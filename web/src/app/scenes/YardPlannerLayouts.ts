@@ -151,13 +151,15 @@ export class YardPlannerLayouts {
         this.options.baseid,
       );
       this.options.session.markSaved(layout.slot, layout.name);
+      // The slot list updates; only a save with buildings still in storage
+      // says so (owner, 13 Nov 2026).
       const stored = this.options.session.state().unplacedCount;
-      this.options.notify(
-        stored === 0
-          ? `Saved to slot ${layout.slot + 1}.`
-          : `Saved to slot ${layout.slot + 1}, with ${stored} ${stored === 1 ? "building" : "buildings"} still in storage.`,
-        "info",
-      );
+      if (stored > 0) {
+        this.options.notify(
+          `Saved to slot ${layout.slot + 1}, with ${stored} ${stored === 1 ? "building" : "buildings"} still in storage.`,
+          "info",
+        );
+      }
     } catch (caught) {
       this.options.notify(describe(caught, "Could not save the layout."), "error");
     } finally {
@@ -195,9 +197,10 @@ export class YardPlannerLayouts {
       void this.save(state.slot, state.slotName || `Slot ${state.slot + 1}`);
       return;
     }
-    void this.toggle().then(() => {
-      this.options.notify("Pick a slot, name it, then press Save.", "info");
-    });
+    // The slots open (or stay open): each row has its name field and its own
+    // Save, so the open panel is the answer (owner, 13 Nov 2026: no "Pick a
+    // slot" notice).
+    if (!this.panel) void this.toggle();
   };
 }
 

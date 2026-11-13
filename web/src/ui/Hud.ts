@@ -21,7 +21,6 @@ import { dismissAnnouncement, fetchAnnouncements } from "@/api/announcements";
 import { openNews } from "./announcements/AnnouncementDialog";
 import { markShownOnThisPage } from "@/game/announcements/announcementQueue";
 import { openLeaderboard } from "./leaderboard/LeaderboardDialog";
-import { openProfile } from "./profile/ProfileDialog";
 import { openBugReport } from "./bugReport/BugReportDialog";
 import { AMOUNT_CHANGE_SIGNS } from "./amountChange";
 import { formatAmount, formatCompact } from "./format";
@@ -202,6 +201,8 @@ const EXACT_LIFETIME_MS = 5000;
 
 /** How long a change float lives; the animation is a little shorter. */
 const FLOAT_LIFETIME_MS = 1800;
+/** The Glimmers readout's float, keyed beside the resources' (`data-resource`). */
+const COINS_FLOAT = "coins";
 
 /**
  * How long a readout takes to count to a new amount unless told otherwise:
@@ -415,7 +416,9 @@ export class Hud {
     }
     this.coins = this.coinReadout();
     resources.append(this.coins.item);
-    this.unwatchCoins = onCoinBalance(() => this.renderCoins());
+    // A change of balance floats "+N" / "-N" as the resources do; the first
+    // balance (or the first after a sign-out) is the purse arriving and floats nothing.
+    this.unwatchCoins = onCoinBalance((balance, before) => this.renderCoins(before === null ? 0 : balance - before));
     this.renderCoins();
     this.unwatchLock = onShinyLock((on) => this.applyShinyLock(on));
     const shinyReadout = this.readouts.get("shiny");
@@ -499,9 +502,7 @@ export class Hud {
       });
       this.friendsDoor = friends;
       this.accountMenu = new AccountMenu({
-        ...(session && {
-          onProfile: () => void openProfile({ container: modalLayer(), userid: session.userId }),
-        }),
+        ...(session && { userid: session.userId }),
         onAchievements: () => void door.open(),
         onFriends: () => void friends.open(),
         onLeaderboard: () => void openLeaderboard({ container: modalLayer(), userId: session?.userId ?? null }),
@@ -555,7 +556,7 @@ export class Hud {
     // Refit before floating, so each float starts where its readout now is.
     this.fit();
     if (options.float === false) return;
-    for (const [readout, delta] of changes) this.float(readout, delta);
+    for (const [readout, delta] of changes) this.float(readout.key, readout.value, delta);
   }
 
   /*
@@ -597,7 +598,7 @@ export class Hud {
   /** Floats a bank's whole amount beside a readout, as a change of amount floats. */
   showChange(key: ResourceKey, delta: number): void {
     const readout = this.readouts.get(key);
-    if (readout && delta !== 0) this.float(readout, delta);
+    if (readout && delta !== 0) this.float(readout.key, readout.value, delta);
   }
 
   /** Shows every readout's whole amount at once: nothing is flying any more. */
@@ -823,7 +824,7 @@ export class Hud {
   };
 
   /** Takes a readout's change float off the page. */
-  private dropFloat(key: ResourceKey): void {
+  private dropFloat(key: string): void {
     for (const float of this.floats) {
       if (float.dataset["resource"] !== key) continue;
       float.remove();
@@ -947,8 +948,12 @@ export class Hud {
     return { item, button };
   }
 
-  /** Draws the coin balance, or hides the readout while none is known. */
-  private renderCoins(): void {
+  /**
+   * Draws the coin balance, or hides the readout while none is known, and
+   * floats `delta` beside it as a resource's change floats: claims, check-ins
+   * and gifts raise no toast any more (owner, 13 Nov 2026), the bar shows them.
+   */
+  private renderCoins(delta = 0): void {
     const balance = coinBalance();
     const { item, button } = this.coins;
     const wasHidden = item.hidden;
@@ -961,7 +966,11 @@ export class Hud {
       button.title = words;
       button.setAttribute("aria-label", `${coinWords(balance)}. Earned in big events, spent on decorations.`);
     }
-    if (wasHidden !== item.hidden && this.element.isConnected) this.fit();
+    const float = delta !== 0 && !item.hidden;
+    // Refit before floating, so the float starts where the number now is.
+    if ((float || wasHidden !== item.hidden) && this.element.isConnected) this.fit();
+    const value = button.querySelector(".hud__resource-value");
+    if (float && value) this.float(COINS_FLOAT, value, delta);
   }
 
   /** The own yard's Shop door, or null where there is no Shop (the map, an attack, a visit). */
@@ -977,14 +986,14 @@ export class Hud {
    * would cover it. The stylesheet does the motion and turns it into a plain
    * fade under `prefers-reduced-motion`.
    */
-  private float(readout: Readout, delta: number): void {
-    this.dropFloat(readout.key);
+  private float(key: string, value: Element, delta: number): void {
+    this.dropFloat(key);
     const float = document.createElement("span");
     float.className = `hud__delta hud__delta--${delta < 0 ? "down" : "up"}`;
-    float.dataset["resource"] = readout.key;
+    float.dataset["resource"] = key;
     float.setAttribute("aria-hidden", "true");
     float.textContent = formatDelta(delta);
-    const box = readout.value.getBoundingClientRect();
+    const box = value.getBoundingClientRect();
     float.style.left = `${Math.round(box.left)}px`;
     float.style.top = `${Math.round(box.bottom + 2)}px`;
     document.body.append(float);

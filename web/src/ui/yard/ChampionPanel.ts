@@ -1,3 +1,5 @@
+import { shortDate } from "@/game/events/eventsModel";
+import { krallenAuraActive, krallenAuraTimes, krallenAuraTimesLooter, krallenAuraUntil } from "@/game/yard/krallenAura";
 import { tutTarget, TutTarget } from "@/game/guide/targets";
 import type { YardRefusal } from "@/api/yard";
 import {
@@ -631,7 +633,20 @@ export class ChampionPanel {
     const level = document.createElement("p");
     level.className = "champion__level";
     level.textContent = `Level ${view.level} of ${view.entry.levels}${frozen ? " · frozen in the Chamber" : ""}`;
-    words.append(name, level, statsBlock(view));
+    words.append(name, level);
+    // Her Krallen Hunt loot aura while it runs (owner, 13 Nov 2026).
+    if (krallenAuraActive(champion, now)) {
+      const times = krallenAuraTimes(view.level);
+      const aura = document.createElement("p");
+      aura.className = "champion__aura";
+      aura.textContent = `Loot aura · until ${shortDate(krallenAuraUntil(champion))}`;
+      const strength = document.createElement("p");
+      strength.className = "champion__aura champion__aura--times";
+      strength.textContent = `Monsters x${times} · Resource hunters x${krallenAuraTimesLooter(view.level)}`;
+      strength.title = "How much more monsters near Krallen loot in attacks";
+      words.append(aura, strength);
+    }
+    words.append(statsBlock(view));
     header.append(portrait(championPicture(view.entry, view.level), "champion__picture"), words);
     block.append(heading("Your second champion"), header);
     if (frozen) {
@@ -851,7 +866,7 @@ const specialShapeOf = (save: YardStore["save"], now: number): string => {
   const champion = specialChampion(save);
   const view = champion ? championView(save, champion, now) : null;
   if (!champion || !view) return "";
-  return `|K:${champion.status ?? 0}:${view.level}:${view.health >= view.maxHealth}:${view.hunger}:${view.healShiny}`;
+  return `|K:${champion.status ?? 0}:${view.level}:${view.health >= view.maxHealth}:${view.hunger}:${view.healShiny}:${krallenAuraActive(champion, now) ? krallenAuraUntil(champion) : 0}`;
 };
 
 /**

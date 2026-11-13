@@ -32,6 +32,13 @@ export const DAILY_FREE_SWAPS = 1;
  */
 export const DAILY_ALWAYS = "destroyTribe";
 
+/**
+ * Glimmers (event coins) the day's last daily quest pays in place of its
+ * resources (owner, 13 Nov 2026). It is the last SLOT, not a kind, so every
+ * player has one every day and a swap keeps the Glimmers on that slot.
+ */
+export const DAILY_GLIMMERS = 5;
+
 /** Shiny paid with each weekly quest, on top of its own reward. */
 export const WEEKLY_QUEST_SHINY = 5;
 /** Shiny for claiming all three weekly quests, once a week. */

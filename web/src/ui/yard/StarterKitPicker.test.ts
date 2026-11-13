@@ -8,7 +8,7 @@ import { setCurrentAllianceBonuses } from "@/game/alliance/allianceBonuses";
 import { readYard } from "@/game/yard/yardModel";
 import type { YardListener, YardStore, YardUiBinding } from "@/game/yard/YardStore";
 import { Notices } from "@/ui/maproom/Notices";
-import { contentLines, KIT_WARNING, shortfallText, StarterKitPicker } from "./StarterKitPicker";
+import { contentLines, KIT_WARNING, kitBoughtText, shortfallText, StarterKitPicker } from "./StarterKitPicker";
 
 /**
  * The Starter Kit picker (outposts WP9, #188): three cards, a confirmation
@@ -266,5 +266,14 @@ describe("the card list", () => {
       "92× Block L2-3",
       "3× Sniper Tower L5",
     ]);
+  });
+});
+
+describe("kitBoughtText (owner, 13 Nov 2026)", () => {
+  it("a kit bought with Shiny stands ready: no notice; one paid with resources says it is building up", () => {
+    expect(kitBoughtText({ pay: "shiny", placed: 12 }, { name: "Regular" })).toBeNull();
+    expect(kitBoughtText({ pay: "resources", placed: 12 }, { name: "Regular" })).toBe(
+      "Regular placed: 12 buildings are building up, without your worker.",
+    );
   });
 });

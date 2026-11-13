@@ -8,11 +8,11 @@ import { monsterMadnessRun } from "../../game-data/events/monsterMadness.js";
 import { memoryProgressStore } from "../../services/events/progressStore.js";
 import { memoryCoinStore, useCoinStore, type EventCoinStore } from "../../services/events/eventCoins.js";
 import { DEFAULT_WEEKEND_SETTINGS, type WeekendSettings } from "../../game-data/events/weekendEvents.js";
-import { forgetWeekendCoinCache } from "../../services/events/weekendCoins.js";
 import { setWeekendSettings, weekendSettings } from "../../services/events/weekendSettings.js";
 import { eventsActions } from "./eventsActions.js";
 import { yardSpeedupAction } from "./speedup.js";
 import { yardUpgradeAction } from "./upgrade.js";
+import { weekendCheckinAction } from "./weekendCheckin.js";
 import { runYardAction, type YardAction, type YardAnswer } from "./yardAction.js";
 
 /**
@@ -413,6 +413,92 @@ describe("the Krallen Hunt's reward through the ladder claim", () => {
   });
 });
 
+/** The hunt's 3x mark: Krallen's loot aura (owner, 13 Nov 2026). */
+describe("the Krallen Hunt's 3x mark through the ladder claim", () => {
+  const JANUARY = krallenHunt(2030, 1);
+  const JAN_START = Date.UTC(2030, 0, 15) / 1000;
+  /** The end of February's hunt: January's aura runs to it. */
+  const MARCH_1 = Date.UTC(2030, 2, 1) / 1000;
+  const FED = JAN_START + 20 * DAY;
+  const krallenOf = () => (db.row!.champion as Row[]).find((one) => one.t === 5);
+  const krallenAt = (l: number, extra: Row = {}) => ({ t: 5, hp: 50_000, l, ft: FED, fd: 0, fb: 0, pl: 0, status: 0, ...extra });
+  const loot = (amount: number) => store.addToCounter(em as never, 2, JANUARY.id, amount);
+  const claimTier = (tier: number) => call(actions.ladderClaim, { event: JANUARY.id, tier });
+
+  beforeEach(() => {
+    actions = eventsActions(store, [JANUARY]);
+    at(JAN_START + 3 * DAY);
+  });
+
+  test("needs 3x her goal: a level 3 Krallen's 675 million, then her aura until the end of next month's hunt", async () => {
+    db.row = rowOf({ champion: [krallenAt(3)] });
+    await loot(750_000_000 - 1);
+    expect(await claimTier(1)).toMatchObject({
+      status: 409,
+      body: { reason: "tierLocked", have: 750_000_000 - 1, need: 750_000_000 },
+    });
+    expect(krallenOf()!.la).toBeUndefined();
+
+    await loot(1);
+    const answer = await claimTier(1);
+    expect(answer.status).toBe(200);
+    expect(answer.body.report).toMatchObject({ granted: [{ kind: "krallenAura", until: MARCH_1, level: 3, hasKrallen: true }] });
+    expect(krallenOf()).toEqual({ ...krallenAt(3), la: MARCH_1 });
+    expect(await claimTier(1)).toMatchObject({ status: 409, body: { reason: "tierClaimed" } });
+  });
+
+  test("the 3x stays 3x the goal she began the hunt with after the first mark raised her", async () => {
+    db.row = rowOf({ champion: [krallenAt(2)] });
+    await loot(450_000_000);
+    expect((await claimTier(0)).body.report).toMatchObject({ granted: [{ kind: "krallen", level: 3, raised: true }] });
+    // Level 3 now, but the hunt began at level 2: 450 million, not 675.
+    const answer = await claimTier(1);
+    expect(answer.status).toBe(200);
+    expect(krallenOf()).toMatchObject({ l: 3, la: MARCH_1 });
+  });
+
+  test("short of 3x the start goal after the raise, the claim names that goal", async () => {
+    db.row = rowOf({ champion: [krallenAt(2)] });
+    await loot(450_000_000 - 1);
+    await claimTier(0);
+    expect(await claimTier(1)).toMatchObject({ status: 409, body: { reason: "tierLocked", need: 450_000_000 } });
+  });
+
+  test("a level 5 Krallen claims her aura at 900 million; her level is untouched", async () => {
+    db.row = rowOf({ champion: [krallenAt(5, { nm: "Kral" })] });
+    await loot(900_000_000);
+    const answer = await claimTier(1);
+    expect(answer.body.report).toMatchObject({ granted: [{ kind: "krallenAura", level: 5, hasKrallen: true }] });
+    expect(krallenOf()).toEqual({ ...krallenAt(5, { nm: "Kral" }), la: MARCH_1 });
+  });
+
+  test("a level 1 or 2 Krallen can claim it; it is kept, though she fights without it below level 3", async () => {
+    db.row = rowOf({ champion: [krallenAt(1)] });
+    await loot(300_000_000);
+    const answer = await claimTier(1);
+    expect(answer.body.report).toMatchObject({ granted: [{ kind: "krallenAura", level: 1, hasKrallen: true }] });
+    expect(krallenOf()).toMatchObject({ l: 1, la: MARCH_1 });
+  });
+
+  test("without a Krallen the 3x mark is refused and stays to claim once she is won", async () => {
+    await loot(180_000_000);
+    expect(await claimTier(1)).toMatchObject({ status: 409, body: { reason: "needsKrallen" } });
+    expect((await claimTier(0)).status).toBe(200);
+    const answer = await claimTier(1);
+    expect(answer.status).toBe(200);
+    expect(krallenOf()).toMatchObject({ l: 1, la: MARCH_1 });
+  });
+
+  test("a later aura end never shortens one she already has", async () => {
+    const later = MARCH_1 + 30 * DAY;
+    db.row = rowOf({ champion: [krallenAt(4, { la: later })] });
+    await loot(900_000_000);
+    const answer = await claimTier(1);
+    expect(answer.body.report).toMatchObject({ granted: [{ kind: "krallenAura", until: later }] });
+    expect(krallenOf()!.la).toBe(later);
+  });
+});
+
 /**
  * Event coins as a calendar and ladder reward (beta 7 grill item 29): paid
  * into the coin store in the claim's transaction, the new balance and the
@@ -515,9 +601,10 @@ describe("Monster Madness: Korath's powers by ladder claim", () => {
   });
 });
 
-describe("weekend Glimmers through a yard action (owner, 12 Nov 2026)", () => {
+describe("weekend check-in through a yard action (owner, 13 Nov 2026)", () => {
   // Saturday 14 Nov 2026 is a Builder's Weekend in the default rotation.
   const SATURDAY = Date.parse("2026-11-14T10:00:00Z") / 1000;
+  const SUNDAY = Date.parse("2026-11-15T00:00:00Z") / 1000;
   const FRIDAY = Date.parse("2026-11-13T10:00:00Z") / 1000;
   let coins: EventCoinStore & { balances: Map<number, number> };
   let previous: EventCoinStore;
@@ -533,43 +620,59 @@ describe("weekend Glimmers through a yard action (owner, 12 Nov 2026)", () => {
       },
     });
   const upgrade = (id: number) => call(yardUpgradeAction, { id });
+  const checkin = () => call(weekendCheckinAction(), {});
 
   beforeEach(() => {
     coins = memoryCoinStore();
     previous = useCoinStore(coins);
     previousSettings = weekendSettings({});
     setWeekendSettings(DEFAULT_WEEKEND_SETTINGS);
-    forgetWeekendCoinCache();
   });
 
   afterEach(() => {
     useCoinStore(previous);
     setWeekendSettings(previousSettings);
-    forgetWeekendCoinCache();
   });
 
-  test("the first upgrade at the Builder's Weekend price pays 75 + 25 once, and the answer says so", async () => {
+  test("a check-in pays 50 once a day, and the answer carries the new purse and the card's state", async () => {
     at(SATURDAY);
     db.row = yardWith();
-    const first = await upgrade(2);
+    const first = await checkin();
     expect(first.status).toBe(200);
-    expect(first.body.eventcoins).toBe(100);
-    expect(first.body.coinsGained).toEqual([
-      { amount: 25, reason: "weekend-played" },
-      { amount: 75, reason: "weekend-boost" },
-    ]);
+    expect(first.body.eventcoins).toBe(50);
+    expect(first.body.coinsGained).toEqual([{ amount: 50, reason: "weekend-checkin" }]);
+    expect(first.body.report).toMatchObject({ paid: 50, checkin: { day: 1, days: 2, claimedToday: true, nextAt: SUNDAY } });
 
-    // Another upgrade later the same weekend (the one builder free again) pays nothing more.
-    at(SATURDAY + 3_600);
-    db.row = yardWith();
-    const second = await upgrade(3);
+    at(SATURDAY + 60);
+    expect(await checkin()).toMatchObject({
+      status: 409,
+      body: { reason: "checkedInToday", nextAt: SUNDAY, checkin: { claimedToday: true } },
+    });
+
+    at(SUNDAY + 60);
+    const second = await checkin();
     expect(second.status).toBe(200);
-    expect(second.body.coinsGained).toBeUndefined();
+    expect(second.body.eventcoins).toBe(100);
     expect(coins.balances.get(2)).toBe(100);
   });
 
-  test("an upgrade outside a weekend pays nothing", async () => {
+  test("two check-ins at once (a double click, two tabs) pay once", async () => {
+    at(SATURDAY);
+    db.row = yardWith();
+    const answers = await Promise.all([checkin(), checkin()]);
+    expect(answers.map((one) => one.status).sort()).toEqual([200, 409]);
+    expect(coins.balances.get(2)).toBe(50);
+  });
+
+  test("refused when no weekend event runs", async () => {
     at(FRIDAY);
+    db.row = yardWith();
+    expect(await checkin()).toMatchObject({ status: 409, body: { reason: "noWeekend" } });
+    expect(coins.balances.get(2)).toBeUndefined();
+  });
+
+  test("using the discount pays nothing any more (the old 25 + 75 are gone)", async () => {
+    at(SATURDAY);
     db.row = yardWith();
     const answer = await upgrade(2);
     expect(answer.status).toBe(200);

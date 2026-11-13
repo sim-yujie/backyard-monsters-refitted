@@ -320,8 +320,12 @@ describe("AttackInput taps", () => {
     expect(log.events).toHaveLength(1);
     expect(log.events[0]).toMatchObject({ kind: "fling", x: OPEN.x, y: OPEN.y, monsters: { C1: 4 } });
     expect(session.state().creepsFlung).toBe(4);
-    // The composition is not cleared (§F3).
-    expect(bucket.count("C1")).toBe(4);
+    // The bucket empties after the fling, as in Flash (§F2; owner, 13 Nov 2026),
+    // so a second tap sends nothing until the player picks again.
+    expect(bucket.count("C1")).toBe(0);
+    expect(bucket.isEmpty()).toBe(true);
+    expect(input.tapAt(OPEN)).toBe(false);
+    expect(appendFling).toHaveBeenCalledTimes(1);
   });
 
   it("refuses a centre on a footprint and says why, without spending anything", () => {

@@ -131,6 +131,7 @@ import {
 } from "@/game/tribeEditor/tribeEditSession";
 import { TribeEditBar, TribePicker } from "@/ui/tribeEditor/TribeEditorPanel";
 import { Notices } from "@/ui/maproom/Notices";
+import { krallenPenaltyNotice } from "@/game/events/eventsModel";
 import { showTakenOver } from "@/ui/maproom/TakeoverDialog";
 import { showBuildMapRoom } from "@/ui/maproom1/MapRoomPrompt";
 import { MonstersScreen } from "@/ui/monsters/MonstersScreen";
@@ -168,7 +169,7 @@ import { showGoldenMushroom } from "@/ui/yard/MushroomReward";
 import { FriendsButton } from "@/ui/friends/FriendsButton";
 import { HelpPanel } from "@/ui/friends/HelpPanel";
 import { YardDock, type YardDockOptions } from "@/ui/yard/YardDock";
-import { StarterKitPicker } from "@/ui/yard/StarterKitPicker";
+import { kitBoughtText, StarterKitPicker } from "@/ui/yard/StarterKitPicker";
 import { YardMinimap } from "@/ui/yard/YardMinimap";
 import { askForWorker } from "@/ui/yard/WorkersBusyBox";
 import { icon } from "@/ui/icons";
@@ -1099,6 +1100,10 @@ export class YardScene implements Scene {
       // A horse on the own main yard: its army's small sheets start now, as
       // its fight has no warning to fetch them in (`raidSheets.ts`).
       if (store?.kind === "main" && findTrojanHorse(yard.buildings)) warmTrojanSheets(false);
+      // The Krallen Hunt took a level, or Krallen, since the last load
+      // (owner, 13 Nov 2026): told once, the server marks it told.
+      const krallenPenalty = store?.kind === "main" ? krallenPenaltyNotice(response.krallenpenalty ?? []) : null;
+      if (krallenPenalty) this.notices.show("krallen-penalty", krallenPenalty, { level: "warning", timeoutMs: 10_000 });
       if (store?.kind === "main" && response.trojanNew) {
         const horse = findTrojanHorse(yard.buildings);
         if (horse && this.camera) {
@@ -1234,7 +1239,8 @@ export class YardScene implements Scene {
       this.dock?.setAttack({ disabled: false, title });
       return;
     }
-    this.notices.show("attack", `Starting the attack on ${attack.name}…`, { level: "info" });
+    // The Attack button shows the start (busy) until the scene changes: no notice.
+    this.dock?.setAttack({ disabled: true, title: `Starting the attack on ${attack.name}…`, busy: true });
 
     try {
       const load = await loadAttackOn(attack);
@@ -2341,8 +2347,7 @@ export class YardScene implements Scene {
       ...(this.save?.firedtraps ? { firedtraps: this.save.firedtraps } : {}),
       // An outpost's Apply and batch actions act on it (outposts WP3).
       ...(this.store?.baseid !== undefined ? { baseid: this.store.baseid } : {}),
-      onApplied: (buildingdata, moved, resources, storage) =>
-        this.onApplied(buildingdata, moved, resources, storage),
+      onApplied: (buildingdata, _moved, resources, storage) => this.onApplied(buildingdata, resources, storage),
       onYardChanged: (buildingdata, resources, mushrooms) =>
         this.onYardChanged(buildingdata, resources, mushrooms),
       onView: (view) => this.setView(view),
@@ -2538,7 +2543,6 @@ export class YardScene implements Scene {
    */
   private onApplied(
     buildingdata: BuildingDataMap,
-    moved: number,
     resources: Resources | undefined,
     storage: AppliedStorage,
   ): void {
@@ -2561,14 +2565,11 @@ export class YardScene implements Scene {
     });
 
     // Raised here rather than by the planner because the planner has just been
-    // closed and clears its own notices on the way out (§8, Q4).
-    const moveText = [
-      `Moved ${moved} building${moved === 1 ? "" : "s"}.`,
-      storageText(storage),
-    ]
-      .filter(Boolean)
-      .join(" ");
-    this.notices.show("yard-applied", moveText, { level: "info", timeoutMs: 5_000 });
+    // closed and clears its own notices on the way out (§8, Q4). The moved
+    // buildings show themselves; only what went into or out of storage is
+    // said (owner, 13 Nov 2026).
+    const stored = storageText(storage);
+    if (stored) this.notices.show("yard-applied", stored, { level: "info", timeoutMs: 5_000 });
   }
 
   /**
@@ -3030,13 +3031,8 @@ export class YardScene implements Scene {
       onBought: (report, kit) => {
         if (this.binding !== binding) return;
         this.notices.clear(OUTPOST_HINT_NOTICE);
-        this.notices.show(
-          "starter-kit",
-          report.pay === "shiny"
-            ? `${kit.name} built: ${report.placed} buildings are ready.`
-            : `${kit.name} placed: ${report.placed} buildings are building up, without your worker.`,
-          { level: "info", timeoutMs: 8_000 },
-        );
+        const text = kitBoughtText(report, kit);
+        if (text) this.notices.show("starter-kit", text, { level: "info", timeoutMs: 8_000 });
       },
       onClose: () => {
         this.kitPicker = null;
@@ -3057,7 +3053,7 @@ export class YardScene implements Scene {
         if (season === "thanksgiving") setTimeout(show, GOLDEN_TURKEY_DELAY_MS);
         else show();
       },
-      ordinary: (quip) => this.notices.show("mushroom", quip, { level: "info", timeoutMs: 4000 }),
+      huntCount: (line) => this.notices.show("mushroom", line, { level: "info", timeoutMs: 4000 }),
       refused: (message) =>
         this.notices.show("mushroom", message, { level: "error", timeoutMs: 5000 }),
     };

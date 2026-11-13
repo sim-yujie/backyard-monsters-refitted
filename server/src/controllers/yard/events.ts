@@ -1,5 +1,6 @@
 import { sqlProgressStore } from "../../services/events/progressStore.js";
 import { eventsActions } from "./eventsActions.js";
+import { weekendCheckinAction } from "./weekendCheckin.js";
 import type { YardRouteEntry } from "./index.js";
 import { yardRoute } from "./yardRoute.js";
 
@@ -14,4 +15,6 @@ const actions = eventsActions(sqlProgressStore);
 export const eventsRoutes: YardRouteEntry[] = [
   { path: "events/calendar/claim", controller: yardRoute(actions.calendarClaim) },
   { path: "events/ladder/claim", controller: yardRoute(actions.ladderClaim) },
+  // The weekend event's daily check-in (`weekendCheckin.ts`).
+  { path: "events/weekend/checkin", controller: yardRoute(weekendCheckinAction()) },
 ];

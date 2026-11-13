@@ -75,7 +75,6 @@ import {
   type HelpTab,
 } from "@/ui/yard/PlannerHelp";
 import { SearchPanel } from "@/ui/yard/SearchPanel";
-import { describeCost } from "@/ui/yard/upgradeText";
 import { wallUpgradePanel, type WallUpgradePanel } from "@/ui/yard/WallUpgradePanel";
 import { YardPlannerLayouts } from "./YardPlannerLayouts";
 
@@ -710,12 +709,9 @@ export class YardPlanner {
       );
       return;
     }
+    // The drawer opens with them in it, and the bar's Undo puts them back: no
+    // "Stored N buildings" notice (owner, 13 Nov 2026).
     this.openInventory();
-    this.options.notices.show(
-      NOTICE,
-      `Stored ${stored} ${plural(stored, "building")}. ${undoName(this.touch)} puts ${stored === 1 ? "it" : "them"} back.`,
-      { level: "info", timeoutMs: 4000 },
-    );
   }
 
   /**
@@ -728,13 +724,8 @@ export class YardPlanner {
   private confirmClearYard(): void {
     if (this.readOnly) return;
     const count = this.session.plan.buildings().length;
-    if (count === 0) {
-      this.options.notices.show(NOTICE, "The yard is already empty.", {
-        level: "info",
-        timeoutMs: 4000,
-      });
-      return;
-    }
+    // An empty yard is plain to see: nothing to ask, nothing to say (owner, 13 Nov 2026).
+    if (count === 0) return;
 
     this.openDialog(
       confirmPanel({
@@ -744,13 +735,9 @@ export class YardPlanner {
         confirmLabel: "Clear yard",
         onConfirm: () => {
           this.closeDialog();
-          const stored = this.session.clearYard();
+          // The yard empties into the drawer; the bar's Undo puts it all back.
+          this.session.clearYard();
           this.openInventory();
-          this.options.notices.show(
-            NOTICE,
-            `Stored ${stored} ${plural(stored, "building")}. ${undoName(this.touch)} puts them all back.`,
-            { level: "info", timeoutMs: 6000 },
-          );
         },
         onClose: () => this.closeDialog(),
       }),
@@ -988,10 +975,8 @@ export class YardPlanner {
     const checklist = this.session.checklist();
     this.bar.setBlocking(blockingCount(checklist));
     if (!checklist.ok) {
+      // The checklist opens and says why: no notice beside it (owner, 13 Nov 2026).
       this.showChecklist();
-      this.options.notices.show(NOTICE, "Apply is blocked. See the checklist.", {
-        level: "warning",
-      });
       return;
     }
 
@@ -1145,11 +1130,7 @@ export class YardPlanner {
     this.batching = true;
     try {
       const response = await postWallUpgrade(ids, level, this.options.baseid);
-      this.options.notices.show(
-        NOTICE,
-        `Upgraded ${response.upgraded} ${plural(response.upgraded, "wall")} to level ${response.level} for ${describeCost(response.cost)}.`,
-        { level: "info", timeoutMs: 6000 },
-      );
+      // The walls change and the cost floats on the top bar: no notice (owner, 13 Nov 2026).
       this.options.onYardChanged(response.buildingdata, response.resources);
     } catch (caught) {
       this.reportBatchFailure(caught, "The server refused the upgrade.");
@@ -1216,11 +1197,7 @@ export class YardPlanner {
         (trap) => !placed.has(`${trap.t}:${trap.x}:${trap.y}`),
       );
 
-      this.options.notices.show(
-        NOTICE,
-        `Re-armed ${response.placed} ${plural(response.placed, "trap")} for ${describeCost(response.cost)}.`,
-        { level: "info", timeoutMs: 6000 },
-      );
+      // The traps come back and the cost floats on the top bar: no notice (owner, 13 Nov 2026).
       this.options.onYardChanged(response.buildingdata, response.resources, response.mushrooms);
       this.bar.setRearmCount(this.rearmTargets().length);
     } catch (caught) {

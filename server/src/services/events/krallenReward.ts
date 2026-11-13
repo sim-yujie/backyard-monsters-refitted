@@ -1,4 +1,5 @@
 import { championEntry } from "../../game-data/championCatalogue.js";
+import { KRALLEN_AURA_LEVEL } from "../../game-rules/combat/champions.js";
 import { KRALLEN_MAX_LEVEL, KRALLEN_TYPE } from "../../game-data/events/eventRewards.js";
 import type { ChampionData } from "../../schemas/ChampionSchema.js";
 import { CHAMPION_STATUS, levelOf, maxHealthOf, readChampions, statusOf } from "../yard/champion.js";
@@ -69,4 +70,49 @@ export const raiseKrallen = (
   next.hp = maxHealthOf(next, entry);
   champions[index] = next;
   return { champions, level: level + 1, raised: true };
+};
+
+/**
+ * The Krallen Hunt's 3x mark (owner, 2026-11-13, `game-data/events/events.ts`
+ * `KRALLEN_AURA_GOAL_TIMES`): her loot aura until `until`, kept on her entry
+ * as `la` (unix seconds), which only the server writes: `ChampionSchema`
+ * leaves it out, so no list a client sends can add or move it, and every
+ * server change to a champion keeps the entry's other fields. A later
+ * `until` wins; an earlier one never shortens it. It is kept at any level:
+ * a level 2 Krallen the same hunt raises to 3 carries it from then.
+ *
+ * - No Krallen: nothing changes, `hasKrallen` false.
+ *
+ * Pure: hands back a fresh list.
+ */
+export const grantKrallenAura = (
+  raw: unknown,
+  until: number
+): { champions: ChampionData[]; until: number; level: number; hasKrallen: boolean } => {
+  const entry = championEntry(KRALLEN_TYPE)!;
+  const champions = readChampions(raw);
+  const index = champions.findIndex((one) => Math.trunc(Number(one.t)) === KRALLEN_TYPE);
+  if (index < 0) return { champions, until: 0, level: 0, hasKrallen: false };
+  const was = champions[index]!;
+  const kept = Math.max(krallenAuraUntilOf(was), Math.floor(until) || 0);
+  champions[index] = { ...was, la: kept };
+  return { champions, until: kept, level: levelOf(was, entry), hasKrallen: true };
+};
+
+/** When a champion entry's loot aura runs out (unix seconds), 0 for none. */
+export const krallenAuraUntilOf = (champion: { la?: unknown } | null | undefined): number => {
+  const until = Number(champion?.la);
+  return Number.isFinite(until) && until > 0 ? Math.floor(until) : 0;
+};
+
+/**
+ * Whether the player's Krallen fights with her loot aura when an attack
+ * starts at `at` (unix seconds): her aura running and her level at least
+ * `KRALLEN_AURA_LEVEL` (`game-rules/combat/champions.ts`). The fight checks
+ * her level itself; this is for the views.
+ */
+export const krallenAuraOn = (raw: unknown, at: number): boolean => {
+  const entry = championEntry(KRALLEN_TYPE)!;
+  const krallen = readChampions(raw).find((one) => Math.trunc(Number(one.t)) === KRALLEN_TYPE);
+  return !!krallen && krallenAuraUntilOf(krallen) > at && levelOf(krallen, entry) >= KRALLEN_AURA_LEVEL;
 };

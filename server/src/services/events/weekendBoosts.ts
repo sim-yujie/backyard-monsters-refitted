@@ -1,7 +1,4 @@
-import type { EntityManager } from "@mikro-orm/core";
-
 import type { WeekendEventId } from "../../game-data/events/weekendEvents.js";
-import { awardWeekendCoins, awardWeekendCoinsSafely } from "./weekendCoins.js";
 import { boostAt } from "./weekendSchedule.js";
 import { weekendSettings } from "./weekendSettings.js";
 
@@ -15,6 +12,9 @@ import { weekendSettings } from "./weekendSettings.js";
  * length after the weekend ends**, so a training started Sunday 23:00 still
  * finishes 30% sooner; one started Monday 00:00 does not. An upgrade bought
  * at 30% off and cancelled later gives back what was paid, not the full price.
+ *
+ * Using an effect pays no Glimmers: a weekend's Glimmers are its daily
+ * check-in (owner, 13 Nov 2026; `weekendCoins.ts`).
  */
 
 /** The percentage of `id` running at `t` (unix seconds), or 0. */
@@ -52,27 +52,3 @@ export const withPlunderBonus = <T extends { readonly [K in keyof T]: number }>(
 /** Tribe Plunder's percentage at `t`, for a credit from a wild tribe; 0 for anyone else. */
 export const plunderPercent = (fromTribe: boolean, t: number): number =>
   fromTribe ? weekendBoost("plunder", t) : 0;
-
-/**
- * EVENT COINS (owner, 12 Nov 2026: "builder's weekend pay glimmer";
- * `weekendCoins.ts`): called each time a player uses a weekend boost: an
- * upgrade bought at the Builder's Weekend price, a training or research
- * started in a Study Weekend, monsters queued in a Hatch Rush, loot banked
- * from a tribe in Tribe Plunder. Pays the weekend's "boost" Glimmers (and
- * "played", if still unpaid) once per player per run; any later call pays
- * nothing.
- *
- * Inside a yard action pass the action's transaction: the coins land or roll
- * back with it, and errors roll it back. After an attack has been committed,
- * pass `safe` so a failure is logged instead of thrown.
- */
-export const weekendBoostUsed = async (
-  em: EntityManager,
-  userid: number,
-  _id: WeekendEventId,
-  now: number,
-  safe = false
-): Promise<number> =>
-  safe
-    ? awardWeekendCoinsSafely(em, userid, ["played", "boost"], now)
-    : awardWeekendCoins(em, userid, ["played", "boost"], now);

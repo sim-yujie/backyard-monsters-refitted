@@ -466,6 +466,23 @@ export class YardStore implements YardStoreReader, YardStoreActions {
     return this.current;
   }
 
+  /**
+   * {@link save} as the server holds it: `resources` without the outpost
+   * income predicted since the last answer, and `buildingresources.t` where
+   * the server last paid it (#207). {@link save} keeps the load's `t` while
+   * its `resources` climb, so a screen that predicts the income afresh from it
+   * (Map Room 2, `mapRoute.ts` `primeFromYard`) would add the ticks twice.
+   */
+  get serverSave(): BaseLoadResponse {
+    const reported = this.income.reported;
+    if (!reported) return this.current;
+    return {
+      ...this.current,
+      resources: reported.resources,
+      buildingresources: { ...this.current.buildingresources, t: reported.t },
+    };
+  }
+
   get yard(): Yard {
     // A tribe camp in the editor stands on the plot a camp grows to (`readYard`).
     this.cachedYard ??= readYard(this.current, isTribeEditing() ? { wild: true } : {});
@@ -829,10 +846,10 @@ export class YardStore implements YardStoreReader, YardStoreActions {
     if (typeof response.playerpoints === "number") slices.playerpoints = response.playerpoints;
     if (typeof response.notifications === "number") slices.notifications = response.notifications;
     if (typeof response.questsClaimable === "number") slices.questsClaimable = response.questsClaimable;
-    // Event coins: only when the action changed them (`game/eventCoins.ts` shows the "+15").
+    // Event coins: only when the action changed them (the top bar floats the "+15").
     if (typeof response.eventcoins === "number") {
       slices.eventcoins = response.eventcoins;
-      noteCoins(response.eventcoins, response.coinsGained);
+      noteCoins(response.eventcoins);
     }
     // Nor are the siege weapons and the Inferno purse: they ride `completed` and the siege routes' reports.
     Object.assign(slices, siegeSlices(this.current, response.completed, response.report));

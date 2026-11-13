@@ -82,13 +82,13 @@ describe.skipIf(!dbName)("event coins on a real database", () => {
 
   test("an award key pays once, even when 8 requests race", async () => {
     const results = await Promise.all(
-      Array.from({ length: 8 }, () => store.grant(em(), A, 25, "weekend-played", "weekend:2030-01-05:played"))
+      Array.from({ length: 8 }, () => store.grant(em(), A, 50, "weekend-checkin", "weekend:2030-01-05:day1"))
     );
-    expect(results.filter((r) => r !== null)).toEqual([25]);
-    expect(await store.balance(em(), A)).toBe(25);
-    expect(await store.awarded(em(), A, ["weekend:2030-01-05:played", "x"])).toEqual(new Set(["weekend:2030-01-05:played"]));
+    expect(results.filter((r) => r !== null)).toEqual([50]);
+    expect(await store.balance(em(), A)).toBe(50);
+    expect(await store.awarded(em(), A, ["weekend:2030-01-05:day1", "x"])).toEqual(new Set(["weekend:2030-01-05:day1"]));
     // Another player, the same key: paid.
-    expect(await store.grant(em(), B, 25, "weekend-played", "weekend:2030-01-05:played")).toBe(25);
+    expect(await store.grant(em(), B, 50, "weekend-checkin", "weekend:2030-01-05:day1")).toBe(50);
   });
 
   test("8 racing spends of 30 from 100 leave 10, never below 0", async () => {
@@ -106,12 +106,12 @@ describe.skipIf(!dbName)("event coins on a real database", () => {
   test("a rolled-back transaction leaves neither coins nor log", async () => {
     await expect(
       orm.em.fork().transactional(async (tx) => {
-        await store.grant(tx, A, 75, "weekend-boost", "weekend:2030-01-05:boost");
+        await store.grant(tx, A, 50, "weekend-checkin", "weekend:2030-01-05:day2");
         throw new Error("refused");
       })
     ).rejects.toThrow("refused");
     expect(await store.balance(em(), A)).toBe(0);
-    expect(await store.grant(em(), A, 75, "weekend-boost", "weekend:2030-01-05:boost")).toBe(75);
+    expect(await store.grant(em(), A, 50, "weekend-checkin", "weekend:2030-01-05:day2")).toBe(50);
   });
 
   test("the account's rows go with it", async () => {

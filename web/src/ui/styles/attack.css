@@ -205,6 +205,20 @@
   display: none;
 }
 
+/*
+ * A skinned window's Close button sits 8px past the window's right edge. The
+ * dock body scrolls, so that 8px counted as sideways overflow: on Windows a
+ * horizontal scrollbar came up under the Catapult, took height, brought a
+ * vertical one with it and the two kept coming and going. The padding keeps
+ * the button inside the scroller; the margin keeps the windows where they were.
+ */
+@media (width > 620px) {
+  :root[data-skin] .attack-dock__body {
+    padding-right: 8px;
+    margin-right: -8px;
+  }
+}
+
 /* The interim "attack over" line; the end panel (WP6) replaces it. */
 .attack-dock__end {
   display: flex;
@@ -671,7 +685,6 @@
   background: var(--colour-surface-sunken);
 }
 
-.attack-army__row--clamped,
 .attack-army__row--exhausted,
 .attack-army__champion--unavailable {
   color: var(--colour-text-muted);
@@ -735,6 +748,22 @@
   color: var(--colour-text-muted);
 }
 
+/* Krallen's Krallen Hunt loot aura: Flash's green looting glow (`LootingMultiplier.as:29`, 0x55FF21). */
+.attack-army__icon--aura img {
+  filter: drop-shadow(0 0 3px #55ff21);
+}
+
+.attack-army__aura {
+  font-size: var(--text-xs);
+  font-weight: 700;
+  padding: 0 var(--space-1);
+  border: 1px solid #55ff21;
+  border-radius: var(--radius-sm);
+  color: var(--colour-success);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
 .attack-army__housed {
   margin-left: auto;
   font-size: var(--text-xs);
@@ -749,11 +778,6 @@
 .attack-army__count {
   flex-basis: 4ch;
   width: 4ch;
-}
-
-.attack-army__row--clamped .attack-army__count {
-  color: var(--colour-text-muted);
-  border-style: dashed;
 }
 
 .attack-army__note {

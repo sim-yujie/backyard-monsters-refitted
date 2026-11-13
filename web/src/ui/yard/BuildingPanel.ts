@@ -1457,11 +1457,8 @@ export class BuildingPanel {
         this.report(id, result, () => []);
         return;
       }
-      // The building is gone, and this panel with it: the refund goes to the notices.
-      const refund = costAmounts(result.report.refund, undefined, reportIcons(result.report));
-      const text = document.createElement("span");
-      text.append(...(refund ? ["Build cancelled. Got back ", refund, "."] : ["Build cancelled."]));
-      this.yard?.notices.show("build-cancel", text, { level: "info", timeoutMs: 6_000 });
+      // The building is gone, and this panel with it; the refund floats on the
+      // top bar, so no notice (owner, 13 Nov 2026).
       return;
     }
     const result = await store.cancelUpgrade(id);
@@ -1502,9 +1499,9 @@ export class BuildingPanel {
   }
 
   /**
-   * Recycles, then says so in the notice dock: the building is gone, so the
-   * scene closes this panel as the answer lands. A refusal stays on the
-   * status line.
+   * Recycles: the building is gone, so the scene closes this panel as the
+   * answer lands. Only a storage move or a loss is said in the notice dock. A
+   * refusal stays on the status line.
    */
   private async runRecycle(id: number, bunkered: Readonly<Record<string, number>>): Promise<void> {
     const yard = this.yard;
@@ -1512,10 +1509,8 @@ export class BuildingPanel {
     const name = this.building?.name ?? "Building";
     const result = await recycleAction(yard.store, id);
     if (result.ok) {
-      yard.notices.show("yard-recycle", recycledMessage(name, result.report, bunkered), {
-        level: "info",
-        timeoutMs: 6_000,
-      });
+      const line = recycledMessage(name, result.report, bunkered);
+      if (line) yard.notices.show("yard-recycle", line, { level: "info", timeoutMs: 6_000 });
       return;
     }
     this.report(id, result, () => []);
@@ -2012,30 +2007,35 @@ const cullText = (culled: Readonly<Record<string, number>>): string | null => {
 };
 
 /**
- * What a recycle came to, for the notice: what came back, what was lost, what
- * went to storage. `bunkered` is what a Monster Bunker held when the player
- * confirmed: the server deletes it with the bunker and does not report it.
+ * What a recycle came to, for the notice: where a stored decoration went, or
+ * what was lost with the building (and what came back). Null for a plain
+ * recycle, whose refund floats on the top bar. `bunkered` is what a Monster
+ * Bunker held when the player confirmed: the server deletes it with the
+ * bunker and does not report it.
  */
 export const recycledMessage = (
   name: string,
   report: RecycleReport,
   bunkered: Readonly<Record<string, number>> = {},
-): HTMLElement => {
+): HTMLElement | null => {
   const line = document.createElement("span");
   if (report.stored) {
     // Where to find it again (#128): the Build menu's Decorations tab.
     line.append(`${name} put in storage. Place it again from Build, Decorations.`);
     return line;
   }
+  const lost = costAmounts(report.lost, undefined, reportIcons(report));
+  const culled = cullText(report.culled);
+  const emptied = cullText(bunkered);
+  // A plain recycle says nothing: the building goes and the refund floats on
+  // the top bar (owner, 13 Nov 2026). What was lost with it still has to be said.
+  if (!lost && !culled && !emptied) return null;
   const refund = costAmounts(report.refund, undefined, reportIcons(report));
   line.append(`${name} recycled`);
   if (refund) line.append(" for ", refund);
   line.append(".");
-  const lost = costAmounts(report.lost, undefined, reportIcons(report));
   if (lost) line.append(" ", lost, " did not fit in storage.");
-  const culled = cullText(report.culled);
   if (culled) line.append(` Housing shrank: ${culled} lost.`);
-  const emptied = cullText(bunkered);
   if (emptied) line.append(` ${emptied} lost with it.`);
   return line;
 };

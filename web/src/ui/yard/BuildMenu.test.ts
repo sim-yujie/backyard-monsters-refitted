@@ -347,13 +347,13 @@ describe("BuildMenu", () => {
     // through its own answer (not the yard's), and the top bar shows 300.
     const { menu } = setup([HALL], { eventcoins: 200 });
     noteCoins(200);
-    noteCoins(300, [{ amount: 100, reason: "announcement" }]);
+    noteCoins(300);
     expect(coinBalance()).toBe(300);
     menu.open(BuildCategory.DECORATIONS);
     const meta = (): Element => menu.element.querySelector(".build-menu__meta")!;
     expect(spokenText(meta())).toBe("You have Glimmers 300");
     // And it redraws while open when the balance moves again.
-    noteCoins(450, [{ amount: 150, reason: "weekend-boost" }]);
+    noteCoins(450);
     expect(spokenText(meta())).toBe("You have Glimmers 450");
   });
 

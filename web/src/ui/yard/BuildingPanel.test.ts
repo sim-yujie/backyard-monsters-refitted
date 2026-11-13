@@ -756,7 +756,14 @@ describe("BuildingPanel: recycle", () => {
   it("names a bunker's lost monsters in the notice after recycling", () => {
     const report = { id: 2, t: 22, refund: { r1: 10, r2: 0, r3: 0, r4: 0 }, lost: {}, stored: null, culled: {} };
     const line = recycledMessage("Monster Bunker", report as never, { C1: 4 });
-    expect(spokenText(line)).toMatch(/Monster Bunker recycled for .*\. 4 × Pokey lost with it\.$/);
+    expect(spokenText(line!)).toMatch(/Monster Bunker recycled for .*\. 4 × Pokey lost with it\.$/);
+  });
+
+  it("a plain recycle raises no notice (the refund floats on the bar); storage still says where it went", () => {
+    const report = { id: 2, t: 22, refund: { r1: 10, r2: 0, r3: 0, r4: 0 }, lost: {}, stored: null, culled: {} };
+    expect(recycledMessage("Monster Bunker", report as never)).toBeNull();
+    const stored = recycledMessage("Gnome", { ...report, refund: {}, stored: { t: 28 } } as never);
+    expect(stored?.textContent).toBe("Gnome put in storage. Place it again from Build, Decorations.");
   });
 
   it("stores a decoration instead, and offers nothing on the Town Hall", () => {

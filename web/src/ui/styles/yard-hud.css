@@ -423,6 +423,32 @@
   opacity: 0.55;
 }
 
+/* Busy (an attack starting): disabled, and the disc breathes until the scene
+   changes. Under reduced motion it just stays a little brighter. */
+.yard-dock__button--busy:disabled {
+  cursor: progress;
+}
+
+.yard-dock__button--busy:disabled .yard-dock__disc {
+  animation: yard-dock-busy 0.9s ease-in-out infinite alternate;
+}
+
+@keyframes yard-dock-busy {
+  from {
+    opacity: 0.55;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .yard-dock__button--busy:disabled .yard-dock__disc {
+    animation: none;
+    opacity: 0.8;
+  }
+}
+
 .yard-dock__label {
   padding: 2px 9px;
   border-radius: var(--radius-pill);

@@ -49,7 +49,7 @@ const fling = (
   battle: Battle,
   at: number,
   monsters: Roster,
-  champion?: { t: number; l: number; pl?: number },
+  champion?: { t: number; l: number; pl?: number; aura?: boolean },
   t = 0,
 ) =>
   battle.apply({
@@ -486,10 +486,10 @@ describe("Fomor (issue #222)", () => {
 });
 
 describe("Krallen (issue #222)", () => {
-  const lootWith = (l: number, pl = 0) => {
+  const lootWith = (l: number, pl = 0, aura = true) => {
     const yard = yardOf({ "1": { id: 1, t: 14, l: 10, X: 0, Y: 0 } });
     const battle = createBattle(yard, { seed: 6 });
-    fling(battle, -60, { C1: 6 }, { t: 5, l, pl });
+    fling(battle, -60, { C1: 6 }, { t: 5, l, pl, aura });
     let boosted = false;
     watch(battle, 600, (_event, current) => {
       if (current.creeps().some((creep) => creep.lootBoosted)) boosted = true;
@@ -504,7 +504,7 @@ describe("Krallen (issue #222)", () => {
     expect([1, 2, 3, 4, 5].map(krallenAuraRadius)).toEqual([250, 275, 300, 325, 350]);
   });
 
-  it("raises the looting of the creeps around her from her level 3, more at each level", () => {
+  it("raises the looting of the creeps around her from her level 3 with the 3x earned, more at each level", () => {
     const third = lootWith(3);
     const fifth = lootWith(5);
     expect(third.boosted).toBe(true);
@@ -512,17 +512,26 @@ describe("Krallen (issue #222)", () => {
     expect(fifth.loot).toBeGreaterThan(third.loot);
   });
 
-  it("has no aura at her levels 1 and 2, powered up or not", () => {
+  it("has no aura at her levels 1 and 2, powered up or not, 3x earned or not", () => {
     expect(lootWith(2).boosted).toBe(false);
     expect(lootWith(2, 2).boosted).toBe(false);
     expect(lootWith(1, 2).boosted).toBe(false);
     expect(lootWith(3).loot).toBeGreaterThan(lootWith(2).loot);
   });
 
+  it("has no aura at any level without the Krallen Hunt's 3x (owner, 13 Nov 2026)", () => {
+    for (const level of [3, 4, 5]) {
+      expect(lootWith(level, 0, false).boosted).toBe(false);
+      expect(lootWith(level, 2, false).boosted).toBe(false);
+      expect(lootWith(level, 0, true).loot).toBeGreaterThan(lootWith(level, 0, false).loot);
+    }
+    expect(hasLootAura("G5", 5, false, false)).toBe(false);
+  });
+
   it("gives the monsters attacking her yard nothing while she defends it", () => {
-    expect(hasLootAura("G5", 5, true)).toBe(false);
-    expect(hasLootAura("G5", 5, false)).toBe(true);
-    expect(hasLootAura("G1", 5, false)).toBe(false);
+    expect(hasLootAura("G5", 5, true, true)).toBe(false);
+    expect(hasLootAura("G5", 5, false, true)).toBe(true);
+    expect(hasLootAura("G1", 5, false, true)).toBe(false);
   });
 
   it("keeps her aura on until she has walked off, not the moment she is called back", () => {
@@ -536,7 +545,7 @@ describe("Krallen (issue #222)", () => {
       y: -400,
       r: 100,
       monsters: { C1: 6 },
-      champion: { t: 5, l: 5, pl: 2 },
+      champion: { t: 5, l: 5, pl: 2, aura: true },
     });
     run(battle, 500);
     expect(battle.creeps().some((creep) => creep.lootBoosted)).toBe(true);

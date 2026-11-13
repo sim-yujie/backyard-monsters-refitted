@@ -257,18 +257,24 @@ export class GoalsDoor {
     if (result.ok) {
       const { monsters } = result.report;
       if (monsters && goal.monsters) {
-        notices.show(GOALS_NOTICE, monsterRewardLine(monsters.id, monstersText(monsters.count, goal.monsters.name), this.words.housing), {
-          level: "info",
-          timeoutMs: 5_000,
-        });
         // They walk in from the yard's edge, as Bob's Pokeys do (the guided
         // start's walk-in), and join the pen when they get there (#228).
+        let walking = false;
         if (!prefersReducedMotion() && this.words.walkIn) {
           this.walkIn?.destroy();
           const { renderer } = this.mounts;
           const release = renderer.holdLife(monsters.id, housedCount(store.save, monsters.id) - monsters.count);
           this.walkIn = walkIntoHousing(renderer, store.yard, monsters.id, monsters.count, release);
-          if (!this.walkIn) release();
+          if (this.walkIn) walking = true;
+          else release();
+        }
+        // The walk-in shows them arrive; only without it (reduced motion, no
+        // path) does a notice say so (owner, 13 Nov 2026).
+        if (!walking) {
+          notices.show(GOALS_NOTICE, monsterRewardLine(monsters.id, monstersText(monsters.count, goal.monsters.name), this.words.housing), {
+            level: "info",
+            timeoutMs: 5_000,
+          });
         }
       }
       // A siege weapon (SW4-SW12) waits in the Chaos Factory for the next attack.

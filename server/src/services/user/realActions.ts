@@ -138,6 +138,8 @@ export const NOT_REAL_ACTION_YARD_PATHS: readonly string[] = [
   "achievements/state",
   "achievements/seen",
   "events/calendar/claim",
+  // The weekend event's daily check-in: turning up, as the calendar.
+  "events/weekend/checkin",
   // The quest window's read, its login card (as the event calendar) and the daily swap.
   "quests/state",
   "quests/login/claim",

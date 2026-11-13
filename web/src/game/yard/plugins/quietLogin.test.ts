@@ -47,22 +47,24 @@ vi.mock("@/api/moderation", () => ({
 }));
 vi.mock("@/game/chat/chatSession", () => ({ worldChat: { onTeam: () => () => undefined } }));
 vi.mock("@/api/weekend", () => ({ refreshWeekend: vi.fn(() => Promise.resolve()) }));
-vi.mock("@/game/weekend", () => {
+vi.mock("@/game/weekend", async (importOriginal) => {
+  const actual = await importOriginal<Record<string, unknown>>();
   const run = { key: "w1", startsAt: 0, endsAt: 10_000 };
   return {
+    ...actual,
     announcedWeekend: () => null,
     currentWeekend: () => ({ active: run, next: null }),
     onWeekendChange: () => () => undefined,
     runningWeekend: () => run,
     weekendNow: () => 100,
+    checkinWaiting: () => false,
+    weekendCheckin: () => null,
   };
 });
 vi.mock("@/ui/events/weekendUi", () => ({
   openWeekendPopup: spies.openWeekendPopup,
-  WeekendBanner: class {
-    element = document.createElement("div");
-    update = vi.fn();
-  },
+  WEEKEND_ICON: { builders: "levelup", plunder: "income", study: "time", hatch: "speed" },
+  weekendAmount: () => "−30%",
 }));
 
 const { EventsDoor } = await import("./events");

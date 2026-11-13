@@ -243,6 +243,8 @@ export const grantedRewards = (granted: readonly GrantedReward[]): EventReward[]
         return [{ kind: "decoration", type: reward.type, count: reward.count }];
       case "krallen":
         return [{ kind: "krallen" }];
+      case "krallenAura":
+        return reward.hasKrallen ? [{ kind: "krallenAura", until: reward.until }] : [];
       case "korath":
         return [{ kind: "korath", power: reward.power }];
       case "eventCoins":

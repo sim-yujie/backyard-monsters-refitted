@@ -4,6 +4,7 @@ import {
   DAILY_ALL_DONE_SHINY,
   DAILY_ALWAYS,
   DAILY_FREE_SWAPS,
+  DAILY_GLIMMERS,
   DAILY_QUEST_COUNT,
   DAILY_QUESTS,
   LOGIN_CARD_SHINY,
@@ -343,7 +344,15 @@ export const pacedNeed = (group: PacedGroup, base: number, pace: number): number
   return Math.max(1, Math.min(high, Math.max(low, roundNice(base * pace))));
 };
 
-const entry = (slot: number, kind: QuestKind, player: QuestPlayer, seed: string, shiny = 0, pace?: QuestPace): QuestEntry => {
+const entry = (
+  slot: number,
+  kind: QuestKind,
+  player: QuestPlayer,
+  seed: string,
+  shiny = 0,
+  pace?: QuestPace,
+  glimmers = 0
+): QuestEntry => {
   const random = rng(hash(`${seed}|${kind.id}`));
   const group = pace ? pacedGroupOf(kind.id) : null;
   const base = needOf(kind, player, random);
@@ -357,7 +366,11 @@ const entry = (slot: number, kind: QuestKind, player: QuestPlayer, seed: string,
     need: Math.max(1, need),
     have: 0,
     claimed: false,
-    rewards: rewardsOf(kind, player.cap, shiny, group === "resources" && pace ? pace.resources : 1),
+    // A Glimmers quest pays them in place of everything else.
+    rewards:
+      glimmers > 0
+        ? [{ kind: "eventCoins", amount: glimmers }]
+        : rewardsOf(kind, player.cap, shiny, group === "resources" && pace ? pace.resources : 1),
   };
 };
 
@@ -376,7 +389,8 @@ export const pickDaily = (player: QuestPlayer, day: string): QuestSet => {
     seed
   );
   const picked = [...always, ...rest].slice(0, DAILY_QUEST_COUNT);
-  return { period: day, quests: picked.map((kind, slot) => entry(slot, kind, player, seed)), bonus: false, swaps: 0 };
+  return { period: day, quests: picked.map((kind, slot) => entry(slot, kind, player, seed, 0, undefined, slot === picked.length - 1 ? DAILY_GLIMMERS : 0)),
+    bonus: false, swaps: 0 };
 };
 
 /**
@@ -599,6 +613,8 @@ export const swapDaily = (record: QuestRecord, player: QuestPlayer, slot: number
   if (set.swaps >= DAILY_FREE_SWAPS) return { ok: false, reason: "noSwapsLeft" };
   if (quest.claimed || quest.have >= quest.need) return { ok: false, reason: "cannotSwap" };
   const seed = `${player.userid}|s|${set.period}|${set.swaps}`;
+  // The Glimmers stay on their slot, whatever quest lands there.
+  const glimmers = quest.rewards.some((reward) => reward.kind === "eventCoins") ? DAILY_GLIMMERS : 0;
   let fresh: QuestEntry;
   const always = QUEST_KINDS.get(DAILY_ALWAYS);
   if (quest.kind === DAILY_ALWAYS && always) {
@@ -606,7 +622,7 @@ export const swapDaily = (record: QuestRecord, player: QuestPlayer, slot: number
     const tribes = variantChoices(always, player).filter((one) => one !== quest.variant);
     if (tribes.length === 0) return { ok: false, reason: "nothingToSwapTo" };
     const tribe = shuffled(tribes, seed)[0]!;
-    fresh = { ...entry(slot, always, player, seed), variant: tribe };
+    fresh = { ...entry(slot, always, player, seed, 0, undefined, glimmers), variant: tribe };
   } else {
     const shown = new Set(set.quests.map((one) => one.kind));
     const open = DAILY_QUESTS.filter(
@@ -614,7 +630,7 @@ export const swapDaily = (record: QuestRecord, player: QuestPlayer, slot: number
     );
     const kind = shuffled(open, seed)[0];
     if (!kind) return { ok: false, reason: "nothingToSwapTo" };
-    fresh = entry(slot, kind, player, seed);
+    fresh = entry(slot, kind, player, seed, 0, undefined, glimmers);
   }
   const quests = set.quests.map((one) => (one.slot === slot ? fresh : one));
   return { ok: true, record: { ...record, daily: { ...set, quests, swaps: set.swaps + 1 } }, value: fresh };
