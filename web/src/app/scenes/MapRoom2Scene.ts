@@ -905,7 +905,9 @@ export class MapRoom2Scene implements Scene {
         );
       }
 
-      if (base.resources) this.showResources(base.resources, base.credits);
+      // With the outpost income since the load's `t` already on (#207), so the
+      // bar does not open on the bare pool and climb a second later.
+      if (base.resources) this.showResources(this.predictedPool() ?? base.resources, base.credits);
       this.ui?.setOutposts(outpostsOf(base));
       // Every outpost's zone, so the attack roster counts it wherever it is (#187).
       for (const cell of outpostsToLoad(outpostsOf(base), (col, row) => !!this.store.getCell(col, row))) {

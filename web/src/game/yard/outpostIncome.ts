@@ -113,6 +113,15 @@ export class IncomePrediction {
   }
 
   /**
+   * The pool as the server last reported it and `t`, the moment its income is
+   * paid up to: what the server holds, with no predicted tick in it. Null
+   * when there is no income to predict.
+   */
+  get reported(): { readonly resources: Resources; readonly t: number } | null {
+    return this.income ? { resources: this.base, t: this.income.t } : null;
+  }
+
+  /**
    * The server paid the income up to its last whole tick before `serverNow`
    * and `resources` holds it: predict from there.
    */
