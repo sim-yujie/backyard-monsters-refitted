@@ -466,6 +466,23 @@ export class YardStore implements YardStoreReader, YardStoreActions {
     return this.current;
   }
 
+  /**
+   * {@link save} as the server holds it: `resources` without the outpost
+   * income predicted since the last answer, and `buildingresources.t` where
+   * the server last paid it (#207). {@link save} keeps the load's `t` while
+   * its `resources` climb, so a screen that predicts the income afresh from it
+   * (Map Room 2, `mapRoute.ts` `primeFromYard`) would add the ticks twice.
+   */
+  get serverSave(): BaseLoadResponse {
+    const reported = this.income.reported;
+    if (!reported) return this.current;
+    return {
+      ...this.current,
+      resources: reported.resources,
+      buildingresources: { ...this.current.buildingresources, t: reported.t },
+    };
+  }
+
   get yard(): Yard {
     // A tribe camp in the editor stands on the plot a camp grows to (`readYard`).
     this.cachedYard ??= readYard(this.current, isTribeEditing() ? { wild: true } : {});

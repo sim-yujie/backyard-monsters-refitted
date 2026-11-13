@@ -94,8 +94,11 @@ export const primeOwnYard = (save: BaseLoadResponse, at = Date.now()): void => {
 /** What {@link primeFromYard} reads off the own yard's store (`YardStore`). */
 export interface OwnYardState {
   readonly kind: string;
-  /** `/base/load`'s answer with every later answer merged in. */
-  readonly save: BaseLoadResponse;
+  /**
+   * `/base/load`'s answer with every later answer merged in, as the server
+   * holds it: no outpost income predicted on top (`YardStore.serverSave`).
+   */
+  readonly serverSave: BaseLoadResponse;
   /** No request in flight or waiting: the merged save is what the server holds. */
   readonly settled: boolean;
   /** The server's clock, estimated: unix seconds. */
@@ -113,10 +116,17 @@ export interface OwnYardState {
  * from the merged save, and the map loads its own as before. `currenttime` is
  * the store's server-clock estimate now, not the time of the last answer, as
  * the map sets its clock from it. Returns whether it primed.
+ *
+ * The pool is the server's, with `buildingresources.t` where the server paid
+ * the outpost income up to: the map predicts the income since then itself.
+ * Handing it the yard's predicted pool with the load's `t` counted every tick
+ * since the yard's load twice, and the map's first resource sync took them
+ * back off with a red float (owner, 13 Nov 2026: "entering map room 2
+ * sometimes causes me to lose some resource").
  */
 export const primeFromYard = (yard: OwnYardState, at = Date.now()): boolean => {
   if (yard.kind !== "main" || !yard.settled) return false;
-  primeOwnYard({ ...yard.save, currenttime: Math.floor(yard.now()) }, at);
+  primeOwnYard({ ...yard.serverSave, currenttime: Math.floor(yard.now()) }, at);
   return true;
 };
 
