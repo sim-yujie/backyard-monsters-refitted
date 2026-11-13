@@ -655,7 +655,8 @@ export const lootCaps = (context: AttackContext): ResourceAmounts => {
  */
 export const lootAuraBound = (champions: readonly ChampionOnField[]): number => {
   const krallen = champions.find((champion) => champion.id === KRALLEN_ID);
-  if (!krallen || !hasLootAura(KRALLEN_ID, krallen.level, false, krallen.lootAura === true)) return 1;
+  const earned = krallen?.lootAura === true;
+  if (!krallen || !hasLootAura(KRALLEN_ID, krallen.level, false, earned)) return 1;
   const most = LOOT_PROPERTY_BASE + LOOT_PROPERTY_BONUS;
   return (most + lootAuraBonus(krallen.level)) / most;
 };

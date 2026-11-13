@@ -252,7 +252,10 @@ export interface ChampionOnField {
   readonly powerLevel: number;
   /** The food-bonus rank, 0 to 3; it indexes the `bonus*` ladders (`ChampionBase.as:123-155`). */
   readonly foodBonus?: number;
-  /** Krallen's loot aura was earned and running when the attack began (`champions.ts`, `hasLootAura`). */
+  /**
+   * Krallen's loot aura was earned and running when the attack began
+   * (`champions.ts`, `hasLootAura`).
+   */
   readonly lootAura?: boolean;
 }
 

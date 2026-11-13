@@ -210,7 +210,12 @@ export const KRALLEN_AURA_LEVEL = 3;
  * defending from her cage never lifts the loot of the monsters attacking her
  * yard.
  */
-export const hasLootAura = (id: string, level: number, friendly: boolean, earned: boolean): boolean =>
+export const hasLootAura = (
+  id: string,
+  level: number,
+  friendly: boolean,
+  earned: boolean,
+): boolean =>
   id === KRALLEN_ID && !friendly && earned && Math.floor(level) >= KRALLEN_AURA_LEVEL;
 
 /** The aura's radius: her `buffRadius` rung, on screen (`ProximityLootBuff.as:24`). */

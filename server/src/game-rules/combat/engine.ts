@@ -3206,7 +3206,13 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
    * says it was earned, `lootAura`), and Korath's reach into the air.
    * The caged champion brings the frame it drew in its cage instead.
    */
-  const equipChampion = (creep: Creep, power: number, at: Cart, frame?: number, lootAura = false): void => {
+  const equipChampion = (
+    creep: Creep,
+    power: number,
+    at: Cart,
+    frame?: number,
+    lootAura = false,
+  ): void => {
     const id = creep.monsterId;
     creep.power = championPower(id, power);
     creep.frame = frame ?? startFrame(creep.flying);
