@@ -1,6 +1,7 @@
 import { quietLogin } from "@/game/quietLogin";
 import { dismissAnnouncement, fetchAnnouncements } from "@/api/announcements";
 import { AnnouncementQueue, guideRunning } from "@/game/announcements/announcementQueue";
+import { SEASONAL_DECOR_KIND } from "@/game/yard/decorShop";
 import { openAnnouncement } from "@/ui/announcements/AnnouncementDialog";
 import { onGiftClaimed } from "@/ui/announcements/announcementGift";
 import { isPopupOver } from "@/ui/Popup";
@@ -39,7 +40,7 @@ export const announcementsPlugin: YardPlugin = (mounts) => {
         step,
         onClose: closed,
         ...(mounts.binding.scene.openDecorations && {
-          openShop: () => mounts.binding.scene.openDecorations?.(),
+          openShop: () => mounts.binding.scene.openDecorations?.(SEASONAL_DECOR_KIND),
         }),
       }),
     blocked: () => screenBusy(mounts),

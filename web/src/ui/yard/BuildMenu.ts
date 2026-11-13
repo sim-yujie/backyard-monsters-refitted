@@ -33,6 +33,7 @@ import { INFERNO_LOCKED_MESSAGE, purseFunds } from "@/game/yard/surfaceInferno";
 import { BUILD_BLURBS, INFERNO_BUILD_BLURBS } from "./buildBlurbs";
 import { costFactChips } from "./costFactChips";
 import { ShinyButton } from "./ShinyButton";
+import { onCoinBalance } from "@/game/eventCoins";
 import { coinAmount, coinWords } from "@/ui/events/coinUi";
 import "@/ui/styles/build-menu.css";
 
@@ -324,7 +325,16 @@ export class BuildMenu {
     this.main = main;
 
     panel.setContent(strip, main);
-    this.unsubscribe = this.binding.store.subscribe((change) => this.onChange(change));
+    const stopYard = this.binding.store.subscribe((change) => this.onChange(change));
+    // The purse and the prices' "short" marks follow the live Glimmers
+    // balance, which can change outside a yard answer (an announcement's gift).
+    const stopCoins = onCoinBalance(() => {
+      if (this.opened && this.active === BuildCategory.DECORATIONS) this.render();
+    });
+    this.unsubscribe = () => {
+      stopYard();
+      stopCoins();
+    };
   }
 
   /** The window's title row, for the tutorial's "?" (issue #227). */
