@@ -29,6 +29,8 @@ export type EventReward =
   | { readonly kind: "eventCoins"; readonly amount: number }
   /** The champion Krallen: level 1 the first time, one level more each later win, at most 5. */
   | { readonly kind: "krallen" }
+  /** Krallen's loot aura until `until` (unix s): the Krallen Hunt's 3x mark; she fights with it from level 3. */
+  | { readonly kind: "krallenAura"; readonly until: number }
   /** One of Korath's powers (Monster Madness): 1 Burn, 2 Breath of Fire, 3 Fists of Doom. */
   | { readonly kind: "korath"; readonly power: number };
 
@@ -42,6 +44,8 @@ export type GrantedReward =
   | { kind: "eventCoins"; amount: number }
   /** `raised` false: she was at the top already and nothing changed. */
   | { kind: "krallen"; level: number; raised: boolean }
+  /** Her aura's end (unix s, 0 without a Krallen), her level when paid, and whether she had a Krallen. */
+  | { kind: "krallenAura"; until: number; level: number; hasKrallen: boolean }
   /** Korath's power now; `raised` false when it was that high already; `hasKorath` false when it waits for him. */
   | { kind: "korath"; power: number; raised: boolean; hasKorath: boolean };
 
@@ -86,8 +90,21 @@ export interface EventView {
   locked: string | null;
   calendar: CalendarView | null;
   ladder: LadderView | null;
-  /** For an event that pays Krallen: her level now (0 for none) and the top an event raises her to. */
-  krallen: { level: number; maxLevel: number } | null;
+  /**
+   * For an event that pays Krallen: her level now (0 for none), the top an
+   * event raises her to, and when her loot aura runs out (unix s, 0 for none;
+   * absent from an older server). `startLevel` is her level when the hunt
+   * began, `minimum` the loot below which its end takes a level (0: none),
+   * `penalty` what its end took; all absent from an older server.
+   */
+  krallen: {
+    level: number;
+    maxLevel: number;
+    auraUntil?: number;
+    startLevel?: number;
+    minimum?: number;
+    penalty?: { from: number; to: number } | null;
+  } | null;
 }
 
 export interface EventsBody extends ApiEnvelope {

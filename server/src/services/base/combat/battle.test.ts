@@ -95,9 +95,9 @@ const attackerOf = (one: Fixture) => ({
   academy: Object.fromEntries(Object.entries(one.levels).map(([id, level]) => [id, { level }])),
   // Krallen, and a Gorgo at power level 3 and food bonus 3 for `champion-power` (issue #202).
   // Korath and Fomor at the power level and food bonus the champion-ability fixtures fling
-  // them at (issue #222).
+  // them at (issue #222). Krallen holds a loot aura (`la`): the mixed-waves log flings her with it.
   champion: [
-    { t: 5, l: 5, hp: 62000, pl: 2 },
+    { t: 5, l: 5, hp: 62000, pl: 2, la: 1_800_000_000 },
     { t: 1, l: 4, hp: 190000, pl: 3, fb: 3 },
     { t: 4, l: 6, hp: 179000, pl: 3, fb: 3 },
     { t: 3, l: 6, hp: 42200, pl: 3, fb: 2 },

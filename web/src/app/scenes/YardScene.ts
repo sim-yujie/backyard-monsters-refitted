@@ -131,6 +131,7 @@ import {
 } from "@/game/tribeEditor/tribeEditSession";
 import { TribeEditBar, TribePicker } from "@/ui/tribeEditor/TribeEditorPanel";
 import { Notices } from "@/ui/maproom/Notices";
+import { krallenPenaltyNotice } from "@/game/events/eventsModel";
 import { showTakenOver } from "@/ui/maproom/TakeoverDialog";
 import { showBuildMapRoom } from "@/ui/maproom1/MapRoomPrompt";
 import { MonstersScreen } from "@/ui/monsters/MonstersScreen";
@@ -1099,6 +1100,10 @@ export class YardScene implements Scene {
       // A horse on the own main yard: its army's small sheets start now, as
       // its fight has no warning to fetch them in (`raidSheets.ts`).
       if (store?.kind === "main" && findTrojanHorse(yard.buildings)) warmTrojanSheets(false);
+      // The Krallen Hunt took a level, or Krallen, since the last load
+      // (owner, 13 Nov 2026): told once, the server marks it told.
+      const krallenPenalty = store?.kind === "main" ? krallenPenaltyNotice(response.krallenpenalty ?? []) : null;
+      if (krallenPenalty) this.notices.show("krallen-penalty", krallenPenalty, { level: "warning", timeoutMs: 10_000 });
       if (store?.kind === "main" && response.trojanNew) {
         const horse = findTrojanHorse(yard.buildings);
         if (horse && this.camera) {

@@ -251,6 +251,12 @@ export interface ChampionSaveEntry {
   h?: unknown;
   /** What its habits learned from: `n` attacks, and each Mode's count and usual scores. */
   hs?: unknown;
+  /**
+   * Krallen's loot aura runs until then, unix seconds (the Krallen Hunt's 3x
+   * mark, server `services/events/krallenReward.ts`); the server's alone to
+   * write. She fights with it from her level 3 (`KRALLEN_AURA_LEVEL`).
+   */
+  la?: number;
   [key: string]: unknown;
 }
 
@@ -885,6 +891,13 @@ export interface BaseLoadResponse extends ApiEnvelope {
    * finds the horse unsprung.
    */
   trojanNew?: true;
+  /**
+   * The Krallen Hunt's penalties this load is the first to tell (server
+   * `services/events/krallenPenalty.ts`, owner 13 Nov 2026), oldest first:
+   * her level before and after, 0 for lost. Own main yard only; absent when
+   * there is nothing to tell.
+   */
+  krallenpenalty?: { from: number; to: number }[];
 }
 
 /* ── Map Room 2 ─────────────────────────────────────────────────────────── */

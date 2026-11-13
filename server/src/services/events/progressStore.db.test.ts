@@ -135,6 +135,26 @@ describe.skipIf(!dbName)("event progress on a real database", () => {
     expect(await store.addToCounter(em(), A, EVENT, 5)).toBe(3_000_005);
   });
 
+  test("a Krallen Hunt's penalty lands once, keeps the row's loot and is told once", async () => {
+    const HUNT = "krallen-2099-01";
+    await sql(`DELETE FROM bym.event_progress WHERE userid = ? AND event_id = ?`, [A, HUNT]);
+    expect(await store.addToCounter(em(), A, HUNT, 40_000_000)).toBe(40_000_000);
+    const raced = await Promise.all([
+      store.recordKrallenPenalty(em(), A, HUNT, 3, 2),
+      store.recordKrallenPenalty(em(), A, HUNT, 3, 2),
+    ]);
+    expect(raced.filter(Boolean)).toHaveLength(1);
+    // A player with no row gets one.
+    expect(await store.recordKrallenPenalty(em(), B, HUNT, 1, 0)).toBe(true);
+    const progress = (await store.read(em(), A, [HUNT])).get(HUNT)!;
+    expect(progress.counter).toBe(40_000_000);
+    expect(progress.data.krallenPenalty).toEqual({ from: 3, to: 2, told: false });
+    expect(await store.takeKrallenNotices(em(), A)).toEqual([{ event: HUNT, from: 3, to: 2 }]);
+    expect(await store.takeKrallenNotices(em(), A)).toEqual([]);
+    expect(await store.takeKrallenNotices(em(), B)).toEqual([{ event: HUNT, from: 1, to: 0 }]);
+    await sql(`DELETE FROM bym.event_progress WHERE event_id = ?`, [HUNT]);
+  });
+
   test("an unknown player cannot have progress", async () => {
     await expect(store.addToCounter(em(), 995_999, EVENT, 1)).rejects.toThrow();
   });

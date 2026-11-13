@@ -67,7 +67,32 @@ export interface EventProgressStore {
    * stops at {@link COUNTER_MAX} as {@link addToCounter}'s does.
    */
   addTakeover(em: EntityManager, userid: number, eventId: string, baseid: string, amount: number): Promise<number | null>;
+  /**
+   * Records the Krallen Hunt's penalty for `eventId` (`data.krallenPenalty`,
+   * `krallenPenalty.ts`), not yet told, unless one is recorded already.
+   * Returns whether it was recorded: a hunt's penalty lands once.
+   */
+  recordKrallenPenalty(em: EntityManager, userid: number, eventId: string, from: number, to: number): Promise<boolean>;
+  /** Every Krallen penalty not yet told, marked told: each is told once. */
+  takeKrallenNotices(em: EntityManager, userid: number): Promise<KrallenPenaltyNotice[]>;
 }
+
+/** A Krallen Hunt penalty for the yard's one-time notice: her level before and after (0: lost). */
+export interface KrallenPenaltyNotice {
+  readonly event: string;
+  readonly from: number;
+  readonly to: number;
+}
+
+/** Ids of the Krallen Hunts (`krallen-<year>-<mm>`), as the store's LIKE matches them. */
+const KRALLEN_HUNT_LIKE = "krallen-%";
+
+const noticeOf = (event: string, raw: unknown): KrallenPenaltyNotice | null => {
+  const value = typeof raw === "string" ? (JSON.parse(raw) as unknown) : raw;
+  if (value === null || typeof value !== "object") return null;
+  const { from, to } = value as { from?: unknown; to?: unknown };
+  return { event, from: Number(from) || 0, to: Number(to) || 0 };
+};
 
 /** The highest count the `integer` column holds. */
 export const COUNTER_MAX = 2_147_483_647;
@@ -181,6 +206,35 @@ export const sqlProgressStore: EventProgressStore = {
     noteEventPlayer(eventId, userid);
     return Number(rows[0]!.counter) || 0;
   },
+
+  async recordKrallenPenalty(em, userid, eventId, from, to) {
+    const penalty = JSON.stringify({ from, to, told: false });
+    // Not counted as taking part (`noteEventPlayer`): the hunt is over.
+    const rows = await sql(em).execute<{ userid: number }[]>(
+      `INSERT INTO bym.event_progress AS p (userid, event_id, data)
+       VALUES (?, ?, jsonb_build_object('krallenPenalty', ?::jsonb))
+       ON CONFLICT (userid, event_id) DO UPDATE
+          SET data = p.data || EXCLUDED.data, updated_at = now()
+        WHERE p.data->'krallenPenalty' IS NULL
+       RETURNING userid`,
+      [userid, eventId, penalty]
+    );
+    return rows.length > 0;
+  },
+
+  async takeKrallenNotices(em, userid) {
+    const rows = await sql(em).execute<{ event_id: string; penalty: unknown }[]>(
+      `UPDATE bym.event_progress
+          SET data = jsonb_set(data, '{krallenPenalty,told}', 'true'::jsonb), updated_at = now()
+        WHERE userid = ? AND event_id LIKE ? AND data->'krallenPenalty'->>'told' = 'false'
+       RETURNING event_id, data->'krallenPenalty' AS penalty`,
+      [userid, KRALLEN_HUNT_LIKE]
+    );
+    return rows
+      .map((row) => noticeOf(row.event_id, row.penalty))
+      .filter((one): one is KrallenPenaltyNotice => one !== null)
+      .sort((a, b) => a.event.localeCompare(b.event));
+  },
 };
 
 /**
@@ -232,6 +286,24 @@ export const memoryProgressStore = (): EventProgressStore & { rows: Map<string, 
       };
       rows.set(key(userid, eventId), next);
       return next.counter;
+    },
+    async recordKrallenPenalty(_em, userid, eventId, from, to) {
+      const now = get(userid, eventId);
+      if (now.data.krallenPenalty !== undefined) return false;
+      rows.set(key(userid, eventId), { ...now, data: { ...now.data, krallenPenalty: { from, to, told: false } } });
+      return true;
+    },
+    async takeKrallenNotices(_em, userid) {
+      const told: KrallenPenaltyNotice[] = [];
+      for (const [id, row] of rows) {
+        const cut = id.indexOf(":");
+        const eventId = id.slice(cut + 1);
+        const penalty = row.data.krallenPenalty as { from?: unknown; to?: unknown; told?: unknown } | undefined;
+        if (id.slice(0, cut) !== String(userid) || !eventId.startsWith("krallen-") || penalty?.told !== false) continue;
+        rows.set(id, { ...row, data: { ...row.data, krallenPenalty: { ...penalty, told: true } } });
+        told.push(noticeOf(eventId, penalty)!);
+      }
+      return told.sort((a, b) => a.event.localeCompare(b.event));
     },
   };
 };

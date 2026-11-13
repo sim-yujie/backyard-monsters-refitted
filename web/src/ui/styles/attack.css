@@ -734,6 +734,21 @@
   color: var(--colour-text-muted);
 }
 
+/* Krallen's Krallen Hunt loot aura: Flash's green looting glow (`LootingMultiplier.as:29`, 0x55FF21). */
+.attack-army__icon--aura img {
+  filter: drop-shadow(0 0 3px #55ff21);
+}
+
+.attack-army__aura {
+  font-size: var(--text-xs);
+  font-weight: 700;
+  padding: 0 var(--space-1);
+  border: 1px solid #55ff21;
+  border-radius: var(--radius-sm);
+  color: var(--colour-success);
+  font-variant-numeric: tabular-nums;
+}
+
 .attack-army__housed {
   margin-left: auto;
   font-size: var(--text-xs);
