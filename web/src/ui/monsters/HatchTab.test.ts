@@ -592,6 +592,106 @@ describe("HatchTab: the grid", () => {
     expect(info.style.minHeight).toBe("200px");
   });
 
+  it("updates the tiles where they are on a tap, never building the grid again (owner, 13 Nov)", () => {
+    const { element } = setup(twoHatcheries(), { buildingId: 10, monster: "C1" });
+    const scroll = element.querySelector<HTMLElement>(".hatch__scroll")!;
+    const grid = element.querySelector<HTMLElement>(".hatch__grid")!;
+    const before = [...grid.children];
+    const c3 = monster(element, "C3");
+    c3.focus();
+    scroll.scrollTop = 400;
+    c3.click();
+    // The same box, the same tiles, the tapped one still under the finger with the focus.
+    expect(element.querySelector(".hatch__scroll")).toBe(scroll);
+    expect([...grid.children]).toEqual(before);
+    expect(monster(element, "C3")).toBe(c3);
+    expect(document.activeElement).toBe(c3);
+    expect(c3.getAttribute("aria-pressed")).toBe("true");
+    expect(monster(element, "C1").getAttribute("aria-pressed")).toBe("false");
+    expect(scroll.scrollTop).toBe(400);
+    more(element, 2);
+    element.querySelector<HTMLButtonElement>(".hatch-add__jump")!.click();
+    expect([...grid.children]).toEqual(before);
+    expect(box(element).value).toBe("7");
+    expect(scroll.scrollTop).toBe(400);
+  });
+
+  it("keeps the hatchery tabs, slid sideways, through a tap on a monster, + and +5 (owner, 13 Nov)", () => {
+    const { element } = setup(twoHatcheries(), { buildingId: 11, monster: "C1" });
+    const strip = element.querySelector<HTMLElement>(".hatch-tabs")!;
+    strip.scrollLeft = 120;
+    monster(element, "C3").click();
+    more(element);
+    element.querySelector<HTMLButtonElement>(".hatch-add__jump")!.click();
+    expect(element.querySelector(".hatch-tabs")).toBe(strip);
+    expect(strip.scrollLeft).toBe(120);
+    // A tab with something new on it draws the strip again: another hatchery chosen.
+    tab(element, 10).click();
+    expect(tab(element, 10).getAttribute("aria-selected")).toBe("true");
+    expect(tab(element, 11).getAttribute("aria-selected")).toBe("false");
+  });
+
+  it("keeps the box still when a step of the count shortens the line over the grid (owner, 13 Nov)", () => {
+    // Bolts after Hatchery 2's Pokeys: a new stack, a dashed slot of its own.
+    const { element } = setup(twoHatcheries(), { buildingId: 10, monster: "C3" });
+    const scroll = element.querySelector<HTMLElement>(".hatch__scroll")!;
+    const info = element.querySelector<HTMLElement>(".hatch-info")!;
+    // A browser's box, which jsdom lacks: each dashed "would add" slot is a
+    // row of the line, the box never scrolled past its bottom.
+    const panel = (): number => Math.max(200, Number.parseFloat(info.style.minHeight) || 0);
+    const rows = (): number => element.querySelectorAll(".hatch-slot--preview").length * 90;
+    let top = 0;
+    Object.defineProperty(info, "offsetHeight", { configurable: true, get: panel });
+    Object.defineProperty(scroll, "scrollHeight", { configurable: true, get: () => 800 + rows() + panel() });
+    Object.defineProperty(scroll, "clientHeight", { configurable: true, get: () => 400 });
+    Object.defineProperty(scroll, "scrollTop", {
+      configurable: true,
+      get: () => Math.min(top, scroll.scrollHeight - scroll.clientHeight),
+      set: (value: number) => {
+        top = value;
+      },
+    });
+    more(element);
+    expect(rows()).toBe(90);
+    scroll.scrollTop = 690; // the bottom
+    element.querySelector<HTMLButtonElement>(".hatch-add__step--minus")!.click();
+    expect(box(element).value).toBe("0");
+    expect(rows()).toBe(0);
+    expect(scroll.scrollTop).toBe(690);
+  });
+
+  it("puts the box back when the browser moves it in the frames after a tap, not after the player scrolls (owner, 13 Nov)", () => {
+    const frames: FrameRequestCallback[] = [];
+    vi.stubGlobal("requestAnimationFrame", (callback: FrameRequestCallback) => frames.push(callback));
+    vi.stubGlobal("cancelAnimationFrame", () => undefined);
+    const runFrames = (): void => {
+      for (let i = 0; i < 5 && frames.length > 0; i++) frames.shift()!(0);
+    };
+    try {
+      const { element } = setup(twoHatcheries(), { buildingId: 11, monster: "C1" });
+      const scroll = element.querySelector<HTMLElement>(".hatch__scroll")!;
+      runFrames();
+      scroll.scrollTop = 400;
+      more(element);
+      // Laid out and painted after the tap, the box jumps to the top.
+      scroll.scrollTop = 0;
+      runFrames();
+      expect(scroll.scrollTop).toBe(400);
+      monster(element, "C3").click();
+      scroll.scrollTop = 0;
+      runFrames();
+      expect(scroll.scrollTop).toBe(400);
+      // The player's own scroll stays.
+      more(element);
+      scroll.dispatchEvent(new Event("touchmove"));
+      scroll.scrollTop = 100;
+      runFrames();
+      expect(scroll.scrollTop).toBe(100);
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
   it("prices a tile short, with the full figure on hover and in the stats (owner, 9 Nov)", () => {
     const lockerdata = { C1: { t: 2 }, C3: { t: 2 }, C7: { t: 2 }, C12: { t: 2 } };
     const { element } = setup(twoHatcheries({ lockerdata } as Partial<BaseLoadResponse>), { monster: "C12" });

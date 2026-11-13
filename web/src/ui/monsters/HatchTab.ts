@@ -129,6 +129,20 @@ const hatchRushChip = (): (Node | string)[] => {
 type Status = { readonly tone: "good" | "bad"; readonly content: (Node | string)[] };
 
 /** A live countdown, refreshed once a second without a redraw. */
+/** One monster's tile in the grid, kept across draws (`renderGrid`). */
+interface HatchTile {
+  readonly item: HTMLLIElement;
+  readonly button: HTMLButtonElement;
+  readonly note: HTMLElement;
+  /** What the note shows now, to rewrite it only when that changes. */
+  noteKey: string;
+}
+
+/** Frames after a redraw in which a box that moved by itself is put back (`keepScroll`). */
+const SETTLE_FRAMES = 3;
+/** Milliseconds a flung list may still be gliding after the finger's last move: no late check then. */
+const GLIDE_MS = 1500;
+
 interface Clock {
   readonly node: HTMLElement;
   readonly endsAt: number;
@@ -262,6 +276,19 @@ export class HatchTab implements MonstersTab {
   private plainButtons: HTMLButtonElement[] = [];
   /** Add has a reason not to be pressed, or nothing to add. */
   private addBlocked = true;
+  /**
+   * The grid's tiles by monster, kept from draw to draw: a tap updates them
+   * where they are rather than building the grid again under the finger.
+   */
+  private readonly tiles = new Map<string, HatchTile>();
+  /** The monsters the grid shows, in order, as last drawn. */
+  private gridOrder = "";
+  /** The hatchery tabs as last drawn, kept while nothing on them changed (see `renderLines`). */
+  private strip: { key: string; element: HTMLElement; clocks: Clock[] } | null = null;
+  /** The frame that checks the box stayed put after a redraw (`settleScroll`). */
+  private settling: number | null = null;
+  /** When the player last scrolled the box by hand (`performance.now()`), so a late check leaves it be. */
+  private scrolledAt = Number.NEGATIVE_INFINITY;
 
   constructor(context: MonstersTabContext, actions?: HatcheryActions) {
     this.context = context;
@@ -281,6 +308,21 @@ export class HatchTab implements MonstersTab {
 
     this.scroll = document.createElement("div");
     this.scroll.className = "tab-scroll hatch__scroll";
+    // The player's own scrolling: a finger dragging, a wheel, a key, the
+    // scrollbar. A redraw's late check (`settleScroll`) never undoes it.
+    const scrolledByHand = (): void => {
+      this.scrolledAt = performance.now();
+    };
+    for (const name of ["touchmove", "wheel", "keydown"] as const) {
+      this.scroll.addEventListener(name, scrolledByHand, { passive: true });
+    }
+    this.scroll.addEventListener(
+      "pointerdown",
+      (event) => {
+        if (event.target === this.scroll) scrolledByHand();
+      },
+      { passive: true },
+    );
 
     this.lines = document.createElement("section");
     this.lines.className = "hatch-lines";
@@ -445,6 +487,8 @@ export class HatchTab implements MonstersTab {
   }
 
   destroy(): void {
+    if (this.settling !== null && typeof cancelAnimationFrame === "function") cancelAnimationFrame(this.settling);
+    this.settling = null;
     this.taking = null;
     this.markYard(null);
     this.stepper.destroy();
@@ -456,15 +500,73 @@ export class HatchTab implements MonstersTab {
   /* ── Drawing ────────────────────────────────────────────────────────── */
 
   private render(): void {
-    const focusKey = (document.activeElement as HTMLElement | null)?.dataset?.["focusKey"];
-    // A redraw (a monster chosen, a hatch done) keeps the box where the player
-    // scrolled it (owner, 9 Nov: on a phone, choosing a monster lower down
-    // sometimes jumped the list back to the top). Only a hatchery tab's tap
-    // opens at the top, and it sets that before it redraws.
-    const scrolled = this.scroll.scrollTop;
-    const tall = this.scroll.scrollHeight;
-    // The info panel's held height (below) is let go; it is measured again.
+    this.keepScroll(() => this.draw());
+  }
+
+  /**
+   * Runs a redraw with the scroll box held where the player left it (owner,
+   * 9 and 13 Nov: on a phone, choosing a monster, `+` or `+5` threw the list
+   * back to the top). Every redraw comes through here, the whole one and the
+   * count's alone. Only a hatchery tab's tap opens at the top, and it sets
+   * that before it redraws.
+   *
+   * - The focus: a redraw that took away the node with the focus gives it to
+   *   the new copy without a scroll. A plain focus() scrolls the box to it,
+   *   and on a phone that is often up in the line.
+   * - The box's height: a shorter info panel (D.A.V.E.'s after Crabatron's)
+   *   made the box shorter while it was scrolled to the bottom, and the
+   *   browser pulled the scroll up (tester, 9 Nov). The panel keeps the
+   *   height it lost.
+   * - Late moves: the browser lays the new nodes out, and decodes their
+   *   pictures, after this returns. For the next frames, a box that moved
+   *   without the player scrolling it goes back.
+   */
+  private keepScroll(draw: () => void): void {
+    const box = this.scroll;
+    const focused = document.activeElement as HTMLElement | null;
+    const focusKey = focused?.dataset?.["focusKey"];
+    const scrolled = box.scrollTop;
+    const tall = box.scrollHeight;
+    // The info panel's held height is let go; it is measured again.
     this.info.style.minHeight = "";
+    draw();
+    if (focusKey && focused && !focused.isConnected) {
+      this.element.querySelector<HTMLElement>(`[data-focus-key="${focusKey}"]`)?.focus({ preventScroll: true });
+    }
+    this.holdScroll(scrolled, tall);
+    this.settleScroll(scrolled, tall);
+  }
+
+  /** Puts the box back at `scrolled`, the info panel keeping any height the box lost. */
+  private holdScroll(scrolled: number, tall: number): void {
+    const box = this.scroll;
+    if (box.scrollTop === scrolled) return;
+    const lost = tall - box.scrollHeight;
+    if (lost > 0) this.info.style.minHeight = `${this.info.offsetHeight + lost}px`;
+    box.scrollTop = scrolled;
+  }
+
+  /** For the next frames, a box that moved on its own goes back (see `keepScroll`). */
+  private settleScroll(scrolled: number, tall: number): void {
+    if (typeof requestAnimationFrame !== "function") return;
+    if (this.settling !== null) cancelAnimationFrame(this.settling);
+    this.settling = null;
+    const since = this.scrolledAt;
+    // A list still gliding from a fling moves by itself: leave it be.
+    if (performance.now() - since < GLIDE_MS) return;
+    let frames = SETTLE_FRAMES;
+    const check = (): void => {
+      this.settling = null;
+      // The player scrolled meanwhile: where they put it is where it stays.
+      if (!this.scroll.isConnected || this.scrolledAt !== since) return;
+      this.holdScroll(scrolled, tall);
+      frames -= 1;
+      if (frames > 0) this.settling = requestAnimationFrame(check);
+    };
+    this.settling = requestAnimationFrame(check);
+  }
+
+  private draw(): void {
     const store = this.store;
     const yard = readHatchYard(store.save, store.now());
     this.yard = yard;
@@ -494,25 +596,8 @@ export class HatchTab implements MonstersTab {
         this.shiny.delete(key);
       }
     }
-    this.renderCount(document.activeElement !== this.stepper.input);
+    this.drawCount(document.activeElement !== this.stepper.input);
     this.markYard(yard.hcc || yard.hatcheries.length === 0 ? null : this.target);
-    // The focus goes back to the redrawn copy of what had it, where it was:
-    // without preventScroll the browser scrolls the box to it, and on a phone
-    // that is often a button up in the line (a tap there focuses it, and an
-    // iPhone's tap on a monster leaves the focus where it was), so choosing a
-    // monster lower down threw the list back up.
-    if (focusKey) {
-      this.element.querySelector<HTMLElement>(`[data-focus-key="${focusKey}"]`)?.focus({ preventScroll: true });
-    }
-    if (this.scroll.scrollTop !== scrolled) {
-      // A shorter info panel (D.A.V.E.'s after Crabatron's) made the box
-      // shorter while it was scrolled to the bottom: the browser pulled the
-      // scroll up and the list moved about 20 px (tester, 9 Nov, phone). The
-      // panel keeps the height it lost, so the list stays put.
-      const lost = tall - this.scroll.scrollHeight;
-      if (lost > 0) this.info.style.minHeight = `${this.info.offsetHeight + lost}px`;
-      this.scroll.scrollTop = scrolled;
-    }
   }
 
   /**
@@ -534,9 +619,14 @@ export class HatchTab implements MonstersTab {
   /**
    * Everything that follows the count: the box, Max, Add, the lines under
    * them, the dashed slots and the housing bar. Runs on every step of a
-   * hold, so the grid and the info panel are left alone.
+   * hold, so the grid and the info panel are left alone. The line over the
+   * grid is redrawn, so the box is held still (`keepScroll`).
    */
   private renderCount(rewrite: boolean): void {
+    this.keepScroll(() => this.drawCount(rewrite));
+  }
+
+  private drawCount(rewrite: boolean): void {
     const yard = this.yard;
     const row = this.selectedRow();
     const target = this.target;
@@ -631,13 +721,35 @@ export class HatchTab implements MonstersTab {
     const tabs = hatcheryTabs(yard, this.numbers);
     const chosen = yard.hatcheries.find((one) => one.id === this.target) ?? yard.hatcheries[0]!;
     const line = this.hatcheryLine(yard, chosen, tabs.length > 0, preview, added);
-    this.showTabs(tabs.length > 0 ? this.tabStrip(tabs, chosen.id) : null);
+    this.showTabs(tabs.length > 0 ? this.keptStrip(tabs, chosen.id) : null);
     this.lines.replaceChildren(line);
+  }
+
+  /**
+   * The tab strip, built again only when a tab has something new to show.
+   * A `+` or a monster chosen changes nothing on the tabs: the same strip
+   * stays, so a row slid sideways to Hatchery 5 stays there and the row's
+   * height never changes over the box (owner, 13 Nov).
+   */
+  private keptStrip(tabs: readonly HatcheryTab[], chosen: number): HTMLElement {
+    const key = JSON.stringify([this.store.kind, this.words.hatchery, chosen, tabs]);
+    if (this.strip?.key !== key) {
+      const before = this.clocks.length;
+      const element = this.tabStrip(tabs, chosen);
+      this.strip = { key, element, clocks: this.clocks.slice(before) };
+    } else {
+      // Its countdowns keep ticking.
+      this.clocks.push(...this.strip.clocks);
+    }
+    return this.strip.element;
   }
 
   /** The tab strip in its row over the scroll box, or no row at all. */
   private showTabs(strip: HTMLElement | null): void {
-    this.tabsRow.replaceChildren(...(strip ? [strip] : []));
+    if (strip === null) this.strip = null;
+    if (this.tabsRow.firstElementChild !== strip || this.tabsRow.childElementCount !== (strip ? 1 : 0)) {
+      this.tabsRow.replaceChildren(...(strip ? [strip] : []));
+    }
     this.tabsRow.hidden = strip === null;
   }
 
@@ -1244,14 +1356,26 @@ export class HatchTab implements MonstersTab {
 
   /* ── The grid ───────────────────────────────────────────────────────── */
 
+  /**
+   * The monsters to choose from. Each tile is built once and then updated
+   * where it is (owner, 13 Nov: on a phone a tap threw the list back to the
+   * top): a tap changes which tile is pressed and the counts, never the
+   * nodes, so the button under the finger, its focus and the grid's height
+   * all stay. The grid is rebuilt only when the monsters in it change.
+   */
   private renderGrid(monsters: readonly HatchMonster[]): void {
-    const items = monsters.map((row) => {
-      const item = document.createElement("li");
-      const button = document.createElement("button");
-      button.type = "button";
-      button.className = `hatch-monster hatch-monster--${row.state.kind}`;
-      button.dataset["monster"] = row.monster.id;
-      button.dataset["focusKey"] = `monster-${row.monster.id}`;
+    const order = monsters.map((row) => row.monster.id).join(",");
+    if (order !== this.gridOrder) {
+      this.gridOrder = order;
+      const ids = new Set(monsters.map((row) => row.monster.id));
+      for (const id of [...this.tiles.keys()]) if (!ids.has(id)) this.tiles.delete(id);
+      this.grid.replaceChildren(...monsters.map((row) => this.tile(row).item));
+    }
+    for (const row of monsters) {
+      const tile = this.tile(row);
+      const { button, note } = tile;
+      const kind = `hatch-monster hatch-monster--${row.state.kind}`;
+      if (button.className !== kind) button.className = kind;
       button.setAttribute("aria-pressed", String(row.monster.id === this.selected));
       // The tile says its price short ("468K", owner 9 Nov: easier to see), rounded up so it never looks cheaper;
       // the full figure stays on hover here and in the chosen monster's stats.
@@ -1259,22 +1383,13 @@ export class HatchTab implements MonstersTab {
         row.state.kind === "ready"
           ? `Choose ${row.monster.name} · ${formatAmount(row.price)} each`
           : `${row.monster.name}: ${row.state.kind === "unlocking" ? "still unlocking" : "locked"}`;
-      button.addEventListener("click", () => this.tapMonster(row));
-      const name = document.createElement("span");
-      // A long name ("Slimeattikus") gets smaller letters on a phone, so it
-      // stays whole on one line rather than breaking mid-word.
-      name.className =
-        row.monster.name.length > LONG_NAME ? "hatch-monster__name hatch-monster__name--long" : "hatch-monster__name";
-      name.textContent = row.monster.name;
-      const note = document.createElement("span");
-      note.className = "hatch-monster__note";
-      if (row.state.kind === "ready") note.append(resourceAmount("r4", formatShortPrice(row.price)));
-      else note.textContent = row.state.kind === "unlocking" ? "Unlocking" : "Locked";
-      button.append(monsterPicture(row.monster, "small", "hatch-monster__picture"), name, " ", note);
-      item.append(button);
-      return item;
-    });
-    this.grid.replaceChildren(...items);
+      const noteKey = row.state.kind === "ready" ? `ready ${row.price}` : row.state.kind;
+      if (tile.noteKey !== noteKey) {
+        tile.noteKey = noteKey;
+        if (row.state.kind === "ready") note.replaceChildren(resourceAmount("r4", formatShortPrice(row.price)));
+        else note.textContent = row.state.kind === "unlocking" ? "Unlocking" : "Locked";
+      }
+    }
 
     const locked = monsters.some((row) => row.state.kind !== "ready");
     this.lockedNote.hidden = !locked;
@@ -1294,6 +1409,32 @@ export class HatchTab implements MonstersTab {
     go.textContent = `Go to ${this.words.locker}`;
     go.addEventListener("click", () => this.context.showTab(MonstersTabId.UNLOCK, {}));
     this.lockedNote.replaceChildren(lock, text, go);
+  }
+
+  /** A monster's tile, built the first time the grid shows it; `renderGrid` fills in the rest. */
+  private tile(row: HatchMonster): HatchTile {
+    const id = row.monster.id;
+    const kept = this.tiles.get(id);
+    if (kept) return kept;
+    const item = document.createElement("li");
+    const button = document.createElement("button");
+    button.type = "button";
+    button.dataset["monster"] = id;
+    button.dataset["focusKey"] = `monster-${id}`;
+    button.addEventListener("click", () => this.tapMonster(id));
+    const name = document.createElement("span");
+    // A long name ("Slimeattikus") gets smaller letters on a phone, so it
+    // stays whole on one line rather than breaking mid-word.
+    name.className =
+      row.monster.name.length > LONG_NAME ? "hatch-monster__name hatch-monster__name--long" : "hatch-monster__name";
+    name.textContent = row.monster.name;
+    const note = document.createElement("span");
+    note.className = "hatch-monster__note";
+    button.append(monsterPicture(row.monster, "small", "hatch-monster__picture"), name, " ", note);
+    item.append(button);
+    const tile: HatchTile = { item, button, note, noteKey: "" };
+    this.tiles.set(id, tile);
+    return tile;
   }
 
   /* ── The info panel ─────────────────────────────────────────────────── */
@@ -1528,8 +1669,8 @@ export class HatchTab implements MonstersTab {
    * per tap (`HATCHERYPOPUP.as:234-291`); with the count and Add beside it
    * that made two ways to add and surprise extras.
    */
-  private tapMonster(row: HatchMonster): void {
-    this.select(row.monster.id);
+  private tapMonster(id: string): void {
+    this.select(id);
   }
 
   /** A tab's tap: its line shows, monsters go to it, the yard's outline moves to it, and it is remembered. */
