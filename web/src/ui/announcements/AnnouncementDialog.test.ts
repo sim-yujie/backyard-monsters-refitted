@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { Announcement } from "@/api/announcements";
+import { coinBalance, onCoinsGained, resetCoins } from "@/game/eventCoins";
 import { isPopupOver } from "@/ui/Popup";
 import { announcementText, linkPieces, paragraphsOf, safeHref } from "./announcementContent";
 import { onGiftClaimed } from "./announcementGift";
@@ -161,6 +162,61 @@ describe("a gift", () => {
     openAnnouncement({ container: document.body, announcement: { ...gift, claimed: true } });
     expect(words()).toContain("Got it");
     expect(words()).not.toContain("Claim");
+  });
+});
+
+describe("a Glimmers gift", () => {
+  const glimmers = { id: 8, title: "Thanks", body: "Happy Thanksgiving", imageIds: [], glimmers: 100 };
+  const visible = (selector: string): HTMLButtonElement | undefined =>
+    [...document.querySelectorAll<HTMLButtonElement>(selector)].find((b) => !b.hidden);
+
+  afterEach(() => resetCoins());
+
+  it("shows the Glimmer and the amount, and the claim's purse moves the top bar with a +100", async () => {
+    resetCoins();
+    const gains: number[] = [];
+    onCoinsGained((gained) => gains.push(gained.amount));
+    const claim = vi.fn(() =>
+      Promise.resolve({
+        error: 0,
+        shiny: 0,
+        glimmers: 100,
+        already: false,
+        eventcoins: 140,
+        coinsGained: [{ amount: 100, reason: "announcement" }],
+      }),
+    );
+    const openShop = vi.fn();
+    openAnnouncement({ container: document.body, announcement: glimmers, claim, openShop });
+    const amount = document.querySelector(".announcement-gift__amount--glimmers");
+    expect(amount?.querySelector("img.game-icon--eventcoin")).not.toBeNull();
+    expect(amount?.textContent).toContain("100");
+    expect(document.querySelector(".res-amount")).toBeNull();
+    expect(visible(".announcement-dialog__shop")).toBeUndefined();
+
+    visible(".announcement-gift__claim")!.click();
+    await vi.waitFor(() => expect(visible(".announcement-dialog__done")).toBeDefined());
+    expect(coinBalance()).toBe(140);
+    expect(gains).toEqual([100]);
+
+    visible(".announcement-dialog__shop")!.click();
+    expect(openShop).toHaveBeenCalledOnce();
+    expect(isAnnouncementOpen()).toBe(false);
+  });
+
+  it("shows Shiny and Glimmers side by side under one Claim", () => {
+    openAnnouncement({ container: document.body, announcement: { ...glimmers, shiny: 200 } });
+    expect(document.querySelector(".res-amount")?.textContent).toContain("200");
+    expect(document.querySelector(".announcement-gift__amount--glimmers")?.textContent).toContain("100");
+    expect(document.querySelectorAll(".announcement-gift__claim")).toHaveLength(1);
+  });
+
+  it("has no Shop without a shop to open, and Shop at once when claimed already", () => {
+    openAnnouncement({ container: document.body, announcement: { ...glimmers, claimed: true } });
+    expect(document.querySelector(".announcement-dialog__shop")).toBeNull();
+    document.body.replaceChildren();
+    openAnnouncement({ container: document.body, announcement: { ...glimmers, claimed: true }, openShop: vi.fn() });
+    expect(visible(".announcement-dialog__shop")).toBeDefined();
   });
 });
 

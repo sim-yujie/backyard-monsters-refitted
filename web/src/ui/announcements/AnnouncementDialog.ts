@@ -1,4 +1,5 @@
 import { announcementImageUrl, type Announcement } from "@/api/announcements";
+import { coinAmount } from "@/ui/events/coinUi";
 import { Popup } from "@/ui/Popup";
 import { announcementContent } from "./announcementContent";
 import { announcementGift } from "./announcementGift";
@@ -12,7 +13,10 @@ import "./announcements.css";
  * The scrim does not close the pop-up, so a stray tap on a phone does not
  * skip it; "Got it", the close button and Escape all do. One with a gift not
  * yet claimed has "Claim" (`announcementGift.ts`) and shows "Got it" after
- * it; closing it unclaimed brings it back on the next visit.
+ * it; closing it unclaimed brings it back on the next visit. A gift with
+ * Glimmers also shows "Shop" beside "Got it" once claimed, which opens the
+ * decorations, where Glimmers are spent (owner, 13 Nov 2026: "promote
+ * decorations in game").
  */
 
 const el = <K extends keyof HTMLElementTagNameMap>(
@@ -36,7 +40,7 @@ export interface AnnouncementDialogOptions {
   /** Where the popup mounts: the modal layer. */
   readonly container: HTMLElement;
   readonly announcement: Pick<Announcement, "title" | "body" | "imageIds"> &
-    Partial<Pick<Announcement, "id" | "shiny" | "claimed">>;
+    Partial<Pick<Announcement, "id" | "shiny" | "glimmers" | "claimed">>;
   /** Which one of how many waiting, shown as "1 / 2" when there is more than one. */
   readonly step?: { readonly index: number; readonly total: number };
   /** A picture's address; the game's public picture route by default. */
@@ -45,12 +49,32 @@ export interface AnnouncementDialogOptions {
   readonly onClose?: () => void;
   /** Asks the server for the gift; the game's route by default. */
   readonly claim?: (id: number) => Promise<unknown>;
+  /** Opens the decorations (the Build window's Decorations tab); without it, no "Shop". */
+  readonly openShop?: () => void;
 }
 
-/** Whether `item` has a gift to draw. */
-const hasGift = (
-  item: Partial<Pick<Announcement, "id" | "shiny">>,
-): item is { id: number; shiny: number } => item.id !== undefined && (item.shiny ?? 0) > 0;
+/** The gift `item` holds, or null when it has none to draw. */
+const giftOf = (
+  item: Partial<Pick<Announcement, "id" | "shiny" | "glimmers">>,
+): { id: number; shiny: number; glimmers: number } | null => {
+  const shiny = Math.max(0, item.shiny ?? 0);
+  const glimmers = Math.max(0, item.glimmers ?? 0);
+  return item.id !== undefined && (shiny > 0 || glimmers > 0) ? { id: item.id, shiny, glimmers } : null;
+};
+
+/** "[glimmer] Shop": closes the pop-up and opens the decorations. */
+const shopButton = (popup: Popup, openShop: () => void): HTMLButtonElement => {
+  const button = el("button", "btn btn--outline announcement-dialog__shop");
+  button.type = "button";
+  button.setAttribute("aria-label", "Shop: decorations cost Glimmers");
+  button.title = "Decorations cost Glimmers";
+  button.append(coinAmount("Shop", { size: 24, decorative: true }));
+  button.addEventListener("click", () => {
+    popup.close();
+    openShop();
+  });
+  return button;
+};
 
 /** Opens one announcement with its "Got it". */
 export const openAnnouncement = (options: AnnouncementDialogOptions): Popup => {
@@ -68,20 +92,23 @@ export const openAnnouncement = (options: AnnouncementDialogOptions): Popup => {
   done.type = "button";
   done.addEventListener("click", () => popup.close());
   let claimButton: HTMLButtonElement | null = null;
-  if (hasGift(announcement)) {
-    const gift = announcementGift({
-      id: announcement.id,
-      shiny: announcement.shiny,
+  const gift = giftOf(announcement);
+  const shop = gift && gift.glimmers > 0 && options.openShop ? shopButton(popup, options.openShop) : null;
+  if (gift) {
+    const row = announcementGift({
+      ...gift,
       claimed: announcement.claimed === true,
       ...(options.claim && { claim: options.claim }),
       onClaimed: () => {
         done.hidden = false;
+        if (shop) shop.hidden = false;
         done.focus({ preventScroll: true });
       },
     });
-    claimButton = gift.button;
+    claimButton = row.button;
     done.hidden = claimButton !== null;
-    body.append(gift.element);
+    if (shop) shop.hidden = claimButton !== null;
+    body.append(row.element);
   }
   const foot = el("div", "announcement-dialog__foot");
   if (options.step && options.step.total > 1) {
@@ -93,6 +120,7 @@ export const openAnnouncement = (options: AnnouncementDialogOptions): Popup => {
     count.setAttribute("aria-label", `${options.step.index + 1} of ${options.step.total}`);
     foot.append(count);
   }
+  if (shop) foot.append(shop);
   foot.append(done);
   body.append(foot);
   popup.setContent(body).mount(options.container);
@@ -135,10 +163,9 @@ export const openNews = (options: NewsOptions): Popup => {
           el("h3", "announcement-news__title", item.title),
           announcementContent(item.body, item.imageIds.map(imageUrl)),
         );
-        if (hasGift(item)) {
-          article.append(
-            announcementGift({ id: item.id, shiny: item.shiny, claimed: item.claimed === true }).element,
-          );
+        const gift = giftOf(item);
+        if (gift) {
+          article.append(announcementGift({ ...gift, claimed: item.claimed === true }).element);
         }
         body.append(article);
       }

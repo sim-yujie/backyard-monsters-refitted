@@ -11,7 +11,8 @@ import { YARD_PLUGINS, type YardMounts, type YardPlugin } from "../yardPlugins";
  * (`game/announcements/announcementQueue.ts`): after the yard loads, each
  * current one the player has not pressed "Got it" on pops up, one at a time,
  * once nothing else has the screen. A gift claimed here or in "News" moves
- * the HUD's Shiny through the yard's next answer.
+ * the HUD's Shiny through the yard's next answer; its Glimmers come in the
+ * claim's own answer. A gift with Glimmers offers "Shop" (the decorations).
  */
 
 /** Whether Bob is talking: the guided start, Help's tour of it, or a tip. */
@@ -37,6 +38,9 @@ export const announcementsPlugin: YardPlugin = (mounts) => {
         announcement: item,
         step,
         onClose: closed,
+        ...(mounts.binding.scene.openDecorations && {
+          openShop: () => mounts.binding.scene.openDecorations?.(),
+        }),
       }),
     blocked: () => screenBusy(mounts),
     setTimer: (run, ms) => window.setTimeout(run, ms),

@@ -1,12 +1,12 @@
 import { apiUrl, get, post } from "./http";
-import type { ApiEnvelope } from "./types";
+import type { ApiEnvelope, CoinGain } from "./types";
 
 /**
  * The owner's in-game announcements (server `controllers/announcements/routes.ts`):
  *
  *   GET  /api/:apiVersion/bm/announcements              the current ones, newest first
  *   POST /api/:apiVersion/bm/announcements/:id/dismiss  "Got it", kept per account
- *   POST /api/:apiVersion/bm/announcements/:id/claim    the gift's Shiny, once per account
+ *   POST /api/:apiVersion/bm/announcements/:id/claim    the gift's Shiny and Glimmers, once per account
  *   GET  /api/:apiVersion/announcements/images/:id      a picture, for an `<img src>`
  */
 
@@ -24,6 +24,8 @@ export interface Announcement {
   readonly dismissed: boolean;
   /** The gift this player may claim; absent or 0 is none. */
   readonly shiny?: number;
+  /** The Glimmers in the gift; absent or 0 is none. */
+  readonly glimmers?: number;
   /** Whether this player claimed the gift. */
   readonly claimed?: boolean;
 }
@@ -40,8 +42,14 @@ export const dismissAnnouncement = (id: number): Promise<ApiEnvelope> =>
 
 export interface GiftClaim extends ApiEnvelope {
   readonly shiny: number;
+  /** The Glimmers it gave; absent from an older server. */
+  readonly glimmers?: number;
   /** True when an earlier press gave it. */
   readonly already: boolean;
+  /** The Glimmers balance after it, when the gift had Glimmers. */
+  readonly eventcoins?: number;
+  /** What this press paid in Glimmers, for the "+100" notice. */
+  readonly coinsGained?: readonly CoinGain[];
 }
 
 export const claimAnnouncementGift = (id: number): Promise<GiftClaim> =>

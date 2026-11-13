@@ -20,6 +20,8 @@ const REASON_WORDS: Readonly<Record<string, string>> = {
   ladder: "Event",
   "weekend-played": "Weekend",
   "weekend-boost": "Boost",
+  // An announcement's Glimmers gift (server `GLIMMERS_REASON`).
+  announcement: "Gift",
 };
 
 /** "Daily", "Daily + Event", or "" for an unnamed gain. */
