@@ -389,23 +389,61 @@ describe("Bucket champion", () => {
 });
 
 describe("Bucket after a drop", () => {
-  it("keeps the numbers, re-clamps each row to what is left, and reports the clamp", () => {
-    const session = sessionWith({ monsters: { C1: 10, C4: 5 } });
+  it("empties every row, the champion and the cost, as Flash does (owner, 13 Nov 2026)", () => {
+    const session = sessionWith({ monsters: { C1: 10, C4: 5 }, champions: [champion(3, 2)] });
     const bucket = new Bucket(session, { storage: null });
     bucket.setCount("C1", 6);
     bucket.setCount("C4", 5);
+    bucket.pickChampion(3);
+    let heard = 0;
+    bucket.subscribe(() => {
+      heard += 1;
+    });
 
     session.appendFling({ x: 100, y: 100, ...bucket.composition() });
     bucket.afterDrop();
 
-    // The player's figures stay; what they would send is what is left.
-    expect(bucket.requestedCount("C1")).toBe(6);
-    expect(bucket.count("C1")).toBe(4);
-    expect(bucket.requestedCount("C4")).toBe(5);
-    expect(bucket.count("C4")).toBe(0);
-    expect(bucket.composition()).toEqual({ monsters: { C1: 4 } });
-    expect(bucket.clamped()).toEqual({ C1: 4, C4: 0 });
+    expect(heard).toBeGreaterThan(0);
+    expect(bucket.requestedCount("C1")).toBe(0);
+    expect(bucket.requestedCount("C4")).toBe(0);
+    expect(bucket.isEmpty()).toBe(true);
+    expect(bucket.composition()).toEqual({ monsters: {} });
+    expect(bucket.cost()).toBe(0);
+    expect(bucket.reserved()).toBe(0);
+    // What is left can be picked again; a row that ran out cannot.
+    expect(bucket.max("C1")).toBe(4);
     expect(bucket.max("C4")).toBe(0);
+    bucket.setCount("C1", 9);
+    expect(bucket.composition()).toEqual({ monsters: { C1: 4 } });
+  });
+
+  it("empties after every drop, not just the first", () => {
+    const session = sessionWith({ monsters: { C1: 10 } });
+    const bucket = new Bucket(session, { storage: null });
+    for (const sent of [3, 2]) {
+      bucket.setCount("C1", sent);
+      session.appendFling({ x: 100, y: 100, ...bucket.composition() });
+      bucket.afterDrop();
+      expect(bucket.isEmpty()).toBe(true);
+    }
+    expect(bucket.remaining("C1")).toBe(5);
+  });
+
+  it("loads the batch just sent back, clamped to what is left", () => {
+    const storage = fakeStorage();
+    const session = sessionWith({ monsters: { C1: 10, C4: 5 }, champions: [champion(3, 2), champion(5, 1)] });
+    const bucket = new Bucket(session, { storage, playerKey: "2503" });
+    bucket.setCount("C1", 6);
+    bucket.setCount("C4", 2);
+    bucket.pickChampion(3);
+    session.appendFling({ x: 100, y: 100, ...bucket.composition() });
+    bucket.afterDrop();
+    expect(bucket.isEmpty()).toBe(true);
+
+    expect(bucket.loadLast()).toBe(true);
+    // 6 Bolt asked, 4 left; both Pokeys still there; the champion is on the field.
+    expect(bucket.composition()).toEqual({ monsters: { C1: 4, C4: 2 } });
+    expect(bucket.champion()).toBeNull();
   });
 
   it("clears the champion, which is on the field now", () => {
@@ -419,13 +457,7 @@ describe("Bucket after a drop", () => {
     expect(bucket.champions()[0]?.available).toBe(false);
     bucket.pickChampion(3);
     expect(bucket.champion()).toBeNull();
-    expect(bucket.composition()).toEqual({ monsters: { C1: 2 } });
-  });
-
-  it("reports nothing clamped while every row is within what is housed", () => {
-    const bucket = new Bucket(sessionWith({ monsters: { C1: 10 } }), { storage: null });
-    bucket.setCount("C1", 10);
-    expect(bucket.clamped()).toEqual({});
+    expect(bucket.composition()).toEqual({ monsters: {} });
   });
 
   it("stops taking drops once the attack ends", () => {

@@ -25,12 +25,11 @@ import { KRALLEN_TYPE, type AttackSession, type ChampionBlockReason } from "./At
  * ## Requested versus effective
  *
  * A row holds the number the player set — the *requested* count. After a drop
- * the session's `remaining()` shrinks, and §F2 ("after a drop, nothing resets")
- * decides that the figure on screen stays put rather than being rewritten out
- * from under the player. So the requested count may exceed what is still
- * housed; the *effective* count, `min(requested, remaining)`, is what
- * {@link composition} carries and what {@link cost} prices. {@link clamped}
- * names the rows where the two differ, for the panel's "20 left" note.
+ * the bucket empties (§F2; owner, 13 Nov 2026, like Flash), so in play a row
+ * never asks for more than is still housed. The *effective* count,
+ * `min(requested, remaining)`, is still what {@link composition} carries and
+ * what {@link cost} prices, so a fling sent around the bucket (the dev hook)
+ * can never make it send monsters that are already gone.
  *
  * ## Two ceilings
  *
@@ -151,6 +150,8 @@ export class Bucket {
   private readonly playerKey: string;
   /** What the session last told us, to skip notifying on an unchanged clock tick. */
   private sessionSignature = "";
+  /** Drops sent through {@link afterDrop}, for {@link drops}. */
+  private dropCount = 0;
 
   constructor(session: AttackSession, options: BucketOptions = {}) {
     this.session = session;
@@ -187,7 +188,7 @@ export class Bucket {
     return this.session.remaining()[id] ?? 0;
   }
 
-  /** What the player set, which may exceed {@link remaining} after a drop. */
+  /** What the player set; 0 again after each drop. */
   requestedCount(id: string): number {
     return this.requested[id] ?? 0;
   }
@@ -261,20 +262,6 @@ export class Bucket {
     const others = this.cost() - unit * this.count(id);
     const room = Math.floor((this.capacity() - others) / unit);
     return Math.max(0, Math.min(housed, room));
-  }
-
-  /**
-   * Rows whose requested count exceeds what is still housed, mapped to what
-   * is: the panel's "20 left" note. A row that ran out is here too, at 0.
-   */
-  clamped(): Record<string, number> {
-    const out: Record<string, number> = {};
-    for (const id of this.order) {
-      const requested = this.requestedCount(id);
-      const remaining = this.remaining(id);
-      if (requested > remaining) out[id] = remaining;
-    }
-    return out;
   }
 
   /** Whether the session still takes drops. */
@@ -416,19 +403,28 @@ export class Bucket {
   /**
    * Called right after `session.appendFling` with this composition.
    *
-   * Remembers what was sent as the last army, drops the champion pick — it is
-   * on the field now — and tells the panel, which re-reads every row against
-   * the smaller `remaining()`. The requested counts stay as the player set
-   * them (§F2, "after a drop, nothing resets").
+   * Remembers what was sent as the last army, then empties the bucket: every
+   * row back to 0 and the champion pick dropped — it is on the field now. The
+   * player picks the next batch, or presses Load last to send this one again
+   * (§F2, "after a drop, the bucket empties"; owner, 13 Nov 2026, like Flash's
+   * `ATTACK.Spawn`). The saved rows are the requested counts, which equal what
+   * was sent: `remaining()` has already shrunk by the time this runs.
    */
   afterDrop(): void {
     this.saveLast();
+    this.dropCount += 1;
+    for (const id of Object.keys(this.requested)) delete this.requested[id];
     this.championTypes = [];
     this.sessionSignature = this.signature();
     this.notify();
   }
 
   /* ── Listening ──────────────────────────────────────────────────────── */
+
+  /** How many drops this bucket has sent; each one saved a last army. */
+  drops(): number {
+    return this.dropCount;
+  }
 
   /** Whether a last army is kept at all: not on a Baiter test (#22, WP3). */
   remembersLast(): boolean {

@@ -671,7 +671,6 @@
   background: var(--colour-surface-sunken);
 }
 
-.attack-army__row--clamped,
 .attack-army__row--exhausted,
 .attack-army__champion--unavailable {
   color: var(--colour-text-muted);
@@ -749,11 +748,6 @@
 .attack-army__count {
   flex-basis: 4ch;
   width: 4ch;
-}
-
-.attack-army__row--clamped .attack-army__count {
-  color: var(--colour-text-muted);
-  border-style: dashed;
 }
 
 .attack-army__note {
