@@ -7,11 +7,8 @@ import {
   MushroomPicker,
   mushroomPickAction,
   mushroomZIndex,
-  ORDINARY_QUIPS,
-  PUMPKIN_QUIPS,
   pumpkinsFound,
   pickRefusal,
-  TURKEY_QUIPS,
   turkeysCaught,
   SHAKE_MS,
   type MushroomPickView,
@@ -112,7 +109,7 @@ const viewSpy = () => {
     shake: (spot) => calls.push(`shake ${spot.x},${spot.y}`),
     stop: (spot) => calls.push(`stop ${spot.x},${spot.y}`),
     golden: (shiny) => calls.push(`golden ${shiny}`),
-    ordinary: (quip) => calls.push(`ordinary ${quip}`),
+    huntCount: (line) => calls.push(`huntCount ${line}`),
     refused: (message) => calls.push(`refused ${message}`),
   };
   return { view, calls };
@@ -232,36 +229,18 @@ describe("MushroomPicker", () => {
     expect(picker.isPicking({ x: -300, y: 100 })).toBe(false);
   });
 
-  it("an ordinary answer gets a worker's quip", async () => {
+  it("an ordinary answer outside a hunt says nothing (no worker's quip, owner 13 Nov 2026)", async () => {
     const save = loadWith();
     const store = storeOf(save, vi.fn(() => Promise.resolve(answer(save, 0))));
     const { view, calls } = viewSpy();
     const time = handTimers();
-    const picker = new MushroomPicker(store, view, { timers: time.timers, random: () => 0.5 });
+    const picker = new MushroomPicker(store, view, { timers: time.timers });
 
     const done = picker.pick(store.yard.mushrooms[0]!);
     time.fire();
     await done;
 
-    expect(calls.at(-1)).toBe(`ordinary ${ORDINARY_QUIPS[1]}`);
-  });
-
-  it("at Halloween the quip is about the pumpkin", async () => {
-    const save = loadWith();
-    const store = storeOf(save, vi.fn(() => Promise.resolve(answer(save, 0))));
-    const { view, calls } = viewSpy();
-    const time = handTimers();
-    const picker = new MushroomPicker(store, view, {
-      timers: time.timers,
-      random: () => 0.5,
-      season: () => "halloween",
-    });
-
-    const done = picker.pick(store.yard.mushrooms[0]!);
-    time.fire();
-    await done;
-
-    expect(calls.at(-1)).toBe(`ordinary ${PUMPKIN_QUIPS[1]}`);
+    expect(calls).toEqual(["shake 300,100", "stop 300,100"]);
   });
 
   it("during the pumpkin hunt the toast says the count and the Events page hears it", async () => {
@@ -271,18 +250,14 @@ describe("MushroomPicker", () => {
     const time = handTimers();
     const heard = vi.fn();
     const stop = onPumpkins(heard);
-    const picker = new MushroomPicker(store, view, {
-      timers: time.timers,
-      random: () => 0.5,
-      season: () => "halloween",
-    });
+    const picker = new MushroomPicker(store, view, { timers: time.timers });
 
     const done = picker.pick(store.yard.mushrooms[0]!);
     time.fire();
     await done;
     stop();
 
-    expect(calls.at(-1)).toBe(`ordinary ${PUMPKIN_QUIPS[1]} 12 pumpkins found.`);
+    expect(calls.at(-1)).toBe("huntCount 12 pumpkins found.");
     expect(heard).toHaveBeenCalledWith(12);
     expect(pumpkinsFound(1)).toBe("1 pumpkin found.");
   });
@@ -295,7 +270,7 @@ describe("MushroomPicker", () => {
     const time = handTimers();
     const heard = vi.fn();
     const stop = onHuntCount(heard);
-    const picker = new MushroomPicker(store, view, { timers: time.timers, season: () => "thanksgiving" });
+    const picker = new MushroomPicker(store, view, { timers: time.timers });
 
     const done = picker.pick(store.yard.mushrooms[2]!);
     time.fire();
@@ -307,23 +282,19 @@ describe("MushroomPicker", () => {
     expect(store.credits).toBe(13);
   });
 
-  it("an ordinary turkey gets a turkey quip and the turkey count", async () => {
+  it("an ordinary turkey gets the turkey count", async () => {
     const save = loadWith();
     const store = storeOf(save, vi.fn(() => Promise.resolve(answer(save, 0, { turkeys: 1 }))));
     const { view, calls } = viewSpy();
     view.picked = (_spot, golden) => calls.push(`picked ${golden}`);
     const time = handTimers();
-    const picker = new MushroomPicker(store, view, {
-      timers: time.timers,
-      random: () => 0.5,
-      season: () => "thanksgiving",
-    });
+    const picker = new MushroomPicker(store, view, { timers: time.timers });
 
     const done = picker.pick(store.yard.mushrooms[0]!);
     time.fire();
     await done;
 
-    expect(calls.slice(-2)).toEqual(["picked false", `ordinary ${TURKEY_QUIPS[1]} 1 turkey caught.`]);
+    expect(calls.slice(-2)).toEqual(["picked false", "huntCount 1 turkey caught."]);
     expect(turkeysCaught(12)).toBe("12 turkeys caught.");
   });
 

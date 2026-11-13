@@ -3062,7 +3062,7 @@ export class YardScene implements Scene {
         if (season === "thanksgiving") setTimeout(show, GOLDEN_TURKEY_DELAY_MS);
         else show();
       },
-      ordinary: (quip) => this.notices.show("mushroom", quip, { level: "info", timeoutMs: 4000 }),
+      huntCount: (line) => this.notices.show("mushroom", line, { level: "info", timeoutMs: 4000 }),
       refused: (message) =>
         this.notices.show("mushroom", message, { level: "error", timeoutMs: 5000 }),
     };
