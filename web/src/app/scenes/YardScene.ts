@@ -1,5 +1,5 @@
 import { getSession, logout } from "@/api/auth";
-import { setCurrentAllianceBonuses } from "@/game/alliance/allianceBonuses";
+import { inCurrentAlliance, setCurrentAllianceBonuses } from "@/game/alliance/allianceBonuses";
 import { setAllianceTradeFrom } from "@/game/alliance/tradeSwitch";
 import { chatApi, chatConfigFrom } from "@/api/chat";
 import { loadAttackOn, loadOwnBase, loadOwnYard, takeAwayJobs, viewBase } from "@/api/base";
@@ -2044,8 +2044,12 @@ export class YardScene implements Scene {
   /** The Defences button: only Map Room 2 keeps defence replays (until #246); an outpost is a Map Room 2 cell. */
   private showDefences(store: YardStore): void {
     this.defences?.setAvailable(store.kind === "outpost" || mapRoomOf(store.save) === MapRoomChoice.MAP_ROOM_2);
-    // Alliances are the player's, so Map Room 2's main yard and outposts show the button; the Inferno does not.
-    this.alliance?.setAvailable(store.kind === "outpost" || (store.kind !== "inferno" && mapRoomOf(store.save) === MapRoomChoice.MAP_ROOM_2));
+    // Alliances are the player's, so Map Room 2's main yard and outposts may show the button; the Inferno does not.
+    // It waits for the Observatory (owner, 13 Nov 2026): the main yard shows it once one stands there,
+    // and a player already in an alliance sees it everywhere (an outpost has no Observatory of its own).
+    const mapRoom2 = store.kind === "outpost" || (store.kind !== "inferno" && mapRoomOf(store.save) === MapRoomChoice.MAP_ROOM_2);
+    const observatory = store.kind === "main" && store.yard.buildings.some((one) => one.type === OBSERVATORY_TYPE);
+    this.alliance?.setAvailable(mapRoom2 && (observatory || inCurrentAlliance()));
   }
 
   /** Carries out what another screen asked the own yard to open (`yardIntent.ts`). */

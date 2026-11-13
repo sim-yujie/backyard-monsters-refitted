@@ -107,6 +107,16 @@ describe("AccountMenu", () => {
       expect(openSettings(menu).getAttribute("aria-checked")).toBe("true");
     });
 
+    it("shows an uploaded photo in place of the critter, and the critter again once it goes", () => {
+      const { menu, face } = withAvatar();
+      menu.setPhoto("/api/v1/profile/photos/7?v=3");
+      expect(face().getAttribute("src")).toBe("/api/v1/profile/photos/7?v=3");
+      expect(face().classList.contains("is-photo")).toBe(true);
+      menu.setPhoto(null);
+      expect(face().getAttribute("src")).toMatch(/avatars\/frog-64\.webp$/);
+      expect(face().classList.contains("is-photo")).toBe(false);
+    });
+
     it("keeps a save running through closing and reopening, and can go back after it", async () => {
       let finish: () => void = () => {};
       const pick = vi.fn(() => new Promise<void>((done) => (finish = done)));

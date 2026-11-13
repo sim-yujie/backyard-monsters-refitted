@@ -62,9 +62,15 @@ export const byPercent = (amount: number, percent: number): number =>
  * main-yard load.
  */
 let current: AllianceBonusesView = NO_BONUSES;
+/** The last own main-yard load said the player is in an alliance (it sends `alliancedata` only then). */
+let member = false;
 
 export const setCurrentAllianceBonuses = (alliancedata: unknown): void => {
   current = allianceBonusesOf(alliancedata);
+  member = isRecord(alliancedata);
 };
+
+/** The player is in an alliance, as the last own main-yard load said. */
+export const inCurrentAlliance = (): boolean => member;
 
 export const currentAllianceBonuses = (): AllianceBonusesView => current;

@@ -1,5 +1,6 @@
 import * as profileApi from "@/api/profile";
 import type { OwnPhotoState, Profile } from "@/api/profile";
+import { recordOwnProfile } from "@/api/ownPhoto";
 import { avatarOf, avatarUrl } from "@/game/avatars";
 import { achievementBadge } from "@/ui/achievements/badge";
 import { formatAmount } from "@/ui/format";
@@ -176,6 +177,8 @@ export class ProfileDialog {
   /** Draws `profile` as the window's content. */
   show(profile: Profile): void {
     this.profile = profile;
+    // The account badge shows the player's own photo; tell it what this one is.
+    if (profile.own) recordOwnProfile(profile);
     const body = el("div", "profile");
     body.dataset["userid"] = String(profile.userid);
 

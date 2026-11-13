@@ -1353,6 +1353,15 @@ select option {
   object-fit: cover;
 }
 
+/* An uploaded profile photo in place of the critter: it fills the round
+   ring on the pill (the critter sits inside it with a margin). */
+.account-menu .account-menu__ring img.is-photo {
+  width: 100%;
+  height: 100%;
+  border-radius: 50%;
+  object-fit: cover;
+}
+
 /* The avatar picker in Account settings: twelve critters in two rows. */
 .avatar-picker {
   display: flex;
