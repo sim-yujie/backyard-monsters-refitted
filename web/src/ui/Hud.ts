@@ -21,7 +21,6 @@ import { dismissAnnouncement, fetchAnnouncements } from "@/api/announcements";
 import { openNews } from "./announcements/AnnouncementDialog";
 import { markShownOnThisPage } from "@/game/announcements/announcementQueue";
 import { openLeaderboard } from "./leaderboard/LeaderboardDialog";
-import { openProfile } from "./profile/ProfileDialog";
 import { openBugReport } from "./bugReport/BugReportDialog";
 import { AMOUNT_CHANGE_SIGNS } from "./amountChange";
 import { formatAmount, formatCompact } from "./format";
@@ -499,9 +498,7 @@ export class Hud {
       });
       this.friendsDoor = friends;
       this.accountMenu = new AccountMenu({
-        ...(session && {
-          onProfile: () => void openProfile({ container: modalLayer(), userid: session.userId }),
-        }),
+        ...(session && { userid: session.userId }),
         onAchievements: () => void door.open(),
         onFriends: () => void friends.open(),
         onLeaderboard: () => void openLeaderboard({ container: modalLayer(), userId: session?.userId ?? null }),
