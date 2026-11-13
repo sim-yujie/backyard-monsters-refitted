@@ -126,6 +126,22 @@ describe("the window", () => {
     ]);
   });
 
+  it("shows a friend's uploaded photo, and the critter for a friend with none or a hidden one", async () => {
+    await setup([friend(1, { username: "Ann", photo: 4 }), friend(2, { username: "Bo", photo: undefined })]);
+    const face = (name: string) =>
+      items()
+        .find((item) => item.querySelector(".friends-window__name")!.textContent === name)!
+        .querySelector<HTMLImageElement>(".friends-window__img")!;
+    expect(face("Ann").getAttribute("src")).toMatch(/\/profile\/photos\/1\?v=4$/);
+    expect(face("Ann").classList.contains("is-photo")).toBe(true);
+    expect(face("Bo").getAttribute("src")).toMatch(/avatars\//);
+    expect(face("Bo").classList.contains("is-photo")).toBe(false);
+    // A photo taken down since the list was sent: the critter, never a broken picture.
+    face("Ann").dispatchEvent(new Event("error"));
+    expect(face("Ann").getAttribute("src")).toMatch(/avatars\//);
+    expect(face("Ann").classList.contains("is-photo")).toBe(false);
+  });
+
   it("shows each row's level, online dot and painted help and gift marks, no emoji", async () => {
     await setup([
       friend(1, { username: "Ann", level: 12, online: "online", giftSentToday: false, ...helps }),
