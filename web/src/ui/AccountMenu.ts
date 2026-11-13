@@ -150,6 +150,8 @@ export class AccountMenu {
   private readonly stopSound: (() => void)[] = [];
   private readonly name: string;
   private current: AvatarId | null = null;
+  /** The uploaded profile photo's address, shown over the critter; null for none. */
+  private photo: string | null = null;
   /** The picker Settings shows; null without an avatar. */
   private readonly picker: AvatarPicker | null = null;
 
@@ -501,17 +503,42 @@ export class AccountMenu {
     picture.alt = "";
     picture.decoding = "async";
     picture.dataset["size"] = size;
-    if (this.current) picture.src = avatarUrl(this.current, size);
+    // A photo that will not load (taken down, or the connection dropped) shows the critter, never a broken picture.
+    picture.addEventListener("error", () => {
+      if (picture.classList.contains("is-photo")) this.showCritter(picture);
+    });
     this.faces.push(picture);
+    this.showFace(picture);
     return picture;
   }
 
-  /** Points every face at the current avatar. */
+  /**
+   * The player's uploaded profile photo, shown in place of the critter; null
+   * goes back to the critter. Only a menu with an avatar has faces to change.
+   */
+  setPhoto(url: string | null): void {
+    if (url === this.photo) return;
+    this.photo = url;
+    this.showFaces();
+  }
+
+  /** Points every face at the photo, or else the current avatar. */
   private showFaces(): void {
-    if (!this.current) return;
-    for (const picture of this.faces) {
-      picture.src = avatarUrl(this.current, picture.dataset["size"] === "small" ? "small" : "full");
+    for (const picture of this.faces) this.showFace(picture);
+  }
+
+  private showFace(picture: HTMLImageElement): void {
+    if (this.photo === null) {
+      this.showCritter(picture);
+      return;
     }
+    picture.classList.add("is-photo");
+    picture.src = this.photo;
+  }
+
+  private showCritter(picture: HTMLImageElement): void {
+    picture.classList.remove("is-photo");
+    if (this.current) picture.src = avatarUrl(this.current, picture.dataset["size"] === "small" ? "small" : "full");
   }
 
   private toggle(open: boolean): void {

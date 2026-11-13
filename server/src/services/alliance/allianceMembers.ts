@@ -1,6 +1,7 @@
 import { User } from "../../database/models/user.model.js";
 import { postgres } from "../../server.js";
 import { getCurrentDateTime } from "../../utils/getCurrentDateTime.js";
+import { addPhotos } from "../profile/visiblePhoto.js";
 import { onlinePlayers } from "../user/online.js";
 import { ALLIANCE_MEMBER_FIELDS, toAllianceMember, type AllianceMember } from "./allianceMember.js";
 
@@ -27,5 +28,6 @@ export const getAllianceMembers = async (allianceId: number): Promise<AllianceMe
     .map((member) => toAllianceMember(member, online, now))
     .filter((member) => member !== null);
 
+  await addPhotos(postgres.em, roster, (member) => member.user_id);
   return roster.sort((member, other) => other.points - member.points);
 };

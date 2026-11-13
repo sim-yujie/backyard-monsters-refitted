@@ -75,6 +75,8 @@ export interface MapRoom1NeighbourWire {
   /** The attacker's name while `attackpermitted` is UNDER_ATTACK. */
   attacker?: string;
   pic?: string;
+  /** Their uploaded photo's upload number; null or absent for the critter (`game/playerPicture.ts`). */
+  photo?: number | null;
   /** `requested`, `accepted`, … (`server/src/enums/TruceStatus.ts`). */
   trucestate?: string;
   /** Seconds the truce has left. */

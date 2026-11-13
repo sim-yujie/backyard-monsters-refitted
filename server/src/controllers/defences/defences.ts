@@ -6,6 +6,7 @@ import { Status } from "../../enums/StatusCodes.js";
 import { defenceReplayLoadOf } from "../../services/defences/defenceReplayFields.js";
 import { decodeReplay, DEFENCE_REPLAY_LIMIT, type DefenceReplayPayload } from "../../services/defences/defenceReplayStore.js";
 import { RULES_VERSION } from "../../services/defences/rulesVersion.js";
+import { playersAndPhotos } from "../../services/profile/visiblePhoto.js";
 import type { JsonObject } from "../../types/JsonObject.js";
 import { logger } from "../../utils/logger.js";
 
@@ -20,8 +21,11 @@ import { logger } from "../../utils/logger.js";
  *
  * Another player's replay, or one that does not exist, is the same `404`, so
  * an id says nothing about whose it is. A row kept without its inputs is
- * `410`. Nothing here, nor anything sent, says whether the attacker is a bot
- * (§9): the attacker is the name and picture frozen at landing, never their id.
+ * `410`. The attacker is the name and critter frozen at landing, plus (owner,
+ * 13 Nov 2026: photos show everywhere, and there are no bots any more) their
+ * id and the uploaded photo others may see now, by the one rule in
+ * `services/profile/visiblePhoto.ts`. An attacker who deleted their account
+ * has neither: only the name the deletion left.
  */
 
 export interface DefencesAnswer {
@@ -39,7 +43,12 @@ export const LISTED_MAP_VERSIONS: readonly number[] = [2];
 /** One defence as the list (and the replay's figures) send it. */
 export interface Defence {
   id: number;
-  attacker: { name: string; pic: string | null };
+  /**
+   * `name` and `pic` (their critter) are frozen at landing. `userid` is null
+   * once the attacker's account is gone; `photo` is their visible photo's
+   * upload number now, null for the critter.
+   */
+  attacker: { name: string; pic: string | null; userid: number | null; photo: number | null };
   /** Unix seconds: when the attack started, and when it landed (the order). */
   attackedAt: number;
   landedAt: number;
@@ -62,6 +71,7 @@ export interface Defence {
 /** The columns a list row reads: everything but the payload itself. */
 const LIST_FIELDS = [
   "id",
+  "attacker_userid",
   "attacker_username",
   "attacker_pic_square",
   "attacked_at",
@@ -79,11 +89,23 @@ type ListedRow = Pick<DefenceReplay, (typeof LIST_FIELDS)[number]>;
 
 const seconds = (at: Date | string): number => Math.floor(new Date(at).getTime() / 1000);
 
-const defenceOf = (row: ListedRow): Defence => {
+/** The attackers of `rows` who still have an account, with their visible photo (null for the critter): one query. */
+const attackersOf = (em: EntityManager, rows: readonly ListedRow[]): Promise<Map<number, number | null>> =>
+  // `execute` is the Postgres manager's; every caller hands one in.
+  playersAndPhotos(em as never, rows.map((row) => Number(row.attacker_userid)));
+
+const defenceOf = (row: ListedRow, attackers: ReadonlyMap<number, number | null>): Defence => {
   const hasReplay = Number(row.replay_bytes) > 0;
+  const attacker = Number(row.attacker_userid);
+  const known = attackers.has(attacker);
   return {
     id: Number(row.id),
-    attacker: { name: row.attacker_username, pic: row.attacker_pic_square ?? null },
+    attacker: {
+      name: row.attacker_username,
+      pic: row.attacker_pic_square ?? null,
+      userid: known ? attacker : null,
+      photo: attackers.get(attacker) ?? null,
+    },
     attackedAt: seconds(row.attacked_at),
     landedAt: seconds(row.landed_at),
     damageDone: Math.max(0, row.damage_after - row.damage_before),
@@ -104,7 +126,8 @@ export const listAnswer = async (em: EntityManager, user: User): Promise<Defence
     { defender_userid: user.userid, map_version: { $in: [...LISTED_MAP_VERSIONS] } },
     { fields: LIST_FIELDS, orderBy: { landed_at: "DESC", id: "DESC" }, limit: DEFENCE_REPLAY_LIMIT },
   );
-  return { status: Status.OK, body: { error: 0, defences: rows.map(defenceOf) } };
+  const attackers = await attackersOf(em, rows);
+  return { status: Status.OK, body: { error: 0, defences: rows.map((row) => defenceOf(row, attackers)) } };
 };
 
 const IdSchema = z.object({ id: z.coerce.number().int().positive().max(Number.MAX_SAFE_INTEGER) });
@@ -156,5 +179,6 @@ export const replayAnswer = async (em: EntityManager, user: User, rawParams: unk
     logger.warn("defence-replay-unreadable: replay {id}: {error}", { id: row.id, error: String(error) });
     return gone();
   }
-  return { status: Status.OK, body: { error: 0, defence: defenceOf(row), replay: sentPayload(payload) } };
+  const attackers = await attackersOf(em, [row]);
+  return { status: Status.OK, body: { error: 0, defence: defenceOf(row, attackers), replay: sentPayload(payload) } };
 };

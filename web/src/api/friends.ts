@@ -1,4 +1,5 @@
 import { dayText } from "@/game/mail/mailbox";
+import { photoVersionOf, type PhotoVersion } from "@/game/playerPicture";
 import { formatCountdown } from "@/ui/format";
 import { getSession } from "./auth";
 import { ApiError, get, NetworkError, postJson } from "./http";
@@ -89,6 +90,8 @@ export interface Friend {
   readonly username: string;
   /** Their `pic_square`: an avatar path, or null for their default critter. */
   readonly pic: string | null;
+  /** Their uploaded photo's upload number; absent for the critter (`game/playerPicture.ts`). */
+  readonly photo?: PhotoVersion;
   readonly level: number;
   readonly online: FriendOnline;
   /** Friends since; null when the server sent none. */
@@ -135,6 +138,8 @@ export interface FriendRequest {
   readonly userid: number;
   readonly username: string;
   readonly pic: string | null;
+  /** Their uploaded photo's upload number; absent for the critter (`game/playerPicture.ts`). */
+  readonly photo?: PhotoVersion;
   readonly level: number;
   /** `pending` while it waits; `accepted` on a request that asking back accepted. */
   readonly status: "pending" | "accepted" | "declined" | "cancelled" | "expired";
@@ -168,6 +173,8 @@ export interface PlayerResult {
   readonly userid: number;
   readonly username: string;
   readonly pic: string | null;
+  /** Their uploaded photo's upload number; absent for the critter (`game/playerPicture.ts`). */
+  readonly photo?: PhotoVersion;
   readonly level: number;
   readonly relation: Relation;
 }
@@ -181,6 +188,8 @@ export interface Gift {
   readonly userid: number;
   readonly username: string;
   readonly pic: string | null;
+  /** Their uploaded photo's upload number; absent for the critter (`game/playerPicture.ts`). */
+  readonly photo?: PhotoVersion;
   readonly level: number;
   readonly resource: GiftResource;
   readonly amount: number;
@@ -473,6 +482,7 @@ export const friendOf = (raw: Record<string, unknown>): Friend => {
     userid: id(raw["userid"]),
     username: text(raw["username"], "A player"),
     pic: picOf(raw["pic"]),
+    photo: photoVersionOf(raw["photo"]),
     level: count(raw["level"]),
     online: typeof raw["online"] === "string" && ONLINE.has(raw["online"]) ? (raw["online"] as FriendOnline) : null,
     since: toSeconds(raw["since"]),
@@ -495,6 +505,7 @@ const requestOf = (raw: Record<string, unknown>): FriendRequest => ({
   userid: id(raw["userid"]),
   username: text(raw["username"], "A player"),
   pic: picOf(raw["pic"]),
+  photo: photoVersionOf(raw["photo"]),
   level: count(raw["level"]),
   status:
     typeof raw["status"] === "string" && REQUEST_STATUSES.has(raw["status"])
@@ -508,6 +519,7 @@ const playerOf = (raw: Record<string, unknown>): PlayerResult => ({
   userid: id(raw["userid"]),
   username: text(raw["username"], "A player"),
   pic: picOf(raw["pic"]),
+  photo: photoVersionOf(raw["photo"]),
   level: count(raw["level"]),
   relation:
     typeof raw["relation"] === "string" && RELATIONS.has(raw["relation"]) ? (raw["relation"] as Relation) : "none",
@@ -518,6 +530,7 @@ const giftOf = (raw: Record<string, unknown>): Gift => ({
   userid: id(raw["userid"] ?? raw["from_userid"]),
   username: text(raw["username"], "A friend"),
   pic: picOf(raw["pic"]),
+  photo: photoVersionOf(raw["photo"]),
   level: count(raw["level"]),
   resource:
     typeof raw["resource"] === "string" && GIFT_RESOURCES.has(raw["resource"])

@@ -49,7 +49,7 @@ type Cell = Loaded<WorldMapCell, "save", UserCellFields>;
  */
 export const userCell = async (ctx: Context, cell: Cell, cellOwners: Map<number, UserCellOwner>) => {
   const currentUser: User = ctx.authUser;
-  const { online: onlineNow, truces, pendingInvites, idleWorkers, busyWorkers, attackers, friends, pinnedFriends, attacked } =
+  const { online: onlineNow, truces, pendingInvites, idleWorkers, busyWorkers, attackers, friends, pinnedFriends, attacked, photos } =
     ctx.state;
 
   const mine = currentUser.userid === cell.uid;
@@ -143,6 +143,9 @@ export const userCell = async (ctx: Context, cell: Cell, cellOwners: Map<number,
     lo: locked,
     dm: damage,
     pic_square: cellOwner.pic_square,
+    // The owner's uploaded photo others may see, its upload number (`services/profile/visiblePhoto.ts`);
+    // null shows the critter. Read once for the whole area by `getArea`.
+    photo: (photos as Map<number, number> | undefined)?.get(cellOwner.userid) ?? null,
     // An outpost's Starter Kit (issue #334): everyone's tower reads bronze,
     // silver or gold by it, including a viewer who does not own it, so this
     // is not gated on `mine` the way `r`/`m` are.

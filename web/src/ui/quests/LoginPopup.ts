@@ -44,7 +44,11 @@ export class LoginPopup {
     });
     this.render(view);
     this.popup.mount(options.container);
-    this.popup.element.querySelector<HTMLButtonElement>(".quests-login__claim")?.focus({ preventScroll: true });
+    // The window takes the keyboard, not Claim: an Enter or Space meant for
+    // something else (sending a chat line, closing another window) must not
+    // claim the day unseen (owner, 13 Nov 2026). Tab still reaches Claim.
+    this.popup.element.tabIndex = -1;
+    this.popup.element.focus({ preventScroll: true });
   }
 
   get element(): HTMLElement {

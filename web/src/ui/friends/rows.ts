@@ -1,4 +1,4 @@
-import { avatarOf, avatarUrl } from "@/game/avatars";
+import { playerPicture, showPlayerPicture, type PhotoVersion } from "@/game/playerPicture";
 import { levelLabel } from "@/game/friends/friendText";
 import { modalLayer } from "@/ui/events/WhatsNewDialog";
 import { onlineDot } from "@/ui/onlineDot";
@@ -39,6 +39,8 @@ export interface RowPlayer {
   readonly userid: number;
   readonly username: string;
   readonly pic: string | null;
+  /** Their uploaded photo's upload number; absent for the critter. */
+  readonly photo?: PhotoVersion;
   readonly level: number;
 }
 
@@ -72,7 +74,7 @@ export const playerRow = (
   row.dataset["userid"] = String(player.userid);
 
   const face = make("img", "friends-row__face");
-  face.src = avatarUrl(avatarOf(player.pic, player.userid), "small");
+  showPlayerPicture(face, playerPicture(player.userid, player.pic, player.photo, "small"));
   face.alt = "";
   face.decoding = "async";
   face.loading = "lazy";

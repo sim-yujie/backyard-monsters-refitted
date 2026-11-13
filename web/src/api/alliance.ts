@@ -88,6 +88,8 @@ export interface AllianceMember {
   readonly user_id: number;
   readonly display_name: string;
   readonly pic_square: string | null;
+  /** Their uploaded photo's upload number; null or absent for the critter (`game/playerPicture.ts`). */
+  readonly photo?: number | null;
   readonly base_id?: string | number | null;
   readonly level: number;
   readonly points: number;
@@ -146,6 +148,8 @@ export interface AllianceInviteRow {
   readonly user_id: number;
   readonly user_name: string;
   readonly user_pic_square: string | null;
+  /** The player's uploaded photo's upload number; null or absent for the critter. */
+  readonly user_photo?: number | null;
 }
 
 /** A refusal: the server's sentence, its `reason` when it gave one, and when a wait ends. */

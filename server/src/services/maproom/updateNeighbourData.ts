@@ -13,6 +13,7 @@ import type { NeighbourData } from "../../types/NeighbourData.js";
 import { friendFlag, friendMarksAmong } from "../friends/friendFlags.js";
 import { BaseType } from "../../enums/Base.js";
 import { mr1LevelPermission, vengeanceOwed } from "./v1/mr1AttackRules.js";
+import { visiblePhotos } from "../profile/visiblePhoto.js";
 
 
 type Base = BaseType.MAIN | BaseType.INFERNO;
@@ -68,7 +69,7 @@ export const updateNeighbourData = async (
 
   const currentTime = getCurrentDateTime();
 
-  const [neighbourUsers, neighbourSaves, lastSeens, truces, online, friendMarks] = await Promise.all([
+  const [neighbourUsers, neighbourSaves, lastSeens, truces, online, friendMarks, photos] = await Promise.all([
     postgres.em.find(
       User,
       { userid: { $in: userIds } },
@@ -93,6 +94,9 @@ export const updateNeighbourData = async (
     // The friend flag, read fresh: the cached list outlives friendships (friends WP2, #369);
     // with it, which of them the viewer pinned (beta 7).
     friendMarksAmong(postgres.em, friendViewerId, userIds),
+
+    // Their uploaded photos others may see (owner, 13 Nov 2026), read fresh, one query for the list.
+    visiblePhotos(postgres.em, userIds),
   ]);
 
   const saves = new Map(neighbourSaves.map((save) => [save.userid, save]));
@@ -165,6 +169,7 @@ export const updateNeighbourData = async (
       neighbour.ownerName = owner.username;
       neighbour.pic = owner.pic_square || "";
     }
+    neighbour.photo = photos.get(neighbour.userid) ?? null;
 
     const truce = truces.get(neighbour.userid);
 

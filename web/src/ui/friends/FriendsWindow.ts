@@ -1,5 +1,5 @@
 import type { Friend } from "@/api/friends";
-import { avatarOf, avatarUrl } from "@/game/avatars";
+import { playerPicture, showPlayerPicture } from "@/game/playerPicture";
 import { canHelp } from "@/game/friends/friendText";
 import { friendsStore as sharedStore, type FriendsStore } from "@/game/friends/friendsStore";
 import { friendsOpener, type FriendsOpenTab } from "@/game/friends/friendsView";
@@ -323,7 +323,7 @@ export class FriendsWindow {
     row.setAttribute("aria-expanded", String(opened));
     const face = make("span", "friends-window__face");
     const img = make("img", "friends-window__img");
-    img.src = avatarUrl(avatarOf(friend.pic, friend.userid), "small");
+    showPlayerPicture(img, playerPicture(friend.userid, friend.pic, friend.photo, "small"));
     img.alt = "";
     img.decoding = "async";
     img.loading = "lazy";

@@ -2,6 +2,7 @@ import { HudStatus } from "./yard/HudStatus";
 import { tutTarget, TutTarget } from "@/game/guide/targets";
 import { setAvatar } from "@/api/account";
 import { getSession } from "@/api/auth";
+import { watchOwnPhoto } from "@/api/ownPhoto";
 import type { Friend } from "@/api/friends";
 import type { ResourceCaps, Resources } from "@/api/types";
 import { avatarOf, pickedAvatar, type AvatarId } from "@/game/avatars";
@@ -316,6 +317,8 @@ export class Hud {
   /** Shiny Lock is on: the Shiny counter shows a padlock, not the 0 the server sends (`game/shinyLock.ts`). */
   private locked = shinyLocked();
   private readonly unwatchLock: () => void;
+  /** Stops the account badge following the player's profile photo. */
+  private unwatchPhoto: () => void = () => undefined;
   /** The event coin readout after Shiny, hidden until a balance is known. */
   private readonly coins: { readonly item: HTMLElement; readonly button: HTMLButtonElement };
   private readonly unwatchCoins: () => void;
@@ -528,6 +531,8 @@ export class Hud {
       });
       this.element.append(this.accountMenu.element);
       this.accountMenu.setFriendsCount(friendsStore.waiting);
+      // An uploaded profile photo shows on the badge in place of the critter.
+      if (session) this.unwatchPhoto = watchOwnPhoto(session.userId, (url) => this.accountMenu?.setPhoto(url));
     }
   }
 
@@ -710,6 +715,7 @@ export class Hud {
     this.frame = 0;
     window.removeEventListener("resize", this.onResize);
     this.unwatchLock();
+    this.unwatchPhoto();
     this.unwatchCoins();
     this.hideExact();
     this.accountMenu?.destroy();

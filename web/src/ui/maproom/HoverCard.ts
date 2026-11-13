@@ -1,5 +1,5 @@
 import { CellType, isFogCell, isPlayerCell, isWaterCell, type MapCell } from "@/api/types";
-import { avatarOf, avatarUrl } from "@/game/avatars";
+import { playerPicture, showPlayerPicture } from "@/game/playerPicture";
 import { cellsText, type ReachAnswer } from "@/game/maproom/attackRange";
 import { TRIBE_COLOURS, relationOf } from "@/game/maproom/cellVisuals";
 import { RELATION_LOOK, cssHex } from "@/game/maproom/relationLook";
@@ -20,8 +20,10 @@ import { friendBadge } from "@/ui/friends/friendBadge";
  */
 
 export interface HoverCardContent {
-  /** The tribe's portrait or the owner's critter. */
+  /** The tribe's portrait, or the owner's photo or critter. */
   readonly picture: string | null;
+  /** Set when `picture` is the owner's uploaded photo: their critter, for when it will not load. */
+  readonly critter?: string;
   /** The picture's ring: the tribe's colour, or the accent for the player's own. */
   readonly ring: string | null;
   readonly title: string;
@@ -78,8 +80,9 @@ export class HoverCard {
     this.picture.replaceChildren();
     if (content.picture) {
       const image = document.createElement("img");
-      image.src = content.picture;
       image.alt = "";
+      if (content.critter === undefined) image.src = content.picture;
+      else showPlayerPicture(image, { src: content.picture, photo: true, critter: content.critter });
       this.picture.append(image);
     }
     if (content.ring) this.picture.style.setProperty("--ring", content.ring);
@@ -124,9 +127,12 @@ export const hoverContentFor = (
   if (!title) return null;
 
   let picture: string | null;
+  let critter: string | undefined;
   let ring: string | null;
   if (isPlayerCell(payload)) {
-    picture = avatarUrl(avatarOf(payload.pic_square, payload.uid), "small");
+    const shown = playerPicture(payload.uid, payload.pic_square, payload.photo, "small");
+    picture = shown.src;
+    if (shown.photo) critter = shown.critter;
     ring = payload.mine === 1 ? "var(--colour-accent)" : null;
   } else {
     picture = tribePictureUrl(payload.n);
@@ -144,12 +150,14 @@ export const hoverContentFor = (
     const relation = relationOf(payload, null, mark ?? "none");
     if (relation === "pinned" || relation === "friend" || relation === "hostile") ring = cssHex(RELATION_LOOK[relation].colour);
   }
+  // The owner's critter rides along with their photo, for when it will not load.
+  const art = critter === undefined ? { picture } : { picture, critter };
   if (mine || !reach.source) {
-    return { picture, ring, title, detail: "Click for more", warn: false, ...friend };
+    return { ...art, ring, title, detail: "Click for more", warn: false, ...friend };
   }
   if (!reach.inRange) {
     return {
-      picture,
+      ...art,
       ring,
       title,
       detail: `Out of range · ${cellsText(reach.steps)} too far`,
@@ -158,7 +166,7 @@ export const hoverContentFor = (
     };
   }
   return {
-    picture,
+    ...art,
     ring,
     title,
     detail: `In range · ${cellsText(reach.steps)} away · click for more`,

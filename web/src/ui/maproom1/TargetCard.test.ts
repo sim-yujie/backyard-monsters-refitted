@@ -184,6 +184,21 @@ describe("targetCard", () => {
     expect(box.querySelector("img")).toBeNull();
     expect(box.textContent).toBe("MO");
   });
+
+  it("frames a neighbour's uploaded photo, then the critter, then initials if neither loads (owner, 13 Nov 2026)", () => {
+    const withPhoto = { ...find("player-901"), photo: 3 } as ReturnType<typeof find>;
+    const box = avatar(withPhoto, "lg");
+    const art = box.querySelector("img")!;
+    expect(art.classList.contains("is-photo")).toBe(true);
+    expect(art.getAttribute("src")).toContain("/profile/photos/901?v=3");
+    art.dispatchEvent(new Event("error"));
+    expect(box.querySelector("img")).toBe(art);
+    expect(art.classList.contains("is-photo")).toBe(false);
+    expect(art.getAttribute("src")).toMatch(/avatars\/owl\.webp$/);
+    art.dispatchEvent(new Event("error"));
+    expect(box.querySelector("img")).toBeNull();
+    expect(box.textContent).toBe("MO");
+  });
 });
 
 describe("targetCard Add friend (friends WP11, #378)", () => {

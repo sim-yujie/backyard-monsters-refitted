@@ -5,6 +5,7 @@ import type { Alliance } from "../../database/models/alliance.model.js";
 import { User } from "../../database/models/user.model.js";
 import { postgres } from "../../server.js";
 import { getCurrentDateTime } from "../../utils/getCurrentDateTime.js";
+import { addPhotos } from "../profile/visiblePhoto.js";
 import { onlinePlayers } from "../user/online.js";
 import { ALLIANCE_MEMBER_FIELDS, toAllianceMember, type AllianceMember } from "./allianceMember.js";
 
@@ -51,7 +52,8 @@ export const getSuggestedMembers = async (alliance: Alliance): Promise<AllianceM
   const now = getCurrentDateTime();
   const online = await onlinePlayers(candidates.map((user) => user.userid), now);
 
-  return candidates
+  const rows = candidates
     .map((user) => toAllianceMember(user, online, now))
     .filter((user) => user !== null);
+  return addPhotos(postgres.em, rows, (user) => user.user_id);
 };
