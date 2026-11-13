@@ -287,15 +287,11 @@ describe("showBankResult", () => {
 
   const text = (): string => spokenText(document.querySelector(".notice") ?? document.createElement("i"));
 
-  it("warns when storage kept some in the harvesters", () => {
+  it("raises no notice when storage kept some in the harvesters (owner, 13 Nov)", () => {
     showBankResult(notices, { ok: true, report: reportOf({ r1: 280 }, { r1: 440 }), completed: [] });
-    expect(document.querySelector(".notice--warning")).not.toBeNull();
-    expect(text()).toContain("Twigs 440 stayed in your harvesters: storage is full.");
-    // No "Collected" part (owner, 9 Nov); what stayed is plain, not a gain.
-    expect(text()).not.toContain("Collected");
-    const values = [...document.querySelectorAll(".notice .res-amount__value")];
-    expect(values.map((value) => value.textContent)).toEqual(["440"]);
-    expect(document.querySelectorAll(".notice .res-amount--gain")).toHaveLength(0);
+    expect(document.querySelector(".notice")).toBeNull();
+    showBankResult(notices, { ok: true, report: reportOf({}, { r1: 440, r2: 10, r3: 5, r4: 7 }), completed: [] });
+    expect(document.querySelector(".notice")).toBeNull();
   });
 
   it("says nothing for a plain collect (owner, 9 Nov: the toast was annoying)", () => {
