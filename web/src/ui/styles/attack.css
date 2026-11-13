@@ -205,6 +205,20 @@
   display: none;
 }
 
+/*
+ * A skinned window's Close button sits 8px past the window's right edge. The
+ * dock body scrolls, so that 8px counted as sideways overflow: on Windows a
+ * horizontal scrollbar came up under the Catapult, took height, brought a
+ * vertical one with it and the two kept coming and going. The padding keeps
+ * the button inside the scroller; the margin keeps the windows where they were.
+ */
+@media (width > 620px) {
+  :root[data-skin] .attack-dock__body {
+    padding-right: 8px;
+    margin-right: -8px;
+  }
+}
+
 /* The interim "attack over" line; the end panel (WP6) replaces it. */
 .attack-dock__end {
   display: flex;
