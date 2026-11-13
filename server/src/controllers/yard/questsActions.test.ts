@@ -4,6 +4,7 @@ import type z from "zod";
 
 import type { User } from "../../database/models/user.model.js";
 import { DAILY_ALWAYS, LOGIN_CARD_SHINY } from "../../game-data/quests.js";
+import { memoryCoinStore, useCoinStore } from "../../services/events/eventCoins.js";
 import { utcDay, utcWeek } from "../../services/quests/period.js";
 import { claimableCount, emptyQuests, questsJson, readQuests, type QuestEntry, type QuestRecord } from "../../services/quests/state.js";
 import { capOf } from "../../services/yard/credit.js";
@@ -199,6 +200,22 @@ describe("POST /bm/yard/quests/claim", () => {
     expect(await call(actions.claim, { period: "daily", slot: 1 })).toMatchObject({ status: 409, body: { reason: "notDone" } });
     expect(await call(actions.claim, { period: "daily", slot: 6 })).toMatchObject({ status: 409, body: { reason: "noSuchQuest" } });
     expect((await call(actions.claim, { period: "monthly", slot: 0 })).status).toBe(400);
+  });
+
+  test("a Glimmers quest pays 5 Glimmers once, and a second claim pays nothing more", async () => {
+    const coins = memoryCoinStore();
+    const previous = useCoinStore(coins);
+    try {
+      withQuests([quest({ need: 1, have: 1, rewards: [{ kind: "eventCoins", amount: 5 }] })]);
+      const answer = await call(actions.claim, { period: "daily", slot: 0 });
+      expect(answer.status).toBe(200);
+      expect(reportOf(answer).granted).toEqual([{ kind: "eventCoins", amount: 5 }]);
+      expect(coins.balances.get(user.userid)).toBe(5);
+      expect(await call(actions.claim, { period: "daily", slot: 0 })).toMatchObject({ status: 409, body: { reason: "claimed" } });
+      expect(coins.balances.get(user.userid)).toBe(5);
+    } finally {
+      useCoinStore(previous);
+    }
   });
 
   test("a weekly quest pays its speed-up and Shiny", async () => {

@@ -587,6 +587,12 @@
   height: 22px;
 }
 
+/* The Glimmers icon is drawn the size of the resource icons beside it, so every reward sits on one line. */
+.quest__rewards .events-reward__icon {
+  width: 22px;
+  height: 22px;
+}
+
 .quest__rewards .events-reward__figure {
   font-size: var(--text-sm);
   font-weight: 800;
@@ -735,8 +741,13 @@
     gap: 3px;
   }
 
-  .quest__rewards .res-icon {
+  .quest__rewards .res-icon,
+  .quest__rewards .events-reward__icon {
     height: 18px;
+  }
+
+  .quest__rewards .events-reward__icon {
+    width: 18px;
   }
 
   .quest__rewards .events-reward__pictures {

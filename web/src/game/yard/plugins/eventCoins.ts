@@ -22,6 +22,8 @@ const REASON_WORDS: Readonly<Record<string, string>> = {
   "weekend-boost": "Boost",
   // An announcement's Glimmers gift (server `GLIMMERS_REASON`).
   announcement: "Gift",
+  // A daily quest that pays Glimmers (server questsActions).
+  quest: "Quest",
 };
 
 /** "Daily", "Daily + Event", or "" for an unnamed gain. */
