@@ -367,10 +367,17 @@ export class YardDock {
     layout.setAttribute("aria-pressed", String(state.open));
   }
 
-  setAttack(state: { readonly disabled: boolean; readonly title: string }): void {
+  setAttack(state: { readonly disabled: boolean; readonly title: string; readonly busy?: boolean }): void {
     if (!this.attack) return;
-    this.attack.element.disabled = state.disabled;
-    this.attack.element.title = state.title;
+    const { element } = this.attack;
+    element.disabled = state.disabled;
+    element.title = state.title;
+    // The attack is starting: the button itself says so (it pulses), in
+    // place of a "Starting the attack…" notice (owner, 13 Nov 2026).
+    const busy = state.busy === true;
+    element.classList.toggle("yard-dock__button--busy", busy);
+    if (busy) element.setAttribute("aria-busy", "true");
+    else element.removeAttribute("aria-busy");
   }
 
   /** Puts a button another part of the scene owns beside Monsters: the Mail button (#193). */
