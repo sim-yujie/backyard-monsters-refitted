@@ -263,7 +263,7 @@ export const baseLoad: KoaController = async (ctx) => {
     // and places the Trojan Horse the moment the player qualifies for one
     // (issue #324); `trojanNew` tells the client to pan the camera to it once.
     let jobs: CompletedJob[];
-    ({ save: baseSave, completed: jobs, trojanPlaced: trojanNew, krallenPenalties } = await catchUpOwnerYard(baseSave));
+    ({ save: baseSave, completed: jobs, trojanPlaced: trojanNew, krallenPenalties = [] } = await catchUpOwnerYard(baseSave));
     // Outpost attacks and takeovers since the player last looked, told once
     // in the same notice and kept in the mailbox (outposts WP8, #187).
     completed = [...jobs, ...(await takeOutpostNotices(postgres.em, user.userid))];
