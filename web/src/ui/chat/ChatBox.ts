@@ -21,6 +21,7 @@ import { allianceTradeOn, TRADE_OFF_TITLE } from "@/game/alliance/tradeSwitch";
 import { icon } from "@/ui/icons";
 import { gameIcon, type GameIconName } from "@/ui/gameIcon";
 import { addFriendButton } from "@/ui/friends/AddFriendButton";
+import { playerPicture, showPlayerPicture } from "@/game/playerPicture";
 import type { FriendsApi } from "@/api/friends";
 import type { FriendRelations } from "@/game/friends/friendRelations";
 import "@/ui/styles/chat.css";
@@ -476,8 +477,27 @@ export class ChatBox {
       badge.title = "Moderator";
       item.append(badge);
     }
+    item.prepend(this.picture(entry));
     item.append(name, body);
     return item;
+  }
+
+  /**
+   * The speaker's picture before their name (owner, 13 Nov 2026): their
+   * uploaded photo when others may see it, else their critter, by the rule
+   * every list uses (`game/playerPicture.ts`). Open, it picks the speaker as
+   * their name does; the name says who it is, so the picture has no words.
+   */
+  private picture(entry: ChatLine): HTMLImageElement {
+    const image = document.createElement("img");
+    image.className = "chat-line__pic";
+    image.alt = "";
+    image.width = 20;
+    image.height = 20;
+    image.decoding = "async";
+    image.loading = "lazy";
+    image.draggable = false;
+    return showPlayerPicture(image, playerPicture(entry.userId, entry.pic, entry.photo, "small"));
   }
 
   /**
@@ -535,7 +555,8 @@ export class ChatBox {
 
   private onLinesClick(event: MouseEvent): void {
     if (!this.open || !(event.target instanceof Element)) return;
-    const name = event.target.closest("button.chat-line__name");
+    // The speaker's name or their picture (not their own line's: that has no strip).
+    const name = event.target.closest("button.chat-line__name, .chat-line:not(.chat-line--own) > .chat-line__pic");
     const item = name?.closest<HTMLElement>(".chat-line");
     if (!item) return;
     const id = Number(item.dataset["line"]);

@@ -30,6 +30,10 @@ export interface ChatClient {
   displayName: string;
   username: string;
   picSquare: string | null;
+  /** Their visible photo's upload number as last read (`chatPhotos.ts`); null or absent for none. */
+  photo?: number | null;
+  /** When `photo` was read (ms); absent before the first read. */
+  photoReadAt?: number;
   channels: Map<string, ChannelInfo>;
   lastMsgAt: number;
   /** One of `ADMIN_USER_IDS`: their lines carry the game team's mark (`gm`). */
