@@ -3202,10 +3202,11 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
    * battle's stream (one draw below 7, and a flying champion's second below
    * 1,000, `ChampionBase.as:228`, `:237`), the point it walks back to when it
    * leaves (`_spawnPoint`, the landing point rounded down to hundreds on
-   * screen, `ChampionBase.as:115`), its aura, and Korath's reach into the air.
+   * screen, `ChampionBase.as:115`), its aura (Krallen's only when the log
+   * says it was earned, `lootAura`), and Korath's reach into the air.
    * The caged champion brings the frame it drew in its cage instead.
    */
-  const equipChampion = (creep: Creep, power: number, at: Cart, frame?: number): void => {
+  const equipChampion = (creep: Creep, power: number, at: Cart, frame?: number, lootAura = false): void => {
     const id = creep.monsterId;
     creep.power = championPower(id, power);
     creep.frame = frame ?? startFrame(creep.flying);
@@ -3215,7 +3216,7 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
     // `screenPointOf` undone, as in {@link dropPoint}.
     creep.spawnX = spawnSy + spawnSx / 2;
     creep.spawnY = spawnSy - spawnSx / 2;
-    if (id === FOMOR_ID || hasLootAura(id, creep.level, creep.friendly)) {
+    if (id === FOMOR_ID || hasLootAura(id, creep.level, creep.friendly, lootAura)) {
       creep.aura = { counter: 0, members: [] };
     }
     creep.hitFlags = championReach(id, creep.level, creep.power, creep.hitFlags);
@@ -3237,6 +3238,7 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
     brain?: Partial<BrainWeights>,
     startHealth?: number,
     habits?: { readonly hv?: number; readonly h?: unknown },
+    lootAura = false,
   ): Creep | null => {
     const id = championByType(type);
     if (!id) return null;
@@ -3307,7 +3309,7 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
     creeps.push(creep);
     byCreepId.set(creep.id, creep);
     boostDamage(creep);
-    equipChampion(creep, power, at);
+    equipChampion(creep, power, at, undefined, lootAura);
     if (habits?.hv !== undefined && hasHabits(id)) {
       // Its Mode's instincts plus that Mode's habits, as the log froze them
       // (champion modes round 2, `habits.ts`); the old brain is not read.
@@ -3493,6 +3495,7 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
         event.champion.hv === undefined
           ? undefined
           : { hv: event.champion.hv, h: event.champion.h },
+        event.champion.aura === true,
       );
     }
   };

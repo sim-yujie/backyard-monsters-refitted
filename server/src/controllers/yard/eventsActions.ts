@@ -1,6 +1,6 @@
 import z from "zod";
 
-import { eventById, tierNeed, type EventDefinition } from "../../game-data/events/events.js";
+import { eventById, huntStartLevel, tierNeed, type EventDefinition } from "../../game-data/events/events.js";
 import { planGrant, type GrantedReward } from "../../services/events/grant.js";
 import { krallenLevelOf } from "../../services/events/krallenReward.js";
 import { liveEvents } from "../../services/events/liveEvents.js";
@@ -29,8 +29,8 @@ import { defineYardAction } from "./yardAction.js";
  *   the end). Refusals: `400 unknownEvent`, `409 eventNotActive {startsAt,
  *   endsAt}`, `409 claimedToday {nextAt}`, `409 calendarDone`.
  * - `events/ladder/claim { event, tier }`: one collection-ladder tier, once
- *   the counter reaches it (the Krallen Hunt's goal by her level at the
- *   claim, `tierNeed`), while the event is on or, for an event with
+ *   the counter reaches it (the Krallen Hunt's goal by her level when the
+ *   hunt began, `huntStartLevel`, `tierNeed`), while the event is on or, for an event with
  *   `claimDays`, until that many days after its end (the counter stops at
  *   the end, so only a tier reached in time can be claimed then).
  *   Refusals: `400 unknownEvent`, `400 unknownTier`, `409 eventNotActive`,
@@ -143,8 +143,12 @@ export const eventsActions = (store: EventProgressStore, fixed?: readonly EventD
       const tier = event.ladder?.tiers[body.tier];
       if (!tier) throw yardBadRequestErr("There is no such tier.", { event: event.id, tier: body.tier }, "unknownTier");
 
-      // The Krallen Hunt's goal follows her level now, under the save lock.
-      const need = tierNeed(tier, krallenLevelOf(save.champion));
+      // The Krallen Hunt's goal follows her level when the hunt began, under
+      // the save lock: the 3x mark stays 3x the goal the player started
+      // with after the first mark raised her (owner, 13 Nov 2026).
+      const before = (await store.read(em, user.userid, [event.id])).get(event.id);
+      const level = huntStartLevel(event.ladder?.tiers ?? [], before?.claimedTiers ?? [], krallenLevelOf(save.champion));
+      const need = tierNeed(tier, level);
       if (!(await store.claimTier(em, user.userid, event.id, body.tier, need))) {
         const progress = (await store.read(em, user.userid, [event.id])).get(event.id);
         if (progress?.claimedTiers.includes(body.tier)) {

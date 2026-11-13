@@ -1,3 +1,5 @@
+import { shortDate } from "@/game/events/eventsModel";
+import { krallenAuraActive, krallenAuraTimes, krallenAuraUntil } from "@/game/yard/krallenAura";
 import { tutTarget, TutTarget } from "@/game/guide/targets";
 import type { YardRefusal } from "@/api/yard";
 import {
@@ -381,6 +383,15 @@ export class ChampionPanel {
       `Level ${view.level} of ${view.entry.levels}` +
       (view.entry.role ? ` · ${view.entry.role}` : "");
     words.append(level);
+    // Krallen's Krallen Hunt loot aura while it runs (owner, 13 Nov 2026).
+    const auraUntil = krallenAuraUntil(view.champion);
+    if (krallenAuraActive(view.champion, Date.now() / 1000)) {
+      const aura = document.createElement("p");
+      aura.className = "champion__aura";
+      aura.textContent = `Loot aura x${krallenAuraTimes(view.level)} · until ${shortDate(auraUntil)}`;
+      aura.title = `Monsters near Krallen loot x${krallenAuraTimes(view.level)} in attacks`;
+      words.append(aura);
+    }
     if (showsModes(view.champion)) {
       // What it is, fixed whatever it learns (champion modes round 2).
       const nature = document.createElement("p");

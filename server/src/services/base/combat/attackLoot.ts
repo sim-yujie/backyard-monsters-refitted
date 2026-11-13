@@ -15,6 +15,7 @@ import {
   type ResourceAmounts,
 } from "../../../game-rules/combat/index.js";
 import type { JsonObject } from "../../../types/JsonObject.js";
+import { krallenAuraUntilOf } from "../../events/krallenReward.js";
 import { mr1TribePool } from "../../maproom/v1/mr1TribeRules.js";
 import type { EntryHoused } from "../../yard/attackRoster.js";
 import { creditResources, type CreditResult, type CreditSave } from "../../yard/credit.js";
@@ -159,8 +160,11 @@ export const foughtAcademy = (
 /** What the replay needs of the attacker's main save, as it stood before this save. */
 export interface LootAttacker {
   academy?: JsonObject | null;
-  /** The attacker's champions: type, level, power level (issue #202) and food-bonus rank. */
-  champion?: readonly { t: number; l: number; pl?: number; fb?: number }[] | null;
+  /**
+   * The attacker's champions: type, level, power level (issue #202),
+   * food-bonus rank and, for Krallen, when her loot aura runs out (`la`).
+   */
+  champion?: readonly { t: number; l: number; pl?: number; fb?: number; la?: number }[] | null;
   catapult?: number | null;
   buildingdata?: JsonObject | null;
   /**
@@ -182,6 +186,12 @@ export interface LootAttacker {
    * goes out at full health, as a session minted before it was fought.
    */
   health?: ChampionHealth | null;
+  /**
+   * When the attack began (the session's `startedat`, unix s): Krallen fights
+   * with her loot aura only when it was still running then (the Krallen
+   * Hunt's 3x mark, owner 13 Nov 2026). Absent, she fights with none.
+   */
+  auraAt?: number | null;
 }
 
 const bombById: ReadonlyMap<string, BombStats> = new Map(BOMBS.map((bomb) => [bomb.id, bomb]));
@@ -217,7 +227,8 @@ export const fightableLog = (log: FlingLog, attacker: LootAttacker, entryHoused:
     for (const [id, count] of Object.entries(housed)) left[id] = (left[id] ?? 0) + count;
   }
 
-  const owned = new Map<number, { l: number; pl: number; fb: number }>();
+  const owned = new Map<number, { l: number; pl: number; fb: number; aura: boolean }>();
+  const auraAt = Number(attacker.auraAt);
   for (const champion of attacker.champion ?? []) {
     if (!Number.isInteger(champion?.t) || !Number.isFinite(champion.l)) continue;
     const pl = Number(champion.pl);
@@ -226,6 +237,7 @@ export const fightableLog = (log: FlingLog, attacker: LootAttacker, entryHoused:
       l: champion.l,
       pl: Number.isFinite(pl) ? Math.max(0, Math.floor(pl)) : 0,
       fb: Number.isFinite(fb) ? Math.max(0, Math.floor(fb)) : 0,
+      aura: champion.t === KRALLEN_TYPE && Number.isFinite(auraAt) && krallenAuraUntilOf(champion) > auraAt,
     });
   }
   const championsFlung = new Set<number>();
@@ -268,6 +280,9 @@ export const fightableLog = (log: FlingLog, attacker: LootAttacker, entryHoused:
     // Its brain (issue #219) and its health are never the log's: the
     // session's frozen copies are stamped on, and one with no health left at
     // launch stays home (`ATTACK.as:245`, only a champion with `hp > 0`).
+    // Krallen's loot aura is never the log's either: the stored Krallen's,
+    // running when the attack began (owner, 13 Nov 2026); the engine adds
+    // her level 3 to it (`hasLootAura`).
     let champion: FlungChampion | undefined;
     const stored = event.champion ? owned.get(event.champion.t) : undefined;
     if (
@@ -286,6 +301,7 @@ export const fightableLog = (log: FlingLog, attacker: LootAttacker, entryHoused:
             ...(pl !== undefined && { pl: Math.max(0, Math.min(pl, stored.pl)) }),
             ...(fb !== undefined && { fb: Math.max(0, Math.min(fb, stored.fb)) }),
             ...(s !== undefined && { s }),
+            ...(stored.aura && { aura: true }),
           },
           attacker.brains
         ),
@@ -314,7 +330,8 @@ type FlungChampion = NonNullable<Extract<FlingEvent, { kind: "fling" }>["champio
  * @param brains - The session's `championBrains`, if any.
  */
 export const withFrozenBrain = (champion: FlungChampion, brains: ChampionBrains | null | undefined): FlungChampion => {
-  const { b: _sent, hv: _version, h: _habits, ...rest } = champion;
+  // Krallen's loot aura goes too: only `fightableLog` stamps it, from the save.
+  const { b: _sent, hv: _version, h: _habits, aura: _aura, ...rest } = champion;
   return { ...rest, ...flungMind(brains?.[String(champion.t)], champion.t, champion.s) };
 };
 

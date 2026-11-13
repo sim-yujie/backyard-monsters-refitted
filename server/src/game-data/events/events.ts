@@ -61,6 +61,22 @@ export interface LadderTier {
   readonly rewards: readonly EventReward[];
 }
 
+/**
+ * The player's Krallen level when the hunt began: her level now, less the one
+ * a tier claimed this hunt raised her by (`krallen` pays one level). The
+ * hunt's goals follow it, so the 3x mark stays 3x the goal the player started
+ * with after the first mark raised her. A tier claimed at the top (level 5)
+ * raised nothing; its goals are the last entry either way.
+ */
+export const huntStartLevel = (
+  tiers: readonly LadderTier[],
+  claimedTiers: readonly number[],
+  krallenLevel: number
+): number => {
+  const raised = claimedTiers.some((index) => tiers[index]?.rewards.some((reward) => reward.kind === "krallen"));
+  return raised && krallenLevel > 0 ? krallenLevel - 1 : krallenLevel;
+};
+
 /** What a tier needs of a player whose Krallen is at `krallenLevel` (0 for none). */
 export const tierNeed = (tier: LadderTier, krallenLevel: number): number => {
   const needs = tier.needByKrallenLevel;
@@ -319,6 +335,28 @@ export const KRALLEN_HUNT_GOALS: readonly number[] = [
   60_000_000, 100_000_000, 150_000_000, 225_000_000, 300_000_000,
 ];
 
+/**
+ * ═══════════════════════════════════════════════════════════════════════
+ * KRALLEN'S LOOT AURA: set by the owner (2026-11-13).
+ * A second mark on the hunt at {@link KRALLEN_AURA_GOAL_TIMES} times the
+ * player's goal: 180, 300, 450, 675 and 900 million by the Krallen level
+ * the player had when the hunt began (a level 5 Krallen keeps the last).
+ * Claiming it gives Krallen her loot aura until the END of the NEXT month's
+ * hunt (as Flash's second loot mark held for the round after,
+ * `KOTHHandler.as:76-84`, `:146-155`); it must be won again to keep it.
+ * Only a Krallen of level 3, 4 or 5 carries the aura (strength and radius in
+ * `game-rules/combat/champions.ts`, `LOOT_AURA_BONUS`); below level 3, or
+ * without the mark, she has none.
+ * ═══════════════════════════════════════════════════════════════════════
+ */
+export const KRALLEN_AURA_GOAL_TIMES = 3;
+
+/** The aura mark's goal by Krallen level at the hunt's start, 0 (none) first. */
+export const KRALLEN_AURA_GOALS: readonly number[] = KRALLEN_HUNT_GOALS.map((goal) => goal * KRALLEN_AURA_GOAL_TIMES);
+
+/** How many hunts after the one it was won in the aura runs to the end of. */
+export const KRALLEN_AURA_HUNTS_AFTER = 1;
+
 /** The first month the hunt runs, and how many months are listed from it. */
 export const KRALLEN_HUNT_FIRST = { year: 2026, month: 11 } as const;
 export const KRALLEN_HUNT_MONTHS = 120;
@@ -328,9 +366,25 @@ export const KRALLEN_HUNT_CLAIM_DAYS = 7;
 
 const twoDigits = (value: number): string => String(value).padStart(2, "0");
 
+/** The month `count` months after `month` (1-12) of `year`. */
+const monthsAfter = (year: number, month: number, count: number): { year: number; month: number } => {
+  const months = month - 1 + count;
+  return { year: year + Math.floor(months / 12), month: (months % 12) + 1 };
+};
+
+/**
+ * When the aura won in the hunt of `month` (1-12) of `year` runs out, unix
+ * seconds: the end of the hunt {@link KRALLEN_AURA_HUNTS_AFTER} later, the
+ * first of the month after that one (November's runs to 1 January).
+ */
+export const krallenAuraUntil = (year: number, month: number): number => {
+  const end = monthsAfter(year, month, KRALLEN_AURA_HUNTS_AFTER + 1);
+  return Date.UTC(end.year, end.month - 1, 1) / 1000;
+};
+
 /** The Krallen Hunt of `month` (1-12) in `year`, id `krallen-<year>-<mm>`. */
 export const krallenHunt = (year: number, month: number): EventDefinition => {
-  const next = month === 12 ? { year: year + 1, month: 1 } : { year, month: month + 1 };
+  const next = monthsAfter(year, month, 1);
   return {
     id: `krallen-${year}-${twoDigits(month)}`,
     title: "Krallen Hunt",
@@ -343,6 +397,11 @@ export const krallenHunt = (year: number, month: number): EventDefinition => {
       source: "attackLoot",
       tiers: [
         { need: KRALLEN_HUNT_GOALS[0]!, needByKrallenLevel: KRALLEN_HUNT_GOALS, rewards: [{ kind: "krallen" }] },
+        {
+          need: KRALLEN_AURA_GOALS[0]!,
+          needByKrallenLevel: KRALLEN_AURA_GOALS,
+          rewards: [{ kind: "krallenAura", until: krallenAuraUntil(year, month) }],
+        },
       ],
     },
     requires: { townHall: 6, tutorial: true },

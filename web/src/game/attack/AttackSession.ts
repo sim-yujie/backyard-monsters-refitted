@@ -42,6 +42,7 @@ import {
   type ChampionStance,
 } from "@/game/combat/rules";
 import { siegeLevelsOf } from "@/game/combat/rules/siege";
+import { krallenAuraActive, krallenAuraRuns } from "@/game/yard/krallenAura";
 import type { AttackTarget } from "./attackTarget";
 
 /**
@@ -939,6 +940,8 @@ export class AttackSession {
    * player picked (issue #220), which the server replays it in, its
    * learned habits or brain as the attack load froze it ({@link servedMind}),
    * and the health the attack load froze it at ({@link servedHealth}).
+   * Krallen carries `aura` while her Krallen Hunt loot aura runs at the
+   * attack load's clock ({@link krallenAuraRuns}); the server stamps its own.
    */
   private flungChampion(champion: NonNullable<FlingInput["champion"]>): {
     t: number;
@@ -946,6 +949,7 @@ export class AttackSession {
     pl?: number;
     fb?: number;
     s?: ChampionStance;
+    aura?: boolean;
   } & FlungMind & { hp?: number } {
     const entry = this.target.roster.champions.find((owned) => owned.t === champion.t);
     const pl = Number(entry?.pl);
@@ -961,6 +965,7 @@ export class AttackSession {
       ...(stance ? { s: stance } : {}),
       ...mind,
       ...(hp !== null ? { hp } : {}),
+      ...(krallenAuraRuns(entry, this.response?.currenttime) ? { aura: true } : {}),
     };
   }
 
@@ -1141,6 +1146,17 @@ export class AttackSession {
    */
   attackersAfter(): BattleState["attackers"] {
     return this.battle_?.state().attackers ?? [];
+  }
+
+  /**
+   * Whether the champion of type `t` fights with Krallen's loot aura: her
+   * Krallen Hunt aura running at the attack load's clock and her level 3 or
+   * more (`krallenAuraActive`). For the army row's sign; the fight reads the
+   * log's `aura`, which the server stamps itself.
+   */
+  hasLootAura(t: number): boolean {
+    const entry = this.target.roster.champions.find((owned) => owned.t === t);
+    return krallenAuraActive(entry, this.response?.currenttime);
   }
 
   /**

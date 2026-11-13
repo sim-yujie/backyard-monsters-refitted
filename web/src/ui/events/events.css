@@ -1417,3 +1417,58 @@
     font-size: var(--text-lg);
   }
 }
+
+/* ── The Krallen Hunt's 3x mark: her loot aura (owner, 13 Nov 2026) ──── */
+
+/* Flash's green glow round a looting monster (`LootingMultiplier.as:29`, 0x55FF21). */
+.events-reward__image--aura,
+.events-krallen__aura--on .events-krallen__aura-picture {
+  filter: drop-shadow(0 0 3px #55ff21) drop-shadow(0 0 2px #55ff21);
+}
+
+.events-krallen__aura {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--colour-border-subtle);
+  border-radius: var(--radius-md);
+  background: var(--colour-surface-sunken);
+}
+
+.events-krallen__aura-picture {
+  flex: none;
+  width: 40px;
+  height: 40px;
+  object-fit: contain;
+}
+
+.events-krallen__aura-words {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+  flex: 1;
+}
+
+.events-krallen__aura-need {
+  font-size: var(--text-md);
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  color: var(--colour-text-strong);
+}
+
+.events-krallen__aura-what {
+  font-size: var(--text-sm);
+  color: var(--colour-text-strong);
+}
+
+.events-krallen__aura-note {
+  font-size: var(--text-sm);
+  color: var(--colour-text-muted);
+}
+
+.events-krallen__aura-note--on {
+  color: var(--colour-success);
+  font-weight: 700;
+}

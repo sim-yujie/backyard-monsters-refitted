@@ -1,4 +1,5 @@
 import type { CalendarView, EventReward, EventView, GrantedReward, LadderView } from "@/api/events";
+import { KRALLEN_AURA_LEVEL } from "@/game/yard/krallenAura";
 import { formatAmount, formatCompact, formatCountdown } from "@/ui/format";
 
 /**
@@ -49,19 +50,28 @@ export const calendarDays = (calendar: CalendarView): CalendarDayView[] =>
 export const claimableTiers = (ladder: LadderView): number[] =>
   ladder.tiers.flatMap((tier, index) => (!tier.claimed && ladder.counter >= tier.need ? [index] : []));
 
-/** Whether the event pays Krallen and the player's is at the top already: its goal pays nothing more. */
+/** Whether the event pays Krallen and the player's is at the top already: its level goal pays nothing more. */
 export const krallenMaxed = (event: Pick<EventView, "krallen">): boolean =>
   event.krallen !== null && event.krallen.level >= event.krallen.maxLevel;
+
+/**
+ * The tiers the player can claim now that would pay something: a Krallen at
+ * the top takes no level from the hunt, though its 3x mark still pays her aura.
+ */
+export const payingClaimableTiers = (event: Pick<EventView, "krallen" | "ladder">): number[] => {
+  const ladder = event.ladder;
+  if (!ladder) return [];
+  const maxed = krallenMaxed(event);
+  return claimableTiers(ladder).filter(
+    (index) => !(maxed && (ladder.tiers[index]?.rewards ?? []).every((reward) => reward.kind === "krallen")),
+  );
+};
 
 /** How many rewards wait to be claimed across the events that are on, or over with claims still open. */
 export const claimableCount = (events: readonly EventView[]): number =>
   events
     .filter((event) => event.status !== "upcoming")
-    .reduce(
-      (sum, event) =>
-        sum + (event.calendar?.canClaim ? 1 : 0) + (event.ladder && !krallenMaxed(event) ? claimableTiers(event.ladder).length : 0),
-      0,
-    );
+    .reduce((sum, event) => sum + (event.calendar?.canClaim ? 1 : 0) + payingClaimableTiers(event).length, 0);
 
 /** The device's clock moved onto the server's: `now()` in unix seconds. */
 export interface ServerClock {
@@ -152,6 +162,8 @@ export const rewardText = (reward: EventReward, decorationName: (type: number) =
     }
     case "krallen":
       return "Krallen";
+    case "krallenAura":
+      return "Krallen's loot aura";
     case "korath":
       return `Korath's ${korathPowerName(reward.power)}`;
     case "eventCoins":
@@ -170,12 +182,27 @@ export const krallenPrizeText = (krallen: { level: number; maxLevel: number }): 
       ? `Your Krallen is already level ${krallen.maxLevel}, the highest. Thanks for hunting!`
       : `Krallen level ${krallen.level} → ${krallen.level + 1}`;
 
-/** What a paid claim gave, for the notice: "Krallen joined your yard!" or "Krallen is now level 3!". */
+/**
+ * What a paid claim gave, for the notice: "Krallen joined your yard!",
+ * "Krallen is now level 3!", or her loot aura ({@link grantedAuraText}).
+ */
 export const grantedKrallenText = (granted: readonly GrantedReward[]): string | null => {
   const krallen = granted.find((one) => one.kind === "krallen");
-  if (!krallen || krallen.kind !== "krallen") return null;
+  if (!krallen || krallen.kind !== "krallen") return grantedAuraText(granted);
   if (!krallen.raised) return `Your Krallen is already level ${krallen.level}, the highest.`;
   return krallen.level === 1 ? "Krallen joined your yard!" : `Krallen is now level ${krallen.level}!`;
+};
+
+/**
+ * Her loot aura, for the notice: "Krallen's loot aura is on until 1 Jan!",
+ * or, below level 3, that it waits for her level 3.
+ */
+export const grantedAuraText = (granted: readonly GrantedReward[]): string | null => {
+  const aura = granted.find((one) => one.kind === "krallenAura");
+  if (!aura || aura.kind !== "krallenAura") return null;
+  if (!aura.hasKrallen) return "Win Krallen first: her loot aura needs her.";
+  if (aura.level < KRALLEN_AURA_LEVEL) return `Loot aura won! Krallen uses it from level ${KRALLEN_AURA_LEVEL}.`;
+  return `Krallen's loot aura is on until ${shortDate(aura.until)}!`;
 };
 
 /** Korath's powers by level (Flash `KorathReward.as`): 1 Burn, 2 Breath of Fire, 3 Fists of Doom. */

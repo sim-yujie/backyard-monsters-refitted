@@ -191,28 +191,36 @@ export const FOMOR_DRIFT = 1.25;
 /* ── Krallen (G5) ─────────────────────────────────────────────────────────── */
 
 /**
- * Her loot aura is on from her level 3 (owner, 2026-10-23). Flash gave
- * `ProximityLootBuff`, her third ability, to a powered-up Krallen at any
- * level instead (power level 2, `CHAMPIONCAGE.as:265`); the Krallen Hunt
- * raises her level, never her power level.
+ * Her loot aura needs her level 3 and the Krallen Hunt's 3x goal (owner,
+ * 13 Nov 2026): a Krallen of level 3, 4 or 5 whose player looted three times
+ * their hunt goal carries it until the end of the next hunt
+ * (`server/src/game-data/events/events.ts`, `KRALLEN_AURA_GOAL_TIMES`); every
+ * other Krallen carries none, and levels 1 and 2 never do. Flash gave
+ * `ProximityLootBuff`, her third ability, to the Krallen whose player reached
+ * the second loot mark, 3x the first (power level 2, `CHAMPIONCAGE.as:265`,
+ * `KOTHHandler.as:76-84`), at any level. From 23 Oct to 13 Nov 2026 every
+ * Krallen of level 3 and up had it without the 3x.
  */
 export const KRALLEN_AURA_LEVEL = 3;
 
 /**
  * Whether a champion carries the loot aura: an attacking Krallen from
- * {@link KRALLEN_AURA_LEVEL}. A Krallen defending from her cage never
- * lifts the loot of the monsters attacking her yard.
+ * {@link KRALLEN_AURA_LEVEL} whose aura was earned and running when the attack
+ * began (`earned`, the log's `aura`, which the server stamps). A Krallen
+ * defending from her cage never lifts the loot of the monsters attacking her
+ * yard.
  */
-export const hasLootAura = (id: string, level: number, friendly: boolean): boolean =>
-  id === KRALLEN_ID && !friendly && Math.floor(level) >= KRALLEN_AURA_LEVEL;
+export const hasLootAura = (id: string, level: number, friendly: boolean, earned: boolean): boolean =>
+  id === KRALLEN_ID && !friendly && earned && Math.floor(level) >= KRALLEN_AURA_LEVEL;
 
 /** The aura's radius: her `buffRadius` rung, on screen (`ProximityLootBuff.as:24`). */
 export const krallenAuraRadius = (level: number): number =>
   championStat(KRALLEN_ID, "buffRadius", level);
 
 /**
- * What the aura adds to a looting property at her levels 3, 4 and 5 (owner,
- * 2026-10-23), added as `LootingMultiplier` adds (`LootingMultiplier.as:46-53`).
+ * AURA STRENGTH, the one place to change it. What the aura adds to a looting
+ * property at her levels 3, 4 and 5 (owner, 2026-10-23; kept 13 Nov 2026),
+ * added as `LootingMultiplier` adds (`LootingMultiplier.as:46-53`).
  * Level 5 is Flash's own `1 + _buff` at her top `buffs` rung, 0.3
  * (`ProximityLootBuff.as:51`): an ordinary monster's 0.5 becomes 1.8, 3.6
  * times, and a looter's 2 becomes 3.3. Each level below it adds 0.4 less:
