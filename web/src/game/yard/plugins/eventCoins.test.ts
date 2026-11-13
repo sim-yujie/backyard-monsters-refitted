@@ -66,6 +66,8 @@ describe("event coins plugin", () => {
     expect(notices.show).not.toHaveBeenCalled();
     expect(claimOnly(["calendar"])).toBe(true);
     expect(claimOnly(["calendar", "ladder"])).toBe(true);
+    expect(claimOnly(["quest"])).toBe(true);
+    expect(claimOnly(["quest", "weekend-played"])).toBe(false);
     expect(claimOnly(["calendar", "other"])).toBe(false);
     expect(claimOnly([])).toBe(false);
   });

@@ -22,8 +22,6 @@ const REASON_WORDS: Readonly<Record<string, string>> = {
   "weekend-boost": "Boost",
   // An announcement's Glimmers gift (server `GLIMMERS_REASON`).
   announcement: "Gift",
-  // A daily quest that pays Glimmers (server questsActions).
-  quest: "Quest",
 };
 
 /** "Daily", "Daily + Event", or "" for an unnamed gain. */
@@ -56,12 +54,12 @@ export const gainLine = (gained: CoinsGained): HTMLElement => {
 };
 
 /**
- * Coins a claim on the Events page paid show on that claim's own "Day 3
- * claimed" notice; a second "+15" beside it would say the same twice
+ * Coins a claim on the Events page (or a Glimmers daily quest) paid show on
+ * that claim's own "Day 3 claimed" / "Quest claimed" notice; a second "+15" beside it would say the same twice
  * (ASSUMED).
  */
 export const claimOnly = (reasons: readonly string[]): boolean =>
-  reasons.length > 0 && reasons.every((reason) => reason === "calendar" || reason === "ladder");
+  reasons.length > 0 && reasons.every((reason) => reason === "calendar" || reason === "ladder" || reason === "quest");
 
 export const eventCoinsPlugin: YardPlugin = ({ store, notices }) => {
   const stop = onCoinsGained((gained) => {
