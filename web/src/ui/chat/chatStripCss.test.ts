@@ -85,7 +85,7 @@ describe("chat.css: the phone's folded line has its own row, clear of the Events
 });
 
 describe("chat.css: at 390px the folded line shows the name and the start of the words", () => {
-  const line = rule(chatPhone, `${folded} .chat-line:not(.chat-line--notice)`);
+  const line = rule(chatPhone, `${folded} .chat-line:last-child:not(.chat-line--notice)`);
   const name = rule(chatPhone, `${folded} .chat-line > .chat-line__name`);
   const body = rule(chatPhone, `${folded} .chat-line > .chat-line__body`);
 
@@ -110,5 +110,17 @@ describe("chat.css: at 390px the folded line shows the name and the start of the
     // Even a name at its 60% cap leaves the words a start.
     const cap = px(name, /max-width:\s*(\d+)%/) / 100;
     expect(width - picture - badge - width * cap).toBeGreaterThanOrEqual(80);
+  });
+});
+
+describe("chat.css: folded on a phone, only the newest line shows (7.2 hotfix, owner 13 Nov)", () => {
+  it("hides every older line, and no later folded-line rule shows them again", () => {
+    expect(rule(chatPhone, `${folded} .chat-line:not(:last-child)`)).toMatch(/display:\s*none/);
+    // A rule with the same weight that sets display on every line (not only the last)
+    // came later and showed the whole history over the yard in 7.2.
+    const shown = [...chatPhone.matchAll(/([^{}]+)\{([^}]*)\}/g)]
+      .filter(([, selector, body]) => selector.includes(folded) && /\.chat-line(?![-_])/.test(selector) && /display:\s*(?!none\b)[a-z]/.test(body))
+      .map(([, selector]) => selector.trim());
+    for (const selector of shown) expect(selector).toMatch(/:last-child/);
   });
 });
