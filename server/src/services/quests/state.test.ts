@@ -12,6 +12,7 @@ import {
   QUEST_TRIBES,
   WEEKLY_ALL_DONE_SHINY,
   WEEKLY_QUEST_SHINY,
+  DAILY_GLIMMERS,
 } from "../../game-data/quests.js";
 import { FilterFrontendKeys } from "../../utils/FrontendKey.js";
 import { utcDay, utcWeek } from "./period.js";
@@ -141,12 +142,17 @@ describe("the daily pick", () => {
 
   test("each daily quest pays 4% of the storage cap in its one resource; needs follow Town Hall", () => {
     const set = pickDaily(playerOf({ cap: 250_000, townHall: 5 }), utcDay(MONDAY));
+    const last = set.quests.length - 1;
     for (const one of set.quests) {
       expect(one.rewards).toHaveLength(1);
+      if (one.slot === last) continue;
       const reward = one.rewards[0] as { kind: string; amounts: Record<string, number> };
       expect(reward.kind).toBe("resources");
       expect(Object.values(reward.amounts)).toEqual([Math.floor(250_000 * DAILY_PAY_SHARE)]);
     }
+    // The last slot pays Glimmers instead (and only that slot).
+    expect(set.quests[last]!.rewards).toEqual([{ kind: "eventCoins", amount: DAILY_GLIMMERS }]);
+    expect(DAILY_GLIMMERS).toBe(5);
     // destroyTribe needs 2 at Town Hall 5.
     expect(set.quests[0]).toMatchObject({ kind: "destroyTribe", need: 2 });
   });
@@ -337,6 +343,17 @@ describe("the daily swap (one free a day)", () => {
     expect(swapped.value.variant).not.toBe(before.variant);
     expect(QUEST_TRIBES as readonly string[]).toContain(swapped.value.variant!);
     expect(swapped.value).toMatchObject({ slot: 0, have: 0, claimed: false });
+  });
+
+  test("a swap keeps the Glimmers on the last slot and never moves them to another slot", () => {
+    const record = today();
+    const last = record.daily!.quests.length - 1;
+    const swapped = swapDaily(record, player, last);
+    if (!swapped.ok) throw new Error(swapped.reason);
+    expect(swapped.value.rewards).toEqual([{ kind: "eventCoins", amount: DAILY_GLIMMERS }]);
+    const other = swapDaily(record, player, 2);
+    if (!other.ok) throw new Error(other.reason);
+    expect(other.value.rewards[0]!.kind).toBe("resources");
   });
 
   test("another quest swaps to an unlocked kind not shown today, never the tribe kind", () => {
