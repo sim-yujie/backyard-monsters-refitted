@@ -228,6 +228,40 @@ button.chat-line__name {
   cursor: pointer;
 }
 
+/* The speaker's picture before their name (owner, 13 Nov 2026): a small
+   round frame, their critter inside it, or their uploaded photo filling it
+   (cover-cropped, as on the profile badge). Folded it is a touch smaller, so
+   a line stays one line high. */
+.chat-line__pic {
+  display: inline-block;
+  box-sizing: border-box;
+  width: 20px;
+  height: 20px;
+  margin-right: 0.35em;
+  padding: 1px;
+  border: 1px solid rgb(255 255 255 / 0.35);
+  border-radius: 50%;
+  background: rgb(10 14 20 / 0.45);
+  object-fit: contain;
+  vertical-align: -5px;
+  user-select: none;
+}
+
+.chat-line__pic.is-photo {
+  padding: 0;
+  object-fit: cover;
+}
+
+.chat-box--open .chat-line:not(.chat-line--own) > .chat-line__pic {
+  cursor: pointer;
+}
+
+.chat-box:not(.chat-box--open) .chat-line__pic {
+  width: 18px;
+  height: 18px;
+  vertical-align: -4px;
+}
+
 /* Your own lines: the name in the warm accent, a bar down the side. */
 .chat-line--own {
   border-left: 3px solid var(--chat-own);
@@ -623,6 +657,17 @@ button.chat-line__name {
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
+  }
+
+  /* The strip stops short of the Events button in the top right corner
+     (owner, 13 Nov: "world chat gets cut off by events tab"): the button
+     (events.css, 12px from the edge) is its 48px disc with its "Events"
+     sign under it, and the sign is the wider part, about 70px in Modern and
+     76px with Classic's wider sign ends. 96px from the edge keeps a gap past
+     either; the line ends in "…" before it. Without the button the strip
+     keeps the whole width. */
+  .overlay__layer:has(> .yard-dock > .events-door:not([hidden])) > .chat-box:not(.chat-box--open) {
+    width: calc(100% - var(--space-3) - 96px);
   }
 
   /* The dock takes about 270px at the bottom of a phone: the open box ends

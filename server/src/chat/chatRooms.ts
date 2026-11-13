@@ -15,6 +15,7 @@ import {
 import { getHistory, pushMessage } from "./chatHistory.js";
 import { watchLine } from "./chatWatch.js";
 import { markGameTeam, refuseIfMuted } from "./chatGameTeam.js";
+import { speakerPhoto, withCurrentPhotos } from "./chatPhotos.js";
 import { isChatModerator } from "./chatModerators.js";
 import { takeAllianceLine } from "./chatLimits.js";
 import {
@@ -175,10 +176,11 @@ export const leaveAllChannels = (client: ChatClient) => {
  * @returns {Promise<HistoryEntry[]>} Entries ordered oldest to newest.
  */
 export const getChannelHistory = async (channel: string, info: ChannelInfo): Promise<HistoryEntry[]> => {
-  if (info.type !== ChannelType.Alliance) return markGameTeam(await getHistory(channel));
+  // Every speaker's photo as it is now, whatever the line was stored with (`chatPhotos.ts`).
+  if (info.type !== ChannelType.Alliance) return markGameTeam(await withCurrentPhotos(await getHistory(channel)));
 
   const em = postgres.orm.em.fork();
-  return markGameTeam(await getAllianceMessages(info.allianceId, em));
+  return markGameTeam(await withCurrentPhotos(await getAllianceMessages(info.allianceId, em)));
 };
 
 /**
@@ -224,9 +226,13 @@ export const postMessage = async (client: ChatClient, channel: string, body: str
     return;
   }
 
+  // The speaker's photo for others to see, absent for their critter (`chatPhotos.ts`).
+  const photo = await speakerPhoto(client, now);
+
   const fields = {
     userId: client.userId,
     picSquare: client.picSquare,
+    ...(photo !== null && { photo }),
     allianceImage: null,
     body: messageBody,
     messageType: AllianceMessageType.MESSAGE,
