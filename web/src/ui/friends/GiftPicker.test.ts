@@ -8,7 +8,7 @@ import { fixtureApi, fixtureFriend, fixtureGift, fixtureList } from "@/game/frie
 import { FriendsStore } from "@/game/friends/friendsStore";
 import { setPlayerPool } from "@/game/friends/friendsView";
 import { setResourceRealm } from "@/ui/resourceIcon";
-import { choiceOrder, GIFT_TEXT, GiftPicker } from "./GiftPicker";
+import { choiceOrder, GIFT_PICKER_CLOSE_MS, GIFT_TEXT, GiftPicker } from "./GiftPicker";
 
 /** The gift picker (issue #375): four resources, one press sends, the store marks the friend. */
 
@@ -206,5 +206,73 @@ describe("the choices' look", () => {
     // On a skin the plate's ends are its border: the marker sits on the right end.
     expect(rule(":root[data-skin] .panel .gift-picker__choice.btn--outline .gift-picker__mark")).toMatch(/var\(--skin-button2-cap\)/);
     expect(rule(":root[data-skin] .panel .gift-picker__choice.btn--primary .gift-picker__mark")).toMatch(/var\(--skin-button-cap\)/);
+  });
+});
+
+describe("what the player cannot afford (owner, 13 Nov 2026)", () => {
+  const cost = { amount: 300, resources: { r1: 100, r2: 5000, r3: 300, r4: 0 } };
+
+  it("greys each resource held short of one gift, shows the gift's size, and a press says why instead of sending", async () => {
+    const { picker, calls } = await setup({ giftCost: cost });
+    await picker.loadCost();
+    expect(document.querySelector(".gift-picker__size")?.textContent).toBe(GIFT_TEXT.size(300));
+    const short = ["r1", "r2", "r3", "r4"].filter((key) => choice(key).classList.contains("is-short"));
+    expect(short).toEqual(["r1", "r4"]);
+    expect(choice("r1").getAttribute("aria-disabled")).toBe("true");
+    expect(choice("r1").title).toBe(GIFT_TEXT.short("r1", 300, 100));
+    choice("r1").click();
+    await Promise.resolve();
+    expect(picker.statusText).toBe(GIFT_TEXT.short("r1", 300, 100));
+    expect(calls.some(([method]) => method === "sendGift")).toBe(false);
+    // Exactly enough is enough.
+    choice("r3").click();
+    await vi.waitFor(() => expect(calls.some(([method]) => method === "sendGift")).toBe(true));
+  });
+
+  it("reads the yard on screen before the server's figure", async () => {
+    const undo = setPlayerPool({ read: () => ({ resources: { r1: 9000, r4: 0 }, caps: null }), refresh: () => {} });
+    try {
+      const { picker } = await setup({ giftCost: cost });
+      await picker.loadCost();
+      expect(choice("r1").classList.contains("is-short")).toBe(false);
+      expect(choice("r4").classList.contains("is-short")).toBe(true);
+    } finally {
+      undo();
+    }
+  });
+
+  it("leaves every choice open when the cost cannot be read", async () => {
+    const { picker } = await setup({ giftCost: new Error("down") });
+    await picker.loadCost();
+    expect(document.querySelectorAll(".gift-picker .is-short")).toHaveLength(0);
+    expect((document.querySelector(".gift-picker__size") as HTMLElement).hidden).toBe(true);
+  });
+
+  it("a held Enter (the press that opened the picker) does not send the focused choice", async () => {
+    const { api } = fixtureApi();
+    const picker = new GiftPicker({ userid: 7, username: "Ann" }, { api, store: new FriendsStore({ api }) }).mount(document.body);
+    const focused = document.activeElement as HTMLElement;
+    expect(focused.classList.contains("gift-picker__choice")).toBe(true);
+    const held = new KeyboardEvent("keydown", { key: "Enter", repeat: true, bubbles: true, cancelable: true });
+    focused.dispatchEvent(held);
+    expect(held.defaultPrevented).toBe(true);
+    const fresh = new KeyboardEvent("keydown", { key: "Enter", bubbles: true, cancelable: true });
+    focused.dispatchEvent(fresh);
+    expect(fresh.defaultPrevented).toBe(false);
+    picker.popup.close();
+  });
+
+  it("closes itself a moment after the gift went", async () => {
+    vi.useFakeTimers();
+    try {
+      const { picker } = await setup();
+      await picker.send("r3");
+      expect(document.querySelector(".gift-picker")).not.toBeNull();
+      await vi.advanceTimersByTimeAsync(GIFT_PICKER_CLOSE_MS);
+      expect(document.querySelector(".gift-picker")).toBeNull();
+      expect(await picker.closed).toEqual(expect.objectContaining({ resource: "r3" }));
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });

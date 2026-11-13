@@ -36,6 +36,10 @@ export interface ChatLineWire {
   userId: number;
   /** `[level] name`, the server's words. */
   displayName: string;
+  /** The speaker's critter (`pic_square`); null or absent for their default. */
+  picSquare?: string | null;
+  /** The speaker's visible photo's upload number (`game/playerPicture.ts`); absent for their critter. */
+  photo?: number;
   body: string;
   /** When it was said, ms since the epoch: with `userId`, what names the line. */
   ts: number;

@@ -64,13 +64,17 @@ import { countAfterCommit } from "../../services/alliance/allianceProgress.js";
  *   9 Nov 2026): the receiver throws waiting gifts away. Nothing is credited
  *   and no daily collect is used; the sender's one-a-day key still holds.
  *   One gift not waiting for the caller is `noSuchGift`.
+ * - `GET /bm/friends/gift/cost?userid=` (owner, 13 Nov 2026): one gift's
+ *   amount and the sender's resources, so the picker greys what is too dear.
+ *
+ * Gift all, many gifts in one go, is `giftAll.ts`.
  */
 
 const id = z.coerce.number().int().positive();
 
 export const GiftSchema = z.object({ userid: id, resource: z.enum(GIFT_RESOURCES) });
 /** A JSON body's array arrives re-stringified (`middleware/jsonBody.ts`), so a string is parsed first. */
-const parsedList = (value: unknown): unknown => {
+export const parsedList = (value: unknown): unknown => {
   if (typeof value !== "string") return value;
   try {
     return JSON.parse(value);
@@ -90,7 +94,7 @@ export const CollectSchema = z.union([
 export const DeleteGiftsSchema = CollectSchema;
 
 /** The storage-cap slice of each main save, by save id. */
-const readCaps = async (em: EntityManager, basesaveids: readonly number[]): Promise<Map<number, number>> => {
+export const readCaps = async (em: EntityManager, basesaveids: readonly number[]): Promise<Map<number, number>> => {
   const rows = await em.execute<
     { basesaveid: number | string; buildingdata: BuildingDataMap | null; storedata: JsonObject | null; outposts: unknown[] | null }[]
   >(
@@ -172,13 +176,13 @@ export const sendGiftAnswer = async (em: EntityManager, user: User, body: unknow
 };
 
 /** One resource as the save holds it; anything unreadable is zero. */
-const heldOf = (save: Save, key: string): number => {
+export const heldOf = (save: Save, key: string): number => {
   const value = Number(save.resources?.[key]);
   return Number.isFinite(value) ? value : 0;
 };
 
 /** The four resources a save holds, as whole numbers. */
-const resourcesOf = (save: Save) => {
+export const resourcesOf = (save: Save) => {
   const amounts = noAmounts();
   for (const key of GIFT_RESOURCES) amounts[key] = heldOf(save, key);
   return amounts;
@@ -201,7 +205,7 @@ export const wishesAnswer = async (em: EntityManager, user: User, body: unknown)
 };
 
 /** `SELECT … FOR UPDATE` on one save row, refreshed into the identity map. */
-const lockSave = (tx: EntityManager, basesaveid: number) =>
+export const lockSave = (tx: EntityManager, basesaveid: number) =>
   tx.findOne(Save, { basesaveid }, { lockMode: LockMode.PESSIMISTIC_WRITE, refresh: true });
 
 /**
@@ -282,4 +286,35 @@ export const deleteGiftsAnswer = async (em: EntityManager, user: User, body: unk
 
   const [collected, giftsWaiting] = await Promise.all([collectedToday(em, me, now), countWaitingGifts(em, me, now)]);
   return { error: 0, deleted, collectsLeft: collectsLeftOf(collected), giftsWaiting };
+};
+
+export const GiftCostSchema = z.object({ userid: id });
+
+/**
+ * `GET /bm/friends/gift/cost?userid=` (owner, 13 Nov 2026): what one gift to
+ * this friend is worth now (`amount`, the same for every resource) and what
+ * the sender's main yard holds as last saved (`resources`), so the picker
+ * can grey out what the player cannot afford instead of being refused.
+ * Writes nothing; sending still checks everything (`sendGiftAnswer`).
+ */
+export const giftCostAnswer = async (em: EntityManager, user: User, query: unknown): Promise<FriendsBody> => {
+  const { userid: to } = GiftCostSchema.parse(query);
+  const from = user.userid;
+  if (to === from) throw friendRefusedErr("self");
+  const [sides, since] = await Promise.all([readSides(em, [from, to]), friendsSince(em, from, [to])]);
+  const mine = sides.get(from);
+  const theirs = sides.get(to);
+  if (!theirs) throw friendRefusedErr("noSuchPlayer");
+  if (!since.has(to)) throw friendRefusedErr("notFriends");
+  if (!mine?.basesaveid) throw notMainYardErr();
+  if (!theirs.basesaveid) throw friendRefusedErr("cannotSend");
+  const caps = await readCaps(em, [mine.basesaveid, theirs.basesaveid]);
+  const [row] = await em.execute<{ resources: Save["resources"] }[]>(`SELECT resources FROM bym.save WHERE basesaveid = ?`, [
+    mine.basesaveid,
+  ]);
+  return {
+    error: 0,
+    amount: giftAmountOf(caps.get(mine.basesaveid) ?? 0, caps.get(theirs.basesaveid) ?? 0),
+    resources: resourcesOf({ resources: row?.resources ?? null } as Save),
+  };
 };

@@ -5738,3 +5738,15 @@ tbody th {
     font-size: 0.8125rem;
   }
 }
+
+/* The Shiny and Glimmers gifts, side by side where there is room. */
+.ann-gifts {
+  display: grid;
+  gap: 16px;
+}
+
+@media (min-width: 720px) {
+  .ann-gifts {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}

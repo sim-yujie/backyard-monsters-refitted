@@ -53,6 +53,8 @@ export interface HistoryEntry {
   userId: number;
   displayName: string;
   picSquare: string | null;
+  /** The speaker's visible photo's upload number (`chatPhotos.ts`); absent for their critter. */
+  photo?: number;
   allianceImage: number | null;
   body: string;
   messageType: AllianceMessageType;
@@ -87,7 +89,7 @@ export type ServerMessage =
   | { type: ServerMessageType.AuthOk; userId: number; displayName: string }
   | { type: ServerMessageType.AuthFail; reason: AuthFailReason }
   | { type: ServerMessageType.Joined; channel: string; history: HistoryEntry[] }
-  | { type: ServerMessageType.Message; channel: string; messageType: AllianceMessageType; userId: number; displayName: string; picSquare: string | null; allianceImage: number | null; body: string; ts: number; cell?: { x: number; y: number }; tradeRequest?: number; gm?: boolean; mod?: boolean }
+  | { type: ServerMessageType.Message; channel: string; messageType: AllianceMessageType; userId: number; displayName: string; picSquare: string | null; photo?: number; allianceImage: number | null; body: string; ts: number; cell?: { x: number; y: number }; tradeRequest?: number; gm?: boolean; mod?: boolean }
   | { type: ServerMessageType.UserEnter; channel: string; userId: number; displayName: string }
   | { type: ServerMessageType.UserExit; channel: string; userId: number }
   | { type: ServerMessageType.NameUpdate; channel: string; userId: number; displayName: string }

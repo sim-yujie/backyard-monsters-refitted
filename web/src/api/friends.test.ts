@@ -3,6 +3,7 @@ import { dayText } from "@/game/mail/mailbox";
 import {
   friendRefusal,
   friendsApi,
+  giftAllOf,
   GENERAL_REFUSAL,
   NETWORK_REFUSAL,
   REFUSAL_TEXT,
@@ -363,5 +364,38 @@ describe("toSeconds", () => {
     expect(toSeconds("")).toBeNull();
     expect(toSeconds("soon")).toBeNull();
     expect(toSeconds(0)).toBeNull();
+  });
+});
+
+describe("giftAllOf (owner, 13 Nov 2026)", () => {
+  it("reads a Gift all answer, dropping a gift with no known resource", () => {
+    const result = giftAllOf({
+      fallback: "r2",
+      gifts: [
+        { userid: 4, username: "Ann", resource: "r4", amount: 100.7, wish: 1, giftid: 9 },
+        { userid: 5, username: "Bo", resource: "gold", amount: 100, wish: 0 },
+      ],
+      skipped: [
+        { userid: 6, username: "Max", reason: "notEnough", lacking: ["r4", "r1"], amount: 100 },
+        { userid: 7, username: "", reason: "cannotSend", lacking: [], amount: 0 },
+        { userid: 8, username: "Zed", reason: "somethingNew", lacking: [], amount: 0 },
+      ],
+      cost: { r4: 100 },
+      resources: { r1: 5, r2: "7", r3: null },
+      noWish: 3,
+    });
+    expect(result).toEqual({
+      fallback: "r2",
+      noWish: 3,
+      gifts: [{ userid: 4, username: "Ann", resource: "r4", amount: 100, wish: 1 }],
+      skipped: [
+        { userid: 6, username: "Max", reason: "notEnough", lacking: ["r4", "r1"], amount: 100 },
+        // No name comes back for a player who is no longer a friend.
+        { userid: 7, username: "Player 7", reason: "cannotSend", lacking: [], amount: 0 },
+        { userid: 8, username: "Zed", reason: "cannotSend", lacking: [], amount: 0 },
+      ],
+      cost: { r1: 0, r2: 0, r3: 0, r4: 100 },
+      resources: { r1: 5, r2: 7, r3: 0, r4: 0 },
+    });
   });
 });

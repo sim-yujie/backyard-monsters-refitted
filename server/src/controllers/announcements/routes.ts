@@ -7,6 +7,7 @@ import { apiVersion } from "../../middleware/apiVersioning.js";
 import {
   ANNOUNCEMENT_LIMITS,
   claimForPlayer,
+  GLIMMERS_REASON,
   createAnnouncement,
   deleteAnnouncement,
   dismissForPlayer,
@@ -26,7 +27,7 @@ import { logger } from "../../utils/logger.js";
  *
  *   GET  /api/:apiVersion/bm/announcements              the current ones, newest first, each with `dismissed`
  *   POST /api/:apiVersion/bm/announcements/:id/dismiss  "Got it"
- *   POST /api/:apiVersion/bm/announcements/:id/claim    the gift's Shiny, once per account
+ *   POST /api/:apiVersion/bm/announcements/:id/claim    the gift's Shiny and Glimmers, once per account
  *   GET  /api/:apiVersion/announcements/images/:id      a published one's picture (an `<img>` sends no sign-in)
  *
  * The dashboard's, behind the owner-only check like every `/admin` route:
@@ -116,8 +117,20 @@ export const mountAnnouncementRoutes = (router: Router, deps: AnnouncementRouteD
       const status = done.outcome === "notFound" ? Status.NOT_FOUND : Status.CONFLICT;
       return refuse(ctx, status, CLAIM_REFUSAL_WORDS[done.outcome], done.outcome);
     }
-    if (done.outcome === "claimed") logger.info(`Announcements: ${ctx.authUser.userid} claimed ${done.shiny} Shiny from ${id}`);
-    ok(ctx, { id, shiny: done.shiny, already: done.outcome === "already" });
+    if (done.outcome === "claimed") {
+      logger.info(`Announcements: ${ctx.authUser.userid} claimed ${done.shiny} Shiny and ${done.glimmers} Glimmers from ${id}`);
+    }
+    ok(ctx, {
+      id,
+      shiny: done.shiny,
+      glimmers: done.glimmers,
+      already: done.outcome === "already",
+      // The purse, as a yard answer carries it, so the top bar moves at once
+      // and the "+100" notice shows (`web/src/game/eventCoins.ts`).
+      ...(done.coins !== null && { eventcoins: done.coins }),
+      ...(done.outcome === "claimed" &&
+        done.glimmers > 0 && { coinsGained: [{ amount: done.glimmers, reason: GLIMMERS_REASON }] }),
+    });
   });
 
   router.get(`${api}/announcements/images/:id`, apiVersion, deps.imageLimiter, async (ctx) => {

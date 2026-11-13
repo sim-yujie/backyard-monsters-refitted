@@ -6,6 +6,7 @@ import {
   draftProblem,
   formOf,
   giftNeedsConfirm,
+  giftWords,
   fromLocalInput,
   pictureProblem,
   standing,
@@ -18,7 +19,7 @@ import {
  * where each announcement stands, and the preview drawn by the game's code.
  */
 
-const LIMITS = { titleMax: 80, bodyMax: 2000, images: 3, imageBytesMax: 1_000_000, shinyMax: 10_000 };
+const LIMITS = { titleMax: 80, bodyMax: 2000, images: 3, imageBytesMax: 1_000_000, shinyMax: 10_000, glimmersMax: 1_000 };
 
 interface Call {
   method: string;
@@ -43,6 +44,7 @@ const saved = (over: Partial<AdminAnnouncement> = {}): AdminAnnouncement => ({
   live: true,
   dismissals: 12,
   shiny: 0,
+  glimmers: 0,
   claims: 0,
   ...over,
 });
@@ -55,6 +57,7 @@ const draft = (over: Partial<Draft> = {}): Draft => ({
   endsAt: "",
   pictures: [],
   shiny: "",
+  glimmers: "",
   ...over,
 });
 
@@ -110,13 +113,31 @@ describe("the form's checks", () => {
     expect(formOf(draft({ shiny: " 200 " })).shiny).toBe(200);
     expect(formOf(draft()).shiny).toBe(0);
 
-    const publish = { status: "published", shiny: "200" } as const;
+    const publish = { status: "published", shiny: "200", glimmers: "" } as const;
     expect(giftNeedsConfirm(publish, undefined)).toBe(true);
     expect(giftNeedsConfirm(publish, saved({ status: "draft", shiny: 200 }))).toBe(true);
     expect(giftNeedsConfirm(publish, saved({ shiny: 100 }))).toBe(true);
     expect(giftNeedsConfirm(publish, saved({ shiny: 200 }))).toBe(false);
-    expect(giftNeedsConfirm({ status: "draft", shiny: "200" }, undefined)).toBe(false);
-    expect(giftNeedsConfirm({ status: "published", shiny: "" }, undefined)).toBe(false);
+    expect(giftNeedsConfirm({ status: "draft", shiny: "200", glimmers: "" }, undefined)).toBe(false);
+    expect(giftNeedsConfirm({ status: "published", shiny: "", glimmers: "" }, undefined)).toBe(false);
+  });
+
+  it("takes a Glimmers gift within its own limit, and asks once more before publishing one", () => {
+    expect(draftProblem(draft({ glimmers: "100" }), LIMITS)).toBeNull();
+    expect(draftProblem(draft({ glimmers: "1000" }), LIMITS)).toBeNull();
+    for (const glimmers of ["-1", "2.5", "1001", "many"]) {
+      expect(draftProblem(draft({ glimmers }), LIMITS)).toContain("Glimmers");
+    }
+    expect(formOf(draft({ glimmers: " 100 " })).glimmers).toBe(100);
+    expect(formOf(draft()).glimmers).toBe(0);
+    expect(giftWords({ shiny: "", glimmers: "100" })).toBe("100 Glimmers");
+    expect(giftWords({ shiny: "200", glimmers: "100" })).toBe("200 Shiny and 100 Glimmers");
+
+    const publish = { status: "published", shiny: "", glimmers: "100" } as const;
+    expect(giftNeedsConfirm(publish, undefined)).toBe(true);
+    expect(giftNeedsConfirm(publish, saved({ glimmers: 50 }))).toBe(true);
+    expect(giftNeedsConfirm(publish, saved({ glimmers: 100 }))).toBe(false);
+    expect(giftNeedsConfirm({ ...publish, status: "draft" }, undefined)).toBe(false);
   });
 
   it("takes PNG, JPEG and WebP pictures only", () => {
@@ -151,6 +172,7 @@ describe("the form's checks", () => {
       startsAt: null,
       endsAt: null,
       shiny: 0,
+      glimmers: 0,
       images: [{ data: "data:image/png;base64,AAAA" }, { keep: 9 }],
     });
   });

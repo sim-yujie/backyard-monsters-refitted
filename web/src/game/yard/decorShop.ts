@@ -67,6 +67,15 @@ export interface DecorKindDefinition {
  * decoration types (`isDecoration`) has a `subgroup`, 0 to 4. This project's
  * own go under Plants and Good.
  */
+/**
+ * The sub-tab whose first tiles are this project's own seasonal decorations
+ * (now the autumn ones: Leaf Pile and Rake, Turkey Topiary, Autumn Maple
+ * Tree). An announcement's "Shop" opens here, so a Glimmers gift leads to
+ * what the current event is about; the top bar's Glimmers keeps Flash's Evil.
+ * Change it when a new season's decorations lead another sub-tab.
+ */
+export const SEASONAL_DECOR_KIND: DecorKind = DecorKind.PLANTS;
+
 export const DECOR_KINDS: readonly DecorKindDefinition[] = [
   { id: DecorKind.EVIL, label: "Evil", types: [107, 74, 75, 76, 77, 78, 79, 81, 82, 83, 84, 85, 80, 73] },
   {

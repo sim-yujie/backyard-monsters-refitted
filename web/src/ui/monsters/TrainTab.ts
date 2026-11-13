@@ -191,7 +191,9 @@ export class TrainTab implements MonstersTab {
       }
     }
     this.syncPending();
-    if (focusKey) this.element.querySelector<HTMLElement>(`[data-focus-key="${focusKey}"]`)?.focus();
+    // Without preventScroll the browser scrolls the list to the redrawn copy:
+    // on a phone that threw the list about on a tap (the Hatch tab's bug, 13 Nov).
+    if (focusKey) this.element.querySelector<HTMLElement>(`[data-focus-key="${focusKey}"]`)?.focus({ preventScroll: true });
   }
 
   private renderSlots(used: Set<string>): void {

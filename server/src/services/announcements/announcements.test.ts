@@ -39,6 +39,7 @@ describe("parseAnnouncement", () => {
         endsAt: null,
         images: [],
         shiny: 0,
+        glimmers: 0,
       },
     });
   });
@@ -49,6 +50,18 @@ describe("parseAnnouncement", () => {
     expect(parseAnnouncement({ ...form(), shiny: null })).toMatchObject({ ok: true, value: { shiny: 0 } });
     for (const shiny of [-1, 1.5, 10_001, "200", Number.NaN]) {
       expect(parseAnnouncement({ ...form(), shiny }).ok).toBe(false);
+    }
+  });
+
+  test("takes Glimmers within their own limit, alone or beside Shiny", () => {
+    expect(parseAnnouncement({ ...form(), glimmers: 100 })).toMatchObject({ ok: true, value: { shiny: 0, glimmers: 100 } });
+    expect(parseAnnouncement({ ...form(), shiny: 50, glimmers: 100 })).toMatchObject({
+      ok: true,
+      value: { shiny: 50, glimmers: 100 },
+    });
+    expect(parseAnnouncement({ ...form(), glimmers: ANNOUNCEMENT_LIMITS.glimmersMax })).toMatchObject({ ok: true });
+    for (const glimmers of [-1, 2.5, ANNOUNCEMENT_LIMITS.glimmersMax + 1, "100", Number.NaN]) {
+      expect(refusal({ ...form(), glimmers })).toContain("Glimmers");
     }
   });
 

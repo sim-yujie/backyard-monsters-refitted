@@ -16,6 +16,7 @@ describe("event coins plugin", () => {
     expect(gainWords(["calendar"])).toBe("Daily");
     expect(gainWords(["calendar", "ladder"])).toBe("Daily + Event");
     expect(gainWords(["weekend-played"])).toBe("Weekend");
+    expect(gainWords(["announcement"])).toBe("Gift");
     expect(gainWords(["weekend-played", "weekend-boost"])).toBe("Weekend + Boost");
     expect(gainWords(["unknown"])).toBe("");
     expect(gainWords([])).toBe("");

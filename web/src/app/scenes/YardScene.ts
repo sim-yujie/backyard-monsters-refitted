@@ -1,3 +1,4 @@
+import type { DecorKind } from "@/game/yard/decorShop";
 import { getSession, logout } from "@/api/auth";
 import { setCurrentAllianceBonuses } from "@/game/alliance/allianceBonuses";
 import { allianceButtonShows } from "@/game/alliance/allianceButton";
@@ -1773,9 +1774,10 @@ export class YardScene implements Scene {
   }
 
   /** Opens the Build window on its Decorations tab (the HUD's event coin counter). */
-  private openDecorations(): void {
+  private openDecorations(kind?: DecorKind): void {
     this.openBuildMenu();
     this.buildMenu?.open(BuildCategory.DECORATIONS);
+    if (kind) this.buildMenu?.openKind(kind);
   }
 
   /**
@@ -2731,7 +2733,7 @@ export class YardScene implements Scene {
         },
         openShop: () => this.openShop(),
         openAlliance: () => this.alliance?.open(),
-        openDecorations: () => this.openDecorations(),
+        openDecorations: (kind) => this.openDecorations(kind),
         startBank: (predicted) => this.startBank(predicted),
         markHatcheries: (marks) => this.markHatcheries(marks),
       },
