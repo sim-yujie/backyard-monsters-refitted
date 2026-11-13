@@ -1004,6 +1004,8 @@ export interface PlayerCell {
   /** 1 when the cell belongs to the caller. */
   mine: 0 | 1;
   pic_square: string | null;
+  /** The owner's uploaded photo's upload number; null or absent for the critter (`game/playerPicture.ts`). */
+  photo?: number | null;
   /**
    * On the caller's own outpost: the thread of the invitation to move onto it
    * still waiting for its answer (#205; Flash's `_invitePendingID`), else 0.

@@ -69,6 +69,21 @@ describe("hoverContentFor", () => {
     );
   });
 
+  it("shows the owner's uploaded photo, filling the frame, with their critter behind it (owner, 13 Nov 2026)", () => {
+    const content = hoverContentFor(player({ photo: 5 }), inRange(4))!;
+    expect(content.picture).toContain("/profile/photos/7?v=5");
+    expect(content.critter).toContain("avatars/");
+    expect(hoverContentFor(player({ photo: null }), inRange(4))).not.toHaveProperty("critter");
+
+    const card = new HoverCard().mount(document.createElement("div"));
+    card.show(content, { left: 0, right: 10, middle: 0 });
+    const image = card.element.querySelector<HTMLImageElement>(".mr2-hover__picture img")!;
+    expect(image.classList.contains("is-photo")).toBe(true);
+    image.dispatchEvent(new Event("error"));
+    expect(image.src).toContain("avatars/");
+    expect(image.classList.contains("is-photo")).toBe(false);
+  });
+
   it("leaves the range out when nothing of the player's has a Flinger", () => {
     expect(hoverContentFor(camp, noFlinger)?.detail).toBe("Click for more");
   });

@@ -13,6 +13,7 @@ import { createNeighbourData } from "../maproom/createNeighbourData.js";
 import { needsAttackableRetry, needsNewNeighbours } from "../maproom/neighbourCache.js";
 import { onlinePlayers } from "../user/online.js";
 import { infernoYardLevel } from "./infernoTribes.js";
+import { visiblePhotos } from "../profile/visiblePhoto.js";
 import {
   INFERNO_NEIGHBOUR_LIMIT,
   INFERNO_NEIGHBOUR_SEARCH,
@@ -48,6 +49,11 @@ export interface InfernoNeighbourView {
   baseid: string;
   name: string;
   pic: string;
+  /**
+   * Their uploaded photo's upload number when others may see it, null for
+   * the critter (`services/profile/visiblePhoto.ts`); set by the list's one lookup.
+   */
+  photo?: number | null;
   level: number;
   /** 1 while the owner is playing (the main yard's rule, #271), when they cannot be attacked. */
   online: 0 | 1;
@@ -173,17 +179,19 @@ export const infernoNeighbourViews = async (
 ): Promise<InfernoNeighbourView[]> => {
   const ids = list.map((entry) => entry.userid);
   if (ids.length === 0) return [];
-  const [yards, users, online, friends] = await Promise.all([
+  const [yards, users, online, friends, photos] = await Promise.all([
     liveInfernoYards(em, ids),
     em.find(User, { userid: { $in: ids } }, { fields: ["userid", "username", "pic_square"] }),
     onlinePlayers(ids, now),
     friendsAmong(em as never, viewer, ids),
+    visiblePhotos(em as never, ids),
   ]);
   return list.flatMap((entry) => {
     const yard = yards.get(entry.userid);
     if (!yard) return [];
     const owner = users.find((one) => one.userid === entry.userid);
-    return [infernoNeighbourView(entry, yard, owner, mine, now, online.has(entry.userid), friends.has(entry.userid))];
+    const view = infernoNeighbourView(entry, yard, owner, mine, now, online.has(entry.userid), friends.has(entry.userid));
+    return [{ ...view, photo: photos.get(entry.userid) ?? null }];
   });
 };
 

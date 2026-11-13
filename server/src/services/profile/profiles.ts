@@ -10,6 +10,7 @@ import {
   uploadGate,
   type UploadRefusal,
 } from "./profileRules.js";
+import { visiblePhotoVersion, visiblePhotoWhere } from "./visiblePhoto.js";
 
 /**
  * Player profiles (beta 7, owner 6 Nov 2026, grill Q27-28): what a profile
@@ -135,7 +136,9 @@ export const readProfile = async (
   const own = viewer === userid;
   const level = levelOf(row);
   const hidden = row.photo_hidden === true;
-  const showPhoto = row.has_photo === true && !hidden;
+  // The same rule every list that shows this player's picture uses.
+  const visible = visiblePhotoVersion(row);
+  const showPhoto = visible !== null;
   const version = row.photo_version ?? 0;
 
   let reported = false;
@@ -172,7 +175,7 @@ export const readProfile = async (
     username: row.username,
     pic: row.pic_square ?? null,
     bio: row.bio ?? "",
-    photoVersion: showPhoto ? version : null,
+    photoVersion: visible,
     stats: {
       level,
       townHall: Number(row.thlevel ?? 0),
@@ -328,7 +331,7 @@ export const reportPhoto = async (
 export const readPhoto = async (em: EntityManager, userid: number): Promise<Buffer | null> => {
   const [row] = await em.execute<{ photo: Buffer | Uint8Array | null }[]>(
     `SELECT p.photo FROM bym.player_profile p JOIN bym."user" u ON u.userid = p.userid
-      WHERE p.userid = ? AND p.photo IS NOT NULL AND p.photo_hidden = false AND u.banned = false`,
+      WHERE p.userid = ? AND ${visiblePhotoWhere("p", "u")}`,
     [userid],
   );
   return row?.photo ? Buffer.from(row.photo) : null;

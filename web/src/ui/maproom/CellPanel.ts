@@ -2,7 +2,7 @@ import { heightBonus } from "@/game/maproom/heightBonus";
 import { campTitle } from "@/game/attack/attackTarget";
 import { CellType, isFogCell, isPlayerCell, isWaterCell, type MapCell, type PlayerCell } from "@/api/types";
 import { devDetails } from "@/app/devDetails";
-import { avatarOf, avatarUrl } from "@/game/avatars";
+import { playerPicture, showPlayerPicture, type PhotoVersion } from "@/game/playerPicture";
 import type { OffsetCell } from "@/game/HexGrid";
 import { cellsText } from "@/game/maproom/attackRange";
 import { TRIBE_COLOURS } from "@/game/maproom/cellVisuals";
@@ -483,7 +483,7 @@ export class CellPanel {
     const mine = payload.mine === 1;
     const kind = outpost ? "Outpost" : "Main yard";
     this.setHead(
-      { kind: "player", picture: payload.pic_square, uid: payload.uid, mine },
+      { kind: "player", picture: payload.pic_square, photo: payload.photo, uid: payload.uid, mine },
       mine ? (outpost ? "Your outpost" : "Your yard") : payload.n,
       `Level ${payload.l}`,
       `${kind} · ${where}`,
@@ -598,7 +598,7 @@ export class CellPanel {
     picture:
       | { kind: "loading" | "water" | "fog" }
       | { kind: "tribe"; tribe: string; faded: boolean }
-      | { kind: "player"; picture: string | null; uid: number; mine: boolean },
+      | { kind: "player"; picture: string | null; photo?: PhotoVersion; uid: number; mine: boolean },
     title: string,
     level: string,
     subtitle: string,
@@ -624,7 +624,8 @@ export class CellPanel {
       if (url) this.picture.append(image(url));
     } else if (picture.kind === "player") {
       this.picture.classList.toggle("mr2-cell__picture--mine", picture.mine);
-      this.picture.append(image(avatarUrl(avatarOf(picture.picture, picture.uid))));
+      const shown = playerPicture(picture.uid, picture.picture, picture.photo);
+      this.picture.append(showPlayerPicture(image(shown.src), shown));
     }
   }
 

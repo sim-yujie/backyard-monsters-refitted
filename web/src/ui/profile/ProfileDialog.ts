@@ -1,7 +1,7 @@
 import * as profileApi from "@/api/profile";
 import type { OwnPhotoState, Profile } from "@/api/profile";
 import { recordOwnProfile } from "@/api/ownPhoto";
-import { avatarOf, avatarUrl } from "@/game/avatars";
+import { playerPicture, type PlayerPicture } from "@/game/playerPicture";
 import { achievementBadge } from "@/ui/achievements/badge";
 import { formatAmount } from "@/ui/format";
 import { gameIcon, type GameIconName } from "@/ui/gameIcon";
@@ -109,10 +109,8 @@ export const photoNote = (state: OwnPhotoState): string | null => {
 };
 
 /** The big picture: the photo when there is one to show, else the critter. */
-export const pictureOf = (profile: Profile): { src: string; photo: boolean } =>
-  profile.photoVersion !== null
-    ? { src: profileApi.photoUrl(profile.userid, profile.photoVersion), photo: true }
-    : { src: avatarUrl(avatarOf(profile.pic, profile.userid)), photo: false };
+export const pictureOf = (profile: Profile): PlayerPicture =>
+  playerPicture(profile.userid, profile.pic, profile.photoVersion);
 
 /** One stat: an icon and a short value, the word in its tooltip. */
 const stat = (name: string, art: Element, value: string): HTMLElement => {
@@ -196,7 +194,7 @@ export class ProfileDialog {
       image.addEventListener(
         "error",
         () => {
-          image.src = avatarUrl(avatarOf(profile.pic, profile.userid));
+          image.src = picture.critter;
           frame.classList.remove("profile__picture--photo");
         },
         { once: true },
