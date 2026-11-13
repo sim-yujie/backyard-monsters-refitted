@@ -1,6 +1,6 @@
 import { YardLabMonsterSchema, YardLabSchema } from "../../schemas/YardSchemas.js";
 import { planLabCancel, planLabFinish, planLabInstant, planLabStart } from "../../services/yard/lab.js";
-import { weekendBoost, weekendBoostUsed } from "../../services/events/weekendBoosts.js";
+import { weekendBoost } from "../../services/events/weekendBoosts.js";
 import { defineYardAction } from "./yardAction.js";
 
 /**
@@ -16,13 +16,7 @@ import { defineYardAction } from "./yardAction.js";
  */
 export const yardLabStartAction = defineYardAction({
   schema: YardLabMonsterSchema,
-  run: async ({ save, body, now, user, em }) => {
-    const off = weekendBoost("study", now);
-    const plan = planLabStart(save, body.monster, now, off);
-    // The weekend's Glimmers, in this transaction (`weekendCoins.ts`).
-    if (off > 0) await weekendBoostUsed(em, user.userid, "study", now);
-    return plan;
-  },
+  run: ({ save, body, now }) => planLabStart(save, body.monster, now, weekendBoost("study", now)),
 });
 
 /** `POST /bm/yard/lab/cancel` — stop the running research, the full putty price back (capped). */

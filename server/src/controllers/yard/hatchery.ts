@@ -10,7 +10,6 @@ import {
   planHatcheryFinish,
   planHatcheryRemove,
 } from "../../services/yard/hatchery.js";
-import { weekendBoost, weekendBoostUsed } from "../../services/events/weekendBoosts.js";
 import { housedQuestEvents } from "../../services/quests/hooks.js";
 import { defineYardAction } from "./yardAction.js";
 
@@ -31,11 +30,8 @@ import { defineYardAction } from "./yardAction.js";
  */
 export const yardHatcheryAddAction = defineYardAction({
   schema: YardHatcheryAddSchema,
-  run: async ({ save, body, now, bonuses, user, em }) => {
-    const plan = planHatcheryAdd(save, body.hatchery, body.monster, body.count, now, bonuses?.outpostHatchCost ?? 0);
-    if (weekendBoost("hatch", now) > 0) await weekendBoostUsed(em, user.userid, "hatch", now);
-    return plan;
-  },
+  run: ({ save, body, now, bonuses }) =>
+    planHatcheryAdd(save, body.hatchery, body.monster, body.count, now, bonuses?.outpostHatchCost ?? 0),
   outposts: "allow",
   inferno: "allow",
 });

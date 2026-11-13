@@ -2,15 +2,20 @@ import { afterEach, describe, expect, it } from "vitest";
 import { popupRun } from "@/game/yard/plugins/weekend";
 import {
   announcedWeekend,
+  checkinAt,
+  checkinWaiting,
   costLessBy,
   currentWeekend,
   lessByPercent,
   onWeekendChange,
+  readCheckin,
   readWeekendState,
   resetWeekend,
   runningWeekend,
   setWeekend,
+  setWeekendCheckin,
   shorterBy,
+  weekendCheckin,
   weekendNow,
   weekendPercent,
   type WeekendRun,
@@ -106,5 +111,54 @@ describe("popupRun: once per run on this device", () => {
   it("first visit during the weekend shows it; nothing before the announcement", () => {
     expect(popupRun(SAT + 60, state, "2026-11-07")).toBe(RUN);
     expect(popupRun(RUN.announceAt - 60, state, null)).toBeNull();
+  });
+});
+
+describe("the daily check-in (owner, 13 Nov 2026)", () => {
+  const wire = {
+    key: "2026-11-14",
+    amount: 50,
+    day: 1,
+    days: 2,
+    claimedToday: true,
+    marks: [
+      { day: 1, claimed: true },
+      { day: 2, claimed: false },
+    ],
+    nextAt: SAT + 86_400,
+  };
+
+  it("reads the server's check-in and drops anything malformed", () => {
+    expect(readCheckin(wire)).toEqual(wire);
+    expect(readCheckin(null)).toBeNull();
+    expect(readCheckin({ ...wire, day: 0 })).toBeNull();
+    expect(readCheckin({ ...wire, key: 5 })).toBeNull();
+    expect(readCheckin({ ...wire, nextAt: null })?.nextAt).toBeNull();
+  });
+
+  it("Sunday 00:00 opens day 2 without asking the server; Sunday is the last day", () => {
+    const sunday = checkinAt(readCheckin(wire)!, SAT + 86_400);
+    expect(sunday).toMatchObject({ day: 2, claimedToday: false, nextAt: null });
+    expect(sunday.marks).toEqual(wire.marks);
+    expect(checkinAt(readCheckin(wire)!, SAT + 86_399)).toMatchObject({ day: 1, claimedToday: true });
+  });
+
+  it("a long test run's two marks move on a day", () => {
+    const long = { ...wire, day: 20_406, days: 47_000, marks: [{ day: 20_405, claimed: false }, { day: 20_406, claimed: true }] };
+    expect(checkinAt(readCheckin(long)!, SAT + 86_400).marks).toEqual([
+      { day: 20_406, claimed: true },
+      { day: 20_407, claimed: false },
+    ]);
+  });
+
+  it("belongs to its own run only; a check-in waits while today is not done", () => {
+    setWeekend({ active: RUN, next: null }, SAT + 60);
+    setWeekendCheckin(readCheckin(wire));
+    expect(weekendCheckin(RUN, SAT + 60)?.claimedToday).toBe(true);
+    expect(weekendCheckin({ key: "2026-11-21" }, SAT + 60)).toBeNull();
+    expect(checkinWaiting(SAT + 60)).toBe(false);
+    expect(checkinWaiting(SAT + 86_400)).toBe(true);
+    // After the weekend nothing waits.
+    expect(checkinWaiting(SAT + 2 * 86_400)).toBe(false);
   });
 });

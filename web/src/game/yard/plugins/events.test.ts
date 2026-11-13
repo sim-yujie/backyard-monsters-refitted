@@ -5,7 +5,7 @@ import { fileURLToPath } from "node:url";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { EventsActions, EventsApi, EventView, Mr2WelcomeStatus } from "@/api/events";
 import { notePumpkins } from "@/game/events/pumpkinHunt";
-import { resetWeekend, setWeekend, type WeekendRun } from "@/game/weekend";
+import { resetWeekend, setWeekend, setWeekendCheckin, type WeekendCheckin, type WeekendRun } from "@/game/weekend";
 import { Notices } from "@/ui/maproom/Notices";
 import type { YardMounts } from "../yardPlugins";
 import { EventsDoor } from "./events";
@@ -50,7 +50,11 @@ const hunt = (counter: number, claimed: readonly boolean[] = [false, false]): Ev
 
 let doors: EventsDoor[];
 
-const setup = async (events: EventView[], mr2Welcome: Mr2WelcomeStatus | null = null) => {
+const setup = async (
+  events: EventView[],
+  mr2Welcome: Mr2WelcomeStatus | null = null,
+  checkIn: () => Promise<string | null> = vi.fn(() => Promise.resolve(null)),
+) => {
   const notices = new Notices();
   const dock = document.body.appendChild(document.createElement("div"));
   const content = document.body.appendChild(document.createElement("div"));
@@ -66,7 +70,7 @@ const setup = async (events: EventView[], mr2Welcome: Mr2WelcomeStatus | null = 
     list: vi.fn(() => Promise.resolve({ now: 3_600, events, whatsNewSeen: null, mr2Welcome })),
   } as unknown as EventsApi;
   const actions: EventsActions = { claimCalendar: vi.fn(), claimTier: vi.fn() };
-  const door = new EventsDoor(mounts, api, actions);
+  const door = new EventsDoor(mounts, api, actions, checkIn);
   doors.push(door);
   await door.load();
   return { door, notices, content, mounts };
@@ -285,5 +289,62 @@ describe("Events: the weekend event (owner, 13 Nov: in Events, not a banner on t
     } finally {
       vi.useRealTimers();
     }
+  });
+
+  describe("its daily check-in (owner, 13 Nov 2026: 50 Glimmers a day)", () => {
+    const waiting: WeekendCheckin = {
+      key: builders.key,
+      amount: 50,
+      day: 1,
+      days: 2,
+      claimedToday: false,
+      marks: [
+        { day: 1, claimed: false },
+        { day: 2, claimed: false },
+      ],
+      nextAt: 86_400,
+    };
+    const done: WeekendCheckin = { ...waiting, claimedToday: true, marks: [{ day: 1, claimed: true }, waiting.marks[1]!] };
+
+    it("a waiting check-in lights the Events badge; checking in on the card clears it", async () => {
+      setWeekend({ active: builders, next: null }, 3_600);
+      setWeekendCheckin(waiting);
+      const checkIn = vi.fn(async () => {
+        setWeekendCheckin(done);
+        return null;
+      });
+      const { door, content } = await setup([], null, checkIn);
+      const badge = door.button.querySelector<HTMLElement>(".events-badge")!;
+      expect(badge.hidden).toBe(false);
+      expect(badge.textContent).toBe("1");
+      door.toggle();
+      const button = content.querySelector<HTMLButtonElement>(".events-card--weekend .weekend-checkin__button")!;
+      expect(button.textContent).toBe("Check in50");
+      button.click();
+      await vi.waitFor(() => expect(content.querySelector(".events-card--weekend .weekend-checkin__done")).not.toBeNull());
+      expect(checkIn).toHaveBeenCalledOnce();
+      expect(badge.hidden).toBe(true);
+      expect(content.querySelector(".events-card--weekend .weekend-checkin__button")).toBeNull();
+    });
+
+    it("a check-in for another weekend, or none heard, lights nothing", async () => {
+      setWeekend({ active: builders, next: null }, 3_600);
+      setWeekendCheckin({ ...waiting, key: "2026-11-07" });
+      const { door, content } = await setup([]);
+      expect(door.button.querySelector<HTMLElement>(".events-badge")!.hidden).toBe(true);
+      door.toggle();
+      expect(content.querySelector<HTMLElement>(".events-card--weekend .weekend-checkin")?.dataset["checkin"]).toBe("unknown");
+    });
+
+    it("a failed check-in says why on the card", async () => {
+      setWeekend({ active: builders, next: null }, 3_600);
+      setWeekendCheckin(waiting);
+      const { door, content } = await setup([], null, () => Promise.resolve("Could not reach the server."));
+      door.toggle();
+      content.querySelector<HTMLButtonElement>(".weekend-checkin__button")!.click();
+      await vi.waitFor(() =>
+        expect(content.querySelector(".weekend-checkin__error")?.textContent).toBe("Could not reach the server."),
+      );
+    });
   });
 });

@@ -71,9 +71,80 @@ export const readWeekendState = (raw: unknown): WeekendState => {
   return { active: readRun(state.active), next: readRun(state.next) };
 };
 
+/**
+ * The player's daily check-in for the run on now (owner, 13 Nov 2026: 50
+ * Glimmers each event day; `server/src/services/events/weekendCoins.ts`).
+ * An event day is each 24 h from the run's start: Saturday, then Sunday.
+ */
+export interface WeekendCheckin {
+  /** The run it belongs to. */
+  readonly key: string;
+  /** Glimmers one check-in pays. */
+  readonly amount: number;
+  /** Today's day of the run, 1-based. */
+  readonly day: number;
+  readonly days: number;
+  readonly claimedToday: boolean;
+  /** The days to draw (every day; for a long test run, yesterday and today). */
+  readonly marks: readonly { readonly day: number; readonly claimed: boolean }[];
+  /** When the next day starts, or null on the last day. */
+  readonly nextAt: number | null;
+}
+
+/** A check-in from the wire, or null when it is not one. */
+export const readCheckin = (raw: unknown): WeekendCheckin | null => {
+  if (!raw || typeof raw !== "object") return null;
+  const c = raw as Record<string, unknown>;
+  const day = num(c.day);
+  const amount = num(c.amount);
+  if (typeof c.key !== "string" || day < 1 || amount <= 0) return null;
+  const marks = Array.isArray(c.marks)
+    ? c.marks.flatMap((mark: unknown) => {
+        if (!mark || typeof mark !== "object") return [];
+        const m = mark as Record<string, unknown>;
+        return num(m.day) >= 1 ? [{ day: num(m.day), claimed: m.claimed === true }] : [];
+      })
+    : [];
+  return {
+    key: c.key,
+    amount,
+    day,
+    days: Math.max(day, num(c.days)),
+    claimedToday: c.claimedToday === true,
+    marks,
+    nextAt: typeof c.nextAt === "number" && c.nextAt > 0 ? c.nextAt : null,
+  };
+};
+
+const DAY = 86_400;
+
+/**
+ * `checkin` as it stands at `t`: once its next day has begun (the page left
+ * open over midnight) that day is today and not checked in, until the
+ * server's next answer says more.
+ */
+export const checkinAt = (checkin: WeekendCheckin, t: number): WeekendCheckin => {
+  let now = checkin;
+  while (now.nextAt !== null && t >= now.nextAt) {
+    const day = now.day + 1;
+    const marks = now.marks.some((mark) => mark.day === day)
+      ? now.marks
+      : [...now.marks.slice(-1), { day, claimed: false }];
+    now = {
+      ...now,
+      day,
+      claimedToday: false,
+      marks,
+      nextAt: day < now.days ? now.nextAt + DAY : null,
+    };
+  }
+  return now;
+};
+
 type Listener = (state: WeekendState) => void;
 
 let current: WeekendState = EMPTY;
+let checkin: WeekendCheckin | null = null;
 /** Server clock minus the browser's, seconds. */
 let offset = 0;
 const listeners = new Set<Listener>();
@@ -103,6 +174,25 @@ export const setWeekend = (state: WeekendState, serverNow?: number): void => {
   for (const listener of listeners) listener(state);
 };
 
+/** Takes the player's check-in (the yard load, `GET /bm/weekend`, a check-in's answer); listeners hear it. */
+export const setWeekendCheckin = (next: WeekendCheckin | null): void => {
+  checkin = next;
+  for (const listener of listeners) listener(current);
+};
+
+/**
+ * The player's check-in for `run` at `t`, or null when the client holds
+ * none for that run (an older server, a read that failed).
+ */
+export const weekendCheckin = (run: Pick<WeekendRun, "key"> | null, t: number = weekendNow()): WeekendCheckin | null =>
+  run && checkin && checkin.key === run.key ? checkinAt(checkin, t) : null;
+
+/** Whether a check-in waits for the player at `t`: a run is on and today is not checked in. */
+export const checkinWaiting = (t: number = weekendNow()): boolean => {
+  const state = weekendCheckin(runningWeekend(t), t);
+  return !!state && !state.claimedToday;
+};
+
 /** Calls `listener` on every change. Returns the unsubscribe. */
 export const onWeekendChange = (listener: Listener): (() => void) => {
   listeners.add(listener);
@@ -112,6 +202,7 @@ export const onWeekendChange = (listener: Listener): (() => void) => {
 /** For tests: back to no event and the browser's clock. */
 export const resetWeekend = (): void => {
   current = EMPTY;
+  checkin = null;
   offset = 0;
   listeners.clear();
 };

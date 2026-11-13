@@ -18,7 +18,16 @@ import {
 } from "@/game/events/eventsModel";
 import { onPumpkins, PUMPKIN_HUNT_KIND, withPumpkinCount } from "@/game/events/pumpkinHunt";
 import { currentSeason, seasonFor, setSeason } from "@/game/season";
-import { announcedWeekend, currentWeekend, onWeekendChange, runningWeekend, type WeekendRun } from "@/game/weekend";
+import {
+  announcedWeekend,
+  checkinWaiting,
+  currentWeekend,
+  onWeekendChange,
+  runningWeekend,
+  weekendCheckin,
+  type WeekendRun,
+} from "@/game/weekend";
+import { checkInWeekendMessage } from "@/api/weekend";
 import { latestRelease, localSeen, markSeen, whatsNewDecision } from "@/game/events/whatsNew";
 import { gameIcon } from "@/ui/gameIcon";
 import {
@@ -110,11 +119,23 @@ export class EventsDoor {
   private weekendDrawn = "";
   /** The weekend pop-up opened from its card, one at a time. */
   private weekendPopupOpen = false;
+  /** The weekend check-in being sent from the card. */
+  private checkingIn = false;
+  /** Why the card's last check-in failed. */
+  private checkinError: string | null = null;
+  /** Checks in for today's weekend Glimmers (`api/weekend.ts`). */
+  private readonly checkIn: () => Promise<string | null>;
 
-  constructor(mounts: YardMounts, api: EventsApi = eventsApi, actions: EventsActions = eventsActions(mounts.store, api)) {
+  constructor(
+    mounts: YardMounts,
+    api: EventsApi = eventsApi,
+    actions: EventsActions = eventsActions(mounts.store, api),
+    checkIn: () => Promise<string | null> = () => checkInWeekendMessage(mounts.store),
+  ) {
     this.mounts = mounts;
     this.api = api;
     this.actions = actions;
+    this.checkIn = checkIn;
     const { element, disc } = dockButton("events", "Events", buttonArt(), () => this.toggle());
     this.button = element;
     this.button.classList.add("events-door");
@@ -200,6 +221,7 @@ export class EventsDoor {
         this.mounts.scene.openMap();
       },
       onOpenWeekend: (run) => this.openWeekend(run),
+      onCheckInWeekend: () => void this.checkInWeekend(),
       onClose: () => {
         this.panel = null;
         this.refusal = null;
@@ -250,14 +272,37 @@ export class EventsDoor {
   private weekend(now: number): EventsWeekend {
     const on = runningWeekend(now);
     const { next } = currentWeekend();
-    return { on, next: !on && next && next.startsAt > now ? next : null };
+    return {
+      on,
+      next: !on && next && next.startsAt > now ? next : null,
+      checkin: weekendCheckin(on, now),
+      checkingIn: this.checkingIn,
+      checkinError: this.checkinError,
+    };
   }
 
-  /** What the page shows of the weekend, as a key: it redraws when this changes. */
+  /**
+   * What the page shows of the weekend, as a key: it redraws when this
+   * changes (an event starting or ending, a new check-in day at midnight).
+   */
   private weekendKey(now: number): string {
-    const { on, next } = this.weekend(now);
+    const { on, next, checkin } = this.weekend(now);
     const told = announcedWeekend(now);
-    return [on, next, told].map((run) => (run ? `${run.key}:${run.id}` : "")).join("|");
+    const day = checkin ? `${checkin.day}:${checkin.claimedToday}` : "";
+    return [...[on, next, told].map((run) => (run ? `${run.key}:${run.id}` : "")), day].join("|");
+  }
+
+  /** The card's Check in: today's 50 Glimmers; the "+50" and the purse come with the yard answer. */
+  private async checkInWeekend(): Promise<void> {
+    if (this.checkingIn) return;
+    this.checkingIn = true;
+    this.checkinError = null;
+    this.render();
+    const message = await this.checkIn();
+    if (this.destroyed) return;
+    this.checkingIn = false;
+    this.checkinError = message;
+    this.refresh();
   }
 
   /** The weekend's pop-up from its card. */
@@ -268,6 +313,7 @@ export class EventsDoor {
       container: this.mounts.overlay.modal,
       run,
       now: this.now,
+      onCheckIn: this.checkIn,
       onClose: () => {
         this.weekendPopupOpen = false;
       },
@@ -305,7 +351,8 @@ export class EventsDoor {
     const now = this.now;
     const weekendOut = runningWeekend(now) !== null || announcedWeekend(now) !== null;
     this.button.hidden = events.length === 0 && this.welcome === null && !weekendOut;
-    const count = claimableCount(events);
+    // A weekend check-in waiting counts as one more thing to claim.
+    const count = claimableCount(events) + (checkinWaiting(now) ? 1 : 0);
     this.badge.hidden = count === 0;
     this.badge.textContent = count > 99 ? "99+" : String(count);
     const words = count === 1 ? "1 reward to claim" : `${count} rewards to claim`;

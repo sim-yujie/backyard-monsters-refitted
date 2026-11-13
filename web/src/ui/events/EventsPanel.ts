@@ -13,7 +13,7 @@ import {
 import { championPortrait, showPortrait } from "@/game/portraits";
 import { ArtState, resolveArt } from "@/game/yard/buildingArt";
 import { typeName } from "@/game/yard/planner/summary";
-import type { WeekendRun } from "@/game/weekend";
+import type { WeekendCheckin, WeekendRun } from "@/game/weekend";
 import { AMOUNT_CHANGE_SIGNS } from "@/ui/amountChange";
 import { formatAmount, formatCountdown } from "@/ui/format";
 import { gameIcon, type GameIconName } from "@/ui/gameIcon";
@@ -22,7 +22,7 @@ import { Panel } from "@/ui/Panel";
 import { resourceIcon, RESOURCE_KEYS } from "@/ui/resourceIcon";
 import { eventsArt } from "./eventsArt";
 import { mr2WelcomeCard, paintWelcomeReward, paintWelcomeTimeline, welcomeDaysText } from "./mr2WelcomeCard";
-import { WEEKEND_ICON, weekendAmount } from "./weekendUi";
+import { tickCheckin, WEEKEND_ICON, weekendAmount, weekendCheckinBlock } from "./weekendUi";
 import "./events.css";
 
 /**
@@ -78,6 +78,12 @@ export type EventsPanelView =
 export interface EventsWeekend {
   readonly on: WeekendRun | null;
   readonly next: WeekendRun | null;
+  /** The player's check-in for `on` (owner, 13 Nov 2026: 50 Glimmers a day), or null when not known. */
+  readonly checkin?: WeekendCheckin | null;
+  /** A check-in is on its way. */
+  readonly checkingIn?: boolean;
+  /** Why the last check-in failed. */
+  readonly checkinError?: string | null;
 }
 
 export interface EventsPanelOptions {
@@ -89,6 +95,8 @@ export interface EventsPanelOptions {
   onGoToMapRoom2?(): void;
   /** The weekend card pressed: its pop-up (`openWeekendPopup`). */
   onOpenWeekend?(run: WeekendRun): void;
+  /** The weekend card's Check in. */
+  onCheckInWeekend?(): void;
 }
 
 const el = <K extends keyof HTMLElementTagNameMap>(
@@ -338,9 +346,15 @@ const weekendHead = (run: WeekendRun): HTMLElement => {
 /**
  * The weekend event while it runs: its painted icon, name, amount, one line
  * and the time left (the page's tick runs it). Pressing it opens the
- * weekend's pop-up.
+ * weekend's pop-up. Under it, the daily check-in (`weekendCheckinBlock`).
  */
-const weekendCard = (run: WeekendRun, now: number, onOpen: (run: WeekendRun) => void): HTMLElement => {
+const weekendCard = (
+  weekend: EventsWeekend & { readonly on: WeekendRun },
+  now: number,
+  onOpen: (run: WeekendRun) => void,
+  onCheckIn: (() => void) | null,
+): HTMLElement => {
+  const run = weekend.on;
   const card = el("article", "events-card events-card--weekend");
   card.dataset["event"] = WEEKEND_CARD_ID;
   card.dataset["weekend"] = run.id;
@@ -354,7 +368,16 @@ const weekendCard = (run: WeekendRun, now: number, onOpen: (run: WeekendRun) => 
   words.append(weekendHead(run), el("span", "events-weekend__line", run.line), left);
   button.append(weekendIcon(run, 48, "events-weekend__icon"), words);
   button.addEventListener("click", () => onOpen(run));
-  card.append(button);
+  card.append(
+    button,
+    weekendCheckinBlock({
+      checkin: weekend.checkin ?? null,
+      now,
+      onCheckIn,
+      busy: weekend.checkingIn === true,
+      error: weekend.checkinError ?? null,
+    }),
+  );
   return card;
 };
 
@@ -430,6 +453,7 @@ export class EventsPanel {
     for (const line of this.element.querySelectorAll<HTMLElement>("[data-next-at]")) {
       line.textContent = nextText(Number(line.dataset["nextAt"]) - now);
     }
+    tickCheckin(this.element, now);
     for (const line of this.element.querySelectorAll<HTMLElement>("[data-welcome-ends]")) {
       line.textContent = welcomeDaysText(Number(line.dataset["welcomeEnds"]), now);
     }
@@ -478,7 +502,17 @@ export class EventsPanel {
     const weekendOn = view.weekend?.on ?? null;
     const weekendNext = weekendOn ? null : (view.weekend?.next ?? null);
     const main = el("div", "events-page__main");
-    if (weekendOn) main.append(weekendCard(weekendOn, view.now, (run) => this.options.onOpenWeekend?.(run)));
+    if (weekendOn && view.weekend) {
+      const onCheckIn = this.options.onCheckInWeekend;
+      main.append(
+        weekendCard(
+          { ...view.weekend, on: weekendOn },
+          view.now,
+          (run) => this.options.onOpenWeekend?.(run),
+          onCheckIn ? () => onCheckIn() : null,
+        ),
+      );
+    }
     for (const event of active) main.append(this.activeCard(event, view));
     if (main.childElementCount === 0 && !welcome) main.append(el("p", "events-status", "No event is on right now."));
     if (main.childElementCount > 0) page.append(main);

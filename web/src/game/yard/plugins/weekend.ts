@@ -1,10 +1,11 @@
 import { quietLogin } from "@/game/quietLogin";
-import { refreshWeekend } from "@/api/weekend";
+import { checkInWeekendMessage, refreshWeekend } from "@/api/weekend";
 import {
   announcedWeekend,
   currentWeekend,
   onWeekendChange,
   runningWeekend,
+  weekendCheckin,
   weekendNow,
   type WeekendRun,
   type WeekendState,
@@ -55,7 +56,7 @@ export const popupRun = (now: number, state: WeekendState, seen: string | null):
 };
 
 export const weekendPlugin: YardPlugin = (mounts) => {
-  const { overlay } = mounts;
+  const { overlay, store } = mounts;
   // On every own yard: the Inferno has upgrades and tribes too.
   let stopped = false;
   let popupOpen = false;
@@ -70,6 +71,8 @@ export const weekendPlugin: YardPlugin = (mounts) => {
       container: overlay.modal,
       run,
       now: weekendNow(),
+      // The check-in is a main-yard action; elsewhere the pop-up says so.
+      ...(store.kind === "main" && { onCheckIn: () => checkInWeekendMessage(store) }),
       onClose: () => {
         popupOpen = false;
       },
@@ -94,7 +97,9 @@ export const weekendPlugin: YardPlugin = (mounts) => {
     window.clearTimeout(edgeTimer);
     const now = weekendNow();
     const { active, next } = currentWeekend();
-    const edges = [active?.endsAt, next?.announceAt, next?.startsAt, next?.endsAt].filter(
+    // The next check-in day too, so the Events badge and card hear it from the server.
+    const nextDay = weekendCheckin(active, now)?.nextAt;
+    const edges = [active?.endsAt, next?.announceAt, next?.startsAt, next?.endsAt, nextDay].filter(
       (t): t is number => typeof t === "number" && t > now,
     );
     if (edges.length === 0) return;

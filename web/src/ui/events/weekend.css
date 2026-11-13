@@ -87,26 +87,6 @@
   font-size: var(--text-md);
 }
 
-.weekend-popup__coins {
-  display: grid;
-  gap: var(--space-1);
-  max-width: 100%;
-  font-size: var(--text-sm);
-}
-
-.weekend-popup__coin {
-  display: flex;
-  align-items: center;
-  gap: var(--space-1);
-  margin: 0;
-  text-align: left;
-}
-
-.weekend-popup__coin-amount {
-  min-width: 2.5ch;
-  text-align: right;
-}
-
 .weekend-popup__when {
   display: inline-flex;
   align-items: center;
@@ -121,4 +101,104 @@
   min-width: 120px;
   min-height: 44px;
   margin-top: var(--space-2);
+}
+
+/* ── The daily check-in (owner, 13 Nov 2026), on the Events card and in the pop-up ── */
+
+.weekend-checkin {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2) var(--space-3);
+  min-width: 0;
+}
+
+.weekend-popup .weekend-checkin {
+  flex-direction: column;
+  justify-content: center;
+}
+
+.weekend-checkin__days {
+  display: flex;
+  gap: var(--space-1);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+/* A day: its number in a ring, a tick on green once checked in. */
+.weekend-checkin__day {
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  border: 2px solid var(--colour-border-subtle);
+  border-radius: 50%;
+  color: var(--colour-text-secondary);
+  font-size: var(--text-sm);
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+}
+
+.weekend-checkin__day--today {
+  border-color: var(--colour-warning);
+  color: var(--colour-text-strong);
+}
+
+.weekend-checkin__day--claimed {
+  border-color: var(--colour-success);
+  background: var(--colour-success);
+  color: var(--colour-text-inverse);
+}
+
+.weekend-checkin__day--missed {
+  opacity: 0.45;
+  text-decoration: line-through;
+}
+
+.weekend-checkin__button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  min-width: 140px;
+  min-height: 44px;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+}
+
+.weekend-checkin__button--busy {
+  cursor: progress;
+}
+
+.weekend-checkin__done,
+.weekend-checkin__info {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  margin: 0;
+  font-size: var(--text-sm);
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.weekend-checkin__done {
+  min-height: 44px;
+  color: var(--colour-gain);
+}
+
+.weekend-checkin__done .weekend-checkin__tick {
+  flex: none;
+}
+
+.weekend-checkin__info {
+  color: var(--colour-text-secondary);
+}
+
+.weekend-checkin__error {
+  flex-basis: 100%;
+  margin: 0;
+  font-size: var(--text-sm);
+  color: var(--colour-danger);
 }

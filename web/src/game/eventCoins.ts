@@ -2,13 +2,13 @@ import type { CoinGain } from "@/api/types";
 
 /**
  * EVENT COINS (beta 7 grill item 29): the currency big events pay (their
- * login calendar and ladder, owner 8 Nov 2026; weekend events 25 + 75,
- * owner 12 Nov 2026) and
+ * login calendar and ladder, owner 8 Nov 2026; weekend events 50 a day for
+ * checking in, owner 13 Nov 2026) and
  * the decorations shop takes. The server owns the balance
  * (`server/src/services/events/eventCoins.ts`); the client only shows it.
  *
  * The purse arrives on the owner's main-yard load (`eventcoins`, and
- * `coinsgained` when the load paid a weekend's "played" Glimmers) and on
+ * `coinsgained` if a load ever pays something) and on
  * every yard answer that changed it (`YardStore`). Each arrival goes through
  * {@link noteCoins}, which works out what was gained for the "+25" moment
  * (`game/yard/plugins/eventCoins.ts`):
