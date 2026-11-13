@@ -1581,10 +1581,7 @@ export class MapRoom2Scene implements Scene {
           if (oldHome) this.store.invalidateCell(oldHome.col, oldHome.row);
           this.store.invalidateCell(cell.col, cell.row);
           void this.store.pump();
-          this.ui?.notices.show("relocate", "Your main yard has moved here.", {
-            level: "info",
-            timeoutMs: 5_000,
-          });
+          // The map recentres on the new home: no notice (owner, 13 Nov 2026).
           void this.loadOwnCell();
         },
       }),
@@ -1606,11 +1603,13 @@ export class MapRoom2Scene implements Scene {
     });
     this.store.invalidateCell(cell.col, cell.row);
     void this.store.pump();
-    this.ui?.notices.show(
-      "invite",
-      result.ok ? "The invitation has been withdrawn." : `The invitation was not withdrawn: ${result.reason}`,
-      { level: result.ok ? "info" : "warning", timeoutMs: 5_000 },
-    );
+    // Withdrawn, the invite leaves the cell panel: only a failure is said (owner, 13 Nov 2026).
+    if (!result.ok) {
+      this.ui?.notices.show("invite", `The invitation was not withdrawn: ${result.reason}`, {
+        level: "warning",
+        timeoutMs: 5_000,
+      });
+    }
   }
 
   /**
@@ -1633,11 +1632,8 @@ export class MapRoom2Scene implements Scene {
     this.store.refreshVisible();
     void this.store.pump();
     void this.sight.refresh();
+    // The map redraws: no "Refetching" notice (owner, 13 Nov 2026).
     this.ui?.refreshTakeover();
-    this.ui?.notices.show("refresh", "Refetching the visible map.", {
-      level: "info",
-      timeoutMs: 2_000,
-    });
   }
 
   /**
