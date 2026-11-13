@@ -62,6 +62,7 @@ import { finaliseBeforeLoad } from "../../../services/base/finaliseAttack.js";
 import { infernoConfig } from "../../../config/InfernoConfig.js";
 import { quietLoginOn } from "../../../config/QuietLoginConfig.js";
 import { loginPromptFields } from "./loginPrompts.js";
+import type { KrallenPenaltyNotice } from "../../../services/events/progressStore.js";
 import { closeInfernoPlayerAttacksOf } from "../../../services/inferno/infernoPlayerFinalise.js";
 import { combatCellHeight, combatLandFeature } from "../../../services/base/combat/cellHeight.js";
 import type { DefenderForces } from "../../../game-rules/combat/index.js";
@@ -253,6 +254,7 @@ export const baseLoad: KoaController = async (ctx) => {
   let completed: (CompletedJob | OutpostNoticeJob)[] | undefined;
   let notifications: number | undefined;
   let trojanNew = false;
+  let krallenPenalties: KrallenPenaltyNotice[] = [];
   let emergence: EmergenceOnLoad | undefined;
   let underHall: number | undefined;
   if (type === BaseMode.BUILD && isOwner && baseSave.type === BaseType.MAIN) {
@@ -261,7 +263,7 @@ export const baseLoad: KoaController = async (ctx) => {
     // and places the Trojan Horse the moment the player qualifies for one
     // (issue #324); `trojanNew` tells the client to pan the camera to it once.
     let jobs: CompletedJob[];
-    ({ save: baseSave, completed: jobs, trojanPlaced: trojanNew } = await catchUpOwnerYard(baseSave));
+    ({ save: baseSave, completed: jobs, trojanPlaced: trojanNew, krallenPenalties } = await catchUpOwnerYard(baseSave));
     // Outpost attacks and takeovers since the player last looked, told once
     // in the same notice and kept in the mailbox (outposts WP8, #187).
     completed = [...jobs, ...(await takeOutpostNotices(postgres.em, user.userid))];
@@ -590,6 +592,8 @@ export const baseLoad: KoaController = async (ctx) => {
     // The Trojan Horse was just placed on this load (issue #324): the
     // client's one-time camera pan (design §3.1).
     ...(trojanNew && { trojanNew: true }),
+    // The Krallen Hunt's penalties not told yet: the yard's one-time notice.
+    ...(krallenPenalties.length > 0 && { krallenpenalty: krallenPenalties.map(({ from, to }) => ({ from, to })) }),
     // The cave and Moloch's emergence (docs/design/inferno.md §3.2), with
     // `raised` when this load set its next raid going.
     ...(emergence && { infernostate: infernoLoadState(emergence, baseSave, getCurrentDateTime(), underHall) }),

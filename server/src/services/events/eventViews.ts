@@ -1,5 +1,6 @@
 import { KRALLEN_MAX_LEVEL, type EventReward } from "../../game-data/events/eventRewards.js";
-import { huntStartLevel, tierNeed, type LadderTier } from "../../game-data/events/events.js";
+import { krallenHuntMinimum, tierNeed, type LadderTier } from "../../game-data/events/events.js";
+import { krallenStartLevel } from "./krallenPenalty.js";
 import { lockedReason, type EventPlayer } from "./eventPlayer.js";
 import { NO_PROGRESS, type EventProgress } from "./progressStore.js";
 import { claimsUntil, nextUtcMidnight, utcDay, type ScheduledEvent } from "./schedule.js";
@@ -47,13 +48,29 @@ export interface EventView {
    * For an event that pays Krallen: her level now (0 for none), the top an
    * event raises her to, and when her loot aura runs out (unix s, 0 for
    * none; she fights with it only from level 3, `KRALLEN_AURA_LEVEL`).
+   * `startLevel` is her level when the hunt began; `minimum` the loot below
+   * which she loses a level when it ends (0: no Krallen at the start, no
+   * minimum, `krallenHuntMinimum`); `penalty` what its end took, if anything.
    */
-  krallen: { level: number; maxLevel: number; auraUntil: number } | null;
+  krallen: {
+    level: number;
+    maxLevel: number;
+    auraUntil: number;
+    startLevel: number;
+    minimum: number;
+    penalty: { from: number; to: number } | null;
+  } | null;
 }
 
 /** An amount for the page's sentences: "60 million", "2.5 million", "25,000". */
 export const amountWords = (amount: number): string =>
   amount >= 1_000_000 ? `${Math.round(amount / 100_000) / 10} million` : amount.toLocaleString("en-US");
+
+/** The penalty a hunt's end took (`krallenPenalty.ts`), or null. */
+const penaltyOf = (progress: EventProgress): { from: number; to: number } | null => {
+  const recorded = progress.data.krallenPenalty as { from?: unknown; to?: unknown } | undefined;
+  return recorded ? { from: Number(recorded.from) || 0, to: Number(recorded.to) || 0 } : null;
+};
 
 /** A player with nothing known: may take part, no Krallen. */
 const ANYONE: EventPlayer = { townHall: Number.POSITIVE_INFINITY, tutorialDone: true, krallenLevel: 0 };
@@ -87,7 +104,8 @@ export const eventView = (
   const paysKrallen = (event.ladder?.tiers ?? []).some((tier) => tier.rewards.some((reward) => reward.kind === "krallen"));
   // A tier claimed this month raised her a level: every tier shows the goal
   // by her level when the hunt began, not the next month's.
-  const startLevel = huntStartLevel(event.ladder?.tiers ?? [], progress.claimedTiers, player.krallenLevel);
+  // A hunt whose penalty took a level keeps the level it began with.
+  const startLevel = krallenStartLevel(event, progress, player.krallenLevel);
   const needOf = (tier: LadderTier): number => tierNeed(tier, startLevel);
   const firstTier = event.ladder?.tiers[0];
   const text = status === "upcoming" ? (event.upcomingText ?? event.text) : event.text;
@@ -115,7 +133,14 @@ export const eventView = (
         }
       : null,
     krallen: paysKrallen
-      ? { level: player.krallenLevel, maxLevel: KRALLEN_MAX_LEVEL, auraUntil: player.krallenAuraUntil ?? 0 }
+      ? {
+          level: player.krallenLevel,
+          maxLevel: KRALLEN_MAX_LEVEL,
+          auraUntil: player.krallenAuraUntil ?? 0,
+          startLevel,
+          minimum: krallenHuntMinimum(startLevel),
+          penalty: penaltyOf(progress),
+        }
       : null,
   };
 };

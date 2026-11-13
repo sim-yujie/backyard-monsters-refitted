@@ -1,10 +1,11 @@
 import z from "zod";
 
-import { eventById, huntStartLevel, tierNeed, type EventDefinition } from "../../game-data/events/events.js";
+import { eventById, tierNeed, type EventDefinition } from "../../game-data/events/events.js";
 import { planGrant, type GrantedReward } from "../../services/events/grant.js";
+import { krallenStartLevel } from "../../services/events/krallenPenalty.js";
 import { krallenLevelOf } from "../../services/events/krallenReward.js";
 import { liveEvents } from "../../services/events/liveEvents.js";
-import type { EventProgressStore } from "../../services/events/progressStore.js";
+import { NO_PROGRESS, type EventProgressStore } from "../../services/events/progressStore.js";
 import {
   claimsUntil,
   eventWindow,
@@ -154,7 +155,7 @@ export const eventsActions = (store: EventProgressStore, fixed?: readonly EventD
         throw yardRefusedErr("needsKrallen", "Win Krallen first.", { event: event.id, tier: body.tier });
       }
       const before = (await store.read(em, user.userid, [event.id])).get(event.id);
-      const level = huntStartLevel(event.ladder?.tiers ?? [], before?.claimedTiers ?? [], krallenNow);
+      const level = krallenStartLevel(event, before ?? NO_PROGRESS, krallenNow);
       const need = tierNeed(tier, level);
       if (!(await store.claimTier(em, user.userid, event.id, body.tier, need))) {
         const progress = (await store.read(em, user.userid, [event.id])).get(event.id);

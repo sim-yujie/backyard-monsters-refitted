@@ -337,6 +337,26 @@ export const KRALLEN_HUNT_GOALS: readonly number[] = [
 
 /**
  * ═══════════════════════════════════════════════════════════════════════
+ * THE HUNT'S MINIMUM: set by the owner (2026-11-13).
+ * A player who owned Krallen when a hunt began and ends it with less than
+ * {@link KRALLEN_PENALTY_SHARE} of that hunt's goal loses one Krallen level;
+ * a level 1 Krallen is lost and must be won again. 45, 75, 125 and 150
+ * million for a Krallen that began the hunt at level 1, 2, 3 and 4 or 5.
+ * Without her at the start there is no minimum
+ * (`services/events/krallenPenalty.ts`).
+ * ═══════════════════════════════════════════════════════════════════════
+ */
+export const KRALLEN_PENALTY_SHARE = 0.5;
+
+/** The hunt's minimum for a Krallen at `startLevel` when it began; 0 without her. */
+export const krallenHuntMinimum = (startLevel: number): number => {
+  const level = Math.trunc(startLevel) || 0;
+  if (level <= 0) return 0;
+  return Math.floor(KRALLEN_HUNT_GOALS[Math.min(level, KRALLEN_HUNT_GOALS.length - 1)]! * KRALLEN_PENALTY_SHARE);
+};
+
+/**
+ * ═══════════════════════════════════════════════════════════════════════
  * KRALLEN'S LOOT AURA: set by the owner (2026-11-13).
  * A second mark on the hunt at {@link KRALLEN_AURA_GOAL_TIMES} times the
  * player's goal: 180, 300, 450, 675 and 900 million by the Krallen level

@@ -52,6 +52,12 @@ export type ChampionData = z.infer<typeof ChampionSchema> & {
    * by the server alone and kept off {@link ChampionSchema} like `b`.
    */
   la?: number;
+  /**
+   * Krallen's hunts are settled up to then, unix seconds: a Krallen Hunt
+   * ending later still decides her penalty (`services/events/krallenPenalty.ts`).
+   * Written by the server alone and kept off {@link ChampionSchema} like `la`.
+   */
+  hk?: number;
 };
 
 /**

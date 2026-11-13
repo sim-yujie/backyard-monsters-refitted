@@ -75,7 +75,7 @@ describe("the Krallen Hunt's view", () => {
 
   test("carries the Krallen level and the claim deadline 7 days after the end", () => {
     const view = eventView(scheduled, { ...NO_PROGRESS, counter: 12 }, huntWindow.startsAt, player(6, true, 3));
-    expect(view.krallen).toEqual({ level: 3, maxLevel: 5, auraUntil: 0 });
+    expect(view.krallen).toEqual({ level: 3, maxLevel: 5, auraUntil: 0, startLevel: 3, minimum: 125_000_000, penalty: null });
     expect(view.claimUntil).toBe(huntWindow.endsAt + 7 * DAY);
     expect(view.ladder).toMatchObject({
       counter: 12,
@@ -122,7 +122,14 @@ describe("the Krallen Hunt's view", () => {
 
   test("carries when her aura runs out", () => {
     const view = eventView(scheduled, NO_PROGRESS, huntWindow.startsAt, { ...player(6, true, 4), krallenAuraUntil: 1_900_000_000 });
-    expect(view.krallen).toEqual({ level: 4, maxLevel: 5, auraUntil: 1_900_000_000 });
+    expect(view.krallen).toEqual({
+      level: 4,
+      maxLevel: 5,
+      auraUntil: 1_900_000_000,
+      startLevel: 4,
+      minimum: 150_000_000,
+      penalty: null,
+    });
   });
 
   test("a Krallen at the top still has the 3x mark to claim, but never the first", () => {
