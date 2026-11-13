@@ -120,7 +120,7 @@ describe("chat.css: folded on a phone, only the newest line shows (7.2 hotfix, o
     // came later and showed the whole history over the yard in 7.2.
     const shown = [...chatPhone.matchAll(/([^{}]+)\{([^}]*)\}/g)]
       .map((match) => ({ selector: (match[1] ?? "").trim(), body: match[2] ?? "" }))
-      .filter(({ selector, body }) => selector.includes(folded) && /\.chat-line(?![-_])/.test(selector) && /display:\s*(?!none)[a-z]/.test(body))
+      .filter(({ selector, body }) => selector.includes(folded) && /\.chat-line(?![-_])/.test(selector) && /display:\s*(?!none\b)[a-z]/.test(body))
       .map(({ selector }) => selector);
     for (const selector of shown) expect(selector).toMatch(/:last-child/);
   });
