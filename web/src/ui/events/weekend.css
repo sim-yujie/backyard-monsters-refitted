@@ -88,11 +88,23 @@
 }
 
 .weekend-popup__coins {
-  display: inline-flex;
+  display: grid;
+  gap: var(--space-1);
+  max-width: 100%;
+  font-size: var(--text-sm);
+}
+
+.weekend-popup__coin {
+  display: flex;
   align-items: center;
   gap: var(--space-1);
   margin: 0;
-  font-size: var(--text-sm);
+  text-align: left;
+}
+
+.weekend-popup__coin-amount {
+  min-width: 2.5ch;
+  text-align: right;
 }
 
 .weekend-popup__when {

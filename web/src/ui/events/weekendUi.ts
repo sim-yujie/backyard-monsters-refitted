@@ -76,9 +76,29 @@ const el = <K extends keyof HTMLElementTagNameMap>(tag: K, className: string, te
  * What every weekend event pays (owner, 12 Nov 2026: "builder's weekend pay
  * glimmer"; `server/src/services/events/weekendCoins.ts` WEEKEND_COINS):
  * 25 Glimmers the first time the yard loads that weekend, 75 the first time
- * the boost is used. The pop-up says it in one line.
+ * the boost is used. The pop-up shows it as two rows.
  */
-export const WEEKEND_GLIMMERS_LINE = "Play this weekend for 25 Glimmers, use the boost for 75 more.";
+export const WEEKEND_PLAY_GLIMMERS = 25;
+export const WEEKEND_ACTION_GLIMMERS = 75;
+
+/**
+ * The action that pays the 75, per event (what `weekendBoostUsed` is called
+ * from): an upgrade at the lower price, a training or research, monsters
+ * queued to hatch, loot banked from a wild tribe. Each is paid once per
+ * player per weekend.
+ */
+export const weekendActionText = (run: Pick<WeekendRun, "id" | "percent">): string => {
+  switch (run.id) {
+    case "builders":
+      return `Start 1 upgrade at ${weekendAmount(run)}`;
+    case "study":
+      return "Start 1 training or research";
+    case "hatch":
+      return "Hatch a batch of monsters";
+    case "plunder":
+      return "Loot a wild tribe";
+  }
+};
 
 /** The pop-up's class, for tests and for "something else has the screen" checks. */
 export const WEEKEND_POPUP_CLASS = "weekend-popup";
@@ -120,8 +140,16 @@ export const openWeekendPopup = (options: WeekendPopupOptions): Popup => {
     gameIcon("time", { size: 16, decorative: true }),
     running ? `Ends in ${formatCountdown(run.endsAt - now)}` : `Starts in ${formatCountdown(run.startsAt - now)}`,
   );
-  const glimmers = el("p", "weekend-popup__coins");
-  glimmers.append(gameIcon("eventcoin", { size: 16, decorative: true }), WEEKEND_GLIMMERS_LINE);
+  const glimmers = el("div", "weekend-popup__coins");
+  const row = (amount: string, text: string): HTMLElement => {
+    const line = el("p", "weekend-popup__coin");
+    line.append(gameIcon("eventcoin", { size: 16, decorative: true }), el("strong", "weekend-popup__coin-amount", amount), text);
+    return line;
+  };
+  glimmers.append(
+    row(String(WEEKEND_PLAY_GLIMMERS), "Play this weekend"),
+    row(`+${WEEKEND_ACTION_GLIMMERS}`, weekendActionText(run)),
+  );
   const done = el("button", "btn btn--primary weekend-popup__done", "OK");
   done.type = "button";
   done.addEventListener("click", () => popup.close());

@@ -4,7 +4,7 @@ import { resetWeekend, setWeekend, type WeekendRun } from "@/game/weekend";
 import {
   openWeekendPopup,
   studySeconds,
-  WEEKEND_GLIMMERS_LINE,
+  weekendActionText,
   weekendAmount,
   weekendChip,
 } from "./weekendUi";
@@ -59,9 +59,16 @@ describe("openWeekendPopup", () => {
     expect(document.querySelector(".weekend-popup__when")?.textContent).toBe("Ends in 1d 23h");
   });
 
-  it("says what the weekend pays in Glimmers: 25 for playing, 75 for the boost", () => {
+  it("says what pays the Glimmers: 25 for playing, 75 for the weekend's action", () => {
     openWeekendPopup({ container: document.body, run: STUDY, now: NOW });
-    expect(WEEKEND_GLIMMERS_LINE).toBe("Play this weekend for 25 Glimmers, use the boost for 75 more.");
-    expect(document.querySelector(".weekend-popup__coins")?.textContent).toBe(WEEKEND_GLIMMERS_LINE);
+    const rows = [...document.querySelectorAll(".weekend-popup__coin")].map((r) => r.textContent);
+    expect(rows).toEqual(["25Play this weekend", "+75Start 1 training or research"]);
+    expect(document.querySelector(".weekend-popup__coins")?.textContent).not.toMatch(/boost/i);
+  });
+
+  it("names the action for every weekend event", () => {
+    expect(weekendActionText({ id: "builders", percent: 30 })).toBe("Start 1 upgrade at −30%");
+    expect(weekendActionText({ id: "hatch", percent: 30 })).toBe("Hatch a batch of monsters");
+    expect(weekendActionText({ id: "plunder", percent: 30 })).toBe("Loot a wild tribe");
   });
 });
