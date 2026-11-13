@@ -78,14 +78,9 @@ export class DamageBanner {
   private async repairAll(): Promise<void> {
     const result = await this.actions.all();
     if (result.ok) {
-      const started = result.report.started.length;
-      this.binding.notices.show(
-        DAMAGE_NOTICE,
-        `Repairing ${started} ${started === 1 ? "building" : "buildings"}. They are back to full health within the hour.`,
-        { level: "info", timeoutMs: 6_000 },
-      );
-      // The notice under the key is now the confirmation, not the banner.
-      this.shown = false;
+      // The banner goes and each building shows its repair: no "Repairing N
+      // buildings" notice (owner, 13 Nov 2026).
+      this.hide();
       return;
     }
     if (result.refusal.local && result.refusal.reason === "notDamaged") {

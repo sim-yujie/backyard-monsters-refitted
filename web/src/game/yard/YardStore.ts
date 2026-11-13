@@ -846,10 +846,10 @@ export class YardStore implements YardStoreReader, YardStoreActions {
     if (typeof response.playerpoints === "number") slices.playerpoints = response.playerpoints;
     if (typeof response.notifications === "number") slices.notifications = response.notifications;
     if (typeof response.questsClaimable === "number") slices.questsClaimable = response.questsClaimable;
-    // Event coins: only when the action changed them (`game/eventCoins.ts` shows the "+15").
+    // Event coins: only when the action changed them (the top bar floats the "+15").
     if (typeof response.eventcoins === "number") {
       slices.eventcoins = response.eventcoins;
-      noteCoins(response.eventcoins, response.coinsGained);
+      noteCoins(response.eventcoins);
     }
     // Nor are the siege weapons and the Inferno purse: they ride `completed` and the siege routes' reports.
     Object.assign(slices, siegeSlices(this.current, response.completed, response.report));

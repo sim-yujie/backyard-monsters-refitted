@@ -1,77 +1,18 @@
-import { noteCoins, onCoinsGained, type CoinsGained } from "@/game/eventCoins";
-import { coinGain, coinWords } from "@/ui/events/coinUi";
+import { noteCoins } from "@/game/eventCoins";
 import { YARD_PLUGINS, type YardPlugin } from "../yardPlugins";
 
 /**
  * Own-yard plugin for event coins (beta 7, `game/eventCoins.ts`): hands the
- * yard load's purse to the coin module, and shows a short "[coin] +25"
- * notice each time coins arrive that no claim notice already shows. Coins
- * come from big events' calendar days and ladder tiers (owner, 8 Nov 2026)
- * and from weekend events: 50 for each day's check-in on the event's card
- * or pop-up (owner, 13 Nov 2026).
+ * yard load's purse to the coin module. Coins come from big events' calendar
+ * days and ladder tiers (owner, 8 Nov 2026) and from weekend events: 50 for
+ * each day's check-in on the event's card or pop-up (owner, 13 Nov 2026).
+ * A gain raises no toast (owner, 13 Nov 2026): the top bar's Glimmers
+ * readout floats the "+N" (`ui/Hud.ts`).
  */
-
-export const COINS_NOTICE = "event-coins";
-const NOTICE_MS = 6_000;
-
-/** What paid, in one or two words; "" when the server did not say. */
-const REASON_WORDS: Readonly<Record<string, string>> = {
-  calendar: "Daily",
-  ladder: "Event",
-  "weekend-checkin": "Weekend",
-  // An announcement's Glimmers gift (server `GLIMMERS_REASON`).
-  announcement: "Gift",
-};
-
-/** "Daily", "Daily + Event", or "" for an unnamed gain. */
-export const gainWords = (reasons: readonly string[]): string =>
-  [
-    ...new Set(
-      reasons
-        .map((reason) => REASON_WORDS[reason])
-        .filter((word): word is string => Boolean(word)),
-    ),
-  ].join(" + ");
-
-/** The notice's line: "[coin] +15 Daily". */
-export const gainLine = (gained: CoinsGained): HTMLElement => {
-  const line = document.createElement("span");
-  line.className = "coins-gained";
-  const words = gainWords(gained.reasons);
-  line.setAttribute(
-    "aria-label",
-    `${coinWords(gained.amount)} gained${words ? `: ${words}` : ""}`,
-  );
-  line.append(coinGain(gained.amount, { size: 24, decorative: true }));
-  if (words) {
-    const why = document.createElement("span");
-    why.className = "coins-gained__why";
-    why.textContent = words;
-    line.append(" ", why);
-  }
-  return line;
-};
-
-/**
- * Coins a claim on the Events page (or a Glimmers daily quest) paid show on
- * that claim's own "Day 3 claimed" / "Quest claimed" notice; a second "+15" beside it would say the same twice
- * (ASSUMED).
- */
-export const claimOnly = (reasons: readonly string[]): boolean =>
-  reasons.length > 0 && reasons.every((reason) => reason === "calendar" || reason === "ladder" || reason === "quest");
-
-export const eventCoinsPlugin: YardPlugin = ({ store, notices }) => {
-  const stop = onCoinsGained((gained) => {
-    if (claimOnly(gained.reasons)) return;
-    notices.show(COINS_NOTICE, gainLine(gained), { level: "info", timeoutMs: NOTICE_MS });
-  });
+export const eventCoinsPlugin: YardPlugin = ({ store }) => {
   // The main yard's load carries the purse.
   const save = store.save;
-  if (typeof save.eventcoins === "number") noteCoins(save.eventcoins, save.coinsgained);
-  return () => {
-    stop();
-    notices.clear(COINS_NOTICE);
-  };
+  if (typeof save.eventcoins === "number") noteCoins(save.eventcoins);
 };
 
 YARD_PLUGINS.push(eventCoinsPlugin);

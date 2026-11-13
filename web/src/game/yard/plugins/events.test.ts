@@ -3,7 +3,7 @@ import { readFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import type { EventsActions, EventsApi, EventView, Mr2WelcomeStatus } from "@/api/events";
+import type { EventReward, EventsActions, EventsApi, EventView, Mr2WelcomeStatus } from "@/api/events";
 import { notePumpkins } from "@/game/events/pumpkinHunt";
 import { resetWeekend, setWeekend, setWeekendCheckin, type WeekendCheckin, type WeekendRun } from "@/game/weekend";
 import { Notices } from "@/ui/maproom/Notices";
@@ -346,5 +346,85 @@ describe("Events: the weekend event (owner, 13 Nov: in Events, not a banner on t
         expect(content.querySelector(".weekend-checkin__error")?.textContent).toBe("Could not reach the server."),
       );
     });
+  });
+});
+
+describe("Events: claims raise no toast for what the bar shows (owner, 13 Nov 2026)", () => {
+  type Claims = {
+    claimCalendar(event: EventView): Promise<void>;
+    claimTier(event: EventView, tier: number): Promise<void>;
+  };
+  const claimsOf = (door: EventsDoor) => door as unknown as Claims;
+
+  const daily = (days: EventReward[][]): EventView => ({
+    ...hunt(0),
+    id: "thanksgiving-2026",
+    calendar: { days, claimed: 0, canClaim: true, nextAt: null },
+  });
+
+  it("a calendar day of resources and Glimmers: no 'Day 1 claimed'", async () => {
+    const event = daily([[{ kind: "resources", amounts: { r1: 10_000 } }, { kind: "eventCoins", amount: 15 }]]);
+    const { door, notices } = await setup([event]);
+    const actions = (door as unknown as { actions: EventsActions }).actions;
+    vi.mocked(actions.claimCalendar).mockResolvedValue({
+      ok: true,
+      report: { event: event.id, day: 1, granted: [], nextAt: null },
+      completed: [],
+    });
+    const before = notices.element.childElementCount;
+    await claimsOf(door).claimCalendar(event);
+    expect(actions.claimCalendar).toHaveBeenCalledWith(event.id);
+    expect(notices.element.childElementCount).toBe(before);
+  });
+
+  it("a calendar day with a decoration still names the decoration", async () => {
+    const event = daily([[{ kind: "resources", amounts: { r1: 10_000 } }, { kind: "decoration", type: 41, count: 1 }]]);
+    const { door, notices } = await setup([event]);
+    const actions = (door as unknown as { actions: EventsActions }).actions;
+    vi.mocked(actions.claimCalendar).mockResolvedValue({
+      ok: true,
+      report: { event: event.id, day: 1, granted: [], nextAt: null },
+      completed: [],
+    });
+    await claimsOf(door).claimCalendar(event);
+    const line = notices.element.querySelector(".events-claimed");
+    expect(line?.getAttribute("aria-label")).toMatch(/^Day 1 claimed, gained /);
+    expect(line?.getAttribute("aria-label")).not.toContain("Twigs");
+  });
+
+  it("a ladder tier of Shiny: no 'Claimed'; Krallen's news stays; her aura switching on says nothing", async () => {
+    const event = hunt(30);
+    const { door, notices } = await setup([event]);
+    const actions = (door as unknown as { actions: EventsActions }).actions;
+    const claimTier = vi.mocked(actions.claimTier);
+    const before = notices.element.childElementCount;
+
+    claimTier.mockResolvedValue({ ok: true, report: { event: event.id, tier: 0, granted: [{ kind: "shiny", amount: 10 }] }, completed: [] });
+    await claimsOf(door).claimTier(event, 0);
+    expect(notices.element.childElementCount).toBe(before);
+
+    claimTier.mockResolvedValue({
+      ok: true,
+      report: { event: event.id, tier: 1, granted: [{ kind: "krallenAura", until: 864_000, level: 4, hasKrallen: true }] },
+      completed: [],
+    });
+    await claimsOf(door).claimTier(event, 1);
+    expect(notices.element.childElementCount).toBe(before);
+
+    claimTier.mockResolvedValue({
+      ok: true,
+      report: { event: event.id, tier: 1, granted: [{ kind: "krallenAura", until: 0, level: 0, hasKrallen: false }] },
+      completed: [],
+    });
+    await claimsOf(door).claimTier(event, 1);
+    expect(notices.element.textContent).toContain("Win Krallen first");
+
+    claimTier.mockResolvedValue({
+      ok: true,
+      report: { event: event.id, tier: 1, granted: [{ kind: "krallen", level: 1, raised: true }] },
+      completed: [],
+    });
+    await claimsOf(door).claimTier(event, 1);
+    expect(notices.element.textContent).toContain("Krallen joined your yard!");
   });
 });

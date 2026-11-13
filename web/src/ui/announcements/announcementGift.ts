@@ -70,8 +70,8 @@ const failureWords = (err: unknown): string =>
 /** Hands the claim's Glimmers purse to the top bar, when the answer has one. */
 const notePurse = (answer: unknown): void => {
   if (answer === null || typeof answer !== "object") return;
-  const { eventcoins, coinsGained } = answer as Partial<GiftClaim>;
-  if (typeof eventcoins === "number") noteCoins(eventcoins, coinsGained ?? null);
+  const { eventcoins } = answer as Partial<GiftClaim>;
+  if (typeof eventcoins === "number") noteCoins(eventcoins);
 };
 
 /** The gift's row, with `button` being its "Claim" (null once claimed). */

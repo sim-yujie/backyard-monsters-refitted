@@ -1,7 +1,6 @@
 import type { MushroomPickReport } from "@/api/types";
 import type { YardRefusal } from "@/api/yard";
 import { noteHuntCount, PUMPKIN_HUNT_KIND, TURKEY_HUNT_KIND } from "@/game/events/pumpkinHunt";
-import { currentSeason, type Season } from "@/game/season";
 import { freeWorkers } from "./workers";
 import type { YardActionResult, YardStoreAction, YardStoreReader } from "./YardStore";
 import type { YardMushroom } from "./yardModel";
@@ -12,7 +11,8 @@ import type { YardMushroom } from "./yardModel";
  * The original sent a worker: the mushroom shook for 60 ticks, then resolved
  * (`client/scripts/BMUSHROOM.as:67-84`), and a golden one showed a popup
  * (`client/scripts/MUSHROOMS.as:246-250`) while an ordinary one got a worker's
- * quip (`:253-254`). Here a tap does the same: the mushroom shakes for
+ * quip (`:253-254`). Here a tap does the same, without the quip (owner,
+ * 13 Nov 2026): the mushroom shakes for
  * {@link SHAKE_MS}, then `POST /bm/yard/mushroom/pick` goes out and the
  * server decides the reward; the answer removes the mushroom and says what
  * it gave. A refusal (every worker busy, a stale list) stops the shake and
@@ -67,31 +67,6 @@ export const mushroomAt = (
  * into the block.
  */
 export const mushroomZIndex = (mushroom: Pick<YardMushroom, "depth">): number => mushroom.depth * 8;
-
-/** The worker quips for an ordinary mushroom (`pop_mushroom_msg2`..`4`, `MUSHROOMS.as:253`). */
-export const ORDINARY_QUIPS: readonly string[] = [
-  "Mmmm, mushroom soup.",
-  "These things grow like weeds.",
-  "Plain old fungus.",
-];
-
-/** The same quips for a Halloween pumpkin (`game/season.ts`). */
-export const PUMPKIN_QUIPS: readonly string[] = [
-  "Mmmm, pumpkin pie.",
-  "Another one for the pumpkin patch.",
-  "Just a plain old pumpkin.",
-];
-
-/** The same quips for a Thanksgiving turkey (`game/season.ts`). */
-export const TURKEY_QUIPS: readonly string[] = [
-  "Gobble gobble! Got one.",
-  "This one nearly got away.",
-  "Another one for the feast.",
-];
-
-/** The quips a pick in `season` draws from. */
-export const quipsFor = (season: Season): readonly string[] =>
-  season === "halloween" ? PUMPKIN_QUIPS : season === "thanksgiving" ? TURKEY_QUIPS : ORDINARY_QUIPS;
 
 /** "12 pumpkins found." for the pick's toast during the pumpkin hunt. */
 export const pumpkinsFound = (count: number): string =>
@@ -178,8 +153,12 @@ export interface MushroomPickView {
   picked?(spot: Spot, golden: boolean): void;
   /** A golden mushroom: the popup (`pop_goldenmushroom_*`). */
   golden(shiny: number): void;
-  /** An ordinary one: a toast with a worker's quip. */
-  ordinary(quip: string): void;
+  /**
+   * An ordinary one during a hunt: the count, "12 pumpkins found.". Outside
+   * a hunt an ordinary pick says nothing (the worker's quip toast went, owner
+   * 13 Nov 2026): the mushroom pops and the reward floats on the bar.
+   */
+  huntCount(line: string): void;
   /** A refusal, in a toast. */
   refused(message: string): void;
 }
@@ -201,22 +180,17 @@ export class MushroomPicker {
   private readonly store: MushroomPickStore;
   private readonly view: MushroomPickView;
   private readonly timers: PickTimers;
-  private readonly random: () => number;
-  /** The season now, for the quips (`game/season.ts`). */
-  private readonly season: () => Season;
   /** Mushrooms shaking or in flight, by {@link mushroomKey}: a second tap on one is ignored. */
   private readonly busy = new Set<string>();
 
   constructor(
     store: MushroomPickStore,
     view: MushroomPickView,
-    options: { timers?: PickTimers; random?: () => number; season?: () => Season } = {},
+    options: { timers?: PickTimers } = {},
   ) {
     this.store = store;
     this.view = view;
     this.timers = options.timers ?? realTimers;
-    this.random = options.random ?? Math.random;
-    this.season = options.season ?? currentSeason;
   }
 
   /** Whether this mushroom is shaking or its pick is in flight. */
@@ -254,13 +228,8 @@ export class MushroomPicker {
             const hunt = huntCountOf(result.report);
             if (hunt) noteHuntCount(hunt.kind, hunt.count);
             this.view.picked?.(mushroom, result.report.golden);
-            if (result.report.golden) {
-              this.view.golden(result.report.shiny);
-            } else {
-              const quips = quipsFor(this.season());
-              const quip = quips[Math.floor(this.random() * quips.length)] ?? quips[0]!;
-              this.view.ordinary(hunt ? `${quip} ${hunt.line}` : quip);
-            }
+            if (result.report.golden) this.view.golden(result.report.shiny);
+            else if (hunt) this.view.huntCount(hunt.line);
           })
           .finally(() => {
             this.busy.delete(key);

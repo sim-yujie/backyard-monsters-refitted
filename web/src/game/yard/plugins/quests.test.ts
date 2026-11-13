@@ -122,21 +122,54 @@ describe("QuestsDoor", () => {
     expect(door.claimable).toBe(2);
   });
 
-  it("opens the window, claims a quest, and shows what came", async () => {
+  it("opens the window and claims a quest: the row flips and the count drops, with no toast (owner, 13 Nov 2026)", async () => {
     const { door, actions, notices } = doorOf();
     door.toggle();
     await flush();
     expect(document.querySelector(".quests-panel")).not.toBeNull();
     expect(door.button.getAttribute("aria-expanded")).toBe("true");
+    expect(door.claimable).toBe(2);
     document.querySelector<HTMLButtonElement>(".quest__claim")!.click();
     await flush();
     expect(actions.claim).toHaveBeenCalledWith("daily", 0);
-    expect(notices.show).toHaveBeenCalledWith("quests", expect.any(HTMLElement), expect.objectContaining({ level: "info" }));
-    const line = notices.show.mock.calls[0]![1] as HTMLElement;
-    expect(line.getAttribute("aria-label")).toBe("Quest claimed, gained 400 Putty");
+    // The 400 Putty floats on the top bar (the yard answer's resources): no "Quest claimed" toast.
+    expect(notices.show).not.toHaveBeenCalled();
     expect(document.querySelector(".quest--claimed")).not.toBeNull();
+    expect(door.claimable).toBe(1);
     door.toggle();
     expect(document.querySelector(".quests-panel")).toBeNull();
+  });
+
+  it("the login day and a bonus paying Shiny raise no toast either", async () => {
+    const { door, actions, notices } = doorOf();
+    await door.load();
+    await door.claimLogin();
+    expect(actions.claimLogin).toHaveBeenCalledOnce();
+    await door.claimBonus("daily");
+    expect(actions.claimBonus).toHaveBeenCalledWith("daily");
+    expect(notices.show).not.toHaveBeenCalled();
+  });
+
+  it("a claim paying what the bar cannot show (an item, a decoration) still names it", async () => {
+    const actions = actionsOf();
+    actions.claim.mockImplementation(() =>
+      Promise.resolve(
+        ok({
+          quests: view(),
+          granted: [
+            { kind: "resources", amounts: { r3: 400 }, credited: { r3: 400 }, overflow: {} },
+            { kind: "decoration", type: 41, count: 1, stored: 1 },
+          ],
+        }),
+      ),
+    );
+    const { door, notices } = doorOf(storeOf(), actions);
+    await door.load();
+    await door.claim("daily", 0);
+    expect(notices.show).toHaveBeenCalledWith("quests", expect.any(HTMLElement), expect.objectContaining({ level: "info" }));
+    const line = notices.show.mock.calls[0]![1] as HTMLElement;
+    // Only the decoration: the Putty floats on the bar.
+    expect(line.getAttribute("aria-label")).toMatch(/^Quest claimed, gained (?!.*Putty)/);
   });
 
   it("shows a refusal under the row and reads the state again", async () => {

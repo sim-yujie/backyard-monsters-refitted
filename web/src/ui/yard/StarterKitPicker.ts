@@ -99,6 +99,19 @@ export const KIT_WARNING =
   "A Starter Kit replaces every building on this outpost except its core. Buildings you have here now are removed without a refund.";
 
 /** "4× Sniper Tower L6": one line of a card's list, same types merged. */
+/**
+ * The notice after a kit is bought, or null. A kit bought with Shiny stands
+ * ready at once, and its buildings show it (owner, 13 Nov 2026); one paid with
+ * resources says its buildings are still going up.
+ */
+export const kitBoughtText = (
+  report: Pick<StarterKitReport, "pay" | "placed">,
+  kit: Pick<StarterKitSummary, "name">,
+): string | null =>
+  report.pay === "shiny"
+    ? null
+    : `${kit.name} placed: ${report.placed} buildings are building up, without your worker.`;
+
 export const contentLines = (kit: Pick<StarterKitSummary, "contents">): string[] => {
   const byType = new Map<number, { count: number; levels: number[] }>();
   for (const [type, level, count] of kit.contents) {

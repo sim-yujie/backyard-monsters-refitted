@@ -423,6 +423,32 @@
   opacity: 0.55;
 }
 
+/* Busy (an attack starting): disabled, and the disc breathes until the scene
+   changes. Under reduced motion it just stays a little brighter. */
+.yard-dock__button--busy:disabled {
+  cursor: progress;
+}
+
+.yard-dock__button--busy:disabled .yard-dock__disc {
+  animation: yard-dock-busy 0.9s ease-in-out infinite alternate;
+}
+
+@keyframes yard-dock-busy {
+  from {
+    opacity: 0.55;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .yard-dock__button--busy:disabled .yard-dock__disc {
+    animation: none;
+    opacity: 0.8;
+  }
+}
+
 .yard-dock__label {
   padding: 2px 9px;
   border-radius: var(--radius-pill);
@@ -795,14 +821,6 @@
    menu, a confirm) still cover it. */
 .yard-notices {
   z-index: calc(var(--z-hud) + 2);
-}
-
-/* The Glimmers notice, "[coin] +15 Daily": the 24 px coin and the words sat on
-   one text baseline, so the coin hung below the line's middle. One centred row. */
-.coins-gained {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--space-2);
 }
 
 /* A building's panel docks on the right edge where the rail is. */

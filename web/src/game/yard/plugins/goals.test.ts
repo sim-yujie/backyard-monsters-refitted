@@ -7,6 +7,10 @@ import { YardDock } from "@/ui/yard/YardDock";
 import type { YardMounts } from "../yardPlugins";
 import { GoalsDoor, goalsPlugin, startGrant } from "./goals";
 
+// The walk-in is the renderer's business; here it only says whether it started.
+const walk = vi.hoisted(() => ({ walkIntoHousing: vi.fn((): { destroy(): void } | null => null) }));
+vi.mock("@/game/guide/MonsterWalkIn", () => walk);
+
 /**
  * The Goals button, its badge, the first read and Claim with its balls
  * (issue #227), against stand-in mounts.
@@ -176,6 +180,46 @@ describe("on the Inferno yard (Inferno WP 4.3)", () => {
     expect(line.getAttribute("aria-label")).toBe("10 Zagnoids moved into the Compound");
     expect(line.querySelector("img")!.getAttribute("src")).toContain("IC2");
     door.destroy();
+  });
+});
+
+describe("a monster reward on the main yard (owner, 13 Nov 2026)", () => {
+  const claimPokeys = async (reduced: boolean, walking: boolean) => {
+    vi.stubGlobal("matchMedia", () => ({ matches: reduced }));
+    walk.walkIntoHousing.mockReturnValueOnce(walking ? { destroy: vi.fn() } : null);
+    const { mounts, notices } = mountsOf(storeOf(1));
+    (mounts.renderer as unknown as { holdLife: () => () => void }).holdLife = vi.fn(() => vi.fn());
+    const pokeys: GoalView = { ...goal("UC1", "ready"), monsters: { id: "C1", name: "Pokey", count: 5 } };
+    const actions = actionsOf([pokeys]);
+    actions.claim.mockResolvedValueOnce(
+      ok<GoalClaimReport>({
+        id: "UC1",
+        credited: { r1: 0, r2: 0, r3: 0, r4: 0 },
+        overflow: { r1: 0, r2: 0, r3: 0, r4: 0 },
+        monsters: { id: "C1", count: 5 },
+        points: 3,
+      }),
+    );
+    const door = new GoalsDoor(mounts, actions);
+    door.toggle();
+    await settle();
+    mounts.overlay.content.querySelector<HTMLButtonElement>('.goals-claim[data-goal="UC1"]')!.click();
+    await settle();
+    door.destroy();
+    return notices;
+  };
+
+  it("they walk in, so no notice", async () => {
+    const notices = await claimPokeys(false, true);
+    expect(walk.walkIntoHousing).toHaveBeenCalled();
+    expect(notices.show).not.toHaveBeenCalled();
+  });
+
+  it("with reduced motion (no walk-in) the notice still says where they went", async () => {
+    walk.walkIntoHousing.mockClear();
+    const notices = await claimPokeys(true, false);
+    expect(walk.walkIntoHousing).not.toHaveBeenCalled();
+    expect(notices.show).toHaveBeenCalledWith("goals", expect.any(HTMLElement), expect.objectContaining({ level: "info" }));
   });
 });
 

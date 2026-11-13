@@ -222,16 +222,28 @@ export const grantedKrallenText = (granted: readonly GrantedReward[]): string | 
 };
 
 /**
- * Her loot aura, for the notice: "Krallen's loot aura is on until 1 Jan!",
- * or, below level 3, that it waits for her level 3.
+ * Her loot aura, for the notice: below level 3, that it waits for her level 3;
+ * without her, that she comes first. An aura that is on raises no notice
+ * (owner, 13 Nov 2026): the hunt card says "On until 1 Jan".
  */
 export const grantedAuraText = (granted: readonly GrantedReward[]): string | null => {
   const aura = granted.find((one) => one.kind === "krallenAura");
   if (!aura || aura.kind !== "krallenAura") return null;
   if (!aura.hasKrallen) return "Win Krallen first: her loot aura needs her.";
   if (aura.level < KRALLEN_AURA_LEVEL) return `Loot aura won! Krallen uses it from level ${KRALLEN_AURA_LEVEL}.`;
-  return `Krallen's loot aura is on until ${shortDate(aura.until)}!`;
+  return null;
 };
+
+/**
+ * What a claim's notice still names: the rewards nothing else shows. Resources,
+ * Shiny and Glimmers float on the top bar as they land, and Krallen's loot aura
+ * shows on the hunt card, so a claim of only those raises no notice (owner,
+ * 13 Nov 2026). Champions (Krallen, Korath), items, speed-ups and decorations stay.
+ */
+const SHOWN_ELSEWHERE: ReadonlySet<EventReward["kind"]> = new Set(["resources", "shiny", "eventCoins", "krallenAura"]);
+
+export const offBarRewards = (rewards: readonly EventReward[]): EventReward[] =>
+  rewards.filter((reward) => !SHOWN_ELSEWHERE.has(reward.kind));
 
 /** Korath's powers by level (Flash `KorathReward.as`): 1 Burn, 2 Breath of Fire, 3 Fists of Doom. */
 const KORATH_POWER_NAMES = ["Burn", "Breath of Fire", "Fists of Doom"] as const;
