@@ -33,7 +33,8 @@ import {
 import { helpBlock } from "../../services/friends/helpFacts.js";
 import { setHelpBlockFor } from "../../services/friends/helpHook.js";
 import { helpAnswer } from "./help.js";
-import { collectGiftsAnswer, deleteGiftsAnswer, giftsAnswer, sendGiftAnswer, wishesAnswer } from "./gift.js";
+import { collectGiftsAnswer, deleteGiftsAnswer, giftCostAnswer, giftsAnswer, sendGiftAnswer, wishesAnswer } from "./gift.js";
+import { giftAllAnswer } from "./giftAll.js";
 
 /** Binds an answer function to Koa: the caller, the body or query, `postgres.em`, now. */
 const route =
@@ -77,6 +78,13 @@ export const mountFriendsRoutes = (router: Router): void => {
     route((ctx, now) => helpAnswer(postgres.em, ctx.authUser, ctx.request.body, now)));
   router.post(`${api}/bm/friends/gift`, apiVersion, verifyUserAuth, verifyAccountStatus, friendActionLimiter, logRequest,
     route((ctx, now) => sendGiftAnswer(postgres.em, ctx.authUser, ctx.request.body, now)));
+  router.get(`${api}/bm/friends/gift/cost`, apiVersion, verifyUserAuth, verifyAccountStatus, friendsReadLimiter,
+    route((ctx) => giftCostAnswer(postgres.em, ctx.authUser, ctx.query)));
+  // Gift all (owner, 13 Nov 2026): the confirm step's plan, then the send.
+  router.post(`${api}/bm/friends/gifts/all/plan`, apiVersion, verifyUserAuth, verifyAccountStatus, friendsReadLimiter,
+    route((ctx, now) => giftAllAnswer(postgres.em, ctx.authUser, ctx.request.body, now, false)));
+  router.post(`${api}/bm/friends/gifts/all`, apiVersion, verifyUserAuth, verifyAccountStatus, friendActionLimiter, logRequest,
+    route((ctx, now) => giftAllAnswer(postgres.em, ctx.authUser, ctx.request.body, now, true)));
   router.get(`${api}/bm/friends/gifts`, apiVersion, verifyUserAuth, verifyAccountStatus, friendsReadLimiter,
     route((ctx, now) => giftsAnswer(postgres.em, ctx.authUser, now)));
   router.post(`${api}/bm/friends/gifts/collect`, apiVersion, verifyUserAuth, verifyAccountStatus, friendActionLimiter, logRequest,

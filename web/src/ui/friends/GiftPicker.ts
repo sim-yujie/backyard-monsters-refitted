@@ -1,6 +1,7 @@
-import { friendRefusal, friendsApi, type FriendsApi, type Gift, type GiftResource } from "@/api/friends";
+import { friendRefusal, friendsApi, type FriendsApi, type Gift, type GiftCost, type GiftResource } from "@/api/friends";
 import { friendsStore as sharedStore, type FriendsStore } from "@/game/friends/friendsStore";
 import { playerPool } from "@/game/friends/friendsView";
+import { formatAmount } from "@/ui/format";
 import { Popup } from "@/ui/Popup";
 import { RESOURCE_KEYS, resourceAmount, resourceIcon, resourceName } from "@/ui/resourceIcon";
 import { make, StatusLine } from "./rows";
@@ -21,6 +22,14 @@ import "./friends.css";
  * Goo only" (one wish) or gives the order. The resources they did not wish
  * for shrink to a row of small tiles under "Or send". Any resource can still
  * be sent; a wished one earns nothing extra. With no wishes, the plain four.
+ *
+ * Owner, 13 Nov 2026 ("the friends window closes after sending to one
+ * friend"): the picker opens over the list it came from and closes itself a
+ * moment after the gift went, so the player is straight back on the list
+ * with that friend's button saying "Sent". On opening it asks what one gift
+ * to this friend is worth (`giftCost`) and greys out each resource the
+ * player holds less of; pressing a greyed one says what it needs instead of
+ * sending.
  */
 
 export const GIFT_TEXT = {
@@ -38,6 +47,11 @@ export const GIFT_TEXT = {
   },
   cancel: "Cancel",
   done: "Done",
+  /** "Gift: 691,500": one gift's size, the same in every resource. */
+  size: (amount: number): string => `Gift: ${formatAmount(amount)}`,
+  /** On a greyed choice: what the gift needs and what the player has. */
+  short: (resource: GiftResource, need: number, have: number): string =>
+    `Not enough ${resourceName(resource, "surface")}: need ${formatAmount(need)}, you have ${formatAmount(have)}`,
   /** The line over the choices when the friend wished for one resource only. */
   wishedOnly: (name: string, resource: GiftResource): string => `${name} wants ${resourceName(resource, "surface")} only`,
   /**
@@ -70,7 +84,16 @@ export interface GiftPickerOptions {
   readonly store?: FriendsStore;
   /** After a gift went. */
   readonly onSent?: (gift: Gift) => void;
+  /**
+   * How long the "Sent" line shows before the picker closes itself, in ms
+   * (owner, 13 Nov 2026: back to the list after each gift); null keeps it
+   * open until Done.
+   */
+  readonly closeAfterSentMs?: number | null;
 }
+
+/** How long the "Sent" line shows before the picker closes itself. */
+export const GIFT_PICKER_CLOSE_MS = 900;
 
 export class GiftPicker {
   readonly popup: Popup;
@@ -84,8 +107,12 @@ export class GiftPicker {
   private readonly status = new StatusLine();
   private readonly choices = new Map<GiftResource, HTMLButtonElement>();
   private readonly cancel: HTMLButtonElement;
+  private readonly size = make("p", "gift-picker__size");
   private sent: Gift | null = null;
   private busy = false;
+  /** One gift's size and what the player holds, once known; each choice short of it is greyed. */
+  private cost: GiftCost | null = null;
+  private closeTimer: ReturnType<typeof setTimeout> | null = null;
 
   constructor(target: GiftTarget, options: GiftPickerOptions = {}) {
     this.target = target;
@@ -99,14 +126,18 @@ export class GiftPicker {
     this.popup = new Popup({
       title: GIFT_TEXT.title,
       className: "takeover-dialog gift-picker",
-      onClose: () => settle(this.sent),
+      onClose: () => {
+        if (this.closeTimer !== null) clearTimeout(this.closeTimer);
+        settle(this.sent);
+      },
     });
 
     const lead = make("p", "takeover-dialog__lead", GIFT_TEXT.lead(target.username));
     const wishes = target.wishes ?? this.store.friends.find((friend) => friend.userid === target.userid)?.wishes ?? [];
     const order = choiceOrder(wishes);
     const wished = order.filter((key) => wishes.includes(key));
-    const parts: HTMLElement[] = [lead];
+    this.size.hidden = true;
+    const parts: HTMLElement[] = [lead, this.size];
     if (wished.length === 0) {
       // No wishes: the plain four, two by two.
       const grid = make("div", "gift-picker__choices");
@@ -169,7 +200,11 @@ export class GiftPicker {
     choice.dataset["resource"] = key;
     choice.append(resourceIcon(key, { decorative: true, realm: "surface" }));
     if (named) choice.append(make("span", "gift-picker__name", resourceName(key, "surface")));
-    choice.addEventListener("click", () => void this.send(key));
+    choice.addEventListener("click", () => {
+      const short = this.shortOf(key);
+      if (short) this.status.set(GIFT_TEXT.short(key, short.need, short.have), "error");
+      else void this.send(key);
+    });
     this.choices.set(key, choice);
     return choice;
   }
@@ -181,7 +216,50 @@ export class GiftPicker {
   mount(container: HTMLElement): this {
     this.popup.mount(container);
     this.choices.values().next().value?.focus();
+    void this.loadCost();
     return this;
+  }
+
+  /** Asks what one gift is worth and greys what the player cannot afford; a failure leaves every choice open. */
+  async loadCost(): Promise<void> {
+    try {
+      this.cost = await this.api.giftCost(this.target.userid);
+    } catch {
+      return;
+    }
+    if (this.sent || this.cost.amount <= 0) return;
+    this.size.textContent = GIFT_TEXT.size(this.cost.amount);
+    this.size.hidden = false;
+    this.markShort();
+  }
+
+  /** What the player holds of `key`: the yard on screen when there is one, else the server's figure. */
+  private heldOf(key: GiftResource): number {
+    const live = playerPool()?.read()?.resources[key];
+    return typeof live === "number" ? live : (this.cost?.resources[key] ?? 0);
+  }
+
+  /** What a gift in `key` needs and what the player has, when the player has too little; null otherwise. */
+  private shortOf(key: GiftResource): { need: number; have: number } | null {
+    if (!this.cost || this.cost.amount <= 0) return null;
+    const have = Math.floor(this.heldOf(key));
+    return have < this.cost.amount ? { need: this.cost.amount, have } : null;
+  }
+
+  /** Greys each choice the player cannot afford: still pressable (a tap says why), but not sent. */
+  private markShort(): void {
+    for (const [key, choice] of this.choices) {
+      const short = this.shortOf(key);
+      choice.classList.toggle("is-short", short !== null);
+      if (short) {
+        choice.setAttribute("aria-disabled", "true");
+        choice.title = GIFT_TEXT.short(key, short.need, short.have);
+      } else {
+        choice.removeAttribute("aria-disabled");
+        if (choice.classList.contains("gift-picker__other")) choice.title = resourceName(key, "surface");
+        else choice.removeAttribute("title");
+      }
+    }
   }
 
   /** Sends the gift in `resource`; a refusal is said and the picker stays open. */
@@ -211,6 +289,9 @@ export class GiftPicker {
       // The gift left the player's storage: the yard on screen reads it fresh.
       playerPool()?.refresh();
       this.options.onSent?.(gift);
+      // Back to the list it came from (owner, 13 Nov 2026), once the "Sent" line has been seen.
+      const wait = this.options.closeAfterSentMs === undefined ? GIFT_PICKER_CLOSE_MS : this.options.closeAfterSentMs;
+      if (wait !== null) this.closeTimer = setTimeout(() => this.popup.close(), wait);
     } catch (caught) {
       const refusal = friendRefusal(caught);
       this.status.set(refusal.message, "error");

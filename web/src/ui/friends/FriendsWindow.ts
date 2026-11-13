@@ -1,4 +1,4 @@
-import type { Friend } from "@/api/friends";
+import type { Friend, FriendsApi } from "@/api/friends";
 import { playerPicture, showPlayerPicture } from "@/game/playerPicture";
 import { canHelp } from "@/game/friends/friendText";
 import { friendsStore as sharedStore, type FriendsStore } from "@/game/friends/friendsStore";
@@ -8,6 +8,7 @@ import { gameIcon } from "@/ui/gameIcon";
 import { onlineDot } from "@/ui/onlineDot";
 import { Popup } from "@/ui/Popup";
 import { scrollFade } from "@/ui/scrollFade";
+import { giftAllButton, openGiftAll } from "./GiftAll";
 import { openGiftPicker } from "./GiftPicker";
 import { make } from "./rows";
 import "./friends-button.css";
@@ -36,8 +37,13 @@ import "./friends-button.css";
  *   all three groups are a short scroll apart. Show all lists that one group
  *   whole, and the head becomes a **< 90 Can use help** button back to the
  *   three. One scrolling box at any size; the way back never scrolls away.
- * - **Foot:** **All friends ›** opens the Friends screen, and the friend
+ * - **Foot:** **All friends ›** opens the Friends screen, **Gift all**
+ *   (owner, 13 Nov 2026) opens `GiftAll.ts` over the window, and the friend
  *   requests waiting, when there are any, open its Requests tab.
+ * - **Send gift** opens the picker over the window, which stays open (owner,
+ *   13 Nov 2026: "Its a hassle as the friends window closes after sending to
+ *   one friend"); the picker closes itself once the gift went and the
+ *   friend's button says "Sent".
  *
  * It reads the shared friends store and follows it while open.
  */
@@ -143,6 +149,8 @@ export interface FriendsWindowOptions {
   readonly openFriends?: (tab?: FriendsOpenTab) => void;
   /** The store, for a test. */
   readonly store?: FriendsStore;
+  /** The server, for a test: what the gift picker and Gift all ask. */
+  readonly api?: FriendsApi;
   /** Told once the window has closed. */
   readonly onClose?: () => void;
 }
@@ -156,6 +164,7 @@ export class FriendsWindow {
   private readonly list = make("div", "friends-window__list");
   private readonly foot = make("div", "friends-window__foot");
   private readonly requests = make("button", "btn btn--outline friends-window__requests");
+  private readonly giftAll: HTMLButtonElement;
   private readonly unsubscribe: () => void;
   /** The friend whose actions show, or null. */
   private opened: number | null = null;
@@ -200,7 +209,8 @@ export class FriendsWindow {
     all.addEventListener("click", () => this.openFriends("friends"));
     this.requests.type = "button";
     this.requests.addEventListener("click", () => this.openFriends("requests"));
-    this.foot.append(all, this.requests);
+    this.giftAll = giftAllButton(() => this.openGiftAll(), "friends-window__gift-all");
+    this.foot.append(all, this.giftAll, this.requests);
     // Under the body, not in it: the way to the full screen stays in sight while the list scrolls.
     this.popup.element.append(this.foot);
 
@@ -226,8 +236,16 @@ export class FriendsWindow {
     (this.options.openFriends ?? friendsOpener())?.(tab);
   }
 
+  /** Gift all, over the window. */
+  private openGiftAll(): void {
+    if (!this.container) return;
+    openGiftAll(this.container, { store: this.store, ...(this.options.api && { api: this.options.api }) });
+  }
+
   private render(): void {
     const friends = this.store.friends;
+    // Off once every friend has had a gift from the player today.
+    this.giftAll.disabled = !friends.some((friend) => !friend.giftSentToday);
     const online = friends.filter((friend) => friend.online === "online").length;
     const groups = groupFriends(friends);
     const sections = friendsSections(groups, this.focus);
@@ -350,6 +368,12 @@ export class FriendsWindow {
     return item;
   }
 
+  /** After the picker closed: focus back on that friend's row (the button it came from was redrawn). */
+  private refocus(userid: number): void {
+    if (!this.popup.element.isConnected) return;
+    this.list.querySelector<HTMLElement>(`[data-userid="${userid}"] .friends-window__row`)?.focus({ preventScroll: true });
+  }
+
   /** Visit, Message and Send gift, under the row pressed. */
   private actions(friend: Friend): HTMLElement {
     const actions = make("div", "friends-window__actions");
@@ -376,10 +400,15 @@ export class FriendsWindow {
     }
     const sent = friend.giftSentToday;
     const gift = add(sent ? FRIENDS_WINDOW_TEXT.giftSent : FRIENDS_WINDOW_TEXT.gift, "outline", () => {
-      const container = this.container;
-      this.close();
+      // The window stays open under the picker (owner, 13 Nov 2026).
       if (onGift) onGift(friend);
-      else openGiftPicker(friend, container, { store: this.store });
+      else if (this.container) {
+        const picker = openGiftPicker(friend, this.container, {
+          store: this.store,
+          ...(this.options.api && { api: this.options.api }),
+        });
+        void picker.closed.then(() => this.refocus(friend.userid));
+      }
     }, sent ? FRIENDS_WINDOW_TEXT.giftSentTitle : FRIENDS_WINDOW_TEXT.gift);
     gift.disabled = sent;
     actions.dataset["count"] = String(actions.childElementCount);

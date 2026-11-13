@@ -118,6 +118,23 @@
   display: none;
 }
 
+/* The count and, beside it, Gift all (owner, 13 Nov 2026). */
+.friends-tab__head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+}
+
+.friends-tab__head:not(:has(> :not(:empty, [hidden]))) {
+  display: none;
+}
+
+.friends-tab__gift-all[hidden] {
+  display: none;
+}
+
 .friends-status {
   margin: 0;
   font-size: var(--text-sm);
@@ -956,4 +973,184 @@
 :root[data-skin="flash"] .gift-wish:disabled > .res-icon {
   filter: grayscale(1);
   opacity: 0.6;
+}
+
+/* One gift's size over the choices (owner, 13 Nov 2026), and a resource the
+   player holds too little of: greyed and flat, still pressable so a tap says
+   what it needs (a disabled button would say nothing on a phone). */
+.gift-picker__size {
+  margin: 0;
+  font-size: var(--text-sm);
+  font-weight: 700;
+  text-align: center;
+  opacity: 0.85;
+}
+
+.gift-picker .is-short,
+:root[data-skin] .panel .gift-picker .is-short {
+  filter: grayscale(1);
+  opacity: 0.45;
+  box-shadow: none;
+  cursor: not-allowed;
+}
+
+/* ── Gift all (owner, 13 Nov 2026) ─────────────────────────────────────── */
+
+.gift-all-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  white-space: nowrap;
+}
+
+.gift-all-button > .game-icon {
+  flex: none;
+  width: 22px;
+  height: 22px;
+}
+
+/* "No wish? [twigs][pebbles][putty][goo]": the picked one lit gold, as a wish is. */
+.gift-all__fallback {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+}
+
+.gift-all__fallback[hidden] {
+  display: none;
+}
+
+.gift-all__fallback-label {
+  font-size: var(--text-sm);
+  font-weight: 700;
+}
+
+.gift-all__fallback-tiles {
+  display: flex;
+  gap: var(--space-2);
+}
+
+.gift-all__pick[aria-pressed="true"],
+.gift-all__pick[aria-pressed="true"]:hover {
+  border-color: #8a5a00;
+  background: radial-gradient(circle at 50% 30%, #fff3b0, var(--colour-medal-gold) 75%);
+  box-shadow:
+    0 0 0 2px rgb(255 214 90 / 55%),
+    0 2px 3px var(--colour-art-shadow);
+}
+
+/* "[gift] 7 friends" over the cost: "-1,387,800 [putty] -691,500 [goo]". */
+.gift-all__summary {
+  display: grid;
+  justify-items: center;
+  gap: var(--space-1);
+}
+
+.gift-all__count {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin: 0;
+  font-size: var(--text-lg);
+  font-weight: 800;
+}
+
+.gift-all__count > .game-icon {
+  width: 28px;
+  height: 28px;
+}
+
+.gift-all__none {
+  font-size: var(--text-md, 1rem);
+  font-weight: 600;
+  text-align: center;
+}
+
+.gift-all__cost {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: var(--space-1) var(--space-3);
+  margin: 0;
+  font-weight: 700;
+}
+
+/* Each friend and their gift; only this list scrolls when it is long. */
+.gift-all__list {
+  display: grid;
+  gap: 2px;
+  max-height: min(40dvh, 260px);
+  margin: 0;
+  padding: var(--space-1) var(--space-2);
+  overflow-y: auto;
+  list-style: none;
+  border: 1px solid var(--colour-border-subtle);
+  border-radius: var(--radius-md, 8px);
+}
+
+.gift-all__list[hidden] {
+  display: none;
+}
+
+.gift-all__row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: var(--space-2);
+  min-height: 30px;
+}
+
+.gift-all__name {
+  overflow: hidden;
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.gift-all__row > .gift-all__mark {
+  --wish-mark-size: 22px;
+}
+
+.gift-all__amount {
+  justify-self: end;
+  font-variant-numeric: tabular-nums;
+}
+
+.gift-all__skipped-head {
+  margin: 0;
+  font-size: var(--text-sm);
+  font-weight: 700;
+  color: var(--colour-danger, #b3261e);
+}
+
+.gift-all__skipped-list {
+  display: grid;
+  gap: 2px;
+  margin: 0;
+  padding: 0;
+  font-size: var(--text-sm);
+  list-style: none;
+}
+
+.gift-all__skip {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px;
+}
+
+.gift-all__skip .gift-all__name {
+  max-width: 50%;
+}
+
+.gift-all__lack {
+  width: 20px;
+  height: auto;
+}
+
+.gift-all__send[hidden] {
+  display: none;
 }

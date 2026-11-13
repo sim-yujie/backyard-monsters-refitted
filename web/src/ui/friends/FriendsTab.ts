@@ -3,6 +3,7 @@ import { canHelp, friendCountText, onlineText } from "@/game/friends/friendText"
 import type { FriendsSnapshot, FriendsStore } from "@/game/friends/friendsStore";
 import { gameIcon, iconAmount } from "@/ui/gameIcon";
 import { blockButton } from "./BlockButton";
+import { giftAllButton } from "./GiftAll";
 import { button, make, playerRow, section, StatusLine, type FriendsTabView, type RowBadge } from "./rows";
 
 /**
@@ -34,6 +35,8 @@ export interface FriendActions {
   readonly onGift?: (friend: Friend) => void;
   /** Write to them: the mailbox opens a new message to them. */
   readonly onMessage?: (friend: Friend) => void;
+  /** Gift all (owner, 13 Nov 2026): a gift to every friend who can take one today. */
+  readonly onGiftAll?: () => void;
   /** Block them (WP9). */
 }
 
@@ -126,6 +129,8 @@ export class FriendsTab implements FriendsTabView {
 
   private readonly options: FriendsTabOptions;
   private readonly summary: HTMLElement;
+  /** Gift all, beside the count; absent when the opener hands no Gift all in. */
+  private readonly giftAll: HTMLButtonElement | null;
   private readonly tools: HTMLElement;
   private readonly search: HTMLInputElement;
   private readonly filterButtons = new Map<FriendFilter, HTMLButtonElement>();
@@ -147,6 +152,8 @@ export class FriendsTab implements FriendsTabView {
     this.options = options;
     this.element = make("div", "friends-tab friends-tab--friends");
     this.summary = make("p", "friends-summary");
+    const onGiftAll = options.onGiftAll;
+    this.giftAll = onGiftAll ? giftAllButton(() => onGiftAll(), "friends-tab__gift-all") : null;
     // Only the list scrolls: the search and the filter buttons stay over it
     // (owner, 6 Nov 2026: tabs fixed at the top).
     this.body = make("div", "tab-scroll friends-tab__body");
@@ -185,7 +192,9 @@ export class FriendsTab implements FriendsTabView {
     }
     this.tools.append(searchBox, filterRow);
     this.tools.hidden = true;
-    this.element.append(this.summary, this.tools, this.status.element, this.body);
+    const head = make("div", "friends-tab__head");
+    head.append(this.summary, ...(this.giftAll ? [this.giftAll] : []));
+    this.element.append(head, this.tools, this.status.element, this.body);
     this.unsubscribe = options.store.subscribe((snapshot) => {
       this.snapshot = snapshot;
       this.render();
@@ -215,11 +224,16 @@ export class FriendsTab implements FriendsTabView {
     const snapshot = this.snapshot;
     if (!snapshot?.loaded) {
       this.summary.textContent = "";
+      if (this.giftAll) this.giftAll.hidden = true;
       this.tools.hidden = true;
       this.body.replaceChildren();
       return;
     }
     this.summary.replaceChildren(friendCountText(snapshot.friends.length, snapshot.max));
+    if (this.giftAll) {
+      this.giftAll.hidden = snapshot.friends.length === 0;
+      this.giftAll.disabled = !snapshot.friends.some((friend) => !friend.giftSentToday);
+    }
     const pinnedCount = snapshot.friends.filter((friend) => friend.pinnedAt !== null).length;
     if (pinnedCount > 0) {
       const pins = iconAmount("pin", `${pinnedCount}/${snapshot.maxPinned}`, {

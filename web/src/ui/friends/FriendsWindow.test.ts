@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { canHelp } from "@/game/friends/friendText";
-import { bigFriendList, fixtureApi, fixtureFriend, fixtureList } from "@/game/friends/friendsFixture";
+import { bigFriendList, fixtureApi, fixtureFriend, fixtureGift, fixtureList } from "@/game/friends/friendsFixture";
 import { FriendsStore } from "@/game/friends/friendsStore";
 import {
   FRIENDS_WINDOW_TEXT,
@@ -12,6 +12,7 @@ import {
   orderFriends,
   type FriendsWindowOptions,
 } from "./FriendsWindow";
+import { GIFT_PICKER_CLOSE_MS } from "./GiftPicker";
 
 /** The Friends window (owner, 9 Nov 2026, option A): a centred game window in place of the bar. */
 
@@ -241,7 +242,7 @@ describe("a row's actions", () => {
     expect(document.querySelector(".friends-window")).toBeNull();
   });
 
-  it("Send gift opens the gift picker, and is off once a gift went today (#375)", async () => {
+  it("Send gift opens the gift picker over the window, and is off once a gift went today (#375)", async () => {
     await setup([friend(1, { username: "Ann" }), friend(2, { username: "Bo", giftSentToday: true })]);
     row("Bo").click();
     expect(actions()[0]!.textContent).toBe("Sent");
@@ -249,8 +250,32 @@ describe("a row's actions", () => {
     expect(actions()[0]!.disabled).toBe(true);
     row("Ann").click();
     actions()[0]!.click();
-    expect(document.querySelector(".friends-window")).toBeNull();
+    // The window stays open under the picker (owner, 13 Nov 2026).
+    expect(document.querySelector(".friends-window")).not.toBeNull();
     expect(document.querySelector(".gift-picker")?.textContent).toContain("Ann");
+  });
+
+  it("after a gift the picker closes itself and the friend's button says Sent (owner, 13 Nov 2026)", async () => {
+    vi.useFakeTimers();
+    try {
+      const { api } = fixtureApi({ sendGift: fixtureGift(7, 1, { username: "Ann", resource: "r2", amount: 40 }) });
+      await setup([friend(1, { username: "Ann" }), friend(2, { username: "Bo" })], { api });
+      row("Ann").click();
+      actions()[0]!.click();
+      document.querySelector<HTMLButtonElement>('.gift-picker [data-resource="r2"]')!.click();
+      await vi.advanceTimersByTimeAsync(0);
+      expect(document.querySelector(".gift-picker")).not.toBeNull();
+      await vi.advanceTimersByTimeAsync(GIFT_PICKER_CLOSE_MS);
+      expect(document.querySelector(".gift-picker")).toBeNull();
+      expect(document.querySelector(".friends-window")).not.toBeNull();
+      const gift = actions().find((button) => button.textContent === "Sent")!;
+      expect(gift.disabled).toBe(true);
+      // The next friend is one press away.
+      row("Bo").click();
+      expect(actions().some((button) => button.textContent === FRIENDS_WINDOW_TEXT.gift && !button.disabled)).toBe(true);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it("hands the friend to onGift when given", async () => {
@@ -263,6 +288,19 @@ describe("a row's actions", () => {
 });
 
 describe("the foot", () => {
+  it("Gift all opens over the window, and is off once every friend has a gift today (owner, 13 Nov 2026)", async () => {
+    const { api, calls } = fixtureApi();
+    const { store } = await setup([friend(1, { username: "Ann" }), friend(2, { username: "Bo", giftSentToday: true })], { api });
+    const giftAll = document.querySelector<HTMLButtonElement>(".friends-window__gift-all")!;
+    expect(giftAll.disabled).toBe(false);
+    giftAll.click();
+    expect(document.querySelector(".gift-all")).not.toBeNull();
+    expect(document.querySelector(".friends-window")).not.toBeNull();
+    expect(calls.some(([method]) => method === "giftAllPlan")).toBe(true);
+    store.markGifted(1);
+    expect(giftAll.disabled).toBe(true);
+  });
+
   it("All friends opens the Friends screen and closes the window", async () => {
     const { openFriends } = await setup();
     const all = document.querySelector<HTMLButtonElement>(".friends-window__all")!;

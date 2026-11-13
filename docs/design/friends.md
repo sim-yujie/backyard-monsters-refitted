@@ -172,6 +172,16 @@ at most 10 gifts a day (owner, 9 Nov 2026: was 5); the rest wait. Each waiting g
 button (and **Delete all** with 2 or more waiting), each with a short confirm: a deleted gift gives
 nothing, uses none of the day's collects, and still counts as the sender's gift for that day.
 
+Owner, 13 Nov 2026 ("the friends window closes after sending to one friend"): the picker opens over
+the list and closes itself once the gift went, leaving the friend's button on **Sent**; a resource
+the sender holds less than one gift of is greyed (a tap says what it needs). **Gift all** (Friends
+window foot, Friends tab head) sends every friend who can take a gift today their first wish, or
+the sender's pick ("No wish?", starting on the resource held most) for friends with none. It opens
+on the plan (how many, the cost per resource, each friend's gift) and sends only on **Send to N**.
+Short of stock, a friend falls back to their next wish the sender can still afford, counting the
+batch's earlier gifts; with none, they are skipped ("Not sent: Max · not enough [goo]") and nothing
+is taken for them. Never a short gift.
+
 ### 3.5 Attacking a friend
 
 Any Attack press on a friend's yard (Map Room 1 list, Map Room 2 popup, the visit's Attack button)
@@ -238,8 +248,13 @@ in the yard.
   is measured: it grows with their silos, packing and outposts. Taking the lower cap means a fake
   low-level account sends very little, and a big player cannot flood a beginner. Worked out and
   fixed when sent.
-- **Free:** nothing is taken from the sender.
-- **Receiving:** gifts wait up to 7 days. At most **5 collected a day** per player.
+- **Costs the sender** (owner, 7 Nov 2026): the amount is taken from the sender's main yard; with
+  too little of that resource the gift is refused (`notEnough`). A gift that lapses is not given back.
+- **Gift all** (owner, 13 Nov 2026): the same gate, amount and one-a-day key per friend, planned and
+  sent in one transaction under the sender's yard lock (`controllers/friends/giftAll.ts`). Sending
+  does not look at the receiver's collects: a gift to a friend at their daily limit waits, as one
+  sent alone does.
+- **Receiving:** gifts wait up to 7 days. At most **10 collected a day** per player (owner, 9 Nov 2026: was 5).
   Collecting credits the main yard, clamped to its cap (the yard action credit rule, T3).
 - For scale: at most 15% of one's cap a day from gifts, plus at most 5% per resource from helping.
 
@@ -286,6 +301,9 @@ add lines to that file only. Answers use `{ error: 0, ... }` like the rest.
 | `GET /bm/friends/gifts` | — | `gifts: Gift[]`, `collectsLeft: n` |
 | `POST /bm/friends/gifts/collect` | `{ giftid }` or `{ all: true }` | `{ collected, resources }` |
 | `POST /bm/friends/gifts/delete` | `{ giftid }` or `{ all: true }` | `{ deleted, collectsLeft, giftsWaiting }` |
+| `GET /bm/friends/gift/cost` | `?userid=` | `{ amount, resources }` |
+| `POST /bm/friends/gifts/all/plan` | `{ fallback? }` | `{ fallback, gifts, skipped, cost, resources }` |
+| `POST /bm/friends/gifts/all` | `{ fallback?, userids? }` | the same, each gift with its `giftid` |
 | `POST /bm/friends/help` | `{ userid, buildingId, kind }` | `{ secondsSaved?, healed?, reward, helpsLeft, building }` |
 | `POST /base/load` with `type: "help"` | `baseid` of the friend's main yard | the yard as `view` serves it, plus `help: { helpsLeft, buildings: { [id]: { speedup?, repair? } } }`, each `true` or a reason |
 | `POST /player/settings` (existing) | adds `hideOnline?`, `friendRequests?` (every field optional) | `settings` adds both |

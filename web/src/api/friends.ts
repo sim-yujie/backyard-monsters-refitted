@@ -26,6 +26,11 @@ import type { ApiEnvelope, BaseLoadResponse } from "./types";
  *   `POST /bm/friends/gifts/collect { giftid } | { all: true }` (WP8),
  *   `POST /bm/friends/gifts/delete { giftid } | { all: true }` (owner, 9 Nov 2026),
 *   `POST /bm/friends/wishes { wishes }` (#391).
+ * - `GET  /bm/friends/gift/cost ?userid=`: one gift to them, and what the
+ *   player holds (owner, 13 Nov 2026: the picker greys what is too dear).
+ * - `POST /bm/friends/gifts/all/plan { fallback? }` and
+ *   `POST /bm/friends/gifts/all { fallback?, userids? }`: Gift all, its
+ *   confirm step's plan and the send (owner, 13 Nov 2026).
  * - `POST /bm/friends/help { userid, buildingId, kind }` (WP6/WP7).
  * - `POST /base/load` with `type: "help"`: a friend's main yard to help in (WP2/WP5).
  * - `POST /player/settings { hideOnline?, friendRequests? }`,
@@ -51,6 +56,9 @@ const GIFTS_PATH = "/api/:apiVersion/bm/friends/gifts";
 const COLLECT_PATH = "/api/:apiVersion/bm/friends/gifts/collect";
 const DELETE_GIFTS_PATH = "/api/:apiVersion/bm/friends/gifts/delete";
 const WISHES_PATH = "/api/:apiVersion/bm/friends/wishes";
+const GIFT_COST_PATH = "/api/:apiVersion/bm/friends/gift/cost";
+const GIFT_ALL_PLAN_PATH = "/api/:apiVersion/bm/friends/gifts/all/plan";
+const GIFT_ALL_PATH = "/api/:apiVersion/bm/friends/gifts/all";
 const HELP_PATH = "/api/:apiVersion/bm/friends/help";
 const LOAD_PATH = "/base/load";
 const SETTINGS_PATH = "/api/:apiVersion/player/settings";
@@ -207,6 +215,45 @@ export interface GiftsList {
   readonly collectsLeft: number;
   /** The player's own gift wishes (#391), up to {@link GIFT_WISH_MAX}. */
   readonly wishes: readonly GiftResource[];
+}
+
+/** `GET /bm/friends/gift/cost`: one gift to a friend, and what the player's yard held when last saved. */
+export interface GiftCost {
+  /** What one gift to them is worth, the same in every resource. */
+  readonly amount: number;
+  readonly resources: Readonly<Record<GiftResource, number>>;
+}
+
+/** One gift in a Gift all. */
+export interface GiftAllGift {
+  readonly userid: number;
+  readonly username: string;
+  readonly resource: GiftResource;
+  readonly amount: number;
+  /** Which of their wishes it is, 1 to 3; 0 when they had none (the player's pick). */
+  readonly wish: number;
+}
+
+/** A friend Gift all leaves out: the store ran short, or a gift to them already went today. */
+export interface GiftAllSkip {
+  readonly userid: number;
+  readonly username: string;
+  readonly reason: "notEnough" | "giftSentToday";
+  /** What they would have taken, best first; none of it affordable. */
+  readonly lacking: readonly GiftResource[];
+  readonly amount: number;
+}
+
+/** The Gift all plan, or what it sent. */
+export interface GiftAllResult {
+  /** The resource for friends with no wish. */
+  readonly fallback: GiftResource;
+  readonly gifts: readonly GiftAllGift[];
+  readonly skipped: readonly GiftAllSkip[];
+  /** What the gifts take, per resource. */
+  readonly cost: Readonly<Record<GiftResource, number>>;
+  /** What the player's yard holds: before (a plan) or after (a send). */
+  readonly resources: Readonly<Record<GiftResource, number>>;
 }
 
 /** `POST /bm/friends/gifts/collect`. */
@@ -459,6 +506,42 @@ const amounts = (value: unknown): ResourceAmounts => {
   return out;
 };
 
+/** All four resources, each a whole number, zero when missing. */
+const giftAmountsOf = (value: unknown): Record<GiftResource, number> => {
+  const raw = record(value);
+  return { r1: count(raw["r1"]), r2: count(raw["r2"]), r3: count(raw["r3"]), r4: count(raw["r4"]) };
+};
+
+const giftResourceOf = (value: unknown): GiftResource | null =>
+  typeof value === "string" && GIFT_RESOURCES.has(value) ? (value as GiftResource) : null;
+
+/** A Gift all answer; an entry with no known resource is dropped. */
+export const giftAllOf = (raw: Record<string, unknown>): GiftAllResult => ({
+  fallback: giftResourceOf(raw["fallback"]) ?? "r1",
+  gifts: list(raw["gifts"]).flatMap((gift) => {
+    const resource = giftResourceOf(gift["resource"]);
+    if (!resource) return [];
+    return [
+      {
+        userid: id(gift["userid"]),
+        username: text(gift["username"], `Player ${id(gift["userid"])}`),
+        resource,
+        amount: count(gift["amount"]),
+        wish: count(gift["wish"]),
+      },
+    ];
+  }),
+  skipped: list(raw["skipped"]).map((skip) => ({
+    userid: id(skip["userid"]),
+    username: text(skip["username"], `Player ${id(skip["userid"])}`),
+    reason: skip["reason"] === "giftSentToday" ? "giftSentToday" : "notEnough",
+    lacking: wishesOf(skip["lacking"]),
+    amount: count(skip["amount"]),
+  })),
+  cost: giftAmountsOf(raw["cost"]),
+  resources: giftAmountsOf(raw["resources"]),
+});
+
 /** At most this many gift wishes (#391; the server's `MAX_GIFT_WISHES`). */
 export const GIFT_WISH_MAX = 3;
 
@@ -572,6 +655,12 @@ export interface FriendsApi {
   /** Alliance mates who are not friends yet. */
   suggestions(): Promise<PlayerResult[]>;
   sendGift(userid: number, resource: GiftResource): Promise<Gift | null>;
+  /** One gift to this friend, and what the player holds. */
+  giftCost(userid: number): Promise<GiftCost>;
+  /** What Gift all would send now; friends with no wish get `fallback` (the most held when left out). */
+  giftAllPlan(fallback?: GiftResource): Promise<GiftAllResult>;
+  /** Sends Gift all, to the friends in `userids` only (those the player confirmed). */
+  giftAll(fallback: GiftResource, userids: readonly number[]): Promise<GiftAllResult>;
   gifts(): Promise<GiftsList>;
   /** Sets the player's gift wishes (#391), up to 3; `[]` clears them. Answers what was stored. */
   setWishes(wishes: readonly GiftResource[]): Promise<GiftResource[]>;
@@ -643,6 +732,16 @@ export const friendsApi: FriendsApi = {
   async sendGift(userid, resource) {
     const answer = await postJson<Answer>(GIFT_PATH, { userid, resource });
     return answer["gift"] ? giftOf(record(answer["gift"])) : null;
+  },
+  async giftCost(userid) {
+    const answer = await get<Answer>(GIFT_COST_PATH, { userid: String(userid) });
+    return { amount: count(answer["amount"]), resources: giftAmountsOf(answer["resources"]) };
+  },
+  async giftAllPlan(fallback) {
+    return giftAllOf(await postJson<Answer>(GIFT_ALL_PLAN_PATH, fallback ? { fallback } : {}));
+  },
+  async giftAll(fallback, userids) {
+    return giftAllOf(await postJson<Answer>(GIFT_ALL_PATH, { fallback, userids: [...userids] }));
   },
   async gifts() {
     const answer = await get<Answer>(GIFTS_PATH);

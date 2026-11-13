@@ -4,6 +4,7 @@ import { centreWindow, type CentreWindow } from "@/ui/centreWindow";
 import { Panel } from "@/ui/Panel";
 import { FindTab } from "./FindTab";
 import { FriendsTab, type FriendActions } from "./FriendsTab";
+import { openGiftAll } from "./GiftAll";
 import { openGiftPicker } from "./GiftPicker";
 import { GiftsTab } from "./GiftsTab";
 import { RequestsTab } from "./RequestsTab";
@@ -94,6 +95,7 @@ export class FriendsScreen {
         onGift:
           options.onGift ??
           ((friend) => void openGiftPicker(friend, this.element.parentElement, { api, store: this.store })),
+        onGiftAll: () => void openGiftAll(this.element.parentElement, { api, store: this.store }),
       }),
     );
     this.tabs.set("requests", new RequestsTab({ api, store: this.store, ...(options.now && { now: options.now }) }));
