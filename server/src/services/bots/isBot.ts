@@ -53,6 +53,24 @@ export const isBot = async (userid: number, em?: EntityManager): Promise<boolean
 };
 
 /**
+ * Which of `userids` are bots, as {@link isBot} answers each: one query for
+ * the whole list (Gift all asks about up to 100 friends at once). Server-only,
+ * as {@link isBot}.
+ *
+ * @param {readonly number[]} userids - The users to ask about
+ * @param {EntityManager} em - The entity manager to read with
+ * @returns {Promise<Set<number>>} The user ids with a `bot` row that is not `seeded`
+ */
+export const botsAmong = async (userids: readonly number[], em: EntityManager): Promise<Set<number>> => {
+  if (userids.length === 0) return new Set();
+  const rows = await em.execute<{ userid: number | string }[]>(
+    `SELECT userid FROM bym.bot WHERE userid IN (${userids.map(() => "?").join(", ")}) AND state IS DISTINCT FROM 'seeded'`,
+    [...userids]
+  );
+  return new Set(rows.map((row) => Number(row.userid)));
+};
+
+/**
  * Whether a user is one of the `db:seed:mr2` dev players whose yard the bot
  * sweep repairs and grows (issue #233, `seededPlayers.ts`). To everything
  * else they stay ordinary accounts: they can log in, and they get the notices

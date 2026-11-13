@@ -48,6 +48,8 @@ const READERS: Record<string, string> = {
     "books the decline of a friend request under the friends design's §6.2 rule (#368); the request is stored and answered alike for anyone, writes only a bot_job row",
   "controllers/friends/gift.ts":
     "refuses a gift to or from a bot as notFriends, the same answer as for any player who is not a friend (#375)",
+  "controllers/friends/giftAll.ts":
+    "leaves a bot out of Gift all as any friend who cannot take a gift is left out; a confirmed one reads as cannotSend, the same as a blocked or banned friend",
   "services/inferno/infernoNeighbours.ts":
     "leaves bots out of the Inferno neighbours (no bots in the Inferno, R10); a bot is simply not listed, like a player out of range",
   "controllers/inferno/playerAttack.ts":
