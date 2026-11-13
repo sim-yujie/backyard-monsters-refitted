@@ -5,7 +5,6 @@ import {
   openWeekendPopup,
   studySeconds,
   WEEKEND_GLIMMERS_LINE,
-  WeekendBanner,
   weekendAmount,
   weekendChip,
 } from "./weekendUi";
@@ -43,23 +42,6 @@ describe("weekend chips", () => {
     expect(weekendChip("hatch", NOW)).toBeNull();
     expect(studySeconds(36_000, NOW)).toBe(25_200);
     expect(studySeconds(36_000, STUDY.endsAt)).toBe(36_000);
-  });
-});
-
-describe("WeekendBanner", () => {
-  it("shows icon, title, amount and time left; hides with no run; opens the pop-up", () => {
-    const opened: WeekendRun[] = [];
-    const banner = new WeekendBanner((run) => opened.push(run));
-    banner.update(STUDY, NOW);
-    expect(banner.element.hidden).toBe(false);
-    expect(banner.element.querySelector(".weekend-banner__title")?.textContent).toBe("Study Weekend");
-    expect(banner.element.querySelector(".weekend-banner__amount")?.textContent).toBe("−30%");
-    expect(banner.element.querySelector(".weekend-banner__left")?.textContent).toBe("1d 23h");
-    expect(banner.element.dataset["event"]).toBe("study");
-    banner.element.click();
-    expect(opened).toEqual([STUDY]);
-    banner.update(null, NOW);
-    expect(banner.element.hidden).toBe(true);
   });
 });
 

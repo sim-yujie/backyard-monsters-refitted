@@ -59,10 +59,8 @@ vi.mock("@/game/weekend", () => {
 });
 vi.mock("@/ui/events/weekendUi", () => ({
   openWeekendPopup: spies.openWeekendPopup,
-  WeekendBanner: class {
-    element = document.createElement("div");
-    update = vi.fn();
-  },
+  WEEKEND_ICON: { builders: "levelup", plunder: "income", study: "time", hatch: "speed" },
+  weekendAmount: () => "−30%",
 }));
 
 const { EventsDoor } = await import("./events");

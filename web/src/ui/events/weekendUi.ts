@@ -12,10 +12,11 @@ import { Popup } from "@/ui/Popup";
 import "./weekend.css";
 
 /**
- * The weekend event on screen (`game/weekend.ts`): the banner while one runs,
- * the Friday pop-up, and the small "−30%" chip beside a price or a time it
- * lowers. Short words, painted icons (owner: icons over words); the plates
- * follow the Classic/Modern style through `skin.css`.
+ * The weekend event on screen (`game/weekend.ts`): the Friday pop-up and the
+ * small "−30%" chip beside a price or a time it lowers. Short words, painted
+ * icons (owner: icons over words). While one runs it is a card on the Events
+ * page (`ui/events/EventsPanel.ts`), not a banner on the yard (owner, 13 Nov
+ * 2026).
  */
 
 /**
@@ -72,53 +73,6 @@ const el = <K extends keyof HTMLElementTagNameMap>(tag: K, className: string, te
 };
 
 /**
- * The banner while an event runs: icon, title, "−30%" and the time left.
- * On a phone the title folds away (CSS). Pressing it opens the pop-up.
- */
-export class WeekendBanner {
-  readonly element: HTMLButtonElement;
-  private readonly icon: HTMLElement;
-  private readonly title: HTMLElement;
-  private readonly amount: HTMLElement;
-  private readonly left: HTMLElement;
-  private run: WeekendRun | null = null;
-  private iconOf: WeekendEventId | null = null;
-
-  constructor(onOpen: (run: WeekendRun) => void) {
-    this.element = el("button", "weekend-banner");
-    this.element.type = "button";
-    this.element.hidden = true;
-    this.icon = el("span", "weekend-banner__icon");
-    this.title = el("span", "weekend-banner__title");
-    this.amount = el("span", "weekend-banner__amount");
-    this.left = el("span", "weekend-banner__left");
-    // The countdown changes each minute: not read out each time.
-    this.left.setAttribute("aria-hidden", "true");
-    this.element.append(this.icon, this.title, this.amount, this.left);
-    this.element.addEventListener("click", () => {
-      if (this.run) onOpen(this.run);
-    });
-  }
-
-  /** Shows `run` (or hides with null), its time left read at `now`. */
-  update(run: WeekendRun | null, now: number): void {
-    this.run = run;
-    this.element.hidden = run === null;
-    if (!run) return;
-    if (this.iconOf !== run.id) {
-      this.icon.replaceChildren(gameIcon(WEEKEND_ICON[run.id], { size: 32, decorative: true }));
-      this.iconOf = run.id;
-    }
-    this.element.dataset["event"] = run.id;
-    this.title.textContent = run.title;
-    this.amount.textContent = weekendAmount(run);
-    this.left.replaceChildren(gameIcon("time", { size: 16, decorative: true }), formatCountdown(run.endsAt - now));
-    this.element.setAttribute("aria-label", `${run.title}: ${run.line}. Ends in ${formatCountdown(run.endsAt - now)}.`);
-    this.element.title = run.line;
-  }
-}
-
-/**
  * What every weekend event pays (owner, 12 Nov 2026: "builder's weekend pay
  * glimmer"; `server/src/services/events/weekendCoins.ts` WEEKEND_COINS):
  * 25 Glimmers the first time the yard loads that weekend, 75 the first time
@@ -138,7 +92,7 @@ export interface WeekendPopupOptions {
 }
 
 /**
- * The Friday pop-up (and the same box from the banner): big icon, the
+ * The Friday pop-up (and the same box from the Events page's weekend card): big icon, the
  * event's name, its one line, what it pays in Glimmers, and when. "Starts in 14h" before Saturday,
  * "Ends in 1d 4h" while it runs.
  */

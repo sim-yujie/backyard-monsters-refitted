@@ -5,6 +5,7 @@ import { fileURLToPath } from "node:url";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { EventsActions, EventsApi, EventView, Mr2WelcomeStatus } from "@/api/events";
 import { notePumpkins } from "@/game/events/pumpkinHunt";
+import { resetWeekend, setWeekend, type WeekendRun } from "@/game/weekend";
 import { Notices } from "@/ui/maproom/Notices";
 import type { YardMounts } from "../yardPlugins";
 import { EventsDoor } from "./events";
@@ -53,10 +54,11 @@ const setup = async (events: EventView[], mr2Welcome: Mr2WelcomeStatus | null = 
   const notices = new Notices();
   const dock = document.body.appendChild(document.createElement("div"));
   const content = document.body.appendChild(document.createElement("div"));
+  const modal = document.body.appendChild(document.createElement("div"));
   const mounts = {
     store: { save: { onboarding: { guide: { state: "done" } } } },
     dock: { element: dock },
-    overlay: { content },
+    overlay: { content, modal },
     notices,
     scene: { openMap: vi.fn() },
   } as unknown as YardMounts;
@@ -81,6 +83,7 @@ beforeEach(() => {
 
 afterEach(() => {
   for (const door of doors) door.destroy();
+  resetWeekend();
   // jsdom has no scrollIntoView; the tests that spy on it add their own.
   delete (Element.prototype as Partial<Element>).scrollIntoView;
 });
@@ -214,5 +217,73 @@ describe("Events: the New to Map Room 2 card", () => {
     content.querySelector<HTMLButtonElement>(".events-welcome__go")?.click();
     expect(content.querySelector(".events-panel")).toBeNull();
     expect(mounts.scene.openMap).toHaveBeenCalledOnce();
+  });
+});
+
+describe("Events: the weekend event (owner, 13 Nov: in Events, not a banner on the yard)", () => {
+  // The door's clock reads 3,600 (the list's `now`).
+  const builders: WeekendRun = {
+    id: "builders",
+    title: "Builder's Weekend",
+    line: "Upgrades cost 30% less",
+    percent: 30,
+    key: "2026-11-14",
+    startsAt: 0,
+    endsAt: 2 * 86_400,
+    announceAt: -86_400,
+    forced: false,
+  };
+  const later: WeekendRun = { ...builders, key: "2026-11-21", startsAt: 7 * 86_400, endsAt: 9 * 86_400, announceAt: 6 * 86_400 };
+
+  it("shows the button while it runs, even with no other event, and its card on the page", async () => {
+    setWeekend({ active: builders, next: later }, 3_600);
+    const { door, content } = await setup([]);
+    expect(door.button.hidden).toBe(false);
+    door.toggle();
+    expect(content.querySelector(".events-card--weekend .events-weekend__title")?.textContent).toBe("Builder's Weekend");
+    // The next one waits for this one to end.
+    expect(content.querySelector(".events-upcoming")).toBeNull();
+    expect(content.querySelector(".events-status")).toBeNull();
+  });
+
+  it("its card opens the weekend pop-up, once at a time", async () => {
+    setWeekend({ active: builders, next: null }, 3_600);
+    const { door, mounts } = await setup([]);
+    door.toggle();
+    const card = document.querySelector<HTMLButtonElement>("button.events-weekend")!;
+    card.click();
+    card.click();
+    const popups = mounts.overlay.modal.querySelectorAll(".weekend-popup");
+    expect(popups).toHaveLength(1);
+    expect(popups[0]!.querySelector(".weekend-popup__title")?.textContent).toBe("Builder's Weekend");
+  });
+
+  it("none running: no button for a weekend not yet announced, and the next one under Coming up", async () => {
+    setWeekend({ active: null, next: later }, 3_600);
+    const quiet = await setup([]);
+    expect(quiet.door.button.hidden).toBe(true);
+    const other: EventView = { ...hunt(0), id: "later-event", status: "upcoming", startsAt: 20 * 86_400 };
+    const { door, content } = await setup([other]);
+    expect(door.button.hidden).toBe(false);
+    door.toggle();
+    expect(content.querySelector(".events-card--weekend")).toBeNull();
+    const items = [...content.querySelectorAll<HTMLElement>(".events-upcoming__item")].map((item) => item.dataset["event"]);
+    expect(items).toEqual(["weekend", other.id]);
+  });
+
+  it("draws the card when the weekend starts while the page is open", async () => {
+    vi.useFakeTimers({ toFake: ["setInterval", "clearInterval", "Date"] });
+    try {
+      vi.setSystemTime(0);
+      setWeekend({ active: null, next: { ...later, startsAt: 3_605 } }, 3_600);
+      const { door, content } = await setup([]);
+      door.toggle();
+      expect(content.querySelector(".events-card--weekend")).toBeNull();
+      await vi.advanceTimersByTimeAsync(10_000);
+      expect(content.querySelector(".events-card--weekend")).not.toBeNull();
+      expect(door.button.hidden).toBe(false);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });

@@ -9,24 +9,25 @@ import {
   type WeekendRun,
   type WeekendState,
 } from "@/game/weekend";
-import { openWeekendPopup, WeekendBanner } from "@/ui/events/weekendUi";
+import { openWeekendPopup } from "@/ui/events/weekendUi";
 import { YARD_PLUGINS, type YardPlugin } from "../yardPlugins";
 import { screenBusy } from "./announcements";
 
 /**
  * Own-yard plugin for the weekend event (`game/weekend.ts`):
  *
- * - the banner under the HUD while an event runs, its time left ticking;
+ * - no banner on the yard (owner, 13 Nov 2026: "Put under events rather than
+ *   obstructing the screen"): the running event is a card on the Events page
+ *   (`game/yard/plugins/events.ts`), the next one under its Coming up;
  * - the pop-up once per run on this device: on Friday when it is announced,
  *   or when the player first comes in while it runs (ASSUMED: one pop-up per
- *   weekend is enough; the banner says the rest), once nothing else has the
- *   screen;
+ *   weekend is enough; the Events card says the rest), once nothing else has
+ *   the screen;
  * - a fresh `GET /bm/weekend` every 10 minutes and just after each
  *   boundary (announce, start, end), so a dashboard swap reaches open yards.
  */
 
 const REFRESH_MS = 10 * 60_000;
-const TICK_MS = 30_000;
 const WAIT_MS = 2_000;
 /** Where the last run's pop-up shown on this device is remembered. */
 export const WEEKEND_SEEN_KEY = "bymr.weekend.seen";
@@ -54,7 +55,7 @@ export const popupRun = (now: number, state: WeekendState, seen: string | null):
 };
 
 export const weekendPlugin: YardPlugin = (mounts) => {
-  const { overlay, notices } = mounts;
+  const { overlay } = mounts;
   // On every own yard: the Inferno has upgrades and tribes too.
   let stopped = false;
   let popupOpen = false;
@@ -75,12 +76,9 @@ export const weekendPlugin: YardPlugin = (mounts) => {
     });
   };
 
-  const banner = new WeekendBanner(openPopup);
-  notices.element.prepend(banner.element);
-
   const maybePopup = (): void => {
     window.clearTimeout(waitTimer);
-    // A test server's quiet login: no pop-up by itself; the banner still opens it.
+    // A test server's quiet login: no pop-up by itself; the Events card still opens it.
     if (stopped || popupOpen || quietLogin()) return;
     const run = popupRun(weekendNow(), currentWeekend(), seenKey());
     if (!run) return;
@@ -104,12 +102,6 @@ export const weekendPlugin: YardPlugin = (mounts) => {
     edgeTimer = window.setTimeout(() => void refresh(), ms);
   };
 
-  const render = (): void => {
-    if (stopped) return;
-    const now = weekendNow();
-    banner.update(runningWeekend(now), now);
-  };
-
   const refresh = async (): Promise<void> => {
     try {
       await refreshWeekend();
@@ -117,20 +109,16 @@ export const weekendPlugin: YardPlugin = (mounts) => {
       // Offline or refused: keep what the yard load said.
     }
     if (stopped) return;
-    render();
     scheduleEdge();
     maybePopup();
   };
 
   const stopChange = onWeekendChange(() => {
-    render();
     scheduleEdge();
     maybePopup();
   });
-  const tick = window.setInterval(render, TICK_MS);
   const poll = window.setInterval(() => void refresh(), REFRESH_MS);
 
-  render();
   scheduleEdge();
   maybePopup();
 
@@ -138,10 +126,8 @@ export const weekendPlugin: YardPlugin = (mounts) => {
     stopped = true;
     window.clearTimeout(waitTimer);
     window.clearTimeout(edgeTimer);
-    window.clearInterval(tick);
     window.clearInterval(poll);
     stopChange();
-    banner.element.remove();
   };
 };
 
