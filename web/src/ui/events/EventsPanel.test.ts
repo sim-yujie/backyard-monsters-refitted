@@ -255,6 +255,85 @@ describe("EventsPanel: the Krallen Hunt", () => {
     expect(panel.element.querySelector(".events-krallen__done")?.textContent).toBe("Prize claimed. The next hunt starts on the 15th.");
     panel.close();
   });
+
+  describe("the 3x mark: Krallen's loot aura (owner, 13 Nov 2026)", () => {
+    /** 1 March 2030, as the server sends it (unix s). */
+    const UNTIL = Date.UTC(2030, 2, 1) / 1000;
+    const twoMarks = (counter: number, level: number, claimed: [boolean, boolean] = [false, false], auraUntil = 0) =>
+      hunt(counter, {
+        ladder: {
+          label: "Loot taken",
+          counter,
+          tiers: [
+            { need: 150_000_000, rewards: [{ kind: "krallen" }], claimed: claimed[0] },
+            { need: 450_000_000, rewards: [{ kind: "krallenAura", until: UNTIL }], claimed: claimed[1] },
+          ],
+        },
+        krallen: { level, maxLevel: 5, auraUntil },
+      });
+    const auraRow = (panel: EventsPanel) => panel.element.querySelector<HTMLElement>(".events-krallen__aura")!;
+
+    it("before 3x: the mark, the aura's x number at the level she will have, and a lock", () => {
+      const { panel } = mounted();
+      // Level 2 at the start, raised to 3 by the first mark.
+      panel.render(list([twoMarks(200_000_000, 3, [true, false])]));
+      const row = auraRow(panel);
+      expect(row.querySelector(".events-krallen__aura-need")?.textContent).toBe("450M");
+      expect(row.querySelector(".events-krallen__aura-what")?.textContent).toBe("Loot aura: x2 loot near Krallen");
+      expect(row.querySelector(".events-tier__claim")).toBeNull();
+      expect(row.querySelector(".events-krallen__aura-note")).toBeNull();
+      expect(panel.element.querySelector(".events-krallen .events-calendar__count")?.textContent).toBe("200M / 450M");
+      expect(panel.element.querySelector(".events-krallen__done")?.textContent).toBe("Prize claimed.");
+      panel.close();
+    });
+
+    it("at 3x: Claim pays the aura tier", () => {
+      const { panel, options } = mounted();
+      const view = twoMarks(450_000_000, 4, [true, false]);
+      panel.render(list([view]));
+      const button = auraRow(panel).querySelector<HTMLButtonElement>(".events-tier__claim")!;
+      expect(button.textContent).toBe("Claim");
+      expect(auraRow(panel).querySelector(".events-krallen__aura-what")?.textContent).toBe("Loot aura: x2.8 loot near Krallen");
+      button.click();
+      expect(options.onClaimTier).toHaveBeenCalledWith(expect.objectContaining({ id: "krallen-2026-11" }), 1);
+      panel.close();
+    });
+
+    it("claimed and running: a tick, 'On until' its end and the green row", () => {
+      const { panel } = mounted();
+      panel.render(list([twoMarks(450_000_000, 4, [true, true], UNTIL)]));
+      const row = auraRow(panel);
+      expect(row.classList.contains("events-krallen__aura--on")).toBe(true);
+      expect(row.querySelector(".events-krallen__aura-note--on")?.textContent).toMatch(/^On until /);
+      expect(row.querySelector(".events-tier__claim")).toBeNull();
+      expect(panel.element.querySelector(".events-krallen__done")?.textContent).toBe("Prize claimed. The next hunt starts on the 15th.");
+      panel.close();
+    });
+
+    it("below level 3 even after this hunt's raise: says it needs level 3", () => {
+      const { panel } = mounted();
+      panel.render(list([twoMarks(50_000_000, 1)]));
+      expect(auraRow(panel).querySelector(".events-krallen__aura-note")?.textContent).toBe("Needs Krallen level 3");
+      panel.close();
+    });
+
+    it("no Krallen yet: the 3x mark stays locked though reached; the first claim comes first", () => {
+      const { panel } = mounted();
+      panel.render(list([twoMarks(500_000_000, 0)]));
+      expect(auraRow(panel).querySelector(".events-tier__claim")).toBeNull();
+      expect(panel.element.querySelector(".events-krallen__claim")).not.toBeNull();
+      panel.close();
+    });
+
+    it("at level 5 the first mark has no claim, but the 3x mark does", () => {
+      const { panel } = mounted();
+      panel.render(list([twoMarks(900_000_000, 5)]));
+      expect(panel.element.querySelector(".events-krallen__claim")).toBeNull();
+      expect(auraRow(panel).querySelector(".events-tier__claim")).not.toBeNull();
+      expect(auraRow(panel).querySelector(".events-krallen__aura-what")?.textContent).toBe("Loot aura: x3.6 loot near Krallen");
+      panel.close();
+    });
+  });
 });
 
 describe("rewardBadge: event coins (beta 7)", () => {

@@ -34,7 +34,8 @@ import { defineYardAction } from "./yardAction.js";
  *   `claimDays`, until that many days after its end (the counter stops at
  *   the end, so only a tier reached in time can be claimed then).
  *   Refusals: `400 unknownEvent`, `400 unknownTier`, `409 eventNotActive`,
- *   `409 tierClaimed`, `409 tierLocked {have, need}`. A tier paying Krallen
+ *   `409 tierClaimed`, `409 tierLocked {have, need}`, `409 needsKrallen`
+ *   (the 3x mark's loot aura without a Krallen yet). A tier paying Krallen
  *   at her top level is claimed and pays nothing (`granted` says
  *   `raised: false`).
  *
@@ -146,8 +147,14 @@ export const eventsActions = (store: EventProgressStore, fixed?: readonly EventD
       // The Krallen Hunt's goal follows her level when the hunt began, under
       // the save lock: the 3x mark stays 3x the goal the player started
       // with after the first mark raised her (owner, 13 Nov 2026).
+      const krallenNow = krallenLevelOf(save.champion);
+      // Her loot aura needs her: without a Krallen the 3x mark waits for the
+      // first mark's claim rather than being spent on nothing.
+      if (krallenNow === 0 && tier.rewards.some((reward) => reward.kind === "krallenAura")) {
+        throw yardRefusedErr("needsKrallen", "Win Krallen first.", { event: event.id, tier: body.tier });
+      }
       const before = (await store.read(em, user.userid, [event.id])).get(event.id);
-      const level = huntStartLevel(event.ladder?.tiers ?? [], before?.claimedTiers ?? [], krallenLevelOf(save.champion));
+      const level = huntStartLevel(event.ladder?.tiers ?? [], before?.claimedTiers ?? [], krallenNow);
       const need = tierNeed(tier, level);
       if (!(await store.claimTier(em, user.userid, event.id, body.tier, need))) {
         const progress = (await store.read(em, user.userid, [event.id])).get(event.id);

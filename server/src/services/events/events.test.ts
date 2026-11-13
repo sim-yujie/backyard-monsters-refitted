@@ -5,8 +5,11 @@ import {
   HALLOWEEN_2026_CALENDAR,
   THANKSGIVING_2026_CALENDAR,
   THANKSGIVING_2026_LADDER,
+  huntStartLevel,
+  KRALLEN_AURA_GOALS,
   KRALLEN_HUNT_GOALS,
   KRALLEN_HUNTS,
+  krallenAuraUntil,
   krallenHunt,
   tierNeed,
 } from "../../game-data/events/events.js";
@@ -92,7 +95,14 @@ describe("the event list", () => {
     });
     expect(KRALLEN_HUNTS[0]!.ladder).toMatchObject({
       source: "attackLoot",
-      tiers: [{ need: 60_000_000, needByKrallenLevel: KRALLEN_HUNT_GOALS, rewards: [{ kind: "krallen" }] }],
+      tiers: [
+        { need: 60_000_000, needByKrallenLevel: KRALLEN_HUNT_GOALS, rewards: [{ kind: "krallen" }] },
+        {
+          need: 180_000_000,
+          needByKrallenLevel: KRALLEN_AURA_GOALS,
+          rewards: [{ kind: "krallenAura", until: Date.UTC(2027, 0, 1) / 1000 }],
+        },
+      ],
     });
     expect(KRALLEN_HUNT_GOALS).toEqual([60_000_000, 100_000_000, 150_000_000, 225_000_000, 300_000_000]);
     expect(krallenHunt(2026, 12)).toMatchObject({ id: "krallen-2026-12", startsAt: "2026-12-15T00:00:00Z", endsAt: "2027-01-01T00:00:00Z" });
@@ -117,5 +127,32 @@ describe("the event list", () => {
     ]);
     expect(tierNeed(tier, -1)).toBe(60_000_000);
     expect(tierNeed({ need: 25, rewards: [] }, 3)).toBe(25);
+  });
+
+  test("Krallen's loot aura: 3x the goal (180M to 900M), until the end of the next month's hunt", () => {
+    const tier = KRALLEN_HUNTS[0]!.ladder!.tiers[1]!;
+    expect([0, 1, 2, 3, 4, 5].map((level) => tierNeed(tier, level))).toEqual([
+      180_000_000, 300_000_000, 450_000_000, 675_000_000, 900_000_000, 900_000_000,
+    ]);
+    expect(KRALLEN_AURA_GOALS).toEqual(KRALLEN_HUNT_GOALS.map((goal) => goal * 3));
+    // November's runs to 1 January (the end of December's hunt), December's to 1 February.
+    expect(krallenAuraUntil(2026, 11)).toBe(Date.UTC(2027, 0, 1) / 1000);
+    expect(krallenAuraUntil(2026, 12)).toBe(Date.UTC(2027, 1, 1) / 1000);
+    expect(krallenAuraUntil(2027, 10)).toBe(Date.UTC(2027, 11, 1) / 1000);
+    expect(krallenAuraUntil(2027, 11)).toBe(Date.UTC(2028, 0, 1) / 1000);
+    // Each hunt's aura outlasts the next hunt's end, never the one after.
+    for (const [index, hunt] of KRALLEN_HUNTS.slice(0, -1).entries()) {
+      const until = (hunt.ladder!.tiers[1]!.rewards[0] as { until: number }).until;
+      expect(until).toBe(Date.parse(KRALLEN_HUNTS[index + 1]!.endsAt) / 1000);
+    }
+  });
+
+  test("the hunt's start level: her level now, less the one this hunt's first mark raised", () => {
+    const tiers = KRALLEN_HUNTS[0]!.ladder!.tiers;
+    expect(huntStartLevel(tiers, [], 3)).toBe(3);
+    expect(huntStartLevel(tiers, [0], 3)).toBe(2);
+    expect(huntStartLevel(tiers, [1], 3)).toBe(3);
+    expect(huntStartLevel(tiers, [0, 1], 1)).toBe(0);
+    expect(huntStartLevel(tiers, [0], 0)).toBe(0);
   });
 });

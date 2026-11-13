@@ -252,6 +252,8 @@ export interface ChampionOnField {
   readonly powerLevel: number;
   /** The food-bonus rank, 0 to 3; it indexes the `bonus*` ladders (`ChampionBase.as:123-155`). */
   readonly foodBonus?: number;
+  /** Krallen's loot aura was earned and running when the attack began (`champions.ts`, `hasLootAura`). */
+  readonly lootAura?: boolean;
 }
 
 /** One entry of a `champion` or `attackerchampion` list (`ChampionSchema.ts`). */
@@ -512,6 +514,14 @@ export type FlingEvent =
         readonly hv?: number;
         readonly h?: HabitWeights;
         readonly hp?: number;
+        /**
+         * Krallen's loot aura, earned in the Krallen Hunt (owner, 13 Nov 2026,
+         * `champions.ts`, `KRALLEN_AURA_LEVEL`): true when the player
+         * looted 3x their hunt goal and the aura was still running when the
+         * attack began. The server stamps it from the stored Krallen
+         * (`attackLoot.ts`, `fightableLog`) and never reads the log's own.
+         */
+        readonly aura?: boolean;
       };
     }
   | {

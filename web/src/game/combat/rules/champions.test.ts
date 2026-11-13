@@ -49,7 +49,7 @@ const fling = (
   battle: Battle,
   at: number,
   monsters: Roster,
-  champion?: { t: number; l: number; pl?: number },
+  champion?: { t: number; l: number; pl?: number; aura?: boolean },
   t = 0,
 ) =>
   battle.apply({

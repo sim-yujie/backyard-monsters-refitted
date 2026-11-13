@@ -21,6 +21,7 @@ import {
   foughtAcademy,
   krallenBuffOf,
   wholeAmounts,
+  withFrozenChampions,
   type LootAttacker,
   type LootDefender,
 } from "./attackLoot.js";
@@ -591,6 +592,70 @@ describe("fightableLog", () => {
     expect(fought("offensive")).toMatchObject({ champion: { s: "offensive" } });
     expect((fought(undefined) as { champion: { s?: string } }).champion.s).toBeUndefined();
   }, REPLAY_TIMEOUT_MS);
+
+  describe("Krallen's loot aura (the Krallen Hunt's 3x mark, owner 13 Nov 2026)", () => {
+    const START = 1_900_000_000;
+    const withAura = (aura?: boolean): FlingEvent =>
+      ({ ...fling(10, {}), champion: { t: 5, l: 4, ...(aura !== undefined && { aura }) } }) as FlingEvent;
+    const auraOf = (event: FlingEvent | undefined) => (event as { champion?: { aura?: boolean } }).champion?.aura;
+    const fought = (stored: { la?: number; l?: number; t?: number }, sent?: boolean, auraAt: number | null = START) =>
+      fightableLog(
+        { v: 1, seed: 7, events: [withAura(sent)] },
+        { ...attacker, champion: [{ t: 5, l: 4, ...stored }], auraAt },
+        {}
+      ).events[0];
+
+    test("stamped from her stored aura end when it ran past the attack's start", () => {
+      expect(auraOf(fought({ la: START + 1 }))).toBe(true);
+      expect(auraOf(fought({ la: START + 1 }, false))).toBe(true);
+    });
+
+    test("never the log's: a page that sends it without the claim gets none", () => {
+      expect(auraOf(fought({}, true))).toBeUndefined();
+      expect(auraOf(fought({ la: START }, true))).toBeUndefined();
+      expect(auraOf(fought({ la: START - 100 }, true))).toBeUndefined();
+    });
+
+    test("none without the session's start time", () => {
+      expect(auraOf(fought({ la: START + 1 }, true, null))).toBeUndefined();
+    });
+
+    test("only Krallen carries it: another champion's stored `la` gives nothing", () => {
+      const gorgo = fightableLog(
+        { v: 1, seed: 7, events: [{ ...fling(10, {}), champion: { t: 1, l: 6, aura: true } } as FlingEvent] },
+        { ...attacker, champion: [{ t: 1, l: 6, la: START + 1 }], auraAt: START },
+        {}
+      ).events[0];
+      expect(auraOf(gorgo)).toBeUndefined();
+    });
+
+    test("a level 1 or 2 Krallen is stamped too; the engine then gives her none (`hasLootAura`)", () => {
+      const low = fightableLog(
+        { v: 1, seed: 7, events: [{ ...fling(10, {}), champion: { t: 5, l: 2 } } as FlingEvent] },
+        { ...attacker, champion: [{ t: 5, l: 2, la: START + 1 }], auraAt: START },
+        {}
+      ).events[0];
+      expect(auraOf(low)).toBe(true);
+    });
+
+    test("the save's replay reads the session's start time against her stored end", () => {
+      const replayed = (la: number) =>
+        battleReplayInput({
+          flinglog: { v: 1, seed: 7, events: [withAura(true)] },
+          session: { attackerid: 1, attackid: 1, startedat: START, entryHoused: {} },
+          defender: { type: "main" } as never,
+          attacker: { champion: [{ t: 5, l: 4, la }] } as never,
+          tick: 100,
+        })!.log.events[0];
+      expect(auraOf(replayed(START + 1))).toBe(true);
+      expect(auraOf(replayed(START))).toBeUndefined();
+    });
+
+    test("a log replayed without the entry roster drops the page's aura too", () => {
+      const log = withFrozenChampions({ v: 1, seed: 7, events: [withAura(true)] }, null);
+      expect(auraOf(log.events[0])).toBeUndefined();
+    });
+  });
 
   test("a bomb the catapult does not unlock, an unknown one or a second of the same resource does not go off", () => {
     const log: FlingLog = {

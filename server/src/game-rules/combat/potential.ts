@@ -649,12 +649,13 @@ export const lootCaps = (context: AttackContext): ResourceAmounts => {
 
 /**
  * How far Krallen's loot aura can raise the largest looting property, as a
- * ratio of it: `(2 + bonus) / 2` while she has it (from her level 3), else 1
+ * ratio of it: `(2 + bonus) / 2` while she has it (from her level 3, with the
+ * Krallen Hunt's 3x earned, `lootAura`), else 1
  * (`ProximityLootBuff`, `LootingMultiplier`, issue #222).
  */
 export const lootAuraBound = (champions: readonly ChampionOnField[]): number => {
   const krallen = champions.find((champion) => champion.id === KRALLEN_ID);
-  if (!krallen || !hasLootAura(KRALLEN_ID, krallen.level, false)) return 1;
+  if (!krallen || !hasLootAura(KRALLEN_ID, krallen.level, false, krallen.lootAura === true)) return 1;
   const most = LOOT_PROPERTY_BASE + LOOT_PROPERTY_BONUS;
   return (most + lootAuraBonus(krallen.level)) / most;
 };

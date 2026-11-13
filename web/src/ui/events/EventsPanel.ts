@@ -629,7 +629,9 @@ export class EventsPanel {
     const key = tierKey(event.id, 0);
     if (tier.claimed) {
       const done = el("p", "events-krallen__done");
-      done.append(eventsArt("tick", 18, "events-krallen__tick"), el("span", "", "Prize claimed. The next hunt starts on the 15th."));
+      // While the 3x mark is still open this hunt, the next hunt's date waits.
+      const doneText = auraTier && !auraTier.claimed ? "Prize claimed." : "Prize claimed. The next hunt starts on the 15th.";
+      done.append(eventsArt("tick", 18, "events-krallen__tick"), el("span", "", doneText));
       section.append(done);
     } else if (ladder.counter >= tier.need && !maxed) {
       const button = el("button", "btn btn--primary events-claim events-krallen__claim");
@@ -688,7 +690,7 @@ export class EventsPanel {
     const end = el("div", "events-tier__end");
     if (tier.claimed) {
       end.append(eventsArt("tick", 18, "events-tier__mark"));
-    } else if (ladder.counter >= tier.need && event.locked === null) {
+    } else if (ladder.counter >= tier.need && event.locked === null && krallen.level > 0) {
       const button = el("button", "btn btn--primary events-tier__claim", "Claim");
       button.type = "button";
       button.dataset["claim"] = key;

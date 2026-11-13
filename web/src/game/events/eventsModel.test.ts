@@ -1,6 +1,10 @@
 import { describe, expect, it } from "vitest";
 import type { CalendarView, EventView } from "@/api/events";
 import {
+  auraWaitsForKrallen,
+  grantedAuraText,
+  payingClaimableTiers,
+  shortDate,
   calendarDays,
   claimableCount,
   claimableTiers,
@@ -187,6 +191,51 @@ describe("the Krallen Hunt", () => {
     expect(krallenMaxed(topped)).toBe(true);
     expect(claimableCount([topped])).toBe(0);
     expect(claimableCount([hunt({ status: "upcoming" })])).toBe(0);
+  });
+
+  describe("the 3x mark: Krallen's loot aura (owner, 13 Nov 2026)", () => {
+    const UNTIL = Date.UTC(2030, 2, 1) / 1000;
+    const twoMarks = (counter: number, level: number, claimed: [boolean, boolean] = [false, false]) =>
+      hunt({
+        ladder: {
+          label: "Loot taken",
+          counter,
+          tiers: [
+            { need: 150_000_000, rewards: [{ kind: "krallen" }], claimed: claimed[0] },
+            { need: 450_000_000, rewards: [{ kind: "krallenAura", until: UNTIL }], claimed: claimed[1] },
+          ],
+        },
+        krallen: { level, maxLevel: 5, auraUntil: 0 },
+      });
+
+    it("counts toward the badge once reached; at level 5 only the 3x mark counts", () => {
+      expect(payingClaimableTiers(twoMarks(450_000_000, 2))).toEqual([0, 1]);
+      expect(payingClaimableTiers(twoMarks(449_999_999, 3, [true, false]))).toEqual([]);
+      expect(payingClaimableTiers(twoMarks(900_000_000, 5))).toEqual([1]);
+      expect(claimableCount([twoMarks(900_000_000, 5)])).toBe(1);
+      expect(claimableCount([twoMarks(900_000_000, 5, [false, true])])).toBe(0);
+    });
+
+    it("waits for Krallen: without one only the first mark counts", () => {
+      expect(auraWaitsForKrallen(twoMarks(0, 0))).toBe(true);
+      expect(payingClaimableTiers(twoMarks(500_000_000, 0))).toEqual([0]);
+      expect(auraWaitsForKrallen(twoMarks(0, 1))).toBe(false);
+    });
+
+    it("names the reward and says what its claim gave", () => {
+      const words = (type: number) => `Decoration ${type}`;
+      expect(rewardText({ kind: "krallenAura", until: UNTIL }, words)).toBe("Krallen's loot aura");
+      expect(grantedKrallenText([{ kind: "krallenAura", until: UNTIL, level: 4, hasKrallen: true }])).toBe(
+        `Krallen's loot aura is on until ${shortDate(UNTIL)}!`,
+      );
+      expect(grantedAuraText([{ kind: "krallenAura", until: UNTIL, level: 2, hasKrallen: true }])).toBe(
+        "Loot aura won! Krallen uses it from level 3.",
+      );
+      expect(grantedAuraText([{ kind: "krallenAura", until: 0, level: 0, hasKrallen: false }])).toBe(
+        "Win Krallen first: her loot aura needs her.",
+      );
+      expect(grantedAuraText([{ kind: "shiny", amount: 5 }])).toBeNull();
+    });
   });
 });
 

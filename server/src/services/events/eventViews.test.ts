@@ -2,8 +2,8 @@ import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 
 import { eventsAnswer, WhatsNewSeenSchema } from "../../controllers/events/eventsState.js";
 import type { User } from "../../database/models/user.model.js";
-import { EVENTS, KRALLEN_HUNT_GOALS, krallenHunt, type EventDefinition } from "../../game-data/events/events.js";
-import { eventView } from "./eventViews.js";
+import { EVENTS, KRALLEN_AURA_GOALS, KRALLEN_HUNT_GOALS, krallenHunt, type EventDefinition } from "../../game-data/events/events.js";
+import { eventView, hasTierToClaim } from "./eventViews.js";
 import { memoryProgressStore, NO_PROGRESS } from "./progressStore.js";
 import { memoryWelcomeStore, useWelcomeStore } from "./mr2Welcome.js";
 import { visibleEvents } from "./schedule.js";
@@ -75,9 +75,15 @@ describe("the Krallen Hunt's view", () => {
 
   test("carries the Krallen level and the claim deadline 7 days after the end", () => {
     const view = eventView(scheduled, { ...NO_PROGRESS, counter: 12 }, huntWindow.startsAt, player(6, true, 3));
-    expect(view.krallen).toEqual({ level: 3, maxLevel: 5 });
+    expect(view.krallen).toEqual({ level: 3, maxLevel: 5, auraUntil: 0 });
     expect(view.claimUntil).toBe(huntWindow.endsAt + 7 * DAY);
-    expect(view.ladder).toMatchObject({ counter: 12, tiers: [{ need: KRALLEN_HUNT_GOALS[3], claimed: false }] });
+    expect(view.ladder).toMatchObject({
+      counter: 12,
+      tiers: [
+        { need: KRALLEN_HUNT_GOALS[3], claimed: false },
+        { need: KRALLEN_AURA_GOALS[3], claimed: false },
+      ],
+    });
     expect(eventView({ event: EVENT, window, status: "active" }, NO_PROGRESS, START).krallen).toBeNull();
     expect(eventView({ event: EVENT, window, status: "active" }, NO_PROGRESS, START).claimUntil).toBeNull();
   });
@@ -97,6 +103,43 @@ describe("the Krallen Hunt's view", () => {
     const view = eventView(scheduled, claimed, huntWindow.startsAt, player(6, true, 3));
     expect(view.ladder!.tiers[0]).toMatchObject({ need: 150_000_000, claimed: true });
     expect(view.text).toStartWith("Take 150 million loot");
+  });
+
+  test("the 3x mark is 3x the goal she began the hunt with: 180/300/450/675/900 million", () => {
+    const auraOf = (level: number, claimedTiers: number[] = []) =>
+      eventView(scheduled, { ...NO_PROGRESS, claimedTiers }, huntWindow.startsAt, player(6, true, level)).ladder!.tiers[1]!;
+    expect([0, 1, 2, 3, 4, 5].map((level) => auraOf(level).need)).toEqual([
+      180_000_000, 300_000_000, 450_000_000, 675_000_000, 900_000_000, 900_000_000,
+    ]);
+    // The first mark raised her from 2 to 3: the 3x mark stays 450 million, not 675.
+    expect(auraOf(3, [0]).need).toBe(450_000_000);
+    // Raised from 4 to the top: still 900 million.
+    expect(auraOf(5, [0]).need).toBe(900_000_000);
+    // Only the 3x mark claimed: it raised nothing, so her level now is her level at the start.
+    expect(auraOf(3, [1]).need).toBe(675_000_000);
+    expect(auraOf(3, [1]).rewards).toEqual([{ kind: "krallenAura", until: Date.UTC(2030, 2, 1) / 1000 }]);
+  });
+
+  test("carries when her aura runs out", () => {
+    const view = eventView(scheduled, NO_PROGRESS, huntWindow.startsAt, { ...player(6, true, 4), krallenAuraUntil: 1_900_000_000 });
+    expect(view.krallen).toEqual({ level: 4, maxLevel: 5, auraUntil: 1_900_000_000 });
+  });
+
+  test("a Krallen at the top still has the 3x mark to claim, but never the first", () => {
+    const at = (counter: number, claimedTiers: number[] = []) =>
+      hasTierToClaim(eventView(scheduled, { ...NO_PROGRESS, counter, claimedTiers }, huntWindow.startsAt, player(6, true, 5)));
+    expect(at(300_000_000)).toBe(false);
+    expect(at(899_999_999)).toBe(false);
+    expect(at(900_000_000)).toBe(true);
+    expect(at(900_000_000, [1])).toBe(false);
+    // Below the top both marks pay: level 2 at the start, raised to 3 by the first.
+    const level2 = (counter: number, claimedTiers: number[] = []) =>
+      hasTierToClaim(
+        eventView(scheduled, { ...NO_PROGRESS, counter, claimedTiers }, huntWindow.startsAt, player(6, true, claimedTiers.includes(0) ? 3 : 2)),
+      );
+    expect(level2(150_000_000)).toBe(true);
+    expect(level2(449_999_999, [0])).toBe(false);
+    expect(level2(450_000_000, [0])).toBe(true);
   });
 });
 

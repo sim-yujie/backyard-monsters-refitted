@@ -228,7 +228,8 @@ export const fightableLog = (log: FlingLog, attacker: LootAttacker, entryHoused:
   }
 
   const owned = new Map<number, { l: number; pl: number; fb: number; aura: boolean }>();
-  const auraAt = Number(attacker.auraAt);
+  // No start time, no aura (`Number(null)` would be 0, before every end).
+  const auraAt = attacker.auraAt == null ? NaN : Number(attacker.auraAt);
   for (const champion of attacker.champion ?? []) {
     if (!Number.isInteger(champion?.t) || !Number.isFinite(champion.l)) continue;
     const pl = Number(champion.pl);
@@ -293,7 +294,7 @@ export const fightableLog = (log: FlingLog, attacker: LootAttacker, entryHoused:
     ) {
       championsFlung.add(event.champion.t);
       const { pl, fb, s } = event.champion;
-      champion = withFrozenHealth(
+      const fielded = withFrozenHealth(
         withFrozenBrain(
           {
             t: event.champion.t,
@@ -301,12 +302,13 @@ export const fightableLog = (log: FlingLog, attacker: LootAttacker, entryHoused:
             ...(pl !== undefined && { pl: Math.max(0, Math.min(pl, stored.pl)) }),
             ...(fb !== undefined && { fb: Math.max(0, Math.min(fb, stored.fb)) }),
             ...(s !== undefined && { s }),
-            ...(stored.aura && { aura: true }),
           },
           attacker.brains
         ),
         attacker.health
       );
+      // Stamped after `withFrozenBrain`, which drops any `aura` it is handed.
+      champion = stored.aura ? { ...fielded, aura: true } : fielded;
     }
 
     if (Object.keys(monsters).length === 0 && !champion) continue;

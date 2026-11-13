@@ -534,4 +534,23 @@ describe("ChampionPanel: stats and Krallen", () => {
     const { element } = setup([gorgo()]);
     expect(element.querySelector(".champion__part--special")).toBeNull();
   });
+
+  describe("her Krallen Hunt loot aura (owner, 13 Nov 2026)", () => {
+    const UNTIL = T0 + 20 * 86_400;
+    const auraLine = (champions: ChampionSaveEntry[]) =>
+      setup(champions, [CAGE, { id: 4, t: 119, l: 1, X: 400, Y: 0 }])
+        .element.querySelector<HTMLElement>(".champion__part--special .champion__aura");
+
+    it("while it runs at level 3 to 5: x2, x2.8 or x3.6 and until when", () => {
+      expect(auraLine([gorgo(), krallen({ l: 4, la: UNTIL })])?.textContent).toMatch(/^Loot aura x2\.8 · until .+$/);
+      expect(auraLine([gorgo(), krallen({ l: 3, la: UNTIL })])?.textContent).toMatch(/^Loot aura x2 · /);
+      expect(auraLine([gorgo(), krallen({ l: 5, la: UNTIL })])?.textContent).toMatch(/^Loot aura x3\.6 · /);
+    });
+
+    it("none without the 3x claim, once it has run out, or below level 3", () => {
+      expect(auraLine([gorgo(), krallen({ l: 5 })])).toBeNull();
+      expect(auraLine([gorgo(), krallen({ l: 5, la: T0 })])).toBeNull();
+      expect(auraLine([gorgo(), krallen({ l: 2, la: UNTIL })])).toBeNull();
+    });
+  });
 });

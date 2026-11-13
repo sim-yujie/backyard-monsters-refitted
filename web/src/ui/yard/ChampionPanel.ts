@@ -383,15 +383,6 @@ export class ChampionPanel {
       `Level ${view.level} of ${view.entry.levels}` +
       (view.entry.role ? ` · ${view.entry.role}` : "");
     words.append(level);
-    // Krallen's Krallen Hunt loot aura while it runs (owner, 13 Nov 2026).
-    const auraUntil = krallenAuraUntil(view.champion);
-    if (krallenAuraActive(view.champion, Date.now() / 1000)) {
-      const aura = document.createElement("p");
-      aura.className = "champion__aura";
-      aura.textContent = `Loot aura x${krallenAuraTimes(view.level)} · until ${shortDate(auraUntil)}`;
-      aura.title = `Monsters near Krallen loot x${krallenAuraTimes(view.level)} in attacks`;
-      words.append(aura);
-    }
     if (showsModes(view.champion)) {
       // What it is, fixed whatever it learns (champion modes round 2).
       const nature = document.createElement("p");
@@ -642,7 +633,17 @@ export class ChampionPanel {
     const level = document.createElement("p");
     level.className = "champion__level";
     level.textContent = `Level ${view.level} of ${view.entry.levels}${frozen ? " · frozen in the Chamber" : ""}`;
-    words.append(name, level, statsBlock(view));
+    words.append(name, level);
+    // Her Krallen Hunt loot aura while it runs (owner, 13 Nov 2026).
+    if (krallenAuraActive(champion, now)) {
+      const times = krallenAuraTimes(view.level);
+      const aura = document.createElement("p");
+      aura.className = "champion__aura";
+      aura.textContent = `Loot aura x${times} · until ${shortDate(krallenAuraUntil(champion))}`;
+      aura.title = `Monsters near Krallen loot x${times} in attacks`;
+      words.append(aura);
+    }
+    words.append(statsBlock(view));
     header.append(portrait(championPicture(view.entry, view.level), "champion__picture"), words);
     block.append(heading("Your second champion"), header);
     if (frozen) {
@@ -862,7 +863,7 @@ const specialShapeOf = (save: YardStore["save"], now: number): string => {
   const champion = specialChampion(save);
   const view = champion ? championView(save, champion, now) : null;
   if (!champion || !view) return "";
-  return `|K:${champion.status ?? 0}:${view.level}:${view.health >= view.maxHealth}:${view.hunger}:${view.healShiny}`;
+  return `|K:${champion.status ?? 0}:${view.level}:${view.health >= view.maxHealth}:${view.hunger}:${view.healShiny}:${krallenAuraActive(champion, now) ? krallenAuraUntil(champion) : 0}`;
 };
 
 /**

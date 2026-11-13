@@ -584,6 +584,45 @@ describe("ArmyPanel champion", () => {
     const { panel } = mount({ ...sandboxRoster(), champions: [] });
     expect(panel.element.querySelector<HTMLElement>(".attack-army__champions")?.hidden).toBe(true);
   });
+
+  describe("Krallen's Krallen Hunt loot aura (owner, 13 Nov 2026)", () => {
+    /** The tower yard's load clock (`towerYard`). */
+    const NOW = 1_700_000_000;
+    const withKrallen = (krallen: Record<string, unknown>): AttackRoster => {
+      const roster = sandboxRoster();
+      return {
+        ...roster,
+        champions: roster.champions.map((one) => (one.t === 5 ? { ...one, ...krallen } : one)),
+      } as AttackRoster;
+    };
+    const krallenRow = (panel: ArmyPanel) =>
+      panel.element.querySelector<HTMLElement>(".attack-army__champion[data-t='5']")!;
+
+    it("while it runs: the green glow and how much more her neighbours loot", () => {
+      const { panel } = mount(withKrallen({ l: 4, la: NOW + 86_400 }));
+      const row = krallenRow(panel);
+      expect(row.querySelector(".attack-army__aura")?.textContent).toBe("x2.8");
+      expect(row.querySelector(".attack-army__icon--aura")).not.toBeNull();
+      expect(panel.element.querySelector(".attack-army__champion[data-t='4'] .attack-army__aura")).toBeNull();
+    });
+
+    it("none without the claim, once it has run out, or below level 3", () => {
+      for (const krallen of [{ l: 5 }, { l: 5, la: NOW }, { l: 2, la: NOW + 86_400 }]) {
+        const { panel } = mount(withKrallen(krallen));
+        expect(krallenRow(panel).querySelector(".attack-army__aura")).toBeNull();
+        expect(krallenRow(panel).querySelector(".attack-army__icon--aura")).toBeNull();
+      }
+    });
+
+    it("the fling log carries the page's `aura` while it runs (the server stamps its own)", () => {
+      const running = mount(withKrallen({ l: 5, la: NOW + 86_400 }));
+      running.session.appendFling({ x: 100, y: 100, monsters: {}, champion: { t: 5, l: 5 } });
+      expect(running.session.flingLog().events.at(-1)).toMatchObject({ champion: { t: 5, aura: true } });
+      const none = mount(withKrallen({ l: 5 }));
+      none.session.appendFling({ x: 100, y: 100, monsters: {}, champion: { t: 5, l: 5 } });
+      expect((none.session.flingLog().events.at(-1) as { champion?: { aura?: boolean } }).champion?.aura).toBeUndefined();
+    });
+  });
 });
 
 describe("ArmyPanel after a drop", () => {

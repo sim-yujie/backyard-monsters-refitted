@@ -56,16 +56,23 @@ export const krallenMaxed = (event: Pick<EventView, "krallen">): boolean =>
 
 /**
  * The tiers the player can claim now that would pay something: a Krallen at
- * the top takes no level from the hunt, though its 3x mark still pays her aura.
+ * the top takes no level from the hunt, though its 3x mark still pays her aura;
+ * the aura waits for her (the server refuses it without a Krallen, `needsKrallen`).
  */
 export const payingClaimableTiers = (event: Pick<EventView, "krallen" | "ladder">): number[] => {
   const ladder = event.ladder;
   if (!ladder) return [];
   const maxed = krallenMaxed(event);
-  return claimableTiers(ladder).filter(
-    (index) => !(maxed && (ladder.tiers[index]?.rewards ?? []).every((reward) => reward.kind === "krallen")),
-  );
+  return claimableTiers(ladder).filter((index) => {
+    const rewards = ladder.tiers[index]?.rewards ?? [];
+    if (maxed && rewards.every((reward) => reward.kind === "krallen")) return false;
+    return !(auraWaitsForKrallen(event) && rewards.some((reward) => reward.kind === "krallenAura"));
+  });
 };
+
+/** Whether the hunt's 3x mark waits for Krallen: the player has none yet. */
+export const auraWaitsForKrallen = (event: Pick<EventView, "krallen">): boolean =>
+  event.krallen !== null && event.krallen.level === 0;
 
 /** How many rewards wait to be claimed across the events that are on, or over with claims still open. */
 export const claimableCount = (events: readonly EventView[]): number =>
