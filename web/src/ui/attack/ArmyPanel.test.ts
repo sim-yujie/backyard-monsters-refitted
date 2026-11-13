@@ -587,22 +587,26 @@ describe("ArmyPanel champion", () => {
 });
 
 describe("ArmyPanel after a drop", () => {
-  it("keeps the figure, greys a clamped row with what is left, and disables an exhausted one", () => {
+  it("empties every row and the meter, and disables an exhausted row (owner, 13 Nov 2026)", () => {
     const { panel, bucket, session } = mount();
-    bucket.setCount("C14", 20);
+    bucket.setCount("C14", 10);
     bucket.setCount("C15", 2);
     const [krallen] = radios(panel);
     krallen?.click();
 
     // Send 10 Teratorn and both Zafreeti with the champion.
-    session.appendFling({ x: 100, y: 100, monsters: { C14: 10, C15: 2 }, champion: { t: 5, l: 5 } });
+    session.appendFling({ x: 100, y: 100, ...bucket.composition() });
     bucket.afterDrop();
 
     const teratorn = rowFor(panel, "C14");
-    expect(teratorn.classList.contains("attack-army__row--clamped")).toBe(true);
-    expect(control<HTMLInputElement>(teratorn, ".attack-army__count").value).toBe("20");
-    expect(control(teratorn, ".attack-army__note").textContent).toBe("15 left");
+    expect(control<HTMLInputElement>(teratorn, ".attack-army__count").value).toBe("0");
+    expect(control<HTMLInputElement>(teratorn, ".attack-army__count").disabled).toBe(false);
+    expect(control(teratorn, ".attack-army__note").textContent).toBe("");
     expect(control(teratorn, ".attack-army__housed").textContent).toBe("15 housed");
+    expect(panel.element.querySelector(".attack-army__meter")?.getAttribute("aria-valuenow")).toBe("0");
+    expect(control(panel.element, ".attack-army__hint").textContent).toBe("Pick monsters, then tap ground");
+    expect(control<HTMLButtonElement>(panel.element, ".attack-army__clear").disabled).toBe(true);
+    expect(control<HTMLButtonElement>(panel.element, ".attack-army__fill-all").disabled).toBe(false);
 
     const zafreeti = rowFor(panel, "C15");
     expect(zafreeti.classList.contains("attack-army__row--exhausted")).toBe(true);
@@ -713,5 +717,39 @@ describe("ArmyPanel last army", () => {
     panels.push(again);
     control<HTMLButtonElement>(again.element, ".attack-army__load-last").click();
     expect(again.inputFor("C14")?.value).toBe("7");
+  });
+
+  it("puts the batch just sent back after the drop emptied the panel, even if it found none before", () => {
+    const map = new Map<string, string>();
+    const storage = {
+      length: 0,
+      clear: () => map.clear(),
+      getItem: (k: string) => map.get(k) ?? null,
+      key: () => null,
+      removeItem: (k: string) => {
+        map.delete(k);
+      },
+      setItem: (k: string, v: string) => {
+        map.set(k, v);
+      },
+    } as Storage;
+    const session = sessionWith(sandboxRoster());
+    const bucket = new Bucket(session, { storage, playerKey: "2503" });
+    const panel = new ArmyPanel(bucket).mount(document.body);
+    panels.push(panel);
+    const load = control<HTMLButtonElement>(panel.element, ".attack-army__load-last");
+    load.click();
+    expect(load.disabled).toBe(true);
+
+    bucket.setCount("C14", 7);
+    session.appendFling({ x: 100, y: 100, ...bucket.composition() });
+    bucket.afterDrop();
+    expect(panel.inputFor("C14")?.value).toBe("0");
+    expect(load.disabled).toBe(false);
+    expect(load.title).toBe("Recall the composition you sent last");
+
+    load.click();
+    expect(panel.inputFor("C14")?.value).toBe("7");
+    expect(bucket.composition()).toEqual({ monsters: { C14: 7 } });
   });
 });

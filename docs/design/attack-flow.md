@@ -317,16 +317,18 @@ adding each type up to its own maximum until the shared capacity is exhausted (O
 this the default because a random or best-damage fill order would make "fill" behave differently
 each press).
 
-**After a drop, nothing resets — but every row reflects what is actually left.** Decided 2026-09-26:
-the composition on screen after a drop is the same numbers the player set, never auto-cleared and
-never auto-refilled. What changes is each row's ceiling, reclamped the instant the drop lands to
-`min(remaining housed count, remaining capacity / bucketCost(1))` — the same arithmetic §"How it
-works" above already computes on every edit, just re-run once more after the fling. A row whose true
-count fell below the number showing is greyed and carries a plain note naming what is actually left
-— "20 left" — rather than silently rewriting the figure the player typed out from under them. A row
-whose housed count reaches zero shows 0 and stays disabled until, if ever, more of that type comes
-back into range. This is the direct opposite of `BucketAdd`'s silent refusal past a wall
-(`combat.md:337-339`): the wall is explained, not just hit.
+**After a drop, the bucket empties, as in Flash.** Owner reversal, 2026-11-13 ("the flinger is
+supposed to reset after flinging a batch in"): the earlier rule (decided 2026-09-26, "after a drop,
+nothing resets", the numbers stayed and a row that fell below its figure was greyed with a "20 left"
+note) is withdrawn. After every fling — normal attacks, Map Room 2, Inferno/Descent and the Baiter
+test alike — every row goes back to 0, the champion pick is dropped and the flinger meter is empty,
+as Flash's `ATTACK.Spawn` empties `_flingerBucket` (`combat.md:376`). The player picks the next
+batch, or presses **Load last army**, which puts the batch just sent back, clamped to what is still
+housed (`Bucket.afterDrop` saves it before emptying). Because rows can no longer ask for more than is
+housed, the "20 left" note is gone. Each row's ceiling is still
+`min(remaining housed count, remaining capacity / bucketCost(1))`; a row whose housed count reaches
+zero shows 0, says "None left" and stays disabled. Nothing else about a fling changes: the room per
+fling, the champion going in first, the server's checks and the fling cooldown.
 
 **Champion.** One champion goes per drop — the panel enforces this as a single-select control (a
 radio group, not checkboxes). No `Send`/`Hold` toggle is needed; picking a different champion simply
@@ -359,13 +361,14 @@ health back (`attackerchampion`), read from the engine's per-champion `champions
 attack, stored in `localStorage` under a per-player key, read and written through try/catch exactly
 as the planner's own `localStorage` flags already are (`docs/design/yard-planner-redesign.md`, Q13's
 dismissible-help-card flag and Q15's view-toggle memory). A blocked or cleared store degrades to an
-empty composition, never an error.
+empty composition, never an error. Every drop writes it, so within an attack it also recalls the
+batch just sent, now that the bucket empties after each drop (2026-11-13).
 
 ### F3. Fling and deploy interaction — Must, M
 
 **For the player.** Tap or click a spot on the enemy yard to send the current composition there.
-The composition stays selected — sending another drop is "tap again", not "reselect from
-scratch."
+The bucket then empties, as in Flash (owner, 2026-11-13; §F2 "After a drop"): the next drop is
+picked again, or recalled with Load last army.
 
 **How it works.** The one click in the old flow that carries real tactical meaning is the drop point
 (`combat.md:1540-1541`), so this plan keeps exactly that click and removes every other one. Rather
@@ -384,9 +387,9 @@ test to tell a tap from a pan), computes the drop radius from `dropRadius(bucket
 (`x`, `y` "a fling centre may not overlap a building footprint",
 `server-combat.md:768`). On a valid drop, `AttackSession` appends a `fling` `FlingEvent`
 (`types.ts:440-452`) to its `FlingLog`, hands it to the running `Battle.apply(event)` (§F5), and —
-unlike Flash — **does not clear the composition**, only reclamps it to what is still available
-(§F2's "after a drop" rule). The player sends the same numbers again with one more tap, or edits the
-panel first.
+like Flash — **clears the composition** (§F2's "after a drop" rule, owner reversal 2026-11-13; until
+then it was kept and only reclamped). The player picks the next batch, or presses Load last army to
+send the same one again.
 
 **There is no wave to build.** As §1.1 already cites (`combat.md:466-475`, "There is no wave system
 in an attack."), a drop is emergent by design: nothing here numbers a drop or shows a drop-count
