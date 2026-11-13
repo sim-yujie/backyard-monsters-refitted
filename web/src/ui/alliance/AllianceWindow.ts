@@ -48,6 +48,7 @@ import {
 } from "@/game/alliance/allianceRules";
 import type { AllianceFocus, AllianceTab } from "@/game/alliance/allianceView";
 import { playerPool } from "@/game/friends/friendsView";
+import { inAlliance, setInAlliance } from "@/game/alliance/allianceButton";
 import { setAllianceTradeOn, TRADE_OFF_TITLE } from "@/game/alliance/tradeSwitch";
 import type { AllianceTradeApi } from "@/api/allianceTrade";
 import { TradeTab } from "./allianceTradeUi";
@@ -268,6 +269,8 @@ export interface AllianceWindowOptions {
   readonly onOpenMap?: () => void;
   /** The player joined, founded, left or lost an alliance: the scene refreshes what shows it. */
   readonly onChanged?: () => void;
+  /** Each time the window reads the player's alliance: whether they are in one (the More menu's button follows). */
+  readonly onMembership?: (member: boolean) => void;
   /** World chat, whose Alliance room follows what this window learns; the game's own unless a test swaps it. */
   readonly chat?: Pick<ChatSession, "setAllianceRoom">;
   readonly onClose?: () => void;
@@ -549,6 +552,9 @@ export class AllianceWindow {
       alliance ? { id: alliance.alliance_id, name: alliance.name, image: alliance.image } : null,
     );
     setAllianceTradeOn(mine.alliance?.trade_on);
+    // The Alliance button's rule (`game/alliance/allianceButton.ts`) hears a join, a leave or a kick at once.
+    setInAlliance(alliance !== null && alliance !== undefined);
+    this.options.onMembership?.(inAlliance());
     if (mine.alliance) {
       this.view = { kind: "mine", alliance: mine.alliance };
       this.dropTradeWhenOff();

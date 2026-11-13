@@ -1,6 +1,7 @@
 import type { Defence } from "@/api/defences";
-import { avatarOf, avatarUrl } from "@/game/avatars";
+import { avatarOf } from "@/game/avatars";
 import { DEFENCE_REFUSAL_TEXT, defenceRefusal, lootTakenOf } from "@/game/defences/defenceWatch";
+import { pictureFor, playerPicture, showPlayerPicture } from "@/game/playerPicture";
 import { agoText } from "@/ui/attack/autoAttackText";
 import { centreWindow, type CentreWindow } from "@/ui/centreWindow";
 import { Panel } from "@/ui/Panel";
@@ -32,9 +33,8 @@ export const LOADING_TEXT = "Loading your defences…";
 export const LOAD_FAILED_TEXT = "Your defences could not load. Try again.";
 
 /**
- * A stable critter for an attacker who has not picked one. The list carries
- * no user id (a hidden bot must never be told apart), so the default comes
- * from the frozen name instead.
+ * A stable critter for an attacker who has not picked one and whose account
+ * is gone (the list has no id for them): the default comes from the name.
  */
 const nameSeed = (name: string): number => {
   let hash = 0;
@@ -196,7 +196,17 @@ export class DefencesScreen {
 
     const picture = el("span", "defences-row__picture");
     const image = document.createElement("img");
-    image.src = avatarUrl(avatarOf(defence.attacker.pic, nameSeed(defence.attacker.name)), "small");
+    // Their uploaded photo when others may see it, else their critter (the same one every other list shows).
+    const { attacker } = defence;
+    const userid = typeof attacker.userid === "number" && attacker.userid > 0 ? attacker.userid : 0;
+    showPlayerPicture(
+      image,
+      userid > 0
+        ? playerPicture(userid, attacker.pic, attacker.photo, "small")
+        : pictureFor(0, avatarOf(attacker.pic, nameSeed(attacker.name)), null, "small"),
+    );
+    image.decoding = "async";
+    image.loading = "lazy";
     image.alt = "";
     picture.append(image);
 

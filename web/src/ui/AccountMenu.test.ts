@@ -117,6 +117,26 @@ describe("AccountMenu", () => {
       expect(face().classList.contains("is-photo")).toBe(false);
     });
 
+    it("falls back to the critter when the photo will not load, never a broken picture", () => {
+      const { menu, face } = withAvatar();
+      menu.setPhoto("/api/v1/profile/photos/7?v=3");
+      face().dispatchEvent(new Event("error"));
+      expect(face().getAttribute("src")).toMatch(/avatars\/frog-64\.webp$/);
+      expect(face().classList.contains("is-photo")).toBe(false);
+      // A new upload is a new address, and shows again.
+      menu.setPhoto("/api/v1/profile/photos/7?v=4");
+      expect(face().getAttribute("src")).toBe("/api/v1/profile/photos/7?v=4");
+      expect(face().classList.contains("is-photo")).toBe(true);
+    });
+
+    it("keeps the photo on the badge when the player picks another critter", () => {
+      const { menu, face } = withAvatar();
+      menu.setPhoto("/api/v1/profile/photos/7?v=3");
+      openSettings(menu);
+      document.querySelector<HTMLButtonElement>('.avatar-picker__tile[data-avatar="bee"]')?.click();
+      expect(face().getAttribute("src")).toBe("/api/v1/profile/photos/7?v=3");
+    });
+
     it("keeps a save running through closing and reopening, and can go back after it", async () => {
       let finish: () => void = () => {};
       const pick = vi.fn(() => new Promise<void>((done) => (finish = done)));

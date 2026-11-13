@@ -1,5 +1,6 @@
 import { getSession, logout } from "@/api/auth";
-import { inCurrentAlliance, setCurrentAllianceBonuses } from "@/game/alliance/allianceBonuses";
+import { setCurrentAllianceBonuses } from "@/game/alliance/allianceBonuses";
+import { allianceButtonShows } from "@/game/alliance/allianceButton";
 import { setAllianceTradeFrom } from "@/game/alliance/tradeSwitch";
 import { chatApi, chatConfigFrom } from "@/api/chat";
 import { loadAttackOn, loadOwnBase, loadOwnYard, takeAwayJobs, viewBase } from "@/api/base";
@@ -771,6 +772,10 @@ export class YardScene implements Scene {
         onBuildObservatory: () => this.openBuildMenu(OBSERVATORY_TYPE),
         onOpenMap: () => this.openMap(),
         onChanged: () => void this.store?.refresh(),
+        // Joined, founded, left or kicked: the More menu's button follows at once.
+        onMembership: () => {
+          if (this.store) this.showDefences(this.store);
+        },
       });
       this.defences.button.element.after(this.alliance.button);
       // Reports (owner, 12 Nov 2026): last in the More fan, shown only to moderators (the server says who).
@@ -1036,6 +1041,8 @@ export class YardScene implements Scene {
       // The alliance's strengths and weaknesses, for prices outside the yard store (Starter Kits, outpost hatching).
       if (!target && !tribe && store?.kind === "main") {
         setCurrentAllianceBonuses(response.alliancedata);
+        // The store started (and drew the More menu) before this was known: the Alliance button asks again.
+        this.showDefences(store);
         // Alliance trading's switch, for chat's Send and Trade buttons (off in beta 7).
         setAllianceTradeFrom(response.alliancedata);
       }
@@ -2045,11 +2052,10 @@ export class YardScene implements Scene {
   private showDefences(store: YardStore): void {
     this.defences?.setAvailable(store.kind === "outpost" || mapRoomOf(store.save) === MapRoomChoice.MAP_ROOM_2);
     // Alliances are the player's, so Map Room 2's main yard and outposts may show the button; the Inferno does not.
-    // It waits for the Observatory (owner, 13 Nov 2026): the main yard shows it once one stands there,
-    // and a player already in an alliance sees it everywhere (an outpost has no Observatory of its own).
+    // It waits for a finished Observatory in the main yard, or for the player to be in an alliance already
+    // (owner, 13 Nov 2026; `game/alliance/allianceButton.ts`).
     const mapRoom2 = store.kind === "outpost" || (store.kind !== "inferno" && mapRoomOf(store.save) === MapRoomChoice.MAP_ROOM_2);
-    const observatory = store.kind === "main" && store.yard.buildings.some((one) => one.type === OBSERVATORY_TYPE);
-    this.alliance?.setAvailable(mapRoom2 && (observatory || inCurrentAlliance()));
+    this.alliance?.setAvailable(allianceButtonShows({ kind: store.kind, mapRoom2, buildings: store.yard.buildings }));
   }
 
   /** Carries out what another screen asked the own yard to open (`yardIntent.ts`). */

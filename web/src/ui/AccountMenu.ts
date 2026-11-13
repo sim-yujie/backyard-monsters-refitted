@@ -503,8 +503,12 @@ export class AccountMenu {
     picture.alt = "";
     picture.decoding = "async";
     picture.dataset["size"] = size;
-    if (this.current) picture.src = avatarUrl(this.current, size);
+    // A photo that will not load (taken down, or the connection dropped) shows the critter, never a broken picture.
+    picture.addEventListener("error", () => {
+      if (picture.classList.contains("is-photo")) this.showCritter(picture);
+    });
     this.faces.push(picture);
+    this.showFace(picture);
     return picture;
   }
 
@@ -520,13 +524,21 @@ export class AccountMenu {
 
   /** Points every face at the photo, or else the current avatar. */
   private showFaces(): void {
-    for (const picture of this.faces) {
-      picture.classList.toggle("is-photo", this.photo !== null);
-      if (this.photo !== null) picture.src = this.photo;
-      else if (this.current) {
-        picture.src = avatarUrl(this.current, picture.dataset["size"] === "small" ? "small" : "full");
-      }
+    for (const picture of this.faces) this.showFace(picture);
+  }
+
+  private showFace(picture: HTMLImageElement): void {
+    if (this.photo === null) {
+      this.showCritter(picture);
+      return;
     }
+    picture.classList.add("is-photo");
+    picture.src = this.photo;
+  }
+
+  private showCritter(picture: HTMLImageElement): void {
+    picture.classList.remove("is-photo");
+    if (this.current) picture.src = avatarUrl(this.current, picture.dataset["size"] === "small" ? "small" : "full");
   }
 
   private toggle(open: boolean): void {

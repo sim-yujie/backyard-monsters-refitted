@@ -240,10 +240,36 @@ describe("words", () => {
   });
 });
 
-describe("hidden bots", () => {
-  it("never shows anything but the frozen name and picture of an attacker", async () => {
-    const { host } = await openDoor(fakeApi([defence()]));
-    const html = host.innerHTML;
-    expect(html).not.toMatch(/bot|userid|baseid/i);
+describe("the attacker's picture", () => {
+  const face = (host: HTMLElement): HTMLImageElement => host.querySelector<HTMLImageElement>(".defences-row__picture img")!;
+
+  it("shows the attacker's uploaded photo when the server says others may see it", async () => {
+    const { host } = await openDoor(fakeApi([defence({ attacker: { name: "Acorn", pic: "/avatars/owl.webp", userid: 3103, photo: 4 } })]));
+    expect(face(host).getAttribute("src")).toMatch(/\/profile\/photos\/3103\?v=4$/);
+    expect(face(host).classList.contains("is-photo")).toBe(true);
+  });
+
+  it("shows the critter when the photo is hidden, removed or there is none", async () => {
+    const { host } = await openDoor(fakeApi([defence({ attacker: { name: "Acorn", pic: "/avatars/owl.webp", userid: 3104, photo: null } })]));
+    expect(face(host).getAttribute("src")).toMatch(/avatars\/owl-64\.webp$/);
+    expect(face(host).classList.contains("is-photo")).toBe(false);
+  });
+
+  it("falls back to the critter when the photo will not load", async () => {
+    const { host } = await openDoor(fakeApi([defence({ attacker: { name: "Acorn", pic: "/avatars/owl.webp", userid: 3103, photo: 4 } })]));
+    face(host).dispatchEvent(new Event("error"));
+    expect(face(host).getAttribute("src")).toMatch(/avatars\/owl-64\.webp$/);
+    expect(face(host).classList.contains("is-photo")).toBe(false);
+  });
+
+  it("shows a critter, never a photo address, for an attacker whose account is gone", async () => {
+    const { host } = await openDoor(fakeApi([defence({ attacker: { name: "Deleted player", pic: null, userid: null, photo: null } })]));
+    expect(face(host).getAttribute("src")).toMatch(/avatars\/[a-z]+-64\.webp$/);
+    expect(face(host).classList.contains("is-photo")).toBe(false);
+  });
+
+  it("still shows the critter for a list from an older server, which sends no id or photo", async () => {
+    const { host } = await openDoor(fakeApi([defence({ attacker: { name: "Acorn", pic: "/avatars/owl.webp" } })]));
+    expect(face(host).getAttribute("src")).toMatch(/avatars\/owl-64\.webp$/);
   });
 });

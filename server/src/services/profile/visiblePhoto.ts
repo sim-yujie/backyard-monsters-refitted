@@ -82,6 +82,26 @@ export const visiblePhotos = async (em: EntityManager, userids: Iterable<number>
 };
 
 /**
+ * For a list whose rows keep a player's id long after it was written (the
+ * Defences screen's attackers): each of `userids` whose account still exists,
+ * with their visible photo's upload number or null for the critter. A player
+ * who deleted their account is left out of the map, so their id is not sent.
+ * One query for the whole list.
+ */
+export const playersAndPhotos = async (em: EntityManager, userids: Iterable<number>): Promise<Map<number, number | null>> => {
+  const list = intArray(userids);
+  if (list === "{}") return new Map();
+  const rows = await em.execute<{ userid: number | string; photo: number | string | null }[]>(
+    `SELECT u.userid, ${photoColumn("p", "u")}
+       FROM bym."user" u
+       ${photoJoin("p", "u")}
+      WHERE u.userid = ANY(?::int[])`,
+    [list],
+  );
+  return new Map(rows.map((row) => [Number(row.userid), photoOf(row.photo)]));
+};
+
+/**
  * Sets `photo` on each row from {@link visiblePhotos} (null for the critter),
  * in place, and returns the rows. `idOf` gives a row's player id (0 or less
  * for a row with no player, such as a tribe).

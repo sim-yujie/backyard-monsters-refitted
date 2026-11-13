@@ -4,7 +4,7 @@ import { MikroORM } from "@mikro-orm/postgresql";
 import ormConfig from "../../mikro-orm.config.js";
 import { memoryRedis } from "../../testing/memoryRedis.js";
 import { readPhoto, readProfile } from "./profiles.js";
-import { visiblePhotos } from "./visiblePhoto.js";
+import { playersAndPhotos, visiblePhotos } from "./visiblePhoto.js";
 
 type FriendViews = typeof import("../friends/friendViews.js");
 
@@ -82,6 +82,23 @@ describe.skipIf(!dbName)("visible photos on a real database", () => {
   test("the lists' one lookup sends only the photo that may be shown", async () => {
     const photos = await visiblePhotos(orm.em.fork(), ALL);
     expect(photos).toEqual(new Map([[SHOWN, 3]]));
+  });
+
+  test("the Defences screen's lookup: every attacker who still has an account, only the visible photo", async () => {
+    const GONE = 996399; // deleted their account
+    const players = await playersAndPhotos(orm.em.fork(), [...ALL, GONE, SHOWN]);
+    expect(players).toEqual(
+      new Map<number, number | null>([
+        [SHOWN, 3],
+        [HIDDEN, null],
+        [REMOVED, null],
+        [BLOCKED, null],
+        [BANNED, null],
+        [NONE, null],
+        [VIEWER, null],
+      ]),
+    );
+    expect(await playersAndPhotos(orm.em.fork(), [])).toEqual(new Map());
   });
 
   test("the Profile window and the photo's address follow the same rule", async () => {

@@ -122,6 +122,14 @@
   object-fit: contain;
 }
 
+/* An uploaded profile photo is a square snapshot, not a cut-out critter: it
+   fills the frame inside the border. */
+.defences-row__picture img.is-photo {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
 .defences-row__main {
   flex: 1;
   min-width: 0;

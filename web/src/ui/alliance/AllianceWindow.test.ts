@@ -3,6 +3,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import type { AllianceApi, AllianceInviteRow, AllianceListing, AllianceMember, MyAlliance } from "@/api/alliance";
 import type { AllianceProgressApi, ConstellationView } from "@/api/allianceProgress";
 import { setClassicLook } from "@/game/classicLook";
+import { inAlliance, resetAllianceButton, setInAlliance } from "@/game/alliance/allianceButton";
 import { allianceTradeOn, setAllianceTradeOn, TRADE_OFF_TITLE } from "@/game/alliance/tradeSwitch";
 import { ALLIANCE_TEXT, AllianceWindow, type AllianceWindowOptions } from "./AllianceWindow";
 
@@ -126,6 +127,7 @@ const buttonNamed = (words: string): HTMLButtonElement | undefined =>
 const picks = (): HTMLButtonElement[] => [...document.querySelectorAll<HTMLButtonElement>(".alliance__sets .alliance__pick")];
 
 afterEach(() => {
+  resetAllianceButton();
   setClassicLook(false);
   document.body.replaceChildren();
   vi.restoreAllMocks();
@@ -324,7 +326,11 @@ describe("AllianceWindow: marketplace", () => {
       }),
     });
     const onChanged = vi.fn();
-    const view = await open(api, { onChanged });
+    const onMembership = vi.fn();
+    const view = await open(api, { onChanged, onMembership });
+    // Not in an alliance yet: the More menu's Alliance button rule hears so.
+    expect(onMembership).toHaveBeenLastCalledWith(false);
+    expect(inAlliance()).toBe(false);
     document.querySelector<HTMLButtonElement>(".alliance__row")!.click();
     document.querySelector<HTMLButtonElement>(".alliance__join")!.click();
     await flush();
@@ -332,6 +338,17 @@ describe("AllianceWindow: marketplace", () => {
     expect(api.requestJoin).toHaveBeenCalledWith(5);
     expect(onChanged).toHaveBeenCalled();
     expect(view.kind).toBe("mine");
+    // Joined: the button's rule hears it at once, without a reload.
+    expect(onMembership).toHaveBeenLastCalledWith(true);
+    expect(inAlliance()).toBe(true);
+  });
+
+  it("tells the Alliance button's rule when the player is found to be out of their alliance (left, kicked)", async () => {
+    setInAlliance(true);
+    const onMembership = vi.fn();
+    await open(fakeApi(), { onMembership });
+    expect(onMembership).toHaveBeenLastCalledWith(false);
+    expect(inAlliance()).toBe(false);
   });
 
   it("filters: Open, the player's flag and a type go to the server; Clear drops them", async () => {

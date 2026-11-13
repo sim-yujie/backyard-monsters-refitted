@@ -158,7 +158,9 @@ export class Popup extends Panel {
     }
 
     const active = document.activeElement;
-    if (event.shiftKey && active === first) {
+    // Focus on the panel itself (a popup that opens without a control focused):
+    // Shift+Tab would step out to the page behind, so it wraps to the end.
+    if (event.shiftKey && (active === first || active === this.element)) {
       event.preventDefault();
       last.focus();
     } else if (!event.shiftKey && active === last) {
