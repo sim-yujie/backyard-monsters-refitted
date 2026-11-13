@@ -797,6 +797,14 @@
   z-index: calc(var(--z-hud) + 2);
 }
 
+/* The Glimmers notice, "[coin] +15 Daily": the 24 px coin and the words sat on
+   one text baseline, so the coin hung below the line's middle. One centred row. */
+.coins-gained {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
 /* A building's panel docks on the right edge where the rail is. */
 .overlay__layer:has(> .map-dock--right > *) > .yard-viewtools--rail {
   display: none;
