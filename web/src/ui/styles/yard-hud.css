@@ -1054,9 +1054,11 @@
     max-width: calc(100% - 48px);
   }
 
-  /* Notices (the wild monsters' warning) hang under the "?" and Chat, not on them. */
+  /* Notices (the wild monsters' warning) hang under the "?" and Chat, not on
+     them: under the folded Chat tab and its line on the row below it
+     (chat.css), about 110px under the HUD. */
   .overlay__layer:has(> .chat-box:not([hidden])) > .yard-notices {
-    top: calc(var(--notice-top-inset) + 92px);
+    top: calc(var(--notice-top-inset) + 122px);
   }
 
   /* A tall sheet reaches past the Chat strip, which would peek over its top. */

@@ -625,13 +625,17 @@ button.chat-line__name {
     width: calc(100% - 2 * var(--space-3));
   }
 
-  .chat-box:not(.chat-box--open) {
-    flex-direction: row;
-    align-items: center;
-  }
-
+  /* Folded, the "Chat" tab sits on its own and the newest line runs the
+     whole width under it (owner, 13 Nov: "world chat gets cut off by events
+     tab"). Beside the tab the line ran under the Events button in the top
+     right corner (events.css: from the HUD's bottom + 8px, 48px disc and its
+     sign, about 76px tall); stopped short of it, a 200px line kept only the
+     picture, the GM badge and "…" (lead's check at 390x844). Under the tab
+     plus 6px it starts past the button's bottom (the tab is 28px or more,
+     so the line is at least 38px below the box's top, which is 44px under
+     the HUD; the button ends at most 86px under it), with the full width. */
   .chat-box:not(.chat-box--open) .chat-box__tab-label {
-    /* The dot and "Chat" are enough beside the line. */
+    /* The dot and "Chat" are enough. */
     font-size: 0;
   }
 
@@ -645,8 +649,7 @@ button.chat-line__name {
   }
 
   .chat-box:not(.chat-box--open) .chat-box__lines {
-    flex: 1;
-    min-width: 0;
+    margin-top: 6px;
   }
 
   .chat-box:not(.chat-box--open) .chat-line:not(:last-child) {
@@ -659,15 +662,33 @@ button.chat-line__name {
     text-overflow: ellipsis;
   }
 
-  /* The strip stops short of the Events button in the top right corner
-     (owner, 13 Nov: "world chat gets cut off by events tab"): the button
-     (events.css, 12px from the edge) is its 48px disc with its "Events"
-     sign under it, and the sign is the wider part, about 70px in Modern and
-     76px with Classic's wider sign ends. 96px from the edge keeps a gap past
-     either; the line ends in "…" before it. Without the button the strip
-     keeps the whole width. */
-  .overlay__layer:has(> .yard-dock > .events-door:not([hidden])) > .chat-box:not(.chat-box--open) {
-    width: calc(100% - var(--space-3) - 96px);
+  /* One line: the picture, the badge and the name keep their room and the
+     words are what end in "…", never the name (a line's own "…" hid a
+     button-name whole). A very long name gives way only past 60%. */
+  .chat-box:not(.chat-box--open) .chat-line:not(.chat-line--notice) {
+    display: flex;
+    align-items: center;
+  }
+
+  .chat-box:not(.chat-box--open) .chat-line > :is(.chat-line__pic, .chat-line__gm, .chat-line__mod) {
+    flex: none;
+  }
+
+  .chat-box:not(.chat-box--open) .chat-line > .chat-line__name {
+    flex: 0 1 auto;
+    min-width: 0;
+    max-width: 60%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .chat-box:not(.chat-box--open) .chat-line > .chat-line__body {
+    flex: 1 1 0;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
 
   /* The dock takes about 270px at the bottom of a phone: the open box ends

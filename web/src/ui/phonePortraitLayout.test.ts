@@ -75,7 +75,7 @@ describe("upright phone layout", () => {
   it("keeps the yard's level strip, notices and Chat clear of the floating \"?\"", () => {
     const phone = media(css("styles/yard-hud.css"), "width <= 620px");
     expect(phone).toMatch(/> \.hud--corner > \.hud-status \{[^}]*left: 48px;/);
-    expect(phone).toMatch(/> \.yard-notices \{\s*top: calc\(var\(--notice-top-inset\) \+ 92px\);/);
+    expect(phone).toMatch(/> \.yard-notices \{\s*top: calc\(var\(--notice-top-inset\) \+ 122px\);/);
     expect(phone).toContain(".overlay__layer:has(> .build-menu:not([hidden])) > .chat-box");
     // The friend-request count sits on the critter, not on the name.
     expect(phone).toMatch(/\.account-menu__button-count \{\s*right: auto;\s*left: -6px;/);
