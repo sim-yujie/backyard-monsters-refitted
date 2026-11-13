@@ -1,5 +1,5 @@
 import { KRALLEN_AURA_LEVEL, krallenAuraRadius, lootAuraBonus } from "@/game/combat/rules/champions";
-import { LOOT_PROPERTY_BASE } from "@/game/combat/rules/stats";
+import { LOOT_PROPERTY_BASE, LOOT_PROPERTY_BONUS } from "@/game/combat/rules/stats";
 
 /**
  * Krallen's loot aura from the Krallen Hunt's 3x mark (owner, 13 Nov 2026,
@@ -41,5 +41,15 @@ export const krallenAuraActive = (entry: AuraEntry | null | undefined, now: numb
  */
 export const krallenAuraTimes = (level: number): number =>
   Math.round(((LOOT_PROPERTY_BASE + lootAuraBonus(level)) / LOOT_PROPERTY_BASE) * 10) / 10;
+
+/**
+ * The same for a resource hunter or another champion, whose looting value is
+ * already 2.0 (`LOOT_PROPERTY_BASE + LOOT_PROPERTY_BONUS`, the rules' looter
+ * value): "x1.25", "x1.45", "x1.65" at levels 3, 4 and 5.
+ */
+export const krallenAuraTimesLooter = (level: number): number => {
+  const looter = LOOT_PROPERTY_BASE + LOOT_PROPERTY_BONUS;
+  return Math.round(((looter + lootAuraBonus(level)) / looter) * 100) / 100;
+};
 
 export { KRALLEN_AURA_LEVEL, krallenAuraRadius };

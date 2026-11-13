@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { krallenAuraActive, krallenAuraRuns, krallenAuraTimes, krallenAuraUntil } from "./krallenAura";
+import { krallenAuraActive, krallenAuraRuns, krallenAuraTimes, krallenAuraTimesLooter, krallenAuraUntil } from "./krallenAura";
 
 describe("Krallen's loot aura (Krallen Hunt 3x mark, owner 13 Nov 2026)", () => {
   it("reads when it runs out off Krallen's entry only", () => {
@@ -20,5 +20,9 @@ describe("Krallen's loot aura (Krallen Hunt 3x mark, owner 13 Nov 2026)", () => 
 
   it("makes an ordinary monster near her loot 2, 2.8 and 3.6 times at levels 3, 4 and 5", () => {
     expect([1, 2, 3, 4, 5].map(krallenAuraTimes)).toEqual([1, 1, 2, 2.8, 3.6]);
+  });
+
+  it("makes a resource hunter or champion (looting value 2.0) loot 1.25, 1.45 and 1.65 times", () => {
+    expect([2, 3, 4, 5].map(krallenAuraTimesLooter)).toEqual([1, 1.25, 1.45, 1.65]);
   });
 });

@@ -1,5 +1,5 @@
 import { shortDate } from "@/game/events/eventsModel";
-import { krallenAuraActive, krallenAuraTimes, krallenAuraUntil } from "@/game/yard/krallenAura";
+import { krallenAuraActive, krallenAuraTimes, krallenAuraTimesLooter, krallenAuraUntil } from "@/game/yard/krallenAura";
 import { tutTarget, TutTarget } from "@/game/guide/targets";
 import type { YardRefusal } from "@/api/yard";
 import {
@@ -639,9 +639,12 @@ export class ChampionPanel {
       const times = krallenAuraTimes(view.level);
       const aura = document.createElement("p");
       aura.className = "champion__aura";
-      aura.textContent = `Loot aura x${times} · until ${shortDate(krallenAuraUntil(champion))}`;
-      aura.title = `Monsters near Krallen loot x${times} in attacks`;
-      words.append(aura);
+      aura.textContent = `Loot aura · until ${shortDate(krallenAuraUntil(champion))}`;
+      const strength = document.createElement("p");
+      strength.className = "champion__aura champion__aura--times";
+      strength.textContent = `Monsters x${times} · Resource hunters x${krallenAuraTimesLooter(view.level)}`;
+      strength.title = "How much more monsters near Krallen loot in attacks";
+      words.append(aura, strength);
     }
     words.append(statsBlock(view));
     header.append(portrait(championPicture(view.entry, view.level), "champion__picture"), words);

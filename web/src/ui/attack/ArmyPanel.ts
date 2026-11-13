@@ -10,7 +10,7 @@ import {
   type ChampionStance,
 } from "@/game/combat/rules";
 import { championPortrait, monsterPortrait, showPortrait, type Portrait } from "@/game/portraits";
-import { krallenAuraTimes } from "@/game/yard/krallenAura";
+import { krallenAuraTimes, krallenAuraTimesLooter } from "@/game/yard/krallenAura";
 import { formatAmount } from "@/ui/format";
 import { Panel } from "@/ui/Panel";
 import { QuantityStepper } from "@/ui/QuantityStepper";
@@ -411,8 +411,8 @@ export class ArmyPanel {
       icon.classList.add("attack-army__icon--aura");
       const aura = document.createElement("span");
       aura.className = "attack-army__aura";
-      aura.textContent = `x${krallenAuraTimes(l)}`;
-      aura.title = `Loot aura: monsters near Krallen loot x${krallenAuraTimes(l)}`;
+      aura.textContent = `up to x${krallenAuraTimes(l)}`;
+      aura.title = `Loot aura: monsters near Krallen loot up to x${krallenAuraTimes(l)}; resource hunters x${krallenAuraTimesLooter(l)}`;
       aura.setAttribute("aria-label", aura.title);
       label.append(aura);
     }

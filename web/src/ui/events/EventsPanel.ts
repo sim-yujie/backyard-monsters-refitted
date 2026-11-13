@@ -721,7 +721,7 @@ export class EventsPanel {
     const words = el("div", "events-krallen__aura-words");
     words.append(
       el("span", "events-krallen__aura-need", shortAmount(tier.need)),
-      el("span", "events-krallen__aura-what", `Loot aura: x${krallenAuraTimes(shown)} loot near Krallen`),
+      el("span", "events-krallen__aura-what", `Loot aura: nearby monsters loot up to x${krallenAuraTimes(shown)}`),
     );
     if (after < KRALLEN_AURA_LEVEL) {
       words.append(el("span", "events-krallen__aura-note", `Needs Krallen level ${KRALLEN_AURA_LEVEL}`));

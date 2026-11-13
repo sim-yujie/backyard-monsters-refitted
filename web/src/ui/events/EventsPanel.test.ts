@@ -279,7 +279,7 @@ describe("EventsPanel: the Krallen Hunt", () => {
       panel.render(list([twoMarks(200_000_000, 3, [true, false])]));
       const row = auraRow(panel);
       expect(row.querySelector(".events-krallen__aura-need")?.textContent).toBe("450M");
-      expect(row.querySelector(".events-krallen__aura-what")?.textContent).toBe("Loot aura: x2 loot near Krallen");
+      expect(row.querySelector(".events-krallen__aura-what")?.textContent).toBe("Loot aura: nearby monsters loot up to x2");
       expect(row.querySelector(".events-tier__claim")).toBeNull();
       expect(row.querySelector(".events-krallen__aura-note")).toBeNull();
       expect(panel.element.querySelector(".events-krallen .events-calendar__count")?.textContent).toBe("200M / 450M");
@@ -293,7 +293,7 @@ describe("EventsPanel: the Krallen Hunt", () => {
       panel.render(list([view]));
       const button = auraRow(panel).querySelector<HTMLButtonElement>(".events-tier__claim")!;
       expect(button.textContent).toBe("Claim");
-      expect(auraRow(panel).querySelector(".events-krallen__aura-what")?.textContent).toBe("Loot aura: x2.8 loot near Krallen");
+      expect(auraRow(panel).querySelector(".events-krallen__aura-what")?.textContent).toBe("Loot aura: nearby monsters loot up to x2.8");
       button.click();
       expect(options.onClaimTier).toHaveBeenCalledWith(expect.objectContaining({ id: "krallen-2026-11" }), 1);
       panel.close();
@@ -330,7 +330,7 @@ describe("EventsPanel: the Krallen Hunt", () => {
       panel.render(list([twoMarks(900_000_000, 5)]));
       expect(panel.element.querySelector(".events-krallen__claim")).toBeNull();
       expect(auraRow(panel).querySelector(".events-tier__claim")).not.toBeNull();
-      expect(auraRow(panel).querySelector(".events-krallen__aura-what")?.textContent).toBe("Loot aura: x3.6 loot near Krallen");
+      expect(auraRow(panel).querySelector(".events-krallen__aura-what")?.textContent).toBe("Loot aura: nearby monsters loot up to x3.6");
       panel.close();
     });
   });

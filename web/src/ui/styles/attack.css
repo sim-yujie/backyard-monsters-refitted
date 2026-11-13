@@ -748,6 +748,7 @@
   border-radius: var(--radius-sm);
   color: var(--colour-success);
   font-variant-numeric: tabular-nums;
+  white-space: nowrap;
 }
 
 .attack-army__housed {

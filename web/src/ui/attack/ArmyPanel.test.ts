@@ -601,7 +601,7 @@ describe("ArmyPanel champion", () => {
     it("while it runs: the green glow and how much more her neighbours loot", () => {
       const { panel } = mount(withKrallen({ l: 4, la: NOW + 86_400 }));
       const row = krallenRow(panel);
-      expect(row.querySelector(".attack-army__aura")?.textContent).toBe("x2.8");
+      expect(row.querySelector(".attack-army__aura")?.textContent).toBe("up to x2.8");
       expect(row.querySelector(".attack-army__icon--aura")).not.toBeNull();
       expect(panel.element.querySelector(".attack-army__champion[data-t='4'] .attack-army__aura")).toBeNull();
     });

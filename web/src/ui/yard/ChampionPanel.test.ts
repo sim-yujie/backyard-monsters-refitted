@@ -537,14 +537,16 @@ describe("ChampionPanel: stats and Krallen", () => {
 
   describe("her Krallen Hunt loot aura (owner, 13 Nov 2026)", () => {
     const UNTIL = T0 + 20 * 86_400;
-    const auraLine = (champions: ChampionSaveEntry[]) =>
+    const auraLines = (champions: ChampionSaveEntry[]) =>
       setup(champions, [CAGE, { id: 4, t: 119, l: 1, X: 400, Y: 0 }])
-        .element.querySelector<HTMLElement>(".champion__part--special .champion__aura");
+        .element.querySelectorAll<HTMLElement>(".champion__part--special .champion__aura");
+    const auraLine = (champions: ChampionSaveEntry[]) => auraLines(champions)[0] ?? null;
 
     it("while it runs at level 3 to 5: x2, x2.8 or x3.6 and until when", () => {
-      expect(auraLine([gorgo(), krallen({ l: 4, la: UNTIL })])?.textContent).toMatch(/^Loot aura x2\.8 · until .+$/);
-      expect(auraLine([gorgo(), krallen({ l: 3, la: UNTIL })])?.textContent).toMatch(/^Loot aura x2 · /);
-      expect(auraLine([gorgo(), krallen({ l: 5, la: UNTIL })])?.textContent).toMatch(/^Loot aura x3\.6 · /);
+      expect(auraLine([gorgo(), krallen({ l: 4, la: UNTIL })])?.textContent).toMatch(/^Loot aura · until .+$/);
+      expect(auraLines([gorgo(), krallen({ l: 4, la: UNTIL })])[1]?.textContent).toBe("Monsters x2.8 · Resource hunters x1.45");
+      expect(auraLines([gorgo(), krallen({ l: 3, la: UNTIL })])[1]?.textContent).toBe("Monsters x2 · Resource hunters x1.25");
+      expect(auraLines([gorgo(), krallen({ l: 5, la: UNTIL })])[1]?.textContent).toBe("Monsters x3.6 · Resource hunters x1.65");
     });
 
     it("none without the 3x claim, once it has run out, or below level 3", () => {
