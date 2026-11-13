@@ -353,7 +353,7 @@ describe("BuildMenu", () => {
     const meta = (): Element => menu.element.querySelector(".build-menu__meta")!;
     expect(spokenText(meta())).toBe("You have Glimmers 300");
     // And it redraws while open when the balance moves again.
-    noteCoins(450, [{ amount: 150, reason: "weekend-boost" }]);
+    noteCoins(450, [{ amount: 150, reason: "weekend-checkin" }]);
     expect(spokenText(meta())).toBe("You have Glimmers 450");
   });
 

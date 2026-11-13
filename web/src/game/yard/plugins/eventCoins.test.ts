@@ -15,9 +15,9 @@ describe("event coins plugin", () => {
   it("names what paid in one or two words", () => {
     expect(gainWords(["calendar"])).toBe("Daily");
     expect(gainWords(["calendar", "ladder"])).toBe("Daily + Event");
-    expect(gainWords(["weekend-played"])).toBe("Weekend");
+    expect(gainWords(["weekend-checkin"])).toBe("Weekend");
     expect(gainWords(["announcement"])).toBe("Gift");
-    expect(gainWords(["weekend-played", "weekend-boost"])).toBe("Weekend + Boost");
+    expect(gainWords(["calendar", "weekend-checkin"])).toBe("Daily + Weekend");
     expect(gainWords(["unknown"])).toBe("");
     expect(gainWords([])).toBe("");
   });
@@ -45,17 +45,13 @@ describe("event coins plugin", () => {
     expect(notices.show).toHaveBeenCalledTimes(1);
   });
 
-  it("a weekend's Glimmers paid by the load show a +25 notice on mount, the boost's 75 another", () => {
-    const { notices, mounts: m } = mounts({
-      eventcoins: 25,
-      coinsgained: [{ amount: 25, reason: "weekend-played" }],
-    });
+  it("a weekend check-in's 50 Glimmers show a +50 notice (owner, 13 Nov 2026)", () => {
+    const { notices, mounts: m } = mounts({ eventcoins: 25 });
     eventCoinsPlugin(m);
+    expect(notices.show).not.toHaveBeenCalled();
+    noteCoins(75, [{ amount: 50, reason: "weekend-checkin" }]);
     expect(notices.show).toHaveBeenCalledTimes(1);
-    expect(notices.show.mock.calls[0]![1].getAttribute("aria-label")).toBe("25 Glimmers gained: Weekend");
-    noteCoins(100, [{ amount: 75, reason: "weekend-boost" }]);
-    expect(notices.show).toHaveBeenCalledTimes(2);
-    expect(notices.show.mock.calls[1]![1].getAttribute("aria-label")).toBe("75 Glimmers gained: Boost");
+    expect(notices.show.mock.calls[0]![1].getAttribute("aria-label")).toBe("50 Glimmers gained: Weekend");
   });
 
   it("a load without a purse (the Inferno) shows nothing; claims show on their own notice", () => {

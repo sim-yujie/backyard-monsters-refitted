@@ -1,7 +1,7 @@
 import { post, send, type FormBody, type RequestOptions } from "./http";
 import { getSession } from "./auth";
 import { seasonFor, setSeason } from "@/game/season";
-import { readWeekendState, setWeekend } from "@/game/weekend";
+import { readCheckin, readWeekendState, setWeekend, setWeekendCheckin } from "@/game/weekend";
 import {
   BaseMode,
   type AttackData,
@@ -31,6 +31,8 @@ const loadBase = async (body: BaseLoadRequest): Promise<BaseLoadResponse> => {
   setSeason(seasonFor(response.activeevents ?? []));
   // A foreign load (an attack, a visit) answers the same weekend: the server's, not the yard's.
   if (response.weekend !== undefined) setWeekend(readWeekendState(response.weekend), response.currenttime);
+  // The owner's main-yard load: the weekend's daily check-in, while one runs.
+  if (response.weekendcheckin !== undefined) setWeekendCheckin(readCheckin(response.weekendcheckin));
   return response;
 };
 const SAVE_PATH = "/base/save";

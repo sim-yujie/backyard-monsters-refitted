@@ -1,134 +1,164 @@
 import type { EntityManager } from "@mikro-orm/core";
 
-import { logger } from "../../utils/logger.js";
 import { coinStore, type EventCoinStore } from "./eventCoins.js";
 import { activeRun, type WeekendRun } from "./weekendSchedule.js";
 import type { WeekendSettings } from "../../game-data/events/weekendEvents.js";
 import { weekendSettings } from "./weekendSettings.js";
 
 /**
- * A weekend event's Glimmers (beta 7 grill item 29, owner 6 Nov 2026; off
- * 8 Nov, back on 12 Nov: "builder's weekend pay glimmer"): about
- * 100 per weekend, {@link WEEKEND_COINS}`.played` for playing during it and
- * `.boost` for using its boost. Each is paid once per player per run (the
- * run's `key`: its Saturday, or `forced-<since>` for a forced one), through
- * the coin log's award key, so a race or a retry never pays twice.
+ * A weekend event's Glimmers: a DAILY CHECK-IN (owner, 13 Nov 2026: "reward
+ * based on attendance (Check in on the event itself to receive 50 glimmer
+ * each day)"). While a weekend event runs, a player may check in once per
+ * event day, from the event's card on the Events page or its pop-up, and
+ * each check-in pays {@link WEEKEND_CHECKIN_COINS}. A 48-hour weekend has
+ * two days, so 100 at most. Using the event's discount pays nothing (the
+ * old 25 "played" + 75 "boost" Glimmers are gone).
  *
- * - Played: the first time the player's own main yard loads during the run
- *   (`controllers/base/load/baseLoad.ts`). ASSUMED: loading the yard is
- *   "playing".
- * - Boost: the first time the player uses the boost (`weekendBoosts.ts`
- *   `weekendBoostUsed`): an upgrade at the Builder's Weekend price, a
- *   training or research in a Study Weekend, monsters hatched in a Hatch
- *   Rush, tribe loot banked in Tribe Plunder. Using the boost also counts as
- *   playing (ASSUMED), so it pays "played" too when that is still unpaid.
+ * An event DAY is each 24-hour block from the run's start: a scheduled
+ * weekend starts Saturday 00:00 in the settings' zone (UTC by default), so
+ * day 1 is Saturday and day 2 Sunday. A weekend the dashboard lengthens
+ * gets more days (72 h: 3); one it shortens fewer (24 h: 1); a last block
+ * shorter than 24 h still counts as a day. A run forced from the dashboard
+ * ("Run now") counts its days from the moment it was switched on.
+ *
+ * Each day is paid at most once per player through the coin log's award
+ * key `weekend:<run key>:day<n>` (unique per player), so a double click,
+ * two tabs or a retry never pays twice. No new table or column.
  */
-export const WEEKEND_COINS = { played: 25, boost: 75 } as const;
+export const WEEKEND_CHECKIN_COINS = 50;
 
-export type WeekendCoinPart = keyof typeof WEEKEND_COINS;
+/** The coin log's reason for a check-in. */
+export const WEEKEND_CHECKIN_REASON = "weekend-checkin";
 
-/** The coin log's award key for `part` of `run`. */
-export const weekendAwardKey = (run: Pick<WeekendRun, "key">, part: WeekendCoinPart): string =>
-  `weekend:${run.key}:${part}`;
+const DAY = 86_400;
 
-/**
- * Keys already paid (or found paid) in this process, so a busy player's
- * every yard load is not a database write. Only a cache: the log's unique
- * index is the rule. Emptied when it grows past {@link SEEN_MAX}.
- */
-const seen = new Set<string>();
-const SEEN_MAX = 200_000;
+/** Above this many days (a long forced test run) the card shows only yesterday and today. */
+export const WEEKEND_CHECKIN_MAX_MARKS = 7;
 
-const remember = (key: string): void => {
-  if (seen.size >= SEEN_MAX) seen.clear();
-  seen.add(key);
+/** The run's day at `now`, 1-based (24-hour blocks from its start). */
+export const weekendDayOf = (run: Pick<WeekendRun, "startsAt">, now: number): number =>
+  Math.floor((now - run.startsAt) / DAY) + 1;
+
+/** How many days the run has (its last, shorter block counts). */
+export const weekendDaysOf = (run: Pick<WeekendRun, "startsAt" | "endsAt">): number =>
+  Math.max(1, Math.ceil((run.endsAt - run.startsAt) / DAY));
+
+/** The run on at `now` that has started (a forced run is "on" before its `since`; it has no day then). */
+const runAt = (settings: WeekendSettings, now: number): WeekendRun | null => {
+  const run = activeRun(settings, now);
+  return run && run.startsAt <= now ? run : null;
 };
 
-/** Forgets the cache (tests). */
-export const forgetWeekendCoinCache = (): void => seen.clear();
+/** The coin log's award key for day `day` of `run`. */
+export const weekendCheckinKey = (run: Pick<WeekendRun, "key">, day: number): string =>
+  `weekend:${run.key}:day${day}`;
 
-export interface WeekendCoinOptions {
+/** When day `day + 1` starts, or null when `day` is the run's last. */
+const nextDayAt = (run: Pick<WeekendRun, "startsAt" | "endsAt">, day: number): number | null => {
+  const at = run.startsAt + day * DAY;
+  return at < run.endsAt ? at : null;
+};
+
+/** One day of the run as the card shows it. */
+export interface WeekendCheckinMark {
+  readonly day: number;
+  readonly claimed: boolean;
+}
+
+/** The player's check-in for the weekend run on now (the card's button and day marks). */
+export interface WeekendCheckinState {
+  /** The run's key, so the client never reads one weekend's state for another. */
+  readonly key: string;
+  /** What one check-in pays. */
+  readonly amount: number;
+  /** Today's day of the run, 1-based. */
+  readonly day: number;
+  /** The run's days. */
+  readonly days: number;
+  /** Whether today has been checked in. */
+  readonly claimedToday: boolean;
+  /** The days to draw: every day of the run, or for a run longer than {@link WEEKEND_CHECKIN_MAX_MARKS} days yesterday and today. */
+  readonly marks: readonly WeekendCheckinMark[];
+  /** When the next day starts (unix s), or null on the last day. */
+  readonly nextAt: number | null;
+}
+
+export interface WeekendCheckinOptions {
   readonly settings?: WeekendSettings;
   readonly store?: EventCoinStore;
 }
 
-/**
- * Pays `parts` of the weekend run on at `now` to `userid`, each at most
- * once; returns the coins paid now (0 when no run is on or all were paid).
- * Errors go to the caller: inside a yard action they roll the action back
- * (it is retried), elsewhere call {@link awardWeekendCoinsSafely}.
- */
-export const awardWeekendCoins = async (
-  em: EntityManager,
-  userid: number,
-  parts: readonly WeekendCoinPart[],
-  now: number,
-  options: WeekendCoinOptions = {}
-): Promise<number> => {
-  const run = activeRun(options.settings ?? weekendSettings(), now);
-  if (!run) return 0;
-  const store = options.store ?? coinStore();
-  let paid = 0;
-  for (const part of parts) {
-    const key = weekendAwardKey(run, part);
-    const cacheKey = `${userid}:${key}`;
-    if (seen.has(cacheKey)) continue;
-    const balance = await store.grant(em, userid, WEEKEND_COINS[part], `weekend-${part}`, key);
-    if (balance !== null) paid += WEEKEND_COINS[part];
-    // Remembered only once found paid already: a payment made inside a yard
-    // action may still roll back, and the next call must try again.
-    else remember(cacheKey);
-  }
-  return paid;
+/** The days {@link WeekendCheckinState.marks} draws. */
+const markDays = (day: number, days: number): number[] => {
+  const first = days <= WEEKEND_CHECKIN_MAX_MARKS ? 1 : Math.max(1, day - 1);
+  const last = days <= WEEKEND_CHECKIN_MAX_MARKS ? days : day;
+  return Array.from({ length: last - first + 1 }, (_, i) => first + i);
 };
 
-/**
- * {@link awardWeekendCoins} for the places that must not fail on it (a
- * yard load, an attack already committed): a failure is logged and the
- * coins are paid at the next chance instead.
- */
-export const awardWeekendCoinsSafely = async (
+/** The state of `run` at `now` for `userid`, read through `store`. */
+const stateOf = async (
   em: EntityManager,
+  store: EventCoinStore,
   userid: number,
-  parts: readonly WeekendCoinPart[],
-  now: number,
-  options: WeekendCoinOptions = {}
-): Promise<number> => {
-  try {
-    return await awardWeekendCoins(em, userid, parts, now, options);
-  } catch (error) {
-    logger.error("Could not pay weekend coins to {userid}: {error}", {
-      event: "weekend-coins-failed",
-      userid,
-      parts,
-      error,
-    });
-    return 0;
-  }
-};
-
-/** What the weekend pop-up shows: the run on now and which parts this player has been paid. */
-export interface WeekendCoinState {
-  readonly key: string;
-  readonly played: boolean;
-  readonly boost: boolean;
-  readonly coins: typeof WEEKEND_COINS;
-}
-
-export const weekendCoinState = async (
-  em: EntityManager,
-  userid: number,
-  now: number,
-  options: WeekendCoinOptions = {}
-): Promise<WeekendCoinState | null> => {
-  const run = activeRun(options.settings ?? weekendSettings(), now);
-  if (!run) return null;
-  const store = options.store ?? coinStore();
-  const paid = await store.awarded(em, userid, [weekendAwardKey(run, "played"), weekendAwardKey(run, "boost")]);
+  run: WeekendRun,
+  now: number
+): Promise<WeekendCheckinState> => {
+  const day = weekendDayOf(run, now);
+  const days = weekendDaysOf(run);
+  const shown = markDays(day, days);
+  const paid = await store.awarded(em, userid, shown.map((d) => weekendCheckinKey(run, d)));
+  const marks = shown.map((d) => ({ day: d, claimed: paid.has(weekendCheckinKey(run, d)) }));
   return {
     key: run.key,
-    played: paid.has(weekendAwardKey(run, "played")),
-    boost: paid.has(weekendAwardKey(run, "boost")),
-    coins: WEEKEND_COINS,
+    amount: WEEKEND_CHECKIN_COINS,
+    day,
+    days,
+    claimedToday: paid.has(weekendCheckinKey(run, day)),
+    marks,
+    nextAt: nextDayAt(run, day),
   };
+};
+
+/** The player's check-in state for the weekend run on at `now`, or null when none runs. */
+export const weekendCheckinState = async (
+  em: EntityManager,
+  userid: number,
+  now: number,
+  options: WeekendCheckinOptions = {}
+): Promise<WeekendCheckinState | null> => {
+  const run = runAt(options.settings ?? weekendSettings(), now);
+  if (!run) return null;
+  return stateOf(em, options.store ?? coinStore(), userid, run, now);
+};
+
+/** Why a check-in was refused. */
+export type WeekendCheckinRefusal =
+  | { readonly refused: "noWeekend" }
+  | { readonly refused: "checkedInToday"; readonly state: WeekendCheckinState };
+
+export type WeekendCheckinResult =
+  | { readonly refused?: undefined; readonly paid: number; readonly state: WeekendCheckinState }
+  | WeekendCheckinRefusal;
+
+/**
+ * Checks `userid` in for today of the weekend run on at `now`: pays
+ * {@link WEEKEND_CHECKIN_COINS} once per day. Refused when no weekend event
+ * runs, or today was paid already (a second click, another tab). Inside a
+ * yard action pass its transaction: the coins land or roll back with it, and
+ * the action's answer reports the new balance.
+ */
+export const checkInWeekend = async (
+  em: EntityManager,
+  userid: number,
+  now: number,
+  options: WeekendCheckinOptions = {}
+): Promise<WeekendCheckinResult> => {
+  const run = runAt(options.settings ?? weekendSettings(), now);
+  if (!run) return { refused: "noWeekend" };
+  const store = options.store ?? coinStore();
+  const day = weekendDayOf(run, now);
+  const balance = await store.grant(em, userid, WEEKEND_CHECKIN_COINS, WEEKEND_CHECKIN_REASON, weekendCheckinKey(run, day));
+  const state = await stateOf(em, store, userid, run, now);
+  if (balance === null) return { refused: "checkedInToday", state };
+  return { paid: WEEKEND_CHECKIN_COINS, state };
 };
