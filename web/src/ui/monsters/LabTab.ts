@@ -170,7 +170,9 @@ export class LabTab implements MonstersTab {
       }
     }
     this.syncPending();
-    if (focusKey) this.element.querySelector<HTMLElement>(`[data-focus-key="${focusKey}"]`)?.focus();
+    // Without preventScroll the browser scrolls the list to the redrawn copy:
+    // on a phone that threw the list about on a tap (the Hatch tab's bug, 13 Nov).
+    if (focusKey) this.element.querySelector<HTMLElement>(`[data-focus-key="${focusKey}"]`)?.focus({ preventScroll: true });
   }
 
   /** The research running, else the first that can start, else the first the Lab could take, else the first. */
