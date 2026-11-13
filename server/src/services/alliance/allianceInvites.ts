@@ -13,6 +13,7 @@ import { Alliance } from "../../database/models/alliance.model.js";
 import { AllianceInvite } from "../../database/models/allianceinvite.model.js";
 import { User } from "../../database/models/user.model.js";
 import { postgres } from "../../server.js";
+import { visiblePhotos } from "../profile/visiblePhoto.js";
 import { addAllianceMember, lockAlliance, lockMembership } from "./membership.js";
 import { AllianceAction, can } from "./permissions.js";
 import { memberLimit } from "./allianceTypes.js";
@@ -41,6 +42,8 @@ interface InviteMessage {
   user_id: number;
   user_name: string;
   user_pic_square: string | null;
+  /** The player's visible photo's upload number; null for the critter. */
+  user_photo: number | null;
   base_id: string | null;
   update_at_formatted: string;
 }
@@ -110,13 +113,14 @@ export const getInviteMessages = async (user: User): Promise<InviteMessage[]> =>
   // The players named on each row, and whoever sent each invite.
   const userIds = invites.flatMap((invite) => (invite.invited_by ? [invite.user_id, invite.invited_by] : [invite.user_id]));
 
-  const [alliances, players] = await Promise.all([
+  const [alliances, players, photos] = await Promise.all([
     postgres.em.find(Alliance, { id: { $in: allianceIds } }),
     postgres.em.find(
       User,
       { userid: { $in: userIds } },
       { fields: ["userid", "username", "pic_square", "save.baseid"] }
     ),
+    visiblePhotos(postgres.em, invites.map((invite) => invite.user_id)),
   ]);
 
   const alliancesById = new Map(alliances.map((alliance) => [alliance.id, alliance]));
@@ -143,6 +147,7 @@ export const getInviteMessages = async (user: User): Promise<InviteMessage[]> =>
       user_id: player.userid,
       user_name: player.username,
       user_pic_square: player.pic_square ?? null,
+      user_photo: photos.get(player.userid) ?? null,
       base_id: player.save?.baseid ?? null,
       update_at_formatted: formatInviteDate(invite.updated_at),
     };

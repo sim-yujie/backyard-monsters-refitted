@@ -153,6 +153,20 @@ describe("the Players tab", () => {
     expect(attackOf("5008").disabled).toBe(false);
   });
 
+  it("shows a player's uploaded photo, and the critter for one with none (owner, 13 Nov 2026)", async () => {
+    neighbours.mockImplementation(async () =>
+      neighboursOf([neighbour({ photo: 6 }), neighbour({ userid: 43, baseid: "5006", name: "Cleo", photo: null })]),
+    );
+    await openPlayers();
+    await settle();
+    const photo = row("5005").querySelector<HTMLImageElement>(".inferno-player__portrait")!;
+    expect(photo.classList.contains("is-photo")).toBe(true);
+    expect(photo.getAttribute("src")).toContain("/profile/photos/42?v=6");
+    const critter = row("5006").querySelector<HTMLImageElement>(".inferno-player__portrait")!;
+    expect(critter.classList.contains("is-photo")).toBe(false);
+    expect(critter.getAttribute("src")).not.toContain("/profile/photos/");
+  });
+
   it("is left out when the map cannot open a look", async () => {
     const { openView: _openView, ...withoutView } = deps;
     await openInfernoMap(withoutView);

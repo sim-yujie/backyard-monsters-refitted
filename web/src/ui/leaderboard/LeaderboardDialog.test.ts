@@ -70,6 +70,15 @@ describe("openLeaderboard", () => {
     expect(faces[1]).toMatch(/avatars\/[a-z]+-64\.webp$/);
   });
 
+  it("shows a player's uploaded photo in place of their critter (owner, 13 Nov 2026)", async () => {
+    await open({ ...boardOf(2, null), top: [rowOf(1, { pic: "/avatars/frog.webp", photo: 3 }), rowOf(2, { photo: null })] });
+    const faces = rows().map((row) => row.querySelector<HTMLImageElement>(".leaderboard__face")!);
+    expect(faces[0]!.src).toContain(`/profile/photos/${rowOf(1).userId}?v=3`);
+    expect(faces[0]!.classList.contains("is-photo")).toBe(true);
+    expect(faces[1]!.src).toMatch(/avatars\/[a-z]+-64\.webp$/);
+    expect(faces[1]!.classList.contains("is-photo")).toBe(false);
+  });
+
   it("lights up the player's own row in the top 100 and adds no You line", async () => {
     await open(boardOf(100, rowOf(42)), 1042);
     const mine = rows().filter((row) => row.classList.contains("leaderboard__row--you"));

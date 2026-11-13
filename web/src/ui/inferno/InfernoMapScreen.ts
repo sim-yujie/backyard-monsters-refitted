@@ -9,7 +9,7 @@ import {
   sortTribeRows,
   type TribeRow,
 } from "@/game/inferno/tribeMap";
-import { avatarOf, avatarUrl } from "@/game/avatars";
+import { playerPicture, showPlayerPicture } from "@/game/playerPicture";
 import { playerStatus, type PlayerRow } from "@/game/inferno/playerMap";
 import { Popup } from "@/ui/Popup";
 import "@/ui/styles/inferno.css";
@@ -466,7 +466,7 @@ export class InfernoMapScreen {
         const item = element("div", "inferno-row inferno-player");
         item.dataset["player"] = row.baseid;
         const picture = element("img", "inferno-row__portrait inferno-player__portrait");
-        picture.src = avatarUrl(avatarOf(row.pic, row.userid), "small");
+        showPlayerPicture(picture, playerPicture(row.userid, row.pic, row.photo, "small"));
         picture.alt = "";
         picture.decoding = "async";
 

@@ -104,7 +104,7 @@ describe.skipIf(!dbName)("the Defences routes on a real database (issue #360)", 
     );
     expect(defences[0]).toEqual({
       id: ids.get(119),
-      attacker: { name: "zz_dra_attacker", pic: "https://pic.invalid/a.png" },
+      attacker: expect.objectContaining({ name: "zz_dra_attacker", pic: "https://pic.invalid/a.png", userid: ATTACKER, photo: null }),
       attackedAt: (T0 + 116 * MINUTE) / 1000,
       landedAt: (T0 + 119 * MINUTE) / 1000,
       damageDone: 35,

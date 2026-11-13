@@ -24,6 +24,8 @@ export interface GiftView {
   userid: number;
   username: string;
   pic: string | null;
+  /** Their visible photo's upload number; null for the critter. */
+  photo: number | null;
   level: number;
   resource: GiftResource;
   amount: number;

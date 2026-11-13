@@ -14,6 +14,8 @@ export interface BoardRow {
   readonly name: string;
   /** `pic_square`: their avatar's path, or null for their default one. */
   readonly pic: string | null;
+  /** Their uploaded photo's upload number; null or absent for the critter (`game/playerPicture.ts`). */
+  readonly photo?: number | null;
   readonly empirePoints: number;
   readonly outposts: number;
 }

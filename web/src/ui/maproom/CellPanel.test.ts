@@ -145,6 +145,20 @@ describe("another player's yard", () => {
     expect(buttonNamed(host, "View yard")).toBeDefined();
   });
 
+  it("shows their uploaded photo filling the frame, and the critter when it is hidden or will not load", () => {
+    const { host } = open(player({ photo: 5 }));
+    const picture = host.querySelector<HTMLImageElement>(".mr2-cell__picture img")!;
+    expect(picture.getAttribute("src")).toMatch(/\/profile\/photos\/\d+\?v=5$/);
+    expect(picture.classList.contains("is-photo")).toBe(true);
+    picture.dispatchEvent(new Event("error"));
+    expect(picture.src).toContain("avatars/bee.webp");
+    expect(picture.classList.contains("is-photo")).toBe(false);
+
+    const hidden = open(player({ photo: null })).host.querySelector<HTMLImageElement>(".mr2-cell__picture img")!;
+    expect(hidden.src).toContain("avatars/bee.webp");
+    expect(hidden.classList.contains("is-photo")).toBe(false);
+  });
+
   it("keeps empire value and alliance behind More about this yard", () => {
     const { host } = open(player({ aid: 12 }));
     const more = host.querySelector<HTMLDetailsElement>(".mr2-cell__more")!;

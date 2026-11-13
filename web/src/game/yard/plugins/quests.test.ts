@@ -157,8 +157,12 @@ describe("QuestsDoor", () => {
     vi.advanceTimersByTime(POPUP_FIRST_DELAY_MS + POPUP_RETRY_MS);
     expect(document.querySelector(".quests-login-popup")).not.toBeNull();
     expect(window.localStorage.getItem("bymr.quests.loginPopup.1234")).toBe("2026-11-02");
+    // The keyboard sits on the window, not Claim: a stray Enter claims nothing (owner, 13 Nov 2026).
+    const claim = document.querySelector<HTMLButtonElement>(".quests-login-popup .quests-login__claim")!;
+    expect(document.activeElement).not.toBe(claim);
+    expect(document.querySelector(".quests-login-popup")!.contains(document.activeElement)).toBe(true);
 
-    document.querySelector<HTMLButtonElement>(".quests-login-popup .quests-login__claim")!.click();
+    claim.click();
     await vi.advanceTimersByTimeAsync(0);
     expect(actions.claimLogin).toHaveBeenCalled();
     expect(document.querySelector(".quests-login-popup .quests-login__note")?.textContent).toMatch(/^Next day in/);

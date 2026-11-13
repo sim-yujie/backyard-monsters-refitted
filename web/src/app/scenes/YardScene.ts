@@ -1,5 +1,6 @@
 import { getSession, logout } from "@/api/auth";
 import { setCurrentAllianceBonuses } from "@/game/alliance/allianceBonuses";
+import { allianceButtonShows } from "@/game/alliance/allianceButton";
 import { setAllianceTradeFrom } from "@/game/alliance/tradeSwitch";
 import { chatApi, chatConfigFrom } from "@/api/chat";
 import { loadAttackOn, loadOwnBase, loadOwnYard, takeAwayJobs, viewBase } from "@/api/base";
@@ -771,6 +772,10 @@ export class YardScene implements Scene {
         onBuildObservatory: () => this.openBuildMenu(OBSERVATORY_TYPE),
         onOpenMap: () => this.openMap(),
         onChanged: () => void this.store?.refresh(),
+        // Joined, founded, left or kicked: the More menu's button follows at once.
+        onMembership: () => {
+          if (this.store) this.showDefences(this.store);
+        },
       });
       this.defences.button.element.after(this.alliance.button);
       // Reports (owner, 12 Nov 2026): last in the More fan, shown only to moderators (the server says who).
@@ -1036,6 +1041,8 @@ export class YardScene implements Scene {
       // The alliance's strengths and weaknesses, for prices outside the yard store (Starter Kits, outpost hatching).
       if (!target && !tribe && store?.kind === "main") {
         setCurrentAllianceBonuses(response.alliancedata);
+        // The store started (and drew the More menu) before this was known: the Alliance button asks again.
+        this.showDefences(store);
         // Alliance trading's switch, for chat's Send and Trade buttons (off in beta 7).
         setAllianceTradeFrom(response.alliancedata);
       }
@@ -2044,8 +2051,11 @@ export class YardScene implements Scene {
   /** The Defences button: only Map Room 2 keeps defence replays (until #246); an outpost is a Map Room 2 cell. */
   private showDefences(store: YardStore): void {
     this.defences?.setAvailable(store.kind === "outpost" || mapRoomOf(store.save) === MapRoomChoice.MAP_ROOM_2);
-    // Alliances are the player's, so Map Room 2's main yard and outposts show the button; the Inferno does not.
-    this.alliance?.setAvailable(store.kind === "outpost" || (store.kind !== "inferno" && mapRoomOf(store.save) === MapRoomChoice.MAP_ROOM_2));
+    // Alliances are the player's, so Map Room 2's main yard and outposts may show the button; the Inferno does not.
+    // It waits for a finished Observatory in the main yard, or for the player to be in an alliance already
+    // (owner, 13 Nov 2026; `game/alliance/allianceButton.ts`).
+    const mapRoom2 = store.kind === "outpost" || (store.kind !== "inferno" && mapRoomOf(store.save) === MapRoomChoice.MAP_ROOM_2);
+    this.alliance?.setAvailable(allianceButtonShows({ kind: store.kind, mapRoom2, buildings: store.yard.buildings }));
   }
 
   /** Carries out what another screen asked the own yard to open (`yardIntent.ts`). */

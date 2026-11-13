@@ -1,5 +1,5 @@
 import { getEmpireBoard, type BoardRow, type EmpireBoard } from "@/api/leaderboard";
-import { avatarOf, avatarUrl } from "@/game/avatars";
+import { playerPicture, showPlayerPicture } from "@/game/playerPicture";
 import { formatAmount } from "@/ui/format";
 import { Popup } from "@/ui/Popup";
 import "./leaderboard.css";
@@ -40,7 +40,7 @@ const row = (item: BoardRow, mine: boolean): HTMLLIElement => {
   line.dataset["rank"] = String(item.rank);
 
   const face = el("img", "leaderboard__face");
-  face.src = avatarUrl(avatarOf(item.pic, item.userId), "small");
+  showPlayerPicture(face, playerPicture(item.userId, item.pic, item.photo, "small"));
   face.alt = "";
   face.decoding = "async";
   face.loading = "lazy";

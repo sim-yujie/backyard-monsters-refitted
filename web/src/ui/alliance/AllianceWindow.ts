@@ -15,7 +15,7 @@ import {
   type MyAlliance,
 } from "@/api/alliance";
 import { friendsApi, SEARCH_MIN_LENGTH, type FriendsApi, type PlayerResult } from "@/api/friends";
-import { avatarOf, avatarUrl } from "@/game/avatars";
+import { playerPicture, showPlayerPicture } from "@/game/playerPicture";
 import {
   aboutCount,
   ALLIANCE_DESC_MAX,
@@ -48,6 +48,7 @@ import {
 } from "@/game/alliance/allianceRules";
 import type { AllianceFocus, AllianceTab } from "@/game/alliance/allianceView";
 import { playerPool } from "@/game/friends/friendsView";
+import { inAlliance, setInAlliance } from "@/game/alliance/allianceButton";
 import { setAllianceTradeOn, TRADE_OFF_TITLE } from "@/game/alliance/tradeSwitch";
 import type { AllianceTradeApi } from "@/api/allianceTrade";
 import { TradeTab } from "./allianceTradeUi";
@@ -268,6 +269,8 @@ export interface AllianceWindowOptions {
   readonly onOpenMap?: () => void;
   /** The player joined, founded, left or lost an alliance: the scene refreshes what shows it. */
   readonly onChanged?: () => void;
+  /** Each time the window reads the player's alliance: whether they are in one (the More menu's button follows). */
+  readonly onMembership?: (member: boolean) => void;
   /** World chat, whose Alliance room follows what this window learns; the game's own unless a test swaps it. */
   readonly chat?: Pick<ChatSession, "setAllianceRoom">;
   readonly onClose?: () => void;
@@ -549,6 +552,9 @@ export class AllianceWindow {
       alliance ? { id: alliance.alliance_id, name: alliance.name, image: alliance.image } : null,
     );
     setAllianceTradeOn(mine.alliance?.trade_on);
+    // The Alliance button's rule (`game/alliance/allianceButton.ts`) hears a join, a leave or a kick at once.
+    setInAlliance(alliance !== null && alliance !== undefined);
+    this.options.onMembership?.(inAlliance());
     if (mine.alliance) {
       this.view = { kind: "mine", alliance: mine.alliance };
       this.dropTradeWhenOff();
@@ -1763,7 +1769,7 @@ export class AllianceWindow {
     for (const request of requests) {
       const row = make("div", "alliance__invite alliance__invite--answer");
       row.append(
-        this.face(request.user_pic_square, request.user_id),
+        this.face(request.user_pic_square, request.user_id, request.user_photo),
         make("strong", "alliance__invite-words", request.user_name),
         this.answerButtons(request),
       );
@@ -1772,9 +1778,9 @@ export class AllianceWindow {
     return box;
   }
 
-  private face(pic: string | null, userid: number): HTMLElement {
+  private face(pic: string | null, userid: number, photo?: number | null): HTMLElement {
     const img = make("img", "alliance__face");
-    img.src = avatarUrl(avatarOf(pic, userid), "small");
+    showPlayerPicture(img, playerPicture(userid, pic, photo, "small"));
     img.alt = "";
     img.loading = "lazy";
     return img;
@@ -1796,7 +1802,7 @@ export class AllianceWindow {
     const words = make("span", "alliance__row-words");
     words.append(make("strong", "alliance__row-name", member.display_name), make("span", `alliance__role alliance__role--${role}`, ROLE_WORD[role]));
     row.append(
-      this.face(member.pic_square, member.user_id),
+      this.face(member.pic_square, member.user_id, member.photo),
       words,
       make("span", "alliance__level", ALLIANCE_TEXT.level(member.level)),
       // Offline: an empty spot of the dot's size, so the levels line up (and no "Online" label).
@@ -1895,8 +1901,8 @@ export class AllianceWindow {
     box.append(form);
 
     const people = this.found.length > 0
-      ? this.found.filter((player) => player.relation !== "self").map((player) => ({ id: player.userid, name: player.username, level: player.level, pic: player.pic }))
-      : this.suggested.map((member) => ({ id: member.user_id, name: member.display_name, level: member.level, pic: member.pic_square }));
+      ? this.found.filter((player) => player.relation !== "self").map((player) => ({ id: player.userid, name: player.username, level: player.level, pic: player.pic, photo: player.photo }))
+      : this.suggested.map((member) => ({ id: member.user_id, name: member.display_name, level: member.level, pic: member.pic_square, photo: member.photo }));
     if (this.found.length === 0 && this.suggested.length > 0) box.append(make("p", "alliance__note alliance__note--soft", ALLIANCE_TEXT.suggested));
     for (const person of people) {
       const row = make("div", "alliance__invite");
@@ -1904,7 +1910,7 @@ export class AllianceWindow {
       const send = button(invited ? ALLIANCE_TEXT.invited : ALLIANCE_TEXT.invite, "btn--primary", () => void this.invite(person.id, person.name));
       send.disabled = invited;
       row.append(
-        this.face(person.pic, person.id),
+        this.face(person.pic, person.id, person.photo),
         make("strong", "alliance__invite-words", person.name),
         make("span", "alliance__level", ALLIANCE_TEXT.level(person.level)),
         send,

@@ -25,6 +25,7 @@ import { getPlayerSight } from "../../../services/maproom/sight/sightService.js"
 import { isVisible } from "../../../game-rules/maproom/sight.js";
 import { mr2HexShape, mr2NeighbourBonusMode } from "../../../config/MapRoom2Config.js";
 import { loadAreaNeighbourCounts } from "../../../services/maproom/v2/neighbourDefence.js";
+import { visiblePhotos } from "../../../services/profile/visiblePhoto.js";
 
 /**
  * Wraps a zone coordinate to the world's `0..size-1`: `getarea`'s 11×11 block
@@ -255,7 +256,7 @@ export const getArea: KoaController = async (ctx) => {
     .filter((cell) => cell.uid === user.userid && cell.base_type === MapRoomCell.OUTPOST && cell.save)
     .map((cell) => cell.save!.basesaveid);
 
-  const [ownersList, online, truces, pendingInvites, workers, attackers, friendMarks, attacked] = await Promise.all([
+  const [ownersList, online, truces, pendingInvites, workers, attackers, friendMarks, attacked, photos] = await Promise.all([
     postgres.em.find(User, { userid: { $in: ownerIds } }, {
       populate: ["save"],
       fields: CELL_OWNER_FIELDS,
@@ -273,6 +274,8 @@ export const getArea: KoaController = async (ctx) => {
     // Anyone with an attack between them and the viewer, either way: the hostile border's `ho`
     // (owner, 8 Nov 2026; `hostiles.ts`), switched off by a running truce in `userCell`.
     attackedBetween(postgres.em, user.userid, ownerIds),
+    // Their uploaded photos others may see (owner, 13 Nov 2026), one query for the area: `photo`.
+    visiblePhotos(postgres.em, ownerIds),
   ]);
 
   const cellOwners = new Map(ownersList.map((u) => [u.userid, u]));
@@ -286,6 +289,7 @@ export const getArea: KoaController = async (ctx) => {
   ctx.state.friends = friendMarks.friends;
   ctx.state.pinnedFriends = friendMarks.pinned;
   ctx.state.attacked = attacked;
+  ctx.state.photos = photos;
 
   const allianceIds = new Set<number>();
 

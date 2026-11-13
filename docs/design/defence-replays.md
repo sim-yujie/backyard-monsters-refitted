@@ -193,6 +193,7 @@ returns it, and the mailbox shows **Watch** (opens that replay, same version che
 | Defender moved to MR1 / another world later | Rows stay listed (they were MR2 defences); viewer needs only the payload. |
 | Outposts, own attacks, camps, raids, Trojan, Inferno | Not recorded (gate in §5). |
 | Hidden bots never revealed | Recording, list, API and viewer never ask `isBot` and carry no bot field; a bot attacker (e.g. a revenge on a player who later moved to MR2) is recorded like anyone. Only bot JOBS stay MR1-gated. When #246 turns MR1 on, it must record EVERY MR1 main-yard defence (bot-neighbours decisions 3, 21), and bot revenge's load path (`revengeRun.ts`) must keep the load key too. |
+| Attacker's photo (13 Nov 2026) | Bots were decommissioned, so the "never their id" rule above is retired: the list and replay send the attacker's `userid` and visible `photo` (`services/profile/visiblePhoto.ts`), so their uploaded photo shows like everywhere else. A deleted attacker has `userid` null. |
 | Defender online during an attack | Cannot happen: attacks are refused while the defender is online [fact]. |
 
 ## 10. Test plan

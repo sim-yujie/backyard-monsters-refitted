@@ -57,7 +57,14 @@ const row = (extra: Row = {}): Row => {
   };
 };
 
-const db = { rows: [] as Row[], fields: [] as (readonly string[] | undefined)[] };
+const db = {
+  rows: [] as Row[],
+  fields: [] as (readonly string[] | undefined)[],
+  /** The accounts that still exist, with their visible photo's upload number (null for the critter). */
+  players: new Map<number, number | null>(),
+  /** How many times the players were looked up. */
+  lookups: 0,
+};
 
 const matches = (one: Row, where: Row): boolean =>
   Object.entries(where).every(([key, want]) =>
@@ -85,6 +92,13 @@ const em = {
     const found = db.rows.find((one) => matches(one, where));
     return found ? loaded(found, options.fields) : null;
   },
+  /** `playersAndPhotos`: the asked-for accounts that exist, each with its visible photo. */
+  async execute(sql: string, params: unknown[]) {
+    expect(sql).toContain('FROM bym."user" u');
+    db.lookups++;
+    const asked = String(params[0]).replace(/[{}]/g, "").split(",").filter(Boolean).map(Number);
+    return asked.filter((id) => db.players.has(id)).map((userid) => ({ userid, photo: db.players.get(userid) }));
+  },
 } as unknown as EntityManager;
 
 const me = { userid: ME } as User;
@@ -93,6 +107,8 @@ const other = { userid: OTHER } as User;
 beforeEach(() => {
   db.rows = [];
   db.fields = [];
+  db.players = new Map();
+  db.lookups = 0;
   nextId = 1;
 });
 
@@ -107,7 +123,7 @@ describe("GET /api/:apiVersion/defences", () => {
     expect(defences.map((one) => one.id)).toEqual([1, 3, 2]);
     expect(defences[2]).toEqual({
       id: 2,
-      attacker: { name: "Attacker 2", pic: "https://pic.invalid/2.png" },
+      attacker: { name: "Attacker 2", pic: "https://pic.invalid/2.png", userid: null, photo: null },
       attackedAt: Math.floor((T0 - MINUTE) / 1000),
       landedAt: Math.floor((T0 + 2 * MINUTE) / 1000),
       damageDone: 63,
@@ -155,17 +171,34 @@ describe("GET /api/:apiVersion/defences", () => {
     expect([defence.rulesVersion, defence.hasReplay, defence.playable]).toEqual(["0123456789abcdef", true, false]);
   });
 
-  test("a deleted attacker shows as the name the account deletion left, with no picture", async () => {
+  test("a deleted attacker shows as the name the account deletion left, with no picture, id or photo", async () => {
     db.rows.push(row({ attacker_username: "Deleted player", attacker_pic_square: null }));
     const [defence] = (await listAnswer(em, me)).body.defences as Row[];
-    expect(defence.attacker).toEqual({ name: "Deleted player", pic: null });
+    expect(defence.attacker).toEqual({ name: "Deleted player", pic: null, userid: null, photo: null });
+    expect(JSON.stringify(defence)).not.toContain(String(db.rows[0].attacker_userid));
   });
 
-  test("nothing sent says who the attacker is beyond their name and picture (bots look like players)", async () => {
+  test("an attacker's uploaded photo shows: their id and the photo's upload number are sent", async () => {
+    db.rows.push(row(), row(), row());
+    db.players.set(901, 4); // a visible photo
+    db.players.set(902, null); // no photo, or one hidden, removed, blocked or banned
+    const defences = (await listAnswer(em, me)).body.defences as Row[];
+    const byName = new Map(defences.map((one) => [one.attacker.name, one.attacker]));
+    expect(byName.get("Attacker 1")).toMatchObject({ userid: 901, photo: 4 });
+    expect(byName.get("Attacker 2")).toMatchObject({ userid: 902, photo: null });
+    expect(byName.get("Attacker 3")).toMatchObject({ userid: null, photo: null });
+  });
+
+  test("the whole list's photos are one lookup, never one per attack", async () => {
+    for (let i = 0; i < 12; i++) db.rows.push(row());
+    await listAnswer(em, me);
+    expect(db.lookups).toBe(1);
+  });
+
+  test("nothing sent says the attacker is a bot or which yard they came from", async () => {
     db.rows.push(row());
     const sent = JSON.stringify((await listAnswer(em, me)).body);
-    expect(sent).not.toMatch(/userid|bot|baseid/i);
-    expect(sent).not.toContain(String(db.rows[0].attacker_userid));
+    expect(sent).not.toMatch(/bot|baseid/i);
   });
 });
 

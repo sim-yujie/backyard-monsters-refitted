@@ -2,6 +2,7 @@ import type { EntityManager } from "@mikro-orm/core";
 import z from "zod";
 
 import type { Save } from "../../database/models/save.model.js";
+import { logger } from "../../utils/logger.js";
 import { planGrant, type GrantedReward } from "../../services/events/grant.js";
 import { sqlHasFriend } from "../../services/quests/friends.js";
 import {
@@ -99,9 +100,13 @@ export const questsActions = (hasFriend: HasFriend = sqlHasFriend) => ({
 
   loginClaim: defineYardAction({
     schema: QuestsStateSchema,
-    run: ({ save, now }) => {
+    run: ({ save, user, now }) => {
       const result = claimLogin(current(save, now), now);
       if (!result.ok) return refuse(result.reason, { nextAt: nextUtcMidnight(now) });
+      // One line per claim, so "when did I claim day N?" can be answered from the log (owner, 13 Nov 2026).
+      logger.info(
+        `Quests: ${user.userid} claimed login day ${result.value.day} (+${result.value.shiny} Shiny, ${result.record.login.total} days in all)`,
+      );
       const plan = planGrant(save, [{ kind: "shiny", amount: result.value.shiny }], now);
       const report: QuestsReport = { quests: questsView(result.record, now), granted: plan.granted, day: result.value.day };
       return {
