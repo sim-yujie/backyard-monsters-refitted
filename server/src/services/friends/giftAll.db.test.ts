@@ -225,6 +225,18 @@ describe.skipIf(!dbName)("Gift all on a real database (owner, 13 Nov 2026)", () 
     await sendGiftAnswer(em() as never, as(S), { userid: F1, resource: "r1" }, T0);
     const answer = await sendAll({ fallback: "r1" }, T0 + 5);
     expect(answer.gifts.map((gift: any) => gift.userid)).toEqual([F2, F3, F4]);
+    expect(answer.skipped).toEqual([]);
+    expect(await held()).toMatchObject({ r1: 5000 - 4 * AMOUNT });
+  });
+
+  test("a confirmed friend gifted since the plan is said as already sent, and not paid for", async () => {
+    await setHeld({ r1: 5000, r2: 5000, r3: 5000, r4: 5000 });
+    const shown = await plan({ fallback: "r1" });
+    expect(shown.gifts.map((gift: any) => gift.userid)).toEqual(OPEN);
+    await sendGiftAnswer(em() as never, as(S), { userid: F3, resource: "r1" }, T0);
+    const answer = await sendAll({ fallback: "r1", userids: OPEN }, T0 + 5);
+    expect(answer.gifts.map((gift: any) => gift.userid)).toEqual([F1, F2, F4]);
+    expect(answer.skipped).toEqual([{ userid: F3, username: "zz_ga_3", reason: "giftSentToday", lacking: [], amount: 0 }]);
     expect(await held()).toMatchObject({ r1: 5000 - 4 * AMOUNT });
   });
 

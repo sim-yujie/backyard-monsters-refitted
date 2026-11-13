@@ -55,7 +55,9 @@ import { lockSave, parsedList, readCaps, resourcesOf } from "./gift.js";
  * wish }`, plus `giftid` once sent), `skipped` (`{ userid, username, reason,
  * lacking, amount }`), `cost` per resource and the sender's `resources`
  * (after the gifts left, when sent). Refused as the single gift is while the
- * yard is fought over or is not the player's main yard.
+ * yard is fought over or is not the player's main yard. A friend in
+ * `userids` who has had a gift from the player today since is listed in
+ * `skipped` as `giftSentToday`.
  */
 
 const id = z.coerce.number().int().positive();
@@ -127,8 +129,10 @@ export const giftAllAnswer = async (
 
       const held = resourcesOf(save) as GiftAmounts;
       const fallback = picked ?? mostHeld(held);
-      const candidates = await giftableFriends(tx, from, mine, mine.basesaveid, only, now);
-      const plan = planGiftAll(candidates, held, fallback);
+      const { candidates, giftedAlready } = await giftableFriends(tx, from, mine, mine.basesaveid, only, now);
+      const planned = planGiftAll(candidates, held, fallback);
+      // A confirmed friend sent a gift since (one at a time, or another Gift all): said, not silently dropped.
+      const plan = { ...planned, skipped: [...planned.skipped, ...giftedAlready] };
       const base = { senderName: mine.username, senderBasesaveid: mine.basesaveid, fallback };
       if (!send) return { ...base, ...plan, resources: held };
 
@@ -198,10 +202,11 @@ const giftableFriends = async (
   senderBasesaveid: number,
   only: ReadonlySet<number> | null,
   now: number
-): Promise<GiftAllCandidate[]> => {
-  if (await isBot(from, tx)) return [];
+): Promise<{ candidates: GiftAllCandidate[]; giftedAlready: SkippedGift[] }> => {
+  const none = { candidates: [], giftedAlready: [] };
+  if (await isBot(from, tx)) return none;
   const friends = (await readFriends(tx, from)).filter((friend) => !only || only.has(friend.userid));
-  if (friends.length === 0) return [];
+  if (friends.length === 0) return none;
   const ids = friends.map((friend) => friend.userid);
   const [sides, since, gifted] = await Promise.all([
     readSides(tx, ids),
@@ -210,6 +215,12 @@ const giftableFriends = async (
   ]);
 
   const open: { friend: FriendRow; basesaveid: number }[] = [];
+  // Only a confirmed list (`userids`) reports who already has a gift today; the plan just leaves them out.
+  const giftedAlready: SkippedGift[] = only
+    ? friends
+        .filter((friend) => gifted.has(friend.userid))
+        .map((friend) => ({ userid: friend.userid, username: friend.username, reason: "giftSentToday", lacking: [], amount: 0 }))
+    : [];
   for (const friend of friends) {
     const theirs = sides.get(friend.userid);
     const friendedAt = since.get(friend.userid) ?? null;
@@ -218,14 +229,15 @@ const giftableFriends = async (
     if (await isBot(friend.userid, tx)) continue;
     open.push({ friend, basesaveid: theirs.basesaveid });
   }
-  if (open.length === 0) return [];
+  if (open.length === 0) return { candidates: [], giftedAlready };
 
   const caps = await readCaps(tx, [senderBasesaveid, ...open.map((entry) => entry.basesaveid)]);
   const senderCap = caps.get(senderBasesaveid) ?? 0;
-  return open.map(({ friend, basesaveid }) => ({
+  const candidates = open.map(({ friend, basesaveid }) => ({
     userid: friend.userid,
     username: friend.username,
     wishes: friend.wishes,
     amount: giftAmountOf(senderCap, caps.get(basesaveid) ?? 0),
   }));
+  return { candidates, giftedAlready };
 };
