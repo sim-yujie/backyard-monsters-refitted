@@ -661,12 +661,18 @@ export interface BaseLoadResponse extends ApiEnvelope {
    */
   weekend?: unknown;
   /**
+   * The player's daily check-in for the weekend event on now
+   * (`server/src/services/events/weekendCoins.ts`), read by `game/weekend.ts`.
+   * On the owner's main-yard build load while one runs.
+   */
+  weekendcheckin?: unknown;
+  /**
    * The player's event coins (`server/src/services/events/eventCoins.ts`):
    * on the owner's main-yard build load, and merged from every yard answer
    * that changed them. Absent elsewhere (a visit, an attack, an outpost).
    */
   eventcoins?: number;
-  /** What this load paid (a weekend event's "played" Glimmers), with `eventcoins`. */
+  /** What this load paid, with `eventcoins` (none since the weekend check-in, 13 Nov 2026; kept for an older server). */
   coinsgained?: CoinGain[];
   /** When the yard was last saved, in unix seconds. 0 on a yard never saved. */
   savetime?: number;

@@ -7,8 +7,8 @@ import { YARD_PLUGINS, type YardPlugin } from "../yardPlugins";
  * yard load's purse to the coin module, and shows a short "[coin] +25"
  * notice each time coins arrive that no claim notice already shows. Coins
  * come from big events' calendar days and ladder tiers (owner, 8 Nov 2026)
- * and from weekend events: 25 on the first yard load of the weekend (this
- * load's `coinsgained`), 75 for the first boost used (owner, 12 Nov 2026).
+ * and from weekend events: 50 for each day's check-in on the event's card
+ * or pop-up (owner, 13 Nov 2026).
  */
 
 export const COINS_NOTICE = "event-coins";
@@ -18,8 +18,7 @@ const NOTICE_MS = 6_000;
 const REASON_WORDS: Readonly<Record<string, string>> = {
   calendar: "Daily",
   ladder: "Event",
-  "weekend-played": "Weekend",
-  "weekend-boost": "Boost",
+  "weekend-checkin": "Weekend",
   // An announcement's Glimmers gift (server `GLIMMERS_REASON`).
   announcement: "Gift",
 };

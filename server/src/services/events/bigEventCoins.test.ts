@@ -14,7 +14,7 @@ import {
   type EventDefinition,
 } from "../../game-data/events/events.js";
 import { WEEKEND_EVENT_INFO } from "../../game-data/events/weekendEvents.js";
-import { WEEKEND_COINS } from "./weekendCoins.js";
+import { WEEKEND_CHECKIN_COINS } from "./weekendCoins.js";
 
 /**
  * Event coins come only from big 1-2 week events (owner, 8 Nov 2026), through
@@ -111,10 +111,10 @@ describe("big events pay event coins", () => {
     for (const hunt of KRALLEN_HUNTS) expect(eventCoinsTotal(EVENTS.find((event) => event.id === hunt.id)!)).toBe(0);
   });
 
-  test("weekend events pay only their fixed 25 + 75 (weekendCoins.ts); their definitions carry boosts only", () => {
+  test("weekend events pay only their daily 50 check-in (weekendCoins.ts); their definitions carry boosts only", () => {
     for (const weekend of Object.values(WEEKEND_EVENT_INFO)) {
       expect(JSON.stringify(weekend)).not.toMatch(/coin/i);
     }
-    expect(WEEKEND_COINS).toEqual({ played: 25, boost: 75 });
+    expect(WEEKEND_CHECKIN_COINS).toBe(50);
   });
 });

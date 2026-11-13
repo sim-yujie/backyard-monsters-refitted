@@ -2,192 +2,196 @@ import { beforeEach, describe, expect, test } from "bun:test";
 import type { EntityManager } from "@mikro-orm/core";
 
 import { DEFAULT_WEEKEND_SETTINGS, type WeekendSettings } from "../../game-data/events/weekendEvents.js";
-import { coinNotes, memoryCoinStore, useCoinStore, type EventCoinStore } from "./eventCoins.js";
-import { weekendBoostUsed } from "./weekendBoosts.js";
+import { coinNotes, memoryCoinStore } from "./eventCoins.js";
 import { activeRun } from "./weekendSchedule.js";
-import { setWeekendSettings, weekendSettings } from "./weekendSettings.js";
 import {
-  awardWeekendCoins,
-  awardWeekendCoinsSafely,
-  forgetWeekendCoinCache,
-  WEEKEND_COINS,
-  weekendAwardKey,
-  weekendCoinState,
+  checkInWeekend,
+  WEEKEND_CHECKIN_COINS,
+  weekendCheckinKey,
+  weekendCheckinState,
+  weekendDayOf,
+  weekendDaysOf,
 } from "./weekendCoins.js";
 
 /**
- * A weekend event's Glimmers (beta 7 grill item 29; back on, owner 12 Nov
- * 2026): 25 for playing, 75 for using the boost, each once per player per
- * run, nothing outside a run, for all four weekend events.
- * The schedule is the default rotation: Saturday 14 Nov 2026 is a
- * Builder's Weekend, 21 Nov a Tribe Plunder.
+ * A weekend event's Glimmers (owner, 13 Nov 2026): a check-in once per event
+ * day, 50 each, 100 for a 48-hour weekend; nothing outside a run, for all
+ * four weekend events. The schedule is the default rotation: Saturday 14 Nov
+ * 2026 is a Builder's Weekend, 21 Nov a Tribe Plunder.
  */
 const at = (iso: string): number => Date.parse(iso) / 1000;
 const settings = (over: Partial<WeekendSettings> = {}): WeekendSettings => ({ ...DEFAULT_WEEKEND_SETTINGS, ...over });
 
 const SATURDAY = at("2026-11-14T10:00:00Z");
+const SATURDAY_LATE = at("2026-11-14T23:59:59Z");
+const SUNDAY = at("2026-11-15T00:00:00Z");
 const SUNDAY_LATE = at("2026-11-15T23:30:00Z");
+const MONDAY = at("2026-11-16T00:00:00Z");
 const NEXT_SATURDAY = at("2026-11-21T10:00:00Z");
 const FRIDAY = at("2026-11-13T10:00:00Z");
 
 const fakeEm = (): EntityManager => ({}) as EntityManager;
 
-describe("weekend coins", () => {
+describe("weekend check-in", () => {
   let store: ReturnType<typeof memoryCoinStore>;
-  const options = () => ({ settings: settings(), store });
+  const options = (over: Partial<WeekendSettings> = {}) => ({ settings: settings(over), store });
+  const paid = async (t: number, userid = 7, over: Partial<WeekendSettings> = {}): Promise<number> => {
+    const result = await checkInWeekend(fakeEm(), userid, t, options(over));
+    return result.refused ? 0 : result.paid;
+  };
 
   beforeEach(() => {
     store = memoryCoinStore();
-    forgetWeekendCoinCache();
   });
 
-  test("the owner's figures: 25 for playing, 75 for the boost, 100 in all", () => {
-    expect(WEEKEND_COINS).toEqual({ played: 25, boost: 75 });
-    expect(WEEKEND_COINS.played + WEEKEND_COINS.boost).toBe(100);
+  test("the owner's figure: 50 a day, 100 for a two-day weekend", async () => {
+    expect(WEEKEND_CHECKIN_COINS).toBe(50);
+    expect(await paid(SATURDAY)).toBe(50);
+    expect(await paid(SUNDAY_LATE)).toBe(50);
+    expect(store.balances.get(7)).toBe(100);
+    expect(store.log.map((row) => row.reason)).toEqual(["weekend-checkin", "weekend-checkin"]);
   });
 
-  test("playing pays 25 once per weekend, however often", async () => {
-    expect(await awardWeekendCoins(fakeEm(), 7, ["played"], SATURDAY, options())).toBe(25);
-    expect(await awardWeekendCoins(fakeEm(), 7, ["played"], SUNDAY_LATE, options())).toBe(0);
-    expect(store.balances.get(7)).toBe(25);
-    expect(store.log).toEqual([{ userid: 7, amount: 25, reason: "weekend-played", awardKey: "weekend:2026-11-14:played" }]);
-  });
-
-  test("using the boost pays 75, and playing too when still unpaid; then nothing more", async () => {
-    expect(await awardWeekendCoins(fakeEm(), 7, ["played", "boost"], SATURDAY, options())).toBe(100);
-    expect(await awardWeekendCoins(fakeEm(), 7, ["played", "boost"], SATURDAY + 60, options())).toBe(0);
+  test("once per day: a second click or another tab is refused and pays nothing", async () => {
+    expect(await paid(SATURDAY)).toBe(50);
+    const again = await checkInWeekend(fakeEm(), 7, SATURDAY_LATE, options());
+    expect(again.refused).toBe("checkedInToday");
+    if (again.refused === "checkedInToday") {
+      expect(again.state).toMatchObject({ day: 1, claimedToday: true, nextAt: SUNDAY });
+    }
+    expect(store.balances.get(7)).toBe(50);
+    // Two at once (two tabs): only one is paid.
+    const both = await Promise.all([paid(SUNDAY), paid(SUNDAY + 1)]);
+    expect(both.sort()).toEqual([0, 50]);
     expect(store.balances.get(7)).toBe(100);
   });
 
-  test("after playing, the boost adds only its 75", async () => {
-    await awardWeekendCoins(fakeEm(), 7, ["played"], SATURDAY, options());
-    expect(await awardWeekendCoins(fakeEm(), 7, ["played", "boost"], SUNDAY_LATE, options())).toBe(75);
-    expect(store.balances.get(7)).toBe(100);
+  test("the day turns at the run's midnight: Saturday 23:59:59 is day 1, Sunday 00:00 day 2", async () => {
+    const run = activeRun(settings(), SATURDAY)!;
+    expect(weekendDayOf(run, SATURDAY_LATE)).toBe(1);
+    expect(weekendDayOf(run, SUNDAY)).toBe(2);
+    expect(weekendDaysOf(run)).toBe(2);
+    expect(await paid(SATURDAY_LATE)).toBe(50);
+    expect(await paid(SUNDAY)).toBe(50);
+    expect(store.log.map((row) => row.awardKey)).toEqual(["weekend:2026-11-14:day1", "weekend:2026-11-14:day2"]);
   });
 
-  test("the next weekend pays again; each player is counted alone", async () => {
-    await awardWeekendCoins(fakeEm(), 7, ["played", "boost"], SATURDAY, options());
-    expect(await awardWeekendCoins(fakeEm(), 7, ["played", "boost"], NEXT_SATURDAY, options())).toBe(100);
-    expect(await awardWeekendCoins(fakeEm(), 8, ["played"], SATURDAY, options())).toBe(25);
-    expect(store.balances.get(7)).toBe(200);
-    expect(store.balances.get(8)).toBe(25);
+  test("a missed day is gone: coming only on Sunday pays 50", async () => {
+    expect(await paid(SUNDAY_LATE)).toBe(50);
+    expect(await weekendCheckinState(fakeEm(), 7, SUNDAY_LATE, options())).toEqual({
+      key: "2026-11-14",
+      amount: 50,
+      day: 2,
+      days: 2,
+      claimedToday: true,
+      marks: [
+        { day: 1, claimed: false },
+        { day: 2, claimed: true },
+      ],
+      nextAt: null,
+    });
   });
 
-  test("nothing outside a run, switched off, or on a skipped weekend", async () => {
-    expect(await awardWeekendCoins(fakeEm(), 7, ["played", "boost"], FRIDAY, options())).toBe(0);
-    expect(
-      await awardWeekendCoins(fakeEm(), 7, ["played"], SATURDAY, { store, settings: settings({ enabled: false }) })
-    ).toBe(0);
-    expect(
-      await awardWeekendCoins(fakeEm(), 7, ["played"], SATURDAY, {
-        store,
-        settings: settings({ overrides: { "2026-11-14": "skip" } }),
-      })
-    ).toBe(0);
+  test("refused outside a run: Friday, Monday, switched off, a skipped weekend", async () => {
+    for (const t of [FRIDAY, MONDAY]) {
+      expect((await checkInWeekend(fakeEm(), 7, t, options())).refused).toBe("noWeekend");
+    }
+    expect(await paid(SATURDAY, 7, { enabled: false })).toBe(0);
+    expect(await paid(SATURDAY, 7, { overrides: { "2026-11-14": "skip" } })).toBe(0);
     expect(store.log).toEqual([]);
+  });
+
+  test("each weekend and each player is paid apart", async () => {
+    expect(await paid(SATURDAY)).toBe(50);
+    expect(await paid(NEXT_SATURDAY)).toBe(50);
+    expect(await paid(SATURDAY, 8)).toBe(50);
+    expect(store.balances.get(7)).toBe(100);
+    expect(store.balances.get(8)).toBe(50);
   });
 
   test("all four weekend events pay 100 each: Builder's, Plunder, Study, Hatch Rush", async () => {
     const saturdays = [0, 1, 2, 3].map((week) => SATURDAY + week * 7 * 86_400);
-    const ids = saturdays.map((t) => activeRun(settings(), t)?.id);
-    expect(ids).toEqual(["builders", "plunder", "study", "hatch"]);
+    expect(saturdays.map((t) => activeRun(settings(), t)?.id)).toEqual(["builders", "plunder", "study", "hatch"]);
     for (const t of saturdays) {
-      expect(await awardWeekendCoins(fakeEm(), 7, ["played"], t, options())).toBe(25);
-      expect(await awardWeekendCoins(fakeEm(), 7, ["boost"], t + 3_600, options())).toBe(75);
-      expect(await awardWeekendCoins(fakeEm(), 7, ["played", "boost"], t + 7_200, options())).toBe(0);
+      expect(await paid(t)).toBe(50);
+      expect(await paid(t + 3_600)).toBe(0);
+      expect(await paid(t + 86_400)).toBe(50);
     }
     expect(store.balances.get(7)).toBe(400);
   });
 
-  test("a forced run pays under its own key", async () => {
-    const s = settings({ forced: { id: "study", since: 0, until: 4_102_444_800 } });
-    expect(await awardWeekendCoins(fakeEm(), 7, ["played"], FRIDAY, { store, settings: s })).toBe(25);
-    expect(store.log[0]?.awardKey).toBe("weekend:forced-0:played");
+  test("a weekend lengthened from the dashboard has more days; a shortened one fewer", async () => {
+    // 72 h: Saturday, Sunday, Monday.
+    expect(await paid(MONDAY + 3_600, 7, { lengthHours: 72 })).toBe(50);
+    const long = await weekendCheckinState(fakeEm(), 7, MONDAY + 3_600, options({ lengthHours: 72 }));
+    expect(long).toMatchObject({ day: 3, days: 3, nextAt: null });
+    expect(long?.marks.map((m) => m.day)).toEqual([1, 2, 3]);
+    // 24 h: Saturday only; Sunday is outside the run.
+    expect(await weekendCheckinState(fakeEm(), 7, SATURDAY, options({ lengthHours: 24 }))).toMatchObject({
+      day: 1,
+      days: 1,
+      nextAt: null,
+    });
+    expect(await paid(SUNDAY, 7, { lengthHours: 24 })).toBe(0);
+    // 36 h: the last 12 hours count as a day.
+    expect(weekendDaysOf({ startsAt: 0, endsAt: 36 * 3_600 })).toBe(2);
   });
 
-  test("a payment is noted on the request's entity manager for the yard answer", async () => {
+  test("a run forced from the dashboard counts its days from when it was switched on", async () => {
+    const since = SATURDAY - 5 * 3_600; // switched on at 05:00 UTC
+    const forced = { forced: { id: "study" as const, since, until: since + 48 * 3_600 } };
+    expect(await paid(FRIDAY, 7, forced)).toBe(0); // before it started
+    expect(await paid(since + 23 * 3_600, 7, forced)).toBe(50);
+    expect(await paid(since + 24 * 3_600, 7, forced)).toBe(50);
+    expect(store.log.map((row) => row.awardKey)).toEqual([`weekend:forced-${since}:day1`, `weekend:forced-${since}:day2`]);
+  });
+
+  test("the local WEEKEND_FORCE run (1970 to 2100): one a UTC day; the card shows yesterday and today", async () => {
+    const forced = { forced: { id: "builders" as const, since: 0, until: 4_102_444_800 } };
+    expect(await paid(FRIDAY, 7, forced)).toBe(50);
+    expect(await paid(FRIDAY + 3_600, 7, forced)).toBe(0);
+    expect(await paid(SATURDAY, 7, forced)).toBe(50);
+    const day = Math.floor(SATURDAY / 86_400) + 1;
+    expect(store.log[1]?.awardKey).toBe(`weekend:forced-0:day${day}`);
+    const state = await weekendCheckinState(fakeEm(), 7, SATURDAY, options(forced));
+    expect(state).toMatchObject({ day, claimedToday: true, nextAt: SUNDAY });
+    expect(state?.marks).toEqual([
+      { day: day - 1, claimed: true },
+      { day, claimed: true },
+    ]);
+  });
+
+  test("a check-in is noted on the request's entity manager for the yard answer", async () => {
     const em = fakeEm();
     expect(coinNotes(em)).toBeNull();
-    await awardWeekendCoins(em, 7, ["played", "boost"], SATURDAY, options());
-    expect(coinNotes(em)).toEqual({
-      balance: 100,
-      gained: [
-        { amount: 25, reason: "weekend-played" },
-        { amount: 75, reason: "weekend-boost" },
+    await checkInWeekend(em, 7, SATURDAY, options());
+    expect(coinNotes(em)).toEqual({ balance: 50, gained: [{ amount: 50, reason: "weekend-checkin" }] });
+  });
+
+  test("the card's state before and after", async () => {
+    expect(await weekendCheckinState(fakeEm(), 7, FRIDAY, options())).toBeNull();
+    expect(await weekendCheckinState(fakeEm(), 7, SATURDAY, options())).toEqual({
+      key: "2026-11-14",
+      amount: 50,
+      day: 1,
+      days: 2,
+      claimedToday: false,
+      marks: [
+        { day: 1, claimed: false },
+        { day: 2, claimed: false },
+      ],
+      nextAt: SUNDAY,
+    });
+    const result = await checkInWeekend(fakeEm(), 7, SATURDAY, options());
+    expect(result.refused).toBeUndefined();
+    expect(result.refused === undefined && result.state).toMatchObject({
+      claimedToday: true,
+      marks: [
+        { day: 1, claimed: true },
+        { day: 2, claimed: false },
       ],
     });
-  });
-
-  test("a payment that rolled back is tried again (only 'already paid' is cached)", async () => {
-    await awardWeekendCoins(fakeEm(), 7, ["played"], SATURDAY, options());
-    // The yard action rolled back: the row is gone.
-    store.log.length = 0;
-    store.balances.clear();
-    expect(await awardWeekendCoins(fakeEm(), 7, ["played"], SATURDAY, options())).toBe(25);
-  });
-
-  test("once found paid, later calls skip the store", async () => {
-    await awardWeekendCoins(fakeEm(), 7, ["played"], SATURDAY, options());
-    await awardWeekendCoins(fakeEm(), 7, ["played"], SATURDAY, options());
-    let calls = 0;
-    const counting: EventCoinStore = {
-      ...store,
-      grant: async (...args) => {
-        calls++;
-        return store.grant(...args);
-      },
-    };
-    await awardWeekendCoins(fakeEm(), 7, ["played"], SATURDAY, { settings: settings(), store: counting });
-    expect(calls).toBe(0);
-  });
-
-  test("the safe form logs a failing store and pays nothing", async () => {
-    const broken: EventCoinStore = {
-      ...store,
-      grant: async () => {
-        throw new Error("no table");
-      },
-    };
-    expect(await awardWeekendCoinsSafely(fakeEm(), 7, ["played"], SATURDAY, { settings: settings(), store: broken })).toBe(0);
-    await expect(awardWeekendCoins(fakeEm(), 7, ["played"], SATURDAY, { settings: settings(), store: broken })).rejects.toThrow(
-      "no table"
-    );
-  });
-
-  test("the pop-up's ticks: which parts this player has", async () => {
-    expect(await weekendCoinState(fakeEm(), 7, FRIDAY, options())).toBeNull();
-    expect(await weekendCoinState(fakeEm(), 7, SATURDAY, options())).toEqual({
-      key: "2026-11-14",
-      played: false,
-      boost: false,
-      coins: WEEKEND_COINS,
-    });
-    await awardWeekendCoins(fakeEm(), 7, ["played"], SATURDAY, options());
-    expect(await weekendCoinState(fakeEm(), 7, SATURDAY, options())).toMatchObject({ played: true, boost: false });
-    expect(weekendAwardKey({ key: "2026-11-14" }, "boost")).toBe("weekend:2026-11-14:boost");
-  });
-});
-
-describe("weekendBoostUsed: the yard actions' hook pays through the game's coin store", () => {
-  test("first boost use pays 75 + 25 once; outside a weekend nothing", async () => {
-    const store = memoryCoinStore();
-    const previousStore = useCoinStore(store);
-    const previousSettings = weekendSettings({});
-    setWeekendSettings(settings());
-    forgetWeekendCoinCache();
-    try {
-      expect(await weekendBoostUsed(fakeEm(), 9, "builders", SATURDAY)).toBe(100);
-      expect(await weekendBoostUsed(fakeEm(), 9, "builders", SATURDAY + 60)).toBe(0);
-      expect(await weekendBoostUsed(fakeEm(), 9, "builders", SUNDAY_LATE, true)).toBe(0);
-      expect(await weekendBoostUsed(fakeEm(), 10, "builders", FRIDAY)).toBe(0);
-      expect(store.balances.get(9)).toBe(100);
-      expect(store.balances.get(10)).toBeUndefined();
-      expect(store.log.map((row) => row.reason)).toEqual(["weekend-played", "weekend-boost"]);
-    } finally {
-      useCoinStore(previousStore);
-      setWeekendSettings(previousSettings);
-      forgetWeekendCoinCache();
-    }
+    expect(weekendCheckinKey({ key: "2026-11-14" }, 2)).toBe("weekend:2026-11-14:day2");
   });
 });
 

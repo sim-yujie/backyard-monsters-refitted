@@ -4,6 +4,7 @@ import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it, vi } from "vitest";
 import type { EventView } from "@/api/events";
+import type { WeekendRun } from "@/game/weekend";
 import {
   claimedLine,
   EVENT_EXTRAS,
@@ -587,5 +588,89 @@ describe("EventsPanel: Monster Madness goals", () => {
     panel.render(list([madness(50_000_000)]));
     expect(panel.element.querySelector(".events-ladder--goals .events-goals__bar")).not.toBeNull();
     expect(panel.element.querySelectorAll(".events-tier__claim")).toHaveLength(1);
+  });
+});
+
+describe("EventsPanel: the weekend event (owner, 13 Nov: in Events, not a banner on the yard)", () => {
+  const builders: WeekendRun = {
+    id: "builders",
+    title: "Builder's Weekend",
+    line: "Upgrades cost 30% less",
+    percent: 30,
+    key: "2026-11-14",
+    startsAt: 0,
+    endsAt: 2 * 86_400,
+    announceAt: -86_400,
+    forced: false,
+  };
+  const later: WeekendRun = { ...builders, key: "2026-11-21", startsAt: 7 * 86_400, endsAt: 9 * 86_400 };
+
+  it("while it runs: a card first in the main column, icon, name, −30%, its line and the time left", () => {
+    const { panel } = mounted();
+    panel.render(list([event()], { weekend: { on: builders, next: null } }));
+    const main = panel.element.querySelector(".events-page__main")!;
+    const card = main.firstElementChild as HTMLElement;
+    expect(card.classList.contains("events-card--weekend")).toBe(true);
+    expect(card.dataset["event"]).toBe("weekend");
+    expect(card.querySelector<HTMLImageElement>(".events-weekend__icon")?.dataset["icon"]).toBe("levelup");
+    expect(card.querySelector(".events-weekend__title")?.textContent).toBe("Builder's Weekend");
+    expect(card.querySelector(".events-weekend__amount")?.textContent).toBe("−30%");
+    expect(card.querySelector(".events-weekend__line")?.textContent).toBe("Upgrades cost 30% less");
+    expect(card.querySelector(".events-card__countdown")?.textContent).toBe("Ends in 1d 23h");
+    // The Halloween card still follows it; nothing else went.
+    expect(main.querySelectorAll(".events-card")).toHaveLength(2);
+    expect(panel.element.querySelector(".events-upcoming")).toBeNull();
+    panel.close();
+  });
+
+  it("ticks its time left with the page's other countdowns", () => {
+    const { panel } = mounted();
+    panel.render(list([], { weekend: { on: builders, next: null } }));
+    panel.tick(builders.endsAt - 90 * 60);
+    expect(panel.element.querySelector(".events-weekend .events-card__countdown")?.textContent).toBe("Ends in 1h 30m");
+    panel.close();
+  });
+
+  it("opens the weekend pop-up when pressed", () => {
+    const options = { onClaimCalendar: vi.fn(), onClaimTier: vi.fn(), onRetry: vi.fn(), onClose: vi.fn(), onOpenWeekend: vi.fn() };
+    const panel = new EventsPanel(options).mount(document.body);
+    panel.render(list([], { weekend: { on: builders, next: null } }));
+    panel.element.querySelector<HTMLButtonElement>("button.events-weekend")!.click();
+    expect(options.onOpenWeekend).toHaveBeenCalledWith(builders);
+    panel.close();
+  });
+
+  it("no 'No event' line while only the weekend runs", () => {
+    const { panel } = mounted();
+    panel.render(list([], { weekend: { on: builders, next: null } }));
+    expect(panel.element.querySelector(".events-status")).toBeNull();
+    expect(panel.element.querySelectorAll(".events-card--weekend")).toHaveLength(1);
+    panel.close();
+  });
+
+  it("none running: the next one under Coming up, in its place by start, counting down to it", () => {
+    const { panel } = mounted();
+    const soon = event({ id: "soon", title: "Soon", status: "upcoming", startsAt: 2 * 86_400 });
+    const late = event({ id: "late", title: "Late", status: "upcoming", startsAt: 20 * 86_400 });
+    panel.render(list([soon, late], { weekend: { on: null, next: later } }));
+    expect(panel.element.querySelector(".events-card--weekend")).toBeNull();
+    const items = [...panel.element.querySelectorAll<HTMLElement>(".events-upcoming__item")];
+    expect(items.map((item) => item.dataset["event"])).toEqual(["soon", "weekend", "late"]);
+    const weekend = items[1]!;
+    expect(weekend.querySelector(".events-weekend__title")?.textContent).toBe("Builder's Weekend");
+    expect(weekend.querySelector(".events-weekend__amount")?.textContent).toBe("−30%");
+    expect(weekend.querySelector(".events-upcoming__text")?.textContent).toBe("Upgrades cost 30% less");
+    expect(weekend.querySelector(".events-card__countdown")?.textContent).toBe("Starts in 6d 23h");
+    expect(panel.element.querySelector(".events-status")?.textContent).toBe("No event is on right now.");
+    panel.close();
+  });
+
+  it("none running and none known: nothing extra", () => {
+    const { panel } = mounted();
+    panel.render(list([], { weekend: { on: null, next: null } }));
+    expect(panel.element.querySelector("[data-event='weekend']")).toBeNull();
+    expect(panel.element.querySelector(".events-upcoming")).toBeNull();
+    expect(panel.element.querySelector(".events-status")?.textContent).toBe("No event is on right now.");
+    panel.close();
   });
 });

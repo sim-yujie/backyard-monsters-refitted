@@ -95,7 +95,7 @@ import { championsAfterDefence } from "../../../services/base/combat/defenderCha
 import { healChampions } from "../../../services/yard/catchUpChampions.js";
 import { championsAfterLessons } from "../../../services/base/combat/championBrain.js";
 import { countAttackLoot } from "../../../services/events/lootEvents.js";
-import { plunderPercent, weekendBoostUsed, withPlunderBonus } from "../../../services/events/weekendBoosts.js";
+import { plunderPercent, withPlunderBonus } from "../../../services/events/weekendBoosts.js";
 import { attackLootPercent, mapByPercent } from "../../../services/alliance/allianceBonuses.js";
 import { RESOURCE_KEYS, type ResourceAmounts } from "../../../game-rules/combat/index.js";
 import { recordAttackPlan } from "../../../services/base/autoAttack/attackPlanStore.js";
@@ -574,8 +574,6 @@ const saveBase = async (
   let takeoverGrant: TakeoverOffer | null = null;
   /** What the attacker's pool took of the loot (issue #166), for the response. */
   let banked: ResourceAmounts | null = null;
-  /** Tribe Plunder raised this landing's loot: the weekend's Glimmers are paid after the commit. */
-  let plunderUsed = false;
   /** The defence replay and the yard owner's notice, written once the landing has committed. */
   let afterLanding: (() => Promise<void>) | null = null;
 
@@ -627,7 +625,6 @@ const saveBase = async (
         ),
         loot.krallenBuff
       ).credited;
-      plunderUsed = plunder > 0;
     }
 
     // Each champion that fought learns from the server's battle, once: this
@@ -804,9 +801,6 @@ const saveBase = async (
     // After the commit: a counter it fails to write is logged and lost, and
     // must not take the landing's transaction down with it.
     if (loot) await countAttackLoot(postgres.em, user.userid, userSave, loot.credit, now);
-    // Tribe Plunder's weekend Glimmers, after the commit too: logged, not thrown
-    // (`services/events/weekendCoins.ts`).
-    if (plunderUsed) await weekendBoostUsed(postgres.em, user.userid, "plunder", now, true);
 
     // Quests (`services/quests/hooks.ts`), each on its player's main row
     // under its own lock, after the commit: a won attack, a tribe camp

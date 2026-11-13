@@ -8,10 +8,12 @@ import {
   shortAmount,
   sortEvents,
   type CalendarDayView,
+  type CountdownTimes,
 } from "@/game/events/eventsModel";
 import { championPortrait, showPortrait } from "@/game/portraits";
 import { ArtState, resolveArt } from "@/game/yard/buildingArt";
 import { typeName } from "@/game/yard/planner/summary";
+import type { WeekendCheckin, WeekendRun } from "@/game/weekend";
 import { AMOUNT_CHANGE_SIGNS } from "@/ui/amountChange";
 import { formatAmount, formatCountdown } from "@/ui/format";
 import { gameIcon, type GameIconName } from "@/ui/gameIcon";
@@ -20,6 +22,7 @@ import { Panel } from "@/ui/Panel";
 import { resourceIcon, RESOURCE_KEYS } from "@/ui/resourceIcon";
 import { eventsArt } from "./eventsArt";
 import { mr2WelcomeCard, paintWelcomeReward, paintWelcomeTimeline, welcomeDaysText } from "./mr2WelcomeCard";
+import { tickCheckin, WEEKEND_ICON, weekendAmount, weekendCheckinBlock } from "./weekendUi";
 import "./events.css";
 
 /**
@@ -64,7 +67,24 @@ export type EventsPanelView =
       readonly refusal: { readonly key: string; readonly message: string } | null;
       /** The player's "New to Map Room 2" card (`ui/events/mr2WelcomeCard.ts`), first on the page; null for none. */
       readonly mr2Welcome?: Mr2WelcomeStatus | null;
+      /** The weekend event (`game/weekend.ts`): its card while it runs, else the next one under "Coming up". */
+      readonly weekend?: EventsWeekend | null;
     };
+
+/**
+ * The weekend event as the page shows it (owner, 13 Nov 2026: in Events,
+ * not a banner on the yard): `on` the run going now, `next` the coming one.
+ */
+export interface EventsWeekend {
+  readonly on: WeekendRun | null;
+  readonly next: WeekendRun | null;
+  /** The player's check-in for `on` (owner, 13 Nov 2026: 50 Glimmers a day), or null when not known. */
+  readonly checkin?: WeekendCheckin | null;
+  /** A check-in is on its way. */
+  readonly checkingIn?: boolean;
+  /** Why the last check-in failed. */
+  readonly checkinError?: string | null;
+}
 
 export interface EventsPanelOptions {
   onClaimCalendar(event: EventView): void;
@@ -73,6 +93,10 @@ export interface EventsPanelOptions {
   onClose(): void;
   /** The "New to Map Room 2" card's Go to Map Room 2. */
   onGoToMapRoom2?(): void;
+  /** The weekend card pressed: its pop-up (`openWeekendPopup`). */
+  onOpenWeekend?(run: WeekendRun): void;
+  /** The weekend card's Check in. */
+  onCheckInWeekend?(): void;
 }
 
 const el = <K extends keyof HTMLElementTagNameMap>(
@@ -293,13 +317,88 @@ const banner = (event: EventView): HTMLElement[] => {
   return [band];
 };
 
+/** The weekend card's key in `data-event`, apart from the server's event ids. */
+export const WEEKEND_CARD_ID = "weekend";
+
+/** A weekend run's times for {@link countdown}. */
+const weekendTimes = (run: WeekendRun, status: "active" | "upcoming"): CountdownTimes => ({
+  status,
+  startsAt: run.startsAt,
+  endsAt: run.endsAt,
+});
+
+/** The event's painted icon at `side` px (the srcset fetches a sharp file). */
+const weekendIcon = (run: WeekendRun, side: number, className: string): HTMLImageElement => {
+  const icon = gameIcon(WEEKEND_ICON[run.id], { size: 32, decorative: true, className });
+  icon.width = side;
+  icon.height = side;
+  icon.sizes = `${side}px`;
+  return icon;
+};
+
+/** The event's name and its amber amount pill. */
+const weekendHead = (run: WeekendRun): HTMLElement => {
+  const head = el("span", "events-weekend__head");
+  head.append(el("span", "events-weekend__title", run.title), el("span", "events-weekend__amount", weekendAmount(run)));
+  return head;
+};
+
+/**
+ * The weekend event while it runs: its painted icon, name, amount, one line
+ * and the time left (the page's tick runs it). Pressing it opens the
+ * weekend's pop-up. Under it, the daily check-in (`weekendCheckinBlock`).
+ */
+const weekendCard = (
+  weekend: EventsWeekend & { readonly on: WeekendRun },
+  now: number,
+  onOpen: (run: WeekendRun) => void,
+  onCheckIn: (() => void) | null,
+): HTMLElement => {
+  const run = weekend.on;
+  const card = el("article", "events-card events-card--weekend");
+  card.dataset["event"] = WEEKEND_CARD_ID;
+  card.dataset["weekend"] = run.id;
+  const button = el("button", "events-weekend");
+  button.type = "button";
+  button.title = run.line;
+  const words = el("span", "events-weekend__words");
+  // A span: a button holds no paragraphs.
+  const left = countdown(weekendTimes(run, "active"), now, "span");
+  left.classList.add("events-weekend__left");
+  words.append(weekendHead(run), el("span", "events-weekend__line", run.line), left);
+  button.append(weekendIcon(run, 48, "events-weekend__icon"), words);
+  button.addEventListener("click", () => onOpen(run));
+  card.append(
+    button,
+    weekendCheckinBlock({
+      checkin: weekend.checkin ?? null,
+      now,
+      onCheckIn,
+      busy: weekend.checkingIn === true,
+      error: weekend.checkinError ?? null,
+    }),
+  );
+  return card;
+};
+
+/** The next weekend event under "Coming up": icon, name, amount, its line, when it starts. */
+const weekendUpcoming = (run: WeekendRun, now: number): HTMLElement => {
+  const item = el("li", "events-upcoming__item events-upcoming__item--weekend");
+  item.dataset["event"] = WEEKEND_CARD_ID;
+  item.dataset["weekend"] = run.id;
+  const title = el("h4", "events-upcoming__title events-weekend__upcoming");
+  title.append(weekendIcon(run, 24, "events-weekend__small-icon"), weekendHead(run));
+  item.append(title, el("p", "events-upcoming__text", run.line), countdown(weekendTimes(run, "upcoming"), now));
+  return item;
+};
+
 /** A countdown line the panel's `tick` keeps running. */
-const countdown = (event: EventView, now: number): HTMLElement => {
-  const line = el("p", "events-card__countdown", countdownText(event, now));
+const countdown = (event: CountdownTimes, now: number, tag: "p" | "span" = "p"): HTMLElement => {
+  const line = el(tag, "events-card__countdown", countdownText(event, now));
   line.dataset["countdown"] = event.status;
   line.dataset["startsAt"] = String(event.startsAt);
   line.dataset["endsAt"] = String(event.endsAt);
-  if (event.claimUntil !== null) line.dataset["claimUntil"] = String(event.claimUntil);
+  if (event.claimUntil != null) line.dataset["claimUntil"] = String(event.claimUntil);
   return line;
 };
 
@@ -354,6 +453,7 @@ export class EventsPanel {
     for (const line of this.element.querySelectorAll<HTMLElement>("[data-next-at]")) {
       line.textContent = nextText(Number(line.dataset["nextAt"]) - now);
     }
+    tickCheckin(this.element, now);
     for (const line of this.element.querySelectorAll<HTMLElement>("[data-welcome-ends]")) {
       line.textContent = welcomeDaysText(Number(line.dataset["welcomeEnds"]), now);
     }
@@ -397,14 +497,34 @@ export class EventsPanel {
     const page = el("div", "events-page");
     const welcome = view.mr2Welcome ?? null;
     if (welcome) page.append(mr2WelcomeCard(welcome, view.now, () => this.options.onGoToMapRoom2?.()));
+    // The weekend event first while it runs: short, and over in two days.
+    // When none runs, the next one goes in Coming up in its place by start.
+    const weekendOn = view.weekend?.on ?? null;
+    const weekendNext = weekendOn ? null : (view.weekend?.next ?? null);
     const main = el("div", "events-page__main");
+    if (weekendOn && view.weekend) {
+      const onCheckIn = this.options.onCheckInWeekend;
+      main.append(
+        weekendCard(
+          { ...view.weekend, on: weekendOn },
+          view.now,
+          (run) => this.options.onOpenWeekend?.(run),
+          onCheckIn ? () => onCheckIn() : null,
+        ),
+      );
+    }
     for (const event of active) main.append(this.activeCard(event, view));
-    if (active.length === 0 && !welcome) main.append(el("p", "events-status", "No event is on right now."));
+    if (main.childElementCount === 0 && !welcome) main.append(el("p", "events-status", "No event is on right now."));
     if (main.childElementCount > 0) page.append(main);
-    if (upcoming.length > 0) {
+    if (upcoming.length > 0 || weekendNext) {
       const section = el("section", "events-upcoming");
       const list = el("ul", "events-upcoming__list");
+      let weekendLeft = weekendNext;
       for (const event of upcoming) {
+        if (weekendLeft && weekendLeft.startsAt <= event.startsAt) {
+          list.append(weekendUpcoming(weekendLeft, view.now));
+          weekendLeft = null;
+        }
         const item = el("li", "events-upcoming__item");
         item.dataset["event"] = event.id;
         item.append(
@@ -414,6 +534,7 @@ export class EventsPanel {
         );
         list.append(item);
       }
+      if (weekendLeft) list.append(weekendUpcoming(weekendLeft, view.now));
       section.append(el("h3", "events-section__title", "Coming up"), list);
       page.append(section);
       // The side column only beside events that are on.

@@ -8,11 +8,11 @@ import { monsterMadnessRun } from "../../game-data/events/monsterMadness.js";
 import { memoryProgressStore } from "../../services/events/progressStore.js";
 import { memoryCoinStore, useCoinStore, type EventCoinStore } from "../../services/events/eventCoins.js";
 import { DEFAULT_WEEKEND_SETTINGS, type WeekendSettings } from "../../game-data/events/weekendEvents.js";
-import { forgetWeekendCoinCache } from "../../services/events/weekendCoins.js";
 import { setWeekendSettings, weekendSettings } from "../../services/events/weekendSettings.js";
 import { eventsActions } from "./eventsActions.js";
 import { yardSpeedupAction } from "./speedup.js";
 import { yardUpgradeAction } from "./upgrade.js";
+import { weekendCheckinAction } from "./weekendCheckin.js";
 import { runYardAction, type YardAction, type YardAnswer } from "./yardAction.js";
 
 /**
@@ -515,9 +515,10 @@ describe("Monster Madness: Korath's powers by ladder claim", () => {
   });
 });
 
-describe("weekend Glimmers through a yard action (owner, 12 Nov 2026)", () => {
+describe("weekend check-in through a yard action (owner, 13 Nov 2026)", () => {
   // Saturday 14 Nov 2026 is a Builder's Weekend in the default rotation.
   const SATURDAY = Date.parse("2026-11-14T10:00:00Z") / 1000;
+  const SUNDAY = Date.parse("2026-11-15T00:00:00Z") / 1000;
   const FRIDAY = Date.parse("2026-11-13T10:00:00Z") / 1000;
   let coins: EventCoinStore & { balances: Map<number, number> };
   let previous: EventCoinStore;
@@ -533,43 +534,59 @@ describe("weekend Glimmers through a yard action (owner, 12 Nov 2026)", () => {
       },
     });
   const upgrade = (id: number) => call(yardUpgradeAction, { id });
+  const checkin = () => call(weekendCheckinAction(), {});
 
   beforeEach(() => {
     coins = memoryCoinStore();
     previous = useCoinStore(coins);
     previousSettings = weekendSettings({});
     setWeekendSettings(DEFAULT_WEEKEND_SETTINGS);
-    forgetWeekendCoinCache();
   });
 
   afterEach(() => {
     useCoinStore(previous);
     setWeekendSettings(previousSettings);
-    forgetWeekendCoinCache();
   });
 
-  test("the first upgrade at the Builder's Weekend price pays 75 + 25 once, and the answer says so", async () => {
+  test("a check-in pays 50 once a day, and the answer carries the new purse and the card's state", async () => {
     at(SATURDAY);
     db.row = yardWith();
-    const first = await upgrade(2);
+    const first = await checkin();
     expect(first.status).toBe(200);
-    expect(first.body.eventcoins).toBe(100);
-    expect(first.body.coinsGained).toEqual([
-      { amount: 25, reason: "weekend-played" },
-      { amount: 75, reason: "weekend-boost" },
-    ]);
+    expect(first.body.eventcoins).toBe(50);
+    expect(first.body.coinsGained).toEqual([{ amount: 50, reason: "weekend-checkin" }]);
+    expect(first.body.report).toMatchObject({ paid: 50, checkin: { day: 1, days: 2, claimedToday: true, nextAt: SUNDAY } });
 
-    // Another upgrade later the same weekend (the one builder free again) pays nothing more.
-    at(SATURDAY + 3_600);
-    db.row = yardWith();
-    const second = await upgrade(3);
+    at(SATURDAY + 60);
+    expect(await checkin()).toMatchObject({
+      status: 409,
+      body: { reason: "checkedInToday", nextAt: SUNDAY, checkin: { claimedToday: true } },
+    });
+
+    at(SUNDAY + 60);
+    const second = await checkin();
     expect(second.status).toBe(200);
-    expect(second.body.coinsGained).toBeUndefined();
+    expect(second.body.eventcoins).toBe(100);
     expect(coins.balances.get(2)).toBe(100);
   });
 
-  test("an upgrade outside a weekend pays nothing", async () => {
+  test("two check-ins at once (a double click, two tabs) pay once", async () => {
+    at(SATURDAY);
+    db.row = yardWith();
+    const answers = await Promise.all([checkin(), checkin()]);
+    expect(answers.map((one) => one.status).sort()).toEqual([200, 409]);
+    expect(coins.balances.get(2)).toBe(50);
+  });
+
+  test("refused when no weekend event runs", async () => {
     at(FRIDAY);
+    db.row = yardWith();
+    expect(await checkin()).toMatchObject({ status: 409, body: { reason: "noWeekend" } });
+    expect(coins.balances.get(2)).toBeUndefined();
+  });
+
+  test("using the discount pays nothing any more (the old 25 + 75 are gone)", async () => {
+    at(SATURDAY);
     db.row = yardWith();
     const answer = await upgrade(2);
     expect(answer.status).toBe(200);

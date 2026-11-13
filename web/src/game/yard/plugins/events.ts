@@ -18,9 +18,28 @@ import {
 } from "@/game/events/eventsModel";
 import { onPumpkins, PUMPKIN_HUNT_KIND, withPumpkinCount } from "@/game/events/pumpkinHunt";
 import { currentSeason, seasonFor, setSeason } from "@/game/season";
+import {
+  announcedWeekend,
+  checkinWaiting,
+  currentWeekend,
+  onWeekendChange,
+  runningWeekend,
+  weekendCheckin,
+  type WeekendRun,
+} from "@/game/weekend";
+import { checkInWeekendMessage } from "@/api/weekend";
 import { latestRelease, localSeen, markSeen, whatsNewDecision } from "@/game/events/whatsNew";
 import { gameIcon } from "@/ui/gameIcon";
-import { calendarKey, claimedLine, EventsPanel, readyLine, tierKey, type EventsPanelView } from "@/ui/events/EventsPanel";
+import {
+  calendarKey,
+  claimedLine,
+  EventsPanel,
+  readyLine,
+  tierKey,
+  type EventsPanelView,
+  type EventsWeekend,
+} from "@/ui/events/EventsPanel";
+import { openWeekendPopup } from "@/ui/events/weekendUi";
 import { modalLayer, openWhatsNew } from "@/ui/events/WhatsNewDialog";
 import "@/ui/events/pumpkinHuntHint";
 import { dockButton } from "@/ui/yard/YardDock";
@@ -44,6 +63,10 @@ import { YARD_PLUGINS, type YardMounts, type YardPlugin } from "../yardPlugins";
  *   below the fold on a phone).
  * - **What's new.** The first read also says which release's cards the
  *   player has seen; the newest pops up once (`game/events/whatsNew.ts`).
+ * - **Weekend event** (`game/weekend.ts`, owner 13 Nov 2026: in Events, not
+ *   a banner on the yard): its card while it runs, else the next one under
+ *   Coming up. The button shows while one runs or is announced, so its card
+ *   can always be reached. The weekend plugin keeps its pop-up and refresh.
  *
  * Main yard only: the claims refuse on an outpost.
  */
@@ -90,11 +113,29 @@ export class EventsDoor {
   private scrollToClaim = false;
   /** Stops following the pumpkin hunt's count (`game/events/pumpkinHunt.ts`). */
   private readonly unwatchPumpkins: () => void;
+  /** Stops following the weekend event. */
+  private readonly unwatchWeekend: () => void;
+  /** The weekend runs the page last drew, so a start or end at midnight redraws it. */
+  private weekendDrawn = "";
+  /** The weekend pop-up opened from its card, one at a time. */
+  private weekendPopupOpen = false;
+  /** The weekend check-in being sent from the card. */
+  private checkingIn = false;
+  /** Why the card's last check-in failed. */
+  private checkinError: string | null = null;
+  /** Checks in for today's weekend Glimmers (`api/weekend.ts`). */
+  private readonly checkIn: () => Promise<string | null>;
 
-  constructor(mounts: YardMounts, api: EventsApi = eventsApi, actions: EventsActions = eventsActions(mounts.store, api)) {
+  constructor(
+    mounts: YardMounts,
+    api: EventsApi = eventsApi,
+    actions: EventsActions = eventsActions(mounts.store, api),
+    checkIn: () => Promise<string | null> = () => checkInWeekendMessage(mounts.store),
+  ) {
     this.mounts = mounts;
     this.api = api;
     this.actions = actions;
+    this.checkIn = checkIn;
     const { element, disc } = dockButton("events", "Events", buttonArt(), () => this.toggle());
     this.button = element;
     this.button.classList.add("events-door");
@@ -108,6 +149,7 @@ export class EventsDoor {
       this.refresh();
       this.noteTierReady(before, this.events);
     });
+    this.unwatchWeekend = onWeekendChange(() => this.refresh());
     this.badge = document.createElement("span");
     this.badge.className = "yard-dock__badge events-badge";
     this.badge.hidden = true;
@@ -178,6 +220,8 @@ export class EventsDoor {
         this.panel?.close();
         this.mounts.scene.openMap();
       },
+      onOpenWeekend: (run) => this.openWeekend(run),
+      onCheckInWeekend: () => void this.checkInWeekend(),
       onClose: () => {
         this.panel = null;
         this.refusal = null;
@@ -224,6 +268,58 @@ export class EventsDoor {
     return this.clock?.now() ?? Date.now() / 1000;
   }
 
+  /** The weekend event at `now`: the run going, and the next one. */
+  private weekend(now: number): EventsWeekend {
+    const on = runningWeekend(now);
+    const { next } = currentWeekend();
+    return {
+      on,
+      next: !on && next && next.startsAt > now ? next : null,
+      checkin: weekendCheckin(on, now),
+      checkingIn: this.checkingIn,
+      checkinError: this.checkinError,
+    };
+  }
+
+  /**
+   * What the page shows of the weekend, as a key: it redraws when this
+   * changes (an event starting or ending, a new check-in day at midnight).
+   */
+  private weekendKey(now: number): string {
+    const { on, next, checkin } = this.weekend(now);
+    const told = announcedWeekend(now);
+    const day = checkin ? `${checkin.day}:${checkin.claimedToday}` : "";
+    return [...[on, next, told].map((run) => (run ? `${run.key}:${run.id}` : "")), day].join("|");
+  }
+
+  /** The card's Check in: today's 50 Glimmers; the "+50" and the purse come with the yard answer. */
+  private async checkInWeekend(): Promise<void> {
+    if (this.checkingIn) return;
+    this.checkingIn = true;
+    this.checkinError = null;
+    this.render();
+    const message = await this.checkIn();
+    if (this.destroyed) return;
+    this.checkingIn = false;
+    this.checkinError = message;
+    this.refresh();
+  }
+
+  /** The weekend's pop-up from its card. */
+  private openWeekend(run: WeekendRun): void {
+    if (this.weekendPopupOpen) return;
+    this.weekendPopupOpen = true;
+    openWeekendPopup({
+      container: this.mounts.overlay.modal,
+      run,
+      now: this.now,
+      onCheckIn: this.checkIn,
+      onClose: () => {
+        this.weekendPopupOpen = false;
+      },
+    });
+  }
+
   private view(): EventsPanelView {
     if (this.events) {
       return {
@@ -233,6 +329,7 @@ export class EventsDoor {
         claiming: this.claiming,
         refusal: this.refusal,
         mr2Welcome: this.welcome,
+        weekend: this.weekend(this.now),
       };
     }
     if (this.loadFailed) return { kind: "error", message: this.loadFailed };
@@ -240,6 +337,7 @@ export class EventsDoor {
   }
 
   private render(): void {
+    this.weekendDrawn = this.weekendKey(this.now);
     const view = this.view();
     this.panel?.render(view);
     if (this.scrollToClaim && view.kind === "list") {
@@ -250,8 +348,11 @@ export class EventsDoor {
 
   private refresh(): void {
     const events = this.events ?? [];
-    this.button.hidden = events.length === 0 && this.welcome === null;
-    const count = claimableCount(events);
+    const now = this.now;
+    const weekendOut = runningWeekend(now) !== null || announcedWeekend(now) !== null;
+    this.button.hidden = events.length === 0 && this.welcome === null && !weekendOut;
+    // A weekend check-in waiting counts as one more thing to claim.
+    const count = claimableCount(events) + (checkinWaiting(now) ? 1 : 0);
     this.badge.hidden = count === 0;
     this.badge.textContent = count > 99 ? "99+" : String(count);
     const words = count === 1 ? "1 reward to claim" : `${count} rewards to claim`;
@@ -262,8 +363,15 @@ export class EventsDoor {
 
   /** Every second: the page's countdowns, and a fresh read when the list has gone stale. */
   private tick(): void {
-    if (!this.events || this.loading) return;
+    if (this.loading) return;
     const now = this.now;
+    // The weekend announced, starting or ending (Friday, Saturday or Monday
+    // midnight): the button and the page follow without a fresh read.
+    if (this.weekendKey(now) !== this.weekendDrawn) {
+      this.refresh();
+      return;
+    }
+    if (!this.events) return;
     const stale =
       (this.welcome !== null && now >= this.welcome.endsAt) ||
       this.events.some(
@@ -326,6 +434,7 @@ export class EventsDoor {
   destroy(): void {
     this.destroyed = true;
     this.unwatchPumpkins();
+    this.unwatchWeekend();
     if (this.timer !== null) window.clearInterval(this.timer);
     this.panel?.close();
     this.button.remove();
