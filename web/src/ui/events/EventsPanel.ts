@@ -3,6 +3,7 @@ import {
   calendarDays,
   claimableTiers,
   countdownText,
+  krallenPenaltyText,
   krallenPrizeText,
   rewardText,
   shortAmount,
@@ -247,9 +248,11 @@ const GOAL_BAR_KINDS: ReadonlySet<string> = new Set(["monster-madness"]);
 
 /**
  * One bar from 0 to the top goal, filled to the player's points, with a tick
- * at each goal (green once reached) and its figure under it.
+ * at each goal (green once reached) and its figure under it. `minimum`, when
+ * above 0, adds the Krallen Hunt's half-goal mark (red until reached,
+ * owner 13 Nov 2026): below it at the end, she loses a level.
  */
-export const goalsBar = (ladder: LadderView): HTMLElement => {
+export const goalsBar = (ladder: LadderView, minimum = 0): HTMLElement => {
   const top = Math.max(1, ...ladder.tiers.map((tier) => tier.need));
   const reached = Math.min(ladder.counter, top);
   const share = (value: number): string => `${Math.round((value / top) * 1000) / 10}%`;
@@ -265,6 +268,16 @@ export const goalsBar = (ladder: LadderView): HTMLElement => {
   fill.style.width = share(reached);
   bar.append(fill);
   const marks = el("div", "events-goals__marks");
+  if (minimum > 0 && minimum < top) {
+    // First among the figures, so the top goal stays the last one.
+    const safe = ladder.counter >= minimum;
+    const tick = el("span", `events-goals__tick events-goals__tick--min${safe ? " events-goals__tick--done" : ""}`);
+    tick.style.left = share(minimum);
+    bar.append(tick);
+    const label = el("span", `events-goals__mark events-goals__mark--min${safe ? " events-goals__mark--done" : ""}`, shortAmount(minimum));
+    label.style.left = share(minimum);
+    marks.append(label);
+  }
   for (const tier of ladder.tiers) {
     const done = ladder.counter >= tier.need;
     const tick = el("span", `events-goals__tick${done ? " events-goals__tick--done" : ""}`);
@@ -276,6 +289,36 @@ export const goalsBar = (ladder: LadderView): HTMLElement => {
   }
   wrap.append(bar, marks);
   return wrap;
+};
+
+/**
+ * The Krallen Hunt's minimum on its card (owner, 13 Nov 2026): while the hunt
+ * runs and the loot is below it, what the end will cost ("Below 75M: −1
+ * level", or at level 1 "Below 45M: Krallen leaves"); once a hunt's end took
+ * a level, what it took ("Krallen lost a level: 3 → 2", "Krallen left").
+ * Nothing otherwise, and never for a player without her at the hunt's start.
+ */
+export const krallenMinimumLine = (
+  event: Pick<EventView, "status">,
+  counter: number,
+  krallen: NonNullable<EventView["krallen"]>,
+): HTMLElement | null => {
+  const penalty = krallen.penalty ?? null;
+  const minimum = krallen.minimum ?? 0;
+  let words: string;
+  if (penalty) words = krallenPenaltyText(penalty);
+  else if (event.status === "active" && minimum > 0 && counter < minimum) {
+    const loses = (krallen.startLevel ?? krallen.level) <= 1 ? "Krallen leaves" : `${AMOUNT_CHANGE_SIGNS.loss}1 level`;
+    words = `Below ${shortAmount(minimum)}: ${loses}`;
+  } else return null;
+  const line = el("p", `events-krallen__minimum${penalty ? " events-krallen__minimum--taken" : ""}`);
+  line.setAttribute("role", "status");
+  line.append(
+    krallenPicture(Math.max(1, penalty ? penalty.from : krallen.level), "icon", "events-krallen__minimum-icon"),
+    el("span", "events-krallen__minimum-arrow", "▼"),
+    el("span", "", words),
+  );
+  return line;
 };
 
 /** Krallen's portrait at a level. */
@@ -608,7 +651,7 @@ export class EventsPanel {
     progress.append(head);
     if (auraTier) {
       // Both marks on one bar: the goal, and 3x it for her loot aura.
-      progress.append(goalsBar(ladder));
+      progress.append(goalsBar(ladder, krallen.minimum ?? 0));
     } else {
       const reached = Math.min(ladder.counter, tier.need);
       const share = tier.need > 0 ? reached / tier.need : 1;
@@ -625,6 +668,8 @@ export class EventsPanel {
       progress.append(bar);
     }
     section.append(progress);
+    const minimumLine = krallenMinimumLine(event, ladder.counter, krallen);
+    if (minimumLine) section.append(minimumLine);
 
     const key = tierKey(event.id, 0);
     if (tier.claimed) {

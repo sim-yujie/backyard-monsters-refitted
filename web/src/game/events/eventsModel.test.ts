@@ -2,6 +2,8 @@ import { describe, expect, it } from "vitest";
 import type { CalendarView, EventView } from "@/api/events";
 import {
   auraWaitsForKrallen,
+  krallenPenaltyNotice,
+  krallenPenaltyText,
   grantedAuraText,
   payingClaimableTiers,
   shortDate,
@@ -261,5 +263,19 @@ describe("Monster Madness: Korath's powers", () => {
       "Korath already knows Fists of Doom.",
     );
     expect(grantedKorathText([{ kind: "shiny", amount: 5 }])).toBeNull();
+  });
+});
+
+describe("the Krallen Hunt's penalty words (owner, 13 Nov 2026)", () => {
+  it("a level lost, or Krallen gone", () => {
+    expect(krallenPenaltyText({ from: 3, to: 2 })).toBe("Krallen lost a level: 3 → 2");
+    expect(krallenPenaltyText({ from: 1, to: 0 })).toBe("Krallen left");
+  });
+
+  it("the load's one-time notice: nothing, one hunt, or several from the first level to now", () => {
+    expect(krallenPenaltyNotice([])).toBeNull();
+    expect(krallenPenaltyNotice([{ from: 5, to: 4 }])).toBe("Krallen lost a level: 5 → 4");
+    expect(krallenPenaltyNotice([{ from: 3, to: 2 }, { from: 2, to: 1 }])).toBe("Krallen lost 2 levels: 3 → 1");
+    expect(krallenPenaltyNotice([{ from: 2, to: 1 }, { from: 1, to: 0 }])).toBe("Krallen left");
   });
 });

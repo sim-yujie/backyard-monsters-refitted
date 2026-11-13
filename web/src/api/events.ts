@@ -93,9 +93,18 @@ export interface EventView {
   /**
    * For an event that pays Krallen: her level now (0 for none), the top an
    * event raises her to, and when her loot aura runs out (unix s, 0 for none;
-   * absent from an older server).
+   * absent from an older server). `startLevel` is her level when the hunt
+   * began, `minimum` the loot below which its end takes a level (0: none),
+   * `penalty` what its end took; all absent from an older server.
    */
-  krallen: { level: number; maxLevel: number; auraUntil?: number } | null;
+  krallen: {
+    level: number;
+    maxLevel: number;
+    auraUntil?: number;
+    startLevel?: number;
+    minimum?: number;
+    penalty?: { from: number; to: number } | null;
+  } | null;
 }
 
 export interface EventsBody extends ApiEnvelope {

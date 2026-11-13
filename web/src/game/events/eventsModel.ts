@@ -190,6 +190,27 @@ export const krallenPrizeText = (krallen: { level: number; maxLevel: number }): 
       : `Krallen level ${krallen.level} → ${krallen.level + 1}`;
 
 /**
+ * What a Krallen Hunt's end took (owner, 13 Nov 2026: below half the goal she
+ * loses a level, a level 1 Krallen leaves): "Krallen lost a level: 3 → 2",
+ * or "Krallen left".
+ */
+export const krallenPenaltyText = (penalty: { from: number; to: number }): string => {
+  if (penalty.to <= 0) return "Krallen left";
+  const lost = penalty.from - penalty.to;
+  return `Krallen lost ${lost > 1 ? `${lost} levels` : "a level"}: ${penalty.from} → ${penalty.to}`;
+};
+
+/**
+ * The yard's one-time notice of the penalties a load took (the load's
+ * `krallenpenalty`, oldest first), from the first one's level to where she
+ * stands now: several hunts missed read "Krallen lost 2 levels: 3 → 1".
+ */
+export const krallenPenaltyNotice = (penalties: readonly { from: number; to: number }[]): string | null => {
+  if (penalties.length === 0) return null;
+  return krallenPenaltyText({ from: penalties[0]!.from, to: penalties[penalties.length - 1]!.to });
+};
+
+/**
  * What a paid claim gave, for the notice: "Krallen joined your yard!",
  * "Krallen is now level 3!", or her loot aura ({@link grantedAuraText}).
  */

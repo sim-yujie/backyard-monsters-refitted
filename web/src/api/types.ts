@@ -885,6 +885,13 @@ export interface BaseLoadResponse extends ApiEnvelope {
    * finds the horse unsprung.
    */
   trojanNew?: true;
+  /**
+   * The Krallen Hunt's penalties this load is the first to tell (server
+   * `services/events/krallenPenalty.ts`, owner 13 Nov 2026), oldest first:
+   * her level before and after, 0 for lost. Own main yard only; absent when
+   * there is nothing to tell.
+   */
+  krallenpenalty?: { from: number; to: number }[];
 }
 
 /* ── Map Room 2 ─────────────────────────────────────────────────────────── */

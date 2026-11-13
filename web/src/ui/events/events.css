@@ -755,6 +755,39 @@
   opacity: 1;
 }
 
+/* The Krallen Hunt's half-goal mark (owner 13 Nov 2026): red until reached. */
+.events-goals__tick--min:not(.events-goals__tick--done) {
+  background: var(--colour-danger);
+}
+
+.events-goals__mark--min:not(.events-goals__mark--done) {
+  color: var(--colour-danger);
+  opacity: 1;
+}
+
+/* Below the minimum, or what a hunt's end took: Krallen, a red arrow, the figure. */
+.events-krallen__minimum {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 0;
+  font-size: var(--text-sm);
+  font-weight: 700;
+  color: var(--colour-danger);
+}
+
+.events-krallen__minimum-icon {
+  width: 24px;
+  height: 24px;
+  object-fit: contain;
+  flex: none;
+}
+
+.events-krallen__minimum-arrow {
+  font-size: 0.8em;
+  line-height: 1;
+}
+
 /* Its rows: Korath's power large and named, the points readable. */
 .events-ladder--goals .events-tier {
   align-items: center;

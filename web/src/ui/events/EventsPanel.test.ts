@@ -334,6 +334,84 @@ describe("EventsPanel: the Krallen Hunt", () => {
       panel.close();
     });
   });
+
+  describe("the minimum: half the goal, or she loses a level (owner, 13 Nov 2026)", () => {
+    const withMinimum = (
+      counter: number,
+      level: number,
+      minimum: number,
+      over: Partial<EventView> = {},
+      penalty: { from: number; to: number } | null = null,
+    ) =>
+      hunt(counter, {
+        ladder: {
+          label: "Loot taken",
+          counter,
+          tiers: [
+            { need: minimum * 2, rewards: [{ kind: "krallen" }], claimed: false },
+            { need: minimum * 6, rewards: [{ kind: "krallenAura", until: 1 }], claimed: false },
+          ],
+        },
+        krallen: { level, maxLevel: 5, auraUntil: 0, startLevel: penalty ? penalty.from : level, minimum, penalty },
+        ...over,
+      });
+    const line = (panel: EventsPanel) => panel.element.querySelector(".events-krallen__minimum");
+    const minMark = (panel: EventsPanel) => panel.element.querySelector<HTMLElement>(".events-goals__mark--min");
+
+    it("below it: a red mark at half the goal and what the end will cost", () => {
+      const { panel } = mounted();
+      panel.render(list([withMinimum(40_000_000, 2, 75_000_000)]));
+      expect(minMark(panel)?.textContent).toBe("75M");
+      expect(minMark(panel)?.style.left).toBe("16.7%");
+      expect(minMark(panel)?.classList.contains("events-goals__mark--done")).toBe(false);
+      expect(panel.element.querySelectorAll(".events-goals__tick--min")).toHaveLength(1);
+      expect(line(panel)?.textContent).toBe("▼Below 75M: −1 level");
+      expect(line(panel)?.querySelector("img.events-krallen__minimum-icon")).not.toBeNull();
+      // The top goal stays the last figure, kept inside the bar's end.
+      expect(panel.element.querySelector(".events-goals__marks")?.lastElementChild?.textContent).toBe("450M");
+      panel.close();
+    });
+
+    it("a level 1 Krallen: she leaves", () => {
+      const { panel } = mounted();
+      panel.render(list([withMinimum(0, 1, 45_000_000)]));
+      expect(line(panel)?.textContent).toBe("▼Below 45M: Krallen leaves");
+      panel.close();
+    });
+
+    it("at or above it: the mark turns green and the line goes", () => {
+      const { panel } = mounted();
+      panel.render(list([withMinimum(75_000_000, 2, 75_000_000)]));
+      expect(minMark(panel)?.classList.contains("events-goals__mark--done")).toBe(true);
+      expect(line(panel)).toBeNull();
+      panel.close();
+    });
+
+    it("no Krallen at the hunt's start: no mark, no line", () => {
+      const { panel } = mounted();
+      panel.render(list([withMinimum(0, 0, 0, { krallen: { level: 0, maxLevel: 5, auraUntil: 0, startLevel: 0, minimum: 0, penalty: null } })]));
+      expect(minMark(panel)).toBeNull();
+      expect(line(panel)).toBeNull();
+      panel.close();
+    });
+
+    it("an older server without the minimum: no mark, no line", () => {
+      const { panel } = mounted();
+      panel.render(list([withMinimum(0, 2, 75_000_000, { krallen: { level: 2, maxLevel: 5 } })]));
+      expect(minMark(panel)).toBeNull();
+      expect(line(panel)).toBeNull();
+      panel.close();
+    });
+
+    it("an ended hunt says what its end took", () => {
+      const { panel } = mounted();
+      panel.render(list([withMinimum(10, 2, 125_000_000, { status: "ended", claimUntil: 99_999 }, { from: 3, to: 2 })]));
+      expect(line(panel)?.textContent).toBe("▼Krallen lost a level: 3 → 2");
+      panel.render(list([withMinimum(10, 0, 45_000_000, { status: "ended", claimUntil: 99_999 }, { from: 1, to: 0 })]));
+      expect(line(panel)?.textContent).toBe("▼Krallen left");
+      panel.close();
+    });
+  });
 });
 
 describe("rewardBadge: event coins (beta 7)", () => {
