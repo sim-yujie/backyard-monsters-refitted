@@ -134,6 +134,7 @@ describe.skipIf(!dbName)("the friends core on a real database (issue #368)", () 
         userid: B,
         username: "zz_fr_bob",
         pic: null,
+        photo: null,
         level: 1,
         online: "away",
         since: T0 + 60,
@@ -352,12 +353,12 @@ describe.skipIf(!dbName)("the friends core on a real database (issue #368)", () 
     const results = ((await friends.searchAnswer(em(), as(A), { q: "zz_fr_" }, T0)) as any).results as any[];
     const relation = (userid: number) => results.find((r) => r.userid === userid)?.relation;
     expect([relation(A), relation(B), relation(C), relation(D)]).toEqual(["self", "requested", "asked", "friend"]);
-    expect(Object.keys(results[0]).sort()).toEqual(["level", "pic", "relation", "userid", "username"]);
+    expect(Object.keys(results[0]).sort()).toEqual(["level", "photo", "pic", "relation", "userid", "username"]);
 
     // A player who blocked the searcher shows as none, and a request fails with the neutral refusal.
     await friends.blockAnswer(em(), as(D), { userid: A }, T0);
     const after = ((await friends.searchAnswer(em(), as(A), { q: "zz_fr_dave" }, T0)) as any).results;
-    expect(after).toEqual([{ userid: D, username: "zz_fr_dave", pic: null, level: 1, relation: "none" }]);
+    expect(after).toEqual([{ userid: D, username: "zz_fr_dave", pic: null, photo: null, level: 1, relation: "none" }]);
     expect(await reasonOf(ask(A, D))).toBe("cannotSend");
   });
 
@@ -395,7 +396,7 @@ describe.skipIf(!dbName)("the friends core on a real database (issue #368)", () 
     await answer(C, friendship.request.requestid, true);
     await ask(B, A);
     expect(((await friends.suggestionsAnswer(em(), as(A), T0)) as any).results).toEqual([
-      { userid: B, username: "zz_fr_bob", pic: null, level: 1, relation: "asked" },
+      { userid: B, username: "zz_fr_bob", pic: null, photo: null, level: 1, relation: "asked" },
     ]);
   });
 
