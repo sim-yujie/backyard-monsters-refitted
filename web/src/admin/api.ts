@@ -572,6 +572,8 @@ export interface AdminAnnouncement {
   dismissals: number;
   /** The Shiny each player may claim, 0 for none. */
   shiny: number;
+  /** The Glimmers each player may claim with it, 0 for none. */
+  glimmers: number;
   /** How many players claimed the gift. */
   claims: number;
 }
@@ -582,6 +584,7 @@ export interface AnnouncementLimits {
   images: number;
   imageBytesMax: number;
   shinyMax: number;
+  glimmersMax: number;
 }
 
 /** What Save sends: a picture already saved by id, or a new one as a data URL. */
@@ -593,6 +596,7 @@ export interface AnnouncementForm {
   endsAt: string | null;
   images: ({ keep: number } | { data: string })[];
   shiny: number;
+  glimmers: number;
 }
 
 export const fetchAnnouncements = (): Promise<
