@@ -665,7 +665,7 @@ button.chat-line__name {
   /* One line: the picture, the badge and the name keep their room and the
      words are what end in "…", never the name (a line's own "…" hid a
      button-name whole). A very long name gives way only past 60%. */
-  .chat-box:not(.chat-box--open) .chat-line:not(.chat-line--notice) {
+  .chat-box:not(.chat-box--open) .chat-line:last-child:not(.chat-line--notice) {
     display: flex;
     align-items: center;
   }
