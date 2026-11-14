@@ -16,10 +16,18 @@ const sqlRows = (count: number) =>
     outposts: i % 3,
   }));
 
-/** An entity manager whose one query answers `rows`, counting the times it is asked. */
-const fakeEm = (rows: unknown[]) => {
-  const calls = { count: 0, sql: "" };
+/**
+ * An entity manager whose board query answers `rows`, counting the times it
+ * is asked; the visible-photo lookup answers `photos`.
+ */
+const fakeEm = (rows: unknown[], photos: { userid: number; photo_version: number }[] = []) => {
+  const calls = { count: 0, sql: "", photoSql: "", photoAsks: 0 };
   const em = {
+    execute: async (sql: string) => {
+      calls.photoAsks++;
+      calls.photoSql = sql;
+      return photos;
+    },
     getConnection: () => ({
       execute: async (sql: string) => {
         calls.count++;
@@ -80,7 +88,15 @@ describe("empireBoard", () => {
   test("finds the asker's own place below the top 100", async () => {
     const { em } = fakeEm(sqlRows(150));
     const board = await empireBoard(em, redis, 142, 1_000);
-    expect(board.you).toEqual({ rank: 142, userId: 142, name: "player142", pic: null, empirePoints: 9000, outposts: 141 % 3 });
+    expect(board.you).toEqual({
+      rank: 142,
+      userId: 142,
+      name: "player142",
+      pic: null,
+      photo: null,
+      empirePoints: 9000,
+      outposts: 141 % 3,
+    });
   });
 
   test("an asker who is not ranked (a bot, banned, no yard) gets no row", async () => {
@@ -104,7 +120,25 @@ describe("empireBoard", () => {
     const { em } = fakeEm(sqlRows(2).map((row) => ({ ...row, discord_tag: "someone#1234" })));
     const board = await empireBoard(em, redis, 1, 1_000);
     expect(JSON.stringify(board)).not.toContain("someone#1234");
-    expect(Object.keys(board.top[0]!).sort()).toEqual(["empirePoints", "name", "outposts", "pic", "rank", "userId"]);
+    expect(Object.keys(board.top[0]!).sort()).toEqual(["empirePoints", "name", "outposts", "photo", "pic", "rank", "userId"]);
+  });
+
+  test("each row carries its visible photo, looked up for every answer in one query", async () => {
+    const { em, calls } = fakeEm(sqlRows(150), [
+      { userid: 2, photo_version: 4 },
+      { userid: 142, photo_version: 1 },
+    ]);
+    const board = await empireBoard(em, redis, 142, 1_000);
+    expect(board.top[0]!.photo).toBeNull();
+    expect(board.top[1]!.photo).toBe(4);
+    expect(board.you?.photo).toBe(1);
+    expect(calls.photoAsks).toBe(1);
+    // The shared rule: hidden or banned photos never come back.
+    expect(calls.photoSql).toContain("p.photo IS NOT NULL AND p.photo_hidden = false AND u.banned = false");
+
+    // The stored board keeps no photo, so a new or hidden one shows at once.
+    const stored = JSON.parse((await redis.get(BOARD_KEY))!) as { top: object[] };
+    expect(stored.top[1]).not.toHaveProperty("photo");
   });
 
   test("an empty board is fine", async () => {

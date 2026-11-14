@@ -20,9 +20,11 @@ import { MONSTERS_TABS } from "./tabs";
 /**
  * The Monsters screen (`docs/design/yard-buildings.md` §4.1, decision D4).
  *
- * One screen with five tabs — Unlock (Monster Locker), Hatch (Hatchery and
- * Hatchery Control Centre), Housing, Train (Academy), Lab — opened by the HUD's
- * Monsters button or by the Open button on one of those buildings. Docked to
+ * One screen with six tabs — Unlock (Monster Locker), Hatch (Hatchery and
+ * Hatchery Control Centre), Housing (with the Monster Juicer and the Monster
+ * Bunkers), Train (Academy), Lab, Champion (Champion Cage and Chamber) —
+ * opened by the HUD's Monsters button or by the Open button on one of those
+ * buildings. Docked to
  * the right under the HUD at full height on a wide screen, a bottom sheet on a
  * phone; the yard stays visible and clickable beside it. It is not a modal and
  * stays open after every action: the original closed its popups on success,
@@ -59,6 +61,7 @@ const PURPOSE: Readonly<Record<MonstersTabId, string>> = {
   housing: "house your monsters",
   train: "train your monsters",
   lab: "research monster abilities",
+  champion: "raise a champion",
 };
 
 /** The first Town Hall (Under Hall in the Inferno) level that allows one of `type` (the build menu's rule). */
@@ -91,6 +94,7 @@ const MONSTERS_SCREENS: Record<MonstersTabId, GuideScreen> = {
   [MonstersTabId.HOUSING]: GuideScreen.MONSTERS_HOUSING,
   [MonstersTabId.TRAIN]: GuideScreen.MONSTERS_TRAIN,
   [MonstersTabId.LAB]: GuideScreen.MONSTERS_LAB,
+  [MonstersTabId.CHAMPION]: GuideScreen.CHAMPION,
 };
 
 export class MonstersScreen {

@@ -1,4 +1,4 @@
-import type { Friend, FriendRequest, FriendsApi, FriendsList, Gift, PlayerResult } from "@/api/friends";
+import type { Friend, FriendRequest, FriendsApi, FriendsList, Gift, GiftAllResult, PlayerResult } from "@/api/friends";
 
 /**
  * Friends in the §6.2 contract's shapes (issue #370), for the tests: a
@@ -108,6 +108,16 @@ export const fixtureGift = (id: number, userid: number, extra: Partial<Gift> = {
   ...extra,
 });
 
+/** A Gift all that sends nothing. */
+export const NO_GIFT_ALL: GiftAllResult = {
+  fallback: "r1",
+  noWish: 0,
+  gifts: [],
+  skipped: [],
+  cost: { r1: 0, r2: 0, r3: 0, r4: 0 },
+  resources: { r1: 0, r2: 0, r3: 0, r4: 0 },
+};
+
 type FriendsApiWishes = Parameters<FriendsApi["setWishes"]>[0];
 
 export type FixtureCall = readonly [method: keyof FriendsApi, ...args: unknown[]];
@@ -138,6 +148,9 @@ export const fixtureApi = (
     search: answer("search", []),
     suggestions: answer("suggestions", []),
     sendGift: answer("sendGift", null),
+    giftCost: answer("giftCost", { amount: 0, resources: { r1: 0, r2: 0, r3: 0, r4: 0 } }),
+    giftAllPlan: answer("giftAllPlan", NO_GIFT_ALL),
+    giftAll: answer("giftAll", NO_GIFT_ALL),
     gifts: answer("gifts", { gifts: [], collectsLeft: 10, wishes: [] }),
     // Left out of `answers`, it stores what it was asked, like the server.
     setWishes: (...args: unknown[]) =>

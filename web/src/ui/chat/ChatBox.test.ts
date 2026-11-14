@@ -110,6 +110,45 @@ describe("ChatBox", () => {
     expect(own.querySelector("button")).toBeNull();
   });
 
+  it("shows each speaker's picture: their visible photo, else their critter (owner, 13 Nov)", () => {
+    mount([
+      { ...wire(77, "photo", 1), picSquare: "/avatars/bee.webp", photo: 3 },
+      { ...wire(78, "critter", 2), picSquare: "/avatars/bee.webp" },
+      wire(2505, "mine", 3, "[27] agenttester"),
+    ]);
+    const pics = [...box.element.querySelectorAll<HTMLImageElement>(".chat-line > .chat-line__pic")];
+    expect(pics).toHaveLength(3);
+    const [photo, critter, own] = pics;
+
+    // The photo's address carries its upload number; it fills the round frame.
+    expect(photo!.getAttribute("src")).toContain("/profile/photos/77");
+    expect(photo!.getAttribute("src")).toContain("v=3");
+    expect(photo!.classList.contains("is-photo")).toBe(true);
+    expect(critter!.getAttribute("src")).toBe("/avatars/bee-64.webp");
+    expect(critter!.classList.contains("is-photo")).toBe(false);
+    // No photo field, no critter picked: the player's default critter, never a blank.
+    expect(own!.getAttribute("src")).toMatch(/^\/avatars\/.+\.webp$/);
+    // The name says who it is: the picture adds no words to the line.
+    expect(photo!.alt).toBe("");
+    expect(lineTexts()[0]).toBe("[12] p77photo");
+  });
+
+  it("a photo that will not load (taken down since) shows the critter", () => {
+    mount([{ ...wire(77, "photo", 1), picSquare: "/avatars/bee.webp", photo: 3 }]);
+    const pic = box.element.querySelector<HTMLImageElement>(".chat-line__pic")!;
+    pic.dispatchEvent(new Event("error"));
+    expect(pic.getAttribute("src")).toBe("/avatars/bee-64.webp");
+    expect(pic.classList.contains("is-photo")).toBe(false);
+  });
+
+  it("open, a speaker's picture picks them as their name does", () => {
+    mount([{ ...wire(77, "hello", 1), picSquare: "/avatars/bee.webp" }]);
+    box.setOpen(true);
+    box.element.querySelector<HTMLElement>(".chat-line__pic")!.click();
+    expect(strip().hidden).toBe(false);
+    expect(strip().textContent).toContain("[12] p77");
+  });
+
   it("marks the game team's lines with GM and a moderator's with Mod, GM winning", () => {
     mount([
       { ...wire(7, "Please keep chat friendly.", 1, "[40] Owner"), gm: true },
@@ -128,8 +167,9 @@ describe("ChatBox", () => {
     const badge = mod!.querySelector<HTMLElement>(".chat-line__mod")!;
     expect(badge.textContent).toBe("Mod");
     expect(badge.title).toBe("Moderator");
-    // The badge comes first, then the name and the words.
-    expect(mod!.firstElementChild).toBe(badge);
+    // The speaker's picture comes first, then the badge, the name and the words.
+    expect(mod!.firstElementChild?.classList.contains("chat-line__pic")).toBe(true);
+    expect(mod!.children[1]).toBe(badge);
     expect(mod!.textContent).toBe("Mod[25] helperThanks!");
 
     expect(plain!.classList.contains("chat-line--mod")).toBe(false);

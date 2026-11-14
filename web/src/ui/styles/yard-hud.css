@@ -423,6 +423,32 @@
   opacity: 0.55;
 }
 
+/* Busy (an attack starting): disabled, and the disc breathes until the scene
+   changes. Under reduced motion it just stays a little brighter. */
+.yard-dock__button--busy:disabled {
+  cursor: progress;
+}
+
+.yard-dock__button--busy:disabled .yard-dock__disc {
+  animation: yard-dock-busy 0.9s ease-in-out infinite alternate;
+}
+
+@keyframes yard-dock-busy {
+  from {
+    opacity: 0.55;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .yard-dock__button--busy:disabled .yard-dock__disc {
+    animation: none;
+    opacity: 0.8;
+  }
+}
+
 .yard-dock__label {
   padding: 2px 9px;
   border-radius: var(--radius-pill);
@@ -1054,9 +1080,11 @@
     max-width: calc(100% - 48px);
   }
 
-  /* Notices (the wild monsters' warning) hang under the "?" and Chat, not on them. */
+  /* Notices (the wild monsters' warning) hang under the "?" and Chat, not on
+     them: under the folded Chat tab and its line on the row below it
+     (chat.css), about 110px under the HUD. */
   .overlay__layer:has(> .chat-box:not([hidden])) > .yard-notices {
-    top: calc(var(--notice-top-inset) + 92px);
+    top: calc(var(--notice-top-inset) + 122px);
   }
 
   /* A tall sheet reaches past the Chat strip, which would peek over its top. */

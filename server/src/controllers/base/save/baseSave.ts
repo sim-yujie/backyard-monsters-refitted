@@ -95,7 +95,7 @@ import { championsAfterDefence } from "../../../services/base/combat/defenderCha
 import { healChampions } from "../../../services/yard/catchUpChampions.js";
 import { championsAfterLessons } from "../../../services/base/combat/championBrain.js";
 import { countAttackLoot } from "../../../services/events/lootEvents.js";
-import { plunderPercent, weekendBoostUsed, withPlunderBonus } from "../../../services/events/weekendBoosts.js";
+import { plunderPercent, withPlunderBonus } from "../../../services/events/weekendBoosts.js";
 import { attackLootPercent, mapByPercent } from "../../../services/alliance/allianceBonuses.js";
 import { RESOURCE_KEYS, type ResourceAmounts } from "../../../game-rules/combat/index.js";
 import { recordAttackPlan } from "../../../services/base/autoAttack/attackPlanStore.js";
@@ -106,7 +106,7 @@ import { attackQuestEvents, defenceQuestEvents } from "../../../services/quests/
 import { recordQuestEvents, recordUserQuestEvents } from "../../../services/quests/record.js";
 import { INFERNO_SAVE_TYPES, refuseOldInferno } from "../../../services/inferno/infernoGate.js";
 import { infernoConfig } from "../../../config/InfernoConfig.js";
-import { noteOutpostDefended } from "../../../services/alliance/allianceProgress.js";
+import { isPlayerYard, noteOutpostDefended } from "../../../services/alliance/allianceProgress.js";
 
 /**
  * Controller responsible for saving the user's base data.
@@ -625,7 +625,6 @@ const saveBase = async (
         ),
         loot.krallenBuff
       ).credited;
-      if (plunder > 0) weekendBoostUsed(user.userid, "plunder", now);
     }
 
     // Each champion that fought learns from the server's battle, once: this
@@ -819,6 +818,7 @@ const saveBase = async (
         after: battle?.buildinghealthdata,
         log: battleInput?.log,
         loot: loot?.credit,
+        playerYard: await isPlayerYard(postgres.em, baseSave, user.userid),
       }),
       now
     );

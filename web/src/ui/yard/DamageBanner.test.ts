@@ -103,7 +103,7 @@ describe("DamageBanner", () => {
     expect(text()).toBe("Your yard was attacked: 1 building damaged");
   });
 
-  it("Repair all sends one request and says what started", async () => {
+  it("Repair all sends one request; the banner goes with no notice in its place", async () => {
     const report: RepairReport = { started: [1, 2], skipped: [], doneBy: T0 + 24 };
     all.mockImplementation(() => {
       setBuildings([snapper(1, { hp: 100, rE: 1 }), snapper(2, { hp: 200, rE: 1 })]);
@@ -112,9 +112,7 @@ describe("DamageBanner", () => {
     banner = new DamageBanner(binding, actions);
     document.querySelector<HTMLButtonElement>(".notice button.btn--ghost")!.click();
     await vi.waitFor(() => expect(all).toHaveBeenCalledTimes(1));
-    await vi.waitFor(() =>
-      expect(document.querySelector(".notice")?.textContent).toContain("Repairing 2 buildings."),
-    );
-    expect(text()).toBeNull();
+    await vi.waitFor(() => expect(text()).toBeNull());
+    expect(document.querySelector(".notice")).toBeNull();
   });
 });

@@ -61,6 +61,22 @@ export interface LadderTier {
   readonly rewards: readonly EventReward[];
 }
 
+/**
+ * The player's Krallen level when the hunt began: her level now, less the one
+ * a tier claimed this hunt raised her by (`krallen` pays one level). The
+ * hunt's goals follow it, so the 3x mark stays 3x the goal the player started
+ * with after the first mark raised her. A tier claimed at the top (level 5)
+ * raised nothing; its goals are the last entry either way.
+ */
+export const huntStartLevel = (
+  tiers: readonly LadderTier[],
+  claimedTiers: readonly number[],
+  krallenLevel: number
+): number => {
+  const raised = claimedTiers.some((index) => tiers[index]?.rewards.some((reward) => reward.kind === "krallen"));
+  return raised && krallenLevel > 0 ? krallenLevel - 1 : krallenLevel;
+};
+
 /** What a tier needs of a player whose Krallen is at `krallenLevel` (0 for none). */
 export const tierNeed = (tier: LadderTier, krallenLevel: number): number => {
   const needs = tier.needByKrallenLevel;
@@ -221,7 +237,7 @@ export const HALLOWEEN_2026_LADDER: readonly LadderTier[] = [
  * reward. r1 Twigs, r2 Pebbles, r3 Putty, r4 Goo. Decoration 55 is the
  * Acorn, 69 the Scarecrow. Like Halloween, the event also pays Glimmers
  * (event coins) every day and at every ladder tier: its `coins:
- * BIG_EVENT_COINS` in {@link EVENTS} adds them (`withEventCoins`).
+ * THANKSGIVING_2026_COINS` in {@link EVENTS} adds them (`withEventCoins`).
  * ═══════════════════════════════════════════════════════════════════════
  */
 export const THANKSGIVING_2026_CALENDAR: readonly CalendarDay[] = [
@@ -249,36 +265,54 @@ export const THANKSGIVING_2026_CALENDAR: readonly CalendarDay[] = [
 /**
  * ═══════════════════════════════════════════════════════════════════════
  * THANKSGIVING 2026 TURKEY HUNT LADDER: what picking turkeys earns.
- * The same tiers as Halloween's pumpkin ladder (owner may change them):
- * during the event the yard's mushrooms grow as turkeys that wander near
- * where they grew, about one an hour (`services/yard/season.ts`), and every
- * turkey a player picks adds one to the counter
- * (`controllers/yard/mushrooms.ts`). One pick in four is a golden turkey,
- * worth 3 or 8 Shiny, exactly as a golden mushroom (`GOLDEN_SMALL`,
- * `GOLDEN_BIG` in `services/yard/mushrooms.ts`). Each tier is claimed once,
- * by hand, on the Events page. `need` is the turkey count.
- * r1 Twigs, r2 Pebbles, r3 Putty, r4 Goo. Decoration 69 is the Scarecrow,
- * 110 the D.A.V.E. Pumpkin.
+ * Set by the owner (13 Nov 2026): 25 turkeys for 10 Shiny, 50 for 100
+ * Glimmers, 150 for the Scarecrow and 20 Shiny, 200 for the Autumn Maple
+ * Tree and 30 Shiny. During the event the yard's mushrooms grow as turkeys
+ * that wander near where they grew, about one an hour, at most 10 waiting
+ * (`services/yard/season.ts`, `mushrooms.ts`), and every turkey a player
+ * picks adds one to the counter (`controllers/yard/mushrooms.ts`): up to
+ * about 24 a day for a player who looks in at least every 10 hours. One pick
+ * in four is a golden turkey, worth 3 or 8 Shiny, exactly as a golden
+ * mushroom (`GOLDEN_SMALL`, `GOLDEN_BIG` in `services/yard/mushrooms.ts`).
+ * Each tier is claimed once, by hand, on the Events page. `need` is the
+ * turkey count. The 50 tier's 100 Glimmers are paid through the event's
+ * coins ({@link THANKSGIVING_2026_COINS}), on top of the usual ladder
+ * Glimmers, so the tier shows one Glimmer figure. Decoration 69 is the
+ * Scarecrow, 206 the Autumn Maple Tree (`revampDecorations.ts`).
  * ═══════════════════════════════════════════════════════════════════════
  */
 export const THANKSGIVING_2026_LADDER: readonly LadderTier[] = [
-  /* 10 turkeys  */ { need: 10, rewards: [{ kind: "shiny", amount: 10 }] },
-  /* 25 turkeys  */ { need: 25, rewards: [{ kind: "resources", amounts: { r1: 25_000, r2: 25_000, r3: 25_000, r4: 25_000 } }] },
-  /* 50 turkeys  */ {
-    need: 50,
+  /* 25 turkeys  */ { need: 25, rewards: [{ kind: "shiny", amount: 10 }] },
+  /* 50 turkeys  */ { need: 50, rewards: [] }, // 100 Glimmers, from THANKSGIVING_2026_COINS
+  /* 150 turkeys */ {
+    need: 150,
     rewards: [
       { kind: "decoration", type: 69, count: 1 },
       { kind: "shiny", amount: 20 },
     ],
   },
-  /* 100 turkeys */ {
-    need: 100,
+  /* 200 turkeys */ {
+    need: 200,
     rewards: [
-      { kind: "decoration", type: 110, count: 1 },
+      { kind: "decoration", type: 206, count: 1 },
       { kind: "shiny", amount: 30 },
     ],
   },
 ];
+
+/** Glimmers the 50-turkey tier pays as its own prize (owner, 13 Nov 2026). */
+export const THANKSGIVING_2026_TIER_GLIMMERS = 100;
+
+/**
+ * Thanksgiving's event coins: the big-event amounts ({@link BIG_EVENT_COINS},
+ * 15 a day and 20/35/55/80 over the ladder), with the 50-turkey tier's own
+ * {@link THANKSGIVING_2026_TIER_GLIMMERS} added to its milestone: 20, 135,
+ * 55, 80, 500 in all with the calendar.
+ */
+export const THANKSGIVING_2026_COINS: EventCoins = {
+  ...BIG_EVENT_COINS,
+  milestones: BIG_EVENT_COINS.milestones.map((coins, tier) => (tier === 1 ? coins + THANKSGIVING_2026_TIER_GLIMMERS : coins)),
+};
 
 /**
  * ═══════════════════════════════════════════════════════════════════════
@@ -292,14 +326,56 @@ export const THANKSGIVING_2026_LADDER: readonly LadderTier[] = [
  * more each later month, at most 5 (`services/events/grant.ts`).
  *
  * The goal follows the player's Krallen level (owner, 2026-10-23): 60
- * million to win her, then 100, 150, 225 and 300 million to raise her to
+ * million to win her, then 90, 150, 250 and 300 million to raise her to
  * levels 2, 3, 4 and 5. A level 5 Krallen keeps the last goal on the page,
  * though the hunt has nothing more to give her.
  * ═══════════════════════════════════════════════════════════════════════
  */
 export const KRALLEN_HUNT_GOALS: readonly number[] = [
-  60_000_000, 100_000_000, 150_000_000, 225_000_000, 300_000_000,
+  60_000_000, 90_000_000, 150_000_000, 250_000_000, 300_000_000,
 ];
+
+/**
+ * ═══════════════════════════════════════════════════════════════════════
+ * THE HUNT'S MINIMUM: set by the owner (2026-11-13).
+ * A player who owned Krallen when a hunt began and ends it with less than
+ * {@link KRALLEN_PENALTY_SHARE} of that hunt's goal loses one Krallen level;
+ * a level 1 Krallen is lost and must be won again. 45, 75, 125 and 150
+ * million for a Krallen that began the hunt at level 1, 2, 3 and 4 or 5.
+ * Without her at the start there is no minimum
+ * (`services/events/krallenPenalty.ts`).
+ * ═══════════════════════════════════════════════════════════════════════
+ */
+export const KRALLEN_PENALTY_SHARE = 0.5;
+
+/** The hunt's minimum for a Krallen at `startLevel` when it began; 0 without her. */
+export const krallenHuntMinimum = (startLevel: number): number => {
+  const level = Math.trunc(startLevel) || 0;
+  if (level <= 0) return 0;
+  return Math.floor(KRALLEN_HUNT_GOALS[Math.min(level, KRALLEN_HUNT_GOALS.length - 1)]! * KRALLEN_PENALTY_SHARE);
+};
+
+/**
+ * ═══════════════════════════════════════════════════════════════════════
+ * KRALLEN'S LOOT AURA: set by the owner (2026-11-13).
+ * A second mark on the hunt at {@link KRALLEN_AURA_GOAL_TIMES} times the
+ * player's goal: 180, 300, 450, 675 and 900 million by the Krallen level
+ * the player had when the hunt began (a level 5 Krallen keeps the last).
+ * Claiming it gives Krallen her loot aura until the END of the NEXT month's
+ * hunt (as Flash's second loot mark held for the round after,
+ * `KOTHHandler.as:76-84`, `:146-155`); it must be won again to keep it.
+ * Only a Krallen of level 3, 4 or 5 carries the aura (strength and radius in
+ * `game-rules/combat/champions.ts`, `LOOT_AURA_BONUS`); below level 3, or
+ * without the mark, she has none.
+ * ═══════════════════════════════════════════════════════════════════════
+ */
+export const KRALLEN_AURA_GOAL_TIMES = 3;
+
+/** The aura mark's goal by Krallen level at the hunt's start, 0 (none) first. */
+export const KRALLEN_AURA_GOALS: readonly number[] = KRALLEN_HUNT_GOALS.map((goal) => goal * KRALLEN_AURA_GOAL_TIMES);
+
+/** How many hunts after the one it was won in the aura runs to the end of. */
+export const KRALLEN_AURA_HUNTS_AFTER = 1;
 
 /** The first month the hunt runs, and how many months are listed from it. */
 export const KRALLEN_HUNT_FIRST = { year: 2026, month: 11 } as const;
@@ -310,9 +386,25 @@ export const KRALLEN_HUNT_CLAIM_DAYS = 7;
 
 const twoDigits = (value: number): string => String(value).padStart(2, "0");
 
+/** The month `count` months after `month` (1-12) of `year`. */
+const monthsAfter = (year: number, month: number, count: number): { year: number; month: number } => {
+  const months = month - 1 + count;
+  return { year: year + Math.floor(months / 12), month: (months % 12) + 1 };
+};
+
+/**
+ * When the aura won in the hunt of `month` (1-12) of `year` runs out, unix
+ * seconds: the end of the hunt {@link KRALLEN_AURA_HUNTS_AFTER} later, the
+ * first of the month after that one (November's runs to 1 January).
+ */
+export const krallenAuraUntil = (year: number, month: number): number => {
+  const end = monthsAfter(year, month, KRALLEN_AURA_HUNTS_AFTER + 1);
+  return Date.UTC(end.year, end.month - 1, 1) / 1000;
+};
+
 /** The Krallen Hunt of `month` (1-12) in `year`, id `krallen-<year>-<mm>`. */
 export const krallenHunt = (year: number, month: number): EventDefinition => {
-  const next = month === 12 ? { year: year + 1, month: 1 } : { year, month: month + 1 };
+  const next = monthsAfter(year, month, 1);
   return {
     id: `krallen-${year}-${twoDigits(month)}`,
     title: "Krallen Hunt",
@@ -325,6 +417,11 @@ export const krallenHunt = (year: number, month: number): EventDefinition => {
       source: "attackLoot",
       tiers: [
         { need: KRALLEN_HUNT_GOALS[0]!, needByKrallenLevel: KRALLEN_HUNT_GOALS, rewards: [{ kind: "krallen" }] },
+        {
+          need: KRALLEN_AURA_GOALS[0]!,
+          needByKrallenLevel: KRALLEN_AURA_GOALS,
+          rewards: [{ kind: "krallenAura", until: krallenAuraUntil(year, month) }],
+        },
       ],
     },
     requires: { townHall: 6, tutorial: true },
@@ -368,7 +465,7 @@ export const EVENTS: readonly EventDefinition[] = [
     endsAt: "2026-12-03T00:00:00Z",
     calendar: THANKSGIVING_2026_CALENDAR,
     ladder: { label: "Turkeys caught", tiers: THANKSGIVING_2026_LADDER },
-    coins: BIG_EVENT_COINS,
+    coins: THANKSGIVING_2026_COINS,
   },
 ].map(withEventCoins);
 

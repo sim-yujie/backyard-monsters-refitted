@@ -32,8 +32,7 @@ import { RESOURCE_NAMES, resourceAmount, resourceRealm } from "@/ui/resourceIcon
  * store's prediction (`harvest.ts`) once a second while bound, as well as on
  * every store change the dock passes on. The press runs through the store's
  * queue (`bankActions`), so the answer is merged like any yard action's and the
- * HUD's readouts float what arrived; a notice only says what stayed in the
- * harvesters because storage was full, or a refusal.
+ * HUD's readouts float what arrived; a notice only says a refusal.
  */
 
 /** How often the waiting total is re-read while bound. */
@@ -62,8 +61,6 @@ export const COLLECT_FULL_NOTE =
 export const INFERNO_COLLECT_FULL_NOTE =
   "Storage is full: what does not fit stays in your harvesters. Build or upgrade Resource Pods.";
 
-/** What raises the cap in the realm on screen. */
-const storageName = (): string => (resourceRealm() === "inferno" ? "Resource Pods" : "Storage Silos");
 const collectFullNote = (): string =>
   resourceRealm() === "inferno" ? INFERNO_COLLECT_FULL_NOTE : COLLECT_FULL_NOTE;
 
@@ -128,18 +125,6 @@ export const collectRing = (
   return { ...waiting, fraction, state };
 };
 
-/** "icon 720 icon 300": the non-zero amounts of a report field, or null for none. */
-const amountsNode = (amounts: Readonly<Record<HarvestKey, number>>): Node | null => {
-  const shown = KEYS.filter((key) => amounts[key] > 0);
-  if (shown.length === 0) return null;
-  const span = document.createElement("span");
-  shown.forEach((key, index) => {
-    if (index > 0) span.append(" ");
-    span.append(resourceAmount(key, amounts[key]));
-  });
-  return span;
-};
-
 /**
  * "+720" in green with the resource's icon: what a tap banked, for the yard to
  * float off the building (`harvest.css`). A gain (`amountChange.ts`); only to
@@ -157,25 +142,17 @@ export const bankFloat = (resource: HarvestKey, amount: number): HTMLElement => 
 };
 
 /**
- * Says how a bank came out in the yard's notice dock, but only when something
- * went wrong: a server refusal, or storage full so some stayed in the
- * harvesters. A plain collect says nothing (owner, 9 Nov: the "Collected"
- * toast was annoying); the balls, the floats and the HUD readouts already
- * show what arrived. A local "nothing to collect" says nothing either: the
- * bubble was about to empty anyway.
+ * Says how a bank came out in the yard's notice dock, but only when it failed:
+ * a server refusal. Nothing else says anything (owner, 9 and 13 Nov: the
+ * "Collected" toast and the "stayed in your harvesters: storage is full"
+ * toast were annoying); the balls, the floats and the HUD readouts show what
+ * arrived. A local "nothing to collect" says nothing either: the bubble was
+ * about to empty anyway.
  */
 export const showBankResult = (notices: Notices, result: YardActionResult<BankReport>): void => {
-  if (!result.ok) {
-    if (result.refusal.local && result.refusal.reason === "empty") return;
-    notices.show(BANK_NOTICE, result.refusal.message, { level: "error", timeoutMs: 6_000 });
-    return;
-  }
-  // What stayed behind is only where it is: plain, not a gain.
-  const kept = amountsNode(result.report.leftInBuffers);
-  if (!kept) return;
-  const message = document.createElement("span");
-  message.append(kept, ` stayed in your harvesters: storage is full. Build or upgrade ${storageName()}.`);
-  notices.show(BANK_NOTICE, message, { level: "warning", timeoutMs: 8_000 });
+  if (result.ok) return;
+  if (result.refusal.local && result.refusal.reason === "empty") return;
+  notices.show(BANK_NOTICE, result.refusal.message, { level: "error", timeoutMs: 6_000 });
 };
 
 export class CollectAll {

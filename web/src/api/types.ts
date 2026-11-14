@@ -251,6 +251,12 @@ export interface ChampionSaveEntry {
   h?: unknown;
   /** What its habits learned from: `n` attacks, and each Mode's count and usual scores. */
   hs?: unknown;
+  /**
+   * Krallen's loot aura runs until then, unix seconds (the Krallen Hunt's 3x
+   * mark, server `services/events/krallenReward.ts`); the server's alone to
+   * write. She fights with it from her level 3 (`KRALLEN_AURA_LEVEL`).
+   */
+  la?: number;
   [key: string]: unknown;
 }
 
@@ -661,11 +667,19 @@ export interface BaseLoadResponse extends ApiEnvelope {
    */
   weekend?: unknown;
   /**
+   * The player's daily check-in for the weekend event on now
+   * (`server/src/services/events/weekendCoins.ts`), read by `game/weekend.ts`.
+   * On the owner's main-yard build load while one runs.
+   */
+  weekendcheckin?: unknown;
+  /**
    * The player's event coins (`server/src/services/events/eventCoins.ts`):
    * on the owner's main-yard build load, and merged from every yard answer
    * that changed them. Absent elsewhere (a visit, an attack, an outpost).
    */
   eventcoins?: number;
+  /** What this load paid, with `eventcoins` (none since the weekend check-in, 13 Nov 2026; kept for an older server). */
+  coinsgained?: CoinGain[];
   /** When the yard was last saved, in unix seconds. 0 on a yard never saved. */
   savetime?: number;
   resources?: Resources;
@@ -877,6 +891,13 @@ export interface BaseLoadResponse extends ApiEnvelope {
    * finds the horse unsprung.
    */
   trojanNew?: true;
+  /**
+   * The Krallen Hunt's penalties this load is the first to tell (server
+   * `services/events/krallenPenalty.ts`, owner 13 Nov 2026), oldest first:
+   * her level before and after, 0 for lost. Own main yard only; absent when
+   * there is nothing to tell.
+   */
+  krallenpenalty?: { from: number; to: number }[];
 }
 
 /* ── Map Room 2 ─────────────────────────────────────────────────────────── */
@@ -1002,6 +1023,8 @@ export interface PlayerCell {
   /** 1 when the cell belongs to the caller. */
   mine: 0 | 1;
   pic_square: string | null;
+  /** The owner's uploaded photo's upload number; null or absent for the critter (`game/playerPicture.ts`). */
+  photo?: number | null;
   /**
    * On the caller's own outpost: the thread of the invitation to move onto it
    * still waiting for its answer (#205; Flash's `_invitePendingID`), else 0.
@@ -1015,6 +1038,8 @@ export interface PlayerCell {
   wi?: 1;
   /** 1 on the caller's own outpost whose worker is building, upgrading or fortifying; absent otherwise. */
   wb?: 1;
+  /** With `wb`: when that job ends, Unix seconds on the server's clock (owner, 12 Nov 2026); absent while it is paused. */
+  wf?: number;
   /** Own cells only: the owner's live resources. */
   r?: Resources;
   /** Own cells only: hatchery and garrison state. */

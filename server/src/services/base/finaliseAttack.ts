@@ -51,11 +51,11 @@ import type { AbandonedOutcome } from "./combat/abandonedAttack.js";
 import { recordAttackPlan } from "./autoAttack/attackPlanStore.js";
 import { recordAttackAchievements } from "../achievements/events.js";
 import { countAttackLoot } from "../events/lootEvents.js";
-import { plunderPercent, weekendBoostUsed, withPlunderBonus } from "../events/weekendBoosts.js";
+import { plunderPercent, withPlunderBonus } from "../events/weekendBoosts.js";
 import { attackLootPercent, mapByPercent } from "../alliance/allianceBonuses.js";
 import { attackQuestEvents, defenceQuestEvents } from "../quests/hooks.js";
 import { recordQuestEvents, recordUserQuestEvents } from "../quests/record.js";
-import { noteOutpostDefended } from "../alliance/allianceProgress.js";
+import { isPlayerYard, noteOutpostDefended } from "../alliance/allianceProgress.js";
 
 /**
  * Finishes an attack its attacker left without saving (issue #138).
@@ -333,7 +333,6 @@ const finaliseLocked = async (basesaveid: number, trigger: string, options: Land
     ),
     loot.krallenBuff
   );
-  if (plunder > 0) weekendBoostUsed(attacker.userid, "plunder", now);
   postgres.em.persist(userSave);
 
   // The defender.
@@ -420,6 +419,7 @@ const finaliseLocked = async (basesaveid: number, trigger: string, options: Land
       after: outcome.buildinghealthdata,
       log: input.log,
       loot: loot.credit,
+      playerYard: await isPlayerYard(postgres.em, defender, attacker.userid),
     }),
     now
   );

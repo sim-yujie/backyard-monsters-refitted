@@ -1,4 +1,4 @@
-import { avatarOf, avatarUrl } from "@/game/avatars";
+import { playerPicture, showPlayerPicture, type PhotoVersion } from "@/game/playerPicture";
 import { levelLabel } from "@/game/friends/friendText";
 import { modalLayer } from "@/ui/events/WhatsNewDialog";
 import { onlineDot } from "@/ui/onlineDot";
@@ -39,6 +39,8 @@ export interface RowPlayer {
   readonly userid: number;
   readonly username: string;
   readonly pic: string | null;
+  /** Their uploaded photo's upload number; absent for the critter. */
+  readonly photo?: PhotoVersion;
   readonly level: number;
 }
 
@@ -72,7 +74,7 @@ export const playerRow = (
   row.dataset["userid"] = String(player.userid);
 
   const face = make("img", "friends-row__face");
-  face.src = avatarUrl(avatarOf(player.pic, player.userid), "small");
+  showPlayerPicture(face, playerPicture(player.userid, player.pic, player.photo, "small"));
   face.alt = "";
   face.decoding = "async";
   face.loading = "lazy";
@@ -121,6 +123,18 @@ export const section = (title: string, rows: readonly HTMLElement[], empty: stri
     wrapper.append(listNode);
   }
   return wrapper;
+};
+
+/**
+ * Makes a held Enter press nothing inside `element`. A window opened with
+ * Enter gets the key's repeats while it is still down, and a repeat presses
+ * whichever button the new window focused: a gift could go before the player
+ * has seen the choice. A fresh press still works.
+ */
+export const ignoreHeldEnter = (element: HTMLElement): void => {
+  element.addEventListener("keydown", (event) => {
+    if (event.key === "Enter" && event.repeat) event.preventDefault();
+  });
 };
 
 /** A tab's status line: loading, a refusal, a thank-you. Hidden while empty. */

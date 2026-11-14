@@ -14,8 +14,18 @@ export type DefenceLoot = Readonly<Partial<Record<"r1" | "r2" | "r3" | "r4", num
 /** One defence, as the list and the replay's figures send it. */
 export interface Defence {
   readonly id: number;
-  /** The attacker's name and picture, frozen when the attack landed. */
-  readonly attacker: { readonly name: string; readonly pic: string | null };
+  /**
+   * The attacker: their name and critter (`pic`) frozen when the attack
+   * landed, their id (null or absent once their account is gone) and their
+   * uploaded photo's upload number when others may see it now (null or absent
+   * for the critter; server `services/profile/visiblePhoto.ts`).
+   */
+  readonly attacker: {
+    readonly name: string;
+    readonly pic: string | null;
+    readonly userid?: number | null;
+    readonly photo?: number | null;
+  };
   /** Unix seconds: when the attack started, and when it landed. */
   readonly attackedAt: number;
   readonly landedAt: number;

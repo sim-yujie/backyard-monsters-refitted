@@ -49,6 +49,7 @@ import { jobQuestEvents } from "../../services/quests/hooks.js";
 import { addQuestEvents, claimableCount, readQuests, recordQuests, type QuestEvents } from "../../services/quests/state.js";
 import { getCurrentDateTime } from "../../utils/getCurrentDateTime.js";
 import { logger } from "../../utils/logger.js";
+import { pruneFiredTraps } from "../../services/yardplanner/firedTraps.js";
 
 /**
  * The yard action wrapper every `POST /bm/yard/<action>` runs
@@ -366,6 +367,9 @@ export const applyOutcome = (save: Save, user: User, outcome: YardOutcome<unknow
   }
 
   if (outcome.slices) Object.assign(save, outcome.slices);
+  // A trap built by hand on a fired trap's spot (or anything else put there)
+  // answers that entry: the re-arm list must not keep offering it.
+  if (outcome.slices?.buildingdata) pruneFiredTraps(save);
 
   if (RESOURCE_KEYS.some((key) => debit[key] > 0)) {
     const resources = { ...(save.resources ?? {}) };
@@ -542,6 +546,8 @@ const logOutpostProblems = (outpost: Save): void => {
  * @param alsoUnderLock - More to write on the locked row in the same flush,
  *   under attack too: the load's raid session count (`countRaidSession`,
  *   passed in because this module reads no Redis and so cannot import it).
+ *   It may be async, and gets the transaction: the Krallen Hunt's penalty
+ *   writes its progress row in it (`services/events/krallenPenalty.ts`).
  * @returns The caught-up save to answer with (the same entity in practice,
  *   since the transaction shares the request's identity map) and what the
  *   catch-up finished, which the load sends as `completed` so the client can
@@ -551,13 +557,13 @@ const logOutpostProblems = (outpost: Save): void => {
 export const catchUpLockedYard = async (
   em: EntityManager,
   save: Save,
-  alsoUnderLock?: (locked: Save, now: number) => void
+  alsoUnderLock?: (locked: Save, now: number, tx: EntityManager) => void | Promise<void>
 ): Promise<{ save: Save; completed: CompletedJob[] }> =>
   countAfterCommit(() => em.transactional(async (tx) => {
     const locked = await lockRow(tx, save.basesaveid);
     if (!locked) return { save, completed: [] };
     const now = getCurrentDateTime();
-    if (alsoUnderLock) alsoUnderLock(locked, now);
+    if (alsoUnderLock) await alsoUnderLock(locked, now, tx);
     if (isAttackActive(locked)) {
       if (alsoUnderLock) await tx.flush();
       return { save: locked, completed: [] };

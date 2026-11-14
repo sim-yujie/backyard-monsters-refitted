@@ -1,6 +1,7 @@
 import { quietLogin } from "@/game/quietLogin";
 import { questsActions, type QuestPeriod, type QuestsActions, type QuestsReport, type QuestsView } from "@/api/quests";
 import type { YardActionResult } from "@/game/yard/YardStore";
+import { offBarRewards } from "@/game/events/eventsModel";
 import { grantedRewards, utcDayOf } from "@/game/quests/questsModel";
 import { showPortrait } from "@/game/portraits";
 import { claimedLine } from "@/ui/events/EventsPanel";
@@ -34,6 +35,16 @@ import { screenBusy } from "./announcements";
  */
 
 const QUESTS_NOTICE = "quests";
+
+/**
+ * A claim's notice, only for what the top bar cannot show (an item, a
+ * speed-up, a decoration, a champion). Resources, Shiny and Glimmers float on
+ * the bar and the row flips to claimed, so they raise none (owner, 13 Nov 2026).
+ */
+const offBarLine = (title: string, report: QuestsReport): HTMLElement | null => {
+  const rewards = offBarRewards(grantedRewards(report.granted ?? []));
+  return rewards.length > 0 ? claimedLine(title, rewards) : null;
+};
 
 /** How often the countdowns and the day's turn are checked. */
 const TICK_MS = 1_000;
@@ -237,7 +248,7 @@ export class QuestsDoor {
 
   async claimLogin(): Promise<void> {
     const claimed = await this.act(LOGIN_KEY, () => this.actions.claimLogin(), (report) =>
-      claimedLine(`Day ${report.day ?? ""} claimed`, grantedRewards(report.granted ?? [])),
+      offBarLine(`Day ${report.day ?? ""} claimed`, report),
     );
     // The pop-up has done its job once the day is claimed: it closes a moment later.
     if (claimed && this.popup) {
@@ -248,13 +259,13 @@ export class QuestsDoor {
 
   async claim(period: QuestPeriod, slot: number): Promise<void> {
     await this.act(questKey(period, slot), () => this.actions.claim(period, slot), (report) =>
-      claimedLine("Quest claimed", grantedRewards(report.granted ?? [])),
+      offBarLine("Quest claimed", report),
     );
   }
 
   async claimBonus(period: QuestPeriod): Promise<void> {
     await this.act(bonusKey(period), () => this.actions.claimBonus(period), (report) =>
-      claimedLine("Bonus claimed", grantedRewards(report.granted ?? [])),
+      offBarLine("Bonus claimed", report),
     );
   }
 

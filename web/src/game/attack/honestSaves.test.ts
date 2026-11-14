@@ -113,9 +113,14 @@ const fixtures = new Map<string, Fixture>(
     .map((fixture) => [fixture.name, fixture]),
 );
 
-/** The attacker's champions, as `battle.test.ts` gives them: Krallen, Gorgo, Korath, Fomor. */
+/**
+ * The attacker's champions, as `battle.test.ts` gives them: Krallen, Gorgo,
+ * Korath, Fomor. Krallen won the Krallen Hunt's 3x mark: her loot aura runs
+ * past the load's clock (`la`), so the page flings her with it and the
+ * server's replay stamps it too (owner, 13 Nov 2026).
+ */
 const CHAMPIONS: readonly ChampionSaveEntry[] = [
-  { t: 5, l: 5, hp: 62_000, pl: 2, fb: 0 },
+  { t: 5, l: 5, hp: 62_000, pl: 2, fb: 0, la: 1_800_000_000 },
   { t: 1, l: 4, hp: 190_000, pl: 3, fb: 3 },
   { t: 4, l: 6, hp: 179_000, pl: 3, fb: 3 },
   { t: 3, l: 6, hp: 42_200, pl: 3, fb: 2 },

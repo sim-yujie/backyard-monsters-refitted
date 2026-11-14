@@ -7,6 +7,7 @@ import {
 import type { BaseLoadResponse } from "@/api/types";
 import { isHealthyChampion, mainYardRoster } from "@/game/attack/attackEntry";
 import { avatarOf, type AvatarId } from "@/game/avatars";
+import { photoVersionOf, type PhotoVersion } from "@/game/playerPicture";
 import type { AttackTarget } from "@/game/attack/attackTarget";
 import { readYard } from "@/game/yard/yardModel";
 import { tribeFromName, tribeInfo, tribeOfBaseId, type TribeId } from "./tribes";
@@ -76,6 +77,8 @@ export interface Mr1Neighbour {
   readonly truceUntil: number | null;
   /** Their critter (issue #175): the one they picked, or their default. */
   readonly avatar: AvatarId;
+  /** Their uploaded photo's upload number, shown over the critter; absent for none (`game/playerPicture.ts`). */
+  readonly photo?: PhotoVersion;
   /** Whether they are the player's friend, as the route says (friends §6.2). */
   readonly friend?: boolean;
   /** Whether the player pinned this friend to the top of their list (beta 7). */
@@ -183,6 +186,7 @@ const readNeighbour = (wire: MapRoom1NeighbourWire, now: number): Mr1Neighbour =
     protectedUntil: num(wire.protectedUntil) > 0 ? num(wire.protectedUntil) : null,
     truceUntil: truce ? (num(wire.truceexpire) > 0 ? now + num(wire.truceexpire) : now) : null,
     avatar: avatarOf(wire.pic, wire.userid),
+    photo: photoVersionOf(wire.photo),
     friend: num(wire.friend) === 1,
     pinned: num(wire.friendpinned) === 1,
     vengeance: Math.max(0, Math.floor(num(wire.vengeance))),

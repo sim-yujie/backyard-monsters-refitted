@@ -1,3 +1,5 @@
+import { setInAlliance } from "./allianceButton";
+
 /**
  * The player's alliance strengths and weaknesses, as the server sends them on
  * an own main-yard load (`alliancedata.bonuses`, server
@@ -65,6 +67,8 @@ let current: AllianceBonusesView = NO_BONUSES;
 
 export const setCurrentAllianceBonuses = (alliancedata: unknown): void => {
   current = allianceBonusesOf(alliancedata);
+  // The load sends `alliancedata` only to a player in an alliance: the Alliance button's rule hears it.
+  setInAlliance(isRecord(alliancedata));
 };
 
 export const currentAllianceBonuses = (): AllianceBonusesView => current;

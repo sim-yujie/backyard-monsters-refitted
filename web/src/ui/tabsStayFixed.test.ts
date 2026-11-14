@@ -146,7 +146,6 @@ describe("tab rows fill the width", () => {
     ["quests/QuestsPanel.ts", "quests-tabs"],
     ["siege/SiegeScreen.ts", "siege-tabs"],
     ["yard/BaiterPanel.ts", "baiter__tabs"],
-    ["yard/BuildingPanel.ts", "building-panel__tabs"],
     ["yard/PlannerHelp.ts", "planner-help__tabs"],
   ])("%s gives its tab row the shared class", (file, own) => {
     expect(source(file)).toMatch(new RegExp(`"[^"]*tab-row [^"]*${own}[^"]*"`));

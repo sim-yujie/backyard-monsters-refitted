@@ -7,6 +7,7 @@ import { topUpPrice } from "@/game/yard/resourcePacks";
 import type { BaseLoadResponse, BuildingData, YardResponse } from "@/api/types";
 import type { YardApi } from "@/api/yard";
 import { setClassicLook } from "@/game/classicLook";
+import { coinBalance, noteCoins, resetCoins } from "@/game/eventCoins";
 import { buildPicture } from "@/game/yard/buildButtonArt";
 import { BuildCategory } from "@/game/yard/buildCatalogue";
 import { DecorKind } from "@/game/yard/decorShop";
@@ -68,6 +69,7 @@ const HALL = building(1, 14, { l: 3 });
 afterEach(() => {
   document.body.replaceChildren();
   setClassicLook(false);
+  resetCoins();
 });
 
 const info = (menu: BuildMenu): HTMLElement => menu.element.querySelector<HTMLElement>(".build-info")!;
@@ -338,6 +340,21 @@ describe("BuildMenu", () => {
     withHall.open();
     withHall.element.querySelector<HTMLButtonElement>(".build-menu__hall")!.click();
     expect(onTownHall).toHaveBeenCalledTimes(1);
+  });
+
+  it("the purse follows the live Glimmers balance, also when coins arrive outside a yard answer", () => {
+    // The yard loaded with 200; an announcement's Glimmers gift then paid 100
+    // through its own answer (not the yard's), and the top bar shows 300.
+    const { menu } = setup([HALL], { eventcoins: 200 });
+    noteCoins(200);
+    noteCoins(300);
+    expect(coinBalance()).toBe(300);
+    menu.open(BuildCategory.DECORATIONS);
+    const meta = (): Element => menu.element.querySelector(".build-menu__meta")!;
+    expect(spokenText(meta())).toBe("You have Glimmers 300");
+    // And it redraws while open when the balance moves again.
+    noteCoins(450);
+    expect(spokenText(meta())).toBe("You have Glimmers 450");
   });
 
   it("with nothing stored, the Decorations tab sells Flash's 73 for event coins under its five sub-tabs", () => {

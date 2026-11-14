@@ -213,6 +213,7 @@ import {
   TARGETS_FLYING,
   TARGETS_GROUND,
   TARGETS_INVISIBLE,
+  CREEP_CELL_SIZE,
   createCreepIndex,
   defenseFlags,
   findBuildingTarget,
@@ -970,6 +971,8 @@ export interface CreepSnapshot {
   readonly weakened?: boolean;
   /** A copy a ranked Slimeattikus left as it died (Lab "Split"): drawn small, split-marked. */
   readonly splitCopy?: boolean;
+  /** Raised by a Rezghul (`Zombiefy.as:26-34`): drawn grey, with green sparks. */
+  readonly zombie?: boolean;
 }
 
 /**
@@ -1161,6 +1164,34 @@ export type BattleVisualEvent =
       readonly toIy: number;
       /** Health the jump took off, after fortification. */
       readonly amount: number;
+    }
+  | {
+      /**
+       * A Rezghul threw its raise (`ResurrectProjectile.as`): it flies from
+       * the `from` yard point to the `to` one, 2 screen px a loop, and lands
+       * on `landTick`. Both points are the orb's corner, as Flash moves it;
+       * its 20 px sprite is drawn from there. Drawing only.
+       */
+      readonly kind: "raiseOrb";
+      readonly tick: number;
+      readonly creepId: number;
+      readonly fromIx: number;
+      readonly fromIy: number;
+      readonly toIx: number;
+      readonly toIy: number;
+      readonly landTick: number;
+    }
+  | {
+      /**
+       * A Rezghul's raise brought `creepId` back where it fell
+       * (`RezghulResurrectAttack.resurrect`, `:71-89`): a `Dig` and dirt below
+       * it, and it rises 20 px out of the ground over 0.8 s. Drawing only.
+       */
+      readonly kind: "rise";
+      readonly tick: number;
+      readonly creepId: number;
+      readonly ix: number;
+      readonly iy: number;
     }
   | {
       /** Korath's quake landed (issue #222): a ring on the ground, `radius` screen px. */
@@ -1381,8 +1412,13 @@ interface Creep {
    * Such a Spurtz fights as Flash's does rather than by the bunker rules.
    */
   hatchedBy: number;
-  /** Rezghul: the tick its raise is ready again (`RangedAttack.as:45-51`). */
+  /**
+   * Rezghul: the battle second its raise is ready again
+   * (`RangedAttack.as:45-51`, `GLOBAL.Timestamp()`, whole seconds).
+   */
   rechargeAt: number;
+  /** Raised by a Rezghul (`Zombiefy`): drawn grey, with green sparks. */
+  zombie: boolean;
   /** The flags of the creeps it can fight: its foes' side, and whether it reaches the air. */
   hitFlags: number;
   /**
@@ -1931,17 +1967,81 @@ interface Corpse {
   readonly friendly: boolean;
   /** The flags it was hit by while it lived: its side and whether it flew. */
   readonly flags: number;
+  /**
+   * `isTargetable` when it fell (`Targeting.as:294`): a Bolt that died
+   * mid-blink, untargetable, lies where no raise finds it.
+   */
+  readonly targetable: boolean;
   readonly ix: number;
   readonly iy: number;
   readonly x: number;
   readonly y: number;
 }
 
-/** How far Rezghul throws its raise, and how wide it lands (`creeps/Rezghul.as:52`). */
+/**
+ * A raise in the air: Rezghul's `ResurrectProjectile` (`ResurrectProjectile.as`),
+ * a `Projectilev2` at 2 px a loop that homes on the point it was thrown at
+ * (`Projectilev2.as:107-135`). The corpse it was thrown at never moves, so its
+ * whole flight is known when it is thrown: `landTick` and the screen point it
+ * lands at.
+ */
+interface RaiseOrb {
+  readonly raiser: Creep;
+  readonly landTick: number;
+  /** `m_x`, `m_y` when it lands: a screen point. */
+  readonly landX: number;
+  readonly landY: number;
+}
+
+/** How far Rezghul throws its raise, and how wide it lands (`creeps/Rezghul.as:49`). */
 const RAISE_RANGE = 300;
 const RAISE_AREA = 50;
+/** The raise's speed, a loop, whatever it is set up with (`ResurrectProjectile.as:20`, `:35`). */
+const RAISE_ORB_SPEED = 2;
+/**
+ * Half the raise's 20 x 20 sprite (`SPRITES.as:95`): it starts with its
+ * corner, not its middle, on the Rezghul (`Projectilev2.as:67-68`).
+ */
+const RAISE_ORB_HALF = 10;
+/**
+ * The spread of the point a raise aims at round its corpse: a quarter of the
+ * corpse's 52 x 50 graphic either way (`Projectilev2.as:75-77`,
+ * `GameObject.as:66-73`, `CreepBase.as:132`).
+ */
+const RAISE_AIM_SPREAD_X = 52 * 0.25;
+const RAISE_AIM_SPREAD_Y = 50 * 0.25;
 
-/** Nobody raises these (`RezghulResurrectAttack.as:13`). */
+/**
+ * Where a raise flies, loop by loop, as `Projectilev2.tick` moves it
+ * (`Projectilev2.as:107-135`): the distance first, then a 2 px step towards
+ * the aim (the unit vector, note 2; `atan2(0, 0)` is 0, a step along x), and
+ * it lands on the loop that distance less the step is 0 or under, where the
+ * step took it. `loops` counts the loops after the first; the first is the
+ * loop it is thrown on, since `GLOBAL.TickFast` ticks it after the creeps
+ * (`GLOBAL.as:1266-1271`).
+ */
+export const raiseOrbFlight = (
+  fromX: number,
+  fromY: number,
+  toX: number,
+  toY: number,
+): { readonly loops: number; readonly x: number; readonly y: number } => {
+  let x = fromX;
+  let y = fromY;
+  for (let loops = 0; ; loops += 1) {
+    const dx = toX - x;
+    const dy = toY - y;
+    const distance = Math.sqrt(dx * dx + dy * dy);
+    x += distance > 0 ? (dx / distance) * RAISE_ORB_SPEED : RAISE_ORB_SPEED;
+    y += distance > 0 ? (dy / distance) * RAISE_ORB_SPEED : 0;
+    if (distance - RAISE_ORB_SPEED <= 0) return { loops, x, y };
+  }
+};
+
+/**
+ * Nobody raises these (`RezghulResurrectAttack.as:12`): Zafreeti, Vorg,
+ * Slimeattikus Mini and Rezghul.
+ */
 const UNRAISABLE: ReadonlySet<string> = new Set(["C16", "C15", "C19", "C18"]);
 
 /** Its own side, on the ground: `getFriendlyFlag | k_TARGETS_GROUND` (`Rezghul.as:52`). */
@@ -2087,6 +2187,8 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
   const corpses: Corpse[] = [];
   /** Corpses Rezghul raised this step, back on their feet at its end. */
   const pendingZombies: Array<{ readonly corpse: Corpse; readonly raiser: Creep }> = [];
+  /** Rezghul's raises in the air, in the order thrown (`GLOBAL.fastTickables`). */
+  const raiseOrbs: RaiseOrb[] = [];
   /** Spurtz Cannon shells in the air, in the order fired (issue #313, `FIREBALLS`). */
   const spurtzShells: SpurtzShell[] = [];
   /** The other towers' shells in the air, in the order fired (fidelity note 1). */
@@ -2713,6 +2815,7 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
         monsterId: creep.monsterId,
         friendly: creep.friendly,
         flags: creep.flags,
+        targetable: creep.targetable,
         ix: creep.ix,
         iy: creep.iy,
         x: creep.x,
@@ -2826,52 +2929,132 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
     lookForSpurtzFoe(spurtz);
   };
 
+  /** A battle second of `GLOBAL.Timestamp()`, which counts whole seconds. */
+  const clockSecond = (): number => Math.trunc(tick / TICKS_PER_SECOND);
+
   /**
-   * `RezghulResurrectAttack` (`creeps/Rezghul.as:48-53`,
-   * `components/abilities/RezghulResurrectAttack.as`): while it fights, a
-   * Rezghul whose raise is ready throws it at the nearest corpse of its own
-   * side within 300 that lay on the ground, and every such corpse within 50 of
-   * where it lands gets up (`:29-44`, `:58-71`). Healers, Minis and Rezghul
-   * never do (`:13`). The raise is then `resurrectCooldown` seconds away
-   * (`RangedAttack.as:45-51`), counted in ticks here rather than whole
-   * seconds of the clock. The throw lands at once (fidelity note 1), and the
-   * corpses rise when the step is done.
+   * Whether a Rezghul's raise works now: `inBattleState` (`MonsterBase.as:
+   * 349-351`), which `getValidTargetsInRange` asks first
+   * (`RezghulResurrectAttack.as:25-27`). An attacker attacking, healing,
+   * hunting or bouncing in and a defender defending or making for its bunker
+   * are; one decoyed or retreating is not.
    */
-  const tickRaise = (creep: Creep): void => {
-    if (tick < creep.rechargeAt) return;
-    const reach = (from: { x: number; y: number }, radius: number): Corpse[] =>
-      corpses
-        .filter(
-          (corpse) =>
-            !UNRAISABLE.has(corpse.monsterId) &&
-            canHit(raiseTargets(creep), corpse.flags) &&
-            Math.trunc(distanceSquared(from.x, from.y, corpse.x, corpse.y)) < radius * radius,
-        )
-        .sort(
-          (one, other) =>
-            distanceSquared(from.x, from.y, one.x, one.y) -
-              distanceSquared(from.x, from.y, other.x, other.y) || one.creepId - other.creepId,
-        );
-    const aim = reach(creep, RAISE_RANGE)[0];
-    if (!aim) return;
-    for (const corpse of reach(aim, RAISE_AREA)) {
-      corpses.splice(corpses.indexOf(corpse), 1);
-      pendingZombies.push({ corpse, raiser: creep });
-    }
-    creep.rechargeAt = tick + ticks(monsterStat(creep.monsterId, "resurrectCooldown", creep.level));
+  const raisesNow = (creep: Creep): boolean =>
+    creep.hp > 0 && !creep.gone && creep.behaviour !== "decoy" && creep.behaviour !== "retreat";
+
+  /**
+   * `Targeting.getDeadCreeps` filtered as `getValidTargetsInRange` does
+   * (`Targeting.as:258-320`, `RezghulResurrectAttack.as:24-42`): the corpses
+   * within `radius` of a point, in yard units, that this Rezghul may raise:
+   * targetable when they fell, of its own side and on the ground, every hit
+   * flag of theirs in its `getFriendlyFlag | k_TARGETS_GROUND`
+   * (`Rezghul.as:49`, `canHitCreep`), so never a flyer or a cloaked Brain or a
+   * Wormzer that died underground; and not one of {@link UNRAISABLE}. In the
+   * order the scan finds them: cell column by cell column, west to east, and
+   * down each column (`:280-285`), the cells being `GRID.FromISO`'s rounded-up
+   * point over 100 (`Targeting.as:41-52`); within one cell, the order they
+   * died in (Flash's is the `for in` order of the cell's keys).
+   */
+  const raisableNear = (creep: Creep, x: number, y: number, radius: number): Corpse[] => {
+    const flags = raiseTargets(creep);
+    const limit = radius * radius;
+    const cell = (value: number): number => Math.trunc(Math.ceil(value) / CREEP_CELL_SIZE);
+    return corpses
+      .filter(
+        (corpse) =>
+          corpse.targetable &&
+          !UNRAISABLE.has(corpse.monsterId) &&
+          canHit(flags, corpse.flags) &&
+          Math.trunc(distanceSquared(x, y, corpse.x, corpse.y)) < limit,
+      )
+      .sort(
+        (one, other) =>
+          cell(one.ix) - cell(other.ix) ||
+          cell(one.iy) - cell(other.iy) ||
+          one.creepId - other.creepId,
+      );
   };
 
   /**
-   * `resurrect` and `Zombiefy` (`RezghulResurrectAttack.as:73-89`,
-   * `Zombiefy.as:22-40`): the dead creep again, where it fell, at the
-   * attacker's level for it, as a zombie: slower by the Rezghul's speed
-   * multiplier, which also stretches its swing; harder and stronger by its
-   * health and damage multipliers; on full health (`MaxHealthProperty.as:
-   * 19-29` scales a fresh spawn's full health to the new maximum); and
-   * disposable, so it does not rise twice.
+   * `RezghulResurrectAttack` through `RangedAttack.tick` (`creeps/Rezghul.as:
+   * 47-50`, `RangedAttack.as:43-52`), every loop, before the creep's own
+   * behaviour (`MonsterBase.as:525-536`), so also while it fights a defender:
+   * once the clock's whole second has reached its recharge, a Rezghul in
+   * battle throws its raise at the first corpse {@link raisableNear} finds
+   * within 300 of it, and its raise is then `resurrectCooldown` seconds of the
+   * clock away. The raise flies ({@link raiseOrbFlight}) to a point jittered
+   * about the corpse and raises where it lands ({@link landRaiseOrbs}).
+   */
+  const tickRaise = (creep: Creep): void => {
+    if (!raisesNow(creep) || clockSecond() < creep.rechargeAt) return;
+    const aim = raisableNear(creep, creep.x, creep.y, RAISE_RANGE)[0];
+    if (!aim) return;
+    const from = screenPointOf(creep.ix, creep.iy);
+    const at = screenPointOf(aim.ix, aim.iy);
+    const fromX = from.x - RAISE_ORB_HALF;
+    const fromY = from.y - RAISE_ORB_HALF;
+    // `getRandomPointOnGraphic`: x first, then y.
+    const toX = at.x + rng.float() * (RAISE_AIM_SPREAD_X * 2) - RAISE_AIM_SPREAD_X;
+    const toY = at.y + rng.float() * (RAISE_AIM_SPREAD_Y * 2) - RAISE_AIM_SPREAD_Y;
+    const flight = raiseOrbFlight(fromX, fromY, toX, toY);
+    raiseOrbs.push({
+      raiser: creep,
+      landTick: tick + flight.loops,
+      landX: flight.x,
+      landY: flight.y,
+    });
+    visual.push({
+      kind: "raiseOrb",
+      tick,
+      creepId: creep.id,
+      fromIx: fromX * 0.5 + fromY,
+      fromIy: fromY - fromX * 0.5,
+      toIx: flight.x * 0.5 + flight.y,
+      toIy: flight.y - flight.x * 0.5,
+      landTick: tick + flight.loops,
+    });
+    creep.rechargeAt =
+      clockSecond() + monsterStat(creep.monsterId, "resurrectCooldown", creep.level);
+  };
+
+  /**
+   * The raises that land this loop, newest first as `GLOBAL.TickFast` ticks
+   * its fast tickables (`GLOBAL.as:1268-1271`), after every creep. Each
+   * raises every corpse {@link raisableNear} finds within 50 of where it
+   * landed (`RezghulResurrectAttack.as:56-69`), and that corpse is gone
+   * (`corpseDeath`). It asks the Rezghul again: one that has died since it
+   * threw, or left the fight, raises nothing (its component is gone, or
+   * `inBattleState` is false).
+   */
+  const landRaiseOrbs = (): void => {
+    if (raiseOrbs.length === 0) return;
+    for (let at = raiseOrbs.length - 1; at >= 0; at -= 1) {
+      const orb = raiseOrbs[at] as RaiseOrb;
+      if (orb.landTick > tick) continue;
+      raiseOrbs.splice(at, 1);
+      if (!raisesNow(orb.raiser)) continue;
+      const centre = fromIso(orb.landX, orb.landY);
+      for (const corpse of raisableNear(orb.raiser, centre.x, centre.y, RAISE_AREA)) {
+        corpses.splice(corpses.indexOf(corpse), 1);
+        pendingZombies.push({ corpse, raiser: orb.raiser });
+      }
+    }
+  };
+
+  /**
+   * `resurrect` and `Zombiefy` (`RezghulResurrectAttack.as:71-89`,
+   * `Zombiefy.as:18-35`): the dead creep again, where it fell, at its side's
+   * level for it, as a zombie: slower by the Rezghul's speed multiplier, which
+   * also stretches its swing; harder and stronger by its health and damage
+   * multipliers; on full health (`MaxHealthProperty.as:19-29` scales a fresh
+   * spawn's full health to the new maximum); and disposable, so it does not
+   * rise twice. A defender's comes back with no bunker of its own
+   * (`CreepBase.as:80`).
    */
   const raise = (corpse: Corpse, raiser: Creep): void => {
-    const levels = corpse.friendly ? options.defenderLevels ?? options.levels : options.levels;
+    const levels = corpse.friendly
+      ? (options.defenderLevels ?? options.levels)
+      : options.levels;
     const level = clampLevel(levels, corpse.monsterId);
     const zombie = spawnCreep(
       corpse.monsterId,
@@ -2892,6 +3075,8 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
     zombie.maxHp *= health;
     zombie.hp = zombie.maxHp;
     zombie.disposable = true;
+    zombie.zombie = true;
+    visual.push({ kind: "rise", tick, creepId: zombie.id, ix: zombie.ix, iy: zombie.iy });
     joinRow(zombie, false);
   };
 
@@ -2992,6 +3177,7 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
       disposable: false,
       hatchedBy: -1,
       rechargeAt: 0,
+      zombie: false,
       // A bunker's defender chases anything attacking, air or ground (`HOUSINGBUNKER.as:269-300`).
       hitFlags: friendly
         ? oldStyleTargets(1)
@@ -3016,10 +3202,17 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
    * battle's stream (one draw below 7, and a flying champion's second below
    * 1,000, `ChampionBase.as:228`, `:237`), the point it walks back to when it
    * leaves (`_spawnPoint`, the landing point rounded down to hundreds on
-   * screen, `ChampionBase.as:115`), its aura, and Korath's reach into the air.
+   * screen, `ChampionBase.as:115`), its aura (Krallen's only when the log
+   * says it was earned, `lootAura`), and Korath's reach into the air.
    * The caged champion brings the frame it drew in its cage instead.
    */
-  const equipChampion = (creep: Creep, power: number, at: Cart, frame?: number): void => {
+  const equipChampion = (
+    creep: Creep,
+    power: number,
+    at: Cart,
+    frame?: number,
+    lootAura = false,
+  ): void => {
     const id = creep.monsterId;
     creep.power = championPower(id, power);
     creep.frame = frame ?? startFrame(creep.flying);
@@ -3029,7 +3222,7 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
     // `screenPointOf` undone, as in {@link dropPoint}.
     creep.spawnX = spawnSy + spawnSx / 2;
     creep.spawnY = spawnSy - spawnSx / 2;
-    if (id === FOMOR_ID || hasLootAura(id, creep.level, creep.friendly)) {
+    if (id === FOMOR_ID || hasLootAura(id, creep.level, creep.friendly, lootAura)) {
       creep.aura = { counter: 0, members: [] };
     }
     creep.hitFlags = championReach(id, creep.level, creep.power, creep.hitFlags);
@@ -3051,6 +3244,7 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
     brain?: Partial<BrainWeights>,
     startHealth?: number,
     habits?: { readonly hv?: number; readonly h?: unknown },
+    lootAura = false,
   ): Creep | null => {
     const id = championByType(type);
     if (!id) return null;
@@ -3111,6 +3305,7 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
       disposable: false,
       hatchedBy: -1,
       rechargeAt: 0,
+      zombie: false,
       hitFlags: fightFlags(false, flying, championStatWithFood(id, "range", level, foodBonus) || 1),
       home: null,
       provokedBy: -1,
@@ -3120,7 +3315,7 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
     creeps.push(creep);
     byCreepId.set(creep.id, creep);
     boostDamage(creep);
-    equipChampion(creep, power, at);
+    equipChampion(creep, power, at, undefined, lootAura);
     if (habits?.hv !== undefined && hasHabits(id)) {
       // Its Mode's instincts plus that Mode's habits, as the log froze them
       // (champion modes round 2, `habits.ts`); the old brain is not read.
@@ -3210,6 +3405,7 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
       disposable: false,
       hatchedBy: -1,
       rechargeAt: 0,
+      zombie: false,
       hitFlags: fightFlags(true, flying, range),
       home: null,
       provokedBy: -1,
@@ -3305,6 +3501,7 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
         event.champion.hv === undefined
           ? undefined
           : { hv: event.champion.hv, h: event.champion.h },
+        event.champion.aura === true,
       );
     }
   };
@@ -6230,6 +6427,7 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
         return;
       }
     }
+    if (creep.monsterId === REZGHUL_ID) tickRaise(creep);
     if (creep.friendly) {
       if (creep.behaviour === "decoy") tickDecoyed(creep);
       else if (creep.champion) tickCageChampion(creep);
@@ -6249,7 +6447,6 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
       supportThink(creep);
       return;
     }
-    if (creep.monsterId === REZGHUL_ID) tickRaise(creep);
 
     const target = creep.targetBuilding >= 0 ? buildingOf(creep.targetBuilding) : null;
     const stale =
@@ -7641,6 +7838,7 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
       if (creep.burrows) tickBurrow(creep);
     }
     tickLeaving();
+    landRaiseOrbs();
     tickTowerShells();
 
     if (creeps.length > 0) {
@@ -7761,6 +7959,7 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
       ...(creep.swarming ? { swarming: true } : {}),
       ...(creep.weakUntil > tick ? { weakened: true } : {}),
       ...(creep.splitCopy ? { splitCopy: true } : {}),
+      ...(creep.zombie ? { zombie: true } : {}),
     }));
 
   const weakenedTowers = (): number[] =>

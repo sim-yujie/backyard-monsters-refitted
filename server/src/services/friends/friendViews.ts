@@ -5,6 +5,7 @@ import type { EntityManager } from "@mikro-orm/postgresql";
 import type { FriendRequestStatus } from "../../database/models/friendrequest.model.js";
 import { calculateBaseLevel } from "../base/calculateBaseLevel.js";
 import { onlinePlayers } from "../user/online.js";
+import { photoColumn, photoJoin, photoOf } from "../profile/visiblePhoto.js";
 import {
   escapeLike,
   FRIEND_LIMITS,
@@ -27,6 +28,8 @@ export interface FriendView {
   userid: number;
   username: string;
   pic: string | null;
+  /** Their visible photo's upload number; null for the critter. */
+  photo: number | null;
   level: number;
   /** Null when they hide it (§3.6). */
   online: OnlineStatus | null;
@@ -56,6 +59,8 @@ export interface RequestView {
   userid: number;
   username: string;
   pic: string | null;
+  /** Their visible photo's upload number; null for the critter. */
+  photo: number | null;
   level: number;
   status: FriendRequestStatus;
   /** When it was made, unix seconds. */
@@ -72,18 +77,22 @@ export interface PlayerResult {
   userid: number;
   username: string;
   pic: string | null;
+  /** Their visible photo's upload number; null for the critter. */
+  photo: number | null;
   level: number;
   relation: Relation;
 }
 
 /** The columns every player description reads: the account and its main save's level. */
-export const CARD_COLUMNS = `u.userid, u.username, u.pic_square, s.points, s.basevalue`;
-export const CARD_JOIN = `bym."user" u LEFT JOIN bym.save s ON s.basesaveid = u.save_basesaveid`;
+export const CARD_COLUMNS = `u.userid, u.username, u.pic_square, ${photoColumn("card_photo", "u")}, s.points, s.basevalue`;
+export const CARD_JOIN = `bym."user" u LEFT JOIN bym.save s ON s.basesaveid = u.save_basesaveid ${photoJoin("card_photo", "u")}`;
 
 export interface CardRow {
   userid: number | string;
   username: string;
   pic_square: string | null;
+  /** The visible photo's upload number (`services/profile/visiblePhoto.ts`); null for the critter. */
+  photo: number | string | null;
   points: string | null;
   basevalue: string | null;
 }
@@ -95,6 +104,7 @@ export const cardOf = (row: CardRow) => ({
   userid: Number(row.userid),
   username: row.username,
   pic: row.pic_square ?? null,
+  photo: photoOf(row.photo),
   level: levelOf(row),
 });
 

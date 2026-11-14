@@ -175,6 +175,7 @@
 
 .friends-window__add,
 .friends-window__all,
+.friends-window__gift-all,
 .friends-window__requests,
 .friends-window__action {
   display: inline-flex;
@@ -192,6 +193,7 @@
 }
 
 .friends-window__add > .game-icon,
+.friends-window__gift-all > .game-icon,
 .friends-window__requests > .game-icon {
   flex: none;
   width: 22px;
@@ -463,6 +465,18 @@
   font-variant-numeric: tabular-nums;
 }
 
+/* Gift all (owner, 13 Nov 2026): the gift and its word; a narrow phone keeps the gift only. */
+.friends-window__gift-all {
+  flex: none;
+  padding-inline: var(--space-3);
+}
+
+@media (width <= 400px) {
+  .friends-window__gift-all .gift-all-button__word {
+    display: none;
+  }
+}
+
 .friends-window__requests[hidden] {
   display: none;
 }
@@ -498,7 +512,7 @@
     --scroll-fade-above: 24px;
   }
 
-  :root[data-skin] .panel.friends-window :is(.friends-window__add, .friends-window__all, .friends-window__requests, .friends-window__more, .friends-window__back) {
+  :root[data-skin] .panel.friends-window :is(.friends-window__add, .friends-window__all, .friends-window__gift-all, .friends-window__requests, .friends-window__more, .friends-window__back) {
     min-height: 36px;
   }
 

@@ -3,7 +3,9 @@ import type { EventDefinition } from "../../game-data/events/events.js";
 import type { BuildingDataMap } from "../../types/BuildingData.js";
 import { TUTORIAL_DONE_STAGE } from "../onboarding/guidedStart.js";
 import { townHallLevel } from "../yardplanner/costs.js";
-import { krallenLevelOf } from "./krallenReward.js";
+import { krallenAuraUntilOf, krallenLevelOf } from "./krallenReward.js";
+import { readChampions } from "../yard/champion.js";
+import { KRALLEN_TYPE } from "../../game-data/events/eventRewards.js";
 
 /**
  * What an event needs to know of a player, read off their main yard: whether
@@ -18,6 +20,8 @@ export interface EventPlayer {
   readonly tutorialDone: boolean;
   /** Krallen's level, 0 for none. */
   readonly krallenLevel: number;
+  /** When Krallen's loot aura runs out (unix s), 0 or absent for none. */
+  readonly krallenAuraUntil?: number;
 }
 
 /** The slice of a main save this reads. */
@@ -34,6 +38,9 @@ export const eventPlayerOf = (
   townHall: townHallLevel(save?.buildingdata),
   tutorialDone: skipTutorial || (Number(save?.tutorialstage) || 0) >= TUTORIAL_DONE_STAGE,
   krallenLevel: krallenLevelOf(save?.champion),
+  krallenAuraUntil: krallenAuraUntilOf(
+    readChampions(save?.champion).find((one) => Math.trunc(Number(one.t)) === KRALLEN_TYPE)
+  ),
 });
 
 /** Why the player cannot take part, in the page's words, or null when they can. */

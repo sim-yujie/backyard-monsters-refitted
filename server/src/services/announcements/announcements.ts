@@ -3,6 +3,7 @@ import type { EntityManager } from "@mikro-orm/postgresql";
 
 import { Save } from "../../database/models/save.model.js";
 import { BaseType } from "../../enums/Base.js";
+import { coinStore } from "../events/eventCoins.js";
 import { sniffImageType, type BugReportImageType } from "../bugReports/bugReportImage.js";
 
 /**
@@ -29,6 +30,13 @@ import { sniffImageType, type BugReportImageType } from "../bugReports/bugReport
  *   under its row lock. A gift not claimed yet keeps popping up, one visit to
  *   the page at a time, even after the close button, so nobody loses it by
  *   closing the pop-up. Its amount cannot change once anyone has claimed it.
+ * - **Glimmers** (event coins, owner 13 Nov 2026: "promote decorations") may
+ *   be part of the gift, alone or beside the Shiny. The same one Claim gives
+ *   both, once: the claim row is still the once-only key, and the coins go
+ *   through the coin store (`services/events/eventCoins.ts`) with the award
+ *   key `announcement:<id>`, so they are logged in `bym.event_coin_log` and
+ *   could not be paid twice even without the claim row. They land in the same
+ *   transaction as the claim, so a failure gives neither.
  */
 
 export const ANNOUNCEMENT_LIMITS = {
@@ -38,6 +46,13 @@ export const ANNOUNCEMENT_LIMITS = {
   imageBytesMax: 1_000_000,
   /** The largest gift, per player: the same as the most one dashboard award may give. */
   shinyMax: 10_000,
+  /**
+   * The largest Glimmers gift, per player. Decorations cost 5 to 500
+   * Glimmers (most 15-250) and a full two-week event pays about 400, so
+   * 1,000 buys the two dearest decorations: plenty for a thank-you, and a
+   * typo cannot hand out a fortune.
+   */
+  glimmersMax: 1_000,
   /** The most current announcements a player is sent. */
   playerList: 20,
 } as const;
@@ -56,6 +71,8 @@ export interface AnnouncementInput {
   readonly images: readonly AnnouncementImageInput[];
   /** The gift each player may claim, 0 for none. */
   readonly shiny: number;
+  /** The Glimmers each player may claim with it, 0 for none. */
+  readonly glimmers: number;
 }
 
 export type Parsed<T> = { readonly ok: true; readonly value: T } | { readonly ok: false; readonly message: string };
@@ -117,8 +134,8 @@ const imagesOf = (raw: unknown): unknown => {
 
 /**
  * The dashboard's form, checked: `{ title, body, status, startsAt, endsAt,
- * images: [{ keep: id } | { data: "data:image/png;base64,..." }], shiny }`.
- * No `shiny` is no gift.
+ * images: [{ keep: id } | { data: "data:image/png;base64,..." }], shiny, glimmers }`.
+ * No `shiny` (or `glimmers`) is none of it.
  */
 export const parseAnnouncement = (body: unknown): Parsed<AnnouncementInput> => {
   const raw = body !== null && typeof body === "object" ? (body as Record<string, unknown>) : {};
@@ -153,7 +170,19 @@ export const parseAnnouncement = (body: unknown): Parsed<AnnouncementInput> => {
   if (typeof shiny !== "number" || !Number.isSafeInteger(shiny) || shiny < 0 || shiny > ANNOUNCEMENT_LIMITS.shinyMax) {
     return { ok: false, message: `The gift must be a whole number of Shiny from 0 to ${ANNOUNCEMENT_LIMITS.shinyMax.toLocaleString("en-US")}.` };
   }
-  return { ok: true, value: { title, body: text, status: raw.status, startsAt, endsAt, images, shiny } };
+  const glimmers = raw.glimmers ?? 0;
+  if (
+    typeof glimmers !== "number" ||
+    !Number.isSafeInteger(glimmers) ||
+    glimmers < 0 ||
+    glimmers > ANNOUNCEMENT_LIMITS.glimmersMax
+  ) {
+    return {
+      ok: false,
+      message: `The Glimmers gift must be a whole number from 0 to ${ANNOUNCEMENT_LIMITS.glimmersMax.toLocaleString("en-US")}.`,
+    };
+  }
+  return { ok: true, value: { title, body: text, status: raw.status, startsAt, endsAt, images, shiny, glimmers } };
 };
 
 /** What a player is sent about one current announcement. */
@@ -169,6 +198,8 @@ export interface PlayerAnnouncement {
   dismissed: boolean;
   /** The gift this player may claim, 0 for none. */
   shiny: number;
+  /** The Glimmers in the gift, 0 for none. */
+  glimmers: number;
   /** Whether this player claimed the gift. */
   claimed: boolean;
 }
@@ -191,6 +222,8 @@ export interface AdminAnnouncement {
   dismissals: number;
   /** The gift each player may claim, 0 for none. */
   shiny: number;
+  /** The Glimmers in the gift, 0 for none. */
+  glimmers: number;
   /** How many players claimed the gift. */
   claims: number;
 }
@@ -213,13 +246,14 @@ export const listForPlayer = async (em: EntityManager, userid: number, now: Date
       ends_at: Date | null;
       dismissed: boolean;
       shiny: number;
+      glimmers: number;
       claimed: boolean;
       image_ids: (number | string)[] | null;
     }[]
   >(
     `SELECT a.id, a.title, a.body, coalesce(a.starts_at, a.published_at, a.created_at) AS shown_from, a.ends_at,
             EXISTS (SELECT 1 FROM bym.announcement_dismissal d WHERE d.announcement_id = a.id AND d.userid = ?) AS dismissed,
-            a.shiny,
+            a.shiny, a.glimmers,
             EXISTS (SELECT 1 FROM bym.announcement_claim c WHERE c.announcement_id = a.id AND c.userid = ?) AS claimed,
             ${IMAGE_IDS}
        FROM bym.announcement a
@@ -230,6 +264,7 @@ export const listForPlayer = async (em: EntityManager, userid: number, now: Date
   );
   return rows.map((row) => {
     const shiny = Number(row.shiny ?? 0);
+    const glimmers = Number(row.glimmers ?? 0);
     const claimed = Boolean(row.claimed);
     return {
       id: Number(row.id),
@@ -238,8 +273,9 @@ export const listForPlayer = async (em: EntityManager, userid: number, now: Date
       imageIds: ids(row.image_ids),
       shownFrom: iso(row.shown_from)!,
       endsAt: iso(row.ends_at),
-      dismissed: Boolean(row.dismissed) && (shiny === 0 || claimed),
+      dismissed: Boolean(row.dismissed) && ((shiny === 0 && glimmers === 0) || claimed),
       shiny,
+      glimmers,
       claimed,
     };
   });
@@ -268,34 +304,60 @@ export const dismissForPlayer = async (
 
 /** What {@link claimForPlayer} did. */
 export type ClaimOutcome =
-  | { readonly outcome: "claimed" | "already"; readonly shiny: number }
+  | {
+      readonly outcome: "claimed" | "already";
+      readonly shiny: number;
+      /** The Glimmers this claim gave (or the earlier one gave), 0 for none. */
+      readonly glimmers: number;
+      /** The player's Glimmers balance after it, when the gift had Glimmers; null otherwise. */
+      readonly coins: number | null;
+    }
   | { readonly outcome: "notFound" | "noGift" | "noMainYard" };
 
+/** The coin store's award key for an announcement's Glimmers: one payment per player. */
+export const glimmersAwardKey = (id: number): string => `announcement:${id}`;
+/** The coin log's reason, and the client's word for the "+100" notice. */
+export const GLIMMERS_REASON = "announcement";
+
 /**
- * Gives this player the announcement's gift, once. The claim, the Shiny and
- * the "Got it" land together or not at all. Pressing it twice, or at once on
- * two devices, gives once: the yard's row lock puts the two in turn, and the
- * claim's key refuses the second. `notFound` when no current announcement has
- * this id, unless the player claimed it before it ended.
+ * Gives this player the announcement's gift (its Shiny and its Glimmers),
+ * once. The claim, the Shiny, the Glimmers and the "Got it" land together or
+ * not at all. Pressing it twice, or at once on two devices, gives once: the
+ * yard's row lock puts the two in turn, and the claim's key refuses the
+ * second (the Glimmers' award key would refuse it too). `notFound` when no
+ * current announcement has this id, unless the player claimed it before it
+ * ended.
  */
 export const claimForPlayer = async (em: EntityManager, userid: number, id: number, now: Date): Promise<ClaimOutcome> =>
   em.transactional(async (tx): Promise<ClaimOutcome> => {
-    const [earlier] = await tx.execute<{ amount: number }[]>(
-      `SELECT amount FROM bym.announcement_claim WHERE userid = ? AND announcement_id = ?`,
+    const balanceIf = async (glimmers: number): Promise<number | null> =>
+      glimmers > 0 ? coinStore().balance(tx, userid) : null;
+
+    const [earlier] = await tx.execute<{ amount: number; glimmers: number }[]>(
+      `SELECT amount, glimmers FROM bym.announcement_claim WHERE userid = ? AND announcement_id = ?`,
       [userid, id]
     );
-    if (earlier) return { outcome: "already", shiny: Number(earlier.amount) };
+    if (earlier) {
+      const glimmers = Number(earlier.glimmers ?? 0);
+      return { outcome: "already", shiny: Number(earlier.amount), glimmers, coins: await balanceIf(glimmers) };
+    }
 
-    const [gift] = await tx.execute<{ shiny: number }[]>(`SELECT a.shiny FROM bym.announcement a WHERE a.id = ? AND ${CURRENT}`, [id, now, now]);
+    const [gift] = await tx.execute<{ shiny: number; glimmers: number }[]>(
+      `SELECT a.shiny, a.glimmers FROM bym.announcement a WHERE a.id = ? AND ${CURRENT}`,
+      [id, now, now]
+    );
     if (!gift) return { outcome: "notFound" };
     const shiny = Number(gift.shiny);
-    if (shiny <= 0) return { outcome: "noGift" };
+    const glimmers = Number(gift.glimmers ?? 0);
+    if (shiny <= 0 && glimmers <= 0) return { outcome: "noGift" };
 
     const [player] = await tx.execute<{ save_basesaveid: number | null }[]>(
       `SELECT save_basesaveid FROM bym."user" WHERE userid = ?`,
       [userid]
     );
     if (!player || player.save_basesaveid === null) return { outcome: "noMainYard" };
+    // Locked even for Glimmers alone: it puts two presses in turn, and the
+    // coin store's lock order is the main yard first, then the coin row.
     const save = await tx.findOne(
       Save,
       { basesaveid: Number(player.save_basesaveid) },
@@ -304,18 +366,34 @@ export const claimForPlayer = async (em: EntityManager, userid: number, id: numb
     if (!save || save.type !== BaseType.MAIN || save.userid !== userid) return { outcome: "noMainYard" };
 
     const claims = await tx.execute<{ amount: number }[]>(
-      `INSERT INTO bym.announcement_claim (userid, announcement_id, amount, claimed_at) VALUES (?, ?, ?, ?)
+      `INSERT INTO bym.announcement_claim (userid, announcement_id, amount, glimmers, claimed_at) VALUES (?, ?, ?, ?, ?)
        ON CONFLICT (userid, announcement_id) DO NOTHING RETURNING amount`,
-      [userid, id, shiny, now]
+      [userid, id, shiny, glimmers, now]
     );
-    if (claims.length === 0) return { outcome: "already", shiny };
-    save.credits += shiny;
-    await tx.flush();
+    if (claims.length === 0) return { outcome: "already", shiny, glimmers, coins: await balanceIf(glimmers) };
+    if (shiny > 0) {
+      save.credits += shiny;
+      await tx.flush();
+    }
+    let coins: number | null = null;
+    let paid = 0;
+    if (glimmers > 0) {
+      const after = await coinStore().grant(tx, userid, glimmers, GLIMMERS_REASON, glimmersAwardKey(id));
+      // Null only if this key was paid without a claim row, which nothing
+      // does: then nothing more is paid, and the claim says so.
+      if (after === null) {
+        await tx.execute(`UPDATE bym.announcement_claim SET glimmers = 0 WHERE userid = ? AND announcement_id = ?`, [userid, id]);
+        coins = await coinStore().balance(tx, userid);
+      } else {
+        coins = after;
+        paid = glimmers;
+      }
+    }
     await tx.execute(
       `INSERT INTO bym.announcement_dismissal (userid, announcement_id) VALUES (?, ?) ON CONFLICT (userid, announcement_id) DO NOTHING`,
       [userid, id]
     );
-    return { outcome: "claimed", shiny };
+    return { outcome: "claimed", shiny, glimmers: paid, coins };
   });
 
 /**
@@ -352,6 +430,7 @@ export const listForAdmin = async (em: EntityManager, now: Date): Promise<AdminA
       live: boolean;
       dismissals: number;
       shiny: number;
+      glimmers: number;
       claims: number;
     }[]
   >(
@@ -359,7 +438,7 @@ export const listForAdmin = async (em: EntityManager, now: Date): Promise<AdminA
             ${IMAGE_IDS},
             (${CURRENT}) AS live,
             (SELECT count(*)::int FROM bym.announcement_dismissal d WHERE d.announcement_id = a.id) AS dismissals,
-            a.shiny,
+            a.shiny, a.glimmers,
             (SELECT count(*)::int FROM bym.announcement_claim c WHERE c.announcement_id = a.id) AS claims
        FROM bym.announcement a
       ORDER BY a.created_at DESC, a.id DESC`,
@@ -379,6 +458,7 @@ export const listForAdmin = async (em: EntityManager, now: Date): Promise<AdminA
     live: Boolean(row.live),
     dismissals: Number(row.dismissals),
     shiny: Number(row.shiny ?? 0),
+    glimmers: Number(row.glimmers ?? 0),
     claims: Number(row.claims ?? 0),
   }));
 };
@@ -429,9 +509,22 @@ export const createAnnouncement = async (
   try {
     return await em.transactional(async (tx) => {
       const [row] = await tx.execute<{ id: string }[]>(
-        `INSERT INTO bym.announcement (title, body, status, starts_at, ends_at, published_at, shiny, created_by, updated_by, created_at, updated_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) RETURNING id`,
-        [input.title, input.body, input.status, input.startsAt, input.endsAt, input.status === "published" ? now : null, input.shiny, by, by, now, now]
+        `INSERT INTO bym.announcement (title, body, status, starts_at, ends_at, published_at, shiny, glimmers, created_by, updated_by, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) RETURNING id`,
+        [
+          input.title,
+          input.body,
+          input.status,
+          input.startsAt,
+          input.endsAt,
+          input.status === "published" ? now : null,
+          input.shiny,
+          input.glimmers,
+          by,
+          by,
+          now,
+          now,
+        ]
       );
       const id = Number(row!.id);
       if ((await saveImages(tx, id, input.images)) === "badImage") throw new BadImage();
@@ -445,7 +538,8 @@ export const createAnnouncement = async (
 
 /**
  * Changes an announcement; `notFound` when there is none, `badImage` as for a
- * new one, `giftClaimed` when it changes a gift players have already claimed.
+ * new one, `giftClaimed` when it changes a gift (its Shiny or its Glimmers)
+ * players have already claimed.
  */
 export const updateAnnouncement = async (
   em: EntityManager,
@@ -456,19 +550,20 @@ export const updateAnnouncement = async (
 ): Promise<"saved" | "notFound" | "badImage" | "giftClaimed"> => {
   try {
     return await em.transactional(async (tx) => {
-      const [before] = await tx.execute<{ shiny: number; claimed: boolean }[]>(
-        `SELECT a.shiny, EXISTS (SELECT 1 FROM bym.announcement_claim c WHERE c.announcement_id = a.id) AS claimed
+      const [before] = await tx.execute<{ shiny: number; glimmers: number; claimed: boolean }[]>(
+        `SELECT a.shiny, a.glimmers, EXISTS (SELECT 1 FROM bym.announcement_claim c WHERE c.announcement_id = a.id) AS claimed
            FROM bym.announcement a WHERE a.id = ? FOR UPDATE`,
         [id]
       );
       if (!before) return "notFound" as const;
-      if (before.claimed && Number(before.shiny) !== input.shiny) return "giftClaimed" as const;
+      const giftChanged = Number(before.shiny) !== input.shiny || Number(before.glimmers ?? 0) !== input.glimmers;
+      if (before.claimed && giftChanged) return "giftClaimed" as const;
       const rows = await tx.execute<{ id: string }[]>(
         `UPDATE bym.announcement
-            SET title = ?, body = ?, status = ?, starts_at = ?, ends_at = ?, shiny = ?, updated_by = ?, updated_at = ?,
+            SET title = ?, body = ?, status = ?, starts_at = ?, ends_at = ?, shiny = ?, glimmers = ?, updated_by = ?, updated_at = ?,
                 published_at = CASE WHEN ? = 'published' THEN coalesce(published_at, ?) ELSE published_at END
           WHERE id = ? RETURNING id`,
-        [input.title, input.body, input.status, input.startsAt, input.endsAt, input.shiny, by, now, input.status, now, id]
+        [input.title, input.body, input.status, input.startsAt, input.endsAt, input.shiny, input.glimmers, by, now, input.status, now, id]
       );
       if (rows.length === 0) return "notFound" as const;
       if ((await saveImages(tx, id, input.images)) === "badImage") throw new BadImage();

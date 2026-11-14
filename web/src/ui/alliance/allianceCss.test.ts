@@ -116,6 +116,46 @@ describe("alliance.css: a constellation's monster behind its stars", () => {
   });
 });
 
+describe("alliance.css: night-sky stars (owner, 12 Nov: real stars, not yellow dots or game icons)", () => {
+  const starFile = (name: string): Buffer => readFileSync(new URL(`../../../public/ui/stars/${name}`, import.meta.url));
+
+  it("shows the small star lights in the star-count row and the track, never plain round dots", () => {
+    const dot = rulesFor(".alliance-dots__dot").join(" ");
+    expect(dot).toContain('url("/ui/stars/star-dim-small@2x.webp")');
+    expect(dot).not.toMatch(/border-radius/);
+    expect(rulesFor(".alliance-dots__dot--on").join(" ")).toContain('url("/ui/stars/star-lit-small@2x.webp")');
+    expect(rulesFor(".alliance-track__pip--star").join(" ")).toContain("star-dim-small@2x.webp");
+  });
+
+  it("has every star picture on disk as a square 2x webp with even sides", () => {
+    const names = ["blue", "white", "gold"].map((t) => `star-lit-${t}@2x.webp`);
+    for (const name of [...names, "star-dim@2x.webp", "star-next@2x.webp", "star-lit-small@2x.webp", "star-dim-small@2x.webp"]) {
+      const file = starFile(name);
+      expect(file.subarray(8, 12).toString("ascii")).toBe("WEBP");
+      // VP8L (lossless) header: 14-bit width-1 and height-1 after the signature byte.
+      expect(file.subarray(12, 16).toString("ascii")).toBe("VP8L");
+      const bits = file.readUInt32LE(21);
+      const width = (bits & 0x3fff) + 1;
+      const height = ((bits >> 14) & 0x3fff) + 1;
+      expect(width).toBe(height);
+      expect(width % 2).toBe(0);
+    }
+  });
+
+  it("lays faint star dust behind each figure, under the monster", () => {
+    expect(rulesFor(".alliance-sky__art::before").join(" ")).toContain('url("/ui/stars/sky-dust@2x.webp")');
+    expect(rulesFor(".alliance-sky__art::before").join(" ")).toMatch(/pointer-events:\s*none/);
+    expect(starFile("sky-dust@2x.webp").subarray(8, 12).toString("ascii")).toBe("WEBP");
+  });
+
+  it("twinkles cheaply (opacity and scale) and keeps still for less motion", () => {
+    expect(rulesFor(".alliance-sky__star--lit").join(" ")).toMatch(/animation:\s*alliance-star-twinkle/);
+    expect(rulesFor(".alliance-sky__star--next").join(" ")).toMatch(/animation:\s*alliance-star-next/);
+    const still = css.slice(css.indexOf("@media (prefers-reduced-motion: reduce)"));
+    expect(still).toMatch(/\.alliance-sky__star--lit,\s*\.alliance-sky__star--next\s*\{\s*animation:\s*none/);
+  });
+});
+
 describe("alliance.css: trade tiles", () => {
   it("set the resource tiles (buttons) in the window's own font, not the browser's", () => {
     expect(rulesFor(".trade-tile").join(" ")).toMatch(/font:\s*inherit/);

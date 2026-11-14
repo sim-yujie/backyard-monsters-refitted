@@ -138,6 +138,8 @@ export const NOT_REAL_ACTION_YARD_PATHS: readonly string[] = [
   "achievements/state",
   "achievements/seen",
   "events/calendar/claim",
+  // The weekend event's daily check-in: turning up, as the calendar.
+  "events/weekend/checkin",
   // The quest window's read, its login card (as the event calendar) and the daily swap.
   "quests/state",
   "quests/login/claim",
@@ -190,6 +192,7 @@ export const REAL_ACTION_ROUTES: readonly RealActionRoute[] = [
   // Friends: help in their yard, and gifts.
   { method: "POST", path: "/api/:apiVersion/bm/friends/help" },
   { method: "POST", path: "/api/:apiVersion/bm/friends/gift" },
+  { method: "POST", path: "/api/:apiVersion/bm/friends/gifts/all" },
   { method: "POST", path: "/api/:apiVersion/bm/friends/gifts/collect" },
   // Alliance trades move resources between yards (beta 7, design v5 §12a).
   // A request takes what it offers from the yard; cancel gives it back; accept swaps.
@@ -255,6 +258,8 @@ export const NOT_REAL_ACTION_ROUTES: readonly string[] = [
   "POST /api/:apiVersion/bm/friends/wishes",
   // Deleting received gifts (owner, 9 Nov 2026) gives nothing and changes no yard.
   "POST /api/:apiVersion/bm/friends/gifts/delete",
+  // Gift all's preview (13 Nov 2026) only reads: it sends nothing and changes no yard.
+  "POST /api/:apiVersion/bm/friends/gifts/all/plan",
   // Pinning a friend to the top of the list (beta 7) only sorts it.
   "POST /api/:apiVersion/bm/friends/pin",
   "POST /alliance/createalliance",

@@ -240,6 +240,20 @@ describe("YardDock", () => {
     expect(onAttack).toHaveBeenCalledOnce();
   });
 
+  it("an attack starting shows on the Attack button itself, not in a notice (owner, 13 Nov 2026)", () => {
+    dock = new YardDock({ onMap: vi.fn(), onHome: vi.fn(), onAttack: vi.fn() }).mount(document.body);
+    dock.setAttack({ disabled: true, title: "Starting the attack on Kozu…", busy: true });
+    expect(button("attack").disabled).toBe(true);
+    expect(button("attack").getAttribute("aria-busy")).toBe("true");
+    expect(button("attack").classList.contains("yard-dock__button--busy")).toBe(true);
+    expect(button("attack").title).toBe("Starting the attack on Kozu…");
+    // It could not start: the button is back, no longer busy.
+    dock.setAttack({ disabled: false, title: "Attack Kozu's yard" });
+    expect(button("attack").disabled).toBe(false);
+    expect(button("attack").hasAttribute("aria-busy")).toBe(false);
+    expect(button("attack").classList.contains("yard-dock__button--busy")).toBe(false);
+  });
+
   it("tags every button for Bob's pointer, and makes a matching one for a package (#227)", () => {
     dock = new YardDock(options).mount(document.body);
     for (const name of ["build", "map", "monsters", "layout"]) {

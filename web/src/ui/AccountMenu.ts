@@ -12,7 +12,9 @@
  * out was picked, and a press elsewhere or Escape closes it.
  *
  * With an `avatar` (issue #175) the button wears the player's critter, and
- * Settings holds the picker (`ui/AvatarPicker.ts`).
+ * Settings holds the picker (`ui/AvatarPicker.ts`). With a `userid`, Settings'
+ * Account tab also holds the player's own profile (photo, bio, "Preview"):
+ * the menu's "Profile" item moved there (owner, 13 Nov 2026).
  *
  * The yard's HUD (#171) shows it as a `pill`: the player's name beside their
  * critter in a ring, rather than the word "Account", and under the name the
@@ -74,8 +76,8 @@ export interface AccountMenuOptions {
    * "pill": the name and the face in a ring, the yard HUD's corner (#171).
    */
   readonly variant?: "button" | "pill";
-  /** The "Profile" item's action (the player's own profile); without it there is no such item. */
-  readonly onProfile?: () => void;
+  /** The signed-in player's id: Settings > Account then edits their profile (photo, bio). */
+  readonly userid?: number;
   /** The "Achievements" item's action; without it there is no such item. */
   readonly onAchievements?: () => void;
   /** The "Friends" item's action; without it there is no such item. */
@@ -150,6 +152,8 @@ export class AccountMenu {
   private readonly stopSound: (() => void)[] = [];
   private readonly name: string;
   private current: AvatarId | null = null;
+  /** The uploaded profile photo's address, shown over the critter; null for none. */
+  private photo: string | null = null;
   /** The picker Settings shows; null without an avatar. */
   private readonly picker: AvatarPicker | null = null;
 
@@ -266,20 +270,6 @@ export class AccountMenu {
       this.toggle(false);
       startGuideTour();
     });
-    if (options.onProfile) {
-      const onProfile = options.onProfile;
-      // Not `account-menu__item` either, for the same reason as Help's.
-      const profile = document.createElement("button");
-      profile.type = "button";
-      profile.className = "btn btn--ghost account-menu__help account-menu__profile";
-      profile.setAttribute("role", "menuitem");
-      profile.textContent = "Profile";
-      profile.addEventListener("click", () => {
-        this.toggle(false);
-        onProfile();
-      });
-      play.append(profile);
-    }
     if (options.onFriends) {
       const onFriends = options.onFriends;
       // Not `account-menu__item` either, for the same reason as Help's.
@@ -403,7 +393,8 @@ export class AccountMenu {
     discord.textContent = "Join the Discord";
     discord.addEventListener("click", () => this.toggle(false));
     community.append(discord);
-    // Settings (username, Shiny Lock) and Fullscreen, the original's top-bar button.
+    // Settings (profile, username, Shiny Lock) and Fullscreen, the original's top-bar button.
+    const userid = options.userid;
     const settings = document.createElement("button");
     settings.type = "button";
     settings.className = "btn btn--ghost account-menu__help account-menu__settings";
@@ -413,7 +404,11 @@ export class AccountMenu {
       this.toggle(false);
       const container = document.querySelector<HTMLElement>(".overlay__layer--modal") ?? document.body;
       this.picker?.clearStatus();
-      openAccountSettings({ container, ...(this.picker && { avatarPicker: this.picker }) });
+      openAccountSettings({
+        container,
+        ...(this.picker && { avatarPicker: this.picker }),
+        ...(userid !== undefined && { profile: { userid } }),
+      });
     });
     this.fullscreen = document.createElement("button");
     this.fullscreen.type = "button";
@@ -501,17 +496,42 @@ export class AccountMenu {
     picture.alt = "";
     picture.decoding = "async";
     picture.dataset["size"] = size;
-    if (this.current) picture.src = avatarUrl(this.current, size);
+    // A photo that will not load (taken down, or the connection dropped) shows the critter, never a broken picture.
+    picture.addEventListener("error", () => {
+      if (picture.classList.contains("is-photo")) this.showCritter(picture);
+    });
     this.faces.push(picture);
+    this.showFace(picture);
     return picture;
   }
 
-  /** Points every face at the current avatar. */
+  /**
+   * The player's uploaded profile photo, shown in place of the critter; null
+   * goes back to the critter. Only a menu with an avatar has faces to change.
+   */
+  setPhoto(url: string | null): void {
+    if (url === this.photo) return;
+    this.photo = url;
+    this.showFaces();
+  }
+
+  /** Points every face at the photo, or else the current avatar. */
   private showFaces(): void {
-    if (!this.current) return;
-    for (const picture of this.faces) {
-      picture.src = avatarUrl(this.current, picture.dataset["size"] === "small" ? "small" : "full");
+    for (const picture of this.faces) this.showFace(picture);
+  }
+
+  private showFace(picture: HTMLImageElement): void {
+    if (this.photo === null) {
+      this.showCritter(picture);
+      return;
     }
+    picture.classList.add("is-photo");
+    picture.src = this.photo;
+  }
+
+  private showCritter(picture: HTMLImageElement): void {
+    picture.classList.remove("is-photo");
+    if (this.current) picture.src = avatarUrl(this.current, picture.dataset["size"] === "small" ? "small" : "full");
   }
 
   private toggle(open: boolean): void {

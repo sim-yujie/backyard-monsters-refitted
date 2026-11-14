@@ -23,7 +23,11 @@ import { defineYardAction } from "./yardAction.js";
  * (`docs/design/inferno.md` WP 2.3; overdrives `HODI|HOD2I|HOD3I`).
  */
 
-/** `POST /bm/yard/hatchery/add` — queue up to `count` of `monster` in one request. */
+/**
+ * `POST /bm/yard/hatchery/add` — queue up to `count` of `monster` in one
+ * request. In a Hatch Rush the queue hatches faster (the catch-up applies
+ * it), and queueing pays the weekend's Glimmers (`services/events/weekendCoins.ts`).
+ */
 export const yardHatcheryAddAction = defineYardAction({
   schema: YardHatcheryAddSchema,
   run: ({ save, body, now, bonuses }) =>

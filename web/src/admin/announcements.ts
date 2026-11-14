@@ -20,7 +20,8 @@ import { errorWords } from "./shiny";
  * Announcements: the pop-ups the owner writes for players (server
  * `services/announcements/announcements.ts`). Each has a title, plain text
  * (line breaks kept, `https://` addresses become links), up to three
- * pictures, an optional start and end, an optional Shiny gift, and Draft or
+ * pictures, an optional start and end, an optional gift of Shiny and/or
+ * Glimmers (the decorations' coins, owner 13 Nov 2026), and Draft or
  * Published. Players see the published ones in date after their yard loads,
  * once each, until they press "Got it" or claim the gift; the Account menu's
  * "News" shows them again. Publishing a gift asks once more, in place,
@@ -39,6 +40,7 @@ const DEFAULT_LIMITS: AnnouncementLimits = {
   images: 3,
   imageBytesMax: 1_000_000,
   shinyMax: 10_000,
+  glimmersMax: 1_000,
 };
 const PICTURE_TYPES = ["image/png", "image/jpeg", "image/webp"];
 /** The widest picture kept as it is; wider ones are made this wide. */
@@ -62,6 +64,8 @@ export interface Draft {
   pictures: FormPicture[];
   /** The gift as typed, empty for none. */
   shiny: string;
+  /** The Glimmers gift as typed, empty for none. */
+  glimmers: string;
 }
 
 const emptyDraft = (): Draft => ({
@@ -72,10 +76,14 @@ const emptyDraft = (): Draft => ({
   endsAt: "",
   pictures: [],
   shiny: "",
+  glimmers: "",
 });
 
 /** The gift as typed, as a number: 0 for none, NaN when it is not a number. */
 export const giftOf = (draft: Pick<Draft, "shiny">): number => Number(draft.shiny.trim() || 0);
+
+/** The Glimmers gift as typed, as a number: 0 for none, NaN when it is not a number. */
+export const glimmersOf = (draft: Pick<Draft, "glimmers">): number => Number(draft.glimmers.trim() || 0);
 
 /** An ISO time as a `datetime-local` value on this computer's clock, or "". */
 export const toLocalInput = (iso: string | null): string => {
@@ -110,17 +118,30 @@ export const draftProblem = (draft: Draft, limits: AnnouncementLimits): string |
   const gift = giftOf(draft);
   if (!Number.isSafeInteger(gift) || gift < 0 || gift > limits.shinyMax)
     return `The gift must be a whole number of Shiny from 0 to ${count(limits.shinyMax)}.`;
+  const glimmers = glimmersOf(draft);
+  if (!Number.isSafeInteger(glimmers) || glimmers < 0 || glimmers > limits.glimmersMax)
+    return `The Glimmers gift must be a whole number from 0 to ${count(limits.glimmersMax)}.`;
   return null;
 };
 
 /** Whether saving publishes a gift players do not have yet, which asks once more. */
 export const giftNeedsConfirm = (
-  draft: Pick<Draft, "status" | "shiny">,
-  saved: Pick<AdminAnnouncement, "status" | "shiny"> | undefined,
+  draft: Pick<Draft, "status" | "shiny" | "glimmers">,
+  saved: Pick<AdminAnnouncement, "status" | "shiny" | "glimmers"> | undefined,
 ): boolean => {
   const gift = giftOf(draft);
-  if (draft.status !== "published" || gift <= 0) return false;
-  return saved?.status !== "published" || saved.shiny !== gift;
+  const glimmers = glimmersOf(draft);
+  if (draft.status !== "published" || (gift <= 0 && glimmers <= 0)) return false;
+  return saved?.status !== "published" || saved.shiny !== gift || (saved.glimmers ?? 0) !== glimmers;
+};
+
+/** "200 Shiny and 100 Glimmers", "100 Glimmers": the gift in the "Publish with a gift of ...?" question. */
+export const giftWords = (draft: Pick<Draft, "shiny" | "glimmers">): string => {
+  const parts = [
+    giftOf(draft) > 0 ? `${count(giftOf(draft))} Shiny` : "",
+    glimmersOf(draft) > 0 ? `${count(glimmersOf(draft))} ${glimmersOf(draft) === 1 ? "Glimmer" : "Glimmers"}` : "",
+  ].filter(Boolean);
+  return parts.join(" and ") || "nothing";
 };
 
 /** What Save sends for the form. */
@@ -134,6 +155,7 @@ export const formOf = (draft: Draft): AnnouncementForm => ({
     picture.kind === "saved" ? { keep: picture.id } : { data: picture.data },
   ),
   shiny: giftOf(draft),
+  glimmers: glimmersOf(draft),
 });
 
 /** Why a picked file cannot be used, or null. */
@@ -235,7 +257,8 @@ export class AnnouncementsView {
     try {
       const answer = await fetchAnnouncements();
       this.items = answer.announcements;
-      this.limits = answer.limits ?? DEFAULT_LIMITS;
+      // Spread, so a limit an older server does not send keeps its default.
+      this.limits = { ...DEFAULT_LIMITS, ...answer.limits };
       this.loadError = null;
     } catch (err) {
       this.loadError = `Could not load the announcements: ${errorWords(err)}`;
@@ -259,6 +282,7 @@ export class AnnouncementsView {
           endsAt: toLocalInput(item.endsAt),
           pictures: [],
           shiny: item.shiny > 0 ? String(item.shiny) : "",
+          glimmers: (item.glimmers ?? 0) > 0 ? String(item.glimmers) : "",
         }
       : emptyDraft();
     this.render();
@@ -442,7 +466,9 @@ export class AnnouncementsView {
           { class: "row-meta" },
           item.endsAt ? `until ${dateTime(item.endsAt)} · ` : "",
           item.imageIds.length > 0 ? `${plural(item.imageIds.length, "picture")} · ` : "",
-          item.shiny > 0 ? `Gift ${count(item.shiny)} Shiny · ${count(item.claims)} claimed · ` : "",
+          item.shiny > 0 || (item.glimmers ?? 0) > 0
+            ? `Gift ${giftWords({ shiny: String(item.shiny), glimmers: String(item.glimmers ?? 0) })} · ${count(item.claims)} claimed · `
+            : "",
           item.status === "published" ? `${count(item.dismissals)} pressed Got it · ` : "",
           h(
             "time",
@@ -585,6 +611,21 @@ export class AnnouncementsView {
     });
     gift.value = draft.shiny;
     gift.addEventListener("input", () => set({ shiny: gift.value }));
+    const glimmers = h("input", {
+      class: "field-input",
+      attrs: {
+        id: `ann-glimmers-${n}`,
+        type: "number",
+        min: "0",
+        max: String(limits.glimmersMax),
+        step: "1",
+        inputmode: "numeric",
+        placeholder: "None",
+        ...(claims > 0 && { disabled: "" }),
+      },
+    });
+    glimmers.value = draft.glimmers;
+    glimmers.addEventListener("input", () => set({ glimmers: glimmers.value }));
 
     const statusButtons = (["draft", "published"] as const).map((status) =>
       h(
@@ -689,12 +730,12 @@ export class AnnouncementsView {
       h(
         "p",
         { class: "confirm-question" },
-        `Publish with a gift of ${count(giftOf(draft) || 0)} Shiny?`,
+        `Publish with a gift of ${giftWords(draft)}?`,
       ),
       h(
         "p",
         { class: "note" },
-        "Every player can claim it once while this announcement is up. Claimed Shiny cannot be taken back, and the amount cannot change after the first claim.",
+        "Every player can claim it once while this announcement is up. What they claim cannot be taken back, and the amounts cannot change after the first claim.",
       ),
       h(
         "div",
@@ -769,15 +810,32 @@ export class AnnouncementsView {
       ),
       h(
         "div",
-        { class: "field ann-gift" },
-        h("label", { attrs: { for: gift.id } }, "Shiny gift"),
-        gift,
+        { class: "ann-gifts" },
         h(
-          "span",
-          { class: "hint" },
-          claims > 0
-            ? `${count(claims)} claimed, so the amount cannot change.`
-            : "Each player gets this once, when they press Claim. Empty: no gift.",
+          "div",
+          { class: "field ann-gift" },
+          h("label", { attrs: { for: gift.id } }, "Shiny gift"),
+          gift,
+          h(
+            "span",
+            { class: "hint" },
+            claims > 0
+              ? `${count(claims)} claimed, so the amount cannot change.`
+              : "Each player gets this once, when they press Claim. Empty: no gift.",
+          ),
+        ),
+        h(
+          "div",
+          { class: "field ann-gift" },
+          h("label", { attrs: { for: glimmers.id } }, "Glimmers gift"),
+          glimmers,
+          h(
+            "span",
+            { class: "hint" },
+            claims > 0
+              ? "Claimed, so the amount cannot change."
+              : `For decorations (5 to 500 each), up to ${count(limits.glimmersMax)}. Same Claim; adds a Shop button. Empty: none.`,
+          ),
         ),
       ),
       h(
@@ -837,7 +895,7 @@ export class AnnouncementsView {
       draft.body.trim() || "Your text shows here.",
       draft.pictures.map((picture) => picture.src).filter((src) => src !== ""),
     );
-    const gift = giftOf(draft);
+    const gift = { shiny: Math.max(0, giftOf(draft) || 0), glimmers: Math.max(0, glimmersOf(draft) || 0) };
     return h(
       "div",
       { class: "game-look ann-preview" },
@@ -854,7 +912,7 @@ export class AnnouncementsView {
           "div",
           { class: "ann-preview-body" },
           content,
-          gift > 0
+          gift.shiny > 0 || gift.glimmers > 0
             ? h(
                 "div",
                 { class: "announcement-gift" },

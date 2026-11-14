@@ -1,5 +1,7 @@
 import type { EntityManager } from "@mikro-orm/postgresql";
 
+import { visiblePhotos } from "../profile/visiblePhoto.js";
+
 /**
  * The leaderboard (beta.4): one board for every player, ordered by empire
  * points, the Flash score (`points` + `basevalue`, `client/scripts/BASE.as:4835-4877`).
@@ -40,6 +42,12 @@ export interface BoardRow {
   readonly name: string;
   /** `user.pic_square`: their avatar's path, or null for the default one. */
   readonly pic: string | null;
+  /**
+   * Their visible photo's upload number, null for the critter
+   * (`services/profile/visiblePhoto.ts`). Not kept with the stored board:
+   * looked up for each answer, so a new or hidden photo shows at once.
+   */
+  readonly photo?: number | null;
   readonly empirePoints: number;
   /** Map Room 2 outposts they hold. */
   readonly outposts: number;
@@ -151,5 +159,7 @@ export const empireBoard = async (
     you = typeof stored === "string" ? (JSON.parse(stored) as BoardRow) : null;
   }
 
-  return { top: board.top, you, total: board.total, builtAt: board.builtAt };
+  const photos = await visiblePhotos(em, [...board.top.map((row) => row.userId), ...(you ? [you.userId] : [])]);
+  const withPhoto = (row: BoardRow): BoardRow => ({ ...row, photo: photos.get(row.userId) ?? null });
+  return { top: board.top.map(withPhoto), you: you && withPhoto(you), total: board.total, builtAt: board.builtAt };
 };

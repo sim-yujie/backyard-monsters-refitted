@@ -189,6 +189,11 @@ export interface DescentLanding {
   /** The 13th win: the Inferno yard is the player's. */
   readonly captured: boolean;
   readonly infernobaseid?: string | number;
+  /**
+   * The save's own result disagreed with the server's battle, which landed
+   * instead (owner, 12 Nov 2026). Present only then.
+   */
+  readonly overruled?: boolean;
 }
 
 /** The landing's `descent`, when the answer carries a well-formed one. */
@@ -314,6 +319,8 @@ export interface InfernoNeighbourView {
   readonly baseid: string;
   readonly name: string;
   readonly pic: string;
+  /** Their uploaded photo's upload number; null or absent for the critter (`game/playerPicture.ts`). */
+  readonly photo?: number | null;
   /** Their Inferno yard's level. */
   readonly level: number;
   /** 1 while they are playing anywhere in the game, when they cannot be attacked. */

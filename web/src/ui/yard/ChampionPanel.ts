@@ -1,3 +1,5 @@
+import { shortDate } from "@/game/events/eventsModel";
+import { krallenAuraActive, krallenAuraTimes, krallenAuraTimesLooter, krallenAuraUntil } from "@/game/yard/krallenAura";
 import { tutTarget, TutTarget } from "@/game/guide/targets";
 import type { YardRefusal } from "@/api/yard";
 import {
@@ -40,10 +42,11 @@ import { modesBlock, modesShape, savedStance, showsModes } from "./championModes
 import { ShinyButton } from "./ShinyButton";
 
 /**
- * The Champion Cage's controls, inside its building panel
- * (`docs/design/yard-buildings.md` §7.2, decisions D11 and D17; issue #124).
+ * The Champion Cage's controls, in the Monsters screen's Champion tab
+ * (`ChampionTab.ts`; owner, 12 Nov 2026; `docs/design/yard-buildings.md`
+ * §7.2, decisions D11 and D17; issue #124).
  *
- * Opened by the panel's **Open cage**. With no champion in the cage: one card
+ * Opened by the cage's **Open Champion Cage**. With no champion in the cage: one card
  * each for Gorgo, Drull and Fomor (Korath and Krallen are not offered), each
  * with **Raise** (free), or a note when that one is frozen in the Chamber.
  * Raising puts the champion in the cage straight away, as in the original
@@ -630,7 +633,20 @@ export class ChampionPanel {
     const level = document.createElement("p");
     level.className = "champion__level";
     level.textContent = `Level ${view.level} of ${view.entry.levels}${frozen ? " · frozen in the Chamber" : ""}`;
-    words.append(name, level, statsBlock(view));
+    words.append(name, level);
+    // Her Krallen Hunt loot aura while it runs (owner, 13 Nov 2026).
+    if (krallenAuraActive(champion, now)) {
+      const times = krallenAuraTimes(view.level);
+      const aura = document.createElement("p");
+      aura.className = "champion__aura";
+      aura.textContent = `Loot aura · until ${shortDate(krallenAuraUntil(champion))}`;
+      const strength = document.createElement("p");
+      strength.className = "champion__aura champion__aura--times";
+      strength.textContent = `Monsters x${times} · Resource hunters x${krallenAuraTimesLooter(view.level)}`;
+      strength.title = "How much more monsters near Krallen loot in attacks";
+      words.append(aura, strength);
+    }
+    words.append(statsBlock(view));
     header.append(portrait(championPicture(view.entry, view.level), "champion__picture"), words);
     block.append(heading("Your second champion"), header);
     if (frozen) {
@@ -850,7 +866,7 @@ const specialShapeOf = (save: YardStore["save"], now: number): string => {
   const champion = specialChampion(save);
   const view = champion ? championView(save, champion, now) : null;
   if (!champion || !view) return "";
-  return `|K:${champion.status ?? 0}:${view.level}:${view.health >= view.maxHealth}:${view.hunger}:${view.healShiny}`;
+  return `|K:${champion.status ?? 0}:${view.level}:${view.health >= view.maxHealth}:${view.hunger}:${view.healShiny}:${krallenAuraActive(champion, now) ? krallenAuraUntil(champion) : 0}`;
 };
 
 /**

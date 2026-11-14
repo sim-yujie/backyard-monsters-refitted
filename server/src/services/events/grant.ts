@@ -13,7 +13,7 @@ import { fitCredit, type CreditSave } from "../yard/credit.js";
 import type { ResourceAmounts } from "../yardplanner/costs.js";
 import { KORATH_MAX_POWER } from "../../game-data/events/monsterMadness.js";
 import { grantKorathPower } from "./korathPower.js";
-import { raiseKrallen } from "./krallenReward.js";
+import { grantKrallenAura, raiseKrallen } from "./krallenReward.js";
 
 /**
  * Paying event rewards (`game-data/events/eventRewards.ts`) into the player's
@@ -47,6 +47,12 @@ export type GrantedReward =
   | { kind: "decoration"; type: number; count: number; stored: number }
   /** Krallen's level now; `raised` false when she was at the top already. */
   | { kind: "krallen"; level: number; raised: boolean }
+  /**
+   * Krallen's loot aura (the hunt's 3x mark): when it runs out (unix s, 0
+   * without a Krallen), her level as it stood when it was paid, and whether
+   * she had a Krallen to carry it.
+   */
+  | { kind: "krallenAura"; until: number; level: number; hasKrallen: boolean }
   /**
    * Korath's power now; `raised` false when it was that high already;
    * `hasKorath` false when it waits for him to be raised.
@@ -96,6 +102,8 @@ export const rewardProblem = (reward: EventReward): string | null => {
       return whole(reward.count) > 0 ? null : "no count";
     case "krallen":
       return null;
+    case "krallenAura":
+      return Number.isInteger(reward.until) && reward.until > 0 ? null : "no end time";
     case "korath":
       return Number.isInteger(reward.power) && reward.power >= 1 && reward.power <= KORATH_MAX_POWER
         ? null
@@ -194,6 +202,12 @@ export const planGrant = (save: GrantSave, rewards: readonly EventReward[], now:
         const raised = raiseKrallen(champion ?? save.champion, now);
         champion = raised.champions;
         granted.push({ kind: "krallen", level: raised.level, raised: raised.raised });
+        break;
+      }
+      case "krallenAura": {
+        const aura = grantKrallenAura(champion ?? save.champion, reward.until);
+        if (aura.hasKrallen) champion = aura.champions;
+        granted.push({ kind: "krallenAura", until: aura.until, level: aura.level, hasKrallen: aura.hasKrallen });
         break;
       }
       case "korath": {

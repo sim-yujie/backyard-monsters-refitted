@@ -17,7 +17,7 @@ import {
   type Mr1Target,
   type Mr1World,
 } from "@/game/maproom1/mr1Model";
-import { avatarUrl } from "@/game/avatars";
+import { pictureFor, showPlayerPicture } from "@/game/playerPicture";
 import { tribeInfo } from "@/game/maproom1/tribes";
 import { VICTORY_THRESHOLD } from "@/game/combat/rules";
 import { monsterPortrait, showPortrait } from "@/game/portraits";
@@ -102,8 +102,15 @@ export const avatar = (target: Mr1Target, size: "sm" | "md" | "lg"): HTMLElement
     art.src = tribeInfo(target.tribe).art;
   } else {
     box.classList.add("mr1-avatar--player");
-    art.src = avatarUrl(target.avatar, size === "lg" ? "full" : "small");
-    art.addEventListener("error", () => art.replaceWith(initials(target.name)), { once: true });
+    // A critter that will not load shows the initials; a photo that will not
+    // load first falls back to the critter (`showPlayerPicture`).
+    const onError = (): void => {
+      if (art.classList.contains("is-photo")) return;
+      art.removeEventListener("error", onError);
+      art.replaceWith(initials(target.name));
+    };
+    art.addEventListener("error", onError);
+    showPlayerPicture(art, pictureFor(target.userid, target.avatar, target.photo, size === "lg" ? "full" : "small"));
   }
   box.append(art);
   return box;

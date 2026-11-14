@@ -29,6 +29,7 @@ mock.module("../../server.js", () => ({
 
 const progress = await import("./allianceProgress.js");
 const { productionScheduleOfUser } = await import("./productionHistory.js");
+const { getAllianceMessages } = await import("./allianceMessages.js");
 
 const BASE = 993_900;
 const LEADER = BASE + 1;
@@ -45,6 +46,7 @@ const sql = <R = Record<string, any>>(query: string, params: unknown[] = []) =>
 const em = () => orm!.em.fork();
 
 const clear = async () => {
+  await sql(`DELETE FROM bym.alliance_message WHERE alliance_id = ?`, [ALLIANCE]);
   await sql(`DELETE FROM bym.alliance WHERE id = ?`, [ALLIANCE]);
   await sql(`DELETE FROM bym.save WHERE saveuserid IN (${USERS.join(",")})`);
   await sql(`DELETE FROM bym."user" WHERE userid IN (${USERS.join(",")})`);
@@ -82,30 +84,103 @@ describe.skipIf(!enabled)("alliance progress", () => {
     await orm?.close();
   });
 
-  test("daily quests: 1 point each, 3 a member a day", async () => {
-    const paid = [];
-    for (let i = 0; i < 4; i++) paid.push(await progress.creditDailyQuest(em(), MEMBER, NOW));
-    expect(paid).toEqual([true, true, true, false]);
-    expect(Number((await alliance()).points)).toBe(3);
-    const view = await progress.progressView(em(), ALLIANCE, AllianceType.MIDAS, NOW);
-    expect(view.today).toMatchObject({ contributed: 1, members: 2, points_today: 3 });
-  });
-
-  test("a goal pays once when reached; members cannot set goals", async () => {
-    await expect(progress.setGoal(em(), MEMBER, "hatch", "easy", NOW)).rejects.toThrow("Leader and Officers");
-    await progress.setGoal(em(), LEADER, "hatch", "easy", NOW);
-    await expect(progress.setGoal(em(), LEADER, "hatch", "hard", NOW)).rejects.toThrow("already set");
-    await progress.addGoalProgress(em(), MEMBER, { hatch: 100 }, NOW);
+  test("daily quests pay no points; each counts 1 towards Finish daily quests and marks the member as helping", async () => {
+    await progress.setGoal(em(), LEADER, "dailyQuests", "easy", NOW);
+    for (let i = 0; i < 4; i++) await progress.creditDailyQuest(em(), MEMBER, NOW);
     expect(Number((await alliance()).points)).toBe(0);
-    await progress.addGoalProgress(em(), MEMBER, { hatch: 60 }, NOW);
-    await progress.addGoalProgress(em(), MEMBER, { hatch: 60 }, NOW);
-    expect(Number((await alliance()).points)).toBe(10);
     const view = await progress.progressView(em(), ALLIANCE, AllianceType.MIDAS, NOW);
-    expect(view.goals[0]).toMatchObject({ kind: "hatch", progress: 150, done: true, removable: false });
-    expect(view.top_helpers[0]).toMatchObject({ userid: MEMBER });
+    expect(view.today).toMatchObject({ contributed: 1, members: 2, points_today: 0 });
+    expect(view.goals[0]).toMatchObject({ kind: "dailyQuests", progress: 4, target: 100, points: 15 });
+    expect(view.top_helpers[0]).toMatchObject({ userid: MEMBER, quests: 4 });
   });
 
-  test("lighting a step spends points and records the members' old factor", async () => {
+  test("a goal pays once when reached; members cannot set goals; the menu says who each tier is sized for", async () => {
+    await expect(progress.setGoal(em(), MEMBER, "tribeDestroy", "easy", NOW)).rejects.toThrow("Leader and Officers");
+    await progress.setGoal(em(), LEADER, "tribeDestroy", "easy", NOW);
+    await expect(progress.setGoal(em(), LEADER, "tribeDestroy", "hard", NOW)).rejects.toThrow("already set");
+    await progress.addGoalProgress(em(), MEMBER, { tribeDestroy: 100 }, NOW);
+    expect(Number((await alliance()).points)).toBe(0);
+    await progress.addGoalProgress(em(), MEMBER, { tribeDestroy: 60 }, NOW);
+    await progress.addGoalProgress(em(), MEMBER, { tribeDestroy: 60 }, NOW);
+    expect(Number((await alliance()).points)).toBe(15);
+    const view = await progress.progressView(em(), ALLIANCE, AllianceType.MIDAS, NOW);
+    expect(view.goals[0]).toMatchObject({ kind: "tribeDestroy", progress: 200, done: true, removable: false });
+    expect(view.top_helpers[0]).toMatchObject({ userid: MEMBER });
+    // Paid today by the clock (`done_at` is the database's now()).
+    const today = await progress.progressView(em(), ALLIANCE, AllianceType.MIDAS, Math.floor(Date.now() / 1000));
+    expect(today.today.points_today).toBe(15);
+    const tribes = view.goal_menu.find((g) => g.kind === "tribeDestroy")!;
+    expect(tribes.tiers.map((t) => [t.target, t.points, t.players])).toEqual([
+      [200, 15, 3],
+      [550, 37, 8],
+      [1000, 70, 15],
+    ]);
+  });
+
+  test("an old Hatch monsters goal (off the menu since 12 Nov) is ignored: cannot be set, gains nothing, not shown, takes no slot", async () => {
+    const week = progress.weekOf(NOW);
+    await sql(
+      `INSERT INTO bym.alliance_goal (alliance_id, week, kind, tier, target, points, set_by, progress)
+       VALUES (?, ?::date, 'hatch', 'easy', 18000, 15, ?, 500)`,
+      [ALLIANCE, week, LEADER]
+    );
+    await sql(
+      `INSERT INTO bym.alliance_message (alliance_id, user_id, body, message_type, created_at)
+       VALUES (?, ?, ?, 'goal_set', now()), (?, ?, ?, 'goal_set', now())`,
+      [
+        ALLIANCE, LEADER, JSON.stringify({ kind: "hatch", tier: "easy" }),
+        ALLIANCE, LEADER, JSON.stringify({ kind: "loot", tier: "easy" }),
+      ]
+    );
+    await expect(progress.setGoal(em(), LEADER, "hatch", "easy", NOW)).rejects.toThrow("not on your menu");
+    // Hatching adds nothing to it, even fed straight in.
+    progress.noteAllianceEvents(MEMBER, { hatch: 5, "hatch:C1": 5 });
+    expect(progress.pendingAllianceEvents(MEMBER)?.hatch ?? 0).toBe(0);
+    await progress.addGoalProgress(em(), MEMBER, { hatch: 20_000 }, NOW);
+    const [stored] = await sql<{ progress: number; done_at: Date | null }>(
+      `SELECT progress, done_at FROM bym.alliance_goal WHERE alliance_id = ? AND kind = 'hatch'`,
+      [ALLIANCE]
+    );
+    expect(Number(stored!.progress)).toBe(500);
+    expect(stored!.done_at).toBeNull();
+    expect(Number((await alliance()).points)).toBe(0);
+    // Not shown, not on the menu.
+    const view = await progress.progressView(em(), ALLIANCE, AllianceType.MIDAS, NOW);
+    expect(view.goals).toEqual([]);
+    expect(view.goal_menu.some((g) => g.kind === "hatch")).toBe(false);
+    // It takes no slot: all five can still be set.
+    for (const kind of ["tribeDestroy", "takeover", "attackWin", "loot", "upgrade"]) {
+      await progress.setGoal(em(), LEADER, kind, "easy", NOW);
+    }
+    await expect(progress.setGoal(em(), LEADER, "catapultHit", "easy", NOW)).rejects.toThrow("Up to 5");
+    expect((await progress.progressView(em(), ALLIANCE, AllianceType.MIDAS, NOW)).goals).toHaveLength(5);
+    // Its old "goal set" line is left out of the feed; the loot one stays.
+    const feed = await getAllianceMessages(ALLIANCE, em());
+    const goalLines = feed.filter((m) => String(m.messageType) === "goal_set").map((m) => m.body);
+    expect(goalLines).toEqual([expect.stringContaining("Loot resources (Easy)")]);
+  });
+
+  test("a cancelled upgrade takes its count back, never below 0, and never off a goal already done", async () => {
+    await progress.setGoal(em(), LEADER, "upgrade", "easy", NOW);
+    const goal = async () => (await progress.progressView(em(), ALLIANCE, AllianceType.MIDAS, NOW)).goals[0]!;
+    await progress.addGoalProgress(em(), MEMBER, { upgrade: 2 }, NOW);
+    await progress.addGoalProgress(em(), MEMBER, { upgrade: -1 }, NOW);
+    expect((await goal()).progress).toBe(1);
+    await progress.addGoalProgress(em(), MEMBER, { upgrade: -5 }, NOW);
+    expect((await goal()).progress).toBe(0);
+    // Only upgrades go back.
+    await progress.setGoal(em(), LEADER, "catapultHit", "easy", NOW);
+    await progress.addGoalProgress(em(), MEMBER, { catapultHit: 3 }, NOW);
+    await progress.addGoalProgress(em(), MEMBER, { catapultHit: -3 }, NOW);
+    const hits = (await progress.progressView(em(), ALLIANCE, AllianceType.MIDAS, NOW)).goals[1]!;
+    expect(hits.progress).toBe(3);
+    await progress.addGoalProgress(em(), MEMBER, { upgrade: 90 }, NOW);
+    await progress.addGoalProgress(em(), MEMBER, { upgrade: -1 }, NOW);
+    expect(await goal()).toMatchObject({ progress: 90, done: true });
+    expect(Number((await alliance()).points)).toBe(15);
+  });
+
+  test("lighting a star spends points and records the members' old factor", async () => {
     await expect(progress.lightStar(em(), LEADER, "wormzer", NOW)).rejects.toThrow("more points");
     await sql(`UPDATE bym.alliance SET points = 100 WHERE id = ?`, [ALLIANCE]);
     await expect(progress.lightStar(em(), MEMBER, "wormzer", NOW)).rejects.toThrow("Leader and Officers");
@@ -113,7 +188,7 @@ describe.skipIf(!enabled)("alliance progress", () => {
     const before = (await productionScheduleOfUser(em(), MEMBER)).current;
     await progress.lightStar(em(), LEADER, "wormzer", NOW);
     const after = await alliance();
-    expect(Number(after.points_spent)).toBe(40);
+    expect(Number(after.points_spent)).toBe(20);
     expect(after.stars).toEqual({ wormzer: 1 });
     const schedule = await productionScheduleOfUser(em(), MEMBER);
     expect(schedule.past).toEqual([{ until: NOW, factor: before }]);
@@ -157,22 +232,22 @@ describe.skipIf(!enabled)("alliance progress", () => {
   });
 
   test("goal progress noted in a rolled-back transaction is dropped; a committed one is queued", async () => {
-    const hatches = () => progress.pendingAllianceEvents(MEMBER)?.hatch ?? 0;
-    const start = hatches();
+    const tribes = () => progress.pendingAllianceEvents(MEMBER)?.tribeDestroy ?? 0;
+    const start = tribes();
     await expect(
       progress.countAfterCommit(() =>
         em().transactional(async () => {
-          progress.noteAllianceEvents(MEMBER, { hatch: 5 });
+          progress.noteAllianceEvents(MEMBER, { tribeDestroy: 5 });
           throw new Error("refused");
         })
       )
     ).rejects.toThrow("refused");
-    expect(hatches()).toBe(start);
+    expect(tribes()).toBe(start);
     await progress.countAfterCommit(() =>
       em().transactional(async () => {
-        progress.noteAllianceEvents(MEMBER, { hatch: 5 });
+        progress.noteAllianceEvents(MEMBER, { tribeDestroy: 5 });
       })
     );
-    expect(hatches()).toBe(start + 5);
+    expect(tribes()).toBe(start + 5);
   });
 });

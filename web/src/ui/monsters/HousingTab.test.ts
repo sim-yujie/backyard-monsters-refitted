@@ -401,3 +401,69 @@ describe("HousingTab: the Monster Juicer", () => {
     );
   });
 });
+
+describe("Housing tab: the Monster Juicer's and Monster Bunkers' Open buttons land here (owner, 12 Nov 2026)", () => {
+  const bunker = (id: number, l = 1, extra: Partial<BuildingData> = {}): BuildingData => ({
+    id,
+    t: 22,
+    l,
+    X: id * 40,
+    Y: 40,
+    ...extra,
+  });
+  const withBuildings = (...extra: BuildingData[]): Partial<BaseLoadResponse> => ({
+    buildingdata: {
+      "1": housing(1, 6),
+      ...Object.fromEntries(extra.map((one) => [String(one.id), one])),
+    },
+  });
+  const section = (root: HTMLElement) => root.querySelector<HTMLElement>(".housing-bunkers")!;
+
+  it("has no bunker section without a built bunker", () => {
+    const { element } = setup(withBuildings(bunker(7, 0, { cB: 600 })));
+    expect(section(element).hidden).toBe(true);
+    expect(element.querySelector(".bunker")).toBeNull();
+  });
+
+  it("shows the one bunker's controls under its heading, with no picker", () => {
+    const { element } = setup(withBuildings(bunker(7)));
+    expect(section(element).hidden).toBe(false);
+    expect(section(element).querySelector(".housing-section__title")!.textContent).toBe("Monster Bunker");
+    expect(section(element).querySelectorAll(".bunker")).toHaveLength(1);
+    expect(element.querySelector<HTMLElement>(".housing-bunkers__pick")!.hidden).toBe(true);
+  });
+
+  it("with several, picks the bunker it was opened from, and switches with a button each", () => {
+    const { element } = setup(withBuildings(bunker(7), bunker(9, 2)), { buildingId: 9 });
+    expect(section(element).querySelector(".housing-section__title")!.textContent).toBe("Monster Bunkers");
+    const pick = [...element.querySelectorAll<HTMLButtonElement>(".housing-bunkers__pick button")];
+    expect(pick.map((one) => [one.textContent, one.getAttribute("aria-pressed")])).toEqual([
+      ["Bunker 1", "false"],
+      ["Bunker 2", "true"],
+    ]);
+    expect(section(element).querySelectorAll(".bunker")).toHaveLength(1);
+    pick[0]!.click();
+    expect(
+      [...element.querySelectorAll<HTMLButtonElement>(".housing-bunkers__pick button")].map((one) =>
+        one.getAttribute("aria-pressed"),
+      ),
+    ).toEqual(["true", "false"]);
+    expect(section(element).querySelectorAll(".bunker")).toHaveLength(1);
+  });
+
+  it("brings the Juicer's or the bunker's section into view when opened from that building", () => {
+    const scrolled: string[] = [];
+    const original = HTMLElement.prototype.scrollIntoView;
+    HTMLElement.prototype.scrollIntoView = function (this: HTMLElement) {
+      scrolled.push(this.className);
+    };
+    try {
+      setup(withBuildings(bunker(7), { id: 8, t: 9, l: 1, X: 0, Y: 80 }), { buildingId: 8 });
+      setup(withBuildings(bunker(7), { id: 8, t: 9, l: 1, X: 0, Y: 80 }), { buildingId: 7 });
+      setup(withBuildings(bunker(7)), { buildingId: 1 });
+    } finally {
+      HTMLElement.prototype.scrollIntoView = original;
+    }
+    expect(scrolled).toEqual(["housing-section housing-juicer", "housing-section housing-bunkers"]);
+  });
+});

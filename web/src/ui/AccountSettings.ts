@@ -1,6 +1,6 @@
 /**
  * The Settings dialog, opened from the account menu, in four tabs (owner,
- * 5 Nov 2026): Account (avatar, username, Shiny Lock), Look and sound,
+ * 5 Nov 2026): Account (the player's own profile, username, Shiny Lock), Look and sound,
  * Social (world chat, country, the privacy switches, blocked and muted
  * players), and Notifications (owner 11 Nov 2026: which categories reach the
  * bell, kept on the account, `ui/notifications/NotificationSettings.ts`). "World
@@ -8,13 +8,19 @@
  * server, except the volume sliders, which the account menu has too
  * (`ui/SoundSliders.ts`).
  *
- * Both are server rules this only fronts. A rename keeps the game's username
+ * The Account tab opens with the player's own profile (owner, 13 Nov 2026:
+ * the menu's "Profile" item moved here): photo, the no-photo critter, bio,
+ * and "Preview" to see it as others do (`ui/profile/OwnProfileSection.ts`).
+ *
+ * Username and Shiny Lock are server rules this only fronts. A rename keeps the game's username
  * rules and a long cooldown (`changeUsername.ts`); Shiny Lock makes the server
  * refuse every Shiny spend until it is turned off again (`shinyLock.ts`).
  */
 
 import { reduceEffects, setReduceEffects } from "@/game/attack/juice";
 import type { AvatarPicker } from "@/ui/AvatarPicker";
+import { OwnProfileSection } from "@/ui/profile/OwnProfileSection";
+import type { ProfileApi } from "@/ui/profile/OwnProfileControls";
 import { SoundSliders } from "@/ui/SoundSliders";
 import { changeUsername, fetchAccount, setShinyLocked, type AccountInfo } from "@/api/account";
 import {
@@ -41,6 +47,7 @@ import { noteShinyLock } from "@/game/shinyLock";
 import { savedFontChoice, setFontChoice, type FontChoice } from "@/ui/fontChoice";
 import { Popup } from "@/ui/Popup";
 import { reportLook } from "@/app/lookReport";
+import { groundPicker } from "./groundPicker";
 import { NOTIFICATION_SETTINGS_TEXT, notificationSettingsSection } from "@/ui/notifications/NotificationSettings";
 
 export const SETTINGS_TEXT = {
@@ -49,6 +56,9 @@ export const SETTINGS_TEXT = {
   tabLook: "Look and sound",
   tabSocial: "Social",
   tabNotifications: "Notifications",
+  /** The two long tab words, shortened on a phone so all four tabs fit. */
+  tabLookShort: "Look",
+  tabNotificationsShort: "Alerts",
   reduceLabel: "Reduce effects",
   reduceHint: "Turns off screen shake, hit pauses and slow motion in attacks, with fewer particles.",
   loadFailed: "Could not load your account. Try again.",
@@ -152,16 +162,21 @@ export interface AccountSettingsOptions {
   readonly onRenamed?: (username: string) => void;
   /** The account menu's avatar picker; without it the Account tab has none. */
   readonly avatarPicker?: AvatarPicker;
+  /**
+   * The signed-in player, whose photo and bio the Account tab edits; without
+   * it the tab has only the picker. `api` is for tests.
+   */
+  readonly profile?: { readonly userid: number; readonly api?: ProfileApi };
 }
 
-const SETTINGS_TABS = [
-  { id: "account", label: SETTINGS_TEXT.tabAccount },
-  { id: "look", label: SETTINGS_TEXT.tabLook },
-  { id: "social", label: SETTINGS_TEXT.tabSocial },
-  { id: "notifications", label: SETTINGS_TEXT.tabNotifications },
-] as const;
+type SettingsTab = "account" | "look" | "social" | "notifications";
 
-type SettingsTab = (typeof SETTINGS_TABS)[number]["id"];
+const SETTINGS_TABS: readonly { id: SettingsTab; label: string; short?: string }[] = [
+  { id: "account", label: SETTINGS_TEXT.tabAccount },
+  { id: "look", label: SETTINGS_TEXT.tabLook, short: SETTINGS_TEXT.tabLookShort },
+  { id: "social", label: SETTINGS_TEXT.tabSocial },
+  { id: "notifications", label: SETTINGS_TEXT.tabNotifications, short: SETTINGS_TEXT.tabNotificationsShort },
+];
 
 /**
  * The tab strip and its four panes, the Account tab showing; returns the
@@ -189,7 +204,7 @@ const settingsTabs = (body: HTMLElement): Record<SettingsTab, HTMLElement> => {
       panes[tabId].hidden = !on;
     }
   };
-  for (const { id, label } of SETTINGS_TABS) {
+  for (const { id, label, short } of SETTINGS_TABS) {
     const tab = document.createElement("button");
     tab.type = "button";
     tab.className = "tabs__tab account-settings__tab";
@@ -197,7 +212,20 @@ const settingsTabs = (body: HTMLElement): Record<SettingsTab, HTMLElement> => {
     tab.dataset["tab"] = id;
     tab.setAttribute("role", "tab");
     tab.setAttribute("aria-controls", `account-settings-pane-${id}`);
-    tab.textContent = label;
+    if (short) {
+      // Both words are in the tab; the CSS shows the short one on a phone
+      // (ui.css `.account-settings__tab-short`), hiding the other entirely,
+      // so the tab's name is always the word on screen.
+      const long = document.createElement("span");
+      long.className = "account-settings__tab-long";
+      long.textContent = label;
+      const brief = document.createElement("span");
+      brief.className = "account-settings__tab-short";
+      brief.textContent = short;
+      tab.append(long, brief);
+    } else {
+      tab.textContent = label;
+    }
     tab.addEventListener("click", () => show(id));
     strip.append(tab);
     tabs.set(id, tab);
@@ -225,18 +253,33 @@ const settingsTabs = (body: HTMLElement): Record<SettingsTab, HTMLElement> => {
 
 /** Opens the dialog; returns it so a caller can close it. */
 export const openAccountSettings = (options: AccountSettingsOptions): Popup => {
-  const popup = new Popup({ title: SETTINGS_TEXT.title, className: "account-settings-popup" });
+  let ownProfile: OwnProfileSection | null = null;
+  const popup = new Popup({
+    title: SETTINGS_TEXT.title,
+    className: "account-settings-popup",
+    onClose: () => ownProfile?.destroy(),
+  });
   const body = document.createElement("div");
   body.className = "account-settings";
   const status = document.createElement("p");
   status.className = "field__hint";
   status.textContent = "Loading…";
   const panes = settingsTabs(body);
-  // The avatar and the Look and sound tab need nothing from this load.
-  if (options.avatarPicker) panes.account.append(options.avatarPicker.element);
+  // The profile loads on its own; the picker and the Look and sound tab need
+  // nothing from the account's load.
+  if (options.profile) {
+    ownProfile = new OwnProfileSection({
+      userid: options.profile.userid,
+      container: options.container,
+      ...(options.avatarPicker && { avatarPicker: options.avatarPicker }),
+      ...(options.profile.api && { api: options.profile.api }),
+    });
+    panes.account.append(ownProfile.element);
+  } else if (options.avatarPicker) panes.account.append(options.avatarPicker.element);
   panes.account.append(status);
   panes.look.append(lookSection(), effectsSection());
   popup.setContent(body).mount(options.container);
+  void ownProfile?.load();
 
   fetchAccount().then(
     (account) => {
@@ -664,16 +707,21 @@ const lookSection = (): HTMLElement => {
   hint.setAttribute("aria-live", "polite");
   hint.textContent = SETTINGS_TEXT.lookHint;
   look.setAttribute("aria-describedby", hint.id);
+  // The yard ground (owner, 12 Nov 2026): the swatches of the Style shown above.
+  let ground = groundPicker(look.value === "classic");
   look.addEventListener("change", () => {
     const saved = saveClassicLook(look.value === "classic");
     if (saved) reportLook();
     hint.textContent = saved ? SETTINGS_TEXT.lookSaved : SETTINGS_TEXT.lookFailed;
     hint.classList.toggle("field__hint--error", !saved);
+    const next = groundPicker(look.value === "classic");
+    ground.replaceWith(next);
+    ground = next;
   });
 
   // The volume sliders, as in the account menu (owner, 4 Nov 2026); saved with the account.
   const sound = new SoundSliders("account-settings__sound");
-  section.append(heading, row, hint, ...fontRows(), ...musicRows(), sound.element);
+  section.append(heading, row, hint, ground, ...fontRows(), ...musicRows(), sound.element);
   return section;
 };
 

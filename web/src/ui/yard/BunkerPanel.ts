@@ -21,10 +21,11 @@ import "@/ui/styles/bunker.css";
 import { ShinyButton } from "./ShinyButton";
 
 /**
- * The Monster Bunker's controls, inside its building panel
- * (`docs/design/yard-buildings.md` §7.1, decision D11; issue #121).
+ * The Monster Bunker's controls, in the Monsters screen's Housing tab
+ * (`HousingTab.ts`; owner, 12 Nov 2026; `docs/design/yard-buildings.md`
+ * §7.1, decision D11; issue #121).
  *
- * Opened by the panel's **Open bunker**. Top to bottom: the space used against
+ * Opened by the bunker's **Open Monster Bunker**. Top to bottom: the space used against
  * the bunker's room; **Put monsters in**, a From housing / Buy switch over one
  * row per monster with a {@link QuantityStepper} (Fill takes as many as are
  * housed and fit), and one **Move to bunker** (putty) or **Buy** (Shiny, two

@@ -18,7 +18,7 @@
     },
     "housedLost": 0,
     "left": false,
-    "rulesVersion": "c0d679929909ec69",
+    "rulesVersion": "c7849174b413bf21",
     "hasReplay": true,
     "playable": true
   },
@@ -3710,7 +3710,8 @@
         "champion": {
           "t": 5,
           "l": 5,
-          "pl": 2
+          "pl": 2,
+          "aura": true
         }
       },
       {
@@ -3804,7 +3805,7 @@
       },
       "housedLost": 0,
       "left": true,
-      "rulesVersion": "c0d679929909ec69",
+      "rulesVersion": "c7849174b413bf21",
       "hasReplay": true,
       "playable": true
     },

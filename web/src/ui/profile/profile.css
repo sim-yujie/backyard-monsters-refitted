@@ -343,3 +343,67 @@
     justify-content: flex-start;
   }
 }
+
+/* ── Settings > Account (`OwnProfileSection.ts`, owner 13 Nov 2026) ─────────
+   "Photo" and a small "Preview" on one line; the photo (smaller than the
+   window's 112px) beside New photo and Remove; then the critter picker and the
+   bio. A painted icon leads New photo and Preview. */
+
+.account-settings__section.own-profile {
+  gap: var(--space-3);
+}
+
+.own-profile__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+}
+
+.own-profile__preview,
+.own-profile .profile__new-photo {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-1);
+  white-space: nowrap;
+}
+
+.own-profile__preview {
+  flex: none;
+  padding-inline: var(--space-2);
+}
+
+.own-profile__preview > .game-icon,
+.own-profile .profile__new-photo > .game-icon {
+  flex: none;
+  width: 20px;
+  height: 20px;
+}
+
+.own-profile__photo {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  min-width: 0;
+}
+
+.own-profile__photo .profile__picture {
+  width: 88px;
+  height: 88px;
+}
+
+.own-profile__photo .profile__photo-row {
+  flex: 1;
+  min-width: 0;
+}
+
+.own-profile__bio {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.own-profile__bio[hidden] {
+  display: none;
+}

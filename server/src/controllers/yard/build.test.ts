@@ -130,6 +130,28 @@ describe("POST /bm/yard/build", () => {
     expect(db.row!.points).toBe("515");
   });
 
+  test("a trap built by hand on a fired trap's spot strikes that entry off the re-arm list", async () => {
+    // Player report 2026-11-12: traps rebuilt from the build menu stayed on
+    // the list, so re-arm offered them again and refused every one.
+    const answered = { t: 24, X: 200, Y: 0, at: 1 };
+    const waiting = { t: 24, X: 300, Y: 0, at: 2 };
+    db.row = rowOf({ firedtraps: [answered, waiting] });
+
+    const answer = await build(24, 200, 0);
+
+    expect(answer.status).toBe(200);
+    expect(db.row!.firedtraps).toEqual([waiting]);
+  });
+
+  test("a build away from every fired spot leaves the list exactly as it was", async () => {
+    const list = [{ t: 24, X: 300, Y: 0, at: 2 }];
+    db.row = rowOf({ firedtraps: list });
+
+    await build(17, 0, 200);
+
+    expect(db.row!.firedtraps).toEqual(list);
+  });
+
   test("a wall is finished at once with its points, no worker", async () => {
     const answer = await build(17, 0, 200);
 

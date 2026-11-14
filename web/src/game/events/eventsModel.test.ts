@@ -1,6 +1,12 @@
 import { describe, expect, it } from "vitest";
 import type { CalendarView, EventView } from "@/api/events";
 import {
+  auraWaitsForKrallen,
+  krallenPenaltyNotice,
+  krallenPenaltyText,
+  grantedAuraText,
+  offBarRewards,
+  payingClaimableTiers,
   calendarDays,
   claimableCount,
   claimableTiers,
@@ -188,6 +194,69 @@ describe("the Krallen Hunt", () => {
     expect(claimableCount([topped])).toBe(0);
     expect(claimableCount([hunt({ status: "upcoming" })])).toBe(0);
   });
+
+  describe("the 3x mark: Krallen's loot aura (owner, 13 Nov 2026)", () => {
+    const UNTIL = Date.UTC(2030, 2, 1) / 1000;
+    const twoMarks = (counter: number, level: number, claimed: [boolean, boolean] = [false, false]) =>
+      hunt({
+        ladder: {
+          label: "Loot taken",
+          counter,
+          tiers: [
+            { need: 150_000_000, rewards: [{ kind: "krallen" }], claimed: claimed[0] },
+            { need: 450_000_000, rewards: [{ kind: "krallenAura", until: UNTIL }], claimed: claimed[1] },
+          ],
+        },
+        krallen: { level, maxLevel: 5, auraUntil: 0 },
+      });
+
+    it("counts toward the badge once reached; at level 5 only the 3x mark counts", () => {
+      expect(payingClaimableTiers(twoMarks(450_000_000, 2))).toEqual([0, 1]);
+      expect(payingClaimableTiers(twoMarks(449_999_999, 3, [true, false]))).toEqual([]);
+      expect(payingClaimableTiers(twoMarks(900_000_000, 5))).toEqual([1]);
+      expect(claimableCount([twoMarks(900_000_000, 5)])).toBe(1);
+      expect(claimableCount([twoMarks(900_000_000, 5, [false, true])])).toBe(0);
+    });
+
+    it("waits for Krallen: without one only the first mark counts", () => {
+      expect(auraWaitsForKrallen(twoMarks(0, 0))).toBe(true);
+      expect(payingClaimableTiers(twoMarks(500_000_000, 0))).toEqual([0]);
+      expect(auraWaitsForKrallen(twoMarks(0, 1))).toBe(false);
+    });
+
+    it("names the reward and says what its claim gave", () => {
+      const words = (type: number) => `Decoration ${type}`;
+      expect(rewardText({ kind: "krallenAura", until: UNTIL }, words)).toBe("Krallen's loot aura");
+      // An aura that is on raises no notice: the hunt card says "On until" (owner, 13 Nov 2026).
+      expect(grantedKrallenText([{ kind: "krallenAura", until: UNTIL, level: 4, hasKrallen: true }])).toBeNull();
+      expect(grantedAuraText([{ kind: "krallenAura", until: UNTIL, level: 2, hasKrallen: true }])).toBe(
+        "Loot aura won! Krallen uses it from level 3.",
+      );
+      expect(grantedAuraText([{ kind: "krallenAura", until: 0, level: 0, hasKrallen: false }])).toBe(
+        "Win Krallen first: her loot aura needs her.",
+      );
+      expect(grantedAuraText([{ kind: "shiny", amount: 5 }])).toBeNull();
+    });
+
+    it("a claim's notice keeps only what the bar or the hunt card cannot show (owner, 13 Nov 2026)", () => {
+      expect(
+        offBarRewards([
+          { kind: "resources", amounts: { r1: 10 } },
+          { kind: "shiny", amount: 5 },
+          { kind: "eventCoins", amount: 25 },
+          { kind: "krallenAura", until: UNTIL },
+        ]),
+      ).toEqual([]);
+      const kept = [
+        { kind: "krallen" },
+        { kind: "korath", power: 2 },
+        { kind: "decoration", type: 41, count: 1 },
+        { kind: "speedup", item: "SP1", count: 2 },
+        { kind: "shopItem", item: "PRO1" },
+      ] as const;
+      expect(offBarRewards([{ kind: "eventCoins", amount: 25 }, ...kept])).toEqual(kept);
+    });
+  });
 });
 
 describe("Monster Madness: Korath's powers", () => {
@@ -212,5 +281,19 @@ describe("Monster Madness: Korath's powers", () => {
       "Korath already knows Fists of Doom.",
     );
     expect(grantedKorathText([{ kind: "shiny", amount: 5 }])).toBeNull();
+  });
+});
+
+describe("the Krallen Hunt's penalty words (owner, 13 Nov 2026)", () => {
+  it("a level lost, or Krallen gone", () => {
+    expect(krallenPenaltyText({ from: 3, to: 2 })).toBe("Krallen lost a level: 3 → 2");
+    expect(krallenPenaltyText({ from: 1, to: 0 })).toBe("Krallen left");
+  });
+
+  it("the load's one-time notice: nothing, one hunt, or several from the first level to now", () => {
+    expect(krallenPenaltyNotice([])).toBeNull();
+    expect(krallenPenaltyNotice([{ from: 5, to: 4 }])).toBe("Krallen lost a level: 5 → 4");
+    expect(krallenPenaltyNotice([{ from: 3, to: 2 }, { from: 2, to: 1 }])).toBe("Krallen lost 2 levels: 3 → 1");
+    expect(krallenPenaltyNotice([{ from: 2, to: 1 }, { from: 1, to: 0 }])).toBe("Krallen left");
   });
 });

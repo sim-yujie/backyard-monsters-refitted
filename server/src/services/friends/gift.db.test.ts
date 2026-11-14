@@ -178,6 +178,7 @@ describe.skipIf(!dbName)("daily gifts on a real database (issue #375)", () => {
         userid: A,
         username: `zz_fg_${A}`,
         pic: null,
+        photo: null,
         level: expect.any(Number),
         resource: "r3",
         amount: 300,

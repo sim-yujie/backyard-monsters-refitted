@@ -1,4 +1,7 @@
 // @vitest-environment jsdom
+import { readFileSync } from "node:fs";
+import { dirname, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const api = vi.hoisted(() => ({
@@ -77,6 +80,37 @@ describe("AccountSettings", () => {
     const panes = [...document.querySelectorAll<HTMLElement>("[role='tabpanel']")];
     expect(panes).toHaveLength(4);
     for (const pane of panes) expect(pane.parentElement).toBe(scroll);
+  });
+
+  it("fits its four tabs: wider on a computer, short words on a phone (owner, 12 Nov)", async () => {
+    await open({});
+    const tab = (id: string) => document.querySelector<HTMLButtonElement>(`#account-settings-tab-${id}`)!;
+    // The two long tabs hold both words; the plain ones just their word.
+    expect(tab("look").querySelector(".account-settings__tab-long")!.textContent).toBe(SETTINGS_TEXT.tabLook);
+    expect(tab("look").querySelector(".account-settings__tab-short")!.textContent).toBe(SETTINGS_TEXT.tabLookShort);
+    expect(tab("notifications").querySelector(".account-settings__tab-long")!.textContent).toBe(
+      SETTINGS_TEXT.tabNotifications,
+    );
+    expect(tab("notifications").querySelector(".account-settings__tab-short")!.textContent).toBe(
+      SETTINGS_TEXT.tabNotificationsShort,
+    );
+    expect(tab("account").textContent).toBe(SETTINGS_TEXT.tabAccount);
+    const here = dirname(fileURLToPath(import.meta.url));
+    const ui = readFileSync(resolve(here, "styles/ui.css"), "utf8").replace(/\r\n/g, "\n");
+    // Modern's 22px tab ends need the room: at 560px "Notifications" ran under the frame.
+    // Its own max-width too, later in the file than `.panel`'s 560px cap, which
+    // otherwise kept the window at 560px (lead, 1280x800 Modern, 12 Nov 2026).
+    expect(ui).toMatch(
+      /\.account-settings-popup \{\s*width: min\(600px, [^;]+;\s*max-width: min\(92vw, 600px\);/,
+    );
+    expect(ui.indexOf("max-width: min(92vw, 560px)")).toBeGreaterThan(-1);
+    expect(ui.indexOf(".account-settings-popup {")).toBeGreaterThan(
+      ui.indexOf("max-width: min(92vw, 560px)"),
+    );
+    expect(ui).toMatch(/\.account-settings__tab-short \{\s*display: none;/);
+    expect(ui).toMatch(
+      /@media \(width <= 500px\) \{\s*\.account-settings__tab-long \{\s*display: none;\s*\}\s*\.account-settings__tab-short \{\s*display: inline;/,
+    );
   });
 
   it("switches tabs by click and arrow keys, and a new tab opens at its top", async () => {
@@ -443,6 +477,20 @@ describe("AccountSettings", () => {
     expect(document.querySelector("#settings-classic-art")).toBeNull();
   });
 
+  it("shows the yard ground swatches of the Style picked above (owner, 12 Nov 2026)", async () => {
+    localStorage.clear();
+    await open({});
+    const grounds = () =>
+      [...document.querySelectorAll<HTMLElement>(".ground-picker__swatch")].map((swatch) => swatch.dataset["ground"]);
+    expect(grounds()).toHaveLength(6);
+    expect(grounds()[0]).toBe("meadow");
+    const look = document.querySelector<HTMLSelectElement>("#settings-look")!;
+    look.value = "classic";
+    look.dispatchEvent(new Event("change"));
+    expect(grounds()).toEqual(["original", "rock", "sand", "crater"]);
+    localStorage.clear();
+  });
+
   it("offers the music on its own, following the Style by default, kept in this browser for the next load", async () => {
     localStorage.clear();
     await open({});
@@ -617,6 +665,71 @@ describe("AccountSettings tabs", () => {
     await settle();
     expect(pane("account").querySelectorAll(".avatar-picker__tile")).toHaveLength(12);
     expect(pane("account").textContent).toContain(SETTINGS_TEXT.loadFailed);
+  });
+
+  it("opens Account with the player's own profile, then username and Shiny Lock (owner, 13 Nov 2026)", async () => {
+    api.fetchAccount.mockResolvedValue({
+      username: "Agent",
+      canChangeUsername: true,
+      nextChangeAt: null,
+      shinyLocked: false,
+      privacy: { hideOnline: false, friendRequests: true },
+      country: { country: null, countryAsked: false, countryChannel: null },
+      notificationsOff: [],
+    });
+    const fetchProfile = vi.fn(() =>
+      Promise.resolve({
+        userid: 2503,
+        username: "Agent",
+        pic: null,
+        bio: "Hi",
+        photoVersion: null,
+        stats: {
+          level: 12,
+          townHall: 5,
+          empirePoints: 100,
+          achievements: null,
+          friends: 0,
+          joined: null,
+          alliance: null,
+        },
+        own: true,
+        reported: false,
+        photoState: { hidden: false, blocked: false, canUpload: true, reason: null, nextAt: null, minLevel: 10 },
+      }),
+    );
+    const profileApi = {
+      fetchProfile,
+      saveBio: vi.fn(),
+      uploadPhoto: vi.fn(),
+      removePhoto: vi.fn(),
+      reportPhoto: vi.fn(),
+    };
+    // What the other tabs hold without the profile, to compare.
+    openAccountSettings({ container: document.body });
+    await settle();
+    const before = (["look", "social", "notifications"] as const).map((id) => pane(id).children.length);
+    const accountBefore = [...pane("account").children].map((child) => child.className);
+    document.body.replaceChildren();
+
+    openAccountSettings({
+      container: document.body,
+      avatarPicker: new AvatarPicker({ current: "owl", picked: true, onPick: () => Promise.resolve() }),
+      profile: { userid: 2503, api: profileApi },
+    });
+    await settle();
+    expect(fetchProfile).toHaveBeenCalledWith(2503);
+    const parts = [...pane("account").children].map((child) => child.className);
+    expect(parts[0]).toContain("own-profile");
+    // Username and Shiny Lock follow, as before.
+    expect(parts.slice(1)).toEqual(accountBefore);
+    const section = pane("account").querySelector<HTMLElement>(".own-profile")!;
+    expect(section.querySelector(".profile__new-photo")).not.toBeNull();
+    expect(section.querySelectorAll(".avatar-picker__tile")).toHaveLength(12);
+    expect(section.querySelector<HTMLTextAreaElement>(".profile__bio-input")?.value).toBe("Hi");
+    expect(section.querySelector(".own-profile__preview")).not.toBeNull();
+    // The other tabs are untouched.
+    expect((["look", "social", "notifications"] as const).map((id) => pane(id).children.length)).toEqual(before);
   });
 
   it("keeps Reduce effects with the game effects, in this browser", async () => {

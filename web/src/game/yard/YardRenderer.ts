@@ -20,6 +20,7 @@ import { routeBetween } from "@/game/guide/MonsterWalkIn";
 import { yardArtAtlas, type YardArtAtlas } from "./yardAtlas";
 import { loadSheet, MonsterSheetTextures, prefersReducedMotion } from "@/game/attack/AttackBattleLayer";
 import { currentSeason, onSeasonChange, type Season } from "@/game/season";
+import { onGroundChange } from "./groundChoice";
 import { classicLook } from "@/game/classicLook";
 import { thanksgivingSkin } from "./thanksgivingSkin";
 import { YardTurkeys } from "./YardTurkeys";
@@ -29,6 +30,7 @@ import { blueprintToYard, blueprintToWorld } from "./planner/blueprint";
 import { PlannerOverlay, type PlannerVisuals } from "./planner/PlannerOverlay";
 import { diamondCorners, type Corners, type Diamond } from "./planner/marquee";
 import { fromIso, toIso, yardFitRect, yardToWorld, type Point, type Rect } from "./YardGrid";
+import { loadMushroomArt, mushroomAnchor, mushroomArtIndex, mushroomPictureFor } from "./mushroomArt";
 import { mushroomAt, mushroomKey, mushroomZIndex } from "./mushroomPick";
 import { MUSHROOM_POP_SECONDS, mushroomPopScale, newMushroomKeys } from "./mushroomPop";
 import type { Yard, YardBuilding, YardMushroom } from "./yardModel";
@@ -186,9 +188,17 @@ export class YardRenderer {
   private pumpkin: Texture | null = null;
   /** Whether the pumpkin is being asked for, so a second Halloween does not ask twice. */
   private pumpkinLoading = false;
+  /**
+   * The painted mushrooms of this page's look, one per art variant
+   * (`mushroomArt.ts`), once they have loaded; a missing one is null and its
+   * mushrooms keep the drawn glyph.
+   */
+  private mushroomArt: readonly (Texture | null)[] | null = null;
   /** Whether `destroy` has run: a pumpkin still being retried then gives up. */
   private destroyed = false;
   private unwatchSeason: (() => void) | null = null;
+  /** Follows the ground the player picks in Settings (`groundChoice.ts`). */
+  private unwatchGround: (() => void) | null = null;
   private yard: Yard | null = null;
   /** Which buildings are working and the clock to read it on (#255); see `setWork`. */
   private work: WorkSource | null = null;
@@ -248,11 +258,14 @@ export class YardRenderer {
     this.atlas ??= yardArtAtlas(renderer);
     this.pixi = renderer;
     this.life.useRenderer(renderer);
+    if (!this.mushroomArt) this.loadMushroomArt();
     // The yard follows the season from here on (`game/season.ts`).
     if (!this.unwatchSeason) {
       this.setSeason(currentSeason());
       this.unwatchSeason = onSeasonChange((season) => this.setSeason(season));
     }
+    // And the ground the player picks, at once (owner, 12 Nov 2026).
+    this.unwatchGround ??= onGroundChange((ground) => this.ground.setGround(ground));
   }
 
   /**
@@ -293,6 +306,19 @@ export class YardRenderer {
     }
     this.dressYard();
     this.redrawMushrooms();
+  }
+
+  /**
+   * Asks for the painted mushrooms once. The yard opens on the drawn glyph and
+   * swaps the pictures in where the mushrooms stand when they arrive.
+   */
+  private loadMushroomArt(): void {
+    this.mushroomArt = [];
+    void loadMushroomArt(() => this.destroyed).then((textures) => {
+      if (this.destroyed) return;
+      this.mushroomArt = textures;
+      this.redrawMushrooms();
+    });
   }
 
   /** Whether turkeys stand in for the mushrooms now: Thanksgiving, once their pictures are in. */
@@ -386,14 +412,10 @@ export class YardRenderer {
       return;
     }
     const keys = new Set<string>();
-    const pumpkin = this.season === "halloween" ? this.pumpkin : null;
     for (const mushroom of yard.mushrooms) {
       const key = mushroomKey(mushroom);
-      const sprite = new Sprite(pumpkin ?? atlas.mushroom);
-      // Both stand on their base: the glyph's stalk foot, the pumpkin's bottom.
-      if (pumpkin) sprite.anchor.set(0.5, PUMPKIN_BASE);
-      else sprite.anchor.set(0.5, 0.85);
-      sprite.scale.set(this.mushroomSize());
+      const sprite = new Sprite();
+      this.dressMushroom(sprite, mushroom.variant, atlas);
       sprite.position.set(mushroom.worldX, mushroom.worldY);
       // Among the buildings, by depth: a wall behind it no longer covers it.
       sprite.eventMode = "none";
@@ -466,10 +488,12 @@ export class YardRenderer {
     if (!target || range === null) return;
 
     const { rx, ry } = rangeRadii(range, YardView.ISO);
+    // White, as Flash drew it, unless the ground would swallow white (Snow).
+    const colour = this.ground.rangeInk() ?? RANGE_COLOUR;
     this.rangeOval
       .ellipse(0, 0, rx, ry)
-      .fill({ color: RANGE_COLOUR, alpha: RANGE_FILL_ALPHA })
-      .stroke({ color: RANGE_COLOUR, alpha: RANGE_EDGE_ALPHA, width: 1, pixelLine: true });
+      .fill({ color: colour, alpha: RANGE_FILL_ALPHA })
+      .stroke({ color: colour, alpha: RANGE_EDGE_ALPHA, width: 1, pixelLine: true });
     const offset = this.buildings.offsetOf(target.id);
     this.rangeOval.position.set(target.centreX + offset.x, target.centreY + offset.y);
   }
@@ -1170,6 +1194,8 @@ export class YardRenderer {
     this.openSheets();
     this.unwatchSeason?.();
     this.unwatchSeason = null;
+    this.unwatchGround?.();
+    this.unwatchGround = null;
     this.collect.destroy();
     this.giblets.destroy();
     this.blends.clear();
@@ -1260,13 +1286,34 @@ export class YardRenderer {
   /** Swaps every mushroom sprite's picture for the season's, where they stand. */
   private redrawMushrooms(): void {
     const atlas = this.atlas;
-    if (!atlas) return;
-    const pumpkin = this.season === "halloween" ? this.pumpkin : null;
-    for (const sprite of this.mushroomSprites.values()) {
-      sprite.texture = pumpkin ?? atlas.mushroom;
-      sprite.anchor.set(0.5, pumpkin ? PUMPKIN_BASE : 0.85);
-      sprite.scale.set(this.mushroomSize());
+    if (!atlas || !this.yard) return;
+    for (const mushroom of this.yard.mushrooms) {
+      const sprite = this.mushroomSprites.get(mushroomKey(mushroom));
+      if (sprite) this.dressMushroom(sprite, mushroom.variant, atlas);
     }
+  }
+
+  /**
+   * Gives a mushroom's sprite its picture, standing on its spot: the Halloween
+   * pumpkin in season, else its painted mushroom (`mushroomArt.ts`), else,
+   * until that arrives or if it never does, the drawn glyph.
+   */
+  private dressMushroom(sprite: Sprite, variant: number, atlas: YardArtAtlas): void {
+    const pumpkin = this.season === "halloween" ? this.pumpkin : null;
+    const painted = this.mushroomArt?.[mushroomArtIndex(variant)] ?? null;
+    if (pumpkin) {
+      sprite.texture = pumpkin;
+      sprite.anchor.set(0.5, PUMPKIN_BASE);
+    } else if (painted) {
+      sprite.texture = painted;
+      const anchor = mushroomAnchor(mushroomPictureFor(variant), painted.width, painted.height);
+      sprite.anchor.set(anchor.x, anchor.y);
+    } else {
+      // The glyph's stalk foot.
+      sprite.texture = atlas.mushroom;
+      sprite.anchor.set(0.5, 0.85);
+    }
+    sprite.scale.set(this.mushroomSize());
   }
 
   /** How big a mushroom sprite stands at rest: the Halloween pumpkin a bit bigger. */

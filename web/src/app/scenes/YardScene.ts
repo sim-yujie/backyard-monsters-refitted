@@ -1,5 +1,7 @@
+import type { DecorKind } from "@/game/yard/decorShop";
 import { getSession, logout } from "@/api/auth";
 import { setCurrentAllianceBonuses } from "@/game/alliance/allianceBonuses";
+import { allianceButtonShows } from "@/game/alliance/allianceButton";
 import { setAllianceTradeFrom } from "@/game/alliance/tradeSwitch";
 import { chatApi, chatConfigFrom } from "@/api/chat";
 import { loadAttackOn, loadOwnBase, loadOwnYard, takeAwayJobs, viewBase } from "@/api/base";
@@ -129,6 +131,7 @@ import {
 } from "@/game/tribeEditor/tribeEditSession";
 import { TribeEditBar, TribePicker } from "@/ui/tribeEditor/TribeEditorPanel";
 import { Notices } from "@/ui/maproom/Notices";
+import { krallenPenaltyNotice } from "@/game/events/eventsModel";
 import { showTakenOver } from "@/ui/maproom/TakeoverDialog";
 import { showBuildMapRoom } from "@/ui/maproom1/MapRoomPrompt";
 import { MonstersScreen } from "@/ui/monsters/MonstersScreen";
@@ -139,6 +142,7 @@ import { MailDoor } from "@/ui/mail/MailDoor";
 import { NotificationDoor } from "@/ui/notifications/NotificationDoor";
 import { DefencesDoor } from "@/ui/defences/DefencesDoor";
 import { AllianceDoor } from "@/ui/alliance/AllianceDoor";
+import { ReportsDoor } from "@/ui/moderation/ReportsDoor";
 import { setWatchRun } from "@/game/autoAttack/watchRun";
 import { WorldChatBox } from "@/ui/chat/WorldChatBox";
 import { centredLayout, closeCentreWindow, onCentreWindowOpen } from "@/ui/centreWindow";
@@ -165,7 +169,7 @@ import { showGoldenMushroom } from "@/ui/yard/MushroomReward";
 import { FriendsButton } from "@/ui/friends/FriendsButton";
 import { HelpPanel } from "@/ui/friends/HelpPanel";
 import { YardDock, type YardDockOptions } from "@/ui/yard/YardDock";
-import { StarterKitPicker } from "@/ui/yard/StarterKitPicker";
+import { kitBoughtText, StarterKitPicker } from "@/ui/yard/StarterKitPicker";
 import { YardMinimap } from "@/ui/yard/YardMinimap";
 import { askForWorker } from "@/ui/yard/WorkersBusyBox";
 import { icon } from "@/ui/icons";
@@ -437,6 +441,8 @@ export class YardScene implements Scene {
   private defences: DefencesDoor | null = null;
   /** The Alliance button in the More fan and its window (beta 7): the own yard of a Map Room 2 player. */
   private alliance: AllianceDoor | null = null;
+  /** Moderators only (owner, 12 Nov 2026): chat reports in the game. */
+  private reports: ReportsDoor | null = null;
   /**
    * World chat's box (#282), on every yard while the player's "World chat"
    * switch is on; the connection is `worldChat`'s and outlives it.
@@ -654,7 +660,7 @@ export class YardScene implements Scene {
       onViewYard: (userId) => this.viewChatPlayer(userId),
       // An Alliance room under-attack alert's Map button (beta 7): the map, opened on that yard.
       onShowOnMap: (cell) => {
-        setMapFocus({ cell: { col: cell.x, row: cell.y } });
+        setMapFocus({ cell: { col: cell.x, row: cell.y }, open: true });
         context.goTo(sceneForMap(MapRoomChoice.MAP_ROOM_2));
       },
     });
@@ -719,7 +725,7 @@ export class YardScene implements Scene {
         live: { chat: worldChat },
         onOpen: () => this.makeRoomForMail(),
         onShowOnMap: (cell) => {
-          setMapFocus({ cell });
+          setMapFocus({ cell, open: true });
           context.goTo(sceneForMap(MapRoomChoice.MAP_ROOM_2));
         },
         // An invitation to move accepted here (#205): its price left the pool, which the server now holds.
@@ -768,8 +774,23 @@ export class YardScene implements Scene {
         onBuildObservatory: () => this.openBuildMenu(OBSERVATORY_TYPE),
         onOpenMap: () => this.openMap(),
         onChanged: () => void this.store?.refresh(),
+        // Joined, founded, left or kicked: the More menu's button follows at once.
+        onMembership: () => {
+          if (this.store) this.showDefences(this.store);
+        },
       });
       this.defences.button.element.after(this.alliance.button);
+      // Reports (owner, 12 Nov 2026): last in the More fan, shown only to moderators (the server says who).
+      this.reports = new ReportsDoor({
+        container: context.overlay.modal,
+        onOpen: () => {
+          this.mail?.close();
+          this.bell?.close();
+          this.defences?.close();
+          this.alliance?.close();
+        },
+      });
+      this.alliance.button.after(this.reports.button);
     }
     context.overlay.content.append(this.status);
     this.inset = { top: this.hud.element.getBoundingClientRect().bottom, bottom: 0 };
@@ -824,6 +845,8 @@ export class YardScene implements Scene {
     this.defences = null;
     this.alliance?.destroy();
     this.alliance = null;
+    this.reports?.destroy();
+    this.reports = null;
     this.chat?.destroy();
     this.chat = null;
     this.friendsButton?.destroy();
@@ -1020,6 +1043,8 @@ export class YardScene implements Scene {
       // The alliance's strengths and weaknesses, for prices outside the yard store (Starter Kits, outpost hatching).
       if (!target && !tribe && store?.kind === "main") {
         setCurrentAllianceBonuses(response.alliancedata);
+        // The store started (and drew the More menu) before this was known: the Alliance button asks again.
+        this.showDefences(store);
         // Alliance trading's switch, for chat's Send and Trade buttons (off in beta 7).
         setAllianceTradeFrom(response.alliancedata);
       }
@@ -1075,6 +1100,10 @@ export class YardScene implements Scene {
       // A horse on the own main yard: its army's small sheets start now, as
       // its fight has no warning to fetch them in (`raidSheets.ts`).
       if (store?.kind === "main" && findTrojanHorse(yard.buildings)) warmTrojanSheets(false);
+      // The Krallen Hunt took a level, or Krallen, since the last load
+      // (owner, 13 Nov 2026): told once, the server marks it told.
+      const krallenPenalty = store?.kind === "main" ? krallenPenaltyNotice(response.krallenpenalty ?? []) : null;
+      if (krallenPenalty) this.notices.show("krallen-penalty", krallenPenalty, { level: "warning", timeoutMs: 10_000 });
       if (store?.kind === "main" && response.trojanNew) {
         const horse = findTrojanHorse(yard.buildings);
         if (horse && this.camera) {
@@ -1210,7 +1239,8 @@ export class YardScene implements Scene {
       this.dock?.setAttack({ disabled: false, title });
       return;
     }
-    this.notices.show("attack", `Starting the attack on ${attack.name}…`, { level: "info" });
+    // The Attack button shows the start (busy) until the scene changes: no notice.
+    this.dock?.setAttack({ disabled: true, title: `Starting the attack on ${attack.name}…`, busy: true });
 
     try {
       const load = await loadAttackOn(attack);
@@ -1610,15 +1640,17 @@ export class YardScene implements Scene {
     // brings the Monsters screen to the middle, which closes the panel
     // (owner, 9 Nov 2026, option A; it opened beside the panel before, D4).
     // A phone keeps its old way: the click opens the building's tab as a
-    // sheet over the panel, which waits under it. A Housing's panel is the
-    // Housing panel itself (#170), with the tab's army in it, so the screen
-    // steps aside for it. Still on its first build (level 0), the building
-    // has no working window yet: the panel's construction info is all a
-    // click should open (#281).
+    // sheet over the panel, which waits under it (the Champion Cage and
+    // Chamber their Champion tab, the Juicer and Monster Bunker the Housing
+    // tab, since 12 Nov 2026). A Housing's panel is the Housing panel itself
+    // (#170), with the tab's army in it, so the screen steps aside for it.
+    // Still on its first build (level 0), the building has no working window
+    // yet: the panel's construction info is all a click should open (#281).
     if (centredLayout()) return;
     const tab = monstersTabFor(building.type);
-    if (tab === MonstersTabId.HOUSING) this.monsters?.close();
-    else if (tab && this.binding && building.level > 0) {
+    if (building.type === MonsterBuilding.HOUSING || building.type === MonsterBuilding.HOUSING_BUNKER) {
+      this.monsters?.close();
+    } else if (tab && this.binding && building.level > 0) {
       this.openMonsters(tab, { buildingId: building.id });
     }
   }
@@ -1748,9 +1780,10 @@ export class YardScene implements Scene {
   }
 
   /** Opens the Build window on its Decorations tab (the HUD's event coin counter). */
-  private openDecorations(): void {
+  private openDecorations(kind?: DecorKind): void {
     this.openBuildMenu();
     this.buildMenu?.open(BuildCategory.DECORATIONS);
+    if (kind) this.buildMenu?.openKind(kind);
   }
 
   /**
@@ -2008,6 +2041,7 @@ export class YardScene implements Scene {
     }
     // An outpost is a Map Room 2 cell: its map is that world, opened on it.
     if (store.kind === "outpost") {
+      // Centred on the outpost just left, its card shut: the player asked for the map, not the card (owner, 12 Nov 2026).
       if (store.target.cell) setMapFocus({ cell: store.target.cell });
       context.goTo(sceneForMap(MapRoomChoice.MAP_ROOM_2));
       return;
@@ -2025,8 +2059,11 @@ export class YardScene implements Scene {
   /** The Defences button: only Map Room 2 keeps defence replays (until #246); an outpost is a Map Room 2 cell. */
   private showDefences(store: YardStore): void {
     this.defences?.setAvailable(store.kind === "outpost" || mapRoomOf(store.save) === MapRoomChoice.MAP_ROOM_2);
-    // Alliances are the player's, so Map Room 2's main yard and outposts show the button; the Inferno does not.
-    this.alliance?.setAvailable(store.kind === "outpost" || (store.kind !== "inferno" && mapRoomOf(store.save) === MapRoomChoice.MAP_ROOM_2));
+    // Alliances are the player's, so Map Room 2's main yard and outposts may show the button; the Inferno does not.
+    // It waits for a finished Observatory in the main yard, or for the player to be in an alliance already
+    // (owner, 13 Nov 2026; `game/alliance/allianceButton.ts`).
+    const mapRoom2 = store.kind === "outpost" || (store.kind !== "inferno" && mapRoomOf(store.save) === MapRoomChoice.MAP_ROOM_2);
+    this.alliance?.setAvailable(allianceButtonShows({ kind: store.kind, mapRoom2, buildings: store.yard.buildings }));
   }
 
   /** Carries out what another screen asked the own yard to open (`yardIntent.ts`). */
@@ -2310,8 +2347,7 @@ export class YardScene implements Scene {
       ...(this.save?.firedtraps ? { firedtraps: this.save.firedtraps } : {}),
       // An outpost's Apply and batch actions act on it (outposts WP3).
       ...(this.store?.baseid !== undefined ? { baseid: this.store.baseid } : {}),
-      onApplied: (buildingdata, moved, resources, storage) =>
-        this.onApplied(buildingdata, moved, resources, storage),
+      onApplied: (buildingdata, _moved, resources, storage) => this.onApplied(buildingdata, resources, storage),
       onYardChanged: (buildingdata, resources, mushrooms) =>
         this.onYardChanged(buildingdata, resources, mushrooms),
       onView: (view) => this.setView(view),
@@ -2507,7 +2543,6 @@ export class YardScene implements Scene {
    */
   private onApplied(
     buildingdata: BuildingDataMap,
-    moved: number,
     resources: Resources | undefined,
     storage: AppliedStorage,
   ): void {
@@ -2530,14 +2565,11 @@ export class YardScene implements Scene {
     });
 
     // Raised here rather than by the planner because the planner has just been
-    // closed and clears its own notices on the way out (§8, Q4).
-    const moveText = [
-      `Moved ${moved} building${moved === 1 ? "" : "s"}.`,
-      storageText(storage),
-    ]
-      .filter(Boolean)
-      .join(" ");
-    this.notices.show("yard-applied", moveText, { level: "info", timeoutMs: 5_000 });
+    // closed and clears its own notices on the way out (§8, Q4). The moved
+    // buildings show themselves; only what went into or out of storage is
+    // said (owner, 13 Nov 2026).
+    const stored = storageText(storage);
+    if (stored) this.notices.show("yard-applied", stored, { level: "info", timeoutMs: 5_000 });
   }
 
   /**
@@ -2702,7 +2734,7 @@ export class YardScene implements Scene {
         },
         openShop: () => this.openShop(),
         openAlliance: () => this.alliance?.open(),
-        openDecorations: () => this.openDecorations(),
+        openDecorations: (kind) => this.openDecorations(kind),
         startBank: (predicted) => this.startBank(predicted),
         markHatcheries: (marks) => this.markHatcheries(marks),
       },
@@ -2759,7 +2791,8 @@ export class YardScene implements Scene {
       },
       focusBuilding: (id, champion) => {
         this.focusBuilding(id);
-        if (champion && this.selected?.id === id) this.panel?.openChampion();
+        // The champions' controls live in the Monsters screen's Champion tab (owner, 12 Nov 2026).
+        if (champion && this.selected?.id === id) this.openMonsters(MonstersTabId.CHAMPION, { buildingId: id });
       },
       closePanel: () => this.select(null),
       selectedBuilding: () => this.selected?.id ?? null,
@@ -2998,13 +3031,8 @@ export class YardScene implements Scene {
       onBought: (report, kit) => {
         if (this.binding !== binding) return;
         this.notices.clear(OUTPOST_HINT_NOTICE);
-        this.notices.show(
-          "starter-kit",
-          report.pay === "shiny"
-            ? `${kit.name} built: ${report.placed} buildings are ready.`
-            : `${kit.name} placed: ${report.placed} buildings are building up, without your worker.`,
-          { level: "info", timeoutMs: 8_000 },
-        );
+        const text = kitBoughtText(report, kit);
+        if (text) this.notices.show("starter-kit", text, { level: "info", timeoutMs: 8_000 });
       },
       onClose: () => {
         this.kitPicker = null;
@@ -3025,7 +3053,7 @@ export class YardScene implements Scene {
         if (season === "thanksgiving") setTimeout(show, GOLDEN_TURKEY_DELAY_MS);
         else show();
       },
-      ordinary: (quip) => this.notices.show("mushroom", quip, { level: "info", timeoutMs: 4000 }),
+      huntCount: (line) => this.notices.show("mushroom", line, { level: "info", timeoutMs: 4000 }),
       refused: (message) =>
         this.notices.show("mushroom", message, { level: "error", timeoutMs: 5000 }),
     };

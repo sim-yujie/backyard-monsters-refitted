@@ -12,7 +12,7 @@ import type { EntityManager as SqlEntityManager } from "@mikro-orm/postgresql";
  * writes, and every change is one atomic statement:
  *
  * - {@link EventCoinStore.grant} adds coins. With an `awardKey` it pays at
- *   most once per player and key (a weekend's "played", say): a second call
+ *   most once per player and key (a weekend day's check-in, say): a second call
  *   finds the key in the log and pays nothing.
  * - {@link EventCoinStore.spend} takes coins only while the balance covers
  *   them, so two tabs racing to spend the last 50 cannot both win.
@@ -23,11 +23,12 @@ import type { EntityManager as SqlEntityManager } from "@mikro-orm/postgresql";
  * then the coin row; nothing here ever locks a save, so a coin write outside
  * a yard action cannot wait on one.
  *
- * Where coins come from (owner, 8 Nov 2026): only big 1-2 week events
- * (Halloween, Thanksgiving), never weekend events. A big event with a
- * `coins` field pays them from its login calendar and its ladder; the
- * numbers live in one place, `BIG_EVENT_COINS` in
- * `game-data/events/eventRewards.ts` (about 400 per full 14-day event).
+ * Where coins come from: big 1-2 week events (Halloween, Thanksgiving;
+ * owner, 8 Nov 2026). A big event with a `coins` field pays them from its
+ * login calendar and its ladder; the numbers live in one place,
+ * `BIG_EVENT_COINS` in `game-data/events/eventRewards.ts` (about 400 per
+ * full 14-day event). And weekend events (owner, 13 Nov 2026):
+ * `weekendCoins.ts`, a daily check-in of 50 while one runs.
  */
 
 /** The most coins a balance holds (the `integer` column). */
@@ -36,7 +37,7 @@ export const COINS_MAX = 2_147_483_647;
 /** One payment, for the answer and the client's "+25" moment. */
 export interface CoinGain {
   readonly amount: number;
-  /** A short reason, e.g. `calendar`, `ladder`. */
+  /** A short reason, e.g. `calendar`, `ladder`, `weekend-checkin`. */
   readonly reason: string;
 }
 

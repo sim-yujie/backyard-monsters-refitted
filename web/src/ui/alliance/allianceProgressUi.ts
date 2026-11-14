@@ -37,10 +37,13 @@ export const STAT_INFO: Readonly<Record<string, { readonly label: string; readon
   towerDamage: { label: "Tower damage", icon: "damage" },
 };
 
-/** "+15%", "−10%", "+1" (reach in cells). */
+/**
+ * "+15%", "−10%", "+1" (reach in cells). Two decimals, since one star can move
+ * a value a quarter point (Slimeattikus: −4.75%).
+ */
 export const statValue = (stat: string, value: number): string => {
   const sign = value > 0 ? "+" : value < 0 ? "−" : "";
-  const amount = Math.abs(Math.round(value * 10) / 10);
+  const amount = Math.abs(Math.round(value * 100) / 100);
   return `${sign}${amount}${STAT_INFO[stat]?.cells ? "" : "%"}`;
 };
 
@@ -111,6 +114,46 @@ export const todayCard = (alliance: MyAlliance): HTMLElement | null => {
 
 const tierWord = (tier: GoalView["tier"]): string => tier.charAt(0).toUpperCase() + tier.slice(1);
 
+type MenuTier = NonNullable<MyAlliance["goal_menu"]>[number]["tiers"][number];
+
+/**
+ * A goal target short enough for a tier button, never rounded: "450M",
+ * "2.25B", "18K", "90" (up to two decimals, trailing zeros dropped).
+ */
+export const shortTarget = (value: number): string => {
+  const units: [number, string][] = [
+    [1_000_000_000, "B"],
+    [1_000_000, "M"],
+    [1_000, "K"],
+  ];
+  for (const [unit, word] of units) {
+    if (value >= unit && Number.isInteger((value * 100) / unit)) return `${(value / unit).toFixed(2).replace(/\.?0+$/, "")}${word}`;
+  }
+  return formatAmount(value);
+};
+
+/**
+ * The goal picker's head: one column a tier, with who it is sized for (an
+ * icon and "~3") and what it pays ("★ 15"). The same for every goal, so said
+ * once (owner, 12 Nov 2026: targets never scale with the member count).
+ */
+const goalMenuHead = (tiers: readonly MenuTier[]): HTMLElement => {
+  const head = make("div", "alliance-goal-menu__head");
+  for (const tier of tiers) {
+    const col = make("div", `alliance-goal-menu__col alliance-goal-menu__col--${tier.tier}`);
+    col.append(make("span", "alliance-goal-menu__col-tier", tierWord(tier.tier)));
+    if (tier.players !== undefined) {
+      const players = make("span", "alliance-goal-menu__players");
+      players.title = `Sized for about ${tier.players} active players`;
+      players.append(gameIcon("friends", { size: 16, decorative: true }), make("span", "", `~${tier.players}`));
+      col.append(players);
+    }
+    col.append(make("span", "alliance-goal-menu__pays", `★ ${formatAmount(tier.points)}`));
+    head.append(col);
+  }
+  return head;
+};
+
 /** The week's goals, with Add and Remove for the Leader and Officers. */
 export const goalsCard = (
   alliance: MyAlliance,
@@ -150,17 +193,21 @@ export const goalsCard = (
     if (adding.open) {
       const taken = new Set(goals.map((g) => g.kind));
       const menu = make("div", "alliance-goal-menu");
+      const firstTiers = alliance.goal_menu?.[0]?.tiers;
+      if (firstTiers) menu.append(goalMenuHead(firstTiers));
       for (const item of alliance.goal_menu ?? []) {
         if (taken.has(item.kind)) continue;
         const line = make("div", "alliance-goal-menu__row");
         line.append(make("span", `alliance-goal-menu__name${item.only ? " alliance-goal-menu__name--only" : ""}`, item.name));
         for (const tier of item.tiers) {
+          const sized = tier.players !== undefined ? `, sized for about ${tier.players} players` : "";
           const pick = button(
-            `${tierWord(tier.tier)} ${formatAmount(tier.target)}`,
+            shortTarget(tier.target),
             `btn--outline btn--small alliance-goal-menu__tier alliance-goal-menu__tier--${tier.tier}`,
             () => host.run(() => api.setGoal(item.kind, tier.tier)),
-            `★ ${tier.points}`,
+            `${tierWord(tier.tier)}: ${formatAmount(tier.target)} · ★ ${formatAmount(tier.points)}${sized}`,
           );
+          pick.setAttribute("aria-label", `${item.name}, ${tierWord(tier.tier)} ${formatAmount(tier.target)}`);
           line.append(pick);
         }
         menu.append(line);
@@ -248,27 +295,57 @@ const figureWithArt = (c: ConstellationView, slot: number, saved: MyAlliance["st
   return holder;
 };
 
-/** One figure: 10 stars, lit ones gold, the next 2 ringed with the price on the first. */
+/**
+ * Real night-sky stars (owner, 12 Nov: "more realistic looking stars, not
+ * cartoon or game star icons"), rendered as light by
+ * `design/constellation-stars/real/render_stars.py`: a white-hot core, a soft
+ * coloured bloom and four thin diffraction spikes when lit; a faint small
+ * point when not; that point with a faint gold halo ring for the next one to
+ * buy. All are drawn at one scale (128 px picture = `size` 47 box units, about
+ * 40 px on a ~170 px card), so their cores match; the glow and spikes fill
+ * the rest and fade out before the picture's edge.
+ */
+export const STAR_ART = {
+  lit: { file: "star-lit-white@2x.webp", size: 47 },
+  next: { file: "star-next@2x.webp", size: 47 },
+  dim: { file: "star-dim@2x.webp", size: 23.5 },
+} as const;
+
+/** Each lit star's colour by its number, as real skies mix them: blue-white, white, pale gold. */
+export const STAR_TINTS = ["white", "blue", "white", "gold", "blue", "white", "gold", "blue", "white", "gold"] as const;
+
+/** How far a line stops short of each star, in box units, as on a star map. */
+const LINE_GAP = 6;
+
+const starArt = (file: string): string => `${import.meta.env.BASE_URL}ui/stars/${file}`;
+
+/** One figure: 10 stars, lit ones shining, the next one haloed and tagged with its price. */
 const figure = (c: ConstellationView, slot: number, saved: MyAlliance["star_figures"]): SVGSVGElement => {
   const { stars, lines } = figureFor(c.id, slot, saved);
-  const lit = c.steps * 2;
+  const lit = c.steps;
   const box = svg("svg", { viewBox: `0 0 ${FIGURE_WIDTH} ${FIGURE_HEIGHT}`, class: "alliance-sky__figure", "aria-hidden": "true" });
   for (const [a, b] of lines) {
-    const [x1, y1] = stars[a]!;
-    const [x2, y2] = stars[b]!;
+    const [ax, ay] = stars[a]!;
+    const [bx, by] = stars[b]!;
+    const t = Math.min(LINE_GAP / Math.max(Math.hypot(bx - ax, by - ay), 1e-6), 0.4);
+    const [x1, y1, x2, y2] = [ax + (bx - ax) * t, ay + (by - ay) * t, bx - (bx - ax) * t, by - (by - ay) * t];
     box.append(svg("line", { x1, y1, x2, y2, class: `alliance-sky__line${a < lit && b < lit ? " alliance-sky__line--lit" : ""}` }));
   }
   stars.forEach(([x, y], i) => {
-    const state = i < lit ? "lit" : i < lit + 2 && c.next_price !== null ? "next" : "dim";
-    if (state === "next") box.append(svg("circle", { cx: x, cy: y, r: 9, class: "alliance-sky__ring" }));
-    box.append(svg("circle", { cx: x, cy: y, r: state === "lit" ? 5 : 3.5, class: `alliance-sky__star alliance-sky__star--${state}` }));
+    const state = i < lit ? "lit" : i === lit && c.next_price !== null ? "next" : "dim";
+    const { size } = STAR_ART[state];
+    const file = state === "lit" ? `star-lit-${STAR_TINTS[i % STAR_TINTS.length]}@2x.webp` : STAR_ART[state].file;
+    const star = svg("image", { href: starArt(file), x: x - size / 2, y: y - size / 2, width: size, height: size, class: `alliance-sky__star alliance-sky__star--${state}` });
+    // Lit stars twinkle out of step with each other (CSS; still when the player asks for less motion).
+    if (state === "lit") star.style.animationDelay = `${-((i * 7 + slot * 3) % 10) * 0.37}s`;
+    box.append(star);
   });
   if (c.next_price !== null) {
     const [x, y] = stars[lit]!;
     const tag = svg("g", { class: "alliance-sky__tag" });
     // Clear of the figure: above the star, or below when it is near the top;
     // kept inside the box at the sides.
-    const ty = y < 30 ? y + 22 : y - 16;
+    const ty = y < 32 ? y + 24 : y - 19;
     const tx = Math.min(Math.max(x, 23), FIGURE_WIDTH - 23);
     tag.append(svg("rect", { x: tx - 22, y: ty - 11, width: 44, height: 18, rx: 9 }));
     const text = svg("text", { x: tx, y: ty + 2, "text-anchor": "middle" });
@@ -279,13 +356,14 @@ const figure = (c: ConstellationView, slot: number, saved: MyAlliance["star_figu
   return box;
 };
 
-/** 5 columns of 2 dots: the stars lit. */
+/** 5 columns of 2 small star lights (CSS): the stars lit, one a step (top then bottom of each column). */
 const starDots = (steps: number): HTMLElement => {
   const dots = make("span", "alliance-dots");
-  dots.setAttribute("aria-label", `${steps * 2} of 10 stars`);
+  dots.setAttribute("aria-label", `${steps} of 10 stars`);
+  const dot = (star: number) => make("span", `alliance-dots__dot${star < steps ? " alliance-dots__dot--on" : ""}`);
   for (let s = 0; s < 5; s++) {
     const col = make("span", "alliance-dots__col");
-    col.append(make("span", `alliance-dots__dot${s < steps ? " alliance-dots__dot--on" : ""}`), make("span", `alliance-dots__dot${s < steps ? " alliance-dots__dot--on" : ""}`));
+    col.append(dot(s * 2), dot(s * 2 + 1));
     dots.append(col);
   }
   return dots;
@@ -307,7 +385,7 @@ export const constellationTab = (
   const list = alliance.constellations ?? [];
   if (list.length === 0) return [make("p", "alliance-sky__empty", "The constellations are not ready yet.")];
   const chosen = chosenConstellation(list, chosenId)!;
-  const litStars = list.reduce((sum, c) => sum + c.steps * 2, 0);
+  const litStars = list.reduce((sum, c) => sum + c.steps, 0);
 
   const sky = make("div", `alliance-sky alliance-sky--${alliance.type}`);
   const top = make("div", "alliance-sky__top");
@@ -346,7 +424,7 @@ export const constellationTab = (
     half.append(row);
     halves.append(half);
   });
-  sky.append(halves, make("span", "alliance-sky__placeholder", "Placeholder star art"));
+  sky.append(halves);
   return [sky, detailBar(alliance, chosen, host, api)];
 };
 
@@ -366,18 +444,20 @@ const detailBar = (
     make("strong", "alliance-detail__name", c.name),
     make("span", `alliance-detail__tag alliance-detail__tag--${c.kind}`, c.kind === "strength" ? "Strength" : "Weakness"),
     make("span", "alliance-detail__stat", info?.label ?? ""),
-    make("span", "alliance-detail__per", effect ? `${statValue(effect.stat, per)} per 2 stars` : ""),
+    make("span", "alliance-detail__per", effect ? `${statValue(effect.stat, per)} per star` : ""),
   );
   if (info) who.prepend(gameIcon(info.icon, { size: 32, decorative: true }));
 
-  // The star track: start, then 5 pairs; lit gold, the next one tagged.
+  // The star track: start, then stars 1-10; lit gold, the next one tagged.
   const track = make("ol", "alliance-track");
   (effect?.values ?? []).forEach((value, i) => {
     const state = i === c.steps ? "now" : i < c.steps ? "lit" : i === c.steps + 1 ? "next" : "later";
     const mark = make("li", `alliance-track__mark alliance-track__mark--${state}`);
-    mark.title = i === 0 ? "Start" : `Stars ${i * 2 - 1}–${i * 2}, ★${c.prices[i - 1] ?? ""}`;
+    mark.title = i === 0 ? "Start" : `Star ${i}, ★${c.prices[i - 1] ?? ""}`;
+    // Stars 1-10 show the small star light on a night-sky disc (CSS), lit or not; the next one its price.
+    const painted = i > 0 && state !== "next";
     mark.append(
-      make("span", "alliance-track__pip", i === 0 ? "●" : state === "next" ? `★${c.next_price}` : "★★"),
+      make("span", `alliance-track__pip${painted ? " alliance-track__pip--star" : ""}`, i === 0 ? "●" : state === "next" ? `★${c.next_price}` : ""),
       make("span", "alliance-track__value", statValue(effect!.stat, value)),
     );
     track.append(mark);
@@ -397,7 +477,7 @@ const detailBar = (
         ),
       );
     }
-    const stars = `★${c.steps * 2 + 1}–${c.steps * 2 + 2}`;
+    const stars = `★${c.steps + 1}`;
     if (canLead(alliance)) {
       const light = button(`Light ${stars}`, "btn--primary alliance-detail__light", () => host.run(() => api.lightStar(c.id)));
       light.disabled = toSpend < c.next_price;
@@ -422,7 +502,7 @@ const detailBar = (
   if (last?.id) {
     const name = (alliance.constellations ?? []).find((x) => x.id === last.id)?.name ?? last.id;
     bar.append(
-      make("p", "alliance-detail__last", `Last lit: ${name} ★${last.step * 2 - 1}–${last.step * 2}, by ${last.by}, ${ago(last.at * 1000, host.now())} ago`),
+      make("p", "alliance-detail__last", `Last lit: ${name} ★${last.step}, by ${last.by}, ${ago(last.at * 1000, host.now())} ago`),
     );
   }
   return bar;

@@ -755,6 +755,39 @@
   opacity: 1;
 }
 
+/* The Krallen Hunt's half-goal mark (owner 13 Nov 2026): red until reached. */
+.events-goals__tick--min:not(.events-goals__tick--done) {
+  background: var(--colour-danger);
+}
+
+.events-goals__mark--min:not(.events-goals__mark--done) {
+  color: var(--colour-danger);
+  opacity: 1;
+}
+
+/* Below the minimum, or what a hunt's end took: Krallen, a red arrow, the figure. */
+.events-krallen__minimum {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 0;
+  font-size: var(--text-sm);
+  font-weight: 700;
+  color: var(--colour-danger);
+}
+
+.events-krallen__minimum-icon {
+  width: 24px;
+  height: 24px;
+  object-fit: contain;
+  flex: none;
+}
+
+.events-krallen__minimum-arrow {
+  font-size: 0.8em;
+  line-height: 1;
+}
+
 /* Its rows: Korath's power large and named, the points readable. */
 .events-ladder--goals .events-tier {
   align-items: center;
@@ -878,6 +911,93 @@
   color: var(--colour-text-secondary);
 }
 
+/* ── The weekend event (owner, 13 Nov 2026: here, not a banner on the yard)
+   One plate while it runs, the whole plate a button that opens its pop-up;
+   the next one sits in Coming up with its icon and amount. The "−30%" pill's
+   colours are in weekend.css, beside the price chips. */
+
+.events-weekend {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  width: 100%;
+  min-height: 44px;
+  padding: var(--space-3);
+  border: 1px solid var(--colour-warning-line);
+  border-radius: var(--radius-md);
+  background: var(--colour-surface-sunken);
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.events-weekend:hover {
+  background: var(--colour-surface-control-hover);
+}
+
+.events-weekend:focus-visible {
+  outline: 2px solid var(--colour-accent);
+  outline-offset: 2px;
+}
+
+.events-weekend__icon {
+  flex: none;
+  width: 48px;
+  height: 48px;
+}
+
+.events-weekend__words {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.events-weekend__head {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-1) var(--space-2);
+  min-width: 0;
+}
+
+.events-weekend__title {
+  font-size: var(--text-lg);
+  font-weight: 800;
+  color: var(--colour-text-strong);
+}
+
+.events-weekend__amount {
+  flex: none;
+  padding: 0 var(--space-2);
+  border-radius: var(--radius-pill);
+  font-size: var(--text-sm);
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+}
+
+.events-weekend__line {
+  font-size: var(--text-sm);
+  line-height: var(--leading-normal);
+  color: var(--colour-text-secondary);
+}
+
+.events-weekend__upcoming {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.events-weekend__upcoming .events-weekend__title {
+  font-size: var(--text-md);
+  font-weight: 700;
+}
+
+.events-weekend__small-icon {
+  flex: none;
+}
+
 /* ── Loading, errors ──────────────────────────────────────────────────── */
 
 .events-status {
@@ -950,6 +1070,22 @@
   flex-wrap: wrap;
   align-items: stretch;
   gap: var(--space-2);
+}
+
+/* Glimmers in a claimed notice: the gem and the number on one centred row. */
+.events-claimed .events-reward--eventCoins {
+  flex-direction: row;
+  flex-wrap: nowrap;
+  justify-content: center;
+  align-items: center;
+  align-self: center;
+  gap: 4px;
+  white-space: nowrap;
+}
+
+.events-claimed .events-reward--eventCoins .events-reward__icon {
+  width: 22px;
+  height: 22px;
 }
 
 .events-claimed__title {
@@ -1416,4 +1552,59 @@
   .events-welcome__figure {
     font-size: var(--text-lg);
   }
+}
+
+/* ── The Krallen Hunt's 3x mark: her loot aura (owner, 13 Nov 2026) ──── */
+
+/* Flash's green glow round a looting monster (`LootingMultiplier.as:29`, 0x55FF21). */
+.events-reward__image--aura,
+.events-krallen__aura--on .events-krallen__aura-picture {
+  filter: drop-shadow(0 0 3px #55ff21) drop-shadow(0 0 2px #55ff21);
+}
+
+.events-krallen__aura {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--colour-border-subtle);
+  border-radius: var(--radius-md);
+  background: var(--colour-surface-sunken);
+}
+
+.events-krallen__aura-picture {
+  flex: none;
+  width: 40px;
+  height: 40px;
+  object-fit: contain;
+}
+
+.events-krallen__aura-words {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+  flex: 1;
+}
+
+.events-krallen__aura-need {
+  font-size: var(--text-md);
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  color: var(--colour-text-strong);
+}
+
+.events-krallen__aura-what {
+  font-size: var(--text-sm);
+  color: var(--colour-text-strong);
+}
+
+.events-krallen__aura-note {
+  font-size: var(--text-sm);
+  color: var(--colour-text-muted);
+}
+
+.events-krallen__aura-note--on {
+  color: var(--colour-success);
+  font-weight: 700;
 }

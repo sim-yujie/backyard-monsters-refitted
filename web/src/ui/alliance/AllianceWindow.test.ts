@@ -3,6 +3,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import type { AllianceApi, AllianceInviteRow, AllianceListing, AllianceMember, MyAlliance } from "@/api/alliance";
 import type { AllianceProgressApi, ConstellationView } from "@/api/allianceProgress";
 import { setClassicLook } from "@/game/classicLook";
+import { inAlliance, resetAllianceButton, setInAlliance } from "@/game/alliance/allianceButton";
 import { allianceTradeOn, setAllianceTradeOn, TRADE_OFF_TITLE } from "@/game/alliance/tradeSwitch";
 import { ALLIANCE_TEXT, AllianceWindow, type AllianceWindowOptions } from "./AllianceWindow";
 
@@ -122,7 +123,11 @@ const open = async (api: AllianceApi, options: AllianceWindowOptions = {}): Prom
 const buttonNamed = (words: string): HTMLButtonElement | undefined =>
   [...document.querySelectorAll<HTMLButtonElement>("button")].find((node) => node.textContent?.trim() === words);
 
+/** The Language, Time zone and Min level dropdown boxes, in order. */
+const picks = (): HTMLButtonElement[] => [...document.querySelectorAll<HTMLButtonElement>(".alliance__sets .alliance__pick")];
+
 afterEach(() => {
+  resetAllianceButton();
   setClassicLook(false);
   document.body.replaceChildren();
   vi.restoreAllMocks();
@@ -321,7 +326,11 @@ describe("AllianceWindow: marketplace", () => {
       }),
     });
     const onChanged = vi.fn();
-    const view = await open(api, { onChanged });
+    const onMembership = vi.fn();
+    const view = await open(api, { onChanged, onMembership });
+    // Not in an alliance yet: the More menu's Alliance button rule hears so.
+    expect(onMembership).toHaveBeenLastCalledWith(false);
+    expect(inAlliance()).toBe(false);
     document.querySelector<HTMLButtonElement>(".alliance__row")!.click();
     document.querySelector<HTMLButtonElement>(".alliance__join")!.click();
     await flush();
@@ -329,6 +338,17 @@ describe("AllianceWindow: marketplace", () => {
     expect(api.requestJoin).toHaveBeenCalledWith(5);
     expect(onChanged).toHaveBeenCalled();
     expect(view.kind).toBe("mine");
+    // Joined: the button's rule hears it at once, without a reload.
+    expect(onMembership).toHaveBeenLastCalledWith(true);
+    expect(inAlliance()).toBe(true);
+  });
+
+  it("tells the Alliance button's rule when the player is found to be out of their alliance (left, kicked)", async () => {
+    setInAlliance(true);
+    const onMembership = vi.fn();
+    await open(fakeApi(), { onMembership });
+    expect(onMembership).toHaveBeenLastCalledWith(false);
+    expect(inAlliance()).toBe(false);
   });
 
   it("filters: Open, the player's flag and a type go to the server; Clear drops them", async () => {
@@ -442,29 +462,98 @@ describe("AllianceWindow: create", () => {
     modes[2]!.click();
     expect(modes[2]!.getAttribute("aria-pressed")).toBe("true");
     expect(modes[0]!.getAttribute("aria-pressed")).toBe("false");
-    const [zone, level] = [...document.querySelectorAll(".alliance__stepper")];
-    const zoneText = zone!.querySelector(".alliance__stepper-value")!.textContent!;
-    expect(zoneText).toMatch(/^GMT/);
-    expect(level!.querySelector(".alliance__stepper-value")!.textContent).toBe(ALLIANCE_TEXT.anyLevel);
-    const levelUp = level!.querySelectorAll<HTMLButtonElement>("button")[1]!;
-    levelUp.click();
-    levelUp.click();
-    expect(level!.querySelector(".alliance__stepper-value")!.textContent).toBe("40+");
+    const [, zone, level] = picks();
+    expect(zone!.textContent).toMatch(/^GMT/);
+    expect(level!.textContent).toBe(ALLIANCE_TEXT.anyLevel);
+    level!.click();
+    expect(level!.getAttribute("aria-expanded")).toBe("true");
+    const rows = [...document.querySelectorAll<HTMLButtonElement>(".alliance__pop .alliance__option")];
+    expect(rows.map((row) => row.textContent)).toEqual(["Any level\u2713", "Level 35+", "Level 40+", "Level 45+", "Level 50+", "Level 55+", "Level 60+"]);
+    rows[2]!.click();
+    expect(document.querySelector(".alliance__pop")).toBeNull();
+    expect(level!.getAttribute("aria-expanded")).toBe("false");
+    expect(level!.textContent).toBe("40+");
     document.querySelector<HTMLButtonElement>(".alliance__submit")!.click();
     await flush();
     expect(api.create).toHaveBeenCalledWith(expect.objectContaining({ join_mode: "invite", min_level: 40 }));
   });
 
-  it("the language button opens the country list; a pick shows its flag", async () => {
+  it("the language dropdown opens the country list; a pick shows its flag", async () => {
     await open(fakeApi());
     document.querySelector<HTMLButtonElement>(".alliance__create")!.click();
-    const pick = document.querySelector<HTMLButtonElement>(".alliance__lang-pick")!;
-    expect(pick.textContent).toBe(ALLIANCE_TEXT.anyLanguage);
-    pick.click();
-    const option = document.querySelector<HTMLButtonElement>(".alliance__lang-list button[data-code='PH']")!;
+    const [pick] = picks();
+    expect(pick!.textContent).toBe(ALLIANCE_TEXT.anyLanguage);
+    pick!.click();
+    const anyRow = document.querySelector<HTMLButtonElement>(".alliance__pop button[data-code='']")!;
+    expect(anyRow.textContent).toContain(ALLIANCE_TEXT.anyLanguageRow);
+    const option = document.querySelector<HTMLButtonElement>(".alliance__pop button[data-code='PH']")!;
     option.click();
-    expect(document.querySelector(".alliance__lang-list")).toBeNull();
-    expect(pick.querySelector(".country-flag, img")).not.toBeNull();
+    expect(document.querySelector(".alliance__pop")).toBeNull();
+    expect(pick!.querySelector(".country-flag, img")).not.toBeNull();
+  });
+
+  it("the three settings sit in one row of dropdowns, each named by its label", async () => {
+    await open(fakeApi());
+    document.querySelector<HTMLButtonElement>(".alliance__create")!.click();
+    const row = document.querySelector(".alliance__sets")!;
+    const labels = [...row.querySelectorAll(".alliance__label")].map((label) => label.textContent);
+    expect(labels).toEqual([ALLIANCE_TEXT.language, ALLIANCE_TEXT.timeZone, ALLIANCE_TEXT.minLevel]);
+    for (const pick of picks()) {
+      expect(pick.getAttribute("aria-haspopup")).toBe("listbox");
+      const [labelId] = pick.getAttribute("aria-labelledby")!.split(" ");
+      expect(document.getElementById(labelId!)!.textContent).toBeTruthy();
+    }
+    // No ‹ › steppers any more.
+    expect(document.querySelector(".alliance__stepper")).toBeNull();
+  });
+
+  it("the time zone list runs GMT-12 to GMT+14 and marks the player's own zone", async () => {
+    await open(fakeApi());
+    document.querySelector<HTMLButtonElement>(".alliance__create")!.click();
+    const [, zone] = picks();
+    zone!.click();
+    const rows = [...document.querySelectorAll<HTMLButtonElement>(".alliance__pop .alliance__option")];
+    expect(rows).toHaveLength(27);
+    expect(rows[0]!.textContent).toBe("GMT-12");
+    expect(rows[26]!.textContent).toBe("GMT+14");
+    expect(document.querySelectorAll(".alliance__pop .alliance__you")).toHaveLength(1);
+    expect(document.querySelectorAll('.alliance__pop [aria-selected="true"]')).toHaveLength(1);
+  });
+
+  it("a dropdown closes on a press outside it or on Escape, and opening another closes the first", async () => {
+    await open(fakeApi());
+    document.querySelector<HTMLButtonElement>(".alliance__create")!.click();
+    const [, zone, level] = picks();
+    zone!.click();
+    expect(document.querySelectorAll(".alliance__pop")).toHaveLength(1);
+    level!.dispatchEvent(new Event("pointerdown", { bubbles: true }));
+    level!.click();
+    expect(document.querySelectorAll(".alliance__pop")).toHaveLength(1);
+    expect(zone!.getAttribute("aria-expanded")).toBe("false");
+    expect(level!.getAttribute("aria-expanded")).toBe("true");
+    level!.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
+    expect(document.querySelector(".alliance__pop")).toBeNull();
+    zone!.click();
+    document.body.dispatchEvent(new Event("pointerdown", { bubbles: true }));
+    expect(document.querySelector(".alliance__pop")).toBeNull();
+  });
+
+  it("About counts its letters up to 120 and stops there", async () => {
+    await open(fakeApi());
+    document.querySelector<HTMLButtonElement>(".alliance__create")!.click();
+    const about = document.querySelector<HTMLTextAreaElement>(".alliance__about textarea")!;
+    const count = document.querySelector<HTMLElement>(".alliance__count")!;
+    expect(about.maxLength).toBe(120);
+    expect(count.textContent).toBe("0/120");
+    about.value = "x".repeat(37);
+    about.dispatchEvent(new Event("input"));
+    expect(count.textContent).toBe("37/120");
+    expect(count.dataset["state"]).toBe("");
+    about.value = "x".repeat(120);
+    about.dispatchEvent(new Event("input"));
+    expect(count.textContent).toBe("120/120");
+    expect(count.dataset["state"]).toBe("full");
+    expect(about.getAttribute("aria-describedby")).toBe(count.id);
   });
 
   it("does not send a name that is too short", async () => {
@@ -501,11 +590,14 @@ describe("AllianceWindow: my alliance", () => {
     buttonNamed(ALLIANCE_TEXT.edit)!.click();
     const modes = [...document.querySelectorAll<HTMLButtonElement>(".alliance__mode")];
     expect(modes[1]!.getAttribute("aria-pressed")).toBe("true");
-    const [zone, level] = [...document.querySelectorAll(".alliance__stepper")];
-    expect(zone!.querySelector(".alliance__stepper-value")!.textContent).toBe("GMT-5");
-    expect(level!.querySelector(".alliance__stepper-value")!.textContent).toBe("45+");
+    const [language, zone, level] = picks();
+    expect(language!.textContent).toBe("Germany");
+    expect(zone!.textContent).toBe("GMT-5");
+    expect(level!.textContent).toBe("45+");
     modes[0]!.click();
-    zone!.querySelectorAll<HTMLButtonElement>("button")[1]!.click();
+    zone!.click();
+    [...document.querySelectorAll<HTMLButtonElement>(".alliance__pop .alliance__option")].find((row) => row.textContent === "GMT-4")!.click();
+    expect(zone!.textContent).toBe("GMT-4");
     buttonNamed(ALLIANCE_TEXT.save)!.click();
     await flush();
     expect(api.edit).toHaveBeenCalledWith({
@@ -518,8 +610,35 @@ describe("AllianceWindow: my alliance", () => {
     });
   });
 
+  it("Edit keeps an older About over 120 whole, shows it over and asks for a shorter one before saving", async () => {
+    const long = "We farm goo every day. ".repeat(8).trim();
+    expect(long.length).toBeGreaterThan(120);
+    const api = fakeApi({ mine: vi.fn(() => ok({ alliance: mine({ description: long }), rejoinAt: null })) });
+    await open(api);
+    expect(document.querySelector(".alliance__description")!.textContent).toBe(long);
+    buttonNamed(ALLIANCE_TEXT.edit)!.click();
+    const about = document.querySelector<HTMLTextAreaElement>(".alliance__about textarea")!;
+    const count = document.querySelector<HTMLElement>(".alliance__count")!;
+    expect(about.value).toBe(long);
+    expect(count.textContent).toBe(`${long.length}/120`);
+    expect(count.dataset["state"]).toBe("over");
+    expect(about.getAttribute("aria-invalid")).toBe("true");
+    buttonNamed(ALLIANCE_TEXT.save)!.click();
+    await flush();
+    expect(api.edit).not.toHaveBeenCalled();
+    expect(document.querySelector(".alliance__status")!.textContent).toContain("At most 120 letters.");
+    expect(document.activeElement).toBe(about);
+    about.value = long.slice(0, 120);
+    about.dispatchEvent(new Event("input"));
+    expect(count.dataset["state"]).toBe("full");
+    expect(about.getAttribute("aria-invalid")).toBe("false");
+    buttonNamed(ALLIANCE_TEXT.save)!.click();
+    await flush();
+    expect(api.edit).toHaveBeenCalledWith(expect.objectContaining({ description: long.slice(0, 120).trim() }));
+  });
+
   it("shows phase 2's Overview cards, and a goal set from the menu reloads on the same tab", async () => {
-    const goal = { id: 7, kind: "hatch", name: "Hatch monsters", tier: "easy", target: 150, progress: 60, points: 10, done: false, removable: false } as const;
+    const goal = { id: 7, kind: "tribeDestroy", name: "Destroy tribe yards", tier: "easy", target: 150, progress: 60, points: 10, done: false, removable: false } as const;
     const api = fakeApi({
       mine: vi.fn(() =>
         ok({
@@ -547,6 +666,38 @@ describe("AllianceWindow: my alliance", () => {
     expect(progress.setGoal).toHaveBeenCalledWith("kitRebuild", "easy");
     expect(api.mine).toHaveBeenCalledTimes(2);
     expect(document.querySelector(".alliance__tab[aria-selected='true']")!.getAttribute("aria-label")).toBe("Overview");
+  });
+
+  it("the goal picker says once, per tier, who it is sized for and what it pays; buttons show short targets", async () => {
+    const tiers = [
+      { tier: "easy", target: 450_000_000, points: 15, players: 3 },
+      { tier: "medium", target: 1_200_000_000, points: 37, players: 8 },
+      { tier: "hard", target: 2_250_000_000, points: 70, players: 15 },
+    ] as const;
+    const api = fakeApi({
+      mine: vi.fn(() =>
+        ok({
+          alliance: mine({
+            goals: [],
+            goals_per_week: 5,
+            goal_menu: [
+              { kind: "loot", name: "Loot resources", only: null, tiers },
+              { kind: "upgrade", name: "Upgrade buildings", only: null, tiers: tiers.map((t) => ({ ...t, target: 90 })) },
+            ],
+          }),
+          rejoinAt: null,
+        }),
+      ),
+    });
+    await open(api, { progressApi: fakeProgress() });
+    buttonNamed("Add goal")!.click();
+    const cols = [...document.querySelectorAll(".alliance-goal-menu__col")].map((c) => c.textContent);
+    expect(cols).toEqual(["Easy~3★ 15", "Medium~8★ 37", "Hard~15★ 70"]);
+    expect(document.querySelectorAll(".alliance-goal-menu__head").length).toBe(1);
+    const picks = [...document.querySelectorAll<HTMLButtonElement>(".alliance-goal-menu__tier")];
+    expect(picks.slice(0, 3).map((b) => b.textContent)).toEqual(["450M", "1.2B", "2.25B"]);
+    expect(picks[0]!.title).toBe("Easy: 450,000,000 · ★ 15, sized for about 3 players");
+    expect(picks[0]!.getAttribute("aria-label")).toBe("Loot resources, Easy 450,000,000");
   });
 
   it("Territory loads its board and switches type; Constellation draws the sky", async () => {
@@ -803,5 +954,84 @@ describe("AllianceWindow: trading's switch (owner 11 Nov: greyed out for beta 7)
     await flush();
     expect(selected()).toBe("trade");
     expect(trade.view).toHaveBeenCalled();
+  });
+});
+
+describe("AllianceWindow: players' uploaded photos (owner, 13 Nov 2026)", () => {
+  /** The face beside the row that names `name`, inside `scope`. */
+  const faceOf = (scope: string, name: string): HTMLImageElement => {
+    const row = [...document.querySelectorAll(`${scope}`)].find((node) => node.textContent?.includes(name))!;
+    return row.querySelector<HTMLImageElement>(".alliance__face")!;
+  };
+  const isPhoto = (img: HTMLImageElement, userid: number, version: number): void => {
+    expect(img.classList.contains("is-photo")).toBe(true);
+    expect(img.getAttribute("src")).toContain(`/profile/photos/${userid}?v=${version}`);
+  };
+  const isCritter = (img: HTMLImageElement): void => {
+    expect(img.classList.contains("is-photo")).toBe(false);
+    expect(img.getAttribute("src")).not.toContain("/profile/photos/");
+  };
+
+  it("members, join requests and suggestions show a visible photo, and the critter when there is none", async () => {
+    const api = fakeApi({
+      mine: vi.fn(() => ok({ alliance: mine(), rejoinAt: null })),
+      members: vi.fn(() => ok({ members: [member(1, "leader"), member(2, "officer", { photo: 3 }), member(3, "member", { photo: null })] })),
+      messages: vi.fn(() =>
+        ok({
+          messages: [
+            invite(50, { type: "request", user_id: 8, user_name: "Asker Photo", user_photo: 2 }),
+            invite(51, { type: "request", user_id: 9, user_name: "Asker Critter", user_photo: null }),
+          ],
+        }),
+      ),
+      suggested: vi.fn(() =>
+        ok({ members: [member(20, "member", { display_name: "Sugg Photo", photo: 1 }), member(21, "member", { display_name: "Sugg Critter" })] }),
+      ),
+    });
+    const view = await open(api);
+    view.showTab("members");
+    await flush();
+
+    isPhoto(faceOf(".alliance__member, [data-userid]", "Player 2"), 2, 3);
+    isCritter(faceOf(".alliance__member, [data-userid]", "Player 3"));
+    isPhoto(faceOf(".alliance__invite--answer", "Asker Photo"), 8, 2);
+    isCritter(faceOf(".alliance__invite--answer", "Asker Critter"));
+    isPhoto(faceOf(".alliance__invite-box .alliance__invite", "Sugg Photo"), 20, 1);
+    isCritter(faceOf(".alliance__invite-box .alliance__invite", "Sugg Critter"));
+  });
+
+  it("the invite search shows a found player's photo", async () => {
+    const search = vi.fn(() =>
+      Promise.resolve([
+        { userid: 30, username: "Found Photo", pic: null, photo: 4, level: 12, relation: "none" as const },
+        { userid: 31, username: "Found Critter", pic: null, level: 12, relation: "none" as const },
+      ]),
+    );
+    const view = await open(fakeApi({ mine: vi.fn(() => ok({ alliance: mine(), rejoinAt: null })) }), { players: { search } });
+    view.showTab("members");
+    await flush();
+    const input = document.querySelector<HTMLInputElement>(".alliance__invite-box .alliance__input")!;
+    input.value = "Found";
+    input.form!.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
+    await flush();
+
+    expect(search).toHaveBeenCalledWith("Found");
+    isPhoto(faceOf(".alliance__invite-box .alliance__invite", "Found Photo"), 30, 4);
+    isCritter(faceOf(".alliance__invite-box .alliance__invite", "Found Critter"));
+  });
+
+  it("a photo that will not load falls back to the critter", async () => {
+    await open(
+      fakeApi({
+        mine: vi.fn(() => ok({ alliance: mine(), rejoinAt: null })),
+        members: vi.fn(() => ok({ members: [member(1, "leader"), member(2, "member", { photo: 5 })] })),
+      }),
+      { tab: "members" },
+    );
+    await flush();
+    const img = faceOf(".alliance__member, [data-userid]", "Player 2");
+    isPhoto(img, 2, 5);
+    img.dispatchEvent(new Event("error"));
+    isCritter(img);
   });
 });

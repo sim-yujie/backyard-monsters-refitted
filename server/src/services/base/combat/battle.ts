@@ -101,6 +101,9 @@ export const battleReplayInput = ({
     resources: session?.attackerResources ?? null,
     brains: session?.championBrains ?? null,
     health: session?.championHealth ?? null,
+    // Krallen's loot aura counts when it ran at the attack's start (owner,
+    // 13 Nov 2026): a session without one gives her none.
+    auraAt: session?.startedat ?? null,
   };
   return {
     defender: {

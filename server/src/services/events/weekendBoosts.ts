@@ -12,6 +12,9 @@ import { weekendSettings } from "./weekendSettings.js";
  * length after the weekend ends**, so a training started Sunday 23:00 still
  * finishes 30% sooner; one started Monday 00:00 does not. An upgrade bought
  * at 30% off and cancelled later gives back what was paid, not the full price.
+ *
+ * Using an effect pays no Glimmers: a weekend's Glimmers are its daily
+ * check-in (owner, 13 Nov 2026; `weekendCoins.ts`).
  */
 
 /** The percentage of `id` running at `t` (unix seconds), or 0. */
@@ -49,22 +52,3 @@ export const withPlunderBonus = <T extends { readonly [K in keyof T]: number }>(
 /** Tribe Plunder's percentage at `t`, for a credit from a wild tribe; 0 for anyone else. */
 export const plunderPercent = (fromTribe: boolean, t: number): number =>
   fromTribe ? weekendBoost("plunder", t) : 0;
-
-/**
- * EVENT COINS HOOK (beta 7 grill item 29, a separate later task).
- *
- * Called once each time a player uses a weekend boost: an upgrade bought at
- * the Builder's Weekend price, a training or research started in a Study
- * Weekend, loot banked from a tribe in Tribe Plunder. Hatch Rush is applied
- * inside the hatchery catch-up, which has no player at hand; the coins task
- * can count it from `POST /bm/yard/hatchery/add` instead.
- *
- * TODO(event-coins): grant the weekend's coins here (owner's proposal: about
- * 100 per weekend, 25 for playing that weekend and 75 for using the boost),
- * once per player per weekend run (`WeekendRun.key`), through the events
- * progress store (`services/events/progressStore.ts`). Nothing is granted
- * yet.
- */
-export const weekendBoostUsed = (_userid: number, _id: WeekendEventId, _now: number): void => {
-  // Deliberately empty until event coins are built.
-};

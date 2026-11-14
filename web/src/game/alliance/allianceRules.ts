@@ -63,7 +63,12 @@ export const membersLine = (type: AllianceType): string => `Up to ${TYPE_INFO[ty
 
 export const ALLIANCE_NAME_MIN = 3;
 export const ALLIANCE_NAME_MAX = 30;
-export const ALLIANCE_DESC_MAX = 255;
+/**
+ * The About is one short line (owner, 12 Nov 2026), counted as it is typed.
+ * The server keeps 255 letters a row, so an older, longer About still shows;
+ * only a new save must fit.
+ */
+export const ALLIANCE_DESC_MAX = 120;
 export const SHIELD_COUNT = 41;
 
 /** A shield's picture, 1 to 41 (Flash's own; `medium` is 46 px, `small` 25 px). */
@@ -87,6 +92,17 @@ export const descriptionProblem = (text: string): string | null => {
   if (!trimmed) return "Write a line about your alliance.";
   if (trimmed.length > ALLIANCE_DESC_MAX) return `At most ${ALLIANCE_DESC_MAX} letters.`;
   return null;
+};
+
+/** The About counter's look: plain, near the end (20 left), full, or over (an older About, too long to save). */
+export type AboutCountState = "" | "near" | "full" | "over";
+
+/** "37/120" and how it looks. */
+export const aboutCount = (text: string): { words: string; state: AboutCountState } => {
+  const used = text.length;
+  const state: AboutCountState =
+    used > ALLIANCE_DESC_MAX ? "over" : used === ALLIANCE_DESC_MAX ? "full" : used >= ALLIANCE_DESC_MAX - 20 ? "near" : "";
+  return { words: `${used}/${ALLIANCE_DESC_MAX}`, state };
 };
 
 /** The alliance has a free seat. */

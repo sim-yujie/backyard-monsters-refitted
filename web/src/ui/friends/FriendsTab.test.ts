@@ -343,3 +343,27 @@ describe("FriendsTab", () => {
     });
   });
 });
+
+describe("Gift all (owner, 13 Nov 2026)", () => {
+  it("sits beside the count when the screen hands it in, and is off once every friend has a gift today", async () => {
+    const { api } = fixtureApi({ list: fixtureList([fixtureFriend(1), fixtureFriend(2, { giftSentToday: true })]) });
+    const store = new FriendsStore({ api });
+    const onGiftAll = vi.fn();
+    const tab = new FriendsTab({ api, store, onFind: vi.fn(), onGiftAll });
+    document.body.append(tab.element);
+    await tab.show();
+    const button = tab.element.querySelector<HTMLButtonElement>(".friends-tab__gift-all")!;
+    expect(button.hidden).toBe(false);
+    expect(button.disabled).toBe(false);
+    button.click();
+    expect(onGiftAll).toHaveBeenCalledOnce();
+    store.markGifted(1);
+    expect(button.disabled).toBe(true);
+  });
+
+  it("is not there without the screen's Gift all", async () => {
+    const { tab } = setup();
+    await tab.show();
+    expect(tab.element.querySelector(".friends-tab__gift-all")).toBeNull();
+  });
+});

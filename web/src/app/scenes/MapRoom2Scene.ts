@@ -18,6 +18,7 @@ import {
 } from "@/api/maproom";
 import { takePrimedOwnYard } from "@/game/maproom/mapRoute";
 import { mateAllianceOf } from "@/game/maproom/mapAlliances";
+import { WorkerFinishWatch } from "@/game/maproom/workerFinish";
 import { getAutoAttackPlan, type AutoAttackPlanResponse } from "@/api/autoAttack";
 import { setWatchRun } from "@/game/autoAttack/watchRun";
 import { openDefence } from "@/game/defences/openDefence";
@@ -83,6 +84,7 @@ import { currentAllianceBonuses, setCurrentAllianceBonuses } from "@/game/allian
 import { KitFilter } from "@/game/maproom/cellVisuals";
 import { Bookmarks } from "@/game/maproom/Bookmarks";
 import {
+  cardOnEntry,
   consumeMapFocus,
   recallMapView,
   rememberMapView,
@@ -143,7 +145,6 @@ import { devStats } from "../devDetails";
 import { connectMr2TimingReport } from "../mr2TimingReport";
 import type { Scene, SceneContext } from "../SceneManager";
 import { SceneName } from "../sceneName";
-import { isPhoneLayout } from "@/ui/phoneLayout";
 
 /**
  * Map Room 2.
@@ -319,6 +320,8 @@ export class MapRoom2Scene implements Scene {
   private income: IncomePrediction | null = null;
   private incomeCap = 0;
   private clockOffset = 0;
+  /** Own outposts' build ends already asked about (`workerFinish.ts`). */
+  private readonly workerFinish = new WorkerFinishWatch();
   /**
    * Where the map should open instead of the home cell: the target of the
    * attack just finished, or the outpost just taken over (`mapFocus.ts`).
@@ -629,7 +632,6 @@ export class MapRoom2Scene implements Scene {
         yard: this.ownSave.baseid,
         centre: { x: (view.left + view.right) / 2, y: (view.top + view.bottom) / 2 },
         zoom: this.camera.zoom,
-        selected: this.selected,
       });
     }
     if (this.markerPicturesTimer !== null) clearTimeout(this.markerPicturesTimer);
@@ -843,6 +845,7 @@ export class MapRoom2Scene implements Scene {
       this.sinceUiTick = 0;
       this.refreshUi();
       this.tickIncome();
+      this.askFinishedWorkers();
     }
 
     // Exponential moving average: one slow frame should show, but not dominate.
@@ -883,9 +886,10 @@ export class MapRoom2Scene implements Scene {
         if (inWorld(cell.col, cell.row)) {
           this.home = cell;
           this.ui?.setHome(cell);
-          // On a phone the "Your yard" card would cover a third of the map
-          // on every visit (#381): the map opens on the home cell, card shut.
-          this.jumpTo(cell, DEFAULT_ZOOM, !isPhoneLayout());
+          // The map opens on the home cell with the card shut: on a phone it
+          // would cover a third of the map (#381), and anywhere it popped up
+          // unasked on every visit (owner, 12 Nov 2026). A click opens it.
+          this.jumpTo(cell, DEFAULT_ZOOM, false);
           markOnce(MR2_OWN_CELL);
         }
       }
@@ -901,7 +905,9 @@ export class MapRoom2Scene implements Scene {
         );
       }
 
-      if (base.resources) this.showResources(base.resources, base.credits);
+      // With the outpost income since the load's `t` already on (#207), so the
+      // bar does not open on the bare pool and climb a second later.
+      if (base.resources) this.showResources(this.predictedPool() ?? base.resources, base.credits);
       this.ui?.setOutposts(outpostsOf(base));
       // Every outpost's zone, so the attack roster counts it wherever it is (#187).
       for (const cell of outpostsToLoad(outpostsOf(base), (col, row) => !!this.store.getCell(col, row))) {
@@ -985,13 +991,16 @@ export class MapRoom2Scene implements Scene {
     void timeSpan("marker-pictures", () => this.renderer.loadMarkerPictures());
   }
 
-  /** Puts the camera and the selection back where the map was left. */
+  /**
+   * Puts the camera back where the map was left. The cell that was open then
+   * is not opened again: its card popping up on the way back from a yard
+   * looked random (owner, 12 Nov 2026).
+   */
   private restoreView(view: MapView): void {
     this.camera.zoom = view.zoom;
     this.camera.centreOn(view.centre);
     this.camera.dirty = true;
-    if (view.selected && inWorld(view.selected.col, view.selected.row)) this.selectCell(view.selected);
-    else this.clearSelection();
+    this.clearSelection();
   }
 
   /**
@@ -1003,7 +1012,8 @@ export class MapRoom2Scene implements Scene {
     const focus = this.pendingFocus;
     this.pendingFocus = null;
     if (!focus || !inWorld(focus.cell.col, focus.cell.row)) return;
-    this.jumpTo(focus.cell, DEFAULT_ZOOM);
+    // Its card opens only when the player asked for that cell (`MapFocus.open`).
+    this.jumpTo(focus.cell, DEFAULT_ZOOM, cardOnEntry(focus));
     if (focus.takenOver) this.ui?.showTakenOver(focus.takenOver.kind, focus.takenOver.name);
   }
 
@@ -1014,6 +1024,22 @@ export class MapRoom2Scene implements Scene {
   private syncPool(resources: Resources, credits: number | undefined): void {
     this.income?.rebase(resources);
     this.showResources(this.predictedPool() ?? resources, credits);
+  }
+
+  /**
+   * Once a second: an own outpost whose build or upgrade has just ended is
+   * asked for again, so its construction badge and its card's "Worker:
+   * Building" go now rather than when the yard is next opened (owner, 12 Nov 2026).
+   */
+  private askFinishedWorkers(): void {
+    if (!this.ownSave || !this.ready) return;
+    const now = Date.now() / 1000 + this.clockOffset;
+    const due = this.workerFinish.due(
+      outpostsOf(this.ownSave).map((outpost) => outpost.cell),
+      (col, row) => this.store.getCell(col, row),
+      now,
+    );
+    for (const cell of due) this.store.invalidateCell(cell.col, cell.row);
   }
 
   /** Once a second: the pool with the next whole tick of outpost income, when one passed (#207). */
@@ -1555,10 +1581,7 @@ export class MapRoom2Scene implements Scene {
           if (oldHome) this.store.invalidateCell(oldHome.col, oldHome.row);
           this.store.invalidateCell(cell.col, cell.row);
           void this.store.pump();
-          this.ui?.notices.show("relocate", "Your main yard has moved here.", {
-            level: "info",
-            timeoutMs: 5_000,
-          });
+          // The map recentres on the new home: no notice (owner, 13 Nov 2026).
           void this.loadOwnCell();
         },
       }),
@@ -1580,11 +1603,13 @@ export class MapRoom2Scene implements Scene {
     });
     this.store.invalidateCell(cell.col, cell.row);
     void this.store.pump();
-    this.ui?.notices.show(
-      "invite",
-      result.ok ? "The invitation has been withdrawn." : `The invitation was not withdrawn: ${result.reason}`,
-      { level: result.ok ? "info" : "warning", timeoutMs: 5_000 },
-    );
+    // Withdrawn, the invite leaves the cell panel: only a failure is said (owner, 13 Nov 2026).
+    if (!result.ok) {
+      this.ui?.notices.show("invite", `The invitation was not withdrawn: ${result.reason}`, {
+        level: "warning",
+        timeoutMs: 5_000,
+      });
+    }
   }
 
   /**
@@ -1607,11 +1632,8 @@ export class MapRoom2Scene implements Scene {
     this.store.refreshVisible();
     void this.store.pump();
     void this.sight.refresh();
+    // The map redraws: no "Refetching" notice (owner, 13 Nov 2026).
     this.ui?.refreshTakeover();
-    this.ui?.notices.show("refresh", "Refetching the visible map.", {
-      level: "info",
-      timeoutMs: 2_000,
-    });
   }
 
   /**

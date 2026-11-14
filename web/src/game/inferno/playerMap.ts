@@ -1,5 +1,6 @@
 import type { InfernoNeighbourView, InfernoNeighboursResponse } from "@/api/inferno";
 import { formatSpan } from "@/game/maproom1/mr1Model";
+import { photoVersionOf, type PhotoVersion } from "@/game/playerPicture";
 import { TRIBE_NO_MONSTERS, TRIBE_START_FAILED } from "./tribeMap";
 
 /**
@@ -26,6 +27,8 @@ export interface PlayerRow {
   readonly userid: number;
   readonly name: string;
   readonly pic: string;
+  /** Their uploaded photo's upload number; absent for the critter (`game/playerPicture.ts`). */
+  readonly photo?: PhotoVersion;
   readonly level: number;
   readonly online: boolean;
   readonly friend: boolean;
@@ -41,6 +44,7 @@ export const playerRowOf = (view: InfernoNeighbourView): PlayerRow => ({
   userid: view.userid,
   name: view.name,
   pic: view.pic,
+  photo: photoVersionOf(view.photo),
   level: view.level,
   online: view.online === 1,
   friend: view.friend === 1,

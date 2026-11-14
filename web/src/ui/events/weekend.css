@@ -1,85 +1,14 @@
 /*
- * The weekend event (`ui/events/weekendUi.ts`): the banner under the HUD
- * while one runs, the Friday pop-up, and the "−30%" chip beside a lowered
- * price or time. Values from tokens.css; the banner's plate follows the
- * Classic/Modern style through skin.css.
+ * The weekend event (`ui/events/weekendUi.ts`): the Friday pop-up and the
+ * "−30%" chip beside a lowered price or time. Values from tokens.css. Its
+ * card on the Events page is in events.css (owner, 13 Nov 2026: no banner
+ * on the yard).
  */
-
-/* ── Banner: top centre, above the notices ─────────────────────────────── */
-
-.weekend-banner {
-  align-self: center;
-  display: inline-flex;
-  align-items: center;
-  gap: var(--space-2);
-  min-height: 44px;
-  max-width: 100%;
-  padding: var(--space-1) var(--space-3) var(--space-1) var(--space-2);
-  border: 1px solid var(--colour-warning-line);
-  border-radius: var(--radius-pill);
-  background: var(--colour-surface-raised);
-  -webkit-backdrop-filter: var(--blur-panel);
-  backdrop-filter: var(--blur-panel);
-  box-shadow: var(--shadow-float);
-  color: var(--colour-text-strong);
-  font: inherit;
-  font-size: var(--text-sm);
-  cursor: pointer;
-  white-space: nowrap;
-}
-
-.weekend-banner[hidden] {
-  display: none;
-}
-
-.weekend-banner:hover {
-  background: var(--colour-surface-control-hover);
-}
-
-.weekend-banner:focus-visible {
-  outline: 2px solid var(--colour-accent);
-  outline-offset: 2px;
-}
-
-.weekend-banner__icon {
-  display: inline-flex;
-  flex: none;
-}
-
-.weekend-banner__title {
-  font-weight: 700;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.weekend-banner__amount {
-  flex: none;
-  padding: 0 var(--space-2);
-  border-radius: var(--radius-pill);
-  font-weight: 800;
-  font-variant-numeric: tabular-nums;
-}
-
-.weekend-banner__left {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--space-1);
-  flex: none;
-  color: var(--colour-text-secondary);
-  font-variant-numeric: tabular-nums;
-}
-
-/* A phone: icon, amount and time; the name is in the pop-up. */
-@media (width <= 620px) {
-  .weekend-banner__title {
-    display: none;
-  }
-}
 
 /* ── The chip beside a price or a time ─────────────────────────────────── */
 
 /*
- * The "−30%" on the banner and beside a price or a time: a solid amber pill,
+ * The "−30%" on the Events page's weekend card and beside a price or a time: a solid amber pill,
  * like the pop-up's, so it reads on every background. Each look pairs its own
  * amber with its own inverse ink: the HUD and Modern panels have light amber
  * with near-black ink (about 10:1), Classic's cream panels a dark amber with
@@ -87,7 +16,7 @@
  * (`--colour-warning-text` stays dark in every look, so it cannot go on
  * Classic's dark amber, and on the old 10% wash it was dark on dark.)
  */
-.weekend-banner__amount,
+.events-weekend__amount,
 .chip.weekend-chip {
   background: var(--colour-warning);
   color: var(--colour-text-inverse);
@@ -172,4 +101,104 @@
   min-width: 120px;
   min-height: 44px;
   margin-top: var(--space-2);
+}
+
+/* ── The daily check-in (owner, 13 Nov 2026), on the Events card and in the pop-up ── */
+
+.weekend-checkin {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2) var(--space-3);
+  min-width: 0;
+}
+
+.weekend-popup .weekend-checkin {
+  flex-direction: column;
+  justify-content: center;
+}
+
+.weekend-checkin__days {
+  display: flex;
+  gap: var(--space-1);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+/* A day: its number in a ring, a tick on green once checked in. */
+.weekend-checkin__day {
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  border: 2px solid var(--colour-border-subtle);
+  border-radius: 50%;
+  color: var(--colour-text-secondary);
+  font-size: var(--text-sm);
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+}
+
+.weekend-checkin__day--today {
+  border-color: var(--colour-warning);
+  color: var(--colour-text-strong);
+}
+
+.weekend-checkin__day--claimed {
+  border-color: var(--colour-success);
+  background: var(--colour-success);
+  color: var(--colour-text-inverse);
+}
+
+.weekend-checkin__day--missed {
+  opacity: 0.45;
+  text-decoration: line-through;
+}
+
+.weekend-checkin__button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  min-width: 140px;
+  min-height: 44px;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+}
+
+.weekend-checkin__button--busy {
+  cursor: progress;
+}
+
+.weekend-checkin__done,
+.weekend-checkin__info {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  margin: 0;
+  font-size: var(--text-sm);
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.weekend-checkin__done {
+  min-height: 44px;
+  color: var(--colour-gain);
+}
+
+.weekend-checkin__done .weekend-checkin__tick {
+  flex: none;
+}
+
+.weekend-checkin__info {
+  color: var(--colour-text-secondary);
+}
+
+.weekend-checkin__error {
+  flex-basis: 100%;
+  margin: 0;
+  font-size: var(--text-sm);
+  color: var(--colour-danger);
 }

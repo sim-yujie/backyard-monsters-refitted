@@ -46,6 +46,18 @@ export type ChampionData = z.infer<typeof ChampionSchema> & {
    */
   h?: HabitBook;
   hs?: HabitStats;
+  /**
+   * Krallen's loot aura runs until then, unix seconds: the Krallen Hunt's 3x
+   * mark (`services/events/krallenReward.ts`, `grantKrallenAura`). Written
+   * by the server alone and kept off {@link ChampionSchema} like `b`.
+   */
+  la?: number;
+  /**
+   * Krallen's hunts are settled up to then, unix seconds: a Krallen Hunt
+   * ending later still decides her penalty (`services/events/krallenPenalty.ts`).
+   * Written by the server alone and kept off {@link ChampionSchema} like `la`.
+   */
+  hk?: number;
 };
 
 /**

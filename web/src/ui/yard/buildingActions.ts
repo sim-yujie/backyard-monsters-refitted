@@ -23,7 +23,6 @@ import { freeWorkers, holdsWorker, sharperToolsMultiplier } from "@/game/yard/wo
 import type { Yard, YardBuilding, YardWorkers } from "@/game/yard/yardModel";
 import { BAITER_TYPE } from "@/game/baiter/baiterSession";
 import { GENERAL_STORE_TYPE } from "@/game/yard/shop";
-import { BUNKER_TYPE } from "@/game/monsters/bunker";
 import { researchOn } from "@/game/monsters/lab";
 import { siteOfType } from "@/game/siege/siege";
 import { costLessBy, weekendPercent } from "@/game/weekend";
@@ -33,7 +32,6 @@ import {
   surfaceInfernoStanding,
   UNDER_HALL_REQUIREMENT,
 } from "@/game/yard/surfaceInferno";
-import { CHAMPION_CAGE_TYPE, CHAMPION_CHAMBER_TYPE } from "@/game/yard/championModel";
 import { monstersTabFor, type MonstersTabId } from "@/ui/monsters/monstersTab";
 import { availableAgainText, outpostCountOf, randomMoveWait } from "@/game/maproom/randomMove";
 
@@ -241,16 +239,14 @@ export interface CancelOffer {
 
 /**
  * Which door a building opens: the world map, the layout planner, the
- * Monsters screen, a bunker's controls, the Champion Cage's or Chamber's, the
- * Baiter's, the Shop (the General Store, §8.2), or the Siege screen.
+ * Monsters screen (the monster buildings, and since 12 Nov 2026 the Juicer,
+ * the Monster Bunker and the Champion Cage and Chamber too), the Baiter's
+ * test window, the Shop (the General Store, §8.2), or the Siege screen.
  */
 export type OpenTarget =
   | "map"
   | "planner"
   | "monsters"
-  | "bunker"
-  | "cage"
-  | "chamber"
   | "baiter"
   | "shop"
   /** The alliance window: a built Observatory (beta 7). */
@@ -268,8 +264,9 @@ export interface PanelModel {
   readonly open: OpenTarget | null;
   /**
    * With `open: "monsters"`, the tab the building opens (§4.1, D4): Monster
-   * Locker → Unlock, Hatchery and HCC → Hatch, Housing → Housing, Academy →
-   * Train, Lab → Lab. Null otherwise.
+   * Locker → Unlock, Hatchery and HCC → Hatch, Housing, Juicer and Monster
+   * Bunker → Housing, Academy → Train, Lab → Lab, Champion Cage and Chamber →
+   * Champion. Null otherwise.
    */
   readonly monstersTab: MonstersTabId | null;
   /** Why an Open button cannot be pressed (the Map Room below Town Hall 6). */
@@ -593,21 +590,15 @@ export const panelModel = (building: YardBuilding, context: PanelContext): Panel
         ? "planner"
         : monstersTab && building.level > 0
           ? "monsters"
-          : building.type === BUNKER_TYPE && building.level > 0
-            ? "bunker"
-            : building.type === CHAMPION_CAGE_TYPE && building.level > 0
-              ? "cage"
-              : building.type === CHAMPION_CHAMBER_TYPE && building.level > 0
-                ? "chamber"
-                : building.type === BAITER_TYPE && building.level > 0 && context.yard.kind !== "outpost"
-                  ? "baiter"
-                  : building.type === GENERAL_STORE_TYPE && building.level > 0
-                    ? "shop"
-                    : siteOfType(building.type) && building.level > 0 && context.yard.kind !== "outpost"
-                      ? "siege"
-                      : building.type === OBSERVATORY_TYPE && building.level > 0
-                        ? "alliance"
-                        : null;
+          : building.type === BAITER_TYPE && building.level > 0 && context.yard.kind !== "outpost"
+            ? "baiter"
+            : building.type === GENERAL_STORE_TYPE && building.level > 0
+              ? "shop"
+              : siteOfType(building.type) && building.level > 0 && context.yard.kind !== "outpost"
+                ? "siege"
+                : building.type === OBSERVATORY_TYPE && building.level > 0
+                  ? "alliance"
+                  : null;
   return {
     upgrade: upgrade && upgrade.gate?.reason !== "maxLevel" ? upgrade : null,
     maxed: upgrade?.gate?.reason === "maxLevel",

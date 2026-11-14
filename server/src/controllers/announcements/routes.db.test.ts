@@ -99,6 +99,14 @@ describe.skipIf(!dbName)("the announcement routes on a real database", () => {
   const reset = async () => {
     await sql(`DELETE FROM bym.announcement WHERE title LIKE 'anntest%'`);
     await sql(`UPDATE bym.save SET credits = ? WHERE userid IN (${PLAYER}, ${OTHER})`, [START_SHINY]);
+    await sql(`DELETE FROM bym.event_coin_log WHERE userid IN (${LIST})`);
+    await sql(`DELETE FROM bym.event_coins WHERE userid IN (${LIST})`);
+  };
+
+  /** The player's Glimmers (event coins), 0 with no row. */
+  const glimmersOf = async (userid: number) => {
+    const [row] = await sql<{ balance: number }>(`SELECT balance FROM bym.event_coins WHERE userid = ?`, [userid]);
+    return Number(row?.balance ?? 0);
   };
 
   const shinyOf = async (userid: number) => {
@@ -326,6 +334,113 @@ describe.skipIf(!dbName)("the announcement routes on a real database", () => {
       await call("DELETE", `/api/v/admin/announcements/${id}`, OWNER);
       const [row] = await sql<{ n: number }>(`SELECT count(*)::int AS n FROM bym.announcement_dismissal WHERE announcement_id = ?`, [id]);
       expect(row!.n).toBe(0);
+    });
+  });
+
+  describe("a Glimmers gift", () => {
+    test("gives its Glimmers once per account, logged under the announcement, with the purse in the answer", async () => {
+      const id = (await write("glimmers", { glimmers: 100 })).id;
+      const before = (await playerList()).find((a) => a.id === id);
+      expect(before).toMatchObject({ shiny: 0, glimmers: 100, claimed: false, dismissed: false });
+
+      const first = await call("POST", `/api/v/bm/announcements/${id}/claim`, PLAYER);
+      expect(first.status).toBe(200);
+      expect(first.body).toMatchObject({
+        id,
+        shiny: 0,
+        glimmers: 100,
+        already: false,
+        eventcoins: 100,
+        coinsGained: [{ amount: 100, reason: "announcement" }],
+      });
+      expect(await glimmersOf(PLAYER)).toBe(100);
+      expect(await shinyOf(PLAYER)).toBe(START_SHINY);
+
+      const second = await call("POST", `/api/v/bm/announcements/${id}/claim`, PLAYER);
+      expect(second.body).toMatchObject({ glimmers: 100, already: true, eventcoins: 100 });
+      expect(second.body.coinsGained).toBeUndefined();
+      expect(await glimmersOf(PLAYER)).toBe(100);
+      expect(await glimmersOf(OTHER)).toBe(0);
+
+      const log = await sql<{ amount: number; reason: string; award_key: string }>(
+        `SELECT amount, reason, award_key FROM bym.event_coin_log WHERE userid = ?`,
+        [PLAYER]
+      );
+      expect(log).toEqual([{ amount: 100, reason: "announcement", award_key: `announcement:${id}` }]);
+      const [claim] = await sql<{ amount: number; glimmers: number }>(
+        `SELECT amount, glimmers FROM bym.announcement_claim WHERE userid = ? AND announcement_id = ?`,
+        [PLAYER, id]
+      );
+      expect(claim).toEqual({ amount: 0, glimmers: 100 });
+      expect((await playerList()).find((a) => a.id === id)).toMatchObject({ claimed: true, dismissed: true });
+      const admin = await call("GET", "/api/v/admin/announcements", OWNER);
+      expect(admin.body.announcements.find((a: { id: number }) => a.id === id)).toMatchObject({
+        shiny: 0,
+        glimmers: 100,
+        claims: 1,
+      });
+      expect(admin.body.limits).toMatchObject({ glimmersMax: 1000 });
+    });
+
+    test("one Claim gives the Shiny and the Glimmers together", async () => {
+      const id = (await write("both", { shiny: 200, glimmers: 100 })).id;
+      const first = await call("POST", `/api/v/bm/announcements/${id}/claim`, PLAYER);
+      expect(first.body).toMatchObject({ shiny: 200, glimmers: 100, already: false, eventcoins: 100 });
+      expect(await shinyOf(PLAYER)).toBe(START_SHINY + 200);
+      expect(await glimmersOf(PLAYER)).toBe(100);
+      await call("POST", `/api/v/bm/announcements/${id}/claim`, PLAYER);
+      expect(await shinyOf(PLAYER)).toBe(START_SHINY + 200);
+      expect(await glimmersOf(PLAYER)).toBe(100);
+    });
+
+    test("many presses at once give the Glimmers once", async () => {
+      const id = (await write("glimmers", { shiny: 20, glimmers: 100 })).id;
+      const answers = await Promise.all(
+        Array.from({ length: 8 }, () => call("POST", `/api/v/bm/announcements/${id}/claim`, PLAYER))
+      );
+      expect(answers.map((a) => a.status)).toEqual(Array(8).fill(200));
+      expect(answers.filter((a) => a.body.already === false)).toHaveLength(1);
+      expect(await glimmersOf(PLAYER)).toBe(100);
+      expect(await shinyOf(PLAYER)).toBe(START_SHINY + 20);
+      const [row] = await sql<{ n: number }>(`SELECT count(*)::int AS n FROM bym.event_coin_log WHERE userid = ?`, [PLAYER]);
+      expect(row!.n).toBe(1);
+    });
+
+    test("adds to Glimmers the player already has", async () => {
+      await sql(`INSERT INTO bym.event_coins (userid, balance, earned) VALUES (?, 40, 40)`, [PLAYER]);
+      const id = (await write("glimmers", { glimmers: 100 })).id;
+      expect((await call("POST", `/api/v/bm/announcements/${id}/claim`, PLAYER)).body.eventcoins).toBe(140);
+      expect(await glimmersOf(PLAYER)).toBe(140);
+    });
+
+    test("an older Shiny-only claim stays as it was: no Glimmers, no purse", async () => {
+      const id = (await write("thanks", { shiny: 200 })).id;
+      await call("POST", `/api/v/bm/announcements/${id}/claim`, PLAYER);
+      const again = await call("POST", `/api/v/bm/announcements/${id}/claim`, PLAYER);
+      expect(again.body).toMatchObject({ shiny: 200, glimmers: 0, already: true });
+      expect(again.body.eventcoins).toBeUndefined();
+      expect(await glimmersOf(PLAYER)).toBe(0);
+    });
+
+    test("the Glimmers change only until the first claim", async () => {
+      const id = (await write("glimmers", { glimmers: 100 })).id;
+      const put = (overrides: Record<string, unknown>) =>
+        call("PUT", `/api/v/admin/announcements/${id}`, OWNER, form("glimmers", overrides));
+      expect((await put({ glimmers: 150 })).status).toBe(200);
+      await call("POST", `/api/v/bm/announcements/${id}/claim`, PLAYER);
+      const refused = await put({ glimmers: 300 });
+      expect(refused.status).toBe(409);
+      expect(refused.body.reason).toBe("giftClaimed");
+      // Adding Shiny to a claimed Glimmers gift is a change too.
+      expect((await put({ glimmers: 150, shiny: 10 })).status).toBe(409);
+      expect((await put({ glimmers: 150, body: "New words" })).status).toBe(200);
+      expect((await call("POST", `/api/v/bm/announcements/${id}/claim`, OTHER)).body.glimmers).toBe(150);
+    });
+
+    test("too many Glimmers are refused", async () => {
+      const answer = await call("POST", "/api/v/admin/announcements", OWNER, form("too many", { glimmers: 1001 }));
+      expect(answer.status).toBe(400);
+      expect(answer.body.error).toContain("Glimmers");
     });
   });
 

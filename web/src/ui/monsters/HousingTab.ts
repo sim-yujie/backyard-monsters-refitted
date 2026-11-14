@@ -6,10 +6,17 @@ import { actionKey, YardChangeReason, type YardChange } from "@/game/yard/YardSt
 import { formatAmount, formatCountdown } from "@/ui/format";
 import { resourceAmount } from "@/ui/resourceIcon";
 import "@/ui/styles/housing.css";
+import { BunkerPanel } from "@/ui/yard/BunkerPanel";
 import { ShinyButton } from "@/ui/yard/ShinyButton";
 import { HousingJuice } from "./HousingJuice";
 import { HousingView } from "./HousingView";
-import { MonstersTabId, type MonstersFocus, type MonstersTab, type MonstersTabContext } from "./monstersTab";
+import {
+  MonsterBuilding,
+  MonstersTabId,
+  type MonstersFocus,
+  type MonstersTab,
+  type MonstersTabContext,
+} from "./monstersTab";
 
 /**
  * The Housing tab (`docs/design/yard-buildings.md` §4.5).
@@ -18,8 +25,15 @@ import { MonstersTabId, type MonstersFocus, type MonstersTab, type MonstersTabCo
  * (`HousingView`, #170): the space over one block per Housing, the monsters
  * waiting for room, and the army as pictures with counts; then the Monster
  * Juicer (`HousingJuice.ts`, §7.3): pick how many of each to juice and juice
- * them, confirmed first; and Housing Expansion (`EXH`), a
- * {@link ShinyButton} while none runs, its time left while one does.
+ * them, confirmed first; the Monster Bunkers (`BunkerPanel.ts`, §7.1), one
+ * at a time with a button per bunker when there are several; and Housing
+ * Expansion (`EXH`), a {@link ShinyButton} while none runs, its time left
+ * while one does.
+ *
+ * The Juicer's and the bunkers' controls opened from their own buildings
+ * before; since 12 Nov 2026 (owner: "Champion cage, juicer, bunker should
+ * follow the same pattern") those buildings' panels have an Open button that
+ * lands here, on the Juicer's section or on that bunker.
  *
  * Every figure comes from `game/monsters/housing.ts`, the header's own
  * arithmetic, so the tab and the header always agree. The purchase goes
@@ -41,6 +55,12 @@ export class HousingTab implements MonstersTab {
   private readonly expansion: HTMLElement;
   private readonly juiceSection: HTMLElement;
   private readonly juice: HousingJuice;
+  private readonly bunkerSection: HTMLElement;
+  /** One button per built bunker when there are several; empty for one. */
+  private readonly bunkerPick: HTMLElement;
+  private bunker: BunkerPanel | null = null;
+  /** The bunker the player chose (by building id); the first one when unset or gone. */
+  private bunkerChoice: number | null = null;
 
   /** The running expansion's end as last drawn, so its expiry redraws the tab. */
   private drawnExpansion: number | null = null;
@@ -78,8 +98,16 @@ export class HousingTab implements MonstersTab {
       ...(juiceActions ? { actions: juiceActions } : {}),
     });
     this.juiceSection.append(this.juice.element);
+    this.bunkerSection = section("housing-bunkers", "Monster Bunker");
+    this.bunkerPick = document.createElement("div");
+    // The bunker's own From housing / Buy switch look (bunker.css).
+    this.bunkerPick.className = "bunker-switch housing-bunkers__pick";
+    this.bunkerPick.setAttribute("role", "group");
+    this.bunkerPick.setAttribute("aria-label", "Bunkers");
+    this.bunkerSection.append(this.bunkerPick);
+    this.bunkerSection.hidden = true;
     this.expansion = section("housing-expansion", words.expansion);
-    scroll.append(this.view.element, this.juiceSection, this.expansion);
+    scroll.append(this.view.element, this.juiceSection, this.bunkerSection, this.expansion);
 
     this.element.append(this.status, scroll);
   }
@@ -95,7 +123,17 @@ export class HousingTab implements MonstersTab {
 
   show(focus: MonstersFocus): void {
     this.view.setFocus(focus.buildingId ?? null);
+    const opener = focus.buildingId === undefined ? undefined : this.store.building(focus.buildingId);
+    if (opener?.type === MonsterBuilding.BUNKER) this.bunkerChoice = opener.id;
     this.render();
+    // A Juicer's or bunker's Open lands on its section.
+    const target =
+      opener?.type === MonsterBuilding.JUICER
+        ? this.juiceSection
+        : opener?.type === MonsterBuilding.BUNKER && !this.bunkerSection.hidden
+          ? this.bunkerSection
+          : null;
+    target?.scrollIntoView?.({ block: "start" });
   }
 
   update(change: YardChange): void {
@@ -122,6 +160,8 @@ export class HousingTab implements MonstersTab {
   destroy(): void {
     this.view.destroy();
     this.juice.destroy();
+    this.bunker?.destroy();
+    this.bunker = null;
     this.buyButton?.destroy();
     this.buyButton = null;
     this.element.remove();
@@ -134,8 +174,53 @@ export class HousingTab implements MonstersTab {
     const now = this.store.now();
     this.view.render();
     this.juice.render();
+    this.renderBunkers();
     this.renderExpansion(expansionEndsAt(save, now), now);
     this.syncPending();
+  }
+
+  /**
+   * The built bunkers (oldest first), the chosen one's controls, and a
+   * button per bunker to switch when there are several. None built: no section.
+   */
+  private renderBunkers(): void {
+    const bunkers = this.store.yard.buildings
+      .filter((building) => building.type === MonsterBuilding.BUNKER && building.level > 0)
+      .sort((a, b) => a.id - b.id);
+    this.bunkerSection.hidden = bunkers.length === 0;
+    const title = this.bunkerSection.querySelector(".housing-section__title");
+    if (title) title.textContent = bunkers.length > 1 ? "Monster Bunkers" : "Monster Bunker";
+    const chosen = bunkers.find((building) => building.id === this.bunkerChoice) ?? bunkers[0] ?? null;
+    if (this.bunker && this.bunker.bunkerId !== chosen?.id) {
+      this.bunker.destroy();
+      this.bunker = null;
+    }
+    if (chosen && !this.bunker) {
+      this.bunker = new BunkerPanel({ store: this.store, bunkerId: chosen.id });
+      this.bunkerSection.append(this.bunker.element);
+    }
+    this.bunker?.show();
+
+    this.bunkerPick.hidden = bunkers.length < 2;
+    this.bunkerPick.replaceChildren(
+      ...(bunkers.length < 2
+        ? []
+        : bunkers.map((building, index) => {
+            const button = document.createElement("button");
+            button.type = "button";
+            const on = building.id === chosen?.id;
+            button.className = `bunker-switch__option${on ? " bunker-switch__option--on" : ""}`;
+            button.textContent = `Bunker ${index + 1}`;
+            button.setAttribute("aria-pressed", String(on));
+            button.addEventListener("click", () => {
+              if (this.bunkerChoice === building.id && this.bunker?.bunkerId === building.id) return;
+              this.bunkerChoice = building.id;
+              this.renderBunkers();
+              this.bunkerPick.querySelector<HTMLElement>('[aria-pressed="true"]')?.focus();
+            });
+            return button;
+          })),
+    );
   }
 
   private renderExpansion(ends: number | null, now: number): void {
@@ -174,6 +259,7 @@ export class HousingTab implements MonstersTab {
   private syncPending(): void {
     this.view.syncPending();
     this.juice.syncPending();
+    this.bunker?.syncPending();
     this.buyButton?.setBusy(this.store.isRunning(actionKey("buy", this.offer.item)));
   }
 

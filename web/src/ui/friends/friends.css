@@ -118,6 +118,23 @@
   display: none;
 }
 
+/* The count and, beside it, Gift all (owner, 13 Nov 2026). */
+.friends-tab__head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+}
+
+.friends-tab__head:not(:has(> :not(:empty, [hidden]))) {
+  display: none;
+}
+
+.friends-tab__gift-all[hidden] {
+  display: none;
+}
+
 .friends-status {
   margin: 0;
   font-size: var(--text-sm);
@@ -956,4 +973,257 @@
 :root[data-skin="flash"] .gift-wish:disabled > .res-icon {
   filter: grayscale(1);
   opacity: 0.6;
+}
+
+/* One gift's size over the choices (owner, 13 Nov 2026), and a resource the
+   player holds too little of: greyed and flat, still pressable so a tap says
+   what it needs (a disabled button would say nothing on a phone). */
+.gift-picker__size {
+  margin: 0;
+  font-size: var(--text-sm);
+  font-weight: 700;
+  text-align: center;
+  opacity: 0.85;
+}
+
+.gift-picker .is-short,
+:root[data-skin] .panel .gift-picker .is-short {
+  filter: grayscale(1);
+  opacity: 0.45;
+  box-shadow: none;
+  cursor: not-allowed;
+}
+
+/* ── Gift all (owner, 13 Nov 2026) ─────────────────────────────────────── */
+
+.gift-all-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  white-space: nowrap;
+}
+
+.gift-all-button > .game-icon {
+  flex: none;
+  width: 22px;
+  height: 22px;
+}
+
+/* "No wish? [twigs][pebbles][putty][goo]": the picked one lit gold, as a wish is. */
+.gift-all__fallback {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+}
+
+.gift-all__fallback[hidden] {
+  display: none;
+}
+
+.gift-all__fallback-label {
+  font-size: var(--text-sm);
+  font-weight: 700;
+}
+
+.gift-all__fallback-tiles {
+  display: flex;
+  gap: var(--space-2);
+}
+
+.gift-all__pick[aria-pressed="true"],
+.gift-all__pick[aria-pressed="true"]:hover {
+  border-color: #8a5a00;
+  background: radial-gradient(circle at 50% 30%, #fff3b0, var(--colour-medal-gold) 75%);
+  box-shadow:
+    0 0 0 2px rgb(255 214 90 / 55%),
+    0 2px 3px var(--colour-art-shadow);
+}
+
+/* "[gift] 7 friends" over the cost: "-1,387,800 [putty] -691,500 [goo]". */
+.gift-all__summary {
+  display: grid;
+  justify-items: center;
+  gap: var(--space-1);
+}
+
+.gift-all__count {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin: 0;
+  font-size: var(--text-lg);
+  font-weight: 800;
+}
+
+.gift-all__count > .game-icon {
+  width: 28px;
+  height: 28px;
+}
+
+.gift-all__none {
+  font-size: var(--text-md, 1rem);
+  font-weight: 600;
+  text-align: center;
+}
+
+.gift-all__cost {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: var(--space-1) var(--space-3);
+  margin: 0;
+  font-weight: 700;
+}
+
+/* The window is never taller than the screen (9 friends or 100, a phone on
+   its side): the pick, the count and the cost stay at the top, Cancel and
+   Send at the bottom, and only the friends between them scroll. The body
+   itself scrolls only if even that cannot fit. */
+.popup-backdrop > .panel.gift-all {
+  /* Centred, with the title sign hanging over the top edge: twice its overhang keeps the sign on screen. */
+  max-height: calc(100dvh - 2 * var(--space-4) - 2 * var(--skin-title-lift, 0px));
+}
+
+.takeover-dialog.gift-all > .panel__body {
+  display: flex;
+  flex-direction: column;
+  flex: 0 1 auto;
+  min-height: 0;
+}
+
+.takeover-dialog.gift-all > .panel__body > * {
+  flex: none;
+}
+
+.takeover-dialog.gift-all > .panel__body > .gift-all__scroll {
+  flex: 0 1 auto;
+}
+
+/* Each friend and their gift, then who is left out. */
+.gift-all__scroll {
+  display: grid;
+  align-content: start;
+  gap: var(--space-2);
+  min-height: 68px;
+  padding: var(--space-1) var(--space-2);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  border: 1px solid var(--colour-border-subtle);
+  border-radius: var(--radius-md, 8px);
+}
+
+.gift-all__scroll:focus-visible {
+  outline: none;
+  box-shadow: var(--focus-ring);
+}
+
+.gift-all__list {
+  display: grid;
+  gap: 2px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.gift-all__list[hidden] {
+  display: none;
+}
+
+.gift-all__row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: var(--space-2);
+  min-height: 30px;
+}
+
+.gift-all__name {
+  overflow: hidden;
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.gift-all__row > .gift-all__mark {
+  --wish-mark-size: 22px;
+}
+
+/* Always the last column, so the amounts line up with or without a wish marker. */
+.gift-all__amount {
+  grid-column: 3;
+  justify-self: end;
+  font-variant-numeric: tabular-nums;
+}
+
+.gift-all__skipped-head {
+  margin: 0;
+  font-size: var(--text-sm);
+  font-weight: 700;
+  color: var(--colour-danger, #b3261e);
+}
+
+.gift-all__skipped-list {
+  display: grid;
+  gap: 2px;
+  margin: 0;
+  padding: 0;
+  font-size: var(--text-sm);
+  list-style: none;
+}
+
+.gift-all__skip {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px;
+}
+
+.gift-all__skip .gift-all__name {
+  max-width: 50%;
+}
+
+.gift-all__lack {
+  width: 20px;
+  height: auto;
+}
+
+.gift-all__send[hidden] {
+  display: none;
+}
+
+/* A phone on its side (844x390): the count and the cost share one line and
+   the gaps tighten, so three friends show between the top and the buttons. */
+@media (height <= 500px) {
+  .takeover-dialog.gift-all > .panel__body {
+    gap: var(--space-2);
+    padding-block: var(--space-2);
+  }
+
+  .gift-all__summary {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: center;
+    gap: var(--space-1) var(--space-4);
+  }
+
+  .gift-all__count {
+    font-size: var(--text-md, 1rem);
+  }
+
+  .gift-all__pick {
+    width: 38px;
+    height: 38px;
+  }
+
+  .gift-all__pick > .res-icon {
+    width: 28px;
+  }
+
+  .gift-all__scroll {
+    min-height: 60px;
+  }
 }

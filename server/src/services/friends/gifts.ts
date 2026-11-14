@@ -24,6 +24,8 @@ export interface GiftView {
   userid: number;
   username: string;
   pic: string | null;
+  /** Their visible photo's upload number; null for the critter. */
+  photo: number | null;
   level: number;
   resource: GiftResource;
   amount: number;
@@ -117,16 +119,41 @@ export interface SentGift {
 export const insertGift = async (
   tx: EntityManager,
   gift: { from: number; to: number; resource: GiftResource; amount: number; now: number; expiresAt: number }
-): Promise<SentGift | null> => {
-  const [row] = await tx.execute<{ id: number | string }[]>(
+): Promise<SentGift | null> =>
+  (await insertGifts(tx, gift.from, [gift], gift.now, gift.expiresAt)).get(gift.to) ?? null;
+
+/**
+ * Writes gifts from one sender to several receivers in one statement (Gift
+ * all), each under the same one-a-day key as {@link insertGift}. Answers the
+ * gifts written, by receiver; a receiver `from` has already sent one today
+ * is absent. Each receiver may be listed once.
+ */
+export const insertGifts = async (
+  tx: EntityManager,
+  from: number,
+  gifts: readonly { to: number; resource: GiftResource; amount: number }[],
+  now: number,
+  expiresAt: number
+): Promise<Map<number, SentGift>> => {
+  if (gifts.length === 0) return new Map();
+  const day = helpDayOf(now);
+  const created = dateOf(now);
+  const expires = dateOf(expiresAt);
+  const rows = await tx.execute<{ id: number | string; to_userid: number | string }[]>(
     `INSERT INTO bym.friend_gift (from_userid, to_userid, resource, amount, gift_day, created_at, expires_at)
-     VALUES (?, ?, ?, ?, ?::date, ?, ?)
+     VALUES ${gifts.map(() => "(?, ?, ?, ?, ?::date, ?, ?)").join(", ")}
      ON CONFLICT ON CONSTRAINT friend_gift_once_a_day DO NOTHING
-     RETURNING id`,
-    [gift.from, gift.to, gift.resource, gift.amount, helpDayOf(gift.now), dateOf(gift.now), dateOf(gift.expiresAt)]
+     RETURNING id, to_userid`,
+    gifts.flatMap((gift) => [from, gift.to, gift.resource, gift.amount, day, created, expires])
   );
-  if (!row) return null;
-  return { giftid: Number(row.id), resource: gift.resource, amount: gift.amount, createdAt: gift.now, expiresAt: gift.expiresAt };
+  const byReceiver = new Map(gifts.map((gift) => [gift.to, gift]));
+  const written = new Map<number, SentGift>();
+  for (const row of rows) {
+    const to = Number(row.to_userid);
+    const gift = byReceiver.get(to);
+    if (gift) written.set(to, { giftid: Number(row.id), resource: gift.resource, amount: gift.amount, createdAt: now, expiresAt });
+  }
+  return written;
 };
 
 /** A waiting gift as the collect reads it. */

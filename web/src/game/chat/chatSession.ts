@@ -1,4 +1,5 @@
 import type { ChatAlliance, ChatConfig, ChatLineWire, ChatServerMessage } from "@/api/chat";
+import { photoVersionOf } from "@/game/playerPicture";
 import { onWorldChatChange, worldChatOn } from "./worldChatSetting";
 
 /**
@@ -43,6 +44,10 @@ export interface ChatLine {
   readonly userId: number;
   /** `[level] name`, as the server stamped the line. */
   readonly name: string;
+  /** The speaker's critter (`pic_square`), null for their default; with `photo`, their picture. */
+  readonly pic: string | null;
+  /** The speaker's visible photo's upload number; undefined for their critter (`game/playerPicture.ts`). */
+  readonly photo: number | undefined;
   readonly body: string;
   /** When it was said, ms since the epoch; with `userId`, what a report names. */
   readonly ts: number;
@@ -658,6 +663,8 @@ export class ChatSession {
       id: this.nextId++,
       userId,
       name: String(wire.displayName ?? ""),
+      pic: typeof wire.picSquare === "string" && wire.picSquare ? wire.picSquare : null,
+      photo: photoVersionOf(wire.photo),
       body: String(wire.body ?? ""),
       ts: Number(wire.ts) || 0,
       own: this.state.self?.userId === userId,

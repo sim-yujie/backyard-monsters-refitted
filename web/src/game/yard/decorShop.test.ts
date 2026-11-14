@@ -1,6 +1,6 @@
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
-import { DECOR_KINDS, DECORATIONS_FOR_SALE, DecorKind, decorKindOf, decorOrder } from "./decorShop";
+import { DECOR_KINDS, DECORATIONS_FOR_SALE, DecorKind, decorKindOf, decorOrder, SEASONAL_DECOR_KIND } from "./decorShop";
 import { isDecoration } from "./planner/placement";
 
 /** Every decoration in Flash's props: its `subgroup` and whether it is `block`ed. */
@@ -78,5 +78,10 @@ describe("this project's autumn decorations (owner, 10 Nov 2026)", () => {
     expect(decorKindOf(204)).toBe(DecorKind.GOOD);
     expect(decorOrder(201)).toBeLessThan(decorOrder(55));
     expect(decorOrder(202)).toBeLessThan(decorOrder(57));
+  });
+
+  it("lead the sub-tab an announcement's Shop opens on", () => {
+    const tab = DECOR_KINDS.find((kind) => kind.id === SEASONAL_DECOR_KIND)!;
+    expect(tab.types.slice(0, 3)).toEqual([201, 205, 206]);
   });
 });

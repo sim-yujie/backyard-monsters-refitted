@@ -1,4 +1,5 @@
-import { noteCoins } from "@/game/eventCoins";
+import type { DecorKind } from "@/game/yard/decorShop";
+import { coinBalance, noteCoins } from "@/game/eventCoins";
 import type {
   AchievementUnlock,
   BaseLoadResponse,
@@ -263,10 +264,11 @@ export interface YardSceneHooks {
    */
   openAlliance?(): void;
   /**
-   * Opens the Build window on its Decorations tab: the HUD's event coin
-   * counter uses it. Absent where there is no Build window.
+   * Opens the Build window on its Decorations tab, on sub-tab `kind` when
+   * given: the HUD's event coin counter and an announcement's "Shop" use it.
+   * Absent where there is no Build window.
    */
-  openDecorations?(): void;
+  openDecorations?(kind?: DecorKind): void;
   /**
    * Plays a bank on the press (#208, `bankShow.ts`): each harvester in
    * `predicted` (`predictBank`) throws its resource balls at the Town Hall
@@ -464,6 +466,23 @@ export class YardStore implements YardStoreReader, YardStoreActions {
     return this.current;
   }
 
+  /**
+   * {@link save} as the server holds it: `resources` without the outpost
+   * income predicted since the last answer, and `buildingresources.t` where
+   * the server last paid it (#207). {@link save} keeps the load's `t` while
+   * its `resources` climb, so a screen that predicts the income afresh from it
+   * (Map Room 2, `mapRoute.ts` `primeFromYard`) would add the ticks twice.
+   */
+  get serverSave(): BaseLoadResponse {
+    const reported = this.income.reported;
+    if (!reported) return this.current;
+    return {
+      ...this.current,
+      resources: reported.resources,
+      buildingresources: { ...this.current.buildingresources, t: reported.t },
+    };
+  }
+
   get yard(): Yard {
     // A tribe camp in the editor stands on the plot a camp grows to (`readYard`).
     this.cachedYard ??= readYard(this.current, isTribeEditing() ? { wild: true } : {});
@@ -478,9 +497,14 @@ export class YardStore implements YardStoreReader, YardStoreActions {
     return this.current.credits ?? 0;
   }
 
-  /** Event coins (beta 7): the decorations shop's purse; 0 when the load did not carry it. */
+  /**
+   * Event coins (beta 7): the decorations shop's purse. The live balance the
+   * top bar shows (`game/eventCoins.ts`) when one is known: coins can arrive
+   * outside a yard answer (an announcement's Glimmers gift), and the yard's
+   * own copy would then lag behind. Else the load's, or 0.
+   */
   get eventCoins(): number {
-    return this.current.eventcoins ?? 0;
+    return coinBalance() ?? this.current.eventcoins ?? 0;
   }
 
   get caps(): ResourceCaps | null {
@@ -822,10 +846,10 @@ export class YardStore implements YardStoreReader, YardStoreActions {
     if (typeof response.playerpoints === "number") slices.playerpoints = response.playerpoints;
     if (typeof response.notifications === "number") slices.notifications = response.notifications;
     if (typeof response.questsClaimable === "number") slices.questsClaimable = response.questsClaimable;
-    // Event coins: only when the action changed them (`game/eventCoins.ts` shows the "+15").
+    // Event coins: only when the action changed them (the top bar floats the "+15").
     if (typeof response.eventcoins === "number") {
       slices.eventcoins = response.eventcoins;
-      noteCoins(response.eventcoins, response.coinsGained);
+      noteCoins(response.eventcoins);
     }
     // Nor are the siege weapons and the Inferno purse: they ride `completed` and the siege routes' reports.
     Object.assign(slices, siegeSlices(this.current, response.completed, response.report));

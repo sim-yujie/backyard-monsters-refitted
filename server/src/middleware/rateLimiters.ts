@@ -676,10 +676,19 @@ export const photoReportLimiter = RateLimit.middleware({
   handler: profileRefusal("You have sent a lot of reports. Please wait a few minutes."),
 });
 
-/** Profile photos, which need no sign-in: 240 a minute per IP. Browsers keep them a day. */
+/**
+ * Profile photos, which need no sign-in: 600 a minute per IP. Browsers keep
+ * each one a day, so a player asks once per photo. Since photos show on every
+ * list (13 Nov 2026) one player opening the leaderboard, the friends window
+ * and an alliance roster can ask for 100 or so in a minute, and several
+ * players can share one address (a household, a school, a mobile carrier),
+ * so the limit leaves room for a handful of them. Each request is one read
+ * by primary key; a refused one shows the critter, never a broken picture.
+ */
+export const PROFILE_PHOTOS_PER_MINUTE = 600;
 export const profilePhotoLimiter = RateLimit.middleware({
   interval: { min: 1 },
-  max: 240,
+  max: PROFILE_PHOTOS_PER_MINUTE,
   prefixKey: "profile-photos",
   handler: profileRefusal("Too many requests. Please try again shortly."),
 });
@@ -710,6 +719,22 @@ export const mailStatusLimiter = RateLimit.middleware({
   max: 20,
   prefixKey: "mail-status",
   keyGenerator: byUser("mail-status"),
+  handler: async (ctx: Context) => {
+    ctx.status = Status.TOO_MANY_REQUESTS;
+    ctx.body = { error: "Too many requests. Please slow down.", reason: "rateLimited" };
+  },
+});
+
+/**
+ * The game's Reports window for moderators (`/mod/...`, owner 12 Nov 2026):
+ * the button's count every couple of minutes, the list, a player, the chat
+ * around a line and the steps. 60 a minute is far above a moderator's use.
+ */
+export const modReportsLimiter = RateLimit.middleware({
+  interval: { min: 1 },
+  max: 60,
+  prefixKey: "mod-reports",
+  keyGenerator: byUser("mod-reports"),
   handler: async (ctx: Context) => {
     ctx.status = Status.TOO_MANY_REQUESTS;
     ctx.body = { error: "Too many requests. Please slow down.", reason: "rateLimited" };

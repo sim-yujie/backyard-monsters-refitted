@@ -24,6 +24,8 @@ export interface AllianceDoorOptions {
   readonly onOpenMap?: () => void;
   /** The player joined, founded, left or lost an alliance. */
   readonly onChanged?: () => void;
+  /** The window read whether the player is in an alliance: the scene shows or hides the button. */
+  readonly onMembership?: (member: boolean) => void;
   /** The routes, for a test. */
   readonly api?: AllianceApi;
 }
@@ -81,7 +83,7 @@ export class AllianceDoor {
       return;
     }
     this.options.onOpen?.();
-    const { onBuildObservatory, onOpenMap, onChanged, api } = this.options;
+    const { onBuildObservatory, onOpenMap, onChanged, onMembership, api } = this.options;
     this.window = new AllianceWindow({
       ...(api ? { api } : {}),
       ...(tab ? { tab } : {}),
@@ -89,6 +91,7 @@ export class AllianceDoor {
       ...(onBuildObservatory ? { onBuildObservatory } : {}),
       ...(onOpenMap ? { onOpenMap } : {}),
       ...(onChanged ? { onChanged } : {}),
+      ...(onMembership ? { onMembership } : {}),
       onClose: () => {
         this.window = null;
         this.button.setAttribute("aria-expanded", "false");

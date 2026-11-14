@@ -5,7 +5,7 @@ import {
   planAcademyInstant,
   planAcademyTrain,
 } from "../../services/yard/academy.js";
-import { weekendBoost, weekendBoostUsed } from "../../services/events/weekendBoosts.js";
+import { weekendBoost } from "../../services/events/weekendBoosts.js";
 import { defineYardAction } from "./yardAction.js";
 
 /**
@@ -23,12 +23,7 @@ import { defineYardAction } from "./yardAction.js";
  */
 export const yardAcademyTrainAction = defineYardAction({
   schema: YardAcademyTrainSchema,
-  run: ({ save, body, now, user }) => {
-    const off = weekendBoost("study", now);
-    const plan = planAcademyTrain(save, body.monster, body.academy, now, off);
-    if (off > 0) weekendBoostUsed(user.userid, "study", now);
-    return plan;
-  },
+  run: ({ save, body, now }) => planAcademyTrain(save, body.monster, body.academy, now, weekendBoost("study", now)),
   inferno: "allow",
 });
 

@@ -28,6 +28,12 @@ export type UserCellFields =
 
 export type UserCellOwner = Loaded<User, "save", "userid" | "username" | "pic_square" | "alliance_id" | "save.points" | "save.basevalue">;
 
+/** `wf`: when the own outpost's busy worker is free again, when that is known. */
+const workerFinish = (busy: unknown, saveId: number): { wf: number } | undefined => {
+  const finishAt = busy instanceof Map ? busy.get(saveId) : undefined;
+  return typeof finishAt === "number" ? { wf: finishAt } : undefined;
+};
+
 type Cell = Loaded<WorldMapCell, "save", UserCellFields>;
 
 /**
@@ -43,7 +49,7 @@ type Cell = Loaded<WorldMapCell, "save", UserCellFields>;
  */
 export const userCell = async (ctx: Context, cell: Cell, cellOwners: Map<number, UserCellOwner>) => {
   const currentUser: User = ctx.authUser;
-  const { online: onlineNow, truces, pendingInvites, idleWorkers, busyWorkers, attackers, friends, pinnedFriends, attacked } =
+  const { online: onlineNow, truces, pendingInvites, idleWorkers, busyWorkers, attackers, friends, pinnedFriends, attacked, photos } =
     ctx.state;
 
   const mine = currentUser.userid === cell.uid;
@@ -94,7 +100,10 @@ export const userCell = async (ctx: Context, cell: Cell, cellOwners: Map<number,
     // `mcWorker`). Absent elsewhere: nobody else sees whether a worker is busy.
     ...(mine && outpostCell && (idleWorkers as Set<number> | undefined)?.has(cellSave.basesaveid) && { wi: 1 }),
     // ... or with it building, upgrading or fortifying (Modern's construction badge).
-    ...(mine && outpostCell && (busyWorkers as Set<number> | undefined)?.has(cellSave.basesaveid) && { wb: 1 }),
+    ...(mine && outpostCell && (busyWorkers as Map<number, number | null> | undefined)?.has(cellSave.basesaveid) && { wb: 1 }),
+    // ... and when that job ends (Unix seconds), so the map takes the badge down then
+    // without the yard being opened (owner, 12 Nov 2026). Absent while it is paused.
+    ...(mine && outpostCell && workerFinish(busyWorkers, cellSave.basesaveid)),
     bid: cell.baseid,
     aid: cellOwner.alliance_id,
     i: cell.terrainHeight,
@@ -134,6 +143,9 @@ export const userCell = async (ctx: Context, cell: Cell, cellOwners: Map<number,
     lo: locked,
     dm: damage,
     pic_square: cellOwner.pic_square,
+    // The owner's uploaded photo others may see, its upload number (`services/profile/visiblePhoto.ts`);
+    // null shows the critter. Read once for the whole area by `getArea`.
+    photo: (photos as Map<number, number> | undefined)?.get(cellOwner.userid) ?? null,
     // An outpost's Starter Kit (issue #334): everyone's tower reads bronze,
     // silver or gold by it, including a viewer who does not own it, so this
     // is not gated on `mine` the way `r`/`m` are.

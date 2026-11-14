@@ -409,7 +409,7 @@
   line-height: 1;
 }
 
-/* The monster hatching now. A button when there is one: a tap asks to cancel it. */
+/* The monster hatching now. A button when there is one: a tap cancels it, holding cancels more. */
 .hatch-now {
   position: relative;
   flex: none;
@@ -425,6 +425,17 @@
   color: var(--colour-text);
   font: inherit;
   text-align: left;
+}
+
+/* Held to cancel or take out more (owner, 12 Nov): a finger must not select
+   text or open the long-press menu. Panning the row still works; the browser
+   then cancels the press and nothing is taken. */
+button.hatch-now,
+button.hatch-slot {
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
+  touch-action: manipulation;
 }
 
 button.hatch-now {
@@ -533,39 +544,6 @@ button.hatch-now:disabled {
   transition: width var(--motion-normal) var(--easing);
 }
 
-/* "Cancel this Pokey?" in the card itself, with its refund. */
-.hatch-now--confirm,
-.hatch-now--confirm.hatch-now--compact {
-  justify-content: center;
-  gap: var(--space-1);
-  width: auto;
-  min-width: 208px;
-  padding: var(--space-2) var(--space-3);
-  border-color: var(--colour-danger);
-  background: var(--colour-danger-soft);
-}
-
-.hatch-now__question {
-  font-weight: 700;
-  white-space: nowrap;
-}
-
-.hatch-now__refund {
-  font-size: var(--text-sm);
-  color: var(--colour-text-secondary);
-}
-
-.hatch-now__buttons {
-  display: flex;
-  gap: var(--space-2);
-}
-
-.hatch-now__buttons > .btn {
-  flex: 1;
-  padding-inline: var(--space-2);
-  font-size: var(--text-sm);
-}
-
 /* Idle, with the chosen batch about to start in it. */
 .hatch-now--preview {
   align-items: center;
@@ -631,6 +609,16 @@ button.hatch-slot {
 
 button.hatch-slot:hover:not(:disabled) {
   background: var(--colour-surface-control-hover);
+}
+
+/* Being held: the count runs down in the danger colour until the release sends it. */
+button.hatch-slot.hatch-slot--taking {
+  border-color: var(--colour-danger);
+  background: var(--colour-danger-soft);
+}
+
+.hatch-slot--taking .hatch-slot__count {
+  color: var(--colour-danger);
 }
 
 button.hatch-slot:focus-visible {
@@ -901,11 +889,6 @@ button.hatch-slot:disabled {
   background: var(--colour-surface-sunken);
 }
 
-.hatch-message__icon.res-icon {
-  flex: none;
-  height: 24px;
-}
-
 .hatch-message__words {
   flex: 1;
   display: flex;
@@ -922,6 +905,12 @@ button.hatch-slot:disabled {
 
 .hatch-message__title--warning {
   color: var(--colour-warning);
+}
+
+/* With no warning beside it the housing bar takes the whole row. */
+.hatch-message > .hatch-housing:only-child {
+  flex: 1;
+  width: auto;
 }
 
 .hatch-housing {
@@ -1347,18 +1336,6 @@ button.hatch-slot:disabled {
   color: var(--colour-text-strong);
 }
 
-/* The batch's cost, time and housing before it is sent (#268, G). */
-.hatch-add__sum {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 0 var(--space-1);
-  margin: 0;
-  font-size: var(--text-sm);
-  color: var(--colour-text-secondary);
-  font-variant-numeric: tabular-nums;
-}
-
 .hatch-add__controls .qty-stepper__step,
 .hatch-add__count,
 .hatch-add__fill {
@@ -1396,16 +1373,11 @@ button.hatch-slot:disabled {
   text-wrap: balance;
 }
 
-.hatch-add__note,
 .hatch-add__warning {
   margin: 0;
   font-size: var(--text-sm);
   line-height: var(--leading-normal);
   font-variant-numeric: tabular-nums;
-}
-
-.hatch-add__note {
-  color: var(--colour-text-secondary);
 }
 
 .hatch-add__warning {
@@ -1589,10 +1561,6 @@ button.hatch-slot:disabled {
     border-radius: 0;
   }
 
-  .hatch-now--confirm {
-    grid-column: span 3;
-  }
-
   .hatch-now--more {
     font-size: var(--text-xs);
   }
@@ -1638,10 +1606,6 @@ button.hatch-slot:disabled {
     align-items: stretch;
     gap: var(--space-2);
     padding: var(--space-3);
-  }
-
-  .hatch-message__icon.res-icon {
-    display: none;
   }
 
   .hatch-housing {
@@ -1756,8 +1720,7 @@ button.hatch-slot:disabled {
     border-top: 0;
   }
 
-  .hatch-add__to,
-  .hatch-add__sum {
+  .hatch-add__to {
     font-size: var(--text-xs);
   }
 

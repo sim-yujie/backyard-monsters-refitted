@@ -1,6 +1,7 @@
 import { weekendState } from "../../../services/events/weekendSchedule.js";
 import { weekendSettings } from "../../../services/events/weekendSettings.js";
 import { coinStore } from "../../../services/events/eventCoins.js";
+import { weekendCheckinState, type WeekendCheckinState } from "../../../services/events/weekendCoins.js";
 import { devConfig } from "../../../config/GameConfig.js";
 import { Save } from "../../../database/models/save.model.js";
 import { postgres, redis } from "../../../server.js";
@@ -61,6 +62,7 @@ import { finaliseBeforeLoad } from "../../../services/base/finaliseAttack.js";
 import { infernoConfig } from "../../../config/InfernoConfig.js";
 import { quietLoginOn } from "../../../config/QuietLoginConfig.js";
 import { loginPromptFields } from "./loginPrompts.js";
+import type { KrallenPenaltyNotice } from "../../../services/events/progressStore.js";
 import { closeInfernoPlayerAttacksOf } from "../../../services/inferno/infernoPlayerFinalise.js";
 import { combatCellHeight, combatLandFeature } from "../../../services/base/combat/cellHeight.js";
 import type { DefenderForces } from "../../../game-rules/combat/index.js";
@@ -88,12 +90,18 @@ const STRONGHOLD_FIELDS = ["level", "cell.x", "cell.y"] as const;
  * @throws Will throw an error if the base load process fails.
  */
 /**
- * The owner's event coins on a main-yard load: the balance. Null when the
- * coin tables cannot be read.
+ * The owner's event coins on a main-yard load, and the weekend event's
+ * check-in (`weekendCoins.ts`) when one runs. Null when the coin tables
+ * cannot be read.
  */
-const ownCoinsOnLoad = async (userid: number): Promise<number | null> => {
+const ownCoinsOnLoad = async (
+  userid: number,
+  now: number
+): Promise<{ balance: number; checkin: WeekendCheckinState | null } | null> => {
   try {
-    return await coinStore().balance(postgres.em.fork(), userid);
+    const em = postgres.em.fork();
+    const balance = await coinStore().balance(em, userid);
+    return { balance, checkin: await weekendCheckinState(em, userid, now) };
   } catch (error) {
     logger.warn(`event coins not read for user ${userid}: ${error}`);
     return null;
@@ -244,6 +252,7 @@ export const baseLoad: KoaController = async (ctx) => {
   let completed: (CompletedJob | OutpostNoticeJob)[] | undefined;
   let notifications: number | undefined;
   let trojanNew = false;
+  let krallenPenalties: KrallenPenaltyNotice[] = [];
   let emergence: EmergenceOnLoad | undefined;
   let underHall: number | undefined;
   if (type === BaseMode.BUILD && isOwner && baseSave.type === BaseType.MAIN) {
@@ -252,7 +261,7 @@ export const baseLoad: KoaController = async (ctx) => {
     // and places the Trojan Horse the moment the player qualifies for one
     // (issue #324); `trojanNew` tells the client to pan the camera to it once.
     let jobs: CompletedJob[];
-    ({ save: baseSave, completed: jobs, trojanPlaced: trojanNew } = await catchUpOwnerYard(baseSave));
+    ({ save: baseSave, completed: jobs, trojanPlaced: trojanNew, krallenPenalties = [] } = await catchUpOwnerYard(baseSave));
     // Outpost attacks and takeovers since the player last looked, told once
     // in the same notice and kept in the mailbox (outposts WP8, #187).
     completed = [...jobs, ...(await takeOutpostNotices(postgres.em, user.userid))];
@@ -513,10 +522,12 @@ export const baseLoad: KoaController = async (ctx) => {
   const activeKinds = activeEventKinds(getCurrentDateTime());
 
   // Event coins on the owner's main-yard load (`services/events/eventCoins.ts`):
-  // the purse for the HUD and the decorations shop. Left out if the read fails (a server before the migration): the client then shows none.
+  // the purse for the HUD and the decorations shop, and a running weekend
+  // event's check-in (`weekendCoins.ts`) for its Events card. Left out if the read
+  // fails (a server before the migration): the client then shows none.
   const coins =
     isOwner && type === BaseMode.BUILD && baseSave.type === BaseType.MAIN
-      ? await ownCoinsOnLoad(user.userid)
+      ? await ownCoinsOnLoad(user.userid, getCurrentDateTime())
       : null;
 
   // The player's outpost names and pins (beta 7, `services/outposts/outpostLabels.ts`)
@@ -549,7 +560,8 @@ export const baseLoad: KoaController = async (ctx) => {
     // The weekend event on now and the next (`services/events/weekendSchedule.ts`):
     // the web client's banner, Friday pop-up and boosted prices and times.
     weekend: weekendState(weekendSettings(), getCurrentDateTime()),
-    ...(coins !== null && { eventcoins: coins }),
+    ...(coins && { eventcoins: coins.balance }),
+    ...(coins?.checkin && { weekendcheckin: coins.checkin }),
     ...(outpostLabels && { outpostlabels: outpostLabels }),
     chatservers: [process.env.CHAT_WS_HOST!],
     ...(type === BaseMode.HELP && { help: await helpBlockFor(user.userid, baseSave) }),
@@ -578,6 +590,8 @@ export const baseLoad: KoaController = async (ctx) => {
     // The Trojan Horse was just placed on this load (issue #324): the
     // client's one-time camera pan (design §3.1).
     ...(trojanNew && { trojanNew: true }),
+    // The Krallen Hunt's penalties not told yet: the yard's one-time notice.
+    ...(krallenPenalties.length > 0 && { krallenpenalty: krallenPenalties.map(({ from, to }) => ({ from, to })) }),
     // The cave and Moloch's emergence (docs/design/inferno.md §3.2), with
     // `raised` when this load set its next raid going.
     ...(emergence && { infernostate: infernoLoadState(emergence, baseSave, getCurrentDateTime(), underHall) }),

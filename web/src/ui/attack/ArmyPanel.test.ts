@@ -584,25 +584,68 @@ describe("ArmyPanel champion", () => {
     const { panel } = mount({ ...sandboxRoster(), champions: [] });
     expect(panel.element.querySelector<HTMLElement>(".attack-army__champions")?.hidden).toBe(true);
   });
+
+  describe("Krallen's Krallen Hunt loot aura (owner, 13 Nov 2026)", () => {
+    /** The tower yard's load clock (`towerYard`). */
+    const NOW = 1_700_000_000;
+    const withKrallen = (krallen: Record<string, unknown>): AttackRoster => {
+      const roster = sandboxRoster();
+      return {
+        ...roster,
+        champions: roster.champions.map((one) => (one.t === 5 ? { ...one, ...krallen } : one)),
+      } as AttackRoster;
+    };
+    const krallenRow = (panel: ArmyPanel) =>
+      panel.element.querySelector<HTMLElement>(".attack-army__champion[data-t='5']")!;
+
+    it("while it runs: the green glow and how much more her neighbours loot", () => {
+      const { panel } = mount(withKrallen({ l: 4, la: NOW + 86_400 }));
+      const row = krallenRow(panel);
+      expect(row.querySelector(".attack-army__aura")?.textContent).toBe("up to x2.8");
+      expect(row.querySelector(".attack-army__icon--aura")).not.toBeNull();
+      expect(panel.element.querySelector(".attack-army__champion[data-t='4'] .attack-army__aura")).toBeNull();
+    });
+
+    it("none without the claim, once it has run out, or below level 3", () => {
+      for (const krallen of [{ l: 5 }, { l: 5, la: NOW }, { l: 2, la: NOW + 86_400 }]) {
+        const { panel } = mount(withKrallen(krallen));
+        expect(krallenRow(panel).querySelector(".attack-army__aura")).toBeNull();
+        expect(krallenRow(panel).querySelector(".attack-army__icon--aura")).toBeNull();
+      }
+    });
+
+    it("the fling log carries the page's `aura` while it runs (the server stamps its own)", () => {
+      const running = mount(withKrallen({ l: 5, la: NOW + 86_400 }));
+      running.session.appendFling({ x: 100, y: 100, monsters: {}, champion: { t: 5, l: 5 } });
+      expect(running.session.flingLog().events.at(-1)).toMatchObject({ champion: { t: 5, aura: true } });
+      const none = mount(withKrallen({ l: 5 }));
+      none.session.appendFling({ x: 100, y: 100, monsters: {}, champion: { t: 5, l: 5 } });
+      expect((none.session.flingLog().events.at(-1) as { champion?: { aura?: boolean } }).champion?.aura).toBeUndefined();
+    });
+  });
 });
 
 describe("ArmyPanel after a drop", () => {
-  it("keeps the figure, greys a clamped row with what is left, and disables an exhausted one", () => {
+  it("empties every row and the meter, and disables an exhausted row (owner, 13 Nov 2026)", () => {
     const { panel, bucket, session } = mount();
-    bucket.setCount("C14", 20);
+    bucket.setCount("C14", 10);
     bucket.setCount("C15", 2);
     const [krallen] = radios(panel);
     krallen?.click();
 
     // Send 10 Teratorn and both Zafreeti with the champion.
-    session.appendFling({ x: 100, y: 100, monsters: { C14: 10, C15: 2 }, champion: { t: 5, l: 5 } });
+    session.appendFling({ x: 100, y: 100, ...bucket.composition() });
     bucket.afterDrop();
 
     const teratorn = rowFor(panel, "C14");
-    expect(teratorn.classList.contains("attack-army__row--clamped")).toBe(true);
-    expect(control<HTMLInputElement>(teratorn, ".attack-army__count").value).toBe("20");
-    expect(control(teratorn, ".attack-army__note").textContent).toBe("15 left");
+    expect(control<HTMLInputElement>(teratorn, ".attack-army__count").value).toBe("0");
+    expect(control<HTMLInputElement>(teratorn, ".attack-army__count").disabled).toBe(false);
+    expect(control(teratorn, ".attack-army__note").textContent).toBe("");
     expect(control(teratorn, ".attack-army__housed").textContent).toBe("15 housed");
+    expect(panel.element.querySelector(".attack-army__meter")?.getAttribute("aria-valuenow")).toBe("0");
+    expect(control(panel.element, ".attack-army__hint").textContent).toBe("Pick monsters, then tap ground");
+    expect(control<HTMLButtonElement>(panel.element, ".attack-army__clear").disabled).toBe(true);
+    expect(control<HTMLButtonElement>(panel.element, ".attack-army__fill-all").disabled).toBe(false);
 
     const zafreeti = rowFor(panel, "C15");
     expect(zafreeti.classList.contains("attack-army__row--exhausted")).toBe(true);
@@ -713,5 +756,39 @@ describe("ArmyPanel last army", () => {
     panels.push(again);
     control<HTMLButtonElement>(again.element, ".attack-army__load-last").click();
     expect(again.inputFor("C14")?.value).toBe("7");
+  });
+
+  it("puts the batch just sent back after the drop emptied the panel, even if it found none before", () => {
+    const map = new Map<string, string>();
+    const storage = {
+      length: 0,
+      clear: () => map.clear(),
+      getItem: (k: string) => map.get(k) ?? null,
+      key: () => null,
+      removeItem: (k: string) => {
+        map.delete(k);
+      },
+      setItem: (k: string, v: string) => {
+        map.set(k, v);
+      },
+    } as Storage;
+    const session = sessionWith(sandboxRoster());
+    const bucket = new Bucket(session, { storage, playerKey: "2503" });
+    const panel = new ArmyPanel(bucket).mount(document.body);
+    panels.push(panel);
+    const load = control<HTMLButtonElement>(panel.element, ".attack-army__load-last");
+    load.click();
+    expect(load.disabled).toBe(true);
+
+    bucket.setCount("C14", 7);
+    session.appendFling({ x: 100, y: 100, ...bucket.composition() });
+    bucket.afterDrop();
+    expect(panel.inputFor("C14")?.value).toBe("0");
+    expect(load.disabled).toBe(false);
+    expect(load.title).toBe("Recall the composition you sent last");
+
+    load.click();
+    expect(panel.inputFor("C14")?.value).toBe("7");
+    expect(bucket.composition()).toEqual({ monsters: { C14: 7 } });
   });
 });

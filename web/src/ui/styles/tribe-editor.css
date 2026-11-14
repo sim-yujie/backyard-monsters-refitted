@@ -114,6 +114,13 @@
   z-index: 15;
 }
 
+/* It sat over a building window's title (the Champion Cage's "Tribe editor"
+   over its name, owner 12 Nov 2026): out of the way while a building's
+   window or the Monsters screen is open. */
+:root:has(.map-dock--right > :not([hidden]), .monsters-screen:not([hidden])) .tribe-editor-open {
+  visibility: hidden;
+}
+
 .tribe-edit-bar[hidden] {
   display: none;
 }

@@ -23,6 +23,11 @@ export interface AllianceMember {
   user_id: number;
   display_name: string;
   pic_square: string | null;
+  /**
+   * Their visible photo's upload number, null for the critter; set by the
+   * list's one lookup (`addPhotos`, `services/profile/visiblePhoto.ts`).
+   */
+  photo: number | null;
   base_id: string | null;
   level: number;
   points: number;
@@ -83,6 +88,7 @@ export const toAllianceMember = (
     user_id: userid,
     display_name: username,
     pic_square: pic_square ?? null,
+    photo: null,
     base_id: save.baseid,
     level: calculateBaseLevel(save.points, save.basevalue),
     points: calculateEmpirePoints(save.points, save.basevalue),

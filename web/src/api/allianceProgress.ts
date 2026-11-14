@@ -11,15 +11,15 @@ export interface ConstellationView {
   readonly id: string;
   readonly name: string;
   readonly kind: "strength" | "weakness";
-  /** Steps lit, 0-5 (each step = 2 stars). */
+  /** Steps lit, 0-10 (each step = 1 star). */
   readonly steps: number;
   /** Points for the next step, or null when all 10 stars are lit. */
   readonly next_price: number | null;
-  /** The price of steps 1-5. */
+  /** The price of stars 1-10. */
   readonly prices: readonly (number | null)[];
   /** Members suggesting its next step. */
   readonly suggest_count: number;
-  /** Each stat it moves: its value at start, then after steps 1-5. */
+  /** Each stat it moves: its value at start, then after stars 1-10. */
   readonly effects: readonly { readonly stat: string; readonly values: readonly number[] }[];
 }
 
@@ -41,7 +41,13 @@ export interface GoalMenuItem {
   readonly kind: string;
   readonly name: string;
   readonly only: AllianceType | null;
-  readonly tiers: readonly { readonly tier: GoalView["tier"]; readonly target: number; readonly points: number }[];
+  readonly tiers: readonly {
+    readonly tier: GoalView["tier"];
+    readonly target: number;
+    readonly points: number;
+    /** How many hardcore players the tier is sized for (no scaling by member count); an older server sends none. */
+    readonly players?: number;
+  }[];
 }
 
 /** What `myalliance` adds in phase 2 (all optional: an older server sends none). */
@@ -59,6 +65,7 @@ export interface AllianceProgressFields {
   readonly today?: {
     readonly contributed: number;
     readonly members: number;
+    /** Points the alliance's goals paid today (goals are the only source of points). */
     readonly points_today: number;
     readonly helped_ids: readonly number[];
   };

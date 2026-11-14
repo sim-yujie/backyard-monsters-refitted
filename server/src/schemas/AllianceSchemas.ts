@@ -1,7 +1,7 @@
 import z from "zod";
 
 import { AllianceInviteStatus, AllianceJoinMode, AllianceRole, AllianceStance, AllianceType } from "../enums/Alliance.js";
-import { ALLIANCE_AD, DEFAULT_ALLIANCE_TYPE } from "../config/AllianceConfig.js";
+import { ALLIANCE_AD, ALLIANCE_DESC_MAX, DEFAULT_ALLIANCE_TYPE } from "../config/AllianceConfig.js";
 import { isCountryCode } from "../config/Countries.js";
 
 /**
@@ -35,7 +35,7 @@ const adFields = {
 export const CreateAllianceSchema = z.object({
   alliance_name: z.string().trim(),
   alliance_image: z.coerce.number().int().min(1).max(41),
-  alliance_desc: z.string().trim().min(1).max(255),
+  alliance_desc: z.string().trim().min(1).max(ALLIANCE_DESC_MAX),
   /** Midas' Council, Conquest Horde or Fortress Legion; Midas when left out. */
   alliance_type: z.enum(AllianceType).default(DEFAULT_ALLIANCE_TYPE),
   /** The ad; each left out keeps the default (Ask to join, any language, no time zone, the level floor). */
@@ -69,7 +69,7 @@ export const ReportAllianceSchema = z.object({
  */
 export const EditAllianceSchema = z.object({
   alliance_image: z.coerce.number().int().min(1).max(41),
-  alliance_desc: z.string().trim().min(1).max(255),
+  alliance_desc: z.string().trim().min(1).max(ALLIANCE_DESC_MAX),
   /** The ad; each left out stays as it is. */
   ...adFields,
 });

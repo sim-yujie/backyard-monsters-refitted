@@ -103,9 +103,6 @@ const buttons = (root: HTMLElement): HTMLButtonElement[] => [
 ];
 const buttonNamed = (root: HTMLElement, text: string): HTMLButtonElement | undefined =>
   buttons(root).find((one) => one.textContent?.startsWith(text));
-/** One of the Champion Cage's two tabs. */
-const tabNamed = (root: HTMLElement, tab: "champion" | "building"): HTMLButtonElement =>
-  root.querySelector<HTMLButtonElement>(`[role="tab"][data-tab="${tab}"]`)!;
 
 const HALL = building(1, 14, 5);
 
@@ -546,29 +543,6 @@ describe("BuildingPanel: the monster buildings", () => {
   });
 });
 
-describe("BuildingPanel: the Monster Bunker (§7.1)", () => {
-  it("Open bunker shows the bunker's controls under the actions, and Close bunker hides them", () => {
-    const { element } = setup([HALL, building(2, 22, 1, { m: { C1: 3 } })], 2, {
-      load: { monsters: { housed: { C2: 4 } } } as Partial<BaseLoadResponse>,
-    });
-    expect(element.querySelector(".bunker")).toBeNull();
-    buttonNamed(element, "Open bunker")!.click();
-    const bunker = element.querySelector(".bunker")!;
-    expect(bunker.querySelector(".bunker__figures")!.textContent).toBe("30 / 380 space used");
-    expect(buttonNamed(element, "Close bunker")!.getAttribute("aria-expanded")).toBe("true");
-    buttonNamed(element, "Close bunker")!.click();
-    expect(element.querySelector(".bunker")).toBeNull();
-    expect(buttonNamed(element, "Open bunker")).toBeDefined();
-  });
-
-  it("closes the bunker's controls when another building is shown", () => {
-    const { element, panel, store } = setup([HALL, building(2, 22, 1)], 2);
-    buttonNamed(element, "Open bunker")!.click();
-    panel.show(store.building(1)!);
-    expect(element.querySelector(".bunker")).toBeNull();
-  });
-});
-
 describe("BuildingPanel: the Wild Monster Baiter (#126, #22, #308)", () => {
   // The window opens on the page, outside the panel: start each test on a clean one.
   beforeEach(() => document.body.replaceChildren());
@@ -616,86 +590,29 @@ describe("BuildingPanel: the Wild Monster Baiter (#126, #22, #308)", () => {
   });
 });
 
-describe("BuildingPanel: the Champion Cage (§7.2)", () => {
-  it("opens straight on the champion, in the wider panel, with no Open cage (owner, 28 Oct)", () => {
-    const { element, panel, store } = setup([HALL, building(2, 114, 1)], 2);
-    expect(element.classList.contains("building-panel--cage")).toBe(true);
-    expect(element.querySelector(".champion .champion-card")).not.toBeNull();
-    expect(buttonNamed(element, "Open cage")).toBeUndefined();
-    const tabs = [...element.querySelectorAll<HTMLButtonElement>('[role="tab"]')];
-    expect(tabs.map((tab) => [tab.textContent, tab.getAttribute("aria-selected")])).toEqual([
-      ["Champion", "true"],
-      ["Building", "false"],
-    ]);
-    expect(element.dataset["cageTab"]).toBe("champion");
-    expect(element.querySelector<HTMLElement>(".building-panel__champion")!.hidden).toBe(false);
-    expect(element.querySelector<HTMLElement>(".building-panel__actions")!.hidden).toBe(true);
-    panel.show(store.building(1)!);
-    expect(element.querySelector(".champion")).toBeNull();
-    expect(element.classList.contains("building-panel--cage")).toBe(false);
-    expect(element.querySelector<HTMLElement>(".building-panel__tabs")!.hidden).toBe(true);
-  });
-
-  it("keeps the building's card a tab away, and the champion's window open behind it", () => {
-    const { element } = setup([HALL, building(2, 114, 1)], 2);
-    const champion = element.querySelector(".champion");
-    tabNamed(element, "building").click();
-    expect(element.dataset["cageTab"]).toBe("building");
-    expect(element.querySelector<HTMLElement>(".building-panel__champion")!.hidden).toBe(true);
+describe("BuildingPanel: the buildings whose controls live in the Monsters screen (owner, 12 Nov 2026)", () => {
+  it.each([
+    [114, "Open Champion Cage", "champion"],
+    [119, "Open Champion Chamber", "champion"],
+    [9, "Open Monster Juicer", "housing"],
+    [22, "Open Monster Bunker", "housing"],
+  ] as const)("type %i shows its plain card with %s, which opens the %s tab on it", (type, label, tab) => {
+    const openMonsters = vi.fn();
+    const { element } = setup([HALL, building(2, type, 1)], 2, { scene: { openMonsters } });
+    // The building's own card, not its controls: no champion, bunker or tabs in the panel.
+    expect(element.querySelector(".champion, .chamber, .bunker")).toBeNull();
+    expect(element.querySelector('[role="tablist"]')).toBeNull();
     expect(element.querySelector<HTMLElement>(".building-panel__actions")!.hidden).toBe(false);
-    expect(element.querySelector(".building-panel__actions")!.childElementCount).toBeGreaterThan(0);
-    tabNamed(element, "champion").click();
-    expect(element.dataset["cageTab"]).toBe("champion");
-    expect(element.querySelector(".champion")).toBe(champion);
+    const open = buttonNamed(element, label)!;
+    expect(open.textContent).toBe(label);
+    open.click();
+    expect(openMonsters).toHaveBeenCalledWith(tab, { buildingId: 2 });
   });
 
-  it("opens the Champion Chamber straight on its champions too, with Building a tab away (#125; owner, 28 Oct)", () => {
-    const { element } = setup([HALL, building(2, 119, 1)], 2);
-    expect(element.classList.contains("building-panel--cage")).toBe(true);
-    expect(element.querySelector(".chamber")).not.toBeNull();
-    expect(buttonNamed(element, "Open chamber")).toBeUndefined();
-    const tabs = [...element.querySelectorAll<HTMLButtonElement>('[role="tab"]')];
-    expect(tabs.map((tab) => [tab.textContent, tab.getAttribute("aria-selected")])).toEqual([
-      ["Champions", "true"],
-      ["Building", "false"],
-    ]);
-    expect(element.querySelector('[role="tablist"]')!.getAttribute("aria-label")).toBe("Champion Chamber");
-    tabNamed(element, "building").click();
-    expect(element.querySelector<HTMLElement>(".building-panel__champion")!.hidden).toBe(true);
-    expect(element.querySelector<HTMLElement>(".building-panel__actions")!.hidden).toBe(false);
-  });
-
-  it("keeps the cage's and chamber's tabs over the body, which alone scrolls; a new tab opens at its top (owner, 6 Nov 2026)", () => {
-    for (const type of [114, 119]) {
-      const { element } = setup([HALL, building(2, type, 1)], 2);
-      const tablist = element.querySelector<HTMLElement>('[role="tablist"]')!;
-      const body = element.querySelector<HTMLElement>(":scope > .panel__body")!;
-      expect(tablist.parentElement!.classList.contains("panel__head")).toBe(true);
-      expect(tablist.parentElement!.nextElementSibling).toBe(body);
-      expect(body.contains(tablist)).toBe(false);
-      body.scrollTop = 200;
-      expect(body.scrollTop).toBe(200);
-      tabNamed(element, "building").click();
-      expect(body.scrollTop).toBe(0);
-      document.body.replaceChildren();
-    }
-  });
-
-  it("puts a red dot on a damaged chamber's Building tab", () => {
-    const { element } = setup([HALL, { ...building(2, 119, 1), hp: 100 }], 2);
-    expect(tabNamed(element, "building").classList.contains("building-panel__tab--alert")).toBe(true);
-  });
-
-  it("openChampion brings back the champion tab once, and does nothing on another building (Inferno WP 5.2)", () => {
-    const { element, panel, store } = setup([HALL, building(2, 114, 1)], 2);
-    tabNamed(element, "building").click();
-    panel.openChampion();
-    panel.openChampion();
-    expect(element.querySelectorAll(".champion")).toHaveLength(1);
-    expect(element.dataset["cageTab"]).toBe("champion");
-    panel.show(store.building(1)!);
-    panel.openChampion();
-    expect(element.querySelector(".champion")).toBeNull();
+  it("offers no Open on one still on its first build", () => {
+    const openMonsters = vi.fn();
+    const { element } = setup([HALL, building(2, 114, 0, { cB: 20 })], 2, { scene: { openMonsters } });
+    expect(buttonNamed(element, "Open Champion Cage")).toBeUndefined();
   });
 });
 
@@ -839,7 +756,14 @@ describe("BuildingPanel: recycle", () => {
   it("names a bunker's lost monsters in the notice after recycling", () => {
     const report = { id: 2, t: 22, refund: { r1: 10, r2: 0, r3: 0, r4: 0 }, lost: {}, stored: null, culled: {} };
     const line = recycledMessage("Monster Bunker", report as never, { C1: 4 });
-    expect(spokenText(line)).toMatch(/Monster Bunker recycled for .*\. 4 × Pokey lost with it\.$/);
+    expect(spokenText(line!)).toMatch(/Monster Bunker recycled for .*\. 4 × Pokey lost with it\.$/);
+  });
+
+  it("a plain recycle raises no notice (the refund floats on the bar); storage still says where it went", () => {
+    const report = { id: 2, t: 22, refund: { r1: 10, r2: 0, r3: 0, r4: 0 }, lost: {}, stored: null, culled: {} };
+    expect(recycledMessage("Monster Bunker", report as never)).toBeNull();
+    const stored = recycledMessage("Gnome", { ...report, refund: {}, stored: { t: 28 } } as never);
+    expect(stored?.textContent).toBe("Gnome put in storage. Place it again from Build, Decorations.");
   });
 
   it("stores a decoration instead, and offers nothing on the Town Hall", () => {

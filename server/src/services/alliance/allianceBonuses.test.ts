@@ -7,6 +7,7 @@ import {
   bonusesFor,
   byPercent,
   constellationOf,
+  effectValue,
   mapByPercent,
   nextStepPrice,
   noBonuses,
@@ -57,33 +58,57 @@ describe("alliance bonuses", () => {
 
   test("strength steps grow; weakness steps shrink at full", () => {
     const start = bonusesFor(AllianceType.MIDAS).production;
-    expect(bonusesFor(AllianceType.MIDAS, { wormzer: 5 }).production).toBeCloseTo(start + 10, 5);
+    expect(bonusesFor(AllianceType.MIDAS, { wormzer: 10 }).production).toBeCloseTo(start + 10, 5);
     const pokey = constellationOf(AllianceType.MIDAS, "pokey")!.effects[0]!;
     // Hatch cost +15% -> +5% (fable52, start -> full).
-    expect(bonusesFor(AllianceType.MIDAS, { pokey: 5 }).outpostHatchCost).toBeCloseTo(pokey.start - 10, 5);
+    expect(bonusesFor(AllianceType.MIDAS, { pokey: 10 }).outpostHatchCost).toBeCloseTo(pokey.start - 10, 5);
     const bolt = constellationOf(AllianceType.CONQUEST, "bolt")!.effects[0]!;
-    expect(bonusesFor(AllianceType.CONQUEST, { bolt: 5 }).loot).toBeCloseTo(bolt.start / 2, 5);
+    expect(bonusesFor(AllianceType.CONQUEST, { bolt: 10 }).loot).toBeCloseTo(bolt.start / 2, 5);
+  });
+
+  test("each step lights one star and moves the value an equal share (owner, 12 Nov)", () => {
+    const brain = constellationOf(AllianceType.MIDAS, "brain")!.effects[0]!;
+    expect([0, 1, 2, 3, 10].map((s) => effectValue(brain, s))).toEqual([10, 10.5, 11, 11.5, 15]);
+    // 2, 4 ... 10 stars give what the old 1, 2 ... 5 steps of 2 stars gave.
+    const oldFull: Record<string, number> = {
+      wormzer: 25, brain: 15, pokey: 5, zafreeti: 10,
+      fang: -30, teratorn: -25, bolt: -10, ichi: -5,
+      crabatron: 20, bandito: 15, slimeattikus: -2.5, octoooze: 5,
+    };
+    for (const type of Object.values(AllianceType)) {
+      for (const c of CONSTELLATIONS[type]) {
+        const e = c.effects[0]!;
+        const oldStep = (oldFull[c.id]! - e.start) / 5;
+        for (let k = 0; k <= 5; k++) expect(effectValue(e, 2 * k)).toBeCloseTo(e.start + oldStep * k, 5);
+      }
+    }
+    const slime = constellationOf(AllianceType.FORTRESS, "slimeattikus")!.effects[0]!;
+    expect(effectValue(slime, 1)).toBe(-4.75);
   });
 
   test("Teratorn's +1 reach only at full", () => {
-    expect(bonusesFor(AllianceType.CONQUEST, { teratorn: 4 }).reach).toBe(0);
-    expect(bonusesFor(AllianceType.CONQUEST, { teratorn: 5 }).reach).toBe(1);
+    expect(bonusesFor(AllianceType.CONQUEST, { teratorn: 9 }).reach).toBe(0);
+    expect(bonusesFor(AllianceType.CONQUEST, { teratorn: 10 }).reach).toBe(1);
   });
 
   test("stars of another type and junk count for nothing", () => {
-    expect(bonusesFor(AllianceType.FORTRESS, { wormzer: 5 })).toEqual(bonusesFor(AllianceType.FORTRESS));
-    expect(stepsOf({ fang: 99 }, "fang")).toBe(5);
+    expect(bonusesFor(AllianceType.FORTRESS, { wormzer: 10 })).toEqual(bonusesFor(AllianceType.FORTRESS));
+    expect(stepsOf({ fang: 99 }, "fang")).toBe(10);
     expect(stepsOf({ fang: -3 }, "fang")).toBe(0);
     expect(stepsOf({ fang: "x" as unknown as number }, "fang")).toBe(0);
   });
 
   test("step prices scale 1x / 2x / 4x and stop at full", () => {
-    expect(nextStepPrice(AllianceType.MIDAS, 0)).toBe(40);
-    expect(nextStepPrice(AllianceType.CONQUEST, 0)).toBe(80);
-    expect(nextStepPrice(AllianceType.FORTRESS, 4)).toBe(800);
-    expect(nextStepPrice(AllianceType.MIDAS, 5)).toBeNull();
-    expect(spentOn(AllianceType.MIDAS, 5)).toBe(600);
-    expect(spentOn(AllianceType.FORTRESS, 5)).toBe(2400);
+    expect(nextStepPrice(AllianceType.MIDAS, 0)).toBe(20);
+    expect(nextStepPrice(AllianceType.MIDAS, 1)).toBe(20);
+    expect(nextStepPrice(AllianceType.MIDAS, 2)).toBe(40);
+    expect(nextStepPrice(AllianceType.CONQUEST, 0)).toBe(40);
+    expect(nextStepPrice(AllianceType.FORTRESS, 9)).toBe(400);
+    expect(nextStepPrice(AllianceType.MIDAS, 10)).toBeNull();
+    // A full constellation costs what it did with 5 steps of 2 stars.
+    expect(spentOn(AllianceType.MIDAS, 10)).toBe(600);
+    expect(spentOn(AllianceType.MIDAS, 4)).toBe(120);
+    expect(spentOn(AllianceType.FORTRESS, 10)).toBe(2400);
   });
 
   test("percent helpers", () => {
@@ -98,11 +123,12 @@ describe("alliance bonuses", () => {
 });
 
 describe("always-on values move with the whole sky", () => {
-  test("Fortress's enemy takeover price: +25% with nothing lit, +40% with all 20 steps", () => {
+  test("Fortress's enemy takeover price: +25% with nothing lit, +40% with all 40 stars", () => {
     expect(bonusesFor(AllianceType.FORTRESS, {}).enemyTakeoverCost).toBe(25);
-    const all = Object.fromEntries(CONSTELLATIONS[AllianceType.FORTRESS].map((c) => [c.id, 5]));
+    const all = Object.fromEntries(CONSTELLATIONS[AllianceType.FORTRESS].map((c) => [c.id, 10]));
     expect(bonusesFor(AllianceType.FORTRESS, all).enemyTakeoverCost).toBe(40);
-    expect(bonusesFor(AllianceType.FORTRESS, { crabatron: 5, bandito: 5 }).enemyTakeoverCost).toBe(32.5);
+    expect(bonusesFor(AllianceType.FORTRESS, { crabatron: 10, bandito: 10 }).enemyTakeoverCost).toBe(32.5);
+    expect(bonusesFor(AllianceType.FORTRESS, { crabatron: 1 }).enemyTakeoverCost).toBe(25.38);
   });
 });
 

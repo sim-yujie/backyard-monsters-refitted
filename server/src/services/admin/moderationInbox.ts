@@ -1,6 +1,6 @@
 import type { EntityManager } from "@mikro-orm/postgresql";
 
-import { isAdminUser } from "../../config/AdminConfig.js";
+import { adminUserIds, isAdminUser } from "../../config/AdminConfig.js";
 import { logger } from "../../utils/logger.js";
 import { suggestAction, type CaseSuggestion } from "./chatCases.js";
 import { dismissChatFlags, type FlagLine } from "./chatWatchAdmin.js";
@@ -215,6 +215,17 @@ const viewRow = (row: InboxRow, now: Date): InboxPlayer => {
  * only the filter caught them. A line both reported and caught is never in
  * the Word filter list, and no player is counted in both.
  */
+/**
+ * Leaves out moderators and game team accounts when asked (`hideStaff`): the
+ * game's Reports window for moderators (`services/moderator/modReports.ts`)
+ * never shows them, as only an admin decides on them. Two parameters:
+ * {@link staffParams}.
+ */
+const staffFilter = (alias: string): string =>
+  `(NOT ?::boolean OR (${alias}.userid NOT IN (SELECT cm.userid FROM bym.chat_moderator cm) AND NOT (${alias}.userid = ANY(?::int[]))))`;
+
+const staffParams = (hide: boolean | undefined): [boolean, string] => [Boolean(hide), `{${[...adminUserIds()].join(",")}}`];
+
 const SOURCE_WHERE: Record<InboxSource, string> = {
   all: "TRUE",
   reports: "case_id IS NOT NULL",
@@ -229,7 +240,7 @@ const SOURCE_WHERE: Record<InboxSource, string> = {
  */
 export const listInbox = async (
   em: EntityManager,
-  options: { source?: InboxSource; userid?: number; offset?: number; limit?: number } = {},
+  options: { source?: InboxSource; userid?: number; offset?: number; limit?: number; hideStaff?: boolean } = {},
   now: Date = new Date(),
 ): Promise<InboxList> => {
   const source = options.source ?? "all";
@@ -237,16 +248,17 @@ export const listInbox = async (
   const offset = Math.max(0, options.offset ?? 0);
   const rows = await em.execute<InboxRow[]>(
     `SELECT * FROM (${OPEN_ITEMS}) x
-      WHERE ${SOURCE_WHERE[source]} AND (?::int IS NULL OR x.userid = ?::int)
+      WHERE ${SOURCE_WHERE[source]} AND (?::int IS NULL OR x.userid = ?::int) AND ${staffFilter("x")}
       ORDER BY (coalesce(x.slurs, 0) > 0) DESC, ((x.warnings + x.mutes + x.bans) > 0) DESC,
                greatest(x.case_last, x.flag_last) DESC, x.userid
       LIMIT ${limit + 1} OFFSET ${offset}`,
-    [options.userid ?? null, options.userid ?? null],
+    [options.userid ?? null, options.userid ?? null, ...staffParams(options.hideStaff)],
   );
   const [counts] = await em.execute<{ all: string | number; reports: string | number; filter: string | number }[]>(
     `SELECT count(*) AS all, count(*) FILTER (WHERE case_id IS NOT NULL) AS reports,
             count(*) FILTER (WHERE case_id IS NULL AND lines IS NOT NULL) AS filter
-       FROM (${OPEN_ITEMS}) x`,
+       FROM (${OPEN_ITEMS}) x WHERE ${staffFilter("x")}`,
+    staffParams(options.hideStaff),
   );
   return {
     players: rows.slice(0, limit).map((row) => viewRow(row, now)),
@@ -385,7 +397,7 @@ export const moderatePlayer = async (
 /** The owner's step on a player in the inbox. */
 export type InboxAction =
   | { kind: "warn"; reason: string }
-  | { kind: "mute"; reason: string; hours: number }
+  | { kind: "mute"; reason: string; hours: number; /** Never shortens a mute already on (moderators). */ neverShorten?: boolean }
   | { kind: "ban"; reason: string; days: number | null }
   | { kind: "dismiss"; note: string | null };
 
@@ -486,6 +498,7 @@ export const actOnInboxPlayer = async (
     reason: action.reason,
     length: action.kind === "mute" ? action.hours : action.kind === "ban" ? action.days : null,
     chatReportId: null,
+    neverShorten: action.kind === "mute" && action.neverShorten === true,
   };
   const { done, closed } = await moderatePlayer(em, userid, request, adminId, effects, now, flagsUpTo);
   if (done.outcome !== "done" || !closed) return { outcome: done.outcome === "gameTeam" ? "gameTeam" : "noPlayer" };
@@ -624,7 +637,7 @@ const asStamps = (raw: unknown): number[] => (parsed(raw) as (string | number)[]
  */
 export const listClosed = async (
   em: EntityManager,
-  options: { offset?: number; limit?: number; userid?: number } = {},
+  options: { offset?: number; limit?: number; userid?: number; hideStaff?: boolean } = {},
   now: Date = new Date(),
 ): Promise<ClosedList> => {
   const limit = Math.min(100, Math.max(1, options.limit ?? INBOX_PAGE));
@@ -650,14 +663,14 @@ export const listClosed = async (
           WHERE a.userid = d.userid AND a.created_at = d.closed_at AND a.action IN ('warn', 'mute', 'ban')
           ORDER BY a.id DESC LIMIT 1
        ) st ON true
-      WHERE (?::int IS NULL OR d.userid = ?::int)
+      WHERE (?::int IS NULL OR d.userid = ?::int) AND ${staffFilter("d")}
       ORDER BY d.closed_at DESC, d.userid
       LIMIT ${limit + 1} OFFSET ${offset}`,
-    [since, since, ...who],
+    [since, since, ...who, ...staffParams(options.hideStaff)],
   );
   const [counted] = await em.execute<{ n: string | number }[]>(
-    `SELECT count(*) AS n FROM (${CLOSED_DECISIONS}) d WHERE (?::int IS NULL OR d.userid = ?::int)`,
-    [since, since, ...who],
+    `SELECT count(*) AS n FROM (${CLOSED_DECISIONS}) d WHERE (?::int IS NULL OR d.userid = ?::int) AND ${staffFilter("d")}`,
+    [since, since, ...who, ...staffParams(options.hideStaff)],
   );
   const decisions = rows.slice(0, limit).map((row): ClosedDecision => {
     const flagLines = asFlagLines(row.flag_lines);

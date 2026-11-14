@@ -39,6 +39,11 @@ export interface NeighbourData {
   basename?: string;
   ownerName?: string;
   pic?: string;
+  /**
+   * Their uploaded photo's upload number when others may see it, null for
+   * the critter (`services/profile/visiblePhoto.ts`); refreshed on each read.
+   */
+  photo?: number | null;
   trucestate?: string;
   truceexpire?: number;
   destroyed?: number;

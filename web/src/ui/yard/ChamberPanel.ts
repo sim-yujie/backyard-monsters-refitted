@@ -25,9 +25,10 @@ import "@/ui/styles/champion.css";
 import { FREEZE_SHORT, actHint, actTile } from "./ChampionPanel";
 
 /**
- * The Champion Chamber's window, the first tab of its building panel
- * (`docs/design/yard-buildings.md` §7.2; issue #125). A built chamber opens
- * straight on it (owner, 28 Oct: one click, like the cage).
+ * The Champion Chamber's window, under the cage's in the Monsters screen's
+ * Champion tab (`ChampionTab.ts`; owner, 12 Nov 2026;
+ * `docs/design/yard-buildings.md` §7.2; issue #125). The chamber's panel
+ * opens it with **Open Champion Chamber**.
  *
  * Like the original's chamber popup (`client/scripts/CHAMPIONCHAMBERPOPUP.as:42-110`),
  * every champion is a card with its big picture, name and level: the one in

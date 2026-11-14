@@ -31,7 +31,7 @@ export const watchPlugin: AttackPlugin = (mounts) => {
       summary: summariseAttack(session),
       onAgain: () => mounts.openWatch?.(run),
       onBack: () => {
-        if (run.cell) setMapFocus({ cell: run.cell });
+        if (run.cell) setMapFocus({ cell: run.cell, open: true });
         mounts.goToMap();
       },
     }).mount(mounts.modal);

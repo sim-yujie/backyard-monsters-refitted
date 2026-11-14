@@ -7,6 +7,10 @@
  * The account menu keeps one picker for its whole life and hands it to each
  * Account settings it opens, so a save still running when the window closes
  * lands on the same picker that shows when it opens again.
+ *
+ * Since profile photos (owner, 13 Nov 2026) the critter is only the icon of a
+ * player with no photo, and the heading says so ("No-photo icon"); it sits
+ * under the photo in Settings > Account (`ui/profile/OwnProfileSection.ts`).
  */
 
 import { AVATARS, avatarName, avatarUrl, type AvatarId } from "@/game/avatars";
@@ -23,6 +27,9 @@ export interface AccountAvatar {
 /** What the picker's heading adds while the player still wears the default. */
 export const DEFAULT_NOTE = "Default until you pick one";
 
+/** The picker's heading: what the critter is for now that players have photos. */
+export const PICKER_TITLE = "No-photo icon";
+
 /** What the picker says when a pick could not be saved. */
 export const PICK_FAILED = "Could not save that avatar. Try again.";
 
@@ -35,6 +42,7 @@ export class AvatarPicker {
   private readonly avatar: AccountAvatar;
   private current: AvatarId;
   private saving = false;
+  private readonly listeners = new Set<(id: AvatarId) => void>();
 
   constructor(avatar: AccountAvatar) {
     this.avatar = avatar;
@@ -48,7 +56,7 @@ export class AvatarPicker {
     heading.id = "avatar-picker-head";
     const title = document.createElement("h3");
     title.className = "account-settings__heading";
-    title.textContent = "Avatar";
+    title.textContent = PICKER_TITLE;
     this.note = document.createElement("span");
     this.note.className = "avatar-picker__note";
     this.note.textContent = DEFAULT_NOTE;
@@ -87,6 +95,17 @@ export class AvatarPicker {
     this.mark();
   }
 
+  /** The critter now shown. */
+  get shown(): AvatarId {
+    return this.current;
+  }
+
+  /** Calls `listener` with each pick once it is stored; returns the way to stop. */
+  onPicked(listener: (id: AvatarId) => void): () => void {
+    this.listeners.add(listener);
+    return () => this.listeners.delete(listener);
+  }
+
   /** Takes away an old failure's words, for a window opening again. */
   clearStatus(): void {
     this.status.hidden = true;
@@ -111,6 +130,7 @@ export class AvatarPicker {
       this.current = id;
       this.note.hidden = true;
       this.mark();
+      for (const listener of this.listeners) listener(id);
     } catch {
       this.status.textContent = PICK_FAILED;
       this.status.hidden = false;

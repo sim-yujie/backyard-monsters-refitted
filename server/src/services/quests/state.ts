@@ -4,25 +4,30 @@ import {
   DAILY_ALL_DONE_SHINY,
   DAILY_ALWAYS,
   DAILY_FREE_SWAPS,
+  DAILY_GLIMMERS,
   DAILY_QUEST_COUNT,
   DAILY_QUESTS,
   LOGIN_CARD_SHINY,
+  PACED_GROUPS,
   QUEST_KINDS,
   QUEST_STATS,
   QUEST_TRIBES,
   CATAPULT_TARGETS,
   WEEKLY_ALL_DONE_SHINY,
   WEEKLY_GROUPS,
+  WEEKLY_PACE,
   WEEKLY_QUEST_SHINY,
   WEEKLY_QUESTS,
+  type PacedGroup,
   type QuestKind,
+  type WeeklyGroup,
 } from "../../game-data/quests.js";
 import type { JsonObject } from "../../types/JsonObject.js";
 import type { BuildingDataMap } from "../../types/BuildingData.js";
 import { capOf, type CreditSave } from "../yard/credit.js";
 import { STARTER_MONSTER } from "../yard/locker.js";
 import { townHallLevel } from "../yardplanner/costs.js";
-import { utcDay, utcWeek } from "./period.js";
+import { DAY_SECONDS, utcDay, utcWeek } from "./period.js";
 
 /**
  * A player's login card, daily quests and weekly quests: `save.dailyquests`
@@ -44,6 +49,11 @@ export interface QuestEntry {
   have: number;
   claimed: boolean;
   rewards: EventReward[];
+  /**
+   * Weekly quests: unix seconds when `have` first reached `need` (not the
+   * Claim, so claiming late changes nothing). The next week's pace reads it.
+   */
+  doneAt?: number;
 }
 
 /** A day's or a week's quests. */
@@ -71,7 +81,12 @@ export interface QuestRecord {
   weekly: QuestSet | null;
   /** Whether the player had a friend to help or gift when last checked (the social quest's choice). */
   hasFriend: boolean;
+  /** The weekly Fighting and Resources quests' pace (owner, 9 Nov, Option A): their need is the base x this. */
+  pace: QuestPace;
 }
+
+/** A multiplier per paced weekly group, within `WEEKLY_PACE.min`..`max`. */
+export type QuestPace = Record<PacedGroup, number>;
 
 /**
  * Counted actions: a stat (`game-data/quests.ts` `QUEST_STATS`), or
@@ -107,7 +122,26 @@ export const emptyQuests = (): QuestRecord => ({
   daily: null,
   weekly: null,
   hasFriend: false,
+  pace: startPace(),
 });
+
+/** A new player's pace: today's numbers. */
+export const startPace = (): QuestPace => ({ fighting: WEEKLY_PACE.start, resources: WEEKLY_PACE.start });
+
+/** `value` within the pace's limits, to 4 decimals (no float drift over the weeks). */
+const clampPace = (value: number): number =>
+  Math.round(Math.min(WEEKLY_PACE.max, Math.max(WEEKLY_PACE.min, value)) * 10_000) / 10_000;
+
+/** A stored pace, cleaned up: each group within the limits, 1 when missing. */
+export const readPace = (raw: unknown): QuestPace => {
+  const one = (raw !== null && typeof raw === "object" ? raw : {}) as Record<string, unknown>;
+  const pace = startPace();
+  for (const group of PACED_GROUPS) {
+    const value = Number(one[group]);
+    if (Number.isFinite(value) && value > 0) pace[group] = clampPace(value);
+  }
+  return pace;
+};
 
 const whole = (raw: unknown, min = 0): number => {
   const value = Number(raw);
@@ -129,6 +163,7 @@ const entryOf = (raw: unknown): QuestEntry | null => {
     have: Math.min(need, whole(one.have)),
     claimed: one.claimed === true,
     rewards: Array.isArray(one.rewards) ? (one.rewards as EventReward[]) : [],
+    ...(Number(one.doneAt) > 0 && { doneAt: whole(one.doneAt) }),
   };
 };
 
@@ -155,6 +190,7 @@ export const readQuests = (raw: unknown): QuestRecord => {
     daily: setOf(one.daily),
     weekly: setOf(one.weekly),
     hasFriend: one.hasFriend === true,
+    pace: readPace(one.pace),
   };
 };
 
@@ -238,10 +274,15 @@ const shuffled = <T>(list: readonly T[], seed: string): T[] => {
   return out;
 };
 
-/** What a quest of `kind` pays a player whose storage cap is `cap`. */
-export const rewardsOf = (kind: QuestKind, cap: number, shiny = 0): EventReward[] => {
+/**
+ * What a quest of `kind` pays a player whose storage cap is `cap`. `pace`
+ * scales a resource pay (the weekly Resources quest), up to
+ * `WEEKLY_PACE.payMaxShare` of the cap.
+ */
+export const rewardsOf = (kind: QuestKind, cap: number, shiny = 0, pace = 1): EventReward[] => {
   const rewards: EventReward[] = [];
-  const amount = kind.pay ? Math.floor(Math.max(0, cap) * kind.pay.share) : 0;
+  const share = kind.pay ? (pace === 1 ? kind.pay.share : Math.min(WEEKLY_PACE.payMaxShare, kind.pay.share * pace)) : 0;
+  const amount = kind.pay ? Math.floor(Math.max(0, cap) * share) : 0;
   if (kind.pay && amount > 0) {
     const amounts: Partial<Record<"r1" | "r2" | "r3" | "r4", number>> = {};
     for (const key of kind.pay.resources) amounts[key] = amount;
@@ -274,9 +315,48 @@ export const needOf = (kind: QuestKind, player: QuestPlayer, random: () => numbe
   return byTownHall(need, player.townHall);
 };
 
-const entry = (slot: number, kind: QuestKind, player: QuestPlayer, seed: string, shiny = 0): QuestEntry => {
+/** The weekly group of each weekly kind. */
+const GROUP_OF: ReadonlyMap<string, WeeklyGroup> = new Map(
+  WEEKLY_GROUPS.flatMap((group) => WEEKLY_QUESTS[group].map((kind) => [kind.id, group] as const))
+);
+
+/** The paced group a quest kind belongs to, or null (Social, dailies). */
+export const pacedGroupOf = (kind: string): PacedGroup | null => {
+  const group = GROUP_OF.get(kind);
+  return group !== undefined && (PACED_GROUPS as readonly string[]).includes(group) ? (group as PacedGroup) : null;
+};
+
+/** `value` to 3 significant figures (24,250,000 -> 24,300,000), whole numbers under 1,000. */
+const roundNice = (value: number): number => {
+  if (value < 1000) return Math.round(value);
+  const step = 10 ** (Math.floor(Math.log10(value)) - 2);
+  return Math.round(value / step) * step;
+};
+
+/** A paced weekly quest's need: the base need x the group's pace, rounded and clamped. */
+export const pacedNeed = (group: PacedGroup, base: number, pace: number): number => {
+  if (group === "fighting") {
+    return Math.min(WEEKLY_PACE.fightsMax, Math.max(WEEKLY_PACE.fightsMin, Math.round(base * pace)));
+  }
+  if (pace === 1) return base;
+  const low = Math.ceil(base * WEEKLY_PACE.lootMinShare);
+  const high = Math.floor(base * WEEKLY_PACE.lootMaxShare);
+  return Math.max(1, Math.min(high, Math.max(low, roundNice(base * pace))));
+};
+
+const entry = (
+  slot: number,
+  kind: QuestKind,
+  player: QuestPlayer,
+  seed: string,
+  shiny = 0,
+  pace?: QuestPace,
+  glimmers = 0
+): QuestEntry => {
   const random = rng(hash(`${seed}|${kind.id}`));
-  const need = needOf(kind, player, random);
+  const group = pace ? pacedGroupOf(kind.id) : null;
+  const base = needOf(kind, player, random);
+  const need = group && pace ? pacedNeed(group, base, pace[group]) : base;
   const choices = variantChoices(kind, player);
   const variant = kind.variant ? choices[Math.floor(random() * choices.length)] : undefined;
   return {
@@ -286,7 +366,11 @@ const entry = (slot: number, kind: QuestKind, player: QuestPlayer, seed: string,
     need: Math.max(1, need),
     have: 0,
     claimed: false,
-    rewards: rewardsOf(kind, player.cap, shiny),
+    // A Glimmers quest pays them in place of everything else.
+    rewards:
+      glimmers > 0
+        ? [{ kind: "eventCoins", amount: glimmers }]
+        : rewardsOf(kind, player.cap, shiny, group === "resources" && pace ? pace.resources : 1),
   };
 };
 
@@ -305,19 +389,66 @@ export const pickDaily = (player: QuestPlayer, day: string): QuestSet => {
     seed
   );
   const picked = [...always, ...rest].slice(0, DAILY_QUEST_COUNT);
-  return { period: day, quests: picked.map((kind, slot) => entry(slot, kind, player, seed)), bonus: false, swaps: 0 };
+  return { period: day, quests: picked.map((kind, slot) => entry(slot, kind, player, seed, 0, undefined, slot === picked.length - 1 ? DAILY_GLIMMERS : 0)),
+    bonus: false, swaps: 0 };
 };
 
-/** A week's quests: one unlocked kind from each weekly group. */
-export const pickWeekly = (player: QuestPlayer, week: string): QuestSet => {
+/**
+ * A week's quests: one unlocked kind from each weekly group, the Fighting and
+ * Resources needs (and the Resources pay) scaled by `pace`. The pace is the
+ * server's alone (owner, 12 Nov: "invisible to player and determined server
+ * side"): the player only ever sees the need and the reward.
+ */
+export const pickWeekly = (player: QuestPlayer, week: string, pace: QuestPace = startPace()): QuestSet => {
   const quests: QuestEntry[] = [];
   WEEKLY_GROUPS.forEach((group, slot) => {
     const open = WEEKLY_QUESTS[group].filter((kind) => canPick(kind, player));
     const seed = `${player.userid}|w|${week}|${group}`;
     const kind = shuffled(open, seed)[0];
-    if (kind) quests.push(entry(slot, kind, player, seed, WEEKLY_QUEST_SHINY));
+    if (!kind) return;
+    quests.push(entry(slot, kind, player, seed, WEEKLY_QUEST_SHINY, pace));
   });
   return { period: week, quests, bonus: false, swaps: 0 };
+};
+
+/** Unix seconds of 00:00 UTC on `day` (`YYYY-MM-DD`). */
+const dayStart = (day: string): number => Date.parse(`${day}T00:00:00Z`) / 1000;
+
+/** The day of its week (1 = Monday .. 7) a weekly quest was finished on, or null (not finished, or no time kept). */
+export const doneDay = (quest: QuestEntry, week: string): number | null => {
+  if (quest.have < quest.need || quest.doneAt === undefined) return null;
+  return Math.min(7, Math.max(1, Math.floor((quest.doneAt - dayStart(week)) / DAY_SECONDS) + 1));
+};
+
+/** What last week's quest multiplies its group's pace by. */
+export const paceStep = (quest: QuestEntry, week: string): number => {
+  if (quest.have < quest.need) return WEEKLY_PACE.failStep;
+  const day = doneDay(quest, week);
+  // Finished before finish times were kept: no change.
+  if (day === null) return 1;
+  if (day <= WEEKLY_PACE.fastDay) return WEEKLY_PACE.fastStep;
+  if (day >= WEEKLY_PACE.slowDay) return WEEKLY_PACE.slowStep;
+  return 1;
+};
+
+/**
+ * The pace for `week`, from the pace and the weekly quests the record held
+ * before it. No quests yet (a new player): unchanged. Last week's quests: each
+ * paced group steps by when its quest was finished. Older quests (the player
+ * was away last week): each group they had a quest in counts as not finished,
+ * once. A group with no quest (no Map Room yet) keeps its pace.
+ */
+export const nextPace = (pace: QuestPace, last: QuestSet | null, week: string): QuestPace => {
+  if (!last || last.period >= week) return pace;
+  const lastWeek = utcWeek(dayStart(week) - DAY_SECONDS);
+  const next = { ...pace };
+  for (const group of PACED_GROUPS) {
+    const quest = last.quests.find((one) => pacedGroupOf(one.kind) === group);
+    if (!quest) continue;
+    const step = last.period === lastWeek ? paceStep(quest, last.period) : WEEKLY_PACE.failStep;
+    next[group] = clampPace(pace[group] * step);
+  }
+  return next;
 };
 
 /**
@@ -329,11 +460,15 @@ export const rollOver = (record: QuestRecord, player: QuestPlayer, now: number):
   const day = utcDay(now);
   const week = utcWeek(now);
   const daily = record.daily?.period === day ? record.daily : pickDaily(player, day);
-  const weekly = record.weekly?.period === week ? record.weekly : pickWeekly(player, week);
-  return daily === record.daily && weekly === record.weekly ? record : { ...record, daily, weekly };
+  if (record.weekly?.period === week) return daily === record.daily ? record : { ...record, daily };
+  // The old week is read for the pace before it is replaced.
+  const pace = nextPace(record.pace, record.weekly, week);
+  const weekly = pickWeekly(player, week, pace);
+  return { ...record, daily, weekly, pace };
 };
 
-const countSet = (set: QuestSet | null, events: QuestEvents): { set: QuestSet | null; changed: boolean } => {
+/** Counts `events` on a set; `stamp` (unix seconds) marks when a quest first reaches its need (weekly only). */
+const countSet = (set: QuestSet | null, events: QuestEvents, stamp?: number): { set: QuestSet | null; changed: boolean } => {
   if (!set) return { set, changed: false };
   let changed = false;
   const quests = set.quests.map((quest) => {
@@ -348,15 +483,25 @@ const countSet = (set: QuestSet | null, events: QuestEvents): { set: QuestSet | 
     const have = Math.min(quest.need, Math.max(0, quest.have + add));
     if (have === quest.have) return quest;
     changed = true;
-    return { ...quest, have };
+    const next: QuestEntry = { ...quest, have };
+    if (stamp !== undefined && have >= quest.need && quest.doneAt === undefined) next.doneAt = stamp;
+    if (have < quest.need) delete next.doneAt;
+    return next;
   });
   return { set: changed ? { ...set, quests } : set, changed };
 };
 
-/** Adds `events` to every unclaimed quest of the record's current day and week. */
-export const countQuests = (record: QuestRecord, events: QuestEvents): { record: QuestRecord; changed: boolean } => {
+/**
+ * Adds `events` to every unclaimed quest of the record's current day and
+ * week. A weekly quest that reaches its need is stamped `doneAt = now`.
+ */
+export const countQuests = (
+  record: QuestRecord,
+  events: QuestEvents,
+  now: number = Math.floor(Date.now() / 1000)
+): { record: QuestRecord; changed: boolean } => {
   const daily = countSet(record.daily, events);
-  const weekly = countSet(record.weekly, events);
+  const weekly = countSet(record.weekly, events, Math.floor(now));
   if (!daily.changed && !weekly.changed) return { record, changed: false };
   return { record: { ...record, daily: daily.set, weekly: weekly.set }, changed: true };
 };
@@ -468,6 +613,8 @@ export const swapDaily = (record: QuestRecord, player: QuestPlayer, slot: number
   if (set.swaps >= DAILY_FREE_SWAPS) return { ok: false, reason: "noSwapsLeft" };
   if (quest.claimed || quest.have >= quest.need) return { ok: false, reason: "cannotSwap" };
   const seed = `${player.userid}|s|${set.period}|${set.swaps}`;
+  // The Glimmers stay on their slot, whatever quest lands there.
+  const glimmers = quest.rewards.some((reward) => reward.kind === "eventCoins") ? DAILY_GLIMMERS : 0;
   let fresh: QuestEntry;
   const always = QUEST_KINDS.get(DAILY_ALWAYS);
   if (quest.kind === DAILY_ALWAYS && always) {
@@ -475,7 +622,7 @@ export const swapDaily = (record: QuestRecord, player: QuestPlayer, slot: number
     const tribes = variantChoices(always, player).filter((one) => one !== quest.variant);
     if (tribes.length === 0) return { ok: false, reason: "nothingToSwapTo" };
     const tribe = shuffled(tribes, seed)[0]!;
-    fresh = { ...entry(slot, always, player, seed), variant: tribe };
+    fresh = { ...entry(slot, always, player, seed, 0, undefined, glimmers), variant: tribe };
   } else {
     const shown = new Set(set.quests.map((one) => one.kind));
     const open = DAILY_QUESTS.filter(
@@ -483,7 +630,7 @@ export const swapDaily = (record: QuestRecord, player: QuestPlayer, slot: number
     );
     const kind = shuffled(open, seed)[0];
     if (!kind) return { ok: false, reason: "nothingToSwapTo" };
-    fresh = entry(slot, kind, player, seed);
+    fresh = entry(slot, kind, player, seed, 0, undefined, glimmers);
   }
   const quests = set.quests.map((one) => (one.slot === slot ? fresh : one));
   return { ok: true, record: { ...record, daily: { ...set, quests, swaps: set.swaps + 1 } }, value: fresh };
@@ -519,7 +666,7 @@ export const updateQuests = (
   let record = hasFriend === undefined || hasFriend === before.hasFriend ? before : { ...before, hasFriend };
   record = rollOver(record, questPlayerOf(save, record.hasFriend), now);
   const clean = cleanEvents(events);
-  if (clean) record = countQuests(record, clean).record;
+  if (clean) record = countQuests(record, clean, now).record;
   const changed = record !== before || save.dailyquests === null || save.dailyquests === undefined;
   return { record, changed };
 };

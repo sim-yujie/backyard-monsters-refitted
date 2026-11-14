@@ -10,6 +10,7 @@ import {
   type ChampionStance,
 } from "@/game/combat/rules";
 import { championPortrait, monsterPortrait, showPortrait, type Portrait } from "@/game/portraits";
+import { krallenAuraTimes, krallenAuraTimesLooter } from "@/game/yard/krallenAura";
 import { formatAmount } from "@/ui/format";
 import { Panel } from "@/ui/Panel";
 import { QuantityStepper } from "@/ui/QuantityStepper";
@@ -41,9 +42,10 @@ export { HOLD_DELAY_MS, HOLD_FAST_MS, HOLD_RAMP_MS, HOLD_START_MS, holdInterval,
  *
  * ## After a drop
  *
- * The bucket keeps the numbers the player set. A row whose true count fell
- * below its number is greyed and says what is left; a row that ran out shows
- * 0 and is disabled (§F2 "after a drop").
+ * The bucket empties: every row back to 0, no champion picked, the meter
+ * empty, as in Flash (owner, 13 Nov 2026). Load last army puts the batch just
+ * sent back, clamped to what is left. A row that ran out shows 0, says "None
+ * left" and is disabled (§F2 "after a drop").
  */
 
 // The display names moved to the shared rules, whose attack report the server
@@ -186,8 +188,11 @@ export class ArmyPanel {
   private readonly onStanceChange: ((t: number, stance: ChampionStance) => void) | null;
   private onField: readonly number[] = [];
   private locked: ArmyLock = {};
-  /** Load last army found nothing saved: it stays off. */
-  private noLastArmy = false;
+  /**
+   * Load last army found nothing saved, at this many drops: it stays off until
+   * the next drop saves one ({@link Bucket.drops}).
+   */
+  private noLastArmyAt: number | null = null;
 
   constructor(bucket: Bucket, options: ArmyPanelOptions = {}) {
     this.bucket = bucket;
@@ -221,12 +226,12 @@ export class ArmyPanel {
     this.clearButton.title = "Empty every row and un-pick the champion";
     this.loadLastButton = button("btn btn--ghost attack-army__load-last", "Load last army", () => {
       if (!this.bucket.loadLast()) {
-        this.loadLastButton.title = "No army from a previous attack was saved on this browser";
-        this.noLastArmy = true;
+        this.loadLastButton.title = NO_LAST_ARMY_TITLE;
+        this.noLastArmyAt = this.bucket.drops();
         this.loadLastButton.disabled = true;
       }
     });
-    this.loadLastButton.title = "Recall the composition you sent last";
+    this.loadLastButton.title = LOAD_LAST_TITLE;
     // A Baiter test keeps no last army, so there is none to recall (#22, WP3).
     this.loadLastButton.hidden = !bucket.remembersLast();
     actions.append(this.fillAllButton, this.clearButton, this.loadLastButton);
@@ -248,7 +253,7 @@ export class ArmyPanel {
     legend.textContent = "Champion";
     champions.append(legend);
     for (const champion of bucket.champions()) {
-      const row = this.buildChampion(champion.t, champion.l, champion.hp);
+      const row = this.buildChampion(champion.t, champion.l, champion.hp, champion.lootAura === true);
       this.champions.push(row);
       champions.append(row.element);
     }
@@ -365,7 +370,7 @@ export class ArmyPanel {
     return { id, element: item, stepper, input: stepper.input, note, count };
   }
 
-  private buildChampion(t: number, l: number, hp: number): ChampionRow {
+  private buildChampion(t: number, l: number, hp: number, lootAura = false): ChampionRow {
     const item = document.createElement("label");
     item.className = "attack-army__champion";
     item.dataset["t"] = String(t);
@@ -404,6 +409,17 @@ export class ArmyPanel {
     health.className = "attack-army__housed u-muted";
     health.textContent = `${formatAmount(hp)} hp`;
     label.append(name, level, health);
+    if (lootAura) {
+      // Krallen's Krallen Hunt loot aura (owner, 13 Nov 2026): Flash's green
+      // looting glow on her picture, and how much more her neighbours loot.
+      icon.classList.add("attack-army__icon--aura");
+      const aura = document.createElement("span");
+      aura.className = "attack-army__aura";
+      aura.textContent = `up to x${krallenAuraTimes(l)}`;
+      aura.title = `Loot aura: monsters near Krallen loot up to x${krallenAuraTimes(l)}; resource hunters x${krallenAuraTimesLooter(l)}`;
+      aura.setAttribute("aria-label", aura.title);
+      label.append(aura);
+    }
 
     const note = document.createElement("span");
     note.className = "attack-army__note";
@@ -500,7 +516,12 @@ export class ArmyPanel {
     const anyRoom = bucket.ids().some((id) => bucket.max(id) > bucket.requestedCount(id));
     this.fillAllButton.disabled = !live || !anyRoom || this.locked.fillAll === true;
     this.clearButton.disabled = !live || bucket.isEmpty() || this.locked.clear === true;
-    this.loadLastButton.disabled = !live || this.noLastArmy || this.locked.clear === true;
+    // A drop since the empty answer saved one, so the button comes back.
+    if (this.noLastArmyAt !== null && this.noLastArmyAt !== bucket.drops()) {
+      this.noLastArmyAt = null;
+      this.loadLastButton.title = LOAD_LAST_TITLE;
+    }
+    this.loadLastButton.disabled = !live || this.noLastArmyAt !== null || this.locked.clear === true;
 
     for (const row of this.rows) this.refreshRow(row, document.activeElement !== row.input);
 
@@ -572,7 +593,6 @@ export class ArmyPanel {
     const remaining = bucket.remaining(id);
     const max = bucket.max(id);
     const exhausted = remaining === 0;
-    const clamped = !exhausted && requested > remaining;
     const shown = exhausted ? 0 : requested;
 
     row.stepper.sync({
@@ -582,14 +602,16 @@ export class ArmyPanel {
       rewrite: rewrite || exhausted,
     });
     row.count.textContent = `${remaining} housed`;
-    row.element.classList.toggle("attack-army__row--clamped", clamped);
     row.element.classList.toggle("attack-army__row--exhausted", exhausted);
-    row.note.textContent = exhausted ? "None left" : clamped ? `${remaining} left` : "";
+    row.note.textContent = exhausted ? "None left" : "";
   }
 }
 
 /** Bucket units, exact with a thousands separator: "2,150", never "2.2K". */
 const units = (value: number): string => Math.round(value).toLocaleString("en-US");
+
+const LOAD_LAST_TITLE = "Recall the composition you sent last";
+const NO_LAST_ARMY_TITLE = "No army from a previous attack was saved on this browser";
 
 /** What the hint says with nothing set to send, and once the attack is over. */
 export const EMPTY_HINT = "Pick monsters, then tap ground";

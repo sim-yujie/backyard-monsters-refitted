@@ -77,6 +77,36 @@ describe("the HUD", () => {
     expect(floats()[0]?.classList.contains("hud__delta--up")).toBe(true);
   });
 
+  it("floats a Glimmers gain or spend beside the Glimmers readout, as the resources do (owner, 13 Nov 2026)", () => {
+    forgetCoinBalance();
+    // The load's purse arrives: no float.
+    noteCoins(25);
+    expect(floats()).toHaveLength(0);
+    const value = hud.element.querySelector(".hud__coins-button .hud__resource-value");
+    expect(value?.textContent).toBe("25");
+
+    // A check-in pays 50: the readout climbs and "+50" floats up beside it.
+    noteCoins(75);
+    expect(hud.element.querySelector(".hud__coins-button .hud__resource-value")?.textContent).toBe("75");
+    expect(floats().map((one) => one.textContent)).toEqual(["+50"]);
+    expect(floats()[0]?.dataset["resource"]).toBe("coins");
+    expect(floats()[0]?.classList.contains("hud__delta--up")).toBe(true);
+    expect(floats()[0]?.getAttribute("aria-hidden")).toBe("true");
+
+    // A decoration bought: "−40" floats down, replacing the last float.
+    noteCoins(35);
+    expect(floats().map((one) => one.textContent)).toEqual(["−40"]);
+    expect(floats()[0]?.classList.contains("hud__delta--down")).toBe(true);
+    vi.advanceTimersByTime(2_000);
+    expect(floats()).toHaveLength(0);
+
+    // A sign-out: the next account's first purse floats nothing.
+    forgetCoinBalance();
+    noteCoins(500);
+    expect(floats()).toHaveLength(0);
+    forgetCoinBalance();
+  });
+
   it("counts a bank up as its balls land, ahead of the server's credit (#208)", () => {
     hud.setResources({ r1: 1_000, r4: 50 });
     // The press: balls fly, the pool has not moved.

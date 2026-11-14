@@ -71,7 +71,7 @@ describe("the primed own-yard load", () => {
 describe("the own yard handed from the yard to Map Room 2 (no second load on open)", () => {
   const yard = (extra: { kind?: string; settled?: boolean; serverNow?: number } = {}) => ({
     kind: extra.kind ?? "main",
-    save: save({ currenttime: 100, resources: { r1: 5 } }),
+    serverSave: save({ currenttime: 100, resources: { r1: 5 } }),
     settled: extra.settled ?? true,
     now: () => extra.serverNow ?? 1234.7,
   });

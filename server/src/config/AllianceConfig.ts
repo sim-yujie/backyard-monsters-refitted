@@ -59,6 +59,13 @@ export const ALLIANCE_AD = {
   timeZone: { min: -12, max: 14 },
 };
 
+/**
+ * The longest About a leader may save (owner, 12 Nov 2026: one short line with
+ * a live counter). The column stays VARCHAR(255): older, longer Abouts still
+ * show unchanged; only a new save must fit.
+ */
+export const ALLIANCE_DESC_MAX = 120;
+
 /** Days between two renames by the leader (design v5 §6). */
 export const RENAME_COOLDOWN_DAYS = 7;
 
@@ -146,12 +153,12 @@ export const BATTLE_STATS: readonly AllianceStat[] = [
   "reach",
 ];
 
-/** One stat a constellation moves: its value with no stars, and what each step (2 stars) adds. */
+/** One stat a constellation moves: its value with no stars, and what each star adds. */
 export interface ConstellationEffect {
   stat: AllianceStat;
   start: number;
-  perStep: number;
-  /** Added only once the last step is lit (Teratorn's +1 reach). */
+  perStar: number;
+  /** Added only once the last star is lit (Teratorn's +1 reach). */
   atFull?: number;
 }
 
@@ -166,17 +173,22 @@ export interface ConstellationRules {
   effects: ConstellationEffect[];
 }
 
-/** Steps per constellation; each step lights 2 of its 10 stars (design v5 §9, question 22). */
-export const CONSTELLATION_STEPS = 5;
+/**
+ * Steps per constellation; each step lights 1 of its 10 stars (owner, 12 Nov
+ * 2026: one at a time, not two; design v5 §9 had 5 steps of 2).
+ */
+export const CONSTELLATION_STEPS = 10;
 
 /** Stars each step lights. */
-export const STARS_PER_STEP = 2;
+export const STARS_PER_STEP = 1;
 
 /**
- * Point price of steps 1-5 for Midas; Conquest pays 2x and Fortress 4x (by
- * capacity, never by member count; design v5 §9).
+ * Point price of stars 1-10 for Midas; Conquest pays 2x and Fortress 4x (by
+ * capacity, never by member count; design v5 §9). Each old 2-star step's
+ * price split evenly over its two stars, so a full constellation still costs
+ * 600 (Midas).
  */
-export const STEP_PRICES = [40, 80, 120, 160, 200];
+export const STEP_PRICES = [20, 20, 40, 40, 60, 60, 80, 80, 100, 100];
 
 /** Capacity factor per type: point prices, goal targets and goal points scale with it. */
 export const TYPE_SCALE: Record<AllianceType, number> = {
@@ -190,39 +202,40 @@ export const TYPE_SCALE: Record<AllianceType, number> = {
  * balance check (10 Nov 2026, START column) and the owner's answers of
  * 10 Nov: Midas's second weakness is outpost hatch cost, Conquest's is
  * outpost health, no weakness touches main-yard defence. Steps follow the
- * check's "start -> full sky" table (5 equal steps).
+ * check's "start -> full sky" table in 10 equal stars (half of each old
+ * 2-star step, so 2, 4 ... 10 stars give the old 1, 2 ... 5 steps' values).
  * PLACEHOLDERS: the owner tunes these after the feature is done.
  */
 export const CONSTELLATIONS: Record<AllianceType, ConstellationRules[]> = {
   [AllianceType.MIDAS]: [
-    { id: "wormzer", name: "Wormzer", kind: "strength", effects: [{ stat: "production", start: 15, perStep: 2 }] },
-    { id: "brain", name: "Brain", kind: "strength", effects: [{ stat: "loot", start: 10, perStep: 1 }] },
+    { id: "wormzer", name: "Wormzer", kind: "strength", effects: [{ stat: "production", start: 15, perStar: 1 }] },
+    { id: "brain", name: "Brain", kind: "strength", effects: [{ stat: "loot", start: 10, perStar: 0.5 }] },
     {
       id: "pokey",
       name: "Pokey",
       kind: "weakness",
-      effects: [{ stat: "outpostHatchCost", start: 15, perStep: -2 }],
+      effects: [{ stat: "outpostHatchCost", start: 15, perStar: -1 }],
     },
     {
       id: "zafreeti",
       name: "Zafreeti",
       kind: "weakness",
-      effects: [{ stat: "takeoverCost", start: 20, perStep: -2 }],
+      effects: [{ stat: "takeoverCost", start: 20, perStar: -1 }],
     },
   ],
   [AllianceType.CONQUEST]: [
-    { id: "fang", name: "Fang", kind: "strength", effects: [{ stat: "takeoverCost", start: -20, perStep: -2 }] },
+    { id: "fang", name: "Fang", kind: "strength", effects: [{ stat: "takeoverCost", start: -20, perStar: -1 }] },
     {
       id: "teratorn",
       name: "Teratorn",
       kind: "strength",
       effects: [
-        { stat: "kitCost", start: -10, perStep: -3 },
-        { stat: "reach", start: 0, perStep: 0, atFull: 1 },
+        { stat: "kitCost", start: -10, perStar: -1.5 },
+        { stat: "reach", start: 0, perStar: 0, atFull: 1 },
       ],
     },
-    { id: "bolt", name: "Bolt", kind: "weakness", effects: [{ stat: "loot", start: -20, perStep: 2 }] },
-    { id: "ichi", name: "Ichi", kind: "weakness", effects: [{ stat: "outpostHealth", start: -10, perStep: 1 }] },
+    { id: "bolt", name: "Bolt", kind: "weakness", effects: [{ stat: "loot", start: -20, perStar: 1 }] },
+    { id: "ichi", name: "Ichi", kind: "weakness", effects: [{ stat: "outpostHealth", start: -10, perStar: 0.5 }] },
   ],
   [AllianceType.FORTRESS]: [
     {
@@ -230,22 +243,22 @@ export const CONSTELLATIONS: Record<AllianceType, ConstellationRules[]> = {
       name: "Crabatron",
       kind: "strength",
       effects: [
-        { stat: "buildingHealth", start: 10, perStep: 2 },
-        { stat: "trapDamage", start: 10, perStep: 2 },
+        { stat: "buildingHealth", start: 10, perStar: 1 },
+        { stat: "trapDamage", start: 10, perStar: 1 },
       ],
     },
-    { id: "bandito", name: "Bandito", kind: "strength", effects: [{ stat: "towerDamage", start: 5, perStep: 2 }] },
+    { id: "bandito", name: "Bandito", kind: "strength", effects: [{ stat: "towerDamage", start: 5, perStar: 1 }] },
     {
       id: "slimeattikus",
       name: "Slimeattikus",
       kind: "weakness",
-      effects: [{ stat: "production", start: -5, perStep: 0.5 }],
+      effects: [{ stat: "production", start: -5, perStar: 0.25 }],
     },
     {
       id: "octoooze",
       name: "Octo-ooze",
       kind: "weakness",
-      effects: [{ stat: "takeoverCost", start: 15, perStep: -2 }],
+      effects: [{ stat: "takeoverCost", start: 15, perStar: -1 }],
     },
   ],
 };
@@ -281,15 +294,24 @@ export const TYPE_EXTRAS: Record<AllianceType, Partial<Record<AllianceStat, Type
   },
 };
 
-/** Daily-quest points a member can earn the alliance per UTC day (design v5 §8, ASSUMED). */
-export const DAILY_QUEST_POINTS_CAP = 3;
-
 /** The three goal tiers. */
 export const GOAL_TIERS = ["easy", "medium", "hard"] as const;
 export type GoalTier = (typeof GOAL_TIERS)[number];
 
-/** Points a goal pays for Midas; Conquest 2x, Fortress 4x (`TYPE_SCALE`; design v5 §8, ASSUMED). */
-export const GOAL_POINTS: Record<GoalTier, number> = { easy: 10, medium: 25, hard: 50 };
+/**
+ * Points a goal pays for Midas; Conquest 2x, Fortress 4x (`TYPE_SCALE`).
+ * Goals are the only source of points (owner, 12 Nov 2026: daily quests no
+ * longer pay). Aim: 8 hardcore players finishing 5 Medium goals a week light
+ * the whole sky (2,400 Midas) in about 13 weeks.
+ */
+export const GOAL_POINTS: Record<GoalTier, number> = { easy: 15, medium: 37, hard: 70 };
+
+/**
+ * How many hardcore Map Room 2 players each tier is sized for, Midas; scaled
+ * by `TYPE_SCALE` like the targets (owner, 12 Nov 2026). Targets never scale
+ * with the member count; the goal picker shows these instead.
+ */
+export const GOAL_TIER_PLAYERS: Record<GoalTier, number> = { easy: 3, medium: 8, hard: 15 };
 
 /** Goals an alliance may set a week (owner). */
 export const GOALS_PER_WEEK = 5;
@@ -305,23 +327,27 @@ export interface GoalRules {
 }
 
 /**
- * The weekly goal menu (design v5 §16, targets ASSUMED). Each kind's progress
- * comes from `services/alliance/allianceProgress.ts`: quest events for most,
- * direct hooks for takeovers, daily quests, harvests, kits and outposts
- * defended; "hold" is the members' outposts at the week's last daily tally.
+ * The weekly goal menu. Midas targets are sized for 3 / 8 / 15 hardcore Map
+ * Room 2 players a week (owner, 12 Nov 2026); never scaled by member count.
+ * Each kind's progress comes from `services/alliance/allianceProgress.ts`:
+ * quest events for most, direct hooks for takeovers, daily quests, harvests,
+ * kits and outposts defended; "hold" is the members' outposts at the week's
+ * last daily tally. "attackWin" counts wins on players' yards only (not tribe
+ * camps or bots); "upgrade" loses a count when the upgrade is cancelled.
+ * "Hatch monsters" is gone (owner, 12 Nov 2026): a stored goal of a kind no
+ * longer on the menu gains nothing, is not shown and takes no weekly slot.
  */
 export const GOAL_MENU: GoalRules[] = [
-  { kind: "tribeDestroy", name: "Destroy tribe yards", targets: [15, 40, 75] },
-  { kind: "takeover", name: "Take over outposts", targets: [3, 8, 15] },
-  { kind: "hold", name: "Hold outposts at the end of the week", targets: [8, 15, 30] },
-  { kind: "attackWin", name: "Win attacks on players", targets: [8, 20, 45] },
-  { kind: "defenceWin", name: "Win defences", targets: [8, 20, 45] },
-  { kind: "hatch", name: "Hatch monsters", targets: [150, 400, 750] },
-  { kind: "dailyQuests", name: "Finish daily quests", targets: [60, 120, 225] },
-  { kind: "loot", name: "Loot resources", targets: [8_000_000, 30_000_000, 75_000_000] },
-  { kind: "catapultHit", name: "Catapult hits", targets: [30, 75, 150] },
-  { kind: "upgrade", name: "Upgrade buildings", targets: [15, 40, 75] },
-  { kind: "harvest", name: "Harvest resources", targets: [40_000_000, 120_000_000, 300_000_000], only: AllianceType.MIDAS },
+  { kind: "tribeDestroy", name: "Destroy tribe yards", targets: [200, 550, 1000] },
+  { kind: "takeover", name: "Take over outposts", targets: [60, 160, 300] },
+  { kind: "hold", name: "Hold outposts at the end of the week", targets: [90, 240, 450] },
+  { kind: "attackWin", name: "Win attacks on players", targets: [300, 800, 1500] },
+  { kind: "defenceWin", name: "Win defences", targets: [30, 80, 150] },
+  { kind: "dailyQuests", name: "Finish daily quests", targets: [100, 280, 500] },
+  { kind: "loot", name: "Loot resources", targets: [450_000_000, 1_200_000_000, 2_250_000_000] },
+  { kind: "catapultHit", name: "Catapult hits", targets: [900, 2400, 4500] },
+  { kind: "upgrade", name: "Upgrade buildings", targets: [90, 240, 450] },
+  { kind: "harvest", name: "Harvest resources", targets: [500_000_000, 1_300_000_000, 2_200_000_000], only: AllianceType.MIDAS },
   { kind: "kitRebuild", name: "Rebuild outposts with Starter Kits", targets: [6, 16, 30], only: AllianceType.CONQUEST },
   { kind: "outpostDefended", name: "Outposts attacked but not taken", targets: [30, 80, 160], only: AllianceType.FORTRESS },
 ];

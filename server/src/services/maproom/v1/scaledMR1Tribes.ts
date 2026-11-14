@@ -42,7 +42,7 @@ import { catapultQuestEvents, lootQuestEvents } from "../../quests/hooks.js";
 import { recordQuestEvents } from "../../quests/record.js";
 import { removedCampStandIn } from "./practiceCamp.js";
 import { countAttackLoot } from "../../events/lootEvents.js";
-import { plunderPercent, weekendBoostUsed, withPlunderBonus } from "../../events/weekendBoosts.js";
+import { plunderPercent, withPlunderBonus } from "../../events/weekendBoosts.js";
 import { recordAttackAchievements } from "../../achievements/events.js";
 import {
   acquireMR1TribeFinalLock,
@@ -298,7 +298,6 @@ const writeTribeLanding = async (
       withPlunderBonus(withTribeGooBonus(credit, true), plunder),
       krallenBuff
     ).credited;
-    if (plunder > 0) weekendBoostUsed(user.userid, "plunder", now);
 
     const looted = { ...existingTribe.looted };
     for (const key of RESOURCE_KEYS) looted[key] = (looted[key] ?? 0) + credit[key];
