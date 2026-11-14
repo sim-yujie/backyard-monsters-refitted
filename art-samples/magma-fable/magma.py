@@ -55,11 +55,9 @@ MATS = kit.MATS
 HX, HY, BH = 1.85, 2.4, 4.0               # the body: half sizes and height
 LIFT = 0.0 if T == 1 else 0.45            # tiers 2 and 3 stand on feet
 Z0, TOP = LIFT, LIFT + BH
-POT_H = 1.4                               # the pot: a squat bowl, wider than tall, the same at every tier
-POT = Vector((-0.6, 0.6, 0.0))             # toward the back of the lid, as Flash's: the rays fan out in front of it
-TILT = 10.0                               # the bowl leans this many degrees straight away from the camera: Flash draws
-                                          # its mouth flatter than the box's own view would show it
-NECK = 0.85                               # the glowing funnel the bowl sits on (mostly hidden behind the bowl's front)
+POT_H = 2.1                               # the pot: one squat stone piece seated on the lid, the same at every tier
+POT = Vector((-0.66, 0.62, 0.0))          # toward the back of the lid, as Flash's: the rays fan out in front of it
+TILT = 0.0                                # degrees the pot leans away from the camera (0: it stands square on the lid)
 FL = Vector((HX, 0.0, Z0 + 1.68))        # the flange's centre on the right face
 WELL = Vector((HX + 2.05, -0.12, 0.0))     # the well in the ground
 
@@ -173,8 +171,8 @@ def smoke_mat():
     noise.inputs["Roughness"].default_value = 0.5
     nz = noise.outputs[0]
     # the column's radius: narrow in the mouth, wider higher up, its outline ragged by the grain
-    rad = math_("MULTIPLY_ADD", z, 0.27)
-    rad.inputs[2].default_value = 1.0
+    rad = math_("MULTIPLY_ADD", z, 0.36)
+    rad.inputs[2].default_value = 1.12
     q = math_("DIVIDE", ln.outputs["Value"], rad.outputs[0])
     q2 = math_("MULTIPLY_ADD", math_("SUBTRACT", nz, 0.5).outputs[0], 1.1)
     L_(q.outputs[0], q2.inputs[2])
@@ -219,8 +217,8 @@ def m_brass():
     """Flash's brass: deep gold, brown in the shade, with bright worn edges."""
     if "brass" in MATS:
         return MATS["brass"]
-    m = mat("brass", (190, 100, 6), rough=0.3, metal=0.6, wear=(240, 160, 16), rust=(96, 46, 6), rust_at=0.6, mottle=0.2, wear_amt=0.6,
-            scale=3.2, dirt=0.6, streak=(96, 46, 6), top=(255, 196, 36), ao_min=0.35)
+    m = mat("brass", (108, 57, 2), rough=0.34, metal=0.95, wear=(204, 130, 14), rust=(60, 28, 2), rust_at=0.6, mottle=0.2, wear_amt=0.6,
+            scale=3.2, dirt=0.6, streak=(66, 32, 2), top=(240, 176, 30), ao_min=0.35)
     nt = m.node_tree
     bsdf = next(n for n in nt.nodes if n.type == "BSDF_PRINCIPLED")
     src = bsdf.inputs["Base Color"].links[0].from_socket
@@ -382,7 +380,7 @@ def turn(k):
     if VOL:          # the smoke: rises out of the mouth, lets go of it, thins away; nothing left well before the loop ends
         on = 0.035 < f < 0.84
         zh = 0.5 + 3.3 * min(1.0, max(0.0, f - 0.03) / 0.5) ** 0.8
-        zt = -0.9 + 3.3 * sstep(0.5, 0.84, f)
+        zt = -0.9 + 3.7 * sstep(0.42, 0.82, f)          # the tail lets go of the mouth by about frame 28, as Flash's
         VOL["head"].inputs["From Min"].default_value, VOL["head"].inputs["From Max"].default_value = zh - 1.2, zh
         VOL["tail"].inputs["From Min"].default_value, VOL["tail"].inputs["From Max"].default_value = zt, zt + 0.9
         VOL["dens"].inputs[1].default_value = 3.6 * sstep(0.035, 0.12, f) * (1.0 - sstep(0.52, 0.82, f)) if on else 0.0
@@ -503,19 +501,21 @@ def pipe():
 
 def pot():
     """The smoke pot on the lid: a squat stone bowl (a riveted band, a short flare with glowing ribs, a thick ring of
-    steel blocks round a wide dark mouth) on a glowing funnel; orange rays fan out from under it across the lid; the
-    smoke."""
+    steel blocks round a wide dark mouth) whose short stone collar stands directly on the lid; orange rays fan out from
+    its base across the lid, with a small patch of glow on the lid at the front of the base; the smoke."""
     base = POT + Z * TOP
-    c = base + Z * NECK
+    c = base                          # the pot's base is on the lid: no neck, no gap
     H = POT_H
-    r0, r1, ri = 1.44, 1.56, 1.08     # the band, the rim's outside, the mouth
-    zb = 0.5                          # the band's top
+    r0, r1, ri = 1.32, 1.6, 1.1     # the band, the rim's outside, the mouth
+    rc, zc = 1.14, 0.34               # the collar the pot stands on: its radius and top
+    zb = zc + 0.72                    # the band's top
     zr = H - 0.17                     # the rim's underside
     before = set(bpy.data.objects)
     neck = glow("potneck", (176, 40, 6), (236, 84, 10), (255, 136, 22), 0.8, scale=3.0, cut=0.4)
-    kit.lathe("pot-foot", [(0.56, -0.02), (0.5, 0.1), (0.72, NECK + 0.14), (0.0, NECK + 0.14)], base, neck, verts=32)
-    kit.lathe("pot-seat", [(0.8, -0.02), (0.78, 0.07), (0.54, 0.09), (0.0, 0.09)], base, m_lid(), verts=32)
-    prof = [(0.6, 0.0), (r0 - 0.07, 0.0), (r0, 0.07), (r0 + 0.02, zb - 0.05), (r0 - 0.01, zb), (r1 - 0.06, zr), (r1 - 0.06, H - 0.08), (ri, H - 0.08)]
+    cam = Vector((1, -1, 0)).normalized()
+    kit.cyl("pot-glow", 0.56, 0.02, base + cam * (rc - 0.12) + Z * 0.012, neck, verts=24, bevel=0.0)      # the glow at the base's front
+    prof = [(0.6, -0.02), (rc + 0.05, -0.02), (rc + 0.05, 0.07), (rc, 0.13), (rc - 0.02, zc - 0.05), (r0 - 0.06, zc), (r0, zc + 0.07),
+            (r0 + 0.02, zb - 0.05), (r0 - 0.01, zb), (r1 - 0.06, zr), (r1 - 0.06, H - 0.08), (ri, H - 0.08)]
     ob = kit.lathe("pot", prof, c, m_bronze(), verts=10)          # ten flat sides, as Flash's faceted pot
     ob.data.polygons.foreach_set("use_smooth", [False] * len(ob.data.polygons))
     dark = mat("potdark", (30, 20, 16), rough=0.9, mottle=0.0, speck=0.0, dirt=0.0, bump=0.0)
@@ -534,7 +534,7 @@ def pot():
     for i in range(10):
         a = 2 * math.pi * (i + 0.5) / 10
         d = Vector((math.cos(a), math.sin(a), 0))
-        ball("pot-rivet-%d" % i, c + d * (r0 + 0.03) + Z * 0.25, 0.1, m_gold())
+        ball("pot-rivet-%d" % i, c + d * (r0 + 0.03) + Z * (zc + 0.4), 0.1, m_gold())
     mr = mover("ribs")
     for i in range(10):
         a = 2 * math.pi * i / 10
@@ -556,31 +556,32 @@ def pot():
         side = Vector((-d.y, d.x, 0))
         lim = [((1.56 if d.x > 0 else -1.56) - POT.x) / d.x if abs(d.x) > 1e-3 else 9.0,
                ((1.14 if d.y > 0 else -1.36) - POT.y) / d.y if abs(d.y) > 1e-3 else 9.0]
-        reach = min(2.3, *lim)
-        if reach < 1.15:
+        reach = min(2.6, *lim)
+        r_in = rc - 0.04              # the rays start under the collar's edge
+        ln = reach - r_in
+        if ln < 0.35:
             continue
-        ln = reach - 0.74
-        plate("ray-%d" % i, [(0.0, -0.085), (ln, -0.02), (ln, 0.02), (0.0, 0.085)], base + d * 0.74, d, side, Z, 0.012, m_ray(), bevel=0.0, sink=0.02)
+        plate("ray-%d" % i, [(0.0, -0.085), (ln, -0.02), (ln, 0.02), (0.0, 0.085)], base + d * r_in, d, side, Z, 0.012, m_ray(), bevel=0.0, sink=0.02)
     if T >= 2:           # brass rings under the rim and round the band's foot
         kit.ring("pot-crown", r1 - 0.02, 0.08, m_brass(), z=0.0).location = c + Z * (zr - 0.06)
-        kit.ring("pot-belt", r0 + 0.04, 0.07, m_brass(), z=0.0).location = c + Z * 0.05
+        kit.ring("pot-belt", r0 + 0.03, 0.07, m_brass(), z=0.0).location = c + Z * (zc + 0.06)
     if T == 3:           # iron spikes on the rim
         for i in range(nb):
             a = 2 * math.pi * (i + 0.5) / nb
             d = Vector((math.cos(a), math.sin(a), 0))
             kit.cyl("pot-spike-%d" % i, 0.12, 0.6, c + d * ((r1 + ri) / 2 + 0.06) + Z * (H - 0.03), m_iron(), verts=10, r2=0.01, bevel=0.0,
                     rot=(math.degrees(-0.35 * d.y), math.degrees(0.35 * d.x), 0))
-    # lean the bowl (everything made above but its foot, seat and the rays) about the top of the foot
+    # lean the pot (everything made above but the glow and the rays on the lid) about its base
     lean = Vector((-1, 1, 0)).normalized()
     M = Matrix.Translation(c) @ Matrix.Rotation(math.radians(TILT), 4, Z.cross(lean)) @ Matrix.Translation(-c)
     bpy.context.view_layer.update()
     for o in bpy.data.objects:
-        if o not in before and o.parent is None and not o.name.startswith(("pot-foot", "pot-seat", "ray-")):
+        if o not in before and o.parent is None and not o.name.startswith(("pot-glow", "ray-")):
             o.matrix_world = M @ o.matrix_world
     # the smoke
     ms = mover("smoke")
     bm = bmesh.new()
-    bmesh.ops.create_cone(bm, cap_ends=True, segments=24, radius1=1.5, radius2=2.7, depth=4.6)
+    bmesh.ops.create_cone(bm, cap_ends=True, segments=24, radius1=2.0, radius2=3.7, depth=4.6)
     for v in bm.verts:
         v.co.z += 2.3 - 0.4
     ob = kit.mesh_ob("smoke-column", bm, [smoke_mat()], bevel=0.0, parent=ms)
