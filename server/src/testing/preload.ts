@@ -25,3 +25,19 @@ process.env.INFERNO_ENABLED = "off";
  */
 delete process.env.BOTS_FLOOR_LEVEL;
 delete process.env.BOTS_TOTAL;
+
+/*
+ * No weekend event runs unless a test starts one. The yard actions read the
+ * live settings (`services/events/weekendSettings.ts`) at the real clock, and
+ * the defaults run an event every weekend from 14 Nov 2026: on a Builder's
+ * Weekend nine upgrade and fortify tests were charged 30% less than they
+ * expect, and the other three events would move loot, lab and hatch tests in
+ * their turn. A test that needs an event passes its own settings or calls
+ * `setWeekendSettings`, and puts back what it found. A developer's
+ * `WEEKEND_FORCE` in server/.env must not start one either. Imported here,
+ * after the lines above, so nothing reads the environment before it is set.
+ */
+delete process.env.WEEKEND_FORCE;
+const { DEFAULT_WEEKEND_SETTINGS } = await import("../game-data/events/weekendEvents.js");
+const { setWeekendSettings } = await import("../services/events/weekendSettings.js");
+setWeekendSettings({ ...DEFAULT_WEEKEND_SETTINGS, enabled: false });

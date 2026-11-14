@@ -130,14 +130,27 @@
   color: var(--colour-warning);
 }
 
+/* The list hugs its rows and only scrolls past its max-height. Two rules keep
+   a press on Fill, + or − from moving anything (owner, 14 Nov 2026: Fill made
+   a scroll bar appear and slid out from under the pointer):
+   - A pressed button drops 1-2px (`.btn:active`, ui.css and skin.css). With
+     no padding the box ended exactly at the last row's bottom, so the press
+     itself overflowed it and a scroll bar came up. The padding (taken back by
+     the margin, so the rows stay in line with the rest) holds the press and
+     the focus rings inside the box.
+   - `scrollbar-gutter: stable` keeps the bar's width free at all times, so a
+     bar coming or going never narrows the rows (which re-wrapped them and
+     moved the buttons) and never lies over Fill. */
 .transfer-dialog__list {
   display: grid;
   gap: var(--space-2);
-  margin: 0;
-  padding: 0;
+  margin: calc(-1 * var(--space-1));
+  padding: var(--space-1);
   list-style: none;
   max-height: min(46vh, 360px);
   overflow-y: auto;
+  scrollbar-gutter: stable;
+  scrollbar-width: thin;
 }
 
 .transfer-dialog__list:empty {
