@@ -381,9 +381,15 @@ describe("the 3D yard buildings", () => {
         { url: `${folder}${look?.anim?.strip[0] ?? ""}`, frames: level < 3 ? 47 : 45 },
       ]);
     }
-    // No 3D ruins of its own: the whole look when damaged, Flash's rubble when destroyed.
-    expect(resolveArt(2, 1, ArtState.DAMAGED, "inferno")?.top.url).toBe(`${folder}body.3d1@2x.webp`);
-    expect(resolveArt(2, 1, ArtState.DESTROYED, "inferno")?.top.url).toBe(`${folder}top.1.destroyed.v2.png`);
+    // Each tier has its own 3D damaged and destroyed stills.
+    for (const [level, tier] of [[1, 1], [2, 1], [3, 3], [6, 3], [7, 7], [10, 7]] as const) {
+      const damaged = resolveArt(2, level, ArtState.DAMAGED, "inferno");
+      expect(damaged?.top.url, `level ${level}`).toBe(`${folder}top.3d${tier}.damaged@2x.webp`);
+      expect(damaged?.shadow?.url, `level ${level}`).toBe(`${folder}shadow.3d${tier}.damaged.jpg`);
+      const destroyed = resolveArt(2, level, ArtState.DESTROYED, "inferno");
+      expect(destroyed?.top.url, `level ${level}`).toBe(`${folder}top.3d${tier}.destroyed@2x.webp`);
+      expect(destroyed?.shadow?.url, `level ${level}`).toBe(`${folder}shadow.3d${tier}.destroyed.jpg`);
+    }
     // The main yard's Pebble Shiner keeps its own 3D look; the Classic look is Flash's Coal Extractor.
     expect(resolveArt(2, 7, ArtState.DEFAULT, "main")?.top.url).toBe("/assets/buildings/pebbleshiner.v2/body.3d6@2x.webp");
     setClassicLook(true);

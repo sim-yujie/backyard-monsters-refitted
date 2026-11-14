@@ -26,6 +26,7 @@ FRAMES = 1
 SUN, SUN_COL = 4.8, (1.0, 0.95, 0.86)      # the overworld recipe's light; a building may warm it
 SKY, SKY_E = (0.62, 0.68, 0.78), 0.85
 OUT = Path(".")
+STATE = os.environ.get("PB_STATE", "")          # "damaged" or "destroyed": the files are L<n>-<state>-base.png and -alone.png
 K = {"fit": 4}.get(MODE, int(os.environ.get("PB_K", 12)))      # render px per Flash px
 SX, SY, SZ = 10 * math.cos(math.radians(45)), 10 * math.sin(math.radians(45)) * math.sin(math.radians(EL)),     10 * math.cos(math.radians(EL))
 rng = random.Random(1000)            # the same at every level: a level only adds parts
@@ -56,7 +57,7 @@ def reset():
     sc = bpy.context.scene
     sc.render.engine = "CYCLES"
     prefs = bpy.context.preferences.addons["cycles"].preferences
-    for kind in ("OPTIX", "CUDA"):
+    for kind in os.environ.get("PB_DEVICE", "CUDA").split(","):      # CUDA: OptiX is not there under WSL
         try:
             prefs.compute_device_type = kind
             prefs.get_devices()
@@ -65,6 +66,7 @@ def reset():
                 for d in prefs.devices:
                     d.use = d.type == kind
                 sc.cycles.device = "GPU"
+                print("DEVICE", kind, [d.name for d in devs])
                 break
         except TypeError:
             continue
@@ -745,13 +747,13 @@ def run(build, turn, family=default_family, masonry=()):
         sc.cycles.samples = int(os.environ.get("PB_SAMPLES", 384))
         for o in moving_objs:
             o.visible_camera = False
-        sc.render.filepath = str(out / f"L{L}-base.png")
+        sc.render.filepath = str(out / f"L{L}{'-' + STATE if STATE else ''}-base.png")
         bpy.ops.render.render(write_still=True)
         for o in moving_objs:
             o.visible_camera = True
         bpy.data.objects["ground"].hide_render = True
         sc.cycles.samples = 32
-        sc.render.filepath = str(out / f"L{L}-alone.png")
+        sc.render.filepath = str(out / f"L{L}{'-' + STATE if STATE else ''}-alone.png")
         bpy.ops.render.render(write_still=True)
         bpy.data.objects["ground"].hide_render = False
         for o in moving_objs:

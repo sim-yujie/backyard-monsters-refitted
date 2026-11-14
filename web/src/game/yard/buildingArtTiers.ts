@@ -733,15 +733,21 @@ export const INFERNO_BUILDING_3D_ART: Readonly<Record<number, readonly TierArt[]
   // 2 Coal Extractor: 3D, the clean-room model of art/coal-fable (`export3d_buildings.py coal`), three tiers at levels
   // 1-2, 3-6 and 7-10 as the Bone Cruncher's (Flash's has two looks, from 1 and 3; the middle tier is in between).
   // A lump of coal goes up the intake and along the copper pipe, the coal jiggles and the furnace flickers, in Flash's
-  // 47 cells (levels 1-2) and 45. No damaged or destroyed look of its own: the damaged one is the whole look tinted,
-  // the destroyed Flash's.
+  // 47 cells (levels 1-2) and 45. Each tier has its own damaged still (sooted, the copper pipe sprung off, the funnel
+  // knocked over) and destroyed still (the machine on its side), one rough pass each (`coal:damaged`, `coal:destroyed`).
   2: [
     { from: 1, top: ["top.3d1@2x.webp", -40, -45], shadow: ["shadow.3d1.jpg", -29, 8], lift: 0,
-      anim: { strip: ["anim.3d1@2x.webp", -40, -46, 62, 94, 47], columns: 33, body: ["body.3d1@2x.webp", -40, -41] } },
-    { from: 3, top: ["top.3d3@2x.webp", -43, -50], shadow: ["shadow.3d3.jpg", -26, 9], lift: 0,
-      anim: { strip: ["anim.3d3@2x.webp", -40, -51, 68, 86, 45], columns: 30, body: ["body.3d3@2x.webp", -43, -41] } },
-    { from: 7, top: ["top.3d7@2x.webp", -40, -50], shadow: ["shadow.3d7.jpg", -24, 3], lift: 0,
-      anim: { strip: ["anim.3d7@2x.webp", -38, -51, 68, 102, 45], columns: 30, body: ["body.3d7@2x.webp", -40, -47] } },
+      anim: { strip: ["anim.3d1@2x.webp", -40, -46, 62, 94, 47], columns: 33, body: ["body.3d1@2x.webp", -40, -41] },
+      damaged: { top: ["top.3d1.damaged@2x.webp", -40, -43], shadow: ["shadow.3d1.damaged.jpg", -29, 8] },
+      destroyed: { top: ["top.3d1.destroyed@2x.webp", -38, -19], shadow: ["shadow.3d1.destroyed.jpg", -22, 16] } },
+    { from: 3, top: ["top.3d3@2x.webp", -44, -50], shadow: ["shadow.3d3.jpg", -28, 9], lift: 0,
+      anim: { strip: ["anim.3d3@2x.webp", -40, -51, 68, 101, 45], columns: 30, body: ["body.3d3@2x.webp", -44, -41] },
+      damaged: { top: ["top.3d3.damaged@2x.webp", -44, -48], shadow: ["shadow.3d3.damaged.jpg", -28, 9] },
+      destroyed: { top: ["top.3d3.destroyed@2x.webp", -40, -18], shadow: ["shadow.3d3.destroyed.jpg", -22, 15] } },
+    { from: 7, top: ["top.3d7@2x.webp", -41, -50], shadow: ["shadow.3d7.jpg", -24, 3], lift: 0,
+      anim: { strip: ["anim.3d7@2x.webp", -39, -51, 69, 102, 45], columns: 29, body: ["body.3d7@2x.webp", -41, -47] },
+      damaged: { top: ["top.3d7.damaged@2x.webp", -41, -49], shadow: ["shadow.3d7.damaged.jpg", -24, 3] },
+      destroyed: { top: ["top.3d7.destroyed@2x.webp", -39, -21], shadow: ["shadow.3d7.destroyed.jpg", -22, 15] } },
   ],
   // 16 Incubator Control Centre: 3D look C, on a small magma pool. Each cell is the whole building: 32 cells of its
   // idle loop (the lava's light breathing), then 64 of its loop while it hatches (the crystal pulsing twice as well).

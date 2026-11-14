@@ -157,36 +157,36 @@ SHINE = {1: 0.0, 2: 0.55, 3: 1.0}[T]
 
 
 def m_body():
-    return mat("body", lerp((126, 70, 40), (128, 62, 22), SHINE), rough=0.75 - 0.43 * SHINE, metal=0.1 + 0.7 * SHINE,
-               wear=lerp((226, 128, 66), (236, 142, 58), SHINE), rust=lerp((44, 26, 18), (50, 26, 12), SHINE),
-               rust_at=0.5 + 0.08 * SHINE, scale=4.6 - 0.6 * SHINE, hard=T < 3, wear_amt=0.85 - 0.15 * SHINE, streak=lerp((60, 36, 24), (80, 40, 16), SHINE),
+    return mat("body", lerp((186, 108, 70), (128, 62, 22), SHINE), rough=0.75 - 0.43 * SHINE, metal=0.1 + 0.7 * SHINE,
+               wear=lerp((236, 150, 96), (236, 142, 58), SHINE), rust=lerp((72, 42, 30), (50, 26, 12), SHINE),
+               rust_at=0.5 + 0.04 * SHINE, scale=4.6 - 0.6 * SHINE, hard=T < 3, wear_amt=0.85 - 0.15 * SHINE, streak=lerp((60, 36, 24), (80, 40, 16), SHINE),
                top=lerp((104, 64, 46), (128, 62, 22), SHINE), mottle=0.5, speck=0.1 * SHINE, bump=0.03 + 0.04 * SHINE,
-               bands=lerp((50, 28, 18), (70, 34, 12), SHINE) if T < 3 else None)
+               bands=lerp((84, 48, 32), (70, 34, 12), SHINE) if T < 3 else None)
 
 
 def m_trim():
-    return mat("trim", lerp((98, 60, 40), (140, 74, 26), SHINE), rough=0.65 - 0.3 * SHINE, metal=0.2 + 0.55 * SHINE,
-               wear=lerp((152, 96, 66), (214, 136, 60), SHINE), rust=lerp((50, 32, 24), (70, 36, 14), SHINE), scale=5.0)
+    return mat("trim", lerp((132, 84, 58), (140, 74, 26), SHINE), rough=0.65 - 0.3 * SHINE, metal=0.2 + 0.55 * SHINE,
+               wear=lerp((190, 128, 92), (214, 136, 60), SHINE), rust=lerp((70, 44, 32), (70, 36, 14), SHINE), scale=5.0)
 
 
 def m_yellow():
-    return mat("yellow", (212, 134, 26), rough=0.42, metal=0.35, wear=(250, 198, 80), rust=(150, 80, 20), rust_at=0.58,
-               scale=3.0, streak=(130, 64, 16), dirt=0.6)
+    return mat("yellow", (250, 170, 56), rough=0.42, metal=0.2, wear=(255, 214, 104), rust=(168, 92, 26), rust_at=0.58,
+               scale=3.0, streak=(140, 70, 18), dirt=0.4, mottle=0.25)
 
 
 def m_orange():
-    return mat("orange", (190, 104, 22), rough=0.5, metal=0.3, wear=(232, 156, 54), rust=(120, 60, 16), scale=4.0)
+    return mat("orange", (214, 120, 30), rough=0.5, metal=0.2, wear=(244, 172, 66), rust=(120, 60, 16), scale=4.0)
 
 
 def m_pipe():
-    return mat("pipe", lerp((232, 112, 66), (204, 98, 40), SHINE), rough=0.5 - 0.2 * SHINE, metal=0.3 + 0.45 * SHINE,
+    return mat("pipe", lerp((244, 124, 78), (246, 130, 64), SHINE), rough=0.5 - 0.2 * SHINE, metal=0.3 + 0.3 * SHINE,
                wear=lerp((255, 152, 104), (246, 160, 90), SHINE), rust=lerp((170, 70, 44), (130, 60, 24), SHINE), scale=4.0,
                dirt=0.1, mottle=0.3)
 
 
 def m_olive():
-    return mat("olive", (170, 118, 40), rough=0.5, metal=0.4, rust=(74, 46, 20), rust_at=0.64, scale=5.0,
-               dirt=0.2, speck=0.0, mottle=0.12, bump=0.02, hard=True)
+    return mat("olive", (204, 138, 48), rough=0.5, metal=0.3, wear=(236, 178, 84), rust=(112, 62, 36), rust_at=0.55, scale=4.0,
+               dirt=0.3, speck=0.06, mottle=0.25, bump=0.03, hard=True)
 
 
 def m_neck():
@@ -220,13 +220,13 @@ def m_steel():
 
 def m_flange():
     if T < 3:
-        return m_olive()
+        return mat("flange", lerp((184, 118, 98), (150, 120, 96), SHINE), rough=0.65, metal=0.15, wear=(222, 160, 136), rust=(104, 60, 46), rust_at=0.52, scale=6.0, hard=True)
     return mat("flange", lerp((178, 114, 98), (150, 150, 146), SHINE), rough=0.6, metal=0.2 + 0.4 * SHINE,
                wear=lerp((210, 150, 130), (196, 198, 196), SHINE), rust=(110, 70, 60), scale=6.0)
 
 
 def m_brick():
-    return mat("brick", (206, 120, 44), rough=0.4, metal=0.45, wear=(238, 172, 86), rust=(92, 48, 18), scale=6.0, mottle=0.3, ao_min=0.05, top=(255, 196, 104), speck=0.08,
+    return mat("brick", (248, 144, 50), rough=0.4, metal=0.2, dirt=0.6, wear=(255, 196, 104), rust=(120, 62, 22), scale=6.0, mottle=0.22, ao_min=0.05, top=(255, 206, 120), speck=0.08,
                streak=(120, 72, 30))
 
 
@@ -441,6 +441,7 @@ RIS = P(-2.15, 2.97)                         # the riser's axis (where the coppe
 FUN = P(-3.4, 2.97)                          # the funnel's axis
 WIN = (-22.0, 76.0)                          # the window band's bearings
 RISER_TOP = 0.0
+STACK_YAW = float(os.environ.get("PB_STACK_YAW", 22.0))     # Flash shows the stack corner-on: a wide lit face, a narrower shaded one
 
 
 def legs():
@@ -672,16 +673,16 @@ def intake():
             one("ycollar", [mat("ybase", (116, 46, 30), rough=0.7, wear=(160, 76, 50), rust=(60, 26, 18), scale=4.0, speck=0.0)], lambda b: b.lathe([(R + 0.14, 0.0), (R + 0.14, 0.42), (R + 0.02, 0.5)], at=c, n=36), sharp=30)
             one("yrib", [m_orange()], lambda b: b.box((0.2, 0.26, 1.5), frame_at(c + D(-80) * (R + 0.06) + UP * 0.75, D(-80), UP)), bevel=0.05)
         else:
-            S = 1.72
-            M0 = Rz(38, c)
+            S = 1.5
+            M0 = Rz(STACK_YAW, c)
             one("stackplate", [m_plate()], lambda b: b.box((S + 0.7, S + 0.7, 0.2), M0 @ Matrix.Translation((0, 0, 0.1))), smooth=False, bevel=0.04)
             for i in range(2):
                 one("stackbrick-%d" % i, [m_brick()], lambda b, i=i: b.box((S, S, 0.9), M0 @ Matrix.Translation((0, 0, 0.2 + 0.47 + 0.95 * i))), smooth=False, bevel=0.07)
             one("stackbolts", [m_dark()], lambda b: [b.lathe([(0.09, 0), (0.07, 0.05), (0, 0.06)], n=8, M=M0 @ Matrix.Translation((sx * (S / 2 + 0.2), sy * (S / 2 + 0.2), 0.2)))
                                                      for sx in (-1, 1) for sy in (-1, 1)])
         return zf + bend + RE
-    S = 1.86
-    M0 = Rz(38, c)
+    S = 1.62          # corner-on it is as wide on the screen as Flash's
+    M0 = Rz(STACK_YAW, c)
     one("stackplate", [m_plate()], lambda b: b.box((S + 0.86, S + 0.86, 0.22), M0 @ Matrix.Translation((0, 0, 0.11))), smooth=False, bevel=0.04)
     one("stackbolts", [m_dark()], lambda b: [b.lathe([(0.1, 0), (0.08, 0.05), (0, 0.07)], n=8, M=M0 @ Matrix.Translation((sx * (S / 2 + 0.25), sy * (S / 2 + 0.25), 0.22)))
                                              for sx in (-1, 1) for sy in (-1, 1)])
@@ -704,7 +705,7 @@ def intake():
         rs.append(S / 2 * (1 + 0.07 * math.sin(math.pi * min(u, 0.9) / 0.9)) * math.sqrt(max(0.1, 1 - (max(0.0, u - 0.74) / 0.26) ** 2 * 0.5)))
     mv = mover("stack")
     bb = B()
-    rings = freeze(bb, bb.tube([c + UP * z for z in zs], rs, sides=4, twist=-7))
+    rings = freeze(bb, bb.tube([c + UP * z for z in zs], rs, sides=4, twist=STACK_YAW - 45))
     o = bb.ob("stack-duct", [m_brick()], parent=mv, smooth=False, bevel=0.022, segs=2)
     bulging(o, rings, 0.04, 0.5, 0.2, 0.11, 0.03, 0.97)
     return zs[-1]
@@ -890,6 +891,84 @@ def build():
     copper_pipe(z_tur)
 
 
+# ------------------------------------------------------------------------------------------------- damaged, destroyed
+# One rough pass each (owner: these only roughly follow Flash): PB_STATE=damaged|destroyed with mode `base`.
+#   PB_STATE=damaged PB_K=6 sh run.sh <tier> base   ->  render/L<tier>-damaged-base.png, -alone.png
+STATE = kit.STATE
+
+
+def scorch(amount, cut=0.5):
+    """Soot over every paint: patches of near black, `amount` of the colour left under them."""
+    for m in list(bpy.data.materials):
+        nt = m.node_tree
+        if nt is None:
+            continue
+        bsdf = next((n for n in nt.nodes if n.type == "BSDF_PRINCIPLED"), None)
+        if bsdf is None:
+            continue
+        es = bsdf.inputs["Emission Strength"]
+        if es.default_value > 0:
+            es.default_value *= 0.0 if STATE == "destroyed" else 0.45
+        inp = bsdf.inputs["Base Color"]
+        if inp.is_linked:
+            src = inp.links[0].from_socket
+        else:
+            rgb = nt.nodes.new("ShaderNodeRGB")
+            rgb.outputs[0].default_value = inp.default_value
+            src = rgb.outputs[0]
+        tc = nt.nodes.new("ShaderNodeTexCoord")
+        nz = nt.nodes.new("ShaderNodeTexNoise")
+        nz.inputs["Scale"].default_value = 1.6
+        nz.inputs["Detail"].default_value = 5.0
+        nz.inputs["Roughness"].default_value = 0.65
+        ramp = nt.nodes.new("ShaderNodeValToRGB")
+        ramp.color_ramp.elements[0].position, ramp.color_ramp.elements[0].color = cut - 0.1, grey(amount)
+        ramp.color_ramp.elements[1].position, ramp.color_ramp.elements[1].color = cut + 0.12, K1
+        mix = nt.nodes.new("ShaderNodeMix")
+        mix.data_type = "RGBA"
+        mix.blend_type = "MULTIPLY"
+        mix.inputs[0].default_value = 1.0
+        nt.links.new(tc.outputs["Object"], nz.inputs["Vector"])
+        nt.links.new(nz.outputs[0], ramp.inputs[0])
+        nt.links.new(src, mix.inputs[6])
+        nt.links.new(ramp.outputs[0], mix.inputs[7])
+        nt.links.new(mix.outputs[2], inp)
+
+
+def about(pivot, axis, deg):
+    return Matrix.Translation(pivot) @ Matrix.Rotation(math.radians(deg), 4, axis) @ Matrix.Translation(-Vector(pivot))
+
+
+def knock(names, M):
+    for n in names:
+        o = bpy.data.objects.get(n)
+        if o is not None and o.parent is None:
+            o.matrix_world = M @ o.matrix_world
+
+
+def build_state():
+    build()
+    if not STATE:
+        return
+    kit.MOVING.clear()                      # a state is one still: nothing is held back for a strip
+    bpy.context.view_layer.update()         # so every object's matrix_world is its real place before it is knocked
+    if STATE == "damaged":
+        scorch(0.3)
+        # the copper pipe torn off the riser and sprung up, the funnel knocked over, the turret's top askew
+        knock(["cpipe"], about(TUR + UP * (TOP + 2.2), SF, 16))
+        knock(["funnel", "funnelhole", "funnelstem"], about(FUN + UP * 7.7, SF, -32))
+        knock(["star", "spikes", "collar"], about(TUR + UP * (TOP + 1.6), SF, -9))
+    else:
+        scorch(0.16, 0.56)
+        # the whole machine thrown on its side toward the screen's right, sunk a little, its pipe and funnel flung off
+        roots = [o for o in bpy.data.objects if o.parent is None]
+        knock(["cpipe"], about(TUR + UP * (TOP + 2.2), SF, 40))
+        knock(["funnel", "funnelhole", "funnelstem"], Matrix.Translation(SR * -0.6 + UP * -1.0) @ about(FUN + UP * 7.7, SF, -60))
+        M = Matrix.Translation(UP * -1.1 + SR * -4.6) @ about(P(2.3, 0.0, 0.0), SF, -72)      # what turns under the ground is hidden by it
+        for o in roots:
+            o.matrix_world = M @ o.matrix_world
+
+
 _border = kit.border_of
 
 
@@ -906,4 +985,4 @@ def border_all(objs, pad=10):
 
 
 kit.border_of = border_all
-kit.run(build, turn)
+kit.run(build_state, turn)

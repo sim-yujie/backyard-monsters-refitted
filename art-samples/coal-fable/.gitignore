@@ -1,3 +1,5 @@
 work/
 render/
+render-oldpc/
+out/
 __pycache__/
