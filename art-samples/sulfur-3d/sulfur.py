@@ -1032,6 +1032,7 @@ def build():
         cradle()
     window()
     cen, rad = pipe()
+    build.cen = cen
     rocks(cen, rad)
     funnel(84 if T == 1 else 112, 1.22 if T == 3 else 1.0)
     drive()
@@ -1053,4 +1054,181 @@ def border_all(objs, pad=10):
 
 
 kit.border_of = border_all
-kit.run(build, turn)
+
+
+# ------------------------------------------------------------------------------------------------------------- damaged
+# One rough pass (owner: this only roughly follows Flash): PB_STATE=damaged with mode `base`.
+#   PB_STATE=damaged PB_K=6 sh run.sh <tier> base   ->  render/L<tier>-damaged-base.png, -alone.png
+# Destroyed is Flash's rubble, as for every other 3D building: there is no 3D destroyed look.
+# Nothing here runs without PB_STATE: the whole model and its renders are as they were.
+STATE = kit.STATE
+
+
+def scorch(amount, cut=0.5, fires=0.3):
+    """Soot over every paint: patches of near black, `amount` of the colour left under them; the glows gutter."""
+    for m in list(bpy.data.materials):
+        nt = m.node_tree
+        if nt is None:
+            continue
+        bsdf = next((n for n in nt.nodes if n.type == "BSDF_PRINCIPLED"), None)
+        if bsdf is None:
+            continue
+        es = bsdf.inputs["Emission Strength"]
+        if es.is_linked:
+            src = es.links[0].from_socket
+            mul = nt.nodes.new("ShaderNodeMath")
+            mul.operation = "MULTIPLY"
+            mul.inputs[1].default_value = fires
+            nt.links.new(src, mul.inputs[0])
+            nt.links.new(mul.outputs[0], es)
+        elif es.default_value > 0:
+            es.default_value *= fires
+        inp = bsdf.inputs["Base Color"]
+        if inp.is_linked:
+            src = inp.links[0].from_socket
+        else:
+            rgb = nt.nodes.new("ShaderNodeRGB")
+            rgb.outputs[0].default_value = inp.default_value
+            src = rgb.outputs[0]
+        tc = nt.nodes.new("ShaderNodeTexCoord")
+        nz = nt.nodes.new("ShaderNodeTexNoise")
+        nz.inputs["Scale"].default_value = 1.6
+        nz.inputs["Detail"].default_value = 5.0
+        nz.inputs["Roughness"].default_value = 0.65
+        ramp = nt.nodes.new("ShaderNodeValToRGB")
+        ramp.color_ramp.elements[0].position, ramp.color_ramp.elements[0].color = cut - 0.1, grey(amount)
+        ramp.color_ramp.elements[1].position, ramp.color_ramp.elements[1].color = cut + 0.12, grey(0.85)
+        mix = nt.nodes.new("ShaderNodeMix")
+        mix.data_type = "RGBA"
+        mix.blend_type = "MULTIPLY"
+        mix.inputs[0].default_value = 1.0
+        nt.links.new(tc.outputs["Object"], nz.inputs["Vector"])
+        nt.links.new(nz.outputs[0], ramp.inputs[0])
+        nt.links.new(src, mix.inputs[6])
+        nt.links.new(ramp.outputs[0], mix.inputs[7])
+        nt.links.new(mix.outputs[2], inp)
+
+
+def about(pivot, axis, deg):
+    return Matrix.Translation(pivot) @ Matrix.Rotation(math.radians(deg), 4, axis) @ Matrix.Translation(-Vector(pivot))
+
+
+def away(pivot, axis, deg, probe):
+    """`about`, turned the way that takes `probe` farther from the tank's axis."""
+    a, b = about(pivot, axis, deg), about(pivot, axis, -deg)
+    return a if (a @ Vector(probe)).xy.length >= (b @ Vector(probe)).xy.length else b
+
+
+def knock(names, M):
+    """Move the named objects (and what hangs on them) by M: they are hung on a new empty, so that `turn` (which sets
+    the hubs' own turning) leaves the knock alone."""
+    e = bpy.data.objects.new("knock-" + names[0], None)
+    kit.link(e)
+    for n in names:
+        o = bpy.data.objects.get(n)
+        if o is not None and o.parent is None:
+            o.parent = e
+    e.matrix_world = M
+
+
+def on_tank(name, phi, el, a, b, m, lift=0.03, thick=0.05, jag=0.35, seed=0.0):
+    """A ragged flat patch lying on the tank's shell at bearing phi, `el` degrees above its middle: a x b units."""
+    c = S(phi, el)
+    n = (c - C).normalized()
+    tx = D(phi + 90)
+    ty = n.cross(tx)
+    bm = bmesh.new()
+    bmesh.ops.create_icosphere(bm, subdivisions=2, radius=1.0)
+    for v in bm.verts:
+        k = 1.0 + jag * noise.noise(Vector((v.co.x * 1.7 + seed, v.co.y * 1.7, seed * 0.37)))
+        p = c + tx * (v.co.x * a * k) + ty * (v.co.y * b * k)
+        v.co = C + (p - C).normalized() * (RT + lift + v.co.z * thick)
+    return kit.mesh_ob(name, bm, [m], smooth=False)
+
+
+def wreck(leak):
+    """What the damage adds: holes broken in the shell with their plates bent out and sulfur running from them, a
+    cracked window, plates, stones and sulfur at the feet. `leak` False: all but the sulfur (made after the soot)."""
+    rr = random.Random(12)
+    # (bearing, elevation, half width, half height) of the holes in the shell
+    holes = [(68, 20, 0.7, 0.6), (-42, 2, 0.55, 0.62), (50, 64, 0.6, 0.48)] if T == 1 else \
+            [(70, 27, 0.78, 0.62), (-36, 60, 0.6, 0.5), (54, 70, 0.62, 0.5)]
+    if not leak:
+        soot = mat("hole", (10, 8, 8), rough=0.95, dirt=0.0, mottle=0.0, speck=0.0, bump=0.0)
+        plate = mat("plate", (96, 66, 70) if T == 1 else (118, 52, 42), rough=0.7, wear=(150, 96, 70), dirt=0.2, scale=4.0)
+        for i, (phi, el, a, b) in enumerate(holes):
+            on_tank("hole%d" % i, phi, el, a, b, soot, lift=0.035, seed=3.1 * i)
+            c = S(phi, el)
+            n = (c - C).normalized()
+            tx = D(phi + 90)
+            ty = n.cross(tx)
+            for j in range(6):                                  # the broken plates round it, bent out
+                ang = 2 * math.pi * (j + rr.uniform(-0.2, 0.2)) / 6
+                rad_ = tx * math.cos(ang) + ty * math.sin(ang)
+                p = c + tx * (math.cos(ang) * a * 1.05) + ty * (math.sin(ang) * b * 1.05)
+                p = C + (p - C).normalized() * (RT + 0.12)
+                tip = math.radians(rr.uniform(35, 65))
+                sh = kit.box("shard%d-%d" % (i, j), (rr.uniform(0.3, 0.46), rr.uniform(0.26, 0.4), 0.05), (0, 0, 0), plate, bevel=0.012, origin="centre")
+                sh.matrix_world = frame_at(p, n.cross(rad_), n * math.cos(tip) - rad_ * math.sin(tip))
+        # the window: dark cracks and dead corners over the glass
+        phi, el = (3.0, 31.0) if T == 1 else (0.0, 41.0)
+        for i, (du, dv, a, b) in enumerate([(-9, 3, 0.3, 0.22), (8, -3, 0.34, 0.2), (1, 5, 0.14, 0.26)] if T == 1 else
+                                           [(-12, 2, 0.36, 0.24), (10, -2, 0.4, 0.2), (0, 4, 0.16, 0.24)]):
+            on_tank("deadpane%d" % i, phi + du, el + dv, a, b, soot, lift=0.07 if T == 1 else 0.075, thick=0.02, jag=0.6, seed=7.7 + i)
+        # at the feet: plates off the shell and stones
+        for i, (phi, r, sz, tilt) in enumerate([(24, 3.7, (0.8, 0.55), 9), (58, 4.0, (0.6, 0.66), -11), (84, 3.75, (0.7, 0.5), 14),
+                                                (104, 4.35, (0.5, 0.45), -7), (40, 4.6, (0.45, 0.4), 6)]):
+            d = D(phi)
+            nrm = (UP + d * math.tan(math.radians(tilt))).normalized()
+            pl = kit.box("fallenplate%d" % i, (sz[0], sz[1], 0.07), (0, 0, 0), plate, bevel=0.015, origin="centre")
+            pl.matrix_world = frame_at(d * r + UP * (0.07 + abs(tilt) * 0.006), D(phi + rr.uniform(20, 160)), nrm)
+        for i, (phi, r, sz) in enumerate([(14, 4.2, 0.24), (34, 4.2, 0.17), (50, 3.6, 0.21), (70, 4.25, 0.26), (92, 3.95, 0.16),
+                                          (112, 3.9, 0.2), (64, 4.8, 0.14), (26, 4.9, 0.15), (80, 4.75, 0.13)]):
+            stone("rubble%d" % i, D(phi) * r, sz)
+        return
+    yel = glow("leak", (236, 204, 22), 0.4)
+    for i, (phi, el, a, b) in enumerate(holes):
+        on_tank("leak%d" % i, phi, el - 7, a * 0.6, b * 0.5, yel, lift=0.06, thick=0.07, jag=0.5, seed=5.3 * i + 1)
+        # it runs down the shell from the hole
+        for j, (dphi, n_, r) in enumerate(((-5, 5, 0.13), (6, 3, 0.1))):
+            low = -4 if T > 1 else -30
+            pts = [S(phi + dphi + 2.5 * math.sin(k * 1.3 + i), max(low, el - 8 - 9 * k), RT + 0.05) for k in range(n_ + 1)]
+            kit.tube("drip%d-%d" % (i, j), pts, r, yel, r_end=r * 0.55, smooth=True)
+    # where the pipe came out of its hood, and pools at the feet
+    for i, (phi, r, sx, sy) in enumerate([(38, 3.75, 0.75, 0.5), (74, 3.95, 0.6, 0.42), (-70 if T == 1 else 96, 3.5 if T == 1 else 4.3, 0.5, 0.36)]):
+        kit.blob("pool%d" % i, tuple(D(phi) * r + UP * 0.02), 1.0, 0.05, yel, stretch=(sx, sy)).rotation_euler = (0, 0, math.radians(45 + phi))
+    for i in range(9):
+        phi, r = rr.uniform(10, 100), rr.uniform(3.4, 4.7)
+        s = rr.uniform(0.07, 0.13)
+        kit.blob("lump%d" % i, tuple(D(phi) * r + UP * s * 0.4), s, 0.7, yel)
+
+
+def build_state():
+    build()
+    if not STATE:
+        return
+    kit.MOVING.clear()                      # a state is one still: nothing is held back for a strip
+    bpy.context.view_layer.update()         # so every object's matrix_world is its real place before it is knocked
+    wreck(False)
+    scorch(0.3, 0.52, 0.3)
+    wreck(True)
+    top = CZ + RT
+    # the chain drive knocked askew on the tank's top, its pole with it
+    knock(["chain", "shaft", "idler", "pole", "polefoot"], about(UP * (top + 1.3), SF, 21) @ about(UP * (top + 1.3), SR, -12))
+    # the intake pipe pulled off its hood: it leans away from the tank on its foot
+    cen = build.cen
+    knock(["pipe", "collar"] if BIG else ["pipe"], away(cen[-1], UP.cross((cen[0] - cen[-1]).normalized()), 27 if T == 1 else 22, cen[0]))
+    hd = (cen[1] - cen[0]).normalized()
+    hole = kit.cyl("hoodhole", 0.4 if T == 1 else 0.56, 0.04, (0, 0, 0), mat("hole", (10, 8, 8)), verts=20, bevel=0.0)
+    aim(hole, cen[0] + hd * (0.62 if T == 1 else 0.7), hd)
+    # the funnel bent over
+    fphi = 84 if T == 1 else 112
+    fa = S(fphi, 31 if T == 1 else 42, RT - 0.1)
+    knock(["fstem", "fcup"], away(fa, D(fphi + 90), 24, fa + UP * 1.5))
+    # the window's frame knocked crooked
+    wphi, wel = (3.0, 31.0) if T == 1 else (0.0, 41.0)
+    wn = (S(wphi, wel) - C).normalized()
+    knock(["winframe", "wintrim"], about(S(wphi, wel), wn, -7))
+
+
+kit.run(build_state, turn)
