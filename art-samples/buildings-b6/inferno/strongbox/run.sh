@@ -1,7 +1,7 @@
 #!/bin/bash
 # run.sh <mode> [extra args] : one Blender run of strongbox.py on one graphics card, under the PC's Blender lock.
 # Takes blender-lock-0 (GPU 0) or blender-lock-1 (GPU 1), whichever is free (waits if both are held), renders on
-# that card only with CUDA, and gives the lock back. Env: PB_K, PB_SAMPLES, PB_SUB, PB_EXTRA, PB_FIRST.
+# that card only with CUDA, and gives the lock back. Env: PB_K, PB_SAMPLES, PB_SUB, PB_EXTRA, PB_FIRST, PB_ALONE.
 HERE="$(cd "$(dirname "$0")" && pwd)"
 ROOT=/home/yujiesim/Coding/backyard-monsters-refitted
 N=""

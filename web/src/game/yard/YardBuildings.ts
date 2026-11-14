@@ -378,7 +378,7 @@ export class YardBuildings {
         swapShadowResolved: true,
         animsSuppressed: false,
         workUntil: workUntil(building.type, building.id, work),
-        restOnIdle: anims[0]?.policy.restOnIdle === true,
+        restOnIdle: anims[0]?.policy.restOnIdle === true || anims[0]?.anim.home === true,
       };
       this.views.push(view);
       this.byId.set(building.id, view);

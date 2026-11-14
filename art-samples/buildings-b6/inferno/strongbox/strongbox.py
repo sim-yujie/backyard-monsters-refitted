@@ -493,6 +493,12 @@ if kit.MODE == "full":
     sc = kit.SC
     sc.cycles.samples = int(os.environ.get("PB_SAMPLES", 256))
     out = kit.OUT / "render"
+    if os.environ.get("PB_ALONE"):
+        # the game export's masks (export3d_buildings.py strongbox): each frame with no ground, so no ground shadow;
+        # only its alpha is used, to tell the building from its shadow in the whole frames
+        bpy.data.objects["ground"].hide_render = True
+        sc.cycles.samples = 32
+        out = kit.OUT / "render-alone"
     out.mkdir(exist_ok=True)
     only = [int(a) for a in kit.ARGS[2:]]
     for k in only or range(int(os.environ.get("PB_FIRST", 0)), kit.FRAMES):

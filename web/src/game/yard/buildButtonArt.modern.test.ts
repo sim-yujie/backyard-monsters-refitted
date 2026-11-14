@@ -71,6 +71,14 @@ describe("the build menu's Modern pictures", () => {
     expect(buildPicture(1, "inferno", true)).toEqual({ url: buttonUrl(1, "inferno"), modern: false });
   });
 
+  it("the Inferno's 3D Strongbox has a Modern picture of its own, not the Monster Locker's", () => {
+    const picture = buildPicture(8, "inferno", false);
+    expect(picture.modern).toBe(true);
+    expect(picture.url).toMatch(/\/modern\/8\.inferno\.[0-9a-f]{8}\.webp$/);
+    expect(picture.url).not.toBe(buildPicture(8, "main", false).url);
+    expect(buildPicture(8, "inferno", true)).toEqual({ url: buttonUrl(8, "inferno"), modern: false });
+  });
+
   it("an outpost draws the main yard's pictures", () => {
     expect(buildPicture(13, "outpost", false)).toEqual(buildPicture(13, "main", false));
   });
