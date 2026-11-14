@@ -746,6 +746,24 @@ export const INFERNO_BUILDING_3D_ART: Readonly<Record<number, readonly TierArt[]
       anim: { strip: ["anim.3d7@2x.webp", -39, -51, 69, 102, 45], columns: 29, body: ["body.3d7@2x.webp", -41, -47] },
       damaged: { top: ["top.3d7.damaged@2x.webp", -45, -50], shadow: ["shadow.3d7.damaged.jpg", -24, 8] } },
   ],
+  // 3 Sulfur Swirler: 3D (owner, 14 Nov 2026, Review Desk), the clean-room model of art/sulfur-3d
+  // (`export3d_buildings.py sulfur`), three tiers at levels 1-2, 3-6 and 7-10 as the Bone Cruncher's (Flash's has two
+  // looks, from 1 and 3; the top tier adds the side boiler, the big gear and the lit firebox). The chain runs round its
+  // wheels, a lump of sulfur goes up the gold pipe and the sulfur swirls behind the window, in Flash's 51 cells
+  // (levels 1-2) and 45. Each tier has its own damaged still (sooted, holes in the shell running sulfur, the pipe off
+  // its hood, the chain drive askew, the window dim and cracked, plates and stones at its feet), one rough pass
+  // (`sulfur:damaged`). Destroyed is Flash's rubble, as the others'.
+  3: [
+    { from: 1, top: ["top.3d1@2x.webp", -36, -59], shadow: ["shadow.3d1.jpg", -10, 10], lift: 0,
+      anim: { strip: ["anim.3d1@2x.webp", -37, -56, 52, 92, 51], columns: 39, body: ["body.3d1@2x.webp", -36, -59] },
+      damaged: { top: ["top.3d1.damaged@2x.webp", -42, -55], shadow: ["shadow.3d1.damaged.jpg", -10, 10] } },
+    { from: 3, top: ["top.3d3@2x.webp", -37, -61], shadow: ["shadow.3d3.jpg", -16, 18], lift: 0,
+      anim: { strip: ["anim.3d3@2x.webp", -38, -61, 50, 119, 45], columns: 40, body: ["body.3d3@2x.webp", -37, -59] },
+      damaged: { top: ["top.3d3.damaged@2x.webp", -37, -54], shadow: ["shadow.3d3.damaged.jpg", -16, 17] } },
+    { from: 7, top: ["top.3d7@2x.webp", -40, -61], shadow: ["shadow.3d7.jpg", -26, 17], lift: 0,
+      anim: { strip: ["anim.3d7@2x.webp", -38, -61, 50, 119, 45], columns: 40, body: ["body.3d7@2x.webp", -40, -59] },
+      damaged: { top: ["top.3d7.damaged@2x.webp", -40, -54], shadow: ["shadow.3d7.damaged.jpg", -28, 16] } },
+  ],
   // 16 Incubator Control Centre: 3D look C, on a small magma pool. Each cell is the whole building: 32 cells of its
   // idle loop (the lava's light breathing), then 64 of its loop while it hatches (the crystal pulsing twice as well).
   // No damaged or destroyed look of its own yet: the damaged one is the whole look tinted, the destroyed Flash's.
