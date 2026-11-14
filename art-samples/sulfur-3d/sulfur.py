@@ -5,8 +5,9 @@ modes), the same kit as the 3D Bone Cruncher and Coal Extractor.
     blender -b --factory-startup -P sulfur.py -- <tier 1|2|3> <fit|check|still|anim|probe|gap> [frame]
 
 Tier 1 = levels 1-2 (Flash look 1: cracked tank in a green tub, wooden post drive), tier 2 = levels 3-6 (Flash look 2:
-bigger plated tank in an iron cradle, sprocket drive, fat pipe), tier 3 = levels 7-10 (tier 2 plus: burner under the
-tank, spiked rail, gold trim, second funnel, sulfur crystals, hotter seams). One model: a tank (radius RT, centre
+bigger plated tank in an iron strap cradle with a hanging chain, sprocket drive, fat pipe), tier 3 = levels 7-10 (tier 2
+plus: lit firebox, big spikes on the band, a side boiler, a big gear under the chain wheel, a larger gold-rimmed
+funnel, gold trim, sulfur crystals on the rock, hotter seams). One model: a tank (radius RT, centre
 height CZ) with every part mounted on it by bearing and height: window, intake pipe, funnel, drive on top, pole.
 
 World: Z up, the tank's axis on the origin, 10 Flash px a unit. The camera looks from +X -Y. P(r, f, z) is the point r
@@ -25,7 +26,7 @@ from pathlib import Path
 
 import bmesh
 import bpy
-from mathutils import Matrix, Vector
+from mathutils import Matrix, Vector, noise
 
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
@@ -139,41 +140,55 @@ def glow(name, col, strength):
 
 
 def m_tank():
-    """The tank's shell: dull maroon plates with glowing yellow sulfur seams between them (a Voronoi's cell edges).
-    Tier 1: thin cracks in a blotchy purple shell. Tier 2 up: thick seams round puffed plates."""
+    """The tank's shell: puffed, blotchy maroon plates with yellow sulfur cracks between them (a Voronoi's cell edges).
+    The cracks' width wanders (a noise divides the distance to the edge), every plate has its own tone, and big soft
+    blotches of paler and darker maroon lie over them. Tier 1: thin cracks in a dull purple-brown shell."""
     if "tank" in MATS:
         return MATS["tank"]
     t = kit.NT("tank")
     v = t.coords()
+    wob = t.mix(v, t.noise(v, 1.6, 2.0, 0.5), 0.10 if T == 1 else 0.06)
     vo = t.n("ShaderNodeTexVoronoi", feature="DISTANCE_TO_EDGE")
-    vo.inputs["Scale"].default_value = 0.86 if T == 1 else 0.82
-    vo.inputs["Randomness"].default_value = 1.0 if T == 1 else 0.8
-    wob = t.mix(v, t.noise(v, 1.6, 2.0, 0.5), 0.10 if T == 1 else 0.05)
-    t.link(wob, vo.inputs["Vector"])
-    d = vo.outputs["Distance"]
-    w = 0.028 if T == 1 else 0.062
+    cell = t.n("ShaderNodeTexVoronoi", feature="F1")
+    for nd in (vo, cell):
+        nd.inputs["Scale"].default_value = 0.86 if T == 1 else 0.82
+        nd.inputs["Randomness"].default_value = 1.0 if T == 1 else 0.8
+        t.link(wob, nd.inputs["Vector"])
+    # the crack's width: thin for most of its run, swelling in places (Flash: irregular, pooled at some corners)
+    wide = t.ramp(t.noise(v, 1.9, 3.0, 0.6, 0.8), [(0.3, grey(0.3)), (0.5, grey(0.62)), (0.72, K1)])
+    dv = t.n("ShaderNodeMath", operation="DIVIDE")
+    t.link(vo.outputs["Distance"], dv.inputs[0])
+    t.link(wide, dv.inputs[1])
+    d = dv.outputs[0]
+    w = 0.026 if T == 1 else 0.07
     if T == 1:
-        base, pale, dark = (104, 60, 68), (150, 108, 104), (62, 34, 42)
+        base, pale, dark = (92, 52, 60), (134, 100, 100), (50, 28, 36)
     else:
-        base, pale, dark = (128, 52, 44), (178, 96, 82), (78, 28, 26)
-    col = t.mix(kit.srgb(*base), kit.srgb(*pale), t.ramp(t.noise(v, 1.5, 4.0, 0.6, 0.5), [(0.42, K0), (0.7, grey(0.8))]))
-    col = t.mix(col, kit.srgb(*dark), t.ramp(t.noise(v, 2.6, 4.0, 0.65, 1.2), [(0.52, K0), (0.72, grey(0.75))]))
+        base, pale, dark = (122, 48, 40), (176, 100, 84), (66, 24, 24)
+    col = t.mix(kit.srgb(*base), kit.srgb(*pale), t.ramp(t.noise(v, 1.3, 4.0, 0.65, 0.8), [(0.4, K0), (0.66, grey(0.9))]))
+    col = t.mix(col, kit.srgb(*dark), t.ramp(t.noise(v, 2.3, 5.0, 0.7, 1.4), [(0.47, K0), (0.68, grey(0.85))]))
+    sepc = t.n("ShaderNodeSeparateColor")                    # each plate its own tone
+    t.link(cell.outputs["Color"], sepc.inputs[0])
+    col = t.mix(col, t.ramp(sepc.outputs[0], [(0.0, grey(0.66)), (1.0, K1)]), 1.0, "MULTIPLY")
+    col = t.mix(col, t.ramp(t.noise(v, 9.0, 4.0, 0.7, 0.5), [(0.3, grey(0.72)), (0.65, K1)]), 1.0, "MULTIPLY")     # stains
     col = t.mix(col, t.ramp(t.noise(v, 40, 2.0, 0.5), [(0.3, grey(0.84)), (0.62, K1)]), 1.0, "MULTIPLY")
-    col = t.mix(col, t.ramp(d, [(w, grey(0.55)), (w * 3.2, K1)]), 1.0, "MULTIPLY")      # plates darken toward the seam
+    col = t.mix(col, t.ramp(d, [(w, grey(0.42)), (w * 4.5, K1)]), 1.0, "MULTIPLY")      # plates darken toward the crack
     col = t.grime(col, 0.0, 2.6, 0.3, 0.5)
-    seam = t.ramp(d, [(w * 0.75, K1), (w, K0)])
-    hot = {1: (228, 208, 40), 2: (232, 212, 28), 3: (255, 214, 30)}[T]
-    core = {1: (236, 226, 90), 2: (246, 232, 70), 3: (255, 246, 170)}[T]
+    seam = t.ramp(d, [(w * 0.7, K1), (w, K0)])
+    hot = {1: (190, 172, 34), 2: (214, 194, 26), 3: (255, 214, 30)}[T]
+    core = {1: (214, 200, 60), 2: (236, 220, 52), 3: (255, 246, 170)}[T]
     scol = t.mix(kit.srgb(*hot), kit.srgb(*core), t.ramp(d, [(0.0, K1), (w * 0.6, K0)]))
     out = t.mix(col, scol, seam)
-    t.set(**{"Base Color": out, "rough": 0.62, "spec": 0.35})
+    t.set(**{"Base Color": out, "rough": 0.66, "spec": 0.3})
     t.link(scol, t.bsdf.inputs["Emission Color"])
     es = t.n("ShaderNodeMath", operation="MULTIPLY")
     t.link(seam, es.inputs[0])
-    es.inputs[1].default_value = {1: 0.6, 2: 0.5, 3: 1.6}[T]
+    es.inputs[1].default_value = {1: 0.22, 2: 0.3, 3: 1.5}[T]
     t.link(es.outputs[0], t.bsdf.inputs["Emission Strength"])
-    h = t.ramp(d, [(w * 0.6, K0), (w * (2.0 if T == 1 else 4.0), K1)])
-    t.bump(h, 0.25 if T == 1 else 0.7, 0.05)
+    # puffed plates: each rises like a cushion from its cracks, with a lumpy skin
+    h = t.ramp(d, [(w * 0.5, K0), (w * 2.5, grey(0.6)), (w * (5.0 if T == 1 else 7.0), K1)])
+    h = t.mix(h, t.noise(v, 6.0, 3.0, 0.6), 0.16)
+    t.bump(h, 0.6 if T == 1 else 1.0, 0.09)
     MATS["tank"] = t.m
     return t.m
 
@@ -253,6 +268,33 @@ def m_iron():
     return mat("iron", (34, 36, 40), rough=0.45, metal=0.7, wear=(70, 74, 82), wear_amt=0.5, dirt=0.3, scale=5.0)
 
 
+def m_lattice():
+    """The cradle's black iron: its edges worn to bright silver (where a bevelled normal leaves the face's own), a
+    few rubbed patches on the faces."""
+    if "lattice" in MATS:
+        return MATS["lattice"]
+    t = kit.NT("lattice")
+    v = t.coords()
+    col = t.mix(kit.srgb(13, 14, 16), kit.srgb(44, 47, 54), t.ramp(t.noise(v, 3.0, 3.0, 0.6, 0.4), [(0.5, K0), (0.75, grey(0.6))]))
+    bv = t.n("ShaderNodeBevel", samples=6)
+    bv.inputs["Radius"].default_value = 0.035
+    geo = t.n("ShaderNodeNewGeometry")
+    dot = t.n("ShaderNodeVectorMath", operation="DOT_PRODUCT")
+    t.link(bv.outputs[0], dot.inputs[0])
+    t.link(geo.outputs["Normal"], dot.inputs[1])
+    edge = t.ramp(dot.outputs["Value"], [(0.8, K1), (0.975, K0)])
+    brk = t.ramp(t.noise(v, 7.0, 3.0, 0.6), [(0.3, grey(0.35)), (0.6, K1)])
+    em = t.n("ShaderNodeMath", operation="MULTIPLY")
+    t.link(edge, em.inputs[0])
+    t.link(brk, em.inputs[1])
+    col = t.mix(col, kit.srgb(228, 234, 246), em.outputs[0])
+    col = t.grime(col, 0.0, 2.6, 0.25, 0.55)
+    t.set(**{"Base Color": col, "rough": 0.5, "metal": 0.25, "spec": 0.4})
+    t.bump(t.noise(v, 22, 3.0, 0.6), 0.06, 0.01)
+    MATS["lattice"] = t.m
+    return t.m
+
+
 def m_steel():
     return mat("steel", (150, 154, 168), rough=0.4, metal=0.8, wear=(170, 176, 190), dirt=0.2, scale=6.0)
 
@@ -275,8 +317,27 @@ def m_red():
 
 
 def m_rock():
-    return mat("rock", (104, 80, 54), rough=0.9, wear=(150, 122, 82), rust=(58, 44, 30), rust_at=0.5, dirt=0.5, scale=3.0,
-               streak=(60, 44, 28), bump=0.3, top=(150, 124, 86))
+    """The brown rock: tan on its ridges, dark in its crevices (the mesh's `crev` colour: 0 on a rib's crest, 1 in
+    the furrow between two), grain running down it, gritty."""
+    if "rock" in MATS:
+        return MATS["rock"]
+    t = kit.NT("rock")
+    v = t.coords()
+    at = t.n("ShaderNodeAttribute", attribute_name="crev")
+    sp = t.n("ShaderNodeSeparateColor")
+    t.link(at.outputs["Color"], sp.inputs[0])
+    cr = sp.outputs[0]
+    col = t.ramp(cr, [(0.0, kit.srgb(200, 162, 108)), (0.13, kit.srgb(124, 90, 58)), (0.5, kit.srgb(66, 46, 30)), (1.0, kit.srgb(20, 13, 9))])
+    col = t.mix(col, kit.srgb(70, 46, 28), t.ramp(t.noise(v, 2.2, 4.0, 0.65, 0.8), [(0.45, K0), (0.7, grey(0.6))]))
+    col = t.mix(col, kit.srgb(176, 132, 78), t.ramp(t.noise(v, 3.4, 4.0, 0.65, 0.4), [(0.55, K0), (0.75, grey(0.5))]))
+    v2 = t.coords(scale=(1.0, 1.0, 0.15))
+    col = t.mix(col, t.ramp(t.noise(v2, 9.0, 4.0, 0.65, 0.4), [(0.3, grey(0.6)), (0.65, K1)]), 1.0, "MULTIPLY")     # grain
+    col = t.mix(col, t.ramp(t.noise(v, 44, 2.0, 0.5), [(0.3, grey(0.8)), (0.62, K1)]), 1.0, "MULTIPLY")
+    col = t.grime(col, 0.0, 2.2, 0.4, 0.4)
+    t.set(**{"Base Color": col, "rough": 0.92, "spec": 0.2})
+    t.bump(t.mix(t.noise(v2, 9.0, 4.0, 0.65, 0.4), t.noise(v, 14, 4.0, 0.65), 0.5), 0.5, 0.03)
+    MATS["rock"] = t.m
+    return t.m
 
 
 def m_funnel():
@@ -361,48 +422,109 @@ def tub():
         kit.ring("bandrim%d" % int(z * 10), 2.53, 0.045, m_steel(), z=z)
 
 
+STRAPS = [5 + 30 * i for i in range(8)]                     # the cradle's straps (bearings): the front, right and back;
+#                                                             the front left is open (the pipe and the rock are there)
+CHAIN_PHI = 50                                              # the hanging chain, in the gap between two straps
+BOILER_PHI = 100                                            # tier 3's side boiler
+
+
+def strap_pts(phi, ro, zr):
+    d = D(phi)
+    return [d * (ro - 0.02) + UP * (zr - 0.2), d * (ro + 0.03) + UP * 2.0, d * (ro + 0.06) + UP * 1.0, d * (ro + 0.1) + UP * 0.1]
+
+
+def along(pts, u):
+    """The point a fraction u down a strap's line."""
+    ls = [(b - a).length for a, b in zip(pts, pts[1:])]
+    x = u * sum(ls)
+    for (a, b), ln in zip(zip(pts, pts[1:]), ls):
+        if x <= ln:
+            return a.lerp(b, x / ln)
+        x -= ln
+    return pts[-1].copy()
+
+
+def arc_lathe(name, prof, a0, a1, mat_, n=72, bevel=0.0):
+    """A closed (r, z) profile swept round the axis from bearing a0 to a1 only, capped at both ends."""
+    bm = bmesh.new()
+    rows = [[bm.verts.new(D(a0 + (a1 - a0) * i / n) * r + UP * z) for r, z in prof] for i in range(n + 1)]
+    m = len(prof)
+    for a, b in zip(rows, rows[1:]):
+        for j in range(m):
+            k = (j + 1) % m
+            bm.faces.new((a[j], a[k], b[k], b[j]))
+    bm.faces.new(rows[0])
+    bm.faces.new(rows[-1][::-1])
+    bmesh.ops.recalc_face_normals(bm, faces=bm.faces)
+    return kit.mesh_ob(name, bm, [mat_], bevel=bevel)
+
+
+RAIL = (0, 224)         # the band's arc: from the front (its end under the first strap) round the right to behind the tank
+
+
 def cradle():
     """Tier 2 up: the iron cradle the tank sits in (where tier 1 has its tub): a firebox drum under the tank, a band
-    round the tank's middle on six pierced legs, braces between the legs. Tier 3 lights the firebox and adds spikes."""
+    round the tank's middle, and under the band, round the front, right and back, a tight basket of pierced iron
+    straps that drop almost straight to the ground, a dark fire wall behind them, two hoops and crossed braces between
+    them, a heavy chain hanging from the band on the right. All black iron with its edges worn bright. Tier 3 lights
+    the firebox and adds spikes to the band."""
     zr = 3.3
     rin = math.sqrt(RT * RT - (zr + 0.3 - CZ) ** 2) - 0.03
-    ro = RT + 0.2
-    kit.lathe("rail", [(rin, zr - 0.3), (ro - 0.04, zr - 0.3), (ro, zr - 0.26), (ro, zr + 0.26), (ro - 0.04, zr + 0.3), (rin, zr + 0.3)],
-              (0, 0, 0), m_iron(), verts=64, bevel=0.02)
-    kit.ring("railrim", ro + 0.01, 0.05, m_steel(), z=zr + 0.27)
+    ro = RT + 0.15
+    lat = m_lattice()
+    arc_lathe("rail", [(rin, zr - 0.3), (ro - 0.04, zr - 0.3), (ro, zr - 0.26), (ro, zr + 0.26), (ro - 0.04, zr + 0.3), (rin, zr + 0.3)],
+              RAIL[0], RAIL[1], lat, bevel=0.02)
+    ra = [RAIL[0] + (RAIL[1] - RAIL[0]) * i / 72 for i in range(73)]
+    kit.tube("railrim", [D(a) * (ro + 0.01) + UP * (zr + 0.27) for a in ra], 0.05, m_steel())
+    kit.tube("railrim2", [D(a) * (ro + 0.01) + UP * (zr - 0.27) for a in ra], 0.04, m_steel())
     kit.lathe("firebox", [(0.0, 0.0), (2.1, 0.0), (2.16, 0.08), (2.16, 0.95), (2.0, 1.1), (1.6, 1.22), (0.0, 1.22)], (0, 0, 0), m_iron(), verts=48, bevel=0.02)
     kit.ring("fireboxrim", 2.17, 0.05, m_steel(), z=0.95)
-    phis = (20, 65, 110, 160, 222)
-    feet = []
-    for i, phi in enumerate(phis):
+    lines = {}
+    for phi in STRAPS:
         d, sd = D(phi), D(phi + 90)
-        top, foot = d * (ro - 0.02) + UP * (zr - 0.2), d * 3.3
-        feet.append((top, foot))
-        for j, s in enumerate((-0.42, 0.42)):
-            kit.sweep("leg%d-r%d" % (i, j), [top + sd * s * 0.85, foot + sd * s + UP * 0.12], d, 0.2, 0.3, m_iron(), bevel=0.03)
-        for j in range(5):
-            u = (j + 0.5) / 5.0
-            p = top.lerp(foot + UP * 0.12, u)
-            hw = 0.42 * (0.85 + 0.15 * u)
-            kit.sweep("leg%d-x%d" % (i, j), [p - sd * hw, p + sd * hw], d, 0.17, 0.26, m_steel() if j == 0 else m_iron(), bevel=0.03)
-        fb = kit.box("leg%d-foot" % i, (1.2, 0.55, 0.14), foot, m_trim() if T == 3 else m_iron(), bevel=0.04)
-        aim(fb, foot, UP, sd)
-        if T == 3:                      # a spike on the band over each leg, and between
-            for dphi in (0, 30):
-                e = D(phi + dphi)
-                sp = kit.cyl("spike%d-%d" % (i, dphi), 0.17, 0.9, (0, 0, 0), m_steel(), verts=8, r2=0.0, bevel=0.0)
-                aim(sp, e * (ro - 0.02) + UP * zr, e * 0.9 + UP * 0.45)
-    for i in range(4):                  # crossed braces between neighbouring legs (not where the pipe passes)
-        (t0, f0), (t1, f1) = feet[i], feet[i + 1]
-        out = (D(phis[i]) + D(phis[i + 1])).normalized()
-        for j, (a, b) in enumerate(((t0.lerp(f0, 0.12), t1.lerp(f1, 0.9)), (t0.lerp(f0, 0.9), t1.lerp(f1, 0.12)))):
-            kit.sweep("brace%d-%d" % (i, j), [a + out * (0.05 - 0.1 * j), b + out * (0.05 - 0.1 * j)], out, 0.07, 0.16, m_iron(), bevel=0.02)
+        pts = strap_pts(phi, ro, zr)
+        lines[phi] = pts
+        hw = 0.3
+        for j, sg in enumerate((-1, 1)):
+            kit.sweep("leg%d-r%d" % (phi, j), [q + sd * sg * hw for q in pts], d, 0.14, 0.17, lat, bevel=0.025)
+        for j in range(8):                                   # the rungs: a pierced strap
+            q = along(pts, (j + 0.45) / 8.0)
+            kit.sweep("leg%d-x%d" % (phi, j), [q - sd * hw, q + sd * hw], d, 0.12, 0.15, lat, bevel=0.02)
+        foot = pts[-1] - UP * 0.1
+        fb = kit.box("leg%d-foot" % phi, (0.8, 0.36, 0.14), foot + d * 0.05, m_trim() if T == 3 else lat, bevel=0.04)
+        aim(fb, foot + d * 0.05, UP, sd)
+    arc = [STRAPS[0] - 5 + (STRAPS[-1] - STRAPS[0] + 10) * i / 72 for i in range(73)]
+    for z, r in ((2.0, ro + 0.03), (1.0, ro + 0.06)):        # two hoops through the straps
+        kit.tube("hoop%d" % int(z * 10), [D(a) * r + UP * z for a in arc], 0.075, lat)
+    bm = bmesh.new()                                         # the fire wall behind the straps: the basket reads dark
+    rw = ro - 0.14
+    rows = [(bm.verts.new(D(a) * rw), bm.verts.new(D(a) * rw + UP * (zr - 0.28))) for a in arc]
+    for (a0, a1), (b0, b1) in zip(rows, rows[1:]):
+        bm.faces.new((a0, b0, b1, a1))
+    kit.mesh_ob("firewall", bm, [mat("wall", (14, 11, 11), rough=0.8, wear=(44, 22, 18), wear_amt=0.5, dirt=0.5, scale=4.0)])
+    for a, b in zip(STRAPS, STRAPS[1:]):                     # crossed braces in every gap
+        pa, pb = lines[a], lines[b]
+        out = D(a + 15)
+        sa, sb = D(a + 90) * 0.3, D(b + 90) * 0.3
+        for k, (u0, u1) in enumerate(((0.06, 0.5), (0.5, 0.06), (0.52, 0.96), (0.96, 0.52))):
+            off = out * (0.02 - 0.07 * (k % 2))
+            kit.sweep("brace%d-%d" % (a, k), [along(pa, u0) + sa + off, along(pb, u1) - sb + off], out, 0.05, 0.11, lat, bevel=0.015)
+    hang_chain(ro, zr)
     if T == 3:
+        for phi in (20, 78, 125, 155, 185, 215):    # big spikes on the band
+            e = D(phi)
+            sp = kit.cyl("spike%d" % phi, 0.25, 1.35, (0, 0, 0), m_steel(), verts=8, r2=0.0, bevel=0.0)
+            aim(sp, e * (ro - 0.06) + UP * zr, e * 0.9 + UP * 0.4)
+            sp.name = "spike%d" % (phi + 100)
+            kit.ring("spikering%d" % phi, 0.27, 0.05, m_trim(), parent=sp, z=0.1, n=16)
         fire = kit.lava("fire", strength=6.0, scale=2.4)
         for i in range(10):             # glowing fire holes round the firebox
             e = D(8 + 36 * i)
             b = kit.box("vent%d" % i, (0.62, 0.08, 0.5), (0, 0, 0), fire, bevel=0.03, origin="centre")
             aim(b, e * 2.15 + UP * 0.5, UP, D(8 + 36 * i + 90))
+        for i, phi in enumerate(STRAPS[:-1]):     # and in the fire wall, one in every gap of the basket
+            b = kit.box("wvent%d" % i, (0.5, 0.06, 0.62), (0, 0, 0), fire, bevel=0.03, origin="centre")
+            aim(b, D(phi + 15) * (ro - 0.13) + UP * 1.5, UP, D(phi + 105))
         for i in range(3):
             ld = bpy.data.lights.new("fireglow%d" % i, "POINT")
             ld.energy = 60
@@ -411,6 +533,69 @@ def cradle():
             lo = bpy.data.objects.new("fireglow%d" % i, ld)
             kit.link(lo)
             lo.location = D(-20 + 70 * i) * 2.9 + UP * 0.6
+        boiler(ro, zr)
+
+
+def hang_chain(ro, zr):
+    """The heavy chain that hangs from the band on the right down to a stake in the ground (Flash look 2). It does not
+    move."""
+    d, sd = D(CHAIN_PHI), D(CHAIN_PHI + 90)
+    top = d * (ro + 0.2) + UP * (zr - 0.3)
+    bot = d * (ro + 0.66) + UP * 0.3
+    mid = (top + bot) / 2 + d * 0.28
+    ml = mat("hlink", (196, 200, 212), rough=0.4, metal=0.2, wear=(236, 240, 250), wear_amt=0.8, dirt=0.2, scale=9.0, mottle=0.35)
+    kit.tube("hangeye", [d * (ro - 0.05) + UP * (zr - 0.06), d * (ro + 0.22) + UP * (zr - 0.06), top + UP * 0.12], 0.08, m_lattice())
+    n, hl, hw, wire = 8, 0.33, 0.2, 0.08
+    for i in range(n):
+        u = (i + 0.5) / n
+        c = top * (1 - u) ** 2 + mid * 2 * u * (1 - u) + bot * u * u
+        tg = ((mid - top) * (1 - u) + (bot - mid) * u).normalized()
+        side = sd if i % 2 == 0 else tg.cross(sd).normalized()
+        pts = []
+        for k in range(16):
+            a = 2 * math.pi * k / 16
+            cs, sn = math.cos(a), math.sin(a)
+            pts.append(c + tg * hl * math.copysign(abs(sn) ** 0.7, sn) + side * hw * math.copysign(abs(cs) ** 0.7, cs))
+        kit.tube("hang%d" % i, pts, wire, ml, cyclic=True, verts=8)
+    base = d * (ro + 0.66)
+    kit.cyl("hangstake", 0.16, 0.34, (base.x, base.y, 0.0), m_lattice(), verts=10, bevel=0.03)
+    fb = kit.box("hangfoot", (0.62, 0.5, 0.1), base, m_lattice(), bevel=0.03)
+    aim(fb, base, UP, sd)
+
+
+def boiler(ro, zr):
+    """Tier 3: a small side boiler on a shelf on the band's right, piped into the tank, with a valve on top."""
+    d, sd = D(BOILER_PHI), D(BOILER_PHI + 90)
+    c = d * (RT + 0.8)
+    z0 = zr + 0.36
+    sh = kit.box("boilershelf", (1.4, 1.0, 0.12), (0, 0, 0), m_lattice(), bevel=0.03, origin="centre")
+    aim(sh, d * (ro + 0.42) + UP * (zr + 0.3), UP, d)
+    for sg in (-1, 1):
+        kit.sweep("boilerstrut%d" % (sg + 1), [d * (ro + 0.02) + sd * sg * 0.36 + UP * (zr - 0.5), c + d * 0.4 + sd * sg * 0.36 + UP * (zr + 0.26)],
+                  sd, 0.1, 0.12, m_lattice(), bevel=0.02)
+    mb = mat("boiler", (104, 40, 34), rough=0.55, metal=0.3, wear=(160, 84, 66), wear_amt=0.6, rust=(54, 20, 20), rust_at=0.52, dirt=0.3,
+             scale=3.0, streak=(44, 18, 16), bump=0.2)
+    kit.lathe("boilerbody", [(0.0, 0.0), (0.46, 0.0), (0.57, 0.06), (0.62, 0.22), (0.62, 1.12), (0.55, 1.36), (0.37, 1.52), (0.16, 1.58), (0.0, 1.58)],
+              (c.x, c.y, z0), mb, verts=32)
+    for z, r in ((0.2, 0.63), (1.14, 0.63)):
+        kit.ring("boilerband%d" % int(z * 10), r, 0.055, m_trim(), z=z0 + z, n=32).location = (c.x, c.y, 0)
+    for i in range(10):
+        a = 2 * math.pi * i / 10
+        kit.blob("boilerrivet%d" % i, (c.x + 0.63 * math.cos(a), c.y + 0.63 * math.sin(a), z0 + 0.66), 0.05, 0.9, m_trim())
+    # the fire door, toward the viewer
+    e = D(40)
+    door = kit.cyl("boilerdoor", 0.26, 0.08, (0, 0, 0), m_lattice(), verts=20, bevel=0.02)
+    aim(door, c + e * 0.6 + UP * (z0 + 0.66), e)
+    eye = kit.cyl("boilerglow", 0.16, 0.03, (0, 0, 0), kit.lava("fire2", strength=5.0, scale=5.0), verts=16, bevel=0.0)
+    aim(eye, c + e * 0.68 + UP * (z0 + 0.66), e)
+    # the valve on top: a short neck, a gold cap, a red handwheel
+    kit.cyl("boilerneck", 0.15, 0.5, (c.x, c.y, z0 + 1.5), m_lattice(), verts=14)
+    kit.lathe("boilercap", [(0.0, 0.0), (0.26, 0.0), (0.3, 0.08), (0.22, 0.2), (0.0, 0.26)], (c.x, c.y, z0 + 1.98), m_trim(), verts=20)
+    # the gold feed pipe into the tank's side
+    into = S(BOILER_PHI, 24, RT - 0.1)
+    kit.tube("boilerfeed", [c + UP * (z0 + 1.3) - d * 0.5, c + UP * (z0 + 1.62) - d * 0.75, into + (into - C).normalized() * 0.3, into], 0.15, m_gold(), smooth=True)
+    hd = kit.lathe("boilerhood", [(0.14, -0.05), (0.27, -0.03), (0.27, 0.1), (0.18, 0.16)], (0, 0, 0), m_red(), verts=20)
+    aim(hd, S(BOILER_PHI, 24, RT - 0.03), (into - C).normalized())
 
 
 def window():
@@ -420,18 +605,20 @@ def window():
     n = D(phi) * math.cos(e) + UP * math.sin(e)
     tx, ty = D(phi + 90), -D(phi) * math.sin(e) + UP * math.cos(e)
     if T == 1:
-        wb, wt, h, fw, th = 0.54, 0.42, 0.3, 0.1, 0.13
+        wb, wt, h, fw, th = 0.6, 0.4, 0.3, 0.1, 0.13
     else:
         wb, wt, h, fw, th = 0.66, 0.72, 0.26, 0.125, 0.17
+
+    ex = 0.2 if T == 1 else 0.45         # tier 1: Flash's trapezoid, wider at the bottom, its corners barely rounded
 
     def loop(grow, m=64):
         out = []
         for i in range(m):
             a = 2 * math.pi * i / m
             cs, sn = math.cos(a), math.sin(a)
-            v = math.copysign(abs(sn) ** 0.45, sn)
+            v = math.copysign(abs(sn) ** ex, sn)
             w = (wb + (wt - wb) * (v + 1) / 2) + grow
-            out.append((w * math.copysign(abs(cs) ** 0.45, cs), (h + grow) * v))
+            out.append((w * math.copysign(abs(cs) ** ex, cs), (h + grow) * v))
         return out
 
     def pt(u, v, rad):
@@ -490,15 +677,18 @@ def catmull(pts, n):
     return out
 
 
+PIPE_PHI = -78          # tier 1: where the pipe enters the shell
+
+
 def pipe():
     """The gold intake pipe: from the ground at the front left up into the tank's left side, in ringed segments. One
     mesh (moving): a lump travels up it."""
     if T == 1:
-        ctrl = [S(-72, -16, RT - 0.35), S(-72, -16, RT + 0.3), P(-3.02, 1.2, 2.5), P(-2.82, 1.62, 1.3), P(-2.52, 1.8, -0.1)]
+        ctrl = [S(PIPE_PHI, -16, RT - 0.35), S(PIPE_PHI, -16, RT + 0.3), P(-3.12, 1.2, 2.5), P(-3.04, 1.62, 1.3), P(-2.84, 1.9, -0.1)]
         rad, segs = 0.47, 4
     else:
-        ctrl = [S(-50, -5, RT - 0.4), S(-50, -5, RT + 0.42), P(-1.98, 3.3, 3.0), P(-0.98, 3.78, 1.5), P(-0.56, 3.82, -0.1)]
-        rad, segs = 0.7, 5
+        ctrl = [S(-50, -5, RT - 0.4), S(-50, -5, RT + 0.42), P(-2.3, 3.05, 3.0), P(-1.5, 3.62, 1.5), P(-0.56, 3.82, -0.1)]
+        rad, segs = 0.66, 5
     per = 14
     cen = catmull(ctrl, segs * per + 1)
     e_ = mover("pipe")
@@ -538,34 +728,32 @@ def pipe():
     # the dark red hood where it enters the tank, and (tier 2 up) the collar where it enters the ground
     d0 = (ctrl[1] - ctrl[0]).normalized()
     hood = kit.lathe("hood", [(rad * 0.9, -0.1), (rad * 1.3, -0.05), (rad * 1.26, 0.14), (rad * 1.12, 0.26), (rad * 1.0, 0.28)], (0, 0, 0), m_red(), verts=32)
-    aim(hood, S(-72 if T == 1 else -50, -16 if T == 1 else -5, RT - 0.04), d0)
+    aim(hood, S(PIPE_PHI if T == 1 else -50, -16 if T == 1 else -5, RT - 0.04), d0)
     if BIG:
         ft = ctrl[-1]
-        kit.lathe("collar", [(rad * 0.9, 0.0), (rad * 1.28, 0.0), (rad * 1.34, 0.1), (rad * 1.3, 0.34), (rad * 1.12, 0.4), (rad * 1.02, 0.4)],
-                  (ft.x, ft.y, 0.0), m_red(), verts=32)
-    return ctrl[-1]
+        # the collar closes onto the pipe (its lip is inside the pipe's skin): no dark slot between the two
+        co = kit.lathe("collar", [(rad * 0.8, 0.0), (rad * 1.2, 0.0), (rad * 1.27, 0.1), (rad * 1.25, 0.34), (rad * 1.14, 0.46), (rad * 0.6, 0.5)],
+                       (0, 0, 0), m_red(), verts=32)
+        up = (cen[-4] - cen[-1]).normalized()
+        aim(co, cen[-1] - up * 0.05, up)
+    return cen, rad
 
 
-def crag(name, at, h, r, lean=(0, 0, 0), mat_=None, facet=False):
-    """A rock spire standing on `at`: ridged down its length like Flash's rock (smooth), or a faceted crystal."""
+def crystal(name, at, h, r, lean=(0, 0, 0)):
+    """A faceted sulfur crystal standing on `at`."""
     bm = bmesh.new()
-    sides, rings = (6, 3) if facet else (14, 8)
+    sides, rings = 6, 3
     rows = []
     off = rnd.uniform(0, 6.28)
-    lobes = [1.0 if facet else rnd.uniform(0.7, 1.2) for _ in range(sides)]
     for i in range(rings + 1):
         u = i / rings
-        if facet:
-            rr = r * (1.0 if u < 0.7 else (1 - u) / 0.3) * (0.8 + 0.2 * u / 0.7 if u < 0.7 else 1.0)
-        else:
-            rr = r * (1 - u ** 1.5) ** 0.7 * (1.15 if i == 0 else 1.0)
+        rr = r * (1.0 if u < 0.7 else (1 - u) / 0.3) * (0.8 + 0.2 * u / 0.7 if u < 0.7 else 1.0)
         c = Vector(at) + UP * (h * u) + Vector(lean) * (u * u)
         if i == rings:
             rows.append([bm.verts.new(c)])
             continue
-        tw = 0.0 if facet else 0.12 * i
-        rows.append([bm.verts.new(c + Vector((math.cos(off + tw + 2 * math.pi * j / sides), math.sin(off + tw + 2 * math.pi * j / sides), 0))
-                                  * rr * lobes[j] * (1.0 if facet else rnd.uniform(0.94, 1.06))) for j in range(sides)])
+        rows.append([bm.verts.new(c + Vector((math.cos(off + 2 * math.pi * j / sides), math.sin(off + 2 * math.pi * j / sides), 0)) * rr)
+                     for j in range(sides)])
     for a, b in zip(rows, rows[1:]):
         for j in range(sides):
             k = (j + 1) % sides
@@ -575,29 +763,126 @@ def crag(name, at, h, r, lean=(0, 0, 0), mat_=None, facet=False):
                 bm.faces.new((a[j], a[k], b[k], b[j]))
     bm.faces.new(rows[0][::-1])
     bmesh.ops.recalc_face_normals(bm, faces=bm.faces)
-    if facet:
-        return kit.mesh_ob(name, bm, [mat_], smooth=False, bevel=0.015, segs=2)
-    return kit.mesh_ob(name, bm, [mat_ or m_rock()], smooth=True, subsurf=1)
+    return kit.mesh_ob(name, bm, [m_crystal()], smooth=False, bevel=0.015, segs=2)
 
 
-def rocks(foot):
-    """The brown rock the pipe comes out of, piled against the building's front left."""
+def rock_mass(fans, cen, rad):
+    """The rock as ONE mesh: a height over the ground, the highest of several `fans`. A fan is a crag that stands
+    against the building at bearing phi, r from the axis, H tall, and runs out R over the ground; sharp ribs run down
+    it from its top like roots (a furrow between each two), every rib its own height, their lines wandering. The rock
+    is cut back round and under the pipe (centre line cen, radius rad), so the pipe comes out of it.
+    Returns height(x, y)."""
+    rr = random.Random(7 + T // 2)
+    spec = []
+    for phi, r, H, R, nrib in fans:
+        d = D(phi)
+        spec.append((d.x * r, d.y * r, H, R, math.atan2(d.y, d.x), nrib, rr.uniform(0, 1), rr.uniform(0, 50)))
+    low = [c for c in cen if c.z < 3.4]
+
+    def height(x, y):
+        best, crev = 0.0, 0.0
+        for ax, ay, H, R, th0, nrib, ph, seed in spec:
+            vx, vy = x - ax, y - ay
+            rho = math.hypot(vx, vy)
+            th = math.atan2(vy, vx)
+            dth = (th - th0 + math.pi) % (2 * math.pi) - math.pi
+            reach = R * (0.3 + 0.7 * max(0.0, math.cos(dth)) ** 0.6)
+            u = rho / reach
+            if u >= 1.0:
+                continue
+            t = dth * nrib / (2 * math.pi) + ph + 0.75 * noise.noise(Vector((rho * 1.0, seed, dth * 0.7)))
+            k = round(t)
+            tri = abs(t - k) * 2.0
+            hk = 0.58 + 0.42 * (math.sin(k * 12.9898 + seed) * 43758.5453 % 1.0)
+            hk = 1.0 + (hk - 1.0) * min(1.0, u * 2.5)
+            u = max(0.0, u - 0.12) / 0.88
+            depth = min(1.0, 0.35 + 0.9 * u)
+            h = H * hk * (1 - u ** 1.5) ** 0.9 * (1 - 0.55 * depth * tri ** 0.7)
+            if h > best:
+                best, crev = h, tri * (0.45 + 0.55 * depth)
+        if best <= 0.0:
+            return 0.0, 0.0
+        best *= 1.0 + 0.26 * noise.noise(Vector((x * 2.0, y * 2.0, 3.1)))
+        best += 0.05 * noise.noise(Vector((x * 9.0, y * 9.0, 1.7)))
+        for c in low:                                   # the pipe's tunnel
+            lim = c.z - rad + 6.0 * max(0.0, math.hypot(x - c.x, y - c.y) - rad * 0.7)
+            if lim < best:
+                best, crev = lim, max(crev, 0.75)
+        return best, crev
+
+    st = 0.045
+    xs = [a[0] for a in spec]
+    ys = [a[1] for a in spec]
+    R = max(a[3] for a in spec) + 0.2
+    x0, y0 = min(xs) - R, min(ys) - R
+    nx, ny = int((max(xs) + R - x0) / st) + 1, int((max(ys) + R - y0) / st) + 1
+    grid = [[height(x0 + i * st, y0 + j * st) for j in range(ny)] for i in range(nx)]
+    bm = bmesh.new()
+    vert, cv = {}, []
+
+    def vtx(i, j):
+        if (i, j) not in vert:
+            h, c = grid[i][j]
+            x, y = x0 + i * st, y0 + j * st
+            z = max(h, -0.04)
+            # a little overhang: the rock's skin shifts sideways with height
+            x += 0.05 * z * noise.noise(Vector((x * 1.7, y * 1.7, 7.0)))
+            y += 0.05 * z * noise.noise(Vector((x * 1.7, y * 1.7, 9.0)))
+            vert[(i, j)] = bm.verts.new((x, y, z))
+            cv.append(c if h > 0 else 0.9)
+        return vert[(i, j)]
+    for i in range(nx - 1):
+        for j in range(ny - 1):
+            if max(grid[i][j][0], grid[i + 1][j][0], grid[i + 1][j + 1][0], grid[i][j + 1][0]) > 0.02 \
+                    and math.hypot(x0 + i * st, y0 + j * st) > 1.9:
+                bm.faces.new((vtx(i, j), vtx(i + 1, j), vtx(i + 1, j + 1), vtx(i, j + 1)))
+    bm.verts.index_update()
+    order = sorted(vert.values(), key=lambda v: v.index)
+    assert [v.index for v in order] == list(range(len(cv)))
+    bmesh.ops.recalc_face_normals(bm, faces=bm.faces)
+    ob = kit.mesh_ob("rockmass", bm, [m_rock()], smooth=True)
+    attr = ob.data.color_attributes.new("crev", "FLOAT_COLOR", "POINT")
+    for i, c in enumerate(cv):
+        attr.data[i].color = (c, c, c, 1.0)
+    return lambda x, y: height(x, y)[0]
+
+
+def stone(name, at, r):
+    """A loose stone: a lumpy faceted ball half sunk in the ground."""
+    bm = bmesh.new()
+    bmesh.ops.create_icosphere(bm, subdivisions=2, radius=r)
+    sd = rnd.uniform(0, 40)
+    for v in bm.verts:
+        k = 1.0 + 0.35 * noise.noise(Vector((v.co.x * 2.2 / r * 0.5, v.co.y * 2.2 / r * 0.5, v.co.z * 2.2 / r * 0.5 + sd)))
+        v.co = Vector((v.co.x * k, v.co.y * k, v.co.z * k * 0.72))
+    ob = kit.mesh_ob(name, bm, [m_rock()], smooth=False, bevel=0.012, segs=2)
+    ob.location = (at.x, at.y, r * 0.22)
+    ob.rotation_euler = (0, 0, rnd.uniform(0, 6.28))
+    return ob
+
+
+def rocks(cen, rad):
+    """The brown rock the pipe comes out of: one tall ridged crag that leans on the building's front left and wraps the
+    pipe's foot (Flash's footprint), a few loose stones round it. Tier 3 grows sulfur crystals on it."""
     if T == 1:
-        spots = [(-70, 2.95, 1.6, 0.55), (-84, 3.05, 1.1, 0.5), (-46, 2.95, 2.9, 0.72), (-34, 2.95, 3.0, 0.75), (-22, 2.98, 2.6, 0.72),
-                 (-40, 3.7, 1.8, 0.7), (-10, 2.95, 2.0, 0.65), (-26, 3.8, 1.5, 0.68), (-12, 3.7, 1.1, 0.55),
-                 (4, 3.0, 1.2, 0.5), (-34, 4.4, 0.7, 0.45)]
+        fans = [(-66, 2.9, 3.5, 0.95, 11), (-50, 2.7, 3.9, 1.7, 13), (-34, 2.7, 3.6, 1.9, 13), (-19, 2.65, 2.9, 1.8, 12),
+                (-5, 2.6, 2.0, 1.3, 10), (6, 2.5, 1.1, 0.9, 8), (-48, 3.8, 0.8, 0.7, 8)]
+        loose = [(-56, 4.0, 0.2), (-12, 4.25, 0.17), (4, 3.6, 0.2), (-36, 4.95, 0.15), (-24, 4.85, 0.12)]
     else:
-        spots = [(-72, 2.7, 1.5, 0.6), (-60, 2.9, 2.0, 0.7), (-48, 3.3, 1.8, 0.7), (-38, 3.0, 1.6, 0.7), (-30, 3.6, 1.3, 0.65),
-                 (-45, 3.9, 1.1, 0.6), (-24, 3.0, 1.2, 0.6), (-36, 4.3, 0.7, 0.5)]
-    for i, (phi, dist, h, r) in enumerate(spots):
-        at = D(phi) * dist
-        if (at - Vector((foot.x, foot.y, 0))).length < (0.75 if T == 1 else 1.25):
-            continue
-        crag("rock%d" % i, at, h, r, lean=-D(phi) * 0.25 * h * 0.3)
-    if T == 3:                          # sulfur crystals grown on the rock and at the pipe's foot
-        for i, (phi, dist, h) in enumerate([(-62, 3.0, 1.0), (-50, 3.4, 0.9), (-40, 3.1, 1.0), (-30, 3.7, 0.7), (-46, 4.0, 0.6),
-                                            (-70, 2.8, 0.7), (104, 3.72, 0.8), (112, 3.8, 0.55), (97, 3.85, 0.45)]):
-            crag("crystal%d" % i, D(phi) * dist + UP * (0.5 if i < 6 else 0.0), h, 0.17, lean=D(phi + rnd.uniform(-60, 60)) * 0.3, mat_=m_crystal(), facet=True)
+        fans = [(-52, 2.9, 2.4, 0.75, 9), (-42, 2.95, 2.9, 1.25, 13), (-26, 2.95, 2.7, 1.4, 12),
+                (-10, 3.0, 2.0, 1.2, 11), (-30, 4.0, 0.8, 0.8, 8)]
+        loose = [(-50, 3.75, 0.2), (-40, 4.35, 0.17), (-30, 4.95, 0.13), (8, 4.6, 0.16), (-22, 4.8, 0.12)]
+    hf = rock_mass(fans, cen, rad)
+    if os.environ.get("PB_DEBUG"):
+        for phi, r, H, R, nrib in fans:
+            print("PROBE fan", phi, r, H, [round(hf(*(D(phi) * (r + k)).xy), 2) for k in (-0.2, 0.0, 0.1, 0.2, 0.4, 0.8)])
+    for i, (phi, dist, r) in enumerate(loose):
+        stone("rock-s%d" % i, D(phi) * dist, r)
+    if T == 3:                          # sulfur crystals grown in clumps on the rock
+        for i, (phi, dist, h) in enumerate([(-58, 3.3, 1.0), (-54, 3.5, 0.7), (-62, 3.45, 0.6), (-66, 3.2, 0.8), (-48, 3.55, 0.55),
+                                            (-40, 4.45, 0.7), (-36, 4.6, 0.45), (-44, 4.6, 0.4)]):
+            at = D(phi) * dist
+            crystal("crystal%d" % i, at + UP * (max(0.0, hf(at.x, at.y)) - 0.12), h, 0.17, lean=D(phi + rnd.uniform(-60, 60)) * 0.3)
 
 
 def funnel(phi, scale=1.0, tag=""):
@@ -613,19 +898,23 @@ def funnel(phi, scale=1.0, tag=""):
             ang = 2 * math.pi * i / 8
             kit.blob("frivet%s%d" % (tag, i), (0.64 * math.cos(ang), 0.64 * math.sin(ang), 0.85), 0.06, 0.8, glow("rivet", (200, 150, 50), 0.15), parent=cup)
         return
-    a = S(phi, 40, RT - 0.1)
-    base = a + (D(phi) * 0.25 + UP * 1.45) * scale
-    axis = UP * 1.0 + D(phi + 30) * 0.3
-    kit.tube("fstem" + tag, [a, a + D(phi) * 0.3 * scale + UP * 0.25 * scale, base - axis * 0.1, base + axis * 0.1], 0.19 * scale, m_funnel(), smooth=True)
-    s = scale * 0.92
-    cup = kit.lathe("fcup" + tag, [(0.0, 0.0), (0.24 * s, 0.0), (0.42 * s, 0.8 * s), (0.62 * s, 1.5 * s), (0.78 * s, 1.78 * s), (0.78 * s, 1.9 * s),
-                                   (0.62 * s, 1.9 * s), (0.46 * s, 1.4 * s), (0.26 * s, 0.7 * s), (0.0, 0.5 * s)], (0, 0, 0), m_funnel(), verts=32, bevel=0.015)
+    # tier 2 up: a short stubby trumpet with a wide mouth on the back of the right shoulder, leaning to the right
+    a = S(phi, 42, RT - 0.1)
+    nrm = (a - C).normalized()
+    axis = (UP * 1.0 + SR * 0.16).normalized()
+    s = scale
+    base = a + nrm * 0.2 * s + UP * 0.62 * s
+    kit.tube("fstem" + tag, [a, a + nrm * 0.3 * s + UP * 0.2 * s, base - axis * 0.1, base + axis * 0.15], 0.25 * s, m_funnel(), smooth=True)
+    cup = kit.lathe("fcup" + tag, [(0.0, 0.0), (0.25 * s, 0.0), (0.3 * s, 0.4 * s), (0.4 * s, 0.82 * s), (0.54 * s, 1.14 * s), (0.69 * s, 1.3 * s),
+                                   (0.73 * s, 1.4 * s), (0.71 * s, 1.5 * s), (0.6 * s, 1.5 * s), (0.5 * s, 1.26 * s), (0.3 * s, 0.86 * s), (0.0, 0.66 * s)],
+                    (0, 0, 0), m_funnel(), verts=32, bevel=0.015)
     aim(cup, base, axis)
     if T == 3:
-        kit.ring("frim" + tag, 0.72 * s, 0.07 * s, m_trim(), parent=cup, z=1.88 * s)
+        kit.ring("frim" + tag, 0.69 * s, 0.085 * s, m_trim(), parent=cup, z=1.47 * s)
+        kit.ring("fband" + tag, 0.3 * s, 0.05 * s, m_trim(), parent=cup, z=0.58 * s)
     for i in range(8):
         ang = 2 * math.pi * i / 8
-        kit.blob("frivet%s%d" % (tag, i), (0.66 * s * math.cos(ang), 0.66 * s * math.sin(ang), 1.56 * s), 0.06 * s, 0.8,
+        kit.blob("frivet%s%d" % (tag, i), (0.6 * s * math.cos(ang), 0.6 * s * math.sin(ang), 1.2 * s), 0.06 * s, 0.8,
                  glow("rivet", (236, 120, 40), 0.5), parent=cup)
 
 
@@ -695,6 +984,13 @@ def drive():
         kit.box("shaft-nut", (0.3, 0.3, 0.22), (0, 0, 9.72), m_red(), bevel=0.03, parent=hub)
         wheel(hub, r, teeth, zc)
         kit.cyl("shaft-boss", 0.36, 0.3, (0, 0, z_cap), m_green(), verts=20, parent=hub)
+        if T == 3:              # a big iron gear under the chain wheel, turning with the shaft (25 teeth: 10 a loop)
+            kit.gear("shaft-biggear", 1.26, 25, 0.2, (0, 0, zc - 0.5), m_iron(), (0, 0, 0), tooth=0.13, parent=hub)
+            kit.ring("shaft-gearrim", 0.98, 0.06, m_trim(), parent=hub, z=zc - 0.38, n=40)
+            kit.cyl("shaft-gearhub", 0.42, 0.3, (0, 0, zc - 0.62), m_trim(), verts=20, parent=hub)
+            for i in range(5):
+                a = 2 * math.pi * i / 5
+                kit.cyl("shaft-gearhole%d" % i, 0.15, 0.02, (0.7 * math.cos(a), 0.7 * math.sin(a), zc - 0.4), m_red(), verts=10, bevel=0.0, parent=hub)
     # the pole and its wheel
     foot_z = CZ + (1.0 if T == 1 else 1.55)
     pb = dirv * d
@@ -735,9 +1031,9 @@ def build():
     else:
         cradle()
     window()
-    foot = pipe()
-    rocks(foot)
-    funnel(84 if T == 1 else 60)
+    cen, rad = pipe()
+    rocks(cen, rad)
+    funnel(84 if T == 1 else 112, 1.22 if T == 3 else 1.0)
     drive()
 
 
