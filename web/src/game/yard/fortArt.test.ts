@@ -8,6 +8,12 @@ const ASSETS = resolve(__dirname, "../../../../server/public");
 
 const TYPES = [6, 14, 20, 21, 23, 25, 112, 115, 118];
 
+/** A PNG's width and height, from its `IHDR` header. */
+const pngSize = (file: string): [number, number] => {
+  const bytes = readFileSync(file);
+  return [bytes.readUInt32BE(16), bytes.readUInt32BE(20)];
+};
+
 /** A WebP with alpha's width and height, from its `VP8X` header. */
 const webpSize = (file: string): [number, number] => {
   const bytes = readFileSync(file);
@@ -54,7 +60,7 @@ describe("fortArtFor, Classic look (Flash's pictures)", () => {
   });
 });
 
-describe("fortArtFor, Modern look (Thorn and Bone)", () => {
+describe("fortArtFor, Modern look (Flash's art redrawn sharp)", () => {
   beforeAll(() => setClassicLook(false));
 
   it("draws nothing for an unfortified building or a type without overlay art", () => {
@@ -70,47 +76,19 @@ describe("fortArtFor, Modern look (Thorn and Bone)", () => {
     expect(fortArtFor(21, 9)?.front.url).toContain("fort70_F4.modern");
   });
 
-  it("every picture it names is on disk, with whole drawn pixels", () => {
+  it("stands exactly where Flash's does: the same offsets and exactly twice Flash's picture", () => {
     for (const type of TYPES) {
       for (let fort = 1; fort <= 4; fort++) {
-        const art = fortArtFor(type, fort)!;
-        for (const image of [art.front, art.back]) {
-          const [width, height] = webpSize(resolve(ASSETS, image.url.slice(1)));
-          expect((width % 2) + (height % 2), image.url).toBe(0);
-          expect(Number.isInteger(image.x) && Number.isInteger(image.y), image.url).toBe(true);
+        setClassicLook(true);
+        const classic = fortArtFor(type, fort)!;
+        setClassicLook(false);
+        const modern = fortArtFor(type, fort)!;
+        for (const [flash, sharp] of [[classic.front, modern.front], [classic.back, modern.back]] as const) {
+          expect([sharp.x, sharp.y], sharp.url).toEqual([flash.x, flash.y]);
+          const [width, height] = pngSize(resolve(ASSETS, flash.url.slice(1)));
+          expect(webpSize(resolve(ASSETS, sharp.url.slice(1))), sharp.url).toEqual([width * 2, height * 2]);
         }
       }
     }
-  });
-
-  it("keeps one ring at every tier: the back's and the front's ends meet on the same corners", () => {
-    // The ring's corners are where the back half's bottom edge and the front half's top edge are: the back
-    // half ends at its bottom, the front half begins at its top (give or take the end discs and the shadow).
-    for (const [type, centre, half] of [[20, 35, 69], [6, 41, 69], [14, 65, 124]] as const) {
-      for (let fort = 1; fort <= 4; fort++) {
-        const { front, back } = fortArtFor(type, fort)!;
-        const [frontWidth] = webpSize(resolve(ASSETS, front.url.slice(1)));
-        const [backWidth, backHeight] = webpSize(resolve(ASSETS, back.url.slice(1)));
-        // Both halves span the diamond's two corners, a disc and a little shadow beyond.
-        for (const [x, width] of [[front.x, frontWidth / 2], [back.x, backWidth / 2]] as const) {
-          expect(x, `${type} tier ${fort}`).toBeLessThanOrEqual(-half - 4);
-          expect(x, `${type} tier ${fort}`).toBeGreaterThanOrEqual(-half - 20);
-          expect(x + width, `${type} tier ${fort}`).toBeGreaterThanOrEqual(half + 4);
-          expect(x + width, `${type} tier ${fort}`).toBeLessThanOrEqual(half + 30);
-        }
-        // The back half reaches down to the corners, the front half up to them, and they overlap only there.
-        expect(back.y + backHeight / 2, `${type} tier ${fort}`).toBeGreaterThan(centre);
-        expect(back.y + backHeight / 2, `${type} tier ${fort}`).toBeLessThan(centre + 40);
-        expect(front.y, `${type} tier ${fort}`).toBeLessThan(centre);
-      }
-    }
-  });
-
-  it("puts the Silo's ring 6 px below a tower's and leaves x alone", () => {
-    const tower = fortArtFor(20, 1)!;
-    const silo = fortArtFor(6, 1)!;
-    expect(silo.front.y - tower.front.y).toBe(6);
-    expect(silo.back.y - tower.back.y).toBe(6);
-    expect(silo.front.x).toBe(tower.front.x);
   });
 });
