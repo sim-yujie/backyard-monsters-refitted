@@ -58,9 +58,24 @@ describe("the build menu's Modern pictures", () => {
   });
 
   it("an Inferno building with no Inferno look of its own keeps its Inferno button", () => {
-    // The main yard's 3D Academy and Pebble Shiner are not the Inferno's.
+    // The main yard's 3D Academy is not the Inferno's.
     expect(buildPicture(26, "inferno", false)).toEqual({ url: buttonUrl(26, "inferno"), modern: false });
-    expect(buildPicture(2, "inferno", false)).toEqual({ url: buttonUrl(2, "inferno"), modern: false });
+  });
+
+  it("the Inferno's 3D Coal Extractor has a Modern picture of its own, not the Pebble Shiner's", () => {
+    const picture = buildPicture(2, "inferno", false);
+    expect(picture.modern).toBe(true);
+    expect(picture.url).toMatch(/\/modern\/2\.inferno\.[0-9a-f]{8}\.webp$/);
+    expect(picture.url).not.toBe(buildPicture(2, "main", false).url);
+    expect(buildPicture(2, "inferno", true)).toEqual({ url: buttonUrl(2, "inferno"), modern: false });
+  });
+
+  it("the Inferno's 3D Sulfur Swirler has a Modern picture of its own, not the Putty Squisher's", () => {
+    const picture = buildPicture(3, "inferno", false);
+    expect(picture.modern).toBe(true);
+    expect(picture.url).toMatch(/\/modern\/3\.inferno\.[0-9a-f]{8}\.webp$/);
+    expect(picture.url).not.toBe(buildPicture(3, "main", false).url);
+    expect(buildPicture(3, "inferno", true)).toEqual({ url: buttonUrl(3, "inferno"), modern: false });
   });
 
   it("the Inferno's 3D Bone Cruncher has a Modern picture of its own, not the Twig Snapper's", () => {
