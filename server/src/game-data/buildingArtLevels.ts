@@ -63,6 +63,8 @@ export const TOWER_TIER_ART_LEVELS: Readonly<Record<number, readonly number[]>> 
  */
 export const INFERNO_ART_LEVELS: Readonly<Record<number, readonly number[]>> = {
   1: [1, 3, 7],
+  // 3 Sulfur Swirler: the same split (Flash's two looks are from 1 and 3)
+  3: [1, 3, 7],
 };
 
 /**

@@ -195,6 +195,7 @@ describe("the 3D yard buildings", () => {
       [17, INFERNO_BUILDING_3D_ART[17] ?? [], "inferno"] as const,
       [16, INFERNO_BUILDING_3D_ART[16] ?? [], "inferno"] as const,
       [1, INFERNO_BUILDING_3D_ART[1] ?? [], "inferno"] as const,
+      [3, INFERNO_BUILDING_3D_ART[3] ?? [], "inferno"] as const,
     ];
     for (const [type, looks, kind] of sets) {
       const folder = `${ASSETS}${artFolder(type, kind) ?? ""}`;
@@ -363,6 +364,38 @@ describe("the 3D yard buildings", () => {
     setClassicLook(true);
     expect(resolveArt(1, 1, ArtState.DEFAULT, "inferno")?.top.url).toBe(`${folder}top.1.v2.png`);
     expect(resolveArt(1, 7, ArtState.DEFAULT, "inferno")?.top.url).toBe(`${folder}top.2.png`);
+  });
+
+  it("give the Inferno's Sulfur Swirler its three 3D tiers, from levels 3 and 7, in Flash's 51 and 45 cells", () => {
+    const folder = "/assets/buildings/isulpherproducer/";
+    const looks = INFERNO_BUILDING_3D_ART[3] ?? [];
+    expect(looks.map((look) => look.from)).toEqual([1, 3, 7]);
+    for (const level of [1, 2, 3, 6, 7, 10]) {
+      const look = [...looks].reverse().find((one) => one.from <= level);
+      const art = resolveArt(3, level, ArtState.DEFAULT, "inferno");
+      const name = `level ${level}`;
+      expect(art?.name, name).toBe("Sulfur Swirler");
+      expect(art?.top.url, name).toBe(`${folder}${look?.anim?.body?.[0] ?? ""}`);
+      expect(art?.still?.url, name).toBe(`${folder}${look?.top[0] ?? ""}`);
+      expect(art?.shadow?.url, name).toBe(`${folder}${look?.shadow?.[0] ?? ""}`);
+      expect(art?.anims.map(({ url, frames }) => ({ url, frames })), name).toEqual([
+        { url: `${folder}${look?.anim?.strip[0] ?? ""}`, frames: level < 3 ? 51 : 45 },
+      ]);
+    }
+    // Each tier has its own 3D damaged still; destroyed is Flash's rubble, as every other 3D building's.
+    for (const [level, tier] of [[1, 1], [2, 1], [3, 3], [6, 3], [7, 7], [10, 7]] as const) {
+      const damaged = resolveArt(3, level, ArtState.DAMAGED, "inferno");
+      expect(damaged?.top.url, `level ${level}`).toBe(`${folder}top.3d${tier}.damaged@2x.webp`);
+      expect(damaged?.anims, `level ${level}`).toEqual([]);
+      expect(damaged?.shadow?.url, `level ${level}`).toBe(`${folder}shadow.3d${tier}.damaged.jpg`);
+      const destroyed = resolveArt(3, level, ArtState.DESTROYED, "inferno");
+      expect(destroyed?.top.url, `level ${level}`).toBe(`${folder}${level < 3 ? "top.1.destroyed.v2.png" : "top.2.destroyed.png"}`);
+    }
+    // The main yard's Putty Squisher keeps its own 3D look; the Classic look is Flash's Sulfur Swirler.
+    expect(resolveArt(3, 7, ArtState.DEFAULT, "main")?.top.url).toBe("/assets/buildings/puttysquisher.v2/body.3d6@2x.webp");
+    setClassicLook(true);
+    expect(resolveArt(3, 1, ArtState.DEFAULT, "inferno")?.top.url).toBe(`${folder}top.1.v2.png`);
+    expect(resolveArt(3, 7, ArtState.DEFAULT, "inferno")?.top.url).toBe(`${folder}top.2.png`);
   });
 
   it("never show in an Inferno yard: the Inferno's own art there, even where it shares Flash's folder", () => {

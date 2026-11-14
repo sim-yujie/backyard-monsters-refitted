@@ -35,6 +35,7 @@ px around the building's origin, 12 render px a 1x px), with the same camera as 
 | heavy | 117 Heavy Trap | art/traps-3d | traps-3d (traps.py) | one look, still; destroyed = fired |
 | icc | 16 Incubator Control Centre in an Inferno yard | art/icc-inferno-looks | icc-looks (look C) | one look; 32 idle and 64 working cells, each the whole building |
 | bone | 1 Bone Cruncher in an Inferno yard | art/buildings-3d-inferno | inferno/bone-clean2 (crusher.py) | levels 1, 3, 7; 36 cells of its loop |
+| sulfur | 3 Sulfur Swirler in an Inferno yard | art/sulfur-3d | art-samples/sulfur-3d (sulfur.py) | levels 1, 3, 7; 51, 45 and 45 cells of its loop (leave out `L<tier>-parts-51/45.png`, frame 0 again for the loop check); canvas x -60..60, y -80..70; `sulfur:damaged` from the same folder (`PB_STATE`); destroyed is Flash's rubble |
 | locker | 8 Monster Locker | art/locker-fable-2 | locker-fable-2 (locker.py) | levels 1-4; 21, 20, 20 and 21 cells of its key and gears |
 
 The Monster Locker (`locker`, owner 10 Nov 2026, Review Desk card locker-fable-2) is the from-scratch model
@@ -162,6 +163,8 @@ BUILDINGS = {
     "icc": dict(type=16, folder="hatcherycontrolcenter", frame=(-80, -84), looks=[(1, "")], moves="loops"),
     "bone": dict(type=1, folder="iboneharvester", frame=(-60, -70), k=6, looks=[(1, "L1"), (3, "L2"), (7, "L3")],
                  moves="parts", grow=1.2, ground=(0, 35)),
+    "sulfur": dict(type=3, folder="isulpherproducer", frame=(-60, -80), k=6, looks=[(1, "L1"), (3, "L2"), (7, "L3")],
+                   moves="parts"),
     "locker": dict(type=8, folder="monsterlocker", frame=(-80, -110), k=8, looks=[(n, f"L{n}") for n in range(1, 5)],
                    moves="cells", noise=0.0),
     "booby": dict(type=24, folder="boobytrap", frame=(-24, -14), looks=[(1, "booby-whole")], moves=None),
@@ -172,6 +175,7 @@ CELLS = {"twig": {1: 34, 3: 34, 6: 34, 10: 34}, "pebble": {1: 26, 3: 26, 6: 26, 
          "putty": {1: 26, 3: 26, 6: 26, 10: 25}, "goo": {1: 26, 3: 26, 6: 26, 10: 26}, "silo": {1: 26},
          "hatchery": {1: 31, 2: 31, 3: 31}, "juicer": {1: 51}, "baiter": {1: 41},
          "academy": {1: 21, 2: 21, 3: 21, 4: 21}, "lab": {1: (32, 5, 5)}, "bone": {1: 36, 3: 36, 7: 36},
+         "sulfur": {1: 51, 3: 45, 7: 45},
          "locker": {1: 21, 2: 20, 3: 20, 4: 21}}
 TAIL = 16                      # 1x px a shadow cut by the render's canvas is carried on past it, fading out
 NOISE = 0.07                   # the shadow catcher's faint wash over all the ground (sky occlusion), taken off every shade
