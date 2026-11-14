@@ -5,6 +5,10 @@ python post.py frames [sub]    <sub>/frames/f-NN.png (base + moving parts + the 
 python post.py mp4             incubator-hatching.mp4 (Flash beside 3D, the loop three times) and
                                incubator-hatching-3d.mp4 (3D alone, larger)
 python post.py sheets          sheet-idle.png and sheet-hatching.png: Flash beside 3D at the stills' full size
+python post.py crops           crop-body.png, crop-foot.png, crop-porthole.png, crop-pump.png: Flash beside 3D, enlarged
+python post.py check           loop-check.png (every pixel that changes during the loop, in red, on the idle picture)
+                               and the loop's numbers: frame 50 against frame 0, the step 49 -> 0 against the other
+                               steps, and how much changes outside the brood, the hose and the smoke
 
 A frame is the base picture (every still part and the ground shadow) with the moving parts' layer laid over it, then
 the smoke. The smoke is drawn here, not in Blender (as the Incubator Control Centre's glows): a broad puff of green leaves
@@ -193,6 +197,61 @@ def sheets():
     print("made", D / "sheet-idle.png", D / "sheet-hatching.png")
 
 
+def crops():
+    """Flash beside 3D for the parts worth a close look, in Flash px boxes, enlarged with hard Flash pixels."""
+    still = D / "render"
+    m = frame(still, 0, False)
+    k = m.width // W
+    fl = flash(0)
+    for name, box, z in (("body", (-26, -22, 38, 48), 1), ("foot", (-60, 28, 74, 84), 1),
+                         ("porthole", (4, 10, 38, 48), 2), ("pump", (-50, -20, -8, 36), 1)):
+        b = tuple((v - o) * k for v, o in zip(box, (FRAME[0], FRAME[1]) * 2))
+        a = on(fl.resize(m.size, Image.NEAREST)).crop(b)
+        c = on(m).crop(b)
+        out = Image.new("RGBA", (a.width * 2 + 8, a.height), (30, 20, 16, 255))
+        out.paste(a, (0, 0))
+        out.paste(c, (a.width + 8, 0))
+        if z != 1:
+            out = out.resize((out.width * z, out.height * z), Image.LANCZOS)
+        out.save(D / f"crop-{name}.png")
+        print("made", D / f"crop-{name}.png", out.size)
+    on(m).crop(tuple((v - o) * k for v, o in zip(CROP, (FRAME[0], FRAME[1]) * 2))).save(D / "incubator-idle.png")
+
+
+# where Flash's moving parts are, in Flash px: the brood's glass, the feed hose, the vent's smoke
+MOVING = (("brood", (7, 15, 33, 44)), ("hose", (-47, -2, -12, 36)), ("smoke", (-66, -60, 8, 4)))
+
+
+def check(tol=10):
+    F = D / "anim" / "frames"
+    fr = [np.asarray(Image.open(F / f"f-{k:02d}.png").convert("RGBA")).astype(np.int16) for k in range(N + 1)]
+    d = lambda a, b: np.abs(a - b).max(axis=2)
+    seam = d(fr[N], fr[0])
+    print("frame 50 against frame 0: greatest difference %d of 255, pixels over %d: %d" % (seam.max(), tol,
+                                                                                         (seam > tol).sum()))
+    steps = [float(d(fr[k], fr[(k + 1) % N]).astype(float).mean()) for k in range(N)]
+    print("mean change per step: 49 -> 0 is %.3f; the other steps %.3f .. %.3f (median %.3f)" % (
+        steps[-1], min(steps[:-1]), max(steps[:-1]), sorted(steps[:-1])[len(steps) // 2]))
+    moved = np.zeros(seam.shape, bool)
+    for k in range(N):
+        moved |= d(fr[k], fr[0]) > tol
+    kk = moved.shape[1] // W
+    yy, xx = np.nonzero(moved)
+    X, Y = xx / kk + FRAME[0], yy / kk + FRAME[1]
+    inside = np.zeros(len(X), bool)
+    for name, (x0, y0, x1, y1) in MOVING:
+        m = (X >= x0) & (X < x1) & (Y >= y0) & (Y < y1)
+        if m.any():
+            print("  %-6s %6d px change, x %.1f..%.1f y %.1f..%.1f" % (name, m.sum(), X[m].min(), X[m].max(),
+                                                                        Y[m].min(), Y[m].max()))
+        inside |= m
+    print("pixels that change outside the brood, the hose and the smoke: %d of %d" % ((~inside).sum(), len(X)))
+    idle = np.asarray(on(Image.open(D / "anim" / "idle.png").convert("RGBA"))).copy()
+    idle[moved] = (idle[moved] * 0.35 + np.array([255, 0, 0, 255]) * 0.65).astype(np.uint8)
+    Image.fromarray(idle, "RGBA").save(D / "loop-check.png")
+    print("made", D / "loop-check.png")
+
+
 if __name__ == "__main__":
     cmd = sys.argv[1]
     if cmd == "frames":
@@ -201,3 +260,7 @@ if __name__ == "__main__":
         mp4()
     elif cmd == "sheets":
         sheets()
+    elif cmd == "crops":
+        crops()
+    elif cmd == "check":
+        check()

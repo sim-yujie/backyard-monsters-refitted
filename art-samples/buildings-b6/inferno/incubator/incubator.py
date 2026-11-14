@@ -40,7 +40,13 @@ kit.FRAMES = N + int(os.environ.get("PB_EXTRA", 0))     # PB_EXTRA=1 also render
 kit.SUN_COL = (1.0, 0.93, 0.82)
 rnd = random.Random(13)
 
-A, C_, ZC = 2.72, 3.8, 3.65          # the egg's shell: half width, half height, height of its middle
+# The body, measured on Flash: 56 px wide (x -22..34), its top at y -17, widest low (y 22..25), its lower third
+# behind the legs, leaning a little to the back left. A helmet: a tall dome with broad shoulders over a short fat
+# bottom that only tucks in under the legs.
+A, ZC = 2.8, 3.0                    # half width; height of the widest point
+CT, CB = 4.25, 3.1                  # the dome's height above the widest point; the bottom's depth below it
+NT_, NB = 2.35, 3.0                 # how square the dome's shoulders and the bottom are (2 = an egg)
+LEAN = (-0.11, -0.03)               # the top leans this far (per unit of height) to the back left
 IN = 0.13                           # the lower body lies this far inside the shell
 CEN = Vector((0, 0, ZC))
 
@@ -51,16 +57,40 @@ def D(az, el=0.0):
     return Vector((math.cos(e) * math.cos(a), math.cos(e) * math.sin(a), math.sin(e)))
 
 
+def rho(d):
+    """The body's radius along unit direction d (before the lean)."""
+    c, n = (CT, NT_) if d.z >= 0 else (CB, NB)
+    return ((math.hypot(d.x, d.y) / A) ** n + (abs(d.z) / c) ** n) ** (-1.0 / n)
+
+
+def lean(q):
+    return Vector((q.x + LEAN[0] * q.z, q.y + LEAN[1] * q.z, q.z))
+
+
+def unlean(q):
+    return Vector((q.x - LEAN[0] * q.z, q.y - LEAN[1] * q.z, q.z))
+
+
 def S(d, off=0.0):
-    """The point of the egg's skin along direction d from its middle, lifted off the skin by `off`."""
+    """The point of the body's skin along direction d from its middle (d before the lean), lifted off the skin by
+    `off` along the skin's normal."""
     d = Vector(d).normalized()
-    rho = 1.0 / math.sqrt((d.x * d.x + d.y * d.y) / (A * A) + d.z * d.z / (C_ * C_))
-    return CEN + d * (rho + off)
+    p = CEN + lean(d * rho(d))
+    return p + normal(d) * off if off else p
 
 
 def normal(d):
-    p = S(d) - CEN
-    return Vector((p.x / (A * A), p.y / (A * A), p.z / (C_ * C_))).normalized()
+    d = Vector(d).normalized()
+    t1 = d.orthogonal().normalized()
+    t2 = d.cross(t1)
+    e = 2e-3
+    n = (S(d + t1 * e) - S(d - t1 * e)).cross(S(d + t2 * e) - S(d - t2 * e)).normalized()
+    return n if n.dot(d) > 0 else -n
+
+
+def skin(p, off=0.0):
+    """The skin point under (or over) world point p."""
+    return S(unlean(Vector(p) - CEN), off)
 
 
 def polar(r, az, z=0.0):
@@ -160,7 +190,7 @@ def balls(name, pts, r, mat, squash=1.0, parent=None):
 
 # ------------------------------------------------------------------------------------------------------ materials
 def iron(name, col, wear, rough=(0.16, 0.5), scale=3.0, patch=0.5, rust=None, dirt=0.4, metal=0.9, spec=0.9,
-         bump=0.12):
+         bump=0.12, shine=None):
     """Flash's worn iron: a dark colour with big blotches of a paler, worn one, fine dark pitting, and a polish that
     changes from patch to patch (so the highlights break up instead of lying as clean streaks)."""
     if name in kit.MATS:
@@ -178,53 +208,72 @@ def iron(name, col, wear, rough=(0.16, 0.5), scale=3.0, patch=0.5, rust=None, di
     c = t.grime(c, kit.GROUND, 2.2, dirt, 0.5)
     lo, hi = rough
     r = t.ramp(fine, [(0.36, (lo, lo, lo, 1)), (0.7, (hi, hi, hi, 1))])
+    for attr, tone, a0, a1, amount, pol in shine or ():
+        # a pale worn tone where the mesh's own `attr` says so: a seam's crest, the shell's broad sheen
+        at = t.n("ShaderNodeAttribute", attribute_name=attr)
+        f = t.ramp(at.outputs["Fac"], [(a0, (0, 0, 0, 1)), (a1, (amount, amount, amount, 1))])
+        c = t.mix(c, kit.srgb(*tone), f)
+        r = t.mix(r, (pol, pol, pol, 1), f)
     t.set(**{"Base Color": c, "rough": r, "metal": metal, "spec": spec})
     t.bump(big, bump, 0.03)
     kit.MATS[name] = t.m
     return t.m
 
 
-SHELL = lambda: iron("shell", (22, 32, 26), (44, 58, 48), (0.1, 0.4), scale=2.0, patch=1.3, bump=0.04)
+SHEEN = ("sheen", (112, 130, 138), 0.0, 1.0, 0.6, 0.34)
+SHELL = lambda: iron("shell", (22, 32, 26), (44, 58, 48), (0.16, 0.44), scale=2.0, patch=1.3, bump=0.04, shine=[SHEEN])
 LOWER = lambda: iron("lower", (15, 19, 16), (40, 46, 38), (0.22, 0.5), scale=3.0, rust=(70, 40, 22), metal=0.85)
-RIDGE = lambda: iron("ridge", (58, 72, 60), (104, 118, 104), (0.1, 0.3), scale=4.0, dirt=0.25, bump=0.06)
-BEZEL = lambda: iron("bezel", (96, 108, 98), (160, 170, 158), (0.1, 0.3), scale=4.0, dirt=0.25, bump=0.06)
-TRIM = RIDGE
+# a seam is the shell's own iron (so its shoulders run into the shell unseen) worn bright along its crest
+RIDGE = lambda: iron("ridge", (22, 32, 26), (44, 58, 48), (0.16, 0.44), scale=2.0, patch=1.3, bump=0.04, dirt=0.3,
+                     shine=[SHEEN, ("crest", (70, 84, 80), 0.1, 0.7, 0.8, 0.3),
+                            ("crest", (164, 178, 182), 0.78, 0.97, 0.85, 0.12)])
+BEZEL = lambda: iron("bezel", (18, 24, 21), (58, 68, 62), (0.16, 0.4), scale=4.0, dirt=0.25, bump=0.06)
+TRIM = lambda: iron("trim", (58, 72, 60), (104, 118, 104), (0.1, 0.3), scale=4.0, dirt=0.25, bump=0.06)
 IRON = lambda: iron("iron", (18, 24, 20), (44, 54, 46), (0.18, 0.46), scale=4.0, rust=(84, 56, 34))
-ROOT = lambda: iron("root", (22, 28, 22), (52, 62, 50), (0.12, 0.38), scale=4.0, rust=(100, 52, 26), dirt=0.5)
+ROOT = lambda: iron("root", (24, 30, 24), (78, 88, 76), (0.14, 0.4), scale=4.0, rust=(100, 52, 26), dirt=0.5)
 STACK = lambda: kit.painted("stack", (64, 74, 66), rough=0.36, metal=0.7, wear=(120, 128, 116), dirt=0.3,
                             scale=6.0, soot=0.4, spec=0.7)
 DARK = lambda: kit.flat("dark", (8, 12, 8), rough=0.9)
 
 
 def brood():
-    """The porthole's brood: flat, hard-edged patches of lime green, yellow and orange (more orange toward the top),
-    lit from inside. The patches are cells read on a circle in two spare dimensions (turn() moves along it), so the
-    shifting runs into itself."""
+    """The porthole's brood, in Flash's colours (measured on its strip): flat, hard-edged patches, mostly lime green,
+    with yellow and orange ones toward the upper left, and a darker green edge. Lit from inside. The patches are
+    cells read on a circle in two spare dimensions (turn() moves along it), so the shifting runs into itself."""
     t = kit.NT("brood")
     v = t.coords(scale=(1, 1, 0))
     mp = v.node
     vo = t.n("ShaderNodeTexVoronoi", voronoi_dimensions="4D", feature="F1")
-    vo.inputs["Scale"].default_value = 2.3
+    vo.inputs["Scale"].default_value = 2.0
     vo.inputs["Randomness"].default_value = 1.0
     t.link(v, vo.inputs["Vector"])
     tc = t.n("ShaderNodeTexCoord")
-    sep = t.n("ShaderNodeSeparateXYZ")
-    t.link(tc.outputs["Object"], sep.inputs[0])
+    dot = t.n("ShaderNodeVectorMath", operation="DOT_PRODUCT")     # the glass's own x is up, its y the viewer's left
+    t.link(tc.outputs["Object"], dot.inputs[0])
+    dot.inputs[1].default_value = (0.16, 0.2, 0.0)
     grey = t.n("ShaderNodeRGBToBW")
     t.link(vo.outputs["Color"], grey.inputs[0])
-    add = t.n("ShaderNodeMath", operation="MULTIPLY_ADD")          # the cell's own random tone + its height
-    t.link(sep.outputs["X"], add.inputs[0])
-    add.inputs[1].default_value = 0.2
-    t.link(grey.outputs[0], add.inputs[2])
-    c = t.ramp(add.outputs[0], [(0.0, kit.srgb(84, 160, 8)), (0.34, kit.srgb(116, 186, 10)),
-                                (0.46, kit.srgb(144, 200, 12)), (0.58, kit.srgb(188, 206, 18)),
-                                (0.66, kit.srgb(236, 190, 28)), (0.75, kit.srgb(246, 150, 26))])
+    add = t.n("ShaderNodeMath", operation="ADD")                   # the cell's own random tone + its place
+    t.link(dot.outputs["Value"], add.inputs[0])
+    t.link(grey.outputs[0], add.inputs[1])
+    c = t.ramp(add.outputs[0], [(0.0, kit.srgb(*BROOD_COLS[0]))] +
+               [(q, kit.srgb(*col)) for q, col in zip((0.3, 0.46, 0.58, 0.68, 0.76, 0.87), BROOD_COLS[1:])])
     c.node.color_ramp.interpolation = "CONSTANT"
-    t.set(**{"Base Color": c, "rough": 0.08, "spec": 0.8, "coat": 1.0})
+    # the darker green edge
+    rad = t.n("ShaderNodeVectorMath", operation="LENGTH")
+    t.link(t.coords(scale=(1, 1, 0)), rad.inputs[0])
+    c = t.mix(c, kit.srgb(40, 70, 8), t.ramp(rad.outputs["Value"], [(0.74, (0, 0, 0, 1)), (1.0, (0.8, 0.8, 0.8, 1))]))
+    t.set(**{"Base Color": t.mix(c, (0, 0, 0, 1), 0.6), "rough": 0.2, "spec": 0.2, "coat": 0.25})
     t.link(c, t.bsdf.inputs["Emission Color"])
-    t.bsdf.inputs["Emission Strength"].default_value = 1.5
+    t.bsdf.inputs["Emission Strength"].default_value = BROOD_E
     BROOD.update(map=mp, noise=vo)
     return t.m
+
+
+# Flash's brood colours: three greens (half of the glass and more), a bright lime, an olive yellow, yellow, orange
+BROOD_COLS = [(88, 134, 8), (100, 154, 6), (118, 170, 10), (142, 200, 8), (160, 146, 8), (206, 184, 20),
+              (234, 168, 30)]
+BROOD_E = 0.8
 
 
 def hose_mat():
@@ -254,50 +303,89 @@ HOSE = {}
 
 # ------------------------------------------------------------------------------------------------------ the parts
 def E(sx, sy):
-    """The direction (from the egg's middle) of the shell's point seen on Flash pixel (sx, sy): Flash's seams are
-    traced in its own pixels and laid on the shell with this."""
+    """The direction (from the body's middle, before the lean) of the skin's point seen on Flash pixel (sx, sy):
+    Flash's seams are traced in its own pixels and laid on the shell with this. A pixel beside the body gives the
+    skin's nearest point."""
     f = kit.cam_fwd()
-    o = kit.px(sx, sy, Z=ZC) - CEN
-    q = lambda v: Vector((v.x / A, v.y / A, v.z / C_))
-    of, ff = q(o), q(f)
-    a, b, c = ff.dot(ff), 2 * of.dot(ff), of.dot(of) - 1
-    t = (-b - math.sqrt(max(0.0, b * b - 4 * a * c))) / (2 * a)
-    return (o + f * t).normalized()
+    o = kit.px(sx, sy, Z=ZC) - f * 14
+
+    def depth(t):
+        q = unlean(o + f * t - CEN)
+        return q.length / rho(q.normalized())
+    t, best = 0.0, (9.0, 0.0)
+    while t < 28:
+        v = depth(t)
+        if v < 1:
+            break
+        best = min(best, (v, t))
+        t += 0.04
+    else:
+        return unlean(o + f * best[1] - CEN).normalized()
+    lo, hi = t - 0.04, t
+    for _ in range(24):
+        mid = (lo + hi) / 2
+        lo, hi = (lo, mid) if depth(mid) < 1 else (mid, hi)
+    return unlean(o + f * hi - CEN).normalized()
+
+
+def P3(sx, sy, z):
+    """The world point seen on Flash pixel (sx, sy) at height z: the legs are traced on Flash with this."""
+    return kit.px(sx, sy, Z=z)
 
 
 def azel(d):
     return math.degrees(math.atan2(d.y, d.x)), math.degrees(math.asin(max(-1, min(1, d.z))))
 
 
-def ridge(name, dirs, w=0.15, h=0.1, mat=None, closed=False, sub=6, off=0.0, seg=10):
-    """A broad, soft raised seam on the egg through directions `dirs`: half as wide as `w` each side, `h` proud of
-    the skin, pressed half into it; an open one runs out to nothing at its ends."""
+def ridge(name, dirs, w=0.25, h=0.065, mat=None, closed=False, sub=6, off=0.0, seg=6, ends=("fade", "fade")):
+    """A broad, flat embossed seam on the body through directions `dirs`: `w` wide each side of its line, `h` proud
+    at its flat crest, its soft shoulders running into the skin (every point is laid on the skin, so it follows the
+    body's curve). An open one runs out to nothing at a "fade" end and widens at a "join" end, where it meets
+    another seam. The crest's share (0 at the shoulders, 1 on the crest) is stored on the mesh for the worn
+    highlight."""
     P = spline(dirs, sub, closed)
     n = len(P)
     bm = bmesh.new()
-    rows = []
+    rows, crest = [], []
+    RIDGES.append(name)
+    off += 0.005 * len(RIDGES)                               # no two seams' skins lie in one another where they meet
     for i, d in enumerate(P):
         pa = P[(i - 1) % n] if closed else P[max(i - 1, 0)]
         pb = P[(i + 1) % n] if closed else P[min(i + 1, n - 1)]
         nr = normal(d)
-        t = (S(pb, off) - S(pa, off)).normalized()
+        t = (S(pb) - S(pa)).normalized()
         bi = t.cross(nr).normalized()
-        k = 1.0
+        kw = kh = 1.0
         if not closed:
-            s = i / (n - 1)
-            k = max(0.06, min(1.0, min(s, 1 - s) / 0.1) ** 0.6)
-        p = S(d, off)
-        rows.append([bm.verts.new(p + bi * (w * k * math.cos(2 * math.pi * j / seg))
-                                  + nr * (h * k * math.sin(2 * math.pi * j / seg))) for j in range(seg)])
+            s_ = i / (n - 1)
+            for e, u in zip(ends, (s_ / 0.14, (1 - s_) / 0.14)):
+                if u < 1:
+                    if e == "fade":
+                        kw *= max(0.08, u) ** 0.6
+                        kh *= max(0.0, u) ** 0.8
+                    else:
+                        kw *= 1.0 + 0.8 * (1 - u) ** 2
+                        kh *= min(1.0, u / 0.4) ** 0.7         # and sinks into the seam it meets
+        p0 = S(d)
+        row = []
+        for j in range(-seg, seg + 1):
+            x = j / seg
+            u = min(1.0, (1 - abs(x)) / 0.85)
+            bell = u * u * (3 - 2 * u)                       # a low flat-topped swell with long soft shoulders
+            row.append(bm.verts.new(skin(p0 + bi * (w * kw * x), off + h * kh * bell - 0.008)))
+            crest.append(bell * kh)
+        rows.append(row)
     pairs = list(zip(rows, rows[1:])) + ([(rows[-1], rows[0])] if closed else [])
     for r0, r1 in pairs:
-        for j in range(seg):
-            bm.faces.new((r0[j], r0[(j + 1) % seg], r1[(j + 1) % seg], r1[j]))
-    if not closed:
-        bm.faces.new(rows[0][::-1])
-        bm.faces.new(rows[-1])
+        for j in range(2 * seg):
+            bm.faces.new((r0[j], r0[j + 1], r1[j + 1], r1[j]))
     bmesh.ops.recalc_face_normals(bm, faces=bm.faces)
-    return kit.mesh_ob(name, bm, [mat or RIDGE()])
+    ob = kit.mesh_ob(name, bm, [mat or RIDGE()])
+    ob.data.attributes.new("crest", "FLOAT", "POINT").data.foreach_set("value", crest)
+    return ob
+
+
+RIDGES = []
 
 
 # the shell's wavy lower hem, traced on Flash (px) across the front; the back keeps a plain wave
@@ -329,76 +417,115 @@ def skirt_el(az):
     return SKIRT[i % 360] * (1 - f) + SKIRT[(i + 1) % 360] * f
 
 
-def egg():
-    # the lower body: the egg itself, a little inside the shell, standing in the ground
-    prof = []
-    for e in range(-90, 91, 5):
-        p = S(D(0, e), -IN)
-        prof.append((max(0.002, p.x), max(0.02, p.z) - ZC))
-    kit.lathe("egg", prof, CEN, LOWER(), verts=72)
-    # the shell: the egg's armour from the top down to its wavy hem
-    cols, rows = 180, 26
+def skin_grid(name, mat, off, lo_el, rows=26, cols=180, lip=None, attr=None):
+    """The body's skin from elevation lo_el(az) up to the top, `off` off the skin; `lip` turns its lower edge in."""
     bm = bmesh.new()
-    grid = []
+    grid, vals = [], []
     for i in range(cols):
         az = i * 360 / cols - 180
-        lo = skirt_el(az)
-        col = [bm.verts.new(S(D(az, lo), -IN - 0.03))]
+        lo = lo_el(az)
+        col = [bm.verts.new(S(D(az, lo), lip))] if lip is not None else []
         for j in range(rows):
-            col.append(bm.verts.new(S(D(az, lo + (88 - lo) * (j / (rows - 1)) ** 0.9))))
+            col.append(bm.verts.new(S(D(az, lo + (88 - lo) * (j / (rows - 1)) ** 0.9), off)))
         grid.append(col)
-    top = bm.verts.new(S(D(0, 90)))
+    top = bm.verts.new(S(D(0, 90), off))
     for i in range(cols):
         a, b = grid[i], grid[(i + 1) % cols]
-        for j in range(rows):
+        for j in range(len(a) - 1):
             bm.faces.new((a[j], b[j], b[j + 1], a[j + 1]))
         bm.faces.new((a[-1], b[-1], top))
     bmesh.ops.recalc_face_normals(bm, faces=bm.faces)
-    kit.mesh_ob("egg-shell", bm, [SHELL()])
+    if attr:
+        vals = [attr(v.co) for v in bm.verts]
+    ob = kit.mesh_ob(name, bm, [mat])
+    if attr:
+        ob.data.attributes.new("sheen", "FLOAT", "POINT").data.foreach_set("value", vals)
+    return ob
+
+
+SHEEN_PX = ((-9, -7, 1.8), (2, -12, 1.3))      # Flash's broad pale sheen, upper left of the shell: (px, px, size)
+
+
+def egg():
+    # the lower body: the body itself, a little inside the shell, standing in the ground
+    skin_grid("egg", LOWER(), -IN, lambda az: -89.0, rows=30, cols=72)
+    # the shell: the body's armour from the top down to its wavy hem, with Flash's pale sheen on its upper left
+    spots = [(S(E(sx, sy)), r) for sx, sy, r in SHEEN_PX]
+    sheen = lambda p: min(1.0, sum(math.exp(-((p - q).length / r) ** 2) for q, r in spots))
+    SHEEN_F.append(sheen)
+    skin_grid("egg-shell", SHELL(), 0.0, skirt_el, lip=-IN - 0.03, attr=sheen)
     # the hem's bright rolled rim
-    ridge("egg-hem", [D(a, skirt_el(a)) for a in range(-180, 180, 3)], 0.2, 0.15, closed=True, sub=2, off=-0.04)
+    ob = ridge("egg-hem", [D(a, skirt_el(a) + 1.5) for a in range(-180, 180, 3)], 0.2, 0.1, closed=True, sub=2)
+    add_sheen(ob)
+
+
+SHEEN_F = []
+
+
+def add_sheen(ob):
+    """Give a seam the shell's sheen where it crosses it."""
+    f = SHEEN_F[0]
+    ob.data.attributes.new("sheen", "FLOAT", "POINT").data.foreach_set("value", [f(v.co) for v in ob.data.vertices])
 
 
 def seams():
     """Flash's embossed seams, traced in Flash px: the hood's arc, the tongue panel over the porthole, two slanting
-    seams running down to the porthole's right, and a flap on the lower body at the front left."""
+    seams running down to the porthole's right, and a flap on the lower body at the front left. Broad and flat, a
+    worn bright crest on each, wider where two meet."""
     px = lambda pts: [E(*p) for p in pts]
-    ridge("egg-seam-hood", px([(-20.5, 14), (-19.5, 4), (-15.5, -4.5), (-9, -10), (0, -12.5), (9, -13.5),
-                               (16.5, -12.5), (22.5, -8), (27, 0), (30, 9)]), 0.2, 0.11)
-    ridge("egg-seam-tongue", px([(-7, -1.5), (-2, -5), (5, -6.5), (10, -4), (11.5, 2), (10.5, 8.5), (7, 11.5),
-                                 (3, 10), (-1, 6), (-4.5, 2)]), 0.2, 0.12, closed=True)
-    ridge("egg-seam-slant0", px([(10, -5.5), (15.5, -2.5), (20, 3.5), (24, 10), (27.5, 15.5)]), 0.17, 0.1)
-    ridge("egg-seam-slant1", px([(13, 2.5), (17, 7), (21, 12)]), 0.15, 0.09)
-    ridge("egg-seam-arch", px([(-17.5, 26), (-16, 14), (-13, 5), (-8.5, -0.5)]), 0.16, 0.08)
-    ridge("egg-flap", px([(-19, 35), (-17, 39), (-13.5, 42.5), (-10, 43.5), (-8, 41), (-7.5, 37)]), 0.2, 0.13,
-          off=-IN)
-    ridge("egg-flap1", px([(22, 46), (27, 45), (31, 41)]), 0.12, 0.1, off=-IN)
+    obs = [
+        ridge("egg-seam-hood", px([(-20.5, 14), (-19.5, 4), (-15.5, -4.5), (-9, -10), (0, -12.5), (9, -13.5),
+                                   (16.5, -12.5), (22.5, -8), (27, 0), (30, 9)]), 0.27, 0.095),
+        ridge("egg-seam-tongue", px([(-7, -1.5), (-2, -5), (5, -6.5), (10, -4), (11.5, 2), (10.5, 8.5), (7, 11.5),
+                                     (3, 10), (-1, 6), (-4.5, 2)]), 0.27, 0.1, closed=True),
+        ridge("egg-seam-slant0", px([(10, -5.5), (15.5, -2.5), (20, 3.5), (24, 10), (27.5, 15.5)]), 0.24, 0.09,
+              ends=("join", "fade")),
+        ridge("egg-seam-slant1", px([(12, 2), (17, 7), (21, 12)]), 0.21, 0.08, ends=("join", "fade")),
+        ridge("egg-seam-arch", px([(-17.5, 26), (-16, 14), (-13, 5), (-8, -1)]), 0.23, 0.08, ends=("fade", "join")),
+    ]
+    for ob in obs:
+        add_sheen(ob)
+    ridge("egg-flap", px([(-19, 35), (-17, 39), (-13.5, 42.5), (-10, 43.5), (-8, 41), (-7.5, 37)]), 0.24, 0.08,
+          off=-IN, mat=FLAP())
+    ridge("egg-flap1", px([(22, 46), (27, 45), (31, 41)]), 0.16, 0.07, off=-IN, mat=FLAP())
     pts = []
     for p in ((2, 18), (-2, 26), (-12, 22), (-15, 12)):
         d = E(*p)
         pts.append((S(d, 0.0), normal(d)))
-    balls("egg-rivets", pts, 0.13, RIDGE(), 0.55)
+    balls("egg-rivets", pts, 0.13, TRIM(), 0.55)
 
 
-WIN_PX = (18.5, 28.5)
-WIN_K = 1.1
+FLAP = lambda: iron("flap", (15, 19, 16), (40, 46, 38), (0.2, 0.46), scale=3.0, metal=0.85,
+                    shine=[("crest", (60, 70, 62), 0.1, 0.7, 0.8, 0.3), ("crest", (160, 170, 164), 0.78, 0.97, 0.85, 0.14)])
+
+WIN_PX = (19.5, 29.5)
+WIN_K = 1.13
+WIN_TURN, WIN_DOWN = 32, 10           # Flash's glass is 19 px wide and 23 tall: it looks this far (deg) to the right,
+                                      # and a little down, as the body's skin there does (so the skin stays out of it)
 
 
 def porthole():
     d = E(*WIN_PX)
-    n = (normal(d) * 0.5 - kit.cam_fwd()).normalized()         # a stubby barrel turned toward the viewer
-    m = basis(n, S(d) + n * 0.3) @ Matrix.Diagonal((WIN_K, WIN_K, 1, 1))
-    bezel = [(0.98, -0.3), (0.98, 0.34), (1.03, 0.46), (1.12, 0.52), (1.21, 0.44), (1.26, 0.26), (1.27, -2.2)]
-    lathe_at("port-bezel", bezel, m, BEZEL(), verts=48)
-    balls("port-bolts", [(m @ Vector((1.14 * math.cos(a), 1.14 * math.sin(a), 0.5)), n)
-                         for a in [math.radians(45 + 60 * i) for i in range(6)]], 0.05, IRON(), 0.6)
+    v = -kit.cam_fwd()
+    right = Vector((1, 1, 0)).normalized()
+    up = right.cross(v) if right.cross(v).z > 0 else v.cross(right)
+    a, b = math.radians(WIN_TURN), math.radians(WIN_DOWN)
+    # set in the body's right front, seen at an angle
+    n = (v * math.cos(a) * math.cos(b) + right * math.sin(a) * math.cos(b) - up * math.sin(b)).normalized()
+    m = basis(n, S(d)) @ Matrix.Diagonal((WIN_K, WIN_K, 1, 1))
+    # a chunky dark collar: a broad rounded rim round the glass on a barrel sunk into the body
+    bezel = [(0.98, -0.7), (0.98, 0.2), (1.02, 0.34), (1.1, 0.43), (1.22, 0.45), (1.32, 0.38), (1.38, 0.24),
+             (1.39, -1.3)]
+    lathe_at("port-bezel", bezel, m, BEZEL(), verts=56)
+    balls("port-bolts", [(m @ Vector((1.2 * math.cos(q), 1.2 * math.sin(q), 0.43)), n)
+                         for q in [math.radians(45 + 60 * i) for i in range(6)]], 0.055, IRON(), 0.6)
     hub = bpy.data.objects.new("brood", None)
     kit.link(hub)
     hub.matrix_world = m
     kit.MOVING.append(hub)
-    glass = [(0.002, 0.42), (0.3, 0.41), (0.6, 0.37), (0.85, 0.3), (1.0, 0.2)]
+    glass = [(0.002, 0.36), (0.3, 0.35), (0.6, 0.31), (0.85, 0.24), (1.0, 0.14)]
     ob = kit.lathe("brood-glass", glass, (0, 0, 0), brood(), verts=48, parent=hub)
-    PORT["at"] = m @ Vector((0, 0, 0.4))
+    PORT["at"] = m @ Vector((0, 0, 0.34))
     return ob
 
 
@@ -526,7 +653,7 @@ STK = {}
 
 
 def stack():
-    d = D(STK_D[0], STK_D[1])
+    d = E(*STK_PX)
     aim = (normal(d) * 0.3 + Vector((0.08, 0.06, 1))).normalized()
     m = basis(aim, S(d) - aim * 0.25)
     k = 1.12                                  # taller than wide, as Flash's
@@ -536,66 +663,94 @@ def stack():
     STK.update(base=S(d), top=m @ Vector((0, 0, 1.64 * k)))
 
 
-STK_D = (74, 64)
+STK_PX = (17.5, -11.5)                # where the stack stands, in Flash px
 
 
-GLOW_E = 2.6
+GLOW_E = 0.5
 
 
 def glow():
-    """The fire under the egg: a ring of ember light on the ground round the body. The camera does not see the ring
-    itself, only its red-orange shine on the underside of the body and of the legs, as in Flash."""
-    ob = kit.lathe("glow", [(1.8, 0.04), (3.8, 0.04)], (0, 0, 0), kit.flat("glow", (255, 80, 14), emit=GLOW_E),
-                   verts=40)
+    """The fire under the body: a broad ring of ember light on the ground round it, brightest under the body's rim
+    and fading to nothing inward and outward, so its shine on the underside of the body and of the legs is a soft
+    glow with no edge. The camera does not see the ring itself."""
+    t = kit.NT("glow")
+    rad = t.n("ShaderNodeVectorMath", operation="LENGTH")
+    t.link(t.coords(scale=(1 / 6.0, 1 / 6.0, 0)), rad.inputs[0])
+    f = t.ramp(rad.outputs["Value"], [(0.14, (0, 0, 0, 1)), (0.42, (1, 1, 1, 1)), (0.56, (0.7, 0.7, 0.7, 1)),
+                                      (1.0, (0, 0, 0, 1))])
+    f.node.color_ramp.interpolation = "EASE"
+    t.set(**{"Base Color": (0, 0, 0, 1), "rough": 1.0})
+    t.bsdf.inputs["Emission Color"].default_value = kit.srgb(255, 74, 12)
+    em = t.n("ShaderNodeMath", operation="MULTIPLY")
+    t.link(f, em.inputs[0])
+    em.inputs[1].default_value = GLOW_E
+    t.link(em.outputs[0], t.bsdf.inputs["Emission Strength"])
+    ob = kit.lathe("glow", [(0.6, 0.04), (6.0, 0.04)], (0, 0, 0), t.m, verts=48)
     ob.visible_camera = ob.visible_diffuse = ob.visible_shadow = False
     ob.visible_transmission = ob.visible_volume_scatter = False
 
 
-def root(name, az, reach, r0, ribs, curl=0.0, lift=0.0, tip_z=0.12, r1=0.05, mid=1.0, depth=0.16, power=0.8):
-    """A ribbed leg from the lower body out along the ground: `curl` turns it (degrees) toward its tip, `lift`
-    raises the tip."""
-    pts = [polar(1.5, az, 1.0), polar(2.8, az, 0.95 * mid),
-           polar(2.8 + (reach - 2.8) * 0.35, az + curl * 0.15, 0.78 * mid + lift * 0.2),
-           polar(2.8 + (reach - 2.8) * 0.7, az + curl * 0.5, 0.42 * mid + lift * 0.55),
-           polar(reach, az + curl, tip_z + lift)]
-    return tubemesh(name, pts, ribbed(r0, r1, ribs, depth, power), ROOT(), seg=16, sub=30)
+def along(R):
+    """Radius along a traced limb: R at its traced points, straight between them."""
+    m = len(R) - 1
+
+    def f(s):
+        x = min(m - 1e-6, s * m)
+        i = int(x)
+        return R[i] + (R[i + 1] - R[i]) * (x - i)
+    return f
+
+
+def limb(name, pts, ribs=0, depth=0.25, seg=16, sub=10, flat=1.0, mat=None):
+    """A leg traced on Flash: pts are (px, px, height, radius) along it from the body out. It starts inside the
+    body. `ribs` raised rings along it; `flat` < 1 squashes it into a blade (its height against its width)."""
+    W = [P3(sx, sy, z) for sx, sy, z, _ in pts]
+    R = [r for *_, r in pts]
+    core = Vector((LEAN[0] * (W[0].z - ZC), LEAN[1] * (W[0].z - ZC), W[0].z + 0.15))
+    W = [core + (W[0] - core) * 0.5] + W
+    R = [R[0]] + R
+    base = along(R)
+
+    def rad(s):
+        r = base(s)
+        if ribs:
+            r *= 1.0 + depth * (1.0 - abs(math.sin(math.pi * ribs * s))) ** 1.3
+        return (r, max(0.02, r * flat)) if flat != 1.0 else r
+    return tubemesh(name, W, rad, mat or ROOT(), seg=seg, sub=sub)
 
 
 def roots():
-    """The squat legs the egg is sunk into: every one starts inside the lower body and lies along the ground."""
-    # the front leg: short, fat, deeply ringed, flat on the ground, its tip hooked to the left
-    pts = [polar(1.5, -70, 1.0), polar(2.8, -69, 0.95), polar(4.0, -69, 0.72), polar(5.1, -70, 0.48),
-           polar(6.0, -72, 0.26), polar(6.65, -76, 0.1)]
-    tubemesh("leg", pts, ribbed(0.98, 0.04, 8, 0.3, 1.0), ROOT(), seg=18, sub=24)
-    # the clawed arm, front left: a ringed arm ending in three talons
-    root("claw", -113, 5.3, 0.64, 7, curl=-5, r1=0.26, tip_z=0.32, depth=0.3, power=1.2)
-    wrist = polar(5.3, -118, 0.32)
-    for i, (da, ln, dz) in enumerate(((-16, 1.4, 0.25), (2, 1.6, -0.1), (20, 1.2, 0.2))):
-        d = D(-118 + da)
-        pts = [wrist - d * 0.15, wrist + d * ln * 0.5 + Vector((0, 0, 0.2 + dz * 0.5)),
-               wrist + d * ln + Vector((0, 0, max(-0.24, dz - 0.25)))]
-        tubemesh(f"claw-talon{i}", pts, lambda s: 0.2 * (1 - s) ** 0.7 + 0.02, ROOT(), seg=10, sub=8)
+    """The short fat legs the body sits in, each traced on Flash: they start inside the lower body, hug it and
+    splay flat on the ground."""
+    # centre front: a fat ringed stump, flat on the ground, tapering to a tip hooked to the left
+    limb("leg", [(-10.5, 47, 1.25, 0.84), (-12, 54, 0.88, 0.8), (-13, 60, 0.72, 0.7), (-14.5, 66, 0.52, 0.5),
+                 (-16, 71, 0.36, 0.34), (-17.4, 75, 0.25, 0.21), (-20.5, 77.7, 0.17, 0.13), (-26.5, 79, 0.08, 0.035)],
+         ribs=9, depth=0.26, seg=18)
+    # left front: a fat ringed stump that drops from the body and bends out to a small two-fingered claw
+    limb("claw", [(-27, 40, 1.5, 0.82), (-33, 44, 1.15, 0.76), (-37, 48.5, 0.8, 0.62), (-42, 52.5, 0.5, 0.42),
+                  (-47, 55.5, 0.3, 0.26), (-50.3, 57.2, 0.2, 0.17)], ribs=6, depth=0.28)
+    for i, pts in enumerate(([(-49.5, 57, 0.2, 0.15), (-53, 56.4, 0.22, 0.11), (-56, 57.6, 0.05, 0.03)],
+                             [(-49.6, 57.2, 0.2, 0.15), (-47.6, 60.4, 0.2, 0.12), (-49, 62.6, 0.12, 0.09),
+                              (-54, 63.2, 0.04, 0.03)])):
+        tubemesh(f"claw-talon{i}", [P3(*p[:3]) for p in pts], along([p[3] for p in pts]), ROOT(), seg=10, sub=8)
     # the horn, left: a big straight spike held level, ringed
     tubemesh("horn", [polar(1.3, -150, 1.5), polar(4.0, -150, 1.35), polar(6.1, -150, 1.12)],
              lambda s: (1.4 * (1 - s) + 0.015) * (1 + 0.14 * (1 - abs(math.sin(math.pi * 9 * s))) ** 1.5),
              ROOT(), seg=16, sub=16)
     # the claws, right: a tight clump of fat dark claws from one shoulder, curling down to points on the ground
-    for i, (az, reach, w) in enumerate(((19, 4.5, 0.5), (7, 4.95, 0.58), (-6, 4.85, 0.56), (-19, 4.0, 0.48))):
-        a0 = az * 0.4
-        pts = [polar(1.5, a0, 1.0), polar(2.8, a0, 1.1), polar(2.9 + (reach - 2.9) * 0.5, az * 0.9, 1.0),
-               polar(2.9 + (reach - 2.9) * 0.86, az, 0.5), polar(reach, az + 4, 0.05)]
-
-        def sec(s, w=w):
-            k = (1 - s ** 1.6) ** 0.8
-            rib = 1.0 + 0.12 * (1 - abs(math.sin(math.pi * 5 * s))) ** 2
-            return (max(0.02, w * k * rib), max(0.02, 0.42 * k * rib))
-        tubemesh(f"fin{i}", pts, sec, ROOT(), seg=14, sub=20)
-    # two thin feelers, back right: one rises in a hump and reaches out along the ground, a short one under it
-    tubemesh("tail", [polar(1.9, 44, 1.0), polar(3.3, 46, 0.9), polar(4.0, 48, 1.35), polar(4.4, 49, 1.6),
-                      polar(4.95, 53, 1.0), polar(5.6, 58, 0.3), polar(6.4, 57, 0.14)],
-             ribbed(0.42, 0.05, 12, 0.2, 0.8), ROOT(), seg=12, sub=16)
-    tubemesh("tailb", [polar(1.9, 38, 0.9), polar(3.2, 40, 0.75), polar(3.8, 44, 0.5), polar(4.35, 49, 0.12)],
-             ribbed(0.3, 0.04, 8, 0.2, 0.8), ROOT(), seg=12, sub=16)
+    for i, pts in enumerate((
+            [(25, 49.5, 1.05, 0.46), (26.5, 56, 0.78, 0.44), (28.5, 61, 0.46, 0.34), (30.6, 65.6, 0.06, 0.03)],
+            [(29, 50, 1.1, 0.5), (33, 57, 0.82, 0.48), (37.5, 64, 0.46, 0.36), (41.6, 70.6, 0.06, 0.03)],
+            [(32, 49, 1.1, 0.5), (38.5, 54.5, 0.82, 0.48), (45, 59.5, 0.44, 0.34), (50.6, 62.8, 0.06, 0.03)],
+            [(33, 46.5, 1.05, 0.44), (39, 49.6, 0.84, 0.4), (43.6, 53.8, 0.5, 0.3), (46.6, 58, 0.12, 0.03)])):
+        limb(f"fin{i}", pts, ribs=5, depth=0.16, seg=14, sub=12, flat=0.8)
+    # two thin feelers, right: one rises in a hump and reaches out along the ground, a short one under it
+    limb("tail", [(33, 44, 0.5, 0.3), (38, 43, 0.5, 0.26), (43, 42, 0.6, 0.22), (46, 38, 1.05, 0.2),
+                  (49, 35.2, 1.4, 0.19), (52, 34.6, 1.45, 0.19), (55, 36, 1.3, 0.18), (57.2, 39.5, 0.9, 0.17),
+                  (60, 42, 0.55, 0.16), (64, 42.6, 0.35, 0.14), (68.6, 42.6, 0.2, 0.05)], ribs=14, depth=0.18,
+         seg=12, sub=8)
+    limb("tailb", [(31, 47, 0.42, 0.22), (36, 47, 0.26, 0.17), (41, 46.5, 0.18, 0.13), (45.6, 45.6, 0.1, 0.04)],
+         ribs=6, depth=0.18, seg=12, sub=8)
 
 
 def cards():
