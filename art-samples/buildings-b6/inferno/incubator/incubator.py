@@ -4,7 +4,7 @@ built clean-room from the Flash picture put into words (14 Nov 2026). Only the g
 
     blender -b --factory-startup -P incubator.py -- 1 <fit|check|gap|still|anim> [frame]
 
-The building: a squat dark iron egg (the brood vessel) sunk into short fat legs, ember light under it. Its armour
+The building: a squat dark iron egg (the brood vessel) sunk into short fat legs, plain dark under it. Its armour
 shell ends in a wavy hem above the lower body and carries broad embossed seams traced from Flash. On its front right
 a round porthole full of green brood; on its left a riveted pump box with a fat ribbed vent pipe on top and a pale
 feed hose looped round its front; on its top, to the back, a short capped stack. Round the foot: a fat ringed leg
@@ -208,10 +208,14 @@ def iron(name, col, wear, rough=(0.16, 0.5), scale=3.0, patch=0.5, rust=None, di
     c = t.grime(c, kit.GROUND, 2.2, dirt, 0.5)
     lo, hi = rough
     r = t.ramp(fine, [(0.36, (lo, lo, lo, 1)), (0.7, (hi, hi, hi, 1))])
-    for attr, tone, a0, a1, amount, pol in shine or ():
+    for attr, tone, a0, a1, amount, pol, *brk in shine or ():
         # a pale worn tone where the mesh's own `attr` says so: a seam's crest, the shell's broad sheen
         at = t.n("ShaderNodeAttribute", attribute_name=attr)
         f = t.ramp(at.outputs["Fac"], [(a0, (0, 0, 0, 1)), (a1, (amount, amount, amount, 1))])
+        if brk:
+            # only in patches (noise of this scale, this share of it): the wear catches the light in short bits
+            bs, b0, b1 = brk[0]
+            f = t.mix((0, 0, 0, 1), f, t.ramp(t.noise(v, bs, 3.0, 0.6, 0.3), [(b0, (0, 0, 0, 1)), (b1, (1, 1, 1, 1))]))
         c = t.mix(c, kit.srgb(*tone), f)
         r = t.mix(r, (pol, pol, pol, 1), f)
     t.set(**{"Base Color": c, "rough": r, "metal": metal, "spec": spec})
@@ -220,17 +224,21 @@ def iron(name, col, wear, rough=(0.16, 0.5), scale=3.0, patch=0.5, rust=None, di
     return t.m
 
 
-SHEEN = ("sheen", (112, 130, 138), 0.0, 1.0, 0.6, 0.34)
-SHELL = lambda: iron("shell", (22, 32, 26), (44, 58, 48), (0.16, 0.44), scale=2.0, patch=1.3, bump=0.04, shine=[SHEEN])
+SHEEN = ("sheen", (84, 96, 80), 0.0, 1.0, 0.32, 0.42)
+SHELL_KW = dict(rough=(0.32, 0.58), scale=2.0, patch=1.3, bump=0.04, metal=0.9, spec=0.3)
+SHELL = lambda: iron("shell", (30, 40, 26), (56, 68, 44), shine=[SHEEN], **SHELL_KW)
 LOWER = lambda: iron("lower", (15, 19, 16), (40, 46, 38), (0.22, 0.5), scale=3.0, rust=(70, 40, 22), metal=0.85)
 # a seam is the shell's own iron (so its shoulders run into the shell unseen) worn bright along its crest
-RIDGE = lambda: iron("ridge", (22, 32, 26), (44, 58, 48), (0.16, 0.44), scale=2.0, patch=1.3, bump=0.04, dirt=0.3,
-                     shine=[SHEEN, ("crest", (70, 84, 80), 0.1, 0.7, 0.8, 0.3),
-                            ("crest", (164, 178, 182), 0.78, 0.97, 0.85, 0.12)])
+# only along a thin line on its very crest: a dim grey line there, pale in short broken bits (Flash's seams are
+# thin grey lines that catch the light in places, their sides as dark as the shell)
+CREST = lambda lo, hi: [("crest", lo, 0.82, 0.96, 0.8, 0.42), ("crest", hi, 0.88, 0.98, 0.85, 0.3, (2.6, 0.4, 0.62))]
+RIDGE = lambda: iron("ridge", (30, 40, 26), (56, 68, 44), dirt=0.3,
+                     shine=[SHEEN] + CREST((78, 90, 78), (160, 170, 156)), **SHELL_KW)
 BEZEL = lambda: iron("bezel", (18, 24, 21), (58, 68, 62), (0.16, 0.4), scale=4.0, dirt=0.25, bump=0.06)
 TRIM = lambda: iron("trim", (58, 72, 60), (104, 118, 104), (0.1, 0.3), scale=4.0, dirt=0.25, bump=0.06)
 IRON = lambda: iron("iron", (18, 24, 20), (44, 54, 46), (0.18, 0.46), scale=4.0, rust=(84, 56, 34))
-ROOT = lambda: iron("root", (24, 30, 24), (78, 88, 76), (0.14, 0.4), scale=4.0, rust=(100, 52, 26), dirt=0.5)
+ROOT = lambda: iron("root", (54, 58, 45), (80, 84, 66), (0.3, 0.52), scale=4.0, patch=0.3, rust=(100, 52, 26),
+                    dirt=0.5, metal=0.7, spec=0.5, bump=0.05)
 STACK = lambda: kit.painted("stack", (64, 74, 66), rough=0.36, metal=0.7, wear=(120, 128, 116), dirt=0.3,
                             scale=6.0, soot=0.4, spec=0.7)
 DARK = lambda: kit.flat("dark", (8, 12, 8), rough=0.9)
@@ -443,7 +451,7 @@ def skin_grid(name, mat, off, lo_el, rows=26, cols=180, lip=None, attr=None):
     return ob
 
 
-SHEEN_PX = ((-9, -7, 1.8), (2, -12, 1.3))      # Flash's broad pale sheen, upper left of the shell: (px, px, size)
+SHEEN_PX = ((-9, -6, 1.6),)      # Flash's broad pale sheen, upper left of the shell: (px, px, size)
 
 
 def egg():
@@ -496,7 +504,7 @@ def seams():
 
 
 FLAP = lambda: iron("flap", (15, 19, 16), (40, 46, 38), (0.2, 0.46), scale=3.0, metal=0.85,
-                    shine=[("crest", (60, 70, 62), 0.1, 0.7, 0.8, 0.3), ("crest", (160, 170, 164), 0.78, 0.97, 0.85, 0.14)])
+                    shine=CREST((74, 84, 72), (150, 160, 146)))
 
 WIN_PX = (19.5, 29.5)
 WIN_K = 1.13
@@ -666,7 +674,7 @@ def stack():
 STK_PX = (17.5, -11.5)                # where the stack stands, in Flash px
 
 
-GLOW_E = 0.5
+GLOW_E = 0.0                          # no ember light under the body: Flash is plain dark there
 
 
 def glow():
@@ -780,7 +788,8 @@ def build():
     pump()
     hose()
     stack()
-    glow()
+    if GLOW_E:
+        glow()
     roots()
 
 
