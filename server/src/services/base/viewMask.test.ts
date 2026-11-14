@@ -92,6 +92,10 @@ describe("someone else's yard, only looked at", () => {
     expect(artLevelOf(TWIG_SNAPPER, 6, true, "inferno")).toBe(3);
     expect(artLevelOf(TWIG_SNAPPER, 2, true, "inferno")).toBe(1);
     expect(artLevelOf(TWIG_SNAPPER, 10, true, "inferno")).toBe(7);
+    // The Magma Pump (type 4, the Goo Factory's) splits the same way in the Inferno.
+    expect(artLevelOf(4, 6, true, "inferno")).toBe(3);
+    expect(artLevelOf(4, 8, true, "inferno")).toBe(7);
+    expect(artLevelOf(4, 8, true, "main")).toBe(6);
     // The main yard's Twig Snapper, and the Flash steps alone, are as they were.
     expect(artLevelOf(TWIG_SNAPPER, 8, true, "main")).toBe(6);
     expect(artLevelOf(TWIG_SNAPPER, 8, false, "inferno")).toBe(6);

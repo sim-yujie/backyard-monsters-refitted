@@ -73,7 +73,8 @@ export const buildAnimLayers = (building: YardBuilding, art: ResolvedArt): AnimL
       sprite,
       policy,
       // A strip of several rows (the 3D Laser's tilts) starts in its first, the head nearest level.
-      progress: startFrame(policy, anim.columns ?? anim.frames, building.id),
+      // A strip whose rest is cell 0 (the Inferno's 3D Strongbox) starts there, not on a cell of its own.
+      progress: anim.home ? 0 : startFrame(policy, anim.columns ?? anim.frames, building.id),
       resolved: false,
     };
   });

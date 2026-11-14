@@ -197,6 +197,8 @@ describe("the 3D yard buildings", () => {
       [1, INFERNO_BUILDING_3D_ART[1] ?? [], "inferno"] as const,
       [2, INFERNO_BUILDING_3D_ART[2] ?? [], "inferno"] as const,
       [3, INFERNO_BUILDING_3D_ART[3] ?? [], "inferno"] as const,
+      [4, INFERNO_BUILDING_3D_ART[4] ?? [], "inferno"] as const,
+      [8, INFERNO_BUILDING_3D_ART[8] ?? [], "inferno"] as const,
     ];
     for (const [type, looks, kind] of sets) {
       const folder = `${ASSETS}${artFolder(type, kind) ?? ""}`;
@@ -340,6 +342,47 @@ describe("the 3D yard buildings", () => {
     expect(resolveArt(16, 1, ArtState.DEFAULT, "inferno")?.anims).toEqual([]);
   });
 
+  it("give the Inferno's Strongbox its one 3D look, whole cells that run only while it unlocks, on Flash's spot", () => {
+    const folder = "/assets/buildings/imonsterlab/";
+    expect((INFERNO_BUILDING_3D_ART[8] ?? []).map((look) => look.from)).toEqual([1]);
+    for (const level of [1, 2, 3, 4]) {
+      const art = resolveArt(8, level, ArtState.DEFAULT, "inferno");
+      const name = `level ${level}`;
+      expect(art?.name, name).toBe("Strongbox");
+      // Every cell is the whole building: the top is cell 0 (what it holds at rest), the still the icons' picture.
+      expect(art?.topIsAnim, name).toBe(true);
+      expect(art?.top.url, name).toBe(`${folder}anim.3d1@2x.webp`);
+      expect(art?.top.frame, name).toEqual({ width: 115, height: 127 });
+      expect(art?.still?.url, name).toBe(`${folder}top.3d1@2x.webp`);
+      expect(art?.shadow?.url, name).toBe(`${folder}shadow.3d1.jpg`);
+      // At rest it holds cell 0 (`home`): it starts there and goes back there when the unlock ends.
+      expect(art?.anims.map(({ url, frames, columns, rest, home }) => ({ url, frames, columns, rest, home })), name).toEqual([
+        { url: `${folder}anim.3d1@2x.webp`, frames: 30, columns: 17, rest: undefined, home: true },
+      ]);
+      // Flash has no damaged or destroyed picture for it: the whole look when damaged (the yard tints it), and
+      // the 3D still when destroyed, never Flash's painting.
+      expect(resolveArt(8, level, ArtState.DAMAGED, "inferno")?.top.url, name).toBe(`${folder}anim.3d1@2x.webp`);
+      const destroyed = resolveArt(8, level, ArtState.DESTROYED, "inferno");
+      expect(destroyed?.top.url, name).toBe(`${folder}top.3d1@2x.webp`);
+      expect(destroyed?.shadow?.url, name).toBe(`${folder}shadow.3d1.jpg`);
+      expect(destroyed?.anims, name).toEqual([]);
+    }
+    // It stands where Flash's does: Flash's at rest is its top (the cage) and cell 0 of its strip (the lock).
+    const flashFolder = `${ASSETS}buildings/imonsterlab/`;
+    const want = union([drawn(`${flashFolder}top.1.v2.png`, -56, 8), drawn(`${flashFolder}anim.1.v2.png`, -42, -41, 86, 88)]);
+    const [file, x, y] = INFERNO_BUILDING_3D_ART[8]?.[0]?.top ?? ["", 0, 0];
+    const [width, height] = webpSize(`${flashFolder}${file}`);
+    const got: Box = [x, y, x + width / 2, y + height / 2];
+    for (const side of [0, 1, 2, 3]) expect(Math.abs((got[side] ?? 0) - (want[side] ?? 0)), `side ${side}`).toBeLessThanOrEqual(2);
+    // The main yard's Monster Locker keeps its own 3D look; the Classic look is Flash's Strongbox.
+    expect(resolveArt(8, 1, ArtState.DEFAULT, "main")?.top.url).toContain("/assets/buildings/monsterlocker/");
+    setClassicLook(true);
+    expect(resolveArt(8, 1, ArtState.DEFAULT, "inferno")?.top.url).toBe(`${folder}top.1.v2.png`);
+    expect(resolveArt(8, 1, ArtState.DEFAULT, "inferno")?.anims.map(({ url, frames }) => ({ url, frames }))).toEqual([
+      { url: `${folder}anim.1.v2.png`, frames: 31 },
+    ]);
+  });
+
   it("give the Inferno's Bone Cruncher its three 3D tiers, from levels 3 and 7, its bones crunching in 36 cells", () => {
     const folder = "/assets/buildings/iboneharvester/";
     const looks = INFERNO_BUILDING_3D_ART[1] ?? [];
@@ -427,6 +470,38 @@ describe("the 3D yard buildings", () => {
     setClassicLook(true);
     expect(resolveArt(3, 1, ArtState.DEFAULT, "inferno")?.top.url).toBe(`${folder}top.1.v2.png`);
     expect(resolveArt(3, 7, ArtState.DEFAULT, "inferno")?.top.url).toBe(`${folder}top.2.png`);
+  });
+
+  it("give the Inferno's Magma Pump its three 3D tiers, from levels 3 and 7, in Flash's 49 cells", () => {
+    const folder = "/assets/buildings/imagmaproducer/";
+    const looks = INFERNO_BUILDING_3D_ART[4] ?? [];
+    expect(looks.map((look) => look.from)).toEqual([1, 3, 7]);
+    for (const level of [1, 2, 3, 6, 7, 10]) {
+      const look = [...looks].reverse().find((one) => one.from <= level);
+      const art = resolveArt(4, level, ArtState.DEFAULT, "inferno");
+      const name = `level ${level}`;
+      expect(art?.name, name).toBe("Magma Pump");
+      expect(art?.top.url, name).toBe(`${folder}${look?.anim?.body?.[0] ?? ""}`);
+      expect(art?.still?.url, name).toBe(`${folder}${look?.top[0] ?? ""}`);
+      expect(art?.shadow?.url, name).toBe(`${folder}${look?.shadow?.[0] ?? ""}`);
+      expect(art?.anims.map(({ url, frames }) => ({ url, frames })), name).toEqual([
+        { url: `${folder}${look?.anim?.strip[0] ?? ""}`, frames: 49 },
+      ]);
+    }
+    // Each tier has its own 3D damaged still; destroyed is Flash's rubble, as every other 3D building's.
+    for (const [level, tier] of [[1, 1], [2, 1], [3, 3], [6, 3], [7, 7], [10, 7]] as const) {
+      const damaged = resolveArt(4, level, ArtState.DAMAGED, "inferno");
+      expect(damaged?.top.url, `level ${level}`).toBe(`${folder}top.3d${tier}.damaged@2x.webp`);
+      expect(damaged?.anims, `level ${level}`).toEqual([]);
+      expect(damaged?.shadow?.url, `level ${level}`).toBe(`${folder}shadow.3d${tier}.damaged.jpg`);
+      const destroyed = resolveArt(4, level, ArtState.DESTROYED, "inferno");
+      expect(destroyed?.top.url, `level ${level}`).toBe(`${folder}top.1.destroyed.v2.png`);
+    }
+    // The main yard's Goo Factory keeps its own 3D look; the Classic look is Flash's Magma Pump.
+    expect(resolveArt(4, 7, ArtState.DEFAULT, "main")?.top.url).toContain("/assets/buildings/goofactory");
+    setClassicLook(true);
+    expect(resolveArt(4, 1, ArtState.DEFAULT, "inferno")?.top.url).toBe(`${folder}top.1.v2.png`);
+    expect(resolveArt(4, 7, ArtState.DEFAULT, "inferno")?.top.url).toBe(`${folder}top.1.v2.png`);
   });
 
   it("never show in an Inferno yard: the Inferno's own art there, even where it shares Flash's folder", () => {
