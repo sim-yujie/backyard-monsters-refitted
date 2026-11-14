@@ -197,6 +197,7 @@ describe("the 3D yard buildings", () => {
       [1, INFERNO_BUILDING_3D_ART[1] ?? [], "inferno"] as const,
       [2, INFERNO_BUILDING_3D_ART[2] ?? [], "inferno"] as const,
       [3, INFERNO_BUILDING_3D_ART[3] ?? [], "inferno"] as const,
+      [4, INFERNO_BUILDING_3D_ART[4] ?? [], "inferno"] as const,
       [8, INFERNO_BUILDING_3D_ART[8] ?? [], "inferno"] as const,
     ];
     for (const [type, looks, kind] of sets) {
@@ -469,6 +470,38 @@ describe("the 3D yard buildings", () => {
     setClassicLook(true);
     expect(resolveArt(3, 1, ArtState.DEFAULT, "inferno")?.top.url).toBe(`${folder}top.1.v2.png`);
     expect(resolveArt(3, 7, ArtState.DEFAULT, "inferno")?.top.url).toBe(`${folder}top.2.png`);
+  });
+
+  it("give the Inferno's Magma Pump its three 3D tiers, from levels 3 and 7, in Flash's 49 cells", () => {
+    const folder = "/assets/buildings/imagmaproducer/";
+    const looks = INFERNO_BUILDING_3D_ART[4] ?? [];
+    expect(looks.map((look) => look.from)).toEqual([1, 3, 7]);
+    for (const level of [1, 2, 3, 6, 7, 10]) {
+      const look = [...looks].reverse().find((one) => one.from <= level);
+      const art = resolveArt(4, level, ArtState.DEFAULT, "inferno");
+      const name = `level ${level}`;
+      expect(art?.name, name).toBe("Magma Pump");
+      expect(art?.top.url, name).toBe(`${folder}${look?.anim?.body?.[0] ?? ""}`);
+      expect(art?.still?.url, name).toBe(`${folder}${look?.top[0] ?? ""}`);
+      expect(art?.shadow?.url, name).toBe(`${folder}${look?.shadow?.[0] ?? ""}`);
+      expect(art?.anims.map(({ url, frames }) => ({ url, frames })), name).toEqual([
+        { url: `${folder}${look?.anim?.strip[0] ?? ""}`, frames: 49 },
+      ]);
+    }
+    // Each tier has its own 3D damaged still; destroyed is Flash's rubble, as every other 3D building's.
+    for (const [level, tier] of [[1, 1], [2, 1], [3, 3], [6, 3], [7, 7], [10, 7]] as const) {
+      const damaged = resolveArt(4, level, ArtState.DAMAGED, "inferno");
+      expect(damaged?.top.url, `level ${level}`).toBe(`${folder}top.3d${tier}.damaged@2x.webp`);
+      expect(damaged?.anims, `level ${level}`).toEqual([]);
+      expect(damaged?.shadow?.url, `level ${level}`).toBe(`${folder}shadow.3d${tier}.damaged.jpg`);
+      const destroyed = resolveArt(4, level, ArtState.DESTROYED, "inferno");
+      expect(destroyed?.top.url, `level ${level}`).toBe(`${folder}top.1.destroyed.v2.png`);
+    }
+    // The main yard's Goo Factory keeps its own 3D look; the Classic look is Flash's Magma Pump.
+    expect(resolveArt(4, 7, ArtState.DEFAULT, "main")?.top.url).toContain("/assets/buildings/goofactory");
+    setClassicLook(true);
+    expect(resolveArt(4, 1, ArtState.DEFAULT, "inferno")?.top.url).toBe(`${folder}top.1.v2.png`);
+    expect(resolveArt(4, 7, ArtState.DEFAULT, "inferno")?.top.url).toBe(`${folder}top.1.v2.png`);
   });
 
   it("never show in an Inferno yard: the Inferno's own art there, even where it shares Flash's folder", () => {

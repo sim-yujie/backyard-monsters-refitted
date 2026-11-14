@@ -78,6 +78,14 @@ describe("the build menu's Modern pictures", () => {
     expect(buildPicture(3, "inferno", true)).toEqual({ url: buttonUrl(3, "inferno"), modern: false });
   });
 
+  it("the Inferno's 3D Magma Pump has a Modern picture of its own, not the Goo Factory's", () => {
+    const picture = buildPicture(4, "inferno", false);
+    expect(picture.modern).toBe(true);
+    expect(picture.url).toMatch(/\/modern\/4\.inferno\.[0-9a-f]{8}\.webp$/);
+    expect(picture.url).not.toBe(buildPicture(4, "main", false).url);
+    expect(buildPicture(4, "inferno", true)).toEqual({ url: buttonUrl(4, "inferno"), modern: false });
+  });
+
   it("the Inferno's 3D Bone Cruncher has a Modern picture of its own, not the Twig Snapper's", () => {
     const picture = buildPicture(1, "inferno", false);
     expect(picture.modern).toBe(true);
