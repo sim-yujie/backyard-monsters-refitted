@@ -32,7 +32,7 @@ from pathlib import Path
 
 import bmesh
 import bpy
-from mathutils import Vector
+from mathutils import Matrix, Vector
 
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
@@ -55,9 +55,11 @@ MATS = kit.MATS
 HX, HY, BH = 1.85, 2.4, 4.0               # the body: half sizes and height
 LIFT = 0.0 if T == 1 else 0.45            # tiers 2 and 3 stand on feet
 Z0, TOP = LIFT, LIFT + BH
-POT_H = 1.5 if T == 1 else 1.75
-POT = Vector((0.0, 0.0, 0.0))
-SK_R, SK_H, NECK = 1.72, 0.6, 0.9           # the skirt under the pot (radius, height) and the height of the pot's foot
+POT_H = 1.4                               # the pot: a squat bowl, wider than tall, the same at every tier
+POT = Vector((-0.6, 0.6, 0.0))             # toward the back of the lid, as Flash's: the rays fan out in front of it
+TILT = 10.0                               # the bowl leans this many degrees straight away from the camera: Flash draws
+                                          # its mouth flatter than the box's own view would show it
+NECK = 0.85                               # the glowing funnel the bowl sits on (mostly hidden behind the bowl's front)
 FL = Vector((HX, 0.0, Z0 + 1.68))        # the flange's centre on the right face
 WELL = Vector((HX + 2.05, -0.12, 0.0))     # the well in the ground
 
@@ -116,26 +118,91 @@ def glow(name, lo, mid, hi, strength, scale=3.0, cut=0.45):
     return t.m
 
 
-def smoke_mat(name):
-    """A soft puff: see-through toward its rim, its strength set by turn()."""
-    t = kit.NT(name)
-    col = kit.srgb(206, 124, 62)
-    t.set(**{"Base Color": col, "rough": 1.0, "spec": 0.0})
-    t.bsdf.inputs["Emission Color"].default_value = col
-    t.bsdf.inputs["Emission Strength"].default_value = 0.55
-    lw = t.n("ShaderNodeLayerWeight")
-    lw.inputs["Blend"].default_value = 0.35
-    inv = t.n("ShaderNodeMath", operation="SUBTRACT")
-    inv.inputs[0].default_value = 1.0
-    t.link(lw.outputs["Facing"], inv.inputs[1])
-    pw = t.n("ShaderNodeMath", operation="POWER")
-    t.link(inv.outputs[0], pw.inputs[0])
-    pw.inputs[1].default_value = 1.2
-    mul = t.n("ShaderNodeMath", operation="MULTIPLY")
-    t.link(pw.outputs[0], mul.inputs[0])
-    mul.inputs[1].default_value = 0.0
-    t.link(mul.outputs[0], t.bsdf.inputs["Alpha"])
-    return t.m, mul
+VOL = {}         # the smoke column's animated nodes
+
+
+def smoke_mat():
+    """The smoke: one soft column of brown-orange haze (a volume that glows its own colour and hides what is behind
+    it, so it looks the same in any light). turn() sets how high its head and tail have risen and how thick it is."""
+    m = bpy.data.materials.new("smoke")
+    m.use_nodes = True
+    nt = m.node_tree
+    for n in list(nt.nodes):
+        nt.nodes.remove(n)
+    N_, L_ = nt.nodes.new, nt.links.new
+
+    def math_(op, a=None, b=None):
+        n = N_("ShaderNodeMath")
+        n.operation = op
+        for i, v in enumerate((a, b)):
+            if v is None:
+                continue
+            if isinstance(v, (int, float)):
+                n.inputs[i].default_value = v
+            else:
+                L_(v, n.inputs[i])
+        return n
+
+    def smooth(v, lo, hi, a, b):
+        n = N_("ShaderNodeMapRange")
+        n.interpolation_type = "SMOOTHSTEP"
+        L_(v, n.inputs["Value"])
+        n.inputs["From Min"].default_value, n.inputs["From Max"].default_value = lo, hi
+        n.inputs["To Min"].default_value, n.inputs["To Max"].default_value = a, b
+        return n
+
+    out = N_("ShaderNodeOutputMaterial")
+    tc = N_("ShaderNodeTexCoord")
+    sep = N_("ShaderNodeSeparateXYZ")
+    L_(tc.outputs["Object"], sep.inputs[0])
+    z = sep.outputs["Z"]
+    flat = N_("ShaderNodeVectorMath")
+    flat.operation = "MULTIPLY"
+    L_(tc.outputs["Object"], flat.inputs[0])
+    flat.inputs[1].default_value = (1, 1, 0)
+    ln = N_("ShaderNodeVectorMath")
+    ln.operation = "LENGTH"
+    L_(flat.outputs[0], ln.inputs[0])
+    rise = N_("ShaderNodeVectorMath")          # the haze's grain rises with the column
+    rise.operation = "SUBTRACT"
+    L_(tc.outputs["Object"], rise.inputs[0])
+    noise = N_("ShaderNodeTexNoise")
+    L_(rise.outputs[0], noise.inputs["Vector"])
+    noise.inputs["Scale"].default_value = 0.9
+    noise.inputs["Detail"].default_value = 2.5
+    noise.inputs["Roughness"].default_value = 0.5
+    nz = noise.outputs[0]
+    # the column's radius: narrow in the mouth, wider higher up, its outline ragged by the grain
+    rad = math_("MULTIPLY_ADD", z, 0.27)
+    rad.inputs[2].default_value = 1.0
+    q = math_("DIVIDE", ln.outputs["Value"], rad.outputs[0])
+    q2 = math_("MULTIPLY_ADD", math_("SUBTRACT", nz, 0.5).outputs[0], 1.1)
+    L_(q.outputs[0], q2.inputs[2])
+    radial = smooth(q2.outputs[0], 0.15, 1.0, 1.0, 0.0)
+    head = smooth(z, 0.0, 1.0, 1.0, 0.0)
+    tail = smooth(z, 0.0, 1.0, 0.0, 1.0)
+    d = math_("MULTIPLY", math_("MULTIPLY", radial.outputs[0], head.outputs[0]).outputs[0], tail.outputs[0])
+    dens = math_("MULTIPLY", d.outputs[0], 0.0)
+    ramp = N_("ShaderNodeMapRange")
+    L_(nz, ramp.inputs["Value"])
+    ramp.inputs["From Min"].default_value, ramp.inputs["From Max"].default_value = 0.35, 0.7
+    mix = N_("ShaderNodeMix")
+    mix.data_type = "RGBA"
+    L_(ramp.outputs[0], mix.inputs["Factor"])
+    mix.inputs["A"].default_value = kit.srgb(176, 98, 52)
+    mix.inputs["B"].default_value = kit.srgb(220, 134, 70)
+    em = N_("ShaderNodeEmission")
+    L_(mix.outputs["Result"], em.inputs["Color"])
+    L_(dens.outputs[0], em.inputs["Strength"])
+    ab = N_("ShaderNodeVolumeAbsorption")
+    ab.inputs["Color"].default_value = (0, 0, 0, 1)
+    L_(dens.outputs[0], ab.inputs["Density"])
+    add = N_("ShaderNodeAddShader")
+    L_(em.outputs[0], add.inputs[0])
+    L_(ab.outputs[0], add.inputs[1])
+    L_(add.outputs[0], out.inputs["Volume"])
+    VOL.update(head=head, tail=tail, dens=dens, rise=rise)
+    return m
 
 
 def m_body():
@@ -149,8 +216,33 @@ def m_lid():
 
 
 def m_brass():
-    return mat("brass", (196, 112, 10), rough=0.36, metal=0.15, wear=(240, 170, 30), rust=(140, 74, 12), rust_at=0.66, mottle=0.12, wear_amt=0.4,
-               scale=3.2, dirt=0.5, streak=(140, 74, 12), top=(255, 204, 60))
+    """Flash's brass: deep gold, brown in the shade, with bright worn edges."""
+    if "brass" in MATS:
+        return MATS["brass"]
+    m = mat("brass", (190, 100, 6), rough=0.3, metal=0.6, wear=(240, 160, 16), rust=(96, 46, 6), rust_at=0.6, mottle=0.2, wear_amt=0.6,
+            scale=3.2, dirt=0.6, streak=(96, 46, 6), top=(255, 196, 36), ao_min=0.35)
+    nt = m.node_tree
+    bsdf = next(n for n in nt.nodes if n.type == "BSDF_PRINCIPLED")
+    src = bsdf.inputs["Base Color"].links[0].from_socket
+    bev = nt.nodes.new("ShaderNodeBevel")
+    bev.samples = 6
+    bev.inputs["Radius"].default_value = 0.08
+    geo = nt.nodes.new("ShaderNodeNewGeometry")
+    dot = nt.nodes.new("ShaderNodeVectorMath")
+    dot.operation = "DOT_PRODUCT"
+    nt.links.new(bev.outputs[0], dot.inputs[0])
+    nt.links.new(geo.outputs["Normal"], dot.inputs[1])
+    edge = nt.nodes.new("ShaderNodeMapRange")
+    nt.links.new(dot.outputs["Value"], edge.inputs["Value"])
+    edge.inputs["From Min"].default_value, edge.inputs["From Max"].default_value = 0.995, 0.9
+    edge.inputs["To Min"].default_value, edge.inputs["To Max"].default_value = 0.0, 0.85
+    mix = nt.nodes.new("ShaderNodeMix")
+    mix.data_type = "RGBA"
+    nt.links.new(edge.outputs[0], mix.inputs["Factor"])
+    nt.links.new(src, mix.inputs["A"])
+    mix.inputs["B"].default_value = kit.srgb(255, 200, 44)
+    nt.links.new(mix.outputs["Result"], bsdf.inputs["Base Color"])
+    return m
 
 
 def m_yellow():
@@ -163,7 +255,7 @@ def m_gold():
 
 
 def m_bronze():
-    return mat("bronze", (118, 98, 82), rough=0.5, metal=0.5, wear=(176, 154, 128), rust=(66, 50, 40), scale=4.0, dirt=0.15)
+    return mat("bronze", (146, 128, 110), rough=0.6, metal=0.25, wear=(204, 184, 152), rust=(84, 66, 54), scale=4.0, dirt=0.25)
 
 
 def m_rim():
@@ -187,7 +279,7 @@ def m_well():
 
 
 def m_vent():
-    return glow("vent", (196, 40, 8), (250, 104, 12), (255, 190, 40), 1.5, scale=2.2, cut=0.45)
+    return glow("vent", (244, 96, 8), (255, 128, 14), (255, 168, 34), 1.5, scale=0.9, cut=0.5)
 
 
 def m_ray():
@@ -266,7 +358,6 @@ def spline(pts, n=40):
 
 
 # ------------------------------------------------------------------------------------------------------------ animation
-SMOKE = []       # (object, alpha node, start, life, drift)
 LUMP = []        # (object, path)
 
 
@@ -288,18 +379,15 @@ def turn(k):
           "mouth": (1.0 + 40.0 * win(f, 0.5, 0.99, 0.13)) if T < 3 else (1.0 + 0.5 * win(f, 0.5, 0.99, 0.13))}
     for name, (bsdf, rest) in GLOW.items():
         bsdf.inputs["Emission Strength"].default_value = rest * lv.get(name, 1.0)
-    for ob, node, t0, life, drift in SMOKE:
-        u = (f - t0) / life
-        if 0.0 < u < 1.0:
-            r = 0.42 + 0.75 * u
-            ob.scale = (r, r, r * 1.15)
-            ob.location = ob["rest"][:]
-            ob.location += Vector((drift[0] * u, drift[1] * u, 3.3 * u ** 0.8))
-            node.inputs[1].default_value = 0.55 * min(1.0, u * 5.0) * (1.0 - u) ** 1.2
-        else:
-            ob.scale = (0.001, 0.001, 0.001)
-            ob.location = ob["rest"][:]
-            node.inputs[1].default_value = 0.0
+    if VOL:          # the smoke: rises out of the mouth, lets go of it, thins away; nothing left well before the loop ends
+        on = 0.035 < f < 0.84
+        zh = 0.5 + 3.3 * min(1.0, max(0.0, f - 0.03) / 0.5) ** 0.8
+        zt = -0.9 + 3.3 * sstep(0.5, 0.84, f)
+        VOL["head"].inputs["From Min"].default_value, VOL["head"].inputs["From Max"].default_value = zh - 1.2, zh
+        VOL["tail"].inputs["From Min"].default_value, VOL["tail"].inputs["From Max"].default_value = zt, zt + 0.9
+        VOL["dens"].inputs[1].default_value = 3.6 * sstep(0.035, 0.12, f) * (1.0 - sstep(0.52, 0.82, f)) if on else 0.0
+        VOL["rise"].inputs[1].default_value = (0.0, 0.0, 3.6 * f)
+        VOL["ob"].scale = (1, 1, 1) if on else (0.001, 0.001, 0.001)
     for ob, path in LUMP:
         s = (0.04 + 0.92 * f) * (len(path) - 1)
         j = min(int(s), len(path) - 2)
@@ -325,16 +413,16 @@ def posts():
     """Brass angle posts on the corners seen; the front one flares into a chevron under the lid."""
     w = 0.6 if T == 1 else 0.74
     W = 1.2 if T == 1 else 1.32
-    t = 0.14
+    t = 0.24
     h = BH + 0.06
-    chev = [(-t, 0), (W, 0), (W, -0.35), (w, -0.35 - (W - w) * 1.5), (w, -h), (-t, -h)]
+    chev = [(-t, 0), (W, 0), (W, -0.35), (w, -0.35 - (W - w) * 1.5), (w, -h + 0.62), (-t, -h)]      # a pointed bottom
     plate("post-f-l", chev, LF(HX, Z0 + h), -X, Z, -Y, t, m_brass())
     plate("post-f-r", [(0.031, 0)] + chev[1:5] + [(0.031, -h)], RF(-HY, Z0 + h), Y, Z, X, t, m_brass())
     bar = [(-t, 0), (w, 0), (w, -h), (-t, -h)]
     plate("post-r-r", bar, RF(HY, Z0 + h), -Y, Z, X, t, m_brass())
     plate("post-r-b", [(0.031, 0)] + bar[1:3] + [(0.031, -h)], Vector((HX, HY, Z0 + h)), -X, Z, Y, t, m_brass())
     if T == 1:           # a short brass bracket on the left corner
-        kit.box("post-l", (0.95, 0.95, 1.1), (-HX + 0.2, -HY + 0.2, Z0 + 2.2), m_brass(), bevel=0.07)
+        kit.box("post-l", (1.0, 1.0, 1.15), (-HX + 0.2, -HY + 0.16, Z0 + 2.2), m_brass(), bevel=0.07)
     else:
         plate("post-l-l", bar, LF(-HX, Z0 + h), X, Z, -Y, t, m_brass())
         plate("post-l-b", [(0.031, 0)] + bar[1:3] + [(0.031, -h)], Vector((-HX, -HY, Z0 + h)), Y, Z, -X, t, m_brass())
@@ -351,11 +439,14 @@ def vent():
     plate("vent-frame", [(x0 - 0.1, z0 - 0.1), (x1 + 0.1, z0 - 0.1), (x1 + 0.1, z1 + 0.1), (x0 - 0.1, z1 + 0.1)], LF(0, 0), X, Z, -Y, 0.2, mat("ventframe", (120, 40, 20), rough=0.6, metal=0.3, wear=(190, 80, 30), rust=(60, 20, 12)), bevel=0.04)
     mv = mover("vent-glow")
     plate("vent-lava", [(x0, z0), (x1, z0), (x1, z1), (x0, z1)], LF(0, 0, 0.2), X, Z, -Y, 0.04, m_vent(), bevel=0.0, parent=mv, sink=0.0)
-    dark = mat("ventbar", (150, 52, 14), rough=0.6, metal=0.2, wear=(206, 96, 24), mottle=0.0, dirt=0.0)
-    nb = 5
-    for i in range(1, nb):
-        x = x0 + (x1 - x0) * i / nb
-        plate("vent-bar-%d" % i, [(x - 0.055, z0), (x + 0.055, z0), (x + 0.055, z1), (x - 0.055, z1)], LF(0, 0, 0.24), X, Z, -Y, 0.03, dark, bevel=0.0, sink=0.0)
+    # a perforated plate: a regular grid of darker slots over the glow
+    dark = mat("ventbar", (150, 44, 6), rough=0.7, metal=0.0, mottle=0.0, dirt=0.0, speck=0.0, bump=0.0)
+    nc, nr = 7, round((z1 - z0) / 0.4)
+    for i in range(nc):
+        x = x0 + (x1 - x0) * (i + 0.5) / nc
+        for j in range(nr):
+            z = z0 + (z1 - z0) * (j + 0.5) / nr
+            plate("vent-slot-%d%d" % (i, j), [(x - 0.04, z - 0.15), (x + 0.04, z - 0.15), (x + 0.04, z + 0.15), (x - 0.04, z + 0.15)], LF(0, 0, 0.24), X, Z, -Y, 0.02, dark, bevel=0.0, sink=0.0)
     # the thin yellow pipe: up the left face from the vent, over the lid's edge, a loop on the lid, back down to the left corner
     r = 0.11
     yo, zt = -HY - 0.07 - r, TOP + r - 0.01
@@ -377,13 +468,16 @@ def vent():
 def pipe():
     """The flange on the right face, the yellow elbow pipe down to the well in the ground, and the swelling in it."""
     c = FL
-    rod("flange", c - X * 0.02, c + X * 0.14, 0.86, m_brown(), res=8)
+    hub = mat("hub", (120, 72, 38), rough=0.5, metal=0.35, wear=(176, 116, 62), rust=(52, 30, 18), scale=5.0)
+    rod("flange", c - X * 0.02, c + X * 0.16, 0.8, hub, res=8)
+    rod("flange-boss", c + X * 0.1, c + X * 0.34, 0.7, m_brown(), res=8)
     for i in range(6):
         a = math.radians(30 + 60 * i)
-        p = c + Y * (1.12 * math.cos(a)) + Z * (1.12 * math.sin(a))
-        rod("flange-arm-%d" % i, c + X * 0.12, p + X * 0.12, 0.13, m_brown())
-        rod("flange-stud-%d" % i, p - X * 0.02, p + X * 0.2, 0.12, m_gold())
-        ball("flange-nut-%d" % i, p + X * 0.24, 0.2, m_gold())
+        d = Y * math.cos(a) + Z * math.sin(a)
+        p = c + d * 1.2
+        kit.tube("flange-arm-%d" % i, [c + d * 0.5 + X * 0.2, p + X * 0.2], 0.24, hub, r_end=0.15)
+        rod("flange-stud-%d" % i, p - X * 0.02, p + X * 0.3, 0.13, m_gold())
+        ball("flange-nut-%d" % i, p + X * 0.32, 0.22, m_gold())
     rod("stub", c + X * 0.1, c + X * 0.78, 0.56, m_brown(), res=8)
     rod("collar", c + X * 0.72, c + X * 1.0, 0.6, mat("collar", (150, 120, 100), rough=0.45, metal=0.5, wear=(200, 176, 150), rust=(80, 60, 50)), res=8)
     dx = WELL.x - c.x
@@ -408,71 +502,90 @@ def pipe():
 
 
 def pot():
-    """The smoke pot on the lid: a riveted band, a flared cone with glowing ribs, a notched steel rim; the sunburst
-    of glowing slots round its foot; the smoke."""
+    """The smoke pot on the lid: a squat stone bowl (a riveted band, a short flare with glowing ribs, a thick ring of
+    steel blocks round a wide dark mouth) on a glowing funnel; orange rays fan out from under it across the lid; the
+    smoke."""
     base = POT + Z * TOP
     c = base + Z * NECK
     H = POT_H
-    r0, r1 = 1.25, 1.52
-    zb = 0.8                      # the band's top
-    kit.lathe("skirt", [(SK_R, -0.05), (SK_R, 0.04), (1.0, SK_H), (0.0, SK_H)], base, m_lid(), verts=40)
-    kit.lathe("pot-foot", [(0.98, SK_H - 0.14), (0.92, NECK + 0.08), (0.0, NECK + 0.08)], base, glow("neck", (170, 40, 8), (240, 96, 14), (255, 160, 30), 1.3, scale=3.0, cut=0.4), verts=32)
-    prof = [(0.5, 0.0), (r0 - 0.06, 0.0), (r0, 0.08), (r0 + 0.02, zb - 0.06), (r0 - 0.02, zb), (r1 - 0.06, H - 0.24), (r1, H - 0.2), (r1, H), (r1 - 0.2, H),
-            (r1 - 0.24, H - 0.24), (r0 - 0.22, zb + 0.06), (r0 - 0.26, 0.3), (0.0, 0.3)]
+    r0, r1, ri = 1.44, 1.56, 1.08     # the band, the rim's outside, the mouth
+    zb = 0.5                          # the band's top
+    zr = H - 0.17                     # the rim's underside
+    before = set(bpy.data.objects)
+    neck = glow("potneck", (176, 40, 6), (236, 84, 10), (255, 136, 22), 0.8, scale=3.0, cut=0.4)
+    kit.lathe("pot-foot", [(0.56, -0.02), (0.5, 0.1), (0.72, NECK + 0.14), (0.0, NECK + 0.14)], base, neck, verts=32)
+    kit.lathe("pot-seat", [(0.8, -0.02), (0.78, 0.07), (0.54, 0.09), (0.0, 0.09)], base, m_lid(), verts=32)
+    prof = [(0.6, 0.0), (r0 - 0.07, 0.0), (r0, 0.07), (r0 + 0.02, zb - 0.05), (r0 - 0.01, zb), (r1 - 0.06, zr), (r1 - 0.06, H - 0.08), (ri, H - 0.08)]
     ob = kit.lathe("pot", prof, c, m_bronze(), verts=10)          # ten flat sides, as Flash's faceted pot
     ob.data.polygons.foreach_set("use_smooth", [False] * len(ob.data.polygons))
-    # the rim: steel blocks with gaps (Flash's notched ring)
+    dark = mat("potdark", (30, 20, 16), rough=0.9, mottle=0.0, speck=0.0, dirt=0.0, bump=0.0)
+    kit.lathe("pot-well", [(ri + 0.01, H - 0.07), (ri - 0.06, 0.3), (0.0, 0.3)], c, dark, verts=28)
+    # the rim: thick steel blocks with gaps (Flash's segmented ring)
     nb = 10
     for i in range(nb):
-        a0, a1 = 2 * math.pi * (i + 0.06) / nb, 2 * math.pi * (i + 0.94) / nb
+        a0, a1 = 2 * math.pi * (i + 0.07) / nb, 2 * math.pi * (i + 0.93) / nb
         pts = []
-        for rr in (r1 + 0.02, r1 - 0.24):
+        for rr in (r1 + 0.02, ri - 0.02):
             seq = [a0, a1]
             if rr < r1:
                 seq = seq[::-1]
             pts += [(rr * math.cos(a), rr * math.sin(a)) for a in seq]
-        plate("rim-%d" % i, pts, c + Z * (H - 0.04), X, Y, Z, 0.15, m_rim(), bevel=0.03)
+        plate("rim-%d" % i, pts, c + Z * zr, X, Y, Z, 0.17, m_rim(), bevel=0.04, sink=0.0)
     for i in range(10):
         a = 2 * math.pi * (i + 0.5) / 10
         d = Vector((math.cos(a), math.sin(a), 0))
-        ball("pot-rivet-%d" % i, c + d * (r0 + 0.04) + Z * 0.32, 0.1, m_gold())
+        ball("pot-rivet-%d" % i, c + d * (r0 + 0.03) + Z * 0.25, 0.1, m_gold())
     mr = mover("ribs")
     for i in range(10):
         a = 2 * math.pi * i / 10
         d = Vector((math.cos(a), math.sin(a), 0))
-        rod("rib-%d" % i, c + d * (r0 + 0.02) + Z * (zb + 0.03), c + d * (r1 - 0.04) + Z * (H - 0.26), 0.05, m_rib(), parent=mr)
+        rod("rib-%d" % i, c + d * (r0 + 0.02) + Z * (zb + 0.02), c + d * (r1 - 0.05) + Z * (zr - 0.02), 0.05, m_rib(), parent=mr)
     mm = mover("mouth")
-    kit.cyl("mouth-lava", r0 - 0.2, 0.06, c + Z * (0.34 if T < 3 else zb + 0.45), m_mouth() if T < 3 else glow("mouth", (190, 50, 8), (250, 120, 18), (255, 210, 70), 1.6, scale=2.4, cut=0.45),
-            verts=28, bevel=0.0, parent=mm, r2=(r0 - 0.2) if T < 3 else r0 + 0.02)
-    # the sunburst: glowing slots in the lid round the pot's foot
-    nr = 12
+    if T < 3:            # dark at rest: only its glow shows
+        bs = GLOW.get("mouth") or (m_mouth() and GLOW["mouth"])
+        for l in list(bs[0].inputs["Base Color"].links):
+            bs[0].id_data.links.remove(l)
+        bs[0].inputs["Base Color"].default_value = kit.srgb(34, 18, 12)
+    kit.cyl("mouth-lava", ri - 0.08, 0.05, c + Z * (H - 0.55 if T < 3 else H - 0.3), m_mouth() if T < 3 else glow("mouth", (190, 50, 8), (250, 120, 18), (255, 210, 70), 1.6, scale=2.4, cut=0.45),
+            verts=28, bevel=0.0, parent=mm)
+    # the sunburst: glowing rays flat on the lid, fanning out from under the pot (kept clear of the pipes on the lid)
+    nr = 14
     for i in range(nr):
         a = 2 * math.pi * (i + 0.5) / nr
         d = Vector((math.cos(a), math.sin(a), 0))
         side = Vector((-d.y, d.x, 0))
-        u = (d * (SK_R - 1.02) - Z * (SK_H - 0.06)).normalized()          # down the skirt's slope
-        n = side.cross(u)
-        n = n if n.z > 0 else -n
-        ln = (Vector((SK_R - 1.02, 0, SK_H - 0.06))).length
-        plate("ray-%d" % i, [(0.0, -0.1), (ln * 0.92, -0.012), (ln * 0.92, 0.012), (0.0, 0.1)], base + d * 1.02 + Z * (SK_H - 0.04), u, side, n, 0.02, m_ray(), bevel=0.0, sink=0.02)
-    if T >= 2:           # a brass crown ring under the rim
-        kit.ring("pot-crown", r1 + 0.03, 0.09, m_brass(), z=0.0).location = c + Z * (H - 0.26)
-        kit.ring("pot-belt", r0 + 0.05, 0.07, m_brass(), z=0.0).location = c + Z * 0.06
+        lim = [((1.56 if d.x > 0 else -1.56) - POT.x) / d.x if abs(d.x) > 1e-3 else 9.0,
+               ((1.14 if d.y > 0 else -1.36) - POT.y) / d.y if abs(d.y) > 1e-3 else 9.0]
+        reach = min(2.3, *lim)
+        if reach < 1.15:
+            continue
+        ln = reach - 0.74
+        plate("ray-%d" % i, [(0.0, -0.085), (ln, -0.02), (ln, 0.02), (0.0, 0.085)], base + d * 0.74, d, side, Z, 0.012, m_ray(), bevel=0.0, sink=0.02)
+    if T >= 2:           # brass rings under the rim and round the band's foot
+        kit.ring("pot-crown", r1 - 0.02, 0.08, m_brass(), z=0.0).location = c + Z * (zr - 0.06)
+        kit.ring("pot-belt", r0 + 0.04, 0.07, m_brass(), z=0.0).location = c + Z * 0.05
     if T == 3:           # iron spikes on the rim
         for i in range(nb):
             a = 2 * math.pi * (i + 0.5) / nb
             d = Vector((math.cos(a), math.sin(a), 0))
-            kit.cyl("pot-spike-%d" % i, 0.11, 0.6, c + d * (r1 - 0.1) + Z * (H + 0.12), m_iron(), verts=10, r2=0.01, bevel=0.0,
+            kit.cyl("pot-spike-%d" % i, 0.12, 0.6, c + d * ((r1 + ri) / 2 + 0.06) + Z * (H - 0.03), m_iron(), verts=10, r2=0.01, bevel=0.0,
                     rot=(math.degrees(-0.35 * d.y), math.degrees(0.35 * d.x), 0))
+    # lean the bowl (everything made above but its foot, seat and the rays) about the top of the foot
+    lean = Vector((-1, 1, 0)).normalized()
+    M = Matrix.Translation(c) @ Matrix.Rotation(math.radians(TILT), 4, Z.cross(lean)) @ Matrix.Translation(-c)
+    bpy.context.view_layer.update()
+    for o in bpy.data.objects:
+        if o not in before and o.parent is None and not o.name.startswith(("pot-foot", "pot-seat", "ray-")):
+            o.matrix_world = M @ o.matrix_world
     # the smoke
     ms = mover("smoke")
-    nsm = 16 if T < 3 else 20
-    for i in range(nsm):
-        m, node = smoke_mat("smoke-%d" % i)
-        at = c + Vector((rnd.uniform(-0.45, 0.45), rnd.uniform(-0.45, 0.45), H - 0.3))
-        ob = kit.blob("puff-%d" % i, at, 1.0, squash=1.0, mat=m, parent=ms)
-        ob["rest"] = at[:]
-        SMOKE.append((ob, node, 0.035 + 0.44 * i / nsm, 0.46, (rnd.uniform(-0.7, 0.7), rnd.uniform(-0.7, 0.7))))
+    bm = bmesh.new()
+    bmesh.ops.create_cone(bm, cap_ends=True, segments=24, radius1=1.5, radius2=2.7, depth=4.6)
+    for v in bm.verts:
+        v.co.z += 2.3 - 0.4
+    ob = kit.mesh_ob("smoke-column", bm, [smoke_mat()], bevel=0.0, parent=ms)
+    ob.location = M @ (c + Z * (H - 0.35))          # out of the leaning mouth, straight up
+    VOL["ob"] = ob
 
 
 def tank():
@@ -499,36 +612,27 @@ def tank():
     zt = TOP + r - 0.01
     side = Vector((HX + 0.06 + r, y - 0.62, 0))
     pts = [top - Z * 0.05 - Y * 0.3, Vector((top.x, side.y, top.z + 0.12)), Vector((side.x, side.y, top.z + 0.12)), Vector((side.x, side.y, TOP - 0.22)),
-           Vector((HX - 0.12, side.y, zt)), Vector((1.25, side.y, zt)), Vector((0.95, 0.85, zt + 0.2))]
+           Vector((HX - 0.12, side.y, zt)), Vector((1.2, side.y, zt)), Vector((1.2, side.y, TOP - 0.1))]
     kit.tube("tank-feed", pts, r, m_yellow())
+    kit.cyl("tank-feed-sock", 0.15, 0.07, (1.2, side.y, TOP - 0.01), m_brass(), verts=14, bevel=0.02)
 
 
 def belt():
-    """Tier 3: a riveted iron belt under the lid on both faces seen, with glowing slots."""
-    z0, z1 = Z0 + 2.72, Z0 + 3.36
+    """Tier 3: a riveted iron belt round the lid's side on both faces seen, with glowing slots. On the left face it is
+    two short plates that sit between the feed pipes and the front post, so no pipe crosses it."""
+    z0, z1 = TOP - 0.66, TOP - 0.2
     ms = mover("slots")
     slot = glow("slot", (200, 54, 8), (255, 126, 18), (255, 224, 80), 3.0, scale=3.0, cut=0.4)
-    # left face: between the left post and the front chevron
-    a0, a1 = -HX + 0.7, HX - 1.3
-    plate("belt-l", [(a0, z0), (a1, z0), (a1, z1), (a0, z1)], LF(0, 0), X, Z, -Y, 0.1, m_iron(), bevel=0.03)
-    b0, b1 = -HY + 1.3, HY - 0.7
-    plate("belt-r", [(b0, z0 + 0.5), (b1, z0 + 0.5), (b1, z1 + 0.28), (b0, z1 + 0.28)], RF(0, 0), Y, Z, X, 0.1, m_iron(), bevel=0.03)
-    for i in range(5):
-        x = a0 + 0.3 + (a1 - a0 - 0.6) * i / 4
-        if abs(x + 0.35) < 0.2 or abs(x + 1.35) < 0.2:
-            continue
-        plate("slot-l-%d" % i, [(x - 0.07, z0 + 0.14), (x + 0.07, z0 + 0.14), (x + 0.07, z1 - 0.14), (x - 0.07, z1 - 0.14)], LF(0, 0, 0.1), X, Z, -Y, 0.012, slot, bevel=0.0, parent=ms, sink=0.0)
-    for i in range(7):
-        yy = b0 + 0.25 + (b1 - b0 - 0.5) * i / 6
-        if abs(yy - 1.24) < 0.2:
-            continue
-        plate("slot-r-%d" % i, [(yy - 0.07, z0 + 0.62), (yy + 0.07, z0 + 0.62), (yy + 0.07, z1 + 0.16), (yy - 0.07, z1 + 0.16)], RF(0, 0, 0.1), Y, Z, X, 0.012, slot, bevel=0.0, parent=ms, sink=0.0)
-    for i, x in enumerate((a0 + 0.1, a1 - 0.1)):
-        for j, z in enumerate((z0 + 0.1, z1 - 0.1)):
-            ball("belt-rivet-l%d%d" % (i, j), LF(x, z, 0.1), 0.06, m_brass())
-    for i, yy in enumerate((b0 + 0.1, b1 - 0.1)):
-        for j, z in enumerate((z0 + 0.6, z1 + 0.18)):
-            ball("belt-rivet-r%d%d" % (i, j), RF(yy, z, 0.1), 0.06, m_brass())
+    o = 0.07                                   # the lid stands this far out from the body
+    spans = [("l0", LF, X, -Y, -1.06, -0.56, 2), ("l1", LF, X, -Y, -0.13, HX - 1.44, 2), ("r", RF, Y, X, -HY + 1.44, 1.14, 6)]
+    for name, F, u, n, a0, a1, k in spans:
+        plate("belt-" + name, [(a0, z0), (a1, z0), (a1, z1), (a0, z1)], F(0, 0, o), u, Z, n, 0.09, m_iron(), bevel=0.03)
+        for i in range(k):
+            x = a0 + (a1 - a0) * (i + 0.5) / k
+            plate("slot-%s-%d" % (name, i), [(x - 0.065, z0 + 0.1), (x + 0.065, z0 + 0.1), (x + 0.065, z1 - 0.1), (x - 0.065, z1 - 0.1)], F(0, 0, o + 0.09), u, Z, n, 0.012, slot, bevel=0.0, parent=ms, sink=0.0)
+        for i, x in enumerate((a0 + 0.07, a1 - 0.07)):
+            for j, z in enumerate((z0 + 0.07, z1 - 0.07)):
+                ball("belt-rivet-%s%d%d" % (name, i, j), F(x, z, o + 0.09), 0.045, m_brass())
 
 
 def build():
