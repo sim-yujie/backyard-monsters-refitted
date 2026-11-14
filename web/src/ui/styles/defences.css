@@ -50,7 +50,7 @@
 }
 
 .defences-screen .panel__body {
-  flex: 1;
+  flex: 1 1 auto;
   min-height: 0;
   max-height: none;
   padding: 0;
@@ -78,7 +78,7 @@
 /* ── The rows ───────────────────────────────────────────────────────────── */
 
 .defences-list {
-  flex: 1;
+  flex: 1 1 auto;
   min-height: 0;
   margin: 0;
   padding: 0;

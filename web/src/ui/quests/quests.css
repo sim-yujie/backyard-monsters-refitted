@@ -89,7 +89,7 @@
 
 .quests-panel .panel__body {
   display: flex;
-  flex: 1;
+  flex: 1 1 auto;
   flex-direction: column;
   min-height: 0;
   padding: 0;
@@ -129,7 +129,7 @@
 
 .quests-pane {
   display: flex;
-  flex: 1;
+  flex: 1 1 auto;
   flex-direction: column;
   gap: var(--space-4);
   min-height: 0;

@@ -488,6 +488,18 @@ select option {
     transform: none;
   }
 
+  /* A window that fits its content (no `--centre-height`: Build, Goals,
+     Events, Quests, Alerts, Defences) gets `max-content` above while it is
+     pinned at both top and bottom. Safari (the owner's iPad, 15 Nov) then
+     takes a zero flex basis (`flex: 1`) at its word, so the body and the list
+     that scrolls in it were sized to nothing: Build ended under its tabs,
+     Goals after one row. Its body, and each window's own scroll box
+     (`flex: 1 1 auto` in its CSS), start from their content's height and
+     shrink from there, which every browser agrees on. */
+  .overlay__layer > .panel.panel--centre > .panel__body {
+    flex-basis: auto;
+  }
+
   /* The painted name plate rides up over the frame's top edge, and the close
      disc 12px (skin.css): the band's top leaves room for the higher. */
   :root[data-skin] .overlay__layer > .panel.panel--centre {
