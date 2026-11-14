@@ -7,7 +7,7 @@ python post.py mp4             incubator-hatching.mp4 (Flash beside 3D, the loop
 python post.py sheets          sheet-idle.png and sheet-hatching.png: Flash beside 3D at the stills' full size
 
 A frame is the base picture (every still part and the ground shadow) with the moving parts' layer laid over it, then
-the smoke. The smoke is drawn here, not in Blender (as the Incubator Control Centre's glows): soft green puffs leave
+the smoke. The smoke is drawn here, not in Blender (as the Incubator Control Centre's glows): a broad puff of green leaves
 the vent's mouth from frame 2 to 29, rise, swell and fade, all gone by frame 48, as Flash's strip (cells 45-49 clear).
 The canvas is incubator.py's: Flash px x -80..80, y -60..90, the building's anchor at (0, 0).
 """
@@ -25,8 +25,8 @@ FLASH = D.parents[3] / "server/public/assets/buildings/ihatchery"
 FRAME = (-80, -60, 80, 90)
 N = 50
 BG = (96, 60, 52, 255)                  # a dark Inferno ground
-MOUTH = (-30.0, -1.1)                   # the vent's mouth in Flash px, and the way it points (incubator.py -- 1 where)
-AIM = (-0.45, -0.89)
+MOUTH = (-30.5, -5.4)                   # the vent's mouth in Flash px, and the way it points (incubator.py -- 1 where)
+AIM = (-0.63, -0.78)
 W, H = FRAME[2] - FRAME[0], FRAME[3] - FRAME[1]
 
 
@@ -58,7 +58,7 @@ def flash(i=0, shadow=True):
 
 PUFFS = []
 _r = random.Random(5)
-for _ in range(46):
+for _ in range(80):
     PUFFS.append(dict(b=_r.uniform(2, 29), life=_r.uniform(15, 19), side=_r.uniform(-1, 1), rise=_r.uniform(24, 31),
                       r=_r.uniform(0.8, 1.2), tone=_r.random(), wob=_r.uniform(0, 6.28)))
 
@@ -72,10 +72,10 @@ def smoke(k, size):
         t = (k - p["b"]) / p["life"]
         if not 0 <= t <= 1:
             continue
-        x = MOUTH[0] + AIM[0] * (1 + 4 * t) + p["side"] * (0.8 + 7.5 * t) + 1.2 * math.sin(p["wob"] + 5 * t)
+        x = MOUTH[0] + AIM[0] * (1 + 2 * t) + p["side"] * (1.4 + 11.5 * t) + 1.2 * math.sin(p["wob"] + 5 * t)
         y = MOUTH[1] + AIM[1] * (1 + 3 * t) - p["rise"] * t ** 1.15
-        r = p["r"] * (2.4 + 7.5 * t ** 0.7)
-        a = 0.62 * min(1.0, t / 0.12) * (1 - t) ** 1.2
+        r = p["r"] * (3.0 + 9.0 * t ** 0.7)
+        a = 0.66 * min(1.0, t / 0.12) * (1 - t) ** 1.2
         cx, cy = (x - FRAME[0]) * kpx, (y - FRAME[1]) * kpx
         rp = r * kpx
         x0, x1 = max(0, int(cx - rp)), min(size[0], int(cx + rp) + 2)

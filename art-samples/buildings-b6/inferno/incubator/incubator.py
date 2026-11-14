@@ -4,10 +4,11 @@ built clean-room from the Flash picture put into words (14 Nov 2026). Only the g
 
     blender -b --factory-startup -P incubator.py -- 1 <fit|check|gap|still|anim> [frame]
 
-The building: a dark iron egg (the brood vessel) on a crown of iron roots over a bed of embers. On its front right a
-round porthole full of green brood; on its left a riveted pump box with a ribbed vent pipe on top and a pale feed
-hose looped round its front; on its top, to the back, a short capped stack. Round the foot: a ribbed horn (front), a
-clawed arm (front left), a spike (left), a fan of fins (right), a tail (back right) and two plain roots (back).
+The building: a squat dark iron egg (the brood vessel) sunk into short fat legs, ember light under it. Its armour
+shell ends in a wavy hem above the lower body and carries broad embossed seams traced from Flash. On its front right
+a round porthole full of green brood; on its left a riveted pump box with a fat ribbed vent pipe on top and a pale
+feed hose looped round its front; on its top, to the back, a short capped stack. Round the foot: a fat ringed leg
+(front), a clawed arm (front left), a ringed horn (left), a clump of claws (right) and two feelers (back right).
 
 World: Z up, the egg's axis on the origin. The camera looks from +X -Y, so +X is the front right on screen, -Y the
 front left, -X the back left and +Y the back right. Directions are given as (azimuth from +X toward +Y, elevation).
@@ -39,7 +40,8 @@ kit.FRAMES = N + int(os.environ.get("PB_EXTRA", 0))     # PB_EXTRA=1 also render
 kit.SUN_COL = (1.0, 0.93, 0.82)
 rnd = random.Random(13)
 
-A, C_, ZC = 2.9, 3.3, 3.75          # the egg: half width, half height, height of its middle
+A, C_, ZC = 2.72, 3.8, 3.65          # the egg's shell: half width, half height, height of its middle
+IN = 0.13                           # the lower body lies this far inside the shell
 CEN = Vector((0, 0, ZC))
 
 
@@ -157,41 +159,71 @@ def balls(name, pts, r, mat, squash=1.0, parent=None):
 
 
 # ------------------------------------------------------------------------------------------------------ materials
-SHELL = lambda: kit.painted("shell", (34, 48, 38), rough=0.2, metal=0.85, wear=(64, 80, 66), rust=(70, 56, 36),
-                            rust_at=0.76, dirt=0.4, scale=3.0, spec=0.9)
-PLATE = lambda: kit.painted("plate", (48, 62, 50), rough=0.17, metal=0.85, wear=(100, 116, 98), dirt=0.35,
-                            scale=3.5, spec=0.9)
-TRIM = lambda: kit.painted("trim", (150, 160, 138), rough=0.2, metal=0.8, wear=(86, 96, 82), dirt=0.3, scale=8.0,
-                           spec=0.9)
-IRON = lambda: kit.painted("iron", (44, 54, 46), rough=0.26, metal=0.8, wear=(104, 112, 98), rust=(84, 56, 34),
-                           rust_at=0.7, dirt=0.4, scale=4.0, soot=0.3, spec=0.8)
-ROOT = lambda: kit.painted("root", (60, 74, 58), rough=0.27, metal=0.8, wear=(140, 150, 126), rust=(110, 56, 28),
-                           rust_at=0.68, dirt=0.6, scale=5.0, spec=0.8)
-STACK = lambda: kit.painted("stack", (92, 100, 94), rough=0.42, metal=0.6, wear=(140, 146, 134), dirt=0.3,
+def iron(name, col, wear, rough=(0.16, 0.5), scale=3.0, patch=0.5, rust=None, dirt=0.4, metal=0.9, spec=0.9,
+         bump=0.12):
+    """Flash's worn iron: a dark colour with big blotches of a paler, worn one, fine dark pitting, and a polish that
+    changes from patch to patch (so the highlights break up instead of lying as clean streaks)."""
+    if name in kit.MATS:
+        return kit.MATS[name]
+    t = kit.NT(name)
+    v = t.coords()
+    big = t.noise(v, scale * 0.5, 4.0, 0.6, 0.6)
+    fine = t.noise(v, scale * 3.0, 5.0, 0.65, 0.2)
+    c = t.mix(kit.srgb(*col), kit.srgb(*wear),
+              t.ramp(big, [(0.5 - patch * 0.2, (0, 0, 0, 1)), (0.5 + patch * 0.25, (1, 1, 1, 1))]))
+    c = t.mix(c, kit.srgb(*[int(x * 0.4) for x in col]), t.ramp(fine, [(0.55, (0, 0, 0, 1)), (0.8, (0.5, 0.5, 0.5, 1))]))
+    if rust:
+        n2 = t.noise(v, scale * 0.8, 5.0, 0.65, 1.0)
+        c = t.mix(c, kit.srgb(*rust), t.ramp(n2, [(0.66, (0, 0, 0, 1)), (0.8, (0.6, 0.6, 0.6, 1))]))
+    c = t.grime(c, kit.GROUND, 2.2, dirt, 0.5)
+    lo, hi = rough
+    r = t.ramp(fine, [(0.36, (lo, lo, lo, 1)), (0.7, (hi, hi, hi, 1))])
+    t.set(**{"Base Color": c, "rough": r, "metal": metal, "spec": spec})
+    t.bump(big, bump, 0.03)
+    kit.MATS[name] = t.m
+    return t.m
+
+
+SHELL = lambda: iron("shell", (22, 32, 26), (44, 58, 48), (0.1, 0.4), scale=2.0, patch=1.3, bump=0.04)
+LOWER = lambda: iron("lower", (15, 19, 16), (40, 46, 38), (0.22, 0.5), scale=3.0, rust=(70, 40, 22), metal=0.85)
+RIDGE = lambda: iron("ridge", (58, 72, 60), (104, 118, 104), (0.1, 0.3), scale=4.0, dirt=0.25, bump=0.06)
+BEZEL = lambda: iron("bezel", (96, 108, 98), (160, 170, 158), (0.1, 0.3), scale=4.0, dirt=0.25, bump=0.06)
+TRIM = RIDGE
+IRON = lambda: iron("iron", (18, 24, 20), (44, 54, 46), (0.18, 0.46), scale=4.0, rust=(84, 56, 34))
+ROOT = lambda: iron("root", (22, 28, 22), (52, 62, 50), (0.12, 0.38), scale=4.0, rust=(100, 52, 26), dirt=0.5)
+STACK = lambda: kit.painted("stack", (64, 74, 66), rough=0.36, metal=0.7, wear=(120, 128, 116), dirt=0.3,
                             scale=6.0, soot=0.4, spec=0.7)
 DARK = lambda: kit.flat("dark", (8, 12, 8), rough=0.9)
 
 
 def brood():
-    """The porthole's brood: lime green with slow orange-yellow clots, lit from inside. Its noise is read on a circle
-    in two spare dimensions (turn() moves along it), so the churn runs into itself."""
+    """The porthole's brood: flat, hard-edged patches of lime green, yellow and orange (more orange toward the top),
+    lit from inside. The patches are cells read on a circle in two spare dimensions (turn() moves along it), so the
+    shifting runs into itself."""
     t = kit.NT("brood")
     v = t.coords(scale=(1, 1, 0))
     mp = v.node
-    nz = t.n("ShaderNodeTexNoise", noise_dimensions="4D")
-    nz.inputs["Scale"].default_value = 1.15
-    nz.inputs["Detail"].default_value = 1.5
-    nz.inputs["Roughness"].default_value = 0.45
-    nz.inputs["Distortion"].default_value = 0.6
-    t.link(v, nz.inputs["Vector"])
-    c = t.ramp(nz.outputs["Fac"], [(0.36, kit.srgb(70, 150, 6)), (0.47, kit.srgb(150, 208, 10)),
-                                   (0.56, kit.srgb(196, 214, 20)), (0.61, kit.srgb(250, 176, 30)),
-                                   (0.72, kit.srgb(255, 206, 70))])
-    c.node.color_ramp.interpolation = "EASE"
+    vo = t.n("ShaderNodeTexVoronoi", voronoi_dimensions="4D", feature="F1")
+    vo.inputs["Scale"].default_value = 2.3
+    vo.inputs["Randomness"].default_value = 1.0
+    t.link(v, vo.inputs["Vector"])
+    tc = t.n("ShaderNodeTexCoord")
+    sep = t.n("ShaderNodeSeparateXYZ")
+    t.link(tc.outputs["Object"], sep.inputs[0])
+    grey = t.n("ShaderNodeRGBToBW")
+    t.link(vo.outputs["Color"], grey.inputs[0])
+    add = t.n("ShaderNodeMath", operation="MULTIPLY_ADD")          # the cell's own random tone + its height
+    t.link(sep.outputs["X"], add.inputs[0])
+    add.inputs[1].default_value = 0.2
+    t.link(grey.outputs[0], add.inputs[2])
+    c = t.ramp(add.outputs[0], [(0.0, kit.srgb(84, 160, 8)), (0.34, kit.srgb(116, 186, 10)),
+                                (0.46, kit.srgb(144, 200, 12)), (0.58, kit.srgb(188, 206, 18)),
+                                (0.66, kit.srgb(236, 190, 28)), (0.75, kit.srgb(246, 150, 26))])
+    c.node.color_ramp.interpolation = "CONSTANT"
     t.set(**{"Base Color": c, "rough": 0.08, "spec": 0.8, "coat": 1.0})
     t.link(c, t.bsdf.inputs["Emission Color"])
-    t.bsdf.inputs["Emission Strength"].default_value = 1.6
-    BROOD.update(map=mp, noise=nz)
+    t.bsdf.inputs["Emission Strength"].default_value = 1.5
+    BROOD.update(map=mp, noise=vo)
     return t.m
 
 
@@ -221,82 +253,160 @@ HOSE = {}
 
 
 # ------------------------------------------------------------------------------------------------------ the parts
-def egg():
-    prof = [(max(0.002, A * math.cos(math.radians(e))), C_ * math.sin(math.radians(e))) for e in range(-90, 91, 5)]
-    kit.lathe("egg", prof, CEN, SHELL(), verts=72)
-    # the cap seam, tilted a little toward the front, and the wavy skirt seam low down
-    cap = [S(basis(D(-45, 78)).to_3x3() @ D(a, 38)) for a in range(0, 360, 5)]
-    kit.tube("egg-seam-cap", cap, 0.1, TRIM(), cyclic=True)
-    skirt = [S(D(a, -34 + 7 * math.sin(math.radians(5 * a + 40)))) for a in range(0, 360, 3)]
-    kit.tube("egg-seam-skirt", skirt, 0.11, TRIM(), cyclic=True)
-    # upright seams from cap to skirt
-    for n, az in enumerate((100, 190)):
-        pts = [S(D(az + 6 * math.sin(math.radians(3 * e)), e)) for e in range(-30, 49, 6)]
-        kit.tube(f"egg-seam-up{n}", pts, 0.08, TRIM())
+def E(sx, sy):
+    """The direction (from the egg's middle) of the shell's point seen on Flash pixel (sx, sy): Flash's seams are
+    traced in its own pixels and laid on the shell with this."""
+    f = kit.cam_fwd()
+    o = kit.px(sx, sy, Z=ZC) - CEN
+    q = lambda v: Vector((v.x / A, v.y / A, v.z / C_))
+    of, ff = q(o), q(f)
+    a, b, c = ff.dot(ff), 2 * of.dot(ff), of.dot(of) - 1
+    t = (-b - math.sqrt(max(0.0, b * b - 4 * a * c))) / (2 * a)
+    return (o + f * t).normalized()
 
 
-def plate(name, az, el, outline, off=0.08, rings=5, rim=0.075):
-    """A raised armour plate on the egg: `outline` in tangent units round direction (az, el), east then north."""
-    m = basis(D(az, el), xhint=(0, 0, 1)).to_3x3()         # local X = north, Y = west
-    out = spline([Vector((v, -u, 0)) for u, v in outline], 6, closed=True)
-    d0 = Vector((0, 0, 1))
+def azel(d):
+    return math.degrees(math.atan2(d.y, d.x)), math.degrees(math.asin(max(-1, min(1, d.z))))
+
+
+def ridge(name, dirs, w=0.15, h=0.1, mat=None, closed=False, sub=6, off=0.0, seg=10):
+    """A broad, soft raised seam on the egg through directions `dirs`: half as wide as `w` each side, `h` proud of
+    the skin, pressed half into it; an open one runs out to nothing at its ends."""
+    P = spline(dirs, sub, closed)
+    n = len(P)
     bm = bmesh.new()
-    c = bm.verts.new(S(m @ d0, off))
-    prev = None
-    for r in range(1, rings + 2):
-        k = min(1.0, r / rings)
-        o = off if r <= rings else -0.02
-        row = [bm.verts.new(S(m @ (d0 + p * k), o)) for p in out]
-        for j in range(len(row)):
-            j2 = (j + 1) % len(row)
-            if prev is None:
-                bm.faces.new((c, row[j], row[j2]))
-            else:
-                bm.faces.new((prev[j], row[j], row[j2], prev[j2]))
-        prev = row
+    rows = []
+    for i, d in enumerate(P):
+        pa = P[(i - 1) % n] if closed else P[max(i - 1, 0)]
+        pb = P[(i + 1) % n] if closed else P[min(i + 1, n - 1)]
+        nr = normal(d)
+        t = (S(pb, off) - S(pa, off)).normalized()
+        bi = t.cross(nr).normalized()
+        k = 1.0
+        if not closed:
+            s = i / (n - 1)
+            k = max(0.06, min(1.0, min(s, 1 - s) / 0.1) ** 0.6)
+        p = S(d, off)
+        rows.append([bm.verts.new(p + bi * (w * k * math.cos(2 * math.pi * j / seg))
+                                  + nr * (h * k * math.sin(2 * math.pi * j / seg))) for j in range(seg)])
+    pairs = list(zip(rows, rows[1:])) + ([(rows[-1], rows[0])] if closed else [])
+    for r0, r1 in pairs:
+        for j in range(seg):
+            bm.faces.new((r0[j], r0[(j + 1) % seg], r1[(j + 1) % seg], r1[j]))
+    if not closed:
+        bm.faces.new(rows[0][::-1])
+        bm.faces.new(rows[-1])
     bmesh.ops.recalc_face_normals(bm, faces=bm.faces)
-    kit.mesh_ob(name, bm, [PLATE()])
-    kit.tube(name + "-rim", [S(m @ (d0 + p), off) for p in out], rim, TRIM(), cyclic=True)
+    return kit.mesh_ob(name, bm, [mat or RIDGE()])
 
 
-def plates():
-    # the brow over the porthole: a teardrop, its point up and to the back
-    plate("egg-brow", -36, 33, [(-0.42, -0.1), (-0.3, 0.2), (0.02, 0.3), (0.4, 0.26), (0.54, 0.04), (0.3, -0.12),
-                                (-0.1, -0.16)])
-    # a long cheek plate on the front left, between the pump box and the porthole
-    plate("egg-cheek", -68, 2, [(-0.2, -0.44), (-0.26, 0.0), (-0.18, 0.4), (0.1, 0.44), (0.18, 0.1), (0.14, -0.4)])
-    # the back plates, seen only at the rim
-    plate("egg-back", 60, 18, [(-0.4, -0.3), (-0.36, 0.3), (0.3, 0.36), (0.44, -0.1), (0.1, -0.4)])
+# the shell's wavy lower hem, traced on Flash (px) across the front; the back keeps a plain wave
+SKIRT_PX = [(-20, 29), (-16.5, 29), (-13, 29.5), (-10, 31.5), (-7, 35), (-3, 37.5), (1.5, 38), (5, 36), (9, 39),
+            (15, 43.5), (22, 43.5), (28.5, 38)]
+SKIRT = []
+
+
+def skirt_el(az):
+    """The hem's elevation at azimuth az."""
+    if not SKIRT:
+        pts = sorted(azel(E(*p)) for p in SKIRT_PX)
+        lo, hi = pts[0][0], pts[-1][0]
+        back = [(a, -15 + 5 * math.sin(math.radians(4 * a))) for a in range(int(hi) + 14, int(lo) + 360 - 13, 10)]
+        pts = pts + back
+        pts = pts + [(a + 360, e) for a, e in pts] + [(a - 360, e) for a, e in pts]
+        pts.sort()
+        raw = []
+        for a in range(-180, 180):
+            i = max(j for j, p in enumerate(pts) if p[0] <= a)
+            (a0, e0), (a1, e1) = pts[i], pts[i + 1]
+            raw.append(e0 + (e1 - e0) * (a - a0) / max(1e-6, a1 - a0))
+        for _ in range(2):
+            raw = [sum(raw[(i + k) % 360] for k in range(-2, 3)) / 5 for i in range(360)]
+        SKIRT.extend(raw)
+    a = (az + 180) % 360
+    i = int(math.floor(a))
+    f = a - i
+    return SKIRT[i % 360] * (1 - f) + SKIRT[(i + 1) % 360] * f
+
+
+def egg():
+    # the lower body: the egg itself, a little inside the shell, standing in the ground
+    prof = []
+    for e in range(-90, 91, 5):
+        p = S(D(0, e), -IN)
+        prof.append((max(0.002, p.x), max(0.02, p.z) - ZC))
+    kit.lathe("egg", prof, CEN, LOWER(), verts=72)
+    # the shell: the egg's armour from the top down to its wavy hem
+    cols, rows = 180, 26
+    bm = bmesh.new()
+    grid = []
+    for i in range(cols):
+        az = i * 360 / cols - 180
+        lo = skirt_el(az)
+        col = [bm.verts.new(S(D(az, lo), -IN - 0.03))]
+        for j in range(rows):
+            col.append(bm.verts.new(S(D(az, lo + (88 - lo) * (j / (rows - 1)) ** 0.9))))
+        grid.append(col)
+    top = bm.verts.new(S(D(0, 90)))
+    for i in range(cols):
+        a, b = grid[i], grid[(i + 1) % cols]
+        for j in range(rows):
+            bm.faces.new((a[j], b[j], b[j + 1], a[j + 1]))
+        bm.faces.new((a[-1], b[-1], top))
+    bmesh.ops.recalc_face_normals(bm, faces=bm.faces)
+    kit.mesh_ob("egg-shell", bm, [SHELL()])
+    # the hem's bright rolled rim
+    ridge("egg-hem", [D(a, skirt_el(a)) for a in range(-180, 180, 3)], 0.2, 0.15, closed=True, sub=2, off=-0.04)
+
+
+def seams():
+    """Flash's embossed seams, traced in Flash px: the hood's arc, the tongue panel over the porthole, two slanting
+    seams running down to the porthole's right, and a flap on the lower body at the front left."""
+    px = lambda pts: [E(*p) for p in pts]
+    ridge("egg-seam-hood", px([(-20.5, 14), (-19.5, 4), (-15.5, -4.5), (-9, -10), (0, -12.5), (9, -13.5),
+                               (16.5, -12.5), (22.5, -8), (27, 0), (30, 9)]), 0.2, 0.11)
+    ridge("egg-seam-tongue", px([(-7, -1.5), (-2, -5), (5, -6.5), (10, -4), (11.5, 2), (10.5, 8.5), (7, 11.5),
+                                 (3, 10), (-1, 6), (-4.5, 2)]), 0.2, 0.12, closed=True)
+    ridge("egg-seam-slant0", px([(10, -5.5), (15.5, -2.5), (20, 3.5), (24, 10), (27.5, 15.5)]), 0.17, 0.1)
+    ridge("egg-seam-slant1", px([(13, 2.5), (17, 7), (21, 12)]), 0.15, 0.09)
+    ridge("egg-seam-arch", px([(-17.5, 26), (-16, 14), (-13, 5), (-8.5, -0.5)]), 0.16, 0.08)
+    ridge("egg-flap", px([(-19, 35), (-17, 39), (-13.5, 42.5), (-10, 43.5), (-8, 41), (-7.5, 37)]), 0.2, 0.13,
+          off=-IN)
+    ridge("egg-flap1", px([(22, 46), (27, 45), (31, 41)]), 0.12, 0.1, off=-IN)
     pts = []
-    for u, v in ((-0.12, -0.3), (0.06, -0.3), (-0.12, 0.3), (0.04, 0.3), (-0.03, 0.0)):
-        m = basis(D(-68, 2), xhint=(0, 0, 1)).to_3x3()
-        d = m @ Vector((v, -u, 1))
-        pts.append((S(d, 0.07), normal(d)))
-    balls("egg-rivets", pts, 0.07, TRIM(), 0.6)
+    for p in ((2, 18), (-2, 26), (-12, 22), (-15, 12)):
+        d = E(*p)
+        pts.append((S(d, 0.0), normal(d)))
+    balls("egg-rivets", pts, 0.13, RIDGE(), 0.55)
 
 
-WIN_D = D(-24, -5)
+WIN_PX = (18.5, 28.5)
+WIN_K = 1.1
 
 
 def porthole():
-    n = normal(WIN_D)
-    m = basis(n, S(WIN_D) - n * 0.3)
-    bezel = [(0.98, -0.1), (0.98, 0.34), (1.06, 0.46), (1.22, 0.5), (1.34, 0.42), (1.4, 0.24), (1.42, -0.3)]
-    lathe_at("port-bezel", bezel, m, IRON(), verts=48)
-    kit.ring("port-lip", 1.21, 0.07, TRIM(), n=48).matrix_world = m @ Matrix.Translation((0, 0, 0.5))
-    balls("port-bolts", [(m @ Vector((1.32 * math.cos(a), 1.32 * math.sin(a), 0.4)), n)
-                         for a in [math.radians(45 + 60 * i) for i in range(6)]], 0.07, TRIM(), 0.6)
+    d = E(*WIN_PX)
+    n = (normal(d) * 0.5 - kit.cam_fwd()).normalized()         # a stubby barrel turned toward the viewer
+    m = basis(n, S(d) + n * 0.3) @ Matrix.Diagonal((WIN_K, WIN_K, 1, 1))
+    bezel = [(0.98, -0.3), (0.98, 0.34), (1.03, 0.46), (1.12, 0.52), (1.21, 0.44), (1.26, 0.26), (1.27, -2.2)]
+    lathe_at("port-bezel", bezel, m, BEZEL(), verts=48)
+    balls("port-bolts", [(m @ Vector((1.14 * math.cos(a), 1.14 * math.sin(a), 0.5)), n)
+                         for a in [math.radians(45 + 60 * i) for i in range(6)]], 0.05, IRON(), 0.6)
     hub = bpy.data.objects.new("brood", None)
     kit.link(hub)
     hub.matrix_world = m
     kit.MOVING.append(hub)
     glass = [(0.002, 0.42), (0.3, 0.41), (0.6, 0.37), (0.85, 0.3), (1.0, 0.2)]
     ob = kit.lathe("brood-glass", glass, (0, 0, 0), brood(), verts=48, parent=hub)
+    PORT["at"] = m @ Vector((0, 0, 0.4))
     return ob
 
 
+PORT = {}
+
+
 BOX_AZ = -122
-BOX_R, BOX_Z0, BOX_Z1 = 3.4, 2.6, 5.2
+BOX_R, BOX_Z0, BOX_Z1 = 3.4, 3.2, 5.8
 BOX_HALF = (0.8, 0.78)                       # half its depth (along its outward direction) and half its width
 
 
@@ -323,15 +433,13 @@ def pump():
     P = lambda x, y, z: m @ Vector((x, y, z))
     # a trim strip round the front face and rivets on it
     fy = BOX_HALF[1] + 0.005
-    edge = [P(-0.95, fy, -hz + 0.2), P(0.1, fy, -hz + 0.2), P(0.1, fy * 0.9, hz - 0.45), P(-0.95, fy * 0.9, hz - 0.2)]
-    kit.tube("pump-trim", edge, 0.045, TRIM(), cyclic=True)
     balls("pump-rivets", [(P(x, fy if z < 0 else fy * 0.93, z), side) for x, z in
                           ((-0.15, -0.5), (-0.15, 0.1), (-0.15, 0.7), (-0.7, -0.5), (-0.7, 0.1), (-0.7, 0.75))],
           0.085, TRIM(), 0.6)
     # the vent pipe on top: a collar, a ribbed bellows neck leaning out, a flared mouth with a green glow inside
-    top = P(-0.25, 0.0, hz - 0.12)
-    aim = (Vector((0, 0, 1)) + out * 0.42 + side * 0.16).normalized()
-    pm = basis(aim, top)
+    top = P(-0.45, 0.0, hz - 0.12)
+    aim = (Vector((0, 0, 1)) + out * 0.64 + side * 0.14).normalized()
+    pm = basis(aim, top) @ Matrix.Diagonal((VENT_K, VENT_K, 1, 1))        # a fat, stubby pipe
     neck = [(0.56, 0.0), (0.56, 0.12), (0.44, 0.2)]
     for i in range(5):
         z = 0.22 + i * 0.19
@@ -342,14 +450,14 @@ def pump():
     lathe_at("vent-pipe", neck, pm, IRON(), verts=36)
     lathe_at("vent-throat", [(0.002, z + 0.1), (0.37, z + 0.1)], pm, kit.flat("vent-throat", (5, 12, 3), rough=0.9),
              verts=24)
-    lathe_at("vent-glow", [(0.002, z + 0.11), (0.2, z + 0.11)], basis(aim, top + side * 0.06),
+    lathe_at("vent-glow", [(0.002, z + 0.11), (0.14, z + 0.11)], basis(aim, top + side * 0.06) @ Matrix.Diagonal((VENT_K, VENT_K, 1, 1)),
              kit.flat("vent-glow", (70, 120, 8), rough=0.6, emit=0.9), verts=16)
-    kit.ring("vent-lip", 0.6, 0.045, TRIM(), n=36).matrix_world = pm @ Matrix.Translation((0, 0, z + 0.36))
+    kit.ring("vent-lip", 0.6, 0.05, IRON(), n=36).matrix_world = pm @ Matrix.Translation((0, 0, z + 0.36))
     VENT["mouth"] = pm @ Vector((0, 0, z + 0.4))
     VENT["aim"] = aim
     # the hose's two sockets: on the box's outer face, high, and on the egg, low at the front of the box
-    a = P(BOX_HALF[0] - 0.5, 0.05, 0.6)
-    db_ = (P(-0.75, 1.25, -0.8) - CEN).normalized()
+    a = P(BOX_HALF[0] - 0.5, 0.1, 0.7)
+    db_ = E(-18, 23.5)
     b = S(db_)
     nb = normal(db_)
     for nm, p, d in (("a", a, out), ("b", b, nb)):
@@ -359,6 +467,7 @@ def pump():
 
 
 VENT = {}
+VENT_K = 1.22
 HOSE_SEG, HOSE_SUB, HOSE_WAVES = 14, 10, 3.0
 
 
@@ -366,8 +475,8 @@ def hose_path():
     a, da, b, db = HOSE["a"], HOSE["da"], HOSE["b"], HOSE["db"]
     out, side = box_frame()
     P = HOSE["P_"]                             # the pump box's own frame: x out, y to the front, z up from its middle
-    pts = [a - da * 0.2, a + da * 0.3, P(1.1, 0.2, 0.05), P(1.25, 0.65, -0.75), P(0.95, 1.35, -1.3), P(0.1, 1.7, -1.3),
-           b + db * 0.45, b - db * 0.2]
+    pts = [a - da * 0.2, a + da * 0.35, P(0.95, 0.12, 0.9), P(1.42, 0.4, 0.2), P(1.25, 0.8, -0.5), P(0.6, 1.2, -0.9),
+           P(0.05, 1.6, -0.7), b + db * 0.4, b - db * 0.2]
     return spline(pts, HOSE_SUB)
 
 
@@ -377,7 +486,7 @@ def hose_rows(ph):
 
     def rad(s):
         w = 0.5 - 0.5 * math.cos(2 * math.pi * (s * HOSE_WAVES - ph))
-        thick = 0.24 + 0.12 * s ** 0.7                          # fuller where it sags
+        thick = 0.26 + 0.07 * s ** 0.7                          # fuller where it sags
         return thick * (0.9 + 0.3 * w ** 1.5)
     return tube_coords(P, rad, HOSE_SEG)
 
@@ -413,71 +522,80 @@ def hose():
     HOSE["ob"] = ob
 
 
+STK = {}
+
+
 def stack():
-    d = D(62, 66)
-    aim = (normal(d) * 0.5 + Vector((0.12, 0.1, 1))).normalized()
+    d = D(STK_D[0], STK_D[1])
+    aim = (normal(d) * 0.3 + Vector((0.08, 0.06, 1))).normalized()
     m = basis(aim, S(d) - aim * 0.25)
-    prof = [(0.62, 0.0), (0.62, 0.3), (0.44, 0.4), (0.4, 0.7), (0.5, 0.76), (0.52, 0.9), (0.42, 0.96), (0.42, 1.1),
-            (0.52, 1.18), (0.56, 1.5), (0.5, 1.6), (0.3, 1.64), (0.002, 1.64)]
-    lathe_at("stack", prof, m, STACK(), verts=32)
+    k = 1.12                                  # taller than wide, as Flash's
+    prof = [(0.86, -0.1), (0.8, 0.2), (0.5, 0.44), (0.4, 0.7), (0.5, 0.76), (0.52, 0.9), (0.42, 0.96), (0.42, 1.1),
+            (0.54, 1.18), (0.58, 1.5), (0.52, 1.6), (0.3, 1.64), (0.002, 1.64)]
+    lathe_at("stack", [(r, z * k) for r, z in prof], m, STACK(), verts=32)
+    STK.update(base=S(d), top=m @ Vector((0, 0, 1.64 * k)))
 
 
-def foot():
-    """The crown the egg sits in, and the embers under it."""
-    crown = [(1.5, 0.35), (2.5, 0.5), (2.95, 0.95), (2.95, 1.4), (2.7, 1.72), (2.3, 1.85)]
-    kit.lathe("crown", crown, (0, 0, 0), ROOT(), verts=48)
-    kit.tube("crown-rim", [polar(2.84, a, 1.6) for a in range(0, 360, 6)], 0.09, TRIM(), cyclic=True)
-    ember = [(0.002, 0.5), (2.0, 0.45), (2.4, 0.3), (2.6, 0.12), (2.7, 0.02)]
-    kit.lathe("ember", ember, (0, 0, 0), kit.lava("ember", col=(190, 44, 10), hot=(246, 110, 26), strength=0.8,
-                                                  scale=1.6), verts=40)
+STK_D = (74, 64)
+
+
+GLOW_E = 2.6
+
+
+def glow():
+    """The fire under the egg: a ring of ember light on the ground round the body. The camera does not see the ring
+    itself, only its red-orange shine on the underside of the body and of the legs, as in Flash."""
+    ob = kit.lathe("glow", [(1.8, 0.04), (3.8, 0.04)], (0, 0, 0), kit.flat("glow", (255, 80, 14), emit=GLOW_E),
+                   verts=40)
+    ob.visible_camera = ob.visible_diffuse = ob.visible_shadow = False
+    ob.visible_transmission = ob.visible_volume_scatter = False
 
 
 def root(name, az, reach, r0, ribs, curl=0.0, lift=0.0, tip_z=0.12, r1=0.05, mid=1.0, depth=0.16, power=0.8):
-    """A ribbed root from the crown out to the ground: `curl` turns it (degrees) toward its tip, `lift` raises the
-    tip."""
-    pts = [polar(2.0, az, 1.3), polar(3.0, az, 1.25 * mid),
-           polar(3.0 + (reach - 3.0) * 0.35, az + curl * 0.15, 0.9 * mid + lift * 0.2),
-           polar(3.0 + (reach - 3.0) * 0.7, az + curl * 0.5, 0.42 * mid + lift * 0.55),
+    """A ribbed leg from the lower body out along the ground: `curl` turns it (degrees) toward its tip, `lift`
+    raises the tip."""
+    pts = [polar(1.5, az, 1.0), polar(2.8, az, 0.95 * mid),
+           polar(2.8 + (reach - 2.8) * 0.35, az + curl * 0.15, 0.78 * mid + lift * 0.2),
+           polar(2.8 + (reach - 2.8) * 0.7, az + curl * 0.5, 0.42 * mid + lift * 0.55),
            polar(reach, az + curl, tip_z + lift)]
     return tubemesh(name, pts, ribbed(r0, r1, ribs, depth, power), ROOT(), seg=16, sub=30)
 
 
 def roots():
-    # the horn, front: thick, ringed like a ram's horn, its tip turned to the left
-    root("horn", -70, 6.9, 1.0, 10, curl=-16, depth=0.4, power=0.9)
+    """The squat legs the egg is sunk into: every one starts inside the lower body and lies along the ground."""
+    # the front leg: short, fat, deeply ringed, flat on the ground, its tip hooked to the left
+    pts = [polar(1.5, -70, 1.0), polar(2.8, -69, 0.95), polar(4.0, -69, 0.72), polar(5.1, -70, 0.48),
+           polar(6.0, -72, 0.26), polar(6.65, -76, 0.1)]
+    tubemesh("leg", pts, ribbed(0.98, 0.04, 8, 0.3, 1.0), ROOT(), seg=18, sub=24)
     # the clawed arm, front left: a ringed arm ending in three talons
-    root("claw", -112, 5.2, 0.66, 7, curl=-6, r1=0.28, tip_z=0.4)
-    wrist = polar(5.2, -118, 0.4)
-    for i, (da, ln, dz) in enumerate(((-16, 1.5, 0.25), (2, 1.7, -0.1), (20, 1.3, 0.2))):
+    root("claw", -113, 5.3, 0.64, 7, curl=-5, r1=0.26, tip_z=0.32, depth=0.3, power=1.2)
+    wrist = polar(5.3, -118, 0.32)
+    for i, (da, ln, dz) in enumerate(((-16, 1.4, 0.25), (2, 1.6, -0.1), (20, 1.2, 0.2))):
         d = D(-118 + da)
-        pts = [wrist - d * 0.15, wrist + d * ln * 0.5 + Vector((0, 0, 0.22 + dz * 0.5)),
-               wrist + d * ln + Vector((0, 0, max(-0.3, dz - 0.25)))]
+        pts = [wrist - d * 0.15, wrist + d * ln * 0.5 + Vector((0, 0, 0.2 + dz * 0.5)),
+               wrist + d * ln + Vector((0, 0, max(-0.24, dz - 0.25)))]
         tubemesh(f"claw-talon{i}", pts, lambda s: 0.2 * (1 - s) ** 0.7 + 0.02, ROOT(), seg=10, sub=8)
-    # the spike, left: a straight cone held level off the crown
-    tubemesh("spike", [polar(2.2, -150, 1.3), polar(4.4, -150, 1.2), polar(6.4, -150, 1.05)],
-             lambda s: 0.8 * (1 - s) + 0.015, ROOT(), seg=16, sub=6)
-    kit.tube("spike-ring", [polar(3.2, -150, 1.26) + basis(D(-150)).to_3x3() @ Vector((0.7 * math.cos(a),
-             0.7 * math.sin(a), 0)) for a in [math.radians(x) for x in range(0, 360, 12)]], 0.06, TRIM(), cyclic=True)
-    # the fins, right: a fan of ribbed blades
-    for i, (az, reach, tilt) in enumerate(((-26, 5.3, 0.3), (-10, 5.7, 0.12), (7, 5.3, 0.5), (23, 4.6, 0.9))):
-        pts = [polar(2.0, az, 1.3), polar(3.1, az, 1.3), polar(3.1 + (reach - 3.1) * 0.5, az + 2, 0.85 + tilt * 0.4),
-               polar(reach, az + 5, 0.1 + tilt)]
+    # the horn, left: a big straight spike held level, ringed
+    tubemesh("horn", [polar(1.3, -150, 1.5), polar(4.0, -150, 1.35), polar(6.1, -150, 1.12)],
+             lambda s: (1.4 * (1 - s) + 0.015) * (1 + 0.14 * (1 - abs(math.sin(math.pi * 9 * s))) ** 1.5),
+             ROOT(), seg=16, sub=16)
+    # the claws, right: a tight clump of fat dark claws from one shoulder, curling down to points on the ground
+    for i, (az, reach, w) in enumerate(((19, 4.5, 0.5), (7, 4.95, 0.58), (-6, 4.85, 0.56), (-19, 4.0, 0.48))):
+        a0 = az * 0.4
+        pts = [polar(1.5, a0, 1.0), polar(2.8, a0, 1.1), polar(2.9 + (reach - 2.9) * 0.5, az * 0.9, 1.0),
+               polar(2.9 + (reach - 2.9) * 0.86, az, 0.5), polar(reach, az + 4, 0.05)]
 
-        def blade(s, k=i):
-            w = 0.28 + 0.4 * math.sin(math.pi * min(1.0, s * 1.15) ** 0.8) if s > 0.25 else 0.5
-            w *= 1.0 + 0.14 * (1.0 - abs(math.sin(math.pi * 9 * s))) ** 2
-            return (max(0.02, w * (1.0 if s < 0.9 else (1 - s) * 10)), max(0.03, 0.26 * (1 - s * 0.8)))
-        tubemesh(f"fin{i}", pts, blade, ROOT(), seg=12, sub=24)
-    # the tail, back right: thin, rising in an S and reaching out level
-    pts = [polar(2.0, 44, 1.3), polar(3.0, 44, 1.2), polar(3.8, 46, 1.2), polar(4.5, 50, 2.0), polar(5.3, 49, 2.1),
-           polar(6.0, 45, 1.35), polar(6.9, 44, 1.2)]
-    tubemesh("tail", pts, ribbed(0.55, 0.05, 14, 0.25, 0.6), ROOT(), seg=12, sub=20)
-    # two plain roots at the back
-    root("rootb", 105, 5.4, 0.7, 8, curl=10)
-    root("rootc", 168, 5.2, 0.7, 8, curl=-12)
-    # two short stubs at the front, between the horn and its neighbours
-    root("rootd", -47, 4.6, 0.62, 6, curl=8, depth=0.3)
-    root("roote", -92, 4.3, 0.6, 6, curl=-5, depth=0.3)
+        def sec(s, w=w):
+            k = (1 - s ** 1.6) ** 0.8
+            rib = 1.0 + 0.12 * (1 - abs(math.sin(math.pi * 5 * s))) ** 2
+            return (max(0.02, w * k * rib), max(0.02, 0.42 * k * rib))
+        tubemesh(f"fin{i}", pts, sec, ROOT(), seg=14, sub=20)
+    # two thin feelers, back right: one rises in a hump and reaches out along the ground, a short one under it
+    tubemesh("tail", [polar(1.9, 44, 1.0), polar(3.3, 46, 0.9), polar(4.0, 48, 1.35), polar(4.4, 49, 1.6),
+                      polar(4.95, 53, 1.0), polar(5.6, 58, 0.3), polar(6.4, 57, 0.14)],
+             ribbed(0.42, 0.05, 12, 0.2, 0.8), ROOT(), seg=12, sub=16)
+    tubemesh("tailb", [polar(1.9, 38, 0.9), polar(3.2, 40, 0.75), polar(3.8, 44, 0.5), polar(4.35, 49, 0.12)],
+             ribbed(0.3, 0.04, 8, 0.2, 0.8), ROOT(), seg=12, sub=16)
 
 
 def cards():
@@ -487,8 +605,8 @@ def cards():
     r = Vector((1, 1, 0)).normalized()
     u = v.cross(r) * -1
     u = r.cross(v) if r.cross(v).z > 0 else v.cross(r)
-    for nm, n, size, col, e in (("card-key", v + u * 0.5 - r * 0.5, 7.0, (1.0, 0.95, 0.82), 30.0),
-                                ("card-sky", v + u * 1.3 + r * 0.2, 16.0, (0.7, 0.8, 1.0), 2.5)):
+    for nm, n, size, col, e in (("card-key", v + u * 0.5 - r * 0.5, 8.0, (1.0, 0.95, 0.82), 30.0),
+                                ("card-sky", v + u * 1.3 + r * 0.2, 16.0, (0.7, 0.8, 1.0), 4.0)):
         n = n.normalized()
         l = (2 * n.dot(v) * n - v).normalized()
         bm = bmesh.new()
@@ -502,12 +620,12 @@ def cards():
 def build():
     cards()
     egg()
-    plates()
+    seams()
     porthole()
     pump()
     hose()
     stack()
-    foot()
+    glow()
     roots()
 
 
@@ -528,5 +646,9 @@ def turn(k):
 
 kit.run(build, turn)
 if kit.MODE == "where":                              # the smoke's start for post.py
+    print("PORT px %.1f %.1f" % kit.scr(PORT["at"]))
+    print("STACK base px %.1f %.1f top px %.1f %.1f" % (*kit.scr(STK["base"]), *kit.scr(STK["top"])))
+    print("SKIRT", [(round(a), round(skirt_el(a))) for a in range(-180, 180, 15)])
+    print("HOSE", ["%.0f,%.0f" % kit.scr(p) for p in HOSE["P"][::8]])
     print("VENT mouth px %.2f %.2f aim px %.3f %.3f" % (*kit.scr(VENT["mouth"]),
           *[a - b for a, b in zip(kit.scr(VENT["mouth"] + VENT["aim"]), kit.scr(VENT["mouth"]))]))
