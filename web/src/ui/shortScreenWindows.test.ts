@@ -9,8 +9,9 @@ import { PHONE_LAYOUT_QUERY } from "./phoneLayout";
  * The owner's iPad (15 Nov 2026), Modern look, on its side: Build ended right
  * under its four tabs and Goals after one cut-off row. A middle window with no
  * `--centre-height` of its own fits its content (`height: max-content` in
- * ui.css while pinned top and bottom), and Safari sized the `flex: 1`
- * (zero-basis) body and list in it to nothing. jsdom lays nothing out, so
+ * ui.css while pinned top and bottom); the suspected cause, not reproduced
+ * here (no Safari), is that Safari sized the `flex: 1` (zero-basis) body and
+ * list in it to nothing. jsdom lays nothing out, so
  * these read the CSS as text: no middle window that fits its content may
  * leave its scroll box on a zero basis.
  */
@@ -49,13 +50,18 @@ const sourcesUnder = (dir: string): string[] =>
     return entry.name.endsWith(".ts") && !entry.name.endsWith(".test.ts") ? [path] : [];
   });
 
-/** Rules that shrink a box (`min-height: 0`) from a zero flex basis (`flex: 1`, `flex: 1 1 0`). */
+/**
+ * Rules that may shrink a box to nothing from a zero flex basis (`flex: 1`,
+ * `flex: 1 1 0`): `min-height: 0`, or an `overflow` that is not visible
+ * (which also drops a flex item's minimum to 0).
+ */
 const zeroBasisShrinkers = (source: string): string[] => {
   const found: string[] = [];
   for (const match of source.matchAll(/([^{};]+)\{([^{}]*)\}/g)) {
     const body = match[2] ?? "";
     const zeroBasis = /(?:^|[;\s])flex:\s*1(?:\s+1\s+0(?:%|px)?)?\s*(?:;|$)/.test(body) || /flex-basis:\s*0/.test(body);
-    if (zeroBasis && /min-height:\s*0\s*(?:;|$)/.test(body)) found.push((match[1] ?? "").trim());
+    const shrinks = /min-height:\s*0\s*(?:;|$)/.test(body) || /overflow(?:-y)?:\s*(?:auto|hidden|scroll|clip)/.test(body);
+    if (zeroBasis && shrinks) found.push((match[1] ?? "").trim());
   }
   return found;
 };
