@@ -4,6 +4,7 @@ import {
   harvesterFullAt,
   hatcheryJobs,
   lockerJobs,
+  unlockRealmOf,
   researchJobs,
   savedAtOf,
   trainingJobs,
@@ -120,7 +121,8 @@ export const readWork = (save: WorkSave): WorkMap => {
     later(work, id, harvesterFullAt({ ...raw, id }, savedAt, health));
   }
 
-  const unlocking = lockerJobs(save.lockerdata, null, save.storedata, savedAt).reduce(
+  // The Inferno yard's Strongbox works on the Inferno's unlocks (`IC…`), a surface Locker on the surface's.
+  const unlocking = lockerJobs(save.lockerdata, null, save.storedata, savedAt, unlockRealmOf(save)).reduce(
     (end, job) => Math.max(end, job.endsAt ?? Number.NEGATIVE_INFINITY),
     Number.NEGATIVE_INFINITY,
   );
