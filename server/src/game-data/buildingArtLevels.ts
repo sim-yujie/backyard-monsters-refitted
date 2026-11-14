@@ -63,6 +63,8 @@ export const TOWER_TIER_ART_LEVELS: Readonly<Record<number, readonly number[]>> 
  */
 export const INFERNO_ART_LEVELS: Readonly<Record<number, readonly number[]>> = {
   1: [1, 3, 7],
+  // 4 Magma Pump: the same split (Flash has one look in play, its steps 1 and 3 the same picture)
+  4: [1, 3, 7],
 };
 
 /**

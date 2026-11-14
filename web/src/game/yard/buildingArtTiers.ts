@@ -730,6 +730,25 @@ export const INFERNO_BUILDING_3D_ART: Readonly<Record<number, readonly TierArt[]
     { from: 7, top: ["top.3d7@2x.webp", -48, -37], shadow: ["shadow.3d7.jpg", -47, 16], lift: 0,
       anim: { strip: ["anim.3d7@2x.webp", -29, -37, 80, 85, 36], columns: 25, body: ["body.3d7@2x.webp", -48, -37] } },
   ],
+  // 4 Magma Pump: 3D (owner, 14 Nov 2026, Review Desk), the clean-room model of art/magma-3d
+  // (`export3d_buildings.py magma`), three tiers at levels 1-2, 3-6 and 7-10 as the Bone Cruncher's (Flash's has one
+  // look in play; tier 2 adds the feet, the full brass frame, the vent's grille and the sight tank, tier 3 the horns,
+  // the spiked brimming pot, the slotted belt and the magma ring round the well). The pot's ribs light and it puffs
+  // smoke, a swelling goes up the elbow pipe and the vent breathes, in Flash's 49 cells. Each tier has its own damaged
+  // still (sooted and cracked, the pot tilted off its seat with magma running down the lid and the left face, a corner
+  // post torn off, the elbow knocked off its stub, the vent dead, stones and magma pools at its feet), one rough pass
+  // (`magma:damaged`). Destroyed is Flash's rubble, as the others'.
+  4: [
+    { from: 1, top: ["top.3d1@2x.webp", -36, -37], shadow: ["shadow.3d1.jpg", -26, 9], lift: 0,
+      anim: { strip: ["anim.3d1@2x.webp", -29, -69, 61, 110, 49], columns: 33, body: ["body.3d1@2x.webp", -36, -37] },
+      damaged: { top: ["top.3d1.damaged@2x.webp", -46, -39], shadow: ["shadow.3d1.damaged.jpg", -43, 9] } },
+    { from: 3, top: ["top.3d3@2x.webp", -35, -41], shadow: ["shadow.3d3.jpg", -33, 5], lift: 0,
+      anim: { strip: ["anim.3d3@2x.webp", -29, -72, 64, 109, 49], columns: 32, body: ["body.3d3@2x.webp", -35, -41] },
+      damaged: { top: ["top.3d3.damaged@2x.webp", -46, -43], shadow: ["shadow.3d3.damaged.jpg", -38, 5] } },
+    { from: 7, top: ["top.3d7@2x.webp", -35, -45], shadow: ["shadow.3d7.jpg", -33, 5], lift: 0,
+      anim: { strip: ["anim.3d7@2x.webp", -29, -72, 68, 121, 49], columns: 30, body: ["body.3d7@2x.webp", -35, -45] },
+      damaged: { top: ["top.3d7.damaged@2x.webp", -46, -47], shadow: ["shadow.3d7.damaged.jpg", -38, 5] } },
+  ],
   // 16 Incubator Control Centre: 3D look C, on a small magma pool. Each cell is the whole building: 32 cells of its
   // idle loop (the lava's light breathing), then 64 of its loop while it hatches (the crystal pulsing twice as well).
   // No damaged or destroyed look of its own yet: the damaged one is the whole look tinted, the destroyed Flash's.
