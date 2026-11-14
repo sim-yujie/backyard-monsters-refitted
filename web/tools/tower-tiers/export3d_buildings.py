@@ -35,7 +35,7 @@ px around the building's origin, 12 render px a 1x px), with the same camera as 
 | heavy | 117 Heavy Trap | art/traps-3d | traps-3d (traps.py) | one look, still; destroyed = fired |
 | icc | 16 Incubator Control Centre in an Inferno yard | art/icc-inferno-looks | icc-looks (look C) | one look; 32 idle and 64 working cells, each the whole building |
 | bone | 1 Bone Cruncher in an Inferno yard | art/buildings-3d-inferno | inferno/bone-clean2 (crusher.py) | levels 1, 3, 7; 36 cells of its loop |
-| coal | 2 Coal Extractor in an Inferno yard | art/coal-3d-b8 | art-samples/coal-fable (coal.py) | levels 1, 3, 7; 47, 45 and 45 cells of its loop; `coal:damaged`, `coal:destroyed` from the same folder (`PB_STATE`) |
+| coal | 2 Coal Extractor in an Inferno yard | art/coal-3d-b8 | art-samples/coal-fable (coal.py) | levels 1, 3, 7; 47, 45 and 45 cells of its loop; `coal:damaged` from the same folder (`PB_STATE`); destroyed is Flash's rubble |
 | locker | 8 Monster Locker | art/locker-fable-2 | locker-fable-2 (locker.py) | levels 1-4; 21, 20, 20 and 21 cells of its key and gears |
 
 The Monster Locker (`locker`, owner 10 Nov 2026, Review Desk card locker-fable-2) is the from-scratch model

@@ -85,7 +85,7 @@ def _math(t, op, a, b=None):
 
 
 def mat(name, col, rough=0.6, metal=0.0, wear=None, wear_amt=0.6, rust=None, rust_at=0.6, dirt=0.3, scale=5.0,
-        speck=0.14, bump=0.07, ao_min=0.5, streak=None, bricks=None, coat=0.0, mottle=0.4, top=None, bands=None, hard=False):
+        speck=0.14, bump=0.07, ao_min=0.5, streak=None, bricks=None, coat=0.0, mottle=0.4, top=None, bands=None, hard=False, shade=None):
     """Paint or metal: worn patches (`wear` shows through), rust blotches, a fine speckle, darker toward the ground and
     in creases. streak = colour of soft marks that run down the part. bricks = (course height, colour of the joints)."""
     if name in MATS:
@@ -112,6 +112,12 @@ def mat(name, col, rough=0.6, metal=0.0, wear=None, wear_amt=0.6, rust=None, rus
         out = t.mix(out, kit.srgb(*streak), t.ramp(t.noise(v2, scale * 0.9, 5.0, 0.6, 0.3), [(0.5, K0), (0.72, grey(0.55))]))
     if speck:
         out = t.mix(out, t.ramp(t.noise(v, scale * 12, 2.0, 0.5), [(0.3, grey(1 - speck)), (0.62, K1)]), 1.0, "MULTIPLY")
+    if shade:                                      # (direction, k): faces turned toward `direction` are darkened to k
+        geo = t.n("ShaderNodeNewGeometry")
+        dot = t.n("ShaderNodeVectorMath", operation="DOT_PRODUCT")
+        t.link(geo.outputs["Normal"], dot.inputs[0])
+        dot.inputs[1].default_value = tuple(Vector(shade[0]).normalized())
+        out = t.mix(out, t.ramp(dot.outputs["Value"], [(0.15, K1), (0.6, (shade[1], shade[1] * 0.72, shade[1] * 0.4, 1))]), 1.0, "MULTIPLY")
     out = t.grime(out, 0.0, 2.6, dirt, ao_min)
     t.set(**{"Base Color": out, "rough": rough, "metal": metal, "spec": 0.4, "coat": coat})
     if bump:
@@ -157,6 +163,12 @@ SHINE = {1: 0.0, 2: 0.55, 3: 1.0}[T]
 
 
 def m_body():
+    if T == 1:      # Flash look 1's drum wall: pink-brown plate (about 114, 71, 47 over all), hard rust blotches
+        return mat("body", (210, 126, 80), rough=0.75, metal=0.1, wear=(246, 172, 120), rust=(78, 44, 28), rust_at=0.55, scale=3.6, hard=True,
+                   wear_amt=0.9, streak=(70, 42, 28), top=(112, 70, 52), mottle=0.5, speck=0.0, bump=0.03)
+    if T == 3:      # look 2's dome: blotchy brown copper, dull, not a mirror
+        return mat("body", (140, 72, 28), rough=0.58, metal=0.45, wear=(206, 122, 54), rust=(62, 30, 12), rust_at=0.46, scale=3.0,
+                   wear_amt=0.75, streak=(70, 36, 14), mottle=0.6, speck=0.12, bump=0.08)
     return mat("body", lerp((186, 108, 70), (128, 62, 22), SHINE), rough=0.75 - 0.43 * SHINE, metal=0.1 + 0.7 * SHINE,
                wear=lerp((236, 150, 96), (236, 142, 58), SHINE), rust=lerp((72, 42, 30), (50, 26, 12), SHINE),
                rust_at=0.5 + 0.04 * SHINE, scale=4.6 - 0.6 * SHINE, hard=T < 3, wear_amt=0.85 - 0.15 * SHINE, streak=lerp((60, 36, 24), (80, 40, 16), SHINE),
@@ -226,8 +238,23 @@ def m_flange():
 
 
 def m_brick():
-    return mat("brick", (248, 144, 50), rough=0.4, metal=0.2, dirt=0.6, wear=(255, 196, 104), rust=(120, 62, 22), scale=6.0, mottle=0.22, ao_min=0.05, top=(255, 206, 120), speck=0.08,
-               streak=(120, 72, 30))
+    # Flash look 2's brass: gold-brown (about 182, 124, 65 where lit), its face toward the screen's right in shade
+    return mat("brick", (252, 158, 64), rough=0.45, metal=0.2, dirt=0.6, wear=(255, 200, 100), rust=(120, 64, 24), scale=6.0, mottle=0.3, ao_min=0.05, top=(246, 190, 108), speck=0.1,
+               streak=(110, 64, 28), shade=(SR - SF * 0.25, 0.55))
+
+
+def m_pale():
+    """The turret's brims at tiers 1-2: Flash's pale grey-pink metal."""
+    return mat("pale", (190, 152, 136), rough=0.6, metal=0.15, wear=(226, 194, 178), rust=(112, 82, 68), rust_at=0.56, scale=6.0, dirt=0.1, hard=True, mottle=0.25)
+
+
+def m_turret():
+    return mat("turretwall", (176, 110, 84), rough=0.7, metal=0.1, wear=(222, 154, 122), rust=(84, 50, 36), rust_at=0.53, scale=5.0, hard=True, mottle=0.3,
+               streak=(80, 48, 34))
+
+
+def m_coalpale():
+    return mat("coalpale", (150, 146, 140), rough=0.75, wear=(206, 202, 196), rust=(84, 80, 78), scale=9.0, speck=0.2, dirt=0.0, ao_min=0.3)
 
 
 def m_plate():
@@ -436,6 +463,7 @@ TOP = {1: 4.0, 2: 4.4, 3: 4.4}[T]          # the drum's top
 RD = 2.25                                    # the drum's radius
 TUR = P(0.64, -0.87)                         # the turret's axis on the drum's top
 TR = 0.7                                     # the turret's radius
+DOME = [(0.0, 4.47), (1.0, 4.45), (1.7, 4.36), (2.08, 4.2), (RD, 4.06)]      # tiers 2-3: the drum's top, a low dome with a flat deck
 INT = {1: Vector((-0.05, -4.8, 0)), 2: Vector((-0.05, -4.8, 0)), 3: Vector((0.22, -4.46, 0))}[T]     # the intake's axis
 RIS = P(-2.15, 2.97)                         # the riser's axis (where the copper pipe ends), above the intake's top
 FUN = P(-3.4, 2.97)                          # the funnel's axis
@@ -465,8 +493,7 @@ def drum():
         prof = [(0.0, 0.5), (1.3, 0.52), (1.85, 0.85), (2.15, 1.4), (RD, 1.95), (RD, 3.42), (RD + 0.07, 3.46), (RD + 0.07, TOP - 0.06),
                 (RD, TOP), (2.02, TOP), (1.96, TOP - 0.05), (1.86, TOP - 0.05), (1.8, TOP), (0.0, TOP + 0.02)]
     else:
-        prof = [(0.0, 0.5), (1.3, 0.52), (1.85, 0.85), (2.15, 1.4), (RD, 1.95), (RD, 3.62), (RD + 0.08, 3.68), (RD + 0.08, 4.0),
-                (RD, 4.06), (2.05, 4.2), (1.6, 4.38), (0.9, 4.5), (0.0, 4.55)]
+        prof = [(0.0, 0.5), (1.3, 0.52), (1.85, 0.85), (2.15, 1.4), (RD, 1.95), (RD, 3.62), (RD + 0.08, 3.68), (RD + 0.08, 4.0)] + list(reversed(DOME))
     one("drum", [m_body()], lambda b: b.lathe(prof, n=72), sharp=35)
     if T >= 2:
         def rivets(b):
@@ -475,6 +502,23 @@ def drum():
                 M = frame_at(d * (RD + 0.08) + UP * 3.84, UP, d)
                 b.lathe([(0.085, 0.0), (0.075, 0.035), (0.0, 0.05)], n=8, M=M)
         one("drumrivets", [m_dark()], rivets)
+        if T == 3:      # the deck's plates: a raised seam round the flat of the deck, seams down the shoulder, rivets along them
+            def dz(r):
+                for (r0, z0), (r1, z1) in zip(DOME, DOME[1:]):
+                    if r <= r1:
+                        return z0 + (z1 - z0) * (r - r0) / (r1 - r0)
+                return DOME[-1][1]
+            one("deckseam", [m_trim()], lambda b: b.lathe([(1.5, dz(1.5) - 0.02), (1.53, dz(1.53) + 0.035), (1.6, dz(1.6) + 0.035), (1.63, dz(1.63) - 0.02)], n=64))
+
+            def seams(b):
+                for i in range(8):
+                    d = D(i * 45 + 20)
+                    b.tube([d * r + UP * (dz(r) - 0.005) for r in (1.62, 1.8, 2.0, 2.12, RD + 0.02)], 0.03, n=6, mi=1)
+                    for r in (1.75, 2.0):
+                        for sgn in (-1, 1):
+                            q = d * r + UP.cross(d) * 0.1 * sgn
+                            b.lathe([(0.05, 0.0), (0.04, 0.025), (0.0, 0.035)], n=6, M=Matrix.Translation(q + UP * dz(r)))
+            one("deckplates", [m_dark(), m_trim()], seams)
     else:
         one("drumring", [m_dark()], lambda b: b.lathe([(RD + 0.01, 3.3), (RD + 0.05, 3.32), (RD + 0.05, 3.4), (RD + 0.01, 3.42)], n=72))
         one("drumlid", [m_body()], lambda b: b.lathe([(1.98, TOP - 0.02), (1.9, TOP + 0.05), (0.9, TOP + 0.24), (0.0, TOP + 0.24)], n=64), sharp=30)
@@ -525,8 +569,8 @@ def turret():
     c = TUR
     z = TOP + (0.0 if T == 1 else 0.1)
     if T == 1:
-        H = 1.6
-        one("turret", [m_body()], lambda b: b.lathe([(TR + 0.06, z), (TR + 0.06, z + 0.34), (TR, z + 0.38), (TR, z + H), (0.0, z + H)], at=c, n=40))
+        H = 1.75
+        one("turret", [m_turret()], lambda b: b.lathe([(TR + 0.06, z), (TR + 0.06, z + 0.34), (TR, z + 0.38), (TR, z + H), (0.0, z + H)], at=c, n=40))
         mv = mover("slits")
         gl = glow("slit", (255, 206, 60), 1.3)
 
@@ -555,18 +599,21 @@ def turret():
         zc = z + H + 0.12
     if T < 3:
         zk = zc
-        # a flat spiked brim, then the neck the copper pipe leaves by
-        one("collar", [m_body()], lambda b: b.lathe([(TR - 0.05, zk - 0.04), (0.9, zk + 0.03), (0.97, zk + 0.1), (0.9, zk + 0.2), (0.5, zk + 0.3), (0.0, zk + 0.3)], at=c, n=40), sharp=30)
+        # Flash: a flat spiked brim, a short drum, a second spiked brim, then the neck the copper pipe leaves by
+        one("collar", [m_pale()], lambda b: b.lathe([(TR - 0.05, zk - 0.04), (0.9, zk + 0.02), (0.96, zk + 0.07), (0.9, zk + 0.13), (0.5, zk + 0.2), (0.0, zk + 0.2)], at=c, n=40), sharp=30)
+        one("turretmid", [m_neck()], lambda b: b.lathe([(0.46, zk + 0.16), (0.46, zk + 0.8)], at=c, n=32))
+        one("collar2", [m_pale()], lambda b: b.lathe([(0.46, zk + 0.74), (0.66, zk + 0.78), (0.7, zk + 0.83), (0.66, zk + 0.89), (0.38, zk + 0.95), (0.0, zk + 0.95)], at=c, n=36), sharp=30)
 
         def spikes(b):
-            for i in range(6):
-                d = D(i * 60)
-                M = frame_at(c + d * 0.86 + UP * (zk + 0.12), UP, d + UP * 0.1)
-                b.lathe([(0.12, 0.0), (0.09, 0.14), (0.0, 0.6)], n=10, M=M)
+            for rr_, zz, ln, off in ((0.84, zk + 0.07, 0.62, 0), (0.6, zk + 0.83, 0.55, 30)):
+                for i in range(6):
+                    d = D(i * 60 + off)
+                    M = frame_at(c + d * rr_ + UP * zz, UP, d + UP * 0.1)
+                    b.lathe([(0.1, 0.0), (0.075, 0.14), (0.0, ln)], n=10, M=M)
         one("spikes", [m_spike()], spikes)
-        one("neck", [m_neck() if T == 1 else m_steel()], lambda b: b.lathe([(0.33, zk + 0.25), (0.33, zk + 0.55), (0.42, zk + 0.58), (0.42, zk + 0.85), (0.3, zk + 0.9),
-                                                                             (0.3, zk + 1.15), (0.0, zk + 1.15)], at=c, n=24), sharp=30)
-        return zk + 1.15
+        one("neck", [m_neck() if T == 1 else m_steel()], lambda b: b.lathe([(0.33, zk + 0.93), (0.33, zk + 1.2), (0.4, zk + 1.23), (0.4, zk + 1.42), (0.3, zk + 1.46),
+                                                                             (0.3, zk + 1.6), (0.0, zk + 1.6)], at=c, n=24), sharp=30)
+        return zk + 1.6
     zs = zc + 0.62
     one("neck", [m_dark()], lambda b: b.lathe([(0.34, zc - 0.05), (0.34, zs + 0.2), (0.46, zs + 0.22), (0.46, zs + 0.36), (0.0, zs + 0.36)], at=c, n=24))
     e = bpy.data.objects.new("star", None)
@@ -581,13 +628,13 @@ def turret():
         pts = []
         for i in range(16):
             a = 2 * math.pi * i / 16
-            r = 1.72 if i % 2 == 0 else 0.86
+            r = 1.72 if i % 2 == 0 else 1.0
             pts.append((r * math.cos(a), r * math.sin(a)))
-        b.prism(pts, 0.14, Matrix.Identity(4))
+        b.prism(pts, 0.34, Matrix.Translation((0, 0, -0.1)))
         for v in b.bm.verts:                      # the points droop a little, as a shallow cone
-            v.co.z -= 0.16 * (math.hypot(v.co.x, v.co.y) - 0.86)
-    one("starplate", [mat("starsteel", (92, 72, 52), rough=0.45, metal=0.6, wear=(156, 134, 100), rust=(50, 38, 28), scale=3.0, dirt=0.0)],
-        star, parent=hub, smooth=False, bevel=0.03)
+            v.co.z -= 0.16 * (math.hypot(v.co.x, v.co.y) - 1.0)
+    one("starplate", [mat("starsteel", (128, 104, 76), rough=0.5, metal=0.5, wear=(184, 160, 122), rust=(70, 52, 36), rust_at=0.58, scale=3.0, dirt=0.0)],
+        star, parent=hub, smooth=False, bevel=0.05)
     return zs + 0.36
 
 
@@ -712,16 +759,12 @@ def intake():
 
 
 def cabinet():
-    """The feed box on the drum's top, left of the turret, and the coal chute out of its mouth (-Y side): a closed-sided
-    trough sloping down across the drum's top into the furnace's feed hatch."""
+    """The coal tray on the drum's top, left of the turret: an open tray heaped with coal (tier 3: a brass block, gold
+    rim), and the chute out of its front (-Y side): a closed-sided trough sloping down across the drum's top into the
+    furnace's feed hatch."""
     bx0, by0 = -2.04, -0.65
-    bx1, by1, h = (-0.48, 0.2, 0.92) if T == 1 else (-0.3, 0.3, 1.15)
+    bx1, by1 = (-0.48, 0.2) if T == 1 else (-0.3, 0.3)
     xm, ym = (bx0 + bx1) / 2, (by0 + by1) / 2
-    zt = TOP + h
-    one("cabinet", [m_trim() if T == 1 else m_body()], lambda b: b.box((bx1 - bx0, by1 - by0, h + 0.4), Matrix.Translation((xm, ym, TOP + h / 2 - 0.2))), smooth=False, bevel=0.05)
-    one("cabinetlid", [m_trim() if T == 1 else m_body()], lambda b: b.box((bx1 - bx0 + 0.14, by1 - by0 + 0.14, 0.12), Matrix.Translation((xm, ym, zt + 0.04))), smooth=False, bevel=0.04)
-    # the dark mouth in the box's front, over the coal
-    one("cabinetmouth", [m_soot()], lambda b: b.box((bx1 - bx0 - 0.3, 0.04, min(h, 0.9) - 0.25), Matrix.Translation((xm, by0 - 0.01, TOP + min(h, 0.9) / 2 - 0.05))), smooth=False)
     # ---- the chute: a closed-sided trough out of the box's mouth, sloping down toward the viewer across the drum's
     # top and ending in the furnace's feed hatch, an opening in the drum's top with the fire showing in it. The coal
     # slides down the trough in a stream and drops into the hatch. One solid piece, standing in the drum's top.
@@ -734,6 +777,54 @@ def cabinet():
     hr = 0.24                                            # the walls stand this far over the bed
     zb = TOP - 0.4                                       # everything runs down into the drum's top
     trim = m_trim() if T == 1 else m_body()
+    block = m_trim() if T == 1 else m_brick() if T == 3 else m_cab()
+    rim_m = m_brick() if T == 3 else m_yellow()
+    zr = za + hr + 0.04                                  # the tray's rim
+    wt = 0.09                                            # its walls
+    fx0, fx1 = O.x - hw / w.x - th, O.x + hw / w.x + th  # the chute's gap in the front wall
+    one("tray", [block], lambda b: b.box((bx1 - bx0, by1 - by0, za - TOP + 0.3), Matrix.Translation((xm, ym, (za + TOP - 0.3) / 2))), smooth=False, bevel=0.04)
+
+    def rim(b, z0=za - 0.02, z1=zr, grow=0.0):
+        g = grow
+        b.box((bx1 - bx0 + 2 * g, wt + 2 * g, z1 - z0), Matrix.Translation((xm, by1 - wt / 2, (z0 + z1) / 2)))
+        for x in (bx0 + wt / 2, bx1 - wt / 2):
+            b.box((wt + 2 * g, by1 - by0 + 2 * g, z1 - z0), Matrix.Translation((x, ym, (z0 + z1) / 2)))
+        for xa, xb in ((bx0, fx0), (fx1, bx1)):
+            if xb - xa > 0.04:
+                b.box((xb - xa + 2 * g, wt + 2 * g, z1 - z0), Matrix.Translation(((xa + xb) / 2, by0 + wt / 2, (z0 + z1) / 2)))
+    one("trayrim", [block], rim, smooth=False, bevel=0.02)
+    one("traycap", [rim_m], lambda b: rim(b, zr - 0.005, zr + 0.05, 0.02), smooth=False, bevel=0.012)
+    # the heap: a dark mound with lumps all over it, highest over the chute's start (the sliding coal comes out from under it)
+    hx, hy = (bx1 - bx0) / 2 - wt, (by1 - by0) / 2 - wt
+
+    def heap_z(x, y):
+        u, v = (x - xm) / hx, (y - ym) / hy
+        return za + 0.02 + 0.5 * max(0.0, 1 - 0.75 * u * u) * max(0.0, 1 - 0.8 * max(0.0, v) ** 2 - 0.25 * min(0.0, v) ** 2)
+
+    def mound(b):
+        m = 10
+        g = [[b.bm.verts.new(Vector((xm + hx * (2 * i / m - 1), ym + hy * (2 * j / m - 1), heap_z(xm + hx * (2 * i / m - 1), ym + hy * (2 * j / m - 1)) - 0.06)))
+              for j in range(m + 1)] for i in range(m + 1)]
+        for i in range(m):
+            for j in range(m):
+                b.bm.faces.new((g[i][j], g[i + 1][j], g[i + 1][j + 1], g[i][j + 1]))
+        b.box((2 * hx, 2 * hy, 0.04), Matrix.Translation((xm, ym, za + 0.02)))
+    one("heapmound", [m_soot()], mound)
+    hr_ = random.Random(31)
+    pale = {1: 0.42, 2: 0.2, 3: 0.0}[T]
+    hb = bmesh.new()
+    for k in range(64 if T == 1 else 80):
+        r = hr_.uniform(0.11, 0.17) if T < 3 else hr_.uniform(0.13, 0.2)
+        x, y = xm + hx * hr_.uniform(-1, 1) * 0.9, ym + hy * hr_.uniform(-1, 1) * 0.86
+        geo = bmesh.ops.create_icosphere(hb, subdivisions=1, radius=r)
+        mi = 1 if hr_.random() < pale else 0
+        R3 = Matrix.Rotation(hr_.uniform(0, 6.3), 4, 'Z') @ Matrix.Rotation(hr_.uniform(0, 6.3), 4, 'X')
+        at_ = Vector((x, y, heap_z(x, y) + r * 0.25))
+        for v in geo["verts"]:
+            v.co = at_ + R3 @ (v.co * hr_.uniform(0.72, 1.18))
+            for f in v.link_faces:
+                f.material_index = mi
+    kit.mesh_ob("heap", hb, [m_coal(), m_coalpale()], smooth=False)
 
     def Mc(t=0.0):
         return frame_at(O + w * t, d, -w)                # a prism's outline as (s, z), its thickness across the trough
@@ -748,13 +839,11 @@ def cabinet():
     one("chutebed", [m_soot()], lambda b: b.prism([(s0, za), (0, za), (sl, zl), (sl, zl - 0.2), (sl + 0.03, zl - 0.2), (sl + 0.03, zl + 0.02), (0, za + 0.03), (s0, za + 0.03)],
                                               2 * hw, Mc()), smooth=False)
     ze = TOP + (0.2 if T == 1 else 0.14)                                      # the hatch's rim at its far end
-    top = [(s0, za + hr), (0, za + hr), (sl, zl + hr), (se + th, ze)]         # the walls' top edge
-    wall = top + [(se + th, zb), (s0, zb)]
+    top = [(-wt, za + hr), (0, za + hr), (sl, zl + hr), (se + th, ze)]        # the walls' top edge
+    wall = top + [(se + th, zb), (-wt, zb)]
     one("chutewalls", [trim], lambda b: ([b.prism(wall, th, Mc(t)) for t in (-hw - th / 2, hw + th / 2)],
                                          b.prism([(se, ze), (se + th, ze), (se + th, zb), (se, zb)], 2 * hw, Mc())),
         smooth=False, bevel=0.025)
-    # the dark of the box's mouth over the bed
-    one("chutemouth", [m_soot()], lambda b: b.box((2 * hw / w.x, 0.04, 0.4), Matrix.Translation((O.x, by0 - 0.012, za + 0.1))), smooth=False)
     if T < 3:                                            # Flash's yellow edge along the channel
         cap = top + [(a, z + 0.035) for a, z in reversed(top)]
         one("chutecaps", [m_yellow()], lambda b: ([b.prism(cap, th + 0.03, Mc(t)) for t in (-hw - th / 2, hw + th / 2)],
@@ -776,7 +865,7 @@ def cabinet():
         r = math.hypot(p.x, p.y)
         if T == 1:
             return max(TOP + 0.02, TOP + 0.05 + 0.19 * (1.9 - r))
-        prof = [(0.0, 4.55), (0.9, 4.5), (1.6, 4.38), (2.05, 4.2), (RD, 4.06)]
+        prof = DOME
         for (r0, z0), (r1, z1) in zip(prof, prof[1:]):
             if r <= r1:
                 return z0 + (z1 - z0) * (r - r0) / (r1 - r0)
@@ -812,7 +901,7 @@ def cabinet():
         bmesh.ops.create_icosphere(bm, subdivisions=1, radius=r)
         for v in bm.verts:
             v.co *= rr.uniform(0.72, 1.18)
-        o = kit.mesh_ob("coal-%d" % i, bm, [m_coal()], smooth=False, parent=mv)
+        o = kit.mesh_ob("coal-%d" % i, bm, [m_coalpale() if i % 5 < round(pale * 5) else m_coal()], smooth=False, parent=mv)
         rot = (rr.uniform(0, 6.3), rr.uniform(0, 6.3), rr.uniform(0, 6.3))
         SLIDES.append((o, ride, rr.uniform(-hw + r + 0.02, hw - r - 0.02), r, (i + rr.uniform(0, 0.6)) / n, rot, rr.choice((1, 1, 2))))
     if T == 3:
@@ -891,14 +980,15 @@ def build():
     copper_pipe(z_tur)
 
 
-# ------------------------------------------------------------------------------------------------- damaged, destroyed
-# One rough pass each (owner: these only roughly follow Flash): PB_STATE=damaged|destroyed with mode `base`.
+# ------------------------------------------------------------------------------------------------------------- damaged
+# One rough pass (owner: this only roughly follows Flash): PB_STATE=damaged with mode `base`.
 #   PB_STATE=damaged PB_K=6 sh run.sh <tier> base   ->  render/L<tier>-damaged-base.png, -alone.png
+# Destroyed is Flash's rubble, as for every other 3D building: there is no 3D destroyed look.
 STATE = kit.STATE
 
 
-def scorch(amount, cut=0.5):
-    """Soot over every paint: patches of near black, `amount` of the colour left under them."""
+def scorch(amount, cut=0.5, fires=0.3):
+    """Soot over every paint: patches of near black, `amount` of the colour left under them; the fires gutter."""
     for m in list(bpy.data.materials):
         nt = m.node_tree
         if nt is None:
@@ -908,7 +998,7 @@ def scorch(amount, cut=0.5):
             continue
         es = bsdf.inputs["Emission Strength"]
         if es.default_value > 0:
-            es.default_value *= 0.0 if STATE == "destroyed" else 0.45
+            es.default_value *= fires
         inp = bsdf.inputs["Base Color"]
         if inp.is_linked:
             src = inp.links[0].from_socket
@@ -923,7 +1013,7 @@ def scorch(amount, cut=0.5):
         nz.inputs["Roughness"].default_value = 0.65
         ramp = nt.nodes.new("ShaderNodeValToRGB")
         ramp.color_ramp.elements[0].position, ramp.color_ramp.elements[0].color = cut - 0.1, grey(amount)
-        ramp.color_ramp.elements[1].position, ramp.color_ramp.elements[1].color = cut + 0.12, K1
+        ramp.color_ramp.elements[1].position, ramp.color_ramp.elements[1].color = cut + 0.12, grey(0.8)
         mix = nt.nodes.new("ShaderNodeMix")
         mix.data_type = "RGBA"
         mix.blend_type = "MULTIPLY"
@@ -940,10 +1030,70 @@ def about(pivot, axis, deg):
 
 
 def knock(names, M):
+    """Move the named objects (and what hangs on them) by M."""
     for n in names:
         o = bpy.data.objects.get(n)
-        if o is not None and o.parent is None:
+        if o is not None:
             o.matrix_world = M @ o.matrix_world
+    bpy.context.view_layer.update()
+
+
+def wreck():
+    """What the damage adds: torn holes in the drum with their plates bent out, dead window panes, parts fallen at the feet."""
+    rr = random.Random(12)
+    holes = [(0, 26, 2.8, 3.5, RD), (82, 108, 2.0, 3.1, RD), (28, 50, 1.4, 1.95, 2.17)]
+    if T >= 2:
+        holes[0] = (-4, 22, 3.0, 3.62, RD)
+        holes[2] = (26, 50, 1.2, 1.7, 2.12)
+
+    def torn(b):
+        for a0, a1, z0, z1, r in holes:
+            m = 6
+            for i in range(m):
+                u0, u1 = a0 + (a1 - a0) * i / m, a0 + (a1 - a0) * (i + 1) / m
+                k = 1 - abs((i + 0.5) / m - 0.5) * 1.3
+                h = (z1 - z0) * k * rr.uniform(0.7, 1.0)
+                zm = (z0 + z1) / 2 + rr.uniform(-0.06, 0.06)
+                b.shell(r - 0.02, r + 0.1, u0, u1, zm - h / 2, zm + h / 2, n=1)
+    one("torn", [m_soot()], torn, smooth=False)
+
+    def bent(b):
+        for n, (a0, a1, z0, z1, r) in enumerate(holes):
+            for a, tip, z in ((a0 + 1, 38, z1 - 0.02), (a1 - 1, -46, z0 + 0.02)):          # one plate bent up and out, one hanging down
+                d = D(a + (a1 - a0) * 0.22 * (1 if tip > 0 else -1))
+                t = math.radians(abs(tip))
+                out = d * math.sin(t) + UP * (math.cos(t) if tip < 0 else -math.cos(t))    # along the plate, away from its hinge
+                hgt = (z1 - z0) * 0.62
+                b.box((0.5, hgt, 0.05), frame_at(d * (r + 0.1) + UP * z + out * (hgt / 2), UP.cross(d), out.cross(UP.cross(d))))
+    one("bentplates", [m_trim() if T == 1 else m_body()], bent, smooth=False, bevel=0.015)
+    # dead panes
+    a0, a1 = WIN
+    n = 7 if T == 1 else 6
+    step = (a1 - a0) / n
+    z0, z1 = (2.06, 2.68) if T == 1 else (2.08, 2.72)
+    one("deadpanes", [m_soot()], lambda b: [b.shell(RD + 0.013, RD + (0.03 if T == 1 else 0.05), a0 + step * i, a0 + step * (i + 1), z0, z1, n=4) for i in ((1, 2, 4, 6) if T == 1 else (0, 2, 3, 5))])
+    # at the feet: plates off the drum, a hoop's end, coal, spikes
+    def plates(b):
+        for phi, r, sz, tilt in ((-20, 3.5, (0.8, 0.55), 8), (22, 3.75, (0.6, 0.7), -10), (62, 3.6, (0.75, 0.5), 14), (96, 3.3, (0.5, 0.45), -6), (4, 4.5, (0.45, 0.4), 5)):
+            d = D(phi)
+            nrm = (UP + d * math.tan(math.radians(tilt))).normalized()
+            b.box((sz[0], sz[1], 0.06), frame_at(d * r + UP * (0.07 + abs(tilt) * 0.006), D(phi + rr.uniform(20, 160)), nrm))
+    one("fallenplates", [m_trim() if T == 1 else m_body()], plates, smooth=False, bevel=0.015)
+    hb = bmesh.new()
+    for k in range(16):
+        phi, r0 = rr.uniform(-34, 30), rr.uniform(2.9, 4.4)
+        r = rr.uniform(0.1, 0.17)
+        geo = bmesh.ops.create_icosphere(hb, subdivisions=1, radius=r)
+        at_ = D(phi) * r0 + UP * r * 0.7
+        for v in geo["verts"]:
+            v.co = at_ + v.co * rr.uniform(0.72, 1.18)
+    kit.mesh_ob("spiltcoal", hb, [m_coal()], smooth=False)
+    if T < 3:
+        def fallen(b):
+            for phi, r, turn_ in ((48, 3.2, 30), (78, 3.9, 200), (-2, 3.9, 120)):
+                d = D(phi)
+                b.lathe([(0.1, 0.0), (0.075, 0.14), (0.0, 0.62)], n=10, M=frame_at(d * r + UP * 0.1, UP, D(turn_) + UP * 0.05))
+        one("fallenspikes", [m_spike()], fallen)
 
 
 def build_state():
@@ -952,21 +1102,25 @@ def build_state():
         return
     kit.MOVING.clear()                      # a state is one still: nothing is held back for a strip
     bpy.context.view_layer.update()         # so every object's matrix_world is its real place before it is knocked
-    if STATE == "damaged":
-        scorch(0.3)
-        # the copper pipe torn off the riser and sprung up, the funnel knocked over, the turret's top askew
-        knock(["cpipe"], about(TUR + UP * (TOP + 2.2), SF, 16))
-        knock(["funnel", "funnelhole", "funnelstem"], about(FUN + UP * 7.7, SF, -32))
-        knock(["star", "spikes", "collar"], about(TUR + UP * (TOP + 1.6), SF, -9))
+    wreck()
+    scorch(0.2, 0.5)
+    # the intake bent away from the drum above its flange (tier 3: the stack leaning), the riser with it
+    if T < 3:
+        lean = about(INT + UP * 4.1, SF, 13)
+        knock(["ypipe-elbow", "yrib-0", "yrib-1", "ymouth", "ythroat", "riserbox", "riserband", "riserflange", "funnelstem"], lean)
+        knock(["yflange"], about(INT + UP * 4.1, SF, 6))
     else:
-        scorch(0.16, 0.56)
-        # the whole machine thrown on its side toward the screen's right, sunk a little, its pipe and funnel flung off
-        roots = [o for o in bpy.data.objects if o.parent is None]
-        knock(["cpipe"], about(TUR + UP * (TOP + 2.2), SF, 40))
-        knock(["funnel", "funnelhole", "funnelstem"], Matrix.Translation(SR * -0.6 + UP * -1.0) @ about(FUN + UP * 7.7, SF, -60))
-        M = Matrix.Translation(UP * -1.1 + SR * -4.6) @ about(P(2.3, 0.0, 0.0), SF, -72)      # what turns under the ground is hidden by it
-        for o in roots:
-            o.matrix_world = M @ o.matrix_world
+        lean = about(INT + UP * 0.2, SF, 7)
+        knock(["stack", "riserneck", "riserbracket", "riserbolts"], lean)
+    # the copper pipe torn off the turret: it hangs from the riser, swung out over the drum's front and drooping
+    top = lean @ (RIS + UP * RISER_TOP)
+    run = (TUR - RIS).normalized()
+    knock(["cpipe"], about(top, UP.cross(run), -14) @ about(top, UP, -34) @ lean)
+    # the funnel knocked off, lying at the feet
+    zf = 9.4 if T < 3 else 9.3
+    knock(["funnel", "funnelhole"], Matrix.Translation(P(-1.0, 4.9, 0.42 if T < 3 else 0.55) - (FUN + UP * zf)) @ about(FUN + UP * zf, SF, 96) @ about(FUN + UP * zf, UP, 30))
+    # the turret's top askew
+    knock(["star", "spikes", "collar", "collar2", "turretmid", "neck"], about(TUR + UP * (TOP + 1.7), SF, -13))
 
 
 _border = kit.border_of

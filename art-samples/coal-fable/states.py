@@ -1,4 +1,4 @@
-"""states.py : out/states.png, the damaged and destroyed looks beside Flash's, per tier (render/L<t>-<state>-base.png)."""
+"""states.py : out/states.png, the damaged look beside Flash's, per tier (render/L<t>-damaged-base.png). Destroyed is Flash's rubble."""
 import os
 from PIL import Image
 import fref
@@ -9,7 +9,7 @@ FL = {1: ('top.1.damaged.v2.png', 'top.1.destroyed.v2.png'), 2: ('top.2.damaged.
 rows = []
 for t in (1, 2, 3):
     cells = []
-    for i, st in enumerate(('damaged', 'destroyed')):
+    for i, st in enumerate(('damaged',)):
         f = Image.open(os.path.join(A, FL[t][i])).convert('RGBA')
         c = Image.new('RGBA', (130 * 4, 140 * 4), BG)
         f = f.resize((f.width * 4, f.height * 4), Image.NEAREST)
