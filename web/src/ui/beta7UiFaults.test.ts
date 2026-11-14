@@ -41,6 +41,19 @@ describe("6 Nov UI check: phone faults", () => {
     expect(phone("styles/moveyards.css")).toMatch(/\.transfer-dialog__ends \{\s*grid-template-columns: minmax\(0, 1fr\);/);
   });
 
+  it("Move Monsters: pressing Fill, + or − cannot bring up a scroll bar or move the buttons", () => {
+    const list = /\.transfer-dialog__list \{([^}]*)\}/.exec(css("styles/moveyards.css"))?.[1] ?? "";
+    expect(list).toMatch(/overflow-y: auto;/);
+    // A pressed button drops 1px (2px for a painted plate): the list's padding must hold that,
+    // or the press overflows a list that ends at its last row and the scroll bar appears.
+    expect(css("styles/ui.css")).toMatch(/\.btn:active:not\(:disabled\) \{\s*transform: translateY\(1px\);/);
+    expect(list).toMatch(/padding: var\(--space-1\);/);
+    expect(list).toMatch(/margin: calc\(-1 \* var\(--space-1\)\);/);
+    expect(css("styles/tokens.css")).toMatch(/--space-1: 4px;/);
+    // The bar's room is always kept, so it never narrows the rows or covers Fill.
+    expect(list).toMatch(/scrollbar-gutter: stable;/);
+  });
+
   it("Hatchery: Max wraps rather than running past the edge; a card shows its hatchery's number", () => {
     const phoneHatch = block(css("styles/hatch.css"), "@container hatch (width < 560px) {");
     expect(phoneHatch).toMatch(/\.hatch-add__controls \{\s*flex-wrap: wrap;/);

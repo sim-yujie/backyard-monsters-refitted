@@ -139,6 +139,17 @@ describe("the Monster Locker", () => {
     expect(animates(save, 8, 8, SAVED + 500)).toBe(false);
   });
 
+  it("runs the Inferno yard's Strongbox while an Inferno monster (IC…) unlocks, and only then", () => {
+    const lockerdata = { IC1: { t: 2 }, IC2: { t: 1, s: SAVED - 100, e: SAVED + 500 } };
+    const inferno = saveWith(locker, { type: "inferno", lockerdata });
+    expect(animates(inferno, 8, 8, SAVED)).toBe(true);
+    expect(animates(inferno, 8, 8, SAVED + 500)).toBe(false);
+    // A surface Locker never runs for an Inferno entry, nor the Strongbox for a surface one.
+    expect(animates(saveWith(locker, { lockerdata }), 8, 8, SAVED)).toBe(false);
+    const surface = { C5: { t: 1, s: SAVED - 100, e: SAVED + 500 } };
+    expect(animates(saveWith(locker, { type: "inferno", lockerdata: surface }), 8, 8, SAVED)).toBe(false);
+  });
+
   it("stands still with nothing unlocking", () => {
     const save = saveWith(locker, { lockerdata: { C5: { t: 2 }, C6: { t: 2 } } });
     expect(animates(save, 8, 8, SAVED)).toBe(false);
