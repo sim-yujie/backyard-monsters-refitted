@@ -38,6 +38,21 @@ px around the building's origin, 12 render px a 1x px), with the same camera as 
 | coal | 2 Coal Extractor in an Inferno yard | art/coal-3d-b8 | art-samples/coal-fable (coal.py) | levels 1, 3, 7; 47, 45 and 45 cells of its loop; `coal:damaged` from the same folder (`PB_STATE`); destroyed is Flash's rubble |
 | sulfur | 3 Sulfur Swirler in an Inferno yard | art/sulfur-3d | art-samples/sulfur-3d (sulfur.py) | levels 1, 3, 7; 51, 45 and 45 cells of its loop (leave out `L<tier>-parts-51/45.png`, frame 0 again for the loop check); canvas x -60..60, y -80..70; `sulfur:damaged` from the same folder (`PB_STATE`); destroyed is Flash's rubble |
 | locker | 8 Monster Locker | art/locker-fable-2 | locker-fable-2 (locker.py) | levels 1-4; 21, 20, 20 and 21 cells of its key and gears |
+| strongbox | 8 Strongbox in an Inferno yard | art/strongbox-3d | art-samples/buildings-b6/inferno/strongbox (strongbox.py) | one look for its four levels; 30 cells of its loop while it unlocks, each the whole building |
+
+The Inferno's Strongbox (`strongbox`, moves "frames"; owner on the Review Desk, 14 Nov 2026) is the clean-room model
+(`strongbox.py`), one look for every level as Flash's. Its renders are whole frames, ground shadow and all
+(`render/f-00.png` to `f-29.png`, 12 render px a 1x px, on the canvas x -70..90, y -52..98; `f-30.png` is frame 0
+again, rendered for the loop check, and is not read): the hand's shadow moves over the disc and the light it throws
+back changes most of the building a little from frame to frame, so there is no still body to cut a moving layer out of
+(over the loop, pixels change by more than 2 in 255 across x -55..55, y -40..50 of a building that is x -56..56,
+y -40..85). Every cell is therefore the whole building (`whole`), as the Incubator Control Centre's. The ground shadow
+is taken off each frame as off a base, the building told from its shadow by the same frame rendered with no ground
+(`render-alone/f-NN.png`, `PB_ALONE=1 run.sh full`, only its alpha read); the shadow picture is frame 0's (outside the
+building the frames' shadows differ only along its outline). Its files are `*.3d1*` in the Inferno's own folder,
+`imonsterlab/`. Flash has no shadow, damaged or destroyed picture for this building; the 3D has its own ground shadow
+and no damaged or destroyed render: the game tints the whole look when damaged and, Flash having no rubble for it,
+goes on showing it when destroyed (`resolveArt`).
 
 The Monster Locker (`locker`, owner 10 Nov 2026, Review Desk card locker-fable-2) is the from-scratch model
 (`locker.py`), its four levels as Flash's. Its renders are whole scenes (8 render px a 1x px, `k`, on the canvas
@@ -168,6 +183,7 @@ BUILDINGS = {
                  moves="parts"),
     "sulfur": dict(type=3, folder="isulpherproducer", frame=(-60, -80), k=6, looks=[(1, "L1"), (3, "L2"), (7, "L3")],
                    moves="parts"),
+    "strongbox": dict(type=8, folder="imonsterlab", frame=(-70, -52), looks=[(1, "")], moves="frames"),
     "locker": dict(type=8, folder="monsterlocker", frame=(-80, -110), k=8, looks=[(n, f"L{n}") for n in range(1, 5)],
                    moves="cells", noise=0.0),
     "booby": dict(type=24, folder="boobytrap", frame=(-24, -14), looks=[(1, "booby-whole")], moves=None),
@@ -180,7 +196,7 @@ CELLS = {"twig": {1: 34, 3: 34, 6: 34, 10: 34}, "pebble": {1: 26, 3: 26, 6: 26, 
          "academy": {1: 21, 2: 21, 3: 21, 4: 21}, "lab": {1: (32, 5, 5)}, "bone": {1: 36, 3: 36, 7: 36},
          "coal": {1: 47, 3: 45, 7: 45},
          "sulfur": {1: 51, 3: 45, 7: 45},
-         "locker": {1: 21, 2: 20, 3: 20, 4: 21}}
+         "strongbox": {1: 30}, "locker": {1: 21, 2: 20, 3: 20, 4: 21}}
 TAIL = 16                      # 1x px a shadow cut by the render's canvas is carried on past it, fading out
 NOISE = 0.07                   # the shadow catcher's faint wash over all the ground (sky occlusion), taken off every shade
 MOVED = 8                      # levels (of 255) a Lab cell must differ from the first to count as moving, past the noise
@@ -375,6 +391,56 @@ def export_loops(name, render):
     return [row]
 
 
+def export_frames(name, render):
+    """The Inferno Strongbox (`strongbox`): a strip of whole cells cut from whole frames with their ground shadow, its
+    top (cell 0) and its shadow (frame 0's). See the module comment."""
+    cfg = BUILDINGS[name]
+    out = ASSETS / cfg["folder"]
+    fx, fy = cfg["frame"]
+    k = cfg.get("k", K)
+    n = CELLS[name][1]
+    names = [render / f"f-{j:02d}.png" for j in range(n)]
+    masks = [render.parent / "render-alone" / p.name for p in names]
+    assert all(p.exists() for p in names + masks), (name, render)
+    # The box every cell is cut to: all that any frame's building covers, and a 1x px round it for its soft edge.
+    boxes = [Image.open(m).getchannel("A").point(lambda v: 255 if v > 2 else 0).getbbox() for m in masks]
+    size = Image.open(names[0]).size
+    x0, y0, x1, y1 = whole((max(0, min(b[0] for b in boxes) - k), max(0, min(b[1] for b in boxes) - k),
+                            min(size[0], max(b[2] for b in boxes) + k), min(size[1], max(b[3] for b in boxes) + k)), k)
+    w, h = (x1 - x0) * 2 // k, (y1 - y0) * 2 // k
+    cols = min(n, MAX_W // w)
+    nrows = -(-n // cols)
+    sheet = Image.new("RGBA", (w * cols, h * nrows), (0, 0, 0, 0))
+    first = shade = None
+    for j, (path, mask) in enumerate(zip(names, masks)):
+        body, s = split(load(path), load(mask)[..., 3] > 0.01, cfg.get("noise", NOISE))
+        ys, xs = np.nonzero(body[..., 3] > 2 / 255)
+        assert x0 <= xs.min() and xs.max() < x1 and y0 <= ys.min() and ys.max() < y1, (path.name, "outside the cell")
+        if j == 0:
+            first, shade = body, s
+        sheet.paste(resize_pm(body[y0:y1, x0:x1], (w, h)), ((j % cols) * w, (j // cols) * h))
+    tag = "3d1"
+    save_webp(sheet, out / f"anim.{tag}@2x.webp")
+    row = dict(building=name, type=cfg["type"], level=1)
+    tx0, ty0, tx1, ty1 = bbox(first[..., 3], k=k)
+    save_webp(resize_pm(first[ty0:ty1, tx0:tx1], ((tx1 - tx0) * 2 // k, (ty1 - ty0) * 2 // k)), out / f"top.{tag}@2x.webp")
+    row["top"] = [f"top.{tag}@2x.webp", fx + tx0 // k, fy + ty0 // k]
+    sh = np.asarray(Image.fromarray(shade, "F").resize((shade.shape[1] // k, shade.shape[0] // k), Image.BOX))
+    sh, sx, sy = tail(sh)
+    ys, xs = np.nonzero(sh > 0.02)
+    sx0, sy0 = max(0, int(xs.min()) - 1), max(0, int(ys.min()) - 1)
+    sx1, sy1 = min(sh.shape[1], int(xs.max()) + 2), min(sh.shape[0], int(ys.max()) + 2)
+    gray = np.clip(255 * (1 - sh[sy0:sy1, sx0:sx1]) + 0.5, 0, 255).astype("uint8")
+    Image.fromarray(gray, "L").save(out / f"shadow.{tag}.jpg", "JPEG", quality=90)
+    row["shadow"] = [f"shadow.{tag}.jpg", fx + sx + sx0, fy + sy + sy0]
+    row["anim"] = [f"anim.{tag}@2x.webp", fx + x0 // k, fy + y0 // k, w // 2, h // 2, n]
+    row["columns"] = cols
+    row["whole"] = True
+    row["bytes"] = sum((out / f).stat().st_size for f in (row["top"][0], row["shadow"][0], row["anim"][0]))
+    print(json.dumps(row), flush=True)
+    return [row]
+
+
 def grown(name, render, frame, k):
     """A building exported larger than it was modelled (`grow`, the Bone Cruncher's): its renders, each look's base,
     alone and first `CELLS` parts cells, enlarged by `grow` into a scratch folder, about the building's middle on the
@@ -550,5 +616,9 @@ if __name__ == "__main__":
         if BUILDINGS[building]["moves"] == "loops":
             assert not state, pairs[i]
             export_loops(building, Path(pairs[i + 1]).resolve())
+            continue
+        if BUILDINGS[building]["moves"] == "frames":
+            assert not state, pairs[i]
+            export_frames(building, Path(pairs[i + 1]).resolve())
             continue
         export(building, Path(pairs[i + 1]).resolve(), state or None)

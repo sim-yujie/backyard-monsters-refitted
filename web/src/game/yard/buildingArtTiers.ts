@@ -219,6 +219,14 @@ export interface TierAnim {
    * same point of the loop (`loopAnimLayers`).
    */
   readonly rest?: number;
+  /**
+   * A building whose look at rest is cell 0 and no other (the Inferno's 3D
+   * Strongbox: the owner approved its still with the hand at one o'clock and
+   * the latch up): it starts on cell 0 and goes back to it when its work
+   * ends, where Flash's strip starts on a cell of its own choosing and stops
+   * wherever it is (`startFrame`, `BFOUNDATION.as:1136`).
+   */
+  readonly home?: boolean;
 }
 
 /** A 3D building's damaged or destroyed look: one still and its shadow (none where it casts none). */
@@ -714,7 +722,9 @@ export const BUILDING_3D_ART: Readonly<Record<number, readonly TierArt[]>> = {
  * Incubator Control Centre (16, in the Hatchery Control Center's folder,
  * which the Inferno's row shares), look C from art/icc-inferno-looks (owner,
  * 2 Nov 2026: "I want to see it in the inferno + the soft animated glow of the
- * lava"), exported by `export3d_buildings.py icc`.
+ * lava"), exported by `export3d_buildings.py icc`; and its Strongbox (8,
+ * `buildings/imonsterlab/`), from art/strongbox-3d (owner on the Review Desk,
+ * 14 Nov 2026), exported by `export3d_buildings.py strongbox`.
  */
 export const INFERNO_BUILDING_3D_ART: Readonly<Record<number, readonly TierArt[]>> = {
   // 1 Bone Cruncher: 3D (owner, 6 Nov 2026: "3d bone crusher has been approved"), the clean-room model's three tiers,
@@ -763,6 +773,17 @@ export const INFERNO_BUILDING_3D_ART: Readonly<Record<number, readonly TierArt[]
     { from: 7, top: ["top.3d7@2x.webp", -40, -61], shadow: ["shadow.3d7.jpg", -26, 17], lift: 0,
       anim: { strip: ["anim.3d7@2x.webp", -38, -61, 50, 119, 45], columns: 40, body: ["body.3d7@2x.webp", -40, -59] },
       damaged: { top: ["top.3d7.damaged@2x.webp", -40, -54], shadow: ["shadow.3d7.damaged.jpg", -28, 16] } },
+  ],
+  // 8 Strongbox: 3D (owner on the Review Desk, 14 Nov 2026), the clean-room model, one look for its four levels as
+  // Flash's. Each cell is the whole building, 30 cells of its loop while a monster is unlocked (the hand swings over
+  // the lock and back, its shadow crossing the disc, so no part of it stands still to be a body); at rest it holds
+  // cell 0, the approved still (`home`). Its own ground shadow, where Flash's has none. Flash has no damaged or destroyed picture for
+  // it and neither has the 3D: damaged is the whole look tinted, destroyed the 3D still (tinted darker), where Flash
+  // goes on showing its whole picture.
+  8: [
+    { from: 1, top: ["top.3d1@2x.webp", -57, -38], shadow: ["shadow.3d1.jpg", -61, 31], lift: 0,
+      anim: { strip: ["anim.3d1@2x.webp", -57, -41, 115, 127, 30], columns: 17, whole: true, home: true },
+      destroyed: { top: ["top.3d1@2x.webp", -57, -38], shadow: ["shadow.3d1.jpg", -61, 31] } },
   ],
   // 16 Incubator Control Centre: 3D look C, on a small magma pool. Each cell is the whole building: 32 cells of its
   // idle loop (the lava's light breathing), then 64 of its loop while it hatches (the crystal pulsing twice as well).
