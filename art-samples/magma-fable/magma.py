@@ -664,4 +664,207 @@ def border_all(objs, pad=10):
 
 
 kit.border_of = border_all
-kit.run(build, turn)
+
+
+# ------------------------------------------------------------------------------------------------------------- damaged
+# One rough pass (owner: this only roughly follows Flash's top.1.damaged.v2): PB_STATE=damaged with mode `base`.
+#   PB_STATE=damaged PB_K=6 sh run.sh <tier> base   ->  render/L<tier>-damaged-base.png, -alone.png
+# Destroyed is Flash's rubble, as for every other 3D building: there is no 3D destroyed look.
+# Nothing here runs without PB_STATE: the whole model and its renders are as they were.
+STATE = kit.STATE
+
+
+def scorch(amount, cut=0.5):
+    """Soot over every paint: patches of near black, `amount` of the colour left under them."""
+    for m in list(bpy.data.materials):
+        nt = m.node_tree
+        if nt is None:
+            continue
+        bsdf = next((n for n in nt.nodes if n.type == "BSDF_PRINCIPLED"), None)
+        if bsdf is None:
+            continue
+        inp = bsdf.inputs["Base Color"]
+        if inp.is_linked:
+            src = inp.links[0].from_socket
+        else:
+            rgb = nt.nodes.new("ShaderNodeRGB")
+            rgb.outputs[0].default_value = inp.default_value
+            src = rgb.outputs[0]
+        tc = nt.nodes.new("ShaderNodeTexCoord")
+        nz = nt.nodes.new("ShaderNodeTexNoise")
+        nz.inputs["Scale"].default_value = 1.6
+        nz.inputs["Detail"].default_value = 5.0
+        nz.inputs["Roughness"].default_value = 0.65
+        ramp = nt.nodes.new("ShaderNodeValToRGB")
+        ramp.color_ramp.elements[0].position, ramp.color_ramp.elements[0].color = cut - 0.1, grey(amount)
+        ramp.color_ramp.elements[1].position, ramp.color_ramp.elements[1].color = cut + 0.12, grey(0.85)
+        mix = nt.nodes.new("ShaderNodeMix")
+        mix.data_type = "RGBA"
+        mix.blend_type = "MULTIPLY"
+        mix.inputs[0].default_value = 1.0
+        nt.links.new(tc.outputs["Object"], nz.inputs["Vector"])
+        nt.links.new(nz.outputs[0], ramp.inputs[0])
+        nt.links.new(src, mix.inputs[6])
+        nt.links.new(ramp.outputs[0], mix.inputs[7])
+        nt.links.new(mix.outputs[2], inp)
+
+
+def about(pivot, axis, deg):
+    return Matrix.Translation(pivot) @ Matrix.Rotation(math.radians(deg), 4, axis) @ Matrix.Translation(-Vector(pivot))
+
+
+def lean(pivot, d, deg):
+    """Tip what stands on `pivot` over toward the level direction d."""
+    d = Vector(d).normalized()
+    return about(Vector(pivot), Z.cross(d), deg)
+
+
+def knock(tag, M, names=(), prefixes=(), skip=()):
+    """Move the named objects (and what hangs on them) by M: they are hung on a new empty."""
+    e = bpy.data.objects.new("knock-" + tag, None)
+    kit.link(e)
+    for o in list(bpy.data.objects):
+        if o is e or o.parent is not None or o.name.startswith("knock-") or o.name.startswith(tuple(skip) or ("\0",)):
+            continue
+        if o.name in names or (prefixes and o.name.startswith(tuple(prefixes))):
+            o.parent = e
+    e.matrix_world = M
+
+
+def patch(name, at, size, m, jag=0.35, seed=0.0):
+    """A ragged lump or (one size small) a ragged flat patch."""
+    from mathutils import noise
+    bm = bmesh.new()
+    bmesh.ops.create_icosphere(bm, subdivisions=2, radius=1.0)
+    for v in bm.verts:
+        k = 1.0 + jag * noise.noise(Vector((v.co.x * 1.7 + seed, v.co.y * 1.7, v.co.z * 1.7 + seed * 0.37)))
+        v.co = Vector((v.co.x * size[0] * k, v.co.y * size[1] * k, v.co.z * size[2] * k))
+    ob = kit.mesh_ob(name, bm, [m], smooth=False)
+    ob.location = Vector(at)
+    return ob
+
+
+def crack(name, pts, m, r=0.055):
+    kit.tube(name, [Vector(p) for p in pts], r, m, r_end=r * 0.3)
+
+
+def wreck_dark():
+    """Before the soot: holes, dents and cracks in the box, lid and pot, stones and plates at the feet."""
+    rr = random.Random(7)
+    soot = mat("hole", (9, 7, 7), rough=0.95, dirt=0.0, mottle=0.0, speck=0.0, bump=0.0)
+    # the left face: a hole torn low at its near end, a dent beside the vent, cracks up to the lid
+    patch("hole-l0", LF(1.25, Z0 + 0.75, 0.0), (0.5, 0.1, 0.62), soot, seed=1.0)
+    patch("hole-l1", LF(-1.5, Z0 + 3.0, 0.0), (0.34, 0.1, 0.3), soot, seed=2.0)
+    crack("crack-l0", [LF(1.0, Z0 + 1.2, 0.05), LF(0.75, Z0 + 1.9, 0.05), LF(1.02, Z0 + 2.45, 0.05), LF(0.8, Z0 + 3.1, 0.05)], soot)
+    crack("crack-l1", [LF(0.75, Z0 + 1.9, 0.05), LF(0.3, Z0 + 2.6, 0.05), LF(0.42, Z0 + 3.0, 0.05)], soot, 0.04)
+    # the right face: a blast hole above the flange, cracks from it
+    patch("hole-r0", RF(0.5, Z0 + 3.05, 0.0), (0.1, 0.75, 0.5), soot, seed=3.0)
+    patch("hole-r1", RF(-1.3, Z0 + 0.7, 0.0), (0.1, 0.4, 0.46), soot, seed=4.0)
+    crack("crack-r0", [RF(0.2, Z0 + 2.7, 0.05), RF(-0.5, Z0 + 2.9, 0.05), RF(-0.75, Z0 + 2.35, 0.05), RF(-1.3, Z0 + 2.2, 0.05)], soot)
+    crack("crack-r1", [RF(1.0, Z0 + 2.8, 0.05), RF(1.3, Z0 + 2.2, 0.05), RF(1.1, Z0 + 1.7, 0.05), RF(1.45, Z0 + 1.0, 0.05)], soot)
+    # the lid: a corner broken in, cracks across it from the pot
+    zl = TOP + 0.02
+    patch("hole-lid", (HX - 0.55, -HY + 0.85, TOP), (0.6, 0.5, 0.09), soot, seed=5.0)
+    crack("crack-lid0", [(0.5, 0.1, zl), (0.9, -0.5, zl), (0.7, -1.0, zl), (1.25, -1.5, zl)], soot, 0.06)
+    crack("crack-lid1", [(0.7, 0.9, zl), (1.2, 0.7, zl), (1.4, 1.2, zl), (1.75, 1.1, zl)], soot, 0.05)
+    crack("crack-lid2", [(-1.0, -0.6, zl), (-0.8, -1.2, zl), (-1.1, -1.6, zl)], soot, 0.045)
+    # at the feet: stones off the pot and plates off the box
+    stone = mat("rubble", (96, 84, 80), rough=0.9, wear=(140, 128, 120), dirt=0.3, scale=6.0)
+    navy = m_body()
+    for i, (x, y, s) in enumerate([(-1.2, -3.3, 0.3), (-0.2, -3.9, 0.22), (1.3, -3.5, 0.34), (2.5, -3.2, 0.26), (3.0, -2.2, 0.3), (3.4, -3.0, 0.18),
+                                   (2.9, 1.1, 0.3), (3.9, 1.5, 0.22), (1.9, -4.2, 0.2), (0.4, -4.6, 0.16), (-2.3, -3.2, 0.2), (4.6, -1.4, 0.17)]):
+        patch("rubble%d" % i, (x, y, s * 0.45), (s, s * rr.uniform(0.7, 1.0), s * 0.7), stone, jag=0.5, seed=i * 1.9)
+    for i, (x, y, sz, rz) in enumerate([(2.2, -3.9, (0.9, 0.6), 30), (-0.6, -4.3, (0.7, 0.5), -20), (3.6, 0.3, (0.6, 0.7), 55)]):
+        kit.box("fallenplate%d" % i, (sz[0], sz[1], 0.08), (x, y, 0.05), navy, rot=(rr.uniform(-9, 9), rr.uniform(-9, 9), rz), bevel=0.015)
+    # a block off the pot's rim, on the lid's edge and on the ground
+    kit.box("fallenrim0", (0.62, 0.42, 0.2), (2.9, -3.9, 0.02), m_rim(), rot=(8, -6, 25), bevel=0.04)
+    # where the elbow came off: the stub's open end
+    kit.cyl("stubhole", 0.44, 0.03, FL + X * 1.0, soot, rot=(0, 90, 0), verts=20, bevel=0.0)
+
+
+def wreck_magma(lip, pd):
+    """After the soot: magma down the pot and across the lid from the tilted mouth, down the left face over the dead
+    vent, out of the open stub, and pooled at the feet."""
+    spill = glow("spill", (196, 44, 6), (252, 116, 16), (255, 216, 76), 2.6, scale=2.6, cut=0.42)
+    crust = glow("crust", (44, 14, 10), (170, 34, 10), (250, 110, 22), 1.5, scale=3.2, cut=0.56)
+    c = POT + Z * TOP
+    edge = c + pd * ((-HY - 0.02 - c.y) / pd.y)             # where the run meets the lid's left edge
+    side = Vector((-pd.y, pd.x, 0))
+    for j, (off, r, low) in enumerate(((0.0, 0.2, Z0 + 0.25), (0.42, 0.13, Z0 + 1.7), (-0.4, 0.12, Z0 + 2.6))):
+        o = side * off
+        pts = [lip + o * 0.6 + Z * 0.05, lip + o * 0.7 + pd * 0.2 - Z * 0.5, c + o + pd * 1.62 + Z * 0.5, c + o + pd * 1.9 + Z * 0.1,
+               edge + o + Z * 0.1, edge + o - Y * 0.2 - Z * 0.25, Vector((edge.x + o.x, -HY - 0.3, (TOP + low) / 2)), Vector((edge.x + o.x * 1.3, -HY - 0.3, low))]
+        kit.tube("spill%d" % j, pts, r, spill, r_end=r * 0.6, smooth=True)
+    kit.blob("spill-lid", tuple(c + pd * 1.95 + Z * 0.03), 1.0, 0.07, spill, stretch=(0.95, 0.6)).rotation_euler = (0, 0, math.atan2(pd.y, pd.x) + math.pi / 2)
+    kit.blob("spill-mouth", tuple(lip - pd * 0.5 - Z * 0.18), 0.55, 0.3, spill)
+    # out of the open stub
+    s = FL + X * 0.95
+    kit.tube("stubdrip", [s - Z * 0.2, s + X * 0.22 - Z * 0.75, Vector((s.x + 0.2, s.y - 0.1, 0.1))], 0.2, spill, r_end=0.13, smooth=True)
+    # pools and crusted lumps at the feet
+    ex = edge.x
+    for i, (x, y, sx, sy, rz) in enumerate([(ex + 0.1, -HY - 0.95, 1.05, 0.62, 35), (HX + 0.75, -0.55, 0.8, 0.55, -30), (HX + 0.6, -HY - 0.5, 0.6, 0.4, 10)]):
+        kit.blob("pool%d" % i, (x, y, 0.02), 1.0, 0.06, spill, stretch=(sx, sy)).rotation_euler = (0, 0, math.radians(rz))
+    rr = random.Random(19)
+    for i, (x, y, sz) in enumerate([(ex - 0.9, -3.7, 0.3), (ex + 1.0, -4.1, 0.36), (2.6, -2.9, 0.3), (3.3, -1.3, 0.34), (2.3, -1.6, 0.24), (ex + 0.2, -4.5, 0.22),
+                                   (3.9, -2.2, 0.2), (-1.6, -4.0, 0.18)]):
+        patch("lump%d" % i, (x, y, sz * 0.4), (sz, sz * rr.uniform(0.75, 1.0), sz * 0.62), crust, jag=0.55, seed=4.4 * i + 2)
+
+
+def build_state():
+    build()
+    if not STATE:
+        return
+    kit.MOVING.clear()                      # a state is one still: nothing is held back for a strip
+    bpy.context.view_layer.update()         # so every object's matrix_world is its real place before it is knocked
+    wreck_dark()
+    for name in ("vent", "ventbar"):        # the vent is dead: black behind its plate
+        bs = next(n for n in MATS[name].node_tree.nodes if n.type == "BSDF_PRINCIPLED")
+        for l in list(bs.inputs["Base Color"].links):
+            MATS[name].node_tree.links.remove(l)
+        bs.inputs["Base Color"].default_value = kit.srgb(26, 13, 10) if name == "vent" else kit.srgb(12, 8, 8)
+    scorch(0.3, 0.5)
+    # the fires gutter: the vent is dead, the rest dim (turn() sets every glow from its rest strength)
+    dim = {"vent": 0.04, "slot": 0.12, "tank": 0.3, "pool": 0.6, "rib": 0.5, "ray": 0.5, "potneck": 0.8, "mouth": 1.0}
+    for name, (bsdf, rest) in list(GLOW.items()):
+        GLOW[name] = (bsdf, rest * dim.get(name, 0.4))
+    if T < 3:                               # the pot's mouth, dark at rest, stands full of magma
+        bs = GLOW["mouth"][0]
+        bs.inputs["Base Color"].default_value = kit.srgb(236, 100, 14)
+        GLOW["mouth"] = (bs, 1.6)
+    c = POT + Z * TOP
+    pd = Vector((0.36, -0.93, 0)).normalized()               # the way the pot tips: toward the lid's left edge
+    Mp = lean(c + pd * 1.1, pd, 17) @ about(c, Z, 12)
+    lip = Mp @ (c + (Matrix.Rotation(math.radians(-12), 4, Z) @ pd) * 1.5 + Z * (POT_H - 0.02))
+    wreck_magma(lip, pd)
+    # a block gone from the pot's rim (it lies at the feet), then the pot cracked off its seat and tilted
+    for n in ("rim-7", "pot-spike-7"):
+        o = bpy.data.objects.get(n)
+        if o is not None:
+            bpy.data.objects.remove(o)
+    knock("pot", Mp, names=("ribs", "mouth", "smoke"), prefixes=("pot", "rim-"), skip=("pot-glow",))
+    soot = MATS["hole"]
+    for i, a in enumerate((250, 320, 20)):                   # cracks down the pot
+        d = Vector((math.cos(math.radians(a)), math.sin(math.radians(a)), 0))
+        pts = [c + d * 1.56 + Z * 1.85, c + d * 1.5 + Vector((-d.y, d.x, 0)) * 0.16 + Z * 1.45, c + d * 1.36 + Z * 1.0, c + d * 1.37 + Vector((-d.y, d.x, 0)) * -0.14 + Z * 0.55]
+        crack("crack-pot%d" % i, [Mp @ p for p in pts], soot, 0.06)
+    # a corner post torn off: it lies on the ground in front of the left face (tier 1: its bracket; the far post leans out)
+    P = Vector((-HX, -HY, Z0))
+    fall = Matrix.Translation(Vector((-0.2, -1.5, 0.16 - Z0))) @ about(P, Z, 78) @ about(P, X, 84)
+    if T == 1:
+        knock("post-l", Matrix.Translation(Vector((0.1, -1.5, -(Z0 + 2.2) + 0.05))) @ about(Vector((-HX + 0.2, -HY + 0.16, Z0 + 2.2)), Z, 28) @ about(Vector((-HX + 0.2, -HY + 0.16, Z0 + 2.2)), X, 14), names=("post-l",))
+        knock("post-r", lean(Vector((HX, HY, Z0)), (0.75, 0.66, 0), 27), names=("post-r-r", "post-r-b"))
+    else:
+        knock("post-l", fall, names=("post-l-l", "post-l-b", "horn-2", "horn-sock-2"))
+        knock("rail-l", about(LF(HX, Z0), Y, -9) @ Matrix.Translation(Vector((0, -0.12, -0.2))), names=("rail-l",))
+    # the elbow pipe knocked loose from its stub: it leans out on the well
+    wp = Vector((WELL.x, WELL.y, 0.3))
+    knock("elbow", lean(wp, (1, 0, 0), 27) @ lean(wp, (0, -1, 0), 13), names=("elbow", "lump"))
+    if T >= 2:
+        g1 = Z0 + 2.6 + 0.22                # the grille hangs by one corner, pulled out from the face
+        gp = LF(-1.6, g1, 0.42)
+        knock("grille", about(gp, Y, -15) @ about(gp, Z, -13), prefixes=("grille",))
+        to = RF(2.1, Z0 + 1.0, 0.56)        # the sight tank bent on its arms
+        knock("tank", lean(to, (0.6, -0.8, 0), 19), names=("tank-glow",), prefixes=("tank-arm", "tank-base", "tank-cap", "tank-stay", "tank-dome", "tank-spike"))
+
+
+kit.run(build_state, turn)

@@ -23,6 +23,7 @@ GROUND = 0.0
 ORIGIN = (0.0, 35.0)                  # Flash pixel of the world origin; the building script sets it
 FRAME = (-60, -70, 60, 70)            # the canvas in Flash px; the building script sets it
 FRAMES = 1
+STATE = os.environ.get("PB_STATE", "")          # "damaged": the files are L<n>-damaged-base.png and -alone.png
 SUN, SUN_COL = 4.8, (1.0, 0.95, 0.86)      # the overworld recipe's light; a building may warm it
 SKY, SKY_E = (0.62, 0.68, 0.78), 0.85
 OUT = Path(".")
@@ -746,13 +747,13 @@ def run(build, turn, family=default_family, masonry=()):
         sc.cycles.samples = int(os.environ.get("PB_SAMPLES", 384))
         for o in moving_objs:
             o.visible_camera = False
-        sc.render.filepath = str(out / f"L{L}-base.png")
+        sc.render.filepath = str(out / f"L{L}{'-' + STATE if STATE else ''}-base.png")
         bpy.ops.render.render(write_still=True)
         for o in moving_objs:
             o.visible_camera = True
         bpy.data.objects["ground"].hide_render = True
         sc.cycles.samples = 32
-        sc.render.filepath = str(out / f"L{L}-alone.png")
+        sc.render.filepath = str(out / f"L{L}{'-' + STATE if STATE else ''}-alone.png")
         bpy.ops.render.render(write_still=True)
         bpy.data.objects["ground"].hide_render = False
         for o in moving_objs:
