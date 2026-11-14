@@ -3,6 +3,7 @@ import { BUNKER_TYPE, bunkerContents } from "@/game/monsters/bunker";
 import { academyLevel, housingCapacity, HOUSING_TYPE } from "@/game/monsters/housing";
 import { housingSpace } from "@/game/monsters/monsterCatalogue";
 import { kindOf, rowOf, sumCosts, upgradeSteps } from "./buildingCosts";
+import { unlockRealmOf } from "./jobs";
 
 /**
  * Recycling on the client (`docs/design/yard-buildings.md` §5.4): whether a
@@ -195,7 +196,9 @@ export const recycleBlock = (
   if (
     type === LOCKER_TYPE &&
     Object.entries(save.lockerdata ?? {}).some(
-      ([monster, entry]) => monster.startsWith("C") && Number(entry?.t) === 1,
+      ([monster, entry]) =>
+        (unlockRealmOf(save) === "inferno" ? /^IC\d+$/.test(monster) : monster.startsWith("C")) &&
+        Number(entry?.t) === 1,
     )
   ) {
     return { reason: "unlocking", message: "Cancel the unlock first." };

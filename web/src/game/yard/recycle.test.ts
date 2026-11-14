@@ -99,6 +99,10 @@ describe("recycleBlock", () => {
     expect(reason(building(1, 8), { lockerdata: { C5: { t: 1, s: NOW, e: NOW + 60 } } } as never)).toBe(
       "unlocking",
     );
+    // The Inferno yard's Strongbox is held by an Inferno unlock (IC…), as the server's `runningUnlock` has it.
+    const infernoUnlock = { type: "inferno", lockerdata: { IC2: { t: 1, s: NOW, e: NOW + 60 } } };
+    expect(reason(building(1, 8), infernoUnlock as never)).toBe("unlocking");
+    expect(reason(building(1, 8), { lockerdata: infernoUnlock.lockerdata } as never)).toBeNull();
     expect(reason(building(1, 20, { l: 3 }))).toBeNull();
   });
 });

@@ -247,8 +247,28 @@ describe("monster timers", () => {
     expect(unlockEndsAt(SAVED + 10_000, SAVED, { CLOD: { e: SAVED + 60 } })).toBe(SAVED + 9_760);
   });
 
-  it("leaves Inferno unlocks out", () => {
+  it("leaves Inferno unlocks out of a surface yard, and surface ones out of the Inferno yard", () => {
     expect(lockerJobs({ IC1: { t: 1, s: SAVED, e: SAVED + 5 } })).toEqual([]);
+    expect(lockerJobs({ C5: { t: 1, s: SAVED, e: SAVED + 5 } }, 7, null, SAVED, "inferno")).toEqual([]);
+  });
+
+  it("counts an Inferno unlock (IC…) in the Inferno yard, on its Strongbox", () => {
+    const lockerdata = { IC1: { t: 2 }, IC2: { t: 1, s: SAVED - 10, e: SAVED + 50 }, C5: { t: 1, e: SAVED + 9 } };
+    expect(lockerJobs(lockerdata, 7, null, SAVED, "inferno")).toEqual([
+      { kind: "unlock", key: "unlock:IC2", id: "IC2", buildingId: 7, endsAt: SAVED + 50, holdsWorker: false },
+    ]);
+    const save = {
+      type: "inferno",
+      savetime: SAVED,
+      currenttime: SAVED,
+      buildingdata: { 3: { id: 3, t: 8, l: 1 } },
+      lockerdata,
+    } as unknown as BaseLoadResponse;
+    expect(only(yardJobs(save), JobKind.UNLOCK).map((job) => [job.id, job.buildingId, job.endsAt])).toEqual([
+      ["IC2", 3, SAVED + 50],
+    ]);
+    // The same entries on a main yard are the surface unlock only.
+    expect(only(yardJobs({ ...save, type: "main" }), JobKind.UNLOCK).map((job) => job.id)).toEqual(["C5"]);
   });
 
   it("reads an academy time as absolute, converting a legacy remainder once", () => {
