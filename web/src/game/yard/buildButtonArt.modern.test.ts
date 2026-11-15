@@ -102,6 +102,14 @@ describe("the build menu's Modern pictures", () => {
     expect(buildPicture(8, "inferno", true)).toEqual({ url: buttonUrl(8, "inferno"), modern: false });
   });
 
+  it("the Inferno's 3D Incubator has a Modern picture of its own, not the Hatchery's", () => {
+    const picture = buildPicture(13, "inferno", false);
+    expect(picture.modern).toBe(true);
+    expect(picture.url).toMatch(/\/modern\/13\.inferno\.[0-9a-f]{8}\.webp$/);
+    expect(picture.url).not.toBe(buildPicture(13, "main", false).url);
+    expect(buildPicture(13, "inferno", true)).toEqual({ url: buttonUrl(13, "inferno"), modern: false });
+  });
+
   it("an outpost draws the main yard's pictures", () => {
     expect(buildPicture(13, "outpost", false)).toEqual(buildPicture(13, "main", false));
   });

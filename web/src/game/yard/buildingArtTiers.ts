@@ -724,7 +724,9 @@ export const BUILDING_3D_ART: Readonly<Record<number, readonly TierArt[]>> = {
  * 2 Nov 2026: "I want to see it in the inferno + the soft animated glow of the
  * lava"), exported by `export3d_buildings.py icc`; and its Strongbox (8,
  * `buildings/imonsterlab/`), from art/strongbox-3d (owner on the Review Desk,
- * 14 Nov 2026), exported by `export3d_buildings.py strongbox`.
+ * 14 Nov 2026), exported by `export3d_buildings.py strongbox`; and its
+ * Incubator (13, `buildings/ihatchery/`), from art/incubator-3d (owner, 15
+ * Nov 2026), exported by `export3d_buildings.py incubator`.
  */
 export const INFERNO_BUILDING_3D_ART: Readonly<Record<number, readonly TierArt[]>> = {
   // 1 Bone Cruncher: 3D (owner, 6 Nov 2026: "3d bone crusher has been approved"), the clean-room model's three tiers,
@@ -803,6 +805,18 @@ export const INFERNO_BUILDING_3D_ART: Readonly<Record<number, readonly TierArt[]
     { from: 1, top: ["top.3d1@2x.webp", -57, -38], shadow: ["shadow.3d1.jpg", -61, 31], lift: 0,
       anim: { strip: ["anim.3d1@2x.webp", -57, -41, 115, 127, 30], columns: 17, whole: true, home: true },
       destroyed: { top: ["top.3d1@2x.webp", -57, -38], shadow: ["shadow.3d1.jpg", -61, 31] } },
+  ],
+  // 13 Incubator: 3D (owner, 15 Nov 2026, round 3 approved as is), the clean-room model, one look for its three levels
+  // as Flash's. Its moving parts over a still body, in Flash's 50 cells: the brood churns in the porthole and the
+  // feed hose pumps, twice a loop, and green smoke puffs from the vent once (laid into the cells by its post.py). It
+  // runs only while a monster hatches and drops back to cell 0, the approved still with no smoke, when it stops, as
+  // Flash's hatchery (`yardAnim.ts` type 13). Its own damaged still, one rough pass (`incubator:damaged`): dented and
+  // sooted, the hose torn off the pump, the glass cracked and the brood running down the front. Destroyed is Flash's
+  // rubble, as the others'.
+  13: [
+    { from: 1, top: ["top.3d1@2x.webp", -57, -28], shadow: ["shadow.3d1.jpg", -57, 22], lift: 0,
+      anim: { strip: ["anim.3d1@2x.webp", -54, -46, 84, 87, 50], columns: 24, body: ["body.3d1@2x.webp", -57, -28] },
+      damaged: { top: ["top.3d1.damaged@2x.webp", -66, -28], shadow: ["shadow.3d1.damaged.jpg", -66, 22] } },
   ],
   // 16 Incubator Control Centre: 3D look C, on a small magma pool. Each cell is the whole building: 32 cells of its
   // idle loop (the lava's light breathing), then 64 of its loop while it hatches (the crystal pulsing twice as well).
