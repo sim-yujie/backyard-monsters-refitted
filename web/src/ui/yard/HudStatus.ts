@@ -4,8 +4,6 @@ import type { YardStore, YardUiBinding } from "@/game/yard/YardStore";
 import { formatCountdown } from "@/ui/format";
 import { Popup } from "@/ui/Popup";
 import "@/ui/styles/yard-status.css";
-// PREVIEW ONLY (beta 8 reset-clock layout options): remove with clockLookPreview.ts.
-import { PreviewStatus, clockLook, previewFakeBoosts } from "./clockLookPreview";
 
 /**
  * The small status strip under the yard's top bar (`UI2.as:254-300` protection,
@@ -68,9 +66,6 @@ export class HudStatus {
   /** A level gained while the guided start ran, announced once it is over. */
   private heldLevel: number | null = null;
   private model: HudStatusModel;
-  /** PREVIEW ONLY: `?clockLook=` in a dev build (clockLookPreview.ts). */
-  private readonly preview: PreviewStatus | null;
-  private readonly fakeBoosts: ReturnType<typeof previewFakeBoosts>;
 
   constructor(binding: YardUiBinding) {
     this.store = binding.store;
@@ -89,9 +84,6 @@ export class HudStatus {
     this.boostList.setAttribute("aria-label", "Running boosts");
 
     this.element.append(this.badge, this.boostList);
-    const look = clockLook();
-    this.preview = look ? new PreviewStatus(this.element, look) : null;
-    this.fakeBoosts = look ? previewFakeBoosts(this.store.now()) : [];
 
     this.model = hudStatusModel(this.store);
     this.render();
@@ -166,13 +158,6 @@ export class HudStatus {
       chip.title = `${boost.name}: ${left} left`;
     }
     this.element.hidden = until === null && boosts.length === 0;
-    if (this.preview) {
-      const all = [...boosts, ...this.fakeBoosts];
-      this.badge.hidden = true;
-      this.boostList.hidden = true;
-      this.preview.render(until, all, now);
-      this.element.hidden = until === null && all.length === 0;
-    }
   }
 
   /** The level-up box: one line and an OK. */
