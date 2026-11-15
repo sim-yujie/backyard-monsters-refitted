@@ -114,6 +114,13 @@
   pointer-events: auto;
 }
 
+/* The corner HUD is one layer (z --z-hud) under the yard's dock and its
+   labels: while a list is open it lifts to the pop-ups' layer, so the Events
+   door's label does not show through the list. */
+.hud--corner:has(> .hud-status .hud-status__list:not([hidden])) {
+  z-index: var(--z-popup);
+}
+
 .hud-status__rows {
   display: flex;
   flex-direction: column;
