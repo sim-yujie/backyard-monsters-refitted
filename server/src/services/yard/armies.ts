@@ -7,7 +7,8 @@ import type { JsonObject } from "../../types/JsonObject.js";
 import { getCurrentDateTime } from "../../utils/getCurrentDateTime.js";
 import { catchUpLockedYard } from "../../controllers/yard/yardAction.js";
 import { isAttackActive } from "../base/isAttackActive.js";
-import { outpostsNearCell, type CellCoords } from "../maproom/v2/rangeCheck.js";
+import { ownYardsInReach } from "../maproom/v2/ownYardsInReach.js";
+import type { CellCoords } from "../maproom/v2/rangeCheck.js";
 import {
   countsOf,
   flungPerYard,
@@ -79,8 +80,11 @@ const applyArmy = (row: Save, owner: ArmyOwner, now: number): void => {
  *   would give it; a defending outpost, its monsters.
  * - The attacker's main yard gets the full locked catch-up, unless someone is
  *   attacking it right now (their save owns the row): then it is only
- *   measured. Every outpost of theirs close enough to reach the target (the
- *   range rule's sweep box, `rangeCheck.ts`) gets its monsters caught up.
+ *   measured. Every outpost of theirs whose own flinger reaches the target
+ *   (`ownYardsInReach`) gets its monsters caught up.
+ * - On Map Room 2, `entryHoused` lists only the yards whose flinger reaches
+ *   the target, the main yard included: the yards the Attack window sums, and
+ *   the only ones the attack can fling from and spend.
  *
  * Runs before the attack is committed, while nothing on either row has been
  * changed yet: the locked catch-up re-reads the row.
@@ -123,17 +127,20 @@ export const catchUpArmiesForAttack = async ({
 
   const entryHoused: EntryHoused = {};
 
-  if (isAttackActive(userSave)) {
-    entryHoused[userSave.baseid] = countsOf(catchUpArmyRow(userSave, userSave, now).monsters?.housed);
-  } else {
-    const { save: locked } = await catchUpLockedYard(postgres.em, userSave);
-    entryHoused[userSave.baseid] = countsOf(locked.monsters?.housed);
-  }
+  // A Map Room 2 attack flings only from the yards whose own flinger reaches
+  // the target (`ownYardsInReach`), the cells the Attack window sums; the
+  // others are left out of the roster, so nothing can be flung or spent from
+  // them. With no cell to measure to, the main yard alone, as before.
+  const reaching = cell && !mapRoom1 ? await ownYardsInReach(user, cell) : [userSave.baseid];
+  const mainHoused = isAttackActive(userSave)
+    ? countsOf(catchUpArmyRow(userSave, userSave, now).monsters?.housed)
+    : countsOf((await catchUpLockedYard(postgres.em, userSave)).save.monsters?.housed);
+  if (reaching.includes(userSave.baseid)) entryHoused[userSave.baseid] = mainHoused;
 
-  const near = cell && !mapRoom1 ? outpostsNearCell(cell, userSave.outposts ?? []) : [];
+  const near = reaching.filter((baseid) => baseid !== userSave.baseid);
   if (near.length > 0) {
     const outposts = await postgres.em.find(Save, {
-      baseid: { $in: near.map((outpost) => outpost.baseid) },
+      baseid: { $in: near },
       saveuserid: user.userid,
     });
     for (const outpost of outposts) {
