@@ -37,6 +37,8 @@ export type HelpChoice =
 export interface BuildingHelpView {
   readonly speedup?: HelpChoice;
   readonly repair?: HelpChoice;
+  /** Today's rewarded helps are used up: a help still goes through, for nothing. */
+  readonly rewardUsedUp?: true;
 }
 
 /**
@@ -84,7 +86,7 @@ export const buildingHelp = (block: HelpBlock | null, id: number, now?: number):
   const speedup = choiceOf(offer.speedup, block?.gate, now);
   const repair = choiceOf(offer.repair, block?.gate, now);
   if (!speedup && !repair) return null;
-  return { ...(speedup && { speedup }), ...(repair && { repair }) };
+  return { ...(speedup && { speedup }), ...(repair && { repair }), ...(block?.rewardsLeft === 0 && { rewardUsedUp: true as const }) };
 };
 
 /** The buildings that can take a help now: the ones with a wrench. */
@@ -186,11 +188,11 @@ export const thanksText = (kind: HelpKind, result: HelpResult, owner: string, bu
 };
 
 /**
- * The help block after a help went through: the building's entry as it now
- * stands. A speed-up leaves the job helped by this player; a repair leaves
- * nothing to repair.
+ * The help block after a help went through: the rewarded helps left today
+ * and the building's entry as it now stands. A speed-up leaves the job
+ * helped by this player; a repair leaves nothing to repair.
  */
-export const afterHelp = (block: HelpBlock, id: number, kind: HelpKind): HelpBlock => {
+export const afterHelp = (block: HelpBlock, id: number, kind: HelpKind, rewardsLeft: number): HelpBlock => {
   const key = String(id);
   const buildings: Record<string, HelpOffer> = {};
   for (const [other, offer] of Object.entries(block.buildings)) {
@@ -204,7 +206,7 @@ export const afterHelp = (block: HelpBlock, id: number, kind: HelpKind): HelpBlo
     }
     if (next.speedup !== undefined || next.repair !== undefined) buildings[other] = next;
   }
-  return { buildings };
+  return { rewardsLeft, buildings };
 };
 
 /**

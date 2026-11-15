@@ -9,12 +9,14 @@ import { FRIEND_GATES, HELP_RULES } from "./helpConfig.js";
 import { helpersOf, withoutHelpers } from "./helpList.js";
 import {
   gateRefusal,
+  helpRewardOf,
   isRefusal,
   planRepair,
   planSpeedup,
   previewHelp,
   refusalDetails,
   rewardOf,
+  rewardsLeftOf,
   type HelpFacts,
   type SpeedupPlan,
 } from "./helpRules.js";
@@ -96,6 +98,16 @@ describe("reward", () => {
     expect(rewardOf(1_000_000, 300_001)).toEqual({ r1: 750, r2: 750, r3: 750, r4: 750 });
     expect(rewardOf(200, 1_000_000)).toEqual({ r1: 0, r2: 0, r3: 0, r4: 0 });
     expect(HELP_RULES.rewardShare).toBe(0.0025);
+  });
+
+  test("only the first 5 helps of a day pay (owner, 15 Nov 2026)", () => {
+    expect(HELP_RULES.rewardedHelpsPerDay).toBe(5);
+    expect(rewardsLeftOf(0)).toBe(5);
+    expect(rewardsLeftOf(4)).toBe(1);
+    expect(rewardsLeftOf(5)).toBe(0);
+    expect(rewardsLeftOf(30)).toBe(0);
+    expect(helpRewardOf(4, 1_000_000, 300_001)).toEqual({ r1: 750, r2: 750, r3: 750, r4: 750 });
+    expect(helpRewardOf(5, 1_000_000, 300_001)).toEqual({ r1: 0, r2: 0, r3: 0, r4: 0 });
   });
 });
 

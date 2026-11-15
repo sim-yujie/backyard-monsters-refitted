@@ -41,6 +41,16 @@ describe("HelpPanel (#374)", () => {
     expect(speed?.disabled).toBe(false);
   });
 
+  it("says the reward is used up for today once the first 5 helps are given, and still lets the help go", () => {
+    const { panel } = mount();
+    panel.show(silo, buildingHelp({ rewardsLeft: 1, buildings: { "7": { speedup: true } } }, 7));
+    expect(panel.element.querySelector(".help-panel__reward-off")).toBeNull();
+    panel.show(silo, buildingHelp({ rewardsLeft: 0, buildings: { "7": { speedup: true } } }, 7));
+    expect(panel.element.querySelector(".help-panel__reward-off")?.textContent).toBe("Reward used up for today");
+    expect(buttons(panel)[0]?.disabled).toBe(false);
+    expect(panel.element.textContent).not.toMatch(/helps? left/i);
+  });
+
   it("offers a repair", () => {
     const { panel } = mount();
     panel.show(tower, buildingHelp({ buildings: { "8": { repair: true } } }, 8));

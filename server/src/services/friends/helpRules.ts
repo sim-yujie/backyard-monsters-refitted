@@ -168,6 +168,17 @@ export const rewardOf = (helperCap: number, ownerCap: number): ResourceAmounts =
   return reward;
 };
 
+/** Rewarded helps the helper has left today, having given `helpsToday` (UTC). */
+export const rewardsLeftOf = (helpsToday: number): number => Math.max(0, HELP_RULES.rewardedHelpsPerDay - helpsToday);
+
+/**
+ * The reward for the helper's next help, having given `helpsToday` today:
+ * {@link rewardOf} for the first {@link HELP_RULES}.rewardedHelpsPerDay, then
+ * nothing (owner, 15 Nov 2026).
+ */
+export const helpRewardOf = (helpsToday: number, helperCap: number, ownerCap: number): ResourceAmounts =>
+  rewardsLeftOf(helpsToday) > 0 ? rewardOf(helperCap, ownerCap) : noAmounts();
+
 /** What each building could take, `true` or the reason it could not. */
 export type BuildingHelp = Record<string, { speedup?: true | FriendRefusal; repair?: true | FriendRefusal }>;
 

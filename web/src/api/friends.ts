@@ -289,6 +289,8 @@ export interface HelpResult {
   readonly healed?: boolean;
   /** What the helper earned. */
   readonly reward: ResourceAmounts;
+  /** Helps today that still pay a reward, after this one (the first 5 a day pay; owner, 15 Nov 2026). */
+  readonly rewardsLeft: number;
   /** The friend's building after the help, as the server wrote it. */
   readonly building: Record<string, unknown> | null;
 }
@@ -307,6 +309,8 @@ export interface GateHold {
 
 /** A help-mode load's own block (§6.2): what the player can help with in the yard. */
 export interface HelpBlock {
+  /** Helps today that still pay a reward; 0 once today's are used up. Absent: not known. */
+  readonly rewardsLeft?: number;
   readonly buildings: Readonly<Record<string, HelpOffer>>;
   /** When every offer is `tooNew`: which gate holds and when it lifts. */
   readonly gate?: GateHold & { readonly reason?: string };
@@ -781,6 +785,7 @@ export const friendsApi: FriendsApi = {
       ...(Number.isFinite(seconds) && seconds > 0 && { secondsSaved: Math.floor(seconds) }),
       ...(answer["healed"] === true && { healed: true }),
       reward: amounts(answer["reward"]),
+      rewardsLeft: count(answer["rewardsLeft"]),
       building: typeof answer["building"] === "object" && answer["building"] !== null ? record(answer["building"]) : null,
     };
   },

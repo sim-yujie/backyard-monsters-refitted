@@ -1891,7 +1891,7 @@ export class YardScene implements Scene {
 
   /**
    * One help (#374): the server decides and answers with the building as it
-   * now is and the reward. A refusal is said in words and
+   * now is, the reward and the rewarded helps left today. A refusal is said in words and
    * stands on the button from then on.
    */
   private async help(building: YardBuilding, kind: HelpKind): Promise<void> {
@@ -1902,7 +1902,7 @@ export class YardScene implements Scene {
     try {
       const result = await this.friends.help(friend, building.id, kind);
       if (this.context !== context || !this.helpBlock) return;
-      this.helpBlock = afterHelp(this.helpBlock, building.id, kind);
+      this.helpBlock = afterHelp(this.helpBlock, building.id, kind, result.rewardsLeft);
       if (result.building) this.patchVisitBuilding(building, result.building);
       // The reward lands in the visitor's own pool (#374): the HUD floats it.
       const pool = this.visitorPool;

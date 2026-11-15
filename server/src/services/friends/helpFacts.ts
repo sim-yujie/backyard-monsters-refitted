@@ -8,6 +8,7 @@ import { placeholders } from "./friendViews.js";
 import {
   gateRefusal,
   previewHelp,
+  rewardsLeftOf,
   type BuildingHelp,
   type HelpFacts,
   type HelpKind,
@@ -18,13 +19,23 @@ import {
 
 /**
  * What the help rules read from the database (issue #373): both players, the
- * friendship, and the `friend_help` rows themselves.
+ * friendship, the helper's helps today (for the reward), and the
+ * `friend_help` rows themselves.
  * The rules are in `helpRules.ts`; the route that writes is
  * `controllers/friends/help.ts`.
  */
 
 /** The UTC day `now` falls in, as `friend_help.help_day` stores it (`YYYY-MM-DD`). */
 export const helpDayOf = (now: number): string => new Date(now * 1000).toISOString().slice(0, 10);
+
+/** Helps the player has given in the UTC day `now` falls in (only the first few pay, `rewardsLeftOf`). */
+export const helpsToday = async (em: EntityManager, helper: number, now: number): Promise<number> => {
+  const [row] = await em.execute<{ n: number }[]>(
+    `SELECT count(*)::int AS n FROM bym.friend_help WHERE helper_userid = ? AND help_day = ?::date`,
+    [helper, helpDayOf(now)]
+  );
+  return Number(row?.n ?? 0);
+};
 
 /** One side of a help as the gates read it, plus where its main yard is. */
 export interface HelpSideRow extends HelpSide {
@@ -101,6 +112,8 @@ export const recordHelp = (tx: EntityManager, record: HelpRecord) =>
 
 /** What help-mode `/base/load` adds to the yard (§6.2), WP2's `HelpBlock`. */
 export interface HelpBlock {
+  /** Helps today that still pay a reward (0 once today's are used up). */
+  rewardsLeft: number;
   buildings: BuildingHelp;
   /** When the age or level gates refuse (`tooNew`): which holds and when it lifts, for the panel's words. */
   gate?: HelpRefusal;
@@ -113,7 +126,8 @@ interface OwnerYard extends HelpPreviewSave {
 }
 
 /**
- * The `help` block of a help-mode load (§6.2): per building, whether the visitor could speed it up or repair it, `true` or the
+ * The `help` block of a help-mode load (§6.2): the rewarded helps left
+ * today and, per building, whether the visitor could speed it up or repair it, `true` or the
  * refusal. Only the owner's main yard can be helped (Q10), so anything else
  * gets no buildings.
  *
@@ -121,11 +135,12 @@ interface OwnerYard extends HelpPreviewSave {
  */
 export const helpBlock = async (em: EntityManager, helper: number, ownerSave: OwnerYard, now: number): Promise<HelpBlock> => {
   const owner = Number(ownerSave.userid);
-  const facts = await helpFactsFor(em, helper, owner);
-  if (!facts || helper === owner || ownerSave.type !== BaseType.MAIN) return { buildings: {} };
+  const [facts, today] = await Promise.all([helpFactsFor(em, helper, owner), helpsToday(em, helper, now)]);
+  const rewardsLeft = rewardsLeftOf(today);
+  if (!facts || helper === owner || ownerSave.type !== BaseType.MAIN) return { rewardsLeft, buildings: {} };
   const gate = gateRefusal(facts, now);
   const buildings = previewHelp(ownerSave, helper, now, gate);
-  return gate?.reason === "tooNew" ? { buildings, gate } : { buildings };
+  return gate?.reason === "tooNew" ? { rewardsLeft, buildings, gate } : { rewardsLeft, buildings };
 };
 
 /**

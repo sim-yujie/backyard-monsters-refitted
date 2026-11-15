@@ -235,10 +235,11 @@ describe("friendsApi writes", () => {
   });
 
   it("helps and reads the result", async () => {
-    stubFetch({ error: 0, secondsSaved: 390, reward: { r1: 10, r2: 10, r3: 10, r4: 10 }, building: { id: 4 } });
+    stubFetch({ error: 0, secondsSaved: 390, reward: { r1: 10, r2: 10, r3: 10, r4: 10 }, rewardsLeft: 2, building: { id: 4 } });
     expect(await friendsApi.help(7, 4, "speedup")).toEqual({
       secondsSaved: 390,
       reward: { r1: 10, r2: 10, r3: 10, r4: 10 },
+      rewardsLeft: 2,
       building: { id: 4 },
     });
     expect(calls[0]?.json).toEqual({ userid: 7, buildingId: 4, kind: "speedup" });
