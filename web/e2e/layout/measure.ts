@@ -10,12 +10,13 @@
  * - on the centred (non-phone) layout it is no taller than the screen below
  *   the top bar;
  * - its close button, title and tabs are on the screen and nothing covers
- *   the close button (a tab row inside the box that scrolls, such as the
- *   Champion's Mode tabs, scrolls with the content and is not judged);
+ *   the close button (tabs further down a list that scrolls, such as the
+ *   Champion's Mode tabs, are out of sight until it scrolls: not judged);
  * - its list (the biggest box that scrolls, else the body) shows at least a
  *   few rows (`minList` px), or all of its content when that is shorter; a
  *   window that already fills the screen below the top bar cannot give its
- *   list more, and needs only `minListFull` px (two rows);
+ *   list more on a short screen (500px or less), and needs only
+ *   `minListFull` px (two rows);
  * - something is actually drawn in the visible part of the list, and when the
  *   window names its items (`itemSelector`) one of them is in view.
  *
@@ -199,26 +200,28 @@ export const checkWindow = (args: CheckArgs): CheckReport => {
     const style = getComputedStyle(element);
     return style.overflowY === "auto" || style.overflowY === "scroll";
   };
-  const inScroller = (element: Element): boolean => {
+  // A box whose content runs past it downwards: a list scrolled at the top.
+  // (A tab row that scrolls sideways also computes overflow-y auto; it does
+  // not count.)
+  const inVerticalScroller = (element: Element): boolean => {
     for (let at = element.parentElement; at && at !== panel; at = at.parentElement)
-      if (scrolls(at)) return true;
+      if (scrolls(at) && at.scrollHeight > at.clientHeight + tol) return true;
     return false;
   };
   const tabs = [...panel.querySelectorAll('[role="tab"], .tabs__tab')].filter(shown);
   let scrolledTabs = 0;
   for (const tab of tabs) {
-    if (inScroller(tab)) {
-      scrolledTabs += 1;
-      continue;
-    }
     const box = visibleBox(tab);
     if (width(box) < 1) continue;
     if (height(box) < height(boxOf(tab)) * 0.5) {
-      problems.push(`tab "${(tab.textContent ?? "").trim().slice(0, 24)}" is cut off`);
+      // Tabs further down a list (the Champion's Modes) are out of sight
+      // until the list scrolls; only a tab cut off otherwise is a fault.
+      if (inVerticalScroller(tab)) scrolledTabs += 1;
+      else problems.push(`tab "${(tab.textContent ?? "").trim().slice(0, 24)}" is cut off`);
     }
   }
 
-  if (scrolledTabs > 0) notes.push(`${scrolledTabs} tabs inside the list, not judged`);
+  if (scrolledTabs > 0) notes.push(`${scrolledTabs} tabs further down the list, not judged`);
 
   // The list: the biggest box that scrolls, else the body.
   const body =
@@ -232,10 +235,11 @@ export const checkWindow = (args: CheckArgs): CheckReport => {
         best === null || element.scrollHeight > best.scrollHeight ? element : best,
       null,
     ) ?? body;
-  // A window that already runs from just under the top bar to near the
-  // screen's foot cannot give its list more: two rows are then enough
-  // (owner's rule "about 120px", lead to confirm; phone on its side, 15 Nov).
-  const fillsScreen = own.top <= hudBottom + 48 && own.bottom >= vh - 24;
+  // On a short screen (a phone on its side) a window that already runs from
+  // just under the top bar to near the screen's foot cannot give its list
+  // more: two rows are then enough (owner's rule "about 120px", lead to
+  // confirm; Monsters' Train and Lab showed 110px at 844x390, 15 Nov).
+  const fillsScreen = vh <= 500 && own.top <= hudBottom + 48 && own.bottom >= vh - 24;
   const minList = fillsScreen ? Math.min(args.minList, args.minListFull) : args.minList;
   if (fillsScreen) notes.push("fills the screen below the top bar");
   let listHeight = 0;

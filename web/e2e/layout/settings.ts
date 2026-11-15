@@ -30,8 +30,9 @@ export const settings = {
   /** A few rows of a list (owner, 15 Nov 2026: "never shrinks below a few rows"). */
   minList: Number(env("LAYOUT_MIN_LIST_PX", "120")),
   /**
-   * Two rows, for a window that already fills the screen below the top bar
-   * (a phone on its side: Monsters' Train and Lab lists show 110px there).
+   * Two rows, for a window that already fills a short screen (500px or less)
+   * below the top bar (a phone on its side: Monsters' Train and Lab lists
+   * show 110px there).
    */
   minListFull: Number(env("LAYOUT_MIN_LIST_FULL_PX", "96")),
   /** Run the cases in knownFailures.ts too (a fix branch's run): LAYOUT_IGNORE_KNOWN=1. */

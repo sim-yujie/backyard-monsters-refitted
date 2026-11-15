@@ -119,7 +119,7 @@ const untilResponsive = async (page: Page): Promise<void> => {
     .locator('.yard-dock__button[data-dock="build"]:not([disabled])')
     .first()
     .click({ trial: true, timeout: settings.bootTimeout });
-  const end = Date.now() + 60_000;
+  const end = Date.now() + 15_000;
   let quick = 0;
   while (quick < 2 && Date.now() < end) {
     const start = Date.now();

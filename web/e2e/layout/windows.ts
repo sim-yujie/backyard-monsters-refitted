@@ -77,7 +77,8 @@ export const WINDOWS: readonly WindowCase[] = [
   {
     id: "defences",
     // Its dock button shows only on a Map Room 2 main yard or an outpost
-    // (YardScene setAvailable); the sandbox yard is on Map Room 1.
+    // (YardScene setAvailable, mapRoute.ts mapRoomFor); the sandbox yard
+    // is not on Map Room 2 (the first run found no Defences button).
     optional: true,
     why: "the Defences button shows only on Map Room 2 yards",
     label: "Defences",
