@@ -182,6 +182,11 @@ export interface HudOptions {
    * to the friend. Without it the list has no Message button.
    */
   onMessageFriend?: (friend: Friend) => void;
+  /**
+   * false: no Glimmers readout. The map leaves it off (owner, 15 Nov 2026):
+   * Glimmers buy decorations, which only the yard has. Shown by default.
+   */
+  coins?: boolean;
 }
 
 /** At or under this width the corner layout is the phone's (`yard-hud.css`). */
@@ -329,6 +334,8 @@ export class Hud {
   private unwatchPhoto: () => void = () => undefined;
   /** The event coin readout after Shiny, hidden until a balance is known. */
   private readonly coins: { readonly item: HTMLElement; readonly button: HTMLButtonElement };
+  /** The Glimmers readout is wanted here (`HudOptions.coins`); the map leaves it off. */
+  private readonly showCoins: boolean;
   private readonly unwatchCoins: () => void;
 
   constructor(options: HudOptions) {
@@ -421,6 +428,7 @@ export class Hud {
       this.readouts.set(key, readout);
       this.label(readout);
     }
+    this.showCoins = options.coins !== false;
     this.coins = this.coinReadout();
     resources.append(this.coins.item);
     // A change of balance floats "+N" / "-N" as the resources do; the first
@@ -659,7 +667,12 @@ export class Hud {
     if (!this.built) return;
     // The corner on a phone lays the readouts in a grid of four, which never
     // overflows and so cannot be measured: short amounts, as the mock-up has.
-    if (this.corner && window.matchMedia?.(PHONE_QUERY).matches) {
+    // So does the map's bar on a phone, a square of four (maproom.css): a list
+    // laid out by the bar's grid (`display: contents`) has no width of its own.
+    if (
+      (this.corner && window.matchMedia?.(PHONE_QUERY).matches) ||
+      (this.element.isConnected && getComputedStyle(this.list).display === "contents")
+    ) {
       this.applyFit(HudFit.COMPACT);
       return;
     }
@@ -970,7 +983,7 @@ export class Hud {
     const balance = coinBalance();
     const { item, button } = this.coins;
     const wasHidden = item.hidden;
-    item.hidden = balance === null;
+    item.hidden = balance === null || !this.showCoins;
     if (balance !== null) {
       const amount = coinAmount(balance, { size: 24, decorative: true });
       amount.querySelector(".icon-amount__value")?.classList.add("hud__resource-value");

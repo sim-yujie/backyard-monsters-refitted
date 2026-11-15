@@ -1753,3 +1753,122 @@
     display: none;
   }
 }
+
+/*
+ * The map's top bar on a phone (owner, 15 Nov 2026, patch 7.7). Glimmers stay off the map
+ * everywhere (Hud `coins: false`); they buy decorations, which only the yard has.
+ *
+ * Upright, one band rather than two rows: Twigs and Pebbles over Putty and Goo in a square at the
+ * left, where the bar was empty; the Map/Yard switch without its grey tray, centred on the square's
+ * middle line in the room left over; and the Account face over Shiny at the right, each on a
+ * resource row. The word "Account" stays for screen readers only: with it the band needs about
+ * 410 px. Placed by hand: the readout list is `display: contents`, so its items are the grid's
+ * own. Everything under the bar follows through --hud-bar-height.
+ */
+@media (max-width: 620px) {
+  :root:has(.hud--map) {
+    /* Two 30 px rows and the bar's padding and edge (100 px as two rows of 44). */
+    --hud-bar-height: 72px;
+  }
+
+  .hud.hud--map {
+    display: grid;
+    grid-template-columns: auto auto 1fr auto 1fr auto;
+    grid-template-rows: repeat(2, 30px);
+    align-content: center;
+    align-items: center;
+    gap: 0 2px;
+  }
+
+  .hud--map .hud__resources {
+    display: contents;
+  }
+
+  .hud--map .hud__spacer {
+    display: none;
+  }
+
+  .hud--map .hud__resource-button {
+    min-height: 0;
+    height: 30px;
+  }
+
+  .hud--map .hud__resource--r1 {
+    grid-area: 1 / 1;
+  }
+
+  .hud--map .hud__resource--r2 {
+    grid-area: 1 / 2;
+  }
+
+  .hud--map .hud__resource--r3 {
+    grid-area: 2 / 1;
+  }
+
+  .hud--map .hud__resource--r4 {
+    grid-area: 2 / 2;
+  }
+
+  /* The switch alone, no tray: its lit plate and "Yard" sit on the bar like the readouts. */
+  :root .hud.hud--map .hud__scenes {
+    grid-area: 1 / 4 / 3 / 5;
+    padding: 0;
+    border: 0;
+    background: none;
+  }
+
+  .hud--map .hud__scene-button {
+    padding-inline: var(--space-2);
+  }
+
+  .hud--map .account-menu {
+    grid-area: 1 / 6;
+    justify-self: end;
+  }
+
+  .hud--map .account-menu__button {
+    justify-content: center;
+    min-width: var(--control-height);
+    min-height: 0;
+    height: 30px;
+    padding: 0 var(--space-1);
+  }
+
+  .hud--map .account-menu__face {
+    width: 28px;
+    height: 28px;
+    margin-inline-end: 0;
+  }
+
+  .hud--map .account-menu__word {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+
+  .hud--map .hud__resource--shiny {
+    grid-area: 2 / 6;
+    justify-self: end;
+  }
+}
+
+/* On its side the bar keeps its one row; the switch loses its tray as upright, and the readouts
+   close up so Shiny is not cut off at 844 px. */
+@media (min-width: 620.02px) and (max-height: 500px) {
+  :root .hud.hud--map .hud__scenes {
+    padding: 0;
+    border: 0;
+    background: none;
+  }
+
+  .hud--map .hud__resources {
+    gap: 0;
+  }
+
+  .hud--map .hud__resource-button {
+    padding-inline: var(--space-1);
+  }
+}
