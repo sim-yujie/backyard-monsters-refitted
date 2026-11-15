@@ -17,6 +17,7 @@ import {
   serverClock,
   type ServerClock,
 } from "@/game/events/eventsModel";
+import { setEventsFeed } from "@/game/events/eventsFeed";
 import { onPumpkins, PUMPKIN_HUNT_KIND, withPumpkinCount } from "@/game/events/pumpkinHunt";
 import { currentSeason, seasonFor, setSeason } from "@/game/season";
 import {
@@ -172,6 +173,7 @@ export class EventsDoor {
       if (this.destroyed) return;
       this.clock = serverClock(body.now, Date.now());
       this.events = body.events;
+      setEventsFeed(body.events, this.clock);
       this.welcome = body.mr2Welcome ?? null;
       // An event that started since the yard loaded dresses it now. The yard's
       // own load already chose among overlapping events (a forced one first),
