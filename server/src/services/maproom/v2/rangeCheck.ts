@@ -171,6 +171,44 @@ export const outpostsNearCell = (
   return nearby;
 };
 
+/**
+ * Whether the main yard's own flinger reaches the cell.
+ *
+ * An empty `homebase` array leaves the yard's coordinates NaN, and the
+ * comparison is then false, which sends the range check to the outposts. That
+ * is what the rule has always done, so it is left as it is.
+ *
+ * @param homebase - The attacker's `homebase`, as the save stores it.
+ * @param flinger - The main yard's flinger level.
+ * @param cell - The cell under attack.
+ * @param extraReach - Extra cells from the attacker's alliance (0 = none).
+ */
+export const mainYardReaches = (
+  homebase: readonly (string | number)[],
+  flinger: number | undefined,
+  cell: CellCoords,
+  extraReach = 0
+): boolean => {
+  const [homeX, homeY] = homebase.map(Number);
+  const totalRange = withExtraReach(mainYardRange(flinger), extraReach);
+  const distanceFromMain = getDistanceFromMain(cell.x, cell.y, homeX!, homeY!);
+  return totalRange > 0 && distanceFromMain <= totalRange;
+};
+
+/**
+ * Whether one outpost inside the sweep box reaches the cell, measured from its
+ * own cell with its own flinger (issue #190).
+ */
+const outpostReaches = (
+  { x, y, dx, dy }: NearbyOutpost,
+  level: number | undefined,
+  shape: HexShape,
+  extraReach: number
+): boolean => {
+  const totalRange = withExtraReach(outpostRange(level), extraReach);
+  return totalRange > 0 && hexDistance({ x, y }, { x: x - dx, y: y - dy }, shape) <= totalRange;
+};
+
 /** What the rule needs before any outpost flinger levels are known. */
 export interface RangePlanInput {
   /** The attacker's `homebase`, as the save stores it: `["x", "y"]`. */
@@ -205,15 +243,7 @@ export const planRangeCheck = ({
 
   if (!hasCoords(cell)) return { ok: false, reason: "no-attack-cell" };
 
-  const [homeX, homeY] = homebase.map(Number);
-
-  // An empty `homebase` array leaves these NaN, and the comparison below is
-  // then false, which sends the check to the outposts. That is what the rule
-  // has always done, so it is left as it is.
-  const totalRange = withExtraReach(mainYardRange(flinger), extraReach);
-  const distanceFromMain = getDistanceFromMain(cell.x, cell.y, homeX!, homeY!);
-
-  if (totalRange > 0 && distanceFromMain <= totalRange) return { ok: true, via: "main" };
+  if (mainYardReaches(homebase, flinger, cell, extraReach)) return { ok: true, via: "main" };
 
   if (outposts.length === 0) return { ok: false, reason: "no-outposts" };
 
@@ -243,17 +273,52 @@ export const checkOutpostRange = (
   shape: HexShape = mr2HexShape(),
   extraReach = 0
 ): RangeVerdict => {
-  for (const { baseid, x, y, dx, dy } of nearby) {
-    if (!flingers.has(baseid)) continue;
-
-    const totalRange = withExtraReach(outpostRange(flingers.get(baseid)), extraReach);
-    const target = { x: x - dx, y: y - dy };
-
-    if (totalRange > 0 && hexDistance({ x, y }, target, shape) <= totalRange)
-      return { ok: true, via: "outpost" };
+  for (const outpost of nearby) {
+    if (!flingers.has(outpost.baseid)) continue;
+    if (outpostReaches(outpost, flingers.get(outpost.baseid), shape, extraReach)) return { ok: true, via: "outpost" };
   }
 
   return { ok: false, reason: "out-of-range" };
+};
+
+/** What {@link yardsInReach} needs: the range rule's inputs, every level known. */
+export interface YardsInReachInput {
+  /** The attacker's main yard base id. */
+  mainBaseid: string;
+  homebase: readonly (string | number)[] | null | undefined;
+  /** The main yard's flinger level. */
+  flinger: number | undefined;
+  cell: CellCoords;
+  outposts: readonly OutpostEntry[] | undefined;
+  /** Flinger level per outpost baseid, for the outposts in the sweep box. */
+  outpostFlingers: ReadonlyMap<string, number | undefined>;
+  extraReach?: number;
+}
+
+/**
+ * The attacker's own yards whose flinger reaches the cell: the main yard
+ * first, if it reaches, then each outpost that reaches, in sweep order. These
+ * are the yards a Map Room 2 attack may fling from, the same cells the web
+ * client's Attack window sums (`rosterInRange`, `web/src/game/attack/attackEntry.ts`).
+ * The sweep box alone is not enough: it holds outposts up to six steps away
+ * whatever their flinger level, and the main yard counts only within its own
+ * reach.
+ *
+ * @param input - The attacker's yards, their flinger levels and the target.
+ * @param shape - The world's hex shape (`MR2_HEX_SHAPE`).
+ * @returns Base ids, the main yard's first when it reaches.
+ */
+export const yardsInReach = (
+  { mainBaseid, homebase, flinger, cell, outposts = [], outpostFlingers, extraReach = 0 }: YardsInReachInput,
+  shape: HexShape = mr2HexShape()
+): string[] => {
+  const yards: string[] = [];
+  if (homebase && mainYardReaches(homebase, flinger, cell, extraReach)) yards.push(mainBaseid);
+  for (const outpost of outpostsNearCell(cell, outposts, extraReach)) {
+    if (!outpostFlingers.has(outpost.baseid)) continue;
+    if (outpostReaches(outpost, outpostFlingers.get(outpost.baseid), shape, extraReach)) yards.push(outpost.baseid);
+  }
+  return yards;
 };
 
 /** The whole rule in one call, for callers that already hold every input. */

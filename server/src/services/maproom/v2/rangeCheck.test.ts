@@ -8,6 +8,7 @@ import {
   getOutpostRange,
   outpostsNearCell,
   planRangeCheck,
+  yardsInReach,
   type OutpostEntry,
   type RangeCheckInput,
 } from "./rangeCheck.js";
@@ -254,5 +255,50 @@ describe("alliance extra reach (Conquest's full Teratorn)", () => {
     for (const extraReach of [0, 0.5, -1]) {
       expect(range({ cell: { x: 400, y: 405 }, extraReach })).toEqual({ ok: false, reason: "no-outposts" });
     }
+  });
+});
+
+describe("yardsInReach: the yards an attack may fling from", () => {
+  const outposts: OutpostEntry[] = [
+    [403, 400, "op-near"],
+    [405, 400, "op-box"],
+    [404, 400, "op-flat"],
+  ];
+  const flingers = new Map([
+    ["op-near", 2],
+    ["op-box", 2],
+    ["op-flat", 0],
+  ]);
+  const yards = (overrides: Partial<Parameters<typeof yardsInReach>[0]> = {}) =>
+    yardsInReach({
+      mainBaseid: "main",
+      homebase: HOME,
+      flinger: 1,
+      cell: { x: 402, y: 400 },
+      outposts,
+      outpostFlingers: flingers,
+      ...overrides,
+    });
+
+  test("each yard by its own flinger: an outpost in the sweep box but out of its reach is left out", () => {
+    // op-box sits in the box, three cells off, with a two-cell flinger; op-flat has none.
+    expect(yards()).toEqual(["main", "op-near"]);
+  });
+
+  test("the main yard only within its own reach", () => {
+    expect(yards({ homebase: ["390", "400"] })).toEqual(["op-near"]);
+    expect(yards({ homebase: null })).toEqual(["op-near"]);
+  });
+
+  test("agrees with the range verdict", () => {
+    for (const x of [395, 398, 402, 406, 409]) {
+      const cell = { x, y: 400 };
+      const verdict = checkRange({ homebase: HOME, flinger: 1, cell, outposts, outpostFlingers: flingers });
+      expect(yards({ cell }).length > 0).toBe(verdict.ok);
+    }
+  });
+
+  test("the alliance's extra reach counts, as the range check counts it", () => {
+    expect(yards({ extraReach: 1 })).toEqual(["main", "op-near", "op-box"]);
   });
 });

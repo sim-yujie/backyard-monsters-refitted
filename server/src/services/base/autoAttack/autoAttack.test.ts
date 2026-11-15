@@ -61,6 +61,8 @@ const PLAN = {
 
 let camp: Record<string, any>;
 let userSave: Record<string, any>;
+/** The attacker's outposts, as `em.find` serves them. */
+let outpostRows: Record<string, any>[];
 let planRow: Record<string, any> | null;
 const flush = mock(async () => {});
 const upsert = mock(async () => {});
@@ -96,6 +98,9 @@ const reset = () => {
     baseid: HOME,
     worldid: WORLD,
     mapversion: 2,
+    // The camp's next-door cell; a level 4 Flinger reaches ten cells.
+    homebase: ["241", "207"],
+    flinger: 4,
     catapult: 2,
     buildingdata: {},
     outposts: [],
@@ -105,6 +110,7 @@ const reset = () => {
     champion: [{ t: 5, l: 5, hp: 62000, status: 0 }],
     siege: null,
   };
+  outpostRows = [];
   planRow = { userid: ATTACKER, wmid: 11, level: 35, slot: "last", baseid: "1000240208", plan: PLAN, recorded_at: new Date() };
 };
 reset();
@@ -127,7 +133,8 @@ mock.module("../../../server.js", () => ({
         if (where.basesaveid === userSave.basesaveid) return userSave;
         return where.basesaveid === BASESAVEID || where.baseid === camp.baseid ? camp : null;
       },
-      find: async () => [],
+      find: async (_entity: unknown, where: { baseid?: { $in?: string[] } }) =>
+        outpostRows.filter((row) => where?.baseid?.$in?.includes(row.baseid)),
       populate: async () => {},
       persist: () => {},
       remove: removeRow,
@@ -262,6 +269,22 @@ beforeEach(() => {
   inRange = true;
   slotFree = true;
 });
+
+/** One of the attacker's outposts, at a cell with a Flinger level and housing. */
+const addOutpost = (x: number, y: number, flinger: number, housed: Record<string, number>) => {
+  const baseid = `1000${x}${y}`;
+  userSave.outposts = [...userSave.outposts, [x, y, baseid]];
+  outpostRows.push({
+    baseid,
+    saveuserid: ATTACKER,
+    type: "outpost",
+    flinger,
+    savetime: now(),
+    buildingdata: {},
+    buildinghealthdata: {},
+    monsters: { housed: { ...housed } },
+  });
+};
 
 /** The refusal's reason, from a `ClientSafeError`. */
 const refusal = async (run: Promise<unknown>): Promise<{ reason?: string; missing?: unknown[] } & Record<string, unknown>> => {
@@ -472,6 +495,36 @@ describe("autoAttackPlanFor", () => {
     expect(answer).toMatchObject({ outOfRange: false, underAttack: false, damage: 12 });
     expect(flush).not.toHaveBeenCalled();
     expect(mint).not.toHaveBeenCalled();
+  });
+
+  test("monsters in an outpost whose own Flinger cannot reach the camp do not count (Repeat attack, 15 Nov)", async () => {
+    userSave.monsters.housed = {};
+    // In the sweep box, three cells from the camp; a level 2 outpost Flinger reaches two.
+    addOutpost(244, 208, 2, { C1: 200 });
+    const answer = await autoAttackPlanFor(user() as never, CAMP);
+    expect(answer.missing).toEqual([{ kind: "monster", id: "C1", need: 150, have: 0 }]);
+
+    const refused = await refusal(runAutoAttack(user() as never, CAMP));
+    expect(refused.reason).toBe("missing");
+    expect(refused.missing).toEqual([{ kind: "monster", id: "C1", need: 150, have: 0 }]);
+    expect(mint).not.toHaveBeenCalled();
+    expect(outpostRows[0]!.monsters.housed).toEqual({ C1: 200 });
+  });
+
+  test("monsters in an outpost that reaches the camp count", async () => {
+    userSave.monsters.housed = {};
+    addOutpost(242, 208, 2, { C1: 200 });
+    expect((await autoAttackPlanFor(user() as never, CAMP)).missing).toEqual([]);
+  });
+
+  test("the main yard's monsters do not count when only an outpost reaches the camp", async () => {
+    // A level 1 main Flinger reaches four cells; the camp is eleven away.
+    userSave.homebase = ["230", "208"];
+    userSave.flinger = 1;
+    addOutpost(242, 208, 2, { C1: 100 });
+    expect((await autoAttackPlanFor(user() as never, CAMP)).missing).toEqual([
+      { kind: "monster", id: "C1", need: 150, have: 100 },
+    ]);
   });
 
   test("a camp no Flinger reaches says so, so Repeat attack is refused", async () => {
