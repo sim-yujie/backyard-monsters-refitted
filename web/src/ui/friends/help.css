@@ -451,11 +451,13 @@
     display: none;
   }
 
-  /* What sits under the HUD (the World chat tab, a docked panel) follows
-     the one row left, not the readouts' two. Wider screens keep their
-     height: the account pill is as tall as the readouts were. */
+  /* What sits under the HUD (the World chat tab, a window's title sign)
+     follows the one row left, not the readouts' two: the bar with Help all
+     ends 64px down, and a window's sign stands 13px above the band's end.
+     Wider screens keep their height: the account pill is as tall as the
+     readouts were. */
   :root:has(.hud--corner.hud--visit-top) {
-    --hud-bar-height: 44px;
+    --hud-bar-height: 72px;
   }
 
   .friend-visit.friend-visit--corner {
