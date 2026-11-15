@@ -5,7 +5,7 @@ import { Assets, Sprite, Texture, type ColorMatrixFilter } from "pixi.js";
 import { creepZIndex } from "@/game/attack/AttackBattleLayer";
 import type { BaseLoadResponse } from "@/api/types";
 import type { YardArtAtlas } from "./yardAtlas";
-import { HIGHLIGHT_MATRIX, YardBuildings } from "./YardBuildings";
+import { HIGHLIGHT_MATRIX, UPGRADE_FADE_ALPHA, YardBuildings } from "./YardBuildings";
 import { readWork } from "./buildingWork";
 import { rowOf } from "./buildingCosts";
 import { artFor, readYard } from "./yardModel";
@@ -403,6 +403,61 @@ describe("YardBuildings: loading the pictures", () => {
       load.mockRestore();
       warn.mockRestore();
       vi.useRealTimers();
+    }
+  });
+});
+
+describe("YardBuildings.setFaded (the upgrade preview, beta 8)", () => {
+  const fortifiedSniper = (): BaseLoadResponse => {
+    const response = yardResponse();
+    (response.buildingdata as Record<string, Record<string, unknown>>)["2"]!.fort = 1;
+    return response;
+  };
+  const everywhere = { x: -10_000, y: -10_000, width: 20_000, height: 20_000 };
+  const settle = async (buildings: YardBuildings): Promise<void> => {
+    for (let pass = 0; pass < 5; pass++) {
+      await new Promise((resolve) => setTimeout(resolve, 0));
+      buildings.draw(everywhere);
+    }
+  };
+
+  it("fades a building with its strip, shadow and fortification, keeps it faded as pictures arrive, and puts it back", async () => {
+    let release: () => void = () => {};
+    const gate = new Promise<void>((resolve) => (release = resolve));
+    const load = vi.spyOn(Assets, "load").mockImplementation((async () => {
+      await gate;
+      return Texture.WHITE;
+    }) as typeof Assets.load);
+    try {
+      const buildings = new YardBuildings();
+      buildings.show(readYard(fortifiedSniper()), fakeAtlas());
+      // Booby trap, then the sniper's fort back, top, gun strip and fort front.
+      const [trap, back, top, gun, front] = buildings.tops.children;
+      buildings.setFaded(2);
+      expect(buildings.fadedId).toBe(2);
+      // Still a placeholder: it keeps its own faint grey.
+      expect(top!.alpha).toBeCloseTo(0.3);
+      expect([back!.alpha, gun!.alpha, front!.alpha]).toEqual([UPGRADE_FADE_ALPHA, UPGRADE_FADE_ALPHA, UPGRADE_FADE_ALPHA]);
+
+      release();
+      await settle(buildings);
+      // The picture came in faded; the trap beside it is untouched.
+      expect(top!.alpha).toBe(UPGRADE_FADE_ALPHA);
+      expect(trap!.alpha).toBe(1);
+      expect(buildings.shadows.children.every((shadow) => shadow.alpha === 1 || shadow.alpha === UPGRADE_FADE_ALPHA)).toBe(true);
+
+      buildings.setFaded(null);
+      expect(buildings.fadedId).toBeNull();
+      expect(buildings.tops.children.map((child) => child.alpha)).toEqual([1, 1, 1, 1, 1]);
+      expect(buildings.shadows.children.every((shadow) => shadow.alpha === 1)).toBe(true);
+
+      // Shown again (every save change), nothing stays faded.
+      buildings.setFaded(2);
+      buildings.show(readYard(fortifiedSniper()), fakeAtlas());
+      expect(buildings.fadedId).toBeNull();
+      buildings.destroy();
+    } finally {
+      load.mockRestore();
     }
   });
 });
