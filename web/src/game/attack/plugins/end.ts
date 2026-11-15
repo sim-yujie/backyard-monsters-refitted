@@ -518,6 +518,8 @@ export const createEndPlugin = (deps: EndPluginDeps = {}): AttackPlugin => {
         baseid: target.baseid,
         ...(target.cell ? { cell: target.cell } : {}),
         modal,
+        // The same server attack as the map's Repeat attack, so the same army bar (15 Nov 2026).
+        progressBar: true,
         onWatch: (run) => mounts.openWatch?.(run),
         // The loot it banked joins the pool the HUD shows, as this attack's did (#168).
         onAttacked: (result) => creditLoot(result.loot),

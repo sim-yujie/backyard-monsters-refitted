@@ -80,7 +80,8 @@ export interface AutoAttackFlowOptions {
   readonly now?: () => number;
   /**
    * Show the working bar while the attack runs (owner, 15 Nov 2026): the
-   * map's Repeat attack only, not the end panel's Attack again.
+   * map's Repeat attack and the end panel's Attack again. Without it, the
+   * plain "Your monsters are attacking…" line.
    */
   readonly progressBar?: boolean;
   /** The bar's clock and timer; the real ones by default. */

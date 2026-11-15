@@ -8,7 +8,9 @@ import { REPEAT_BAR_FULL_HOLD_MS, type BarTimers } from "./repeatBarTiming";
 
 /**
  * Repeat attack's working bar (owner, 15 Nov 2026): at least 5 s, full only
- * once the answer is in, stopped by an error; the map's Repeat attack only.
+ * once the answer is in, stopped by an error; on the map's Repeat attack and
+ * the end panel's Attack again (both ask for it), and a flow that does not
+ * ask keeps the plain line.
  */
 
 const BASEID = "1000241208";
@@ -213,7 +215,7 @@ describe("the bar's timing on Repeat attack", () => {
     expect(onAttacked).toHaveBeenCalledTimes(1);
   });
 
-  it("the end panel's Attack again (no bar asked for) keeps the plain line", async () => {
+  it("a flow that asks for no bar keeps the plain line", async () => {
     const modal = document.createElement("div");
     const run = deferred<AutoAttackResponse>();
     const flow = new AutoAttackFlow({ baseid: BASEID, modal, onWatch: vi.fn(), calls: calls(() => run.promise) });
