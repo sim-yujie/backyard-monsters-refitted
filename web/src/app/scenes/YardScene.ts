@@ -37,6 +37,7 @@ import {
   type HelpBlock,
   type HelpKind,
   type HelpYardResponse,
+  type ResourceAmounts,
 } from "@/api/friends";
 import { friendsStore } from "@/game/friends/friendsStore";
 import { HelpedWatch } from "@/game/friends/helpedWatch";
@@ -174,6 +175,7 @@ import { FriendsButton } from "@/ui/friends/FriendsButton";
 import { HelpPanel } from "@/ui/friends/HelpPanel";
 import { HelpAllBar, type HelpAllLine } from "@/ui/friends/HelpAllBar";
 import { helpAllFxMaker, type HelpAllFx, type HelpFxStage } from "@/ui/friends/helpAllFx";
+import { rewardNode, RewardChip, VISIT_REWARD_MS, visitTopChoice } from "@/ui/friends/visitTop";
 import { YardDock, type YardDockOptions } from "@/ui/yard/YardDock";
 import { kitBoughtText, StarterKitPicker } from "@/ui/yard/StarterKitPicker";
 import { YardMinimap } from "@/ui/yard/YardMinimap";
@@ -499,6 +501,10 @@ export class YardScene implements Scene {
   private visitTop: HTMLElement | null = null;
   /** Keeps the clear band under the visit bar as the bar's height changes. */
   private visitTopWatch: ResizeObserver | null = null;
+  /** PREVIEW (`visitTop.ts`): 1 or 2 on a friend's yard without the readouts, else 0. */
+  private visitTopLook: 0 | 1 | 2 = 0;
+  /** Look 2's chip beside the visit bar. */
+  private rewardChip: RewardChip | null = null;
   /** The one visit bar: "Bob's yard", the tools and "3", Help all; a friend's visit only (beta 8). */
   private helpAllBar: HelpAllBar | null = null;
   /** Help all's effect while one plays (`helpAllFx.ts`); null plays none. */
@@ -668,6 +674,9 @@ export class YardScene implements Scene {
     });
     this.hud.setActiveScene(SceneName.YARD);
     this.hud.mount(context.overlay.content);
+    // PREVIEW: a friend's yard without the readouts, from the first frame.
+    this.visitTopLook = this.target?.kind === "friend" ? visitTopChoice() : 0;
+    this.hud.setVisitTop(this.visitTopLook !== 0);
 
     this.chat = new WorldChatBox({
       session: worldChat,
@@ -879,6 +888,9 @@ export class YardScene implements Scene {
     this.helpAllBar = null;
     this.visitTopWatch?.disconnect();
     this.visitTopWatch = null;
+    this.rewardChip?.destroy();
+    this.rewardChip = null;
+    this.visitTopLook = 0;
     this.visitTop?.remove();
     this.visitTop = null;
     if (this.helpMarkTimer) clearInterval(this.helpMarkTimer);
@@ -1877,11 +1889,16 @@ export class YardScene implements Scene {
     if (!this.visitTop) {
       this.visitTop = document.createElement("div");
       this.visitTop.className = "friend-visit";
+      if (this.visitTopLook) this.visitTop.classList.add("friend-visit--corner");
       context.overlay.content.append(this.visitTop);
     }
     if (!this.helpAllBar) {
       this.helpAllBar = new HelpAllBar({ onHelpAll: () => this.helpAll() });
       this.visitTop.append(this.helpAllBar.element);
+      if (this.visitTopLook === 2) {
+        this.rewardChip = new RewardChip();
+        this.visitTop.append(this.rewardChip.element);
+      }
       // The bar is lower with the name alone than with Help all: the
       // wrenches' clear band follows it.
       if (typeof ResizeObserver !== "undefined") {
@@ -1914,6 +1931,11 @@ export class YardScene implements Scene {
           })),
         };
       };
+    }
+    if (import.meta.env.DEV && this.visitTopLook) {
+      // PREVIEW: for a test script, a reward shown as one help's would be.
+      (window as unknown as { __visitReward?: (reward: ResourceAmounts) => void }).__visitReward = (reward) =>
+        this.showVisitReward(reward);
     }
     // The "-18m" tags shrink as the friend's jobs run on.
     this.helpMarkTimer ??= setInterval(() => this.showHelpMarks(), 15_000);
@@ -2062,6 +2084,8 @@ export class YardScene implements Scene {
         this.visitorPool = { ...pool, resources };
         this.hud?.setResources(resources, pool.credits, fx ? { float: false } : {});
       }
+      // No readouts to float it on: one help's reward shows as Help all's does.
+      if (!fx && this.visitTopLook) this.showVisitReward(result.reward);
       this.showHelpBlock();
       // The friends bar's wrench follows.
       friendsStore.nudge();
@@ -2132,6 +2156,17 @@ export class YardScene implements Scene {
     return played ?? line;
   }
 
+  /** PREVIEW: one help's reward on a yard without the readouts, in the bar (look 1) or the chip (look 2). */
+  private showVisitReward(reward: ResourceAmounts): void {
+    if (this.rewardChip) {
+      this.rewardChip.show(reward);
+      return;
+    }
+    const node = rewardNode(reward);
+    if (!node) return;
+    this.helpAllBar?.showResult({ text: "Reward added", kind: "thanks", node, ms: VISIT_REWARD_MS });
+  }
+
   /** What Help all's effect plays on (`helpAllFx.ts`); null off a visit. */
   private helpFxStage(): HelpFxStage | null {
     const hud = this.hud;
@@ -2142,6 +2177,8 @@ export class YardScene implements Scene {
     return {
       hud,
       bar,
+      ...(this.visitTopLook === 1 && { reward: "bar" as const }),
+      ...(this.rewardChip && { reward: this.rewardChip }),
       marks: {
         hold: (ids) => renderer.holdHelpMarks(ids),
         leave: (id, exit) => renderer.leaveHelpMark(id, exit),

@@ -617,7 +617,7 @@ export class Hud {
    */
   floatBelow(key: ResourceKey, delta: number): void {
     const readout = this.readouts.get(key);
-    if (!readout || delta === 0) return;
+    if (!readout || delta === 0 || this.readoutsHidden) return;
     this.dropFloat(key);
     const float = document.createElement("span");
     float.className = `hud__delta hud__delta--lane hud__delta--${delta < 0 ? "down" : "up"}`;
@@ -635,6 +635,19 @@ export class Hud {
     };
     float.addEventListener("animationend", remove, { once: true });
     window.setTimeout(remove, FLOAT_LIFETIME_MS);
+  }
+
+  /**
+   * A friend's yard without the readouts (`friends/visitTop.ts`): they stay
+   * in the bar, hidden by `hud--visit-top`, so amounts keep adding up for
+   * the way home; nothing floats from a readout nobody sees.
+   */
+  setVisitTop(on: boolean): void {
+    this.element.classList.toggle("hud--visit-top", on);
+  }
+
+  private get readoutsHidden(): boolean {
+    return this.element.classList.contains("hud--visit-top");
   }
 
   /** A readout's cell lights up for a moment: something just landed in it. */
@@ -1035,6 +1048,7 @@ export class Hud {
    * fade under `prefers-reduced-motion`.
    */
   private float(key: string, value: Element, delta: number): void {
+    if (this.readoutsHidden) return;
     this.dropFloat(key);
     const float = document.createElement("span");
     float.className = `hud__delta hud__delta--${delta < 0 ? "down" : "up"}`;

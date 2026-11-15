@@ -4,6 +4,7 @@ import type { HelpMarkExit } from "@/game/yard/YardHelpMarks";
 import type { ResourceKey } from "../resourceIcon";
 import type { HelpAllBar, HelpAllLine } from "./HelpAllBar";
 import { HelpLandsFx } from "./helpLands";
+import type { RewardChip } from "./visitTop";
 
 /**
  * What Help all looks like as it lands (beta 8; owner, 15 Nov 2026: "I find
@@ -38,6 +39,12 @@ export interface HelpFxStage {
   readonly hud: HelpFxHud;
   readonly marks: HelpFxMarks;
   readonly bar: HelpAllBar;
+  /**
+   * Where the reward shows when the top bar has no readouts on a friend's
+   * yard (`visitTop.ts`): in the bar's line, or in the chip beside it.
+   * Absent: the top bar's counters count up.
+   */
+  readonly reward?: "bar" | RewardChip;
   readonly reducedMotion: boolean;
 }
 

@@ -287,3 +287,169 @@
     top: calc(var(--hud-height, 64px) + var(--space-1) + 10px);
   }
 }
+
+/*
+ * PREVIEW (`visitTop.ts`, `?visitTop=1|2` in a dev build; owner, Review Desk
+ * 7, 15 Nov 2026): a friend's yard without the readouts, the visit bar top
+ * left where they were. The account stays top right (it moves there on an
+ * upright phone, so the bar is top left on every screen).
+ */
+.hud--corner.hud--visit-top .hud__bar,
+.hud--corner.hud--visit-top::before {
+  display: none;
+}
+
+/* The account alone is left in the HUD's row: it keeps the right. */
+.hud--corner.hud--visit-top {
+  justify-content: flex-end;
+}
+
+/* What sits under the HUD (the World chat tab, the wrenches' clear band)
+   follows the one bar's height, not the readouts'. */
+:root:has(.hud--corner.hud--visit-top) {
+  --hud-bar-height: 48px;
+}
+
+.friend-visit.friend-visit--corner {
+  top: var(--hud-inset);
+  left: var(--hud-inset);
+  align-items: center;
+  justify-content: flex-start;
+  gap: var(--space-2);
+  /* Stops short of the account pill, top right. */
+  max-width: calc(100vw - 2 * var(--hud-inset) - 240px);
+  transform: none;
+}
+
+/* A reward as pictures and numbers: in the bar's line (look 1) or the chip (look 2). */
+.visit-reward {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  color: var(--colour-gain);
+  font-size: var(--text-sm);
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+  white-space: nowrap;
+}
+
+.visit-reward__icons,
+.visit-reward__pair {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+}
+
+.visit-reward .res-icon {
+  flex: none;
+  height: 20px;
+  vertical-align: 0;
+}
+
+/* After the tools, the tick and the count, a thin rule, then the reward. */
+.help-all-done > .visit-reward {
+  margin-left: var(--space-1);
+  padding-left: var(--space-2);
+  border-left: 1px solid var(--colour-warning-line);
+}
+
+.visit-reward-chip {
+  display: flex;
+  flex: none;
+  align-items: center;
+  min-height: 32px;
+  padding: 0 var(--space-3);
+  border: 1px solid var(--colour-border);
+  border-radius: var(--radius-md);
+  background: var(--colour-surface-raised);
+  -webkit-backdrop-filter: var(--blur-panel);
+  backdrop-filter: var(--blur-panel);
+  box-shadow: var(--shadow-float);
+  animation: help-all-done-in 180ms var(--easing, ease-out) both;
+}
+
+.visit-reward-chip[hidden] {
+  display: none;
+}
+
+.visit-reward-chip .visit-reward {
+  gap: var(--space-3);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .visit-reward-chip {
+    animation: none;
+  }
+}
+
+@media (max-width: 620px) {
+  /* An upright phone: the critter alone, top right; the bar takes the rest
+     of the row from the left, and the chip the row under it. */
+  /* (`:root .hud`: over the event coins' own placing of the critter.) */
+  :root .hud.hud--corner.hud--visit-top .account-menu {
+    grid-area: 1 / 4;
+    justify-self: end;
+  }
+
+  :root .hud.hud--corner.hud--visit-top .account-menu__pill-text {
+    display: none;
+  }
+
+  :root:has(.hud--corner.hud--visit-top) {
+    --hud-bar-height: 44px;
+  }
+
+  .friend-visit.friend-visit--corner {
+    top: calc(var(--hud-inset) - 4px);
+    left: var(--space-3);
+    flex-direction: column;
+    align-items: flex-start;
+    gap: var(--space-1);
+    /* Stops short of the critter (48px with its frame). */
+    max-width: calc(100vw - 2 * var(--space-3) - 48px - var(--space-2));
+  }
+
+  /* The reward needs the row: the name waits, as for a line of words. */
+  .help-all-bar--result:has(> .help-all-bar__result .visit-reward) .help-all-bar__name {
+    display: none;
+  }
+
+  .help-all-bar--result:has(> .help-all-bar__result .visit-reward) .help-all-bar__result {
+    padding-left: 0;
+    border-left: 0;
+  }
+
+  /* Four amounts of their own (not the usual one for all four) fill the row by themselves. */
+  .help-all-done:has(> .visit-reward--each) > :not(.visit-reward) {
+    display: none;
+  }
+
+  .help-all-bar__result .visit-reward--each {
+    margin-left: 0;
+    padding-left: 0;
+    border-left: 0;
+    gap: 3px;
+    font-size: 11px;
+  }
+
+  .help-all-bar__result .visit-reward--each .visit-reward__pair {
+    gap: 1px;
+  }
+
+  .help-all-bar__result .visit-reward--each .res-icon {
+    height: 14px;
+  }
+
+  .visit-reward {
+    font-size: var(--text-xs, var(--text-sm));
+  }
+
+  .visit-reward .res-icon {
+    height: 16px;
+  }
+
+  .visit-reward-chip .visit-reward {
+    gap: var(--space-2);
+  }
+}
