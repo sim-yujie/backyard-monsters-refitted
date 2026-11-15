@@ -169,6 +169,28 @@ describe("YardRenderer.setUpgradePreview", () => {
       () => {};
     renderer.setView(YardView.BLUEPRINT);
     expect(inner.upgradePreviewLayer.visible).toBe(false);
+    // The blueprint keeps the selection's own outline round the building.
+    const blueprintCorners = [
+      [0, 0],
+      [10, 0],
+      [10, 10],
+      [0, 10],
+    ] as const;
+    (renderer as unknown as { blueprint: { cornersOf: () => unknown } }).blueprint.cornersOf =
+      () => blueprintCorners;
+    const chrome = (
+      renderer as unknown as {
+        chrome: { clear: () => unknown; poly: (points: number[]) => unknown };
+      }
+    ).chrome;
+    const drawn: number[][] = [];
+    const poly = chrome.poly.bind(chrome);
+    chrome.poly = (points: number[]) => {
+      drawn.push(points);
+      return poly(points);
+    };
+    (renderer as unknown as { drawChrome: () => void }).drawChrome();
+    expect(drawn).toHaveLength(1);
     renderer.setView(YardView.ISO);
     expect(inner.upgradePreviewLayer.visible).toBe(true);
     expect(inner.upgradePreview.root.visible).toBe(true);

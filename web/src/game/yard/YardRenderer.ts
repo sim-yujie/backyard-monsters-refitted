@@ -1330,8 +1330,9 @@ export class YardRenderer {
       }
     }
 
-    // A building under its upgrade preview wears the preview's own blue diamond instead.
-    const previewed = this.upgradePreview.buildingId;
+    // A building under its upgrade preview wears the preview's own blue diamond instead (the isometric view only:
+    // the blueprint hides the preview, and keeps the selection's outline).
+    const previewed = this.currentView === YardView.ISO ? this.upgradePreview.buildingId : null;
     if (this.selected && !this.plannerVisuals && this.selected.id !== chosen && this.selected.id !== previewed) {
       const corners = this.cornersOf(this.selected.id);
       if (corners) {
