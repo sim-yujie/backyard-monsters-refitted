@@ -1030,7 +1030,7 @@ export class HatchTab implements MonstersTab {
       } else {
         const text = document.createElement("span");
         text.className = "hatch-now__state";
-        text.textContent = IDLE_TEXT[state] ?? "Nothing hatching";
+        stateWords(text, IDLE_TEXT[state] ?? ["Nothing hatching"]);
         card.append(" ", text);
       }
       return card;
@@ -1086,7 +1086,7 @@ export class HatchTab implements MonstersTab {
       card.append(bar);
       this.clocks.push({ node: time, endsAt: hatchery.endsAt, fill, total, suffix: compact ? "" : " left" });
     } else {
-      time.textContent = (state === "stalled" && this.realm === "inferno" ? "Waiting for room" : BUSY_TEXT[state]) ?? "";
+      stateWords(time, state === "stalled" && this.realm === "inferno" ? STALLED_INFERNO : BUSY_TEXT[state]);
     }
     return card;
   }
@@ -1375,7 +1375,12 @@ export class HatchTab implements MonstersTab {
     const foot = document.createElement("span");
     foot.className = "hatch-housing__foot";
     foot.append(key);
-    if (after > yard.capacity) {
+    // "Housing is full: ... wait for room" above already says it (7.6.1):
+    // the short warning is not said twice; it stays on hover of the numbers.
+    const fullSaid = tone === "warning" && yard.hatcheries.some((one) => one.stage === 2);
+    value.title = `${words}: ${formatAmount(housed)} housed, ${formatAmount(pending)} on the way${adding > 0 ? `, ${formatAmount(adding)} adding` : ""}, of ${formatAmount(yard.capacity)}`;
+    if (after > yard.capacity) value.title += `. Over by ${formatAmount(after - yard.capacity)}: the rest hatch and wait in the ${this.words.hatchery} for room.`;
+    if (after > yard.capacity && !fullSaid) {
       const over = document.createElement("span");
       over.className = "hatch-housing__over";
       over.textContent = `${formatAmount(after - yard.capacity)} over: they wait for room`;
@@ -1889,10 +1894,10 @@ export class HatchTab implements MonstersTab {
 /* ── Pieces ──────────────────────────────────────────────────────────────── */
 
 /** What an empty "hatching now" card says. */
-const IDLE_TEXT: Partial<Record<HatcheryView["state"], string>> = {
-  building: "Being built",
-  damaged: "Damaged: repair it",
-  idle: "Nothing hatching",
+const IDLE_TEXT: Partial<Record<HatcheryView["state"], StateWords>> = {
+  building: ["Being built", "Building"],
+  damaged: ["Damaged"],
+  idle: ["Nothing hatching", "Idle"],
 };
 
 /**
@@ -1915,12 +1920,36 @@ const TAB_STATE: Readonly<Record<HatcheryView["state"], string>> = {
   damaged: "Damaged",
 };
 
-/** What a card with a monster says when it is not counting down. */
-const BUSY_TEXT: Partial<Record<HatcheryView["state"], string>> = {
-  stalled: "Waiting for housing",
-  upgrading: "Paused: upgrading",
-  damaged: "Damaged: repair it",
-  building: "Being built",
+/**
+ * What a card with a monster says when it is not counting down, and the
+ * shorter words a phone's card has room for (patch 7.6.1, owner 15 Nov
+ * 2026: "Waiting for housing" ran over the next card). The message line
+ * under the cards says it in full ("Housing is full: ...").
+ */
+type StateWords = readonly [words: string, short?: string];
+const BUSY_TEXT: Partial<Record<HatcheryView["state"], StateWords>> = {
+  stalled: ["Needs housing", "No room"],
+  upgrading: ["Upgrading"],
+  damaged: ["Damaged"],
+  building: ["Being built", "Building"],
+};
+const STALLED_INFERNO: StateWords = ["Needs room", "No room"];
+
+/** A card's state words: the long ones, and a phone's short ones beside them (hatch.css). */
+const stateWords = (node: HTMLElement, words: StateWords | undefined): void => {
+  const [long, short] = words ?? [""];
+  if (!short) {
+    node.textContent = long;
+    return;
+  }
+  const full = document.createElement("span");
+  full.className = "hatch-now__words-long";
+  full.textContent = long;
+  const brief = document.createElement("span");
+  brief.className = "hatch-now__words-short";
+  brief.setAttribute("aria-hidden", "true");
+  brief.textContent = short;
+  node.replaceChildren(full, brief);
 };
 
 /**
@@ -2036,7 +2065,9 @@ export const lineSentence = (
     // Waiting monsters first: they are what a player cannot otherwise see (#169).
     if (stalled.length > 0) {
       return {
-        title: `${housingNoun(words, true)} is full: ${stalled.length === 1 ? "a hatched monster waits" : `${formatAmount(stalled.length)} hatched monsters wait`} in the ${words.hatcheries} for room.`,
+        // Where they wait is the cards just above (7.6.1: shorter, so the
+        // housing numbers fit beside it).
+        title: `${housingNoun(words, true)} is full: ${stalled.length === 1 ? "a hatched monster waits" : `${formatAmount(stalled.length)} hatched monsters wait`} for room.`,
         tone: "warning",
       };
     }

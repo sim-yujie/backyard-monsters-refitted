@@ -512,7 +512,7 @@ describe("HatchTab: each hatchery's line", () => {
       [building(10, 13, 3), building(11, 13, 3), building(12, 13, 1, { cB: 50 })],
     );
     const { element } = setup(save);
-    expect(spokenText(nowCard(element, 10))).toBe("Hatching now Pokey Waiting for housing");
+    expect(spokenText(nowCard(element, 10))).toBe("Hatching now Pokey Needs housing");
     expect(text(element, ".hatch-message__title")).toBe(
       "Housing is full: the hatched Pokey waits in this Hatchery for room.",
     );
@@ -1115,9 +1115,9 @@ describe("HatchTab: with a Hatchery Control Centre", () => {
       [building(10, 13, 3), building(11, 13, 3), building(20, 16, 1)],
     );
     const { element } = setup(stalled, { buildingId: 10, monster: "C1" });
-    expect(spokenText(nowCard(element, 10))).toBe("Hatchery 1 Pokey Waiting for housing");
+    expect(spokenText(nowCard(element, 10))).toBe("Hatchery 1 Pokey Needs housing");
     expect(text(element, ".hatch-message__title")).toBe(
-      "Housing is full: a hatched monster waits in the Hatcheries for room.",
+      "Housing is full: a hatched monster waits for room.",
     );
   });
 });

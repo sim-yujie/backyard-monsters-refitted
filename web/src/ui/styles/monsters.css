@@ -32,7 +32,8 @@
   /* Its height in the middle: the tabs do not jump as they change. Never
      under 560px, the Hatch tab's hatcheries, slots and a row of monsters: on
      a short screen it reaches over the dock rather than (ui.css). */
-  --centre-height: 820px;
+  --monsters-height: 820px;
+  --centre-height: var(--monsters-height);
   --centre-min-height: 560px;
 }
 
