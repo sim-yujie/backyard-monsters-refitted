@@ -40,6 +40,8 @@
   flex-direction: column;
   align-items: center;
   gap: var(--space-1);
+  /* Its own width, not the half the centring's left: 50% would leave it. */
+  width: max-content;
   max-width: calc(100vw - 2 * var(--space-4));
   transform: translateX(-50%);
   pointer-events: none;

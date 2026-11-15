@@ -259,6 +259,9 @@ describe("YardJobBars: helper badges (beta 8)", () => {
       { id: 4, helpers: 5, full: true },
     ]);
     expect(helperBadgeStates(yardOf(helped(), { foreign: true }), SAVED)).toEqual([]);
+    // Friends help in a main yard only.
+    expect(helperBadgeStates({ ...yardOf(helped()), kind: "outpost" }, SAVED)).toEqual([]);
+    expect(helperBadgeStates({ ...yardOf(helped()), kind: "inferno" }, SAVED)).toEqual([]);
   });
 
   it("wears one on each job's bar, at the bar's right end, and beside a fortify's mark", () => {

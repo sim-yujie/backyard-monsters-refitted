@@ -153,11 +153,12 @@ export const jobBarStates = (yard: Yard, now: number): JobBarState[] => {
 
 /**
  * Every helper badge the yard should show at `now` (server clock): one per
- * building with a build, upgrade or fortify still running. None on a
- * foreign yard.
+ * building with a build, upgrade or fortify still running. Friends help in
+ * a main yard only (`controllers/friends/help.ts`), so none on an outpost or
+ * the Inferno; none on a foreign yard.
  */
 export const helperBadgeStates = (yard: Yard, now: number): HelperBadge[] => {
-  if (yard.foreign) return [];
+  if (yard.foreign || yard.kind !== "main") return [];
   const badges: HelperBadge[] = [];
   for (const building of yard.buildings) {
     const badge = helperBadgeOf(building, now);
