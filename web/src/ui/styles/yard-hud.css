@@ -1072,10 +1072,11 @@
     left: -6px;
   }
 
-  /* The level strip starts after the floating "?" instead of over it, level
-     with the button (whose top is --hud-height plus a step, tips.css). */
+  /* The status strip starts after the floating "?" instead of over it, in
+     line with the button (whose top is --hud-height plus a step, tips.css;
+     the strip's buttons are as tall as it, yard-status.css). */
   .overlay__layer:has(> .guide-help--float:not([hidden])) > .hud--corner > .hud-status {
-    top: calc(var(--hud-height) - var(--hud-inset) + var(--space-2) + 4px);
+    top: calc(var(--hud-height) - var(--hud-inset) + var(--space-2));
     left: 48px;
     max-width: calc(100% - 48px);
   }

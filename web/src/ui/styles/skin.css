@@ -496,6 +496,10 @@
   --skin-bar-slice: 100;
   --skin-bar-width: 16px;
   --skin-bar-edge: 7px;
+  /* The frame's clear margin in the picture (about 12px of its 100px slice
+     on top, 10px at the sides and bottom), at 16px: pushed outside the box,
+     the painted edge is the box at 1x, 2x and 3x (measured, 15 Nov). */
+  --skin-bar-bleed: 1.92px 1.6px 1.6px;
   --skin-label: url("/ui/skin/scrap/title.webp");
   --skin-label-slice: 0 72;
   --skin-label-ink: #2c1a04;
@@ -552,6 +556,8 @@
   --skin-bar-slice: 40;
   --skin-bar-width: 16px;
   --skin-bar-edge: 5px;
+  /* The chip's clear margin (2 of its 40px slice), at 16px. */
+  --skin-bar-bleed: 0.8px;
   --skin-label: url("/ui/skin/flash/title.webp");
   --skin-label-slice: 0 130;
   --skin-label-ink: #fff6dc;
@@ -610,8 +616,9 @@
 :root[data-skin] :is(
   .hud:not(.hud--corner),
   .hud--corner .hud__bar,
-  .hud-status__badge,
-  .hud-status__boost,
+  .hud-status__chip,
+  .hud-status__list,
+  .reset-clock__list,
   .friend-visit-line,
   .account-menu__button--pill,
   .account-menu__list,
@@ -669,6 +676,14 @@
   --colour-text-strong: #ffffff;
   --colour-text-secondary: var(--skin-ink-2);
   --colour-text-muted: var(--skin-ink-3);
+}
+
+/* The yard's corner row (reset-clock.css): the status strip's plates and
+   World chat's pill paint their frame on the box's edge, not inside its clear
+   margin, so they line up with the round "?" and hourglass, whose rim is
+   their box's edge. */
+:root[data-skin] :is(.hud-status__chip, .chat-box__tab) {
+  border-image-outset: var(--skin-bar-bleed, 0);
 }
 
 /* The yard's zoom rail is one plate: the zoom group inside it (+ and −) wears
@@ -788,8 +803,9 @@
   color: var(--skin-ink);
 }
 
-/* Bob's "?" over a scene: a small round button like the yard's domes. */
-:root[data-skin] .guide-help--float {
+/* Bob's "?" over a scene, and the reset clock's hourglass beside it: small
+   round buttons like the yard's domes. */
+:root[data-skin] :is(.guide-help--float, .reset-clock__button) {
   border-color: var(--colour-dome-rim);
   background: radial-gradient(circle at 50% 35%, var(--colour-dome-top), var(--colour-dome-bottom));
   color: #ffffff;
