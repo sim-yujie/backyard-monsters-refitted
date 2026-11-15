@@ -1884,3 +1884,36 @@
     padding-inline: var(--space-1);
   }
 }
+
+/* Narrower still (iPad Split View at 694 px, a small phone on its side at 667): smaller figures,
+   and Account as the face alone, as on an upright phone. */
+@media (min-width: 620.02px) and (max-width: 760px) {
+  .hud--map .hud__resource-value {
+    font-size: var(--text-sm);
+  }
+
+  .hud--map .hud__resource-button .res-icon {
+    height: 18px;
+  }
+
+  .hud--map .account-menu__button {
+    justify-content: center;
+    min-width: var(--control-height);
+    padding-inline: var(--space-1);
+  }
+
+  .hud--map .account-menu__face {
+    width: 28px;
+    height: 28px;
+    margin-inline-end: 0;
+  }
+
+  .hud--map .account-menu__word {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+}
