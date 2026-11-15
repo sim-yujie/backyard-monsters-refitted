@@ -35,6 +35,7 @@ const {
   recordRaidScreen,
   checkRaidForFinish,
   dropOpenRaid,
+  openFightingRaid,
   updateOpenRaid,
 } = await import("./raidStore.js");
 type OpenRaid = NonNullable<Awaited<ReturnType<typeof readOpenRaid>>>;
@@ -165,6 +166,14 @@ describe("finish", () => {
     expect(await readOpenRaid(USER)).not.toBeNull();
     expect(await dropOpenRaid(USER, "r_one")).toBe(true);
     expect(await checkRaidForFinish(USER, "r_one", ready + 1)).toEqual({ kind: "gone" });
+  });
+
+  test("the drop compares and deletes in one step: a raid opened since is never dropped for the old one", async () => {
+    // Two settlements both read r_one; one drops it, a Trojan Horse spring opens r_two, the other drops "r_one".
+    expect(await dropOpenRaid(USER, "r_one")).toBe(true);
+    await openFightingRaid(USER, { ...fighting(start), id: "r_two" }, start);
+    expect(await dropOpenRaid(USER, "r_one")).toBe(false);
+    expect((await readOpenRaid(USER))?.id).toBe("r_two");
   });
 
   test("another raid's id finds nothing and leaves it", async () => {

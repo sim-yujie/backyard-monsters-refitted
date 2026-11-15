@@ -579,6 +579,7 @@ export const finishRaid = async (em: EntityManager, user: User, raidId: unknown,
     case "finished": {
       const settled = await settleRaid(em, user, raidId, now, "land", "finish");
       if (settled.kind === "landed") return settled.result;
+      if (settled.kind === "cancelled") throw raidRefusedErr("cancelled");
       throw raidRefusedErr("noRaid");
     }
   }
@@ -600,7 +601,7 @@ const alreadyLanded = async (em: EntityManager, user: User, raidId: string): Pro
 type RaidSettlement =
   /** The raid is landed: now, or by an earlier finish or load. */
   | { readonly kind: "landed"; readonly result: RaidResult }
-  /** Cancelled now: nothing landed. */
+  /** Called off, now or by an earlier finish (`lastCancelledId`): nothing landed. */
   | { readonly kind: "cancelled" }
   /** Neither open nor landed: it timed out or was cancelled. */
   | { readonly kind: "gone" };
@@ -639,14 +640,17 @@ const settleRaid = async (
         if (!landed) return { kind: "gone" };
         return { kind: "landed", result: (await readLandedResult(user.userid, raidId)) ?? landed };
       }
+      // Called off already: a retry that finds it still in Redis (its drop
+      // failed) never lands it (sol's third review).
+      if (schedule.lastCancelledId === raidId) return { kind: "cancelled" };
       const raid = await readOpenRaid(user.userid);
       if (!raid || raid.id !== raidId || raid.phase !== "fighting") return { kind: "gone" };
 
       if (how === "cancel") {
-        if (readFightLock(schedule.fight)?.id === raidId) {
-          locked.aiattacks = scheduleColumn(withoutFightLock(schedule));
-          await tx.flush();
-        }
+        // Kept on the row, with the lock lifted, before the raid leaves Redis.
+        const unlocked = readFightLock(schedule.fight)?.id === raidId ? withoutFightLock(schedule) : schedule;
+        locked.aiattacks = scheduleColumn({ ...unlocked, lastCancelledId: raidId });
+        await tx.flush();
         return { kind: "cancelled" };
       }
 
@@ -671,7 +675,7 @@ const settleRaid = async (
   );
   if (settled.kind === "gone") return settled;
   // Written: the raid may leave Redis now. Should that fail, the row says it
-  // landed, so whatever finds it next answers what landed.
+  // landed or was called off, so whatever finds it next answers that.
   await dropOpenRaid(user.userid, raidId).catch((err: unknown) =>
     logger.warn(`Wild monster raid ${raidId} not dropped after it settled: ${(err as Error).message}`)
   );

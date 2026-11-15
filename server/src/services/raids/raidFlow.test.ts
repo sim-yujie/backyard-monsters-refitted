@@ -266,7 +266,7 @@ const yardLoad = async (now: number, gameWasClosed = false) => {
   const settled = await settleRaidOnYardLoad(em, user, closed, now);
   await em.transactional(async (tx) => {
     const locked = (await tx.findOne(Object, {}, { lockMode: LockMode.PESSIMISTIC_WRITE })) as never;
-    countRaidSession(locked, now);
+    countRaidSession(locked, now, settled.keep);
     await tx.flush();
   });
   await cancelRaidOnYardLoad(USER, closed, settled.keep);
@@ -765,14 +765,50 @@ describe("a yard load while the finish is on its way (patch 7.5, sol's review)",
       db.failFlushes = 1;
       expect(await yardLoad(finishFrom + 1)).toBeNull();
 
-      // Not landed, and not cancelled by the load either: still there to land.
+      // Not landed, and not cancelled by the load either: still there to land,
+      // and the yard still locked for it, so nothing changes it before the
+      // finish lands the fight on it (sol's third review).
       expect(db.row!.credits).toBe(100);
       expect(readSchedule(db.row!.aiattacks).recent).toEqual([]);
       expect((await readOpenRaid(USER))?.id).toBe(id);
+      expect(fightLock()?.id).toBe(id);
+      expect(raidFighting(db.row!, finishFrom + 1)).toBe(true);
 
       const result = await finishRaid(em, user, id, finishFrom + 3);
       expect(result).toMatchObject({ id, shiny: 10 });
       expect(db.row!.credits).toBe(110);
+      expect(await readOpenRaid(USER)).toBeNull();
+      expect(fightLock()).toBeUndefined();
+    },
+    FIGHT_TIMEOUT_MS
+  );
+
+  test(
+    "a fight the finish called off never lands, even when Redis kept it (its drop failed) and presence came back",
+    async () => {
+      const { id, finishFrom } = await toFight();
+      at(finishFrom);
+      await redis.del(lastSeenKey(USER));
+      const send = redis.send;
+      redis.send = (async (command: string, args: string[]) => {
+        if (command === "EVAL") throw new Error("Redis said no");
+        return send(command, args);
+      }) as typeof redis.send;
+      try {
+        expect(await refusal(finishRaid(em, user, id, finishFrom))).toEqual({ reason: "cancelled" });
+      } finally {
+        redis.send = send;
+      }
+      expect((await readOpenRaid(USER))?.id).toBe(id);
+      expect(readSchedule(db.row!.aiattacks)).toMatchObject({ lastCancelledId: id, recent: [] });
+      expect(fightLock()).toBeUndefined();
+
+      // The game comes back and asks again: still called off, nothing lands, and the raid goes.
+      await present(finishFrom + 5);
+      expect(await refusal(finishRaid(em, user, id, finishFrom + 5))).toEqual({ reason: "cancelled" });
+      expect(await yardLoad(finishFrom + 6)).toBeNull();
+      expect(db.row!.credits).toBe(100);
+      expect(readSchedule(db.row!.aiattacks).recent).toEqual([]);
       expect(await readOpenRaid(USER)).toBeNull();
     },
     FIGHT_TIMEOUT_MS

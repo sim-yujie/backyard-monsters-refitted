@@ -94,6 +94,11 @@ export interface RaidSchedule {
   /** The last raid applied, so a second finish of it applies nothing. */
   readonly lastRaidId?: string;
   /**
+   * The last raid a finish called off (presence lost), so a retry that finds
+   * it still open in Redis never lands it (patch 7.5, sol's third review).
+   */
+  readonly lastCancelledId?: string;
+  /**
    * Unix seconds the last raid's warning opened, kept whether it then landed
    * or was cancelled, for {@link RAID_MIN_GAP_SECONDS}.
    */
@@ -180,6 +185,7 @@ export const readSchedule = (raw: unknown): RaidSchedule => {
     sessionsSinceLastAttack: Math.max(0, whole(stored.sessionsSinceLastAttack) ?? 0),
     attackPreference: Math.sign(preference) as RaidPreference,
     ...(typeof stored.lastRaidId === "string" ? { lastRaidId: stored.lastRaidId } : {}),
+    ...(typeof stored.lastCancelledId === "string" ? { lastCancelledId: stored.lastCancelledId } : {}),
     ...(lastOpenedAt !== undefined && lastOpenedAt > 0 ? { lastOpenedAt } : {}),
     recent,
     ...(fight ? { fight } : {}),
@@ -196,10 +202,13 @@ export const scheduleColumn = (schedule: RaidSchedule): JsonObject => structured
  * session, and the next raid's time when the last is over 4 days old (60
  * seconds from now, renewed on every load, as Flash did) or when none is set
  * yet (the wait the player's preference gives). A load cancels any fight
- * (`cancelRaidOnYardLoad`), so the yard's fight lock goes too.
+ * (`cancelRaidOnYardLoad`), so the yard's fight lock goes too, except the
+ * lock of `keepFight`: a fight the load could not land, left open for its
+ * finish (patch 7.5), which must find the yard as the fight left it.
  */
-export const startSession = (schedule: RaidSchedule, now: number): RaidSchedule => {
-  const sessions = { ...withoutFightLock(schedule), sessionsSinceLastAttack: schedule.sessionsSinceLastAttack + 1 };
+export const startSession = (schedule: RaidSchedule, now: number, keepFight?: string): RaidSchedule => {
+  const unlocked = keepFight !== undefined && schedule.fight?.id === keepFight ? schedule : withoutFightLock(schedule);
+  const sessions = { ...unlocked, sessionsSinceLastAttack: schedule.sessionsSinceLastAttack + 1 };
   if (now - schedule.lastattack > LONG_GAP_SECONDS) return { ...sessions, nextAttack: now + FIRST_RAID_DELAY_SECONDS };
   if (schedule.nextAttack === undefined) {
     return { ...sessions, nextAttack: schedule.lastattack + RAID_PREFERENCES[schedule.attackPreference].waitSeconds };
@@ -454,8 +463,9 @@ export const raidDueNow = async (userid: number, save: Save, now: number): Promi
  *
  * @param locked - The row, under its lock, not yet flushed.
  * @param now - Unix seconds.
+ * @param keepFight - A fight whose lock stays: see {@link startSession}.
  */
-export const countRaidSession = (locked: Save, now: number): void => {
+export const countRaidSession = (locked: Save, now: number, keepFight?: string): void => {
   if (locked.type !== BaseType.MAIN) return;
-  locked.aiattacks = scheduleColumn(startSession(readSchedule(locked.aiattacks), now));
+  locked.aiattacks = scheduleColumn(startSession(readSchedule(locked.aiattacks), now, keepFight));
 };

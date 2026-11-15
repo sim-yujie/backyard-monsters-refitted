@@ -228,13 +228,24 @@ export const checkRaidForFinish = async (userid: number, raidId: string, now: nu
 };
 
 /**
- * Drops the open raid if it is still `raidId`, once it has been landed or
- * cancelled. @returns True when it was dropped.
+ * Deletes the key only while it holds raid `ARGV[1]`, in one step, so a
+ * raid opened since (a Trojan Horse spring, Moloch's) is never dropped in
+ * its place. The marker line lets the test Redis (`memoryRedis.ts`) play it.
  */
-export const dropOpenRaid = async (userid: number, raidId: string): Promise<boolean> => {
-  if ((await readOpenRaid(userid))?.id !== raidId) return false;
-  return cancelOpenRaid(userid);
-};
+export const DROP_IF_RAID_SCRIPT = `-- bymr:drop-if-raid
+local raw = redis.call('GET', KEYS[1])
+if not raw then return 0 end
+local ok, raid = pcall(cjson.decode, raw)
+if ok and type(raid) == 'table' and raid.id == ARGV[1] then return redis.call('DEL', KEYS[1]) end
+return 0`;
+
+/**
+ * Drops the open raid if it is still `raidId`, once it has been landed or
+ * cancelled: compare and delete in one Redis step (sol's third review).
+ * @returns True when it was dropped.
+ */
+export const dropOpenRaid = async (userid: number, raidId: string): Promise<boolean> =>
+  Number(await redis.send("EVAL", [DROP_IF_RAID_SCRIPT, "1", raidKey(userid), raidId])) > 0;
 
 /**
  * The screen from a presence ping's body: `{ where: "yard" | "other",
