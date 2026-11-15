@@ -4,6 +4,7 @@ import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it, vi } from "vitest";
 import type { EventView } from "@/api/events";
+import { shortDate } from "@/game/events/eventsModel";
 import type { WeekendRun } from "@/game/weekend";
 import {
   claimedLine,
@@ -274,15 +275,19 @@ describe("EventsPanel: the Krallen Hunt", () => {
       });
     const auraRow = (panel: EventsPanel) => panel.element.querySelector<HTMLElement>(".events-krallen__aura")!;
 
-    it("before 3x: the mark, the aura's x number at the level she will have, and a lock", () => {
+    const notes = (panel: EventsPanel) =>
+      [...auraRow(panel).querySelectorAll<HTMLElement>(".events-krallen__aura-note")].map((one) => one.textContent);
+
+    it("before 3x: loot 3x the goal, the aura until when, its x number at the level she will have, and a lock", () => {
       const { panel } = mounted();
       // Level 2 at the start, raised to 3 by the first mark.
       panel.render(list([twoMarks(200_000_000, 3, [true, false])]));
       const row = auraRow(panel);
-      expect(row.querySelector(".events-krallen__aura-need")?.textContent).toBe("450M");
-      expect(row.querySelector(".events-krallen__aura-what")?.textContent).toBe("Loot aura: nearby monsters loot up to x2");
+      expect(row.querySelector(".events-krallen__aura-need")?.textContent).toBe("Loot 450M (3x goal)");
+      expect(row.querySelector(".events-krallen__aura-what")?.textContent).toBe(`Krallen's loot aura until ${shortDate(UNTIL)}`);
+      expect(notes(panel)).toEqual(["Nearby monsters loot up to x2"]);
       expect(row.querySelector(".events-tier__claim")).toBeNull();
-      expect(row.querySelector(".events-krallen__aura-note")).toBeNull();
+      expect(row.querySelector(".events-tier__mark")).not.toBeNull();
       expect(panel.element.querySelector(".events-krallen .events-calendar__count")?.textContent).toBe("200M / 450M");
       expect(panel.element.querySelector(".events-krallen__done")?.textContent).toBe("Prize claimed.");
       panel.close();
@@ -294,7 +299,7 @@ describe("EventsPanel: the Krallen Hunt", () => {
       panel.render(list([view]));
       const button = auraRow(panel).querySelector<HTMLButtonElement>(".events-tier__claim")!;
       expect(button.textContent).toBe("Claim");
-      expect(auraRow(panel).querySelector(".events-krallen__aura-what")?.textContent).toBe("Loot aura: nearby monsters loot up to x2.8");
+      expect(notes(panel)).toEqual(["Nearby monsters loot up to x2.8"]);
       button.click();
       expect(options.onClaimTier).toHaveBeenCalledWith(expect.objectContaining({ id: "krallen-2026-11" }), 1);
       panel.close();
@@ -305,24 +310,38 @@ describe("EventsPanel: the Krallen Hunt", () => {
       panel.render(list([twoMarks(450_000_000, 4, [true, true], UNTIL)]));
       const row = auraRow(panel);
       expect(row.classList.contains("events-krallen__aura--on")).toBe(true);
+      expect(row.querySelector(".events-krallen__aura-what")?.textContent).toBe("Krallen's loot aura");
       expect(row.querySelector(".events-krallen__aura-note--on")?.textContent).toMatch(/^On until /);
       expect(row.querySelector(".events-tier__claim")).toBeNull();
       expect(panel.element.querySelector(".events-krallen__done")?.textContent).toBe("Prize claimed. The next hunt starts on the 15th.");
       panel.close();
     });
 
-    it("below level 3 even after this hunt's raise: says it needs level 3", () => {
+    it("at levels 1 and 2 it works too: x1.4 or x1.7, no level note (levels 1-2 added 15 Nov 2026)", () => {
       const { panel } = mounted();
+      // No Krallen yet: the first mark makes her level 1.
+      panel.render(list([twoMarks(50_000_000, 0)]));
+      expect(notes(panel)).toEqual(["Nearby monsters loot up to x1.4"]);
+      // Level 1, raised to 2 by the first mark.
       panel.render(list([twoMarks(50_000_000, 1)]));
-      expect(auraRow(panel).querySelector(".events-krallen__aura-note")?.textContent).toBe("Needs Krallen level 3");
+      expect(notes(panel)).toEqual(["Nearby monsters loot up to x1.7"]);
+      expect(auraRow(panel).textContent).not.toMatch(/level 3/i);
+      // A level 1 Krallen at 3x, the first mark claimed: Claim.
+      panel.render(list([twoMarks(450_000_000, 1, [true, false])]));
+      expect(auraRow(panel).querySelector(".events-tier__claim")).not.toBeNull();
+      expect(notes(panel)).toEqual(["Nearby monsters loot up to x1.4"]);
       panel.close();
     });
 
-    it("no Krallen yet: the 3x mark stays locked though reached; the first claim comes first", () => {
+    it("no Krallen yet at 3x: the aura stays locked and says to claim Krallen first", () => {
       const { panel } = mounted();
       panel.render(list([twoMarks(500_000_000, 0)]));
       expect(auraRow(panel).querySelector(".events-tier__claim")).toBeNull();
+      expect(auraRow(panel).querySelector(".events-krallen__aura-note--first")?.textContent).toBe("Claim Krallen first");
       expect(panel.element.querySelector(".events-krallen__claim")).not.toBeNull();
+      // Not reached yet: no such note.
+      panel.render(list([twoMarks(100_000_000, 0)]));
+      expect(auraRow(panel).querySelector(".events-krallen__aura-note--first")).toBeNull();
       panel.close();
     });
 
@@ -331,7 +350,7 @@ describe("EventsPanel: the Krallen Hunt", () => {
       panel.render(list([twoMarks(900_000_000, 5)]));
       expect(panel.element.querySelector(".events-krallen__claim")).toBeNull();
       expect(auraRow(panel).querySelector(".events-tier__claim")).not.toBeNull();
-      expect(auraRow(panel).querySelector(".events-krallen__aura-what")?.textContent).toBe("Loot aura: nearby monsters loot up to x3.6");
+      expect(notes(panel)).toEqual(["Nearby monsters loot up to x3.6"]);
       panel.close();
     });
   });

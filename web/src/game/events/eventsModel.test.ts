@@ -20,6 +20,7 @@ import {
   rewardText,
   serverClock,
   shortAmount,
+  shortDate,
   sortEvents,
 } from "./eventsModel";
 
@@ -227,14 +228,28 @@ describe("the Krallen Hunt", () => {
     it("names the reward and says what its claim gave", () => {
       const words = (type: number) => `Decoration ${type}`;
       expect(rewardText({ kind: "krallenAura", until: UNTIL }, words)).toBe("Krallen's loot aura");
-      // An aura that is on raises no notice: the hunt card says "On until" (owner, 13 Nov 2026).
-      expect(grantedKrallenText([{ kind: "krallenAura", until: UNTIL, level: 4, hasKrallen: true }])).toBeNull();
+      // Claimed, it says the aura is on now, until when and how strong at her
+      // level (owner, 15 Nov 2026), from level 1.
+      const date = shortDate(UNTIL);
+      expect(grantedKrallenText([{ kind: "krallenAura", until: UNTIL, level: 4, hasKrallen: true }])).toBe(
+        `Loot aura on until ${date}: nearby monsters loot up to x2.8.`,
+      );
+      expect(grantedAuraText([{ kind: "krallenAura", until: UNTIL, level: 1, hasKrallen: true }])).toBe(
+        `Loot aura on until ${date}: nearby monsters loot up to x1.4.`,
+      );
       expect(grantedAuraText([{ kind: "krallenAura", until: UNTIL, level: 2, hasKrallen: true }])).toBe(
-        "Loot aura won! Krallen uses it from level 3.",
+        `Loot aura on until ${date}: nearby monsters loot up to x1.7.`,
       );
       expect(grantedAuraText([{ kind: "krallenAura", until: 0, level: 0, hasKrallen: false }])).toBe(
-        "Win Krallen first: her loot aura needs her.",
+        "Claim Krallen first, then her loot aura.",
       );
+      // One claim paying both says both.
+      expect(
+        grantedKrallenText([
+          { kind: "krallen", level: 1, raised: true },
+          { kind: "krallenAura", until: UNTIL, level: 1, hasKrallen: true },
+        ]),
+      ).toBe(`Krallen joined your yard! Loot aura on until ${date}: nearby monsters loot up to x1.4.`);
       expect(grantedAuraText([{ kind: "shiny", amount: 5 }])).toBeNull();
     });
 

@@ -1611,3 +1611,9 @@
   color: var(--colour-success);
   font-weight: 700;
 }
+
+/* Reached 3x without a Krallen: the goal's Krallen is claimed first (15 Nov 2026). */
+.events-krallen__aura-note--first {
+  color: var(--colour-warning);
+  font-weight: 700;
+}

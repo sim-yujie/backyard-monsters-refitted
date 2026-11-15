@@ -14,6 +14,9 @@ import {
 } from "@/game/events/eventsModel";
 import { championPortrait, showPortrait } from "@/game/portraits";
 import { KRALLEN_AURA_LEVEL, krallenAuraTimes } from "@/game/yard/krallenAura";
+
+/** The Krallen picture the aura reward shows: her level 3 icon, as before the 15 Nov 2026 rebalance. */
+const AURA_PICTURE_LEVEL = 3;
 import { ArtState, resolveArt } from "@/game/yard/buildingArt";
 import { typeName } from "@/game/yard/planner/summary";
 import type { WeekendCheckin, WeekendRun } from "@/game/weekend";
@@ -215,7 +218,7 @@ export const rewardBadge = (reward: EventReward, gained = false): HTMLElement =>
       break;
     case "krallenAura":
       // Flash's green glow round a looting monster (`LootingMultiplier.as:29`).
-      pictures.append(krallenPicture(KRALLEN_AURA_LEVEL, "icon", "events-reward__image events-reward__image--aura"));
+      pictures.append(krallenPicture(AURA_PICTURE_LEVEL, "icon", "events-reward__image events-reward__image--aura"));
       figure = "Aura";
       break;
     case "korath": {
@@ -818,9 +821,12 @@ export class EventsPanel {
   }
 
   /**
-   * The hunt's 3x mark (owner, 13 Nov 2026): Krallen's loot aura, how much
-   * more her neighbours loot, and its claim; that it needs her level 3 when
-   * she will still be below it; and, while it runs, until when.
+   * The hunt's 3x mark (owner, 13 Nov 2026; every level from 15 Nov): loot
+   * 3x the goal, the amount shown, for Krallen's loot aura until the end of
+   * next month's hunt, how much more her neighbours loot at her level, and
+   * its claim. Without a Krallen the goal's Krallen comes first (the server
+   * refuses the aura without her, `needsKrallen`), so the row says so once
+   * the 3x is reached; while an aura runs, until when.
    */
   private krallenAura(
     event: EventView,
@@ -837,15 +843,25 @@ export class EventsPanel {
     const until = krallen.auraUntil ?? 0;
     const running = until > view.now;
     const row = el("div", `events-krallen__aura${running && krallen.level >= KRALLEN_AURA_LEVEL ? " events-krallen__aura--on" : ""}`);
+    // When this mark's aura would run out: its reward's own `until`.
+    const reward = tier.rewards.find((one) => one.kind === "krallenAura");
+    const wins = reward && reward.kind === "krallenAura" ? reward.until : 0;
+    const reached = ladder.counter >= tier.need;
+    const waits = !tier.claimed && reached && krallen.level <= 0;
 
     const picture = krallenPicture(shown, "icon", "events-krallen__aura-picture");
     const words = el("div", "events-krallen__aura-words");
     words.append(
-      el("span", "events-krallen__aura-need", shortAmount(tier.need)),
-      el("span", "events-krallen__aura-what", `Loot aura: nearby monsters loot up to x${krallenAuraTimes(shown)}`),
+      el("span", "events-krallen__aura-need", `Loot ${shortAmount(tier.need)} (3x goal)`),
+      el(
+        "span",
+        "events-krallen__aura-what",
+        tier.claimed || wins <= 0 ? "Krallen's loot aura" : `Krallen's loot aura until ${shortDate(wins)}`,
+      ),
+      el("span", "events-krallen__aura-note", `Nearby monsters loot up to x${krallenAuraTimes(shown)}`),
     );
-    if (after < KRALLEN_AURA_LEVEL) {
-      words.append(el("span", "events-krallen__aura-note", `Needs Krallen level ${KRALLEN_AURA_LEVEL}`));
+    if (waits) {
+      words.append(el("span", "events-krallen__aura-note events-krallen__aura-note--first", "Claim Krallen first"));
     }
     if (running) {
       words.append(el("span", "events-krallen__aura-note events-krallen__aura-note--on", `On until ${shortDate(until)}`));
@@ -856,7 +872,7 @@ export class EventsPanel {
     const end = el("div", "events-tier__end");
     if (tier.claimed) {
       end.append(eventsArt("tick", 18, "events-tier__mark"));
-    } else if (ladder.counter >= tier.need && event.locked === null && krallen.level > 0) {
+    } else if (reached && event.locked === null && krallen.level > 0) {
       const button = el("button", "btn btn--primary events-tier__claim", "Claim");
       button.type = "button";
       button.dataset["claim"] = key;

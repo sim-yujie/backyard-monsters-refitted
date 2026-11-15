@@ -1150,8 +1150,8 @@ export class AttackSession {
 
   /**
    * Whether the champion of type `t` fights with Krallen's loot aura: her
-   * Krallen Hunt aura running at the attack load's clock and her level 3 or
-   * more (`krallenAuraActive`). For the army row's sign; the fight reads the
+   * Krallen Hunt aura running at the attack load's clock, at any level
+   * (`krallenAuraActive`). For the army row's sign; the fight reads the
    * log's `aura`, which the server stamps itself.
    */
   hasLootAura(t: number): boolean {

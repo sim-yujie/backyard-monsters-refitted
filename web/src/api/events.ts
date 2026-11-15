@@ -29,7 +29,7 @@ export type EventReward =
   | { readonly kind: "eventCoins"; readonly amount: number }
   /** The champion Krallen: level 1 the first time, one level more each later win, at most 5. */
   | { readonly kind: "krallen" }
-  /** Krallen's loot aura until `until` (unix s): the Krallen Hunt's 3x mark; she fights with it from level 3. */
+  /** Krallen's loot aura until `until` (unix s): the Krallen Hunt's 3x mark; she fights with it at any level. */
   | { readonly kind: "krallenAura"; readonly until: number }
   /** One of Korath's powers (Monster Madness): 1 Burn, 2 Breath of Fire, 3 Fists of Doom. */
   | { readonly kind: "korath"; readonly power: number };
