@@ -59,6 +59,8 @@ describe("friendsApi reads", () => {
       max: 100,
       requestsIn: 2,
       giftsWaiting: 1,
+      // Sent only for pre-7.6 clients; this client ignores it.
+      helpsLeft: 999,
       friends: [
         {
           userid: 7,
@@ -234,8 +236,15 @@ describe("friendsApi writes", () => {
     expect(calls.every((call) => call.url.includes("/bm/friends/gifts/delete"))).toBe(true);
   });
 
-  it("helps and reads the result", async () => {
-    stubFetch({ error: 0, secondsSaved: 390, reward: { r1: 10, r2: 10, r3: 10, r4: 10 }, rewardsLeft: 2, building: { id: 4 } });
+  it("helps and reads the result (the pre-7.6 helpsLeft is ignored)", async () => {
+    stubFetch({
+      error: 0,
+      secondsSaved: 390,
+      reward: { r1: 10, r2: 10, r3: 10, r4: 10 },
+      rewardsLeft: 2,
+      helpsLeft: 999,
+      building: { id: 4 },
+    });
     expect(await friendsApi.help(7, 4, "speedup")).toEqual({
       secondsSaved: 390,
       reward: { r1: 10, r2: 10, r3: 10, r4: 10 },
