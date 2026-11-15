@@ -2706,6 +2706,8 @@ export class YardScene implements Scene {
       store,
       scene: {
         selectBuilding: (id) => this.focusBuilding(id),
+        // The renderer draws it for the selected building only, so a panel left over never lights another.
+        previewUpgrade: (building, to) => this.renderer.setUpgradePreview(this.planner ? null : building, to),
         openMonsters: (tab, focus) => this.openMonsters(tab, focus),
         openSiege: (site) => this.openSiege(site),
         runBaiter: (run) => {

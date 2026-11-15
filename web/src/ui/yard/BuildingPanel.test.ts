@@ -1093,3 +1093,28 @@ describe("BuildingPanel: fortifying in a Builder's Weekend", () => {
     expect(spokenText(block.querySelector(".building-panel__cost")!)).toContain("50,000");
   });
 });
+
+describe("BuildingPanel: the upgrade preview (beta 8)", () => {
+  it("asks the yard for the next level's look while Upgrade is offered, and puts it back on close", () => {
+    const previewUpgrade = vi.fn();
+    const { panel } = setup([HALL, building(2, 4, 5)], 2, { scene: { previewUpgrade } });
+    expect(previewUpgrade).toHaveBeenLastCalledWith(expect.objectContaining({ id: 2, level: 5 }), 6);
+    panel.close();
+    expect(previewUpgrade).toHaveBeenLastCalledWith(null, null);
+  });
+
+  it("asks even when the upgrade is gated (short of the Town Hall level)", () => {
+    const previewUpgrade = vi.fn();
+    setup([building(1, 14, 1), building(2, 4, 5)], 2, { scene: { previewUpgrade } });
+    expect(previewUpgrade).toHaveBeenLastCalledWith(expect.objectContaining({ id: 2 }), 6);
+  });
+
+  it("asks for nothing on a maxed building or one already upgrading", () => {
+    const previewUpgrade = vi.fn();
+    setup([building(1, 14, 10), building(2, 4, 10)], 2, { scene: { previewUpgrade } });
+    expect(previewUpgrade).toHaveBeenLastCalledWith(expect.objectContaining({ id: 2 }), null);
+    const busy = vi.fn();
+    setup([HALL, building(2, 4, 5, { cU: 5_400 })], 2, { scene: { previewUpgrade: busy } });
+    expect(busy).toHaveBeenLastCalledWith(expect.objectContaining({ id: 2 }), null);
+  });
+});

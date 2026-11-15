@@ -25,6 +25,8 @@ import { classicLook } from "@/game/classicLook";
 import { thanksgivingSkin } from "./thanksgivingSkin";
 import { YardTurkeys } from "./YardTurkeys";
 import { YardDressUp } from "./YardDressUp";
+import { UpgradePreview } from "./UpgradePreview";
+import { upgradeLook } from "./upgradeLook";
 import { BlueprintLayer } from "./planner/BlueprintLayer";
 import { blueprintToYard, blueprintToWorld } from "./planner/blueprint";
 import { PlannerOverlay, type PlannerVisuals } from "./planner/PlannerOverlay";
@@ -97,6 +99,10 @@ export class YardRenderer {
   private readonly turkeys = new YardTurkeys(this.buildings);
   /** Thanksgiving: the props round the plot (`YardDressUp.ts`). */
   private readonly dressUp = new YardDressUp(this.buildings);
+  /** The ghost of a building's next look while its window offers the upgrade (beta 8); see `setUpgradePreview`. */
+  private readonly upgradePreview = new UpgradePreview();
+  /** Holds the ghost, so the blueprint view can hide it while the ghost keeps its own visibility. */
+  private readonly upgradePreviewLayer = new Container();
   /** Each mushroom's sprite by `mushroomKey`, rebuilt with every `show`. */
   private readonly mushroomSprites = new Map<string, Sprite>();
   /** Mushrooms shaking for a pick, by `mushroomKey` (`BMUSHROOM.as:76-81`). */
@@ -231,6 +237,8 @@ export class YardRenderer {
     this.buildings.onArtReady(() => this.openSheets());
     this.life.onJuiceArrive = (monster, juicer) => this.juiceArrived(monster, juicer);
     this.isoDecals.eventMode = "none";
+    this.upgradePreviewLayer.eventMode = "none";
+    this.upgradePreviewLayer.addChild(this.upgradePreview.root);
     this.rangeOval.eventMode = "none";
     this.rangeOval.visible = false;
     this.root.addChild(
@@ -244,6 +252,7 @@ export class YardRenderer {
       this.collect.root,
       this.blueprint.root,
       this.chrome,
+      this.upgradePreviewLayer,
       this.planner.root,
       this.buildings.markers,
       this.jobBars.root,
@@ -362,6 +371,8 @@ export class YardRenderer {
     this.setHovered(null);
     this.setRangeHover(null);
     this.setSelected(null);
+    // The sprites go; the window asks for its preview again once it has the new building.
+    this.clearUpgradePreview();
     this.yard = yard;
     this.byId.clear();
     // Fresh sprites are drawn, so nothing is hidden any more. A planner that
@@ -524,6 +535,50 @@ export class YardRenderer {
     if (this.selected?.id === building?.id) return;
     this.selected = building;
     this.chromeDirty = true;
+    // The preview belongs to the selected building's window.
+    if (this.upgradePreview.buildingId !== null && this.upgradePreview.buildingId !== building?.id) {
+      this.clearUpgradePreview();
+    }
+  }
+
+  /* ── Upgrade preview (beta 8, owner 15 Nov 2026) ────────────────────── */
+
+  /**
+   * Shows the selected building as a blue ghost of its look at level `to`,
+   * over itself drawn faded, while its window offers that upgrade; or puts it
+   * back when passed null. Only when the look changes (`upgradeLook`: never
+   * with the Classic look, nor for a level of the same tier), only on the
+   * building selected, and not while the planner is drawing. Asking again for
+   * the ghost already up costs nothing; the building window asks on every
+   * redraw.
+   */
+  setUpgradePreview(building: YardBuilding | null, to: number | null): void {
+    const yard = this.yard;
+    const shown = building ? this.byId.get(building.id) : undefined;
+    const art =
+      yard && shown && to !== null && this.selected?.id === shown.id && !this.plannerVisuals
+        ? upgradeLook(shown.type, Math.max(shown.level, 1), to, yard.kind)
+        : null;
+    const shape = art && shown && !this.stored.has(shown.id) && !this.concealed.has(shown.id) ? this.isoShapeOf(shown.id) : null;
+    if (!art || !shown || to === null || !shape) {
+      this.clearUpgradePreview();
+      return;
+    }
+    this.upgradePreview.show({ building: shown, art, level: to, corners: diamondCorners(shape) });
+    this.buildings.setFaded(shown.id);
+    this.chromeDirty = true;
+  }
+
+  /** The building whose upgrade preview is up, or null. */
+  get upgradePreviewId(): number | null {
+    return this.upgradePreview.buildingId;
+  }
+
+  private clearUpgradePreview(): void {
+    if (this.upgradePreview.buildingId === null && this.buildings.fadedId === null) return;
+    this.upgradePreview.clear();
+    this.buildings.setFaded(null);
+    this.chromeDirty = true;
   }
 
   /* ── Views ──────────────────────────────────────────────────────────── */
@@ -545,6 +600,7 @@ export class YardRenderer {
       this.buildings.tops,
       this.giblets.root,
       this.collect.root,
+      this.upgradePreviewLayer,
       this.buildings.markers,
       this.jobBars.root,
       this.hatchMarks.root,
@@ -636,6 +692,7 @@ export class YardRenderer {
     this.zoomLevel = zoom;
     this.blueprint.setZoom(zoom);
     this.jobBars.setZoom(zoom);
+    this.upgradePreview.setZoom(zoom);
     this.hatchMarks.setZoom(zoom);
     this.helpMarks.setZoom(zoom);
     this.zoomWatcher?.(zoom);
@@ -1210,6 +1267,7 @@ export class YardRenderer {
     this.hatchMarks.destroy();
     this.helpMarks.destroy();
     this.blueprint.destroy();
+    this.upgradePreview.destroy();
     this.byId.clear();
     this.yard = null;
     this.buildings.destroy();
@@ -1272,7 +1330,9 @@ export class YardRenderer {
       }
     }
 
-    if (this.selected && !this.plannerVisuals && this.selected.id !== chosen) {
+    // A building under its upgrade preview wears the preview's own blue diamond instead.
+    const previewed = this.upgradePreview.buildingId;
+    if (this.selected && !this.plannerVisuals && this.selected.id !== chosen && this.selected.id !== previewed) {
       const corners = this.cornersOf(this.selected.id);
       if (corners) {
         this.chrome
@@ -1380,7 +1440,10 @@ export class YardRenderer {
     const traps = snapshotHiddenIds(yard.buildings).filter((id) => !this.concealed.has(id));
     const shown = this.root.children.map((child) => [child, child.visible] as const);
     const wasGroup = this.root.isRenderGroup;
+    // The picture shows the yard as built: a building under its upgrade preview is drawn whole.
+    const faded = this.buildings.fadedId;
     try {
+      this.buildings.setFaded(null);
       for (const id of traps) this.setConcealed(id, true);
       // Every building drawn, not only those on screen.
       this.buildings.draw(EVERYWHERE, 0, this.work?.now() ?? 0);
@@ -1400,6 +1463,7 @@ export class YardRenderer {
     } finally {
       for (const [child, visible] of shown) child.visible = visible;
       for (const id of traps) this.setConcealed(id, false);
+      this.buildings.setFaded(faded);
       // Drawing a container on its own makes it a render group; the yard was not one.
       if (!wasGroup && this.root.isRenderGroup) this.root.disableRenderGroup();
       // The next frame culls to the screen again; until then, the screen as it was.
