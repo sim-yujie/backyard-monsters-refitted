@@ -501,8 +501,10 @@ export const REPAINT_LAYOUTS: Readonly<Record<string, SheetLayoutOverride>> = {
   },
   // Zagnoid (IC2): 76x58 cells. The Flash cell is 64.4 px wide (1933 px / 30), drawn at fractional
   // x; the repaint cuts it at whole pixels as a 64 px cell and adds 6 px each side, 10 on top and 2
-  // at the bottom, so the anchor moves by (6, 10) and the slug and its long cast shadow stay put.
-  // 30 headings on 30 columns, as Flash. Rows: 0 idle, 1-6 crawl, 7-11 attack (rear back, rear up,
+  // at the bottom, so the anchor moves by (6, 10) and the slug stands on the same ground line over
+  // Flash's own long cast shadow. The Flash art creeps right 0.25 px a column (laid out 64.65 apart,
+  // cut 64.4 apart) and jumps back between headings 29 and 0; the repaint takes that out, so it sits
+  // up to about 4 px either way from Flash's spot. 30 headings on 30 columns, as Flash. Rows: 0 idle, 1-6 crawl, 7-11 attack (rear back, rear up,
   // lunge with claws and bite, follow-through, recover). Flash's single pose glided.
   "monsters/zagnoid.png": {
     frameWidth: 76,

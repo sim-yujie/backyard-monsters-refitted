@@ -100,7 +100,19 @@ about 25 minutes of Codex time (calls run 3-4 at once). Codex calls for IC2 (all
   234-306 degrees); the three-quarter back views outside it say the snout shows in profile, as Flash does.
 - **Facing check** is now body-centred (`common.facing_scores`): the old whole-cell diff is decided by
   position on an off-centre cell.
-- Codex calls: see the IC2 line under Steps.
+- Codex calls: see the IC2 line under Steps (plus 2 more redos after it: headings 1 and 8, colour drift found by
+  comparing each heading's mean frame colour with its idle frame; 42 calls in all).
+- `compare.py` writes `mirror-check.png` for mirrored headings only; with every heading painted it means nothing.
+
+## Battle shot setup (own database copy, never `bym`)
+
+- The server needs `INFERNO_ENABLED=on` (every `/bm/inferno/*` route answers "The Inferno is not open yet"
+  without it): add it to the helper's server command.
+- yardtester (user 2503, password `Dev12345!` in the `inferno_mon` copy): Inferno save basesaveid 3401. Set
+  `monsters.housed` (e.g. `{"IC1": 0, "IC2": 60}`) and `lockerdata.<ID>` = `{"t": 2}`. The tribe attack flings at
+  most the Housing Bunker's capacity (`infernoTribeFlingCapacity`: 200 at level 1, 1140 at level 5), so raise
+  the bunker (building id 8, type 128) with `l` and `monsters.space` to match.
+- Weakest tribe at yardtester's Inferno level (21): "Moloch's Minions, Level 19" (baseid 228).
 - **Flash likeness of IC1** (lead's call): the Modern crown is a little taller and the body a little
   redder than Flash's (crown 38% vs 32% of the height, yellow 31% vs 34% of the pixels). A sample at
   Flash proportions (one call, not used) is in `art-work/IC1-flashprop` and

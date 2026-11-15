@@ -336,7 +336,7 @@ describe("applyLayout", () => {
     expect(sheet.strikeFrame).toBe(2);
   });
 
-  it("the Zagnoid layout matches the animated PNG, cuts whole-pixel cells and keeps the slug where it was", () => {
+  it("the Zagnoid layout matches the animated PNG, cuts whole-pixel cells and keeps the slug on its ground line", () => {
     const old = MONSTER_SPRITES["IC2"];
     if (!old) throw new Error("no IC2");
     const sheet = spriteFor("IC2");
@@ -352,7 +352,7 @@ describe("applyLayout", () => {
     expect(sheet.width).toBe(76 * 30);
     expect(sheet.height).toBe(58 * 12);
     expect(frameRect(sheet, 29, 11)).toEqual({ x: 29 * 76, y: 11 * 58, width: 76, height: 58 });
-    // 6 px added left and right, 10 px on top: the slug stays on the same ground point.
+    // 6 px added left and right, 10 px on top: the anchor moves with the padding.
     expect(sheet.anchorX).toBe(old.anchorX + 6);
     expect(sheet.anchorY).toBe(old.anchorY + 10);
     expect(sheet.animations.walk).toEqual({ first: 1, count: 6, ticksPerFrame: 8 });
