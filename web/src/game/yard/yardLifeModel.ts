@@ -822,6 +822,14 @@ export const reconcileWalkers = (
       found && found.sheetLevel !== spec.sheetLevel ? { ...found, sheetLevel: spec.sheetLevel } : found;
     if (kept) {
       if (!kept.champion) kept.area = spec.area;
+      // A champion the battle pins to a point (an empty area) stands on it,
+      // even when it left and came back in between two reads (bug report #47).
+      if (kept.champion && kept.trip === null && spec.area.width === 0 && spec.area.height === 0) {
+        kept.area = spec.area;
+        kept.x = kept.targetX = spec.area.x;
+        kept.y = kept.targetY = spec.area.y;
+        kept.moving = false;
+      }
       kept.speed = spec.speed;
       if (kept.trip === null && !inside(kept.area, kept.targetX, kept.targetY)) {
         const at = pointIn(kept.area, random);

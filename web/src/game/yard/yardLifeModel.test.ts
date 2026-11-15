@@ -271,6 +271,15 @@ describe("withCagedChampions", () => {
     expect(back.champions).toEqual([{ id: "G2", level: 4, sheetLevel: 4, at: { x: 170, y: 240 } }]);
   });
 
+  it("moves a kept champion onto its new point when it came out and went back in between two reads", () => {
+    const first = reconcileWalkers(new Map(), walkerSpecs(life, seeded()), seeded());
+    const moved = withCagedChampions(life, [{ t: 2, l: 4, ix: 170, iy: 240 }]);
+    const second = reconcileWalkers(first, walkerSpecs(moved, seeded()), seeded());
+    const walker = second.get(championWalkerKey(7, "G2"))!;
+    expect(walker).toBe(first.get(championWalkerKey(7, "G2")));
+    expect([walker.x, walker.y, walker.moving]).toEqual([170, 240, false]);
+  });
+
   it("keeps none on a yard with no cage", () => {
     const bare = lifeWith({});
     expect(withCagedChampions(bare, [{ t: 2, l: 4, ix: 150, iy: 260 }])).toBe(bare);
