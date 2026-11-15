@@ -237,8 +237,8 @@ export const checkWindow = (args: CheckArgs): CheckReport => {
     ) ?? body;
   // On a short screen (a phone on its side) a window that already runs from
   // just under the top bar to near the screen's foot cannot give its list
-  // more: two rows are then enough (owner's rule "about 120px", lead to
-  // confirm; Monsters' Train and Lab showed 110px at 844x390, 15 Nov).
+  // more: two rows are then enough (owner confirmed 15 Nov, desk card
+  // layout-phone-list: Monsters' Train and Lab show 110px at 844x390).
   const fillsScreen = vh <= 500 && own.top <= hudBottom + 48 && own.bottom >= vh - 24;
   const minList = fillsScreen ? Math.min(args.minList, args.minListFull) : args.minList;
   if (fillsScreen) notes.push("fills the screen below the top bar");
