@@ -1,5 +1,5 @@
 import type { Page } from "@playwright/test";
-import { openAchievements, openShop, pressDock } from "./game";
+import { openAchievements, openFriendsScreen, openShop, pressDock } from "./game";
 
 /**
  * Every window the layout check opens on the own yard.
@@ -23,6 +23,8 @@ export interface WindowCase {
    * Alliance): no way in skips it. For every other window no way in fails.
    */
   readonly optional?: boolean;
+  /** Why an optional window may have no way in, for the skipped list. */
+  readonly why?: string;
   /** Click through the window's tabs and check each. */
   readonly tabs: boolean;
   readonly open: (page: Page) => Promise<boolean>;
@@ -74,6 +76,10 @@ export const WINDOWS: readonly WindowCase[] = [
   },
   {
     id: "defences",
+    // Its dock button shows only on a Map Room 2 main yard or an outpost
+    // (YardScene setAvailable); the sandbox yard is on Map Room 1.
+    optional: true,
+    why: "the Defences button shows only on Map Room 2 yards",
     label: "Defences",
     panel: ".defences-screen",
     items: null,
@@ -105,12 +111,22 @@ export const WINDOWS: readonly WindowCase[] = [
     open: dock("monsters"),
   },
   {
+    // The round Friends button opens this popup (FriendsWindow.ts) in the modal layer.
     id: "friends",
     label: "Friends",
+    panel: ".friends-window",
+    items: null,
+    tabs: false,
+    open: dock("friends"),
+  },
+  {
+    // The full Friends screen with its tabs, behind the popup's "All friends".
+    id: "friends-screen",
+    label: "Friends screen",
     panel: ".friends-screen",
     items: null,
     tabs: true,
-    open: dock("friends"),
+    open: openFriendsScreen,
   },
   {
     id: "achievements",

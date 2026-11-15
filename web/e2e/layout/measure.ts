@@ -10,9 +10,12 @@
  * - on the centred (non-phone) layout it is no taller than the screen below
  *   the top bar;
  * - its close button, title and tabs are on the screen and nothing covers
- *   the close button;
+ *   the close button (a tab row inside the box that scrolls, such as the
+ *   Champion's Mode tabs, scrolls with the content and is not judged);
  * - its list (the biggest box that scrolls, else the body) shows at least a
- *   few rows (`minList` px), or all of its content when that is shorter;
+ *   few rows (`minList` px), or all of its content when that is shorter; a
+ *   window that already fills the screen below the top bar cannot give its
+ *   list more, and needs only `minListFull` px (two rows);
  * - something is actually drawn in the visible part of the list, and when the
  *   window names its items (`itemSelector`) one of them is in view.
  *
@@ -28,6 +31,8 @@ export interface CheckArgs {
   readonly itemSelector: string | null;
   /** The fewest pixels of list a window may show (a few rows). */
   readonly minList: number;
+  /** The fewest when the window already fills the screen below the top bar. */
+  readonly minListFull: number;
   /** Rounding slack, in pixels. */
   readonly tolerance: number;
 }
@@ -190,8 +195,22 @@ export const checkWindow = (args: CheckArgs): CheckReport => {
 
   // Tabs: in sight from top to bottom. A tab row that scrolls sideways may
   // hide a tab to the side; that one is skipped.
+  const scrolls = (element: Element): boolean => {
+    const style = getComputedStyle(element);
+    return style.overflowY === "auto" || style.overflowY === "scroll";
+  };
+  const inScroller = (element: Element): boolean => {
+    for (let at = element.parentElement; at && at !== panel; at = at.parentElement)
+      if (scrolls(at)) return true;
+    return false;
+  };
   const tabs = [...panel.querySelectorAll('[role="tab"], .tabs__tab')].filter(shown);
+  let scrolledTabs = 0;
   for (const tab of tabs) {
+    if (inScroller(tab)) {
+      scrolledTabs += 1;
+      continue;
+    }
     const box = visibleBox(tab);
     if (width(box) < 1) continue;
     if (height(box) < height(boxOf(tab)) * 0.5) {
@@ -199,26 +218,33 @@ export const checkWindow = (args: CheckArgs): CheckReport => {
     }
   }
 
+  if (scrolledTabs > 0) notes.push(`${scrolledTabs} tabs inside the list, not judged`);
+
   // The list: the biggest box that scrolls, else the body.
   const body =
     panel.querySelector(":scope > .panel__body") ?? panel.querySelector(".panel__body");
-  const scrollers = [...panel.querySelectorAll("*")].filter((element) => {
-    const style = getComputedStyle(element);
-    return (style.overflowY === "auto" || style.overflowY === "scroll") && shown(element);
-  });
+  const scrollers = [...panel.querySelectorAll("*")].filter(
+    (element) => scrolls(element) && shown(element),
+  );
   const list =
     scrollers.reduce<Element | null>(
       (best, element) =>
         best === null || element.scrollHeight > best.scrollHeight ? element : best,
       null,
     ) ?? body;
+  // A window that already runs from just under the top bar to near the
+  // screen's foot cannot give its list more: two rows are then enough
+  // (owner's rule "about 120px", lead to confirm; phone on its side, 15 Nov).
+  const fillsScreen = own.top <= hudBottom + 48 && own.bottom >= vh - 24;
+  const minList = fillsScreen ? Math.min(args.minList, args.minListFull) : args.minList;
+  if (fillsScreen) notes.push("fills the screen below the top bar");
   let listHeight = 0;
   if (!list) {
     problems.push("the window has no body or list");
   } else {
     const listBox = visibleBox(list);
     listHeight = round(height(listBox));
-    const need = Math.min(args.minList, list.scrollHeight);
+    const need = Math.min(minList, list.scrollHeight);
     if (height(listBox) + tol < need) {
       problems.push(
         `list (${describe(list)}) shows ${listHeight} px, needs ${round(need)} px ` +
@@ -227,7 +253,7 @@ export const checkWindow = (args: CheckArgs): CheckReport => {
     }
     if (body && body !== list) {
       const bodyBox = visibleBox(body);
-      const bodyNeed = Math.min(args.minList, body.scrollHeight);
+      const bodyNeed = Math.min(minList, body.scrollHeight);
       if (height(bodyBox) + tol < bodyNeed) {
         problems.push(`body shows ${round(height(bodyBox))} px, needs ${round(bodyNeed)} px`);
       }

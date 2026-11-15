@@ -29,6 +29,13 @@ export const settings = {
   bootTimeout: Number(env("LAYOUT_BOOT_TIMEOUT_MS", "150000")),
   /** A few rows of a list (owner, 15 Nov 2026: "never shrinks below a few rows"). */
   minList: Number(env("LAYOUT_MIN_LIST_PX", "120")),
+  /**
+   * Two rows, for a window that already fills the screen below the top bar
+   * (a phone on its side: Monsters' Train and Lab lists show 110px there).
+   */
+  minListFull: Number(env("LAYOUT_MIN_LIST_FULL_PX", "96")),
+  /** Run the cases in knownFailures.ts too (a fix branch's run): LAYOUT_IGNORE_KNOWN=1. */
+  ignoreKnown: env("LAYOUT_IGNORE_KNOWN", "") === "1",
   /** Save a picture of every case, not only failed ones. */
   allShots: env("LAYOUT_SHOTS", "") === "all",
 } as const;

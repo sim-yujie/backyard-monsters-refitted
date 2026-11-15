@@ -79,6 +79,7 @@ const expectWindow = async (
     panelSelector: win.panel,
     itemSelector: withItems ? win.items : null,
     minList: settings.minList,
+    minListFull: settings.minListFull,
     tolerance: TOLERANCE,
   });
   const box = report.panel
@@ -165,8 +166,9 @@ const windowStep = async (
       } else if (noWayIn === null) {
         tally.checked.push(stepId);
       } else if (win.optional) {
-        tally.skipped.push(`${stepId} (${noWayIn})`);
-        test.info().annotations.push({ type: "skipped", description: `${stepId}: ${noWayIn}` });
+        const why = win.why ? `${noWayIn}: ${win.why}` : noWayIn;
+        tally.skipped.push(`${stepId} (${why})`);
+        test.info().annotations.push({ type: "skipped", description: `${stepId}: ${why}` });
       } else {
         await attachShot(page, `${profile.id}-${stepId}-no-way-in`);
         expect.soft(noWayIn, `${win.label} opens on ${profile.label}`).toBe("opened");

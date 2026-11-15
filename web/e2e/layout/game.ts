@@ -105,6 +105,29 @@ export const waitForYard = async (page: Page): Promise<void> => {
     throw new Error("The game showed its login screen: the stored session was refused.");
   }
   await expectQuietStart(page);
+  await untilResponsive(page);
+};
+
+/**
+ * Without a graphics card the first frames of the yard can hold the page for
+ * many seconds: the first click after boot timed out on five screens while
+ * the page was busy (layout check, 15 Nov). Waits until Build would take a
+ * press and the page answers quickly twice in a row.
+ */
+const untilResponsive = async (page: Page): Promise<void> => {
+  await page
+    .locator('.yard-dock__button[data-dock="build"]:not([disabled])')
+    .first()
+    .click({ trial: true, timeout: settings.bootTimeout });
+  const end = Date.now() + 60_000;
+  let quick = 0;
+  while (quick < 2 && Date.now() < end) {
+    const start = Date.now();
+    await page.evaluate(
+      () => new Promise<void>((done) => requestAnimationFrame(() => setTimeout(done, 0))),
+    );
+    quick = Date.now() - start < 250 ? quick + 1 : 0;
+  }
 };
 
 /** Nothing may sit over the yard at the start: the guided start or a pop-up would block every click. */
@@ -147,6 +170,7 @@ const WINDOW_CLASSES = [
   ".shop-screen",
   ".mail-screen",
   ".monsters-screen",
+  ".friends-window",
   ".friends-screen",
   ".ach-screen",
   ".alliance-window",
@@ -177,6 +201,9 @@ export const closeAll = async (page: Page): Promise<void> => {
   }
 };
 
+/** How long a dock press may wait for the page. */
+const DOCK_CLICK_TIMEOUT = 20_000;
+
 /**
  * Presses a round dock button by its `data-dock` name. On a phone or with the
  * bubble menu the button may be folded into Menu or More first.
@@ -198,7 +225,21 @@ export const pressDock = async (page: Page, name: string): Promise<boolean> => {
     .then(() => true)
     .catch(() => false);
   if (!shown) return false;
-  await button.click({ timeout: 5000 });
+  // Longer than a click needs: a busy page (the yard drawn without a graphics card) answers slowly.
+  await button.click({ timeout: DOCK_CLICK_TIMEOUT });
+  return true;
+};
+
+/** Opens the full Friends screen: the Friends button's popup, then its "All friends". */
+export const openFriendsScreen = async (page: Page): Promise<boolean> => {
+  if (!(await pressDock(page, "friends"))) return false;
+  const all = page.locator(".overlay__layer .friends-window__all").first();
+  const shown = await all
+    .waitFor({ state: "visible", timeout: 5000 })
+    .then(() => true)
+    .catch(() => false);
+  if (!shown) return false;
+  await all.click({ timeout: DOCK_CLICK_TIMEOUT });
   return true;
 };
 

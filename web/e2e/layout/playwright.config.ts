@@ -23,7 +23,8 @@ import { assertSafeSettings, settings } from "./settings";
  *        cd web && LAYOUT_DB_NAME=bym_layout npm run test:layout
  *      (on the WSL PC prefix PATH="$HOME/.bun/bin:$PATH" NODE_OPTIONS=--no-webstorage)
  *   Narrow it with LAYOUT_PROFILES=ipad-side-bars,phone-side; LAYOUT_SHOTS=all
- *   keeps a picture of every case. Results: e2e/layout/report/index.html
+ *   keeps a picture of every case, LAYOUT_IGNORE_KNOWN=1 also runs the cases
+ *   in knownFailures.ts (to see a fix branch cure them). Results: e2e/layout/report/index.html
  *   (npx playwright show-report e2e/layout/report).
  *
  * CI runs the same command in the `layout` job of .github/workflows/ci.yml.
