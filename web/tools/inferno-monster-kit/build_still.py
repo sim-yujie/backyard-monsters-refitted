@@ -45,6 +45,8 @@ for f in sorted((work / "still").glob("b-*/frames-new.png"), key=lambda p: p.sta
         cut = common.key_cell(cell, despill=spec.get("despill"), open_holes=spec.get("open_holes", False))
         if cut is not None:
             painted[h] = cut
+if spec.get("view_match"):
+    painted = common.match_views(painted)  # IC2 round 3: one colour for every batch
 src = {}
 for h in range(D):
     if h in painted:

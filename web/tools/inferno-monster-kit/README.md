@@ -140,3 +140,26 @@ animation + 4 animation redos for front headings 6-9, whose wind-up grinned) cha
   redder than Flash's (crown 38% vs 32% of the height, yellow 31% vs 34% of the pixels). A sample at
   Flash proportions (one call, not used) is in `art-work/IC1-flashprop` and
   `shots-inferno-mon/IC1/flash-proportions-sample.png`; a redo at those proportions is about 22 calls.
+
+## IC2 Zagnoid round 3 (15 Nov): the portrait is the design
+
+The owner rejected round 2 too: by "sprite" he meant the picture in the Hatchery / Locker
+(`web/public/portraits/IC2.webp`), not the Flash battle sprite. Round 3 (work dir `art-work/IC2-r3`, round 2's
+game sheets backed up in `art-work/IC2-r3/r2-assets`) paints that creature:
+
+- `design="portrait"` (spec) with `portrait=True`: `still_batch.py` tells Codex the portrait decides the design,
+  parts and colours and frames.png (the Flash cells) only the facing, pose and size; the Flash cell's dark head
+  spikes are named as the eye stalks and its beak-like head as the mane and mouth. `anim_ref.py` sends ref.png
+  (the painted still) + portrait.png; an `EXTRA` note (art-work/IC2-r3/anim-extra.txt) says the portrait shows
+  one side only and every cell keeps ref.png's angle.
+- Words written from the portrait (eye stalks, mane, fangs, drool, crab claws, neck spikes, curled tail, leg nubs).
+  The creature is left-right symmetric, so it is lit from above and only headings 8-22 are painted (mirrored rest).
+- `view_match` (build_still, `common.match_views`): Codex painted one 2x2 batch more orange than the others; every
+  painted view's colour mean and spread is matched to the median view before placing (and before the cuts the
+  animation calls and the anim colour lock use).
+- `grade`: Codex paints it more orange and saturated than the card; the grade moves body and limbs toward the
+  portrait's paler, greener gold and coral.
+- Codex calls: 1 sample (8 12 15 21) + 3 still batches (the last with heading 15 again as a spare; the later one
+  won) + 15 animation = **19 calls**. No redos were needed.
+- Comparison pictures: `art-work/IC2-r3/r3sheets.py <shots dir>` (portrait | round 2 | round 3; every heading; game
+  size). Battle and yard shots: `art-work/IC2-r3/film.mjs` (yardtester, own server on 5461).

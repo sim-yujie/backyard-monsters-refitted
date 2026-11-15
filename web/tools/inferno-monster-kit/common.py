@@ -314,3 +314,20 @@ def grade(im, spec):
         out += gr * w[..., None]
     a[..., :3] = out
     return Image.fromarray(np.clip(a, 0, 255).astype(np.uint8), "RGBA")
+
+
+def match_views(views):
+    """spec view_match (IC2 round 3): Codex paints some 2x2 batches more orange than others, so each painted view's
+    per-channel mean and spread (solid pixels) are matched to the median over all views. Gains held to 0.85-1.18."""
+    stats = {h: (np.asarray(v).astype(float)[solid(v)][:, :3].mean(0), np.asarray(v).astype(float)[solid(v)][:, :3].std(0))
+             for h, v in views.items()}
+    tm = np.median([s[0] for s in stats.values()], 0)
+    ts = np.median([s[1] for s in stats.values()], 0)
+    out = {}
+    for h, v in views.items():
+        m, s = stats[h]
+        k = np.clip(ts / np.maximum(s, 1e-3), 0.85, 1.18)
+        a = np.asarray(v).astype(float)
+        a[..., :3] = np.clip((a[..., :3] - m) * k + tm, 0, 255)
+        out[h] = Image.fromarray(a.astype(np.uint8), "RGBA")
+    return out

@@ -90,11 +90,23 @@ else:
         "glossier or cuter.\n"
     )
     style_text2 = f"{spec['style']}; {spec['texture']}."
+design = spec.get("design")  # IC2 round 3: "portrait" = the portrait is the design, the Flash cells only a pose guide
+if design == "portrait":
+    frames_use = ("Use it ONLY as a guide for the facing, pose, position and overall size of each cell (where the head, the "
+                  "claws and the tail are). Do NOT copy its colours, shapes or details: the old sprites are blurry and crude "
+                  "(their dark spikes on the head are the red eye stalks, their beak-like head is the mane and fanged mouth)")
+    face_line = f"Look at where {spec['face_marks']} sit on each old sprite and put them there."
+    portrait_text = (f"Input {n_in}, portrait.png: {spec['portrait_note']}. It decides the design, the parts and the colours "
+                     "in every cell; frames.png only decides the facing, pose and size.\n")
+    style_text2 = f"{spec['style']}; {spec['texture']}."
+else:
+    frames_use = "Use it for the facing, shape, colours and overall size of each cell: the new art is the same creature, painted richer"
+    face_line = f"Look closely at where {spec['face_marks']} sit on each old sprite and put the face exactly there."
 prompt = f"""Use your image generation tool (one call) to create a new image and save it as frames-new.png in the current folder. Do not write code and do not copy or composite pixels from the inputs.
 
-Input 1, frames.png: a 2x2 grid of 4 low-resolution isometric game sprites of {spec['name']}, blown up (OLD pixel art). Use it for the facing, shape, colours and overall size of each cell: the new art is the same creature, painted richer. Heading in degrees: 0 = facing the screen's RIGHT, 90 = facing toward the viewer (down), 180 = facing the screen's LEFT, 270 = facing away from the viewer (up); the camera is a 3/4 isometric view from above. Cells:
+Input 1, frames.png: a 2x2 grid of 4 low-resolution isometric game sprites of {spec['name']}, blown up (OLD pixel art). {frames_use}. Heading in degrees: 0 = facing the screen's RIGHT, 90 = facing toward the viewer (down), 180 = facing the screen's LEFT, 270 = facing away from the viewer (up); the camera is a 3/4 isometric view from above. Cells:
 {chr(10).join(lines)}
-Look closely at where {spec['face_marks']} sit on each old sprite and put the face exactly there.
+{face_line}
 {style_text}
 The creature: {spec['creature']}
 
