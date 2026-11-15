@@ -70,6 +70,12 @@ import { writeAmount, type AmountChange } from "./amountChange";
  * `pin`, a glossy red push-pin with a steel needle (painted by Codex, 9 Nov:
  * the stand-in copy of the gold crown read as a crown, tester 9 Nov).
  *
+ * The Alliance window's Goals tab (owner, 15 Nov 2026; Codex, how in
+ * `art-samples/goals-tab-icon/make_nonp.py`): a red and white archery
+ * target with a gold-fletched arrow in the bullseye, `goals` in the Modern
+ * look and `goalsclassic` in the Classic (Flash) one, softer and dustier; the
+ * window picks by the Classic/Modern switch.
+ *
  * World chat's player strip (`ui/chat/ChatBox.ts`, owner 8 Nov: icons rather than
  * words): `addfriend` is the two monster heads (`friends`) with a green plus disc on
  * their corner (9 Nov, `tools/game-icons/friends_icons.py`, so Add no longer looks
@@ -162,6 +168,8 @@ export const GAME_ICONS = {
   mail: "Friend requests",
   camera: "Yard picture",
   camera2: "Yard picture",
+  goals: "Goals",
+  goalsclassic: "Goals",
 } as const satisfies Record<string, string>;
 
 export type GameIconName = keyof typeof GAME_ICONS;
