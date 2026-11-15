@@ -4,31 +4,42 @@ import { make } from "./rows";
 import "./help.css";
 
 /**
- * The Help all bar on a friend's yard (beta 8, owner 15 Nov 2026, mock-up
- * "D without Next"), under the "Helping Bob" line: the painted tools, "3 to
- * speed up" and **Help all**, which gives every help the visitor can still
- * give, one after another. While it runs the button reads "2/3"; after, one
- * short line says what it came to ("Helped 3 · saved 1h 12m · earned …")
- * for a few seconds. With nothing left to help, and no line to show, the
- * bar is hidden.
+ * The one bar on a friend's yard (beta 8, owner 15 Nov 2026: "why are there
+ * so many bars?"). One row at the top of the yard: whose yard it is, the
+ * painted tools with the number of buildings to speed up, and **Help all**,
+ * which gives every help the visitor can still give, one after another.
+ * While it runs the button reads "2/3"; after, the same row shows one short
+ * line ("Helped 3 · -1h 12m · +1.2K each") for a few seconds in place of the
+ * count and the button, then the name alone, or the name, count and button
+ * again if any help is left. It replaces the old "Helping Bob" line above it
+ * and the yard's name in the status line at the bottom.
  */
 
 export const HELP_ALL_TEXT = {
   button: "Help all",
-  label: "Buildings you can help",
+  label: "Visiting a friend",
 } as const;
 
 /** How long the result line stays, in milliseconds. */
 export const HELP_ALL_RESULT_MS = 7000;
 
+/** What Help all came to: the short line the bar shows, and the full one behind it. */
+export interface HelpAllLine {
+  readonly text: string;
+  readonly full?: string;
+  readonly kind: "thanks" | "error";
+}
+
 export interface HelpAllBarOptions {
   /** Runs Help all; resolves with the line to show after. */
-  readonly onHelpAll: () => Promise<{ text: string; kind: "thanks" | "error" }>;
+  readonly onHelpAll: () => Promise<HelpAllLine>;
 }
 
 export class HelpAllBar {
   readonly element: HTMLElement;
 
+  private readonly name: HTMLElement;
+  private readonly help: HTMLElement;
   private readonly count: HTMLElement;
   private readonly button: HTMLButtonElement;
   private readonly result: HTMLElement;
@@ -40,21 +51,29 @@ export class HelpAllBar {
     this.element = make("div", "help-all-bar");
     this.element.setAttribute("role", "group");
     this.element.setAttribute("aria-label", HELP_ALL_TEXT.label);
+    this.name = make("span", "help-all-bar__name");
     const icon = gameIcon("tools", { size: 24, decorative: true, className: "help-all-bar__icon" });
     this.count = make("span", "help-all-bar__count");
     this.button = make("button", "btn btn--primary help-all-bar__button", HELP_ALL_TEXT.button);
     this.button.type = "button";
     this.button.addEventListener("click", () => void this.run());
-    this.result = make("p", "help-all-bar__result");
+    this.help = make("span", "help-all-bar__help");
+    this.help.append(icon, this.count, this.button);
+    this.result = make("span", "help-all-bar__result");
     this.result.setAttribute("role", "status");
     this.result.hidden = true;
-    const row = make("div", "help-all-bar__row");
-    row.append(icon, this.count, this.button);
-    this.element.append(row, this.result);
+    this.element.append(this.name, this.help, this.result);
     this.render();
   }
 
-  /** The buildings left to help: "3 to speed up". */
+  /** Whose yard it is: "Bob's yard". */
+  setName(text: string): void {
+    this.name.textContent = text;
+    this.name.title = text;
+    this.render();
+  }
+
+  /** The buildings left to help: the tools and "3". */
   setCount(count: number): void {
     this.total = Math.max(0, Math.floor(count));
     this.render();
@@ -75,12 +94,13 @@ export class HelpAllBar {
     return this.result.hidden ? "" : (this.result.textContent ?? "");
   }
 
-  /** Shows the line after Help all for {@link HELP_ALL_RESULT_MS}. */
-  showResult(text: string, kind: "thanks" | "error"): void {
+  /** Shows the line after Help all for {@link HELP_ALL_RESULT_MS}, in place of the count and the button. */
+  showResult(line: HelpAllLine): void {
     if (this.resultTimer) clearTimeout(this.resultTimer);
-    this.result.textContent = text;
+    this.result.textContent = line.text;
+    this.result.title = line.full ?? line.text;
     this.result.hidden = false;
-    this.result.classList.toggle("help-all-bar__result--error", kind === "error");
+    this.result.classList.toggle("help-all-bar__result--error", line.kind === "error");
     this.resultTimer = setTimeout(() => {
       this.resultTimer = null;
       this.result.hidden = true;
@@ -96,11 +116,12 @@ export class HelpAllBar {
   }
 
   private render(): void {
-    const row = this.element.querySelector<HTMLElement>(".help-all-bar__row");
-    const nothing = this.total === 0 && !this.busy;
-    if (row) row.hidden = nothing;
-    this.element.hidden = nothing && this.result.hidden;
-    // "3" and " to speed up": a phone shows the number alone (help.css).
+    // The count and the button: while there is something to help, and not
+    // while the line after Help all shows.
+    this.help.hidden = !this.result.hidden || (this.total === 0 && !this.busy);
+    this.element.classList.toggle("help-all-bar--result", !this.result.hidden);
+    this.name.hidden = this.name.textContent === "";
+    // "3" and the words for a screen reader; the screen shows the number by the tools.
     const number = make("span", "help-all-bar__number", String(this.total));
     const words = make("span", "help-all-bar__words", " to speed up");
     this.count.replaceChildren(number, words);
@@ -114,13 +135,13 @@ export class HelpAllBar {
     this.busy = true;
     this.result.hidden = true;
     this.render();
-    let line: { text: string; kind: "thanks" | "error" } | null = null;
+    let line: HelpAllLine | null = null;
     try {
       line = await this.options.onHelpAll();
     } finally {
       this.busy = false;
       this.render();
     }
-    if (line) this.showResult(line.text, line.kind);
+    if (line) this.showResult(line);
   }
 }

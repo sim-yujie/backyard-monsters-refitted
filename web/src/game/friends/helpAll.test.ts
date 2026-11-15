@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { HelpBlock } from "@/api/friends";
 import { afterHelp, afterRefusal, savingTag, type HelpTarget } from "./helpModel";
-import { helpAllResultText, runHelpAll, stopsHelpAll, type HelpOutcome } from "./helpAll";
+import { helpAllResultText, helpAllShortText, runHelpAll, stopsHelpAll, type HelpOutcome } from "./helpAll";
 
 /**
  * Help all (beta 8, owner 15 Nov 2026): every speed-up, one after another,
@@ -132,6 +132,33 @@ describe("helpAllResultText", () => {
       "Helped 2 · saved 1d 2h 50m",
     );
     expect(helpAllResultText({ helped: 0, secondsSaved: 0, reward: reward(0), skipped: 2, stoppedBy: null })).toBe(
+      "There is nothing left to help with here.",
+    );
+  });
+});
+
+describe("helpAllShortText", () => {
+  it("fits the one-row visit bar: numbers over words", () => {
+    expect(
+      helpAllShortText({ helped: 3, secondsSaved: 30_960, reward: reward(172_875), skipped: 0, stoppedBy: null }),
+    ).toBe("Helped 3 · -8h 36m · +172.8K each");
+    expect(helpAllShortText({ helped: 2, secondsSaved: 600, reward: reward(0), skipped: 1, stoppedBy: null })).toBe(
+      "Helped 2 · -10m",
+    );
+    expect(
+      helpAllShortText({
+        helped: 1,
+        secondsSaved: 60,
+        reward: { r1: 1500, r4: 20 },
+        skipped: 0,
+        stoppedBy: "They are under attack.",
+      }),
+    ).toBe("Helped 1 · -1m · +1.5K twigs +20 goo");
+    // Nothing helped: the reason alone (the notice has the full line too).
+    expect(
+      helpAllShortText({ helped: 0, secondsSaved: 0, reward: reward(0), skipped: 0, stoppedBy: "They are under attack." }),
+    ).toBe("They are under attack.");
+    expect(helpAllShortText({ helped: 0, secondsSaved: 0, reward: reward(0), skipped: 2, stoppedBy: null })).toBe(
       "There is nothing left to help with here.",
     );
   });

@@ -15,7 +15,7 @@ import { formatAmount, formatCountdown } from "@/ui/format";
 /**
  * Helping in a friend's yard (`docs/design/friends.md` §3.3 and §4, issue
  * #374): what the help block says each building can take, put into the words
- * the help panel, the wrench markers and the "Helping Bob" line show.
+ * the help panel, the wrench markers and the visit bar show.
  *
  * The server decides everything (§7 rule 6). The time a speed-up would save
  * is worked out here only to say it before the press, the same way the
@@ -98,9 +98,6 @@ export const helpableIds = (block: HelpBlock | null): Set<number> => {
   }
   return ids;
 };
-
-/** "Helping Bob". No count: there is no daily cap on helps (owner, 15 Nov 2026: was 20). */
-export const helpingLine = (name: string): string => `Helping ${name}`;
 
 /** The seconds left on a building's job now; its frozen time when paused. Null with no job. */
 export const timeLeft = (building: YardBuilding, now: number): number | null => {

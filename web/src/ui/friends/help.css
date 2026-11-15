@@ -1,45 +1,21 @@
 /*
  * Visiting and helping a friend (issues #372 and #374, docs/design/friends.md
- * §3.3): the "Helping Bob" line across the top of the
- * yard, and the help panel docked where the building panel docks.
+ * §3.3): the one visit bar at the top of the yard ("Bob's yard", the painted
+ * tools and "3", Help all; owner 15 Nov 2026: one bar, not three), and the
+ * help panel docked where the building panel docks.
  *
  * Every value comes from tokens.css.
  */
 
-.friend-visit-line {
-  position: absolute;
-  top: 64px;
-  left: 50%;
-  z-index: var(--z-hud);
-  max-width: calc(100vw - 2 * var(--space-4));
-  padding: var(--space-1) var(--space-3);
-  border: 1px solid var(--colour-warning-line);
-  border-radius: var(--radius-md);
-  background: var(--colour-surface-raised);
-  -webkit-backdrop-filter: var(--blur-panel);
-  backdrop-filter: var(--blur-panel);
-  box-shadow: var(--shadow-float);
-  color: var(--colour-warning-bright);
-  font-size: var(--text-sm);
-  font-weight: 600;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  transform: translateX(-50%);
-  pointer-events: none;
-}
-
-/* The "Helping Bob" line and, under it, the Help all bar (beta 8): one
-   column at the top of the yard, so the two never overlap at any size. */
+/* The holder at the top of the yard, centred under the HUD (the old 64px
+   put it half under a wide screen's top bar); the bar is its own width. */
 .friend-visit {
   position: absolute;
-  top: 64px;
+  top: calc(var(--hud-height, 64px) + var(--space-1));
   left: 50%;
   z-index: var(--z-hud);
   display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: var(--space-1);
+  justify-content: center;
   /* Its own width, not the half the centring's left: 50% would leave it. */
   width: max-content;
   max-width: calc(100vw - 2 * var(--space-4));
@@ -47,19 +23,17 @@
   pointer-events: none;
 }
 
-.friend-visit .friend-visit-line {
-  position: static;
-  max-width: 100%;
-  transform: none;
-}
-
+/* One row, always: the name gives way (an ellipsis) before the count, the
+   button or the line after Help all, so the bar's height never changes and
+   the wrenches' clear band below it stays true. */
 .help-all-bar {
   display: flex;
-  flex-direction: column;
   align-items: center;
-  gap: var(--space-1);
+  gap: var(--space-2);
   max-width: 100%;
-  padding: var(--space-1) var(--space-2) var(--space-1) var(--space-3);
+  min-width: 0;
+  min-height: 44px;
+  padding: var(--space-1) var(--space-1) var(--space-1) var(--space-3);
   border: 2px solid var(--colour-warning-line);
   border-radius: var(--radius-md);
   background: var(--colour-surface-raised);
@@ -67,20 +41,47 @@
   backdrop-filter: var(--blur-panel);
   box-shadow: var(--shadow-float);
   color: var(--colour-text);
+  white-space: nowrap;
   pointer-events: auto;
 }
 
+/* The name alone, or the name and the line after: no button at the end. */
+.help-all-bar:has(> .help-all-bar__help[hidden]) {
+  padding-right: var(--space-3);
+}
+
 .help-all-bar[hidden],
-.help-all-bar__row[hidden],
+.help-all-bar__name[hidden],
+.help-all-bar__help[hidden],
 .help-all-bar__result[hidden] {
   display: none;
 }
 
-.help-all-bar__row {
+.help-all-bar__name {
+  flex: 0 1 auto;
+  min-width: 3em;
+  /* A long name stops short of a phone on its side's zoom rail. */
+  max-width: 16em;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  color: var(--colour-warning-bright);
+  font-size: var(--text-sm);
+  font-weight: 600;
+}
+
+/* The tools, "3" and Help all, after a thin rule from the name. */
+.help-all-bar__help {
   display: flex;
+  flex: none;
   align-items: center;
   gap: var(--space-2);
-  white-space: nowrap;
+  padding-left: var(--space-2);
+  border-left: 1px solid var(--colour-warning-line);
+}
+
+.help-all-bar__name[hidden] + .help-all-bar__help {
+  padding-left: 0;
+  border-left: 0;
 }
 
 .help-all-bar__icon {
@@ -93,19 +94,31 @@
   color: var(--colour-text-strong, var(--colour-text));
 }
 
+/* "to speed up": for a screen reader; the screen shows the number by the tools. */
+.help-all-bar__words {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
 .help-all-bar__button {
   flex: none;
   min-width: 6.5em;
 }
 
 .help-all-bar__result {
-  margin: 0;
-  max-width: 34em;
+  flex: 0 1 auto;
+  min-width: 0;
+  padding-left: var(--space-2);
+  border-left: 1px solid var(--colour-warning-line);
+  overflow: hidden;
+  text-overflow: ellipsis;
   color: var(--colour-success);
   font-size: var(--text-sm);
   font-weight: 600;
-  text-align: center;
-  white-space: normal;
 }
 
 .help-all-bar__result--error {
@@ -162,37 +175,33 @@
 }
 
 @media (max-width: 620px) {
-  .friend-visit-line {
+  /* An upright phone: under the two HUD rows, above the folded World chat
+     tab (about 76px under the HUD) and clear of the Events button's column
+     on the right, which a friend's yard does not show. The bar is one row
+     at most the screen's width less the gutters; the name gives way first. */
+  .friend-visit {
     top: 96px;
+    max-width: calc(100vw - 2 * var(--space-3));
+  }
+
+  .help-all-bar__name,
+  .help-all-bar__result {
     font-size: var(--text-xs, var(--text-sm));
   }
 
-  .friend-visit {
-    top: 96px;
-  }
-
-  /* An upright phone has no room for two rows here: the folded World chat
-     tab sits on the left just below (about 76px under the HUD) and the Events
-     button on the right. The "Helping Bob" line goes (the yard is the friend's
-     either way) and the bar shows its number alone, so the bar is one row
-     about 190px wide, clear of both (lead's check at 390x844). */
-  .friend-visit .friend-visit-line {
+  /* The line after Help all needs the whole row: the name waits. */
+  .help-all-bar--result .help-all-bar__name {
     display: none;
   }
 
-  .help-all-bar__words {
-    position: absolute;
-    width: 1px;
-    height: 1px;
-    overflow: hidden;
-    clip-path: inset(50%);
-    white-space: nowrap;
+  .help-all-bar--result .help-all-bar__result {
+    padding-left: 0;
+    border-left: 0;
   }
 }
 
 /* A phone on its side: the HUD is one short row (`--hud-height`), the World
-   chat tab under it on the left and the Events button on the right; the
-   centred column starts just under the HUD, clear of both. */
+   chat tab under it on the left; the centred bar starts just under the HUD. */
 @media (min-width: 621px) and (max-height: 500px) {
   .friend-visit {
     top: calc(var(--hud-height, 64px) + var(--space-1));

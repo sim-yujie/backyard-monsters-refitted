@@ -1,4 +1,5 @@
 import type { HelpBlock, ResourceAmounts } from "@/api/friends";
+import { formatShort } from "@/ui/format";
 import { helpRefusalText, isHelpOpen, rewardText, savedText, tagSeconds, type HelpTarget } from "./helpModel";
 
 /**
@@ -105,4 +106,33 @@ export const helpAllResultText = (summary: HelpAllSummary): string => {
   const line = parts.join(" · ");
   if (summary.stoppedBy) return line ? `${line}. ${summary.stoppedBy}` : summary.stoppedBy;
   return line || helpRefusalText("nothingToHelp");
+};
+
+/** "Twigs" for r1, as the short line shows a reward the four resources do not share. */
+const SHORT_WORDS: Readonly<Record<string, string>> = { r1: "twigs", r2: "pebbles", r3: "putty", r4: "goo" };
+
+/** A reward at its shortest: "+172.8K each", or "+1.2K twigs +500 goo". Empty when nothing. */
+const shortReward = (reward: ResourceAmounts): string => {
+  const entries = (["r1", "r2", "r3", "r4"] as const)
+    .map((key) => [key, Math.max(0, Math.floor(reward[key] ?? 0))] as const)
+    .filter(([, amount]) => amount > 0);
+  if (entries.length === 0) return "";
+  const first = entries[0]![1];
+  if (entries.length === 4 && entries.every(([, amount]) => amount === first)) return `+${formatShort(first)} each`;
+  return entries.map(([key, amount]) => `+${formatShort(amount)} ${SHORT_WORDS[key]}`).join(" ");
+};
+
+/**
+ * The same, short enough for the one-row visit bar on a phone (owner,
+ * 15 Nov 2026: one bar, numbers over words): "Helped 3 · -8h 36m · +172.8K
+ * each". A stop says only the reason when nothing was helped; the full
+ * sentence also goes up as a notice ({@link helpAllResultText}).
+ */
+export const helpAllShortText = (summary: HelpAllSummary): string => {
+  if (summary.helped === 0) return summary.stoppedBy ?? helpRefusalText("nothingToHelp");
+  const parts = [`Helped ${summary.helped}`];
+  if (summary.secondsSaved > 0) parts.push(`-${savedText(summary.secondsSaved)}`);
+  const earned = shortReward(summary.reward);
+  if (earned) parts.push(earned);
+  return parts.join(" · ");
 };

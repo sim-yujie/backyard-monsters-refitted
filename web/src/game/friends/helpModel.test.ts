@@ -20,7 +20,6 @@ import {
   helpableIds,
   helpersOf,
   helpersText,
-  helpingLine,
   helpRefusalText,
   repairText,
   rewardText,
@@ -83,10 +82,6 @@ describe("the help block, per building (#374)", () => {
 });
 
 describe("the words (#372, #374)", () => {
-  it("says who is helped, and no count of helps left (no daily cap since 15 Nov 2026)", () => {
-    expect(helpingLine("Bob")).toBe("Helping Bob");
-  });
-
   it("says what a speed-up takes off: 5% of the time left now, rounded down", () => {
     expect(speedupSeconds(7_800)).toBe(390);
     expect(speedupSeconds(19)).toBe(0);

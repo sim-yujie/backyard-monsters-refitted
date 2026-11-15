@@ -3,12 +3,12 @@ import { MARK_HALF_WIDTH, MARK_HEADROOM } from "./YardHelpMarks";
 /**
  * Where the camera stands when a friend's yard opens (beta 8, lead's check
  * 15 Nov 2026): no wrench the visitor can use may sit under the HUD or the
- * "Helping Bob / Help all" column at the top. When every mark is already in
+ * one visit bar at the top ("Bob's yard", the tools, Help all). When every mark is already in
  * the clear band the camera stays where it is; otherwise it pans to bring
  * them in, never changing the zoom (`frameHelpMarks`).
  *
  * The yard scene lets the camera put the yard's top edge just under the
- * column (`Camera.setViewExtent`), so this can always bring the top row down.
+ * bar (`Camera.setViewExtent`), so this can always bring the top row down.
  */
 
 export interface WorldBox {

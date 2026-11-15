@@ -48,13 +48,12 @@ import {
   fromVisitSave,
   helpAllCount,
   helpAllTargets,
-  helpingLine,
   helpMarksOf,
   helpRefusalText,
   thanksText,
   type HelpTarget,
 } from "@/game/friends/helpModel";
-import { helpAllResultText, runHelpAll, type HelpOutcome } from "@/game/friends/helpAll";
+import { helpAllResultText, helpAllShortText, runHelpAll, type HelpOutcome } from "@/game/friends/helpAll";
 import { frameHelpMarks, type ClearBand } from "@/game/yard/helpFrame";
 import { worldChat } from "@/game/chat/chatSession";
 import { concealTraps, countedBuildings } from "@/game/attack/trapReveal";
@@ -173,7 +172,7 @@ import { bankFloat, showBankResult } from "@/ui/yard/CollectAll";
 import { showGoldenMushroom } from "@/ui/yard/MushroomReward";
 import { FriendsButton } from "@/ui/friends/FriendsButton";
 import { HelpPanel } from "@/ui/friends/HelpPanel";
-import { HelpAllBar } from "@/ui/friends/HelpAllBar";
+import { HelpAllBar, type HelpAllLine } from "@/ui/friends/HelpAllBar";
 import { YardDock, type YardDockOptions } from "@/ui/yard/YardDock";
 import { kitBoughtText, StarterKitPicker } from "@/ui/yard/StarterKitPicker";
 import { YardMinimap } from "@/ui/yard/YardMinimap";
@@ -495,11 +494,11 @@ export class YardScene implements Scene {
    * helped, kept current after each help; null on every other yard.
    */
   private helpBlock: HelpBlock | null = null;
-  /** The "Helping Bob" line; a friend's visit only. */
-  private visitLine: HTMLElement | null = null;
-  /** The column at the top of a friend's yard: the line, then the Help all bar (beta 8). */
+  /** The holder at the top of a friend's yard for the one visit bar (beta 8). */
   private visitTop: HTMLElement | null = null;
-  /** "3 to speed up" and Help all; a friend's visit only (beta 8). */
+  /** Keeps the clear band under the visit bar as the bar's height changes. */
+  private visitTopWatch: ResizeObserver | null = null;
+  /** The one visit bar: "Bob's yard", the tools and "3", Help all; a friend's visit only (beta 8). */
   private helpAllBar: HelpAllBar | null = null;
   /** Keeps the wrenches' "-18m" tags current while visiting. */
   private helpMarkTimer: ReturnType<typeof setInterval> | null = null;
@@ -871,10 +870,10 @@ export class YardScene implements Scene {
     this.stopHelpedWatch = null;
     this.helpPanel?.close();
     this.helpPanel = null;
-    this.visitLine?.remove();
-    this.visitLine = null;
     this.helpAllBar?.destroy();
     this.helpAllBar = null;
+    this.visitTopWatch?.disconnect();
+    this.visitTopWatch = null;
     this.visitTop?.remove();
     this.visitTop = null;
     if (this.helpMarkTimer) clearInterval(this.helpMarkTimer);
@@ -925,7 +924,7 @@ export class YardScene implements Scene {
     this.viewportHeight = pane.height;
     this.camera?.resize(pane.width, pane.height);
     if (this.yard) this.applyZoomLimits(pane.width, pane.height);
-    // A friend's yard keeps its top edge clear of the top column at any size.
+    // A friend's yard keeps its top edge clear of the visit bar at any size.
     if (this.visitTop) this.applyVisitExtent();
     this.placeCompareLabels();
     // A different viewport is a different visible rectangle even when the
@@ -1865,7 +1864,7 @@ export class YardScene implements Scene {
     context.goTo(SceneName.YARD);
   }
 
-  /** A friend's yard has loaded: the helping line and the wrenches (#374). */
+  /** A friend's yard has loaded: the one visit bar and the wrenches (#374). */
   private startHelping(response: HelpYardResponse, name: string): void {
     const context = this.context;
     if (!context) return;
@@ -1875,19 +1874,19 @@ export class YardScene implements Scene {
       this.visitTop.className = "friend-visit";
       context.overlay.content.append(this.visitTop);
     }
-    if (!this.visitLine) {
-      this.visitLine = document.createElement("div");
-      this.visitLine.className = "friend-visit-line";
-      this.visitLine.setAttribute("role", "status");
-      this.visitTop.append(this.visitLine);
-    }
     if (!this.helpAllBar) {
       this.helpAllBar = new HelpAllBar({ onHelpAll: () => this.helpAll() });
       this.visitTop.append(this.helpAllBar.element);
+      // The bar is lower with the name alone than with Help all: the
+      // wrenches' clear band follows it.
+      if (typeof ResizeObserver !== "undefined") {
+        this.visitTopWatch = new ResizeObserver(() => this.applyVisitExtent());
+        this.visitTopWatch.observe(this.visitTop);
+      }
     }
-    this.visitLine.dataset["name"] = name;
+    this.helpAllBar.element.dataset["name"] = name;
     this.showHelpBlock();
-    // No wrench under the HUD or the top column when the yard opens (lead, 15 Nov 2026).
+    // No wrench under the HUD or the visit bar when the yard opens (lead, 15 Nov 2026).
     this.applyVisitExtent();
     this.frameHelpMarksOnce();
     if (import.meta.env.DEV) {
@@ -1918,7 +1917,7 @@ export class YardScene implements Scene {
 
   /**
    * The screen band a friend's yard is seen in: below the HUD and the
-   * "Helping Bob / Help all" column, above the bottom bars. Null off a visit.
+   * one visit bar, above the bottom bars. Null off a visit.
    */
   private visitBand(): ClearBand | null {
     const context = this.context;
@@ -1935,7 +1934,7 @@ export class YardScene implements Scene {
 
   /**
    * Lets the camera bring a friend's yard's top edge down to just under the
-   * top column, as if the screen began there, so the top row of buildings can
+   * visit bar, as if the screen began there, so the top row of buildings can
    * always be panned clear of it.
    */
   private applyVisitExtent(): void {
@@ -1949,7 +1948,7 @@ export class YardScene implements Scene {
 
   /**
    * Once a visit, as the yard opens: if any wrench sits under the HUD or the
-   * top column, the camera pans the marks into the clear band, at the zoom
+   * visit bar, the camera pans the marks into the clear band, at the zoom
    * the yard opened at (`frameHelpMarks`).
    */
   private frameHelpMarksOnce(): void {
@@ -1977,11 +1976,11 @@ export class YardScene implements Scene {
     this.renderer.setHelpMarks(helpMarksOf(block, this.yard?.buildings ?? [], Date.now() / 1000));
   }
 
-  /** Puts the help block on screen: the line, the wrenches and the open panel. */
+  /** Puts the help block on screen: the bar, the wrenches and the open panel. */
   private showHelpBlock(): void {
     const block = this.helpBlock;
     if (!block) return;
-    if (this.visitLine) this.visitLine.textContent = helpingLine(this.target?.name ?? "");
+    this.helpAllBar?.setName(this.whose());
     this.showHelpMarks();
     this.helpAllBar?.setCount(helpAllCount(block));
     const shown = this.helpPanel?.shown;
@@ -2083,10 +2082,11 @@ export class YardScene implements Scene {
   /**
    * Help all (beta 8, owner 15 Nov 2026): every speed-up the visitor can
    * still give, one after another (`runHelpAll`), each one help to the
-   * server; the marks and the count follow each. Resolves with the one line
-   * the bar shows after.
+   * server; the marks and the count follow each. Resolves with the short
+   * line the bar shows after; a stop's reason also goes up as a notice, as
+   * the bar has no room for a sentence on a phone.
    */
-  private async helpAll(): Promise<{ text: string; kind: "thanks" | "error" }> {
+  private async helpAll(): Promise<HelpAllLine> {
     const context = this.context;
     this.helpPanel?.close();
     const targets = helpAllTargets(this.helpBlock);
@@ -2101,7 +2101,11 @@ export class YardScene implements Scene {
         return (await this.giveHelp(building, step.kind)) ?? { ok: false, reason: "gone", text: "" };
       },
     });
-    return { text: helpAllResultText(summary), kind: summary.stoppedBy ? "error" : "thanks" };
+    const full = helpAllResultText(summary);
+    if (summary.stoppedBy && this.context === context) {
+      this.notices.show("help-all-stopped", full, { level: "warning", timeoutMs: 8_000 });
+    }
+    return { text: helpAllShortText(summary), full, kind: summary.stoppedBy ? "error" : "thanks" };
   }
 
   /**
@@ -3403,9 +3407,10 @@ export class YardScene implements Scene {
     // #56); the counts, the plot, the frame time and the selected id are a
     // developer's (#150), behind their own opt-in switch (`devStats`, beta 6).
     const parts = [
-      // A friend's yard in help mode says "Helping …" at the top; "read-only"
-      // under it would contradict it (tester, 9 Nov), so it just names the yard.
-      ...(this.target ? [this.helpBlock ? this.whose() : `${this.whose()}, read-only`] : []),
+      // A friend's yard in help mode names the yard in its one bar at the top
+      // (owner, 15 Nov 2026: one bar, not three); "read-only" would contradict
+      // helping (tester, 9 Nov). Any other visit says whose and read-only here.
+      ...(this.target && !this.helpBlock ? [`${this.whose()}, read-only`] : []),
       ...(this.hint ? [this.hint] : []),
       ...(devStats()
         ? [
