@@ -175,12 +175,12 @@ describe("raid result popup", () => {
     expect(popup.querySelector(".raid-result__stolen")!.textContent).toContain("1,200");
   });
 
-  it("pictures the whole horse after a Trojan Horse fight, not its nodding-head strip (owner, 15 Nov)", () => {
+  it("pictures the whole horse after a Trojan Horse fight, with its mouth, not its nodding-head strip (owner, 15 Nov)", () => {
     const { modal } = layers();
     raidResultPopup({ ...result(true), tribe: "wild", shiny: 0 }, null, () => {}).mount(modal);
     const src = modal.querySelector<HTMLImageElement>(".raid-result__splash")!.getAttribute("src")!;
     expect(src).toBe(horsePicture());
-    expect(src).toMatch(/^\/assets\/buildings\/trojanhorse\/top\.1\.png/);
+    expect(src).toMatch(/^\/assets\/buildings\/trojanhorse\/whole\.1\.png/);
     expect(src).not.toContain("anim");
   });
 

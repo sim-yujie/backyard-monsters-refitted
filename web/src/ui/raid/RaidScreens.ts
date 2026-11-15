@@ -16,8 +16,7 @@ import {
   tribeTitle,
 } from "@/game/raid/raidText";
 import { raidCountdownText, type RaidBusy, type RaidStage, type RaidYardView } from "@/game/raid/raidYardFlow";
-import { TROJAN_HORSE_TYPE, TROJAN_TRIBE } from "@/game/trojan/trojanHorse";
-import { ArtState, resolveArt } from "@/game/yard/buildingArt";
+import { TROJAN_TRIBE } from "@/game/trojan/trojanHorse";
 import { versionedArt } from "@/game/yard/retryLoad";
 import { alarmPulse } from "@/ui/alarmPulse";
 import { formatAmount } from "@/ui/format";
@@ -60,18 +59,15 @@ const splash = (tribe: string, className: string): HTMLImageElement => {
   return image;
 };
 
-/** The whole horse, if the yard's art has no plain picture for it. */
-export const HORSE_PICTURE_FALLBACK = "/assets/buildings/trojanhorse/top.1.png";
+/** The whole horse: its body with the head and mouth cell drawn on (made from `top` + `anim` cell 0). */
+export const HORSE_PICTURE = "/assets/buildings/trojanhorse/whole.1.png";
 
 /**
- * The horse as the yard draws it: its `top` picture from the yard's own art
- * table, never the `anim` strip (that is two cut-out frames of its nodding
- * head, which read as broken wooden blocks; owner, 15 Nov).
+ * The horse as it stands in the yard: its body with the head and mouth over
+ * it. `top` alone has no mouth and the raw `anim` strip is two cut-out frames
+ * (owner, 15 Nov), so `whole.1.png` is the two put together.
  */
-export const horsePicture = (): string => {
-  const top = resolveArt(TROJAN_HORSE_TYPE, 1, ArtState.DEFAULT)?.top;
-  return versionedArt(top && top.frame === null ? top.url : HORSE_PICTURE_FALLBACK);
-};
+export const horsePicture = (): string => versionedArt(HORSE_PICTURE);
 
 /**
  * The result popup's picture: a tribe's splash, as Flash's good-defence popup
