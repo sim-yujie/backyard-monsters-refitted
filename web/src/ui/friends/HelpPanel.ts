@@ -98,6 +98,18 @@ export class HelpPanel {
     this.status.textContent = text ?? "";
     this.status.classList.toggle("help-panel__status--error", text !== null && kind === "error");
     this.status.classList.toggle("help-panel__status--thanks", text !== null && kind === "thanks");
+    if (text !== null) this.revealMessage();
+  }
+
+  /**
+   * On a short screen the body scrolls (a phone on its side): the words just
+   * set are scrolled up into view, inside the body only, never the page.
+   */
+  private revealMessage(): void {
+    const body = this.status.closest<HTMLElement>(".panel__body");
+    if (!body) return;
+    const below = this.status.getBoundingClientRect().bottom - body.getBoundingClientRect().bottom;
+    if (below > 0) body.scrollTop += Math.ceil(below);
   }
 
   /** The words under the buttons now, for a test. */

@@ -234,8 +234,11 @@
   color: var(--colour-text-muted);
 }
 
+/* Why the button is off. The warning ink of the panel's own style: amber on
+   Modern's dark plate, dark amber on Classic's cream (the bright amber was
+   all but invisible there). */
 .help-panel__reason {
-  color: var(--colour-warning-bright);
+  color: var(--colour-warning);
 }
 
 .help-panel__button {
@@ -254,6 +257,38 @@
 .help-panel__status--error {
   color: var(--colour-danger);
   font-weight: 600;
+}
+
+/* A short screen (a phone on its side, 390px high): the dock leaves the
+   panel's body about 230px, so the choice packs tighter and the reason sits
+   beside its button; what still does not fit scrolls inside the body, and a
+   thank-you is scrolled into view (`HelpPanel.setMessage`). */
+@media (max-height: 500px) {
+  .map-panel.help-panel .panel__body {
+    padding-block: var(--space-2);
+    gap: var(--space-2);
+  }
+
+  .help-panel__choices {
+    gap: var(--space-2);
+  }
+
+  .help-panel__choice {
+    flex-flow: row wrap;
+    align-items: center;
+    column-gap: var(--space-2);
+    padding: var(--space-1) var(--space-2);
+  }
+
+  .help-panel__line,
+  .help-panel__note {
+    flex-basis: 100%;
+  }
+
+  .help-panel__reason {
+    flex: 1 1 0;
+    min-width: 0;
+  }
 }
 
 @media (max-width: 620px) {
