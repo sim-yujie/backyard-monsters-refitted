@@ -5,18 +5,36 @@
  * opens, hanging under the "?".
  *
  * The row under the top bar, left to right: the "?", this button, then the
- * yard's status strip (shield, boosts button; yard-status.css), which starts
- * after the button while it shows. World chat sits under the row (chat.css),
- * whose top already allows for the "?"'s height, so the button keeps to it.
+ * yard's status strip (shield, boosts button; yard-status.css). World chat's
+ * pill is under the row. On the yard all of them are placed from the tokens
+ * below, so the row lines up (owner, 15 Nov: "ensure they are aligned
+ * properly"): one height for the four buttons (and World chat's pill outside
+ * a phone), one step between them and down to the pill, and one left edge
+ * for the row, the pill and the lists. The plates' painted edge is their box
+ * (skin.css: --skin-bar-bleed), as the round buttons' rim is theirs.
  */
 
 :root {
-  /* The floating "?" (tips.css: 32px, 40px for a finger). */
-  --reset-help-size: 32px;
+  /* The row's height: World chat's pill on a computer, a finger's 40px on a
+     touch screen. Away from the yard Bob's "?" keeps its own 32px (tips.css). */
+  --reset-help-size: 36px;
+  /* The row's top and left edge: the top bar's bottom plus a step, and World
+     chat's left edge (chat.css), which the lists share. */
+  --corner-row-top: calc(var(--hud-height) + var(--space-2));
+  --corner-row-left: calc(var(--hud-inset) + var(--space-2));
+  /* The lists hang a step under the row. */
+  --corner-list-top: calc(var(--corner-row-top) + var(--reset-help-size) + var(--space-2));
   /* The button is as wide as the "?". */
   --reset-clock-width: var(--reset-help-size);
   /* Where the button starts: the "?"'s left edge, its width and a step. */
-  --reset-clock-left: calc(var(--hud-inset) + var(--space-2) + var(--reset-help-size) + var(--space-2));
+  --reset-clock-left: calc(var(--corner-row-left) + var(--reset-help-size) + var(--space-2));
+  /* The Events door's width with its label (yard-hud.css, events.css), for a
+     phone on its side, where it stands in the row: Classic's plate. */
+  --events-door-side-width: 76px;
+}
+
+:root[data-skin="scrap"] {
+  --events-door-side-width: 68px;
 }
 
 @media (pointer: coarse) {
@@ -25,9 +43,42 @@
   }
 }
 
+/* An upright phone: World chat's pill and the top bar start --space-3 in. */
+@media (max-width: 620px) {
+  :root {
+    --corner-row-left: var(--space-3);
+  }
+}
+
+/* Bob's "?" on the yard: the row's first button, as tall as the rest. The
+   "?" sits a pixel high in its line box, so the bottom padding centres it. */
+.overlay__layer:has(> .reset-clock) > .guide-help--float {
+  top: var(--corner-row-top);
+  left: var(--corner-row-left);
+  width: var(--reset-help-size);
+  height: var(--reset-help-size);
+  padding: 0 0 2px;
+}
+
+/* World chat's pill: a step under the row, its left edge the row's. Outside
+   a phone it is as tall as the row (on a phone it stays small, so the line
+   under it keeps clear of the notices). */
+.overlay__layer:has(> .reset-clock) > .chat-box {
+  --chat-top: calc(var(--corner-row-top) + var(--reset-help-size) + var(--space-2));
+  left: var(--corner-row-left);
+}
+
+@media (min-width: 621px) and (min-height: 501px) {
+  .overlay__layer:has(> .reset-clock) > .chat-box .chat-box__tab {
+    box-sizing: border-box;
+    height: var(--reset-help-size);
+    padding-block: 0;
+  }
+}
+
 .reset-clock {
   position: absolute;
-  top: calc(var(--hud-height) + var(--space-2));
+  top: var(--corner-row-top);
   left: var(--reset-clock-left);
   width: var(--reset-clock-width);
   height: var(--reset-help-size);
@@ -64,19 +115,20 @@
 
 /* ── The list: under the "?", over World chat's tab ─────────────────── */
 
+/* Fixed to the screen at the same place as the status strip's lists
+   (yard-status.css): from the row's left edge, so a phone has the width. */
 .reset-clock__list {
   box-sizing: border-box;
-  position: absolute;
-  top: calc(100% + var(--space-2));
-  /* From the "?"'s left edge, so a phone has the width for it. */
-  left: calc(var(--reset-help-size) * -1 - var(--space-2));
+  position: fixed;
+  top: var(--corner-list-top);
+  left: var(--corner-row-left);
   z-index: var(--z-popup);
   display: flex;
   flex-direction: column;
   gap: var(--space-1);
   width: min(320px, calc(100vw - 2 * (var(--hud-inset) + var(--space-2))));
-  max-height: calc(100vh - var(--hud-height) - var(--reset-help-size) - 3 * var(--space-2));
-  max-height: calc(100dvh - var(--hud-height) - var(--reset-help-size) - 3 * var(--space-2));
+  max-height: calc(100vh - var(--corner-list-top) - var(--space-2));
+  max-height: calc(100dvh - var(--corner-list-top) - var(--space-2));
   overflow-y: auto;
   overscroll-behavior: contain;
   padding: var(--space-2) var(--space-3);
@@ -140,26 +192,22 @@
 
 /* ── The status strip starts after the button ───────────────────────── */
 
-/* A computer and a phone upright: the strip's left edge is the top bar's,
-   `--hud-inset` in (`--space-3` on an upright phone); it starts a step after
-   the button. (Doubled class: it must beat yard-status.css's and
-   yard-hud.css's "after the ?" rules.) Two buttons at most, so it never
-   reaches the Events door at the right. */
+/* Fixed to the screen like the button, a step after it, whatever the corner's
+   bar does. (Doubled class: it must beat yard-status.css's and yard-hud.css's
+   "after the ?" rules.) Two buttons at most, so it never reaches the Events
+   door at the right. */
 .overlay__layer:has(> .reset-clock:not([hidden])) > .hud--corner > .hud-status.hud-status {
-  left: calc(var(--reset-clock-left) + var(--reset-clock-width) + var(--space-2) - var(--hud-inset));
-}
-
-@media (max-width: 620px) {
-  .overlay__layer:has(> .reset-clock:not([hidden])) > .hud--corner > .hud-status.hud-status {
-    left: calc(var(--reset-clock-left) + var(--reset-clock-width) + var(--space-2) - var(--space-3));
-  }
+  position: fixed;
+  top: var(--corner-row-top);
+  left: calc(var(--reset-clock-left) + var(--reset-clock-width) + var(--space-2));
+  max-width: none;
 }
 
 /* A phone on its side: the Events door stands in this row at 226px from the
-   left (events.css), so the strip starts a step after the door (up to 76px
-   wide with Classic's "Events" plate) instead of squeezing in before it. */
+   left (events.css), so the strip starts a step after the door (Classic's
+   "Events" plate is 76px wide, Modern's 68px) instead of squeezing in before it. */
 @media (min-width: 621px) and (max-height: 500px) {
   .overlay__layer:has(> .reset-clock:not([hidden])) > .hud--corner > .hud-status.hud-status {
-    left: calc(226px + 76px + var(--space-2) - var(--hud-inset));
+    left: calc(226px + var(--events-door-side-width) + var(--space-2));
   }
 }

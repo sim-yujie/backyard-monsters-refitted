@@ -4,7 +4,8 @@
  * button with a count while boosts run. It hangs below the corner HUD
  * rather than sitting in its grid, so the bar's own layout is untouched.
  * Both buttons are as tall as Bob's "?" (--reset-help-size, reset-clock.css)
- * and sit in its row; the skins paint them as plates (skin.css).
+ * and sit in its row; the skins paint them as plates (skin.css), whose
+ * painted edge is the box, so the row lines up with the round buttons.
  */
 
 /* In line with the "?" (tips.css: --hud-height plus a step from the top of
@@ -30,10 +31,11 @@
   display: flex;
   flex: none;
   align-items: center;
-  gap: 2px;
+  gap: 4px;
   height: var(--reset-help-size);
   margin: 0;
-  padding: 0 7px 0 4px;
+  /* The same room each side: the icon and its number sit in the middle. */
+  padding: 0 4px;
   border: 1px solid var(--colour-border);
   border-radius: var(--radius-pill);
   background: var(--colour-surface-raised);
@@ -68,21 +70,12 @@
   height: calc(var(--reset-help-size) - 12px);
 }
 
-.hud-status__time {
-  font-variant-numeric: tabular-nums;
-}
-
-/* The count: a small round number beside the icon, not an alert badge. */
+/* The shield's time and the boosts' count: one plain style. The display
+   face sits a pixel low in its line box; the nudge centres it in the plate. */
+.hud-status__time,
 .hud-status__count {
-  display: grid;
-  place-items: center;
-  min-width: 18px;
-  height: 18px;
-  padding: 0 4px;
-  border-radius: 9px;
-  background: rgb(0 0 0 / 55%);
-  color: #ffffff;
-  font-size: 12px;
+  position: relative;
+  top: -1px;
   font-variant-numeric: tabular-nums;
 }
 
@@ -93,12 +86,12 @@
 .hud-status__list {
   box-sizing: border-box;
   position: fixed;
-  top: calc(var(--hud-height) + var(--space-2) + var(--reset-help-size) + var(--space-2));
-  left: calc(var(--hud-inset) + var(--space-2));
+  top: var(--corner-list-top);
+  left: var(--corner-row-left);
   z-index: var(--z-popup);
   width: min(320px, calc(100vw - 2 * (var(--hud-inset) + var(--space-2))));
-  max-height: calc(100vh - var(--hud-height) - var(--reset-help-size) - 3 * var(--space-2));
-  max-height: calc(100dvh - var(--hud-height) - var(--reset-help-size) - 3 * var(--space-2));
+  max-height: calc(100vh - var(--corner-list-top) - var(--space-2));
+  max-height: calc(100dvh - var(--corner-list-top) - var(--space-2));
   overflow-y: auto;
   overscroll-behavior: contain;
   padding: var(--space-2) var(--space-3);

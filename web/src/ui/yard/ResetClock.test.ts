@@ -135,7 +135,33 @@ describe("reset clock CSS", () => {
 
   it("on a phone on its side the strip starts after the Events door", () => {
     const side = css.slice(css.indexOf("@media (min-width: 621px) and (max-height: 500px) {"));
-    expect(side.slice(0, side.indexOf("\n}\n"))).toContain("left: calc(226px + 76px");
+    expect(side.slice(0, side.indexOf("\n}\n"))).toContain("left: calc(226px + var(--events-door-side-width)");
+    // The door with its label: Classic's 76px plate, Modern's 68px.
+    expect(css).toMatch(/:root \{[^}]*--events-door-side-width: 76px;/);
+    expect(css).toMatch(/:root\[data-skin="scrap"\] \{\s*--events-door-side-width: 68px;/);
+  });
+
+  it("the row lines up: one height, one top, one left edge for the \"?\", the strip, World chat and the lists", () => {
+    const status = readFileSync(resolve(__dirname, "../styles/yard-status.css"), "utf8");
+    const yardHelp = css.slice(css.indexOf(".overlay__layer:has(> .reset-clock) > .guide-help--float {"));
+    const help = yardHelp.slice(0, yardHelp.indexOf("}"));
+    expect(help).toContain("top: var(--corner-row-top);");
+    expect(help).toContain("left: var(--corner-row-left);");
+    expect(help).toContain("height: var(--reset-help-size);");
+    // World chat: its left edge is the row's, a step under it.
+    expect(css).toMatch(/> \.chat-box \{\s*--chat-top: calc\(var\(--corner-row-top\) \+ var\(--reset-help-size\) \+ var\(--space-2\)\);\s*left: var\(--corner-row-left\);/);
+    // Both lists hang at the same place.
+    for (const text of [css.slice(css.indexOf(".reset-clock__list {")), status.slice(status.indexOf(".hud-status__list {"))]) {
+      const rule = text.slice(0, text.indexOf("}"));
+      expect(rule).toContain("position: fixed;");
+      expect(rule).toContain("top: var(--corner-list-top);");
+      expect(rule).toContain("left: var(--corner-row-left);");
+    }
+    // The plates paint their frame on the box's edge, as the round buttons do.
+    expect(skin).toMatch(/:root\[data-skin\] :is\(\.hud-status__chip, \.chat-box__tab\) \{\s*border-image-outset: var\(--skin-bar-bleed, 0\);/);
+    // One plain style for the shield's time and the boosts' count.
+    expect(status).toMatch(/\.hud-status__time,\s*\.hud-status__count \{/);
+    expect(status).not.toMatch(/\.hud-status__count \{[^}]*background/);
   });
 });
 
