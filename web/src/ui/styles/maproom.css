@@ -1872,3 +1872,15 @@
     padding-inline: var(--space-1);
   }
 }
+
+/* An iPad upright or in Split View (up to 900 px wide): the one-row bar cut Shiny off behind
+   Map/Yard; the readouts close up as on a phone's side. */
+@media (min-width: 620.02px) and (max-width: 900px) {
+  .hud--map .hud__resources {
+    gap: 0;
+  }
+
+  .hud--map .hud__resource-button {
+    padding-inline: var(--space-1);
+  }
+}
