@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
 
 import { eventsForcedOff, eventsForcedOn } from "../../config/GameConfig.js";
-import type { EventDefinition } from "../../game-data/events/events.js";
+import { EVENTS, KRALLEN_HUNT_SERIES, krallenHunt, type EventDefinition } from "../../game-data/events/events.js";
 import { claimsUntil, eventWindow, nextUtcMidnight, statusAt, utcDay, visibleEvents } from "./schedule.js";
 
 const DAY = 86_400;
@@ -104,5 +104,48 @@ describe("which events show", () => {
     const soon = event("soon", "2026-11-12T00:00:00Z", "2026-11-13T00:00:00Z");
     const now = at("2026-11-10T00:00:00Z");
     expect(visibleEvents(now, [soon, HALLOWEEN], NONE).map((one) => one.event.id)).toEqual(["halloween", "soon"]);
+  });
+});
+
+describe("a repeating series (owner, 15 Nov 2026)", () => {
+  const ids = (iso: string, events: readonly EventDefinition[] = EVENTS) =>
+    visibleEvents(at(iso), events, NONE, NONE).map((one) => `${one.event.id}:${one.status}`);
+
+  test("every monthly Krallen Hunt is one series", () => {
+    expect(krallenHunt(2026, 11).series).toBe(KRALLEN_HUNT_SERIES);
+    expect(krallenHunt(2027, 3).series).toBe(KRALLEN_HUNT_SERIES);
+  });
+
+  test("while a Krallen Hunt is on, the next one is not coming up; other events are", () => {
+    // 15 Nov 2026 13:30 UTC: the November hunt has just begun, December's is 29d 10h away.
+    const shown = ids("2026-11-15T13:30:00Z");
+    expect(shown).toContain("krallen-2026-11:active");
+    expect(shown.some((id) => id.startsWith("krallen-2026-12"))).toBe(false);
+    expect(shown).toContain("thanksgiving-2026:upcoming");
+    const late = ids("2026-11-30T23:59:59Z");
+    expect(late).toContain("krallen-2026-11:active");
+    expect(late.some((id) => id.startsWith("krallen-2026-12"))).toBe(false);
+  });
+
+  test("once the hunt is over the next one shows, even while the last one's claim days run", () => {
+    const shown = ids("2026-12-02T00:00:00Z");
+    expect(shown).toContain("krallen-2026-11:ended");
+    expect(shown).toContain("krallen-2026-12:upcoming");
+    expect(ids("2026-12-10T00:00:00Z")).toContain("krallen-2026-12:upcoming");
+    expect(ids("2026-12-15T00:00:00Z")).toContain("krallen-2026-12:active");
+    expect(ids("2026-12-15T00:00:00Z").some((id) => id.startsWith("krallen-2027-01"))).toBe(false);
+  });
+
+  test("only the same series is held back; an event without one is never", () => {
+    const run = (id: string, startsAt: string, endsAt: string, series?: string): EventDefinition => ({
+      ...event(id, startsAt, endsAt),
+      ...(series && { series }),
+    });
+    const a1 = run("a1", "2026-11-01T00:00:00Z", "2026-11-20T00:00:00Z", "a");
+    const a2 = run("a2", "2026-11-25T00:00:00Z", "2026-12-05T00:00:00Z", "a");
+    const b2 = run("b2", "2026-11-25T00:00:00Z", "2026-12-05T00:00:00Z", "b");
+    const loose = run("loose", "2026-11-25T00:00:00Z", "2026-12-05T00:00:00Z");
+    expect(ids("2026-11-10T00:00:00Z", [a1, a2, b2, loose])).toEqual(["a1:active", "b2:upcoming", "loose:upcoming"]);
+    expect(ids("2026-11-21T00:00:00Z", [a1, a2, b2, loose])).toEqual(["a2:upcoming", "b2:upcoming", "loose:upcoming"]);
   });
 });
