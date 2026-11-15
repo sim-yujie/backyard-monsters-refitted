@@ -479,6 +479,26 @@ export const REPAINT_LAYOUTS: Readonly<Record<string, SheetLayoutOverride>> = {
   // layout, 16 wide and 30 tall, even the 2x sheet passed 8192 px.
   "monsters/korath_5.png": { frameWidth: 200, columns: 20 },
   "monsters/korath_6.png": { frameHeight: 168, columns: 20 },
+  // Spurtz (IC1): 36x42 cells (the old 24x28 cell plus 6 px each side, 12 px on top and 2 at the
+  // bottom), so the anchor moves by (6, 12) and the fireball and its shadow stay put. The Flash
+  // sheet has only 30 columns for the 32 headings the game reads (headings 30 and 31 fell off the
+  // sheet); the repaint has all 32, 11.25 degrees apart, one row per frame: `columns: 32` with the
+  // 32 directions packs exactly one heading per column. Rows: 0 idle, 1-6 hopping walk, 7-11 attack
+  // (squash, flare up, lunge, follow-through, recover).
+  "monsters/spurtz.png": {
+    frameWidth: 36,
+    frameHeight: 42,
+    anchorX: 18,
+    anchorY: 26,
+    rows: 12,
+    columns: 32,
+    animations: {
+      idle: { first: 0, count: 1, ticksPerFrame: 8 },
+      walk: { first: 1, count: 6, ticksPerFrame: 8 },
+      attack: { first: 7, count: 5, ticksPerFrame: 4 },
+    },
+    strikeFrame: 2,
+  },
 };
 
 const layoutCache = new Map<MonsterSheet, AnimatedSheet>();
@@ -812,6 +832,7 @@ export const REPAINTED_SHEETS: Readonly<Record<string, string>> = {
   "monsters/slimeattikus_anim.png": "monsters/slimeattikus-anim@4x.png", // Slimeattikus animated repaint
   "monsters/slimeattikusmini_anim.png": "monsters/slimeattikusmini-anim@4x.png", // mini slime animated repaint (same frames scaled)
   "monsters/rezghul.png": "monsters/rezghul-anim@4x.png", // Rezghul animated repaint (glide walk + attack, tail knob)
+  "monsters/spurtz.png": "monsters/spurtz-anim@4x.png", // Spurtz (Inferno IC1) animated repaint (32 headings, hop walk + attack)
   "monsters/ape_1.png": "monsters/ape_1-repaint@4x.png", // Gorgo level 1 repaint (all 16 headings, idle + walk + attack)
   "monsters/fly_1.png": "monsters/fly_1-repaint@4x.png", // Fomor level 1 repaint (all 16 headings, idle + walk)
   "monsters/dragon_1.png": "monsters/dragon_1-repaint@4x.png", // Drull level 1 repaint (all 16 headings painted, idle + walk + attack)

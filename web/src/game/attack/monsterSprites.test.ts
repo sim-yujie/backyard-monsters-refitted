@@ -319,7 +319,7 @@ describe("placement", () => {
 
 describe("sheetUrl", () => {
   it("serves from /assets/ like the building art", () => {
-    expect(sheetUrl(sheet("IC1"))).toBe("/assets/monsters/spurtz.png");
+    expect(sheetUrl(sheet("worker"))).toBe("/assets/monsters/worker.png");
     expect(sheetUrl("monsters/flyingshadow.png")).toBe("/assets/monsters/flyingshadow.png");
   });
 
@@ -332,7 +332,7 @@ describe("sheetUrl", () => {
     expect(isHighResolutionSheet("/assets/monsters/14-repaint@4x.png")).toBe(true);
     expect(isHighResolutionSheet("/assets/monsters/pokey-anim@2x.png?v=4xkz")).toBe(true);
     expect(isHighResolutionSheet(sheetUrl(sheet("C1")))).toBe(true);
-    expect(isHighResolutionSheet(sheetUrl(sheet("IC1")))).toBe(false);
+    expect(isHighResolutionSheet(sheetUrl(sheet("worker")))).toBe(false);
   });
 
   it("asks for a smaller copy where the graphics card cannot hold the painting", () => {
@@ -383,7 +383,7 @@ describe("sheetUrl", () => {
     it("leaves a sheet with no repaint alone at every level", () => {
       for (const level of ["high", "medium", "low"] as const) {
         setQuality(level);
-        expect(sheetUrl(sheet("IC1"))).toBe("/assets/monsters/spurtz.png");
+        expect(sheetUrl(sheet("worker"))).toBe("/assets/monsters/worker.png");
       }
     });
   });
