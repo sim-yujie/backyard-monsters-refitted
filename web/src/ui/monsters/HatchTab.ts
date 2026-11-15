@@ -128,6 +128,13 @@ const hatchRushChip = (): (Node | string)[] => {
 
 type Status = { readonly tone: "good" | "bad"; readonly content: (Node | string)[] };
 
+/**
+ * How long the result of an action floats over the top of the tab (patch 7.6,
+ * owner 15 Nov 2026): it no longer takes a line of its own, which pushed the
+ * tab past the window's bottom and brought up a scroll bar.
+ */
+export const STATUS_SHOW_MS = 5000;
+
 /** A live countdown, refreshed once a second without a redraw. */
 /** One monster's tile in the grid, kept across draws (`renderGrid`). */
 interface HatchTile {
@@ -223,6 +230,8 @@ export class HatchTab implements MonstersTab {
   private readonly context: MonstersTabContext;
   private readonly actions: HatcheryActions;
   private readonly status: HTMLElement;
+  /** Hides the floating status (`setStatus`). */
+  private statusTimer: ReturnType<typeof setTimeout> | null = null;
   /** The hatchery tabs, over the scroll box: they never scroll out of sight (owner, 6 Nov 2026). */
   private readonly tabsRow: HTMLElement;
   /** Everything under the tabs; only this scrolls. */
@@ -298,7 +307,7 @@ export class HatchTab implements MonstersTab {
     this.element.className = "hatch";
 
     this.status = document.createElement("p");
-    this.status.className = "monsters-status";
+    this.status.className = "monsters-status hatch__status";
     this.status.setAttribute("role", "status");
     this.status.hidden = true;
 
@@ -412,8 +421,10 @@ export class HatchTab implements MonstersTab {
     this.info.append(this.infoHead, this.infoEach, this.detailsButton, this.stats, this.addBlock);
     // The message sits in the split so the info panel can stand beside it on a wide screen.
     split.append(this.message, pick, this.info);
-    this.scroll.append(this.status, this.lines, this.boosts, split);
-    this.element.append(this.tabsRow, this.scroll);
+    this.scroll.append(this.lines, this.boosts, split);
+    // The status floats over the top of the tab, outside the scroll box, so a
+    // message never makes the tab taller (patch 7.6).
+    this.element.append(this.tabsRow, this.scroll, this.status);
   }
 
   private get store() {
@@ -489,6 +500,8 @@ export class HatchTab implements MonstersTab {
   destroy(): void {
     if (this.settling !== null && typeof cancelAnimationFrame === "function") cancelAnimationFrame(this.settling);
     this.settling = null;
+    if (this.statusTimer !== null) clearTimeout(this.statusTimer);
+    this.statusTimer = null;
     this.taking = null;
     this.markYard(null);
     this.stepper.destroy();
@@ -1851,8 +1864,12 @@ export class HatchTab implements MonstersTab {
   }
 
   private setStatus(status: Status | null): void {
+    if (this.statusTimer !== null) clearTimeout(this.statusTimer);
+    this.statusTimer = status ? setTimeout(() => this.setStatus(null), STATUS_SHOW_MS) : null;
     this.status.hidden = status === null;
-    this.status.className = status ? `monsters-status monsters-status--${status.tone}` : "monsters-status";
+    this.status.className = status
+      ? `monsters-status hatch__status monsters-status--${status.tone}`
+      : "monsters-status hatch__status";
     this.status.replaceChildren(...(status?.content ?? []));
   }
 }

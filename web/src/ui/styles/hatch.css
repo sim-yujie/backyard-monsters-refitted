@@ -37,6 +37,7 @@
   --hatch-pad: var(--space-5);
 
   container: hatch / inline-size;
+  position: relative;
   flex: 1;
   min-height: 0;
   display: flex;
@@ -69,8 +70,30 @@
   padding-top: var(--space-3);
 }
 
-.hatch__scroll > .monsters-status {
-  padding: 0;
+/* What the last action did ("Added 5 Vorgs: 312,500 spent.") floats over
+   the top of the tab for a few seconds (`STATUS_SHOW_MS`) instead of taking a
+   line of its own (patch 7.6, owner 15 Nov 2026): that line pushed the tab
+   past the window's bottom and brought up a scroll bar. It lets taps through
+   to whatever is under it. */
+.hatch > .hatch__status {
+  position: absolute;
+  top: var(--space-1);
+  left: 50%;
+  z-index: 2;
+  width: max-content;
+  max-width: calc(100% - 2 * var(--hatch-pad));
+  padding: var(--space-2) var(--space-4);
+  border: 1px solid var(--colour-border);
+  border-radius: var(--radius-lg);
+  background: var(--colour-surface-raised);
+  box-shadow: var(--shadow-popup);
+  text-align: center;
+  transform: translateX(-50%);
+  pointer-events: none;
+}
+
+.hatch > .hatch__status[hidden] {
+  display: none;
 }
 
 /* A container query cannot style its own container: the tab's padding
