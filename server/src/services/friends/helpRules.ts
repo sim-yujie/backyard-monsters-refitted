@@ -58,8 +58,6 @@ export interface HelpFacts {
   owner: HelpSide;
   /** Friends since, unix seconds; null when they are not friends. */
   friendsSince: number | null;
-  /** Helps the helper has given today (UTC). */
-  helpsToday: number;
 }
 
 const HOUR = 60 * 60;
@@ -67,11 +65,13 @@ const HOUR = 60 * 60;
 const levelOf = (side: HelpSide): number => calculateBaseLevel(side.points ?? "0", side.basevalue ?? "0");
 
 /**
- * Why the helper may not help the owner at all today, or null when they may
+ * Why the helper may not help the owner at all now, or null when they may
  * (§4 "Who may help", §7 rules 1, 2 and 8). In this order: not friends; a
  * block either way or either account banned (the neutral `cannotSend`); the
  * level and friendship-age gates (`tooNew`, with `rule` naming the gate that
- * holds and, for the friendship's age, `from` when it lifts); the daily cap.
+ * holds and, for the friendship's age, `from` when it lifts). There is no
+ * daily cap (owner, 15 Nov 2026: was 20 helps a day); the 5 helpers a job
+ * ({@link HELP_RULES}.helpersPerJob) still holds.
  */
 export const gateRefusal = (facts: HelpFacts, now: number): HelpRefusal | null => {
   const { helper, owner } = facts;
@@ -89,13 +89,8 @@ export const gateRefusal = (facts: HelpFacts, now: number): HelpRefusal | null =
   const levelsOk = levelOf(helper) >= FRIEND_GATES.minLevel && levelOf(owner) >= FRIEND_GATES.minLevel;
   if (!levelsOk) return { reason: "tooNew", rule: "level" };
   if (friendshipClears > now) return { reason: "tooNew", from: friendshipClears, rule: "friendship" };
-
-  if (facts.helpsToday >= HELP_RULES.dailyHelps) return { reason: "dailyCap" };
   return null;
 };
-
-/** Helps left today. */
-export const helpsLeftOf = (helpsToday: number): number => Math.max(0, HELP_RULES.dailyHelps - helpsToday);
 
 /** The countdown a speed-up would shorten, or null when none is running. */
 export const helpCountdown = (building: BuildingData): HelpCountdown | null =>

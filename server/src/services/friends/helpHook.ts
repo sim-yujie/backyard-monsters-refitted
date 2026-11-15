@@ -2,7 +2,6 @@ import type { Save } from "../../database/models/save.model.js";
 
 /** What help-mode `/base/load` adds to the yard (`docs/design/friends.md` §6.2). */
 export interface HelpBlock {
-  helpsLeft: number;
   /** Per building id: `speedup` / `repair` each `true` or a refusal reason. */
   buildings: Record<string, { speedup?: true | string; repair?: true | string }>;
   /** A `tooNew` refusal's gate (`friendship`, `account` or `level`) and, when time lifts it, `from`. */
@@ -15,7 +14,7 @@ export interface HelpBlock {
  */
 export type HelpBlockFor = (helperUserid: number, ownerSave: Save) => Promise<HelpBlock>;
 
-let hook: HelpBlockFor = async () => ({ helpsLeft: 0, buildings: {} });
+let hook: HelpBlockFor = async () => ({ buildings: {} });
 
 export const helpBlockFor: HelpBlockFor = (helperUserid, ownerSave) => hook(helperUserid, ownerSave);
 

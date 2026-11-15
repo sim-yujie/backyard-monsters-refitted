@@ -29,7 +29,7 @@ const buttons = (panel: HelpPanel) => [...panel.element.querySelectorAll<HTMLBut
 describe("HelpPanel (#374)", () => {
   it("offers a speed-up with the time it saves and the helpers so far", () => {
     const { panel } = mount();
-    panel.show(silo, buildingHelp({ helpsLeft: 5, buildings: { "7": { speedup: true } } }, 7));
+    panel.show(silo, buildingHelp({ buildings: { "7": { speedup: true } } }, 7));
     const text = panel.element.textContent ?? "";
     // A friend's yard is someone else's: the title is the name, no level (owner report 2026-10-22).
     expect(panel.element.querySelector(".panel__title")?.textContent).toBe("Storage Silo");
@@ -43,20 +43,20 @@ describe("HelpPanel (#374)", () => {
 
   it("offers a repair", () => {
     const { panel } = mount();
-    panel.show(tower, buildingHelp({ helpsLeft: 5, buildings: { "8": { repair: true } } }, 8));
+    panel.show(tower, buildingHelp({ buildings: { "8": { repair: true } } }, 8));
     expect(panel.element.textContent).toContain("Repairs this Cannon Tower now.");
     expect(buttons(panel).map((b) => b.textContent)).toEqual(["Repair"]);
   });
 
   it("disables a help the server refused, saying why", () => {
     const { panel } = mount();
-    panel.show(silo, buildingHelp({ helpsLeft: 0, buildings: { "7": { speedup: "dailyCap", repair: "tooNew" } } }, 7));
+    panel.show(silo, buildingHelp({ buildings: { "7": { speedup: "helpersFull", repair: "tooNew" } } }, 7));
     const [speed, repair] = buttons(panel);
     expect(speed?.disabled).toBe(true);
     expect(repair?.disabled).toBe(true);
     const reasons = [...panel.element.querySelectorAll(".help-panel__reason")].map((one) => one.textContent);
     expect(reasons).toEqual([
-      "You have used all your helps for today. More tomorrow.",
+      "5 friends have already sped up this job.",
       "Not yet: friends for 12 hours and each player level 5.",
     ]);
   });
@@ -64,7 +64,7 @@ describe("HelpPanel (#374)", () => {
   it("says which gate holds a tooNew and when it lifts", () => {
     const { panel } = mount();
     const from = Math.floor(Date.now() / 1000) + 5 * 3600 + 600;
-    panel.show(silo, buildingHelp({ helpsLeft: 5, buildings: { "7": { speedup: "tooNew" } }, gate: { reason: "tooNew", from, rule: "friendship" } }, 7));
+    panel.show(silo, buildingHelp({ buildings: { "7": { speedup: "tooNew" } }, gate: { reason: "tooNew", from, rule: "friendship" } }, 7));
     expect(panel.element.querySelector(".help-panel__reason")?.textContent).toMatch(/^Opens in 5h (10|9)m \(friends for 12 hours first\)\.$/);
   });
 
@@ -84,7 +84,7 @@ describe("HelpPanel (#374)", () => {
         }),
     );
     const { panel } = mount(onHelp);
-    panel.show(silo, buildingHelp({ helpsLeft: 5, buildings: { "7": { speedup: true } } }, 7));
+    panel.show(silo, buildingHelp({ buildings: { "7": { speedup: true } } }, 7));
     buttons(panel)[0]?.click();
     expect(onHelp).toHaveBeenCalledWith(silo, "speedup");
     expect(buttons(panel)[0]?.disabled).toBe(true);
@@ -92,7 +92,7 @@ describe("HelpPanel (#374)", () => {
     buttons(panel)[0]?.click();
     expect(onHelp).toHaveBeenCalledTimes(1);
 
-    panel.show(silo, buildingHelp({ helpsLeft: 4, buildings: { "7": { speedup: "alreadyHelped" } } }, 7));
+    panel.show(silo, buildingHelp({ buildings: { "7": { speedup: "alreadyHelped" } } }, 7));
     panel.setMessage("Thanks for helping!", "thanks");
     finish();
     await Promise.resolve();

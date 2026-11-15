@@ -32,7 +32,6 @@ describe("friends rules", () => {
       requestLapseDays: 14,
       declineWaitDays: 7,
       friendshipAgeHours: 12,
-      dailyHelps: 20,
     });
   });
 

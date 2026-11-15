@@ -126,7 +126,7 @@ export const sendGiftAnswer = async (em: EntityManager, user: User, body: unknow
     const since = (await friendsSince(tx, from, [to])).get(to) ?? null;
     // Accounts that cannot be friended never take or give gifts; the answer is a non-friend's.
     if (since === null || (await isBot(to, tx)) || (await isBot(from, tx))) throw friendRefusedErr("notFriends");
-    const gate = gateRefusal({ helper: mine, owner: theirs, friendsSince: since, helpsToday: 0 }, now);
+    const gate = gateRefusal({ helper: mine, owner: theirs, friendsSince: since }, now);
     if (gate) throw friendRefusedErr(gate.reason, refusalDetails(gate));
     if (!theirs.basesaveid) throw friendRefusedErr("cannotSend");
 

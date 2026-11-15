@@ -9,7 +9,6 @@ import { FRIEND_GATES, HELP_RULES } from "./helpConfig.js";
 import { helpersOf, withoutHelpers } from "./helpList.js";
 import {
   gateRefusal,
-  helpsLeftOf,
   isRefusal,
   planRepair,
   planSpeedup,
@@ -96,7 +95,7 @@ describe("reward", () => {
   test("0.25% of the lower cap, rounded down, in each resource", () => {
     expect(rewardOf(1_000_000, 300_001)).toEqual({ r1: 750, r2: 750, r3: 750, r4: 750 });
     expect(rewardOf(200, 1_000_000)).toEqual({ r1: 0, r2: 0, r3: 0, r4: 0 });
-    expect(HELP_RULES.rewardShare * HELP_RULES.dailyHelps).toBeCloseTo(0.05);
+    expect(HELP_RULES.rewardShare).toBe(0.0025);
   });
 });
 
@@ -114,11 +113,10 @@ describe("gates", () => {
     helper: side(1),
     owner: side(2),
     friendsSince: NOW - 2 * DAY,
-    helpsToday: 0,
     ...fields,
   });
 
-  test("friends for 12 hours, both level 5, under the cap: allowed; account age is no rule", () => {
+  test("friends for 12 hours, both level 5: allowed; account age is no rule", () => {
     expect(FRIEND_GATES.friendshipAgeHours).toBe(12);
     expect(gateRefusal(facts(), NOW)).toBeNull();
     expect(gateRefusal(facts({ friendsSince: NOW - 12 * HOUR }), NOW)).toBeNull();
@@ -151,9 +149,11 @@ describe("gates", () => {
       rule: "friendship",
     });
     expect(gateRefusal(facts({ helper: side(1, { points: "100" }) }), NOW)).toEqual({ reason: "tooNew", rule: "level" });
-    expect(gateRefusal(facts({ helpsToday: 20 }), NOW)).toEqual({ reason: "dailyCap" });
-    expect(helpsLeftOf(19)).toBe(1);
-    expect(helpsLeftOf(25)).toBe(0);
+  });
+
+  test("no daily cap (owner, 15 Nov 2026: was 20); 5 friends a job still holds", () => {
+    expect(HELP_RULES).not.toHaveProperty("dailyHelps");
+    expect(HELP_RULES.helpersPerJob).toBe(5);
   });
 });
 
@@ -176,10 +176,10 @@ describe("preview", () => {
       "3": { repair: true },
       "4": { speedup: "alreadyHelped" },
     });
-    expect(previewHelp(save, 9, NOW, { reason: "dailyCap" })).toEqual({
-      "1": { speedup: "dailyCap" },
-      "3": { repair: "dailyCap" },
-      "4": { speedup: "dailyCap" },
+    expect(previewHelp(save, 9, NOW, { reason: "cannotSend" })).toEqual({
+      "1": { speedup: "cannotSend" },
+      "3": { repair: "cannotSend" },
+      "4": { speedup: "cannotSend" },
     });
   });
 });

@@ -28,7 +28,6 @@ export const fixtureList = (friends: Friend[], extra: Partial<FriendsList> = {})
   maxPinned: 10,
   requestsIn: 0,
   giftsWaiting: 0,
-  helpsLeft: 20,
   ...extra,
 });
 
@@ -159,7 +158,7 @@ export const fixtureApi = (
         : (calls.push(["setWishes", ...args]), Promise.resolve([...(args[0] as FriendsApiWishes)])),
     collect: answer("collect", { collected: 0, resources: {}, collectsLeft: 10, giftsWaiting: 0 }),
     deleteGifts: answer("deleteGifts", { deleted: 0, collectsLeft: 10, giftsWaiting: 0 }),
-    help: answer("help", { reward: {}, helpsLeft: 0, building: null }),
+    help: answer("help", { reward: {}, building: null }),
     loadHelpYard: answer("loadHelpYard", { error: 0 } as Awaited<ReturnType<FriendsApi["loadHelpYard"]>>),
     setPrivacy: answer("setPrivacy", { hideOnline: false, friendRequests: true }),
     blocked: answer("blocked", []),

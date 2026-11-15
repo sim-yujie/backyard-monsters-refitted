@@ -287,7 +287,7 @@ const giftableFriends = async (
       friendedAt === null ||
       bots.has(from) ||
       bots.has(friend.userid) ||
-      gateRefusal({ helper: mine, owner: theirs, friendsSince: friendedAt, helpsToday: 0 }, now)
+      gateRefusal({ helper: mine, owner: theirs, friendsSince: friendedAt }, now)
     ) {
       leave(friend.userid, friend.username, "cannotSend");
     } else open.push({ friend, basesaveid: theirs.basesaveid });

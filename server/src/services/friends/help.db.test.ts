@@ -9,7 +9,7 @@ import { memoryRedis } from "../../testing/memoryRedis.js";
  * The help engine (issue #373, `docs/design/friends.md` §4, §6.3 and §7)
  * against a real Postgres: `POST /bm/friends/help` end to end, with the saves
  * locked, caught up and written, the `friend_help` rows, the notifications,
- * the friends list's `help` and `helpsLeft`, and the help-mode load's block.
+ * the friends list's `help`, and the help-mode load's block.
  *
  * Opt-in: runs only when FRIENDS_TEST_DB names a throwaway database with the
  * `bym` schema and the friends migrations applied, and refuses the shared
@@ -150,8 +150,9 @@ describe.skipIf(!dbName)("the help engine on a real database (issue #373)", () =
   test("a speed-up takes floor(5%) off the countdown, keeps hl, pays the reward, writes the row and a notice", async () => {
     await setYard(OWNER, { buildingdata: { "1": upgrading(1, 10_000) } });
     const answer = await help(H1, 1, "speedup");
-    expect(answer).toMatchObject({ error: 0, secondsSaved: 500, helpsLeft: 19, reward: { r1: 25, r2: 25, r3: 25, r4: 25 } });
+    expect(answer).toMatchObject({ error: 0, secondsSaved: 500, reward: { r1: 25, r2: 25, r3: 25, r4: 25 } });
     expect(answer.building).toMatchObject({ id: 1, cU: 9500, hl: [H1] });
+    expect(answer).not.toHaveProperty("helpsLeft");
 
     const owner = await yardOf(OWNER);
     expect(owner.buildingdata["1"]).toMatchObject({ cU: 9500, hl: [H1] });
@@ -206,7 +207,7 @@ describe.skipIf(!dbName)("the help engine on a real database (issue #373)", () =
       buildingdata: { "1": { id: 1, t: CANNON, x: 1, y: 0, l: 2, hp: 10, rE: 1 } },
       buildinghealthdata: { "1": 10 },
     });
-    expect(await help(H1, 1, "repair")).toMatchObject({ error: 0, healed: true, helpsLeft: 19 });
+    expect(await help(H1, 1, "repair")).toMatchObject({ error: 0, healed: true });
     const owner = await yardOf(OWNER);
     expect(owner.buildingdata["1"].hp).toBeUndefined();
     expect(owner.buildingdata["1"].rE).toBeUndefined();
@@ -217,19 +218,20 @@ describe.skipIf(!dbName)("the help engine on a real database (issue #373)", () =
     expect(notice!.jobs[0]).toMatchObject({ event: "helpRepair", userid: H1, buildingId: 1 });
   });
 
-  test("the daily cap counts speed-ups and repairs together and turns over at 00:00 UTC", async () => {
+  test("no daily cap (owner, 15 Nov 2026: was 20): a 21st and a 50th help in one UTC day land", async () => {
     const buildings: Record<string, unknown> = {};
-    for (let id = 1; id <= 21; id++) buildings[String(id)] = upgrading(id, 100_000);
-    buildings["30"] = { id: 30, t: CANNON, x: 30, y: 0, l: 2, hp: 10 };
-    await setYard(OWNER, { buildingdata: buildings, buildinghealthdata: { "30": 10 } });
+    for (let id = 1; id <= 49; id++) buildings[String(id)] = upgrading(id, 100_000);
+    buildings["60"] = { id: 60, t: CANNON, x: 60, y: 0, l: 2, hp: 10 };
+    await setYard(OWNER, { buildingdata: buildings, buildinghealthdata: { "60": 10 } });
 
-    const lastSecond = T0 + 12 * 60 * 60 - 1; // 23:59:59 UTC
-    await help(H1, 30, "repair", lastSecond - 100);
-    for (let id = 1; id <= 19; id++) await help(H1, id, "speedup", lastSecond - 100 + id);
-    expect(await refusalOf(help(H1, 20, "speedup", lastSecond))).toEqual({ reason: "dailyCap" });
-    expect(await helpRows(H1)).toHaveLength(20);
-
-    expect((await help(H1, 20, "speedup", lastSecond + 1)).helpsLeft).toBe(19);
+    // Speed-ups and a repair, all in the same UTC day.
+    for (let id = 1; id <= 20; id++) await help(H1, id, "speedup");
+    expect(await help(H1, 21, "speedup")).toMatchObject({ error: 0, secondsSaved: 5000 });
+    for (let id = 22; id <= 49; id++) await help(H1, id, "speedup");
+    expect(await help(H1, 60, "repair")).toMatchObject({ error: 0, healed: true });
+    expect(await helpRows(H1)).toHaveLength(50);
+    // Each one paid the reward: 0.25% of the 10,000 base cap, 50 times.
+    expect((await yardOf(H1)).resources).toMatchObject({ r1: 50 * 25, r4: 50 * 25 });
   });
 
   test("the gates: not friends, blocked, banned, friends under a day, a new account, a low level; with from", async () => {
@@ -306,14 +308,14 @@ describe.skipIf(!dbName)("the help engine on a real database (issue #373)", () =
     expect((await yardOf(OWNER)).buildingdata["1"].cU).toBe(9500);
   });
 
-  test("the friends list says who could be helped, and helpsLeft counts today's helps", async () => {
+  test("the friends list says who could be helped, and says nothing of helps left", async () => {
     await setYard(OWNER, {
       buildingdata: { "1": upgrading(1, 10_000), "2": { id: 2, t: CANNON, x: 2, y: 0, l: 2, hp: 10 } },
       buildinghealthdata: { "2": 10 },
     });
     await befriend(H1, STRANGER, T0 - 3600);
     let list = (await friendsAnswer(em() as never, as(H1), T0)) as any;
-    expect(list.helpsLeft).toBe(20);
+    expect(list).not.toHaveProperty("helpsLeft");
     const byId = (id: number) => list.friends.find((friend: { userid: number }) => friend.userid === id);
     expect(byId(OWNER).help).toEqual({ speedup: true, repair: true });
     expect(byId(STRANGER).help).toBeNull();
@@ -321,7 +323,6 @@ describe.skipIf(!dbName)("the help engine on a real database (issue #373)", () =
     await help(H1, 1, "speedup");
     await help(H1, 2, "repair");
     list = (await friendsAnswer(em() as never, as(H1), T0)) as any;
-    expect(list.helpsLeft).toBe(18);
     expect(byId(OWNER).help).toEqual({ speedup: false, repair: false });
   });
 
@@ -332,11 +333,9 @@ describe.skipIf(!dbName)("the help engine on a real database (issue #373)", () =
     });
     const owner = { userid: OWNER, type: "main", savetime: T0, ...(await yardOf(OWNER)) };
     expect(await helpBlock(em() as never, H1, owner, T0)).toEqual({
-      helpsLeft: 20,
       buildings: { "1": { speedup: true }, "2": { repair: true } },
     });
     expect(await helpBlock(em() as never, STRANGER, owner, T0)).toEqual({
-      helpsLeft: 20,
       buildings: { "1": { speedup: "notFriends" }, "2": { repair: "notFriends" } },
     });
 
@@ -344,7 +343,6 @@ describe.skipIf(!dbName)("the help engine on a real database (issue #373)", () =
     await befriend(H1, STRANGER, T0 - 2 * 60 * 60);
     const stranger = { ...owner, userid: STRANGER };
     expect(await helpBlock(em() as never, H1, stranger, T0)).toEqual({
-      helpsLeft: 20,
       buildings: { "1": { speedup: "tooNew" }, "2": { repair: "tooNew" } },
       gate: { reason: "tooNew", from: T0 + 10 * 60 * 60, rule: "friendship" },
     });
