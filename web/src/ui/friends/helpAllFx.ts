@@ -3,7 +3,6 @@ import type { HelpAllSummary } from "@/game/friends/helpAll";
 import type { HelpMarkExit } from "@/game/yard/YardHelpMarks";
 import type { ResourceKey } from "../resourceIcon";
 import type { HelpAllBar, HelpAllLine } from "./HelpAllBar";
-import { previewFxMaker } from "./helpFxPreview";
 
 /**
  * What Help all looks like as it lands (beta 8; owner, 15 Nov 2026: "I find
@@ -72,9 +71,5 @@ export interface HelpAllFx {
 /** Makes one Help all's effect on a stage; null plays none. */
 export type HelpAllFxMaker = (stage: HelpFxStage) => HelpAllFx | null;
 
-/**
- * The effect Help all plays, or null for none. PREVIEW ONLY: a dev build's
- * `?helpFx=a|b|c` plays one of astra's three (`helpFxPreview.ts`).
- */
-export const helpAllFxMaker = (): HelpAllFxMaker | null =>
-  import.meta.env.DEV ? previewFxMaker(window.location.search) : null;
+/** The effect Help all plays, or null for none. */
+export const helpAllFxMaker = (): HelpAllFxMaker | null => null;
