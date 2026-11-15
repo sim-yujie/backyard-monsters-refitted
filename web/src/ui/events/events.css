@@ -40,7 +40,7 @@
   color: #1d1003;
 }
 
-@media (width <= 620px) {
+@media (max-width: 620px) {
   .yard-dock > .events-door {
     top: calc(var(--hud-height) + var(--space-2));
     right: var(--space-3);
@@ -63,7 +63,7 @@
 
 /* A phone on its side: Collect all, Layout and the zoom take the top right,
    so the button sits right of the level bar instead. */
-@media (width > 620px) and (height <= 500px) {
+@media (min-width: 620.02px) and (max-height: 500px) {
   .yard-dock > .events-door {
     top: calc(var(--hud-height) - var(--space-2));
     right: auto;
@@ -90,7 +90,7 @@
    the sheet's title and ran under the close button (tester, 9 Nov). The
    page's own close shuts it. On a computer the page is centred, clear of the
    button, which stays lit as the way to shut it. */
-@media (width <= 620px), (height <= 500px) {
+@media (max-width: 620px), (max-height: 500px) {
   .events-door[aria-expanded="true"] {
     visibility: hidden;
   }
@@ -119,12 +119,13 @@
   z-index: var(--z-hud);
   width: min(440px, calc(100vw - 2 * var(--space-4)));
   max-height: calc(100vh - var(--hud-height) - 150px);
+  max-height: calc(100dvh - var(--hud-height) - 150px);
   min-width: 0;
   transform: translateX(-50%);
 }
 
 .events-panel .panel__body {
-  flex: 1;
+  flex: 1 1 auto;
   min-height: 0;
   overflow-y: auto;
   padding: var(--space-3);
@@ -606,7 +607,7 @@
   font-size: var(--text-sm);
 }
 
-@media (width <= 620px) {
+@media (max-width: 620px) {
   /* A phone, down to 320 px: tighter gaps and padding, a smaller count and
      narrower fixed columns, so a row's lock, tick or Claim stays inside it. */
   .events-tier {
@@ -815,7 +816,7 @@
   font-weight: 700;
 }
 
-@media (width <= 620px) {
+@media (max-width: 620px) {
   .events-ladder--goals .events-tier__need {
     min-width: 84px;
     font-size: var(--text-sm);
@@ -1015,7 +1016,7 @@
 
 /* ── Phones ───────────────────────────────────────────────────────────── */
 
-@media (width <= 620px) {
+@media (max-width: 620px) {
   .events-panel {
     top: auto;
     left: 0;
@@ -1023,7 +1024,8 @@
     bottom: 0;
     width: auto;
     max-width: none;
-    max-height: min(85vh, calc(100dvh - var(--hud-height)));
+    max-height: min(85vh, calc(100vh - var(--hud-height)));
+    max-height: min(85dvh, calc(100dvh - var(--hud-height)));
     transform: none;
     border-radius: var(--radius-lg) var(--radius-lg) 0 0;
     border-bottom: 0;
@@ -1048,10 +1050,11 @@
 }
 
 /* A phone on its side: the panel takes the height down to the screen's foot. */
-@media (width > 620px) and (height <= 500px) {
+@media (min-width: 620.02px) and (max-height: 500px) {
   .events-panel {
     top: calc(var(--hud-height) + var(--space-1));
     width: min(440px, calc(100vw - 2 * var(--space-4)));
+    max-height: calc(100vh - var(--hud-height) - var(--space-3) - var(--space-4));
     max-height: calc(100dvh - var(--hud-height) - var(--space-3) - var(--space-4));
   }
 
@@ -1316,7 +1319,7 @@
   min-width: 220px;
 }
 
-@media (width <= 620px) {
+@media (max-width: 620px) {
   .events-welcome__head {
     grid-template-columns: minmax(0, 1fr) auto;
   }
@@ -1454,7 +1457,7 @@
    Windows open in the middle now (ui.css `.panel--centre`), so the page is
    wider (centreWindow.ts may narrow it to clear the Events button), the
    login calendar two weeks of 7 and the timeline's marks bigger. */
-@media (width > 620px) and (height > 500px) {
+@media (min-width: 620.02px) and (min-height: 500.02px) {
   /* max-width: none past ui.css's `.panel` cap of 560px. */
   .events-panel {
     width: min(1000px, calc(100vw - 2 * var(--space-4)));
@@ -1506,7 +1509,7 @@
 /* A wide screen: the Frontier Pass across the top, a line under it, its two
    rewards side by side with bigger pictures; the events on now in the wide
    main column and Coming up in a column at the side. */
-@media (width >= 1100px) and (height > 500px) {
+@media (min-width: 1100px) and (min-height: 500.02px) {
   .events-page {
     display: grid;
     grid-template-columns: minmax(0, 1fr);

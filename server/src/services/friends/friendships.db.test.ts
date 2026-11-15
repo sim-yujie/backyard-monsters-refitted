@@ -128,7 +128,7 @@ describe.skipIf(!dbName)("the friends core on a real database (issue #368)", () 
     expect((await notices(B)).at(-1)).toEqual({ event: "accepted", userid: A, username: "zz_fr_alice" });
 
     const listA = await list_(A, T0 + 2 * DAY);
-    expect(listA).toMatchObject({ error: 0, max: 100, requestsIn: 0, giftsWaiting: 0, helpsLeft: 20 });
+    expect(listA).toMatchObject({ error: 0, max: 100, requestsIn: 0, giftsWaiting: 0 });
     expect(listA.friends).toEqual([
       {
         userid: B,

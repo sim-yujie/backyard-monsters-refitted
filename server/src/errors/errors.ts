@@ -1161,6 +1161,7 @@ export type AutoAttackRefusal =
   | "notACamp"
   | "noPlan"
   | "missing"
+  | "outOfRange"
   | "inFlight"
   | "busy"
   | "failed";
@@ -1170,6 +1171,7 @@ const AUTO_ATTACK_REFUSAL_MESSAGES: Record<AutoAttackRefusal, string> = {
   notACamp: "Only a wild monster camp on Map Room 2 can be auto-attacked.",
   noPlan: "Attack a camp of this tribe and level by hand first, then repeat that attack.",
   missing: "You do not have everything that attack used.",
+  outOfRange: "This camp is out of your Flingers' range.",
   inFlight: "Your last auto-attack is still being worked out.",
   busy: "The server is busy working out other attacks. Try again in a moment.",
   failed: "The auto-attack could not be worked out. Nothing was spent.",

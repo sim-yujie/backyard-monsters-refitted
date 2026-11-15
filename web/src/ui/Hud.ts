@@ -180,7 +180,7 @@ export interface HudOptions {
 }
 
 /** At or under this width the corner layout is the phone's (`yard-hud.css`). */
-const PHONE_QUERY = "(width <= 620px)";
+const PHONE_QUERY = "(max-width: 620px)";
 
 /**
  * A tapped resource's three Shiny offers in its bubble (Flash's "+" beside

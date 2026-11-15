@@ -5,7 +5,7 @@ import { consumeViewTarget } from "@/game/attack/attackTarget";
 import { friendTarget, loadFriendYard, NoFriendYard, visitFailureText, visitFriend } from "./friendVisit";
 
 const bob = { userid: 77, username: "Bob" };
-const yard = { error: 0, baseid: "1234", help: { helpsLeft: 17, buildings: {} } } as unknown as HelpYardResponse;
+const yard = { error: 0, baseid: "1234", help: { buildings: {} } } as unknown as HelpYardResponse;
 
 describe("visiting a friend (#372)", () => {
   it("targets the friend by user id, read-only, with no attack", () => {

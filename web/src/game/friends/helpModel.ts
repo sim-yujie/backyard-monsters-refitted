@@ -37,6 +37,8 @@ export type HelpChoice =
 export interface BuildingHelpView {
   readonly speedup?: HelpChoice;
   readonly repair?: HelpChoice;
+  /** Today's rewarded helps are used up: a help still goes through, for nothing. */
+  readonly rewardUsedUp?: true;
 }
 
 /**
@@ -45,7 +47,6 @@ export interface BuildingHelpView {
  * which gate holds and when it lifts (`tooNewText`).
  */
 export const HELP_REFUSAL_TEXT: Readonly<Record<string, string>> = {
-  dailyCap: "You have used all your helps for today. More tomorrow.",
   nothingToHelp: "There is nothing left to help with here.",
   alreadyHelped: "You have already sped up this job.",
   helpersFull: "5 friends have already sped up this job.",
@@ -85,7 +86,7 @@ export const buildingHelp = (block: HelpBlock | null, id: number, now?: number):
   const speedup = choiceOf(offer.speedup, block?.gate, now);
   const repair = choiceOf(offer.repair, block?.gate, now);
   if (!speedup && !repair) return null;
-  return { ...(speedup && { speedup }), ...(repair && { repair }) };
+  return { ...(speedup && { speedup }), ...(repair && { repair }), ...(block?.rewardsLeft === 0 && { rewardUsedUp: true as const }) };
 };
 
 /** The buildings that can take a help now: the ones with a wrench. */
@@ -98,11 +99,8 @@ export const helpableIds = (block: HelpBlock | null): Set<number> => {
   return ids;
 };
 
-/** "Helping Bob: 17 helps left today". */
-export const helpingLine = (name: string, helpsLeft: number): string =>
-  helpsLeft <= 0
-    ? `Helping ${name}: no helps left today`
-    : `Helping ${name}: ${formatAmount(helpsLeft)} ${helpsLeft === 1 ? "help" : "helps"} left today`;
+/** "Helping Bob". No count: there is no daily cap on helps (owner, 15 Nov 2026: was 20). */
+export const helpingLine = (name: string): string => `Helping ${name}`;
 
 /** The seconds left on a building's job now; its frozen time when paused. Null with no job. */
 export const timeLeft = (building: YardBuilding, now: number): number | null => {
@@ -190,12 +188,11 @@ export const thanksText = (kind: HelpKind, result: HelpResult, owner: string, bu
 };
 
 /**
- * The help block after a help went through: one fewer help today, and the
- * building's entry as it now stands. A speed-up leaves the job helped by this
- * player; a repair leaves nothing to repair. With no helps left, every offer
- * still open turns into the daily cap.
+ * The help block after a help went through: the rewarded helps left today
+ * and the building's entry as it now stands. A speed-up leaves the job
+ * helped by this player; a repair leaves nothing to repair.
  */
-export const afterHelp = (block: HelpBlock, id: number, kind: HelpKind, helpsLeft: number): HelpBlock => {
+export const afterHelp = (block: HelpBlock, id: number, kind: HelpKind, rewardsLeft: number): HelpBlock => {
   const key = String(id);
   const buildings: Record<string, HelpOffer> = {};
   for (const [other, offer] of Object.entries(block.buildings)) {
@@ -207,23 +204,17 @@ export const afterHelp = (block: HelpBlock, id: number, kind: HelpKind, helpsLef
         next = rest;
       }
     }
-    if (helpsLeft <= 0) {
-      next = {
-        ...(next.speedup !== undefined && { speedup: next.speedup === true ? "dailyCap" : next.speedup }),
-        ...(next.repair !== undefined && { repair: next.repair === true ? "dailyCap" : next.repair }),
-      };
-    }
     if (next.speedup !== undefined || next.repair !== undefined) buildings[other] = next;
   }
-  return { helpsLeft, buildings };
+  return { rewardsLeft, buildings };
 };
 
 /**
  * The help block after a help was refused: the reason now stands for that
  * kind on that building, so the panel and the wrench agree with the server;
  * a `tooNew`'s gate (`hold`) is kept so the panel says which and when.
- * A refusal about the whole visit (not friends, the daily cap, the yard under
- * attack) is left to the caller.
+ * A refusal about the whole visit (not friends, the yard under attack) is
+ * left to the caller.
  */
 export const afterRefusal = (block: HelpBlock, id: number, kind: HelpKind, reason: string, hold?: GateHold): HelpBlock => {
   const key = String(id);

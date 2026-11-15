@@ -53,7 +53,7 @@ describe("tabs stay fixed at the top", () => {
   });
 
   it("scrolls each Baiter tab under its row on a phone and a short screen, not the whole sheet", () => {
-    const small = media(css("styles/baiter.css"), "(width <= 620px), (height <= 500px)");
+    const small = media(css("styles/baiter.css"), "(max-width: 620px), (max-height: 500px)");
     expect(small).toMatch(/\.baiter-window \.panel__body:has\(\.baiter\) \{\s*overflow: hidden;/);
     expect(small).toMatch(/\.baiter__view \{[^}]*overflow-y: auto;/);
     expect(css("styles/baiter.css")).not.toMatch(/\.baiter-window \.panel__body:has\(\.baiter\) \{\s*overflow-y: auto;/);
@@ -79,23 +79,23 @@ describe("tabs stay fixed at the top", () => {
 describe("room under the fixed rows on a short screen", () => {
   it("lets the Hatchery's add bar scroll with the content below 960 px tall, and shrinks its tabs on a phone on its side", () => {
     const hatch = css("styles/hatch.css");
-    const short = media(hatch, "(height <= 960px)");
+    const short = media(hatch, "(max-height: 960px)");
     expect(short).toMatch(/\.hatch-info \{[^}]*position: relative;/);
     // After the phone's sticky bar, so it wins.
-    expect(hatch.indexOf("@media (height <= 960px)")).toBeGreaterThan(hatch.indexOf("position: sticky;"));
-    const side = media(hatch, "(height <= 500px)");
+    expect(hatch.indexOf("@media (max-height: 960px)")).toBeGreaterThan(hatch.indexOf("position: sticky;"));
+    const side = media(hatch, "(max-height: 500px)");
     expect(side).toMatch(/\.hatch-tab__art \{[^}]*height: 32px;/);
   });
 
   it("puts the Friends count, search and filters on one line on a phone on its side", () => {
-    const side = media(css("friends/friends.css"), "(width > 620px) and (height <= 500px)");
+    const side = media(css("friends/friends.css"), "(min-width: 620.02px) and (max-height: 500px)");
     expect(side).toMatch(/\.friends-tab--friends \{[^}]*display: grid;[^}]*grid-template-rows: auto auto minmax\(0, 1fr\);/);
     expect(side).toMatch(/\.friends-tab--friends > \.friends-tools \{[^}]*grid-area: 1 \/ 2;[^}]*flex-direction: row;/);
     expect(side).toMatch(/\.friends-tab--friends > \.friends-tab__body \{[^}]*grid-area: 3 \/ 1 \/ 4 \/ -1;/);
   });
 
   it("puts the Planner help's line beside its tabs, and lets Got it scroll, on a short screen", () => {
-    const side = media(css("styles/planner.css"), "(height <= 500px)");
+    const side = media(css("styles/planner.css"), "(max-height: 500px)");
     expect(side).toMatch(/\.planner-help \.panel__head \{[^}]*flex-direction: row;/);
     expect(side).toMatch(/\.planner-help__footer \{[^}]*position: static;/);
   });
@@ -154,7 +154,7 @@ describe("tab rows fill the width", () => {
   it("fills the title bar's room in Monsters and Chaos Weapons, and the whole second row on a phone", () => {
     const monsters = css("styles/monsters.css");
     expect(rule(monsters, ".monsters-screen .monsters-tabs")).toMatch(/flex: 1 1 0;\s*min-width: 0;/);
-    const phone = media(monsters, "(width <= 620px)");
+    const phone = media(monsters, "(max-width: 620px)");
     expect(phone).toMatch(/\.monsters-screen \.monsters-tabs \{\s*order: 1;\s*flex: 1 0 100%;\s*\}/);
   });
 

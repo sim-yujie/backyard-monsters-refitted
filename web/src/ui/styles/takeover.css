@@ -230,7 +230,7 @@
   color: var(--colour-danger);
 }
 
-@media (width <= 420px) {
+@media (max-width: 420px) {
   .takeover-dialog__choice {
     grid-template-columns: 1fr;
   }

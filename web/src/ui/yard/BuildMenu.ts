@@ -86,13 +86,13 @@ export interface BuildMenuOptions {
 }
 
 /** The layout that stacks the info over the tiles and carries with a Build here button. */
-const PHONE_QUERY = "(width <= 620px), (pointer: coarse)";
+const PHONE_QUERY = "(max-width: 620px), (pointer: coarse)";
 
 const isPhone = (): boolean =>
   typeof window !== "undefined" && window.matchMedia?.(PHONE_QUERY).matches === true;
 
 /** The info over the tiles rather than beside them: a phone, or a screen too short for both (a phone on its side). */
-const STACKED_QUERY = `${PHONE_QUERY}, (height <= 500px)`;
+const STACKED_QUERY = `${PHONE_QUERY}, (max-height: 500px)`;
 
 const isStacked = (): boolean =>
   typeof window !== "undefined" && window.matchMedia?.(STACKED_QUERY).matches === true;

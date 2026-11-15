@@ -16,8 +16,7 @@ import {
 import { FRIEND_LIMITS } from "../../services/friends/friendRules.js";
 import { setFriendPinned } from "../../services/friends/friendPins.js";
 import { countWaitingGifts, giftedToday } from "../../services/friends/gifts.js";
-import { friendsHelp, helpsToday } from "../../services/friends/helpFacts.js";
-import { helpsLeftOf } from "../../services/friends/helpRules.js";
+import { friendsHelp } from "../../services/friends/helpFacts.js";
 import {
   allianceSuggestions,
   countIncoming,
@@ -51,10 +50,9 @@ export const PinSchema = z.object({ userid: id, pinned: z.boolean() });
 
 /** `GET /bm/friends`: the list and the counts the bar and screen show. */
 export const friendsAnswer = async (em: EntityManager, user: User, now: number): Promise<FriendsBody> => {
-  const [listed, requestsIn, today, giftsWaiting] = await Promise.all([
+  const [listed, requestsIn, giftsWaiting] = await Promise.all([
     listFriends(em, user.userid, now),
     countIncoming(em, user.userid, now),
-    helpsToday(em, user.userid, now),
     countWaitingGifts(em, user.userid, now),
   ]);
   const ids = listed.map((friend) => friend.userid);
@@ -71,7 +69,6 @@ export const friendsAnswer = async (em: EntityManager, user: User, now: number):
     maxPinned: FRIEND_LIMITS.maxPinned,
     requestsIn,
     giftsWaiting,
-    helpsLeft: helpsLeftOf(today),
   };
 };
 

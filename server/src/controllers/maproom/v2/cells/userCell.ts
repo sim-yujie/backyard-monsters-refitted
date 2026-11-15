@@ -28,6 +28,20 @@ export type UserCellFields =
 
 export type UserCellOwner = Loaded<User, "save", "userid" | "username" | "pic_square" | "alliance_id" | "save.points" | "save.basevalue">;
 
+/**
+ * `f`: an own cell's Flinger level as of now (`flingerLevelsNow`, which
+ * `getArea` reads for every own cell in view), the level the server's range
+ * check uses. The stored column lags until the yard is next written: an
+ * outpost's Flinger finished building while nobody opened it read 0 here,
+ * so the map called a camp out of range that the server let the player
+ * attack (Repeat attack, 15 Nov 2026). The column stands in when the level
+ * was not looked up.
+ */
+const flingerNow = (flingers: unknown, baseid: string, stored: number | undefined): number | undefined => {
+  const level = flingers instanceof Map ? flingers.get(baseid) : undefined;
+  return typeof level === "number" ? level : stored;
+};
+
 /** `wf`: when the own outpost's busy worker is free again, when that is known. */
 const workerFinish = (busy: unknown, saveId: number): { wf: number } | undefined => {
   const finishAt = busy instanceof Map ? busy.get(saveId) : undefined;
@@ -49,7 +63,7 @@ type Cell = Loaded<WorldMapCell, "save", UserCellFields>;
  */
 export const userCell = async (ctx: Context, cell: Cell, cellOwners: Map<number, UserCellOwner>) => {
   const currentUser: User = ctx.authUser;
-  const { online: onlineNow, truces, pendingInvites, idleWorkers, busyWorkers, attackers, friends, pinnedFriends, attacked, photos } =
+  const { online: onlineNow, truces, pendingInvites, idleWorkers, busyWorkers, attackers, friends, pinnedFriends, attacked, photos, flingers } =
     ctx.state;
 
   const mine = currentUser.userid === cell.uid;
@@ -112,7 +126,8 @@ export const userCell = async (ctx: Context, cell: Cell, cellOwners: Map<number,
     // Flinger and Catapult levels on the viewer's own cells only (owner
     // decision 2026-10-22): Flash showed anyone's, but someone else's yard
     // keeps its levels hidden on the map as it does in the yard view.
-    ...(mine && { f: cellSave.flinger, c: cellSave.catapult }),
+    // The Flinger as of now, as the range check reads it (`flingerNow`).
+    ...(mine && { f: flingerNow(flingers, cell.baseid, cellSave.flinger), c: cellSave.catapult }),
     t: truceExpiry,
     // 1 on a base whose owner has ever attacked the viewer: the map's red plate.
     ...(!mine && (attackers as Set<number> | undefined)?.has(cellOwner.userid) && { ak: 1 }),

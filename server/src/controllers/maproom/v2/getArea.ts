@@ -26,6 +26,7 @@ import { isVisible } from "../../../game-rules/maproom/sight.js";
 import { mr2HexShape, mr2NeighbourBonusMode } from "../../../config/MapRoom2Config.js";
 import { loadAreaNeighbourCounts } from "../../../services/maproom/v2/neighbourDefence.js";
 import { visiblePhotos } from "../../../services/profile/visiblePhoto.js";
+import { flingerLevelsNow } from "../../../services/yard/flingerLevelsNow.js";
 
 /**
  * Wraps a zone coordinate to the world's `0..size-1`: `getarea`'s 11×11 block
@@ -256,7 +257,10 @@ export const getArea: KoaController = async (ctx) => {
     .filter((cell) => cell.uid === user.userid && cell.base_type === MapRoomCell.OUTPOST && cell.save)
     .map((cell) => cell.save!.basesaveid);
 
-  const [ownersList, online, truces, pendingInvites, workers, attackers, friendMarks, attacked, photos] = await Promise.all([
+  // The player's own yard and outposts here, for their Flinger level as of now (`f`).
+  const ownBaseids = visibleDbCells.filter((cell) => cell.uid === user.userid).map((cell) => cell.baseid);
+
+  const [ownersList, online, truces, pendingInvites, workers, attackers, friendMarks, attacked, photos, flingers] = await Promise.all([
     postgres.em.find(User, { userid: { $in: ownerIds } }, {
       populate: ["save"],
       fields: CELL_OWNER_FIELDS,
@@ -276,6 +280,10 @@ export const getArea: KoaController = async (ctx) => {
     attackedBetween(postgres.em, user.userid, ownerIds),
     // Their uploaded photos others may see (owner, 13 Nov 2026), one query for the area: `photo`.
     visiblePhotos(postgres.em, ownerIds),
+    // Each own Flinger's level as the range check reads it (`validateRange.ts`):
+    // a build or upgrade that ran out since the yard was last written counts now,
+    // so the map's range, its Attack button and the server agree.
+    flingerLevelsNow(ownBaseids),
   ]);
 
   const cellOwners = new Map(ownersList.map((u) => [u.userid, u]));
@@ -290,6 +298,7 @@ export const getArea: KoaController = async (ctx) => {
   ctx.state.pinnedFriends = friendMarks.pinned;
   ctx.state.attacked = attacked;
   ctx.state.photos = photos;
+  ctx.state.flingers = flingers;
 
   const allianceIds = new Set<number>();
 

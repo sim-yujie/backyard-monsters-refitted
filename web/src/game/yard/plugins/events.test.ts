@@ -146,7 +146,7 @@ describe("Events: opening the page", () => {
   it("opens at the top on a computer, with the Frontier Pass in view", async () => {
     const scrollIntoView = vi.fn();
     Element.prototype.scrollIntoView = scrollIntoView;
-    const matchMedia = vi.fn((query: string) => ({ matches: query.includes("width > 620px") }) as MediaQueryList);
+    const matchMedia = vi.fn((query: string) => ({ matches: query.includes("min-width: 620.02px") }) as MediaQueryList);
     vi.stubGlobal("matchMedia", matchMedia);
     try {
       const { door } = await setup([hunt(12)]);
@@ -186,7 +186,7 @@ describe("Events: the button while its page is open", () => {
 
   it("is hidden then on a phone, upright or on its side, and only there", () => {
     const hide = /@media ([^{]+)\{\s*\.events-door\[aria-expanded="true"\] \{\s*visibility: hidden;/.exec(eventsCss);
-    expect(hide?.[1]?.trim()).toBe("(width <= 620px), (height <= 500px)");
+    expect(hide?.[1]?.trim()).toBe("(max-width: 620px), (max-height: 500px)");
   });
 });
 

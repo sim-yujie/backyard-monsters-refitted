@@ -358,7 +358,7 @@
   --font-display-descent: 0.29em;
 }
 
-@media (width <= 620px), (pointer: coarse) {
+@media (max-width: 620px), (pointer: coarse) {
   :root {
     --control-height-compact: 44px;
   }

@@ -109,7 +109,7 @@ describe("AccountSettings", () => {
     );
     expect(ui).toMatch(/\.account-settings__tab-short \{\s*display: none;/);
     expect(ui).toMatch(
-      /@media \(width <= 500px\) \{\s*\.account-settings__tab-long \{\s*display: none;\s*\}\s*\.account-settings__tab-short \{\s*display: inline;/,
+      /@media \(max-width: 500px\) \{\s*\.account-settings__tab-long \{\s*display: none;\s*\}\s*\.account-settings__tab-short \{\s*display: inline;/,
     );
   });
 

@@ -434,6 +434,7 @@
 
 .building-panel--housing {
   max-height: calc(100vh - var(--hud-height) - var(--space-6));
+  max-height: calc(100dvh - var(--hud-height) - var(--space-6));
 }
 
 .building-panel--housing .panel__titlebar {
@@ -584,10 +585,11 @@
 
 /* A phone (R-Housing-phone): a sheet from the bottom with a handle, no
    line of purpose, and the rest a size smaller. */
-@media (width <= 620px) {
+@media (max-width: 620px) {
   .map-dock--right:has(> .building-panel--housing) {
     width: auto;
     max-height: calc(100vh - 212px);
+    max-height: calc(100dvh - 212px);
   }
 
   .building-panel--housing {

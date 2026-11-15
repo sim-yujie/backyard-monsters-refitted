@@ -409,7 +409,7 @@ describe("ChampionPanel: one screen at 1280x800 (lead, 28 Oct)", () => {
       /\.champion__header--hero \{\s*display: grid;\s*grid-template-columns: 128px minmax\(0, 1fr\) 184px;/,
     );
     expect(css).toMatch(/\.champion__header--hero > \.champion__acts \{\s*grid-row: 1;\s*grid-column: 3;/);
-    const phone = css.slice(css.indexOf("@media (width <= 620px)"));
+    const phone = css.slice(css.indexOf("@media (max-width: 620px)"));
     expect(phone).toMatch(/\.champion__header--hero \{\s*grid-template-columns: 104px minmax\(0, 1fr\);/);
     expect(phone).toMatch(
       /\.champion__header--hero > \.champion__acts \{\s*grid-row: auto;\s*grid-column: 1 \/ -1;\s*grid-template-columns: minmax\(0, 1fr\);/,

@@ -14,7 +14,7 @@ import { playerMapVersion } from "../../maproom/playerMapVersion.js";
 import { calculateTribeLevel } from "../../maproom/v2/calculateTribeLevel.js";
 import { cellCoordsFromBaseId, outpostsNearCell, type CellCoords } from "../../maproom/v2/rangeCheck.js";
 import { TAKEOVER_DAMAGE } from "../../maproom/v2/takeoverRules.js";
-import { rangeCheckV2, validateRange } from "../../maproom/v2/validateRange.js";
+import { rangeCheckV2 } from "../../maproom/v2/validateRange.js";
 import { isWildMonsterExpired } from "../../maproom/wildMonsterExpiry.js";
 import { isCampInPlay } from "../../maproom/campInPlay.js";
 import { catchUpArmyRow } from "../../yard/armies.js";
@@ -279,7 +279,10 @@ export const runAutoAttack = async (user: User, baseid: string): Promise<AutoAtt
     const stored = await findAttackPlan(userid, camp.key);
     if (!stored) throw autoAttackRefusedErr("noPlan");
 
-    await validateRange(user, MapRoomVersion.V2, { baseid, cell: camp.cell });
+    // The range rule a hand-played attack meets (`validateRange`), refused in
+    // words the confirm sheet shows rather than the hand path's bare error.
+    const { verdict } = await rangeCheckV2(user, { baseid, cell: camp.cell });
+    if (!verdict.ok) throw autoAttackRefusedErr("outOfRange");
 
     const missing = await shortfallOf(user, camp, stored, now);
     if (missing.length > 0) throw autoAttackRefusedErr("missing", { missing });

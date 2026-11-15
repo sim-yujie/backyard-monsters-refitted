@@ -183,6 +183,15 @@ describe("GET /bm/events after a hunt ends", () => {
     const views = (await eventsAnswer(em, store, topped, DEC_3)).events.map((view) => view.id);
     expect(views).not.toContain("krallen-2026-11");
   });
+
+  test("next month's hunt is not coming up while this month's runs; it is once this one is over (owner, 15 Nov 2026)", async () => {
+    const store = memoryProgressStore();
+    const NOV_15 = Date.UTC(2026, 10, 15, 13, 30) / 1000;
+    const during = await ids(store, NOV_15);
+    expect(during).toContain("krallen-2026-11:active");
+    expect(during.filter((id) => id.startsWith("krallen-2026-12"))).toEqual([]);
+    expect(await ids(store, DEC_3)).toContain("krallen-2026-12:upcoming");
+  });
 });
 
 describe("POST /bm/whatsnew/seen body", () => {

@@ -340,7 +340,7 @@ export const openCentreWindow = (): HTMLElement | null =>
   current && shown(current.element) ? current.element : null;
 
 /** The screens ui.css centres middle windows on: not a phone, upright or on its side. */
-export const CENTRED_LAYOUT_QUERY = "(width > 620px) and (height > 500px)";
+export const CENTRED_LAYOUT_QUERY = "(min-width: 620.02px) and (min-height: 500.02px)";
 
 /**
  * Whether windows open in the middle here. A phone keeps its sheets, and

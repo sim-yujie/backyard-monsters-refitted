@@ -120,7 +120,7 @@ describe("Champion tab", () => {
       readFileSync(resolve(here, path), "utf8").replace(/\r\n/g, "\n");
     const skin = css("../styles/skin.css");
     // Inside the phone block of skin.css, which closes at the first unindented brace.
-    const start = skin.indexOf("@media (width <= 620px), (height <= 500px) {");
+    const start = skin.indexOf("@media (max-width: 620px), (max-height: 500px) {");
     const phone = skin.slice(start, skin.indexOf("\n}\n", start));
     expect(phone).toMatch(
       /:root\[data-skin\] \.monsters-screen \.tab-row > \.tabs__tab \{\s*padding-inline: 2px;\s*font-size: min\(var\(--text-sm\), 3vw\);/,
