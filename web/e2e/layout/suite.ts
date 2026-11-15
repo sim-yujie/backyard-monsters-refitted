@@ -1,5 +1,14 @@
 import { expect, test, type Page } from "@playwright/test";
-import { closeAll, fillWorldChat, openGame, tapYardMiddle, type Game } from "./game";
+import {
+  chatLines,
+  closeAll,
+  closeWorldChat,
+  fillWorldChat,
+  openGame,
+  tapYardMiddle,
+  yardIsUp,
+  type Game,
+} from "./game";
 import { knownFailure } from "./knownFailures";
 import { checkWindow, pageFacts, type CheckArgs, type CheckReport } from "./measure";
 import { selectedProfiles, type Profile } from "./profiles";
@@ -34,7 +43,7 @@ const animationsDone = async (page: Page, selector: string): Promise<void> => {
 };
 
 /** Measures until two readings in a row pass (lists load over the network), or time runs out. */
-const settle = async (page: Page, args: CheckArgs, timeout = 12_000): Promise<CheckReport> => {
+const settle = async (page: Page, args: CheckArgs, timeout = 8_000): Promise<CheckReport> => {
   await animationsDone(page, args.panelSelector);
   const end = Date.now() + timeout;
   let passes = 0;
@@ -64,10 +73,11 @@ const expectWindow = async (
   profile: Profile,
   win: WindowCase,
   where: string,
+  withItems = true,
 ): Promise<void> => {
   const report = await settle(page, {
     panelSelector: win.panel,
-    itemSelector: win.items,
+    itemSelector: withItems ? win.items : null,
     minList: settings.minList,
     tolerance: TOLERANCE,
   });
@@ -111,29 +121,56 @@ const checkTabs = async (page: Page, profile: Profile, win: WindowCase): Promise
         .toBe(true);
       if (!clicked) continue;
     }
-    await expectWindow(page, profile, win, `tab "${name}"`);
+    // A tab may be empty (an empty-state line counts as drawn), so its items are not required.
+    await expectWindow(page, profile, win, `tab "${name}"`, false);
   }
 };
 
-/** One window's check, as a step; a thrown error is recorded and the run goes on. */
+/** What each screen's run did, attached as a summary. */
+interface Tally {
+  readonly checked: string[];
+  readonly skipped: string[];
+  readonly fixme: string[];
+}
+
+/**
+ * One window's check, as a step; a thrown error is recorded and the run goes
+ * on. `run` returns null when it checked the window, false when it skipped
+ * and said why itself, or why there was no way in: that fails unless
+ * `optional`, else the step is listed as skipped.
+ */
 const windowStep = async (
   page: Page,
   profile: Profile,
   win: WindowCase,
   stepId: string,
-  run: () => Promise<string | null>,
+  tally: Tally,
+  run: () => Promise<string | null | false>,
 ): Promise<void> => {
   const note = knownFailure(profile.id, stepId);
   await test.step(win.label + (stepId === win.id ? "" : ` (${stepId})`), async () => {
     if (note !== undefined) {
+      tally.fixme.push(`${stepId} (${note})`);
       test.info().annotations.push({ type: "fixme", description: `${stepId}: ${note}` });
       return;
     }
     try {
       await closeAll(page);
-      const skipped = await run();
-      if (skipped)
-        test.info().annotations.push({ type: "skipped", description: `${stepId}: ${skipped}` });
+      const yard = await yardIsUp(page);
+      expect.soft(yard, `the yard is up before ${win.label} on ${profile.label}`).toBe(true);
+      if (!yard) return;
+      const noWayIn = await run();
+      if (noWayIn === false) {
+        // Skipped, and already recorded by the step itself.
+      } else if (noWayIn === null) {
+        tally.checked.push(stepId);
+      } else if (win.optional) {
+        tally.skipped.push(`${stepId} (${noWayIn})`);
+        test.info().annotations.push({ type: "skipped", description: `${stepId}: ${noWayIn}` });
+      } else {
+        await attachShot(page, `${profile.id}-${stepId}-no-way-in`);
+        expect.soft(noWayIn, `${win.label} opens on ${profile.label}`).toBe("opened");
+      }
     } catch (error) {
       await attachShot(page, `${profile.id}-${stepId}-error`);
       expect
@@ -146,6 +183,9 @@ const windowStep = async (
   });
 };
 
+/** The fewest World chat lines that count as a busy chat. */
+const CHAT_MIN_LINES = 3;
+
 /**
  * One test per screen, one step per window: the game boots once per screen
  * (a failed test would make Playwright start a new worker and boot again), and
@@ -157,7 +197,8 @@ export const defineLayoutSuite = (profileIds: readonly string[]): void => {
     test(`${profile.id} ${profile.width}x${profile.height}: every window`, async ({
       browser,
     }) => {
-      test.setTimeout(settings.bootTimeout + 20 * 60_000);
+      test.setTimeout(settings.bootTimeout + 12 * 60_000);
+      const tally: Tally = { checked: [], skipped: [], fixme: [] };
       const game: Game = await openGame(browser, profile, test.info().parallelIndex);
       const page = game.page;
       try {
@@ -168,6 +209,11 @@ export const defineLayoutSuite = (profileIds: readonly string[]): void => {
           // BuildMenu and the chat pick their touch layout from (pointer: coarse);
           // if WebKit's touch emulation does not set it, the touch screens here
           // are not testing the iPad's layout at all.
+          const note = knownFailure(profile.id, "screen");
+          if (note !== undefined) {
+            test.info().annotations.push({ type: "fixme", description: `screen: ${note}` });
+            return;
+          }
           expect
             .soft(
               facts.coarse,
@@ -177,7 +223,7 @@ export const defineLayoutSuite = (profileIds: readonly string[]): void => {
         });
 
         for (const win of WINDOWS) {
-          await windowStep(page, profile, win, win.id, async () => {
+          await windowStep(page, profile, win, win.id, tally, async () => {
             if (!(await win.open(page))) return "no way in on this screen";
             await expectWindow(page, profile, win, "as opened");
             if (win.tabs) await checkTabs(page, profile, win);
@@ -185,35 +231,52 @@ export const defineLayoutSuite = (profileIds: readonly string[]): void => {
           });
         }
 
+        for (const id of CHAT_WINDOWS) {
+          const win = WINDOWS.find((item) => item.id === id);
+          if (!win) continue;
+          await windowStep(page, profile, win, `${win.id}+chat`, tally, async () => {
+            const said = await fillWorldChat(page);
+            test.info().annotations.push({ type: "chat", description: said });
+            if (said.startsWith("no World chat")) {
+              tally.skipped.push(`${win.id}+chat (${said})`);
+              return false;
+            }
+            expect
+              .soft(await chatLines(page), `World chat lines on ${profile.label}`)
+              .toBeGreaterThanOrEqual(CHAT_MIN_LINES);
+            if (!(await win.open(page))) return "no way in on this screen";
+            await expectWindow(page, profile, win, "with World chat full");
+            return null;
+          });
+        }
+        await closeAll(page);
+        await closeWorldChat(page);
+
+        // Last: a blind tap on the yard may leave a building picked up.
         const building: WindowCase = {
           id: "building",
           label: "Building side panel",
           panel: ".building-panel",
           items: null,
+          optional: true,
           tabs: false,
           open: async () => true,
         };
-        await windowStep(page, profile, building, building.id, async () => {
+        await windowStep(page, profile, building, building.id, tally, async () => {
           if (!(await tapYardMiddle(page, profile))) {
             return "no building under the middle of the screen (the yard is a canvas; the tap is blind)";
           }
           await expectWindow(page, profile, building, "as opened");
           return null;
         });
-
-        for (const id of CHAT_WINDOWS) {
-          const win = WINDOWS.find((item) => item.id === id);
-          if (!win) continue;
-          await windowStep(page, profile, win, `${win.id}+chat`, async () => {
-            const said = await fillWorldChat(page);
-            test.info().annotations.push({ type: "chat", description: said });
-            if (said.startsWith("no World chat")) return said;
-            if (!(await win.open(page))) return "no way in on this screen";
-            await expectWindow(page, profile, win, "with World chat full");
-            return null;
-          });
-        }
       } finally {
+        test.info().annotations.push({
+          type: "summary",
+          description:
+            `checked ${tally.checked.length}: ${tally.checked.join(", ") || "none"}` +
+            ` | skipped ${tally.skipped.length}: ${tally.skipped.join(", ") || "none"}` +
+            ` | fixme ${tally.fixme.length}: ${tally.fixme.join(", ") || "none"}`,
+        });
         await game.context.close();
       }
     });

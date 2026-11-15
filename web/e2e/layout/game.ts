@@ -69,9 +69,13 @@ export const openGame = async (
   const { email, password } = account(workerIndex);
   const session = await signIn(email, password);
   const context = await browser.newContext({ ...profile.context, baseURL: settings.webUrl });
+  // Seeded once per tab: the game swaps the token for a fresh one on boot and
+  // the server drops the old one, so a reload must keep the game's own copy.
   await context.addInitScript((stored) => {
     try {
+      if (window.sessionStorage.getItem("layout-check-seeded")) return;
       window.localStorage.setItem("bymr.session", stored);
+      window.sessionStorage.setItem("layout-check-seeded", "1");
     } catch {
       // No storage: the game shows its login screen and boot reports it.
     }
@@ -178,9 +182,9 @@ export const closeAll = async (page: Page): Promise<void> => {
  * bubble menu the button may be folded into Menu or More first.
  */
 export const pressDock = async (page: Page, name: string): Promise<boolean> => {
-  const button = page.locator(`.yard-dock__button[data-dock="${name}"]`);
+  const button = page.locator(`.yard-dock__button[data-dock="${name}"]`).first();
   if ((await button.count()) === 0) return false;
-  if (!(await button.first().isVisible())) {
+  if (!(await button.isVisible())) {
     for (const holder of ["more", "menu"]) {
       const opener = page.locator(`.yard-dock__button[data-dock="${holder}"]`);
       if (await opener.isVisible()) {
@@ -189,8 +193,22 @@ export const pressDock = async (page: Page, name: string): Promise<boolean> => {
       }
     }
   }
-  await button.first().click({ timeout: 5000 });
+  const shown = await button
+    .waitFor({ state: "visible", timeout: 3000 })
+    .then(() => true)
+    .catch(() => false);
+  if (!shown) return false;
+  await button.click({ timeout: 5000 });
   return true;
+};
+
+/** The own yard is still up (Build pressable); reloads once if not. */
+export const yardIsUp = async (page: Page): Promise<boolean> => {
+  const build = page.locator('.yard-dock__button[data-dock="build"]:not([disabled])');
+  if (await build.isVisible()) return true;
+  await page.reload();
+  await waitForYard(page);
+  return build.isVisible();
 };
 
 /** Opens the Shop from the Shiny readout in the top bar. */
@@ -262,4 +280,18 @@ export const fillWorldChat = async (page: Page, lines = 6): Promise<string> => {
     })
     .catch(() => undefined);
   return `World chat open with ${await page.locator(".chat-line").count()} lines`;
+};
+
+/** Lines showing in World chat now. */
+export const chatLines = (page: Page): Promise<number> => page.locator(".chat-line").count();
+
+/** Shuts World chat again so later checks see the plain yard. */
+export const closeWorldChat = async (page: Page): Promise<void> => {
+  const tab = page.locator(".chat-box__tab").first();
+  if (
+    (await tab.isVisible().catch(() => false)) &&
+    (await tab.getAttribute("aria-expanded")) === "true"
+  ) {
+    await tab.click().catch(() => undefined);
+  }
 };

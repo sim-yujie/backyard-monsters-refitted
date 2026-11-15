@@ -4,9 +4,11 @@ import { openAchievements, openShop, pressDock } from "./game";
 /**
  * Every window the layout check opens on the own yard.
  *
- * `open` returns false when the window has no way in on this screen or build
- * (the test then skips, saying so); a window that does open but breaks a rule
- * fails. `items` names the list's items when a sandbox yard always has some;
+ * `open` returns false when the window has no way in on this screen: a fail,
+ * unless the window is `optional` (then the step is listed as skipped). A
+ * window that opens but breaks a rule fails. `items` names the list's items
+ * when a sandbox yard always has some (checked as the window opens, not on
+ * every tab, since a tab may be empty);
  * windows that may be empty on a fresh account (Mail, Friends, Alerts,
  * Defences, Quests) only need something drawn, an empty-state line counts.
  */
@@ -16,6 +18,11 @@ export interface WindowCase {
   /** The window's own class on its `.panel`. */
   readonly panel: string;
   readonly items: string | null;
+  /**
+   * A window the sandbox yard may not offer (Events outside an event,
+   * Alliance): no way in skips it. For every other window no way in fails.
+   */
+  readonly optional?: boolean;
   /** Click through the window's tabs and check each. */
   readonly tabs: boolean;
   readonly open: (page: Page) => Promise<boolean>;
@@ -42,6 +49,7 @@ export const WINDOWS: readonly WindowCase[] = [
   },
   {
     id: "events",
+    optional: true,
     label: "Events",
     panel: ".events-panel",
     items: null,
@@ -114,6 +122,7 @@ export const WINDOWS: readonly WindowCase[] = [
   },
   {
     id: "alliance",
+    optional: true,
     label: "Alliance",
     panel: ".alliance-window",
     items: null,

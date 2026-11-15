@@ -46,7 +46,7 @@ const profile = (
     context: {
       ...options,
       viewport: { width, height },
-      screen: { width: Math.max(width, height), height: Math.min(width, height) },
+      screen: { width, height },
       deviceScaleFactor: 1,
     },
   };

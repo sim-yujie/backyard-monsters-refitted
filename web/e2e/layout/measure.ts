@@ -100,9 +100,10 @@ export const checkWindow = (args: CheckArgs): CheckReport => {
   const visibleBox = (element: Element): Box => {
     let box = intersect(boxOf(element), screen);
     let fixed = getComputedStyle(element).position === "fixed";
+    // The body's and the page's overflow belong to the screen, already cut above.
     for (
       let at = element.parentElement;
-      at && at !== document.documentElement;
+      at && at !== document.body && at !== document.documentElement;
       at = at.parentElement
     ) {
       const style = getComputedStyle(at);

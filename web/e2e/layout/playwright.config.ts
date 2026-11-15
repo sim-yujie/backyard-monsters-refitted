@@ -49,8 +49,11 @@ export default defineConfig({
   // screen; files spread over the workers, one account per worker.
   fullyParallel: false,
   workers: Number(process.env["LAYOUT_WORKERS"] ?? (ci ? 2 : 1)),
-  retries: ci ? 1 : 0,
-  globalTimeout: 50 * 60_000,
+  // No retries: a retry reboots a whole screen (minutes), and a layout fault
+  // that only shows sometimes should be seen, not hidden.
+  retries: 0,
+  // Under the CI job's 60 minutes, so the report is still written and uploaded.
+  globalTimeout: 40 * 60_000,
   reporter: [
     ["list"],
     ["html", { outputFolder: resolve(here, "report"), open: "never" }],
