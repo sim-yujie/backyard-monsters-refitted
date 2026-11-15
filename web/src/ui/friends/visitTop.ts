@@ -1,5 +1,5 @@
 import type { ResourceAmounts } from "@/api/friends";
-import { formatShort } from "@/ui/format";
+import { formatCompact } from "@/ui/format";
 import { resourceIcon } from "../resourceIcon";
 import { make } from "./rows";
 
@@ -41,7 +41,7 @@ const amountsOf = (reward: ResourceAmounts): (readonly [(typeof KEYS)[number], n
 /** Counts `node`'s text up to "+amount" over `ms`; at once when `ms` is 0. */
 const countUp = (node: HTMLElement, amount: number, ms: number): void => {
   const write = (value: number): void => {
-    node.textContent = `+${formatShort(value)}`;
+    node.textContent = `+${formatCompact(value)}`;
   };
   if (ms <= 0 || typeof requestAnimationFrame === "undefined") {
     write(amount);

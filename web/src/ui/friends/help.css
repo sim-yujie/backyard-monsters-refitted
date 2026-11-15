@@ -304,12 +304,6 @@
   justify-content: flex-end;
 }
 
-/* What sits under the HUD (the World chat tab, the wrenches' clear band)
-   follows the one bar's height, not the readouts'. */
-:root:has(.hud--corner.hud--visit-top) {
-  --hud-bar-height: 48px;
-}
-
 .friend-visit.friend-visit--corner {
   top: var(--hud-inset);
   left: var(--hud-inset);
@@ -353,6 +347,11 @@
   vertical-align: 0;
 }
 
+/* Whatever the width, a reward never spills out of the bar's frame. */
+.help-all-bar__result:has(.visit-reward) {
+  overflow-x: clip;
+}
+
 /* After the tools, the tick and the count, a thin rule, then the reward. */
 .help-all-done > .visit-reward {
   margin-left: var(--space-1);
@@ -389,6 +388,56 @@
   }
 }
 
+/* Not a wide desktop (a phone, an iPad, a split screen): the bar stops at
+   the account, so the reward takes the row and the name waits, as for a
+   line of words; four amounts of their own go without the tools and tick. */
+@media (max-width: 1100px) {
+  .friend-visit--corner .help-all-bar--result:has(> .help-all-bar__result .visit-reward) .help-all-bar__name {
+    display: none;
+  }
+
+  .friend-visit--corner .help-all-bar--result:has(> .help-all-bar__result .visit-reward) .help-all-bar__result {
+    padding-left: 0;
+    border-left: 0;
+  }
+
+  .help-all-done:has(> .visit-reward--each) > :not(.visit-reward) {
+    display: none;
+  }
+
+  .help-all-bar__result .visit-reward--each {
+    margin-left: 0;
+    padding-left: 0;
+    border-left: 0;
+    font-size: var(--text-sm);
+  }
+}
+
+/* Narrower still: the four amounts close up to fit beside the account. */
+@media (max-width: 760px) {
+  .help-all-bar__result .visit-reward--each {
+    gap: 3px;
+    font-size: 11px;
+  }
+
+  .help-all-bar__result .visit-reward--each .visit-reward__pair {
+    gap: 1px;
+  }
+
+  .help-all-bar__result .visit-reward--each .res-icon {
+    height: 14px;
+  }
+
+  .visit-reward-chip .visit-reward {
+    gap: var(--space-2);
+    font-size: var(--text-xs, var(--text-sm));
+  }
+
+  .visit-reward-chip .res-icon {
+    height: 16px;
+  }
+}
+
 @media (max-width: 620px) {
   /* An upright phone: the critter alone, top right; the bar takes the rest
      of the row from the left, and the chip the row under it. */
@@ -402,6 +451,9 @@
     display: none;
   }
 
+  /* What sits under the HUD (the World chat tab, a docked panel) follows
+     the one row left, not the readouts' two. Wider screens keep their
+     height: the account pill is as tall as the readouts were. */
   :root:has(.hud--corner.hud--visit-top) {
     --hud-bar-height: 44px;
   }
@@ -416,37 +468,6 @@
   /* The name alone, without "'s yard": a 12-letter name fits beside Help all. */
   .friend-visit--corner .help-all-bar__name-rest {
     display: none;
-  }
-
-  /* The reward needs the row: the name waits, as for a line of words. */
-  .help-all-bar--result:has(> .help-all-bar__result .visit-reward) .help-all-bar__name {
-    display: none;
-  }
-
-  .help-all-bar--result:has(> .help-all-bar__result .visit-reward) .help-all-bar__result {
-    padding-left: 0;
-    border-left: 0;
-  }
-
-  /* Four amounts of their own (not the usual one for all four) fill the row by themselves. */
-  .help-all-done:has(> .visit-reward--each) > :not(.visit-reward) {
-    display: none;
-  }
-
-  .help-all-bar__result .visit-reward--each {
-    margin-left: 0;
-    padding-left: 0;
-    border-left: 0;
-    gap: 3px;
-    font-size: 11px;
-  }
-
-  .help-all-bar__result .visit-reward--each .visit-reward__pair {
-    gap: 1px;
-  }
-
-  .help-all-bar__result .visit-reward--each .res-icon {
-    height: 14px;
   }
 
   .visit-reward {
