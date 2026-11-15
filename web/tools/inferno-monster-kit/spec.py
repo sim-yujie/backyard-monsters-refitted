@@ -30,6 +30,13 @@ SPECS = {
         # animated sheet: the cell grows by (left/right, top, bottom) 1x pixels
         anim_pad=(6, 12, 2),
         walk_lift=(0, 1, 3, 0, 1, 3),    # 1x pixels each walk frame is lifted off the ground (the hop)
+        # prompt words that are this monster's own (the scripts hold only the generic parts)
+        features="flame crown and face",
+        face_marks="the yellow face marks (eyes and grin)",
+        portrait_note="for painting style and fire texture only. Do NOT copy its red lower shell, nose or proportions",
+        light="the fireball glows evenly from within; no light from one side, no cast shadow on the body, so the left and right halves are lit the same",
+        texture="rich glowing fire texture",
+        no_fx="No sparks, embers, smoke, motion streaks or fire spray off the body: every flame stays attached to the body",
         creature=(
             "Spurtz, a small living fireball: an upright egg / rounded teardrop of glowing molten fire, wider and "
             "rounder at the bottom. Its body is bright yellow at the top, blending through orange to a deep red-orange "

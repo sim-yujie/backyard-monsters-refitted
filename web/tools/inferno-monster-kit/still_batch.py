@@ -4,8 +4,10 @@ Sets up ONE Codex call that paints four headings of the still sheet as a 2x2 gri
 Writes <work>/still/b-<h1>-<h2>-<h3>-<h4>/ with frames.png (the Flash cells blown up), style.png
 (approved views, if <work>/approved.json exists), portrait.png and prompt.txt.
 The first call (no approved.json yet) is the design sample; approve it with approve.py.
+Env NOTE is appended to the prompt.
 """
 import json
+import os
 import shutil
 import sys
 from pathlib import Path
@@ -53,7 +55,7 @@ if appr.exists():
     names = "; ".join(f"heading {heading_deg(spec, v['heading']):g} degrees ({view_of(spec, v['heading'])[0]})" for v in near)
     style_text = (
         f"\nInput 2, style.png: a row of APPROVED painted views of {spec['name']} on magenta, left to right: {names}. "
-        "This row is NOT the layout of the output. Copy its exact design, colours, painting style, flame crown and "
+        f"This row is NOT the layout of the output. Copy its exact design, colours, painting style, {spec['features']} and "
         "proportions for every new cell: same creature in every cell, turned to the cell's own heading.\n"
     )
 inputs.append("portrait.png")
@@ -72,20 +74,22 @@ prompt = f"""Use your image generation tool (one call) to create a new image and
 
 Input 1, frames.png: a 2x2 grid of 4 low-resolution isometric game sprites of {spec['name']}, blown up (OLD pixel art). Use it for the facing, shape, colours and overall size of each cell: the new art is the same creature, painted richer. Heading in degrees: 0 = facing the screen's RIGHT, 90 = facing toward the viewer (down), 180 = facing the screen's LEFT, 270 = facing away from the viewer (up); the camera is a 3/4 isometric view from above. Cells:
 {chr(10).join(lines)}
-Look closely at where the yellow face marks (eyes and grin) sit on each old sprite and put the face exactly there.
+Look closely at where {spec['face_marks']} sit on each old sprite and put the face exactly there.
 {style_text}
 The creature: {spec['creature']}
 
 PART CHECKLIST (every cell, as seen from that cell's angle; never drop, merge or add parts):
 {spec['parts']}
 {back}
-Input {n_in}, portrait.png: the official concept painting, for painting style and fire texture only. Do NOT copy its red lower shell, nose or proportions; the old sprite decides the shape and the features.
+Input {n_in}, portrait.png: the official concept painting, {spec['portrait_note']}; the old sprite decides the shape and the features.
 
-LIGHT: the fireball glows evenly from within; no light from one side, no cast shadow on the body, so the left and right halves are lit the same.
+LIGHT: {spec['light']}.
 Output: ONE image with the same 2x2 grid layout and canvas proportions as frames.png (640x512 or a 2x multiple), each creature at the same position and facing as the matching cell of frames.png and about the same size (no bigger than 1.3x). Same scale in all four cells.
-Style: hand-painted digital game illustration like the portrait: rich glowing fire texture, soft shading, bright highlights, NO thick black outline, no pixel art, readable at a small size.
-Background everywhere: flat pure magenta #FF00FF. No shadows, no ground, no grid lines, no text, no labels, no sparks or embers.
+Style: hand-painted digital game illustration like the portrait: {spec['texture']}, soft shading, bright highlights, NO thick black outline, no pixel art, readable at a small size.
+Background everywhere: flat pure magenta #FF00FF. No shadows, no ground, no grid lines, no text, no labels. {spec['no_fx']}.
 """
+if os.environ.get("NOTE"):
+    prompt += os.environ["NOTE"] + "\n"
 (out / "prompt.txt").write_text(prompt, encoding="utf-8")
 (out / "inputs.txt").write_text(" ".join(inputs))
 print(out)

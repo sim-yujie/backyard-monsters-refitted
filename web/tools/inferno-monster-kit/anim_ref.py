@@ -30,7 +30,7 @@ for h in [int(x) for x in sys.argv[3:]]:
     words, back = view_of(spec, h)
     backnote = (spec["back_note"] + " This holds in EVERY cell, attack cells included: the attack is seen from behind.\n") if back else ""
     prompt = f"""FACING RULE (most important): at heading {deg:g} degrees (0 = facing screen right, 90 = toward the viewer, 180 = screen left, 270 = away) {spec['name']} is {words}, exactly as ref.png shows. In EVERY cell, walk cells AND attack cells, the creature faces this same way and the viewer sees the same side of it as in ref.png: the face (where ref.png shows it) stays in the same place on the body. Never turn it toward the viewer, never mirror it.
-Use the reference image ref.png (the exact creature: the painted game sprite of {spec['name']} at this heading; match its colours, flame crown and face exactly) and portrait.png (the concept painting, painting style only; do NOT copy its red shell, nose or proportions).
+Use the reference image ref.png (the exact creature: the painted game sprite of {spec['name']} at this heading; match its colours, {spec['features']} exactly) and portrait.png (the concept painting, {spec['portrait_note']}).
 The creature: {spec['creature']}
 Parts, in every cell as ref.png shows them:
 {spec['parts']}
@@ -38,7 +38,7 @@ Parts, in every cell as ref.png shows them:
 Create ONE image: an animation pose sheet of this same creature on flat pure magenta #FF00FF, no shadows, no ground, no text, no grid lines. Layout: EXACTLY 4 columns x 3 rows of equal cells (12 cells, never a 4th row), poses in reading order: row 1 = cells 1-4 (walk 1-4), row 2 = cells 5-8 (walk 5, walk 6, anticipation, wind-up), row 3 = cells 9-12 (strike, follow-through, recovery, empty). Exactly 6 walk poses.
 {spec['walk']}
 {spec['attack']}
-In EVERY cell: the identical creature as ref.png in the same painted style (rich glowing fire texture, no black outline), the same camera angle (3/4 isometric from above), the same size as ref.png in the walk cells, the same heading. LIGHT: it glows evenly from within, no light from one side. No sparks, embers, smoke, motion streaks or fire spray off the body: every flame stays attached to the body. One creature per cell, centred in it, not cut at the cell edges, with clear magenta between the cells.
+In EVERY cell: the identical creature as ref.png in the same painted style ({spec['texture']}, no black outline), the same camera angle (3/4 isometric from above), the same size as ref.png in the walk cells, the same heading. LIGHT: {spec['light']}. {spec['no_fx']}. One creature per cell, centred in it, not cut at the cell edges, with clear magenta between the cells.
 Use your image generation tool (one call) and save the result as sheet.png in the current folder. Do not write code and do not copy or composite pixels from the inputs.
 """
     if os.environ.get("EXTRA"):

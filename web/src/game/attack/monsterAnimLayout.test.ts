@@ -11,6 +11,7 @@ import {
   frameRect,
   frameRow,
   REPAINT_LAYOUTS,
+  sheetColumn,
   sheetUrl,
   spriteFor,
   type SheetLayoutOverride,
@@ -320,6 +321,8 @@ describe("applyLayout", () => {
     expect(sheet.packedColumns).toBe(32);
     expect(sheet.width).toBe(sheet.frameWidth * 32);
     expect(sheet.height).toBe(sheet.frameHeight * 12);
+    // A monster heading 350 degrees reads column 31, which is on the painted sheet.
+    expect(sheetColumn(sheet, (350 * Math.PI) / 180)).toBe(31);
     expect(frameRect(sheet, 31, 11)).toEqual({ x: 31 * 36, y: 11 * 42, width: 36, height: 42 });
     expect(frameRect(sheet, 5, 3)).toEqual({ x: 5 * 36, y: 3 * 42, width: 36, height: 42 });
     // 6 px added left and right, 12 px on top: the fireball stays on the same ground point.

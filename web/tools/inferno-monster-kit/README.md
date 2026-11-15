@@ -68,3 +68,15 @@ about 25 minutes of Codex time (calls run 3-4 at once). Masters before the 256-c
   edge, but look at the contact pictures.
 - Vite: never run it on a symlinked `web/node_modules` (shared `.vite` cache breaks the owner's 5173);
   hard-link copy it (`cp -al`) and delete its `.vite`.
+- **Next monsters.** IC2-IC8 read 30 headings on 30-column sheets (only IC1 has the 32/30 quirk), so
+  `columns` stays out of their layout. Several are not left-right symmetric (Malphus, Valgos, Grokus,
+  Sabnox: check the Flash sheet with a column-vs-mirrored-column diff as done for Spurtz): then set
+  `painted` to all headings, about 8 still + 30 animation calls, which fills a whole window. IC2 Zagnoid's
+  Flash cell is 64.4 px wide (1933 px / 30): `common.flash_cell` assumes whole pixels, so fix the crop
+  (round each column's x) before using it. Move every word that is the monster's own into `spec.py`
+  (`features`, `face_marks`, `portrait_note`, `light`, `texture`, `no_fx`, `creature`, `parts`,
+  `back_note`, `walk`, `attack`; and `view_of` describes a creature with a face: check its words).
+- **Flash likeness of IC1** (lead's call): the Modern crown is a little taller and the body a little
+  redder than Flash's (crown 38% vs 32% of the height, yellow 31% vs 34% of the pixels). A sample at
+  Flash proportions (one call, not used) is in `art-work/IC1-flashprop` and
+  `shots-inferno-mon/IC1/flash-proportions-sample.png`; a redo at those proportions is about 22 calls.
