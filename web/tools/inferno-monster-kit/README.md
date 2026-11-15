@@ -5,7 +5,7 @@ Paints one Inferno monster for the Modern look the way the main-yard monsters we
 every heading), wired through `REPAINTED_SHEETS` / `REPAINT_LAYOUTS` in
 `web/src/game/attack/monsterSprites.ts`. Classic keeps the Flash sheet (the global Classic switch).
 
-Order: Spurtz IC1 (done, branch `art/inferno-monsters`), Zagnoid IC2, Malphus IC3, Valgos IC4,
+Order: Spurtz IC1 (done, branch `art/inferno-monsters`), Zagnoid IC2 (done, same branch), Malphus IC3, Valgos IC4,
 Balthazar IC5, Grokus IC6, Sabnox IC7, King Wormzer IC8. One monster per Codex usage window (~40 calls).
 
 Python: `~/.cache/bymr-art-venv/bin/python` (numpy + Pillow; **imagequant** was pip-installed into it on
@@ -41,7 +41,7 @@ this folder. Work files go in `<worktree>/art-work/<ID>/` (never commit that fol
    mirror light check, loop mp4s.
 
 Codex calls for IC1: 1 sample + 4 still batches + 17 animation + 1 redo (heading 17) = **23 calls**,
-about 25 minutes of Codex time (calls run 3-4 at once). Masters before the 256-colour shrink are kept in
+about 25 minutes of Codex time (calls run 3-4 at once). Codex calls for IC2 (all 30 headings painted): 1 sample + 7 still batches (the last one 28 29 plus spares 0 and 20, which replaced the earlier views) + 30 animation + 2 redos (headings 0 and 16, the two side views: dark tiger stripes, a comb of spines and a row of legs; redone with an `EXTRA` note) = **40 calls**, about 30 minutes. Masters before the 256-colour shrink are kept in
 `$WK/masters/` (rerun the shrink from those, never from an already shrunk sheet). `codex_call.sh` appends every call to `$WK/calls.log`.
 
 ## Gotchas
@@ -68,14 +68,39 @@ about 25 minutes of Codex time (calls run 3-4 at once). Masters before the 256-c
   edge, but look at the contact pictures.
 - Vite: never run it on a symlinked `web/node_modules` (shared `.vite` cache breaks the owner's 5173);
   hard-link copy it (`cp -al`) and delete its `.vite`.
-- **Next monsters.** IC2-IC8 read 30 headings on 30-column sheets (only IC1 has the 32/30 quirk), so
+- **Next monsters.** IC3-IC8 read 30 headings on 30-column sheets (only IC1 has the 32/30 quirk), so
   `columns` stays out of their layout. Several are not left-right symmetric (Malphus, Valgos, Grokus,
-  Sabnox: check the Flash sheet with a column-vs-mirrored-column diff as done for Spurtz): then set
-  `painted` to all headings, about 8 still + 30 animation calls, which fills a whole window. IC2 Zagnoid's
-  Flash cell is 64.4 px wide (1933 px / 30): `common.flash_cell` assumes whole pixels, so fix the crop
-  (round each column's x) before using it. Move every word that is the monster's own into `spec.py`
-  (`features`, `face_marks`, `portrait_note`, `light`, `texture`, `no_fx`, `creature`, `parts`,
-  `back_note`, `walk`, `attack`; and `view_of` describes a creature with a face: check its words).
+  Sabnox: check the Flash sheet with a column-vs-mirrored-column diff as done for Spurtz and Zagnoid):
+  then set `painted` to all headings, 8 still + 30 animation calls, which fills a whole window. Move every
+  word that is the monster's own into `spec.py` (`features`, `face_marks`, `portrait_note`, `light`,
+  `texture`, `no_fx`, `creature`, `parts`, `back_note`, `walk`, `attack`, and `face`/`back_range` for
+  `view_of`). Run `python check_crop.py <dir>` first and look at `crop-check-<ID>.png`.
+
+## IC2 Zagnoid (done 15 Nov): what was new
+
+- **Fractional cell.** The Flash cell is 64.4 px wide (1933 / 30). `spec.flash_w` = 64.4; `common.flash_x`
+  starts column c at round(c * 64.4) and cuts `cell` = 64 px. The sheet has exactly one see-through-separated
+  art run per column, so `flash_cell` keeps only column c's own run (without that, the left neighbour's shadow
+  tip and the right neighbour's tail tip show in the cut). 70 of 28221 art pixels fall outside the cuts
+  (Flash's own cut lost them too). `check_crop.py` proves every IC1 cell cuts exactly as before.
+- **Drift.** The art was laid out about 64.65 px apart, not 64.4 (the last column is cut off at the sheet
+  edge): a body-centre fit (linear + one sine over the turn, 0.4 px residual) gives the body creeping right
+  0.25 px a column, 7 px over the turn, then jumping back between headings 29 and 0. `spec.flash_drift`
+  takes it out (`common.flash_shift`, centred on the middle column, so at most 3.6 px either way) for both
+  the body and its shadow. Classic still shows Flash's creep.
+- **Not symmetric.** Mirror diff (lit body, centred): shape mismatch 0.38 vs Spurtz's 0.08, and Flash is lit
+  from the upper left with the cast shadow to the lower right. All 30 headings painted; the prompts ask for
+  the same screen-fixed light from the upper left.
+- **Long cast shadow.** `shadow="flash"` draws the Flash cell's own shadow shape (`common.cast_shadow`)
+  instead of an ellipse under the body (the ellipse lost Zagnoid's long shadow). `ref_body_only` gives
+  Codex reference cells without that shadow, centred with margin (the body touches the cell's left edge).
+- **Body at the cell edge.** `still_pad=6`: the still sheet's cells are 76 px wide (the anim cell width), so a
+  painting 1.2x the Flash area is not cut at the left edge. Fit coordinates stay in Flash-cell pixels.
+- **Snout on a neck.** `view_of` takes `face` (the word: "snout") and `back_range` (headings with no face:
+  234-306 degrees); the three-quarter back views outside it say the snout shows in profile, as Flash does.
+- **Facing check** is now body-centred (`common.facing_scores`): the old whole-cell diff is decided by
+  position on an off-centre cell.
+- Codex calls: see the IC2 line under Steps.
 - **Flash likeness of IC1** (lead's call): the Modern crown is a little taller and the body a little
   redder than Flash's (crown 38% vs 32% of the height, yellow 31% vs 34% of the pixels). A sample at
   Flash proportions (one call, not used) is in `art-work/IC1-flashprop` and

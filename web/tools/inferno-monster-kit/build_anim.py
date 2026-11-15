@@ -91,10 +91,13 @@ def painted_frames(p):
 
 
 def shadow(h):
+    if spec.get("shadow") == "flash":
+        return common.cast_shadow(spec, flash_column(spec, h), ACW * UP, ACH * UP, PX + fit[h].get("shift", 0.0), PT, UP)
     _, (sx0, sy0, sx1, sy1), a = common.flash_body_and_shadow(spec, flash_column(spec, h))
     m = Image.new("L", (ACW * UP, ACH * UP), 0)
     if sx1 > sx0:
-        ImageDraw.Draw(m).ellipse(((sx0 + PX + 0.5) * UP, (sy0 + PT + 0.5) * UP, (sx1 + PX - 0.5) * UP, (sy1 + PT - 0.5) * UP), fill=min(255, a + 20))
+        ox = PX + fit[h].get("shift", 0.0)  # the drift taken out of the Flash sheet (IC2), as the still view
+        ImageDraw.Draw(m).ellipse(((sx0 + ox + 0.5) * UP, (sy0 + PT + 0.5) * UP, (sx1 + ox - 0.5) * UP, (sy1 + PT - 0.5) * UP), fill=min(255, a + 20))
     m = m.filter(ImageFilter.GaussianBlur(0.8 * UP))
     lay = Image.new("RGBA", m.size, (25, 18, 12, 0))
     lay.putalpha(m)

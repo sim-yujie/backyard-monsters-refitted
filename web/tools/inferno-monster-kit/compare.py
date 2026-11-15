@@ -42,7 +42,7 @@ def modern(h, k, sheet=anim, s=UP):
 
 def old(h, r, s=UP):
     """Flash cell (nearest Flash column, row r) in a Modern-sized frame, enlarged s times."""
-    c = flash.crop((flash_column(spec, h) * CW, r * CH, (flash_column(spec, h) + 1) * CW, (r + 1) * CH))
+    c = common.flash_cell(spec, flash_column(spec, h), r)
     f = Image.new("RGBA", (ACW, ACH))
     f.paste(c, (PX, PT))
     return f.resize((ACW * s, ACH * s), Image.NEAREST) if s != 1 else f
@@ -117,7 +117,7 @@ mc.save(shots / "mirror-check.png")
 
 # loops
 if shutil.which("ffmpeg"):
-    for h in (4, 12):
+    for h in spec.get("loops", (4, 12)):
         tmp = Path(tempfile.mkdtemp(dir=shots))
         seqf = [("walk", k, 8) for _ in range(3) for k in range(1, 7)] + [("attack", k, 4) for _ in range(2) for k in list(range(7, 12)) + [0, 0, 0]]
         n = 0

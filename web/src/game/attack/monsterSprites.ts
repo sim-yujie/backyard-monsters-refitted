@@ -499,6 +499,24 @@ export const REPAINT_LAYOUTS: Readonly<Record<string, SheetLayoutOverride>> = {
     },
     strikeFrame: 2,
   },
+  // Zagnoid (IC2): 76x58 cells. The Flash cell is 64.4 px wide (1933 px / 30), drawn at fractional
+  // x; the repaint cuts it at whole pixels as a 64 px cell and adds 6 px each side, 10 on top and 2
+  // at the bottom, so the anchor moves by (6, 10) and the slug and its long cast shadow stay put.
+  // 30 headings on 30 columns, as Flash. Rows: 0 idle, 1-6 crawl, 7-11 attack (rear back, rear up,
+  // lunge with claws and bite, follow-through, recover). Flash's single pose glided.
+  "monsters/zagnoid.png": {
+    frameWidth: 76,
+    frameHeight: 58,
+    anchorX: 32,
+    anchorY: 38,
+    rows: 12,
+    animations: {
+      idle: { first: 0, count: 1, ticksPerFrame: 8 },
+      walk: { first: 1, count: 6, ticksPerFrame: 8 },
+      attack: { first: 7, count: 5, ticksPerFrame: 4 },
+    },
+    strikeFrame: 2,
+  },
 };
 
 const layoutCache = new Map<MonsterSheet, AnimatedSheet>();
@@ -833,6 +851,7 @@ export const REPAINTED_SHEETS: Readonly<Record<string, string>> = {
   "monsters/slimeattikusmini_anim.png": "monsters/slimeattikusmini-anim@4x.png", // mini slime animated repaint (same frames scaled)
   "monsters/rezghul.png": "monsters/rezghul-anim@4x.png", // Rezghul animated repaint (glide walk + attack, tail knob)
   "monsters/spurtz.png": "monsters/spurtz-anim@4x.png", // Spurtz (Inferno IC1) animated repaint (32 headings, hop walk + attack)
+  "monsters/zagnoid.png": "monsters/zagnoid-anim@4x.png", // Zagnoid (Inferno IC2) animated repaint (30 headings, crawl + claw attack)
   "monsters/ape_1.png": "monsters/ape_1-repaint@4x.png", // Gorgo level 1 repaint (all 16 headings, idle + walk + attack)
   "monsters/fly_1.png": "monsters/fly_1-repaint@4x.png", // Fomor level 1 repaint (all 16 headings, idle + walk)
   "monsters/dragon_1.png": "monsters/dragon_1-repaint@4x.png", // Drull level 1 repaint (all 16 headings painted, idle + walk + attack)

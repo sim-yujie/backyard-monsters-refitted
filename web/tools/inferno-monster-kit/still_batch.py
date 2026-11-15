@@ -12,6 +12,7 @@ import shutil
 import sys
 from pathlib import Path
 
+import numpy as np
 from PIL import Image
 
 import common
@@ -24,13 +25,19 @@ out = work / "still" / ("b-" + "-".join(map(str, hs)))
 out.mkdir(parents=True, exist_ok=True)
 
 cw, ch = spec["cell"]
-z = 7
+z = min(7, 320 // cw, 256 // ch)  # blow-up that fits a 320x256 grid cell (IC1: 7, IC2: 5)
 grid = Image.new("RGB", (640, 512), (128, 128, 128))
 for i, h in enumerate(hs):
-    cell = common.flash_cell(spec, flash_column(spec, h)).resize((cw * z, ch * z), Image.NEAREST)
-    bg = Image.new("RGBA", cell.size, (128, 128, 128, 255))
-    bg.alpha_composite(cell)
-    grid.paste(bg.convert("RGB"), ((i % 2) * 320 + (320 - cw * z) // 2, (i // 2) * 256 + (256 - ch * z) // 2))
+    cell = common.flash_cell(spec, flash_column(spec, h))
+    if spec.get("ref_body_only"):
+        # the body without its cast shadow, centred in the grid cell with clear margin (Zagnoid's shadow
+        # reaches far to the lower right and its body sits at the cell's left edge)
+        cell = common.flash_body_only(spec, flash_column(spec, h))
+        cell = cell.crop(common.bbox(np.asarray(cell)[..., 3] > 0))
+    big = cell.resize((cell.width * z, cell.height * z), Image.NEAREST)
+    bg = Image.new("RGBA", big.size, (128, 128, 128, 255))
+    bg.alpha_composite(big)
+    grid.paste(bg.convert("RGB"), ((i % 2) * 320 + (320 - big.width) // 2, (i // 2) * 256 + (256 - big.height) // 2))
 grid.save(out / "frames.png")
 
 p = Image.open(PORTRAITS / f"{mid}.webp").convert("RGB")

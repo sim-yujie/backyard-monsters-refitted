@@ -87,6 +87,7 @@ describe("applyLayout", () => {
       "monsters/spurtz.png",
       "monsters/vorg_anim.png",
       "monsters/zafreeti.v2.png",
+      "monsters/zagnoid.png",
     ]);
     const other = MONSTER_SPRITES["IC8"];
     if (!other) throw new Error("no IC8");
@@ -329,6 +330,31 @@ describe("applyLayout", () => {
     expect(sheet.anchorX).toBe(old.anchorX + 6);
     expect(sheet.anchorY).toBe(old.anchorY + 12);
     expect(sheet.frameWidth - sheet.anchorX).toBe(old.frameWidth - old.anchorX + 6);
+    expect(sheet.animations.walk).toEqual({ first: 1, count: 6, ticksPerFrame: 8 });
+    expect(sheet.animations.attack?.first).toBe(7);
+    expect((sheet.animations.attack?.first ?? 0) + (sheet.animations.attack?.count ?? 0)).toBe(12);
+    expect(sheet.strikeFrame).toBe(2);
+  });
+
+  it("the Zagnoid layout matches the animated PNG, cuts whole-pixel cells and keeps the slug where it was", () => {
+    const old = MONSTER_SPRITES["IC2"];
+    if (!old) throw new Error("no IC2");
+    const sheet = spriteFor("IC2");
+    if (!sheet) throw new Error("no sprite for IC2");
+    const data = readFileSync(resolve(__dirname, "../../../../server/public/assets/monsters/zagnoid-anim@4x.png"));
+    expect(data.readUInt32BE(16)).toBe(sheet.width * 4);
+    expect(data.readUInt32BE(20)).toBe(sheet.height * 4);
+    // The Flash cell is 64.4 px wide; the repaint's is a whole 76 (64 + 6 each side).
+    expect(old.frameWidth).toBeCloseTo(64.4, 6);
+    expect(sheet.frameWidth).toBe(76);
+    expect(sheet.directions).toBe(30);
+    expect(sheet.packedColumns).toBeUndefined();
+    expect(sheet.width).toBe(76 * 30);
+    expect(sheet.height).toBe(58 * 12);
+    expect(frameRect(sheet, 29, 11)).toEqual({ x: 29 * 76, y: 11 * 58, width: 76, height: 58 });
+    // 6 px added left and right, 10 px on top: the slug stays on the same ground point.
+    expect(sheet.anchorX).toBe(old.anchorX + 6);
+    expect(sheet.anchorY).toBe(old.anchorY + 10);
     expect(sheet.animations.walk).toEqual({ first: 1, count: 6, ticksPerFrame: 8 });
     expect(sheet.animations.attack?.first).toBe(7);
     expect((sheet.animations.attack?.first ?? 0) + (sheet.animations.attack?.count ?? 0)).toBe(12);
