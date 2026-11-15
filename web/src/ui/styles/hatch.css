@@ -1054,6 +1054,11 @@ button.hatch-slot:disabled {
   white-space: nowrap;
 }
 
+/* "After:" in front of the total (owner, 16 Nov 2026): quieter than the numbers. */
+.hatch-housing__after {
+  color: var(--colour-text-secondary);
+}
+
 .hatch-housing--over .hatch-housing__value {
   color: var(--colour-warning);
 }

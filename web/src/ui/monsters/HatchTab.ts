@@ -1336,7 +1336,12 @@ export class HatchTab implements MonstersTab {
     label.append(gameIcon("housing", { label: words }));
     const value = document.createElement("span");
     value.className = "hatch-housing__value";
-    value.textContent = `${formatAmount(after)} / ${formatAmount(yard.capacity)}`;
+    // "After:" so the total reads as the housing once the line has hatched,
+    // not as the housing now (owner, desk card p761-housing-number, 16 Nov 2026).
+    const afterWord = document.createElement("span");
+    afterWord.className = "hatch-housing__after";
+    afterWord.textContent = "After:";
+    value.append(afterWord, ` ${formatAmount(after)} / ${formatAmount(yard.capacity)}`);
 
     const bar = document.createElement("div");
     bar.className = "hatch-housing__bar";

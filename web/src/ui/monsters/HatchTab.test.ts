@@ -539,7 +539,9 @@ describe("HatchTab: the message and the housing bar", () => {
     expect(element.querySelector(".hatch-message")!.textContent).not.toMatch(/press Add/);
     // 15 (the Bolt) + 250 (25 Pokeys) on the way, 10 more for the one Pokey chosen.
     expect(text(element, ".hatch-housing__label")).toBe("Housing after this add");
-    expect(text(element, ".hatch-housing__value")).toBe("275 / 1,080");
+    // "After:" in front of the total (owner, desk, 16 Nov).
+    expect(text(element, ".hatch-housing__value")).toBe("After: 275 / 1,080");
+    expect(text(element, ".hatch-housing__after")).toBe("After:");
     expect(element.querySelectorAll(".hatch-housing__part")).toHaveLength(2);
     expect(element.querySelector(".hatch-housing__bar")!.getAttribute("aria-valuetext")).toBe(
       "0 housed, 265 on the way, 10 adding, of 1,080",
