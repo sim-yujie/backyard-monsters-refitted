@@ -3,7 +3,7 @@ import { runningWeekend, type WeekendState } from "@/game/weekend";
 
 /**
  * The reset clock on the yard (beta 8, owner 15 Nov 2026): when the game's
- * resets happen, worked out on the server's clock. Pure, so the pill, its
+ * resets happen, worked out on the server's clock. Pure, so the clock button, its
  * list and the tests share it.
  *
  * Every time here comes from the server's own rules:
@@ -42,8 +42,8 @@ export const nextWeeklyReset = (now: number): number => weekStart(now) + WEEK_SE
 const pad = (value: number): string => String(value).padStart(2, "0");
 
 /**
- * The pill's countdown: "18h 01m", or "4m 09s" in the last hour. At most 7
- * characters up to 24 hours, which the pill's fixed width is made for.
+ * The daily reset's countdown (the clock button's label, and the list's
+ * rows under a day): "18h 01m", or "4m 09s" in the last hour.
  */
 export const pillCountdown = (seconds: number): string => {
   const left = Math.max(0, Math.floor(seconds));
@@ -53,7 +53,7 @@ export const pillCountdown = (seconds: number): string => {
   return `${minutes}m ${pad(left % 60)}s`;
 };
 
-/** A row's countdown: "5d 18h" a day or more out, else as the pill. */
+/** A row's countdown: "5d 18h" a day or more out, else as the daily one. */
 export const rowCountdown = (seconds: number): string => {
   const left = Math.max(0, Math.floor(seconds));
   const days = Math.floor(left / DAY_SECONDS);

@@ -5,7 +5,7 @@ import type { YardApi } from "@/api/yard";
 import { levelProgress } from "@/game/yard/experience";
 import { YardStore } from "@/game/yard/YardStore";
 import type { Notices } from "@/ui/maproom/Notices";
-import { HudStatus, hudStatusModel, protectionBadgeText } from "./HudStatus";
+import { HudStatus, boostIcon, hudStatusModel, shortTime } from "./HudStatus";
 
 const T0 = 2_000_000;
 const never = <R>() => new Promise<R>(() => undefined);
@@ -58,8 +58,16 @@ describe("hudStatusModel", () => {
     expect(hudStatusModel(storeWith())).toEqual({ protectedUntil: null, boosts: [] });
   });
 
-  it("words the badge", () => {
-    expect(protectionBadgeText(T0 + 90_000, T0)).toBe("Protected 1d 1h");
+  it("shortens a time to its first unit for the strip", () => {
+    expect(shortTime(90_000)).toBe("1d");
+    expect(shortTime(3_700)).toBe("1h");
+    expect(shortTime(45)).toBe("45s");
+  });
+
+  it("gives each boost a painted icon", () => {
+    expect(boostIcon("POD")).toBe("overdrive");
+    expect(boostIcon("MSOD")).toBe("speed");
+    expect(boostIcon("BST")).toBe("tools");
   });
 });
 
@@ -69,7 +77,10 @@ describe("HudStatus", () => {
     const status = new HudStatus({ store, scene: { selectBuilding: vi.fn() }, notices: {} as Notices });
     document.body.append(status.element);
 
-    expect(status.element.querySelector(".hud-status__badge")?.textContent).toBe("Protected 1h 1m");
+    const shield = status.element.querySelector<HTMLButtonElement>(".hud-status__shield");
+    expect(shield?.textContent).toBe("1h");
+    expect(shield?.getAttribute("aria-label")).toBe("Protected 1h 1m");
+    expect(status.element.querySelector<HTMLElement>(".hud-status__boosts")?.hidden).toBe(true);
 
     store.mergeWrite({ playerlevel: 2, playerpoints: 1_000 } as Partial<BaseLoadResponse>);
     expect(document.body.querySelector(".level-up")?.textContent).toContain("You reached level 2!");
@@ -116,6 +127,70 @@ describe("HudStatus", () => {
     const store = storeWith({ playerlevel: 4, playerpoints: 6_000 } as Partial<BaseLoadResponse>);
     const status = new HudStatus({ store, scene: { selectBuilding: vi.fn() }, notices: {} as Notices });
     expect(document.body.querySelector(".level-up")).toBeNull();
+    status.destroy();
+  });
+
+  it("folds every boost into one button with a count; a tap lists their names and times", () => {
+    const store = storeWith({
+      storedata: { BST: { q: 1, e: T0 + 7_200 }, POD: { q: 1, e: T0 + 600 }, MSOD: { q: 1, e: T0 + 90_000 } },
+    } as Partial<BaseLoadResponse>);
+    const status = new HudStatus({ store, scene: { selectBuilding: vi.fn() }, notices: {} as Notices });
+    document.body.append(status.element);
+
+    // Unprotected: no shield; three boosts: one button saying 3.
+    expect(status.element.querySelector<HTMLElement>(".hud-status__shield")?.hidden).toBe(true);
+    const boosts = status.element.querySelector<HTMLButtonElement>(".hud-status__boosts")!;
+    expect(boosts.hidden).toBe(false);
+    expect(boosts.querySelector(".hud-status__count")?.textContent).toBe("3");
+    expect(boosts.getAttribute("aria-label")).toBe("3 boosts running");
+    expect(status.element.querySelectorAll("button")).toHaveLength(2);
+
+    const list = status.element.querySelector<HTMLElement>(".hud-status__list")!;
+    expect(list.hidden).toBe(true);
+    boosts.click();
+    expect(list.hidden).toBe(false);
+    expect(boosts.getAttribute("aria-expanded")).toBe("true");
+    const rows = [...list.querySelectorAll(".hud-status__row")];
+    expect(rows.map((row) => row.querySelector(".hud-status__title")?.textContent)).toEqual([
+      "Production Overdrive",
+      "Sharper Tools",
+      "Monster Speed Buff",
+    ]);
+    expect(rows.map((row) => row.querySelector(".hud-status__left")?.textContent)).toEqual(["10m 0s", "2h 0m", "1d 1h"]);
+
+    // A press elsewhere shuts it; so does Escape, and another tap.
+    document.body.dispatchEvent(new Event("pointerdown", { bubbles: true }));
+    expect(list.hidden).toBe(true);
+    boosts.click();
+    document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape" }));
+    expect(list.hidden).toBe(true);
+    boosts.click();
+    boosts.click();
+    expect(list.hidden).toBe(true);
+    status.destroy();
+  });
+
+  it("the shield opens protection's exact time, and an open list shuts when its subject ends", () => {
+    const store = storeWith({ protected: T0 + 90_000, storedata: { BST: { q: 1, e: T0 + 7_200 } } } as Partial<BaseLoadResponse>);
+    const status = new HudStatus({ store, scene: { selectBuilding: vi.fn() }, notices: {} as Notices });
+    document.body.append(status.element);
+    const shield = status.element.querySelector<HTMLButtonElement>(".hud-status__shield")!;
+    const list = status.element.querySelector<HTMLElement>(".hud-status__list")!;
+    shield.click();
+    expect(status.openList).toBe("shield");
+    expect(list.querySelector(".hud-status__left")?.textContent).toBe("1d 1h");
+
+    // Over to the boosts: the same list, now the boost.
+    status.element.querySelector<HTMLButtonElement>(".hud-status__boosts")!.click();
+    expect(status.openList).toBe("boosts");
+    expect(shield.getAttribute("aria-expanded")).toBe("false");
+    expect(list.querySelector(".hud-status__title")?.textContent).toBe("Sharper Tools");
+
+    // The last boost gone: the button and its list go.
+    store.mergeWrite({ storedata: {} } as Partial<BaseLoadResponse>);
+    expect(status.element.querySelector<HTMLElement>(".hud-status__boosts")?.hidden).toBe(true);
+    expect(list.hidden).toBe(true);
+    expect(status.openList).toBeNull();
     status.destroy();
   });
 });

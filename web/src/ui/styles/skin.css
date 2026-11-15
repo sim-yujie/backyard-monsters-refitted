@@ -610,9 +610,8 @@
 :root[data-skin] :is(
   .hud:not(.hud--corner),
   .hud--corner .hud__bar,
-  .hud-status__badge,
-  .hud-status__boost,
-  .reset-clock__button,
+  .hud-status__chip,
+  .hud-status__list,
   .reset-clock__list,
   .friend-visit-line,
   .account-menu__button--pill,
@@ -790,8 +789,9 @@
   color: var(--skin-ink);
 }
 
-/* Bob's "?" over a scene: a small round button like the yard's domes. */
-:root[data-skin] .guide-help--float {
+/* Bob's "?" over a scene, and the reset clock's hourglass beside it: small
+   round buttons like the yard's domes. */
+:root[data-skin] :is(.guide-help--float, .reset-clock__button) {
   border-color: var(--colour-dome-rim);
   background: radial-gradient(circle at 50% 35%, var(--colour-dome-top), var(--colour-dome-bottom));
   color: #ffffff;

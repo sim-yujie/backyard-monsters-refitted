@@ -7,21 +7,23 @@ import {
 } from "@/game/resetClock";
 import { gameIcon, type GameIconName } from "@/ui/gameIcon";
 import "@/ui/styles/reset-clock.css";
+// The round look it shares with Bob's "?".
+import "@/ui/styles/tips.css";
 
 /**
- * The reset clock (beta 8, owner 15 Nov 2026, mock-up option A): a small pill
- * beside Bob's floating "?" on the yard that counts down to the next daily
- * reset (00:00 server time), and on a tap a short list of every reset with
- * its own countdown (`game/resetClock.ts`). Icon and numbers on the pill, no
- * words; the list says what each reset is.
+ * The reset clock (beta 8, owner 15 Nov 2026, corner option C): a round
+ * hourglass button beside Bob's floating "?" on the yard, its twin in shape
+ * and size, and on a tap a short list of every reset with its own countdown
+ * (`game/resetClock.ts`). No words or numbers on the button (the corner was
+ * "wayy too cluttered"); the list says what each reset is and when.
  *
  * It only shows times: what it reads, and when it is hidden (the guided
  * start), is its plugin's (`game/yard/plugins/resetClock.ts`).
  */
 
 /**
- * The pill's picture. A painted round "reset" arrow is still to be made; the
- * painted hourglass stands in until then (one name to change).
+ * The button's picture. A painted round "reset" arrow is still to be made;
+ * the painted hourglass stands in until then (one name to change).
  */
 export const RESET_CLOCK_ICON: GameIconName = "time";
 
@@ -51,7 +53,8 @@ let nextId = 0;
 export class ResetClock {
   readonly element: HTMLElement;
   private readonly button: HTMLButtonElement;
-  private readonly time: HTMLElement;
+  /** The daily reset's countdown the button's label says. */
+  private label = "";
   private readonly list: HTMLElement;
   private readonly heading: HTMLElement;
   private readonly rowsBox: HTMLElement;
@@ -85,13 +88,8 @@ export class ResetClock {
     this.button.className = "reset-clock__button";
     this.button.setAttribute("aria-expanded", "false");
     this.button.setAttribute("aria-controls", listId);
-    this.button.title = "Daily reset (00:00 server time). Tap for every reset.";
-    this.time = document.createElement("span");
-    this.time.className = "reset-clock__time";
-    this.button.append(
-      gameIcon(RESET_CLOCK_ICON, { size: 24, decorative: true, className: "reset-clock__icon" }),
-      this.time,
-    );
+    this.button.title = "Resets";
+    this.button.append(gameIcon(RESET_CLOCK_ICON, { size: 24, decorative: true, className: "reset-clock__icon" }));
     this.button.addEventListener("click", () => this.toggle());
 
     this.list = document.createElement("div");
@@ -144,12 +142,12 @@ export class ResetClock {
     document.removeEventListener("keydown", this.onKey);
   }
 
-  /** The pill's countdown, and the list's rows while it is open. */
+  /** The button's label (the daily reset's countdown), and the list's rows while it is open. */
   render(): void {
     const now = this.options.now();
     const left = pillCountdown(nextDailyReset(now) - now);
-    if (this.time.textContent !== left) {
-      this.time.textContent = left;
+    if (this.label !== left) {
+      this.label = left;
       this.button.setAttribute("aria-label", `Daily reset in ${left}. Show every reset`);
     }
     if (this.open) this.renderList(now);

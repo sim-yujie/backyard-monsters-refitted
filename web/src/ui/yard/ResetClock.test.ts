@@ -49,14 +49,13 @@ describe("ResetClock", () => {
     let now = T0;
     const timers = manualTimers();
     const clock = new ResetClock({ now: () => now, rows: () => ROWS, timers });
-    const time = clock.element.querySelector(".reset-clock__time");
-    expect(time?.textContent).toBe("18h 01m");
-    expect(clock.element.querySelector("button")?.getAttribute("aria-label")).toBe(
-      "Daily reset in 18h 01m. Show every reset",
-    );
+    const button = clock.element.querySelector("button");
+    // An hourglass only: the countdown is in its label and its list.
+    expect(button?.textContent).toBe("");
+    expect(button?.getAttribute("aria-label")).toBe("Daily reset in 18h 01m. Show every reset");
     now = T0 + 18 * 3600 + 30;
     timers.fire();
-    expect(time?.textContent).toBe("0m 30s");
+    expect(button?.getAttribute("aria-label")).toBe("Daily reset in 0m 30s. Show every reset");
     clock.destroy();
     expect(timers.stopped).toBe(true);
   });
@@ -113,34 +112,30 @@ describe("ResetClock", () => {
 describe("reset clock CSS", () => {
   const css = readFileSync(resolve(__dirname, "../styles/reset-clock.css"), "utf8");
   const skin = readFileSync(resolve(__dirname, "../styles/skin.css"), "utf8");
+  const tips = readFileSync(resolve(__dirname, "../styles/tips.css"), "utf8");
 
-  it("the hidden attribute wins over the pill's own display", () => {
+  it("the hidden attribute wins over the button's own display", () => {
     expect(css).toMatch(/\.reset-clock\[hidden\][^{]*\{\s*display: none;/);
   });
 
-  it("both skins paint the pill and its list", () => {
+  it("the hourglass is the \"?\"'s round twin: same size, same look in every style", () => {
+    expect(css).toMatch(/--reset-clock-width: var\(--reset-help-size\);/);
+    expect(tips).toMatch(/:is\(\.guide-help--float, \.reset-clock__button\) \{[^}]*border-radius: 50%;/);
+    expect(skin).toContain(":root[data-skin] :is(.guide-help--float, .reset-clock__button) {");
+    // Not a square plate: the skins' plate list paints only its list.
     const plate = skin.slice(skin.indexOf(":root[data-skin] :is(\n  .hud:not(.hud--corner)"));
     const list = plate.slice(0, plate.indexOf("\n) {"));
-    expect(list).toContain(".reset-clock__button");
+    expect(list).not.toContain(".reset-clock__button");
     expect(list).toContain(".reset-clock__list");
   });
 
-  it("the status strip starts after the pill while it shows", () => {
+  it("the status strip starts after the button while it shows", () => {
     expect(css).toContain(".overlay__layer:has(> .reset-clock:not([hidden])) > .hud--corner > .hud-status.hud-status");
-  });
-
-  it("on an upright phone the strip stops before the Events door and its chips wrap", () => {
-    const phone = css.slice(css.indexOf("@media (max-width: 620px) {\n  .overlay__layer"));
-    const block = phone.slice(0, phone.indexOf("\n}\n"));
-    expect(block).toContain("var(--reset-clock-door-room)");
-    expect(block).toMatch(/\.hud-status__boost \{\s*white-space: normal;/);
-    // World chat open: the taller chips step away rather than cover its tabs.
-    expect(block).toMatch(/:has\(> \.chat-box--open\)[^{]*\{\s*display: none;/);
   });
 
   it("on a phone on its side the strip starts after the Events door", () => {
     const side = css.slice(css.indexOf("@media (min-width: 621px) and (max-height: 500px) {"));
-    expect(side.slice(0, side.indexOf("\n}\n"))).toContain("left: calc(226px + var(--reset-clock-door-room)");
+    expect(side.slice(0, side.indexOf("\n}\n"))).toContain("left: calc(226px + 76px");
   });
 });
 
@@ -172,11 +167,11 @@ const mount = (store: YardStore) => {
 };
 
 describe("resetClockPlugin", () => {
-  it("puts the pill on the yard, on the store's server clock", () => {
+  it("puts the hourglass on the yard, on the store's server clock", () => {
     const { content, teardown } = mount(storeWith("done"));
-    const pill = content.querySelector<HTMLElement>(".reset-clock");
-    expect(pill?.hidden).toBe(false);
-    expect(pill?.querySelector(".reset-clock__time")?.textContent).toBe("18h 01m");
+    const clock = content.querySelector<HTMLElement>(".reset-clock");
+    expect(clock?.hidden).toBe(false);
+    expect(clock?.querySelector("button")?.getAttribute("aria-label")).toContain("18h 01m");
     teardown();
     expect(content.querySelector(".reset-clock")).toBeNull();
   });
@@ -216,7 +211,7 @@ describe("resetClockPlugin", () => {
       { now: () => later },
     );
     const { content, teardown } = mount(storeWith("done"));
-    expect(content.querySelector(".reset-clock__time")?.textContent).toBe("17h 01m");
+    expect(content.querySelector(".reset-clock__button")?.getAttribute("aria-label")).toContain("17h 01m");
     content.querySelector<HTMLButtonElement>(".reset-clock__button")?.click();
     const rows = [...content.querySelectorAll<HTMLElement>(".reset-clock__row")];
     expect(rows.map((row) => row.dataset["reset"])).toEqual(["daily", "weekly", "krallen"]);

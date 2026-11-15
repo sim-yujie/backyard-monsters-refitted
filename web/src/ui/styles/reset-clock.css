@@ -1,26 +1,21 @@
 /*
- * The reset clock (ui/yard/ResetClock.ts, beta 8): a pill right of Bob's
- * floating "?" (tips.css), on the same row and as tall as it, and the list
- * of resets it opens, hanging under the "?".
+ * The reset clock (ui/yard/ResetClock.ts, beta 8, corner option C): a round
+ * hourglass button right of Bob's floating "?" (tips.css), its twin in size
+ * and look (tips.css and skin.css paint both), and the list of resets it
+ * opens, hanging under the "?".
  *
- * The row under the top bar, left to right: the "?", this pill, then the
- * yard's status strip (protection, boosts; yard-status.css), which starts
- * after the pill while it shows. World chat sits under the row (chat.css),
- * whose top already allows for the "?"'s height, so the pill keeps to it.
- *
- * The pill is a fixed width (its countdown is at most 7 characters, "18h 01m"
- * or "4m 09s"), so the strip's place after it is known in CSS. The skins
- * give both the painted plate (skin.css, with the other bars); without a
- * skin they wear the strip's glass.
+ * The row under the top bar, left to right: the "?", this button, then the
+ * yard's status strip (shield, boosts button; yard-status.css), which starts
+ * after the button while it shows. World chat sits under the row (chat.css),
+ * whose top already allows for the "?"'s height, so the button keeps to it.
  */
 
 :root {
   /* The floating "?" (tips.css: 32px, 40px for a finger). */
   --reset-help-size: 32px;
-  /* "24h 00m" is 59px in Titan One at 13px; with the icon, the gap, the
-     padding and Modern's 7px plate edges it needs about 120px. */
-  --reset-clock-width: 124px;
-  /* Where the pill starts: the "?"'s left edge, its width and a step. */
+  /* The button is as wide as the "?". */
+  --reset-clock-width: var(--reset-help-size);
+  /* Where the button starts: the "?"'s left edge, its width and a step. */
   --reset-clock-left: calc(var(--hud-inset) + var(--space-2) + var(--reset-help-size) + var(--space-2));
 }
 
@@ -45,51 +40,26 @@
 }
 
 /* One "?" at a time (tips.css): while a panel's own "?" sends the floating
-   one away, the pill beside it goes too. */
+   one away, the hourglass beside it goes too. */
 .overlay:has(.panel__titlebar > .guide-help:not([hidden]):not([hidden] *)) .reset-clock {
   display: none;
 }
 
+/* The round look (border, ground, shadow) is the "?"'s own rule
+   (tips.css; skin.css for Modern and Classic), so the two never drift apart. */
 .reset-clock__button {
   box-sizing: border-box;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: var(--space-1);
+  display: grid;
+  place-items: center;
   width: 100%;
   height: 100%;
-  padding: 0 6px;
-  border: 1px solid var(--colour-border);
-  border-radius: var(--radius-pill);
-  background: var(--colour-surface-raised);
-  -webkit-backdrop-filter: var(--blur-panel);
-  backdrop-filter: var(--blur-panel);
-  box-shadow: var(--shadow-float);
-  color: var(--colour-text-strong);
-  font-family: var(--font-display);
-  font-size: var(--text-sm);
-  line-height: 1;
-  white-space: nowrap;
+  padding: 0;
   cursor: pointer;
 }
 
-.reset-clock__button:hover {
-  filter: brightness(1.08);
-}
-
-.reset-clock__button:focus-visible {
-  outline: 2px solid var(--guide-ring);
-  outline-offset: 2px;
-}
-
 .reset-clock__icon {
-  flex: none;
-  width: calc(var(--reset-help-size) - 14px);
-  height: calc(var(--reset-help-size) - 14px);
-}
-
-.reset-clock__time {
-  font-variant-numeric: tabular-nums;
+  width: calc(var(--reset-help-size) - 12px);
+  height: calc(var(--reset-help-size) - 12px);
 }
 
 /* ── The list: under the "?", over World chat's tab ─────────────────── */
@@ -168,61 +138,28 @@
   white-space: nowrap;
 }
 
-/* ── The status strip starts after the pill ─────────────────────────── */
+/* ── The status strip starts after the button ───────────────────────── */
 
-/* A computer and a phone on its side: the strip's left edge is the top
-   bar's, `--hud-inset` in; it starts a step after the pill. (Doubled class:
-   it must beat yard-status.css's and yard-hud.css's "after the ?" rules.) */
+/* A computer and a phone upright: the strip's left edge is the top bar's,
+   `--hud-inset` in (`--space-3` on an upright phone); it starts a step after
+   the button. (Doubled class: it must beat yard-status.css's and
+   yard-hud.css's "after the ?" rules.) Two buttons at most, so it never
+   reaches the Events door at the right. */
 .overlay__layer:has(> .reset-clock:not([hidden])) > .hud--corner > .hud-status.hud-status {
   left: calc(var(--reset-clock-left) + var(--reset-clock-width) + var(--space-2) - var(--hud-inset));
-  max-width: min(560px, calc(100% - (var(--reset-clock-left) + var(--reset-clock-width) + var(--space-2) - var(--hud-inset)) - var(--reset-clock-door-room-wide)));
 }
 
-/* The Events door (events.css) is up to 76px wide with its "Events" label
-   on a phone (Classic's plate; Modern's is 68px) and up to 80px on a bigger
-   screen, where it stands --space-4 from the right edge; the strip keeps a
-   step clear of it. On a narrow iPad (Split View, 694px) a few boosts
-   would otherwise wrap under it. */
-:root {
-  --reset-clock-door-room: calc(76px + var(--space-2));
-  --reset-clock-door-room-wide: calc(80px + var(--space-4) - var(--hud-inset) + var(--space-2));
-}
-
-/* A phone upright: the top bar stands --space-3 in, not --hud-inset. Between
-   the pill and the Events door at the right there is only about 100px, so
-   the strip stops before the door and its chips break their words onto more
-   lines ("Production / Overdrive / 10h 55m") instead of running off the
-   screen under the door (beta 8 pictures, 15 Nov 2026). */
 @media (max-width: 620px) {
   .overlay__layer:has(> .reset-clock:not([hidden])) > .hud--corner > .hud-status.hud-status {
     left: calc(var(--reset-clock-left) + var(--reset-clock-width) + var(--space-2) - var(--space-3));
-    max-width: calc(100% - (var(--reset-clock-left) + var(--reset-clock-width) + var(--space-2) - var(--space-3)) - var(--reset-clock-door-room));
-  }
-
-  .overlay__layer:has(> .reset-clock:not([hidden])) > .hud--corner > .hud-status.hud-status .hud-status__boosts {
-    min-width: 0;
-  }
-
-  .overlay__layer:has(> .reset-clock:not([hidden])) > .hud--corner > .hud-status.hud-status .hud-status__badge,
-  .overlay__layer:has(> .reset-clock:not([hidden])) > .hud--corner > .hud-status.hud-status .hud-status__boost {
-    white-space: normal;
-    text-wrap: balance;
-  }
-
-  /* World chat open reaches up to the row: the chips, now taller, would
-     sit over its Global / Alliance / country tabs, so they step away while
-     it is open (they come back when it folds). */
-  .overlay__layer:has(> .reset-clock:not([hidden])):has(> .chat-box--open) > .hud--corner > .hud-status.hud-status {
-    display: none;
   }
 }
 
 /* A phone on its side: the Events door stands in this row at 226px from the
-   left (events.css), right after the pill, so the strip starts after the
-   door instead of covering it, and stops before the zoom buttons. */
+   left (events.css), so the strip starts a step after the door (up to 76px
+   wide with Classic's "Events" plate) instead of squeezing in before it. */
 @media (min-width: 621px) and (max-height: 500px) {
   .overlay__layer:has(> .reset-clock:not([hidden])) > .hud--corner > .hud-status.hud-status {
-    left: calc(226px + var(--reset-clock-door-room) - var(--hud-inset));
-    max-width: calc(100% - (226px + var(--reset-clock-door-room) - var(--hud-inset)) - var(--reset-clock-door-room));
+    left: calc(226px + 76px + var(--space-2) - var(--hud-inset));
   }
 }

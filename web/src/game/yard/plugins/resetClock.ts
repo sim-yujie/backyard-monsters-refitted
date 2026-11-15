@@ -6,8 +6,8 @@ import { ResetClock } from "@/ui/yard/ResetClock";
 import { YARD_PLUGINS, type YardPlugin } from "../yardPlugins";
 
 /**
- * Own-yard plugin for the reset clock (`ui/yard/ResetClock.ts`): the pill
- * beside Bob's floating "?", on every own yard (main, outpost, Inferno).
+ * Own-yard plugin for the reset clock (`ui/yard/ResetClock.ts`): the round
+ * hourglass beside Bob's floating "?", on every own yard (main, outpost, Inferno).
  *
  * - **Clock.** The events list's server clock (`serverClock`) once the Events
  *   button has read it, else the yard store's, which the server's
