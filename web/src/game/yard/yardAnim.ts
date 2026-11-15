@@ -167,6 +167,9 @@ const POLICIES = new Map<number, AnimPolicy>([
   [16, whileWorking(WorkKind.CONTROL, whenIdle(every(3, false)))],
   // Monster Baiter: `BFOUNDATION.as:1141` names type 19.
   [19, STATIC_FIXED],
+  // Under Hall (Town Hall in the main yard): only the Inferno's own levels 4 to 6 have a strip (its lava, sparks and
+  // smoke, `INFERNO_PAINTED_BUILDING_ART`), a 48-cell loop at 20 a second from cell 0; nothing else of type 14 has one.
+  [14, every(2, false)],
   // Towers. The cell is a facing, set only when something is being shot at.
   [21, STATIC],
   // Monster Bunker: its strip is its shutters, down (cell 0) at rest; its `TickFast` brings them down

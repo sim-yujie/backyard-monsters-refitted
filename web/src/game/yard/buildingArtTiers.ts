@@ -844,11 +844,16 @@ export const INFERNO_BUILDING_3D_ART: Readonly<Record<number, readonly TierArt[]
  * centre building of every Inferno yard, `buildings/itownhall/`; owner on the Review Desk, 6 Nov 2026: "Underhall can
  * be repainted"), painted by Codex from Flash's three looks (levels 1, 2 and 3 to 6) in the finish of the painted
  * Town Hall, and fitted onto Flash's footprint by `web/tools/underhall-repaint/` (`finish.py`, then `export.py`), on
- * Flash's own shadows. Each look has its own damaged and destroyed picture, as Flash's has; like Flash's, it stands
- * still. The main yard's Town Hall (also type 14) keeps `TOWN_HALL_ART`.
+ * Flash's own shadows. Each look has its own damaged and destroyed picture, as Flash's has; levels 1 to 3, like
+ * Flash's, stand still. Levels 4, 5 and 6 are this project's own (owner, 14 Nov 2026: direction B, Lava and Black
+ * Iron, fire option 3 "No open flame"), each a Codex edit of the level below on level 3's footprint and shadows
+ * (`art-samples/b8/underhall-levels/`): its body with a 48-cell loop over it (8 cells a row, 2.4 s round at
+ * `yardAnim.ts`'s rate for type 14) of the lava's glow, the funnel's flicker, sparks and thin smoke, and behind level
+ * 6's gate a bed of coals; `top` is cell 24 over the body, the still for the icons. Damaged and destroyed stand still.
+ * The main yard's Town Hall (also type 14) keeps `TOWN_HALL_ART`.
  */
 export const INFERNO_PAINTED_BUILDING_ART: Readonly<Record<number, readonly TierArt[]>> = {
-  // 14 Under Hall: painted, Flash's three looks, each damaged and destroyed in paint too
+  // 14 Under Hall: painted, Flash's three looks and three of its own (4 to 6, animated), each damaged and destroyed in paint too
   14: [
     { from: 1, top: ["top.c1@2x.webp", -52, -30], shadow: ["shadow.1.v2.jpg", -65, 49], lift: 0,
       damaged: { top: ["top.c1.damaged@2x.webp", -57, -38], shadow: ["shadow.1.damaged.v2.jpg", -65, 47] },
@@ -859,6 +864,18 @@ export const INFERNO_PAINTED_BUILDING_ART: Readonly<Record<number, readonly Tier
     { from: 3, top: ["top.c3@2x.webp", -51, -54], shadow: ["shadow.3.v2.jpg", -74, 35], lift: 0,
       damaged: { top: ["top.c3.damaged@2x.webp", -56, -65], shadow: ["shadow.3.damaged.v2.jpg", -73, 33] },
       destroyed: { top: ["top.c3.destroyed@2x.webp", -61, -21], shadow: ["shadow.3.destroyed.v2.jpg", -75, 29] } },
+    { from: 4, top: ["top.c4@2x.webp", -51, -80], shadow: ["shadow.3.v2.jpg", -74, 35], lift: 0,
+      anim: { strip: ["anim.c4@2x.webp", -35, -91, 78, 193, 48], columns: 8, body: ["body.c4@2x.webp", -51, -54] },
+      damaged: { top: ["top.c4.damaged@2x.webp", -50, -50], shadow: ["shadow.3.damaged.v2.jpg", -73, 33] },
+      destroyed: { top: ["top.c4.destroyed@2x.webp", -51, 6], shadow: ["shadow.3.destroyed.v2.jpg", -75, 29] } },
+    { from: 5, top: ["top.c5@2x.webp", -51, -94], shadow: ["shadow.3.v2.jpg", -74, 35], lift: 0,
+      anim: { strip: ["anim.c5@2x.webp", -35, -108, 78, 218, 48], columns: 8, body: ["body.c5@2x.webp", -51, -54] },
+      damaged: { top: ["top.c5.damaged@2x.webp", -51, -54], shadow: ["shadow.3.damaged.v2.jpg", -73, 33] },
+      destroyed: { top: ["top.c5.destroyed@2x.webp", -54, 14], shadow: ["shadow.3.destroyed.v2.jpg", -75, 29] } },
+    { from: 6, top: ["top.c6@2x.webp", -51, -109], shadow: ["shadow.3.v2.jpg", -74, 35], lift: 0,
+      anim: { strip: ["anim.c6@2x.webp", -35, -125, 78, 235, 48], columns: 8, body: ["body.c6@2x.webp", -51, -55] },
+      damaged: { top: ["top.c6.damaged@2x.webp", -51, -53], shadow: ["shadow.3.damaged.v2.jpg", -73, 33] },
+      destroyed: { top: ["top.c6.destroyed@2x.webp", -55, 7], shadow: ["shadow.3.destroyed.v2.jpg", -75, 29] } },
   ],
 };
 
