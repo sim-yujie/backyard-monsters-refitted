@@ -648,14 +648,6 @@ export class Hud {
     window.setTimeout(() => button.classList.remove("hud__resource-button--pulse"), 400);
   }
 
-  /** Where a readout's picture is on the screen, or null without one. */
-  readoutBox(key: ResourceKey): DOMRect | null {
-    const readout = this.readouts.get(key);
-    if (!readout) return null;
-    const icon = readout.button.querySelector(".res-icon, img, svg");
-    return (icon ?? readout.button).getBoundingClientRect();
-  }
-
   /** Shows every readout's whole amount at once: nothing is flying any more. */
   releaseHeld(): void {
     for (const readout of this.readouts.values()) {

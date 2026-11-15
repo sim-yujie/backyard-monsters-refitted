@@ -2147,15 +2147,6 @@ export class YardScene implements Scene {
         leave: (id, exit) => renderer.leaveHelpMark(id, exit),
         release: () => renderer.releaseHelpMarks(),
       },
-      wrenchAt: (id) => {
-        const camera = this.camera;
-        const disc = renderer.helpMarkDiscs().find((one) => one.id === id);
-        if (!camera || !disc || !disc.visible) return null;
-        const at = camera.worldToScreen({ x: disc.x, y: disc.y });
-        if (at.x < 0 || at.y < 0 || at.x > this.viewportWidth || at.y > this.viewportHeight) return null;
-        const canvas = context.canvas.getBoundingClientRect();
-        return { x: canvas.left + at.x, y: canvas.top + at.y };
-      },
       reducedMotion: prefersReducedMotion(),
     };
   }

@@ -23,7 +23,6 @@ export interface HelpFxHud {
   deliver(key: ResourceKey, amount: number, ms?: number): void;
   floatBelow(key: ResourceKey, delta: number): void;
   pulse(key: ResourceKey): void;
-  readoutBox(key: ResourceKey): DOMRect | null;
   releaseHeld(): void;
 }
 
@@ -39,8 +38,6 @@ export interface HelpFxStage {
   readonly hud: HelpFxHud;
   readonly marks: HelpFxMarks;
   readonly bar: HelpAllBar;
-  /** Where a building's wrench is on the screen now (page pixels), or null when it is off screen or gone. */
-  wrenchAt(id: number): { x: number; y: number } | null;
   readonly reducedMotion: boolean;
 }
 

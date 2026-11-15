@@ -121,10 +121,10 @@ export interface HelpMarksOptions {
 /**
  * How a held wrench leaves once its help has landed ({@link YardHelpMarks.leave}):
  * `pop` bumps the disc and pops it while the tag rises off the building and
- * the ring flares; `flash` lights the disc and fades it; `fade` fades it all.
+ * the ring flares; `fade` fades it all.
  * Under `prefers-reduced-motion` every exit is a plain fade.
  */
-export type HelpMarkExit = "pop" | "flash" | "fade";
+export type HelpMarkExit = "pop" | "fade";
 
 /** A wrench on its way out: drawn on, out of `views`, until its exit ends. */
 interface LeavingView {
@@ -132,13 +132,13 @@ interface LeavingView {
   readonly exit: HelpMarkExit;
   /** The tag and its plate, lifted out of the bob so they can rise on their own. */
   readonly tagBox: Container | null;
-  /** The flash's white glow, or the pop's burst ring; none for a fade. */
+  /** The pop's burst ring; none for a fade. */
   readonly overlay: Graphics | null;
   age: number;
 }
 
 /** Each exit's length, seconds. */
-export const EXIT_SECONDS: Readonly<Record<HelpMarkExit, number>> = { pop: 0.9, flash: 0.35, fade: 0.3 };
+export const EXIT_SECONDS: Readonly<Record<HelpMarkExit, number>> = { pop: 0.9, fade: 0.3 };
 
 export class YardHelpMarks {
   /** The wrenches and their tags: over the buildings. */
@@ -500,8 +500,8 @@ const dropView = (view: MarkView): void => {
 /**
  * Readies a wrench to leave: its tag and plate move out of the bob into
  * their own box on the badge, where they stood, so they can rise on their
- * own; the disc scales about its own centre; and a white glow (flash) or a
- * cream burst ring (pop) is laid over it.
+ * own; the disc scales about its own centre; and a cream burst ring (pop)
+ * is laid over it.
  */
 const readyToLeave = (view: MarkView, exit: HelpMarkExit): Pick<LeavingView, "tagBox" | "overlay"> => {
   const disc = view.bob;
@@ -517,11 +517,7 @@ const readyToLeave = (view: MarkView, exit: HelpMarkExit): Pick<LeavingView, "ta
   disc.pivot.set(0, -WRENCH_RISE);
   disc.position.set(disc.x, disc.y - WRENCH_RISE);
   let overlay: Graphics | null = null;
-  if (exit === "flash") {
-    overlay = new Graphics().circle(0, -WRENCH_RISE, WRENCH_RADIUS).fill({ color: 0xffffff });
-    overlay.alpha = 0;
-    disc.addChild(overlay);
-  } else if (exit === "pop") {
+  if (exit === "pop") {
     overlay = new Graphics().circle(0, 0, WRENCH_RADIUS).stroke({ width: 4, color: RIM });
     overlay.position.set(disc.x, disc.y);
     overlay.alpha = 0;
@@ -538,7 +534,6 @@ const easeOut = (t: number): number => 1 - (1 - t) * (1 - t);
  *   (shrinks and fades) by 0.3 s while a cream ring bursts out of it; the
  *   ground ring flares to full and fades by 0.3 s; the tag rises 26 px off
  *   the building and fades over the last 0.25 s.
- * - flash (0.35 s): the disc lights up white and fades with its tag; the ring fades.
  * - fade (0.3 s): everything fades.
  */
 const paintExit = (leaving: LeavingView, t: number, age: number): void => {
@@ -569,14 +564,6 @@ const paintExit = (leaving: LeavingView, t: number, age: number): void => {
       tagBox.alpha = age < fadeFrom ? 1 : Math.max(0, 1 - (age - fadeFrom) / 0.25);
       tagBox.scale.set(age < 0.12 ? 1 + 0.15 * (age / 0.12) : 1.15 - 0.15 * Math.min(1, (age - 0.12) / 0.2));
     }
-    return;
-  }
-  if (exit === "flash") {
-    if (overlay) overlay.alpha = t < 0.3 ? 0.85 * (t / 0.3) : 0.85;
-    disc.alpha = t < 0.3 ? 1 : 1 - (t - 0.3) / 0.7;
-    disc.scale.set(1 + 0.15 * Math.sin(Math.PI * Math.min(1, t / 0.6)));
-    if (tagBox) tagBox.alpha = disc.alpha;
-    ring(1 - t);
     return;
   }
   disc.alpha = 1 - t;

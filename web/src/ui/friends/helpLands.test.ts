@@ -20,7 +20,6 @@ const fakeStage = (reducedMotion = false) => {
       deliver: vi.fn((key: string, amount: number, ms?: number) => log.push(`deliver ${key} ${amount} ${ms}`)),
       floatBelow: vi.fn((key: string, delta: number) => log.push(`float ${key} ${delta}`)),
       pulse: vi.fn(),
-      readoutBox: vi.fn(() => null),
       releaseHeld: vi.fn(() => log.push("hud release")),
     },
     marks: {
@@ -29,7 +28,6 @@ const fakeStage = (reducedMotion = false) => {
       release: vi.fn(() => log.push("marks release")),
     },
     bar: { setProgress: vi.fn((done: number, total: number) => log.push(`bar ${done}/${total}`)), element: document.createElement("div") },
-    wrenchAt: () => null,
     reducedMotion,
   };
   return { stage: stage as unknown as HelpFxStage, raw: stage, log };
