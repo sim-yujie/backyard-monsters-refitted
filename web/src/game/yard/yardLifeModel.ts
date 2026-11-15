@@ -37,11 +37,15 @@ import type { Yard, YardBuilding } from "./yardModel";
  *   Moloch yard (a Descent yard or an Inferno map tribe) is one too: it loads
  *   as an Inferno yard, but Flash attacks it in `IWMATTACK`, which
  *   `GLOBAL.Setup` turns into `WMATTACK` (`GLOBAL.as:763-787`).
- * - **No champion on an attacked yard.** Flash's cage champion was a guardian
- *   that came out to fight the attacker. The combat engine does not simulate a
- *   defending champion (only the attacker's flung ones,
- *   `game/combat/rules/engine.ts`), so one drawn in its cage would be a
- *   defender that never defends. A visit, where nobody fights, shows it pacing.
+ * - **An attacked yard's champion is the battle's.** Flash's cage champion was
+ *   a guardian that came out to fight the attacker, and the combat engine
+ *   fights it so (issues #260, #310): it waits at a point in its cage, comes
+ *   out at an attacker and may walk back in. So the save's champion list is
+ *   not read; {@link withCagedChampions} puts in the ones `Battle.cagedChampions`
+ *   says are in the cage, each standing on the engine's own point (bug report
+ *   #47: the cage stood empty and the champion appeared from nowhere). Out on
+ *   the field the battle draws it instead. A visit, where nobody fights, shows
+ *   it pacing.
  * - **A Housing destroyed in a battle loses its monsters.** `BUILDING15.Destroyed`
  *   sets every creature in it to zero health in Map Room 2
  *   (`BUILDING15.as:93-104`); {@link fellPens} takes the pen's walkers off.
@@ -237,6 +241,12 @@ export interface LifeChampion {
   readonly level: number;
   /** The level its sheet is picked at: its level, Krallen's too (`spriteFor` maps hers to her look). */
   readonly sheetLevel: number;
+  /**
+   * On an attacked yard, the yard point the battle has it waiting on in its
+   * cage ({@link withCagedChampions}): it stands there rather than pacing, so
+   * it comes out from where it is drawn. Absent everywhere else.
+   */
+  readonly at?: YardPoint;
 }
 
 /** A building a worker is on. */
@@ -316,7 +326,8 @@ const TRIBE_TYPE = "tribe";
  * On the Inferno they are its Housing Bunkers, each with its own garrison
  * when attacked.
  * The champion list keeps status 0 only (`CHAMPIONCAGE.as:593-594`), and is
- * empty on an attacked yard; a wild monster camp has no workers, nor has a
+ * empty on an attacked yard until the battle fills it
+ * ({@link withCagedChampions}); a wild monster camp has no workers, nor has a
  * Moloch yard, which the caller marks `wild` since its save says Inferno.
  *
  * Every housed monster the combat tables know is drawn. A ground monster, the
@@ -393,6 +404,47 @@ export const yardLifeOf = (
   if (housing !== HOUSING_BUNKER_TYPE || view !== "attack") return life;
   // The engine's own deal, so each pen shows what its bunker will send.
   return withRosters(life, housedGarrisons(save.buildingdata, save.monsters?.housed ?? {}, save.buildinghealthdata));
+};
+
+/** A champion waiting in its cage, as `Battle.cagedChampions` gives it. */
+export interface CagedChampion {
+  /** The champion type, `G{t}`. */
+  readonly t: number;
+  /** Its level. */
+  readonly l: number;
+  /** The yard point it waits on. */
+  readonly ix: number;
+  readonly iy: number;
+}
+
+/**
+ * The life of an attacked yard with the champions `caged` says are in their
+ * cage right now, each standing on its point (bug report #47); the same object
+ * when that is what it holds already, so a caller can tell nothing changed. A
+ * yard with no cage keeps none.
+ */
+export const withCagedChampions = (life: YardLife, caged: readonly CagedChampion[]): YardLife => {
+  const champions: LifeChampion[] = life.cage
+    ? caged
+        .filter((one) => one.t >= 1)
+        .map((one) => {
+          const level = Math.max(1, Math.floor(one.l) || 1);
+          return { id: `G${one.t}`, level, sheetLevel: level, at: { x: one.ix, y: one.iy } };
+        })
+    : [];
+  const same =
+    champions.length === life.champions.length &&
+    champions.every((one, index) => {
+      const had = life.champions[index];
+      return (
+        had !== undefined &&
+        had.id === one.id &&
+        had.sheetLevel === one.sheetLevel &&
+        had.at?.x === one.at?.x &&
+        had.at?.y === one.at?.y
+      );
+    });
+  return same ? life : { ...life, champions };
 };
 
 /**
@@ -735,7 +787,8 @@ export const walkerSpecs = (
         monsterId: champion.id,
         sheetLevel: champion.sheetLevel,
         champion: true,
-        area: cageArea(cage, random),
+        // One the battle holds stands on its point: an empty area there.
+        area: champion.at ? { x: champion.at.x, y: champion.at.y, width: 0, height: 0 } : cageArea(cage, random),
         speed:
           (championStat(champion.id, "speed", champion.level) / CHAMPION_SPEED_DIVISOR) *
           (BEHAVIOUR_SPEED["pen"] ?? 1),

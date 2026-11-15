@@ -917,6 +917,21 @@ export interface BattleState {
 }
 
 /**
+ * A defending champion waiting in its Champion Cage, as {@link Battle.cagedChampions}
+ * gives it (bug report #47): its type and level, and the yard point it stands
+ * on in there, which is where it comes out from. Drawing only.
+ */
+export interface CagedChampionSnapshot {
+  /** The champion type, `t` in the save (`G{t}`). */
+  readonly t: number;
+  /** Its level, `l`. */
+  readonly l: number;
+  /** Where it waits, in yard units, as {@link CreepSnapshot.ix} and `iy`. */
+  readonly ix: number;
+  readonly iy: number;
+}
+
+/**
  * One creep as the live renderer sees it (issue #32, WP5).
  *
  * A read-only copy taken by {@link Battle.creeps}; nothing the renderer does
@@ -1333,6 +1348,17 @@ export interface Battle {
    * Ooze"), by building id, ascending. Drawing only. A fresh copy per call.
    */
   weakenedTowers(): readonly number[];
+  /**
+   * The defender's champions in their cage right now (issues #260, #310), in
+   * the order {@link BattleOptions.defenderChampions} gave them: before they
+   * first come out and again once they have walked back in. One that is out
+   * on the field is one of {@link creeps} instead, and one that fell is in
+   * neither. Flash drew the caged champion pacing its cage through the attack
+   * (`CHAMPIONCAGE.as:589-660`); the yard draws it standing on this point
+   * (bug report #47). Drawing only: not in the state or the checkpoint. A
+   * fresh copy per call.
+   */
+  cagedChampions(): readonly CagedChampionSnapshot[];
 }
 
 /* ── Internals ────────────────────────────────────────────────────────────── */
@@ -8046,6 +8072,17 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
       endHp: Math.max(0, championsHp[lesson.monsterId] ?? 0),
     }));
 
+  /** {@link Battle.cagedChampions}. */
+  const cagedChampions = (): CagedChampionSnapshot[] => {
+    const out: CagedChampionSnapshot[] = [];
+    for (const slot of cageSlots) {
+      const pen = slot.pen;
+      if (!pen || slot.report.hp <= 0) continue;
+      out.push({ t: slot.caged.t, l: slot.caged.l, ix: pen.ix, iy: pen.iy });
+    }
+    return out;
+  };
+
   /** {@link Battle.bunkerPools}. */
   const bunkerPools = (): Record<number, Record<string, number>> => {
     const out: Record<number, Record<string, number>> = {};
@@ -8145,6 +8182,7 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
     siege: siegeSnapshot,
     bunkerPools,
     weakenedTowers,
+    cagedChampions,
   };
 };
 
