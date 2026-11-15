@@ -663,14 +663,9 @@ export class HatchTab implements MonstersTab {
     this.syncPending();
   }
 
-  /** "Add 5 Pokeys to Hatchery 2": the last thing read before the tap says where they go (#268, C). */
-  private drawAddLabel(row: HatchMonster | null): void {
-    const target = this.target;
-    const where = typeof target === "number" ? ` to ${this.hatcheryName(target)}` : "";
-    const words =
-      !row || this.count < 1
-        ? "Add"
-        : `Add ${formatAmount(this.count)} ${plural(row.monster.name, this.count)}${where}`;
+  /** The button says just "Add" (owner, 15 Nov): the line above it says where they go. */
+  private drawAddLabel(_row: HatchMonster | null): void {
+    const words = "Add";
     // The words are rewritten, never replaced: pressing Add straight after
     // typing a count blurs the box, which redraws here between the press and
     // the release, and a replaced node under the pointer cancels the click

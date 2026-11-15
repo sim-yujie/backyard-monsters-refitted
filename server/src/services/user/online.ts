@@ -63,6 +63,16 @@ export const isOnline = (marks: PresenceMarks, now: number, seenWithinSeconds: n
   marks.lastAction !== null &&
   marks.lastAction >= now - REAL_ACTION_WINDOW_SECONDS;
 
+/**
+ * A game open on the yard, with no in-game check waiting: the presence half of
+ * {@link isOnline} alone. For a request that is itself the player's real
+ * action, so needs no earlier one: the Trojan Horse's spring (owner, 15 Nov:
+ * a player who comes to their yard and taps the horse first is playing). The
+ * action mark is still written by the real-action middleware, on success only.
+ */
+export const isPresent = (marks: PresenceMarks, now: number, seenWithinSeconds: number): boolean =>
+  !marks.challengePending && marks.lastSeen !== null && marks.lastSeen >= now - seenWithinSeconds;
+
 export const readPresenceMarks = async (userid: number, now: number): Promise<PresenceMarks> => {
   const [seen, action, challenge] = await Promise.all([
     redis.get(lastSeenKey(userid)),

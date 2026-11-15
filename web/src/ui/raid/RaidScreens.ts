@@ -17,6 +17,7 @@ import {
 } from "@/game/raid/raidText";
 import { raidCountdownText, type RaidBusy, type RaidStage, type RaidYardView } from "@/game/raid/raidYardFlow";
 import { TROJAN_TRIBE } from "@/game/trojan/trojanHorse";
+import { versionedArt } from "@/game/yard/retryLoad";
 import { alarmPulse } from "@/ui/alarmPulse";
 import { formatAmount } from "@/ui/format";
 import { Popup } from "@/ui/Popup";
@@ -58,16 +59,27 @@ const splash = (tribe: string, className: string): HTMLImageElement => {
   return image;
 };
 
+/** The whole horse: its body with the head and mouth cell drawn on (made from `top` + `anim` cell 0). */
+export const HORSE_PICTURE = "/assets/buildings/trojanhorse/whole.1.png";
+
 /**
- * The result popup's picture: a tribe's splash, or the horse itself for a
- * landed Trojan Horse fight (`tribe: "wild"`, issue #327,
+ * The horse as it stands in the yard: its body with the head and mouth over
+ * it. `top` alone has no mouth and the raw `anim` strip is two cut-out frames
+ * (owner, 15 Nov), so `whole.1.png` is the two put together.
+ */
+export const horsePicture = (): string => versionedArt(HORSE_PICTURE);
+
+/**
+ * The result popup's picture: a tribe's splash, as Flash's good-defence popup
+ * showed it (`ATTACK.as` `tribe.splash`), or the horse itself for a landed
+ * Trojan Horse fight (`tribe: "wild"`, issue #327,
  * `docs/design/trojan-horse.md` §6), which names "the wild monsters", never
  * a tribe.
  */
 const resultPicture = (tribe: string, className: string): HTMLImageElement => {
   if (tribe !== TROJAN_TRIBE) return splash(tribe, className);
   const image = element("img", className);
-  image.src = "/assets/buildings/trojanhorse/anim.1.png";
+  image.src = horsePicture();
   image.alt = "The wild monsters";
   image.decoding = "async";
   return image;

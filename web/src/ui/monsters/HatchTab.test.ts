@@ -19,7 +19,7 @@ import { HatchTab, plural } from "./HatchTab";
  * tap chooses a monster, the info panel with the batch add and its dashed
  * preview, and Finish now and the Overdrive behind the small link. Since
  * #268: the numbered lines with the chosen one standing out, the numbers and
- * outline handed to the yard, "Add 5 Pokeys to Hatchery 2", `+5` / `+10`,
+ * outline handed to the yard, "Add", `+5` / `+10`,
  * and what the batch does shown before Add. The rules are
  * `hatchPlan.test.ts`'s; this checks the drawing and the wiring.
  *
@@ -276,7 +276,7 @@ describe("HatchTab: each hatchery's line", () => {
     expect(markHatcheries).toHaveBeenLastCalledWith({ numbers: new Map([[10, 1], [11, 2]]), chosen: 11 });
     // Idle: it would start at once.
     expect(spokenText(nowCard(element, 11))).toBe("Hatching now Starts now");
-    expect(text(element, ".hatch-add__words")).toBe("Add 1 Pokey to Hatchery 2");
+    expect(text(element, ".hatch-add__words")).toBe("Add");
     buttonNamed(line(element, 11), "Upgrade")!.click();
     expect(selectBuilding).toHaveBeenCalledWith(11);
   });
@@ -327,7 +327,7 @@ describe("HatchTab: each hatchery's line", () => {
     expect(line(element, 10).className).toBe("hatch-line");
     expect(line(element, 10).querySelector(".hatch-line__number")!.textContent).toBe("1");
     expect(text(line(element, 10), ".hatch-line__title")).toBe("Hatchery 1 · Level 3");
-    expect(text(element, ".hatch-add__words")).toBe("Add 1 Pokey to Hatchery 1");
+    expect(text(element, ".hatch-add__words")).toBe("Add");
   });
 
   it("opens on the clicked hatchery", () => {
@@ -720,7 +720,7 @@ describe("HatchTab: the grid", () => {
     await flush();
     expect(actions.add).not.toHaveBeenCalled();
     more(element);
-    expect(text(element, ".hatch-add__words")).toBe("Add 1 Bolt to Hatchery 2");
+    expect(text(element, ".hatch-add__words")).toBe("Add");
     expect(addButton(element).disabled).toBe(false);
     addButton(element).click();
     await flush();
@@ -836,7 +836,7 @@ describe("HatchTab: the info panel and the batch add", () => {
     expect(element.querySelector(".hatch-add__sum")).toBeNull();
     expect(element.querySelector<HTMLButtonElement>(".hatch-add__step--plus")!.disabled).toBe(true);
     expect(text(element, ".hatch-add__to")).toBe("Adding to Hatchery 2 (Level 2)");
-    expect(text(element, ".hatch-add__add")).toBe("Add 61 Pokeys to Hatchery 2");
+    expect(text(element, ".hatch-add__add")).toBe("Add");
     // One starts at once in the idle hatchery, 60 fill three new stacks: 60 wait.
     expect(spokenText(nowCard(element, 11))).toBe("Hatching now Starts now");
     expect(slotKinds(line(element, 11))).toEqual(["new +20", "new +20", "new +20", "locked"]);
@@ -892,7 +892,7 @@ describe("HatchTab: the info panel and the batch add", () => {
     const held = Number(box(element).value);
     expect(held).toBeGreaterThan(20);
     plus.dispatchEvent(new PointerEvent("pointerup", { bubbles: true, button: 0, pointerId: 1 }));
-    expect(text(element, ".hatch-add__words")).toBe(`Add ${held} Pokeys to Hatchery 2`);
+    expect(text(element, ".hatch-add__words")).toBe("Add");
   });
 
   it("steps by 5 and 10 beside +, up to Max (#268, E)", () => {
@@ -903,7 +903,7 @@ describe("HatchTab: the info panel and the batch add", () => {
     expect(box(element).value).toBe("5");
     jumps[1]!.click();
     expect(box(element).value).toBe("15");
-    expect(text(element, ".hatch-add__words")).toBe("Add 15 Pokeys to Hatchery 2");
+    expect(text(element, ".hatch-add__words")).toBe("Add");
     maxButton(element).click();
     expect(jumps.every((jump) => jump.disabled)).toBe(true);
   });
@@ -914,7 +914,7 @@ describe("HatchTab: the info panel and the batch add", () => {
     input.focus();
     input.value = "5";
     input.dispatchEvent(new Event("input", { bubbles: true }));
-    expect(text(element, ".hatch-add__words")).toBe("Add 5 Pokeys to Hatchery 2");
+    expect(text(element, ".hatch-add__words")).toBe("Add");
     expect(text(line(element, 11), ".hatch-line__waiting")).toBe("0 → 4 waiting of 60");
     // The press lands on the button's words and takes the focus out of the
     // box, whose redraw runs before the release: the words must be the same
@@ -1032,7 +1032,7 @@ describe("HatchTab: with a Hatchery Control Centre", () => {
 
     type(box(element), "3");
     expect(text(element, ".hatch-add__to")).toBe("Adding to the shared queue");
-    expect(text(element, ".hatch-add__words")).toBe("Add 3 Bolts");
+    expect(text(element, ".hatch-add__words")).toBe("Add");
     addButton(element).click();
     await flush();
     expect(actions.add).toHaveBeenLastCalledWith("hcc", "C3", 3);

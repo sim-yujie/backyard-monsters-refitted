@@ -7,6 +7,7 @@ import Koa, { type Context, type Next } from "koa";
 import { getGameVersion } from "../../config/VersionManifestConfig.js";
 import { bodyParsers } from "../../middleware/bodyLimits.js";
 import { jsonBodyCompat } from "../../middleware/jsonBody.js";
+import { setWeekendSettings, storedWeekendSettings } from "../../services/events/weekendSettings.js";
 import { mountAdminWeekendRoutes } from "./weekend.js";
 
 /**
@@ -39,6 +40,7 @@ const fakeOwner = async (ctx: Context, next: Next) => {
 describe("POST /admin/weekend through the real body middleware", () => {
   let server: Server;
   let url = "";
+  let before = storedWeekendSettings().settings;
 
   const post = async (body: unknown) => {
     const response = await fetch(url, {
@@ -50,6 +52,7 @@ describe("POST /admin/weekend through the real body middleware", () => {
   };
 
   beforeAll(async () => {
+    before = storedWeekendSettings().settings;
     const app = new Koa();
     const router = new Router();
     mountAdminWeekendRoutes(router, "/api/:apiVersion/admin", fakeOwner as never, () => fakeEm);
@@ -65,8 +68,9 @@ describe("POST /admin/weekend through the real body middleware", () => {
   });
 
   afterAll(async () => {
-    // Leave the settings in memory at the defaults for any later test file.
-    await post({ action: "reset" });
+    // Leave the settings in memory as the suite found them (weekend events off,
+    // `testing/preload.ts`) for any later test file.
+    setWeekendSettings(before);
     server?.close();
   });
 

@@ -48,7 +48,7 @@ const { finishRaid, START_LOCK_SECONDS } = await import("./raidFlow.js");
 const { raidFighting } = await import("./raidLock.js");
 const { readSchedule } = await import("./raidSchedule.js");
 const { readOpenRaid, openRaid, newRaidId } = await import("./raidStore.js");
-const { lastActionKey, lastSeenKey } = await import("../user/online.js");
+const { challengeKey, lastActionKey, lastSeenKey } = await import("../user/online.js");
 const { TROJAN_LAST_SPAWN_TICK, TROJAN_MONSTER_COUNT } = await import("./trojanArmy.js");
 
 type Row = Record<string, unknown>;
@@ -238,6 +238,22 @@ describe("refusals", () => {
     expect(await refusal(springTrojanHorse(em, user, NOW))).toEqual({ reason: "offline" });
   });
 
+  test("a real action but no game open on the yard (no presence mark) is still offline", async () => {
+    await redis.set(lastActionKey(USER), String(NOW));
+    expect(await refusal(springTrojanHorse(em, user, NOW))).toEqual({ reason: "offline" });
+  });
+
+  test("a presence mark from over a minute ago is still offline", async () => {
+    await redis.set(lastSeenKey(USER), String(NOW - 61));
+    expect(await refusal(springTrojanHorse(em, user, NOW))).toEqual({ reason: "offline" });
+  });
+
+  test("an in-game check waiting is still offline", async () => {
+    await present(NOW);
+    await redis.set(challengeKey(USER), "1");
+    expect(await refusal(springTrojanHorse(em, user, NOW))).toEqual({ reason: "offline" });
+  });
+
   test("no replay slot free is busy, before the yard is touched", async () => {
     await present(NOW);
     standIn.slot = async () => null;
@@ -265,6 +281,18 @@ describe("the spring", () => {
       expect(open.tribe).toBe("wild");
       expect(raidFighting(db.row!, NOW)).toBe(true);
       expect(readSchedule(db.row!.aiattacks).fight?.id).toBe(start.raid.id);
+    },
+    FIGHT_TIMEOUT_MS
+  );
+
+  test(
+    "a fresh login that taps the horse first: the tap is the action, so the raid starts (owner, 15 Nov)",
+    async () => {
+      // The yard load's presence mark only; no real action yet.
+      await redis.set(lastSeenKey(USER), String(NOW));
+      const start = await springTrojanHorse(em, user, NOW);
+      expect(start.raid).toMatchObject({ phase: "fighting", tribe: "wild" });
+      expect((await readOpenRaid(USER))?.phase).toBe("fighting");
     },
     FIGHT_TIMEOUT_MS
   );

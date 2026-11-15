@@ -7,6 +7,7 @@ import {
   parseWeekendChange,
   readSettings,
   setWeekendSettings,
+  storedWeekendSettings,
   weekendSettings,
 } from "./weekendSettings.js";
 import {
@@ -134,6 +135,8 @@ describe("weekend boost numbers", () => {
 
   test("the boost read from memory follows the stored settings", () => {
     const now = at("2026-11-10T10:00:00Z");
+    // The suite runs with weekend events off (`testing/preload.ts`): put that back after.
+    const before = storedWeekendSettings().settings;
     try {
       setWeekendSettings({ ...DEFAULT_WEEKEND_SETTINGS, forced: { id: "hatch", since: now, until: now + 60 } });
       const env = process.env.WEEKEND_FORCE;
@@ -143,7 +146,7 @@ describe("weekend boost numbers", () => {
       expect(weekendBoost("study", now)).toBe(0);
       if (env !== undefined) process.env.WEEKEND_FORCE = env;
     } finally {
-      setWeekendSettings(DEFAULT_WEEKEND_SETTINGS);
+      setWeekendSettings(before);
     }
   });
 });

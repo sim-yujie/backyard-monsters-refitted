@@ -8,7 +8,7 @@ import { catchUpLockedRow } from "../../controllers/yard/yardAction.js";
 import { calculateEmpirePoints } from "../base/calculateEmpirePoints.js";
 import { isAttackActive } from "../base/isAttackActive.js";
 import { ReplayTimeoutError, fightRaidInWorker, reserveReplaySlot } from "../base/combat/replayRunner.js";
-import { ATTACK_ONLINE_SECONDS, isOnline, readPresenceMarks } from "../user/online.js";
+import { ATTACK_ONLINE_SECONDS, isPresent, readPresenceMarks } from "../user/online.js";
 import { fightSecondsOf, type RaidFightInput, type RaidFightOutcome } from "./raidFight.js";
 import {
   START_LOCK_SECONDS,
@@ -129,8 +129,10 @@ const freezeTrojan = async (em: EntityManager, user: User, now: number): Promise
  */
 export const springTrojanHorse = async (em: EntityManager, user: User, now: number): Promise<RaidStart> => {
   if (await readOpenRaid(user.userid)) throw raidRefusedErr("raidOpen");
+  // The tap on the horse is the player's action, so only presence is asked: a game open on
+  // the yard and no in-game check waiting (owner, 15 Nov: a fresh login that taps it first).
   const marks = await readPresenceMarks(user.userid, now);
-  if (!isOnline(marks, now, ATTACK_ONLINE_SECONDS)) throw raidRefusedErr("offline");
+  if (!isPresent(marks, now, ATTACK_ONLINE_SECONDS)) throw raidRefusedErr("offline");
 
   const release = await reserveReplaySlot();
   if (!release) throw raidRefusedErr("busy");
