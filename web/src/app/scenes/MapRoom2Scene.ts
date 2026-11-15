@@ -1442,6 +1442,8 @@ export class MapRoom2Scene implements Scene {
       baseid,
       cell,
       modal,
+      // The army bar while the server fights it (owner, 15 Nov 2026), as on the end panel's Attack again.
+      progressBar: true,
       onWatch: (run) => {
         setWatchRun(run);
         context.goTo(SceneName.WATCH);

@@ -1,0 +1,228 @@
+/*
+ * Repeat attack's working bar, the marching army (owner, 15 Nov 2026;
+ * ui/attack/RepeatBar.ts). `--repeat-progress` (0 to 1) on `.repeat-bar`
+ * drives it. The bar's frame is the window style's bar plate (skin.css
+ * `--skin-bar`): riveted steel in Modern, Flash brown in Classic; the plain
+ * glass without a style.
+ *
+ * The bar has a fixed height and the tribe at its end sits inside it, so the
+ * sheet never jumps or grows while it runs, and nothing reaches the frame.
+ */
+
+.repeat-bar {
+  --repeat-progress: 0;
+  --repeat-bar-height: 64px;
+  --repeat-track-height: 48px;
+
+  position: relative;
+  display: flex;
+  align-items: center;
+  height: var(--repeat-bar-height);
+  margin: 0;
+  /* Room for the tribe's shake and shadow, inside the window. */
+  padding-right: 4px;
+}
+
+.repeat-bar__track {
+  position: relative;
+  flex: 1 1 auto;
+  min-width: 0;
+  height: var(--repeat-track-height);
+  box-sizing: border-box;
+  border: 2px solid var(--colour-border-strong);
+  border-radius: var(--radius-md);
+  background: var(--colour-surface-sunken);
+}
+
+/* The window style's own bar plate (steel / Flash brown). */
+:root[data-skin] .repeat-bar__track {
+  border-style: solid;
+  border-color: transparent;
+  border-width: var(--skin-bar-edge);
+  border-radius: 0;
+  border-image-source: var(--skin-bar);
+  border-image-slice: var(--skin-bar-slice) fill;
+  border-image-width: var(--skin-bar-width);
+  border-image-repeat: round;
+  background: none;
+}
+
+.repeat-bar__goal {
+  position: relative;
+  z-index: 1;
+  flex: 0 0 auto;
+  display: grid;
+  place-items: center;
+}
+
+/* ── The marching army ─────────────────────────────────────────────────── */
+
+/* A dirt road along the bottom; the part walked is trodden lighter. */
+.repeat-bar__road {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 3px;
+  height: 9px;
+  border-radius: var(--radius-pill);
+  background: linear-gradient(#7a5a32, #4e3618);
+  box-shadow: inset 0 1px 2px rgb(0 0 0 / 50%);
+}
+
+.repeat-bar__road::after {
+  content: "";
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: calc(var(--repeat-progress) * 100%);
+  border-radius: inherit;
+  background: linear-gradient(#b08a52, #7a5a32);
+}
+
+.repeat-bar__troop {
+  --marcher-size: 32px;
+  --marcher-step: 22px;
+  --troop-width: calc(var(--marcher-size) + (var(--marchers, 1) - 1) * var(--marcher-step));
+
+  position: absolute;
+  bottom: 4px;
+  left: calc(var(--repeat-progress) * (100% - var(--troop-width)));
+  display: flex;
+  width: var(--troop-width);
+  height: var(--marcher-size);
+}
+
+.repeat-bar__marcher {
+  position: relative;
+  flex: 0 0 auto;
+  width: var(--marcher-size);
+  height: var(--marcher-size);
+  margin-right: calc(var(--marcher-step) - var(--marcher-size));
+  animation: repeat-bar-hop 420ms ease-in-out infinite;
+  animation-delay: calc(var(--marcher, 0) * -110ms);
+}
+
+.repeat-bar__marcher:last-child {
+  margin-right: 0;
+}
+
+.repeat-bar__marcher-pic {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  filter: drop-shadow(0 2px 2px rgb(0 0 0 / 55%));
+}
+
+/* Modern's monster icons are square paintings with their ground: a round
+   token each, so they overlap cleanly. Champions and Flash's icons are
+   cut-outs and march as they are. */
+.repeat-bar__marcher--token .repeat-bar__marcher-pic {
+  box-sizing: border-box;
+  border: 2px solid var(--colour-accent-line);
+  border-radius: 50%;
+  object-fit: cover;
+}
+
+.repeat-bar__count {
+  position: absolute;
+  right: -4px;
+  bottom: -3px;
+  padding: 0 4px;
+  border-radius: var(--radius-pill);
+  background: rgb(0 0 0 / 68%);
+  color: #ffffff;
+  font-size: 11px;
+  font-weight: 800;
+  line-height: 15px;
+  text-shadow: none;
+  white-space: nowrap;
+}
+
+/* The camp's tribe waits at the end of the road. */
+.repeat-bar__goal--tribe {
+  width: 58px;
+  height: var(--repeat-bar-height);
+  margin-left: -14px;
+}
+
+.repeat-bar__goal-pic {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  filter: drop-shadow(0 3px 3px rgb(0 0 0 / 55%));
+}
+
+.repeat-bar--full .repeat-bar__goal--tribe {
+  animation: repeat-bar-hit 360ms ease-out 2;
+}
+
+.repeat-bar--full .repeat-bar__marcher {
+  animation: none;
+}
+
+@keyframes repeat-bar-hop {
+  0%,
+  100% {
+    transform: translateY(0) rotate(-3deg);
+  }
+
+  50% {
+    transform: translateY(-5px) rotate(3deg);
+  }
+}
+
+@keyframes repeat-bar-hit {
+  0%,
+  100% {
+    transform: translateX(0) rotate(0);
+  }
+
+  30% {
+    transform: translateX(3px) rotate(5deg);
+  }
+
+  65% {
+    transform: translateX(-3px) rotate(-4deg);
+  }
+}
+
+/* ── Stopped, and reduced motion ────────────────────────────────────────── */
+
+.repeat-bar--stopped,
+.repeat-bar--stopped * {
+  animation-play-state: paused;
+}
+
+/* Nothing hops or shakes; the bar still fills. */
+.repeat-bar--still,
+.repeat-bar--still * {
+  animation: none !important;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .repeat-bar,
+  .repeat-bar * {
+    animation: none !important;
+  }
+}
+
+/* ── Phones (the phone layout's query, phoneLayout.ts) ──────────────────── */
+
+/* A shorter bar, smaller marchers, and the tribe beside the bar's end rather
+   than over it, so it stays clear of the bar plate and the window's frame. */
+@media (max-width: 620px), (max-height: 500px) {
+  .repeat-bar {
+    --repeat-bar-height: 54px;
+    --repeat-track-height: 42px;
+  }
+
+  .repeat-bar__troop {
+    --marcher-size: 28px;
+    --marcher-step: 19px;
+  }
+
+  .repeat-bar__goal--tribe {
+    width: 48px;
+    margin-left: 2px;
+  }
+}

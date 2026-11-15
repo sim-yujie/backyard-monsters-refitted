@@ -26,11 +26,13 @@ import {
   repeatRefusal,
   shortfallText,
 } from "./autoAttackText";
+import { RepeatBar } from "./RepeatBar";
+import { REAL_TIMERS, REPEAT_BAR_MIN_MS, atLeast, type BarTimers } from "./repeatBarTiming";
 import "@/ui/styles/autoattack.css";
 
 /**
- * Auto-attack's screens (issue #221): the confirm sheet, the instant result,
- * and from it Repeat again and Watch. One flow, opened from the map's camp
+ * Auto-attack's screens (issue #221): the confirm sheet, the working bar,
+ * the result, and from it Watch. One flow, opened from the map's camp
  * panel (Repeat attack) and from the end-of-attack panel (Attack again).
  *
  * The owner's rules, as the screens carry them: the sheet is always shown,
@@ -76,12 +78,25 @@ export interface AutoAttackFlowOptions {
   readonly calls?: AutoAttackCalls;
   /** Local unix seconds; `Date.now` by default. */
   readonly now?: () => number;
+  /**
+   * Show the working bar while the attack runs (owner, 15 Nov 2026): the
+   * map's Repeat attack and the end panel's Attack again. Without it, the
+   * plain "Your monsters are attacking…" line.
+   */
+  readonly progressBar?: boolean;
+  /** The bar's clock and timer; the real ones by default. */
+  readonly barTimers?: BarTimers;
+  /** Reduced motion for the bar; the player's setting by default. */
+  readonly barReducedMotion?: boolean;
 }
 
 /** A modal sheet: a scrim and a panel that Escape and the scrim do not close. */
 const sheet = (title: string, className: string): { backdrop: HTMLElement; panel: Panel } => {
   const backdrop = document.createElement("div");
-  backdrop.className = "popup-backdrop attack-end__backdrop";
+  // The working bar's sheet is small on a phone too (attack.css), not the whole screen.
+  backdrop.className = `popup-backdrop attack-end__backdrop${
+    className.includes("auto-attack--bar") ? " auto-attack__backdrop--bar" : ""
+  }`;
   const panel = new Panel({ title, closable: false, className: `map-panel attack-end auto-attack ${className}` });
   panel.element.setAttribute("role", "dialog");
   panel.element.setAttribute("aria-modal", "true");
@@ -125,6 +140,9 @@ export class AutoAttackFlow {
   private offer: EndTakeoverOffer | null = null;
   private busy = false;
   private closed = false;
+  /** The plan the confirm sheet showed: who the bar's army is. */
+  private plan: AutoAttackPlanResponse["plan"] = null;
+  private bar: RepeatBar | null = null;
 
   constructor(options: AutoAttackFlowOptions) {
     this.options = options;
@@ -154,6 +172,8 @@ export class AutoAttackFlow {
   close(): void {
     if (this.closed) return;
     this.closed = true;
+    this.bar?.destroy();
+    this.bar = null;
     this.offer?.destroy();
     this.offer = null;
     this.open?.panel.close();
@@ -177,10 +197,15 @@ export class AutoAttackFlow {
     this.open?.panel.close();
     this.open?.backdrop.remove();
     const view = sheet(title, className);
-    const row = document.createElement("div");
-    row.className = "attack-end__actions";
-    row.append(...actions);
-    view.panel.setContent(...body, row);
+    // No buttons (the working sheets), no empty row under the words.
+    if (actions.length > 0) {
+      const row = document.createElement("div");
+      row.className = "attack-end__actions";
+      row.append(...actions);
+      view.panel.setContent(...body, row);
+    } else {
+      view.panel.setContent(...body);
+    }
     this.options.modal.append(view.backdrop);
     this.open = view;
     (actions.find((one) => one.classList.contains("btn--primary") && !one.disabled) ?? actions[0])?.focus();
@@ -188,6 +213,7 @@ export class AutoAttackFlow {
 
   private confirm(answer: AutoAttackPlanResponse): void {
     const plan = answer.plan;
+    this.plan = plan;
     if (!plan) {
       this.show("Repeat attack", "auto-attack--confirm", [paragraph("You have no attack to repeat on this camp yet.")], [
         buttonOf("Close", "btn btn--primary", () => this.close()),
@@ -208,7 +234,7 @@ export class AutoAttackFlow {
       body.push(paragraph(refusal, "auto-attack__refusal"));
       if (answer.missing.length > 0) body.push(missingList(answer.missing));
     } else {
-      body.push(paragraph("The monsters are spent, as in an attack by hand. The result comes at once.", "u-muted"));
+      body.push(paragraph("The monsters are spent, as in an attack by hand. The result comes in a few seconds.", "u-muted"));
     }
 
     const attack = buttonOf("Attack now", "btn btn--primary auto-attack__go", () => void this.run());
@@ -222,14 +248,55 @@ export class AutoAttackFlow {
   private async run(): Promise<void> {
     if (this.busy) return;
     this.busy = true;
-    this.show("Repeat attack", "auto-attack--running", [paragraph("Your monsters are attacking…", "u-muted")], []);
+    if (!this.options.progressBar) {
+      this.show("Repeat attack", "auto-attack--running", [paragraph("Your monsters are attacking…", "u-muted")], []);
+      try {
+        const result = await this.calls.run(this.options.baseid);
+        this.options.onAttacked?.(result);
+        if (!this.closed) this.result(result);
+      } catch (caught) {
+        if (!this.closed) this.failed(caught);
+      } finally {
+        this.busy = false;
+      }
+      return;
+    }
+    await this.runWithBar();
+  }
+
+  /**
+   * Repeat attack with the working bar: it runs at least
+   * {@link REPEAT_BAR_MIN_MS}; once the answer is in and that time has passed
+   * it jumps to full, holds a moment, and the result shows. An error stops it
+   * at once. The map hears of the landed attack when the bar lands, so the
+   * camp behind the sheet does not change before the bar is done.
+   */
+  private async runWithBar(): Promise<void> {
+    const timers = this.options.barTimers ?? REAL_TIMERS;
+    const bar = new RepeatBar({
+      plan: this.plan,
+      timers,
+      ...(this.options.barReducedMotion === undefined ? {} : { reducedMotion: this.options.barReducedMotion }),
+    });
+    this.bar = bar;
+    const words = paragraph("Attacking…", "u-muted auto-attack__working");
+    words.setAttribute("aria-live", "polite");
+    this.show("Repeat attack", "auto-attack--running auto-attack--bar", [bar.element, words], []);
+    bar.start();
     try {
-      const result = await this.calls.run(this.options.baseid);
+      const result = await atLeast(this.calls.run(this.options.baseid), REPEAT_BAR_MIN_MS, timers, bar.started);
+      // Before the closed check: a landed attack is always reported.
       this.options.onAttacked?.(result);
+      if (this.closed) return;
+      bar.complete();
+      await timers.wait(bar.holdMs);
       if (!this.closed) this.result(result);
     } catch (caught) {
+      bar.stop();
       if (!this.closed) this.failed(caught);
     } finally {
+      bar.destroy();
+      if (this.bar === bar) this.bar = null;
       this.busy = false;
     }
   }
@@ -303,12 +370,11 @@ export class AutoAttackFlow {
       );
     }
 
+    // Only Watch and Close (owner, 15 Nov 2026): no Repeat again here.
     const watch = buttonOf("Watch", "btn btn--ghost auto-attack__watch", () => void this.watch());
-    const again = buttonOf("Repeat again", "btn btn--ghost auto-attack__again", () => void this.start());
     const close = buttonOf("Close", "btn btn--primary auto-attack__close", () => this.close());
     this.show("Auto-attack result", `auto-attack--result${result.conquered ? " attack-end--win" : ""}`, body, [
       watch,
-      again,
       close,
     ]);
 

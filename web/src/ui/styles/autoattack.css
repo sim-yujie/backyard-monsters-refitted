@@ -55,3 +55,45 @@
   margin: var(--space-1) 0 0;
   padding-left: var(--space-4);
 }
+
+/* ── The working bar's sheet (Repeat attack, 15 Nov 2026) ─────────────────
+ * Just the bar and one short line under it: no empty row for buttons, and
+ * the body's gaps and the line's own margins taken in. Specific enough to
+ * win over `.map-panel .panel__body` (maproom.css) and the window style's
+ * padding (skin.css) whatever order the files load in. */
+
+.map-panel.auto-attack--bar > .panel__body {
+  gap: var(--space-1);
+  padding-block: var(--space-2) var(--space-3);
+}
+
+.auto-attack__working {
+  margin: 0;
+  font-size: var(--text-sm);
+  text-align: center;
+}
+
+/* A phone: a compact sheet in the middle of the screen, not the whole screen
+   that the confirm sheet and the result take (attack.css), with a 16px gutter
+   and clear of the notch and the home bar. */
+@media (max-width: 620px) {
+  .attack-end__backdrop.auto-attack__backdrop--bar {
+    place-items: center stretch;
+    padding: max(var(--space-4), env(safe-area-inset-top)) max(var(--space-4), env(safe-area-inset-right))
+      max(var(--space-4), env(safe-area-inset-bottom)) max(var(--space-4), env(safe-area-inset-left));
+  }
+
+  /* The painted sign rides above the frame's top edge (skin.css): room for it. */
+  :root[data-skin] .attack-end__backdrop.auto-attack__backdrop--bar {
+    padding-top: max(32px, env(safe-area-inset-top));
+  }
+
+  .attack-end.auto-attack--bar {
+    align-self: center;
+    width: auto;
+    height: auto;
+    max-height: 100%;
+    border: 1px solid var(--colour-border);
+    border-radius: var(--radius-lg);
+  }
+}
