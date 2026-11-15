@@ -1,5 +1,5 @@
 import type { CalendarView, EventReward, EventView, GrantedReward, LadderView } from "@/api/events";
-import { KRALLEN_AURA_LEVEL } from "@/game/yard/krallenAura";
+import { krallenAuraTimes } from "@/game/yard/krallenAura";
 import { formatAmount, formatCompact, formatCountdown } from "@/ui/format";
 
 /**
@@ -212,26 +212,31 @@ export const krallenPenaltyNotice = (penalties: readonly { from: number; to: num
 
 /**
  * What a paid claim gave, for the notice: "Krallen joined your yard!",
- * "Krallen is now level 3!", or her loot aura ({@link grantedAuraText}).
+ * "Krallen is now level 3!", and her loot aura ({@link grantedAuraText}).
  */
 export const grantedKrallenText = (granted: readonly GrantedReward[]): string | null => {
+  const aura = grantedAuraText(granted);
   const krallen = granted.find((one) => one.kind === "krallen");
-  if (!krallen || krallen.kind !== "krallen") return grantedAuraText(granted);
-  if (!krallen.raised) return `Your Krallen is already level ${krallen.level}, the highest.`;
-  return krallen.level === 1 ? "Krallen joined your yard!" : `Krallen is now level ${krallen.level}!`;
+  if (!krallen || krallen.kind !== "krallen") return aura;
+  const words = !krallen.raised
+    ? `Your Krallen is already level ${krallen.level}, the highest.`
+    : krallen.level === 1
+      ? "Krallen joined your yard!"
+      : `Krallen is now level ${krallen.level}!`;
+  return aura === null ? words : `${words} ${aura}`;
 };
 
 /**
- * Her loot aura, for the notice: below level 3, that it waits for her level 3;
- * without her, that she comes first. An aura that is on raises no notice
- * (owner, 13 Nov 2026): the hunt card says "On until 1 Jan".
+ * Her loot aura, for the notice (owner, 15 Nov 2026: say it is on now):
+ * "Loot aura on until 1 Jan: nearby monsters loot up to x1.4." at her level;
+ * without her, that she comes first (the server refuses that claim,
+ * `needsKrallen`, so it should not be seen).
  */
 export const grantedAuraText = (granted: readonly GrantedReward[]): string | null => {
   const aura = granted.find((one) => one.kind === "krallenAura");
   if (!aura || aura.kind !== "krallenAura") return null;
-  if (!aura.hasKrallen) return "Win Krallen first: her loot aura needs her.";
-  if (aura.level < KRALLEN_AURA_LEVEL) return `Loot aura won! Krallen uses it from level ${KRALLEN_AURA_LEVEL}.`;
-  return null;
+  if (!aura.hasKrallen) return "Claim Krallen first, then her loot aura.";
+  return `Loot aura on until ${shortDate(aura.until)}: nearby monsters loot up to x${krallenAuraTimes(aura.level)}.`;
 };
 
 /**

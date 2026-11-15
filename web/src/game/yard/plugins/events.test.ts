@@ -392,7 +392,7 @@ describe("Events: claims raise no toast for what the bar shows (owner, 13 Nov 20
     expect(line?.getAttribute("aria-label")).not.toContain("Twigs");
   });
 
-  it("a ladder tier of Shiny: no 'Claimed'; Krallen's news stays; her aura switching on says nothing", async () => {
+  it("a ladder tier of Shiny: no 'Claimed'; Krallen's news stays; her aura says it is on (owner, 15 Nov 2026)", async () => {
     const event = hunt(30);
     const { door, notices } = await setup([event]);
     const actions = (door as unknown as { actions: EventsActions }).actions;
@@ -409,7 +409,8 @@ describe("Events: claims raise no toast for what the bar shows (owner, 13 Nov 20
       completed: [],
     });
     await claimsOf(door).claimTier(event, 1);
-    expect(notices.element.childElementCount).toBe(before);
+    expect(notices.element.textContent).toContain("Loot aura on until ");
+    expect(notices.element.textContent).toContain("nearby monsters loot up to x2.8.");
 
     claimTier.mockResolvedValue({
       ok: true,
@@ -417,7 +418,7 @@ describe("Events: claims raise no toast for what the bar shows (owner, 13 Nov 20
       completed: [],
     });
     await claimsOf(door).claimTier(event, 1);
-    expect(notices.element.textContent).toContain("Win Krallen first");
+    expect(notices.element.textContent).toContain("Claim Krallen first, then her loot aura.");
 
     claimTier.mockResolvedValue({
       ok: true,
