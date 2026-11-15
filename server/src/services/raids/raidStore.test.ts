@@ -33,7 +33,8 @@ const {
   readOpenRaid,
   readRaidScreen,
   recordRaidScreen,
-  takeRaidForFinish,
+  checkRaidForFinish,
+  dropOpenRaid,
   updateOpenRaid,
 } = await import("./raidStore.js");
 type OpenRaid = NonNullable<Awaited<ReturnType<typeof readOpenRaid>>>;
@@ -149,49 +150,47 @@ describe("finish", () => {
     expect(ready).toBe(start + FIGHT / 2 - 5);
     at(ready - 1);
     await ping(ready - 1);
-    expect(await takeRaidForFinish(USER, "r_one", ready - 1)).toEqual({ kind: "tooEarly", readyAt: ready });
+    expect(await checkRaidForFinish(USER, "r_one", ready - 1)).toEqual({ kind: "tooEarly", readyAt: ready });
     expect(await readOpenRaid(USER)).not.toBeNull();
   });
 
-  test("taken exactly once", async () => {
+  test("ready to land, and left open: it is landed and dropped under the yard's lock (raidFlow.ts)", async () => {
     at(ready);
     await ping(ready);
-    const [a, b] = await Promise.all([
-      takeRaidForFinish(USER, "r_one", ready),
-      takeRaidForFinish(USER, "r_one", ready),
-    ]);
-    expect([a.kind, b.kind].sort()).toEqual(["finished", "gone"]);
-    const finished = a.kind === "finished" ? a : b;
-    expect(finished).toMatchObject({ raid: { id: "r_one", outcome: { health: 0.95 } } });
-    expect(await readOpenRaid(USER)).toBeNull();
-    expect(await takeRaidForFinish(USER, "r_one", ready + 1)).toEqual({ kind: "gone" });
+    const [a, b] = await Promise.all([checkRaidForFinish(USER, "r_one", ready), checkRaidForFinish(USER, "r_one", ready)]);
+    expect(a).toMatchObject({ kind: "finished", raid: { id: "r_one", outcome: { health: 0.95 } } });
+    expect(b.kind).toBe("finished");
+    expect(await readOpenRaid(USER)).not.toBeNull();
+    expect(await dropOpenRaid(USER, "r_other")).toBe(false);
+    expect(await readOpenRaid(USER)).not.toBeNull();
+    expect(await dropOpenRaid(USER, "r_one")).toBe(true);
+    expect(await checkRaidForFinish(USER, "r_one", ready + 1)).toEqual({ kind: "gone" });
   });
 
   test("another raid's id finds nothing and leaves it", async () => {
     at(ready);
-    expect(await takeRaidForFinish(USER, "r_other", ready)).toEqual({ kind: "gone" });
+    expect(await checkRaidForFinish(USER, "r_other", ready)).toEqual({ kind: "gone" });
     expect(await readOpenRaid(USER)).not.toBeNull();
   });
 
   test("a raid still in its warning cannot be finished", async () => {
     await cancelOpenRaid(USER);
     await openRaid(USER, warning(), T0);
-    expect(await takeRaidForFinish(USER, "r_one", T0 + 1000)).toEqual({ kind: "notFighting" });
+    expect(await checkRaidForFinish(USER, "r_one", T0 + 1000)).toEqual({ kind: "notFighting" });
     expect(await readOpenRaid(USER)).not.toBeNull();
   });
 
-  test("no presence mark in the last 2 minutes: cancelled and gone (cancel rule 2)", async () => {
+  test("no presence mark in the last 2 minutes: to be cancelled (cancel rule 2)", async () => {
     await ping(start);
     at(start + 200);
-    const result = await takeRaidForFinish(USER, "r_one", start + 200);
+    const result = await checkRaidForFinish(USER, "r_one", start + 200);
     expect(result.kind).toBe("cancelled");
-    expect(await readOpenRaid(USER)).toBeNull();
   });
 
   test("a mark just inside the 2 minutes still finishes", async () => {
     await ping(ready - 100);
     at(ready);
-    expect((await takeRaidForFinish(USER, "r_one", ready)).kind).toBe("finished");
+    expect((await checkRaidForFinish(USER, "r_one", ready)).kind).toBe("finished");
   });
 });
 

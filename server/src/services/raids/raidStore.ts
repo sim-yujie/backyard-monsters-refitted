@@ -153,11 +153,12 @@ export const presenceLapsed = async (userid: number): Promise<boolean> => (await
  * warning only when the game had been closed.
  *
  * @param gameWasClosed - {@link presenceLapsed}, read before this load wrote the mark.
+ * @param keep - A fight this load tried to land and could not: left open for its finish.
  * @returns True when a raid was cancelled.
  */
-export const cancelRaidOnYardLoad = async (userid: number, gameWasClosed: boolean): Promise<boolean> => {
+export const cancelRaidOnYardLoad = async (userid: number, gameWasClosed: boolean, keep?: string): Promise<boolean> => {
   const raid = await readOpenRaid(userid);
-  if (!raid) return false;
+  if (!raid || raid.id === keep) return false;
   if (raid.phase === "warning" && !gameWasClosed) return false;
   return cancelOpenRaid(userid);
 };
@@ -188,7 +189,7 @@ export const readLandedResult = async (userid: number, raidId: string): Promise<
   }
 };
 
-/** What {@link takeRaidForFinish} found. */
+/** What {@link checkRaidForFinish} found. */
 export type RaidFinish =
   /** No open raid with that id: it timed out, was cancelled or was already finished. */
   | { readonly kind: "gone" }
@@ -196,9 +197,9 @@ export type RaidFinish =
   | { readonly kind: "notFighting" }
   /** Sooner than the fight could have been watched at 2x. Left open until it times out. */
   | { readonly kind: "tooEarly"; readonly readyAt: number }
-  /** The game was closed during the fight: cancelled and gone. */
+  /** The game was closed during the fight: the caller cancels it. */
   | { readonly kind: "cancelled"; readonly raid: OpenRaid }
-  /** Taken, exactly once: the caller applies it. */
+  /** Ready to land: the caller lands it, once, under the yard's row lock. */
   | { readonly kind: "finished"; readonly raid: OpenRaid };
 
 /** The earliest finish for a fight that started at `startedAt` and lasts `fightSeconds` at 1x. */
@@ -206,11 +207,14 @@ export const earliestFinish = (startedAt: number, fightSeconds: number): number 
   startedAt + Math.ceil(fightSeconds / 2) - FINISH_EARLY_SLACK_SECONDS;
 
 /**
- * The finish's checks (§7.1), and the raid taken out of Redis with `GETDEL`
- * so that of two finishes only one gets it. A refused finish leaves the raid
- * as it was.
+ * The finish's checks (§7.1). Nothing is taken out of Redis here: the raid
+ * is landed or cancelled under the main yard's row lock, which the finish
+ * and the yard load both take, and only then dropped (`raidFlow.ts`'s
+ * `settleRaid`, patch 7.5). So two finishes, or a finish and a load, land it
+ * once whatever order they come in, and a landing that fails leaves the raid
+ * open for the next try.
  */
-export const takeRaidForFinish = async (userid: number, raidId: string, now: number): Promise<RaidFinish> => {
+export const checkRaidForFinish = async (userid: number, raidId: string, now: number): Promise<RaidFinish> => {
   const open = await readOpenRaid(userid);
   if (!open || open.id !== raidId) return { kind: "gone" };
   if (open.phase !== "fighting" || open.startedAt === undefined) return { kind: "notFighting" };
@@ -218,12 +222,18 @@ export const takeRaidForFinish = async (userid: number, raidId: string, now: num
   const readyAt = earliestFinish(open.startedAt, open.fightSeconds ?? 0);
   if (now < readyAt) return { kind: "tooEarly", readyAt };
 
-  const taken = parseRaid(await redis.getdel(raidKey(userid)));
-  if (!taken || taken.id !== raidId || taken.phase !== "fighting") return { kind: "gone" };
-
   const seen = Number(await redis.get(lastSeenKey(userid)));
-  if (!(seen > 0) || seen < now - RAID_PRESENCE_SECONDS) return { kind: "cancelled", raid: taken };
-  return { kind: "finished", raid: taken };
+  if (!(seen > 0) || seen < now - RAID_PRESENCE_SECONDS) return { kind: "cancelled", raid: open };
+  return { kind: "finished", raid: open };
+};
+
+/**
+ * Drops the open raid if it is still `raidId`, once it has been landed or
+ * cancelled. @returns True when it was dropped.
+ */
+export const dropOpenRaid = async (userid: number, raidId: string): Promise<boolean> => {
+  if ((await readOpenRaid(userid))?.id !== raidId) return false;
+  return cancelOpenRaid(userid);
 };
 
 /**

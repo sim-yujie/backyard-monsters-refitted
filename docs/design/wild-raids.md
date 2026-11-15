@@ -550,8 +550,10 @@ becomes server-owned:
   outcome, fightSeconds }`. TTL: warning `attackAt - now + 15 min`; fight `fightSeconds + 2 min`.
   Losing Redis loses only open raids, which is a cancel (D5).
 - `raid-screen:<userid>` → the last ping's `{ where, planner }`, TTL 120 s.
-- Finish reads and deletes the raid key atomically (`GETDEL`), then applies under the row lock;
-  `lastRaidId` refuses a second apply.
+- Finish (and, since patch 7.5, the yard load) takes the main row lock first, then reads the raid
+  key under it and applies; `lastRaidId` refuses a second apply, so a finish and a load land it
+  once in either order. The key is deleted only after the row is written, so a failed apply
+  leaves the raid open for the next try. (Before 7.5 the finish deleted it first with `GETDEL`.)
 
 No new table and no schema migration.
 

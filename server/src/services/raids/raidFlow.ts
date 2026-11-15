@@ -54,13 +54,14 @@ import {
   FIGHT_GRACE_SECONDS,
   WARNING_SECONDS,
   cancelOpenRaid,
+  checkRaidForFinish,
+  dropOpenRaid,
   earliestFinish,
   keepLandedResult,
   newRaidId,
   openRaid,
   readLandedResult,
   readOpenRaid,
-  takeRaidForFinish,
   updateOpenRaid,
   type OpenRaid,
   type RaidScreen,
@@ -539,8 +540,8 @@ export const unlockYard = (em: EntityManager, user: User, raidId: string): Promi
   });
 
 /**
- * The finish (§4.2, §7.1): the raid taken out of Redis exactly once, then
- * landed on the caught-up yard under its row lock (`raidLanding.ts`).
+ * The finish (§4.2, §7.1): the raid landed once on the caught-up yard under
+ * its row lock (`raidLanding.ts`, {@link settleRaid}).
  *
  * - A finish sooner than the fight could be watched at 2x is refused
  *   (`tooEarly`, with `readyAt`); the raid stays open until it times out.
@@ -549,13 +550,12 @@ export const unlockYard = (em: EntityManager, user: User, raidId: string): Promi
  *   unlocked and the raid is still due.
  * - A finish for a raid that already landed answers what it landed, so a
  *   client that lost the first answer can ask again, and so does one whose
- *   raid the yard load landed first (`settleRaidOnYardLoad`): it reads the
- *   row under its lock, so it waits for a landing still being written.
+ *   raid the yard load landed (`settleRaidOnYardLoad`), in either order.
  */
 export const finishRaid = async (em: EntityManager, user: User, raidId: unknown, now: number): Promise<RaidResult> => {
   if (typeof raidId !== "string") throw raidRefusedErr("badRequest");
-  const taken = await takeRaidForFinish(user.userid, raidId, now);
-  switch (taken.kind) {
+  const checked = await checkRaidForFinish(user.userid, raidId, now);
+  switch (checked.kind) {
     case "gone": {
       const landed = await alreadyLanded(em, user, raidId);
       if (landed) return landed;
@@ -564,17 +564,24 @@ export const finishRaid = async (em: EntityManager, user: User, raidId: unknown,
     case "notFighting":
       throw raidRefusedErr("notFighting");
     case "tooEarly":
-      throw raidRefusedErr("tooEarly", { readyAt: taken.readyAt });
-    case "cancelled":
-      await unlockYard(em, user, raidId);
+      throw raidRefusedErr("tooEarly", { readyAt: checked.readyAt });
+    case "cancelled": {
+      const settled = await settleRaid(em, user, raidId, now, "cancel", "finish");
+      if (settled.kind === "landed") return settled.result;
+      if (settled.kind === "gone") throw raidRefusedErr("noRaid");
       logger.info("Wild monster raid {id} cancelled for userid {userid}: presence lost", {
         event: "wild-raid-cancelled",
         userid: user.userid,
         id: raidId,
       });
       throw raidRefusedErr("cancelled");
+    }
+    case "finished": {
+      const settled = await settleRaid(em, user, raidId, now, "land", "finish");
+      if (settled.kind === "landed") return settled.result;
+      throw raidRefusedErr("noRaid");
+    }
   }
-  return landTakenRaid(em, user, taken.raid, now, "finish");
 };
 
 /**
@@ -589,43 +596,94 @@ const alreadyLanded = async (em: EntityManager, user: User, raidId: string): Pro
   return (await readLandedResult(user.userid, raidId)) ?? record;
 };
 
-/** Lands a raid taken out of Redis (`takeRaidForFinish`), once, and keeps its whole result for a late finish. */
-const landTakenRaid = async (
+/** What {@link settleRaid} did. */
+type RaidSettlement =
+  /** The raid is landed: now, or by an earlier finish or load. */
+  | { readonly kind: "landed"; readonly result: RaidResult }
+  /** Cancelled now: nothing landed. */
+  | { readonly kind: "cancelled" }
+  /** Neither open nor landed: it timed out or was cancelled. */
+  | { readonly kind: "gone" };
+
+/**
+ * Lands (or, with "cancel", calls off) the open raid `raidId`, once: the one
+ * place a raid is settled, by the finish and by the yard load alike (patch
+ * 7.5, sol's second review). Everything is decided under the main yard's row
+ * lock: whether the row has landed it already, then the open raid as Redis
+ * has it now. The raid leaves Redis only after the row is written, so:
+ *
+ * - whichever of a finish and a load takes the lock first lands it, and the
+ *   other finds it landed and answers the same result;
+ * - a landing that fails (the database) leaves the raid open, for the next
+ *   finish or load to land;
+ * - keeping the whole result for a late finish (`keepLandedResult`) is extra:
+ *   if Redis refuses it the landing still stands, and a late finish answers
+ *   the record `recent` keeps.
+ */
+const settleRaid = async (
   em: EntityManager,
   user: User,
-  raid: OpenRaid,
+  raidId: string,
   now: number,
+  how: "land" | "cancel",
   via: "finish" | "load"
-): Promise<RaidResult> => {
-  const outcome = raid.outcome as RaidFightOutcome;
+): Promise<RaidSettlement> => {
   let completed: CompletedJob[] = [];
-  // False when this finish only repeats one that already landed, so the dashboard counts each raid once.
-  let landedNow = false;
-  const result = await countAfterCommit(() => em.transactional(async (tx) => {
-    const locked = await lockMain(tx, user);
-    if (raidAlreadyApplied(readSchedule(locked.aiattacks), raid.id)) {
-      const landed = landedResult(locked.aiattacks, raid.id);
-      if (!landed) throw raidRefusedErr("noRaid");
-      return (await readLandedResult(user.userid, raid.id)) ?? landed;
-    }
-    completed = await catchUpLockedRow(tx, locked, now);
-    const landed = landRaid(locked, { id: raid.id, tribe: raid.tribe, startedAt: raid.startedAt ?? now, outcome }, now);
-    // Quests: a wild monster raid held off (the raid's own good defence, the
-    // one that pays Shiny; not the Trojan Horse or Moloch) is a held defence
-    // for the weekly Fighting quest, on the locked main row.
-    if (landed.defended && raid.tribe !== TROJAN_TRIBE && raid.tribe !== MOLOCH_TRIBE) {
-      recordQuests(locked, now, { defenceWin: 1 });
-    }
-    // Kept before the row lock goes, so a finish waiting on it finds it whole.
-    await keepLandedResult(user.userid, landed);
-    await tx.flush();
-    landedNow = true;
-    return landed;
-  }));
-  await notifyJobs(em, user.userid, completed);
+  let landedNow: { raid: OpenRaid; outcome: RaidFightOutcome } | null = null;
+  const settled = await countAfterCommit(() =>
+    em.transactional(async (tx): Promise<RaidSettlement> => {
+      const locked = await lockMain(tx, user);
+      const schedule = readSchedule(locked.aiattacks);
+      if (raidAlreadyApplied(schedule, raidId)) {
+        const landed = landedResult(locked.aiattacks, raidId);
+        if (!landed) return { kind: "gone" };
+        return { kind: "landed", result: (await readLandedResult(user.userid, raidId)) ?? landed };
+      }
+      const raid = await readOpenRaid(user.userid);
+      if (!raid || raid.id !== raidId || raid.phase !== "fighting") return { kind: "gone" };
 
+      if (how === "cancel") {
+        if (readFightLock(schedule.fight)?.id === raidId) {
+          locked.aiattacks = scheduleColumn(withoutFightLock(schedule));
+          await tx.flush();
+        }
+        return { kind: "cancelled" };
+      }
+
+      const outcome = raid.outcome as RaidFightOutcome;
+      completed = await catchUpLockedRow(tx, locked, now);
+      const landed = landRaid(locked, { id: raid.id, tribe: raid.tribe, startedAt: raid.startedAt ?? now, outcome }, now);
+      // Quests: a wild monster raid held off (the raid's own good defence, the
+      // one that pays Shiny; not the Trojan Horse or Moloch) is a held defence
+      // for the weekly Fighting quest, on the locked main row.
+      if (landed.defended && raid.tribe !== TROJAN_TRIBE && raid.tribe !== MOLOCH_TRIBE) {
+        recordQuests(locked, now, { defenceWin: 1 });
+      }
+      // Kept before the row lock goes, so a finish waiting on it finds it
+      // whole; never at the cost of the landing itself.
+      await keepLandedResult(user.userid, landed).catch((err: unknown) =>
+        logger.warn(`Wild monster raid ${raid.id}'s result not kept for a late finish: ${(err as Error).message}`)
+      );
+      await tx.flush();
+      landedNow = { raid, outcome };
+      return { kind: "landed", result: landed };
+    })
+  );
+  if (settled.kind === "gone") return settled;
+  // Written: the raid may leave Redis now. Should that fail, the row says it
+  // landed, so whatever finds it next answers what landed.
+  await dropOpenRaid(user.userid, raidId).catch((err: unknown) =>
+    logger.warn(`Wild monster raid ${raidId} not dropped after it settled: ${(err as Error).message}`)
+  );
+  if (settled.kind === "cancelled") return settled;
+  const fresh = landedNow as { raid: OpenRaid; outcome: RaidFightOutcome } | null;
+  if (!fresh) return settled;
+
+  await notifyJobs(em, user.userid, completed);
+  noteTribeRaid();
+  const { raid, outcome } = fresh;
+  const result = settled.result;
   const plan = planOf(raid);
-  if (landedNow) noteTribeRaid();
   logger.info("Wild monster raid {id} landed for userid {userid}: {tribe}, health {health}", {
     event: "wild-raid",
     userid: user.userid,
@@ -644,8 +702,19 @@ const landTakenRaid = async (
     shiny: result.shiny,
     damaged: result.damaged.length,
   });
-  return result;
+  return settled;
 };
+
+/** What {@link settleRaidOnYardLoad} did. */
+export interface YardLoadRaid {
+  /** What is landed for the fight this load came back from, by this load or before it, for the load's answer. */
+  readonly landed: RaidResult | null;
+  /**
+   * A fight whose landing failed here: left open for its finish, so the
+   * load's cancel (`cancelRaidOnYardLoad`) must leave it alone.
+   */
+  readonly keep?: string;
+}
 
 /**
  * A wild monster raid on an own-main-yard build load (patch 7.5), before the
@@ -655,37 +724,38 @@ const landTakenRaid = async (
  * back to the yard while the finish is still on its way (a slow line, a
  * server that answered late, "Back to yard") loses nothing: the yard opens
  * with the raid landed, the load answers its result, and the finish that
- * arrives afterwards answers the same result (`finishRaid`).
+ * arrives afterwards answers the same result (`finishRaid`). A finish that
+ * takes the yard's lock first lands it instead, and the load answers that.
  *
  * Anything else is left for `cancelRaidOnYardLoad` after the catch-up, as
  * before: a warning, a fight left before it could have been watched at 2x (a
  * reload during the fight, owner Q1), and any fight when the game had been
- * closed (presence lapsed: the finish would have cancelled it too).
+ * closed (presence lapsed: the finish would have cancelled it too). A
+ * landing that fails here (the database) keeps the fight open (`keep`) for
+ * its finish to land, rather than losing it.
  *
  * Nothing comes from the client: the outcome is the server's own, fought at
  * the start, so landing it here gives nothing a finish would not.
  *
  * @param gameWasClosed - `presenceLapsed`, read before this load wrote the mark.
- * @returns What landed, for the load's answer, or null when nothing did.
  */
 export const settleRaidOnYardLoad = async (
   em: EntityManager,
   user: User,
   gameWasClosed: boolean,
   now: number
-): Promise<RaidResult | null> => {
-  if (gameWasClosed) return null;
+): Promise<YardLoadRaid> => {
+  if (gameWasClosed) return { landed: null };
   const open = await readOpenRaid(user.userid);
-  if (!open || open.phase !== "fighting" || open.startedAt === undefined) return null;
-  if (now < earliestFinish(open.startedAt, open.fightSeconds ?? 0)) return null;
-  // The load wrote the presence mark already; the game was open (above).
-  const taken = await takeRaidForFinish(user.userid, open.id, now);
-  if (taken.kind === "cancelled") {
-    await unlockYard(em, user, open.id);
-    return null;
+  if (!open || open.phase !== "fighting" || open.startedAt === undefined) return { landed: null };
+  if (now < earliestFinish(open.startedAt, open.fightSeconds ?? 0)) return { landed: null };
+  try {
+    const settled = await settleRaid(em, user, open.id, now, "land", "load");
+    return { landed: settled.kind === "landed" ? settled.result : null };
+  } catch (err) {
+    logger.warn(`Wild monster raid ${open.id} not landed on load for user ${user.userid}: ${(err as Error).message}`);
+    return { landed: null, keep: open.id };
   }
-  if (taken.kind !== "finished") return null;
-  return landTakenRaid(em, user, taken.raid, now, "load");
 };
 
 /**

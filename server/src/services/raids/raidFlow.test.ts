@@ -73,6 +73,8 @@ const db = {
   /** Unlocked reads of the whole row (no `fields`), and locked reads. */
   fullReads: 0,
   locks: 0,
+  /** The next this many flushes fail, as a lost database connection would: the transaction writes nothing. */
+  failFlushes: 0,
 };
 
 /** Takes the row lock; resolves with its release once every earlier holder let go. */
@@ -110,6 +112,10 @@ const em = {
         return entity;
       },
       async flush() {
+        if (db.failFlushes > 0) {
+          db.failFlushes--;
+          throw new Error("the database went away");
+        }
         if (entity) pending = structuredClone(entity);
       },
       transactional: (inner: (fork: unknown) => Promise<unknown>) => inner(fork),
@@ -257,14 +263,14 @@ const yardLoad = async (now: number, gameWasClosed = false) => {
   if (gameWasClosed) await redis.del(lastSeenKey(USER));
   const closed = await presenceLapsed(USER);
   await redis.set(lastSeenKey(USER), String(now));
-  const landed = await settleRaidOnYardLoad(em, user, closed, now);
+  const settled = await settleRaidOnYardLoad(em, user, closed, now);
   await em.transactional(async (tx) => {
     const locked = (await tx.findOne(Object, {}, { lockMode: LockMode.PESSIMISTIC_WRITE })) as never;
     countRaidSession(locked, now);
     await tx.flush();
   });
-  await cancelRaidOnYardLoad(USER, closed);
-  return landed;
+  await cancelRaidOnYardLoad(USER, closed, settled.keep);
+  return settled.landed;
 };
 
 beforeEach(() => {
@@ -273,6 +279,7 @@ beforeEach(() => {
   db.inferno = null;
   db.fullReads = 0;
   db.locks = 0;
+  db.failFlushes = 0;
   standIn.slot = null;
   standIn.fight = null;
   at(NOW);
@@ -673,22 +680,116 @@ describe("a yard load while the finish is on its way (patch 7.5, sol's review)",
     FIGHT_TIMEOUT_MS
   );
 
+  /**
+   * A load and a finish for the same fight at once, `first` taking the yard's
+   * row lock first: the row is held while both check the raid and queue for
+   * the lock, then let go.
+   */
+  const race = async (first: "load" | "finish") => {
+    const { id, finishFrom } = await toFight();
+    await present(finishFrom);
+    const release = await acquire();
+    const queued = () => db.locks;
+    const before = queued();
+    const startLoad = () => yardLoad(finishFrom + 1);
+    const startFinish = () => finishRaid(em, user, id, finishFrom + 1);
+    const one = first === "load" ? startLoad() : startFinish();
+    await until(() => queued() === before + 1);
+    const two = first === "load" ? startFinish() : startLoad();
+    await until(() => queued() === before + 2);
+    // Both have seen the raid open and wait on the row: nothing has left Redis.
+    expect(await readOpenRaid(USER)).not.toBeNull();
+    release();
+    const [a, b] = await Promise.all([one, two]);
+    const [fromLoad, fromFinish] = first === "load" ? [a, b] : [b, a];
+    return { id, fromLoad: fromLoad as Awaited<ReturnType<typeof yardLoad>>, fromFinish: fromFinish as Awaited<ReturnType<typeof finishRaid>> };
+  };
+
   test(
-    "a finish that comes while the load is landing waits for it and answers it; Shiny is paid once",
+    "the load takes the yard's lock first: it lands the raid, the finish waits and answers the same; Shiny once",
+    async () => {
+      const { id, fromLoad, fromFinish } = await race("load");
+      expect(fromLoad).toMatchObject({ id, defended: true, shiny: 10 });
+      expect(fromFinish).toEqual(fromLoad!);
+      expect(db.row!.credits).toBe(110);
+      expect(readSchedule(db.row!.aiattacks).recent).toHaveLength(1);
+      expect(await readOpenRaid(USER)).toBeNull();
+    },
+    FIGHT_TIMEOUT_MS
+  );
+
+  test(
+    "the finish takes the yard's lock first (sol's order): it lands the raid, the load answers the same; Shiny once",
+    async () => {
+      const { id, fromLoad, fromFinish } = await race("finish");
+      expect(fromFinish).toMatchObject({ id, defended: true, shiny: 10 });
+      expect(fromLoad).toEqual(fromFinish);
+      expect(db.row!.credits).toBe(110);
+      expect(readSchedule(db.row!.aiattacks).recent).toHaveLength(1);
+      expect(await readOpenRaid(USER)).toBeNull();
+    },
+    FIGHT_TIMEOUT_MS
+  );
+
+  test(
+    "Redis refusing to keep the whole result does not lose the landing: it stands, and a late finish answers it",
     async () => {
       const { id, finishFrom } = await toFight();
       await present(finishFrom);
-      // Hold the row so the load's landing waits after taking the raid.
-      const release = await acquire();
-      const load = yardLoad(finishFrom + 1);
-      await until(() => !strings.has(`wild-raid:${USER}`));
-      const finish = finishRaid(em, user, id, finishFrom + 1);
-      await Bun.sleep(5);
-      release();
-      const [fromLoad, fromFinish] = await Promise.all([load, finish]);
+      const setex = redis.setex;
+      redis.setex = (async (key: string, ttl: number, value: string) => {
+        if (key.startsWith("wild-raid-landed:")) throw new Error("Redis said no");
+        return setex(key, ttl, value);
+      }) as typeof redis.setex;
+      try {
+        const landed = await yardLoad(finishFrom + 1);
+        expect(landed).toMatchObject({ id, shiny: 10 });
+      } finally {
+        redis.setex = setex;
+      }
+      expect(db.row!.credits).toBe(110);
+      expect(readSchedule(db.row!.aiattacks).recent.map((raid) => raid.id)).toEqual([id]);
+      expect(await readOpenRaid(USER)).toBeNull();
+      // The late finish: the record `recent` keeps, without the damaged list.
+      expect(await finishRaid(em, user, id, finishFrom + 4)).toMatchObject({ id, shiny: 10, defended: true });
+      expect(db.row!.credits).toBe(110);
+    },
+    FIGHT_TIMEOUT_MS
+  );
 
-      expect(fromLoad).toMatchObject({ id, defended: true, shiny: 10 });
-      expect(fromFinish).toEqual(fromLoad!);
+  test(
+    "a landing the database fails on the load keeps the fight open: the finish after it lands it",
+    async () => {
+      const { id, finishFrom } = await toFight();
+      await present(finishFrom);
+      db.failFlushes = 1;
+      expect(await yardLoad(finishFrom + 1)).toBeNull();
+
+      // Not landed, and not cancelled by the load either: still there to land.
+      expect(db.row!.credits).toBe(100);
+      expect(readSchedule(db.row!.aiattacks).recent).toEqual([]);
+      expect((await readOpenRaid(USER))?.id).toBe(id);
+
+      const result = await finishRaid(em, user, id, finishFrom + 3);
+      expect(result).toMatchObject({ id, shiny: 10 });
+      expect(db.row!.credits).toBe(110);
+      expect(await readOpenRaid(USER)).toBeNull();
+    },
+    FIGHT_TIMEOUT_MS
+  );
+
+  test(
+    "a landing the database fails on the finish keeps the fight open: asking again lands it, once",
+    async () => {
+      const { id, finishFrom } = await toFight();
+      await present(finishFrom);
+      db.failFlushes = 1;
+      await expect(finishRaid(em, user, id, finishFrom)).rejects.toThrow("the database went away");
+      expect((await readOpenRaid(USER))?.id).toBe(id);
+      expect(db.row!.credits).toBe(100);
+
+      expect(await finishRaid(em, user, id, finishFrom + 2)).toMatchObject({ id, shiny: 10 });
+      expect(await finishRaid(em, user, id, finishFrom + 3)).toMatchObject({ id, shiny: 10 });
       expect(db.row!.credits).toBe(110);
       expect(readSchedule(db.row!.aiattacks).recent).toHaveLength(1);
     },
