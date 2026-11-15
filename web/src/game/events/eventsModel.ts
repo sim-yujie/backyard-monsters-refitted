@@ -241,9 +241,10 @@ export const grantedAuraText = (granted: readonly GrantedReward[]): string | nul
 
 /**
  * What a claim's notice still names: the rewards nothing else shows. Resources,
- * Shiny and Glimmers float on the top bar as they land, and Krallen's loot aura
- * shows on the hunt card, so a claim of only those raises no notice (owner,
- * 13 Nov 2026). Champions (Krallen, Korath), items, speed-ups and decorations stay.
+ * Shiny and Glimmers float on the top bar as they land, so a claim of only
+ * those raises no notice (owner, 13 Nov 2026). Krallen's loot aura has its own
+ * line ({@link grantedAuraText}, "Loot aura on until ...", 15 Nov 2026), not a
+ * "Claimed" one. Champions (Krallen, Korath), items, speed-ups and decorations stay.
  */
 const SHOWN_ELSEWHERE: ReadonlySet<EventReward["kind"]> = new Set(["resources", "shiny", "eventCoins", "krallenAura"]);
 
