@@ -177,6 +177,18 @@ describe("the hatchery", () => {
     expect(readWork(save).get(13)).toBe(INF);
   });
 
+  it("runs the Inferno yard's Incubator while an Inferno monster (IC…) hatches, and only then", () => {
+    const hatching = {
+      saved: SAVED,
+      h: [["IC1", 30, []]],
+      hid: [13],
+      hstage: [1],
+    } as unknown as NonNullable<WorkSave["monsters"]>;
+    const save = saveWith(hatchery, { type: "inferno", monsters: hatching });
+    expect(animates(save, 13, 13, SAVED + 29)).toBe(true);
+    expect(animates(save, 13, 13, SAVED + 30)).toBe(false);
+  });
+
   it("stands still waiting for housing, or with nothing in production", () => {
     for (const stage of [0, 2]) {
       const save = saveWith(hatchery, { monsters: monsters(stage) });
