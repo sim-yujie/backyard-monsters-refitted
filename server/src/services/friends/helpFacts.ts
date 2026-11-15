@@ -5,6 +5,7 @@ import type { BuildingDataMap, BuildingHealthData } from "../../types/BuildingDa
 import type { ResourceAmounts } from "../yardplanner/costs.js";
 import { secondsOf } from "./friendRules.js";
 import { placeholders } from "./friendViews.js";
+import { LEGACY_HELPS_LEFT } from "./helpConfig.js";
 import {
   gateRefusal,
   previewHelp,
@@ -114,6 +115,8 @@ export const recordHelp = (tx: EntityManager, record: HelpRecord) =>
 export interface HelpBlock {
   /** Helps today that still pay a reward (0 once today's are used up). */
   rewardsLeft: number;
+  /** Kept only for pre-7.6 clients: always {@link LEGACY_HELPS_LEFT}. */
+  helpsLeft: number;
   buildings: BuildingHelp;
   /** When the age or level gates refuse (`tooNew`): which holds and when it lifts, for the panel's words. */
   gate?: HelpRefusal;
@@ -137,10 +140,12 @@ export const helpBlock = async (em: EntityManager, helper: number, ownerSave: Ow
   const owner = Number(ownerSave.userid);
   const [facts, today] = await Promise.all([helpFactsFor(em, helper, owner), helpsToday(em, helper, now)]);
   const rewardsLeft = rewardsLeftOf(today);
-  if (!facts || helper === owner || ownerSave.type !== BaseType.MAIN) return { rewardsLeft, buildings: {} };
+  // Kept only for pre-7.6 clients (`LEGACY_HELPS_LEFT`).
+  const helpsLeft = LEGACY_HELPS_LEFT;
+  if (!facts || helper === owner || ownerSave.type !== BaseType.MAIN) return { rewardsLeft, helpsLeft, buildings: {} };
   const gate = gateRefusal(facts, now);
   const buildings = previewHelp(ownerSave, helper, now, gate);
-  return gate?.reason === "tooNew" ? { rewardsLeft, buildings, gate } : { rewardsLeft, buildings };
+  return gate?.reason === "tooNew" ? { rewardsLeft, helpsLeft, buildings, gate } : { rewardsLeft, helpsLeft, buildings };
 };
 
 /**
