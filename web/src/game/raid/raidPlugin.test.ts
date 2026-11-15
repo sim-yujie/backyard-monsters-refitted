@@ -14,6 +14,7 @@ import {
   DOOR_OPEN_MS,
   LEAVE_LABEL,
   LEAVE_OFFER_MS,
+  LEAVE_TEXT,
   RAID_PLUGINS,
   createRaidPlugin,
   finishNotice,
@@ -277,6 +278,10 @@ describe("raidPlugin", () => {
       expect(leaveButton()).toBeUndefined();
       await vi.advanceTimersByTimeAsync(1);
       expect(leaveButton()).toBeDefined();
+      // One short line and the button, nothing about servers (owner, 15 Nov).
+      expect(t.notices.element.querySelector(".notice__text")?.textContent).toBe("Raid over");
+      expect(LEAVE_LABEL).toBe("Back to yard");
+      expect(LEAVE_TEXT.split(" ").length).toBeLessThanOrEqual(2);
 
       // Dismissed, it comes back while the screen still waits.
       t.notices.clear("raid-leave");

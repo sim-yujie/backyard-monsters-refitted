@@ -67,10 +67,10 @@ const DOOR_LAYER = 0;
  * no button at all). A raid has no Map, Yard or Retreat while it plays.
  */
 export const LEAVE_OFFER_MS = 8_000;
-/** The notice that offers it, and its words. */
+/** The notice that offers it, and its words: one short line and the button (owner, 15 Nov). */
 export const LEAVE_NOTICE = "raid-leave";
-export const LEAVE_TEXT = "The raid is over. Your yard shows the result once the server has it.";
-export const LEAVE_LABEL = "Back to the yard";
+export const LEAVE_TEXT = "Raid over";
+export const LEAVE_LABEL = "Back to yard";
 
 export const finishNotice = (finish: RaidFinish, tribe = ""): string | null => {
   if (finish.kind === "cancelled") {
@@ -146,7 +146,7 @@ export const createRaidPlugin =
     let gone = false;
     /** Lets the sheet downloads go again (`holdSheets`): when the finish is back, or this screen is gone. */
     let release: (() => void) | null = null;
-    /** Offers "Back to the yard" while the finish is slow; shown again if dismissed. */
+    /** Offers "Back to yard" while the finish is slow; shown again if dismissed. */
     let offerTimer: ReturnType<typeof setInterval> | null = null;
     const stopOffer = (): void => {
       if (offerTimer !== null) clearInterval(offerTimer);
