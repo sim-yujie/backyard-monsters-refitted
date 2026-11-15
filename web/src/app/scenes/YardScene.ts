@@ -46,11 +46,15 @@ import {
   afterRefusal,
   buildingHelp,
   fromVisitSave,
-  helpableIds,
+  helpAllCount,
+  helpAllTargets,
   helpingLine,
+  helpMarksOf,
   helpRefusalText,
   thanksText,
+  type HelpTarget,
 } from "@/game/friends/helpModel";
+import { helpAllResultText, runHelpAll, type HelpOutcome } from "@/game/friends/helpAll";
 import { worldChat } from "@/game/chat/chatSession";
 import { concealTraps, countedBuildings } from "@/game/attack/trapReveal";
 import { prefersReducedMotion } from "@/game/attack/AttackBattleLayer";
@@ -168,6 +172,7 @@ import { bankFloat, showBankResult } from "@/ui/yard/CollectAll";
 import { showGoldenMushroom } from "@/ui/yard/MushroomReward";
 import { FriendsButton } from "@/ui/friends/FriendsButton";
 import { HelpPanel } from "@/ui/friends/HelpPanel";
+import { HelpAllBar } from "@/ui/friends/HelpAllBar";
 import { YardDock, type YardDockOptions } from "@/ui/yard/YardDock";
 import { kitBoughtText, StarterKitPicker } from "@/ui/yard/StarterKitPicker";
 import { YardMinimap } from "@/ui/yard/YardMinimap";
@@ -491,6 +496,12 @@ export class YardScene implements Scene {
   private helpBlock: HelpBlock | null = null;
   /** The "Helping Bob" line; a friend's visit only. */
   private visitLine: HTMLElement | null = null;
+  /** The column at the top of a friend's yard: the line, then the Help all bar (beta 8). */
+  private visitTop: HTMLElement | null = null;
+  /** "3 to speed up" and Help all; a friend's visit only (beta 8). */
+  private helpAllBar: HelpAllBar | null = null;
+  /** Keeps the wrenches' "-18m" tags current while visiting. */
+  private helpMarkTimer: ReturnType<typeof setInterval> | null = null;
   /** The help panel, while open on a friend's building. */
   private helpPanel: HelpPanel | null = null;
   /**
@@ -859,6 +870,12 @@ export class YardScene implements Scene {
     this.helpPanel = null;
     this.visitLine?.remove();
     this.visitLine = null;
+    this.helpAllBar?.destroy();
+    this.helpAllBar = null;
+    this.visitTop?.remove();
+    this.visitTop = null;
+    if (this.helpMarkTimer) clearInterval(this.helpMarkTimer);
+    this.helpMarkTimer = null;
     this.helpBlock = null;
     this.visitorPool = null;
     this.dock?.destroy();
@@ -1845,15 +1862,33 @@ export class YardScene implements Scene {
     const context = this.context;
     if (!context) return;
     this.helpBlock = response.help ?? { buildings: {} };
+    if (!this.visitTop) {
+      this.visitTop = document.createElement("div");
+      this.visitTop.className = "friend-visit";
+      context.overlay.content.append(this.visitTop);
+    }
     if (!this.visitLine) {
       this.visitLine = document.createElement("div");
       this.visitLine.className = "friend-visit-line";
       this.visitLine.setAttribute("role", "status");
-      context.overlay.content.append(this.visitLine);
+      this.visitTop.append(this.visitLine);
+    }
+    if (!this.helpAllBar) {
+      this.helpAllBar = new HelpAllBar({ onHelpAll: () => this.helpAll() });
+      this.visitTop.append(this.helpAllBar.element);
     }
     this.visitLine.dataset["name"] = name;
     this.showHelpBlock();
+    // The "-18m" tags shrink as the friend's jobs run on.
+    this.helpMarkTimer ??= setInterval(() => this.showHelpMarks(), 15_000);
     this.refreshStatus();
+  }
+
+  /** The wrenches, rings and tags, read off the block and the yard as they stand now. */
+  private showHelpMarks(): void {
+    const block = this.helpBlock;
+    if (!block) return;
+    this.renderer.setHelpMarks(helpMarksOf(block, this.yard?.buildings ?? [], Date.now() / 1000));
   }
 
   /** Puts the help block on screen: the line, the wrenches and the open panel. */
@@ -1861,7 +1896,8 @@ export class YardScene implements Scene {
     const block = this.helpBlock;
     if (!block) return;
     if (this.visitLine) this.visitLine.textContent = helpingLine(this.target?.name ?? "");
-    this.renderer.setHelpMarks(helpableIds(block));
+    this.showHelpMarks();
+    this.helpAllBar?.setCount(helpAllCount(block));
     const shown = this.helpPanel?.shown;
     if (shown) this.helpPanel?.show(shown, buildingHelp(block, shown.id));
   }
@@ -1869,7 +1905,8 @@ export class YardScene implements Scene {
   /** Opens the help panel on a friend's building, docked where the building panel docks. */
   private showHelp(picked: YardBuilding): void {
     const dock = this.panelDock;
-    if (!dock) return;
+    // Help all is giving helps: one at a time.
+    if (!dock || this.helpAllBar?.running) return;
     // The yard's copy, which a help keeps current; the drawn one is as loaded.
     const building = this.yard?.buildings.find((one) => one.id === picked.id) ?? picked;
     this.panel?.close();
@@ -1890,18 +1927,34 @@ export class YardScene implements Scene {
   }
 
   /**
-   * One help (#374): the server decides and answers with the building as it
-   * now is, the reward and the rewarded helps left today. A refusal is said in words and
-   * stands on the button from then on.
+   * One help from the help panel (#374): the thank-you or the refusal, in
+   * words under its buttons. Nothing while Help all runs.
    */
   private async help(building: YardBuilding, kind: HelpKind): Promise<void> {
+    if (this.helpAllBar?.running) return;
+    const outcome = await this.giveHelp(building, kind);
+    if (!outcome) return;
+    this.helpPanel?.setMessage(outcome.text, outcome.ok ? "thanks" : "error");
+  }
+
+  /**
+   * One help (#374): the server decides and answers with the building as it
+   * now is, the reward and the rewarded helps left today. A refusal stands
+   * on the building from then on, unless it is about the whole visit. The
+   * help panel and Help all both give theirs here. Null when the visit is
+   * over (left, or signed out).
+   */
+  private async giveHelp(
+    building: YardBuilding,
+    kind: HelpKind,
+  ): Promise<(HelpOutcome & { readonly text: string }) | null> {
     const target = this.target;
     const friend = target?.friend;
     const context = this.context;
-    if (!target || friend === undefined || !this.helpBlock || !context) return;
+    if (!target || friend === undefined || !this.helpBlock || !context) return null;
     try {
       const result = await this.friends.help(friend, building.id, kind);
-      if (this.context !== context || !this.helpBlock) return;
+      if (this.context !== context || !this.helpBlock) return null;
       this.helpBlock = afterHelp(this.helpBlock, building.id, kind, result.rewardsLeft);
       if (result.building) this.patchVisitBuilding(building, result.building);
       // The reward lands in the visitor's own pool (#374): the HUD floats it.
@@ -1916,14 +1969,19 @@ export class YardScene implements Scene {
         this.hud?.setResources(resources, pool.credits);
       }
       this.showHelpBlock();
-      this.helpPanel?.setMessage(thanksText(kind, result, target.name, building.name), "thanks");
       // The friends bar's wrench follows.
       friendsStore.nudge();
+      return {
+        ok: true,
+        secondsSaved: result.secondsSaved ?? 0,
+        reward: result.reward,
+        text: thanksText(kind, result, target.name, building.name),
+      };
     } catch (caught) {
-      if (this.context !== context || !this.helpBlock) return;
+      if (this.context !== context || !this.helpBlock) return null;
       if (caught instanceof ApiError && caught.isAuthFailure) {
         context.goTo(SceneName.LOGIN);
-        return;
+        return null;
       }
       const refusal = friendRefusal(caught);
       const known = refusal.reason !== "unknown" && refusal.reason !== "network";
@@ -1932,8 +1990,32 @@ export class YardScene implements Scene {
         this.helpBlock = afterRefusal(this.helpBlock, building.id, kind, refusal.reason, refusal);
       }
       this.showHelpBlock();
-      this.helpPanel?.setMessage(text, "error");
+      return { ok: false, reason: refusal.reason, text };
     }
+  }
+
+  /**
+   * Help all (beta 8, owner 15 Nov 2026): every speed-up the visitor can
+   * still give, one after another (`runHelpAll`), each one help to the
+   * server; the marks and the count follow each. Resolves with the one line
+   * the bar shows after.
+   */
+  private async helpAll(): Promise<{ text: string; kind: "thanks" | "error" }> {
+    const context = this.context;
+    this.helpPanel?.close();
+    const targets = helpAllTargets(this.helpBlock);
+    const summary = await runHelpAll(targets, {
+      block: () => this.helpBlock,
+      goOn: () => this.context === context && this.helpBlock !== null,
+      onStep: (done, total) => this.helpAllBar?.setProgress(done, total),
+      helpOne: async (step: HelpTarget): Promise<HelpOutcome> => {
+        const building = this.yard?.buildings.find((one) => one.id === step.id);
+        if (!building) return { ok: false, reason: "nothingToHelp", text: helpRefusalText("nothingToHelp") };
+        // Signed out or left mid-way: stop.
+        return (await this.giveHelp(building, step.kind)) ?? { ok: false, reason: "gone", text: "" };
+      },
+    });
+    return { text: helpAllResultText(summary), kind: summary.stoppedBy ? "error" : "thanks" };
   }
 
   /**

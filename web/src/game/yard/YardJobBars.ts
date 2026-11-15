@@ -1,7 +1,9 @@
 import { Container, Graphics, Text } from "pixi.js";
+import { HELPERS_PER_JOB, helperBadgeOf, helperBadgeText, type HelperBadge } from "@/game/friends/helpModel";
 import { formatCountdown } from "@/ui/format";
 import { countdownProgress } from "./jobs";
 import { damageOf, repairAt } from "./repair";
+import { paintIcon } from "./yardIcons";
 import type { Point } from "./YardGrid";
 import type { Yard, YardBuilding } from "./yardModel";
 
@@ -30,6 +32,12 @@ import type { Yard, YardBuilding } from "./yardModel";
  * The layer sits above every building, so a bar is never hidden behind the
  * building in front; bars are added in the yard's depth order, so where two
  * overlap the nearer building's bar is on top.
+ *
+ * A build, upgrade or fortify also wears a helper badge (beta 8, owner 15 Nov
+ * 2026): the friends' painted critters and "2/5", how many friends have sped
+ * the job up out of the 5 who may (`hl`, {@link helperBadgeOf}). It sits at
+ * the right end of the job's bar; a fortify, which has no bar, wears it
+ * beside its working mark. All 5 turns it green. It goes with the job.
  */
 
 /** Bar size in world pixels at zoom 1. */
@@ -51,6 +59,21 @@ const UPGRADE_FILL = 0x8fd0ff;
 const REPAIR_FILL = 0x7fdc6b;
 const PAUSED_FILL = 0x9aa4ad;
 const TRACK = 0x0f1c26;
+
+/** The helper badge: a pill this size (world px at zoom 1), a gap off the bar's end. */
+export const HELPER_BADGE_WIDTH = 50;
+export const HELPER_BADGE_HEIGHT = 20;
+const HELPER_BADGE_GAP = 3;
+/** The painted critters' side, at the pill's left. */
+const HELPER_ICON = 20;
+/** Dark like the bar's track; all 5 helpers turn it green. */
+const HELPER_FILL = 0x0f1c26;
+const HELPER_RIM = 0xd6ecff;
+const HELPER_FULL_FILL = 0x2f7a3a;
+const HELPER_FULL_RIM = 0x7fdc6b;
+/** Where a fortify's badge sits off its anchor: beside the 26 px working mark, 6 px over the art. */
+const NO_BAR_X = 16;
+const NO_BAR_Y = 19;
 
 /** What one bar reads at a moment. */
 export interface JobBarState {
@@ -128,6 +151,21 @@ export const jobBarStates = (yard: Yard, now: number): JobBarState[] => {
   return bars;
 };
 
+/**
+ * Every helper badge the yard should show at `now` (server clock): one per
+ * building with a build, upgrade or fortify still running. None on a
+ * foreign yard.
+ */
+export const helperBadgeStates = (yard: Yard, now: number): HelperBadge[] => {
+  if (yard.foreign) return [];
+  const badges: HelperBadge[] = [];
+  for (const building of yard.buildings) {
+    const badge = helperBadgeOf(building, now);
+    if (badge) badges.push(badge);
+  }
+  return badges;
+};
+
 /** How much a bar is enlarged at a zoom: 1 at zoom 1 and closer, growing as the yard shrinks, to a limit. */
 export const jobBarScale = (zoom: number): number =>
   zoom > 0 ? Math.min(MAX_COUNTER_SCALE, Math.max(1, 1 / zoom)) : MAX_COUNTER_SCALE;
@@ -143,6 +181,13 @@ interface BarView {
   done: boolean;
 }
 
+interface HelperView {
+  readonly root: Container;
+  /** The helpers it was drawn for: a change redraws it. */
+  helpers: number;
+  done: boolean;
+}
+
 /**
  * Where a bar sits: the middle of the building, at the top of what is drawn
  * of it. Null when the building is not drawn (stored in the planner's drawer).
@@ -151,16 +196,20 @@ export type JobBarAnchor = (id: number) => Point | null;
 
 export class YardJobBars {
   readonly root = new Container();
+  /** The helper badges: over the bars. Add to the scene after `root`. */
+  readonly helperRoot = new Container();
 
   private yard: Yard | null = null;
   private clock: (() => number) | null = null;
   private readonly bars = new Map<number, BarView>();
+  private readonly helpers = new Map<number, HelperView>();
   /** The whole second last drawn, so a frame inside the same second costs nothing. */
   private drawnSecond = Number.NaN;
   private zoom = 1;
 
   constructor(private readonly anchorOf: JobBarAnchor) {
     this.root.eventMode = "none";
+    this.helperRoot.eventMode = "none";
   }
 
   /** Starts drawing bars against a server clock, or stops when passed null. */
@@ -178,7 +227,7 @@ export class YardJobBars {
   /** Called every frame; redraws only when the second has turned. */
   update(): void {
     const clock = this.clock;
-    if (!clock || this.bars.size === 0) return;
+    if (!clock || (this.bars.size === 0 && this.helpers.size === 0)) return;
     const second = Math.floor(clock());
     if (second === this.drawnSecond) return;
     this.drawnSecond = second;
@@ -194,6 +243,8 @@ export class YardJobBars {
       bar.root.scale.set(scale);
       bar.text.visible = text;
     }
+    for (const helper of this.helpers.values()) helper.root.scale.set(scale);
+    this.reposition();
   }
 
   /** Puts every bar back over its building: after a planner move or a drawer change. */
@@ -203,6 +254,29 @@ export class YardJobBars {
       bar.root.visible = anchor !== null && !bar.done;
       if (anchor) bar.root.position.set(anchor.x, anchor.y - BAR_GAP);
     }
+    const scale = jobBarScale(this.zoom);
+    for (const [id, helper] of this.helpers) {
+      const anchor = this.anchorOf(id);
+      const bar = this.bars.get(id);
+      const onBar = bar !== undefined && bar.root.visible;
+      helper.root.visible = anchor !== null && !helper.done && (onBar || bar === undefined);
+      if (!anchor) continue;
+      if (onBar) {
+        helper.root.position.set(
+          anchor.x + (BAR_WIDTH / 2 + HELPER_BADGE_GAP) * scale,
+          anchor.y - BAR_GAP - (BAR_HEIGHT / 2) * scale,
+        );
+      } else {
+        helper.root.position.set(anchor.x + NO_BAR_X, anchor.y - NO_BAR_Y);
+      }
+    }
+  }
+
+  /** The ids wearing a helper badge now, and what each says ("2/5"). */
+  get helperBadges(): { id: number; text: string; full: boolean }[] {
+    return [...this.helpers]
+      .filter(([, view]) => view.root.visible)
+      .map(([id, view]) => ({ id, text: helperBadgeText(view.helpers), full: view.helpers >= HELPERS_PER_JOB }));
   }
 
   /** The ids with a bar showing, in drawing order. */
@@ -218,6 +292,7 @@ export class YardJobBars {
   destroy(): void {
     this.clear();
     this.root.destroy({ children: true });
+    this.helperRoot.destroy({ children: true });
   }
 
   private rebuild(): void {
@@ -260,6 +335,12 @@ export class YardJobBars {
       this.bars.set(state.id, bar);
       paint(bar, state);
     }
+    for (const badge of helperBadgeStates(yard, now)) {
+      const root = drawHelperBadge(badge);
+      root.scale.set(scale);
+      this.helperRoot.addChild(root);
+      this.helpers.set(badge.id, { root, helpers: badge.helpers, done: false });
+    }
     this.drawnSecond = Math.floor(now);
     this.reposition();
   }
@@ -275,13 +356,17 @@ export class YardJobBars {
       if (!state) bar.done = true;
       else paint(bar, state);
     }
+    const badges = new Set(helperBadgeStates(yard, now).map((badge) => badge.id));
+    for (const [id, helper] of this.helpers) if (!badges.has(id)) helper.done = true;
     // Hides a bar whose time is up; its place is the art table's and holds still.
     this.reposition();
   }
 
   private clear(): void {
     for (const child of this.root.removeChildren()) child.destroy({ children: true });
+    for (const child of this.helperRoot.removeChildren()) child.destroy({ children: true });
     this.bars.clear();
+    this.helpers.clear();
     this.drawnSecond = Number.NaN;
   }
 }
@@ -302,4 +387,46 @@ const paint = (bar: BarView, state: JobBarState): void => {
     bar.fill.roundRect(-BAR_WIDTH / 2, -BAR_HEIGHT, width, BAR_HEIGHT, radius).fill({ color });
   }
   if (bar.text.text !== state.label) bar.text.text = state.label;
+};
+
+/**
+ * One helper badge, its left end at the origin and its middle on the
+ * origin's line: a pill, the friends' painted critters (two drawn heads
+ * until the picture is in) and "2/5".
+ */
+const drawHelperBadge = (badge: HelperBadge): Container => {
+  const root = new Container();
+  root.eventMode = "none";
+  root.label = `helpers-${badge.id}`;
+  const h = HELPER_BADGE_HEIGHT;
+  const pill = new Graphics()
+    .roundRect(0, -h / 2, HELPER_BADGE_WIDTH, h, h / 2)
+    .fill({ color: badge.full ? HELPER_FULL_FILL : HELPER_FILL, alpha: 0.92 })
+    .stroke({ width: 1.5, color: badge.full ? HELPER_FULL_RIM : HELPER_RIM, alpha: 0.8 });
+  const iconX = 3 + HELPER_ICON / 2;
+  // Two heads and shoulders, light on the dark pill, until the painting comes.
+  const heads = new Graphics()
+    .circle(iconX - 4, -3, 3.5)
+    .fill({ color: HELPER_RIM })
+    .roundRect(iconX - 9, 1, 10, 6, 3)
+    .fill({ color: HELPER_RIM })
+    .circle(iconX + 4, -2, 3)
+    .fill({ color: HELPER_RIM, alpha: 0.8 })
+    .roundRect(iconX, 2, 8, 5, 2.5)
+    .fill({ color: HELPER_RIM, alpha: 0.8 });
+  const text = new Text({
+    text: helperBadgeText(badge.helpers),
+    style: {
+      fontFamily: "Titan One, sans-serif",
+      fontSize: 13,
+      fill: 0xffffff,
+      stroke: { color: TRACK, width: 3 },
+    },
+    resolution: 2,
+  });
+  text.anchor.set(0.5, 0.5);
+  text.position.set(3 + HELPER_ICON + (HELPER_BADGE_WIDTH - 3 - HELPER_ICON) / 2, 0);
+  root.addChild(pill, heads, text);
+  paintIcon(root, "friends", HELPER_ICON, { x: iconX, y: 0 }, heads);
+  return root;
 };

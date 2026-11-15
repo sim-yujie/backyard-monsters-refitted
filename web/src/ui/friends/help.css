@@ -29,6 +29,87 @@
   pointer-events: none;
 }
 
+/* The "Helping Bob" line and, under it, the Help all bar (beta 8): one
+   column at the top of the yard, so the two never overlap at any size. */
+.friend-visit {
+  position: absolute;
+  top: 64px;
+  left: 50%;
+  z-index: var(--z-hud);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-1);
+  max-width: calc(100vw - 2 * var(--space-4));
+  transform: translateX(-50%);
+  pointer-events: none;
+}
+
+.friend-visit .friend-visit-line {
+  position: static;
+  max-width: 100%;
+  transform: none;
+}
+
+.help-all-bar {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-1);
+  max-width: 100%;
+  padding: var(--space-1) var(--space-2) var(--space-1) var(--space-3);
+  border: 2px solid var(--colour-warning-line);
+  border-radius: var(--radius-md);
+  background: var(--colour-surface-raised);
+  -webkit-backdrop-filter: var(--blur-panel);
+  backdrop-filter: var(--blur-panel);
+  box-shadow: var(--shadow-float);
+  color: var(--colour-text);
+  pointer-events: auto;
+}
+
+.help-all-bar[hidden],
+.help-all-bar__row[hidden],
+.help-all-bar__result[hidden] {
+  display: none;
+}
+
+.help-all-bar__row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  white-space: nowrap;
+}
+
+.help-all-bar__icon {
+  flex: none;
+}
+
+.help-all-bar__count {
+  font-family: var(--font-display, inherit);
+  font-size: var(--text-md, var(--text-sm));
+  color: var(--colour-text-strong, var(--colour-text));
+}
+
+.help-all-bar__button {
+  flex: none;
+  min-width: 6.5em;
+}
+
+.help-all-bar__result {
+  margin: 0;
+  max-width: 34em;
+  color: var(--colour-success);
+  font-size: var(--text-sm);
+  font-weight: 600;
+  text-align: center;
+  white-space: normal;
+}
+
+.help-all-bar__result--error {
+  color: var(--colour-warning-bright);
+}
+
 .help-panel__choices {
   display: flex;
   flex-direction: column;
@@ -82,5 +163,9 @@
   .friend-visit-line {
     top: 96px;
     font-size: var(--text-xs, var(--text-sm));
+  }
+
+  .friend-visit {
+    top: 96px;
   }
 }

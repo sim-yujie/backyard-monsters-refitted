@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import type { BaseLoadResponse, BuildingData } from "@/api/types";
 import { readYard, type Yard } from "./yardModel";
 import {
+  helperBadgeStates,
   jobBarScale,
   jobBarStates,
   showsJobBarText,
@@ -238,5 +239,55 @@ describe("jobBarStates: repairs (#279)", () => {
   it("damage alone draws no bar, and a foreign yard none at all", () => {
     expect(jobBarStates(yardOf([repairing({ rE: 0 })]), SAVED)).toEqual([]);
     expect(jobBarStates(yardOf([repairing()], { foreign: true }), SAVED)).toEqual([]);
+  });
+});
+
+describe("YardJobBars: helper badges (beta 8)", () => {
+  const anchor = (id: number) => ({ x: id * 100, y: -id * 10 });
+  /** An upgrade with two helpers, a build with none, a fortify with all five, an idle cannon. */
+  const helped = (): BuildingData[] => [
+    row(1),
+    row(2, { cU: 600, cL: 1_200, hl: [11, 12] }),
+    row(3, { l: 0, cB: 30, cL: 60 }),
+    row(4, { cF: 500, hl: [1, 2, 3, 4, 5] }),
+  ];
+
+  it("reads each running job's helpers out of 5; none on a foreign yard", () => {
+    expect(helperBadgeStates(yardOf(helped()), SAVED)).toEqual([
+      { id: 2, helpers: 2, full: false },
+      { id: 3, helpers: 0, full: false },
+      { id: 4, helpers: 5, full: true },
+    ]);
+    expect(helperBadgeStates(yardOf(helped(), { foreign: true }), SAVED)).toEqual([]);
+  });
+
+  it("wears one on each job's bar, at the bar's right end, and beside a fortify's mark", () => {
+    const bars = new YardJobBars(anchor);
+    bars.setClock(() => SAVED);
+    bars.show(yardOf(helped()));
+    expect(bars.helperBadges).toEqual([
+      { id: 2, text: "2/5", full: false },
+      { id: 3, text: "0/5", full: false },
+      { id: 4, text: "5/5", full: true },
+    ]);
+    const [upgrade, , fortify] = bars.helperRoot.children;
+    // Right of the 64 px bar centred on the anchor, level with the bar.
+    expect(upgrade!.position.x).toBeGreaterThan(200 + 32);
+    expect(upgrade!.position.y).toBeLessThan(-20);
+    // The fortify has no bar: beside its working mark.
+    expect(fortify!.position.x).toBe(400 + 16);
+  });
+
+  it("goes with the job: at its end, and with no clock", () => {
+    let now = SAVED;
+    const bars = new YardJobBars(anchor);
+    bars.setClock(() => now);
+    bars.show(yardOf(helped()));
+    // The build (30 s) is done; the upgrade and the fortify run on.
+    now = SAVED + 400;
+    bars.update();
+    expect(bars.helperBadges.map((badge) => badge.id)).toEqual([2, 4]);
+    bars.setClock(null);
+    expect(bars.helperBadges).toEqual([]);
   });
 });

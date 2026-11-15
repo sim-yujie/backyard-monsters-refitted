@@ -8,6 +8,7 @@ import { YardGround } from "./YardGround";
 import { LOAD_TRIES, loadWithRetries } from "./retryLoad";
 import { CHOSEN_FILL, YardHatchMarks, type HatcheryMarks } from "./YardHatchMarks";
 import { YardHelpMarks } from "./YardHelpMarks";
+import type { HelpMark } from "@/game/friends/helpModel";
 import { BAR_HEIGHT, jobBarScale, YardJobBars } from "./YardJobBars";
 import { MAX_JUICE_WALKERS, YardLifeLayer } from "./YardLifeLayer";
 import { holdBack, juicerDoor, type LifeHold, type YardLife, type YardPoint } from "./yardLifeModel";
@@ -124,7 +125,11 @@ export class YardRenderer {
   /** The hatchery numbers while the Hatch tab is open (#268), above a job bar where there is one. */
   private readonly hatchMarks = new YardHatchMarks((id) => this.hatchMarkAnchor(id));
   /** The wrenches over a friend's yard on a visit (#374); see `YardHelpMarks`. */
-  private readonly helpMarks = new YardHelpMarks((id) => this.hatchMarkAnchor(id));
+  private readonly helpMarks = new YardHelpMarks(
+    (id) => this.hatchMarkAnchor(id),
+    (id) => (this.currentView === YardView.ISO ? this.cornersOf(id) : null),
+    { reducedMotion: prefersReducedMotion() },
+  );
   /** Opens {@link sheetsAllowed}; see there. */
   private allowSheets: () => void = () => {};
   /**
@@ -238,6 +243,7 @@ export class YardRenderer {
       this.isoDecals,
       this.giblets.ground,
       this.rangeOval,
+      this.helpMarks.ground,
       this.buildings.shadows,
       this.buildings.tops,
       this.giblets.root,
@@ -247,6 +253,7 @@ export class YardRenderer {
       this.planner.root,
       this.buildings.markers,
       this.jobBars.root,
+      this.jobBars.helperRoot,
       this.hatchMarks.root,
       this.helpMarks.root,
       this.buildings.labels,
@@ -447,7 +454,10 @@ export class YardRenderer {
       this.jobBars.update();
       // A handful of badges: cheap to place every frame.
       if (this.hatchMarks.current) this.hatchMarks.reposition();
-      if (this.helpMarks.active) this.helpMarks.reposition();
+      if (this.helpMarks.active) {
+        this.helpMarks.update(deltaSeconds);
+        this.helpMarks.reposition();
+      }
       this.shakeMushrooms();
       this.popMushrooms(deltaSeconds);
       if (this.turkeysOn) this.turkeys.update(deltaSeconds);
@@ -541,12 +551,14 @@ export class YardRenderer {
       this.ground.root,
       this.isoDecals,
       this.giblets.ground,
+      this.helpMarks.ground,
       this.buildings.shadows,
       this.buildings.tops,
       this.giblets.root,
       this.collect.root,
       this.buildings.markers,
       this.jobBars.root,
+      this.jobBars.helperRoot,
       this.hatchMarks.root,
       this.helpMarks.root,
       this.buildings.labels,
@@ -680,9 +692,22 @@ export class YardRenderer {
     if (this.hatchMarks.set(marks)) this.chromeDirty = true;
   }
 
-  /** Puts a wrench over these buildings of a friend's yard (#374), or none when empty. */
-  setHelpMarks(ids: ReadonlySet<number>): void {
-    this.helpMarks.set(ids);
+  /**
+   * Marks these buildings of a friend's yard (#374, beta 8): a ground ring, a
+   * wrench and what a speed-up would save; none when empty. See `YardHelpMarks`.
+   */
+  setHelpMarks(marks: readonly HelpMark[]): void {
+    this.helpMarks.set(marks);
+  }
+
+  /** The tag on each friend's wrench now ("-18m", or null), by building id. */
+  get helpMarkTags(): Map<number, string | null> {
+    return this.helpMarks.tags;
+  }
+
+  /** The helper badge on each of the player's own jobs now ("2/5"), by building id. */
+  get helperBadges(): { id: number; text: string; full: boolean }[] {
+    return this.jobBars.helperBadges;
   }
 
   /** The buildings wearing a wrench now, by id. */
