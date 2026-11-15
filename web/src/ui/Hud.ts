@@ -23,7 +23,7 @@ import { markShownOnThisPage } from "@/game/announcements/announcementQueue";
 import { openLeaderboard } from "./leaderboard/LeaderboardDialog";
 import { openBugReport } from "./bugReport/BugReportDialog";
 import { AMOUNT_CHANGE_SIGNS } from "./amountChange";
-import { formatAmount, formatCompact } from "./format";
+import { formatAmount, formatBarAmount, formatCompact, formatShort } from "./format";
 import { gameIcon } from "./gameIcon";
 import { coinBalance, onCoinBalance } from "@/game/eventCoins";
 import { coinAmount, coinWords } from "./events/coinUi";
@@ -36,10 +36,11 @@ import { ShinyButton } from "./yard/ShinyButton";
  * The persistent top bar: resource readouts on the left, a scene switcher on
  * the right.
  *
- * Each readout is the resource's icon (issue #93) and the amount in full,
- * "11,158,040,000" (issue #134). When the bar is too narrow for every readout
- * in full — a phone — it drops the brand, then falls back to short amounts
- * ("11.16B") rather than wrap or scroll; see {@link HudFit}. A short amount
+ * Each readout is the resource's icon (issue #93) and the amount, in full up
+ * to 99,999 and short past it, "475.9K" or "11.1B" (`formatBarAmount`; owner,
+ * 15 Nov 2026: the full "10,874,100" was long and cluttered). When the bar is
+ * too narrow for every readout — a phone — it drops the brand, then the caps,
+ * rather than wrap or scroll; see {@link HudFit}. A short amount
  * hides small changes on a big pool, so every readout also carries the exact
  * figure (issue #92): as its tooltip and accessible name for a mouse or a
  * screen reader, and in a small bubble on a tap for a finger, which has no
@@ -92,7 +93,11 @@ export const HudFit = {
   NO_BRAND: "no-brand",
   /** Caps leave the text for the tooltip and the bubble; the fill bars stay. */
   NO_CAPS: "no-caps",
-  /** Short amounts ("15.0M"): the phone fallback. The tap bubble stays exact. */
+  /**
+   * The narrow bar's last level, the phone's corner always: the per-hour
+   * rates and amounts as at every level (`formatBarAmount`), the caps and the
+   * full silo's "15M/15M" gone. The tap bubble stays exact.
+   */
   COMPACT: "compact",
 } as const;
 export type HudFit = (typeof HudFit)[keyof typeof HudFit];
@@ -109,16 +114,16 @@ export const INFERNO_FULL_NOTE = "Full: new income is lost. Build or upgrade Res
  * "15M/15M": a full silo's readout on the yard (the text cut, 28 Oct). Both
  * figures are the cap, so the digits say nothing the fill bar does not; the
  * exact amounts stay in the tooltip and the tap bubble. A whole ".0" is
- * dropped ("15M", not "15.0M") to keep it short on a phone.
+ * dropped ("15M", not "15.0M") to keep it short, and like every bar amount it
+ * rounds down ("23M", not "23.1M", for 23,050,000).
  */
-export const fullText = (amount: number, cap: number): string => {
-  const short = (value: number): string => formatCompact(value).replace(/\.0+(?=[KMB]$)/, "");
-  return `${short(amount)}/${short(cap)}`;
-};
+export const fullText = (amount: number, cap: number): string => `${formatShort(amount)}/${formatShort(cap)}`;
 
-/** "+12,400/h", or "+12.4K/h" short: a resource's income an hour (#280). */
-export const formatRate = (perHour: number, compact = false): string =>
-  `+${compact ? formatCompact(perHour) : formatAmount(perHour)}/h`;
+/**
+ * "+12,400/h" or "+475.9K/h": a resource's income an hour (#280), spelled as
+ * the amount above it is (`formatBarAmount`).
+ */
+export const formatRate = (perHour: number): string => `+${formatBarAmount(perHour)}/h`;
 
 /** The worker art: the orange builder with the hammer and the hard hat. */
 const WORKER_ICON_URL = "/assets/archived/worker.v1.png";
@@ -771,25 +776,24 @@ export class Hud {
     // The corner draws the cap as the fill bar alone, the figure kept for the
     // tooltip and the tap bubble, until the silo is full: then "15M/15M". A
     // phone's quarter-width cell has no room for "23.1M/23.1M", so there the
-    // short amount and the full mark say it.
+    // short amount and the full mark say it. Amounts and rates are short past
+    // 99,999 at every level (`formatBarAmount`).
     readout.value.textContent =
-      this.fitted === HudFit.COMPACT
-        ? formatCompact(shown)
-        : this.corner && full && readout.cap !== undefined
-          ? fullText(shown, readout.cap)
-          : formatAmount(shown);
+      this.fitted !== HudFit.COMPACT && this.corner && full && readout.cap !== undefined
+        ? fullText(shown, readout.cap)
+        : formatBarAmount(shown);
     const showCap =
       !this.corner &&
       readout.cap !== undefined &&
       (this.fitted === HudFit.FULL || this.fitted === HudFit.NO_BRAND);
-    readout.capText.textContent = showCap ? ` / ${formatAmount(readout.cap)}` : "";
+    readout.capText.textContent = showCap ? ` / ${formatBarAmount(readout.cap)}` : "";
     readout.bar.hidden = state === null;
     readout.fill.style.width = state === null ? "" : `${+(state.fraction * 100).toFixed(2)}%`;
     readout.button.classList.toggle("hud__resource-button--full", full);
     readout.fullMark.hidden = !full;
     readout.rate.hidden = readout.perHour === undefined;
     if (readout.perHour !== undefined) {
-      readout.rate.textContent = formatRate(readout.perHour, this.fitted === HudFit.COMPACT);
+      readout.rate.textContent = formatRate(readout.perHour);
       // Still made, but lost while the silo is full: dimmed, the pile marked full.
       readout.rate.classList.toggle("hud__rate--full", full);
     }
