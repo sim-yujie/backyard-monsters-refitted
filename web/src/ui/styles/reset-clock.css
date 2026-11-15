@@ -17,7 +17,9 @@
 :root {
   /* The floating "?" (tips.css: 32px, 40px for a finger). */
   --reset-help-size: 32px;
-  --reset-clock-width: 112px;
+  /* "24h 00m" is 59px in Titan One at 13px; with the icon, the gap, the
+     padding and Modern's 7px plate edges it needs about 120px. */
+  --reset-clock-width: 124px;
   /* Where the pill starts: the "?"'s left edge, its width and a step. */
   --reset-clock-left: calc(var(--hud-inset) + var(--space-2) + var(--reset-help-size) + var(--space-2));
 }
@@ -173,13 +175,13 @@
    it must beat yard-status.css's and yard-hud.css's "after the ?" rules.) */
 .overlay__layer:has(> .reset-clock:not([hidden])) > .hud--corner > .hud-status.hud-status {
   left: calc(var(--reset-clock-left) + var(--reset-clock-width) + var(--space-2) - var(--hud-inset));
-  max-width: calc(100% - (var(--reset-clock-left) + var(--reset-clock-width) + var(--space-2) - var(--hud-inset)));
+  max-width: min(560px, calc(100% - (var(--reset-clock-left) + var(--reset-clock-width) + var(--space-2) - var(--hud-inset))));
 }
 
 /* A phone upright: the top bar stands --space-3 in, not --hud-inset. */
 @media (max-width: 620px) {
   .overlay__layer:has(> .reset-clock:not([hidden])) > .hud--corner > .hud-status.hud-status {
     left: calc(var(--reset-clock-left) + var(--reset-clock-width) + var(--space-2) - var(--space-3));
-    max-width: calc(100% - (var(--reset-clock-left) + var(--reset-clock-width) + var(--space-2) - var(--space-3)));
+    max-width: min(560px, calc(100% - (var(--reset-clock-left) + var(--reset-clock-width) + var(--space-2) - var(--space-3))));
   }
 }
