@@ -34,14 +34,16 @@ for i, h in enumerate(hs):
         # reaches far to the lower right and its body sits at the cell's left edge)
         cell = common.flash_body_only(spec, flash_column(spec, h))
         cell = cell.crop(common.bbox(np.asarray(cell)[..., 3] > 0))
-    big = cell.resize((cell.width * z, cell.height * z), Image.NEAREST)
+    big = cell.resize((cell.width * z, cell.height * z), Image.BICUBIC if spec.get("ref_smooth") else Image.NEAREST)
     bg = Image.new("RGBA", big.size, (128, 128, 128, 255))
     bg.alpha_composite(big)
     grid.paste(bg.convert("RGB"), ((i % 2) * 320 + (320 - big.width) // 2, (i // 2) * 256 + (256 - big.height) // 2))
 grid.save(out / "frames.png")
 
-p = Image.open(PORTRAITS / f"{mid}.webp").convert("RGB")
-p.resize((p.width * 3, p.height * 3), Image.LANCZOS).save(out / "portrait.png")
+use_portrait = spec.get("portrait", True)  # IC2 round 2: False, the Flash sprite is the only reference
+if use_portrait:
+    p = Image.open(PORTRAITS / f"{mid}.webp").convert("RGB")
+    p.resize((p.width * 3, p.height * 3), Image.LANCZOS).save(out / "portrait.png")
 
 inputs = ["frames.png"]
 style_text = ""
@@ -65,7 +67,8 @@ if appr.exists():
         f"This row is NOT the layout of the output. Copy its exact design, colours, painting style, {spec['features']} and "
         "proportions for every new cell: same creature in every cell, turned to the cell's own heading.\n"
     )
-inputs.append("portrait.png")
+if use_portrait:
+    inputs.append("portrait.png")
 
 cells = ["top-left", "top-right", "bottom-left", "bottom-right"]
 lines = []
@@ -77,6 +80,16 @@ for c, h in zip(cells, hs):
         backs.append(c)
 back = f"\n{spec['back_note']} (cells: {', '.join(backs)})\n" if backs else ""
 n_in = len(inputs)
+if use_portrait:
+    portrait_text = f"Input {n_in}, portrait.png: the official concept painting, {spec['portrait_note']}; the old sprite decides the shape and the features.\n"
+    style_text2 = f"hand-painted digital game illustration like the portrait: {spec['texture']}, soft shading, bright highlights, NO thick black outline, no pixel art, readable at a small size."
+else:
+    portrait_text = (
+        "frames.png is the ONLY design reference: trace each old sprite's silhouette (body, neck, head, beak, tail, "
+        "limbs) and keep its proportions and colours; do not invent a new design, do not make it fatter, rounder, "
+        "glossier or cuter.\n"
+    )
+    style_text2 = f"{spec['style']}; {spec['texture']}."
 prompt = f"""Use your image generation tool (one call) to create a new image and save it as frames-new.png in the current folder. Do not write code and do not copy or composite pixels from the inputs.
 
 Input 1, frames.png: a 2x2 grid of 4 low-resolution isometric game sprites of {spec['name']}, blown up (OLD pixel art). Use it for the facing, shape, colours and overall size of each cell: the new art is the same creature, painted richer. Heading in degrees: 0 = facing the screen's RIGHT, 90 = facing toward the viewer (down), 180 = facing the screen's LEFT, 270 = facing away from the viewer (up); the camera is a 3/4 isometric view from above. Cells:
@@ -88,11 +101,10 @@ The creature: {spec['creature']}
 PART CHECKLIST (every cell, as seen from that cell's angle; never drop, merge or add parts):
 {spec['parts']}
 {back}
-Input {n_in}, portrait.png: the official concept painting, {spec['portrait_note']}; the old sprite decides the shape and the features.
-
+{portrait_text}
 LIGHT: {spec['light']}.
 Output: ONE image with the same 2x2 grid layout and canvas proportions as frames.png (640x512 or a 2x multiple), each creature at the same position and facing as the matching cell of frames.png and about the same size (no bigger than 1.3x). Same scale in all four cells.
-Style: hand-painted digital game illustration like the portrait: {spec['texture']}, soft shading, bright highlights, NO thick black outline, no pixel art, readable at a small size.
+Style: {style_text2}
 Background everywhere: flat pure magenta #FF00FF. No shadows, no ground, no grid lines, no text, no labels. {spec['no_fx']}.
 """
 if os.environ.get("NOTE"):

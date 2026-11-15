@@ -42,7 +42,7 @@ for f in sorted((work / "still").glob("b-*/frames-new.png"), key=lambda p: p.sta
     for h, cell in zip(hs, common.grid_cells(f, 2, 2)):
         if (f.parent.name, str(h)) in skip:
             continue
-        cut = common.key_cell(cell, despill=spec.get("despill"))
+        cut = common.key_cell(cell, despill=spec.get("despill"), open_holes=spec.get("open_holes", False))
         if cut is not None:
             painted[h] = cut
 src = {}
@@ -103,7 +103,7 @@ def shadow_layer(h, w, hgt, ox=0, oy=0):
 
 def place(h, v, scale, cx, bottom, mid, foot, w, hgt, ox=0, oy=0):
     s = scale * UP
-    mon = common.premul_resize(v, (max(1, round(v.width * s)), max(1, round(v.height * s))))
+    mon = common.grade(common.premul_resize(v, (max(1, round(v.width * s)), max(1, round(v.height * s)))), spec)
     layer = Image.new("RGBA", (w, hgt))
     layer.alpha_composite(mon, (round((cx + ox) * UP - mid * s), round((bottom + oy) * UP - foot * s)))
     return layer

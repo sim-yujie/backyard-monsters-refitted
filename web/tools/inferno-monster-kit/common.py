@@ -132,7 +132,7 @@ def fill_holes(mask):
     return ~reach
 
 
-def key_cell(img, min_part=0.03, choose=None, despill=None):
+def key_cell(img, min_part=0.03, choose=None, despill=None, open_holes=False):
     """One painted creature on magenta -> tight RGBA cutout (or None).
     Keeps blobs >= min_part of the biggest; `choose(labels, sizes)` may pick the label set instead.
     despill="fire": a creature with no blue or purple in it; any blue above green is magenta bleeding into a
@@ -145,6 +145,11 @@ def key_cell(img, min_part=0.03, choose=None, despill=None):
         return None
     ids = choose(lab, sizes) if choose else [i for i in range(1, len(sizes)) if sizes[i] >= sizes.max() * min_part]
     keep = fill_holes(np.isin(lab, ids))
+    if open_holes:
+        # magenta gaps closed in by the art (Zagnoid's bent arms and claw fingers against its body) become
+        # see-through again, with a 2 px rim so no pink fringe is left
+        hole = keep & ~np.isin(lab, ids) & magenta(rgb)
+        keep &= ~grow(hole, 2) | ~(magenta(rgb) | grow(hole, 1))
     keep = shrink(keep, 1)
     core = shrink(keep, 3)
     col = fill_out(rgb, core) if core.any() else rgb
@@ -275,3 +280,33 @@ def cast_shadow(spec, col, w, hgt, ox, oy, up):
     lay = Image.new("RGBA", (w, hgt), (25, 18, 12, 0))
     lay.putalpha(m)
     return lay
+
+
+
+def part_weights(rgb):
+    """Soft (body, limbs, crest) weights of each pixel for Zagnoid's colour match: crest = green at least as
+    strong as red (the dark teal spikes), limbs = red well above green (brick-red arms and legs), body = the rest."""
+    r, g = rgb[..., 0], rgb[..., 1]
+    crest = np.clip((g - r + 10) / 30, 0, 1)
+    ratio = g / np.maximum(r, 1)
+    red = np.clip((0.62 - ratio) / 0.12, 0, 1) * np.clip((r - 40) / 30, 0, 1) * (1 - crest)
+    return 1 - red - crest, red, crest
+
+
+def grade(im, spec):
+    """spec `grade` = {"body": ((gain, offset) for R, G, B), "limbs": (...)}: a per-part, per-channel colour match of
+    the painting to the Flash sprite (IC2 round 2: mean and spread of each channel over all 30 headings at 1x; the
+    crest is left as painted). Applied when a view is placed on a sheet (build_still) and to every animated frame
+    (build_anim); the cuts and the Codex references stay ungraded."""
+    g = spec.get("grade")
+    if not g:
+        return im
+    a = np.asarray(im).astype(float)
+    rgb = a[..., :3]
+    wb, wr, wc = part_weights(rgb)
+    out = rgb * wc[..., None]
+    for w, part in ((wb, "body"), (wr, "limbs")):
+        gr = np.stack([rgb[..., c] * k + o for c, (k, o) in enumerate(g[part])], -1)
+        out += gr * w[..., None]
+    a[..., :3] = out
+    return Image.fromarray(np.clip(a, 0, 255).astype(np.uint8), "RGBA")

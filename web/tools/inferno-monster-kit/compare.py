@@ -1,7 +1,7 @@
 """
 compare.py <IC id> <work dir> <shots dir>
 Comparison pictures for the lead (build_anim.py first):
-  compare-h<a>-h<b>.png  Flash beside Modern, every 4th heading, 4 headings per picture, enlarged 4x:
+  compare-h<a>-h<b>.png  Flash beside Modern, every 4th heading (env STEP=1: every heading), 4 headings per picture, enlarged 4x:
                          Flash idle + its walk rows | Modern idle, walk 2, walk 3, wind-up, strike
   game-size.png          all headings at the real 1x size: Flash, Modern idle, Modern walk 3, Modern strike
   game-size-x3.png       the same blown up 3x with hard pixels (what 1x looks like, easier to see)
@@ -9,6 +9,7 @@ Comparison pictures for the lead (build_anim.py first):
                          spare views (still/skip.txt) beside the mirrored views that replace them
   loop-h<N>.mp4          walk x2 then attack, Flash beside Modern, for two headings (needs ffmpeg)
 """
+import os
 import shutil
 import subprocess
 import sys
@@ -52,7 +53,7 @@ def label(im, text, xy=(4, 4), fill=(255, 240, 160)):
     ImageDraw.Draw(im).text(xy, text, fill=fill)
 
 
-heads = list(range(0, D, 4))
+heads = list(range(0, D, int(os.environ.get("STEP", 4))))  # STEP=1: every heading
 W, H = ACW * UP, ACH * UP
 cols = [("Flash idle", lambda h: old(h, 0))] + [(f"Flash walk {i}", (lambda r: lambda h: old(h, r))(r)) for i, r in enumerate(walk_rows[:2], 1)]
 cols += [("Modern idle", lambda h: modern(h, 0)), ("walk 2", lambda h: modern(h, 2)), ("walk 3", lambda h: modern(h, 3)),
@@ -94,7 +95,7 @@ if sk.exists():
             b, h = line.split()
             hs_ = [int(x) for x in b.split("-")[1:]]
             cell = common.grid_cells(work / "still" / b / "frames-new.png", 2, 2)[hs_.index(int(h))]
-            spare.append((int(h), common.key_cell(cell, despill=spec.get("despill"))))
+            spare.append((int(h), common.key_cell(cell, despill=spec.get("despill"), open_holes=spec.get("open_holes", False))))
 if spare:
     st = Image.open(ASSETS / f"{spec['out']}-repaint@4x.png").convert("RGBA")
     sw, sh = CW * UP, CH * UP

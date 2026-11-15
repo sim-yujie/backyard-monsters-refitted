@@ -70,7 +70,12 @@ SPECS = {
             "back; 10 follow-through: furthest forward, squashed against the target, grin wide open, flames flared; "
             "11 recovery: settling back to the resting shape of ref.png. Cell 12 stays empty magenta."
         ),
-    ),    "IC2": dict(
+    ),
+    # IC2 round 2 (15 Nov): round 1 drifted into a fat glossy golden grub with a smiling face (the concept
+    # portrait and the words pulled it there). Round 2 drops the portrait and describes the Flash sprite as it
+    # is (colours picked from the Flash body pixels: median body #8b7317 olive-mustard, lit #ffe75c, shade
+    # #452e00, limbs #5c2e17 / #732e2e with #8b452e lights, crest #2e452e / #2e4545 with #5c7345 tips).
+    "IC2": dict(
         name="Zagnoid",
         out="zagnoid",
         flash="zagnoid.png",
@@ -79,72 +84,98 @@ SPECS = {
         flash_drift=0.247,               # ... but the art was laid out 64.65 apart: the body creeps right 0.25 px a column
         still_pad=6,                     # still cell 76 px wide: the body touches the Flash cell's left edge at some headings
         ref_body_only=True,              # reference cells without the long cast shadow, centred (still_batch.py)
+        ref_smooth=True,                 # blow the reference cells up smoothly (bicubic): Codex read the blocky head as a thin beak
+        portrait=False,                  # no concept painting in the prompts: the Flash sprite is the only reference
+        # per-part, per-channel colour match to the Flash sprite (common.grade; crest left as painted), from
+        # art-work colstats over the 30 still views at 1x. Before grading: body mean R154.0 G113.8 B14.7, spread
+        # 65.4 64.7 21.9 (Flash 143.1 112.3 26.5 / 70.2 68.4 30.2); limbs 122.2 44.9 22.4 / 49.3 23.1 20.7
+        # (Flash 126.2 51.1 31.4 / 54.0 27.9 23.8)
+        grade=dict(body=((1.073, -22.2), (1.057, -8.0), (1.379, 6.2)), limbs=((1.095, -7.6), (1.208, -3.1), (1.15, 5.6))),
+        anim_colour_lock=True,           # build_anim: each animated frame's colours matched to its heading's still view
+        gamma=1.0,                       # no brightness lift in build_anim: the grade already matches Flash
+        open_holes=True,                 # see-through gaps between the bent arms and the body (common.key_cell)
         anchor=(26, 28),
         flash_columns=30,
         flash_step=12.0,
         directions=30,
         painted=list(range(30)),
-        area=1.2,
+        area=1.15,                       # 1.05 read about 8% small beside Flash (Flash head and neck look bigger)
         drop=0.0,
         shadow="flash",                  # the Flash cast shadow's own shape (long, to the lower right), not an ellipse
-        despill="fire",                  # yellow, red and dark green only: blue above green is magenta bleeding into an edge
+        # no despill: the crest is dark grey-teal (blue close to green); key_cell's magenta test does the keying
         anim_pad=(6, 10, 2),
         walk_lift=(0, 0, 0, 0, 0, 0),    # it crawls, no hop
         loops=(0, 8, 22),                # compare.py loop videos: side, front, back
         # No face from behind only for the true back views: the snout on its long neck still shows at
         # 216 and 324 degrees in the Flash sheet (Spurtz hides its face from 213.75 to 326.25).
         back_range=(234.0, 306.0),
-        face="snout",
-        features="head, snout, green head spines, red claws, stubby legs and tail",
-        face_marks="the head with its snout (open red mouth) and the dark green head spines",
-        portrait_note=(
-            "for painting style, glossy slimy skin and colours only. Do NOT copy its eye stalks, hair, dripping slime "
-            "or proportions: the old sprite has dark green spines on the head and no eye stalks"
+        face="bill",
+        features="silhouette, thick neck, big duck-billed head, dark teal crest spikes, thin dark-red arms and legs, tail and dirty olive-yellow colouring",
+        face_marks="the big duck-billed head (broad upper bill, red open mouth under it, small dark eye) and the dark teal crest spikes",
+        style=(
+            "a FAITHFUL repaint of the old sprite at higher detail, like a remaster: the same creature, the same "
+            "silhouette and proportions, the same colours and the same dirty, mottled look, only sharper and cleaner. "
+            "Hand-painted digital game illustration, soft painted shading with crisp edges, a thin dark rim where the "
+            "old sprite has dark edges, NO thick black outline, no pixel art, not glossy, not shiny plastic, not cute, "
+            "readable at a small size"
         ),
         light=(
-            "soft light from the upper LEFT of the screen in every cell, the same screen-fixed light for every heading "
-            "as in the old sprites (brighter on the screen-left side of the creature); no cast shadow on the ground"
+            "light from the upper LEFT of the screen in every cell, the same screen-fixed light for every heading "
+            "as in the old sprites (bright lemon highlights on the screen-left side of the creature, deep olive-brown "
+            "shade on the right and underneath); no cast shadow on the ground"
         ),
-        texture="glossy, slimy golden-yellow skin with olive-brown shading and soft wet highlights",
-        no_fx="No slime drips, puddles, sparks, smoke, motion streaks or loose bits: every part stays attached to the body",
+        texture="matte, dirty, mottled olive-mustard skin with small darker blotches, lemon-yellow highlights and deep olive-brown shade",
+        no_fx="No slime, drips, puddles, sparks, smoke, motion streaks or loose bits: every part stays attached to the body",
         creature=(
-            "Zagnoid, a squat slug-like lab mutant: a fat, lumpy golden-yellow body that sits low on the ground, wide "
-            "at the base, with darker olive-brown bands winding round it like a coil. From the front of the body rises "
-            "a thick upright neck that bends forward into a blunt, duck-like head; the snout points in the facing "
-            "direction and its open mouth is red inside. On top of the head stand THREE or FOUR thin dark green spines. "
-            "From the chest reach TWO red-orange arms, each ending in a three-fingered claw, held forward on either side "
-            "of the neck. Round the bottom of the body, many short red-orange stubby legs poke out (like a caterpillar's). "
-            "Behind, a thick yellow cone-shaped tail curls up to a point; the tail always points the opposite way to the snout."
+            "Zagnoid, a little dinosaur-like Inferno monster with a duck bill (NOT a fat grub, NOT a slug, NOT a worm). "
+            "Its lower body is a pear-shaped bulb sitting on the ground; from it rises a THICK upright neck (about half "
+            "as wide as the bulb, as tall as the bulb) that bends forward at the top into a BIG BLUNT DUCK-BILLED head, "
+            "like a hadrosaur or a duck: a broad, flat, rounded upper bill as wide as the neck juts forward in the facing "
+            "direction (the head is chunky, NOT a thin pointed bird beak); under the bill the mouth hangs open, dark red "
+            "inside, with a few small dark bristly teeth / whiskers poking forward from it; one small dark eye on the side "
+            "of the head behind the bill. On top and back of the head stands a crest of THREE or FOUR thin, stiff, dark slate "
+            "teal-green spikes (#2e452e to #2e4545, grey-green #5c7345 tips), some forked, sticking up and back. Behind, a "
+            "LONG cone-shaped tail sticks straight out backwards from the bottom of the bulb, tapering to a point that "
+            "turns up at the tip (like a teapot spout); the tail points the opposite way to the bill. Seen from behind (and only from "
+            "behind), a raised band coils once round the body from the neck down to the bulb; from the side and front there "
+            "is NO collar, ring or band. From the chest reach TWO thin, spindly, insect-like arms in DULL dark maroon / "
+            "brick red (#5c2e17 to #732e2e, lit #8b452e; matte, not bright red, not shiny), bent at the elbow and held forward, each ending in a small pincer claw of two or three "
+            "thin fingers. Round the base, six to eight SHORT, thin, jointed, spider-like legs in the "
+            "same dull brick red splay out flat on the ground, mostly hidden under the bulb (only their lower halves show). Colours: the body is a dirty olive-mustard yellow (mid tone #8b7317, lit #b98b2e to #ffe75c lemon "
+            "yellow on the light side, shade #5c4517 to #452e00 dark olive-brown), matte and mottled with small darker "
+            "blotches, not glossy and not orange-gold."
         ),
         parts=(
-            " 1. Body: ONE fat lumpy golden-yellow slug body sitting low, darker olive bands winding round it.\n"
-            " 2. Neck and head: ONE thick upright neck bending forward into a blunt duck-like head; the snout points in the facing direction, red open mouth.\n"
-            " 3. Head spines: THREE or FOUR thin dark green spines on top of the head.\n"
-            " 4. Arms: TWO red-orange arms with three-fingered claws, held forward on either side of the neck (the far one partly hidden in side views).\n"
-            " 5. Legs: many short red-orange stubby legs round the bottom of the body.\n"
-            " 6. Tail: ONE thick yellow cone-shaped tail curling up to a point, on the side opposite the snout.\n"
-            " 7. No eye stalks, no wings, no horns, no hair, no slime drips."
+            " 1. Body: ONE pear-shaped olive-mustard bulb sitting on the ground (no ribs, no rings, no segments).\n"
+            " 2. Neck: ONE THICK upright neck (half the bulb's width), bending forward at the top.\n"
+            " 3. Head: ONE BIG BLUNT duck-billed head: broad flat upper bill toward the facing direction, red open mouth under it with small dark bristly teeth, one small dark eye on the side; no thin pointed bird beak, no smile. In front views the bill points at the viewer and the mouth is hidden under it: NO grin, NO smiling mouth line across the face.\n"
+            " 4. Crest: THREE or FOUR thin stiff dark slate teal-green spikes on top of and behind the head.\n"
+            " 5. Arms: TWO thin spindly DULL dark maroon / brick-red insect arms bent at the elbow, small pincer claws, held forward (the far one partly hidden in side views).\n"
+            " 6. Legs: six to eight SHORT thin jointed spider-like dull brick-red legs splayed flat round the base, mostly under the bulb, each leg a thin stick with a knee bend tapering to a point (not sausage-shaped, not segmented tubes, not long spikes, not bright red).\n"
+            " 7. Tail: ONE long cone tail sticking straight out backwards from the bulb, tip turned up, opposite the bill.\n"
+            " 8. From behind only: one smooth raised band coiling round the body from neck to bulb (no collar or ring in side or front views).\n"
+            " 9. No eye stalks, no wings, no horns, no hair, no slime, no ribs or rings, no cheeks or smile."
         ),
         back_note=(
-            "BACK VIEW: the creature faces away from the viewer: the snout and mouth are NOT visible; the viewer sees "
-            "the back of the neck and head with its green spines, the olive bands coiling round the back of the body, "
-            "the two claws sticking out to the sides, and the tail toward the viewer at the bottom"
+            "BACK VIEW: the creature faces away from the viewer: the bill and eye are NOT visible; the viewer sees "
+            "the back of the long neck with the teal crest spikes on top, the smooth spiral band coiling round the back "
+            "of the body, the two thin arms sticking out to the sides, and the cone tail toward the viewer at the bottom"
         ),
         walk=(
-            "Cells 1-6 are a WALK: Zagnoid crawls like a caterpillar-slug: its many stubby legs patter in a ripple "
-            "that runs from the tail to the front, and the body heaves a little with it: 1 body bunched up (a little "
-            "shorter, a little taller), legs under the back half lifted; 2 the front reaches forward in the facing "
-            "direction, neck leaning forward; 3 body stretched out long and low, legs under the front half lifted; "
-            "4 like 1; 5 like 2; 6 like 3. Claws sway a little and the tail swings a little side to side. The changes "
-            "are small: same overall size as ref.png, centred in its cell, bottom of the body on the same horizontal "
-            "line in every cell."
+            "Cells 1-6 are a WALK. The old game slid this monster along in one pose, so the walk must stay very close "
+            "to ref.png: the body, neck, head, tail and silhouette do NOT change shape or size, they stay rigid. Only "
+            "the thin spider legs step in a ripple (in cells 1 and 4 the legs on one side lifted a little, in cells 2 "
+            "and 5 the legs on the other side lifted, in cells 3 and 6 the legs flat), the arms sway a little and the "
+            "tail tip swings a little. Same size as ref.png, centred in its cell, bottom of the body on the same "
+            "horizontal line in every cell."
         ),
         attack=(
-            "Cells 7-11 are an ATTACK (claw slash and bite): 7 anticipation: rears back away from the facing direction, "
-            "neck pulled back, both claws raised; 8 wind-up: rears up taller, claws spread wide and high, mouth wide "
-            "open; 9 strike: lunges forward in the facing direction, neck and snout thrust forward, both claws slashing "
-            "down in front; 10 follow-through: furthest forward, body low and stretched toward the target, mouth "
-            "snapping shut, claws down; 11 recovery: settling back to the resting pose of ref.png. Cell 12 stays empty magenta."
+            "Cells 7-11 are an ATTACK (bill bite and claw slash), still the same creature as ref.png with the same "
+            "body shape: 7 anticipation: neck pulled back away from the facing direction, both thin arms raised; "
+            "8 wind-up: neck drawn back further, mouth wide open under the bill, claws high; 9 strike: neck and bill thrust forward "
+            "in the facing direction, both claws slashing down in front; 10 follow-through: bill furthest forward, "
+            "snapping shut, claws down; 11 recovery: back to the resting pose of ref.png. The bulb body and tail stay "
+            "where they are. Cell 12 stays empty magenta."
         ),
     ),
 }
