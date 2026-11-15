@@ -1611,12 +1611,32 @@ button.hatch-slot:disabled {
     }
   }
 
+  /* 1366x768 and lower: a smaller portrait, so the panel (taller with a
+     hatchery's "Adding to Hatchery 1" line and the warning's kept line)
+     does not make the tab scroll where 7.6 did not (patch 7.6.1). */
+  @media (max-height: 800px) {
+    .hatch-info__portrait {
+      width: 52px;
+      height: 52px;
+    }
+
+    .hatch-info__picture {
+      width: 48px;
+      height: 48px;
+    }
+  }
+
   /* Its line is kept, empty, while there is no warning (patch 7.6.1): Add,
      pinned to the panel's bottom, rose by a line whenever a count went past
      the housing, and the window grew under it. */
   .hatch .hatch-add__warning[hidden] {
     display: block;
     visibility: hidden;
+  }
+
+  /* "The queue is full." already holds a line there: no second one. */
+  .hatch .hatch-add__gate:not([hidden]) ~ .hatch-add__warning[hidden] {
+    display: none;
   }
 }
 
