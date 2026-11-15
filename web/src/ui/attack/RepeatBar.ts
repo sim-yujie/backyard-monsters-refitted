@@ -4,48 +4,22 @@ import { championByType } from "@/game/combat/rules";
 import { tribePictureUrl } from "@/game/maproom/tribeAvatars";
 import { championPortrait, monsterPortrait, showPortrait, type Portrait } from "@/game/portraits";
 import { formatAmount } from "@/ui/format";
-import {
-  REAL_TIMERS,
-  REPEAT_BAR_FULL_HOLD_MS,
-  REPEAT_BAR_MIN_MS,
-  waitingProgress,
-  type BarTimers,
-  type RepeatBarLook,
-} from "./repeatBarTiming";
+import { REAL_TIMERS, REPEAT_BAR_FULL_HOLD_MS, REPEAT_BAR_MIN_MS, waitingProgress, type BarTimers } from "./repeatBarTiming";
 import "@/ui/styles/repeat-bar.css";
 
 /**
- * Repeat attack's "working" bar (owner, 15 Nov 2026), on the sheet while the
- * server fights the battle. Three looks to choose from behind a dev switch
- * (`repeatBarTiming.ts`), all from art the game already has:
- *
- * - **army**: the monsters the attack sends (its plan, as the confirm sheet
- *   showed it) march along the bar to the camp's tribe at the end.
- * - **fuse**: a fuse burns along the bar to the siege decoy's charge, which
- *   bursts when the bar fills.
- * - **goo**: goo fills a wooden bar.
+ * Repeat attack's working bar (owner, 15 Nov 2026), on the sheet while the
+ * server fights the battle: the marching army (look A, chosen 15 Nov). The
+ * monsters the attack sends (its plan, as the confirm sheet showed it) march
+ * along the bar to the camp's tribe at the end, from art the game already has.
  *
  * The frame is the window style's own bar plate (skin.css `--skin-bar`):
  * steel in Modern, Flash brown in Classic. `--repeat-progress` (0 to 1) on
- * the element drives every look; the CSS does the rest.
+ * the element drives it; the CSS does the rest.
  */
 
 /** Monster kinds that march at most, so the troop fits a phone's bar. */
 export const MAX_MARCHERS = 4;
-
-/** The Flash art the looks borrow (served by the game server under /assets). */
-export const REPEAT_BAR_ART = {
-  /** The siege decoy's charge with its fuse, 21 cells of 44x49; cell 0 is unlit. */
-  charge: "/assets/siegeimages/decoy_fuse_anim.png",
-  /** The decoy's blast, 33 cells of 184x195. */
-  burst: "/assets/siegeimages/decoy_explosion_anim.png",
-  /** A small flame, for the fuse's spark. */
-  flame: "/assets/effects/flame_icon.png",
-  /** A wooden plank, 276x54. */
-  plank: "/assets/ui/wood1.png",
-  /** The goo pile. */
-  goo: "/assets/popups/resourcegoo.png",
-} as const;
 
 /** The tribe's portrait at the end of the army's road: Modern's painting, Classic's Flash splash. */
 export const tribeGoalPicture = (tribe: string, classic: boolean = classicLook()): string | null => {
@@ -100,7 +74,6 @@ const picture = (className: string, src: string): HTMLImageElement => {
 };
 
 export interface RepeatBarOptions {
-  readonly look: RepeatBarLook;
   /** The attack being repeated: who marches, and to which tribe. */
   readonly plan: Pick<PlanSummary, "monsters" | "champions" | "tribe"> | null;
   readonly timers?: BarTimers;
@@ -110,9 +83,8 @@ export interface RepeatBarOptions {
 
 export class RepeatBar {
   readonly element: HTMLElement;
-  readonly look: RepeatBarLook;
   /** How long the full bar stays up before the result. */
-  readonly holdMs: number;
+  readonly holdMs = REPEAT_BAR_FULL_HOLD_MS;
   private readonly timers: BarTimers;
   private readonly minMs: number;
   private startedAt = 0;
@@ -122,25 +94,18 @@ export class RepeatBar {
   private state: "idle" | "running" | "full" | "stopped" = "idle";
 
   constructor(options: RepeatBarOptions) {
-    this.look = options.look;
     this.timers = options.timers ?? REAL_TIMERS;
     this.minMs = options.minMs ?? REPEAT_BAR_MIN_MS;
-    this.holdMs = REPEAT_BAR_FULL_HOLD_MS[options.look];
     const reduced = options.reducedMotion ?? prefersReducedMotion();
 
-    const root = part(`repeat-bar repeat-bar--${options.look}${reduced ? " repeat-bar--still" : ""}`);
+    const root = part(`repeat-bar${reduced ? " repeat-bar--still" : ""}`);
     root.setAttribute("role", "progressbar");
     root.setAttribute("aria-label", "Attacking");
     root.setAttribute("aria-valuemin", "0");
     root.setAttribute("aria-valuemax", "100");
-    root.style.setProperty("--repeat-art-charge", `url("${REPEAT_BAR_ART.charge}")`);
-    root.style.setProperty("--repeat-art-burst", `url("${REPEAT_BAR_ART.burst}")`);
-    root.style.setProperty("--repeat-art-plank", `url("${REPEAT_BAR_ART.plank}")`);
     const track = part("repeat-bar__track");
     root.append(track);
-    if (options.look === "army") this.buildArmy(root, track, options.plan);
-    else if (options.look === "fuse") this.buildFuse(root, track);
-    else this.buildGoo(root, track);
+    this.buildArmy(root, track, options.plan);
     this.element = root;
     this.paint(0);
   }
@@ -225,7 +190,7 @@ export class RepeatBar {
     this.element.setAttribute("aria-valuenow", String(Math.round(this.progress * 100)));
   }
 
-  /* ── The looks ─────────────────────────────────────────────────────────── */
+  /* ── The army ──────────────────────────────────────────────────────────── */
 
   private buildArmy(root: HTMLElement, track: HTMLElement, plan: RepeatBarOptions["plan"]): void {
     track.append(part("repeat-bar__road"));
@@ -263,25 +228,5 @@ export class RepeatBar {
     else goal.classList.add("repeat-bar__goal--none");
     if (plan) goal.title = plan.tribe;
     root.append(goal);
-  }
-
-  private buildFuse(root: HTMLElement, track: HTMLElement): void {
-    track.append(part("repeat-bar__rope"), part("repeat-bar__ash"));
-    const spark = part("repeat-bar__spark");
-    spark.append(picture("repeat-bar__flame", REPEAT_BAR_ART.flame));
-    track.append(spark);
-    const goal = part("repeat-bar__goal repeat-bar__goal--charge");
-    goal.append(part("repeat-bar__charge"), part("repeat-bar__burst"));
-    root.append(goal);
-  }
-
-  private buildGoo(root: HTMLElement, track: HTMLElement): void {
-    track.append(part("repeat-bar__plank"));
-    const goo = part("repeat-bar__goo");
-    goo.append(part("repeat-bar__goo-head"));
-    track.append(goo);
-    const source = part("repeat-bar__source");
-    source.append(picture("repeat-bar__source-pic", REPEAT_BAR_ART.goo));
-    root.prepend(source);
   }
 }

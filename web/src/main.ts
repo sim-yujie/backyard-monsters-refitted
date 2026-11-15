@@ -23,7 +23,6 @@ import { showGraphicsOffNotice } from "@/ui/GraphicsOffNotice";
 import { UpdateCheck, fetchLivePage, runningBundleName } from "@/app/updateCheck";
 import { UpdatePrompt } from "@/ui/UpdatePrompt";
 import { applySkin } from "@/ui/skin";
-import { repeatBarLook } from "@/ui/attack/repeatBarTiming";
 import { applyFontChoice } from "@/ui/fontChoice";
 import { installGameUiSounds } from "@/game/sound/sound";
 
@@ -34,8 +33,6 @@ installErrorReporter();
 
 // Painted windows: steel in Modern, Flash parchment in Classic (`?skin=` to test).
 applySkin();
-// A tester's `?repeatBar=` look, remembered on load as `?skin=` is (until the owner picks one).
-repeatBarLook();
 // The player's Font choice (Account Settings): the game font, Clear or Extra readable.
 applyFontChoice();
 // Flash's click on every button and tab, and its close on close buttons.

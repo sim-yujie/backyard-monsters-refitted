@@ -4,7 +4,7 @@ import type { AutoAttackPlanResponse, AutoAttackResponse, PlanSummary } from "@/
 import { setClassicLook } from "@/game/classicLook";
 import { AutoAttackFlow, type AutoAttackCalls } from "./AutoAttackFlow";
 import { MAX_MARCHERS, RepeatBar, marchersOf, tribeGoalPicture } from "./RepeatBar";
-import { REPEAT_BAR_FULL_HOLD_MS, type BarTimers, type RepeatBarLook } from "./repeatBarTiming";
+import { REPEAT_BAR_FULL_HOLD_MS, type BarTimers } from "./repeatBarTiming";
 
 /**
  * Repeat attack's working bar (owner, 15 Nov 2026): at least 5 s, full only
@@ -108,7 +108,7 @@ const button = (root: ParentNode, label: string) =>
   [...root.querySelectorAll("button")].find((one) => one.textContent === label) as HTMLButtonElement | undefined;
 
 /** The flow on the map's Repeat attack, its confirm sheet open, Attack now pressed. */
-const pressAttack = async (run: AutoAttackCalls["run"], look: RepeatBarLook = "army") => {
+const pressAttack = async (run: AutoAttackCalls["run"]) => {
   const modal = document.createElement("div");
   const timers = fakeTimers();
   const onAttacked = vi.fn();
@@ -119,7 +119,6 @@ const pressAttack = async (run: AutoAttackCalls["run"], look: RepeatBarLook = "a
     onAttacked,
     calls: calls(run),
     progressBar: true,
-    barLook: look,
     barTimers: timers,
     barReducedMotion: false,
   });
@@ -140,6 +139,10 @@ describe("the bar's timing on Repeat attack", () => {
     expect(onAttacked).not.toHaveBeenCalled();
     expect(bar()).not.toBeNull();
     expect(modal.textContent).toContain("Attacking…");
+    // A compact sheet: the bar and one line, no empty button row; small on a phone too.
+    expect(modal.querySelector(".attack-end__actions")).toBeNull();
+    expect(modal.querySelector(".auto-attack__backdrop--bar")).not.toBeNull();
+    expect(modal.querySelectorAll(".panel__body > *")).toHaveLength(2);
 
     await timers.advance(2500);
     const midway = value();
@@ -157,14 +160,20 @@ describe("the bar's timing on Repeat attack", () => {
     expect(onAttacked).toHaveBeenCalledWith(RESULT);
     expect(modal.textContent).not.toContain("Auto-attack result");
 
-    await timers.advance(REPEAT_BAR_FULL_HOLD_MS.army);
+    await timers.advance(REPEAT_BAR_FULL_HOLD_MS);
     expect(modal.querySelector(".repeat-bar")).toBeNull();
     expect(modal.textContent).toContain("Auto-attack result");
+    // The result is the full sheet again, with only Watch and Close.
+    expect(modal.querySelector(".auto-attack__backdrop--bar")).toBeNull();
+    expect([...modal.querySelectorAll(".attack-end__actions button")].map((one) => one.textContent)).toEqual([
+      "Watch",
+      "Close",
+    ]);
   });
 
   it("an answer after 5 s: the bar keeps creeping, never full, until the answer lands", async () => {
     const answer = deferred<AutoAttackResponse>();
-    const { modal, timers, bar, value } = await pressAttack(() => answer.promise, "fuse");
+    const { modal, timers, bar, value } = await pressAttack(() => answer.promise);
     await timers.advance(5000);
     const atFive = value();
     await timers.advance(3000);
@@ -178,13 +187,13 @@ describe("the bar's timing on Repeat attack", () => {
     await timers.advance(50);
     expect(value()).toBe(100);
     expect(bar()!.classList.contains("repeat-bar--full")).toBe(true);
-    await timers.advance(REPEAT_BAR_FULL_HOLD_MS.fuse);
+    await timers.advance(REPEAT_BAR_FULL_HOLD_MS);
     expect(modal.textContent).toContain("Auto-attack result");
   });
 
   it("an error: the bar stops at once and the error shows as before", async () => {
     const answer = deferred<AutoAttackResponse>();
-    const { modal, timers, onAttacked } = await pressAttack(() => answer.promise, "goo");
+    const { modal, timers, onAttacked } = await pressAttack(() => answer.promise);
     await timers.advance(1000);
     answer.reject(new Error("The camp is under attack."));
     await timers.advance(50);
@@ -219,13 +228,13 @@ describe("the bar's timing on Repeat attack", () => {
   });
 });
 
-describe("the looks", () => {
-  it("army: the plan's biggest kinds march (at most 4), champions lead, the tribe waits at the end", () => {
+describe("the marching army", () => {
+  it("the plan's biggest kinds march (at most 4), champions lead, the tribe waits at the end", () => {
     const marchers = marchersOf(PLAN);
     expect(marchers.map((one) => one.name)).toEqual(["C1", "C2", "C12", "C5", "G3"]);
     expect(marchers.filter((one) => one.count !== null)).toHaveLength(MAX_MARCHERS);
 
-    const bar = new RepeatBar({ look: "army", plan: PLAN, reducedMotion: false });
+    const bar = new RepeatBar({ plan: PLAN, reducedMotion: false });
     const units = [...bar.element.querySelectorAll(".repeat-bar__marcher")];
     expect(units).toHaveLength(5);
     // Left to right: smallest kind at the back, the champion in front.
@@ -246,9 +255,9 @@ describe("the looks", () => {
     expect(bar.element.getAttribute("role")).toBe("progressbar");
   });
 
-  it("army in Classic: Flash's monster icons and the tribe's Flash splash", () => {
+  it("in Classic: Flash's monster icons and the tribe's Flash splash", () => {
     setClassicLook(true);
-    const bar = new RepeatBar({ look: "army", plan: PLAN, reducedMotion: false });
+    const bar = new RepeatBar({ plan: PLAN, reducedMotion: false });
     expect(bar.element.querySelector(".repeat-bar__marcher img")!.getAttribute("src")).toBe(
       "/assets/monsters/C5-small.png",
     );
@@ -257,29 +266,27 @@ describe("the looks", () => {
     expect(tribeGoalPicture("Nobody")).toBeNull();
   });
 
-  it("fuse and goo build their parts; reduced motion marks the bar still", () => {
-    const fuse = new RepeatBar({ look: "fuse", plan: null, reducedMotion: true });
-    expect(fuse.element.querySelector(".repeat-bar__spark")).not.toBeNull();
-    expect(fuse.element.querySelector(".repeat-bar__charge")).not.toBeNull();
-    expect(fuse.element.querySelector(".repeat-bar__burst")).not.toBeNull();
-    expect(fuse.element.classList.contains("repeat-bar--still")).toBe(true);
-    expect(fuse.element.style.getPropertyValue("--repeat-art-burst")).toContain("decoy_explosion_anim.png");
-
-    const goo = new RepeatBar({ look: "goo", plan: null, reducedMotion: false });
-    expect(goo.element.querySelector(".repeat-bar__goo")).not.toBeNull();
-    expect(goo.element.querySelector(".repeat-bar__plank")).not.toBeNull();
-    expect(goo.element.classList.contains("repeat-bar--still")).toBe(false);
+  it("reduced motion marks the bar still; no plan, no marchers and an empty goal", () => {
+    const still = new RepeatBar({ plan: PLAN, reducedMotion: true });
+    expect(still.element.classList.contains("repeat-bar--still")).toBe(true);
+    const moving = new RepeatBar({ plan: null, reducedMotion: false });
+    expect(moving.element.classList.contains("repeat-bar--still")).toBe(false);
+    expect(moving.element.querySelectorAll(".repeat-bar__marcher")).toHaveLength(0);
+    expect(moving.element.querySelector(".repeat-bar__goal--none")).not.toBeNull();
+    // One look only: no other look's parts, no art pulled in by custom property.
+    expect(moving.element.className).toBe("repeat-bar");
+    expect(moving.element.getAttribute("style")).not.toContain("--repeat-art");
   });
 
   it("never goes backwards, and stays put once stopped", () => {
     const timers = fakeTimers();
-    const bar = new RepeatBar({ look: "goo", plan: null, timers, reducedMotion: false });
+    const bar = new RepeatBar({ plan: null, timers, reducedMotion: false });
     bar.start();
     bar.complete();
     bar.update();
     expect(bar.value).toBe(1);
 
-    const stopped = new RepeatBar({ look: "goo", plan: null, timers, reducedMotion: false });
+    const stopped = new RepeatBar({ plan: null, timers, reducedMotion: false });
     stopped.start();
     stopped.stop();
     const at = stopped.value;

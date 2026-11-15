@@ -1,14 +1,5 @@
 import { describe, expect, it } from "vitest";
-import {
-  DEFAULT_REPEAT_BAR_LOOK,
-  REPEAT_BAR_KEY,
-  REPEAT_BAR_MIN_MS,
-  atLeast,
-  pickRepeatBarLook,
-  repeatBarLook,
-  waitingProgress,
-  type BarTimers,
-} from "./repeatBarTiming";
+import { REPEAT_BAR_MIN_MS, atLeast, waitingProgress, type BarTimers } from "./repeatBarTiming";
 
 /** A clock that only moves when told to, and timers that fire as it passes them. */
 const fakeTimers = (): BarTimers & { advance: (ms: number) => Promise<void> } => {
@@ -121,39 +112,5 @@ describe("the 5 s minimum", () => {
     const state = watch(atLeast(Promise.resolve(1), REPEAT_BAR_MIN_MS, timers, 0));
     await timers.advance(1000);
     expect(state.done).toBe(true);
-  });
-});
-
-describe("the look switch", () => {
-  const memory = (): Storage => {
-    const data = new Map<string, string>();
-    return {
-      getItem: (key: string) => data.get(key) ?? null,
-      setItem: (key: string, value: string) => void data.set(key, value),
-      removeItem: (key: string) => void data.delete(key),
-      clear: () => data.clear(),
-      key: () => null,
-      get length() {
-        return data.size;
-      },
-    };
-  };
-
-  it("is the army unless a valid look is asked for or saved", () => {
-    expect(DEFAULT_REPEAT_BAR_LOOK).toBe("army");
-    expect(pickRepeatBarLook(null, null)).toBe("army");
-    expect(pickRepeatBarLook("fuse", "goo")).toBe("fuse");
-    expect(pickRepeatBarLook("nonsense", "goo")).toBe("goo");
-    expect(pickRepeatBarLook(null, "nonsense")).toBe("army");
-  });
-
-  it("?repeatBar= is remembered on this browser, and ?repeatBar=auto forgets it", () => {
-    const store = memory();
-    expect(repeatBarLook("?repeatBar=goo", store)).toBe("goo");
-    expect(store.getItem(REPEAT_BAR_KEY)).toBe("goo");
-    expect(repeatBarLook("", store)).toBe("goo");
-    expect(repeatBarLook("?repeatBar=auto", store)).toBe("army");
-    expect(store.getItem(REPEAT_BAR_KEY)).toBeNull();
-    expect(repeatBarLook("?repeatBar=fuse", null)).toBe("fuse");
   });
 });

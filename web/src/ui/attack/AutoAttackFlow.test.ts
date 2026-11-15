@@ -146,20 +146,13 @@ describe("the result", () => {
     expect(shown).toContain("some loot was left behind");
     // The takeover offer an attack by hand gets.
     expect(modal.querySelector(".end-takeover")).not.toBeNull();
-    expect(button(modal, "Repeat again")).toBeDefined();
-  });
-
-  it("Repeat again asks the server again and opens the sheet afresh", async () => {
-    const modal = document.createElement("div");
-    const api = calls();
-    const flow = new AutoAttackFlow({ baseid: BASEID, modal, onWatch: vi.fn(), calls: api });
-    await flow.start(answer());
-    button(modal, "Attack now")!.click();
-    await settle();
-    button(modal, "Repeat again")!.click();
-    await settle();
-    expect(api.plan).toHaveBeenCalledWith(BASEID);
-    expect(button(modal, "Attack now")).toBeDefined();
+    // Only Watch and Close (owner, 15 Nov 2026): no Repeat again.
+    expect(button(modal, "Repeat again")).toBeUndefined();
+    expect([...modal.querySelectorAll(".attack-end__actions button")].map((one) => one.textContent)).toEqual([
+      "Watch",
+      "Close",
+    ]);
+    expect(api.plan).not.toHaveBeenCalled();
   });
 
   it("a refusal says why, with the missing list", async () => {

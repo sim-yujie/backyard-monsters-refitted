@@ -1,6 +1,6 @@
 /**
- * Repeat attack's progress bar (owner, 15 Nov 2026): the timing and the
- * look switch, kept apart from the DOM so the tests can drive them.
+ * Repeat attack's progress bar (owner, 15 Nov 2026): its timing, kept apart
+ * from the DOM so the tests can drive it.
  *
  * The server answers a Repeat attack at once, so the bar is theatre: it runs
  * for at least {@link REPEAT_BAR_MIN_MS}, and only once the answer is in AND
@@ -71,61 +71,5 @@ export const atLeast = async <T>(
   return result;
 };
 
-/* ── The look (dev switch until the owner picks one) ────────────────────── */
-
-export const REPEAT_BAR_LOOKS = ["army", "fuse", "goo"] as const;
-export type RepeatBarLook = (typeof REPEAT_BAR_LOOKS)[number];
-
-/** The look shown when nobody picked one. */
-export const DEFAULT_REPEAT_BAR_LOOK: RepeatBarLook = "army";
-
-/** Where this browser keeps a tester's `?repeatBar=` choice. */
-export const REPEAT_BAR_KEY = "bymr.repeatBar";
-
-/**
- * How long the full bar stays up before the result, per look: long enough to
- * see it land (the fuse's bomb bursts in this time).
- */
-export const REPEAT_BAR_FULL_HOLD_MS: Readonly<Record<RepeatBarLook, number>> = {
-  army: 600,
-  fuse: 900,
-  goo: 600,
-};
-
-const isLook = (value: string | null): value is RepeatBarLook =>
-  (REPEAT_BAR_LOOKS as readonly (string | null)[]).includes(value);
-
-/** The look: a tester's `?repeatBar=` if valid, else the one they saved, else the default. */
-export const pickRepeatBarLook = (asked: string | null, saved: string | null): RepeatBarLook => {
-  if (isLook(asked)) return asked;
-  if (isLook(saved)) return saved;
-  return DEFAULT_REPEAT_BAR_LOOK;
-};
-
-const storage = (): Storage | null => {
-  try {
-    return window.localStorage;
-  } catch {
-    return null;
-  }
-};
-
-/**
- * The look for this page. `?repeatBar=army|fuse|goo` picks one and this
- * browser remembers it; `?repeatBar=auto` forgets it.
- */
-export const repeatBarLook = (
-  search: string = typeof location === "undefined" ? "" : location.search,
-  store: Storage | null = storage(),
-): RepeatBarLook => {
-  const asked = new URLSearchParams(search).get("repeatBar");
-  let saved: string | null = null;
-  try {
-    if (asked === "auto") store?.removeItem(REPEAT_BAR_KEY);
-    else if (isLook(asked)) store?.setItem(REPEAT_BAR_KEY, asked);
-    saved = store?.getItem(REPEAT_BAR_KEY) ?? null;
-  } catch {
-    saved = null;
-  }
-  return pickRepeatBarLook(asked, saved);
-};
+/** How long the full bar stays up before the result: long enough to see the army reach the tribe. */
+export const REPEAT_BAR_FULL_HOLD_MS = 600;
