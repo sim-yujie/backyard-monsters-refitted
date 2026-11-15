@@ -93,7 +93,8 @@ SPECS = {
         gamma=1.0,                       # no brightness lift in build_anim
         # toward the portrait (body mean 215/152/45 vs portrait 183/153/98, limbs 164/65/22 vs 126/54/28): Codex
         # paints it more orange and saturated than the card; this gives a paler, greener gold and coral limbs
-        grade=dict(body=((0.84, 12.0), (0.95, 14.0), (1.3, 30.0)), limbs=((0.8, 12.0), (0.88, 8.0), (1.2, 8.0))),
+        grade=dict(body=((0.86, 6.0), (0.97, 10.0), (1.5, 14.0)), limbs=((0.8, 12.0), (0.88, 8.0), (1.2, 8.0))),
+        grade_chroma=True,               # grey / white pixels (fangs, drool, glints, crevices) are left as painted
         view_match=True,                 # build_still: every painted view colour-matched to the median view (batches vary)
         open_holes=True,                 # see-through gaps between the claws / arms and the body (common.key_cell)
         anchor=(26, 28),

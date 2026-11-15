@@ -304,6 +304,12 @@ def grade(im, spec):
     a = np.asarray(im).astype(float)
     rgb = a[..., :3]
     wb, wr, wc = part_weights(rgb)
+    if spec.get("grade_chroma"):
+        # IC2 round 3: grey / white pixels (fangs, drool, glints, dark crevices) keep their colour; the grade
+        # acts in proportion to how coloured a pixel is, so whites do not turn cyan or shadows purple-grey
+        k = np.clip((rgb.max(-1) - rgb.min(-1)) / 80.0, 0, 1)
+        wc = wc + (wb + wr) * (1 - k)  # the ungraded share is kept as painted (like the crest)
+        wb, wr = wb * k, wr * k
     # the crest grade only touches dark green pixels: lemon body highlights can read green-yellow too
     wd = wc * np.clip((160 - rgb.mean(-1)) / 40, 0, 1) if "crest" in g else np.zeros_like(wc)
     out = rgb * (wc - wd)[..., None]

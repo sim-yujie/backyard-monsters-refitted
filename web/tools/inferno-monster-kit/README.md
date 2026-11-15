@@ -161,5 +161,11 @@ game sheets backed up in `art-work/IC2-r3/r2-assets`) paints that creature:
   portrait's paler, greener gold and coral.
 - Codex calls: 1 sample (8 12 15 21) + 3 still batches (the last with heading 15 again as a spare; the later one
   won) + 15 animation = **19 calls**. No redos were needed.
+- Polish (owner: "finish the polish", 15 Nov): `grade_chroma` (spec) leaves grey / white pixels (fangs, drool, glints,
+  crevices) as painted, since the old grade turned the drool cyan; headings 9 and 21 repainted at their true turn (they
+  had come out as straight front / back views, so h6-h9 and h21-h24 looked alike); heading 12 repainted without the
+  black-tipped tail tendril; heading 8's animation redone (the tail flipped to the left in the walk frames), then
+  9, 12 and 21 animated again from their new stills. `still/skip.txt` keeps only h9/h21 and h12 from the two redo
+  batches. 6 more calls: **25 calls** for round 3.
 - Comparison pictures: `art-work/IC2-r3/r3sheets.py <shots dir>` (portrait | round 2 | round 3; every heading; game
   size). Battle and yard shots: `art-work/IC2-r3/film.mjs` (yardtester, own server on 5461).
