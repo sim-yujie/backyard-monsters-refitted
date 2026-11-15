@@ -31,6 +31,7 @@ import {
   stepWalker,
   stepWorker,
   walkerSpecs,
+  withCagedChampions,
   withRosters,
   WORKER_MOTION,
   yardLifeOf,
@@ -163,7 +164,7 @@ describe("yardLifeOf on somebody else's yard (#159)", () => {
     expect(visit.jobs).toHaveLength(1);
   });
 
-  it("an attack keeps the pens and workers but no caged champion: none defends", () => {
+  it("an attack keeps the pens and workers; the battle says which champions are caged", () => {
     const attack = yardLifeOf(busy, yard, "attack");
     expect(attack.groups).toEqual(yardLifeOf(busy, yard, "visit").groups);
     expect(attack.pens.map((pen) => pen.id)).toEqual([82, 584, 585, 586]);
@@ -171,6 +172,24 @@ describe("yardLifeOf on somebody else's yard (#159)", () => {
     expect(attack.cage).not.toBeNull();
     expect(walkerSpecs(attack, seeded()).some((spec) => spec.champion)).toBe(false);
     expect(attack.workers).toBe(5);
+  });
+
+  it("an attack's cage holds the champions the battle has in it, each on its point (bug report #47)", () => {
+    const attack = yardLifeOf(busy, yard, "attack");
+    const caged = withCagedChampions(attack, [
+      { t: 1, l: 3, ix: 40.5, iy: 61.25 },
+      { t: 5, l: 2, ix: 70, iy: 55 },
+    ]);
+    expect(caged.champions).toEqual([
+      { id: "G1", level: 3, sheetLevel: 3, at: { x: 40.5, y: 61.25 } },
+      { id: "G5", level: 2, sheetLevel: 2, at: { x: 70, y: 55 } },
+    ]);
+    // Each stands on its point: no pacing, so it comes out from where it is drawn.
+    const walkers = reconcileWalkers(new Map(), walkerSpecs(caged, seeded()), seeded());
+    const gorgo = walkers.get(championWalkerKey(attack.cage!.id, "G1"))!;
+    expect([gorgo.x, gorgo.y]).toEqual([40.5, 61.25]);
+    for (let tick = 0; tick < 2000; tick++) stepWalker(gorgo, seeded(tick));
+    expect([gorgo.x, gorgo.y]).toEqual([40.5, 61.25]);
   });
 
   it("a wild monster camp has no workers, visited or attacked (`QUEUE.as:56`)", () => {
@@ -233,6 +252,37 @@ describe("yardLifeOf on the Inferno", () => {
       expect(held).toEqual(dealt[pen.id] ?? {});
     }
     expect(yardLifeOf(inferno, readYard(inferno, { foreign: true }), "visit").rosters).toBeNull();
+  });
+});
+
+describe("withCagedChampions", () => {
+  const cage = { id: 7, x: 100, y: 200 };
+  const life = withCagedChampions(lifeWith({ cage }), [{ t: 2, l: 4, ix: 150, iy: 260 }]);
+
+  it("is the same life while the cage holds the same champions on the same points", () => {
+    expect(withCagedChampions(life, [{ t: 2, l: 4, ix: 150, iy: 260 }])).toBe(life);
+  });
+
+  it("empties the cage as its champion comes out, and fills it again where it went back in", () => {
+    const out = withCagedChampions(life, []);
+    expect(out.champions).toEqual([]);
+    expect(walkerSpecs(out, seeded())).toEqual([]);
+    const back = withCagedChampions(out, [{ t: 2, l: 4, ix: 170, iy: 240 }]);
+    expect(back.champions).toEqual([{ id: "G2", level: 4, sheetLevel: 4, at: { x: 170, y: 240 } }]);
+  });
+
+  it("moves a kept champion onto its new point when it came out and went back in between two reads", () => {
+    const first = reconcileWalkers(new Map(), walkerSpecs(life, seeded()), seeded());
+    const moved = withCagedChampions(life, [{ t: 2, l: 4, ix: 170, iy: 240 }]);
+    const second = reconcileWalkers(first, walkerSpecs(moved, seeded()), seeded());
+    const walker = second.get(championWalkerKey(7, "G2"))!;
+    expect(walker).toBe(first.get(championWalkerKey(7, "G2")));
+    expect([walker.x, walker.y, walker.moving]).toEqual([170, 240, false]);
+  });
+
+  it("keeps none on a yard with no cage", () => {
+    const bare = lifeWith({});
+    expect(withCagedChampions(bare, [{ t: 2, l: 4, ix: 150, iy: 260 }])).toBe(bare);
   });
 });
 
