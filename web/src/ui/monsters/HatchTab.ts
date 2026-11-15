@@ -410,7 +410,7 @@ export class HatchTab implements MonstersTab {
       this.warningLine,
     );
 
-    this.info.append(this.infoHead, this.infoEach, this.detailsButton, this.stats, this.addBlock);
+    this.info.append(this.infoHead, this.infoEach, this.stats, this.addBlock);
     // The message sits in the split so the info panel can stand beside it on a wide screen.
     split.append(this.message, pick, this.info);
     this.scroll.append(this.lines, this.boosts, split);
@@ -1491,7 +1491,8 @@ export class HatchTab implements MonstersTab {
     blurb.append(...describe(monster.description));
     blurb.title = blurb.textContent ?? "";
     heading.append(level, name, blurb);
-    this.infoHead.replaceChildren(portrait, heading);
+    // patch 7.6.1 (astra): Details belongs to the portrait/name row, with its full tap target.
+    this.infoHead.replaceChildren(portrait, heading, this.detailsButton);
 
     // The phone bar's line: what one costs, takes and fills, as icons.
     this.infoEach.replaceChildren(

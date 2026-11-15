@@ -798,6 +798,12 @@ describe("HatchTab: the info panel and the batch add", () => {
     expect(text(element, ".hatch-info__name")).toBe("Bolt");
     expect(text(element, ".hatch-info__level")).toBe("Level 1");
     expect(text(element, ".hatch-info__blurb")).toContain("Bolt is fast as lightning");
+    // patch 7.6.1 (astra): Details stays in the head row and still opens the numbers.
+    const details = element.querySelector<HTMLButtonElement>(".hatch-info__head > .hatch-info__details")!;
+    details.click();
+    expect(element.querySelector(".hatch-info")!.classList.contains("hatch-info--details")).toBe(true);
+    details.click();
+    expect(element.querySelector(".hatch-info")!.classList.contains("hatch-info--details")).toBe(false);
     const stats = [...element.querySelectorAll<HTMLElement>(".hatch-info__stat")].map(
       (stat) => `${spokenText(stat.querySelector("dt")!)} ${spokenText(stat.querySelector("dd")!)}`,
     );

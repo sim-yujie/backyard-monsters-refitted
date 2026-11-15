@@ -1308,8 +1308,7 @@ button.hatch-slot:disabled {
 .hatch-info__head {
   display: flex;
   align-items: center;
-  gap: var(--space-3);
-  padding-right: 76px;
+  gap: var(--space-2);
 }
 
 .hatch-info__portrait {
@@ -1330,6 +1329,7 @@ button.hatch-slot:disabled {
 }
 
 .hatch-info__heading {
+  flex: 1;
   display: flex;
   flex-direction: column;
   gap: 2px;
@@ -1375,9 +1375,10 @@ button.hatch-slot:disabled {
 }
 
 .hatch-info__details {
-  position: absolute;
-  top: var(--space-2);
-  right: var(--space-2);
+  /* patch 7.6.1 (astra): in the head row, centred beside the name. */
+  flex: none;
+  margin-left: auto;
+  padding-inline: var(--space-1);
   font-size: var(--text-sm);
 }
 
@@ -1945,13 +1946,9 @@ button.hatch-slot:disabled {
 
   .hatch-info__each {
     margin-top: calc(-1 * var(--space-2));
-    padding-left: calc(48px + var(--space-3));
+    padding-left: calc(48px + var(--space-2));
     font-size: var(--text-xs);
     color: var(--colour-text-muted);
-  }
-
-  .hatch-info__details {
-    top: var(--space-3);
   }
 
   .hatch-info--details .hatch-info__blurb {
@@ -2077,7 +2074,7 @@ button.hatch-slot:disabled {
    (owner, 6 Nov 2026), the add bar fixed to a phone's bottom (287 px) left
    the monster list and the queue no room at all at 375x667 and one row at
    375x812 (patch 6.3). Below 960 px tall the bar scrolls with the content,
-   under the monster grid; the details button keeps its corner. */
+   under the monster grid. */
 @media (max-height: 960px) {
   .hatch-info {
     position: relative;
