@@ -174,6 +174,8 @@ const JUMPS = [5, 10] as const;
 const MAX_HATCHERIES = 5;
 /** Letters past which a card's name is drawn smaller on a phone ("Slimeattikus" is 12). */
 const LONG_NAME = 10;
+/** patch 7.6.1 (astra): past this, smaller in the nine-across tiles too ("Octo-ooze", "Crabatron"). */
+const MID_NAME = 8;
 
 /** Seconds as a countdown: "12s", "4m 10s". */
 const duration = (seconds: number): string => formatCountdown(Math.ceil(seconds));
@@ -1452,8 +1454,10 @@ export class HatchTab implements MonstersTab {
     const name = document.createElement("span");
     // A long name ("Slimeattikus") gets smaller letters on a phone, so it
     // stays whole on one line rather than breaking mid-word.
-    name.className =
-      row.monster.name.length > LONG_NAME ? "hatch-monster__name hatch-monster__name--long" : "hatch-monster__name";
+    // Side by side, nine across, a name of nine letters or more is drawn a
+    // little smaller too, so none is cut with "…" (patch 7.6.1, astra).
+    const letters = row.monster.name.length;
+    name.className = `hatch-monster__name${letters > LONG_NAME ? " hatch-monster__name--long" : ""}${letters > MID_NAME ? " hatch-monster__name--mid" : ""}`;
     name.textContent = row.monster.name;
     const note = document.createElement("span");
     note.className = "hatch-monster__note";

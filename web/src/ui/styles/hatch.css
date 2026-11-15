@@ -1562,15 +1562,51 @@ button.hatch-slot:disabled {
     line-clamp: 2;
   }
 
+  /* patch 7.6.1 (astra): the long names fit nine across without taller tiles. */
+  .hatch-monster__name--mid {
+    font-size: 10px;
+    letter-spacing: -0.6px;
+  }
+
+  /* patch 7.6.1 (astra): the box gives way to Max, including the painted
+     skin's 4ch minimum. The row still fills the same width as Add. */
+  .hatch-add__count,
+  :root[data-skin] .panel .hatch .hatch-add__count {
+    flex: 1 1 0;
+    /* Never narrower than three digits (the most is 400): "145" was cut at 1920x1080. */
+    min-width: calc(3ch + 6px);
+    width: 0;
+    padding-inline: 2px;
+  }
+
   /* A finger's 44px steps and "Max (145)" ran 20px past the panel's edge
      on an iPad on its side (patch 7.6.1): a little less room between them. */
   @media (pointer: coarse) {
     .hatch-add__controls {
-      gap: 4px;
+      gap: 1px;
+    }
+
+    /* patch 7.6.1 (astra): pinch the painted ends too, leaving the count
+       three digits of room while every step keeps its 44px target. */
+    :root[data-skin] .panel .hatch .hatch-add__controls .btn--outline {
+      --skin-button2-cap: 10px;
     }
 
     .hatch-add__controls .qty-stepper__step {
       padding-inline: var(--space-1);
+    }
+
+    .hatch-add__fill {
+      padding-inline: var(--space-2);
+      font-size: var(--text-xs);
+    }
+  }
+
+  /* With a mouse, "Max (145)" ran 9px past Add's right edge (patch 7.6.1):
+     a little less room between the steps and inside Max. */
+  @media (pointer: fine) {
+    .hatch-add__controls {
+      gap: 4px;
     }
 
     .hatch-add__fill {
@@ -1589,12 +1625,34 @@ button.hatch-slot:disabled {
       min-height: 28px;
       padding-block: 0;
     }
+
+    /* patch 7.6.1 (astra): reclaim 30px without changing rows or the art.
+       Idle keeps the same head height as Clear all; touch keeps its targets. */
+    .hatch__tabs-row {
+      padding-top: var(--space-1);
+    }
+
+    .hatch-tab {
+      padding-block: 0;
+    }
+
+    .hatch__tabs-row:not([hidden]) + .hatch__scroll {
+      padding-top: var(--space-1);
+    }
+
+    .hatch-line--tabbed {
+      gap: 2px;
+      padding-block: 2px;
+    }
+
+    .hatch-line--tabbed > .hatch-line__head,
+    .hatch-line--tabbed > .hatch-line__head > .btn.hatch-clear {
+      min-height: 26px;
+    }
   }
 
-  /* The same warning as the housing row's: one line here, in full on hover. */
+  /* patch 7.6.1 (astra): the short warning fits the kept line, with no cut. */
   .hatch-add__warning {
-    overflow: hidden;
-    text-overflow: ellipsis;
     white-space: nowrap;
   }
 
