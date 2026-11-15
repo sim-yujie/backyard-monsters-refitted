@@ -39,6 +39,7 @@ px around the building's origin, 12 render px a 1x px), with the same camera as 
 | sulfur | 3 Sulfur Swirler in an Inferno yard | art/sulfur-3d | art-samples/sulfur-3d (sulfur.py) | levels 1, 3, 7; 51, 45 and 45 cells of its loop (leave out `L<tier>-parts-51/45.png`, frame 0 again for the loop check); canvas x -60..60, y -80..70; `sulfur:damaged` from the same folder (`PB_STATE`); destroyed is Flash's rubble |
 | magma | 4 Magma Pump in an Inferno yard | art/magma-3d | art-samples/magma-fable (magma.py) | levels 1, 3, 7; 49 cells of its loop, the pot's smoke in them (leave out `L<tier>-parts-49.png`, frame 0 again for the loop check); canvas x -60..60, y -80..60; `magma:damaged` from the same folder (`PB_STATE`); destroyed is Flash's rubble |
 | locker | 8 Monster Locker | art/locker-fable-2 | locker-fable-2 (locker.py) | levels 1-4; 21, 20, 20 and 21 cells of its key and gears |
+| incubator | 13 Incubator in an Inferno yard | art/incubator-3d | art-samples/buildings-b6/inferno/incubator (incubator.py, `post.py game` -> `game/`) | one look for its three levels; 50 cells of its hatching loop, the vent's smoke laid into the cells by post.py; canvas x -80..80, y -60..90; `incubator:damaged` from the same `game/` folder; destroyed is Flash's rubble |
 | strongbox | 8 Strongbox in an Inferno yard | art/strongbox-3d | art-samples/buildings-b6/inferno/strongbox (strongbox.py) | one look for its four levels; 30 cells of its loop while it unlocks, each the whole building |
 
 The Inferno's Strongbox (`strongbox`, moves "frames"; owner on the Review Desk, 14 Nov 2026) is the clean-room model
@@ -186,6 +187,7 @@ BUILDINGS = {
                    moves="parts"),
     "magma": dict(type=4, folder="imagmaproducer", frame=(-60, -80), k=6, looks=[(1, "L1"), (3, "L2"), (7, "L3")],
                   moves="parts"),
+    "incubator": dict(type=13, folder="ihatchery", frame=(-80, -60), k=6, looks=[(1, "L1")], moves="parts"),
     "strongbox": dict(type=8, folder="imonsterlab", frame=(-70, -52), looks=[(1, "")], moves="frames"),
     "locker": dict(type=8, folder="monsterlocker", frame=(-80, -110), k=8, looks=[(n, f"L{n}") for n in range(1, 5)],
                    moves="cells", noise=0.0),
@@ -200,6 +202,7 @@ CELLS = {"twig": {1: 34, 3: 34, 6: 34, 10: 34}, "pebble": {1: 26, 3: 26, 6: 26, 
          "coal": {1: 47, 3: 45, 7: 45},
          "sulfur": {1: 51, 3: 45, 7: 45},
          "magma": {1: 49, 3: 49, 7: 49},
+         "incubator": {1: 50},
          "strongbox": {1: 30}, "locker": {1: 21, 2: 20, 3: 20, 4: 21}}
 TAIL = 16                      # 1x px a shadow cut by the render's canvas is carried on past it, fading out
 NOISE = 0.07                   # the shadow catcher's faint wash over all the ground (sky occlusion), taken off every shade

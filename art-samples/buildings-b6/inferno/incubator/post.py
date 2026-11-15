@@ -6,6 +6,10 @@ python post.py mp4             incubator-hatching.mp4 (Flash beside 3D, the loop
                                incubator-hatching-3d.mp4 (3D alone, larger)
 python post.py sheets          sheet-idle.png and sheet-hatching.png: Flash beside 3D at the stills' full size
 python post.py crops           crop-body.png, crop-foot.png, crop-porthole.png, crop-pump.png: Flash beside 3D, enlarged
+python post.py game            game/: what web/tools/tower-tiers/export3d_buildings.py `incubator` reads: anim/render's
+                               L1-base.png and L1-alone.png, and L1-parts-00..49.png, each frame's moving parts with
+                               its smoke laid over them (frame 50, the loop check, is left out), plus damaged/render's
+                               L1-damaged-base.png and -alone.png (incubator.py PB_STATE=damaged) for `incubator:damaged`
 python post.py check           loop-check.png (every pixel that changes during the loop, in red, on the idle picture)
                                and the loop's numbers: frame 50 against frame 0, the step 49 -> 0 against the other
                                steps, and how much changes outside the brood, the hose and the smoke
@@ -252,8 +256,26 @@ def check(tol=10):
     print("made", D / "loop-check.png")
 
 
+def game():
+    R = D / "anim" / "render"
+    out = D / "game"
+    out.mkdir(exist_ok=True)
+    for name in ("L1-base.png", "L1-alone.png"):
+        Image.open(R / name).save(out / name)
+    for k in range(N):
+        parts = Image.open(R / f"L1-parts-{k:02d}.png").convert("RGBA")
+        parts.alpha_composite(smoke(k, parts.size))
+        parts.save(out / f"L1-parts-{k:02d}.png")
+    for name in ("L1-damaged-base.png", "L1-damaged-alone.png"):
+        if (D / "damaged" / "render" / name).exists():
+            Image.open(D / "damaged" / "render" / name).save(out / name)
+    print("game", N, "cells ->", out)
+
+
 if __name__ == "__main__":
     cmd = sys.argv[1]
+    if cmd == "game":
+        game()
     if cmd == "frames":
         frames(*sys.argv[2:3])
     elif cmd == "mp4":

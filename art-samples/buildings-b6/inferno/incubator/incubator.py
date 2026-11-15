@@ -808,7 +808,191 @@ def turn(k):
     ob.data.update()
 
 
-kit.run(build, turn)
+# ------------------------------------------------------------------------------------------------------------ damaged
+# One rough pass (owner: damaged looks only roughly follow Flash's top.1.damaged.v2, no polish rounds), on the
+# approved model: PB_STATE=damaged with mode `base` writes <PB_SUB>/render/L1-damaged-base.png and -alone.png.
+#   PB_STATE=damaged PB_SUB=damaged PB_K=6 ./run.sh base
+# As Flash's: the shell dented and sooted, the feed hose torn off the pump and hanging to the ground, the porthole's
+# glass cracked and the brood leaking down the front in two green runs, a few plates and stones at the feet, the vent
+# dead. Destroyed is Flash's rubble, as for every other 3D building. Nothing here runs without PB_STATE.
+STATE = kit.STATE
+
+
+def grey(x):
+    return (x, x, x, 1)
+
+
+def scorch(amount, cut=0.5, skip=("brood", "goo", "card", "glow", "vent-glow", "hole")):
+    """Soot over every paint: patches of near black, `amount` of the colour left under them (as the Magma Pump's)."""
+    for m in list(bpy.data.materials):
+        nt = m.node_tree
+        if nt is None or m.name.startswith(skip):
+            continue
+        bsdf = next((n for n in nt.nodes if n.type == "BSDF_PRINCIPLED"), None)
+        if bsdf is None:
+            continue
+        inp = bsdf.inputs["Base Color"]
+        if inp.is_linked:
+            src = inp.links[0].from_socket
+        else:
+            rgb = nt.nodes.new("ShaderNodeRGB")
+            rgb.outputs[0].default_value = inp.default_value
+            src = rgb.outputs[0]
+        tc = nt.nodes.new("ShaderNodeTexCoord")
+        nz = nt.nodes.new("ShaderNodeTexNoise")
+        nz.inputs["Scale"].default_value = 1.4
+        nz.inputs["Detail"].default_value = 5.0
+        nz.inputs["Roughness"].default_value = 0.65
+        ramp = nt.nodes.new("ShaderNodeValToRGB")
+        ramp.color_ramp.elements[0].position, ramp.color_ramp.elements[0].color = cut - 0.1, grey(amount)
+        ramp.color_ramp.elements[1].position, ramp.color_ramp.elements[1].color = cut + 0.12, grey(0.9)
+        mix = nt.nodes.new("ShaderNodeMix")
+        mix.data_type = "RGBA"
+        mix.blend_type = "MULTIPLY"
+        mix.inputs[0].default_value = 1.0
+        nt.links.new(tc.outputs["Object"], nz.inputs["Vector"])
+        nt.links.new(nz.outputs[0], ramp.inputs[0])
+        nt.links.new(src, mix.inputs[6])
+        nt.links.new(ramp.outputs[0], mix.inputs[7])
+        nt.links.new(mix.outputs[2], inp)
+
+
+def dents(strength=0.3, size=0.9):
+    """Knock the shell about: one lumpy displacement in world space over the body, its armour and its seams, so the
+    seams stay on the shell as it dents."""
+    tex = bpy.data.textures.new("dents", "CLOUDS")
+    tex.noise_scale = size
+    tex.noise_depth = 2
+    for o in list(bpy.data.objects):
+        if o.type != "MESH" or not (o.name.startswith("egg") and not o.name.startswith("egg-rivets")):
+            continue
+        sub = o.modifiers.new("dent-sub", "SUBSURF")
+        sub.levels = sub.render_levels = 1
+        mo = o.modifiers.new("dents", "DISPLACE")
+        mo.texture = tex
+        mo.texture_coords = "GLOBAL"
+        mo.direction = "NORMAL"
+        mo.mid_level = 0.55
+        mo.strength = strength
+
+
+def lump(name, at, size, m, jag=0.4, seed=0.0):
+    """A ragged lump (a stone, a bit of plate)."""
+    from mathutils import noise
+    bm = bmesh.new()
+    bmesh.ops.create_icosphere(bm, subdivisions=2, radius=1.0)
+    for v in bm.verts:
+        k = 1.0 + jag * noise.noise(Vector((v.co.x * 1.7 + seed, v.co.y * 1.7, v.co.z * 1.7 + seed * 0.37)))
+        v.co = Vector((v.co.x * size[0] * k, v.co.y * size[1] * k, v.co.z * size[2] * k))
+    ob = kit.mesh_ob(name, bm, [m], smooth=False)
+    ob.location = Vector(at)
+    return ob
+
+
+def goo():
+    """The brood out of the cracked glass: a glossy, faintly lit green."""
+    t = kit.NT("goo")
+    v = t.coords()
+    c = t.ramp(t.noise(v, 6.0, 3.0, 0.6, 0.3), [(0.35, kit.srgb(46, 120, 6)), (0.65, kit.srgb(120, 196, 14))])
+    t.set(**{"Base Color": c, "rough": 0.12, "spec": 0.7, "coat": 0.5})
+    t.link(c, t.bsdf.inputs["Emission Color"])
+    t.bsdf.inputs["Emission Strength"].default_value = 0.6
+    return t.m
+
+
+def torn_hose():
+    """The feed hose torn off the pump: from its socket on the egg it hangs out to the front left onto the ground,
+    its end ragged; a short torn stub is left in the pump's socket."""
+    m = hose_mat()
+    whole = HOSE["P"]                       # turn() still poses the hidden whole hose from its own path
+    b, db = HOSE["b"], HOSE["db"]
+    a, da = HOSE["a"], HOSE["da"]
+    for nm, pts, ph in (
+            ("hose-torn", [b - db * 0.2, b + db * 0.45, P3(-33, 30, 2.1), P3(-44, 38, 1.8), P3(-54, 47, 0.7),
+                           P3(-58, 51, 0.26), P3(-63, 53, 0.24)], 0.4),
+            ("hose-stub", [a - da * 0.2, a + da * 0.35, a + da * 0.62 + Vector((0, 0, -0.3)),
+                           a + da * 0.7 + Vector((0, 0, -0.62))], 0.1)):
+        HOSE["P"] = spline(pts, HOSE_SUB)
+        rows = tube_coords(HOSE["P"], lambda s: 0.27 * (1 - 0.18 * s ** 3), HOSE_SEG)
+        bm = bmesh.new()
+        vr = [[bm.verts.new(c) for c in row] for row in rows]
+        for r0, r1 in zip(vr, vr[1:]):
+            for j in range(HOSE_SEG):
+                bm.faces.new((r0[j], r0[(j + 1) % HOSE_SEG], r1[(j + 1) % HOSE_SEG], r1[j]))
+        # the torn end: a dark, ragged mouth
+        end = vr[-1]
+        mid = bm.verts.new(sum((v.co for v in end), Vector()) / len(end))
+        for j in range(HOSE_SEG):
+            bm.faces.new((end[j], end[(j + 1) % HOSE_SEG], mid))
+        bmesh.ops.recalc_face_normals(bm, faces=bm.faces)
+        for j, v in enumerate(end):
+            v.co += (v.co - mid.co) * (0.25 if j % 2 else -0.15)
+        ob = kit.mesh_ob(nm, bm, [m])
+        hv, hw = hose_tex(ph)
+        hv += [0.0, 0.0, 0.0]
+        hw += [0.0]
+        ob.data.attributes.new("hv", "FLOAT_VECTOR", "POINT").data.foreach_set("vector", hv)
+        ob.data.attributes.new("hw", "FLOAT", "POINT").data.foreach_set("value", hw)
+        kit.blob(nm + "-mouth", tuple(HOSE["P"][-1]), 0.2, 0.6, kit.flat("hole", (20, 12, 6), rough=0.95))
+    HOSE["P"] = whole
+
+
+def wreck():
+    kit.MOVING.clear()                      # a state is one still: the brood and the hose go into its picture
+    bpy.context.view_layer.update()
+    HOSE["ob"].hide_render = True           # the whole hose is gone: torn off, below
+    hole = kit.flat("hole", (20, 12, 6), rough=0.95)
+    # the porthole: the glass cracked across, a hole knocked in it, the brood dull behind it
+    hub = bpy.data.objects["brood"]
+    mw = hub.matrix_world
+    zg = lambda r: 0.36 - 0.22 * r * r + 0.03
+    rr = random.Random(23)
+    for i, (a0, n) in enumerate(((20, 4), (130, 3), (200, 4), (290, 3), (70, 2))):
+        pts, r, a = [], 0.12, a0
+        for _ in range(n):
+            pts.append(mw @ Vector((r * math.cos(math.radians(a)), r * math.sin(math.radians(a)), zg(r))))
+            r += 0.85 / n
+            a += rr.uniform(-25, 25)
+        kit.tube(f"glass-crack{i}", pts, 0.035, hole, r_end=0.015)
+    kit.blob("glass-hole", tuple(mw @ Vector((-0.25, 0.2, zg(0.3)))), 0.24, 0.3, hole, stretch=(1.0, 0.8))
+    bs = next(n for n in bpy.data.materials["brood"].node_tree.nodes if n.type == "BSDF_PRINCIPLED")
+    bs.inputs["Emission Strength"].default_value = BROOD_E * 0.45
+    # the vent is dead: its glow out
+    vb = next(n for n in bpy.data.materials["vent-glow"].node_tree.nodes if n.type == "BSDF_PRINCIPLED")
+    vb.inputs["Emission Strength"].default_value = 0.0
+    vb.inputs["Base Color"].default_value = kit.srgb(14, 20, 8)
+    torn_hose()
+    dents()
+    scorch(0.35, 0.5)
+    # the brood running out under the glass: two runs down the front of the body and a pool between the legs
+    g = goo()
+    # (the glass's own x is up, its y the viewer's left): out of the glass low on either side, over the collar's rim
+    for i, (sd, x0, x1, w) in enumerate(((1, 11.5, 9.5, 0.18), (-1, 27.5, 29.5, 0.16))):
+        pts = [mw @ Vector((-1.12, 0.8 * sd, 0.47)), mw @ Vector((-1.38, 0.86 * sd, 0.2))]
+        pts += [S(E(x0 + (x1 - x0) * t, 41.0 + 7.0 * t), 0.08) for t in (0.0, 0.5, 1.0)]
+        pts += [P3(x1, 53.0, 0.5), P3(x1 + 0.5, 57.0, 0.08)]
+        kit.tube(f"goo-run{i}", pts, w, g, r_end=w * 0.8, smooth=True)
+        kit.blob(f"goo-drop{i}", tuple(pts[-1]), w * 2.2, 0.35, g)
+    kit.blob("goo-pool", tuple(P3(19.0, 58.5, 0.02)), 1.0, 0.05, g, stretch=(1.15, 0.7))
+    # a few plates and stones knocked off, at the feet
+    plate = TRIM()
+    stone = ROOT()
+    for i, (sx, sy, sz) in enumerate(((-30, 66, 0.42), (6, 74, 0.36), (40, 70, 0.3), (-62, 44, 0.28), (54, 52, 0.26),
+                                      (-8, 82, 0.22))):
+        lump(f"rubble{i}", P3(sx, sy, sz * 0.4), (sz, sz * rr.uniform(0.7, 1.0), sz * 0.65), stone, jag=0.5,
+             seed=i * 1.9)
+    for i, (sx, sy, sz, rz) in enumerate(((-22, 70, (0.7, 0.5), 30), (30, 76, (0.55, 0.45), -20))):
+        kit.box(f"fallenplate{i}", (sz[0], sz[1], 0.07), P3(sx, sy, 0.04), plate,
+                rot=(rr.uniform(-8, 8), rr.uniform(-8, 8), rz), bevel=0.015)
+
+
+def build_state():
+    build()
+    if STATE:
+        wreck()
+
+
+kit.run(build_state, turn)
 if kit.MODE == "where":                              # the smoke's start for post.py
     print("PORT px %.1f %.1f" % kit.scr(PORT["at"]))
     print("STACK base px %.1f %.1f top px %.1f %.1f" % (*kit.scr(STK["base"]), *kit.scr(STK["top"])))
