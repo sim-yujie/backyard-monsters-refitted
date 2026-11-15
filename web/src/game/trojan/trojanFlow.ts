@@ -1,3 +1,4 @@
+import { raidRefusal } from "@/api/raid";
 import type { TrojanApi, TrojanSpringResponse } from "@/api/trojan";
 
 /**
@@ -44,9 +45,12 @@ export class TrojanFlow {
       const response = await this.deps.api.spring();
       this.state = "done";
       this.deps.fight(response);
-    } catch {
+    } catch (caught) {
       this.state = "idle";
-      this.deps.notice(TROJAN_SPRING_FAILED);
+      // A refusal says why in the server's own words ("You need to be at your
+      // yard for this."); anything else gets the general line.
+      const refused = raidRefusal(caught) !== null && caught instanceof Error && caught.message !== "";
+      this.deps.notice(refused ? caught.message : TROJAN_SPRING_FAILED);
     }
   }
 }
