@@ -6,10 +6,20 @@ import {
   afterRefusal,
   buildingHelp,
   fromVisitSave,
+  HELP_ALL_REPAIRS,
+  helpAllCount,
+  helpAllCountText,
+  helpAllTargets,
+  helpMarksOf,
+  helperBadgeOf,
+  helperBadgeText,
+  isHelpOpen,
+  savedText,
+  savingTag,
+  tagSeconds,
   helpableIds,
   helpersOf,
   helpersText,
-  helpingLine,
   helpRefusalText,
   repairText,
   rewardText,
@@ -72,10 +82,6 @@ describe("the help block, per building (#374)", () => {
 });
 
 describe("the words (#372, #374)", () => {
-  it("says who is helped, and no count of helps left (no daily cap since 15 Nov 2026)", () => {
-    expect(helpingLine("Bob")).toBe("Helping Bob");
-  });
-
   it("says what a speed-up takes off: 5% of the time left now, rounded down", () => {
     expect(speedupSeconds(7_800)).toBe(390);
     expect(speedupSeconds(19)).toBe(0);
@@ -192,5 +198,105 @@ describe("the building a help answers with (#374)", () => {
   it("leaves a frozen countdown and a building with no job as they are", () => {
     expect(fromVisitSave({ X: 0, Y: 0, t: 6, id: 45, cU: 4_930 }, 600, true)).toEqual({ X: 0, Y: 0, t: 6, id: 45, cU: 4_930 });
     expect(fromVisitSave({ X: 0, Y: 0, t: 6, id: 45 }, 600, false)).toEqual({ X: 0, Y: 0, t: 6, id: 45 });
+  });
+});
+
+describe("the visit's marks and Help all (beta 8)", () => {
+  const block: HelpBlock = {
+    rewardsLeft: 5,
+    buildings: {
+      "7": { speedup: true },
+      "3": { speedup: true, repair: true },
+      "9": { repair: true },
+      "4": { speedup: "alreadyHelped" },
+      "5": { speedup: "helpersFull", repair: true },
+    },
+  };
+
+  it("Help all and its count are speed-ups only (owner, 15 Nov 2026)", () => {
+    expect(HELP_ALL_REPAIRS).toBe(false);
+    expect(helpAllTargets(block)).toEqual([
+      { id: 3, kind: "speedup" },
+      { id: 7, kind: "speedup" },
+    ]);
+    expect(helpAllCount(block)).toBe(2);
+    expect(helpAllCountText(2)).toBe("2 to speed up");
+    expect(helpAllCount(null)).toBe(0);
+  });
+
+  it("with repairs on, a building taking both counts once and gets both, speed-up first", () => {
+    expect(helpAllTargets(block, true)).toEqual([
+      { id: 3, kind: "speedup" },
+      { id: 3, kind: "repair" },
+      { id: 5, kind: "repair" },
+      { id: 7, kind: "speedup" },
+      { id: 9, kind: "repair" },
+    ]);
+    expect(helpAllCount(block, true)).toBe(4);
+  });
+
+  it("drops a building from the count once helped", () => {
+    expect(helpAllCount(afterHelp(block, 7, "speedup", 4))).toBe(1);
+    expect(isHelpOpen(afterHelp(block, 7, "speedup", 4), { id: 7, kind: "speedup" })).toBe(false);
+    expect(isHelpOpen(block, { id: 3, kind: "repair" })).toBe(true);
+  });
+
+  it("marks a speed-up big with its saving, a repair only small with none", () => {
+    const silo = { ...building({ countdown: upgrading(21_600) }), id: 7 } as YardBuilding;
+    const both = { ...building({ countdown: upgrading(10, true) }), id: 3 } as YardBuilding;
+    const hurt = { ...building(), id: 9 } as YardBuilding;
+    const helped = { ...building({ countdown: upgrading(600) }), id: 4 } as YardBuilding;
+    expect(helpMarksOf(block, [silo, both, hurt, helped], NOW)).toEqual([
+      { id: 7, kind: "speedup", saving: 1080 },
+      // 5% of 10 s is under a second: no tag.
+      { id: 3, kind: "speedup", saving: null },
+      { id: 9, kind: "repair", saving: null },
+    ]);
+  });
+
+  it("tags a saving in its largest unit", () => {
+    expect(savingTag(1080)).toBe("-18m");
+    expect(savingTag(1110)).toBe("-18m");
+    expect(savingTag(40)).toBe("-40s");
+    expect(savingTag(7500)).toBe("-2h 5m");
+    expect(savingTag(7200)).toBe("-2h");
+    expect(savingTag(97_200)).toBe("-1d 3h");
+  });
+
+  it("cuts seconds to what the tag shows, and says a total with every unit", () => {
+    expect(tagSeconds(9539)).toBe(9480);
+    expect(savingTag(tagSeconds(9539))).toBe(savingTag(9539));
+    expect(tagSeconds(40.7)).toBe(40);
+    expect(tagSeconds(97_250)).toBe(97_200);
+    expect(savedText(96_600)).toBe("1d 2h 50m");
+    expect(savedText(7200)).toBe("2h");
+    expect(savedText(40)).toBe("40s");
+  });
+});
+
+describe("the own yard's helper badge (beta 8)", () => {
+  it("shows on a running build, upgrade or fortify, with its helpers out of 5", () => {
+    expect(helperBadgeOf(building({ countdown: upgrading(600), hl: [11, 12] }), NOW)).toEqual({
+      id: 7,
+      helpers: 2,
+      full: false,
+    });
+    expect(helperBadgeOf(building({ countdown: upgrading(600) }), NOW)).toMatchObject({ helpers: 0, full: false });
+    const fortify: YardCountdown = { kind: "fortify", endsAt: NOW + 60, seconds: 60, paused: false };
+    expect(helperBadgeOf(building({ countdown: fortify, hl: [1, 2, 3, 4, 5] }), NOW)).toMatchObject({
+      helpers: 5,
+      full: true,
+    });
+    expect(helperBadgeText(2)).toBe("2/5");
+  });
+
+  it("stays on a paused job; goes with no job, a finished one, or a rebuild", () => {
+    expect(helperBadgeOf(building({ countdown: upgrading(600, true), hl: [1] }), NOW + 9_999)).toMatchObject({
+      helpers: 1,
+    });
+    expect(helperBadgeOf(building(), NOW)).toBeNull();
+    expect(helperBadgeOf(building({ countdown: upgrading(600), hl: [1] }), NOW + 600)).toBeNull();
+    const rebuild: YardCountdown = { kind: "rebuild", endsAt: NOW + 60, seconds: 60, paused: false };
+    expect(helperBadgeOf(building({ countdown: rebuild }), NOW)).toBeNull();
   });
 });

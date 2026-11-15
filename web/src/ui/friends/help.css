@@ -1,32 +1,210 @@
 /*
  * Visiting and helping a friend (issues #372 and #374, docs/design/friends.md
- * §3.3): the "Helping Bob" line across the top of the
- * yard, and the help panel docked where the building panel docks.
+ * §3.3): the one visit bar at the top of the yard ("Bob's yard", the painted
+ * tools and "3", Help all; owner 15 Nov 2026: one bar, not three), and the
+ * help panel docked where the building panel docks.
  *
  * Every value comes from tokens.css.
  */
 
-.friend-visit-line {
+/*
+ * A friend's yard has no readouts (`visitReward.ts`; owner, Review Desk 7,
+ * 15 Nov 2026, option 1 "reward in the bar"): the visit bar sits top left
+ * where they were. The account stays top right (it moves there on an
+ * upright phone, so the bar is top left on every screen).
+ */
+.hud--corner.hud--no-readouts .hud__bar,
+.hud--corner.hud--no-readouts::before {
+  display: none;
+}
+
+/* The account alone is left in the HUD's row: it keeps the right. */
+.hud--corner.hud--no-readouts {
+  justify-content: flex-end;
+}
+
+/* The holder top left; the bar is its own width. */
+.friend-visit {
   position: absolute;
-  top: 64px;
-  left: 50%;
+  top: var(--hud-inset);
+  left: var(--hud-inset);
   z-index: var(--z-hud);
-  max-width: calc(100vw - 2 * var(--space-4));
-  padding: var(--space-1) var(--space-3);
-  border: 1px solid var(--colour-warning-line);
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: flex-start;
+  width: max-content;
+  /* Stops short of the account pill, top right. */
+  max-width: calc(100vw - 2 * var(--hud-inset) - 240px);
+  pointer-events: none;
+}
+
+/* One row, always: the name gives way (an ellipsis) before the count, the
+   button or the line after Help all, so the bar's height never changes and
+   the wrenches' clear band below it stays true. */
+.help-all-bar {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  max-width: 100%;
+  min-width: 0;
+  min-height: 44px;
+  padding: var(--space-1) var(--space-1) var(--space-1) var(--space-3);
+  border: 2px solid var(--colour-warning-line);
   border-radius: var(--radius-md);
   background: var(--colour-surface-raised);
   -webkit-backdrop-filter: var(--blur-panel);
   backdrop-filter: var(--blur-panel);
   box-shadow: var(--shadow-float);
+  color: var(--colour-text);
+  white-space: nowrap;
+  pointer-events: auto;
+}
+
+/* The name alone, or the name and the line after: no button at the end. */
+.help-all-bar:has(> .help-all-bar__help[hidden]) {
+  padding-right: var(--space-3);
+}
+
+.help-all-bar[hidden],
+.help-all-bar__name[hidden],
+.help-all-bar__help[hidden],
+.help-all-bar__result[hidden] {
+  display: none;
+}
+
+.help-all-bar__name {
+  flex: 0 1 auto;
+  min-width: 3em;
+  /* A long name stops short of a phone on its side's zoom rail. */
+  max-width: 16em;
+  overflow: hidden;
+  text-overflow: ellipsis;
   color: var(--colour-warning-bright);
   font-size: var(--text-sm);
   font-weight: 600;
+}
+
+/* The tools, "3" and Help all, after a thin rule from the name. */
+.help-all-bar__help {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: var(--space-2);
+  padding-left: var(--space-2);
+  border-left: 1px solid var(--colour-warning-line);
+}
+
+.help-all-bar__name[hidden] + .help-all-bar__help {
+  padding-left: 0;
+  border-left: 0;
+}
+
+.help-all-bar__icon {
+  flex: none;
+}
+
+.help-all-bar__count {
+  font-family: var(--font-display, inherit);
+  font-size: var(--text-md, var(--text-sm));
+  color: var(--colour-text-strong, var(--colour-text));
+}
+
+/* "to speed up": for a screen reader; the screen shows the number by the tools. */
+.help-all-bar__words {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
   white-space: nowrap;
+}
+
+.help-all-bar__button {
+  flex: none;
+  min-width: 6.5em;
+}
+
+.help-all-bar__result {
+  flex: 0 1 auto;
+  min-width: 0;
+  padding-left: var(--space-2);
+  border-left: 1px solid var(--colour-warning-line);
   overflow: hidden;
   text-overflow: ellipsis;
-  transform: translateX(-50%);
-  pointer-events: none;
+  color: var(--colour-success);
+  font-size: var(--text-sm);
+  font-weight: 600;
+}
+
+.help-all-bar__result--error {
+  color: var(--colour-warning-bright);
+}
+
+/* While Help all plays (`helpLands.ts`), the button counts the helps as they
+   pop; the tools' own number, which follows the server, waits. */
+.help-all-bar:has(.help-all-bar__button:disabled) .help-all-bar__count {
+  display: none;
+}
+
+/* No rule before a line of pictures: it is the bar's whole right side. */
+.help-all-bar__result--node {
+  overflow: visible;
+}
+
+/* The bar's line after Help all: the tools, a green tick, "3". Short enough
+   that the name stays beside it, even on a phone. */
+.help-all-done {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  animation: help-all-done-in 180ms var(--easing, ease-out) both;
+}
+
+.help-all-done__tick {
+  color: var(--colour-success);
+  font-size: var(--text-md, var(--text-sm));
+  line-height: 1;
+  animation: help-all-done-tick 360ms 60ms var(--easing, ease-out) both;
+}
+
+.help-all-done__count {
+  font-family: var(--font-display, inherit);
+  font-size: var(--text-md, var(--text-sm));
+  color: var(--colour-text-strong, var(--colour-text));
+  font-variant-numeric: tabular-nums;
+}
+
+@keyframes help-all-done-in {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes help-all-done-tick {
+  0% {
+    transform: scale(0.2);
+    opacity: 0;
+  }
+  60% {
+    transform: scale(1.35);
+    opacity: 1;
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .help-all-done,
+  .help-all-done__tick {
+    animation: none;
+  }
 }
 
 .help-panel__choices {
@@ -56,8 +234,11 @@
   color: var(--colour-text-muted);
 }
 
+/* Why the button is off. The warning ink of the panel's own style: amber on
+   Modern's dark plate, dark amber on Classic's cream (the bright amber was
+   all but invisible there). */
 .help-panel__reason {
-  color: var(--colour-warning-bright);
+  color: var(--colour-warning);
 }
 
 .help-panel__button {
@@ -78,9 +259,184 @@
   font-weight: 600;
 }
 
+/* A short screen (a phone on its side, 390px high): the dock leaves the
+   panel's body about 230px, so the choice packs tighter and the reason sits
+   beside its button; what still does not fit scrolls inside the body, and a
+   thank-you is scrolled into view (`HelpPanel.setMessage`). */
+@media (max-height: 500px) {
+  .map-panel.help-panel .panel__body {
+    padding-block: var(--space-2);
+    gap: var(--space-2);
+  }
+
+  .help-panel__choices {
+    gap: var(--space-2);
+  }
+
+  .help-panel__choice {
+    flex-flow: row wrap;
+    align-items: center;
+    column-gap: var(--space-2);
+    padding: var(--space-1) var(--space-2);
+  }
+
+  .help-panel__line,
+  .help-panel__note {
+    flex-basis: 100%;
+  }
+
+  .help-panel__reason {
+    flex: 1 1 0;
+    min-width: 0;
+  }
+}
+
 @media (max-width: 620px) {
-  .friend-visit-line {
-    top: 96px;
+  /* An upright phone: the bar is one row; the name gives way first. */
+  .help-all-bar__name,
+  .help-all-bar__result {
     font-size: var(--text-xs, var(--text-sm));
+  }
+
+  /* The line after Help all needs the whole row: the name waits. */
+  .help-all-bar--result .help-all-bar__name {
+    display: none;
+  }
+
+  .help-all-bar--result .help-all-bar__result {
+    padding-left: 0;
+    border-left: 0;
+  }
+
+  /* ...but the tools, tick and count are short enough to sit beside it. */
+  .help-all-bar--result:has(> .help-all-bar__result > .help-all-done) .help-all-bar__name {
+    display: inline;
+  }
+
+  .help-all-bar--result:has(> .help-all-bar__result > .help-all-done) .help-all-bar__result {
+    padding-left: var(--space-2);
+    border-left: 1px solid var(--colour-warning-line);
+  }
+}
+
+/* A reward as pictures and numbers, in the visit bar's line. */
+.visit-reward {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  color: var(--colour-gain);
+  font-size: var(--text-md, var(--text-sm));
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+  white-space: nowrap;
+}
+
+.visit-reward__icons,
+.visit-reward__pair {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+}
+
+.visit-reward .res-icon {
+  flex: none;
+  height: 20px;
+  vertical-align: 0;
+}
+
+/* Whatever the width, a reward never spills out of the bar's frame. */
+.help-all-bar__result:has(.visit-reward) {
+  overflow-x: clip;
+}
+
+/* After the tools, the tick and the count, a thin rule, then the reward. */
+.help-all-done > .visit-reward {
+  margin-left: var(--space-1);
+  padding-left: var(--space-2);
+  border-left: 1px solid var(--colour-warning-line);
+}
+
+/* Not a wide desktop (a phone, an iPad, a split screen): the bar stops at
+   the account, so the reward takes the row and the name waits, as for a
+   line of words; four amounts of their own go without the tools and tick. */
+@media (max-width: 1100px) {
+  .friend-visit .help-all-bar--result:has(> .help-all-bar__result .visit-reward) .help-all-bar__name {
+    display: none;
+  }
+
+  .friend-visit .help-all-bar--result:has(> .help-all-bar__result .visit-reward) .help-all-bar__result {
+    padding-left: 0;
+    border-left: 0;
+  }
+
+  .help-all-done:has(> .visit-reward--each) > :not(.visit-reward) {
+    display: none;
+  }
+
+  .help-all-bar__result .visit-reward--each {
+    margin-left: 0;
+    padding-left: 0;
+    border-left: 0;
+    font-size: var(--text-sm);
+  }
+}
+
+/* Narrower still: the four amounts close up to fit beside the account. */
+@media (max-width: 760px) {
+  .help-all-bar__result .visit-reward--each {
+    gap: 3px;
+    font-size: 11px;
+  }
+
+  .help-all-bar__result .visit-reward--each .visit-reward__pair {
+    gap: 1px;
+  }
+
+  .help-all-bar__result .visit-reward--each .res-icon {
+    height: 14px;
+  }
+}
+
+@media (max-width: 620px) {
+  /* An upright phone: the critter alone, top right; the bar takes the rest
+     of the row from the left. */
+  /* (`:root .hud`: over the event coins' own placing of the critter.) */
+  :root .hud.hud--corner.hud--no-readouts .account-menu {
+    grid-area: 1 / 4;
+    justify-self: end;
+  }
+
+  :root .hud.hud--corner.hud--no-readouts .account-menu__pill-text {
+    display: none;
+  }
+
+  /* What sits under the HUD (the World chat tab, a window's title sign)
+     follows the one row left, not the readouts' two: the bar with Help all
+     ends 64px down, and a window's sign stands 13px above the band's end.
+     Wider screens keep their height: the account pill is as tall as the
+     readouts were. */
+  :root:has(.hud--corner.hud--no-readouts) {
+    --hud-bar-height: 72px;
+  }
+
+  .friend-visit {
+    top: calc(var(--hud-inset) - 4px);
+    left: var(--space-3);
+    /* Stops short of the critter (48px with its frame). */
+    max-width: calc(100vw - 2 * var(--space-3) - 48px - var(--space-2));
+  }
+
+  /* The name alone, without "'s yard": a 12-letter name fits beside Help all. */
+  .friend-visit .help-all-bar__name-rest {
+    display: none;
+  }
+
+  .visit-reward {
+    font-size: var(--text-sm);
+  }
+
+  .visit-reward .res-icon {
+    height: 16px;
   }
 }
