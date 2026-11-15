@@ -90,7 +90,10 @@ SPECS = {
         # art-work colstats over the 30 still views at 1x. Before grading: body mean R154.0 G113.8 B14.7, spread
         # 65.4 64.7 21.9 (Flash 143.1 112.3 26.5 / 70.2 68.4 30.2); limbs 122.2 44.9 22.4 / 49.3 23.1 20.7
         # (Flash 126.2 51.1 31.4 / 54.0 27.9 23.8)
-        grade=dict(body=((1.073, -22.2), (1.057, -8.0), (1.379, 6.2)), limbs=((1.095, -7.6), (1.208, -3.1), (1.15, 5.6))),
+        grade=dict(body=((1.073, -22.2), (1.057, -8.0), (1.379, 6.2)), limbs=((1.095, -16.0), (1.208, -3.1), (1.0, 4.0)),
+                   # limbs: the stats fit made the legs salmon at 1x (blue over green 0.76 vs Flash 0.61): R and B cut back.
+                   # crest (dark pixels only): painted 65/79/53 vs Flash 76/101/55, a near-black crest at 1x -> lifted grey-green
+                   crest=((1.0, 11.0), (1.0, 22.0), (1.0, 2.0))),
         anim_colour_lock=True,           # build_anim: each animated frame's colours matched to its heading's still view
         gamma=1.0,                       # no brightness lift in build_anim: the grade already matches Flash
         open_holes=True,                 # see-through gaps between the bent arms and the body (common.key_cell)

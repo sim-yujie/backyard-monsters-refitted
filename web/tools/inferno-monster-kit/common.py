@@ -294,9 +294,9 @@ def part_weights(rgb):
 
 
 def grade(im, spec):
-    """spec `grade` = {"body": ((gain, offset) for R, G, B), "limbs": (...)}: a per-part, per-channel colour match of
-    the painting to the Flash sprite (IC2 round 2: mean and spread of each channel over all 30 headings at 1x; the
-    crest is left as painted). Applied when a view is placed on a sheet (build_still) and to every animated frame
+    """spec `grade` = {"body": ((gain, offset) for R, G, B), "limbs": (...), "crest": (...)}: a per-part, per-channel
+    colour match of the painting to the Flash sprite (IC2 round 2: mean and spread of each channel over all 30
+    headings at 1x; limbs and crest then set by eye on the game-size strip). Applied when a view is placed on a sheet (build_still) and to every animated frame
     (build_anim); the cuts and the Codex references stay ungraded."""
     g = spec.get("grade")
     if not g:
@@ -304,8 +304,12 @@ def grade(im, spec):
     a = np.asarray(im).astype(float)
     rgb = a[..., :3]
     wb, wr, wc = part_weights(rgb)
-    out = rgb * wc[..., None]
-    for w, part in ((wb, "body"), (wr, "limbs")):
+    # the crest grade only touches dark green pixels: lemon body highlights can read green-yellow too
+    wd = wc * np.clip((160 - rgb.mean(-1)) / 40, 0, 1) if "crest" in g else np.zeros_like(wc)
+    out = rgb * (wc - wd)[..., None]
+    for w, part in ((wb, "body"), (wr, "limbs"), (wd, "crest")):
+        if part not in g:
+            continue
         gr = np.stack([rgb[..., c] * k + o for c, (k, o) in enumerate(g[part])], -1)
         out += gr * w[..., None]
     a[..., :3] = out

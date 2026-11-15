@@ -108,8 +108,8 @@ about 25 minutes of Codex time (calls run 3-4 at once). Codex calls for IC2 (all
 
 The owner rejected round 1 ("looks nothing alike": a fat, ribbed, glossy golden grub with a smile). Causes: the
 concept portrait in every prompt, and prompt words written from it ("fat lumpy slug", "glossy golden", "stubby
-legs"). Round 2 (work dir `art-work/IC2-r2`, 41 Codex calls: 2 samples + 7 still batches + 2 still redos + 30
-animation) changed the kit, all switched on per monster in `spec.py` so IC1 is untouched:
+legs"). Round 2 (work dir `art-work/IC2-r2`, 45 Codex calls: 2 samples + 7 still batches + 2 still redos + 30
+animation + 4 animation redos for front headings 6-9, whose wind-up grinned) changed the kit, all switched on per monster in `spec.py` so IC1 is untouched:
 
 - `portrait=False`: no concept painting. `still_batch.py` says frames.png is the only design reference;
   `anim_ref.py` sends that heading's Flash cell (`flash.png`) beside the painted still instead.
@@ -122,7 +122,10 @@ animation) changed the kit, all switched on per monster in `spec.py` so IC1 is u
 - `anim_colour_lock`: build_anim matches each animated frame's colours to its heading's still view (heading 9's
   sheet came back olive-grey). `gamma=1.0`: no brightness lift (the grade already matches Flash).
 - No `despill` (the crest is grey-teal). `compare.py` with `STEP=1` writes a compare sheet for every heading.
-- Front views drift to a grin: the redo note for headings 5-8 asked for a closed mouth hidden under the bill.
+- Front views drift to a grin: the redo note for headings 5-8 (stills) and 6-9 (animation, `EXTRA`) asked for a
+  closed mouth hidden under the bill in every cell.
+- The limb and crest numbers in `grade` were then set by eye on `game-size-x3.png` (the stats fit made the legs
+  salmon and left the crest near black at 1x); the crest grade only touches dark green pixels.
 
 ## Battle shot setup (own database copy, never `bym`)
 
