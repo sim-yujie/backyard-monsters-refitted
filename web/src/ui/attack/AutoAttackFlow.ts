@@ -234,7 +234,7 @@ export class AutoAttackFlow {
       body.push(paragraph(refusal, "auto-attack__refusal"));
       if (answer.missing.length > 0) body.push(missingList(answer.missing));
     } else {
-      body.push(paragraph("The monsters are spent, as in an attack by hand. The result comes at once.", "u-muted"));
+      body.push(paragraph("The monsters are spent, as in an attack by hand. The result comes in a few seconds.", "u-muted"));
     }
 
     const attack = buttonOf("Attack now", "btn btn--primary auto-attack__go", () => void this.run());
