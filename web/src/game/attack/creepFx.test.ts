@@ -261,7 +261,7 @@ describe("CreepFx", () => {
     const host = hostOf();
     host.anchors.set(5, { ground: { x: 100, y: 200 }, top: 170 });
     const fx = new CreepFx(host);
-    fx.number(10, "creep:5", 5, 20, AT, "damage");
+    fx.number(10, "creep:5", 5, 20, AT, "attackerLoss");
     expect(fx.labelCount).toBe(1);
     fx.update(10);
     expect(fx.labelsFor("creep:5")).toEqual([{ amount: -20, x: 100, y: 164 }]);
@@ -284,10 +284,10 @@ describe("CreepFx", () => {
 
   it("shows at most three numbers per target in the window, shifted sideways", () => {
     const fx = new CreepFx(hostOf());
-    fx.number(0, "creep:1", 1, 20, AT, "damage");
-    fx.number(1, "creep:1", 1, 20, AT, "damage");
-    fx.number(2, "creep:1", 1, 20, AT, "damage");
-    fx.number(3, "creep:1", 1, 20, AT, "damage");
+    fx.number(0, "creep:1", 1, 20, AT, "attackerLoss");
+    fx.number(1, "creep:1", 1, 20, AT, "attackerLoss");
+    fx.number(2, "creep:1", 1, 20, AT, "attackerLoss");
+    fx.number(3, "creep:1", 1, 20, AT, "attackerLoss");
     fx.update(3);
     const shown = fx.labelsFor("creep:1");
     expect(shown).toHaveLength(LABEL_PER_TARGET);
@@ -297,29 +297,29 @@ describe("CreepFx", () => {
       -2 * LABEL_DIGIT_SHIFT,
     ]);
     // Another target is not held back by this one.
-    fx.number(3, "creep:9", 9, 5, AT, "damage");
+    fx.number(3, "creep:9", 9, 5, AT, "attackerLoss");
     expect(fx.labelsFor("creep:9")).toHaveLength(1);
     // Once the window has passed the target may show numbers again.
-    fx.number(LABEL_WINDOW_TICKS, "creep:1", 1, 7, AT, "damage");
+    fx.number(LABEL_WINDOW_TICKS, "creep:1", 1, 7, AT, "attackerLoss");
     expect(fx.labelCount).toBe(5);
     fx.destroy();
   });
 
   it("recycles an expired number and shows no more than twenty at once", () => {
     const fx = new CreepFx(hostOf());
-    fx.number(0, "creep:1", 1, 20, AT, "damage");
+    fx.number(0, "creep:1", 1, 20, AT, "attackerLoss");
     fx.update(LABEL_TICKS + 1);
     expect(fx.labelCount).toBe(0);
     expect(fx.pooledLabelCount).toBe(1);
     expect(fx.labelsFor("creep:1")).toEqual([]);
-    fx.number(LABEL_TICKS + 1, "creep:2", 2, 30, AT, "damage");
+    fx.number(LABEL_TICKS + 1, "creep:2", 2, 30, AT, "attackerLoss");
     expect(fx.pooledLabelCount).toBe(0);
     expect(fx.labelCount).toBe(1);
 
     // Six hundred creeps hit in the same tick make at most LABEL_MAX numbers;
     // the ones that do not fit are simply not shown, as Flash dropped them.
     for (let creep = 100; creep < 700; creep += 1) {
-      fx.number(LABEL_TICKS + 2, `creep:${creep}`, creep, 10, AT, "damage");
+      fx.number(LABEL_TICKS + 2, `creep:${creep}`, creep, 10, AT, "attackerLoss");
     }
     expect(fx.labelCount).toBe(LABEL_MAX);
     fx.update(LABEL_TICKS + 2);
@@ -331,7 +331,7 @@ describe("CreepFx", () => {
   it("keeps a number the same size on screen whatever the zoom", () => {
     const host = hostOf();
     const fx = new CreepFx(host);
-    fx.number(0, "building:1", -1, 60, AT, "damage");
+    fx.number(0, "building:1", -1, 60, AT, "defenderLoss");
     host.zoomLevel = 2;
     fx.update(0);
     // Fire, rockets, smoke, then the numbers.
@@ -344,7 +344,7 @@ describe("CreepFx", () => {
     const host = hostOf();
     host.anchors.set(1, { ground: { x: 50, y: 50 }, top: 30 });
     const fx = new CreepFx(host, true);
-    fx.number(0, "creep:1", 1, 15, { x: 50, y: 24 }, "damage");
+    fx.number(0, "creep:1", 1, 15, { x: 50, y: 24 }, "attackerLoss");
     fx.update(LABEL_TICKS / 2);
     expect(fx.labelsFor("creep:1")[0]?.y).toBe(24);
     fx.poof(0, { x: 0, y: 0 }, true);
@@ -544,7 +544,7 @@ describe("big numbers on a busy building (bigger attack effects)", () => {
   it("never shows more than three at once, each in its own place", () => {
     const fx = new CreepFx(hostOf(), false, true);
     for (let tick = 0; tick < 80; tick += 1) {
-      if (tick % 2 === 0) fx.number(tick, "building:4", -1, 9, AT, "damage");
+      if (tick % 2 === 0) fx.number(tick, "building:4", -1, 9, AT, "defenderLoss");
       fx.update(tick);
       const shown = fx.labelsFor("building:4");
       expect(shown.length).toBeLessThanOrEqual(BIG_LABEL_PER_TARGET);
@@ -565,7 +565,7 @@ describe("big numbers on a busy building (bigger attack effects)", () => {
       if (tick < 80 && tick % 2 === 0) {
         const amount = 7 + (tick % 5);
         total += amount;
-        fx.number(tick, "building:4", -1, amount, AT, "damage");
+        fx.number(tick, "building:4", -1, amount, AT, "defenderLoss");
       }
       const before = fx.labelsFor("building:4");
       fx.update(tick);
@@ -583,11 +583,11 @@ describe("big numbers on a busy building (bigger attack effects)", () => {
 
   it("merges a hit only into a fresh number, and starts a new one after", () => {
     const fx = new CreepFx(hostOf(), false, true);
-    fx.number(0, "building:1", -1, 20, AT, "damage");
-    fx.number(BIG_LABEL_MERGE_TICKS - 1, "building:1", -1, 5, AT, "damage");
+    fx.number(0, "building:1", -1, 20, AT, "defenderLoss");
+    fx.number(BIG_LABEL_MERGE_TICKS - 1, "building:1", -1, 5, AT, "defenderLoss");
     fx.update(BIG_LABEL_MERGE_TICKS - 1);
     expect(fx.labelsFor("building:1").map((label) => label.amount)).toEqual([-25]);
-    fx.number(BIG_LABEL_MERGE_TICKS, "building:1", -1, 30, AT, "damage");
+    fx.number(BIG_LABEL_MERGE_TICKS, "building:1", -1, 30, AT, "defenderLoss");
     fx.update(BIG_LABEL_MERGE_TICKS);
     expect(fx.labelsFor("building:1").map((label) => label.amount)).toEqual([-25, -30]);
     fx.destroy();
@@ -595,12 +595,12 @@ describe("big numbers on a busy building (bigger attack effects)", () => {
 
   it("moves a side number further out as its sum gains digits", () => {
     const fx = new CreepFx(hostOf(), false, true);
-    fx.number(0, "building:6", -1, 40, AT, "damage");
-    fx.number(BIG_LABEL_MERGE_TICKS, "building:6", -1, 40, AT, "damage");
+    fx.number(0, "building:6", -1, 40, AT, "defenderLoss");
+    fx.number(BIG_LABEL_MERGE_TICKS, "building:6", -1, 40, AT, "defenderLoss");
     fx.update(BIG_LABEL_MERGE_TICKS);
     const before = fx.labelsFor("building:6")[1]?.x ?? 0;
     for (let index = 1; index <= 5; index += 1) {
-      fx.number(BIG_LABEL_MERGE_TICKS + index, "building:6", -1, 40, AT, "damage");
+      fx.number(BIG_LABEL_MERGE_TICKS + index, "building:6", -1, 40, AT, "defenderLoss");
     }
     fx.update(BIG_LABEL_MERGE_TICKS + 5);
     const [middle, right] = fx.labelsFor("building:6");
@@ -613,9 +613,9 @@ describe("big numbers on a busy building (bigger attack effects)", () => {
 
   it("keeps healing and damage on a creep apart", () => {
     const fx = new CreepFx(hostOf(), false, true);
-    fx.number(0, "creep:3", -1, 12, AT, "damage");
+    fx.number(0, "creep:3", -1, 12, AT, "attackerLoss");
     fx.number(1, "creep:3", -1, 8, AT, "heal");
-    fx.number(2, "creep:3", -1, 4, AT, "damage");
+    fx.number(2, "creep:3", -1, 4, AT, "attackerLoss");
     fx.update(2);
     expect(fx.labelsFor("creep:3").map((label) => label.amount)).toEqual([-16, 8]);
     fx.destroy();
@@ -623,8 +623,8 @@ describe("big numbers on a busy building (bigger attack effects)", () => {
 
   it("spreads its places wider for longer numbers and bigger type", () => {
     const fx = new CreepFx(hostOf(), false, true);
-    fx.number(0, "building:2", -1, 900, AT, "damage");
-    fx.number(BIG_LABEL_MERGE_TICKS, "building:2", -1, 900, AT, "damage");
+    fx.number(0, "building:2", -1, 900, AT, "defenderLoss");
+    fx.number(BIG_LABEL_MERGE_TICKS, "building:2", -1, 900, AT, "defenderLoss");
     fx.update(BIG_LABEL_MERGE_TICKS);
     const [middle, right] = fx.labelsFor("building:2");
     // Clears a whole three-digit number, where the small ones moved 10 px a digit.
