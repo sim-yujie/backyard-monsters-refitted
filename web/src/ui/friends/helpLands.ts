@@ -4,7 +4,7 @@ import type { ResourceKey } from "../resourceIcon";
 import type { HelpAllLine } from "./HelpAllBar";
 import type { HelpAllFx, HelpFxStage, HelpFxStep } from "./helpAllFx";
 import { make } from "./rows";
-import { rewardNode, VISIT_REWARD_MS } from "./visitTop";
+import { rewardNode, VISIT_REWARD_MS } from "./visitReward";
 
 /**
  * Help all's effect, "help lands" (beta 8; Codex astra's option A, chosen by
@@ -91,14 +91,11 @@ export class HelpLandsFx implements HelpAllFx {
     // A help the run never reached (a stop, or one passed over) keeps no wrench held.
     this.stage.marks.release();
     const countMs = reducedMotion ? 0 : HELP_LANDS_COUNT_MS;
-    // No readouts on this yard: the totals show in the chip beside the bar...
-    if (reward && reward !== "bar") reward.show(total, countMs);
     // A stop keeps its words: the scene's line, as before.
     if (summary.stoppedBy || summary.helped === 0) return null;
     const node = helpLandsMark(summary.helped);
-    // (The tick and the count stay as long as the chip does, so the two leave together.)
-    if (reward !== "bar") return { ...line, node, ms: reward ? countMs + VISIT_REWARD_MS : HELP_LANDS_DONE_MS };
-    // ...or in the bar's own line, after the tools, the tick and the count.
+    if (reward !== "bar") return { ...line, node, ms: HELP_LANDS_DONE_MS };
+    // No readouts on this yard: the totals show in the bar's own line, after the tools, the tick and the count.
     const earned = rewardNode(total, { countMs });
     if (earned) node.append(earned);
     return { ...line, node, ms: countMs + VISIT_REWARD_MS };

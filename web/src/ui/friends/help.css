@@ -7,19 +7,35 @@
  * Every value comes from tokens.css.
  */
 
-/* The holder at the top of the yard, centred under the HUD (the old 64px
-   put it half under a wide screen's top bar); the bar is its own width. */
+/*
+ * A friend's yard has no readouts (`visitReward.ts`; owner, Review Desk 7,
+ * 15 Nov 2026, option 1 "reward in the bar"): the visit bar sits top left
+ * where they were. The account stays top right (it moves there on an
+ * upright phone, so the bar is top left on every screen).
+ */
+.hud--corner.hud--no-readouts .hud__bar,
+.hud--corner.hud--no-readouts::before {
+  display: none;
+}
+
+/* The account alone is left in the HUD's row: it keeps the right. */
+.hud--corner.hud--no-readouts {
+  justify-content: flex-end;
+}
+
+/* The holder top left; the bar is its own width. */
 .friend-visit {
   position: absolute;
-  top: calc(var(--hud-height, 64px) + var(--space-1));
-  left: 50%;
+  top: var(--hud-inset);
+  left: var(--hud-inset);
   z-index: var(--z-hud);
   display: flex;
-  justify-content: center;
-  /* Its own width, not the half the centring's left: 50% would leave it. */
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: flex-start;
   width: max-content;
-  max-width: calc(100vw - 2 * var(--space-4));
-  transform: translateX(-50%);
+  /* Stops short of the account pill, top right. */
+  max-width: calc(100vw - 2 * var(--hud-inset) - 240px);
   pointer-events: none;
 }
 
@@ -241,17 +257,7 @@
 }
 
 @media (max-width: 620px) {
-  /* An upright phone: under the two HUD rows, above the folded World chat
-     tab (about 76px under the HUD) and clear of the Events button's column
-     on the right, which a friend's yard does not show. The bar is one row
-     at most the screen's width less the gutters; the name gives way first.
-     106px, not 96px: Help all's totals sit in a lane just under the four
-     counters (to about 102px) and must not land on the bar's rim. */
-  .friend-visit {
-    top: 106px;
-    max-width: calc(100vw - 2 * var(--space-3));
-  }
-
+  /* An upright phone: the bar is one row; the name gives way first. */
   .help-all-bar__name,
   .help-all-bar__result {
     font-size: var(--text-xs, var(--text-sm));
@@ -278,46 +284,7 @@
   }
 }
 
-/* A phone on its side: the HUD is one short row (`--hud-height`), the World
-   chat tab under it on the left; the centred bar starts under the HUD, 10px
-   lower than it would need to so Help all's totals (a lane just under the
-   counters) clear its rim. */
-@media (min-width: 621px) and (max-height: 500px) {
-  .friend-visit {
-    top: calc(var(--hud-height, 64px) + var(--space-1) + 10px);
-  }
-}
-
-/*
- * PREVIEW (`visitTop.ts`, `?visitTop=1|2` in a dev build; owner, Review Desk
- * 7, 15 Nov 2026): a friend's yard without the readouts, the visit bar top
- * left where they were. The account stays top right (it moves there on an
- * upright phone, so the bar is top left on every screen).
- */
-.hud--corner.hud--visit-top .hud__bar,
-.hud--corner.hud--visit-top::before {
-  display: none;
-}
-
-/* The account alone is left in the HUD's row: it keeps the right. */
-.hud--corner.hud--visit-top {
-  justify-content: flex-end;
-}
-
-.friend-visit.friend-visit--corner {
-  top: var(--hud-inset);
-  left: var(--hud-inset);
-  /* The bar, and look 2's chip under it. */
-  flex-direction: column;
-  align-items: flex-start;
-  justify-content: flex-start;
-  gap: var(--space-1);
-  /* Stops short of the account pill, top right. */
-  max-width: calc(100vw - 2 * var(--hud-inset) - 240px);
-  transform: none;
-}
-
-/* A reward as pictures and numbers: in the bar's line (look 1) or the chip (look 2). */
+/* A reward as pictures and numbers, in the visit bar's line. */
 .visit-reward {
   display: inline-flex;
   align-items: center;
@@ -328,10 +295,6 @@
   font-variant-numeric: tabular-nums;
   line-height: 1;
   white-space: nowrap;
-}
-
-.visit-reward-chip .visit-reward {
-  font-size: var(--text-sm);
 }
 
 .visit-reward__icons,
@@ -359,44 +322,15 @@
   border-left: 1px solid var(--colour-warning-line);
 }
 
-.visit-reward-chip {
-  display: flex;
-  flex: none;
-  align-items: center;
-  min-height: 32px;
-  padding: 0 var(--space-3);
-  border: 1px solid var(--colour-border);
-  border-radius: var(--radius-md);
-  background: var(--colour-surface-raised);
-  -webkit-backdrop-filter: var(--blur-panel);
-  backdrop-filter: var(--blur-panel);
-  box-shadow: var(--shadow-float);
-  animation: help-all-done-in 180ms var(--easing, ease-out) both;
-}
-
-.visit-reward-chip[hidden] {
-  display: none;
-}
-
-.visit-reward-chip .visit-reward {
-  gap: var(--space-3);
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .visit-reward-chip {
-    animation: none;
-  }
-}
-
 /* Not a wide desktop (a phone, an iPad, a split screen): the bar stops at
    the account, so the reward takes the row and the name waits, as for a
    line of words; four amounts of their own go without the tools and tick. */
 @media (max-width: 1100px) {
-  .friend-visit--corner .help-all-bar--result:has(> .help-all-bar__result .visit-reward) .help-all-bar__name {
+  .friend-visit .help-all-bar--result:has(> .help-all-bar__result .visit-reward) .help-all-bar__name {
     display: none;
   }
 
-  .friend-visit--corner .help-all-bar--result:has(> .help-all-bar__result .visit-reward) .help-all-bar__result {
+  .friend-visit .help-all-bar--result:has(> .help-all-bar__result .visit-reward) .help-all-bar__result {
     padding-left: 0;
     border-left: 0;
   }
@@ -427,27 +361,18 @@
   .help-all-bar__result .visit-reward--each .res-icon {
     height: 14px;
   }
-
-  .visit-reward-chip .visit-reward {
-    gap: var(--space-2);
-    font-size: var(--text-xs, var(--text-sm));
-  }
-
-  .visit-reward-chip .res-icon {
-    height: 16px;
-  }
 }
 
 @media (max-width: 620px) {
   /* An upright phone: the critter alone, top right; the bar takes the rest
-     of the row from the left, and the chip the row under it. */
+     of the row from the left. */
   /* (`:root .hud`: over the event coins' own placing of the critter.) */
-  :root .hud.hud--corner.hud--visit-top .account-menu {
+  :root .hud.hud--corner.hud--no-readouts .account-menu {
     grid-area: 1 / 4;
     justify-self: end;
   }
 
-  :root .hud.hud--corner.hud--visit-top .account-menu__pill-text {
+  :root .hud.hud--corner.hud--no-readouts .account-menu__pill-text {
     display: none;
   }
 
@@ -456,11 +381,11 @@
      ends 64px down, and a window's sign stands 13px above the band's end.
      Wider screens keep their height: the account pill is as tall as the
      readouts were. */
-  :root:has(.hud--corner.hud--visit-top) {
+  :root:has(.hud--corner.hud--no-readouts) {
     --hud-bar-height: 72px;
   }
 
-  .friend-visit.friend-visit--corner {
+  .friend-visit {
     top: calc(var(--hud-inset) - 4px);
     left: var(--space-3);
     /* Stops short of the critter (48px with its frame). */
@@ -468,7 +393,7 @@
   }
 
   /* The name alone, without "'s yard": a 12-letter name fits beside Help all. */
-  .friend-visit--corner .help-all-bar__name-rest {
+  .friend-visit .help-all-bar__name-rest {
     display: none;
   }
 
@@ -476,15 +401,7 @@
     font-size: var(--text-sm);
   }
 
-  .visit-reward-chip .visit-reward {
-    font-size: var(--text-xs, var(--text-sm));
-  }
-
   .visit-reward .res-icon {
     height: 16px;
-  }
-
-  .visit-reward-chip .visit-reward {
-    gap: var(--space-2);
   }
 }

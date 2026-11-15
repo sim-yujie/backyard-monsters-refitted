@@ -3,16 +3,16 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { HelpAllSummary } from "@/game/friends/helpAll";
 import type { HelpAllLine } from "./HelpAllBar";
 import type { HelpFxStage } from "./helpAllFx";
-import { HELP_LANDS_COUNT_MS, HELP_LANDS_DONE_MS, HelpLandsFx } from "./helpLands";
-import { RewardChip, rewardNode, VISIT_REWARD_MS, visitTopChoice } from "./visitTop";
+import { HELP_LANDS_DONE_MS, HelpLandsFx } from "./helpLands";
+import { rewardNode, VISIT_REWARD_MS } from "./visitReward";
 
 /**
- * PREVIEW (`visitTop.ts`; owner, Review Desk 7, 15 Nov 2026): a friend's
- * yard without the readouts. A help's reward shows in the visit bar's line
- * (look 1) or in a chip beside it (look 2), never on a counter nobody sees.
+ * A friend's yard without the readouts (`visitReward.ts`; owner's option 1,
+ * Review Desk 7, 15 Nov 2026): a help's reward shows in the visit bar's
+ * line, never on a counter nobody sees.
  */
 
-const stageWith = (reward?: "bar" | RewardChip) => {
+const stageWith = (reward?: "bar") => {
   const hud = { hold: vi.fn(), deliver: vi.fn(), floatBelow: vi.fn(), pulse: vi.fn(), releaseHeld: vi.fn() };
   const stage = {
     hud,
@@ -50,20 +50,6 @@ beforeEach(() => {
 
 afterEach(() => {
   vi.useRealTimers();
-  vi.unstubAllGlobals();
-});
-
-describe("visitTopChoice", () => {
-  it("is today's top without the switch", () => {
-    expect(visitTopChoice()).toBe(0);
-  });
-
-  it("reads ?visitTop=1|2 in a dev build", () => {
-    vi.stubGlobal("location", { search: "?visitTop=2" });
-    expect(visitTopChoice()).toBe(2);
-    vi.stubGlobal("location", { search: "?visitTop=9" });
-    expect(visitTopChoice()).toBe(0);
-  });
 });
 
 describe("rewardNode", () => {
@@ -83,7 +69,7 @@ describe("rewardNode", () => {
 });
 
 describe("Help all on a yard without the readouts", () => {
-  it("look 1: adds the reward without counting a hidden counter up, and shows it in the bar's line", async () => {
+  it("adds the reward without counting a hidden counter up, and shows it in the bar's line", async () => {
     const { stage, hud } = stageWith("bar");
     const result = await play(stage);
     expect(hud.deliver).toHaveBeenCalledWith("r1", 200, 0);
@@ -93,22 +79,7 @@ describe("Help all on a yard without the readouts", () => {
     expect(result?.ms).toBe(VISIT_REWARD_MS);
   });
 
-  it("look 2: shows the four totals in the chip, and the bar's line stays tools, tick and count", async () => {
-    const chip = new RewardChip();
-    const { stage, hud } = stageWith(chip);
-    const result = await play(stage);
-    expect(hud.floatBelow).not.toHaveBeenCalled();
-    expect(result?.node?.querySelector(".visit-reward")).toBeNull();
-    expect(result?.ms).toBe(VISIT_REWARD_MS);
-    expect(chip.element.hidden).toBe(false);
-    expect([...chip.element.querySelectorAll(".visit-reward__pair")].map((pair) => pair.textContent)).toEqual(
-      Array(4).fill("+200"),
-    );
-    await vi.advanceTimersByTimeAsync(VISIT_REWARD_MS + HELP_LANDS_COUNT_MS);
-    expect(chip.element.hidden).toBe(true);
-  });
-
-  it("with the readouts (no look), the counters count up as before", async () => {
+  it("with the readouts, the counters count up as before", async () => {
     const { stage, hud } = stageWith();
     expect((await play(stage))?.ms).toBe(HELP_LANDS_DONE_MS);
     expect(hud.floatBelow).toHaveBeenCalledWith("r1", 200);

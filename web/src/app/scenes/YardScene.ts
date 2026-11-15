@@ -175,7 +175,7 @@ import { FriendsButton } from "@/ui/friends/FriendsButton";
 import { HelpPanel } from "@/ui/friends/HelpPanel";
 import { HelpAllBar, type HelpAllLine } from "@/ui/friends/HelpAllBar";
 import { helpAllFxMaker, type HelpAllFx, type HelpFxStage } from "@/ui/friends/helpAllFx";
-import { rewardNode, RewardChip, VISIT_REWARD_MS, visitTopChoice } from "@/ui/friends/visitTop";
+import { rewardNode, VISIT_REWARD_MS } from "@/ui/friends/visitReward";
 import { YardDock, type YardDockOptions } from "@/ui/yard/YardDock";
 import { kitBoughtText, StarterKitPicker } from "@/ui/yard/StarterKitPicker";
 import { YardMinimap } from "@/ui/yard/YardMinimap";
@@ -498,13 +498,9 @@ export class YardScene implements Scene {
    */
   private helpBlock: HelpBlock | null = null;
   /** The holder at the top of a friend's yard for the one visit bar (beta 8). */
-  private visitTop: HTMLElement | null = null;
+  private visitHolder: HTMLElement | null = null;
   /** Keeps the clear band under the visit bar as the bar's height changes. */
-  private visitTopWatch: ResizeObserver | null = null;
-  /** PREVIEW (`visitTop.ts`): 1 or 2 on a friend's yard without the readouts, else 0. */
-  private visitTopLook: 0 | 1 | 2 = 0;
-  /** Look 2's chip beside the visit bar. */
-  private rewardChip: RewardChip | null = null;
+  private visitHolderWatch: ResizeObserver | null = null;
   /** The one visit bar: "Bob's yard", the tools and "3", Help all; a friend's visit only (beta 8). */
   private helpAllBar: HelpAllBar | null = null;
   /** Help all's effect while one plays (`helpAllFx.ts`); null plays none. */
@@ -674,9 +670,8 @@ export class YardScene implements Scene {
     });
     this.hud.setActiveScene(SceneName.YARD);
     this.hud.mount(context.overlay.content);
-    // PREVIEW: a friend's yard without the readouts, from the first frame.
-    this.visitTopLook = this.target?.kind === "friend" ? visitTopChoice() : 0;
-    this.hud.setVisitTop(this.visitTopLook !== 0);
+    // A friend's yard has no readouts (`visitReward.ts`), from the first frame.
+    this.hud.setReadoutsHidden(this.target?.kind === "friend");
 
     this.chat = new WorldChatBox({
       session: worldChat,
@@ -886,13 +881,10 @@ export class YardScene implements Scene {
     this.helpFx = null;
     this.helpAllBar?.destroy();
     this.helpAllBar = null;
-    this.visitTopWatch?.disconnect();
-    this.visitTopWatch = null;
-    this.rewardChip?.destroy();
-    this.rewardChip = null;
-    this.visitTopLook = 0;
-    this.visitTop?.remove();
-    this.visitTop = null;
+    this.visitHolderWatch?.disconnect();
+    this.visitHolderWatch = null;
+    this.visitHolder?.remove();
+    this.visitHolder = null;
     if (this.helpMarkTimer) clearInterval(this.helpMarkTimer);
     this.helpMarkTimer = null;
     this.helpMarksFramed = false;
@@ -942,7 +934,7 @@ export class YardScene implements Scene {
     this.camera?.resize(pane.width, pane.height);
     if (this.yard) this.applyZoomLimits(pane.width, pane.height);
     // A friend's yard keeps its top edge clear of the visit bar at any size.
-    if (this.visitTop) this.applyVisitExtent();
+    if (this.visitHolder) this.applyVisitExtent();
     this.placeCompareLabels();
     // A different viewport is a different visible rectangle even when the
     // camera did not move.
@@ -1886,24 +1878,19 @@ export class YardScene implements Scene {
     const context = this.context;
     if (!context) return;
     this.helpBlock = response.help ?? { buildings: {} };
-    if (!this.visitTop) {
-      this.visitTop = document.createElement("div");
-      this.visitTop.className = "friend-visit";
-      if (this.visitTopLook) this.visitTop.classList.add("friend-visit--corner");
-      context.overlay.content.append(this.visitTop);
+    if (!this.visitHolder) {
+      this.visitHolder = document.createElement("div");
+      this.visitHolder.className = "friend-visit";
+      context.overlay.content.append(this.visitHolder);
     }
     if (!this.helpAllBar) {
       this.helpAllBar = new HelpAllBar({ onHelpAll: () => this.helpAll() });
-      this.visitTop.append(this.helpAllBar.element);
-      if (this.visitTopLook === 2) {
-        this.rewardChip = new RewardChip();
-        this.visitTop.append(this.rewardChip.element);
-      }
+      this.visitHolder.append(this.helpAllBar.element);
       // The bar is lower with the name alone than with Help all: the
       // wrenches' clear band follows it.
       if (typeof ResizeObserver !== "undefined") {
-        this.visitTopWatch = new ResizeObserver(() => this.applyVisitExtent());
-        this.visitTopWatch.observe(this.visitTop);
+        this.visitHolderWatch = new ResizeObserver(() => this.applyVisitExtent());
+        this.visitHolderWatch.observe(this.visitHolder);
       }
     }
     this.helpAllBar.element.dataset["name"] = name;
@@ -1932,11 +1919,6 @@ export class YardScene implements Scene {
         };
       };
     }
-    if (import.meta.env.DEV && this.visitTopLook) {
-      // PREVIEW: for a test script, a reward shown as one help's would be.
-      (window as unknown as { __visitReward?: (reward: ResourceAmounts) => void }).__visitReward = (reward) =>
-        this.showVisitReward(reward);
-    }
     // The "-18m" tags shrink as the friend's jobs run on.
     this.helpMarkTimer ??= setInterval(() => this.showHelpMarks(), 15_000);
     this.refreshStatus();
@@ -1948,9 +1930,9 @@ export class YardScene implements Scene {
    */
   private visitBand(): ClearBand | null {
     const context = this.context;
-    if (!context || !this.visitTop) return null;
+    if (!context || !this.visitHolder) return null;
     const canvasTop = context.canvas.getBoundingClientRect().top;
-    const column = this.visitTop.getBoundingClientRect();
+    const column = this.visitHolder.getBoundingClientRect();
     const columnBottom = column.height > 0 ? column.bottom - canvasTop : 0;
     return {
       width: this.viewportWidth,
@@ -2069,7 +2051,7 @@ export class YardScene implements Scene {
       if (this.context !== context || !this.helpBlock) return null;
       this.helpBlock = afterHelp(this.helpBlock, building.id, kind, result.rewardsLeft);
       if (result.building) this.patchVisitBuilding(building, result.building);
-      // The reward lands in the visitor's own pool (#374): the HUD floats it.
+      // The reward lands in the visitor's own pool (#374), kept in the hidden readouts for the way home.
       const pool = this.visitorPool;
       const fx = this.helpFx;
       if (pool) {
@@ -2085,7 +2067,7 @@ export class YardScene implements Scene {
         this.hud?.setResources(resources, pool.credits, fx ? { float: false } : {});
       }
       // No readouts to float it on: one help's reward shows as Help all's does.
-      if (!fx && this.visitTopLook) this.showVisitReward(result.reward);
+      if (!fx) this.showVisitReward(result.reward);
       this.showHelpBlock();
       // The friends bar's wrench follows.
       friendsStore.nudge();
@@ -2156,12 +2138,8 @@ export class YardScene implements Scene {
     return played ?? line;
   }
 
-  /** PREVIEW: one help's reward on a yard without the readouts, in the bar (look 1) or the chip (look 2). */
+  /** One help's reward on a friend's yard, which has no readouts: in the visit bar's line. */
   private showVisitReward(reward: ResourceAmounts): void {
-    if (this.rewardChip) {
-      this.rewardChip.show(reward);
-      return;
-    }
     const node = rewardNode(reward);
     if (!node) return;
     this.helpAllBar?.showResult({ text: "Reward added", kind: "thanks", node, ms: VISIT_REWARD_MS });
@@ -2177,8 +2155,7 @@ export class YardScene implements Scene {
     return {
       hud,
       bar,
-      ...(this.visitTopLook === 1 && { reward: "bar" as const }),
-      ...(this.rewardChip && { reward: this.rewardChip }),
+      reward: "bar",
       marks: {
         hold: (ids) => renderer.holdHelpMarks(ids),
         leave: (id, exit) => renderer.leaveHelpMark(id, exit),

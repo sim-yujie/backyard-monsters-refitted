@@ -75,7 +75,7 @@ export class HelpAllBar {
 
   /** Whose yard it is: "Bob's yard". */
   setName(text: string): void {
-    // "'s yard" in a piece of its own: a phone's corner bar (`visitTop.ts`) shows the name alone.
+    // "'s yard" in a piece of its own: an upright phone's visit bar shows the name alone.
     const cut = text.endsWith(YARD_SUFFIX) ? text.length - YARD_SUFFIX.length : text.length;
     this.name.replaceChildren(text.slice(0, cut));
     if (cut < text.length) this.name.append(make("span", "help-all-bar__name-rest", YARD_SUFFIX));

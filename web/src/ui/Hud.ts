@@ -638,16 +638,16 @@ export class Hud {
   }
 
   /**
-   * A friend's yard without the readouts (`friends/visitTop.ts`): they stay
-   * in the bar, hidden by `hud--visit-top`, so amounts keep adding up for
-   * the way home; nothing floats from a readout nobody sees.
+   * A friend's yard has no readouts (`friends/visitReward.ts`): they stay in
+   * the bar, hidden by `hud--no-readouts`, so amounts keep adding up for the
+   * way home; nothing floats from a readout nobody sees.
    */
-  setVisitTop(on: boolean): void {
-    this.element.classList.toggle("hud--visit-top", on);
+  setReadoutsHidden(on: boolean): void {
+    this.element.classList.toggle("hud--no-readouts", on);
   }
 
   private get readoutsHidden(): boolean {
-    return this.element.classList.contains("hud--visit-top");
+    return this.element.classList.contains("hud--no-readouts");
   }
 
   /** A readout's cell lights up for a moment: something just landed in it. */
