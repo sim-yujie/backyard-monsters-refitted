@@ -47,7 +47,7 @@ export interface EventView {
   /**
    * For an event that pays Krallen: her level now (0 for none), the top an
    * event raises her to, and when her loot aura runs out (unix s, 0 for
-   * none; she fights with it only from level 3, `KRALLEN_AURA_LEVEL`).
+   * none; she fights with it at any level, `KRALLEN_AURA_LEVEL`).
    * `startLevel` is her level when the hunt began; `minimum` the loot below
    * which she loses a level when it ends (0: no Krallen at the start, no
    * minimum, `krallenHuntMinimum`); `penalty` what its end took, if anything.

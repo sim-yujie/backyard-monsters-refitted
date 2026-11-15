@@ -58,7 +58,7 @@ export interface ReportsWindowOptions {
 }
 
 /** The phone layout: one column, the list or the player (reports.css). */
-export const REPORTS_PHONE_QUERY = "(width <= 620px)";
+export const REPORTS_PHONE_QUERY = "(max-width: 620px)";
 
 /** Below this much room the window is one column (reports.css `@container mod-reports`). */
 export const REPORTS_TWO_COLUMNS = 720;

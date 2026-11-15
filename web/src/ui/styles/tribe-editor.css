@@ -31,6 +31,7 @@
      off a phone (6 Nov UI check). */
   width: min(380px, calc(100vw - 2 * var(--space-4) - 58px - var(--space-3)));
   max-height: calc(100vh - var(--hud-height, 64px) - var(--space-4) - 300px);
+  max-height: calc(100dvh - var(--hud-height, 64px) - var(--space-4) - 300px);
   overflow-y: auto;
   z-index: 20;
 }

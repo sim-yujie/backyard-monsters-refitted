@@ -21,9 +21,9 @@ import type { ResourceAmounts } from "../../services/yardplanner/costs.js";
  *   to {@link KRALLEN_MAX_LEVEL}, and nothing more at the top. She is kept
  *   for good. This is the only way a Krallen is made or raised.
  * - `krallenAura`: Krallen's loot aura until `until` (unix seconds), kept on
- *   her `champion` entry as `la` (`services/events/krallenReward.ts`). Only
- *   a Krallen of level 3 and up carries it in a fight; a player without a
- *   Krallen gets nothing. The Krallen Hunt's 3x mark pays it (`events.ts`).
+ *   her `champion` entry as `la` (`services/events/krallenReward.ts`). A
+ *   Krallen of any level carries it in a fight (levels 1-2 added 15 Nov
+ *   2026); a player without a Krallen gets nothing. The Krallen Hunt's 3x mark pays it (`events.ts`).
  * - `korath`: one of Korath's powers, `power` 1 Burn, 2 Breath of Fire, 3
  *   Fists of Doom (Monster Madness, `monsterMadness.ts`). It sets his power
  *   level to at least `power`, never lower, and is kept in the yard's

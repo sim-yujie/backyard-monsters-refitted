@@ -17,6 +17,7 @@
   /* What sticks up above the frame: the title sign rides up by its lift less
      the frame's edge, the close disc by 12 px (as the middle windows, ui.css). */
   --attack-window-overhang: max(12px, calc(var(--skin-title-lift, 0px) - var(--skin-edge, 0px)));
+  max-height: calc(100vh - var(--hud-height) - var(--space-1) - var(--space-4) - var(--attack-window-overhang));
   max-height: calc(100dvh - var(--hud-height) - var(--space-1) - var(--space-4) - var(--attack-window-overhang));
   margin-top: var(--attack-window-overhang);
   min-height: 0;
@@ -293,6 +294,7 @@
     /* The base panel stops at 560 px; this one may be wider. */
     max-width: none;
     /* 8 px under it rather than 16: that room goes to the monsters. */
+    max-height: calc(100vh - var(--hud-height) - var(--space-1) - var(--space-2) - var(--attack-window-overhang));
     max-height: calc(100dvh - var(--hud-height) - var(--space-1) - var(--space-2) - var(--attack-window-overhang));
   }
 

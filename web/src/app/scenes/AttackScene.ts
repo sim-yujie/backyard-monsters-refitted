@@ -44,7 +44,7 @@ import { Camera } from "@/game/Camera";
 import { fixedWorkSource } from "@/game/yard/buildingWork";
 import { setOwnYardTarget, type OwnYardTarget } from "@/game/yard/ownYards";
 import { readYard, type Yard } from "@/game/yard/yardModel";
-import { fellPens, withRosters, yardLifeOf, type YardLife } from "@/game/yard/yardLifeModel";
+import { fellPens, withCagedChampions, withRosters, yardLifeOf, type YardLife } from "@/game/yard/yardLifeModel";
 import { setYardIntent } from "@/game/yard/yardIntent";
 import { YardRenderer } from "@/game/yard/YardRenderer";
 import { YardInput } from "@/game/yard/YardInput";
@@ -441,6 +441,9 @@ export class AttackScene implements Scene {
     const session = this.session;
     if (session && !session.playback && this.wallClock) this.wallClock.frame();
     else session?.advance(deltaSeconds);
+    // Every frame, so the caged champion hands over to the battle layer on
+    // the frame it comes out, rather than at the strip's slower beat.
+    this.cagedChampions();
 
     this.sinceUiTick += deltaSeconds;
     if (this.sinceUiTick >= UI_TICK_SECONDS) {
@@ -492,11 +495,13 @@ export class AttackScene implements Scene {
     if (!this.practice && !this.raiding && !isDefenceWatch(this.watchRun)) concealTraps(this.renderer, yard);
     // The defender's pens, as Flash drew them on an attacked yard (#159):
     // scenery in the yard's own containers, never in the battle layer, so no
-    // creep targets them and no count includes them. No caged champion: the
-    // engine has no defending champion, and one that never fights would lie.
+    // creep targets them and no count includes them. The caged champion is
+    // the battle's: it stands where the engine has it wait, and leaves the
+    // cage to the battle layer while it is out (bug report #47).
     // No workers on a Moloch yard, a world map attack in Flash.
     this.life = yardLifeOf(response, yard, "attack", molochYard);
     this.renderer.setLife(this.life);
+    this.cagedChampions();
     this.buildingCount = countedBuildings(yard.buildings.map((building) => building.type));
     this.startCamera(yard, context);
 
@@ -1032,6 +1037,22 @@ export class AttackScene implements Scene {
     const battle = this.session?.battle();
     if (!life?.rosters || !battle) return;
     const next = withRosters(life, battle.bunkerPools());
+    if (next === life) return;
+    this.life = next;
+    this.renderer.setLife(next);
+  }
+
+  /**
+   * The defender's champions in their cage (bug report #47): the ones the
+   * battle has waiting there, each on its own point. One that comes out
+   * leaves the cage for the battle layer, and one that walks back in stands
+   * in it again. Drawing only.
+   */
+  private cagedChampions(): void {
+    const life = this.life;
+    const battle = this.session?.battle();
+    if (!life?.cage || !battle) return;
+    const next = withCagedChampions(life, battle.cagedChampions());
     if (next === life) return;
     this.life = next;
     this.renderer.setLife(next);

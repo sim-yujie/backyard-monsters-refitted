@@ -13,6 +13,7 @@ import { monsterEntry } from "@/game/monsters/monsterCatalogue";
 import { championPortrait, showPortrait, type Portrait } from "@/game/portraits";
 import { buttonUrl, silhouetteUrl } from "@/game/yard/buildButtonArt";
 import type { YardKind } from "@/game/yard/buildingCosts";
+import { KRALLEN_ID } from "@/game/combat/rules/champions";
 import type { ChampionStance } from "@/game/combat/rules";
 import { brainSummary, championNature, learnedFromText, STANCE_NAMES, tendenciesText } from "@/game/yard/championBrain";
 import type { ChampionEntry } from "@/game/yard/championCatalogue";
@@ -883,16 +884,22 @@ export const statsBlock = (view: ChampionView): HTMLElement => {
   list.className = "champion__stats";
   list.setAttribute("aria-label", "Stats");
   // A painted icon where there is one; Range and Buff have none yet, so keep their word.
+  // Krallen's `buffs` raise the storage limit for loot in attacks she is flung
+  // in (`attackerStorage.ts`, `krallenBuffOf`), not her loot: "Storage +20% in
+  // attacks" (owner, 15 Nov 2026: a bare "Buff 20%" read as +20% loot).
+  const krallen = view.entry.id === KRALLEN_ID;
   const rows: ReadonlyArray<
-    readonly [string, keyof ChampionStats, (value: number) => string, GameIconName | null]
+    readonly [string, keyof ChampionStats, (value: number) => string, GameIconName | null, string?]
   > = [
     ["Damage", "damage", formatAmount, "damage"],
     ["Max health", "health", formatAmount, "health"],
     ["Speed", "speed", (value) => String(Math.round(value * 10) / 10), "speed"],
     ["Range", "range", formatAmount, null],
-    ["Buff", "buff", (value) => `${value}%`, null],
+    krallen
+      ? ["Storage", "buff", (value) => `+${value}%`, null, " in attacks"]
+      : ["Buff", "buff", (value) => `${value}%`, null],
   ];
-  for (const [label, key, spell, icon] of rows) {
+  for (const [label, key, spell, icon, suffix = ""] of rows) {
     const now = view.stats[key];
     if (key === "buff" && now <= 0) continue;
     const item = document.createElement("li");
@@ -900,7 +907,7 @@ export const statsBlock = (view: ChampionView): HTMLElement => {
     item.dataset["stat"] = key;
     const next = view.nextStats?.[key];
     const grows = next !== undefined && next !== now;
-    item.title = `${label} ${spell(now)}${grows ? ` → ${spell(next)}` : ""}`;
+    item.title = `${label} ${spell(now)}${grows ? ` → ${spell(next)}` : ""}${suffix}`;
     item.append(icon ? gameIcon(icon, { size: 16, label, tooltip: false }) : `${label} `, strong(spell(now)));
     if (grows) {
       const after = document.createElement("span");
@@ -908,6 +915,7 @@ export const statsBlock = (view: ChampionView): HTMLElement => {
       after.textContent = ` → ${spell(next)}`;
       item.append(after);
     }
+    if (suffix) item.append(suffix);
     list.append(item);
   }
   wrap.append(list);

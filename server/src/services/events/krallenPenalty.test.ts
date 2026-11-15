@@ -55,7 +55,7 @@ describe("settleKrallenHunts", () => {
     expect(after.l).toBe(2);
     expect(after.hp).toBe(maxHealthOf(after, entry));
     expect(after.hk).toBe(MARCH_END);
-    // The aura stays on her entry; below level 3 the fight's level check leaves it off.
+    // The aura stays on her entry, at her new level's strength.
     expect(after.la).toBe(9_999_999_999);
     expect(told).toEqual([{ event: MARCH.id, from: 3, to: 2 }]);
   });

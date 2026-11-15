@@ -930,7 +930,7 @@
 
 /* ── A phone: a smaller picture ──────────────────────────────────────────── */
 
-@media (width <= 620px) {
+@media (max-width: 620px) {
   /* Freeze and Juice side by side under the stats: too narrow beside the picture. */
   .champion__header--hero {
     grid-template-columns: 104px minmax(0, 1fr);

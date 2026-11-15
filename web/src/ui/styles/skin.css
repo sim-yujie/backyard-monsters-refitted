@@ -476,7 +476,7 @@
 /* The Hatch tab lays itself out by its own width (hatch.css): the frame gets
    its own room on top of the original's 1160px, so the inside is as wide as
    on the glass. */
-@media (width > 620px) {
+@media (min-width: 620.02px) {
   :root[data-skin] .monsters-screen[data-tab="hatch"] {
     width: min(1160px + 2 * var(--skin-edge), calc(100vw - 2 * var(--space-4)));
   }
@@ -758,7 +758,7 @@
 
 /* The army dock scrolls, so it would cut its first window's sign: room for
    the sign above it, under the attack strip. */
-@media (width > 620px) and (height > 500px) {
+@media (min-width: 620.02px) and (min-height: 500.02px) {
   :root[data-skin] .attack-dock__body {
     padding-top: 20px;
   }
@@ -821,7 +821,7 @@
 }
 
 /* On a phone the map tools are square icon buttons: the lit Key keeps its size. */
-@media (width <= 620px) {
+@media (max-width: 620px) {
   :root[data-skin] .mr2-tools-dock .mr2-key__toggle[aria-expanded="true"] {
     padding: 0;
   }
@@ -892,7 +892,7 @@
   padding-inline: 1px;
 }
 
-@media (width <= 620px) {
+@media (max-width: 620px) {
   :root[data-skin] .build-menu__kinds .build-menu__kind[aria-selected="true"] {
     border-image-width: 0 5px;
   }
@@ -1070,7 +1070,7 @@
 
 /* A thinner frame and a smaller sign and disc: the room goes to what is in
    the window. */
-@media (width <= 620px), (height <= 500px) {
+@media (max-width: 620px), (max-height: 500px) {
   :root[data-skin="scrap"] .panel {
     --skin-frame-width: 32px;
     --skin-edge: 15px;
@@ -1136,7 +1136,7 @@
   /* Four tabs now (Notifications, 11 Nov), their phone words short (ui.css
      `.account-settings__tab-short`); under 360px Classic's 10px ends need
      the words a hair smaller still to fit 320px across. */
-  @media (width < 360px) {
+  @media (max-width: 359.98px) {
     :root[data-skin] .panel .tab-row > .account-settings__tab {
       font-size: 3.1vw;
     }

@@ -227,6 +227,19 @@ describe("the camp panel's Repeat attack", () => {
     expect(control.detail.textContent).toContain("Gorgo is not ready (frozen or away)");
   });
 
+  it("greys out on a camp no Flinger reaches, saying so, and a press runs nothing", async () => {
+    const onRepeat = vi.fn();
+    const control = new AutoAttackControl({ plan: async () => answer({ outOfRange: true }), onRepeat });
+    control.setCell(CELL, campCell());
+    await settle();
+    expect(control.button.hidden).toBe(false);
+    expect(control.button.disabled).toBe(true);
+    expect(control.button.title).toBe("This camp is out of your Flingers' range.");
+    expect(control.detail.textContent).toContain("This camp is out of your Flingers' range.");
+    control.button.click();
+    expect(onRepeat).not.toHaveBeenCalled();
+  });
+
   it("without a plan, says how to get one; on anything but a camp, shows nothing", async () => {
     const plan = vi.fn(async () => answer({ plan: null }));
     const control = new AutoAttackControl({ plan, onRepeat: vi.fn() });

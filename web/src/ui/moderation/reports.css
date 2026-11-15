@@ -815,7 +815,7 @@
 
 /* ── Narrow: one column, the list or the player ───────────────────────── */
 
-@media (width <= 620px) {
+@media (max-width: 620px) {
   .panel.mod-reports-window {
     height: var(--mod-reports-room);
   }

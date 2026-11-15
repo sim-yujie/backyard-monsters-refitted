@@ -191,17 +191,18 @@ export const FOMOR_DRIFT = 1.25;
 /* ── Krallen (G5) ─────────────────────────────────────────────────────────── */
 
 /**
- * Her loot aura needs her level 3 and the Krallen Hunt's 3x goal (owner,
- * 13 Nov 2026): a Krallen of level 3, 4 or 5 whose player looted three times
- * their hunt goal carries it until the end of the next hunt
+ * Her loot aura needs the Krallen Hunt's 3x goal (owner, 13 Nov 2026): a
+ * Krallen of any level, 1 to 5, whose player looted three times their hunt
+ * goal carries it until the end of the next hunt
  * (`server/src/game-data/events/events.ts`, `KRALLEN_AURA_GOAL_TIMES`); every
- * other Krallen carries none, and levels 1 and 2 never do. Flash gave
- * `ProximityLootBuff`, her third ability, to the Krallen whose player reached
- * the second loot mark, 3x the first (power level 2, `CHAMPIONCAGE.as:265`,
- * `KOTHHandler.as:76-84`), at any level. From 23 Oct to 13 Nov 2026 every
- * Krallen of level 3 and up had it without the 3x.
+ * other Krallen carries none. Flash gave `ProximityLootBuff`, her third
+ * ability, to the Krallen whose player reached the second loot mark, 3x the
+ * first (power level 2, `CHAMPIONCAGE.as:265`, `KOTHHandler.as:76-84`), at any
+ * level. From 23 Oct to 13 Nov 2026 every Krallen of level 3 and up had it
+ * without the 3x; from 13 to 15 Nov it needed level 3 too; levels 1-2 added
+ * 15 Nov 2026 (owner: a level 1 Krallen won with the 3x must use it).
  */
-export const KRALLEN_AURA_LEVEL = 3;
+export const KRALLEN_AURA_LEVEL = 1;
 
 /**
  * Whether a champion carries the loot aura: an attacking Krallen from
@@ -224,14 +225,18 @@ export const krallenAuraRadius = (level: number): number =>
 
 /**
  * AURA STRENGTH, the one place to change it. What the aura adds to a looting
- * property at her levels 3, 4 and 5 (owner, 2026-10-23; kept 13 Nov 2026),
- * added as `LootingMultiplier` adds (`LootingMultiplier.as:46-53`).
- * Level 5 is Flash's own `1 + _buff` at her top `buffs` rung, 0.3
- * (`ProximityLootBuff.as:51`): an ordinary monster's 0.5 becomes 1.8, 3.6
- * times, and a looter's 2 becomes 3.3. Each level below it adds 0.4 less:
- * 0.9 at level 4 (1.4, 2.8 times) and 0.5 at level 3 (1.0, twice).
+ * property at her levels 1 to 5, added as `LootingMultiplier` adds
+ * (`LootingMultiplier.as:46-53`). An ordinary monster loots 0.5, a resource
+ * hunter or champion 2.
+ * - Level 5: Flash's own `1 + _buff` at her top `buffs` rung, 0.3
+ *   (`ProximityLootBuff.as:51`): 1.3, so 0.5 becomes 1.8 (3.6 times) and a
+ *   looter's 2 becomes 3.3 (1.65 times).
+ * - Level 4: 0.9 (2.8 times, 1.45 times). Level 3: 0.5 (twice, 1.25 times).
+ *   Owner, 2026-10-23; kept 13 Nov 2026.
+ * - Level 2: 0.35 (1.7 times, 1.175). Level 1: 0.2 (1.4 times, 1.1 times).
+ *   Owner, 15 Nov 2026.
  */
-export const LOOT_AURA_BONUS: readonly number[] = [0.5, 0.9, 1.3];
+export const LOOT_AURA_BONUS: readonly number[] = [0.2, 0.35, 0.5, 0.9, 1.3];
 
 /** What the aura adds to a looting property at her `level`, 0 below {@link KRALLEN_AURA_LEVEL}. */
 export const lootAuraBonus = (level: number): number => {

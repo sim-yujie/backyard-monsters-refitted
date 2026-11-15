@@ -10,9 +10,9 @@ import { describe, expect, it } from "vitest";
 /** alliance.css with its comments taken out. */
 const css = readFileSync(new URL("./alliance.css", import.meta.url), "utf8").replace(/\/\*[\s\S]*?\*\//g, "");
 
-/** The text of the phone block, `@media (width <= 480px) { ... }`. */
+/** The text of the phone block, `@media (max-width: 480px) { ... }`. */
 const phoneCss = ((): string => {
-  const at = css.indexOf("@media (width <= 480px)");
+  const at = css.indexOf("@media (max-width: 480px)");
   const open = css.indexOf("{", at);
   let depth = 1;
   let i = open + 1;

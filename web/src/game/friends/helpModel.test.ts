@@ -39,7 +39,6 @@ const upgrading = (left: number, paused = false): YardCountdown => ({
 });
 
 const block: HelpBlock = {
-  helpsLeft: 17,
   buildings: {
     "7": { speedup: true },
     "8": { repair: true },
@@ -65,7 +64,7 @@ describe("the help block, per building (#374)", () => {
   });
 
   it("words every refusal plainly, and an unknown one generally", () => {
-    for (const reason of ["tooNew", "dailyCap", "nothingToHelp", "alreadyHelped", "helpersFull", "underAttack", "notFriends", "cannotSend", "self"]) {
+    for (const reason of ["tooNew", "nothingToHelp", "alreadyHelped", "helpersFull", "underAttack", "notFriends", "cannotSend", "self"]) {
       expect(helpRefusalText(reason)).toMatch(/^[A-Z0-9].*[.!]$/);
     }
     expect(helpRefusalText("somethingNew")).toBe("That can't be done right now.");
@@ -73,10 +72,8 @@ describe("the help block, per building (#374)", () => {
 });
 
 describe("the words (#372, #374)", () => {
-  it("says who is helped and how many helps are left", () => {
-    expect(helpingLine("Bob", 17)).toBe("Helping Bob: 17 helps left today");
-    expect(helpingLine("Bob", 1)).toBe("Helping Bob: 1 help left today");
-    expect(helpingLine("Bob", 0)).toBe("Helping Bob: no helps left today");
+  it("says who is helped, and no count of helps left (no daily cap since 15 Nov 2026)", () => {
+    expect(helpingLine("Bob")).toBe("Helping Bob");
   });
 
   it("says what a speed-up takes off: 5% of the time left now, rounded down", () => {
@@ -109,34 +106,52 @@ describe("the words (#372, #374)", () => {
   });
 
   it("thanks the helper with what was saved and earned", () => {
-    const sped: HelpResult = { secondsSaved: 390, reward: { r1: 25, r2: 25, r3: 25, r4: 25 }, helpsLeft: 16, building: null };
+    const sped: HelpResult = { secondsSaved: 390, reward: { r1: 25, r2: 25, r3: 25, r4: 25 }, rewardsLeft: 3, building: null };
     expect(thanksText("speedup", sped, "Bob", "Storage Silo")).toBe(
       "Thanks for helping! You took 6m 30s off Bob's Storage Silo. You earned 25 of each resource.",
     );
-    const fixed: HelpResult = { healed: true, reward: {}, helpsLeft: 16, building: null };
+    const fixed: HelpResult = { healed: true, reward: {}, rewardsLeft: 3, building: null };
     expect(thanksText("repair", fixed, "Bob", "Cannon Tower")).toBe("Thanks for helping! You repaired Bob's Cannon Tower.");
+    // A help after the day's 5 rewarded ones: the server pays all zeros, and nothing is said of earning.
+    const unpaid: HelpResult = { secondsSaved: 390, reward: { r1: 0, r2: 0, r3: 0, r4: 0 }, rewardsLeft: 0, building: null };
+    expect(thanksText("speedup", unpaid, "Bob", "Storage Silo")).toBe("Thanks for helping! You took 6m 30s off Bob's Storage Silo.");
   });
 });
 
 describe("the block after a help (#374)", () => {
-  it("a speed-up leaves that job helped by the player, and the counter drops", () => {
-    const next = afterHelp(block, 7, "speedup", 16);
-    expect(next.helpsLeft).toBe(16);
+  it("a speed-up leaves that job helped by the player", () => {
+    const next = afterHelp(block, 7, "speedup", 4);
+    expect(next).not.toHaveProperty("helpsLeft");
+    expect(next.rewardsLeft).toBe(4);
     expect(next.buildings["7"]).toEqual({ speedup: "alreadyHelped" });
     expect(helpableIds(next).has(7)).toBe(false);
   });
 
   it("a repair leaves nothing to repair", () => {
-    const next = afterHelp(block, 8, "repair", 16);
+    const next = afterHelp(block, 8, "repair", 4);
     expect(next.buildings["8"]).toBeUndefined();
-    expect(afterHelp(block, 9, "repair", 16).buildings["9"]).toEqual({ speedup: "alreadyHelped" });
+    expect(afterHelp(block, 9, "repair", 4).buildings["9"]).toEqual({ speedup: "alreadyHelped" });
   });
 
-  it("with no helps left, every open offer becomes the daily cap", () => {
-    const next = afterHelp(block, 7, "speedup", 0);
-    expect(helpableIds(next).size).toBe(0);
-    expect(next.buildings["8"]).toEqual({ repair: "dailyCap" });
+  it("however many helps were given, every other open offer stays open (no daily cap)", () => {
+    let next = block;
+    for (let i = 0; i < 25; i++) next = afterHelp(next, 7, "speedup", 0);
+    expect([...helpableIds(next)].sort((a, b) => a - b)).toEqual([8, 9]);
+    expect(next.buildings["8"]).toEqual({ repair: true });
     expect(next.buildings["10"]).toEqual({ speedup: "helpersFull" });
+  });
+
+  it("once today's rewarded helps are used up, the help still goes and says the reward is used up", () => {
+    expect(buildingHelp(block, 8)).toEqual({ repair: { allowed: true } });
+    expect(buildingHelp({ ...block, rewardsLeft: 1 }, 8)).toEqual({ repair: { allowed: true } });
+    const spent = afterHelp(block, 7, "speedup", 0);
+    expect(buildingHelp(spent, 8)).toEqual({ repair: { allowed: true }, rewardUsedUp: true });
+  });
+
+  it("reads rewardsLeft, never the helpsLeft the server keeps sending for pre-7.6 tabs", () => {
+    const fromServer = { ...block, rewardsLeft: 0, helpsLeft: 999 } as HelpBlock;
+    expect(buildingHelp(fromServer, 8)).toEqual({ repair: { allowed: true }, rewardUsedUp: true });
+    expect(afterHelp(fromServer, 7, "speedup", 0)).not.toHaveProperty("helpsLeft");
   });
 
   it("a refusal stands on that kind of that building", () => {
@@ -157,7 +172,7 @@ describe("the block after a help (#374)", () => {
   });
 
   it("tooNew says the gate the help block names", () => {
-    const gated = (gate: HelpBlock["gate"]): HelpBlock => ({ helpsLeft: 20, buildings: { "7": { speedup: "tooNew" } }, ...(gate && { gate }) });
+    const gated = (gate: HelpBlock["gate"]): HelpBlock => ({ buildings: { "7": { speedup: "tooNew" } }, ...(gate && { gate }) });
     const text = (gate: HelpBlock["gate"]) => (buildingHelp(gated(gate), 7, NOW)?.speedup as { text: string }).text;
     expect(text({ reason: "tooNew", from: NOW + 5 * 3600 + 60, rule: "friendship" })).toBe("Opens in 5h 1m (friends for 12 hours first).");
     expect(text({ reason: "tooNew", rule: "level" })).toBe("Not yet: each player must be level 5.");

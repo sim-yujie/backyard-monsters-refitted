@@ -489,7 +489,7 @@ export class YardScene implements Scene {
    * helped, kept current after each help; null on every other yard.
    */
   private helpBlock: HelpBlock | null = null;
-  /** The "Helping Bob: 17 helps left today" line; a friend's visit only. */
+  /** The "Helping Bob" line; a friend's visit only. */
   private visitLine: HTMLElement | null = null;
   /** The help panel, while open on a friend's building. */
   private helpPanel: HelpPanel | null = null;
@@ -1844,7 +1844,7 @@ export class YardScene implements Scene {
   private startHelping(response: HelpYardResponse, name: string): void {
     const context = this.context;
     if (!context) return;
-    this.helpBlock = response.help ?? { helpsLeft: 0, buildings: {} };
+    this.helpBlock = response.help ?? { buildings: {} };
     if (!this.visitLine) {
       this.visitLine = document.createElement("div");
       this.visitLine.className = "friend-visit-line";
@@ -1860,7 +1860,7 @@ export class YardScene implements Scene {
   private showHelpBlock(): void {
     const block = this.helpBlock;
     if (!block) return;
-    if (this.visitLine) this.visitLine.textContent = helpingLine(this.target?.name ?? "", block.helpsLeft);
+    if (this.visitLine) this.visitLine.textContent = helpingLine(this.target?.name ?? "");
     this.renderer.setHelpMarks(helpableIds(block));
     const shown = this.helpPanel?.shown;
     if (shown) this.helpPanel?.show(shown, buildingHelp(block, shown.id));
@@ -1891,7 +1891,7 @@ export class YardScene implements Scene {
 
   /**
    * One help (#374): the server decides and answers with the building as it
-   * now is, the reward and the helps left. A refusal is said in words and
+   * now is, the reward and the rewarded helps left today. A refusal is said in words and
    * stands on the button from then on.
    */
   private async help(building: YardBuilding, kind: HelpKind): Promise<void> {
@@ -1902,7 +1902,7 @@ export class YardScene implements Scene {
     try {
       const result = await this.friends.help(friend, building.id, kind);
       if (this.context !== context || !this.helpBlock) return;
-      this.helpBlock = afterHelp(this.helpBlock, building.id, kind, result.helpsLeft);
+      this.helpBlock = afterHelp(this.helpBlock, building.id, kind, result.rewardsLeft);
       if (result.building) this.patchVisitBuilding(building, result.building);
       // The reward lands in the visitor's own pool (#374): the HUD floats it.
       const pool = this.visitorPool;
@@ -1917,7 +1917,7 @@ export class YardScene implements Scene {
       }
       this.showHelpBlock();
       this.helpPanel?.setMessage(thanksText(kind, result, target.name, building.name), "thanks");
-      // The friends bar's wrench and the helps left follow.
+      // The friends bar's wrench follows.
       friendsStore.nudge();
     } catch (caught) {
       if (this.context !== context || !this.helpBlock) return;
@@ -1928,9 +1928,7 @@ export class YardScene implements Scene {
       const refusal = friendRefusal(caught);
       const known = refusal.reason !== "unknown" && refusal.reason !== "network";
       const text = known ? helpRefusalText(refusal.reason, refusal) : refusal.message;
-      if (refusal.reason === "dailyCap") {
-        this.helpBlock = afterHelp(this.helpBlock, -1, kind, 0);
-      } else if (known && refusal.reason !== "underAttack" && refusal.reason !== "notFriends") {
+      if (known && refusal.reason !== "underAttack" && refusal.reason !== "notFriends") {
         this.helpBlock = afterRefusal(this.helpBlock, building.id, kind, refusal.reason, refusal);
       }
       this.showHelpBlock();

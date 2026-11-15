@@ -78,8 +78,8 @@ export const raiseKrallen = (
  * as `la` (unix seconds), which only the server writes: `ChampionSchema`
  * leaves it out, so no list a client sends can add or move it, and every
  * server change to a champion keeps the entry's other fields. A later
- * `until` wins; an earlier one never shortens it. It is kept at any level:
- * a level 2 Krallen the same hunt raises to 3 carries it from then.
+ * `until` wins; an earlier one never shortens it. She carries it at any
+ * level, stronger as she rises (levels 1-2 added 15 Nov 2026).
  *
  * - No Krallen: nothing changes, `hasKrallen` false.
  *
@@ -108,8 +108,8 @@ export const krallenAuraUntilOf = (champion: { la?: unknown } | null | undefined
 /**
  * Whether the player's Krallen fights with her loot aura when an attack
  * starts at `at` (unix seconds): her aura running and her level at least
- * `KRALLEN_AURA_LEVEL` (`game-rules/combat/champions.ts`). The fight checks
- * her level itself; this is for the views.
+ * `KRALLEN_AURA_LEVEL`, 1 (`game-rules/combat/champions.ts`). The fight
+ * checks her level itself; this is for the views.
  */
 export const krallenAuraOn = (raw: unknown, at: number): boolean => {
   const entry = championEntry(KRALLEN_TYPE)!;

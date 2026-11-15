@@ -855,7 +855,7 @@
 /* The plates' ends pinched and the words 13 px on every screen wider than a
    phone, so all six tabs (Goals added, owner 15 Nov 2026) fit with their
    words in the 840 px window. */
-@media (min-width: 481px) {
+@media (min-width: 480.02px) {
   :root[data-skin] .panel .alliance__tab.tabs__tab {
     --skin-tab-cap: 10px;
 
@@ -867,7 +867,7 @@
 /* Narrower (an upright iPad, a phone on its side): icons only, as on a
    phone; the aria-label and title name each tab. Six tabs with words need
    about 800 px of window. */
-@media (min-width: 481px) and (max-width: 880px) {
+@media (min-width: 480.02px) and (max-width: 880px) {
   .alliance__tab-words {
     display: none;
   }
@@ -2074,7 +2074,7 @@
 
 /* ── Phone ────────────────────────────────────────────────────────────── */
 
-@media (width <= 480px) {
+@media (max-width: 480px) {
   .alliance-window > .panel__body {
     padding: var(--space-2) var(--space-3);
   }
@@ -2161,6 +2161,7 @@
 
 .star-editor {
   width: min(100%, 980px);
+  max-height: calc(100vh - var(--space-4));
   max-height: calc(100dvh - var(--space-4));
 }
 
@@ -2838,7 +2839,7 @@
   gap: 4px;
 }
 
-@media (width <= 480px) {
+@media (max-width: 480px) {
   /* Two by two, so each number keeps its word. */
   .trade-today,
   .trade-tiles {
@@ -2996,7 +2997,7 @@
   --alliance-arrow: #c8640a;
 }
 
-@media (width <= 480px) {
+@media (max-width: 480px) {
   /* Phone: the language on its own line, time zone and level side by side; boxes big enough for a thumb. */
   .alliance__sets {
     --alliance-control: 44px;
@@ -3143,7 +3144,7 @@
   cursor: pointer;
 }
 
-@media (width <= 480px) {
+@media (max-width: 480px) {
   .alliance__option {
     min-height: 40px;
   }

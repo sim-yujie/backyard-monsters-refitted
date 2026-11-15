@@ -4,7 +4,6 @@ import type { BaseLoadResponse, BuildingData, YardResponse } from "@/api/types";
 import type { YardApi } from "@/api/yard";
 import { YardStore, type YardChange } from "@/game/yard/YardStore";
 import type { Notices } from "@/ui/maproom/Notices";
-import { spokenText } from "@/ui/resourceIcon";
 import { MonstersScreen, townHallFor } from "./MonstersScreen";
 import type { MonstersFocus, MonstersTab, MonstersTabDefinition } from "./monstersTab";
 import { MONSTERS_TABS } from "./tabs";
@@ -109,15 +108,14 @@ describe("MonstersScreen: the frame", () => {
     expect(element.querySelector(".locker")).not.toBeNull();
   });
 
-  it("shows housing used / total and goo and putty in full, with their caps", () => {
+  it("shows housing used / total, and no goo or putty (the resource bar above has them, owner 15 Nov)", () => {
     const { screen, element } = setup([HALL, LOCKER, HOUSING]);
     screen.open("unlock");
     const header = element.querySelector<HTMLElement>(".monsters-header")!;
     expect(header.querySelector(".monsters-header__value")!.textContent).toBe("100 / 200");
     expect(header.querySelector('[role="meter"]')!.getAttribute("aria-valuenow")).toBe("100");
-    const [goo, putty] = [...header.querySelectorAll<HTMLElement>(".monsters-header__resource")];
-    expect(spokenText(goo!)).toBe("Goo 3,200,000 / 4,000,000");
-    expect(spokenText(putty!)).toBe("Putty 900,000 / 4,000,000");
+    expect(header.querySelectorAll(".monsters-header__resource")).toHaveLength(0);
+    expect(header.querySelector(".res-amount")).toBeNull();
   });
 
   it("says what to build, and the Town Hall it needs, for a tab with no building", () => {

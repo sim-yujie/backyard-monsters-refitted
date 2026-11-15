@@ -5,6 +5,7 @@
 
 .whats-new-popup {
   width: min(640px, calc(100vw - 2 * var(--space-4)));
+  max-height: calc(100vh - 2 * var(--space-4));
   max-height: calc(100dvh - 2 * var(--space-4));
 }
 
@@ -112,7 +113,7 @@
   min-height: var(--control-height);
 }
 
-@media (width <= 620px) {
+@media (max-width: 620px) {
   .whats-new__cards {
     grid-template-columns: minmax(0, 1fr);
   }

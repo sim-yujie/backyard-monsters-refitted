@@ -131,7 +131,7 @@
 /* A tall desktop: the right edge is one column, the zoom rail over Collect
    all over Build, so the yard's middle is free and every button is in the
    one corner; the bottom row is More, Monsters and Build. */
-@media (width > 620px) and (height > 780px) {
+@media (min-width: 620.02px) and (min-height: 780.02px) {
   .yard-dock--bubbles .yard-dock__right > .yard-collect,
   .yard-dock--bubbles .yard-dock__right > .yard-dock__button--kits {
     right: 26px;
@@ -156,7 +156,7 @@
    left corner (yard-hud.css, friends-button.css), and the right corner a square
    of four under the thumb: More over Monsters, Collect all over Build. The
    column rises straight from More, the bubbles a little smaller and closer. */
-@media (width <= 620px) {
+@media (max-width: 620px) {
   .bubble-menu {
     --bubble-anchor: 30px;
     --bubble-disc: 52px;
@@ -194,7 +194,7 @@
    bubbles stand in rows of three above More and to its right, where the
    screen is empty (owner, beta 6), with their words under them, as a column
    up from More would not fit the short screen. */
-@media (width > 620px) and (height <= 500px) {
+@media (min-width: 620.02px) and (max-height: 500px) {
   .bubble-menu {
     --bubble-anchor: 28px;
     --bubble-disc: 52px;
@@ -270,5 +270,16 @@
 
   .yard-dock__button--more .yard-dock__disc > svg {
     transition: none;
+  }
+}
+
+/* A phone held upright: the fan rises into the middle of the screen, where an
+   open World chat sits over it (chat.css) and took its presses (layout check,
+   15 Nov: Goals could not be pressed with the chat open). While the fan is
+   out the chat steps aside, as it does for Build and Monsters (yard-hud.css),
+   and is back as the fan folds. */
+@media (max-width: 620px) {
+  .overlay__layer:has(> .yard-dock .bubble-menu--open) > .chat-box {
+    display: none;
   }
 }

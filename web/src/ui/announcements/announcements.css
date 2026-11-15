@@ -7,6 +7,7 @@
 
 .announcement-popup {
   width: min(520px, calc(100vw - 2 * var(--space-4)));
+  max-height: calc(100vh - 2 * var(--space-4));
   max-height: calc(100dvh - 2 * var(--space-4));
 }
 
@@ -33,6 +34,7 @@
   display: block;
   width: 100%;
   max-height: min(42vh, 320px);
+  max-height: min(42dvh, 320px);
   object-fit: contain;
 }
 
@@ -166,7 +168,7 @@
   color: var(--colour-text-muted);
 }
 
-@media (width <= 620px) {
+@media (max-width: 620px) {
   .announcement-dialog__done {
     flex: 1;
   }

@@ -62,7 +62,7 @@ export interface InfernoMapActions {
   readonly players?: InfernoPlayerActions;
 }
 
-const PHONE_QUERY = "(width <= 620px)";
+const PHONE_QUERY = "(max-width: 620px)";
 
 const isPhone = (): boolean =>
   typeof window !== "undefined" && window.matchMedia?.(PHONE_QUERY).matches === true;

@@ -282,8 +282,8 @@ export const fightableLog = (log: FlingLog, attacker: LootAttacker, entryHoused:
     // session's frozen copies are stamped on, and one with no health left at
     // launch stays home (`ATTACK.as:245`, only a champion with `hp > 0`).
     // Krallen's loot aura is never the log's either: the stored Krallen's,
-    // running when the attack began (owner, 13 Nov 2026); the engine adds
-    // her level 3 to it (`hasLootAura`).
+    // running when the attack began (owner, 13 Nov 2026); the engine gives
+    // it at her level's strength (`hasLootAura`, `lootAuraBonus`).
     let champion: FlungChampion | undefined;
     const stored = event.champion ? owned.get(event.champion.t) : undefined;
     if (

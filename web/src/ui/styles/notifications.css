@@ -51,7 +51,7 @@
 }
 
 .notif-screen .panel__body {
-  flex: 1;
+  flex: 1 1 auto;
   min-height: 0;
   max-height: none;
   padding: 0;
@@ -71,7 +71,7 @@
 /* ── The rows ───────────────────────────────────────────────────────────── */
 
 .notif-list {
-  flex: 1;
+  flex: 1 1 auto;
   min-height: 0;
   margin: 0;
   padding: 0;
@@ -131,7 +131,7 @@
 
 /* ── A phone: a bottom sheet, the bell above Mail ───────────────────────── */
 
-@media (width <= 620px) {
+@media (max-width: 620px) {
   .notif-screen {
     top: auto;
     left: 0;
@@ -139,6 +139,7 @@
     bottom: 0;
     width: auto;
     max-height: min(82vh, calc(100vh - var(--hud-height)));
+    max-height: min(82dvh, calc(100dvh - var(--hud-height)));
     border-radius: var(--radius-lg) var(--radius-lg) 0 0;
     border-bottom: 0;
   }

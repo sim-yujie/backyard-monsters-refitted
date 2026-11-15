@@ -339,7 +339,7 @@
 
 /* ── A phone: a full-height sheet ─────────────────────────────────────── */
 
-@media (width <= 620px) {
+@media (max-width: 620px) {
   .ach-screen {
     top: var(--hud-height);
     left: 0;
