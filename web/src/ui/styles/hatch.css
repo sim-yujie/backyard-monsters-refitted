@@ -622,7 +622,9 @@ div.hatch-now:not(.hatch-now--preview) .hatch-now__state {
 /* The HCC's row: one small card per hatchery, as tall idle as hatching
    (patch 7.6). */
 .hatch-now--compact {
-  width: 140px;
+  flex: 1 1 116px;
+  width: auto;
+  max-width: 148px;
   min-height: 60px;
 }
 
@@ -1472,6 +1474,15 @@ button.hatch-slot:disabled {
     padding-bottom: 6px;
   }
 
+  .hatch__tabs-row:not([hidden]) + .hatch__scroll {
+    padding-top: var(--space-2);
+  }
+
+  .hatch-line--tabbed {
+    gap: 6px;
+    padding: 6px var(--space-2);
+  }
+
   .hatch__split {
     row-gap: 6px;
   }
@@ -1510,6 +1521,36 @@ button.hatch-slot:disabled {
 @container hatch (width >= 1040px) {
   .hatch__grid {
     grid-template-columns: repeat(9, minmax(0, 1fr));
+  }
+}
+
+/* ── Add under the grid (an iPad upright, a phone on its side) ──────────
+   The totals take their own line under the stacks, so the stacks never push
+   them down a line; idle, the line gives its room back (the first Add moves
+   what is below it once, never a + or a choice). */
+@container hatch (width < 880px) {
+  .hatch-line__totals {
+    flex-basis: 100%;
+    padding-left: 0;
+    border-left: 0;
+  }
+
+  .hatch-line__totals--idle {
+    display: none;
+  }
+
+  /* The HCC's totals on the first line, the stacks under them in a row kept
+     one slot high: a stack chosen or added never pushes the totals down. */
+  .hatch-line--hcc > .hatch-line__slots {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, 96px);
+    grid-template-rows: auto var(--hatch-slot-height);
+    min-height: 0;
+  }
+
+  .hatch-line--hcc > .hatch-line__slots > .hatch-line__totals {
+    grid-column: 1 / -1;
+    grid-row: 1;
   }
 }
 
@@ -1559,7 +1600,8 @@ button.hatch-slot:disabled {
   }
 
   .hatch-line__slots,
-  .hatch-line__now {
+  .hatch-line__now,
+  .hatch-line--hcc > .hatch-line__slots {
     display: grid;
     grid-template-columns: repeat(5, minmax(0, 1fr));
     gap: 6px;
@@ -1655,12 +1697,6 @@ button.hatch-slot:disabled {
     flex-wrap: nowrap;
     padding: 0;
     border: 0;
-  }
-
-  /* Idle, a phone gives its room back (its first Add moves what is below,
-     once; a desktop keeps the room, as Add stands beside it). */
-  .hatch-line__totals--idle {
-    display: none;
   }
 
   .hatch-line__done-label,
