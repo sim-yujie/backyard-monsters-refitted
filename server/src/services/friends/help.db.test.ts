@@ -24,6 +24,7 @@ mock.module("../../server.js", () => ({ postgres, redis }));
 const { helpAnswer } = await import("../../controllers/friends/help.js");
 const { friendsAnswer } = await import("../../controllers/friends/friends.js");
 const { helpBlock } = await import("./helpFacts.js");
+const { LEGACY_HELPS_LEFT } = await import("./helpConfig.js");
 
 /** Six helpers, the owner, and a stranger who is nobody's friend. */
 const HELPERS = [993_001, 993_002, 993_003, 993_004, 993_005, 993_006];
@@ -152,7 +153,7 @@ describe.skipIf(!dbName)("the help engine on a real database (issue #373)", () =
     const answer = await help(H1, 1, "speedup");
     expect(answer).toMatchObject({ error: 0, secondsSaved: 500, rewardsLeft: 4, reward: { r1: 25, r2: 25, r3: 25, r4: 25 } });
     expect(answer.building).toMatchObject({ id: 1, cU: 9500, hl: [H1] });
-    expect(answer).not.toHaveProperty("helpsLeft");
+    expect(answer.helpsLeft).toBe(LEGACY_HELPS_LEFT);
 
     const owner = await yardOf(OWNER);
     expect(owner.buildingdata["1"]).toMatchObject({ cU: 9500, hl: [H1] });
@@ -233,6 +234,31 @@ describe.skipIf(!dbName)("the help engine on a real database (issue #373)", () =
     expect((await yardOf(OWNER)).buildingdata["49"].cU).toBe(95_000);
     // Only the first 5 paid: 0.25% of the 10,000 base cap, 5 times.
     expect((await yardOf(H1)).resources).toMatchObject({ r1: 5 * 25, r4: 5 * 25 });
+  });
+
+  test("a 7.5 tab never locks: after 30 helps today every answer still carries helpsLeft > 0", async () => {
+    const buildings: Record<string, unknown> = {};
+    for (let id = 1; id <= 32; id++) buildings[String(id)] = upgrading(id, 100_000);
+    await setYard(OWNER, { buildingdata: buildings });
+
+    for (let id = 1; id <= 30; id++) await help(H1, id, "speedup");
+    expect(await helpRows(H1)).toHaveLength(30);
+
+    // POST help: the 31st.
+    const answer = await help(H1, 31, "speedup");
+    expect(answer).toMatchObject({ error: 0, rewardsLeft: 0 });
+    expect(answer.helpsLeft).toBeGreaterThan(0);
+
+    // The help-mode load's block.
+    const owner = { userid: OWNER, type: "main", savetime: T0, ...(await yardOf(OWNER)) };
+    const block = await helpBlock(em() as never, H1, owner, T0);
+    expect(block).toMatchObject({ rewardsLeft: 0 });
+    expect(block.helpsLeft).toBeGreaterThan(0);
+    expect(block.buildings["32"]).toEqual({ speedup: true });
+
+    // GET /bm/friends.
+    const list = (await friendsAnswer(em() as never, as(H1), T0)) as any;
+    expect(list.helpsLeft).toBeGreaterThan(0);
   });
 
   test("only the first 5 helps of a UTC day pay (speed-ups and repairs together); the 6th lands for nothing", async () => {
@@ -334,14 +360,14 @@ describe.skipIf(!dbName)("the help engine on a real database (issue #373)", () =
     expect((await yardOf(OWNER)).buildingdata["1"].cU).toBe(9500);
   });
 
-  test("the friends list says who could be helped, and says nothing of helps left", async () => {
+  test("the friends list says who could be helped; helpsLeft only as the pre-7.6 constant", async () => {
     await setYard(OWNER, {
       buildingdata: { "1": upgrading(1, 10_000), "2": { id: 2, t: CANNON, x: 2, y: 0, l: 2, hp: 10 } },
       buildinghealthdata: { "2": 10 },
     });
     await befriend(H1, STRANGER, T0 - 3600);
     let list = (await friendsAnswer(em() as never, as(H1), T0)) as any;
-    expect(list).not.toHaveProperty("helpsLeft");
+    expect(list.helpsLeft).toBe(LEGACY_HELPS_LEFT);
     const byId = (id: number) => list.friends.find((friend: { userid: number }) => friend.userid === id);
     expect(byId(OWNER).help).toEqual({ speedup: true, repair: true });
     expect(byId(STRANGER).help).toBeNull();
@@ -360,10 +386,12 @@ describe.skipIf(!dbName)("the help engine on a real database (issue #373)", () =
     const owner = { userid: OWNER, type: "main", savetime: T0, ...(await yardOf(OWNER)) };
     expect(await helpBlock(em() as never, H1, owner, T0)).toEqual({
       rewardsLeft: 5,
+      helpsLeft: LEGACY_HELPS_LEFT,
       buildings: { "1": { speedup: true }, "2": { repair: true } },
     });
     expect(await helpBlock(em() as never, STRANGER, owner, T0)).toEqual({
       rewardsLeft: 5,
+      helpsLeft: LEGACY_HELPS_LEFT,
       buildings: { "1": { speedup: "notFriends" }, "2": { repair: "notFriends" } },
     });
 
@@ -372,6 +400,7 @@ describe.skipIf(!dbName)("the help engine on a real database (issue #373)", () =
     const stranger = { ...owner, userid: STRANGER };
     expect(await helpBlock(em() as never, H1, stranger, T0)).toEqual({
       rewardsLeft: 5,
+      helpsLeft: LEGACY_HELPS_LEFT,
       buildings: { "1": { speedup: "tooNew" }, "2": { repair: "tooNew" } },
       gate: { reason: "tooNew", from: T0 + 10 * 60 * 60, rule: "friendship" },
     });

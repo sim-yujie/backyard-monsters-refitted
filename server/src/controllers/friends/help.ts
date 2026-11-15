@@ -10,6 +10,7 @@ import { builtEvents, recordAchievements } from "../../services/achievements/rec
 import { storageCap } from "../../services/base/economy/resourceBudget.js";
 import { isAttackActive } from "../../services/base/isAttackActive.js";
 import { notifyFriend } from "../../services/friends/friendNotifications.js";
+import { LEGACY_HELPS_LEFT } from "../../services/friends/helpConfig.js";
 import { markHelped } from "../../services/friends/helpedMark.js";
 import { friendsSince, helpsToday, readSides, recordHelp } from "../../services/friends/helpFacts.js";
 import {
@@ -81,6 +82,8 @@ interface HelpDone {
   reward: ResourceAmounts;
   /** Helps today that still pay a reward, after this one. */
   rewardsLeft: number;
+  /** Kept only for pre-7.6 clients: always `LEGACY_HELPS_LEFT`, so an old tab never locks its help buttons. */
+  helpsLeft: number;
   building: BuildingData;
   helperName: string;
 }
@@ -181,6 +184,7 @@ export const helpAnswer = async (em: EntityManager, user: User, body: unknown, n
       ...(kind === "speedup" ? { secondsSaved } : { healed: true as const }),
       reward,
       rewardsLeft: rewardsLeftOf(today + 1),
+      helpsLeft: LEGACY_HELPS_LEFT,
       // Sent back for the visit's panel: masked as the visit's load was (`viewMask.ts`).
       building: maskBuilding(theirs.buildingdata![key]!, "main"),
       helperName: mySide.username,

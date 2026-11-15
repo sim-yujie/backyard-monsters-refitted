@@ -649,7 +649,7 @@ export const lootCaps = (context: AttackContext): ResourceAmounts => {
 
 /**
  * How far Krallen's loot aura can raise the largest looting property, as a
- * ratio of it: `(2 + bonus) / 2` while she has it (from her level 3, with the
+ * ratio of it: `(2 + bonus) / 2` while she has it (at any level, with the
  * Krallen Hunt's 3x earned, `lootAura`), else 1
  * (`ProximityLootBuff`, `LootingMultiplier`, issue #222).
  */

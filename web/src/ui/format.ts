@@ -62,6 +62,34 @@ export const formatShort = (value: number | undefined): string => {
   return `${tenths(1_000_000_000)}B`;
 };
 
+/** Where the top bar starts shortening an amount: under it, the full figure. */
+export const BAR_SHORT_FROM = 100_000;
+
+/**
+ * A top-bar amount: "87,450" in full, "475.9K", "10.8M", "1.2B" past
+ * {@link BAR_SHORT_FROM} (owner, 15 Nov 2026: the desktop bar's
+ * "10,874,100" was long and cluttered; "even 100.1K is granular enough").
+ *
+ * One decimal of K, M or B with the ".0" kept, as the phone's short amounts
+ * have always spelled it ("15.0M"), so the number does not change width as it
+ * ticks. Rounded DOWN at every unit, as {@link formatShort} is, so a store
+ * never reads fuller than it is: 999,999 is "999.9K", never "1000.0K" or
+ * "1.0M". The tooltip and the tap bubble keep the exact figure. It is the
+ * same at every width: "99,999" is no wider than "999.9K", so a phone's
+ * quarter-width cell holds either.
+ */
+export const formatBarAmount = (value: number | undefined): string => {
+  if (value === undefined) return "—";
+  if (value < 0) return `-${formatBarAmount(-value)}`;
+  const whole = Math.floor(value);
+  if (whole < BAR_SHORT_FROM) return formatAmount(whole);
+  // Tenths of the unit, in whole numbers, so the rounding is exact.
+  const tenths = (unit: number): string => (Math.floor(whole / (unit / 10)) / 10).toFixed(1);
+  if (whole < 1_000_000) return `${tenths(1_000)}K`;
+  if (whole < 1_000_000_000) return `${tenths(1_000_000)}M`;
+  return `${tenths(1_000_000_000)}B`;
+};
+
 /**
  * A price at its shortest, rounded UP: "1.3K" for 1,250, "14.5K" for 14,450.
  *

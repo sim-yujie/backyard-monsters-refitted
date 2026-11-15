@@ -44,10 +44,12 @@ import {
   PROJECTILE_TICKS,
   drawsProjectile,
   jumpTicks,
+  lossOf,
   lungeOffset,
   mouthPoint,
   projectileStyle,
   type NumberMods,
+  type Side,
 } from "./creepFx";
 import { FOMOR_ID } from "@/game/combat/rules/champions";
 import { DAVE_ID } from "@/game/combat/rules/specialMoves";
@@ -640,6 +642,13 @@ export interface AttackBattleLayerOptions {
    * out. It draws the battle as Flash did, whatever `juice` says.
    */
   readonly classic?: boolean;
+  /**
+   * Whose side the player watching is on (owner, beta 8): the damage numbers
+   * are red for that side's losses and white for the other side's. The
+   * attacker's when left out; `viewerSideOf` in `plugins/battle.ts` says
+   * which for each scene.
+   */
+  readonly viewer?: Side;
   /** The "Screen shake" switch; the player's setting when left out (beta.5). */
   readonly screenShake?: boolean;
   /** "Effects: full / low" for the towers' shots; the player's setting or the screen size when left out. */
@@ -1018,6 +1027,7 @@ export class AttackBattleLayer {
         creepAnchor: (id) => this.creepAnchor(id),
         flashBuilding: (id, on) => this.host.flashBuilding?.(id, on),
         zoom: () => this.host.zoom ?? 1,
+        viewer: options.viewer ?? "attacker",
         landed: (id, amount) => this.onFireballLanded(id, amount),
         rocketCell: (column) => this.textures.frame(ROCKET_SHEET, column, 0),
       },
@@ -2120,11 +2130,12 @@ export class AttackBattleLayer {
       this.blastFx.impact(event.tick, contact, champion ? 34 : 20);
       if (champion) this.hitStop(HIT_STOP_CHAMPION_MS);
     }
-    // Flash showed the same red numbers on buildings (`BFOUNDATION.as:534`).
+    // Flash numbered buildings too (`BFOUNDATION.as:534`); a building is the yard's, so its
+    // loss is white to the attacker and red to its owner (owner, beta 8).
     if (event.buildingId >= 0 && event.amount > 0) {
       const over = { x: target.x, y: target.y - BUILDING_NUMBER_LIFT };
       const key = `building:${event.buildingId}`;
-      this.fx.number(event.tick, key, -1, event.amount, over, "damage", modsOf(event));
+      this.fx.number(event.tick, key, -1, event.amount, over, "defenderLoss", modsOf(event));
     }
   }
 
@@ -2135,7 +2146,7 @@ export class AttackBattleLayer {
     if (!centre) return;
     const over = { x: centre.x, y: centre.y - BUILDING_NUMBER_LIFT };
     const key = `building:${event.buildingId}`;
-    this.fx.number(event.tick, key, -1, event.amount, over, "damage", { thorns: true });
+    this.fx.number(event.tick, key, -1, event.amount, over, "defenderLoss", { thorns: true });
   }
 
   /**
@@ -2153,7 +2164,9 @@ export class AttackBattleLayer {
       : groundWorld(wound.ix, wound.iy, this.origin);
     const at = { x: ground.x, y: (view?.top ?? ground.y - BODY_HEIGHT) - 6 };
     const key = `creep:${wound.creepId}`;
-    this.fx.number(tick, key, wound.creepId, wound.amount, at, "damage", modsOf(wound));
+    // The engine says whose the creep is; a held wound keeps it, even once the creep has gone.
+    const defends = wound.friendly ?? view?.snapshot?.friendly ?? false;
+    this.fx.number(tick, key, wound.creepId, wound.amount, at, lossOf(defends ? "defender" : "attacker"), modsOf(wound));
   }
 
   /**
@@ -2418,7 +2431,7 @@ export class AttackBattleLayer {
       const centre = this.host.centreOf(id);
       if (!centre) continue;
       const over = { x: centre.x, y: centre.y - BUILDING_NUMBER_LIFT };
-      this.fx.number(tick, `building:${id}`, -1, amount, over, "damage");
+      this.fx.number(tick, `building:${id}`, -1, amount, over, "defenderLoss");
     }
   }
 

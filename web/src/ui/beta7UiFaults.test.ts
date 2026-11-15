@@ -62,8 +62,9 @@ describe("6 Nov UI check: phone faults", () => {
       /\.hatch-add__controls \.qty-stepper__step \{\s*flex: 1 1 var\(--control-height-compact\);\s*min-width: var\(--control-height-compact\);/,
     );
     expect(phoneHatch).toMatch(/\.hatch-add__fill \{\s*flex: 1 0 auto;/);
-    expect(phoneHatch).toMatch(/\.hatch-line--hcc \.hatch-now__label-word \{\s*display: none;/);
-    expect(phoneHatch).toMatch(/\.hatch-line--hcc \.hatch-now__label-number::before \{\s*content: "#";/);
+    // Every screen shows "#1" since 15 Nov (owner: no "Hatchery" word on the cards).
+    expect(css("styles/hatch.css")).toMatch(/\.hatch-line--hcc \.hatch-now__label-word \{\s*display: none;/);
+    expect(css("styles/hatch.css")).toMatch(/\.hatch-line--hcc \.hatch-now__label-number::before \{\s*content: "#";/);
   });
 
   it("Hatchery on a phone (owner, 9 Nov): four monsters across, no name cut, the chosen one a different colour", () => {
@@ -73,11 +74,32 @@ describe("6 Nov UI check: phone faults", () => {
     // A name is never broken mid-word ("Slimeattik / us"): a long one is drawn smaller.
     expect(phoneHatch).not.toMatch(/\.hatch-monster__name \{[^}]*overflow-wrap: anywhere;/);
     expect(phoneHatch).toMatch(/\.hatch-monster__name--long \{\s*font-size: 10\.5px;/);
-    // The "Grey monsters are locked" note has the line's width, its button under it.
-    expect(phoneHatch).toMatch(/\.hatch-pick__locked-text \{\s*flex: 1 1 calc\(100% - 40px\);/);
+    // No "Grey monsters are locked" note since 15 Nov (owner): a padlock on each locked monster.
+    expect(source).not.toMatch(/\.hatch-pick__locked/);
     expect(phoneHatch).toMatch(/\.hatch-slot__upgrade \{\s*min-height: var\(--control-height-compact\);/);
     expect(source).toMatch(
       /\.hatch-monster\[aria-pressed="true"\],[^{]*\{[^}]*background: color-mix\(in srgb, var\(--colour-accent\) 36%, transparent\);/,
+    );
+  });
+
+  it("Hatchery on a phone (owner, 15 Nov): the monsters slide sideways in one row, a card cut at the edge", () => {
+    const source = css("styles/hatch.css");
+    // Upright and on its side: the phone layout's own query (phoneLayout.ts), so an iPad keeps the grid.
+    const row = block(source, "@media (max-width: 620px), (max-height: 500px) {");
+    expect(row).toMatch(/\.hatch__grid \{[^}]*grid-template-columns: none;[^}]*grid-auto-flow: column;[^}]*grid-auto-columns: var\(--hatch-card-width\);/);
+    expect(row).toMatch(/\.hatch__grid \{[^}]*overflow-x: auto;[^}]*overflow-y: hidden;[^}]*overscroll-behavior-x: contain;/);
+    // The row reaches the sheet's edges, so the next card is cut there.
+    expect(row).toMatch(/\.hatch__grid \{[^}]*margin-inline: calc\(-1 \* var\(--hatch-pad\)\);/);
+    // Never narrower than a whole "Slimeattikus" needs.
+    expect(row).toMatch(/--hatch-card-width: clamp\(76px,/);
+    // Not with the desktop's or iPad's queries.
+    expect(source).not.toMatch(/@media \(min-width: 621px\)[^{]*\{[^@]*grid-auto-flow: column/);
+  });
+
+  it("Hatchery with an HCC: idle, the totals still hold the first line, so a waiting stack fills the held one", () => {
+    const narrow = block(css("styles/hatch.css"), "@container hatch (width < 880px) {");
+    expect(narrow).toMatch(
+      /\.hatch-line--hcc > \.hatch-line__slots > \.hatch-line__totals--idle \{\s*display: block;\s*height: 0;\s*overflow: hidden;/,
     );
   });
 

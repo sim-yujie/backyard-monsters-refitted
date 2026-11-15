@@ -23,6 +23,16 @@ export const HELP_RULES = {
 } as const;
 
 /**
+ * Kept only for pre-7.6 clients: the `helpsLeft` every help answer still
+ * carries (the help-mode load's `help` block, `POST /bm/friends/help`,
+ * `GET /bm/friends`). A 7.5 tab still open reads it as the helps left today
+ * and locks its help buttons at 0; there is no daily cap now, so it gets a
+ * number it never reaches. The 7.6 client ignores it (it reads `rewardsLeft`).
+ * Drop it once no 7.5 tab can be open.
+ */
+export const LEGACY_HELPS_LEFT = 999;
+
+/**
  * Who may help, or send a gift (§7 rules 1 and 2, Q7): friends this long, both
  * at this level or above. No account-age rule (owner 2026-10-29: it was 3 days).
  */

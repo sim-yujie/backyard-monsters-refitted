@@ -917,6 +917,21 @@ export interface BattleState {
 }
 
 /**
+ * A defending champion waiting in its Champion Cage, as {@link Battle.cagedChampions}
+ * gives it (bug report #47): its type and level, and the yard point it stands
+ * on in there, which is where it comes out from. Drawing only.
+ */
+export interface CagedChampionSnapshot {
+  /** The champion type, `t` in the save (`G{t}`). */
+  readonly t: number;
+  /** Its level, `l`. */
+  readonly l: number;
+  /** Where it waits, in yard units, as {@link CreepSnapshot.ix} and `iy`. */
+  readonly ix: number;
+  readonly iy: number;
+}
+
+/**
  * One creep as the live renderer sees it (issue #32, WP5).
  *
  * A read-only copy taken by {@link Battle.creeps}; nothing the renderer does
@@ -1333,6 +1348,17 @@ export interface Battle {
    * Ooze"), by building id, ascending. Drawing only. A fresh copy per call.
    */
   weakenedTowers(): readonly number[];
+  /**
+   * The defender's champions in their cage right now (issues #260, #310), in
+   * the order {@link BattleOptions.defenderChampions} gave them: before they
+   * first come out and again once they have walked back in. One that is out
+   * on the field is one of {@link creeps} instead, and one that fell is in
+   * neither. Flash drew the caged champion pacing its cage through the attack
+   * (`CHAMPIONCAGE.as:589-660`); the yard draws it standing on this point
+   * (bug report #47). Drawing only: not in the state or the checkpoint. A
+   * fresh copy per call.
+   */
+  cagedChampions(): readonly CagedChampionSnapshot[];
 }
 
 /* ── Internals ────────────────────────────────────────────────────────────── */
@@ -1911,6 +1937,23 @@ interface Bunker {
  * it is fully up (`_animTick >= 15`, `BUILDING22.as:204`, `:344`).
  */
 export const BUNKER_DOOR_FRAMES = 15;
+
+/**
+ * Whether a standing Monster Bunker's door is stuck where it is: below half
+ * health, on every yard. Flash moves the door only in `TickFast`
+ * (`BUILDING22.as:433-455`), an ENTER_FRAME listener the building drops each
+ * time it loads a new look (`BFOUNDATION.as:1096-1098`) and takes back only
+ * for a look with an `anim` strip (`:1129-1149`). The bunker's damaged look,
+ * which it wears below half health (`isCriticallyDamaged`, `:495-497`, drawn
+ * in `Update`, `:2876-2884`), has none in any props table (`YARD_PROPS.as:2460-2470`,
+ * `OUTPOST_YARD_PROPS.as:1869-1878`, `INFERNOYARDPROPS.as:1929-1938`). So a
+ * bunker that starts the battle below half never opens and sends no one out,
+ * and one that falls below half keeps its door as it was: shut stays shut,
+ * fully up stays up. At exactly half it is not damaged and works as before. A
+ * fallen bunker sends no one out anyway, and its door shuts as before.
+ */
+const doorStuck = (building: EngineBuilding): boolean =>
+  building.hp > 0 && building.hp < building.maxHp * 0.5;
 
 /** The drop radius a payload earns: `max(200, bucket / 4) / 2` (`ATTACK.as:667-671`). */
 export const dropRadius = (bucketTotal: number): number =>
@@ -3892,6 +3935,8 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
    * otherwise, a frame of {@link BUNKER_DOOR_FRAMES} at a time. The bunker
    * sends monsters out only through a door that is fully up. Only a change of
    * way is told ({@link BattleVisualEvent} `bunkerDoor`).
+   *
+   * A bunker standing below half health has a stuck door ({@link doorStuck}).
    */
   const tickBunkerDoors = (): void => {
     if (tick % 2 !== 0) return;
@@ -3899,6 +3944,7 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
     for (const bunker of bunkers) {
       const building = bunker.building;
       if (building.type === HOUSING_BUNKER_TYPE) continue;
+      if (doorStuck(building)) continue;
       let open = false;
       if (building.hp > 0) {
         if (!out) {
@@ -8046,6 +8092,17 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
       endHp: Math.max(0, championsHp[lesson.monsterId] ?? 0),
     }));
 
+  /** {@link Battle.cagedChampions}. */
+  const cagedChampions = (): CagedChampionSnapshot[] => {
+    const out: CagedChampionSnapshot[] = [];
+    for (const slot of cageSlots) {
+      const pen = slot.pen;
+      if (!pen || slot.report.hp <= 0) continue;
+      out.push({ t: slot.caged.t, l: slot.caged.l, ix: pen.ix, iy: pen.iy });
+    }
+    return out;
+  };
+
   /** {@link Battle.bunkerPools}. */
   const bunkerPools = (): Record<number, Record<string, number>> => {
     const out: Record<number, Record<string, number>> = {};
@@ -8145,6 +8202,7 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
     siege: siegeSnapshot,
     bunkerPools,
     weakenedTowers,
+    cagedChampions,
   };
 };
 

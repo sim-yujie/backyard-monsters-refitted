@@ -695,6 +695,8 @@ export class BuildingPanel {
 
     if (yard) {
       const model = panelModel(building, yard.store);
+      // The building on the yard shows its next look while Upgrade is offered (beta 8), even short of resources.
+      yard.scene.previewUpgrade?.(building, model.upgrade?.to ?? null);
       const repair = repairOffer(building.id, yard.store.save, yard.store.credits, yard.store.now());
       if (repair) blocks.push(this.repairBlock(building, repair, used));
       if (model.job) blocks.push(this.jobBlock(building, model.job, used));
@@ -1588,6 +1590,7 @@ export class BuildingPanel {
   }
 
   private dispose(): void {
+    this.yard?.scene.previewUpgrade?.(null, null);
     this.closeBaiter();
     this.closeJuice();
     this.toggleMore(false);

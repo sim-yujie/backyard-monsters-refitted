@@ -105,13 +105,13 @@ describe("the Krallen Hunt's view", () => {
     expect(view.text).toStartWith("Take 150 million loot");
   });
 
-  test("the 3x mark is 3x the goal she began the hunt with: 180/300/450/675/900 million", () => {
+  test("the 3x mark is 3x the goal she began the hunt with: 180/270/450/750/900 million", () => {
     const auraOf = (level: number, claimedTiers: number[] = []) =>
       eventView(scheduled, { ...NO_PROGRESS, claimedTiers }, huntWindow.startsAt, player(6, true, level)).ladder!.tiers[1]!;
     expect([0, 1, 2, 3, 4, 5].map((level) => auraOf(level).need)).toEqual([
       180_000_000, 270_000_000, 450_000_000, 750_000_000, 900_000_000, 900_000_000,
     ]);
-    // The first mark raised her from 2 to 3: the 3x mark stays 450 million, not 675.
+    // The first mark raised her from 2 to 3: the 3x mark stays 450 million, not 750.
     expect(auraOf(3, [0]).need).toBe(450_000_000);
     // Raised from 4 to the top: still 900 million.
     expect(auraOf(5, [0]).need).toBe(900_000_000);

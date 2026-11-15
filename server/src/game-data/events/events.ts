@@ -368,14 +368,16 @@ export const krallenHuntMinimum = (startLevel: number): number => {
  * ═══════════════════════════════════════════════════════════════════════
  * KRALLEN'S LOOT AURA: set by the owner (2026-11-13).
  * A second mark on the hunt at {@link KRALLEN_AURA_GOAL_TIMES} times the
- * player's goal: 180, 300, 450, 675 and 900 million by the Krallen level
- * the player had when the hunt began (a level 5 Krallen keeps the last).
- * Claiming it gives Krallen her loot aura until the END of the NEXT month's
- * hunt (as Flash's second loot mark held for the round after,
- * `KOTHHandler.as:76-84`, `:146-155`); it must be won again to keep it.
- * Only a Krallen of level 3, 4 or 5 carries the aura (strength and radius in
- * `game-rules/combat/champions.ts`, `LOOT_AURA_BONUS`); below level 3, or
- * without the mark, she has none.
+ * player's goal: 180, 270, 450, 750 and 900 million by the Krallen level
+ * the player had when the hunt began (none, 1, 2, 3, 4; a level 5 Krallen
+ * keeps the last). Claiming it gives Krallen her loot aura until the END of
+ * the NEXT month's hunt (as Flash's second loot mark held for the round
+ * after, `KOTHHandler.as:76-84`, `:146-155`); it must be won again to keep
+ * it. A Krallen of any level, 1 to 5, carries the aura, stronger at each
+ * level (strength and radius in `game-rules/combat/champions.ts`,
+ * `LOOT_AURA_BONUS`; levels 1-2 added 15 Nov 2026); without the mark she
+ * has none. A player without Krallen claims the goal's Krallen first, then
+ * the aura (`controllers/yard/eventsActions.ts`, `needsKrallen`).
  * ═══════════════════════════════════════════════════════════════════════
  */
 export const KRALLEN_AURA_GOAL_TIMES = 3;

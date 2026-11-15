@@ -63,7 +63,6 @@ import {
 } from "@/api/allianceProgress";
 import {
   constellationTab,
-  goalsCard,
   helpersCard,
   newsCard,
   statTiles,
@@ -71,6 +70,7 @@ import {
   todayCard,
   type ProgressHost,
 } from "./allianceProgressUi";
+import { confirmRemoveGoal, goalsLine, goalsTab, goalsTabIcon, type GoalsHost } from "./goalsTab";
 import { onlineDot } from "@/ui/onlineDot";
 import { Popup } from "@/ui/Popup";
 import { StarEditor } from "@/ui/alliance/StarEditor";
@@ -165,7 +165,14 @@ export const ALLIANCE_TEXT = {
   back: "Back",
   overview: "Overview",
   members: "Members",
-  tabs: { overview: "Overview", constellation: "Constellation", members: "Members", trade: "Trade", territory: "Territory" } as Readonly<
+  tabs: {
+    overview: "Overview",
+    goals: "Goals",
+    constellation: "Constellation",
+    members: "Members",
+    trade: "Trade",
+    territory: "Territory",
+  } as Readonly<
     Record<AllianceTab, string>
   >,
   membersCount: (count: number, limit: number): string => `${formatAmount(count)} / ${formatAmount(limit)} members`,
@@ -354,11 +361,12 @@ const typeBadge = (type: AllianceType): HTMLElement =>
 
 export class AllianceWindow {
   /** The member tabs, in order (design v5 §7b). */
-  static readonly TABS: readonly AllianceTab[] = ["overview", "constellation", "members", "trade", "territory"];
+  static readonly TABS: readonly AllianceTab[] = ["overview", "goals", "constellation", "members", "trade", "territory"];
 
   /** Each tab's painted icon; on a phone the tabs show only it. */
   static readonly TAB_ICONS: Readonly<Record<AllianceTab, GameIconName>> = {
     overview: "alliance",
+    goals: "goals",
     constellation: "empire",
     members: "friends",
     trade: "income",
@@ -431,6 +439,19 @@ export class AllianceWindow {
     run: (action) => void this.runProgress(action),
     redraw: () => this.render(),
     now: () => this.now(),
+  };
+  /** The Goals tab's view of the window: its calls, the Add list and the remove pop-up. */
+  private readonly goalsHost: GoalsHost = {
+    run: (action) => void this.runProgress(action),
+    now: () => this.now(),
+    adding: () => this.addingGoal,
+    setAdding: (open) => {
+      this.addingGoal = open;
+      this.say(null);
+      this.render();
+      this.popup.body.scrollTop = 0;
+    },
+    confirmRemove: (goal) => confirmRemoveGoal(this.container ?? document.body, goal),
   };
 
   private static newDraft(): { name: string; image: number; description: string; type: AllianceType } & AdDraft {
@@ -1449,7 +1470,7 @@ export class AllianceWindow {
       const off = tab === "trade" && !this.tradeOn();
       const node = make("button", "tabs__tab alliance__tab");
       node.append(
-        gameIcon(AllianceWindow.TAB_ICONS[tab], { size: 24, decorative: true }),
+        gameIcon(tab === "goals" ? goalsTabIcon() : AllianceWindow.TAB_ICONS[tab], { size: 24, decorative: true }),
         make("span", "alliance__tab-words", words),
       );
       node.title = words;
@@ -1522,6 +1543,8 @@ export class AllianceWindow {
           },
           alliance.can_edit_stars ? () => this.openStarEditor() : undefined,
         );
+      case "goals":
+        return goalsTab(alliance, this.goalsHost, this.progressApi);
       case "trade":
         return this.trade.render();
       case "territory":
@@ -1589,16 +1612,9 @@ export class AllianceWindow {
     if (this.editing === "rename") nodes.push(this.renameForm(alliance));
     if (this.editing === "type") nodes.push(this.typeSwitch(alliance, now));
 
-    const adding = {
-      open: this.addingGoal,
-      toggle: () => {
-        this.addingGoal = !this.addingGoal;
-        this.render();
-      },
-    };
     for (const part of [
       todayCard(alliance),
-      goalsCard(alliance, this.host, this.progressApi, adding),
+      goalsLine(alliance, now, () => this.showTab("goals")),
       helpersCard(alliance),
       newsCard(this.news, this.showAllNews, this.host, () => {
         this.showAllNews = !this.showAllNews;

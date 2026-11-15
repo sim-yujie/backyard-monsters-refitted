@@ -14,7 +14,9 @@
  *   as before the big-effects trial (`juiceLevel` is `off`: no wind-up, lunge,
  *   hit-stop, slow motion, demolish blast or big flash), the towers' Flash
  *   shots (no painted shots, tower shake or turret aiming), no punchy blasts,
- *   Eye-ra's yellow rings rather than the fireball, and no damage numbers.
+ *   and Eye-ra's yellow rings rather than the fireball. The damage numbers
+ *   still show, in plain bold Verdana with Flash's motion, coloured by side
+ *   as in Modern (`numberColour` in `attack/creepFx.ts`, owner, beta 8).
  * - **Music**: Flash's yard tune rather than the new one (`game/sound/tunes.ts`),
  *   unless the player picks the music on its own ({@link flashMusic}).
  * - **Windows**: every panel dressed as the Flash pop-ups, refreshed (cream

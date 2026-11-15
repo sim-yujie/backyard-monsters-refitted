@@ -2449,6 +2449,83 @@ describe("the caged champion (issues #195, #260)", () => {
     expect(champion(battle)).toMatchObject({ id: first.id, hp });
   });
 
+  it("tells the yard where it waits in its cage, before it comes out and after it goes back in (bug report #47)", () => {
+    const battle = createBattle(yard(), { seed: 3, defenderChampions: [gorgo] });
+    const before = battle.cagedChampions();
+    expect(before).toHaveLength(1);
+    expect(before[0]).toMatchObject({ t: 1, l: 2 });
+    // Inside the cage's 160 x 160 footprint at the yard's origin.
+    for (const value of [before[0]!.ix, before[0]!.iy]) {
+      expect(value).toBeGreaterThan(0);
+      expect(value).toBeLessThan(160);
+    }
+    battle.apply({ kind: "fling", t: 0, x: 600, y: 600, r: 0, monsters: { C1: 1 } });
+    untilOut(battle, 400);
+    // It comes out from the point the yard drew it on (its first step already
+    // taken), and leaves the cage empty.
+    const out = champion(battle)!;
+    expect(Math.hypot(out.ix - before[0]!.ix, out.iy - before[0]!.iy)).toBeLessThan(2);
+    expect(battle.cagedChampions()).toEqual([]);
+    for (let step = 0; step < 3000 && champion(battle); step += 1) battle.step();
+    expect(champion(battle)).toBeUndefined();
+    // Back in, where it stopped: in its cage again, a fresh copy each time.
+    const after = battle.cagedChampions();
+    expect(after).toHaveLength(1);
+    expect(after).not.toBe(battle.cagedChampions());
+  });
+
+  it("is fought by the Pokeys it strikes or reaches, while the rest stay on the buildings (bug report #47)", () => {
+    // Flash's Pokey (target group 1) looks for buildings only; it turns on a
+    // champion that strikes it (`ChampionBase.as:892-903`, `aggro` `:920-930`).
+    // Revamped adds one in its reach (#195). One Pokey lures the champion out,
+    // ten more work a harvester across the yard.
+    const battle = createBattle(
+      yardOf({
+        "1": { id: 1, t: 114, l: 1, X: 0, Y: 0 },
+        "2": { id: 2, t: 1, l: 1, X: 700, Y: 700 },
+        "3": { id: 3, t: 1, l: 1, X: 700, Y: -500 },
+      }),
+      { seed: 3, defenderChampions: [{ t: 1, l: 6, hp: 227500, pl: 1, fb: 2 }] },
+    );
+    battle.apply({ kind: "fling", t: 0, x: 350, y: 350, r: 0, monsters: { C1: 1 } });
+    battle.apply({ kind: "fling", t: 0, x: 750, y: -400, r: 30, monsters: { C1: 10 } });
+    let onChampion = 0;
+    let onBuildings = 0;
+    for (let step = 0; step < 4000 && !battle.over(); step += 1) {
+      battle.step();
+      const out = champion(battle);
+      if (!out || out.targetCreep < 0) continue;
+      const attackers = battle.creeps().filter((creep) => !creep.friendly);
+      onChampion = Math.max(onChampion, attackers.filter((creep) => creep.targetCreep === out.id).length);
+      onBuildings = Math.max(onBuildings, attackers.filter((creep) => creep.targetCreep < 0).length);
+    }
+    expect(onChampion).toBeGreaterThan(0);
+    expect(onBuildings).toBeGreaterThan(0);
+    expect(battle.state().defenderChampions[0]!.hp).toBeLessThan(227500);
+  });
+
+  it("is no longer in its cage once it has fallen", () => {
+    const battle = createBattle(yard(), { seed: 3, defenderChampions: [gorgo] });
+    battle.apply({ kind: "fling", t: 0, x: 140, y: 140, r: 50, monsters: { C1: 60 } });
+    run(battle, 4000);
+    expect(battle.state().defenderChampions[0]?.hp).toBe(0);
+    expect(battle.cagedChampions()).toEqual([]);
+  });
+
+  it("leaves the checkpoint as it was: the cage is drawing only", () => {
+    const one = createBattle(yard(), { seed: 3, defenderChampions: [gorgo] });
+    const two = createBattle(yard(), { seed: 3, defenderChampions: [gorgo] });
+    for (const battle of [one, two]) {
+      battle.apply({ kind: "fling", t: 0, x: 600, y: 600, r: 0, monsters: { C1: 1 } });
+    }
+    for (let step = 0; step < 1200; step += 1) {
+      one.step();
+      one.cagedChampions();
+      two.step();
+    }
+    expect(one.checkpoint()).toEqual(two.checkpoint());
+  });
+
   it("is never shot by a tower", () => {
     const battle = createBattle(yard(), { seed: 3, defenderChampions: [gorgo] });
     battle.apply({ kind: "fling", t: 0, x: 140, y: 140, r: 50, monsters: { C1: 5 } });

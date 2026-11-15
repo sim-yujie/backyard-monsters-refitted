@@ -171,7 +171,7 @@ export const addGoalProgress = async (
       `UPDATE bym.alliance_goal g
           SET progress = GREATEST(0, LEAST(g.target, g.progress + ?)),
               done_at = CASE WHEN g.progress + ? >= g.target THEN now() ELSE NULL END
-        WHERE g.alliance_id = ? AND g.week = ?::date AND g.kind = ? AND g.done_at IS NULL
+        WHERE g.alliance_id = ? AND g.week = ?::date AND g.kind = ? AND g.done_at IS NULL AND g.removed_at IS NULL
         RETURNING g.alliance_id, g.kind, g.tier, g.points, g.target,
                   LEAST(g.target, g.progress) AS added, g.done_at IS NOT NULL AS done`,
       [amount, amount, allianceId, week, kind]
@@ -362,15 +362,19 @@ export const setGoal = async (em: EntityManager, userid: number, kind: string, t
     const rules = goalMenuFor(alliance.type).find((g) => g.kind === kind);
     if (!rules || !GOAL_TIERS.includes(tier)) throw progressRefusedErr("noSuchGoal", "That goal is not on your menu.");
     const week = weekOf(now);
-    // A stored goal of a kind off the menu (an old "hatch") takes no slot.
+    // A stored goal of a kind off the menu (an old "hatch") takes no slot; a
+    // removed one frees its slot, but its kind stays used for the week.
     const menuKinds = GOAL_MENU.map((g) => g.kind);
-    const [count] = await sql(tx).execute<{ n: number; same: number }[]>(
-      `SELECT count(*)::int AS n, count(*) FILTER (WHERE kind = ?)::int AS same
+    const [count] = await sql(tx).execute<{ n: number; same: number; removed: number }[]>(
+      `SELECT count(*) FILTER (WHERE removed_at IS NULL)::int AS n,
+              count(*) FILTER (WHERE kind = ? AND removed_at IS NULL)::int AS same,
+              count(*) FILTER (WHERE kind = ? AND removed_at IS NOT NULL)::int AS removed
          FROM bym.alliance_goal
         WHERE alliance_id = ? AND week = ?::date AND kind IN (${menuKinds.map(() => "?").join(", ")})`,
-      [kind, alliance.id, week, ...menuKinds]
+      [kind, kind, alliance.id, week, ...menuKinds]
     );
     if (Number(count?.same) > 0) throw progressRefusedErr("goalTaken", "That goal is already set this week.");
+    if (Number(count?.removed) > 0) throw progressRefusedErr("goalUsed", "That goal was used this week. Try again next week.");
     if (Number(count?.n) >= GOALS_PER_WEEK) {
       throw progressRefusedErr("goalsFull", `Up to ${GOALS_PER_WEEK} goals a week.`);
     }
@@ -381,23 +385,30 @@ export const setGoal = async (em: EntityManager, userid: number, kind: string, t
     void say(alliance.id, userid, AllianceMessageType.GOAL_SET, { kind, tier });
   });
 
-/** Removes a goal of this week, only while nothing counts towards it (design v5 §8). */
+/**
+ * Removes an unfinished goal of this week (Leader and Officers; owner, 15 Nov
+ * 2026). Its progress is lost (Hold's comes from the territory tally, so
+ * nothing of it is). The row stays, marked removed: it frees its weekly slot,
+ * but its kind cannot be set again this week (`setGoal`). A finished goal
+ * stays.
+ */
 export const removeGoal = async (em: EntityManager, userid: number, goalId: number, now: number) =>
   em.transactional(async (tx) => {
     const alliance = await lockLeadOrOfficer(tx, userid);
     const rows = await sql(tx).execute<{ id: number }[]>(
-      `DELETE FROM bym.alliance_goal WHERE id = ? AND alliance_id = ? AND week = ?::date AND progress = 0 AND kind <> 'hold'
-       RETURNING id`,
+      `UPDATE bym.alliance_goal SET removed_at = now()
+        WHERE id = ? AND alliance_id = ? AND week = ?::date AND done_at IS NULL AND removed_at IS NULL
+        RETURNING id`,
       [goalId, alliance.id, weekOf(now)]
     );
     if (rows.length === 0) {
-      // "Hold" reads live outposts, so it can go too while the week's tally has not run.
-      const hold = await sql(tx).execute<{ id: number }[]>(
-        `DELETE FROM bym.alliance_goal WHERE id = ? AND alliance_id = ? AND week = ?::date AND kind = 'hold' AND done_at IS NULL
-         RETURNING id`,
+      const [goal] = await sql(tx).execute<{ done: boolean }[]>(
+        `SELECT done_at IS NOT NULL AS done FROM bym.alliance_goal
+          WHERE id = ? AND alliance_id = ? AND week = ?::date AND removed_at IS NULL`,
         [goalId, alliance.id, weekOf(now)]
       );
-      if (hold.length === 0) throw progressRefusedErr("goalStarted", "A goal can only be removed before anyone adds to it.");
+      if (goal?.done) throw progressRefusedErr("goalDone", "A finished goal stays.");
+      throw progressRefusedErr("noSuchGoal", "That goal is no longer set.", Status.NOT_FOUND);
     }
   });
 
@@ -519,7 +530,7 @@ export const runTerritoryTally = async (em: EntityManager, now: number): Promise
           `UPDATE bym.alliance_goal g
               SET progress = LEAST(g.target, t.outposts), done_at = CASE WHEN t.outposts >= g.target THEN now() END
              FROM bym.alliance_territory t
-            WHERE g.kind = 'hold' AND g.done_at IS NULL AND g.week = ?::date
+            WHERE g.kind = 'hold' AND g.done_at IS NULL AND g.removed_at IS NULL AND g.week = ?::date
               AND t.alliance_id = g.alliance_id AND t.day = ?::date
             RETURNING g.alliance_id, g.kind, g.tier, g.points, g.done_at`,
           [lastWeek, day]
@@ -615,14 +626,26 @@ export const progressView = async (em: EntityManager, allianceId: number, type: 
     [allianceId, day, allianceId, allianceId, day]
   );
   const goals = await sql(em).execute<
-    { id: number; kind: string; tier: string; target: number; points: number; progress: number; done_at: Date | null }[]
+    {
+      id: number;
+      kind: string;
+      tier: string;
+      target: number;
+      points: number;
+      progress: number;
+      done_at: Date | null;
+      removed_at: Date | null;
+    }[]
   >(
-    `SELECT id, kind, tier, target, points, progress, done_at FROM bym.alliance_goal
+    `SELECT id, kind, tier, target, points, progress, done_at, removed_at FROM bym.alliance_goal
       WHERE alliance_id = ? AND week = ?::date ORDER BY id`,
     [allianceId, week]
   ).then((rows) => rows.filter((g) => isGoalOnMenu(g.kind)));
+  // Kinds set this week, live or removed: none can be set again this week.
+  const usedKinds = new Set(goals.map((g) => g.kind));
+  const live = goals.filter((g) => !g.removed_at);
   let held: number | null = null;
-  if (goals.some((g) => g.kind === "hold")) {
+  if (live.some((g) => g.kind === "hold")) {
     const [row] = await sql(em).execute<{ n: number }[]>(
       `SELECT count(*)::int AS n FROM bym.save s JOIN bym."user" u ON u.userid = s.saveuserid
         WHERE u.alliance_id = ? AND s.type = 'outpost'`,
@@ -653,7 +676,7 @@ export const progressView = async (em: EntityManager, allianceId: number, type: 
       helped_ids: helpedToday.map((r) => Number(r.userid)),
     },
     week_ends_at: weekEndsAt(now),
-    goals: goals.map((g) => ({
+    goals: live.map((g) => ({
       id: Number(g.id),
       kind: g.kind,
       name: names[g.kind] ?? g.kind,
@@ -662,13 +685,15 @@ export const progressView = async (em: EntityManager, allianceId: number, type: 
       points: Number(g.points),
       progress: g.kind === "hold" && !g.done_at ? Math.min(Number(g.target), held ?? 0) : Number(g.progress),
       done: Boolean(g.done_at),
-      // A goal goes only before anyone adds to it ("hold" reads live, so until settled).
-      removable: g.kind === "hold" ? !g.done_at : Number(g.progress) === 0,
+      // The Leader and Officers may remove any unfinished goal (owner, 15 Nov 2026).
+      removable: !g.done_at,
     })),
     goal_menu: goalMenuFor(type).map((g) => ({
       kind: g.kind,
       name: g.name,
       only: g.only ?? null,
+      // Set this week (live or removed): cannot be set again until next week.
+      used: usedKinds.has(g.kind),
       tiers: GOAL_TIERS.map((tier) => ({
         tier,
         target: goalTarget(type, g, tier),

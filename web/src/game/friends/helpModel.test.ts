@@ -154,6 +154,12 @@ describe("the block after a help (#374)", () => {
     expect(buildingHelp(spent, 8)).toEqual({ repair: { allowed: true }, rewardUsedUp: true });
   });
 
+  it("reads rewardsLeft, never the helpsLeft the server keeps sending for pre-7.6 tabs", () => {
+    const fromServer = { ...block, rewardsLeft: 0, helpsLeft: 999 } as HelpBlock;
+    expect(buildingHelp(fromServer, 8)).toEqual({ repair: { allowed: true }, rewardUsedUp: true });
+    expect(afterHelp(fromServer, 7, "speedup", 0)).not.toHaveProperty("helpsLeft");
+  });
+
   it("a refusal stands on that kind of that building", () => {
     const next = afterRefusal(block, 7, "speedup", "helpersFull");
     expect(next.buildings["7"]).toEqual({ speedup: "helpersFull" });

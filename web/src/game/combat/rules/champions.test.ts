@@ -497,30 +497,32 @@ describe("Krallen (issue #222)", () => {
     return { loot: battle.state().loot.r1, boosted };
   };
 
-  it("adds 0.5, 0.9 and 1.3 to a looting property at her levels 3, 4 and 5, nothing below", () => {
-    expect([0, 1, 2, 3, 4, 5, 6].map(lootAuraBonus)).toEqual([0, 0, 0, 0.5, 0.9, 1.3, 1.3]);
+  it("adds 0.2, 0.35, 0.5, 0.9 and 1.3 to a looting property at her levels 1 to 5 (owner, 15 Nov 2026)", () => {
+    expect([0, 1, 2, 3, 4, 5, 6].map(lootAuraBonus)).toEqual([0, 0.2, 0.35, 0.5, 0.9, 1.3, 1.3]);
     // Level 5 is Flash's own `1 + _buff` at her top `buffs` rung.
     expect(lootAuraBonus(5)).toBeCloseTo(1 + championStat("G5", "buffs", 5), 12);
     expect([1, 2, 3, 4, 5].map(krallenAuraRadius)).toEqual([250, 275, 300, 325, 350]);
   });
 
-  it("raises the looting of the creeps around her from her level 3 with the 3x earned, more at each level", () => {
-    const third = lootWith(3);
-    const fifth = lootWith(5);
-    expect(third.boosted).toBe(true);
-    expect(fifth.boosted).toBe(true);
-    expect(fifth.loot).toBeGreaterThan(third.loot);
+  it("raises the looting of the creeps around her at every level with the 3x earned, more at each level", () => {
+    const looted = [1, 2, 3, 4, 5].map((level) => lootWith(level));
+    for (const one of looted) expect(one.boosted).toBe(true);
+    for (let level = 1; level < looted.length; level += 1) {
+      expect(looted[level]!.loot).toBeGreaterThanOrEqual(looted[level - 1]!.loot);
+    }
+    expect(looted[4]!.loot).toBeGreaterThan(looted[0]!.loot);
   });
 
-  it("has no aura at her levels 1 and 2, powered up or not, 3x earned or not", () => {
-    expect(lootWith(2).boosted).toBe(false);
-    expect(lootWith(2, 2).boosted).toBe(false);
-    expect(lootWith(1, 2).boosted).toBe(false);
-    expect(lootWith(3).loot).toBeGreaterThan(lootWith(2).loot);
+  it("carries it at her levels 1 and 2 too, powered up or not (levels 1-2 added 15 Nov 2026)", () => {
+    expect(lootWith(1).boosted).toBe(true);
+    expect(lootWith(1, 2).boosted).toBe(true);
+    expect(lootWith(2, 2).boosted).toBe(true);
+    expect(hasLootAura("G5", 1, false, true)).toBe(true);
+    expect(lootWith(1).loot).toBeGreaterThan(lootWith(1, 0, false).loot);
   });
 
   it("has no aura at any level without the Krallen Hunt's 3x (owner, 13 Nov 2026)", () => {
-    for (const level of [3, 4, 5]) {
+    for (const level of [1, 2, 3, 4, 5]) {
       expect(lootWith(level, 0, false).boosted).toBe(false);
       expect(lootWith(level, 2, false).boosted).toBe(false);
       expect(lootWith(level, 0, true).loot).toBeGreaterThan(lootWith(level, 0, false).loot);

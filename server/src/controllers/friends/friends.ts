@@ -16,6 +16,7 @@ import {
 import { FRIEND_LIMITS } from "../../services/friends/friendRules.js";
 import { setFriendPinned } from "../../services/friends/friendPins.js";
 import { countWaitingGifts, giftedToday } from "../../services/friends/gifts.js";
+import { LEGACY_HELPS_LEFT } from "../../services/friends/helpConfig.js";
 import { friendsHelp } from "../../services/friends/helpFacts.js";
 import {
   allianceSuggestions,
@@ -69,6 +70,8 @@ export const friendsAnswer = async (em: EntityManager, user: User, now: number):
     maxPinned: FRIEND_LIMITS.maxPinned,
     requestsIn,
     giftsWaiting,
+    // Kept only for pre-7.6 clients, which lock helping at 0 (`LEGACY_HELPS_LEFT`).
+    helpsLeft: LEGACY_HELPS_LEFT,
   };
 };
 

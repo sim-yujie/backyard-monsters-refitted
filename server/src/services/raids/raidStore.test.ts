@@ -92,7 +92,7 @@ describe("lives", () => {
 
   test("a fight not finished in its length plus 2 minutes is gone (cancel rule 1)", async () => {
     await openRaid(USER, warning(), T0);
-    expect(await updateOpenRaid(USER, fighting(T0 + 10), T0 + 10)).toBe(true);
+    expect(await updateOpenRaid(USER, fighting(T0 + 10), T0 + 10, "warning")).toBe(true);
     expect(await redis.ttl(raidKey(USER))).toBe(FIGHT + FIGHT_GRACE_SECONDS);
 
     at(T0 + 10 + FIGHT + FIGHT_GRACE_SECONDS);
@@ -113,16 +113,51 @@ describe("one open raid", () => {
   });
 
   test("an update never brings back a raid that has gone", async () => {
-    expect(await updateOpenRaid(USER, warning({ warned: 1 }), T0)).toBe(false);
+    expect(await updateOpenRaid(USER, warning({ warned: 1 }), T0, "warning")).toBe(false);
     expect(await readOpenRaid(USER)).toBeNull();
   });
 
   test("Engage now and Prepare defences rewrite it, its life following attackAt", async () => {
     await openRaid(USER, warning(), T0);
-    expect(await updateOpenRaid(USER, warning({ attackAt: T0 + 20 }), T0 + 20)).toBe(true);
+    expect(await updateOpenRaid(USER, warning({ attackAt: T0 + 20 }), T0 + 20, "warning")).toBe(true);
     expect(await redis.ttl(raidKey(USER))).toBe(WARNING_GRACE_SECONDS);
-    expect(await updateOpenRaid(USER, warning({ attackAt: T0 + 20, warned: 1 }), T0 + 20)).toBe(true);
+    expect(await updateOpenRaid(USER, warning({ attackAt: T0 + 20, warned: 1 }), T0 + 20, "warning")).toBe(true);
     expect(await readOpenRaid(USER)).toMatchObject({ attackAt: T0 + 20, warned: 1 });
+  });
+
+  test("an update writes only over the same raid, still in the phase the caller read (sol's fifth review)", async () => {
+    await openRaid(USER, warning(), T0);
+    const stored = () => strings.get(raidKey(USER));
+
+    // Another raid's id, or a phase the raid has left, changes nothing.
+    expect(await updateOpenRaid(USER, warning({ id: "r_two", warned: 1 }), T0, "warning")).toBe(false);
+    expect(await updateOpenRaid(USER, fighting(T0), T0, "fighting")).toBe(false);
+    expect(stored()).toBe(JSON.stringify(warning()));
+
+    // The fight started: a late "Prepare defences" or a second start, read from the warning, is refused.
+    expect(await updateOpenRaid(USER, fighting(T0 + 10), T0 + 10, "warning")).toBe(true);
+    expect(await updateOpenRaid(USER, warning({ warned: 1 }), T0 + 11, "warning")).toBe(false);
+    expect(await updateOpenRaid(USER, fighting(T0 + 12), T0 + 12, "warning")).toBe(false);
+    expect(await readOpenRaid(USER)).toEqual(fighting(T0 + 10));
+    expect(await redis.ttl(raidKey(USER))).toBe(FIGHT + FIGHT_GRACE_SECONDS);
+  });
+
+  test("a stale update for raid A never writes over raid B opened since", async () => {
+    await openRaid(USER, warning(), T0);
+    expect(await dropOpenRaid(USER, "r_one")).toBe(true);
+    const b = { ...fighting(T0 + 20), id: "r_two", tribe: "Trojan" };
+    expect(await openFightingRaid(USER, b, T0 + 20)).toBe(true);
+
+    expect(await updateOpenRaid(USER, warning({ warned: 1 }), T0 + 21, "warning")).toBe(false);
+    expect(await updateOpenRaid(USER, fighting(T0 + 21), T0 + 21, "warning")).toBe(false);
+    expect(await updateOpenRaid(USER, fighting(T0 + 21), T0 + 21, "fighting")).toBe(false);
+    expect(strings.get(raidKey(USER))).toBe(JSON.stringify(b));
+  });
+
+  test("an update over a broken value writes nothing", async () => {
+    strings.set(raidKey(USER), "{not json");
+    expect(await updateOpenRaid(USER, warning({ warned: 1 }), T0, "warning")).toBe(false);
+    expect(strings.get(raidKey(USER))).toBe("{not json");
   });
 
   test("ids are fresh and say what they are", () => {
@@ -144,7 +179,7 @@ describe("finish", () => {
   beforeEach(async () => {
     await openRaid(USER, warning(), T0);
     at(start);
-    await updateOpenRaid(USER, fighting(start), start);
+    await updateOpenRaid(USER, fighting(start), start, "warning");
   });
 
   test("not sooner than the fight at 2x less 5 seconds; refused finishes leave it open", async () => {
@@ -206,7 +241,7 @@ describe("finish", () => {
 describe("a yard load (cancel rule 3)", () => {
   test("cancels a fight", async () => {
     await openRaid(USER, warning(), T0);
-    await updateOpenRaid(USER, fighting(T0 + 300), T0 + 300);
+    await updateOpenRaid(USER, fighting(T0 + 300), T0 + 300, "warning");
     expect(await cancelRaidOnYardLoad(USER, false)).toBe(true);
     expect(await readOpenRaid(USER)).toBeNull();
   });
