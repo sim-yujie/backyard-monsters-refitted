@@ -11,7 +11,7 @@
     "preview": "vite preview",
     "typecheck": "tsc --noEmit && tsc --noEmit -p e2e",
     "test": "vitest run",
-    "test:layout": "playwright test -c e2e/layout/playwright.config.ts",
+    "test:layout": "PULSE_SERVER=unix:/nonexistent/no-sound playwright test -c e2e/layout/playwright.config.ts",
     "lint": "eslint .",
     "gen:combat": "bun tools/gen-combat-stats.mjs",
     "gen:monster-sprites": "node tools/gen-monster-sprites.mjs",
