@@ -564,8 +564,9 @@
   }
 
   /* The "?" stands on the frame beside the title sign instead of taking a
-     row of its own over the tabs (owner, 15 Nov 2026). */
-  :root[data-skin] .monsters-screen .panel__titlebar > .guide-help {
+     row of its own over the tabs (owner, 15 Nov 2026). Not in Chaos Weapons,
+     which shares the frame but has a longer sign. */
+  :root[data-skin] .monsters-screen:not(.siege-screen) .panel__titlebar > .guide-help {
     position: absolute;
     top: calc(-1 * var(--skin-title-lift) + 2px);
     left: calc(50% + 74px);
