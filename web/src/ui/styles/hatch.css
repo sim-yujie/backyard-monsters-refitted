@@ -1581,6 +1581,20 @@ button.hatch-slot:disabled {
     white-space: nowrap;
   }
 
+  /* A short screen (1280x720): a smaller portrait gives back the line kept
+     for the warning below, so the whole tab still fits with no scroll bar. */
+  @media (max-height: 760px) {
+    .hatch-info__portrait {
+      width: 56px;
+      height: 56px;
+    }
+
+    .hatch-info__picture {
+      width: 52px;
+      height: 52px;
+    }
+  }
+
   /* Its line is kept, empty, while there is no warning (patch 7.6.1): Add,
      pinned to the panel's bottom, rose by a line whenever a count went past
      the housing, and the window grew under it. */
