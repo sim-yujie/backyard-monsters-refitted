@@ -675,7 +675,9 @@ export class HatchTab implements MonstersTab {
 
     const warning =
       yard && row && ready && this.count > 0 ? housingWarning(yard, row.monster.id, this.count) : null;
-    this.warningLine.textContent = warning ?? "";
+    // A space when there is none: side by side the line keeps its room
+    // (hatch.css), so Add never moves when a warning comes or goes (7.6.1).
+    this.warningLine.textContent = warning ?? "\u00a0";
     // In full on hover where the wide layout keeps it to one line (hatch.css).
     this.warningLine.title = warning ?? "";
     this.warningLine.hidden = warning === null;
@@ -916,13 +918,15 @@ export class HatchTab implements MonstersTab {
     slots.className = "hatch-line__slots";
     slots.append(this.nowCard(yard, hatchery, false, preview), chevron());
     hatchery.queue.forEach((stack, at) => slots.append(this.stackSlot(hatchery.id, stack, at + 1, preview)));
-    // No "Empty" boxes (owner, 15 Nov 2026): the head says how many fit.
     let free = hatchery.stackLimit - hatchery.queue.length;
     for (const count of preview?.fresh ?? []) {
       if (free <= 0) break;
       slots.append(previewSlot(preview!.monster, count));
       free -= 1;
     }
+    // The empty boxes are back (owner, 15 Nov 2026, patch 7.6.1: "I still
+    // want the empty box, even if there are no queued monsters in it").
+    for (; free > 0; free -= 1) slots.append(emptySlot());
     if (hatchery.level > 0 && hatchery.level < maxLevel(HATCHERY_TYPE, this.store.kind)) {
       slots.append(this.lockedSlot(hatchery));
     }
@@ -968,6 +972,7 @@ export class HatchTab implements MonstersTab {
       slots.append(previewSlot(preview!.monster, count));
       free -= 1;
     }
+    for (; free > 0; free -= 1) slots.append(emptySlot());
     const idle = yard.shared.length === 0 && yard.hatcheries.every((one) => one.monster === null);
     slots.append(this.lineTotals(yard, "hcc", idle, this.clearControl("hcc", yard.shared)));
 
@@ -1389,6 +1394,9 @@ export class HatchTab implements MonstersTab {
     }
     housing.append(label, value, bar, foot);
 
+    // With a warning the housing row has a line of its own under it, so a
+    // count chosen (a "+20" in the key) never moves what is below (7.6.1).
+    this.message.classList.toggle("hatch-message--warning", parts.length > 0);
     this.message.replaceChildren(...parts, housing);
   }
 
@@ -1990,6 +1998,17 @@ const lockedNote = (unlocking: boolean): Node[] => {
   return [mark, word];
 };
 
+/** A free slot in the queue: a faint dashed box (patch 7.6.1). */
+const emptySlot = (): HTMLElement => {
+  const slot = document.createElement("div");
+  slot.className = "hatch-slot hatch-slot--empty";
+  const words = document.createElement("span");
+  words.className = "hatch-slot__empty";
+  words.textContent = "Empty";
+  slot.append(words);
+  return slot;
+};
+
 /** A new stack the chosen batch would open, dashed. */
 const previewSlot = (monster: string, count: number): HTMLElement => {
   const slot = document.createElement("div");
@@ -2065,9 +2084,7 @@ export const lineSentence = (
     // Waiting monsters first: they are what a player cannot otherwise see (#169).
     if (stalled.length > 0) {
       return {
-        // Where they wait is the cards just above (7.6.1: shorter, so the
-        // housing numbers fit beside it).
-        title: `${housingNoun(words, true)} is full: ${stalled.length === 1 ? "a hatched monster waits" : `${formatAmount(stalled.length)} hatched monsters wait`} for room.`,
+        title: `${housingNoun(words, true)} is full: ${stalled.length === 1 ? "a hatched monster waits" : `${formatAmount(stalled.length)} hatched monsters wait`} in the ${words.hatcheries} for room.`,
         tone: "warning",
       };
     }

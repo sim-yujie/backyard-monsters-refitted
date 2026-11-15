@@ -810,6 +810,19 @@ button.hatch-slot:disabled {
   display: none;
 }
 
+/* A free slot (back in patch 7.6.1, owner 15 Nov 2026): faint and dashed,
+   so the queue's row shows how many batches fit. */
+.hatch-slot--empty {
+  border-style: dashed;
+  border-color: var(--colour-border-subtle);
+  background: transparent;
+}
+
+.hatch-slot__empty {
+  font-size: var(--text-xs);
+  color: var(--colour-text-muted);
+}
+
 /* The slot the next Hatchery level opens: the padlock and Upgrade; what it
    opens is on hover and for a screen reader. */
 .hatch-slot--locked {
@@ -987,6 +1000,13 @@ button.hatch-slot:disabled {
   border: 1px solid var(--colour-border);
   border-radius: var(--radius-md);
   background: var(--colour-surface-sunken);
+}
+
+/* With a warning the words take the first line and the housing row the
+   second, always: a "+20" added to the key would otherwise push the row
+   under the words and move the grid and Add (patch 7.6.1). */
+.hatch-message--warning > .hatch-housing {
+  flex-basis: 100%;
 }
 
 .hatch-message__words {
@@ -1557,6 +1577,14 @@ button.hatch-slot:disabled {
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
+  }
+
+  /* Its line is kept, empty, while there is no warning (patch 7.6.1): Add,
+     pinned to the panel's bottom, rose by a line whenever a count went past
+     the housing, and the window grew under it. */
+  .hatch .hatch-add__warning[hidden] {
+    display: block;
+    visibility: hidden;
   }
 }
 
