@@ -16,7 +16,9 @@ import {
   tribeTitle,
 } from "@/game/raid/raidText";
 import { raidCountdownText, type RaidBusy, type RaidStage, type RaidYardView } from "@/game/raid/raidYardFlow";
-import { TROJAN_TRIBE } from "@/game/trojan/trojanHorse";
+import { TROJAN_HORSE_TYPE, TROJAN_TRIBE } from "@/game/trojan/trojanHorse";
+import { ArtState, resolveArt } from "@/game/yard/buildingArt";
+import { versionedArt } from "@/game/yard/retryLoad";
 import { alarmPulse } from "@/ui/alarmPulse";
 import { formatAmount } from "@/ui/format";
 import { Popup } from "@/ui/Popup";
@@ -58,16 +60,30 @@ const splash = (tribe: string, className: string): HTMLImageElement => {
   return image;
 };
 
+/** The whole horse, if the yard's art has no plain picture for it. */
+export const HORSE_PICTURE_FALLBACK = "/assets/buildings/trojanhorse/top.1.png";
+
 /**
- * The result popup's picture: a tribe's splash, or the horse itself for a
- * landed Trojan Horse fight (`tribe: "wild"`, issue #327,
+ * The horse as the yard draws it: its `top` picture from the yard's own art
+ * table, never the `anim` strip (that is two cut-out frames of its nodding
+ * head, which read as broken wooden blocks; owner, 15 Nov).
+ */
+export const horsePicture = (): string => {
+  const top = resolveArt(TROJAN_HORSE_TYPE, 1, ArtState.DEFAULT)?.top;
+  return versionedArt(top && top.frame === null ? top.url : HORSE_PICTURE_FALLBACK);
+};
+
+/**
+ * The result popup's picture: a tribe's splash, as Flash's good-defence popup
+ * showed it (`ATTACK.as` `tribe.splash`), or the horse itself for a landed
+ * Trojan Horse fight (`tribe: "wild"`, issue #327,
  * `docs/design/trojan-horse.md` §6), which names "the wild monsters", never
  * a tribe.
  */
 const resultPicture = (tribe: string, className: string): HTMLImageElement => {
   if (tribe !== TROJAN_TRIBE) return splash(tribe, className);
   const image = element("img", className);
-  image.src = "/assets/buildings/trojanhorse/anim.1.png";
+  image.src = horsePicture();
   image.alt = "The wild monsters";
   image.decoding = "async";
   return image;

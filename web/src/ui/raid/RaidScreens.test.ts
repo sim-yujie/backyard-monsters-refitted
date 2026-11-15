@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { RaidResult, RaidView } from "@/api/raid";
-import { RaidYardUi, raidFrequencyPopup, raidResultPopup, spottedLine } from "./RaidScreens";
+import { RaidYardUi, horsePicture, raidFrequencyPopup, raidResultPopup, spottedLine } from "./RaidScreens";
 import { spokenText } from "@/ui/resourceIcon";
 
 /** The raid's screens on the own yard (issue #226 WP4), as the DOM shows them. */
@@ -173,6 +173,23 @@ describe("raid result popup", () => {
     const popup = modal.querySelector(".raid-result--good")!;
     expect(popup.querySelector(".raid-result__reward")).toBeNull();
     expect(popup.querySelector(".raid-result__stolen")!.textContent).toContain("1,200");
+  });
+
+  it("pictures the whole horse after a Trojan Horse fight, not its nodding-head strip (owner, 15 Nov)", () => {
+    const { modal } = layers();
+    raidResultPopup({ ...result(true), tribe: "wild", shiny: 0 }, null, () => {}).mount(modal);
+    const src = modal.querySelector<HTMLImageElement>(".raid-result__splash")!.getAttribute("src")!;
+    expect(src).toBe(horsePicture());
+    expect(src).toMatch(/^\/assets\/buildings\/trojanhorse\/top\.1\.png/);
+    expect(src).not.toContain("anim");
+  });
+
+  it("pictures a tribe's raid with the tribe's own splash", () => {
+    const { modal } = layers();
+    raidResultPopup(result(true), null, () => {}).mount(modal);
+    expect(modal.querySelector<HTMLImageElement>(".raid-result__splash")!.getAttribute("src")).toBe(
+      "/assets/popups/tribe_kozu.v2.png",
+    );
   });
 
   it("keeps the popup up with the reason when Repair now is refused", async () => {
