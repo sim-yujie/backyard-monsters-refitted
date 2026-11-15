@@ -208,6 +208,13 @@
     white-space: normal;
     text-wrap: balance;
   }
+
+  /* World chat open reaches up to the row: the chips, now taller, would
+     sit over its Global / Alliance / country tabs, so they step away while
+     it is open (they come back when it folds). */
+  .overlay__layer:has(> .reset-clock:not([hidden])):has(> .chat-box--open) > .hud--corner > .hud-status.hud-status {
+    display: none;
+  }
 }
 
 /* A phone on its side: the Events door stands in this row at 226px from the

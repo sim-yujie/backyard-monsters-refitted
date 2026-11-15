@@ -128,6 +128,20 @@ describe("reset clock CSS", () => {
   it("the status strip starts after the pill while it shows", () => {
     expect(css).toContain(".overlay__layer:has(> .reset-clock:not([hidden])) > .hud--corner > .hud-status.hud-status");
   });
+
+  it("on an upright phone the strip stops before the Events door and its chips wrap", () => {
+    const phone = css.slice(css.indexOf("@media (max-width: 620px) {\n  .overlay__layer"));
+    const block = phone.slice(0, phone.indexOf("\n}\n"));
+    expect(block).toContain("var(--reset-clock-door-room)");
+    expect(block).toMatch(/\.hud-status__boost \{\s*white-space: normal;/);
+    // World chat open: the taller chips step away rather than cover its tabs.
+    expect(block).toMatch(/:has\(> \.chat-box--open\)[^{]*\{\s*display: none;/);
+  });
+
+  it("on a phone on its side the strip starts after the Events door", () => {
+    const side = css.slice(css.indexOf("@media (min-width: 621px) and (max-height: 500px) {"));
+    expect(side.slice(0, side.indexOf("\n}\n"))).toContain("left: calc(226px + var(--reset-clock-door-room)");
+  });
 });
 
 const storeWith = (guide: "pending" | "active" | "done" | null) =>
