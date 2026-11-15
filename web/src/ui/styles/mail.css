@@ -55,6 +55,11 @@
   max-width: none;
   min-width: 0;
   --centre-height: 820px;
+  /* Never under 320px in the middle: the title, the New message bar and the
+     frame take about 185px, so the list keeps 135px. On a short screen
+     (980x551, layout check 15 Nov) it stopped above Main yard at 194px and
+     the list showed 9px; now it reaches over the dock instead (ui.css). */
+  --centre-min-height: 320px;
 }
 
 .mail-screen[hidden] {
