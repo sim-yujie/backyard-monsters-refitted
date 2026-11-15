@@ -33,6 +33,12 @@ export interface RaidFinishOptions {
 export const FINISH_RETRY_MS = 2_000;
 /** The most `tooEarly` waits in a row, so a confused clock cannot loop for ever. */
 const MAX_EARLY_WAITS = 5;
+/**
+ * The longest one `tooEarly` wait. The server takes a finish once half the
+ * fight has run, so a real wait is a few seconds; a phone whose clock is far
+ * off would otherwise wait for hours on "The raid is over…" (reports 44, 45).
+ */
+export const MAX_EARLY_WAIT_MS = 10_000;
 
 export const finishRaidFight = async (options: RaidFinishOptions): Promise<RaidFinish> => {
   let failures = 0;
@@ -46,7 +52,8 @@ export const finishRaidFight = async (options: RaidFinishOptions): Promise<RaidF
       if (refusal?.reason === "tooEarly" && early < MAX_EARLY_WAITS) {
         early += 1;
         const readyAt = refusal.readyAt ?? options.serverNow() + 1;
-        await options.wait(Math.max(250, (readyAt - options.serverNow()) * 1000 + 250));
+        const ms = (readyAt - options.serverNow()) * 1000 + 250;
+        await options.wait(Number.isFinite(ms) ? Math.min(MAX_EARLY_WAIT_MS, Math.max(250, ms)) : MAX_EARLY_WAIT_MS);
         continue;
       }
       if (refusal?.reason === "cancelled") return { kind: "cancelled" };
