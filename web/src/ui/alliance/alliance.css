@@ -1259,33 +1259,6 @@
   }
 }
 
-/* A short screen (a phone on its side): the strip and its Add slimmer. */
-@media (max-height: 500px) {
-  .alliance-goals__strip {
-    gap: 4px var(--space-3);
-  }
-
-  .alliance-goals__add.btn,
-  .goal-picker__back.btn {
-    min-height: 34px;
-    padding-block: 2px;
-  }
-
-  .alliance-goal {
-    padding-block: 4px;
-  }
-
-  /* The Add list's tier heads go (each button still says its tier on hover
-     and to a screen reader), so a kind shows under Back without scrolling. */
-  .goal-picker {
-    gap: 4px;
-  }
-
-  .goal-picker__cols {
-    display: none;
-  }
-}
-
 /* ── The Add list: every kind, one scroll, Easy / Medium / Hard each ──── */
 .goal-picker {
   display: flex;
@@ -1432,6 +1405,46 @@
 
   .goal-pick__name {
     grid-column: auto;
+  }
+}
+
+/* A short screen (a phone on its side): the strip and its Add slimmer. */
+@media (max-height: 500px) {
+  .alliance-goals__strip {
+    gap: 4px var(--space-3);
+  }
+
+  .alliance-goals__add.btn,
+  .goal-picker__back.btn {
+    min-height: 34px;
+    padding-block: 2px;
+  }
+
+  /* About 100 px of list on a phone on its side: less room above and between,
+     so the strip (or Back) and one whole card (or kind) show unscrolled. */
+  .alliance-window .alliance__body:has(> .alliance-goals, > .goal-picker) {
+    row-gap: 4px;
+    padding-top: var(--space-1);
+  }
+
+  .alliance-goal {
+    padding-block: 2px;
+  }
+
+  .goal-pick {
+    padding-block: 0;
+    border-color: transparent;
+    background: none;
+  }
+
+  /* The Add list's tier heads go (each button still says its tier on hover
+     and to a screen reader), so a kind shows under Back without scrolling. */
+  .goal-picker {
+    gap: 4px;
+  }
+
+  .goal-picker__cols {
+    display: none;
   }
 }
 
