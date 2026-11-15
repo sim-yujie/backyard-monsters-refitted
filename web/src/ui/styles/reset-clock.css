@@ -15,9 +15,10 @@
  */
 
 :root {
-  /* The row's height: World chat's pill on a computer, a finger's 40px on a
-     touch screen. Away from the yard Bob's "?" keeps its own 32px (tips.css). */
-  --reset-help-size: 36px;
+  /* The row's height: Bob's "?" (tips.css: 32px, 40px for a finger). On a
+     yard with the reset clock the row grows to World chat's pill on a
+     computer (below); a yard without it keeps the "?"'s size. */
+  --reset-help-size: 32px;
   /* The row's top and left edge: the top bar's bottom plus a step, and World
      chat's left edge (chat.css), which the lists share. */
   --corner-row-top: calc(var(--hud-height) + var(--space-2));
@@ -40,6 +41,12 @@
 @media (pointer: coarse) {
   :root {
     --reset-help-size: 40px;
+  }
+}
+
+@media not all and (pointer: coarse) {
+  :root:has(.reset-clock) {
+    --reset-help-size: 36px;
   }
 }
 
