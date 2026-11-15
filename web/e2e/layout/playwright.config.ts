@@ -59,7 +59,12 @@ export default defineConfig({
     ["html", { outputFolder: resolve(here, "report"), open: "never" }],
     ...(ci ? ([["github"]] as const) : []),
   ],
-  use: { browserName: "webkit", actionTimeout: 10_000 },
+  use: {
+    browserName: "webkit",
+    actionTimeout: 10_000,
+    // No sound from test browsers (owner, 15 Nov 2026): point WebKit at a sound server that does not exist.
+    launchOptions: { env: { ...process.env, PULSE_SERVER: "unix:/nonexistent/no-sound" } },
+  },
   projects: [{ name: "webkit", use: { browserName: "webkit" } }],
   webServer: [
     {
