@@ -112,7 +112,9 @@ const yard = () => {
   let planner = false;
   let carrying = false;
   let teardown: (() => void) | void = undefined;
-  const open = (load: { raidresult?: RaidResult } = {}): void => {
+  /** The last raid the server's yard has landed, as a load from now on says it (`lastraid`); unsaid when undefined. */
+  let serverLast: string | undefined;
+  const open = (load: { raidresult?: RaidResult; lastraid?: string } = {}): void => {
     if (typeof teardown === "function") teardown();
     const modal = document.createElement("div");
     const content = document.createElement("div");
@@ -125,7 +127,7 @@ const yard = () => {
       carrying: () => carrying,
       reload: () => {
         reloads();
-        open();
+        open(serverLast === undefined ? {} : { lastraid: serverLast });
       },
     };
     const store = { kind: "main", save: { buildingdata: {}, ...load }, credits: 0, now: () => 0 };
@@ -138,9 +140,12 @@ const yard = () => {
     shown,
     /** Whether the open yard shows the raid's lock ("is raiding your yard"). */
     locked: () => modals.at(-1)!.querySelector(".raid-lock") !== null,
+    /** Result popups on the yard open now. */
+    popupsInLast: () => modals.at(-1)!.querySelectorAll(".raid-result").length,
     /** Result popups shown so far, in every yard opened. */
     popups: () => modals.reduce((sum, modal) => sum + modal.querySelectorAll(".raid-result").length, 0),
     setPlanner: (open: boolean) => (planner = open),
+    setServerLast: (id: string) => (serverLast = id),
     setCarrying: (held: boolean) => (carrying = held),
     close: () => {
       if (typeof teardown === "function") teardown();
@@ -209,6 +214,61 @@ describe("Back to yard before the finish answers (patch 7.5)", () => {
     expect(home.reloads).toHaveBeenCalledTimes(1);
     expect(home.popups()).toBe(1);
     expect(consumeRaidResult()).toBeNull();
+    home.close();
+  });
+
+  it("the finish answered while the yard was loading: the yard read before the landing opens afresh, and the new one shows the popup once", async () => {
+    let answer: (value: unknown) => void = () => {};
+    const screen = raidScreen(() => new Promise((resolve) => (answer = resolve)));
+    const home = yard();
+    screen.end();
+    await vi.advanceTimersByTimeAsync(LEAVE_OFFER_MS);
+    screen.backButton()!.click();
+
+    // The yard's load read the yard before the finish landed (its lastraid is
+    // an older raid); the finish's answer comes before that yard is up.
+    answer({ error: 0, result: RESULT });
+    await vi.advanceTimersByTimeAsync(0);
+    home.setServerLast(RESULT.id);
+    home.open({ lastraid: "r_older" });
+    expect(home.popups()).toBe(0);
+    await vi.advanceTimersByTimeAsync(0);
+    expect(home.reloads).toHaveBeenCalledTimes(1);
+    expect(home.popups()).toBe(1);
+    // The popup is on the yard opened afresh, not on the stale one.
+    expect(home.popupsInLast()).toBe(1);
+
+    await vi.advanceTimersByTimeAsync(LATE_RESULT_CHECK_MS * 5);
+    expect(home.reloads).toHaveBeenCalledTimes(1);
+    expect(home.popups()).toBe(1);
+    home.close();
+  });
+
+  it("the finish answered before the yard's load read the yard: shown at once, no second load", async () => {
+    const screen = raidScreen(async () => ({ error: 0, result: RESULT }));
+    const home = yard();
+    screen.end();
+    await vi.advanceTimersByTimeAsync(0);
+    expect(screen.goToYard).toHaveBeenCalledTimes(1);
+    home.open({ lastraid: RESULT.id });
+    expect(home.popups()).toBe(1);
+    await vi.advanceTimersByTimeAsync(LATE_RESULT_CHECK_MS * 3);
+    expect(home.reloads).not.toHaveBeenCalled();
+    home.close();
+  });
+
+  it("opens the yard afresh once at most for a result, even if the new yard still does not say it has it", async () => {
+    const screen = raidScreen(async () => ({ error: 0, result: RESULT }));
+    const home = yard();
+    screen.end();
+    await vi.advanceTimersByTimeAsync(0);
+    home.setServerLast("r_older");
+    home.open({ lastraid: "r_older" });
+    await vi.advanceTimersByTimeAsync(0);
+    expect(home.reloads).toHaveBeenCalledTimes(1);
+    expect(home.popups()).toBe(1);
+    await vi.advanceTimersByTimeAsync(LATE_RESULT_CHECK_MS * 3);
+    expect(home.reloads).toHaveBeenCalledTimes(1);
     home.close();
   });
 

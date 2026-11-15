@@ -6,7 +6,9 @@ import {
   adoptLoadedRaidResult,
   consumeRaidNote,
   consumeRaidResult,
+  markRaidYardRefreshed,
   onRaidNews,
+  raidResultAheadOfYard,
   raidResultWaiting,
   setRaidRun,
 } from "@/game/raid/raidSession";
@@ -85,9 +87,13 @@ export const raidYardPlugin: YardPlugin = (mounts) => {
 
   // Back from a fight: what it landed, or why it did not. The load may have
   // landed it itself, with its finish still on the way (patch 7.5); the
-  // result first, so a "did not land" line for the same raid is dropped.
+  // result first, so a "did not land" line for the same raid is dropped. A
+  // result whose raid landed after this yard was read (the finish answered
+  // while it loaded, sol's second review) is not shown on it: the yard opens
+  // afresh first, below, and the new yard shows it.
   adoptLoadedRaidResult(store.save.raidresult);
-  const result = consumeRaidResult((landed) => !isMolochRaid(landed));
+  const behind = raidResultAheadOfYard(store.save);
+  const result = behind ? null : consumeRaidResult((landed) => !isMolochRaid(landed));
   if (result) {
     void runRaidAftermath(
       { api: raidApi, view: raidAftermathView(overlay.modal, () => repairOffer(mounts), notice) },
@@ -97,29 +103,42 @@ export const raidYardPlugin: YardPlugin = (mounts) => {
   const note = consumeRaidNote();
   if (note) notice(note);
 
-  // The finish's answer can come after the player went back to the yard
-  // ("Back to yard", sol's review): a line is shown at once; a result opens
-  // the yard afresh, as the server has it now, and the new yard shows it
-  // (this plugin's, or Moloch's in the Inferno's). Not under the Planner or
-  // with a building in hand: that waits until they are done.
+  // A result this yard does not have: the finish's answer came after the
+  // player went back to the yard ("Back to yard", sol's review), or while it
+  // loaded. The yard opens afresh, as the server has it now, and the new yard
+  // shows it (this plugin's, or Moloch's in the Inferno's); a line is shown
+  // at once. Not under the Planner or with a building in hand: that waits
+  // until they are done.
   let reloadTimer: ReturnType<typeof setInterval> | null = null;
+  let firstCheck: ReturnType<typeof setTimeout> | null = null;
   const stopReloadTimer = (): void => {
     if (reloadTimer !== null) clearInterval(reloadTimer);
+    if (firstCheck !== null) clearTimeout(firstCheck);
     reloadTimer = null;
+    firstCheck = null;
   };
   const reloadIfFree = (): void => {
     if (!raidResultWaiting()) return stopReloadTimer();
     if (scene.plannerOpen() || scene.carrying()) return;
     stopReloadTimer();
+    markRaidYardRefreshed();
     scene.reload();
+  };
+  const reloadWhenFree = (): void => {
+    if (!raidResultWaiting() || reloadTimer !== null) return;
+    reloadTimer = setInterval(reloadIfFree, LATE_RESULT_CHECK_MS);
+    // The first look on the next turn, never while this yard is still mounting.
+    firstCheck = setTimeout(() => {
+      firstCheck = null;
+      reloadIfFree();
+    }, 0);
   };
   const stopNews = onRaidNews(() => {
     const late = consumeRaidNote();
     if (late) notice(late);
-    if (!raidResultWaiting() || reloadTimer !== null) return;
-    reloadTimer = setInterval(reloadIfFree, LATE_RESULT_CHECK_MS);
-    reloadIfFree();
+    reloadWhenFree();
   });
+  if (behind) reloadWhenFree();
 
   return () => {
     stopNews();

@@ -82,6 +82,30 @@ export const adoptLoadedRaidResult = (result: RaidResult | null | undefined): vo
 /** Whether a result is waiting for its taker. */
 export const raidResultWaiting = (): boolean => pendingResult !== null;
 
+/** Results the yard has been opened afresh for, so it is never opened again for the same one. */
+const refreshed: string[] = [];
+
+/**
+ * Whether the waiting result is not in the yard `load` sent yet: its raid
+ * landed after the load read the yard (the finish answered while the yard
+ * was loading, sol's second review), so the popup would sit on a yard
+ * without its damage, theft or Shiny. Then the yard is opened afresh first
+ * ({@link markRaidYardRefreshed}), once per result. A server that does not
+ * say (`lastraid` absent) is taken at its word.
+ */
+export const raidResultAheadOfYard = (load: { readonly lastraid?: unknown }): boolean => {
+  const result = pendingResult;
+  if (result === null || typeof load.lastraid !== "string") return false;
+  return load.lastraid !== result.id && !refreshed.includes(result.id);
+};
+
+/** The yard is being opened afresh for the waiting result. */
+export const markRaidYardRefreshed = (): void => {
+  if (pendingResult === null || refreshed.includes(pendingResult.id)) return;
+  refreshed.push(pendingResult.id);
+  if (refreshed.length > TAKEN_KEPT) refreshed.shift();
+};
+
 /**
  * Takes what the last raid landed, clearing it: the yard shows it once. With
  * `which`, only a result it accepts is taken; any other is left for its own
@@ -132,6 +156,7 @@ export const resetRaidSession = (): void => {
   pendingResult = null;
   pendingNote = null;
   taken.length = 0;
+  refreshed.length = 0;
   listeners.clear();
 };
 

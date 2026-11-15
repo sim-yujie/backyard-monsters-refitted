@@ -880,6 +880,12 @@ export interface BaseLoadResponse extends ApiEnvelope {
    */
   raidresult?: RaidResult;
   /**
+   * Only on the owner's build-mode load of their own main yard (patch 7.5):
+   * the last raid landed in the yard this load sends, "" for none. A result
+   * the client holds for another raid landed after this yard was read.
+   */
+  lastraid?: string;
+  /**
    * Only on the owner's build-mode load of their own main yard or outpost:
    * the account's new-player tutorial summary (issue #227). Every yard action
    * answer refreshes it.
