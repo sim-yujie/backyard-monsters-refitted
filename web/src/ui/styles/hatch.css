@@ -1559,7 +1559,7 @@ button.hatch-slot:disabled {
 @container hatch (width < 560px) {
   /* (The container itself cannot be styled from its own query: its box.) */
   .hatch__scroll {
-    --hatch-slot-height: 72px;
+    --hatch-slot-height: 80px;
   }
 
   /* Every tab fits across: the picture over the level and the light. */
