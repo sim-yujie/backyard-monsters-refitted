@@ -1849,6 +1849,11 @@
     white-space: nowrap;
   }
 
+  /* The menu hangs from the face in the top row: past the Shiny row, under the whole bar. */
+  .hud--map .account-menu__list {
+    top: calc(200% + var(--space-2));
+  }
+
   .hud--map .hud__resource--shiny {
     grid-area: 2 / 6;
     justify-self: end;

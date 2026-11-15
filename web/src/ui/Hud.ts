@@ -1208,7 +1208,12 @@ export class Hud {
     const size = bubble.getBoundingClientRect();
     const maxLeft = Math.max(OFFSET_PX, window.innerWidth - size.width - OFFSET_PX);
     const left = Math.min(Math.max(OFFSET_PX, box.left + box.width / 2 - size.width / 2), maxLeft);
-    bubble.style.top = `${Math.round(box.bottom + OFFSET_PX)}px`;
+    // The map's bar on a phone lays its readouts in two rows (maproom.css,
+    // the list `display: contents`): a top row's bubble hangs under the whole
+    // bar rather than over the row below.
+    const twoRows = !this.corner && getComputedStyle(this.list).display === "contents";
+    const bar = twoRows ? this.element.getBoundingClientRect().bottom : 0;
+    bubble.style.top = `${Math.round(Math.max(box.bottom, bar) + OFFSET_PX)}px`;
     bubble.style.left = `${Math.round(left)}px`;
   }
 
