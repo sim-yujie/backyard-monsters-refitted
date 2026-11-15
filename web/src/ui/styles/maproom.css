@@ -34,6 +34,19 @@
   max-height: calc(100dvh - var(--hud-height) - var(--space-6));
 }
 
+/* The panel in it keeps to the dock's height and only its body scrolls. A
+   framed panel (skin.css) has `overflow: visible`, so without these it kept
+   its full height and ran off a short screen: the Town Hall's ran 50px past
+   the bottom at 1024x560 and 65px at 844x390 (layout check, 15 Nov). */
+.map-dock--right > .panel {
+  min-height: 0;
+}
+
+.map-dock--right > .panel > .panel__body {
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
 .map-dock--bottom-right {
   right: var(--space-4);
   bottom: var(--space-4);
