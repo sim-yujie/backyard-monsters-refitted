@@ -1,0 +1,91 @@
+"""
+still_batch.py <IC id> <work dir> <h1> <h2> <h3> <h4>
+Sets up ONE Codex call that paints four headings of the still sheet as a 2x2 grid on magenta.
+Writes <work>/still/b-<h1>-<h2>-<h3>-<h4>/ with frames.png (the Flash cells blown up), style.png
+(approved views, if <work>/approved.json exists), portrait.png and prompt.txt.
+The first call (no approved.json yet) is the design sample; approve it with approve.py.
+"""
+import json
+import shutil
+import sys
+from pathlib import Path
+
+from PIL import Image
+
+import common
+from spec import PORTRAITS, SPECS, flash_column, heading_deg, view_of
+
+mid, work = sys.argv[1], Path(sys.argv[2])
+hs = [int(x) for x in sys.argv[3:7]]
+spec = SPECS[mid]
+out = work / "still" / ("b-" + "-".join(map(str, hs)))
+out.mkdir(parents=True, exist_ok=True)
+
+cw, ch = spec["cell"]
+z = 7
+grid = Image.new("RGB", (640, 512), (128, 128, 128))
+for i, h in enumerate(hs):
+    cell = common.flash_cell(spec, flash_column(spec, h)).resize((cw * z, ch * z), Image.NEAREST)
+    bg = Image.new("RGBA", cell.size, (128, 128, 128, 255))
+    bg.alpha_composite(cell)
+    grid.paste(bg.convert("RGB"), ((i % 2) * 320 + (320 - cw * z) // 2, (i // 2) * 256 + (256 - ch * z) // 2))
+grid.save(out / "frames.png")
+
+p = Image.open(PORTRAITS / f"{mid}.webp").convert("RGB")
+p.resize((p.width * 3, p.height * 3), Image.LANCZOS).save(out / "portrait.png")
+
+inputs = ["frames.png"]
+style_text = ""
+appr = work / "approved.json"
+if appr.exists():
+    views = json.loads(appr.read_text())  # [{"heading": h, "file": path to a cut view}]
+    near = sorted(views, key=lambda v: min(abs(v["heading"] - h) for h in hs))[:3]
+    near.sort(key=lambda v: v["heading"])
+    ims = [Image.open(v["file"]).convert("RGBA") for v in near]
+    H = max(i.height for i in ims)
+    strip = Image.new("RGBA", (sum(i.width for i in ims) + 40 * (len(ims) + 1), H + 80), (255, 0, 255, 255))
+    x = 40
+    for im in ims:
+        strip.alpha_composite(im, (x, 40 + H - im.height))
+        x += im.width + 40
+    strip.convert("RGB").save(out / "style.png")
+    inputs.append("style.png")
+    names = "; ".join(f"heading {heading_deg(spec, v['heading']):g} degrees ({view_of(spec, v['heading'])[0]})" for v in near)
+    style_text = (
+        f"\nInput 2, style.png: a row of APPROVED painted views of {spec['name']} on magenta, left to right: {names}. "
+        "This row is NOT the layout of the output. Copy its exact design, colours, painting style, flame crown and "
+        "proportions for every new cell: same creature in every cell, turned to the cell's own heading.\n"
+    )
+inputs.append("portrait.png")
+
+cells = ["top-left", "top-right", "bottom-left", "bottom-right"]
+lines = []
+backs = []
+for c, h in zip(cells, hs):
+    words, back = view_of(spec, h)
+    lines.append(f"  {c}: heading {heading_deg(spec, h):g} degrees, {words}")
+    if back:
+        backs.append(c)
+back = f"\n{spec['back_note']} (cells: {', '.join(backs)})\n" if backs else ""
+n_in = len(inputs)
+prompt = f"""Use your image generation tool (one call) to create a new image and save it as frames-new.png in the current folder. Do not write code and do not copy or composite pixels from the inputs.
+
+Input 1, frames.png: a 2x2 grid of 4 low-resolution isometric game sprites of {spec['name']}, blown up (OLD pixel art). Use it for the facing, shape, colours and overall size of each cell: the new art is the same creature, painted richer. Heading in degrees: 0 = facing the screen's RIGHT, 90 = facing toward the viewer (down), 180 = facing the screen's LEFT, 270 = facing away from the viewer (up); the camera is a 3/4 isometric view from above. Cells:
+{chr(10).join(lines)}
+Look closely at where the yellow face marks (eyes and grin) sit on each old sprite and put the face exactly there.
+{style_text}
+The creature: {spec['creature']}
+
+PART CHECKLIST (every cell, as seen from that cell's angle; never drop, merge or add parts):
+{spec['parts']}
+{back}
+Input {n_in}, portrait.png: the official concept painting, for painting style and fire texture only. Do NOT copy its red lower shell, nose or proportions; the old sprite decides the shape and the features.
+
+LIGHT: the fireball glows evenly from within; no light from one side, no cast shadow on the body, so the left and right halves are lit the same.
+Output: ONE image with the same 2x2 grid layout and canvas proportions as frames.png (640x512 or a 2x multiple), each creature at the same position and facing as the matching cell of frames.png and about the same size (no bigger than 1.3x). Same scale in all four cells.
+Style: hand-painted digital game illustration like the portrait: rich glowing fire texture, soft shading, bright highlights, NO thick black outline, no pixel art, readable at a small size.
+Background everywhere: flat pure magenta #FF00FF. No shadows, no ground, no grid lines, no text, no labels, no sparks or embers.
+"""
+(out / "prompt.txt").write_text(prompt, encoding="utf-8")
+(out / "inputs.txt").write_text(" ".join(inputs))
+print(out)
