@@ -880,6 +880,8 @@ export class YardScene implements Scene {
     if (this.helpMarkTimer) clearInterval(this.helpMarkTimer);
     this.helpMarkTimer = null;
     this.helpMarksFramed = false;
+    this.renderer.setHelpMarksTop(null);
+    if (import.meta.env.DEV) delete (window as unknown as { __helpMarks?: unknown }).__helpMarks;
     this.helpBlock = null;
     this.visitorPool = null;
     this.dock?.destroy();
@@ -1888,6 +1890,27 @@ export class YardScene implements Scene {
     // No wrench under the HUD or the top column when the yard opens (lead, 15 Nov 2026).
     this.applyVisitExtent();
     this.frameHelpMarksOnce();
+    if (import.meta.env.DEV) {
+      // For looking at the marks from a test script: where each wrench is on screen.
+      (window as unknown as { __helpMarks?: () => unknown }).__helpMarks = () => {
+        const camera = this.camera;
+        if (!camera) return null;
+        const at = (x: number, y: number) => camera.worldToScreen({ x, y });
+        return {
+          zoom: camera.zoom,
+          minZoom: camera.minZoom,
+          band: this.visitBand(),
+          box: this.renderer.helpMarksBox(),
+          position: { ...camera.position },
+          tags: Object.fromEntries(this.renderer.helpMarkTags),
+          discs: this.renderer.helpMarkDiscs().map((disc) => ({
+            ...disc,
+            ...at(disc.x, disc.y),
+            radius: disc.radius * camera.zoom,
+          })),
+        };
+      };
+    }
     // The "-18m" tags shrink as the friend's jobs run on.
     this.helpMarkTimer ??= setInterval(() => this.showHelpMarks(), 15_000);
     this.refreshStatus();
@@ -1920,12 +1943,14 @@ export class YardScene implements Scene {
     const band = this.visitBand();
     if (!camera || !band) return;
     camera.setViewExtent({ left: 0, top: band.top, right: this.viewportWidth, bottom: this.viewportHeight });
+    // No big wrench hides under the column after a pan either.
+    this.renderer.setHelpMarksTop(band.top);
   }
 
   /**
    * Once a visit, as the yard opens: if any wrench sits under the HUD or the
-   * top column, the camera centres the marks in the clear band, zooming out
-   * as far as it must (`frameHelpMarks`).
+   * top column, the camera pans the marks into the clear band, at the zoom
+   * the yard opened at (`frameHelpMarks`).
    */
   private frameHelpMarksOnce(): void {
     const camera = this.camera;

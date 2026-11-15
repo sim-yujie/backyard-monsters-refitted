@@ -14,7 +14,9 @@ import {
   helperBadgeOf,
   helperBadgeText,
   isHelpOpen,
+  savedText,
   savingTag,
+  tagSeconds,
   helpableIds,
   helpersOf,
   helpersText,
@@ -258,6 +260,16 @@ describe("the visit's marks and Help all (beta 8)", () => {
     expect(savingTag(7500)).toBe("-2h 5m");
     expect(savingTag(7200)).toBe("-2h");
     expect(savingTag(97_200)).toBe("-1d 3h");
+  });
+
+  it("cuts seconds to what the tag shows, and says a total with every unit", () => {
+    expect(tagSeconds(9539)).toBe(9480);
+    expect(savingTag(tagSeconds(9539))).toBe(savingTag(9539));
+    expect(tagSeconds(40.7)).toBe(40);
+    expect(tagSeconds(97_250)).toBe(97_200);
+    expect(savedText(96_600)).toBe("1d 2h 50m");
+    expect(savedText(7200)).toBe("2h");
+    expect(savedText(40)).toBe("40s");
   });
 });
 

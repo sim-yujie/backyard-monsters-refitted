@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { HelpMark } from "@/game/friends/helpModel";
 import { jobBarScale } from "./YardJobBars";
-import { SMALL_RADIUS, WRENCH_RADIUS, YardHelpMarks } from "./YardHelpMarks";
+import { helpMarkScale, SMALL_RADIUS, WRENCH_RADIUS, YardHelpMarks } from "./YardHelpMarks";
 import type { Corners } from "./planner/marquee";
 
 /**
@@ -88,17 +88,60 @@ describe("YardHelpMarks", () => {
     expect(marks.pick(200 + SMALL_RADIUS + 1, 30)).toBeNull();
     expect(marks.pick(9900, 30)).toBeNull();
 
-    marks.setZoom(0.5);
-    const scale = jobBarScale(0.5);
+    // Far out (a phone on its side): the big wrench keeps its full size on
+    // screen, past the job bars' cap; the small repair wrench keeps theirs.
+    marks.setZoom(0.25);
+    const scale = helpMarkScale(0.25);
+    expect(scale).toBe(4);
+    expect(scale).toBeGreaterThan(jobBarScale(0.25));
     expect(marks.pick(100, 50 - 32 * scale)).toBe(1);
     expect(marks.pick(100 + (WRENCH_RADIUS - 1) * scale, 50 - 32 * scale)).toBe(1);
     expect(marks.pick(100 + (WRENCH_RADIUS + 1) * scale, 50 - 32 * scale)).toBeNull();
+    const small = jobBarScale(0.25);
+    expect(marks.pick(200, 50 - 20 * small)).toBe(2);
+    expect(marks.pick(200 + (SMALL_RADIUS + 1) * small, 50 - 20 * small)).toBeNull();
+    expect(marks.discs.find((disc) => disc.id === 1)?.radius).toBe(WRENCH_RADIUS * scale);
   });
 
-  it("names the world box its marks take: highest anchor to lowest ring", () => {
+  it("slides a big wrench down under the top column, and hides it once its building has gone under", () => {
+    const marks = new YardHelpMarks(anchor, corners, { reducedMotion: true });
+    marks.set([speedup(1), repair(2)]);
+    // The disc reaches 22 + 32 + 5 = 59 px over the anchor (y 50): its top is at -9.
+    marks.setViewTop(-20);
+    marks.reposition();
+    expect(marks.discs[0]).toMatchObject({ y: 50 - 32, visible: true });
+    // The column's foot at y 30: the wrench stands just under it.
+    marks.setViewTop(30);
+    marks.reposition();
+    expect(marks.discs[0]).toMatchObject({ y: 30 + 59 - 32, visible: true });
+    expect(marks.discs[0]!.y - WRENCH_RADIUS - 5).toBeGreaterThanOrEqual(30);
+    // Past the ring's lowest corner (y 100): gone with its building.
+    marks.setViewTop(101);
+    marks.reposition();
+    expect(marks.discs[0]!.visible).toBe(false);
+    expect(marks.pick(100, 101 + 59 - 32)).toBeNull();
+    // The repair wrench is left where it is.
+    expect(marks.pick(200, 30)).toBe(2);
+    marks.setViewTop(null);
+    marks.reposition();
+    expect(marks.discs[0]).toMatchObject({ y: 50 - 32, visible: true });
+  });
+
+  it("draws each ring's front edge over the buildings, none for a repair", () => {
+    const marks = new YardHelpMarks(anchor, corners);
+    marks.set([speedup(1), repair(2)]);
+    expect(marks.ground.children).toHaveLength(1);
+    expect(marks.front.children).toHaveLength(1);
+    marks.set([]);
+    expect(marks.front.children).toHaveLength(0);
+  });
+
+  it("names the world box its big wrenches take: highest anchor to lowest ring; a repair is left out", () => {
     const marks = new YardHelpMarks(anchor, corners);
     expect(marks.worldBox()).toBeNull();
-    marks.set([speedup(1), repair(2)]);
-    expect(marks.worldBox()).toEqual({ left: 60, top: 50, right: 240, bottom: 100 });
+    marks.set([repair(2)]);
+    expect(marks.worldBox()).toBeNull();
+    marks.set([speedup(1), speedup(2), repair(3)]);
+    expect(marks.worldBox()).toEqual({ left: 60, top: 50, right: 240, bottom: 100, footTop: 100, xs: [100, 200] });
   });
 });

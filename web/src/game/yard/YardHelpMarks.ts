@@ -57,6 +57,17 @@ export const MARK_HEADROOM = WRENCH_RISE + WRENCH_RADIUS + BOB_HEIGHT + 6;
 /** Half a big wrench's width, in the same screen pixels. */
 export const MARK_HALF_WIDTH = WRENCH_RADIUS + 4;
 
+/**
+ * A big wrench's scale at a zoom: its full size on screen at any zoom out,
+ * with no floor (lead's check, 15 Nov 2026: on a phone on its side the job
+ * bars' cap left it 15 px across and its tag unreadable), and growing with
+ * the yard past zoom 1. The small repair wrench keeps the job bars' scale.
+ */
+export const helpMarkScale = (zoom: number): number => (zoom > 0 ? Math.max(1, 1 / zoom) : 1);
+
+const scaleOf = (kind: HelpMark["kind"], zoom: number): number =>
+  kind === "speedup" ? helpMarkScale(zoom) : jobBarScale(zoom);
+
 /** One pulse of the ring, seconds, and its faintest. */
 const PULSE_PERIOD = 1.6;
 const PULSE_LOW = 0.75;
@@ -75,6 +86,17 @@ const TAG_FILL = 0x143c1e;
 const TAG_EDGE = 0x57e389;
 const TAG_HEIGHT = 20;
 
+/** The world rectangle the marks take, and the highest building's foot (`YardHelpMarks.worldBox`). */
+export interface HelpMarksBox {
+  readonly left: number;
+  readonly top: number;
+  readonly right: number;
+  readonly bottom: number;
+  readonly footTop: number;
+  /** Each big wrench's x. */
+  readonly xs: readonly number[];
+}
+
 /** Where a building's footprint is drawn now, or null when it is not. */
 export type MarkCorners = (id: number) => Corners | null;
 
@@ -86,6 +108,8 @@ interface MarkView {
   readonly tag: Text | null;
   /** The ground ring, at the footprint's middle; none for a repair only. */
   readonly ring: Graphics | null;
+  /** The ring's front edge, over the buildings; none for a repair only. */
+  readonly edge: Graphics | null;
   readonly kind: HelpMark["kind"];
   saving: number | null;
 }
@@ -99,12 +123,20 @@ export class YardHelpMarks {
   readonly root = new Container();
   /** The rings: under the buildings, over the ground. */
   readonly ground = new Container();
+  /**
+   * The rings' front edge again, over the buildings and walls and under the
+   * wrenches, so a walled or crowded building's ring still shows (lead's
+   * check, 15 Nov 2026: walls and a champion hid one).
+   */
+  readonly front = new Container();
 
   private marks: readonly HelpMark[] = [];
   private zoom = 1;
   private time = 0;
   private readonly views = new Map<number, MarkView>();
   private readonly reducedMotion: boolean;
+  /** The world y of the top of the clear band (under the visit's top column), or null. */
+  private viewTop: number | null = null;
 
   constructor(
     private readonly anchorOf: MarkAnchor,
@@ -113,6 +145,7 @@ export class YardHelpMarks {
   ) {
     this.root.eventMode = "none";
     this.ground.eventMode = "none";
+    this.front.eventMode = "none";
     this.reducedMotion = options.reducedMotion ?? false;
   }
 
@@ -129,6 +162,16 @@ export class YardHelpMarks {
   /** The tag on each wrench now ("-18m"), or null with none; by id. */
   get tags(): Map<number, string | null> {
     return new Map([...this.views].map(([id, view]) => [id, view.tag?.text ?? null]));
+  }
+
+  /** Each big wrench's disc as drawn: centre and radius in world pixels, and whether it shows. For checks. */
+  get discs(): { id: number; x: number; y: number; radius: number; visible: boolean }[] {
+    return [...this.views]
+      .filter(([, view]) => view.kind === "speedup")
+      .map(([id, view]) => {
+        const scale = scaleOf(view.kind, this.zoom);
+        return { id, x: view.badge.x, y: view.badge.y - WRENCH_RISE * scale, radius: WRENCH_RADIUS * scale, visible: view.badge.visible };
+      });
   }
 
   /**
@@ -166,9 +209,18 @@ export class YardHelpMarks {
   setZoom(zoom: number): void {
     if (zoom === this.zoom) return;
     this.zoom = zoom;
-    const scale = jobBarScale(zoom);
-    for (const view of this.views.values()) view.badge.scale.set(scale);
+    for (const view of this.views.values()) view.badge.scale.set(scaleOf(view.kind, zoom));
     this.reposition();
+  }
+
+  /**
+   * The world y under which a big wrench must stand: the bottom of the
+   * visit's top column, or null for none. A wrench that would reach above it
+   * slides down until its building's foot passes under the column too
+   * (`reposition`).
+   */
+  setViewTop(worldY: number | null): void {
+    this.viewTop = worldY;
   }
 
   /** Advances the pulse and the bob; called every frame while any mark is drawn. */
@@ -180,16 +232,17 @@ export class YardHelpMarks {
     for (const view of this.views.values()) {
       if (!view.ring) continue;
       view.ring.alpha = pulse;
+      if (view.edge) view.edge.alpha = pulse;
       view.bob.y = bob;
     }
   }
 
   /** The building whose wrench is under a world point, or null. */
   pick(worldX: number, worldY: number): number | null {
-    const scale = jobBarScale(this.zoom);
     for (const [id, view] of this.views) {
       if (!view.badge.visible) continue;
       const big = view.kind === "speedup";
+      const scale = scaleOf(view.kind, this.zoom);
       const radius = (big ? WRENCH_RADIUS : SMALL_RADIUS) * scale;
       const dx = worldX - view.badge.x;
       const dy = worldY - (view.badge.y - (big ? WRENCH_RISE : SMALL_RISE) * scale);
@@ -203,33 +256,69 @@ export class YardHelpMarks {
     for (const [id, view] of this.views) {
       const anchor = this.anchorOf(id);
       view.badge.visible = anchor !== null;
-      if (anchor) view.badge.position.set(anchor.x, anchor.y);
+      const corners = view.ring ? this.cornersOf(id) : null;
+      if (anchor) {
+        const placed = this.underViewTop(view, anchor.y, corners);
+        view.badge.visible = placed !== null;
+        view.badge.position.set(anchor.x, placed ?? anchor.y);
+      }
       if (!view.ring) continue;
-      const corners = this.cornersOf(id);
       view.ring.visible = corners !== null;
+      if (view.edge) view.edge.visible = corners !== null;
       if (corners) {
         const middle = middleOf(corners);
         view.ring.position.set(middle.x, middle.y);
+        view.edge?.position.set(middle.x, middle.y);
       }
     }
   }
 
   /**
-   * The world rectangle the marks' buildings take: from the highest wrench
-   * anchor (the wrench and tag stand above it, in screen pixels:
-   * {@link MARK_HEADROOM}) to the lowest ring. Null with no mark placed.
+   * Where a big wrench stands so it is not under the visit's top column: at
+   * its anchor, or slid down to just under the column while its building's
+   * foot is still below it; null (hidden) once the foot has gone under too.
    */
-  worldBox(): { left: number; top: number; right: number; bottom: number } | null {
-    let box: { left: number; top: number; right: number; bottom: number } | null = null;
-    const add = (x: number, y: number): void => {
-      box = box
-        ? { left: Math.min(box.left, x), top: Math.min(box.top, y), right: Math.max(box.right, x), bottom: Math.max(box.bottom, y) }
-        : { left: x, top: y, right: x, bottom: y };
-    };
-    for (const id of this.views.keys()) {
+  private underViewTop(view: MarkView, anchorY: number, corners: Corners | null): number | null {
+    const top = this.viewTop;
+    if (top === null || view.kind !== "speedup") return anchorY;
+    const reach = (WRENCH_RISE + WRENCH_RADIUS + BOB_HEIGHT) * scaleOf(view.kind, this.zoom);
+    if (anchorY - reach >= top) return anchorY;
+    const foot = corners ? Math.max(...corners.map(([, y]) => y)) : anchorY;
+    return foot < top ? null : top + reach;
+  }
+
+  /**
+   * The world rectangle the big wrenches' buildings take: from the highest wrench
+   * anchor (the wrench and tag stand above it, in screen pixels:
+   * {@link MARK_HEADROOM}) to the lowest ring; and `footTop`, the highest
+   * building's foot (its footprint's lowest corner), which is as far up as a
+   * wrench can be slid under the top column (`setViewTop`). Null with no mark
+   * placed.
+   */
+  worldBox(): HelpMarksBox | null {
+    let box: HelpMarksBox | null = null;
+    for (const [id, view] of this.views) {
+      // The big wrenches only: a repair is not what the visit frames.
+      if (view.kind !== "speedup") continue;
       const anchor = this.anchorOf(id);
-      if (anchor) add(anchor.x, anchor.y);
-      for (const [x, y] of this.cornersOf(id) ?? []) add(x, y);
+      const corners = this.cornersOf(id) ?? [];
+      const points: (readonly [number, number])[] = [...(anchor ? [[anchor.x, anchor.y] as const] : []), ...corners];
+      if (points.length === 0) continue;
+      const xs = points.map(([x]) => x);
+      const ys = points.map(([, y]) => y);
+      const foot = Math.max(...ys);
+      const at = anchor ? [anchor.x] : [];
+      const next = { left: Math.min(...xs), top: Math.min(...ys), right: Math.max(...xs), bottom: foot, footTop: foot, xs: at };
+      box = box
+        ? {
+            left: Math.min(box.left, next.left),
+            top: Math.min(box.top, next.top),
+            right: Math.max(box.right, next.right),
+            bottom: Math.max(box.bottom, next.bottom),
+            footTop: Math.min(box.footTop, next.footTop),
+            xs: [...box.xs, ...next.xs],
+          }
+        : next;
     }
     return box;
   }
@@ -238,21 +327,21 @@ export class YardHelpMarks {
     this.clear();
     this.root.destroy({ children: true });
     this.ground.destroy({ children: true });
+    this.front.destroy({ children: true });
   }
 
   private rebuild(): void {
     this.clear();
-    const scale = jobBarScale(this.zoom);
     for (const mark of this.marks) {
       const badge = new Container();
-      badge.scale.set(scale);
+      badge.scale.set(scaleOf(mark.kind, this.zoom));
       const bob = new Container();
       badge.addChild(bob);
       this.root.addChild(badge);
 
       if (mark.kind === "repair") {
         bob.addChild(...smallWrench());
-        this.views.set(mark.id, { badge, bob, tag: null, ring: null, kind: mark.kind, saving: null });
+        this.views.set(mark.id, { badge, bob, tag: null, ring: null, edge: null, kind: mark.kind, saving: null });
         continue;
       }
 
@@ -293,10 +382,14 @@ export class YardHelpMarks {
         drawTagPlate(plate, tag, tagY);
       }
 
+      const corners = this.cornersOf(mark.id);
       const ring = new Graphics();
-      drawRing(ring, this.cornersOf(mark.id));
+      drawRing(ring, corners);
       this.ground.addChild(ring);
-      this.views.set(mark.id, { badge, bob, tag, ring, kind: mark.kind, saving: mark.saving });
+      const edge = new Graphics();
+      drawFrontEdge(edge, corners);
+      this.front.addChild(edge);
+      this.views.set(mark.id, { badge, bob, tag, ring, edge, kind: mark.kind, saving: mark.saving });
     }
     this.update(0);
     this.reposition();
@@ -305,6 +398,7 @@ export class YardHelpMarks {
   private clear(): void {
     for (const child of this.root.removeChildren()) child.destroy({ children: true });
     for (const child of this.ground.removeChildren()) child.destroy({ children: true });
+    for (const child of this.front.removeChildren()) child.destroy({ children: true });
     this.views.clear();
   }
 }
@@ -364,17 +458,24 @@ const middleOf = (corners: Corners): { x: number; y: number } => {
  * ellipse through the diamond's corners, widened by {@link RING_SPREAD}, with
  * an amber glow inside, a soft halo and a bright edge.
  */
+/** The ring's two radii about the footprint's middle. */
+const ringRadii = (corners: Corners): { rx: number; ry: number } => {
+  const xs = corners.map(([x]) => x);
+  const ys = corners.map(([, y]) => y);
+  return {
+    rx: ((Math.max(...xs) - Math.min(...xs)) / 2) * RING_SPREAD,
+    ry: ((Math.max(...ys) - Math.min(...ys)) / 2) * RING_SPREAD,
+  };
+};
+
 const drawRing = (ring: Graphics, corners: Corners | null): void => {
   ring.clear();
   if (!corners) return;
-  const xs = corners.map(([x]) => x);
-  const ys = corners.map(([, y]) => y);
-  const rx = ((Math.max(...xs) - Math.min(...xs)) / 2) * RING_SPREAD;
-  const ry = ((Math.max(...ys) - Math.min(...ys)) / 2) * RING_SPREAD;
+  const { rx, ry } = ringRadii(corners);
   ring
     // A warm glow over the ground inside, strongest in the middle.
     .ellipse(0, 0, rx, ry)
-    .fill({ color: AMBER, alpha: 0.22 })
+    .fill({ color: AMBER, alpha: 0.3 })
     .ellipse(0, 0, rx * 0.72, ry * 0.72)
     .fill({ color: RING_EDGE, alpha: 0.2 })
     .ellipse(0, 0, rx * 0.42, ry * 0.42)
@@ -382,9 +483,31 @@ const drawRing = (ring: Graphics, corners: Corners | null): void => {
     // A wide soft halo round the edge.
     .ellipse(0, 0, rx + 4, ry + 4)
     .stroke({ width: 16, color: AMBER, alpha: 0.4 })
-    // A thin dark line just outside, then the bright edge itself.
-    .ellipse(0, 0, rx + 4, ry + 4)
-    .stroke({ width: 2.5, color: RING_DARK, alpha: 0.75 })
+    // A dark band under the edge, so it reads on grass, then the bright edge itself.
+    .ellipse(0, 0, rx, ry)
+    .stroke({ width: 11, color: RING_DARK, alpha: 0.85 })
     .ellipse(0, 0, rx, ry)
     .stroke({ width: 6, color: RING_EDGE, alpha: 1 });
+};
+
+/**
+ * The ring's front half again (the arc nearest the viewer), dark band and
+ * bright edge, for the layer over the buildings: it is the part a wall or a
+ * monster in front would hide, and it stands in front of the building's foot.
+ */
+const drawFrontEdge = (edge: Graphics, corners: Corners | null): void => {
+  edge.clear();
+  if (!corners) return;
+  const { rx, ry } = ringRadii(corners);
+  const arc = (): Graphics => {
+    const steps = 32;
+    edge.moveTo(rx, 0);
+    for (let i = 1; i <= steps; i += 1) {
+      const t = (Math.PI * i) / steps;
+      edge.lineTo(rx * Math.cos(t), ry * Math.sin(t));
+    }
+    return edge;
+  };
+  arc().stroke({ width: 9, color: RING_DARK, alpha: 0.8, cap: "round" });
+  arc().stroke({ width: 4.5, color: RING_EDGE, alpha: 1, cap: "round" });
 };

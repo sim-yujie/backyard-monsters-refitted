@@ -1,5 +1,5 @@
 import type { HelpBlock, ResourceAmounts } from "@/api/friends";
-import { helpRefusalText, isHelpOpen, rewardText, savingTag, type HelpTarget } from "./helpModel";
+import { helpRefusalText, isHelpOpen, rewardText, savedText, tagSeconds, type HelpTarget } from "./helpModel";
 
 /**
  * Help all on a friend's yard (beta 8, owner 15 Nov 2026): every help the
@@ -30,7 +30,7 @@ export type HelpOutcome =
 export interface HelpAllSummary {
   /** Helps the server took. */
   readonly helped: number;
-  /** Seconds taken off, all speed-ups together. */
+  /** Seconds taken off, all speed-ups together, each cut as its tag shows it (`tagSeconds`). */
   readonly secondsSaved: number;
   /** Everything earned. */
   readonly reward: ResourceAmounts;
@@ -75,7 +75,8 @@ export const runHelpAll = async (targets: readonly HelpTarget[], options: HelpAl
     done += 1;
     if (outcome.ok) {
       helped += 1;
-      secondsSaved += Math.max(0, Math.floor(outcome.secondsSaved));
+      // Each help as its tag read, so the total is the tags' sum.
+      secondsSaved += tagSeconds(outcome.secondsSaved);
       addReward(reward, outcome.reward);
     } else if (stopsHelpAll(outcome.reason)) {
       stoppedBy = outcome.text;
@@ -97,7 +98,7 @@ export const helpAllResultText = (summary: HelpAllSummary): string => {
   const parts: string[] = [];
   if (summary.helped > 0) {
     parts.push(`Helped ${summary.helped}`);
-    if (summary.secondsSaved > 0) parts.push(`saved ${savingTag(summary.secondsSaved).slice(1)}`);
+    if (summary.secondsSaved > 0) parts.push(`saved ${savedText(summary.secondsSaved)}`);
     const earned = rewardText(summary.reward);
     if (earned) parts.push(`earned ${earned}`);
   }

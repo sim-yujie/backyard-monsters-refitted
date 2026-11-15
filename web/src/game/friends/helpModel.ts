@@ -315,6 +315,32 @@ export const savingTag = (seconds: number): string => {
   return `-${whole}s`;
 };
 
+/**
+ * The seconds a tag shows: `seconds` cut to the tag's last unit (whole
+ * minutes under a day, whole hours from a day, whole seconds under a
+ * minute). Help all adds these up, so its total is the sum of the tags the
+ * visitor read (lead's check, 15 Nov 2026: three tags of 8h 36m came to
+ * "saved 8h 38m" when the exact seconds were added).
+ */
+export const tagSeconds = (seconds: number): number => {
+  const whole = Math.max(0, Math.floor(seconds));
+  if (whole >= 86_400) return whole - (whole % 3_600);
+  if (whole >= 60) return whole - (whole % 60);
+  return whole;
+};
+
+/** A length of time with every unit it has, down to the minute ("1d 2h 50m"; "40s" under a minute). */
+export const savedText = (seconds: number): string => {
+  const whole = Math.max(0, Math.floor(seconds));
+  if (whole < 60) return `${whole}s`;
+  const days = Math.floor(whole / 86_400);
+  const hours = Math.floor((whole % 86_400) / 3_600);
+  const minutes = Math.floor((whole % 3_600) / 60);
+  return [days > 0 ? `${days}d` : "", hours > 0 ? `${hours}h` : "", minutes > 0 ? `${minutes}m` : ""]
+    .filter(Boolean)
+    .join(" ");
+};
+
 /** The bar's count: "3 to speed up". */
 export const helpAllCountText = (count: number): string => `${count} to speed up`;
 

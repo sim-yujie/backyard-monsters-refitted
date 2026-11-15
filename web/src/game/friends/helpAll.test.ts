@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { HelpBlock } from "@/api/friends";
-import { afterHelp, afterRefusal, type HelpTarget } from "./helpModel";
+import { afterHelp, afterRefusal, savingTag, type HelpTarget } from "./helpModel";
 import { helpAllResultText, runHelpAll, stopsHelpAll, type HelpOutcome } from "./helpAll";
 
 /**
@@ -66,6 +66,18 @@ describe("runHelpAll", () => {
     expect(summary).toEqual({ helped: 3, secondsSaved: 1200, reward: { r1: 20, r2: 20, r3: 20, r4: 20 }, skipped: 0, stoppedBy: null });
   });
 
+  it("adds the helps up as their tags read, so the total is the tags' sum", async () => {
+    // The lead's yard: 2h 38m 59s, 3h 35m 59s and 2h 23m 59s read 2h 38m, 3h 35m and 2h 23m.
+    const seconds = [9539, 12_959, 8639];
+    const yard = scene(
+      Object.fromEntries(seconds.map((secondsSaved, i) => [i + 1, { ok: true as const, secondsSaved, reward: reward(0) }])),
+    );
+    const summary = await runHelpAll(targets([1, 2, 3]), { block: yard.block, helpOne: yard.helpOne });
+    expect(seconds.map(savingTag)).toEqual(["-2h 38m", "-3h 35m", "-2h 23m"]);
+    expect(summary.secondsSaved).toBe((2 * 60 + 38 + 3 * 60 + 35 + 2 * 60 + 23) * 60);
+    expect(helpAllResultText(summary)).toBe("Helped 3 · saved 8h 36m");
+  });
+
   it("passes over a refusal about one building and goes on", async () => {
     const yard = scene({ 2: { ok: false, reason: "helpersFull", text: "5 friends have already sped up this job." } });
     const summary = await runHelpAll(targets([1, 2, 3]), { block: yard.block, helpOne: yard.helpOne });
@@ -115,6 +127,10 @@ describe("helpAllResultText", () => {
     expect(
       helpAllResultText({ helped: 1, secondsSaved: 60, reward: reward(0), skipped: 0, stoppedBy: "They are under attack." }),
     ).toBe("Helped 1 · saved 1m. They are under attack.");
+    // Past a day the total keeps its minutes: 23h 50m + 3h.
+    expect(helpAllResultText({ helped: 2, secondsSaved: 96_600, reward: reward(0), skipped: 0, stoppedBy: null })).toBe(
+      "Helped 2 · saved 1d 2h 50m",
+    );
     expect(helpAllResultText({ helped: 0, secondsSaved: 0, reward: reward(0), skipped: 2, stoppedBy: null })).toBe(
       "There is nothing left to help with here.",
     );

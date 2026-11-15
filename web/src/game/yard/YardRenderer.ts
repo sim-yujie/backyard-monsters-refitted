@@ -7,7 +7,7 @@ import type { HarvestKey } from "./harvest";
 import { YardGround } from "./YardGround";
 import { LOAD_TRIES, loadWithRetries } from "./retryLoad";
 import { CHOSEN_FILL, YardHatchMarks, type HatcheryMarks } from "./YardHatchMarks";
-import { YardHelpMarks } from "./YardHelpMarks";
+import { YardHelpMarks, type HelpMarksBox } from "./YardHelpMarks";
 import type { HelpMark } from "@/game/friends/helpModel";
 import { BAR_HEIGHT, jobBarScale, YardJobBars } from "./YardJobBars";
 import { MAX_JUICE_WALKERS, YardLifeLayer } from "./YardLifeLayer";
@@ -130,6 +130,8 @@ export class YardRenderer {
     (id) => (this.currentView === YardView.ISO ? this.cornersOf(id) : null),
     { reducedMotion: prefersReducedMotion() },
   );
+  /** See `setHelpMarksTop`. */
+  private helpMarksTop: number | null = null;
   /** Opens {@link sheetsAllowed}; see there. */
   private allowSheets: () => void = () => {};
   /**
@@ -255,6 +257,7 @@ export class YardRenderer {
       this.jobBars.root,
       this.jobBars.helperRoot,
       this.hatchMarks.root,
+      this.helpMarks.front,
       this.helpMarks.root,
       this.buildings.labels,
     );
@@ -456,6 +459,9 @@ export class YardRenderer {
       if (this.hatchMarks.current) this.hatchMarks.reposition();
       if (this.helpMarks.active) {
         this.helpMarks.update(deltaSeconds);
+        this.helpMarks.setViewTop(
+          this.helpMarksTop === null ? null : visible.y + this.helpMarksTop / Math.max(this.zoomLevel, 1e-6),
+        );
         this.helpMarks.reposition();
       }
       this.shakeMushrooms();
@@ -560,6 +566,7 @@ export class YardRenderer {
       this.jobBars.root,
       this.jobBars.helperRoot,
       this.hatchMarks.root,
+      this.helpMarks.front,
       this.helpMarks.root,
       this.buildings.labels,
     ]) {
@@ -700,8 +707,22 @@ export class YardRenderer {
     this.helpMarks.set(marks);
   }
 
+  /**
+   * How far down the screen (px from the canvas top) the visit's top column
+   * reaches: no big wrench stands above it (`YardHelpMarks.setViewTop`). Null
+   * off a visit.
+   */
+  setHelpMarksTop(screenY: number | null): void {
+    this.helpMarksTop = screenY;
+  }
+
+  /** The big wrenches' discs, world pixels (see `YardHelpMarks.discs`). */
+  helpMarkDiscs(): { id: number; x: number; y: number; radius: number; visible: boolean }[] {
+    return this.helpMarks.discs;
+  }
+
   /** The world rectangle the friend's marks take (see `YardHelpMarks.worldBox`); null with none. */
-  helpMarksBox(): { left: number; top: number; right: number; bottom: number } | null {
+  helpMarksBox(): HelpMarksBox | null {
     return this.helpMarks.worldBox();
   }
 
