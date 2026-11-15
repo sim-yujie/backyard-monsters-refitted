@@ -449,6 +449,23 @@ export class HatchTab implements MonstersTab {
     }
     if (focus.monster && monsterEntry(focus.monster)?.blocked === false) this.select(focus.monster, false);
     this.render();
+    this.revealChosen();
+  }
+
+  /**
+   * On a phone the monsters are one sliding row (hatch.css): a chosen monster
+   * out of sight along it is slid into the middle when the tab opens. The row
+   * is moved by itself, never with scrollIntoView, which would move the tab too.
+   */
+  private revealChosen(): void {
+    const grid = this.grid;
+    if (!this.selected || grid.scrollWidth <= grid.clientWidth) return;
+    const item = this.tiles.get(this.selected)?.item;
+    if (!item) return;
+    const row = grid.getBoundingClientRect();
+    const tile = item.getBoundingClientRect();
+    if (tile.left >= row.left && tile.right <= row.right) return;
+    grid.scrollLeft += tile.left - row.left - (row.width - tile.width) / 2;
   }
 
   update(change: YardChange): void {

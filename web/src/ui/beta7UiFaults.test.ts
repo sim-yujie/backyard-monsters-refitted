@@ -82,6 +82,27 @@ describe("6 Nov UI check: phone faults", () => {
     );
   });
 
+  it("Hatchery on a phone (owner, 15 Nov): the monsters slide sideways in one row, a card cut at the edge", () => {
+    const source = css("styles/hatch.css");
+    // Upright and on its side: the phone layout's own query (phoneLayout.ts), so an iPad keeps the grid.
+    const row = block(source, "@media (max-width: 620px), (max-height: 500px) {");
+    expect(row).toMatch(/\.hatch__grid \{[^}]*grid-template-columns: none;[^}]*grid-auto-flow: column;[^}]*grid-auto-columns: var\(--hatch-card-width\);/);
+    expect(row).toMatch(/\.hatch__grid \{[^}]*overflow-x: auto;[^}]*overflow-y: hidden;[^}]*overscroll-behavior-x: contain;/);
+    // The row reaches the sheet's edges, so the next card is cut there.
+    expect(row).toMatch(/\.hatch__grid \{[^}]*margin-inline: calc\(-1 \* var\(--hatch-pad\)\);/);
+    // Never narrower than a whole "Slimeattikus" needs.
+    expect(row).toMatch(/--hatch-card-width: clamp\(76px,/);
+    // Not with the desktop's or iPad's queries.
+    expect(source).not.toMatch(/@media \(min-width: 621px\)[^{]*\{[^@]*grid-auto-flow: column/);
+  });
+
+  it("Hatchery with an HCC: idle, the totals still hold the first line, so a waiting stack fills the held one", () => {
+    const narrow = block(css("styles/hatch.css"), "@container hatch (width < 880px) {");
+    expect(narrow).toMatch(
+      /\.hatch-line--hcc > \.hatch-line__slots > \.hatch-line__totals--idle \{\s*display: block;\s*height: 0;\s*overflow: hidden;/,
+    );
+  });
+
   it("Baiter: Fill takes its own line in a narrow card instead of the next column or past the edge", () => {
     const source = css("styles/baiter.css");
     expect(source).toMatch(/\.baiter__controls \{\s*flex-wrap: wrap;/);

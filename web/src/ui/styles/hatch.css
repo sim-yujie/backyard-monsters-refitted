@@ -1552,6 +1552,15 @@ button.hatch-slot:disabled {
     grid-column: 1 / -1;
     grid-row: 1;
   }
+
+  /* Idle, the HCC's totals still hold the first line, at no height: with
+     them gone the first stack chosen took that line and the held one stayed
+     empty under it, so a sixth + pushed the grid and Add down a slot. */
+  .hatch-line--hcc > .hatch-line__slots > .hatch-line__totals--idle {
+    display: block;
+    height: 0;
+    overflow: hidden;
+  }
 }
 
 /* ── A phone: the same order, the add controls in a bar at the bottom ─── */
@@ -1855,6 +1864,70 @@ button.hatch-slot:disabled {
   }
 }
 
+/* ── A phone, upright or on its side: the monsters in one sliding row ────
+   (owner, 15 Nov 2026: "make the monsters scrollable horizontally to save
+   vertical space"). The phone layout's own query (phoneLayout.ts); an iPad
+   and a desktop keep the grid. The row reaches the sheet's edges and a card
+   is cut there, so it shows there is more; a swipe slides it, never the
+   tab. The cards keep their size, so nothing gets harder to tap. */
+@media (max-width: 620px), (max-height: 500px) {
+  /* Upright, four cards and a part of the fifth: the row is the tab's width
+     (100cqi) and both edges' padding, the first card starts one padding in.
+     Never under 76 px, the width "Octo-ooze" and "Slimeattikus" need. */
+  .hatch__grid {
+    --hatch-card-width: clamp(76px, calc((100cqi + var(--hatch-pad) - 4 * 6px) / 4.35), 88px);
+
+    grid-template-columns: none;
+    grid-auto-flow: column;
+    grid-auto-columns: var(--hatch-card-width);
+    gap: 6px;
+    margin-inline: calc(-1 * var(--hatch-pad));
+    padding: 3px var(--hatch-pad);
+    overflow-x: auto;
+    overflow-y: hidden;
+    overscroll-behavior-x: contain;
+    scroll-padding-inline: var(--hatch-pad);
+    scroll-snap-type: x proximity;
+    scrollbar-width: none;
+  }
+
+  /* Narrower (a 375 px phone), four would leave no part of a fifth to see:
+     three cards and half the fourth. */
+  @container hatch (width < 336px) {
+    .hatch__grid {
+      --hatch-card-width: calc((100cqi + var(--hatch-pad) - 3 * 6px) / 3.5);
+    }
+  }
+
+  .hatch__grid::-webkit-scrollbar {
+    display: none;
+  }
+
+  .hatch__grid > li {
+    scroll-snap-align: start;
+  }
+
+  /* A name stays whole: the card gives it its full width, the letters sit a
+     little closer, a long one ("Slimeattikus") smaller still. */
+  .hatch-monster {
+    padding-inline: 1px;
+  }
+
+  .hatch-monster[aria-pressed="true"],
+  .hatch-monster[aria-pressed="true"]:hover {
+    padding-inline: 0;
+  }
+
+  .hatch-monster__name {
+    letter-spacing: -0.2px;
+  }
+
+  .hatch-monster__name--long {
+    font-size: 10.5px;
+    letter-spacing: -0.4px;
+  }
+}
+
 /* ── A short screen: the content keeps its room under the fixed rows ─────
    Under the window's title, tabs and header and the hatchery tabs, all fixed
    (owner, 6 Nov 2026), the add bar fixed to a phone's bottom (287 px) left
@@ -1886,6 +1959,12 @@ button.hatch-slot:disabled {
   .hatch-tab__art {
     width: 24px;
     height: 32px;
+  }
+
+  /* The monsters' row (above) has the width for more: eight cards and half
+     the ninth. */
+  .hatch__grid {
+    --hatch-card-width: clamp(76px, calc((100cqi + var(--hatch-pad) - 8 * 6px) / 8.5), 100px);
   }
 }
 
