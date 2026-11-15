@@ -71,6 +71,8 @@ import { touchLastSeen } from "../../../services/user/lastSeen.js";
 import { noteActivePlayer } from "../../../services/stats/activity.js";
 import { logger } from "../../../utils/logger.js";
 import { cancelRaidOnYardLoad, presenceLapsed } from "../../../services/raids/raidStore.js";
+import { settleRaidOnYardLoad } from "../../../services/raids/raidFlow.js";
+import type { RaidResult } from "../../../services/raids/raidLanding.js";
 import { activeEventKinds } from "../../../services/yard/season.js";
 import {
   defenceReplayLoadOf,
@@ -255,7 +257,19 @@ export const baseLoad: KoaController = async (ctx) => {
   let krallenPenalties: KrallenPenaltyNotice[] = [];
   let emergence: EmergenceOnLoad | undefined;
   let underHall: number | undefined;
+  /** A wild monster raid this load landed (patch 7.5), for the yard's result popup. */
+  let raidLanded: RaidResult | null = null;
   if (type === BaseMode.BUILD && isOwner && baseSave.type === BaseType.MAIN) {
+    // Wild monster raids (patch 7.5): a fight whose finish could already
+    // land, with the game open, is landed now rather than cancelled below,
+    // before the catch-up reads the yard, so the yard comes back with it. The
+    // player came back to the yard with its finish still on the way.
+    raidLanded = await settleRaidOnYardLoad(postgres.em, user, gameWasClosed, getCurrentDateTime()).catch(
+      (err: unknown) => {
+        logger.warn(`Wild monster raid not landed on load for user ${user.userid}: ${(err as Error).message}`);
+        return null;
+      }
+    );
     // The catch-up also counts this load as one more session towards the
     // next wild monster raid, in the same write (`catchUpOwnerYard`, #226),
     // and places the Trojan Horse the moment the player qualifies for one
@@ -267,8 +281,8 @@ export const baseLoad: KoaController = async (ctx) => {
     completed = [...jobs, ...(await takeOutpostNotices(postgres.em, user.userid))];
     notifications = await notifyAndCount(postgres.em, user.userid, null, "away", completed);
     // Wild monster raids (#226, `docs/design/wild-raids.md` §7.1, §8.1): a
-    // fight left by this load is cancelled, as is a warning when the game had
-    // been closed. After the catch-up, whose session count lifts the yard's
+    // fight left by this load and not landed above is cancelled, as is a
+    // warning when the game had been closed. After the catch-up, whose session count lifts the yard's
     // fight lock (`startSession`): a fight a raid start set going meanwhile
     // is cancelled here, not left open on an unlocked yard.
     await cancelRaidOnYardLoad(user.userid, gameWasClosed);
@@ -594,6 +608,7 @@ export const baseLoad: KoaController = async (ctx) => {
     ...(krallenPenalties.length > 0 && { krallenpenalty: krallenPenalties.map(({ from, to }) => ({ from, to })) }),
     // The cave and Moloch's emergence (docs/design/inferno.md §3.2), with
     // `raised` when this load set its next raid going.
+    ...(raidLanded && { raidresult: raidLanded }),
     ...(emergence && { infernostate: infernoLoadState(emergence, baseSave, getCurrentDateTime(), underHall) }),
     ...(isOwner && {
       chatenabled: 1,

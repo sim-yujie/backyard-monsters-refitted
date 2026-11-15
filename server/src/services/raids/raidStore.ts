@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { redis } from "../../server.js";
 import { lastSeenKey } from "../user/online.js";
+import type { RaidResult } from "./raidLanding.js";
 
 /**
  * The open wild monster raid and the player's last screen, in Redis (#226
@@ -25,7 +26,11 @@ import { lastSeenKey } from "../user/online.js";
  *    cancelled only when the game had been closed, i.e. the presence mark had
  *    lapsed before the load ({@link cancelRaidOnYardLoad}). The web client
  *    loads the yard every time the player comes back from the map, and a
- *    warned raid waits for them there (§4.2).
+ *    warned raid waits for them there (§4.2). A fight the finish could
+ *    already have landed (from {@link earliestFinish}), with the game open,
+ *    is not cancelled but landed by the load itself (`raidFlow.ts`'s
+ *    `settleRaidOnYardLoad`, patch 7.5): the player came back to the yard
+ *    with its finish still on the way.
  * 4. A warning never launched: its key lives until `attackAt` plus 15
  *    minutes ({@link WARNING_GRACE_SECONDS}).
  */
@@ -75,6 +80,8 @@ export interface OpenRaid {
 }
 
 export const raidKey = (userid: number): string => `wild-raid:${userid}`;
+/** The last raid landed, whole, for a finish that comes after it landed ({@link keepLandedResult}). */
+export const raidLandedKey = (userid: number): string => `wild-raid-landed:${userid}`;
 export const raidScreenKey = (userid: number): string => `raid-screen:${userid}`;
 
 /** A fresh raid id (`r_…`, design §8.1). */
@@ -153,6 +160,32 @@ export const cancelRaidOnYardLoad = async (userid: number, gameWasClosed: boolea
   if (!raid) return false;
   if (raid.phase === "warning" && !gameWasClosed) return false;
   return cancelOpenRaid(userid);
+};
+
+/** How long the last landed raid's whole result is kept for a finish that comes late. */
+export const RAID_LANDED_SECONDS = 60 * 60;
+
+/**
+ * Keeps a landed raid's whole result for a while, so a finish that reaches
+ * the server after the raid landed (by an earlier finish, or by the yard
+ * load) answers it in full: `aiattacks.recent` keeps no damaged buildings or
+ * housed losses (`landedResult`). Only ever trusted for a raid the row says
+ * landed.
+ */
+export const keepLandedResult = async (userid: number, result: RaidResult): Promise<void> => {
+  await redis.setex(raidLandedKey(userid), RAID_LANDED_SECONDS, JSON.stringify(result));
+};
+
+/** The kept whole result of raid `raidId`, or null. */
+export const readLandedResult = async (userid: number, raidId: string): Promise<RaidResult | null> => {
+  const raw = await redis.get(raidLandedKey(userid));
+  if (raw === null) return null;
+  try {
+    const result = JSON.parse(raw) as RaidResult;
+    return result?.id === raidId ? result : null;
+  } catch {
+    return null;
+  }
 };
 
 /** What {@link takeRaidForFinish} found. */

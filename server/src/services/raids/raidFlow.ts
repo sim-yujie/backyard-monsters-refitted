@@ -55,8 +55,10 @@ import {
   WARNING_SECONDS,
   cancelOpenRaid,
   earliestFinish,
+  keepLandedResult,
   newRaidId,
   openRaid,
+  readLandedResult,
   readOpenRaid,
   takeRaidForFinish,
   updateOpenRaid,
@@ -546,16 +548,16 @@ export const unlockYard = (em: EntityManager, user: User, raidId: string): Promi
  *   fight: the raid is cancelled (`cancelled`), nothing lands, the yard is
  *   unlocked and the raid is still due.
  * - A finish for a raid that already landed answers what it landed, so a
- *   client that lost the first answer can ask again.
+ *   client that lost the first answer can ask again, and so does one whose
+ *   raid the yard load landed first (`settleRaidOnYardLoad`): it reads the
+ *   row under its lock, so it waits for a landing still being written.
  */
 export const finishRaid = async (em: EntityManager, user: User, raidId: unknown, now: number): Promise<RaidResult> => {
   if (typeof raidId !== "string") throw raidRefusedErr("badRequest");
   const taken = await takeRaidForFinish(user.userid, raidId, now);
   switch (taken.kind) {
     case "gone": {
-      const basesaveid = user.save?.basesaveid;
-      const save = basesaveid == null ? null : await em.findOne(Save, { basesaveid }, { fields: ["aiattacks"], refresh: true });
-      const landed = save ? landedResult(save.aiattacks, raidId) : null;
+      const landed = await alreadyLanded(em, user, raidId);
       if (landed) return landed;
       throw raidRefusedErr("noRaid");
     }
@@ -572,8 +574,29 @@ export const finishRaid = async (em: EntityManager, user: User, raidId: unknown,
       });
       throw raidRefusedErr("cancelled");
   }
+  return landTakenRaid(em, user, taken.raid, now, "finish");
+};
 
-  const raid = taken.raid;
+/**
+ * What a raid that already landed landed, whole when it is still kept
+ * (`keepLandedResult`), or null when the row has no such raid. Read under the
+ * row lock, so a landing in progress is waited for rather than missed.
+ */
+const alreadyLanded = async (em: EntityManager, user: User, raidId: string): Promise<RaidResult | null> => {
+  if (user.save?.basesaveid == null) return null;
+  const record = await em.transactional(async (tx) => landedResult((await lockMain(tx, user)).aiattacks, raidId));
+  if (!record) return null;
+  return (await readLandedResult(user.userid, raidId)) ?? record;
+};
+
+/** Lands a raid taken out of Redis (`takeRaidForFinish`), once, and keeps its whole result for a late finish. */
+const landTakenRaid = async (
+  em: EntityManager,
+  user: User,
+  raid: OpenRaid,
+  now: number,
+  via: "finish" | "load"
+): Promise<RaidResult> => {
   const outcome = raid.outcome as RaidFightOutcome;
   let completed: CompletedJob[] = [];
   // False when this finish only repeats one that already landed, so the dashboard counts each raid once.
@@ -583,7 +606,7 @@ export const finishRaid = async (em: EntityManager, user: User, raidId: unknown,
     if (raidAlreadyApplied(readSchedule(locked.aiattacks), raid.id)) {
       const landed = landedResult(locked.aiattacks, raid.id);
       if (!landed) throw raidRefusedErr("noRaid");
-      return landed;
+      return (await readLandedResult(user.userid, raid.id)) ?? landed;
     }
     completed = await catchUpLockedRow(tx, locked, now);
     const landed = landRaid(locked, { id: raid.id, tribe: raid.tribe, startedAt: raid.startedAt ?? now, outcome }, now);
@@ -593,6 +616,8 @@ export const finishRaid = async (em: EntityManager, user: User, raidId: unknown,
     if (landed.defended && raid.tribe !== TROJAN_TRIBE && raid.tribe !== MOLOCH_TRIBE) {
       recordQuests(locked, now, { defenceWin: 1 });
     }
+    // Kept before the row lock goes, so a finish waiting on it finds it whole.
+    await keepLandedResult(user.userid, landed);
     await tx.flush();
     landedNow = true;
     return landed;
@@ -606,6 +631,7 @@ export const finishRaid = async (em: EntityManager, user: User, raidId: unknown,
     userid: user.userid,
     id: raid.id,
     tribe: raid.tribe,
+    via,
     seed: raid.seed,
     bearing: plan.bearing,
     army: JSON.stringify(plan.army),
@@ -619,6 +645,47 @@ export const finishRaid = async (em: EntityManager, user: User, raidId: unknown,
     damaged: result.damaged.length,
   });
   return result;
+};
+
+/**
+ * A wild monster raid on an own-main-yard build load (patch 7.5), before the
+ * load's catch-up reads the yard: a fight the finish could already land
+ * (from `earliestFinish`, the moment `tooEarly` ends) is landed here, as its
+ * finish would have landed it, when the game was open. So a player who comes
+ * back to the yard while the finish is still on its way (a slow line, a
+ * server that answered late, "Back to yard") loses nothing: the yard opens
+ * with the raid landed, the load answers its result, and the finish that
+ * arrives afterwards answers the same result (`finishRaid`).
+ *
+ * Anything else is left for `cancelRaidOnYardLoad` after the catch-up, as
+ * before: a warning, a fight left before it could have been watched at 2x (a
+ * reload during the fight, owner Q1), and any fight when the game had been
+ * closed (presence lapsed: the finish would have cancelled it too).
+ *
+ * Nothing comes from the client: the outcome is the server's own, fought at
+ * the start, so landing it here gives nothing a finish would not.
+ *
+ * @param gameWasClosed - `presenceLapsed`, read before this load wrote the mark.
+ * @returns What landed, for the load's answer, or null when nothing did.
+ */
+export const settleRaidOnYardLoad = async (
+  em: EntityManager,
+  user: User,
+  gameWasClosed: boolean,
+  now: number
+): Promise<RaidResult | null> => {
+  if (gameWasClosed) return null;
+  const open = await readOpenRaid(user.userid);
+  if (!open || open.phase !== "fighting" || open.startedAt === undefined) return null;
+  if (now < earliestFinish(open.startedAt, open.fightSeconds ?? 0)) return null;
+  // The load wrote the presence mark already; the game was open (above).
+  const taken = await takeRaidForFinish(user.userid, open.id, now);
+  if (taken.kind === "cancelled") {
+    await unlockYard(em, user, open.id);
+    return null;
+  }
+  if (taken.kind !== "finished") return null;
+  return landTakenRaid(em, user, taken.raid, now, "load");
 };
 
 /**
