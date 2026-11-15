@@ -313,6 +313,8 @@ export class Hud {
   /** The Friends screen behind the Account menu's item (#370); null without the menu. */
   private friendsDoor: FriendsDoor | null = null;
   private fitted: HudFit = HudFit.FULL;
+  /** The constructor has made every element {@link fit} touches; until then a refit waits for `mount`. */
+  private built = false;
   /** The animation frame counting a readout up, or 0. */
   private frame = 0;
   /** Shiny Lock is on: the Shiny counter shows a padlock, not the 0 the server sends (`game/shinyLock.ts`). */
@@ -420,10 +422,6 @@ export class Hud {
     // balance (or the first after a sign-out) is the purse arriving and floats nothing.
     this.unwatchCoins = onCoinBalance((balance, before) => this.renderCoins(before === null ? 0 : balance - before));
     this.renderCoins();
-    this.unwatchLock = onShinyLock((on) => this.applyShinyLock(on));
-    const shinyReadout = this.readouts.get("shiny");
-    if (shinyReadout) this.render(shinyReadout);
-    loadShinyLock();
 
     // Workers: only on the player's own yard, so hidden until a binding comes.
     // Beside the readout list rather than in it, so on a phone, where the list
@@ -535,6 +533,16 @@ export class Hud {
       // An uploaded profile photo shows on the badge in place of the critter.
       if (session) this.unwatchPhoto = watchOwnPhoto(session.userId, (url) => this.accountMenu?.setPhoto(url));
     }
+
+    // Last, once every element exists: `loadShinyLock` can turn a lock left
+    // from the previous sign-in off at once, which refits the bar from inside
+    // this constructor. Earlier, that refit met no Workers control yet and threw
+    // on phones (bug report 46, "My game keeps on crashing").
+    this.built = true;
+    this.unwatchLock = onShinyLock((on) => this.applyShinyLock(on));
+    const shinyReadout = this.readouts.get("shiny");
+    if (shinyReadout) this.render(shinyReadout);
+    loadShinyLock();
   }
 
   /**
@@ -643,6 +651,7 @@ export class Hud {
    * and takes the fullest.
    */
   fit(): void {
+    if (!this.built) return;
     // The corner on a phone lays the readouts in a grid of four, which never
     // overflows and so cannot be measured: short amounts, as the mock-up has.
     if (this.corner && window.matchMedia?.(PHONE_QUERY).matches) {

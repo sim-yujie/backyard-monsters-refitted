@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import { ApiError } from "@/api/http";
 import type { RaidFinishResponse, RaidResult } from "@/api/raid";
-import { FINISH_RETRY_MS, finishRaidFight } from "./raidFinish";
+import { FINISH_RETRY_MS, finishRaidFight, MAX_EARLY_WAIT_MS } from "./raidFinish";
 
 /** Landing a raid's fight (issue #226 WP4, `/raid/finish`). */
 
@@ -43,6 +43,41 @@ describe("finishRaidFight", () => {
     });
     await expect(finishRaidFight(o)).resolves.toMatchObject({ kind: "landed" });
     expect(wait).toHaveBeenCalledWith(3_250);
+  });
+
+  it("says when a tooEarly wait starts and ends, so the raid screen holds back its way out (patch 7.5)", async () => {
+    let first = true;
+    const seen: string[] = [];
+    const { options: o } = options(async () => {
+      seen.push("finish");
+      if (first) {
+        first = false;
+        throw refusal("tooEarly", { readyAt: 1_003 });
+      }
+      return { error: 0, result: RESULT } as RaidFinishResponse;
+    });
+    o.wait.mockImplementation(async () => {
+      seen.push("wait");
+    });
+    await expect(finishRaidFight({ ...o, onEarlyWait: (waiting) => seen.push(waiting ? "early" : "ready") })).resolves.toMatchObject({
+      kind: "landed",
+    });
+    expect(seen).toEqual(["finish", "early", "wait", "ready", "finish"]);
+  });
+
+  it("never waits more than a few seconds at a time on a far-off readyAt (a phone clock hours off, reports 44, 45)", async () => {
+    let early = 2;
+    // The phone's clock, as the raid watch knows it, is three hours behind the server's.
+    const { options: o, wait } = options(async () => {
+      if (early > 0) {
+        early -= 1;
+        throw refusal("tooEarly", { readyAt: 1_000 + 3 * 3_600 });
+      }
+      return { error: 0, result: RESULT } as RaidFinishResponse;
+    });
+    await expect(finishRaidFight(o)).resolves.toMatchObject({ kind: "landed" });
+    expect(wait).toHaveBeenCalledTimes(2);
+    for (const [ms] of wait.mock.calls) expect(ms).toBe(MAX_EARLY_WAIT_MS);
   });
 
   it("says a cancelled raid was cancelled, and any other refusal that it is gone", async () => {

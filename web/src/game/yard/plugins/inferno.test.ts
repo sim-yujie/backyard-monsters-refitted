@@ -16,7 +16,7 @@ import {
   MOLOCH_INTRO,
   TRANSFER_MONSTERS,
 } from "@/game/inferno/emergenceText";
-import { consumeRaidResult, consumeRaidRun, setRaidResult } from "@/game/raid/raidSession";
+import { consumeRaidResult, consumeRaidRun, resetRaidSession, setRaidResult } from "@/game/raid/raidSession";
 import { INFERNO_YARD, MAIN_YARD } from "@/game/yard/ownYards";
 import { YardView } from "@/game/yard/YardRenderer";
 import type { YardMounts } from "@/game/yard/yardPlugins";
@@ -175,6 +175,7 @@ beforeEach(() => {
 });
 
 afterEach(() => {
+  resetRaidSession();
   vi.useRealTimers();
   vi.unstubAllGlobals();
   localStorage.clear();
@@ -446,7 +447,8 @@ describe("Moloch's raid", () => {
     after.teardown?.();
     document.body.replaceChildren();
 
-    setRaidResult(landed("Kozu"));
+    // Another raid (a raid's result is handed over once, by its id).
+    setRaidResult({ ...landed("Kozu"), id: "w1" });
     const wild = mount(loadState(2));
     expect(wild.modal.textContent).not.toContain(CAVERN_DEFENCE);
     expect(consumeRaidResult()?.tribe).toBe("Kozu");

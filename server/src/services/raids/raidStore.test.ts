@@ -33,7 +33,9 @@ const {
   readOpenRaid,
   readRaidScreen,
   recordRaidScreen,
-  takeRaidForFinish,
+  checkRaidForFinish,
+  dropOpenRaid,
+  openFightingRaid,
   updateOpenRaid,
 } = await import("./raidStore.js");
 type OpenRaid = NonNullable<Awaited<ReturnType<typeof readOpenRaid>>>;
@@ -149,49 +151,55 @@ describe("finish", () => {
     expect(ready).toBe(start + FIGHT / 2 - 5);
     at(ready - 1);
     await ping(ready - 1);
-    expect(await takeRaidForFinish(USER, "r_one", ready - 1)).toEqual({ kind: "tooEarly", readyAt: ready });
+    expect(await checkRaidForFinish(USER, "r_one", ready - 1)).toEqual({ kind: "tooEarly", readyAt: ready });
     expect(await readOpenRaid(USER)).not.toBeNull();
   });
 
-  test("taken exactly once", async () => {
+  test("ready to land, and left open: it is landed and dropped under the yard's lock (raidFlow.ts)", async () => {
     at(ready);
     await ping(ready);
-    const [a, b] = await Promise.all([
-      takeRaidForFinish(USER, "r_one", ready),
-      takeRaidForFinish(USER, "r_one", ready),
-    ]);
-    expect([a.kind, b.kind].sort()).toEqual(["finished", "gone"]);
-    const finished = a.kind === "finished" ? a : b;
-    expect(finished).toMatchObject({ raid: { id: "r_one", outcome: { health: 0.95 } } });
-    expect(await readOpenRaid(USER)).toBeNull();
-    expect(await takeRaidForFinish(USER, "r_one", ready + 1)).toEqual({ kind: "gone" });
+    const [a, b] = await Promise.all([checkRaidForFinish(USER, "r_one", ready), checkRaidForFinish(USER, "r_one", ready)]);
+    expect(a).toMatchObject({ kind: "finished", raid: { id: "r_one", outcome: { health: 0.95 } } });
+    expect(b.kind).toBe("finished");
+    expect(await readOpenRaid(USER)).not.toBeNull();
+    expect(await dropOpenRaid(USER, "r_other")).toBe(false);
+    expect(await readOpenRaid(USER)).not.toBeNull();
+    expect(await dropOpenRaid(USER, "r_one")).toBe(true);
+    expect(await checkRaidForFinish(USER, "r_one", ready + 1)).toEqual({ kind: "gone" });
+  });
+
+  test("the drop compares and deletes in one step: a raid opened since is never dropped for the old one", async () => {
+    // Two settlements both read r_one; one drops it, a Trojan Horse spring opens r_two, the other drops "r_one".
+    expect(await dropOpenRaid(USER, "r_one")).toBe(true);
+    await openFightingRaid(USER, { ...fighting(start), id: "r_two" }, start);
+    expect(await dropOpenRaid(USER, "r_one")).toBe(false);
+    expect((await readOpenRaid(USER))?.id).toBe("r_two");
   });
 
   test("another raid's id finds nothing and leaves it", async () => {
     at(ready);
-    expect(await takeRaidForFinish(USER, "r_other", ready)).toEqual({ kind: "gone" });
+    expect(await checkRaidForFinish(USER, "r_other", ready)).toEqual({ kind: "gone" });
     expect(await readOpenRaid(USER)).not.toBeNull();
   });
 
   test("a raid still in its warning cannot be finished", async () => {
     await cancelOpenRaid(USER);
     await openRaid(USER, warning(), T0);
-    expect(await takeRaidForFinish(USER, "r_one", T0 + 1000)).toEqual({ kind: "notFighting" });
+    expect(await checkRaidForFinish(USER, "r_one", T0 + 1000)).toEqual({ kind: "notFighting" });
     expect(await readOpenRaid(USER)).not.toBeNull();
   });
 
-  test("no presence mark in the last 2 minutes: cancelled and gone (cancel rule 2)", async () => {
+  test("no presence mark in the last 2 minutes: to be cancelled (cancel rule 2)", async () => {
     await ping(start);
     at(start + 200);
-    const result = await takeRaidForFinish(USER, "r_one", start + 200);
+    const result = await checkRaidForFinish(USER, "r_one", start + 200);
     expect(result.kind).toBe("cancelled");
-    expect(await readOpenRaid(USER)).toBeNull();
   });
 
   test("a mark just inside the 2 minutes still finishes", async () => {
     await ping(ready - 100);
     at(ready);
-    expect((await takeRaidForFinish(USER, "r_one", ready)).kind).toBe("finished");
+    expect((await checkRaidForFinish(USER, "r_one", ready)).kind).toBe("finished");
   });
 });
 
@@ -201,6 +209,20 @@ describe("a yard load (cancel rule 3)", () => {
     await updateOpenRaid(USER, fighting(T0 + 300), T0 + 300);
     expect(await cancelRaidOnYardLoad(USER, false)).toBe(true);
     expect(await readOpenRaid(USER)).toBeNull();
+  });
+
+  test("drops only the raid it read: a newer raid B opened meanwhile stays (sol's fourth review)", async () => {
+    // The load reads fight A; meanwhile a finish settles and drops A and a Trojan Horse spring opens B.
+    await openFightingRaid(USER, { ...fighting(T0 + 300), id: "r_b" }, T0 + 300);
+    const staleA = JSON.stringify(fighting(T0 + 300));
+    const get = redis.get;
+    redis.get = (async (key: string) => (key === raidKey(USER) ? staleA : get(key))) as typeof redis.get;
+    try {
+      expect(await cancelRaidOnYardLoad(USER, false)).toBe(false);
+    } finally {
+      redis.get = get;
+    }
+    expect((await readOpenRaid(USER))?.id).toBe("r_b");
   });
 
   test("keeps a warning while the game stayed open (back from the map)", async () => {
