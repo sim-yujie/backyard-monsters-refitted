@@ -1597,17 +1597,17 @@ button.hatch-slot:disabled {
     white-space: nowrap;
   }
 
-  /* A short screen (1280x720): a smaller portrait gives back the line kept
-     for the warning below, so the whole tab still fits with no scroll bar. */
+  /* A short screen (1280x720): smaller monster pictures give back the line
+     the housing numbers take under a warning, so the whole tab still fits
+     with no scroll bar (patch 7.6.1). */
   @media (max-height: 760px) {
-    .hatch-info__portrait {
-      width: 56px;
-      height: 56px;
+    .hatch-monster {
+      padding-top: var(--space-1);
     }
 
-    .hatch-info__picture {
-      width: 52px;
-      height: 52px;
+    .hatch-monster__picture {
+      width: 42px;
+      height: 42px;
     }
   }
 
