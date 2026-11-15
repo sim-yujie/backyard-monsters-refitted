@@ -28,6 +28,10 @@ export interface HelpAllLine {
   readonly text: string;
   readonly full?: string;
   readonly kind: "thanks" | "error";
+  /** Shown in place of the words (icons and numbers), the words kept for a screen reader. */
+  readonly node?: HTMLElement;
+  /** How long it stays; {@link HELP_ALL_RESULT_MS} unless said. 0 shows nothing. */
+  readonly ms?: number;
 }
 
 export interface HelpAllBarOptions {
@@ -91,13 +95,26 @@ export class HelpAllBar {
 
   /** The line after Help all, for a test; empty when none shows. */
   get resultText(): string {
-    return this.result.hidden ? "" : (this.result.textContent ?? "");
+    if (this.result.hidden) return "";
+    return this.result.querySelector(".help-all-bar__words")?.textContent ?? this.result.textContent ?? "";
   }
 
   /** Shows the line after Help all for {@link HELP_ALL_RESULT_MS}, in place of the count and the button. */
   showResult(line: HelpAllLine): void {
     if (this.resultTimer) clearTimeout(this.resultTimer);
-    this.result.textContent = line.text;
+    const ms = line.ms ?? HELP_ALL_RESULT_MS;
+    if (ms <= 0) {
+      this.result.hidden = true;
+      this.render();
+      return;
+    }
+    if (line.node) {
+      line.node.setAttribute("aria-hidden", "true");
+      this.result.replaceChildren(line.node, make("span", "help-all-bar__words", line.text));
+    } else {
+      this.result.textContent = line.text;
+    }
+    this.result.classList.toggle("help-all-bar__result--node", line.node !== undefined);
     this.result.title = line.full ?? line.text;
     this.result.hidden = false;
     this.result.classList.toggle("help-all-bar__result--error", line.kind === "error");
@@ -105,7 +122,7 @@ export class HelpAllBar {
       this.resultTimer = null;
       this.result.hidden = true;
       this.render();
-    }, HELP_ALL_RESULT_MS);
+    }, ms);
     this.render();
   }
 

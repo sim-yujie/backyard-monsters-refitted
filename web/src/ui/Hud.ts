@@ -609,6 +609,53 @@ export class Hud {
     if (readout && delta !== 0) this.float(readout.key, readout.value, delta);
   }
 
+  /**
+   * Floats `delta` in a lane just under the readout's cell, centred on it,
+   * fading where it appears rather than rising through the digits (astra's
+   * review of Help all, 15 Nov 2026: on a phone the usual float sat on the
+   * numbers). Replaces the readout's float, if one is up.
+   */
+  floatBelow(key: ResourceKey, delta: number): void {
+    const readout = this.readouts.get(key);
+    if (!readout || delta === 0) return;
+    this.dropFloat(key);
+    const float = document.createElement("span");
+    float.className = `hud__delta hud__delta--lane hud__delta--${delta < 0 ? "down" : "up"}`;
+    float.dataset["resource"] = key;
+    float.setAttribute("aria-hidden", "true");
+    float.textContent = formatDelta(delta);
+    const box = readout.button.getBoundingClientRect();
+    float.style.left = `${Math.round(box.left + box.width / 2)}px`;
+    float.style.top = `${Math.round(box.bottom + 3)}px`;
+    document.body.append(float);
+    this.floats.add(float);
+    const remove = (): void => {
+      float.remove();
+      this.floats.delete(float);
+    };
+    float.addEventListener("animationend", remove, { once: true });
+    window.setTimeout(remove, FLOAT_LIFETIME_MS);
+  }
+
+  /** A readout's cell lights up for a moment: something just landed in it. */
+  pulse(key: ResourceKey): void {
+    const button = this.readouts.get(key)?.button;
+    if (!button) return;
+    button.classList.remove("hud__resource-button--pulse");
+    // Restart the animation when two land close together.
+    void button.offsetWidth;
+    button.classList.add("hud__resource-button--pulse");
+    window.setTimeout(() => button.classList.remove("hud__resource-button--pulse"), 400);
+  }
+
+  /** Where a readout's picture is on the screen, or null without one. */
+  readoutBox(key: ResourceKey): DOMRect | null {
+    const readout = this.readouts.get(key);
+    if (!readout) return null;
+    const icon = readout.button.querySelector(".res-icon, img, svg");
+    return (icon ?? readout.button).getBoundingClientRect();
+  }
+
   /** Shows every readout's whole amount at once: nothing is flying any more. */
   releaseHeld(): void {
     for (const readout of this.readouts.values()) {

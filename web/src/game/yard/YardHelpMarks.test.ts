@@ -50,6 +50,44 @@ describe("YardHelpMarks", () => {
     expect(marks.ground.children[0]!.position.y).toBe(80);
   });
 
+  it("a held wrench stays after its help lands, until it leaves; then it plays its exit and is gone", () => {
+    const marks = new YardHelpMarks(anchor, corners);
+    marks.set([speedup(1), speedup(2)]);
+    marks.hold([1, 2]);
+    // Both helps land: the scene hands over no marks, but both wrenches stay.
+    marks.set([]);
+    expect(marks.drawn).toEqual([1, 2]);
+    marks.leave(1, "pop");
+    expect(marks.drawn).toEqual([2]);
+    // Still on the yard while it pops.
+    expect(marks.active).toBe(true);
+    expect(marks.root.children.length).toBeGreaterThan(1);
+    marks.update(0.2);
+    expect(marks.root.children.length).toBeGreaterThan(1);
+    marks.update(1);
+    expect(marks.root.children).toHaveLength(1);
+    marks.leave(2);
+    expect(marks.active).toBe(false);
+  });
+
+  it("a held wrench the scene still hands over (a refused help) stays when let go", () => {
+    const marks = new YardHelpMarks(anchor, corners);
+    marks.set([speedup(1)]);
+    marks.hold([1]);
+    marks.leave(1, "fade");
+    expect(marks.drawn).toEqual([1]);
+  });
+
+  it("letting every held wrench go drops them at once", () => {
+    const marks = new YardHelpMarks(anchor, corners);
+    marks.set([speedup(1), speedup(2)]);
+    marks.hold([1, 2]);
+    marks.set([speedup(2)]);
+    expect([...marks.drawn].sort()).toEqual([1, 2]);
+    marks.releaseHeld();
+    expect(marks.drawn).toEqual([2]);
+  });
+
   it("a new saving rewrites the tag without drawing the marks again", () => {
     const marks = new YardHelpMarks(anchor, corners);
     marks.set([speedup(1, 1080)]);

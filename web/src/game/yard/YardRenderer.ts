@@ -7,7 +7,7 @@ import type { HarvestKey } from "./harvest";
 import { YardGround } from "./YardGround";
 import { LOAD_TRIES, loadWithRetries } from "./retryLoad";
 import { CHOSEN_FILL, YardHatchMarks, type HatcheryMarks } from "./YardHatchMarks";
-import { YardHelpMarks, type HelpMarksBox } from "./YardHelpMarks";
+import { YardHelpMarks, type HelpMarkExit, type HelpMarksBox } from "./YardHelpMarks";
 import type { HelpMark } from "@/game/friends/helpModel";
 import { BAR_HEIGHT, jobBarScale, YardJobBars } from "./YardJobBars";
 import { MAX_JUICE_WALKERS, YardLifeLayer } from "./YardLifeLayer";
@@ -705,6 +705,21 @@ export class YardRenderer {
    */
   setHelpMarks(marks: readonly HelpMark[]): void {
     this.helpMarks.set(marks);
+  }
+
+  /** Keeps these wrenches drawn after their helps land, until each leaves (`YardHelpMarks.hold`). */
+  holdHelpMarks(ids: readonly number[]): void {
+    this.helpMarks.hold(ids);
+  }
+
+  /** Lets a held wrench go, playing `exit` where it stands (`YardHelpMarks.leave`). */
+  leaveHelpMark(id: number, exit?: HelpMarkExit): void {
+    this.helpMarks.leave(id, exit);
+  }
+
+  /** Lets every held wrench go at once, with no exit. */
+  releaseHelpMarks(): void {
+    this.helpMarks.releaseHeld();
   }
 
   /**

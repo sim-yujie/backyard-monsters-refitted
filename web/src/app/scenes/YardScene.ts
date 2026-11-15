@@ -173,6 +173,7 @@ import { showGoldenMushroom } from "@/ui/yard/MushroomReward";
 import { FriendsButton } from "@/ui/friends/FriendsButton";
 import { HelpPanel } from "@/ui/friends/HelpPanel";
 import { HelpAllBar, type HelpAllLine } from "@/ui/friends/HelpAllBar";
+import { helpAllFxMaker, type HelpAllFx, type HelpFxStage } from "@/ui/friends/helpAllFx";
 import { YardDock, type YardDockOptions } from "@/ui/yard/YardDock";
 import { kitBoughtText, StarterKitPicker } from "@/ui/yard/StarterKitPicker";
 import { YardMinimap } from "@/ui/yard/YardMinimap";
@@ -500,6 +501,8 @@ export class YardScene implements Scene {
   private visitTopWatch: ResizeObserver | null = null;
   /** The one visit bar: "Bob's yard", the tools and "3", Help all; a friend's visit only (beta 8). */
   private helpAllBar: HelpAllBar | null = null;
+  /** Help all's effect while one plays (`helpAllFx.ts`); null plays none. */
+  private helpFx: HelpAllFx | null = null;
   /** Keeps the wrenches' "-18m" tags current while visiting. */
   private helpMarkTimer: ReturnType<typeof setInterval> | null = null;
   /** Whether this visit's camera has been framed on the marks. */
@@ -870,6 +873,8 @@ export class YardScene implements Scene {
     this.stopHelpedWatch = null;
     this.helpPanel?.close();
     this.helpPanel = null;
+    this.helpFx?.cancel();
+    this.helpFx = null;
     this.helpAllBar?.destroy();
     this.helpAllBar = null;
     this.visitTopWatch?.disconnect();
@@ -2044,14 +2049,18 @@ export class YardScene implements Scene {
       if (result.building) this.patchVisitBuilding(building, result.building);
       // The reward lands in the visitor's own pool (#374): the HUD floats it.
       const pool = this.visitorPool;
+      const fx = this.helpFx;
       if (pool) {
         const resources: Resources = { ...pool.resources };
         for (const key of ["r1", "r2", "r3", "r4"] as const) {
           const add = result.reward[key] ?? 0;
-          if (add > 0) resources[key] = (resources[key] ?? 0) + add;
+          if (add <= 0) continue;
+          resources[key] = (resources[key] ?? 0) + add;
+          // Help all's effect delivers it in its own time; held in the same task, so the readout never jumps.
+          if (fx) this.hud?.hold(key, add);
         }
         this.visitorPool = { ...pool, resources };
-        this.hud?.setResources(resources, pool.credits);
+        this.hud?.setResources(resources, pool.credits, fx ? { float: false } : {});
       }
       this.showHelpBlock();
       // The friends bar's wrench follows.
@@ -2090,22 +2099,65 @@ export class YardScene implements Scene {
     const context = this.context;
     this.helpPanel?.close();
     const targets = helpAllTargets(this.helpBlock);
+    const stage = this.helpFxStage();
+    const fx = stage ? (helpAllFxMaker()?.(stage) ?? null) : null;
+    this.helpFx?.cancel();
+    this.helpFx = fx;
+    fx?.start(targets.map((target) => target.id));
     const summary = await runHelpAll(targets, {
       block: () => this.helpBlock,
       goOn: () => this.context === context && this.helpBlock !== null,
-      onStep: (done, total) => this.helpAllBar?.setProgress(done, total),
+      // An effect counts the bar on as it plays each help, not as each lands.
+      onStep: (done, total) => (fx ? undefined : this.helpAllBar?.setProgress(done, total)),
       helpOne: async (step: HelpTarget): Promise<HelpOutcome> => {
         const building = this.yard?.buildings.find((one) => one.id === step.id);
         if (!building) return { ok: false, reason: "nothingToHelp", text: helpRefusalText("nothingToHelp") };
         // Signed out or left mid-way: stop.
-        return (await this.giveHelp(building, step.kind)) ?? { ok: false, reason: "gone", text: "" };
+        const outcome = (await this.giveHelp(building, step.kind)) ?? { ok: false, reason: "gone", text: "" };
+        if (this.helpFx === fx && fx) {
+          if (outcome.ok) fx.helped({ id: step.id, secondsSaved: outcome.secondsSaved, reward: outcome.reward });
+          else fx.missed(step.id);
+        }
+        return outcome;
       },
     });
     const full = helpAllResultText(summary);
     if (summary.stoppedBy && this.context === context) {
       this.notices.show("help-all-stopped", full, { level: "warning", timeoutMs: 8_000 });
     }
-    return { text: helpAllShortText(summary), full, kind: summary.stoppedBy ? "error" : "thanks" };
+    const line: HelpAllLine = { text: helpAllShortText(summary), full, kind: summary.stoppedBy ? "error" : "thanks" };
+    if (!fx || this.helpFx !== fx) return line;
+    const played = await fx.done(summary, line);
+    if (this.helpFx === fx) this.helpFx = null;
+    return played ?? line;
+  }
+
+  /** What Help all's effect plays on (`helpAllFx.ts`); null off a visit. */
+  private helpFxStage(): HelpFxStage | null {
+    const hud = this.hud;
+    const bar = this.helpAllBar;
+    const context = this.context;
+    if (!hud || !bar || !context) return null;
+    const renderer = this.renderer;
+    return {
+      hud,
+      bar,
+      marks: {
+        hold: (ids) => renderer.holdHelpMarks(ids),
+        leave: (id, exit) => renderer.leaveHelpMark(id, exit),
+        release: () => renderer.releaseHelpMarks(),
+      },
+      wrenchAt: (id) => {
+        const camera = this.camera;
+        const disc = renderer.helpMarkDiscs().find((one) => one.id === id);
+        if (!camera || !disc || !disc.visible) return null;
+        const at = camera.worldToScreen({ x: disc.x, y: disc.y });
+        if (at.x < 0 || at.y < 0 || at.x > this.viewportWidth || at.y > this.viewportHeight) return null;
+        const canvas = context.canvas.getBoundingClientRect();
+        return { x: canvas.left + at.x, y: canvas.top + at.y };
+      },
+      reducedMotion: prefersReducedMotion(),
+    };
   }
 
   /**

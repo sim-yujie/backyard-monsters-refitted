@@ -89,4 +89,19 @@ describe("HelpAllBar", () => {
     expect(part(bar, "help").hidden).toBe(false);
     expect(count(bar)).toBe("1 to speed up");
   });
+
+  it("a line can be icons for its own time, its words kept for a screen reader; 0 ms shows none", () => {
+    vi.useFakeTimers();
+    const bar = new HelpAllBar({ onHelpAll: async () => ({ text: "", kind: "thanks" }) });
+    bar.setName("Bob's yard");
+    const node = document.createElement("span");
+    node.className = "picture";
+    bar.showResult({ text: "Helped 3", kind: "thanks", node, ms: 1000 });
+    expect(part(bar, "result").querySelector(".picture")?.getAttribute("aria-hidden")).toBe("true");
+    expect(bar.resultText).toBe("Helped 3");
+    vi.advanceTimersByTime(1000);
+    expect(bar.resultText).toBe("");
+    bar.showResult({ text: "Helped 3", kind: "thanks", ms: 0 });
+    expect(part(bar, "result").hidden).toBe(true);
+  });
 });

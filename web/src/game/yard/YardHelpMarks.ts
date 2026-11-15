@@ -118,6 +118,28 @@ export interface HelpMarksOptions {
   readonly reducedMotion?: boolean;
 }
 
+/**
+ * How a held wrench leaves once its help has landed ({@link YardHelpMarks.leave}):
+ * `pop` bumps the disc and pops it while the tag rises off the building and
+ * the ring flares; `flash` lights the disc and fades it; `fade` fades it all.
+ * Under `prefers-reduced-motion` every exit is a plain fade.
+ */
+export type HelpMarkExit = "pop" | "flash" | "fade";
+
+/** A wrench on its way out: drawn on, out of `views`, until its exit ends. */
+interface LeavingView {
+  readonly view: MarkView;
+  readonly exit: HelpMarkExit;
+  /** The tag and its plate, lifted out of the bob so they can rise on their own. */
+  readonly tagBox: Container | null;
+  /** The flash's white glow, or the pop's burst ring; none for a fade. */
+  readonly overlay: Graphics | null;
+  age: number;
+}
+
+/** Each exit's length, seconds. */
+export const EXIT_SECONDS: Readonly<Record<HelpMarkExit, number>> = { pop: 0.9, flash: 0.35, fade: 0.3 };
+
 export class YardHelpMarks {
   /** The wrenches and their tags: over the buildings. */
   readonly root = new Container();
@@ -134,6 +156,11 @@ export class YardHelpMarks {
   private zoom = 1;
   private time = 0;
   private readonly views = new Map<number, MarkView>();
+  /** The marks the scene last handed over (`set`), before any held ones are added. */
+  private given: readonly HelpMark[] = [];
+  /** Wrenches kept drawn after their help landed, until `leave` (Help all's effects). */
+  private readonly held = new Map<number, HelpMark>();
+  private readonly leaving: LeavingView[] = [];
   private readonly reducedMotion: boolean;
   /** The world y of the top of the clear band (under the visit's top column), or null. */
   private viewTop: number | null = null;
@@ -151,7 +178,7 @@ export class YardHelpMarks {
 
   /** Whether any mark is drawn. */
   get active(): boolean {
-    return this.views.size > 0;
+    return this.views.size > 0 || this.leaving.length > 0;
   }
 
   /** The buildings wearing a wrench, by id. */
@@ -179,7 +206,9 @@ export class YardHelpMarks {
    * a different set of buildings redraws them all; a new saving only
    * rewrites its tag.
    */
-  set(marks: readonly HelpMark[]): boolean {
+  set(given: readonly HelpMark[]): boolean {
+    this.given = given;
+    const marks = this.withHeld(given);
     const same =
       marks.length === this.marks.length &&
       marks.every((mark) => this.views.get(mark.id)?.kind === mark.kind);
@@ -223,8 +252,46 @@ export class YardHelpMarks {
     this.viewTop = worldY;
   }
 
+  /**
+   * Keeps these buildings' wrenches drawn as they are now, even once a help
+   * takes them out of the marks the scene hands over, until each {@link leave}s
+   * (Help all's effects play each wrench out in turn, not all at once).
+   */
+  hold(ids: readonly number[]): void {
+    for (const id of ids) {
+      const mark = this.marks.find((one) => one.id === id);
+      if (mark) this.held.set(id, mark);
+    }
+  }
+
+  /**
+   * Lets a held wrench go: it plays `exit` where it stands, then is gone. A
+   * wrench the scene still hands over stays. Without `exit` it simply goes.
+   */
+  leave(id: number, exit?: HelpMarkExit): void {
+    const wasHeld = this.held.delete(id);
+    const view = this.views.get(id);
+    if (!wasHeld || !view || this.given.some((mark) => mark.id === id)) return;
+    if (exit) {
+      this.views.delete(id);
+      const played = this.reducedMotion ? "fade" : exit;
+      this.leaving.push({ view, exit: played, ...readyToLeave(view, played), age: 0 });
+    }
+    this.marks = this.withHeld(this.given);
+    this.rebuild();
+  }
+
+  /** Lets every held wrench go at once, with no exit (a visit left mid-way). */
+  releaseHeld(): void {
+    if (this.held.size === 0) return;
+    this.held.clear();
+    this.marks = this.given;
+    this.rebuild();
+  }
+
   /** Advances the pulse and the bob; called every frame while any mark is drawn. */
   update(deltaSeconds: number): void {
+    this.playLeaving(Math.max(0, deltaSeconds));
     if (this.reducedMotion || this.views.size === 0) return;
     this.time += Math.max(0, deltaSeconds);
     const pulse = PULSE_LOW + (1 - PULSE_LOW) * (0.5 - 0.5 * Math.cos((2 * Math.PI * this.time) / PULSE_PERIOD));
@@ -324,10 +391,31 @@ export class YardHelpMarks {
   }
 
   destroy(): void {
+    for (const leaving of this.leaving.splice(0)) dropView(leaving.view);
     this.clear();
     this.root.destroy({ children: true });
     this.ground.destroy({ children: true });
     this.front.destroy({ children: true });
+  }
+
+  /** The marks handed over, plus each held wrench the scene no longer hands over. */
+  private withHeld(given: readonly HelpMark[]): readonly HelpMark[] {
+    const extra = [...this.held.values()].filter((mark) => !given.some((one) => one.id === mark.id));
+    return extra.length === 0 ? given : [...given, ...extra];
+  }
+
+  /** Plays each leaving wrench's exit on by `dt` seconds; drops the finished ones. */
+  private playLeaving(dt: number): void {
+    for (let index = this.leaving.length - 1; index >= 0; index -= 1) {
+      const leaving = this.leaving[index]!;
+      leaving.age += dt;
+      const t = Math.min(1, leaving.age / EXIT_SECONDS[leaving.exit]);
+      paintExit(leaving, t, leaving.age);
+      if (t >= 1) {
+        dropView(leaving.view);
+        this.leaving.splice(index, 1);
+      }
+    }
   }
 
   private rebuild(): void {
@@ -396,12 +484,105 @@ export class YardHelpMarks {
   }
 
   private clear(): void {
-    for (const child of this.root.removeChildren()) child.destroy({ children: true });
-    for (const child of this.ground.removeChildren()) child.destroy({ children: true });
-    for (const child of this.front.removeChildren()) child.destroy({ children: true });
+    // A wrench on its way out plays on: only the standing marks go.
+    for (const view of this.views.values()) dropView(view);
     this.views.clear();
   }
 }
+
+/** Takes a mark's pictures off the yard for good. */
+const dropView = (view: MarkView): void => {
+  view.badge.destroy({ children: true });
+  view.ring?.destroy();
+  view.edge?.destroy();
+};
+
+/**
+ * Readies a wrench to leave: its tag and plate move out of the bob into
+ * their own box on the badge, where they stood, so they can rise on their
+ * own; the disc scales about its own centre; and a white glow (flash) or a
+ * cream burst ring (pop) is laid over it.
+ */
+const readyToLeave = (view: MarkView, exit: HelpMarkExit): Pick<LeavingView, "tagBox" | "overlay"> => {
+  const disc = view.bob;
+  let tagBox: Container | null = null;
+  if (view.tag) {
+    tagBox = new Container();
+    tagBox.position.set(disc.x, disc.y);
+    const plate = disc.children.find((child) => child.label === "tag-plate");
+    if (plate) tagBox.addChild(plate);
+    tagBox.addChild(view.tag);
+    view.badge.addChild(tagBox);
+  }
+  disc.pivot.set(0, -WRENCH_RISE);
+  disc.position.set(disc.x, disc.y - WRENCH_RISE);
+  let overlay: Graphics | null = null;
+  if (exit === "flash") {
+    overlay = new Graphics().circle(0, -WRENCH_RISE, WRENCH_RADIUS).fill({ color: 0xffffff });
+    overlay.alpha = 0;
+    disc.addChild(overlay);
+  } else if (exit === "pop") {
+    overlay = new Graphics().circle(0, 0, WRENCH_RADIUS).stroke({ width: 4, color: RIM });
+    overlay.position.set(disc.x, disc.y);
+    overlay.alpha = 0;
+    view.badge.addChildAt(overlay, 0);
+  }
+  return { tagBox, overlay };
+};
+
+const easeOut = (t: number): number => 1 - (1 - t) * (1 - t);
+
+/**
+ * One frame of a wrench's exit, `age` seconds in, `t` from 0 to 1 over the exit's length.
+ * - pop (0.9 s): the disc swells to 1.3x in the first 0.12 s, then pops
+ *   (shrinks and fades) by 0.3 s while a cream ring bursts out of it; the
+ *   ground ring flares to full and fades by 0.3 s; the tag rises 26 px off
+ *   the building and fades over the last 0.25 s.
+ * - flash (0.35 s): the disc lights up white and fades with its tag; the ring fades.
+ * - fade (0.3 s): everything fades.
+ */
+const paintExit = (leaving: LeavingView, t: number, age: number): void => {
+  const { view, exit, tagBox, overlay } = leaving;
+  const disc = view.bob;
+  const ring = (alpha: number): void => {
+    if (view.ring) view.ring.alpha = alpha;
+    if (view.edge) view.edge.alpha = alpha;
+  };
+  if (exit === "pop") {
+    const swell = 0.12;
+    const popEnd = 0.3;
+    if (age < swell) {
+      disc.scale.set(1 + 0.3 * easeOut(age / swell));
+    } else {
+      const p = Math.min(1, (age - swell) / (popEnd - swell));
+      disc.scale.set(1.3 - 0.7 * p);
+      disc.alpha = 1 - p;
+      if (overlay) {
+        overlay.scale.set(1.2 + 0.9 * easeOut(p));
+        overlay.alpha = p < 1 ? 1 - p : 0;
+      }
+    }
+    ring(age < 0.08 ? 1 : Math.max(0, 1 - (age - 0.08) / 0.22));
+    if (tagBox) {
+      tagBox.y = disc.y + WRENCH_RISE - 26 * easeOut(Math.min(1, age / 0.5));
+      const fadeFrom = EXIT_SECONDS.pop - 0.25;
+      tagBox.alpha = age < fadeFrom ? 1 : Math.max(0, 1 - (age - fadeFrom) / 0.25);
+      tagBox.scale.set(age < 0.12 ? 1 + 0.15 * (age / 0.12) : 1.15 - 0.15 * Math.min(1, (age - 0.12) / 0.2));
+    }
+    return;
+  }
+  if (exit === "flash") {
+    if (overlay) overlay.alpha = t < 0.3 ? 0.85 * (t / 0.3) : 0.85;
+    disc.alpha = t < 0.3 ? 1 : 1 - (t - 0.3) / 0.7;
+    disc.scale.set(1 + 0.15 * Math.sin(Math.PI * Math.min(1, t / 0.6)));
+    if (tagBox) tagBox.alpha = disc.alpha;
+    ring(1 - t);
+    return;
+  }
+  disc.alpha = 1 - t;
+  if (tagBox) tagBox.alpha = 1 - t;
+  ring(1 - t);
+};
 
 /** Today's small wrench (#374), for a building that only takes a repair. */
 const smallWrench = (): Graphics[] => {
