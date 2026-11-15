@@ -5,10 +5,11 @@ import type { BuildingDataMap, BuildingHealthData } from "../../types/BuildingDa
 import type { ResourceAmounts } from "../yardplanner/costs.js";
 import { secondsOf } from "./friendRules.js";
 import { placeholders } from "./friendViews.js";
+import { LEGACY_HELPS_LEFT } from "./helpConfig.js";
 import {
   gateRefusal,
-  helpsLeftOf,
   previewHelp,
+  rewardsLeftOf,
   type BuildingHelp,
   type HelpFacts,
   type HelpKind,
@@ -19,7 +20,8 @@ import {
 
 /**
  * What the help rules read from the database (issue #373): both players, the
- * friendship, the helper's helps today, and the `friend_help` rows themselves.
+ * friendship, the helper's helps today (for the reward), and the
+ * `friend_help` rows themselves.
  * The rules are in `helpRules.ts`; the route that writes is
  * `controllers/friends/help.ts`.
  */
@@ -27,7 +29,7 @@ import {
 /** The UTC day `now` falls in, as `friend_help.help_day` stores it (`YYYY-MM-DD`). */
 export const helpDayOf = (now: number): string => new Date(now * 1000).toISOString().slice(0, 10);
 
-/** Helps the player has given in the UTC day `now` falls in. */
+/** Helps the player has given in the UTC day `now` falls in (only the first few pay, `rewardsLeftOf`). */
 export const helpsToday = async (em: EntityManager, helper: number, now: number): Promise<number> => {
   const [row] = await em.execute<{ n: number }[]>(
     `SELECT count(*)::int AS n FROM bym.friend_help WHERE helper_userid = ? AND help_day = ?::date`,
@@ -71,19 +73,15 @@ export const friendsSince = async (em: EntityManager, helper: number, others: re
 };
 
 /** Everything the gates need for one helper and one owner, or null when either player is gone. */
-export const helpFactsFor = async (em: EntityManager, helper: number, owner: number, now: number): Promise<HelpFacts | null> => {
-  const [sides, since, today] = await Promise.all([
-    readSides(em, [helper, owner]),
-    friendsSince(em, helper, [owner]),
-    helpsToday(em, helper, now),
-  ]);
+export const helpFactsFor = async (em: EntityManager, helper: number, owner: number): Promise<HelpFacts | null> => {
+  const [sides, since] = await Promise.all([readSides(em, [helper, owner]), friendsSince(em, helper, [owner])]);
   const helperSide = sides.get(helper);
   const ownerSide = sides.get(owner);
   if (!helperSide || !ownerSide) return null;
-  return { helper: helperSide, owner: ownerSide, friendsSince: since.get(owner) ?? null, helpsToday: today };
+  return { helper: helperSide, owner: ownerSide, friendsSince: since.get(owner) ?? null };
 };
 
-/** One `friend_help` row: a counted help, and the audit trail (§6.1, §7 rule 9). */
+/** One `friend_help` row: the audit trail of a help (§6.1, §7 rule 9). */
 export interface HelpRecord {
   helper: number;
   owner: number;
@@ -95,7 +93,7 @@ export interface HelpRecord {
   now: number;
 }
 
-/** Writes one counted help. */
+/** Writes one help. */
 export const recordHelp = (tx: EntityManager, record: HelpRecord) =>
   tx.execute(
     `INSERT INTO bym.friend_help (helper_userid, owner_userid, baseid, building_id, kind, seconds_saved, reward, help_day, created_at)
@@ -115,6 +113,9 @@ export const recordHelp = (tx: EntityManager, record: HelpRecord) =>
 
 /** What help-mode `/base/load` adds to the yard (§6.2), WP2's `HelpBlock`. */
 export interface HelpBlock {
+  /** Helps today that still pay a reward (0 once today's are used up). */
+  rewardsLeft: number;
+  /** Kept only for pre-7.6 clients: always {@link LEGACY_HELPS_LEFT}. */
   helpsLeft: number;
   buildings: BuildingHelp;
   /** When the age or level gates refuse (`tooNew`): which holds and when it lifts, for the panel's words. */
@@ -128,8 +129,8 @@ interface OwnerYard extends HelpPreviewSave {
 }
 
 /**
- * The `help` block of a help-mode load (§6.2): helps left today and, per
- * building, whether the visitor could speed it up or repair it, `true` or the
+ * The `help` block of a help-mode load (§6.2): the rewarded helps left
+ * today and, per building, whether the visitor could speed it up or repair it, `true` or the
  * refusal. Only the owner's main yard can be helped (Q10), so anything else
  * gets no buildings.
  *
@@ -137,17 +138,19 @@ interface OwnerYard extends HelpPreviewSave {
  */
 export const helpBlock = async (em: EntityManager, helper: number, ownerSave: OwnerYard, now: number): Promise<HelpBlock> => {
   const owner = Number(ownerSave.userid);
-  const facts = await helpFactsFor(em, helper, owner, now);
-  const helpsLeft = helpsLeftOf(facts?.helpsToday ?? (await helpsToday(em, helper, now)));
-  if (!facts || helper === owner || ownerSave.type !== BaseType.MAIN) return { helpsLeft, buildings: {} };
+  const [facts, today] = await Promise.all([helpFactsFor(em, helper, owner), helpsToday(em, helper, now)]);
+  const rewardsLeft = rewardsLeftOf(today);
+  // Kept only for pre-7.6 clients (`LEGACY_HELPS_LEFT`).
+  const helpsLeft = LEGACY_HELPS_LEFT;
+  if (!facts || helper === owner || ownerSave.type !== BaseType.MAIN) return { rewardsLeft, helpsLeft, buildings: {} };
   const gate = gateRefusal(facts, now);
   const buildings = previewHelp(ownerSave, helper, now, gate);
-  return gate?.reason === "tooNew" ? { helpsLeft, buildings, gate } : { helpsLeft, buildings };
+  return gate?.reason === "tooNew" ? { rewardsLeft, helpsLeft, buildings, gate } : { rewardsLeft, helpsLeft, buildings };
 };
 
 /**
  * The friends list's `help` field (§6.2): for each friend, whether the caller
- * could speed up or repair anything in their main yard today; null when the
+ * could speed up or repair anything in their main yard now; null when the
  * gates refuse. Reads only the buildings with a countdown, a repair or damage.
  */
 export const friendsHelp = async (
@@ -158,11 +161,7 @@ export const friendsHelp = async (
 ): Promise<Map<number, { speedup: boolean; repair: boolean } | null>> => {
   const out = new Map<number, { speedup: boolean; repair: boolean } | null>();
   if (friendIds.length === 0) return out;
-  const [sides, since, today] = await Promise.all([
-    readSides(em, [helper, ...friendIds]),
-    friendsSince(em, helper, friendIds),
-    helpsToday(em, helper, now),
-  ]);
+  const [sides, since] = await Promise.all([readSides(em, [helper, ...friendIds]), friendsSince(em, helper, friendIds)]);
   const helperSide = sides.get(helper);
   const open = friendIds.filter((id) => {
     const side = sides.get(id);
@@ -170,7 +169,7 @@ export const friendsHelp = async (
       !!helperSide &&
       !!side &&
       side.basesaveid !== null &&
-      gateRefusal({ helper: helperSide, owner: side, friendsSince: since.get(id) ?? null, helpsToday: today }, now) === null;
+      gateRefusal({ helper: helperSide, owner: side, friendsSince: since.get(id) ?? null }, now) === null;
     if (!ok) out.set(id, null);
     return ok;
   });

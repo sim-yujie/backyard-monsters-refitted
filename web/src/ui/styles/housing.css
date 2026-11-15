@@ -407,7 +407,7 @@
 }
 
 /* A phone (R-Housing-phone): the same, a size smaller. */
-@media (width <= 620px) {
+@media (max-width: 620px) {
   .housing-view {
     gap: 14px;
   }
@@ -617,7 +617,7 @@
   color: var(--colour-warning);
 }
 
-@media (width <= 620px) {
+@media (max-width: 620px) {
   .housing__stalled {
     margin: var(--space-2) var(--space-3) 0;
   }

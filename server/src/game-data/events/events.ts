@@ -25,7 +25,8 @@ import { coinRewards, BIG_EVENT_COINS, type EventCoins, type EventReward } from 
  *
  * Events that repeat (the monthly Krallen Hunt) come from a small generator,
  * one entry per run with its own id, so each month is an ordinary event with
- * its own progress rows.
+ * its own progress rows. Runs share a `series`, so the next run stays out
+ * of "Coming up" while one is on (`services/events/schedule.ts`).
  *
  * To switch an event on locally before its date, set
  * `EVENTS_FORCE_ON=<id>[,<id>…]` in `server/.env` (`config/GameConfig.ts`,
@@ -98,6 +99,14 @@ export interface EventDefinition {
   readonly upcomingText?: string;
   /** What sort of event; the web client may dress the page by it. */
   readonly kind: string;
+  /**
+   * The repeating series this event is one run of (the monthly Krallen Hunt:
+   * {@link KRALLEN_HUNT_SERIES}). While one run is on, the next run of the
+   * same series is not shown as coming up (owner, 15 Nov 2026: players were
+   * confused by "Starts in 29d" beside the hunt still running). One-off
+   * events have none.
+   */
+  readonly series?: string;
   /** UTC, ISO 8601. */
   readonly startsAt: string;
   /** UTC, ISO 8601; the first moment the event is over. */
@@ -359,14 +368,16 @@ export const krallenHuntMinimum = (startLevel: number): number => {
  * ═══════════════════════════════════════════════════════════════════════
  * KRALLEN'S LOOT AURA: set by the owner (2026-11-13).
  * A second mark on the hunt at {@link KRALLEN_AURA_GOAL_TIMES} times the
- * player's goal: 180, 300, 450, 675 and 900 million by the Krallen level
- * the player had when the hunt began (a level 5 Krallen keeps the last).
- * Claiming it gives Krallen her loot aura until the END of the NEXT month's
- * hunt (as Flash's second loot mark held for the round after,
- * `KOTHHandler.as:76-84`, `:146-155`); it must be won again to keep it.
- * Only a Krallen of level 3, 4 or 5 carries the aura (strength and radius in
- * `game-rules/combat/champions.ts`, `LOOT_AURA_BONUS`); below level 3, or
- * without the mark, she has none.
+ * player's goal: 180, 270, 450, 750 and 900 million by the Krallen level
+ * the player had when the hunt began (none, 1, 2, 3, 4; a level 5 Krallen
+ * keeps the last). Claiming it gives Krallen her loot aura until the END of
+ * the NEXT month's hunt (as Flash's second loot mark held for the round
+ * after, `KOTHHandler.as:76-84`, `:146-155`); it must be won again to keep
+ * it. A Krallen of any level, 1 to 5, carries the aura, stronger at each
+ * level (strength and radius in `game-rules/combat/champions.ts`,
+ * `LOOT_AURA_BONUS`; levels 1-2 added 15 Nov 2026); without the mark she
+ * has none. A player without Krallen claims the goal's Krallen first, then
+ * the aura (`controllers/yard/eventsActions.ts`, `needsKrallen`).
  * ═══════════════════════════════════════════════════════════════════════
  */
 export const KRALLEN_AURA_GOAL_TIMES = 3;
@@ -383,6 +394,9 @@ export const KRALLEN_HUNT_MONTHS = 120;
 
 /** Days after a month's hunt ends that a goal reached in time can still be claimed. */
 export const KRALLEN_HUNT_CLAIM_DAYS = 7;
+
+/** Every monthly hunt's {@link EventDefinition.series}. */
+export const KRALLEN_HUNT_SERIES = "krallen-hunt";
 
 const twoDigits = (value: number): string => String(value).padStart(2, "0");
 
@@ -410,6 +424,7 @@ export const krallenHunt = (year: number, month: number): EventDefinition => {
     title: "Krallen Hunt",
     text: "Take {goal} loot in attacks before the month is out to win Krallen, or raise yours a level. Each level needs more loot than the last. Raids on players, wild monster camps and tribes all count, even loot that does not fit in your storage.",
     kind: "krallen",
+    series: KRALLEN_HUNT_SERIES,
     startsAt: `${year}-${twoDigits(month)}-15T00:00:00Z`,
     endsAt: `${next.year}-${twoDigits(next.month)}-01T00:00:00Z`,
     ladder: {

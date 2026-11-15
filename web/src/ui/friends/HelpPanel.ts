@@ -20,6 +20,8 @@ import "./help.css";
  * - **Speed up**: "Takes 6m 30s off the Storage Silo upgrade (5% of the time
  *   left)" and "3 of 5 friends have helped".
  * - **Repair**: "Repairs this Cannon Tower now."
+ * - Once the helper's first 5 helps of the day are given: "Reward used up
+ *   for today" under the choices; helping still works (owner, 15 Nov 2026).
  *
  * Each button is disabled with the server's reason, in words, when the help
  * cannot go. The scene does the call (`onHelp`) and shows the panel again
@@ -31,6 +33,7 @@ export const HELP_PANEL_TEXT = {
   repair: "Repair",
   working: "Helping…",
   nothing: "There is nothing to help with here.",
+  rewardUsedUp: "Reward used up for today",
 } as const;
 
 export interface HelpPanelOptions {
@@ -122,6 +125,7 @@ export class HelpPanel {
       );
     }
     if (help.repair) this.choices.append(this.choice("repair", help.repair, repairText(building)));
+    if (help.rewardUsedUp) this.choices.append(make("p", "help-panel__note help-panel__reward-off", HELP_PANEL_TEXT.rewardUsedUp));
   }
 
   private choice(kind: HelpKind, choice: HelpChoice, line: string, note?: string): HTMLElement {

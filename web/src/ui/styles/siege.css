@@ -285,7 +285,7 @@
 }
 
 /* A phone: the boxes stack. */
-@media (width <= 620px) {
+@media (max-width: 620px) {
   .siege-offer__boxes {
     grid-template-columns: 1fr;
   }

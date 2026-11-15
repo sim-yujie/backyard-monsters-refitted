@@ -41,6 +41,9 @@
 }
 
 .monsters-screen .panel__titlebar {
+  /* Never squeezed when a tab's content is taller than the window (patch 7.6):
+     the tabs moved up a few pixels whenever the Hatch tab overflowed. */
+  flex-shrink: 0;
   flex-wrap: wrap;
   row-gap: var(--space-2);
   padding: var(--space-2) var(--space-3);
@@ -79,9 +82,10 @@
   min-width: 0;
 }
 
-/* ── Header: housing, goo, putty ─────────────────────────────────────────── */
+/* ── Header: housing (goo and putty are in the resource bar above) ──────── */
 
 .monsters-header {
+  flex-shrink: 0;
   display: flex;
   flex-wrap: wrap;
   align-items: center;
@@ -496,7 +500,7 @@
 /* ── Narrow screens ──────────────────────────────────────────────────────── */
 
 /* The card goes under the list. */
-@media (width <= 760px) {
+@media (max-width: 760px) {
   .locker__split {
     grid-template-columns: 1fr;
     grid-template-rows: minmax(140px, 1fr) auto;
@@ -509,7 +513,7 @@
 
 /* A phone on its side: the frame keeps to the screen as before, with a
    tighter title row, and the list and card scroll as one when stacked. */
-@media (width > 620px) and (height <= 500px) {
+@media (min-width: 620.02px) and (max-height: 500px) {
   .monsters-screen {
     top: calc(var(--hud-height) + var(--space-2));
     bottom: var(--space-2);
@@ -534,7 +538,7 @@
 }
 
 /* A phone: a bottom sheet over the lower part of the yard. */
-@media (width <= 620px) {
+@media (max-width: 620px) {
   .monsters-screen {
     top: auto;
     left: 0;
@@ -542,6 +546,7 @@
     bottom: 0;
     width: auto;
     height: min(82vh, calc(100vh - var(--hud-height)));
+    height: min(82dvh, calc(100dvh - var(--hud-height)));
     border-radius: var(--radius-lg) var(--radius-lg) 0 0;
     border-bottom: 0;
   }
@@ -556,6 +561,30 @@
 
   .monsters-screen .tabs__tab {
     padding-inline: var(--space-1);
+  }
+
+  /* The "?" stands on the frame beside the title sign instead of taking a
+     row of its own over the tabs (owner, 15 Nov 2026). Not in Chaos Weapons,
+     which shares the frame but has a longer sign. */
+  :root[data-skin] .monsters-screen:not(.siege-screen) .panel__titlebar > .guide-help {
+    position: absolute;
+    top: calc(-1 * var(--skin-title-lift) + 2px);
+    left: calc(50% + 74px);
+    z-index: 2;
+    width: 34px;
+    min-width: 0;
+    height: 34px;
+    min-height: 0;
+    margin: 0;
+    padding: 0;
+    /* A round dome like the scene's own "?" (skin.css), so it reads on the frame. */
+    border: 2px solid var(--colour-dome-rim);
+    border-radius: 50%;
+    background: radial-gradient(circle at 50% 35%, var(--colour-dome-top), var(--colour-dome-bottom));
+    color: #ffffff;
+    font-family: var(--font-display);
+    text-shadow: 0 1px 2px rgb(0 0 0 / 70%);
+    box-shadow: 0 2px 3px rgb(0 0 0 / 40%);
   }
 
   .monsters-header {

@@ -40,7 +40,7 @@ export const BUBBLE_MENU_KEY = "bymr.bubbleMenu";
 export const BUBBLE_ITEMS: readonly string[] = ["quests", "layout", "goals", "bell", "defences", "mail", "alliance", "reports"];
 
 /** Where the fan lays its bubbles out in rows: a phone on its side, too short for one column. */
-export const GRID_QUERY = "(width > 620px) and (height <= 500px)";
+export const GRID_QUERY = "(min-width: 620.02px) and (max-height: 500px)";
 
 /** Bubbles in one row of the sideways grid: as many as fit between More and the zoom rail. */
 export const GRID_COLUMNS = 3;

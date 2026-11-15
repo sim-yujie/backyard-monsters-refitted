@@ -255,7 +255,7 @@ export interface ChampionSaveEntry {
   /**
    * Krallen's loot aura runs until then, unix seconds (the Krallen Hunt's 3x
    * mark, server `services/events/krallenReward.ts`); the server's alone to
-   * write. She fights with it from her level 3 (`KRALLEN_AURA_LEVEL`).
+   * write. She fights with it at any level (`KRALLEN_AURA_LEVEL`, 1).
    */
   la?: number;
   [key: string]: unknown;

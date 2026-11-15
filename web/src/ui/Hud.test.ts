@@ -33,17 +33,17 @@ describe("the HUD", () => {
   const floats = (): HTMLElement[] => [...document.querySelectorAll<HTMLElement>(".hud__delta")];
   const bubble = (): HTMLElement | null => document.querySelector(".hud__exact");
 
-  it("shows each resource as its icon and the amount in full, with the word kept for hover and screen readers", () => {
-    hud.setResources({ r1: 11_163_050_000, r2: 2_500, r3: 0, r4: 999 }, 42);
+  it("shows each resource as its icon and the amount, short past 99,999, with the word and full figure kept for hover and screen readers", () => {
+    hud.setResources({ r1: 11_163_050_000, r2: 2_500, r3: 0, r4: 99_999 }, 475_920);
     expect(hud.element.textContent).not.toMatch(/twigs|pebbles|putty|goo|shiny/i);
     const readouts = [...hud.element.querySelectorAll<HTMLButtonElement>(".hud__resource-button[data-resource]")];
-    expect(readouts.map((one) => one.textContent)).toEqual(["11,163,050,000", "2,500", "0", "999", "42"]);
+    expect(readouts.map((one) => one.textContent)).toEqual(["11.1B", "2,500", "0", "99,999", "475.9K"]);
     expect(readouts.map((one) => one.querySelectorAll(".res-icon").length)).toEqual([1, 1, 1, 1, 1]);
     // The button's own name carries the word and the exact amount; the icon is
     // decorative inside it so the name is not read twice.
     expect(button("r1").getAttribute("aria-label")).toBe("Twigs: 11,163,050,000");
     expect(button("r1").title).toBe("Twigs: 11,163,050,000");
-    expect(button("shiny").title).toBe("Shiny: 42");
+    expect(button("shiny").title).toBe("Shiny: 475,920");
     expect(button("r1").querySelector(".res-icon")?.getAttribute("aria-hidden")).toBe("true");
   });
 
@@ -60,7 +60,7 @@ describe("the HUD", () => {
     expect(floats()).toHaveLength(0);
 
     hud.setResources({ r1: 11_158_050_000, r2: 100 });
-    expect(button("r1").textContent).toBe("11,158,050,000");
+    expect(button("r1").textContent).toBe("11.1B");
     expect(button("r1").title).toBe("Twigs: 11,158,050,000");
     const [float] = floats();
     expect(floats()).toHaveLength(1);
@@ -259,31 +259,33 @@ describe("the HUD", () => {
     });
   };
 
-  it("drops the brand, then falls back to short amounts, rather than overflow (#134)", () => {
+  it("drops the brand, then the caps, keeping the top bar's spelling, rather than overflow (#134)", () => {
     lay({ room: 600, full: 550, compact: 300 });
-    hud.setResources({ r1: 15_000_000 }, 5);
+    hud.setResources({ r1: 15_000_000, r2: 87_450 }, 5);
     expect(hud.fitLevel).toBe("full");
-    expect(button("r1").textContent).toBe("15,000,000");
+    expect(button("r1").textContent).toBe("15.0M");
+    expect(button("r2").textContent).toBe("87,450");
 
     lay({ room: 500, full: 550, compact: 300 });
     window.dispatchEvent(new Event("resize"));
     expect(hud.fitLevel).toBe("no-brand");
     expect(hud.element.dataset["fit"]).toBe("no-brand");
-    expect(button("r1").textContent).toBe("15,000,000");
+    expect(button("r2").textContent).toBe("87,450");
 
     lay({ room: 300, full: 550, compact: 300 });
     window.dispatchEvent(new Event("resize"));
     expect(hud.fitLevel).toBe("compact");
     expect(button("r1").textContent).toBe("15.0M");
+    expect(button("r2").textContent).toBe("87,450");
     // The name and the tap bubble keep the exact figure.
-    expect(button("r1").title).toBe("Twigs: 15,000,000");
-    button("r1").click();
-    expect(spokenText(bubble()!)).toBe("Twigs 15,000,000");
+    expect(button("r2").title).toBe("Pebbles: 87,450");
+    button("r2").click();
+    expect(spokenText(bubble()!)).toBe("Pebbles 87,450");
 
     lay({ room: 900, full: 550, compact: 300 });
-    hud.setResources({ r1: 15_000_001 });
+    hud.setResources({ r1: 15_000_001, r2: 87_451 });
     expect(hud.fitLevel).toBe("full");
-    expect(button("r1").textContent).toBe("15,000,001");
+    expect(button("r2").textContent).toBe("87,451");
   });
 
   it("closes the bubble on a press elsewhere", () => {
@@ -452,7 +454,8 @@ describe("the yard's corner layout (#171)", () => {
       hud.element.querySelector<HTMLButtonElement>(`.hud__resource-button[data-resource="${key}"]`)!;
     const mark = (key: string): HTMLElement => button(key).querySelector<HTMLElement>(".hud__full-mark")!;
     expect(button("r1").textContent).toBe("15M/15M");
-    expect(button("r2").textContent).toBe("23.1M/23.1M");
+    // Rounded down, as every bar amount is: 23,050,000 never reads 23.1M.
+    expect(button("r2").textContent).toBe("23M/23M");
     expect(mark("r1").hidden).toBe(false);
     expect(mark("r1").dataset["icon"]).toBe("storagefull");
     expect(button("r1").title).toBe(`Twigs: 15,000,000 of 15,000,000\n${FULL_NOTE}`);
@@ -519,19 +522,25 @@ describe("the yard's corner layout (#171)", () => {
     hud.destroy();
   });
 
-  it("uses short amounts on a phone, where the readouts share a row of four", () => {
-    const matchMedia = vi.fn((query: string) => ({ matches: query === "(width <= 620px)" }));
+  it("uses the top bar's short amounts on a phone, where the readouts share a row of four", () => {
+    const matchMedia = vi.fn((query: string) => ({ matches: query === "(max-width: 620px)" }));
     vi.stubGlobal("matchMedia", matchMedia);
     const hud = new Hud({ scenes: [], layout: "corner", onSceneSelect: () => {} }).mount(document.body);
-    hud.setResources({ r1: 15_000_000 });
+    hud.setResources({ r1: 15_000_000, r2: 87_450, r3: 100_099, r4: 999_999 });
     expect(hud.fitLevel).toBe("compact");
-    expect(hud.element.querySelector('.hud__resource-button[data-resource="r1"]')!.textContent).toBe("15.0M");
+    const text = (key: string): string | null =>
+      hud.element.querySelector(`.hud__resource-button[data-resource="${key}"]`)!.textContent;
+    expect(text("r1")).toBe("15.0M");
+    // Under 100,000 in full, as on a desktop (owner, 15 Nov 2026), and never rounded up.
+    expect(text("r2")).toBe("87,450");
+    expect(text("r3")).toBe("100.0K");
+    expect(text("r4")).toBe("999.9K");
     hud.destroy();
     vi.unstubAllGlobals();
   });
 
   it("keeps a full silo to the short amount and the full mark on a phone, where 23.1M/23.1M would not fit", () => {
-    vi.stubGlobal("matchMedia", vi.fn((query: string) => ({ matches: query === "(width <= 620px)" })));
+    vi.stubGlobal("matchMedia", vi.fn((query: string) => ({ matches: query === "(max-width: 620px)" })));
     const hud = new Hud({ scenes: [], layout: "corner", onSceneSelect: () => {} }).mount(document.body);
     const store = {
       caps: { r1: 23_050_000, r2: 20, r3: 20, r4: 20 },
@@ -546,7 +555,7 @@ describe("the yard's corner layout (#171)", () => {
     hud.setResources({ r1: 23_050_000, r2: 10 });
     hud.bindYard({ store: store as unknown as YardStore, scene: { selectBuilding: () => {} }, notices: new Notices() });
     const r1 = hud.element.querySelector<HTMLButtonElement>('.hud__resource-button[data-resource="r1"]')!;
-    expect(r1.textContent).toBe("23.1M");
+    expect(r1.textContent).toBe("23.0M");
     expect(r1.querySelector<HTMLElement>(".hud__full-mark")!.hidden).toBe(false);
     expect(r1.title).toBe(`Twigs: 23,050,000 of 23,050,000\n${FULL_NOTE}`);
     hud.destroy();
@@ -648,7 +657,7 @@ describe("the HUD on the player's own yard", () => {
 
   it("shows no caps and no workers without a binding, as on the map or a foreign yard", () => {
     hud.setResources({ r1: 15_000_000 });
-    expect(button("r1").textContent).toBe("15,000,000");
+    expect(button("r1").textContent).toBe("15.0M");
     expect(bar("r1").hidden).toBe(true);
     expect(hud.element.querySelector<HTMLElement>(".hud__workers")!.hidden).toBe(true);
   });
@@ -700,7 +709,7 @@ describe("the HUD on the player's own yard", () => {
   it("shows amount / cap with a fill bar once bound, and takes them away on unbind", () => {
     hud.setResources({ r1: 15_000_000, r2: 23_050_000, r3: 0, r4: 30_000_000 }, 7);
     hud.bindYard(binding);
-    expect(button("r1").textContent).toBe("15,000,000 / 23,050,000");
+    expect(button("r1").textContent).toBe("15.0M / 23.0M");
     expect(bar("r1").hidden).toBe(false);
     expect(fill("r1").style.width).toBe("65.08%");
     expect(button("r1").classList.contains("hud__resource-button--full")).toBe(false);
@@ -710,7 +719,7 @@ describe("the HUD on the player's own yard", () => {
     expect(button("shiny").querySelector<HTMLElement>(".hud__cap-bar")!.hidden).toBe(true);
 
     hud.bindYard(null);
-    expect(button("r1").textContent).toBe("15,000,000");
+    expect(button("r1").textContent).toBe("15.0M");
     expect(bar("r1").hidden).toBe(true);
     expect(button("r1").title).toBe("Twigs: 15,000,000");
   });
@@ -754,7 +763,7 @@ describe("the HUD on the player's own yard", () => {
     });
     window.dispatchEvent(new Event("resize"));
     expect(hud.fitLevel).toBe("no-caps");
-    expect(button("r1").textContent).toBe("15,000,000");
+    expect(button("r1").textContent).toBe("15.0M");
     expect(bar("r1").hidden).toBe(false);
     expect(button("r1").title).toBe("Twigs: 15,000,000 of 23,050,000");
     expect(hud.element.querySelector<HTMLElement>(".hud__workers-name")!.hidden).toBe(true);
@@ -819,8 +828,10 @@ describe("capState", () => {
 describe("fullText", () => {
   it("spells both figures short, without a whole .0", () => {
     expect(fullText(15_000_000, 15_000_000)).toBe("15M/15M");
-    expect(fullText(23_050_000, 23_050_000)).toBe("23.1M/23.1M");
+    // Rounded down like every bar amount: a store never reads fuller than it is.
+    expect(fullText(23_050_000, 23_050_000)).toBe("23M/23M");
     expect(fullText(1_600, 1_600)).toBe("1.6K/1.6K");
+    expect(fullText(999_999, 999_999)).toBe("999.9K/999.9K");
     expect(fullText(500, 500)).toBe("500/500");
     expect(fullText(2_000_000_000, 2_000_000_000)).toBe("2B/2B");
   });
@@ -914,18 +925,18 @@ describe("the HUD's income an hour", () => {
     hud.destroy();
   });
 
-  it("goes short on a phone", () => {
-    vi.stubGlobal("matchMedia", (query: string) => ({ matches: query === "(width <= 620px)" }));
+  it("keeps the top bar's rule on a phone: in full under 100,000", () => {
+    vi.stubGlobal("matchMedia", (query: string) => ({ matches: query === "(max-width: 620px)" }));
     const hud = new Hud({ scenes: [], layout: "corner", onSceneSelect: () => {} }).mount(document.body);
     hud.setResources({ r1: 100 });
     bindTo(hud, "main");
-    expect(rate(hud, "r1").textContent).toBe("+1.4K/h");
+    expect(rate(hud, "r1").textContent).toBe("+1,440/h");
     hud.destroy();
   });
 
-  it("spells a rate in full or short", () => {
+  it("spells a rate as the amount above it: in full under 100,000, short and rounded down past it", () => {
     expect(formatRate(12_400)).toBe("+12,400/h");
-    expect(formatRate(12_400, true)).toBe("+12.4K/h");
+    expect(formatRate(475_920)).toBe("+475.9K/h");
     expect(formatRate(0)).toBe("+0/h");
   });
 });

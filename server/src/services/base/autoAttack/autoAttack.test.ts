@@ -447,9 +447,11 @@ describe("runAutoAttack refuses, writing nothing", () => {
     expect(camp.attackid).toBe(77);
   });
 
-  test("out of range", async () => {
+  test("out of range: refused in words, by the hand-played attack's range rule", async () => {
     inRange = false;
-    expect((await refusal(runAutoAttack(user() as never, CAMP))).message).toBe("out of range");
+    const refused = await refusal(runAutoAttack(user() as never, CAMP));
+    expect(refused.reason).toBe("outOfRange");
+    expect(refused.message).toBe("This camp is out of your Flingers' range.");
     nothingWritten();
   });
 
@@ -470,6 +472,13 @@ describe("autoAttackPlanFor", () => {
     expect(answer).toMatchObject({ outOfRange: false, underAttack: false, damage: 12 });
     expect(flush).not.toHaveBeenCalled();
     expect(mint).not.toHaveBeenCalled();
+  });
+
+  test("a camp no Flinger reaches says so, so Repeat attack is refused", async () => {
+    inRange = false;
+    const answer = await autoAttackPlanFor(user() as never, CAMP);
+    expect(answer.plan).not.toBeNull();
+    expect(answer.outOfRange).toBe(true);
   });
 
   test("no plan for the camp's tribe and level", async () => {

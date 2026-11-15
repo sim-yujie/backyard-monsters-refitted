@@ -29,7 +29,7 @@ const block = (source: string, head: string): string => {
   return blocks.join("\n");
 };
 
-const phone = (path: string): string => block(css(path), "@media (width <= 620px) {");
+const phone = (path: string): string => block(css(path), "@media (max-width: 620px) {");
 
 describe("6 Nov UI check: phone faults", () => {
   it("Move Monsters: a long outpost name cannot widen the dialog past the screen", () => {
@@ -62,8 +62,9 @@ describe("6 Nov UI check: phone faults", () => {
       /\.hatch-add__controls \.qty-stepper__step \{\s*flex: 1 1 var\(--control-height-compact\);\s*min-width: var\(--control-height-compact\);/,
     );
     expect(phoneHatch).toMatch(/\.hatch-add__fill \{\s*flex: 1 0 auto;/);
-    expect(phoneHatch).toMatch(/\.hatch-line--hcc \.hatch-now__label-word \{\s*display: none;/);
-    expect(phoneHatch).toMatch(/\.hatch-line--hcc \.hatch-now__label-number::before \{\s*content: "#";/);
+    // Every screen shows "#1" since 15 Nov (owner: no "Hatchery" word on the cards).
+    expect(css("styles/hatch.css")).toMatch(/\.hatch-line--hcc \.hatch-now__label-word \{\s*display: none;/);
+    expect(css("styles/hatch.css")).toMatch(/\.hatch-line--hcc \.hatch-now__label-number::before \{\s*content: "#";/);
   });
 
   it("Hatchery on a phone (owner, 9 Nov): four monsters across, no name cut, the chosen one a different colour", () => {
@@ -73,11 +74,32 @@ describe("6 Nov UI check: phone faults", () => {
     // A name is never broken mid-word ("Slimeattik / us"): a long one is drawn smaller.
     expect(phoneHatch).not.toMatch(/\.hatch-monster__name \{[^}]*overflow-wrap: anywhere;/);
     expect(phoneHatch).toMatch(/\.hatch-monster__name--long \{\s*font-size: 10\.5px;/);
-    // The "Grey monsters are locked" note has the line's width, its button under it.
-    expect(phoneHatch).toMatch(/\.hatch-pick__locked-text \{\s*flex: 1 1 calc\(100% - 40px\);/);
+    // No "Grey monsters are locked" note since 15 Nov (owner): a padlock on each locked monster.
+    expect(source).not.toMatch(/\.hatch-pick__locked/);
     expect(phoneHatch).toMatch(/\.hatch-slot__upgrade \{\s*min-height: var\(--control-height-compact\);/);
     expect(source).toMatch(
       /\.hatch-monster\[aria-pressed="true"\],[^{]*\{[^}]*background: color-mix\(in srgb, var\(--colour-accent\) 36%, transparent\);/,
+    );
+  });
+
+  it("Hatchery on a phone (owner, 15 Nov): the monsters slide sideways in one row, a card cut at the edge", () => {
+    const source = css("styles/hatch.css");
+    // Upright and on its side: the phone layout's own query (phoneLayout.ts), so an iPad keeps the grid.
+    const row = block(source, "@media (max-width: 620px), (max-height: 500px) {");
+    expect(row).toMatch(/\.hatch__grid \{[^}]*grid-template-columns: none;[^}]*grid-auto-flow: column;[^}]*grid-auto-columns: var\(--hatch-card-width\);/);
+    expect(row).toMatch(/\.hatch__grid \{[^}]*overflow-x: auto;[^}]*overflow-y: hidden;[^}]*overscroll-behavior-x: contain;/);
+    // The row reaches the sheet's edges, so the next card is cut there.
+    expect(row).toMatch(/\.hatch__grid \{[^}]*margin-inline: calc\(-1 \* var\(--hatch-pad\)\);/);
+    // Never narrower than a whole "Slimeattikus" needs.
+    expect(row).toMatch(/--hatch-card-width: clamp\(76px,/);
+    // Not with the desktop's or iPad's queries.
+    expect(source).not.toMatch(/@media \(min-width: 621px\)[^{]*\{[^@]*grid-auto-flow: column/);
+  });
+
+  it("Hatchery with an HCC: idle, the totals still hold the first line, so a waiting stack fills the held one", () => {
+    const narrow = block(css("styles/hatch.css"), "@container hatch (width < 880px) {");
+    expect(narrow).toMatch(
+      /\.hatch-line--hcc > \.hatch-line__slots > \.hatch-line__totals--idle \{\s*display: block;\s*height: 0;\s*overflow: hidden;/,
     );
   });
 
@@ -89,7 +111,7 @@ describe("6 Nov UI check: phone faults", () => {
 
   it("Chat: the open box ends above the dock and sits over it, so More never covers Report", () => {
     const chat = phone("styles/chat.css");
-    expect(chat).toMatch(/\.chat-box--open \{\s*z-index: 2;\s*max-height: calc\(100dvh - var\(--chat-top\) - 270px\);/);
+    expect(chat).toMatch(/\.chat-box--open \{\s*z-index: 2;\s*max-height: calc\(100vh - var\(--chat-top\) - 270px\);\s*max-height: calc\(100dvh - var\(--chat-top\) - 270px\);/);
     expect(chat).toMatch(/\.chat-box--open \.chat-box__lines \{\s*flex: 1 1 auto;[^}]*min-height: 80px;[^}]*max-height: none;/);
     // The dock's More bubble stays under it.
     expect(css("styles/bubble-menu.css")).toMatch(/\.bubble-menu \{[^}]*z-index: 1;/);
@@ -122,7 +144,7 @@ describe("6 Nov UI check: phone faults", () => {
     expect(attack).toMatch(/\.attack-end \.panel__body \{[^}]*min-height: 0;[^}]*overflow-y: auto;/);
     expect(attack).toMatch(/:root\[data-skin\] \.attack-end__backdrop \{\s*padding-top: 32px;/);
     // 32px clears both looks' phone signs (Modern lifts 28px, Classic 30px).
-    const skin = block(css("styles/skin.css"), "@media (width <= 620px), (height <= 500px) {");
+    const skin = block(css("styles/skin.css"), "@media (max-width: 620px), (max-height: 500px) {");
     for (const lift of [...skin.matchAll(/--skin-title-lift: (\d+)px;/g)]) {
       expect(Number(lift[1])).toBeLessThanOrEqual(32);
     }
@@ -140,7 +162,7 @@ describe("6 Nov UI check: phone faults", () => {
 
 describe("tester, 6 Nov: Classic on a phone", () => {
   it("Settings: the tab words keep off Classic's painted ends", () => {
-    const skin = block(css("styles/skin.css"), "@media (width <= 620px), (height <= 500px) {");
+    const skin = block(css("styles/skin.css"), "@media (max-width: 620px), (max-height: 500px) {");
     expect(skin).toMatch(/:root\[data-skin="flash"\] \.panel \.tab-row > \.account-settings__tab \{\s*padding-inline: 10px;/);
     expect(skin).toMatch(/:root\[data-skin\] \.panel \.account-settings__tabs \{\s*margin-inline: var\(--space-2\);/);
     // After the shared 6px rule, so it wins at the same specificity.
@@ -171,10 +193,10 @@ describe("Glimmers picture tester, 9 Nov", () => {
   it("Build: the painted title bar keeps the body's inset; on a phone the line shares the '?' row", () => {
     const build = css("styles/build-menu.css");
     expect(build).toMatch(/\n:root\[data-skin\] \.build-menu \.panel__titlebar \{\s*padding-inline: var\(--space-5\);/);
-    const phone = block(build, "@media (width <= 620px)");
+    const phone = block(build, "@media (max-width: 620px)");
     expect(phone).toMatch(/:root\[data-skin\] \.build-menu \.panel__titlebar \{\s*padding-inline: var\(--space-3\);/);
     expect(phone).toMatch(/:root\[data-skin\] \.build-menu__meta \{\s*order: 0;\s*flex: 1 1 0;/);
-    const skinPhone = block(css("styles/skin.css"), "@media (width <= 620px)");
+    const skinPhone = block(css("styles/skin.css"), "@media (max-width: 620px)");
     expect(skinPhone).toMatch(/\.build-menu__tabs \.tabs__tab \{\s*padding-inline: 4px;\s*font-size: min\(var\(--text-sm\), 2\.6vw\);/);
   });
 });

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { formatAmount, formatCompact, formatCountdown, formatShort, formatShortPrice } from "./format";
+import { formatAmount, formatBarAmount, formatCompact, formatCountdown, formatShort, formatShortPrice } from "./format";
 
 /** The shared spellings: amounts in full by default (#134), short only on request. */
 
@@ -30,6 +30,44 @@ describe("formatCompact", () => {
     expect(formatCompact(15_000_000)).toBe("15.0M");
     expect(formatCompact(11_163_050_000)).toBe("11.16B");
     expect(formatCompact(undefined)).toBe("—");
+  });
+});
+
+describe("formatBarAmount (the top bar, owner 15 Nov 2026)", () => {
+  it("writes an amount under 100,000 in full", () => {
+    expect(formatBarAmount(0)).toBe("0");
+    expect(formatBarAmount(999)).toBe("999");
+    expect(formatBarAmount(87_450)).toBe("87,450");
+    expect(formatBarAmount(99_999)).toBe("99,999");
+    expect(formatBarAmount(99_999.9)).toBe("99,999");
+  });
+
+  it("goes to K with one decimal from 100,000", () => {
+    expect(formatBarAmount(100_000)).toBe("100.0K");
+    expect(formatBarAmount(100_099)).toBe("100.0K");
+    expect(formatBarAmount(100_100)).toBe("100.1K");
+    expect(formatBarAmount(475_920)).toBe("475.9K");
+  });
+
+  it("rounds down at every unit, so storage never reads fuller than it is", () => {
+    expect(formatBarAmount(999_999)).toBe("999.9K");
+    expect(formatBarAmount(1_099_999)).toBe("1.0M");
+    expect(formatBarAmount(999_999_999)).toBe("999.9M");
+    expect(formatBarAmount(1_999_999_999)).toBe("1.9B");
+  });
+
+  it("goes to M from a million and to B from a billion, one decimal each", () => {
+    expect(formatBarAmount(1_000_000)).toBe("1.0M");
+    expect(formatBarAmount(10_874_100)).toBe("10.8M");
+    expect(formatBarAmount(56_259_410)).toBe("56.2M");
+    expect(formatBarAmount(1_000_000_000)).toBe("1.0B");
+    expect(formatBarAmount(11_163_050_000)).toBe("11.1B");
+  });
+
+  it("keeps the sign of a negative and dashes a missing value", () => {
+    expect(formatBarAmount(-475_920)).toBe("-475.9K");
+    expect(formatBarAmount(-5)).toBe("-5");
+    expect(formatBarAmount(undefined)).toBe("—");
   });
 });
 

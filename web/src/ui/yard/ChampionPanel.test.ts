@@ -409,7 +409,7 @@ describe("ChampionPanel: one screen at 1280x800 (lead, 28 Oct)", () => {
       /\.champion__header--hero \{\s*display: grid;\s*grid-template-columns: 128px minmax\(0, 1fr\) 184px;/,
     );
     expect(css).toMatch(/\.champion__header--hero > \.champion__acts \{\s*grid-row: 1;\s*grid-column: 3;/);
-    const phone = css.slice(css.indexOf("@media (width <= 620px)"));
+    const phone = css.slice(css.indexOf("@media (max-width: 620px)"));
     expect(phone).toMatch(/\.champion__header--hero \{\s*grid-template-columns: 104px minmax\(0, 1fr\);/);
     expect(phone).toMatch(
       /\.champion__header--hero > \.champion__acts \{\s*grid-row: auto;\s*grid-column: 1 \/ -1;\s*grid-template-columns: minmax\(0, 1fr\);/,
@@ -535,6 +535,23 @@ describe("ChampionPanel: stats and Krallen", () => {
     expect(element.querySelector(".champion__part--special")).toBeNull();
   });
 
+  it("labels Krallen's buff as what it is: more storage for loot in attacks (owner, 15 Nov 2026)", () => {
+    const stat = (champions: ChampionSaveEntry[]) =>
+      setup(champions, [CAGE, { id: 4, t: 119, l: 1, X: 400, Y: 0 }])
+        .element.querySelector<HTMLElement>('.champion__part--special [data-stat="buff"]');
+    const one = stat([gorgo(), krallen({ l: 1 })])!;
+    // Level 1, with her level 2 after the arrow.
+    expect(one.textContent).toBe("Storage +20% → +22% in attacks");
+    expect(one.title).toBe("Storage +20% → +22% in attacks");
+    expect(stat([gorgo(), krallen({ l: 5 })])!.textContent).toBe("Storage +30% in attacks");
+    expect(stat([gorgo(), krallen({ l: 5 })])!.textContent).not.toMatch(/Buff/);
+  });
+
+  it("keeps Fomor's buff (its enrage) as Buff", () => {
+    const { element } = setup([gorgo({ t: 3, l: 1 })]);
+    expect(element.querySelector<HTMLElement>('[data-stat="buff"]')!.title).toMatch(/^Buff 10%/);
+  });
+
   describe("her Krallen Hunt loot aura (owner, 13 Nov 2026)", () => {
     const UNTIL = T0 + 20 * 86_400;
     const auraLines = (champions: ChampionSaveEntry[]) =>
@@ -549,10 +566,15 @@ describe("ChampionPanel: stats and Krallen", () => {
       expect(auraLines([gorgo(), krallen({ l: 5, la: UNTIL })])[1]?.textContent).toBe("Monsters x3.6 · Resource hunters x1.65");
     });
 
-    it("none without the 3x claim, once it has run out, or below level 3", () => {
+    it("at levels 1 and 2 too: x1.4 or x1.7 (levels 1-2 added 15 Nov 2026)", () => {
+      expect(auraLines([gorgo(), krallen({ l: 1, la: UNTIL })])[1]?.textContent).toBe("Monsters x1.4 · Resource hunters x1.1");
+      expect(auraLines([gorgo(), krallen({ l: 2, la: UNTIL })])[1]?.textContent).toBe("Monsters x1.7 · Resource hunters x1.18");
+    });
+
+    it("none without the 3x claim, or once it has run out", () => {
       expect(auraLine([gorgo(), krallen({ l: 5 })])).toBeNull();
       expect(auraLine([gorgo(), krallen({ l: 5, la: T0 })])).toBeNull();
-      expect(auraLine([gorgo(), krallen({ l: 2, la: UNTIL })])).toBeNull();
+      expect(auraLine([gorgo(), krallen({ l: 1 })])).toBeNull();
     });
   });
 });

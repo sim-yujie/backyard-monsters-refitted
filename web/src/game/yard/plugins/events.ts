@@ -79,7 +79,7 @@ const READY_NOTICE = "events-ready";
 /** How often the page's countdowns and the list's freshness are checked. */
 const TICK_MS = 1_000;
 /** A computer's screen, as the centred windows count it (ui.css). */
-const COMPUTER_QUERY = "(width > 620px) and (height > 500px)";
+const COMPUTER_QUERY = "(min-width: 620.02px) and (min-height: 500.02px)";
 
 /**
  * The button's picture: the painted festive calendar with its gold star and

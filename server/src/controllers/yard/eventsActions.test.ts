@@ -6,6 +6,7 @@ import type { User } from "../../database/models/user.model.js";
 import { KRALLEN_HUNT_GOALS, krallenHunt, withEventCoins, type EventDefinition } from "../../game-data/events/events.js";
 import { monsterMadnessRun } from "../../game-data/events/monsterMadness.js";
 import { memoryProgressStore } from "../../services/events/progressStore.js";
+import { krallenAuraOn } from "../../services/events/krallenReward.js";
 import { memoryCoinStore, useCoinStore, type EventCoinStore } from "../../services/events/eventCoins.js";
 import { DEFAULT_WEEKEND_SETTINGS, type WeekendSettings } from "../../game-data/events/weekendEvents.js";
 import { setWeekendSettings, weekendSettings } from "../../services/events/weekendSettings.js";
@@ -430,7 +431,7 @@ describe("the Krallen Hunt's 3x mark through the ladder claim", () => {
     at(JAN_START + 3 * DAY);
   });
 
-  test("needs 3x her goal: a level 3 Krallen's 675 million, then her aura until the end of next month's hunt", async () => {
+  test("needs 3x her goal: a level 3 Krallen's 750 million, then her aura until the end of next month's hunt", async () => {
     db.row = rowOf({ champion: [krallenAt(3)] });
     await loot(750_000_000 - 1);
     expect(await claimTier(1)).toMatchObject({
@@ -451,7 +452,7 @@ describe("the Krallen Hunt's 3x mark through the ladder claim", () => {
     db.row = rowOf({ champion: [krallenAt(2)] });
     await loot(450_000_000);
     expect((await claimTier(0)).body.report).toMatchObject({ granted: [{ kind: "krallen", level: 3, raised: true }] });
-    // Level 3 now, but the hunt began at level 2: 450 million, not 675.
+    // Level 3 now, but the hunt began at level 2: 450 million, not 750.
     const answer = await claimTier(1);
     expect(answer.status).toBe(200);
     expect(krallenOf()).toMatchObject({ l: 3, la: MARCH_1 });
@@ -472,21 +473,26 @@ describe("the Krallen Hunt's 3x mark through the ladder claim", () => {
     expect(krallenOf()).toEqual({ ...krallenAt(5, { nm: "Kral" }), la: MARCH_1 });
   });
 
-  test("a level 1 or 2 Krallen can claim it; it is kept, though she fights without it below level 3", async () => {
+  test("a level 1 or 2 Krallen claims it and fights with it (levels 1-2 added 15 Nov 2026)", async () => {
     db.row = rowOf({ champion: [krallenAt(1)] });
-    await loot(300_000_000);
+    await loot(270_000_000);
     const answer = await claimTier(1);
     expect(answer.body.report).toMatchObject({ granted: [{ kind: "krallenAura", level: 1, hasKrallen: true }] });
     expect(krallenOf()).toMatchObject({ l: 1, la: MARCH_1 });
+    expect(krallenAuraOn(db.row!.champion, JAN_START + 4 * DAY)).toBe(true);
   });
 
   test("without a Krallen the 3x mark is refused and stays to claim once she is won", async () => {
     await loot(180_000_000);
     expect(await claimTier(1)).toMatchObject({ status: 409, body: { reason: "needsKrallen" } });
     expect((await claimTier(0)).status).toBe(200);
+    // 3x the goal she was won with (60 million), not her new level 1's 90.
     const answer = await claimTier(1);
     expect(answer.status).toBe(200);
+    expect(answer.body.report).toMatchObject({ granted: [{ kind: "krallenAura", until: MARCH_1, level: 1, hasKrallen: true }] });
     expect(krallenOf()).toMatchObject({ l: 1, la: MARCH_1 });
+    // Her new level 1 fights with it (owner, 15 Nov 2026).
+    expect(krallenAuraOn(db.row!.champion, JAN_START + 4 * DAY)).toBe(true);
   });
 
   test("a later aura end never shortens one she already has", async () => {

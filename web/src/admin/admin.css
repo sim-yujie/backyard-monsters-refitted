@@ -190,6 +190,7 @@ button {
 
 .notfound-body {
   min-height: 100vh;
+  min-height: 100dvh;
   display: grid;
   place-items: center;
 }
@@ -213,6 +214,7 @@ button {
 
 .shell {
   min-height: 100vh;
+  min-height: 100dvh;
 }
 
 /* On a phone the sidebar's parts sit straight in the page, so the section
@@ -321,6 +323,7 @@ button {
   display: grid;
   gap: 14px;
   max-height: calc(100vh - var(--menu-top, calc(var(--tap) + 13px)));
+  max-height: calc(100dvh - var(--menu-top, calc(var(--tap) + 13px)));
   overflow-y: auto;
   padding: 12px 16px 20px;
   background: var(--bg);
@@ -486,6 +489,7 @@ button {
     position: sticky;
     top: 0;
     height: 100vh;
+    height: 100dvh;
     padding: 24px 14px;
     background: var(--side);
     border-right: 1px solid var(--line);
@@ -2908,6 +2912,7 @@ tbody th {
   margin: 0;
   padding: 8px 0;
   height: min(26rem, 60vh);
+  height: min(26rem, 60dvh);
   overflow-y: auto;
   overscroll-behavior: contain;
 }
@@ -4168,6 +4173,7 @@ tbody th {
     position: sticky;
     top: 16px;
     max-height: calc(100vh - 32px);
+    max-height: calc(100dvh - 32px);
     overflow-y: auto;
   }
 }
@@ -4200,6 +4206,7 @@ tbody th {
 
 .v2 .shell {
   min-height: 100vh;
+  min-height: 100dvh;
 }
 
 .v2 .side {
@@ -4321,6 +4328,7 @@ tbody th {
     flex-direction: column;
     gap: 0;
     height: 100vh;
+    height: 100dvh;
     padding: 28px 14px 20px;
     background: var(--side);
     border: 0;
@@ -5257,6 +5265,7 @@ tbody th {
     display: grid;
     grid-template-columns: 280px minmax(0, 1fr);
     gap: 20px;
+    height: calc(100vh - 300px);
     height: calc(100dvh - 300px);
     min-height: 520px;
   }

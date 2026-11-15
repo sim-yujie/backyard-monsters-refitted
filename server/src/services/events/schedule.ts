@@ -71,7 +71,9 @@ export interface ScheduledEvent {
  * {@link UPCOMING_DAYS}, each in start order, then the ones that are over
  * but still within their {@link claimsUntil} (whose page shows them only to
  * players with a tier left to claim, `eventsState.ts`). Other past events
- * are left out.
+ * are left out, and so is an upcoming run of a series (`series`, the monthly
+ * Krallen Hunt) while another run of it is active (owner, 15 Nov 2026); it
+ * shows once that run has ended, claim days or not.
  */
 export const visibleEvents = (
   now: number,
@@ -79,15 +81,23 @@ export const visibleEvents = (
   forced: ReadonlySet<string> = eventsForcedOn(process.env),
   off: ReadonlySet<string> = eventsForcedOff(process.env)
 ): ScheduledEvent[] => {
-  const shown: ScheduledEvent[] = [];
-  for (const event of events) {
+  const timed = events.map((event) => {
     const window = eventWindow(event, now, forced, off);
-    const status = statusAt(window, now);
+    return { event, window, status: statusAt(window, now) };
+  });
+  const runningSeries = new Set(
+    timed.flatMap(({ event, status }) => (status === "active" && event.series !== undefined ? [event.series] : []))
+  );
+  const shown: ScheduledEvent[] = [];
+  for (const { event, window, status } of timed) {
     if (status === "past") {
       if (now < claimsUntil(event, window)) shown.push({ event, window, status: "ended" });
       continue;
     }
-    if (status === "upcoming" && window.startsAt - now > UPCOMING_DAYS * DAY_SECONDS) continue;
+    if (status === "upcoming") {
+      if (window.startsAt - now > UPCOMING_DAYS * DAY_SECONDS) continue;
+      if (event.series !== undefined && runningSeries.has(event.series)) continue;
+    }
     shown.push({ event, window, status });
   }
   const RANKS = { active: 0, upcoming: 1, ended: 2 } as const;
