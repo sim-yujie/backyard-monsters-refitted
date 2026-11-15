@@ -144,6 +144,10 @@ export const createRaidPlugin =
 
     let finishing = false;
     let gone = false;
+    /** The player went back to the yard; the finish may still be on its way. */
+    let left = false;
+    /** The server said `tooEarly` and its wait is running: no way back offered meanwhile. */
+    let early = false;
     /** Lets the sheet downloads go again (`holdSheets`): when the finish is back, or this screen is gone. */
     let release: (() => void) | null = null;
     /** Offers "Back to yard" while the finish is slow; shown again if dismissed. */
@@ -154,18 +158,31 @@ export const createRaidPlugin =
       mounts.notices.clear(LEAVE_NOTICE);
     };
     const leave = (): void => {
-      if (gone) return;
+      if (gone || left) return;
+      left = true;
       stopOffer();
       mounts.goToYard?.();
+    };
+    /**
+     * The way back, {@link LEAVE_OFFER_MS} after the finish (or its next try)
+     * went out. Never during a `tooEarly` wait: a yard load before the server
+     * would take the finish calls the fight off (owner Q1); from then on the
+     * yard load lands it itself (patch 7.5, `settleRaidOnYardLoad`).
+     */
+    const startOffer = (): void => {
+      if (offerTimer !== null) clearInterval(offerTimer);
+      offerTimer = setInterval(() => {
+        if (!gone && !left && !early) {
+          mounts.notices.show(LEAVE_NOTICE, LEAVE_TEXT, { level: "info", actionLabel: LEAVE_LABEL, onAction: leave });
+        }
+      }, LEAVE_OFFER_MS);
     };
     const finish = async (): Promise<void> => {
       if (finishing) return;
       finishing = true;
       banner.textContent = "The raid is over…";
       // Only once the fight is over: a raid may not be left while it plays.
-      offerTimer = setInterval(() => {
-        if (!gone) mounts.notices.show(LEAVE_NOTICE, LEAVE_TEXT, { level: "info", actionLabel: LEAVE_LABEL, onAction: leave });
-      }, LEAVE_OFFER_MS);
+      startOffer();
       release = deps.holdSheets?.() ?? null;
       try {
         const outcome = await finishRaidFight({
@@ -173,12 +190,23 @@ export const createRaidPlugin =
           id: run.raid.id,
           serverNow: deps.serverNow,
           wait: deps.wait,
+          onEarlyWait: (waiting) => {
+            early = waiting;
+            if (gone || left) return;
+            if (waiting) {
+              stopOffer();
+            } else {
+              startOffer();
+            }
+          },
         }).finally(() => release?.());
-        // Kept for the yard even when this screen has gone meanwhile.
+        // Kept for the yard even when this screen has gone meanwhile; an open
+        // yard is told, and shows it once (`plugins/raid.ts`).
         if (outcome.kind === "landed") setRaidResult(outcome.result);
         deps.clearRaid();
         const notice = finishNotice(outcome, run.raid.tribe);
-        if (notice) setRaidNote(notice);
+        // Dropped if the yard's load landed this raid meanwhile (patch 7.5).
+        if (notice) setRaidNote(notice, run.raid.id);
       } finally {
         // Whatever went wrong above, the player is never left on this screen.
         leave();

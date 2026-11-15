@@ -7,6 +7,7 @@
  */
 
 import type { InfernoLoadState } from "./inferno";
+import type { RaidResult } from "./raid";
 
 /** Every successful game response carries `error: 0`. See ApiError for why. */
 export interface ApiEnvelope {
@@ -872,6 +873,12 @@ export interface BaseLoadResponse extends ApiEnvelope {
    * emergence just raised it to (`docs/design/inferno.md` §2.2).
    */
   infernostate?: InfernoLoadState;
+  /**
+   * Only on the owner's build-mode load of their own main yard, when this
+   * load landed a wild monster raid whose finish was still on its way (patch
+   * 7.5, `settleRaidOnYardLoad`): what it landed, for the yard's result popup.
+   */
+  raidresult?: RaidResult;
   /**
    * Only on the owner's build-mode load of their own main yard or outpost:
    * the account's new-player tutorial summary (issue #227). Every yard action

@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { ApiError } from "@/api/http";
 import type { RaidResult } from "@/api/raid";
 import type { AttackMounts } from "@/game/attack/attackPlugins";
@@ -20,7 +20,7 @@ import {
   finishNotice,
   raidPlugin,
 } from "./raidPlugin";
-import { consumeRaidNote, consumeRaidResult, type RaidRun } from "./raidSession";
+import { consumeRaidNote, consumeRaidResult, resetRaidSession, type RaidRun } from "./raidSession";
 import { DONT_PANIC } from "./raidText";
 
 /**
@@ -142,6 +142,8 @@ const trojanRunWithHorse = (): RaidRun =>
     save: {},
     trojan: true,
   }) as unknown as RaidRun;
+
+afterEach(() => resetRaidSession());
 
 describe("raidPlugin", () => {
   it("mounts with the battle layer alone", () => {

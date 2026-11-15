@@ -1,7 +1,7 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it } from "vitest";
 import type { RaidResult } from "@/api/raid";
 import { isMolochRaid } from "@/game/inferno/molochRaid";
-import { consumeRaidResult, raidSpawnsUntil, setRaidResult, type RaidRun } from "./raidSession";
+import { consumeRaidResult, raidSpawnsUntil, resetRaidSession, setRaidResult, type RaidRun } from "./raidSession";
 
 /** What a raid landed, handed from the raid scene to the yard once. */
 
@@ -16,6 +16,8 @@ const landed = (tribe: string): RaidResult => ({
   damaged: [],
   housedLost: 0,
 });
+
+afterEach(() => resetRaidSession());
 
 describe("consumeRaidResult", () => {
   it("hands a result over once", () => {

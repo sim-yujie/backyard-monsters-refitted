@@ -21,7 +21,7 @@ import { enterDescent } from "@/game/inferno/descentEntry";
 import { isMolochRaid, startMolochRaid } from "@/game/inferno/molochRaid";
 import { academyLevel, housingSummary } from "@/game/monsters/housing";
 import { housingSpace } from "@/game/monsters/monsterCatalogue";
-import { consumeRaidResult, setRaidRun } from "@/game/raid/raidSession";
+import { adoptLoadedRaidResult, consumeRaidResult, setRaidRun } from "@/game/raid/raidSession";
 import { raidWatch } from "@/game/raid/raidWatch";
 import {
   caveMenu,
@@ -312,6 +312,8 @@ export const infernoYardPlugin: YardPlugin = (mounts) => {
   }
 
   // Back from Moloch's raid, won or lost: "stage passed" and his taunt.
+  // Or landed by this yard's own load, its finish still on the way (patch 7.5).
+  adoptLoadedRaidResult(store.save.raidresult);
   if (consumeRaidResult(isMolochRaid)) void staged(() => playStagePassed(state.cave.level, view));
 
   if (import.meta.env.DEV) {

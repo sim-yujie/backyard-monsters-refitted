@@ -27,6 +27,12 @@ export interface RaidFinishOptions {
   readonly wait: (ms: number) => Promise<void>;
   /** Tries after a failure to reach the server; 3 by default. */
   readonly attempts?: number;
+  /**
+   * Told true as a `tooEarly` wait starts and false as it ends: the server is
+   * answering, and a yard load before `readyAt` would call the fight off, so
+   * the raid screen does not offer "Back to yard" meanwhile (patch 7.5).
+   */
+  readonly onEarlyWait?: (waiting: boolean) => void;
 }
 
 /** How long to wait before asking again after a failure to reach the server. */
@@ -53,7 +59,12 @@ export const finishRaidFight = async (options: RaidFinishOptions): Promise<RaidF
         early += 1;
         const readyAt = refusal.readyAt ?? options.serverNow() + 1;
         const ms = (readyAt - options.serverNow()) * 1000 + 250;
-        await options.wait(Number.isFinite(ms) ? Math.min(MAX_EARLY_WAIT_MS, Math.max(250, ms)) : MAX_EARLY_WAIT_MS);
+        options.onEarlyWait?.(true);
+        try {
+          await options.wait(Number.isFinite(ms) ? Math.min(MAX_EARLY_WAIT_MS, Math.max(250, ms)) : MAX_EARLY_WAIT_MS);
+        } finally {
+          options.onEarlyWait?.(false);
+        }
         continue;
       }
       if (refusal?.reason === "cancelled") return { kind: "cancelled" };
