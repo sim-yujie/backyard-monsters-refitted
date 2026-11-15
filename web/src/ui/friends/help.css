@@ -170,4 +170,31 @@
   .friend-visit {
     top: 96px;
   }
+
+  /* An upright phone has no room for two rows here: the folded World chat
+     tab sits on the left just below (about 76px under the HUD) and the Events
+     button on the right. The "Helping Bob" line goes (the yard is the friend's
+     either way) and the bar shows its number alone, so the bar is one row
+     about 190px wide, clear of both (lead's check at 390x844). */
+  .friend-visit .friend-visit-line {
+    display: none;
+  }
+
+  .help-all-bar__words {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+}
+
+/* A phone on its side: the HUD is one short row (`--hud-height`), the World
+   chat tab under it on the left and the Events button on the right; the
+   centred column starts just under the HUD, clear of both. */
+@media (min-width: 621px) and (max-height: 500px) {
+  .friend-visit {
+    top: calc(var(--hud-height, 64px) + var(--space-1));
+  }
 }

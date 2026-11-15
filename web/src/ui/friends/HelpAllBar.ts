@@ -100,7 +100,11 @@ export class HelpAllBar {
     const nothing = this.total === 0 && !this.busy;
     if (row) row.hidden = nothing;
     this.element.hidden = nothing && this.result.hidden;
-    this.count.textContent = helpAllCountText(this.total);
+    // "3" and " to speed up": a phone shows the number alone (help.css).
+    const number = make("span", "help-all-bar__number", String(this.total));
+    const words = make("span", "help-all-bar__words", " to speed up");
+    this.count.replaceChildren(number, words);
+    this.count.title = helpAllCountText(this.total);
     if (!this.busy) this.button.textContent = HELP_ALL_TEXT.button;
     this.button.disabled = this.busy || this.total === 0;
   }

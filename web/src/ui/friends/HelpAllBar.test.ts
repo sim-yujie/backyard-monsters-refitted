@@ -18,6 +18,9 @@ describe("HelpAllBar", () => {
     expect(bar.element.hidden).toBe(false);
     expect(bar.element.querySelector("img.game-icon--tools")).not.toBeNull();
     expect(count(bar)).toBe("3 to speed up");
+    // A phone shows the number alone; the words stay for a screen reader.
+    expect(bar.element.querySelector(".help-all-bar__number")?.textContent).toBe("3");
+    expect(bar.element.querySelector(".help-all-bar__words")?.textContent).toBe(" to speed up");
     expect(button(bar).textContent).toBe("Help all");
     bar.setCount(0);
     expect(bar.element.hidden).toBe(true);
