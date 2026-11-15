@@ -64,12 +64,6 @@ describe("formatBarAmount (the top bar, owner 15 Nov 2026)", () => {
     expect(formatBarAmount(11_163_050_000)).toBe("11.1B");
   });
 
-  it("shortens from a lower threshold when asked, for a bar with no room", () => {
-    expect(formatBarAmount(999, 1_000)).toBe("999");
-    expect(formatBarAmount(1_000, 1_000)).toBe("1.0K");
-    expect(formatBarAmount(87_450, 1_000)).toBe("87.4K");
-  });
-
   it("keeps the sign of a negative and dashes a missing value", () => {
     expect(formatBarAmount(-475_920)).toBe("-475.9K");
     expect(formatBarAmount(-5)).toBe("-5");

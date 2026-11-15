@@ -74,14 +74,15 @@ export const BAR_SHORT_FROM = 100_000;
  * have always spelled it ("15.0M"), so the number does not change width as it
  * ticks. Rounded DOWN at every unit, as {@link formatShort} is, so a store
  * never reads fuller than it is: 999,999 is "999.9K", never "1000.0K" or
- * "1.0M". The tooltip and the tap bubble keep the exact figure. `from` lowers
- * the threshold for a bar with no room even for "99,999".
+ * "1.0M". The tooltip and the tap bubble keep the exact figure. It is the
+ * same at every width: "99,999" is no wider than "999.9K", so a phone's
+ * quarter-width cell holds either.
  */
-export const formatBarAmount = (value: number | undefined, from: number = BAR_SHORT_FROM): string => {
+export const formatBarAmount = (value: number | undefined): string => {
   if (value === undefined) return "—";
-  if (value < 0) return `-${formatBarAmount(-value, from)}`;
+  if (value < 0) return `-${formatBarAmount(-value)}`;
   const whole = Math.floor(value);
-  if (whole < from) return formatAmount(whole);
+  if (whole < BAR_SHORT_FROM) return formatAmount(whole);
   // Tenths of the unit, in whole numbers, so the rounding is exact.
   const tenths = (unit: number): string => (Math.floor(whole / (unit / 10)) / 10).toFixed(1);
   if (whole < 1_000_000) return `${tenths(1_000)}K`;

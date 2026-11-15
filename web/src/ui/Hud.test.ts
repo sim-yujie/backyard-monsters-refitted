@@ -259,7 +259,7 @@ describe("the HUD", () => {
     });
   };
 
-  it("drops the brand, then shortens from a thousand, rather than overflow (#134)", () => {
+  it("drops the brand, then the caps, keeping the top bar's spelling, rather than overflow (#134)", () => {
     lay({ room: 600, full: 550, compact: 300 });
     hud.setResources({ r1: 15_000_000, r2: 87_450 }, 5);
     expect(hud.fitLevel).toBe("full");
@@ -276,7 +276,7 @@ describe("the HUD", () => {
     window.dispatchEvent(new Event("resize"));
     expect(hud.fitLevel).toBe("compact");
     expect(button("r1").textContent).toBe("15.0M");
-    expect(button("r2").textContent).toBe("87.4K");
+    expect(button("r2").textContent).toBe("87,450");
     // The name and the tap bubble keep the exact figure.
     expect(button("r2").title).toBe("Pebbles: 87,450");
     button("r2").click();
@@ -937,7 +937,6 @@ describe("the HUD's income an hour", () => {
   it("spells a rate as the amount above it: in full under 100,000, short and rounded down past it", () => {
     expect(formatRate(12_400)).toBe("+12,400/h");
     expect(formatRate(475_920)).toBe("+475.9K/h");
-    expect(formatRate(12_400, 1_000)).toBe("+12.4K/h");
     expect(formatRate(0)).toBe("+0/h");
   });
 });

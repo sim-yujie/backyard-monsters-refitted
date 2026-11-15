@@ -40,8 +40,7 @@ import { ShinyButton } from "./yard/ShinyButton";
  * to 99,999 and short past it, "475.9K" or "11.1B" (`formatBarAmount`; owner,
  * 15 Nov 2026: the full "10,874,100" was long and cluttered). When the bar is
  * too narrow for every readout — a phone — it drops the brand, then the caps,
- * then shortens from a thousand ("87.4K") rather than wrap or scroll; see
- * {@link HudFit}. A short amount
+ * rather than wrap or scroll; see {@link HudFit}. A short amount
  * hides small changes on a big pool, so every readout also carries the exact
  * figure (issue #92): as its tooltip and accessible name for a mouse or a
  * screen reader, and in a small bubble on a tap for a finger, which has no
@@ -95,9 +94,9 @@ export const HudFit = {
   /** Caps leave the text for the tooltip and the bubble; the fill bars stay. */
   NO_CAPS: "no-caps",
   /**
-   * Short from a thousand ("87.4K"), the narrow bar's last resort. The
-   * phone's corner keeps the top bar's rule instead (`formatBarAmount`). The
-   * tap bubble stays exact.
+   * The narrow bar's last level, the phone's corner always: the per-hour
+   * rates and amounts as at every level (`formatBarAmount`), the caps and the
+   * full silo's "15M/15M" gone. The tap bubble stays exact.
    */
   COMPACT: "compact",
 } as const;
@@ -122,9 +121,9 @@ export const fullText = (amount: number, cap: number): string => `${formatShort(
 
 /**
  * "+12,400/h" or "+475.9K/h": a resource's income an hour (#280), spelled as
- * the amount above it is (`formatBarAmount`, `from` as there).
+ * the amount above it is (`formatBarAmount`).
  */
-export const formatRate = (perHour: number, from?: number): string => `+${formatBarAmount(perHour, from)}/h`;
+export const formatRate = (perHour: number): string => `+${formatBarAmount(perHour)}/h`;
 
 /** The worker art: the orange builder with the hammer and the hard hat. */
 const WORKER_ICON_URL = "/assets/archived/worker.v1.png";
@@ -319,11 +318,6 @@ export class Hud {
   /** The Friends screen behind the Account menu's item (#370); null without the menu. */
   private friendsDoor: FriendsDoor | null = null;
   private fitted: HudFit = HudFit.FULL;
-  /**
-   * The corner in its phone grid: short amounts by the top bar's rule
-   * (`formatBarAmount`), not the narrow bar's shorter fallback.
-   */
-  private phoneGrid = false;
   /** The constructor has made every element {@link fit} touches; until then a refit waits for `mount`. */
   private built = false;
   /** The animation frame counting a readout up, or 0. */
@@ -665,13 +659,7 @@ export class Hud {
     if (!this.built) return;
     // The corner on a phone lays the readouts in a grid of four, which never
     // overflows and so cannot be measured: short amounts, as the mock-up has.
-    const phoneGrid = this.corner && window.matchMedia?.(PHONE_QUERY).matches === true;
-    if (phoneGrid !== this.phoneGrid) {
-      this.phoneGrid = phoneGrid;
-      // applyFit redraws only on a new level; the phone grid and a narrow bar share COMPACT.
-      if (this.fitted === HudFit.COMPACT) for (const readout of this.readouts.values()) this.render(readout);
-    }
-    if (phoneGrid) {
+    if (this.corner && window.matchMedia?.(PHONE_QUERY).matches) {
       this.applyFit(HudFit.COMPACT);
       return;
     }
@@ -789,14 +777,11 @@ export class Hud {
     // tooltip and the tap bubble, until the silo is full: then "15M/15M". A
     // phone's quarter-width cell has no room for "23.1M/23.1M", so there the
     // short amount and the full mark say it. Amounts and rates are short past
-    // 99,999 at every level; only a bar too narrow even then shortens from 1,000.
-    const from = this.fitted === HudFit.COMPACT && !this.phoneGrid ? 1_000 : undefined;
+    // 99,999 at every level (`formatBarAmount`).
     readout.value.textContent =
-      this.fitted === HudFit.COMPACT
-        ? formatBarAmount(shown, from)
-        : this.corner && full && readout.cap !== undefined
-          ? fullText(shown, readout.cap)
-          : formatBarAmount(shown);
+      this.fitted !== HudFit.COMPACT && this.corner && full && readout.cap !== undefined
+        ? fullText(shown, readout.cap)
+        : formatBarAmount(shown);
     const showCap =
       !this.corner &&
       readout.cap !== undefined &&
@@ -808,7 +793,7 @@ export class Hud {
     readout.fullMark.hidden = !full;
     readout.rate.hidden = readout.perHour === undefined;
     if (readout.perHour !== undefined) {
-      readout.rate.textContent = formatRate(readout.perHour, from);
+      readout.rate.textContent = formatRate(readout.perHour);
       // Still made, but lost while the silo is full: dimmed, the pile marked full.
       readout.rate.classList.toggle("hud__rate--full", full);
     }
