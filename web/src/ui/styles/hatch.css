@@ -96,6 +96,16 @@
   display: none;
 }
 
+/* Narrower, the Control Centre's title and count fill the top row: the
+   status floats at the bottom of the tab instead (a phone's add bar is down
+   there, so a phone keeps it at the top). */
+@container hatch (560px <= width < 880px) {
+  .hatch > .hatch__status {
+    top: auto;
+    bottom: var(--space-2);
+  }
+}
+
 /* A container query cannot style its own container: the tab's padding
    follows the window. No bottom padding on a phone, where the add bar
    sits flush with the sheet's bottom edge. */
@@ -1491,6 +1501,13 @@ button.hatch-slot:disabled {
   .hatch-now--compact .hatch-now__picture {
     width: 36px;
     height: 36px;
+  }
+
+  /* An idle hatchery's "Starts now": the picture over the words, smaller,
+     so the card is no taller than a busy one. */
+  .hatch-now--compact.hatch-now--preview .hatch-now__picture {
+    width: 28px;
+    height: 28px;
   }
 
   .hatch__split {
