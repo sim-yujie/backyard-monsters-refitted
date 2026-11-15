@@ -134,9 +134,15 @@ const FIREBALL_CORE = 0xfff0a0;
 const FIREBALL_BODY = 0xff8c1a;
 const FIREBALL_TAIL = 0xd94a12;
 const SMOKE_COLOUR = 0x5a5a5a;
-const LABEL_COLOUR = 0xff0000;
-const LABEL_HEAL_COLOUR = 0x39d353;
+/** Health the viewer's own side lost: red, as Flash showed every number. */
+export const LABEL_COLOUR = 0xff0000;
+/** Health the other side lost: white (owner, beta 8, option B). */
+export const LABEL_FOE_COLOUR = 0xffffff;
+export const LABEL_HEAL_COLOUR = 0x39d353;
 const LABEL_STROKE = 0x1a0a0a;
+/** The dark edge round a red or green number, and the heavier one a white number keeps on sand and snow. */
+export const LABEL_STROKE_WIDTH = 3;
+export const LABEL_FOE_STROKE_WIDTH = 4;
 /** "(+X)": extra damage, a Crabatron's crit (owner, beta 6). */
 export const LABEL_BONUS_COLOUR = 0xff9a1f;
 /** "(-X)": damage taken off, an Octo-ooze's weakening or Fomor's armour (owner, beta 6). */
@@ -358,6 +364,8 @@ export interface CreepFxHost {
   flashBuilding(id: number, on: boolean): void;
   /** The camera's zoom, so a number keeps its size on screen. */
   zoom(): number;
+  /** Whose side the player watching is on, for the numbers' colours; the attacker's when left out. */
+  readonly viewer?: Side;
   /**
    * A projectile carrying `amount` of a building's health has landed (#77):
    * the host shows the building's loss from now, not from the swing.
@@ -370,8 +378,31 @@ export interface CreepFxHost {
   rocketCell?(column: number): Texture | null;
 }
 
-/** What a number says: health lost in red, health gained in green with a plus. */
-export type NumberKind = "damage" | "heal";
+/** The two sides of a battle: the attacking army, and the yard with its bunkers' monsters and caged champion. */
+export type Side = "attacker" | "defender";
+
+/**
+ * What a number says: health one side lost, or health gained (green, with a
+ * plus). A loss is red when it is the viewer's own side's and white when it
+ * is the other side's ({@link numberColour}; owner, beta 8).
+ */
+export type NumberKind = "attackerLoss" | "defenderLoss" | "heal";
+
+/** The kind of number a loss to `side` is. */
+export const lossOf = (side: Side): NumberKind => (side === "defender" ? "defenderLoss" : "attackerLoss");
+
+/**
+ * A number's colour seen by `viewer` (owner, beta 8, "by side"): red when the
+ * viewer's own side loses health, white when the other side does, green for
+ * a heal. The attacker sees its monsters' hits on the yard and its defenders
+ * in white and its own wounds in red; a player watching their own yard
+ * raided sees the reverse.
+ */
+export const numberColour = (kind: NumberKind, viewer: Side): number => {
+  if (kind === "heal") return LABEL_HEAL_COLOUR;
+  const own = kind === (viewer === "defender" ? "defenderLoss" : "attackerLoss");
+  return own ? LABEL_COLOUR : LABEL_FOE_COLOUR;
+};
 
 interface Projectile {
   readonly tick: number;
@@ -682,7 +713,12 @@ export class CreepFx {
     label.x = at.x;
     label.y = at.y;
     label.text.text = kind === "heal" ? `+${shown}` : String(shown);
-    label.text.style.fill = kind === "heal" ? LABEL_HEAL_COLOUR : LABEL_COLOUR;
+    const colour = numberColour(kind, this.host.viewer ?? "attacker");
+    label.text.style.fill = colour;
+    label.text.style.stroke = {
+      color: LABEL_STROKE,
+      width: colour === LABEL_FOE_COLOUR ? LABEL_FOE_STROKE_WIDTH : LABEL_STROKE_WIDTH,
+    };
     label.text.visible = true;
     label.text.alpha = 1;
     label.text.position.set(Math.round(at.x + label.shiftX), Math.round(at.y));
@@ -806,7 +842,8 @@ export class CreepFx {
 
   /**
    * What each number of a target says beside it, oldest first, for tests: the
-   * number, its modifier and colour, whether it has the thorn, and its scale.
+   * number, its modifier and colour, whether it has the thorn, its scale, and
+   * the number's own colour and edge.
    */
   partsFor(key: string): Array<{
     text: string;
@@ -815,6 +852,8 @@ export class CreepFx {
     thorns: boolean;
     scale: number;
     font: string;
+    colour: number;
+    strokeWidth: number;
   }> {
     return (this.labelsByKey.get(key) ?? []).map((label) => ({
       text: label.text.text,
@@ -823,6 +862,8 @@ export class CreepFx {
       thorns: label.mark.visible,
       scale: label.text.scale.y,
       font: String(label.text.style.fontFamily),
+      colour: Number(label.text.style.fill),
+      strokeWidth: label.text.style.stroke ? Number((label.text.style.stroke as { width?: number }).width) : 0,
     }));
   }
 
@@ -843,7 +884,8 @@ export class CreepFx {
           this.host.landed?.(shot.buildingId, shot.amount);
           const over = { x: shot.to.x, y: shot.to.y - BUILDING_NUMBER_LIFT };
           const key = `building:${shot.buildingId}`;
-          this.number(tick, key, -1, shot.amount, over, "damage", shot.mods);
+          // Only an attacker's shot lands on a building: the yard's loss.
+          this.number(tick, key, -1, shot.amount, over, "defenderLoss", shot.mods);
         }
       }
       if (age > shot.flight + burstTicks(shot.style)) continue;
@@ -1167,7 +1209,7 @@ export class CreepFx {
         ...(this.classicFont ? { fontWeight: "bold" as const } : {}),
         fontSize: 13,
         fill: LABEL_COLOUR,
-        stroke: { color: LABEL_STROKE, width: 3 },
+        stroke: { color: LABEL_STROKE, width: LABEL_STROKE_WIDTH },
       },
     });
     text.anchor.set(0.5, 1);
@@ -1179,7 +1221,7 @@ export class CreepFx {
         ...(this.classicFont ? { fontWeight: "bold" as const } : {}),
         fontSize: Math.round(13 * LABEL_EXTRA_SHARE),
         fill: LABEL_BONUS_COLOUR,
-        stroke: { color: LABEL_STROKE, width: 3 },
+        stroke: { color: LABEL_STROKE, width: LABEL_STROKE_WIDTH },
       },
     });
     extra.anchor.set(0, 1);
