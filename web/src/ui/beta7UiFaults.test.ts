@@ -62,8 +62,9 @@ describe("6 Nov UI check: phone faults", () => {
       /\.hatch-add__controls \.qty-stepper__step \{\s*flex: 1 1 var\(--control-height-compact\);\s*min-width: var\(--control-height-compact\);/,
     );
     expect(phoneHatch).toMatch(/\.hatch-add__fill \{\s*flex: 1 0 auto;/);
-    expect(phoneHatch).toMatch(/\.hatch-line--hcc \.hatch-now__label-word \{\s*display: none;/);
-    expect(phoneHatch).toMatch(/\.hatch-line--hcc \.hatch-now__label-number::before \{\s*content: "#";/);
+    // Every screen shows "#1" since 15 Nov (owner: no "Hatchery" word on the cards).
+    expect(css("styles/hatch.css")).toMatch(/\.hatch-line--hcc \.hatch-now__label-word \{\s*display: none;/);
+    expect(css("styles/hatch.css")).toMatch(/\.hatch-line--hcc \.hatch-now__label-number::before \{\s*content: "#";/);
   });
 
   it("Hatchery on a phone (owner, 9 Nov): four monsters across, no name cut, the chosen one a different colour", () => {
@@ -73,8 +74,8 @@ describe("6 Nov UI check: phone faults", () => {
     // A name is never broken mid-word ("Slimeattik / us"): a long one is drawn smaller.
     expect(phoneHatch).not.toMatch(/\.hatch-monster__name \{[^}]*overflow-wrap: anywhere;/);
     expect(phoneHatch).toMatch(/\.hatch-monster__name--long \{\s*font-size: 10\.5px;/);
-    // The "Grey monsters are locked" note has the line's width, its button under it.
-    expect(phoneHatch).toMatch(/\.hatch-pick__locked-text \{\s*flex: 1 1 calc\(100% - 40px\);/);
+    // No "Grey monsters are locked" note since 15 Nov (owner): a padlock on each locked monster.
+    expect(source).not.toMatch(/\.hatch-pick__locked/);
     expect(phoneHatch).toMatch(/\.hatch-slot__upgrade \{\s*min-height: var\(--control-height-compact\);/);
     expect(source).toMatch(
       /\.hatch-monster\[aria-pressed="true"\],[^{]*\{[^}]*background: color-mix\(in srgb, var\(--colour-accent\) 36%, transparent\);/,
