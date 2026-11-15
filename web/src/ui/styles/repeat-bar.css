@@ -113,6 +113,16 @@
   filter: drop-shadow(0 2px 2px rgb(0 0 0 / 55%));
 }
 
+/* Modern's monster icons are square paintings with their ground: a round
+   token each, so they overlap cleanly. Champions and Flash's icons are
+   cut-outs and march as they are. */
+.repeat-bar__marcher--token .repeat-bar__marcher-pic {
+  box-sizing: border-box;
+  border: 2px solid var(--colour-accent-line);
+  border-radius: 50%;
+  object-fit: cover;
+}
+
 .repeat-bar__count {
   position: absolute;
   right: -4px;
@@ -196,7 +206,8 @@
 }
 
 .repeat-bar__ash {
-  width: calc(var(--repeat-progress) * (100% - 6px));
+  /* The spark's own sum, so the ash ends right under it. */
+  width: calc(var(--repeat-progress) * (100% - 12px));
   background: repeating-linear-gradient(60deg, #4a403a 0 4px, #1e1a18 4px 7px);
   opacity: 0.92;
 }

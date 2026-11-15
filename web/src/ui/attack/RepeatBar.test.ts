@@ -136,8 +136,8 @@ afterEach(() => setClassicLook(false));
 describe("the bar's timing on Repeat attack", () => {
   it("an answer before 5 s: the bar runs the full 5 s, then jumps to full, then the result", async () => {
     const { modal, timers, onAttacked, bar, value } = await pressAttack(async () => RESULT);
-    // The map hears of the landed attack as soon as the answer comes.
-    expect(onAttacked).toHaveBeenCalledWith(RESULT);
+    // The map hears of the landed attack only when the bar lands.
+    expect(onAttacked).not.toHaveBeenCalled();
     expect(bar()).not.toBeNull();
     expect(modal.textContent).toContain("Attacking…");
 
@@ -154,6 +154,7 @@ describe("the bar's timing on Repeat attack", () => {
     expect(timers.at()).toBeGreaterThanOrEqual(5000);
     expect(value()).toBe(100);
     expect(bar()!.classList.contains("repeat-bar--full")).toBe(true);
+    expect(onAttacked).toHaveBeenCalledWith(RESULT);
     expect(modal.textContent).not.toContain("Auto-attack result");
 
     await timers.advance(REPEAT_BAR_FULL_HOLD_MS.army);
@@ -194,12 +195,13 @@ describe("the bar's timing on Repeat attack", () => {
     expect(onAttacked).not.toHaveBeenCalled();
   });
 
-  it("closing while it runs shows no result later", async () => {
-    const { modal, timers, flow } = await pressAttack(async () => RESULT);
+  it("closing while it runs shows no result later, but the landed attack is still reported", async () => {
+    const { modal, timers, flow, onAttacked } = await pressAttack(async () => RESULT);
     await timers.advance(1000);
     flow.close();
     await timers.advance(10_000);
     expect(modal.children).toHaveLength(0);
+    expect(onAttacked).toHaveBeenCalledTimes(1);
   });
 
   it("the end panel's Attack again (no bar asked for) keeps the plain line", async () => {
@@ -235,6 +237,9 @@ describe("the looks", () => {
       "champion",
     ]);
     expect(units[0]!.querySelector("img")!.getAttribute("src")).toContain("C5");
+    // Modern's square monster paintings march as round tokens; the champion's cut-out as it is.
+    expect(units[0]!.classList.contains("repeat-bar__marcher--token")).toBe(true);
+    expect(units[4]!.classList.contains("repeat-bar__marcher--token")).toBe(false);
     expect(bar.element.querySelector<HTMLImageElement>(".repeat-bar__goal-pic")!.getAttribute("src")).toBe(
       "/tribes/abunakki-256.png",
     );
@@ -247,6 +252,7 @@ describe("the looks", () => {
     expect(bar.element.querySelector(".repeat-bar__marcher img")!.getAttribute("src")).toBe(
       "/assets/monsters/C5-small.png",
     );
+    expect(bar.element.querySelector(".repeat-bar__marcher--token")).toBeNull();
     expect(tribeGoalPicture("Abunakki")).toBe("/assets/popups/tribe_abunakki.v2.png");
     expect(tribeGoalPicture("Nobody")).toBeNull();
   });

@@ -261,7 +261,8 @@ export class AutoAttackFlow {
    * Repeat attack with the working bar: it runs at least
    * {@link REPEAT_BAR_MIN_MS}; once the answer is in and that time has passed
    * it jumps to full, holds a moment, and the result shows. An error stops it
-   * at once. The map hears of the landed attack as soon as the answer comes.
+   * at once. The map hears of the landed attack when the bar lands, so the
+   * camp behind the sheet does not change before the bar is done.
    */
   private async runWithBar(): Promise<void> {
     const timers = this.options.barTimers ?? REAL_TIMERS;
@@ -277,11 +278,9 @@ export class AutoAttackFlow {
     this.show("Repeat attack", "auto-attack--running auto-attack--bar", [bar.element, words], []);
     bar.start();
     try {
-      const work = this.calls.run(this.options.baseid).then((result) => {
-        this.options.onAttacked?.(result);
-        return result;
-      });
-      const result = await atLeast(work, REPEAT_BAR_MIN_MS, timers, bar.started);
+      const result = await atLeast(this.calls.run(this.options.baseid), REPEAT_BAR_MIN_MS, timers, bar.started);
+      // Before the closed check: a landed attack is always reported.
+      this.options.onAttacked?.(result);
       if (this.closed) return;
       bar.complete();
       await timers.wait(bar.holdMs);

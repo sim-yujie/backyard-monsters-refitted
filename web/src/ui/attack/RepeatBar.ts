@@ -234,7 +234,11 @@ export class RepeatBar {
     // Left to right: the smallest kind at the back, the biggest behind the champions, who lead.
     const marchers = [...all.filter((one) => one.count !== null).reverse(), ...all.filter((one) => one.count === null)];
     marchers.forEach((marcher, index) => {
-      const unit = part(`repeat-bar__marcher${marcher.count === null ? " repeat-bar__marcher--champion" : ""}`);
+      const unit = part(
+        `repeat-bar__marcher${marcher.count === null ? " repeat-bar__marcher--champion" : ""}${
+          marcher.count !== null && marcher.picture.src.includes("/portraits/") ? " repeat-bar__marcher--token" : ""
+        }`,
+      );
       unit.style.setProperty("--marcher", String(index));
       const image = document.createElement("img");
       image.className = "repeat-bar__marcher-pic";
