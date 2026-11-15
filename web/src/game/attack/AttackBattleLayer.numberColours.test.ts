@@ -150,12 +150,19 @@ describe("damage numbers by side over a real fight (owner, beta 8)", () => {
     it(`${look}, watching one's own yard raided: buildings and Fangs lose in red, the raiders in white`, async () => {
       const { shown, friendly } = await fight("defender", classic);
       const buildings = shown.filter((number) => number.key.startsWith("building:"));
+      const defenders = shown.filter((number) => number.key.startsWith("creep:") && friendly.has(creepIdOf(number.key)));
       const raiders = shown.filter(
         (number) => number.key.startsWith("creep:") && !friendly.has(creepIdOf(number.key)) && number.kind !== "heal",
       );
       expect(buildings.length).toBeGreaterThan(0);
+      expect(defenders.length).toBeGreaterThan(0);
       expect(raiders.length).toBeGreaterThan(0);
       expect(buildings.some((number) => number.colour === LABEL_COLOUR)).toBe(true);
+      expect(defenders.some((number) => number.colour === LABEL_COLOUR)).toBe(true);
+      for (const number of defenders) {
+        expect(number.kind).toBe("defenderLoss");
+        if (number.colour !== undefined) expect(number.colour).toBe(LABEL_COLOUR);
+      }
       expect(raiders.some((number) => number.colour === LABEL_FOE_COLOUR)).toBe(true);
       for (const number of buildings) if (number.colour !== undefined) expect(number.colour).toBe(LABEL_COLOUR);
       for (const number of raiders) if (number.colour !== undefined) expect(number.colour).toBe(LABEL_FOE_COLOUR);
