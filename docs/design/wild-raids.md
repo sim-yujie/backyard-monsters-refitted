@@ -457,7 +457,13 @@ A raid is **cancelled** when any of these happens first:
 2. **Presence lost:** at finish, the last presence mark is older than 120 s (the ping's TTL,
    `controllers/maproom/presence.ts`), meaning the game was closed or offline during the fight.
 3. **Reload or new session:** an own-yard build load while a raid is open (warning or fight)
-   cancels it. A reload is closing the game.
+   cancels it. A reload is closing the game. **Except (patch 7.5):** a fight the finish could
+   already land (from its earliest finish, below), with the game still open (presence mark not
+   lapsed), is landed by the load instead, before the load reads the yard, and the load answers
+   it as `raidresult`; a finish arriving afterwards answers the same result. This is the player
+   pressing "Back to yard" while the finish is still on its way. The outcome is the server's own
+   from the start, so landing it on the load gives nothing a finish would not, and it is no
+   sooner than a finish is taken.
 4. **Warning never answered and never launched:** the warning key lives `attackAt` plus 15 minutes;
    after that it is gone.
 
