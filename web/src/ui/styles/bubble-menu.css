@@ -272,3 +272,14 @@
     transition: none;
   }
 }
+
+/* A phone held upright: the fan rises into the middle of the screen, where an
+   open World chat sits over it (chat.css) and took its presses (layout check,
+   15 Nov: Goals could not be pressed with the chat open). While the fan is
+   out the chat steps aside, as it does for Build and Monsters (yard-hud.css),
+   and is back as the fan folds. */
+@media (max-width: 620px) {
+  .overlay__layer:has(> .yard-dock .bubble-menu--open) > .chat-box {
+    display: none;
+  }
+}
