@@ -71,12 +71,13 @@
 }
 
 /* The shield's time and the boosts' count: one plain style. The display
-   face sits a pixel low in its line box; the nudge centres it in the plate. */
+   face sits low in its line box, by a different amount in each browser:
+   trimmed to its capitals and baseline it is centred in the plate (Chrome,
+   Safari); where trimming is missing (Firefox) it stays as the font sets it. */
 .hud-status__time,
 .hud-status__count {
-  position: relative;
-  top: -1px;
   font-variant-numeric: tabular-nums;
+  text-box: trim-both cap alphabetic;
 }
 
 /* ── The list: under Bob's "?", where the reset list hangs too ──────── */
