@@ -200,10 +200,15 @@ export const createRaidPlugin =
             }
           },
         }).finally(() => release?.());
-        // Kept for the yard even when this screen has gone meanwhile; an open
-        // yard is told, and shows it once (`plugins/raid.ts`).
-        if (outcome.kind === "landed") setRaidResult(outcome.result);
-        deps.clearRaid();
+        // The watch first, so a yard the result opens afresh does not find the
+        // fight still going (its lock). The result is kept for the yard even
+        // when this screen has gone meanwhile; an open yard is told, and shows
+        // it once (`plugins/raid.ts`).
+        try {
+          deps.clearRaid();
+        } finally {
+          if (outcome.kind === "landed") setRaidResult(outcome.result);
+        }
         const notice = finishNotice(outcome, run.raid.tribe);
         // Dropped if the yard's load landed this raid meanwhile (patch 7.5).
         if (notice) setRaidNote(notice, run.raid.id);

@@ -52,6 +52,11 @@ export const raidYardPlugin: YardPlugin = (mounts) => {
   if (store.kind !== "main") return;
   const notice = (message: string): void => notices.show("raid", message, { level: "info", timeoutMs: 6_000 });
 
+  // A fight this yard's load landed (patch 7.5) is over, though its finish
+  // has not answered yet: the yard is not locked for it.
+  const loaded = store.save.raidresult;
+  if (loaded && raidWatch.current?.id === loaded.id) raidWatch.set(null);
+
   // The alert lists the army a minute or more before the fight: fetch its
   // sheets now, so a slow line has them by the first wave.
   warmRaidSheets(raidWatch.current);

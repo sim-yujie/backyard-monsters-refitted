@@ -56,6 +56,8 @@ const refusal = (reason: string, extra: Record<string, number> = {}): ApiError =
 
 /** The raid scene on the fight, its finish answered by `finish`; leaving it tears it down, as the scene switch does. */
 const raidScreen = (finish: () => Promise<unknown>) => {
+  // As the yard handed the fight over: the watch holds it, fighting, until the finish answers.
+  raidWatch.set(RUN.raid);
   let phase: AttackSessionState["phase"] = "running";
   const listeners = new Set<(state: AttackSessionState) => void>();
   const state = () => ({ phase, tick: 0 }) as AttackSessionState;
@@ -84,7 +86,7 @@ const raidScreen = (finish: () => Promise<unknown>) => {
   teardown = createRaidPlugin({
     api: api as never,
     serverNow: () => 1_000,
-    clearRaid: () => {},
+    clearRaid: () => raidWatch.set(null),
     wait: (ms) => new Promise((resolve) => setTimeout(resolve, ms)),
   })(mounts);
   return {
@@ -134,6 +136,8 @@ const yard = () => {
     open,
     reloads,
     shown,
+    /** Whether the open yard shows the raid's lock ("is raiding your yard"). */
+    locked: () => modals.at(-1)!.querySelector(".raid-lock") !== null,
     /** Result popups shown so far, in every yard opened. */
     popups: () => modals.reduce((sum, modal) => sum + modal.querySelectorAll(".raid-result").length, 0),
     setPlanner: (open: boolean) => (planner = open),
@@ -168,6 +172,8 @@ describe("Back to yard before the finish answers (patch 7.5)", () => {
     // The yard's load reached the server first: it landed the fight and answers it.
     home.open({ raidresult: RESULT });
     expect(home.popups()).toBe(1);
+    // The fight is over: no lock on the yard while the finish is still out.
+    expect(home.locked()).toBe(false);
 
     // Then the finish's answer: the same raid.
     answer({ error: 0, result: RESULT });
@@ -186,15 +192,18 @@ describe("Back to yard before the finish answers (patch 7.5)", () => {
     await vi.advanceTimersByTimeAsync(LEAVE_OFFER_MS);
     screen.backButton()!.click();
 
-    // The yard's load found the raid landed already: nothing to answer.
+    // The yard's load found the raid landed already: nothing to answer, and
+    // the watch still has the fight until the finish says otherwise.
     home.open();
     expect(home.popups()).toBe(0);
+    expect(home.locked()).toBe(true);
 
     answer({ error: 0, result: RESULT });
     await vi.advanceTimersByTimeAsync(0);
     // The yard as the server has it now (the raid's damage in it), and the popup on it.
     expect(home.reloads).toHaveBeenCalledTimes(1);
     expect(home.popups()).toBe(1);
+    expect(home.locked()).toBe(false);
 
     await vi.advanceTimersByTimeAsync(LATE_RESULT_CHECK_MS * 5);
     expect(home.reloads).toHaveBeenCalledTimes(1);
