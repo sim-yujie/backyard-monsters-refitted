@@ -2070,6 +2070,49 @@ button.hatch-slot:disabled {
    is cut there, so it shows there is more; a swipe slides it, never the
    tab. The cards keep their size, so nothing gets harder to tap. */
 @media (max-width: 620px), (max-height: 500px) {
+  /* patch 7.6.1 (astra): shorter waiting slots, still all present. A long
+     name may wrap here; the monster grid below keeps its single line. */
+  .hatch-slot {
+    min-height: 64px;
+    gap: 0;
+    padding: 2px;
+  }
+
+  .hatch-line--hcc > .hatch-line__slots {
+    grid-template-rows: auto minmax(64px, auto);
+    grid-auto-rows: minmax(64px, auto);
+    min-height: 0;
+  }
+
+  /* Under the "×20" badge, not behind it. */
+  .hatch-slot__picture {
+    width: 28px;
+    height: 28px;
+    margin-top: 14px;
+  }
+
+  .hatch-slot__name {
+    font-size: 10.5px;
+    line-height: var(--leading-tight);
+    letter-spacing: -0.4px;
+    white-space: normal;
+    overflow: visible;
+    overflow-wrap: anywhere;
+  }
+
+  /* patch 7.6.1 (astra): badges have their own corners above the roof. */
+  @container hatch (width < 560px) {
+    .hatch-tab__number {
+      left: -12px;
+    }
+
+    .hatch-tab__waiting {
+      right: 0;
+      padding-inline: 2px;
+      font-size: 10.5px;
+    }
+  }
+
   /* Upright, four cards and a part of the fifth: the row is the tab's width
      (100cqi) and both edges' padding, the first card starts one padding in.
      Never under 76 px, the width "Octo-ooze" and "Slimeattikus" need. */
