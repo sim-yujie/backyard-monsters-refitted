@@ -1,0 +1,136 @@
+/*
+ * PREVIEW ONLY (beta 8, 15 Nov 2026): the reset-clock corner's layout
+ * options, `?clockLook=a|b|c` in a dev build (ui/yard/clockLookPreview.ts).
+ * Every rule hangs on :root[data-clock-look], which only that switch sets.
+ * Delete this file with clockLookPreview.ts once the owner has picked.
+ */
+
+/* ── The status strip: painted icon + short time, one row ───────────── */
+
+:root[data-clock-look] .clock-look__row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+:root[data-clock-look] .hud--corner > .hud-status.hud-status .clock-look__chip {
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  height: var(--reset-help-size);
+  padding: 0 6px 0 3px;
+  font-family: var(--font-display);
+  font-size: var(--text-sm);
+  line-height: 1;
+  white-space: nowrap;
+  color: var(--colour-text-strong);
+}
+
+:root[data-clock-look] .clock-look__icon {
+  flex: none;
+  width: calc(var(--reset-help-size) - 12px);
+  height: calc(var(--reset-help-size) - 12px);
+}
+
+:root[data-clock-look] .clock-look__time {
+  font-variant-numeric: tabular-nums;
+}
+
+:root[data-clock-look] .clock-look__boostitem {
+  display: flex;
+}
+
+:root[data-clock-look] .clock-look__boosts {
+  position: relative;
+  cursor: pointer;
+  pointer-events: auto;
+}
+
+/* The count: a small round number on the icon's corner, not an alert. */
+:root[data-clock-look] .clock-look__count {
+  display: grid;
+  place-items: center;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 4px;
+  border-radius: 9px;
+  background: rgb(0 0 0 / 55%);
+  color: #ffffff;
+  font-size: 12px;
+}
+
+/* The boosts' names, under the strip. */
+:root[data-clock-look] .hud--corner > .hud-status.hud-status > .clock-look__list {
+  top: calc(100% + var(--space-2));
+  left: 0;
+  width: min(280px, calc(100vw - 2 * (var(--hud-inset) + var(--space-2))));
+  pointer-events: auto;
+}
+
+:root[data-clock-look] .clock-look__listrow {
+  align-items: center;
+}
+
+:root[data-clock-look] .clock-look__listrow .reset-clock__title {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+}
+
+/* ── a: the clock pill stays; the chips are icons ───────────────────── */
+
+/* A phone upright: only ~110px is left between the pill and the Events door,
+   so the icons take the row under it, right of World chat's tab. */
+@media (max-width: 620px) {
+  :root[data-clock-look="a"] .overlay__layer:has(> .reset-clock:not([hidden])) > .hud--corner > .hud-status.hud-status {
+    top: calc(var(--hud-height) - var(--space-3) + var(--reset-help-size) + 2 * var(--space-2));
+    left: 92px;
+    max-width: calc(100% - 92px - 72px);
+  }
+}
+
+/* ── c: the clock is a round icon button, as big as Bob's "?" ───────── */
+
+:root[data-clock-look="c"] {
+  --reset-clock-width: var(--reset-help-size);
+}
+
+:root[data-clock-look="c"] .reset-clock__button {
+  padding: 0;
+}
+
+:root[data-clock-look="c"] .reset-clock__time {
+  display: none;
+}
+
+/* The list's own time for the daily reset is already there; nothing to add. */
+
+/* ── b: no clock pill; the strip takes its place; resets under Events ─ */
+
+/* The strip starts where the pill was (the pill's rules then step it on by
+   --reset-clock-width plus a gap: a negative gap brings it back). */
+:root[data-clock-look="b"] {
+  --reset-clock-width: calc(var(--space-2) * -1);
+}
+
+:root[data-clock-look="b"] .reset-clock {
+  /* Stand-in for "a Resets tab inside Events": the list hangs under the
+     Events door at the right. */
+  left: auto;
+  right: calc(var(--hud-inset) + var(--space-2));
+  width: 0;
+}
+
+:root[data-clock-look="b"] .reset-clock__button {
+  display: none;
+}
+
+:root[data-clock-look="b"] .reset-clock__list {
+  left: auto;
+  right: 0;
+  top: 96px;
+}
