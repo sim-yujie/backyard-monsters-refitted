@@ -211,6 +211,20 @@ describe("a yard load (cancel rule 3)", () => {
     expect(await readOpenRaid(USER)).toBeNull();
   });
 
+  test("drops only the raid it read: a newer raid B opened meanwhile stays (sol's fourth review)", async () => {
+    // The load reads fight A; meanwhile a finish settles and drops A and a Trojan Horse spring opens B.
+    await openFightingRaid(USER, { ...fighting(T0 + 300), id: "r_b" }, T0 + 300);
+    const staleA = JSON.stringify(fighting(T0 + 300));
+    const get = redis.get;
+    redis.get = (async (key: string) => (key === raidKey(USER) ? staleA : get(key))) as typeof redis.get;
+    try {
+      expect(await cancelRaidOnYardLoad(USER, false)).toBe(false);
+    } finally {
+      redis.get = get;
+    }
+    expect((await readOpenRaid(USER))?.id).toBe("r_b");
+  });
+
   test("keeps a warning while the game stayed open (back from the map)", async () => {
     await openRaid(USER, warning({ warned: 1 }), T0);
     expect(await cancelRaidOnYardLoad(USER, false)).toBe(false);

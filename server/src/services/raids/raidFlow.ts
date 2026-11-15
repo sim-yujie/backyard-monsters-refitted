@@ -53,7 +53,6 @@ import { mr1RaidCamps, type RaidCamp } from "./raidTribe.js";
 import {
   FIGHT_GRACE_SECONDS,
   WARNING_SECONDS,
-  cancelOpenRaid,
   checkRaidForFinish,
   dropOpenRaid,
   earliestFinish,
@@ -180,8 +179,7 @@ const cancelWarningUnderProtection = async (em: EntityManager, user: User, raid:
   if (basesaveid == null) return false;
   const save = await em.findOne(Save, { basesaveid }, { fields: ["basesaveid", "protected", "storedata"], refresh: true });
   if (!save || !boughtProtection(save, now)) return false;
-  if ((await readOpenRaid(user.userid))?.id !== raid.id) return false;
-  await cancelOpenRaid(user.userid);
+  if (!(await dropOpenRaid(user.userid, raid.id))) return false;
   logger.info("Wild monster raid {id} called off for userid {userid}: protection bought", {
     event: "wild-raid-protected",
     userid: user.userid,
@@ -472,7 +470,7 @@ export const startRaid = async (em: EntityManager, user: User, raidId: unknown, 
   try {
     const frozen = await freezeYard(em, user, raid, now);
     if (!frozen) {
-      if ((await readOpenRaid(user.userid))?.id === raid.id) await cancelOpenRaid(user.userid);
+      await dropOpenRaid(user.userid, raid.id);
       throw raidRefusedErr("noRaid");
     }
     const { yard, defence } = frozen;
@@ -501,7 +499,7 @@ export const startRaid = async (em: EntityManager, user: User, raidId: unknown, 
         throw raidRefusedErr("busy");
       case "lifted":
         // The load that lifted it found the raid still in its warning.
-        if ((await readOpenRaid(user.userid))?.id === raid.id) await cancelOpenRaid(user.userid);
+        await dropOpenRaid(user.userid, raid.id);
         throw raidRefusedErr("noRaid");
       case "raidGone":
         throw raidRefusedErr("noRaid");

@@ -6,7 +6,7 @@ import { quietLoginOn } from "../../config/QuietLoginConfig.js";
 import type { Save } from "../../database/models/save.model.js";
 import { logger } from "../../utils/logger.js";
 import { isAttackActive } from "../base/isAttackActive.js";
-import { cancelOpenRaid, readOpenRaid, type OpenRaid } from "../raids/raidStore.js";
+import { dropOpenRaid, readOpenRaid, type OpenRaid } from "../raids/raidStore.js";
 import {
   EMERGENCE_GAP_SECONDS,
   emergenceDueCheck,
@@ -104,7 +104,7 @@ export const emergenceOnLoad = async (
   if (!enabled) return undefined;
   let open = await readOpenRaid(userid);
   if (open && isEmergenceRaid(open) && open.phase === "warning") {
-    await cancelOpenRaid(userid);
+    await dropOpenRaid(userid, open.id);
     open = null;
   }
   const progress = await readInfernoProgress(em, userid);

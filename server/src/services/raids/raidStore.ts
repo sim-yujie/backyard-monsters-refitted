@@ -160,7 +160,9 @@ export const cancelRaidOnYardLoad = async (userid: number, gameWasClosed: boolea
   const raid = await readOpenRaid(userid);
   if (!raid || raid.id === keep) return false;
   if (raid.phase === "warning" && !gameWasClosed) return false;
-  return cancelOpenRaid(userid);
+  // Only the raid read above: one settled and replaced meanwhile (a Trojan
+  // Horse spring) is not dropped in its place (sol's fourth review).
+  return dropOpenRaid(userid, raid.id);
 };
 
 /** How long the last landed raid's whole result is kept for a finish that comes late. */
