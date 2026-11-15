@@ -1,0 +1,18 @@
+Use your image generation tool (one call) to create a new image and save it as sample-new.png in the current folder. Do not write code and do not copy or composite pixels from the inputs.
+
+Paint the DESTROYED look of the RESOURCE POD (the Inferno's storage building), for the isometric strategy game Backyard Monsters, seen from the game's fixed isometric camera, the same camera, angle and orientation as frames.png (not mirrored).
+
+CAMERA: the isometric 3/4 view of frames.png, seen from the front and above at about 30 degrees, NOT a straight side view and NOT a symmetric picture. Put every part where frames.png has it (left spire, back spire, right spire, the sheet's angle, the column in the middle), not mirrored and not rearranged.
+
+Input 1, frames.png: the OLD Flash destroyed Pod, blown up, on grey (1024x1024): how broken it is, its camera angle, footprint and size.
+Input 2, style.png: the Modern look of the other Inferno buildings from the same game (the finish).
+Input 3, base.png: the NEW whole Resource Pod, already approved. This is the building that is destroyed: same parts, same materials, same colours, same finish.
+
+DESTROYED: what is left after it was blown up: a low wreck, the amber pod burst open into a puddle-like heap of cracked resin with glowing orange lava blobs and yellow lava dripping over its front edge, the copper sheet crumpled and torn standing up at the back like a broken fin, the spires smashed into stumps and chunks of dark grey rock scattered around the edge, smoke-blackened. Follow frames.png for the shape and size of the wreck.
+
+FINISH: the finish of style.png (the Modern Inferno buildings of the same game: the painted Under Hall, the 3D Bone Cruncher and the 3D Magma Tower): crisp, clean, polished, almost rendered stylised 3D, smooth shading, small bevels catching the light, soft light from the upper left, ambient occlusion in the gaps, clean sharp edges, no thick black outline, no cel shading, no pixel art, no painterly brush mess. COLOURS DEEPER AND MORE MUTED than the Under Hall in style.png (it is a little too bright and saturated): the rock spires a dark charcoal grey with cool blue-grey highlights on their folds, like the Magma Tower's dark stone; the sheet a dull dusky copper-mauve with a soft sheen, not bright orange; the column's resin a deep amber-brown; the glowing blobs warm orange with hot yellow centres, like the Bone Cruncher's lava, glowing but not neon, their light just warming the resin and the sheet's underside. Right-hand faces in medium shade, readable, not black.
+
+Output: ONE image, 1024x1024, alone, complete and fully inside the image with margin.
+Background everywhere: flat pure green #00FF00. No ground, no lava pool, no grass, no tile, no shadow on the ground, no grid lines, no text, no labels. The picture itself must contain no bright pure green.
+
+IMPORTANT CORRECTION (an earlier attempt got this wrong): Follow frames.png's colours and shape: the wreck is MOSTLY the glowing amber-orange pod, slumped into a low DOMED melted mound in layered ripples (not a flat pool, not a box). The copper sheet shows only as ONE crumpled torn fin standing up at the BACK, behind the mound; it does NOT wrap around the edges and there is NO copper rim or frame round the heap. Around the mound, at the left, right and front, broken DARK GREY ROCK: two spire stumps (left and right) and chunks of grey rock lying on and around it. Yellow lava drips run down the mound's front.
