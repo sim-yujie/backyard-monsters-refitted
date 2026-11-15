@@ -94,4 +94,11 @@ describe("YardHelpMarks", () => {
     expect(marks.pick(100 + (WRENCH_RADIUS - 1) * scale, 50 - 32 * scale)).toBe(1);
     expect(marks.pick(100 + (WRENCH_RADIUS + 1) * scale, 50 - 32 * scale)).toBeNull();
   });
+
+  it("names the world box its marks take: highest anchor to lowest ring", () => {
+    const marks = new YardHelpMarks(anchor, corners);
+    expect(marks.worldBox()).toBeNull();
+    marks.set([speedup(1), repair(2)]);
+    expect(marks.worldBox()).toEqual({ left: 60, top: 50, right: 240, bottom: 100 });
+  });
 });

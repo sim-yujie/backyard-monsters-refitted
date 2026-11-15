@@ -55,6 +55,7 @@ import {
   type HelpTarget,
 } from "@/game/friends/helpModel";
 import { helpAllResultText, runHelpAll, type HelpOutcome } from "@/game/friends/helpAll";
+import { frameHelpMarks, type ClearBand } from "@/game/yard/helpFrame";
 import { worldChat } from "@/game/chat/chatSession";
 import { concealTraps, countedBuildings } from "@/game/attack/trapReveal";
 import { prefersReducedMotion } from "@/game/attack/AttackBattleLayer";
@@ -502,6 +503,8 @@ export class YardScene implements Scene {
   private helpAllBar: HelpAllBar | null = null;
   /** Keeps the wrenches' "-18m" tags current while visiting. */
   private helpMarkTimer: ReturnType<typeof setInterval> | null = null;
+  /** Whether this visit's camera has been framed on the marks. */
+  private helpMarksFramed = false;
   /** The help panel, while open on a friend's building. */
   private helpPanel: HelpPanel | null = null;
   /**
@@ -876,6 +879,7 @@ export class YardScene implements Scene {
     this.visitTop = null;
     if (this.helpMarkTimer) clearInterval(this.helpMarkTimer);
     this.helpMarkTimer = null;
+    this.helpMarksFramed = false;
     this.helpBlock = null;
     this.visitorPool = null;
     this.dock?.destroy();
@@ -919,6 +923,8 @@ export class YardScene implements Scene {
     this.viewportHeight = pane.height;
     this.camera?.resize(pane.width, pane.height);
     if (this.yard) this.applyZoomLimits(pane.width, pane.height);
+    // A friend's yard keeps its top edge clear of the top column at any size.
+    if (this.visitTop) this.applyVisitExtent();
     this.placeCompareLabels();
     // A different viewport is a different visible rectangle even when the
     // camera did not move.
@@ -1879,9 +1885,64 @@ export class YardScene implements Scene {
     }
     this.visitLine.dataset["name"] = name;
     this.showHelpBlock();
+    // No wrench under the HUD or the top column when the yard opens (lead, 15 Nov 2026).
+    this.applyVisitExtent();
+    this.frameHelpMarksOnce();
     // The "-18m" tags shrink as the friend's jobs run on.
     this.helpMarkTimer ??= setInterval(() => this.showHelpMarks(), 15_000);
     this.refreshStatus();
+  }
+
+  /**
+   * The screen band a friend's yard is seen in: below the HUD and the
+   * "Helping Bob / Help all" column, above the bottom bars. Null off a visit.
+   */
+  private visitBand(): ClearBand | null {
+    const context = this.context;
+    if (!context || !this.visitTop) return null;
+    const canvasTop = context.canvas.getBoundingClientRect().top;
+    const column = this.visitTop.getBoundingClientRect();
+    const columnBottom = column.height > 0 ? column.bottom - canvasTop : 0;
+    return {
+      width: this.viewportWidth,
+      top: Math.max(this.inset.top, columnBottom),
+      bottom: this.viewportHeight - this.inset.bottom,
+    };
+  }
+
+  /**
+   * Lets the camera bring a friend's yard's top edge down to just under the
+   * top column, as if the screen began there, so the top row of buildings can
+   * always be panned clear of it.
+   */
+  private applyVisitExtent(): void {
+    const camera = this.camera;
+    const band = this.visitBand();
+    if (!camera || !band) return;
+    camera.setViewExtent({ left: 0, top: band.top, right: this.viewportWidth, bottom: this.viewportHeight });
+  }
+
+  /**
+   * Once a visit, as the yard opens: if any wrench sits under the HUD or the
+   * top column, the camera centres the marks in the clear band, zooming out
+   * as far as it must (`frameHelpMarks`).
+   */
+  private frameHelpMarksOnce(): void {
+    const camera = this.camera;
+    const band = this.visitBand();
+    const box = this.renderer.helpMarksBox();
+    if (this.helpMarksFramed || !camera || !band || !box) return;
+    this.helpMarksFramed = true;
+    const next = frameHelpMarks(box, band, {
+      zoom: camera.zoom,
+      minZoom: camera.minZoom,
+      x: camera.position.x,
+      y: camera.position.y,
+    });
+    if (!next) return;
+    camera.zoom = next.zoom;
+    camera.setPosition(next.x, next.y);
+    camera.dirty = true;
   }
 
   /** The wrenches, rings and tags, read off the block and the yard as they stand now. */

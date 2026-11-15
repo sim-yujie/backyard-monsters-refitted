@@ -48,14 +48,26 @@ const TOOLS_SIDE = 30;
 /** How high the wrench bobs, and how long one bob takes (seconds). */
 const BOB_HEIGHT = 5;
 const BOB_PERIOD = 1.4;
+/**
+ * How far a wrench and its tag reach above their anchor, in screen pixels at
+ * zoom 1 and below (the wrench keeps its screen size zoomed out): the disc's
+ * rise and radius, the bob and a little air.
+ */
+export const MARK_HEADROOM = WRENCH_RISE + WRENCH_RADIUS + BOB_HEIGHT + 6;
+/** Half a big wrench's width, in the same screen pixels. */
+export const MARK_HALF_WIDTH = WRENCH_RADIUS + 4;
+
 /** One pulse of the ring, seconds, and its faintest. */
 const PULSE_PERIOD = 1.6;
-const PULSE_LOW = 0.6;
+const PULSE_LOW = 0.75;
 /** The ring stands this much wider than the footprint, so it shows round the building's foot. */
 const RING_SPREAD = 1.25;
 
 /** The mock-up's amber, a cream rim and a dark wrench (until the painted tools come). */
 const AMBER = 0xf2a51a;
+/** The ring's brighter edge and the dark line round it, so it reads on grass and lava alike. */
+const RING_EDGE = 0xffc93c;
+const RING_DARK = 0x4a2a00;
 const RIM = 0xfff3d6;
 const WRENCH = 0x3a2200;
 /** The tag: dark green, a bright green edge, white words. */
@@ -202,6 +214,26 @@ export class YardHelpMarks {
     }
   }
 
+  /**
+   * The world rectangle the marks' buildings take: from the highest wrench
+   * anchor (the wrench and tag stand above it, in screen pixels:
+   * {@link MARK_HEADROOM}) to the lowest ring. Null with no mark placed.
+   */
+  worldBox(): { left: number; top: number; right: number; bottom: number } | null {
+    let box: { left: number; top: number; right: number; bottom: number } | null = null;
+    const add = (x: number, y: number): void => {
+      box = box
+        ? { left: Math.min(box.left, x), top: Math.min(box.top, y), right: Math.max(box.right, x), bottom: Math.max(box.bottom, y) }
+        : { left: x, top: y, right: x, bottom: y };
+    };
+    for (const id of this.views.keys()) {
+      const anchor = this.anchorOf(id);
+      if (anchor) add(anchor.x, anchor.y);
+      for (const [x, y] of this.cornersOf(id) ?? []) add(x, y);
+    }
+    return box;
+  }
+
   destroy(): void {
     this.clear();
     this.root.destroy({ children: true });
@@ -340,14 +372,19 @@ const drawRing = (ring: Graphics, corners: Corners | null): void => {
   const rx = ((Math.max(...xs) - Math.min(...xs)) / 2) * RING_SPREAD;
   const ry = ((Math.max(...ys) - Math.min(...ys)) / 2) * RING_SPREAD;
   ring
+    // A warm glow over the ground inside, strongest in the middle.
     .ellipse(0, 0, rx, ry)
-    .fill({ color: AMBER, alpha: 0.12 })
-    .ellipse(0, 0, rx * 0.78, ry * 0.78)
-    .fill({ color: AMBER, alpha: 0.14 })
-    .ellipse(0, 0, rx * 0.5, ry * 0.5)
-    .fill({ color: AMBER, alpha: 0.16 })
-    .ellipse(0, 0, rx + 3, ry + 3)
-    .stroke({ width: 10, color: AMBER, alpha: 0.28 })
+    .fill({ color: AMBER, alpha: 0.22 })
+    .ellipse(0, 0, rx * 0.72, ry * 0.72)
+    .fill({ color: RING_EDGE, alpha: 0.2 })
+    .ellipse(0, 0, rx * 0.42, ry * 0.42)
+    .fill({ color: RING_EDGE, alpha: 0.2 })
+    // A wide soft halo round the edge.
+    .ellipse(0, 0, rx + 4, ry + 4)
+    .stroke({ width: 16, color: AMBER, alpha: 0.4 })
+    // A thin dark line just outside, then the bright edge itself.
+    .ellipse(0, 0, rx + 4, ry + 4)
+    .stroke({ width: 2.5, color: RING_DARK, alpha: 0.75 })
     .ellipse(0, 0, rx, ry)
-    .stroke({ width: 4, color: AMBER, alpha: 1 });
+    .stroke({ width: 6, color: RING_EDGE, alpha: 1 });
 };

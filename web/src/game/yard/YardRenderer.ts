@@ -700,6 +700,11 @@ export class YardRenderer {
     this.helpMarks.set(marks);
   }
 
+  /** The world rectangle the friend's marks take (see `YardHelpMarks.worldBox`); null with none. */
+  helpMarksBox(): { left: number; top: number; right: number; bottom: number } | null {
+    return this.helpMarks.worldBox();
+  }
+
   /** The tag on each friend's wrench now ("-18m", or null), by building id. */
   get helpMarkTags(): Map<number, string | null> {
     return this.helpMarks.tags;
