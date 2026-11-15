@@ -96,7 +96,8 @@ export class HelpLandsFx implements HelpAllFx {
     // A stop keeps its words: the scene's line, as before.
     if (summary.stoppedBy || summary.helped === 0) return null;
     const node = helpLandsMark(summary.helped);
-    if (reward !== "bar") return { ...line, node, ms: HELP_LANDS_DONE_MS };
+    // (The tick and the count stay as long as the chip does, so the two leave together.)
+    if (reward !== "bar") return { ...line, node, ms: reward ? countMs + VISIT_REWARD_MS : HELP_LANDS_DONE_MS };
     // ...or in the bar's own line, after the tools, the tick and the count.
     const earned = rewardNode(total, { countMs });
     if (earned) node.append(earned);

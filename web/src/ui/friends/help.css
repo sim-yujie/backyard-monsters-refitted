@@ -313,9 +313,11 @@
 .friend-visit.friend-visit--corner {
   top: var(--hud-inset);
   left: var(--hud-inset);
-  align-items: center;
+  /* The bar, and look 2's chip under it. */
+  flex-direction: column;
+  align-items: flex-start;
   justify-content: flex-start;
-  gap: var(--space-2);
+  gap: var(--space-1);
   /* Stops short of the account pill, top right. */
   max-width: calc(100vw - 2 * var(--hud-inset) - 240px);
   transform: none;
@@ -327,11 +329,15 @@
   align-items: center;
   gap: var(--space-2);
   color: var(--colour-gain);
-  font-size: var(--text-sm);
+  font-size: var(--text-md, var(--text-sm));
   font-weight: 700;
   font-variant-numeric: tabular-nums;
   line-height: 1;
   white-space: nowrap;
+}
+
+.visit-reward-chip .visit-reward {
+  font-size: var(--text-sm);
 }
 
 .visit-reward__icons,
@@ -403,11 +409,13 @@
   .friend-visit.friend-visit--corner {
     top: calc(var(--hud-inset) - 4px);
     left: var(--space-3);
-    flex-direction: column;
-    align-items: flex-start;
-    gap: var(--space-1);
     /* Stops short of the critter (48px with its frame). */
     max-width: calc(100vw - 2 * var(--space-3) - 48px - var(--space-2));
+  }
+
+  /* The name alone, without "'s yard": a 12-letter name fits beside Help all. */
+  .friend-visit--corner .help-all-bar__name-rest {
+    display: none;
   }
 
   /* The reward needs the row: the name waits, as for a line of words. */
@@ -442,6 +450,10 @@
   }
 
   .visit-reward {
+    font-size: var(--text-sm);
+  }
+
+  .visit-reward-chip .visit-reward {
     font-size: var(--text-xs, var(--text-sm));
   }
 

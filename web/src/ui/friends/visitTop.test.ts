@@ -99,7 +99,7 @@ describe("Help all on a yard without the readouts", () => {
     const result = await play(stage);
     expect(hud.floatBelow).not.toHaveBeenCalled();
     expect(result?.node?.querySelector(".visit-reward")).toBeNull();
-    expect(result?.ms).toBe(HELP_LANDS_DONE_MS);
+    expect(result?.ms).toBe(VISIT_REWARD_MS);
     expect(chip.element.hidden).toBe(false);
     expect([...chip.element.querySelectorAll(".visit-reward__pair")].map((pair) => pair.textContent)).toEqual(
       Array(4).fill("+200"),
@@ -110,7 +110,7 @@ describe("Help all on a yard without the readouts", () => {
 
   it("with the readouts (no look), the counters count up as before", async () => {
     const { stage, hud } = stageWith();
-    await play(stage);
+    expect((await play(stage))?.ms).toBe(HELP_LANDS_DONE_MS);
     expect(hud.floatBelow).toHaveBeenCalledWith("r1", 200);
   });
 });

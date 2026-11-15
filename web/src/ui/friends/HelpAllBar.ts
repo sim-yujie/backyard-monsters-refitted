@@ -20,6 +20,9 @@ export const HELP_ALL_TEXT = {
   label: "Visiting a friend",
 } as const;
 
+/** The end of "Bob's yard". */
+const YARD_SUFFIX = "'s yard";
+
 /** How long the result line stays, in milliseconds. */
 export const HELP_ALL_RESULT_MS = 7000;
 
@@ -72,7 +75,10 @@ export class HelpAllBar {
 
   /** Whose yard it is: "Bob's yard". */
   setName(text: string): void {
-    this.name.textContent = text;
+    // "'s yard" in a piece of its own: a phone's corner bar (`visitTop.ts`) shows the name alone.
+    const cut = text.endsWith(YARD_SUFFIX) ? text.length - YARD_SUFFIX.length : text.length;
+    this.name.replaceChildren(text.slice(0, cut));
+    if (cut < text.length) this.name.append(make("span", "help-all-bar__name-rest", YARD_SUFFIX));
     this.name.title = text;
     this.render();
   }
