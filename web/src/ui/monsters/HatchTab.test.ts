@@ -888,7 +888,7 @@ describe("HatchTab: the info panel and the batch add", () => {
     expect(slotKinds(line(element, 11))).toEqual(["new +20", "new +20", "new +20", "locked"]);
     expect(text(line(element, 11), ".hatch-line__waiting")).toBe("0 → 60 waiting of 60");
     expect(text(element, ".hatch-add__warning")).toBe(
-      "Housing fits 59 of these; the rest will hatch and wait in the Hatchery until there is room.",
+      "59 fit in housing; 2 wait for room",
     );
     // Short, in the housing row; in full on hover (owner, 15 Nov).
     expect(text(element, ".hatch-housing__over")).toBe("15 over: they wait for room");
@@ -920,11 +920,11 @@ describe("HatchTab: the info panel and the batch add", () => {
     expect(box(element).value).toBe("81");
     expect(addButton(element).disabled).toBe(false);
     expect(text(element, ".hatch-add__warning")).toBe(
-      "Housing is full: these will hatch and wait in the Hatchery until there is room.",
+      "Housing full: they wait for room",
     );
     type(box(element), "4");
     expect(text(element, ".hatch-add__warning")).toBe(
-      "Housing is full: these will hatch and wait in the Hatchery until there is room.",
+      "Housing full: they wait for room",
     );
     expect(addButton(element).disabled).toBe(false);
   });
