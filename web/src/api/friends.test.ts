@@ -59,7 +59,6 @@ describe("friendsApi reads", () => {
       max: 100,
       requestsIn: 2,
       giftsWaiting: 1,
-      helpsLeft: 17,
       friends: [
         {
           userid: 7,
@@ -81,7 +80,8 @@ describe("friendsApi reads", () => {
     const list = await friendsApi.list();
     expect(calls[0]).toMatchObject({ method: "GET" });
     expect(calls[0]?.url).toMatch(/\/api\/[^/]+\/bm\/friends$/);
-    expect(list).toMatchObject({ max: 100, requestsIn: 2, giftsWaiting: 1, helpsLeft: 17 });
+    expect(list).toMatchObject({ max: 100, requestsIn: 2, giftsWaiting: 1 });
+    expect(list).not.toHaveProperty("helpsLeft");
     expect(list.friends[0]).toEqual({
       userid: 7,
       username: "Bob",
@@ -235,18 +235,18 @@ describe("friendsApi writes", () => {
   });
 
   it("helps and reads the result", async () => {
-    stubFetch({ error: 0, secondsSaved: 390, reward: { r1: 10, r2: 10, r3: 10, r4: 10 }, helpsLeft: 16, building: { id: 4 } });
+    stubFetch({ error: 0, secondsSaved: 390, reward: { r1: 10, r2: 10, r3: 10, r4: 10 }, rewardsLeft: 2, building: { id: 4 } });
     expect(await friendsApi.help(7, 4, "speedup")).toEqual({
       secondsSaved: 390,
       reward: { r1: 10, r2: 10, r3: 10, r4: 10 },
-      helpsLeft: 16,
+      rewardsLeft: 2,
       building: { id: 4 },
     });
     expect(calls[0]?.json).toEqual({ userid: 7, buildingId: 4, kind: "speedup" });
   });
 
   it("loads a friend's yard in help mode", async () => {
-    stubFetch({ error: 0, help: { helpsLeft: 3, buildings: { "4": { speedup: true, repair: "nothingToHelp" } } } });
+    stubFetch({ error: 0, help: { buildings: { "4": { speedup: true, repair: "nothingToHelp" } } } });
     const yard = await friendsApi.loadHelpYard("1234");
     expect(calls[0]?.url).toMatch(/\/base\/load$/);
     expect(calls[0]?.json).toMatchObject({ type: "help", baseid: "1234" });

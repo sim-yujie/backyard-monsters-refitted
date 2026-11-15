@@ -34,9 +34,9 @@ export const RETENTION_JOB = "privacy-retention";
 export const FRIEND_REQUEST_RETENTION_DAYS = 30;
 
 /**
- * Days a friend help (`friend_help`) is kept: the daily cap reads only
- * today's, and the rest is the audit trail for spotting help rings
- * (`docs/design/friends.md` §7 rule 9).
+ * Days a friend help (`friend_help`) is kept: the daily reward count (the
+ * first 5 helps a day pay) reads only today's, and the rest is the audit
+ * trail for spotting help rings (`docs/design/friends.md` §7 rule 9).
  */
 export const FRIEND_HELP_RETENTION_DAYS = 90;
 

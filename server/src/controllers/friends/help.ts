@@ -14,12 +14,12 @@ import { markHelped } from "../../services/friends/helpedMark.js";
 import { friendsSince, helpsToday, readSides, recordHelp } from "../../services/friends/helpFacts.js";
 import {
   gateRefusal,
-  helpsLeftOf,
+  helpRewardOf,
   isRefusal,
   planRepair,
   planSpeedup,
   refusalDetails,
-  rewardOf,
+  rewardsLeftOf,
   type HelpKind,
 } from "../../services/friends/helpRules.js";
 import { raidFighting } from "../../services/raids/raidLock.js";
@@ -48,8 +48,10 @@ import { countAfterCommit } from "../../services/alliance/allianceProgress.js";
  *    `underAttack`; the helper's own is the yard actions' refusal.
  * 3. Catch both yards up to now, as their owners' loads would.
  * 4. The gates (`helpRules.gateRefusal`): friends, no block either way, the
- *    age and level rules, the daily cap, all read inside the locks.
+ *    age and level rules, all read inside the locks (no daily cap since
+ *    15 Nov 2026; the 5 helpers a job is checked with the speed-up).
  * 5. Apply the speed-up or the repair to the friend's yard, credit the reward
+ *    (the first 5 helps of the helper's UTC day only, owner 15 Nov 2026)
  *    to the helper's main yard through the storage-cap clamp, write the
  *    `friend_help` row, flush, commit.
  * 6. After the commit, a `friend` notification for the owner, and the
@@ -77,7 +79,8 @@ interface HelpDone {
   secondsSaved?: number;
   healed?: true;
   reward: ResourceAmounts;
-  helpsLeft: number;
+  /** Helps today that still pay a reward, after this one. */
+  rewardsLeft: number;
   building: BuildingData;
   helperName: string;
 }
@@ -102,7 +105,7 @@ export const helpAnswer = async (em: EntityManager, user: User, body: unknown, n
     if (!mySide?.basesaveid) throw notMainYardErr();
     // Friendship and blocks first, so a stranger learns nothing about the yard (not even an attack).
     const known = (await friendsSince(tx, helper, [owner])).get(owner) ?? null;
-    const early = gateRefusal({ helper: mySide, owner: theirSide, friendsSince: known, helpsToday: 0 }, now);
+    const early = gateRefusal({ helper: mySide, owner: theirSide, friendsSince: known }, now);
     if (early?.reason === "notFriends" || early?.reason === "cannotSend") throw friendRefusedErr(early.reason);
     if (!theirSide.basesaveid) throw friendRefusedErr("nothingToHelp");
 
@@ -126,13 +129,13 @@ export const helpAnswer = async (em: EntityManager, user: User, body: unknown, n
       await recordAchievements(tx, save, now, builtEvents(completed));
     }
 
+    // Today's count is read inside the lock on the helper's yard, so two helps at once count in turn.
     const [since, today] = await Promise.all([friendsSince(tx, helper, [owner]), helpsToday(tx, helper, now)]);
     const gate = gateRefusal(
       {
         helper: { ...mySide, points: mine.points, basevalue: mine.basevalue },
         owner: { ...theirSide, points: theirs.points, basevalue: theirs.basevalue },
         friendsSince: since.get(owner) ?? null,
-        helpsToday: today,
       },
       now
     );
@@ -157,7 +160,7 @@ export const helpAnswer = async (em: EntityManager, user: User, body: unknown, n
       catchUpDamage(theirs);
     }
 
-    const reward = creditResources(mine, rewardOf(storageCap(mine), storageCap(theirs))).credited;
+    const reward = creditResources(mine, helpRewardOf(today, storageCap(mine), storageCap(theirs))).credited;
     mine.savetime = now;
     theirs.savetime = now;
     await recordHelp(tx, {
@@ -177,7 +180,7 @@ export const helpAnswer = async (em: EntityManager, user: User, body: unknown, n
     return {
       ...(kind === "speedup" ? { secondsSaved } : { healed: true as const }),
       reward,
-      helpsLeft: helpsLeftOf(today + 1),
+      rewardsLeft: rewardsLeftOf(today + 1),
       // Sent back for the visit's panel: masked as the visit's load was (`viewMask.ts`).
       building: maskBuilding(theirs.buildingdata![key]!, "main"),
       helperName: mySide.username,
