@@ -1938,6 +1938,23 @@ interface Bunker {
  */
 export const BUNKER_DOOR_FRAMES = 15;
 
+/**
+ * Whether a standing Monster Bunker's door is stuck where it is: below half
+ * health, on every yard. Flash moves the door only in `TickFast`
+ * (`BUILDING22.as:433-455`), an ENTER_FRAME listener the building drops each
+ * time it loads a new look (`BFOUNDATION.as:1096-1098`) and takes back only
+ * for a look with an `anim` strip (`:1129-1149`). The bunker's damaged look,
+ * which it wears below half health (`isCriticallyDamaged`, `:495-497`, drawn
+ * in `Update`, `:2876-2884`), has none in any props table (`YARD_PROPS.as:2460-2470`,
+ * `OUTPOST_YARD_PROPS.as:1869-1878`, `INFERNOYARDPROPS.as:1929-1938`). So a
+ * bunker that starts the battle below half never opens and sends no one out,
+ * and one that falls below half keeps its door as it was: shut stays shut,
+ * fully up stays up. At exactly half it is not damaged and works as before. A
+ * fallen bunker sends no one out anyway, and its door shuts as before.
+ */
+const doorStuck = (building: EngineBuilding): boolean =>
+  building.hp > 0 && building.hp < building.maxHp * 0.5;
+
 /** The drop radius a payload earns: `max(200, bucket / 4) / 2` (`ATTACK.as:667-671`). */
 export const dropRadius = (bucketTotal: number): number =>
   Math.max(200, bucketTotal / 4) / 2;
@@ -3918,6 +3935,8 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
    * otherwise, a frame of {@link BUNKER_DOOR_FRAMES} at a time. The bunker
    * sends monsters out only through a door that is fully up. Only a change of
    * way is told ({@link BattleVisualEvent} `bunkerDoor`).
+   *
+   * A bunker standing below half health has a stuck door ({@link doorStuck}).
    */
   const tickBunkerDoors = (): void => {
     if (tick % 2 !== 0) return;
@@ -3925,6 +3944,7 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
     for (const bunker of bunkers) {
       const building = bunker.building;
       if (building.type === HOUSING_BUNKER_TYPE) continue;
+      if (doorStuck(building)) continue;
       let open = false;
       if (building.hp > 0) {
         if (!out) {
