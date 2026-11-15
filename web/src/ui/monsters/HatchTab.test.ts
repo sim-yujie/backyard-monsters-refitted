@@ -10,7 +10,7 @@ import type { Notices } from "@/ui/maproom/Notices";
 import { HOLD_DELAY_MS } from "@/ui/QuantityStepper";
 import { spokenText } from "@/ui/resourceIcon";
 import { resetWeekend, setWeekend } from "@/game/weekend";
-import { HatchTab, plural } from "./HatchTab";
+import { HatchTab, plural, STATUS_SHOW_MS } from "./HatchTab";
 
 /**
  * The Hatch tab as a player meets it (issue #156): each hatchery's line (the
@@ -365,6 +365,22 @@ describe("HatchTab: each hatchery's line", () => {
     expect(actions.remove).toHaveBeenCalledOnce();
     expect(actions.remove).toHaveBeenCalledWith(10, 0, 1);
     expect(text(element, ".monsters-status")).toBe("Cancelled 1 Bolt: Goo 350 back.");
+  });
+
+  it("floats the result over the tab, outside the scroll box, and lets it go after a few seconds (patch 7.6)", async () => {
+    vi.useFakeTimers();
+    const { element } = setup();
+    const status = element.querySelector<HTMLElement>(".monsters-status")!;
+    expect(status.parentElement).toBe(element);
+    expect(element.querySelector(".hatch__scroll .monsters-status")).toBeNull();
+    expect(status.hidden).toBe(true);
+    nowCard(element, 10).click();
+    await vi.advanceTimersByTimeAsync(0);
+    expect(status.hidden).toBe(false);
+    expect(status.getAttribute("role")).toBe("status");
+    expect(text(element, ".monsters-status")).toBe("Cancelled 1 Bolt: Goo 350 back.");
+    await vi.advanceTimersByTimeAsync(STATUS_SHOW_MS + 10);
+    expect(status.hidden).toBe(true);
   });
 
   it("cancels on the release of a pointer tap, never on the press, and not at all for a scroll", async () => {
@@ -851,6 +867,8 @@ describe("HatchTab: the info panel and the batch add", () => {
     type(box(element), "59");
     expect(element.querySelector<HTMLElement>(".hatch-add__warning")!.hidden).toBe(true);
     expect(element.querySelector(".hatch-housing__over")).toBeNull();
+    // Its room is kept, so the box does not change height (patch 7.6).
+    expect(element.querySelector(".hatch-housing__spare")?.getAttribute("aria-hidden")).toBe("true");
     // More than the queue takes is clamped to it.
     type(box(element), "500");
     expect(box(element).value).toBe("61");

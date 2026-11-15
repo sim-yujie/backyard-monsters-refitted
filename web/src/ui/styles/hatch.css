@@ -37,6 +37,7 @@
   --hatch-pad: var(--space-5);
 
   container: hatch / inline-size;
+  position: relative;
   flex: 1;
   min-height: 0;
   display: flex;
@@ -69,8 +70,40 @@
   padding-top: var(--space-3);
 }
 
-.hatch__scroll > .monsters-status {
-  padding: 0;
+/* What the last action did ("Added 5 Vorgs: 312,500 spent.") floats over
+   the top of the tab for a few seconds (`STATUS_SHOW_MS`) instead of taking a
+   line of its own (patch 7.6, owner 15 Nov 2026): that line pushed the tab
+   past the window's bottom and brought up a scroll bar. It lets taps through
+   to whatever is under it. */
+.hatch > .hatch__status {
+  position: absolute;
+  top: var(--space-1);
+  left: 50%;
+  z-index: 2;
+  width: max-content;
+  max-width: calc(100% - 2 * var(--hatch-pad));
+  padding: var(--space-2) var(--space-4);
+  border: 1px solid var(--colour-border);
+  border-radius: var(--radius-lg);
+  background: var(--colour-surface-raised);
+  box-shadow: var(--shadow-popup);
+  text-align: center;
+  transform: translateX(-50%);
+  pointer-events: none;
+}
+
+.hatch > .hatch__status[hidden] {
+  display: none;
+}
+
+/* Narrower, the Control Centre's title and count fill the top row: the
+   status floats at the bottom of the tab instead (a phone's add bar is down
+   there, so a phone keeps it at the top). */
+@container hatch (560px <= width < 880px) {
+  .hatch > .hatch__status {
+    top: auto;
+    bottom: var(--space-2);
+  }
 }
 
 /* A container query cannot style its own container: the tab's padding
@@ -316,6 +349,9 @@
   flex-wrap: wrap;
   align-items: center;
   gap: var(--space-1) var(--space-3);
+  /* As tall as its Clear all button, which shows only while monsters wait,
+     so the cards under it stay put (patch 7.6). */
+  min-height: var(--control-height-compact);
 }
 
 .hatch-line__title {
@@ -556,10 +592,12 @@ button.hatch-now:disabled {
   opacity: 0.8;
 }
 
-/* The HCC's row: one small card per hatchery. */
+/* The HCC's row: one small card per hatchery. As tall idle as hatching (its
+   label, the monster and the time bar), so the row does not grow when a
+   batch starts (patch 7.6). */
 .hatch-now--compact {
   width: 160px;
-  min-height: 88px;
+  min-height: 93px;
   gap: var(--space-1);
   padding: var(--space-2) var(--space-3);
 }
@@ -592,7 +630,9 @@ button.hatch-now:disabled {
   justify-content: center;
   gap: 2px;
   width: 124px;
-  min-height: 100px;
+  /* As tall empty as with a stack in it (count, monster, name, time), so the
+     row does not grow when a batch is added (patch 7.6). */
+  min-height: 115px;
   padding: var(--space-2);
   border: 1px solid var(--colour-border);
   border-radius: var(--radius-lg);
@@ -784,7 +824,10 @@ button.hatch-slot:disabled {
   color: var(--colour-text-muted);
 }
 
+/* "—" with nothing waiting takes the same line as a time (patch 7.6). */
 .hatch-line__done {
+  min-height: 1.35em;
+  line-height: 1.35;
   font-family: var(--font-display);
   font-size: var(--text-xl);
   font-weight: var(--display-weight);
@@ -1014,10 +1057,27 @@ button.hatch-slot:disabled {
   background: var(--colour-warning);
 }
 
-.hatch-housing__over {
+.hatch-housing__over,
+.hatch-housing__spare {
   font-size: var(--text-xs);
   color: var(--colour-warning);
   text-wrap: pretty;
+}
+
+.hatch-housing__spare {
+  visibility: hidden;
+}
+
+.hatch-message > .hatch-housing:not(:only-child) {
+  width: 320px;
+}
+
+/* Beside a warning the bar is narrower: the over line stays on one line
+   (in full on hover), so the box keeps its height (patch 7.6). */
+.hatch-message > .hatch-housing:not(:only-child) > .hatch-housing__over {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 /* ── The grid and the info panel, side by side ───────────────────────── */
@@ -1404,6 +1464,106 @@ button.hatch-slot:disabled {
   .hatch-info {
     grid-column: 2;
     grid-row: 1 / span 2;
+  }
+}
+
+/* The whole tab in an 820px Monsters window, with no scroll bar (patch 7.6,
+   owner 15 Nov 2026): with monsters hatching the tab was 74px taller than
+   the window. Each part is as tall idle as busy (the cards, the slots, the
+   housing box), and here, side by side, the spacing is a little tighter so
+   both columns fit under the hatcheries with room to spare. */
+@container hatch (width >= 880px) {
+  .hatch__scroll {
+    gap: var(--space-2);
+    padding-top: var(--space-1);
+    padding-bottom: 6px;
+  }
+
+  .hatch-now--compact {
+    min-height: 84px;
+    padding-block: 6px;
+  }
+
+  .hatch-slot {
+    min-height: 107px;
+    padding-block: 6px;
+  }
+
+  .hatch-slot__picture {
+    margin-top: var(--space-2);
+  }
+
+  /* A top-up's "+5" as tall as the time it stands in for. */
+  .hatch-slot__adding {
+    padding-block: 0;
+  }
+
+  .hatch-now--compact .hatch-now__picture {
+    width: 36px;
+    height: 36px;
+  }
+
+  /* An idle hatchery's "Starts now": the picture over the words, smaller,
+     so the card is no taller than a busy one. */
+  .hatch-now--compact.hatch-now--preview .hatch-now__picture {
+    width: 28px;
+    height: 28px;
+  }
+
+  .hatch__split {
+    row-gap: 6px;
+  }
+
+  .hatch-pick {
+    gap: 6px;
+  }
+
+  .hatch-message {
+    padding-block: 6px;
+  }
+
+  .hatch-housing {
+    gap: 4px;
+  }
+
+  .hatch-pick__locked {
+    padding-block: 2px;
+  }
+
+  .hatch-pick__locked-text {
+    font-size: var(--text-xs);
+    line-height: var(--leading-tight);
+  }
+
+  .hatch-info {
+    gap: 5px;
+    padding-block: var(--space-2);
+  }
+
+  .hatch-info__blurb {
+    -webkit-line-clamp: 2;
+    line-clamp: 2;
+  }
+
+  /* A mouse needs no 36px Clear all: the row under the title stays low. */
+  @media (pointer: fine) {
+    .hatch-line__head {
+      min-height: 28px;
+    }
+
+    .btn.hatch-clear,
+    .hatch-clear--confirm > .btn {
+      min-height: 28px;
+      padding-block: 0;
+    }
+  }
+
+  /* The same warning as the housing box's over line: one line here, in full
+     on hover. */
+  .hatch-add__warning {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
 }
 
