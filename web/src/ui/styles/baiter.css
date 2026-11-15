@@ -15,6 +15,7 @@
   width: min(92vw, 1240px);
   max-width: none;
   height: min(90vh, 800px);
+  height: min(90dvh, 800px);
   min-width: 0;
 }
 
@@ -564,6 +565,7 @@
 @media (width > 620px) and (height <= 860px) {
   .baiter-window {
     height: min(100vh - 2 * var(--space-4), 800px);
+    height: min(100dvh - 2 * var(--space-4), 800px);
   }
 
   .baiter__row {

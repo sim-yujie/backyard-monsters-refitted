@@ -1084,6 +1084,7 @@
    itself scrolls only if even that cannot fit. */
 .popup-backdrop > .panel.gift-all {
   /* Centred, with the title sign hanging over the top edge: twice its overhang keeps the sign on screen. */
+  max-height: calc(100vh - 2 * var(--space-4) - 2 * var(--skin-title-lift, 0px));
   max-height: calc(100dvh - 2 * var(--space-4) - 2 * var(--skin-title-lift, 0px));
 }
 

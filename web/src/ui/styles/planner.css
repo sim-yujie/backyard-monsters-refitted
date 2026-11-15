@@ -497,6 +497,7 @@
   margin: 0;
   padding: 0;
   max-height: 44vh;
+  max-height: 44dvh;
   overflow-y: auto;
 }
 
@@ -714,6 +715,7 @@
   padding: 0;
   font-size: var(--text-sm);
   max-height: 40vh;
+  max-height: 40dvh;
   overflow-y: auto;
 }
 
@@ -978,6 +980,10 @@
       50vh,
       calc(100vh - var(--planner-top, 0px) - var(--planner-bottom, 0px) - 2 * var(--space-2))
     );
+    max-height: min(
+      50dvh,
+      calc(100dvh - var(--planner-top, 0px) - var(--planner-bottom, 0px) - 2 * var(--space-2))
+    );
     justify-content: flex-end;
   }
 
@@ -1207,6 +1213,7 @@
 .planner-inventory__rows {
   /* Headers, not rows, are what a cleared yard's drawer is scrolled through. */
   max-height: 52vh;
+  max-height: 52dvh;
 }
 
 .planner-inventory__section + .planner-inventory__section {
@@ -1865,6 +1872,7 @@
   transform: translateX(-50%);
   width: min(400px, calc(100vw - 2 * var(--space-4)));
   max-height: 55vh;
+  max-height: 55dvh;
   overflow-y: auto;
   z-index: var(--z-hud);
 }
@@ -2129,6 +2137,10 @@
     55vh,
     calc(100vh - var(--planner-top, 0px) - var(--planner-bottom, 0px) - 2 * var(--space-2))
   );
+  max-height: min(
+    55dvh,
+    calc(100dvh - var(--planner-top, 0px) - var(--planner-bottom, 0px) - 2 * var(--space-2))
+  );
   justify-content: flex-end;
 }
 
@@ -2150,6 +2162,10 @@
   max-height: min(
     64vh,
     calc(100vh - var(--planner-top, 0px) - var(--planner-bottom, 0px) - 2 * var(--space-2))
+  );
+  max-height: min(
+    64dvh,
+    calc(100dvh - var(--planner-top, 0px) - var(--planner-bottom, 0px) - 2 * var(--space-2))
   );
 }
 
@@ -2213,6 +2229,10 @@
   max-height: min(
     60vh,
     calc(100vh - var(--planner-top, 0px) - var(--planner-bottom, 0px) - 2 * var(--space-2))
+  );
+  max-height: min(
+    60dvh,
+    calc(100dvh - var(--planner-top, 0px) - var(--planner-bottom, 0px) - 2 * var(--space-2))
   );
   min-width: 0;
   max-width: none;

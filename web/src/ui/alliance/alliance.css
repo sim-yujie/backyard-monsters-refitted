@@ -1896,6 +1896,7 @@
 
 .star-editor {
   width: min(100%, 980px);
+  max-height: calc(100vh - var(--space-4));
   max-height: calc(100dvh - var(--space-4));
 }
 

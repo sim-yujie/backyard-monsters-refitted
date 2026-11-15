@@ -81,6 +81,7 @@
   /* 520px: room for a reward's piles and its amount (tester, 9 Nov). */
   width: min(520px, calc(100vw - 2 * var(--space-4)));
   max-height: calc(100vh - var(--hud-height) - 160px);
+  max-height: calc(100dvh - var(--hud-height) - 160px);
   min-width: 0;
   transform: translateX(-50%);
 }
@@ -715,7 +716,8 @@
     max-width: none;
     /* Starts below the HUD's chat and Events row, so the title plate and
        the close button cover neither. */
-    max-height: min(85vh, calc(100dvh - var(--hud-height) - 100px));
+    max-height: min(85vh, calc(100vh - var(--hud-height) - 100px));
+    max-height: min(85dvh, calc(100dvh - var(--hud-height) - 100px));
     transform: none;
     border-radius: var(--radius-lg) var(--radius-lg) 0 0;
     border-bottom: 0;
@@ -803,6 +805,7 @@
 @media (width > 620px) and (height <= 500px) {
   .quests-panel {
     top: calc(var(--hud-height) + var(--space-1));
+    max-height: calc(100vh - var(--hud-height) - var(--space-3) - var(--space-4));
     max-height: calc(100dvh - var(--hud-height) - var(--space-3) - var(--space-4));
   }
 }

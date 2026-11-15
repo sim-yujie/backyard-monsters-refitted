@@ -108,6 +108,7 @@
   --friends-window-overhang: max(var(--skin-title-lift, 0px), calc(var(--skin-edge, 0px) + 12px));
   /* The window stays under the top bar (the HUD's band, `--hud-height`), so
      its title sign never covers the resources (tester, 9 Nov). */
+  max-height: calc(100vh - var(--hud-height) - var(--space-2) - var(--space-4) - var(--friends-window-overhang));
   max-height: calc(100dvh - var(--hud-height) - var(--space-2) - var(--space-4) - var(--friends-window-overhang));
   margin-top: var(--friends-window-overhang);
   min-height: 0;
@@ -487,6 +488,7 @@
    Taller screens are unchanged. */
 @media (height <= 500px) {
   .friends-window {
+    max-height: calc(100vh - var(--hud-height) - var(--space-2) - var(--space-2) - var(--friends-window-overhang));
     max-height: calc(100dvh - var(--hud-height) - var(--space-2) - var(--space-2) - var(--friends-window-overhang));
   }
 

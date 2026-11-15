@@ -16,6 +16,7 @@
   width: min(380px, calc(100vw - 2 * var(--space-4)));
   /* Clear of the yard switcher and Map in the bottom-left corner. */
   max-height: calc(100vh - var(--hud-height) - 250px);
+  max-height: calc(100dvh - var(--hud-height) - 250px);
   min-width: 0;
 }
 
@@ -264,6 +265,7 @@
     width: auto;
     max-width: none;
     max-height: min(82vh, calc(100vh - var(--hud-height)));
+    max-height: min(82dvh, calc(100dvh - var(--hud-height)));
     border-radius: var(--radius-lg) var(--radius-lg) 0 0;
     border-bottom: 0;
   }
@@ -284,6 +286,7 @@
   .goals-panel {
     left: 150px;
     width: min(380px, calc(100vw - 150px - 98px));
+    max-height: calc(100vh - var(--hud-height) - var(--space-3) - var(--space-4));
     max-height: calc(100dvh - var(--hud-height) - var(--space-3) - var(--space-4));
   }
 }

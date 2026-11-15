@@ -29,6 +29,7 @@
   width: min(760px, 100%);
   max-width: min(760px, 100%);
   /* The foot never scrolls away: the body shrinks and scrolls instead. */
+  max-height: calc(100vh - 2 * var(--space-4) - var(--skin-title-lift, 0px));
   max-height: calc(100dvh - 2 * var(--space-4) - var(--skin-title-lift, 0px));
 }
 
@@ -736,6 +737,7 @@
   }
 
   .yard-card {
+    max-height: calc(100vh - var(--hud-height) - 14px - var(--space-4));
     max-height: calc(100dvh - var(--hud-height) - 14px - var(--space-4));
   }
 }

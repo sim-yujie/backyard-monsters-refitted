@@ -89,7 +89,7 @@ describe("6 Nov UI check: phone faults", () => {
 
   it("Chat: the open box ends above the dock and sits over it, so More never covers Report", () => {
     const chat = phone("styles/chat.css");
-    expect(chat).toMatch(/\.chat-box--open \{\s*z-index: 2;\s*max-height: calc\(100dvh - var\(--chat-top\) - 270px\);/);
+    expect(chat).toMatch(/\.chat-box--open \{\s*z-index: 2;\s*max-height: calc\(100vh - var\(--chat-top\) - 270px\);\s*max-height: calc\(100dvh - var\(--chat-top\) - 270px\);/);
     expect(chat).toMatch(/\.chat-box--open \.chat-box__lines \{\s*flex: 1 1 auto;[^}]*min-height: 80px;[^}]*max-height: none;/);
     // The dock's More bubble stays under it.
     expect(css("styles/bubble-menu.css")).toMatch(/\.bubble-menu \{[^}]*z-index: 1;/);

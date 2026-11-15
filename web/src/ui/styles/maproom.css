@@ -31,6 +31,7 @@
   top: calc(var(--hud-height) + var(--space-4));
   width: 300px;
   max-height: calc(100vh - var(--hud-height) - var(--space-6));
+  max-height: calc(100dvh - var(--hud-height) - var(--space-6));
 }
 
 .map-dock--bottom-right {
@@ -74,6 +75,7 @@
     bottom: 0;
     width: auto;
     max-height: min(62vh, calc(100vh - var(--hud-height) - var(--space-4)));
+    max-height: min(62dvh, calc(100dvh - var(--hud-height) - var(--space-4)));
     gap: 0;
   }
 
@@ -1179,6 +1181,7 @@
 
 .mr2-find__sheet .panel__body {
   max-height: calc(100vh - var(--hud-height) - 120px);
+  max-height: calc(100dvh - var(--hud-height) - 120px);
 }
 
 .mr2-find__world {
@@ -1314,6 +1317,7 @@
 
   .mr2-find__sheet .panel__body {
     max-height: calc(100vh - var(--hud-height) - 150px);
+    max-height: calc(100dvh - var(--hud-height) - 150px);
   }
 
   .mr2-tools-dock {
@@ -1377,6 +1381,7 @@
 
   .mr2-find__sheet .panel__body {
     max-height: calc(100vh - var(--hud-height) - 160px);
+    max-height: calc(100dvh - var(--hud-height) - 160px);
   }
 
   /* The floating "?" stands at the bar's left end, so the bar starts after it. */

@@ -119,6 +119,7 @@
   z-index: var(--z-hud);
   width: min(440px, calc(100vw - 2 * var(--space-4)));
   max-height: calc(100vh - var(--hud-height) - 150px);
+  max-height: calc(100dvh - var(--hud-height) - 150px);
   min-width: 0;
   transform: translateX(-50%);
 }
@@ -1023,7 +1024,8 @@
     bottom: 0;
     width: auto;
     max-width: none;
-    max-height: min(85vh, calc(100dvh - var(--hud-height)));
+    max-height: min(85vh, calc(100vh - var(--hud-height)));
+    max-height: min(85dvh, calc(100dvh - var(--hud-height)));
     transform: none;
     border-radius: var(--radius-lg) var(--radius-lg) 0 0;
     border-bottom: 0;
@@ -1052,6 +1054,7 @@
   .events-panel {
     top: calc(var(--hud-height) + var(--space-1));
     width: min(440px, calc(100vw - 2 * var(--space-4)));
+    max-height: calc(100vh - var(--hud-height) - var(--space-3) - var(--space-4));
     max-height: calc(100dvh - var(--hud-height) - var(--space-3) - var(--space-4));
   }
 

@@ -158,3 +158,87 @@ describe("Screen sizes: middle windows or a phone's sheets", () => {
     expect(height - TOP - fit.bottom).toBeGreaterThanOrEqual(400);
   });
 });
+
+/*
+ * Safari on an iPad or iPhone counts `100vh` as the screen with its toolbars
+ * hidden, so a box sized from it runs under the toolbars while they show
+ * (owner's patch 7.5, 15 Nov). `dvh` is the height actually visible, from
+ * Safari 15.4; older Safari drops a `dvh` line, so each one sits right after
+ * the same line in `vh`. Custom properties are left out: a fallback line
+ * cannot help them (the last one wins before the browser checks the value).
+ */
+const webSrc = resolve(here, "..");
+
+const stylesheetsUnder = (dir: string): string[] =>
+  readdirSync(dir, { withFileTypes: true }).flatMap((entry) => {
+    const path = join(dir, entry.name);
+    if (entry.isDirectory()) return stylesheetsUnder(path);
+    return entry.name.endsWith(".css") ? [path] : [];
+  });
+
+const STYLESHEETS = stylesheetsUnder(webSrc).map((path) =>
+  relative(webSrc, path).replace(/\\/g, "/"),
+);
+
+const readSheet = (path: string): string => read(join("..", path));
+
+const VH = /(?<![a-z])(\d+(?:\.\d+)?)vh\b/g;
+const DVH = /(?<![a-z])(\d+(?:\.\d+)?)dvh\b/g;
+const uses = (unit: RegExp, value: string): boolean => value.replace(unit, "") !== value;
+
+/** Declarations that size from the screen height without the `vh` then `dvh` pair. */
+const unpairedViewportHeights = (css: string): string[] => {
+  const decls = [...css.matchAll(/(?<![\w-])(-{0,2}[a-z][a-z-]*)\s*:\s*([^;{}]*?);/g)]
+    .filter((match) => !(match[1] ?? "").startsWith("--"))
+    .map((match) => ({
+      text: match[0].replace(/\s+/g, " "),
+      vh: uses(VH, match[2] ?? ""),
+      dvh: uses(DVH, match[2] ?? ""),
+    }));
+  const bad: string[] = [];
+  decls.forEach((decl, i) => {
+    if (decl.vh && decl.dvh) bad.push(`${decl.text} (vh and dvh in one line)`);
+    else if (decl.vh && decls[i + 1]?.text !== decl.text.replace(VH, "$1dvh"))
+      bad.push(`${decl.text} (no dvh line after it)`);
+    else if (decl.dvh && decls[i - 1]?.text !== decl.text.replace(DVH, "$1vh"))
+      bad.push(`${decl.text} (no vh line before it)`);
+  });
+  return bad;
+};
+
+describe("Heights from the screen use Safari's visible height (iPad toolbars)", () => {
+  it("finds the stylesheets", () => {
+    expect(STYLESHEETS).toContain("ui/styles/building-panel.css");
+    expect(STYLESHEETS).toContain("ui/styles/attack.css");
+  });
+
+  it.each(STYLESHEETS)("%s pairs every vh line with a dvh line after it", (sheet) => {
+    expect(unpairedViewportHeights(readSheet(sheet))).toEqual([]);
+  });
+
+  it("catches a lone vh, a lone dvh and a mixed line", () => {
+    expect(unpairedViewportHeights(".a { max-height: calc(100vh - 8px); }")).toHaveLength(1);
+    expect(unpairedViewportHeights(".a { max-height: calc(100dvh - 8px); }")).toHaveLength(1);
+    expect(
+      unpairedViewportHeights(".a { max-height: min(70vh, calc(100dvh - 8px)); }"),
+    ).toHaveLength(1);
+    expect(
+      unpairedViewportHeights(
+        ".a { max-height: min(70vh, 640px);\n  max-height: min(70dvh, 640px); top: 2vw; }",
+      ),
+    ).toEqual([]);
+  });
+
+  it("keeps the side panel, the attack panels and popups clear of Safari's toolbars", () => {
+    expect(readSheet("ui/styles/building-panel.css")).toContain(
+      "max-height: calc(100dvh - var(--hud-height) - var(--space-6));",
+    );
+    expect(readSheet("ui/styles/building-panel.css")).toContain(
+      "max-height: calc(100dvh - 212px);",
+    );
+    expect(readSheet("ui/styles/ui.css")).toContain("max-height: min(70dvh, 640px);");
+    expect(readSheet("ui/styles/attack.css")).toContain(
+      "max-height: calc(100dvh - var(--hud-height) - var(--hud-inset) - var(--space-7) - var(--space-6));",
+    );
+  });
+});

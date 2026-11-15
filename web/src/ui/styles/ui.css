@@ -351,6 +351,7 @@ select option {
   padding: var(--space-4);
   overflow: auto;
   max-height: min(70vh, 640px);
+  max-height: min(70dvh, 640px);
 }
 
 /*
@@ -1138,6 +1139,7 @@ select option {
   box-shadow: var(--shadow-popup);
   /* A phone on its side is shorter than the list, so it keeps to the screen
      and scrolls. */
+  max-height: calc(100vh - 84px);
   max-height: calc(100dvh - 84px);
   overflow-y: auto;
   overscroll-behavior: contain;
@@ -1926,6 +1928,7 @@ select option {
   flex-direction: column;
   gap: var(--space-3);
   max-height: 80vh;
+  max-height: 80dvh;
   line-height: var(--leading-normal);
 }
 
@@ -2221,6 +2224,7 @@ select option {
 .account-settings-popup {
   width: min(600px, calc(100vw - 16px));
   max-width: min(92vw, 600px);
+  height: min(calc(100vh - 32px), 640px);
   height: min(calc(100dvh - 32px), 640px);
 }
 

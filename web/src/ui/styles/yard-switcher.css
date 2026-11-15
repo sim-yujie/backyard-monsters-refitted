@@ -32,6 +32,7 @@
   flex-direction: column;
   width: min(20rem, calc(100vw - 2 * var(--space-4)));
   max-height: min(60vh, 34rem);
+  max-height: min(60dvh, 34rem);
   padding: var(--space-1);
   border: 1px solid var(--colour-border);
   border-radius: var(--radius-md);

@@ -220,6 +220,7 @@
     bottom: 0;
     width: auto;
     max-height: min(82vh, calc(100vh - var(--hud-height)));
+    max-height: min(82dvh, calc(100dvh - var(--hud-height)));
     border-radius: var(--radius-lg) var(--radius-lg) 0 0;
     border-bottom: 0;
   }

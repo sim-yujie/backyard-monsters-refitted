@@ -1204,6 +1204,7 @@
 
   .mr1--sheet-open .mr1-list {
     margin-bottom: 60vh;
+    margin-bottom: 60dvh;
   }
 
   .mr1-sheet {
@@ -1214,6 +1215,7 @@
     width: min(480px, calc(100vw - 2 * var(--space-4)));
     /* Clear of the window's title row, with its Map / List and close. */
     max-height: calc(100vh - var(--hud-height) - 64px);
+    max-height: calc(100dvh - var(--hud-height) - 64px);
     overflow-y: auto;
   }
 
@@ -1314,6 +1316,7 @@
   .mr1--sheet-open .mr1-list,
   .mr1--sheet-open .mr1-map {
     margin-bottom: min(46vh, 320px);
+    margin-bottom: min(46dvh, 320px);
   }
 
   .mr1-list__tribes {
@@ -1356,6 +1359,7 @@
     bottom: 0;
     z-index: var(--z-hud);
     max-height: 72vh;
+    max-height: 72dvh;
     overflow-y: auto;
   }
 
