@@ -1005,8 +1005,10 @@ button.hatch-slot:disabled {
 /* With a warning the words take the first line and the housing row the
    second, always: a "+20" added to the key would otherwise push the row
    under the words and move the grid and Add (patch 7.6.1). */
-.hatch-message--warning > .hatch-housing {
-  flex-basis: 100%;
+@container hatch (width >= 560px) {
+  .hatch-message--warning > .hatch-housing {
+    flex-basis: 100%;
+  }
 }
 
 .hatch-message__words {
@@ -1823,10 +1825,13 @@ button.hatch-slot:disabled {
   .hatch-housing {
     flex-wrap: wrap;
     row-gap: 2px;
+    min-width: 0;
   }
 
   .hatch-housing__foot {
     flex-basis: 100%;
+    min-width: 0;
+    flex-wrap: wrap;
   }
 
   /* Four across, not five (owner, 9 Nov: "needs polishing"): at 390 px a
