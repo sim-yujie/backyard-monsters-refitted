@@ -6,6 +6,7 @@ import { setClassicLook } from "@/game/classicLook";
 import { ArtState, artFolder, resolveArt, restingLayers } from "./buildingArt";
 import { BUILDING_ART_ROWS } from "./buildingArtData";
 import { BUILDING_3D_ART, INFERNO_BUILDING_3D_ART, INFERNO_PAINTED_BUILDING_ART, tierArtFor } from "./buildingArtTiers";
+import { animPolicy, startFrame, WorkKind } from "./yardAnim";
 
 /** The game server's assets, which the 3D pictures are served from. */
 const ASSETS = fileURLToPath(new URL("../../../../server/public/assets/", import.meta.url));
@@ -199,6 +200,7 @@ describe("the 3D yard buildings", () => {
       [3, INFERNO_BUILDING_3D_ART[3] ?? [], "inferno"] as const,
       [4, INFERNO_BUILDING_3D_ART[4] ?? [], "inferno"] as const,
       [8, INFERNO_BUILDING_3D_ART[8] ?? [], "inferno"] as const,
+      [13, INFERNO_BUILDING_3D_ART[13] ?? [], "inferno"] as const,
     ];
     for (const [type, looks, kind] of sets) {
       const folder = `${ASSETS}${artFolder(type, kind) ?? ""}`;
@@ -380,6 +382,56 @@ describe("the 3D yard buildings", () => {
     expect(resolveArt(8, 1, ArtState.DEFAULT, "inferno")?.top.url).toBe(`${folder}top.1.v2.png`);
     expect(resolveArt(8, 1, ArtState.DEFAULT, "inferno")?.anims.map(({ url, frames }) => ({ url, frames }))).toEqual([
       { url: `${folder}anim.1.v2.png`, frames: 31 },
+    ]);
+  });
+
+  it("give the Inferno's Incubator its one 3D look, its brood, hose and smoke over a still body in Flash's 50 cells", () => {
+    const folder = "/assets/buildings/ihatchery/";
+    expect((INFERNO_BUILDING_3D_ART[13] ?? []).map((look) => look.from)).toEqual([1]);
+    for (const level of [1, 2, 3]) {
+      const art = resolveArt(13, level, ArtState.DEFAULT, "inferno");
+      const name = `level ${level}`;
+      expect(art?.name, name).toBe("Incubator");
+      // The body under one strip of moving parts; the still (body and cell 0, no smoke) for the icons.
+      expect(art?.topIsAnim, name).toBe(false);
+      expect(art?.top.url, name).toBe(`${folder}body.3d1@2x.webp`);
+      expect(art?.still?.url, name).toBe(`${folder}top.3d1@2x.webp`);
+      expect(art?.shadow?.url, name).toBe(`${folder}shadow.3d1.jpg`);
+      expect(art?.anims.map(({ url, frames, columns }) => ({ url, frames, columns })), name).toEqual([
+        { url: `${folder}anim.3d1@2x.webp`, frames: 50, columns: 24 },
+      ]);
+      // Its own damaged still, standing still; destroyed is Flash's rubble, as every other 3D building's.
+      const damaged = resolveArt(13, level, ArtState.DAMAGED, "inferno");
+      expect(damaged?.top.url, name).toBe(`${folder}top.3d1.damaged@2x.webp`);
+      expect(damaged?.shadow?.url, name).toBe(`${folder}shadow.3d1.damaged.jpg`);
+      expect(damaged?.anims, name).toEqual([]);
+      const destroyed = resolveArt(13, level, ArtState.DESTROYED, "inferno");
+      expect(destroyed?.top.url, name).toBe(`${folder}top.1.destroyed.v2.png`);
+      expect(destroyed?.anims, name).toEqual([]);
+    }
+    // It runs as Flash's hatchery: only while a monster hatches, from cell 0, and back to cell 0 (the approved
+    // still, no smoke) when it stops.
+    expect(animPolicy(13)?.work).toBe(WorkKind.HATCH);
+    expect(animPolicy(13)?.restOnIdle).toBe(true);
+    expect(startFrame(animPolicy(13)!, 50, 1234)).toBe(0);
+    // It stands where Flash's does: Flash's at rest is its top and the first cells of its two strips.
+    const flashFolder = `${ASSETS}buildings/ihatchery/`;
+    const want = union([
+      drawn(`${flashFolder}top.1.v2.png`, -55, -28),
+      drawn(`${flashFolder}anim.1.v2.png`, -48, -45, 33, 78),
+      drawn(`${flashFolder}anim.2.v2.png`, 4, 13.5, 27, 31),
+    ]);
+    const [file, x, y] = INFERNO_BUILDING_3D_ART[13]?.[0]?.top ?? ["", 0, 0];
+    const [width, height] = webpSize(`${flashFolder}${file}`);
+    const got: Box = [x, y, x + width / 2, y + height / 2];
+    for (const side of [0, 1, 2, 3]) expect(Math.abs((got[side] ?? 0) - (want[side] ?? 0)), `side ${side}`).toBeLessThanOrEqual(6);
+    // The main yard's Hatchery keeps its own 3D look; the Classic look is Flash's Incubator and its two strips.
+    expect(resolveArt(13, 1, ArtState.DEFAULT, "main")?.top.url).toContain("/assets/buildings/hatchery/");
+    setClassicLook(true);
+    expect(resolveArt(13, 1, ArtState.DEFAULT, "inferno")?.top.url).toBe(`${folder}top.1.v2.png`);
+    expect(resolveArt(13, 1, ArtState.DEFAULT, "inferno")?.anims.map(({ url, frames }) => ({ url, frames }))).toEqual([
+      { url: `${folder}anim.1.v2.png`, frames: 50 },
+      { url: `${folder}anim.2.v2.png`, frames: 50 },
     ]);
   });
 

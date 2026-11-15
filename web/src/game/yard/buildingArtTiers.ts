@@ -724,7 +724,9 @@ export const BUILDING_3D_ART: Readonly<Record<number, readonly TierArt[]>> = {
  * 2 Nov 2026: "I want to see it in the inferno + the soft animated glow of the
  * lava"), exported by `export3d_buildings.py icc`; and its Strongbox (8,
  * `buildings/imonsterlab/`), from art/strongbox-3d (owner on the Review Desk,
- * 14 Nov 2026), exported by `export3d_buildings.py strongbox`.
+ * 14 Nov 2026), exported by `export3d_buildings.py strongbox`; and its
+ * Incubator (13, `buildings/ihatchery/`), from art/incubator-3d (owner, 15
+ * Nov 2026), exported by `export3d_buildings.py incubator`.
  */
 export const INFERNO_BUILDING_3D_ART: Readonly<Record<number, readonly TierArt[]>> = {
   // 1 Bone Cruncher: 3D (owner, 6 Nov 2026: "3d bone crusher has been approved"), the clean-room model's three tiers,
@@ -804,6 +806,18 @@ export const INFERNO_BUILDING_3D_ART: Readonly<Record<number, readonly TierArt[]
       anim: { strip: ["anim.3d1@2x.webp", -57, -41, 115, 127, 30], columns: 17, whole: true, home: true },
       destroyed: { top: ["top.3d1@2x.webp", -57, -38], shadow: ["shadow.3d1.jpg", -61, 31] } },
   ],
+  // 13 Incubator: 3D (owner, 15 Nov 2026, round 3 approved as is), the clean-room model, one look for its three levels
+  // as Flash's. Its moving parts over a still body, in Flash's 50 cells: the brood churns in the porthole and the
+  // feed hose pumps, twice a loop, and green smoke puffs from the vent once (laid into the cells by its post.py). It
+  // runs only while a monster hatches and drops back to cell 0, the approved still with no smoke, when it stops, as
+  // Flash's hatchery (`yardAnim.ts` type 13). Its own damaged still, one rough pass (`incubator:damaged`): dented and
+  // sooted, the hose torn off the pump, the glass cracked and the brood running down the front. Destroyed is Flash's
+  // rubble, as the others'.
+  13: [
+    { from: 1, top: ["top.3d1@2x.webp", -57, -28], shadow: ["shadow.3d1.jpg", -57, 22], lift: 0,
+      anim: { strip: ["anim.3d1@2x.webp", -54, -46, 84, 87, 50], columns: 24, body: ["body.3d1@2x.webp", -57, -28] },
+      damaged: { top: ["top.3d1.damaged@2x.webp", -66, -28], shadow: ["shadow.3d1.damaged.jpg", -66, 22] } },
+  ],
   // 16 Incubator Control Centre: 3D look C, on a small magma pool. Each cell is the whole building: 32 cells of its
   // idle loop (the lava's light breathing), then 64 of its loop while it hatches (the crystal pulsing twice as well).
   // No damaged or destroyed look of its own yet: the damaged one is the whole look tinted, the destroyed Flash's.
@@ -830,8 +844,13 @@ export const INFERNO_BUILDING_3D_ART: Readonly<Record<number, readonly TierArt[]
  * centre building of every Inferno yard, `buildings/itownhall/`; owner on the Review Desk, 6 Nov 2026: "Underhall can
  * be repainted"), painted by Codex from Flash's three looks (levels 1, 2 and 3 to 6) in the finish of the painted
  * Town Hall, and fitted onto Flash's footprint by `web/tools/underhall-repaint/` (`finish.py`, then `export.py`), on
- * Flash's own shadows. Each look has its own damaged and destroyed picture, as Flash's has; like Flash's, it stands
- * still. The main yard's Town Hall (also type 14) keeps `TOWN_HALL_ART`.
+ * Flash's own shadows. Each look has its own damaged and destroyed picture, as Flash's has; levels 1 to 3, like
+ * Flash's, stand still. Levels 4, 5 and 6 are this project's own (owner, 14 Nov 2026: direction B, Lava and Black
+ * Iron, fire option 3 "No open flame"), each a Codex edit of the level below on level 3's footprint and shadows
+ * (`art-samples/b8/underhall-levels/`): its body with a 48-cell loop over it (8 cells a row, 2.4 s round at
+ * `yardAnim.ts`'s rate for type 14) of the lava's glow, the funnel's flicker, sparks and thin smoke, and behind level
+ * 6's gate a bed of coals; `top` is cell 24 over the body, the still for the icons. Damaged and destroyed stand still.
+ * The main yard's Town Hall (also type 14) keeps `TOWN_HALL_ART`.
  *
  * Also the Resource Pod (6, `buildings/istoragesilo/`; owner 12 Nov 2026: Codex for the Inferno buildings with no
  * animation), painted the same way from Flash's one look by `web/tools/pod-repaint/`, damaged and destroyed too.
@@ -843,7 +862,7 @@ export const INFERNO_PAINTED_BUILDING_ART: Readonly<Record<number, readonly Tier
       damaged: { top: ["top.c1.damaged@2x.webp", -48, -49], shadow: ["shadow.1.damaged.v2.jpg", -47, 17] },
       destroyed: { top: ["top.c1.destroyed@2x.webp", -53, -15], shadow: ["shadow.1.destroyed.v2.jpg", -54, 12] } },
   ],
-  // 14 Under Hall: painted, Flash's three looks, each damaged and destroyed in paint too
+  // 14 Under Hall: painted, Flash's three looks and three of its own (4 to 6, animated), each damaged and destroyed in paint too
   14: [
     { from: 1, top: ["top.c1@2x.webp", -52, -30], shadow: ["shadow.1.v2.jpg", -65, 49], lift: 0,
       damaged: { top: ["top.c1.damaged@2x.webp", -57, -38], shadow: ["shadow.1.damaged.v2.jpg", -65, 47] },
@@ -854,6 +873,18 @@ export const INFERNO_PAINTED_BUILDING_ART: Readonly<Record<number, readonly Tier
     { from: 3, top: ["top.c3@2x.webp", -51, -54], shadow: ["shadow.3.v2.jpg", -74, 35], lift: 0,
       damaged: { top: ["top.c3.damaged@2x.webp", -56, -65], shadow: ["shadow.3.damaged.v2.jpg", -73, 33] },
       destroyed: { top: ["top.c3.destroyed@2x.webp", -61, -21], shadow: ["shadow.3.destroyed.v2.jpg", -75, 29] } },
+    { from: 4, top: ["top.c4@2x.webp", -51, -80], shadow: ["shadow.3.v2.jpg", -74, 35], lift: 0,
+      anim: { strip: ["anim.c4@2x.webp", -35, -91, 78, 193, 48], columns: 8, body: ["body.c4@2x.webp", -51, -54] },
+      damaged: { top: ["top.c4.damaged@2x.webp", -50, -50], shadow: ["shadow.3.damaged.v2.jpg", -73, 33] },
+      destroyed: { top: ["top.c4.destroyed@2x.webp", -51, 6], shadow: ["shadow.3.destroyed.v2.jpg", -75, 29] } },
+    { from: 5, top: ["top.c5@2x.webp", -51, -94], shadow: ["shadow.3.v2.jpg", -74, 35], lift: 0,
+      anim: { strip: ["anim.c5@2x.webp", -35, -108, 78, 218, 48], columns: 8, body: ["body.c5@2x.webp", -51, -54] },
+      damaged: { top: ["top.c5.damaged@2x.webp", -51, -54], shadow: ["shadow.3.damaged.v2.jpg", -73, 33] },
+      destroyed: { top: ["top.c5.destroyed@2x.webp", -54, 14], shadow: ["shadow.3.destroyed.v2.jpg", -75, 29] } },
+    { from: 6, top: ["top.c6@2x.webp", -51, -109], shadow: ["shadow.3.v2.jpg", -74, 35], lift: 0,
+      anim: { strip: ["anim.c6@2x.webp", -35, -125, 78, 235, 48], columns: 8, body: ["body.c6@2x.webp", -51, -55] },
+      damaged: { top: ["top.c6.damaged@2x.webp", -51, -53], shadow: ["shadow.3.damaged.v2.jpg", -73, 33] },
+      destroyed: { top: ["top.c6.destroyed@2x.webp", -55, 7], shadow: ["shadow.3.destroyed.v2.jpg", -75, 29] } },
   ],
 };
 
