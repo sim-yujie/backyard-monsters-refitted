@@ -317,11 +317,22 @@ const openWarning = async (userid: number, raidId: unknown): Promise<OpenRaid> =
   return raid;
 };
 
-/** Rewrites the open raid, refused when it went in the meantime. */
+/**
+ * Rewrites the warning, refused `noRaid` when it is not the open raid in its
+ * warning any more: it went, was replaced, or another tab started its fight
+ * since this request read it (sol's fifth review). Nothing is written then.
+ * Not `notWarning`: the client reloads the yard on that, and the load would
+ * call off the fight the other tab is playing; on `noRaid` it forgets the
+ * raid, and the next presence ping shows it whatever it is now.
+ */
 const rewrite = async (userid: number, raid: OpenRaid, now: number): Promise<RaidView> => {
-  if (!(await updateOpenRaid(userid, raid, now))) throw raidRefusedErr("noRaid");
+  if (!(await updateOpenRaid(userid, raid, now, "warning"))) throw raidRefusedErr("noRaid");
   return raidView(raid);
 };
+
+/** The start's claim: the warning it read becomes the fight, unless it is not that warning any more. */
+const claimWarning = (userid: number, raid: OpenRaid, now: number): Promise<boolean> =>
+  updateOpenRaid(userid, raid, now, "warning");
 
 /** "Engage now" (`AIATTACKPOPUP.as:139-143`): the fight is due now. */
 export const engageRaid = async (userid: number, raidId: unknown, now: number): Promise<RaidView> => {
@@ -374,6 +385,11 @@ const freezeYard = async (em: EntityManager, user: User, raid: OpenRaid, now: nu
     if (readFightLock(readSchedule(locked.aiattacks).fight)?.id === raid.id && raidFighting(locked, now)) {
       throw raidRefusedErr("notWarning");
     }
+    // Another raid's fight holds the yard (a Trojan Horse sprung after this
+    // start read its warning, from another tab): its lock is never taken
+    // over, which would leave that fight on an unlocked yard (sol's fifth
+    // review). Tried again later, the start finds its warning gone.
+    if (raidFighting(locked, now)) throw raidRefusedErr("busy");
     completed = await catchUpLockedRow(tx, locked, now);
 
     const yard = structuredClone({
@@ -405,7 +421,7 @@ export type FightLocked = "locked" | "lapsed" | "lifted" | "raidGone";
 /**
  * The start's second transaction: the provisional lock made the fight's own,
  * lasting the fight and its grace, and the open raid claimed in Redis by
- * `claim` (`updateOpenRaid` for a raid already warned; the Trojan Horse's
+ * `claim` (`claimWarning` for a raid already warned; the Trojan Horse's
  * spring claims instead with `openFightingRaid`, having no warning to update,
  * `trojanFight.ts`). The lock may have gone meanwhile: lifted by a yard load
  * (`startSession`), or lapsed. Any outcome but "locked" leaves the yard
@@ -416,7 +432,7 @@ export const lockForFight = (
   user: User,
   fighting: OpenRaid,
   now: number,
-  claim: (userid: number, raid: OpenRaid, now: number) => Promise<boolean> = updateOpenRaid
+  claim: (userid: number, raid: OpenRaid, now: number) => Promise<boolean> = claimWarning
 ): Promise<FightLocked> =>
   em.transactional(async (tx) => {
     const locked = await lockMain(tx, user);
