@@ -1634,9 +1634,12 @@ button.hatch-slot:disabled {
 
   /* The HCC's totals on the first line, the stacks under them in a row kept
      one slot high: a stack chosen or added never pushes the totals down. */
+  /* Its seven slots (`HCC_STACKS`) in one row, narrower if they must be: with
+     the empty boxes back the seventh fell alone onto a second row on an
+     upright iPad (patch 7.6.1). */
   .hatch-line--hcc > .hatch-line__slots {
     display: grid;
-    grid-template-columns: repeat(auto-fill, 96px);
+    grid-template-columns: repeat(7, minmax(0, 96px));
     grid-template-rows: auto var(--hatch-slot-height);
     min-height: 0;
   }
