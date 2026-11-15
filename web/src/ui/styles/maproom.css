@@ -67,7 +67,7 @@
  * zoom, and the yard's zoom and minimap (planner.css `.yard-viewtools`). Pinch
  * zoom still works while they are away; closing the panel brings them back.
  */
-@media (width <= 620px) {
+@media (max-width: 620px) {
   .map-dock--right {
     top: auto;
     left: 0;
@@ -734,7 +734,7 @@
 }
 
 /* On a phone the legend would cover the map it explains: the button alone. */
-@media (width <= 620px) {
+@media (max-width: 620px) {
   .mr2-range-legend {
     display: none;
   }
@@ -1103,7 +1103,7 @@
   display: none;
 }
 
-@media (width <= 620px) {
+@media (max-width: 620px) {
   .map-dock--right.mr2-cell-dock {
     width: auto;
   }
@@ -1304,7 +1304,7 @@
  * steps aside while the cell panel (right) is open, as on a phone. Closing
  * the panel brings it back; pinching still zooms.
  */
-@media (width > 620px) and (height <= 500px) {
+@media (min-width: 620.02px) and (max-height: 500px) {
   .mr2-find-dock {
     top: calc(var(--hud-height) + var(--space-2));
     bottom: auto;
@@ -1347,7 +1347,7 @@
  * buttons. The cell panel is the bottom sheet (#174), and while it is open
  * the phone rule above puts these away.
  */
-@media (width <= 620px) {
+@media (max-width: 620px) {
   .mr2-find-dock {
     top: calc(var(--hud-height) + var(--space-2));
     bottom: auto;
@@ -1495,7 +1495,7 @@
  * The kit row folds into a Filter button on a phone, upright or on its side
  * (#381, `KitFilterControl`): the button opens the kits as a short list.
  */
-@media (width <= 620px), (height <= 500px) {
+@media (max-width: 620px), (max-height: 500px) {
   .mr2-kit-filter__toggle {
     display: flex;
   }
@@ -1684,7 +1684,7 @@
 
 /* Phone: one compact column filling the width, the picture a little
    squarer, the words and number a size down. */
-@media (width <= 620px) {
+@media (max-width: 620px) {
   .mr2-prepare {
     padding: calc(var(--hud-height) + var(--space-3)) var(--space-3) var(--space-3);
   }
@@ -1713,7 +1713,7 @@
 
 /* A short, wide screen (a phone on its side): the picture goes, the words
    and bar stay. */
-@media (height <= 500px) {
+@media (max-height: 500px) {
   .mr2-prepare__art {
     display: none;
   }
@@ -1725,7 +1725,7 @@
  * through the aria-label). Opening it still gives the full-width sheet. Last in the file so it wins
  * over the tool-row offsets above.
  */
-@media (width <= 440px) {
+@media (max-width: 440px) {
   .overlay__layer:not(:has(.mr2-find--open)) > .mr2-find-dock {
     right: auto !important;
   }

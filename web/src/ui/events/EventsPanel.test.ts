@@ -643,9 +643,9 @@ describe("EventsPanel: the New to Map Room 2 card", () => {
     expect(panel.element.querySelector(".events-page")?.classList.contains("events-page--side")).toBe(false);
     expect(panel.element.querySelector(".events-page__main")).toBeNull();
     const css = eventsCss.replace(/\r\n/g, "\n");
-    const desktop = css.slice(css.indexOf("@media (width > 620px) and (height > 500px)"));
+    const desktop = css.slice(css.indexOf("@media (min-width: 620.02px) and (min-height: 500.02px)"));
     expect(desktop).toMatch(/\.events-panel \{\s*width: min\(1000px/);
-    const wide = css.slice(css.indexOf("@media (width >= 1100px) and (height > 500px)"));
+    const wide = css.slice(css.indexOf("@media (min-width: 1100px) and (min-height: 500.02px)"));
     expect(wide).toMatch(/\.events-page > \.events-card--mr2-welcome \{\s*grid-column: 1 \/ -1;/);
     panel.close();
   });
@@ -684,7 +684,7 @@ describe("EventsPanel: the New to Map Room 2 card", () => {
   it("hides the closed note and drops the days under the title on a phone", () => {
     const css = eventsCss.replace(/\r\n/g, "\n");
     expect(css).toMatch(/\.events-welcome__help\[hidden\] \{\s*display: none;/);
-    const phone = css.slice(css.lastIndexOf("@media (width <= 620px)"));
+    const phone = css.slice(css.lastIndexOf("@media (max-width: 620px)"));
     expect(phone).toMatch(/\.events-welcome__days \{\s*grid-row: 2;/);
     expect(css).toMatch(/:root\[data-skin="flash"\] \.events-card--mr2-welcome \{/);
   });

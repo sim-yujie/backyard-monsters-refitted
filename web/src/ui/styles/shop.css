@@ -196,7 +196,7 @@
 
 /* ── Narrow screens: a bottom sheet, as the Monsters screen ─────────────── */
 
-@media (width <= 620px) {
+@media (max-width: 620px) {
   .shop-screen {
     top: auto;
     left: 0;

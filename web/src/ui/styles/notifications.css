@@ -131,7 +131,7 @@
 
 /* ── A phone: a bottom sheet, the bell above Mail ───────────────────────── */
 
-@media (width <= 620px) {
+@media (max-width: 620px) {
   .notif-screen {
     top: auto;
     left: 0;

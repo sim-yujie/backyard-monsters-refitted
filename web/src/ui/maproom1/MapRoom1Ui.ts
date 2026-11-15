@@ -46,13 +46,13 @@ export interface MapRoom1UiHandlers {
   readonly onTruce?: (target: Mr1Neighbour) => void;
 }
 
-const PHONE_QUERY = "(width <= 620px)";
+const PHONE_QUERY = "(max-width: 620px)";
 
 const isPhone = (): boolean =>
   typeof window !== "undefined" && window.matchMedia?.(PHONE_QUERY).matches === true;
 
 /** The card as a bottom sheet: a phone, or a screen too short for it beside its pin (a phone on its side). */
-const SHEET_QUERY = `${PHONE_QUERY}, (height <= 500px)`;
+const SHEET_QUERY = `${PHONE_QUERY}, (max-height: 500px)`;
 
 const isSheet = (): boolean =>
   typeof window !== "undefined" && window.matchMedia?.(SHEET_QUERY).matches === true;

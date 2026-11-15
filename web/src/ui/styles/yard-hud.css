@@ -839,7 +839,7 @@
    and the Friends button step aside however the dock is laid out, so a bar that
    wraps to two or three rows never covers a button. Hidden, not removed, so
    Stop keeps its place. The phone hides the whole dock under its sheet. */
-@media (width > 620px) {
+@media (min-width: 620.02px) {
   .overlay__layer:has(> .build-placing) > .yard-dock .yard-dock__right > :not(.yard-dock__button--build),
   .overlay__layer:has(> .build-placing) > .yard-dock .yard-dock__button--menu,
   .overlay__layer:has(> .build-placing) > .friends-button {
@@ -859,7 +859,7 @@
 
 /* ── A phone (mock-up R-YardHUD-B-phone) ──────────────────────────────── */
 
-@media (width <= 620px) {
+@media (max-width: 620px) {
   :root:has(.hud--corner) {
     --hud-inset: var(--space-2);
     --hud-bar-height: 110px; /* 96px before the income line (#280) */
@@ -1183,7 +1183,7 @@
    lose their income line, the buttons shrink to the phone's sizes, and the
    right-hand ones are hung from the top instead of stacking up from the
    bottom into the zoom rail and the top bar. */
-@media (width > 620px) and (height <= 500px) {
+@media (min-width: 620.02px) and (max-height: 500px) {
   :root:has(.hud--corner) {
     --hud-bar-height: 54px;
     --dock-top: calc(var(--hud-height) + var(--space-2));
@@ -1335,7 +1335,7 @@
 
 /* Too narrow for the name as well: the critter alone opens the menu, with the
    level on a small badge. */
-@media (620px < width <= 820px) and (height <= 500px) {
+@media (min-width: 620.02px) and (max-width: 820px) and (max-height: 500px) {
   .hud--corner .account-menu__pill-text {
     display: none;
   }
@@ -1351,7 +1351,7 @@
 
 /* A narrow phone: Workers and Shiny share two quarter columns, so their chips
    tighten up rather than run into each other. */
-@media (width <= 420px) {
+@media (max-width: 420px) {
   .hud--corner .hud__workers-button,
   .hud--corner .hud__resource--shiny .hud__resource-button,
   .hud--corner .hud__coins-button {

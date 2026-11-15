@@ -29,7 +29,7 @@ const block = (source: string, head: string): string => {
   return blocks.join("\n");
 };
 
-const phone = (path: string): string => block(css(path), "@media (width <= 620px) {");
+const phone = (path: string): string => block(css(path), "@media (max-width: 620px) {");
 
 describe("6 Nov UI check: phone faults", () => {
   it("Move Monsters: a long outpost name cannot widen the dialog past the screen", () => {
@@ -122,7 +122,7 @@ describe("6 Nov UI check: phone faults", () => {
     expect(attack).toMatch(/\.attack-end \.panel__body \{[^}]*min-height: 0;[^}]*overflow-y: auto;/);
     expect(attack).toMatch(/:root\[data-skin\] \.attack-end__backdrop \{\s*padding-top: 32px;/);
     // 32px clears both looks' phone signs (Modern lifts 28px, Classic 30px).
-    const skin = block(css("styles/skin.css"), "@media (width <= 620px), (height <= 500px) {");
+    const skin = block(css("styles/skin.css"), "@media (max-width: 620px), (max-height: 500px) {");
     for (const lift of [...skin.matchAll(/--skin-title-lift: (\d+)px;/g)]) {
       expect(Number(lift[1])).toBeLessThanOrEqual(32);
     }
@@ -140,7 +140,7 @@ describe("6 Nov UI check: phone faults", () => {
 
 describe("tester, 6 Nov: Classic on a phone", () => {
   it("Settings: the tab words keep off Classic's painted ends", () => {
-    const skin = block(css("styles/skin.css"), "@media (width <= 620px), (height <= 500px) {");
+    const skin = block(css("styles/skin.css"), "@media (max-width: 620px), (max-height: 500px) {");
     expect(skin).toMatch(/:root\[data-skin="flash"\] \.panel \.tab-row > \.account-settings__tab \{\s*padding-inline: 10px;/);
     expect(skin).toMatch(/:root\[data-skin\] \.panel \.account-settings__tabs \{\s*margin-inline: var\(--space-2\);/);
     // After the shared 6px rule, so it wins at the same specificity.
@@ -171,10 +171,10 @@ describe("Glimmers picture tester, 9 Nov", () => {
   it("Build: the painted title bar keeps the body's inset; on a phone the line shares the '?' row", () => {
     const build = css("styles/build-menu.css");
     expect(build).toMatch(/\n:root\[data-skin\] \.build-menu \.panel__titlebar \{\s*padding-inline: var\(--space-5\);/);
-    const phone = block(build, "@media (width <= 620px)");
+    const phone = block(build, "@media (max-width: 620px)");
     expect(phone).toMatch(/:root\[data-skin\] \.build-menu \.panel__titlebar \{\s*padding-inline: var\(--space-3\);/);
     expect(phone).toMatch(/:root\[data-skin\] \.build-menu__meta \{\s*order: 0;\s*flex: 1 1 0;/);
-    const skinPhone = block(css("styles/skin.css"), "@media (width <= 620px)");
+    const skinPhone = block(css("styles/skin.css"), "@media (max-width: 620px)");
     expect(skinPhone).toMatch(/\.build-menu__tabs \.tabs__tab \{\s*padding-inline: 4px;\s*font-size: min\(var\(--text-sm\), 2\.6vw\);/);
   });
 });

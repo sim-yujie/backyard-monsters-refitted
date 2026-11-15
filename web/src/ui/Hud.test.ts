@@ -520,7 +520,7 @@ describe("the yard's corner layout (#171)", () => {
   });
 
   it("uses short amounts on a phone, where the readouts share a row of four", () => {
-    const matchMedia = vi.fn((query: string) => ({ matches: query === "(width <= 620px)" }));
+    const matchMedia = vi.fn((query: string) => ({ matches: query === "(max-width: 620px)" }));
     vi.stubGlobal("matchMedia", matchMedia);
     const hud = new Hud({ scenes: [], layout: "corner", onSceneSelect: () => {} }).mount(document.body);
     hud.setResources({ r1: 15_000_000 });
@@ -531,7 +531,7 @@ describe("the yard's corner layout (#171)", () => {
   });
 
   it("keeps a full silo to the short amount and the full mark on a phone, where 23.1M/23.1M would not fit", () => {
-    vi.stubGlobal("matchMedia", vi.fn((query: string) => ({ matches: query === "(width <= 620px)" })));
+    vi.stubGlobal("matchMedia", vi.fn((query: string) => ({ matches: query === "(max-width: 620px)" })));
     const hud = new Hud({ scenes: [], layout: "corner", onSceneSelect: () => {} }).mount(document.body);
     const store = {
       caps: { r1: 23_050_000, r2: 20, r3: 20, r4: 20 },
@@ -915,7 +915,7 @@ describe("the HUD's income an hour", () => {
   });
 
   it("goes short on a phone", () => {
-    vi.stubGlobal("matchMedia", (query: string) => ({ matches: query === "(width <= 620px)" }));
+    vi.stubGlobal("matchMedia", (query: string) => ({ matches: query === "(max-width: 620px)" }));
     const hud = new Hud({ scenes: [], layout: "corner", onSceneSelect: () => {} }).mount(document.body);
     hud.setResources({ r1: 100 });
     bindTo(hud, "main");

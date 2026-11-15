@@ -18,7 +18,7 @@
 
 /* ── The frame: the original's popup was wide, so the tab is too ─────────── */
 
-@media (width > 620px) {
+@media (min-width: 620.02px) {
   .monsters-screen[data-tab="hatch"] {
     width: min(1160px, calc(100vw - 2 * var(--space-4)));
     /* Never narrowed to clear the Events column (ui.css `.panel--centre`):
@@ -76,7 +76,7 @@
 /* A container query cannot style its own container: the tab's padding
    follows the window. No bottom padding on a phone, where the add bar
    sits flush with the sheet's bottom edge. */
-@media (width <= 620px) {
+@media (max-width: 620px) {
   .hatch {
     --hatch-pad: var(--space-3);
   }
@@ -1769,7 +1769,7 @@ button.hatch-slot:disabled {
    the monster list and the queue no room at all at 375x667 and one row at
    375x812 (patch 6.3). Below 960 px tall the bar scrolls with the content,
    under the monster grid; the details button keeps its corner. */
-@media (height <= 960px) {
+@media (max-height: 960px) {
   .hatch-info {
     position: relative;
     box-shadow: none;
@@ -1778,7 +1778,7 @@ button.hatch-slot:disabled {
 
 /* A phone on its side (812x375): smaller hatchery tabs, so the box under
    them shows three rows or more. */
-@media (height <= 500px) {
+@media (max-height: 500px) {
   .hatch__tabs-row {
     padding-top: var(--space-1);
   }

@@ -37,7 +37,7 @@
   height: 40px;
 }
 
-@media (width <= 620px), (height <= 500px) {
+@media (max-width: 620px), (max-height: 500px) {
   .friends-button .yard-dock__picture.friends-button__picture {
     width: 36px;
     height: 36px;
@@ -55,14 +55,14 @@
 }
 
 /* The yard's status line moves along to stay beside the corner's buttons. */
-@media (width > 620px) {
+@media (min-width: 620.02px) {
   .overlay__layer:has(> .yard-dock):has(> .friends-button) > .cell-readout {
     left: calc(var(--friends-button-right, 200px) + var(--space-3));
   }
 }
 
 /* A phone, upright or on its side (#381): beside Map, or the Menu that holds it. */
-@media (width <= 620px) {
+@media (max-width: 620px) {
   .friends-button {
     bottom: 18px;
     left: 88px;
@@ -76,7 +76,7 @@
 }
 
 /* On its side the buttons are a little smaller (yard-hud.css). */
-@media (width > 620px) and (height <= 500px) {
+@media (min-width: 620.02px) and (max-height: 500px) {
   .friends-button {
     bottom: var(--space-4);
     left: 84px;
@@ -86,7 +86,7 @@
 /* While a sheet or a screen is open on a phone the dock's buttons step aside
    (yard-hud.css and each screen's own rule), and Friends with them, so it
    never sits on a panel's heading. */
-@media (width <= 620px), (height <= 500px) {
+@media (max-width: 620px), (max-height: 500px) {
   .overlay__layer:has(> .panel:not([hidden])) > .friends-button,
   .overlay__layer:has(> .map-dock--right > *) > .friends-button,
   .overlay__layer:has(> .build-menu:not([hidden])) > .friends-button,
@@ -371,7 +371,7 @@
 
 /* A phone held upright: three plates do not fit one line, so Visit has the
    line to itself and Message and Send gift share the one under it. */
-@media (width <= 480px) {
+@media (max-width: 480px) {
   .friends-window__actions {
     grid-template-columns: 1fr 1fr;
     grid-auto-flow: row;
@@ -472,7 +472,7 @@
   padding-inline: var(--space-3);
 }
 
-@media (width <= 400px) {
+@media (max-width: 400px) {
   .friends-window__gift-all .gift-all-button__word {
     display: none;
   }
@@ -486,7 +486,7 @@
    (tester, 9 Nov). The count line and Add move up beside the title sign, and
    the rows, the plates and the gaps get tighter, so three or more rows show.
    Taller screens are unchanged. */
-@media (height <= 500px) {
+@media (max-height: 500px) {
   .friends-window {
     max-height: calc(100vh - var(--hud-height) - var(--space-2) - var(--space-2) - var(--friends-window-overhang));
     max-height: calc(100dvh - var(--hud-height) - var(--space-2) - var(--space-2) - var(--friends-window-overhang));
@@ -551,7 +551,7 @@
 /* The way back as "< [wrench] 90" only, its words kept for the tooltip and a
    screen reader: beside the title sign on a phone on its side, and on an
    upright phone, where "Can use help" was cut to "Can ..." (tester, 9 Nov). */
-@media (height <= 500px), (width <= 480px) {
+@media (max-height: 500px), (max-width: 480px) {
   .friends-window__back > .friends-window__group-words {
     display: none;
   }

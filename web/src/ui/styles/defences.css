@@ -212,7 +212,7 @@
 
 /* ── A phone: a bottom sheet, the button beside Mail ───────────────────── */
 
-@media (width <= 620px) {
+@media (max-width: 620px) {
   .defences-screen {
     top: auto;
     left: 0;

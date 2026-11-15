@@ -132,7 +132,7 @@
   color: var(--colour-text-muted);
 }
 
-@media (width <= 620px) {
+@media (max-width: 620px) {
   .train__slots {
     padding: var(--space-2) var(--space-3) 0;
     grid-template-columns: 1fr;

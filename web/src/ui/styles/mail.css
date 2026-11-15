@@ -639,7 +639,7 @@
 
 /* ── A phone: a bottom sheet, one pane at a time ──────────────────────── */
 
-@media (width <= 620px) {
+@media (max-width: 620px) {
   .mail-screen {
     top: auto;
     left: 0;
@@ -928,7 +928,7 @@
   color: var(--colour-text-muted);
 }
 
-@media (width <= 620px) {
+@media (max-width: 620px) {
   .mail-toast {
     top: calc(var(--hud-height) + var(--space-2));
   }

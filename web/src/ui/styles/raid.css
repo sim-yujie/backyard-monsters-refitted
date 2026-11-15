@@ -292,7 +292,7 @@
 
 /* A phone on its side: the alert keeps its tribe line in view instead of
    opening scrolled down to its buttons. */
-@media (width > 620px) and (height <= 500px) {
+@media (min-width: 620.02px) and (max-height: 500px) {
   .raid-alert {
     width: min(92vw, 36rem);
   }

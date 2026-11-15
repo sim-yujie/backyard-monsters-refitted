@@ -944,7 +944,7 @@
   box-shadow: var(--focus-ring);
 }
 
-@media (width <= 900px) {
+@media (max-width: 900px) {
   .planner-dock {
     width: calc(min(92vw, 420px) + var(--dock-hang-x));
   }
@@ -1096,7 +1096,7 @@
  * the bottom bar its actions (Apply pinned at the end). The minimap steps aside while
  * the planner is open; the zoom stays.
  */
-@media (width <= 620px) {
+@media (max-width: 620px) {
   .planner-bar {
     gap: var(--space-1) var(--space-2);
     padding: var(--space-1) var(--space-2);
@@ -1786,7 +1786,7 @@
  * 212 px tall, so two rows fill the screen and the other four are a scroll
  * away — on the one card whose whole job is to show six things at once.
  */
-@media (width <= 620px) {
+@media (max-width: 620px) {
   .planner-help__demo {
     width: 80px;
   }
@@ -1799,7 +1799,7 @@
  * line in small type, and "Got it" scrolls with the text: the title bar's
  * close stays in sight for leaving.
  */
-@media (height <= 500px) {
+@media (max-height: 500px) {
   .planner-help-dock {
     padding: var(--space-1) var(--space-3);
   }

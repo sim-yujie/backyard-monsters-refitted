@@ -191,7 +191,7 @@
   font-variant-numeric: tabular-nums;
 }
 
-@media (width <= 620px) {
+@media (max-width: 620px) {
   .transfer-dialog__ends {
     grid-template-columns: minmax(0, 1fr);
   }

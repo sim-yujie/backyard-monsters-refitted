@@ -87,7 +87,7 @@ describe("Middle windows on a short screen (owner's iPad, 15 Nov)", () => {
 
   it("starts each fitted window's body from its content, shared for every middle window", () => {
     const css = read("styles/ui.css");
-    const at = css.indexOf("@media (width > 620px) and (height > 500px) {\n  .overlay__layer > .panel.panel--centre {");
+    const at = css.indexOf("@media (min-width: 620.02px) and (min-height: 500.02px) {\n  .overlay__layer > .panel.panel--centre {");
     expect(at).toBeGreaterThanOrEqual(0);
     const block = css.slice(at, css.indexOf("\n}\n", at));
     expect(block).toContain("height: var(--centre-height, max-content);");
@@ -102,18 +102,16 @@ describe("Middle windows on a short screen (owner's iPad, 15 Nov)", () => {
   });
 });
 
-/** Whether a `(width > 620px) and (height > 500px)`-style query, commas for "or", matches a screen. */
+/** Whether a `(min-width: 620.02px) and (min-height: 500.02px)`-style query, commas for "or", matches a screen. */
 const matches = (query: string, width: number, height: number): boolean =>
-  query.split(",").some((part) =>
-    [...part.matchAll(/\((width|height)\s*(<=|>=|<|>)\s*(\d+)px\)/g)].every(([, side, op, px]) => {
+  query.split(",").some((part) => {
+    const features = [...part.matchAll(/\((min|max)-(width|height):\s*(\d+(?:\.\d+)?)px\)/g)];
+    expect(features.length, part).toBe(part.split(" and ").length);
+    return features.every(([, end, side, px]) => {
       const value = side === "width" ? width : height;
-      const limit = Number(px);
-      if (op === "<=") return value <= limit;
-      if (op === ">=") return value >= limit;
-      if (op === "<") return value < limit;
-      return value > limit;
-    }),
-  );
+      return end === "min" ? value >= Number(px) : value <= Number(px);
+    });
+  });
 
 describe("Screen sizes: middle windows or a phone's sheets", () => {
   const SCREENS = [
@@ -122,6 +120,10 @@ describe("Screen sizes: middle windows or a phone's sheets", () => {
     { name: "laptop", width: 1366, height: 900, centred: true },
     { name: "phone on its side", width: 844, height: 390, centred: false },
     { name: "phone upright", width: 390, height: 844, centred: false },
+    { name: "a zoomed window just over the line", width: 620.5, height: 800, centred: true, edge: true },
+    { name: "a window right on the line", width: 620, height: 800, centred: false },
+    { name: "a window just over the height line", width: 1024, height: 500.5, centred: true, edge: true },
+    { name: "a window right on the height line", width: 1024, height: 500, centred: false },
   ];
 
   it.each(SCREENS)("$name ($width x $height) gets exactly one layout", ({ width, height, centred }) => {
@@ -140,7 +142,8 @@ describe("Screen sizes: middle windows or a phone's sheets", () => {
     { left: 24, top: height - 120, right: 100, bottom: height - 26 }, // Map
   ];
 
-  const centredScreens = SCREENS.filter((screen) => screen.centred);
+  // The edge cases only check the queries; they are too small for the band checks.
+  const centredScreens = SCREENS.filter((screen) => screen.centred && !screen.edge);
 
   it.each(centredScreens)("$name: Build's band leaves room for its list", ({ width, height }) => {
     const windowWidth = Math.min(1200, width - 32);
@@ -240,5 +243,52 @@ describe("Heights from the screen use Safari's visible height (iPad toolbars)", 
     expect(readSheet("ui/styles/attack.css")).toContain(
       "max-height: calc(100dvh - var(--hud-height) - var(--hud-inset) - var(--space-7) - var(--space-6));",
     );
+  });
+});
+
+/*
+ * Safari before iPadOS/iOS 16.4 does not read the range form of a media query,
+ * `(width <= 620px)`: the whole query never matches there, so an older iPad
+ * got neither the phone layout nor the middle windows. The stylesheets and the
+ * matchMedia strings use the classic form, `(max-width: 620px)`; a strict `>`
+ * or `<` is the limit moved by 0.02px, so a zoomed window at 620.5px still gets
+ * one layout. Container queries keep the range form: Safari has both from 16.
+ */
+const RANGE = /\(\s*(?:width|height)\s*[<>]=?\s*(?:[\d.]+|\$\{[^}]*\})px|\dpx\s*[<>]=?\s*(?:width|height)\b/;
+
+/** Media queries (CSS) or lines (scripts) that use the range form. */
+const rangeQueries = (source: string, css: boolean): string[] =>
+  css
+    ? [...source.matchAll(/@media\b[^{;]*/g)].map((match) => match[0].trim()).filter((query) => RANGE.test(query))
+    : source.split("\n").filter((line) => !line.includes("@container") && RANGE.test(line));
+
+const SCRIPTS = (() => {
+  const under = (dir: string): string[] =>
+    readdirSync(dir, { withFileTypes: true }).flatMap((entry) => {
+      const path = join(dir, entry.name);
+      if (entry.isDirectory()) return under(path);
+      return entry.name.endsWith(".ts") && !entry.name.endsWith(".test.ts") ? [path] : [];
+    });
+  return under(webSrc).map((path) => relative(webSrc, path).replace(/\\/g, "/"));
+})();
+
+describe("Media queries in the form older iPads read", () => {
+  it.each(STYLESHEETS)("%s has no range-form @media query", (sheet) => {
+    expect(rangeQueries(readSheet(sheet), true)).toEqual([]);
+  });
+
+  it("no script asks matchMedia in the range form", () => {
+    const bad = SCRIPTS.flatMap((path) => rangeQueries(read(join("..", path)), false).map((line) => `${path}: ${line}`));
+    expect(bad).toEqual([]);
+  });
+
+  it("catches the range form and leaves container queries and the classic form alone", () => {
+    expect(rangeQueries("@media (width > 620px) and (height <= 500px) {", true)).toHaveLength(1);
+    expect(rangeQueries("@media (620px < width <= 820px) {", true)).toHaveLength(1);
+    expect(rangeQueries("@container hatch (width < 560px) {", true)).toEqual([]);
+    expect(rangeQueries("@media (min-width: 620.02px) and (max-height: 500px) {", true)).toEqual([]);
+    expect(rangeQueries('const Q = "(width <= 620px)";', false)).toHaveLength(1);
+    expect(rangeQueries("matchMedia(`(width < ${STACK}px)`)", false)).toHaveLength(1);
+    expect(rangeQueries("if (width > 0 && width < LIMIT) return;", false)).toEqual([]);
   });
 });

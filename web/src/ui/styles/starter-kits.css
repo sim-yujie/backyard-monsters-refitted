@@ -254,7 +254,7 @@
 }
 
 /* A phone: one card to a row. */
-@media (width <= 720px) {
+@media (max-width: 720px) {
   .kit-picker__cards {
     grid-template-columns: minmax(0, 1fr);
   }

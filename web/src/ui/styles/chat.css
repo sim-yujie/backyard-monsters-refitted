@@ -621,7 +621,7 @@ button.chat-line__name {
 /* ── Phone: a one-line strip, opening to a panel that keeps clear of the
       HUD above and the dock below ─────────────────────────────────── */
 
-@media (width <= 620px) {
+@media (max-width: 620px) {
   .chat-box {
     left: var(--space-3);
     width: calc(100% - 2 * var(--space-3));

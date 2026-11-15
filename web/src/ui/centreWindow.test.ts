@@ -251,7 +251,7 @@ describe("Middle windows: never over the dock (tester, 9 Nov)", () => {
   });
 
   it("has no short-screen exception: the band's bottom is the dock, whatever the height", () => {
-    expect(css).not.toMatch(/height <= 760px/);
+    expect(css).not.toMatch(/height <= 760px|max-height: 760px/);
     expect(css.match(/--centre-bottom:/g)).toHaveLength(1);
   });
 

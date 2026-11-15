@@ -78,7 +78,7 @@
   font-weight: 600;
 }
 
-@media (width <= 620px) {
+@media (max-width: 620px) {
   .friend-visit-line {
     top: 96px;
     font-size: var(--text-xs, var(--text-sm));

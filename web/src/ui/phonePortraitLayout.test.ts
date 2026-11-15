@@ -32,7 +32,7 @@ const media = (source: string, query: string): string => {
 
 describe("upright phone layout", () => {
   it("puts Map Room 2's Mail, Filter and Key beside the search bar, on screen (#381)", () => {
-    const phone = media(css("styles/maproom.css"), "width <= 620px");
+    const phone = media(css("styles/maproom.css"), "max-width: 620px");
     // One row under the HUD: the tools at the right, the search bar up to them.
     expect(phone).toMatch(/\.mr2-tools-dock \{\s*top: calc\(var\(--hud-height\) \+ var\(--space-2\)\);\s*left: auto;/);
     expect(phone).toMatch(/\.mr2-tools-dock \.mr2-toolrow \{\s*flex-wrap: nowrap;/);
@@ -49,18 +49,18 @@ describe("upright phone layout", () => {
   it("folds Map Room 2's kit row into the Filter button on a phone, upright or sideways (#381)", () => {
     const source = css("styles/maproom.css");
     expect(source).toMatch(/^\.mr2-kit-filter__toggle \{\s*display: none;/m);
-    const phone = media(source, "width <= 620px), (height <= 500px");
+    const phone = media(source, "max-width: 620px), (max-height: 500px");
     expect(phone).toMatch(/\.mr2-kit-filter__toggle \{\s*display: flex;/);
     expect(phone).toMatch(/\.mr2-kit-filter:not\(\.mr2-kit-filter--open\) \{\s*display: none;/);
-    expect(media(source, "width <= 620px")).toMatch(/\.mr2-kit-filter \{\s*top: calc\(100% \+ var\(--space-2\)\);/);
-    expect(media(source, "width > 620px) and (height <= 500px")).toMatch(
+    expect(media(source, "max-width: 620px")).toMatch(/\.mr2-kit-filter \{\s*top: calc\(100% \+ var\(--space-2\)\);/);
+    expect(media(source, "min-width: 620.02px) and (max-height: 500px")).toMatch(
       /\.mr2-kit-filter \{\s*bottom: calc\(100% \+ var\(--space-2\)\);/,
     );
   });
 
   it("puts the Friends button away while a panel or sheet is open", () => {
     // Upright and sideways alike (#381).
-    const phone = media(css("friends/friends-button.css"), "width <= 620px), (height <= 500px");
+    const phone = media(css("friends/friends-button.css"), "max-width: 620px), (max-height: 500px");
     for (const opener of [
       "> .panel:not([hidden])",
       "> .map-dock--right > *",
@@ -73,7 +73,7 @@ describe("upright phone layout", () => {
   });
 
   it("keeps the yard's level strip, notices and Chat clear of the floating \"?\"", () => {
-    const phone = media(css("styles/yard-hud.css"), "width <= 620px");
+    const phone = media(css("styles/yard-hud.css"), "max-width: 620px");
     expect(phone).toMatch(/> \.hud--corner > \.hud-status \{[^}]*left: 48px;/);
     expect(phone).toMatch(/> \.yard-notices \{\s*top: calc\(var\(--notice-top-inset\) \+ 122px\);/);
     expect(phone).toContain(".overlay__layer:has(> .build-menu:not([hidden])) > .chat-box");
@@ -82,14 +82,14 @@ describe("upright phone layout", () => {
   });
 
   it("tightens Workers, Shiny and event coins on a narrow phone so they share their columns", () => {
-    const narrow = media(css("styles/yard-hud.css"), "width <= 420px");
+    const narrow = media(css("styles/yard-hud.css"), "max-width: 420px");
     expect(narrow).toMatch(
       /\.hud__workers-button,[^{]*\.hud__resource--shiny \.hud__resource-button,[^{]*\.hud__coins-button \{[^}]*padding: 0 6px;/,
     );
   });
 
   it("gives event coins the top row's last quarter on a phone, the critter alone leading it", () => {
-    const phone = media(css("styles/yard-hud.css"), "width <= 620px");
+    const phone = media(css("styles/yard-hud.css"), "max-width: 620px");
     expect(phone).toMatch(/\.hud__resource--coins \{[^}]*grid-area: 1 \/ 4;/);
     const shown = ".hud--corner:has(.hud__resource--coins:not([hidden]))";
     expect(phone).toContain(`${shown} .account-menu {
@@ -105,18 +105,18 @@ describe("upright phone layout", () => {
   });
 
   it("sizes the Build tabs to the width so Decorations fits", () => {
-    const phone = media(css("styles/build-menu.css"), "width <= 620px");
+    const phone = media(css("styles/build-menu.css"), "max-width: 620px");
     expect(phone).toMatch(/\.build-menu__tabs \.tabs__tab \{[^}]*font-size: min\(var\(--text-sm\), 3\.1vw\);/);
   });
 
   it("keeps Map Room 1's corner buttons small over the map (K)", () => {
-    const phone = media(css("styles/maproom1.css"), "width <= 620px");
+    const phone = media(css("styles/maproom1.css"), "max-width: 620px");
     expect(phone).toMatch(/\.mr1-map__home-label \{\s*display: none;/);
     expect(phone).toMatch(/\.mr1-mini \{[^}]*width: 84px;/);
   });
 
   it("keeps a tip's Bob small, and drops it to the bottom edge in Map Room 1 (L)", () => {
-    const phone = media(css("styles/guide.css"), "width <= 620px");
+    const phone = media(css("styles/guide.css"), "max-width: 620px");
     expect(phone).toMatch(/\.guide-bob--tip \{\s*--guide-bob-size: 48px;/);
     expect(phone).toMatch(/:root:has\(\.mr1\) \.guide-bob \{\s*bottom: var\(--space-2\);/);
     // The tip's rule comes after the phone's own Bob size, or that one wins.
@@ -126,30 +126,30 @@ describe("upright phone layout", () => {
   it("folds the attack's minimap and zoom behind one button on a phone (#381)", () => {
     const source = css("styles/attack.css");
     expect(source).toMatch(/^\.attack-viewtools__fold \{\s*display: none;/m);
-    const phone = media(source, "width <= 620px), (height <= 500px");
+    const phone = media(source, "max-width: 620px), (max-height: 500px");
     expect(phone).toMatch(/\.attack-viewtools__fold \{\s*display: grid;/);
     expect(phone).toMatch(/\.attack-viewtools:not\(\.attack-viewtools--open\) > :not\(\.attack-viewtools__fold\) \{\s*display: none;/);
     // On its side the status line gives the button its corner, as upright.
-    expect(media(source, "width > 620px) and (height <= 500px")).toMatch(/\.attack-status \{\s*display: none;/);
+    expect(media(source, "min-width: 620.02px) and (max-height: 500px")).toMatch(/\.attack-status \{\s*display: none;/);
   });
 
   it("keeps the attack strip to one row with the menu first (#381)", () => {
-    const phone = media(css("styles/attack.css"), "width <= 620px");
+    const phone = media(css("styles/attack.css"), "max-width: 620px");
     expect(phone).toMatch(/\.attack-strip \{\s*top: 0;\s*gap: var\(--space-1\);/);
     expect(phone).toMatch(/\.attack-menu \{\s*display: flex;\s*order: -1;/);
     expect(phone).toMatch(/\.attack-menu__list \{\s*left: 0;\s*right: auto;/);
-    expect(media(css("styles/attack.css"), "width <= 380px")).toMatch(/\.attack-strip__word \{\s*display: none;/);
+    expect(media(css("styles/attack.css"), "max-width: 380px")).toMatch(/\.attack-strip__word \{\s*display: none;/);
   });
 
   it("shrinks the attack's minimap and zoom (M)", () => {
-    const phone = media(css("styles/attack.css"), "width <= 620px");
+    const phone = media(css("styles/attack.css"), "max-width: 620px");
     expect(phone).toMatch(/\.attack-viewtools \.yard-minimap \{[^}]*width: 120px !important;/);
     expect(phone).toMatch(/\.attack-viewtools \.yard-zoom__slider,\s*\.attack-viewtools \.yard-zoom__readout \{\s*display: none;/);
   });
 
   it("keeps the Friends window's way back to '< [wrench] 90' on phones, in the button's ink (tester, 9 Nov)", () => {
     const source = css("friends/friends-button.css");
-    const phones = media(source, "height <= 500px), (width <= 480px");
+    const phones = media(source, "max-height: 500px), (max-width: 480px");
     expect(phones).toMatch(/\.friends-window__back > \.friends-window__group-words \{\s*display: none;/);
     expect(source).toMatch(/\.friends-window__back > \.friends-window__group-count \{[^}]*color: inherit;/);
   });

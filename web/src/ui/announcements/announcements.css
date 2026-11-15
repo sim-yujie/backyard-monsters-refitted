@@ -168,7 +168,7 @@
   color: var(--colour-text-muted);
 }
 
-@media (width <= 620px) {
+@media (max-width: 620px) {
   .announcement-dialog__done {
     flex: 1;
   }
