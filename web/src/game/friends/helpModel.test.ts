@@ -112,6 +112,9 @@ describe("the words (#372, #374)", () => {
     );
     const fixed: HelpResult = { healed: true, reward: {}, rewardsLeft: 3, building: null };
     expect(thanksText("repair", fixed, "Bob", "Cannon Tower")).toBe("Thanks for helping! You repaired Bob's Cannon Tower.");
+    // A help after the day's 5 rewarded ones: the server pays all zeros, and nothing is said of earning.
+    const unpaid: HelpResult = { secondsSaved: 390, reward: { r1: 0, r2: 0, r3: 0, r4: 0 }, rewardsLeft: 0, building: null };
+    expect(thanksText("speedup", unpaid, "Bob", "Storage Silo")).toBe("Thanks for helping! You took 6m 30s off Bob's Storage Silo.");
   });
 });
 
