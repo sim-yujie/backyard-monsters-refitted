@@ -26,6 +26,8 @@ import {
   repeatRefusal,
   shortfallText,
 } from "./autoAttackText";
+import { RepeatBar } from "./RepeatBar";
+import { REAL_TIMERS, REPEAT_BAR_MIN_MS, atLeast, repeatBarLook, type BarTimers, type RepeatBarLook } from "./repeatBarTiming";
 import "@/ui/styles/autoattack.css";
 
 /**
@@ -76,6 +78,17 @@ export interface AutoAttackFlowOptions {
   readonly calls?: AutoAttackCalls;
   /** Local unix seconds; `Date.now` by default. */
   readonly now?: () => number;
+  /**
+   * Show the working bar while the attack runs (owner, 15 Nov 2026): the
+   * map's Repeat attack only, not the end panel's Attack again.
+   */
+  readonly progressBar?: boolean;
+  /** The bar's look; the dev switch's (`?repeatBar=`) by default. */
+  readonly barLook?: RepeatBarLook;
+  /** The bar's clock and timer; the real ones by default. */
+  readonly barTimers?: BarTimers;
+  /** Reduced motion for the bar; the player's setting by default. */
+  readonly barReducedMotion?: boolean;
 }
 
 /** A modal sheet: a scrim and a panel that Escape and the scrim do not close. */
@@ -125,6 +138,9 @@ export class AutoAttackFlow {
   private offer: EndTakeoverOffer | null = null;
   private busy = false;
   private closed = false;
+  /** The plan the confirm sheet showed: who the bar's army is. */
+  private plan: AutoAttackPlanResponse["plan"] = null;
+  private bar: RepeatBar | null = null;
 
   constructor(options: AutoAttackFlowOptions) {
     this.options = options;
@@ -154,6 +170,8 @@ export class AutoAttackFlow {
   close(): void {
     if (this.closed) return;
     this.closed = true;
+    this.bar?.destroy();
+    this.bar = null;
     this.offer?.destroy();
     this.offer = null;
     this.open?.panel.close();
@@ -188,6 +206,7 @@ export class AutoAttackFlow {
 
   private confirm(answer: AutoAttackPlanResponse): void {
     const plan = answer.plan;
+    this.plan = plan;
     if (!plan) {
       this.show("Repeat attack", "auto-attack--confirm", [paragraph("You have no attack to repeat on this camp yet.")], [
         buttonOf("Close", "btn btn--primary", () => this.close()),
@@ -222,14 +241,57 @@ export class AutoAttackFlow {
   private async run(): Promise<void> {
     if (this.busy) return;
     this.busy = true;
-    this.show("Repeat attack", "auto-attack--running", [paragraph("Your monsters are attacking…", "u-muted")], []);
+    if (!this.options.progressBar) {
+      this.show("Repeat attack", "auto-attack--running", [paragraph("Your monsters are attacking…", "u-muted")], []);
+      try {
+        const result = await this.calls.run(this.options.baseid);
+        this.options.onAttacked?.(result);
+        if (!this.closed) this.result(result);
+      } catch (caught) {
+        if (!this.closed) this.failed(caught);
+      } finally {
+        this.busy = false;
+      }
+      return;
+    }
+    await this.runWithBar();
+  }
+
+  /**
+   * Repeat attack with the working bar: it runs at least
+   * {@link REPEAT_BAR_MIN_MS}; once the answer is in and that time has passed
+   * it jumps to full, holds a moment, and the result shows. An error stops it
+   * at once. The map hears of the landed attack as soon as the answer comes.
+   */
+  private async runWithBar(): Promise<void> {
+    const timers = this.options.barTimers ?? REAL_TIMERS;
+    const bar = new RepeatBar({
+      look: this.options.barLook ?? repeatBarLook(),
+      plan: this.plan,
+      timers,
+      ...(this.options.barReducedMotion === undefined ? {} : { reducedMotion: this.options.barReducedMotion }),
+    });
+    this.bar = bar;
+    const words = paragraph("Attacking…", "u-muted auto-attack__working");
+    words.setAttribute("aria-live", "polite");
+    this.show("Repeat attack", "auto-attack--running auto-attack--bar", [bar.element, words], []);
+    bar.start();
     try {
-      const result = await this.calls.run(this.options.baseid);
-      this.options.onAttacked?.(result);
+      const work = this.calls.run(this.options.baseid).then((result) => {
+        this.options.onAttacked?.(result);
+        return result;
+      });
+      const result = await atLeast(work, REPEAT_BAR_MIN_MS, timers, bar.started);
+      if (this.closed) return;
+      bar.complete();
+      await timers.wait(bar.holdMs);
       if (!this.closed) this.result(result);
     } catch (caught) {
+      bar.stop();
       if (!this.closed) this.failed(caught);
     } finally {
+      bar.destroy();
+      if (this.bar === bar) this.bar = null;
       this.busy = false;
     }
   }

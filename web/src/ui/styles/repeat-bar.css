@@ -1,0 +1,470 @@
+/*
+ * Repeat attack's working bar (owner, 15 Nov 2026; ui/attack/RepeatBar.ts).
+ * `--repeat-progress` (0 to 1) on `.repeat-bar` drives every look. The bar's
+ * frame is the window style's bar plate (skin.css `--skin-bar`): riveted steel
+ * in Modern, Flash brown in Classic; the plain glass without a style.
+ *
+ * The Flash art under /assets comes in as `--repeat-art-*` from RepeatBar.ts
+ * (the game server serves it, not Vite).
+ *
+ * The bar has a fixed height, and what sticks out (the tribe, the burst) is
+ * placed absolutely, so the sheet never jumps or grows while it runs.
+ */
+
+.repeat-bar {
+  --repeat-progress: 0;
+  --repeat-bar-height: 64px;
+  --repeat-track-height: 48px;
+
+  position: relative;
+  display: flex;
+  align-items: center;
+  height: var(--repeat-bar-height);
+  margin: var(--space-2) 0 var(--space-1);
+}
+
+.repeat-bar__track {
+  position: relative;
+  flex: 1 1 auto;
+  min-width: 0;
+  height: var(--repeat-track-height);
+  box-sizing: border-box;
+  border: 2px solid var(--colour-border-strong);
+  border-radius: var(--radius-md);
+  background: var(--colour-surface-sunken);
+}
+
+/* The window style's own bar plate (steel / Flash brown). */
+:root[data-skin] .repeat-bar__track {
+  border-style: solid;
+  border-color: transparent;
+  border-width: var(--skin-bar-edge);
+  border-radius: 0;
+  border-image-source: var(--skin-bar);
+  border-image-slice: var(--skin-bar-slice) fill;
+  border-image-width: var(--skin-bar-width);
+  border-image-repeat: round;
+  background: none;
+}
+
+.repeat-bar__goal {
+  position: relative;
+  z-index: 1;
+  flex: 0 0 auto;
+  display: grid;
+  place-items: center;
+}
+
+/* ── A: the marching army ───────────────────────────────────────────────── */
+
+/* A dirt road along the bottom; the part walked is trodden lighter. */
+.repeat-bar__road {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 3px;
+  height: 9px;
+  border-radius: var(--radius-pill);
+  background: linear-gradient(#7a5a32, #4e3618);
+  box-shadow: inset 0 1px 2px rgb(0 0 0 / 50%);
+}
+
+.repeat-bar__road::after {
+  content: "";
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: calc(var(--repeat-progress) * 100%);
+  border-radius: inherit;
+  background: linear-gradient(#b08a52, #7a5a32);
+}
+
+.repeat-bar__troop {
+  --marcher-size: 32px;
+  --marcher-step: 22px;
+  --troop-width: calc(var(--marcher-size) + (var(--marchers, 1) - 1) * var(--marcher-step));
+
+  position: absolute;
+  bottom: 4px;
+  left: calc(var(--repeat-progress) * (100% - var(--troop-width)));
+  display: flex;
+  width: var(--troop-width);
+  height: var(--marcher-size);
+}
+
+.repeat-bar__marcher {
+  position: relative;
+  flex: 0 0 auto;
+  width: var(--marcher-size);
+  height: var(--marcher-size);
+  margin-right: calc(var(--marcher-step) - var(--marcher-size));
+  animation: repeat-bar-hop 420ms ease-in-out infinite;
+  animation-delay: calc(var(--marcher, 0) * -110ms);
+}
+
+.repeat-bar__marcher:last-child {
+  margin-right: 0;
+}
+
+.repeat-bar__marcher-pic {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  filter: drop-shadow(0 2px 2px rgb(0 0 0 / 55%));
+}
+
+.repeat-bar__count {
+  position: absolute;
+  right: -4px;
+  bottom: -3px;
+  padding: 0 4px;
+  border-radius: var(--radius-pill);
+  background: rgb(0 0 0 / 68%);
+  color: #ffffff;
+  font-size: 11px;
+  font-weight: 800;
+  line-height: 15px;
+  text-shadow: none;
+  white-space: nowrap;
+}
+
+/* The camp's tribe waits at the end of the road. */
+.repeat-bar__goal--tribe {
+  width: 58px;
+  height: var(--repeat-bar-height);
+  margin-left: -14px;
+}
+
+.repeat-bar__goal-pic {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  filter: drop-shadow(0 3px 3px rgb(0 0 0 / 55%));
+}
+
+.repeat-bar--full .repeat-bar__goal--tribe {
+  animation: repeat-bar-hit 360ms ease-out 2;
+}
+
+.repeat-bar--full .repeat-bar__marcher {
+  animation: none;
+}
+
+@keyframes repeat-bar-hop {
+  0%,
+  100% {
+    transform: translateY(0) rotate(-3deg);
+  }
+
+  50% {
+    transform: translateY(-5px) rotate(3deg);
+  }
+}
+
+@keyframes repeat-bar-hit {
+  0%,
+  100% {
+    transform: translateX(0) rotate(0);
+  }
+
+  30% {
+    transform: translateX(5px) rotate(6deg);
+  }
+
+  65% {
+    transform: translateX(-3px) rotate(-4deg);
+  }
+}
+
+/* ── B: the burning fuse ────────────────────────────────────────────────── */
+
+/* A twisted rope from the start to the charge; behind the spark, ash. */
+.repeat-bar__rope,
+.repeat-bar__ash {
+  position: absolute;
+  top: 50%;
+  left: 6px;
+  height: 7px;
+  margin-top: -3px;
+  border-radius: var(--radius-pill);
+}
+
+.repeat-bar__rope {
+  right: 0;
+  background: repeating-linear-gradient(60deg, #d8a860 0 4px, #8a5a26 4px 7px);
+  box-shadow: 0 1px 2px rgb(0 0 0 / 55%);
+}
+
+.repeat-bar__ash {
+  width: calc(var(--repeat-progress) * (100% - 6px));
+  background: repeating-linear-gradient(60deg, #4a403a 0 4px, #1e1a18 4px 7px);
+  opacity: 0.92;
+}
+
+.repeat-bar__spark {
+  position: absolute;
+  top: 50%;
+  left: calc(6px + var(--repeat-progress) * (100% - 12px));
+  width: 26px;
+  height: 30px;
+  transform: translate(-50%, -64%);
+}
+
+/* A hot glow round the flame, and a few sparks flying off it. */
+.repeat-bar__spark::before {
+  content: "";
+  position: absolute;
+  inset: -6px;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgb(255 244 170 / 95%) 0 18%, rgb(255 170 40 / 60%) 40%, transparent 70%);
+  animation: repeat-bar-glow 180ms ease-in-out infinite alternate;
+}
+
+.repeat-bar__spark::after {
+  content: "";
+  position: absolute;
+  left: 50%;
+  top: 55%;
+  width: 3px;
+  height: 3px;
+  border-radius: 50%;
+  background: #fff1a0;
+  box-shadow:
+    -9px -8px 0 0 #ffd24a,
+    8px -11px 0 0 #fff1a0,
+    -5px -15px 0 -1px #ff9a2a,
+    11px -4px 0 -1px #ffd24a;
+  animation: repeat-bar-sparks 300ms linear infinite;
+}
+
+.repeat-bar__flame {
+  position: relative;
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  animation: repeat-bar-flicker 140ms steps(2) infinite;
+}
+
+/* The siege decoy's charge, unlit (cell 0 of its fuse strip). */
+.repeat-bar__goal--charge {
+  width: 52px;
+  height: var(--repeat-bar-height);
+  margin-left: -10px;
+}
+
+.repeat-bar__charge {
+  width: 44px;
+  height: 49px;
+  background: var(--repeat-art-charge) 0 0 / 924px 49px no-repeat;
+  filter: drop-shadow(0 3px 3px rgb(0 0 0 / 50%));
+  animation: repeat-bar-shiver 900ms ease-in-out infinite;
+}
+
+/* The decoy's blast, played once over the charge when the bar fills. */
+.repeat-bar__burst {
+  --burst-scale: 0.36;
+
+  position: absolute;
+  left: 50%;
+  bottom: 0;
+  width: calc(184px * var(--burst-scale));
+  height: calc(195px * var(--burst-scale));
+  transform: translateX(-50%);
+  background: var(--repeat-art-burst) 0 0 / calc(6072px * var(--burst-scale)) 100% no-repeat;
+  visibility: hidden;
+  pointer-events: none;
+}
+
+.repeat-bar--full .repeat-bar__charge,
+.repeat-bar--full .repeat-bar__spark {
+  visibility: hidden;
+}
+
+.repeat-bar--full .repeat-bar__burst {
+  visibility: visible;
+  animation: repeat-bar-burst 850ms steps(33) forwards;
+}
+
+@keyframes repeat-bar-glow {
+  from {
+    transform: scale(0.85);
+    opacity: 0.8;
+  }
+
+  to {
+    transform: scale(1.1);
+    opacity: 1;
+  }
+}
+
+@keyframes repeat-bar-flicker {
+  from {
+    transform: scale(1, 1);
+  }
+
+  to {
+    transform: scale(0.9, 1.12);
+  }
+}
+
+@keyframes repeat-bar-sparks {
+  from {
+    transform: translateY(0) scale(1);
+    opacity: 1;
+  }
+
+  to {
+    transform: translateY(-6px) scale(0.4);
+    opacity: 0;
+  }
+}
+
+@keyframes repeat-bar-shiver {
+  0%,
+  100% {
+    transform: rotate(0);
+  }
+
+  50% {
+    transform: rotate(-3deg);
+  }
+}
+
+@keyframes repeat-bar-burst {
+  from {
+    background-position-x: 0;
+  }
+
+  to {
+    background-position-x: calc(-6072px * var(--burst-scale));
+  }
+}
+
+/* ── C: the goo bar ─────────────────────────────────────────────────────── */
+
+.repeat-bar__plank {
+  position: absolute;
+  inset: 0;
+  background: var(--repeat-art-plank) center / 100% 100%;
+  box-shadow: inset 0 2px 5px rgb(0 0 0 / 55%);
+}
+
+.repeat-bar__goo {
+  position: absolute;
+  top: 7px;
+  bottom: 7px;
+  left: 4px;
+  width: calc(var(--repeat-progress) * (100% - 8px));
+  border-radius: 10px;
+  background:
+    radial-gradient(circle at 20% 70%, rgb(255 255 255 / 55%) 0 2px, transparent 3px),
+    radial-gradient(circle at 60% 35%, rgb(255 255 255 / 45%) 0 3px, transparent 4px),
+    radial-gradient(circle at 85% 65%, rgb(255 255 255 / 50%) 0 2px, transparent 3px),
+    linear-gradient(#d4ff7a 0%, #8ee02c 28%, #58a812 72%, #3c7a08 100%);
+  background-size: 46px 100%, 46px 100%, 46px 100%, 100% 100%;
+  box-shadow:
+    inset 0 -3px 4px rgb(20 60 0 / 55%),
+    0 0 6px rgb(160 255 60 / 45%);
+  animation: repeat-bar-bubbles 1.4s linear infinite;
+}
+
+/* The goo's wobbling front. */
+.repeat-bar__goo-head {
+  position: absolute;
+  top: -3px;
+  bottom: -3px;
+  right: -7px;
+  width: 16px;
+  border-radius: 50%;
+  background: linear-gradient(#d4ff7a 0%, #8ee02c 30%, #58a812 75%, #3c7a08 100%);
+  animation: repeat-bar-wobble 520ms ease-in-out infinite alternate;
+}
+
+/* The goo pile it pours from. */
+.repeat-bar__source {
+  position: relative;
+  z-index: 1;
+  flex: 0 0 auto;
+  width: 46px;
+  height: 46px;
+  margin-right: -12px;
+}
+
+.repeat-bar__source-pic {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  filter: drop-shadow(0 2px 2px rgb(0 0 0 / 50%));
+}
+
+.repeat-bar--full .repeat-bar__goo {
+  animation: repeat-bar-glug 500ms ease-out;
+}
+
+.repeat-bar--full .repeat-bar__goo-head {
+  visibility: hidden;
+}
+
+@keyframes repeat-bar-bubbles {
+  from {
+    background-position: 0 0, 0 0, 0 0, 0 0;
+  }
+
+  to {
+    background-position: 46px -4px, -46px 3px, 46px 2px, 0 0;
+  }
+}
+
+@keyframes repeat-bar-wobble {
+  from {
+    transform: scale(1, 0.92);
+  }
+
+  to {
+    transform: scale(1.25, 1.06);
+  }
+}
+
+@keyframes repeat-bar-glug {
+  0% {
+    box-shadow: 0 0 0 rgb(160 255 60 / 0%);
+  }
+
+  40% {
+    box-shadow: 0 0 14px rgb(180 255 80 / 90%);
+  }
+
+  100% {
+    box-shadow: 0 0 6px rgb(160 255 60 / 45%);
+  }
+}
+
+/* ── Stopped, and reduced motion ────────────────────────────────────────── */
+
+.repeat-bar--stopped,
+.repeat-bar--stopped * {
+  animation-play-state: paused;
+}
+
+/* Nothing hops, flickers or bubbles; the bar still fills. The blast shows one
+   still cell instead of playing. */
+.repeat-bar--still,
+.repeat-bar--still * {
+  animation: none !important;
+}
+
+.repeat-bar--still.repeat-bar--full .repeat-bar__burst {
+  background-position-x: calc(-184px * var(--burst-scale) * 8);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .repeat-bar,
+  .repeat-bar * {
+    animation: none !important;
+  }
+
+  .repeat-bar--full .repeat-bar__burst {
+    background-position-x: calc(-184px * var(--burst-scale) * 8);
+  }
+}

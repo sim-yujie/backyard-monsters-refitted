@@ -1,0 +1,284 @@
+// @vitest-environment jsdom
+import { afterEach, describe, expect, it, vi } from "vitest";
+import type { AutoAttackPlanResponse, AutoAttackResponse, PlanSummary } from "@/api/autoAttack";
+import { setClassicLook } from "@/game/classicLook";
+import { AutoAttackFlow, type AutoAttackCalls } from "./AutoAttackFlow";
+import { MAX_MARCHERS, RepeatBar, marchersOf, tribeGoalPicture } from "./RepeatBar";
+import { REPEAT_BAR_FULL_HOLD_MS, type BarTimers, type RepeatBarLook } from "./repeatBarTiming";
+
+/**
+ * Repeat attack's working bar (owner, 15 Nov 2026): at least 5 s, full only
+ * once the answer is in, stopped by an error; the map's Repeat attack only.
+ */
+
+const BASEID = "1000241208";
+
+const PLAN: PlanSummary = {
+  tribe: "Abunakki",
+  level: 31,
+  recordedOn: { baseid: "1000240208", x: 240, y: 208 },
+  recordedAt: 1_000_000,
+  monsters: { C12: 9, C1: 40, C5: 3, C2: 12, C9: 1 },
+  champions: [{ t: 3, l: 6 }],
+  bombs: ["pu3"],
+  siege: false,
+};
+
+const ANSWER: AutoAttackPlanResponse = {
+  error: 0,
+  baseid: BASEID,
+  plan: PLAN,
+  missing: [],
+  outOfRange: false,
+  underAttack: false,
+  damage: 0,
+};
+
+const RESULT: AutoAttackResponse = {
+  error: 0,
+  baseid: BASEID,
+  tribe: "Abunakki",
+  level: 31,
+  damageBefore: 0,
+  damageAfter: 40,
+  damageAdded: 40,
+  conquered: false,
+  destroyed: 0,
+  loot: { r1: 10, r2: 0, r3: 0, r4: 0 },
+  lootLeft: { r1: 0, r2: 0, r3: 0, r4: 0 },
+  flung: { C12: 9 },
+  champions: [],
+  bombs: [],
+  report: "",
+  plan: PLAN,
+};
+
+/** Animation frames, run by the fake clock as it moves. */
+let frames: FrameRequestCallback[] = [];
+vi.stubGlobal("requestAnimationFrame", (step: FrameRequestCallback) => frames.push(step));
+vi.stubGlobal("cancelAnimationFrame", () => undefined);
+
+/** A clock that only moves when told to, and timers and frames that fire as it passes them. */
+const fakeTimers = (): BarTimers & { advance: (ms: number) => Promise<void>; at: () => number } => {
+  let now = 0;
+  const waits: { at: number; resolve: () => void }[] = [];
+  const flush = async (): Promise<void> => {
+    for (let i = 0; i < 8; i += 1) await Promise.resolve();
+  };
+  return {
+    now: () => now,
+    at: () => now,
+    wait: (ms) => new Promise<void>((resolve) => waits.push({ at: now + ms, resolve })),
+    advance: async (ms) => {
+      const end = now + ms;
+      do {
+        now = Math.min(end, now + 50);
+        for (const wait of waits.filter((one) => one.at <= now)) {
+          waits.splice(waits.indexOf(wait), 1);
+          wait.resolve();
+        }
+        const due = frames;
+        frames = [];
+        for (const step of due) step(now);
+        await flush();
+      } while (now < end);
+    },
+  };
+};
+
+const deferred = <T>() => {
+  let resolve!: (value: T) => void;
+  let reject!: (reason: unknown) => void;
+  const promise = new Promise<T>((yes, no) => {
+    resolve = yes;
+    reject = no;
+  });
+  return { promise, resolve, reject };
+};
+
+const calls = (run: AutoAttackCalls["run"]): AutoAttackCalls => ({
+  plan: vi.fn(async () => ANSWER),
+  run: vi.fn(run),
+  replay: vi.fn(async () => ({ error: 0, replay: null })),
+  quote: vi.fn(async () => ({ error: 0, baseid: BASEID, eligible: false, reason: "notFound", now: 0 }) as never),
+  takeOver: vi.fn(async () => ({})),
+});
+
+const button = (root: ParentNode, label: string) =>
+  [...root.querySelectorAll("button")].find((one) => one.textContent === label) as HTMLButtonElement | undefined;
+
+/** The flow on the map's Repeat attack, its confirm sheet open, Attack now pressed. */
+const pressAttack = async (run: AutoAttackCalls["run"], look: RepeatBarLook = "army") => {
+  const modal = document.createElement("div");
+  const timers = fakeTimers();
+  const onAttacked = vi.fn();
+  const flow = new AutoAttackFlow({
+    baseid: BASEID,
+    modal,
+    onWatch: vi.fn(),
+    onAttacked,
+    calls: calls(run),
+    progressBar: true,
+    barLook: look,
+    barTimers: timers,
+    barReducedMotion: false,
+  });
+  await flow.start(ANSWER);
+  button(modal, "Attack now")!.click();
+  await timers.advance(0);
+  const bar = () => modal.querySelector<HTMLElement>(".repeat-bar");
+  const value = () => Number(bar()?.getAttribute("aria-valuenow"));
+  return { modal, timers, flow, onAttacked, bar, value };
+};
+
+afterEach(() => setClassicLook(false));
+
+describe("the bar's timing on Repeat attack", () => {
+  it("an answer before 5 s: the bar runs the full 5 s, then jumps to full, then the result", async () => {
+    const { modal, timers, onAttacked, bar, value } = await pressAttack(async () => RESULT);
+    // The map hears of the landed attack as soon as the answer comes.
+    expect(onAttacked).toHaveBeenCalledWith(RESULT);
+    expect(bar()).not.toBeNull();
+    expect(modal.textContent).toContain("Attacking…");
+
+    await timers.advance(2500);
+    const midway = value();
+    expect(midway).toBeGreaterThan(0);
+    expect(midway).toBeLessThan(100);
+    await timers.advance(2300);
+    expect(value()).toBeGreaterThan(midway);
+    expect(value()).toBeLessThan(100);
+    expect(bar()!.classList.contains("repeat-bar--full")).toBe(false);
+
+    await timers.advance(250);
+    expect(timers.at()).toBeGreaterThanOrEqual(5000);
+    expect(value()).toBe(100);
+    expect(bar()!.classList.contains("repeat-bar--full")).toBe(true);
+    expect(modal.textContent).not.toContain("Auto-attack result");
+
+    await timers.advance(REPEAT_BAR_FULL_HOLD_MS.army);
+    expect(modal.querySelector(".repeat-bar")).toBeNull();
+    expect(modal.textContent).toContain("Auto-attack result");
+  });
+
+  it("an answer after 5 s: the bar keeps creeping, never full, until the answer lands", async () => {
+    const answer = deferred<AutoAttackResponse>();
+    const { modal, timers, bar, value } = await pressAttack(() => answer.promise, "fuse");
+    await timers.advance(5000);
+    const atFive = value();
+    await timers.advance(3000);
+    expect(value()).toBeGreaterThan(atFive);
+    expect(value()).toBeLessThan(100);
+    expect(bar()!.classList.contains("repeat-bar--full")).toBe(false);
+    await timers.advance(30_000);
+    expect(value()).toBeLessThan(100);
+
+    answer.resolve(RESULT);
+    await timers.advance(50);
+    expect(value()).toBe(100);
+    expect(bar()!.classList.contains("repeat-bar--full")).toBe(true);
+    await timers.advance(REPEAT_BAR_FULL_HOLD_MS.fuse);
+    expect(modal.textContent).toContain("Auto-attack result");
+  });
+
+  it("an error: the bar stops at once and the error shows as before", async () => {
+    const answer = deferred<AutoAttackResponse>();
+    const { modal, timers, onAttacked } = await pressAttack(() => answer.promise, "goo");
+    await timers.advance(1000);
+    answer.reject(new Error("The camp is under attack."));
+    await timers.advance(50);
+    expect(timers.at()).toBeLessThan(1200);
+    expect(modal.querySelector(".repeat-bar")).toBeNull();
+    expect(modal.textContent).toContain("The camp is under attack.");
+    expect(button(modal, "Close")).toBeDefined();
+    expect(onAttacked).not.toHaveBeenCalled();
+  });
+
+  it("closing while it runs shows no result later", async () => {
+    const { modal, timers, flow } = await pressAttack(async () => RESULT);
+    await timers.advance(1000);
+    flow.close();
+    await timers.advance(10_000);
+    expect(modal.children).toHaveLength(0);
+  });
+
+  it("the end panel's Attack again (no bar asked for) keeps the plain line", async () => {
+    const modal = document.createElement("div");
+    const run = deferred<AutoAttackResponse>();
+    const flow = new AutoAttackFlow({ baseid: BASEID, modal, onWatch: vi.fn(), calls: calls(() => run.promise) });
+    await flow.start(ANSWER);
+    button(modal, "Attack now")!.click();
+    await Promise.resolve();
+    expect(modal.querySelector(".repeat-bar")).toBeNull();
+    expect(modal.textContent).toContain("Your monsters are attacking…");
+    run.resolve(RESULT);
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(modal.textContent).toContain("Auto-attack result");
+  });
+});
+
+describe("the looks", () => {
+  it("army: the plan's biggest kinds march (at most 4), champions lead, the tribe waits at the end", () => {
+    const marchers = marchersOf(PLAN);
+    expect(marchers.map((one) => one.name)).toEqual(["C1", "C2", "C12", "C5", "G3"]);
+    expect(marchers.filter((one) => one.count !== null)).toHaveLength(MAX_MARCHERS);
+
+    const bar = new RepeatBar({ look: "army", plan: PLAN, reducedMotion: false });
+    const units = [...bar.element.querySelectorAll(".repeat-bar__marcher")];
+    expect(units).toHaveLength(5);
+    // Left to right: smallest kind at the back, the champion in front.
+    expect(units.map((one) => one.querySelector(".repeat-bar__count")?.textContent ?? "champion")).toEqual([
+      "3",
+      "9",
+      "12",
+      "40",
+      "champion",
+    ]);
+    expect(units[0]!.querySelector("img")!.getAttribute("src")).toContain("C5");
+    expect(bar.element.querySelector<HTMLImageElement>(".repeat-bar__goal-pic")!.getAttribute("src")).toBe(
+      "/tribes/abunakki-256.png",
+    );
+    expect(bar.element.getAttribute("role")).toBe("progressbar");
+  });
+
+  it("army in Classic: Flash's monster icons and the tribe's Flash splash", () => {
+    setClassicLook(true);
+    const bar = new RepeatBar({ look: "army", plan: PLAN, reducedMotion: false });
+    expect(bar.element.querySelector(".repeat-bar__marcher img")!.getAttribute("src")).toBe(
+      "/assets/monsters/C5-small.png",
+    );
+    expect(tribeGoalPicture("Abunakki")).toBe("/assets/popups/tribe_abunakki.v2.png");
+    expect(tribeGoalPicture("Nobody")).toBeNull();
+  });
+
+  it("fuse and goo build their parts; reduced motion marks the bar still", () => {
+    const fuse = new RepeatBar({ look: "fuse", plan: null, reducedMotion: true });
+    expect(fuse.element.querySelector(".repeat-bar__spark")).not.toBeNull();
+    expect(fuse.element.querySelector(".repeat-bar__charge")).not.toBeNull();
+    expect(fuse.element.querySelector(".repeat-bar__burst")).not.toBeNull();
+    expect(fuse.element.classList.contains("repeat-bar--still")).toBe(true);
+    expect(fuse.element.style.getPropertyValue("--repeat-art-burst")).toContain("decoy_explosion_anim.png");
+
+    const goo = new RepeatBar({ look: "goo", plan: null, reducedMotion: false });
+    expect(goo.element.querySelector(".repeat-bar__goo")).not.toBeNull();
+    expect(goo.element.querySelector(".repeat-bar__plank")).not.toBeNull();
+    expect(goo.element.classList.contains("repeat-bar--still")).toBe(false);
+  });
+
+  it("never goes backwards, and stays put once stopped", () => {
+    const timers = fakeTimers();
+    const bar = new RepeatBar({ look: "goo", plan: null, timers, reducedMotion: false });
+    bar.start();
+    bar.complete();
+    bar.update();
+    expect(bar.value).toBe(1);
+
+    const stopped = new RepeatBar({ look: "goo", plan: null, timers, reducedMotion: false });
+    stopped.start();
+    stopped.stop();
+    const at = stopped.value;
+    stopped.update();
+    expect(stopped.value).toBe(at);
+    expect(stopped.element.classList.contains("repeat-bar--stopped")).toBe(true);
+  });
+});

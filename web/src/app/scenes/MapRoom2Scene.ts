@@ -1442,6 +1442,8 @@ export class MapRoom2Scene implements Scene {
       baseid,
       cell,
       modal,
+      // The working bar runs here only, not on the end panel's Attack again (owner, 15 Nov 2026).
+      progressBar: true,
       onWatch: (run) => {
         setWatchRun(run);
         context.goTo(SceneName.WATCH);
