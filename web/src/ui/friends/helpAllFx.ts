@@ -3,6 +3,7 @@ import type { HelpAllSummary } from "@/game/friends/helpAll";
 import type { HelpMarkExit } from "@/game/yard/YardHelpMarks";
 import type { ResourceKey } from "../resourceIcon";
 import type { HelpAllBar, HelpAllLine } from "./HelpAllBar";
+import { HelpLandsFx } from "./helpLands";
 
 /**
  * What Help all looks like as it lands (beta 8; owner, 15 Nov 2026: "I find
@@ -71,5 +72,5 @@ export interface HelpAllFx {
 /** Makes one Help all's effect on a stage; null plays none. */
 export type HelpAllFxMaker = (stage: HelpFxStage) => HelpAllFx | null;
 
-/** The effect Help all plays, or null for none. */
-export const helpAllFxMaker = (): HelpAllFxMaker | null => null;
+/** The effect Help all plays: "help lands" (`helpLands.ts`; owner, Review Desk 7, 15 Nov 2026). */
+export const helpAllFxMaker = (): HelpAllFxMaker | null => (stage) => new HelpLandsFx(stage);

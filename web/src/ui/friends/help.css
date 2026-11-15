@@ -125,6 +125,72 @@
   color: var(--colour-warning-bright);
 }
 
+/* While Help all plays (`helpLands.ts`), the button counts the helps as they
+   pop; the tools' own number, which follows the server, waits. */
+.help-all-bar:has(.help-all-bar__button:disabled) .help-all-bar__count {
+  display: none;
+}
+
+/* No rule before a line of pictures: it is the bar's whole right side. */
+.help-all-bar__result--node {
+  overflow: visible;
+}
+
+/* The bar's line after Help all: the tools, a green tick, "3". Short enough
+   that the name stays beside it, even on a phone. */
+.help-all-done {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  animation: help-all-done-in 180ms var(--easing, ease-out) both;
+}
+
+.help-all-done__tick {
+  color: var(--colour-success);
+  font-size: var(--text-md, var(--text-sm));
+  line-height: 1;
+  animation: help-all-done-tick 360ms 60ms var(--easing, ease-out) both;
+}
+
+.help-all-done__count {
+  font-family: var(--font-display, inherit);
+  font-size: var(--text-md, var(--text-sm));
+  color: var(--colour-text-strong, var(--colour-text));
+  font-variant-numeric: tabular-nums;
+}
+
+@keyframes help-all-done-in {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes help-all-done-tick {
+  0% {
+    transform: scale(0.2);
+    opacity: 0;
+  }
+  60% {
+    transform: scale(1.35);
+    opacity: 1;
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .help-all-done,
+  .help-all-done__tick {
+    animation: none;
+  }
+}
+
 .help-panel__choices {
   display: flex;
   flex-direction: column;
@@ -178,9 +244,11 @@
   /* An upright phone: under the two HUD rows, above the folded World chat
      tab (about 76px under the HUD) and clear of the Events button's column
      on the right, which a friend's yard does not show. The bar is one row
-     at most the screen's width less the gutters; the name gives way first. */
+     at most the screen's width less the gutters; the name gives way first.
+     106px, not 96px: Help all's totals sit in a lane just under the four
+     counters (to about 102px) and must not land on the bar's rim. */
   .friend-visit {
-    top: 96px;
+    top: 106px;
     max-width: calc(100vw - 2 * var(--space-3));
   }
 
@@ -198,12 +266,24 @@
     padding-left: 0;
     border-left: 0;
   }
+
+  /* ...but the tools, tick and count are short enough to sit beside it. */
+  .help-all-bar--result:has(> .help-all-bar__result > .help-all-done) .help-all-bar__name {
+    display: inline;
+  }
+
+  .help-all-bar--result:has(> .help-all-bar__result > .help-all-done) .help-all-bar__result {
+    padding-left: var(--space-2);
+    border-left: 1px solid var(--colour-warning-line);
+  }
 }
 
 /* A phone on its side: the HUD is one short row (`--hud-height`), the World
-   chat tab under it on the left; the centred bar starts just under the HUD. */
+   chat tab under it on the left; the centred bar starts under the HUD, 10px
+   lower than it would need to so Help all's totals (a lane just under the
+   counters) clear its rim. */
 @media (min-width: 621px) and (max-height: 500px) {
   .friend-visit {
-    top: calc(var(--hud-height, 64px) + var(--space-1));
+    top: calc(var(--hud-height, 64px) + var(--space-1) + 10px);
   }
 }
