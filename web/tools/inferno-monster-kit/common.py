@@ -96,9 +96,11 @@ def fill_holes(mask):
     return ~reach
 
 
-def key_cell(img, min_part=0.03, choose=None):
+def key_cell(img, min_part=0.03, choose=None, despill=None):
     """One painted creature on magenta -> tight RGBA cutout (or None).
-    Keeps blobs >= min_part of the biggest; `choose(labels, sizes)` may pick the label set instead."""
+    Keeps blobs >= min_part of the biggest; `choose(labels, sizes)` may pick the label set instead.
+    despill="fire": a creature with no blue or purple in it; any blue above green is magenta bleeding into a
+    thin flame tip, so it is taken out (and that pixel made see-through by as much)."""
     rgb = np.asarray(img.convert("RGB"), dtype=float)
     fg = ~magenta(rgb)
     fg = grow(shrink(fg, 2), 2)  # drop specks and noise
@@ -111,7 +113,12 @@ def key_cell(img, min_part=0.03, choose=None):
     core = shrink(keep, 3)
     col = fill_out(rgb, core) if core.any() else rgb
     col = np.where(core[..., None], rgb, col)
-    alpha = np.asarray(Image.fromarray((keep * 255).astype(np.uint8)).filter(ImageFilter.GaussianBlur(1.0)))
+    alpha = np.asarray(Image.fromarray((keep * 255).astype(np.uint8)).filter(ImageFilter.GaussianBlur(1.0))).astype(float)
+    if despill == "fire":
+        excess = np.clip((col[..., 2] - col[..., 1]) / 160, 0, 1)
+        alpha = alpha * (1 - excess)
+        col = col.copy()
+        col[..., 2] = np.minimum(col[..., 2], col[..., 1])
     ys, xs = np.nonzero(alpha > 20)
     if len(xs) == 0:
         return None
@@ -146,11 +153,17 @@ def bbox(mask):
     return xs.min(), ys.min(), xs.max() + 1, ys.max() + 1
 
 
+def common_bottom(mask):
+    return int(np.nonzero(mask.any(1))[0].max()) + 1
+
+
 def flash_body_and_shadow(spec, col):
     """Flash cell -> (body mask, shadow box (x0,y0,x1,y1), shadow alpha) in 1x pixels."""
     a = np.asarray(flash_cell(spec, col)).astype(int)
     body = a[..., 3] > 235
     dark = (a[..., 3] > 0) & (a[..., :3].max(-1) < 90) & ~grow(body, 1)
+    if body.any():
+        dark[: common_bottom(body) - 2] = False  # the shadow lies under the body, not in its dark bits
     sx0, sy0, sx1, sy1 = bbox(dark) if dark.any() else (0, 0, 0, 0)
     return body, (sx0, sy0, sx1, sy1), int(np.median(a[..., 3][dark])) if dark.any() else 0
 

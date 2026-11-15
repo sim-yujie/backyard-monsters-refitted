@@ -40,7 +40,7 @@ for f in sorted((work / "still").glob("b-*/frames-new.png"), key=lambda p: p.sta
     for h, cell in zip(hs, common.grid_cells(f, 2, 2)):
         if (f.parent.name, str(h)) in skip:
             continue
-        cut = common.key_cell(cell)
+        cut = common.key_cell(cell, despill=spec.get("despill"))
         if cut is not None:
             painted[h] = cut
 src = {}
@@ -72,8 +72,9 @@ for h in range(D):
     k = float(np.mean([size[(h + d) % D] for d in range(-2, 3)])) / np.sqrt(common.solid(v).sum())
     body = flash[h][0]
     bx0, by0, bx1, by1 = common.bbox(body)
-    cx, bottom = (bx0 + bx1) / 2, by1
-    fx0, fy0, fx1, fy1 = common.bbox(np.asarray(v)[..., 3] > 40)
+    cx, bottom = (bx0 + bx1) / 2, by1 + spec.get("drop", 0)
+    fx0, fy0, fx1, _ = common.bbox(np.asarray(v)[..., 3] > 40)
+    fy1 = common.bbox(common.solid(v))[3]  # stands on its solid bottom, not the faint glow under it
     sx0, _, sx1, _ = common.bbox(common.solid(v))
     mid_x = (sx0 + sx1) / 2
     limit = min((cx - MARGIN) / ((mid_x - fx0) * k), (CW - MARGIN - cx) / ((fx1 - mid_x) * k), (bottom - MARGIN) / ((fy1 - fy0) * k))

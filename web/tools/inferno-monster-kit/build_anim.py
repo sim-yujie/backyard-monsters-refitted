@@ -1,5 +1,6 @@
 """
-build_anim.py <IC id> <work dir>
+build_anim.py <IC id> <work dir> [painted heading ...]
+With headings named, only those (and their mirrors) are built into anim/frames/ (a quick look; no sheet).
 Builds the animated sheet from <work>/anim/h<N>/sheet.png (one Codex call per painted heading, 4x3 cells:
 walk 1-6, attack 7-11) and the still views (<work>/still/cuts, fit.json from build_still.py).
 Unpainted headings are the left-right mirror of their painted twin (attack lunges flip with them).
@@ -72,7 +73,7 @@ def painted_frames(p):
     for i in range(11):
         cell = cells[i]
         rgb = np.asarray(cell.convert("RGB"), dtype=float)
-        cut = common.key_cell(cell, choose=pick_main)
+        cut = common.key_cell(cell, choose=pick_main, despill=spec.get("despill"))
         m = ~common.magenta(rgb)
         m = common.grow(common.shrink(m, 2), 2)
         xs = np.nonzero(m)[1]
@@ -111,7 +112,8 @@ def render(h, cut, s, dx, lift, flip):
         k = s * UP
         mon = lifted(common.premul_resize(cut, (max(1, round(cut.width * k)), max(1, round(cut.height * k)))))
         sx0, _, sx1, _ = common.bbox(common.solid(mon))
-        _, fy0, _, fy1 = common.bbox(np.asarray(mon)[..., 3] > 40)
+        fy0 = common.bbox(np.asarray(mon)[..., 3] > 40)[1]
+        fy1 = common.bbox(common.solid(mon))[3]
         x = round((f["cx"] + PX + dx) * UP - (sx0 + sx1) / 2)
         y = round((f["bottom"] + PT - lift) * UP - fy1)
         if mon.width <= W - 2 and y + fy0 >= 1:
@@ -129,7 +131,8 @@ def render(h, cut, s, dx, lift, flip):
 
 
 if __name__ == "__main__":
-    painted = sorted({fit[h]["src"] for h in range(D)})
+    only = [int(x) for x in sys.argv[3:]]
+    painted = only or sorted({fit[h]["src"] for h in range(D)})
     frames = {}
     for p in painted:
         frames[p] = painted_frames(p)
@@ -139,6 +142,8 @@ if __name__ == "__main__":
     sheet = Image.new("RGBA", (D * W, 12 * H))
     for h in range(D):
         p, flip = fit[h]["src"], fit[h]["flip"]
+        if p not in frames:
+            continue
         row = [render(h, cuts[p], fit[p]["scale"] * GROW, 0.0, 0, flip)]
         row += [render(h, *fr, flip) for fr in frames[p]]
         notes = [n for _, n in row if n]
@@ -147,6 +152,8 @@ if __name__ == "__main__":
         for k, (cell, _) in enumerate(row):
             sheet.paste(cell, (h * W, k * H))
             cell.save(fdir / f"h{h}-f{k:02d}.png")
+    if only:
+        sys.exit(f"frames of headings {sorted(h for h in range(D) if fit[h]['src'] in frames)} in {fdir}")
     out = spec["out"]
     sheet.save(ASSETS / f"{out}-anim@4x.png", optimize=True)
     small = Image.new("RGBA", (D * ACW, 12 * ACH))

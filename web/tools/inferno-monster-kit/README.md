@@ -28,9 +28,11 @@ this folder. Work files go in `<worktree>/art-work/<ID>/` (never commit that fol
 4. Animated sheet, 1 call per painted heading: `bash run_anim.sh IC1 $WK 8 9 ... 24` (4 at a time; stops
    on the usage limit). Redo one heading: `EXTRA="..." bash run_anim.sh IC1 $WK 13`.
 5. `python build_anim.py IC1 $WK` -> `<out>-anim@4x.png` + 1x and `anim/frames/`.
-6. `python ../shrink-sheet.py <assets>/<out>-anim@4x.png <assets>/<out>-anim.png` (256 colours; it then
-   runs `sheet_copies.py`, which writes the Medium @2x copy and updates `sheetVersions.ts`). Then
-   `python ../sheet_copies.py --check`.
+6. Copy the four new sheets to `$WK/masters/`, then `python ../shrink-sheet.py <assets>/<out>-anim@4x.png
+   <assets>/<out>-anim.png <assets>/<out>-repaint@4x.png <assets>/<out>-repaint.png` (256 colours; it then
+   runs `sheet_copies.py`, which writes the Medium @2x copies and updates `sheetVersions.ts`). Delete the
+   `<out>-repaint@2x.png` it makes (the still sheet is not wired, like the Wormzer's), then
+   `python ../sheet_copies.py` and `python ../sheet_copies.py --check` (prints nothing when all is well).
 7. Wire it: `REPAINTED_SHEETS` and `REPAINT_LAYOUTS` entries; tests: `monsterAnimLayout.test.ts`
    (exact key list + a layout test like Spurtz's). The "unrepainted sheet" examples in
    `monsterSprites.test.ts` now use the `worker` sheet; `monsterAnimLayout.test.ts` still uses IC8 as
@@ -38,8 +40,9 @@ this folder. Work files go in `<worktree>/art-work/<ID>/` (never commit that fol
 8. `python compare.py IC1 $WK <worktree>/shots-inferno-mon/IC1` -> comparison sheets, game-size strip,
    mirror light check, loop mp4s.
 
-Codex calls for IC1: 1 sample + 4 still batches + 17 animation = 22 first-pass calls, plus redos (see the
-lead report). `codex_call.sh` appends every call to `$WK/calls.log`.
+Codex calls for IC1: 1 sample + 4 still batches + 17 animation + 1 redo (heading 17) = **23 calls**,
+about 25 minutes of Codex time (calls run 3-4 at once). Masters before the 256-colour shrink are kept in
+`$WK/masters/` (rerun the shrink from those, never from an already shrunk sheet). `codex_call.sh` appends every call to `$WK/calls.log`.
 
 ## Gotchas
 
@@ -53,9 +56,14 @@ lead report). `codex_call.sh` appends every call to `$WK/calls.log`.
   (with 32 directions that packs exactly one heading per column). `spec.flash_column` maps a heading to
   the nearest Flash column for the reference pictures. Check each Inferno sheet's columns vs directions.
 - **Pillow images made with `Image.fromarray` ignore `ImageDraw.floodfill`** (read-only buffer): `.copy()` them.
-- The painted flame crown is taller than Flash's, so the still (held to the Flash cell's height) comes out
-  ~10% narrower; `build_anim.py` grows the animated frames to the Flash body width (`grow` in its output)
-  and the anim cell has 12 px of headroom.
+- Size: the painted flame crown is taller than Flash's, so the still (held to the Flash cell's height)
+  is height-limited ("cut to fit the cell" lines are normal). `build_anim.py` would grow the frames to the
+  Flash body width if the still came out narrower (`grow` in its output; 1.0 for Spurtz). `drop` in the
+  spec stands the body 1 px into the Flash shadow, as Flash does (without it Spurtz looked to float).
+- `despill="fire"` (spec): thin flame tips pick up magenta; for a creature with no blue or purple the
+  blue above green is stripped. Leave it out for purple/blue monsters.
+- Codex keeps the facing well with the facing words from `spec.view_of`; the one redo for IC1 (heading 17)
+  was a walk that tipped the body over and lost the face sliver; redo with an `EXTRA` note (step 4).
 - Codex ignores "no sparks" now and then; `common.key_cell` drops specks and loose bits touching the cell
   edge, but look at the contact pictures.
 - Vite: never run it on a symlinked `web/node_modules` (shared `.vite` cache breaks the owner's 5173);

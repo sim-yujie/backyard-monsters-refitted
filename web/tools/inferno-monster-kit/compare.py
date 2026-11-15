@@ -94,7 +94,7 @@ if sk.exists():
             b, h = line.split()
             hs_ = [int(x) for x in b.split("-")[1:]]
             cell = common.grid_cells(work / "still" / b / "frames-new.png", 2, 2)[hs_.index(int(h))]
-            spare.append((int(h), common.key_cell(cell)))
+            spare.append((int(h), common.key_cell(cell, despill=spec.get("despill"))))
 if spare:
     st = Image.open(ASSETS / f"{spec['out']}-repaint@4x.png").convert("RGBA")
     sw, sh = CW * UP, CH * UP

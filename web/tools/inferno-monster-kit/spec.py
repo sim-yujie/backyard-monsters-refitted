@@ -25,6 +25,8 @@ SPECS = {
         # Spurtz is symmetric and glows from within, so only front -> left -> back is painted.
         painted=list(range(8, 25)),
         area=1.2,                        # painted silhouette area / Flash silhouette area
+        despill="fire",                  # no blue/purple in the creature: strip magenta from thin flame tips
+        drop=1.0,                        # stand this many 1x px below the Flash body bottom (into its shadow, as Flash does)
         # animated sheet: the cell grows by (left/right, top, bottom) 1x pixels
         anim_pad=(6, 12, 2),
         walk_lift=(0, 1, 3, 0, 1, 3),    # 1x pixels each walk frame is lifted off the ground (the hop)

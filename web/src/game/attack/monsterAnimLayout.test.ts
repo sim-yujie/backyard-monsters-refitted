@@ -61,7 +61,7 @@ describe("applyLayout", () => {
     expect(applyLayout(POKEY, {})).toBe(POKEY);
   });
 
-  it("ships only the Bandito, Pokey, Bolt, Fink, Eye-ra, Fang, Ichi, Crabatron, Brain, D.A.V.E. (both skins), Project X, Wormzer, Zafreeti, Vorg, Teratorn, Octo-ooze, Rezghul, Slimeattikus (big and mini) and Korath 5 and 6 layouts, so every other sheet is exactly the Flash table", () => {
+  it("ships only the Bandito, Pokey, Bolt, Fink, Eye-ra, Fang, Ichi, Crabatron, Brain, D.A.V.E. (both skins), Project X, Wormzer, Zafreeti, Vorg, Teratorn, Octo-ooze, Rezghul, Slimeattikus (big and mini), Korath 5 and 6 and Spurtz layouts, so every other sheet is exactly the Flash table", () => {
     expect(Object.keys(REPAINT_LAYOUTS).sort()).toEqual([
       "monsters/13.png",
       "monsters/14.v1.png",
@@ -83,6 +83,7 @@ describe("applyLayout", () => {
       "monsters/sprite.12.gold.png",
       "monsters/sprite.12.v2.png",
       "monsters/sprite.3.v2.png",
+      "monsters/spurtz.png",
       "monsters/vorg_anim.png",
       "monsters/zafreeti.v2.png",
     ]);
@@ -300,6 +301,32 @@ describe("applyLayout", () => {
     expect(sheet.anchorX).toBe(old.anchorX + 8);
     expect(sheet.anchorY).toBe(old.anchorY + 14);
     expect(sheet.frameWidth - sheet.anchorX).toBe(old.frameWidth - old.anchorX + 8);
+    expect(sheet.animations.attack?.first).toBe(7);
+    expect((sheet.animations.attack?.first ?? 0) + (sheet.animations.attack?.count ?? 0)).toBe(12);
+    expect(sheet.strikeFrame).toBe(2);
+  });
+
+  it("the Spurtz layout matches the animated PNG, has all 32 headings and keeps the fireball where it was", () => {
+    const old = MONSTER_SPRITES["IC1"];
+    if (!old) throw new Error("no IC1");
+    const sheet = spriteFor("IC1");
+    if (!sheet) throw new Error("no sprite for IC1");
+    const data = readFileSync(resolve(__dirname, "../../../../server/public/assets/monsters/spurtz-anim@4x.png"));
+    expect(data.readUInt32BE(16)).toBe(sheet.width * 4);
+    expect(data.readUInt32BE(20)).toBe(sheet.height * 4);
+    // The Flash sheet has 30 columns for 32 headings; the repaint has one column per heading.
+    expect(old.columns).toBe(30);
+    expect(sheet.directions).toBe(32);
+    expect(sheet.packedColumns).toBe(32);
+    expect(sheet.width).toBe(sheet.frameWidth * 32);
+    expect(sheet.height).toBe(sheet.frameHeight * 12);
+    expect(frameRect(sheet, 31, 11)).toEqual({ x: 31 * 36, y: 11 * 42, width: 36, height: 42 });
+    expect(frameRect(sheet, 5, 3)).toEqual({ x: 5 * 36, y: 3 * 42, width: 36, height: 42 });
+    // 6 px added left and right, 12 px on top: the fireball stays on the same ground point.
+    expect(sheet.anchorX).toBe(old.anchorX + 6);
+    expect(sheet.anchorY).toBe(old.anchorY + 12);
+    expect(sheet.frameWidth - sheet.anchorX).toBe(old.frameWidth - old.anchorX + 6);
+    expect(sheet.animations.walk).toEqual({ first: 1, count: 6, ticksPerFrame: 8 });
     expect(sheet.animations.attack?.first).toBe(7);
     expect((sheet.animations.attack?.first ?? 0) + (sheet.animations.attack?.count ?? 0)).toBe(12);
     expect(sheet.strikeFrame).toBe(2);

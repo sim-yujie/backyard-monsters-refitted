@@ -8,8 +8,10 @@ import sys
 from pathlib import Path
 
 import common
+from spec import SPECS
 
 mid, work, batch = sys.argv[1], Path(sys.argv[2]), Path(sys.argv[3])
+spec = SPECS[mid]
 hs = [int(x) for x in batch.name.split("-")[1:]]
 only = {int(x) for x in sys.argv[4:]} or set(hs)
 (work / "views").mkdir(exist_ok=True)
@@ -18,7 +20,7 @@ views = json.loads(path.read_text()) if path.exists() else []
 for h, cell in zip(hs, common.grid_cells(batch / "frames-new.png", 2, 2)):
     if h not in only:
         continue
-    cut = common.key_cell(cell)
+    cut = common.key_cell(cell, despill=spec.get("despill"))
     f = work / "views" / f"h{h}.png"
     common.flat(cut, (255, 0, 255)).save(f)
     views = [v for v in views if v["heading"] != h] + [{"heading": h, "file": str(f)}]
