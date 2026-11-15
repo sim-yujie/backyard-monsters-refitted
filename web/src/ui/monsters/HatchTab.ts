@@ -1936,12 +1936,12 @@ const TAB_STATE: Readonly<Record<HatcheryView["state"], string>> = {
  */
 type StateWords = readonly [words: string, short?: string];
 const BUSY_TEXT: Partial<Record<HatcheryView["state"], StateWords>> = {
-  stalled: ["Needs housing", "No room"],
-  upgrading: ["Upgrading"],
+  stalled: ["Needs housing", "Full"],
+  upgrading: ["Upgrading", "Paused"],
   damaged: ["Damaged"],
   building: ["Being built", "Building"],
 };
-const STALLED_INFERNO: StateWords = ["Needs room", "No room"];
+const STALLED_INFERNO: StateWords = ["Needs room", "Full"];
 
 /** A card's state words: the long ones, and a phone's short ones beside them (hatch.css). */
 const stateWords = (node: HTMLElement, words: StateWords | undefined): void => {
