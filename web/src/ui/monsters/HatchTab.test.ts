@@ -867,6 +867,8 @@ describe("HatchTab: the info panel and the batch add", () => {
     type(box(element), "59");
     expect(element.querySelector<HTMLElement>(".hatch-add__warning")!.hidden).toBe(true);
     expect(element.querySelector(".hatch-housing__over")).toBeNull();
+    // Its room is kept, so the box does not change height (patch 7.6).
+    expect(element.querySelector(".hatch-housing__spare")?.getAttribute("aria-hidden")).toBe("true");
     // More than the queue takes is clamped to it.
     type(box(element), "500");
     expect(box(element).value).toBe("61");

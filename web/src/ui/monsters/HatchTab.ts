@@ -667,6 +667,8 @@ export class HatchTab implements MonstersTab {
     const warning =
       yard && row && ready && this.count > 0 ? housingWarning(yard, row.monster.id, this.count) : null;
     this.warningLine.textContent = warning ?? "";
+    // In full on hover where the wide layout keeps it to one line (hatch.css).
+    this.warningLine.title = warning ?? "";
     this.warningLine.hidden = warning === null;
 
     if (yard) {
@@ -1356,7 +1358,16 @@ export class HatchTab implements MonstersTab {
       const over = document.createElement("span");
       over.className = "hatch-housing__over";
       over.textContent = `Over by ${formatAmount(after - yard.capacity)}: the rest hatch and wait in the ${this.words.hatchery} for room.`;
+      over.title = over.textContent;
       housing.append(over);
+    } else {
+      // The line's room is kept, empty, so the box is as tall with or without
+      // it and nothing under it moves as the count changes (patch 7.6).
+      const spare = document.createElement("span");
+      spare.className = "hatch-housing__spare";
+      spare.setAttribute("aria-hidden", "true");
+      spare.textContent = "\u00a0";
+      housing.append(spare);
     }
 
     this.message.replaceChildren(...parts, housing);
