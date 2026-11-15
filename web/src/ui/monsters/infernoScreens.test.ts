@@ -138,9 +138,12 @@ describe("Inferno monster screens: Hatch", () => {
     const text = element.textContent ?? "";
     expect(text).toContain("Incubator 1");
     expect(spokenText(element)).toMatch(/Magma [\d,]+ · Time each/);
-    expect(text).toContain("Go to Strongbox");
+    // A locked one's padlock opens the Strongbox (owner, 15 Nov 2026).
+    expect(element.querySelector<HTMLElement>('.hatch-monster[data-monster="IC3"]')!.title).toContain(
+      "Open the Strongbox",
+    );
     // The count starts at 0 (owner, 12 Nov 2026), so the bar shows the line, not an add.
-    expect(text).toContain("Compound after this line");
+    expect(spokenText(element)).toContain("Compound after this line");
     expect(text).not.toMatch(/Hatchery|Monster Locker|goo/i);
   });
 

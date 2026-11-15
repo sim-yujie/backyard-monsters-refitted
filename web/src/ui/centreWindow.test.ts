@@ -454,8 +454,9 @@ describe("Middle windows: never smaller than their minimum (tester-41, 9 Nov)", 
   });
 
   it("wraps a hatchery's slots rather than sliding sideways when too narrow for one row", () => {
-    expect(read("styles/hatch.css")).toMatch(
-      /@container hatch \(560px <= width < 1092px\) \{\n {2}\.hatch-line__slots,\n {2}\.hatch-line__now \{\n {4}flex-wrap: wrap;/,
-    );
+    // At every width since the slim Hatch tab (owner, 15 Nov 2026): no row slides sideways.
+    const css = read("styles/hatch.css");
+    expect(css).toMatch(/\.hatch-line__slots,\n\.hatch-line__now \{\n {2}display: flex;\n {2}flex-wrap: wrap;/);
+    expect(css).not.toMatch(/\.hatch-line__slots,\n\.hatch-line__now \{[^}]*overflow-x: auto;/);
   });
 });

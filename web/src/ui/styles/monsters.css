@@ -82,7 +82,7 @@
   min-width: 0;
 }
 
-/* ── Header: housing, goo, putty ─────────────────────────────────────────── */
+/* ── Header: housing (goo and putty are in the resource bar above) ──────── */
 
 .monsters-header {
   flex-shrink: 0;
@@ -561,6 +561,30 @@
 
   .monsters-screen .tabs__tab {
     padding-inline: var(--space-1);
+  }
+
+  /* The "?" stands on the frame beside the title sign instead of taking a
+     row of its own over the tabs (owner, 15 Nov 2026). Not in Chaos Weapons,
+     which shares the frame but has a longer sign. */
+  :root[data-skin] .monsters-screen:not(.siege-screen) .panel__titlebar > .guide-help {
+    position: absolute;
+    top: calc(-1 * var(--skin-title-lift) + 2px);
+    left: calc(50% + 74px);
+    z-index: 2;
+    width: 34px;
+    min-width: 0;
+    height: 34px;
+    min-height: 0;
+    margin: 0;
+    padding: 0;
+    /* A round dome like the scene's own "?" (skin.css), so it reads on the frame. */
+    border: 2px solid var(--colour-dome-rim);
+    border-radius: 50%;
+    background: radial-gradient(circle at 50% 35%, var(--colour-dome-top), var(--colour-dome-bottom));
+    color: #ffffff;
+    font-family: var(--font-display);
+    text-shadow: 0 1px 2px rgb(0 0 0 / 70%);
+    box-shadow: 0 2px 3px rgb(0 0 0 / 40%);
   }
 
   .monsters-header {
