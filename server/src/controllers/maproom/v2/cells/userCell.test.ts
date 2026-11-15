@@ -281,3 +281,27 @@ describe("userCell Flinger and Catapult levels (owner 2026-10-22)", () => {
     }
   });
 });
+
+describe("userCell Flinger level (Repeat attack range, 15 Nov 2026)", () => {
+  // An own outpost whose Flinger finished building since it was last written:
+  // the column still says 0, `getArea` read 2 off its clock.
+  const ownOutpost = { ...outpostWith(0, 0), uid: 2505 } as unknown as Parameters<typeof userCell>[1];
+  const me = new Map([
+    [2505, { userid: 2505, username: "me", pic_square: "", alliance_id: null, save: { points: "0", basevalue: "0" } }],
+  ]) as unknown as Parameters<typeof userCell>[2];
+  const withFlingers = (flingers?: Map<string, number | undefined>) =>
+    ({ authUser: { userid: 2505, save: {} }, state: { online: new Set(), truces: new Map(), flingers } }) as unknown as Context;
+
+  test("an own cell sends its Flinger as of now, the level the range check reads", async () => {
+    expect(await userCell(withFlingers(new Map([["2000240208", 2]])), ownOutpost, me)).toMatchObject({ f: 2 });
+  });
+
+  test("without a level looked up, the stored column stands in", async () => {
+    expect(await userCell(withFlingers(), ownOutpost, me)).toMatchObject({ f: 0 });
+    expect(await userCell(withFlingers(new Map([["2000240208", undefined]])), ownOutpost, me)).toMatchObject({ f: 0 });
+  });
+
+  test("someone else's cell never carries a Flinger level", async () => {
+    expect(await userCell(withFlingers(new Map([["2000240208", 2]])), outpostWith(0, 0), owners)).not.toHaveProperty("f");
+  });
+});
