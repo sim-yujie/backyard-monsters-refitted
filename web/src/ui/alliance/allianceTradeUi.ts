@@ -59,6 +59,8 @@ export const TRADE_TEXT = {
   noRecent: "No trades yet.",
   gave: (from: string, to: string, what: string) => `${from} gave ${to} ${what}`,
   ago: (time: string) => `${time} ago`,
+  /** One side of a swap in Recent trades: "agenttester got". */
+  got: (name: string) => `${name} got`,
   hint: "48 h requests · 1 open · 3 posts a day · 1 swap a day · max 10% of storage",
   back: "Back",
   post: "Post",
@@ -77,7 +79,8 @@ export const TRADE_TEXT = {
     mateTraded: (name: string) => `${name} swapped today: tomorrow`,
     mineWaits: (time: string) => `You swapped today · open again in ${time}`,
     short: (need: string, what: string, held: string) => `Need ${need} ${what} · you have ${held}`,
-    overCap: (amount: string) => `Over 10% of your storage (max ${amount})`,
+    // Round 2 (astra): say it limits what you GIVE, so "max" is not read against Accept's "+".
+    overCap: (amount: string) => `You give max ${amount} (10% of your storage)`,
     mateOverCap: (name: string) => `Over 10% of ${name}'s storage`,
     full: "Your storage is full",
     mateFull: (name: string) => `${name}'s storage is full`,
@@ -355,7 +358,7 @@ export class TradeTab {
       const row = make("p", "trade-recent__line");
       if (partner) {
         used.add(partnerIndex);
-        row.append(make("span", "", `${line.from} ⇄ ${line.to} · `));
+        // Round 2 (astra): who got what, so the direction is never guessed.
         const received = (amounts: Partial<TradeAmounts>) => {
           const group = make("span", "trade-recent__amount");
           for (const key of TRADE_KEYS) {
@@ -363,7 +366,12 @@ export class TradeTab {
           }
           return group;
         };
-        row.append(received(partner.arrived), document.createTextNode(" ⇄ "), received(line.arrived));
+        row.append(
+          make("span", "", `${TRADE_TEXT.got(line.from)} `),
+          received(partner.arrived),
+          make("span", "", ` · ${TRADE_TEXT.got(line.to)} `),
+          received(line.arrived),
+        );
       } else {
         row.append(make("span", "", TRADE_TEXT.gave(line.from, line.to, amountsWords(line.arrived))));
       }
@@ -568,7 +576,7 @@ export class TradeTab {
       // You give 1,000 Twigs → you get 900 Goo; the mate gets 900 Twigs.
       const summary = make("div", "trade-post-sum");
       const mate = make("span", "trade-post-sum__mate");
-      mate.append(make("span", "", TRADE_TEXT.mateGets), resourceIcon(sheet.give, { decorative: true }), make("strong", "", formatAmount(gets)));
+      mate.append(make("span", "", TRADE_TEXT.mateGets), resourceIcon(sheet.give, { decorative: true }), make("strong", "trade-swap__in", `+${formatAmount(gets)}`));
       summary.append(swap({ key: sheet.give, n: sheet.amount }, { key: sheet.want, n: gets }), mate, make("span", "trade-flow__loss", TRADE_TEXT.lossShort));
       nodes.push(summary, make("p", "trade-note trade-note--small", TRADE_TEXT.held));
     }

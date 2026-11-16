@@ -174,8 +174,8 @@ describe("Trade tab", () => {
     ] }));
     const lines = [...document.querySelectorAll(".trade-recent__line")];
     expect(lines.map((line) => line.textContent)).toEqual([
-      "A ⇄ B · 1.35M ⇄ 1.8M · 12s ago",
-      "C ⇄ D · 900K ⇄ 900K · 12s ago",
+      "A got 1.35M · B got 1.8M · 12s ago",
+      "C got 900K · D got 900K · 12s ago",
     ]);
     expect(lines[0]!.querySelectorAll(".res-icon")).toHaveLength(2);
   });
