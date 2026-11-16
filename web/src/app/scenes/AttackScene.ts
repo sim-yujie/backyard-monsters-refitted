@@ -55,8 +55,7 @@ import { icon } from "@/ui/icons";
 import { Notices } from "@/ui/maproom/Notices";
 import type { Panel } from "@/ui/Panel";
 import { RESOURCE_KEYS, resourceAmount, resourceName, setResourceRealm } from "@/ui/resourceIcon";
-import { isPhoneLayout } from "@/ui/phoneLayout";
-import { stripLootFigure } from "@/ui/attack/stripLoot";
+import { stripLootFigure, stripLootShort } from "@/ui/attack/stripLoot";
 import { lootLook } from "@/ui/attack/lootLook";
 import { gameIcon } from "@/ui/gameIcon";
 import { AttackMenu, sheetHandleLabel } from "@/ui/attack/AttackMenu";
@@ -1091,8 +1090,8 @@ export class AttackScene implements Scene {
       this.damage.textContent = `${readout.damage}%`;
     }
     if (this.loot) {
-      // Short figures on a phone, where the loot has a row of its own (7.7.1).
-      const short = isPhoneLayout();
+      // Short figures on a phone and under 1180 px wide (7.7.1), so the loot keeps its place.
+      const short = stripLootShort();
       RESOURCE_KEYS.forEach((key, index) => {
         const amount = this.lootAmounts[index];
         const figure = stripLootFigure(readout.loot[key], short);

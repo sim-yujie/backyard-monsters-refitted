@@ -682,6 +682,10 @@
     min-height: 44px;
   }
 
+  .attack-strip[data-blp] .attack-menu__button {
+    min-width: 44px;
+  }
+
   .attack-strip[data-blp] .attack-strip__loot:not([hidden]) {
     display: block;
     box-sizing: border-box;
@@ -700,6 +704,16 @@
     flex: none;
     margin: 0;
     vertical-align: middle;
+  }
+}
+
+/* On its side, both options: each icon by its number, the number in a fixed
+   box wide enough for "+999.9K", right-aligned, so pairs read as pairs. */
+@media (min-width: 620.02px) and (max-height: 500px) {
+  .attack-strip[data-blp] .attack-strip__loot .res-amount__value {
+    flex: 0 0 auto;
+    min-width: 58px;
+    text-align: right;
   }
 }
 
@@ -790,8 +804,8 @@
   }
 
   .attack-strip[data-blp="A"] .attack-strip__loot .res-amount {
-    justify-content: space-between;
-    gap: 3px;
+    justify-content: flex-start;
+    gap: 6px;
     padding: 0 6px 0 4px;
   }
 
@@ -804,6 +818,24 @@
     top: calc(var(--hud-inset) + 60px + var(--space-2) + 12px);
     max-height: calc(100vh - var(--hud-inset) - 60px - var(--space-2) - 12px - var(--space-3));
     max-height: calc(100dvh - var(--hud-inset) - 60px - var(--space-2) - 12px - var(--space-3));
+  }
+}
+
+/* An iPad on its side and other screens 621-1179 px wide (not a phone): the
+   bar keeps one row with four short figures (stripLoot.ts) and Bob's "?",
+   which wrapped at 1024 px; a little less room between its parts. */
+@media (min-width: 620.02px) and (max-width: 1179.98px) and (min-height: 500.02px) {
+  .attack-strip[data-blp] {
+    gap: var(--space-2);
+    padding-left: var(--space-3);
+  }
+
+  .attack-strip[data-blp="A"] .attack-strip__loot:not([hidden]) {
+    padding: var(--space-1) var(--space-2);
+  }
+
+  .attack-strip[data-blp="A"] .attack-strip__loot .res-list {
+    gap: var(--space-2);
   }
 }
 
@@ -827,16 +859,17 @@
     box-shadow: var(--shadow-float);
   }
 
-  /* The rods that hang it from the bar. */
+  /* The rods that hang it from the bar: the skin's metal (skin.css), from
+     the bar's frame to the plate's, no further. */
   .attack-strip[data-blp="B"] .attack-strip__loot:not([hidden])::before,
   .attack-strip[data-blp="B"] .attack-strip__loot:not([hidden])::after {
     content: "";
     position: absolute;
-    bottom: 100%;
-    width: 4px;
-    height: 16px;
-    border-radius: 1px;
-    background: var(--colour-border-strong);
+    bottom: calc(100% + var(--skin-bar-edge, 1px));
+    width: 3px;
+    height: calc(10px - var(--skin-bar-edge, 1px));
+    border: 1px solid var(--loot-rod-edge, var(--colour-border-strong));
+    background: linear-gradient(90deg, var(--loot-rod-light, var(--colour-border-strong)) 0 1px, var(--loot-rod, var(--colour-border-strong)) 1px);
   }
 
   .attack-strip[data-blp="B"] .attack-strip__loot:not([hidden])::before {
@@ -852,7 +885,7 @@
 @media (max-width: 620px) {
   .attack-strip[data-blp="B"] .attack-strip__loot:not([hidden]) {
     right: 6px;
-    height: 48px;
+    height: 52px;
   }
 
   .attack-strip[data-blp="B"] .attack-strip__loot .res-list {
@@ -863,7 +896,7 @@
   .attack-strip[data-blp="B"] .attack-strip__loot .res-amount {
     flex-direction: column;
     justify-content: center;
-    gap: 2px;
+    gap: 1px;
   }
 
   .attack-strip[data-blp="B"] .attack-strip__loot .res-list > .res-amount + .res-amount {
@@ -871,33 +904,50 @@
   }
 
   .attack-strip[data-blp="B"] .attack-strip__loot .res-amount > .res-icon {
-    height: 20px;
+    height: 18px;
   }
 
   /* The boosts bolt and the neighbour chip hang under the plate instead. */
   .attack-strip[data-blp="B"]:has(> .attack-strip__loot:not([hidden])) :is(.attack-strip__boosts, .attack-strip__neighbours) {
-    top: calc(100% + 10px + 48px + var(--space-1));
+    top: calc(100% + 10px + 52px + var(--space-1));
   }
 }
 
-/* On its side: a 2x2 plate under the bar's left end, clear of the Army panel
-   on the right and the map button at the bottom left. */
+/* On its side the bar's middle has room (astra, round 1): the loot sits in the
+   one row as in A, without a tray, each resource on a sunken plate of its own;
+   no plate hangs over the battlefield. */
 @media (min-width: 620.02px) and (max-height: 500px) {
+  .attack-strip[data-blp="B"]:has(> .attack-strip__loot:not([hidden])) .attack-strip__spacer {
+    display: none;
+  }
+
   .attack-strip[data-blp="B"] .attack-strip__loot:not([hidden]) {
-    width: 220px;
-    height: 64px;
-    padding: 4px;
+    position: static;
+    order: 0;
+    flex: 0 0 216px;
+    height: 52px;
+    margin-inline: auto;
+    padding: 0;
+    border: 0;
+    border-image: none;
+    background: none;
+    box-shadow: none;
+  }
+
+  .attack-strip[data-blp="B"] .attack-strip__loot:not([hidden])::before,
+  .attack-strip[data-blp="B"] .attack-strip__loot:not([hidden])::after {
+    display: none;
   }
 
   .attack-strip[data-blp="B"] .attack-strip__loot .res-list {
     grid-template-columns: 1fr 1fr;
     grid-template-rows: 1fr 1fr;
-    gap: 4px;
+    gap: 2px 4px;
   }
 
   .attack-strip[data-blp="B"] .attack-strip__loot .res-amount {
-    justify-content: space-between;
-    gap: 3px;
+    justify-content: flex-start;
+    gap: 6px;
     padding: 0 6px 0 4px;
     border-radius: var(--radius-sm);
     background: var(--colour-surface-sunken);

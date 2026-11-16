@@ -672,8 +672,21 @@
 }
 
 /* TEMPORARY (loot design round, option B, attack.css): the loot plate hung
-   under the battle bar wears the bar's own frame. */
-@media (max-height: 500px), (max-width: 620px) {
+   under the battle bar wears the bar's own frame (upright only; on its side
+   B's loot sits in the bar). Its rods are the skin's metal. */
+:root[data-skin="scrap"] {
+  --loot-rod: #3a3f45;
+  --loot-rod-light: #7d858d;
+  --loot-rod-edge: #15181b;
+}
+
+:root[data-skin="flash"] {
+  --loot-rod: #5a3a17;
+  --loot-rod-light: #a8773c;
+  --loot-rod-edge: #24140a;
+}
+
+@media (max-width: 620px) {
   :root[data-skin] .attack-strip[data-blp="B"] .attack-strip__loot:not([hidden]) {
     border-style: solid;
     border-color: transparent;
