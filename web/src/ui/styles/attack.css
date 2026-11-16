@@ -769,7 +769,9 @@
     flex-wrap: nowrap;
   }
 
-  .attack-strip[data-blp="A"] .attack-strip__spacer {
+  /* The tray centres itself in the room the spacer had; a test or raid,
+     with no loot, keeps the spacer. */
+  .attack-strip[data-blp="A"]:has(> .attack-strip__loot:not([hidden])) .attack-strip__spacer {
     display: none;
   }
 
@@ -903,12 +905,6 @@
 
   .attack-strip[data-blp="B"] .attack-strip__loot .res-amount > .res-icon {
     height: 18px;
-  }
-
-  .attack-strip[data-blp="B"]:has(> .attack-strip__loot:not([hidden])) :is(.attack-strip__boosts, .attack-strip__neighbours) {
-    position: absolute;
-    top: calc(100% + 10px + 64px + var(--space-1));
-    background: var(--colour-surface-raised);
   }
 
   /* 12 px lower than live, so the Army window's ribbon clears the bar. */
