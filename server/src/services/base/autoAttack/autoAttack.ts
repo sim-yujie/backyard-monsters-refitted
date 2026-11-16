@@ -12,7 +12,8 @@ import { logger } from "../../../utils/logger.js";
 import { baseModeAttack } from "../../../controllers/base/load/modes/baseModeAttack.js";
 import { playerMapVersion } from "../../maproom/playerMapVersion.js";
 import { calculateTribeLevel } from "../../maproom/v2/calculateTribeLevel.js";
-import { cellCoordsFromBaseId, outpostsNearCell, type CellCoords } from "../../maproom/v2/rangeCheck.js";
+import { ownYardsInReach } from "../../maproom/v2/ownYardsInReach.js";
+import { cellCoordsFromBaseId, type CellCoords } from "../../maproom/v2/rangeCheck.js";
 import { TAKEOVER_DAMAGE } from "../../maproom/v2/takeoverRules.js";
 import { rangeCheckV2 } from "../../maproom/v2/validateRange.js";
 import { isWildMonsterExpired } from "../../maproom/wildMonsterExpiry.js";
@@ -107,18 +108,22 @@ const campOf = async (userSave: Save, baseid: string, now: number): Promise<Camp
 
 /**
  * What each of the player's yards that can fling at the cell houses now: the
- * main yard and the outposts near it, each caught up to now without writing,
- * as the attack load's `catchUpArmiesForAttack` will then write it.
+ * yards whose own flinger reaches it (`ownYardsInReach`, the cells the Attack
+ * window sums), each caught up to now without writing, as the attack load's
+ * `catchUpArmiesForAttack` will then write it. A yard out of reach counts for
+ * nothing, so a plan the Attack window could not send is refused.
  */
 const housedFor = async (user: User, cell: CellCoords, now: number): Promise<EntryHoused> => {
   const userSave = user.save!;
-  const housed: EntryHoused = {
-    [userSave.baseid]: countsOf(catchUpArmyRow(userSave, userSave, now).monsters?.housed),
-  };
-  const near = outpostsNearCell(cell, userSave.outposts ?? []);
+  const reaching = await ownYardsInReach(user, cell);
+  const housed: EntryHoused = {};
+  if (reaching.includes(userSave.baseid)) {
+    housed[userSave.baseid] = countsOf(catchUpArmyRow(userSave, userSave, now).monsters?.housed);
+  }
+  const near = reaching.filter((baseid) => baseid !== userSave.baseid);
   if (near.length === 0) return housed;
   const outposts = await postgres.em.find(Save, {
-    baseid: { $in: near.map((outpost) => outpost.baseid) },
+    baseid: { $in: near },
     saveuserid: user.userid,
   });
   for (const outpost of outposts) {

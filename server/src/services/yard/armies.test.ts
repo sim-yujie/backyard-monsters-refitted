@@ -24,8 +24,12 @@ const byWhere = (where: Record<string, any>) =>
 const em = {
   transactional: async (work: (tx: unknown) => unknown) => work(em),
   findOne: async (_entity: unknown, where: Record<string, any>) => byWhere(where),
-  find: async (_entity: unknown, where: { baseid: { $in: string[] }; saveuserid: number }) =>
-    rows.filter((row) => where.baseid.$in.includes(row.baseid) && row.saveuserid === where.saveuserid),
+  // The yards' own reads, scoped to the attacker, and the flinger-level read (`flingerLevelsNow`), not scoped.
+  find: async (_entity: unknown, where: { baseid: { $in: string[] }; saveuserid?: number }) =>
+    rows.filter(
+      (row) =>
+        where.baseid.$in.includes(row.baseid) && (where.saveuserid === undefined || row.saveuserid === where.saveuserid)
+    ),
   persist: (row: unknown) => persisted.push(row),
   flush: flushed,
 };
@@ -74,6 +78,7 @@ beforeEach(() => {
   persisted.length = 0;
   flushed.mockClear();
   attackerMain = yard(1, "2000241207", ATTACKER, 60, {
+    homebase: ["241", "207"],
     outposts: [
       [242, 207, "2000242207"],
       [100, 100, "2000100100"],
@@ -122,6 +127,41 @@ describe("catchUpArmiesForAttack", () => {
 
     expect(attackerMain.monsters).toEqual(before);
     expect(entryHoused?.["2000241207"]).toEqual({ C1: 14 });
+  });
+
+  test("leaves out an outpost in the sweep box that its own flinger cannot reach (Repeat attack, 15 Nov)", async () => {
+    // Three cells from the target, a level 2 outpost flinger reaches two.
+    const boxOutpost = { ...yard(5, "2000244208", ATTACKER, 30), type: "outpost", academy: {}, flinger: 2 };
+    rows.push(boxOutpost);
+    attackerMain.outposts.push([244, 208, "2000244208"]);
+
+    const { entryHoused } = await catchUpArmiesForAttack({
+      user: user(),
+      defender: defenderMain as never,
+      cell: { x: 241, y: 208 },
+      mapversion: MapRoomVersion.V2,
+    });
+
+    expect(Object.keys(entryHoused ?? {}).sort()).toEqual(["2000241207", "2000242207"]);
+    expect(boxOutpost.monsters.housed).toEqual({ C1: 10 });
+    expect(persisted).not.toContain(boxOutpost);
+  });
+
+  test("leaves out the main yard when only an outpost reaches the target", async () => {
+    // A level 1 main flinger reaches four cells; the target is eleven away.
+    attackerMain.homebase = ["230", "208"];
+    attackerMain.flinger = 1;
+
+    const { entryHoused } = await catchUpArmiesForAttack({
+      user: user(),
+      defender: defenderMain as never,
+      cell: { x: 241, y: 208 },
+      mapversion: MapRoomVersion.V2,
+    });
+
+    expect(entryHoused).toEqual({ "2000242207": { C1: 12 } });
+    // Still caught up and written, as every attack entry does the main yard.
+    expect(attackerMain.monsters.housed).toEqual({ C1: 14 });
   });
 
   test("a Map Room 1 attack records the main yard's housing only, even with an outpost in reach (#132)", async () => {
