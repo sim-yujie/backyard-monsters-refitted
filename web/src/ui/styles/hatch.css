@@ -49,6 +49,29 @@
   overflow: hidden;
 }
 
+/* As tall as its content (patch 7.6.1, owner 15 Nov 2026: "look at the
+   amount of space now"): the other tabs' fixed height (monsters.css
+   `--monsters-height`) left a third of the window empty under Add. The top
+   stays where that window's top is, so the tab strip does not move from tab
+   to tab, and only the bottom edge follows the content. Every part of the
+   tab is as tall idle as busy (below), so it does not jump between them. The
+   tab starts from its content's height, not a zero basis that Safari can
+   size to nothing in a window that fits its content (layout-rules). */
+@media (min-width: 620.02px) and (min-height: 500.02px) {
+  .overlay__layer > .panel.panel--centre.monsters-screen[data-tab="hatch"] {
+    --hatch-drop: max(0px, (100% - var(--centre-top) - var(--centre-bottom) - var(--monsters-height)) / 2);
+    --centre-height: max-content;
+
+    top: calc(var(--centre-top) + var(--hatch-drop));
+    max-height: calc(100% - var(--centre-top) - var(--centre-bottom) - var(--hatch-drop));
+    margin-top: 0;
+  }
+
+  .monsters-screen[data-tab="hatch"] .hatch {
+    flex: 1 1 auto;
+  }
+}
+
 .hatch__tabs-row {
   flex: none;
   padding-top: var(--space-2);
@@ -540,14 +563,24 @@ button.hatch-now:disabled {
   object-fit: contain;
 }
 
+/* Never wider than the card (patch 7.6.1, owner 15 Nov 2026: "Waiting for
+   hou" was cut by the next card): short words, and a second line if they
+   still do not fit. */
 .hatch-now__state {
   grid-column: 2;
-  white-space: nowrap;
+  min-width: 0;
+  overflow-wrap: break-word;
+  text-wrap: balance;
   font-size: var(--text-sm);
   font-weight: 700;
   color: var(--colour-text);
   font-variant-numeric: tabular-nums;
   line-height: var(--leading-tight);
+}
+
+/* A phone's card has room for the short words only (`stateWords`). */
+.hatch-now__words-short {
+  display: none;
 }
 
 .hatch-now--stalled .hatch-now__state,
@@ -624,7 +657,7 @@ div.hatch-now:not(.hatch-now--preview) .hatch-now__state {
 .hatch-now--compact {
   flex: 1 1 116px;
   width: auto;
-  max-width: 148px;
+  max-width: 200px;
   min-height: 60px;
 }
 
@@ -689,6 +722,7 @@ button.hatch-slot:disabled {
 
 .hatch-slot__count {
   position: absolute;
+  z-index: 1;
   top: var(--space-1);
   left: var(--space-1);
   min-width: 26px;
@@ -704,6 +738,7 @@ button.hatch-slot:disabled {
 
 .hatch-slot__minus {
   position: absolute;
+  z-index: 1;
   top: var(--space-1);
   right: var(--space-1);
   display: grid;
@@ -761,6 +796,7 @@ button.hatch-slot:disabled {
 /* A top-up: "+5" where the − was. */
 .hatch-slot__adding {
   position: absolute;
+  z-index: 1;
   top: var(--space-1);
   right: var(--space-1);
   padding: 0 6px;
@@ -772,6 +808,19 @@ button.hatch-slot:disabled {
 
 .hatch-slot--topup .hatch-slot__minus {
   display: none;
+}
+
+/* A free slot (back in patch 7.6.1, owner 15 Nov 2026): faint and dashed,
+   so the queue's row shows how many batches fit. */
+.hatch-slot--empty {
+  border-style: dashed;
+  border-color: var(--colour-border-subtle);
+  background: transparent;
+}
+
+.hatch-slot__empty {
+  font-size: var(--text-xs);
+  color: var(--colour-text-muted);
 }
 
 /* The slot the next Hatchery level opens: the padlock and Upgrade; what it
@@ -939,14 +988,27 @@ button.hatch-slot:disabled {
 
 /* ── The message and where they go ───────────────────────────────────── */
 
+/* The words and the housing row share a line when both fit whole, else the
+   housing row goes under the words (patch 7.6.1, owner 15 Nov 2026: the
+   numbers ran on under the panel beside it). */
 .hatch-message {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
-  gap: var(--space-4);
+  gap: var(--space-1) var(--space-4);
   padding: 6px var(--space-3);
   border: 1px solid var(--colour-border);
   border-radius: var(--radius-md);
   background: var(--colour-surface-sunken);
+}
+
+/* With a warning the words take the first line and the housing row the
+   second, always: a "+20" added to the key would otherwise push the row
+   under the words and move the grid and Add (patch 7.6.1). */
+@container hatch (width >= 560px) {
+  .hatch-message--warning > .hatch-housing {
+    flex-basis: 100%;
+  }
 }
 
 .hatch-message__words {
@@ -970,11 +1032,14 @@ button.hatch-slot:disabled {
 /* The housing row (owner, 15 Nov 2026: about half as tall): the painted
    house, after / total, the bar, and its key as numbers. */
 .hatch-housing {
-  flex: 1;
+  flex: 1 1 0;
   display: flex;
   align-items: center;
   gap: var(--space-2);
-  min-width: 0;
+  /* As narrow as the house, the numbers, the shortest bar and the key, never
+     narrower: anything less wraps the row under the words. */
+  min-width: min-content;
+  max-width: 100%;
 }
 
 .hatch-housing__label {
@@ -987,6 +1052,11 @@ button.hatch-slot:disabled {
   font-weight: 700;
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
+}
+
+/* "After:" in front of the total (owner, 16 Nov 2026): quieter than the numbers. */
+.hatch-housing__after {
+  color: var(--colour-text-secondary);
 }
 
 .hatch-housing--over .hatch-housing__value {
@@ -1031,7 +1101,7 @@ button.hatch-slot:disabled {
   display: flex;
   align-items: center;
   gap: var(--space-3);
-  min-width: 0;
+  min-width: min-content;
 }
 
 /* What each colour of the bar is. */
@@ -1076,14 +1146,13 @@ button.hatch-slot:disabled {
   background: var(--colour-warning);
 }
 
+/* Whole, on two lines if it must: never cut. */
 .hatch-housing__over {
   min-width: 0;
-  overflow: hidden;
   font-size: var(--text-xs);
   font-weight: 700;
+  line-height: var(--leading-tight);
   color: var(--colour-warning);
-  text-overflow: ellipsis;
-  white-space: nowrap;
 }
 
 /* ── The grid and the info panel, side by side ───────────────────────── */
@@ -1244,8 +1313,7 @@ button.hatch-slot:disabled {
 .hatch-info__head {
   display: flex;
   align-items: center;
-  gap: var(--space-3);
-  padding-right: 76px;
+  gap: var(--space-2);
 }
 
 .hatch-info__portrait {
@@ -1266,6 +1334,7 @@ button.hatch-slot:disabled {
 }
 
 .hatch-info__heading {
+  flex: 1;
   display: flex;
   flex-direction: column;
   gap: 2px;
@@ -1311,9 +1380,10 @@ button.hatch-slot:disabled {
 }
 
 .hatch-info__details {
-  position: absolute;
-  top: var(--space-2);
-  right: var(--space-2);
+  /* patch 7.6.1 (astra): in the head row, centred beside the name. */
+  flex: none;
+  margin-left: auto;
+  padding-inline: var(--space-1);
   font-size: var(--text-sm);
 }
 
@@ -1497,6 +1567,58 @@ button.hatch-slot:disabled {
     line-clamp: 2;
   }
 
+  /* patch 7.6.1 (astra): the long names fit nine across without taller tiles. */
+  .hatch-monster__name--mid {
+    font-size: 10px;
+    letter-spacing: -0.6px;
+  }
+
+  /* patch 7.6.1 (astra): the box gives way to Max, including the painted
+     skin's 4ch minimum. The row still fills the same width as Add. */
+  .hatch-add__count,
+  :root[data-skin] .panel .hatch .hatch-add__count {
+    flex: 1 1 0;
+    /* Never narrower than three digits (the most is 400): "145" was cut at 1920x1080. */
+    min-width: calc(3ch + 6px);
+    width: 0;
+    padding-inline: 2px;
+  }
+
+  /* A finger's 44px steps and "Max (145)" ran 20px past the panel's edge
+     on an iPad on its side (patch 7.6.1): a little less room between them. */
+  @media (pointer: coarse) {
+    .hatch-add__controls {
+      gap: 1px;
+    }
+
+    /* patch 7.6.1 (astra): pinch the painted ends too, leaving the count
+       three digits of room while every step keeps its 44px target. */
+    :root[data-skin] .panel .hatch .hatch-add__controls .btn--outline {
+      --skin-button2-cap: 10px;
+    }
+
+    .hatch-add__controls .qty-stepper__step {
+      padding-inline: var(--space-1);
+    }
+
+    .hatch-add__fill {
+      padding-inline: var(--space-2);
+      font-size: var(--text-xs);
+    }
+  }
+
+  /* With a mouse, "Max (145)" ran 9px past Add's right edge (patch 7.6.1):
+     a little less room between the steps and inside Max. */
+  @media (pointer: fine) {
+    .hatch-add__controls {
+      gap: 4px;
+    }
+
+    .hatch-add__fill {
+      padding-inline: var(--space-2);
+    }
+  }
+
   /* A mouse needs no 36px Clear all. */
   @media (pointer: fine) {
     .hatch-line__head {
@@ -1508,13 +1630,77 @@ button.hatch-slot:disabled {
       min-height: 28px;
       padding-block: 0;
     }
+
+    /* patch 7.6.1 (astra): reclaim 30px without changing rows or the art.
+       Idle keeps the same head height as Clear all; touch keeps its targets. */
+    .hatch__tabs-row {
+      padding-top: var(--space-1);
+    }
+
+    .hatch-tab {
+      padding-block: 0;
+    }
+
+    .hatch__tabs-row:not([hidden]) + .hatch__scroll {
+      padding-top: var(--space-1);
+    }
+
+    .hatch-line--tabbed {
+      gap: 2px;
+      padding-block: 2px;
+    }
+
+    .hatch-line--tabbed > .hatch-line__head,
+    .hatch-line--tabbed > .hatch-line__head > .btn.hatch-clear {
+      min-height: 26px;
+    }
   }
 
-  /* The same warning as the housing row's: one line here, in full on hover. */
+  /* patch 7.6.1 (astra): the short warning fits the kept line, with no cut. */
   .hatch-add__warning {
-    overflow: hidden;
-    text-overflow: ellipsis;
     white-space: nowrap;
+  }
+
+  /* A short screen (1280x720): smaller monster pictures give back the line
+     the housing numbers take under a warning, so the whole tab still fits
+     with no scroll bar (patch 7.6.1). */
+  @media (max-height: 760px) {
+    .hatch-monster {
+      padding-top: var(--space-1);
+    }
+
+    .hatch-monster__picture {
+      width: 42px;
+      height: 42px;
+    }
+  }
+
+  /* 1366x768 and lower: a smaller portrait, so the panel (taller with a
+     hatchery's "Adding to Hatchery 1" line and the warning's kept line)
+     does not make the tab scroll where 7.6 did not (patch 7.6.1). */
+  @media (max-height: 800px) {
+    .hatch-info__portrait {
+      width: 52px;
+      height: 52px;
+    }
+
+    .hatch-info__picture {
+      width: 48px;
+      height: 48px;
+    }
+  }
+
+  /* Its line is kept, empty, while there is no warning (patch 7.6.1): Add,
+     pinned to the panel's bottom, rose by a line whenever a count went past
+     the housing, and the window grew under it. */
+  .hatch .hatch-add__warning[hidden] {
+    display: block;
+    visibility: hidden;
+  }
+
+  /* "The queue is full." already holds a line there: no second one. */
+  .hatch .hatch-add__gate:not([hidden]) ~ .hatch-add__warning[hidden] {
+    display: none;
   }
 }
 
@@ -1529,6 +1715,13 @@ button.hatch-slot:disabled {
    them down a line; idle, the line gives its room back (the first Add moves
    what is below it once, never a + or a choice). */
 @container hatch (width < 880px) {
+  /* Narrower cards can take "Needs housing" on two lines: every card has
+     room for two from the start, so a hatchery that stalls never makes the
+     row taller (patch 7.6.1). */
+  .hatch-now--compact {
+    min-height: 70px;
+  }
+
   .hatch-line__totals {
     flex-basis: 100%;
     padding-left: 0;
@@ -1541,9 +1734,12 @@ button.hatch-slot:disabled {
 
   /* The HCC's totals on the first line, the stacks under them in a row kept
      one slot high: a stack chosen or added never pushes the totals down. */
+  /* Its seven slots (`HCC_STACKS`) in one row, narrower if they must be: with
+     the empty boxes back the seventh fell alone onto a second row on an
+     upright iPad (patch 7.6.1). */
   .hatch-line--hcc > .hatch-line__slots {
     display: grid;
-    grid-template-columns: repeat(auto-fill, 96px);
+    grid-template-columns: repeat(7, minmax(0, 96px));
     grid-template-rows: auto var(--hatch-slot-height);
     min-height: 0;
   }
@@ -1665,8 +1861,17 @@ button.hatch-slot:disabled {
   }
 
   .hatch-now__state {
+    max-width: 100%;
     font-size: var(--text-xs);
     font-weight: 700;
+  }
+
+  .hatch-now__words-long {
+    display: none;
+  }
+
+  .hatch-now__words-short {
+    display: inline;
   }
 
   .hatch-now__bar {
@@ -1737,10 +1942,13 @@ button.hatch-slot:disabled {
   .hatch-housing {
     flex-wrap: wrap;
     row-gap: 2px;
+    min-width: 0;
   }
 
   .hatch-housing__foot {
     flex-basis: 100%;
+    min-width: 0;
+    flex-wrap: wrap;
   }
 
   /* Four across, not five (owner, 9 Nov: "needs polishing"): at 390 px a
@@ -1801,13 +2009,9 @@ button.hatch-slot:disabled {
 
   .hatch-info__each {
     margin-top: calc(-1 * var(--space-2));
-    padding-left: calc(48px + var(--space-3));
+    padding-left: calc(48px + var(--space-2));
     font-size: var(--text-xs);
     color: var(--colour-text-muted);
-  }
-
-  .hatch-info__details {
-    top: var(--space-3);
   }
 
   .hatch-info--details .hatch-info__blurb {
@@ -1871,6 +2075,49 @@ button.hatch-slot:disabled {
    is cut there, so it shows there is more; a swipe slides it, never the
    tab. The cards keep their size, so nothing gets harder to tap. */
 @media (max-width: 620px), (max-height: 500px) {
+  /* patch 7.6.1 (astra): shorter waiting slots, still all present. A long
+     name may wrap here; the monster grid below keeps its single line. */
+  .hatch-slot {
+    min-height: 64px;
+    gap: 0;
+    padding: 2px;
+  }
+
+  .hatch-line--hcc > .hatch-line__slots {
+    grid-template-rows: auto minmax(64px, auto);
+    grid-auto-rows: minmax(64px, auto);
+    min-height: 0;
+  }
+
+  /* Under the "×20" badge, not behind it. */
+  .hatch-slot__picture {
+    width: 28px;
+    height: 28px;
+    margin-top: 14px;
+  }
+
+  .hatch-slot__name {
+    font-size: 10.5px;
+    line-height: var(--leading-tight);
+    letter-spacing: -0.4px;
+    white-space: normal;
+    overflow: visible;
+    overflow-wrap: anywhere;
+  }
+
+  /* patch 7.6.1 (astra): badges have their own corners above the roof. */
+  @container hatch (width < 560px) {
+    .hatch-tab__number {
+      left: -12px;
+    }
+
+    .hatch-tab__waiting {
+      right: 0;
+      padding-inline: 2px;
+      font-size: 10.5px;
+    }
+  }
+
   /* Upright, four cards and a part of the fifth: the row is the tab's width
      (100cqi) and both edges' padding, the first card starts one padding in.
      Never under 76 px, the width "Octo-ooze" and "Slimeattikus" need. */
@@ -1933,7 +2180,7 @@ button.hatch-slot:disabled {
    (owner, 6 Nov 2026), the add bar fixed to a phone's bottom (287 px) left
    the monster list and the queue no room at all at 375x667 and one row at
    375x812 (patch 6.3). Below 960 px tall the bar scrolls with the content,
-   under the monster grid; the details button keeps its corner. */
+   under the monster grid. */
 @media (max-height: 960px) {
   .hatch-info {
     position: relative;

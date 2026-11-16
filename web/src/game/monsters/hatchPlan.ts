@@ -565,13 +565,13 @@ export const fillLimits = (yard: HatchYard, target: HatchTarget, monster: string
 
 /**
  * The line under the box when the count is more than housing takes, or null:
- * "Housing fits 12 of these; the rest will hatch and wait in the Hatchery".
+ * patch 7.6.1 (astra): short enough for the kept line under Add.
  */
 export const housingWarning = (yard: HatchYard, monster: string, count: number): string | null => {
   const fits = housingFits(yard, monster);
   if (count <= fits) return null;
-  if (fits === 0) return "Housing is full: these will hatch and wait in the Hatchery until there is room.";
-  return `Housing fits ${fits.toLocaleString("en-US")} of these; the rest will hatch and wait in the Hatchery until there is room.`;
+  if (fits === 0) return "Housing full: they wait for room";
+  return `${fits.toLocaleString("en-US")} fit in housing; ${(count - fits).toLocaleString("en-US")} wait for room`;
 };
 
 /* ── Finish now ────────────────────────────────────────────────────────── */
