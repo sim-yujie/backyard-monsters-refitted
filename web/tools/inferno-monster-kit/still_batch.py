@@ -12,6 +12,7 @@ import shutil
 import sys
 from pathlib import Path
 
+import numpy as np
 from PIL import Image
 
 import common
@@ -24,17 +25,25 @@ out = work / "still" / ("b-" + "-".join(map(str, hs)))
 out.mkdir(parents=True, exist_ok=True)
 
 cw, ch = spec["cell"]
-z = 7
+z = min(7, 320 // cw, 256 // ch)  # blow-up that fits a 320x256 grid cell (IC1: 7, IC2: 5)
 grid = Image.new("RGB", (640, 512), (128, 128, 128))
 for i, h in enumerate(hs):
-    cell = common.flash_cell(spec, flash_column(spec, h)).resize((cw * z, ch * z), Image.NEAREST)
-    bg = Image.new("RGBA", cell.size, (128, 128, 128, 255))
-    bg.alpha_composite(cell)
-    grid.paste(bg.convert("RGB"), ((i % 2) * 320 + (320 - cw * z) // 2, (i // 2) * 256 + (256 - ch * z) // 2))
+    cell = common.flash_cell(spec, flash_column(spec, h))
+    if spec.get("ref_body_only"):
+        # the body without its cast shadow, centred in the grid cell with clear margin (Zagnoid's shadow
+        # reaches far to the lower right and its body sits at the cell's left edge)
+        cell = common.flash_body_only(spec, flash_column(spec, h))
+        cell = cell.crop(common.bbox(np.asarray(cell)[..., 3] > 0))
+    big = cell.resize((cell.width * z, cell.height * z), Image.BICUBIC if spec.get("ref_smooth") else Image.NEAREST)
+    bg = Image.new("RGBA", big.size, (128, 128, 128, 255))
+    bg.alpha_composite(big)
+    grid.paste(bg.convert("RGB"), ((i % 2) * 320 + (320 - big.width) // 2, (i // 2) * 256 + (256 - big.height) // 2))
 grid.save(out / "frames.png")
 
-p = Image.open(PORTRAITS / f"{mid}.webp").convert("RGB")
-p.resize((p.width * 3, p.height * 3), Image.LANCZOS).save(out / "portrait.png")
+use_portrait = spec.get("portrait", True)  # IC2 round 2: False, the Flash sprite is the only reference
+if use_portrait:
+    p = Image.open(PORTRAITS / f"{mid}.webp").convert("RGB")
+    p.resize((p.width * 3, p.height * 3), Image.LANCZOS).save(out / "portrait.png")
 
 inputs = ["frames.png"]
 style_text = ""
@@ -58,7 +67,8 @@ if appr.exists():
         f"This row is NOT the layout of the output. Copy its exact design, colours, painting style, {spec['features']} and "
         "proportions for every new cell: same creature in every cell, turned to the cell's own heading.\n"
     )
-inputs.append("portrait.png")
+if use_portrait:
+    inputs.append("portrait.png")
 
 cells = ["top-left", "top-right", "bottom-left", "bottom-right"]
 lines = []
@@ -70,22 +80,43 @@ for c, h in zip(cells, hs):
         backs.append(c)
 back = f"\n{spec['back_note']} (cells: {', '.join(backs)})\n" if backs else ""
 n_in = len(inputs)
+if use_portrait:
+    portrait_text = f"Input {n_in}, portrait.png: the official concept painting, {spec['portrait_note']}; the old sprite decides the shape and the features.\n"
+    style_text2 = f"hand-painted digital game illustration like the portrait: {spec['texture']}, soft shading, bright highlights, NO thick black outline, no pixel art, readable at a small size."
+else:
+    portrait_text = (
+        "frames.png is the ONLY design reference: trace each old sprite's silhouette (body, neck, head, beak, tail, "
+        "limbs) and keep its proportions and colours; do not invent a new design, do not make it fatter, rounder, "
+        "glossier or cuter.\n"
+    )
+    style_text2 = f"{spec['style']}; {spec['texture']}."
+design = spec.get("design")  # IC2 round 3: "portrait" = the portrait is the design, the Flash cells only a pose guide
+if design == "portrait":
+    frames_use = ("Use it ONLY as a guide for the facing, pose, position and overall size of each cell (where the head, the "
+                  f"{spec.get('pose_parts', 'claws and the tail')} are). Do NOT copy its colours, shapes or details: the old sprites are blurry and crude "
+                  f"({spec['frames_note']})")
+    face_line = f"Look at where {spec['face_marks']} sit on each old sprite and put them there."
+    portrait_text = (f"Input {n_in}, portrait.png: {spec['portrait_note']}. It decides the design, the parts and the colours "
+                     "in every cell; frames.png only decides the facing, pose and size.\n")
+    style_text2 = f"{spec['style']}; {spec['texture']}."
+else:
+    frames_use = "Use it for the facing, shape, colours and overall size of each cell: the new art is the same creature, painted richer"
+    face_line = f"Look closely at where {spec['face_marks']} sit on each old sprite and put the face exactly there."
 prompt = f"""Use your image generation tool (one call) to create a new image and save it as frames-new.png in the current folder. Do not write code and do not copy or composite pixels from the inputs.
 
-Input 1, frames.png: a 2x2 grid of 4 low-resolution isometric game sprites of {spec['name']}, blown up (OLD pixel art). Use it for the facing, shape, colours and overall size of each cell: the new art is the same creature, painted richer. Heading in degrees: 0 = facing the screen's RIGHT, 90 = facing toward the viewer (down), 180 = facing the screen's LEFT, 270 = facing away from the viewer (up); the camera is a 3/4 isometric view from above. Cells:
+Input 1, frames.png: a 2x2 grid of 4 low-resolution isometric game sprites of {spec['name']}, blown up (OLD pixel art). {frames_use}. Heading in degrees: 0 = facing the screen's RIGHT, 90 = facing toward the viewer (down), 180 = facing the screen's LEFT, 270 = facing away from the viewer (up); the camera is a 3/4 isometric view from above. Cells:
 {chr(10).join(lines)}
-Look closely at where {spec['face_marks']} sit on each old sprite and put the face exactly there.
+{face_line}
 {style_text}
 The creature: {spec['creature']}
 
 PART CHECKLIST (every cell, as seen from that cell's angle; never drop, merge or add parts):
 {spec['parts']}
 {back}
-Input {n_in}, portrait.png: the official concept painting, {spec['portrait_note']}; the old sprite decides the shape and the features.
-
+{portrait_text}
 LIGHT: {spec['light']}.
 Output: ONE image with the same 2x2 grid layout and canvas proportions as frames.png (640x512 or a 2x multiple), each creature at the same position and facing as the matching cell of frames.png and about the same size (no bigger than 1.3x). Same scale in all four cells.
-Style: hand-painted digital game illustration like the portrait: {spec['texture']}, soft shading, bright highlights, NO thick black outline, no pixel art, readable at a small size.
+Style: {style_text2}
 Background everywhere: flat pure magenta #FF00FF. No shadows, no ground, no grid lines, no text, no labels. {spec['no_fx']}.
 """
 if os.environ.get("NOTE"):

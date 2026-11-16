@@ -20,7 +20,7 @@ views = json.loads(path.read_text()) if path.exists() else []
 for h, cell in zip(hs, common.grid_cells(batch / "frames-new.png", 2, 2)):
     if h not in only:
         continue
-    cut = common.key_cell(cell, despill=spec.get("despill"))
+    cut = common.key_cell(cell, despill=spec.get("despill"), open_holes=spec.get("open_holes", False))
     f = work / "views" / f"h{h}.png"
     common.flat(cut, (255, 0, 255)).save(f)
     views = [v for v in views if v["heading"] != h] + [{"heading": h, "file": str(f)}]

@@ -1,7 +1,7 @@
 """
 compare.py <IC id> <work dir> <shots dir>
 Comparison pictures for the lead (build_anim.py first):
-  compare-h<a>-h<b>.png  Flash beside Modern, every 4th heading, 4 headings per picture, enlarged 4x:
+  compare-h<a>-h<b>.png  Flash beside Modern, every 4th heading (env STEP=1: every heading), 4 headings per picture, enlarged 4x:
                          Flash idle + its walk rows | Modern idle, walk 2, walk 3, wind-up, strike
   game-size.png          all headings at the real 1x size: Flash, Modern idle, Modern walk 3, Modern strike
   game-size-x3.png       the same blown up 3x with hard pixels (what 1x looks like, easier to see)
@@ -9,6 +9,7 @@ Comparison pictures for the lead (build_anim.py first):
                          spare views (still/skip.txt) beside the mirrored views that replace them
   loop-h<N>.mp4          walk x2 then attack, Flash beside Modern, for two headings (needs ffmpeg)
 """
+import os
 import shutil
 import subprocess
 import sys
@@ -34,6 +35,7 @@ anim1 = Image.open(ASSETS / f"{spec['out']}-anim.png").convert("RGBA")
 flash = common.flash_sheet(spec)
 frows = flash.height // CH
 walk_rows = [r for r in range(frows)][1:] or [0]
+IDLE = spec.get("flash_row", 0)  # the Flash row the game draws standing (IC3: row 0 is never drawn)
 
 
 def modern(h, k, sheet=anim, s=UP):
@@ -42,7 +44,7 @@ def modern(h, k, sheet=anim, s=UP):
 
 def old(h, r, s=UP):
     """Flash cell (nearest Flash column, row r) in a Modern-sized frame, enlarged s times."""
-    c = flash.crop((flash_column(spec, h) * CW, r * CH, (flash_column(spec, h) + 1) * CW, (r + 1) * CH))
+    c = common.flash_cell(spec, flash_column(spec, h), r)
     f = Image.new("RGBA", (ACW, ACH))
     f.paste(c, (PX, PT))
     return f.resize((ACW * s, ACH * s), Image.NEAREST) if s != 1 else f
@@ -52,9 +54,9 @@ def label(im, text, xy=(4, 4), fill=(255, 240, 160)):
     ImageDraw.Draw(im).text(xy, text, fill=fill)
 
 
-heads = list(range(0, D, 4))
+heads = list(range(0, D, int(os.environ.get("STEP", 4))))  # STEP=1: every heading
 W, H = ACW * UP, ACH * UP
-cols = [("Flash idle", lambda h: old(h, 0))] + [(f"Flash walk {i}", (lambda r: lambda h: old(h, r))(r)) for i, r in enumerate(walk_rows[:2], 1)]
+cols = [("Flash idle", lambda h: old(h, IDLE))] + [(f"Flash walk {i}", (lambda r: lambda h: old(h, r))(r)) for i, r in enumerate(walk_rows[:2], 1)]
 cols += [("Modern idle", lambda h: modern(h, 0)), ("walk 2", lambda h: modern(h, 2)), ("walk 3", lambda h: modern(h, 3)),
          ("wind-up", lambda h: modern(h, 8)), ("strike", lambda h: modern(h, 9))]
 for g in range(0, len(heads), 4):
@@ -70,7 +72,7 @@ for g in range(0, len(heads), 4):
     pic.save(shots / f"compare-h{hs[0]}-h{hs[-1]}.png")
 
 # game size
-rows = [("Flash", lambda h: old(h, 0, 1)), ("Modern idle", lambda h: modern(h, 0, anim1, 1)),
+rows = [("Flash", lambda h: old(h, IDLE, 1)), ("Modern idle", lambda h: modern(h, 0, anim1, 1)),
         ("Modern walk 3", lambda h: modern(h, 3, anim1, 1)), ("Modern strike", lambda h: modern(h, 9, anim1, 1))]
 gs = Image.new("RGB", (ACW * D, ACH * len(rows)), BG)
 for i, (_, fn) in enumerate(rows):
@@ -94,7 +96,7 @@ if sk.exists():
             b, h = line.split()
             hs_ = [int(x) for x in b.split("-")[1:]]
             cell = common.grid_cells(work / "still" / b / "frames-new.png", 2, 2)[hs_.index(int(h))]
-            spare.append((int(h), common.key_cell(cell, despill=spec.get("despill"))))
+            spare.append((int(h), common.key_cell(cell, despill=spec.get("despill"), open_holes=spec.get("open_holes", False))))
 if spare:
     st = Image.open(ASSETS / f"{spec['out']}-repaint@4x.png").convert("RGBA")
     sw, sh = CW * UP, CH * UP
@@ -117,13 +119,13 @@ mc.save(shots / "mirror-check.png")
 
 # loops
 if shutil.which("ffmpeg"):
-    for h in (4, 12):
+    for h in spec.get("loops", (4, 12)):
         tmp = Path(tempfile.mkdtemp(dir=shots))
         seqf = [("walk", k, 8) for _ in range(3) for k in range(1, 7)] + [("attack", k, 4) for _ in range(2) for k in list(range(7, 12)) + [0, 0, 0]]
         n = 0
         for kind, k, ticks in seqf:
             fr = Image.new("RGB", (W * 2 + 8, H + 20), BG)
-            fl_row = walk_rows[(k - 1) % len(walk_rows)] if kind == "walk" else 0
+            fl_row = walk_rows[(k - 1) % len(walk_rows)] if kind == "walk" else IDLE
             fr.paste(common.flat(old(h, fl_row), BG), (0, 20))
             fr.paste(common.flat(modern(h, k), BG), (W + 8, 20))
             label(fr, f"Flash  h{h}", (4, 4))

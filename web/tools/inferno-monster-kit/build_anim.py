@@ -25,7 +25,7 @@ import common
 from spec import ASSETS, SPECS, flash_column
 
 UP = 4
-GAMMA = 0.92  # lifts the painting a little so it reads as bright as Flash's at game size
+GAMMA = SPECS[sys.argv[1]].get("gamma", 0.92)  # lifts the painting a little so it reads as bright as Flash's at game size (IC2 r2: 1.0)
 
 mid, work = sys.argv[1], Path(sys.argv[2])
 spec = SPECS[mid]
@@ -38,6 +38,7 @@ cuts = {int(p.stem[1:]): Image.open(p).convert("RGBA") for p in (work / "still" 
 
 
 def lifted(im):
+    im = common.grade(im, spec)  # spec grade (IC2 round 2): colour match to the Flash body
     a = np.asarray(im).astype(float)
     a[..., :3] = 255 * (a[..., :3] / 255) ** GAMMA
     return Image.fromarray(a.astype(np.uint8), "RGBA")
@@ -63,6 +64,19 @@ def pick_main(lab, sizes):
     return [i for i in range(1, len(sizes)) if sizes[i] >= sizes[big] * 0.03 and (i == big or i not in edge)]
 
 
+def colour_lock(cut, ref):
+    """spec anim_colour_lock (IC2 round 2): match each frame's per-channel mean and spread (solid pixels) to the
+    still view of its heading, so a Codex sheet painted a little greener or paler than its ref.png does not
+    flicker against the idle frame (heading 9 came back olive-grey). Gains are held to 0.8-1.25."""
+    a = np.asarray(cut).astype(float)
+    m, r = common.solid(cut), np.asarray(ref).astype(float)[common.solid(ref)][:, :3]
+    x = a[m][:, :3]
+    k = np.clip(r.std(0) / np.maximum(x.std(0), 1e-3), 0.8, 1.25)
+    o = r.mean(0) - x.mean(0) * k
+    a[..., :3] = np.clip(a[..., :3] * k + o, 0, 255)
+    return Image.fromarray(a.astype(np.uint8), "RGBA")
+
+
 def painted_frames(p):
     """-> list of 11 (cutout, scale in 1x px per painted px, dx in 1x px, lift in 1x px)."""
     ref = cuts[p]
@@ -73,11 +87,13 @@ def painted_frames(p):
     for i in range(11):
         cell = cells[i]
         rgb = np.asarray(cell.convert("RGB"), dtype=float)
-        cut = common.key_cell(cell, choose=pick_main, despill=spec.get("despill"))
+        cut = common.key_cell(cell, choose=pick_main, despill=spec.get("despill"), open_holes=spec.get("open_holes", False))
         m = ~common.magenta(rgb)
         m = common.grow(common.shrink(m, 2), 2)
         xs = np.nonzero(m)[1]
         rel = xs.mean() - cell.width / 2 if len(xs) else 0.0
+        if spec.get("anim_colour_lock"):
+            cut = colour_lock(cut, ref)
         out.append([cut, float(np.sqrt(target / common.solid(cut).sum())), rel])
     med = float(np.median([f[1] for f in out[:6]]))
     rel0 = float(np.median([f[2] for f in out[:6]]))
@@ -91,10 +107,13 @@ def painted_frames(p):
 
 
 def shadow(h):
+    if spec.get("shadow") == "flash":
+        return common.cast_shadow(spec, flash_column(spec, h), ACW * UP, ACH * UP, PX + fit[h].get("shift", 0.0), PT, UP)
     _, (sx0, sy0, sx1, sy1), a = common.flash_body_and_shadow(spec, flash_column(spec, h))
     m = Image.new("L", (ACW * UP, ACH * UP), 0)
     if sx1 > sx0:
-        ImageDraw.Draw(m).ellipse(((sx0 + PX + 0.5) * UP, (sy0 + PT + 0.5) * UP, (sx1 + PX - 0.5) * UP, (sy1 + PT - 0.5) * UP), fill=min(255, a + 20))
+        ox = PX + fit[h].get("shift", 0.0)  # the drift taken out of the Flash sheet (IC2), as the still view
+        ImageDraw.Draw(m).ellipse(((sx0 + ox + 0.5) * UP, (sy0 + PT + 0.5) * UP, (sx1 + ox - 0.5) * UP, (sy1 + PT - 0.5) * UP), fill=min(255, a + 20))
     m = m.filter(ImageFilter.GaussianBlur(0.8 * UP))
     lay = Image.new("RGBA", m.size, (25, 18, 12, 0))
     lay.putalpha(m)
@@ -145,7 +164,13 @@ if __name__ == "__main__":
         if p not in frames:
             continue
         row = [render(h, cuts[p], fit[p]["scale"] * GROW, 0.0, 0, flip)]
-        row += [render(h, *fr, flip) for fr in frames[p]]
+        frs = frames[p]
+        roll = spec.get("mirror_walk_roll", 0)
+        if flip and roll:
+            # IC3: a mirrored four-legged gait is half a cycle out (its left legs are the painted right legs), so the
+            # mirrored heading plays walk frame k+roll; the legs then do not jump at the h7/h8 and h22/h23 seams
+            frs = [frs[(k + roll) % 6] for k in range(6)] + frs[6:]
+        row += [render(h, *fr, flip) for fr in frs]
         notes = [n for _, n in row if n]
         if notes:
             print(f"h{h}: frames {[k for k, (_, n) in enumerate(row) if n]} shrunk or moved to stay in the cell")
