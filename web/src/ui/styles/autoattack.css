@@ -872,6 +872,15 @@
   display: none;
 }
 
+/* Room for the price and Take over side by side with a clear gap (at 440px
+   "450,000 each" ran into the button, 5px over in Classic). */
+@media (min-width: 621px) {
+  .attack-end.auto-attack--result {
+    width: min(calc(100vw - 2 * var(--space-4)), 480px);
+    max-width: min(calc(100vw - 2 * var(--space-4)), 480px);
+  }
+}
+
 /* A wide, short screen (a phone on its side): a wider window, the loot four
    across and the camp tighter, so it all fits without scrolling. */
 @media (min-width: 621px) and (max-height: 500px) {
