@@ -596,6 +596,140 @@ SPECS = {
             "of ref.png. The skull never turns toward the viewer. Cell 12 stays empty magenta."
         ),
     ),
+    # IC6 Grokus (16 Nov): painted from the PORTRAIT (web/public/portraits/IC6.webp): a Cthulhu-like octopus head with a
+    # crown of red crystals, angry yellow eyes, webbed blue-violet fins at the sides of the head, a beard of sea-green
+    # face tentacles, and big sea-green legs-tentacles with violet sucker undersides, two of them ending in toothed maws.
+    # Flash sheet: grokus.v2.png, 30 x 1, single pose (it glides), cast shadow to the lower right baked in. The game cuts
+    # it at whole 57 px cells (frameWidth 57, the sheet is 1718 px: 8 px slack), but the art was laid out ~57.27 apart:
+    # against the 57 grid the body creeps right 0.257 px a column (alpha > 235 centroid, linear + one sine fit, 0.21 px
+    # rms), 7.5 px over the turn. Raw art reaches -3 to +60 px of the 57 px cell; de-drifted it lies in 0.2-56.8. So the
+    # kit reads a window 66 px wide from 4 px left of each cell (`flash_x0`, `cell`), keeps the column's own art run
+    # (`flash_w`=57.0) and takes the creep out (`flash_drift`); anchor (28, 20) -> (32, 20). anim_pad 1 -> 68 x 51 cells.
+    # Symmetry: the silhouette XOR / union measure has no power here (mirror partner 15 - c: 0.34; unmirrored control
+    # c vs c+10: 0.36, c vs c+15: 0.34; the tentacle skirt swamps it). Head features (yellow eyes, red crystals) against
+    # the mirror partner: axis 15 fits best (1.7 px), so column c faces 12c. The card creature is symmetric (fins, eyes,
+    # crystal crown, face tentacles, one toothed tentacle maw each side), so headings 8-22 are painted, lit from above.
+    "IC6": dict(
+        name="Grokus",
+        out="grokus",
+        flash="grokus.v2.png",
+        cell=(66, 39),                   # the read window: Flash cell x -4 to 62
+        flash_x0=-4,
+        flash_w=57.0,                    # whole pixels (the game's cut); switches on the own-art-run cut
+        flash_drift=0.257,
+        still_pad=4,
+        ref_body_only=True,              # reference cells without the cast shadow, centred
+        ref_smooth=True,
+        portrait=True,
+        design="portrait",
+        anim_colour_lock=True,
+        gamma=1.0,
+        grade=dict(body=((1.0, 0.0), (1.0, 0.0), (1.0, 0.0)), limbs=((1.0, 0.0), (1.0, 0.0), (1.0, 0.0))),
+        grade_chroma=True,
+        open_holes="core",               # gaps between the tentacles
+        anchor=(32, 20),                 # Flash's (28, 20) in the read window
+        flash_columns=30,
+        flash_step=12.0,
+        directions=30,
+        painted=list(range(8, 23)),      # front (96 degrees) -> left -> back (264 degrees); the rest mirrored (15 - h)
+        area=1.15,
+        drop=0.0,
+        shadow="flash",                  # the Flash cast shadow's own shape (to the lower right)
+        anim_pad=(1, 10, 2),             # 68 x 51 anim cells, anchor (33, 30); 30 x 4 x 68 = 8160 px
+        walk_lift=(0, 0, 0, 0, 0, 0),
+        loops=(8, 15, 22),
+        face="face with its beard of tentacles",
+        back_range=(246, 294),           # 216-240 degrees: three-quarter back, the face in profile at the left
+        pose_parts="crystal crown, the fins and the spread of the big tentacles",
+        frames_note=(
+            "their dark purple blob is the big octopus head, the red spikes on top are the red crystal crown, the two "
+            "yellow dots are the angry eyes, the dark spiky bits at the sides are the webbed fins, and the green skirt "
+            "of tentacles is the beard of face tentacles and the big sprawling tentacles it stands on; the old sprites "
+            "are darker and greener than the real creature"
+        ),
+        features=(
+            "crown of red crystals, angry glowing yellow eyes under a heavy brow, webbed blue-violet fins at the sides of "
+            "the head, beard of sea-green face tentacles, big sea-green tentacles with violet sucker undersides and two "
+            "toothed tentacle maws"
+        ),
+        face_marks="the head (the red crystal crown on top, the yellow eyes and the beard of tentacles under them) and the fins",
+        portrait_note=(
+            "THE DESIGN of Grokus (its official portrait, seen from the front, turned a little to the screen-left): paint "
+            "exactly this creature: a big wrinkled octopus head of blue-grey and lilac scales with a heavy ridged brow, "
+            "two angry glowing yellow eyes, a CROWN of red ruby crystals growing from the top of the head (one big one in "
+            "the middle, smaller ones round it), a webbed blue-violet fin with spines at each side of the head, a round "
+            "grey breathing tube on the cheek, a beard of thick sea-green face tentacles hanging from under the eyes with "
+            "thin violet tentacles between them, and a ring of big sea-green tentacles it stands on, their undersides "
+            "violet with rows of pale suckers, the two outer ones curling up into open maws lined with ivory teeth; in "
+            "its colours and its painting style"
+        ),
+        style=(
+            "hand-painted digital game illustration in the style of portrait.png: scaly, wrinkled blue-grey and lilac "
+            "head, glossy faceted red crystals with bright glints, wet sea-green tentacle skin, rich colour, soft painted "
+            "shading with crisp edges, NO thick black outline, no pixel art; the crystals, yellow eyes and tentacles "
+            "drawn bold and a little exaggerated so they read at a small size"
+        ),
+        light=(
+            "soft light from ABOVE, the same on the left and right halves of the creature (highlights on the crystals and "
+            "the top of the head and tentacles, darker underneath); no cast shadow on the ground"
+        ),
+        texture=(
+            "blue-grey and lilac scaly head, faceted glossy red crystals, glowing yellow eyes, translucent blue-violet fin "
+            "webs, wet sea-green tentacles with darker teal shading, violet sucker undersides with pale suckers, ivory teeth"
+        ),
+        no_fx=(
+            "No falling drops, puddles, splashes, sparks, smoke, dust, motion streaks, glow halos or loose bits. No part of "
+            "the creature is pure magenta or hot pink: the tentacle undersides and thin tentacles are a dark violet-purple "
+            "and the maws inside a deep plum, all clearly different from the magenta background"
+        ),
+        creature=(
+            "Grokus, the crystal-crowned octopus horror of portrait.png (NOT a jellyfish, NOT a squid with a long body, NOT "
+            "a plant). Its HEAD is a big round wrinkled octopus head, blue-grey on top fading to lilac and violet at the "
+            "sides, with fine scales, a heavy ridged scowling BROW and TWO ANGRY GLOWING YELLOW EYES under it. From the top "
+            "of the head grows a CROWN of glossy faceted RED RUBY CRYSTALS: one big crystal in the middle and three or four "
+            "smaller ones round it. At each side of the head stands a webbed FIN, blue-violet membrane on bony spines, "
+            "swept up and back like an ear; a round grey breathing tube sits on each cheek. Under the eyes hangs a BEARD of "
+            "thick sea-green FACE TENTACLES (with a few thin violet ones between them) reaching down to the ground. The head "
+            "and beard sit on a ring of six or seven BIG SEA-GREEN TENTACLES spread on the ground all round it like a skirt: "
+            "their tops are wet sea-green with darker teal shading, their curled undersides violet-purple with rows of pale "
+            "suckers; the two outer tentacles (one at each side) curl up and end in OPEN MAWS lined with ivory teeth, plum "
+            "inside. No arms, no legs, no body other than the head. Colours: red crystals (lit #d86461, shade #8c1818), "
+            "blue-grey head (lit #acd9e0, mid #86a6b4) going lilac and violet (#8f8199), yellow eyes (#f5e2ac with an orange "
+            "rim), sea-green tentacles (lit #759095, mid #445760, shade #193b3d), violet undersides and thin tentacles "
+            "(#a2598d, shade #542748), plum maw (#783e5f), ivory teeth."
+        ),
+        parts=(
+            " 1. Head: ONE big round wrinkled octopus head, blue-grey on top, lilac-violet at the sides, a heavy ridged brow; from behind only the back of the head shows.\n"
+            " 2. Crystals: a CROWN of glossy red ruby crystals on top of the head (one big in the middle, three or four smaller round it), always pointing up.\n"
+            " 3. Eyes: TWO angry glowing yellow eyes under the brow (hidden from behind).\n"
+            " 4. Fins: TWO webbed blue-violet fins, one at each side of the head, swept up and back.\n"
+            " 5. Beard: thick sea-green face tentacles hanging from under the eyes to the ground, a few thin violet ones between them (hidden from behind).\n"
+            " 6. Tentacles: a ring of six or seven big sea-green tentacles spread on the ground all round, violet sucker undersides; the two outer ones end in open toothed maws.\n"
+            " 7. No arms, no legs, no wings, no tail, no body other than the head, no mouth on the head itself (the beard hides it)."
+        ),
+        back_note=(
+            "BACK VIEW: the creature faces away from the viewer: the eyes and the beard of face tentacles are NOT visible; "
+            "the viewer sees the round blue-grey back of the head with the red crystal crown on top, the two fins at its "
+            "sides seen from behind, and the big sea-green tentacles spread on the ground all round"
+        ),
+        walk=(
+            "Cells 1-6 are ONE CRAWL CYCLE (six different steps, then it loops back to cell 1): Grokus pulls itself along on "
+            "its big tentacles, like an octopus walking on the sea floor: 1 the front tentacles reach forward in the facing "
+            "direction; 2 they grip the ground, the rear tentacles curl in; 3 the head sways a little forward as the body is "
+            "pulled along; 4 the rear tentacles push and spread back; 5 the side tentacles ripple; 6 the front tentacles "
+            "lift to reach again. The head and its crystal crown stay level and keep the angle of ref.png (they bob a "
+            "little), the face tentacles sway. Same size as ref.png, centred in its cell, the tentacles on the same "
+            "horizontal ground line in every cell."
+        ),
+        attack=(
+            "Cells 7-11 are an ATTACK (a tentacle slam and bite), the same creature as ref.png: 7 anticipation: the head "
+            "pulls back and up away from the facing direction, the two toothed outer tentacles curl up; 8 wind-up: the two "
+            "toothed tentacles raised high above the head, maws opened wide, the face tentacles flaring; 9 strike: the head "
+            "lunges forward in the facing direction and the two toothed tentacles whip down onto the target; 10 "
+            "follow-through: furthest forward and low, the toothed maws clamped on the ground in front of it; 11 recovery: "
+            "back to the resting pose of ref.png. The head never turns toward the viewer. Cell 12 stays empty magenta."
+        ),
+    ),
 }
 
 
