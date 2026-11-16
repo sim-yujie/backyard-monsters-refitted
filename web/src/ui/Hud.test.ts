@@ -706,6 +706,19 @@ describe("the HUD on the player's own yard", () => {
     forgetCoinBalance();
   });
 
+  it("leaves Glimmers off with coins: false, the map's bar (owner, 15 Nov 2026)", () => {
+    forgetCoinBalance();
+    const map = new Hud({ scenes: [{ id: "map", label: "Map" }], onSceneSelect: () => {}, coins: false }).mount(
+      document.body,
+    );
+    noteCoins(1_250);
+    expect(map.element.querySelector<HTMLElement>(".hud__resource--coins")!.hidden).toBe(true);
+    // The other bar still shows them.
+    expect(hud.element.querySelector<HTMLElement>(".hud__resource--coins")!.hidden).toBe(false);
+    map.destroy();
+    forgetCoinBalance();
+  });
+
   it("shows amount / cap with a fill bar once bound, and takes them away on unbind", () => {
     hud.setResources({ r1: 15_000_000, r2: 23_050_000, r3: 0, r4: 30_000_000 }, 7);
     hud.bindYard(binding);

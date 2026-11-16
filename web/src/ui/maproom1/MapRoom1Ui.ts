@@ -99,6 +99,8 @@ export class MapRoom1Ui {
       onAchievementsOpen: () => this.select(null),
       ...(handlers.onVisitFriend ? { onVisitFriend: handlers.onVisitFriend } : {}),
       ...(handlers.onMessageFriend ? { onMessageFriend: handlers.onMessageFriend } : {}),
+      // Glimmers buy decorations, which the map has none of (owner, 15 Nov 2026).
+      coins: false,
     });
     this.hud.setActiveScene(activeScene);
 

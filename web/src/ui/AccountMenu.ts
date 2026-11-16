@@ -203,7 +203,12 @@ export class AccountMenu {
       this.button.setAttribute("aria-label", `Your account: ${accountName(options.name)}`);
       this.button.title = "Your account";
     } else {
-      this.button.textContent = "Account";
+      // The word in a span of its own: the map's bar on an upright phone keeps
+      // it for screen readers only and shows the face (maproom.css).
+      const word = document.createElement("span");
+      word.className = "account-menu__word";
+      word.textContent = "Account";
+      this.button.append(word);
       if (options.avatar) this.button.prepend(this.face("account-menu__face", "small"));
     }
     this.button.setAttribute("aria-haspopup", "true");
