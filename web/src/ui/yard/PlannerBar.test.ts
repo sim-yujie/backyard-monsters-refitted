@@ -795,7 +795,7 @@ describe("the wall line's controls (owner, 16 Nov 2026)", () => {
     expect(done?.hidden).toBe(false);
     expect(done?.textContent).toBe("Done");
     expect(tip?.hidden).toBe(true);
-    expect(counts?.textContent).toBe("×6✕25 over stock");
+    expect(counts?.textContent).toBe("✓6✕25 over stock");
     expect(place?.textContent).toBe("✓ Place 6");
     expect(place?.disabled).toBe(false);
     expect(undo?.disabled).toBe(false);

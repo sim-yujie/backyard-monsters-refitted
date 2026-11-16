@@ -1172,7 +1172,9 @@ export class PlannerBar {
     if (line.anchors > 0) {
       const place = document.createElement("strong");
       place.className = "planner-bar__line-place-count";
-      place.textContent = `×${line.place}`;
+      // ✓ rather than build mode's ×, which there multiplies a price; here
+      // nothing is paid, and × read like the red ✕ (astra round 2).
+      place.textContent = `✓${line.place}`;
       place.title = `${line.place} to place`;
       counts.append(place);
       if (line.blocked > 0) {

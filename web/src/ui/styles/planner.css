@@ -2407,6 +2407,10 @@
   flex: none;
   min-height: 44px;
   background: var(--colour-surface-control);
+  /* astra round 2 (wall line): it read as disabled; the bar's Done outline, full-strength words. */
+  border: 1px solid var(--colour-accent);
+  color: var(--colour-text);
+  opacity: 1;
 }
 
 /* ── The wall line (owner, 16 Nov 2026) ─────────────────────────────────── */
