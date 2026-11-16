@@ -31,4 +31,20 @@ describe("YardHelpMarks", () => {
     expect(marks.pick(100 + 13 * scale, 50 - 20 * scale)).toBe(1);
     expect(marks.pick(100 + 15 * scale, 50 - 20 * scale)).toBeNull();
   });
+
+  it("draws a grey wrench over a spent repair, pickable, and amber wins for a building in both", () => {
+    const marks = new YardHelpMarks(anchor);
+    expect(marks.set(new Set([1]), new Set([1, 2, 3]))).toBe(true);
+    expect(marks.drawn).toEqual([1]);
+    expect(marks.drawnSpent).toEqual([2, 3]);
+    expect(marks.root.children).toHaveLength(3);
+    expect(marks.active).toBe(true);
+    expect(marks.pick(200, 30)).toBe(2);
+    // The same sets again change nothing; an empty pair clears every badge.
+    expect(marks.set(new Set([1]), new Set([2, 3]))).toBe(false);
+    expect(marks.set(new Set([1]), new Set([2]))).toBe(true);
+    expect(marks.drawnSpent).toEqual([2]);
+    marks.set(new Set());
+    expect(marks.active).toBe(false);
+  });
 });

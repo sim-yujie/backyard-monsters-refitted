@@ -680,9 +680,13 @@ export class YardRenderer {
     if (this.hatchMarks.set(marks)) this.chromeDirty = true;
   }
 
-  /** Puts a wrench over these buildings of a friend's yard (#374), or none when empty. */
-  setHelpMarks(ids: ReadonlySet<number>): void {
-    this.helpMarks.set(ids);
+  /**
+   * Puts a wrench over these buildings of a friend's yard (#374), or none
+   * when empty, and a grey one over `spent`: still damaged, today's repair
+   * in the yard used up.
+   */
+  setHelpMarks(ids: ReadonlySet<number>, spent?: ReadonlySet<number>): void {
+    this.helpMarks.set(ids, spent);
   }
 
   /** The buildings wearing a wrench now, by id. */
