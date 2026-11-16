@@ -191,6 +191,7 @@ const championRows = (result: AutoAttackResponse): HTMLElement[] =>
     const alive = champion.hp > 0;
     const health = make("span", `arv-champion__health${alive ? "" : " arv-champion__health--fell"}`);
     health.append(gameIcon("health", { size: 16, label: "Health left" }), alive ? formatAmount(Math.floor(champion.hp)) : "Fell");
+    health.title = alive ? `Health left: ${formatAmount(Math.floor(champion.hp))}` : "Fell in the battle";
     const row = make("div", "arv-row arv-champion-row");
     row.append(unit, health);
     return row;
@@ -212,7 +213,14 @@ const detailsFold = (result: AutoAttackResponse): HTMLElement | null => {
     const level = result.plan.champions.find((one) => one.t === champion.t)?.l ?? 1;
     peek.append(portrait(championPortrait(championByType(champion.t) ?? `G${champion.t}`, level, "icon")));
   }
-  if ((result.moved ?? []).length > 0) peek.append(make("span", "arv-fold__moved", "Moved"));
+  // astra round 3: the move is its own group, "[portrait] ×8 →", so it does not read as the champion moving.
+  const moved: Record<string, number> = {};
+  for (const move of result.moved ?? []) for (const [id, count] of Object.entries(move.monsters)) moved[id] = (moved[id] ?? 0) + count;
+  if (Object.keys(moved).length > 0) {
+    const group = make("span", "arv-fold__moved");
+    group.append(...unitChips(moved), "→");
+    peek.append(group);
+  }
   summary.append(peek);
   const body = make("div", "arv-fold__body");
   body.append(...rows);
@@ -291,8 +299,8 @@ export const resultView = (layout: Exclude<ResultLayout, "today">, result: AutoA
   }
   if (layout === "B") {
     // astra round 2: what was used shows above the tabs, on both pages.
-    const loot = keep([...lootPart(), offerHost]);
-    return { head: head(result), middle: [spentRow(result), ...tabs(loot, rows)], offerHost, wide: false };
+    // astra round 3: the offer sits under both pages, not on the Loot page only.
+    return { head: head(result), middle: keep([spentRow(result), ...tabs(lootPart(), rows), offerHost]), offerHost, wide: false };
   }
   // C: on a phone upright the army's other rows fold under "Army details" (astra round 1);
   // wider, they show in the column. Both are built; the screen size picks one.
@@ -300,7 +308,7 @@ export const resultView = (layout: Exclude<ResultLayout, "today">, result: AutoA
   shown.append(...rows);
   const fold = make("details", "arv-fold arv-fold--army");
   const summary = make("summary", "arv-fold__summary");
-  summary.append(make("span", "arv-fold__word", "Army details"));
+  summary.append(make("span", "arv-fold__word", "Details"));
   const body = make("div", "arv-fold__body");
   body.append(...armyRows(result));
   fold.append(summary, body);
