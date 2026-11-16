@@ -15,6 +15,7 @@ import {
   planSpeedup,
   previewHelp,
   refusalDetails,
+  repairDayRefusal,
   rewardOf,
   rewardsLeftOf,
   type HelpFacts,
@@ -193,6 +194,25 @@ describe("preview", () => {
       "3": { repair: "cannotSend" },
       "4": { speedup: "cannotSend" },
     });
+  });
+
+  test("one repair a friend's yard a UTC day (owner, 16 Nov 2026): once given, every repair says repairedToday", () => {
+    expect(HELP_RULES.repairsPerYardPerDay).toBe(1);
+    expect(repairDayRefusal(0)).toBeNull();
+    expect(repairDayRefusal(1)).toEqual({ reason: "repairedToday" });
+    const save = {
+      type: "main",
+      savetime: NOW,
+      buildingdata: { "1": building({ id: 1, cU: 5000 }), "3": building({ id: 3, hp: 10 }), "6": building({ id: 6, hp: 20 }) },
+      buildinghealthdata: { "3": 10, "6": 20 },
+    };
+    expect(previewHelp(save, 9, NOW, null, 1)).toEqual({
+      "1": { speedup: true },
+      "3": { repair: "repairedToday" },
+      "6": { repair: "repairedToday" },
+    });
+    // A gate still says first why nothing can be helped.
+    expect(previewHelp(save, 9, NOW, { reason: "cannotSend" }, 1)["3"]).toEqual({ repair: "cannotSend" });
   });
 });
 

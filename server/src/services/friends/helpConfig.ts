@@ -20,6 +20,12 @@ export const HELP_RULES = {
    * together (owner, 15 Nov 2026). Later helps still go through, for nothing.
    */
   rewardedHelpsPerDay: 5,
+  /**
+   * Repairs a helper may give in one friend's yard in a UTC day (owner,
+   * 16 Nov 2026, bug report #50). A second is refused with `repairedToday`.
+   * Speed-ups have no such count.
+   */
+  repairsPerYardPerDay: 1,
 } as const;
 
 /**

@@ -219,6 +219,54 @@ describe.skipIf(!dbName)("the help engine on a real database (issue #373)", () =
     expect(notice!.jobs[0]).toMatchObject({ event: "helpRepair", userid: H1, buildingId: 1 });
   });
 
+  test("one repair per friend's yard per UTC day (owner, 16 Nov 2026); speed-ups are not counted", async () => {
+    const hurt = (id: number) => ({ id, t: CANNON, x: id, y: 0, l: 2, hp: 10 });
+    await setYard(OWNER, {
+      buildingdata: { "1": hurt(1), "2": hurt(2), "3": upgrading(3, 100_000), "4": upgrading(4, 100_000) },
+      buildinghealthdata: { "1": 10, "2": 10 },
+    });
+    await setYard(H2, { buildingdata: { "1": hurt(1) }, buildinghealthdata: { "1": 10 } });
+    await befriend(H1, H2);
+
+    expect(await help(H1, 1, "repair")).toMatchObject({ error: 0, healed: true });
+    // A second repair in the same yard the same day: its own reason, nothing written.
+    expect(await refusalOf(help(H1, 2, "repair", T0 + 60))).toEqual({ reason: "repairedToday" });
+    expect((await yardOf(OWNER)).buildinghealthdata).toEqual({ "2": 10 });
+    // Another helper may still repair there, and H1 may repair in another friend's yard.
+    expect(await help(H2, 2, "repair", T0 + 60)).toMatchObject({ healed: true });
+    expect(await help(H1, 1, "repair", T0 + 60, H2)).toMatchObject({ healed: true });
+    // Speed-ups go on as before.
+    expect(await help(H1, 3, "speedup", T0 + 60)).toMatchObject({ error: 0 });
+    expect(await help(H1, 4, "speedup", T0 + 60)).toMatchObject({ error: 0 });
+    expect(await helpRows(H1)).toHaveLength(4);
+
+    // The help-mode load and the friends list say so before the tap (a fresh job 3 is open to speed up).
+    await setYard(OWNER, { buildingdata: { "5": hurt(5), "3": upgrading(3, 100_000) }, buildinghealthdata: { "5": 10 } });
+    const owner = { userid: OWNER, type: "main", savetime: T0 + 60, ...(await yardOf(OWNER)) };
+    expect((await helpBlock(em() as never, H1, owner, T0 + 60)).buildings).toEqual({
+      "3": { speedup: true },
+      "5": { repair: "repairedToday" },
+    });
+    expect((await helpBlock(em() as never, H2, owner, T0 + 60)).buildings["5"]).toEqual({ repair: "repairedToday" });
+    expect((await helpBlock(em() as never, H1 + 2, owner, T0 + 60)).buildings["5"]).toEqual({ repair: true });
+    const list = (await friendsAnswer(em() as never, as(H1), T0 + 60)) as any;
+    expect(list.friends.find((friend: { userid: number }) => friend.userid === OWNER).help).toEqual({ speedup: true, repair: false });
+
+    // The next UTC day it is open again.
+    const tomorrow = T0 + DAY;
+    expect((await helpBlock(em() as never, H1, { ...owner, savetime: tomorrow }, tomorrow)).buildings["5"]).toEqual({ repair: true });
+    expect(await help(H1, 5, "repair", tomorrow)).toMatchObject({ healed: true });
+  });
+
+  test("the helper's own yard under attack has its own reason, not the friend's underAttack", async () => {
+    await setYard(OWNER, { buildingdata: { "1": upgrading(1, 10_000) } });
+    const realNow = Math.floor(Date.now() / 1000);
+    await setYard(H1, { attackid: 1, attacks: [{ starttime: realNow }] });
+    expect(await reasonOf(help(H1, 1, "speedup"))).toBe("helperUnderAttack");
+    await setYard(H1, { attackid: 0, attacks: [] });
+    expect(await helpRows()).toHaveLength(0);
+  });
+
   test("no daily cap (owner, 15 Nov 2026: was 20): a 21st and a 50th help in one UTC day land", async () => {
     const buildings: Record<string, unknown> = {};
     for (let id = 1; id <= 49; id++) buildings[String(id)] = upgrading(id, 100_000);

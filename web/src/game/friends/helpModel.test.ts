@@ -11,6 +11,7 @@ import {
   helpersText,
   helpingLine,
   helpRefusalText,
+  refusalStays,
   repairText,
   rewardText,
   speedupSeconds,
@@ -159,6 +160,37 @@ describe("the block after a help (#374)", () => {
     expect(next.buildings["7"]).toEqual({ speedup: "helpersFull" });
     expect(next.gate).toBeUndefined();
     expect(afterRefusal(block, 99, "speedup", "helpersFull")).toBe(block);
+  });
+
+  it("one repair a friend's yard a day: after a repair every other repair says so (owner, 16 Nov 2026)", () => {
+    const next = afterHelp(block, 8, "repair", 4);
+    expect(next.buildings["8"]).toBeUndefined();
+    expect(next.buildings["9"]).toEqual({ speedup: "alreadyHelped", repair: "repairedToday" });
+    expect(next.buildings["7"]).toEqual({ speedup: true });
+    expect(buildingHelp(next, 9)?.repair).toEqual({
+      allowed: false,
+      reason: "repairedToday",
+      text: "You already repaired a building here today.",
+    });
+    // Speed-ups leave the repairs alone.
+    expect(afterHelp(block, 7, "speedup", 4).buildings["8"]).toEqual({ repair: true });
+  });
+
+  it("a repairedToday refusal closes every repair in the yard, not only the one tapped", () => {
+    const next = afterRefusal(block, 8, "repair", "repairedToday");
+    expect(next.buildings["8"]).toEqual({ repair: "repairedToday" });
+    expect(next.buildings["9"]).toEqual({ speedup: "alreadyHelped", repair: "repairedToday" });
+    expect(next.buildings["7"]).toEqual({ speedup: true });
+    expect([...helpableIds(next)]).toEqual([7]);
+  });
+
+  it("the spam limit has clear words and never stays on a button (bug report #50)", () => {
+    expect(helpRefusalText("rateLimited")).toBe("You have helped a lot this hour. Try again later.");
+    expect(refusalStays("rateLimited")).toBe(false);
+    expect(refusalStays("underAttack")).toBe(false);
+    expect(refusalStays("notFriends")).toBe(false);
+    expect(refusalStays("helpersFull")).toBe(true);
+    expect(refusalStays("repairedToday")).toBe(true);
   });
 
   it("a tooNew refusal keeps its gate, so the panel says which and when", () => {
