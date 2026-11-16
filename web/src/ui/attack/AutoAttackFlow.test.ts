@@ -294,19 +294,21 @@ describe("Smart Repeat attack's prompt (owner, 16 Nov 2026)", () => {
     expect([...modal.querySelectorAll(".auto-attack__room li")].map((row) => row.textContent)).toEqual(["Outpost242, 20840 space free"]);
   });
 
-  it("the result says what moved in first", async () => {
+  it("the result leaves out what moved in first (owner, 16 Nov 2026: only the loot and the take-over cost)", async () => {
     const modal = document.createElement("div");
     const moved = { ...RESULT, conquered: false, moved: MOVES.moves, yards: MOVES.yards };
     const flow = new AutoAttackFlow({ baseid: BASEID, modal, onWatch: vi.fn(), calls: calls({ run: vi.fn(async () => moved) }) });
     await flow.start(answer(MOVES));
     button(modal, "Move and attack")!.click();
     await settle();
-    expect(text(modal)).toContain("Moved in first180 Pokey, 30 Eye-ra, 4 D.A.V.E.");
+    expect(modal.querySelector(".auto-attack--result")).not.toBeNull();
+    expect(text(modal)).not.toContain("Moved");
+    expect(text(modal)).not.toContain("Pokey");
   });
 });
 
 describe("the result", () => {
-  it("shows the damage added, the total, Conquered!, the loot and the losses, once per press", async () => {
+  it("shows Victory!, the camp's damage, the loot and the take-over offer, once per press", async () => {
     const modal = document.createElement("div");
     const api = calls();
     const onAttacked = vi.fn();
@@ -319,14 +321,17 @@ describe("the result", () => {
     expect(api.run).toHaveBeenCalledTimes(1);
     expect(onAttacked).toHaveBeenCalledWith(RESULT);
     const shown = text(modal);
-    expect(shown).toContain("Conquered!");
-    expect(shown).toContain("+51% (41% → 92%)");
-    expect(shown).toContain("Camp damage92%");
-    expect(shown).toContain("Gorgo1,450 health left");
-    expect(shown).toContain("Bombs fired3");
-    expect(shown).toContain("some loot was left behind");
-    // The takeover offer an attack by hand gets.
-    expect(modal.querySelector(".end-takeover")).not.toBeNull();
+    expect(shown).toContain("Attack result");
+    expect(shown).toContain("Kozu · Level 35");
+    expect(shown).toContain("Victory!92%");
+    expect(shown).toContain("+1,200");
+    expect(shown).toContain("Storage full: some loot left behind");
+    // The owner wants none of the army, champion or bombs (16 Nov 2026).
+    expect(shown).not.toContain("Gorgo");
+    expect(shown).not.toContain("Bombs");
+    expect(shown).not.toContain("Monsters spent");
+    // The short take-over offer.
+    expect(modal.querySelector(".end-takeover--compact")).not.toBeNull();
     // Only Watch and Close (owner, 15 Nov 2026): no Repeat again.
     expect(button(modal, "Repeat again")).toBeUndefined();
     expect([...modal.querySelectorAll(".attack-end__actions button")].map((one) => one.textContent)).toEqual([

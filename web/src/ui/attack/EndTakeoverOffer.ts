@@ -53,15 +53,12 @@ export interface EndTakeoverOfferOptions {
   /** Local seconds; `Date.now` by default. */
   readonly now?: () => number;
   /**
-   * The short form for the Repeat attack's result (astra, 16 Nov 2026): a
-   * "Claim as outpost" line, the price as painted resource icons, Take over
-   * beside it, and the rules folded under "Terms". Wild camps only.
+   * The short form for the Repeat attack's result (owner, 16 Nov 2026: only
+   * the resources needed to take over): "Take-over cost", the price as
+   * painted resource icons, Take over beside it. Wild camps only.
    */
   readonly compact?: boolean;
 }
-
-/** The compact offer's folded rules. */
-export const COMPACT_TERMS = "Needs 90% damage. You can also take it over from the map until the camp rebuilds.";
 
 /** Where the offer stands. */
 export type EndTakeoverState = "open" | "declining" | "declined" | "taken" | "ended";
@@ -72,36 +69,24 @@ export const LEAVING_DECLINES =
 
 /**
  * The compact offer's price: the four painted resource icons, "450,000 each",
- * "or", the Shiny icon and its amount; "Frontier Pass" or "Half price" first
- * when one applies.
+ * "or", the Shiny icon and its amount. No "Frontier Pass" or "Half price":
+ * the owner only needs the price (16 Nov 2026).
  */
-const compactPrice = (price: { resources: number; shiny?: number; welcome?: boolean; adjacent?: boolean }): Node[] => {
-  const parts: Node[] = [];
-  // astra round 2: "Frontier Pass:" leads the price it names, not a chip of its own.
-  const deal = price.welcome ? "Frontier Pass:" : price.adjacent ? "Half price:" : null;
-  if (deal) {
-    const chip = document.createElement("span");
-    chip.className = "end-takeover__deal";
-    chip.textContent = deal;
-    parts.push(chip);
-  }
+const compactPrice = (price: { resources: number; shiny?: number | undefined }): Node[] => {
   const each = document.createElement("span");
   each.className = "end-takeover__each";
   each.setAttribute("aria-label", `${formatAmount(price.resources)} of each resource`);
   for (const key of RESOURCE_KEYS) each.append(resourceIcon(key, { decorative: true }));
   each.append(document.createTextNode(` ${formatAmount(price.resources)} each`));
-  parts.push(each);
-  if (price.shiny !== undefined) {
-    // "or [Shiny] 965" never breaks apart.
-    const alternative = document.createElement("span");
-    alternative.className = "end-takeover__alt";
-    const or = document.createElement("span");
-    or.className = "end-takeover__or";
-    or.textContent = "or";
-    alternative.append(or, resourceAmount("shiny", price.shiny, { tooltip: false }));
-    parts.push(alternative);
-  }
-  return parts;
+  if (price.shiny === undefined) return [each];
+  // "or [Shiny] 965" never breaks apart.
+  const alternative = document.createElement("span");
+  alternative.className = "end-takeover__alt";
+  const or = document.createElement("span");
+  or.className = "end-takeover__or";
+  or.textContent = "or";
+  alternative.append(or, resourceAmount("shiny", price.shiny, { tooltip: false }));
+  return [each, alternative];
 };
 
 export class EndTakeoverOffer {
@@ -166,23 +151,11 @@ export class EndTakeoverOffer {
 
     if (options.compact && kind === "camp") {
       this.element.classList.add("end-takeover--compact");
-      lead.textContent = "Claim as outpost";
+      lead.textContent = "Take-over cost";
       this.message.textContent = "";
       const info = document.createElement("div");
       info.className = "end-takeover__info";
-      // astra round 1: "Terms ▾" on the heading's line, not left alone at the bottom.
-      const top = document.createElement("div");
-      top.className = "end-takeover__top";
-      top.append(lead);
-      info.append(top, this.priceLine);
-      const terms = document.createElement("details");
-      terms.className = "end-takeover__terms";
-      const summary = document.createElement("summary");
-      summary.textContent = "Terms";
-      const words = document.createElement("p");
-      words.textContent = COMPACT_TERMS;
-      terms.append(summary, words);
-      top.append(terms);
+      info.append(lead, this.priceLine);
       this.element.append(info, actions, this.message);
     } else {
       this.element.append(lead, this.priceLine, this.countdown, actions, this.message);
@@ -268,7 +241,7 @@ export class EndTakeoverOffer {
       return;
     }
     if (this.element.classList.contains("end-takeover--compact")) {
-      this.priceLine.replaceChildren(...compactPrice(price as { resources: number; shiny?: number; welcome?: boolean; adjacent?: boolean }));
+      this.priceLine.replaceChildren(...compactPrice({ resources: price.resources, shiny: price.shiny }));
       return;
     }
     // The welcome price is a flat 10% of the full price: no half price on top.

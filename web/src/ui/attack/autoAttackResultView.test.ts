@@ -1,13 +1,14 @@
 // @vitest-environment jsdom
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import type { AutoAttackPlanResponse, AutoAttackResponse, PlanSummary } from "@/api/autoAttack";
 import { AutoAttackFlow, type AutoAttackCalls } from "./AutoAttackFlow";
 import { resultView } from "./autoAttackResultView";
-import { resultLayout } from "./resultLayout";
 
 /**
- * astra's three looks for the Repeat attack's result (owner, 16 Nov 2026),
- * behind `?arp=A|B|C` until the owner picks one.
+ * The Repeat attack's result (owner, 16 Nov 2026: "I just want to know the
+ * loot, and resource needed to take over"): the camp and whether it was won,
+ * the loot, the take-over price with Take over, Watch and Close. Nothing
+ * about the army, the champion, the moves, the deal or the rules.
  */
 
 const BASEID = "22913802237211";
@@ -62,105 +63,48 @@ const PLAIN: AutoAttackResponse = {
 
 const STALLED: AutoAttackResponse = { ...PLAIN, damageAfter: 1, damageAdded: 1, loot: { r1: 0, r2: 0, r3: 0, r4: 0 } };
 
-const LAYOUTS = ["A", "B", "C"] as const;
 const all = (view: ReturnType<typeof resultView>): string =>
-  [view.head, ...view.middle].map((node) => node.textContent ?? "").join(" | ");
+  [view.head, view.loot].map((node) => node.textContent ?? "").join(" | ");
 
-afterEach(() => {
-  window.localStorage.removeItem("bymr.arp");
-  window.history.replaceState(null, "", "/");
-});
-
-describe("the switch", () => {
-  it("is today's panel unless A, B or C is asked for, by address or by storage", () => {
-    expect(resultLayout()).toBe("today");
-    window.localStorage.setItem("bymr.arp", "b");
-    expect(resultLayout()).toBe("B");
-    window.history.replaceState(null, "", "/?arp=C");
-    expect(resultLayout()).toBe("C");
-    window.history.replaceState(null, "", "/?arp=Z");
-    expect(resultLayout()).toBe("today");
-  });
-});
-
-describe.each(LAYOUTS)("look %s", (layout) => {
-  it("says the damage once, with Conquered!, and has a place for the offer", () => {
-    const view = resultView(layout, BUSY);
-    const words = all(view);
-    expect(words).toContain("Legionnaire · Level 33");
-    expect(words).toContain("Conquered!");
-    expect(words).toContain("0% → 94%");
-    expect(words).toContain("+94%");
-    expect(words.match(/94%/g)?.length).toBe(2);
+describe("the parts", () => {
+  it("a conquered camp: its name and level, Victory!, the damage, the loot, a place for the offer", () => {
+    const view = resultView(BUSY);
+    expect(view.head.textContent).toContain("Legionnaire · Level 33");
+    expect(view.head.textContent).toContain("Victory!");
+    expect(view.head.querySelector('[aria-label="Camp damage: 94%"]')).not.toBeNull();
+    expect(view.loot.querySelectorAll(".arv-loot__item")).toHaveLength(4);
+    expect(view.loot.querySelectorAll(".arv-loot__item--none")).toHaveLength(2);
+    expect(view.loot.textContent).toContain("+100,000");
+    expect(view.loot.textContent).toContain("Storage full");
     expect(view.offerHost).not.toBeNull();
-    expect(words).toContain("Storage full");
   });
 
-  it("shows the loot, what was spent, the champion's health, the bombs and the move", () => {
-    const view = resultView(layout, BUSY);
-    const root = document.createElement("div");
-    root.append(view.head, ...view.middle);
-    expect(root.querySelectorAll(".arv-loot__item")).toHaveLength(4);
-    expect(root.querySelectorAll(".arv-loot__item--none")).toHaveLength(2);
-    expect(root.querySelector('[aria-label="20 Ichi"]')).not.toBeNull();
-    expect(root.textContent).toContain("35,570");
-    expect(root.textContent).toContain("×2");
-    expect(root.textContent).toContain("(230, 214) → (238, 209)");
-  });
-
-  it("a plain result: no Conquered!, no offer, no champion or bomb rows", () => {
-    const view = resultView(layout, PLAIN);
-    const words = all(view);
-    expect(words).not.toContain("Conquered!");
+  it("a camp still standing: Not won and its damage, no offer", () => {
+    const view = resultView(PLAIN);
+    expect(view.head.textContent).toContain("Not won");
+    expect(view.head.textContent).toContain("13%");
+    expect(view.head.textContent).not.toContain("Victory!");
     expect(view.offerHost).toBeNull();
-    expect(words).not.toContain("Storage full");
-    const root = document.createElement("div");
-    root.append(view.head, ...view.middle);
-    expect(root.querySelector(".arv-champion")).toBeNull();
-    expect(root.querySelector(".arv-bombs")).toBeNull();
-    expect(root.querySelector(".arv-moved")).toBeNull();
+    expect(view.loot.textContent).not.toContain("Storage full");
+    expect(view.loot.textContent).not.toContain("Low damage");
   });
 
-  it("a fallen champion says Fell; a stalled attack says to attack by hand", () => {
-    expect(all(resultView(layout, { ...BUSY, champions: [{ t: 3, hp: 0 }] }))).toContain("Fell");
-    expect(all(resultView(layout, STALLED))).toContain("Attack by hand");
-  });
-});
-
-describe("astra round 1", () => {
-  it("only what was spent: B has no tabs and C no second column", () => {
-    const b = document.createElement("div");
-    b.append(...resultView("B", PLAIN).middle);
-    expect(b.querySelector(".arv-tabs")).toBeNull();
-    expect(b.textContent).toContain("Used");
-    expect(resultView("C", PLAIN).wide).toBe(false);
-    expect(resultView("C", BUSY).wide).toBe(true);
+  it("an attack that stopped working says so under the loot", () => {
+    expect(resultView(STALLED).loot.textContent).toContain("Low damage. Attack by hand to try new drop points.");
   });
 
-  it("B's second tab is Army, with no count that reads as the army's size", () => {
-    const b = document.createElement("div");
-    b.append(...resultView("B", BUSY).middle);
-    expect([...b.querySelectorAll(".arv-tab")].map((one) => one.textContent)).toEqual(["Loot", "Army"]);
-  });
-
-  it("the damage bar names its 90% mark", () => {
-    expect(resultView("A", BUSY).head.querySelector(".arv-damage__ninety")?.textContent).toBe("90% to conquer");
+  it("shows nothing about the army, the champion, the moves or the bombs (owner, 16 Nov 2026)", () => {
+    const shown = all(resultView(BUSY));
+    for (const gone of ["Used", "Ichi", "Fomor", "health", "Moved", "bomb", "Battle details", "Army", "Terms"]) {
+      expect(shown).not.toContain(gone);
+    }
+    const view = resultView(BUSY);
+    expect(view.head.querySelector("details")).toBeNull();
+    expect(view.loot.querySelector("details, img.arv-portrait, .arv-unit")).toBeNull();
   });
 });
 
-describe("astra round 2", () => {
-  it("bombs sit with the monsters under Used; B shows Used above its tabs", () => {
-    const b = document.createElement("div");
-    b.append(...resultView("B", BUSY).middle);
-    const used = b.querySelector(".arv-spent")!;
-    expect(used.textContent).toContain("Used");
-    expect(used.querySelector('[aria-label="2 bombs"]')).not.toBeNull();
-    expect(used.compareDocumentPosition(b.querySelector(".arv-tabs")!) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
-    expect(b.querySelectorAll(".arv-page--off")).toHaveLength(1);
-  });
-});
-
-describe("the flow with a look chosen", () => {
+describe("the flow's result", () => {
   const calls = (result: AutoAttackResponse): AutoAttackCalls => ({
     plan: vi.fn(async () => ({}) as AutoAttackPlanResponse),
     run: vi.fn(async () => result),
@@ -180,36 +124,53 @@ describe("the flow with a look chosen", () => {
     damage: 0,
   };
 
-  it.each(LAYOUTS)("%s: Watch and Close sit outside the scrolling middle; the compact offer is in it", async (layout) => {
-    window.localStorage.setItem("bymr.arp", layout);
+  const attack = async (result: AutoAttackResponse): Promise<{ modal: HTMLElement; flow: AutoAttackFlow }> => {
     const modal = document.createElement("div");
-    const flow = new AutoAttackFlow({ baseid: BASEID, modal, onWatch: vi.fn(), calls: calls(BUSY) });
+    const flow = new AutoAttackFlow({ baseid: BASEID, modal, onWatch: vi.fn(), calls: calls(result) });
     await flow.start(answer);
     [...modal.querySelectorAll("button")].find((one) => one.textContent === "Attack now")!.click();
     await new Promise((resolve) => setTimeout(resolve, 0));
     await new Promise((resolve) => setTimeout(resolve, 0));
-    const panel = modal.querySelector(`.auto-attack--rv-${layout}`)!;
-    expect(panel).not.toBeNull();
+    return { modal, flow };
+  };
+
+  it("conquered: the price as icons and Take over, outside the loot; Watch and Close under them", async () => {
+    const { modal, flow } = await attack(BUSY);
+    const panel = modal.querySelector(".auto-attack--result")!;
+    expect(panel.querySelector(".panel__title")?.textContent).toBe("Attack result");
     const middle = panel.querySelector(".arv-middle")!;
     const actions = panel.querySelector(".attack-end__actions")!;
-    expect(middle.contains(actions)).toBe(false);
-    expect([...actions.querySelectorAll("button")].map((one) => one.textContent)).toEqual(["Watch", "Close"]);
-    const offer = middle.querySelector(".end-takeover--compact");
+    const offer = panel.querySelector(".end-takeover--compact")!;
     expect(offer).not.toBeNull();
-    expect(offer!.textContent).toContain("Claim as outpost");
-    expect(offer!.textContent).toContain("450,000 each");
-    expect(offer!.textContent).toContain("Frontier Pass");
+    expect(middle.contains(offer)).toBe(false);
+    expect(middle.contains(actions)).toBe(false);
+    expect(offer.compareDocumentPosition(actions) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(offer.textContent).toContain("Take-over cost");
+    expect(offer.textContent).toContain("450,000 each");
+    expect(offer.textContent).toContain("965");
+    // The owner does not need to know a Frontier Pass applied, nor any rules.
+    expect(offer.textContent).not.toContain("Frontier");
+    expect(offer.textContent).not.toContain("Terms");
+    expect(offer.querySelector("details")).toBeNull();
+    const take = offer.querySelector<HTMLButtonElement>(".end-takeover__take")!;
+    expect(take.textContent).toBe("Take over");
+    expect(take.disabled).toBe(false);
+    expect([...actions.querySelectorAll("button")].map((one) => one.textContent)).toEqual(["Watch", "Close"]);
+    // Take over is the main action; Close is named for the layout check.
+    expect(actions.querySelector(".btn--primary")).toBeNull();
+    expect(actions.querySelector('button[aria-label="Close"]')).not.toBeNull();
+    for (const gone of ["Used", "Fomor", "health left", "Moved", "Bombs", "Damage added", "Battle details"]) {
+      expect(panel.textContent).not.toContain(gone);
+    }
     flow.close();
   });
 
-  it("no look chosen: today's panel, unchanged", async () => {
-    const modal = document.createElement("div");
-    const flow = new AutoAttackFlow({ baseid: BASEID, modal, onWatch: vi.fn(), calls: calls(BUSY) });
-    await flow.start(answer);
-    [...modal.querySelectorAll("button")].find((one) => one.textContent === "Attack now")!.click();
-    await new Promise((resolve) => setTimeout(resolve, 0));
-    expect(modal.querySelector(".auto-attack--rv")).toBeNull();
-    expect(modal.textContent).toContain("Damage added");
+  it("not won: no offer, Close is the main action", async () => {
+    const { modal, flow } = await attack(PLAIN);
+    const panel = modal.querySelector(".auto-attack--result")!;
+    expect(panel.querySelector(".end-takeover")).toBeNull();
+    expect(panel.textContent).toContain("Not won");
+    expect(panel.querySelector(".attack-end__actions .btn--primary")?.textContent).toBe("Close");
     flow.close();
   });
 });

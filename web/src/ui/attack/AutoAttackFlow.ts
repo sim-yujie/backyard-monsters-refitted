@@ -19,11 +19,9 @@ import { championByType } from "@/game/combat/rules";
 import { championPortrait, monsterPortrait, showPortrait } from "@/game/portraits";
 import { championName, monsterName } from "@/ui/attack/ArmyPanel";
 import { EndTakeoverOffer } from "@/ui/attack/EndTakeoverOffer";
-import { formatAmount } from "@/ui/format";
 import { icon } from "@/ui/maproom1/icons";
 import { fitWholeRows, watchMoreBelow } from "@/ui/moreBelow";
 import { Panel } from "@/ui/Panel";
-import { RESOURCE_KEYS, RESOURCE_NAMES, resourceAmount } from "@/ui/resourceIcon";
 import {
   MOVES_CHANGED,
   MOVES_LEAD,
@@ -42,7 +40,6 @@ import {
 } from "./autoAttackText";
 import { resultView } from "./autoAttackResultView";
 import { RepeatBar } from "./RepeatBar";
-import { resultLayout, type ResultLayout } from "./resultLayout";
 import { REAL_TIMERS, REPEAT_BAR_MIN_MS, atLeast, type BarTimers } from "./repeatBarTiming";
 import "@/ui/styles/autoattack.css";
 
@@ -115,7 +112,7 @@ const sheet = (title: string, className: string): { backdrop: HTMLElement; panel
   // the confirm and refusal ones since the lead's vetting, 16 Nov 2026).
   backdrop.className = `popup-backdrop attack-end__backdrop${
     className.includes("auto-attack--bar") ? " auto-attack__backdrop--bar" : ""
-  }${/auto-attack--(confirm|failed|rv)/.test(className) ? " auto-attack__backdrop--card" : ""}`;
+  }${/auto-attack--(confirm|failed|result)/.test(className) ? " auto-attack__backdrop--card" : ""}`;
   const panel = new Panel({ title, closable: false, className: `map-panel attack-end auto-attack ${className}` });
   panel.element.setAttribute("role", "dialog");
   panel.element.setAttribute("aria-modal", "true");
@@ -371,7 +368,7 @@ export class AutoAttackFlow {
   private cueLists(root: HTMLElement): void {
     for (const stop of this.stopCues) stop();
     this.stopCues = [];
-    // astra's result looks: the middle fades at the bottom while more is below (a phone on its side).
+    // The result's loot fades at the bottom while more is below (a very short screen).
     for (const middle of root.querySelectorAll<HTMLElement>(".arv-middle")) {
       this.stopCues.push(watchMoreBelow(middle, "auto-attack__list--more"));
     }
@@ -411,14 +408,15 @@ export class AutoAttackFlow {
       const row = document.createElement("div");
       row.className = "attack-end__actions";
       row.append(...actions);
-      if (className.includes("auto-attack--rv")) {
-        // astra's result looks (16 Nov 2026): the camp and the damage on top,
-        // the middle scrolls, Watch and Close always in sight under it.
-        const [top, ...rest] = body;
+      if (className.includes("auto-attack--result")) {
+        // The result (owner, 16 Nov 2026): the camp on top, then the loot,
+        // which alone scrolls on a screen too short for it; the take-over
+        // offer and Watch and Close always in sight under it.
+        const [top, loot, ...rest] = body;
         const words = document.createElement("div");
         words.className = "auto-attack__scroll arv-middle";
-        words.append(...rest);
-        view.panel.setContent(...(top ? [top] : []), words, row);
+        if (loot) words.append(loot);
+        view.panel.setContent(...(top ? [top] : []), words, ...rest, row);
       } else if (className.includes("auto-attack--confirm") || className.includes("auto-attack--failed")) {
         // On a short screen the list (moves, what is short, the room) scrolls
         // and the words and buttons stay in sight (layout-rules; Smart Repeat
@@ -614,114 +612,18 @@ export class AutoAttackFlow {
   }
 
   private result(result: AutoAttackResponse): void {
-    const layout = resultLayout();
-    if (layout !== "today") {
-      this.resultAs(layout, result);
-      return;
-    }
-    const body: HTMLElement[] = [];
-    body.push(
-      paragraph(
-        result.conquered ? "Conquered!" : `${result.tribe} camp at ${Math.floor(result.damageAfter)}% damage`,
-        `attack-end__outcome${result.conquered ? " auto-attack__conquered" : ""}`,
-      ),
-    );
-
-    const stats = document.createElement("dl");
-    stats.className = "attack-end__stats";
-    const stat = (label: string, value: string, className = ""): void => {
-      const dt = document.createElement("dt");
-      dt.textContent = label;
-      const dd = document.createElement("dd");
-      dd.textContent = value;
-      if (className) dd.className = className;
-      stats.append(dt, dd);
-    };
-    stat(
-      "Damage added",
-      `+${Math.floor(result.damageAdded)}% (${Math.floor(result.damageBefore)}% → ${Math.floor(result.damageAfter)}%)`,
-      "auto-attack__added",
-    );
-    stat("Camp damage", `${Math.floor(result.damageAfter)}%`);
-    stat("Monsters spent", monstersText(result.flung) || "none");
-    // Smart Repeat attack: what moved into the yards in range first.
-    const moved: Record<string, number> = {};
-    for (const move of result.moved ?? [])
-      for (const [id, count] of Object.entries(move.monsters)) moved[id] = (moved[id] ?? 0) + count;
-    if (Object.keys(moved).length > 0) stat("Moved in first", monstersText(moved));
-    for (const champion of result.champions) {
-      stat(
-        championName(champion.t),
-        champion.hp > 0 ? `${formatAmount(Math.floor(champion.hp))} health left` : "fell in the battle",
-      );
-    }
-    if (result.bombs.length > 0) stat("Bombs fired", String(result.bombs.length));
-    body.push(stats);
-
-    const loot = document.createElement("ul");
-    loot.className = "attack-end__loot";
-    loot.setAttribute("aria-label", "Loot kept");
-    let spilled = false;
-    for (const key of RESOURCE_KEYS) {
-      const item = document.createElement("li");
-      const amount = result.loot[key];
-      item.className = `attack-end__loot-item${amount > 0 ? "" : " attack-end__loot-item--none"}`;
-      // Won, so green with a plus, "+1,500" (owner, 28 Oct).
-      item.append(resourceAmount(key, amount, { change: "gain", tooltip: false }));
-      item.title = `${RESOURCE_NAMES[key]}: ${Math.floor(amount).toLocaleString("en-US")}${amount >= 1 ? " gained" : ""}`;
-      if (result.lootLeft[key] > 0) spilled = true;
-      loot.append(item);
-    }
-    body.push(loot);
-    if (spilled) body.push(paragraph("Your storage was full, so some loot was left behind.", "u-muted attack-end__storage"));
-    if (result.damageAdded < 2 && !result.conquered) {
-      body.push(
-        paragraph(
-          "This attack has stopped working here. Attack by hand to try new drop points.",
-          "auto-attack__stalled",
-        ),
-      );
-    }
-
+    const view = resultView(result);
     // Only Watch and Close (owner, 15 Nov 2026): no Repeat again here.
-    const watch = buttonOf("Watch", "btn btn--ghost auto-attack__watch", () => void this.watch());
-    const close = buttonOf("Close", "btn btn--primary auto-attack__close", () => this.close());
-    this.show("Auto-attack result", `auto-attack--result${result.conquered ? " attack-end--win" : ""}`, body, [
-      watch,
-      close,
-    ]);
-
-    if (result.conquered && this.open) {
-      this.offer = new EndTakeoverOffer({
-        kind: "camp",
-        baseid: this.options.baseid,
-        name: result.tribe,
-        grant: null,
-        quote: this.calls.quote,
-        takeOver: this.calls.takeOver,
-        decline: (baseid, options) => declineTakeover(baseid, options),
-        modal: this.options.modal,
-        onTaken: (payment) => {
-          this.close();
-          this.options.onTaken?.(payment);
-        },
-        now: () => this.now(),
-      });
-      this.open.panel.body.querySelector(".attack-end__actions")?.before(this.offer.element);
-    }
-  }
-
-  /** One of astra's proposals for the result (owner picks on the Review Desk). */
-  private resultAs(layout: Exclude<ResultLayout, "today">, result: AutoAttackResponse): void {
-    const view = resultView(layout, result);
     const watch = buttonOf("Watch", "btn auto-attack__watch", () => void this.watch());
-    const close = buttonOf("Close", "btn btn--primary auto-attack__close", () => this.close());
+    const close = buttonOf("Close", "btn auto-attack__close", () => this.close());
+    // The layout check (and a screen reader) find the way out by its name.
+    close.setAttribute("aria-label", "Close");
+    // Take over is the main action when it is offered; Close otherwise.
+    if (!view.offerHost) close.classList.add("btn--primary");
     this.show(
       "Attack result",
-      `auto-attack--result auto-attack--rv auto-attack--rv-${layout}${view.wide ? " auto-attack--rv-wide" : ""}${
-        result.conquered ? " attack-end--win" : ""
-      }`,
-      [view.head, ...view.middle],
+      `auto-attack--result${result.conquered ? " attack-end--win" : ""}`,
+      [view.head, view.loot, ...(view.offerHost ? [view.offerHost] : [])],
       [watch, close],
     );
     if (view.offerHost && this.open) {
