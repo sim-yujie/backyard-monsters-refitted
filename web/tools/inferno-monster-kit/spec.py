@@ -317,6 +317,145 @@ SPECS = {
             "Cell 12 stays empty magenta."
         ),
     ),
+    # IC4 Valgos (16 Nov): painted from the PORTRAIT (web/public/portraits/IC4.webp), as Zagnoid round 3 and Malphus.
+    # Colours picked from it: salmon-pink fleshy head (lit #e0a68a, mid #b17653), dark red throat (#6c1f19), ivory
+    # fangs (#e6dcb4), orange eye balls (#f37b33), teal-blue spines and patches (lit #79b9c9, mid #488290, shade
+    # #2b617b), golden-tan scaly body (lit #e6c27e, mid #d79951, shade #9a6a35), plum-maroon claws (#733a43, lit
+    # #d299a1). Flash sheet: 30 x 1 whole-pixel cells of 55 x 32, one pose (it glides). The shadow tips of columns
+    # 13-19 reach 1-4 px into the next cell, so `flash_w` = 55.0 switches on the own-art-run cut (common.flash_cell).
+    # Symmetric, but Flash's columns are drawn 6 degrees early (column c faces 12c - 6): the best mirror partner of
+    # column c is 16 - c in 29 of 30 columns (body silhouettes centred, XOR / union: 0.16 mean mismatch, Spurtz 0.17 by the same measure), while the
+    # usual 15 - c gives 0.28, as much as one 12-degree step changes a column (0.28). So columns 8 and 23 are the
+    # straight front and back views. Codex paints the pose of the Flash column it is shown, so the repaint keeps
+    # Flash's turn: headings 8-23 are painted (8 and 23 are their own mirror) and h <-> 16 - h mirrored
+    # (`mirror_axis`). The portrait creature is symmetric (eyes and eye pits on both sides of the maw, spines on the
+    # middle of the back), lit from above. Drift: the body centre creeps right 0.425 px a column (art laid out ~55.4
+    # apart; linear + one sine fit, 0.36 px rms), 12 px over the turn, then jumps back between columns 29 and 0.
+    "IC4": dict(
+        name="Valgos",
+        out="valgos",
+        flash="valgos.png",
+        cell=(55, 32),
+        flash_w=55.0,                    # whole pixels, but keep only each column's own art run (shadow tips spill over)
+        still_pad=6,                     # the tail tip touches the cell's left edge (h0-1), the head its right edge (h14-17)
+        ref_body_only=True,              # reference cells without the cast shadow, centred
+        ref_smooth=True,
+        portrait=True,
+        design="portrait",
+        anim_colour_lock=True,
+        gamma=1.0,
+        # Codex paints it brighter and more saturated than the card (gold body hue 33 / sat 0.56 / value 0.90 vs the card's
+        # 35 / 0.48 / 0.74; pink flesh value 0.82 vs 0.71; teal sat 0.55 vs 0.49; claws a hot pink, hue 345 / value 0.51 vs
+        # plum 351 / 0.31). No per-channel grade (identity, so `tone` runs); `tone` moves each part toward the card,
+        # measured with art-work/IC4/colours.py: gold 32 / 0.52 / 0.77, flesh 14 / 0.51 / 0.70, teal 195 / 0.49 / 0.57,
+        # claws 348 / 0.61 / 0.40 (kept a step lighter than the card so they read at game size). `max_sat` keeps the
+        # orange eye balls (sat ~0.8) out of the gold and flesh windows.
+        grade=dict(body=((1.0, 0.0), (1.0, 0.0), (1.0, 0.0)), limbs=((1.0, 0.0), (1.0, 0.0), (1.0, 0.0))),
+        grade_chroma=True,               # fangs and eye glints stay as painted
+        tone=dict(
+            gold=dict(hue=(28, 60), soft=5, min_sat=0.25, max_sat=0.72, chroma=0.88, value=0.84, hi=210),
+            flesh=dict(hue=(2, 26), soft=4, min_sat=0.2, max_sat=0.65, chroma=1.0, value=0.84, gains=(0.98, 1.04, 1.0), hi=210),
+            teal=dict(hue=(170, 220), soft=8, min_sat=0.2, chroma=0.88, value=1.06, gains=(1.0, 1.01, 0.98)),
+            claws=dict(hue=(300, 356), soft=6, min_sat=0.25, chroma=0.95, value=0.72, gains=(1.04, 1.0, 0.94), hi=170),
+        ),
+        open_holes="core",               # gaps between the legs and the body
+        mirror_walk_roll=3,              # four-legged diagonal gait: a mirrored heading plays walk frame k+3
+        anchor=(11, 15),
+        flash_columns=30,
+        flash_step=12.0,
+        directions=30,
+        painted=list(range(8, 24)),      # Flash's front (column 8) -> left -> back (column 23)
+        mirror_axis=16,                  # heading h <-> 16 - h mirrored (see above)
+        flash_drift=0.425,               # the body creeps right 0.425 px a column (see above)
+        area=1.15,
+        drop=0.0,
+        shadow="flash",
+        anim_pad=(6, 10, 2),
+        walk_lift=(0, 0, 0, 0, 0, 0),
+        loops=(0, 8, 23),
+        face="gaping maw",
+        back_range=(246, 294),           # the big head shows in profile past the body up to 240 degrees (Flash column 20)
+        pose_parts="four clawed feet and the tail",
+        frames_note=(
+            "their pink blob with red dots is the big fleshy head with its gaping round maw and orange eye balls, the blue "
+            "teeth along the top are the teal back spines, the long yellow cone behind the head is the golden scaly body "
+            "tapering to the short pointed tail, the small brown bits at the sides are the four clawed feet"
+        ),
+        features="huge gaping round maw with three ivory fangs, orange eye balls on short stalks, teal-blue back spines, golden scaly body with teal patches and four clawed feet",
+        face_marks="the head (the gaping round maw with its fangs, the orange eye balls round its rim) and the teal back spines",
+        portrait_note=(
+            "THE DESIGN of Valgos (its official portrait, seen from the front-left, the maw turned toward the viewer): paint "
+            "exactly this creature: its huge fleshy salmon-pink head that is one big gaping round maw (dark red throat, three "
+            "big curved ivory fangs, small teeth), the glossy orange eye balls on short dark stalks round the top and sides "
+            "of the head, the small pits of tiny black eyes on the sides, the crest of teal-blue spines down its back, the "
+            "golden-tan scaly body with teal patches, four short thick legs with long curved plum-maroon claws, and the short "
+            "pointed tail, in its colours and its painting style"
+        ),
+        style=(
+            "hand-painted digital game illustration in the style of portrait.png: wrinkled fleshy pink head with soft "
+            "highlights, glossy orange eye balls, golden scaly skin, rich colour, soft painted shading with crisp edges, NO "
+            "thick black outline, no pixel art; the maw, fangs, orange eye balls and teal spines drawn bold and a little "
+            "exaggerated so they read at a small size"
+        ),
+        light=(
+            "soft light from ABOVE, the same on the left and right halves of the creature (highlights on the top "
+            "surfaces, darker underneath); no cast shadow on the ground"
+        ),
+        texture="wrinkled ridged salmon-pink flesh round the maw, glossy orange eye balls, golden-tan scales mottled with teal-blue patches, teal-blue spines",
+        no_fx=(
+            "No falling drops, puddles, splashes, sparks, smoke, dust, motion streaks, glow halos or loose bits. No part of "
+            "the creature is pure magenta: the head is a salmon pink, the throat a dark red and the claws a plum maroon, all "
+            "clearly different from the magenta background"
+        ),
+        creature=(
+            "Valgos, the burrowing maw beast of portrait.png (NOT a frog, NOT a crocodile, NOT a fish). Its HEAD is huge, as "
+            "wide as the body, and is almost all one GAPING ROUND MAW, open like a tunnel mouth: the rim is thick wrinkled "
+            "salmon-pink flesh in ridged folds banded with pale golden-tan, inside is a deep dark red throat; THREE big curved "
+            "IVORY FANGS stick out of the rim (one hanging down from the top, two pointing up from the bottom) and small "
+            "ivory teeth line the inside. Round the top and down both sides of the head stand EIGHT glossy ORANGE EYE BALLS on "
+            "short dark stalks (four down each side, the top pair near the crown), and on each side of the head, beside them, "
+            "sit three round pits each holding a cluster of tiny black beady eyes. Behind the head a crest of jagged TEAL-BLUE SPINES runs from the top of the head down the "
+            "middle of the back to the tail. The BODY is low, stocky and rounded, golden-tan with fine scales, mottled with "
+            "teal-blue patches, and ends in a SHORT POINTED TAIL. FOUR short thick legs (two at the front under the head, "
+            "two at the back) stand splayed, each foot with four or five long curved PLUM-MAROON claws; a plum-maroon spur "
+            "points back from each hind leg. Colours: salmon-pink head flesh (lit #e0a68a, mid #b17653), dark red throat "
+            "(#6c1f19), ivory fangs, orange eye balls (#f37b33 with a white glint), teal-blue spines and patches (lit #79b9c9, "
+            "mid #488290, shade #2b617b), golden-tan body (lit #e6c27e, mid #d79951, shade #9a6a35), plum-maroon claws "
+            "(#733a43, lit #d299a1)."
+        ),
+        parts=(
+            " 1. Head: ONE huge fleshy salmon-pink head at the front, almost all gaping round maw (wrinkled ridged rim, dark red throat inside); from behind only the back of the head shows.\n"
+            " 2. Fangs: THREE big curved ivory fangs on the maw's rim (one down from the top, two up from the bottom) and small ivory teeth inside. A gaping open maw: NOT a smile, NOT a grin, no lips, no tongue sticking out.\n"
+            " 3. Eyes: EIGHT glossy orange eye balls on short dark stalks, four down each side of the head (the top pair near the crown), plus three pits of tiny black eyes on each side.\n"
+            " 4. Spines: a crest of jagged teal-blue spines from the top of the head down the middle of the back to the tail.\n"
+            " 5. Body: low, stocky, golden-tan and scaly with teal-blue patches, behind the head.\n"
+            " 6. Legs: FOUR short thick splayed legs (two front, two back), each foot with four or five long curved plum-maroon claws; a plum-maroon spur on each hind leg.\n"
+            " 7. Tail: ONE short pointed tail at the back, opposite the head.\n"
+            " 8. No wings, no horns on the head, no arms, no extra legs (exactly four), no lips, no nose, no green skin."
+        ),
+        back_note=(
+            "BACK VIEW: the creature faces away from the viewer: the maw, throat and fangs are NOT visible; the viewer sees "
+            "the back of the big round salmon-pink head with the orange eye balls on stalks sticking up round its top and "
+            "sides, the crest of teal-blue spines running down the middle of the back toward the viewer, the golden-tan scaly "
+            "back with teal patches, the four splayed clawed legs at the sides and the short pointed tail toward the viewer"
+        ),
+        walk=(
+            "Cells 1-6 are ONE WALK CYCLE (six different steps, then it loops back to cell 1): Valgos plods on its four short "
+            "legs, diagonal pairs moving together (pair A = its own front-left and back-right legs, pair B = front-right and "
+            "back-left): 1 pair A reaches forward, pair B pushes back; 2 pair A sets down, pair B lifts; 3 pair B swings "
+            "forward; 4 pair B reaches forward, pair A pushes back (the opposite of cell 1); 5 pair B sets down, pair A lifts; "
+            "6 pair A swings forward. The body sways a little side to side, the heavy head bobs a little, the maw stays open. "
+            "Same size as ref.png, centred in its cell, the feet on the same horizontal ground line in every cell."
+        ),
+        attack=(
+            "Cells 7-11 are an ATTACK (a crunching bite with the huge maw), the same creature as ref.png: 7 anticipation: the "
+            "head pulls back and up away from the facing direction, the maw half closed; 8 wind-up: the head raised a little "
+            "higher (never higher than one head's height above the body), the maw stretched open as wide as it goes, fangs "
+            "bared; 9 strike: lunges forward in the facing direction, the head driving down onto the target, maw wide; 10 "
+            "follow-through: furthest forward and low, the jaws clamped nearly shut in a crunching bite; 11 recovery: back to "
+            "the resting pose of ref.png. The four feet stay planted where they are. Cell 12 stays empty magenta."
+        ),
+    ),
 }
 
 
@@ -330,8 +469,10 @@ def flash_column(spec, h):
 
 
 def mirror_of(spec, h):
+    """The heading whose left-right mirror image heading h is: d/2 - h, or spec `mirror_axis` - h (Valgos IC4:
+    16 - h, since its Flash columns are drawn 6 degrees early, so the front and back views are columns 8 and 23)."""
     d = spec["directions"]
-    return (d // 2 - h) % d
+    return (spec.get("mirror_axis", d // 2) - h) % d
 
 
 def view_of(spec, h):
