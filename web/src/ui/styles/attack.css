@@ -654,6 +654,271 @@
   }
 }
 
+/*
+ * TEMPORARY (7.7.1 design round, `?blp=A|B`, `ui/attack/lootLook.ts`): two
+ * ways for the loot to sit on a phone, from astra's advice, to compare in the
+ * real game. Without `?blp=` the rules above apply. One of the two replaces
+ * the 7.7.1 rules above once the owner picks it; the other goes.
+ *
+ * Both give every amount a fixed slot from the first second, so nothing
+ * grows as the loot comes in, and keep Retreat, the speed buttons and the
+ * menu at 44 px on a phone.
+ */
+
+/* Shared on a phone: the four slots, Twigs, Pebbles, Putty, Goo. */
+@media (max-width: 620px), (max-height: 500px) {
+  .attack-strip[data-blp] .attack-strip__loot .res-list {
+    display: grid;
+    height: 100%;
+  }
+
+  .attack-strip[data-blp] .attack-strip__loot .res-list > .res-amount + .res-amount {
+    margin-left: 0;
+  }
+
+  .attack-strip[data-blp] .attack-strip__retreat,
+  .attack-strip[data-blp] .attack-strip__speed-button,
+  .attack-strip[data-blp] .attack-menu__button {
+    min-height: 44px;
+  }
+
+  .attack-strip[data-blp] .attack-strip__loot:not([hidden]) {
+    display: block;
+    box-sizing: border-box;
+    font-size: 13px;
+    line-height: 16px;
+  }
+
+  .attack-strip[data-blp] .attack-strip__loot .res-amount {
+    display: flex;
+    align-items: center;
+    min-width: 0;
+    font-family: var(--font-display);
+  }
+
+  .attack-strip[data-blp] .attack-strip__loot .res-amount > .res-icon {
+    flex: none;
+    margin: 0;
+    vertical-align: middle;
+  }
+}
+
+/* ── Option A: a recessed tray inside the bar ──────────────────────────── */
+
+/* The tray: the speed switch's sunken plate, so it reads as part of the bar. */
+.attack-strip[data-blp="A"] .attack-strip__loot:not([hidden]) {
+  border: 1px solid var(--colour-border-subtle);
+  border-radius: var(--radius-md);
+  background: var(--colour-surface-sunken);
+  box-shadow: inset 0 1px 3px rgb(0 0 0 / 35%);
+}
+
+/* A desktop keeps its one row and full figures, on the same tray. */
+@media (min-width: 620.02px) and (min-height: 500.02px) {
+  .attack-strip[data-blp="A"] .attack-strip__loot:not([hidden]) {
+    padding: var(--space-1) var(--space-3);
+  }
+
+  .attack-strip[data-blp="A"] .attack-strip__loot .res-list {
+    display: flex;
+    gap: var(--space-3);
+  }
+
+  .attack-strip[data-blp="A"] .attack-strip__loot .res-list > .res-amount + .res-amount {
+    margin-left: 0;
+  }
+}
+
+/* Upright: a full-width tray under the controls, four columns, icon over number. */
+@media (max-width: 620px) {
+  .attack-strip[data-blp="A"] {
+    flex-wrap: wrap;
+    row-gap: 6px;
+  }
+
+  .attack-strip[data-blp="A"] .attack-strip__loot:not([hidden]) {
+    order: 1;
+    flex: 1 0 100%;
+    height: 44px;
+    padding: 0;
+  }
+
+  .attack-strip[data-blp="A"] .attack-strip__loot .res-list {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+
+  .attack-strip[data-blp="A"] .attack-strip__loot .res-amount {
+    flex-direction: column;
+    justify-content: center;
+    gap: 2px;
+  }
+
+  .attack-strip[data-blp="A"] .attack-strip__loot .res-list > .res-amount + .res-amount {
+    border-left: 1px solid var(--colour-border-subtle);
+  }
+
+  .attack-strip[data-blp="A"] .attack-strip__loot .res-amount > .res-icon {
+    height: 20px;
+  }
+}
+
+/* On its side: one row, the tray a 2x2 block between the readouts and the
+   controls; the Army panel stays where a one-row bar leaves it. */
+@media (min-width: 620.02px) and (max-height: 500px) {
+  .attack-strip[data-blp="A"] {
+    flex-wrap: nowrap;
+  }
+
+  .attack-strip[data-blp="A"] .attack-strip__spacer {
+    display: none;
+  }
+
+  .attack-strip[data-blp="A"] .attack-strip__loot:not([hidden]) {
+    order: 0;
+    flex: 0 0 216px;
+    height: 52px;
+    margin-inline: auto;
+    padding: 3px;
+  }
+
+  .attack-strip[data-blp="A"] .attack-strip__loot .res-list {
+    grid-template-columns: 1fr 1fr;
+    grid-template-rows: 1fr 1fr;
+    gap: 2px 4px;
+  }
+
+  .attack-strip[data-blp="A"] .attack-strip__loot .res-amount {
+    justify-content: space-between;
+    gap: 3px;
+    padding: 0 6px 0 4px;
+  }
+
+  .attack-strip[data-blp="A"] .attack-strip__loot .res-amount > .res-icon {
+    height: 18px;
+  }
+
+  /* 12 px lower than live, so the Army window's ribbon clears the bar. */
+  .attack-dock[data-blp="A"] {
+    top: calc(var(--hud-inset) + 60px + var(--space-2) + 12px);
+    max-height: calc(100vh - var(--hud-inset) - 60px - var(--space-2) - 12px - var(--space-3));
+    max-height: calc(100dvh - var(--hud-inset) - 60px - var(--space-2) - 12px - var(--space-3));
+  }
+}
+
+/* ── Option B: a plate hung under the bar ──────────────────────────────── */
+
+/* The bar keeps its one row; the loot is a plate of its own under its left
+   end, in the bar's frame (skin.css), on two short rods 10 px long. */
+@media (max-width: 620px), (max-height: 500px) {
+  .attack-strip[data-blp="B"] {
+    flex-wrap: nowrap;
+  }
+
+  .attack-strip[data-blp="B"] .attack-strip__loot:not([hidden]) {
+    position: absolute;
+    top: calc(100% + 10px);
+    left: 6px;
+    padding: 2px 4px;
+    border: 1px solid var(--colour-border);
+    border-radius: var(--radius-md);
+    background: var(--colour-surface-raised);
+    box-shadow: var(--shadow-float);
+  }
+
+  /* The rods that hang it from the bar. */
+  .attack-strip[data-blp="B"] .attack-strip__loot:not([hidden])::before,
+  .attack-strip[data-blp="B"] .attack-strip__loot:not([hidden])::after {
+    content: "";
+    position: absolute;
+    bottom: 100%;
+    width: 4px;
+    height: 16px;
+    border-radius: 1px;
+    background: var(--colour-border-strong);
+  }
+
+  .attack-strip[data-blp="B"] .attack-strip__loot:not([hidden])::before {
+    left: 18px;
+  }
+
+  .attack-strip[data-blp="B"] .attack-strip__loot:not([hidden])::after {
+    right: 18px;
+  }
+}
+
+/* Upright: as wide as the bar, four columns, icon over number. */
+@media (max-width: 620px) {
+  .attack-strip[data-blp="B"] .attack-strip__loot:not([hidden]) {
+    right: 6px;
+    height: 48px;
+  }
+
+  .attack-strip[data-blp="B"] .attack-strip__loot .res-list {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 4px;
+  }
+
+  .attack-strip[data-blp="B"] .attack-strip__loot .res-amount {
+    flex-direction: column;
+    justify-content: center;
+    gap: 2px;
+  }
+
+  .attack-strip[data-blp="B"] .attack-strip__loot .res-list > .res-amount + .res-amount {
+    border-left: 1px solid var(--colour-border-subtle);
+  }
+
+  .attack-strip[data-blp="B"] .attack-strip__loot .res-amount > .res-icon {
+    height: 20px;
+  }
+
+  /* The boosts bolt and the neighbour chip hang under the plate instead. */
+  .attack-strip[data-blp="B"]:has(> .attack-strip__loot:not([hidden])) :is(.attack-strip__boosts, .attack-strip__neighbours) {
+    top: calc(100% + 10px + 48px + var(--space-1));
+  }
+}
+
+/* On its side: a 2x2 plate under the bar's left end, clear of the Army panel
+   on the right and the map button at the bottom left. */
+@media (min-width: 620.02px) and (max-height: 500px) {
+  .attack-strip[data-blp="B"] .attack-strip__loot:not([hidden]) {
+    width: 220px;
+    height: 64px;
+    padding: 4px;
+  }
+
+  .attack-strip[data-blp="B"] .attack-strip__loot .res-list {
+    grid-template-columns: 1fr 1fr;
+    grid-template-rows: 1fr 1fr;
+    gap: 4px;
+  }
+
+  .attack-strip[data-blp="B"] .attack-strip__loot .res-amount {
+    justify-content: space-between;
+    gap: 3px;
+    padding: 0 6px 0 4px;
+    border-radius: var(--radius-sm);
+    background: var(--colour-surface-sunken);
+  }
+
+  .attack-strip[data-blp="B"] .attack-strip__loot .res-amount > .res-icon {
+    height: 18px;
+  }
+
+  .attack-strip[data-blp="B"]:has(> .attack-strip__loot:not([hidden])) :is(.attack-strip__boosts, .attack-strip__neighbours) {
+    position: absolute;
+    top: calc(100% + 10px + 64px + var(--space-1));
+    background: var(--colour-surface-raised);
+  }
+
+  /* 12 px lower than live, so the Army window's ribbon clears the bar. */
+  .attack-dock[data-blp="B"] {
+    top: calc(var(--hud-inset) + 60px + var(--space-2) + 12px);
+    max-height: calc(100vh - var(--hud-inset) - 60px - var(--space-2) - 12px - var(--space-3));
+    max-height: calc(100dvh - var(--hud-inset) - 60px - var(--space-2) - 12px - var(--space-3));
+  }
+}
+
 /* WP3 army panel ─────────────────────────────────────────────────────────
  * The army composition panel (§F2, §4.2, §4.3): a capacity meter, a row per
  * housed monster type with a number box flanked by −/+ and a Fill, the
