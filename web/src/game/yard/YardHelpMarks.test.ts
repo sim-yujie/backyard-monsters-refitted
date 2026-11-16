@@ -208,6 +208,20 @@ describe("YardHelpMarks", () => {
     marks.set([]);
     expect(marks.active).toBe(false);
   });
+
+  it("a held big wrench whose building is left damaged turns grey when its speed-up lands", () => {
+    const marks = new YardHelpMarks(anchor, corners);
+    marks.set([speedup(1), spent(2)]);
+    marks.hold([1]);
+    // Help all's speed-up lands; the repair there was used up today, so the scene hands over a spent mark.
+    expect(marks.set([spent(1), spent(2)])).toBe(true);
+    expect(marks.drawnSpent).toEqual([1, 2]);
+    expect(marks.ground.children).toHaveLength(0);
+    // Its exit does not play: the grey wrench stays.
+    marks.leave(1, "pop");
+    expect(marks.drawnSpent).toEqual([1, 2]);
+    expect(marks.root.children).toHaveLength(2);
+  });
 });
 
 /** The fill colour of the `index`th wrench's disc. */

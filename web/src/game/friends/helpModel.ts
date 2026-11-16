@@ -104,9 +104,10 @@ export const helpableIds = (block: HelpBlock | null): Set<number> => {
 /**
  * The buildings still damaged whose repair is used up for today
  * (`repairedToday`: one repair a friend's yard a UTC day, owner 16 Nov 2026)
- * and that have no speed-up open: they wear a grey wrench. A visit draws no
- * damage, so without it the yard looks fully repaired once today's repair is
- * given (owner's bug report, 16 Nov 2026: "it all repaired"). The same on a
+ * and that have no speed-up open: they wear a grey wrench. The wrench is the
+ * visit's clear sign of which buildings are damaged, so without it the yard
+ * looks fully repaired once today's repair is given (owner's bug report,
+ * 16 Nov 2026: "it all repaired"). The same on a
  * visit later that day, when the server sends every repair as `repairedToday`.
  */
 export const spentRepairIds = (block: HelpBlock | null): Set<number> => {

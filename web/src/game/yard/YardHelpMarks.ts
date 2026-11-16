@@ -22,9 +22,10 @@ import type { Corners } from "./planner/marquee";
  * no ring and no tag (owner, 15 Nov 2026: Help all and the bar's count are
  * speed-ups only; a repair is still given from the building's panel).
  * A building still damaged whose repair is used up for today (one repair a
- * friend's yard a day) keeps that small wrench in grey, still tappable: a
- * visit draws no damage, so it is the only sign the rest of the yard is
- * still damaged (owner's bug report, 16 Nov 2026).
+ * friend's yard a day) keeps that small wrench in grey, still tappable: the
+ * wrench is the visit's clear sign of which buildings are damaged, so
+ * without it the rest of the yard looks repaired (owner's bug report,
+ * 16 Nov 2026).
  *
  * The scene decides which buildings and what each saves (`helpMarksOf`);
  * this layer only draws them, and draws nothing once handed none. The wrench
