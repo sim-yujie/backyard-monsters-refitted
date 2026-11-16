@@ -1357,6 +1357,21 @@
       > .planner-search__input:not([hidden])
       + .planner-search__chips {
       grid-column: 2;
+      /* A scroll box's grid row would otherwise stop at the box's height and
+         clip a pressed chip's pill. */
+      height: max-content;
+    }
+
+    /* The box is narrow here: a smaller hint, ended with an ellipsis rather
+       than cut through a letter. */
+    :is(.planner-inventory, .planner-search) > .panel__body > .planner-search__input {
+      text-overflow: ellipsis;
+    }
+
+    :is(.planner-inventory, .planner-search)
+      > .panel__body
+      > .planner-search__input::placeholder {
+      font-size: var(--text-xs);
     }
   }
 }
