@@ -6,9 +6,10 @@ import { resourceName } from "@/ui/resourceIcon";
 import { TRADE_TEXT, TradeTab, type TradeHost } from "./allianceTradeUi";
 
 /**
- * The Trade tab and its sheets (owner 11 Nov 2026: a request is "I give N
+ * The Trade tab and its sheet (owner 11 Nov 2026: a request is "I give N
  * Twigs, I want N Goo", 1:1; a mate clicks Accept and the swap happens; each
- * side gets 90%) against a stand-in for the routes.
+ * side gets 90%; swaps only, no Send, owner 16 Nov 2026) against a stand-in
+ * for the routes.
  */
 
 const ok = <T extends object>(value: T) => Promise.resolve({ ok: true as const, ...value });
@@ -38,28 +39,25 @@ const request = (extra: Partial<TradeRequest> = {}): TradeRequest => ({
   ...extra,
 });
 
-const today = { sendsLeft: 1, receivesLeft: 1, postsLeft: 3, newDayIn: 6 * 3600 };
+const today = { swapsLeft: 1, postsLeft: 3, newDayIn: 6 * 3600 };
 
 const view = (extra: Partial<TradeView> = {}): TradeView => ({
   today,
-  rules: { loss: 0.1, capShare: 0.1, requestSeconds: 86_400 },
+  rules: { loss: 0.1, capShare: 0.1, requestSeconds: 172_800 },
   me: storage(5_000_000),
   myRequest: null,
   requests: [request()],
   recent: [{ from: "Mira", to: "Thornback", arrived: { r4: 800_000 }, at: 1_000_000 - 7_200 }],
-  mate: null,
   ...extra,
 });
 
 const swapDone = { gave: { r3: 1_000_000 }, got: { r1: 900_000 }, resources: { r1: 0, r2: 0, r3: 0, r4: 0 }, with: { userid: 2, username: "PebbleKing" } };
-const sendDone = { sent: {}, arrived: { r3: 900_000 }, lostFull: {}, resources: { r1: 0, r2: 0, r3: 0, r4: 0 }, to: { userid: 2, username: "PebbleKing" } };
 
 const fakeApi = (overrides: Partial<AllianceTradeApi> = {}): AllianceTradeApi => ({
   view: vi.fn(() => ok({ view: view() })),
   post: vi.fn(() => ok({})),
   cancel: vi.fn(() => ok({})),
   accept: vi.fn(() => ok({ done: swapDone })),
-  send: vi.fn(() => ok({ done: sendDone })),
   ...overrides,
 });
 
@@ -110,12 +108,16 @@ describe("trade sums (web preview = server)", () => {
   it("acceptBlock: each reason Accept is off", () => {
     const me = storage(5_000_000);
     expect(acceptBlock(request(), me, today)).toBeNull();
-    expect(acceptBlock(request(), me, { sendsLeft: 0, receivesLeft: 1 })).toBe("traded");
-    expect(acceptBlock(request(), me, { sendsLeft: 1, receivesLeft: 0 })).toBe("traded");
+    expect(acceptBlock(request(), me, { swapsLeft: 0 })).toBe("traded");
     expect(acceptBlock(request({ ready: false }), me, today)).toBe("mateTraded");
     expect(acceptBlock(request(), storage(500_000), today)).toBe("short");
     expect(acceptBlock(request(), null, today)).toBe("short");
-    expect(acceptBlock(request({ storage: storage(0, 5_000_000) }), me, today)).toBe("overCap");
+    // Over 10% of YOUR storage (5M cap: up to 500K), though the asker's is bigger.
+    expect(acceptBlock(request(), storage(5_000_000, 5_000_000), today)).toBe("overCap");
+    // Over the cap comes before not enough, as the server checks.
+    expect(acceptBlock(request(), storage(400_000, 5_000_000), today)).toBe("overCap");
+    // The asker's storage shrank since they posted.
+    expect(acceptBlock(request({ storage: storage(0, 5_000_000) }), me, today)).toBe("mateOverCap");
     expect(acceptBlock(request(), { held: { r1: 19_500_000, r2: 0, r3: 5_000_000, r4: 0 }, cap: 20_000_000 }, today)).toBe("full");
     expect(acceptBlock(request({ storage: { held: { r1: 0, r2: 0, r3: 19_500_000, r4: 0 }, cap: 20_000_000 } }), me, today)).toBe("mateFull");
   });
@@ -160,10 +162,11 @@ describe("Trade tab", () => {
   });
 
   it.each([
-    ["traded", { today: { ...today, sendsLeft: 0 } }, TRADE_TEXT.block.traded],
-    ["mateTraded", { requests: [request({ ready: false })] }, TRADE_TEXT.block.mateTraded],
-    ["short", { me: storage(400_000) }, TRADE_TEXT.block.short("400,000")],
-    ["overCap", { requests: [request({ storage: storage(0, 5_000_000) })] }, TRADE_TEXT.block.overCap("500,000")],
+    ["traded", { today: { ...today, swapsLeft: 0 } }, TRADE_TEXT.block.traded],
+    ["mateTraded", { requests: [request({ ready: false })] }, TRADE_TEXT.block.mateTraded("PebbleKing")],
+    ["short", { me: storage(400_000) }, TRADE_TEXT.block.short("400K", resourceName("r3"))],
+    ["overCap", { me: storage(5_000_000, 5_000_000) }, TRADE_TEXT.block.overCap("500K")],
+    ["mateOverCap", { requests: [request({ storage: storage(0, 5_000_000) })] }, TRADE_TEXT.block.mateOverCap("PebbleKing")],
     ["mateFull", { requests: [request({ storage: { held: { r1: 0, r2: 0, r3: 19_500_000, r4: 0 }, cap: 20_000_000 } })] }, TRADE_TEXT.block.mateFull("PebbleKing")],
   ] as const)("Accept is off with a reason: %s", async (block, extra, words) => {
     await mount(withView(extra as Partial<TradeView>));
@@ -202,7 +205,8 @@ describe("Trade tab", () => {
 
   it("your request when you traded today: it waits for tomorrow", async () => {
     await mount(withView({ myRequest: request({ id: 9, ready: false }) }));
-    expect(document.querySelector('.trade-request--mine .trade-request__why[data-block="mateTraded"]')).not.toBeNull();
+    const why = document.querySelector('.trade-request--mine .trade-request__why[data-block="mateTraded"]');
+    expect(why?.textContent).toBe(TRADE_TEXT.block.mineWaits);
   });
 
   it("New request is off once today's posts are used, or after a trade today", async () => {
@@ -210,7 +214,7 @@ describe("Trade tab", () => {
     expect(document.querySelector<HTMLButtonElement>(".trade-new")!.disabled).toBe(true);
     expect(document.body.textContent).toContain(TRADE_TEXT.postsUsed);
     document.body.replaceChildren();
-    await mount(withView({ today: { ...today, receivesLeft: 0 } }));
+    await mount(withView({ today: { ...today, swapsLeft: 0 } }));
     expect(document.querySelector<HTMLButtonElement>(".trade-new")!.disabled).toBe(true);
     expect(document.body.textContent).toContain(TRADE_TEXT.tradedToday);
   });
@@ -292,20 +296,19 @@ describe("New request sheet", () => {
   });
 });
 
-describe("Send sheet", () => {
-  it("past free storage is lost, Fit to room lowers it", async () => {
-    const mate = { userid: 2, username: "PebbleKing", storage: storage(19_500_000) };
-    const api = withView({ mate });
-    const { tab } = await mount(api);
-    tab.openSend(2, "PebbleKing");
-    await flush();
-    document.querySelector<HTMLButtonElement>('.trade-tile[data-key="r3"]')!.click();
-    buttonNamed("1M")!.click();
-    expect(document.body.textContent).toContain(TRADE_TEXT.lostFull("400,000"));
-    buttonNamed(TRADE_TEXT.fit)!.click();
-    expect(document.body.textContent).not.toContain("lost: storage full");
-    document.querySelector<HTMLButtonElement>(".trade-sheet__go")!.click();
-    await flush();
-    expect(api.send).toHaveBeenCalledWith(2, { r3: fitToRoom(storage(19_500_000), "r3") });
+describe("swaps only (owner, 16 Nov 2026)", () => {
+  it("Today shows one swap left, and the tab has no Send anywhere", async () => {
+    await mount(fakeApi());
+    const stats = [...document.querySelectorAll(".trade-today__stat")].map((node) => node.textContent);
+    expect(stats[0]).toBe(`1${TRADE_TEXT.swap} ${TRADE_TEXT.left}`);
+    expect(stats).toHaveLength(3);
+    expect(buttonNamed("Send")).toBeUndefined();
+    expect(document.body.textContent).not.toMatch(/\bSend\b/);
+    expect(document.body.textContent).toContain(TRADE_TEXT.hint);
+  });
+
+  it("after today's swap the stat is greyed out", async () => {
+    await mount(withView({ today: { ...today, swapsLeft: 0 } }));
+    expect(document.querySelector(".trade-today__stat")!.classList.contains("is-used")).toBe(true);
   });
 });

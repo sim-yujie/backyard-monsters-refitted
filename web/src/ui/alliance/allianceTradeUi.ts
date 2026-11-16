@@ -6,38 +6,26 @@ import {
   type TradeAmounts,
   type TradeKey,
   type TradeRequest,
-  type TradeStorage,
   type TradeView,
 } from "@/api/allianceTrade";
-import {
-  acceptBlock,
-  arriveFor,
-  carryCap,
-  fitToRoom,
-  landing,
-  nonZero,
-  postCap,
-  roomOf,
-  sendCap,
-  type AcceptBlock,
-} from "@/game/alliance/tradeRules";
+import { acceptBlock, arriveFor, carryCap, postCap, roomOf, type AcceptBlock } from "@/game/alliance/tradeRules";
 import { formatAmount, formatCountdown, formatShort } from "@/ui/format";
 import { make } from "@/ui/friends/rows";
 import { gameIcon, type GameIconName } from "@/ui/gameIcon";
 import { resourceIcon, resourceName } from "@/ui/resourceIcon";
 
 /**
- * The alliance window's Trade tab (design v5 §12b; a request is a 1:1 swap,
- * owner 10 and 11 Nov 2026):
+ * The alliance window's Trade tab (design v5 §12b; swaps only, owner 10, 11
+ * and 16 Nov 2026: a request is a 1:1 swap, each side receives 90%, no Send):
  *
- * - the tab: Today (sends / receives left, new day, −10%), your request
- *   (what you give → what you get, Cancel) or New request, mates' requests
- *   each with one Accept that shows what you get, the last 2 trades, a hint;
+ * - the tab: Today (swap left, new day, −10%), your request (what you give →
+ *   what you get, Cancel) or New request, mates' requests each with one
+ *   Accept that shows what you get (greyed with the reason when it cannot
+ *   go), the last 2 trades, the rules in one line;
  * - New request: what you give (one resource), what you get (another), the
- *   amount (500K / 1M / Most or typed), the swap with the 10% shown, Post.
- *   What you give is held by the request until a mate accepts or you cancel;
- * - Send (a mate's row in Members, or chat): tiles, 500K / 1M / Most, the
- *   flow with what really lands, "lost: storage full" and Fit to room.
+ *   amount (500K / 1M / Most or typed, up to 10% of your storage), the swap
+ *   with the 10% shown, Post. What you give is held by the request until a
+ *   mate accepts, you cancel, or 48 h pass.
  *
  * Icons and numbers over words (owner). A sheet takes the tab's place (it
  * fills a phone). The server decides everything
@@ -46,8 +34,7 @@ import { resourceIcon, resourceName } from "@/ui/resourceIcon";
 
 export const TRADE_TEXT = {
   today: "Today",
-  send: "Send",
-  receive: "Receive",
+  swap: "Swap",
   left: "left",
   newDay: "New day",
   loss: "−10% on the way",
@@ -70,46 +57,38 @@ export const TRADE_TEXT = {
   noRecent: "No trades yet.",
   gave: (from: string, to: string, what: string) => `${from} gave ${to} ${what}`,
   ago: (time: string) => `${time} ago`,
-  hint: "Or send to a mate: their row in Members, or tap their name in chat.",
+  hint: "Requests last 48 h. 1 swap a day each, up to 10% of storage.",
   back: "Back",
   post: "Post",
   youGive: "You give",
   youGet: "You get",
   mateGets: "Mate gets",
-  gets: (name: string) => `${name} gets`,
   most: "Most",
   /** Beside the amount: the most one trade carries here. */
   max: (amount: string) => `max ${amount}`,
-  maxWhy: "One trade carries up to 10% of storage, what you have, and what fits your room after the 10%.",
+  maxWhy: "Up to 10% of your storage, what you have, and what fits your room after the 10%.",
   room: "room",
   full: "Full",
   /** Why Accept is off, short. */
   block: {
-    traded: "You traded today",
-    mateTraded: "Tomorrow",
-    short: (amount: string) => `You have ${amount}`,
-    overCap: (amount: string) => `Max ${amount}`,
+    traded: "1 swap a day: you swapped today",
+    mateTraded: (name: string) => `${name} swapped today: tomorrow`,
+    mineWaits: "You swapped today: open from tomorrow",
+    short: (amount: string, what: string) => `Not enough: you have ${amount} ${what}`,
+    overCap: (amount: string) => `Over 10% of your storage (max ${amount})`,
+    mateOverCap: (name: string) => `Over 10% of ${name}'s storage`,
     full: "Your storage is full",
     mateFull: (name: string) => `${name}'s storage is full`,
   },
-  lostFull: (amount: string) => `${amount} lost: storage full`,
-  fitWarning: (name: string, what: string, amount: string) =>
-    `${name}'s ${what} storage is nearly full, so ${amount} would be lost.`,
-  fit: "Fit to room",
-  storage: (name: string) => `${name}'s storage`,
-  yourStorage: "Your storage",
-  sendTo: (name: string) => `Send to ${name}`,
   timeLeft: (time: string) => `${time} left`,
-  sent: (name: string, what: string) => `Done! ${name} got ${what}.`,
   swapped: (name: string, what: string) => `Done! You got ${what} from ${name}.`,
   posted: "Request posted. Mates see it here and in chat.",
-  usesSend: "Uses your 1 send today · Shiny can't be sent",
   loading: "Loading…",
   gone: "That request is no longer open.",
   pick: "Pick a resource",
 };
 
-/** The quick amounts on New request and Send. */
+/** The quick amounts on New request. */
 const QUICK = [500_000, 1_000_000] as const;
 
 /** What the tab needs from the window. */
@@ -117,18 +96,12 @@ export interface TradeHost {
   redraw(): void;
   say(text: string | null): void;
   now(): number;
-  /** After a post, cancel, accept or send: the yard's resources changed. */
+  /** After a post, cancel or accept: the yard's resources changed. */
   traded(): void;
 }
 
-type Amounts = Record<TradeKey, number>;
-const zero = (): Amounts => ({ r1: 0, r2: 0, r3: 0, r4: 0 });
-
-type Sheet =
-  /** A new request: what is given, what is wanted, how much of each. */
-  | { kind: "post"; give: TradeKey | null; want: TradeKey | null; amount: number }
-  /** `amounts`: what leaves. */
-  | { kind: "send"; mate: { userid: number; username: string; storage: TradeStorage | null }; picked: Set<TradeKey>; amounts: Amounts };
+/** A new request: what is given, what is wanted, how much of each. */
+type Sheet = { kind: "post"; give: TradeKey | null; want: TradeKey | null; amount: number };
 
 const button = (words: string, className: string, run: () => void, title?: string): HTMLButtonElement => {
   const node = make("button", `btn ${className}`, words);
@@ -179,33 +152,8 @@ const typed = (value: string): number => {
   return digits ? Math.min(Number(digits), 1_000_000_000) : 0;
 };
 
-/**
- * One storage bar: what is held now, and the change (green: what lands;
- * red: what leaves).
- */
-const storageBar = (label: string, storage: TradeStorage, key: TradeKey, change: number): HTMLElement => {
-  const box = make("div", "trade-bar");
-  const now = Math.max(0, storage.held[key]);
-  const after = Math.max(0, now + change);
-  const cap = Math.max(1, storage.cap);
-  const pct = (value: number) => `${Math.min(100, (value / cap) * 100).toFixed(1)}%`;
-  const head = make("div", "trade-bar__head");
-  head.append(make("span", "trade-bar__label", label), make("span", "trade-bar__nums", `${formatShort(now)} → ${formatShort(after)} / ${formatShort(storage.cap)}`));
-  const track = make("div", "trade-bar__track");
-  track.setAttribute("role", "img");
-  track.setAttribute("aria-label", `${label}: ${formatAmount(now)} now, ${formatAmount(after)} after, of ${formatAmount(storage.cap)}`);
-  const base = make("div", "trade-bar__fill");
-  base.style.width = pct(Math.min(now, after));
-  const delta = make("div", change >= 0 ? "trade-bar__gain" : "trade-bar__loss");
-  delta.style.left = pct(Math.min(now, after));
-  delta.style.width = pct(Math.abs(after - now));
-  track.append(base, delta);
-  box.append(head, track);
-  return box;
-};
-
 /** Why Accept is off: an icon and a few words. */
-const blockLine = (block: AcceptBlock, request: TradeRequest, view: TradeView): HTMLElement => {
+const blockLine = (block: AcceptBlock, request: TradeRequest, view: TradeView, mine = false): HTMLElement => {
   const icon: GameIconName = block === "traded" || block === "mateTraded" ? "time" : block === "full" || block === "mateFull" ? "storagefull" : "lost";
   let text: string;
   switch (block) {
@@ -213,13 +161,16 @@ const blockLine = (block: AcceptBlock, request: TradeRequest, view: TradeView): 
       text = TRADE_TEXT.block.traded;
       break;
     case "mateTraded":
-      text = TRADE_TEXT.block.mateTraded;
+      text = mine ? TRADE_TEXT.block.mineWaits : TRADE_TEXT.block.mateTraded(request.username);
       break;
     case "short":
-      text = TRADE_TEXT.block.short(formatAmount(view.me?.held[request.want] ?? 0));
+      text = TRADE_TEXT.block.short(formatShort(view.me?.held[request.want] ?? 0), resourceName(request.want));
       break;
     case "overCap":
-      text = TRADE_TEXT.block.overCap(formatAmount(view.me && request.storage ? carryCap(view.me.cap, request.storage.cap, view.rules.capShare) : 0));
+      text = TRADE_TEXT.block.overCap(formatShort(view.me ? carryCap(view.me.cap, view.me.cap, view.rules.capShare) : 0));
+      break;
+    case "mateOverCap":
+      text = TRADE_TEXT.block.mateOverCap(request.username);
       break;
     case "full":
       text = TRADE_TEXT.block.full;
@@ -263,10 +214,10 @@ export class TradeTab {
     return this.view;
   }
 
-  /** Loads the tab; with `to`, opens Send to that mate. */
-  async load(to?: { userid: number; username: string }): Promise<void> {
+  /** Loads the tab. */
+  async load(): Promise<void> {
     const generation = ++this.generation;
-    const answer = await this.api.view(to?.userid);
+    const answer = await this.api.view();
     if (generation !== this.generation) return;
     if (!answer.ok) {
       this.failed = answer.message;
@@ -277,10 +228,6 @@ export class TradeTab {
     this.view = answer.view;
     this.loadedAt = this.host.now();
     this.focusId = null;
-    if (to) {
-      const mate = answer.view.mate ?? { userid: to.userid, username: to.username, storage: null };
-      this.sheet = { kind: "send", mate, picked: new Set(), amounts: zero() };
-    }
     if (this.pendingFocus !== null) {
       const id = this.pendingFocus;
       this.pendingFocus = null;
@@ -298,12 +245,6 @@ export class TradeTab {
     this.sheet = null;
     this.pendingFocus = requestId;
     void this.load();
-  }
-
-  /** Opens the Send sheet to a mate (Members row, chat name). */
-  openSend(userid: number, username: string): void {
-    this.sheet = null;
-    void this.load({ userid, username });
   }
 
   /** Closes any sheet. */
@@ -337,8 +278,7 @@ export class TradeTab {
       return box;
     };
     today.append(
-      stat(gameIcon("income", { size: 24, decorative: true }), String(view.today.sendsLeft), `${TRADE_TEXT.send} ${TRADE_TEXT.left}`, view.today.sendsLeft === 0),
-      stat(gameIcon("gift", { size: 24, decorative: true }), String(view.today.receivesLeft), `${TRADE_TEXT.receive} ${TRADE_TEXT.left}`, view.today.receivesLeft === 0),
+      stat(gameIcon("income", { size: 24, decorative: true }), String(view.today.swapsLeft), `${TRADE_TEXT.swap} ${TRADE_TEXT.left}`, view.today.swapsLeft === 0),
       stat(gameIcon("time", { size: 24, decorative: true }), formatCountdown(view.today.newDayIn - (now - this.loadedAt)).replace(/ \d+[ms]$/, ""), TRADE_TEXT.newDay),
       stat(gameIcon("lost", { size: 24, decorative: true }), TRADE_TEXT.lossShort, TRADE_TEXT.loss.replace("−10% ", "")),
     );
@@ -354,10 +294,10 @@ export class TradeTab {
         make("span", "trade-request__time", TRADE_TEXT.timeLeft(formatCountdown(mine.expires_at - now).replace(/ \d+[ms]$/, ""))),
         button(TRADE_TEXT.cancel, "btn--outline trade-request__act", () => void this.cancel()),
       );
-      if (!mine.ready) row.append(blockLine("mateTraded", mine, view));
+      if (!mine.ready) row.append(blockLine("mateTraded", mine, view, true));
       nodes.push(card(TRADE_TEXT.yourRequest, row, make("p", "trade-note trade-note--small", TRADE_TEXT.held)));
     } else {
-      const traded = view.today.sendsLeft === 0 || view.today.receivesLeft === 0;
+      const traded = view.today.swapsLeft === 0;
       const open = button("", "btn--primary trade-new", () => this.openPost());
       open.append(gameIcon("income", { size: 24, decorative: true }), make("span", "", TRADE_TEXT.newRequest));
       open.disabled = traded || view.today.postsLeft === 0 || !view.me || this.busy;
@@ -445,13 +385,10 @@ export class TradeTab {
   private renderSheet(view: TradeView, sheet: Sheet): HTMLElement {
     const box = make("section", `trade-sheet trade-sheet--${sheet.kind}`);
     const head = make("div", "trade-sheet__head");
-    const title = sheet.kind === "post" ? TRADE_TEXT.newRequest : TRADE_TEXT.sendTo(sheet.mate.username);
-    head.append(button(`← ${TRADE_TEXT.back}`, "btn--outline trade-sheet__back", () => this.closeSheet()), make("h3", "trade-sheet__title", title));
+    head.append(button(`← ${TRADE_TEXT.back}`, "btn--outline trade-sheet__back", () => this.closeSheet()), make("h3", "trade-sheet__title", TRADE_TEXT.newRequest));
     box.append(head);
     this.live = make("div", "trade-sheet__live");
-    if (sheet.kind === "post") box.append(...this.postControls(view, sheet));
-    if (sheet.kind === "send") box.append(...this.sendControls(view, sheet));
-    box.append(this.live);
+    box.append(...this.postControls(view, sheet), this.live);
     this.fillLive();
     return box;
   }
@@ -461,8 +398,7 @@ export class TradeTab {
     const sheet = this.sheet;
     const view = this.view;
     if (!sheet || !view || !this.live) return;
-    if (sheet.kind === "post") this.live.replaceChildren(...this.postLive(view, sheet));
-    if (sheet.kind === "send") this.live.replaceChildren(...this.sendLive(view, sheet));
+    this.live.replaceChildren(...this.postLive(view, sheet));
   }
 
   /** A resource tile: icon, name, a small line (free room, held). The chosen one is lit. */
@@ -520,20 +456,6 @@ export class TradeTab {
     return row;
   }
 
-  private flow(key: TradeKey, give: number, arrive: number, receiver: string, lost = 0): HTMLElement {
-    const flow = make("div", "trade-flow");
-    flow.dataset["key"] = key;
-    const from = make("div", "trade-flow__side");
-    from.append(make("span", "trade-flow__who", TRADE_TEXT.youGive), make("strong", "trade-flow__n", formatAmount(give)));
-    const arrow = make("div", "trade-flow__arrow");
-    arrow.append(resourceIcon(key, { decorative: true }), make("span", "trade-flow__loss", TRADE_TEXT.lossLong));
-    const to = make("div", "trade-flow__side trade-flow__side--to");
-    to.append(make("span", "trade-flow__who", receiver), make("strong", "trade-flow__n trade-flow__n--gain", formatAmount(arrive)));
-    if (lost > 0) to.append(make("span", "trade-flow__lost", TRADE_TEXT.lostFull(formatAmount(lost))));
-    flow.append(from, arrow, to);
-    return flow;
-  }
-
   private submit(label: string, enabled: boolean, run: () => void): HTMLElement {
     const node = button(label, "btn--primary trade-sheet__go", run);
     node.disabled = !enabled || this.busy;
@@ -542,7 +464,7 @@ export class TradeTab {
 
   // New request -------------------------------------------------------------
 
-  private postControls(view: TradeView, sheet: Extract<Sheet, { kind: "post" }>): HTMLElement[] {
+  private postControls(view: TradeView, sheet: Sheet): HTMLElement[] {
     const me = view.me;
     const most = (give: TradeKey | null, want: TradeKey | null) => (me && give && want ? postCap(me, give, want) : 0);
     const settle = () => {
@@ -582,7 +504,7 @@ export class TradeTab {
     return nodes;
   }
 
-  private postLive(view: TradeView, sheet: Extract<Sheet, { kind: "post" }>): HTMLElement[] {
+  private postLive(view: TradeView, sheet: Sheet): HTMLElement[] {
     const nodes: HTMLElement[] = [];
     if (!sheet.give || !sheet.want) {
       nodes.push(make("p", "trade-note", TRADE_TEXT.pick));
@@ -600,79 +522,10 @@ export class TradeTab {
     return nodes;
   }
 
-  private async post(sheet: Extract<Sheet, { kind: "post" }>): Promise<void> {
+  private async post(sheet: Sheet): Promise<void> {
     const { give, want, amount } = sheet;
     if (!give || !want || amount <= 0) return;
     await this.act(() => this.api.post(give, want, amount), () => this.host.say(TRADE_TEXT.posted), true);
-  }
-
-  // Send -------------------------------------------------------------------
-
-  private sendControls(view: TradeView, sheet: Extract<Sheet, { kind: "send" }>): HTMLElement[] {
-    const me = view.me;
-    const theirs = sheet.mate.storage;
-    const tiles = make("div", "trade-tiles");
-    for (const key of TRADE_KEYS) {
-      const most = me && theirs ? sendCap(me, theirs, key) : 0;
-      tiles.append(
-        this.tile(key, sheet.picked.has(key), me ? formatShort(me.held[key]) : "—", most <= 0, () => {
-          if (sheet.picked.has(key)) {
-            sheet.picked.delete(key);
-            sheet.amounts[key] = 0;
-          } else {
-            sheet.picked.add(key);
-            sheet.amounts[key] = Math.min(QUICK[0], most);
-          }
-          this.host.redraw();
-        }),
-      );
-    }
-    const amounts = make("div", "trade-amounts");
-    for (const key of TRADE_KEYS) {
-      if (!sheet.picked.has(key) || !me || !theirs) continue;
-      amounts.append(this.amountRow(key, sheet.amounts[key], sendCap(me, theirs, key), (n) => (sheet.amounts[key] = n)));
-    }
-    return [tiles, amounts];
-  }
-
-  private sendLive(view: TradeView, sheet: Extract<Sheet, { kind: "send" }>): HTMLElement[] {
-    const nodes: HTMLElement[] = [];
-    const theirs = sheet.mate.storage;
-    const name = sheet.mate.username;
-    const bars = make("div", "trade-bars");
-    for (const key of TRADE_KEYS) {
-      if (!sheet.picked.has(key)) continue;
-      const sent = sheet.amounts[key];
-      const land = theirs ? landing(sent, theirs, key) : { arrive: arriveFor(sent), lands: arriveFor(sent), lost: 0 };
-      nodes.push(this.flow(key, sent, land.lands, TRADE_TEXT.gets(name), land.lost));
-      if (land.lost > 0 && theirs) {
-        const warn = make("div", "trade-warn");
-        warn.append(
-          make("span", "", TRADE_TEXT.fitWarning(name, resourceName(key), formatAmount(land.lost))),
-          button(TRADE_TEXT.fit, "btn--outline trade-warn__fit", () => {
-            sheet.amounts[key] = Math.min(sheet.amounts[key], fitToRoom(theirs, key));
-            this.host.redraw();
-          }),
-        );
-        nodes.push(warn);
-      }
-      if (theirs) bars.append(storageBar(TRADE_TEXT.storage(name), theirs, key, land.lands));
-      if (view.me) bars.append(storageBar(TRADE_TEXT.yourStorage, view.me, key, -sent));
-    }
-    if (sheet.picked.size === 0) nodes.push(make("p", "trade-note", TRADE_TEXT.pick));
-    nodes.push(bars, make("p", "trade-note trade-note--small", TRADE_TEXT.usesSend));
-    const any = TRADE_KEYS.some((key) => sheet.amounts[key] > 0);
-    nodes.push(this.submit(TRADE_TEXT.send, any && view.today.sendsLeft > 0, () => void this.send(sheet)));
-    return nodes;
-  }
-
-  private async send(sheet: Extract<Sheet, { kind: "send" }>): Promise<void> {
-    const amounts = nonZero(sheet.amounts);
-    await this.act(
-      () => this.api.send(sheet.mate.userid, amounts),
-      (answer) => this.host.say(TRADE_TEXT.sent(sheet.mate.username, amountsWords(answer.done.arrived))),
-      true,
-    );
   }
 
   /** Runs a call; on success closes any sheet, reloads, and says so. */
