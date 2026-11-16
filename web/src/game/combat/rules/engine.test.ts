@@ -15,6 +15,7 @@ import {
   type BattleOptions,
   type BattleVisualEvent,
   type BunkerLossTally,
+  type CreepSnapshot,
 } from "./engine.js";
 import { digestOf } from "./digest.js";
 import { ATTACK_COUNTDOWN_SECONDS, TICKS_PER_SECOND } from "./stats.js";
@@ -2616,6 +2617,61 @@ describe("the caged champion (issues #195, #260)", () => {
       run(battle, 4000);
       expect(out(battle)).toHaveLength(0);
       expect(battle.state().defenderChampions.map((caged) => caged.hp)).toEqual([0, 0]);
+    });
+  });
+
+  describe("a walking Fomor against the attacker's champion (`ChampionBase.as:889-905`)", () => {
+    /** The cage, and a big Town Hall 400 off for the attackers to stand at. */
+    const hallYard = () =>
+      yardOf({
+        "1": { id: 1, t: 114, l: 1, X: 0, Y: 0 },
+        "2": { id: 2, t: 14, l: 6, X: 400, Y: 400 },
+      });
+    const fomor = { t: 3, l: 2, hp: 17500, pl: 1 };
+    const gap = (one: CreepSnapshot, other: CreepSnapshot) =>
+      Math.sqrt(screenDistanceSquared(one.ix, one.iy, other.ix, other.iy));
+
+    it("has the Drull it shoots swing back at once from where it stands, and keep on until it falls", () => {
+      const battle = createBattle(hallYard(), { seed: 3, defenderChampions: [fomor] });
+      battle.apply({ kind: "fling", t: 0, x: 520, y: 520, r: 0, monsters: {}, champion: { t: 2, l: 2 } });
+      let firstSwing = -1;
+      let walked = 0;
+      let lastAt: CreepSnapshot | null = null;
+      expect(untilOut(battle, 400)).toBeGreaterThan(0);
+      for (let step = 0; step < 4000 && champion(battle); step += 1) {
+        battle.step();
+        const out = champion(battle);
+        const drull = battle.creeps().find((creep) => !creep.friendly && creep.champion);
+        if (!out || !drull || drull.targetCreep !== out.id) continue;
+        if (firstSwing < 0 && drull.state === "attacking") firstSwing = gap(drull, out);
+        if (lastAt) walked += Math.hypot(drull.ix - lastAt.ix, drull.iy - lastAt.iy);
+        lastAt = drull;
+      }
+      // The Fomor shoots from its 140; the Drull, with a reach of 45, swings
+      // from there instead of walking up first.
+      expect(firstSwing).toBeGreaterThan(100);
+      expect(firstSwing).toBeLessThanOrEqual(140);
+      expect(walked).toBe(0);
+      expect(champion(battle)).toBeUndefined();
+      expect(battle.state().defenderChampions[0]!.hp).toBe(0);
+    });
+
+    it("still has a monster it shoots walk up to it, swinging only from close by", () => {
+      const battle = createBattle(hallYard(), { seed: 3, defenderChampions: [fomor] });
+      battle.apply({ kind: "fling", t: 0, x: 520, y: 520, r: 0, monsters: { C2: 1 } });
+      expect(untilOut(battle, 400)).toBeGreaterThan(0);
+      let turnedAt = -1;
+      let farSwings = 0;
+      for (let step = 0; step < 4000 && !battle.over() && champion(battle); step += 1) {
+        battle.step();
+        const out = champion(battle);
+        const octo = battle.creeps().find((creep) => !creep.friendly);
+        if (!out || !octo || octo.targetCreep !== out.id) continue;
+        if (turnedAt < 0) turnedAt = gap(octo, out);
+        if (octo.state === "attacking" && gap(octo, out) >= 50) farSwings += 1;
+      }
+      expect(turnedAt).toBeGreaterThan(100);
+      expect(farSwings).toBe(0);
     });
   });
 });
