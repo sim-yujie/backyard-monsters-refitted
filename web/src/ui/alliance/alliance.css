@@ -2730,14 +2730,16 @@
     text-align: center;
   }
 
-  /* A request: name and time on one line, the swap and Accept on the next, the reason under.
-     (Placed by area: by order alone the name fell into a squeezed first column under the swap.) */
+  /* A request: name and time, then the swap across the row, then Accept (full width), then the
+     reason. Placed by area: by order alone the name fell into a squeezed column and the swap ran
+     under Accept. */
   .trade-request,
   .trade-request--mine {
     grid-template-columns: minmax(0, 1fr) auto;
     grid-template-areas:
       "who time"
-      "swap act"
+      "swap swap"
+      "act act"
       "why why";
   }
 
@@ -2757,6 +2759,10 @@
   .trade-request__act,
   .trade-request__given {
     grid-area: act;
+  }
+
+  .trade-request__act {
+    justify-content: center;
   }
 
   .trade-request__why {
