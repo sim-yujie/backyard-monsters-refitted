@@ -658,7 +658,8 @@
   }
 
   .attack-end.auto-attack--confirm,
-  .attack-end.auto-attack--failed {
+  .attack-end.auto-attack--failed,
+  .attack-end.auto-attack--rv {
     align-self: center;
     width: auto;
     height: auto;
@@ -672,4 +673,452 @@
    every size (measured in the browser, lead's vetting 16 Nov). */
 .auto-attack--moves .auto-attack__scroll > .auto-attack__moves {
   padding-block: calc(var(--space-1) / 2);
+}
+
+/* ── The result in astra's looks (owner, 16 Nov 2026: "too wordy, badly
+ * formatted"; `?arp=A|B|C`, autoAttackResultView.ts) ──────────────────────
+ * The camp and its damage on top, a middle that scrolls when the screen is
+ * short, Watch and Close always under it (the confirm sheet's way). */
+
+.attack-end.auto-attack--rv > .panel__body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  min-height: 0;
+  max-height: min(84vh, 760px);
+  max-height: min(84dvh, 760px);
+  overflow: hidden;
+}
+
+.attack-end.auto-attack--rv > .panel__body > .arv-head {
+  flex: none;
+}
+
+.arv-middle {
+  gap: var(--space-3);
+}
+
+.auto-attack--rv .attack-end__actions .btn {
+  min-width: 112px;
+  min-height: 44px;
+}
+
+/* The camp: tribe portrait, name and level, "Conquered!", the damage. */
+.arv-head {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.arv-head__tribe {
+  flex: none;
+  width: 64px;
+  height: 64px;
+  object-fit: contain;
+  border-radius: var(--radius-md);
+  background: var(--colour-surface-sunken);
+}
+
+.arv-head__words {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  min-width: 0;
+  flex: 1 1 auto;
+}
+
+.arv-head__camp {
+  margin: 0;
+  font-size: var(--text-sm);
+  color: var(--colour-text-secondary);
+  font-weight: 700;
+}
+
+.arv-head__outcome {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: var(--text-xl);
+  line-height: 1.1;
+}
+
+.arv-head__outcome--won {
+  color: var(--colour-success, var(--colour-text));
+}
+
+.arv-damage {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.arv-damage__numbers {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.arv-damage__added {
+  margin-left: auto;
+  color: var(--colour-accent);
+}
+
+.arv-damage__bar {
+  position: relative;
+  display: flex;
+  height: 8px;
+  border-radius: var(--radius-pill);
+  background: var(--colour-surface-sunken);
+  overflow: hidden;
+}
+
+.arv-damage__was {
+  background: var(--colour-text-muted);
+}
+
+.arv-damage__now {
+  background: var(--colour-accent);
+}
+
+.arv-damage__mark {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 90%;
+  width: 2px;
+  background: var(--colour-text-strong, var(--colour-text));
+  opacity: 0.6;
+}
+
+/* The loot, two by two, the same size whatever the numbers. */
+.arv-loot {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.arv-loot__item {
+  display: flex;
+  align-items: center;
+  min-height: 36px;
+  padding: var(--space-1) var(--space-2);
+  border: 1px solid var(--colour-border);
+  border-radius: var(--radius-md);
+  font-size: var(--text-md);
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.arv-loot__item--none {
+  color: var(--colour-text-muted);
+  opacity: 0.75;
+}
+
+/* Rows: a painted icon or a short word, then the pictures and numbers. */
+.arv-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-height: 32px;
+}
+
+.arv-row__icon {
+  flex: none;
+  display: inline-flex;
+}
+
+.arv-row__word {
+  flex: none;
+  min-width: 52px;
+  font-size: var(--text-sm);
+  font-weight: 700;
+  color: var(--colour-text-secondary);
+}
+
+.arv-row__body {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-1) var(--space-2);
+  min-width: 0;
+}
+
+.arv-portrait {
+  width: 28px;
+  height: 28px;
+  border-radius: var(--radius-sm);
+  object-fit: cover;
+}
+
+.arv-unit {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.arv-route {
+  font-size: var(--text-sm);
+  color: var(--colour-text-secondary);
+}
+
+.arv-champion {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-weight: 700;
+}
+
+.arv-champion-row {
+  justify-content: space-between;
+}
+
+.arv-champion__health {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.arv-champion__health--fell {
+  color: var(--colour-warning);
+}
+
+.arv-bombs__count {
+  font-weight: 700;
+}
+
+.arv-note {
+  margin: 0;
+  font-size: var(--text-sm);
+  font-weight: 700;
+  color: var(--colour-warning);
+}
+
+/* A: "Battle details", folded, with the champion and bomb pictures on its line. */
+.arv-fold {
+  border: 1px solid var(--colour-border);
+  border-radius: var(--radius-md);
+}
+
+.arv-fold__summary {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-height: 44px;
+  padding: 0 var(--space-3);
+  cursor: pointer;
+  font-weight: 700;
+  list-style-position: inside;
+}
+
+.arv-fold__peek {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  margin-left: auto;
+}
+
+.arv-fold__moved {
+  font-size: var(--text-xs);
+  color: var(--colour-text-secondary);
+}
+
+.arv-fold__body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding: 0 var(--space-3) var(--space-3);
+}
+
+/* B: the Loot | Army tabs. */
+.arv-tabs {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--space-2);
+}
+
+.arv-tab {
+  min-height: 44px;
+  border: 1px solid var(--colour-border);
+  border-radius: var(--radius-md);
+  background: var(--colour-surface-control);
+  color: var(--colour-text-secondary);
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.arv-tab--on {
+  border-color: var(--colour-accent);
+  background: var(--colour-surface-selected);
+  color: var(--colour-text);
+}
+
+.arv-page {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.arv-page[hidden] {
+  display: none;
+}
+
+/* C: Loot and Army side by side on a wider window; one under the other on a phone upright. */
+@media (min-width: 621px) {
+  .attack-end.auto-attack--rv-C {
+    /* Wider than a plain popup (ui.css caps those at 560px). */
+    width: min(calc(100vw - 2 * var(--space-4)), 680px);
+    max-width: min(calc(100vw - 2 * var(--space-4)), 680px);
+  }
+}
+
+.arv-board {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: var(--space-3);
+}
+
+@media (max-width: 620px) {
+  .arv-board {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+.arv-col {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+.arv-col__title {
+  margin: 0;
+  font-size: var(--text-sm);
+  color: var(--colour-text-secondary);
+}
+
+@media (min-width: 621px) {
+  .arv-col--loot .arv-loot {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+/* The compact takeover offer (EndTakeoverOffer `compact`): the heading and
+   the price as icons on the left, Take over on the right, "Terms" folded. */
+.end-takeover.end-takeover--compact {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2) var(--space-3);
+  padding: var(--space-2) var(--space-3);
+}
+
+/* The price takes the line; Take over drops under it when they do not fit. */
+.end-takeover--compact .end-takeover__info {
+  display: flex;
+  flex: 1 1 240px;
+  flex-direction: column;
+  gap: var(--space-1);
+  min-width: 0;
+}
+
+.end-takeover--compact .end-takeover__actions {
+  flex: 0 0 auto;
+  margin-left: auto;
+}
+
+.end-takeover--compact .end-takeover__lead {
+  margin: 0;
+  font-weight: 700;
+}
+
+.end-takeover--compact .end-takeover__price {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-1) var(--space-2);
+  margin: 0;
+  font-size: var(--text-sm);
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.end-takeover__each {
+  display: inline-flex;
+  align-items: center;
+  gap: 1px;
+  white-space: nowrap;
+}
+
+.end-takeover__deal {
+  padding: 0 var(--space-2);
+  border-radius: var(--radius-pill);
+  background: var(--colour-accent-soft);
+  font-size: var(--text-xs);
+}
+
+.end-takeover__or {
+  font-weight: 400;
+  color: var(--colour-text-secondary);
+}
+
+.end-takeover--compact .end-takeover__actions {
+  margin: 0;
+}
+
+.end-takeover--compact .end-takeover__message {
+  flex: 1 1 100%;
+  margin: 0;
+}
+
+.end-takeover--compact .end-takeover__message:empty {
+  display: none;
+}
+
+.end-takeover__terms {
+  flex: 1 1 100%;
+  font-size: var(--text-sm);
+  color: var(--colour-text-secondary);
+}
+
+.end-takeover__terms > summary {
+  display: inline-flex;
+  align-items: center;
+  min-height: 32px;
+  cursor: pointer;
+  font-weight: 700;
+}
+
+@media (pointer: coarse) {
+  .end-takeover__terms > summary {
+    min-height: 44px;
+  }
+}
+
+.end-takeover__terms > p {
+  margin: 0 0 var(--space-1);
+}
+
+/* A phone on its side: the head tighter so the middle keeps room. */
+@media (max-height: 500px) {
+  .arv-head__tribe {
+    width: 40px;
+    height: 40px;
+  }
+
+  .arv-head__outcome {
+    font-size: var(--text-lg);
+  }
+
+  .attack-end.auto-attack--rv > .panel__body {
+    gap: var(--space-2);
+  }
 }

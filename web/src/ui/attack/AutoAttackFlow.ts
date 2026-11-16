@@ -40,7 +40,9 @@ import {
   yardName,
   yardPlace,
 } from "./autoAttackText";
+import { resultView } from "./autoAttackResultView";
 import { RepeatBar } from "./RepeatBar";
+import { resultLayout, type ResultLayout } from "./resultLayout";
 import { REAL_TIMERS, REPEAT_BAR_MIN_MS, atLeast, type BarTimers } from "./repeatBarTiming";
 import "@/ui/styles/autoattack.css";
 
@@ -113,7 +115,7 @@ const sheet = (title: string, className: string): { backdrop: HTMLElement; panel
   // the confirm and refusal ones since the lead's vetting, 16 Nov 2026).
   backdrop.className = `popup-backdrop attack-end__backdrop${
     className.includes("auto-attack--bar") ? " auto-attack__backdrop--bar" : ""
-  }${/auto-attack--(confirm|failed)/.test(className) ? " auto-attack__backdrop--card" : ""}`;
+  }${/auto-attack--(confirm|failed|rv)/.test(className) ? " auto-attack__backdrop--card" : ""}`;
   const panel = new Panel({ title, closable: false, className: `map-panel attack-end auto-attack ${className}` });
   panel.element.setAttribute("role", "dialog");
   panel.element.setAttribute("aria-modal", "true");
@@ -405,7 +407,15 @@ export class AutoAttackFlow {
       const row = document.createElement("div");
       row.className = "attack-end__actions";
       row.append(...actions);
-      if (className.includes("auto-attack--confirm") || className.includes("auto-attack--failed")) {
+      if (className.includes("auto-attack--rv")) {
+        // astra's result looks (16 Nov 2026): the camp and the damage on top,
+        // the middle scrolls, Watch and Close always in sight under it.
+        const [top, ...rest] = body;
+        const words = document.createElement("div");
+        words.className = "auto-attack__scroll arv-middle";
+        words.append(...rest);
+        view.panel.setContent(...(top ? [top] : []), words, row);
+      } else if (className.includes("auto-attack--confirm") || className.includes("auto-attack--failed")) {
         // On a short screen the list (moves, what is short, the room) scrolls
         // and the words and buttons stay in sight (layout-rules; Smart Repeat
         // attack's moves make the sheet tall).
@@ -600,6 +610,11 @@ export class AutoAttackFlow {
   }
 
   private result(result: AutoAttackResponse): void {
+    const layout = resultLayout();
+    if (layout !== "today") {
+      this.resultAs(layout, result);
+      return;
+    }
     const body: HTMLElement[] = [];
     body.push(
       paragraph(
@@ -689,6 +704,38 @@ export class AutoAttackFlow {
         now: () => this.now(),
       });
       this.open.panel.body.querySelector(".attack-end__actions")?.before(this.offer.element);
+    }
+  }
+
+  /** One of astra's proposals for the result (owner picks on the Review Desk). */
+  private resultAs(layout: Exclude<ResultLayout, "today">, result: AutoAttackResponse): void {
+    const view = resultView(layout, result);
+    const watch = buttonOf("Watch", "btn auto-attack__watch", () => void this.watch());
+    const close = buttonOf("Close", "btn btn--primary auto-attack__close", () => this.close());
+    this.show(
+      "Attack result",
+      `auto-attack--result auto-attack--rv auto-attack--rv-${layout}${result.conquered ? " attack-end--win" : ""}`,
+      [view.head, ...view.middle],
+      [watch, close],
+    );
+    if (view.offerHost && this.open) {
+      this.offer = new EndTakeoverOffer({
+        kind: "camp",
+        baseid: this.options.baseid,
+        name: result.tribe,
+        grant: null,
+        quote: this.calls.quote,
+        takeOver: this.calls.takeOver,
+        decline: (baseid, options) => declineTakeover(baseid, options),
+        modal: this.options.modal,
+        onTaken: (payment) => {
+          this.close();
+          this.options.onTaken?.(payment);
+        },
+        now: () => this.now(),
+        compact: true,
+      });
+      view.offerHost.append(this.offer.element);
     }
   }
 
