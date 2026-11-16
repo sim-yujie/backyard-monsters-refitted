@@ -188,7 +188,6 @@ import {
   tradePostController,
   tradeCancelController,
   tradeAcceptController,
-  tradeSendController,
   tradeViewController,
 } from "./controllers/alliance/trade.js";
 import { tradeSwitchGate } from "./services/alliance/tradeSwitch.js";
@@ -432,12 +431,11 @@ router.post("/alliance/suggeststar", verifyUserAuth, logRequest, suggestStarCont
 router.post("/alliance/setgoal", verifyUserAuth, logRequest, setGoalController);
 router.post("/alliance/removegoal", verifyUserAuth, logRequest, removeGoalController);
 router.get("/alliance/territory", verifyUserAuth, logRequest, territoryController);
-// Trading refuses every route while ALLIANCE_TRADE_ENABLED is off (the default, beta 7).
+// Trading (swaps only, owner 16 Nov 2026) refuses every route while ALLIANCE_TRADE_ENABLED is off (the default).
 router.get("/alliance/trade", verifyUserAuth, tradeSwitchGate, logRequest, tradeViewController);
 router.post("/alliance/trade/post", verifyUserAuth, tradeSwitchGate, logRequest, tradePostController);
 router.post("/alliance/trade/cancel", verifyUserAuth, tradeSwitchGate, logRequest, tradeCancelController);
 router.post("/alliance/trade/accept", verifyUserAuth, tradeSwitchGate, logRequest, tradeAcceptController);
-router.post("/alliance/trade/send", verifyUserAuth, tradeSwitchGate, logRequest, tradeSendController);
 router.get("/alliance/news", verifyUserAuth, logRequest, allianceNewsController);
 
 /**  ────────────────────────────────────────────────

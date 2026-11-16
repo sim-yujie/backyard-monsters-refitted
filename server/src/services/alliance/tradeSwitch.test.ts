@@ -69,8 +69,9 @@ describe("switch off: trade routes refuse", () => {
     const routes = readFileSync(new URL("../../app.routes.ts", import.meta.url), "utf8")
       .split(/\r?\n/)
       .filter((line) => /router\.(get|post|put|delete|patch)\(\s*"\/alliance\/trade/.test(line));
-    // view, post, cancel, accept, send
-    expect(routes.length).toBe(5);
+    // view, post, cancel, accept (swaps only: no send, owner 16 Nov 2026)
+    expect(routes.length).toBe(4);
+    expect(routes.some((line) => line.includes("/alliance/trade/send"))).toBe(false);
     for (const line of routes) {
       const gate = line.indexOf("tradeSwitchGate");
       expect(gate).toBeGreaterThan(line.indexOf("verifyUserAuth"));

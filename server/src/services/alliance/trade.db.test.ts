@@ -8,7 +8,7 @@ import { composeShout, shoutTradeRequest } from "./shoutText.js";
 
 /**
  * Trading between alliance members (design v5 §12a, §12b; the 1:1 swap,
- * owner 11 Nov 2026) against a real Postgres (`trade.ts`). Opt-in: runs only
+ * owner 11 Nov 2026; swaps only, 48 h, owner 16 Nov 2026) against a real Postgres (`trade.ts`). Opt-in: runs only
  * when ALLIANCE_TEST_DB names a throwaway copy with the 20261129 migration
  * run; refuses `bym`. Players are `zz_tr_*`, ids 993_950 and up, deleted
  * after. The pure sums and chat lines run always.
@@ -52,14 +52,14 @@ describe("trade sums", () => {
     expect(trade.postCapOf(20_000_000, 5_000_000, 21_000_000)).toBe(0);
   });
 
-  test("the chat lines: a request, a swap, a send; old lines say nothing", () => {
+  test("the chat lines: a request, a swap; old lines (the old Ask, the old Send) say nothing", () => {
     const ask = JSON.stringify({ request: 7, give: "r1", want: "r4", amount: 1000 });
     expect(composeShout(AllianceMessageType.TRADE_ASK, "Gil", ask)).toBe("Gil gives 1K Twigs for 1K Goo.");
     expect(shoutTradeRequest(AllianceMessageType.TRADE_ASK, ask)).toBe(7);
     const swap = JSON.stringify({ with: "Tina", gave: { r4: 900 }, got: { r1: 900 } });
     expect(composeShout(AllianceMessageType.TRADE_DONE, "Gil", swap)).toBe("Gil and Tina traded: 900 Goo for 900 Twigs.");
     const send = JSON.stringify({ to: "Tina", arrived: { r3: 900 } });
-    expect(composeShout(AllianceMessageType.TRADE_DONE, "Gil", send)).toBe("Gil gave Tina 900 Putty.");
+    expect(composeShout(AllianceMessageType.TRADE_DONE, "Gil", send)).toBe("");
     // The old Ask's line (what a mate gives, and what for): no longer shown.
     const old = JSON.stringify({ request: 3, amounts: { r3: 1000 }, for: "b:14:2" });
     expect(composeShout(AllianceMessageType.TRADE_ASK, "Gil", old)).toBe("");
@@ -100,8 +100,21 @@ describe.skipIf(!enabled)("alliance trading on a real database", () => {
     return "not refused";
   };
 
+  /** Marks a swap between two players on the day of `at`, as accept writes it (one row each way). */
+  const swapped = async (one: number, two: number, at: number) => {
+    const day = new Date(at * 1000).toISOString().slice(0, 10);
+    for (const [from, to] of [[one, two], [two, one]]) {
+      await sql(
+        `INSERT INTO bym.alliance_trade (alliance_id, from_userid, to_userid, request_id, sent, arrived, lost_full, day, created_at)
+         VALUES (?, ?, ?, NULL, '{"r1":100}', '{"r1":90}', '{}', ?::date, ?)`,
+        [ALLIANCE, from, to, day, at]
+      );
+    }
+  };
+
+  const clearTrades = () => sql(`DELETE FROM bym.alliance_trade WHERE from_userid IN (${LIST}) OR to_userid IN (${LIST})`);
   const clear = async () => {
-    await sql(`DELETE FROM bym.alliance_trade WHERE from_userid IN (${LIST}) OR to_userid IN (${LIST})`);
+    await clearTrades();
     await sql(`DELETE FROM bym.alliance_trade_request WHERE userid IN (${LIST})`);
   };
 
@@ -171,7 +184,8 @@ describe.skipIf(!enabled)("alliance trading on a real database", () => {
     expect(await reasonOf(trade.postRequest(em(), B, "r2", "r3", 100, NOW))).toBe("requestOpen");
 
     const seen = await trade.tradeView(em(), A, NOW);
-    expect(seen.today).toMatchObject({ sendsLeft: 1, receivesLeft: 1 });
+    expect(seen.today).toMatchObject({ swapsLeft: 1, postsLeft: 3 });
+    expect(seen).not.toHaveProperty("mate");
     expect(seen.requests.find((r) => r.id === posted.id)).toMatchObject({
       userid: B,
       give: "r1",
@@ -199,12 +213,15 @@ describe.skipIf(!enabled)("alliance trading on a real database", () => {
     expect(after.requests.find((r) => r.id === posted.id)).toMatchObject({ status: "done", taken_by: `zz_tr_${A}` });
     expect(after.recent).toHaveLength(2);
 
-    // A swap is both players' send and receive of the day.
-    expect(await reasonOf(trade.sendToMate(em(), A, C, { r1: 100 }, NOW))).toBe("sentToday");
-    expect(await reasonOf(trade.sendToMate(em(), C, B, { r1: 100 }, NOW))).toBe("receivedToday");
+    // One completed swap per player per UTC day: neither side can swap again today.
+    expect((await trade.tradeView(em(), A, NOW)).today.swapsLeft).toBe(0);
+    expect((await trade.tradeView(em(), B, NOW)).today.swapsLeft).toBe(0);
+    const third = await trade.postRequest(em(), C, "r2", "r3", 100, NOW);
+    expect(await reasonOf(trade.acceptRequest(em(), A, third.id, NOW))).toBe("tradedToday");
+    expect(await reasonOf(trade.acceptRequest(em(), B, third.id, NOW))).toBe("tradedToday");
     expect(await reasonOf(trade.postRequest(em(), B, "r1", "r4", 100, NOW))).toBe("tradedToday");
-    // A new UTC day resets both.
-    expect((await trade.sendToMate(em(), A, B, { r1: 100 }, NOW + 86_400)).arrived).toEqual({ r1: 90 });
+    // A new UTC day resets it; C's request (48 h) is still up.
+    expect((await trade.acceptRequest(em(), A, third.id, NOW + 86_400)).got).toEqual({ r2: 90 });
   });
 
   test("two mates accepting at once: exactly one swap", async () => {
@@ -241,17 +258,20 @@ describe.skipIf(!enabled)("alliance trading on a real database", () => {
     expect((await held(C)).r4).toBe(STOCK);
   });
 
-  test("after 24 hours a request lapses and gives back all of it, on a mate's view or a load", async () => {
+  test("after 48 hours a request lapses and gives back all of it, on a mate's view or a load", async () => {
     const one = await trade.postRequest(em(), B, "r1", "r2", 500, NOW);
-    expect(await reasonOf(trade.acceptRequest(em(), A, one.id, NOW + 86_400))).toBe("requestGone");
+    expect(one.expires_at).toBe(NOW + 172_800);
+    // Still up after a day.
+    expect((await trade.tradeView(em(), C, NOW + 86_400)).requests.find((r) => r.id === one.id)?.status).toBe("open");
+    expect(await reasonOf(trade.acceptRequest(em(), A, one.id, NOW + 172_800))).toBe("requestGone");
     // A mate opening the Trade tab gives it back.
-    expect((await trade.tradeView(em(), C, NOW + 86_400)).requests.find((r) => r.id === one.id)).toBeUndefined();
+    expect((await trade.tradeView(em(), C, NOW + 172_800)).requests.find((r) => r.id === one.id)).toBeUndefined();
     expect(await statusOf(one.id)).toBe("expired");
     expect((await held(B)).r1).toBe(STOCK);
 
     const two = await trade.postRequest(em(), C, "r3", "r2", 400, NOW);
-    expect(await trade.refundStaleRequests(em(), C, NOW + 3_600)).toBe(0);
-    expect(await trade.refundStaleRequests(em(), C, NOW + 86_400)).toBe(1);
+    expect(await trade.refundStaleRequests(em(), C, NOW + 86_400)).toBe(0);
+    expect(await trade.refundStaleRequests(em(), C, NOW + 172_800)).toBe(1);
     expect(await statusOf(two.id)).toBe("expired");
     expect((await held(C)).r3).toBe(STOCK);
   });
@@ -260,7 +280,7 @@ describe.skipIf(!enabled)("alliance trading on a real database", () => {
     const open = await trade.postRequest(em(), B, "r1", "r2", 500, NOW);
     expect((await held(B)).r1).toBe(STOCK - 500);
     setSwitch(undefined);
-    // Within the 24 h and still in the alliance: only the switch closes it.
+    // Within the 48 h and still in the alliance: only the switch closes it.
     expect(await trade.refundStaleRequests(em(), B, NOW + 60)).toBe(1);
     expect(await statusOf(open.id)).toBe("expired");
     expect((await held(B)).r1).toBe(STOCK);
@@ -304,7 +324,7 @@ describe.skipIf(!enabled)("alliance trading on a real database", () => {
     expect((await held(B)).r1).toBe(400 - 223);
   });
 
-  test("accepting: the accepter must hold it, both need room, neither traded today", async () => {
+  test("accepting: within 10% of the accepter's own storage, held in full, both need room, neither traded today", async () => {
     const posted = await trade.postRequest(em(), B, "r1", "r4", 1000, NOW);
 
     await setHeld(A, { r4: 999 });
@@ -319,19 +339,42 @@ describe.skipIf(!enabled)("alliance trading on a real database", () => {
     await setHeld(B, { r1: STOCK - 1000 });
     expect(await reasonOf(trade.acceptRequest(em(), OUT, posted.id, NOW))).toBe("notMember");
 
-    // C sent today: C cannot accept.
-    await trade.sendToMate(em(), C, A, { r2: 100 }, NOW);
+    // C swapped today: C cannot accept.
+    await swapped(C, OUT, NOW);
     expect(await reasonOf(trade.acceptRequest(em(), C, posted.id, NOW))).toBe("tradedToday");
-    // B got a send today: the request waits for tomorrow, shown not ready.
-    await sql(`DELETE FROM bym.alliance_trade WHERE from_userid = ?`, [C]);
-    await trade.sendToMate(em(), C, B, { r2: 100 }, NOW);
+    // B swapped today: the request waits for tomorrow, shown not ready.
+    await clearTrades();
+    await swapped(B, OUT, NOW);
     expect(await reasonOf(trade.acceptRequest(em(), A, posted.id, NOW))).toBe("mateTradedToday");
     expect((await trade.tradeView(em(), A, NOW)).requests.find((r) => r.id === posted.id)?.ready).toBe(false);
-    // Nothing moved on a refusal (A got C's 90 Pebbles only).
+    // Nothing moved on a refusal.
     expect(await held(A)).toMatchObject({ r1: STOCK, r4: STOCK });
     expect((await held(B)).r1).toBe(STOCK - 1000);
     // The next UTC day it goes through.
     const done = await trade.acceptRequest(em(), A, posted.id, NOW + 3_600 * 13);
     expect(done.got).toEqual({ r1: 900 });
+  });
+
+  test("a request bigger than 10% of the accepter's own storage: refused at accept, though the asker's is bigger", async () => {
+    // B gets a silo: B's cap passes A's, so B may post more than A may take.
+    await sql(`UPDATE bym.save SET buildingdata = ? WHERE userid = ? AND type = 'main'`, [
+      JSON.stringify({ "0": HALL, "1": { id: 1, t: 6, x: 60, y: 0, l: 1 } }),
+      B,
+    ]);
+    const bigCap = (await trade.tradeView(em(), B, NOW)).me!.cap;
+    expect(bigCap).toBeGreaterThan(10_000);
+    // Room for what comes back: B's Goo is low.
+    await setHeld(B, { r1: 9_000, r4: 0 });
+    const posted = await trade.postRequest(em(), B, "r1", "r4", 1_500, NOW);
+    await setHeld(A, { r4: 5_000 });
+    expect(await reasonOf(trade.acceptRequest(em(), A, posted.id, NOW))).toBe("overCap");
+    expect((await held(A)).r4).toBe(5_000);
+    // The asker's storage shrank after posting: refused for them.
+    await sql(`UPDATE bym.save SET buildingdata = ? WHERE userid = ? AND type = 'main'`, [
+      JSON.stringify({ "0": HALL, "1": { id: 1, t: 6, x: 60, y: 0, l: 1 } }),
+      A,
+    ]);
+    await sql(`UPDATE bym.save SET buildingdata = ? WHERE userid = ? AND type = 'main'`, [JSON.stringify({ "0": HALL }), B]);
+    expect(await reasonOf(trade.acceptRequest(em(), A, posted.id, NOW))).toBe("mateOverCap");
   });
 });

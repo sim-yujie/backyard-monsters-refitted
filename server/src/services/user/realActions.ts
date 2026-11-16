@@ -199,7 +199,6 @@ export const REAL_ACTION_ROUTES: readonly RealActionRoute[] = [
   { method: "POST", path: "/alliance/trade/post" },
   { method: "POST", path: "/alliance/trade/cancel" },
   { method: "POST", path: "/alliance/trade/accept" },
-  { method: "POST", path: "/alliance/trade/send" },
   // The "Stay protected?" prompt's tap (#275): the player said they are there.
   { method: "POST", path: "/api/:apiVersion/bm/presence/stay" },
   // A wild monster raid on the player's yard (#226): every answer to it, so watching one keeps them online.

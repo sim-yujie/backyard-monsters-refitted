@@ -381,30 +381,35 @@ export const STANCE_LABEL: Record<AllianceStance, string> = {
 
 
 // ---------------------------------------------------------------------------
-// Trading between members (design v5 §12a, §12b). Placeholders until the
-// owner balances them.
+// Trading between members (design v5 §12a, §12b). Swaps only; the numbers
+// below are the owner's (beta 8 grilling, 16 Nov 2026).
 // ---------------------------------------------------------------------------
 
 /**
  * Trading's switch (owner 11 Nov 2026: "disable trades for now. We can polish
- * it for beta 8"). Off unless `ALLIANCE_TRADE_ENABLED` is `on` (or `true`):
- * every `/alliance/trade` route refuses with `reason: "trade_off"`, and
- * `myalliance` and the yard load's `alliancedata` say `trade_on: false`, so
- * the web hides the Trade tab and every Send / Trade button. Refunds of a
- * request that somehow exists still run (all of them while it is off). Read
- * on each request, so tests can flip it.
+ * it for beta 8"; on for beta 8, the release sets it). Off unless
+ * `ALLIANCE_TRADE_ENABLED` is `on` (or `true`): every `/alliance/trade` route
+ * refuses with `reason: "trade_off"`, and `myalliance` and the yard load's
+ * `alliancedata` say `trade_on: false`, so the web greys out the Trade tab
+ * and chat's Trade buttons ("Coming soon"). Refunds of a request that
+ * somehow exists still run (all of them while it is off). Read on each
+ * request, so tests can flip it.
  */
 export const allianceTradeEnabled = (env: Record<string, string | undefined> = process.env): boolean =>
   isSwitchOn(env.ALLIANCE_TRADE_ENABLED);
 
-/** What is lost on the way, as a share of what leaves (10%). */
+/** What is lost on the way, as a share of what leaves: each side of a swap receives 90% (owner, 16 Nov 2026). */
 export const TRADE_LOSS = 0.1;
 
-/** One trade carries up to this share of the smaller storage cap, per resource (10%, ASSUMED). */
+/**
+ * One swap carries up to this share of storage, per resource (owner, 16 Nov
+ * 2026): the asker's own cap when posting, and the accepter's own cap (and the
+ * asker's, still) when accepting, so the smaller cap rules.
+ */
 export const TRADE_CAP_SHARE = 0.1;
 
-/** How long a request stays up (24 h, ASSUMED). */
-export const TRADE_REQUEST_SECONDS = 24 * 60 * 60;
+/** How long a request stays up: 48 h (owner, 16 Nov 2026). */
+export const TRADE_REQUEST_SECONDS = 48 * 60 * 60;
 
-/** Requests a member may post in one UTC day, so cancel-and-ask cannot fill the chat (ASSUMED). */
+/** Requests a member may post in one UTC day, so cancel-and-ask cannot fill the chat (owner, 16 Nov 2026). */
 export const TRADE_ASKS_PER_DAY = 3;

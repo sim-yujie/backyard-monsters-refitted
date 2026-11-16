@@ -25,26 +25,27 @@ import type { ResourceAmounts } from "../yardplanner/costs.js";
 import { countAfterCommit, progressRefusedErr, say, utcDay } from "./allianceProgress.js";
 
 /**
- * Trading between alliance members (beta 7, design v5 §12a, §12b).
+ * Trading between alliance members (design v5 §12a, §12b): swaps only
+ * (owner, beta 8 grilling, 16 Nov 2026; the old direct Send is gone).
  *
  * - **Request** (owner, 11 Nov 2026): "I give 1,000 Twigs, I want 1,000
- *   Goo", one resource for another, 1:1. What the asker gives leaves their
- *   yard when they post: the request holds it, so a mate who accepts is sure
- *   to get it. Cancel, the 24 hours running out, or leaving the alliance
- *   gives it back in full ({@link refundStaleRequests}). One open per player.
+ *   Goo", one resource for another, 1:1, at most 10% of the asker's own
+ *   storage cap. What the asker gives leaves their yard when they post: the
+ *   request holds it, so a mate who accepts is sure to get it. Cancel, the 48
+ *   hours running out, or leaving the alliance gives it back in full
+ *   ({@link refundStaleRequests}). One open per player, 3 posts a UTC day.
  * - **Accept**: one mate takes the whole request (no part fills). Both send
- *   the amount and both receive 10% less (owner, 10 Nov 2026: "1 : 1
- *   resource trade, with 10% penalty"; the lead's reading: each side gets
- *   90%). Both must have room for what they receive, or the accept is
- *   refused: nothing is ever lost to a full silo in a swap.
- * - **Send**: a direct send to a mate, no request.
+ *   the amount and both receive 90% (owner, 16 Nov 2026). The accepter must
+ *   hold the full amount and it must be within 10% of their own cap (and of
+ *   the asker's: the smaller cap rules). Both must have room for what they
+ *   receive, or the accept is refused: nothing is ever lost to a full silo.
  *
- * Every trade: one send and one receive per player per UTC day (the count is
- * the player's, kept across alliances; unique indexes hold it; a swap uses
- * both, for both players), at most 10% of the smaller storage cap leaves per
- * resource, and on a Send whatever the receiver has no room for is lost (as
- * loot past a full silo). Shiny cannot be sent. Both main yards are locked
- * and caught up first; a yard under attack or being raided is refused, as the
+ * One completed swap per player per UTC day (the count is the player's, kept
+ * across alliances). A swap writes two `alliance_trade` rows, one each way,
+ * so each player has one "from" and one "to" row that day; the two unique
+ * indexes on (from_userid, day) and (to_userid, day) hold the limit even when
+ * two accepts race. Shiny cannot be traded. Both main yards are locked and
+ * caught up first; a yard under attack or being raided is refused, as the
  * yard actions are. Amounts are whole numbers.
  */
 
@@ -100,8 +101,6 @@ const amountsOf = (raw: Partial<Record<string, unknown>> | null | undefined): Am
   return out;
 };
 
-const anyOf = (amounts: Amounts) => RESOURCE_KEYS.some((key) => amounts[key] > 0);
-
 /** Only the resources with something in them, as the feed and the window store them. */
 const nonZero = (amounts: Amounts): Partial<Amounts> =>
   Object.fromEntries(RESOURCE_KEYS.filter((key) => amounts[key] > 0).map((key) => [key, amounts[key]]));
@@ -151,18 +150,12 @@ const catchUp = async (tx: EntityManager, save: Save, now: number) => {
   await recordAchievements(tx, save, now, builtEvents(completed));
 };
 
-/** Whether the player has sent / received a trade this UTC day. */
-const usedToday = async (em: EntityManager, userid: number, now: number) => {
-  const [row] = await em.execute<{ sent: number | string; received: number | string }[]>(
-    `SELECT count(*) FILTER (WHERE from_userid = ?) AS sent, count(*) FILTER (WHERE to_userid = ?) AS received
-       FROM bym.alliance_trade WHERE day = ?::date AND (from_userid = ? OR to_userid = ?)`,
-    [userid, userid, utcDay(now), userid, userid]
-  );
-  return { sent: Number(row?.sent ?? 0) > 0, received: Number(row?.received ?? 0) > 0 };
-};
+/** Whether the player has swapped this UTC day (one swap a day each). */
+const swappedToday = async (em: EntityManager, userid: number, now: number): Promise<boolean> =>
+  (await tradedToday(em, [userid], now)).has(userid);
 
-/** Of these players, those who already sent or received a trade this UTC day. */
-const tradedToday = async (em: EntityManager, userids: number[], now: number): Promise<Set<number>> => {
+/** Of these players, those who already swapped this UTC day. */
+async function tradedToday(em: EntityManager, userids: number[], now: number): Promise<Set<number>> {
   if (userids.length === 0) return new Set();
   const marks = userids.map(() => "?").join(", ");
   const rows = await em.execute<{ from_userid: number | string; to_userid: number | string }[]>(
@@ -171,7 +164,7 @@ const tradedToday = async (em: EntityManager, userids: number[], now: number): P
     [utcDay(now), ...userids, ...userids]
   );
   return new Set(rows.flatMap((row) => [Number(row.from_userid), Number(row.to_userid)]));
-};
+}
 
 const isUniqueViolation = (err: unknown) => String((err as { code?: string })?.code) === "23505" || /unique/i.test(String(err));
 
@@ -319,13 +312,12 @@ const readStorage = async (em: EntityManager, userids: number[]): Promise<Map<nu
 };
 
 /**
- * `GET /alliance/trade[?to=]`: the Trade tab. Today's sends / receives left,
- * the caller's open request, mates' open requests (and those done today,
- * greyed), the last 2 trades, the caller's storage, and with `to` that mate's
- * storage for the Send sheet. Gives back what run-out requests in the
+ * `GET /alliance/trade`: the Trade tab. Today's swap left, the caller's open
+ * request, mates' open requests (and those done today, greyed), the last 2
+ * trades and the caller's storage. Gives back what run-out requests in the
  * alliance hold first.
  */
-export const tradeView = async (em: EntityManager, userid: number, now: number, to?: number) => {
+export const tradeView = async (em: EntityManager, userid: number, now: number) => {
   const [me] = await em.execute<{ alliance_id: number | null }[]>(`SELECT alliance_id FROM bym."user" WHERE userid = ?`, [userid]);
   const allianceId = me?.alliance_id ? Number(me.alliance_id) : null;
   if (!allianceId) throw refused("notMember", "You are not in an alliance.", Status.FORBIDDEN);
@@ -365,7 +357,7 @@ export const tradeView = async (em: EntityManager, userid: number, now: number, 
     [allianceId, now, dayStart]
   );
   const askers = [...new Set(rows.filter((row) => row.status === "open").map((row) => Number(row.userid)))];
-  const storage = await readStorage(em, [...new Set([userid, ...askers, ...(to ? [to] : [])])]);
+  const storage = await readStorage(em, [...new Set([userid, ...askers])]);
   const traded = await tradedToday(em, askers, now);
 
   const requests: TradeRequestView[] = rows
@@ -401,18 +393,7 @@ export const tradeView = async (em: EntityManager, userid: number, now: number, 
     [allianceId]
   );
 
-  let mate: { userid: number; username: string; storage: StorageView | null } | null = null;
-  if (to) {
-    const [row] = await em.execute<{ username: string; alliance_id: number | null }[]>(
-      `SELECT username, alliance_id FROM bym."user" WHERE userid = ?`,
-      [to]
-    );
-    if (row && Number(row.alliance_id) === allianceId && to !== userid) {
-      mate = { userid: to, username: row.username, storage: storage.get(to) ?? null };
-    }
-  }
-
-  const used = await usedToday(em, userid, now);
+  const swapped = await swappedToday(em, userid, now);
   const [posts] = await em.execute<{ n: number | string }[]>(
     `SELECT count(*) AS n FROM bym.alliance_trade_request WHERE userid = ? AND created_at >= ?`,
     [userid, dayStart]
@@ -420,8 +401,7 @@ export const tradeView = async (em: EntityManager, userid: number, now: number, 
   return {
     error: 0,
     today: {
-      sendsLeft: used.sent ? 0 : 1,
-      receivesLeft: used.received ? 0 : 1,
+      swapsLeft: swapped ? 0 : 1,
       postsLeft: Math.max(0, TRADE_ASKS_PER_DAY - Number(posts?.n ?? 0)),
       newDayIn: newDayIn(now),
     },
@@ -435,7 +415,6 @@ export const tradeView = async (em: EntityManager, userid: number, now: number, 
       arrived: nonZero(amountsOf(parseJson(row.arrived))),
       at: Number(row.created_at),
     })),
-    mate,
   };
 };
 
@@ -461,8 +440,7 @@ export const postRequest = async (em: EntityManager, userid: number, give: strin
       if (!me?.alliance_id) throw refused("notMember", "You are not in an alliance.", Status.FORBIDDEN);
       if (!me.basesaveid) throw notMainYardErr();
 
-      const used = await usedToday(tx, userid, now);
-      if (used.sent || used.received) throw refused("tradedToday", "You traded today. Post again tomorrow.");
+      if (await swappedToday(tx, userid, now)) throw refused("tradedToday", "You traded today. Post again tomorrow.");
       const dayStart = now - (now % 86_400);
       const [posts] = await tx.execute<{ n: number | string }[]>(
         `SELECT count(*) AS n FROM bym.alliance_trade_request WHERE userid = ? AND created_at >= ?`,
@@ -485,7 +463,7 @@ export const postRequest = async (em: EntityManager, userid: number, give: strin
       const held = heldOf(save.resources, give);
       if (held < amount) throw refused("notEnough", `You have ${amountText(held)}.`);
       const carry = carryCap(cap, cap);
-      if (amount > carry) throw refused("overCap", `One trade carries up to ${amountText(carry)}.`);
+      if (amount > carry) throw refused("overCap", `Up to 10% of your storage: ${amountText(carry)}.`);
       const fits = fitSent(cap - heldOf(save.resources, want));
       if (amount > fits) throw refused("overRoom", `Your storage takes a request of up to ${amountText(fits)}.`);
 
@@ -543,10 +521,10 @@ export interface SwapResult {
 
 /**
  * `POST /alliance/trade/accept`: takes a mate's request whole. The accepter
- * sends `amount` of what the asker wants; each side receives the amount
- * less 10%. Refused unless both have room for what they receive, the
- * accepter holds the amount, it is within what one trade carries between the
- * two yards, and neither has traded today.
+ * sends `amount` of what the asker wants; each side receives 90%. Refused
+ * unless neither has swapped today, the amount is within 10% of the
+ * accepter's own storage cap (and the asker's), the accepter holds it all,
+ * and both have room for what they receive.
  */
 export const acceptRequest = async (em: EntityManager, userid: number, requestId: number, now: number): Promise<SwapResult> => {
   const [peek] = await em.execute<{ userid: number }[]>(`SELECT userid FROM bym.alliance_trade_request WHERE id = ?`, [requestId]);
@@ -588,10 +566,8 @@ export const acceptRequest = async (em: EntityManager, userid: number, requestId
       const amount = Number(request.amount);
       const arrive = arriveFor(amount);
 
-      const takerUsed = await usedToday(tx, userid, now);
-      if (takerUsed.sent || takerUsed.received) throw refused("tradedToday", "You traded today. New day at 00:00 UTC.");
-      const askerUsed = await usedToday(tx, askerId, now);
-      if (askerUsed.sent || askerUsed.received) throw refused("mateTradedToday", `${asker.username} traded today. Try tomorrow.`);
+      if (await swappedToday(tx, userid, now)) throw refused("tradedToday", "One swap a day. New day at 00:00 UTC.");
+      if (await swappedToday(tx, askerId, now)) throw refused("mateTradedToday", `${asker.username} traded today. Try tomorrow.`);
 
       // Both main yards, locked in save order, refused while fought over, caught up.
       const order = [taker.basesaveid, asker.basesaveid].sort((a, b) => a - b);
@@ -611,10 +587,14 @@ export const acceptRequest = async (em: EntityManager, userid: number, requestId
       }
       for (const save of [mine, theirs]) await catchUp(tx, save, now);
 
-      const limit = carryCap(capOf(mine), capOf(theirs));
-      if (amount > limit) throw refused("overCap", `One trade carries up to ${amountText(limit)} between your yards.`);
+      // 10% of the accepter's own cap (owner, 16 Nov 2026); the asker's was checked
+      // at post, and is checked again in case their storage shrank since.
+      const myLimit = carryCap(capOf(mine), capOf(mine));
+      if (amount > myLimit) throw refused("overCap", `Over 10% of your storage: up to ${amountText(myLimit)}.`);
+      const theirLimit = carryCap(capOf(theirs), capOf(theirs));
+      if (amount > theirLimit) throw refused("mateOverCap", `Over 10% of ${asker.username}'s storage now.`);
       const held = heldOf(mine.resources, want);
-      if (held < amount) throw refused("notEnough", `You have ${amountText(held)}.`);
+      if (held < amount) throw refused("notEnough", `Not enough: you have ${amountText(held)}.`);
       if (capOf(mine) - heldOf(mine.resources, give) < arrive) throw refused("noRoom", "Your storage is too full for it.");
       if (capOf(theirs) - heldOf(theirs.resources, want) < arrive) {
         throw refused("mateNoRoom", `${asker.username}'s storage is too full for it.`);
@@ -642,7 +622,7 @@ export const acceptRequest = async (em: EntityManager, userid: number, requestId
           day, now,
         ]);
       } catch (err) {
-        if (isUniqueViolation(err)) throw refused("tradedToday", "One trade a day each.");
+        if (isUniqueViolation(err)) throw refused("tradedToday", "One swap a day each.");
         throw err;
       }
       await tx.execute(
@@ -674,128 +654,4 @@ export const acceptRequest = async (em: EntityManager, userid: number, requestId
     got: one(done.give, done.arrive),
   });
   return done.result;
-};
-
-// ---------------------------------------------------------------------------
-// Send: one direct trade
-// ---------------------------------------------------------------------------
-
-export interface TradeResult {
-  /** What left the giver. */
-  sent: Partial<Amounts>;
-  /** What landed in the receiver's storage. */
-  arrived: Partial<Amounts>;
-  /** What arrived but had no room (lost). */
-  lostFull: Partial<Amounts>;
-  /** The giver's resources after. */
-  resources: Amounts;
-  to: { userid: number; username: string };
-}
-
-/**
- * `POST /alliance/trade/send`: a direct send; `sent` is what LEAVES. Both in
- * the same alliance; all the §12a rules; refusals as `progressRefusedErr`
- * (reason in `data.reason`).
- */
-export const sendToMate = async (
-  em: EntityManager,
-  from: number,
-  to: number,
-  raw: Partial<Record<Key, number>>,
-  now: number
-): Promise<TradeResult> => {
-  const sent = amountsOf(raw);
-  if (from === to) throw refused("self", "You can't trade with yourself.", Status.BAD_REQUEST);
-  if (!anyOf(sent)) throw refused("nothingSent", "Pick a resource and an amount.", Status.BAD_REQUEST);
-
-  const done = await countAfterCommit(() =>
-    em.transactional(async (tx) => {
-      const members = await lockMembers(tx, [from, to]);
-      const giver = members.get(from);
-      const taker = members.get(to);
-      if (!giver?.alliance_id) throw refused("notMember", "You are not in an alliance.", Status.FORBIDDEN);
-      if (!taker || taker.alliance_id !== giver.alliance_id) throw refused("notMate", "They are not in your alliance.");
-      if (!giver.basesaveid) throw notMainYardErr();
-      if (!taker.basesaveid) throw refused("notMate", "They are not in your alliance.");
-
-      if ((await usedToday(tx, from, now)).sent) throw refused("sentToday", "You already sent a trade today.");
-      if ((await usedToday(tx, to, now)).received) throw refused("receivedToday", `${taker.username} already got a trade today.`);
-
-      // Both main yards, locked in save order, refused while fought over, caught up.
-      const order = [giver.basesaveid, taker.basesaveid].sort((a, b) => a - b);
-      const locked = new Map<number, Save>();
-      for (const id of order) {
-        const save = await lockSave(tx, id);
-        if (save) locked.set(id, save);
-      }
-      const mine = locked.get(giver.basesaveid);
-      const theirs = locked.get(taker.basesaveid);
-      if (!mine || mine.type !== BaseType.MAIN || mine.userid !== from) throw notMainYardErr();
-      if (!theirs || theirs.type !== BaseType.MAIN || theirs.userid !== to) throw refused("notMate", "They are not in your alliance.");
-      if (isAttackActive(mine)) throw yardUnderAttackErr();
-      if (raidFighting(mine, now)) throw yardRaidInProgressErr();
-      if (isAttackActive(theirs) || raidFighting(theirs, now)) {
-        throw refused("mateUnderAttack", `${taker.username}'s yard is under attack. Try again later.`);
-      }
-      for (const save of [mine, theirs]) await catchUp(tx, save, now);
-
-      const limit = carryCap(capOf(mine), capOf(theirs));
-      for (const key of RESOURCE_KEYS) {
-        if (sent[key] > limit) {
-          throw refused("overCap", `One trade carries up to ${amountText(limit)} of each.`);
-        }
-        if (heldOf(mine.resources, key) < sent[key]) throw refused("notEnough", "You don't have that much.");
-      }
-
-      const resources = { ...(mine.resources ?? {}) };
-      for (const key of RESOURCE_KEYS) {
-        if (sent[key] > 0) resources[key] = heldOf(mine.resources, key) - sent[key];
-      }
-      mine.resources = resources;
-      mine.savetime = now;
-
-      const arriving = noAmounts();
-      for (const key of RESOURCE_KEYS) arriving[key] = arriveFor(sent[key]);
-      const { credited, overflow } = creditResources(theirs, arriving);
-      theirs.savetime = now;
-      await tx.flush();
-
-      try {
-        await tx.execute(
-          `INSERT INTO bym.alliance_trade (alliance_id, from_userid, to_userid, request_id, sent, arrived, lost_full, day, created_at)
-           VALUES (?, ?, ?, NULL, ?::jsonb, ?::jsonb, ?::jsonb, ?::date, ?)`,
-          [
-            giver.alliance_id,
-            from,
-            to,
-            JSON.stringify(nonZero(sent)),
-            JSON.stringify(nonZero(credited)),
-            JSON.stringify(nonZero(overflow)),
-            utcDay(now),
-            now,
-          ]
-        );
-      } catch (err) {
-        if (isUniqueViolation(err)) throw refused("sentToday", "One send and one receive a day.");
-        throw err;
-      }
-
-      const after = noAmounts();
-      for (const key of RESOURCE_KEYS) after[key] = heldOf(mine.resources, key);
-      return {
-        allianceId: giver.alliance_id,
-        sent: nonZero(sent),
-        arrived: nonZero(credited),
-        lostFull: nonZero(overflow),
-        resources: after,
-        to: { userid: to, username: taker.username },
-      };
-    })
-  );
-
-  if (Object.keys(done.arrived).length > 0) {
-    void say(done.allianceId, from, AllianceMessageType.TRADE_DONE, { to: done.to.username, arrived: done.arrived });
-  }
-  const { allianceId: _a, ...result } = done;
-  return result;
 };

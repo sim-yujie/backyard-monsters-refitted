@@ -90,12 +90,10 @@ export interface TradeAskFacts {
 }
 
 /**
- * What a trade-done line stores. A Send: who got it and what arrived. A
- * swap: who it was `with`, what the accepter `gave` and `got` (as arrived).
+ * What a trade-done line stores: who the swap was `with`, what the accepter
+ * `gave` and `got` (as arrived). Trading is swaps only (owner, 16 Nov 2026).
  */
-export type TradeDoneFacts =
-  | { to: string; arrived: Partial<Record<TradeKey, number>> }
-  | { with: string; gave: Partial<Record<TradeKey, number>>; got: Partial<Record<TradeKey, number>> };
+export type TradeDoneFacts = { with: string; gave: Partial<Record<TradeKey, number>>; got: Partial<Record<TradeKey, number>> };
 
 const RESOURCE_WORDS: Record<string, string> = { r1: "Twigs", r2: "Pebbles", r3: "Putty", r4: "Goo" };
 
@@ -216,19 +214,14 @@ export const composeShout = (type: AllianceMessageType, username: string, body: 
 
     case AllianceMessageType.TRADE_DONE: {
       const facts = readJson<Record<string, unknown>>(body);
-      if (typeof facts?.["with"] === "string") {
-        const gave = amountsText((facts["gave"] ?? {}) as Record<string, number>);
-        const got = amountsText((facts["got"] ?? {}) as Record<string, number>);
-        if (!gave || !got) return "";
+      // A line without `with` (the old Send, removed 16 Nov 2026) says nothing.
+      if (typeof facts?.["with"] !== "string") return "";
+      const gave = amountsText((facts["gave"] ?? {}) as Record<string, number>);
+      const got = amountsText((facts["got"] ?? {}) as Record<string, number>);
+      if (!gave || !got) return "";
 
-        // "Mira and Thornback traded: 900 Goo for 900 Twigs." (what each got)
-        return `${username} and ${facts["with"]} traded: ${gave} for ${got}.`;
-      }
-      const what = amountsText((facts?.["arrived"] ?? {}) as Record<string, number>);
-      if (!what || typeof facts?.["to"] !== "string") return "";
-
-      // "Mira gave Thornback 800K Goo." (design v5 §12b)
-      return `${username} gave ${facts["to"]} ${what}.`;
+      // "Mira and Thornback traded: 900 Goo for 900 Twigs." (what each got)
+      return `${username} and ${facts["with"]} traded: ${gave} for ${got}.`;
     }
 
     case AllianceMessageType.RELATIONSHIP:
