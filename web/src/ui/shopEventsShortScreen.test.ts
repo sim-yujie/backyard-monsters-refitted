@@ -32,14 +32,14 @@ const minHeight = (file: string, selector: string): number => {
   return 0;
 };
 
-/** Title and frame around the list, measured in the check (192px window, 112px list). */
+/** Title and frame around the list, from the check (Shop: 192px window, 112px list). */
 const CHROME = 80;
 /** The fewest px of list the layout check accepts. */
 const MIN_LIST = 120;
 
 const WINDOWS = [
   { name: "Shop", file: "styles/shop.css", selector: ".shop-screen", width: 720 },
-  { name: "Events", file: "events/events.css", selector: ".events-panel", width: 747 },
+  { name: "Events", file: "events/events.css", selector: ".events-panel", width: 731 },
 ] as const;
 
 describe.each(WINDOWS)("$name on a short screen", ({ file, selector, width }) => {
@@ -49,7 +49,8 @@ describe.each(WINDOWS)("$name on a short screen", ({ file, selector, width }) =>
 
   it("reaches over Main yard at 980x551 rather than stop above it", () => {
     const layer = { width: 980, height: 551 };
-    // Classic's Main yard, its ribbon just under the window's left edge, and the dock row.
+    // Classic's Main yard, its ribbon just under the window's left edge, and the dock row
+    // (boxes read off the check's 980x551 picture, not measured).
     const mainYard = { left: 24, top: 320, right: 126, bottom: 415 };
     const dockRow = [
       { left: 40, top: 430, right: 105, bottom: 525 },
