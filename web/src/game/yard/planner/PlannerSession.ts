@@ -557,7 +557,8 @@ export class PlannerSession {
    *
    * The row stays armed after the drop (#57): while the drawer holds another
    * building of the same type and level, the next one is in hand at once, so
-   * a run of walls is one click per wall rather than two. See
+   * a run of buildings is one click each rather than two (walls are drawn
+   * as a line instead, {@link startLine}, owner 16 Nov 2026). See
    * {@link dropPlacement} for how the run ends.
    *
    * Returns false when there is nothing to place: a read-only session, or an

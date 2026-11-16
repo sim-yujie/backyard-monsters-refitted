@@ -145,7 +145,7 @@ const HINT_ROWS: readonly HintRow[] = [
   {
     demo: "store",
     text:
-      "Store (Delete) lifts the selection off the yard into a drawer, so there is room to move the rest. Click a stack in the drawer, then click the yard once per building; Esc stops.",
+      "Store (Delete) lifts the selection off the yard into a drawer, so there is room to move the rest. Click a stack in the drawer, then click the yard once per building; Esc stops. Walls are drawn as a line: click the corners, then ✓ Place.",
   },
   {
     demo: "find",
@@ -181,7 +181,7 @@ const TOUCH_HINT_ROWS: readonly HintRow[] = [
   {
     demo: "store",
     text:
-      "Store lifts the selection into the drawer, so there is room to move the rest. Tap a stack in the drawer, then tap the yard once per building; Done stops.",
+      "Store lifts the selection into the drawer, so there is room to move the rest. Tap a stack in the drawer, then tap the yard once per building; Done stops. Walls are drawn as a line: tap the corners, then ✓ Place.",
   },
   {
     demo: "find",
@@ -226,7 +226,9 @@ const SHORTCUT_ROWS: readonly (readonly [string, string])[] = [
   ["Ctrl + Shift + Z, Ctrl + Y", "Redo"],
   ["Ctrl + S", "Save to the current slot"],
   ["Escape", "Cancel a drag or carry, or clear the selection"],
-  ["Delete", "Nothing yet — storing arrives with the store tool"],
+  ["Delete, Backspace", "Store the selection in the drawer"],
+  ["Double-click", "Drawing walls from the drawer: end the line on the last corner"],
+  ["Backspace, right-click", "Drawing walls from the drawer: take the last corner away"],
 ];
 
 export interface PlannerHelpOptions {

@@ -61,7 +61,9 @@ import { Panel } from "@/ui/Panel";
  *
  * But it is a source that keeps giving (#57): after a drop the session takes
  * the next building off the same stack, so a run of walls is one click on the
- * yard per wall, not a trip back to the drawer each time. The row shows as
+ * yard per wall, not a trip back to the drawer each time. Walls themselves
+ * are drawn as a line instead (owner, 16 Nov 2026, `plannerWallLine.ts`):
+ * corners, then ✓ Place, the stack staying armed while it has walls. The row shows as
  * pressed while it is armed, and clicking it again is how the drawer itself
  * ends the run; Escape, the secondary button, another tool or an empty stack
  * end it from elsewhere, and {@link setArmed} keeps the row honest about which.
