@@ -97,6 +97,8 @@ SPECS = {
         grade_chroma=True,               # grey / white pixels (fangs, drool, glints, crevices) are left as painted
         view_match=True,                 # build_still: every painted view colour-matched to the median view (batches vary)
         open_holes=True,                 # see-through gaps between the claws / arms and the body (common.key_cell)
+        # still_batch.py, design="portrait": what the crude Flash cells' blobs are
+        frames_note="their dark spikes on the head are the red eye stalks, their beak-like head is the mane and fanged mouth",
         anchor=(26, 28),
         flash_columns=30,
         flash_step=12.0,
@@ -180,6 +182,125 @@ SPECS = {
             "forward in the facing direction, both claws slashing down in front; 10 follow-through: furthest forward, claws "
             "snapped shut, fangs bared; 11 recovery: back to the resting pose of ref.png. The base of the body and the tail "
             "stay where they are. The mouth is fanged and snarling in every cell, never a smile. Cell 12 stays empty magenta."
+        ),
+    ),
+    # IC3 Malphus (16 Nov): painted from the PORTRAIT (web/public/portraits/IC3.webp) from the start, as Zagnoid
+    # round 3. Colours picked from it: olive green armour (shade #231f05, mid #585127, lit #a19659), orange belly
+    # (mid #9c6a2e, lit #c28c45), purple fur (mid #2f1934, lit #5d4160), pink-magenta stripes and leg webs (#ae6c7d),
+    # red eyes, ivory tusks. The Flash sheet is 30 x 9 cells of 51 x 35 (whole pixels): row 0 is a standing pose
+    # the game never draws (and its columns turn the other way: column c there faces 360 - 12c degrees); rows 1-8 are
+    # the walk the game plays, so the pose / facing guide is row 1 (`flash_row`). Symmetric: the Flash silhouette
+    # matches its mirror column (15 - c) at half a walk cycle later with 0.27 mismatch (silhouette XOR / union, mean
+    # over 30 columns), less than two neighbouring columns differ (0.32) or the walk changes one column (0.36); the
+    # portrait creature is symmetric but for its drool. So headings 8-22 are painted, lit from above, the rest mirrored.
+    "IC3": dict(
+        name="Malphus",
+        out="malphus",
+        flash="malphus.png",
+        cell=(51, 35),
+        flash_row=1,                     # the first walk frame: the game never draws row 0
+        still_pad=6,                     # room for spread legs at the cell edge
+        ref_body_only=True,              # reference cells without the long cast shadow (it reads as more legs)
+        ref_smooth=True,
+        portrait=True,
+        design="portrait",
+        anim_colour_lock=True,
+        gamma=1.0,
+        # view_match left out: it matches each view's whole-body mean, and Malphus's front views carry the orange
+        # belly and ivory tusks that its back views hide (switch on only if the batches really drift)
+        open_holes=True,                 # see-through gaps between the legs, arms and body
+        mirror_walk_roll=3,              # build_anim: a mirrored heading plays walk frame k+3 (Flash's own mirror match is half a cycle on)
+        anchor=(25, 17),
+        flash_columns=30,
+        flash_step=12.0,
+        directions=30,
+        painted=list(range(8, 23)),      # 96 -> 264 degrees; heading h <-> 15 - h mirrored
+        area=1.15,
+        drop=0.0,
+        shadow="flash",                  # the Flash cast shadow's own spider shape, to the lower right
+        anim_pad=(6, 10, 2),
+        walk_lift=(0, 0, 0, 0, 0, 0),    # scuttles on four legs, no hop
+        loops=(0, 8, 22),
+        face="tusked face",
+        pose_parts="clawed arms, the four legs and the round belly",
+        frames_note=(
+            "their two pink-magenta blobs on the shoulders are the shaggy PURPLE fur, the small pink marks on the head are "
+            "its pink stripes, the white specks are the ivory tusks and the hooked talons, the orange ball low between the "
+            "legs is the orange segmented belly"
+        ),
+        features="pink-striped tusked head with red eyes, purple fur, clawed arms, orange segmented belly and four armoured spider legs",
+        face_marks="the head (pink stripes, red eyes, two big ivory tusks) and the orange belly",
+        portrait_note=(
+            "THE DESIGN of Malphus (its official portrait, seen from the front, the head turned a little): paint exactly "
+            "this creature: its olive-green armoured body, the head with dusty rose-pink stripes, red eyes, small ivory horns, "
+            "a mouth full of fangs and two big curved ivory tusks, the shaggy purple fur on its shoulders, chest and "
+            "forearms, two arms with long orange hooked talons, the orange segmented belly and four thick armoured spider "
+            "legs with orange claw tips and dusty rose-pink skin webs, in its colours and its painting style"
+        ),
+        style=(
+            "hand-painted digital game illustration in the style of portrait.png: olive-green armour plates with soft "
+            "highlights, shaggy purple fur, rich colour, soft painted shading with crisp edges, NO thick black outline, "
+            "no pixel art; the tusks, the rose-pink head stripes, the purple fur and the orange belly drawn bold and a little "
+            "exaggerated so they read at a small size"
+        ),
+        light=(
+            "soft light from ABOVE, the same on the left and right halves of the creature (highlights on the top "
+            "surfaces, darker olive underneath); no cast shadow on the ground"
+        ),
+        texture="olive-green armoured hide in plates and ridges, shaggy dark purple fur, glossy orange belly segments",
+        no_fx=(
+            "No falling drops, puddles, splashes, sparks, smoke, motion streaks, glow halos or loose bits: every drool "
+            "string stays attached to the mouth. No part of the creature is pure magenta: the pink is a dusty rose and "
+            "the fur a dark violet, both clearly different from the magenta background"
+        ),
+        creature=(
+            "Malphus, the armoured tusked spider-demon of portrait.png (NOT a frog, NOT a crab). It stands on FOUR thick "
+            "armoured spider legs spread wide around it (two at the front, two at the back), each bending up at a knee and "
+            "down to the ground, ending in a big curved ORANGE claw tip; dusty rose-pink skin webs stretch under the upper legs. "
+            "Low between the legs hangs a big round ORANGE BELLY with horizontal segments (like a beetle's abdomen). Above it "
+            "rises a muscular upright olive-green torso with armour plates, and TWO strong arms bent at the elbow, each hand "
+            "with THREE long hooked ORANGE talons hanging down. SHAGGY DARK PURPLE FUR covers the shoulders, runs down the "
+            "chest to the belly and rings both forearms. HEAD: sits low and forward between the shoulders; olive-green "
+            "armour with bold DUSTY ROSE-PINK stripes over the brow and crown, two big bulging eyes on top and two or three "
+            "small RED eyes below them, small pale ivory horns round the crown, a wide mouth full of sharp ivory fangs, and "
+            "TWO BIG CURVED IVORY TUSKS hanging down from the upper jaw like a walrus's, past the chin; a little pale drool. "
+            "Colours: olive-green armour (lit #a19659, mid #585127, shade #231f05), orange belly and claw tips (lit #c28c45, "
+            "mid #9c6a2e), dark purple fur (lit #5d4160, mid #2f1934), dusty rose-pink head stripes and leg webs (#ae6c7d, never pure magenta), "
+            "red eyes, ivory tusks, horns and fangs."
+        ),
+        parts=(
+            " 1. Legs: FOUR thick armoured olive-green spider legs spread wide (two front, two back), each with a big curved orange claw tip on the ground and a dusty rose-pink skin web under it.\n"
+            " 2. Belly: ONE big round orange segmented belly hanging low between the legs (seen from the front and sides; from behind only its lower edge).\n"
+            " 3. Torso: an upright muscular olive-green armoured torso on top of the belly.\n"
+            " 4. Fur: shaggy dark purple fur on both shoulders, down the chest and round both forearms.\n"
+            " 5. Arms: TWO bent arms, each hand with THREE long hooked orange talons hanging down.\n"
+            " 6. Head: low between the shoulders, olive green with dusty rose-pink stripes, red eyes, small ivory horns round the crown.\n"
+            " 7. Mouth and tusks: a wide fanged mouth and TWO big curved ivory tusks hanging down from the upper jaw. Snarling: NOT a smile, NOT a grin.\n"
+            " 8. No tail, no wings, no crab pincers, no extra legs (exactly four), no frog shape, no yellow-gold skin."
+        ),
+        back_note=(
+            "BACK VIEW: the creature faces away from the viewer: the face, eyes, mouth and tusks are NOT visible; the viewer "
+            "sees the back of the olive-green armoured head with its dusty rose-pink stripes and small ivory horns, the shaggy "
+            "purple fur on the shoulders and upper back, the armoured back of the torso, the two arms at the sides, the four "
+            "spider legs spread round it and only the lower edge of the orange belly between the back legs"
+        ),
+        walk=(
+            "Cells 1-6 are ONE WALK CYCLE (six different steps, then it loops back to cell 1): Malphus scuttles on its four "
+            "spider legs, diagonal pairs moving together (pair A = its own front-left and back-right legs, pair B = front-right "
+            "and back-left): 1 pair A reaches forward, pair B pushes back; 2 pair A sets down, pair B lifts; 3 pair B swings "
+            "forward past the body; 4 pair B reaches forward, pair A pushes back (the opposite of cell 1); 5 pair B sets down, "
+            "pair A lifts; 6 pair A swings forward past the body. The torso stays upright and "
+            "bobs only a little, the arms swing a little, the belly sways. Same size as ref.png, centred in its cell, the "
+            "feet on the same horizontal ground line in every cell."
+        ),
+        attack=(
+            "Cells 7-11 are an ATTACK (a claw slash with a tusk gore), the same creature as ref.png: 7 anticipation: the "
+            "torso leans back away from the facing direction, both arms raised to the sides, talons spread; 8 wind-up: leans "
+            "back further, both arms raised high (never above the top of the head by more than a head's height), fanged mouth "
+            "wide open; 9 strike: lunges forward in the facing direction, both talons slashing down in front, head driving "
+            "the tusks forward; 10 follow-through: furthest forward, talons down, tusks low; 11 recovery: back to the resting "
+            "pose of ref.png. The four legs stay planted where they are. The mouth snarls in every cell, never a smile. "
+            "Cell 12 stays empty magenta."
         ),
     ),
 }

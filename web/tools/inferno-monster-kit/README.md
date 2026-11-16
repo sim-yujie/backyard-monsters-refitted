@@ -169,3 +169,20 @@ game sheets backed up in `art-work/IC2-r3/r2-assets`) paints that creature:
   batches. 6 more calls: **25 calls** for round 3.
 - Comparison pictures: `art-work/IC2-r3/r3sheets.py <shots dir>` (portrait | round 2 | round 3; every heading; game
   size). Battle and yard shots: `art-work/IC2-r3/film.mjs` (yardtester, own server on 5461).
+
+## IC3 Malphus (started 16 Nov; kit ready, painting not started)
+
+- **Flash rows.** `malphus.png` is 30 x 9 whole-pixel cells of 51 x 35. The game plays rows 1-8 (walk) and never row 0,
+  a standing pose whose columns turn the other way (column c faces 360 - 12c degrees). `spec.flash_row` = 1:
+  `common.flash_cell` (and so the Codex references, shadows, fits and facing checks) use the first walk frame;
+  `compare.py` shows that row as "Flash idle". `check_crop.py <dir>` now writes `crop-check-<ID>.png` for every sheet.
+- **Symmetric** (silhouette XOR / union vs the mirror column 15 - c, same measure: IC1 0.11, IC2 0.15). Malphus 0.44
+  frame for frame, but the walk is a four-legged gait whose mirror is half a cycle on: matched 4 rows later it is 0.27,
+  less than two neighbouring columns differ (0.32) or the walk changes one column (0.36). The portrait creature is
+  symmetric but for its drool. So headings 8-22 are painted, lit from above, the rest mirrored, and
+  `mirror_walk_roll=3` makes `build_anim.py` play walk frame k+3 on mirrored headings (no leg jump at the seams).
+- Words from the portrait (`design="portrait"`); `pose_parts` / `frames_note` (spec) now hold the words
+  `still_batch.py` used to say only for Zagnoid. Pink is asked for as "dusty rose" and never pure magenta (the key
+  colour); look for holes in the head stripes, leg webs and fur after each batch. `view_match` is off (front views
+  carry the orange belly and tusks that the back views hide). Still NOTE: `art-work/IC3/note-still.txt` (stand evenly
+  on all four legs, not mid-stride); animation EXTRA: `art-work/IC3/anim-extra.txt`.

@@ -93,8 +93,8 @@ else:
 design = spec.get("design")  # IC2 round 3: "portrait" = the portrait is the design, the Flash cells only a pose guide
 if design == "portrait":
     frames_use = ("Use it ONLY as a guide for the facing, pose, position and overall size of each cell (where the head, the "
-                  "claws and the tail are). Do NOT copy its colours, shapes or details: the old sprites are blurry and crude "
-                  "(their dark spikes on the head are the red eye stalks, their beak-like head is the mane and fanged mouth)")
+                  f"{spec.get('pose_parts', 'claws and the tail')} are). Do NOT copy its colours, shapes or details: the old sprites are blurry and crude "
+                  f"({spec['frames_note']})")
     face_line = f"Look at where {spec['face_marks']} sit on each old sprite and put them there."
     portrait_text = (f"Input {n_in}, portrait.png: {spec['portrait_note']}. It decides the design, the parts and the colours "
                      "in every cell; frames.png only decides the facing, pose and size.\n")

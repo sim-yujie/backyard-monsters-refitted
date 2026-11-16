@@ -164,7 +164,13 @@ if __name__ == "__main__":
         if p not in frames:
             continue
         row = [render(h, cuts[p], fit[p]["scale"] * GROW, 0.0, 0, flip)]
-        row += [render(h, *fr, flip) for fr in frames[p]]
+        frs = frames[p]
+        roll = spec.get("mirror_walk_roll", 0)
+        if flip and roll:
+            # IC3: a mirrored four-legged gait is half a cycle out (its left legs are the painted right legs), so the
+            # mirrored heading plays walk frame k+roll; the legs then do not jump at the h7/h8 and h22/h23 seams
+            frs = [frs[(k + roll) % 6] for k in range(6)] + frs[6:]
+        row += [render(h, *fr, flip) for fr in frs]
         notes = [n for _, n in row if n]
         if notes:
             print(f"h{h}: frames {[k for k, (_, n) in enumerate(row) if n]} shrunk or moved to stay in the cell")

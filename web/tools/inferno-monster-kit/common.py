@@ -32,12 +32,15 @@ def art_runs(spec, row=0):
     return list(zip(edges[::2], edges[1::2]))
 
 
-def flash_cell(spec, col, row=0):
-    """Flash cell (col, row) at the `cell` size. With a fractional `flash_w` the neighbours' art reaches
+def flash_cell(spec, col, row=None):
+    """Flash cell (col, row) at the `cell` size; row defaults to spec `flash_row` (0; Malphus IC3: 1, the
+    first walk frame, since the game never draws its row 0). With a fractional `flash_w` the neighbours' art reaches
     into the cut (a shadow tip from the left, a tail tip from the right), so only this column's own art run
     (the sheet has one see-through-separated run per column) is kept. A run that pokes past the cut
     (Zagnoid column 10's tail tip, 2 px) loses those pixels, as the Flash game's own cut did."""
     w, h = spec["cell"]
+    if row is None:
+        row = spec.get("flash_row", 0)
     x0 = flash_x(spec, col)
     cell = flash_sheet(spec).crop((x0, row * h, x0 + w, (row + 1) * h))
     if "flash_w" not in spec:

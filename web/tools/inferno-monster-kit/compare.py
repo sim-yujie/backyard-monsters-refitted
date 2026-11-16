@@ -35,6 +35,7 @@ anim1 = Image.open(ASSETS / f"{spec['out']}-anim.png").convert("RGBA")
 flash = common.flash_sheet(spec)
 frows = flash.height // CH
 walk_rows = [r for r in range(frows)][1:] or [0]
+IDLE = spec.get("flash_row", 0)  # the Flash row the game draws standing (IC3: row 0 is never drawn)
 
 
 def modern(h, k, sheet=anim, s=UP):
@@ -55,7 +56,7 @@ def label(im, text, xy=(4, 4), fill=(255, 240, 160)):
 
 heads = list(range(0, D, int(os.environ.get("STEP", 4))))  # STEP=1: every heading
 W, H = ACW * UP, ACH * UP
-cols = [("Flash idle", lambda h: old(h, 0))] + [(f"Flash walk {i}", (lambda r: lambda h: old(h, r))(r)) for i, r in enumerate(walk_rows[:2], 1)]
+cols = [("Flash idle", lambda h: old(h, IDLE))] + [(f"Flash walk {i}", (lambda r: lambda h: old(h, r))(r)) for i, r in enumerate(walk_rows[:2], 1)]
 cols += [("Modern idle", lambda h: modern(h, 0)), ("walk 2", lambda h: modern(h, 2)), ("walk 3", lambda h: modern(h, 3)),
          ("wind-up", lambda h: modern(h, 8)), ("strike", lambda h: modern(h, 9))]
 for g in range(0, len(heads), 4):
@@ -71,7 +72,7 @@ for g in range(0, len(heads), 4):
     pic.save(shots / f"compare-h{hs[0]}-h{hs[-1]}.png")
 
 # game size
-rows = [("Flash", lambda h: old(h, 0, 1)), ("Modern idle", lambda h: modern(h, 0, anim1, 1)),
+rows = [("Flash", lambda h: old(h, IDLE, 1)), ("Modern idle", lambda h: modern(h, 0, anim1, 1)),
         ("Modern walk 3", lambda h: modern(h, 3, anim1, 1)), ("Modern strike", lambda h: modern(h, 9, anim1, 1))]
 gs = Image.new("RGB", (ACW * D, ACH * len(rows)), BG)
 for i, (_, fn) in enumerate(rows):
@@ -124,7 +125,7 @@ if shutil.which("ffmpeg"):
         n = 0
         for kind, k, ticks in seqf:
             fr = Image.new("RGB", (W * 2 + 8, H + 20), BG)
-            fl_row = walk_rows[(k - 1) % len(walk_rows)] if kind == "walk" else 0
+            fl_row = walk_rows[(k - 1) % len(walk_rows)] if kind == "walk" else IDLE
             fr.paste(common.flat(old(h, fl_row), BG), (0, 20))
             fr.paste(common.flat(modern(h, k), BG), (W + 8, 20))
             label(fr, f"Flash  h{h}", (4, 4))
