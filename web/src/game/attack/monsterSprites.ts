@@ -578,6 +578,27 @@ export const REPAINT_LAYOUTS: Readonly<Record<string, SheetLayoutOverride>> = {
     },
     strikeFrame: 2,
   },
+  // Grokus (IC6): 68x51 cells. The game cuts the Flash sheet at whole 57 px cells, but the art was laid out
+  // ~57.27 apart, so it creeps right 0.26 px a column (7.5 px over the turn) and reaches 3 px left of a cell
+  // and 3 px right of it; the repaint takes the creep out and reads Flash x -5 to 63 (anchor 28 -> 33), with
+  // 10 px more on top for the crystal crown and 2 at the bottom (anchor 20 -> 30), over Flash's own cast
+  // shadow. 30 x 4 x 68 = 8160 px, inside 8192. Painted from the Hatchery / Locker portrait; headings 8-22
+  // painted, the rest their mirror (the card creature is left-right symmetric). Rows: 0 idle, 1-6 tentacle
+  // crawl, 7-11 attack (rear back, toothed tentacles raised, lunge and slam, bite, recover). Flash's single
+  // pose glided.
+  "monsters/grokus.v2.png": {
+    frameWidth: 68,
+    frameHeight: 51,
+    anchorX: 33,
+    anchorY: 30,
+    rows: 12,
+    animations: {
+      idle: { first: 0, count: 1, ticksPerFrame: 8 },
+      walk: { first: 1, count: 6, ticksPerFrame: 8 },
+      attack: { first: 7, count: 5, ticksPerFrame: 4 },
+    },
+    strikeFrame: 2,
+  },
 };
 
 const layoutCache = new Map<MonsterSheet, AnimatedSheet>();
@@ -916,6 +937,7 @@ export const REPAINTED_SHEETS: Readonly<Record<string, string>> = {
   "monsters/malphus.png": "monsters/malphus-anim@4x.png", // Malphus (Inferno IC3) animated repaint (30 headings, scuttle + slash attack)
   "monsters/valgos.png": "monsters/valgos-anim@4x.png", // Valgos (Inferno IC4) animated repaint (30 headings, plod + bite attack)
   "monsters/balthazar.png": "monsters/balthazar-anim@4x.png", // Balthazar (Inferno IC5) animated repaint (30 headings, wing beat + bite attack)
+  "monsters/grokus.v2.png": "monsters/grokus-anim@4x.png", // Grokus (Inferno IC6) animated repaint (30 headings, tentacle crawl + slam attack)
   "monsters/ape_1.png": "monsters/ape_1-repaint@4x.png", // Gorgo level 1 repaint (all 16 headings, idle + walk + attack)
   "monsters/fly_1.png": "monsters/fly_1-repaint@4x.png", // Fomor level 1 repaint (all 16 headings, idle + walk)
   "monsters/dragon_1.png": "monsters/dragon_1-repaint@4x.png", // Drull level 1 repaint (all 16 headings painted, idle + walk + attack)

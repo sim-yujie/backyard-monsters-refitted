@@ -62,7 +62,7 @@ describe("applyLayout", () => {
     expect(applyLayout(POKEY, {})).toBe(POKEY);
   });
 
-  it("ships only the Bandito, Pokey, Bolt, Fink, Eye-ra, Fang, Ichi, Crabatron, Brain, D.A.V.E. (both skins), Project X, Wormzer, Zafreeti, Vorg, Teratorn, Octo-ooze, Rezghul, Slimeattikus (big and mini), Korath 5 and 6, Spurtz, Zagnoid, Malphus, Valgos and Balthazar layouts, so every other sheet is exactly the Flash table", () => {
+  it("ships only the Bandito, Pokey, Bolt, Fink, Eye-ra, Fang, Ichi, Crabatron, Brain, D.A.V.E. (both skins), Project X, Wormzer, Zafreeti, Vorg, Teratorn, Octo-ooze, Rezghul, Slimeattikus (big and mini), Korath 5 and 6, Spurtz, Zagnoid, Malphus, Valgos, Balthazar and Grokus layouts, so every other sheet is exactly the Flash table", () => {
     expect(Object.keys(REPAINT_LAYOUTS).sort()).toEqual([
       "monsters/13.png",
       "monsters/14.v1.png",
@@ -73,6 +73,7 @@ describe("applyLayout", () => {
       "monsters/eyera.png",
       "monsters/fang.png",
       "monsters/fink.png",
+      "monsters/grokus.v2.png",
       "monsters/ichi.png",
       "monsters/korath_5.png",
       "monsters/korath_6.png",
@@ -435,6 +436,33 @@ describe("applyLayout", () => {
     expect(sheet.animations.walk).toEqual({ first: 1, count: 6, ticksPerFrame: 8 });
     expect(sheet.animations.idle).toBeUndefined();
     expect(frameRow(sheet, "idle", 8)).toBe(frameRow(sheet, "walk", 8));
+    expect(sheet.animations.attack?.first).toBe(7);
+    expect((sheet.animations.attack?.first ?? 0) + (sheet.animations.attack?.count ?? 0)).toBe(12);
+    expect(sheet.strikeFrame).toBe(2);
+  });
+
+  it("the Grokus layout matches the animated PNG and keeps the octopus on its ground point", () => {
+    const old = MONSTER_SPRITES["IC6"];
+    if (!old) throw new Error("no IC6");
+    const sheet = spriteFor("IC6");
+    if (!sheet) throw new Error("no sprite for IC6");
+    const data = readFileSync(resolve(__dirname, "../../../../server/public/assets/monsters/grokus-anim@4x.png"));
+    expect(data.readUInt32BE(16)).toBe(sheet.width * 4);
+    expect(data.readUInt32BE(20)).toBe(sheet.height * 4);
+    // The Flash cell is 57x39 (cut at whole pixels; the art creeps right 0.26 px a column); the repaint's is
+    // 68x51, reading Flash x -5 to 63 with the creep taken out, 10 px more on top and 2 at the bottom.
+    expect(sheet.frameWidth).toBe(68);
+    expect(sheet.frameHeight).toBe(old.frameHeight + 12);
+    expect(sheet.directions).toBe(30);
+    expect(sheet.packedColumns).toBeUndefined();
+    expect(sheet.width).toBe(68 * 30);
+    expect(sheet.width * 4).toBeLessThanOrEqual(8192);
+    expect(sheet.height).toBe(51 * 12);
+    expect(frameRect(sheet, 29, 11)).toEqual({ x: 29 * 68, y: 11 * 51, width: 68, height: 51 });
+    expect(sheet.anchorX).toBe(old.anchorX + 5);
+    expect(sheet.anchorY).toBe(old.anchorY + 10);
+    expect(sheet.animations.idle).toEqual({ first: 0, count: 1, ticksPerFrame: 8 });
+    expect(sheet.animations.walk).toEqual({ first: 1, count: 6, ticksPerFrame: 8 });
     expect(sheet.animations.attack?.first).toBe(7);
     expect((sheet.animations.attack?.first ?? 0) + (sheet.animations.attack?.count ?? 0)).toBe(12);
     expect(sheet.strikeFrame).toBe(2);
