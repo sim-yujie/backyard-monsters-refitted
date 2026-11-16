@@ -102,6 +102,22 @@ export const helpableIds = (block: HelpBlock | null): Set<number> => {
 };
 
 /**
+ * The buildings still damaged whose repair is used up for today
+ * (`repairedToday`: one repair a friend's yard a UTC day, owner 16 Nov 2026)
+ * and that have no other help open: they wear a grey wrench. A visit draws
+ * no damage, so without it the yard looks fully repaired once today's repair
+ * is given (owner's bug report, 16 Nov 2026: "it all repaired").
+ */
+export const spentRepairIds = (block: HelpBlock | null): Set<number> => {
+  const ids = new Set<number>();
+  if (!block) return ids;
+  for (const [id, offer] of Object.entries(block.buildings)) {
+    if (offer.repair === "repairedToday" && offer.speedup !== true) ids.add(Number(id));
+  }
+  return ids;
+};
+
+/**
  * Whether a refusal stands on the building's button from then on. One about
  * the whole visit or that lifts by itself does not: the friend's yard under
  * attack, not friends any more (the scene says so), and the spam limit

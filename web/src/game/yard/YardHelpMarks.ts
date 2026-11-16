@@ -13,6 +13,10 @@ import type { MarkAnchor } from "./YardHatchMarks";
  * hatchery numbers do, and grows against the zoom so it stays readable
  * zoomed out. A tap on a badge picks its building (`pick`), as a tap on the
  * building does.
+ *
+ * A building still damaged whose repair is used up for today wears a grey
+ * wrench (`spentRepairIds`): a visit draws no damage, so it is the only sign
+ * the repair given today left the rest of the yard damaged.
  */
 
 /** The badge's radius and its gap above the anchor, world pixels at zoom 1. */
@@ -23,11 +27,15 @@ const BADGE_GAP = 6;
 const FILL = 0xf5b94a;
 const RIM = 0x0f1c26;
 const WRENCH = 0x2a1a00;
+/** Grey for a repair used up today: still damaged, no help to give now. */
+const SPENT_FILL = 0x9aa1a8;
+const SPENT_WRENCH = 0x3a4047;
 
 export class YardHelpMarks {
   readonly root = new Container();
 
   private ids: ReadonlySet<number> = new Set();
+  private spent: ReadonlySet<number> = new Set();
   private zoom = 1;
   private readonly badges = new Map<number, Container>();
 
@@ -40,15 +48,25 @@ export class YardHelpMarks {
     return this.badges.size > 0;
   }
 
-  /** The buildings wearing a wrench, by id. */
+  /** The buildings wearing an amber wrench (a help open now), by id. */
   get drawn(): number[] {
-    return [...this.badges.keys()];
+    return [...this.badges.keys()].filter((id) => !this.spent.has(id));
   }
 
-  /** Draws a wrench over these buildings and no others; returns whether anything changed. */
-  set(ids: ReadonlySet<number>): boolean {
-    if (ids.size === this.ids.size && [...ids].every((id) => this.ids.has(id))) return false;
+  /** The buildings wearing a grey wrench, by id. */
+  get drawnSpent(): number[] {
+    return [...this.spent].filter((id) => this.badges.has(id));
+  }
+
+  /**
+   * Draws a wrench over `ids` and a grey one over `spent` (a building in
+   * both wears the amber one), and no others; returns whether anything changed.
+   */
+  set(ids: ReadonlySet<number>, spent: ReadonlySet<number> = new Set()): boolean {
+    const grey = new Set([...spent].filter((id) => !ids.has(id)));
+    if (sameSet(ids, this.ids) && sameSet(grey, this.spent)) return false;
     this.ids = new Set(ids);
+    this.spent = grey;
     this.rebuild();
     return true;
   }
@@ -91,22 +109,25 @@ export class YardHelpMarks {
   private rebuild(): void {
     this.clear();
     const scale = jobBarScale(this.zoom);
-    for (const id of this.ids) {
+    for (const id of [...this.ids, ...this.spent]) {
+      const spent = this.spent.has(id);
+      const fill = spent ? SPENT_FILL : FILL;
+      const ink = spent ? SPENT_WRENCH : WRENCH;
       const badge = new Container();
       badge.scale.set(scale);
       const y = -BADGE_RADIUS - BADGE_GAP;
       const disc = new Graphics()
         .circle(0, y, BADGE_RADIUS)
-        .fill({ color: FILL })
+        .fill({ color: fill })
         .stroke({ width: 2, color: RIM, alpha: 0.85 });
       // A spanner: a handle, a round head, and the jaw's gap cut in the disc's colour.
       const wrench = new Graphics()
         .roundRect(-2.5, -1, 5, 13, 2)
-        .fill({ color: WRENCH })
+        .fill({ color: ink })
         .circle(0, -4, 5.5)
-        .fill({ color: WRENCH })
+        .fill({ color: ink })
         .rect(-2, -10.5, 4, 6)
-        .fill({ color: FILL });
+        .fill({ color: fill });
       wrench.position.set(0, y);
       wrench.rotation = Math.PI / 4;
       badge.addChild(disc, wrench);
@@ -121,3 +142,6 @@ export class YardHelpMarks {
     this.badges.clear();
   }
 }
+
+const sameSet = (a: ReadonlySet<number>, b: ReadonlySet<number>): boolean =>
+  a.size === b.size && [...a].every((id) => b.has(id));

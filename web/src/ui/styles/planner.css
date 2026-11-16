@@ -1216,6 +1216,206 @@
   max-height: 52dvh;
 }
 
+/*
+ * The list never folds to nothing (player report, 16 Nov 2026). The body is a
+ * flex column and the list is its one scroll box, so a scroll box's automatic
+ * minimum of zero made it the only part that gave way: with a yard cleared,
+ * the count, the box and three rows of chips filled a short window and the
+ * list shrank to 0 px. The player saw the chips and nothing to tap, and Apply
+ * stayed blocked. A floor of a few rows keeps it open; the body scrolls the
+ * rest (layout-rules: a window never shrinks below a few rows of its list).
+ * Find shares the list and the chips, and had the same fault on a phone on its
+ * side (4 px of list), so every rule here is written for both windows.
+ */
+.planner-search__rows:not(:empty) {
+  flex: 1 1 auto;
+  min-height: 7.5rem;
+}
+
+/*
+ * A phone, or a short screen such as an iPad on its side under Safari's bars:
+ * one scroller, the window's body, rather than a list scrolling inside a
+ * window. The list is as tall as its rows and can no longer be squeezed; the
+ * chips keep to one row that slides sideways; the window fits the dock rather
+ * than running past its fold. So the first rows show under the chips the
+ * moment the drawer opens. The query covers the phone layout's own
+ * (`phoneLayout.ts`: width <= 620 or height <= 500) and the iPad's 690-560 px.
+ */
+@media (max-width: 620px), (max-height: 700px) {
+  .planner-dock > :is(.planner-inventory, .planner-search) {
+    flex: 0 1 auto;
+    min-height: 0;
+  }
+
+  :is(.planner-inventory, .planner-search) > .panel__body {
+    min-height: 0;
+    /* A little less air, so the first rows clear the fold on a phone's side. */
+    gap: var(--space-1);
+    /* No padding above: a category header sticks to the top of what scrolls,
+       and rows would pass through a band of padding over it. The spacer
+       below keeps the air between the title and the first line. */
+    padding-top: 0;
+  }
+
+  :is(.planner-inventory, .planner-search) > .panel__body::before {
+    content: "";
+    flex: none;
+    height: var(--space-1);
+  }
+
+  .planner-inventory__summary {
+    margin-block: 0;
+    font-size: var(--text-xs);
+    line-height: var(--leading-tight);
+  }
+
+  .planner-search__rows,
+  .planner-search__rows:not(:empty) {
+    flex: none;
+    min-height: auto;
+    max-height: none;
+    overflow: visible;
+  }
+
+  :is(.planner-inventory, .planner-search) .planner-search__chips {
+    /* A scroll box in a column shrinks to nothing too, unless told not to. */
+    flex: none;
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    overscroll-behavior-x: contain;
+    scrollbar-width: thin;
+    /* The body's gap spaces it; the padding is room for a pressed chip's drop,
+       which a scroll box would clip. */
+    margin-block: 0;
+    padding-block: 2px;
+  }
+
+  :is(.planner-inventory, .planner-search) .planner-search__chip {
+    flex: none;
+  }
+
+  /* The row goes on: a fade and a chevron pinned to its right edge. Sticky,
+     so it rides at the edge while the chips slide under it and comes to rest
+     after the last chip, never over it. */
+  :is(.planner-inventory, .planner-search) .planner-search__chips::after {
+    content: "\203A";
+    position: sticky;
+    right: 0;
+    flex: none;
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    width: 2rem;
+    margin-inline-start: auto;
+    padding-inline-end: 2px;
+    background: linear-gradient(
+      to right,
+      transparent,
+      var(--skin-fill, var(--colour-surface-base)) 60%
+    );
+    color: var(--colour-text);
+    font-size: var(--text-lg);
+    font-weight: 700;
+    line-height: 1;
+    pointer-events: none;
+  }
+
+  /* Where the browser can tell, the chevron shows only while there is more
+     to slide to: not on a row that fits, and not at the row's end. */
+  @supports (animation-timeline: scroll()) {
+    :is(.planner-inventory, .planner-search) .planner-search__chips::after {
+      opacity: 0;
+      animation: planner-chips-more linear both;
+      animation-timeline: scroll(nearest inline);
+    }
+  }
+
+  /* On a phone's side, the box and the chips share one line: a second row of
+     the list clears the fold. */
+  @media (max-height: 500px) {
+    :is(.planner-inventory, .planner-search) > .panel__body {
+      display: grid;
+      grid-template-columns: minmax(6.5rem, 34%) minmax(0, 1fr);
+      column-gap: var(--space-2);
+      align-content: start;
+    }
+
+    :is(.planner-inventory, .planner-search) > .panel__body > *,
+    :is(.planner-inventory, .planner-search) > .panel__body::before {
+      grid-column: 1 / -1;
+    }
+
+    :is(.planner-inventory, .planner-search)
+      > .panel__body
+      > .planner-search__input:not([hidden]):has(+ .planner-search__chips:not([hidden])) {
+      grid-column: 1;
+      align-self: center;
+    }
+
+    :is(.planner-inventory, .planner-search)
+      > .panel__body
+      > .planner-search__input:not([hidden])
+      + .planner-search__chips {
+      grid-column: 2;
+      /* A scroll box's grid row would otherwise stop at the box's height and
+         clip a pressed chip's pill. */
+      height: max-content;
+    }
+
+    /* The box is narrow here: a smaller hint, ended with an ellipsis rather
+       than cut through a letter. */
+    :is(.planner-inventory, .planner-search) > .panel__body > .planner-search__input {
+      text-overflow: ellipsis;
+    }
+
+    :is(.planner-inventory, .planner-search)
+      > .panel__body
+      > .planner-search__input::placeholder {
+      font-size: var(--text-xs);
+    }
+  }
+}
+
+@keyframes planner-chips-more {
+  0%,
+  92% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+  }
+}
+
+/*
+ * With a mouse the chips wrap as before: a mouse has no swipe, and a laptop
+ * whose window is under 700 px tall (most 1366x768 screens) would otherwise
+ * leave Traps, Walls and the rest out of reach. The body still scrolls, so the
+ * list stays open below them.
+ */
+@media (max-width: 620px) and (pointer: fine), (max-height: 700px) and (pointer: fine) {
+  :is(.planner-inventory, .planner-search) .planner-search__chips {
+    flex-wrap: wrap;
+    overflow-x: visible;
+  }
+
+  :is(.planner-inventory, .planner-search) .planner-search__chips::after {
+    content: none;
+  }
+}
+
+/* Upright on a phone, the drawer takes the taller sheet the walls panel has:
+   placing hides it down to its strip anyway. */
+.planner-phone--portrait > .planner-dock:has(> .planner-inventory:last-child) {
+  max-height: min(
+    64vh,
+    calc(100vh - var(--planner-top, 0px) - var(--planner-bottom, 0px) - 2 * var(--space-2))
+  );
+  max-height: min(
+    64dvh,
+    calc(100dvh - var(--planner-top, 0px) - var(--planner-bottom, 0px) - 2 * var(--space-2))
+  );
+}
+
 .planner-inventory__section + .planner-inventory__section {
   border-top: 1px solid var(--colour-border);
 }
