@@ -175,6 +175,7 @@ const WINDOW_CLASSES = [
   ".ach-screen",
   ".alliance-window",
   ".building-panel",
+  ".auto-attack--result",
 ];
 
 const openWindows = (page: Page) =>
@@ -335,4 +336,22 @@ export const closeWorldChat = async (page: Page): Promise<void> => {
   ) {
     await tab.click().catch(() => undefined);
   }
+};
+
+/**
+ * The Repeat attack's result after a conquered camp, from the build's
+ * preview (`__autoAttackResult`, VITE_LAYOUT_CHECK): the sandbox yard is not
+ * on Map Room 2, so no real Repeat attack can reach it.
+ */
+export const openRepeatResult = async (page: Page): Promise<boolean> => {
+  const opened = await page.evaluate(() => {
+    const open = (globalThis as Record<string, unknown>)["__autoAttackResult"];
+    if (typeof open !== "function") return false;
+    return Boolean((open as (kind: string) => unknown)("won"));
+  });
+  if (!opened) return false;
+  await page.locator(".overlay__layer .auto-attack--result").first().waitFor({ timeout: 10_000 });
+  // The take-over price arrives a moment later (answered in the page).
+  await page.locator(".overlay__layer .auto-attack--result .end-takeover__take:not([disabled])").first().waitFor({ timeout: 10_000 }).catch(() => undefined);
+  return true;
 };

@@ -342,6 +342,12 @@ export class AutoAttackFlow {
     }
   }
 
+  /** Shows a result the caller already has (the layout check's preview). */
+  showResult(result: AutoAttackResponse): void {
+    this.closed = false;
+    this.result(result);
+  }
+
   /** Closes whatever is open. */
   close(): void {
     if (this.closed) return;
