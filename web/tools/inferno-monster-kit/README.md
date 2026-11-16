@@ -170,7 +170,7 @@ game sheets backed up in `art-work/IC2-r3/r2-assets`) paints that creature:
 - Comparison pictures: `art-work/IC2-r3/r3sheets.py <shots dir>` (portrait | round 2 | round 3; every heading; game
   size). Battle and yard shots: `art-work/IC2-r3/film.mjs` (yardtester, own server on 5461).
 
-## IC3 Malphus (started 16 Nov; kit ready, painting not started)
+## IC3 Malphus (painted 16 Nov, waiting for the owner)
 
 - **Flash rows.** `malphus.png` is 30 x 9 whole-pixel cells of 51 x 35. The game plays rows 1-8 (walk) and never row 0,
   a standing pose whose columns turn the other way (column c faces 360 - 12c degrees). `spec.flash_row` = 1:
@@ -186,3 +186,21 @@ game sheets backed up in `art-work/IC2-r3/r2-assets`) paints that creature:
   colour); look for holes in the head stripes, leg webs and fur after each batch. `view_match` is off (front views
   carry the orange belly and tusks that the back views hide). Still NOTE: `art-work/IC3/note-still.txt` (stand evenly
   on all four legs, not mid-stride); animation EXTRA: `art-work/IC3/anim-extra.txt`.
+- **Painting (16 Nov), 27 Codex calls**: 2 samples + 6 still batches + 15 animation + 4 animation redos. Work dir
+  `art-work/IC3`; comparison pictures `art-work/IC3/sheets.py <shots dir>`; battle film `art-work/IC3/film.mjs`
+  (yardtester, own server on 5471; drop at DX=200 DY=640, the old 330,520 spot is a refused red ring).
+  - Sample 1 painted the belly as a smooth ball with seams and the 252-degree view dead straight: the spec now asks for an
+    egg of 5-6 stacked horizontal plates, and `note-still.txt` has a TURN line. Sample 2 approved (style row).
+  - **Turns.** `view_of` put 204-240 degrees in "only the very left edge of the face may show", so Codex painted five
+    identical back views (h18-h22). `back_range=(246, 294)` makes 204-240 ask for the head in profile at the left, as
+    Flash shows, and the redo batches carried per-heading turn notes (`turn-r1/r2/r3.txt`). The last one asked for the
+    whole body (legs too) to turn diagonally; only that got h18-h21 to turn step by step. Later batch wins: h9 h14-16
+    from b-9-14-15-16, h17 from b-17-18-19-20, h18-21 from b-18-19-20-21, h22 from b-19-20-22-21 (no skip.txt needed).
+  - **Fur holes.** The lilac fur highlights pass the magenta test (green ~90-110), so `open_holes=True` punched specks
+    into the fur. `open_holes="core"` (common.key_cell) opens only gaps with real key colour (green < 60) in them.
+  - **Attack facing.** In side views (h13-16) the anticipation and wind-up cells turned to face the viewer (arms "raised
+    to the sides" reads as a front pose). Redone with `anim-extra-attack.txt` (same angle as ref.png, arms up and
+    forward toward the facing direction); `sheet-try1.png` keeps the first try.
+  - **Colour.** Codex's armour came out more golden and saturated than the card (hue 42 vs 48, saturation 0.77 vs 0.60):
+    `grade` (body = armour; limbs = belly, fur, pink) with `grade_chroma`. Walk / attack vs idle mean colour within 1.
+
