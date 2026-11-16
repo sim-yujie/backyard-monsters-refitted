@@ -17,6 +17,7 @@ import {
 } from "@/api/yardplanner";
 import type { Camera } from "@/game/Camera";
 import { TRAP_TYPES } from "@/game/yard/buildingCosts";
+import { hasLayoutSlots } from "@/game/yard/planner/access";
 import { blueprintToWorld } from "@/game/yard/planner/blueprint";
 import type { Checklist } from "@/game/yard/planner/checklist";
 import type { LoadMiss } from "@/game/yard/planner/layout";
@@ -397,7 +398,7 @@ export class YardPlanner {
       dock: this.dock,
       // An outpost has no layout slots (`BasePlanner.as:41`, #191): no panel, no Ctrl+S.
       // The Inferno yard has its own (owner decision 2026-10-29).
-      readOnly: this.readOnly || options.yard.kind === "outpost",
+      readOnly: this.readOnly || !hasLayoutSlots(options.yard),
       ...(options.baseid !== undefined ? { baseid: options.baseid } : {}),
       onLoad: (layout) => this.loadLayout(layout, false),
       onPreview: (layout) => this.loadLayout(layout, true),
@@ -438,7 +439,7 @@ export class YardPlanner {
       onSnapshot: () => this.showSnapshot(),
       onExit: () => this.requestExit(),
       onMore: () => this.applySheet(),
-    }, { readOnly: this.readOnly, layouts: options.baseid === undefined });
+    }, { readOnly: this.readOnly, layouts: hasLayoutSlots(options.yard) });
     this.bar.mount(options.overlay);
     // A press on the planner's own bars and panels is work in it, as a plan
     // edit is (`refreshBar`): "Stay protected?" waits while the player is busy

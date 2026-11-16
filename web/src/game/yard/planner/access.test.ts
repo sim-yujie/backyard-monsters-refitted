@@ -5,6 +5,7 @@ import {
   BLUEPRINT_NOT_IN_OUTPOSTS,
   BLUEPRINT_PLANNER_BUILDING,
   blueprintBlock,
+  hasLayoutSlots,
   hasYardPlanner,
   PlannerAccess,
   plannerAccess,
@@ -88,5 +89,13 @@ describe("blueprintBlock (2026-09-30)", () => {
     expect(blueprintBlock({ ...WITH, kind: "outpost" })).toBe(BLUEPRINT_NOT_IN_OUTPOSTS);
     expect(blueprintBlock({ ...WITHOUT, kind: "outpost" })).toBe(BLUEPRINT_NOT_IN_OUTPOSTS);
     expect(BLUEPRINT_NOT_IN_OUTPOSTS).toBe("Blueprint view isn't available in outposts");
+  });
+});
+
+describe("hasLayoutSlots (I17, 2026-10-29)", () => {
+  it("offers saved layouts on the main yard and the Inferno yard, never in an outpost", () => {
+    expect(hasLayoutSlots({ kind: "main" })).toBe(true);
+    expect(hasLayoutSlots({ kind: "inferno" })).toBe(true);
+    expect(hasLayoutSlots({ kind: "outpost" })).toBe(false);
   });
 });
