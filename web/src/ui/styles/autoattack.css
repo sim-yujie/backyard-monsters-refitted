@@ -131,15 +131,16 @@
   overscroll-behavior: contain;
 }
 
-/* The words keep their height; the list gives way first, down to about one
-   row, and scrolls inside (layout-rules: only the list scrolls). */
+/* The words keep their height; a list of two or more gives way first, down
+   to about one row, and scrolls inside (layout-rules: only the list
+   scrolls). A list of one keeps its own height, with no gap under it. */
 .auto-attack__scroll > * {
   flex: none;
 }
 
-.auto-attack__scroll > .auto-attack__moves,
-.auto-attack__scroll > .auto-attack__missing,
-.auto-attack__scroll > .auto-attack__room {
+.auto-attack__scroll > .auto-attack__moves:has(> li + li),
+.auto-attack__scroll > .auto-attack__missing:has(> li + li),
+.auto-attack__scroll > .auto-attack__room:has(> li + li) {
   flex: 0 1 auto;
   min-height: 56px;
   overflow-y: auto;
