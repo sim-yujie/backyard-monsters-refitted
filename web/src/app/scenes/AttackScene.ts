@@ -55,6 +55,8 @@ import { icon } from "@/ui/icons";
 import { Notices } from "@/ui/maproom/Notices";
 import type { Panel } from "@/ui/Panel";
 import { RESOURCE_KEYS, resourceAmount, resourceName, setResourceRealm } from "@/ui/resourceIcon";
+import { isPhoneLayout } from "@/ui/phoneLayout";
+import { stripLootFigure } from "@/ui/attack/stripLoot";
 import { gameIcon } from "@/ui/gameIcon";
 import { AttackMenu, sheetHandleLabel } from "@/ui/attack/AttackMenu";
 import {
@@ -1083,9 +1085,12 @@ export class AttackScene implements Scene {
       this.damage.textContent = `${readout.damage}%`;
     }
     if (this.loot) {
+      // Short figures on a phone, where the loot has a row of its own (7.7.1).
+      const short = isPhoneLayout();
       RESOURCE_KEYS.forEach((key, index) => {
         const amount = this.lootAmounts[index];
-        if (amount) writeAmount(amount, "res-amount", readout.loot[key], { change: this.lootChange(), tooltip: false });
+        const figure = stripLootFigure(readout.loot[key], short);
+        if (amount) writeAmount(amount, "res-amount", figure, { change: this.lootChange(), tooltip: false });
       });
       // Bone, Coal, Sulfur and Magma in an Inferno fight, as the strip's icons.
       const realm = this.target && combatKind(this.target) === "inferno" ? "inferno" : "surface";
