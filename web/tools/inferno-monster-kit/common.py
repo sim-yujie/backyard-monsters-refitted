@@ -152,6 +152,14 @@ def key_cell(img, min_part=0.03, choose=None, despill=None, open_holes=False):
         # magenta gaps closed in by the art (Zagnoid's bent arms and claw fingers against its body) become
         # see-through again, with a 2 px rim so no pink fringe is left
         hole = keep & ~np.isin(lab, ids) & magenta(rgb)
+        if open_holes == "core":
+            # only gaps with a core of real key colour (green < 60): Malphus's lilac fur highlights pass the
+            # magenta test too (green ~90-110) and would be punched out as specks
+            hl, hs = components(hole)
+            real = np.zeros(len(hs), bool)
+            np.maximum.at(real, hl[hole], rgb[..., 1][hole] < 60)
+            real[0] = False
+            hole = real[hl]
         keep &= ~grow(hole, 2) | ~(magenta(rgb) | grow(hole, 1))
     keep = shrink(keep, 1)
     core = shrink(keep, 3)

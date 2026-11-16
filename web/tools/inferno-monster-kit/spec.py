@@ -208,7 +208,7 @@ SPECS = {
         gamma=1.0,
         # view_match left out: it matches each view's whole-body mean, and Malphus's front views carry the orange
         # belly and ivory tusks that its back views hide (switch on only if the batches really drift)
-        open_holes=True,                 # see-through gaps between the legs, arms and body
+        open_holes="core",               # see-through gaps between the legs, arms and body (not the lilac fur highlights)
         mirror_walk_roll=3,              # build_anim: a mirrored heading plays walk frame k+3 (Flash's own mirror match is half a cycle on)
         anchor=(25, 17),
         flash_columns=30,
@@ -222,6 +222,7 @@ SPECS = {
         walk_lift=(0, 0, 0, 0, 0, 0),    # scuttles on four legs, no hop
         loops=(0, 8, 22),
         face="tusked face",
+        back_range=(246, 294),           # Flash shows the tusked head in profile at the left up to 240 degrees
         pose_parts="clawed arms, the four legs and the round belly",
         frames_note=(
             "their two pink-magenta blobs on the shoulders are the shaggy PURPLE fur, the small pink marks on the head are "
@@ -257,7 +258,7 @@ SPECS = {
             "Malphus, the armoured tusked spider-demon of portrait.png (NOT a frog, NOT a crab). It stands on FOUR thick "
             "armoured spider legs spread wide around it (two at the front, two at the back), each bending up at a knee and "
             "down to the ground, ending in a big curved ORANGE claw tip; dusty rose-pink skin webs stretch under the upper legs. "
-            "Low between the legs hangs a big round ORANGE BELLY with horizontal segments (like a beetle's abdomen). Above it "
+            "Low between the legs hangs a big egg-shaped ORANGE BELLY (taller than wide) made of 5 or 6 stacked overlapping HORIZONTAL plates, each plate a separate rounded ridge like a pill bug's or beetle's abdomen, mottled amber with darker brown spots; NOT a smooth ball, NO vertical seams. Above it "
             "rises a muscular upright olive-green torso with armour plates, and TWO strong arms bent at the elbow, each hand "
             "with THREE long hooked ORANGE talons hanging down. SHAGGY DARK PURPLE FUR covers the shoulders, runs down the "
             "chest to the belly and rings both forearms. HEAD: sits low and forward between the shoulders; olive-green "
@@ -270,7 +271,7 @@ SPECS = {
         ),
         parts=(
             " 1. Legs: FOUR thick armoured olive-green spider legs spread wide (two front, two back), each with a big curved orange claw tip on the ground and a dusty rose-pink skin web under it.\n"
-            " 2. Belly: ONE big round orange segmented belly hanging low between the legs (seen from the front and sides; from behind only its lower edge).\n"
+            " 2. Belly: ONE big egg-shaped orange belly of 5-6 stacked horizontal plates (mottled amber, no vertical seams, not a smooth ball) hanging low between the legs (seen from the front and sides; from behind only its lower edge).\n"
             " 3. Torso: an upright muscular olive-green armoured torso on top of the belly.\n"
             " 4. Fur: shaggy dark purple fur on both shoulders, down the chest and round both forearms.\n"
             " 5. Arms: TWO bent arms, each hand with THREE long hooked orange talons hanging down.\n"
