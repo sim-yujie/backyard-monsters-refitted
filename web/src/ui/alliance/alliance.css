@@ -2418,8 +2418,8 @@
   grid-template-columns: minmax(0, 1fr) auto auto;
 }
 
-.trade-request.is-done {
-  opacity: 0.6;
+.trade-request.is-done .trade-swap__side {
+  color: var(--colour-text-secondary);
 }
 
 /* Chat's Trade on a request line: that request, lit. */
@@ -2435,8 +2435,9 @@
   align-items: center;
   justify-content: flex-end;
   gap: 4px;
-  color: var(--colour-text-muted);
-  font-size: var(--text-xs);
+  color: var(--colour-text-secondary);
+  font-size: 13px;
+  line-height: 1.3;
 }
 
 /* A swap from the reader's side: −1,000 (what leaves) → +900 (what comes). */
@@ -2513,8 +2514,9 @@
 }
 
 .trade-request__time {
-  color: var(--colour-text-muted);
-  font-size: var(--text-xs);
+  color: var(--colour-text-secondary);
+  font-size: 13px;
+  line-height: 1.3;
   white-space: nowrap;
 }
 
@@ -3144,4 +3146,107 @@
   background: #c22a24;
   color: #fff;
   font-weight: 700;
+}
+
+/* beta 8 (astra): trade labels stay smaller than the resource amounts. */
+.trade-swap__label {
+  color: var(--colour-text-muted);
+  font-size: 11px;
+  font-weight: 400;
+}
+
+.trade-status,
+.trade-recent__amount {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.trade-recent__amount .res-icon {
+  width: 20px;
+}
+
+@media (pointer: coarse) {
+  .trade-new,
+  .trade-request__act,
+  .trade-sheet__back,
+  .trade-amount__quick,
+  .trade-amount__box,
+  .trade-sheet__go,
+  .trade-tile {
+    min-height: 44px;
+    min-width: 44px;
+  }
+}
+
+@media (max-width: 480px) {
+  /* beta 8 (astra): three equal quick choices above the amount controls. */
+  .trade-amount {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .trade-amount__quick {
+    grid-row: 1;
+  }
+
+  .trade-amount > .res-icon {
+    grid-row: 2;
+    grid-column: 1;
+  }
+
+  .trade-amount__box {
+    grid-row: 2;
+    grid-column: 1 / 3;
+    min-width: 0;
+    width: calc(100% - 32px);
+    box-sizing: border-box;
+    justify-self: end;
+  }
+
+  .trade-amount__max {
+    grid-row: 2;
+    grid-column: 3;
+  }
+
+  .trade-sheet {
+    gap: 8px;
+  }
+
+  .trade-tiles {
+    gap: 4px;
+  }
+
+  .trade-tile {
+    min-height: 44px;
+    padding: 4px;
+    gap: 0;
+  }
+}
+
+/* beta 8 (astra): save vertical space inside Trade on short screens. */
+@media (max-height: 500px) {
+  .trade-today {
+    gap: 4px;
+  }
+
+  .trade-today__stat {
+    min-height: 28px;
+    padding: 2px 4px;
+    flex-wrap: nowrap;
+  }
+
+  .trade-today__w {
+    flex-basis: auto;
+  }
+
+  .trade-card {
+    padding: 6px 8px;
+    gap: 4px;
+  }
+
+  .trade-status {
+    font-size: 13px;
+    line-height: 1.3;
+  }
 }

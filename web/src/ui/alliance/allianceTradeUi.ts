@@ -34,7 +34,8 @@ import { resourceIcon, resourceName } from "@/ui/resourceIcon";
 
 export const TRADE_TEXT = {
   today: "Today",
-  swap: "Swap",
+  swap: "swap",
+  swaps: "swaps",
   left: "left",
   newDay: "New day",
   loss: "−10% on the way",
@@ -43,7 +44,7 @@ export const TRADE_TEXT = {
   yourRequest: "Your request",
   newRequest: "New request",
   postLine: "Swap one resource for another, 1:1. Each side gets 90%.",
-  tradedToday: "You traded today. Post again tomorrow.",
+  tradedToday: (time: string) => `Swapped today · new day in ${time}`,
   postsUsed: "No more requests today.",
   cancel: "Cancel",
   held: "Held until a mate accepts. Cancel gives it back.",
@@ -52,12 +53,13 @@ export const TRADE_TEXT = {
   accept: "Accept",
   /** A request's swap, read out: "You give 1,000 Goo, you get 900 Twigs". */
   swapLabel: (give: string, get: string) => `You give ${give}, you get ${get}`,
-  takenBy: (name: string) => `✓ ${name}`,
+  takenBy: (name: string) => `✓ ${name} took it`,
+  swappedWith: (name: string) => `✓ Swapped with ${name}`,
   recent: "Recent trades",
   noRecent: "No trades yet.",
   gave: (from: string, to: string, what: string) => `${from} gave ${to} ${what}`,
   ago: (time: string) => `${time} ago`,
-  hint: "Requests last 48 h. 1 swap a day each, up to 10% of storage.",
+  hint: "48 h requests · 1 open · 3 posts a day · 1 swap a day · max 10% of storage",
   back: "Back",
   post: "Post",
   youGive: "You give",
@@ -71,10 +73,10 @@ export const TRADE_TEXT = {
   full: "Full",
   /** Why Accept is off, short. */
   block: {
-    traded: "1 swap a day: you swapped today",
+    traded: (time: string) => `1 swap a day · new day in ${time}`,
     mateTraded: (name: string) => `${name} swapped today: tomorrow`,
-    mineWaits: "You swapped today: open from tomorrow",
-    short: (amount: string, what: string) => `Not enough: you have ${amount} ${what}`,
+    mineWaits: (time: string) => `You swapped today · open again in ${time}`,
+    short: (need: string, what: string, held: string) => `Need ${need} ${what} · you have ${held}`,
     overCap: (amount: string) => `Over 10% of your storage (max ${amount})`,
     mateOverCap: (name: string) => `Over 10% of ${name}'s storage`,
     full: "Your storage is full",
@@ -117,9 +119,13 @@ const card = (title: string, ...children: HTMLElement[]): HTMLElement => {
   return box;
 };
 
+// beta 8 (astra): keep meaningful hundredths of a million in trade receipts.
+const tradeShort = (amount: number): string =>
+  amount >= 1_000_000 ? `${Number((amount / 1_000_000).toFixed(2))}M` : formatShort(amount);
+
 const amountsWords = (amounts: Partial<TradeAmounts>): string =>
   TRADE_KEYS.filter((key) => (amounts[key] ?? 0) > 0)
-    .map((key) => `${formatShort(amounts[key])} ${resourceName(key)}`)
+    .map((key) => `${tradeShort(amounts[key] ?? 0)} ${resourceName(key)}`)
     .join(", ");
 
 const words = (key: TradeKey, amount: number) => `${formatAmount(amount)} ${resourceName(key)}`;
@@ -132,16 +138,16 @@ const swap = (out: { key: TradeKey; n: number }, back: { key: TradeKey; n: numbe
   const row = make("span", "trade-swap");
   row.setAttribute("role", "img");
   row.setAttribute("aria-label", TRADE_TEXT.swapLabel(words(out.key, out.n), words(back.key, back.n)));
-  const side = (key: TradeKey, text: string, className: string) => {
+  const side = (key: TradeKey, text: string, className: string, label: string) => {
     const chip = make("span", `trade-swap__side ${className}`);
     chip.dataset["key"] = key;
-    chip.append(resourceIcon(key, { decorative: true }), make("span", "trade-swap__n", text));
+    chip.append(make("span", "trade-swap__label", label), resourceIcon(key, { decorative: true }), make("span", "trade-swap__n", text));
     return chip;
   };
   row.append(
-    side(out.key, `−${formatAmount(out.n)}`, "trade-swap__out"),
+    side(out.key, `−${formatAmount(out.n)}`, "trade-swap__out", TRADE_TEXT.youGive),
     make("span", "trade-swap__arrow", "→"),
-    side(back.key, `+${formatAmount(back.n)}`, "trade-swap__in"),
+    side(back.key, `+${formatAmount(back.n)}`, "trade-swap__in", TRADE_TEXT.youGet),
   );
   return row;
 };
@@ -153,18 +159,18 @@ const typed = (value: string): number => {
 };
 
 /** Why Accept is off: an icon and a few words. */
-const blockLine = (block: AcceptBlock, request: TradeRequest, view: TradeView, mine = false): HTMLElement => {
+const blockLine = (block: AcceptBlock, request: TradeRequest, view: TradeView, newDay: string, mine = false): HTMLElement => {
   const icon: GameIconName = block === "traded" || block === "mateTraded" ? "time" : block === "full" || block === "mateFull" ? "storagefull" : "lost";
   let text: string;
   switch (block) {
     case "traded":
-      text = TRADE_TEXT.block.traded;
+      text = TRADE_TEXT.block.traded(newDay);
       break;
     case "mateTraded":
-      text = mine ? TRADE_TEXT.block.mineWaits : TRADE_TEXT.block.mateTraded(request.username);
+      text = mine ? TRADE_TEXT.block.mineWaits(newDay) : TRADE_TEXT.block.mateTraded(request.username);
       break;
     case "short":
-      text = TRADE_TEXT.block.short(formatShort(view.me?.held[request.want] ?? 0), resourceName(request.want));
+      text = TRADE_TEXT.block.short(tradeShort(request.amount), resourceName(request.want), tradeShort(view.me?.held[request.want] ?? 0));
       break;
     case "overCap":
       text = TRADE_TEXT.block.overCap(formatShort(view.me ? carryCap(view.me.cap, view.me.cap, view.rules.capShare) : 0));
@@ -274,6 +280,10 @@ export class TradeTab {
   // The tab
   // -------------------------------------------------------------------------
 
+  private newDay(view: TradeView): string {
+    return formatCountdown(view.today.newDayIn - (this.host.now() - this.loadedAt)).replace(/ \d+[ms]$/, "");
+  }
+
   private renderTab(view: TradeView): HTMLElement[] {
     const now = this.host.now();
     const nodes: HTMLElement[] = [];
@@ -287,8 +297,8 @@ export class TradeTab {
       return box;
     };
     today.append(
-      stat(gameIcon("income", { size: 24, decorative: true }), String(view.today.swapsLeft), `${TRADE_TEXT.swap} ${TRADE_TEXT.left}`, view.today.swapsLeft === 0),
-      stat(gameIcon("time", { size: 24, decorative: true }), formatCountdown(view.today.newDayIn - (now - this.loadedAt)).replace(/ \d+[ms]$/, ""), TRADE_TEXT.newDay),
+      stat(gameIcon("income", { size: 24, decorative: true }), String(view.today.swapsLeft), `${view.today.swapsLeft === 1 ? TRADE_TEXT.swap : TRADE_TEXT.swaps} ${TRADE_TEXT.left}`, view.today.swapsLeft === 0),
+      stat(gameIcon("time", { size: 24, decorative: true }), this.newDay(view), TRADE_TEXT.newDay),
       stat(gameIcon("lost", { size: 24, decorative: true }), TRADE_TEXT.lossShort, TRADE_TEXT.loss.replace("−10% ", "")),
     );
     nodes.push(today);
@@ -303,16 +313,25 @@ export class TradeTab {
         make("span", "trade-request__time", TRADE_TEXT.timeLeft(formatCountdown(mine.expires_at - now).replace(/ \d+[ms]$/, ""))),
         button(TRADE_TEXT.cancel, "btn--outline trade-request__act", () => void this.cancel()),
       );
-      if (!mine.ready) row.append(blockLine("mateTraded", mine, view, true));
+      if (!mine.ready) row.append(blockLine("mateTraded", mine, view, this.newDay(view), true));
       nodes.push(card(TRADE_TEXT.yourRequest, row, make("p", "trade-note trade-note--small", TRADE_TEXT.held)));
     } else {
       const traded = view.today.swapsLeft === 0;
-      const open = button("", "btn--primary trade-new", () => this.openPost());
-      open.append(gameIcon("income", { size: 24, decorative: true }), make("span", "", TRADE_TEXT.newRequest));
-      open.disabled = traded || view.today.postsLeft === 0 || !view.me || this.busy;
-      const line = make("p", "trade-note", traded ? TRADE_TEXT.tradedToday : view.today.postsLeft === 0 ? TRADE_TEXT.postsUsed : TRADE_TEXT.postLine);
       const box = make("div", "trade-ask-row");
-      box.append(open, line);
+      if (traded || view.today.postsLeft === 0) {
+        const line = make("p", "trade-note trade-status");
+        line.append(gameIcon("time", { size: 16, decorative: true }), make("span", "", traded ? TRADE_TEXT.tradedToday(this.newDay(view)) : TRADE_TEXT.postsUsed));
+        box.append(line);
+      } else {
+        if (view.me) {
+          const open = button("", "btn--primary trade-new", () => this.openPost());
+          open.append(gameIcon("income", { size: 24, decorative: true }), make("span", "", TRADE_TEXT.newRequest));
+          // Busy (a post or cancel on its way): greyed, not gone, so the card does not jump.
+          open.disabled = this.busy;
+          box.append(open);
+        }
+        box.append(make("p", "trade-note", TRADE_TEXT.postLine));
+      }
       nodes.push(card(TRADE_TEXT.yourRequest, box));
     }
 
@@ -325,10 +344,30 @@ export class TradeTab {
 
     // Recent trades.
     const recent = make("div", "trade-recent");
-    for (const line of view.recent.slice(0, 2)) {
+    // beta 8 (astra): pair reciprocal receipts before limiting the list to two swaps.
+    const used = new Set<number>();
+    for (const [index, line] of view.recent.entries()) {
+      if (used.has(index)) continue;
+      if (recent.childElementCount >= 2) break;
+      used.add(index);
+      const partnerIndex = view.recent.findIndex((other, i) => !used.has(i) && other.at === line.at && other.from === line.to && other.to === line.from);
+      const partner = view.recent[partnerIndex];
       const row = make("p", "trade-recent__line");
+      if (partner) {
+        used.add(partnerIndex);
+        row.append(make("span", "", `${line.from} ⇄ ${line.to} · `));
+        const received = (amounts: Partial<TradeAmounts>) => {
+          const group = make("span", "trade-recent__amount");
+          for (const key of TRADE_KEYS) {
+            if ((amounts[key] ?? 0) > 0) group.append(resourceIcon(key, { decorative: true }), make("span", "", tradeShort(amounts[key] ?? 0)));
+          }
+          return group;
+        };
+        row.append(received(partner.arrived), document.createTextNode(" ⇄ "), received(line.arrived));
+      } else {
+        row.append(make("span", "", TRADE_TEXT.gave(line.from, line.to, amountsWords(line.arrived))));
+      }
       row.append(
-        make("span", "", TRADE_TEXT.gave(line.from, line.to, amountsWords(line.arrived))),
         make("span", "trade-recent__ago", ` · ${TRADE_TEXT.ago(formatCountdown(Math.max(1, now - line.at)).replace(/ \d+[ms]$/, ""))}`),
       );
       recent.append(row);
@@ -357,7 +396,7 @@ export class TradeTab {
         : swap({ key: request.want, n: request.amount }, { key: request.give, n: request.gets }),
     );
     if (done) {
-      row.append(make("span", "trade-request__given", TRADE_TEXT.takenBy(request.taken_by ?? "?")));
+      row.append(make("span", "trade-request__given", (request.mine ? TRADE_TEXT.swappedWith : TRADE_TEXT.takenBy)(request.taken_by ?? "?")));
       return row;
     }
     const block = acceptBlock(request, view.me, view.today);
@@ -366,12 +405,12 @@ export class TradeTab {
     accept.setAttribute("aria-label", `${TRADE_TEXT.accept}: ${TRADE_TEXT.swapLabel(words(request.want, request.amount), words(request.give, request.gets))}`);
     accept.append(
       make("span", "trade-accept__word", TRADE_TEXT.accept),
-      make("span", "trade-accept__n", `+${formatShort(request.gets)}`),
+      make("span", "trade-accept__n", `+${tradeShort(request.gets)}`),
       resourceIcon(request.give, { decorative: true }),
     );
     accept.disabled = block !== null || this.busy;
     row.append(make("span", "trade-request__time", formatCountdown(request.expires_at - now).replace(/ \d+[ms]$/, "")), accept);
-    if (block) row.append(blockLine(block, request, view));
+    if (block) row.append(blockLine(block, request, view, this.newDay(view)));
     if (this.focusId === request.id) queueMicrotask(() => row.scrollIntoView?.({ block: "nearest" }));
     return row;
   }
