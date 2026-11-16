@@ -1,5 +1,5 @@
 import { Container, Graphics, Text } from "pixi.js";
-import { savingTag, type HelpMark } from "@/game/friends/helpModel";
+import { savingTag, type HelpMark, type HelpMarkKind } from "@/game/friends/helpModel";
 import { paintIcon } from "./yardIcons";
 import { jobBarScale } from "./YardJobBars";
 import type { MarkAnchor } from "./YardHatchMarks";
@@ -21,6 +21,11 @@ import type { Corners } from "./planner/marquee";
  * A building that only takes a repair keeps today's small amber wrench, with
  * no ring and no tag (owner, 15 Nov 2026: Help all and the bar's count are
  * speed-ups only; a repair is still given from the building's panel).
+ * A building still damaged whose repair is used up for today (one repair a
+ * friend's yard a day) keeps that small wrench in grey, still tappable: the
+ * wrench is the visit's clear sign of which buildings are damaged, so
+ * without it the rest of the yard looks repaired (owner's bug report,
+ * 16 Nov 2026).
  *
  * The scene decides which buildings and what each saves (`helpMarksOf`);
  * this layer only draws them, and draws nothing once handed none. The wrench
@@ -43,6 +48,9 @@ const SMALL_RISE = SMALL_RADIUS + SMALL_GAP;
 const SMALL_FILL = 0xf5b94a;
 const SMALL_RIM = 0x0f1c26;
 const SMALL_WRENCH = 0x2a1a00;
+/** The small wrench in grey, for a repair used up today: still damaged, no help to give now. */
+const SPENT_FILL = 0x9aa1a8;
+const SPENT_WRENCH = 0x3a4047;
 /** The painted tools' side inside the disc. */
 const TOOLS_SIDE = 30;
 /** How high the wrench bobs, and how long one bob takes (seconds). */
@@ -65,7 +73,7 @@ export const MARK_HALF_WIDTH = WRENCH_RADIUS + 4;
  */
 export const helpMarkScale = (zoom: number): number => (zoom > 0 ? Math.max(1, 1 / zoom) : 1);
 
-const scaleOf = (kind: HelpMark["kind"], zoom: number): number =>
+const scaleOf = (kind: HelpMarkKind, zoom: number): number =>
   kind === "speedup" ? helpMarkScale(zoom) : jobBarScale(zoom);
 
 /** One pulse of the ring, seconds, and its faintest. */
@@ -110,7 +118,7 @@ interface MarkView {
   readonly ring: Graphics | null;
   /** The ring's front edge, over the buildings; none for a repair only. */
   readonly edge: Graphics | null;
-  readonly kind: HelpMark["kind"];
+  readonly kind: HelpMarkKind;
   saving: number | null;
 }
 
@@ -181,9 +189,14 @@ export class YardHelpMarks {
     return this.views.size > 0 || this.leaving.length > 0;
   }
 
-  /** The buildings wearing a wrench, by id. */
+  /** The buildings wearing a wrench, by id: amber or grey. */
   get drawn(): number[] {
     return [...this.views.keys()];
+  }
+
+  /** The buildings wearing the grey wrench (a repair used up today), by id. */
+  get drawnSpent(): number[] {
+    return [...this.views].filter(([, view]) => view.kind === "spent").map(([id]) => id);
   }
 
   /** The tag on each wrench now ("-18m"), or null with none; by id. */
@@ -427,8 +440,8 @@ export class YardHelpMarks {
       badge.addChild(bob);
       this.root.addChild(badge);
 
-      if (mark.kind === "repair") {
-        bob.addChild(...smallWrench());
+      if (mark.kind !== "speedup") {
+        bob.addChild(...smallWrench(mark.kind === "spent"));
         this.views.set(mark.id, { badge, bob, tag: null, ring: null, edge: null, kind: mark.kind, saving: null });
         continue;
       }
@@ -571,21 +584,26 @@ const paintExit = (leaving: LeavingView, t: number, age: number): void => {
   ring(1 - t);
 };
 
-/** Today's small wrench (#374), for a building that only takes a repair. */
-const smallWrench = (): Graphics[] => {
+/**
+ * Today's small wrench (#374), for a building that only takes a repair; in
+ * grey (`spent`) for one whose repair is used up for today.
+ */
+const smallWrench = (spent: boolean): Graphics[] => {
+  const fill = spent ? SPENT_FILL : SMALL_FILL;
+  const ink = spent ? SPENT_WRENCH : SMALL_WRENCH;
   const y = -SMALL_RISE;
   const disc = new Graphics()
     .circle(0, y, SMALL_RADIUS)
-    .fill({ color: SMALL_FILL })
+    .fill({ color: fill })
     .stroke({ width: 2, color: SMALL_RIM, alpha: 0.85 });
   // A spanner: a handle, a round head, and the jaw's gap cut in the disc's colour.
   const wrench = new Graphics()
     .roundRect(-2.5, -1, 5, 13, 2)
-    .fill({ color: SMALL_WRENCH })
+    .fill({ color: ink })
     .circle(0, -4, 5.5)
-    .fill({ color: SMALL_WRENCH })
+    .fill({ color: ink })
     .rect(-2, -10.5, 4, 6)
-    .fill({ color: SMALL_FILL });
+    .fill({ color: fill });
   wrench.position.set(0, y);
   wrench.rotation = Math.PI / 4;
   return [disc, wrench];

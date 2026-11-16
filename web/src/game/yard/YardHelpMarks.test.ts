@@ -1,3 +1,4 @@
+import type { Container, Graphics } from "pixi.js";
 import { describe, expect, it } from "vitest";
 import type { HelpMark } from "@/game/friends/helpModel";
 import { jobBarScale } from "./YardJobBars";
@@ -23,6 +24,7 @@ const corners = (id: number): Corners | null =>
 
 const speedup = (id: number, saving: number | null = 1080): HelpMark => ({ id, kind: "speedup", saving });
 const repair = (id: number): HelpMark => ({ id, kind: "repair", saving: null });
+const spent = (id: number): HelpMark => ({ id, kind: "spent", saving: null });
 
 describe("YardHelpMarks", () => {
   it("draws one wrench per building, none for a building with no anchor", () => {
@@ -182,4 +184,50 @@ describe("YardHelpMarks", () => {
     marks.set([speedup(1), speedup(2), repair(3)]);
     expect(marks.worldBox()).toEqual({ left: 60, top: 50, right: 240, bottom: 100, footTop: 100, xs: [100, 200] });
   });
+
+  it("draws a spent repair as the small wrench in grey, tappable, with no ring, tag or frame (owner's report, 16 Nov 2026)", () => {
+    const marks = new YardHelpMarks(anchor, corners);
+    expect(marks.set([repair(2), repair(3)])).toBe(true);
+    expect(discFill(marks, 0)).toBe(0xf5b94a);
+    // Today's repair given on 3: 2 stays damaged, its repair used up. The kind changing redraws it grey.
+    expect(marks.set([spent(2)])).toBe(true);
+    expect(marks.drawn).toEqual([2]);
+    expect(marks.drawnSpent).toEqual([2]);
+    expect(discFill(marks, 0)).toBe(0x9aa1a8);
+    expect(marks.ground.children).toHaveLength(0);
+    expect(marks.front.children).toHaveLength(0);
+    expect(marks.tags).toEqual(new Map([[2, null]]));
+    expect(marks.discs).toEqual([]);
+    expect(marks.worldBox()).toBeNull();
+    // The same size and place as the amber one, so a tap on it opens the building's panel.
+    expect(marks.pick(200, 30)).toBe(2);
+    expect(marks.pick(200 + SMALL_RADIUS + 1, 30)).toBeNull();
+    expect(marks.set([spent(2)])).toBe(false);
+    expect(marks.set([speedup(1), spent(2)])).toBe(true);
+    expect(marks.drawnSpent).toEqual([2]);
+    marks.set([]);
+    expect(marks.active).toBe(false);
+  });
+
+  it("a held big wrench whose building is left damaged turns grey when its speed-up lands", () => {
+    const marks = new YardHelpMarks(anchor, corners);
+    marks.set([speedup(1), spent(2)]);
+    marks.hold([1]);
+    // Help all's speed-up lands; the repair there was used up today, so the scene hands over a spent mark.
+    expect(marks.set([spent(1), spent(2)])).toBe(true);
+    expect(marks.drawnSpent).toEqual([1, 2]);
+    expect(marks.ground.children).toHaveLength(0);
+    // Its exit does not play: the grey wrench stays.
+    marks.leave(1, "pop");
+    expect(marks.drawnSpent).toEqual([1, 2]);
+    expect(marks.root.children).toHaveLength(2);
+  });
 });
+
+/** The fill colour of the `index`th wrench's disc. */
+const discFill = (marks: YardHelpMarks, index: number): number | undefined => {
+  const badge = marks.root.children[index] as Container;
+  const disc = (badge.children[0] as Container).children[0] as Graphics;
+  const fill = disc.context.instructions.find((one) => one.action === "fill");
+  return fill?.action === "fill" ? fill.data.style.color : undefined;
+};
