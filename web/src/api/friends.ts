@@ -438,7 +438,7 @@ export const REFUSAL_TEXT: Readonly<Record<FriendRefusalReason, string>> = {
 
 /** What a refusal with no words of its own says. */
 export const GENERAL_REFUSAL = "That didn't work. Try again in a moment.";
-/** The friends spam limit (429 `rateLimited`, bug report #50): it lifts on its own within the hour. */
+/** A friends spam limit (429 `rateLimited`, bug report #50) that sent no words of its own. */
 export const RATE_LIMITED_REFUSAL = "You have done that a lot this hour. Try again later.";
 /** What a call that never reached the server says. */
 export const NETWORK_REFUSAL = "Could not reach the server. Try again.";
@@ -463,8 +463,8 @@ export const toSeconds = (value: unknown): number | null => {
 
 /**
  * Why a friends call was refused, in plain words. The `reason` is read from
- * the error's details (`ClientSafeError`'s `data`) or the body itself. The
- * spam limit is `rateLimited` with its own words. A reason the client does
+ * the error's details (`ClientSafeError`'s `data`) or the body itself. A
+ * spam limit is `rateLimited`, with the limiter's own sentence. A reason the client does
  * not know (a yard refusal such as `raidInProgress`) says the server's own
  * sentence (bug report #50: it used to say only the general line); with no
  * reason at all (a crash) it is the general line.
@@ -490,10 +490,11 @@ export const friendRefusal = (caught: unknown): FriendRefusal => {
             : REFUSAL_TEXT[reason];
       return { reason, message, ...(from !== null && { from }), ...(rule && { rule }) };
     }
-    if (reason === "rateLimited") return { reason, message: RATE_LIMITED_REFUSAL };
     const said = [caught.details?.message, body["message"], body["error"]].find(
       (value): value is string => typeof value === "string" && value.trim() !== "",
     );
+    // Each limiter says its own sentence ("Too many searches. Please slow down."); the help panel words its own.
+    if (reason === "rateLimited") return { reason, message: said ?? RATE_LIMITED_REFUSAL };
     if (typeof reason === "string" && reason !== "" && said) return { reason: "unknown", message: said };
   }
   return { reason: "unknown", message: GENERAL_REFUSAL };

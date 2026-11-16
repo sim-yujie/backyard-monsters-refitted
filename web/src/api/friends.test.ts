@@ -382,7 +382,16 @@ describe("friendRefusal", () => {
     const words = "You have done that a lot. Please wait a while and try again.";
     stubFetch({ error: words, message: words, reason: "rateLimited" }, 429);
     const caught = await friendsApi.help(7, 3, "repair").catch((error: unknown) => error);
-    expect(friendRefusal(caught)).toEqual({ reason: "rateLimited", message: RATE_LIMITED_REFUSAL });
+    expect(friendRefusal(caught)).toEqual({ reason: "rateLimited", message: words });
+    // The read limiter's shape: `error` only.
+    stubFetch({ error: "Too many searches. Please slow down.", reason: "rateLimited" }, 429);
+    const search = await friendsApi.remove(7).catch((error: unknown) => error);
+    expect(friendRefusal(search)).toEqual({ reason: "rateLimited", message: "Too many searches. Please slow down." });
+    // No words at all.
+    expect(friendRefusal(new ApiError("x", { status: 429, body: { reason: "rateLimited" } }))).toEqual({
+      reason: "rateLimited",
+      message: RATE_LIMITED_REFUSAL,
+    });
     expect(RATE_LIMITED_REFUSAL).not.toBe(GENERAL_REFUSAL);
   });
 
