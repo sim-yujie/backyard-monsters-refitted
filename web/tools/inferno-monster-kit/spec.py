@@ -211,6 +211,7 @@ SPECS = {
         # pixels red well above green: belly, fur, pink stripes) a little less red, so the fur reads violet
         grade=dict(body=((0.94, 0.0), (1.06, 0.0), (1.2, 0.0)), limbs=((0.9, 0.0), (1.0, 0.0), (1.1, 0.0))),
         grade_chroma=True,               # tusks, fangs and drool stay as painted
+        demagenta=True,                  # hot pink drool-gap specks (h18) take their neighbours' colour
         # view_match left out: it matches each view's whole-body mean, and Malphus's front views carry the orange
         # belly and ivory tusks that its back views hide (switch on only if the batches really drift)
         open_holes="core",               # see-through gaps between the legs, arms and body (not the lilac fur highlights)

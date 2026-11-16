@@ -330,7 +330,31 @@ def grade(im, spec):
         gr = np.stack([rgb[..., c] * k + o for c, (k, o) in enumerate(g[part])], -1)
         out += gr * w[..., None]
     a[..., :3] = out
+    if spec.get("demagenta"):
+        a = demagenta(a)
     return Image.fromarray(np.clip(a, 0, 255).astype(np.uint8), "RGBA")
+
+
+def demagenta(a, steps=6):
+    """spec demagenta (IC3): a few drool-gap pixels came back hot magenta-pink (green < 40, red and blue high) but
+    not magenta enough to key out; nothing on Malphus is that colour, so they take their neighbours' colour."""
+    rgb = a[..., :3]
+    bad = (rgb[..., 1] < 40) & (rgb[..., 0] > 150) & (rgb[..., 2] > 110) & (a[..., 3] > 0)
+    if not bad.any():
+        return a
+    good = ~bad & (a[..., 3] > 100)
+    col, w = rgb * good[..., None], good.astype(float)
+    for _ in range(steps):  # spread the good colours into the bad pixels (3x3 box, repeated)
+        pc, pw = np.pad(col, ((1, 1), (1, 1), (0, 0))), np.pad(w, 1)
+        h, wd = w.shape
+        col = sum(pc[dy:dy + h, dx:dx + wd] for dy in range(3) for dx in range(3))
+        w = sum(pw[dy:dy + h, dx:dx + wd] for dy in range(3) for dx in range(3))
+        col = np.where(good[..., None], rgb, col / np.maximum(w, 1e-6)[..., None])
+        w = np.where(good | (w > 0), 1.0, 0.0)
+        col = col * w[..., None]
+    a = a.copy()
+    a[..., :3] = np.where(bad[..., None] & (w[..., None] > 0), col, rgb)
+    return a
 
 
 def match_views(views):
