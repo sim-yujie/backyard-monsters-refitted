@@ -2526,14 +2526,16 @@
   display: none;
 }
 
-.planner-bar--bottom[data-layout] > .planner-bar__line {
-  flex: 1 1 0;
-  justify-content: flex-end;
+/* The drawer's strip over the bar already says what to do and has Done:
+   the bar keeps the counts and the three buttons, on one row. */
+.planner-bar--bottom[data-layout].planner-bar--line > .planner-bar__put-back,
+.planner-bar--bottom[data-layout] .planner-bar__line-tip {
+  display: none;
 }
 
-.planner-bar--bottom[data-layout] .planner-bar__line-tip {
+.planner-bar--bottom[data-layout] > .planner-bar__line {
   flex: 1 1 auto;
-  min-width: 0;
+  justify-content: flex-end;
 }
 
 .planner-bar--bottom[data-layout] .planner-bar__line-counts {

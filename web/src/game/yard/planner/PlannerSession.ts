@@ -1415,6 +1415,11 @@ export class PlannerSession {
    */
   setCompare(diff: CompareDiff | null): void {
     const was = this.compare !== null;
+    // Compare is read-only: a wall line being drawn stops.
+    if (diff && this.line) {
+      this.line = null;
+      this.hideLineGhosts();
+    }
     this.compare = diff;
     if (diff && !was) this.input.detach();
     if (!diff && was) this.input.attach();

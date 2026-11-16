@@ -402,8 +402,10 @@ export class YardPlanner {
           const rect = canvas.getBoundingClientRect();
           return { x: screen.x + rect.left, y: screen.y + rect.top };
         },
-        centreOn: (x: number, y: number) => {
-          camera.centreOn(renderer.yardToWorld(x, y));
+        centreOn: (x: number, y: number, zoom?: number) => {
+          const world = renderer.yardToWorld(x, y);
+          if (zoom !== undefined) camera.zoomAt(zoom, camera.worldToScreen(world));
+          camera.centreOn(world);
           camera.dirty = true;
         },
       };
