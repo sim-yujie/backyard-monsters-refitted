@@ -1,0 +1,136 @@
+import { readFileSync } from "node:fs";
+import { dirname, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
+import { describe, expect, it } from "vitest";
+
+/**
+ * Stored buildings could not be taken back out (player report, 16 Nov 2026).
+ *
+ * After Clear yard, an iPhone showed the drawer's count, its search box and
+ * three rows of kind chips, and nothing under them: the list was 0 px tall.
+ * The body is a flex column and the list its scroll box, and a scroll box's
+ * automatic minimum height is zero, so on a short sheet it was the one part
+ * that gave way. Nothing could be picked, so nothing could be placed, so Apply
+ * stayed blocked. These rules keep the list open on every screen, in the
+ * drawer and in Find, which shares its list and chips (4 px of list on a
+ * phone on its side).
+ */
+
+const here = dirname(fileURLToPath(import.meta.url));
+const sheet = readFileSync(resolve(here, "planner.css"), "utf8").replace(/\r\n/g, "\n");
+
+const block = (css: string, at: string): string => {
+  const start = css.indexOf(`${at} {`);
+  if (start < 0) return "";
+  let depth = 0;
+  for (let i = css.indexOf("{", start); i < css.length; i++) {
+    if (css[i] === "{") depth++;
+    else if (css[i] === "}" && --depth === 0) return css.slice(css.indexOf("{", start) + 1, i);
+  }
+  return "";
+};
+const rule = (css: string, selector: string): string => {
+  const escaped = selector.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  return new RegExp(`(?:^|\\n)\\s*${escaped} \\{([^}]*)\\}`).exec(css)?.[1] ?? "";
+};
+const declaration = (body: string, property: string): string | null =>
+  new RegExp(`(?:^|[;\\s])${property}:\\s*([^;]+);`).exec(body)?.[1]?.trim() ?? null;
+
+const short = block(sheet, "@media (max-width: 620px), (max-height: 700px)");
+
+describe("the stored-buildings and Find lists never fold to nothing", () => {
+  it("a list with rows keeps a floor of a few rows", () => {
+    const body = rule(sheet, ".planner-search__rows:not(:empty)");
+    expect(declaration(body, "min-height")).toBe("7.5rem");
+    expect(declaration(body, "flex")).toBe("1 1 auto");
+  });
+
+  it("covers every phone layout, upright and on its side, and the short iPad", () => {
+    // phoneLayout.ts: "(max-width: 620px), (max-height: 500px)", inside this one.
+    expect(short).not.toBe("");
+  });
+
+  it("on a short screen the list is not a scroll box that can be squeezed", () => {
+    const rows = rule(short, ".planner-search__rows,\n  .planner-search__rows:not(:empty)");
+    expect(declaration(rows, "overflow")).toBe("visible");
+    expect(declaration(rows, "flex")).toBe("none");
+    expect(declaration(rows, "max-height")).toBe("none");
+  });
+
+  it("on a short screen the chips keep one row, and that row cannot collapse either", () => {
+    const chips = rule(
+      short,
+      ":is(.planner-inventory, .planner-search) .planner-search__chips",
+    );
+    expect(declaration(chips, "flex")).toBe("none");
+    expect(declaration(chips, "flex-wrap")).toBe("nowrap");
+    expect(declaration(chips, "overflow-x")).toBe("auto");
+    expect(
+      declaration(
+        rule(short, ":is(.planner-inventory, .planner-search) .planner-search__chip"),
+        "flex",
+      ),
+    ).toBe("none");
+  });
+
+  it("on a short screen the window fits its dock and its body scrolls", () => {
+    const panel = rule(short, ".planner-dock > :is(.planner-inventory, .planner-search)");
+    expect(declaration(panel, "flex")).toBe("0 1 auto");
+    expect(declaration(panel, "min-height")).toBe("0");
+    expect(
+      declaration(
+        rule(short, ":is(.planner-inventory, .planner-search) > .panel__body"),
+        "min-height",
+      ),
+    ).toBe("0");
+  });
+});
+
+describe("the chips stay reachable with a mouse", () => {
+  it("wrap again for a fine pointer, where there is no swipe to slide a row", () => {
+    const fine = block(
+      sheet,
+      "@media (max-width: 620px) and (pointer: fine), (max-height: 700px) and (pointer: fine)",
+    );
+    const chips = rule(fine, ":is(.planner-inventory, .planner-search) .planner-search__chips");
+    expect(declaration(chips, "flex-wrap")).toBe("wrap");
+    expect(declaration(chips, "overflow-x")).toBe("visible");
+  });
+});
+
+describe("the sliding chip row says it goes on", () => {
+  it("pins a chevron to the row's right edge, kept off a mouse's wrapped chips", () => {
+    const more = rule(
+      short,
+      ":is(.planner-inventory, .planner-search) .planner-search__chips::after",
+    );
+    expect(declaration(more, "position")).toBe("sticky");
+    expect(declaration(more, "right")).toBe("0");
+    expect(declaration(more, "pointer-events")).toBe("none");
+    const fine = block(
+      sheet,
+      "@media (max-width: 620px) and (pointer: fine), (max-height: 700px) and (pointer: fine)",
+    );
+    expect(
+      declaration(
+        rule(fine, ":is(.planner-inventory, .planner-search) .planner-search__chips::after"),
+        "content",
+      ),
+    ).toBe("none");
+  });
+});
+
+describe("a phone on its side shows two rows at once", () => {
+  it("puts the search box and the chips on one line", () => {
+    const side = block(short, "@media (max-height: 500px)");
+    expect(
+      declaration(
+        rule(side, ":is(.planner-inventory, .planner-search) > .panel__body"),
+        "display",
+      ),
+    ).toBe("grid");
+    expect(side).toContain(
+      ".planner-search__input:not([hidden]):has(+ .planner-search__chips:not([hidden]))",
+    );
+  });
+});
