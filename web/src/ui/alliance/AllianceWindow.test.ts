@@ -904,7 +904,8 @@ describe("AllianceWindow: my alliance", () => {
     const view = await open(api);
     buttonNamed(ALLIANCE_TEXT.leave)!.click();
     expect(document.body.textContent).toContain(ALLIANCE_TEXT.leaveConfirm);
-    buttonNamed(ALLIANCE_TEXT.yes)!.click();
+    expect(buttonNamed(ALLIANCE_TEXT.leaveNo)).toBeDefined();
+    buttonNamed(ALLIANCE_TEXT.leaveYes)!.click();
     await flush();
     await flush();
     expect(api.leave).toHaveBeenCalled();
@@ -915,6 +916,18 @@ describe("AllianceWindow: my alliance", () => {
   it("keeps the Leader of a full alliance from leaving", async () => {
     await open(fakeApi({ mine: vi.fn(() => ok({ alliance: mine({ number_of_members: 5 }), rejoinAt: null })) }));
     expect(buttonNamed(ALLIANCE_TEXT.leave)).toBeUndefined();
+    expect(document.querySelector(".alliance__leave-row")).toBeNull();
+  });
+
+  it("puts Leave at the end of Overview too, for a short screen whose CSS hides the foot (beta 8)", async () => {
+    await open(fakeApi({ mine: vi.fn(() => ok({ alliance: mine({ role: "member", permissions: [] }), rejoinAt: null })) }));
+    const body = document.querySelector(".alliance__body")!;
+    expect(body.lastElementChild?.classList.contains("alliance__leave-row")).toBe(true);
+    expect(body.lastElementChild?.textContent).toContain(ALLIANCE_TEXT.leave);
+    expect(document.querySelector(".alliance__foot")!.classList.contains("alliance__foot--leave")).toBe(true);
+    // Still two taps: Leave asks first, in the row too.
+    body.querySelector<HTMLButtonElement>(".alliance__leave-row .alliance__leave")!.click();
+    expect(document.querySelector(".alliance__leave-row")!.textContent).toContain(ALLIANCE_TEXT.leaveConfirm);
   });
 });
 
