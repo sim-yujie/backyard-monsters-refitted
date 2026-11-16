@@ -246,3 +246,8 @@ game sheets backed up in `art-work/IC2-r3/r2-assets`) paints that creature:
 - Work dir `art-work/IC4`: `rebuild.sh` (still + anim + masters + shrink + copies, no Codex), `desk.py`, `sheets.py`
   (portrait beside every painted heading), `strip.py`, `film.mjs` (yardtester, own server on 5471; `SOLO=1` drops one
   wave of Valgos and takes quick shots, `DRY=1` stops at the zoomed attack view).
+- **Filming (battle).** Valgos goes for the WALLS (it eats them: 980-1000 a bite), tunnelling past the buildings, so
+  the bites happen at the base's wall lines, often under the Attack Force panel. What worked (`film6`): drop at
+  WHEEL=4 DX=200 DY=640, DROPX=450 DROPY=520, then `PAN=-820,40` drags the map so the wall line sits mid-screen; the
+  bites come ~12 s after the drop. Headless screenshots take ~3 s each at 2x (and `clip` shots disturb the recording),
+  so the clip and the bite still come from the recorded video (`ffmpeg -ss ... -vf crop=...`), not from screenshots.
