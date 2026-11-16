@@ -350,11 +350,14 @@ SPECS = {
         # measured with art-work/IC4/colours.py: gold 32 / 0.52 / 0.77, flesh 14 / 0.51 / 0.70, teal 195 / 0.49 / 0.57,
         # claws 348 / 0.61 / 0.40 (kept a step lighter than the card so they read at game size). `max_sat` keeps the
         # orange eye balls (sat ~0.8) out of the gold and flesh windows.
+        # Recheck by head region (h8 / h12 heads vs the card's head, no saturation cap): flesh hue 14-17 / sat 0.52 /
+        # value 0.64 vs 16 / 0.50 / 0.66; the `throat` window takes the dark red throat from hue 3 to 6 (card 10).
         grade=dict(body=((1.0, 0.0), (1.0, 0.0), (1.0, 0.0)), limbs=((1.0, 0.0), (1.0, 0.0), (1.0, 0.0))),
         grade_chroma=True,               # fangs and eye glints stay as painted
         tone=dict(
             gold=dict(hue=(28, 60), soft=5, min_sat=0.25, max_sat=0.72, chroma=0.88, value=0.84, hi=210),
-            flesh=dict(hue=(2, 26), soft=4, min_sat=0.2, max_sat=0.65, chroma=1.0, value=0.84, gains=(0.98, 1.04, 1.0), hi=210),
+            flesh=dict(hue=(0, 26), soft=4, min_sat=0.2, max_sat=0.7, chroma=0.9, value=0.86, gains=(0.97, 1.06, 1.0), hi=210),
+            throat=dict(hue=(0, 12), soft=4, min_sat=0.65, chroma=1.0, value=0.92, gains=(1.0, 1.15, 1.0)),
             teal=dict(hue=(170, 220), soft=8, min_sat=0.2, chroma=0.88, value=1.06, gains=(1.0, 1.01, 0.98)),
             claws=dict(hue=(300, 356), soft=6, min_sat=0.25, chroma=0.95, value=0.72, gains=(1.04, 1.0, 0.94), hi=170),
         ),

@@ -236,7 +236,8 @@ game sheets backed up in `art-work/IC2-r3/r2-assets`) paints that creature:
 - **Burrower.** In battle Valgos tunnels (invisible, only dirt) and surfaces to bite, so the attack rows are what
   players see in a raid; the plod (rows 1-6, four-legged diagonal gait, `mirror_walk_roll=3`) shows in the Inferno yard.
 - **Colour.** Codex painted it brighter and more saturated than the card; spec `tone` (gold body, salmon flesh, teal,
-  claws) with an identity `grade` (tone runs inside `grade`). New `max_sat` in `common.tone` keeps the orange eye balls
+  claws; a lead-style recheck by head region then added a throat window and pulled the flesh toward the card:
+  head flesh hue 14-17 / sat 0.52 / value 0.64 vs the card 16 / 0.50 / 0.66, throat 6 / 0.77 / 0.34-0.37 vs 10 / 0.79 / 0.33) with an identity `grade` (tone runs inside `grade`). New `max_sat` in `common.tone` keeps the orange eye balls
   (sat ~0.8) out of the body and flesh windows. Measure with `art-work/IC4/colours.py <img> ...` (part medians).
 - **Codex calls: 24** = 1 sample (8 12 16 23, approved first time) + 3 still batches + 1 still redo (19-22 turned step
   by step with `art-work/IC4/turn-r1.txt`; the first try gave five near-identical back views h21-h25) + 16 animation
@@ -246,7 +247,7 @@ game sheets backed up in `art-work/IC2-r3/r2-assets`) paints that creature:
 - Work dir `art-work/IC4`: `rebuild.sh` (still + anim + masters + shrink + copies, no Codex), `desk.py`, `sheets.py`
   (portrait beside every painted heading), `strip.py`, `film.mjs` (yardtester, own server on 5471; `SOLO=1` drops one
   wave of Valgos and takes quick shots, `DRY=1` stops at the zoomed attack view).
-- **Filming (battle).** Valgos goes for the WALLS (it eats them: 980-1000 a bite), tunnelling past the buildings, so
+- **Filming (battle).** Valgos goes for the WALLS (`targetGroup` 2 = `TARGET_GROUP.WALLS`; it eats them: 980-1000 a bite), tunnelling past the buildings, so
   the bites happen at the base's wall lines, often under the Attack Force panel. What worked (`film6`): drop at
   WHEEL=4 DX=200 DY=640, DROPX=450 DROPY=520, then `PAN=-820,40` drags the map so the wall line sits mid-screen; the
   bites come ~12 s after the drop. Headless screenshots take ~3 s each at 2x (and `clip` shots disturb the recording),
