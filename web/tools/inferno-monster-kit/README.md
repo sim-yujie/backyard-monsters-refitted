@@ -252,3 +252,51 @@ game sheets backed up in `art-work/IC2-r3/r2-assets`) paints that creature:
   WHEEL=4 DX=200 DY=640, DROPX=450 DROPY=520, then `PAN=-820,40` drags the map so the wall line sits mid-screen; the
   bites come ~12 s after the drop. Headless screenshots take ~3 s each at 2x (and `clip` shots disturb the recording),
   so the clip and the bite still come from the recorded video (`ffmpeg -ss ... -vf crop=...`), not from screenshots.
+
+## IC5 Balthazar (painted 16 Nov, waiting for the owner)
+
+- **A flyer.** `balthazar.png` is 30 x 7 whole-pixel cells of 56 x 37, anchor (33, 18.5), with no shadow in the sheet (the
+  game draws `flyingshadow.png` on the ground under it). The game plays rows 1-6 (the wing beat, 8 ticks a frame) and
+  never row 0, so `flash_row=1`. Half its art is soft-edged (alpha under 235): `body_alpha=128` for the body mask.
+- **Wings spill past the cell, and the sheet creeps.** The art reaches 4 px left of a cell and 10 px right of it, and the
+  body creeps right 0.80 px a column (rows 1-6, alpha-weighted centroid, linear + one sine fit, 0.39 px rms):
+  `flash_drift=0.8`. With the creep out, the body orbits the anchor (x 28-38) and all art lies within x 4-63. So the kit
+  reads a window 80 px wide from 7 px left of each Flash cell (`flash_x0=-7`, `cell=(80, 37)`, anchor (40, 18.5)), keeps
+  only the column's own art run (`flash_w=56.0`), and drops the leaks of the touching rows (`flash_specks`: small pieces
+  at the top or bottom edge). `anim_pad=(-6, 20, 8)` trims 6 px each side of that window: 68 x 65 cells, Flash x -1 to
+  67, anchor (34, 38.5), 30 x 4 x 68 = 8160 px wide, inside the 8192 px texture limit. `still_top=20` lets the still use
+  the same headroom (else the side views, whose raised wing passes the Flash cell top, were shrunk 6-15%).
+  `check_crop.py` cuts IC1-IC4 byte for byte as before.
+- **Symmetric.** Silhouette XOR / union of the main art piece against the mirror column 15 - c: 0.24-0.28 (front half
+  0.24) vs 0.34-0.39 for one 12-degree step; columns 7 and 8 are both straight front views, 22 and 23 back views (column
+  c faces 12c). Headings 8-22 are painted, lit from above, the rest mirrored (the usual 15 - h). Both wings beat
+  together, so no `mirror_walk_roll`.
+- **Flyer build** (`flyer=True`, `build_anim.flyer_frames`): the wing beat changes the silhouette a lot, so frames are
+  NOT scaled to the still's area or stood on its bottom line (the body would swell and bob with the wings). One scale for
+  all 11 frames, from walk cell 1 (painted as ref.png's pose) against the still; each frame keeps where Codex painted it
+  in its grid cell, and cell 1's solid box (centre, bottom) lands where the still stands. A frame under 65% of cell 1's
+  area (the h19 / h20 dive away into the picture) is enlarged to that about its own centre. Any frame that leaves the cell
+  prints a `CUT` line (none do). Body steadiness through the beat, measured on the black eyes: within about 1 px.
+  `shadow="none"` keeps the still and anim cells free of a ground shadow.
+- **Layout** (`monsterSprites.ts`): rows 0 still (not played), 1-6 wing beat, 7-11 attack (pull back, jaws wide, lunge,
+  snapping bite, recover), `strikeFrame` 2. No `idle` entry: a housed Balthazar standing in the yard asks for `idle` and
+  falls back to the flap, as Classic does (Teratorn and Vorg do the same).
+- **Colour.** Codex paints the wings redder, more saturated and brighter than the card (hue 9 / sat 0.74 / value 0.52 vs
+  13 / 0.62 / 0.44) and the skull brighter (26 / 0.59 / 0.70 vs 27 / 0.47 / 0.56). `tone` (two wing windows round hue 0,
+  one bone window) gives wings 11 / 0.67 / 0.45 and bone 26 / 0.50 / 0.57; `max_sat=0.82` leaves the dark maroon throat
+  (sat ~0.84) as painted. Measure with `art-work/IC5/tools/colours.py <img> ...`.
+- **Codex calls: 22** = 1 sample (8 12 16 22, approved first time) + 3 still batches (back quarter 18-21 with
+  `art-work/IC5/turn-r1.txt`, turned step by step first time) + 1 still redo (9 13 14 15 with `turn-r2.txt`: h9 had come
+  out as a second straight front view and h14 less turned than h13) + 15 animation + 2 animation redos (h19, h20: in the
+  wind-up the fanged mouth turned toward the viewer and the strike swung into a full side profile; redone with
+  `anim-extra-back.txt`, first tries in `anim/try1/`). Every animation call carried `art-work/IC5/anim-extra.txt` (body
+  steady, only the wings move; same angle in the attack).
+- Work dir `art-work/IC5`: `rebuild.sh` (still + anim + masters + shrink + copies, no Codex), `tools/desk.py` (portrait +
+  five headings in two rows), `tools/sym.py`, `tools/drift2.py`, `tools/jitter.py` (eye tracker), `tools/colours.py`,
+  `film.mjs` (yardtester, own server on 5471).
+- **Filming (battle).** Balthazar is the fastest Inferno monster (speed 4.5) and a hunter (`targetGroup` 6: bunker
+  defenders and champions); on a tribe base with neither it falls through to the nearest building and bites there, so the
+  attack rows show. What worked (`film4`): WHEEL=3 about DX=330 DY=400 (the base's left cluster), drop at DROPX=80
+  DROPY=700 (closer gives "Too close to a building", which spends nothing). The pack reaches the cluster ~2 s after the
+  drop, so screenshots from 3 s on catch the bites. A take uses up the base (40% destroyed after one wave) and 7-8
+  housed Balthazar; for another take, stop the server and recreate the database copy.
