@@ -98,6 +98,16 @@ export const blueprintBlock = (
 };
 
 /**
+ * Whether the planner offers saved layouts (the Layouts button and panel,
+ * Ctrl+S) in this yard. An outpost has none (`BasePlanner.as:41`, #191); the
+ * main yard and the Inferno yard each have their own (owner decision I17,
+ * 2026-10-29). The Inferno yard is opened with a `baseid`, so "has a baseid"
+ * is not the test: until 16 Nov 2026 that hid its Layouts button and left its
+ * slots reachable only by Ctrl+S.
+ */
+export const hasLayoutSlots = (yard: { readonly kind?: string }): boolean => yard.kind !== "outpost";
+
+/**
  * The Layout button's tooltip. Someone else's yard has no button to put it
  * on; the locked text is there for any other way in that is ever added.
  */
