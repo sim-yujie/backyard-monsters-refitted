@@ -392,6 +392,23 @@ export class YardPlanner {
       insets: () => this.insets,
     });
 
+    // Development only: the film scripts store walls and tap exact yard spots (wall line, 16 Nov 2026).
+    if (import.meta.env.DEV) {
+      const { camera, canvas, renderer } = options;
+      (window as unknown as { __planner?: unknown }).__planner = {
+        session: this.session,
+        screenOf: (x: number, y: number) => {
+          const screen = camera.worldToScreen(renderer.yardToWorld(x, y));
+          const rect = canvas.getBoundingClientRect();
+          return { x: screen.x + rect.left, y: screen.y + rect.top };
+        },
+        centreOn: (x: number, y: number) => {
+          camera.centreOn(renderer.yardToWorld(x, y));
+          camera.dirty = true;
+        },
+      };
+    }
+
     this.layouts = new YardPlannerLayouts({
       session: this.session,
       dock: this.dock,
@@ -431,6 +448,9 @@ export class YardPlanner {
       onRearmTraps: () => this.showRearm(),
       onApply: () => this.apply(),
       onPutBack: () => this.session.putBack(),
+      onLineUndo: () => this.session.undoCorner(),
+      onLineClear: () => this.session.clearLine(),
+      onLinePlace: () => this.session.placeLine(),
       onStore: () => this.storeSelection(),
       onClearYard: () => this.confirmClearYard(),
       onInventory: () => this.toggleInventory(),
@@ -775,7 +795,13 @@ export class YardPlanner {
     this.openInventory();
   }
 
+  /** True while walls are drawn as a line from the drawer: the yard's hover outline steps aside. */
+  get drawingLine(): boolean {
+    return this.session.drawingLine;
+  }
+
   destroy(): void {
+    if (import.meta.env.DEV) delete (window as unknown as { __planner?: unknown }).__planner;
     window.removeEventListener("resize", this.onResize);
     this.dockObserver?.disconnect();
     this.dockObserver = null;
@@ -1288,7 +1314,7 @@ export class YardPlanner {
     // Outside the count guard: Escape ends a run of placements without moving
     // anything between the yard and the drawer, and the pressed row has to let
     // go all the same (#57). The panel ignores a repeat of the same answer.
-    this.inventory?.setArmed(this.session.armedStack());
+    this.inventory?.setArmed(this.session.armedStack(), state.line !== null);
 
     this.refreshCoverage(nodes);
     this.refreshPhoneTools(nodes);

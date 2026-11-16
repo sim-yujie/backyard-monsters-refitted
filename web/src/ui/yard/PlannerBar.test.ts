@@ -2,7 +2,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { PlannerTool, type PlannerState } from "@/game/yard/planner/PlannerSession";
 import { YardView } from "@/game/yard/YardRenderer";
-import { PlannerBar, type PlannerBarActions } from "./PlannerBar";
+import { lineTip, PlannerBar, type PlannerBarActions } from "./PlannerBar";
 import { PlannerLayout } from "./plannerLayout";
 
 /**
@@ -56,6 +56,7 @@ const stateOf = (overrides: Partial<PlannerState> = {}): PlannerState => ({
   previewing: false,
   readOnly: false,
   wallPicking: false,
+  line: null,
   ...overrides,
 });
 
@@ -513,7 +514,8 @@ describe("the phone layout (#45)", () => {
     // ~88 + More 44 + Apply ~88 = 308, four 2 px gaps and 8 px padding each
     // side = 332. No test here lays out pixels; keep this sum when adding one.
     expect(actionRow(bar)).toEqual(["Box", "Upgrade walls", "Stored", "More", "Apply"]);
-    expect(bar.actionBar.querySelector("[data-icon='undo'], [data-icon='redo']")).toBeNull();
+    // The plan's Undo and Redo buttons; the wall line's own ↶ (a corner) may sit here.
+    expect(bar.actionBar.querySelector("button[data-icon='undo'], button[data-icon='redo']")).toBeNull();
     // Buttons only: no cost line, no readouts (owner, 2026-11-04).
     expect(bar.actionBar.querySelector(".planner-bar__cost-line")).toBeNull();
     expect(bar.actionBar.querySelector(".planner-cost__cell")).toBeNull();
@@ -760,5 +762,79 @@ describe("the yard picture button (owner, 2026-11-11)", () => {
     expect(bar.moreElement.contains(snapshotButton(bar))).toBe(true);
     bar.setLayout(PlannerLayout.DESKTOP, false);
     expect(snapshotButton(bar)!.parentElement).toBe(bar.toolbar);
+  });
+});
+
+describe("the wall line's controls (owner, 16 Nov 2026)", () => {
+  const LINE = { type: 17, level: 5, anchors: 2, place: 6, blocked: 2, short: 5, stock: 6, finished: false };
+
+  const parts = (bar: PlannerBar) => ({
+    group: bar.actionBar.querySelector<HTMLElement>(".planner-bar__line"),
+    tip: bar.actionBar.querySelector<HTMLElement>(".planner-bar__line-tip"),
+    counts: bar.actionBar.querySelector<HTMLElement>(".planner-bar__line-counts"),
+    undo: bar.actionBar.querySelector<HTMLButtonElement>(".planner-bar__line-undo"),
+    clear: bar.actionBar.querySelector<HTMLButtonElement>(".planner-bar__line-clear"),
+    place: bar.actionBar.querySelector<HTMLButtonElement>(".planner-bar__line-place"),
+    done: bar.actionBar.querySelector<HTMLButtonElement>(".planner-bar__put-back"),
+  });
+
+  it("is hidden with no line, and Put back keeps its words", () => {
+    const bar = mount();
+    bar.update(stateOf());
+    const { group, done } = parts(bar);
+    expect(group?.hidden).toBe(true);
+    expect(done?.hidden).toBe(true);
+    expect(done?.textContent).toBe("Put back");
+  });
+
+  it("shows the counts and ✓ Place N, with Put back reading Done", () => {
+    const bar = mount();
+    bar.update(stateOf({ line: LINE }));
+    const { group, tip, counts, undo, clear, place, done } = parts(bar);
+    expect(group?.hidden).toBe(false);
+    expect(done?.hidden).toBe(false);
+    expect(done?.textContent).toBe("Done");
+    expect(tip?.hidden).toBe(true);
+    expect(counts?.textContent).toBe("×6✕25 not placed");
+    expect(place?.textContent).toBe("✓ Place 6");
+    expect(place?.disabled).toBe(false);
+    expect(undo?.disabled).toBe(false);
+    expect(clear?.disabled).toBe(false);
+    expect(bar.actionBar.classList.contains("planner-bar--line")).toBe(true);
+  });
+
+  it("says what to do before the first corner, in a mouse's words or a finger's", () => {
+    const bar = mount();
+    bar.update(stateOf({ line: { ...LINE, anchors: 0, place: 0, blocked: 0, short: 0 } }));
+    const { tip, counts, undo, place } = parts(bar);
+    expect(tip?.textContent).toBe("Click corners. Double-click ends.");
+    expect(counts?.hidden).toBe(true);
+    expect(undo?.disabled).toBe(true);
+    expect(place?.disabled).toBe(true);
+    expect(place?.textContent).toBe("✓ Place");
+
+    bar.setLayout(PlannerLayout.PORTRAIT, true);
+    expect(parts(bar).tip?.textContent).toBe("Tap corners. Tap the last one twice to end.");
+  });
+
+  it("says why nothing can be placed", () => {
+    expect(lineTip(false, { ...LINE, place: 0, blocked: 3 })).toBe("Nothing here can be placed.");
+    expect(lineTip(false, { ...LINE, place: 0, blocked: 0 })).toBe("No walls left.");
+  });
+
+  it("hands ↶, ✗ and ✓ to the scene", () => {
+    const { bar, fired } = mountWith();
+    const onLineUndo = vi.fn();
+    const onLineClear = vi.fn();
+    const onLinePlace = vi.fn();
+    Object.assign(fired, { onLineUndo, onLineClear, onLinePlace });
+    bar.update(stateOf({ line: LINE }));
+    const { undo, clear, place } = parts(bar);
+    undo?.click();
+    clear?.click();
+    place?.click();
+    expect(onLineUndo).toHaveBeenCalledOnce();
+    expect(onLineClear).toHaveBeenCalledOnce();
+    expect(onLinePlace).toHaveBeenCalledOnce();
   });
 });

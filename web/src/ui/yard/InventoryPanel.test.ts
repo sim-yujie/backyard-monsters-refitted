@@ -425,6 +425,20 @@ describe("the placing strip, for a phone (#45)", () => {
     );
   });
 
+  it("tells a wall line to tap corners rather than once per building (owner, 16 Nov 2026)", () => {
+    const panel = mount();
+    panel.setNodes([node({ id: 1, type: 17, level: 5 }), node({ id: 2, type: 20, level: 1 })]);
+    const hint = (): string | null | undefined =>
+      panel.element.querySelector(".planner-inventory__strip-hint")?.textContent;
+    panel.setArmed({ type: 17, level: 5 }, true);
+    expect(hint()).toBe("Tap corners, then ✓ Place");
+    panel.setArmed({ type: 20, level: 1 });
+    expect(hint()).toBe("Tap the yard once per building");
+    // The wall row's tooltip says how a line is drawn.
+    const titles = [...panel.element.querySelectorAll<HTMLElement>(".planner-inventory__pick")].map((pick) => pick.title);
+    expect(titles.some((title) => title.startsWith("Draw a line"))).toBe(true);
+  });
+
   it("stops the run on Done, the way a second click on the row does", () => {
     const onPutBack = vi.fn();
     const panel = mount(() => true, onPutBack);

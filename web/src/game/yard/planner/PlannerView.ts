@@ -4,7 +4,8 @@ import { blueprintDragToYard } from "./blueprint";
 import { polygonIntersectsRect } from "./marquee";
 import { dragToYard } from "./placement";
 import type { Plan } from "./plan";
-import type { CompareDiff } from "./PlannerOverlay";
+import type { CompareDiff, LineCellVisual } from "./PlannerOverlay";
+import type { LineVisual } from "./PlannerSession";
 
 /**
  * Everything the planner asks of the renderer.
@@ -149,8 +150,32 @@ export class PlannerView {
     diff?: CompareDiff | null;
     /** What stands near the item in hand (#231). */
     nearby?: ReadonlySet<number>;
+    /** A wall line being drawn from the drawer, or null. */
+    line?: LineVisual | null;
   }): void {
-    this.renderer.setPlannerVisuals({ ...state, plot: this.renderer.plotCorners() });
+    const { line, ...rest } = state;
+    this.renderer.setPlannerVisuals({
+      ...rest,
+      plot: this.renderer.plotCorners(),
+      line: line ? this.lineShapes(line) : null,
+    });
+  }
+
+  /** A line's Blocks and corners as polygons in the view that is showing. */
+  private lineShapes(line: LineVisual): { cells: LineCellVisual[]; anchors: (readonly [number, number])[] } {
+    const cells = line.cells.map((cell) => ({
+      corners: this.renderer.footprintCornersAt(line.type, cell.x, cell.y),
+      state: cell.state,
+    }));
+    const anchors = line.anchors.map((anchor) => {
+      const corners = this.renderer.footprintCornersAt(line.type, anchor.x, anchor.y);
+      const n = Math.max(1, corners.length);
+      return [
+        corners.reduce((sum, [x]) => sum + x, 0) / n,
+        corners.reduce((sum, [, y]) => sum + y, 0) / n,
+      ] as const;
+    });
+    return { cells, anchors };
   }
 
   /** Puts every sprite back where the save had it and hides the chrome. */

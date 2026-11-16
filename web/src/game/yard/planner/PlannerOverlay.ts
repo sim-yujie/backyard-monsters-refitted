@@ -2,6 +2,7 @@ import { Graphics } from "pixi.js";
 import { NEARBY_STROKE } from "../nearbyFootprints";
 import type { Rect } from "../YardGrid";
 import type { Corners } from "./marquee";
+import type { LineCellState } from "../wallLine";
 
 /**
  * The planner's chrome: selection, the marquee, the moved marks and the red
@@ -41,7 +42,27 @@ export interface PlannerVisuals {
    * it can be lined up against them. Empty or absent when nothing is.
    */
   readonly nearby?: ReadonlySet<number>;
+  /**
+   * A wall line being drawn from the drawer (owner, 16 Nov 2026): every Block
+   * green (placed), red (blocked) or grey (no wall left for it), and a dot on
+   * every corner. Null or absent with no line.
+   */
+  readonly line?: {
+    readonly cells: readonly LineCellVisual[];
+    readonly anchors: readonly (readonly [number, number])[];
+  } | null;
 }
+
+/** One Block of a wall line, as a polygon in the view that is showing. */
+export interface LineCellVisual {
+  readonly corners: Corners;
+  readonly state: LineCellState;
+}
+
+/** The line's colours: the build bar's own (`BuildPlacement.ts`). */
+export const LINE_PLACE = 0x5cc26a;
+export const LINE_BLOCKED = 0xe05252;
+export const LINE_SHORT = 0x9aa0a6;
 
 /** The compare highlights for one pane (#9). */
 export interface CompareDiff {
@@ -199,6 +220,8 @@ export class PlannerOverlay {
       dashedRect(g, { x: minX, y: minY, width: maxX - minX, height: maxY - minY });
     }
 
+    if (visuals.line) drawLine(g, visuals.line);
+
     const marquee = visuals.marquee;
     if (marquee && marquee.width > 0 && marquee.height > 0) {
       g.rect(marquee.x, marquee.y, marquee.width, marquee.height)
@@ -215,6 +238,40 @@ export class PlannerOverlay {
 const path = (shape: Corners): number[] => shape.flatMap(([x, y]) => [x, y]);
 
 /** A dashed rectangle, which `Graphics` has no primitive for. */
+/**
+ * A wall line's Blocks, one batch per colour, then its corners. A red Block
+ * is crossed out as well as red, and a grey one is fainter: colour is never
+ * the only channel.
+ */
+const drawLine = (g: Graphics, line: NonNullable<PlannerVisuals["line"]>): void => {
+  const styles: readonly [LineCellState, number, number, number][] = [
+    ["short", LINE_SHORT, 0.22, 2],
+    ["build", LINE_PLACE, 0.3, 2],
+    ["blocked", LINE_BLOCKED, 0.3, 3],
+  ];
+  for (const [state, colour, fill, width] of styles) {
+    let drew = false;
+    for (const cell of line.cells) {
+      if (cell.state !== state || cell.corners.length === 0) continue;
+      g.poly(path(cell.corners));
+      drew = true;
+    }
+    if (drew) g.fill({ color: colour, alpha: fill }).stroke({ width, color: colour, alpha: 0.95 });
+  }
+  let crossed = false;
+  for (const cell of line.cells) {
+    if (cell.state !== "blocked") continue;
+    const [a, b, c, d] = cell.corners;
+    if (!a || !b || !c || !d) continue;
+    g.moveTo(a[0], a[1]).lineTo(c[0], c[1]).moveTo(b[0], b[1]).lineTo(d[0], d[1]);
+    crossed = true;
+  }
+  if (crossed) g.stroke({ width: 3, color: LINE_BLOCKED, alpha: 0.95 });
+  for (const [x, y] of line.anchors) {
+    g.circle(x, y, 5).fill({ color: 0xffffff, alpha: 0.95 }).stroke({ width: 2, color: 0x1d252d, alpha: 0.9 });
+  }
+};
+
 export const dashedRect = (
   g: Graphics,
   rect: Rect,

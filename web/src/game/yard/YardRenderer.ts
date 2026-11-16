@@ -29,10 +29,10 @@ import { YardDressUp } from "./YardDressUp";
 import { UpgradePreview } from "./UpgradePreview";
 import { upgradeLook } from "./upgradeLook";
 import { BlueprintLayer } from "./planner/BlueprintLayer";
-import { blueprintToYard, blueprintToWorld } from "./planner/blueprint";
+import { blueprintToYard, blueprintToWorld, rectCorners, tileRect } from "./planner/blueprint";
 import { PlannerOverlay, type PlannerVisuals } from "./planner/PlannerOverlay";
 import { diamondCorners, type Corners, type Diamond } from "./planner/marquee";
-import { fromIso, toIso, yardFitRect, yardToWorld, type Point, type Rect } from "./YardGrid";
+import { footprintCorners, fromIso, toIso, yardFitRect, yardToWorld, type Point, type Rect } from "./YardGrid";
 import { loadMushroomArt, mushroomAnchor, mushroomArtIndex, mushroomPictureFor } from "./mushroomArt";
 import { mushroomAt, mushroomKey, mushroomZIndex } from "./mushroomPick";
 import { MUSHROOM_POP_SECONDS, mushroomPopScale, newMushroomKeys } from "./mushroomPop";
@@ -1235,6 +1235,19 @@ export class YardRenderer {
     for (const id of this.concealed) this.applyHidden(id);
     this.buildings.resortByDepth();
     this.jobBars.reposition();
+  }
+
+  /**
+   * The corners a footprint of `type` would have with its origin at `(x, y)`
+   * yard units, in the active view: what the Planner's wall line outlines
+   * Blocks that are not buildings yet with.
+   */
+  footprintCornersAt(type: number, x: number, y: number): Corners {
+    const kind = this.yard?.kind ?? "main";
+    if (this.currentView === YardView.BLUEPRINT) return rectCorners(tileRect(type, x, y, kind));
+    const bounds = this.yard?.bounds;
+    if (!bounds) return [];
+    return footprintCorners(bounds, type, x, y, kind).map((point) => [point.x, point.y] as const);
   }
 
   /** A building's footprint corners where it is drawn now, in the active view. */
