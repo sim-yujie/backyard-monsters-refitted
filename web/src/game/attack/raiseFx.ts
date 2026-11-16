@@ -223,8 +223,21 @@ export const RISE_GOO_DROP = 10;
 export const RISE_CLODS_CAP = 80;
 export const RISE_GOO_CAP = 20;
 /** A clod lies on the ground this long once down, then fades over {@link RISE_CLOD_FADE_TICKS}. */
-export const RISE_CLOD_LIE_TICKS = 3 * TICKS_PER_SECOND;
+export const RISE_CLOD_LIE_TICKS = 2 * TICKS_PER_SECOND;
 export const RISE_CLOD_FADE_TICKS = TICKS_PER_SECOND;
+
+/**
+ * A well-mixed number in `[0, 1)` from a seed and an index (a SplitMix32
+ * finish): the bits must scatter, where a plain multiply lines them up in
+ * rows and rings.
+ */
+export const bitRandom = (seed: number, index: number): number => {
+  let mixed = (Math.imul(seed | 0, 0x9e3779b1) + Math.imul(index + 1, 0x85ebca6b)) | 0;
+  mixed = Math.imul(mixed ^ (mixed >>> 16), 0x21f0aaad);
+  mixed = Math.imul(mixed ^ (mixed >>> 15), 0x735a2d97);
+  mixed ^= mixed >>> 15;
+  return (mixed >>> 0) / 4294967296;
+};
 
 /**
  * The clods and goo a rise at `seed` throws (`Particles.Create`,
@@ -244,7 +257,7 @@ export const riseBits = (seed: number, clods = true, goo = true): RiseBit[] => {
     salt: number,
   ): void => {
     for (let index = 0; index < count; index += 1) {
-      const random = (n: number): number => raiseJitter(seed, salt, index * 5 + n);
+      const random = (n: number): number => bitRandom(seed, salt * 1000 + index * 5 + n);
       let distance = reach * 0.2 + random(0) * reach * 0.8;
       if (random(1) <= 0.3) distance *= 1.5;
       const angle = random(2) * Math.PI * 2;
