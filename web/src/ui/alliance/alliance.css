@@ -3263,8 +3263,8 @@
  * count on Overview's first tile, so that block goes; Leave moves to the end
  * of Overview (still Leave, then Yes). The tabs and the list get the room.
  * Last in the file: it must win over `.alliance__head` above.
- * 540 px, not the phone layout's 500: up to ~518 px tall a desktop window
- * still left its tab under 120 px.
+ * 540 px, not the phone layout's 500: up to ~520 (Modern) / ~530 (Classic)
+ * px tall a desktop window still left its tab under 120 px.
  */
 @media (max-height: 540px) {
   .alliance-window:has(.alliance__tabs) > .panel__head {
