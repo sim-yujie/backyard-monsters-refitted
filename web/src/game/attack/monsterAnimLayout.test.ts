@@ -62,10 +62,11 @@ describe("applyLayout", () => {
     expect(applyLayout(POKEY, {})).toBe(POKEY);
   });
 
-  it("ships only the Bandito, Pokey, Bolt, Fink, Eye-ra, Fang, Ichi, Crabatron, Brain, D.A.V.E. (both skins), Project X, Wormzer, Zafreeti, Vorg, Teratorn, Octo-ooze, Rezghul, Slimeattikus (big and mini), Korath 5 and 6, Spurtz, Zagnoid, Malphus and Valgos layouts, so every other sheet is exactly the Flash table", () => {
+  it("ships only the Bandito, Pokey, Bolt, Fink, Eye-ra, Fang, Ichi, Crabatron, Brain, D.A.V.E. (both skins), Project X, Wormzer, Zafreeti, Vorg, Teratorn, Octo-ooze, Rezghul, Slimeattikus (big and mini), Korath 5 and 6, Spurtz, Zagnoid, Malphus, Valgos and Balthazar layouts, so every other sheet is exactly the Flash table", () => {
     expect(Object.keys(REPAINT_LAYOUTS).sort()).toEqual([
       "monsters/13.png",
       "monsters/14.v1.png",
+      "monsters/balthazar.png",
       "monsters/bandito.png",
       "monsters/brain.v2.png",
       "monsters/crabatron.png",
@@ -406,6 +407,34 @@ describe("applyLayout", () => {
     expect(sheet.anchorX).toBe(old.anchorX + 6);
     expect(sheet.anchorY).toBe(old.anchorY + 10);
     expect(sheet.animations.walk).toEqual({ first: 1, count: 6, ticksPerFrame: 8 });
+    expect(sheet.animations.attack?.first).toBe(7);
+    expect((sheet.animations.attack?.first ?? 0) + (sheet.animations.attack?.count ?? 0)).toBe(12);
+    expect(sheet.strikeFrame).toBe(2);
+  });
+
+  it("the Balthazar layout matches the animated PNG, keeps the flyer over its shadow and flaps when standing", () => {
+    const old = MONSTER_SPRITES["IC5"];
+    if (!old) throw new Error("no IC5");
+    const sheet = spriteFor("IC5");
+    if (!sheet) throw new Error("no sprite for IC5");
+    const data = readFileSync(resolve(__dirname, "../../../../server/public/assets/monsters/balthazar-anim@4x.png"));
+    expect(data.readUInt32BE(16)).toBe(sheet.width * 4);
+    expect(data.readUInt32BE(20)).toBe(sheet.height * 4);
+    // The Flash cell is 56x37; the repaint's is 68x65, reading Flash x -1 to 67 (the wings spill past the
+    // cell), 20 px more on top for the raised wings and 8 at the bottom.
+    expect(sheet.frameWidth).toBe(68);
+    expect(sheet.frameHeight).toBe(old.frameHeight + 28);
+    expect(sheet.directions).toBe(30);
+    expect(sheet.packedColumns).toBeUndefined();
+    expect(sheet.width).toBe(68 * 30);
+    expect(sheet.width * 4).toBeLessThanOrEqual(8192);
+    expect(sheet.height).toBe(65 * 12);
+    expect(frameRect(sheet, 29, 11)).toEqual({ x: 29 * 68, y: 11 * 65, width: 68, height: 65 });
+    expect(sheet.anchorX).toBe(old.anchorX + 1);
+    expect(sheet.anchorY).toBe(old.anchorY + 20);
+    expect(sheet.animations.walk).toEqual({ first: 1, count: 6, ticksPerFrame: 8 });
+    expect(sheet.animations.idle).toBeUndefined();
+    expect(frameRow(sheet, "idle", 8)).toBe(frameRow(sheet, "walk", 8));
     expect(sheet.animations.attack?.first).toBe(7);
     expect((sheet.animations.attack?.first ?? 0) + (sheet.animations.attack?.count ?? 0)).toBe(12);
     expect(sheet.strikeFrame).toBe(2);

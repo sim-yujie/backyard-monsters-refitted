@@ -31,6 +31,7 @@ D = spec["directions"]
 CW, CH = spec["cell"]
 PAD = spec.get("still_pad", 0)  # still cell = Flash cell + PAD 1x px each side (room for a body at the cell edge)
 SW = CW + 2 * PAD
+TOP = spec.get("still_top", 0)  # flyer (IC5): room above the Flash cell for raised wings, as the anim cell's top pad
 
 skip = set()
 sk = work / "still" / "skip.txt"
@@ -82,7 +83,7 @@ for h in range(D):
     fy1 = common.bbox(common.solid(v))[3]  # stands on its solid bottom, not the faint glow under it
     sx0, _, sx1, _ = common.bbox(common.solid(v))
     mid_x = (sx0 + sx1) / 2
-    limit = min((cx + PAD - MARGIN) / ((mid_x - fx0) * k), (CW + PAD - MARGIN - cx) / ((fx1 - mid_x) * k), (bottom - MARGIN) / ((fy1 - fy0) * k))
+    limit = min((cx + PAD - MARGIN) / ((mid_x - fx0) * k), (CW + PAD - MARGIN - cx) / ((fx1 - mid_x) * k), (bottom + TOP - MARGIN) / ((fy1 - fy0) * k))
     if limit < 1:
         print(f"heading {h}: cut to {limit:.2f} to fit the cell", file=sys.stderr)
     fit[h] = dict(scale=float(k * min(1.0, limit)), cx=float(cx), bottom=float(bottom), mid=float(mid_x), foot=float(fy1), shift=float(shift))
@@ -93,6 +94,8 @@ def shadow_layer(h, w, hgt, ox=0, oy=0):
     (spec shadow="flash": the Flash cast shadow's own shape, common.cast_shadow)."""
     if spec.get("shadow") == "flash":
         return common.cast_shadow(spec, flash_column(spec, h), w, hgt, ox, oy, UP)
+    if spec.get("shadow") == "none":  # a flyer (Balthazar IC5): the game draws its shadow on the ground itself
+        return Image.new("RGBA", (w, hgt))
     _, (sx0, sy0, sx1, sy1), a = flash[h]
     m = Image.new("L", (w, hgt), 0)
     if sx1 > sx0:
@@ -112,18 +115,18 @@ def place(h, v, scale, cx, bottom, mid, foot, w, hgt, ox=0, oy=0):
 
 
 if __name__ == "__main__":
-    cw, ch = SW * UP, CH * UP
+    cw, ch = SW * UP, (CH + TOP) * UP
     sheet = Image.new("RGBA", (D * cw, ch))
     for h in range(D):
         f = fit[h]
-        cell = shadow_layer(h, cw, ch, ox=PAD + f["shift"])
-        cell.alpha_composite(place(h, view(h), f["scale"], f["cx"], f["bottom"], f["mid"], f["foot"], cw, ch, ox=PAD))
+        cell = shadow_layer(h, cw, ch, ox=PAD + f["shift"], oy=TOP)
+        cell.alpha_composite(place(h, view(h), f["scale"], f["cx"], f["bottom"], f["mid"], f["foot"], cw, ch, ox=PAD, oy=TOP))
         sheet.paste(cell, (h * cw, 0))
     out = spec["out"]
     sheet.save(ASSETS / f"{out}-repaint@4x.png", optimize=True)
-    small = Image.new("RGBA", (D * SW, CH))
+    small = Image.new("RGBA", (D * SW, CH + TOP))
     for h in range(D):
-        small.paste(common.premul_resize(sheet.crop((h * cw, 0, (h + 1) * cw, ch)), (SW, CH)), (h * SW, 0))
+        small.paste(common.premul_resize(sheet.crop((h * cw, 0, (h + 1) * cw, ch)), (SW, CH + TOP)), (h * SW, 0))
     small.save(ASSETS / f"{out}-repaint.png", optimize=True)
     (work / "still" / "cuts").mkdir(exist_ok=True)
     for h, cut in painted.items():
@@ -132,7 +135,7 @@ if __name__ == "__main__":
     # facing check: the 1x painting should look more like its Flash column than like that column's mirror
     # image (lit body only, each centred on its own box, so a shift or the shadow does not decide it)
     for h in range(D):
-        same, flip = common.facing_scores(small.crop((h * SW, 0, (h + 1) * SW, CH)), common.flash_cell(spec, flash_column(spec, h)))
+        same, flip = common.facing_scores(small.crop((h * SW, 0, (h + 1) * SW, CH + TOP)), common.flash_cell(spec, flash_column(spec, h)))
         flag = "  <-- CHECK FACING" if flip < same * 0.9 else ""
         print(f"h{h:2} {'mirror of h%d' % src[h][0] if src[h][1] else 'painted':16} scale {fit[h]['scale']:.4f}  vs flash {same:5.1f}  vs mirrored flash {flip:5.1f}{flag}")
     print("wrote", ASSETS / f"{out}-repaint@4x.png")

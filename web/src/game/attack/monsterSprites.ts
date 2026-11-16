@@ -558,6 +558,26 @@ export const REPAINT_LAYOUTS: Readonly<Record<string, SheetLayoutOverride>> = {
     },
     strikeFrame: 2,
   },
+  // Balthazar (IC5): 68x65 cells. The Flash cell is 56x37, but its wings spill past it (-4 to +66 px) and
+  // the art creeps right 0.8 px a column; with the creep taken out, the repaint's cell reads Flash x -1 to
+  // 67 (anchor 33 -> 34) and adds 20 px on top for the raised wings and 8 at the bottom (anchor 18.5 ->
+  // 38.5), so the flyer stays over its own shadow sprite. 30 x 4 x 68 = 8160 px, inside 8192. Painted from
+  // the Hatchery / Locker portrait; headings 8-22 painted, the rest their mirror (left-right symmetric).
+  // Rows: 0 the still pose (not played), 1-6 the wing beat at Flash's 8 ticks a frame, 7-11 attack (pull
+  // back, jaws wide, lunge, snapping bite, recover). No idle: a flyer flaps whenever it is drawn, as in
+  // Flash (a housed one standing in the yard keeps flapping too). Flash had the wing beat only.
+  "monsters/balthazar.png": {
+    frameWidth: 68,
+    frameHeight: 65,
+    anchorX: 34,
+    anchorY: 38.5,
+    rows: 12,
+    animations: {
+      walk: { first: 1, count: 6, ticksPerFrame: 8 },
+      attack: { first: 7, count: 5, ticksPerFrame: 4 },
+    },
+    strikeFrame: 2,
+  },
 };
 
 const layoutCache = new Map<MonsterSheet, AnimatedSheet>();
@@ -895,6 +915,7 @@ export const REPAINTED_SHEETS: Readonly<Record<string, string>> = {
   "monsters/zagnoid.png": "monsters/zagnoid-anim@4x.png", // Zagnoid (Inferno IC2) animated repaint (30 headings, crawl + claw attack)
   "monsters/malphus.png": "monsters/malphus-anim@4x.png", // Malphus (Inferno IC3) animated repaint (30 headings, scuttle + slash attack)
   "monsters/valgos.png": "monsters/valgos-anim@4x.png", // Valgos (Inferno IC4) animated repaint (30 headings, plod + bite attack)
+  "monsters/balthazar.png": "monsters/balthazar-anim@4x.png", // Balthazar (Inferno IC5) animated repaint (30 headings, wing beat + bite attack)
   "monsters/ape_1.png": "monsters/ape_1-repaint@4x.png", // Gorgo level 1 repaint (all 16 headings, idle + walk + attack)
   "monsters/fly_1.png": "monsters/fly_1-repaint@4x.png", // Fomor level 1 repaint (all 16 headings, idle + walk)
   "monsters/dragon_1.png": "monsters/dragon_1-repaint@4x.png", // Drull level 1 repaint (all 16 headings painted, idle + walk + attack)

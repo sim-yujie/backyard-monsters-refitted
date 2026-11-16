@@ -459,6 +459,143 @@ SPECS = {
             "the resting pose of ref.png. The four feet stay planted where they are. Cell 12 stays empty magenta."
         ),
     ),
+    # IC5 Balthazar (16 Nov): painted from the PORTRAIT (web/public/portraits/IC5.webp). Colours picked from it: bone-tan
+    # skull (lit #c9a170, mid #a0774c, shade #6a4526), glossy black eyes, ivory horns, fangs and claws (#d4c3a9), dark
+    # maroon throat (#260b05, mouth flesh #41170c), red-brown leathery wings (membrane #854f40 / #73372a, arm bones
+    # #673729), red-brown head flesh (#915f49), golden-tan clawed feet (#ab7c58).
+    # Flash sheet: 30 x 7 whole-pixel cells of 56 x 37, anchor (33, 18.5), a FLYER (no shadow in the sheet: the game
+    # draws flyingshadow.png on the ground). The game plays rows 1-6 (the wing beat, 8 ticks a frame) and never row 0.
+    # The art spills past the 56 px cell (-4 to +66 px) and creeps right 0.80 px a column (rows 1-6, alpha-weighted
+    # centroid, linear + one sine fit, 0.39 px rms), then jumps back between columns 29 and 0; de-drifted, the body
+    # orbits the anchor (x 28-38) and all art lies within x 4-63 of the Flash cell. So the kit reads a window 80 px wide
+    # starting 7 px left of each Flash cell (`flash_x0`, `cell`), keeps only the column's own art run (`flash_w`), drops
+    # the rows' leaks (`flash_specks`: the rows touch, a wing tip of the row below pokes into the last lines), and the
+    # anim cell trims 6 px each side of that window (anim_pad -6): 68 px wide, Flash x -1 to 67, so 30 x 4 x 68 = 8160
+    # px fits the 8192 px texture limit. Half its art is soft-edged (alpha < 235): body_alpha 128.
+    # Symmetric: silhouette XOR / union of the main art piece against the mirror column 15 - c is 0.24-0.28 (front
+    # half 0.24) vs 0.34-0.39 for one 12-degree step; columns 7 and 8 are both straight front views, 22 and 23 back views
+    # (column c faces 12c). The portrait creature is symmetric but for its uneven crown of horns. So headings 8-22 are
+    # painted, lit from above, the rest mirrored (h <-> 15 - h).
+    "IC5": dict(
+        name="Balthazar",
+        out="balthazar",
+        flash="balthazar.png",
+        cell=(80, 37),                   # the read window: Flash cell x -7 to 73 (see above)
+        flash_x0=-7,
+        flash_w=56.0,                    # whole pixels; switches on the own-art-run cut
+        flash_specks=True,
+        flash_row=1,                     # the first frame of the wing beat (the game never draws row 0)
+        body_alpha=128,
+        flash_drift=0.8,
+        ref_smooth=True,
+        portrait=True,
+        design="portrait",
+        anim_colour_lock=True,
+        gamma=1.0,
+        # Codex paints the wings redder, more saturated and brighter than the card (hue 9 / sat 0.74 / value 0.52 vs the
+        # card's 13 / 0.62 / 0.44) and the skull brighter (26 / 0.59 / 0.70 vs 27 / 0.47 / 0.56); measured with
+        # art-work/IC5/tools/colours.py. Identity `grade` (so `tone` runs); `tone` moves wings and flesh (two hue windows
+        # round 0) and the bone toward the card: wings 11 / 0.67 / 0.45, bone 26 / 0.50 / 0.57. `max_sat` keeps the dark
+        # maroon throat (sat ~0.84) as painted.
+        grade=dict(body=((1.0, 0.0), (1.0, 0.0), (1.0, 0.0)), limbs=((1.0, 0.0), (1.0, 0.0), (1.0, 0.0))),
+        grade_chroma=True,
+        tone=dict(
+            wing=dict(hue=(0, 19), soft=3, min_sat=0.35, max_sat=0.82, chroma=0.85, value=0.86, gains=(0.98, 1.05, 1.0), hi=200),
+            wing2=dict(hue=(338, 360), soft=3, min_sat=0.35, max_sat=0.82, chroma=0.85, value=0.86, gains=(0.98, 1.05, 1.0), hi=200),
+            bone=dict(hue=(23, 45), soft=3, min_sat=0.3, chroma=0.82, value=0.82, hi=215),
+        ),
+        open_holes="core",               # gaps between the wings, the body and the feet
+        flyer=True,                      # build_anim: one scale and Codex's own placement for the wing beat
+        anchor=(40, 18.5),               # Flash's (33, 18.5) in the read window
+        flash_columns=30,
+        flash_step=12.0,
+        directions=30,
+        painted=list(range(8, 23)),      # front (96 degrees) -> left -> back (264 degrees); the rest mirrored
+        area=1.1,
+        drop=0.0,
+        shadow="none",
+        anim_pad=(-6, 20, 8),            # 68 x 65 anim cells, anchor (34, 38.5)
+        still_top=20,                    # the still may use the anim cell's top pad for raised wings
+        walk_lift=(0, 0, 0, 0, 0, 0),
+        loops=(8, 15, 22),
+        face="skull face",
+        back_range=(246, 294),           # 216-240 degrees: three-quarter back, the skull face in profile at the left
+        pose_parts="two wings, the skull face and the clawed feet",
+        frames_note=(
+            "their bright orange bat shape is Balthazar seen from above: the two big wings spread out to the sides, the "
+            "pale blob between them is the skull face with its dark open mouth, the small pale bits under it are the "
+            "clawed feet; the old sprites are much brighter and more orange than the real creature"
+        ),
+        features="bone-tan skull face with big glossy black eyes and a gaping fanged mouth, crown of ivory horns, red-brown bat wings with ivory claws, clawed feet",
+        face_marks="the skull face (the big black eyes and the gaping fanged mouth) and the two wings",
+        portrait_note=(
+            "THE DESIGN of Balthazar (its official portrait, a flying demon seen from the front, a little to the left): "
+            "paint exactly this creature: a big bone-tan SKULL for a head with two huge round glossy black eyes in deep "
+            "sockets, a nose hole, a gaping mouth ringed with long curved ivory fangs and a dark maroon throat; a crown of "
+            "uneven ivory horns along the top of the head; a small red-brown fleshy body hanging under the skull; two big "
+            "red-brown leathery BAT WINGS from the top of the head, each with an ivory claw at the wrist and long hooked "
+            "ivory talons hanging from the lower wing fingers; two small golden-tan clawed feet under the jaw; in its "
+            "colours and its painting style"
+        ),
+        style=(
+            "hand-painted digital game illustration in the style of portrait.png: bone-tan skull with soft highlights, "
+            "glossy black eyes with a white glint, leathery red-brown wings with darker veins, rich but earthy colour, soft "
+            "painted shading with crisp edges, NO thick black outline, no pixel art; the skull, black eyes, fangs and wings "
+            "drawn bold and a little exaggerated so they read at a small size"
+        ),
+        light=(
+            "soft light from ABOVE, the same on the left and right halves of the creature (highlights on the top "
+            "surfaces, darker underneath); no cast shadow on the ground"
+        ),
+        texture="bone-tan skull, glossy black eyes, ivory horns, fangs and claws, leathery red-brown wing membranes with darker veins, red-brown flesh",
+        no_fx=(
+            "No falling drops, splashes, sparks, smoke, fire, dust, motion streaks, glow halos or loose bits. No part of "
+            "the creature is pink or magenta: the wings and flesh are a dark brownish red, clearly different from the "
+            "magenta background"
+        ),
+        creature=(
+            "Balthazar, the flying skull demon of portrait.png (NOT a dragon, NOT a bird, NOT a plain bat). Its HEAD is a "
+            "big rounded bone-tan SKULL: two HUGE round glossy BLACK EYES in deep sockets, a small nose hole, cheek bones, "
+            "and a GAPING MOUTH ringed with long curved ivory FANGS (longest at the corners), a dark maroon throat inside. "
+            "Along the top of the skull stands a CROWN of five or six uneven ivory HORNS. Behind and under the skull hangs a "
+            "small red-brown fleshy BODY. Two big red-brown leathery BAT WINGS grow from the top of the back of the head: "
+            "each has a bony arm with an ivory claw at the wrist and long fingers with the membrane between them, darker "
+            "veins, and long hooked ivory TALONS hanging from the lower fingertips. Two small golden-tan FEET with ivory "
+            "claws hang under the jaw. No arms, no tail, no legs to stand on. Colours: bone-tan skull (lit #c9a170, mid "
+            "#a0774c, shade #6a4526), glossy black eyes, ivory horns, fangs and claws (#d4c3a9), dark maroon throat "
+            "(#260b05), red-brown wings (#854f40, darker #73372a, bones #673729), golden-tan feet (#ab7c58)."
+        ),
+        parts=(
+            " 1. Skull head: ONE big bone-tan skull with TWO huge round glossy black eyes and a nose hole; from behind only the back of the skull shows.\n"
+            " 2. Mouth: a gaping open mouth ringed with long curved ivory fangs, dark maroon inside. NOT a smile, NOT a grin, no lips, no tongue.\n"
+            " 3. Horns: a crown of five or six uneven ivory horns along the top of the skull.\n"
+            " 4. Wings: TWO big red-brown leathery bat wings from the top of the back of the head, an ivory claw at each wrist, hooked ivory talons on the lower fingertips.\n"
+            " 5. Body: a small red-brown fleshy body hanging under and behind the skull.\n"
+            " 6. Feet: TWO small golden-tan clawed feet hanging under the jaw.\n"
+            " 7. No arms, no tail, no legs to stand on, no feathers, no extra wings (exactly two), no green or blue anywhere."
+        ),
+        back_note=(
+            "BACK VIEW: the creature faces away from the viewer: the eyes, mouth and fangs are NOT visible; the viewer sees "
+            "the round bone-tan back of the skull with the crown of ivory horns along its top, the red-brown fleshy back "
+            "and the two big leathery wings spread out from it, seen from behind (the bony arms and veins on their backs)"
+        ),
+        walk=(
+            "Cells 1-6 are ONE WING BEAT while flying (six different steps, then it loops back to cell 1): cell 1 is EXACTLY "
+            "ref.png's pose, wings spread out level; 2 the wings rise; 3 the wings are raised high above the head; 4 the "
+            "wings sweep down, half way; 5 the wings are swept low, below the skull, tips forward; 6 the wings rise back "
+            "toward level. The skull, the body and the feet stay at EXACTLY the same place and the same size in every cell "
+            "(only the wings move; the feet sway a little). Same size as ref.png, centred in its cell, nothing cut at the "
+            "cell edges (leave room above for the raised wings and below for the lowered wings)."
+        ),
+        attack=(
+            "Cells 7-11 are an ATTACK (a swooping bite with the skull's fanged mouth), the same creature as ref.png, still "
+            "flying: 7 anticipation: the skull pulls back and up away from the facing direction, the wings raised, the mouth "
+            "half closed; 8 wind-up: the wings high, the mouth stretched open as wide as it goes, fangs bared; 9 strike: it "
+            "lunges forward and down in the facing direction, the wings swept back, the mouth wide; 10 follow-through: "
+            "furthest forward and low, the jaws snapped nearly shut in a crunching bite; 11 recovery: back to the resting pose "
+            "of ref.png. The skull never turns toward the viewer. Cell 12 stays empty magenta."
+        ),
+    ),
 }
 
 

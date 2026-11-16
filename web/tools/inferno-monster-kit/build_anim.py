@@ -77,6 +77,64 @@ def colour_lock(cut, ref):
     return Image.fromarray(a.astype(np.uint8), "RGBA")
 
 
+def flyer_frames(p):
+    """spec flyer (Balthazar IC5): the wing beat changes the silhouette a lot, so frames are NOT each scaled to the
+    still's area or stood on its bottom line (the body would swell and bob with the wings). One scale for all 11
+    frames, from walk cell 1 (painted as ref.png's pose) against the still; each frame keeps the place Codex painted
+    it at in its grid cell, and cell 1's solid box (centre, bottom) lands where the still view stands.
+    -> list of 11 (cutout, scale, (x, y) of the cutout's top-left in grid-cell px, cell width, reference point)."""
+    ref = cuts[p]
+    base = fit[p]["scale"] * GROW
+    cells = common.grid_cells(work / "anim" / f"h{p}" / "sheet.png", 4, 3)
+    out = []
+    for i in range(11):
+        cut, org = common.key_cell(cells[i], choose=pick_main, despill=spec.get("despill"), open_holes=spec.get("open_holes", False), origin=True)
+        if spec.get("anim_colour_lock"):
+            cut = colour_lock(cut, ref)
+        out.append((cut, org, cells[i].width))
+    c1, o1, _ = out[0]
+    a1 = common.solid(c1).sum()
+    s = base * float(np.sqrt(common.solid(ref).sum() / a1))
+    x0, _, x1, y1 = common.bbox(common.solid(c1))
+    pt = (o1[0] + (x0 + x1) / 2, o1[1] + y1)  # cell 1's solid box centre and bottom, in grid-cell px
+    res = []
+    for cut, org, cw in out:
+        # a frame Codex drew much smaller (a dive away into the picture, h19 / h20) is enlarged to 65% of cell 1's
+        # area about its own box centre, so the size does not halve for one frame
+        bx0, by0, bx1, by1 = common.bbox(common.solid(cut))
+        own = (org[0] + (bx0 + bx1) / 2, org[1] + (by0 + by1) / 2)
+        up = max(1.0, float(np.sqrt(0.65 * a1 / common.solid(cut).sum())))
+        res.append((cut, s, org, cw, pt, own, up))
+    return res
+
+
+def render_flyer(h, cut, s, org, cw, pt, own, up, flip):
+    """One flyer cell: the cutout at scale s, placed so grid point `pt` lands on the still's spot (fit cx, bottom);
+    a frame enlarged by `up` keeps its own box centre `own` where scale s would put it."""
+    f = fit[h]
+    W, H = ACW * UP, ACH * UP
+    if flip:
+        cut = cut.transpose(Image.FLIP_LEFT_RIGHT)
+        org, pt, own = (cw - org[0] - cut.width, org[1]), (cw - pt[0], pt[1]), (cw - own[0], own[1])
+    k = s * UP
+    cx = (f["cx"] + PX) * UP - (pt[0] - own[0]) * k  # where the frame's own centre lands, in cell px at UP
+    cy = (f["bottom"] + PT) * UP - (pt[1] - own[1]) * k
+    k *= up
+    mon = lifted(common.premul_resize(cut, (max(1, round(cut.width * k)), max(1, round(cut.height * k)))))
+    x = round(cx - (own[0] - org[0]) * k)
+    y = round(cy - (own[1] - org[1]) * k)
+    a = np.asarray(mon)[..., 3] > 40
+    ys, xs = np.nonzero(a)
+    note = ""
+    if x + xs.min() < 0 or x + xs.max() >= W or y + ys.min() < 0 or y + ys.max() >= H:
+        note = f"CUT ({x + xs.min()},{y + ys.min()})-({x + xs.max()},{y + ys.max()}) in {W}x{H}"  # needs more anim_pad
+    cell = shadow(h)
+    lay = Image.new("RGBA", (W + 2 * mon.width, H + 2 * mon.height))
+    lay.paste(mon, (x + mon.width, y + mon.height))
+    cell.alpha_composite(lay.crop((mon.width, mon.height, mon.width + W, mon.height + H)))
+    return cell, note
+
+
 def painted_frames(p):
     """-> list of 11 (cutout, scale in 1x px per painted px, dx in 1x px, lift in 1x px)."""
     ref = cuts[p]
@@ -107,6 +165,8 @@ def painted_frames(p):
 
 
 def shadow(h):
+    if spec.get("shadow") == "none":  # a flyer (Balthazar IC5): the game draws its shadow on the ground itself
+        return Image.new("RGBA", (ACW * UP, ACH * UP))
     if spec.get("shadow") == "flash":
         return common.cast_shadow(spec, flash_column(spec, h), ACW * UP, ACH * UP, PX + fit[h].get("shift", 0.0), PT, UP)
     _, (sx0, sy0, sx1, sy1), a = common.flash_body_and_shadow(spec, flash_column(spec, h))
@@ -153,8 +213,9 @@ if __name__ == "__main__":
     only = [int(x) for x in sys.argv[3:]]
     painted = only or sorted({fit[h]["src"] for h in range(D)})
     frames = {}
+    FLY = spec.get("flyer", False)
     for p in painted:
-        frames[p] = painted_frames(p)
+        frames[p] = flyer_frames(p) if FLY else painted_frames(p)
     fdir = work / "anim" / "frames"
     fdir.mkdir(parents=True, exist_ok=True)
     W, H = ACW * UP, ACH * UP
@@ -170,10 +231,10 @@ if __name__ == "__main__":
             # IC3: a mirrored four-legged gait is half a cycle out (its left legs are the painted right legs), so the
             # mirrored heading plays walk frame k+roll; the legs then do not jump at the h7/h8 and h22/h23 seams
             frs = [frs[(k + roll) % 6] for k in range(6)] + frs[6:]
-        row += [render(h, *fr, flip) for fr in frs]
+        row += [(render_flyer if FLY else render)(h, *fr, flip) for fr in frs]
         notes = [n for _, n in row if n]
         if notes:
-            print(f"h{h}: frames {[k for k, (_, n) in enumerate(row) if n]} shrunk or moved to stay in the cell")
+            print(f"h{h}: frames {[k for k, (_, n) in enumerate(row) if n]} shrunk or moved to stay in the cell" + (f": {notes}" if FLY else ""))
         for k, (cell, _) in enumerate(row):
             sheet.paste(cell, (h * W, k * H))
             cell.save(fdir / f"h{h}-f{k:02d}.png")

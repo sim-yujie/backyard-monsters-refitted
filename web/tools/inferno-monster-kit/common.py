@@ -21,7 +21,9 @@ def flash_x(spec, col):
     pixels wide (Zagnoid: 1933 px / 30 = 64.4) sets `flash_w`; the column then starts at col * flash_w
     rounded (half up), and the cut is `cell` wide."""
     fw = spec.get("flash_w", spec["cell"][0])
-    return int(np.floor(col * fw + 0.5))
+    # Balthazar (IC5): `flash_x0` < 0 opens a window wider than the Flash cell (`cell` is then that window), so the
+    # wings that spill past the 56 px cell are kept whole; the own-art-run cut drops the neighbours' art
+    return int(np.floor(col * fw + 0.5)) + spec.get("flash_x0", 0)
 
 
 def art_runs(spec, row=0):
@@ -52,6 +54,14 @@ def flash_cell(spec, col, row=None):
     a = np.asarray(cell).copy()
     xs = np.arange(x0, x0 + w)
     a[:, (xs < r0) | (xs >= r1)] = 0
+    if spec.get("flash_specks"):
+        # Balthazar (IC5): the rows touch, so a wing tip of the row below pokes up into this cell's last lines (and
+        # the claws of the row above into its first): small pieces touching the top or bottom edge are dropped
+        lab, sizes = components(a[..., 3] > 0)
+        if len(sizes) > 2:
+            edge = set(lab[0][lab[0] > 0]) | set(lab[-1][lab[-1] > 0])
+            drop = [i for i in edge if sizes[i] < 0.1 * sizes[1:].max()]
+            a[np.isin(lab, drop)] = 0
     return Image.fromarray(a, "RGBA")
 
 
@@ -135,7 +145,7 @@ def fill_holes(mask):
     return ~reach
 
 
-def key_cell(img, min_part=0.03, choose=None, despill=None, open_holes=False):
+def key_cell(img, min_part=0.03, choose=None, despill=None, open_holes=False, origin=False):
     """One painted creature on magenta -> tight RGBA cutout (or None).
     Keeps blobs >= min_part of the biggest; `choose(labels, sizes)` may pick the label set instead.
     despill="fire": a creature with no blue or purple in it; any blue above green is magenta bleeding into a
@@ -175,7 +185,8 @@ def key_cell(img, min_part=0.03, choose=None, despill=None, open_holes=False):
     if len(xs) == 0:
         return None
     out = Image.fromarray(np.dstack([col, alpha]).astype(np.uint8), "RGBA")
-    return out.crop((xs.min(), ys.min(), xs.max() + 1, ys.max() + 1))
+    cut = out.crop((xs.min(), ys.min(), xs.max() + 1, ys.max() + 1))
+    return (cut, (int(xs.min()), int(ys.min()))) if origin else cut  # origin: where the cutout sat in img (IC5)
 
 
 def grid_cells(path, cols, rows):
@@ -212,7 +223,7 @@ def common_bottom(mask):
 def flash_body_and_shadow(spec, col):
     """Flash cell -> (body mask, shadow box (x0,y0,x1,y1), shadow alpha) in 1x pixels."""
     a = np.asarray(flash_cell(spec, col)).astype(int)
-    body = a[..., 3] > 235
+    body = a[..., 3] > spec.get("body_alpha", 235)  # IC5: 128 (a soft-edged render: half its art is under 235)
     dark = (a[..., 3] > 0) & (a[..., :3].max(-1) < 90) & ~grow(body, 1)
     if body.any():
         dark[: common_bottom(body) - 2] = False  # the shadow lies under the body, not in its dark bits
