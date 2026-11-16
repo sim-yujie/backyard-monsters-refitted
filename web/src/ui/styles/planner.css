@@ -1295,6 +1295,19 @@
   }
 }
 
+/*
+ * With a mouse the chips wrap as before: a mouse has no swipe, and a laptop
+ * whose window is under 700 px tall (most 1366x768 screens) would otherwise
+ * leave Traps, Walls and the rest out of reach. The body still scrolls, so the
+ * list stays open below them.
+ */
+@media (max-width: 620px) and (pointer: fine), (max-height: 700px) and (pointer: fine) {
+  :is(.planner-inventory, .planner-search) .planner-search__chips {
+    flex-wrap: wrap;
+    overflow-x: visible;
+  }
+}
+
 /* Upright on a phone, the drawer takes the taller sheet the walls panel has:
    placing hides it down to its strip anyway. */
 .planner-phone--portrait > .planner-dock:has(> .planner-inventory:last-child) {

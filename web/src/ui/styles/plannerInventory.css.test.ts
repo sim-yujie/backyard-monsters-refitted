@@ -72,3 +72,12 @@ describe("the stored-buildings and Find lists never fold to nothing", () => {
     expect(declaration(rule(short, ":is(.planner-inventory, .planner-search) > .panel__body"), "min-height")).toBe("0");
   });
 });
+
+describe("the chips stay reachable with a mouse", () => {
+  it("wrap again for a fine pointer, where there is no swipe to slide a row", () => {
+    const fine = block(sheet, "@media (max-width: 620px) and (pointer: fine), (max-height: 700px) and (pointer: fine)");
+    const chips = rule(fine, ":is(.planner-inventory, .planner-search) .planner-search__chips");
+    expect(declaration(chips, "flex-wrap")).toBe("wrap");
+    expect(declaration(chips, "overflow-x")).toBe("visible");
+  });
+});
