@@ -233,7 +233,7 @@ export class TradeTab {
     this.loadedAt = this.host.now();
     // A mate took the player's request since the yard last looked: what arrived is in the
     // yard on the server, so the yard asks for its resources again (once per swap).
-    const newlyDone = answer.view.requests.filter((row) => row.mine && row.status === "done" && !this.doneSeen.has(row.id));
+    const newlyDone = (answer.view?.requests ?? []).filter((row) => row.mine && row.status === "done" && !this.doneSeen.has(row.id));
     for (const row of newlyDone) this.doneSeen.add(row.id);
     if (newlyDone.length > 0) this.host.traded();
     this.focusId = null;
