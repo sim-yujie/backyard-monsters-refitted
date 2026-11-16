@@ -123,8 +123,9 @@ const card = (title: string, ...children: HTMLElement[]): HTMLElement => {
 };
 
 // beta 8 (astra): keep meaningful hundredths of a million in trade receipts.
+// Rounded down, never up: 1,996,000 is "1.99M", so "you have" never shows as enough.
 const tradeShort = (amount: number): string =>
-  amount >= 1_000_000 ? `${Number((amount / 1_000_000).toFixed(2))}M` : formatShort(amount);
+  amount >= 1_000_000 ? `${Math.floor(amount / 10_000) / 100}M` : formatShort(amount);
 
 const amountsWords = (amounts: Partial<TradeAmounts>): string =>
   TRADE_KEYS.filter((key) => (amounts[key] ?? 0) > 0)

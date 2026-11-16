@@ -377,4 +377,9 @@ describe("swaps only (owner, 16 Nov 2026)", () => {
     await tab.load();
     expect(host.said.at(-1)).toBeNull();
   });
+
+  it("short amounts round down: 1,996,000 held is 1.99M, never 2M", async () => {
+    await mount(withView({ me: { held: { r1: 5_000_000, r2: 5_000_000, r3: 1_996_000, r4: 5_000_000 }, cap: 20_000_000 }, requests: [request({ amount: 2_000_000, gets: 1_800_000 })] }));
+    expect(document.querySelector(".trade-request__why")?.textContent).toBe(TRADE_TEXT.block.short("2M", resourceName("r3"), "1.99M"));
+  });
 });
