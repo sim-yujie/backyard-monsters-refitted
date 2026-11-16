@@ -191,6 +191,9 @@ export const ALLIANCE_TEXT = {
   takeOverNote: "Your Leader has been away a week. You can lead now.",
   leave: "Leave alliance",
   leaveConfirm: "Leave? You wait 24 h before joining another.",
+  /** The confirm's own buttons: what each does, not Yes / No (astra, beta 8). */
+  leaveYes: "Leave",
+  leaveNo: "Stay",
   yes: "Yes",
   no: "No",
   invite: "Invite",
@@ -1524,8 +1527,8 @@ export class AllianceWindow {
     }
     return [
       make("span", "alliance__confirm-words", ALLIANCE_TEXT.leaveConfirm),
-      button(ALLIANCE_TEXT.yes, "btn--primary", () => void this.leave()),
-      button(ALLIANCE_TEXT.no, "btn--outline", () => {
+      button(ALLIANCE_TEXT.leaveYes, "btn--primary", () => void this.leave()),
+      button(ALLIANCE_TEXT.leaveNo, "btn--outline", () => {
         this.leaving = false;
         this.render();
       }),

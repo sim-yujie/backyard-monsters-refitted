@@ -3290,3 +3290,11 @@
     flex: 1 1 12em;
   }
 }
+
+/* A touch screen (beta 8, astra): every tab at least 44 px tall to tap, not
+   only the raised one; the plates draw the same, just taller. */
+@media (pointer: coarse) {
+  :root[data-skin] .panel .alliance__tab.tabs__tab:not([aria-selected="true"]) {
+    min-height: 44px;
+  }
+}

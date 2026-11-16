@@ -904,7 +904,8 @@ describe("AllianceWindow: my alliance", () => {
     const view = await open(api);
     buttonNamed(ALLIANCE_TEXT.leave)!.click();
     expect(document.body.textContent).toContain(ALLIANCE_TEXT.leaveConfirm);
-    buttonNamed(ALLIANCE_TEXT.yes)!.click();
+    expect(buttonNamed(ALLIANCE_TEXT.leaveNo)).toBeDefined();
+    buttonNamed(ALLIANCE_TEXT.leaveYes)!.click();
     await flush();
     await flush();
     expect(api.leave).toHaveBeenCalled();
