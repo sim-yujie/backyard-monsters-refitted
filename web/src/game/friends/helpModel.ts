@@ -48,6 +48,8 @@ export interface BuildingHelpView {
  */
 export const HELP_REFUSAL_TEXT: Readonly<Record<string, string>> = {
   nothingToHelp: "There is nothing left to help with here.",
+  repairedToday: "You already repaired a building here today.",
+  rateLimited: "You have helped a lot this hour. Try again later.",
   alreadyHelped: "You have already sped up this job.",
   helpersFull: "5 friends have already sped up this job.",
   underAttack: "They are under attack right now. Try again when it is over.",
@@ -98,6 +100,15 @@ export const helpableIds = (block: HelpBlock | null): Set<number> => {
   }
   return ids;
 };
+
+/**
+ * Whether a refusal stands on the building's button from then on. One about
+ * the whole visit or that lifts by itself does not: the friend's yard under
+ * attack, not friends any more (the scene says so), and the spam limit
+ * (`rateLimited`, bug report #50), which lifts within the hour.
+ */
+export const refusalStays = (reason: string): boolean =>
+  reason !== "underAttack" && reason !== "notFriends" && reason !== "rateLimited";
 
 /** The seconds left on a building's job now; its frozen time when paused. Null with no job. */
 export const timeLeft = (building: YardBuilding, now: number): number | null => {
@@ -184,10 +195,21 @@ export const thanksText = (kind: HelpKind, result: HelpResult, owner: string, bu
   return `Thanks for helping! ${did}${earned ? ` You earned ${earned}.` : ""}`;
 };
 
+/** Every repair the block still offers, now refused with `repairedToday` (one repair a yard a day). */
+const repairsUsedUp = (buildings: Readonly<Record<string, HelpOffer>>): Record<string, HelpOffer> => {
+  const out: Record<string, HelpOffer> = {};
+  for (const [key, offer] of Object.entries(buildings)) {
+    out[key] = offer.repair === true ? { ...offer, repair: "repairedToday" } : offer;
+  }
+  return out;
+};
+
 /**
  * The help block after a help went through: the rewarded helps left today
  * and the building's entry as it now stands. A speed-up leaves the job
- * helped by this player; a repair leaves nothing to repair.
+ * helped by this player; a repair leaves nothing to repair, and, as the
+ * server allows one repair a friend's yard a UTC day (owner, 16 Nov 2026),
+ * every other repair in the yard now says `repairedToday`.
  */
 export const afterHelp = (block: HelpBlock, id: number, kind: HelpKind, rewardsLeft: number): HelpBlock => {
   const key = String(id);
@@ -200,6 +222,8 @@ export const afterHelp = (block: HelpBlock, id: number, kind: HelpKind, rewardsL
         const { repair: _repair, ...rest } = next;
         next = rest;
       }
+    } else if (kind === "repair" && next.repair === true) {
+      next = { ...next, repair: "repairedToday" };
     }
     if (next.speedup !== undefined || next.repair !== undefined) buildings[other] = next;
   }
@@ -211,12 +235,16 @@ export const afterHelp = (block: HelpBlock, id: number, kind: HelpKind, rewardsL
  * kind on that building, so the panel and the wrench agree with the server;
  * a `tooNew`'s gate (`hold`) is kept so the panel says which and when.
  * A refusal about the whole visit (not friends, the yard under attack) is
- * left to the caller.
+ * left to the caller ({@link refusalStays}).
  */
 export const afterRefusal = (block: HelpBlock, id: number, kind: HelpKind, reason: string, hold?: GateHold): HelpBlock => {
   const key = String(id);
   const offer = block.buildings[key];
   if (!offer) return block;
+  // Today's repair in this yard is given: no other building can take one either.
+  if (reason === "repairedToday") {
+    return { ...block, buildings: { ...repairsUsedUp(block.buildings), [key]: { ...offer, repair: reason } } };
+  }
   const gate =
     reason === "tooNew" && hold
       ? { gate: { reason, ...(hold.from !== undefined && { from: hold.from }), ...(hold.rule && { rule: hold.rule }) } }

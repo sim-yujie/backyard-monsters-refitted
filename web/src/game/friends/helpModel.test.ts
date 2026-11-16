@@ -21,6 +21,7 @@ import {
   helpersOf,
   helpersText,
   helpRefusalText,
+  refusalStays,
   repairText,
   rewardText,
   speedupSeconds,
@@ -167,6 +168,37 @@ describe("the block after a help (#374)", () => {
     expect(afterRefusal(block, 99, "speedup", "helpersFull")).toBe(block);
   });
 
+  it("one repair a friend's yard a day: after a repair every other repair says so (owner, 16 Nov 2026)", () => {
+    const next = afterHelp(block, 8, "repair", 4);
+    expect(next.buildings["8"]).toBeUndefined();
+    expect(next.buildings["9"]).toEqual({ speedup: "alreadyHelped", repair: "repairedToday" });
+    expect(next.buildings["7"]).toEqual({ speedup: true });
+    expect(buildingHelp(next, 9)?.repair).toEqual({
+      allowed: false,
+      reason: "repairedToday",
+      text: "You already repaired a building here today.",
+    });
+    // Speed-ups leave the repairs alone.
+    expect(afterHelp(block, 7, "speedup", 4).buildings["8"]).toEqual({ repair: true });
+  });
+
+  it("a repairedToday refusal closes every repair in the yard, not only the one tapped", () => {
+    const next = afterRefusal(block, 8, "repair", "repairedToday");
+    expect(next.buildings["8"]).toEqual({ repair: "repairedToday" });
+    expect(next.buildings["9"]).toEqual({ speedup: "alreadyHelped", repair: "repairedToday" });
+    expect(next.buildings["7"]).toEqual({ speedup: true });
+    expect([...helpableIds(next)]).toEqual([7]);
+  });
+
+  it("the spam limit has clear words and never stays on a button (bug report #50)", () => {
+    expect(helpRefusalText("rateLimited")).toBe("You have helped a lot this hour. Try again later.");
+    expect(refusalStays("rateLimited")).toBe(false);
+    expect(refusalStays("underAttack")).toBe(false);
+    expect(refusalStays("notFriends")).toBe(false);
+    expect(refusalStays("helpersFull")).toBe(true);
+    expect(refusalStays("repairedToday")).toBe(true);
+  });
+
   it("a tooNew refusal keeps its gate, so the panel says which and when", () => {
     const next = afterRefusal(block, 7, "speedup", "tooNew", { from: NOW + 3 * 3600, rule: "friendship" });
     expect(next.gate).toEqual({ reason: "tooNew", from: NOW + 3 * 3600, rule: "friendship" });
@@ -252,6 +284,17 @@ describe("the visit's marks and Help all (beta 8)", () => {
       { id: 3, kind: "speedup", saving: null },
       { id: 9, kind: "repair", saving: null },
     ]);
+  });
+
+  it("after today's repair in the yard, no repair wrench or Help all target is left (owner, 16 Nov 2026)", () => {
+    const silo = { ...building({ countdown: upgrading(21_600) }), id: 7 } as YardBuilding;
+    const hurt = { ...building(), id: 9 } as YardBuilding;
+    const repaired = afterRefusal(block, 9, "repair", "repairedToday");
+    expect(repaired.buildings["9"]).toEqual({ repair: "repairedToday" });
+    expect(repaired.buildings["5"]).toEqual({ speedup: "helpersFull", repair: "repairedToday" });
+    expect(helpMarksOf(repaired, [silo, hurt], NOW)).toEqual([{ id: 7, kind: "speedup", saving: 1080 }]);
+    expect(helpAllTargets(repaired, true).filter((target) => target.kind === "repair")).toEqual([]);
+    expect(helpAllTargets(repaired)).toEqual(helpAllTargets(block));
   });
 
   it("tags a saving in its largest unit", () => {
