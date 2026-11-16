@@ -152,6 +152,14 @@ export const planRepair = (save: HelpRepairSave, key: string): RepairPlan | Help
   return { buildingdata: { ...save.buildingdata, [key]: healed(building) }, buildinghealthdata };
 };
 
+/**
+ * Whether the helper may repair in this friend's yard today, having given
+ * `repairsToday` repairs there in the UTC day (owner, 16 Nov 2026, bug report
+ * #50): null when they may, else `repairedToday`. Speed-ups are not counted.
+ */
+export const repairDayRefusal = (repairsToday: number): HelpRefusal | null =>
+  repairsToday >= HELP_RULES.repairsPerYardPerDay ? { reason: "repairedToday" } : null;
+
 /** Whether a plan was refused. */
 export const isRefusal = (plan: object): plan is HelpRefusal => "reason" in plan;
 
@@ -193,9 +201,18 @@ export interface HelpPreviewSave extends HelpRepairSave {
  * up on a copy (repairs, then building countdowns), so a job that ended since
  * the owner's last save is not offered. A building with nothing to help is
  * left out; `gate` (from {@link gateRefusal}) stands in for every answer when
- * the helper may not help at all.
+ * the helper may not help at all. `repairsToday`, the helper's repairs in this
+ * yard in the UTC day, refuses every repair once it is used up
+ * ({@link repairDayRefusal}), so no wrench invites a tap that would fail.
  */
-export const previewHelp = (save: HelpPreviewSave, helper: number, now: number, gate: HelpRefusal | null): BuildingHelp => {
+export const previewHelp = (
+  save: HelpPreviewSave,
+  helper: number,
+  now: number,
+  gate: HelpRefusal | null,
+  repairsToday = 0
+): BuildingHelp => {
+  const repairDay = repairDayRefusal(repairsToday);
   const copy = { type: save.type, buildingdata: save.buildingdata ?? {}, buildinghealthdata: save.buildinghealthdata ?? {} };
   const from = Math.min(Number(save.savetime ?? now) || now, now);
   catchUpRepairs(copy, from, now);
@@ -210,7 +227,7 @@ export const previewHelp = (save: HelpPreviewSave, helper: number, now: number, 
       const plan = planSpeedup(building, helper);
       entry.speedup = gate ? gate.reason : isRefusal(plan) ? plan.reason : true;
     }
-    if (damageOf(copy, key, building)) entry.repair = gate ? gate.reason : true;
+    if (damageOf(copy, key, building)) entry.repair = gate ? gate.reason : repairDay ? repairDay.reason : true;
     if (entry.speedup !== undefined || entry.repair !== undefined) out[String(building.id ?? key)] = entry;
   }
   return out;

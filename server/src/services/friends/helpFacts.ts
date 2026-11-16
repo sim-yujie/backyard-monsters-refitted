@@ -38,6 +38,26 @@ export const helpsToday = async (em: EntityManager, helper: number, now: number)
   return Number(row?.n ?? 0);
 };
 
+/**
+ * Repairs the helper has given in each of `owners`' yards in the UTC day `now`
+ * falls in (one a yard a day, `repairDayRefusal`); a yard with none is absent.
+ */
+export const repairsToday = async (
+  em: EntityManager,
+  helper: number,
+  owners: readonly number[],
+  now: number
+): Promise<Map<number, number>> => {
+  if (owners.length === 0) return new Map();
+  const rows = await em.execute<{ owner_userid: number | string; n: number }[]>(
+    `SELECT owner_userid, count(*)::int AS n FROM bym.friend_help
+      WHERE helper_userid = ? AND kind = 'repair' AND help_day = ?::date AND owner_userid IN (${placeholders(owners)})
+      GROUP BY owner_userid`,
+    [helper, helpDayOf(now), ...owners]
+  );
+  return new Map(rows.map((row) => [Number(row.owner_userid), Number(row.n)]));
+};
+
 /** One side of a help as the gates read it, plus where its main yard is. */
 export interface HelpSideRow extends HelpSide {
   username: string;
@@ -138,13 +158,17 @@ interface OwnerYard extends HelpPreviewSave {
  */
 export const helpBlock = async (em: EntityManager, helper: number, ownerSave: OwnerYard, now: number): Promise<HelpBlock> => {
   const owner = Number(ownerSave.userid);
-  const [facts, today] = await Promise.all([helpFactsFor(em, helper, owner), helpsToday(em, helper, now)]);
+  const [facts, today, repairs] = await Promise.all([
+    helpFactsFor(em, helper, owner),
+    helpsToday(em, helper, now),
+    repairsToday(em, helper, [owner], now),
+  ]);
   const rewardsLeft = rewardsLeftOf(today);
   // Kept only for pre-7.6 clients (`LEGACY_HELPS_LEFT`).
   const helpsLeft = LEGACY_HELPS_LEFT;
   if (!facts || helper === owner || ownerSave.type !== BaseType.MAIN) return { rewardsLeft, helpsLeft, buildings: {} };
   const gate = gateRefusal(facts, now);
-  const buildings = previewHelp(ownerSave, helper, now, gate);
+  const buildings = previewHelp(ownerSave, helper, now, gate, repairs.get(owner) ?? 0);
   return gate?.reason === "tooNew" ? { rewardsLeft, helpsLeft, buildings, gate } : { rewardsLeft, helpsLeft, buildings };
 };
 
@@ -161,7 +185,11 @@ export const friendsHelp = async (
 ): Promise<Map<number, { speedup: boolean; repair: boolean } | null>> => {
   const out = new Map<number, { speedup: boolean; repair: boolean } | null>();
   if (friendIds.length === 0) return out;
-  const [sides, since] = await Promise.all([readSides(em, [helper, ...friendIds]), friendsSince(em, helper, friendIds)]);
+  const [sides, since, repairs] = await Promise.all([
+    readSides(em, [helper, ...friendIds]),
+    friendsSince(em, helper, friendIds),
+    repairsToday(em, helper, friendIds, now),
+  ]);
   const helperSide = sides.get(helper);
   const open = friendIds.filter((id) => {
     const side = sides.get(id);
@@ -196,7 +224,8 @@ export const friendsHelp = async (
       { type: row.type, savetime: Number(row.savetime), buildingdata: row.buildings ?? {}, buildinghealthdata: row.buildinghealthdata },
       helper,
       now,
-      null
+      null,
+      repairs.get(id) ?? 0
     );
     const entries = Object.values(help);
     out.set(id, {
