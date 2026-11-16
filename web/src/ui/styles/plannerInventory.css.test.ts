@@ -58,26 +58,79 @@ describe("the stored-buildings and Find lists never fold to nothing", () => {
   });
 
   it("on a short screen the chips keep one row, and that row cannot collapse either", () => {
-    const chips = rule(short, ":is(.planner-inventory, .planner-search) .planner-search__chips");
+    const chips = rule(
+      short,
+      ":is(.planner-inventory, .planner-search) .planner-search__chips",
+    );
     expect(declaration(chips, "flex")).toBe("none");
     expect(declaration(chips, "flex-wrap")).toBe("nowrap");
     expect(declaration(chips, "overflow-x")).toBe("auto");
-    expect(declaration(rule(short, ":is(.planner-inventory, .planner-search) .planner-search__chip"), "flex")).toBe("none");
+    expect(
+      declaration(
+        rule(short, ":is(.planner-inventory, .planner-search) .planner-search__chip"),
+        "flex",
+      ),
+    ).toBe("none");
   });
 
   it("on a short screen the window fits its dock and its body scrolls", () => {
     const panel = rule(short, ".planner-dock > :is(.planner-inventory, .planner-search)");
     expect(declaration(panel, "flex")).toBe("0 1 auto");
     expect(declaration(panel, "min-height")).toBe("0");
-    expect(declaration(rule(short, ":is(.planner-inventory, .planner-search) > .panel__body"), "min-height")).toBe("0");
+    expect(
+      declaration(
+        rule(short, ":is(.planner-inventory, .planner-search) > .panel__body"),
+        "min-height",
+      ),
+    ).toBe("0");
   });
 });
 
 describe("the chips stay reachable with a mouse", () => {
   it("wrap again for a fine pointer, where there is no swipe to slide a row", () => {
-    const fine = block(sheet, "@media (max-width: 620px) and (pointer: fine), (max-height: 700px) and (pointer: fine)");
+    const fine = block(
+      sheet,
+      "@media (max-width: 620px) and (pointer: fine), (max-height: 700px) and (pointer: fine)",
+    );
     const chips = rule(fine, ":is(.planner-inventory, .planner-search) .planner-search__chips");
     expect(declaration(chips, "flex-wrap")).toBe("wrap");
     expect(declaration(chips, "overflow-x")).toBe("visible");
+  });
+});
+
+describe("the sliding chip row says it goes on", () => {
+  it("pins a chevron to the row's right edge, kept off a mouse's wrapped chips", () => {
+    const more = rule(
+      short,
+      ":is(.planner-inventory, .planner-search) .planner-search__chips::after",
+    );
+    expect(declaration(more, "position")).toBe("sticky");
+    expect(declaration(more, "right")).toBe("0");
+    expect(declaration(more, "pointer-events")).toBe("none");
+    const fine = block(
+      sheet,
+      "@media (max-width: 620px) and (pointer: fine), (max-height: 700px) and (pointer: fine)",
+    );
+    expect(
+      declaration(
+        rule(fine, ":is(.planner-inventory, .planner-search) .planner-search__chips::after"),
+        "content",
+      ),
+    ).toBe("none");
+  });
+});
+
+describe("a phone on its side shows two rows at once", () => {
+  it("puts the search box and the chips on one line", () => {
+    const side = block(short, "@media (max-height: 500px)");
+    expect(
+      declaration(
+        rule(side, ":is(.planner-inventory, .planner-search) > .panel__body"),
+        "display",
+      ),
+    ).toBe("grid");
+    expect(side).toContain(
+      ".planner-search__input:not([hidden]):has(+ .planner-search__chips:not([hidden]))",
+    );
   });
 });

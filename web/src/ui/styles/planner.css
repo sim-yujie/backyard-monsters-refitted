@@ -1293,6 +1293,82 @@
   :is(.planner-inventory, .planner-search) .planner-search__chip {
     flex: none;
   }
+
+  /* The row goes on: a fade and a chevron pinned to its right edge. Sticky,
+     so it rides at the edge while the chips slide under it and comes to rest
+     after the last chip, never over it. */
+  :is(.planner-inventory, .planner-search) .planner-search__chips::after {
+    content: "\203A";
+    position: sticky;
+    right: 0;
+    flex: none;
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    width: 2rem;
+    margin-inline-start: auto;
+    padding-inline-end: 2px;
+    background: linear-gradient(
+      to right,
+      transparent,
+      var(--skin-fill, var(--colour-surface-base)) 60%
+    );
+    color: var(--colour-text);
+    font-size: var(--text-lg);
+    font-weight: 700;
+    line-height: 1;
+    pointer-events: none;
+  }
+
+  /* Where the browser can tell, the chevron shows only while there is more
+     to slide to: not on a row that fits, and not at the row's end. */
+  @supports (animation-timeline: scroll()) {
+    :is(.planner-inventory, .planner-search) .planner-search__chips::after {
+      opacity: 0;
+      animation: planner-chips-more linear both;
+      animation-timeline: scroll(nearest inline);
+    }
+  }
+
+  /* On a phone's side, the box and the chips share one line: a second row of
+     the list clears the fold. */
+  @media (max-height: 500px) {
+    :is(.planner-inventory, .planner-search) > .panel__body {
+      display: grid;
+      grid-template-columns: minmax(6.5rem, 34%) minmax(0, 1fr);
+      column-gap: var(--space-2);
+      align-content: start;
+    }
+
+    :is(.planner-inventory, .planner-search) > .panel__body > *,
+    :is(.planner-inventory, .planner-search) > .panel__body::before {
+      grid-column: 1 / -1;
+    }
+
+    :is(.planner-inventory, .planner-search)
+      > .panel__body
+      > .planner-search__input:not([hidden]):has(+ .planner-search__chips:not([hidden])) {
+      grid-column: 1;
+      align-self: center;
+    }
+
+    :is(.planner-inventory, .planner-search)
+      > .panel__body
+      > .planner-search__input:not([hidden])
+      + .planner-search__chips {
+      grid-column: 2;
+    }
+  }
+}
+
+@keyframes planner-chips-more {
+  0%,
+  92% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+  }
 }
 
 /*
@@ -1305,6 +1381,10 @@
   :is(.planner-inventory, .planner-search) .planner-search__chips {
     flex-wrap: wrap;
     overflow-x: visible;
+  }
+
+  :is(.planner-inventory, .planner-search) .planner-search__chips::after {
+    content: none;
   }
 }
 
