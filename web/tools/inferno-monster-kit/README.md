@@ -285,11 +285,13 @@ game sheets backed up in `art-work/IC2-r3/r2-assets`) paints that creature:
   13 / 0.62 / 0.44) and the skull brighter (26 / 0.59 / 0.70 vs 27 / 0.47 / 0.56). `tone` (two wing windows round hue 0,
   one bone window) gives wings 11 / 0.67 / 0.45 and bone 26 / 0.50 / 0.57; `max_sat=0.82` leaves the dark maroon throat
   (sat ~0.84) as painted. Measure with `art-work/IC5/tools/colours.py <img> ...`.
-- **Codex calls: 22** = 1 sample (8 12 16 22, approved first time) + 3 still batches (back quarter 18-21 with
+- **Codex calls: 26** = 1 sample (8 12 16 22, approved first time) + 3 still batches (back quarter 18-21 with
   `art-work/IC5/turn-r1.txt`, turned step by step first time) + 1 still redo (9 13 14 15 with `turn-r2.txt`: h9 had come
   out as a second straight front view and h14 less turned than h13) + 15 animation + 2 animation redos (h19, h20: in the
   wind-up the fanged mouth turned toward the viewer and the strike swung into a full side profile; redone with
-  `anim-extra-back.txt`, first tries in `anim/try1/`). Every animation call carried `art-work/IC5/anim-extra.txt` (body
+  `anim-extra-back.txt`, first tries in `anim/try1/`) + 4 attack redos (h10, h11, h12 wind-ups swung toward a straight
+  front view, h15's side view turned toward the viewer in the anticipation, wind-up and recovery; redone with
+  `anim-extra-attack.txt`: same eyes visible as ref.png in every attack cell). Every animation call carried `art-work/IC5/anim-extra.txt` (body
   steady, only the wings move; same angle in the attack).
 - Work dir `art-work/IC5`: `rebuild.sh` (still + anim + masters + shrink + copies, no Codex), `tools/desk.py` (portrait +
   five headings in two rows), `tools/sym.py`, `tools/drift2.py`, `tools/jitter.py` (eye tracker), `tools/colours.py`,
