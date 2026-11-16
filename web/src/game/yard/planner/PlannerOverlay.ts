@@ -62,7 +62,10 @@ export interface LineCellVisual {
 /** The line's colours: the build bar's own (`BuildPlacement.ts`). */
 export const LINE_PLACE = 0x5cc26a;
 export const LINE_BLOCKED = 0xe05252;
-export const LINE_SHORT = 0x9aa0a6;
+/** astra round 1: lighter than build mode's grey, which was lost on silver towers. */
+export const LINE_SHORT = 0xbbc3ca;
+/** Under every Block's edge, so the outline holds on pale ground and on metal. */
+const LINE_UNDER = 0x1d252d;
 
 /** The compare highlights for one pane (#9). */
 export interface CompareDiff {
@@ -256,7 +259,13 @@ const drawLine = (g: Graphics, line: NonNullable<PlannerVisuals["line"]>): void 
       g.poly(path(cell.corners));
       drew = true;
     }
-    if (drew) g.fill({ color: colour, alpha: fill }).stroke({ width, color: colour, alpha: 0.95 });
+    if (!drew) continue;
+    // A dark edge under the coloured one (astra round 1), then the colour.
+    g.fill({ color: colour, alpha: fill }).stroke({ width: width + 2, color: LINE_UNDER, alpha: 0.55 });
+    for (const cell of line.cells) {
+      if (cell.state === state && cell.corners.length > 0) g.poly(path(cell.corners));
+    }
+    g.stroke({ width, color: colour, alpha: 0.95 });
   }
   let crossed = false;
   for (const cell of line.cells) {

@@ -130,7 +130,8 @@ export interface PlannerBarActions {
  */
 export const lineTip = (touch: boolean, line: PlannerLineState): string => {
   if (line.anchors === 0) {
-    return touch ? "Tap corners. Tap the last one twice to end." : "Click corners. Double-click ends.";
+    // astra round 1: the next step is ✓ Place; double-click stays a shortcut (the tooltip says it).
+    return touch ? "Tap corners, then ✓ Place" : "Click corners, then ✓ Place";
   }
   if (line.place === 0) return line.blocked > 0 ? "Nothing here can be placed." : "No walls left.";
   return "";
@@ -742,7 +743,11 @@ export class PlannerBar {
     this.lineClear = button("✗", "Clear the line (Esc)", "btn btn--ghost planner-bar__line-clear");
     this.lineClear.setAttribute("aria-label", "Clear the line");
     this.lineClear.addEventListener("click", () => actions.onLineClear?.());
-    this.linePlace = button("✓ Place", "Place the green walls", "btn btn--primary planner-bar__line-place");
+    this.linePlace = button(
+      "✓ Place",
+      "Place the green walls (double-click the last corner to end the line first)",
+      "btn btn--primary planner-bar__line-place",
+    );
     this.linePlace.addEventListener("click", () => actions.onLinePlace?.());
     this.line.append(this.lineTipText, this.lineCounts, this.lineUndo, this.lineClear, this.linePlace);
 
@@ -1180,7 +1185,8 @@ export class PlannerBar {
       if (line.short > 0) {
         const short = document.createElement("span");
         short.className = "planner-bar__line-short";
-        short.textContent = `${line.short} not placed`;
+        // "over stock", like build mode's "over limit" (astra round 1: "not placed" read as every miss).
+        short.textContent = `${line.short} over stock`;
         short.title = `${line.short} past the walls left in the drawer: not placed`;
         counts.append(short);
       }

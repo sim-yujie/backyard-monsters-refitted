@@ -795,7 +795,7 @@ describe("the wall line's controls (owner, 16 Nov 2026)", () => {
     expect(done?.hidden).toBe(false);
     expect(done?.textContent).toBe("Done");
     expect(tip?.hidden).toBe(true);
-    expect(counts?.textContent).toBe("×6✕25 not placed");
+    expect(counts?.textContent).toBe("×6✕25 over stock");
     expect(place?.textContent).toBe("✓ Place 6");
     expect(place?.disabled).toBe(false);
     expect(undo?.disabled).toBe(false);
@@ -807,14 +807,14 @@ describe("the wall line's controls (owner, 16 Nov 2026)", () => {
     const bar = mount();
     bar.update(stateOf({ line: { ...LINE, anchors: 0, place: 0, blocked: 0, short: 0 } }));
     const { tip, counts, undo, place } = parts(bar);
-    expect(tip?.textContent).toBe("Click corners. Double-click ends.");
+    expect(tip?.textContent).toBe("Click corners, then ✓ Place");
     expect(counts?.hidden).toBe(true);
     expect(undo?.disabled).toBe(true);
     expect(place?.disabled).toBe(true);
     expect(place?.textContent).toBe("✓ Place");
 
     bar.setLayout(PlannerLayout.PORTRAIT, true);
-    expect(parts(bar).tip?.textContent).toBe("Tap corners. Tap the last one twice to end.");
+    expect(parts(bar).tip?.textContent).toBe("Tap corners, then ✓ Place");
   });
 
   it("says why nothing can be placed", () => {
