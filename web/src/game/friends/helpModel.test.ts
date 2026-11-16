@@ -12,6 +12,7 @@ import {
   helpingLine,
   helpRefusalText,
   refusalStays,
+  spentRepairIds,
   repairText,
   rewardText,
   speedupSeconds,
@@ -126,6 +127,28 @@ describe("the block after a help (#374)", () => {
     expect(next.rewardsLeft).toBe(4);
     expect(next.buildings["7"]).toEqual({ speedup: "alreadyHelped" });
     expect(helpableIds(next).has(7)).toBe(false);
+  });
+
+  it("a repair leaves the other damaged buildings with a grey wrench, not none (owner's report, 16 Nov 2026)", () => {
+    const yard: HelpBlock = {
+      buildings: { "1": { repair: true }, "2": { repair: true }, "3": { repair: true }, "4": { speedup: true, repair: true } },
+    };
+    const next = afterHelp(yard, 1, "repair", 4);
+    // The repaired one has nothing left; the others are still damaged, their repair used up today.
+    expect([...helpableIds(next)]).toEqual([4]);
+    expect([...spentRepairIds(next)].sort((a, b) => a - b)).toEqual([2, 3]);
+    expect(spentRepairIds(next).has(1)).toBe(false);
+    // A visit later the same day: the server sends every repair as repairedToday.
+    const later: HelpBlock = { buildings: { "2": { repair: "repairedToday" }, "3": { repair: "repairedToday" } } };
+    expect([...spentRepairIds(later)].sort((a, b) => a - b)).toEqual([2, 3]);
+    expect(buildingHelp(later, 2)?.repair).toEqual({
+      allowed: false,
+      reason: "repairedToday",
+      text: "You already repaired a building here today.",
+    });
+    // Nothing used up: no grey wrench.
+    expect(spentRepairIds(yard).size).toBe(0);
+    expect(spentRepairIds(null).size).toBe(0);
   });
 
   it("a repair leaves nothing to repair", () => {

@@ -47,6 +47,7 @@ import {
   buildingHelp,
   fromVisitSave,
   helpableIds,
+  spentRepairIds,
   helpingLine,
   helpRefusalText,
   refusalStays,
@@ -1862,7 +1863,7 @@ export class YardScene implements Scene {
     const block = this.helpBlock;
     if (!block) return;
     if (this.visitLine) this.visitLine.textContent = helpingLine(this.target?.name ?? "");
-    this.renderer.setHelpMarks(helpableIds(block));
+    this.renderer.setHelpMarks(helpableIds(block), spentRepairIds(block));
     const shown = this.helpPanel?.shown;
     if (shown) this.helpPanel?.show(shown, buildingHelp(block, shown.id));
   }
