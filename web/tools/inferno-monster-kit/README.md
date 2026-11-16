@@ -204,3 +204,11 @@ game sheets backed up in `art-work/IC2-r3/r2-assets`) paints that creature:
   - **Colour.** Codex's armour came out more golden and saturated than the card (hue 42 vs 48, saturation 0.77 vs 0.60):
     `grade` (body = armour; limbs = belly, fur, pink) with `grade_chroma`. Walk / attack vs idle mean colour within 1.
 
+  - **Magenta specks.** A few drool-gap pixels under the jaw at h18 (and its mirror h27) came back hot pink (green
+    under 40) but not magenta enough to key out: spec `demagenta` (`common.demagenta`, run inside `grade`) fills
+    them from their neighbours. The dark violet fur (red under 150) and the dusty-rose stripes (green ~100) are untouched.
+  - **Filming gotchas.** A tribe base disappears after it is attacked (L19 was gone on the next run; L20, L21, L24
+    were offered). A running server keeps the save in memory and writes it back, so change `monsters.housed` only
+    with the server stopped. Malphus run off fast (they leap walls toward resource buildings), so the camera loses them.
+  - The Hatchery / Locker show only the portrait card (`ui/monsters/LockerTab.ts` uses `monsterPortrait`); the
+    painted sprite shows in battle and as housed monsters walking in the Inferno yard.
