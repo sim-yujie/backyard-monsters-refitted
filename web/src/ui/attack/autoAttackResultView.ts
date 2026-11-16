@@ -18,7 +18,7 @@ const make = <K extends keyof HTMLElementTagNameMap>(tag: K, className: string, 
   return node;
 };
 
-/** The camp's portrait, name and level, "Victory!" or "Not won", and the camp's damage. */
+/** astra round 2: the camp's portrait, name and level, and "Victory!" or "Defeat". */
 const head = (result: AutoAttackResponse): HTMLElement => {
   const box = make("div", "arv-head");
   const url = tribePictureUrl(result.tribe);
@@ -29,17 +29,9 @@ const head = (result: AutoAttackResponse): HTMLElement => {
     box.append(picture);
   }
   const words = make("div", "arv-head__words");
-  // Review round 1: "camp" and "damaged" as the confirm sheet says them
-  // ("Legionnaire camp · Level 33 · 0% damaged"), so "94%" is not read as a chance.
   words.append(make("p", "arv-head__camp", `${result.tribe} camp · Level ${result.level}`));
   const outcome = make("p", `arv-head__outcome${result.conquered ? " arv-head__outcome--won" : ""}`);
-  outcome.append(make("span", "arv-head__word", result.conquered ? "Victory!" : "Not won"));
-  const damage = Math.floor(result.damageAfter);
-  const chip = make("span", "arv-head__damage");
-  chip.title = `Camp damage: ${damage}%`;
-  chip.setAttribute("aria-label", chip.title);
-  chip.append(gameIcon("yarddamage2", { size: 24, decorative: true }), `${damage}% damaged`);
-  outcome.append(chip);
+  outcome.append(make("span", "arv-head__word", result.conquered ? "Victory!" : "Defeat"));
   words.append(outcome);
   box.append(words);
   return box;

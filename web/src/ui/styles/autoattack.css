@@ -696,7 +696,7 @@
   min-height: 44px;
 }
 
-/* The camp: tribe portrait, name and level, "Victory!" and the camp's damage. */
+/* astra round 2: the camp portrait, name and level, and the outcome word. */
 .arv-head {
   display: flex;
   align-items: center;
@@ -749,15 +749,7 @@
   color: var(--colour-warning);
 }
 
-.arv-head__damage {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--space-1);
-  font-weight: 700;
-  font-variant-numeric: tabular-nums;
-}
-
-/* A part's small heading ("Loot"; the offer's "Take-over cost" matches it). */
+/* A part's small heading ("Loot"; the offer's "Takeover cost" matches it). */
 .arv-label,
 .end-takeover--compact .end-takeover__lead {
   margin: 0;
@@ -809,7 +801,7 @@
   color: var(--colour-warning);
 }
 
-/* The take-over offer, short (EndTakeoverOffer `compact`): "Take-over cost"
+/* The take-over offer, short (EndTakeoverOffer `compact`): "Takeover cost"
    and the price on the left, Take over on the right. */
 .end-takeover.end-takeover--compact {
   display: flex;

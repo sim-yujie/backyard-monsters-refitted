@@ -151,7 +151,7 @@ export class EndTakeoverOffer {
 
     if (options.compact && kind === "camp") {
       this.element.classList.add("end-takeover--compact");
-      lead.textContent = "Take-over cost";
+      lead.textContent = "Takeover cost";
       this.message.textContent = "";
       const info = document.createElement("div");
       info.className = "end-takeover__info";

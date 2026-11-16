@@ -67,11 +67,12 @@ const all = (view: ReturnType<typeof resultView>): string =>
   [view.head, view.loot].map((node) => node.textContent ?? "").join(" | ");
 
 describe("the parts", () => {
-  it("a conquered camp: its name and level, Victory!, the damage, the loot, a place for the offer", () => {
+  it("a conquered camp: its name and level, Victory!, the loot, a place for the offer", () => {
     const view = resultView(BUSY);
     expect(view.head.textContent).toContain("Legionnaire camp · Level 33");
     expect(view.head.textContent).toContain("Victory!");
-    expect(view.head.querySelector('[aria-label="Camp damage: 94%"]')).not.toBeNull();
+    expect(view.head.textContent).not.toContain("%");
+    expect(view.head.querySelector(".arv-head__damage")).toBeNull();
     expect(view.loot.querySelectorAll(".arv-loot__item")).toHaveLength(4);
     expect(view.loot.querySelectorAll(".arv-loot__item--none")).toHaveLength(2);
     expect(view.loot.textContent).toContain("+100,000");
@@ -79,10 +80,11 @@ describe("the parts", () => {
     expect(view.offerHost).not.toBeNull();
   });
 
-  it("a camp still standing: Not won and its damage, no offer", () => {
+  it("a camp still standing: Defeat, no damage or offer", () => {
     const view = resultView(PLAIN);
-    expect(view.head.textContent).toContain("Not won");
-    expect(view.head.textContent).toContain("13%");
+    expect(view.head.textContent).toContain("Defeat");
+    expect(view.head.textContent).not.toContain("%");
+    expect(view.head.querySelector(".arv-head__outcome--won")).toBeNull();
     expect(view.head.textContent).not.toContain("Victory!");
     expect(view.offerHost).toBeNull();
     expect(view.loot.textContent).not.toContain("Storage full");
@@ -145,7 +147,7 @@ describe("the flow's result", () => {
     expect(middle.contains(offer)).toBe(false);
     expect(middle.contains(actions)).toBe(false);
     expect(offer.compareDocumentPosition(actions) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
-    expect(offer.textContent).toContain("Take-over cost");
+    expect(offer.textContent).toContain("Takeover cost");
     expect(offer.textContent).toContain("450,000 each");
     expect(offer.textContent).toContain("965");
     // The owner does not need to know a Frontier Pass applied, nor any rules.
@@ -165,11 +167,11 @@ describe("the flow's result", () => {
     flow.close();
   });
 
-  it("not won: no offer, Close is the main action", async () => {
+  it("defeat: no offer, Close is the main action", async () => {
     const { modal, flow } = await attack(PLAIN);
     const panel = modal.querySelector(".auto-attack--result")!;
     expect(panel.querySelector(".end-takeover")).toBeNull();
-    expect(panel.textContent).toContain("Not won");
+    expect(panel.textContent).toContain("Defeat");
     expect(panel.querySelector(".attack-end__actions .btn--primary")?.textContent).toBe("Close");
     flow.close();
   });

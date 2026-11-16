@@ -308,7 +308,7 @@ describe("Smart Repeat attack's prompt (owner, 16 Nov 2026)", () => {
 });
 
 describe("the result", () => {
-  it("shows Victory!, the camp's damage, the loot and the take-over offer, once per press", async () => {
+  it("shows Victory!, the camp, the loot and the take-over offer, once per press", async () => {
     const modal = document.createElement("div");
     const api = calls();
     const onAttacked = vi.fn();
@@ -323,7 +323,10 @@ describe("the result", () => {
     const shown = text(modal);
     expect(shown).toContain("Attack result");
     expect(shown).toContain("Kozu camp · Level 35");
-    expect(shown).toContain("Victory!92% damaged");
+    expect(shown).toContain("Victory!");
+    expect(modal.querySelector(".arv-head")?.textContent).not.toContain("%");
+    expect(modal.querySelector(".arv-head__damage")).toBeNull();
+    expect(shown).toContain("Takeover cost");
     expect(shown).toContain("+1,200");
     expect(shown).toContain("Storage full: some loot left behind");
     // The owner wants none of the army, champion or bombs (16 Nov 2026).
