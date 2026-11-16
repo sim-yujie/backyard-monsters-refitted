@@ -199,7 +199,13 @@ export class MapRoomUi {
       ...(handlers.onAchievementsOpen ? { onAchievementsOpen: handlers.onAchievementsOpen } : {}),
       ...(handlers.onVisitFriend ? { onVisitFriend: handlers.onVisitFriend } : {}),
       ...(handlers.onMessageFriend ? { onMessageFriend: handlers.onMessageFriend } : {}),
+      // Glimmers buy decorations, which the map has none of (owner, 15 Nov 2026).
+      coins: false,
     });
+    // On an upright phone the map's bar is one band: the four resources in a
+    // square of two rows at its left, Map/Yard, then Account over Shiny
+    // (maproom.css, owner 15 Nov 2026).
+    this.hud.element.classList.add("hud--map");
     this.hud.setActiveScene(activeScene);
 
     // Going somewhere from Find closes it: the place found is what matters.
