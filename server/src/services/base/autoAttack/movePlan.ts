@@ -77,7 +77,7 @@ export type MovePlan =
       readonly kind: "housing";
       /** Housing space the monsters that must move in take. */
       readonly need: number;
-      /** Free housing in each yard in range that can take monsters, in range order. */
+      /** Free housing in each yard in range that can take monsters and has Monster Housing, in range order. */
       readonly free: readonly { readonly baseid: string; readonly free: number }[];
     };
 
@@ -160,7 +160,8 @@ export const planMoves = (needs: Readonly<Counts>, yards: readonly PlanYard[], s
   const receivers = yards
     .filter((yard) => yard.reaches && !yard.busy)
     .map((yard) => ({ yard, free: Math.max(0, yard.capacity - total(yard.housed, sizeOf)) }));
-  const room = receivers.map(({ yard, free }) => ({ baseid: yard.baseid, free }));
+  // A yard with no Monster Housing at all is not worth naming in the refusal.
+  const room = receivers.filter(({ yard }) => yard.capacity > 0).map(({ yard, free }) => ({ baseid: yard.baseid, free }));
   const refused = (): MovePlan => ({ kind: "housing", need: total(gap, sizeOf), free: room });
   // A move needs an outpost at one end; the main yard never sends to itself.
   const canTake = (from: PlanYard, to: PlanYard) => from.baseid !== to.baseid && !(from.main && to.main);

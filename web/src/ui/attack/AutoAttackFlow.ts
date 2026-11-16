@@ -25,6 +25,7 @@ import {
   MOVES_CHANGED,
   MOVES_LEAD,
   MOVE_AND_ATTACK,
+  ROOM_NEED_TEXT,
   SIEGE_NOT_REPEATED,
   autoAttackErrorText,
   campText,
@@ -220,7 +221,7 @@ const movesList = (moves: readonly YardMove[], yards: Readonly<Record<string, Ya
 const roomList = (answer: AutoAttackPlanResponse): HTMLElement[] => {
   const noRoom = answer.noRoom;
   if (!noRoom) return [];
-  const need = paragraph(`Needs ${noRoom.need.toLocaleString("en-US")} housing space`, "auto-attack__room-need");
+  const need = paragraph(ROOM_NEED_TEXT(noRoom.need), "auto-attack__room-need");
   const list = document.createElement("ul");
   list.className = "auto-attack__room";
   list.setAttribute("aria-label", "Free housing in range");
@@ -314,9 +315,10 @@ export class AutoAttackFlow {
       const row = document.createElement("div");
       row.className = "attack-end__actions";
       row.append(...actions);
-      if (className.includes("auto-attack--confirm")) {
-        // The confirm sheet's words scroll on a short screen; its buttons stay
-        // in sight under them (Smart Repeat attack's moves make it tall).
+      if (className.includes("auto-attack--confirm") || className.includes("auto-attack--failed")) {
+        // On a short screen the list (moves, what is short, the room) scrolls
+        // and the words and buttons stay in sight (layout-rules; Smart Repeat
+        // attack's moves make the sheet tall).
         const words = document.createElement("div");
         words.className = "auto-attack__scroll";
         words.append(...body);
@@ -349,7 +351,7 @@ export class AutoAttackFlow {
     if (changed) body.push(paragraph(MOVES_CHANGED, "auto-attack__changed"));
     body.push(
       paragraph(`${campText(plan)} · camp damage now ${Math.floor(answer.damage)}%`, "attack-end__outcome"),
-      paragraph(planSourceText(plan, this.options.baseid, this.now()), "u-muted"),
+      paragraph(planSourceText(plan, this.options.baseid, this.now()), "u-muted auto-attack__source"),
       paragraph(monstersText(plan.monsters), "auto-attack__army"),
     );
     const includes = includesText(plan);
@@ -363,7 +365,7 @@ export class AutoAttackFlow {
       // Smart Repeat attack: the yards in range lack monsters other yards hold.
       this.movesKey = answer.movesKey ?? null;
       body.push(paragraph(MOVES_LEAD, "auto-attack__moves-lead"), movesList(moves, answer.yards ?? {}));
-      body.push(paragraph("Moving is free. The monsters are spent in the attack.", "u-muted auto-attack__spent"));
+      body.push(paragraph("Moving is free; the monsters are spent in the attack.", "u-muted auto-attack__spent"));
     } else {
       body.push(paragraph("The monsters are spent, as in an attack by hand. The result comes in a few seconds.", "u-muted"));
     }
@@ -448,6 +450,9 @@ export class AutoAttackFlow {
     const { message, missing } = autoAttackErrorText(caught);
     const body = [paragraph(message, "auto-attack__refusal")];
     if (missing.length > 0) body.push(missingList(missing));
+    // No room in range: the space needed and each yard's room, as the confirm sheet shows them.
+    const data = caught instanceof ApiError ? (caught.details?.data as Partial<AutoAttackPlanResponse> | undefined) : undefined;
+    if (refusalReason(caught) === "noRoom" && data?.noRoom) body.push(...roomList(data as AutoAttackPlanResponse));
     this.show("Repeat attack", "auto-attack--failed", body, [
       buttonOf("Close", "btn btn--primary", () => this.close()),
     ]);

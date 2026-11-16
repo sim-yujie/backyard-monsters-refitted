@@ -1177,7 +1177,7 @@ const AUTO_ATTACK_REFUSAL_MESSAGES: Record<AutoAttackRefusal, string> = {
   inFlight: "Your last auto-attack is still being worked out.",
   busy: "The server is busy working out other attacks. Try again in a moment.",
   failed: "The auto-attack could not be worked out. Nothing was spent.",
-  noRoom: "Not enough Monster Housing in range to move your army in.",
+  noRoom: "Not enough Monster Housing in range.",
   movesChanged: "Your yards changed since you looked. Check the moves again.",
 };
 

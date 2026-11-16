@@ -109,7 +109,16 @@
   display: flex;
   flex-direction: column;
   min-height: 0;
+  max-height: min(84vh, 760px);
+  max-height: min(84dvh, 760px);
   overflow: hidden;
+}
+
+/* Room for a move's three parts side by side (a phone upright has the whole width). */
+@media (min-width: 621px) {
+  .attack-end.auto-attack--moves {
+    width: min(92vw, 540px);
+  }
 }
 
 .auto-attack__scroll {
@@ -120,6 +129,36 @@
   min-height: 0;
   overflow-y: auto;
   overscroll-behavior: contain;
+}
+
+/* The words keep their height; the list gives way first, down to about one
+   row, and scrolls inside (layout-rules: only the list scrolls). */
+.auto-attack__scroll > * {
+  flex: none;
+}
+
+.auto-attack__scroll > .auto-attack__moves,
+.auto-attack__scroll > .auto-attack__missing,
+.auto-attack__scroll > .auto-attack__room {
+  flex: 0 1 auto;
+  min-height: 56px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+/* A short screen (a phone on its side): tighter gaps, and over the moves only
+   the camp, the champion line and the rows (the rows name every monster that
+   moves), so two moves show before any scroll. */
+@media (max-height: 500px) {
+  .auto-attack__scroll {
+    gap: var(--space-2);
+  }
+
+  .auto-attack--moves .auto-attack__source,
+  .auto-attack--moves .auto-attack__army,
+  .auto-attack--moves .auto-attack__spent {
+    display: none;
+  }
 }
 
 .auto-attack__scroll > p {
@@ -155,7 +194,9 @@
 
 .auto-attack__move {
   display: grid;
-  grid-template-columns: minmax(64px, 1fr) minmax(0, 1.7fr) auto minmax(64px, 1fr);
+  /* Fixed yard columns, so every row's parts line up; the chevron sits next
+     to the yard the monsters go to. */
+  grid-template-columns: 88px minmax(0, 1fr) 18px 88px;
   align-items: center;
   gap: var(--space-2);
   padding: var(--space-2);
@@ -199,7 +240,7 @@
 .auto-attack__cargo {
   display: flex;
   flex-wrap: wrap;
-  justify-content: center;
+  justify-content: flex-start;
   gap: var(--space-1) var(--space-2);
   min-width: 0;
 }
@@ -230,6 +271,10 @@
   display: flex;
   align-items: center;
   gap: var(--space-1);
+}
+
+.auto-attack__missing-monster + .auto-attack__missing-monster {
+  margin-top: var(--space-1);
 }
 
 .auto-attack__missing-monster .auto-attack__portrait {

@@ -67,8 +67,9 @@ export const SIEGE_NOT_REPEATED = "Siege weapons are not repeated.";
 export const shortfallText = (item: PlanShortfall): string => {
   switch (item.kind) {
     case "monster":
-      // Counted over every yard the monsters could move in from (Smart Repeat attack, 16 Nov 2026).
-      return `${monsterName(item.id)}: ${(item.need - item.have).toLocaleString("en-US")} short (you have ${item.have.toLocaleString("en-US")} of ${item.need.toLocaleString("en-US")})`;
+      // Counted over every yard the monsters could move in from; the owner's
+      // own words, "Pokey: 12 short" (Smart Repeat attack, 16 Nov 2026).
+      return `${monsterName(item.id)}: ${(item.need - item.have).toLocaleString("en-US")} short`;
     case "champion": {
       const name = championName(item.t);
       if (item.reason === "hurt") return `${name} has no health left`;
@@ -98,10 +99,13 @@ export const repeatRefusal = (answer: AutoAttackPlanResponse): string | null => 
 /* ── Smart Repeat attack (owner, 16 Nov 2026) ─────────────────────────── */
 
 /** The refusal when the army could be gathered but not housed in range. */
-export const NO_ROOM_TEXT = "Not enough Monster Housing in range to move your army in.";
+export const NO_ROOM_TEXT = "Not enough Monster Housing in range.";
+
+/** Under {@link NO_ROOM_TEXT}: the space the monsters that would move in take. */
+export const ROOM_NEED_TEXT = (need: number): string => `Monsters moving in need ${need.toLocaleString("en-US")} space`;
 
 /** Above the moves on the confirm sheet. */
-export const MOVES_LEAD = "Moves first, then attacks:";
+export const MOVES_LEAD = "Move monsters, then attack:";
 
 /** The confirm sheet's button when monsters move first. */
 export const MOVE_AND_ATTACK = "Move and attack";

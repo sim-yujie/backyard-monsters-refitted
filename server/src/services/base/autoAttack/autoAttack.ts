@@ -164,15 +164,19 @@ export interface NoRoom {
 }
 
 /** The moves, their key, and the housing verdict, as the answers carry them. */
-const movesPart = (assessed: Assessment) => ({
-  moves: assessed.move.kind === "moves" ? assessed.move.moves : [],
-  movesKey: assessed.move.kind === "moves" ? movesKey(assessed.move.moves) : null,
-  noRoom:
-    assessed.move.kind === "housing" && assessed.missing.length === 0
-      ? ({ need: assessed.move.need, free: assessed.move.free } satisfies NoRoom)
-      : null,
-  yards: assessed.yards,
-});
+const movesPart = (assessed: Assessment) => {
+  // Nothing moves for an attack refused anyway (a champion not ready, say).
+  const moves = assessed.move.kind === "moves" && assessed.missing.length === 0 ? assessed.move.moves : [];
+  return {
+    moves,
+    movesKey: moves.length > 0 ? movesKey(moves) : null,
+    noRoom:
+      assessed.move.kind === "housing" && assessed.missing.length === 0
+        ? ({ need: assessed.move.need, free: assessed.move.free } satisfies NoRoom)
+        : null,
+    yards: assessed.yards,
+  };
+};
 
 /** A plan as the panels describe it. */
 export interface PlanSummary {

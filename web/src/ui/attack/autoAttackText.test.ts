@@ -57,7 +57,7 @@ describe("autoAttackText", () => {
 
   it("lists exactly what is missing", () => {
     expect(shortfallText({ kind: "monster", id: "C1", need: 300, have: 288 })).toBe(
-      "Pokey: 12 short (you have 288 of 300)",
+      "Pokey: 12 short",
     );
     expect(shortfallText({ kind: "champion", t: 1, reason: "hurt" })).toBe("Gorgo has no health left");
     expect(shortfallText({ kind: "bomb", id: "tw1", reason: "catapult" })).toBe("Big twig bomb: your Catapult is too low");
@@ -73,7 +73,7 @@ describe("autoAttackText", () => {
 
   it("Smart Repeat attack: no room in range is its own refusal, and moves alone refuse nothing", () => {
     expect(repeatRefusal(answer({ noRoom: { need: 900, free: [{ baseid: "1", free: 40 }] } }))).toBe(
-      "Not enough Monster Housing in range to move your army in.",
+      "Not enough Monster Housing in range.",
     );
     expect(repeatRefusal(answer({ moves: [{ from: "a", to: "b", monsters: { C1: 4 } }], movesKey: "a>b:C1=4" }))).toBeNull();
     expect(yardName({ main: true, x: 1, y: 2 })).toBe("Main yard");

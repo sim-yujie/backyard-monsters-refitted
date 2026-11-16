@@ -120,7 +120,7 @@ describe("the confirm sheet", () => {
     );
     expect(button(modal, "Attack now")?.disabled).toBe(true);
     const items = [...modal.querySelectorAll(".auto-attack__missing li")].map((item) => item.textContent);
-    expect(items).toEqual(["Pokey: 180 short (you have 120 of 300)", "Gorgo has no health left"]);
+    expect(items).toEqual(["Pokey: 180 short", "Gorgo has no health left"]);
   });
 });
 
@@ -162,7 +162,7 @@ describe("Smart Repeat attack's prompt (owner, 16 Nov 2026)", () => {
     expect(first.querySelectorAll(".auto-attack__unit img")).toHaveLength(2);
     expect(first.getAttribute("aria-label")).toBe("120 Pokey, 4 D.A.V.E.: from Outpost 230, 215 to Outpost 242, 208");
     expect(text(rows[1]!.firstElementChild)).toBe("Main yard250, 200");
-    expect(text(modal)).toContain("Moves first, then attacks:");
+    expect(text(modal)).toContain("Move monsters, then attack:");
     expect(button(modal, "Attack now")).toBeUndefined();
     expect(button(modal, "Move and attack")?.disabled).toBe(false);
     expect(button(modal, "Cancel")).toBeDefined();
@@ -223,7 +223,7 @@ describe("Smart Repeat attack's prompt (owner, 16 Nov 2026)", () => {
     );
     expect(text(modal)).toContain("You are missing what that attack used:");
     const items = [...modal.querySelectorAll(".auto-attack__missing li")].map((item) => item.textContent);
-    expect(items).toEqual(["Pokey: 12 short (you have 288 of 300)", "D.A.V.E.: 6 short (you have 2 of 8)"]);
+    expect(items).toEqual(["Pokey: 12 short", "D.A.V.E.: 6 short"]);
     expect(modal.querySelectorAll(".auto-attack__missing img")).toHaveLength(2);
     expect(modal.querySelector(".auto-attack__moves")).toBeNull();
     expect(button(modal, "Attack now")?.disabled).toBe(true);
@@ -239,15 +239,30 @@ describe("Smart Repeat attack's prompt (owner, 16 Nov 2026)", () => {
       }),
     );
     const shown = text(modal);
-    expect(shown).toContain("Not enough Monster Housing in range to move your army in.");
+    expect(shown).toContain("Not enough Monster Housing in range.");
     expect(shown).not.toContain("short");
-    expect(shown).toContain("Needs 1,840 housing space");
+    expect(shown).toContain("Monsters moving in need 1,840 space");
     expect([...modal.querySelectorAll(".auto-attack__room li")].map((row) => row.textContent)).toEqual([
       "Outpost242, 20840 free",
       "Main yard250, 200300 free",
     ]);
     expect(button(modal, "Attack now")?.disabled).toBe(true);
     expect(button(modal, "Move and attack")).toBeUndefined();
+  });
+
+  it("Move and attack refused for room: the refusal shows the space needed and each yard's room", async () => {
+    const modal = document.createElement("div");
+    const refused = new ApiError("Not enough Monster Housing in range.", {
+      status: 409,
+      details: { data: { reason: "noRoom", noRoom: { need: 900, free: [{ baseid: NEAR, free: 40 }] }, yards: MOVES.yards } } as never,
+    });
+    const flow = new AutoAttackFlow({ baseid: BASEID, modal, onWatch: vi.fn(), calls: calls({ run: vi.fn(async () => Promise.reject(refused)) }) });
+    await flow.start(answer(MOVES));
+    button(modal, "Move and attack")!.click();
+    await settle();
+    expect(text(modal)).toContain("Not enough Monster Housing in range.");
+    expect(text(modal)).toContain("Monsters moving in need 900 space");
+    expect([...modal.querySelectorAll(".auto-attack__room li")].map((row) => row.textContent)).toEqual(["Outpost242, 20840 free"]);
   });
 
   it("the result says what moved in first", async () => {
@@ -373,7 +388,7 @@ describe("the camp panel's Repeat attack", () => {
     control.setCell(CELL, campCell());
     await settle();
     expect(control.button.disabled).toBe(true);
-    expect(control.detail.textContent).toContain("Not enough Monster Housing in range to move your army in.");
+    expect(control.detail.textContent).toContain("Not enough Monster Housing in range.");
   });
 
   it("greys out with exactly what is missing", async () => {

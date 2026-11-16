@@ -537,7 +537,8 @@ describe("autoAttackPlanFor", () => {
     const answer = await autoAttackPlanFor(user() as never, CAMP);
     expect(answer.missing).toEqual([]);
     expect(answer.moves).toEqual([]);
-    expect(answer.noRoom).toEqual({ need: 1_500, free: [{ baseid: HOME, free: 0 }] });
+    // (A yard with no Monster Housing at all is not listed.)
+    expect(answer.noRoom).toEqual({ need: 1_500, free: [] });
 
     const refused = await refusal(runAutoAttack(user() as never, CAMP));
     expect(refused.reason).toBe("noRoom");
@@ -559,7 +560,7 @@ describe("autoAttackPlanFor", () => {
     const answer = await autoAttackPlanFor(user() as never, CAMP);
     // The other 50 would have to move in from the main yard, and the outpost has no housing.
     expect(answer.missing).toEqual([]);
-    expect(answer.noRoom).toEqual({ need: 500, free: [{ baseid: "1000242208", free: 0 }] });
+    expect(answer.noRoom).toEqual({ need: 500, free: [] });
   });
 
   test("a camp no Flinger reaches says so, so Repeat attack is refused", async () => {
@@ -696,6 +697,8 @@ describe("Smart Repeat attack: moves into the yards in range", () => {
     split();
     expect(JSON.stringify((await autoAttackPlanFor(user() as never, CAMP)).moves)).not.toContain('"t"');
     userSave.champion = [{ t: 5, l: 5, hp: 62000, status: 1 }];
+    // Refused anyway, so no moves are offered.
+    expect(await autoAttackPlanFor(user() as never, CAMP)).toMatchObject({ moves: [], movesKey: null });
     const refused = await refusal(runAutoAttack(user() as never, CAMP, `${FAR}>${HOME}:C1=90`));
     expect(refused.reason).toBe("missing");
     expect(refused.missing).toEqual([{ kind: "champion", t: 5, reason: "away" }]);

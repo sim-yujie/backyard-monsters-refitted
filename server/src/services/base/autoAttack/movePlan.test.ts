@@ -233,6 +233,15 @@ describe("planMoves", () => {
     });
   });
 
+  test("a yard in range with no Monster Housing at all is not named in the refusal", () => {
+    const plan = planMoves(
+      { C1: 50 },
+      [yard("main", { main: true, housed: { C1: 50 } }), yard("bare", { reaches: true, capacity: 0 }), yard("near", { reaches: true, capacity: 20 })],
+      sizeOf,
+    );
+    expect(plan).toEqual({ kind: "housing", need: 50, free: [{ baseid: "near", free: 20 }] });
+  });
+
   test("no yard in range: every move would have nowhere to go", () => {
     const plan = planMoves({ C1: 5 }, [yard("main", { main: true, housed: { C1: 5 } })], sizeOf);
     expect(plan).toEqual({ kind: "housing", need: 5, free: [] });
