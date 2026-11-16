@@ -2718,10 +2718,49 @@
     justify-content: center;
   }
 
-  /* A request: name and time on one line, the swap and Accept on the next. */
+  /* Today: icon and number on one line, the word under them, so three stats fit across. */
+  .trade-today__stat {
+    flex-wrap: wrap;
+    gap: 0 var(--space-1);
+    padding: var(--space-1);
+  }
+
+  .trade-today__w {
+    flex-basis: 100%;
+    text-align: center;
+  }
+
+  /* A request: name and time on one line, the swap and Accept on the next, the reason under.
+     (Placed by area: by order alone the name fell into a squeezed first column under the swap.) */
   .trade-request,
   .trade-request--mine {
     grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-areas:
+      "who time"
+      "swap act"
+      "why why";
+  }
+
+  .trade-request__who {
+    grid-area: who;
+  }
+
+  .trade-request > .trade-swap {
+    grid-area: swap;
+  }
+
+  .trade-request__time {
+    grid-area: time;
+    justify-self: end;
+  }
+
+  .trade-request__act,
+  .trade-request__given {
+    grid-area: act;
+  }
+
+  .trade-request__why {
+    grid-area: why;
   }
 
   .trade-amount__box {
