@@ -371,10 +371,17 @@ export class AutoAttackFlow {
     this.stopCues = [];
     for (const list of root.querySelectorAll<HTMLElement>(".auto-attack__moves, .auto-attack__missing, .auto-attack__room")) {
       this.stopCues.push(watchMoreBelow(list, "auto-attack__list--more"));
-      requestAnimationFrame(() => {
+      // Measured once laid out, and again whenever something that sizes the
+      // sheet arrives late: a portrait, the fonts, a new screen size.
+      const refit = () => {
         fitWholeRows(list);
         list.dispatchEvent(new Event("scroll"));
-      });
+      };
+      requestAnimationFrame(refit);
+      for (const image of root.querySelectorAll("img")) image.addEventListener("load", refit, { once: true });
+      void document.fonts?.ready.then(() => requestAnimationFrame(refit));
+      window.addEventListener("resize", refit);
+      this.stopCues.push(() => window.removeEventListener("resize", refit));
     }
   }
 

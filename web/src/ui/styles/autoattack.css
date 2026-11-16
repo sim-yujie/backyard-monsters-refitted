@@ -610,12 +610,30 @@
     display: none;
   }
 
+  /* Room for the third row whole, border and corners included, with a gap
+     before the footer (lead's vetting: it was cut by about 1px). */
+  .auto-attack__footer {
+    padding-top: var(--space-2);
+  }
+
+  .auto-attack--moves .auto-attack__scroll {
+    gap: var(--space-1);
+  }
+
+  .auto-attack--moves .attack-end__outcome {
+    font-size: var(--text-md);
+  }
+
+  .attack-end.auto-attack--moves > .panel__body {
+    padding-bottom: max(var(--space-3), env(safe-area-inset-bottom));
+  }
+
   .auto-attack__moves {
     gap: var(--space-1);
   }
 
-  .auto-attack__move {
-    padding-block: var(--space-1);
+  .auto-attack--moves .auto-attack__moves > .auto-attack__move {
+    padding-block: calc(var(--space-1) / 2);
   }
 
   .auto-attack__move .auto-attack__portrait {
@@ -648,4 +666,10 @@
     border: 1px solid var(--colour-border);
     border-radius: var(--radius-lg);
   }
+}
+
+/* The move rows' borders sit clear of the list's top and bottom edges at
+   every size (measured in the browser, lead's vetting 16 Nov). */
+.auto-attack--moves .auto-attack__scroll > .auto-attack__moves {
+  padding-block: calc(var(--space-1) / 2);
 }

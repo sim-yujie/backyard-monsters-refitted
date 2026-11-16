@@ -21,20 +21,23 @@
 export const fitWholeRows = (list: HTMLElement): void => {
   list.style.removeProperty("max-height");
   list.style.removeProperty("min-height");
-  const visible = list.clientHeight;
-  if (visible <= 0 || list.scrollHeight <= visible + 1) return;
-  const top = list.getBoundingClientRect().top - list.scrollTop;
+  // Fractional, as the rows' edges are (clientHeight rounds down).
+  const box = list.getBoundingClientRect();
+  const visible = box.height;
+  if (visible <= 0) return;
+  const top = box.top - list.scrollTop;
+  const ends = ([...list.children] as HTMLElement[]).map((row) => row.getBoundingClientRect().bottom - top);
+  // Every row whole, border included (measured, not rounded: a 1px cut shows).
+  if (ends.every((end) => end <= visible + 0.25)) return;
   let bottom = 0;
-  for (const row of [...list.children] as HTMLElement[]) {
-    const rect = row.getBoundingClientRect();
-    const end = rect.bottom - top;
-    if (end > visible + 0.5) break;
+  for (const end of ends) {
+    if (end > visible + 0.25) break;
     bottom = end;
   }
   // Not even one whole row fits: leave the list as the layout made it.
   if (bottom <= 0) return;
   const padding = parseFloat(getComputedStyle(list).paddingBottom) || 0;
-  const height = `${Math.floor(bottom + padding)}px`;
+  const height = `${Math.ceil(bottom + padding)}px`;
   list.style.maxHeight = height;
   list.style.minHeight = height;
 };
