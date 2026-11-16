@@ -12,13 +12,12 @@ import { logger } from "../../../utils/logger.js";
 import { baseModeAttack } from "../../../controllers/base/load/modes/baseModeAttack.js";
 import { playerMapVersion } from "../../maproom/playerMapVersion.js";
 import { calculateTribeLevel } from "../../maproom/v2/calculateTribeLevel.js";
-import { cellCoordsFromBaseId, outpostsNearCell, type CellCoords } from "../../maproom/v2/rangeCheck.js";
+import { ownYardsInReach } from "../../maproom/v2/ownYardsInReach.js";
+import { cellCoordsFromBaseId, type CellCoords } from "../../maproom/v2/rangeCheck.js";
 import { TAKEOVER_DAMAGE } from "../../maproom/v2/takeoverRules.js";
 import { rangeCheckV2 } from "../../maproom/v2/validateRange.js";
 import { isWildMonsterExpired } from "../../maproom/wildMonsterExpiry.js";
 import { isCampInPlay } from "../../maproom/campInPlay.js";
-import { catchUpArmyRow } from "../../yard/armies.js";
-import { countsOf, type EntryHoused } from "../../yard/attackRoster.js";
 import { newCheckpoint } from "../attackCheckpoint.js";
 import { storeCheckpoint } from "../attackCheckpointStore.js";
 import { readAttackSession } from "../attackSessionStore.js";
@@ -40,6 +39,15 @@ import {
   type PlanShortfall,
 } from "./attackPlan.js";
 import { findAttackPlan, type StoredPlan } from "./attackPlanStore.js";
+import { movesKey, planMoves, type MovePlan, type YardMove } from "./movePlan.js";
+import {
+  labelsOf,
+  makeRepeatMoves,
+  repeatYardsFor,
+  sizeOfFor,
+  undoRepeatMoves,
+  type YardLabel,
+} from "./repeatMoves.js";
 
 /**
  * Auto-attack (issue #221): the player's last hand-played attack on a Map
@@ -105,37 +113,69 @@ const campOf = async (userSave: Save, baseid: string, now: number): Promise<Camp
   return { baseid, cell, key, row: null, expired: false };
 };
 
-/**
- * What each of the player's yards that can fling at the cell houses now: the
- * main yard and the outposts near it, each caught up to now without writing,
- * as the attack load's `catchUpArmiesForAttack` will then write it.
- */
-const housedFor = async (user: User, cell: CellCoords, now: number): Promise<EntryHoused> => {
-  const userSave = user.save!;
-  const housed: EntryHoused = {
-    [userSave.baseid]: countsOf(catchUpArmyRow(userSave, userSave, now).monsters?.housed),
-  };
-  const near = outpostsNearCell(cell, userSave.outposts ?? []);
-  if (near.length === 0) return housed;
-  const outposts = await postgres.em.find(Save, {
-    baseid: { $in: near.map((outpost) => outpost.baseid) },
-    saveuserid: user.userid,
-  });
-  for (const outpost of outposts) {
-    housed[outpost.baseid] = countsOf(catchUpArmyRow(outpost, userSave, now).monsters?.housed);
-  }
-  return housed;
-};
+/** What the attacker has for a plan now, and what has to move first. */
+interface Assessment {
+  /** What they lack: monsters even counting every yard, and champions and bombs. */
+  readonly missing: PlanShortfall[];
+  /** The planner's verdict (`movePlan.ts`). */
+  readonly move: MovePlan;
+  /** The yards whose own Flinger reaches the camp. */
+  readonly reaching: readonly string[];
+  /** Where the yards the verdict names sit. */
+  readonly yards: Record<string, YardLabel>;
+}
 
-/** What the attacker lacks for a plan right now. */
-const shortfallOf = async (user: User, camp: Camp, stored: StoredPlan, now: number): Promise<PlanShortfall[]> => {
+/**
+ * What the attacker lacks for a plan right now, and the moves that would
+ * gather its monsters into the yards in range (Smart Repeat attack, owner,
+ * 16 Nov 2026).
+ *
+ * Only the yards whose own flinger reaches the camp can fling at it
+ * (`ownYardsInReach`, the cells the Attack window sums), each caught up to
+ * now without writing, as the attack load's `catchUpArmiesForAttack` will
+ * then write it. What they lack may move in from the player's other yards
+ * (`planMoves`); a monster is missing only when every yard together lacks it.
+ * Champions and bombs are the main yard's, as before.
+ */
+const assess = async (user: User, camp: Camp, stored: StoredPlan, now: number): Promise<Assessment> => {
   const userSave = user.save!;
-  return planShortfall(planNeeds(stored.plan), {
-    housed: await housedFor(user, camp.cell, now),
+  const reaching = await ownYardsInReach(user, camp.cell);
+  const yards = await repeatYardsFor(user, reaching, now);
+  const needs = planNeeds(stored.plan);
+  const housed = Object.fromEntries(yards.filter((yard) => yard.reaches).map((yard) => [yard.baseid, { ...yard.housed }]));
+  const others = planShortfall(needs, {
+    housed,
     champions: userSave.champion as OwnedChampion[] | null,
     catapultLevel: catapultLevelOf(userSave),
     resources: userSave.resources as Record<string, number> | null,
-  });
+  }).filter((item) => item.kind !== "monster");
+  const move = planMoves(needs.monsters, yards, sizeOfFor(userSave));
+  const monsters: PlanShortfall[] =
+    move.kind === "short" ? move.short.map((item) => ({ kind: "monster", id: item.id, need: item.need, have: item.have })) : [];
+  return { missing: [...monsters, ...others], move, reaching, yards: labelsOf(yards, move) };
+};
+
+/** No room in range for the monsters that would have to move in. */
+export interface NoRoom {
+  /** Housing space the monsters that must move in take. */
+  readonly need: number;
+  /** Free housing in each yard in range that could take them. */
+  readonly free: readonly { readonly baseid: string; readonly free: number }[];
+}
+
+/** The moves, their key, and the housing verdict, as the answers carry them. */
+const movesPart = (assessed: Assessment) => {
+  // Nothing moves for an attack refused anyway (a champion not ready, say).
+  const moves = assessed.move.kind === "moves" && assessed.missing.length === 0 ? assessed.move.moves : [];
+  return {
+    moves,
+    movesKey: moves.length > 0 ? movesKey(moves) : null,
+    noRoom:
+      assessed.move.kind === "housing" && assessed.missing.length === 0
+        ? ({ need: assessed.move.need, free: assessed.move.free } satisfies NoRoom)
+        : null,
+    yards: assessed.yards,
+  };
 };
 
 /** A plan as the panels describe it. */
@@ -179,6 +219,17 @@ export interface PlanAnswer {
   readonly plan: PlanSummary | null;
   /** What the attacker lacks for it: empty when they have everything. */
   readonly missing: readonly PlanShortfall[];
+  /**
+   * Monsters to move into the yards in range first (Smart Repeat attack):
+   * empty when those yards already hold the army, or when it is refused.
+   */
+  readonly moves: readonly YardMove[];
+  /** The moves' key, sent back with "Move and attack"; null without moves. */
+  readonly movesKey: string | null;
+  /** The army could be gathered but the yards in range cannot house it; null otherwise. */
+  readonly noRoom: NoRoom | null;
+  /** Where each yard `moves` and `noRoom` name sits. */
+  readonly yards: Readonly<Record<string, YardLabel>>;
   /** The camp is out of the reach of every Flinger the player has. */
   readonly outOfRange: boolean;
   /** Someone is attacking the camp right now. */
@@ -203,13 +254,16 @@ export const autoAttackPlanFor = async (user: User, baseid: string): Promise<Pla
   const stored = await findAttackPlan(user.userid, camp.key);
   const underAttack = camp.row !== null && !camp.expired && isAttackActive(camp.row);
   const damage = camp.row && !camp.expired ? (camp.row.damage ?? 0) : 0;
-  if (!stored) return { baseid, plan: null, missing: [], outOfRange: false, underAttack, damage };
+  const none = { moves: [], movesKey: null, noRoom: null, yards: {} };
+  if (!stored) return { baseid, plan: null, missing: [], ...none, outOfRange: false, underAttack, damage };
 
   const { verdict } = await rangeCheckV2(user, { baseid, cell: camp.cell });
+  const assessed = await assess(user, camp, stored, now);
   return {
     baseid,
     plan: summaryOf(camp.key, stored, userSave.champion as OwnedChampion[] | null),
-    missing: await shortfallOf(user, camp, stored, now),
+    // Out of range nothing can move in, so only what no yard has is named.
+    ...(verdict.ok ? { missing: assessed.missing, ...movesPart(assessed) } : { missing: assessed.missing, ...none }),
     outOfRange: !verdict.ok,
     underAttack,
     damage,
@@ -239,6 +293,10 @@ export interface AutoAttackResult {
   readonly report: string;
   /** The plan this repeated, for Repeat again. */
   readonly plan: PlanSummary;
+  /** Monsters moved into the yards in range before the attack (Smart Repeat attack). */
+  readonly moved: readonly YardMove[];
+  /** Where each yard `moved` names sits. */
+  readonly yards: Readonly<Record<string, YardLabel>>;
 }
 
 /** A 32-bit seed for the new battle; a plan's is never reused. */
@@ -248,14 +306,24 @@ const mintSeed = (): number => crypto.getRandomValues(new Uint32Array(1))[0] ?? 
  * Runs one auto-attack (see the file comment). The caller has rate-limited
  * the request and checked the Discord age rule.
  *
+ * Smart Repeat attack (owner, 16 Nov 2026): when the yards in range lack
+ * monsters the player's other yards hold, the moves are made first, in one
+ * transaction, but only when `acceptedMoves` is the key of exactly the moves
+ * the server works out now (the prompt the player agreed to). Every check that
+ * writes nothing runs before them; should the attack load still refuse after
+ * the moves were written, they are put back ({@link undoRepeatMoves}), so a
+ * refused attack leaves no move behind.
+ *
  * @param user - The player, as the request authenticated them.
  * @param baseid - The camp.
+ * @param acceptedMoves - The `movesKey` of the moves the player agreed to, if any.
  * @throws {ClientSafeError} `autoAttackRefusedErr` for every refusal, before
- *   anything is written; `baseUnderAttackErr` when someone else is attacking
+ *   anything is written (`movesChanged` when the moves needed are not the
+ *   ones agreed to); `baseUnderAttackErr` when someone else is attacking
  *   the camp; `attackResultPendingErr` when the replay ran past its deadline
  *   (the attack then lands from its checkpoint).
  */
-export const runAutoAttack = async (user: User, baseid: string): Promise<AutoAttackResult> => {
+export const runAutoAttack = async (user: User, baseid: string, acceptedMoves?: string): Promise<AutoAttackResult> => {
   const userid = user.userid;
   const locked = await redis.set(autoAttackLockKey(userid), "1", "EX", String(AUTO_ATTACK_LOCK_SECONDS), "NX");
   if (locked !== "OK") throw autoAttackRefusedErr("inFlight");
@@ -284,30 +352,48 @@ export const runAutoAttack = async (user: User, baseid: string): Promise<AutoAtt
     const { verdict } = await rangeCheckV2(user, { baseid, cell: camp.cell });
     if (!verdict.ok) throw autoAttackRefusedErr("outOfRange");
 
-    const missing = await shortfallOf(user, camp, stored, now);
-    if (missing.length > 0) throw autoAttackRefusedErr("missing", { missing });
+    const assessed = await assess(user, camp, stored, now);
+    if (assessed.missing.length > 0) throw autoAttackRefusedErr("missing", { missing: assessed.missing });
+    const part = movesPart(assessed);
+    if (part.noRoom) throw autoAttackRefusedErr("noRoom", { noRoom: part.noRoom, yards: part.yards });
+    // Moves the player has not agreed to are never made: the web asks again.
+    if (part.movesKey !== null && part.movesKey !== acceptedMoves) throw autoAttackRefusedErr("movesChanged");
 
     release = await reserveReplaySlot();
     if (!release) throw autoAttackRefusedErr("busy");
 
-    // A regenerated camp is a fresh one, as opening it renews it
-    // (`baseModeView.ts`): the old row goes, and the attack load below gives
-    // the camp a new one, as it does a camp attacked for the first time.
-    if (camp.row && camp.expired) {
-      postgres.em.remove(camp.row);
-      await postgres.em.flush();
-    }
+    const moved =
+      part.movesKey === null
+        ? []
+        : await makeRepeatMoves(user, planNeeds(stored.plan).monsters, assessed.reaching, part.movesKey, now);
 
-    // Past this point the attack is committed, as a hand-played one is once
-    // its load returns: the camp is under attack and the session is minted.
-    const { save, defenderForces } = await baseModeAttack({
-      user,
-      baseid,
-      mapversion: MapRoomVersion.V2,
-      attackerLevel: playerLevelOf(userSave),
-    });
-    const session = await readAttackSession(save.basesaveid);
-    if (!session?.entryHoused) throw autoAttackRefusedErr("failed");
+    let save: Save;
+    let defenderForces: Awaited<ReturnType<typeof baseModeAttack>>["defenderForces"];
+    let session: Awaited<ReturnType<typeof readAttackSession>>;
+    try {
+      // A regenerated camp is a fresh one, as opening it renews it
+      // (`baseModeView.ts`): the old row goes, and the attack load below gives
+      // the camp a new one, as it does a camp attacked for the first time.
+      if (camp.row && camp.expired) {
+        postgres.em.remove(camp.row);
+        await postgres.em.flush();
+      }
+
+      // Past this point the attack is committed, as a hand-played one is once
+      // its load returns: the camp is under attack and the session is minted.
+      ({ save, defenderForces } = await baseModeAttack({
+        user,
+        baseid,
+        mapversion: MapRoomVersion.V2,
+        attackerLevel: playerLevelOf(userSave),
+      }));
+      session = await readAttackSession(save.basesaveid);
+      if (!session?.entryHoused) throw autoAttackRefusedErr("failed");
+    } catch (err) {
+      // No attack to fling them in: the moves go back where they came from.
+      if (moved.length > 0) await undoRepeatMoves(user, moved, now);
+      throw err;
+    }
 
     const log = planLog(stored.plan, mintSeed(), userSave.champion as OwnedChampion[] | null);
     await storeCheckpoint(
@@ -371,6 +457,8 @@ export const runAutoAttack = async (user: User, baseid: string): Promise<AutoAtt
       bombs,
       report: outcome.attackreport,
       plan: summaryOf(camp.key, stored, userSave.champion as OwnedChampion[] | null),
+      moved,
+      yards: assessed.yards,
     };
 
     logger.info("Auto-attack by {username} on camp {baseid}: {damageBefore}% to {damageAfter}%", {
@@ -386,6 +474,7 @@ export const runAutoAttack = async (user: User, baseid: string): Promise<AutoAtt
       loot: credited,
       flung: outcome.flung,
       bombs,
+      ...(moved.length > 0 && { moved }),
     });
 
     return result;

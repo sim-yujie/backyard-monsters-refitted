@@ -1,7 +1,8 @@
 import type { AutoAttackPlanResponse } from "@/api/autoAttack";
 import { CellType, isFogCell, isWaterCell, type MapCell } from "@/api/types";
 import type { OffsetCell } from "@/game/HexGrid";
-import { noPlanText, planSourceText, repeatRefusal, shortfallText } from "@/ui/attack/autoAttackText";
+import { movesLineText, noPlanText, planSourceText, repeatRefusal } from "@/ui/attack/autoAttackText";
+import { missingList, roomList } from "@/ui/attack/AutoAttackFlow";
 import { el, icon } from "@/ui/maproom1/icons";
 import type { CellPanelAction } from "./CellPanel";
 import "@/ui/styles/autoattack.css";
@@ -9,7 +10,7 @@ import "@/ui/styles/autoattack.css";
 /**
  * The map cell panel's Repeat attack (issue #221): on a Map Room 2 wild camp,
  * a button under Attack that repeats the player's last attack played by hand
- * on a camp of the same tribe and level, and a line under the actions saying
+ * on a camp of the same tribe and level, and a line under its button saying
  * which attack it repeats, or why it cannot run and exactly what is missing.
  *
  * It asks the server (`POST /worldmapv2/autoattackplan`) whenever the cell or
@@ -65,7 +66,7 @@ export class AutoAttackControl implements CellPanelAction {
     this.button.addEventListener("click", () => this.repeat());
 
     this.line = el("span", "auto-attack-action__line");
-    this.missing = document.createElement("ul");
+    this.missing = document.createElement("div");
     this.missing.className = "auto-attack-action__missing";
     this.detail = document.createElement("div");
     this.detail.className = "auto-attack-action";
@@ -134,6 +135,7 @@ export class AutoAttackControl implements CellPanelAction {
     this.missing.replaceChildren();
     this.missing.hidden = true;
     this.detail.classList.remove("auto-attack-action--refused");
+    this.detail.querySelector(".auto-attack-action__history")?.remove();
 
     if (!camp || state.status === "none" || state.status === "failed") {
       this.button.hidden = true;
@@ -162,15 +164,21 @@ export class AutoAttackControl implements CellPanelAction {
     this.button.disabled = refusal !== null;
     this.button.title = refusal ?? source;
     this.button.setAttribute("aria-label", `Repeat attack. ${refusal ?? source}`);
-    this.line.textContent = refusal ? `${source}. ${refusal}` : `${source}.`;
+    // Smart Repeat attack: monsters move into the yards in range first.
+    const moves = answer.moves?.length ?? 0;
+    this.line.textContent = refusal
+      ? repeatRefusal(answer, "panel")
+      : moves > 0
+        ? `${source}. ${movesLineText(moves)}.`
+        : `${source}.`;
     if (refusal) {
       this.detail.classList.add("auto-attack-action--refused");
-      for (const item of answer.missing) {
-        const row = document.createElement("li");
-        row.textContent = shortfallText(item);
-        this.missing.append(row);
-      }
-      this.missing.hidden = answer.missing.length === 0;
+      // Smart Repeat attack (astra): show the same portraits and housing facts as the sheet.
+      if (answer.missing.length > 0) this.missing.append(missingList(answer.missing));
+      else this.missing.append(...roomList(answer));
+      this.missing.hidden = this.missing.children.length === 0;
+      // Smart Repeat attack (astra): explain the saved attack before its refusal.
+      this.detail.prepend(el("p", "auto-attack-action__history", source));
     }
   }
 

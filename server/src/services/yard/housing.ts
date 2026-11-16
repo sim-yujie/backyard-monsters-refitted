@@ -1,6 +1,7 @@
 import type { BuildingDataMap, BuildingHealthData } from "../../types/BuildingData.js";
 import type { JsonObject } from "../../types/JsonObject.js";
 import {
+  HOUSING_EXPANSION_ITEMS,
   deriveHousingCapacity,
   housingUsed,
 } from "../monsters/transferRules.js";
@@ -91,4 +92,48 @@ export const cullHousing = (
   }
 
   return { housed: kept, culled };
+};
+
+/**
+ * Whether the Housing Expansion power-up is running on a save
+ * (`EXH`/`EXHI` in `Save.storedata`, `client/scripts/STORE.as:2419-2431`).
+ *
+ * @param {JsonObject | null | undefined} storeData - A save's `storedata`
+ * @param {number} now - Current unix seconds
+ * @returns {boolean} True while the power-up is active
+ */
+export const housingExpansionActive = (
+  storeData: JsonObject | null | undefined,
+  now: number
+): boolean =>
+  HOUSING_EXPANSION_ITEMS.some((item) => Number(storeData?.[item]?.e ?? 0) > now);
+
+/**
+ * The caller's Monster Academy level per monster id, which is what decides a
+ * monster's `cStorage` (`CREATURES.GetProperty`, `client/scripts/CREATURES.as:68-77`).
+ *
+ * An outpost's own `academy` column is usually empty while the levels really
+ * live on the main yard, so the highest level found across the saves wins. Only
+ * `C1`'s housing space varies by level and it shrinks as the level rises, so
+ * reading high is the reading that never over-measures an honest army.
+ *
+ * @param {(JsonObject | null | undefined)[]} academies - `Save.academy` from each save involved
+ * @returns {Record<string, number>} Academy level per monster id
+ */
+export const highestAcademyLevels = (
+  academies: (JsonObject | null | undefined)[]
+): Record<string, number> => {
+  const levels: Record<string, number> = {};
+
+  for (const academy of academies) {
+    if (!academy) continue;
+
+    for (const [id, entry] of Object.entries(academy)) {
+      const level = Math.floor(Number((entry as JsonObject | null)?.level ?? 0));
+
+      if (Number.isFinite(level) && level > (levels[id] ?? 0)) levels[id] = level;
+    }
+  }
+
+  return levels;
 };

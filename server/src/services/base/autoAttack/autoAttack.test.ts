@@ -61,7 +61,11 @@ const PLAN = {
 
 let camp: Record<string, any>;
 let userSave: Record<string, any>;
+/** The attacker's outposts, as `em.find` serves them. */
+let outpostRows: Record<string, any>[];
 let planRow: Record<string, any> | null;
+/** Transactions run (Smart Repeat attack's moves and their undo). */
+let transactions = 0;
 const flush = mock(async () => {});
 const upsert = mock(async () => {});
 const mint = mock(async () => {});
@@ -94,8 +98,14 @@ const reset = () => {
   userSave = {
     basesaveid: 6,
     baseid: HOME,
+    type: "main",
+    attackid: 0,
+    attacks: [],
     worldid: WORLD,
     mapversion: 2,
+    // The camp's next-door cell; a level 4 Flinger reaches ten cells.
+    homebase: ["241", "207"],
+    flinger: 4,
     catapult: 2,
     buildingdata: {},
     outposts: [],
@@ -105,6 +115,7 @@ const reset = () => {
     champion: [{ t: 5, l: 5, hp: 62000, status: 0 }],
     siege: null,
   };
+  outpostRows = [];
   planRow = { userid: ATTACKER, wmid: 11, level: 35, slot: "last", baseid: "1000240208", plan: PLAN, recorded_at: new Date() };
 };
 reset();
@@ -125,9 +136,13 @@ mock.module("../../../server.js", () => ({
         }
         // The attacker's main row, locked with the camp's as the attack lands (audit P1, P2).
         if (where.basesaveid === userSave.basesaveid) return userSave;
+        // An outpost, locked as Repeat attack's moves are made (Smart Repeat attack).
+        const outpost = outpostRows.find((row) => row.basesaveid === where.basesaveid);
+        if (outpost) return outpost;
         return where.basesaveid === BASESAVEID || where.baseid === camp.baseid ? camp : null;
       },
-      find: async () => [],
+      find: async (_entity: unknown, where: { baseid?: { $in?: string[] } }) =>
+        outpostRows.filter((row) => where?.baseid?.$in?.includes(row.baseid)),
       populate: async () => {},
       persist: () => {},
       remove: removeRow,
@@ -139,6 +154,21 @@ mock.module("../../../server.js", () => ({
       commit: async () => {},
       rollback: async () => {},
       getTransactionContext: () => undefined,
+      // Smart Repeat attack's moves: the stand-in rows change in place, so a
+      // refused transaction is rolled back by putting back a copy.
+      transactional: async (cb: (em: unknown) => Promise<unknown>) => {
+        const before = structuredClone({ main: userSave.monsters, outposts: outpostRows.map((row) => row.monsters) });
+        const em = (await import("../../../server.js")).postgres.em;
+        try {
+          return await cb(em);
+        } catch (err) {
+          userSave.monsters = before.main;
+          outpostRows.forEach((row, index) => (row.monsters = before.outposts[index]));
+          throw err;
+        } finally {
+          transactions += 1;
+        }
+      },
     },
   },
 }));
@@ -226,6 +256,7 @@ mock.module("../../../controllers/base/load/modes/baseModeAttack.js", () => ({
   baseModeAttack: async (...args: Parameters<typeof realLoad.baseModeAttack>) => {
     if (!standIn) return realLoad.baseModeAttack(...args);
     await mint();
+    if (mintRefuses) throw new Error("the attack load said no");
     camp.attackid = 4242;
     camp.attacks.push({ starttime: now() });
     store.set(
@@ -246,6 +277,8 @@ mock.module("../../../controllers/base/load/modes/baseModeAttack.js", () => ({
 
 const runner = (await import(REAL.runner)) as typeof import("../combat/replayRunner.js");
 let slotFree = true;
+/** The attack load refuses after the checks (Smart Repeat attack's all-or-nothing). */
+let mintRefuses = false;
 mock.module("../combat/replayRunner.js", () => ({
   ...runner,
   reserveReplaySlot: async (...args: Parameters<typeof runner.reserveReplaySlot>) => {
@@ -255,13 +288,37 @@ mock.module("../combat/replayRunner.js", () => ({
 }));
 
 const { runAutoAttack, autoAttackPlanFor, lastAutoAttackReplay, autoAttackLockKey } = await import("./autoAttack.js");
+// The route itself (`POST /worldmapv2/autoattack`, `app.routes.ts`), over the real service and the stand-ins above.
+const { autoAttack: autoAttackRoute } = await import("../../../controllers/maproom/v2/autoAttack.js");
 const { attackCheckpointKey } = await import("../attackCheckpoint.js");
 
 beforeEach(() => {
   reset();
   inRange = true;
   slotFree = true;
+  mintRefuses = false;
+  transactions = 0;
 });
+
+/** One of the attacker's outposts, at a cell with a Flinger level and housing. */
+const addOutpost = (x: number, y: number, flinger: number, housed: Record<string, number>) => {
+  const baseid = `1000${x}${y}`;
+  userSave.outposts = [...userSave.outposts, [x, y, baseid]];
+  outpostRows.push({
+    baseid,
+    basesaveid: 100 + outpostRows.length,
+    saveuserid: ATTACKER,
+    type: "outpost",
+    worldid: WORLD,
+    attackid: 0,
+    attacks: [],
+    flinger,
+    savetime: now(),
+    buildingdata: {},
+    buildinghealthdata: {},
+    monsters: { housed: { ...housed } },
+  });
+};
 
 /** The refusal's reason, from a `ClientSafeError`. */
 const refusal = async (run: Promise<unknown>): Promise<{ reason?: string; missing?: unknown[] } & Record<string, unknown>> => {
@@ -474,6 +531,40 @@ describe("autoAttackPlanFor", () => {
     expect(mint).not.toHaveBeenCalled();
   });
 
+  test("monsters in an outpost whose own Flinger cannot reach the camp are not flung from there (Repeat attack, 15 Nov)", async () => {
+    userSave.monsters.housed = {};
+    // In the sweep box, three cells from the camp; a level 2 outpost Flinger reaches two.
+    addOutpost(244, 208, 2, { C1: 200 });
+    // The main yard in range has no Monster Housing, so they cannot move in either.
+    const answer = await autoAttackPlanFor(user() as never, CAMP);
+    expect(answer.missing).toEqual([]);
+    expect(answer.moves).toEqual([]);
+    // (A yard with no Monster Housing at all is not listed.)
+    expect(answer.noRoom).toEqual({ need: 1_500, free: [] });
+
+    const refused = await refusal(runAutoAttack(user() as never, CAMP));
+    expect(refused.reason).toBe("noRoom");
+    expect(mint).not.toHaveBeenCalled();
+    expect(outpostRows[0]!.monsters.housed).toEqual({ C1: 200 });
+  });
+
+  test("monsters in an outpost that reaches the camp count", async () => {
+    userSave.monsters.housed = {};
+    addOutpost(242, 208, 2, { C1: 200 });
+    expect((await autoAttackPlanFor(user() as never, CAMP)).missing).toEqual([]);
+  });
+
+  test("the main yard's monsters do not count when only an outpost reaches the camp", async () => {
+    // A level 1 main Flinger reaches four cells; the camp is eleven away.
+    userSave.homebase = ["230", "208"];
+    userSave.flinger = 1;
+    addOutpost(242, 208, 2, { C1: 100 });
+    const answer = await autoAttackPlanFor(user() as never, CAMP);
+    // The other 50 would have to move in from the main yard, and the outpost has no housing.
+    expect(answer.missing).toEqual([]);
+    expect(answer.noRoom).toEqual({ need: 500, free: [] });
+  });
+
   test("a camp no Flinger reaches says so, so Repeat attack is refused", async () => {
     inRange = false;
     const answer = await autoAttackPlanFor(user() as never, CAMP);
@@ -489,5 +580,205 @@ describe("autoAttackPlanFor", () => {
   test("a regenerated camp reads as undamaged", async () => {
     camp.savetime = now() - 13 * 60 * 60;
     expect((await autoAttackPlanFor(user() as never, CAMP)).damage).toBe(0);
+  });
+});
+
+/* ── Smart Repeat attack (owner, 16 Nov 2026) ──────────────────────────── */
+
+/** Monster Housing at level 6 (540 each), so a yard can take monsters in. */
+const housing = (count: number) =>
+  Object.fromEntries(Array.from({ length: count }, (_, index) => [`h${index}`, { id: `h${index}`, t: 15, l: 6 }]));
+
+describe("Smart Repeat attack: moves into the yards in range", () => {
+  /** The main yard reaches the camp and has room; an outpost out of reach holds the rest. */
+  const split = () => {
+    userSave.buildingdata = housing(3);
+    userSave.monsters.housed = { C1: 60 };
+    addOutpost(244, 208, 2, { C1: 200 });
+  };
+  const FAR = "1000244208";
+
+  test("the plan answer lists the moves, their key and where each yard sits", async () => {
+    split();
+    const answer = await autoAttackPlanFor(user() as never, CAMP);
+    expect(answer.missing).toEqual([]);
+    expect(answer.noRoom).toBeNull();
+    expect(answer.moves).toEqual([{ from: FAR, to: HOME, monsters: { C1: 90 } }]);
+    expect(answer.movesKey).toBe(`${FAR}>${HOME}:C1=90`);
+    expect(answer.yards).toEqual({ [FAR]: { main: false, x: 244, y: 208 }, [HOME]: { main: true, x: 241, y: 207 } });
+    expect(transactions).toBe(0);
+  });
+
+  test("yards in range that hold the army: no moves, as before", async () => {
+    const answer = await autoAttackPlanFor(user() as never, CAMP);
+    expect(answer).toMatchObject({ missing: [], moves: [], movesKey: null, noRoom: null });
+  });
+
+  test("Move and attack: the moves are made, then the attack spends from the yard in range", async () => {
+    split();
+    const result = await runAutoAttack(user() as never, CAMP, `${FAR}>${HOME}:C1=90`);
+    expect(mint).toHaveBeenCalledTimes(1);
+    expect(result.moved).toEqual([{ from: FAR, to: HOME, monsters: { C1: 90 } }]);
+    expect(result.yards[FAR]).toEqual({ main: false, x: 244, y: 208 });
+    // The outpost gave 90; the main yard had 60 + 90 and flung 150.
+    expect(outpostRows[0]!.monsters.housed).toEqual({ C1: 110 });
+    expect(userSave.monsters.housed.C1 ?? 0).toBe(0);
+    expect(result.flung).toEqual({ C1: 150 });
+  });
+
+  test("never moves without the player's say-so: no key, or another key, is refused and nothing moves", async () => {
+    split();
+    for (const key of [undefined, `${FAR}>${HOME}:C1=80`, "anything"]) {
+      const refused = await refusal(runAutoAttack(user() as never, CAMP, key));
+      expect(refused.reason).toBe("movesChanged");
+    }
+    expect(transactions).toBe(0);
+    expect(mint).not.toHaveBeenCalled();
+    expect(outpostRows[0]!.monsters.housed).toEqual({ C1: 200 });
+    expect(userSave.monsters.housed).toEqual({ C1: 60 });
+  });
+
+  test("the yards changed since the prompt: the server's own plan wins and nothing moves", async () => {
+    split();
+    const key = (await autoAttackPlanFor(user() as never, CAMP)).movesKey!;
+    // A monster hatched in range since: the plan now moves 89, not 90.
+    userSave.monsters.housed = { C1: 61 };
+    const refused = await refusal(runAutoAttack(user() as never, CAMP, key));
+    expect(refused.reason).toBe("movesChanged");
+    expect(outpostRows[0]!.monsters.housed).toEqual({ C1: 200 });
+    expect(mint).not.toHaveBeenCalled();
+  });
+
+  test("all or nothing: the attack load refuses after the moves, and they go back", async () => {
+    split();
+    mintRefuses = true;
+    const refused = await refusal(runAutoAttack(user() as never, CAMP, `${FAR}>${HOME}:C1=90`));
+    expect(refused.message).toBe("the attack load said no");
+    // The moves and their undo: two transactions, and every monster where it was.
+    expect(transactions).toBe(2);
+    expect(outpostRows[0]!.monsters.housed).toEqual({ C1: 200 });
+    expect(userSave.monsters.housed).toEqual({ C1: 60 });
+    expect(store.has(autoAttackLockKey(ATTACKER))).toBe(false);
+  });
+
+  test("no replay worker free: refused before anything moves", async () => {
+    split();
+    slotFree = false;
+    const refused = await refusal(runAutoAttack(user() as never, CAMP, `${FAR}>${HOME}:C1=90`));
+    expect(refused.reason).toBe("busy");
+    expect(transactions).toBe(0);
+    expect(outpostRows[0]!.monsters.housed).toEqual({ C1: 200 });
+  });
+
+  test("not gatherable from every yard: each short type, nothing moves", async () => {
+    userSave.buildingdata = housing(3);
+    userSave.monsters.housed = { C1: 60 };
+    addOutpost(244, 208, 2, { C1: 50 });
+    const answer = await autoAttackPlanFor(user() as never, CAMP);
+    expect(answer.missing).toEqual([{ kind: "monster", id: "C1", need: 150, have: 110 }]);
+    expect(answer.moves).toEqual([]);
+    const refused = await refusal(runAutoAttack(user() as never, CAMP, "x"));
+    expect(refused.reason).toBe("missing");
+    expect(transactions).toBe(0);
+  });
+
+  test("not enough housing in range: its own refusal, with the room each yard has", async () => {
+    userSave.buildingdata = housing(1);
+    userSave.monsters.housed = { C1: 50 };
+    addOutpost(244, 208, 2, { C1: 200 });
+    const answer = await autoAttackPlanFor(user() as never, CAMP);
+    expect(answer.missing).toEqual([]);
+    // 100 Pokey take 1,000; the main yard houses 500 of its 540 already.
+    expect(answer.noRoom).toEqual({ need: 1_000, free: [{ baseid: HOME, free: 40 }] });
+    const refused = await refusal(runAutoAttack(user() as never, CAMP));
+    expect(refused).toMatchObject({ reason: "noRoom", noRoom: answer.noRoom });
+    expect(transactions).toBe(0);
+  });
+
+  test("a champion in the plan never moves; a champion not ready refuses before any move", async () => {
+    split();
+    expect(JSON.stringify((await autoAttackPlanFor(user() as never, CAMP)).moves)).not.toContain('"t"');
+    userSave.champion = [{ t: 5, l: 5, hp: 62000, status: 1 }];
+    // Refused anyway, so no moves are offered.
+    expect(await autoAttackPlanFor(user() as never, CAMP)).toMatchObject({ moves: [], movesKey: null });
+    const refused = await refusal(runAutoAttack(user() as never, CAMP, `${FAR}>${HOME}:C1=90`));
+    expect(refused.reason).toBe("missing");
+    expect(refused.missing).toEqual([{ kind: "champion", t: 5, reason: "away" }]);
+    expect(transactions).toBe(0);
+    expect(outpostRows[0]!.monsters.housed).toEqual({ C1: 200 });
+  });
+
+  test("an outpost under attack sends nothing", async () => {
+    split();
+    outpostRows[0]!.attackid = 9;
+    outpostRows[0]!.attacks = [{ starttime: now() }];
+    const answer = await autoAttackPlanFor(user() as never, CAMP);
+    expect(answer.missing).toEqual([{ kind: "monster", id: "C1", need: 150, have: 60 }]);
+    expect(answer.moves).toEqual([]);
+  });
+});
+
+describe("POST /worldmapv2/autoattack with moves (Smart Repeat attack, the route)", () => {
+  const FAR = "1000244208";
+  const KEY = `${FAR}>${HOME}:C1=90`;
+  const split = () => {
+    userSave.buildingdata = housing(3);
+    userSave.monsters.housed = { C1: 60 };
+    addOutpost(244, 208, 2, { C1: 200 });
+  };
+  /** Calls the controller as the router does, with the body the web client posts. */
+  const post = async (body: Record<string, unknown>, meetsDiscordAgeCheck = true) => {
+    const ctx = { request: { body }, authUser: user(), meetsDiscordAgeCheck, status: 0, body: undefined as unknown };
+    await autoAttackRoute(ctx as never, async () => {});
+    return ctx;
+  };
+  const refusalOf = async (body: Record<string, unknown>) => {
+    try {
+      await post(body);
+    } catch (err) {
+      return { ...((err as { data?: object }).data ?? {}), message: (err as Error).message } as Record<string, unknown>;
+    }
+    throw new Error("expected a refusal");
+  };
+
+  test("the key of the moves shown: the moves are made and the attack lands", async () => {
+    split();
+    const ctx = await post({ baseid: CAMP, moves: KEY });
+    expect(ctx.status).toBe(200);
+    expect(ctx.body).toMatchObject({ error: 0, moved: [{ from: FAR, to: HOME, monsters: { C1: 90 } }], flung: { C1: 150 } });
+    expect(outpostRows[0]!.monsters.housed).toEqual({ C1: 110 });
+  });
+
+  test("no key or another key: movesChanged, nothing moved, nothing minted", async () => {
+    split();
+    expect((await refusalOf({ baseid: CAMP })).reason).toBe("movesChanged");
+    expect((await refusalOf({ baseid: CAMP, moves: `${FAR}>${HOME}:C1=91` })).reason).toBe("movesChanged");
+    expect(transactions).toBe(0);
+    expect(mint).not.toHaveBeenCalled();
+    expect(outpostRows[0]!.monsters.housed).toEqual({ C1: 200 });
+  });
+
+  test("all or nothing: the attack load refuses after the moves, and the route leaves every yard as it was", async () => {
+    split();
+    mintRefuses = true;
+    expect((await refusalOf({ baseid: CAMP, moves: KEY })).message).toBe("the attack load said no");
+    expect(transactions).toBe(2);
+    expect(outpostRows[0]!.monsters.housed).toEqual({ C1: 200 });
+    expect(userSave.monsters.housed).toEqual({ C1: 60 });
+  });
+
+  test("a key that is not a string, or too long, is refused before anything runs", async () => {
+    split();
+    for (const moves of [42, "x".repeat(4_001)]) {
+      await expect(post({ baseid: CAMP, moves })).rejects.toThrow();
+    }
+    expect(transactions).toBe(0);
+    expect(mint).not.toHaveBeenCalled();
+  });
+
+  test("the Discord age rule still applies", async () => {
+    split();
+    await expect(post({ baseid: CAMP, moves: KEY }, false)).rejects.toThrow(/discord/i);
+    expect(transactions).toBe(0);
   });
 });

@@ -1753,3 +1753,49 @@
     display: none;
   }
 }
+
+/* Smart Repeat attack (astra): the camp's content scrolls inside its frame;
+   its head and close button keep their place. Other cell panels keep their layout. */
+.mr2-cell__repeat-body {
+  display: contents;
+}
+
+.map-dock--right > .mr2-cell--repeat {
+  max-height: inherit;
+}
+
+.mr2-cell--repeat > .mr2-cell__head,
+.mr2-cell--repeat > .mr2-cell__grip {
+  flex: none;
+}
+
+.mr2-cell--repeat > .mr2-cell__repeat-body {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
+  min-height: 0;
+  gap: var(--space-3);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding-bottom: var(--space-4);
+}
+
+.mr2-cell--repeat > .mr2-cell__repeat-body > * {
+  flex: none;
+}
+
+.mr2-cell--repeat .mr2-cell__actions > :is(.auto-attack-action, .takeover-action) {
+  margin: 0 0 var(--space-1);
+}
+
+.mr2-cell--repeat .mr2-cell__actions > .btn {
+  flex: none;
+  min-height: calc(var(--space-6) + var(--space-3));
+}
+
+/* Lead's vetting (16 Nov 2026): while the camp's content has more below, its
+   bottom edge fades out, so a cut line reads as "scroll for more". */
+.mr2-cell--repeat > .mr2-cell__repeat-body.mr2-cell__repeat-body--more {
+  -webkit-mask-image: linear-gradient(to bottom, #000 calc(100% - var(--space-6)), transparent);
+  mask-image: linear-gradient(to bottom, #000 calc(100% - var(--space-6)), transparent);
+}

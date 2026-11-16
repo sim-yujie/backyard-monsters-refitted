@@ -33,10 +33,45 @@ export interface PlanSummary {
   readonly siege: boolean;
 }
 
+/** Monsters moved from one of the player's yards to a yard in range (Smart Repeat attack). */
+export interface YardMove {
+  readonly from: string;
+  readonly to: string;
+  readonly monsters: Readonly<Record<string, number>>;
+}
+
+/** Where one of the player's yards sits, so a move can name it. */
+export interface YardLabel {
+  readonly main: boolean;
+  readonly x: number;
+  readonly y: number;
+}
+
+/** No room in range for the monsters that would have to move in. */
+export interface NoRoom {
+  /** Housing space they take. */
+  readonly need: number;
+  /** Free housing in each yard in range that could take them. */
+  readonly free: readonly { readonly baseid: string; readonly free: number }[];
+}
+
 export interface AutoAttackPlanResponse extends ApiEnvelope {
   readonly baseid: string;
   readonly plan: PlanSummary | null;
+  /** What the player lacks, counting every yard they could move monsters from. */
   readonly missing: readonly PlanShortfall[];
+  /**
+   * Smart Repeat attack (owner, 16 Nov 2026): monsters to move into the yards
+   * in range first; empty when those yards hold the army already. Absent from
+   * an older server.
+   */
+  readonly moves?: readonly YardMove[];
+  /** Sent back with "Move and attack"; null without moves. */
+  readonly movesKey?: string | null;
+  /** The army could be gathered, but the yards in range cannot house it. */
+  readonly noRoom?: NoRoom | null;
+  /** Where each yard `moves` and `noRoom` name sits. */
+  readonly yards?: Readonly<Record<string, YardLabel>>;
   readonly outOfRange: boolean;
   readonly underAttack: boolean;
   /** The camp's damage now, whole. */
@@ -68,6 +103,9 @@ export interface AutoAttackResponse extends ApiEnvelope {
   readonly bombs: readonly string[];
   readonly report: string;
   readonly plan: PlanSummary;
+  /** Monsters moved into the yards in range before the attack. */
+  readonly moved?: readonly YardMove[];
+  readonly yards?: Readonly<Record<string, YardLabel>>;
 }
 
 /** The last auto-attack's battle, for Watch. */
@@ -97,10 +135,12 @@ export const getAutoAttackPlan = (baseid: string): Promise<AutoAttackPlanRespons
 /**
  * `POST /worldmapv2/autoattack`: one auto-attack, resolved at once. A refusal
  * is an `ApiError` whose `details.data` carries `reason` and, for `missing`,
- * the list.
+ * the list. `movesKey` is the key of the moves the player agreed to (Smart
+ * Repeat attack); the server makes them only when its own plan has the same
+ * key, and otherwise refuses with `movesChanged`.
  */
-export const runAutoAttack = (baseid: string): Promise<AutoAttackResponse> =>
-  post<AutoAttackResponse>("/worldmapv2/autoattack", { baseid });
+export const runAutoAttack = (baseid: string, movesKey?: string | null): Promise<AutoAttackResponse> =>
+  post<AutoAttackResponse>("/worldmapv2/autoattack", movesKey ? { baseid, moves: movesKey } : { baseid });
 
 /** `GET /worldmapv2/autoattackreplay`: the last auto-attack's battle. */
 export const getAutoAttackReplay = (): Promise<AutoAttackReplayResponse> =>
