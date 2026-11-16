@@ -288,6 +288,8 @@ mock.module("../combat/replayRunner.js", () => ({
 }));
 
 const { runAutoAttack, autoAttackPlanFor, lastAutoAttackReplay, autoAttackLockKey } = await import("./autoAttack.js");
+// The route itself (`POST /worldmapv2/autoattack`, `app.routes.ts`), over the real service and the stand-ins above.
+const { autoAttack: autoAttackRoute } = await import("../../../controllers/maproom/v2/autoAttack.js");
 const { attackCheckpointKey } = await import("../attackCheckpoint.js");
 
 beforeEach(() => {
@@ -713,5 +715,70 @@ describe("Smart Repeat attack: moves into the yards in range", () => {
     const answer = await autoAttackPlanFor(user() as never, CAMP);
     expect(answer.missing).toEqual([{ kind: "monster", id: "C1", need: 150, have: 60 }]);
     expect(answer.moves).toEqual([]);
+  });
+});
+
+describe("POST /worldmapv2/autoattack with moves (Smart Repeat attack, the route)", () => {
+  const FAR = "1000244208";
+  const KEY = `${FAR}>${HOME}:C1=90`;
+  const split = () => {
+    userSave.buildingdata = housing(3);
+    userSave.monsters.housed = { C1: 60 };
+    addOutpost(244, 208, 2, { C1: 200 });
+  };
+  /** Calls the controller as the router does, with the body the web client posts. */
+  const post = async (body: Record<string, unknown>, meetsDiscordAgeCheck = true) => {
+    const ctx = { request: { body }, authUser: user(), meetsDiscordAgeCheck, status: 0, body: undefined as unknown };
+    await autoAttackRoute(ctx as never, async () => {});
+    return ctx;
+  };
+  const refusalOf = async (body: Record<string, unknown>) => {
+    try {
+      await post(body);
+    } catch (err) {
+      return { ...((err as { data?: object }).data ?? {}), message: (err as Error).message } as Record<string, unknown>;
+    }
+    throw new Error("expected a refusal");
+  };
+
+  test("the key of the moves shown: the moves are made and the attack lands", async () => {
+    split();
+    const ctx = await post({ baseid: CAMP, moves: KEY });
+    expect(ctx.status).toBe(200);
+    expect(ctx.body).toMatchObject({ error: 0, moved: [{ from: FAR, to: HOME, monsters: { C1: 90 } }], flung: { C1: 150 } });
+    expect(outpostRows[0]!.monsters.housed).toEqual({ C1: 110 });
+  });
+
+  test("no key or another key: movesChanged, nothing moved, nothing minted", async () => {
+    split();
+    expect((await refusalOf({ baseid: CAMP })).reason).toBe("movesChanged");
+    expect((await refusalOf({ baseid: CAMP, moves: `${FAR}>${HOME}:C1=91` })).reason).toBe("movesChanged");
+    expect(transactions).toBe(0);
+    expect(mint).not.toHaveBeenCalled();
+    expect(outpostRows[0]!.monsters.housed).toEqual({ C1: 200 });
+  });
+
+  test("all or nothing: the attack load refuses after the moves, and the route leaves every yard as it was", async () => {
+    split();
+    mintRefuses = true;
+    expect((await refusalOf({ baseid: CAMP, moves: KEY })).message).toBe("the attack load said no");
+    expect(transactions).toBe(2);
+    expect(outpostRows[0]!.monsters.housed).toEqual({ C1: 200 });
+    expect(userSave.monsters.housed).toEqual({ C1: 60 });
+  });
+
+  test("a key that is not a string, or too long, is refused before anything runs", async () => {
+    split();
+    for (const moves of [42, "x".repeat(4_001)]) {
+      await expect(post({ baseid: CAMP, moves })).rejects.toThrow();
+    }
+    expect(transactions).toBe(0);
+    expect(mint).not.toHaveBeenCalled();
+  });
+
+  test("the Discord age rule still applies", async () => {
+    split();
+    await expect(post({ baseid: CAMP, moves: KEY }, false)).rejects.toThrow(/discord/i);
+    expect(transactions).toBe(0);
   });
 });
