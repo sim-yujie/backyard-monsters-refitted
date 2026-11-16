@@ -1164,7 +1164,9 @@ export type AutoAttackRefusal =
   | "outOfRange"
   | "inFlight"
   | "busy"
-  | "failed";
+  | "failed"
+  | "noRoom"
+  | "movesChanged";
 
 const AUTO_ATTACK_REFUSAL_MESSAGES: Record<AutoAttackRefusal, string> = {
   notMapRoom2: "Auto-attack is for Map Room 2 only.",
@@ -1175,12 +1177,17 @@ const AUTO_ATTACK_REFUSAL_MESSAGES: Record<AutoAttackRefusal, string> = {
   inFlight: "Your last auto-attack is still being worked out.",
   busy: "The server is busy working out other attacks. Try again in a moment.",
   failed: "The auto-attack could not be worked out. Nothing was spent.",
+  noRoom: "Not enough Monster Housing in range to move your army in.",
+  movesChanged: "Your yards changed since you looked. Check the moves again.",
 };
 
 /**
  * An auto-attack refused (issue #221). `missing` carries what the attack the
  * player would repeat used and they lack now (`PlanShortfall`), so the client
- * can list it. `busy` is a 503: the server's replay workers are full.
+ * can list it. Smart Repeat attack (16 Nov 2026) adds `noRoom` (the monsters
+ * could be gathered but the yards in range cannot house them; carries
+ * `noRoom` and `yards`) and `movesChanged` (the moves needed are not the ones
+ * the player agreed to; the client asks for the plan again). `busy` is a 503: the server's replay workers are full.
  *
  * @param {AutoAttackRefusal} reason - Which rule refused it.
  * @param {object} [details] - Anything the refusal carries, such as `missing`.
