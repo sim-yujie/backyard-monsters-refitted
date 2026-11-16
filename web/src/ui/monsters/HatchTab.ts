@@ -174,6 +174,8 @@ const JUMPS = [5, 10] as const;
 const MAX_HATCHERIES = 5;
 /** Letters past which a card's name is drawn smaller on a phone ("Slimeattikus" is 12). */
 const LONG_NAME = 10;
+/** patch 7.6.1 (astra): past this, smaller in the nine-across tiles too ("Octo-ooze", "Crabatron"). */
+const MID_NAME = 8;
 
 /** Seconds as a countdown: "12s", "4m 10s". */
 const duration = (seconds: number): string => formatCountdown(Math.ceil(seconds));
@@ -410,7 +412,7 @@ export class HatchTab implements MonstersTab {
       this.warningLine,
     );
 
-    this.info.append(this.infoHead, this.infoEach, this.detailsButton, this.stats, this.addBlock);
+    this.info.append(this.infoHead, this.infoEach, this.stats, this.addBlock);
     // The message sits in the split so the info panel can stand beside it on a wide screen.
     split.append(this.message, pick, this.info);
     this.scroll.append(this.lines, this.boosts, split);
@@ -675,7 +677,9 @@ export class HatchTab implements MonstersTab {
 
     const warning =
       yard && row && ready && this.count > 0 ? housingWarning(yard, row.monster.id, this.count) : null;
-    this.warningLine.textContent = warning ?? "";
+    // A space when there is none: side by side the line keeps its room
+    // (hatch.css), so Add never moves when a warning comes or goes (7.6.1).
+    this.warningLine.textContent = warning ?? "\u00a0";
     // In full on hover where the wide layout keeps it to one line (hatch.css).
     this.warningLine.title = warning ?? "";
     this.warningLine.hidden = warning === null;
@@ -916,13 +920,15 @@ export class HatchTab implements MonstersTab {
     slots.className = "hatch-line__slots";
     slots.append(this.nowCard(yard, hatchery, false, preview), chevron());
     hatchery.queue.forEach((stack, at) => slots.append(this.stackSlot(hatchery.id, stack, at + 1, preview)));
-    // No "Empty" boxes (owner, 15 Nov 2026): the head says how many fit.
     let free = hatchery.stackLimit - hatchery.queue.length;
     for (const count of preview?.fresh ?? []) {
       if (free <= 0) break;
       slots.append(previewSlot(preview!.monster, count));
       free -= 1;
     }
+    // The empty boxes are back (owner, 15 Nov 2026, patch 7.6.1: "I still
+    // want the empty box, even if there are no queued monsters in it").
+    for (; free > 0; free -= 1) slots.append(emptySlot());
     if (hatchery.level > 0 && hatchery.level < maxLevel(HATCHERY_TYPE, this.store.kind)) {
       slots.append(this.lockedSlot(hatchery));
     }
@@ -968,6 +974,7 @@ export class HatchTab implements MonstersTab {
       slots.append(previewSlot(preview!.monster, count));
       free -= 1;
     }
+    for (; free > 0; free -= 1) slots.append(emptySlot());
     const idle = yard.shared.length === 0 && yard.hatcheries.every((one) => one.monster === null);
     slots.append(this.lineTotals(yard, "hcc", idle, this.clearControl("hcc", yard.shared)));
 
@@ -1030,7 +1037,7 @@ export class HatchTab implements MonstersTab {
       } else {
         const text = document.createElement("span");
         text.className = "hatch-now__state";
-        text.textContent = IDLE_TEXT[state] ?? "Nothing hatching";
+        stateWords(text, IDLE_TEXT[state] ?? ["Nothing hatching"]);
         card.append(" ", text);
       }
       return card;
@@ -1086,7 +1093,7 @@ export class HatchTab implements MonstersTab {
       card.append(bar);
       this.clocks.push({ node: time, endsAt: hatchery.endsAt, fill, total, suffix: compact ? "" : " left" });
     } else {
-      time.textContent = (state === "stalled" && this.realm === "inferno" ? "Waiting for room" : BUSY_TEXT[state]) ?? "";
+      stateWords(time, state === "stalled" && this.realm === "inferno" ? STALLED_INFERNO : BUSY_TEXT[state]);
     }
     return card;
   }
@@ -1329,7 +1336,12 @@ export class HatchTab implements MonstersTab {
     label.append(gameIcon("housing", { label: words }));
     const value = document.createElement("span");
     value.className = "hatch-housing__value";
-    value.textContent = `${formatAmount(after)} / ${formatAmount(yard.capacity)}`;
+    // "After:" so the total reads as the housing once the line has hatched,
+    // not as the housing now (owner, desk card p761-housing-number, 16 Nov 2026).
+    const afterWord = document.createElement("span");
+    afterWord.className = "hatch-housing__after";
+    afterWord.textContent = "After:";
+    value.append(afterWord, ` ${formatAmount(after)} / ${formatAmount(yard.capacity)}`);
 
     const bar = document.createElement("div");
     bar.className = "hatch-housing__bar";
@@ -1375,7 +1387,12 @@ export class HatchTab implements MonstersTab {
     const foot = document.createElement("span");
     foot.className = "hatch-housing__foot";
     foot.append(key);
-    if (after > yard.capacity) {
+    // "Housing is full: ... wait for room" above already says it (7.6.1):
+    // the short warning is not said twice; it stays on hover of the numbers.
+    const fullSaid = tone === "warning" && yard.hatcheries.some((one) => one.stage === 2);
+    value.title = `${words}: ${formatAmount(housed)} housed, ${formatAmount(pending)} on the way${adding > 0 ? `, ${formatAmount(adding)} adding` : ""}, of ${formatAmount(yard.capacity)}`;
+    if (after > yard.capacity) value.title += `. Over by ${formatAmount(after - yard.capacity)}: the rest hatch and wait in the ${this.words.hatchery} for room.`;
+    if (after > yard.capacity && !fullSaid) {
       const over = document.createElement("span");
       over.className = "hatch-housing__over";
       over.textContent = `${formatAmount(after - yard.capacity)} over: they wait for room`;
@@ -1384,6 +1401,9 @@ export class HatchTab implements MonstersTab {
     }
     housing.append(label, value, bar, foot);
 
+    // With a warning the housing row has a line of its own under it, so a
+    // count chosen (a "+20" in the key) never moves what is below (7.6.1).
+    this.message.classList.toggle("hatch-message--warning", parts.length > 0);
     this.message.replaceChildren(...parts, housing);
   }
 
@@ -1439,8 +1459,10 @@ export class HatchTab implements MonstersTab {
     const name = document.createElement("span");
     // A long name ("Slimeattikus") gets smaller letters on a phone, so it
     // stays whole on one line rather than breaking mid-word.
-    name.className =
-      row.monster.name.length > LONG_NAME ? "hatch-monster__name hatch-monster__name--long" : "hatch-monster__name";
+    // Side by side, nine across, a name of nine letters or more is drawn a
+    // little smaller too, so none is cut with "…" (patch 7.6.1, astra).
+    const letters = row.monster.name.length;
+    name.className = `hatch-monster__name${letters > LONG_NAME ? " hatch-monster__name--long" : ""}${letters > MID_NAME ? " hatch-monster__name--mid" : ""}`;
     name.textContent = row.monster.name;
     const note = document.createElement("span");
     note.className = "hatch-monster__note";
@@ -1478,7 +1500,8 @@ export class HatchTab implements MonstersTab {
     blurb.append(...describe(monster.description));
     blurb.title = blurb.textContent ?? "";
     heading.append(level, name, blurb);
-    this.infoHead.replaceChildren(portrait, heading);
+    // patch 7.6.1 (astra): Details belongs to the portrait/name row, with its full tap target.
+    this.infoHead.replaceChildren(portrait, heading, this.detailsButton);
 
     // The phone bar's line: what one costs, takes and fills, as icons.
     this.infoEach.replaceChildren(
@@ -1889,10 +1912,10 @@ export class HatchTab implements MonstersTab {
 /* ── Pieces ──────────────────────────────────────────────────────────────── */
 
 /** What an empty "hatching now" card says. */
-const IDLE_TEXT: Partial<Record<HatcheryView["state"], string>> = {
-  building: "Being built",
-  damaged: "Damaged: repair it",
-  idle: "Nothing hatching",
+const IDLE_TEXT: Partial<Record<HatcheryView["state"], StateWords>> = {
+  building: ["Being built", "Building"],
+  damaged: ["Damaged"],
+  idle: ["Nothing hatching", "Idle"],
 };
 
 /**
@@ -1915,12 +1938,36 @@ const TAB_STATE: Readonly<Record<HatcheryView["state"], string>> = {
   damaged: "Damaged",
 };
 
-/** What a card with a monster says when it is not counting down. */
-const BUSY_TEXT: Partial<Record<HatcheryView["state"], string>> = {
-  stalled: "Waiting for housing",
-  upgrading: "Paused: upgrading",
-  damaged: "Damaged: repair it",
-  building: "Being built",
+/**
+ * What a card with a monster says when it is not counting down, and the
+ * shorter words a phone's card has room for (patch 7.6.1, owner 15 Nov
+ * 2026: "Waiting for housing" ran over the next card). The message line
+ * under the cards says it in full ("Housing is full: ...").
+ */
+type StateWords = readonly [words: string, short?: string];
+const BUSY_TEXT: Partial<Record<HatcheryView["state"], StateWords>> = {
+  stalled: ["Needs housing", "Full"],
+  upgrading: ["Upgrading", "Paused"],
+  damaged: ["Damaged"],
+  building: ["Being built", "Building"],
+};
+const STALLED_INFERNO: StateWords = ["Needs room", "Full"];
+
+/** A card's state words: the long ones, and a phone's short ones beside them (hatch.css). */
+const stateWords = (node: HTMLElement, words: StateWords | undefined): void => {
+  const [long, short] = words ?? [""];
+  if (!short) {
+    node.textContent = long;
+    return;
+  }
+  const full = document.createElement("span");
+  full.className = "hatch-now__words-long";
+  full.textContent = long;
+  const brief = document.createElement("span");
+  brief.className = "hatch-now__words-short";
+  brief.setAttribute("aria-hidden", "true");
+  brief.textContent = short;
+  node.replaceChildren(full, brief);
 };
 
 /**
@@ -1959,6 +2006,17 @@ const lockedNote = (unlocking: boolean): Node[] => {
     ? gameIcon("time", { decorative: true, className: "hatch-monster__lock" })
     : lockArt(26, "hatch-monster__lock");
   return [mark, word];
+};
+
+/** A free slot in the queue: a faint dashed box (patch 7.6.1). */
+const emptySlot = (): HTMLElement => {
+  const slot = document.createElement("div");
+  slot.className = "hatch-slot hatch-slot--empty";
+  const words = document.createElement("span");
+  words.className = "hatch-slot__empty";
+  words.textContent = "Empty";
+  slot.append(words);
+  return slot;
 };
 
 /** A new stack the chosen batch would open, dashed. */
