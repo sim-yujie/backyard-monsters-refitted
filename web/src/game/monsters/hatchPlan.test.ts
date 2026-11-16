@@ -370,14 +370,18 @@ describe("Fill", () => {
     const yard = readHatchYard(save, T0);
     expect(housingWarning(yard, "C1", 8)).toBeNull();
     expect(housingWarning(yard, "C1", 9)).toBe(
-      "Housing fits 8 of these; the rest will hatch and wait in the Hatchery until there is room.",
+      "8 fit in housing; 1 wait for room",
     );
     const full = readHatchYard(
       saveOf({ monsters: monsters({ housed: { C1: 108 } }) }, [building(10, 13, 3)]),
       T0,
     );
     expect(housingWarning(full, "C1", 1)).toBe(
-      "Housing is full: these will hatch and wait in the Hatchery until there is room.",
+      "Housing full: they wait for room",
+    );
+    // patch 7.6.1 (astra): both amounts use commas, including the waiting remainder.
+    expect(housingWarning({ ...yard, capacity: 30_000 }, "C1", 5_000)).toBe(
+      "2,900 fit in housing; 2,100 wait for room",
     );
   });
 });
