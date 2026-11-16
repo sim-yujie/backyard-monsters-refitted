@@ -77,7 +77,8 @@ export const LEAVING_DECLINES =
  */
 const compactPrice = (price: { resources: number; shiny?: number; welcome?: boolean; adjacent?: boolean }): Node[] => {
   const parts: Node[] = [];
-  const deal = price.welcome ? "Frontier Pass" : price.adjacent ? "Half price" : null;
+  // astra round 2: "Frontier Pass:" leads the price it names, not a chip of its own.
+  const deal = price.welcome ? "Frontier Pass:" : price.adjacent ? "Half price:" : null;
   if (deal) {
     const chip = document.createElement("span");
     chip.className = "end-takeover__deal";

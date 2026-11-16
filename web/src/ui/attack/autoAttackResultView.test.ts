@@ -105,7 +105,7 @@ describe.each(LAYOUTS)("look %s", (layout) => {
     expect(root.querySelector('[aria-label="20 Ichi"]')).not.toBeNull();
     expect(root.textContent).toContain("35,570");
     expect(root.textContent).toContain("×2");
-    expect(root.textContent).toContain("230, 214 → 238, 209");
+    expect(root.textContent).toContain("(230, 214) → (238, 209)");
   });
 
   it("a plain result: no Conquered!, no offer, no champion or bomb rows", () => {
@@ -132,7 +132,7 @@ describe("astra round 1", () => {
     const b = document.createElement("div");
     b.append(...resultView("B", PLAIN).middle);
     expect(b.querySelector(".arv-tabs")).toBeNull();
-    expect(b.textContent).toContain("Spent");
+    expect(b.textContent).toContain("Used");
     expect(resultView("C", PLAIN).wide).toBe(false);
     expect(resultView("C", BUSY).wide).toBe(true);
   });
@@ -144,7 +144,19 @@ describe("astra round 1", () => {
   });
 
   it("the damage bar names its 90% mark", () => {
-    expect(resultView("A", BUSY).head.querySelector(".arv-damage__ninety")?.textContent).toBe("90%");
+    expect(resultView("A", BUSY).head.querySelector(".arv-damage__ninety")?.textContent).toBe("90% to conquer");
+  });
+});
+
+describe("astra round 2", () => {
+  it("bombs sit with the monsters under Used; B shows Used above its tabs", () => {
+    const b = document.createElement("div");
+    b.append(...resultView("B", BUSY).middle);
+    const used = b.querySelector(".arv-spent")!;
+    expect(used.textContent).toContain("Used");
+    expect(used.querySelector('[aria-label="2 bombs"]')).not.toBeNull();
+    expect(used.compareDocumentPosition(b.querySelector(".arv-tabs")!) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(b.querySelectorAll(".arv-page--off")).toHaveLength(1);
   });
 });
 
