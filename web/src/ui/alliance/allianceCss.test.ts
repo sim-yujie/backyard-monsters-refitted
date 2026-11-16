@@ -207,3 +207,32 @@ describe("alliance.css: the marketplace keeps one height", () => {
     expect(head).toMatch(/border-bottom:/);
   });
 });
+
+describe("alliance.css: a short screen gives the tab its room (beta 8)", () => {
+  /** The text of the short-screen block, `@media (max-height: 540px) { ... }`. */
+  const shortCss = ((): string => {
+    const at = css.lastIndexOf("@media (max-height: 540px)");
+    const open = css.indexOf("{", at);
+    let depth = 1;
+    let i = open + 1;
+    for (; depth > 0 && i < css.length; i++) {
+      if (css[i] === "{") depth++;
+      else if (css[i] === "}") depth--;
+    }
+    return css.slice(open + 1, i - 1);
+  })();
+
+  it("hides the shield / name / type / count block and the Leave foot, and shows Leave at the end of Overview", () => {
+    expect(rulesFor(".alliance__head--mine", shortCss).join(" ")).toMatch(/display:\s*none/);
+    expect(rulesFor(".alliance__foot--leave", shortCss).join(" ")).toMatch(/display:\s*none/);
+    expect(rulesFor(".alliance__leave-row", shortCss).join(" ")).toMatch(/display:\s*flex/);
+  });
+
+  it("keeps Overview's Leave row hidden on a taller screen", () => {
+    expect(rulesFor(".alliance__leave-row").join(" ")).toMatch(/display:\s*none/);
+  });
+
+  it("sits after every `.alliance__head` rule, so it wins over them", () => {
+    expect(css.lastIndexOf("@media (max-height: 540px)")).toBeGreaterThan(css.lastIndexOf(".alliance__head {"));
+  });
+});

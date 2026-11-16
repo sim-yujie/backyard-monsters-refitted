@@ -354,6 +354,9 @@ const adLine = (ad: Partial<AdForm>): HTMLElement => {
   return line;
 };
 
+/** Anyone may leave, but a Leader only once alone (they hand over first). */
+const canLeave = (alliance: MyAlliance): boolean => !(alliance.role === "leader" && (alliance.number_of_members ?? 1) > 1);
+
 const typeBadge = (type: AllianceType): HTMLElement =>
   make("span", `alliance__type alliance__type--${type}`, TYPE_INFO[type]?.label ?? type);
 
@@ -709,6 +712,7 @@ export class AllianceWindow {
     const view = this.view;
     this.foot.replaceChildren();
     this.foot.hidden = true;
+    this.foot.classList.remove("alliance__foot--leave");
     if (view.kind === "loading" || view.kind === "failed") {
       this.popup.setTitle(ALLIANCE_TEXT.title);
       this.popup.setHead(this.status);
@@ -1489,8 +1493,24 @@ export class AllianceWindow {
     this.popup.setHead(head, tabs, this.status);
     this.popup.body.replaceChildren(...this.tabBody(alliance));
 
-    this.foot.hidden = alliance.role === "leader" && (alliance.number_of_members ?? 1) > 1;
-    if (!this.foot.hidden) this.foot.append(...this.leaveButtons());
+    this.foot.hidden = !canLeave(alliance);
+    if (!this.foot.hidden) {
+      // `--leave`: a short screen hides this foot and shows Leave at the end of Overview instead (alliance.css).
+      this.foot.classList.add("alliance__foot--leave");
+      this.foot.append(...this.leaveButtons());
+    }
+  }
+
+  /**
+   * Leave at the end of Overview (beta 8): shown only on a short screen (a
+   * phone on its side), where the foot under every tab goes so the tab keeps
+   * room for its list (alliance.css). Still two taps: Leave, then Yes.
+   */
+  private leaveRow(alliance: MyAlliance): HTMLElement | null {
+    if (!canLeave(alliance)) return null;
+    const row = make("div", "alliance__leave-row");
+    row.append(...this.leaveButtons());
+    return row;
   }
 
   private leaveButtons(): HTMLElement[] {
@@ -1498,6 +1518,8 @@ export class AllianceWindow {
       return [button(ALLIANCE_TEXT.leave, "btn--outline alliance__leave", () => {
         this.leaving = true;
         this.render();
+        // The confirm replaced Leave at the end of Overview: keep it in sight (short screens).
+        this.popup.body.querySelector(".alliance__leave-row")?.scrollIntoView?.({ block: "nearest" });
       })];
     }
     return [
@@ -1617,6 +1639,7 @@ export class AllianceWindow {
         this.showAllNews = !this.showAllNews;
         this.render();
       }),
+      this.leaveRow(alliance),
     ]) {
       if (part) nodes.push(part);
     }
