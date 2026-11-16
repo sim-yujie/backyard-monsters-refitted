@@ -211,6 +211,13 @@ SPECS = {
         # pixels red well above green: belly, fur, pink stripes) a little less red, so the fur reads violet
         grade=dict(body=((0.94, 0.0), (1.06, 0.0), (1.2, 0.0)), limbs=((0.9, 0.0), (1.0, 0.0), (1.1, 0.0))),
         grade_chroma=True,               # tusks, fangs and drool stay as painted
+        # Lead vetting (16 Nov): the armour read yellow-green and the fur bright violet beside the card. `tone` (common.tone,
+        # after the grade) moves them to the card's numbers (armour hue 48, sat 0.60, value 0.34; fur hue 307, sat 0.52,
+        # value 0.25, measured on IC3.webp); the belly, claws, stripes and tusks fall outside both hue windows
+        tone=dict(
+            armour=dict(hue=(42, 80), soft=5, min_sat=0.25, chroma=0.85, value=0.84, gains=(0.97, 1.0, 1.0)),
+            fur=dict(hue=(275, 335), soft=8, min_sat=0.2, chroma=0.82, value=0.84, gains=(1.0, 1.0, 0.97), hi=150),
+        ),
         demagenta=True,                  # hot pink drool-gap specks (h18) take their neighbours' colour
         # view_match left out: it matches each view's whole-body mean, and Malphus's front views carry the orange
         # belly and ivory tusks that its back views hide (switch on only if the batches really drift)

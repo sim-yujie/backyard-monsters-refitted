@@ -330,9 +330,36 @@ def grade(im, spec):
         gr = np.stack([rgb[..., c] * k + o for c, (k, o) in enumerate(g[part])], -1)
         out += gr * w[..., None]
     a[..., :3] = out
+    if spec.get("tone"):
+        a[..., :3] = tone(np.clip(a[..., :3], 0, 255), spec["tone"])
     if spec.get("demagenta"):
         a = demagenta(a)
     return Image.fromarray(np.clip(a, 0, 255).astype(np.uint8), "RGBA")
+
+
+def tone(rgb, parts):
+    """spec tone (IC3 lead vetting, 16 Nov): after the grade, each named part, picked by hue (degrees, soft edge
+    `soft`) and saturation over `min_sat`, is moved toward the portrait: chroma scaled round the pixel's luma
+    (`chroma`), per-channel `gains`, brightness times `value` (pixels with luma over `hi` keep their brightness,
+    so highlights do not go flat). Pixels outside every hue window (belly, claws, stripes, tusks) are untouched."""
+    x = rgb / 255.0
+    mx, mn = x.max(-1), x.min(-1)
+    d = mx - mn + 1e-9
+    r, g, b = x[..., 0], x[..., 1], x[..., 2]
+    hue = np.where(mx == r, ((g - b) / d) % 6, np.where(mx == g, (b - r) / d + 2, (r - g) / d + 4)) * 60
+    sat = d / (mx + 1e-9)
+    out = rgb.copy()
+    luma = (rgb * [0.299, 0.587, 0.114]).sum(-1, keepdims=True)
+    for p in parts.values():
+        lo, hi = p["hue"]
+        soft = p.get("soft", 8)
+        w = (np.clip((hue - (lo - soft)) / soft, 0, 1) * np.clip(((hi + soft) - hue) / soft, 0, 1)
+             * np.clip((sat - p.get("min_sat", 0.2)) / 0.1, 0, 1))
+        c = (luma + (rgb - luma) * p["chroma"]) * np.array(p.get("gains", (1.0, 1.0, 1.0)))
+        keep = np.clip((luma - p.get("hi", 255)) / 40, 0, 1)
+        c = c * (p["value"] + (1 - p["value"]) * keep)
+        out = out * (1 - w[..., None]) + c * w[..., None]
+    return np.clip(out, 0, 255)
 
 
 def demagenta(a, steps=6):
