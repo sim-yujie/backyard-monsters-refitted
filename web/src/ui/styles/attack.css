@@ -331,8 +331,7 @@
     border-radius: 0 0 var(--radius-lg) var(--radius-lg);
   }
 
-  .attack-strip__title,
-  .attack-strip__loot {
+  .attack-strip__title {
     display: none;
   }
 
@@ -588,10 +587,381 @@
   }
 }
 
-/* Too narrow for the loot as well: the end panel still shows it. */
+/*
+ * The loot on a phone (7.7.1): an upright phone, and a small phone on its
+ * side (667x375, 812x375), hid it, so the player could not see what they were
+ * taking. The four amounts do not fit beside Retreat there, so they get a
+ * slim row of their own under the controls, in short figures ("+472.3K",
+ * `isPhoneLayout` in AttackScene). The row is there from the first second,
+ * zeros and all, so the strip never changes height mid-battle; `hidden` (a
+ * test, a raid) still hides it. A wider phone on its side keeps the loot in
+ * its one row.
+ */
+@media (max-width: 620px), (min-width: 620.02px) and (max-width: 820px) and (max-height: 500px) {
+  .attack-strip {
+    flex-wrap: wrap;
+  }
+
+  .attack-strip__loot:not([hidden]) {
+    display: flex;
+    justify-content: center;
+    order: 1;
+    flex: 1 0 100%;
+    line-height: 1.2;
+  }
+
+  /* Four of "+999.9K" fit one row from 360 px; anything longer wraps rather
+     than running off the edge. */
+  .attack-strip__loot .res-list {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 0 0.5em;
+  }
+
+  .attack-strip__loot .res-list > .res-amount + .res-amount {
+    margin-left: 0;
+  }
+
+  .attack-strip__loot .res-amount > .res-icon {
+    margin-right: 0.2em;
+  }
+}
+
+/* On its side the Army panel sits a fixed 60 px down, under a one-row strip;
+   it moves down by the loot row (25 px with its gap) so its title stays clear. */
 @media (min-width: 620.02px) and (max-width: 820px) and (max-height: 500px) {
-  .attack-strip__loot {
+  .attack-dock {
+    top: calc(var(--hud-inset) + 60px + 26px + var(--space-2));
+    max-height: calc(100vh - var(--hud-inset) - 60px - 26px - var(--space-2) - var(--space-3));
+    max-height: calc(100dvh - var(--hud-inset) - 60px - 26px - var(--space-2) - var(--space-3));
+  }
+}
+
+/* The narrowest upright phones: closer, and a size smaller, so four of
+   "+999.9K" still share one row at 360 px. */
+@media (max-width: 380px) {
+  .attack-strip__loot:not([hidden]) {
+    font-size: var(--text-xs);
+  }
+
+  .attack-strip__loot .res-list {
+    gap: 0 0.3em;
+  }
+
+  .attack-strip__loot .res-amount > .res-icon {
+    margin-right: 0.1em;
+  }
+}
+
+/*
+ * TEMPORARY (7.7.1 design round, `?blp=A|B`, `ui/attack/lootLook.ts`): two
+ * ways for the loot to sit on a phone, from astra's advice, to compare in the
+ * real game. Without `?blp=` the rules above apply. One of the two replaces
+ * the 7.7.1 rules above once the owner picks it; the other goes.
+ *
+ * Both give every amount a fixed slot from the first second, so nothing
+ * grows as the loot comes in, and keep Retreat, the speed buttons and the
+ * menu at 44 px on a phone.
+ */
+
+/* Shared on a phone: the four slots, Twigs, Pebbles, Putty, Goo. */
+@media (max-width: 620px), (max-height: 500px) {
+  .attack-strip[data-blp] .attack-strip__loot .res-list {
+    display: grid;
+    height: 100%;
+  }
+
+  .attack-strip[data-blp] .attack-strip__loot .res-list > .res-amount + .res-amount {
+    margin-left: 0;
+  }
+
+  .attack-strip[data-blp] .attack-strip__retreat,
+  .attack-strip[data-blp] .attack-strip__speed-button,
+  .attack-strip[data-blp] .attack-menu__button {
+    min-height: 44px;
+  }
+
+  .attack-strip[data-blp] .attack-menu__button {
+    min-width: 44px;
+  }
+
+  .attack-strip[data-blp] .attack-strip__loot:not([hidden]) {
+    display: block;
+    box-sizing: border-box;
+    font-size: 13px;
+    line-height: 16px;
+  }
+
+  .attack-strip[data-blp] .attack-strip__loot .res-amount {
+    display: flex;
+    align-items: center;
+    min-width: 0;
+    font-family: var(--font-display);
+  }
+
+  .attack-strip[data-blp] .attack-strip__loot .res-amount > .res-icon {
+    flex: none;
+    margin: 0;
+    vertical-align: middle;
+  }
+}
+
+/* On its side, both options: each icon by its number, the number in a fixed
+   box wide enough for "+999.9K", right-aligned, so pairs read as pairs. */
+@media (min-width: 620.02px) and (max-height: 500px) {
+  .attack-strip[data-blp] .attack-strip__loot .res-amount__value {
+    flex: 0 0 auto;
+    min-width: 58px;
+    text-align: right;
+  }
+}
+
+/* ── Option A: a recessed tray inside the bar ──────────────────────────── */
+
+/* The tray: the speed switch's sunken plate, so it reads as part of the bar. */
+.attack-strip[data-blp="A"] .attack-strip__loot:not([hidden]) {
+  border: 1px solid var(--colour-border-subtle);
+  border-radius: var(--radius-md);
+  background: var(--colour-surface-sunken);
+  box-shadow: inset 0 1px 3px rgb(0 0 0 / 35%);
+}
+
+/* A desktop keeps its one row and full figures, on the same tray. */
+@media (min-width: 620.02px) and (min-height: 500.02px) {
+  .attack-strip[data-blp="A"] .attack-strip__loot:not([hidden]) {
+    padding: var(--space-1) var(--space-3);
+  }
+
+  .attack-strip[data-blp="A"] .attack-strip__loot .res-list {
+    display: flex;
+    gap: var(--space-3);
+  }
+
+  .attack-strip[data-blp="A"] .attack-strip__loot .res-list > .res-amount + .res-amount {
+    margin-left: 0;
+  }
+}
+
+/* Upright: a full-width tray under the controls, four columns, icon over number. */
+@media (max-width: 620px) {
+  .attack-strip[data-blp="A"] {
+    flex-wrap: wrap;
+    row-gap: 6px;
+  }
+
+  .attack-strip[data-blp="A"] .attack-strip__loot:not([hidden]) {
+    order: 1;
+    flex: 1 0 100%;
+    height: 44px;
+    padding: 0;
+  }
+
+  .attack-strip[data-blp="A"] .attack-strip__loot .res-list {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+
+  .attack-strip[data-blp="A"] .attack-strip__loot .res-amount {
+    flex-direction: column;
+    justify-content: center;
+    gap: 2px;
+  }
+
+  .attack-strip[data-blp="A"] .attack-strip__loot .res-list > .res-amount + .res-amount {
+    border-left: 1px solid var(--colour-border-subtle);
+  }
+
+  .attack-strip[data-blp="A"] .attack-strip__loot .res-amount > .res-icon {
+    height: 20px;
+  }
+}
+
+/* On its side: one row, the tray a 2x2 block between the readouts and the
+   controls; the Army panel stays where a one-row bar leaves it. */
+@media (min-width: 620.02px) and (max-height: 500px) {
+  .attack-strip[data-blp="A"] {
+    flex-wrap: nowrap;
+  }
+
+  /* The tray centres itself in the room the spacer had; a test or raid,
+     with no loot, keeps the spacer. */
+  .attack-strip[data-blp="A"]:has(> .attack-strip__loot:not([hidden])) .attack-strip__spacer {
     display: none;
+  }
+
+  .attack-strip[data-blp="A"] .attack-strip__loot:not([hidden]) {
+    order: 0;
+    flex: 0 0 216px;
+    height: 52px;
+    margin-inline: auto;
+    padding: 3px;
+  }
+
+  .attack-strip[data-blp="A"] .attack-strip__loot .res-list {
+    grid-template-columns: 1fr 1fr;
+    grid-template-rows: 1fr 1fr;
+    gap: 2px 4px;
+  }
+
+  .attack-strip[data-blp="A"] .attack-strip__loot .res-amount {
+    justify-content: flex-start;
+    gap: 6px;
+    padding: 0 6px 0 4px;
+  }
+
+  .attack-strip[data-blp="A"] .attack-strip__loot .res-amount > .res-icon {
+    height: 18px;
+  }
+
+  /* 12 px lower than live, so the Army window's ribbon clears the bar. */
+  .attack-dock[data-blp="A"] {
+    top: calc(var(--hud-inset) + 60px + var(--space-2) + 12px);
+    max-height: calc(100vh - var(--hud-inset) - 60px - var(--space-2) - 12px - var(--space-3));
+    max-height: calc(100dvh - var(--hud-inset) - 60px - var(--space-2) - 12px - var(--space-3));
+  }
+}
+
+/* An iPad on its side and other screens 621-1179 px wide (not a phone): the
+   bar keeps one row with four short figures (stripLoot.ts) and Bob's "?",
+   which wrapped at 1024 px; a little less room between its parts. */
+@media (min-width: 620.02px) and (max-width: 1179.98px) and (min-height: 500.02px) {
+  .attack-strip[data-blp] {
+    gap: var(--space-2);
+    padding-left: var(--space-3);
+  }
+
+  .attack-strip[data-blp="A"] .attack-strip__loot:not([hidden]) {
+    padding: var(--space-1) var(--space-2);
+  }
+
+  .attack-strip[data-blp="A"] .attack-strip__loot .res-list {
+    gap: var(--space-2);
+  }
+}
+
+/* ── Option B: a plate hung under the bar ──────────────────────────────── */
+
+/* The bar keeps its one row; the loot is a plate of its own under its left
+   end, in the bar's frame (skin.css), on two short rods 10 px long. */
+@media (max-width: 620px), (max-height: 500px) {
+  .attack-strip[data-blp="B"] {
+    flex-wrap: nowrap;
+  }
+
+  .attack-strip[data-blp="B"] .attack-strip__loot:not([hidden]) {
+    position: absolute;
+    top: calc(100% + 10px);
+    left: 6px;
+    padding: 2px 4px;
+    border: 1px solid var(--colour-border);
+    border-radius: var(--radius-md);
+    background: var(--colour-surface-raised);
+    box-shadow: var(--shadow-float);
+  }
+
+  /* The rods that hang it from the bar: the skin's metal (skin.css), from
+     the bar's frame to the plate's, no further. */
+  .attack-strip[data-blp="B"] .attack-strip__loot:not([hidden])::before,
+  .attack-strip[data-blp="B"] .attack-strip__loot:not([hidden])::after {
+    content: "";
+    position: absolute;
+    bottom: calc(100% + var(--skin-bar-edge, 1px));
+    width: 3px;
+    height: calc(10px - var(--skin-bar-edge, 1px));
+    border: 1px solid var(--loot-rod-edge, var(--colour-border-strong));
+    background: linear-gradient(90deg, var(--loot-rod-light, var(--colour-border-strong)) 0 1px, var(--loot-rod, var(--colour-border-strong)) 1px);
+  }
+
+  .attack-strip[data-blp="B"] .attack-strip__loot:not([hidden])::before {
+    left: 18px;
+  }
+
+  .attack-strip[data-blp="B"] .attack-strip__loot:not([hidden])::after {
+    right: 18px;
+  }
+}
+
+/* Upright: as wide as the bar, four columns, icon over number. */
+@media (max-width: 620px) {
+  .attack-strip[data-blp="B"] .attack-strip__loot:not([hidden]) {
+    right: 6px;
+    height: 52px;
+  }
+
+  .attack-strip[data-blp="B"] .attack-strip__loot .res-list {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 4px;
+  }
+
+  .attack-strip[data-blp="B"] .attack-strip__loot .res-amount {
+    flex-direction: column;
+    justify-content: center;
+    gap: 1px;
+  }
+
+  .attack-strip[data-blp="B"] .attack-strip__loot .res-list > .res-amount + .res-amount {
+    border-left: 1px solid var(--colour-border-subtle);
+  }
+
+  .attack-strip[data-blp="B"] .attack-strip__loot .res-amount > .res-icon {
+    height: 18px;
+  }
+
+  /* The boosts bolt and the neighbour chip hang under the plate instead. */
+  .attack-strip[data-blp="B"]:has(> .attack-strip__loot:not([hidden])) :is(.attack-strip__boosts, .attack-strip__neighbours) {
+    top: calc(100% + 10px + 52px + var(--space-1));
+  }
+}
+
+/* On its side the bar's middle has room (astra, round 1): the loot sits in the
+   one row as in A, without a tray, each resource on a sunken plate of its own;
+   no plate hangs over the battlefield. */
+@media (min-width: 620.02px) and (max-height: 500px) {
+  .attack-strip[data-blp="B"]:has(> .attack-strip__loot:not([hidden])) .attack-strip__spacer {
+    display: none;
+  }
+
+  .attack-strip[data-blp="B"] .attack-strip__loot:not([hidden]) {
+    position: static;
+    order: 0;
+    flex: 0 0 216px;
+    height: 52px;
+    margin-inline: auto;
+    padding: 0;
+    border: 0;
+    border-image: none;
+    background: none;
+    box-shadow: none;
+  }
+
+  .attack-strip[data-blp="B"] .attack-strip__loot:not([hidden])::before,
+  .attack-strip[data-blp="B"] .attack-strip__loot:not([hidden])::after {
+    display: none;
+  }
+
+  .attack-strip[data-blp="B"] .attack-strip__loot .res-list {
+    grid-template-columns: 1fr 1fr;
+    grid-template-rows: 1fr 1fr;
+    gap: 2px 4px;
+  }
+
+  .attack-strip[data-blp="B"] .attack-strip__loot .res-amount {
+    justify-content: flex-start;
+    gap: 6px;
+    padding: 0 6px 0 4px;
+    border-radius: var(--radius-sm);
+    background: var(--colour-surface-sunken);
+  }
+
+  .attack-strip[data-blp="B"] .attack-strip__loot .res-amount > .res-icon {
+    height: 18px;
+  }
+
+  /* 12 px lower than live, so the Army window's ribbon clears the bar. */
+  .attack-dock[data-blp="B"] {
+    top: calc(var(--hud-inset) + 60px + var(--space-2) + 12px);
+    max-height: calc(100vh - var(--hud-inset) - 60px - var(--space-2) - 12px - var(--space-3));
+    max-height: calc(100dvh - var(--hud-inset) - 60px - var(--space-2) - 12px - var(--space-3));
   }
 }
 

@@ -671,6 +671,36 @@
   --colour-text-muted: var(--skin-ink-3);
 }
 
+/* TEMPORARY (loot design round, option B, attack.css): the loot plate hung
+   under the battle bar wears the bar's own frame (upright only; on its side
+   B's loot sits in the bar). Its rods are the skin's metal. */
+:root[data-skin="scrap"] {
+  --loot-rod: #3a3f45;
+  --loot-rod-light: #7d858d;
+  --loot-rod-edge: #15181b;
+}
+
+:root[data-skin="flash"] {
+  --loot-rod: #5a3a17;
+  --loot-rod-light: #a8773c;
+  --loot-rod-edge: #24140a;
+}
+
+@media (max-width: 620px) {
+  :root[data-skin] .attack-strip[data-blp="B"] .attack-strip__loot:not([hidden]) {
+    border-style: solid;
+    border-color: transparent;
+    border-width: var(--skin-bar-edge);
+    border-radius: 0;
+    border-image-source: var(--skin-bar);
+    border-image-slice: var(--skin-bar-slice) fill;
+    border-image-width: var(--skin-bar-width);
+    border-image-repeat: round;
+    background: none;
+    box-shadow: none;
+  }
+}
+
 /* The yard's zoom rail is one plate: the zoom group inside it (+ and −) wears
    none of its own, so the four buttons line up in one column instead of +
    and − sitting in a second frame, pushed right (owner, beta 6). The list

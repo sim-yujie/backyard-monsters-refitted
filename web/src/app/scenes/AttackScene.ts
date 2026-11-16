@@ -55,6 +55,8 @@ import { icon } from "@/ui/icons";
 import { Notices } from "@/ui/maproom/Notices";
 import type { Panel } from "@/ui/Panel";
 import { RESOURCE_KEYS, resourceAmount, resourceName, setResourceRealm } from "@/ui/resourceIcon";
+import { stripLootFigure, stripLootShort } from "@/ui/attack/stripLoot";
+import { lootLook } from "@/ui/attack/lootLook";
 import { gameIcon } from "@/ui/gameIcon";
 import { AttackMenu, sheetHandleLabel } from "@/ui/attack/AttackMenu";
 import {
@@ -838,6 +840,9 @@ export class AttackScene implements Scene {
     boosts.append(icon("boost", 14), boostsWord);
 
     strip.append(title, boosts, clock, damage, loot, spacer, hudSlot, speed, retreat, this.menu.element);
+    // TEMPORARY: the loot design round's options, `?blp=A|B|C` (lootLook.ts).
+    const look = lootLook();
+    if (look) strip.dataset.blp = look;
     context.overlay.content.append(strip);
 
     this.strip = strip;
@@ -853,6 +858,8 @@ export class AttackScene implements Scene {
   private buildDock(context: SceneContext): void {
     const dock = document.createElement("div");
     dock.className = this.live ? "attack-dock attack-dock--live" : "attack-dock";
+    const look = lootLook();
+    if (look) dock.dataset.blp = look;
 
     // The sheet's handle: only shown at phone widths, by the stylesheet.
     const handle = document.createElement("button");
@@ -1083,9 +1090,12 @@ export class AttackScene implements Scene {
       this.damage.textContent = `${readout.damage}%`;
     }
     if (this.loot) {
+      // Short figures on a phone and under 1180 px wide (7.7.1), so the loot keeps its place.
+      const short = stripLootShort();
       RESOURCE_KEYS.forEach((key, index) => {
         const amount = this.lootAmounts[index];
-        if (amount) writeAmount(amount, "res-amount", readout.loot[key], { change: this.lootChange(), tooltip: false });
+        const figure = stripLootFigure(readout.loot[key], short);
+        if (amount) writeAmount(amount, "res-amount", figure, { change: this.lootChange(), tooltip: false });
       });
       // Bone, Coal, Sulfur and Magma in an Inferno fight, as the strip's icons.
       const realm = this.target && combatKind(this.target) === "inferno" ? "inferno" : "surface";
