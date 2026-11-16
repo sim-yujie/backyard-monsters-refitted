@@ -1,4 +1,10 @@
-import { request, type Browser, type BrowserContext, type Page } from "@playwright/test";
+import {
+  request,
+  type Browser,
+  type BrowserContext,
+  type Locator,
+  type Page,
+} from "@playwright/test";
 import { settings } from "./settings";
 import type { Profile } from "./profiles";
 
@@ -237,8 +243,33 @@ export const pressDock = async (page: Page, name: string): Promise<boolean> => {
       .catch(() => false);
     if (!shown) return false;
   }
+  await untilStill(button);
   await button.click({ timeout: BUSY_PAGE_TIMEOUT });
   return true;
+};
+
+/**
+ * Waits for a control's own finite animations to end before it is pressed.
+ * More's bubbles fly out one after another (bubble-menu.css: each waits
+ * 40 ms per place, then springs 300 ms). Playwright counts a bubble as steady
+ * while it still waits folded on More; it then moved under the press, which
+ * landed on nothing, and Alerts never opened (ipad-split on CI, run
+ * 43879130176, 16 Nov 2026: the fan open, the window "not on the screen").
+ */
+export const untilStill = async (control: Locator): Promise<void> => {
+  await control
+    .evaluate(async (element) => {
+      const running = element
+        .getAnimations({ subtree: true })
+        .filter((animation) =>
+          Number.isFinite(Number(animation.effect?.getComputedTiming().endTime ?? Infinity)),
+        );
+      await Promise.race([
+        Promise.all(running.map((animation) => animation.finished.catch(() => undefined))),
+        new Promise((done) => setTimeout(done, 2000)),
+      ]);
+    })
+    .catch(() => undefined);
 };
 
 /** Opens the full Friends screen: the Friends button's popup, then its "All friends". */
