@@ -7,9 +7,17 @@ import {
   ORB_ORBIT_PX,
   ORB_URL_CLASSIC,
   ORB_URL_MODERN,
+  RISE_BITS_TICKS,
+  RISE_CLODS,
+  RISE_CLOD_REACH,
   RISE_DROP_PX,
+  RISE_GLOW_TICKS,
+  RISE_GOO,
+  RISE_GOO_DROP,
+  RISE_GOO_REACH,
   RISE_TICKS,
   RaiseFx,
+  type RaiseFxOptions,
   ZOMBIE_FADE_TICKS,
   lightningPath,
   orbCentre,
@@ -17,7 +25,10 @@ import {
   orbOrbit,
   orbProgress,
   raiseJitter,
+  riseBitAt,
+  riseBits,
   riseDrop,
+  riseGlowAlpha,
   saturationMatrix,
   zombieSaturation,
 } from "./raiseFx";
@@ -131,24 +142,81 @@ describe("`EFFECTS.Lightning` (`EFFECTS.as:112-142`)", () => {
   });
 });
 
+describe("the rise's clods and goo (`EFFECTS.Dig`, `GIBLETS.Create`)", () => {
+  const bits = riseBits(1234);
+
+  it("throws twenty clods out to 30 px and twenty bits of goo out to 50 px", () => {
+    expect(bits.filter((bit) => !bit.goo)).toHaveLength(RISE_CLODS);
+    expect(bits.filter((bit) => bit.goo)).toHaveLength(RISE_GOO);
+    for (const bit of bits) {
+      const reach = bit.goo ? RISE_GOO_REACH : RISE_CLOD_REACH;
+      const drop = bit.goo ? RISE_GOO_DROP : 0;
+      // Back off the flat ground (`GRID.ToISO`): x = gx - gy, y = (gx + gy) / 2.
+      const gx = (bit.dx + 2 * (bit.dy - drop)) / 2;
+      const gy = (2 * (bit.dy - drop) - bit.dx) / 2;
+      const distance = Math.hypot(gx, gy);
+      expect(distance).toBeGreaterThanOrEqual(reach * 0.2 - 1e-9);
+      expect(distance).toBeLessThanOrEqual(reach * 1.5 + 1e-9);
+      // max(0.3, sqrt(d * 0.3) * 0.2) s, hopping 50 px a second of flight.
+      expect(bit.flight / 80).toBeCloseTo(Math.max(0.3, Math.sqrt(distance * 0.3) * 0.2), 6);
+      expect(bit.hop).toBeCloseTo((bit.flight / 80) * 50, 6);
+    }
+  });
+
+  it("is the same for the same rise", () => {
+    expect(riseBits(1234)).toEqual(bits);
+    expect(riseBits(99)).not.toEqual(bits);
+  });
+
+  it("hops each bit from the middle to where it lands; clods lie, then fade; goo is gone", () => {
+    for (const bit of bits) {
+      expect(riseBitAt(bit, bit.delay - 1).alpha).toBe(0);
+      const start = riseBitAt(bit, bit.delay);
+      expect(start.x).toBeCloseTo(0, 6);
+      expect(start.y).toBeCloseTo(0, 6);
+      const top = riseBitAt(bit, bit.delay + bit.flight / 2);
+      expect(top.y).toBeCloseTo(bit.dy / 2 - bit.hop, 6);
+      const down = riseBitAt(bit, bit.delay + bit.flight + 1e-6);
+      expect(down.x).toBeCloseTo(bit.dx, 6);
+      expect(down.y).toBeCloseTo(bit.dy, 6);
+      expect(down.alpha).toBe(bit.goo ? 0 : 1);
+      expect(riseBitAt(bit, RISE_BITS_TICKS).alpha).toBe(0);
+    }
+  });
+
+  it("look B's ground glow is full at once and gone in 1.2 s", () => {
+    expect(riseGlowAlpha(0)).toBe(1);
+    expect(riseGlowAlpha(RISE_GLOW_TICKS / 2)).toBeCloseTo(0.75, 6);
+    expect(riseGlowAlpha(RISE_GLOW_TICKS)).toBe(0);
+  });
+});
+
 describe("RaiseFx", () => {
   const picture = (): Promise<Texture> =>
     Promise.resolve(
       new Texture({ source: new TextureSource({ width: 40, height: 40, resolution: 2 }) }),
     );
+  const fxOf = (options: Partial<RaiseFxOptions>): RaiseFx => {
+    const layer = new Container();
+    return new RaiseFx({
+      air: () => layer,
+      ground: () => layer,
+      classic: true,
+      load: picture,
+      ...options,
+    });
+  };
 
   it("loads the look's own orb", () => {
     const asked: string[] = [];
     for (const classic of [true, false]) {
-      const fx = new RaiseFx(
-        () => new Container(),
+      const fx = fxOf({
         classic,
-        false,
-        (url) => {
+        load: (url) => {
           asked.push(url);
           return picture();
         },
-      );
+      });
       fx.preload();
     }
     expect(asked).toEqual([ORB_URL_CLASSIC, ORB_URL_MODERN]);
@@ -156,9 +224,45 @@ describe("RaiseFx", () => {
     expect(ORB_URL_CLASSIC).not.toContain("fireball");
   });
 
-  it("flies an orb until it lands, sparking about a quarter of its loops", async () => {
-    const layer = new Container();
-    const fx = new RaiseFx(() => layer, true, false, picture);
+  it("flies an orb until it lands, with no lightning unless asked for", async () => {
+    for (const look of ["A", "B"] as const) {
+      const fx = fxOf({ look });
+      fx.throwOrb(100, 300, 5, { x: 0, y: 0 }, { x: 400, y: 0 });
+      await Promise.resolve();
+      for (let tick = 100; tick < 300; tick += 1) {
+        fx.update(tick, () => ({ x: 10, y: 10 }), [{ id: 3, ground: { x: 5, y: 5 } }]);
+        expect(fx.flightCount).toBe(1);
+        expect(fx.boltCount).toBe(0);
+      }
+      fx.update(300, () => null, []);
+      expect(fx.flightCount).toBe(0);
+      fx.destroy();
+    }
+  });
+
+  it("throws a rise's clods and goo, and clears them once they fade", () => {
+    for (const look of ["A", "B"] as const) {
+      const fx = fxOf({ look });
+      fx.rise(10, { x: 0, y: 20 }, { x: 0, y: 0 });
+      expect(fx.burstCount).toBe(1);
+      fx.update(10 + RISE_BITS_TICKS, () => null, []);
+      expect(fx.burstCount).toBe(1);
+      fx.update(11 + Math.max(RISE_BITS_TICKS, RISE_GLOW_TICKS), () => null, []);
+      expect(fx.burstCount).toBe(0);
+      fx.destroy();
+    }
+  });
+
+  it("throws goo for one of four monsters raised at once, as Flash's caps allow", () => {
+    const fx = fxOf({});
+    for (let index = 0; index < 4; index += 1)
+      fx.rise(10, { x: index * 40, y: 20 }, { x: index * 40, y: 0 });
+    expect(fx.bitCounts).toEqual({ clods: 4 * RISE_CLODS, goo: RISE_GOO });
+    fx.destroy();
+  });
+
+  it("with Flash's lightning asked for, sparks off an orb on about a quarter of its loops", async () => {
+    const fx = fxOf({ lightning: true });
     fx.throwOrb(100, 300, 5, { x: 0, y: 0 }, { x: 400, y: 0 });
     await Promise.resolve();
     expect(fx.flightCount).toBe(1);
@@ -178,10 +282,10 @@ describe("RaiseFx", () => {
     fx.destroy();
   });
 
-  it("sparks round a zombie's feet on about a tenth of its loops, none with reduced motion", () => {
+  it("with Flash's lightning asked for, sparks round a zombie's feet on about a tenth of its loops, none with reduced motion", () => {
     const zombie = { id: 9, ground: { x: 50, y: 50 } };
     const count = (reduced: boolean): number => {
-      const fx = new RaiseFx(() => new Container(), false, reduced, picture);
+      const fx = fxOf({ classic: false, reducedMotion: reduced, lightning: true });
       let shown = 0;
       for (let tick = 0; tick < 800; tick += 1) {
         fx.update(tick, () => null, [zombie]);

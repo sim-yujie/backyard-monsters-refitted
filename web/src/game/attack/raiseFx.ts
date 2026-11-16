@@ -13,25 +13,33 @@ import type { Point } from "@/game/yard/YardGrid";
  *   loop from Rezghul's feet to a point by the corpse. Each loop it is drawn
  *   10 px off its path, round a circle it turns 0.05 rad a loop, under a
  *   white `GlowFilter` (blur 9) that TweenMax takes from alpha 0 to 0.8 over
- *   1 s. On a quarter of its loops a green (`0x00FF00`) `EFFECTS.Lightning`
- *   jumps from a random point on it to the closest monster within 125 px (with
- *   a chance that falls with the distance), or to another random point on it.
- *   Flash's `Targeting.getClosestEnemy(…, k_TARGETS_ALL)` despite its name
- *   takes the closest creep of EITHER side, Rezghul and its army included
- *   (`Targeting.as:73-82, 403-414`); a building closer than any creep gives
- *   none. The buildings are left out here.
+ *   1 s. The filter is applied into the orb's own 20 x 20 bitmap
+ *   (`render`, `applyFilter` onto `m_rasterData`), so the glow never leaves
+ *   the orb's box: a soft white haze round its rim.
  *   Its picture, `monsters/projectiles/rezghul_projectile.png`, never shipped,
  *   so Flash fell back to the orange fireball; the owner asked for Rezghul's
  *   own orb instead (12 Nov 2026), painted in both looks.
  * - **The rise** (`RezghulResurrectAttack.resurrect`, `:71-89`): an
- *   `EFFECTS.Dig` and `GIBLETS` 20 px below the corpse, and the new monster's
- *   graphic tweening up from 20 px below its feet over 0.8 s on `Sine.easeOut`.
+ *   `EFFECTS.Dig` (twenty dirt clods, `Particles.Create(…, 30, 20)`) and
+ *   `GIBLETS.Create(…, 50, 20, 10)` (twenty bits of goo) 20 px below the
+ *   corpse, and the new monster's graphic tweening up from 20 px below its
+ *   feet over 0.8 s on `Sine.easeOut`. The clods and bits hop out
+ *   (`ParticlesObject.init`, `GIBLET.init`); the clods stay on the ground,
+ *   the goo is gone where it lands. No disc, ring or flash.
  * - **The zombie** (`Zombiefy.as:26-53`): TweenMax takes its graphic's
- *   saturation from 1 to 0 over 1 s, and on a tenth of its loops a green
- *   `EFFECTS.Lightning` jumps between two random points round its feet.
- * - **`EFFECTS.Lightning`** (`EFFECTS.as:112-142`): a 1 px line with a corner
- *   every 30 px, each thrown up to 7 px off, glowing 4 px, drawn additively,
- *   gone in three ticks.
+ *   saturation from 1 to 0 over 1 s.
+ * - **Lightning**: Flash also throws a green (`0x00FF00`) `EFFECTS.Lightning`
+ *   (`EFFECTS.as:112-142`, a 1 px jagged line glowing 4 px, three ticks) off
+ *   the orb on a quarter of its loops (`ResurrectProjectile.as:51-77`) and
+ *   round a zombie's feet on a tenth (`Zombiefy.as:46`). The owner turned
+ *   those lines down (16 Nov 2026), so they are off; `lightning: true`
+ *   brings them back.
+ *
+ * ## The two looks for the owner (16 Nov 2026)
+ *
+ * `A` is Flash's own: the orb's rim haze, the clods and goo. `B` adds a soft
+ * sea-green glow round the orb in flight and a soft green glow on the ground
+ * as the monster rises. `localStorage["bymr.raiseFx"] = "B"` picks B.
  */
 
 /* ── Timing and arithmetic (pure, tested in raiseFx.test.ts) ───────────── */
@@ -182,15 +190,226 @@ export const lightningPath = (from: Point, to: Point, random: () => number): Poi
   return path;
 };
 
+/* ── The clods and goo of the rise (pure, tested) ─────────────────────── */
+
+/** One clod of earth or bit of goo thrown out as a monster rises. */
+export interface RiseBit {
+  /** Where it lands, world px off the burst's middle. */
+  readonly dx: number;
+  readonly dy: number;
+  /** Ticks after the rise it sets off, and ticks it flies. */
+  readonly delay: number;
+  readonly flight: number;
+  /** How high its hop goes at its top, px. */
+  readonly hop: number;
+  /** Clods stay on the ground; goo is gone where it lands (`GIBLET.Arrived`). */
+  readonly goo: boolean;
+  /** 0..1, picks its size and shade. */
+  readonly shade: number;
+}
+
+/** `EFFECTS.Dig`: `Particles.Create(at, 1 + rnd * 0.5, 30, 20)`. */
+export const RISE_CLODS = 20;
+export const RISE_CLOD_REACH = 30;
+/** `GIBLETS.Create(at, 1, 50, 20, 10)`: twenty bits out to 50 px, landing 10 px lower. */
+export const RISE_GOO = 20;
+export const RISE_GOO_REACH = 50;
+export const RISE_GOO_DROP = 10;
+/**
+ * Flash makes a set only while fewer than this many are in the air
+ * (`Particles.Create`'s 80, `GIBLETS.Create`'s 20): four raised at once
+ * throw four sets of clods but one of goo.
+ */
+export const RISE_CLODS_CAP = 80;
+export const RISE_GOO_CAP = 20;
+/** A clod lies on the ground this long once down, then fades over {@link RISE_CLOD_FADE_TICKS}. */
+export const RISE_CLOD_LIE_TICKS = 3 * TICKS_PER_SECOND;
+export const RISE_CLOD_FADE_TICKS = TICKS_PER_SECOND;
+
+/**
+ * The clods and goo a rise at `seed` throws (`Particles.Create`,
+ * `GIBLETS.Create`): each `reach * (0.2 + rnd * 0.8)` out, half again on
+ * three in ten, round a circle on the ground drawn flat (`GRID.ToISO`), set
+ * off a hundredth of a second after the one before, flying
+ * `max(0.3, sqrt(d * 0.3) * 0.2)` s and hopping `flight * 50` px high
+ * (`ParticlesObject.init`).
+ */
+export const riseBits = (seed: number, clods = true, goo = true): RiseBit[] => {
+  const bits: RiseBit[] = [];
+  const throwSet = (
+    count: number,
+    reach: number,
+    drop: number,
+    goo: boolean,
+    salt: number,
+  ): void => {
+    for (let index = 0; index < count; index += 1) {
+      const random = (n: number): number => raiseJitter(seed, salt, index * 5 + n);
+      let distance = reach * 0.2 + random(0) * reach * 0.8;
+      if (random(1) <= 0.3) distance *= 1.5;
+      const angle = random(2) * Math.PI * 2;
+      const gx = Math.cos(angle) * distance;
+      const gy = Math.sin(angle) * distance;
+      const seconds = Math.max(0.3, Math.sqrt(distance * 0.3) * 0.2);
+      bits.push({
+        dx: gx - gy,
+        dy: (gx + gy) * 0.5 + drop,
+        delay: (index / 100) * TICKS_PER_SECOND,
+        flight: seconds * TICKS_PER_SECOND,
+        hop: seconds * 50,
+        goo,
+        shade: random(3),
+      });
+    }
+  };
+  if (clods) throwSet(RISE_CLODS, RISE_CLOD_REACH, 0, false, 1);
+  if (goo) throwSet(RISE_GOO, RISE_GOO_REACH, RISE_GOO_DROP, true, 2);
+  return bits;
+};
+
+/**
+ * Where a bit is `age` ticks after the rise, off the burst's middle, and how
+ * much of it shows: hidden before it sets off, then along its line on
+ * `Sine.easeInOut` with a hop of `sin(pi * t)`, then lying (a clod, fading
+ * late) or gone (goo).
+ */
+export const riseBitAt = (
+  bit: RiseBit,
+  age: number,
+): { x: number; y: number; alpha: number } => {
+  const flown = age - bit.delay;
+  if (flown < 0) return { x: 0, y: 0, alpha: 0 };
+  if (flown < bit.flight) {
+    const t = flown / bit.flight;
+    const along = (1 - Math.cos(Math.PI * t)) / 2;
+    return { x: bit.dx * along, y: bit.dy * along - bit.hop * Math.sin(Math.PI * t), alpha: 1 };
+  }
+  if (bit.goo) return { x: bit.dx, y: bit.dy, alpha: 0 };
+  const lying = flown - bit.flight - RISE_CLOD_LIE_TICKS;
+  const alpha = lying <= 0 ? 1 : Math.max(0, 1 - lying / RISE_CLOD_FADE_TICKS);
+  return { x: bit.dx, y: bit.dy, alpha };
+};
+
+/** Ticks until every bit of a rise is gone. */
+export const RISE_BITS_TICKS =
+  (RISE_CLODS / 100) * TICKS_PER_SECOND +
+  Math.max(0.3, Math.sqrt(RISE_CLOD_REACH * 1.5 * 0.3) * 0.2) * TICKS_PER_SECOND +
+  RISE_CLOD_LIE_TICKS +
+  RISE_CLOD_FADE_TICKS;
+
+/** Look B's glow on the ground as a monster rises: up at once, gone over 1.2 s. */
+export const RISE_GLOW_TICKS = 1.2 * TICKS_PER_SECOND;
+export const riseGlowAlpha = (age: number): number => {
+  if (age < 0 || age >= RISE_GLOW_TICKS) return 0;
+  const t = age / RISE_GLOW_TICKS;
+  return 1 - t * t;
+};
+
 /* ── Pictures ───────────────────────────────────────────────────────────── */
 
 /** Rezghul's orb, painted for the owner (12 Nov 2026): the Classic one at Flash's own path. */
 export const ORB_URL_CLASSIC = "/assets/monsters/projectiles/rezghul_projectile@2x.png";
 export const ORB_URL_MODERN = "/assets/monsters/projectiles/rezghul_projectile.modern@2x.png";
 
-/** The glow's colour: Flash's white; the Modern look tints it the orb's sea-green. */
-const GLOW_CLASSIC = 0xffffff;
-const GLOW_MODERN = 0xc8ffe6;
+/** The rim haze: Flash's white; the Modern look tints it the orb's sea-green. */
+const HAZE_CLASSIC = 0xffffff;
+const HAZE_MODERN = 0xdcfff0;
+/** The haze reaches this far out from the orb's middle: Flash's glow kept in its 20 px box, softened. */
+const HAZE_RADIUS = ORB_HALF + 4;
+/** Look B: a wider sea-green glow round the orb, and one on the ground at a rise. */
+const AURA_COLOUR = 0x5dffb4;
+const AURA_RADIUS = ORB_HALF * 2.6;
+const AURA_ALPHA = 0.55;
+const RISE_GLOW_COLOUR = 0x5dffa0;
+const RISE_GLOW_RADIUS = 34;
+const RISE_GLOW_ALPHA = 0.7;
+
+/** Earth for the clods (as the battle's dig) and goo for the bits (as its death gibs). */
+const CLOD_COLOURS = [0x7a5532, 0x5a3d22, 0x94693f] as const;
+const GOO_COLOURS = [0x5da832, 0x3f7a1e, 0x8ad14a] as const;
+
+/** The size a soft glow texture is drawn at: big enough that no zoom shows steps. */
+const GLOW_TEXTURE_PX = 256;
+const DOT_TEXTURE_PX = 32;
+
+let glowTexture: Texture | null = null;
+let dotTexture: Texture | null = null;
+
+/** A canvas texture, or the plain white one where there is no canvas (tests). */
+const canvasTexture = (
+  size: number,
+  paint: (context: CanvasRenderingContext2D) => void,
+): Texture => {
+  if (typeof document === "undefined") return Texture.WHITE;
+  const canvas = document.createElement("canvas");
+  canvas.width = size;
+  canvas.height = size;
+  const context = canvas.getContext("2d");
+  if (!context) return Texture.WHITE;
+  paint(context);
+  return Texture.from(canvas);
+};
+
+/** A white glow that falls off as a bell curve, with no edge: tinted for each use. */
+const softGlow = (): Texture => {
+  glowTexture ??= canvasTexture(GLOW_TEXTURE_PX, (context) => {
+    const half = GLOW_TEXTURE_PX / 2;
+    const gradient = context.createRadialGradient(half, half, 0, half, half, half);
+    for (let stop = 0; stop <= 16; stop += 1) {
+      const r = stop / 16;
+      // exp(-4.5 r^2), pulled to 0 at the edge.
+      const alpha = Math.max(
+        0,
+        (Math.exp(-4.5 * r * r) - Math.exp(-4.5)) / (1 - Math.exp(-4.5)),
+      );
+      gradient.addColorStop(r, `rgba(255,255,255,${alpha.toFixed(4)})`);
+    }
+    context.fillStyle = gradient;
+    context.fillRect(0, 0, GLOW_TEXTURE_PX, GLOW_TEXTURE_PX);
+  });
+  return glowTexture;
+};
+
+/** A round white dot with a soft rim, for the clods and goo. */
+const softDot = (): Texture => {
+  dotTexture ??= canvasTexture(DOT_TEXTURE_PX, (context) => {
+    const half = DOT_TEXTURE_PX / 2;
+    const gradient = context.createRadialGradient(half, half, 0, half, half, half);
+    gradient.addColorStop(0, "rgba(255,255,255,1)");
+    gradient.addColorStop(0.7, "rgba(255,255,255,1)");
+    gradient.addColorStop(1, "rgba(255,255,255,0)");
+    context.fillStyle = gradient;
+    context.fillRect(0, 0, DOT_TEXTURE_PX, DOT_TEXTURE_PX);
+  });
+  return dotTexture;
+};
+
+/** A glow sprite `radius` px out, tinted, that never takes a pointer. */
+const glowSprite = (radius: number, tint: number, add: boolean): Sprite => {
+  const sprite = new Sprite(softGlow());
+  sprite.anchor.set(0.5);
+  sprite.width = radius * 2;
+  sprite.height = radius * 2;
+  sprite.tint = tint;
+  sprite.eventMode = "none";
+  if (add) sprite.blendMode = "add";
+  return sprite;
+};
+
+/* ── The look ───────────────────────────────────────────────────────────── */
+
+/** `A`, Flash's own; `B`, Flash's with soft green glows. */
+export type RaiseLook = "A" | "B";
+export const RAISE_LOOK_KEY = "bymr.raiseFx";
+
+/** The look picked for filming: `B` when this browser's `bymr.raiseFx` says so, else `A`. */
+export const raiseLookPicked = (): RaiseLook => {
+  try {
+    return globalThis.localStorage?.getItem(RAISE_LOOK_KEY) === "B" ? "B" : "A";
+  } catch {
+    return "A";
+  }
+};
 
 /* ── The effect ─────────────────────────────────────────────────────────── */
 
@@ -201,10 +420,20 @@ interface Flight {
   readonly creepId: number;
   readonly from: Point;
   readonly to: Point;
-  readonly glow: Graphics;
+  readonly haze: Sprite;
+  readonly aura: Sprite | null;
   readonly sprite: Sprite;
   /** The last tick it threw (or did not throw) a spark on. */
   sparkTick: number;
+}
+
+/** A rise's clods and goo, and look B's glow, on the ground. */
+interface Burst {
+  readonly tick: number;
+  readonly bits: readonly RiseBit[];
+  readonly sprites: readonly Sprite[];
+  readonly at: Point;
+  readonly glow: Sprite | null;
 }
 
 interface Bolt {
@@ -221,27 +450,44 @@ export interface ZombieAt {
 /** The feet of the closest monster of either side within reach of a point, or null. */
 export type CreepNear = (at: Point, reach: number) => Point | null;
 
+export interface RaiseFxOptions {
+  /** Above the creeps: the orbs (Flash's `MAP._PROJECTILES`). */
+  readonly air: () => Container;
+  /** On the ground, under the creeps: the clods, goo and look B's rise glow (`MAP._GROUND`). */
+  readonly ground: () => Container;
+  readonly classic: boolean;
+  readonly reducedMotion?: boolean;
+  /** Defaults to {@link raiseLookPicked}. */
+  readonly look?: RaiseLook;
+  /** Flash's green lightning off the orb and round the zombies; off since the owner turned it down. */
+  readonly lightning?: boolean;
+  readonly load?: (url: string) => Promise<Texture>;
+}
+
 /**
- * Rezghul's orbs in flight and the green lightning round them and round its
- * zombies, all in one layer above the creeps (Flash's `MAP._PROJECTILES`).
+ * Rezghul's orbs in flight, the clods and goo of its rises, and (when asked
+ * for) Flash's green lightning round the orbs and the zombies.
  */
 export class RaiseFx {
   private readonly flights: Flight[] = [];
+  private readonly bursts: Burst[] = [];
   private readonly bolts: Bolt[] = [];
-  private readonly lightning = new Graphics();
+  private lightningGraphics: Graphics | null = null;
   private readonly zombieSparkTick = new Map<number, number>();
   private texture: Texture | null = null;
   private asked = false;
+  readonly look: RaiseLook;
+  private readonly classic: boolean;
+  private readonly reducedMotion: boolean;
+  private readonly lightning: boolean;
+  private readonly load: (url: string) => Promise<Texture>;
 
-  constructor(
-    private readonly layer: () => Container,
-    private readonly classic: boolean,
-    private readonly reducedMotion = false,
-    private readonly load: (url: string) => Promise<Texture> = (url) =>
-      Assets.load<Texture>(url),
-  ) {
-    this.lightning.eventMode = "none";
-    this.lightning.blendMode = "add";
+  constructor(private readonly options: RaiseFxOptions) {
+    this.classic = options.classic;
+    this.reducedMotion = options.reducedMotion ?? false;
+    this.look = options.look ?? raiseLookPicked();
+    this.lightning = options.lightning ?? false;
+    this.load = options.load ?? ((url) => Assets.load<Texture>(url));
   }
 
   /** Starts the orb picture's fetch, so the first throw shows it. */
@@ -265,29 +511,101 @@ export class RaiseFx {
   /** A Rezghul threw its raise: corners `from` and `to` are world px, as the event's. */
   throwOrb(tick: number, landTick: number, creepId: number, from: Point, to: Point): void {
     this.preload();
-    const glow = new Graphics();
-    const colour = this.classic ? GLOW_CLASSIC : GLOW_MODERN;
-    // A soft halo: Flash's 9 px blur, as rings fading out from the orb's edge.
-    glow.circle(0, 0, ORB_HALF + 5).fill({ color: colour, alpha: 0.18 });
-    glow.circle(0, 0, ORB_HALF + 3).fill({ color: colour, alpha: 0.3 });
-    glow.circle(0, 0, ORB_HALF + 1).fill({ color: colour, alpha: 0.45 });
-    glow.eventMode = "none";
-    glow.alpha = 0;
+    const aura = this.look === "B" ? glowSprite(AURA_RADIUS, AURA_COLOUR, true) : null;
+    const haze = glowSprite(HAZE_RADIUS, this.classic ? HAZE_CLASSIC : HAZE_MODERN, false);
+    haze.alpha = 0;
+    if (aura) aura.alpha = 0;
     // Until the picture is in, the glow flies alone.
     const sprite = new Sprite(this.texture ?? Texture.EMPTY);
     sprite.visible = this.texture !== null;
     sprite.anchor.set(0.5);
     sprite.eventMode = "none";
-    const layer = this.layer();
-    layer.addChild(glow, sprite);
-    if (!this.lightning.parent) layer.addChild(this.lightning);
-    else layer.setChildIndex(this.lightning, layer.children.length - 1);
-    this.flights.push({ tick, landTick, creepId, from, to, glow, sprite, sparkTick: tick - 1 });
+    const layer = this.options.air();
+    if (aura) layer.addChild(aura);
+    layer.addChild(haze, sprite);
+    this.flights.push({
+      tick,
+      landTick,
+      creepId,
+      from,
+      to,
+      haze,
+      aura,
+      sprite,
+      sparkTick: tick - 1,
+    });
+  }
+
+  /**
+   * A monster rose with its feet at `feet` (world px): the clods and goo
+   * thrown from 20 px below them, and look B's glow on the ground round it.
+   */
+  rise(tick: number, burstAt: Point, feet: Point): void {
+    const ground = this.options.ground();
+    let glow: Sprite | null = null;
+    if (this.look === "B") {
+      glow = glowSprite(RISE_GLOW_RADIUS, RISE_GLOW_COLOUR, true);
+      glow.height = RISE_GLOW_RADIUS;
+      glow.position.set(feet.x, feet.y);
+      glow.alpha = 0;
+      ground.addChild(glow);
+    }
+    const bits = this.reducedMotion
+      ? []
+      : riseBits(
+          Math.round(burstAt.x * 31 + burstAt.y * 17 + tick),
+          this.inAir(tick, false) < RISE_CLODS_CAP,
+          this.inAir(tick, true) < RISE_GOO_CAP,
+        );
+    const sprites = bits.map((bit) => {
+      const sprite = new Sprite(softDot());
+      sprite.anchor.set(0.5);
+      // Clods 3-4.5 px (Flash's 1-1.5 scale), goo 2.5-3.5 px.
+      const size = bit.goo ? 2.5 + bit.shade : 3 + bit.shade * 1.5;
+      sprite.width = size;
+      sprite.height = size * (bit.goo ? 1 : 0.8);
+      const colours = bit.goo ? GOO_COLOURS : CLOD_COLOURS;
+      sprite.tint =
+        colours[Math.floor(bit.shade * colours.length) % colours.length] ?? 0x7a5532;
+      sprite.eventMode = "none";
+      sprite.visible = false;
+      ground.addChild(sprite);
+      return sprite;
+    });
+    this.bursts.push({ tick, bits, sprites, at: burstAt, glow });
+  }
+
+  /** Clods (or goo) of every rise still in the air at `tick`, as Flash counts them for its caps. */
+  private inAir(tick: number, goo: boolean): number {
+    let count = 0;
+    for (const burst of this.bursts) {
+      const age = tick - burst.tick;
+      for (const bit of burst.bits)
+        if (bit.goo === goo && age < bit.delay + bit.flight) count += 1;
+    }
+    return count;
+  }
+
+  /** Clods and goo thrown by the rises still showing, for tests. */
+  get bitCounts(): { clods: number; goo: number } {
+    let clods = 0;
+    let goo = 0;
+    for (const burst of this.bursts)
+      for (const bit of burst.bits) {
+        if (bit.goo) goo += 1;
+        else clods += 1;
+      }
+    return { clods, goo };
   }
 
   /** Orbs in the air, for tests. */
   get flightCount(): number {
     return this.flights.length;
+  }
+
+  /** Rises still showing clods, goo or glow, for tests. */
+  get burstCount(): number {
+    return this.bursts.length;
   }
 
   /** Lightning bolts showing, for tests. */
@@ -296,15 +614,15 @@ export class RaiseFx {
   }
 
   /**
-   * Moves the orbs to `tick`, drops the landed ones, throws this tick's
-   * sparks off the orbs and the `zombies`, and redraws the lightning.
+   * Moves the orbs to `tick`, drops the landed ones, moves the rises' clods
+   * and goo, and (with lightning on) throws this tick's sparks and redraws
+   * them.
    */
   update(tick: number, creepNear: CreepNear, zombies: Iterable<ZombieAt>): void {
     let keep = 0;
     for (const flight of this.flights) {
       if (tick >= flight.landTick) {
-        flight.glow.destroy();
-        flight.sprite.destroy();
+        this.dropFlight(flight);
         continue;
       }
       this.flights[keep] = flight;
@@ -312,14 +630,49 @@ export class RaiseFx {
       const age = Math.max(0, tick - flight.tick);
       const centre = orbCentre(flight.from, flight.to, age, flight.landTick - flight.tick);
       flight.sprite.position.set(Math.round(centre.x), Math.round(centre.y));
-      flight.glow.position.set(centre.x, centre.y);
-      flight.glow.alpha = orbGlowAlpha(age);
-      for (let at = flight.sparkTick + 1; at <= tick; at += 1)
-        this.orbSpark(flight, at, centre, creepNear);
+      const glow = orbGlowAlpha(age);
+      flight.haze.position.set(centre.x, centre.y);
+      flight.haze.alpha = glow;
+      if (flight.aura) {
+        flight.aura.position.set(centre.x, centre.y);
+        flight.aura.alpha = (glow / ORB_GLOW_ALPHA) * AURA_ALPHA;
+      }
+      if (this.lightning)
+        for (let at = flight.sparkTick + 1; at <= tick; at += 1)
+          this.orbSpark(flight, at, centre, creepNear);
       flight.sparkTick = tick;
     }
     this.flights.length = keep;
 
+    keep = 0;
+    for (const burst of this.bursts) {
+      const age = tick - burst.tick;
+      if (age > RISE_BITS_TICKS && age > RISE_GLOW_TICKS) {
+        this.dropBurst(burst);
+        continue;
+      }
+      this.bursts[keep] = burst;
+      keep += 1;
+      burst.bits.forEach((bit, index) => {
+        const sprite = burst.sprites[index];
+        if (!sprite) return;
+        const at = riseBitAt(bit, age);
+        sprite.visible = at.alpha > 0;
+        sprite.alpha = at.alpha;
+        sprite.position.set(burst.at.x + at.x, burst.at.y + at.y);
+      });
+      if (burst.glow) {
+        burst.glow.alpha = RISE_GLOW_ALPHA * riseGlowAlpha(age);
+        if (!this.reducedMotion) {
+          const grow = 0.85 + 0.3 * Math.min(1, Math.max(0, age / RISE_GLOW_TICKS));
+          burst.glow.width = RISE_GLOW_RADIUS * 2 * grow;
+          burst.glow.height = RISE_GLOW_RADIUS * grow;
+        }
+      }
+    }
+    this.bursts.length = keep;
+
+    if (!this.lightning) return;
     const seen = new Set<number>();
     for (const zombie of zombies) {
       seen.add(zombie.id);
@@ -335,13 +688,24 @@ export class RaiseFx {
   }
 
   destroy(): void {
-    for (const flight of this.flights) {
-      flight.glow.destroy();
-      flight.sprite.destroy();
-    }
+    for (const flight of this.flights) this.dropFlight(flight);
     this.flights.length = 0;
+    for (const burst of this.bursts) this.dropBurst(burst);
+    this.bursts.length = 0;
     this.bolts.length = 0;
-    this.lightning.destroy();
+    this.lightningGraphics?.destroy();
+    this.lightningGraphics = null;
+  }
+
+  private dropFlight(flight: Flight): void {
+    flight.haze.destroy();
+    flight.aura?.destroy();
+    flight.sprite.destroy();
+  }
+
+  private dropBurst(burst: Burst): void {
+    for (const sprite of burst.sprites) sprite.destroy();
+    burst.glow?.destroy();
   }
 
   /**
@@ -391,7 +755,15 @@ export class RaiseFx {
   }
 
   private drawBolts(tick: number): void {
-    const graphics = this.lightning;
+    if (!this.lightningGraphics) {
+      this.lightningGraphics = new Graphics();
+      this.lightningGraphics.eventMode = "none";
+      this.lightningGraphics.blendMode = "add";
+    }
+    const graphics = this.lightningGraphics;
+    const layer = this.options.air();
+    if (graphics.parent !== layer) layer.addChild(graphics);
+    else layer.setChildIndex(graphics, layer.children.length - 1);
     graphics.clear();
     let keep = 0;
     for (const bolt of this.bolts) {
@@ -400,27 +772,20 @@ export class RaiseFx {
       this.bolts[keep] = bolt;
       keep += 1;
       const alpha = 1 / Math.pow(1.75, age);
-      // The 4 px glow, then the line: Flash's 1 px; the Modern look a little bolder.
+      // Flash's 1 px line under a 4 px glow.
       this.trace(bolt.path);
-      graphics.stroke({
-        width: this.classic ? 4 : 5,
-        color: RAISE_BOLT_COLOUR,
-        alpha: 0.3 * alpha,
-      });
+      graphics.stroke({ width: 4, color: RAISE_BOLT_COLOUR, alpha: 0.3 * alpha });
       this.trace(bolt.path);
-      graphics.stroke({
-        width: this.classic ? 1 : 1.5,
-        color: this.classic ? RAISE_BOLT_COLOUR : 0xd8ffd8,
-        alpha,
-      });
+      graphics.stroke({ width: 1, color: RAISE_BOLT_COLOUR, alpha });
     }
     this.bolts.length = keep;
   }
 
   private trace(path: readonly Point[]): void {
+    const graphics = this.lightningGraphics;
     const [first, ...rest] = path;
-    if (!first) return;
-    this.lightning.moveTo(first.x, first.y);
-    for (const point of rest) this.lightning.lineTo(point.x, point.y);
+    if (!first || !graphics) return;
+    graphics.moveTo(first.x, first.y);
+    for (const point of rest) graphics.lineTo(point.x, point.y);
   }
 }

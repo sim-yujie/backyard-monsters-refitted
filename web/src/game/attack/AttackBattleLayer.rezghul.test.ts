@@ -101,6 +101,8 @@ describe("Rezghul's raise, drawn", () => {
       session.appendFling({ x: 150, y: 150, monsters: { C1: 6, C19: 1 } });
 
       let flewFor = 0;
+      let burstFor = 0;
+      let bolts = 0;
       let zombie: { id: number; tick: number; y: number } | null = null;
       const saturations: number[] = [];
       const climb: number[] = [];
@@ -110,6 +112,8 @@ describe("Rezghul's raise, drawn", () => {
         const battle = session.battle();
         if (!battle || battle.over()) break;
         if (layer.raiseEffects.flightCount > 0) flewFor += 1;
+        if (layer.raiseEffects.burstCount > 0) burstFor += 1;
+        bolts += layer.raiseEffects.boltCount;
         if (!zombie) {
           const raised = battle.creeps().find((creep) => creep.zombie === true);
           const body = raised ? layer.bodyOf(raised.id) : null;
@@ -125,6 +129,9 @@ describe("Rezghul's raise, drawn", () => {
       // The orb was in the air for the frames between the throw and the landing.
       expect(flewFor).toBeGreaterThan(10);
       expect(zombie).not.toBeNull();
+      // It threw its clods and goo, and no lightning: the owner turned the lines down.
+      expect(burstFor).toBeGreaterThan(10);
+      expect(bolts).toBe(0);
       // It greys from colour to none over a second, and stays grey.
       expect(saturations[0]).toBeGreaterThan(0.9);
       expect(saturations.at(-1)).toBe(0);

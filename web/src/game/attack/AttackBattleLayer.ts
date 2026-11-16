@@ -785,11 +785,6 @@ const SPLASH_COLOUR = 0xe8d44d;
 const BLINK_COLOUR = 0x9fd4ff;
 /** A Rezghul raise's `Dig` and `GIBLETS` lie 20 px below the risen monster's feet (`RezghulResurrectAttack.as:79, 86`). */
 const RISE_DIG_BELOW = 20;
-/** The giblets' splat: a small one, as a monster's death. */
-const RISE_GIB_RADIUS = 12;
-/** The Modern look's ring round a raise, in Rezghul's sea-green. */
-const RISE_RING_RADIUS = 24;
-const RISE_RING_COLOUR = 0x3fd9a0;
 /** Blink.as:78: a hopping Bolt is drawn at this alpha. A cloaked Brain is drawn the same. */
 const UNSEEN_ALPHA = 0.3;
 const GIB_COLOURS = [0x5da832, 0x3f7a1e, 0x8ad14a] as const;
@@ -1013,7 +1008,12 @@ export class AttackBattleLayer {
       this.juice === "full" ? BIG_MAX_SHAKE : undefined,
       this.juice === "reduced" && !this.reducedMotion,
     );
-    this.raiseFx = new RaiseFx(() => this.airLayer(), this.classic, this.reducedMotion);
+    this.raiseFx = new RaiseFx({
+      air: () => this.airLayer(),
+      ground: () => this.debrisLayer(),
+      classic: this.classic,
+      reducedMotion: this.reducedMotion,
+    });
     this.bombFx = new BombFx(
       {
         air: () => this.airLayer(),
@@ -1423,7 +1423,7 @@ export class AttackBattleLayer {
     };
   }
 
-  /** Rezghul's orbs and lightning, for tests. */
+  /** Rezghul's orbs and the clods of its rises, for tests. */
   get raiseEffects(): RaiseFx {
     return this.raiseFx;
   }
@@ -2704,9 +2704,9 @@ export class AttackBattleLayer {
 
   /**
    * A Rezghul raised `creepId` (`RezghulResurrectAttack.resurrect`, `:78-85`):
-   * a `Dig` and `GIBLETS` 20 px below its feet, and it climbs the 20 px out
-   * of the ground over 0.8 s ({@link place}). The Modern look adds a ring in
-   * Rezghul's sea-green, as its other moves' bursts.
+   * a `Dig` and `GIBLETS` 20 px below its feet, thrown as clods and goo
+   * ({@link RaiseFx.rise}), and it climbs the 20 px out of the ground over
+   * 0.8 s ({@link place}). No disc or ring: Flash has none.
    */
   private onRise(event: Extract<BattleVisualEvent, { kind: "rise" }>): void {
     this.risen.set(event.creepId, event.tick);
@@ -2715,9 +2715,7 @@ export class AttackBattleLayer {
     if (view?.snapshot) this.place(view, view.snapshot, event.tick);
     const at = groundWorld(event.ix, event.iy, this.origin);
     const below = { x: at.x, y: at.y + RISE_DIG_BELOW };
-    this.spawnDirt(event.tick, below, true);
-    this.spawnSplat(event.tick, below, RISE_GIB_RADIUS);
-    if (!this.classic) this.spawnRing(event.tick, at, RISE_RING_RADIUS, RISE_RING_COLOUR);
+    this.raiseFx.rise(event.tick, below, at);
   }
 
   /**
