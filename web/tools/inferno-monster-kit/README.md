@@ -6,7 +6,7 @@ every heading), wired through `REPAINTED_SHEETS` / `REPAINT_LAYOUTS` in
 `web/src/game/attack/monsterSprites.ts`. Classic keeps the Flash sheet (the global Classic switch).
 
 Order: Spurtz IC1 (done, branch `art/inferno-monsters`), Zagnoid IC2 (done, same branch), Malphus IC3, Valgos IC4,
-Balthazar IC5, Grokus IC6, Sabnox IC7, King Wormzer IC8. One monster per Codex usage window (~40 calls).
+Balthazar IC5, Grokus IC6 (painted 17 Nov), Sabnox IC7, King Wormzer IC8. One monster per Codex usage window (~40 calls).
 
 Python: `~/.cache/bymr-art-venv/bin/python` (numpy + Pillow; **imagequant** was pip-installed into it on
 15 Nov for the shrink step, since this PC has no pngquant). The kit needs no scipy. Run every script from
@@ -302,3 +302,32 @@ game sheets backed up in `art-work/IC2-r3/r2-assets`) paints that creature:
   DROPY=700 (closer gives "Too close to a building", which spends nothing). The pack reaches the cluster ~2 s after the
   drop, so screenshots from 3 s on catch the bites. A take uses up the base (40% destroyed after one wave) and 7-8
   housed Balthazar; for another take, stop the server and recreate the database copy.
+
+## IC6 Grokus (painted 17 Nov, waiting for the owner)
+
+- **Flash sheet.** `grokus.v2.png` is 30 x 1, one pose (Flash glides it), its cast shadow to the lower right baked in. The game
+  cuts whole 57 px cells, but the art was laid out ~57.27 apart: the body creeps right 0.257 px a column (0.21 px rms fit),
+  ~7.5 px over the turn, and reaches 3 px past each side of a cell. The kit reads a 66 px window from 4 px left of each cell
+  (`flash_x0`, `cell=(66, 39)`, `flash_w=57.0`) with `flash_drift` taking the creep out; `check_crop.py` keeps all 28501
+  Flash pixels and cuts IC1-IC5 as before. `anim_pad=(1, 10, 2)`: 68 x 51 anim cells, anchor (33, 30), 30 x 4 x 68 = 8160 px.
+- **Symmetry.** The silhouette XOR / union measure is useless here (the tentacle skirt: an unrelated unmirrored heading scores
+  0.34-0.36, the same as the mirror partner). Eyes and crystals line up best with the usual partner 15 - h (1.7 px), so no
+  `mirror_axis`. The card creature is symmetric: headings 8-22 painted, lit from above, the rest mirrored.
+- **Words from the card** (`design="portrait"`): red crystal crown, yellow eyes under a ridged brow, blue-violet fins, a
+  breathing tube on each cheek, a beard of sea-green face tentacles, sea-green tentacles with violet sucker undersides, the two
+  outer ones toothed maws. Pink asked for as "dark violet-purple" / "deep plum", never magenta; no holes came out.
+- **Codex calls: 20** = 1 sample (8 12 16 22, approved first time) + 3 still batches, each with a per-heading turn note
+  (`art-work/IC6/turn-a.txt`, `turn-b.txt`, `turn-c.txt`; batch b-14-15-16-17 carried 16 again as a spare, the later one won)
+  + 1 still redo (9 15 17 21 with `turn-r1.txt`: h9 had come out a second straight front view, h17 turned further away than
+  h18, h21 a straight back view; the redo's h15 was less turned than batch b's, so `still/skip.txt` drops it) + 15 animation,
+  every one with `art-work/IC6/anim-extra.txt` (keep ref.png's angle in all cells, the toothed tentacles rise only to the
+  crystal tips). No animation redos: no heading turned in its attack, and `build_anim` printed no CUT line.
+- **Colour.** Close to the card without a grade or tone (part medians, front headings vs card, `art-work/IC6/tools/colours6.py`):
+  tentacles h190 / s0.33 / v0.44 vs h187 / 0.28 / 0.44, head h222 / 0.34 / 0.38 vs h219 / 0.32 / 0.36, violet h297 / 0.44 /
+  0.39 vs h289 / 0.39 / 0.36. The crystals are brighter (s0.80 / v0.65 vs 0.72 / 0.55), left so they read at game size.
+- Facing check: `build_still` prints CHECK FACING for h1 and h2 by 0.1-0.2, which means nothing here (see Symmetry).
+- Work dir `art-work/IC6`: `rebuild.sh`, `tools/desk.py` (card + five headings), `tools/colours6.py`, `film.mjs` (yardtester,
+  own server on 3641 / vite 5641, `INFERNO_ENABLED=on`).
+- **Filming (battle).** Grokus goes for resource buildings. What worked (`film1`): `SOLO=1 N=8 DROPX=330 DROPY=560` (default
+  zoom about DX=200 DY=640): the pack reaches the Bone Cruncher tubs ~8 s after the drop and bites (800 a hit); the clip and
+  the bite come from the recorded video and the first 2x screenshots.
