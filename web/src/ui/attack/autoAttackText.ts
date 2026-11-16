@@ -1,4 +1,4 @@
-import type { AutoAttackPlanResponse, PlanShortfall, PlanSummary } from "@/api/autoAttack";
+import type { AutoAttackPlanResponse, PlanShortfall, PlanSummary, YardLabel } from "@/api/autoAttack";
 import { ApiError, NetworkError } from "@/api/http";
 import { championName, monsterName } from "@/ui/attack/ArmyPanel";
 import { bombName } from "@/ui/attack/CatapultPanel";
@@ -67,7 +67,8 @@ export const SIEGE_NOT_REPEATED = "Siege weapons are not repeated.";
 export const shortfallText = (item: PlanShortfall): string => {
   switch (item.kind) {
     case "monster":
-      return `${monsterName(item.id)}: ${(item.need - item.have).toLocaleString("en-US")} short (you have ${item.have.toLocaleString("en-US")} of ${item.need.toLocaleString("en-US")} in range)`;
+      // Counted over every yard the monsters could move in from (Smart Repeat attack, 16 Nov 2026).
+      return `${monsterName(item.id)}: ${(item.need - item.have).toLocaleString("en-US")} short (you have ${item.have.toLocaleString("en-US")} of ${item.need.toLocaleString("en-US")})`;
     case "champion": {
       const name = championName(item.t);
       if (item.reason === "hurt") return `${name} has no health left`;
@@ -90,8 +91,33 @@ export const repeatRefusal = (answer: AutoAttackPlanResponse): string | null => 
   if (answer.underAttack) return "Someone else is attacking this camp right now.";
   if (answer.outOfRange) return "This camp is out of your Flingers' range.";
   if (answer.missing.length > 0) return "You are missing what that attack used:";
+  if (answer.noRoom) return NO_ROOM_TEXT;
   return null;
 };
+
+/* ── Smart Repeat attack (owner, 16 Nov 2026) ─────────────────────────── */
+
+/** The refusal when the army could be gathered but not housed in range. */
+export const NO_ROOM_TEXT = "Not enough Monster Housing in range to move your army in.";
+
+/** Above the moves on the confirm sheet. */
+export const MOVES_LEAD = "Moves first, then attacks:";
+
+/** The confirm sheet's button when monsters move first. */
+export const MOVE_AND_ATTACK = "Move and attack";
+
+/** Over the confirm sheet again, when the server's plan changed since the player looked. */
+export const MOVES_CHANGED = "Your yards changed. Here is the new plan.";
+
+/** "Main yard" or "Outpost". */
+export const yardName = (label: YardLabel | undefined): string => (label?.main ? "Main yard" : "Outpost");
+
+/** "244, 208": where a yard sits. */
+export const yardPlace = (label: YardLabel | undefined): string => (label ? `${label.x}, ${label.y}` : "");
+
+/** The camp panel's line when Repeat attack moves monsters in first. */
+export const movesLineText = (moves: number): string =>
+  moves === 1 ? "1 move first" : `${moves} moves first`;
 
 /** Why a camp has no Repeat attack yet. */
 export const noPlanText = (tribe: string, level: number): string =>

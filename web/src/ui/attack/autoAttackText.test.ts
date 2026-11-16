@@ -6,9 +6,12 @@ import {
   autoAttackErrorText,
   includesText,
   monstersText,
+  movesLineText,
   planSourceText,
   repeatRefusal,
   shortfallText,
+  yardName,
+  yardPlace,
 } from "./autoAttackText";
 
 /** What auto-attack says (issue #221). */
@@ -54,7 +57,7 @@ describe("autoAttackText", () => {
 
   it("lists exactly what is missing", () => {
     expect(shortfallText({ kind: "monster", id: "C1", need: 300, have: 288 })).toBe(
-      "Pokey: 12 short (you have 288 of 300 in range)",
+      "Pokey: 12 short (you have 288 of 300)",
     );
     expect(shortfallText({ kind: "champion", t: 1, reason: "hurt" })).toBe("Gorgo has no health left");
     expect(shortfallText({ kind: "bomb", id: "tw1", reason: "catapult" })).toBe("Big twig bomb: your Catapult is too low");
@@ -66,6 +69,18 @@ describe("autoAttackText", () => {
     expect(repeatRefusal(answer({ underAttack: true }))).toContain("attacking this camp");
     expect(repeatRefusal(answer({ outOfRange: true }))).toContain("out of your Flingers' range");
     expect(repeatRefusal(answer({ missing: [{ kind: "monster", id: "C1", need: 2, have: 1 }] }))).toContain("missing");
+  });
+
+  it("Smart Repeat attack: no room in range is its own refusal, and moves alone refuse nothing", () => {
+    expect(repeatRefusal(answer({ noRoom: { need: 900, free: [{ baseid: "1", free: 40 }] } }))).toBe(
+      "Not enough Monster Housing in range to move your army in.",
+    );
+    expect(repeatRefusal(answer({ moves: [{ from: "a", to: "b", monsters: { C1: 4 } }], movesKey: "a>b:C1=4" }))).toBeNull();
+    expect(yardName({ main: true, x: 1, y: 2 })).toBe("Main yard");
+    expect(yardName({ main: false, x: 1, y: 2 })).toBe("Outpost");
+    expect(yardPlace({ main: false, x: 244, y: 208 })).toBe("244, 208");
+    expect(movesLineText(1)).toBe("1 move first");
+    expect(movesLineText(3)).toBe("3 moves first");
   });
 
   it("turns the server's refusal into words, with the missing list", () => {

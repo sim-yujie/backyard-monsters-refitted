@@ -97,3 +97,162 @@
     border-radius: var(--radius-lg);
   }
 }
+
+/* ── Smart Repeat attack (owner, 16 Nov 2026) ─────────────────────────────
+ * The confirm sheet lists the monsters that move into the yards in range
+ * first, one row per move: the yard they leave on the LEFT, the monsters,
+ * an arrow, and the yard in range on the RIGHT (owner's words). Its words
+ * scroll inside the sheet on a short screen and its buttons stay under them
+ * (layout-rules: start from the content, `flex: 1 1 auto`). */
+
+.attack-end.auto-attack--confirm > .panel__body {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.auto-attack__scroll {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+.auto-attack__scroll > p {
+  margin-block: 0;
+}
+
+.auto-attack .attack-end__actions {
+  flex: none;
+}
+
+.auto-attack__changed {
+  margin: 0;
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-sm);
+  background: var(--colour-surface-sunken);
+  color: var(--colour-warning);
+  font-weight: 700;
+}
+
+.auto-attack__moves-lead {
+  font-weight: 700;
+}
+
+.auto-attack__moves,
+.auto-attack__room {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.auto-attack__move {
+  display: grid;
+  grid-template-columns: minmax(64px, 1fr) minmax(0, 1.7fr) auto minmax(64px, 1fr);
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-2);
+  border: 1px solid var(--colour-border);
+  border-radius: var(--radius-sm);
+  background: var(--colour-surface-sunken);
+}
+
+.auto-attack__yard {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  line-height: 1.2;
+}
+
+.auto-attack__yard--to {
+  align-items: flex-end;
+  text-align: right;
+}
+
+.auto-attack__yard-name {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  font-weight: 700;
+  font-size: var(--text-sm);
+  white-space: nowrap;
+}
+
+.auto-attack__yard-icon {
+  flex: none;
+}
+
+.auto-attack__yard-place {
+  font-size: var(--text-xs);
+  color: var(--colour-text-muted);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.auto-attack__cargo {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: var(--space-1) var(--space-2);
+  min-width: 0;
+}
+
+.auto-attack__unit {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  font-weight: 700;
+  font-size: var(--text-sm);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.auto-attack__portrait {
+  flex: none;
+  width: 28px;
+  height: 28px;
+  object-fit: contain;
+}
+
+.auto-attack__arrow {
+  flex: none;
+  color: var(--colour-accent);
+}
+
+.auto-attack__missing-monster {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+}
+
+.auto-attack__missing-monster .auto-attack__portrait {
+  width: 24px;
+  height: 24px;
+}
+
+.auto-attack__room-need {
+  font-weight: 700;
+}
+
+.auto-attack__room-yard {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  padding: var(--space-1) var(--space-2);
+  border-radius: var(--radius-sm);
+  background: var(--colour-surface-sunken);
+}
+
+.auto-attack__room-free {
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  color: var(--colour-warning);
+}

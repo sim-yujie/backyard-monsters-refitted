@@ -1,7 +1,7 @@
 import type { AutoAttackPlanResponse } from "@/api/autoAttack";
 import { CellType, isFogCell, isWaterCell, type MapCell } from "@/api/types";
 import type { OffsetCell } from "@/game/HexGrid";
-import { noPlanText, planSourceText, repeatRefusal, shortfallText } from "@/ui/attack/autoAttackText";
+import { movesLineText, noPlanText, planSourceText, repeatRefusal, shortfallText } from "@/ui/attack/autoAttackText";
 import { el, icon } from "@/ui/maproom1/icons";
 import type { CellPanelAction } from "./CellPanel";
 import "@/ui/styles/autoattack.css";
@@ -162,7 +162,13 @@ export class AutoAttackControl implements CellPanelAction {
     this.button.disabled = refusal !== null;
     this.button.title = refusal ?? source;
     this.button.setAttribute("aria-label", `Repeat attack. ${refusal ?? source}`);
-    this.line.textContent = refusal ? `${source}. ${refusal}` : `${source}.`;
+    // Smart Repeat attack: monsters move into the yards in range first.
+    const moves = answer.moves?.length ?? 0;
+    this.line.textContent = refusal
+      ? `${source}. ${refusal}`
+      : moves > 0
+        ? `${source}. ${movesLineText(moves)}.`
+        : `${source}.`;
     if (refusal) {
       this.detail.classList.add("auto-attack-action--refused");
       for (const item of answer.missing) {
