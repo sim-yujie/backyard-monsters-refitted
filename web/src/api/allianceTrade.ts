@@ -2,8 +2,9 @@ import { call, getFrom, postTo, type AllianceResult } from "@/api/alliance";
 
 /**
  * Trading between alliance members (design v5 §12a, §12b), served by
- * `server/src/controllers/alliance/trade.ts`. Amounts are whole numbers per
- * resource, `r1`..`r4` (Twigs, Pebbles, Putty, Goo); Shiny cannot be sent.
+ * `server/src/controllers/alliance/trade.ts`: swaps only (owner, 16 Nov
+ * 2026). Amounts are whole numbers per resource, `r1`..`r4` (Twigs,
+ * Pebbles, Putty, Goo); Shiny cannot be traded.
  */
 
 export type TradeKey = "r1" | "r2" | "r3" | "r4";
@@ -36,6 +37,8 @@ export interface TradeRequest {
   readonly status: "open" | "done";
   /** Who accepted it (done requests). */
   readonly taken_by: string | null;
+  /** The reader's own request: a done one reads from their side (what they gave → what they got). */
+  readonly mine?: boolean;
   /** The asker's storage (open requests), for the room check. */
   readonly storage: TradeStorage | null;
   /** False when the asker already traded today: it can be accepted from the next UTC day. */
@@ -50,22 +53,13 @@ export interface TradeRecent {
 }
 
 export interface TradeView {
-  readonly today: { readonly sendsLeft: number; readonly receivesLeft: number; readonly postsLeft: number; readonly newDayIn: number };
+  /** `swapsLeft`: 1 until the player's one swap of the UTC day, then 0. */
+  readonly today: { readonly swapsLeft: number; readonly postsLeft: number; readonly newDayIn: number };
   readonly rules: { readonly loss: number; readonly capShare: number; readonly requestSeconds: number };
   readonly me: TradeStorage | null;
   readonly myRequest: TradeRequest | null;
   readonly requests: readonly TradeRequest[];
   readonly recent: readonly TradeRecent[];
-  /** With `to`: that mate and their storage, for the Send sheet. */
-  readonly mate: { readonly userid: number; readonly username: string; readonly storage: TradeStorage | null } | null;
-}
-
-export interface TradeDone {
-  readonly sent: Partial<TradeAmounts>;
-  readonly arrived: Partial<TradeAmounts>;
-  readonly lostFull: Partial<TradeAmounts>;
-  readonly resources: TradeAmounts;
-  readonly to: { readonly userid: number; readonly username: string };
 }
 
 /** What an accept did, for the accepter. */
@@ -79,32 +73,18 @@ export interface SwapDone {
 }
 
 export interface AllianceTradeApi {
-  view(to?: number): Promise<AllianceResult<{ view: TradeView }>>;
+  view(): Promise<AllianceResult<{ view: TradeView }>>;
   /** "I give `amount` of `give`, I want `amount` of `want`." */
   post(give: TradeKey, want: TradeKey, amount: number): Promise<AllianceResult<object>>;
   /** Takes the caller's request down; what it held comes back. */
   cancel(): Promise<AllianceResult<object>>;
   /** Takes a mate's request whole: the swap. */
   accept(requestId: number): Promise<AllianceResult<{ done: SwapDone }>>;
-  /** `amounts` = what leaves. */
-  send(to: number, amounts: Partial<TradeAmounts>): Promise<AllianceResult<{ done: TradeDone }>>;
 }
 
-const flat = (amounts: Partial<TradeAmounts>) => {
-  const out: Record<string, number> = {};
-  for (const key of TRADE_KEYS) {
-    const value = Math.floor(Number(amounts?.[key] ?? 0));
-    if (value > 0) out[key] = value;
-  }
-  return out;
-};
-
-const doneOf = (body: Record<string, unknown>) => ({ done: body as unknown as TradeDone });
-
 export const allianceTradeApi: AllianceTradeApi = {
-  view: (to) => call(getFrom(to ? `trade?to=${to}` : "trade"), (body) => ({ view: body as unknown as TradeView })),
+  view: () => call(getFrom("trade"), (body) => ({ view: body as unknown as TradeView })),
   post: (give, want, amount) => call(postTo("trade/post", { give, want, amount: Math.floor(amount) }), () => ({})),
   cancel: () => call(postTo("trade/cancel"), () => ({})),
   accept: (requestId) => call(postTo("trade/accept", { request_id: requestId }), (body) => ({ done: body as unknown as SwapDone })),
-  send: (to, amounts) => call(postTo("trade/send", { to, ...flat(amounts) }), doneOf),
 };

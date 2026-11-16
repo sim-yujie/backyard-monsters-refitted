@@ -2,15 +2,15 @@
  * Alliance trading's switch as the server last said it (`trade_on` on
  * `myalliance` and on the main yard load's `alliancedata`; the server's
  * `ALLIANCE_TRADE_ENABLED`, off in beta 7: owner 11 Nov 2026, "disable trades
- * for now. We can polish it for beta 8").
+ * for now. We can polish it for beta 8"; the beta 8 release turns it on).
  *
- * Off, the Trade tab and every Send / Trade button stay in place but greyed
- * out with {@link TRADE_OFF_TITLE} (owner 11 Nov), and a click does nothing.
+ * Off, the Trade tab and chat's Trade buttons stay in place but greyed out
+ * with {@link TRADE_OFF_TITLE} (owner 11 Nov), and a click does nothing.
  * Off until the server says on. Chat reads it here; the alliance window reads
  * its own `myalliance` answer and keeps this in step.
  */
 
-/** The tooltip on a greyed-out Trade or Send while trading is off. */
+/** The tooltip on a greyed-out Trade while trading is off. */
 export const TRADE_OFF_TITLE = "Coming soon";
 
 let tradeOn = false;

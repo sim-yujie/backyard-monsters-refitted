@@ -62,7 +62,7 @@ describe("applyLayout", () => {
     expect(applyLayout(POKEY, {})).toBe(POKEY);
   });
 
-  it("ships only the Bandito, Pokey, Bolt, Fink, Eye-ra, Fang, Ichi, Crabatron, Brain, D.A.V.E. (both skins), Project X, Wormzer, Zafreeti, Vorg, Teratorn, Octo-ooze, Rezghul, Slimeattikus (big and mini), Korath 5 and 6, Spurtz, Zagnoid and Malphus layouts, so every other sheet is exactly the Flash table", () => {
+  it("ships only the Bandito, Pokey, Bolt, Fink, Eye-ra, Fang, Ichi, Crabatron, Brain, D.A.V.E. (both skins), Project X, Wormzer, Zafreeti, Vorg, Teratorn, Octo-ooze, Rezghul, Slimeattikus (big and mini), Korath 5 and 6, Spurtz, Zagnoid, Malphus and Valgos layouts, so every other sheet is exactly the Flash table", () => {
     expect(Object.keys(REPAINT_LAYOUTS).sort()).toEqual([
       "monsters/13.png",
       "monsters/14.v1.png",
@@ -86,6 +86,7 @@ describe("applyLayout", () => {
       "monsters/sprite.12.v2.png",
       "monsters/sprite.3.v2.png",
       "monsters/spurtz.png",
+      "monsters/valgos.png",
       "monsters/vorg_anim.png",
       "monsters/zafreeti.v2.png",
       "monsters/zagnoid.png",
@@ -378,6 +379,30 @@ describe("applyLayout", () => {
     expect(sheet.width).toBe(63 * 30);
     expect(sheet.height).toBe(47 * 12);
     expect(frameRect(sheet, 29, 11)).toEqual({ x: 29 * 63, y: 11 * 47, width: 63, height: 47 });
+    expect(sheet.anchorX).toBe(old.anchorX + 6);
+    expect(sheet.anchorY).toBe(old.anchorY + 10);
+    expect(sheet.animations.walk).toEqual({ first: 1, count: 6, ticksPerFrame: 8 });
+    expect(sheet.animations.attack?.first).toBe(7);
+    expect((sheet.animations.attack?.first ?? 0) + (sheet.animations.attack?.count ?? 0)).toBe(12);
+    expect(sheet.strikeFrame).toBe(2);
+  });
+
+  it("the Valgos layout matches the animated PNG and keeps the maw beast on its ground point", () => {
+    const old = MONSTER_SPRITES["IC4"];
+    if (!old) throw new Error("no IC4");
+    const sheet = spriteFor("IC4");
+    if (!sheet) throw new Error("no sprite for IC4");
+    const data = readFileSync(resolve(__dirname, "../../../../server/public/assets/monsters/valgos-anim@4x.png"));
+    expect(data.readUInt32BE(16)).toBe(sheet.width * 4);
+    expect(data.readUInt32BE(20)).toBe(sheet.height * 4);
+    // The Flash cell is 55x32; the repaint's is 67x44 (6 px each side, 10 on top, 2 at the bottom).
+    expect(sheet.frameWidth).toBe(old.frameWidth + 12);
+    expect(sheet.frameHeight).toBe(old.frameHeight + 12);
+    expect(sheet.directions).toBe(30);
+    expect(sheet.packedColumns).toBeUndefined();
+    expect(sheet.width).toBe(67 * 30);
+    expect(sheet.height).toBe(44 * 12);
+    expect(frameRect(sheet, 29, 11)).toEqual({ x: 29 * 67, y: 11 * 44, width: 67, height: 44 });
     expect(sheet.anchorX).toBe(old.anchorX + 6);
     expect(sheet.anchorY).toBe(old.anchorY + 10);
     expect(sheet.animations.walk).toEqual({ first: 1, count: 6, ticksPerFrame: 8 });

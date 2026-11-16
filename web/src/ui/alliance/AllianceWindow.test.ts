@@ -945,20 +945,18 @@ describe("AllianceWindow: Trade sheet Back, then another tab (lead, 11 Nov)", ()
       view: vi.fn(() =>
         ok({
           view: {
-            today: { sendsLeft: 1, receivesLeft: 1, postsLeft: 3, newDayIn: 3_600 },
-            rules: { loss: 0.1, capShare: 0.1, requestSeconds: 86_400 },
+            today: { swapsLeft: 1, postsLeft: 3, newDayIn: 3_600 },
+            rules: { loss: 0.1, capShare: 0.1, requestSeconds: 172_800 },
             me: storage,
             myRequest: null,
             requests: [],
             recent: [],
-            mate: null,
           },
         }),
       ),
       post: vi.fn(() => ok({})),
       cancel: vi.fn(() => ok({})),
       accept: vi.fn(() => ok({})),
-      send: vi.fn(() => ok({})),
     } as unknown as NonNullable<AllianceWindowOptions["tradeApi"]>;
     const onClose = vi.fn();
     const view = await open(fakeApi({ mine: vi.fn(() => ok({ alliance: mine({ trade_on: true }), rejoinAt: null })) }), {
@@ -990,7 +988,6 @@ describe("AllianceWindow: trading's switch (owner 11 Nov: greyed out for beta 7)
       post: vi.fn(() => ok({})),
       cancel: vi.fn(() => ok({})),
       accept: vi.fn(() => ok({})),
-      send: vi.fn(() => ok({})),
     }) as unknown as NonNullable<AllianceWindowOptions["tradeApi"]>;
   const tabNames = () => [...document.querySelectorAll(".alliance__tab")].map((tab) => tab.getAttribute("data-tab"));
   const tradeTab = () => document.querySelector<HTMLButtonElement>('.alliance__tab[data-tab="trade"]')!;
@@ -1003,7 +1000,7 @@ describe("AllianceWindow: trading's switch (owner 11 Nov: greyed out for beta 7)
 
   afterEach(() => setAllianceTradeOn(false));
 
-  it("switch off: Trade and a mate's Send are there but greyed out, Coming soon, and never reach the server", async () => {
+  it("switch off: Trade is there but greyed out, Coming soon, and never reaches the server", async () => {
     setAllianceTradeOn(true);
     const trade = tradeApi();
     const view = await open(withMembers(mine({ trade_on: false })), { tab: "trade", focus: { request: 5 }, tradeApi: trade });
@@ -1019,21 +1016,10 @@ describe("AllianceWindow: trading's switch (owner 11 Nov: greyed out for beta 7)
     await flush();
     expect(selected()).toBe("overview");
 
-    view.showTab("trade", { send: { userid: 3, username: "Player 3" } });
+    view.showTab("trade", { request: 5 });
     await flush();
     expect(selected()).toBe("overview");
     expect(document.querySelector(".trade-new")).toBeNull();
-
-    view.showTab("members");
-    await flush();
-    document.querySelector<HTMLButtonElement>("[data-userid='3'] .alliance__row")!.click();
-    const send = document.querySelector<HTMLButtonElement>(".alliance__send")!;
-    expect(send).not.toBeNull();
-    expect(send.disabled).toBe(true);
-    expect(send.title).toBe(TRADE_OFF_TITLE);
-    send.dispatchEvent(new MouseEvent("click", { bubbles: true }));
-    await flush();
-    expect(selected()).toBe("members");
     expect(trade.view).not.toHaveBeenCalled();
   });
 
@@ -1042,7 +1028,7 @@ describe("AllianceWindow: trading's switch (owner 11 Nov: greyed out for beta 7)
     expect(tradeTab().disabled).toBe(true);
   });
 
-  it("switch on: Trade and a mate's Send work as before", async () => {
+  it("switch on: Trade works; a mate's row has no Send (swaps only, owner 16 Nov 2026)", async () => {
     const trade = tradeApi();
     const view = await open(withMembers(mine({ trade_on: true })), { tradeApi: trade });
     expect(tradeTab().disabled).toBe(false);
@@ -1051,8 +1037,10 @@ describe("AllianceWindow: trading's switch (owner 11 Nov: greyed out for beta 7)
     view.showTab("members");
     await flush();
     document.querySelector<HTMLButtonElement>("[data-userid='3'] .alliance__row")!.click();
-    const send = document.querySelector<HTMLButtonElement>(".alliance__send")!;
-    expect(send.disabled).toBe(false);
+    // The leader's own rank actions open; no Send among them.
+    expect(document.querySelector("[data-userid='3'] .alliance__row-more")).not.toBeNull();
+    expect(document.querySelector(".alliance__send")).toBeNull();
+    expect([...document.querySelectorAll("[data-userid='3'] .alliance__row-more button")].map((b) => b.textContent)).not.toContain("Send");
     tradeTab().click();
     await flush();
     expect(selected()).toBe("trade");

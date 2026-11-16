@@ -2349,7 +2349,7 @@
 
 .trade-today {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: var(--space-2);
 }
 
@@ -2397,8 +2397,7 @@
 }
 
 .trade-requests,
-.trade-recent,
-.trade-amounts {
+.trade-recent {
   display: flex;
   flex-direction: column;
   gap: var(--space-2);
@@ -2419,8 +2418,8 @@
   grid-template-columns: minmax(0, 1fr) auto auto;
 }
 
-.trade-request.is-done {
-  opacity: 0.6;
+.trade-request.is-done .trade-swap__side {
+  color: var(--colour-text-secondary);
 }
 
 /* Chat's Trade on a request line: that request, lit. */
@@ -2436,8 +2435,9 @@
   align-items: center;
   justify-content: flex-end;
   gap: 4px;
-  color: var(--colour-text-muted);
-  font-size: var(--text-xs);
+  color: var(--colour-text-secondary);
+  font-size: 13px;
+  line-height: 1.3;
 }
 
 /* A swap from the reader's side: −1,000 (what leaves) → +900 (what comes). */
@@ -2514,8 +2514,9 @@
 }
 
 .trade-request__time {
-  color: var(--colour-text-muted);
-  font-size: var(--text-xs);
+  color: var(--colour-text-secondary);
+  font-size: 13px;
+  line-height: 1.3;
   white-space: nowrap;
 }
 
@@ -2708,140 +2709,8 @@
   text-align: right;
 }
 
-.trade-flow {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
-  align-items: center;
-  gap: var(--space-2);
-  padding: var(--space-2);
-  border: 1px solid var(--colour-border-subtle);
-  border-radius: var(--radius-md);
-  background: var(--colour-surface-sunken);
-}
-
-.trade-flow__side {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  min-width: 0;
-}
-
-.trade-flow__side--to {
-  align-items: flex-end;
-  text-align: right;
-}
-
-.trade-flow__who {
-  color: var(--colour-text-muted);
-  font-size: var(--text-xs);
-}
-
-.trade-flow__n {
-  color: var(--colour-text-strong);
-  font-size: var(--text-md);
-}
-
-.trade-flow__n--gain {
-  color: var(--colour-gain);
-}
-
-.trade-flow__lost {
-  color: var(--colour-loss);
-  font-size: var(--text-xs);
-}
-
-.trade-flow__arrow {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 2px;
-  color: var(--colour-loss);
-  font-size: var(--text-xs);
-  white-space: nowrap;
-}
-
-.trade-flow__arrow::after {
-  content: "\2192";
-  color: var(--colour-text-secondary);
-  font-size: 20px;
-  line-height: 1;
-}
-
-.trade-flow__arrow .res-icon {
-  width: 28px;
-}
-
-.trade-warn {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: var(--space-2);
-  margin: 0;
-  padding: var(--space-1) var(--space-2);
-  border-radius: var(--radius-md);
-  background: var(--colour-warning-soft);
-  color: var(--colour-text-strong);
-  font-size: var(--text-sm);
-}
-
-.trade-bars {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: var(--space-2);
-}
-
-.trade-bar__head {
-  display: flex;
-  justify-content: space-between;
-  gap: var(--space-1);
-  color: var(--colour-text-secondary);
-  font-size: var(--text-xs);
-}
-
-.trade-bar__nums {
-  white-space: nowrap;
-}
-
-.trade-bar__track {
-  position: relative;
-  height: 10px;
-  overflow: hidden;
-  border: 1px solid var(--colour-border-subtle);
-  border-radius: 5px;
-  background: var(--colour-surface-control);
-}
-
-.trade-bar__fill,
-.trade-bar__gain,
-.trade-bar__loss {
-  position: absolute;
-  top: 0;
-  bottom: 0;
-}
-
-.trade-bar__fill {
-  left: 0;
-  background: var(--colour-text-muted);
-}
-
-.trade-bar__gain {
-  background: var(--colour-gain);
-}
-
-.trade-bar__loss {
-  background: repeating-linear-gradient(45deg, var(--colour-loss) 0 3px, transparent 3px 6px);
-}
-
-/* The Send button on a mate's row in Members. */
-.alliance__send {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-}
-
 @media (max-width: 480px) {
   /* Two by two, so each number keeps its word. */
-  .trade-today,
   .trade-tiles {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
@@ -2851,27 +2720,55 @@
     justify-content: center;
   }
 
-  /* A request: name and time on one line, the swap and Accept on the next. */
-  .trade-request,
-  .trade-request--mine {
-    grid-template-columns: minmax(0, 1fr) auto;
+  /* Today: icon and number on one line, the word under them, so three stats fit across. */
+  .trade-today__stat {
+    flex-wrap: wrap;
+    gap: 0 var(--space-1);
+    padding: var(--space-1);
   }
 
-  /* The flow keeps both numbers on one line; the 10% words go under. */
-  .trade-flow__loss {
-    display: none;
-  }
-
-  .trade-flow::after {
-    content: "\2212 10% lost on the way";
-    grid-column: 1 / -1;
-    color: var(--colour-loss);
-    font-size: var(--text-xs);
+  .trade-today__w {
+    flex-basis: 100%;
     text-align: center;
   }
 
-  .trade-bars {
-    grid-template-columns: 1fr;
+  /* A request: name and time, then the swap across the row, then Accept (full width), then the
+     reason. Placed by area: by order alone the name fell into a squeezed column and the swap ran
+     under Accept. */
+  .trade-request,
+  .trade-request--mine {
+    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-areas:
+      "who time"
+      "swap swap"
+      "act act"
+      "why why";
+  }
+
+  .trade-request__who {
+    grid-area: who;
+  }
+
+  .trade-request > .trade-swap {
+    grid-area: swap;
+  }
+
+  .trade-request__time {
+    grid-area: time;
+    justify-self: end;
+  }
+
+  .trade-request__act,
+  .trade-request__given {
+    grid-area: act;
+  }
+
+  .trade-request__act {
+    justify-content: center;
+  }
+
+  .trade-request__why {
+    grid-area: why;
   }
 
   .trade-amount__box {
@@ -3249,4 +3146,107 @@
   background: #c22a24;
   color: #fff;
   font-weight: 700;
+}
+
+/* beta 8 (astra): trade labels stay smaller than the resource amounts. */
+.trade-swap__label {
+  color: var(--colour-text-muted);
+  font-size: 11px;
+  font-weight: 400;
+}
+
+.trade-status,
+.trade-recent__amount {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.trade-recent__amount .res-icon {
+  width: 20px;
+}
+
+@media (pointer: coarse) {
+  .trade-new,
+  .trade-request__act,
+  .trade-sheet__back,
+  .trade-amount__quick,
+  .trade-amount__box,
+  .trade-sheet__go,
+  .trade-tile {
+    min-height: 44px;
+    min-width: 44px;
+  }
+}
+
+@media (max-width: 480px) {
+  /* beta 8 (astra): three equal quick choices above the amount controls. */
+  .trade-amount {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .trade-amount__quick {
+    grid-row: 1;
+  }
+
+  .trade-amount > .res-icon {
+    grid-row: 2;
+    grid-column: 1;
+  }
+
+  .trade-amount__box {
+    grid-row: 2;
+    grid-column: 1 / 3;
+    min-width: 0;
+    width: calc(100% - 32px);
+    box-sizing: border-box;
+    justify-self: end;
+  }
+
+  .trade-amount__max {
+    grid-row: 2;
+    grid-column: 3;
+  }
+
+  .trade-sheet {
+    gap: 8px;
+  }
+
+  .trade-tiles {
+    gap: 4px;
+  }
+
+  .trade-tile {
+    min-height: 44px;
+    padding: 4px;
+    gap: 0;
+  }
+}
+
+/* beta 8 (astra): save vertical space inside Trade on short screens. */
+@media (max-height: 500px) {
+  .trade-today {
+    gap: 4px;
+  }
+
+  .trade-today__stat {
+    min-height: 28px;
+    padding: 2px 4px;
+    flex-wrap: nowrap;
+  }
+
+  .trade-today__w {
+    flex-basis: auto;
+  }
+
+  .trade-card {
+    padding: 6px 8px;
+    gap: 4px;
+  }
+
+  .trade-status {
+    font-size: 13px;
+    line-height: 1.3;
+  }
 }

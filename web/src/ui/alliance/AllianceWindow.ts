@@ -178,8 +178,6 @@ export const ALLIANCE_TEXT = {
   membersCount: (count: number, limit: number): string => `${formatAmount(count)} / ${formatAmount(limit)} members`,
   online: (count: number): string => `${formatAmount(count)} online`,
   points: "Alliance points",
-  /** A mate's row: send them resources (the Trade tab's Send sheet). */
-  send: "Send",
   /** The short word under each Overview tile's number. */
   tileCaption: { members: "members", online: "online now", points: "points" },
   edit: "Edit",
@@ -266,7 +264,7 @@ export interface AllianceWindowOptions {
   readonly now?: () => number;
   /** The tab a member's window opens on. */
   readonly tab?: AllianceTab;
-  /** On the Trade tab: open Give on a request, or Send to a mate. */
+  /** On the Trade tab: a mate's request to show lit. */
   readonly focus?: AllianceFocus;
   /** The trade routes; the game's own unless a test swaps them. */
   readonly tradeApi?: AllianceTradeApi;
@@ -377,7 +375,7 @@ export class AllianceWindow {
 
   /** The Trade tab (design v5 §12b), which keeps its own data and sheets. */
   private readonly trade: TradeTab;
-  /** Where the Trade tab opens on its first load (chat's Give, a Send). */
+  /** Where the Trade tab opens on its first load (chat's Trade on a request). */
   private focus: AllianceFocus | null;
 
   private readonly options: AllianceWindowOptions;
@@ -516,8 +514,8 @@ export class AllianceWindow {
 
   /**
    * Whether the server lets the alliance trade (`trade_on`; the server's
-   * `ALLIANCE_TRADE_ENABLED`, off in beta 7): off, the Trade tab and every
-   * Send stay but are greyed out, "Coming soon" (owner 11 Nov).
+   * `ALLIANCE_TRADE_ENABLED`; the release turns it on for beta 8): off, the
+   * Trade tab stays but is greyed out, "Coming soon" (owner 11 Nov).
    */
   private tradeOn(): boolean {
     return this.view.kind === "mine" && this.view.alliance.trade_on === true;
@@ -530,7 +528,7 @@ export class AllianceWindow {
     this.focus = null;
   }
 
-  /** Shows a member tab; on Trade, `focus` opens Give or Send. */
+  /** Shows a member tab; on Trade, `focus` lights a request. */
   showTab(tab: AllianceTab, focus?: AllianceFocus): void {
     if (focus) this.focus = focus;
     this.tab = tab;
@@ -546,12 +544,11 @@ export class AllianceWindow {
     if (this.tab === "trade") this.loadTrade();
   }
 
-  /** Loads the Trade tab, opening the sheet a focus asks for. */
+  /** Loads the Trade tab, lighting the request a focus asks for. */
   private loadTrade(): void {
     const focus = this.focus;
     this.focus = null;
-    if (focus && "request" in focus) this.trade.openRequest(focus.request);
-    else if (focus && "send" in focus) this.trade.openSend(focus.send.userid, focus.send.username);
+    if (focus) this.trade.openRequest(focus.request);
     else void this.trade.load();
   }
 
@@ -1803,16 +1800,15 @@ export class AllianceWindow {
   }
 
   private memberRow(alliance: MyAlliance, member: AllianceMember, actions: readonly MemberAction[]): HTMLElement {
-    // Every mate but yourself can be sent resources (design v5 §7b, §12b).
-    const canSend = member.user_id !== (this.myId() ?? -1);
-    const opened = this.openMember === member.user_id && (actions.length > 0 || canSend);
+    // Trading is swaps only (owner, 16 Nov 2026): a row opens for its rank actions alone.
+    const opened = this.openMember === member.user_id && actions.length > 0;
     const item = make("div", "alliance__item");
     item.setAttribute("role", "listitem");
     item.dataset["userid"] = String(member.user_id);
     item.classList.toggle("is-open", opened);
     const row = make("button", "alliance__row");
     row.type = "button";
-    row.disabled = actions.length === 0 && !canSend;
+    row.disabled = actions.length === 0;
     row.setAttribute("aria-expanded", String(opened));
     const role = member.role ?? "member";
     const words = make("span", "alliance__row-words");
@@ -1843,19 +1839,6 @@ export class AllianceWindow {
           }),
         );
       } else {
-        if (canSend) {
-          const tradeOn = this.tradeOn();
-          const send = button(ALLIANCE_TEXT.send, "btn--outline alliance__send", () => {
-            if (tradeOn) this.showTab("trade", { send: { userid: member.user_id, username: member.display_name } });
-          });
-          send.prepend(gameIcon("income", { size: 16, decorative: true }));
-          // Trading switched off: Send stays, greyed out, "Coming soon".
-          if (!tradeOn) {
-            send.disabled = true;
-            send.title = TRADE_OFF_TITLE;
-          }
-          more.append(send);
-        }
         for (const action of actions) {
           more.append(
             button(ALLIANCE_TEXT.action[action], action === "kick" ? "btn--outline alliance__kick" : "btn--outline", () => {

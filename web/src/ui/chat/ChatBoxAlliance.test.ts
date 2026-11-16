@@ -213,18 +213,18 @@ describe("trading in the Alliance room (design v5 §7c)", () => {
     expect(opened).toEqual([["trade", { request: 41 }]]);
   });
 
-  it("a mate's name offers Send in the Alliance room only", () => {
+  it("a mate's name offers no Send, in any room (swaps only, owner 16 Nov 2026)", () => {
     mount();
     box.element.querySelector<HTMLButtonElement>("button.chat-line__name")!.click();
     expect(box.element.querySelector('[data-action="income"]')).toBeNull();
     tabs()[1]!.click();
     box.element.querySelector<HTMLButtonElement>("button.chat-line__name")!.click();
-    box.element.querySelector<HTMLButtonElement>('[data-action="income"]')!.click();
-    expect(opened[0]?.[0]).toBe("trade");
-    expect(opened[0]?.[1]).toMatchObject({ send: {} });
+    expect(box.element.querySelector('[data-action="mute"]')).not.toBeNull();
+    expect(box.element.querySelector('[data-action="income"]')).toBeNull();
+    expect(opened).toEqual([]);
   });
 
-  it("switch off (beta 7): Trade on a request line and Send on a mate are greyed out, Coming soon, and do nothing", () => {
+  it("switch off: Trade on a request line is greyed out, Coming soon, and does nothing", () => {
     setAllianceTradeOn(false);
     mount();
     tabs()[1]!.click();
@@ -238,11 +238,6 @@ describe("trading in the Alliance room (design v5 §7c)", () => {
     expect(give.disabled).toBe(true);
     expect(give.title).toBe(TRADE_OFF_TITLE);
     give.dispatchEvent(new MouseEvent("click", { bubbles: true }));
-    box.element.querySelector<HTMLButtonElement>("button.chat-line__name")!.click();
-    const send = box.element.querySelector<HTMLButtonElement>('[data-action="income"]')!;
-    expect(send.disabled).toBe(true);
-    expect(send.title).toBe(TRADE_OFF_TITLE);
-    send.dispatchEvent(new MouseEvent("click", { bubbles: true }));
     expect(opened).toEqual([]);
   });
 });
