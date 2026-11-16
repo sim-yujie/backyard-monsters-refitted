@@ -371,6 +371,10 @@ export class AutoAttackFlow {
   private cueLists(root: HTMLElement): void {
     for (const stop of this.stopCues) stop();
     this.stopCues = [];
+    // astra's result looks: the middle fades at the bottom while more is below (a phone on its side).
+    for (const middle of root.querySelectorAll<HTMLElement>(".arv-middle")) {
+      this.stopCues.push(watchMoreBelow(middle, "auto-attack__list--more"));
+    }
     for (const list of root.querySelectorAll<HTMLElement>(".auto-attack__moves, .auto-attack__missing, .auto-attack__room")) {
       this.stopCues.push(watchMoreBelow(list, "auto-attack__list--more"));
       // Measured once laid out, and again whenever something that sizes the
@@ -714,7 +718,9 @@ export class AutoAttackFlow {
     const close = buttonOf("Close", "btn btn--primary auto-attack__close", () => this.close());
     this.show(
       "Attack result",
-      `auto-attack--result auto-attack--rv auto-attack--rv-${layout}${result.conquered ? " attack-end--win" : ""}`,
+      `auto-attack--result auto-attack--rv auto-attack--rv-${layout}${view.wide ? " auto-attack--rv-wide" : ""}${
+        result.conquered ? " attack-end--win" : ""
+      }`,
       [view.head, ...view.middle],
       [watch, close],
     );

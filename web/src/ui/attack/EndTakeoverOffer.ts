@@ -91,10 +91,14 @@ const compactPrice = (price: { resources: number; shiny?: number; welcome?: bool
   each.append(document.createTextNode(` ${formatAmount(price.resources)} each`));
   parts.push(each);
   if (price.shiny !== undefined) {
+    // "or [Shiny] 965" never breaks apart.
+    const alternative = document.createElement("span");
+    alternative.className = "end-takeover__alt";
     const or = document.createElement("span");
     or.className = "end-takeover__or";
     or.textContent = "or";
-    parts.push(or, resourceAmount("shiny", price.shiny, { tooltip: false }));
+    alternative.append(or, resourceAmount("shiny", price.shiny, { tooltip: false }));
+    parts.push(alternative);
   }
   return parts;
 };
@@ -165,7 +169,11 @@ export class EndTakeoverOffer {
       this.message.textContent = "";
       const info = document.createElement("div");
       info.className = "end-takeover__info";
-      info.append(lead, this.priceLine);
+      // astra round 1: "Terms ▾" on the heading's line, not left alone at the bottom.
+      const top = document.createElement("div");
+      top.className = "end-takeover__top";
+      top.append(lead);
+      info.append(top, this.priceLine);
       const terms = document.createElement("details");
       terms.className = "end-takeover__terms";
       const summary = document.createElement("summary");
@@ -173,7 +181,8 @@ export class EndTakeoverOffer {
       const words = document.createElement("p");
       words.textContent = COMPACT_TERMS;
       terms.append(summary, words);
-      this.element.append(info, actions, this.message, terms);
+      top.append(terms);
+      this.element.append(info, actions, this.message);
     } else {
       this.element.append(lead, this.priceLine, this.countdown, actions, this.message);
     }

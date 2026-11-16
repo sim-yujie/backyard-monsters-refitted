@@ -781,6 +781,21 @@
   background: var(--colour-accent);
 }
 
+.arv-damage__scale {
+  position: relative;
+  height: 12px;
+}
+
+.arv-damage__ninety {
+  position: absolute;
+  top: 0;
+  left: 90%;
+  transform: translateX(-50%);
+  font-size: 11px;
+  line-height: 12px;
+  color: var(--colour-text-secondary);
+}
+
 .arv-damage__mark {
   position: absolute;
   top: 0;
@@ -824,6 +839,17 @@
   align-items: center;
   gap: var(--space-2);
   min-height: 32px;
+}
+
+.arv-row__lead {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+}
+
+.arv-spent .arv-row__word {
+  min-width: 0;
 }
 
 .arv-row__icon {
@@ -875,7 +901,7 @@
 }
 
 .arv-champion-row {
-  justify-content: space-between;
+  gap: var(--space-3);
 }
 
 .arv-champion__health {
@@ -915,14 +941,37 @@
   padding: 0 var(--space-3);
   cursor: pointer;
   font-weight: 700;
-  list-style-position: inside;
+  list-style: none;
+}
+
+/* astra round 1: a fold says it opens. */
+.arv-fold__summary::-webkit-details-marker,
+.end-takeover__terms > summary::-webkit-details-marker {
+  display: none;
+}
+
+.arv-fold__word::after,
+.end-takeover__terms > summary::after {
+  content: " ▾";
+}
+
+.arv-fold[open] .arv-fold__word::after,
+.end-takeover__terms[open] > summary::after {
+  content: " ▴";
 }
 
 .arv-fold__peek {
   display: inline-flex;
   align-items: center;
-  gap: var(--space-1);
+  gap: var(--space-2);
   margin-left: auto;
+}
+
+.arv-fold__bombs {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  font-variant-numeric: tabular-nums;
 }
 
 .arv-fold__moved {
@@ -973,7 +1022,7 @@
 
 /* C: Loot and Army side by side on a wider window; one under the other on a phone upright. */
 @media (min-width: 621px) {
-  .attack-end.auto-attack--rv-C {
+  .attack-end.auto-attack--rv-wide {
     /* Wider than a plain popup (ui.css caps those at 560px). */
     width: min(calc(100vw - 2 * var(--space-4)), 680px);
     max-width: min(calc(100vw - 2 * var(--space-4)), 680px);
@@ -1005,10 +1054,29 @@
   color: var(--colour-text-secondary);
 }
 
-@media (min-width: 621px) {
+@media (min-width: 621px) and (min-height: 451px) {
   .arv-col--loot .arv-loot {
     grid-template-columns: minmax(0, 1fr);
   }
+}
+
+/* C: wide, the army's rows show in the column; a phone upright folds them. */
+@media (min-width: 621px) {
+  .arv-fold--army {
+    display: none;
+  }
+}
+
+@media (max-width: 620px) {
+  .arv-army-rows {
+    display: none;
+  }
+}
+
+.arv-army-rows {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
 }
 
 /* The compact takeover offer (EndTakeoverOffer `compact`): the heading and
@@ -1018,6 +1086,7 @@
   flex-wrap: wrap;
   align-items: center;
   gap: var(--space-2) var(--space-3);
+  margin: 0;
   padding: var(--space-2) var(--space-3);
 }
 
@@ -1032,12 +1101,24 @@
 
 .end-takeover--compact .end-takeover__actions {
   flex: 0 0 auto;
+  justify-content: flex-end;
   margin-left: auto;
 }
 
 .end-takeover--compact .end-takeover__lead {
   margin: 0;
   font-weight: 700;
+}
+
+.end-takeover__top {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  column-gap: var(--space-3);
+}
+
+.end-takeover__top > .end-takeover__terms[open] {
+  flex: 1 1 100%;
 }
 
 .end-takeover--compact .end-takeover__price {
@@ -1065,6 +1146,13 @@
   font-size: var(--text-xs);
 }
 
+.end-takeover__alt {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  white-space: nowrap;
+}
+
 .end-takeover__or {
   font-weight: 400;
   color: var(--colour-text-secondary);
@@ -1084,7 +1172,6 @@
 }
 
 .end-takeover__terms {
-  flex: 1 1 100%;
   font-size: var(--text-sm);
   color: var(--colour-text-secondary);
 }
@@ -1107,18 +1194,28 @@
   margin: 0 0 var(--space-1);
 }
 
-/* A phone on its side: the head tighter so the middle keeps room. */
-@media (max-height: 500px) {
+/* A phone on its side: the head tighter so the middle keeps room (astra round 1). */
+@media (max-height: 450px) {
+  .arv-head {
+    gap: var(--space-2);
+  }
+
+  .arv-head__words {
+    gap: 2px;
+  }
+
   .arv-head__tribe {
     width: 40px;
     height: 40px;
   }
 
   .arv-head__outcome {
-    font-size: var(--text-lg);
+    font-size: 18px;
   }
 
-  .attack-end.auto-attack--rv > .panel__body {
+  .attack-end.auto-attack--rv > .panel__body,
+  .arv-middle,
+  .arv-page {
     gap: var(--space-2);
   }
 }

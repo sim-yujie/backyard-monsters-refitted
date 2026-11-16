@@ -127,6 +127,27 @@ describe.each(LAYOUTS)("look %s", (layout) => {
   });
 });
 
+describe("astra round 1", () => {
+  it("only what was spent: B has no tabs and C no second column", () => {
+    const b = document.createElement("div");
+    b.append(...resultView("B", PLAIN).middle);
+    expect(b.querySelector(".arv-tabs")).toBeNull();
+    expect(b.textContent).toContain("Spent");
+    expect(resultView("C", PLAIN).wide).toBe(false);
+    expect(resultView("C", BUSY).wide).toBe(true);
+  });
+
+  it("B's second tab is Army, with no count that reads as the army's size", () => {
+    const b = document.createElement("div");
+    b.append(...resultView("B", BUSY).middle);
+    expect([...b.querySelectorAll(".arv-tab")].map((one) => one.textContent)).toEqual(["Loot", "Army"]);
+  });
+
+  it("the damage bar names its 90% mark", () => {
+    expect(resultView("A", BUSY).head.querySelector(".arv-damage__ninety")?.textContent).toBe("90%");
+  });
+});
+
 describe("the flow with a look chosen", () => {
   const calls = (result: AutoAttackResponse): AutoAttackCalls => ({
     plan: vi.fn(async () => ({}) as AutoAttackPlanResponse),

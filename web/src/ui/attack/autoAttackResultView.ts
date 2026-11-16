@@ -112,7 +112,11 @@ const damageLine = (result: AutoAttackResponse): HTMLElement => {
   const mark = make("span", "arv-damage__mark");
   mark.title = "90%: take over";
   bar.append(was, now, mark);
-  line.append(numbers, bar);
+  // astra round 1: the mark says what it is.
+  const scale = make("span", "arv-damage__scale");
+  scale.setAttribute("aria-hidden", "true");
+  scale.append(make("span", "arv-damage__ninety", "90%"));
+  line.append(numbers, bar, scale);
   return line;
 };
 
@@ -140,9 +144,16 @@ const stalled = (result: AutoAttackResponse): HTMLElement | null =>
     ? make("p", "arv-note arv-note--stalled", "Low damage. Attack by hand to try new drop points.")
     : null;
 
+/** astra round 1: "Spent" said in a word, so the chips do not read as the army left. */
 const spentRow = (result: AutoAttackResponse): HTMLElement => {
   const chips = unitChips(result.flung);
-  return iconRow("lost", "Monsters spent", "arv-spent", ...(chips.length > 0 ? chips : [make("span", "u-muted", "None")]));
+  const row = make("div", "arv-row arv-spent");
+  const lead = make("span", "arv-row__lead");
+  lead.append(make("span", "arv-row__word", "Spent"), gameIcon("lost", { size: 24, label: "Monsters spent", decorative: true }));
+  const body = make("span", "arv-row__body");
+  body.append(...(chips.length > 0 ? chips : [make("span", "u-muted", "None")]));
+  row.append(lead, body);
+  return row;
 };
 
 /** What moved into the yards in range first, and from where to where. */
@@ -197,7 +208,11 @@ const detailsFold = (result: AutoAttackResponse): HTMLElement | null => {
     const level = result.plan.champions.find((one) => one.t === champion.t)?.l ?? 1;
     peek.append(portrait(championPortrait(championByType(champion.t) ?? `G${champion.t}`, level, "icon")));
   }
-  if (result.bombs.length > 0) peek.append(gameIcon("resourcebomb", { size: 24, decorative: true }));
+  if (result.bombs.length > 0) {
+    const bombs = make("span", "arv-fold__bombs");
+    bombs.append(gameIcon("resourcebomb", { size: 24, decorative: true }), `×${result.bombs.length}`);
+    peek.append(bombs);
+  }
   if ((result.moved ?? []).length > 0) peek.append(make("span", "arv-fold__moved", "Moved"));
   summary.append(peek);
   const body = make("div", "arv-fold__body");
@@ -207,14 +222,13 @@ const detailsFold = (result: AutoAttackResponse): HTMLElement | null => {
 };
 
 /** B: the Loot | Army tabs over their two pages. */
-const tabs = (loot: HTMLElement[], army: HTMLElement[], spent: Readonly<Record<string, number>>): HTMLElement[] => {
+const tabs = (loot: HTMLElement[], army: HTMLElement[]): HTMLElement[] => {
   const strip = make("div", "arv-tabs");
   strip.setAttribute("role", "tablist");
   const pages = [make("div", "arv-page arv-page--loot"), make("div", "arv-page arv-page--army")];
   pages[0]!.append(...loot);
   pages[1]!.append(...army);
-  const count = Object.values(spent).reduce((sum, one) => sum + Math.max(0, one), 0);
-  const labels = ["Loot", `Army ×${count.toLocaleString("en-US")}`];
+  const labels = ["Loot", "Army"];
   const buttons = labels.map((label, index) => {
     const tab = make("button", "arv-tab", label);
     tab.type = "button";
@@ -252,27 +266,39 @@ export interface ResultView {
   readonly middle: HTMLElement[];
   /** Where the takeover offer goes, when the camp was conquered. */
   readonly offerHost: HTMLElement | null;
+  /** C with army rows to show: the wider window. */
+  readonly wide: boolean;
 }
 
 /** One of astra's looks for this result. */
 export const resultView = (layout: Exclude<ResultLayout, "today">, result: AutoAttackResponse): ResultView => {
   const offerHost = result.conquered ? make("div", "arv-offer") : null;
   const notes = [storageFull(result), stalled(result)].filter((one): one is HTMLElement => one !== null);
-  if (layout === "A") {
-    const middle = [lootGrid(result), ...notes, spentRow(result), detailsFold(result), offerHost].filter(
-      (one): one is HTMLElement => one !== null,
-    );
-    return { head: head(result), middle, offerHost };
+  const rows = armyRows(result);
+  const keep = (list: (HTMLElement | null)[]): HTMLElement[] => list.filter((one): one is HTMLElement => one !== null);
+  // Nothing but what was spent (astra round 1): every look is the plain receipt, no tabs, no second column.
+  if (layout === "A" || rows.length === 0) {
+    const middle = keep([lootGrid(result), ...notes, spentRow(result), layout === "A" ? detailsFold(result) : null, offerHost]);
+    return { head: head(result), middle, offerHost, wide: false };
   }
   if (layout === "B") {
-    const loot = [lootGrid(result), ...notes, offerHost].filter((one): one is HTMLElement => one !== null);
-    const army = [spentRow(result), ...armyRows(result)];
-    return { head: head(result), middle: tabs(loot, army, result.flung), offerHost };
+    const loot = keep([lootGrid(result), ...notes, offerHost]);
+    return { head: head(result), middle: tabs(loot, [spentRow(result), ...rows]), offerHost, wide: false };
   }
+  // C: on a phone upright the army's other rows fold under "Army details" (astra round 1);
+  // wider, they show in the column. Both are built; the screen size picks one.
+  const shown = make("div", "arv-army-rows");
+  shown.append(...rows);
+  const fold = make("details", "arv-fold arv-fold--army");
+  const summary = make("summary", "arv-fold__summary");
+  summary.append(make("span", "arv-fold__word", "Army details"));
+  const body = make("div", "arv-fold__body");
+  body.append(...armyRows(result));
+  fold.append(summary, body);
   const board = make("div", "arv-board");
   board.append(
     column("Loot", "arv-col--loot", [lootGrid(result), ...notes]),
-    column("Army", "arv-col--army", [spentRow(result), ...armyRows(result)]),
+    column("Army", "arv-col--army", [spentRow(result), shown, fold]),
   );
-  return { head: head(result), middle: [board, ...(offerHost ? [offerHost] : [])], offerHost };
+  return { head: head(result), middle: keep([board, offerHost]), offerHost, wide: true };
 };
