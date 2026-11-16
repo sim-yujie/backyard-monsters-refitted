@@ -23,7 +23,7 @@ const media = (query: string): string => {
   return "";
 };
 
-describe("the attack strip's loot (7.7.1: none on an upright phone)", () => {
+describe("the attack strip's loot (7.7.1: an upright phone showed none)", () => {
   it("writes the full figure where there is room, the short one on a phone", () => {
     expect(stripLootFigure(1575, false)).toBe(1575);
     expect(stripLootFigure(1575, true)).toBe("1.5K");
@@ -56,13 +56,25 @@ describe("the attack strip's loot (7.7.1: none on an upright phone)", () => {
     expect(attackCss).not.toMatch(/\.attack-strip__loot\s*\{\s*display: none;/);
   });
 
-  it("gives the loot its own row on an upright phone and a small phone on its side", () => {
-    const row = media("max-width: 620px), (min-width: 620.02px) and (max-width: 820px) and (max-height: 500px");
-    // The side-on strip keeps to one row otherwise (nowrap); the loot row may wrap under it.
-    expect(row).toMatch(/\.attack-strip \{\s*flex-wrap: wrap;/);
-    // Its own full-width row after the controls; a hidden one (a test, a raid) stays hidden.
-    expect(row).toMatch(/\.attack-strip__loot:not\(\[hidden\]\) \{\s*display: flex;[^}]*order: 1;[^}]*flex: 1 0 100%;/);
-    // After the side-on rules that set nowrap, so it wins.
-    expect(attackCss.indexOf(row)).toBeGreaterThan(attackCss.indexOf("@media (min-width: 620.02px) and (max-height: 500px) {"));
+  it("sits in a sunken tray inside the bar at every size (option A, the owner's pick)", () => {
+    expect(attackCss).toMatch(
+      /\n\.attack-strip \.attack-strip__loot:not\(\[hidden\]\) \{\s*border: 1px solid[^}]*background: var\(--colour-surface-sunken\);/,
+    );
+  });
+
+  it("gives the tray its own full-width row under the controls on an upright phone", () => {
+    const upright = attackCss.slice(attackCss.indexOf("/* Upright: a full-width tray under the controls"));
+    expect(upright).toMatch(/\.attack-strip \{\s*flex-wrap: wrap;/);
+    // After the controls, 44 px tall from the first second; a hidden one (a test, a raid) stays hidden.
+    expect(upright).toMatch(/\.attack-strip__loot:not\(\[hidden\]\) \{\s*order: 1;\s*flex: 1 0 100%;\s*height: 44px;/);
+    expect(upright).toMatch(/grid-template-columns: repeat\(4, minmax\(0, 1fr\)\);/);
+  });
+
+  it("keeps one row on a phone's side, the tray a 2x2 block between the readouts and the controls", () => {
+    const side = attackCss.slice(attackCss.indexOf("/* On its side: one row, the tray a 2x2 block"));
+    expect(side).toMatch(/\.attack-strip__loot:not\(\[hidden\]\) \{\s*order: 0;\s*flex: 0 0 216px;\s*height: 52px;/);
+    expect(side).toMatch(/grid-template-columns: 1fr 1fr;\s*grid-template-rows: 1fr 1fr;/);
+    // Nothing wraps the side-on strip onto a second row.
+    expect(attackCss).not.toMatch(/\(max-width: 820px\) and \(max-height: 500px\)/);
   });
 });

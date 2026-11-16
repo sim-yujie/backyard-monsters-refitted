@@ -56,7 +56,6 @@ import { Notices } from "@/ui/maproom/Notices";
 import type { Panel } from "@/ui/Panel";
 import { RESOURCE_KEYS, resourceAmount, resourceName, setResourceRealm } from "@/ui/resourceIcon";
 import { stripLootFigure, stripLootShort } from "@/ui/attack/stripLoot";
-import { lootLook } from "@/ui/attack/lootLook";
 import { gameIcon } from "@/ui/gameIcon";
 import { AttackMenu, sheetHandleLabel } from "@/ui/attack/AttackMenu";
 import {
@@ -840,9 +839,6 @@ export class AttackScene implements Scene {
     boosts.append(icon("boost", 14), boostsWord);
 
     strip.append(title, boosts, clock, damage, loot, spacer, hudSlot, speed, retreat, this.menu.element);
-    // TEMPORARY: the loot design round's options, `?blp=A|B|C` (lootLook.ts).
-    const look = lootLook();
-    if (look) strip.dataset.blp = look;
     context.overlay.content.append(strip);
 
     this.strip = strip;
@@ -858,8 +854,6 @@ export class AttackScene implements Scene {
   private buildDock(context: SceneContext): void {
     const dock = document.createElement("div");
     dock.className = this.live ? "attack-dock attack-dock--live" : "attack-dock";
-    const look = lootLook();
-    if (look) dock.dataset.blp = look;
 
     // The sheet's handle: only shown at phone widths, by the stylesheet.
     const handle = document.createElement("button");
