@@ -26,6 +26,7 @@ import {
   rewardText,
   speedupSeconds,
   speedupText,
+  spentRepairIds,
   thanksText,
   timeLeft,
 } from "./helpModel";
@@ -286,15 +287,77 @@ describe("the visit's marks and Help all (beta 8)", () => {
     ]);
   });
 
-  it("after today's repair in the yard, no repair wrench or Help all target is left (owner, 16 Nov 2026)", () => {
+  it("after today's repair in the yard, no amber repair wrench or Help all target is left, only grey ones (owner, 16 Nov 2026)", () => {
     const silo = { ...building({ countdown: upgrading(21_600) }), id: 7 } as YardBuilding;
     const hurt = { ...building(), id: 9 } as YardBuilding;
+    const full = { ...building(), id: 5 } as YardBuilding;
     const repaired = afterRefusal(block, 9, "repair", "repairedToday");
     expect(repaired.buildings["9"]).toEqual({ repair: "repairedToday" });
     expect(repaired.buildings["5"]).toEqual({ speedup: "helpersFull", repair: "repairedToday" });
-    expect(helpMarksOf(repaired, [silo, hurt], NOW)).toEqual([{ id: 7, kind: "speedup", saving: 1080 }]);
+    // Still damaged, their repair used up today: the small wrench in grey, never an amber one.
+    expect(helpMarksOf(repaired, [silo, hurt, full], NOW)).toEqual([
+      { id: 7, kind: "speedup", saving: 1080 },
+      { id: 9, kind: "spent", saving: null },
+      { id: 5, kind: "spent", saving: null },
+    ]);
     expect(helpAllTargets(repaired, true).filter((target) => target.kind === "repair")).toEqual([]);
     expect(helpAllTargets(repaired)).toEqual(helpAllTargets(block));
+  });
+
+  it("a friend's repair leaves the other damaged buildings a grey wrench and the repaired one none (owner's report, 16 Nov 2026)", () => {
+    const yard: HelpBlock = {
+      buildings: { "1": { repair: true }, "2": { repair: true }, "3": { repair: true }, "4": { speedup: true, repair: true } },
+    };
+    const at = (id: number, countdown: YardCountdown | null = null) => ({ ...building({ countdown }), id }) as YardBuilding;
+    const buildings = [at(1), at(2), at(3), at(4, upgrading(21_600))];
+    // Before: every damaged building wears the amber wrench.
+    expect(helpMarksOf(yard, buildings, NOW).map((mark) => [mark.id, mark.kind])).toEqual([
+      [1, "repair"],
+      [2, "repair"],
+      [3, "repair"],
+      [4, "speedup"],
+    ]);
+    const next = afterHelp(yard, 1, "repair", 4);
+    // The repaired one has nothing left; the others are still damaged, their repair used up today.
+    expect(helpMarksOf(next, buildings, NOW)).toEqual([
+      { id: 2, kind: "spent", saving: null },
+      { id: 3, kind: "spent", saving: null },
+      // A speed-up still open keeps the big amber wrench.
+      { id: 4, kind: "speedup", saving: 1080 },
+    ]);
+    expect([...spentRepairIds(next)].sort((a, b) => a - b)).toEqual([2, 3]);
+    expect(spentRepairIds(next).has(1)).toBe(false);
+    // Once that speed-up is given too, its building is still damaged: grey.
+    expect(helpMarksOf(afterHelp(next, 4, "speedup", 3), buildings, NOW).map((mark) => [mark.id, mark.kind])).toEqual([
+      [2, "spent"],
+      [3, "spent"],
+      [4, "spent"],
+    ]);
+  });
+
+  it("a visit later the same day (or a save repaired before the fix) shows every damaged building grey", () => {
+    // The server sends every repair as repairedToday once today's is given.
+    const later: HelpBlock = { buildings: { "2": { repair: "repairedToday" }, "3": { repair: "repairedToday" } } };
+    const buildings = [2, 3, 8].map((id) => ({ ...building(), id }) as YardBuilding);
+    expect(helpMarksOf(later, buildings, NOW)).toEqual([
+      { id: 2, kind: "spent", saving: null },
+      { id: 3, kind: "spent", saving: null },
+    ]);
+    expect(buildingHelp(later, 2)?.repair).toEqual({
+      allowed: false,
+      reason: "repairedToday",
+      text: "You already repaired a building here today.",
+    });
+  });
+
+  it("no grey wrench when nothing is used up, on the own yard (no block), or for another refusal", () => {
+    const hurt = { ...building(), id: 9 } as YardBuilding;
+    expect(helpMarksOf({ buildings: { "9": { repair: true } } }, [hurt], NOW)).toEqual([{ id: 9, kind: "repair", saving: null }]);
+    expect(helpMarksOf(null, [hurt], NOW)).toEqual([]);
+    expect(spentRepairIds(null).size).toBe(0);
+    expect(helpMarksOf({ buildings: { "9": { repair: "underAttack" } } }, [hurt], NOW)).toEqual([]);
+    // A building the yard no longer has draws nothing.
+    expect(helpMarksOf({ buildings: { "9": { repair: "repairedToday" } } }, [], NOW)).toEqual([]);
   });
 
   it("tags a saving in its largest unit", () => {

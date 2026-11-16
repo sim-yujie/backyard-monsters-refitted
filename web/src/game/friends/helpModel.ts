@@ -102,6 +102,23 @@ export const helpableIds = (block: HelpBlock | null): Set<number> => {
 };
 
 /**
+ * The buildings still damaged whose repair is used up for today
+ * (`repairedToday`: one repair a friend's yard a UTC day, owner 16 Nov 2026)
+ * and that have no speed-up open: they wear a grey wrench. A visit draws no
+ * damage, so without it the yard looks fully repaired once today's repair is
+ * given (owner's bug report, 16 Nov 2026: "it all repaired"). The same on a
+ * visit later that day, when the server sends every repair as `repairedToday`.
+ */
+export const spentRepairIds = (block: HelpBlock | null): Set<number> => {
+  const ids = new Set<number>();
+  if (!block) return ids;
+  for (const [id, offer] of Object.entries(block.buildings)) {
+    if (offer.repair === "repairedToday" && offer.speedup !== true) ids.add(Number(id));
+  }
+  return ids;
+};
+
+/**
  * Whether a refusal stands on the building's button from then on. One about
  * the whole visit or that lifts by itself does not: the friend's yard under
  * attack, not friends any more (the scene says so), and the spam limit
@@ -296,28 +313,43 @@ export const isHelpOpen = (block: HelpBlock | null, target: HelpTarget): boolean
   block?.buildings[String(target.id)]?.[target.kind] === true;
 
 /**
+ * What a wrench on a visit stands for: a speed-up open (the big marks), a
+ * repair open (today's small amber wrench), or a repair used up for today
+ * on a building still damaged (the small wrench in grey, `spentRepairIds`).
+ */
+export type HelpMarkKind = HelpKind | "spent";
+
+/**
  * One wrench on a visit: the building, whether it takes a speed-up (the big
- * marks: ring, big wrench, tag) or only a repair (today's small wrench), and
+ * marks: ring, big wrench, tag), only a repair (today's small wrench) or
+ * nothing now but is still damaged (`spent`: the small wrench in grey), and
  * the seconds a speed-up would save now (null: no tag).
  */
 export interface HelpMark {
   readonly id: number;
-  readonly kind: HelpKind;
+  readonly kind: HelpMarkKind;
   readonly saving: number | null;
 }
 
 /**
  * The wrenches a visit draws: one per building with a help open
- * ({@link helpableIds}). A speed-up open makes it a `speedup` mark tagged
- * with what it would save at `now` (no tag under a second); a repair only,
- * a `repair` mark with no tag.
+ * ({@link helpableIds}), and a grey one per building whose repair is used
+ * up for today ({@link spentRepairIds}). A speed-up open makes it a
+ * `speedup` mark tagged with what it would save at `now` (no tag under a
+ * second); a repair only, a `repair` mark with no tag; a spent repair, a
+ * `spent` mark with no tag.
  *
  * @param now - Unix seconds
  */
 export const helpMarksOf = (block: HelpBlock | null, buildings: readonly YardBuilding[], now: number): HelpMark[] => {
   const ids = helpableIds(block);
+  const spent = spentRepairIds(block);
   const marks: HelpMark[] = [];
   for (const building of buildings) {
+    if (spent.has(building.id)) {
+      marks.push({ id: building.id, kind: "spent", saving: null });
+      continue;
+    }
     if (!ids.has(building.id)) continue;
     const offer = block?.buildings[String(building.id)];
     const kind: HelpKind = offer?.speedup === true ? "speedup" : "repair";
