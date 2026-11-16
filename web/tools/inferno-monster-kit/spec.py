@@ -216,7 +216,7 @@ SPECS = {
         # value 0.25, measured on IC3.webp); the belly, claws, stripes and tusks fall outside both hue windows
         tone=dict(
             armour=dict(hue=(42, 80), soft=5, min_sat=0.25, chroma=0.85, value=0.84, gains=(0.97, 1.0, 1.0)),
-            fur=dict(hue=(275, 335), soft=8, min_sat=0.2, chroma=0.82, value=0.84, gains=(1.0, 1.0, 0.97), hi=150),
+            fur=dict(hue=(275, 335), soft=8, min_sat=0.15, chroma=0.72, value=0.7, gains=(1.0, 1.0, 0.97), hi=170),
         ),
         demagenta=True,                  # hot pink drool-gap specks (h18) take their neighbours' colour
         # view_match left out: it matches each view's whole-body mean, and Malphus's front views carry the orange
