@@ -206,6 +206,11 @@ SPECS = {
         design="portrait",
         anim_colour_lock=True,
         gamma=1.0,
+        # Codex painted the armour more golden and saturated than the card (hue 42 vs 48 degrees, saturation 0.77 vs
+        # 0.60) and the fur pinker: "body" (the olive armour) moves toward the portrait's greener olive, "limbs" (the
+        # pixels red well above green: belly, fur, pink stripes) a little less red, so the fur reads violet
+        grade=dict(body=((0.94, 0.0), (1.06, 0.0), (1.2, 0.0)), limbs=((0.9, 0.0), (1.0, 0.0), (1.1, 0.0))),
+        grade_chroma=True,               # tusks, fangs and drool stay as painted
         # view_match left out: it matches each view's whole-body mean, and Malphus's front views carry the orange
         # belly and ivory tusks that its back views hide (switch on only if the batches really drift)
         open_holes="core",               # see-through gaps between the legs, arms and body (not the lilac fur highlights)
