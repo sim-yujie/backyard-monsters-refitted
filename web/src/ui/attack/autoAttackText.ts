@@ -87,11 +87,11 @@ export const shortfallText = (item: PlanShortfall): string => {
  * Why Repeat attack is greyed out, or null when it can run. The missing
  * things are listed in full by {@link shortfallText}; this is the one line.
  */
-export const repeatRefusal = (answer: AutoAttackPlanResponse): string | null => {
+export const repeatRefusal = (answer: AutoAttackPlanResponse, context: "sheet" | "panel" = "sheet"): string | null => {
   if (!answer.plan) return null;
   if (answer.underAttack) return "Someone else is attacking this camp right now.";
   if (answer.outOfRange) return "This camp is out of your Flingers' range.";
-  if (answer.missing.length > 0) return missingHeadline(answer.missing);
+  if (answer.missing.length > 0) return missingHeadline(answer.missing, context);
   if (answer.noRoom) return NO_ROOM_TEXT;
   return null;
 };
@@ -102,10 +102,10 @@ export const repeatRefusal = (answer: AutoAttackPlanResponse): string | null => 
 export const NO_ROOM_TEXT = "Not enough Monster Housing in range.";
 
 /** Under {@link NO_ROOM_TEXT}: the space the monsters that would move in take. */
-export const ROOM_NEED_TEXT = (need: number): string => `Moving monsters need ${need.toLocaleString("en-US")} space.`;
+export const ROOM_NEED_TEXT = (need: number): string => `Incoming monsters need ${need.toLocaleString("en-US")} space.`;
 
 /** Above the moves on the confirm sheet. */
-export const MOVES_LEAD = (count: number): string => `${count} ${count === 1 ? "transfer" : "transfers"}`;
+export const MOVES_LEAD = (count: number): string => `${count} ${count === 1 ? "move" : "moves"} before attacking`;
 
 /** The confirm sheet's button when monsters move first. */
 export const MOVE_AND_ATTACK = "Move and attack";
@@ -121,16 +121,18 @@ export const yardPlace = (label: YardLabel | undefined): string => (label ? `${l
 
 /** The camp panel's line when Repeat attack moves monsters in first. */
 export const movesLineText = (moves: number): string =>
-  moves === 1 ? "1 monster transfer needed" : `${moves} monster transfers needed`;
+  moves === 1 ? "1 move needed" : `${moves} moves needed`;
 
 /** Why a camp has no Repeat attack yet. */
 export const noPlanText = (tribe: string, level: number): string =>
   `Attack a ${tribe} camp of level ${level} by hand once, and you can repeat that attack here.`;
 
 // Smart Repeat attack (astra): name the shortage without calling bombs or champions monsters.
-const missingHeadline = (missing: readonly PlanShortfall[]): string =>
+const missingHeadline = (missing: readonly PlanShortfall[], context: "sheet" | "panel" = "sheet"): string =>
   missing.some((item) => item.kind === "monster")
-    ? "Not enough monsters across your yards."
+    ? context === "panel"
+      ? "Missing monsters for that attack:"
+      : "Not enough monsters for that attack."
     : "Missing from the attack:";
 
 /** The server's refusal, in words a player can act on. */

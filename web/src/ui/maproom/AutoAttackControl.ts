@@ -167,7 +167,7 @@ export class AutoAttackControl implements CellPanelAction {
     // Smart Repeat attack: monsters move into the yards in range first.
     const moves = answer.moves?.length ?? 0;
     this.line.textContent = refusal
-      ? refusal
+      ? repeatRefusal(answer, "panel")
       : moves > 0
         ? `${source}. ${movesLineText(moves)}.`
         : `${source}.`;
@@ -177,7 +177,8 @@ export class AutoAttackControl implements CellPanelAction {
       if (answer.missing.length > 0) this.missing.append(missingList(answer.missing));
       else this.missing.append(...roomList(answer));
       this.missing.hidden = this.missing.children.length === 0;
-      this.detail.append(el("p", "auto-attack-action__history", source));
+      // Smart Repeat attack (astra): explain the saved attack before its refusal.
+      this.detail.prepend(el("p", "auto-attack-action__history", source));
     }
   }
 

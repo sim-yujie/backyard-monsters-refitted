@@ -204,7 +204,7 @@ const attackArmy = (monsters: Readonly<Record<string, number>>): HTMLElement => 
 
 const movesHeading = (count: number): HTMLElement => {
   const heading = paragraph("", "auto-attack__moves-lead");
-  for (const label of ["From", MOVES_LEAD(count), "To"]) {
+  for (const label of ["From", MOVES_LEAD(count), "To · in range"]) {
     const part = document.createElement("span");
     part.textContent = label;
     heading.append(part);
@@ -257,7 +257,9 @@ export const roomList = (answer: AutoAttackPlanResponse): HTMLElement[] => {
     row.append(yardChip(answer.yards?.[one.baseid], "room"), free);
     list.append(row);
   }
-  return noRoom.free.length > 0 ? [need, list] : [need];
+  return noRoom.free.length > 0
+    ? [need, paragraph("Receiving yards in range", "auto-attack__room-label"), list]
+    : [need];
 };
 
 /** The `reason` of the server's refusal, if it is one. */
@@ -349,7 +351,7 @@ export class AutoAttackFlow {
           // Smart Repeat attack (astra): the cost stays above the buttons, outside the list.
           const footer = document.createElement("div");
           footer.className = "auto-attack__footer";
-          footer.append(paragraph("Free transfer. Monsters spent. Result in seconds.", "u-muted auto-attack__spent"), row);
+          footer.append(paragraph("Moving is free. The attack uses up these monsters.", "u-muted auto-attack__spent"), row);
           view.panel.setContent(words, footer);
         } else {
           view.panel.setContent(words, row);
@@ -381,12 +383,30 @@ export class AutoAttackFlow {
     const body: HTMLElement[] = [];
     if (changed) body.push(paragraph(MOVES_CHANGED, "auto-attack__changed"));
     body.push(
-      paragraph(`${campText(plan)} · camp damage now ${Math.floor(answer.damage)}%`, "attack-end__outcome"),
+      paragraph(
+        moves.length > 0
+          ? `${plan.tribe} camp · Level ${plan.level} · ${Math.floor(answer.damage)}% damaged`
+          : `${campText(plan)} · camp damage now ${Math.floor(answer.damage)}%`,
+        "attack-end__outcome",
+      ),
       paragraph(planSourceText(plan, this.options.baseid, this.now()), "u-muted auto-attack__source"),
       moves.length > 0 ? attackArmy(plan.monsters) : paragraph(monstersText(plan.monsters), "auto-attack__army"),
     );
-    const includes = includesText(plan);
     const details: HTMLElement[] = [];
+    // Smart Repeat attack (astra): the rest of the saved army is already in range.
+    if (moves.length > 0) {
+      const inRange = { ...plan.monsters };
+      for (const move of moves)
+        for (const [id, count] of Object.entries(move.monsters)) inRange[id] = (inRange[id] ?? 0) - count;
+      const units = armyUnits(inRange);
+      if (units.length > 0) {
+        const ready = document.createElement("div");
+        ready.className = "auto-attack__in-range";
+        ready.append(document.createTextNode("Already in range:"), ...units);
+        details.push(ready);
+      }
+    }
+    const includes = includesText(plan);
     if (includes) details.push(paragraph(includes, "auto-attack__includes"));
     if (plan.siege) details.push(paragraph(SIEGE_NOT_REPEATED, "u-muted auto-attack__siege"));
     if (moves.length > 0 && details.length > 0) {
