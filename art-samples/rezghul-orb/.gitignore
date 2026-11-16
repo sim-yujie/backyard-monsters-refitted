@@ -1,0 +1,8 @@
+# The orb candidates (1x, 2x), the comparison sheets and the Codex prompt are kept so the owner can swap the orb.
+!out/*.png
+out/*.full.png
+!compare-orbs.png
+!compare-orbs-1x.png
+!c1/prompt.txt
+!c2/prompt.txt
+!cut_c2.py
