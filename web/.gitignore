@@ -7,3 +7,6 @@ dist/
 .vite/
 coverage/
 .vercel
+# Layout check (e2e/layout) results
+e2e/layout/results/
+e2e/layout/report/
