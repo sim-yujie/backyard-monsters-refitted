@@ -56,8 +56,11 @@
   color: var(--colour-text-muted);
 }
 
+/* Why the button is off. The warning ink of the panel's own style: amber on
+   Modern's dark plate, dark amber on Classic's cream (the bright amber was
+   all but invisible there). */
 .help-panel__reason {
-  color: var(--colour-warning-bright);
+  color: var(--colour-warning);
 }
 
 .help-panel__button {
