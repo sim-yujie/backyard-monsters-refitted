@@ -1,5 +1,5 @@
 import type { Page } from "@playwright/test";
-import { openAchievements, openFriendsScreen, openShop, pressDock } from "./game";
+import { openAchievements, openFriendsScreen, openRepeatResult, openShop, pressDock } from "./game";
 
 /**
  * Every window the layout check opens on the own yard.
@@ -145,6 +145,17 @@ export const WINDOWS: readonly WindowCase[] = [
     items: null,
     tabs: true,
     open: dock("alliance"),
+  },
+  {
+    // The Repeat attack's result (owner, 16 Nov 2026): the loot and the
+    // take-over cost, with Take over, Watch and Close in sight at every size.
+    // Opened from the build's preview with a conquered camp.
+    id: "repeat-result",
+    label: "Repeat attack result",
+    panel: ".auto-attack--result",
+    items: ".end-takeover__take",
+    tabs: false,
+    open: openRepeatResult,
   },
 ];
 

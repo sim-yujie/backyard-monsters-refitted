@@ -26,19 +26,6 @@
   color: var(--colour-text-secondary);
 }
 
-.auto-attack__conquered {
-  color: var(--colour-success, var(--colour-text));
-}
-
-.auto-attack__added {
-  color: var(--colour-accent);
-}
-
-.auto-attack__stalled {
-  margin: 0 0 var(--space-3);
-  color: var(--colour-warning);
-}
-
 /* The map's camp panel: the Repeat attack button sits under Attack, and its
    line under its button says which attack it repeats or what is missing. */
 .auto-attack-action {
@@ -658,7 +645,8 @@
   }
 
   .attack-end.auto-attack--confirm,
-  .attack-end.auto-attack--failed {
+  .attack-end.auto-attack--failed,
+  .attack-end.auto-attack--result {
     align-self: center;
     width: auto;
     height: auto;
@@ -672,4 +660,279 @@
    every size (measured in the browser, lead's vetting 16 Nov). */
 .auto-attack--moves .auto-attack__scroll > .auto-attack__moves {
   padding-block: calc(var(--space-1) / 2);
+}
+
+/* ── The Repeat attack's result (owner, 16 Nov 2026: "I just want to know the
+ * loot, and resource needed to take over") ────────────────────────────────
+ * The camp and whether it was won, the loot, the take-over price with Take
+ * over, then Watch and Close (autoAttackResultView.ts). It fits every
+ * supported screen without scrolling; only the loot would scroll on a
+ * screen shorter than those. */
+
+.attack-end.auto-attack--result > .panel__body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  min-height: 0;
+  max-height: min(84vh, 760px);
+  max-height: min(84dvh, 760px);
+  overflow: hidden;
+}
+
+.attack-end.auto-attack--result > .panel__body > :not(.arv-middle) {
+  flex: none;
+}
+
+.auto-attack--result .arv-middle {
+  gap: var(--space-2);
+}
+
+.auto-attack--result .attack-end__actions {
+  margin: 0;
+}
+
+.auto-attack--result .attack-end__actions .btn {
+  min-width: 112px;
+  min-height: 44px;
+}
+
+/* astra round 2: the camp portrait, name and level, and the outcome word. */
+.arv-head {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.arv-head__tribe {
+  flex: none;
+  width: 56px;
+  height: 56px;
+  object-fit: contain;
+  border-radius: var(--radius-md);
+  background: var(--colour-surface-sunken);
+}
+
+.arv-head__words {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.arv-head__camp {
+  margin: 0;
+  font-size: var(--text-sm);
+  font-weight: 700;
+  color: var(--colour-text-secondary);
+}
+
+.arv-head__outcome {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-1) var(--space-3);
+  margin: 0;
+}
+
+.arv-head__word {
+  font-family: var(--font-display);
+  font-size: var(--text-xl);
+  line-height: 1.1;
+}
+
+.arv-head__outcome--won .arv-head__word {
+  color: var(--colour-success, var(--colour-text));
+}
+
+/* Review round 1: a loss reads as one at a glance, without an alarm red. */
+.arv-head__outcome:not(.arv-head__outcome--won) .arv-head__word {
+  color: var(--colour-warning);
+}
+
+/* A part's small heading ("Loot"; the offer's "Takeover cost" matches it). */
+.arv-label,
+.end-takeover--compact .end-takeover__lead {
+  margin: 0;
+  font-size: var(--text-sm);
+  font-weight: 700;
+  color: var(--colour-text-secondary);
+}
+
+.arv-part {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+/* The loot, two by two, the same size whatever the numbers. */
+.arv-loot {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.arv-loot__item {
+  display: flex;
+  align-items: center;
+  min-height: 36px;
+  padding: var(--space-1) var(--space-2);
+  border: 1px solid var(--colour-border);
+  border-radius: var(--radius-md);
+  font-size: var(--text-md);
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.arv-loot__item--none {
+  color: var(--colour-text-muted);
+  opacity: 0.75;
+}
+
+.arv-note {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+  margin: 0;
+  font-size: var(--text-sm);
+  font-weight: 700;
+  color: var(--colour-warning);
+}
+
+/* The take-over offer, short (EndTakeoverOffer `compact`): "Takeover cost"
+   and the price on the left, Take over on the right. */
+.end-takeover.end-takeover--compact {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2) var(--space-3);
+  margin: 0;
+  padding: var(--space-2) var(--space-3);
+}
+
+/* The price takes the line; Take over drops under it when they do not fit. */
+.end-takeover--compact .end-takeover__info {
+  display: flex;
+  flex: 1 1 200px;
+  flex-direction: column;
+  gap: var(--space-1);
+  min-width: 0;
+}
+
+.end-takeover--compact .end-takeover__actions {
+  flex: 0 0 auto;
+  justify-content: flex-end;
+  margin: 0 0 0 auto;
+}
+
+.end-takeover--compact .end-takeover__take {
+  min-height: 44px;
+}
+
+.end-takeover--compact .end-takeover__price {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-1) var(--space-2);
+  margin: 0;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.end-takeover__each {
+  display: inline-flex;
+  align-items: center;
+  gap: 1px;
+  white-space: nowrap;
+}
+
+/* astra round 3: a clear gap after the four icons, so "450,000 each" is not
+   read as the Goo's price alone. */
+.end-takeover__each > :nth-child(4) {
+  margin-inline-end: 4px;
+}
+
+.end-takeover__alt {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  white-space: nowrap;
+}
+
+.end-takeover__or {
+  font-weight: 400;
+  color: var(--colour-text-secondary);
+}
+
+.end-takeover--compact .end-takeover__message {
+  flex: 1 1 100%;
+  margin: 0;
+}
+
+.end-takeover--compact .end-takeover__message:empty {
+  display: none;
+}
+
+/* Review round 1: a phone upright puts Take over under the price at full
+   width, so the box has no empty half and the button is in thumb reach. */
+@media (max-width: 620px) {
+  .end-takeover--compact .end-takeover__actions {
+    flex: 1 1 100%;
+    margin: 0;
+  }
+
+  .end-takeover--compact .end-takeover__take {
+    width: 100%;
+  }
+}
+
+/* Room for the price and Take over side by side with a clear gap (at 440px
+   "450,000 each" ran into the button, 5px over in Classic). */
+@media (min-width: 621px) {
+  .attack-end.auto-attack--result {
+    width: min(calc(100vw - 2 * var(--space-4)), 480px);
+    max-width: min(calc(100vw - 2 * var(--space-4)), 480px);
+  }
+}
+
+/* A wide, short screen (a phone on its side): a wider window, the loot four
+   across and the camp tighter, so it all fits without scrolling. */
+@media (min-width: 621px) and (max-height: 500px) {
+  .attack-end.auto-attack--result {
+    width: min(calc(100vw - 2 * var(--space-4)), 640px);
+    max-width: min(calc(100vw - 2 * var(--space-4)), 640px);
+  }
+}
+
+@media (max-height: 500px) {
+  .attack-end.auto-attack--result > .panel__body {
+    gap: var(--space-2);
+  }
+
+  .arv-loot {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+
+  .arv-loot__item {
+    min-height: 32px;
+    padding-block: 2px;
+  }
+
+  .arv-head__tribe {
+    width: 40px;
+    height: 40px;
+  }
+
+  .arv-head__words {
+    flex-direction: row;
+    flex-wrap: wrap;
+    align-items: baseline;
+    column-gap: var(--space-3);
+  }
+
+  .arv-head__word {
+    font-size: 18px;
+  }
 }

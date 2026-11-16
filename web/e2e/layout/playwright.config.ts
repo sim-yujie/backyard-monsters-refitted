@@ -111,7 +111,9 @@ export default defineConfig({
       url: settings.webUrl,
       timeout: 300_000,
       reuseExistingServer: false,
-      env: { VITE_PROXY_TARGET: settings.serverUrl },
+      // VITE_LAYOUT_CHECK: the build installs the openers of windows the
+      // sandbox yard cannot reach (the Repeat attack's result).
+      env: { VITE_PROXY_TARGET: settings.serverUrl, VITE_LAYOUT_CHECK: "1" },
     },
   ],
 });

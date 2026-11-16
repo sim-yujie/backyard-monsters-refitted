@@ -160,11 +160,11 @@ describe("the bar's timing on Repeat attack", () => {
     expect(value()).toBe(100);
     expect(bar()!.classList.contains("repeat-bar--full")).toBe(true);
     expect(onAttacked).toHaveBeenCalledWith(RESULT);
-    expect(modal.textContent).not.toContain("Auto-attack result");
+    expect(modal.textContent).not.toContain("Attack result");
 
     await timers.advance(REPEAT_BAR_FULL_HOLD_MS);
     expect(modal.querySelector(".repeat-bar")).toBeNull();
-    expect(modal.textContent).toContain("Auto-attack result");
+    expect(modal.textContent).toContain("Attack result");
     // The result is the full sheet again, with only Watch and Close.
     expect(modal.querySelector(".auto-attack__backdrop--bar")).toBeNull();
     expect([...modal.querySelectorAll(".attack-end__actions button")].map((one) => one.textContent)).toEqual([
@@ -190,7 +190,7 @@ describe("the bar's timing on Repeat attack", () => {
     expect(value()).toBe(100);
     expect(bar()!.classList.contains("repeat-bar--full")).toBe(true);
     await timers.advance(REPEAT_BAR_FULL_HOLD_MS);
-    expect(modal.textContent).toContain("Auto-attack result");
+    expect(modal.textContent).toContain("Attack result");
   });
 
   it("an error: the bar stops at once and the error shows as before", async () => {
@@ -226,7 +226,7 @@ describe("the bar's timing on Repeat attack", () => {
     expect(modal.textContent).toContain("Your monsters are attacking…");
     run.resolve(RESULT);
     await new Promise((resolve) => setTimeout(resolve, 0));
-    expect(modal.textContent).toContain("Auto-attack result");
+    expect(modal.textContent).toContain("Attack result");
   });
 });
 

@@ -175,6 +175,7 @@ const WINDOW_CLASSES = [
   ".ach-screen",
   ".alliance-window",
   ".building-panel",
+  ".auto-attack--result",
 ];
 
 const openWindows = (page: Page) =>
@@ -185,6 +186,22 @@ const openWindows = (page: Page) =>
  * fan; if one will not close, reloads the page and waits for the yard again.
  */
 export const closeAll = async (page: Page): Promise<void> => {
+  // The Repeat attack's result covers the dock's More bubble on a phone
+  // upright, and the test's mouse rests there from the step that pressed
+  // More. When the result closes, More is under the mouse again and opens
+  // its fan by hover (BubbleMenu), which then covers World chat for the
+  // next step. A real touch has no hover, so the mouse moves to the yard's
+  // middle (on the result's scrim) first, and the result closes by key.
+  const result = page
+    .locator('.overlay__layer .auto-attack--result button[aria-label^="Close"]')
+    .filter({ visible: true })
+    .first();
+  if ((await result.count()) > 0) {
+    const size = page.viewportSize();
+    if (size) await page.mouse.move(Math.round(size.width / 2), Math.round(size.height * 0.3));
+    await result.press("Enter", { timeout: 3000 }).catch(() => undefined);
+    await page.waitForTimeout(250);
+  }
   for (let round = 0; round < 4; round += 1) {
     const close = openWindows(page)
       .locator('button[aria-label^="Close"]')
@@ -335,4 +352,22 @@ export const closeWorldChat = async (page: Page): Promise<void> => {
   ) {
     await tab.click().catch(() => undefined);
   }
+};
+
+/**
+ * The Repeat attack's result after a conquered camp, from the build's
+ * preview (`__autoAttackResult`, VITE_LAYOUT_CHECK): the sandbox yard is not
+ * on Map Room 2, so no real Repeat attack can reach it.
+ */
+export const openRepeatResult = async (page: Page): Promise<boolean> => {
+  const opened = await page.evaluate(() => {
+    const open = (globalThis as Record<string, unknown>)["__autoAttackResult"];
+    if (typeof open !== "function") return false;
+    return Boolean((open as (kind: string) => unknown)("won"));
+  });
+  if (!opened) return false;
+  await page.locator(".overlay__layer .auto-attack--result").first().waitFor({ timeout: 10_000 });
+  // The take-over price arrives a moment later (answered in the page).
+  await page.locator(".overlay__layer .auto-attack--result .end-takeover__take:not([disabled])").first().waitFor({ timeout: 10_000 }).catch(() => undefined);
+  return true;
 };

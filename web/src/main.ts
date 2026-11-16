@@ -72,6 +72,17 @@ if (import.meta.env.DEV) {
   (globalThis as Record<string, unknown>)["bymr"] = app;
 }
 
+// The layout check's way to the Repeat attack's result (web/e2e/layout): a
+// dev build, or the check's own build (VITE_LAYOUT_CHECK=1); never a release.
+if (import.meta.env.DEV || import.meta.env.VITE_LAYOUT_CHECK === "1") {
+  void import("@/ui/attack/autoAttackResultPreview").then(({ previewAutoAttackResult }) => {
+    (globalThis as Record<string, unknown>)["__autoAttackResult"] = (kind?: "won" | "lost") => {
+      const modal = document.querySelector<HTMLElement>(".overlay__layer--modal");
+      return modal ? previewAutoAttackResult(modal, kind) : null;
+    };
+  });
+}
+
 // Vite replaces the module on save; tear the old app down so the canvas, the
 // overlay and the ticker do not accumulate.
 if (import.meta.hot) {
