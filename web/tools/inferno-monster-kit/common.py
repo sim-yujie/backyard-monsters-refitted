@@ -339,7 +339,7 @@ def grade(im, spec):
 
 def tone(rgb, parts):
     """spec tone (IC3 lead vetting, 16 Nov): after the grade, each named part, picked by hue (degrees, soft edge
-    `soft`) and saturation over `min_sat`, is moved toward the portrait: chroma scaled round the pixel's luma
+    `soft`) and saturation over `min_sat` (and under `max_sat`, if given), is moved toward the portrait: chroma scaled round the pixel's luma
     (`chroma`), per-channel `gains`, brightness times `value` (pixels with luma over `hi` keep their brightness,
     so highlights do not go flat). Pixels outside every hue window (belly, claws, stripes, tusks) are untouched."""
     x = rgb / 255.0
@@ -354,7 +354,8 @@ def tone(rgb, parts):
         lo, hi = p["hue"]
         soft = p.get("soft", 8)
         w = (np.clip((hue - (lo - soft)) / soft, 0, 1) * np.clip(((hi + soft) - hue) / soft, 0, 1)
-             * np.clip((sat - p.get("min_sat", 0.2)) / 0.1, 0, 1))
+             * np.clip((sat - p.get("min_sat", 0.2)) / 0.1, 0, 1)
+             * np.clip((p.get("max_sat", 2.0) - sat) / 0.1, 0, 1))  # IC4: the orange eye balls (sat ~0.8) stay out of the flesh
         c = (luma + (rgb - luma) * p["chroma"]) * np.array(p.get("gains", (1.0, 1.0, 1.0)))
         keep = np.clip((luma - p.get("hi", 255)) / 40, 0, 1)
         c = c * (p["value"] + (1 - p["value"]) * keep)

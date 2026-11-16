@@ -220,3 +220,35 @@ game sheets backed up in `art-work/IC2-r3/r2-assets`) paints that creature:
     the card's 0.25 by eye, since the card's fur has many near-black strands the measure skips. Belly, claws, stripes
     and tusks are outside both windows (belly stays 148,83,23). `desk.py` reads `masters/`: copy the new sheets
     there before drawing it.
+
+## IC4 Valgos (painted 16 Nov, waiting for the owner)
+
+- **Flash sheet.** `valgos.png` is 30 x 1 whole-pixel cells of 55 x 32, one pose (Flash glides it). The shadow tips of
+  columns 13-19 reach 1-4 px into the next cell, so `flash_w=55.0` switches on the own-art-run cut (44 of 16716 art
+  pixels lost at the cell edges). The body creeps right 0.425 px a column (art laid out ~55.4 apart; linear + one sine
+  fit of the body centre, 0.36 px rms): `flash_drift=0.425`.
+- **Symmetric, but turned 6 degrees.** Silhouette XOR / union (body centred) against the mirror column: the usual
+  15 - c gives 0.28, as much as one 12-degree step (0.28), but the best partner of column c is 16 - c in 29 of 30
+  columns, at 0.16 (Spurtz 0.17 by the same measure). Flash draws column c facing 12c - 6 degrees, so its straight front
+  and back are columns 8 and 23. Codex paints the pose of the Flash cell it is shown, so the repaint keeps Flash's turn:
+  spec `mirror_axis=16` (`spec.mirror_of`: h <-> 16 - h), headings 8-23 painted (16, both ends their own mirror).
+  `heading_deg` / `flash_column` are unchanged (the prompts say 12h; the 6 degrees do not show).
+- **Burrower.** In battle Valgos tunnels (invisible, only dirt) and surfaces to bite, so the attack rows are what
+  players see in a raid; the plod (rows 1-6, four-legged diagonal gait, `mirror_walk_roll=3`) shows in the Inferno yard.
+- **Colour.** Codex painted it brighter and more saturated than the card; spec `tone` (gold body, salmon flesh, teal,
+  claws; a lead-style recheck by head region then added a throat window and pulled the flesh toward the card:
+  head flesh hue 14-17 / sat 0.52 / value 0.64 vs the card 16 / 0.50 / 0.66, throat 6 / 0.77 / 0.34-0.37 vs 10 / 0.79 / 0.33) with an identity `grade` (tone runs inside `grade`). New `max_sat` in `common.tone` keeps the orange eye balls
+  (sat ~0.8) out of the body and flesh windows. Measure with `art-work/IC4/colours.py <img> ...` (part medians).
+- **Codex calls: 24** = 1 sample (8 12 16 23, approved first time) + 3 still batches + 1 still redo (19-22 turned step
+  by step with `art-work/IC4/turn-r1.txt`; the first try gave five near-identical back views h21-h25) + 16 animation
+  + 3 animation redos: h15 (drew a different, longer lizard: `anim-extra-15.txt`), h20 twice (its bite turned the maw
+  toward the viewer, then a redo drew a duller creature: `anim-extra-20.txt` + `anim-extra-20b.txt`). Every animation
+  call carried `art-work/IC4/anim-extra.txt` (same angle in the attack cells), and no side view turned in its wind-up.
+- Work dir `art-work/IC4`: `rebuild.sh` (still + anim + masters + shrink + copies, no Codex), `desk.py`, `sheets.py`
+  (portrait beside every painted heading), `strip.py`, `film.mjs` (yardtester, own server on 5471; `SOLO=1` drops one
+  wave of Valgos and takes quick shots, `DRY=1` stops at the zoomed attack view).
+- **Filming (battle).** Valgos goes for the WALLS (`targetGroup` 2 = `TARGET_GROUP.WALLS`; it eats them: 980-1000 a bite), tunnelling past the buildings, so
+  the bites happen at the base's wall lines, often under the Attack Force panel. What worked (`film6`): drop at
+  WHEEL=4 DX=200 DY=640, DROPX=450 DROPY=520, then `PAN=-820,40` drags the map so the wall line sits mid-screen; the
+  bites come ~12 s after the drop. Headless screenshots take ~3 s each at 2x (and `clip` shots disturb the recording),
+  so the clip and the bite still come from the recorded video (`ffmpeg -ss ... -vf crop=...`), not from screenshots.
