@@ -11,7 +11,9 @@ import { describe, expect, it } from "vitest";
  * The body is a flex column and the list its scroll box, and a scroll box's
  * automatic minimum height is zero, so on a short sheet it was the one part
  * that gave way. Nothing could be picked, so nothing could be placed, so Apply
- * stayed blocked. These rules keep the list open on every screen.
+ * stayed blocked. These rules keep the list open on every screen, in the
+ * drawer and in Find, which shares its list and chips (4 px of list on a
+ * phone on its side).
  */
 
 const here = dirname(fileURLToPath(import.meta.url));
@@ -36,9 +38,9 @@ const declaration = (body: string, property: string): string | null =>
 
 const short = block(sheet, "@media (max-width: 620px), (max-height: 700px)");
 
-describe("the stored-buildings list never folds to nothing", () => {
+describe("the stored-buildings and Find lists never fold to nothing", () => {
   it("a list with rows keeps a floor of a few rows", () => {
-    const body = rule(sheet, ".planner-inventory__rows:not(:empty)");
+    const body = rule(sheet, ".planner-search__rows:not(:empty)");
     expect(declaration(body, "min-height")).toBe("7.5rem");
     expect(declaration(body, "flex")).toBe("1 1 auto");
   });
@@ -49,24 +51,24 @@ describe("the stored-buildings list never folds to nothing", () => {
   });
 
   it("on a short screen the list is not a scroll box that can be squeezed", () => {
-    const rows = rule(short, ".planner-inventory__rows,\n  .planner-inventory__rows:not(:empty)");
+    const rows = rule(short, ".planner-search__rows,\n  .planner-search__rows:not(:empty)");
     expect(declaration(rows, "overflow")).toBe("visible");
     expect(declaration(rows, "flex")).toBe("none");
     expect(declaration(rows, "max-height")).toBe("none");
   });
 
   it("on a short screen the chips keep one row, and that row cannot collapse either", () => {
-    const chips = rule(short, ".planner-inventory .planner-search__chips");
+    const chips = rule(short, ":is(.planner-inventory, .planner-search) .planner-search__chips");
     expect(declaration(chips, "flex")).toBe("none");
     expect(declaration(chips, "flex-wrap")).toBe("nowrap");
     expect(declaration(chips, "overflow-x")).toBe("auto");
-    expect(declaration(rule(short, ".planner-inventory .planner-search__chip"), "flex")).toBe("none");
+    expect(declaration(rule(short, ":is(.planner-inventory, .planner-search) .planner-search__chip"), "flex")).toBe("none");
   });
 
   it("on a short screen the window fits its dock and its body scrolls", () => {
-    const panel = rule(short, ".planner-dock > .planner-inventory");
+    const panel = rule(short, ".planner-dock > :is(.planner-inventory, .planner-search)");
     expect(declaration(panel, "flex")).toBe("0 1 auto");
     expect(declaration(panel, "min-height")).toBe("0");
-    expect(declaration(rule(short, ".planner-inventory > .panel__body"), "min-height")).toBe("0");
+    expect(declaration(rule(short, ":is(.planner-inventory, .planner-search) > .panel__body"), "min-height")).toBe("0");
   });
 });

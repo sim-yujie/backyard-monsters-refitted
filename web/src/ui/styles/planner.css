@@ -1224,8 +1224,10 @@
  * list shrank to 0 px. The player saw the chips and nothing to tap, and Apply
  * stayed blocked. A floor of a few rows keeps it open; the body scrolls the
  * rest (layout-rules: a window never shrinks below a few rows of its list).
+ * Find shares the list and the chips, and had the same fault on a phone on its
+ * side (4 px of list), so every rule here is written for both windows.
  */
-.planner-inventory__rows:not(:empty) {
+.planner-search__rows:not(:empty) {
   flex: 1 1 auto;
   min-height: 7.5rem;
 }
@@ -1240,16 +1242,25 @@
  * (`phoneLayout.ts`: width <= 620 or height <= 500) and the iPad's 690-560 px.
  */
 @media (max-width: 620px), (max-height: 700px) {
-  .planner-dock > .planner-inventory {
+  .planner-dock > :is(.planner-inventory, .planner-search) {
     flex: 0 1 auto;
     min-height: 0;
   }
 
-  .planner-inventory > .panel__body {
+  :is(.planner-inventory, .planner-search) > .panel__body {
     min-height: 0;
     /* A little less air, so the first rows clear the fold on a phone's side. */
     gap: var(--space-1);
-    padding-top: var(--space-2);
+    /* No padding above: a category header sticks to the top of what scrolls,
+       and rows would pass through a band of padding over it. The spacer
+       below keeps the air between the title and the first line. */
+    padding-top: 0;
+  }
+
+  :is(.planner-inventory, .planner-search) > .panel__body::before {
+    content: "";
+    flex: none;
+    height: var(--space-1);
   }
 
   .planner-inventory__summary {
@@ -1258,15 +1269,15 @@
     line-height: var(--leading-tight);
   }
 
-  .planner-inventory__rows,
-  .planner-inventory__rows:not(:empty) {
+  .planner-search__rows,
+  .planner-search__rows:not(:empty) {
     flex: none;
     min-height: auto;
     max-height: none;
     overflow: visible;
   }
 
-  .planner-inventory .planner-search__chips {
+  :is(.planner-inventory, .planner-search) .planner-search__chips {
     /* A scroll box in a column shrinks to nothing too, unless told not to. */
     flex: none;
     flex-wrap: nowrap;
@@ -1279,7 +1290,7 @@
     padding-block: 2px;
   }
 
-  .planner-inventory .planner-search__chip {
+  :is(.planner-inventory, .planner-search) .planner-search__chip {
     flex: none;
   }
 }
