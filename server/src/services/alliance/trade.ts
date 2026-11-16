@@ -285,6 +285,8 @@ export interface TradeRequestView {
   status: "open" | "done";
   /** Who accepted it (done requests). */
   taken_by: string | null;
+  /** The caller's own request (a done one stays in the list, read from their side). */
+  mine: boolean;
   /** The asker's storage, for the room check (open requests only). */
   storage: StorageView | null;
   /** False when the asker already traded today: it can be accepted from the next UTC day. */
@@ -378,6 +380,7 @@ export const tradeView = async (em: EntityManager, userid: number, now: number) 
         expires_at: Number(row.expires_at),
         status: open ? "open" : "done",
         taken_by: row.taker,
+        mine: Number(row.userid) === userid,
         storage: open ? (storage.get(Number(row.userid)) ?? null) : null,
         ready: open && !traded.has(Number(row.userid)),
       };

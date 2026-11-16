@@ -311,4 +311,25 @@ describe("swaps only (owner, 16 Nov 2026)", () => {
     await mount(withView({ today: { ...today, swapsLeft: 0 } }));
     expect(document.querySelector(".trade-today__stat")!.classList.contains("is-used")).toBe(true);
   });
+
+  it("your own request, taken by a mate: reads from your side, and the yard refreshes once for what arrived", async () => {
+    const done = request({ id: 9, userid: 1, username: "Me", give: "r1", want: "r4", amount: 2_000_000, gets: 1_800_000, status: "done", taken_by: "Tina", mine: true });
+    const api = withView({ requests: [done] });
+    const { tab, host } = await mount(api);
+    const row = document.querySelector('.trade-request[data-request="9"]')!;
+    expect([...row.querySelectorAll<HTMLElement>(".trade-swap__side")].map((side) => [side.dataset["key"], side.textContent])).toEqual([
+      ["r1", "−2,000,000"],
+      ["r4", "+1,800,000"],
+    ]);
+    expect(host.traded).toHaveBeenCalledTimes(1);
+    await tab.load();
+    expect(host.traded).toHaveBeenCalledTimes(1);
+  });
+
+  it("a reload clears an old line such as Request posted", async () => {
+    const { tab, host } = await mount(fakeApi());
+    host.say(TRADE_TEXT.posted);
+    await tab.load();
+    expect(host.said.at(-1)).toBeNull();
+  });
 });

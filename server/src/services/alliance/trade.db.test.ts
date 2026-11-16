@@ -211,6 +211,9 @@ describe.skipIf(!enabled)("alliance trading on a real database", () => {
 
     const after = await trade.tradeView(em(), C, NOW);
     expect(after.requests.find((r) => r.id === posted.id)).toMatchObject({ status: "done", taken_by: `zz_tr_${A}` });
+    expect(after.requests.find((r) => r.id === posted.id)?.mine).toBe(false);
+    // The asker still sees it, done, flagged as theirs.
+    expect((await trade.tradeView(em(), B, NOW)).requests.find((r) => r.id === posted.id)).toMatchObject({ status: "done", mine: true });
     expect(after.recent).toHaveLength(2);
 
     // One completed swap per player per UTC day: neither side can swap again today.

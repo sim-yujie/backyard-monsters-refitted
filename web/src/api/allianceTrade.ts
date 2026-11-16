@@ -37,6 +37,8 @@ export interface TradeRequest {
   readonly status: "open" | "done";
   /** Who accepted it (done requests). */
   readonly taken_by: string | null;
+  /** The reader's own request: a done one reads from their side (what they gave → what they got). */
+  readonly mine?: boolean;
   /** The asker's storage (open requests), for the room check. */
   readonly storage: TradeStorage | null;
   /** False when the asker already traded today: it can be accepted from the next UTC day. */

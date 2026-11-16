@@ -196,8 +196,10 @@ export class TradeTab {
   private generation = 0;
   /** When the view was loaded (Unix seconds): the new-day countdown runs from it. */
   private loadedAt = 0;
-  /** The sheet's live part (swap, bars, button), redrawn as amounts are typed. */
+  /** The sheet's live part (swap, button), redrawn as amounts are typed. */
   private live: HTMLElement | null = null;
+  /** The player's own done requests seen so far: a new one means a mate's swap credited the yard. */
+  private doneSeen = new Set<number>();
 
   constructor(
     private readonly host: TradeHost,
@@ -219,6 +221,8 @@ export class TradeTab {
     const generation = ++this.generation;
     const answer = await this.api.view();
     if (generation !== this.generation) return;
+    // An old line ("Request posted.") must not outlive the request it was about.
+    this.host.say(null);
     if (!answer.ok) {
       this.failed = answer.message;
       this.host.redraw();
@@ -227,6 +231,11 @@ export class TradeTab {
     this.failed = null;
     this.view = answer.view;
     this.loadedAt = this.host.now();
+    // A mate took the player's request since the yard last looked: what arrived is in the
+    // yard on the server, so the yard asks for its resources again (once per swap).
+    const newlyDone = answer.view.requests.filter((row) => row.mine && row.status === "done" && !this.doneSeen.has(row.id));
+    for (const row of newlyDone) this.doneSeen.add(row.id);
+    if (newlyDone.length > 0) this.host.traded();
     this.focusId = null;
     if (this.pendingFocus !== null) {
       const id = this.pendingFocus;
@@ -339,7 +348,14 @@ export class TradeTab {
     const who = make("div", "trade-request__who");
     who.append(make("strong", "trade-request__name", request.username));
     if (request.role && request.role !== "member") who.append(make("span", `alliance__role alliance__role--${request.role}`, request.role === "leader" ? "Leader" : "Officer"));
-    row.append(who, swap({ key: request.want, n: request.amount }, { key: request.give, n: request.gets }));
+    // From the reader's side: a mate's request is "you give what they want"; your own (done) one
+    // is what you gave and what you got.
+    row.append(
+      who,
+      request.mine
+        ? swap({ key: request.give, n: request.amount }, { key: request.want, n: request.gets })
+        : swap({ key: request.want, n: request.amount }, { key: request.give, n: request.gets }),
+    );
     if (done) {
       row.append(make("span", "trade-request__given", TRADE_TEXT.takenBy(request.taken_by ?? "?")));
       return row;
