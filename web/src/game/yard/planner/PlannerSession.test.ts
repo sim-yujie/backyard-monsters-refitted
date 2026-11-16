@@ -88,6 +88,13 @@ const by = (from: Point, dx: number, dy: number): Point => ({ x: from.x + dx, y:
 
 /* ── Harness ──────────────────────────────────────────────────────────────── */
 
+/** What the overlay was last handed of a wall line. */
+interface LineVisualSeen {
+  readonly cells: readonly { state: string; corners: Corners }[];
+  readonly anchors: readonly (readonly [number, number])[];
+  readonly flat?: boolean;
+}
+
 interface Harness {
   readonly session: PlannerSession;
   readonly canvas: HTMLCanvasElement;
@@ -100,6 +107,8 @@ interface Harness {
   readonly nearby: () => ReadonlySet<number>;
   /** The wall line's Blocks the overlay was last handed, by state, or null with no line. */
   readonly lineCells: () => string[] | null;
+  /** The wall line as the overlay last got it: Block corners and whether drawn flat. */
+  readonly lineVisual: () => LineVisualSeen | null;
   /** How many times the session asked its owner to open the search box. */
   readonly finds: () => number;
   /** How many taps the session reported to its owner (F14). */
@@ -211,12 +220,13 @@ const planner = (
       visuals: {
         invalid: ReadonlySet<number>;
         nearby?: ReadonlySet<number>;
-        line?: { cells: readonly { state: string }[]; anchors: readonly unknown[] } | null;
+        line?: LineVisualSeen | null;
       } | null,
     ): void => {
       faulted = visuals ? visuals.invalid : new Set<number>();
       nearby = visuals?.nearby ?? new Set<number>();
       lineCells = visuals?.line?.cells.map((cell) => cell.state) ?? null;
+      lineVisual = visuals?.line ?? null;
     },
     worldSize: (): { width: number; height: number } => ({
       width: BLUEPRINT_WORLD.width,
@@ -234,6 +244,7 @@ const planner = (
   let faulted: ReadonlySet<number> = new Set<number>();
   let nearby: ReadonlySet<number> = new Set<number>();
   let lineCells: string[] | null = null;
+  let lineVisual: LineVisualSeen | null = null;
 
   const setView = (next: YardView): void => {
     if (view === next) return;
@@ -283,6 +294,7 @@ const planner = (
     faulted: () => faulted,
     nearby: () => nearby,
     lineCells: () => lineCells,
+    lineVisual: () => lineVisual,
     finds: () => finds,
     taps: () => taps,
     placements,
@@ -2070,6 +2082,36 @@ describe("drawing walls from the drawer as a line (owner, 16 Nov 2026)", () => {
     expect(harness.session.state().line).toMatchObject({ anchors: 2, finished: true, place: 3 });
     harness.drag(block(-60, 200));
     expect(harness.session.state().line?.place).toBe(3);
+  });
+
+  it("draws on the blueprint's own squares, flat, one per Block on the grid", () => {
+    const harness = drawing();
+    across(harness);
+    const seen = harness.lineVisual();
+    expect(seen?.flat).toBe(true);
+    // The first Block, at (-100, 20): the 20-unit tile a wall there would have.
+    expect(seen?.cells[0]?.corners).toEqual(rectCorners(tileRect(17, -100, 20)));
+    expect(seen?.anchors[0]).toEqual([blueprintToWorld(-90, 30).x, blueprintToWorld(-90, 30).y]);
+  });
+
+  it("keeps the line across a switch to 3D and back; only the stretch to the mouse goes", () => {
+    const harness = drawing();
+    across(harness);
+    harness.drag(block(100, 100));
+    expect(harness.lineCells()).toHaveLength(15);
+
+    harness.setView(YardView.ISO);
+    // The pointer was read in the other view: the live stretch goes, the corners stay.
+    expect(harness.session.state().line).toMatchObject({ anchors: 2, place: 4, blocked: 4, short: 3 });
+    expect(harness.lineCells()).toHaveLength(11);
+    expect(harness.lineVisual()?.flat).toBe(false);
+
+    harness.setView(YardView.BLUEPRINT);
+    expect(harness.lineVisual()?.flat).toBe(true);
+    expect(harness.session.state().line?.anchors).toBe(2);
+    expect(harness.session.placeLine()).toBe(4);
+    expect(at(harness, 10)).toEqual({ x: -100, y: 20 });
+    expect(at(harness, 13)).toEqual({ x: -40, y: 20 });
   });
 
   it("pans on a drag rather than putting a corner down", () => {

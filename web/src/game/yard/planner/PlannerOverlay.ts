@@ -50,6 +50,12 @@ export interface PlannerVisuals {
   readonly line?: {
     readonly cells: readonly LineCellVisual[];
     readonly anchors: readonly (readonly [number, number])[];
+    /**
+     * Drawn on the flat blueprint rather than the isometric yard: Blocks are
+     * squares among category-coloured tiles, so they get the blueprint's own
+     * look ({@link drawFlatLine}).
+     */
+    readonly flat?: boolean;
   } | null;
 }
 
@@ -223,7 +229,7 @@ export class PlannerOverlay {
       dashedRect(g, { x: minX, y: minY, width: maxX - minX, height: maxY - minY });
     }
 
-    if (visuals.line) drawLine(g, visuals.line);
+    if (visuals.line) (visuals.line.flat ? drawFlatLine : drawLine)(g, visuals.line);
 
     const marquee = visuals.marquee;
     if (marquee && marquee.width > 0 && marquee.height > 0) {
@@ -240,7 +246,6 @@ export class PlannerOverlay {
 
 const path = (shape: Corners): number[] => shape.flatMap(([x, y]) => [x, y]);
 
-/** A dashed rectangle, which `Graphics` has no primitive for. */
 /**
  * A wall line's Blocks, one batch per colour, then its corners. A red Block
  * is crossed out as well as red, and a grey one is fainter: colour is never
@@ -281,6 +286,104 @@ const drawLine = (g: Graphics, line: NonNullable<PlannerVisuals["line"]>): void 
   }
 };
 
+/** A Block's square on the blueprint, from its corners. */
+const cellRect = (corners: Corners): Rect | null => {
+  if (corners.length === 0) return null;
+  const xs = corners.map(([x]) => x);
+  const ys = corners.map(([, y]) => y);
+  const x = Math.min(...xs);
+  const y = Math.min(...ys);
+  return { x, y, width: Math.max(...xs) - x, height: Math.max(...ys) - y };
+};
+
+/**
+ * A Block's edges as three dashes each, one on either end and one in the
+ * middle, so two grey Blocks side by side share the same dashes.
+ */
+const dashedCell = (g: Graphics, rect: Rect): void => {
+  const { x, y, width, height } = rect;
+  const edges: [number, number, number, number][] = [
+    [x, y, x + width, y],
+    [x + width, y, x + width, y + height],
+    [x, y + height, x + width, y + height],
+    [x, y, x, y + height],
+  ];
+  for (const [x1, y1, x2, y2] of edges) {
+    for (const [from, to] of [[0, 0.2], [0.4, 0.6], [0.8, 1]] as const) {
+      g.moveTo(x1 + (x2 - x1) * from, y1 + (y2 - y1) * from).lineTo(
+        x1 + (x2 - x1) * to,
+        y1 + (y2 - y1) * to,
+      );
+    }
+  }
+};
+
+/**
+ * The wall line on the blueprint (owner, 16 Nov 2026: "what about 2d
+ * blueprint view?"). The flat view is drawn the Flash Yard Planner's way, a
+ * square per building coloured by category, and three of those colours are
+ * the line's own: walls are grey squares, resource tiles green and defence
+ * tiles red. So here:
+ *
+ * - green Blocks keep the stack's grey wall tiles readable under a faint
+ *   wash, with the green edge on a dark one so it holds on grass and on a
+ *   resource tile;
+ * - red Blocks are crossed on a dark under-stroke, which still reads on a
+ *   red defence tile, where red alone vanished;
+ * - grey Blocks are dashed and unfilled, an empty slot, never mistaken for
+ *   the solid grey squares real walls are drawn as.
+ */
+const drawFlatLine = (g: Graphics, line: NonNullable<PlannerVisuals["line"]>): void => {
+  const rects = (state: LineCellState): Rect[] =>
+    line.cells.flatMap((cell) => {
+      if (cell.state !== state) return [];
+      const rect = cellRect(cell.corners);
+      return rect ? [rect] : [];
+    });
+
+  const short = rects("short");
+  if (short.length > 0) {
+    for (const rect of short) dashedCell(g, rect);
+    g.stroke({ width: 3.5, color: LINE_UNDER, alpha: 0.6 });
+    for (const rect of short) dashedCell(g, rect);
+    g.stroke({ width: 1.75, color: LINE_SHORT, alpha: 0.95 });
+  }
+
+  for (const [state, colour, fill] of [
+    ["build", LINE_PLACE, 0.14],
+    ["blocked", LINE_BLOCKED, 0.4],
+  ] as const) {
+    const cells = rects(state);
+    if (cells.length === 0) continue;
+    for (const rect of cells) g.rect(rect.x, rect.y, rect.width, rect.height);
+    g.fill({ color: colour, alpha: fill }).stroke({ width: 4, color: LINE_UNDER, alpha: 0.75 });
+    for (const rect of cells) g.rect(rect.x, rect.y, rect.width, rect.height);
+    g.stroke({ width: 2, color: colour, alpha: 1 });
+  }
+
+  const blocked = rects("blocked");
+  if (blocked.length > 0) {
+    const cross = (): void => {
+      for (const { x, y, width, height } of blocked) {
+        const inset = Math.min(width, height) * 0.2;
+        g.moveTo(x + inset, y + inset).lineTo(x + width - inset, y + height - inset);
+        g.moveTo(x + width - inset, y + inset).lineTo(x + inset, y + height - inset);
+      }
+    };
+    cross();
+    g.stroke({ width: 5, color: LINE_UNDER, alpha: 0.85, cap: "round" });
+    cross();
+    g.stroke({ width: 2.5, color: LINE_BLOCKED, alpha: 1, cap: "round" });
+  }
+
+  // A smaller corner dot than the isometric one: a blueprint Block is half
+  // the width of its diamond, and the dot must not hide a red Block's cross.
+  for (const [x, y] of line.anchors) {
+    g.circle(x, y, 3.5).fill({ color: 0xffffff, alpha: 0.95 }).stroke({ width: 1.5, color: 0x1d252d, alpha: 0.9 });
+  }
+};
+
+/** A dashed rectangle, which `Graphics` has no primitive for. */
 export const dashedRect = (
   g: Graphics,
   rect: Rect,

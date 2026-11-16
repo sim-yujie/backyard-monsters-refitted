@@ -162,7 +162,11 @@ export class PlannerView {
   }
 
   /** A line's Blocks and corners as polygons in the view that is showing. */
-  private lineShapes(line: LineVisual): { cells: LineCellVisual[]; anchors: (readonly [number, number])[] } {
+  private lineShapes(line: LineVisual): {
+    cells: LineCellVisual[];
+    anchors: (readonly [number, number])[];
+    flat: boolean;
+  } {
     const cells = line.cells.map((cell) => ({
       corners: this.renderer.footprintCornersAt(line.type, cell.x, cell.y),
       state: cell.state,
@@ -175,7 +179,7 @@ export class PlannerView {
         corners.reduce((sum, [, y]) => sum + y, 0) / n,
       ] as const;
     });
-    return { cells, anchors };
+    return { cells, anchors, flat: this.view === YardView.BLUEPRINT };
   }
 
   /** Puts every sprite back where the save had it and hides the chrome. */
