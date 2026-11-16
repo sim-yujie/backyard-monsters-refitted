@@ -184,7 +184,7 @@ describe("the rise's clods and goo (`EFFECTS.Dig`, `GIBLETS.Create`)", () => {
     }
   });
 
-  it("look B's ground glow is full at once and gone in 1.2 s", () => {
+  it("the ground glow is full at once and gone in 1.2 s", () => {
     expect(riseGlowAlpha(0)).toBe(1);
     expect(riseGlowAlpha(RISE_GLOW_TICKS / 2)).toBeCloseTo(0.75, 6);
     expect(riseGlowAlpha(RISE_GLOW_TICKS)).toBe(0);
@@ -224,33 +224,43 @@ describe("RaiseFx", () => {
     expect(ORB_URL_CLASSIC).not.toContain("fireball");
   });
 
-  it("flies an orb until it lands, with no lightning unless asked for", async () => {
-    for (const look of ["A", "B"] as const) {
-      const fx = fxOf({ look });
-      fx.throwOrb(100, 300, 5, { x: 0, y: 0 }, { x: 400, y: 0 });
-      await Promise.resolve();
-      for (let tick = 100; tick < 300; tick += 1) {
-        fx.update(tick, () => ({ x: 10, y: 10 }), [{ id: 3, ground: { x: 5, y: 5 } }]);
-        expect(fx.flightCount).toBe(1);
-        expect(fx.boltCount).toBe(0);
-      }
-      fx.update(300, () => null, []);
-      expect(fx.flightCount).toBe(0);
-      fx.destroy();
+  it("flies an orb in its soft green glow until it lands, with no lightning unless asked for", async () => {
+    const air = new Container();
+    const fx = fxOf({ air: () => air });
+    fx.throwOrb(100, 300, 5, { x: 0, y: 0 }, { x: 400, y: 0 });
+    await Promise.resolve();
+    // The wide green glow, Flash's rim haze, and the orb itself.
+    expect(air.children).toHaveLength(3);
+    const [aura, haze] = air.children;
+    expect(aura?.blendMode).toBe("add");
+    expect(aura?.width).toBeGreaterThan(haze?.width ?? Infinity);
+    for (let tick = 100; tick < 300; tick += 1) {
+      fx.update(tick, () => ({ x: 10, y: 10 }), [{ id: 3, ground: { x: 5, y: 5 } }]);
+      expect(fx.flightCount).toBe(1);
+      expect(fx.boltCount).toBe(0);
     }
+    expect(aura?.alpha).toBeGreaterThan(0);
+    fx.update(300, () => null, []);
+    expect(fx.flightCount).toBe(0);
+    expect(air.children).toHaveLength(0);
+    fx.destroy();
   });
 
-  it("throws a rise's clods and goo, and clears them once they fade", () => {
-    for (const look of ["A", "B"] as const) {
-      const fx = fxOf({ look });
-      fx.rise(10, { x: 0, y: 20 }, { x: 0, y: 0 });
-      expect(fx.burstCount).toBe(1);
-      fx.update(10 + RISE_BITS_TICKS, () => null, []);
-      expect(fx.burstCount).toBe(1);
-      fx.update(11 + Math.max(RISE_BITS_TICKS, RISE_GLOW_TICKS), () => null, []);
-      expect(fx.burstCount).toBe(0);
-      fx.destroy();
-    }
+  it("throws a rise's clods and goo with a soft glow, and clears them once they fade", () => {
+    const ground = new Container();
+    const fx = fxOf({ ground: () => ground });
+    fx.rise(10, { x: 0, y: 20 }, { x: 0, y: 0 });
+    expect(fx.burstCount).toBe(1);
+    const glow = ground.children[0];
+    expect(glow?.blendMode).toBe("add");
+    fx.update(11, () => null, []);
+    expect(glow?.alpha).toBeGreaterThan(0.5);
+    fx.update(10 + RISE_BITS_TICKS, () => null, []);
+    expect(fx.burstCount).toBe(1);
+    fx.update(11 + Math.max(RISE_BITS_TICKS, RISE_GLOW_TICKS), () => null, []);
+    expect(fx.burstCount).toBe(0);
+    expect(ground.children).toHaveLength(0);
+    fx.destroy();
   });
 
   it("throws goo for one of four monsters raised at once, as Flash's caps allow", () => {

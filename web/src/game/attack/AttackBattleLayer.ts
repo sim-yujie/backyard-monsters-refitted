@@ -854,7 +854,7 @@ export class AttackBattleLayer {
   /** Drawn explosions, Eye-ra's fiery one (feat/eyera-explosion); inside `effects`. */
   private readonly blastAir = new Container();
   private readonly blastFx: BlastFx;
-  /** Rezghul's raise: its orbs and the green lightning round them and its zombies (`raiseFx.ts`). */
+  /** Rezghul's raise: its orbs and their soft glow, and the clods and goo of its rises (`raiseFx.ts`). */
   private readonly raiseFx: RaiseFx;
   /** The tick each raised creep rose (`rise`), for its climb out of the ground and its greying. */
   private readonly risen = new Map<number, number>();

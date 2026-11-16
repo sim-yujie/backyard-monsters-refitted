@@ -35,11 +35,12 @@ import type { Point } from "@/game/yard/YardGrid";
  *   those lines down (16 Nov 2026), so they are off; `lightning: true`
  *   brings them back.
  *
- * ## The two looks for the owner (16 Nov 2026)
+ * ## Ours (owner, 16 Nov 2026)
  *
- * `A` is Flash's own: the orb's rim haze, the clods and goo. `B` adds a soft
- * sea-green glow round the orb in flight and a soft green glow on the ground
- * as the monster rises. `localStorage["bymr.raiseFx"] = "B"` picks B.
+ * Flash's own (the orb's rim haze, the clods and goo) plus a soft sea-green
+ * glow round the orb in flight and a soft green glow on the ground as the
+ * monster rises. The owner picked this ("B, with soft glow") over Flash's
+ * alone, for both Classic and Modern.
  */
 
 /* ── Timing and arithmetic (pure, tested in raiseFx.test.ts) ───────────── */
@@ -310,7 +311,7 @@ export const RISE_BITS_TICKS =
   RISE_CLOD_LIE_TICKS +
   RISE_CLOD_FADE_TICKS;
 
-/** Look B's glow on the ground as a monster rises: up at once, gone over 1.2 s. */
+/** The soft glow on the ground as a monster rises: up at once, gone over 1.2 s. */
 export const RISE_GLOW_TICKS = 1.2 * TICKS_PER_SECOND;
 export const riseGlowAlpha = (age: number): number => {
   if (age < 0 || age >= RISE_GLOW_TICKS) return 0;
@@ -329,7 +330,7 @@ const HAZE_CLASSIC = 0xffffff;
 const HAZE_MODERN = 0xdcfff0;
 /** The haze reaches this far out from the orb's middle: Flash's glow kept in its 20 px box, softened. */
 const HAZE_RADIUS = ORB_HALF + 4;
-/** Look B: a wider sea-green glow round the orb, and one on the ground at a rise. */
+/** Ours: a wider sea-green glow round the orb, and one on the ground at a rise. */
 const AURA_COLOUR = 0x5dffb4;
 const AURA_RADIUS = ORB_HALF * 2.6;
 const AURA_ALPHA = 0.55;
@@ -409,21 +410,6 @@ const glowSprite = (radius: number, tint: number, add: boolean): Sprite => {
   return sprite;
 };
 
-/* ── The look ───────────────────────────────────────────────────────────── */
-
-/** `A`, Flash's own; `B`, Flash's with soft green glows. */
-export type RaiseLook = "A" | "B";
-export const RAISE_LOOK_KEY = "bymr.raiseFx";
-
-/** The look picked for filming: `B` when this browser's `bymr.raiseFx` says so, else `A`. */
-export const raiseLookPicked = (): RaiseLook => {
-  try {
-    return globalThis.localStorage?.getItem(RAISE_LOOK_KEY) === "B" ? "B" : "A";
-  } catch {
-    return "A";
-  }
-};
-
 /* ── The effect ─────────────────────────────────────────────────────────── */
 
 /** An orb in the air: its own `raiseOrb` event, in world px. */
@@ -434,19 +420,19 @@ interface Flight {
   readonly from: Point;
   readonly to: Point;
   readonly haze: Sprite;
-  readonly aura: Sprite | null;
+  readonly aura: Sprite;
   readonly sprite: Sprite;
   /** The last tick it threw (or did not throw) a spark on. */
   sparkTick: number;
 }
 
-/** A rise's clods and goo, and look B's glow, on the ground. */
+/** A rise's clods and goo, and its soft glow, on the ground. */
 interface Burst {
   readonly tick: number;
   readonly bits: readonly RiseBit[];
   readonly sprites: readonly Sprite[];
   readonly at: Point;
-  readonly glow: Sprite | null;
+  readonly glow: Sprite;
 }
 
 interface Bolt {
@@ -466,12 +452,10 @@ export type CreepNear = (at: Point, reach: number) => Point | null;
 export interface RaiseFxOptions {
   /** Above the creeps: the orbs (Flash's `MAP._PROJECTILES`). */
   readonly air: () => Container;
-  /** On the ground, under the creeps: the clods, goo and look B's rise glow (`MAP._GROUND`). */
+  /** On the ground, under the creeps: the clods, goo and the rise's glow (`MAP._GROUND`). */
   readonly ground: () => Container;
   readonly classic: boolean;
   readonly reducedMotion?: boolean;
-  /** Defaults to {@link raiseLookPicked}. */
-  readonly look?: RaiseLook;
   /** Flash's green lightning off the orb and round the zombies; off since the owner turned it down. */
   readonly lightning?: boolean;
   readonly load?: (url: string) => Promise<Texture>;
@@ -489,7 +473,6 @@ export class RaiseFx {
   private readonly zombieSparkTick = new Map<number, number>();
   private texture: Texture | null = null;
   private asked = false;
-  readonly look: RaiseLook;
   private readonly classic: boolean;
   private readonly reducedMotion: boolean;
   private readonly lightning: boolean;
@@ -498,7 +481,6 @@ export class RaiseFx {
   constructor(private readonly options: RaiseFxOptions) {
     this.classic = options.classic;
     this.reducedMotion = options.reducedMotion ?? false;
-    this.look = options.look ?? raiseLookPicked();
     this.lightning = options.lightning ?? false;
     this.load = options.load ?? ((url) => Assets.load<Texture>(url));
   }
@@ -524,18 +506,17 @@ export class RaiseFx {
   /** A Rezghul threw its raise: corners `from` and `to` are world px, as the event's. */
   throwOrb(tick: number, landTick: number, creepId: number, from: Point, to: Point): void {
     this.preload();
-    const aura = this.look === "B" ? glowSprite(AURA_RADIUS, AURA_COLOUR, true) : null;
+    const aura = glowSprite(AURA_RADIUS, AURA_COLOUR, true);
     const haze = glowSprite(HAZE_RADIUS, this.classic ? HAZE_CLASSIC : HAZE_MODERN, false);
     haze.alpha = 0;
-    if (aura) aura.alpha = 0;
+    aura.alpha = 0;
     // Until the picture is in, the glow flies alone.
     const sprite = new Sprite(this.texture ?? Texture.EMPTY);
     sprite.visible = this.texture !== null;
     sprite.anchor.set(0.5);
     sprite.eventMode = "none";
     const layer = this.options.air();
-    if (aura) layer.addChild(aura);
-    layer.addChild(haze, sprite);
+    layer.addChild(aura, haze, sprite);
     this.flights.push({
       tick,
       landTick,
@@ -551,18 +532,15 @@ export class RaiseFx {
 
   /**
    * A monster rose with its feet at `feet` (world px): the clods and goo
-   * thrown from 20 px below them, and look B's glow on the ground round it.
+   * thrown from 20 px below them, and a soft glow on the ground round it.
    */
   rise(tick: number, burstAt: Point, feet: Point): void {
     const ground = this.options.ground();
-    let glow: Sprite | null = null;
-    if (this.look === "B") {
-      glow = glowSprite(RISE_GLOW_RADIUS, RISE_GLOW_COLOUR, true);
-      glow.height = RISE_GLOW_RADIUS;
-      glow.position.set(feet.x, feet.y);
-      glow.alpha = 0;
-      ground.addChild(glow);
-    }
+    const glow = glowSprite(RISE_GLOW_RADIUS, RISE_GLOW_COLOUR, true);
+    glow.height = RISE_GLOW_RADIUS;
+    glow.position.set(feet.x, feet.y);
+    glow.alpha = 0;
+    ground.addChild(glow);
     const bits = this.reducedMotion
       ? []
       : riseBits(
@@ -646,10 +624,8 @@ export class RaiseFx {
       const glow = orbGlowAlpha(age);
       flight.haze.position.set(centre.x, centre.y);
       flight.haze.alpha = glow;
-      if (flight.aura) {
-        flight.aura.position.set(centre.x, centre.y);
-        flight.aura.alpha = (glow / ORB_GLOW_ALPHA) * AURA_ALPHA;
-      }
+      flight.aura.position.set(centre.x, centre.y);
+      flight.aura.alpha = (glow / ORB_GLOW_ALPHA) * AURA_ALPHA;
       if (this.lightning)
         for (let at = flight.sparkTick + 1; at <= tick; at += 1)
           this.orbSpark(flight, at, centre, creepNear);
@@ -674,13 +650,11 @@ export class RaiseFx {
         sprite.alpha = at.alpha;
         sprite.position.set(burst.at.x + at.x, burst.at.y + at.y);
       });
-      if (burst.glow) {
-        burst.glow.alpha = RISE_GLOW_ALPHA * riseGlowAlpha(age);
-        if (!this.reducedMotion) {
-          const grow = 0.85 + 0.3 * Math.min(1, Math.max(0, age / RISE_GLOW_TICKS));
-          burst.glow.width = RISE_GLOW_RADIUS * 2 * grow;
-          burst.glow.height = RISE_GLOW_RADIUS * grow;
-        }
+      burst.glow.alpha = RISE_GLOW_ALPHA * riseGlowAlpha(age);
+      if (!this.reducedMotion) {
+        const grow = 0.85 + 0.3 * Math.min(1, Math.max(0, age / RISE_GLOW_TICKS));
+        burst.glow.width = RISE_GLOW_RADIUS * 2 * grow;
+        burst.glow.height = RISE_GLOW_RADIUS * grow;
       }
     }
     this.bursts.length = keep;
@@ -712,13 +686,13 @@ export class RaiseFx {
 
   private dropFlight(flight: Flight): void {
     flight.haze.destroy();
-    flight.aura?.destroy();
+    flight.aura.destroy();
     flight.sprite.destroy();
   }
 
   private dropBurst(burst: Burst): void {
     for (const sprite of burst.sprites) sprite.destroy();
-    burst.glow?.destroy();
+    burst.glow.destroy();
   }
 
   /**
