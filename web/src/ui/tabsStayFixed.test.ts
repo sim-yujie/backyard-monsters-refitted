@@ -24,16 +24,22 @@ const rule = (source: string, selector: string): string => {
 };
 
 /** The `@media (<query>) {` block, braces balanced. */
+/** Every block with this query, joined: a sheet may hold more than one. */
 const media = (source: string, query: string): string => {
   const head = `@media ${query} {`;
-  const start = source.indexOf(head);
-  expect(start, head).toBeGreaterThanOrEqual(0);
-  let depth = 0;
-  for (let i = source.indexOf("{", start); i < source.length; i++) {
-    if (source[i] === "{") depth++;
-    if (source[i] === "}" && --depth === 0) return source.slice(start, i + 1);
+  expect(source.indexOf(head), head).toBeGreaterThanOrEqual(0);
+  const blocks: string[] = [];
+  for (let start = source.indexOf(head); start >= 0; start = source.indexOf(head, start + 1)) {
+    let depth = 0;
+    for (let i = source.indexOf("{", start); i < source.length; i++) {
+      if (source[i] === "{") depth++;
+      if (source[i] === "}" && --depth === 0) {
+        blocks.push(source.slice(start, i + 1));
+        break;
+      }
+    }
   }
-  return "";
+  return blocks.join("\n");
 };
 
 describe("tabs stay fixed at the top", () => {
