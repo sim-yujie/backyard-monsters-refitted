@@ -173,13 +173,6 @@ export const TerritoryBoardSchema = z.object({
   type: z.enum(AllianceType).optional(),
 });
 
-/** Resource amounts sent as flat fields (`r1`..`r4`), whole and not negative; left out is 0. */
-const tradeAmount = z.coerce.number().int().min(0).max(1_000_000_000).optional();
-const tradeAmounts = { r1: tradeAmount, r2: tradeAmount, r3: tradeAmount, r4: tradeAmount };
-
-/** GET /alliance/trade[?to=]: the Trade tab; `to` adds a mate's storage for the Send sheet. */
-export const TradeViewSchema = z.object({ to: z.coerce.number().int().positive().optional() });
-
 /** One resource that can be traded (Shiny cannot). */
 const tradeKey = z.enum(["r1", "r2", "r3", "r4"]);
 
@@ -194,5 +187,3 @@ export const TradePostSchema = z
 /** POST /alliance/trade/accept: a mate's request, taken whole; no amounts. */
 export const TradeAcceptSchema = z.object({ request_id: z.coerce.number().int().positive() }).strict();
 
-/** POST /alliance/trade/send: a mate, and what leaves. */
-export const TradeSendSchema = z.object({ to: z.coerce.number().int().positive(), ...tradeAmounts });

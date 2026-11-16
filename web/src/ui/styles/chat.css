@@ -768,3 +768,11 @@ button.chat-line__name {
     white-space: nowrap;
   }
 }
+
+/* beta 8 (astra): the request's Trade button has a full touch target. */
+@media (pointer: coarse) {
+  .chat-line__give {
+    min-height: 44px;
+    min-width: 44px;
+  }
+}
