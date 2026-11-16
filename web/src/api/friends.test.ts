@@ -5,6 +5,7 @@ import {
   friendsApi,
   giftAllOf,
   GENERAL_REFUSAL,
+  RATE_LIMITED_REFUSAL,
   NETWORK_REFUSAL,
   REFUSAL_TEXT,
   toSeconds,
@@ -351,11 +352,53 @@ describe("friendRefusal", () => {
     });
   });
 
-  it("falls back to a general line for a reason it does not know", async () => {
-    stubFetch(refusal("somethingNew"), 409);
+  it("says the server's own words for a reason it does not know (bug report #50)", async () => {
+    stubFetch(
+      {
+        error: "Wild monsters are raiding your yard right now. Try again when the raid is over.",
+        errorDetails: {
+          message: "Wild monsters are raiding your yard right now. Try again when the raid is over.",
+          status: 409,
+          data: { reason: "raidInProgress" },
+        },
+      },
+      409,
+    );
+    const caught = await friendsApi.help(7, 3, "speedup").catch((error: unknown) => error);
+    expect(friendRefusal(caught)).toEqual({
+      reason: "unknown",
+      message: "Wild monsters are raiding your yard right now. Try again when the raid is over.",
+    });
+  });
+
+  it("falls back to a general line only when the server gave no reason (a crash) or it is not an answer", async () => {
+    stubFetch({ error: "Internal Server Error", errorDetails: { message: "Internal Server Error", status: 500 } }, 500);
     const caught = await friendsApi.remove(7).catch((error: unknown) => error);
     expect(friendRefusal(caught)).toEqual({ reason: "unknown", message: GENERAL_REFUSAL });
     expect(friendRefusal(new Error("boom"))).toEqual({ reason: "unknown", message: GENERAL_REFUSAL });
+  });
+
+  it("the spam limit (429 rateLimited) has its own words, never the general line (bug report #50)", async () => {
+    const words = "You have done that a lot. Please wait a while and try again.";
+    stubFetch({ error: words, message: words, reason: "rateLimited" }, 429);
+    const caught = await friendsApi.help(7, 3, "repair").catch((error: unknown) => error);
+    expect(friendRefusal(caught)).toEqual({ reason: "rateLimited", message: words });
+    // The read limiter's shape: `error` only.
+    stubFetch({ error: "Too many searches. Please slow down.", reason: "rateLimited" }, 429);
+    const search = await friendsApi.remove(7).catch((error: unknown) => error);
+    expect(friendRefusal(search)).toEqual({ reason: "rateLimited", message: "Too many searches. Please slow down." });
+    // No words at all.
+    expect(friendRefusal(new ApiError("x", { status: 429, body: { reason: "rateLimited" } }))).toEqual({
+      reason: "rateLimited",
+      message: RATE_LIMITED_REFUSAL,
+    });
+    expect(RATE_LIMITED_REFUSAL).not.toBe(GENERAL_REFUSAL);
+  });
+
+  it("a second repair in a friend's yard the same day says so", async () => {
+    stubFetch(refusal("repairedToday"), 409);
+    const caught = await friendsApi.help(7, 3, "repair").catch((error: unknown) => error);
+    expect(friendRefusal(caught)).toEqual({ reason: "repairedToday", message: "You already repaired a building here today." });
   });
 
   it("says when the server could not be reached", () => {
