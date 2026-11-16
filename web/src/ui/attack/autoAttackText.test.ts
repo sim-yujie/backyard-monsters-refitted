@@ -68,7 +68,7 @@ describe("autoAttackText", () => {
     expect(repeatRefusal(answer({ plan: null }))).toBeNull();
     expect(repeatRefusal(answer({ underAttack: true }))).toContain("attacking this camp");
     expect(repeatRefusal(answer({ outOfRange: true }))).toContain("out of your Flingers' range");
-    expect(repeatRefusal(answer({ missing: [{ kind: "monster", id: "C1", need: 2, have: 1 }] }))).toContain("missing");
+    expect(repeatRefusal(answer({ missing: [{ kind: "monster", id: "C1", need: 2, have: 1 }] }))).toBe("Not enough monsters across your yards.");
   });
 
   it("Smart Repeat attack: no room in range is its own refusal, and moves alone refuse nothing", () => {
@@ -79,8 +79,8 @@ describe("autoAttackText", () => {
     expect(yardName({ main: true, x: 1, y: 2 })).toBe("Main yard");
     expect(yardName({ main: false, x: 1, y: 2 })).toBe("Outpost");
     expect(yardPlace({ main: false, x: 244, y: 208 })).toBe("244, 208");
-    expect(movesLineText(1)).toBe("1 move first");
-    expect(movesLineText(3)).toBe("3 moves first");
+    expect(movesLineText(1)).toBe("1 monster transfer needed");
+    expect(movesLineText(3)).toBe("3 monster transfers needed");
   });
 
   it("turns the server's refusal into words, with the missing list", () => {
@@ -89,7 +89,7 @@ describe("autoAttackText", () => {
       details: { data: { reason: "missing", missing: [{ kind: "monster", id: "C1", need: 2, have: 1 }] } } as never,
     });
     expect(autoAttackErrorText(refused)).toEqual({
-      message: "You do not have everything that attack used.",
+      message: "Not enough monsters across your yards.",
       missing: [{ kind: "monster", id: "C1", need: 2, have: 1 }],
     });
     expect(autoAttackErrorText(new ApiError("slow", { status: 429 })).message).toContain("ten auto-attacks");

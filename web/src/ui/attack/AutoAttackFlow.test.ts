@@ -9,6 +9,7 @@ import type {
 import { ApiError } from "@/api/http";
 import type { MapCell, WildMonsterCell } from "@/api/types";
 import { watchEvents, watchTarget } from "@/game/autoAttack/watchRun";
+import { CellPanel } from "@/ui/maproom/CellPanel";
 import { AutoAttackControl } from "@/ui/maproom/AutoAttackControl";
 import { AutoAttackFlow, type AutoAttackCalls } from "./AutoAttackFlow";
 import { EndAttackPanel } from "./EndAttackPanel";
@@ -162,7 +163,10 @@ describe("Smart Repeat attack's prompt (owner, 16 Nov 2026)", () => {
     expect(first.querySelectorAll(".auto-attack__unit img")).toHaveLength(2);
     expect(first.getAttribute("aria-label")).toBe("120 Pokey, 4 D.A.V.E.: from Outpost 230, 215 to Outpost 242, 208");
     expect(text(rows[1]!.firstElementChild)).toBe("Main yard250, 200");
-    expect(text(modal)).toContain("Move monsters, then attack:");
+    expect(text(modal)).toContain("From3 transfersTo");
+    expect(modal.querySelector(".auto-attack__army-strip [aria-label='300 Pokey']")).not.toBeNull();
+    expect(text(modal.querySelector(".auto-attack__footer"))).toContain("Free transfer. Monsters spent. Result in seconds.");
+    expect(modal.querySelector(".auto-attack__scroll .auto-attack__footer")).toBeNull();
     expect(button(modal, "Attack now")).toBeUndefined();
     expect(button(modal, "Move and attack")?.disabled).toBe(false);
     expect(button(modal, "Cancel")).toBeDefined();
@@ -204,7 +208,7 @@ describe("Smart Repeat attack's prompt (owner, 16 Nov 2026)", () => {
     expect(api.plan).toHaveBeenCalledTimes(1);
     expect(text(modal)).toContain("Your yards changed. Here is the new plan.");
     expect(modal.querySelectorAll(".auto-attack__move")).toHaveLength(1);
-    expect(text(modal.querySelector(".auto-attack__unit"))).toBe("×119");
+    expect(text(modal.querySelector(".auto-attack__move .auto-attack__unit"))).toBe("×119");
     button(modal, "Move and attack")!.click();
     await settle();
     expect(api.run).toHaveBeenLastCalledWith(BASEID, "new-key");
@@ -221,7 +225,7 @@ describe("Smart Repeat attack's prompt (owner, 16 Nov 2026)", () => {
         ],
       }),
     );
-    expect(text(modal)).toContain("You are missing what that attack used:");
+    expect(text(modal)).toContain("Not enough monsters across your yards.");
     const items = [...modal.querySelectorAll(".auto-attack__missing li")].map((item) => item.textContent);
     expect(items).toEqual(["Pokey: 12 short", "D.A.V.E.: 6 short"]);
     expect(modal.querySelectorAll(".auto-attack__missing img")).toHaveLength(2);
@@ -241,10 +245,10 @@ describe("Smart Repeat attack's prompt (owner, 16 Nov 2026)", () => {
     const shown = text(modal);
     expect(shown).toContain("Not enough Monster Housing in range.");
     expect(shown).not.toContain("short");
-    expect(shown).toContain("Monsters moving in need 1,840 space");
+    expect(shown).toContain("Moving monsters need 1,840 space");
     expect([...modal.querySelectorAll(".auto-attack__room li")].map((row) => row.textContent)).toEqual([
-      "Outpost242, 20840 free",
-      "Main yard250, 200300 free",
+      "Outpost242, 20840 space free",
+      "Main yard250, 200300 space free",
     ]);
     expect(button(modal, "Attack now")?.disabled).toBe(true);
     expect(button(modal, "Move and attack")).toBeUndefined();
@@ -261,8 +265,9 @@ describe("Smart Repeat attack's prompt (owner, 16 Nov 2026)", () => {
     button(modal, "Move and attack")!.click();
     await settle();
     expect(text(modal)).toContain("Not enough Monster Housing in range.");
-    expect(text(modal)).toContain("Monsters moving in need 900 space");
-    expect([...modal.querySelectorAll(".auto-attack__room li")].map((row) => row.textContent)).toEqual(["Outpost242, 20840 free"]);
+    expect(text(modal)).toContain("Moving monsters need 900 space");
+    expect(text(modal)).toContain("Your yards changed.");
+    expect([...modal.querySelectorAll(".auto-attack__room li")].map((row) => row.textContent)).toEqual(["Outpost242, 20840 space free"]);
   });
 
   it("the result says what moved in first", async () => {
@@ -322,7 +327,7 @@ describe("the result", () => {
     await flow.start(answer());
     button(modal, "Attack now")!.click();
     await settle();
-    expect(text(modal)).toContain("You do not have everything that attack used.");
+    expect(text(modal)).toContain("Missing from the attack:");
     expect(text(modal)).toContain("Big twig bomb: not enough resources to fire it");
   });
 
@@ -356,6 +361,33 @@ describe("the camp panel's Repeat attack", () => {
   const campCell = (overrides: Partial<WildMonsterCell> = {}): MapCell =>
     ({ uid: 0, b: 1, i: 150, bid: BASEID, n: "Kozu", l: 35, dm: 41, d: 0, ...overrides }) as MapCell;
 
+  it("keeps each camp action's explanation with its button inside the scrolling body", async () => {
+    const control = new AutoAttackControl({ plan: async () => answer(), onRepeat: vi.fn() });
+    const takeover = {
+      button: document.createElement("button"),
+      detail: document.createElement("p"),
+      setCell: vi.fn(),
+      tick: vi.fn(),
+    };
+    const panel = new CellPanel({
+      onClose: vi.fn(), onBookmark: vi.fn(), canBookmark: () => true, onViewYard: vi.fn(),
+      attackRefusal: () => null, onAttack: vi.fn(), reach: () => null,
+      ownFlinger: () => ({ level: 4, reach: 10 }), onRangeToggle: vi.fn(),
+      extraAction: [control, takeover],
+    });
+    panel.show(CELL, campCell());
+    await settle();
+    expect(panel.element.classList.contains("mr2-cell--repeat")).toBe(true);
+    expect(control.button.nextElementSibling).toBe(control.detail);
+    expect(takeover.button.nextElementSibling).toBe(takeover.detail);
+    expect(control.detail.nextElementSibling).toBe(takeover.button);
+    expect(control.button.closest(".mr2-cell__repeat-body")).not.toBeNull();
+    expect(panel.element.querySelector(".mr2-cell__head")?.parentElement).toBe(panel.element);
+    panel.show(CELL, undefined);
+    expect(panel.element.classList.contains("mr2-cell--repeat")).toBe(false);
+    expect(control.detail.hidden).toBe(true);
+  });
+
   it("offers the plan on a camp and opens the sheet with the answer", async () => {
     const onRepeat = vi.fn();
     const control = new AutoAttackControl({ plan: async () => answer(), onRepeat, now: () => 1_000_060 });
@@ -377,18 +409,20 @@ describe("the camp panel's Repeat attack", () => {
     control.setCell(CELL, campCell());
     await settle();
     expect(control.button.disabled).toBe(false);
-    expect(control.detail.textContent).toContain("1 min ago. 2 moves first.");
+    expect(control.detail.textContent).toContain("1 min ago. 2 monster transfers needed.");
   });
 
   it("Smart Repeat attack: no room in range greys the button out in its own words", async () => {
     const control = new AutoAttackControl({
-      plan: async () => answer({ noRoom: { need: 500, free: [] } }),
+      plan: async () => answer({ noRoom: { need: 500, free: [{ baseid: "near", free: 40 }] }, yards: { near: { main: false, x: 242, y: 208 } } }),
       onRepeat: vi.fn(),
     });
     control.setCell(CELL, campCell());
     await settle();
     expect(control.button.disabled).toBe(true);
     expect(control.detail.textContent).toContain("Not enough Monster Housing in range.");
+    expect(control.detail.textContent).toContain("Moving monsters need 500 space.");
+    expect(text(control.detail.querySelector(".auto-attack__room"))).toBe("Outpost242, 20840 space free");
   });
 
   it("greys out with exactly what is missing", async () => {
@@ -400,6 +434,19 @@ describe("the camp panel's Repeat attack", () => {
     await settle();
     expect(control.button.disabled).toBe(true);
     expect(control.detail.textContent).toContain("Gorgo is not ready (frozen or away)");
+  });
+
+  it("puts portrait shortages before the saved attack's history", async () => {
+    const control = new AutoAttackControl({
+      plan: async () => answer({ missing: [{ kind: "monster", id: "C1", need: 300, have: 288 }] }),
+      onRepeat: vi.fn(),
+    });
+    control.setCell(CELL, campCell());
+    await settle();
+    expect(control.detail.firstElementChild?.textContent).toBe("Not enough monsters across your yards.");
+    expect(control.detail.querySelector(".auto-attack__missing li")?.textContent).toBe("Pokey: 12 short");
+    expect(control.detail.querySelector(".auto-attack__missing img")).not.toBeNull();
+    expect(control.detail.lastElementChild?.className).toBe("auto-attack-action__history");
   });
 
   it("greys out on a camp no Flinger reaches, saying so, and a press runs nothing", async () => {

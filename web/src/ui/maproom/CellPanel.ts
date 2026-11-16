@@ -370,6 +370,14 @@ export class CellPanel {
       ...this.extras.map((action) => action.detail),
       this.more,
     );
+    // Smart Repeat attack (astra): keep the camp's head fixed and each explanation with its button.
+    // Panels without Repeat attack keep their existing layout.
+    if (this.extras.some((action) => action.button.classList.contains("auto-attack-action__button"))) {
+      const body = el("div", "mr2-cell__repeat-body");
+      body.append(...[...this.element.children].filter((node) => node !== grip && node !== head));
+      for (const action of this.extras) action.button.after(action.detail);
+      this.element.append(body);
+    }
     this.element.addEventListener("keydown", (event) => {
       if (event.key !== "Escape") return;
       event.stopPropagation();
@@ -390,6 +398,11 @@ export class CellPanel {
     const cell = this.cell;
     if (!cell) return;
     this.payload = payload;
+    this.element.classList.toggle(
+      "mr2-cell--repeat",
+      !!payload && !isWaterCell(payload) && payload.b === CellType.WILD_MONSTER
+        && this.extras.some((action) => action.button.classList.contains("auto-attack-action__button")),
+    );
     for (const action of this.extras) action.setCell(cell, payload);
     this.render(cell, payload);
     this.syncAchievements();

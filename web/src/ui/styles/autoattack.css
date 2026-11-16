@@ -40,7 +40,7 @@
 }
 
 /* The map's camp panel: the Repeat attack button sits under Attack, and its
-   line under the actions says which attack it repeats or what is missing. */
+   line under its button says which attack it repeats or what is missing. */
 .auto-attack-action {
   margin: var(--space-1) 0 0;
   font-size: var(--text-xs);
@@ -51,9 +51,25 @@
   color: var(--colour-warning);
 }
 
+/* Smart Repeat attack (astra): the normal refusal path has the sheet's diagnostics too. */
 .auto-attack-action__missing {
-  margin: var(--space-1) 0 0;
-  padding-left: var(--space-4);
+  margin-top: var(--space-2);
+  font-size: calc((var(--text-sm) + var(--text-md)) / 2);
+}
+
+.auto-attack-action__missing .auto-attack__missing {
+  padding: 0;
+  list-style: none;
+}
+
+.auto-attack-action__missing .auto-attack__missing-monster {
+  min-height: calc(var(--space-5) + var(--space-1));
+  gap: calc(var(--space-3) / 2);
+}
+
+.auto-attack-action__history {
+  margin: var(--space-2) 0 0;
+  color: var(--colour-text-muted);
 }
 
 /* ── The working bar's sheet (Repeat attack, 15 Nov 2026) ─────────────────
@@ -156,8 +172,7 @@
   }
 
   .auto-attack--moves .auto-attack__source,
-  .auto-attack--moves .auto-attack__army,
-  .auto-attack--moves .auto-attack__spent {
+  .auto-attack--moves .auto-attack__army-strip {
     display: none;
   }
 }
@@ -301,4 +316,124 @@
   font-weight: 700;
   font-variant-numeric: tabular-nums;
   color: var(--colour-warning);
+}
+
+/* Smart Repeat attack (astra): keep the total army separate from what moves.
+   From and To share the transfer heading's line, including on a short screen. */
+.auto-attack__army-strip {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-1) var(--space-2);
+  font-size: var(--text-sm);
+}
+
+.auto-attack__details {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1) var(--space-2);
+}
+
+.auto-attack__details > p {
+  margin: 0;
+}
+
+.auto-attack--moves .auto-attack__moves-lead {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding-inline: var(--space-2);
+  font-size: var(--text-sm);
+}
+
+.auto-attack--moves .auto-attack__source,
+.auto-attack--moves .auto-attack__includes,
+.auto-attack--moves .auto-attack__siege {
+  font-size: var(--text-sm);
+  line-height: calc((var(--text-sm) + var(--text-lg)) / 2 + var(--space-1) / 2);
+}
+
+/* Smart Repeat attack (astra): only the move list gives way; spare phone
+   space stays above a compact footer, with the cost always next to the buttons. */
+.attack-end.auto-attack--moves {
+  max-height: calc(100vh - var(--space-6) - var(--space-4));
+  max-height: calc(100dvh - var(--space-6) - var(--space-4));
+  min-height: 0;
+}
+
+@media (max-width: 620px) {
+  .attack-end.auto-attack--moves {
+    max-height: 100%;
+  }
+}
+
+.attack-end.auto-attack--moves > .panel__body {
+  flex: 1 1 auto;
+  min-height: 0;
+  max-height: none;
+  gap: var(--space-2);
+  padding-bottom: max(var(--space-4), env(safe-area-inset-bottom));
+}
+
+.auto-attack--moves .auto-attack__scroll {
+  gap: var(--space-2);
+  overflow: hidden;
+}
+
+.auto-attack--moves .auto-attack__scroll > .auto-attack__moves {
+  flex: 0 1 auto;
+  min-height: calc(var(--space-7) + var(--space-2));
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  /* Local covers hide the edge shadows when no more rows are off screen. */
+  background:
+    linear-gradient(var(--colour-surface-base), var(--colour-surface-base)) top / 100% var(--space-3) no-repeat local,
+    linear-gradient(var(--colour-surface-base), var(--colour-surface-base)) bottom / 100% var(--space-3) no-repeat local,
+    linear-gradient(var(--colour-border-strong), transparent) top / 100% var(--space-2) no-repeat scroll,
+    linear-gradient(transparent, var(--colour-border-strong)) bottom / 100% var(--space-2) no-repeat scroll;
+}
+
+.auto-attack__footer {
+  display: flex;
+  flex-direction: column;
+  flex: none;
+  gap: var(--space-2);
+}
+
+.auto-attack__footer .auto-attack__spent {
+  margin: 0;
+  font-size: var(--text-xs);
+  line-height: var(--space-4);
+}
+
+.auto-attack__failure-context {
+  font-size: calc((var(--text-sm) + var(--text-md)) / 2);
+}
+
+.auto-attack__room-free {
+  text-align: right;
+}
+
+/* Smart Repeat attack (astra): explicit hit areas also cover touch tablets. */
+.auto-attack--moves .attack-end__actions .btn {
+  min-height: calc(var(--space-6) + var(--space-3));
+  min-width: calc(var(--space-6) + var(--space-3));
+}
+
+@media (max-height: 500px) {
+  /* Smart Repeat attack (astra): save space above the rows, not at the buttons.
+     As before, leave the total army and history out here; keep champion and
+     siege information, and the fixed spending note. */
+  .auto-attack--moves .auto-attack__scroll {
+    gap: calc(var(--space-3) / 2);
+  }
+
+  .auto-attack--moves .auto-attack__move {
+    padding-block: var(--space-1);
+  }
+
+  .auto-attack--moves .auto-attack__changed {
+    padding-block: var(--space-1);
+    font-size: var(--text-sm);
+  }
 }

@@ -91,7 +91,7 @@ export const repeatRefusal = (answer: AutoAttackPlanResponse): string | null => 
   if (!answer.plan) return null;
   if (answer.underAttack) return "Someone else is attacking this camp right now.";
   if (answer.outOfRange) return "This camp is out of your Flingers' range.";
-  if (answer.missing.length > 0) return "You are missing what that attack used:";
+  if (answer.missing.length > 0) return missingHeadline(answer.missing);
   if (answer.noRoom) return NO_ROOM_TEXT;
   return null;
 };
@@ -102,10 +102,10 @@ export const repeatRefusal = (answer: AutoAttackPlanResponse): string | null => 
 export const NO_ROOM_TEXT = "Not enough Monster Housing in range.";
 
 /** Under {@link NO_ROOM_TEXT}: the space the monsters that would move in take. */
-export const ROOM_NEED_TEXT = (need: number): string => `Monsters moving in need ${need.toLocaleString("en-US")} space`;
+export const ROOM_NEED_TEXT = (need: number): string => `Moving monsters need ${need.toLocaleString("en-US")} space.`;
 
 /** Above the moves on the confirm sheet. */
-export const MOVES_LEAD = "Move monsters, then attack:";
+export const MOVES_LEAD = (count: number): string => `${count} ${count === 1 ? "transfer" : "transfers"}`;
 
 /** The confirm sheet's button when monsters move first. */
 export const MOVE_AND_ATTACK = "Move and attack";
@@ -121,11 +121,17 @@ export const yardPlace = (label: YardLabel | undefined): string => (label ? `${l
 
 /** The camp panel's line when Repeat attack moves monsters in first. */
 export const movesLineText = (moves: number): string =>
-  moves === 1 ? "1 move first" : `${moves} moves first`;
+  moves === 1 ? "1 monster transfer needed" : `${moves} monster transfers needed`;
 
 /** Why a camp has no Repeat attack yet. */
 export const noPlanText = (tribe: string, level: number): string =>
   `Attack a ${tribe} camp of level ${level} by hand once, and you can repeat that attack here.`;
+
+// Smart Repeat attack (astra): name the shortage without calling bombs or champions monsters.
+const missingHeadline = (missing: readonly PlanShortfall[]): string =>
+  missing.some((item) => item.kind === "monster")
+    ? "Not enough monsters across your yards."
+    : "Missing from the attack:";
 
 /** The server's refusal, in words a player can act on. */
 export const autoAttackErrorText = (caught: unknown): { message: string; missing: readonly PlanShortfall[] } => {
@@ -133,6 +139,7 @@ export const autoAttackErrorText = (caught: unknown): { message: string; missing
     const data = caught.details?.data as { reason?: unknown; missing?: unknown } | undefined;
     const missing = Array.isArray(data?.missing) ? (data.missing as PlanShortfall[]) : [];
     if (caught.status === 429) return { message: "That is ten auto-attacks this minute. Wait a moment.", missing };
+    if (data?.reason === "missing") return { message: missingHeadline(missing), missing };
     return { message: caught.message || "The auto-attack was refused.", missing };
   }
   if (caught instanceof NetworkError || !(caught instanceof Error)) {

@@ -133,7 +133,7 @@ const buttonOf = (label: string, className: string, onClick: () => void): HTMLBu
 };
 
 /** The missing things as a list. */
-const missingList = (missing: readonly PlanShortfall[]): HTMLElement => {
+export const missingList = (missing: readonly PlanShortfall[]): HTMLElement => {
   const list = document.createElement("ul");
   list.className = "auto-attack__missing";
   list.setAttribute("aria-label", "What is missing");
@@ -177,6 +177,41 @@ const yardChip = (label: YardLabel | undefined, end: "from" | "to" | "room"): HT
   return chip;
 };
 
+// Smart Repeat attack (astra): the total army and the transfers use the same painted counts.
+const armyUnits = (monsters: Readonly<Record<string, number>>): HTMLElement[] => {
+  return Object.entries(monsters)
+    .filter(([, count]) => count > 0)
+    .sort((one, other) => other[1] - one[1] || one[0].localeCompare(other[0]))
+    .map(([id, count]) => {
+      const unit = document.createElement("span");
+      unit.className = "auto-attack__unit";
+      unit.title = `${count.toLocaleString("en-US")} ${monsterName(id)}`;
+      unit.setAttribute("aria-label", unit.title);
+      const number = document.createElement("span");
+      number.className = "auto-attack__unit-count";
+      number.textContent = `×${count.toLocaleString("en-US")}`;
+      unit.append(portraitOf(id), number);
+      return unit;
+    });
+};
+
+const attackArmy = (monsters: Readonly<Record<string, number>>): HTMLElement => {
+  const strip = document.createElement("div");
+  strip.className = "auto-attack__army-strip";
+  strip.append(document.createTextNode("Attack army"), ...armyUnits(monsters));
+  return strip;
+};
+
+const movesHeading = (count: number): HTMLElement => {
+  const heading = paragraph("", "auto-attack__moves-lead");
+  for (const label of ["From", MOVES_LEAD(count), "To"]) {
+    const part = document.createElement("span");
+    part.textContent = label;
+    heading.append(part);
+  }
+  return heading;
+};
+
 /**
  * The moves, one row each: the yard they leave on the LEFT, what moves, and
  * the yard in range they go to on the RIGHT (owner: "source yard on left, and
@@ -191,19 +226,7 @@ const movesList = (moves: readonly YardMove[], yards: Readonly<Record<string, Ya
     row.className = "auto-attack__move";
     const cargo = document.createElement("span");
     cargo.className = "auto-attack__cargo";
-    const units = Object.entries(move.monsters)
-      .filter(([, count]) => count > 0)
-      .sort((one, other) => other[1] - one[1] || one[0].localeCompare(other[0]));
-    for (const [id, count] of units) {
-      const unit = document.createElement("span");
-      unit.className = "auto-attack__unit";
-      unit.title = `${count.toLocaleString("en-US")} ${monsterName(id)}`;
-      const number = document.createElement("span");
-      number.className = "auto-attack__unit-count";
-      number.textContent = `×${count.toLocaleString("en-US")}`;
-      unit.append(portraitOf(id), number);
-      cargo.append(unit);
-    }
+    cargo.append(...armyUnits(move.monsters));
     const arrow = icon("chevronRight", 18, "auto-attack__arrow");
     const from = yards[move.from];
     const to = yards[move.to];
@@ -218,7 +241,7 @@ const movesList = (moves: readonly YardMove[], yards: Readonly<Record<string, Ya
 };
 
 /** No room in range: what the moves need, and the room each yard in range has. */
-const roomList = (answer: AutoAttackPlanResponse): HTMLElement[] => {
+export const roomList = (answer: AutoAttackPlanResponse): HTMLElement[] => {
   const noRoom = answer.noRoom;
   if (!noRoom) return [];
   const need = paragraph(ROOM_NEED_TEXT(noRoom.need), "auto-attack__room-need");
@@ -230,7 +253,7 @@ const roomList = (answer: AutoAttackPlanResponse): HTMLElement[] => {
     row.className = "auto-attack__room-yard";
     const free = document.createElement("span");
     free.className = "auto-attack__room-free";
-    free.textContent = `${one.free.toLocaleString("en-US")} free`;
+    free.textContent = `${one.free.toLocaleString("en-US")} space free`;
     row.append(yardChip(answer.yards?.[one.baseid], "room"), free);
     list.append(row);
   }
@@ -322,7 +345,15 @@ export class AutoAttackFlow {
         const words = document.createElement("div");
         words.className = "auto-attack__scroll";
         words.append(...body);
-        view.panel.setContent(words, row);
+        if (className.includes("auto-attack--moves")) {
+          // Smart Repeat attack (astra): the cost stays above the buttons, outside the list.
+          const footer = document.createElement("div");
+          footer.className = "auto-attack__footer";
+          footer.append(paragraph("Free transfer. Monsters spent. Result in seconds.", "u-muted auto-attack__spent"), row);
+          view.panel.setContent(words, footer);
+        } else {
+          view.panel.setContent(words, row);
+        }
       } else {
         view.panel.setContent(...body, row);
       }
@@ -352,11 +383,19 @@ export class AutoAttackFlow {
     body.push(
       paragraph(`${campText(plan)} · camp damage now ${Math.floor(answer.damage)}%`, "attack-end__outcome"),
       paragraph(planSourceText(plan, this.options.baseid, this.now()), "u-muted auto-attack__source"),
-      paragraph(monstersText(plan.monsters), "auto-attack__army"),
+      moves.length > 0 ? attackArmy(plan.monsters) : paragraph(monstersText(plan.monsters), "auto-attack__army"),
     );
     const includes = includesText(plan);
-    if (includes) body.push(paragraph(includes, "auto-attack__includes"));
-    if (plan.siege) body.push(paragraph(SIEGE_NOT_REPEATED, "u-muted auto-attack__siege"));
+    const details: HTMLElement[] = [];
+    if (includes) details.push(paragraph(includes, "auto-attack__includes"));
+    if (plan.siege) details.push(paragraph(SIEGE_NOT_REPEATED, "u-muted auto-attack__siege"));
+    if (moves.length > 0 && details.length > 0) {
+      // Smart Repeat attack (astra): short secondary lines share a row when they fit.
+      const summary = document.createElement("div");
+      summary.className = "auto-attack__details";
+      summary.append(...details);
+      body.push(summary);
+    } else body.push(...details);
     if (refusal) {
       body.push(paragraph(refusal, "auto-attack__refusal"));
       if (answer.missing.length > 0) body.push(missingList(answer.missing));
@@ -364,8 +403,7 @@ export class AutoAttackFlow {
     } else if (moves.length > 0) {
       // Smart Repeat attack: the yards in range lack monsters other yards hold.
       this.movesKey = answer.movesKey ?? null;
-      body.push(paragraph(MOVES_LEAD, "auto-attack__moves-lead"), movesList(moves, answer.yards ?? {}));
-      body.push(paragraph("Moving is free; the monsters are spent in the attack.", "u-muted auto-attack__spent"));
+      body.push(movesHeading(moves.length), movesList(moves, answer.yards ?? {}));
     } else {
       body.push(paragraph("The monsters are spent, as in an attack by hand. The result comes in a few seconds.", "u-muted"));
     }
@@ -449,6 +487,10 @@ export class AutoAttackFlow {
     }
     const { message, missing } = autoAttackErrorText(caught);
     const body = [paragraph(message, "auto-attack__refusal")];
+    // Smart Repeat attack (astra): explain a stale move offer, without guessing for network errors.
+    if (this.movesKey && ["missing", "noRoom"].includes(refusalReason(caught) ?? "")) {
+      body.unshift(paragraph("Your yards changed.", "u-muted auto-attack__failure-context"));
+    }
     if (missing.length > 0) body.push(missingList(missing));
     // No room in range: the space needed and each yard's room, as the confirm sheet shows them.
     const data = caught instanceof ApiError ? (caught.details?.data as Partial<AutoAttackPlanResponse> | undefined) : undefined;
