@@ -1,5 +1,6 @@
 import { expect, test, type Page } from "@playwright/test";
 import {
+  BUSY_PAGE_TIMEOUT,
   chatLines,
   closeAll,
   closeWorldChat,
@@ -114,7 +115,7 @@ const checkTabs = async (page: Page, profile: Profile, win: WindowCase): Promise
     const name = (await tab.innerText()).trim().replace(/\s+/g, " ").slice(0, 24);
     if ((await tab.getAttribute("aria-selected")) !== "true") {
       const clicked = await tab
-        .click({ timeout: 5000 })
+        .click({ timeout: BUSY_PAGE_TIMEOUT })
         .then(() => true)
         .catch(() => false);
       expect
