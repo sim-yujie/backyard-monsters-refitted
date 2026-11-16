@@ -8,6 +8,7 @@ import { cellsText } from "@/game/maproom/attackRange";
 import { TRIBE_COLOURS } from "@/game/maproom/cellVisuals";
 import { tribePictureUrl } from "@/game/maproom/tribeAvatars";
 import { button, el, icon, type IconName } from "@/ui/maproom1/icons";
+import { watchMoreBelow } from "@/ui/moreBelow";
 import { GROUND_BONUS_TITLE, groundBonusIcons, heightIcon } from "./groundBonus";
 import { isFlatGround } from "@/game/maproom/ground";
 import { landFeatureChip } from "./landFeatureRow";
@@ -377,6 +378,8 @@ export class CellPanel {
       body.append(...[...this.element.children].filter((node) => node !== grip && node !== head));
       for (const action of this.extras) action.button.after(action.detail);
       this.element.append(body);
+      // Lead's vetting (16 Nov): a cut last line fades out while there is more below.
+      watchMoreBelow(body, "mr2-cell__repeat-body--more");
     }
     this.element.addEventListener("keydown", (event) => {
       if (event.key !== "Escape") return;

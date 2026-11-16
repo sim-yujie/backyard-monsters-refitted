@@ -183,6 +183,17 @@ describe("Smart Repeat attack's prompt (owner, 16 Nov 2026)", () => {
     expect(modal.querySelectorAll(".auto-attack__move")).toHaveLength(3);
   });
 
+  it("the champion and bombs get their own line with the champion's portrait (lead's vetting)", async () => {
+    const modal = document.createElement("div");
+    const flow = new AutoAttackFlow({ baseid: BASEID, modal, onWatch: vi.fn(), calls: calls() });
+    await flow.start(answer(MOVES));
+    const strip = modal.querySelector(".auto-attack__champion-strip");
+    expect(text(strip)).toContain("Gorgo L5");
+    expect(text(strip)).toContain("3 bombs");
+    expect(strip?.querySelectorAll("img")).toHaveLength(1);
+    expect(strip?.closest(".auto-attack__in-range")).toBeNull();
+  });
+
   it("Move and attack sends the key of the moves shown, and nothing else", async () => {
     const modal = document.createElement("div");
     const api = calls();

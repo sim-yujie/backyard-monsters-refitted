@@ -330,10 +330,21 @@
   font-size: var(--text-sm);
 }
 
+/* Lead's vetting (16 Nov): "Already in range" and the champion line each
+   get their own line, so the champion never reads as part of the strip. */
 .auto-attack__details {
   display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--space-1);
+}
+
+.auto-attack__champion-strip {
+  display: flex;
   flex-wrap: wrap;
+  align-items: center;
   gap: var(--space-1) var(--space-2);
+  font-size: var(--text-sm);
 }
 
 .auto-attack__details > p {
@@ -387,12 +398,6 @@
   min-height: calc(var(--space-7) + var(--space-2));
   overflow-y: auto;
   overscroll-behavior: contain;
-  /* Local covers hide the edge shadows when no more rows are off screen. */
-  background:
-    linear-gradient(var(--colour-surface-base), var(--colour-surface-base)) top / 100% var(--space-3) no-repeat local,
-    linear-gradient(var(--colour-surface-base), var(--colour-surface-base)) bottom / 100% var(--space-3) no-repeat local,
-    linear-gradient(var(--colour-border-strong), transparent) top / 100% var(--space-2) no-repeat scroll,
-    linear-gradient(transparent, var(--colour-border-strong)) bottom / 100% var(--space-2) no-repeat scroll;
 }
 
 .auto-attack__footer {
@@ -585,5 +590,62 @@
 
   .auto-attack--moves .attack-end__actions {
     flex-wrap: nowrap;
+  }
+}
+
+/* ── Lead's vetting of the round-3 shots (16 Nov 2026) ───────────────────
+ * A scrolling list never rests on a half-cut row (`fitWholeRows`,
+ * ui/moreBelow.ts) and fades out at the bottom while more rows are below
+ * (`watchMoreBelow` sets the class). */
+.auto-attack__list--more {
+  -webkit-mask-image: linear-gradient(to bottom, #000 calc(100% - var(--space-4)), transparent);
+  mask-image: linear-gradient(to bottom, #000 calc(100% - var(--space-4)), transparent);
+}
+
+/* A short screen: tighter move rows and no "Already in range" strip (the
+   rows and the champion line stay), so three moves fit a phone on its side;
+   more than fit scroll, resting on whole rows. */
+@media (max-height: 500px) {
+  .auto-attack--moves .auto-attack__details > .auto-attack__in-range {
+    display: none;
+  }
+
+  .auto-attack__moves {
+    gap: var(--space-1);
+  }
+
+  .auto-attack__move {
+    padding-block: var(--space-1);
+  }
+
+  .auto-attack__move .auto-attack__portrait {
+    width: 24px;
+    height: 24px;
+  }
+}
+
+/* A phone upright: the confirm and refusal sheets are a card that hugs its
+   content, centred, with the buttons right under the list (no empty band),
+   with a 16px gutter and clear of the notch and the home bar, as the working
+   bar's sheet. Taller than the screen, its list scrolls inside. */
+@media (max-width: 620px) {
+  .attack-end__backdrop.auto-attack__backdrop--card {
+    place-items: center stretch;
+    padding: max(var(--space-4), env(safe-area-inset-top)) max(var(--space-4), env(safe-area-inset-right))
+      max(var(--space-4), env(safe-area-inset-bottom)) max(var(--space-4), env(safe-area-inset-left));
+  }
+
+  :root[data-skin] .attack-end__backdrop.auto-attack__backdrop--card {
+    padding-top: max(32px, env(safe-area-inset-top));
+  }
+
+  .attack-end.auto-attack--confirm,
+  .attack-end.auto-attack--failed {
+    align-self: center;
+    width: auto;
+    height: auto;
+    max-height: 100%;
+    border: 1px solid var(--colour-border);
+    border-radius: var(--radius-lg);
   }
 }

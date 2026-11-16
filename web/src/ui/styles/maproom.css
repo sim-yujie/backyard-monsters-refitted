@@ -1792,3 +1792,10 @@
   flex: none;
   min-height: calc(var(--space-6) + var(--space-3));
 }
+
+/* Lead's vetting (16 Nov 2026): while the camp's content has more below, its
+   bottom edge fades out, so a cut line reads as "scroll for more". */
+.mr2-cell--repeat > .mr2-cell__repeat-body.mr2-cell__repeat-body--more {
+  -webkit-mask-image: linear-gradient(to bottom, #000 calc(100% - var(--space-6)), transparent);
+  mask-image: linear-gradient(to bottom, #000 calc(100% - var(--space-6)), transparent);
+}

@@ -6,6 +6,7 @@ import {
   type AutoAttackReplayResponse,
   type AutoAttackResponse,
   type PlanShortfall,
+  type PlanSummary,
   type YardLabel,
   type YardMove,
 } from "@/api/autoAttack";
@@ -14,11 +15,13 @@ import { declineTakeover, getTakeoverQuote, takeOverCell, type TakeoverPayment }
 import type { TakeoverQuoteResponse } from "@/api/types";
 import type { WatchRun } from "@/game/autoAttack/watchRun";
 import type { OffsetCell } from "@/game/HexGrid";
-import { monsterPortrait, showPortrait } from "@/game/portraits";
+import { championByType } from "@/game/combat/rules";
+import { championPortrait, monsterPortrait, showPortrait } from "@/game/portraits";
 import { championName, monsterName } from "@/ui/attack/ArmyPanel";
 import { EndTakeoverOffer } from "@/ui/attack/EndTakeoverOffer";
 import { formatAmount } from "@/ui/format";
 import { icon } from "@/ui/maproom1/icons";
+import { fitWholeRows, watchMoreBelow } from "@/ui/moreBelow";
 import { Panel } from "@/ui/Panel";
 import { RESOURCE_KEYS, RESOURCE_NAMES, resourceAmount } from "@/ui/resourceIcon";
 import {
@@ -105,10 +108,12 @@ export interface AutoAttackFlowOptions {
 /** A modal sheet: a scrim and a panel that Escape and the scrim do not close. */
 const sheet = (title: string, className: string): { backdrop: HTMLElement; panel: Panel } => {
   const backdrop = document.createElement("div");
-  // The working bar's sheet is small on a phone too (attack.css), not the whole screen.
+  // The working bar's sheet, and the confirm and refusal sheets, are compact
+  // cards on a phone upright, not the whole screen (attack.css, autoattack.css;
+  // the confirm and refusal ones since the lead's vetting, 16 Nov 2026).
   backdrop.className = `popup-backdrop attack-end__backdrop${
     className.includes("auto-attack--bar") ? " auto-attack__backdrop--bar" : ""
-  }`;
+  }${/auto-attack--(confirm|failed)/.test(className) ? " auto-attack__backdrop--card" : ""}`;
   const panel = new Panel({ title, closable: false, className: `map-panel attack-end auto-attack ${className}` });
   panel.element.setAttribute("role", "dialog");
   panel.element.setAttribute("aria-modal", "true");
@@ -193,6 +198,38 @@ const armyUnits = (monsters: Readonly<Record<string, number>>): HTMLElement[] =>
       unit.append(portraitOf(id), number);
       return unit;
     });
+};
+
+/**
+ * Smart Repeat attack (lead's vetting, 16 Nov): the champions and bombs the
+ * attack brings on their own line with each champion's portrait, so they do
+ * not read as part of the "Already in range" strip.
+ */
+const championStrip = (plan: PlanSummary): HTMLElement | null => {
+  if (plan.champions.length === 0 && plan.bombs.length === 0) return null;
+  const strip = document.createElement("div");
+  strip.className = "auto-attack__champion-strip";
+  strip.append(document.createTextNode("Includes"));
+  for (const champion of plan.champions) {
+    const unit = document.createElement("span");
+    unit.className = "auto-attack__unit auto-attack__champion";
+    const picture = document.createElement("img");
+    picture.className = "auto-attack__portrait";
+    showPortrait(picture, championPortrait(championByType(champion.t) ?? `G${champion.t}`, champion.l, "icon"));
+    picture.alt = "";
+    picture.decoding = "async";
+    const words = document.createElement("span");
+    words.textContent = `${championName(champion.t)} L${champion.l}` + (champion.pl ? ` (power ${champion.pl})` : "");
+    unit.append(picture, words);
+    strip.append(unit);
+  }
+  if (plan.bombs.length > 0) {
+    const bombs = document.createElement("span");
+    bombs.className = "auto-attack__unit";
+    bombs.textContent = plan.bombs.length === 1 ? "1 bomb" : `${plan.bombs.length} bombs`;
+    strip.append(bombs);
+  }
+  return strip;
 };
 
 const attackArmy = (monsters: Readonly<Record<string, number>>): HTMLElement => {
@@ -314,10 +351,31 @@ export class AutoAttackFlow {
     this.bar = null;
     this.offer?.destroy();
     this.offer = null;
+    for (const stop of this.stopCues) stop();
+    this.stopCues = [];
     this.open?.panel.close();
     this.open?.backdrop.remove();
     this.open = null;
     this.options.onClose?.();
+  }
+
+  /** Stops the open sheet's scroll cues. */
+  private stopCues: (() => void)[] = [];
+
+  /**
+   * The sheet's scrolling list never rests on a half-cut row, and fades at the
+   * bottom while more rows are below (lead's vetting, 16 Nov 2026).
+   */
+  private cueLists(root: HTMLElement): void {
+    for (const stop of this.stopCues) stop();
+    this.stopCues = [];
+    for (const list of root.querySelectorAll<HTMLElement>(".auto-attack__moves, .auto-attack__missing, .auto-attack__room")) {
+      this.stopCues.push(watchMoreBelow(list, "auto-attack__list--more"));
+      requestAnimationFrame(() => {
+        fitWholeRows(list);
+        list.dispatchEvent(new Event("scroll"));
+      });
+    }
   }
 
   /** The sheet on screen, for the tests. */
@@ -364,6 +422,7 @@ export class AutoAttackFlow {
     }
     this.options.modal.append(view.backdrop);
     this.open = view;
+    this.cueLists(view.panel.element);
     (actions.find((one) => one.classList.contains("btn--primary") && !one.disabled) ?? actions[0])?.focus();
   }
 
@@ -407,7 +466,9 @@ export class AutoAttackFlow {
       }
     }
     const includes = includesText(plan);
-    if (includes) details.push(paragraph(includes, "auto-attack__includes"));
+    const champions = moves.length > 0 ? championStrip(plan) : null;
+    if (champions) details.push(champions);
+    else if (includes) details.push(paragraph(includes, "auto-attack__includes"));
     if (plan.siege) details.push(paragraph(SIEGE_NOT_REPEATED, "u-muted auto-attack__siege"));
     if (moves.length > 0 && details.length > 0) {
       // Smart Repeat attack (astra): short secondary lines share a row when they fit.
