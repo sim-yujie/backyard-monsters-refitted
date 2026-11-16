@@ -49,3 +49,46 @@ describe("PlannerOverlay nearby outlines", () => {
     overlay.destroy();
   });
 });
+
+/** The wall line on each view (owner, 16 Nov 2026: "what about 2d blueprint view?"). */
+describe("PlannerOverlay wall line", () => {
+  const line = (flat: boolean): NonNullable<PlannerVisuals["line"]> => ({
+    cells: [
+      { corners: square(0), state: "build" },
+      { corners: square(10), state: "short" },
+      { corners: square(20), state: "blocked" },
+    ],
+    anchors: [[5, 5]],
+    flat,
+  });
+
+  it("draws the isometric line as polygons", () => {
+    const overlay = new PlannerOverlay();
+    const poly = vi.spyOn(overlay.root, "poly");
+    const rect = vi.spyOn(overlay.root, "rect");
+    overlay.draw(visuals({ line: line(false) }), () => null);
+    expect(poly).toHaveBeenCalledTimes(6);
+    expect(rect).not.toHaveBeenCalled();
+    overlay.destroy();
+  });
+
+  it("draws the blueprint line as squares: green and red filled, grey dashed and empty", () => {
+    const overlay = new PlannerOverlay();
+    const poly = vi.spyOn(overlay.root, "poly");
+    const rect = vi.spyOn(overlay.root, "rect");
+    const fill = vi.spyOn(overlay.root, "fill");
+    const circle = vi.spyOn(overlay.root, "circle");
+    overlay.draw(visuals({ line: line(true) }), () => null);
+    expect(poly).not.toHaveBeenCalled();
+    // Green and red: one square for the fill and under-edge, one for the coloured edge.
+    expect(rect.mock.calls.map(([x]) => x)).toEqual([0, 0, 20, 20]);
+    expect(fill.mock.calls.map(([style]) => (style as unknown as { color: number }).color)).toEqual([
+      0x5cc26a,
+      0xe05252,
+      0xffffff,
+    ]);
+    expect(circle).toHaveBeenCalledTimes(1);
+    expect(circle.mock.calls[0]?.[2]).toBeLessThan(5);
+    overlay.destroy();
+  });
+});

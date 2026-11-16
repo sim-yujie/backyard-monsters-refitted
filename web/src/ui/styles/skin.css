@@ -1208,7 +1208,8 @@
 
 /* ✓ Build N is green in both looks: Classic's own green plate (Flash's small
    button), Modern's orange steel plate turned green. Grey when off. */
-:root[data-skin="flash"] .build-placing .btn.btn--primary.build-placing__line-confirm {
+:root[data-skin="flash"] .build-placing .btn.btn--primary.build-placing__line-confirm,
+:root[data-skin="flash"] .planner-bar .btn.btn--primary.planner-bar__line-place {
   border-image-source: var(--skin-button2);
   border-image-slice: 0 var(--skin-button2-slice) fill;
   text-shadow:
@@ -1216,15 +1217,18 @@
     1.5px 1.5px 0 var(--skin-button2-stroke), -1.5px 1.5px 0 var(--skin-button2-stroke), 1.5px -1.5px 0 var(--skin-button2-stroke), -1.5px -1.5px 0 var(--skin-button2-stroke);
 }
 
-:root[data-skin="scrap"] .build-placing .btn.btn--primary.build-placing__line-confirm {
+:root[data-skin="scrap"] .build-placing .btn.btn--primary.build-placing__line-confirm,
+:root[data-skin="scrap"] .planner-bar .btn.btn--primary.planner-bar__line-place {
   filter: hue-rotate(100deg) saturate(0.9);
 }
 
-:root[data-skin="scrap"] .build-placing .btn.btn--primary.build-placing__line-confirm:hover:not(:disabled) {
+:root[data-skin="scrap"] .build-placing .btn.btn--primary.build-placing__line-confirm:hover:not(:disabled),
+:root[data-skin="scrap"] .planner-bar .btn.btn--primary.planner-bar__line-place:hover:not(:disabled) {
   filter: hue-rotate(100deg) saturate(0.9) brightness(1.08);
 }
 
-:root[data-skin] .build-placing .btn.btn--primary.build-placing__line-confirm:disabled {
+:root[data-skin] .build-placing .btn.btn--primary.build-placing__line-confirm:disabled,
+:root[data-skin] .planner-bar .btn.btn--primary.planner-bar__line-place:disabled {
   filter: grayscale(1) brightness(0.8);
 }
 

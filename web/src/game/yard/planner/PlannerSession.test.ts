@@ -88,6 +88,13 @@ const by = (from: Point, dx: number, dy: number): Point => ({ x: from.x + dx, y:
 
 /* ── Harness ──────────────────────────────────────────────────────────────── */
 
+/** What the overlay was last handed of a wall line. */
+interface LineVisualSeen {
+  readonly cells: readonly { state: string; corners: Corners }[];
+  readonly anchors: readonly (readonly [number, number])[];
+  readonly flat?: boolean;
+}
+
 interface Harness {
   readonly session: PlannerSession;
   readonly canvas: HTMLCanvasElement;
@@ -98,6 +105,10 @@ interface Harness {
   readonly faulted: () => ReadonlySet<number>;
   /** The ids the session last asked for a faint nearby outline on (#231). */
   readonly nearby: () => ReadonlySet<number>;
+  /** The wall line's Blocks the overlay was last handed, by state, or null with no line. */
+  readonly lineCells: () => string[] | null;
+  /** The wall line as the overlay last got it: Block corners and whether drawn flat. */
+  readonly lineVisual: () => LineVisualSeen | null;
   /** How many times the session asked its owner to open the search box. */
   readonly finds: () => number;
   /** How many taps the session reported to its owner (F14). */
@@ -204,11 +215,18 @@ const planner = (
       return rect ? { x: rect.x + rect.width / 2, y: rect.y + rect.height / 2 } : null;
     },
     plotCorners: (): Corners => rectCorners(centredRect(500, 400)),
+    footprintCornersAt: (type: number, x: number, y: number): Corners => rectCorners(tileRect(type, x, y)),
     setPlannerVisuals: (
-      visuals: { invalid: ReadonlySet<number>; nearby?: ReadonlySet<number> } | null,
+      visuals: {
+        invalid: ReadonlySet<number>;
+        nearby?: ReadonlySet<number>;
+        line?: LineVisualSeen | null;
+      } | null,
     ): void => {
       faulted = visuals ? visuals.invalid : new Set<number>();
       nearby = visuals?.nearby ?? new Set<number>();
+      lineCells = visuals?.line?.cells.map((cell) => cell.state) ?? null;
+      lineVisual = visuals?.line ?? null;
     },
     worldSize: (): { width: number; height: number } => ({
       width: BLUEPRINT_WORLD.width,
@@ -225,6 +243,8 @@ const planner = (
   let taps = 0;
   let faulted: ReadonlySet<number> = new Set<number>();
   let nearby: ReadonlySet<number> = new Set<number>();
+  let lineCells: string[] | null = null;
+  let lineVisual: LineVisualSeen | null = null;
 
   const setView = (next: YardView): void => {
     if (view === next) return;
@@ -273,6 +293,8 @@ const planner = (
     states,
     faulted: () => faulted,
     nearby: () => nearby,
+    lineCells: () => lineCells,
+    lineVisual: () => lineVisual,
     finds: () => finds,
     taps: () => taps,
     placements,
@@ -1888,5 +1910,253 @@ describe("wall picking", () => {
     const harness = planner({ buildings: WALLED, readOnly: true });
     harness.session.setWallPick(true);
     expect(harness.session.state().wallPicking).toBe(false);
+  });
+});
+
+/* ── The wall line (owner, 16 Nov 2026) ───────────────────────────────────── */
+
+describe("drawing walls from the drawer as a line (owner, 16 Nov 2026)", () => {
+  /**
+   * Tower one at (0, 0) and four walls off in a corner, all stored and the
+   * Block stack armed. A main-yard wall is 20 units across.
+   */
+  const WALLS: readonly BuildingData[] = [
+    { id: 1, t: 20, X: 0, Y: 0 },
+    { id: 10, t: 17, X: -300, Y: -300 },
+    { id: 11, t: 17, X: -280, Y: -300 },
+    { id: 12, t: 17, X: -260, Y: -300 },
+    { id: 13, t: 17, X: -240, Y: -300 },
+  ];
+
+  /** Where a click lands to put a corner on the Block whose origin is `(x, y)`. */
+  const block = (x: number, y: number): Point => blueprintToWorld(x + 10, y + 10);
+
+  const drawing = (): Harness => {
+    const harness = planner({ buildings: WALLS });
+    harness.session.selectOnly([10, 11, 12, 13]);
+    expect(harness.session.store()).toBe(4);
+    expect(harness.session.startPlacing(10)).toBe(true);
+    return harness;
+  };
+
+  /**
+   * A straight line from x = -100 to x = 100 along y = 20: eleven Blocks, the
+   * four from x = 0 to 60 on tower one. Four walls: four green, four red,
+   * three grey.
+   */
+  const across = (harness: Harness): void => {
+    harness.click(block(-100, 20));
+    harness.click(block(100, 20));
+  };
+
+  it("arms the stack without putting anything in hand", () => {
+    const harness = drawing();
+    const state = harness.session.state();
+    expect(state.carrying).toBe(false);
+    expect(state.placing).toBe(false);
+    expect(state.line).toMatchObject({ type: 17, anchors: 0, place: 0, stock: 4 });
+    expect(harness.session.armedStack()).toEqual({ type: 17, level: state.line?.level });
+    expect(harness.session.selectedIds()).toEqual([]);
+  });
+
+  it("puts a corner down per click, and says what each Block comes to", () => {
+    const harness = drawing();
+    across(harness);
+    expect(harness.session.state().line).toMatchObject({ anchors: 2, place: 4, blocked: 4, short: 3, stock: 4 });
+    // x = -100 to -40 green; -20 is free but the fifth, so grey; 0 to 60 on
+    // the tower, red; 80 and 100 grey.
+    expect(harness.lineCells()).toEqual([
+      ...["build", "build", "build", "build"],
+      "short",
+      ...["blocked", "blocked", "blocked", "blocked"],
+      ...["short", "short"],
+    ]);
+  });
+
+  it("draws the stack's own walls on the green Blocks, and hides them again when it stops", () => {
+    const harness = drawing();
+    across(harness);
+    expect(harness.placements.get(10)).toEqual({ x: -100, y: 20 });
+    expect(harness.placements.get(13)).toEqual({ x: -40, y: 20 });
+    for (const id of [10, 11, 12, 13]) expect(harness.hidden.has(id)).toBe(false);
+    // Nothing is placed until ✓: the plan still has all four in the drawer.
+    expect(harness.session.state().storedCount).toBe(4);
+
+    harness.session.putBack();
+    expect(harness.session.state().line).toBeNull();
+    for (const id of [10, 11, 12, 13]) expect(harness.hidden.has(id)).toBe(true);
+    expect(harness.lineCells()).toBeNull();
+  });
+
+  it("places the green Blocks in order as one undo step; the grey ones are not placed", () => {
+    const harness = drawing();
+    across(harness);
+    expect(harness.session.placeLine()).toBe(4);
+
+    expect([10, 11, 12, 13].map((id) => at(harness, id))).toEqual([
+      { x: -100, y: 20 },
+      { x: -80, y: 20 },
+      { x: -60, y: 20 },
+      { x: -40, y: 20 },
+    ]);
+    const state = harness.session.state();
+    expect(state.storedCount).toBe(0);
+    // The stack is empty, so the line is done and the drawer row lets go.
+    expect(state.line).toBeNull();
+    expect(harness.session.armedStack()).toBeNull();
+    expect(state.undoLabel).toBe("Place · 4 buildings");
+
+    harness.session.undo();
+    expect(harness.session.state().storedCount).toBe(4);
+    expect(harness.session.plan.get(10)?.stored).toBe(true);
+  });
+
+  it("keeps drawing from the stack while walls are left", () => {
+    const harness = drawing();
+    harness.click(block(-100, 20));
+    harness.click(block(-80, 20));
+    expect(harness.session.placeLine()).toBe(2);
+    const state = harness.session.state();
+    expect(state.line).toMatchObject({ anchors: 0, stock: 2 });
+    expect(state.storedCount).toBe(2);
+  });
+
+  it("takes the last corner on Backspace, a right-click, Ctrl+Z and ↶", () => {
+    const harness = drawing();
+    harness.click(block(-100, 20));
+    harness.click(block(100, 20));
+    harness.click(block(100, 100));
+    harness.click(block(200, 100));
+    expect(harness.session.state().line?.anchors).toBe(4);
+
+    harness.key("Backspace");
+    expect(harness.session.state().line?.anchors).toBe(3);
+    // Backspace does not store anything while drawing.
+    expect(harness.session.state().storedCount).toBe(4);
+
+    expect(harness.contextMenu()).toBe(true);
+    expect(harness.session.state().line?.anchors).toBe(2);
+
+    harness.key("z", { ctrlKey: true });
+    expect(harness.session.state().line?.anchors).toBe(1);
+
+    expect(harness.session.undoCorner()).toBe(true);
+    expect(harness.session.state().line?.anchors).toBe(0);
+    expect(harness.session.undoCorner()).toBe(false);
+
+    // With no corner left, a right-click stops drawing.
+    expect(harness.contextMenu()).toBe(true);
+    expect(harness.session.state().line).toBeNull();
+    // And with nothing drawn, the browser's menu is left alone.
+    expect(harness.contextMenu()).toBe(false);
+  });
+
+  it("lets the line go on Escape, then stops on a second Escape", () => {
+    const harness = drawing();
+    across(harness);
+    harness.key("Escape");
+    expect(harness.session.state().line).toMatchObject({ anchors: 0 });
+    harness.key("Escape");
+    expect(harness.session.state().line).toBeNull();
+    expect(harness.session.state().storedCount).toBe(4);
+  });
+
+  it("follows the mouse with the next stretch, but ✓ places only the corners put down", () => {
+    const harness = drawing();
+    harness.click(block(-100, 20));
+    harness.drag(block(-40, 20));
+    expect(harness.session.state().line?.place).toBe(4);
+    // The mouse leaves the yard for the bar: the live stretch goes.
+    harness.canvas.dispatchEvent(new PointerEvent("pointerleave", { pointerType: "mouse" }));
+    expect(harness.session.state().line?.place).toBe(1);
+    harness.drag(block(-40, 20));
+    expect(harness.session.placeLine()).toBe(1);
+    expect(at(harness, 10)).toEqual({ x: -100, y: 20 });
+  });
+
+  it("ends the line on a double-click on the last corner: the stretch stops following", () => {
+    const harness = drawing();
+    harness.click(block(-100, 20));
+    harness.click(block(-60, 20));
+    harness.click(block(-60, 20));
+    expect(harness.session.state().line).toMatchObject({ anchors: 2, finished: true, place: 3 });
+    harness.drag(block(-60, 200));
+    expect(harness.session.state().line?.place).toBe(3);
+  });
+
+  it("draws on the blueprint's own squares, flat, one per Block on the grid", () => {
+    const harness = drawing();
+    across(harness);
+    const seen = harness.lineVisual();
+    expect(seen?.flat).toBe(true);
+    // The first Block, at (-100, 20): the 20-unit tile a wall there would have.
+    expect(seen?.cells[0]?.corners).toEqual(rectCorners(tileRect(17, -100, 20)));
+    expect(seen?.anchors[0]).toEqual([blueprintToWorld(-90, 30).x, blueprintToWorld(-90, 30).y]);
+  });
+
+  it("keeps the line across a switch to 3D and back; only the stretch to the mouse goes", () => {
+    const harness = drawing();
+    across(harness);
+    harness.drag(block(100, 100));
+    expect(harness.lineCells()).toHaveLength(15);
+
+    harness.setView(YardView.ISO);
+    // The pointer was read in the other view: the live stretch goes, the corners stay.
+    expect(harness.session.state().line).toMatchObject({ anchors: 2, place: 4, blocked: 4, short: 3 });
+    expect(harness.lineCells()).toHaveLength(11);
+    expect(harness.lineVisual()?.flat).toBe(false);
+
+    harness.setView(YardView.BLUEPRINT);
+    expect(harness.lineVisual()?.flat).toBe(true);
+    expect(harness.session.state().line?.anchors).toBe(2);
+    expect(harness.session.placeLine()).toBe(4);
+    expect(at(harness, 10)).toEqual({ x: -100, y: 20 });
+    expect(at(harness, 13)).toEqual({ x: -40, y: 20 });
+  });
+
+  it("pans on a drag rather than putting a corner down", () => {
+    const harness = drawing();
+    harness.press(block(-100, 20));
+    harness.drag(block(0, 200));
+    harness.release(block(0, 200));
+    expect(harness.session.state().line?.anchors).toBe(0);
+  });
+
+  it("takes a finger's taps as corners and a double-tap as the end", () => {
+    const harness = drawing();
+    const touch = { pointerType: "touch" } as const;
+    harness.click(block(-100, 20), touch);
+    harness.click(block(-60, 20), touch);
+    harness.click(block(-60, 20), touch);
+    expect(harness.session.state().line).toMatchObject({ anchors: 2, finished: true, place: 3 });
+    expect(harness.session.placeLine()).toBe(3);
+  });
+
+  it("stops when another tool is chosen or wall picking starts, putting the walls back out of sight", () => {
+    const harness = drawing();
+    across(harness);
+    harness.session.setTool(PlannerTool.BOX);
+    expect(harness.session.state().line).toBeNull();
+    for (const id of [10, 11, 12, 13]) expect(harness.hidden.has(id)).toBe(true);
+
+    harness.session.setTool(PlannerTool.SELECT);
+    harness.session.startPlacing(10);
+    harness.session.setWallPick(true);
+    expect(harness.session.state().line).toBeNull();
+  });
+
+  it("leaves one building at a time for anything that is not a wall (#57)", () => {
+    const harness = planner({ buildings: WALLS });
+    harness.session.selectOnly([1]);
+    harness.session.store();
+    harness.session.startPlacing(1);
+    expect(harness.session.state().line).toBeNull();
+    expect(harness.session.state().placing).toBe(true);
+  });
+
+  it("refuses a read-only session", () => {
+    const harness = planner({ buildings: WALLS, readOnly: true });
+    expect(harness.session.startPlacing(10)).toBe(false);
+    expect(harness.session.state().line).toBeNull();
   });
 });

@@ -1,5 +1,6 @@
 import { tutTarget, TutTarget } from "@/game/guide/targets";
-import { PlannerTool, type PlannerState } from "@/game/yard/planner/PlannerSession";
+import { PlannerTool, type PlannerLineState, type PlannerState } from "@/game/yard/planner/PlannerSession";
+import { gameIcon } from "@/ui/gameIcon";
 import { YardView } from "@/game/yard/YardRenderer";
 import { attachPopover } from "@/ui/Popover";
 import { demo, type DemoName } from "./demos";
@@ -115,7 +116,26 @@ export interface PlannerBarActions {
   onExit: () => void;
   /** A phone's More sheet opened or closed (#45), so the scene can hide the other sheets. */
   onMore?: (open: boolean) => void;
+  /** The wall line's ↶: take the last corner away (owner, 16 Nov 2026). */
+  onLineUndo?: () => void;
+  /** The wall line's ✗: let the corners go, keep drawing. */
+  onLineClear?: () => void;
+  /** The wall line's ✓ Place: put the green Blocks down. */
+  onLinePlace?: () => void;
 }
+
+/**
+ * The wall line's words over its buttons: what to do next before the first
+ * corner, then nothing (the counts say it), or why nothing can be placed.
+ */
+export const lineTip = (touch: boolean, line: PlannerLineState): string => {
+  if (line.anchors === 0) {
+    // astra round 1: the next step is ✓ Place; double-click stays a shortcut (the tooltip says it).
+    return touch ? "Tap corners, then ✓ Place" : "Click corners, then ✓ Place";
+  }
+  if (line.place === 0) return line.blocked > 0 ? "Nothing here can be placed." : "No walls left.";
+  return "";
+};
 
 const button = (label: string, title: string, className = "btn btn--ghost"): HTMLButtonElement => {
   const element = document.createElement("button");
@@ -447,6 +467,15 @@ export class PlannerBar {
   private readonly rearm: HTMLButtonElement;
   private readonly rearmBadge: HTMLElement;
   private readonly putBack: HTMLButtonElement;
+  /* The wall line's controls (owner, 16 Nov 2026), shown only while one is drawn. */
+  private readonly line: HTMLElement;
+  private readonly lineTipText: HTMLElement;
+  private readonly lineCounts: HTMLElement;
+  private readonly lineUndo: HTMLButtonElement;
+  private readonly lineClear: HTMLButtonElement;
+  private readonly linePlace: HTMLButtonElement;
+  private touch = false;
+  private lineShown: PlannerLineState | null = null;
   private readonly store: HTMLButtonElement;
   private readonly storeChip: HTMLButtonElement;
   private readonly inventory: HTMLButtonElement;
@@ -691,6 +720,38 @@ export class PlannerBar {
     this.putBack.addEventListener("click", actions.onPutBack);
 
     /*
+     * The wall line (owner, 16 Nov 2026): the build bar's line controls, in
+     * the Planner's own bar. The counts (green to place, red skipped, grey
+     * with no wall left), ↶ for the last corner, ✗ for the whole line and
+     * ✓ Place. Beside Put back, which reads Done while a line is up.
+     */
+    this.line = document.createElement("div");
+    this.line.className = "planner-bar__line";
+    this.line.setAttribute("role", "group");
+    this.line.setAttribute("aria-label", "Wall line");
+    this.line.hidden = true;
+    this.lineTipText = document.createElement("span");
+    this.lineTipText.className = "planner-bar__line-tip";
+    this.lineTipText.setAttribute("role", "status");
+    this.lineCounts = document.createElement("span");
+    this.lineCounts.className = "planner-bar__line-counts";
+    this.lineCounts.setAttribute("aria-live", "polite");
+    this.lineUndo = button("", "Undo last corner (Backspace or right-click)", "btn btn--ghost planner-bar__line-undo");
+    this.lineUndo.setAttribute("aria-label", "Undo last corner");
+    this.lineUndo.append(gameIcon("undo", { size: 24, decorative: true }));
+    this.lineUndo.addEventListener("click", () => actions.onLineUndo?.());
+    this.lineClear = button("✗", "Clear the line (Esc)", "btn btn--ghost planner-bar__line-clear");
+    this.lineClear.setAttribute("aria-label", "Clear the line");
+    this.lineClear.addEventListener("click", () => actions.onLineClear?.());
+    this.linePlace = button(
+      "✓ Place",
+      "Place the green walls (double-click the last corner to end the line first)",
+      "btn btn--primary planner-bar__line-place",
+    );
+    this.linePlace.addEventListener("click", () => actions.onLinePlace?.());
+    this.line.append(this.lineTipText, this.lineCounts, this.lineUndo, this.lineClear, this.linePlace);
+
+    /*
      * The same Store the toolbar has, as a chip on a phone's bottom bar while
      * something is selected: a phone's top bar has no Store and no Delete
      * key, so this is its only way to store. A desktop never shows it (the
@@ -747,6 +808,9 @@ export class PlannerBar {
         layouts,
         this.apply,
         this.putBack,
+        this.lineUndo,
+        this.lineClear,
+        this.linePlace,
         this.store,
         this.storeChip,
         this.inventory,
@@ -763,7 +827,7 @@ export class PlannerBar {
       actionRow.className = "planner-bar__actions";
       actionRow.append(this.upgradeWalls, this.rearm, this.checklist, layouts, this.apply);
       this.actionRow = actionRow;
-      this.actionBar.append(this.storeChip, this.putBack, spacer(), actionRow);
+      this.actionBar.append(this.storeChip, this.putBack, this.line, spacer(), actionRow);
     }
 
     /* ── The phone-only controls (#45), mounted by `setLayout` ────────── */
@@ -854,6 +918,9 @@ export class PlannerBar {
       this.layout = layout;
       this.arrange(layout);
     }
+    this.touch = touch;
+    this.lineUndo.title = touch ? "Undo last corner" : "Undo last corner (Backspace or right-click)";
+    if (this.lineShown) this.renderLine(this.lineShown);
     // A finger has no Esc and no right button: the chip is the way back.
     this.putBack.title = touch
       ? "Put the buildings in hand back where they were"
@@ -1058,8 +1125,9 @@ export class PlannerBar {
 
     // A read-only session never mounts the chip; hiding it as well keeps the
     // two states from disagreeing if one ever slips through.
-    this.putBack.hidden = this.readOnly || !state.carrying;
+    this.putBack.hidden = this.readOnly || !(state.carrying || state.line);
     if (this.readOnly) return;
+    this.renderLine(state.line);
 
     this.setStoreEnabled(state.selectionCount);
     // Nothing to store while something is already in hand, and the chip would
@@ -1074,6 +1142,62 @@ export class PlannerBar {
     this.apply.title = state.previewing
       ? "Close the preview before applying"
       : "Write this layout to your yard";
+  }
+
+  /**
+   * The wall line's part of the bar: hidden with no line; otherwise the tip
+   * or the counts, and ✓ Place for the green Blocks. Put back reads Done,
+   * since nothing is in hand: it stops drawing.
+   */
+  private renderLine(line: PlannerLineState | null): void {
+    this.lineShown = line;
+    this.line.hidden = line === null;
+    this.actionBar.classList.toggle("planner-bar--line", line !== null);
+    this.putBack.textContent = line ? "Done" : "Put back";
+    if (line) {
+      this.putBack.title = this.touch ? "Stop drawing walls" : "Stop drawing walls (Esc)";
+    } else {
+      this.putBack.title = this.touch
+        ? "Put the buildings in hand back where they were"
+        : "Put the buildings in hand back where they were (Esc or right-click)";
+    }
+    if (!line) return;
+
+    const tip = lineTip(this.touch, line);
+    this.lineTipText.textContent = tip;
+    this.lineTipText.hidden = tip === "";
+    const counts = this.lineCounts;
+    counts.replaceChildren();
+    counts.hidden = line.anchors === 0;
+    if (line.anchors > 0) {
+      const place = document.createElement("strong");
+      place.className = "planner-bar__line-place-count";
+      // ✓ rather than build mode's ×, which there multiplies a price; here
+      // nothing is paid, and × read like the red ✕ (astra round 2).
+      place.textContent = `✓${line.place}`;
+      place.title = `${line.place} to place`;
+      counts.append(place);
+      if (line.blocked > 0) {
+        const blocked = document.createElement("span");
+        blocked.className = "planner-bar__line-blocked";
+        blocked.textContent = `✕${line.blocked}`;
+        blocked.title = `${line.blocked} blocked: skipped`;
+        counts.append(blocked);
+      }
+      if (line.short > 0) {
+        const short = document.createElement("span");
+        short.className = "planner-bar__line-short";
+        // "over stock", like build mode's "over limit" (astra round 1: "not placed" read as every miss).
+        short.textContent = `${line.short} over stock`;
+        short.title = `${line.short} past the walls left in the drawer: not placed`;
+        counts.append(short);
+      }
+    }
+    this.lineUndo.disabled = line.anchors === 0;
+    this.lineClear.disabled = line.anchors === 0;
+    this.linePlace.disabled = line.place === 0;
+    this.linePlace.textContent = line.place > 0 ? `✓ Place ${line.place}` : "✓ Place";
+    this.linePlace.setAttribute("aria-label", line.place > 0 ? `Place ${line.place} walls` : "Place");
   }
 
   /**

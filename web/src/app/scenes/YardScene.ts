@@ -1336,7 +1336,8 @@ export class YardScene implements Scene {
       pick: (x, y) => this.renderer.pick(x, y),
       // Carrying a new building, the ghost is what the pointer is over.
       onHover: (building, mouse) => {
-        const over = this.placement ? null : building;
+        // Nor while the Planner draws a wall line: its Blocks are the outlines.
+        const over = this.placement || this.planner?.drawingLine ? null : building;
         this.renderer.setHovered(over);
         // A defence's range oval: mouse only, not while carrying a building
         // or in the planner, which draws its own rings.
