@@ -201,32 +201,43 @@ export const closeAll = async (page: Page): Promise<void> => {
   }
 };
 
-/** How long a dock press may wait for the page. */
-const DOCK_CLICK_TIMEOUT = 20_000;
+/**
+ * How long a dock press, or a control it brings up, may wait for the page.
+ * Longer than a click needs: a busy page (the yard drawn without a graphics
+ * card, worst just after it boots) can take seconds to answer at all.
+ */
+export const BUSY_PAGE_TIMEOUT = 20_000;
 
 /**
  * Presses a round dock button by its `data-dock` name. On a phone or with the
  * bubble menu the button may be folded into Menu or More first.
+ *
+ * "No way in" (false) is decided from the page, never from a timer: no such
+ * button, or the button switched off for this yard (its own `hidden`, as
+ * Defences, Events and Alliance do), or still not shown after its holder
+ * opened. A short wait on a page busy drawing the yard read as "no way in"
+ * though Build was on screen (odd-980 on CI, 16 Nov 2026).
  */
 export const pressDock = async (page: Page, name: string): Promise<boolean> => {
   const button = page.locator(`.yard-dock__button[data-dock="${name}"]`).first();
   if ((await button.count()) === 0) return false;
+  if ((await button.getAttribute("hidden")) !== null) return false;
   if (!(await button.isVisible())) {
+    // Folded into More (bubble menu) or Menu (phone): a shut fan or sheet hides it.
     for (const holder of ["more", "menu"]) {
       const opener = page.locator(`.yard-dock__button[data-dock="${holder}"]`);
       if (await opener.isVisible()) {
-        await opener.click();
+        await opener.click({ timeout: BUSY_PAGE_TIMEOUT });
         break;
       }
     }
+    const shown = await button
+      .waitFor({ state: "visible", timeout: BUSY_PAGE_TIMEOUT })
+      .then(() => true)
+      .catch(() => false);
+    if (!shown) return false;
   }
-  const shown = await button
-    .waitFor({ state: "visible", timeout: 3000 })
-    .then(() => true)
-    .catch(() => false);
-  if (!shown) return false;
-  // Longer than a click needs: a busy page (the yard drawn without a graphics card) answers slowly.
-  await button.click({ timeout: DOCK_CLICK_TIMEOUT });
+  await button.click({ timeout: BUSY_PAGE_TIMEOUT });
   return true;
 };
 
@@ -235,11 +246,11 @@ export const openFriendsScreen = async (page: Page): Promise<boolean> => {
   if (!(await pressDock(page, "friends"))) return false;
   const all = page.locator(".overlay__layer .friends-window__all").first();
   const shown = await all
-    .waitFor({ state: "visible", timeout: 5000 })
+    .waitFor({ state: "visible", timeout: BUSY_PAGE_TIMEOUT })
     .then(() => true)
     .catch(() => false);
   if (!shown) return false;
-  await all.click({ timeout: DOCK_CLICK_TIMEOUT });
+  await all.click({ timeout: BUSY_PAGE_TIMEOUT });
   return true;
 };
 
@@ -266,11 +277,15 @@ export const openAchievements = async (page: Page): Promise<boolean> => {
   if (!(await menu.isVisible())) return false;
   await menu.click();
   const item = page.getByRole("menuitem", { name: /Achievements/i });
-  if (!(await item.isVisible().catch(() => false))) {
+  const shown = await item
+    .waitFor({ state: "visible", timeout: BUSY_PAGE_TIMEOUT })
+    .then(() => true)
+    .catch(() => false);
+  if (!shown) {
     await page.keyboard.press("Escape");
     return false;
   }
-  await item.click();
+  await item.click({ timeout: BUSY_PAGE_TIMEOUT });
   return true;
 };
 
