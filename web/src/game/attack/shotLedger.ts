@@ -63,6 +63,8 @@ export interface WoundLike {
   readonly ix: number;
   readonly iy: number;
   readonly amount: number;
+  /** A defender's creep (a bunker's monster, the caged champion): its number's colour (owner, beta 8). */
+  readonly friendly?: boolean;
   /** A crit's extra, a weakening's or armour's cut, and an Ichi's thorns: for the number. */
   readonly bonus?: number;
   readonly reduced?: number;

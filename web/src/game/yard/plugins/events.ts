@@ -17,6 +17,7 @@ import {
   serverClock,
   type ServerClock,
 } from "@/game/events/eventsModel";
+import { setEventsFeed } from "@/game/events/eventsFeed";
 import { onPumpkins, PUMPKIN_HUNT_KIND, withPumpkinCount } from "@/game/events/pumpkinHunt";
 import { currentSeason, seasonFor, setSeason } from "@/game/season";
 import {
@@ -79,7 +80,7 @@ const READY_NOTICE = "events-ready";
 /** How often the page's countdowns and the list's freshness are checked. */
 const TICK_MS = 1_000;
 /** A computer's screen, as the centred windows count it (ui.css). */
-const COMPUTER_QUERY = "(width > 620px) and (height > 500px)";
+const COMPUTER_QUERY = "(min-width: 620.02px) and (min-height: 500.02px)";
 
 /**
  * The button's picture: the painted festive calendar with its gold star and
@@ -172,6 +173,7 @@ export class EventsDoor {
       if (this.destroyed) return;
       this.clock = serverClock(body.now, Date.now());
       this.events = body.events;
+      setEventsFeed(body.events, this.clock);
       this.welcome = body.mr2Welcome ?? null;
       // An event that started since the yard loaded dresses it now. The yard's
       // own load already chose among overlapping events (a forced one first),

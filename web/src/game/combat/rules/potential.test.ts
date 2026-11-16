@@ -541,8 +541,9 @@ describe("the loot bounds", () => {
     expect(lootAuraBound([{ id: KRALLEN_ID, level: 5, powerLevel: 0, lootAura: true }])).toBeCloseTo(1.65, 12);
     expect(lootAuraBound([{ id: KRALLEN_ID, level: 4, powerLevel: 0, lootAura: true }])).toBeCloseTo(1.45, 12);
     expect(lootAuraBound([{ id: KRALLEN_ID, level: 3, powerLevel: 0, lootAura: true }])).toBeCloseTo(1.25, 12);
-    // No aura below level 3, powered up or not.
-    expect(lootAuraBound([{ id: KRALLEN_ID, level: 2, powerLevel: 2, lootAura: true }])).toBe(1);
+    // Levels 1 and 2 too (owner, 15 Nov 2026): 2 + 0.35 and 2 + 0.2 over 2.
+    expect(lootAuraBound([{ id: KRALLEN_ID, level: 2, powerLevel: 2, lootAura: true }])).toBeCloseTo(1.175, 12);
+    expect(lootAuraBound([{ id: KRALLEN_ID, level: 1, powerLevel: 0, lootAura: true }])).toBeCloseTo(1.1, 12);
     // None without the Krallen Hunt's 3x (owner, 13 Nov 2026).
     expect(lootAuraBound([{ id: KRALLEN_ID, level: 5, powerLevel: 2 }])).toBe(1);
     const input = {

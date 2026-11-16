@@ -15,7 +15,7 @@ import { Panel } from "@/ui/Panel";
 
 /** Where the panes stack (`CompareView.STACK_BELOW`) and the card folds its figures. */
 const narrow = (): boolean =>
-  typeof window !== "undefined" && window.matchMedia?.(`(width < ${STACK_BELOW}px)`).matches === true;
+  typeof window !== "undefined" && window.matchMedia?.(`(max-width: ${STACK_BELOW - 0.02}px)`).matches === true;
 
 export interface ComparePanelOptions {
   /** "Slot 3: Ring of snipers". */
@@ -125,7 +125,7 @@ export class ComparePanel {
     figures.append(summary, table);
     this.media =
       typeof window !== "undefined" && window.matchMedia
-        ? window.matchMedia(`(width < ${STACK_BELOW}px)`)
+        ? window.matchMedia(`(max-width: ${STACK_BELOW - 0.02}px)`)
         : null;
     this.onMedia = () => {
       figures.open = !narrow();

@@ -37,10 +37,10 @@ Settled on 2026-10-19. This document does not re-open them.
 3. **Attacking a friend is allowed**, after an "Are you sure? This is your friend." warning, as in
    Flash.
 4. **Speed-up help follows Flash:** each help takes 5% off the time left, at most 5 helpers per job,
-   each friend once per job. On top of that, **a daily cap per helper** (about 20 helps a day).
-   **Repair help counts toward the same daily cap**, and a friend can repair a given building once
-   per damage.
-5. **The helper earns a small resource reward** for each help within the cap.
+   each friend once per job. **No daily cap per helper** (owner, 15 Nov 2026: was 20 helps a day,
+   speed-ups and repairs together). A friend can repair a given building once per damage.
+5. **The helper earns a small resource reward** for each of their first **5 helps a day** (owner,
+   15 Nov 2026); later helps still go through but pay nothing.
 6. **Gifts:** a resource gift, taken from the sender's storage (owner, 7 Nov 2026), scaled to the sender's level; **each friend can get at most one
    gift a day from you.** Gifts must not be farmable with fake accounts.
 7. **Finding friends:** search by username; "Add friend" in the Map Room yard popup, in the alliance
@@ -146,7 +146,9 @@ The bar shows on the own yard only: the maps are already crowded.
 
 **Visit** opens the friend's main yard, read-only, wherever it is on any map. Nothing can be built,
 moved or collected. The bottom-left button is **Home**. Buildings you can help with carry a wrench
-marker. A line at the top says "Helping {name} — 17 helps left today".
+marker. A line at the top says "Helping {name}" (owner, 15 Nov 2026: no count of helps left, as there is no
+daily cap). Once the visitor's 5 rewarded helps of the day are given, the help panel says "Reward
+used up for today" under the buttons; the buttons still work.
 
 Pressing a building with a wrench opens a small panel:
 - **Speed up** — "Takes 6m 30s off the Storage Silo upgrade (5% of the time left)". Shows "3 of 5
@@ -213,8 +215,11 @@ All checks are on the server. A **help** is one speed-up or one repair.
 least level 5 (section 7; there is no account-age rule since owner 2026-10-29). Neither has blocked the
 other. Only the friend's **main yard** can be helped.
 
-**Daily cap.** At most **20 helps a day** per helper, speed-ups and repairs together.
-The day turns at 00:00 UTC. A help that is refused does not count.
+**No daily cap** (owner, 15 Nov 2026: was at most 20 helps a day per helper). A helper can give as
+many helps a day as there are jobs and damaged buildings to help with; the 5 helpers a job and
+once per job (or per damage) still hold. Only the first **5 helps of the helper's UTC day** pay the
+reward below (`HELP_RULES.rewardedHelpsPerDay`); the day turns at 00:00 UTC, and a refused help does
+not count.
 
 **Speed-up.**
 - Allowed on a building with a build, upgrade or fortify countdown running (`cB`, `cU` or `cF` above
@@ -232,10 +237,10 @@ The day turns at 00:00 UTC. A help that is refused does not count.
   is then healthy, it can be repaired only once per damage, by one friend.
 - Damage and the yard's damage figure follow the existing repair rules (`catchUpDamage.ts`).
 
-**Reward.** Each counted help pays the helper **0.25% of the lower of the two players' storage caps
+**Reward.** Each of the helper's first 5 helps of the day pays the helper **0.25% of the lower of the two players' storage caps
 in each of Twigs, Pebbles, Putty and Goo**, credited to the helper's main yard up to
-its cap. Using the lower cap means helping a tiny fake yard pays almost nothing. 20 helps a day is at
-most 5% of a cap in each resource.
+its cap. Using the lower cap means helping a tiny fake yard pays almost nothing. 5 rewarded helps a
+day is at most 1.25% of a cap in each resource (owner, 15 Nov 2026: was 20 rewarded helps, 5%).
 
 **What the owner sees.** A `friend` notification for each help. A help never changes anything else
 in the yard.
@@ -263,7 +268,7 @@ in the yard.
   sent alone does.
 - **Receiving:** gifts wait up to 7 days. At most **10 collected a day** per player (owner, 9 Nov 2026: was 5).
   Collecting credits the main yard, clamped to its cap (the yard action credit rule, T3).
-- For scale: at most 15% of one's cap a day from gifts, plus at most 5% per resource from helping.
+- For scale: at most 15% of one's cap a day from gifts, plus at most 1.25% per resource from helping (5 rewarded helps a day).
 
 ## 6. Server: data model and API
 
@@ -274,7 +279,7 @@ in the yard.
 | `friend` | `userid`, `friend_userid`, `created_at` | Two rows per friendship, one each way. PK (`userid`, `friend_userid`); index on `friend_userid`. `created_at` is "friends since" for the 12-hour rule. |
 | `friend_request` | `id`, `from_userid`, `to_userid`, `status` (`pending`, `accepted`, `declined`, `cancelled`, `expired`), `created_at`, `answered_at` | Partial unique index: one `pending` row per ordered pair. A request both ways at once: the second one accepts the first. |
 | `friend_gift` | `id`, `from_userid`, `to_userid`, `resource` (`r1`-`r4`), `amount`, `gift_day` (date), `created_at`, `collected_at`, `expires_at` | Unique (`from_userid`, `to_userid`, `gift_day`). |
-| `friend_help` | `id`, `helper_userid`, `owner_userid`, `baseid`, `building_id`, `kind` (`speedup`, `repair`), `seconds_saved`, `reward` (jsonb), `help_day` (date), `created_at` | Index (`helper_userid`, `help_day`) for the cap. Doubles as the audit trail. |
+| `friend_help` | `id`, `helper_userid`, `owner_userid`, `baseid`, `building_id`, `kind` (`speedup`, `repair`), `seconds_saved`, `reward` (jsonb), `help_day` (date), `created_at` | Index (`helper_userid`, `help_day`) for the 5 rewarded helps a day. Doubles as the audit trail. |
 
 **User columns (new):** `hide_online boolean default false`, `friend_requests_off boolean default
 false`. `friendcount` is kept equal to the real count, for the legacy client.
@@ -296,7 +301,7 @@ add lines to that file only. Answers use `{ error: 0, ... }` like the rest.
 
 | Route | Body / query | Answer |
 | --- | --- | --- |
-| `GET /bm/friends` | — | `friends: Friend[]`, `max: 100`, `requestsIn: n`, `giftsWaiting: n`, `helpsLeft: n` |
+| `GET /bm/friends` | — | `friends: Friend[]`, `max: 100`, `requestsIn: n`, `giftsWaiting: n` (`helpsLeft` went with the daily cap, 15 Nov 2026) |
 | `GET /bm/friends/requests` | — | `incoming: Request[]`, `outgoing: Request[]` |
 | `POST /bm/friends/request` | `{ userid }` or `{ username }` | `{ request, friend? }` or a refusal |
 | `POST /bm/friends/request/answer` | `{ requestid, accept }` | `{ friend? }` |
@@ -311,8 +316,8 @@ add lines to that file only. Answers use `{ error: 0, ... }` like the rest.
 | `GET /bm/friends/gift/cost` | `?userid=` | `{ amount, resources }` |
 | `POST /bm/friends/gifts/all/plan` | `{ fallback? }` | `{ fallback, noWish, gifts, skipped, cost, resources }`; reads only |
 | `POST /bm/friends/gifts/all` | `{ fallback?, userids? }` | the same, each gift with its `giftid` |
-| `POST /bm/friends/help` | `{ userid, buildingId, kind }` | `{ secondsSaved?, healed?, reward, helpsLeft, building }` |
-| `POST /base/load` with `type: "help"` | `baseid` of the friend's main yard | the yard as `view` serves it, plus `help: { helpsLeft, buildings: { [id]: { speedup?, repair? } } }`, each `true` or a reason |
+| `POST /bm/friends/help` | `{ userid, buildingId, kind }` | `{ secondsSaved?, healed?, reward, rewardsLeft, building }` |
+| `POST /base/load` with `type: "help"` | `baseid` of the friend's main yard | the yard as `view` serves it, plus `help: { rewardsLeft, buildings: { [id]: { speedup?, repair? } } }`, each `true` or a reason |
 | `POST /player/settings` (existing) | adds `hideOnline?`, `friendRequests?` (every field optional) | `settings` adds both |
 | `GET /player/blocked` | — | `blocked: [{ userid, username }]` |
 | `POST /player/block`, `POST /player/unblock` | `{ userid }` | `{}` |
@@ -387,28 +392,29 @@ buildings can be helped. Until WP6 lands, `help.buildings` is empty.
 **As built (WP6, #373).** Numbers in `server/src/services/friends/helpConfig.ts`; rules in
 `helpRules.ts`; the route in `controllers/friends/help.ts`.
 
-- Answer: `{ error: 0, secondsSaved | healed: true, reward: { r1..r4 }, helpsLeft, building }`, where
-  `reward` is what landed in the helper's pool (after the cap clamp) and `building` is the friend's
+- Answer: `{ error: 0, secondsSaved | healed: true, reward: { r1..r4 }, rewardsLeft, building }`, where
+  `reward` is what landed in the helper's pool (after the cap clamp; all 0 after the day's first 5
+  helps), `rewardsLeft` the rewarded helps left today and `building` is the friend's
   building as now saved (shorter countdown and `hl`, or healed).
 - Refusal order: `self`, `noSuchPlayer`, `notFriends`, `cannotSend` (so a stranger learns nothing
   about the yard), `underAttack` (the friend's yard attacked or raided; the helper's own yard gives
   the yard actions' `underAttack` / `raidInProgress`), then after both catch-ups `tooNew`,
-  `dailyCap`, then `nothingToHelp`,
+  then `nothingToHelp` (no `dailyCap` for helps since 15 Nov 2026),
   `alreadyHelped`, `helpersFull`. `tooNew` carries `rule` and, for the friendship's age, `from`
   (friendship + 12 h); a level below 5 is named first. A refusal writes nothing, the
   catch-ups included.
 - Level is the main save's level after its catch-up. Account age is not checked (owner 2026-10-29).
 - A countdown under 20 seconds (5% rounds to 0) is `nothingToHelp`, so a help always saves time.
 - Race safety: both main saves are locked in user-id order, so helps on one yard and helps by one
-  helper run one at a time; the 5-helper limit, once-per-job, once-per-damage and the daily cap
-  are all read inside the locks.
+  helper run one at a time; the 5-helper limit, once-per-job, once-per-damage and the
+  day's help count (for the reward) are all read inside the locks.
 - `hl` is cleared where a countdown runs out (`advanceBuildingTimers`, which the catch-up, Shiny
   finish, instant upgrade, planner and attack save all use), where an upgrade or fortify starts
   (`startUpgrades`, `fortify`), where one is cancelled (`upgrade`, `fortify`) and where the Map
   Room's upgrade is taken over (`mapRoom`). A Shiny speed-up that does not finish keeps it.
 - Notification payload: `{ event: "helpSpeedup", userid, username, building: <type>, buildingId,
   seconds }` or `{ event: "helpRepair", userid, username, building: <type>, buildingId }`.
-- `GET /bm/friends`: `helpsLeft` is the real count; each friend's `help` is `null` when the gates
+- `GET /bm/friends`: each friend's `help` is `null` when the gates
   refuse, else `{ speedup, repair }` (anything helpable now).
 - `friend_help` rows go with either account and after 90 days (`retention.ts`).
 
@@ -421,8 +427,8 @@ buildings can be helped. Until WP6 lands, `help.buildings` is empty.
    adding friends straight away.)
 3. **Lower-cap scaling:** gift and reward amounts use the lower of the two storage caps, so small
    fake yards give and earn little.
-4. **Hard caps:** 100 friends; 30 open outgoing requests; 30 new requests a day; 20 helps a day; 5
-   helps per job; one gift per friend per day; 10 gifts collected a day where not set
+4. **Hard caps:** 100 friends; 30 open outgoing requests; 30 new requests a day; 5
+   helps per job (no daily help cap since 15 Nov 2026); one gift per friend per day; 10 gifts collected a day where not set
    by the owner.
 5. **Per-pair keys:** `gift_day` and `hl` stop repeats even across remove and re-add.
 6. **Server decides everything:** time saved, health, amounts and caps are worked out on the server
@@ -494,9 +500,9 @@ on 2026-10-19 (for Q4, the first option: heal to full at once).
 
 | # | Question | Decision |
 | --- | --- | --- |
-| Q1 | Daily help cap per helper | **20** helps a day, speed-ups and repairs together |
+| Q1 | Daily help cap per helper | **None** (owner, 15 Nov 2026: was 20 helps a day, speed-ups and repairs together); only the first **5** a day pay the reward |
 | Q2 | When does "a day" turn over? | **00:00 UTC** for every daily limit |
-| Q3 | Helper's reward per help | **0.25% of the lower of the two storage caps, in each of the four resources** (20 helps = at most 5% a day) |
+| Q3 | Helper's reward per help | **0.25% of the lower of the two storage caps, in each of the four resources** (only the first 5 helps a day pay since 15 Nov 2026, at most 1.25% a day; was 20, 5%) |
 | Q4 | What a friend's repair does | **Heals that building to full at once** (so once per damage, by one friend). Alternative: heals half the missing health, each friend once |
 | Q5 | Gift size | **3% of the lower of the sender's and receiver's storage caps**, one resource the sender picks (Flash gave a random resource, 2-12% of the receiver's cap) |
 | Q6 | Gifts a player can collect a day | **5** (more wait, up to 7 days) |

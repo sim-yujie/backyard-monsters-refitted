@@ -284,6 +284,13 @@ export interface YardSceneHooks {
    * is no yard drawn.
    */
   markHatcheries?(marks: HatcheryMarks | null): void;
+  /**
+   * Shows a building as the ghost of its look at level `to` while its window
+   * offers that upgrade (beta 8), or puts it back when passed null. The scene
+   * draws it only where the look changes and only with the Modern look.
+   * Absent where there is no yard drawn.
+   */
+  previewUpgrade?(building: YardBuilding | null, to: number | null): void;
 }
 
 /** Handed to the building panel (WP1.5) and the HUD (WP1.6) on the player's own yard. */

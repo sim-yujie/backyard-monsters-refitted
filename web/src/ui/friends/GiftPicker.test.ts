@@ -189,7 +189,7 @@ describe("the choices' look", () => {
 
   it("draws Modern's choices a size smaller on a phone, so the pile clears the plate's rivets", () => {
     // Only below the dialog's full 420 px (92vw < 420 px), and only for Modern ("scrap").
-    const phone = css.split("\n@media (width <= 456px) {")[1]?.split("\n}\n")[0] ?? "";
+    const phone = css.split("\n@media (max-width: 456px) {")[1]?.split("\n}\n")[0] ?? "";
     const phoneRule = (selector: string): string => phone.split(`\n  ${selector} {`)[1]?.split("}")[0] ?? "";
     const choice = phoneRule(':root[data-skin="scrap"] .panel .gift-picker__choice.btn--outline');
     expect(choice).toMatch(/font-size: var\(--text-sm\);/);

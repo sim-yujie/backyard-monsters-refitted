@@ -46,6 +46,7 @@ import { formatAmount, formatCountdown, formatShortPrice } from "@/ui/format";
 import { holdPress } from "@/ui/holdPress";
 import { QuantityStepper } from "@/ui/QuantityStepper";
 import { gameIcon, iconAmount } from "@/ui/gameIcon";
+import { lockArt } from "@/ui/lockArt";
 import { resourceAmount, resourceIcon } from "@/ui/resourceIcon";
 import { ShinyButton } from "@/ui/yard/ShinyButton";
 import {
@@ -128,6 +129,13 @@ const hatchRushChip = (): (Node | string)[] => {
 
 type Status = { readonly tone: "good" | "bad"; readonly content: (Node | string)[] };
 
+/**
+ * How long the result of an action floats over the top of the tab (patch 7.6,
+ * owner 15 Nov 2026): it no longer takes a line of its own, which pushed the
+ * tab past the window's bottom and brought up a scroll bar.
+ */
+export const STATUS_SHOW_MS = 5000;
+
 /** A live countdown, refreshed once a second without a redraw. */
 /** One monster's tile in the grid, kept across draws (`renderGrid`). */
 interface HatchTile {
@@ -166,6 +174,8 @@ const JUMPS = [5, 10] as const;
 const MAX_HATCHERIES = 5;
 /** Letters past which a card's name is drawn smaller on a phone ("Slimeattikus" is 12). */
 const LONG_NAME = 10;
+/** patch 7.6.1 (astra): past this, smaller in the nine-across tiles too ("Octo-ooze", "Crabatron"). */
+const MID_NAME = 8;
 
 /** Seconds as a countdown: "12s", "4m 10s". */
 const duration = (seconds: number): string => formatCountdown(Math.ceil(seconds));
@@ -223,6 +233,8 @@ export class HatchTab implements MonstersTab {
   private readonly context: MonstersTabContext;
   private readonly actions: HatcheryActions;
   private readonly status: HTMLElement;
+  /** Hides the floating status (`setStatus`). */
+  private statusTimer: ReturnType<typeof setTimeout> | null = null;
   /** The hatchery tabs, over the scroll box: they never scroll out of sight (owner, 6 Nov 2026). */
   private readonly tabsRow: HTMLElement;
   /** Everything under the tabs; only this scrolls. */
@@ -231,7 +243,6 @@ export class HatchTab implements MonstersTab {
   private readonly boosts: HTMLElement;
   private readonly message: HTMLElement;
   private readonly grid: HTMLElement;
-  private readonly lockedNote: HTMLElement;
   private readonly info: HTMLElement;
   private readonly infoHead: HTMLElement;
   private readonly infoEach: HTMLElement;
@@ -298,7 +309,7 @@ export class HatchTab implements MonstersTab {
     this.element.className = "hatch";
 
     this.status = document.createElement("p");
-    this.status.className = "monsters-status";
+    this.status.className = "monsters-status hatch__status";
     this.status.setAttribute("role", "status");
     this.status.hidden = true;
 
@@ -339,24 +350,16 @@ export class HatchTab implements MonstersTab {
     const split = document.createElement("div");
     split.className = "hatch__split";
 
+    // No "Monsters" heading, hint or locked-monsters note (owner, 15 Nov
+    // 2026): a locked monster wears a padlock and a tap on it opens the
+    // Monster Locker on it.
     const pick = document.createElement("section");
     pick.className = "hatch-pick";
     pick.setAttribute("aria-label", "Monsters");
-    const pickHead = document.createElement("div");
-    pickHead.className = "hatch-pick__head";
-    const pickTitle = document.createElement("h3");
-    pickTitle.className = "hatch-pick__title";
-    pickTitle.textContent = "Monsters";
-    const pickHint = document.createElement("span");
-    pickHint.className = "hatch-pick__hint";
-    pickHint.textContent = "Tap a monster to choose it";
-    pickHead.append(pickTitle, pickHint);
     this.grid = document.createElement("ul");
     this.grid.className = "hatch__grid";
     this.grid.setAttribute("aria-label", "Monsters to hatch");
-    this.lockedNote = document.createElement("div");
-    this.lockedNote.className = "hatch-pick__locked";
-    pick.append(pickHead, this.grid, this.lockedNote);
+    pick.append(this.grid);
 
     this.info = document.createElement("section");
     this.info.className = "hatch-info";
@@ -409,11 +412,13 @@ export class HatchTab implements MonstersTab {
       this.warningLine,
     );
 
-    this.info.append(this.infoHead, this.infoEach, this.detailsButton, this.stats, this.addBlock);
+    this.info.append(this.infoHead, this.infoEach, this.stats, this.addBlock);
     // The message sits in the split so the info panel can stand beside it on a wide screen.
     split.append(this.message, pick, this.info);
-    this.scroll.append(this.status, this.lines, this.boosts, split);
-    this.element.append(this.tabsRow, this.scroll);
+    this.scroll.append(this.lines, this.boosts, split);
+    // The status floats over the top of the tab, outside the scroll box, so a
+    // message never makes the tab taller (patch 7.6).
+    this.element.append(this.tabsRow, this.scroll, this.status);
   }
 
   private get store() {
@@ -446,6 +451,23 @@ export class HatchTab implements MonstersTab {
     }
     if (focus.monster && monsterEntry(focus.monster)?.blocked === false) this.select(focus.monster, false);
     this.render();
+    this.revealChosen();
+  }
+
+  /**
+   * On a phone the monsters are one sliding row (hatch.css): a chosen monster
+   * out of sight along it is slid into the middle when the tab opens. The row
+   * is moved by itself, never with scrollIntoView, which would move the tab too.
+   */
+  private revealChosen(): void {
+    const grid = this.grid;
+    if (!this.selected || grid.scrollWidth <= grid.clientWidth) return;
+    const item = this.tiles.get(this.selected)?.item;
+    if (!item) return;
+    const row = grid.getBoundingClientRect();
+    const tile = item.getBoundingClientRect();
+    if (tile.left >= row.left && tile.right <= row.right) return;
+    grid.scrollLeft += tile.left - row.left - (row.width - tile.width) / 2;
   }
 
   update(change: YardChange): void {
@@ -489,6 +511,8 @@ export class HatchTab implements MonstersTab {
   destroy(): void {
     if (this.settling !== null && typeof cancelAnimationFrame === "function") cancelAnimationFrame(this.settling);
     this.settling = null;
+    if (this.statusTimer !== null) clearTimeout(this.statusTimer);
+    this.statusTimer = null;
     this.taking = null;
     this.markYard(null);
     this.stepper.destroy();
@@ -653,7 +677,11 @@ export class HatchTab implements MonstersTab {
 
     const warning =
       yard && row && ready && this.count > 0 ? housingWarning(yard, row.monster.id, this.count) : null;
-    this.warningLine.textContent = warning ?? "";
+    // A space when there is none: side by side the line keeps its room
+    // (hatch.css), so Add never moves when a warning comes or goes (7.6.1).
+    this.warningLine.textContent = warning ?? "\u00a0";
+    // In full on hover where the wide layout keeps it to one line (hatch.css).
+    this.warningLine.title = warning ?? "";
     this.warningLine.hidden = warning === null;
 
     if (yard) {
@@ -673,15 +701,14 @@ export class HatchTab implements MonstersTab {
     if (this.addWords.textContent !== words) this.addWords.textContent = words;
   }
 
-  /** "Adding to Hatchery 2 (Level 3)", or the HCC's shared queue. */
+  /**
+   * "Adding to Hatchery 2 (Level 3)" when there are hatchery tabs to choose
+   * from; with an HCC there is one queue, so no line (owner, 15 Nov 2026).
+   */
   private drawTo(yard: HatchYard | null): void {
     const target = this.target;
     const hatchery = typeof target === "number" ? yard?.hatcheries.find((one) => one.id === target) : null;
-    this.toLine.hidden = target === null;
-    if (target === "hcc") {
-      this.toLine.replaceChildren("Adding to the ", strong("shared queue"));
-      return;
-    }
+    this.toLine.hidden = !hatchery;
     if (!hatchery) {
       this.toLine.replaceChildren();
       return;
@@ -899,31 +926,28 @@ export class HatchTab implements MonstersTab {
       slots.append(previewSlot(preview!.monster, count));
       free -= 1;
     }
+    // The empty boxes are back (owner, 15 Nov 2026, patch 7.6.1: "I still
+    // want the empty box, even if there are no queued monsters in it").
     for (; free > 0; free -= 1) slots.append(emptySlot());
     if (hatchery.level > 0 && hatchery.level < maxLevel(HATCHERY_TYPE, this.store.kind)) {
       slots.append(this.lockedSlot(hatchery));
     }
-    slots.append(this.lineTotals(yard, hatchery.id, true));
+    const idle = hatchery.monster === null && hatchery.queue.length === 0;
+    slots.append(this.lineTotals(yard, hatchery.id, idle, null));
     line.append(head, slots);
     return line;
   }
 
-  /** The HCC: each hatchery's monster in production, then the shared queue. */
+  /**
+   * The HCC: each hatchery's monster in production, then the shared queue's
+   * stacks with how long the line takes and Clear all after them. No
+   * "Hatchery Control Centre, 19 waiting of 140" head and no "Empty" boxes
+   * (owner, 15 Nov 2026); the queue's row keeps one slot's height when
+   * empty, so nothing under it moves when a batch is chosen or added.
+   */
   private hccLine(yard: HatchYard, preview: SlotPreview | null): HTMLElement {
     const line = document.createElement("div");
     line.className = "hatch-line hatch-line--hcc";
-
-    const head = document.createElement("div");
-    head.className = "hatch-line__head";
-    const title = document.createElement("h3");
-    title.className = "hatch-line__title";
-    title.textContent = this.words.controlCentre;
-    const waiting = document.createElement("span");
-    waiting.className = "hatch-line__waiting";
-    waiting.textContent = `${formatAmount(queuedCount(yard.shared))} waiting of ${formatAmount(HCC_STACKS * STACK_SIZE)}`;
-    head.append(title, waiting);
-    const clear = this.clearControl("hcc", yard.shared);
-    if (clear) head.append(clear);
 
     const now = document.createElement("div");
     now.className = "hatch-line__now";
@@ -951,9 +975,10 @@ export class HatchTab implements MonstersTab {
       free -= 1;
     }
     for (; free > 0; free -= 1) slots.append(emptySlot());
-    slots.append(this.lineTotals(yard, "hcc", true));
+    const idle = yard.shared.length === 0 && yard.hatcheries.every((one) => one.monster === null);
+    slots.append(this.lineTotals(yard, "hcc", idle, this.clearControl("hcc", yard.shared)));
 
-    line.append(head, now, slots);
+    line.append(now, slots);
     return line;
   }
 
@@ -1006,10 +1031,13 @@ export class HatchTab implements MonstersTab {
         text.className = "hatch-now__state";
         text.textContent = "Starts now";
         card.append(" ", text);
+      } else if (compact && state === "idle") {
+        // Just its number on the HCC's row (owner, 15 Nov 2026): an idle card says nothing.
+        card.title = `${where}: nothing hatching`;
       } else {
         const text = document.createElement("span");
         text.className = "hatch-now__state";
-        text.textContent = IDLE_TEXT[state] ?? "Nothing hatching";
+        stateWords(text, IDLE_TEXT[state] ?? ["Nothing hatching"]);
         card.append(" ", text);
       }
       return card;
@@ -1065,7 +1093,7 @@ export class HatchTab implements MonstersTab {
       card.append(bar);
       this.clocks.push({ node: time, endsAt: hatchery.endsAt, fill, total, suffix: compact ? "" : " left" });
     } else {
-      time.textContent = (state === "stalled" && this.realm === "inferno" ? "Waiting for room" : BUSY_TEXT[state]) ?? "";
+      stateWords(time, state === "stalled" && this.realm === "inferno" ? STALLED_INFERNO : BUSY_TEXT[state]);
     }
     return card;
   }
@@ -1201,9 +1229,7 @@ export class HatchTab implements MonstersTab {
   private lockedSlot(hatchery: HatcheryView): HTMLElement {
     const slot = document.createElement("div");
     slot.className = "hatch-slot hatch-slot--locked";
-    const lock = document.createElement("span");
-    lock.className = "hatch-slot__lock";
-    lock.setAttribute("aria-hidden", "true");
+    const lock = lockArt(20, "hatch-slot__padlock");
     const words = document.createElement("span");
     words.className = "hatch-slot__why";
     words.textContent = `Upgrade the ${this.words.hatchery} for a ${ordinal(hatchery.stackLimit + 1)} slot`;
@@ -1218,18 +1244,26 @@ export class HatchTab implements MonstersTab {
     return slot;
   }
 
-  /** How long the line takes, the Overdrive running, and the small link to Finish now. */
-  private lineTotals(yard: HatchYard, target: HatchTarget, withLink: boolean): HTMLElement {
+  /**
+   * One row: how long the line takes, the Overdrive running, the small link
+   * to Finish now, and (with an HCC) Clear all. Kept but hidden while
+   * nothing hatches or waits (owner, 15 Nov 2026), so its room never moves
+   * what is under it.
+   */
+  private lineTotals(yard: HatchYard, target: HatchTarget, idle: boolean, clear: HTMLElement | null): HTMLElement {
     const totals = document.createElement("div");
-    totals.className = "hatch-line__totals";
+    totals.className = `hatch-line__totals${idle ? " hatch-line__totals--idle" : ""}`;
+    if (idle) totals.setAttribute("aria-hidden", "true");
     const label = document.createElement("span");
     label.className = "hatch-line__done-label";
     label.textContent = "All done in";
+    // A phone has the hourglass instead of the words.
+    const glass = gameIcon("time", { size: 16, label: "All done in", className: "hatch-line__done-icon" });
     const time = document.createElement("span");
     time.className = "hatch-line__done";
     time.textContent = this.doneIn(yard, target);
     this.totals.push({ node: time, target });
-    totals.append(label, time);
+    totals.append(label, glass, time);
     const running = activeOverdrive(this.store.save.storedata, this.store.now());
     if (running) {
       const boost = document.createElement("span");
@@ -1237,24 +1271,28 @@ export class HatchTab implements MonstersTab {
       boost.textContent = `Overdrive ${running.power}x`;
       totals.append(boost);
     }
-    if (withLink) {
-      const link = document.createElement("button");
-      link.type = "button";
-      link.className = "hatch-line__boost-link";
-      link.dataset["focusKey"] = "boost-link";
+    // Drawn idle too (hidden with the row), so the row is as tall either way.
+    const link = document.createElement("button");
+    link.type = "button";
+    link.className = "hatch-line__boost-link";
+    link.dataset["focusKey"] = "boost-link";
+    link.setAttribute("aria-expanded", String(this.boostsOpen));
+    link.setAttribute("aria-controls", "hatch-boosts");
+    const words = document.createElement("span");
+    words.className = "hatch-line__boost-words";
+    words.textContent = "Finish now or speed up";
+    // A phone's row has room for the short words only.
+    const short = document.createElement("span");
+    short.className = "hatch-line__boost-words hatch-line__boost-words--short";
+    short.textContent = "Speed up";
+    link.append(resourceIcon("shiny", { decorative: true }), words, short);
+    link.addEventListener("click", () => {
+      this.boostsOpen = !this.boostsOpen;
+      this.boosts.hidden = !this.boostsOpen;
       link.setAttribute("aria-expanded", String(this.boostsOpen));
-      link.setAttribute("aria-controls", "hatch-boosts");
-      const words = document.createElement("span");
-      words.className = "hatch-line__boost-words";
-      words.textContent = "Finish now or speed up";
-      link.append(resourceIcon("shiny", { decorative: true }), words);
-      link.addEventListener("click", () => {
-        this.boostsOpen = !this.boostsOpen;
-        this.boosts.hidden = !this.boostsOpen;
-        link.setAttribute("aria-expanded", String(this.boostsOpen));
-      });
-      totals.append(link);
-    }
+    });
+    totals.append(link);
+    if (clear) totals.append(clear);
     return totals;
   }
 
@@ -1288,22 +1326,27 @@ export class HatchTab implements MonstersTab {
     const pending = pendingSpace(yard);
     const after = housed + pending + adding;
     const scale = Math.max(yard.capacity, after, 1);
+    // One low row (owner, 15 Nov 2026): the painted house, the numbers, the
+    // bar and its key as numbers; the warning only when the batch is over.
     const housing = document.createElement("div");
     housing.className = `hatch-housing${after > yard.capacity ? " hatch-housing--over" : ""}`;
-    const top = document.createElement("div");
-    top.className = "hatch-housing__top";
+    const words = `${this.words.housing} after this ${adding > 0 ? "add" : "line"}`;
     const label = document.createElement("span");
     label.className = "hatch-housing__label";
-    label.textContent = `${this.words.housing} after this ${adding > 0 ? "add" : "line"}`;
+    label.append(gameIcon("housing", { label: words }));
     const value = document.createElement("span");
     value.className = "hatch-housing__value";
-    value.textContent = `${formatAmount(after)} / ${formatAmount(yard.capacity)}`;
+    // "After:" so the total reads as the housing once the line has hatched,
+    // not as the housing now (owner, desk card p761-housing-number, 16 Nov 2026).
+    const afterWord = document.createElement("span");
+    afterWord.className = "hatch-housing__after";
+    afterWord.textContent = "After:";
+    value.append(afterWord, ` ${formatAmount(after)} / ${formatAmount(yard.capacity)}`);
 
-    top.append(label, value);
     const bar = document.createElement("div");
     bar.className = "hatch-housing__bar";
     bar.setAttribute("role", "meter");
-    bar.setAttribute("aria-label", label.textContent);
+    bar.setAttribute("aria-label", words);
     bar.setAttribute("aria-valuemin", "0");
     bar.setAttribute("aria-valuemax", String(Math.max(yard.capacity, 1)));
     bar.setAttribute("aria-valuenow", String(Math.min(after, Math.max(yard.capacity, 1))));
@@ -1322,30 +1365,45 @@ export class HatchTab implements MonstersTab {
       segment.style.width = `${+((amount / scale) * 100).toFixed(2)}%`;
       bar.append(segment);
     }
-    // What each colour is (#268, G): the batch in its own.
+    // What each colour is (#268, G), as numbers by coloured squares; the
+    // words on hover. The batch in its own colour.
     const key = document.createElement("span");
     key.className = "hatch-housing__key";
     key.setAttribute("aria-hidden", "true");
-    for (const [part, words, amount] of [
+    for (const [part, name, amount] of [
       ["housed", "Housed", housed],
       ["pending", "On the way", pending],
       ["adding", "This add", adding],
     ] as const) {
-      if (part === "adding" && amount <= 0) continue;
+      if (part !== "housed" && amount <= 0) continue;
       const item = document.createElement("span");
       item.className = `hatch-housing__item hatch-housing__item--${part}`;
-      item.textContent = `${words} ${formatAmount(amount)}`;
+      item.textContent = `${part === "adding" ? "+" : ""}${formatAmount(amount)}`;
+      item.title = `${name} ${formatAmount(amount)}`;
       key.append(item);
     }
-    housing.append(top, bar, key);
-    // Past the capacity is allowed (#169); say what happens to the rest.
-    if (after > yard.capacity) {
+    // The key and, past the capacity (allowed, #169), a short warning: one
+    // line beside the bar, under it on a phone.
+    const foot = document.createElement("span");
+    foot.className = "hatch-housing__foot";
+    foot.append(key);
+    // "Housing is full: ... wait for room" above already says it (7.6.1):
+    // the short warning is not said twice; it stays on hover of the numbers.
+    const fullSaid = tone === "warning" && yard.hatcheries.some((one) => one.stage === 2);
+    value.title = `${words}: ${formatAmount(housed)} housed, ${formatAmount(pending)} on the way${adding > 0 ? `, ${formatAmount(adding)} adding` : ""}, of ${formatAmount(yard.capacity)}`;
+    if (after > yard.capacity) value.title += `. Over by ${formatAmount(after - yard.capacity)}: the rest hatch and wait in the ${this.words.hatchery} for room.`;
+    if (after > yard.capacity && !fullSaid) {
       const over = document.createElement("span");
       over.className = "hatch-housing__over";
-      over.textContent = `Over by ${formatAmount(after - yard.capacity)}: the rest hatch and wait in the ${this.words.hatchery} for room.`;
-      housing.append(over);
+      over.textContent = `${formatAmount(after - yard.capacity)} over: they wait for room`;
+      over.title = `Over by ${formatAmount(after - yard.capacity)}: the rest hatch and wait in the ${this.words.hatchery} for room.`;
+      foot.append(over);
     }
+    housing.append(label, value, bar, foot);
 
+    // With a warning the housing row has a line of its own under it, so a
+    // count chosen (a "+20" in the key) never moves what is below (7.6.1).
+    this.message.classList.toggle("hatch-message--warning", parts.length > 0);
     this.message.replaceChildren(...parts, housing);
   }
 
@@ -1377,33 +1435,14 @@ export class HatchTab implements MonstersTab {
       button.title =
         row.state.kind === "ready"
           ? `Choose ${row.monster.name} · ${formatAmount(row.price)} each`
-          : `${row.monster.name}: ${row.state.kind === "unlocking" ? "still unlocking" : "locked"}`;
+          : `${row.monster.name}: ${row.state.kind === "unlocking" ? "still unlocking" : "locked"}. Open the ${this.words.locker}`;
       const noteKey = row.state.kind === "ready" ? `ready ${row.price}` : row.state.kind;
       if (tile.noteKey !== noteKey) {
         tile.noteKey = noteKey;
         if (row.state.kind === "ready") note.replaceChildren(resourceAmount("r4", formatShortPrice(row.price)));
-        else note.textContent = row.state.kind === "unlocking" ? "Unlocking" : "Locked";
+        else note.replaceChildren(...lockedNote(row.state.kind === "unlocking"));
       }
     }
-
-    const locked = monsters.some((row) => row.state.kind !== "ready");
-    this.lockedNote.hidden = !locked;
-    if (!locked) {
-      this.lockedNote.replaceChildren();
-      return;
-    }
-    const lock = document.createElement("span");
-    lock.className = "hatch-pick__lock";
-    lock.setAttribute("aria-hidden", "true");
-    const text = document.createElement("p");
-    text.className = "hatch-pick__locked-text";
-    text.textContent = `Grey monsters are locked. Unlock them at the ${this.words.locker}, then hatch them here.`;
-    const go = document.createElement("button");
-    go.type = "button";
-    go.className = "btn btn--outline hatch-pick__go";
-    go.textContent = `Go to ${this.words.locker}`;
-    go.addEventListener("click", () => this.context.showTab(MonstersTabId.UNLOCK, {}));
-    this.lockedNote.replaceChildren(lock, text, go);
   }
 
   /** A monster's tile, built the first time the grid shows it; `renderGrid` fills in the rest. */
@@ -1420,8 +1459,10 @@ export class HatchTab implements MonstersTab {
     const name = document.createElement("span");
     // A long name ("Slimeattikus") gets smaller letters on a phone, so it
     // stays whole on one line rather than breaking mid-word.
-    name.className =
-      row.monster.name.length > LONG_NAME ? "hatch-monster__name hatch-monster__name--long" : "hatch-monster__name";
+    // Side by side, nine across, a name of nine letters or more is drawn a
+    // little smaller too, so none is cut with "…" (patch 7.6.1, astra).
+    const letters = row.monster.name.length;
+    name.className = `hatch-monster__name${letters > LONG_NAME ? " hatch-monster__name--long" : ""}${letters > MID_NAME ? " hatch-monster__name--mid" : ""}`;
     name.textContent = row.monster.name;
     const note = document.createElement("span");
     note.className = "hatch-monster__note";
@@ -1459,7 +1500,8 @@ export class HatchTab implements MonstersTab {
     blurb.append(...describe(monster.description));
     blurb.title = blurb.textContent ?? "";
     heading.append(level, name, blurb);
-    this.infoHead.replaceChildren(portrait, heading);
+    // patch 7.6.1 (astra): Details belongs to the portrait/name row, with its full tap target.
+    this.infoHead.replaceChildren(portrait, heading, this.detailsButton);
 
     // The phone bar's line: what one costs, takes and fills, as icons.
     this.infoEach.replaceChildren(
@@ -1662,9 +1704,15 @@ export class HatchTab implements MonstersTab {
   /**
    * A grid tap only chooses the monster (#268, E). The original added one
    * per tap (`HATCHERYPOPUP.as:234-291`); with the count and Add beside it
-   * that made two ways to add and surprise extras.
+   * that made two ways to add and surprise extras. A locked or unlocking
+   * monster's tap opens the Monster Locker on it instead (owner, 15 Nov 2026).
    */
   private tapMonster(id: string): void {
+    const row = hatchMonsters(this.store.save, this.realm).find((one) => one.monster.id === id);
+    if (row && row.state.kind !== "ready") {
+      this.context.showTab(MonstersTabId.UNLOCK, { monster: id });
+      return;
+    }
     this.select(id);
   }
 
@@ -1851,8 +1899,12 @@ export class HatchTab implements MonstersTab {
   }
 
   private setStatus(status: Status | null): void {
+    if (this.statusTimer !== null) clearTimeout(this.statusTimer);
+    this.statusTimer = status ? setTimeout(() => this.setStatus(null), STATUS_SHOW_MS) : null;
     this.status.hidden = status === null;
-    this.status.className = status ? `monsters-status monsters-status--${status.tone}` : "monsters-status";
+    this.status.className = status
+      ? `monsters-status hatch__status monsters-status--${status.tone}`
+      : "monsters-status hatch__status";
     this.status.replaceChildren(...(status?.content ?? []));
   }
 }
@@ -1860,10 +1912,10 @@ export class HatchTab implements MonstersTab {
 /* ── Pieces ──────────────────────────────────────────────────────────────── */
 
 /** What an empty "hatching now" card says. */
-const IDLE_TEXT: Partial<Record<HatcheryView["state"], string>> = {
-  building: "Being built",
-  damaged: "Damaged: repair it",
-  idle: "Nothing hatching",
+const IDLE_TEXT: Partial<Record<HatcheryView["state"], StateWords>> = {
+  building: ["Being built", "Building"],
+  damaged: ["Damaged"],
+  idle: ["Nothing hatching", "Idle"],
 };
 
 /**
@@ -1886,12 +1938,36 @@ const TAB_STATE: Readonly<Record<HatcheryView["state"], string>> = {
   damaged: "Damaged",
 };
 
-/** What a card with a monster says when it is not counting down. */
-const BUSY_TEXT: Partial<Record<HatcheryView["state"], string>> = {
-  stalled: "Waiting for housing",
-  upgrading: "Paused: upgrading",
-  damaged: "Damaged: repair it",
-  building: "Being built",
+/**
+ * What a card with a monster says when it is not counting down, and the
+ * shorter words a phone's card has room for (patch 7.6.1, owner 15 Nov
+ * 2026: "Waiting for housing" ran over the next card). The message line
+ * under the cards says it in full ("Housing is full: ...").
+ */
+type StateWords = readonly [words: string, short?: string];
+const BUSY_TEXT: Partial<Record<HatcheryView["state"], StateWords>> = {
+  stalled: ["Needs housing", "Full"],
+  upgrading: ["Upgrading", "Paused"],
+  damaged: ["Damaged"],
+  building: ["Being built", "Building"],
+};
+const STALLED_INFERNO: StateWords = ["Needs room", "Full"];
+
+/** A card's state words: the long ones, and a phone's short ones beside them (hatch.css). */
+const stateWords = (node: HTMLElement, words: StateWords | undefined): void => {
+  const [long, short] = words ?? [""];
+  if (!short) {
+    node.textContent = long;
+    return;
+  }
+  const full = document.createElement("span");
+  full.className = "hatch-now__words-long";
+  full.textContent = long;
+  const brief = document.createElement("span");
+  brief.className = "hatch-now__words-short";
+  brief.setAttribute("aria-hidden", "true");
+  brief.textContent = short;
+  node.replaceChildren(full, brief);
 };
 
 /**
@@ -1916,12 +1992,28 @@ const slotPreview = (monster: string, preview: AddPreview): SlotPreview => ({
   starts: new Map(preview.starts.map((start) => [start.hatchery, start.monster])),
 });
 
-/** An empty slot the queue may still fill. */
+/**
+ * A locked tile's mark, over its grey picture: the padlock, or the hourglass
+ * while it unlocks; the word is kept for a screen reader. `lockArt` is the
+ * game's stand-in padlock until a painted one exists (the HUD's Shiny Lock
+ * uses it too).
+ */
+const lockedNote = (unlocking: boolean): Node[] => {
+  const word = document.createElement("span");
+  word.className = "u-visually-hidden";
+  word.textContent = unlocking ? "Unlocking" : "Locked";
+  const mark = unlocking
+    ? gameIcon("time", { decorative: true, className: "hatch-monster__lock" })
+    : lockArt(26, "hatch-monster__lock");
+  return [mark, word];
+};
+
+/** A free slot in the queue: a faint dashed box (patch 7.6.1). */
 const emptySlot = (): HTMLElement => {
   const slot = document.createElement("div");
   slot.className = "hatch-slot hatch-slot--empty";
   const words = document.createElement("span");
-  words.className = "hatch-slot__note";
+  words.className = "hatch-slot__empty";
   words.textContent = "Empty";
   slot.append(words);
   return slot;

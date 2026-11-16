@@ -61,6 +61,17 @@ const DOOR_LAYER = 0;
  * What the yard says when the fight did not land. Moloch's raid called off
  * does not come back: its stage counted when the cave grew.
  */
+/**
+ * How long "The raid is over…" may wait on the server's answer before the
+ * screen offers the way back itself (reports 44, 45: a phone left on it with
+ * no button at all). A raid has no Map, Yard or Retreat while it plays.
+ */
+export const LEAVE_OFFER_MS = 8_000;
+/** The notice that offers it, and its words: one short line and the button (owner, 15 Nov). */
+export const LEAVE_NOTICE = "raid-leave";
+export const LEAVE_TEXT = "Raid over";
+export const LEAVE_LABEL = "Back to yard";
+
 export const finishNotice = (finish: RaidFinish, tribe = ""): string | null => {
   if (finish.kind === "cancelled") {
     return isMolochRaid({ tribe }) ? MOLOCH_RAID_GONE : "The raid was called off: the wild monsters will be back.";
@@ -133,30 +144,78 @@ export const createRaidPlugin =
 
     let finishing = false;
     let gone = false;
+    /** The player went back to the yard; the finish may still be on its way. */
+    let left = false;
+    /** The server said `tooEarly` and its wait is running: no way back offered meanwhile. */
+    let early = false;
     /** Lets the sheet downloads go again (`holdSheets`): when the finish is back, or this screen is gone. */
     let release: (() => void) | null = null;
+    /** Offers "Back to yard" while the finish is slow; shown again if dismissed. */
+    let offerTimer: ReturnType<typeof setInterval> | null = null;
+    const stopOffer = (): void => {
+      if (offerTimer !== null) clearInterval(offerTimer);
+      offerTimer = null;
+      mounts.notices.clear(LEAVE_NOTICE);
+    };
+    const leave = (): void => {
+      if (gone || left) return;
+      left = true;
+      stopOffer();
+      mounts.goToYard?.();
+    };
+    /**
+     * The way back, {@link LEAVE_OFFER_MS} after the finish (or its next try)
+     * went out. Never during a `tooEarly` wait: a yard load before the server
+     * would take the finish calls the fight off (owner Q1); from then on the
+     * yard load lands it itself (patch 7.5, `settleRaidOnYardLoad`).
+     */
+    const startOffer = (): void => {
+      if (offerTimer !== null) clearInterval(offerTimer);
+      offerTimer = setInterval(() => {
+        if (!gone && !left && !early) {
+          mounts.notices.show(LEAVE_NOTICE, LEAVE_TEXT, { level: "info", actionLabel: LEAVE_LABEL, onAction: leave });
+        }
+      }, LEAVE_OFFER_MS);
+    };
     const finish = async (): Promise<void> => {
       if (finishing) return;
       finishing = true;
       banner.textContent = "The raid is over…";
+      // Only once the fight is over: a raid may not be left while it plays.
+      startOffer();
       release = deps.holdSheets?.() ?? null;
-      let outcome: RaidFinish;
       try {
-        outcome = await finishRaidFight({
+        const outcome = await finishRaidFight({
           api: deps.api,
           id: run.raid.id,
           serverNow: deps.serverNow,
           wait: deps.wait,
-        });
+          onEarlyWait: (waiting) => {
+            early = waiting;
+            if (gone || left) return;
+            if (waiting) {
+              stopOffer();
+            } else {
+              startOffer();
+            }
+          },
+        }).finally(() => release?.());
+        // The watch first, so a yard the result opens afresh does not find the
+        // fight still going (its lock). The result is kept for the yard even
+        // when this screen has gone meanwhile; an open yard is told, and shows
+        // it once (`plugins/raid.ts`).
+        try {
+          deps.clearRaid();
+        } finally {
+          if (outcome.kind === "landed") setRaidResult(outcome.result);
+        }
+        const notice = finishNotice(outcome, run.raid.tribe);
+        // Dropped if the yard's load landed this raid meanwhile (patch 7.5).
+        if (notice) setRaidNote(notice, run.raid.id);
       } finally {
-        release?.();
+        // Whatever went wrong above, the player is never left on this screen.
+        leave();
       }
-      // Kept for the yard even when this screen has gone meanwhile.
-      if (outcome.kind === "landed") setRaidResult(outcome.result);
-      deps.clearRaid();
-      const notice = finishNotice(outcome, run.raid.tribe);
-      if (notice) setRaidNote(notice);
-      if (!gone) mounts.goToYard?.();
     };
 
     const unsubscribe = session.subscribe((state) => {
@@ -167,6 +226,7 @@ export const createRaidPlugin =
     if (session.state().phase === "ended") void finish();
 
     return () => {
+      stopOffer();
       gone = true;
       release?.();
       if (trapTimer !== null) clearTimeout(trapTimer);

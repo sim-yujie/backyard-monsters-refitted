@@ -39,8 +39,8 @@ import { eventWindow } from "./schedule.js";
  * - **First look.** A Krallen without `hk` (won since the last load, or older
  *   than this rule) gets `hk` = now and is judged from the next hunt to end.
  * - **Lower.** One level down, health no higher than her new full health;
- *   frozen, the chamber's `fz` copy follows. Her loot aura `la` stays, and
- *   below level 3 the fight's level check leaves it off.
+ *   frozen, the chamber's `fz` copy follows. Her loot aura `la` stays, at
+ *   her new level's strength.
  * - **Lost.** Her entry leaves the list, aura and all; frozen, the chamber's
  *   `fz` copy drops her too.
  * - **Notice.** Every penalty not yet told comes back for the yard's

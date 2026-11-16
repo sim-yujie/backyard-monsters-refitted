@@ -58,8 +58,6 @@ export interface HelpFacts {
   owner: HelpSide;
   /** Friends since, unix seconds; null when they are not friends. */
   friendsSince: number | null;
-  /** Helps the helper has given today (UTC). */
-  helpsToday: number;
 }
 
 const HOUR = 60 * 60;
@@ -67,11 +65,13 @@ const HOUR = 60 * 60;
 const levelOf = (side: HelpSide): number => calculateBaseLevel(side.points ?? "0", side.basevalue ?? "0");
 
 /**
- * Why the helper may not help the owner at all today, or null when they may
+ * Why the helper may not help the owner at all now, or null when they may
  * (§4 "Who may help", §7 rules 1, 2 and 8). In this order: not friends; a
  * block either way or either account banned (the neutral `cannotSend`); the
  * level and friendship-age gates (`tooNew`, with `rule` naming the gate that
- * holds and, for the friendship's age, `from` when it lifts); the daily cap.
+ * holds and, for the friendship's age, `from` when it lifts). There is no
+ * daily cap (owner, 15 Nov 2026: was 20 helps a day); the 5 helpers a job
+ * ({@link HELP_RULES}.helpersPerJob) still holds.
  */
 export const gateRefusal = (facts: HelpFacts, now: number): HelpRefusal | null => {
   const { helper, owner } = facts;
@@ -89,13 +89,8 @@ export const gateRefusal = (facts: HelpFacts, now: number): HelpRefusal | null =
   const levelsOk = levelOf(helper) >= FRIEND_GATES.minLevel && levelOf(owner) >= FRIEND_GATES.minLevel;
   if (!levelsOk) return { reason: "tooNew", rule: "level" };
   if (friendshipClears > now) return { reason: "tooNew", from: friendshipClears, rule: "friendship" };
-
-  if (facts.helpsToday >= HELP_RULES.dailyHelps) return { reason: "dailyCap" };
   return null;
 };
-
-/** Helps left today. */
-export const helpsLeftOf = (helpsToday: number): number => Math.max(0, HELP_RULES.dailyHelps - helpsToday);
 
 /** The countdown a speed-up would shorten, or null when none is running. */
 export const helpCountdown = (building: BuildingData): HelpCountdown | null =>
@@ -157,6 +152,14 @@ export const planRepair = (save: HelpRepairSave, key: string): RepairPlan | Help
   return { buildingdata: { ...save.buildingdata, [key]: healed(building) }, buildinghealthdata };
 };
 
+/**
+ * Whether the helper may repair in this friend's yard today, having given
+ * `repairsToday` repairs there in the UTC day (owner, 16 Nov 2026, bug report
+ * #50): null when they may, else `repairedToday`. Speed-ups are not counted.
+ */
+export const repairDayRefusal = (repairsToday: number): HelpRefusal | null =>
+  repairsToday >= HELP_RULES.repairsPerYardPerDay ? { reason: "repairedToday" } : null;
+
 /** Whether a plan was refused. */
 export const isRefusal = (plan: object): plan is HelpRefusal => "reason" in plan;
 
@@ -173,6 +176,17 @@ export const rewardOf = (helperCap: number, ownerCap: number): ResourceAmounts =
   return reward;
 };
 
+/** Rewarded helps the helper has left today, having given `helpsToday` (UTC). */
+export const rewardsLeftOf = (helpsToday: number): number => Math.max(0, HELP_RULES.rewardedHelpsPerDay - helpsToday);
+
+/**
+ * The reward for the helper's next help, having given `helpsToday` today:
+ * {@link rewardOf} for the first {@link HELP_RULES}.rewardedHelpsPerDay, then
+ * nothing (owner, 15 Nov 2026).
+ */
+export const helpRewardOf = (helpsToday: number, helperCap: number, ownerCap: number): ResourceAmounts =>
+  rewardsLeftOf(helpsToday) > 0 ? rewardOf(helperCap, ownerCap) : noAmounts();
+
 /** What each building could take, `true` or the reason it could not. */
 export type BuildingHelp = Record<string, { speedup?: true | FriendRefusal; repair?: true | FriendRefusal }>;
 
@@ -187,9 +201,18 @@ export interface HelpPreviewSave extends HelpRepairSave {
  * up on a copy (repairs, then building countdowns), so a job that ended since
  * the owner's last save is not offered. A building with nothing to help is
  * left out; `gate` (from {@link gateRefusal}) stands in for every answer when
- * the helper may not help at all.
+ * the helper may not help at all. `repairsToday`, the helper's repairs in this
+ * yard in the UTC day, refuses every repair once it is used up
+ * ({@link repairDayRefusal}), so no wrench invites a tap that would fail.
  */
-export const previewHelp = (save: HelpPreviewSave, helper: number, now: number, gate: HelpRefusal | null): BuildingHelp => {
+export const previewHelp = (
+  save: HelpPreviewSave,
+  helper: number,
+  now: number,
+  gate: HelpRefusal | null,
+  repairsToday = 0
+): BuildingHelp => {
+  const repairDay = repairDayRefusal(repairsToday);
   const copy = { type: save.type, buildingdata: save.buildingdata ?? {}, buildinghealthdata: save.buildinghealthdata ?? {} };
   const from = Math.min(Number(save.savetime ?? now) || now, now);
   catchUpRepairs(copy, from, now);
@@ -204,7 +227,7 @@ export const previewHelp = (save: HelpPreviewSave, helper: number, now: number, 
       const plan = planSpeedup(building, helper);
       entry.speedup = gate ? gate.reason : isRefusal(plan) ? plan.reason : true;
     }
-    if (damageOf(copy, key, building)) entry.repair = gate ? gate.reason : true;
+    if (damageOf(copy, key, building)) entry.repair = gate ? gate.reason : repairDay ? repairDay.reason : true;
     if (entry.speedup !== undefined || entry.repair !== undefined) out[String(building.id ?? key)] = entry;
   }
   return out;

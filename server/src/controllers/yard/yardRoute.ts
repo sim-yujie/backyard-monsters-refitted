@@ -58,10 +58,13 @@ export const yardRoute =
  * The load is one more session towards the next wild monster raid, counted
  * in the same flush (`countRaidSession`, #226); the same lock also places the
  * Trojan Horse the moment the player qualifies for one (`placeTrojanHorse`,
- * issue #324), so two loads at once still place exactly one.
+ * issue #324), so two loads at once still place exactly one. `keepFight`:
+ * a wild raid's fight this load could not land, whose yard lock stays until
+ * its finish lands it (patch 7.5, `settleRaidOnYardLoad`).
  */
 export const catchUpOwnerYard = async (
-  save: Save
+  save: Save,
+  keepFight?: string
 ): Promise<{ save: Save; completed: CompletedJob[]; trojanPlaced: boolean; krallenPenalties: KrallenPenaltyNotice[] }> => {
   // An alliance trade request that ran out, or whose alliance the player
   // left, gives back what it holds first, so the yard loads with it (one
@@ -72,7 +75,7 @@ export const catchUpOwnerYard = async (
   let trojanPlaced = false;
   let krallenPenalties: KrallenPenaltyNotice[] = [];
   return catchUpLockedYard(postgres.em, save, async (locked, now, tx) => {
-    countRaidSession(locked, now);
+    countRaidSession(locked, now, keepFight);
     trojanPlaced = placeTrojanHorse(locked, now);
     // The Krallen Hunt's penalty for hunts over since the last load, and the
     // one-time notice of any not yet told (`krallenPenalty.ts`).

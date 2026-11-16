@@ -545,7 +545,9 @@ import {
  *    the walls or to the wall in its way. A flyer shoots over them. Against a
  *    defender a monster, and Fomor even in the air (`Fomor.as:34-46`), needs
  *    the same clear line unless within 50 screen px; other champions do not
- *    (`ChampionBase.as:1461`). A shot in flight never hits a wall, and towers
+ *    (`ChampionBase.as:1461`). An attacking champion that a defending champion
+ *    on the ground is at swings back from where it stands, however far and
+ *    whatever is between (`ChampionBase.as:894`). A shot in flight never hits a wall, and towers
  *    and defenders shoot over walls as before. The flying monsters with a
  *    range heal rather than shoot, so Flash's check on them never bites.
  *
@@ -914,6 +916,21 @@ export interface BattleState {
    * {@link BattleOptions.learn}. Not a checkpoint value.
    */
   readonly lessons?: readonly ChampionLesson[];
+}
+
+/**
+ * A defending champion waiting in its Champion Cage, as {@link Battle.cagedChampions}
+ * gives it (bug report #47): its type and level, and the yard point it stands
+ * on in there, which is where it comes out from. Drawing only.
+ */
+export interface CagedChampionSnapshot {
+  /** The champion type, `t` in the save (`G{t}`). */
+  readonly t: number;
+  /** Its level, `l`. */
+  readonly l: number;
+  /** Where it waits, in yard units, as {@link CreepSnapshot.ix} and `iy`. */
+  readonly ix: number;
+  readonly iy: number;
 }
 
 /**
@@ -1333,6 +1350,17 @@ export interface Battle {
    * Ooze"), by building id, ascending. Drawing only. A fresh copy per call.
    */
   weakenedTowers(): readonly number[];
+  /**
+   * The defender's champions in their cage right now (issues #260, #310), in
+   * the order {@link BattleOptions.defenderChampions} gave them: before they
+   * first come out and again once they have walked back in. One that is out
+   * on the field is one of {@link creeps} instead, and one that fell is in
+   * neither. Flash drew the caged champion pacing its cage through the attack
+   * (`CHAMPIONCAGE.as:589-660`); the yard draws it standing on this point
+   * (bug report #47). Drawing only: not in the state or the checkpoint. A
+   * fresh copy per call.
+   */
+  cagedChampions(): readonly CagedChampionSnapshot[];
 }
 
 /* ── Internals ────────────────────────────────────────────────────────────── */
@@ -1553,6 +1581,12 @@ interface Creep {
   weakShare: number;
   /** A copy a ranked Slimeattikus left as it died (Lab "Split"); it never splits again. */
   splitCopy: boolean;
+  /**
+   * An attacking champion: the defending champion on the ground that has been
+   * at it, or -1. It fights that one, from where it stands, until it falls or
+   * goes back in its cage ({@link holdChampion}).
+   */
+  heldBy: number;
 }
 
 /** What a lesson credits: the old brain's features and the habits' own. */
@@ -1647,6 +1681,7 @@ const NO_ABILITIES = {
   weakUntil: 0,
   weakShare: 0,
   splitCopy: false,
+  heldBy: -1,
 } as const;
 
 interface DefenderHome {
@@ -1911,6 +1946,23 @@ interface Bunker {
  * it is fully up (`_animTick >= 15`, `BUILDING22.as:204`, `:344`).
  */
 export const BUNKER_DOOR_FRAMES = 15;
+
+/**
+ * Whether a standing Monster Bunker's door is stuck where it is: below half
+ * health, on every yard. Flash moves the door only in `TickFast`
+ * (`BUILDING22.as:433-455`), an ENTER_FRAME listener the building drops each
+ * time it loads a new look (`BFOUNDATION.as:1096-1098`) and takes back only
+ * for a look with an `anim` strip (`:1129-1149`). The bunker's damaged look,
+ * which it wears below half health (`isCriticallyDamaged`, `:495-497`, drawn
+ * in `Update`, `:2876-2884`), has none in any props table (`YARD_PROPS.as:2460-2470`,
+ * `OUTPOST_YARD_PROPS.as:1869-1878`, `INFERNOYARDPROPS.as:1929-1938`). So a
+ * bunker that starts the battle below half never opens and sends no one out,
+ * and one that falls below half keeps its door as it was: shut stays shut,
+ * fully up stays up. At exactly half it is not damaged and works as before. A
+ * fallen bunker sends no one out anyway, and its door shuts as before.
+ */
+const doorStuck = (building: EngineBuilding): boolean =>
+  building.hp > 0 && building.hp < building.maxHp * 0.5;
 
 /** The drop radius a payload earns: `max(200, bucket / 4) / 2` (`ATTACK.as:667-671`). */
 export const dropRadius = (bucketTotal: number): number =>
@@ -3892,6 +3944,8 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
    * otherwise, a frame of {@link BUNKER_DOOR_FRAMES} at a time. The bunker
    * sends monsters out only through a door that is fully up. Only a change of
    * way is told ({@link BattleVisualEvent} `bunkerDoor`).
+   *
+   * A bunker standing below half health has a stuck door ({@link doorStuck}).
    */
   const tickBunkerDoors = (): void => {
     if (tick % 2 !== 0) return;
@@ -3899,6 +3953,7 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
     for (const bunker of bunkers) {
       const building = bunker.building;
       if (building.type === HOUSING_BUNKER_TYPE) continue;
+      if (doorStuck(building)) continue;
       let open = false;
       if (building.hp > 0) {
         if (!out) {
@@ -5572,7 +5627,8 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
         ? creep.range * KORATH_DEFEND_FLYER_REACH
         : creep.range;
     creep.atTarget =
-      squared < creepReach(range) && (creep.friendly || seesFoe(creep, foe, squared));
+      (squared < creepReach(range) && (creep.friendly || seesFoe(creep, foe, squared))) ||
+      creep.heldBy === foe.id;
     // A defending Bolt blinks at its foe; an attacker's blink ends when it turns to fight.
     const blinks = creep.friendly && creep.rank > 0 && creep.monsterId === BOLT_ID;
     if (creep.blinkHops > 0 && (creep.atTarget || !blinks)) stopBlink(creep);
@@ -5641,6 +5697,12 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
       other.targetable &&
       canHit(creep.hitFlags, other.flags);
     let foe = creep.targetCreep >= 0 ? byCreepId.get(creep.targetCreep) : undefined;
+    // A defending champion that has been at it comes first ({@link holdChampion}).
+    if (creep.heldBy >= 0) {
+      const holder = byCreepId.get(creep.heldBy);
+      if (usable(holder)) foe = holder;
+      else creep.heldBy = -1;
+    }
     if (!usable(foe)) {
       const by = creep.provokedBy >= 0 ? byCreepId.get(creep.provokedBy) : undefined;
       foe = usable(by) ? by : undefined;
@@ -7693,6 +7755,21 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
     creep.homing = true;
   };
 
+  /**
+   * The caged champion at its foe, every tick (`tickBDefend`,
+   * `ChampionBase.as:889-905`): on the ground, it turns an attacking champion
+   * on itself, and that champion is "at" it at once, however far off (the
+   * `substr(0, 1) == "G"` test, `:894`). So the attacker's champion swings
+   * back from where it stands, at a Fomor shooting it from 140 too, and keeps
+   * on until this one falls: nothing in its own `tickBAttack` looks at the
+   * distance again (`:791-818`). Other attackers turn when its blow lands
+   * ({@link damageCreep}).
+   */
+  const holdChampion = (creep: Creep, foe: Creep): void => {
+    if (creep.flying || !foe.champion || foe.friendly || foe.support || !fightsBack(foe)) return;
+    foe.heldBy = creep.id;
+  };
+
   /** A step straight at a point: the cage, or a foe where it stands now. */
   const walkTo = (creep: Creep, to: Cart): void => {
     creep.attacking = false;
@@ -7753,6 +7830,7 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
     }
     if (creep.atTarget) {
       creep.attacking = true;
+      holdChampion(creep, foe);
       if (creep.attackCooldown <= 0) {
         creep.attackCooldown += swingDelay(creep);
         recordHit(creep, foe.ix, foe.iy, strikeCreep(creep, foe, creep));
@@ -8046,6 +8124,17 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
       endHp: Math.max(0, championsHp[lesson.monsterId] ?? 0),
     }));
 
+  /** {@link Battle.cagedChampions}. */
+  const cagedChampions = (): CagedChampionSnapshot[] => {
+    const out: CagedChampionSnapshot[] = [];
+    for (const slot of cageSlots) {
+      const pen = slot.pen;
+      if (!pen || slot.report.hp <= 0) continue;
+      out.push({ t: slot.caged.t, l: slot.caged.l, ix: pen.ix, iy: pen.iy });
+    }
+    return out;
+  };
+
   /** {@link Battle.bunkerPools}. */
   const bunkerPools = (): Record<number, Record<string, number>> => {
     const out: Record<number, Record<string, number>> = {};
@@ -8145,6 +8234,7 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
     siege: siegeSnapshot,
     bunkerPools,
     weakenedTowers,
+    cagedChampions,
   };
 };
 

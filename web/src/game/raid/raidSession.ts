@@ -39,8 +39,71 @@ export const consumeRaidRun = (): RaidRun | null => {
   return run;
 };
 
+/**
+ * The raids whose result a yard has taken, newest last, so one raid's result
+ * never shows twice: it can come both with the yard's load (the server landed
+ * it there, `raidresult`) and in the finish's late answer (patch 7.5).
+ */
+const taken: string[] = [];
+/** How many taken raids are remembered: a raid's two answers come within minutes. */
+const TAKEN_KEPT = 20;
+/** The open yard's ear for a result or a line that came after it opened. */
+const listeners = new Set<() => void>();
+
+/** Whether the yard has, or has had, this raid's result. */
+const known = (id: string): boolean => taken.includes(id) || pendingResult?.id === id;
+
+const tell = (): void => {
+  for (const listener of [...listeners]) listener();
+};
+
+/**
+ * What the raid scene's finish landed, for the yard. A raid whose result the
+ * yard already has (from its load) is dropped. An open yard is told
+ * ({@link onRaidNews}), since the answer can come after the player went back
+ * to it.
+ */
 export const setRaidResult = (result: RaidResult): void => {
+  if (known(result.id)) return;
   pendingResult = result;
+  tell();
+};
+
+/**
+ * What the yard's own load landed (`raidresult`, patch 7.5: the server lands
+ * a fight whose finish was still on its way), handed to the yard opening on
+ * it, quietly: that yard shows it as it mounts. One already known is dropped.
+ */
+export const adoptLoadedRaidResult = (result: RaidResult | null | undefined): void => {
+  if (!result || typeof result.id !== "string" || known(result.id)) return;
+  pendingResult = result;
+};
+
+/** Whether a result is waiting for its taker. */
+export const raidResultWaiting = (): boolean => pendingResult !== null;
+
+/** Results the yard has been opened afresh for, so it is never opened again for the same one. */
+const refreshed: string[] = [];
+
+/**
+ * Whether the waiting result is not in the yard `load` sent yet: its raid
+ * landed after the load read the yard (the finish answered while the yard
+ * was loading, sol's second review), so the popup would sit on a yard
+ * without its damage, theft or Shiny. Then the yard is opened afresh first
+ * ({@link markRaidYardRefreshed}), once per result. A server that does not
+ * say (`lastraid` absent) is taken at its word.
+ */
+export const raidResultAheadOfYard = (load: { readonly lastraid?: unknown }): boolean => {
+  const result = pendingResult;
+  if (result === null || typeof load.lastraid !== "string") return false;
+  return load.lastraid !== result.id && !refreshed.includes(result.id);
+};
+
+/** The yard is being opened afresh for the waiting result. */
+export const markRaidYardRefreshed = (): void => {
+  if (pendingResult === null || refreshed.includes(pendingResult.id)) return;
+  refreshed.push(pendingResult.id);
+  if (refreshed.length > TAKEN_KEPT) refreshed.shift();
 };
 
 /**
@@ -52,21 +115,49 @@ export const consumeRaidResult = (which: (result: RaidResult) => boolean = () =>
   const result = pendingResult;
   if (result === null || !which(result)) return null;
   pendingResult = null;
+  taken.push(result.id);
+  if (taken.length > TAKEN_KEPT) taken.shift();
   return result;
 };
 
-let pendingNote: string | null = null;
+let pendingNote: { readonly text: string; readonly raid?: string } | null = null;
 
-/** A line for the yard to show when a fight did not land (called off, or the server out of reach). */
-export const setRaidNote = (note: string): void => {
-  pendingNote = note;
+/**
+ * A line for the yard to show when a fight did not land (called off, or the
+ * server out of reach). With the raid's id, it is dropped once the yard has
+ * that raid's result after all (the load landed it, patch 7.5). An open yard
+ * is told.
+ */
+export const setRaidNote = (note: string, raid?: string): void => {
+  if (raid !== undefined && known(raid)) return;
+  pendingNote = raid === undefined ? { text: note } : { text: note, raid };
+  tell();
 };
 
-/** Takes that line, clearing it. */
+/** Takes that line, clearing it; null too when its raid's result has reached the yard since. */
 export const consumeRaidNote = (): string | null => {
   const note = pendingNote;
   pendingNote = null;
-  return note;
+  if (note?.raid !== undefined && known(note.raid)) return null;
+  return note?.text ?? null;
+};
+
+/** Calls `listener` whenever a result or a line is handed over; returns the way to stop. */
+export const onRaidNews = (listener: () => void): (() => void) => {
+  listeners.add(listener);
+  return () => {
+    listeners.delete(listener);
+  };
+};
+
+/** Forgets every hand-over: tests only. */
+export const resetRaidSession = (): void => {
+  pendingRun = null;
+  pendingResult = null;
+  pendingNote = null;
+  taken.length = 0;
+  refreshed.length = 0;
+  listeners.clear();
 };
 
 /**

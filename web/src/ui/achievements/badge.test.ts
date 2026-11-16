@@ -73,8 +73,8 @@ describe("the medals' size", () => {
   });
 
   it("puts an earned row's date under the description on a phone, so the name keeps the row's width", () => {
-    // The phone rules sit indented inside "@media (width <= 620px) { ... }".
-    const phone = css.split("\n@media (width <= 620px) {")[1]?.split("\n}\n")[0] ?? "";
+    // The phone rules sit indented inside "@media (max-width: 620px) { ... }".
+    const phone = css.split("\n@media (max-width: 620px) {")[1]?.split("\n}\n")[0] ?? "";
     const phoneRule = (selector: string): string => phone.split(`\n  ${selector} {`)[1]?.split("}")[0] ?? "";
     const row = phoneRule('.ach-row[data-status="earned"]');
     expect(row).toMatch(/display: grid;/);

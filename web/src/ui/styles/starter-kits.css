@@ -21,6 +21,7 @@
   display: grid;
   gap: var(--space-3);
   max-height: calc(100vh - 140px);
+  max-height: calc(100dvh - 140px);
   overflow-y: auto;
 }
 
@@ -71,6 +72,7 @@
   display: block;
   width: 100%;
   height: clamp(64px, calc(100vh - 640px), 220px);
+  height: clamp(64px, calc(100dvh - 640px), 220px);
   object-fit: cover;
   border-radius: var(--radius-md);
   background: var(--colour-surface-control);
@@ -252,7 +254,7 @@
 }
 
 /* A phone: one card to a row. */
-@media (width <= 720px) {
+@media (max-width: 720px) {
   .kit-picker__cards {
     grid-template-columns: minmax(0, 1fr);
   }

@@ -7,7 +7,6 @@ import { YardChangeReason, type YardChange, type YardUiBinding } from "@/game/ya
 import { formatAmount } from "@/ui/format";
 import { centreWindow, type CentreWindow } from "@/ui/centreWindow";
 import { Panel } from "@/ui/Panel";
-import { RESOURCE_NAMES, resourceAmount } from "@/ui/resourceIcon";
 import {
   MONSTERS_TAB_ORDER,
   MonstersTabId,
@@ -30,9 +29,9 @@ import { MONSTERS_TABS } from "./tabs";
  * stays open after every action: the original closed its popups on success,
  * which meant reopening them for the next monster (MH §12.2 item 5).
  *
- * The header always shows housing used/total and the two monster resources,
- * goo and putty, as exact amounts with their caps, so "will this fit?" and "can
- * I afford it?" never need another screen. A tab whose building the yard does
+ * The header shows housing used/total, so "will this fit?" never needs
+ * another screen. Goo and putty are not repeated here: the game's own
+ * resource bar above already shows them (owner, 15 Nov 2026). A tab whose building the yard does
  * not have yet shows what to build and the Town Hall it needs instead of an
  * empty list.
  *
@@ -40,8 +39,7 @@ import { MONSTERS_TABS } from "./tabs";
  * contract, `tabs.ts` the list).
  *
  * On the Inferno yard (Inferno WP 2.4) the same screen serves the Inferno
- * roster: its header's two resources are Magma and Sulfur (the screen's
- * resource realm), its housing is the Compound, and a missing building is
+ * roster: its housing is the Compound, and a missing building is
  * named as Flash names it there, behind the Under Hall.
  */
 
@@ -110,8 +108,6 @@ export class MonstersScreen {
   private readonly housingValue: HTMLElement;
   private readonly housingMeter: HTMLElement;
   private readonly housingFill: HTMLElement;
-  private readonly goo: HTMLElement;
-  private readonly putty: HTMLElement;
   private readonly body: HTMLElement;
   private readonly unsubscribe: () => void;
 
@@ -193,11 +189,7 @@ export class MonstersScreen {
     this.housingFill.className = "monsters-bar__fill";
     this.housingMeter.append(this.housingFill);
     housing.append(housingLabel, this.housingValue, this.housingMeter);
-    this.goo = document.createElement("span");
-    this.goo.className = "monsters-header__resource";
-    this.putty = document.createElement("span");
-    this.putty.className = "monsters-header__resource";
-    this.header.append(housing, this.goo, this.putty);
+    this.header.append(housing);
 
     this.body = document.createElement("div");
     this.body.className = "monsters-body";
@@ -300,24 +292,6 @@ export class MonstersScreen {
     const fraction = total > 0 ? Math.min(1, used / total) : used > 0 ? 1 : 0;
     this.housingFill.style.width = `${+(fraction * 100).toFixed(2)}%`;
     this.housingMeter.classList.toggle("monsters-bar--full", total > 0 && used >= total);
-
-    for (const [node, key] of [
-      [this.goo, "r4"],
-      [this.putty, "r3"],
-    ] as const) {
-      const amount = Number(store.resources[key]);
-      const cap = store.caps?.[key];
-      const text = Number.isFinite(amount)
-        ? cap === undefined
-          ? formatAmount(amount)
-          : `${formatAmount(amount)} / ${formatAmount(cap)}`
-        : "—";
-      node.replaceChildren(resourceAmount(key, text));
-      node.title =
-        cap === undefined
-          ? `${RESOURCE_NAMES[key]}: ${text}`
-          : `${RESOURCE_NAMES[key]}: ${formatAmount(amount)} of ${formatAmount(cap)}`;
-    }
   }
 
   /**

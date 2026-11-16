@@ -148,6 +148,7 @@
   padding: var(--space-1);
   list-style: none;
   max-height: min(46vh, 360px);
+  max-height: min(46dvh, 360px);
   overflow-y: auto;
   scrollbar-gutter: stable;
   scrollbar-width: thin;
@@ -190,7 +191,7 @@
   font-variant-numeric: tabular-nums;
 }
 
-@media (width <= 620px) {
+@media (max-width: 620px) {
   .transfer-dialog__ends {
     grid-template-columns: minmax(0, 1fr);
   }

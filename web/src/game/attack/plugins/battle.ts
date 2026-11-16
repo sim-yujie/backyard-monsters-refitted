@@ -1,6 +1,8 @@
 // From the registry itself rather than the scene, so the Baiter scene (#126)
 // can import this plugin without going round the scene and the app.
-import { ATTACK_PLUGINS, type AttackPlugin } from "@/game/attack/attackPlugins";
+import { ATTACK_PLUGINS, type AttackMounts, type AttackPlugin } from "@/game/attack/attackPlugins";
+import type { Side } from "@/game/attack/creepFx";
+import { isDefenceWatch } from "@/game/autoAttack/watchRun";
 import type { Yard } from "@/game/yard/yardModel";
 import type { AttackSession, FlingInput } from "../AttackSession";
 import { AttackBattleLayer } from "../AttackBattleLayer";
@@ -65,12 +67,23 @@ interface DevHook {
   dropSpot: { x: number; y: number };
 }
 
+/**
+ * Whose side the player watching a battle is on, for the damage numbers'
+ * colours (owner, beta 8): the defender's when the yard is their own (a wild
+ * raid played back, a replay of a defence, or a Monster Baiter test, which
+ * flings an army at the player's own yard), the attacker's otherwise (an
+ * attack, and the replay of one of the player's auto-attacks).
+ */
+export const viewerSideOf = (mounts: Pick<AttackMounts, "raid" | "watch" | "practice">): Side =>
+  mounts.raid || mounts.practice || isDefenceWatch(mounts.watch) ? "defender" : "attacker";
+
 const plugin: AttackPlugin = (mounts) => {
   const layer = new AttackBattleLayer({
     session: mounts.session,
     yard: mounts.yard,
     host: mounts.renderer,
     overlay: mounts.battleLayer,
+    viewer: viewerSideOf(mounts),
   });
   // The HUD's damage and the end panel follow what the screen shows (#148).
   const releaseHold = mounts.presentation.hold(() => layer.settling);

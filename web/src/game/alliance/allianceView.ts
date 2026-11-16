@@ -6,7 +6,7 @@
  */
 
 /** The window's pages (design v5 §7b). */
-export type AllianceTab = "overview" | "constellation" | "members" | "trade" | "territory";
+export type AllianceTab = "overview" | "goals" | "constellation" | "members" | "trade" | "territory";
 
 /** Where the Trade tab opens: a mate's request, lit (chat's Trade), or Send to a mate. */
 export type AllianceFocus =

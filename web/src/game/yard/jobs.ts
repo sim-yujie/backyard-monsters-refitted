@@ -728,6 +728,8 @@ export const predictCompletion = (
         if (!row) break;
         delete row.cU;
         delete row.cL;
+        // The job's helpers go with it, as the server drops them (`advanceBuildingTimers`).
+        delete row.hl;
         row.l = (typeof row.l === "number" && row.l > 0 ? row.l : 1) + 1;
         break;
       }
@@ -736,6 +738,7 @@ export const predictCompletion = (
         if (!row) break;
         delete row.cB;
         delete row.cL;
+        delete row.hl;
         if (typeof row["prefab"] === "number" && row["prefab"] > 0) row.l = row["prefab"];
         delete row["prefab"];
         break;
@@ -744,6 +747,7 @@ export const predictCompletion = (
         const row = building(job.buildingId);
         if (!row) break;
         delete row.cF;
+        delete row.hl;
         row.fort = (typeof row.fort === "number" ? row.fort : 0) + 1;
         break;
       }

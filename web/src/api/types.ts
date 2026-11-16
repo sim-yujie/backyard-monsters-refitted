@@ -7,6 +7,7 @@
  */
 
 import type { InfernoLoadState } from "./inferno";
+import type { RaidResult } from "./raid";
 
 /** Every successful game response carries `error: 0`. See ApiError for why. */
 export interface ApiEnvelope {
@@ -254,7 +255,7 @@ export interface ChampionSaveEntry {
   /**
    * Krallen's loot aura runs until then, unix seconds (the Krallen Hunt's 3x
    * mark, server `services/events/krallenReward.ts`); the server's alone to
-   * write. She fights with it from her level 3 (`KRALLEN_AURA_LEVEL`).
+   * write. She fights with it at any level (`KRALLEN_AURA_LEVEL`, 1).
    */
   la?: number;
   [key: string]: unknown;
@@ -872,6 +873,18 @@ export interface BaseLoadResponse extends ApiEnvelope {
    * emergence just raised it to (`docs/design/inferno.md` §2.2).
    */
   infernostate?: InfernoLoadState;
+  /**
+   * Only on the owner's build-mode load of their own main yard, when this
+   * load landed a wild monster raid whose finish was still on its way (patch
+   * 7.5, `settleRaidOnYardLoad`): what it landed, for the yard's result popup.
+   */
+  raidresult?: RaidResult;
+  /**
+   * Only on the owner's build-mode load of their own main yard (patch 7.5):
+   * the last raid landed in the yard this load sends, "" for none. A result
+   * the client holds for another raid landed after this yard was read.
+   */
+  lastraid?: string;
   /**
    * Only on the owner's build-mode load of their own main yard or outpost:
    * the account's new-player tutorial summary (issue #227). Every yard action

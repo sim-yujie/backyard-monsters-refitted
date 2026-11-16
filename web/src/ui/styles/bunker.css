@@ -210,7 +210,7 @@
   font-size: var(--text-sm);
 }
 
-@media (width <= 620px) {
+@media (max-width: 620px) {
   .bunker__step,
   .bunker__fill,
   .bunker__count,

@@ -630,7 +630,7 @@ describe("fightableLog", () => {
       expect(auraOf(gorgo)).toBeUndefined();
     });
 
-    test("a level 1 or 2 Krallen is stamped too; the engine then gives her none (`hasLootAura`)", () => {
+    test("a level 1 or 2 Krallen is stamped too; the engine gives it at her level (`hasLootAura`)", () => {
       const low = fightableLog(
         { v: 1, seed: 7, events: [{ ...fling(10, {}), champion: { t: 5, l: 2 } } as FlingEvent] },
         { ...attacker, champion: [{ t: 5, l: 2, la: START + 1 }], auraAt: START },

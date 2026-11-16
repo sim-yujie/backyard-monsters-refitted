@@ -43,21 +43,54 @@ mock.module("../base/combat/replayRunner.js", () => ({
     standIn.fight ? standIn.fight(args[0]) : runner.fightRaidInWorker(...args),
 }));
 
-const { START_LOCK_SECONDS, engageRaid, finishRaid, prepareRaid, raidOnPing, setRaidPreference, startRaid } = await import(
-  "./raidFlow.js"
-);
+const {
+  START_LOCK_SECONDS,
+  engageRaid,
+  finishRaid,
+  prepareRaid,
+  raidOnPing,
+  setRaidPreference,
+  settleRaidOnYardLoad,
+  startRaid,
+} = await import("./raidFlow.js");
 const { fightRaid } = await import("./raidFight.js");
 const { raidFighting } = await import("./raidLock.js");
 const { RAID_MIN_GAP_SECONDS, RAID_PREFERENCES, countRaidSession, readSchedule } = await import("./raidSchedule.js");
 const { planRaid } = await import("./raidPlan.js");
-const { WARNING_SECONDS, cancelRaidOnYardLoad, readOpenRaid, recordRaidScreen, updateOpenRaid } = await import(
-  "./raidStore.js"
-);
+const {
+  WARNING_SECONDS,
+  cancelRaidOnYardLoad,
+  openFightingRaid,
+  presenceLapsed,
+  raidKey,
+  readOpenRaid,
+  recordRaidScreen,
+  updateOpenRaid,
+} = await import("./raidStore.js");
 const { challengeKey, lastActionKey, lastSeenKey } = await import("../user/online.js");
 const { damagedBuildings } = await import("../yard/repair.js");
 const { openEmergenceRaid } = await import("../inferno/emergenceRaid.js");
 
 type Row = Record<string, unknown>;
+
+/** Redis's own read, put back before every test (`staleRead` swaps it). */
+const realGet = redis.get;
+
+/**
+ * Another tab, in the middle of a request: the request's next read of the
+ * open raid gets what Redis held, then the request stalls while `meanwhile`
+ * runs to its end, and only then goes on with what it read (sol's fifth
+ * review).
+ */
+const staleRead = (meanwhile: () => Promise<unknown>) => {
+  redis.get = async (key: string) => {
+    const held = await realGet(key);
+    if (key !== raidKey(USER)) return held;
+    redis.get = realGet;
+    await meanwhile();
+    return held;
+  };
+};
 
 const db = {
   row: null as Row | null,
@@ -67,6 +100,8 @@ const db = {
   /** Unlocked reads of the whole row (no `fields`), and locked reads. */
   fullReads: 0,
   locks: 0,
+  /** The next this many flushes fail, as a lost database connection would: the transaction writes nothing. */
+  failFlushes: 0,
 };
 
 /** Takes the row lock; resolves with its release once every earlier holder let go. */
@@ -104,6 +139,10 @@ const em = {
         return entity;
       },
       async flush() {
+        if (db.failFlushes > 0) {
+          db.failFlushes--;
+          throw new Error("the database went away");
+        }
         if (entity) pending = structuredClone(entity);
       },
       transactional: (inner: (fork: unknown) => Promise<unknown>) => inner(fork),
@@ -210,7 +249,7 @@ const toStart = async (seed = SANDBOX_HOLDS) => {
     preference: 0,
     seed,
   })!;
-  await updateOpenRaid(USER, { ...open, plan, seed, tribe: plan.tribe }, NOW);
+  await updateOpenRaid(USER, { ...open, plan, seed, tribe: plan.tribe }, NOW, "warning");
   await engageRaid(USER, warning.id, NOW);
   return warning.id;
 };
@@ -239,12 +278,36 @@ const finishOnTime = async (id: string, finishFrom: number) => {
   return finishRaid(em, user, id, finishFrom);
 };
 
+/**
+ * An own-main-yard build load's raid steps, in `baseLoad`'s order: whether
+ * the game had been closed, read before the load writes the presence mark;
+ * a fight its finish could already land is landed (`settleRaidOnYardLoad`);
+ * the catch-up's session count; then cancel rule 3. With `gameWasClosed`
+ * the mark is dropped first, as a game closed for its whole life leaves it.
+ */
+const yardLoad = async (now: number, gameWasClosed = false) => {
+  at(now);
+  if (gameWasClosed) await redis.del(lastSeenKey(USER));
+  const closed = await presenceLapsed(USER);
+  await redis.set(lastSeenKey(USER), String(now));
+  const settled = await settleRaidOnYardLoad(em, user, closed, now);
+  await em.transactional(async (tx) => {
+    const locked = (await tx.findOne(Object, {}, { lockMode: LockMode.PESSIMISTIC_WRITE })) as never;
+    countRaidSession(locked, now, settled.keep);
+    await tx.flush();
+  });
+  await cancelRaidOnYardLoad(USER, closed, settled.keep);
+  return settled.landed;
+};
+
 beforeEach(() => {
+  redis.get = realGet;
   redis.clear();
   db.row = rowOf();
   db.inferno = null;
   db.fullReads = 0;
   db.locks = 0;
+  db.failFlushes = 0;
   standIn.slot = null;
   standIn.fight = null;
   at(NOW);
@@ -614,16 +677,332 @@ describe("the finish", () => {
   );
 });
 
-describe("the gap between raids (owner, 2026-10-19)", () => {
-  /** An own-main-yard build load, as `baseLoad` runs it: the session count, then cancel rule 3. */
-  const yardLoad = async (now: number, gameWasClosed = false) => {
-    await em.transactional(async (tx) => {
-      const locked = (await tx.findOne(Object, {}, { lockMode: LockMode.PESSIMISTIC_WRITE })) as never;
-      countRaidSession(locked, now);
-      await tx.flush();
-    });
-    await cancelRaidOnYardLoad(USER, gameWasClosed);
+describe("a yard load while the finish is on its way (patch 7.5, sol's review)", () => {
+  test(
+    "a load that beats the finish lands the raid on the yard it reads, and the late finish answers the same whole result",
+    async () => {
+      db.row = rowOf({ buildingdata: structuredClone(OPEN_YARD), resources: { r1: 500, r2: 500, r3: 500, r4: 500 } });
+      const { id, finishFrom } = await toFight(OPEN_YARD_FALLS);
+      // The raid screen kept the game open; "Back to yard" loads the yard first.
+      await present(finishFrom);
+      const landed = await yardLoad(finishFrom + 3);
+
+      expect(landed).toMatchObject({ id, defended: false, shiny: 0 });
+      expect(landed!.damaged.length).toBeGreaterThan(0);
+      expect(await readOpenRaid(USER)).toBeNull();
+      // The yard the load goes on to read has it: damaged buildings repairing, the lock gone, counted once.
+      const damaged = damagedBuildings(db.row as never);
+      expect(damaged.map((damage) => damage.id)).toEqual([...landed!.damaged]);
+      expect(damaged.every((damage) => damage.repairing)).toBe(true);
+      const schedule = readSchedule(db.row!.aiattacks);
+      expect(schedule.fight).toBeUndefined();
+      expect(schedule.recent.map((raid) => raid.id)).toEqual([id]);
+      expect(schedule).toMatchObject({ lastRaidId: id, lastattack: NOW, sessionsSinceLastAttack: 1 });
+
+      // The finish arrives afterwards: the same result, whole, and nothing lands twice.
+      const after = structuredClone(db.row!);
+      expect(await finishRaid(em, user, id, finishFrom + 6)).toEqual(landed!);
+      expect(db.row!.resources).toEqual(after.resources);
+      expect(readSchedule(db.row!.aiattacks).recent).toHaveLength(1);
+    },
+    FIGHT_TIMEOUT_MS
+  );
+
+  /**
+   * A load and a finish for the same fight at once, `first` taking the yard's
+   * row lock first: the row is held while both check the raid and queue for
+   * the lock, then let go.
+   */
+  const race = async (first: "load" | "finish") => {
+    const { id, finishFrom } = await toFight();
+    await present(finishFrom);
+    const release = await acquire();
+    const queued = () => db.locks;
+    const before = queued();
+    const startLoad = () => yardLoad(finishFrom + 1);
+    const startFinish = () => finishRaid(em, user, id, finishFrom + 1);
+    const one = first === "load" ? startLoad() : startFinish();
+    await until(() => queued() === before + 1);
+    const two = first === "load" ? startFinish() : startLoad();
+    await until(() => queued() === before + 2);
+    // Both have seen the raid open and wait on the row: nothing has left Redis.
+    expect(await readOpenRaid(USER)).not.toBeNull();
+    release();
+    const [a, b] = await Promise.all([one, two]);
+    const [fromLoad, fromFinish] = first === "load" ? [a, b] : [b, a];
+    return { id, fromLoad: fromLoad as Awaited<ReturnType<typeof yardLoad>>, fromFinish: fromFinish as Awaited<ReturnType<typeof finishRaid>> };
   };
+
+  test(
+    "the load takes the yard's lock first: it lands the raid, the finish waits and answers the same; Shiny once",
+    async () => {
+      const { id, fromLoad, fromFinish } = await race("load");
+      expect(fromLoad).toMatchObject({ id, defended: true, shiny: 10 });
+      expect(fromFinish).toEqual(fromLoad!);
+      expect(db.row!.credits).toBe(110);
+      expect(readSchedule(db.row!.aiattacks).recent).toHaveLength(1);
+      expect(await readOpenRaid(USER)).toBeNull();
+    },
+    FIGHT_TIMEOUT_MS
+  );
+
+  test(
+    "the finish takes the yard's lock first (sol's order): it lands the raid, the load answers the same; Shiny once",
+    async () => {
+      const { id, fromLoad, fromFinish } = await race("finish");
+      expect(fromFinish).toMatchObject({ id, defended: true, shiny: 10 });
+      expect(fromLoad).toEqual(fromFinish);
+      expect(db.row!.credits).toBe(110);
+      expect(readSchedule(db.row!.aiattacks).recent).toHaveLength(1);
+      expect(await readOpenRaid(USER)).toBeNull();
+    },
+    FIGHT_TIMEOUT_MS
+  );
+
+  test(
+    "Redis refusing to keep the whole result does not lose the landing: it stands, and a late finish answers it",
+    async () => {
+      const { id, finishFrom } = await toFight();
+      await present(finishFrom);
+      const setex = redis.setex;
+      redis.setex = (async (key: string, ttl: number, value: string) => {
+        if (key.startsWith("wild-raid-landed:")) throw new Error("Redis said no");
+        return setex(key, ttl, value);
+      }) as typeof redis.setex;
+      try {
+        const landed = await yardLoad(finishFrom + 1);
+        expect(landed).toMatchObject({ id, shiny: 10 });
+      } finally {
+        redis.setex = setex;
+      }
+      expect(db.row!.credits).toBe(110);
+      expect(readSchedule(db.row!.aiattacks).recent.map((raid) => raid.id)).toEqual([id]);
+      expect(await readOpenRaid(USER)).toBeNull();
+      // The late finish: the record `recent` keeps, without the damaged list.
+      expect(await finishRaid(em, user, id, finishFrom + 4)).toMatchObject({ id, shiny: 10, defended: true });
+      expect(db.row!.credits).toBe(110);
+    },
+    FIGHT_TIMEOUT_MS
+  );
+
+  test(
+    "a landing the database fails on the load keeps the fight open: the finish after it lands it",
+    async () => {
+      const { id, finishFrom } = await toFight();
+      await present(finishFrom);
+      db.failFlushes = 1;
+      expect(await yardLoad(finishFrom + 1)).toBeNull();
+
+      // Not landed, and not cancelled by the load either: still there to land,
+      // and the yard still locked for it, so nothing changes it before the
+      // finish lands the fight on it (sol's third review).
+      expect(db.row!.credits).toBe(100);
+      expect(readSchedule(db.row!.aiattacks).recent).toEqual([]);
+      expect((await readOpenRaid(USER))?.id).toBe(id);
+      expect(fightLock()?.id).toBe(id);
+      expect(raidFighting(db.row!, finishFrom + 1)).toBe(true);
+
+      const result = await finishRaid(em, user, id, finishFrom + 3);
+      expect(result).toMatchObject({ id, shiny: 10 });
+      expect(db.row!.credits).toBe(110);
+      expect(await readOpenRaid(USER)).toBeNull();
+      expect(fightLock()).toBeUndefined();
+    },
+    FIGHT_TIMEOUT_MS
+  );
+
+  test(
+    "a fight the finish called off never lands, even when Redis kept it (its drop failed) and presence came back",
+    async () => {
+      const { id, finishFrom } = await toFight();
+      at(finishFrom);
+      await redis.del(lastSeenKey(USER));
+      const send = redis.send;
+      redis.send = (async (command: string, args: string[]) => {
+        if (command === "EVAL") throw new Error("Redis said no");
+        return send(command, args);
+      }) as typeof redis.send;
+      try {
+        expect(await refusal(finishRaid(em, user, id, finishFrom))).toEqual({ reason: "cancelled" });
+      } finally {
+        redis.send = send;
+      }
+      expect((await readOpenRaid(USER))?.id).toBe(id);
+      expect(readSchedule(db.row!.aiattacks)).toMatchObject({ lastCancelledId: id, recent: [] });
+      expect(fightLock()).toBeUndefined();
+
+      // The game comes back and asks again: still called off, nothing lands, and the raid goes.
+      await present(finishFrom + 5);
+      expect(await refusal(finishRaid(em, user, id, finishFrom + 5))).toEqual({ reason: "cancelled" });
+      expect(await yardLoad(finishFrom + 6)).toBeNull();
+      expect(db.row!.credits).toBe(100);
+      expect(readSchedule(db.row!.aiattacks).recent).toEqual([]);
+      expect(await readOpenRaid(USER)).toBeNull();
+    },
+    FIGHT_TIMEOUT_MS
+  );
+
+  test(
+    "a landing the database fails on the finish keeps the fight open: asking again lands it, once",
+    async () => {
+      const { id, finishFrom } = await toFight();
+      await present(finishFrom);
+      db.failFlushes = 1;
+      await expect(finishRaid(em, user, id, finishFrom)).rejects.toThrow("the database went away");
+      expect((await readOpenRaid(USER))?.id).toBe(id);
+      expect(db.row!.credits).toBe(100);
+
+      expect(await finishRaid(em, user, id, finishFrom + 2)).toMatchObject({ id, shiny: 10 });
+      expect(await finishRaid(em, user, id, finishFrom + 3)).toMatchObject({ id, shiny: 10 });
+      expect(db.row!.credits).toBe(110);
+      expect(readSchedule(db.row!.aiattacks).recent).toHaveLength(1);
+    },
+    FIGHT_TIMEOUT_MS
+  );
+
+  test(
+    "a reload before the finish could come still calls the fight off, as before (owner Q1)",
+    async () => {
+      const { id, finishFrom } = await toFight();
+      const before = structuredClone(db.row!);
+      await present(finishFrom - 1);
+      expect(await yardLoad(finishFrom - 1)).toBeNull();
+
+      expect(await readOpenRaid(USER)).toBeNull();
+      expect(await refusal(finishRaid(em, user, id, finishFrom))).toEqual({ reason: "noRaid" });
+      const schedule = readSchedule(db.row!.aiattacks);
+      expect(schedule.recent).toEqual([]);
+      expect(schedule.fight).toBeUndefined();
+      expect(schedule.nextAttack).toBe(NOW - 10);
+      expect(db.row!.credits).toBe(before.credits);
+    },
+    FIGHT_TIMEOUT_MS
+  );
+
+  test(
+    "a game closed during the fight is not landed by the next load: the fight is cancelled, nothing lands",
+    async () => {
+      const { id, finishFrom } = await toFight();
+      const before = structuredClone(db.row!);
+      expect(await yardLoad(finishFrom + 30, true)).toBeNull();
+
+      expect(await readOpenRaid(USER)).toBeNull();
+      expect(await refusal(finishRaid(em, user, id, finishFrom + 31))).toEqual({ reason: "noRaid" });
+      const schedule = readSchedule(db.row!.aiattacks);
+      expect(schedule.recent).toEqual([]);
+      expect(schedule.fight).toBeUndefined();
+      expect(db.row!.resources).toEqual(before.resources);
+      expect(db.row!.credits).toBe(before.credits);
+    },
+    FIGHT_TIMEOUT_MS
+  );
+
+  test(
+    "a finish that lands first: the load after it lands nothing more",
+    async () => {
+      const { id, finishFrom } = await toFight();
+      const result = await finishOnTime(id, finishFrom);
+      expect(await yardLoad(finishFrom + 2)).toBeNull();
+      expect(db.row!.credits).toBe(110);
+      expect(readSchedule(db.row!.aiattacks).recent.map((raid) => raid.id)).toEqual([id]);
+      expect(await finishRaid(em, user, id, finishFrom + 3)).toEqual(result);
+    },
+    FIGHT_TIMEOUT_MS
+  );
+});
+
+describe("two tabs: a request that read the raid, then came late (patch 7.6, sol's fifth review)", () => {
+  /** A raid opened after the first had gone: a Trojan Horse's fight, holding the yard. */
+  const replacement = (now: number) =>
+    ({
+      id: "r_replacement",
+      phase: "fighting",
+      tribe: "Trojan",
+      plan: { army: { C1: 4 } },
+      seed: 99,
+      attackAt: now,
+      warned: 0,
+      startedAt: now,
+      fightSeconds: 120,
+      outcome: { ticks: 1 },
+    }) as const;
+
+  test(
+    "a 'Prepare defences' that read the warning while another tab started the fight changes nothing: the finish lands it",
+    async () => {
+      const id = await toStart();
+      let started: Awaited<ReturnType<typeof startRaid>> | undefined;
+      staleRead(async () => (started = await startRaid(em, user, id, NOW)));
+
+      expect(await refusal(prepareRaid(USER, id, NOW))).toEqual({ reason: "noRaid" });
+
+      expect(await readOpenRaid(USER)).toMatchObject({ id, phase: "fighting", startedAt: NOW });
+      expect((await readOpenRaid(USER))?.outcome).toBeDefined();
+      const result = await finishOnTime(id, started!.raid.finishFrom!);
+      expect(result).toMatchObject({ id, defended: true, shiny: 10 });
+      expect(db.row!.credits).toBe(110);
+    },
+    FIGHT_TIMEOUT_MS
+  );
+
+  test(
+    "so does a late 'Engage now'",
+    async () => {
+      const id = await toStart();
+      staleRead(() => startRaid(em, user, id, NOW));
+
+      expect(await refusal(engageRaid(USER, id, NOW))).toEqual({ reason: "noRaid" });
+      expect(await readOpenRaid(USER)).toMatchObject({ id, phase: "fighting" });
+    },
+    FIGHT_TIMEOUT_MS
+  );
+
+  test(
+    "a late 'Prepare defences' for a raid fought and landed since leaves the raid opened after it alone",
+    async () => {
+      const id = await toStart();
+      let after = 0;
+      staleRead(async () => {
+        const started = await startRaid(em, user, id, NOW);
+        after = started.raid.finishFrom!;
+        await finishOnTime(id, after);
+        await openFightingRaid(USER, replacement(after), after);
+      });
+      expect(await refusal(prepareRaid(USER, id, NOW))).toEqual({ reason: "noRaid" });
+
+      expect(strings.get(raidKey(USER))).toBe(JSON.stringify(replacement(after)));
+      expect(readSchedule(db.row!.aiattacks).recent.map((raid) => raid.id)).toEqual([id]);
+    },
+    FIGHT_TIMEOUT_MS
+  );
+
+  test(
+    "a late start of a raid fought and landed since neither takes over the raid opened after it nor lifts its lock",
+    async () => {
+      const id = await toStart();
+      let after = 0;
+      staleRead(async () => {
+        const started = await startRaid(em, user, id, NOW);
+        after = started.raid.finishFrom!;
+        await finishOnTime(id, after);
+        // The Trojan Horse springs: its fight is open and holds the yard.
+        const horse = replacement(after);
+        await openFightingRaid(USER, horse, after);
+        const schedule = readSchedule(db.row!.aiattacks);
+        db.row!.aiattacks = { ...schedule, fight: { id: horse.id, until: after + 300 } };
+      });
+
+      const answer = await refusal(startRaid(em, user, id, NOW));
+
+      expect(answer).toEqual({ reason: "busy" });
+      expect(strings.get(raidKey(USER))).toBe(JSON.stringify(replacement(after)));
+      expect(readSchedule(db.row!.aiattacks).fight).toEqual({ id: "r_replacement", until: after + 300 });
+    },
+    FIGHT_TIMEOUT_MS
+  );
+});
+
+describe("the gap between raids (owner, 2026-10-19)", () => {
 
   test("opening a raid marks the save, before anything can cancel it", async () => {
     await present(NOW);

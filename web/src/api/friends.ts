@@ -131,8 +131,6 @@ export interface FriendsList {
   readonly requestsIn: number;
   /** Gifts waiting to be collected. */
   readonly giftsWaiting: number;
-  /** Helps the player has left today. */
-  readonly helpsLeft: number;
 }
 
 /**
@@ -291,7 +289,8 @@ export interface HelpResult {
   readonly healed?: boolean;
   /** What the helper earned. */
   readonly reward: ResourceAmounts;
-  readonly helpsLeft: number;
+  /** Helps today that still pay a reward, after this one (the first 5 a day pay; owner, 15 Nov 2026). */
+  readonly rewardsLeft: number;
   /** The friend's building after the help, as the server wrote it. */
   readonly building: Record<string, unknown> | null;
 }
@@ -310,7 +309,8 @@ export interface GateHold {
 
 /** A help-mode load's own block (§6.2): what the player can help with in the yard. */
 export interface HelpBlock {
-  readonly helpsLeft: number;
+  /** Helps today that still pay a reward; 0 once today's are used up. Absent: not known. */
+  readonly rewardsLeft?: number;
   readonly buildings: Readonly<Record<string, HelpOffer>>;
   /** When every offer is `tooNew`: which gate holds and when it lifts. */
   readonly gate?: GateHold & { readonly reason?: string };
@@ -356,6 +356,7 @@ export type FriendRefusalReason =
   | "helpersFull"
   | "alreadyHelped"
   | "nothingToHelp"
+  | "repairedToday"
   | "underAttack"
   | "noSuchPlayer"
   | "noSuchRequest"
@@ -363,9 +364,13 @@ export type FriendRefusalReason =
   | "pinLimit"
   | "self";
 
-/** A refused call, in words: its reason (or `network`/`unknown`) and what to tell the player. */
+/**
+ * A refused call, in words: its reason (or `network`/`unknown`) and what to
+ * tell the player. `rateLimited` is the spam limit (429): it lifts by itself,
+ * so nothing should stay refused because of it.
+ */
 export interface FriendRefusal {
-  readonly reason: FriendRefusalReason | "network" | "unknown";
+  readonly reason: FriendRefusalReason | "rateLimited" | "network" | "unknown";
   readonly message: string;
   /** For `declinedRecently` and `tooNew`: when it becomes possible, unix seconds, when the server knows. */
   readonly from?: number;
@@ -422,6 +427,7 @@ export const REFUSAL_TEXT: Readonly<Record<FriendRefusalReason, string>> = {
   helpersFull: "Enough friends have already helped with this.",
   alreadyHelped: "You have already helped with this.",
   nothingToHelp: "There is nothing to help with here.",
+  repairedToday: "You already repaired a building here today.",
   underAttack: "They are under attack right now.",
   noSuchPlayer: "There is no player with that name.",
   noSuchRequest: "That request is no longer waiting for an answer.",
@@ -430,8 +436,10 @@ export const REFUSAL_TEXT: Readonly<Record<FriendRefusalReason, string>> = {
   self: "That's you!",
 };
 
-/** What a refusal with a reason the client does not know says. */
+/** What a refusal with no words of its own says. */
 export const GENERAL_REFUSAL = "That didn't work. Try again in a moment.";
+/** A friends spam limit (429 `rateLimited`, bug report #50) that sent no words of its own. */
+export const RATE_LIMITED_REFUSAL = "You have done that a lot this hour. Try again later.";
 /** What a call that never reached the server says. */
 export const NETWORK_REFUSAL = "Could not reach the server. Try again.";
 
@@ -455,8 +463,11 @@ export const toSeconds = (value: unknown): number | null => {
 
 /**
  * Why a friends call was refused, in plain words. The `reason` is read from
- * the error's details (`ClientSafeError`'s `data`) or the body itself; one the
- * client does not know falls back to a general line.
+ * the error's details (`ClientSafeError`'s `data`) or the body itself. A
+ * spam limit is `rateLimited`, with the limiter's own sentence. A reason the client does
+ * not know (a yard refusal such as `raidInProgress`) says the server's own
+ * sentence (bug report #50: it used to say only the general line); with no
+ * reason at all (a crash) it is the general line.
  */
 export const friendRefusal = (caught: unknown): FriendRefusal => {
   if (caught instanceof NetworkError) return { reason: "network", message: NETWORK_REFUSAL };
@@ -479,6 +490,12 @@ export const friendRefusal = (caught: unknown): FriendRefusal => {
             : REFUSAL_TEXT[reason];
       return { reason, message, ...(from !== null && { from }), ...(rule && { rule }) };
     }
+    const said = [caught.details?.message, body["message"], body["error"]].find(
+      (value): value is string => typeof value === "string" && value.trim() !== "",
+    );
+    // Each limiter says its own sentence ("Too many searches. Please slow down."); the help panel words its own.
+    if (reason === "rateLimited") return { reason, message: said ?? RATE_LIMITED_REFUSAL };
+    if (typeof reason === "string" && reason !== "" && said) return { reason: "unknown", message: said };
   }
   return { reason: "unknown", message: GENERAL_REFUSAL };
 };
@@ -697,7 +714,6 @@ export const friendsApi: FriendsApi = {
       maxPinned: count(answer["maxPinned"]) || PIN_MAX,
       requestsIn: count(answer["requestsIn"]),
       giftsWaiting: count(answer["giftsWaiting"]),
-      helpsLeft: count(answer["helpsLeft"]),
     };
   },
   async requests() {
@@ -786,7 +802,7 @@ export const friendsApi: FriendsApi = {
       ...(Number.isFinite(seconds) && seconds > 0 && { secondsSaved: Math.floor(seconds) }),
       ...(answer["healed"] === true && { healed: true }),
       reward: amounts(answer["reward"]),
-      helpsLeft: count(answer["helpsLeft"]),
+      rewardsLeft: count(answer["rewardsLeft"]),
       building: typeof answer["building"] === "object" && answer["building"] !== null ? record(answer["building"]) : null,
     };
   },

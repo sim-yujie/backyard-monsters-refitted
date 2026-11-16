@@ -20,10 +20,10 @@ const chatCss = read("../styles/chat.css");
 const eventsCss = read("../events/events.css");
 const hudCss = read("../styles/yard-hud.css");
 
-/** The text of the `@media (width <= 620px)` block(s) in `css`. */
+/** The text of the `@media (max-width: 620px)` block(s) in `css`. */
 const phone = (css: string): string => {
   const out: string[] = [];
-  const head = /@media \(width <= 620px\)\s*\{/g;
+  const head = /@media \(max-width: 620px\)\s*\{/g;
   for (let match = head.exec(css); match; match = head.exec(css)) {
     let depth = 1;
     let at = head.lastIndex;

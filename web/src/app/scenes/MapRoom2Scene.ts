@@ -1442,12 +1442,21 @@ export class MapRoom2Scene implements Scene {
       baseid,
       cell,
       modal,
+      // The army bar while the server fights it (owner, 15 Nov 2026), as on the end panel's Attack again.
+      progressBar: true,
       onWatch: (run) => {
         setWatchRun(run);
         context.goTo(SceneName.WATCH);
       },
-      onAttacked: () => {
+      onAttacked: (result) => {
         this.store.invalidateCell(cell.col, cell.row);
+        // Smart Repeat attack: the yards monsters moved between hold other armies now.
+        for (const move of result.moved ?? []) {
+          for (const baseid of [move.from, move.to]) {
+            const yard = result.yards?.[baseid];
+            if (yard) this.store.invalidateCell(yard.x, yard.y);
+          }
+        }
         this.store.refreshVisible();
         void this.refreshOwnSave();
         this.ui?.refreshAutoAttack();

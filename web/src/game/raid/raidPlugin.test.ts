@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { ApiError } from "@/api/http";
 import type { RaidResult } from "@/api/raid";
 import type { AttackMounts } from "@/game/attack/attackPlugins";
@@ -9,8 +9,18 @@ import { TROJAN_HORSE_TYPE } from "@/game/trojan/trojanHorse";
 import { TRAP_BANNER, TRAP_BANNER_MS } from "@/game/trojan/trojanText";
 import { MOLOCH_RAID_GONE } from "@/game/inferno/emergenceText";
 import { SheetQueue } from "@/game/attack/sheetQueue";
-import { DOOR_OPEN_MS, RAID_PLUGINS, createRaidPlugin, finishNotice, raidPlugin } from "./raidPlugin";
-import { consumeRaidNote, consumeRaidResult, type RaidRun } from "./raidSession";
+import { Notices } from "@/ui/maproom/Notices";
+import {
+  DOOR_OPEN_MS,
+  LEAVE_LABEL,
+  LEAVE_OFFER_MS,
+  LEAVE_TEXT,
+  RAID_PLUGINS,
+  createRaidPlugin,
+  finishNotice,
+  raidPlugin,
+} from "./raidPlugin";
+import { consumeRaidNote, consumeRaidResult, resetRaidSession, type RaidRun } from "./raidSession";
 import { DONT_PANIC } from "./raidText";
 
 /**
@@ -81,15 +91,18 @@ const mount = (
     yardToWorld: vi.fn(),
   },
   holdSheets?: () => () => void,
+  clearRaidImpl: () => void = () => {},
 ) => {
   const session = fakeSession();
   const hudSlot = document.createElement("span");
   const goToYard = vi.fn();
-  const clearRaid = vi.fn();
+  const clearRaid = vi.fn(clearRaidImpl);
+  const notices = new Notices();
   const mounts = {
     session,
     hudSlot,
     goToYard,
+    notices,
     renderer,
     ...(withRun ? { raid: theRun } : {}),
   } as unknown as AttackMounts;
@@ -101,7 +114,7 @@ const mount = (
     ...(holdSheets ? { holdSheets } : {}),
   });
   const teardown = plugin(mounts);
-  return { session, hudSlot, goToYard, clearRaid, renderer, teardown };
+  return { session, hudSlot, goToYard, clearRaid, notices, renderer, teardown };
 };
 
 const settle = () => new Promise((resolve) => setTimeout(resolve, 0));
@@ -129,6 +142,8 @@ const trojanRunWithHorse = (): RaidRun =>
     save: {},
     trojan: true,
   }) as unknown as RaidRun;
+
+afterEach(() => resetRaidSession());
 
 describe("raidPlugin", () => {
   it("mounts with the battle layer alone", () => {
@@ -248,6 +263,65 @@ describe("raidPlugin", () => {
     expect(consumeRaidResult()).toBeNull();
     expect(consumeRaidNote()).toContain("called off");
     expect(t.goToYard).toHaveBeenCalledTimes(1);
+  });
+
+  it("offers the way back once the finish is slow, and only after the fight is over (reports 44, 45)", async () => {
+    vi.useFakeTimers();
+    try {
+      const t = mount(() => new Promise(() => {}));
+      const leaveButton = () =>
+        [...t.notices.element.querySelectorAll("button")].find((one) => one.textContent === LEAVE_LABEL);
+      // While the raid plays there is no way out.
+      await vi.advanceTimersByTimeAsync(LEAVE_OFFER_MS * 2);
+      expect(leaveButton()).toBeUndefined();
+
+      t.session.end();
+      await vi.advanceTimersByTimeAsync(LEAVE_OFFER_MS - 1);
+      expect(leaveButton()).toBeUndefined();
+      await vi.advanceTimersByTimeAsync(1);
+      expect(leaveButton()).toBeDefined();
+      // One short line and the button, nothing about servers (owner, 15 Nov).
+      expect(t.notices.element.querySelector(".notice__text")?.textContent).toBe("Raid over");
+      expect(LEAVE_LABEL).toBe("Back to yard");
+      expect(LEAVE_TEXT.split(" ").length).toBeLessThanOrEqual(2);
+
+      // Dismissed, it comes back while the screen still waits.
+      t.notices.clear("raid-leave");
+      await vi.advanceTimersByTimeAsync(LEAVE_OFFER_MS);
+      leaveButton()!.click();
+      expect(t.goToYard).toHaveBeenCalledTimes(1);
+      expect(leaveButton()).toBeUndefined();
+      t.teardown?.();
+      await vi.advanceTimersByTimeAsync(LEAVE_OFFER_MS * 2);
+      expect(leaveButton()).toBeUndefined();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("still opens the yard when landing the result throws", async () => {
+    const t = mount(
+      async () => ({ error: 0, result: RESULT }),
+      true,
+      run(),
+      undefined,
+      undefined,
+      () => {
+        throw new Error("a raid listener broke");
+      },
+    );
+    const rejected = new Promise<unknown>((resolve) => {
+      const onRejection = (reason: unknown) => {
+        process.off("unhandledRejection", onRejection);
+        resolve(reason);
+      };
+      process.on("unhandledRejection", onRejection);
+    });
+    t.session.end();
+    await settle();
+    expect(t.goToYard).toHaveBeenCalledTimes(1);
+    expect(await rejected).toMatchObject({ message: "a raid listener broke" });
+    consumeRaidResult();
   });
 
   it("says Moloch's raid called off is gone, not coming back", () => {

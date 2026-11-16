@@ -127,6 +127,38 @@ export const memoryRedis = (strings: Map<string, string> = new Map(), { ages = t
       return [...(sets.get(key) ?? [])];
     },
     send: async (command: string, args: string[]): Promise<unknown> => {
+      // `raidStore.ts`'s compare-and-set script: write only over raid `id` in phase `phase`.
+      if (command.toUpperCase() === "EVAL" && args[0]?.startsWith("-- bymr:update-if-raid")) {
+        const [, , evalKey = "", raidId, phase, value = "", ttl = "0"] = args;
+        age(evalKey);
+        const raw = strings.get(evalKey);
+        if (raw === undefined) return 0;
+        let stored: { id?: unknown; phase?: unknown } | null;
+        try {
+          stored = JSON.parse(raw) as { id?: unknown; phase?: unknown } | null;
+        } catch {
+          return 0;
+        }
+        if (stored?.id !== raidId || stored?.phase !== phase) return 0;
+        setString(evalKey, value, Number(ttl));
+        return 1;
+      }
+      // `raidStore.ts`'s compare-and-delete script.
+      if (command.toUpperCase() === "EVAL" && args[0]?.startsWith("-- bymr:drop-if-raid")) {
+        const [, , evalKey = "", raidId] = args;
+        age(evalKey);
+        const raw = strings.get(evalKey);
+        if (raw === undefined) return 0;
+        let id: unknown;
+        try {
+          id = (JSON.parse(raw) as { id?: unknown } | null)?.id;
+        } catch {
+          return 0;
+        }
+        if (id !== raidId) return 0;
+        drop(evalKey);
+        return 1;
+      }
       const [key = "", field = "", by = "0"] = args;
       age(key);
       switch (command.toUpperCase()) {

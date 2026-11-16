@@ -27,7 +27,6 @@ export interface FriendsSnapshot {
   readonly maxPinned: number;
   readonly requestsIn: number;
   readonly giftsWaiting: number;
-  readonly helpsLeft: number;
   /** False until the first refresh lands. */
   readonly loaded: boolean;
 }
@@ -41,7 +40,7 @@ export interface FriendsStoreOptions {
   readonly clearInterval?: (handle: unknown) => void;
 }
 
-const EMPTY: FriendsSnapshot = { friends: [], max: FRIEND_MAX, maxPinned: PIN_MAX, requestsIn: 0, giftsWaiting: 0, helpsLeft: 0, loaded: false };
+const EMPTY: FriendsSnapshot = { friends: [], max: FRIEND_MAX, maxPinned: PIN_MAX, requestsIn: 0, giftsWaiting: 0, loaded: false };
 
 export class FriendsStore {
   private readonly api: FriendsApi;

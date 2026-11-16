@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { RaidResult } from "@/api/raid";
-import { setRaidNote, setRaidResult } from "@/game/raid/raidSession";
+import { resetRaidSession, setRaidNote, setRaidResult } from "@/game/raid/raidSession";
 import { raidWatch } from "@/game/raid/raidWatch";
 import type { YardMounts } from "../yardPlugins";
 import { raidYardPlugin } from "./raid";
@@ -37,6 +37,7 @@ const mounts = (kind: "main" | "outpost") => {
 };
 
 afterEach(() => {
+  resetRaidSession();
   raidWatch.set(null);
   document.body.replaceChildren();
 });

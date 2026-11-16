@@ -1161,24 +1161,33 @@ export type AutoAttackRefusal =
   | "notACamp"
   | "noPlan"
   | "missing"
+  | "outOfRange"
   | "inFlight"
   | "busy"
-  | "failed";
+  | "failed"
+  | "noRoom"
+  | "movesChanged";
 
 const AUTO_ATTACK_REFUSAL_MESSAGES: Record<AutoAttackRefusal, string> = {
   notMapRoom2: "Auto-attack is for Map Room 2 only.",
   notACamp: "Only a wild monster camp on Map Room 2 can be auto-attacked.",
   noPlan: "Attack a camp of this tribe and level by hand first, then repeat that attack.",
   missing: "You do not have everything that attack used.",
+  outOfRange: "This camp is out of your Flingers' range.",
   inFlight: "Your last auto-attack is still being worked out.",
   busy: "The server is busy working out other attacks. Try again in a moment.",
   failed: "The auto-attack could not be worked out. Nothing was spent.",
+  noRoom: "Not enough Monster Housing in range.",
+  movesChanged: "Your yards changed since you looked. Check the moves again.",
 };
 
 /**
  * An auto-attack refused (issue #221). `missing` carries what the attack the
  * player would repeat used and they lack now (`PlanShortfall`), so the client
- * can list it. `busy` is a 503: the server's replay workers are full.
+ * can list it. Smart Repeat attack (16 Nov 2026) adds `noRoom` (the monsters
+ * could be gathered but the yards in range cannot house them; carries
+ * `noRoom` and `yards`) and `movesChanged` (the moves needed are not the ones
+ * the player agreed to; the client asks for the plan again). `busy` is a 503: the server's replay workers are full.
  *
  * @param {AutoAttackRefusal} reason - Which rule refused it.
  * @param {object} [details] - Anything the refusal carries, such as `missing`.
@@ -1269,6 +1278,7 @@ export type FriendRefusal =
   | "helpersFull"
   | "alreadyHelped"
   | "nothingToHelp"
+  | "repairedToday"
   | "underAttack"
   | "noSuchPlayer"
   | "noSuchRequest"
@@ -1294,6 +1304,7 @@ const FRIEND_REFUSAL_MESSAGES: Record<FriendRefusal, string> = {
   helpersFull: "Enough friends have already helped with this.",
   alreadyHelped: "You have already helped with this.",
   nothingToHelp: "There is nothing to help with here.",
+  repairedToday: "You already repaired a building in this yard today.",
   underAttack: "They are under attack right now.",
   noSuchPlayer: "There is no player with that name.",
   noSuchRequest: "That request is no longer waiting for an answer.",

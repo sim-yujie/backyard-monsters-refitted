@@ -23,7 +23,7 @@ import { markShownOnThisPage } from "@/game/announcements/announcementQueue";
 import { openLeaderboard } from "./leaderboard/LeaderboardDialog";
 import { openBugReport } from "./bugReport/BugReportDialog";
 import { AMOUNT_CHANGE_SIGNS } from "./amountChange";
-import { formatAmount, formatCompact } from "./format";
+import { formatAmount, formatBarAmount, formatCompact, formatShort } from "./format";
 import { gameIcon } from "./gameIcon";
 import { coinBalance, onCoinBalance } from "@/game/eventCoins";
 import { coinAmount, coinWords } from "./events/coinUi";
@@ -36,10 +36,11 @@ import { ShinyButton } from "./yard/ShinyButton";
  * The persistent top bar: resource readouts on the left, a scene switcher on
  * the right.
  *
- * Each readout is the resource's icon (issue #93) and the amount in full,
- * "11,158,040,000" (issue #134). When the bar is too narrow for every readout
- * in full — a phone — it drops the brand, then falls back to short amounts
- * ("11.16B") rather than wrap or scroll; see {@link HudFit}. A short amount
+ * Each readout is the resource's icon (issue #93) and the amount, in full up
+ * to 99,999 and short past it, "475.9K" or "11.1B" (`formatBarAmount`; owner,
+ * 15 Nov 2026: the full "10,874,100" was long and cluttered). When the bar is
+ * too narrow for every readout — a phone — it drops the brand, then the caps,
+ * rather than wrap or scroll; see {@link HudFit}. A short amount
  * hides small changes on a big pool, so every readout also carries the exact
  * figure (issue #92): as its tooltip and accessible name for a mouse or a
  * screen reader, and in a small bubble on a tap for a finger, which has no
@@ -92,7 +93,11 @@ export const HudFit = {
   NO_BRAND: "no-brand",
   /** Caps leave the text for the tooltip and the bubble; the fill bars stay. */
   NO_CAPS: "no-caps",
-  /** Short amounts ("15.0M"): the phone fallback. The tap bubble stays exact. */
+  /**
+   * The narrow bar's last level, the phone's corner always: the per-hour
+   * rates and amounts as at every level (`formatBarAmount`), the caps and the
+   * full silo's "15M/15M" gone. The tap bubble stays exact.
+   */
   COMPACT: "compact",
 } as const;
 export type HudFit = (typeof HudFit)[keyof typeof HudFit];
@@ -109,16 +114,16 @@ export const INFERNO_FULL_NOTE = "Full: new income is lost. Build or upgrade Res
  * "15M/15M": a full silo's readout on the yard (the text cut, 28 Oct). Both
  * figures are the cap, so the digits say nothing the fill bar does not; the
  * exact amounts stay in the tooltip and the tap bubble. A whole ".0" is
- * dropped ("15M", not "15.0M") to keep it short on a phone.
+ * dropped ("15M", not "15.0M") to keep it short, and like every bar amount it
+ * rounds down ("23M", not "23.1M", for 23,050,000).
  */
-export const fullText = (amount: number, cap: number): string => {
-  const short = (value: number): string => formatCompact(value).replace(/\.0+(?=[KMB]$)/, "");
-  return `${short(amount)}/${short(cap)}`;
-};
+export const fullText = (amount: number, cap: number): string => `${formatShort(amount)}/${formatShort(cap)}`;
 
-/** "+12,400/h", or "+12.4K/h" short: a resource's income an hour (#280). */
-export const formatRate = (perHour: number, compact = false): string =>
-  `+${compact ? formatCompact(perHour) : formatAmount(perHour)}/h`;
+/**
+ * "+12,400/h" or "+475.9K/h": a resource's income an hour (#280), spelled as
+ * the amount above it is (`formatBarAmount`).
+ */
+export const formatRate = (perHour: number): string => `+${formatBarAmount(perHour)}/h`;
 
 /** The worker art: the orange builder with the hammer and the hard hat. */
 const WORKER_ICON_URL = "/assets/archived/worker.v1.png";
@@ -177,10 +182,15 @@ export interface HudOptions {
    * to the friend. Without it the list has no Message button.
    */
   onMessageFriend?: (friend: Friend) => void;
+  /**
+   * false: no Glimmers readout. The map leaves it off (owner, 15 Nov 2026):
+   * Glimmers buy decorations, which only the yard has. Shown by default.
+   */
+  coins?: boolean;
 }
 
 /** At or under this width the corner layout is the phone's (`yard-hud.css`). */
-const PHONE_QUERY = "(width <= 620px)";
+const PHONE_QUERY = "(max-width: 620px)";
 
 /**
  * A tapped resource's three Shiny offers in its bubble (Flash's "+" beside
@@ -313,6 +323,8 @@ export class Hud {
   /** The Friends screen behind the Account menu's item (#370); null without the menu. */
   private friendsDoor: FriendsDoor | null = null;
   private fitted: HudFit = HudFit.FULL;
+  /** The constructor has made every element {@link fit} touches; until then a refit waits for `mount`. */
+  private built = false;
   /** The animation frame counting a readout up, or 0. */
   private frame = 0;
   /** Shiny Lock is on: the Shiny counter shows a padlock, not the 0 the server sends (`game/shinyLock.ts`). */
@@ -322,6 +334,8 @@ export class Hud {
   private unwatchPhoto: () => void = () => undefined;
   /** The event coin readout after Shiny, hidden until a balance is known. */
   private readonly coins: { readonly item: HTMLElement; readonly button: HTMLButtonElement };
+  /** The Glimmers readout is wanted here (`HudOptions.coins`); the map leaves it off. */
+  private readonly showCoins: boolean;
   private readonly unwatchCoins: () => void;
 
   constructor(options: HudOptions) {
@@ -414,16 +428,13 @@ export class Hud {
       this.readouts.set(key, readout);
       this.label(readout);
     }
+    this.showCoins = options.coins !== false;
     this.coins = this.coinReadout();
     resources.append(this.coins.item);
     // A change of balance floats "+N" / "-N" as the resources do; the first
     // balance (or the first after a sign-out) is the purse arriving and floats nothing.
     this.unwatchCoins = onCoinBalance((balance, before) => this.renderCoins(before === null ? 0 : balance - before));
     this.renderCoins();
-    this.unwatchLock = onShinyLock((on) => this.applyShinyLock(on));
-    const shinyReadout = this.readouts.get("shiny");
-    if (shinyReadout) this.render(shinyReadout);
-    loadShinyLock();
 
     // Workers: only on the player's own yard, so hidden until a binding comes.
     // Beside the readout list rather than in it, so on a phone, where the list
@@ -535,6 +546,16 @@ export class Hud {
       // An uploaded profile photo shows on the badge in place of the critter.
       if (session) this.unwatchPhoto = watchOwnPhoto(session.userId, (url) => this.accountMenu?.setPhoto(url));
     }
+
+    // Last, once every element exists: `loadShinyLock` can turn a lock left
+    // from the previous sign-in off at once, which refits the bar from inside
+    // this constructor. Earlier, that refit met no Workers control yet and threw
+    // on phones (bug report 46, "My game keeps on crashing").
+    this.built = true;
+    this.unwatchLock = onShinyLock((on) => this.applyShinyLock(on));
+    const shinyReadout = this.readouts.get("shiny");
+    if (shinyReadout) this.render(shinyReadout);
+    loadShinyLock();
   }
 
   /**
@@ -601,6 +622,58 @@ export class Hud {
     if (readout && delta !== 0) this.float(readout.key, readout.value, delta);
   }
 
+  /**
+   * Floats `delta` in a lane just under the readout's cell, centred on it,
+   * fading where it appears rather than rising through the digits (astra's
+   * review of Help all, 15 Nov 2026: on a phone the usual float sat on the
+   * numbers). Replaces the readout's float, if one is up.
+   */
+  floatBelow(key: ResourceKey, delta: number): void {
+    const readout = this.readouts.get(key);
+    if (!readout || delta === 0 || this.readoutsHidden) return;
+    this.dropFloat(key);
+    const float = document.createElement("span");
+    float.className = `hud__delta hud__delta--lane hud__delta--${delta < 0 ? "down" : "up"}`;
+    float.dataset["resource"] = key;
+    float.setAttribute("aria-hidden", "true");
+    float.textContent = formatDelta(delta);
+    const box = readout.button.getBoundingClientRect();
+    float.style.left = `${Math.round(box.left + box.width / 2)}px`;
+    float.style.top = `${Math.round(box.bottom + 3)}px`;
+    document.body.append(float);
+    this.floats.add(float);
+    const remove = (): void => {
+      float.remove();
+      this.floats.delete(float);
+    };
+    float.addEventListener("animationend", remove, { once: true });
+    window.setTimeout(remove, FLOAT_LIFETIME_MS);
+  }
+
+  /**
+   * A friend's yard has no readouts (`friends/visitReward.ts`): they stay in
+   * the bar, hidden by `hud--no-readouts`, so amounts keep adding up for the
+   * way home; nothing floats from a readout nobody sees.
+   */
+  setReadoutsHidden(on: boolean): void {
+    this.element.classList.toggle("hud--no-readouts", on);
+  }
+
+  private get readoutsHidden(): boolean {
+    return this.element.classList.contains("hud--no-readouts");
+  }
+
+  /** A readout's cell lights up for a moment: something just landed in it. */
+  pulse(key: ResourceKey): void {
+    const button = this.readouts.get(key)?.button;
+    if (!button) return;
+    button.classList.remove("hud__resource-button--pulse");
+    // Restart the animation when two land close together.
+    void button.offsetWidth;
+    button.classList.add("hud__resource-button--pulse");
+    window.setTimeout(() => button.classList.remove("hud__resource-button--pulse"), 400);
+  }
+
   /** Shows every readout's whole amount at once: nothing is flying any more. */
   releaseHeld(): void {
     for (const readout of this.readouts.values()) {
@@ -643,9 +716,15 @@ export class Hud {
    * and takes the fullest.
    */
   fit(): void {
+    if (!this.built) return;
     // The corner on a phone lays the readouts in a grid of four, which never
     // overflows and so cannot be measured: short amounts, as the mock-up has.
-    if (this.corner && window.matchMedia?.(PHONE_QUERY).matches) {
+    // So does the map's bar on a phone, a square of four (maproom.css): a list
+    // laid out by the bar's grid (`display: contents`) has no width of its own.
+    if (
+      (this.corner && window.matchMedia?.(PHONE_QUERY).matches) ||
+      (this.element.isConnected && getComputedStyle(this.list).display === "contents")
+    ) {
       this.applyFit(HudFit.COMPACT);
       return;
     }
@@ -762,25 +841,24 @@ export class Hud {
     // The corner draws the cap as the fill bar alone, the figure kept for the
     // tooltip and the tap bubble, until the silo is full: then "15M/15M". A
     // phone's quarter-width cell has no room for "23.1M/23.1M", so there the
-    // short amount and the full mark say it.
+    // short amount and the full mark say it. Amounts and rates are short past
+    // 99,999 at every level (`formatBarAmount`).
     readout.value.textContent =
-      this.fitted === HudFit.COMPACT
-        ? formatCompact(shown)
-        : this.corner && full && readout.cap !== undefined
-          ? fullText(shown, readout.cap)
-          : formatAmount(shown);
+      this.fitted !== HudFit.COMPACT && this.corner && full && readout.cap !== undefined
+        ? fullText(shown, readout.cap)
+        : formatBarAmount(shown);
     const showCap =
       !this.corner &&
       readout.cap !== undefined &&
       (this.fitted === HudFit.FULL || this.fitted === HudFit.NO_BRAND);
-    readout.capText.textContent = showCap ? ` / ${formatAmount(readout.cap)}` : "";
+    readout.capText.textContent = showCap ? ` / ${formatBarAmount(readout.cap)}` : "";
     readout.bar.hidden = state === null;
     readout.fill.style.width = state === null ? "" : `${+(state.fraction * 100).toFixed(2)}%`;
     readout.button.classList.toggle("hud__resource-button--full", full);
     readout.fullMark.hidden = !full;
     readout.rate.hidden = readout.perHour === undefined;
     if (readout.perHour !== undefined) {
-      readout.rate.textContent = formatRate(readout.perHour, this.fitted === HudFit.COMPACT);
+      readout.rate.textContent = formatRate(readout.perHour);
       // Still made, but lost while the silo is full: dimmed, the pile marked full.
       readout.rate.classList.toggle("hud__rate--full", full);
     }
@@ -957,7 +1035,7 @@ export class Hud {
     const balance = coinBalance();
     const { item, button } = this.coins;
     const wasHidden = item.hidden;
-    item.hidden = balance === null;
+    item.hidden = balance === null || !this.showCoins;
     if (balance !== null) {
       const amount = coinAmount(balance, { size: 24, decorative: true });
       amount.querySelector(".icon-amount__value")?.classList.add("hud__resource-value");
@@ -987,6 +1065,7 @@ export class Hud {
    * fade under `prefers-reduced-motion`.
    */
   private float(key: string, value: Element, delta: number): void {
+    if (this.readoutsHidden) return;
     this.dropFloat(key);
     const float = document.createElement("span");
     float.className = `hud__delta hud__delta--${delta < 0 ? "down" : "up"}`;
@@ -1182,7 +1261,12 @@ export class Hud {
     const size = bubble.getBoundingClientRect();
     const maxLeft = Math.max(OFFSET_PX, window.innerWidth - size.width - OFFSET_PX);
     const left = Math.min(Math.max(OFFSET_PX, box.left + box.width / 2 - size.width / 2), maxLeft);
-    bubble.style.top = `${Math.round(box.bottom + OFFSET_PX)}px`;
+    // The map's bar on a phone lays its readouts in two rows (maproom.css,
+    // the list `display: contents`): a top row's bubble hangs under the whole
+    // bar rather than over the row below.
+    const twoRows = !this.corner && getComputedStyle(this.list).display === "contents";
+    const bar = twoRows ? this.element.getBoundingClientRect().bottom : 0;
+    bubble.style.top = `${Math.round(Math.max(box.bottom, bar) + OFFSET_PX)}px`;
     bubble.style.left = `${Math.round(left)}px`;
   }
 

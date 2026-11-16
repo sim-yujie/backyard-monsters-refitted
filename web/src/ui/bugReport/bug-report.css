@@ -5,6 +5,7 @@
 
 .bug-report-popup {
   width: min(520px, calc(100vw - 2 * var(--space-4)));
+  max-height: calc(100vh - 2 * var(--space-4));
   max-height: calc(100dvh - 2 * var(--space-4));
 }
 

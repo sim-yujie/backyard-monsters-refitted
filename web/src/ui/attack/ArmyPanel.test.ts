@@ -606,8 +606,17 @@ describe("ArmyPanel champion", () => {
       expect(panel.element.querySelector(".attack-army__champion[data-t='4'] .attack-army__aura")).toBeNull();
     });
 
-    it("none without the claim, once it has run out, or below level 3", () => {
-      for (const krallen of [{ l: 5 }, { l: 5, la: NOW }, { l: 2, la: NOW + 86_400 }]) {
+    it("at levels 1 and 2 too (levels 1-2 added 15 Nov 2026)", () => {
+      expect(krallenRow(mount(withKrallen({ l: 1, la: NOW + 86_400 })).panel).querySelector(".attack-army__aura")?.textContent).toBe(
+        "up to x1.4",
+      );
+      expect(krallenRow(mount(withKrallen({ l: 2, la: NOW + 86_400 })).panel).querySelector(".attack-army__aura")?.textContent).toBe(
+        "up to x1.7",
+      );
+    });
+
+    it("none without the claim, or once it has run out", () => {
+      for (const krallen of [{ l: 5 }, { l: 5, la: NOW }, { l: 1 }]) {
         const { panel } = mount(withKrallen(krallen));
         expect(krallenRow(panel).querySelector(".attack-army__aura")).toBeNull();
         expect(krallenRow(panel).querySelector(".attack-army__icon--aura")).toBeNull();

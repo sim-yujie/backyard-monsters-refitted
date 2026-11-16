@@ -457,7 +457,13 @@ A raid is **cancelled** when any of these happens first:
 2. **Presence lost:** at finish, the last presence mark is older than 120 s (the ping's TTL,
    `controllers/maproom/presence.ts`), meaning the game was closed or offline during the fight.
 3. **Reload or new session:** an own-yard build load while a raid is open (warning or fight)
-   cancels it. A reload is closing the game.
+   cancels it. A reload is closing the game. **Except (patch 7.5):** a fight the finish could
+   already land (from its earliest finish, below), with the game still open (presence mark not
+   lapsed), is landed by the load instead, before the load reads the yard, and the load answers
+   it as `raidresult`; a finish arriving afterwards answers the same result. This is the player
+   pressing "Back to yard" while the finish is still on its way. The outcome is the server's own
+   from the start, so landing it on the load gives nothing a finish would not, and it is no
+   sooner than a finish is taken.
 4. **Warning never answered and never launched:** the warning key lives `attackAt` plus 15 minutes;
    after that it is gone.
 
@@ -544,8 +550,10 @@ becomes server-owned:
   outcome, fightSeconds }`. TTL: warning `attackAt - now + 15 min`; fight `fightSeconds + 2 min`.
   Losing Redis loses only open raids, which is a cancel (D5).
 - `raid-screen:<userid>` → the last ping's `{ where, planner }`, TTL 120 s.
-- Finish reads and deletes the raid key atomically (`GETDEL`), then applies under the row lock;
-  `lastRaidId` refuses a second apply.
+- Finish (and, since patch 7.5, the yard load) takes the main row lock first, then reads the raid
+  key under it and applies; `lastRaidId` refuses a second apply, so a finish and a load land it
+  once in either order. The key is deleted only after the row is written, so a failed apply
+  leaves the raid open for the next try. (Before 7.5 the finish deleted it first with `GETDEL`.)
 
 No new table and no schema migration.
 

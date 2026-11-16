@@ -17,7 +17,7 @@ import "@/ui/styles/yard-menu.css";
  */
 
 /** The phone layout: upright by width, sideways by height (beta.3's rule). */
-export const MENU_QUERY = "(width <= 620px), (height <= 500px)";
+export const MENU_QUERY = "(max-width: 620px), (max-height: 500px)";
 
 /** A badge's highest count before it shows "n+". */
 const BADGE_MAX = 99;

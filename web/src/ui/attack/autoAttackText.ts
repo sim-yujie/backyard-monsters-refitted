@@ -1,4 +1,4 @@
-import type { AutoAttackPlanResponse, PlanShortfall, PlanSummary } from "@/api/autoAttack";
+import type { AutoAttackPlanResponse, PlanShortfall, PlanSummary, YardLabel } from "@/api/autoAttack";
 import { ApiError, NetworkError } from "@/api/http";
 import { championName, monsterName } from "@/ui/attack/ArmyPanel";
 import { bombName } from "@/ui/attack/CatapultPanel";
@@ -67,7 +67,9 @@ export const SIEGE_NOT_REPEATED = "Siege weapons are not repeated.";
 export const shortfallText = (item: PlanShortfall): string => {
   switch (item.kind) {
     case "monster":
-      return `${monsterName(item.id)}: ${(item.need - item.have).toLocaleString("en-US")} short (you have ${item.have.toLocaleString("en-US")} of ${item.need.toLocaleString("en-US")} in range)`;
+      // Counted over every yard the monsters could move in from; the owner's
+      // own words, "Pokey: 12 short" (Smart Repeat attack, 16 Nov 2026).
+      return `${monsterName(item.id)}: ${(item.need - item.have).toLocaleString("en-US")} short`;
     case "champion": {
       const name = championName(item.t);
       if (item.reason === "hurt") return `${name} has no health left`;
@@ -85,17 +87,53 @@ export const shortfallText = (item: PlanShortfall): string => {
  * Why Repeat attack is greyed out, or null when it can run. The missing
  * things are listed in full by {@link shortfallText}; this is the one line.
  */
-export const repeatRefusal = (answer: AutoAttackPlanResponse): string | null => {
+export const repeatRefusal = (answer: AutoAttackPlanResponse, context: "sheet" | "panel" = "sheet"): string | null => {
   if (!answer.plan) return null;
   if (answer.underAttack) return "Someone else is attacking this camp right now.";
   if (answer.outOfRange) return "This camp is out of your Flingers' range.";
-  if (answer.missing.length > 0) return "You are missing what that attack used:";
+  if (answer.missing.length > 0) return missingHeadline(answer.missing, context);
+  if (answer.noRoom) return NO_ROOM_TEXT;
   return null;
 };
+
+/* ── Smart Repeat attack (owner, 16 Nov 2026) ─────────────────────────── */
+
+/** The refusal when the army could be gathered but not housed in range. */
+export const NO_ROOM_TEXT = "Not enough Monster Housing in range.";
+
+/** Under {@link NO_ROOM_TEXT}: the space the monsters that would move in take. */
+export const ROOM_NEED_TEXT = (need: number): string => `Incoming monsters need ${need.toLocaleString("en-US")} space.`;
+
+/** Above the moves on the confirm sheet. */
+export const MOVES_LEAD = (count: number): string => `${count} ${count === 1 ? "move" : "moves"} before attacking`;
+
+/** The confirm sheet's button when monsters move first. */
+export const MOVE_AND_ATTACK = "Move and attack";
+
+/** Over the confirm sheet again, when the server's plan changed since the player looked. */
+export const MOVES_CHANGED = "Your yards changed. Here is the new plan.";
+
+/** "Main yard" or "Outpost". */
+export const yardName = (label: YardLabel | undefined): string => (label?.main ? "Main yard" : "Outpost");
+
+/** "244, 208": where a yard sits. */
+export const yardPlace = (label: YardLabel | undefined): string => (label ? `${label.x}, ${label.y}` : "");
+
+/** The camp panel's line when Repeat attack moves monsters in first. */
+export const movesLineText = (moves: number): string =>
+  moves === 1 ? "1 move needed" : `${moves} moves needed`;
 
 /** Why a camp has no Repeat attack yet. */
 export const noPlanText = (tribe: string, level: number): string =>
   `Attack a ${tribe} camp of level ${level} by hand once, and you can repeat that attack here.`;
+
+// Smart Repeat attack (astra): name the shortage without calling bombs or champions monsters.
+const missingHeadline = (missing: readonly PlanShortfall[], context: "sheet" | "panel" = "sheet"): string =>
+  missing.some((item) => item.kind === "monster")
+    ? context === "panel"
+      ? "Missing monsters for that attack:"
+      : "Not enough monsters for that attack."
+    : "Missing from the attack:";
 
 /** The server's refusal, in words a player can act on. */
 export const autoAttackErrorText = (caught: unknown): { message: string; missing: readonly PlanShortfall[] } => {
@@ -103,6 +141,7 @@ export const autoAttackErrorText = (caught: unknown): { message: string; missing
     const data = caught.details?.data as { reason?: unknown; missing?: unknown } | undefined;
     const missing = Array.isArray(data?.missing) ? (data.missing as PlanShortfall[]) : [];
     if (caught.status === 429) return { message: "That is ten auto-attacks this minute. Wait a moment.", missing };
+    if (data?.reason === "missing") return { message: missingHeadline(missing), missing };
     return { message: caught.message || "The auto-attack was refused.", missing };
   }
   if (caught instanceof NetworkError || !(caught instanceof Error)) {

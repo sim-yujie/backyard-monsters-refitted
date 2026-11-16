@@ -17,7 +17,7 @@ describe("profile layout rules", () => {
   it("gives the chat room less height while a player's strip is up, and keeps the strip over the dock", () => {
     const chat = squash(css("../styles/chat.css"));
     expect(chat).toContain(
-      ".chat-box--open:has(> .chat-box__player:not([hidden])) > .chat-box__lines { height: clamp(48px, calc(100dvh - var(--chat-top) - 229px - 230px - 13px), 260px); }",
+      ".chat-box--open:has(> .chat-box__player:not([hidden])) > .chat-box__lines { height: clamp(48px, calc(100vh - var(--chat-top) - 229px - 230px - 13px), 260px); height: clamp(48px, calc(100dvh - var(--chat-top) - 229px - 230px - 13px), 260px); }",
     );
     expect(chat).toContain(
       ".chat-box--open:has(> .chat-box__player:not([hidden])) { z-index: 1; }",

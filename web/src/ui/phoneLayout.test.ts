@@ -19,7 +19,7 @@ describe("isPhoneLayout", () => {
     const query = answer(true);
     expect(isPhoneLayout()).toBe(true);
     expect(query).toHaveBeenCalledWith(PHONE_LAYOUT_QUERY);
-    expect(PHONE_LAYOUT_QUERY).toBe("(width <= 620px), (height <= 500px)");
+    expect(PHONE_LAYOUT_QUERY).toBe("(max-width: 620px), (max-height: 500px)");
   });
 
   it("is false on a wide screen, and where nothing can tell", () => {

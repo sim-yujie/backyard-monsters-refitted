@@ -88,9 +88,8 @@ describe("krallenAuraUntilOf / krallenAuraOn", () => {
     expect(krallenAuraUntilOf({ la: 123.7 })).toBe(123);
   });
 
-  test("on only while it runs and only from her level 3", () => {
-    for (const l of [1, 2]) expect(krallenAuraOn([{ t: KRALLEN_TYPE, l, la: NOW + 10 }], NOW)).toBe(false);
-    for (const l of [3, 4, 5]) {
+  test("on only while it runs, at every level (levels 1-2 added 15 Nov 2026)", () => {
+    for (const l of [1, 2, 3, 4, 5]) {
       expect(krallenAuraOn([{ t: KRALLEN_TYPE, l, la: NOW + 10 }], NOW)).toBe(true);
       expect(krallenAuraOn([{ t: KRALLEN_TYPE, l, la: NOW }], NOW)).toBe(false);
       expect(krallenAuraOn([{ t: KRALLEN_TYPE, l }], NOW)).toBe(false);
