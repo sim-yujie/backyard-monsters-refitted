@@ -848,6 +848,12 @@
   white-space: nowrap;
 }
 
+/* astra round 3: a clear gap after the four icons, so "450,000 each" is not
+   read as the Goo's price alone. */
+.end-takeover__each > :nth-child(4) {
+  margin-inline-end: 4px;
+}
+
 .end-takeover__alt {
   display: inline-flex;
   align-items: center;
