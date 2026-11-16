@@ -1271,6 +1271,7 @@ export type FriendRefusal =
   | "helpersFull"
   | "alreadyHelped"
   | "nothingToHelp"
+  | "repairedToday"
   | "underAttack"
   | "noSuchPlayer"
   | "noSuchRequest"
@@ -1296,6 +1297,7 @@ const FRIEND_REFUSAL_MESSAGES: Record<FriendRefusal, string> = {
   helpersFull: "Enough friends have already helped with this.",
   alreadyHelped: "You have already helped with this.",
   nothingToHelp: "There is nothing to help with here.",
+  repairedToday: "You already repaired a building in this yard today.",
   underAttack: "They are under attack right now.",
   noSuchPlayer: "There is no player with that name.",
   noSuchRequest: "That request is no longer waiting for an answer.",

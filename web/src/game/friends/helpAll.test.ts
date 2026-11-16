@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { HelpBlock } from "@/api/friends";
-import { afterHelp, afterRefusal, savingTag, type HelpTarget } from "./helpModel";
+import { afterHelp, afterRefusal, helpRefusalText, isHelpOpen, refusalStays, savingTag, type HelpTarget } from "./helpModel";
 import { helpAllResultText, helpAllShortText, runHelpAll, stopsHelpAll, type HelpOutcome } from "./helpAll";
 
 /**
@@ -97,6 +97,28 @@ describe("runHelpAll", () => {
       expect(stopsHelpAll(reason)).toBe(true);
     }
     for (const reason of ["alreadyHelped", "helpersFull", "nothingToHelp"]) expect(stopsHelpAll(reason)).toBe(false);
+  });
+
+  it("the spam limit stops it with the help words, and leaves the building open for later (bug report #50)", async () => {
+    let block: HelpBlock = blockOf([1, 2, 3]);
+    const text = helpRefusalText("rateLimited");
+    const summary = await runHelpAll(targets([1, 2, 3]), {
+      block: () => block,
+      helpOne: async (target) => {
+        if (target.id === 1) {
+          block = afterHelp(block, 1, "speedup", 4);
+          return { ok: true, secondsSaved: 60, reward: reward(10) };
+        }
+        // As the scene does it (`giveHelp`): a refusal that does not stay leaves the block alone.
+        if (refusalStays("rateLimited")) block = afterRefusal(block, target.id, target.kind, "rateLimited");
+        return { ok: false, reason: "rateLimited", text };
+      },
+    });
+    expect(text).toBe("You have helped a lot this hour. Try again later.");
+    expect(summary.stoppedBy).toBe(text);
+    expect(helpAllResultText(summary)).toContain(text);
+    expect(helpAllShortText({ ...summary, helped: 0 })).toBe(text);
+    expect(isHelpOpen(block, { id: 2, kind: "speedup" })).toBe(true);
   });
 
   it("skips a help the block no longer offers, and stops once the visit is over", async () => {
