@@ -212,3 +212,11 @@ game sheets backed up in `art-work/IC2-r3/r2-assets`) paints that creature:
     with the server stopped. Malphus run off fast (they leap walls toward resource buildings), so the camera loses them.
   - The Hatchery / Locker show only the portrait card (`ui/monsters/LockerTab.ts` uses `monsterPortrait`); the
     painted sprite shows in battle and as housed monsters walking in the Inferno yard.
+  - **Lead vetting colour pass (no Codex calls).** Beside the card the armour read yellow-green and the fur bright
+    violet. spec `tone` (`common.tone`, after `grade`) picks a part by hue window and saturation and scales its chroma
+    round the luma, its channels and its brightness (pixels brighter than `hi` keep theirs). Armour (hue 42-80):
+    chroma 0.85, value 0.84, gains R 0.97 -> hue 49 / sat 0.62 / value 0.33 (card 48 / 0.60 / 0.34). Fur (hue
+    275-335): chroma 0.72, value 0.7, gains B 0.97, hi 170 -> hue 308 / sat 0.50 / value 0.18; one step darker than
+    the card's 0.25 by eye, since the card's fur has many near-black strands the measure skips. Belly, claws, stripes
+    and tusks are outside both windows (belly stays 148,83,23). `desk.py` reads `masters/`: copy the new sheets
+    there before drawing it.
