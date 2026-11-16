@@ -69,7 +69,7 @@ const all = (view: ReturnType<typeof resultView>): string =>
 describe("the parts", () => {
   it("a conquered camp: its name and level, Victory!, the damage, the loot, a place for the offer", () => {
     const view = resultView(BUSY);
-    expect(view.head.textContent).toContain("Legionnaire · Level 33");
+    expect(view.head.textContent).toContain("Legionnaire camp · Level 33");
     expect(view.head.textContent).toContain("Victory!");
     expect(view.head.querySelector('[aria-label="Camp damage: 94%"]')).not.toBeNull();
     expect(view.loot.querySelectorAll(".arv-loot__item")).toHaveLength(4);

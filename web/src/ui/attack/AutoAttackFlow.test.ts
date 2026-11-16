@@ -322,8 +322,8 @@ describe("the result", () => {
     expect(onAttacked).toHaveBeenCalledWith(RESULT);
     const shown = text(modal);
     expect(shown).toContain("Attack result");
-    expect(shown).toContain("Kozu · Level 35");
-    expect(shown).toContain("Victory!92%");
+    expect(shown).toContain("Kozu camp · Level 35");
+    expect(shown).toContain("Victory!92% damaged");
     expect(shown).toContain("+1,200");
     expect(shown).toContain("Storage full: some loot left behind");
     // The owner wants none of the army, champion or bombs (16 Nov 2026).

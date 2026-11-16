@@ -29,14 +29,16 @@ const head = (result: AutoAttackResponse): HTMLElement => {
     box.append(picture);
   }
   const words = make("div", "arv-head__words");
-  words.append(make("p", "arv-head__camp", `${result.tribe} · Level ${result.level}`));
+  // Review round 1: "camp" and "damaged" as the confirm sheet says them
+  // ("Legionnaire camp · Level 33 · 0% damaged"), so "94%" is not read as a chance.
+  words.append(make("p", "arv-head__camp", `${result.tribe} camp · Level ${result.level}`));
   const outcome = make("p", `arv-head__outcome${result.conquered ? " arv-head__outcome--won" : ""}`);
   outcome.append(make("span", "arv-head__word", result.conquered ? "Victory!" : "Not won"));
   const damage = Math.floor(result.damageAfter);
   const chip = make("span", "arv-head__damage");
   chip.title = `Camp damage: ${damage}%`;
   chip.setAttribute("aria-label", chip.title);
-  chip.append(gameIcon("yarddamage2", { size: 24, decorative: true }), `${damage}%`);
+  chip.append(gameIcon("yarddamage2", { size: 24, decorative: true }), `${damage}% damaged`);
   outcome.append(chip);
   words.append(outcome);
   box.append(words);

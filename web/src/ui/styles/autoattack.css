@@ -744,6 +744,11 @@
   color: var(--colour-success, var(--colour-text));
 }
 
+/* Review round 1: a loss reads as one at a glance, without an alarm red. */
+.arv-head__outcome:not(.arv-head__outcome--won) .arv-head__word {
+  color: var(--colour-warning);
+}
+
 .arv-head__damage {
   display: inline-flex;
   align-items: center;
@@ -870,6 +875,19 @@
 
 .end-takeover--compact .end-takeover__message:empty {
   display: none;
+}
+
+/* Review round 1: a phone upright puts Take over under the price at full
+   width, so the box has no empty half and the button is in thumb reach. */
+@media (max-width: 620px) {
+  .end-takeover--compact .end-takeover__actions {
+    flex: 1 1 100%;
+    margin: 0;
+  }
+
+  .end-takeover--compact .end-takeover__take {
+    width: 100%;
+  }
 }
 
 /* Room for the price and Take over side by side with a clear gap (at 440px
