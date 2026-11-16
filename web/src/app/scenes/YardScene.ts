@@ -49,6 +49,7 @@ import {
   helpableIds,
   helpingLine,
   helpRefusalText,
+  refusalStays,
   thanksText,
 } from "@/game/friends/helpModel";
 import { worldChat } from "@/game/chat/chatSession";
@@ -1925,10 +1926,11 @@ export class YardScene implements Scene {
         context.goTo(SceneName.LOGIN);
         return;
       }
+      // A reason the client does not know says the server's own words (`friendRefusal`, bug report #50).
       const refusal = friendRefusal(caught);
       const known = refusal.reason !== "unknown" && refusal.reason !== "network";
       const text = known ? helpRefusalText(refusal.reason, refusal) : refusal.message;
-      if (known && refusal.reason !== "underAttack" && refusal.reason !== "notFriends") {
+      if (known && refusalStays(refusal.reason)) {
         this.helpBlock = afterRefusal(this.helpBlock, building.id, kind, refusal.reason, refusal);
       }
       this.showHelpBlock();

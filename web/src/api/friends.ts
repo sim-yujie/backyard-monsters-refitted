@@ -356,6 +356,7 @@ export type FriendRefusalReason =
   | "helpersFull"
   | "alreadyHelped"
   | "nothingToHelp"
+  | "repairedToday"
   | "underAttack"
   | "noSuchPlayer"
   | "noSuchRequest"
@@ -363,9 +364,13 @@ export type FriendRefusalReason =
   | "pinLimit"
   | "self";
 
-/** A refused call, in words: its reason (or `network`/`unknown`) and what to tell the player. */
+/**
+ * A refused call, in words: its reason (or `network`/`unknown`) and what to
+ * tell the player. `rateLimited` is the spam limit (429): it lifts by itself,
+ * so nothing should stay refused because of it.
+ */
 export interface FriendRefusal {
-  readonly reason: FriendRefusalReason | "network" | "unknown";
+  readonly reason: FriendRefusalReason | "rateLimited" | "network" | "unknown";
   readonly message: string;
   /** For `declinedRecently` and `tooNew`: when it becomes possible, unix seconds, when the server knows. */
   readonly from?: number;
@@ -422,6 +427,7 @@ export const REFUSAL_TEXT: Readonly<Record<FriendRefusalReason, string>> = {
   helpersFull: "Enough friends have already helped with this.",
   alreadyHelped: "You have already helped with this.",
   nothingToHelp: "There is nothing to help with here.",
+  repairedToday: "You already repaired a building here today.",
   underAttack: "They are under attack right now.",
   noSuchPlayer: "There is no player with that name.",
   noSuchRequest: "That request is no longer waiting for an answer.",
@@ -430,8 +436,10 @@ export const REFUSAL_TEXT: Readonly<Record<FriendRefusalReason, string>> = {
   self: "That's you!",
 };
 
-/** What a refusal with a reason the client does not know says. */
+/** What a refusal with no words of its own says. */
 export const GENERAL_REFUSAL = "That didn't work. Try again in a moment.";
+/** The friends spam limit (429 `rateLimited`, bug report #50): it lifts on its own within the hour. */
+export const RATE_LIMITED_REFUSAL = "You have done that a lot this hour. Try again later.";
 /** What a call that never reached the server says. */
 export const NETWORK_REFUSAL = "Could not reach the server. Try again.";
 
@@ -455,8 +463,11 @@ export const toSeconds = (value: unknown): number | null => {
 
 /**
  * Why a friends call was refused, in plain words. The `reason` is read from
- * the error's details (`ClientSafeError`'s `data`) or the body itself; one the
- * client does not know falls back to a general line.
+ * the error's details (`ClientSafeError`'s `data`) or the body itself. The
+ * spam limit is `rateLimited` with its own words. A reason the client does
+ * not know (a yard refusal such as `raidInProgress`) says the server's own
+ * sentence (bug report #50: it used to say only the general line); with no
+ * reason at all (a crash) it is the general line.
  */
 export const friendRefusal = (caught: unknown): FriendRefusal => {
   if (caught instanceof NetworkError) return { reason: "network", message: NETWORK_REFUSAL };
@@ -479,6 +490,11 @@ export const friendRefusal = (caught: unknown): FriendRefusal => {
             : REFUSAL_TEXT[reason];
       return { reason, message, ...(from !== null && { from }), ...(rule && { rule }) };
     }
+    if (reason === "rateLimited") return { reason, message: RATE_LIMITED_REFUSAL };
+    const said = [caught.details?.message, body["message"], body["error"]].find(
+      (value): value is string => typeof value === "string" && value.trim() !== "",
+    );
+    if (typeof reason === "string" && reason !== "" && said) return { reason: "unknown", message: said };
   }
   return { reason: "unknown", message: GENERAL_REFUSAL };
 };
