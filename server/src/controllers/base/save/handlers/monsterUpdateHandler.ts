@@ -2,6 +2,7 @@ import { Save } from "../../../../database/models/save.model.js";
 import type { FlingEvent } from "../../../../game-rules/combat/index.js";
 import type { AttackSession } from "../../../../services/base/attackSession.js";
 import { flungOf } from "../../../../services/base/combat/abandonedAttack.js";
+import type { QuestEvents } from "../../../../services/quests/state.js";
 import { settleAttackArmies } from "../../../../services/yard/armies.js";
 import type { Counts } from "../../../../services/yard/attackRoster.js";
 import { logger } from "../../../../utils/logger.js";
@@ -123,17 +124,19 @@ const loggedFlung = (flinglog: unknown): Counts | null => {
  * @param {unknown} monsters - Parsed monsterupdate payload
  * @param {Save} userSave - The attacking user's main save
  * @param {MonsterUpdateContext} attack - The session, whether the save finalises, the log, the map room
+ * @returns The hatches the settle's catch-up finished (the hatch quest's, for
+ *   the caller to count once the landing commits); empty on every other path.
  */
 export const monsterUpdateHandler = async (
   monsters: unknown,
   userSave: Save,
   attack: MonsterUpdateContext
-) => {
+): Promise<QuestEvents> => {
   const mode = monsterUpdateMode(attack);
 
   if (mode === "mapRoom3" && isMapRoom3Update(monsters)) {
     userSave.monsters = monsters as Save["monsters"];
-    return;
+    return {};
   }
 
   if (mode !== "roster" || !Array.isArray(monsters)) {
@@ -143,12 +146,12 @@ export const monsterUpdateHandler = async (
       mode,
       shape: Array.isArray(monsters) ? "array" : typeof monsters,
     });
-    return;
+    return {};
   }
 
-  if (!attack.finalises) return;
+  if (!attack.finalises) return {};
 
-  await settleAttackArmies({
+  return settleAttackArmies({
     userSave,
     entries: monsters.filter(isCellUpdate),
     entryHoused: attack.session?.entryHoused,

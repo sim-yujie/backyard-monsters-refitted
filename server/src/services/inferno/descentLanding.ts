@@ -20,6 +20,7 @@ import { checkpointSession, parseFlingLog } from "../base/attackCheckpoint.js";
 import type { AbandonedOutcome } from "../base/combat/abandonedAttack.js";
 import { replayAbandonedInWorker } from "../base/combat/replayRunner.js";
 import { endRowlessAttack, landRowlessOnce, type RowlessCheckpoint } from "../base/rowlessCheckpoint.js";
+import { recordQuestEvents } from "../quests/record.js";
 import { checkAttackBinding } from "../base/attackSession.js";
 import { battleReplayInput, battleTick } from "../base/combat/battle.js";
 import { championsAfterAttack, championsAfterBattle } from "../base/combat/attackerRow.js";
@@ -214,11 +215,11 @@ const writeDescentLanding = async (
 
   // Marked landed before anything is written: whatever a crash after the
   // write leaves behind lands nothing more (`landRowlessOnce`).
-  const { loot, update, infernobaseid } = await landRowlessOnce(ref, descent.session, async () => {
+  const { loot, update, infernobaseid, hatched } = await landRowlessOnce(ref, descent.session, async () => {
     // The army leaves the main yard's housing through the fling log, capped by
     // what it housed at the start (the session's `entryHoused`), as a Map Room 1
-    // attack's does.
-    await monsterUpdateHandler([...attacker.entries], userSave, {
+    // attack's does. What hatched during the attack comes back for the hatch quest.
+    const hatched = await monsterUpdateHandler([...attacker.entries], userSave, {
       session: descent.session,
       finalises: true,
       flinglog: attacker.flinglog,
@@ -277,7 +278,7 @@ const writeDescentLanding = async (
     em.persist(row);
     em.persist(userSave);
     await em.flush();
-    return { loot, update, infernobaseid };
+    return { loot, update, infernobaseid, hatched };
   });
 
   if (update.captured) {
@@ -296,6 +297,10 @@ const writeDescentLanding = async (
   } catch (err) {
     logger.error(`Recording Descent achievements for main save ${userSave.basesaveid} failed: ${err}`);
   }
+
+  // The surface's hatch quest: the main yard's monsters that hatched during
+  // the Descent, written by the settle above, so no later catch-up counts them.
+  await recordQuestEvents(em, userSave.basesaveid, hatched, now);
 
   // Spent: the lock is still held, so a copy of this save finds nothing, and
   // the attack's checkpoint goes with it, so the finaliser does not land it again.

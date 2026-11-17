@@ -70,7 +70,7 @@ beforeEach(() => {
 
 describe("monsterUpdateHandler — Map Room 2", () => {
   test("takes the logged flings from the yard as caught up now, keeping what hatched meanwhile", async () => {
-    await monsterUpdateHandler(
+    const hatched = await monsterUpdateHandler(
       [{ baseid: Number(HOME), m: { housed: { C1: 90 }, h: [], saved: 1 } } as never],
       userSave as never,
       { session: session({ [HOME]: { C1: 102 } }), finalises: true, flinglog: log(10), now: NOW, mapRoom3: false }
@@ -81,6 +81,8 @@ describe("monsterUpdateHandler — Map Room 2", () => {
     // The server's production state, not the client's blob.
     expect(userSave.monsters.saved).toBe(NOW);
     expect(userSave.monsters.h).toEqual([["C1", 15, [["C1", 6, 1]], 1]]);
+    // The 4 hatched meanwhile go back for the hatch quest: written here, no later catch-up sees them.
+    expect(hatched).toEqual({ hatch: 4, "hatch:C1": 4 });
   });
 
   test("a sent count above what the yard had adds nothing", async () => {
@@ -111,13 +113,14 @@ describe("monsterUpdateHandler — Map Room 2", () => {
 
   test("a save that does not end the attack changes nothing (the final one settles it once)", async () => {
     const before = structuredClone(userSave);
-    await monsterUpdateHandler(
+    const hatched = await monsterUpdateHandler(
       [{ baseid: HOME, m: { housed: { C1: 0 } } } as never],
       userSave as never,
       { session: session({ [HOME]: { C1: 100 } }), finalises: false, flinglog: log(100), now: NOW, mapRoom3: false }
     );
 
     expect(userSave).toEqual(before);
+    expect(hatched).toEqual({});
   });
 
   test("another player's yard in the update is never touched", async () => {
