@@ -41,6 +41,7 @@ px around the building's origin, 12 render px a 1x px), with the same camera as 
 | locker | 8 Monster Locker | art/locker-fable-2 | locker-fable-2 (locker.py) | levels 1-4; 21, 20, 20 and 21 cells of its key and gears |
 | incubator | 13 Incubator in an Inferno yard | art/incubator-3d | art-samples/buildings-b6/inferno/incubator (incubator.py, `post.py game` -> `game/`) | one look for its three levels; 50 cells of its hatching loop, the vent's smoke laid into the cells by post.py; canvas x -80..80, y -60..90; `incubator:damaged` from the same `game/` folder; destroyed is Flash's rubble |
 | strongbox | 8 Strongbox in an Inferno yard | art/strongbox-3d | art-samples/buildings-b6/inferno/strongbox (strongbox.py) | one look for its four levels; 30 cells of its loop while it unlocks, each the whole building |
+| iacademy | 26 Academy in an Inferno yard | art/iacademy-3d | art-samples/buildings-b6/inferno/academy (academy.py, `post.py game` -> `game/`) | Flash's two looks (level 1; levels 2-4); 44 and 47 cells of its training loop (the drill, the cogs between the pillars, the pillars); canvas x -80..90, y -110..80; `iacademy:damaged` from the same `game/` folder; destroyed is the painted rubble (`top.c<n>.destroyed@2x.webp`) |
 
 The Inferno's Strongbox (`strongbox`, moves "frames"; owner on the Review Desk, 14 Nov 2026) is the clean-room model
 (`strongbox.py`), one look for every level as Flash's. Its renders are whole frames, ground shadow and all
@@ -189,6 +190,7 @@ BUILDINGS = {
                   moves="parts"),
     "incubator": dict(type=13, folder="ihatchery", frame=(-80, -60), k=6, looks=[(1, "L1")], moves="parts"),
     "strongbox": dict(type=8, folder="imonsterlab", frame=(-70, -52), looks=[(1, "")], moves="frames"),
+    "iacademy": dict(type=26, folder="iacademy", frame=(-80, -110), k=6, looks=[(1, "L1"), (2, "L2")], moves="parts"),
     "locker": dict(type=8, folder="monsterlocker", frame=(-80, -110), k=8, looks=[(n, f"L{n}") for n in range(1, 5)],
                    moves="cells", noise=0.0),
     "booby": dict(type=24, folder="boobytrap", frame=(-24, -14), looks=[(1, "booby-whole")], moves=None),
@@ -203,6 +205,7 @@ CELLS = {"twig": {1: 34, 3: 34, 6: 34, 10: 34}, "pebble": {1: 26, 3: 26, 6: 26, 
          "sulfur": {1: 51, 3: 45, 7: 45},
          "magma": {1: 49, 3: 49, 7: 49},
          "incubator": {1: 50},
+         "iacademy": {1: 44, 2: 47},
          "strongbox": {1: 30}, "locker": {1: 21, 2: 20, 3: 20, 4: 21}}
 TAIL = 16                      # 1x px a shadow cut by the render's canvas is carried on past it, fading out
 NOISE = 0.07                   # the shadow catcher's faint wash over all the ground (sky occlusion), taken off every shade
