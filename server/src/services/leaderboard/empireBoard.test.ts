@@ -119,18 +119,21 @@ describe("rankRows", () => {
     expect(rankRows(rows, tallyOutposts([])).map((row) => row.empirePoints)).toEqual([100_000_000, 90_000_000]);
   });
 
-  test("equal totals keep the query's order (who got there first, then user id)", () => {
+  test("equal totals go to who reached their main yard score first, then the lower user id", () => {
     const rows = [
-      { userid: 5, username: "first", pic_square: null, empirepoints: "1000" },
-      { userid: 3, username: "second", pic_square: null, empirepoints: "1000" },
-      { userid: 9, username: "third", pic_square: null, empirepoints: "500" },
+      { userid: 5, username: "big-yard-late", pic_square: null, empirepoints: "1000", empirepointsat: 300 },
+      { userid: 9, username: "outposts-early", pic_square: null, empirepoints: "500", empirepointsat: 100 },
+      { userid: 4, username: "same-time-higher-id", pic_square: null, empirepoints: "1000", empirepointsat: 200 },
+      { userid: 3, username: "same-time-lower-id", pic_square: null, empirepoints: "1000", empirepointsat: 200 },
     ];
     const ranked = rankRows(rows, new Map([[9, { count: 1, points: 500 }]]));
     expect(ranked.map((row) => [row.rank, row.name, row.empirePoints])).toEqual([
-      [1, "first", 1000],
-      [2, "second", 1000],
-      [3, "third", 1000],
+      [1, "outposts-early", 1000],
+      [2, "same-time-lower-id", 1000],
+      [3, "same-time-higher-id", 1000],
+      [4, "big-yard-late", 1000],
     ]);
+    expect(ranked[0]).not.toHaveProperty("at");
   });
 });
 

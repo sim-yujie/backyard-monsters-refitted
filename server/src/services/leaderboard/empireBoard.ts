@@ -97,6 +97,8 @@ interface BoardSqlRow {
   username: string;
   pic_square: string | null;
   empirepoints: number | string;
+  /** When the main yard's score last changed, unix seconds; absent sorts last. */
+  empirepointsat?: number | string | null;
 }
 
 interface OutpostSqlRow {
@@ -113,7 +115,8 @@ export const BOARD_SQL = `
     u.userid,
     u.username,
     u.pic_square,
-    s.empirepoints
+    s.empirepoints,
+    s.empirepointsat
   FROM bym.save s
   JOIN bym."user" u ON u.save_basesaveid = s.basesaveid
   WHERE s.type = 'main'
@@ -135,8 +138,8 @@ export const OUTPOSTS_SQL = `
 
 /**
  * The board: each player's main yard points plus their outposts' points,
- * most first, ranked 1, 2, 3... Players on the same total keep the order the
- * query gave them (who reached their score first, then the lower user id).
+ * most first, ranked 1, 2, 3... Players on the same total go by who reached
+ * their main yard's score first (`empirepointsat`), then the lower user id.
  */
 export const rankRows = (
   rows: readonly BoardSqlRow[],
@@ -144,6 +147,7 @@ export const rankRows = (
 ): BoardRow[] =>
   rows
     .map((row) => {
+      const at = Number(row.empirepointsat);
       const userId = Number(row.userid);
       const yardPoints = Number(row.empirepoints);
       const held = outposts.get(userId);
@@ -156,11 +160,11 @@ export const rankRows = (
         yardPoints,
         outpostPoints,
         outposts: held?.count ?? 0,
+        at: Number.isFinite(at) && row.empirepointsat !== null && row.empirepointsat !== undefined ? at : Infinity,
       };
     })
-    // Array sort is stable: ties keep the query's order.
-    .sort((a, b) => b.empirePoints - a.empirePoints)
-    .map((row, index) => ({ rank: index + 1, ...row }));
+    .sort((a, b) => b.empirePoints - a.empirePoints || a.at - b.at || a.userId - b.userId)
+    .map(({ at: _at, ...row }, index) => ({ rank: index + 1, ...row }));
 
 /** Works the board out from the database and stores it; returns the stored build. */
 const buildBoard = async (em: EntityManager, redis: BoardRedis, now: number): Promise<StoredBoard> => {
