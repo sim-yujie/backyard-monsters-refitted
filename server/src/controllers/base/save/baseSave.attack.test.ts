@@ -1666,3 +1666,74 @@ describe("the Flinger's room (owner, 12 Nov 2026)", () => {
     expect(reports).toEqual([]);
   });
 });
+
+describe("the hatch quest through the save that ends the attack (patch 7.7.3)", () => {
+  const now = () => Math.floor(Date.now() / 1000);
+  /** A daily set holding one "hatch N of `monster`" quest at 0, for today. */
+  const hatchQuest = (monster: string, need: number) => ({
+    v: 1,
+    daily: {
+      period: new Date(now() * 1000).toISOString().slice(0, 10),
+      swaps: 0,
+      bonus: false,
+      quests: [{ slot: 0, kind: "hatchMonster", variant: monster, need, have: 0, claimed: false, rewards: [] }],
+    },
+  });
+  const hatchHave = () => (attackerSave.dailyquests as { daily: { quests: { have: number }[] } }).daily.quests[0].have;
+
+  test("monsters that finish hatching during the attack count once, and no later catch-up counts them again", async () => {
+    const { catchUpYard } = await import("../../../services/yard/catchUp.js");
+    const { jobQuestEvents } = await import("../../../services/quests/hooks.js");
+    // The yard was caught up as the attack began, two minutes ago; a queue of
+    // 4 Pokeys (8 s each at academy level 3) all hatch while it runs.
+    Object.assign(attackerSave, {
+      dailyquests: hatchQuest("C1", 50),
+      academy: { C1: { level: 3 } },
+      buildingdata: {
+        "1": { id: 1, t: 15, l: 6 },
+        "2": { id: 2, t: 15, l: 6 },
+        "3": { id: 3, t: 15, l: 6 },
+        "4": { id: 4, t: 15, l: 6 },
+        "9": { id: 9, t: 13, l: 3 },
+      },
+      savetime: now() - 120,
+      monsters: { saved: now() - 120, housed: { C4: 12, C1: 4 }, h: [["", 0, [["C1", 4, 3]]]], hid: [9], hstage: [0], hcc: [] },
+    });
+    const body = {
+      over: "1",
+      flinglog: JSON.stringify(LOG),
+      monsterupdate: JSON.stringify([{ baseid: HOME, m: { housed: { C1: 4 } } }]),
+    };
+
+    await baseSave(ctxFor(body), async () => {});
+
+    // The 12 Cyclops flung, the 4 Pokeys hatched meanwhile kept and counted.
+    expect(attackerSave.monsters.housed.C1).toBe(8);
+    expect(attackerSave.monsters.housed.C4 ?? 0).toBe(0);
+    expect(hatchHave()).toBe(4);
+    // The settle moved the production clock, so the owner's next catch-up finds none of them.
+    expect(attackerSave.monsters.saved).toBeGreaterThanOrEqual(now() - 1);
+    expect(jobQuestEvents(catchUpYard(attackerSave as never, now()))).toEqual({});
+
+    // The same final save sent again lands nothing, so counts nothing.
+    await baseSave(ctxFor(body), async () => {}).catch(() => {});
+    expect(hatchHave()).toBe(4);
+  });
+
+  test("a save that does not end the attack counts none", async () => {
+    Object.assign(attackerSave, {
+      dailyquests: hatchQuest("C1", 50),
+      academy: { C1: { level: 3 } },
+      buildingdata: { "1": { id: 1, t: 15, l: 6 }, "9": { id: 9, t: 13, l: 3 } },
+      savetime: now() - 120,
+      monsters: { saved: now() - 120, housed: { C4: 12 }, h: [["", 0, [["C1", 4, 3]]]], hid: [9], hstage: [0], hcc: [] },
+    });
+
+    await baseSave(
+      ctxFor({ flinglog: JSON.stringify(LOG), monsterupdate: JSON.stringify([{ baseid: HOME, m: { housed: {} } }]) }),
+      async () => {}
+    );
+
+    expect(hatchHave()).toBe(0);
+  });
+});

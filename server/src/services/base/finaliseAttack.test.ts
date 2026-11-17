@@ -1108,3 +1108,57 @@ describe("a countdown the attack's catch-up finishes", () => {
     expect(defender.flinger).toBe(7);
   }, REPLAY_TIMEOUT_MS);
 });
+
+describe("the hatch quest when the server finishes the attack (patch 7.7.3)", () => {
+  /** A daily set holding one "hatch N of `monster`" quest at 0, for today. */
+  const hatchQuest = (monster: string, need: number) => ({
+    v: 1,
+    daily: {
+      period: new Date(now() * 1000).toISOString().slice(0, 10),
+      swaps: 0,
+      bonus: false,
+      quests: [{ slot: 0, kind: "hatchMonster", variant: monster, need, have: 0, claimed: false, rewards: [] }],
+    },
+  });
+  const hatchHave = () => (userSave.dailyquests as { daily: { quests: { have: number }[] } }).daily.quests[0].have;
+
+  test("monsters that finish hatching during the attack count once, and no later catch-up counts them again", async () => {
+    const { catchUpYard } = await import("../yard/catchUp.js");
+    const { jobQuestEvents } = await import("../quests/hooks.js");
+    // The attack began two minutes ago, the yard caught up as it began; a
+    // queue of 4 Pokeys (8 s each at academy level 3) all hatch while it runs.
+    await arm({ startedat: now() - 120 });
+    userSave.type = "main";
+    userSave.dailyquests = hatchQuest("C1", 50);
+    userSave.buildingdata = {
+      "1": { id: 1, t: 15, l: 6 },
+      "2": { id: 2, t: 15, l: 6 },
+      "3": { id: 3, t: 15, l: 6 },
+      "4": { id: 4, t: 15, l: 6 },
+      "9": { id: 9, t: 13, l: 3 },
+    };
+    userSave.savetime = now() - 120;
+    userSave.monsters = {
+      saved: now() - 120,
+      housed: { C1: 200 },
+      h: [["", 0, [["C1", 4, 3]]]],
+      hid: [9],
+      hstage: [0],
+      hcc: [],
+    };
+
+    expect(await finaliseAbandonedAttack(BASESAVEID, "test")).toBe("finalised");
+
+    // All four hatched and were flung with the rest (300 flung: home's 204, the outpost's 96).
+    expect(userSave.monsters.housed).toEqual({ C1: 0 });
+    expect(outpost.monsters.housed).toEqual({ C1: 54 });
+    expect(hatchHave()).toBe(4);
+    // The landing moved the production clock, so the owner's next catch-up finds none of them.
+    expect(userSave.monsters.saved).toBeGreaterThanOrEqual(now() - 1);
+    expect(jobQuestEvents(catchUpYard(userSave as never, now()))).toEqual({});
+
+    // A second finalisation finds nothing and counts nothing.
+    expect(await finaliseAbandonedAttack(BASESAVEID, "test")).toBe("none");
+    expect(hatchHave()).toBe(4);
+  }, REPLAY_TIMEOUT_MS);
+});

@@ -64,6 +64,11 @@ mock.module("../../../server.js", () => ({
         user.save = saves[0];
       },
       transactional: async (run: (tx: typeof em) => Promise<unknown>) => run(em),
+      // The player's main row, found by user id to count a quest (the hatch quest, patch 7.7.3).
+      execute: async (sql: string, params: unknown[]) => {
+        if (!sql.includes('bym."user"')) throw new Error("no database");
+        return params[0] === ME ? [{ basesaveid: saves[0]!.basesaveid }] : [];
+      },
     },
   },
   redis: {},
@@ -181,5 +186,40 @@ describe("transferMonsters, the move as a delta (#196)", () => {
     expect((await run(movedBody(MAIN, OUTPOST, { C1: 11 }))).rule).toBe("holdings");
     expect((await run({ frombaseid: MAIN, tobaseid: OUTPOST })).rule).toBe("quantities");
     expect(flushed).toBe(0);
+  });
+});
+
+describe("transferMonsters, the hatch quest (patch 7.7.3)", () => {
+  /** A daily set holding one "hatch N of `monster`" quest at 0, for today. */
+  const hatchQuest = (monster: string, need: number) => ({
+    v: 1,
+    daily: {
+      period: new Date().toISOString().slice(0, 10),
+      swaps: 0,
+      bonus: false,
+      quests: [{ slot: 0, kind: "hatchMonster", variant: monster, need, have: 0, claimed: false, rewards: [] }],
+    },
+  });
+  const hatchHave = () => (saves[0]!.dailyquests as { daily: { quests: { have: number }[] } }).daily.quests[0]!.have;
+
+  test("a monster that finished hatching since the yard's last catch-up counts once, and no later catch-up counts it again", async () => {
+    const { catchUpYard } = await import("../../../services/yard/catchUp.js");
+    const { jobQuestEvents } = await import("../../../services/quests/hooks.js");
+    const now = Math.floor(Date.now() / 1000);
+    // The main yard's hatchery finished a Pokey a minute ago.
+    Object.assign(saves[0]!, {
+      dailyquests: hatchQuest("C1", 50),
+      monsters: { housed: { C1: 10 }, h: [["C1", 1]], hid: [2], hstage: [1], saved: now - 60 },
+      buildingdata: { "1": { id: 1, t: 15, l: 6 }, "2": { id: 2, t: 13, l: 1 } },
+    });
+
+    expect((await run(movedBody())).ok).toBe(true);
+    expect((saves[0]!.monsters as { housed: unknown }).housed).toEqual({ C1: 6 });
+    expect(hatchHave()).toBe(1);
+    expect(jobQuestEvents(catchUpYard(saves[0] as never, now))).toEqual({});
+
+    // Moving them back finds nothing new to count.
+    expect((await run(movedBody(OUTPOST, MAIN))).ok).toBe(true);
+    expect(hatchHave()).toBe(1);
   });
 });

@@ -44,6 +44,7 @@ interface StandIn {
   create: (entity: unknown, data: Row) => Row;
   persist: () => void;
   flush: () => Promise<void>;
+  execute: (sql: string, params: unknown[]) => Promise<Row[]>;
 }
 
 const em: StandIn = {
@@ -54,6 +55,12 @@ const em: StandIn = {
   create: (_entity: unknown, data: Row) => data,
   persist: () => {},
   flush: async () => {},
+  // A player's main row by user id, to count a quest (the hatch quest, patch 7.7.3).
+  execute: async (sql: string, params: unknown[]) => {
+    if (!sql.includes('bym."user"')) throw new Error("no database");
+    const main = (tables.get(Save) ?? []).find((row) => row.userid === params[0] && row.type === "main");
+    return main ? [{ basesaveid: main.basesaveid }] : [];
+  },
 };
 
 mock.module("../../../../server.js", () => ({
@@ -359,5 +366,40 @@ describe("the attack load ends the attacker's bought protection, notice and all 
 
     expect(attackerSave.protected).toBe(0);
     expect(attackerSave.storedata).toEqual({ BST: { q: 1, e: expect.any(Number) } });
+  });
+});
+
+describe("the hatch quest at the attack load (patch 7.7.3)", () => {
+  /** A daily set holding one "hatch N of `monster`" quest at 0, for today. */
+  const hatchQuest = (monster: string, need: number) => ({
+    v: 1,
+    daily: {
+      period: new Date(now() * 1000).toISOString().slice(0, 10),
+      swaps: 0,
+      bonus: false,
+      quests: [{ slot: 0, kind: "hatchMonster", variant: monster, need, have: 0, claimed: false, rewards: [] }],
+    },
+  });
+  const hatchHave = () => (defenderMain().dailyquests as { daily: { quests: { have: number }[] } }).daily.quests[0]!.have;
+
+  test("a defending outpost's monsters that finished hatching count once, on its owner's quests", async () => {
+    const { catchUpArmyRow } = await import("../../../../services/yard/armies.js");
+    const { jobQuestEvents } = await import("../../../../services/quests/hooks.js");
+    defenderMain().dailyquests = hatchQuest("C1", 50);
+    // The outpost's hatchery finished a queue of 4 Pokeys since its last catch-up.
+    const outpost = tables.get(Save)!.find((row) => row.basesaveid === 900)!;
+    Object.assign(outpost.buildingdata as Row, {
+      "20": { id: 20, t: 15, X: 100, Y: 100, l: 6 },
+      "21": { id: 21, t: 15, X: 160, Y: 100, l: 6 },
+      "9": { id: 9, t: 13, X: 100, Y: 160, l: 3 },
+    });
+    outpost.monsters = { saved: now() - 600, housed: { C1: 10 }, h: [["", 0, [["C1", 4, 3]]]], hid: [9], hstage: [0], hcc: [] };
+
+    await attack(OUTPOST_BASEID);
+
+    expect((outpost.monsters as { housed: unknown }).housed).toEqual({ C1: 14 });
+    expect(hatchHave()).toBe(4);
+    // Written with the attack, so the next catch-up of the outpost finds none of them.
+    expect(jobQuestEvents(catchUpArmyRow(outpost as never, defenderMain() as never, now()).jobs)).toEqual({});
   });
 });
