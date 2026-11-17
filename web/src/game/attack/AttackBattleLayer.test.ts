@@ -58,6 +58,13 @@ const sheetOf = (id: string, level = 1) => {
   return sheet;
 };
 
+/** The Flash table sheet itself (one pose, one row), as Classic draws it; King Wormzer's repaint has 12 rows. */
+const classicOf = (id: string) => {
+  const sheet = MONSTER_SPRITES[id];
+  if (!sheet) throw new Error(`no table sheet for ${id}`);
+  return sheet;
+};
+
 describe("ability tints (issue #222)", () => {
   it("colours the flame over the enrage over the loot aura, and leaves the rest white", () => {
     expect(abilityTint(null)).toBe(0xffffff);
@@ -71,7 +78,7 @@ describe("ability tints (issue #222)", () => {
 
 describe("headings and cells", () => {
   it("picks column 0 for a creep heading right, and walks the columns clockwise", () => {
-    const pokey = sheetOf("IC8");
+    const pokey = classicOf("IC8");
     const right = layoutCreep(
       creepOf(),
       pokey,
@@ -147,7 +154,7 @@ describe("headings and cells", () => {
   });
 
   it("stands a classic creep still on its walk row, and hops it while it walks", () => {
-    const pokey = sheetOf("IC8");
+    const pokey = classicOf("IC8");
     const standing = layoutCreep(
       creepOf(),
       pokey,

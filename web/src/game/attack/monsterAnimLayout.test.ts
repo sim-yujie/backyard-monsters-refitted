@@ -62,7 +62,7 @@ describe("applyLayout", () => {
     expect(applyLayout(POKEY, {})).toBe(POKEY);
   });
 
-  it("ships only the Bandito, Pokey, Bolt, Fink, Eye-ra, Fang, Ichi, Crabatron, Brain, D.A.V.E. (both skins), Project X, Wormzer, Zafreeti, Vorg, Teratorn, Octo-ooze, Rezghul, Slimeattikus (big and mini), Korath 5 and 6, Spurtz, Zagnoid, Malphus, Valgos, Balthazar, Grokus and Sabnox layouts, so every other sheet is exactly the Flash table", () => {
+  it("ships only the Bandito, Pokey, Bolt, Fink, Eye-ra, Fang, Ichi, Crabatron, Brain, D.A.V.E. (both skins), Project X, Wormzer, Zafreeti, Vorg, Teratorn, Octo-ooze, Rezghul, Slimeattikus (big and mini), Korath 5 and 6, Spurtz, Zagnoid, Malphus, Valgos, Balthazar, Grokus, Sabnox and King Wormzer layouts, so every other sheet is exactly the Flash table", () => {
     expect(Object.keys(REPAINT_LAYOUTS).sort()).toEqual([
       "monsters/13.png",
       "monsters/14.v1.png",
@@ -91,12 +91,13 @@ describe("applyLayout", () => {
       "monsters/spurtz.png",
       "monsters/valgos.png",
       "monsters/vorg_anim.png",
+      "monsters/wormzer.png",
       "monsters/zafreeti.v2.png",
       "monsters/zagnoid.png",
     ]);
-    const other = MONSTER_SPRITES["IC8"];
-    if (!other) throw new Error("no IC8");
-    expect(spriteFor("IC8")).toBe(other);
+    const other = MONSTER_SPRITES["worker"];
+    if (!other) throw new Error("no worker");
+    expect(spriteFor("worker")).toBe(other);
   });
 
   it("the Pokey layout matches the animated PNG and keeps the ball where it was", () => {
@@ -461,6 +462,33 @@ describe("applyLayout", () => {
     expect(sheet.height).toBe(48 * 12);
     expect(frameRect(sheet, 29, 11)).toEqual({ x: 29 * 58, y: 11 * 48, width: 58, height: 48 });
     expect(sheet.anchorX).toBe(old.anchorX + 8);
+    expect(sheet.anchorY).toBe(old.anchorY + 12);
+    expect(sheet.animations.idle).toEqual({ first: 0, count: 1, ticksPerFrame: 8 });
+    expect(sheet.animations.walk).toEqual({ first: 1, count: 6, ticksPerFrame: 8 });
+    expect(sheet.animations.attack?.first).toBe(7);
+    expect((sheet.animations.attack?.first ?? 0) + (sheet.animations.attack?.count ?? 0)).toBe(12);
+    expect(sheet.strikeFrame).toBe(2);
+  });
+
+  it("the King Wormzer layout matches the animated PNG and keeps the brute on its ground point", () => {
+    const old = MONSTER_SPRITES["IC8"];
+    if (!old) throw new Error("no IC8");
+    const sheet = spriteFor("IC8");
+    if (!sheet) throw new Error("no sprite for IC8");
+    const data = readFileSync(resolve(__dirname, "../../../../server/public/assets/monsters/kingwormzer-anim@4x.png"));
+    expect(data.readUInt32BE(16)).toBe(sheet.width * 4);
+    expect(data.readUInt32BE(20)).toBe(sheet.height * 4);
+    // The Flash cell is 58x42 (whole pixels, no creep); the repaint's is 5 px wider each side, 12 px taller on
+    // top and 2 at the bottom.
+    expect(sheet.frameWidth).toBe(old.frameWidth + 10);
+    expect(sheet.frameHeight).toBe(old.frameHeight + 14);
+    expect(sheet.directions).toBe(30);
+    expect(sheet.packedColumns).toBeUndefined();
+    expect(sheet.width).toBe(68 * 30);
+    expect(sheet.width * 4).toBeLessThanOrEqual(8192);
+    expect(sheet.height).toBe(56 * 12);
+    expect(frameRect(sheet, 29, 11)).toEqual({ x: 29 * 68, y: 11 * 56, width: 68, height: 56 });
+    expect(sheet.anchorX).toBe(old.anchorX + 5);
     expect(sheet.anchorY).toBe(old.anchorY + 12);
     expect(sheet.animations.idle).toEqual({ first: 0, count: 1, ticksPerFrame: 8 });
     expect(sheet.animations.walk).toEqual({ first: 1, count: 6, ticksPerFrame: 8 });
