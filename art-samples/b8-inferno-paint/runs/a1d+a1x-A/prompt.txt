@@ -1,0 +1,23 @@
+Use your image generation tool (one call) to create a new image and save it as sample-new.png in the current folder. Do not write code and do not copy or composite pixels from the inputs.
+
+Paint 2 pictures side by side in ONE image, in the same order as frames.png:
+- In the LEFT half: the DAMAGED look of the Academy (level 1), described below
+- In the RIGHT half: the DESTROYED look of the Academy (level 1), described below
+
+It is for the isometric strategy game Backyard Monsters (cartoony, colourful monster world), seen from the game's fixed isometric camera, the same camera, angle and orientation as frames.png (not mirrored).
+
+CAMERA: the isometric 3/4 view of frames.png, seen from the front and above at about 30 degrees, NOT a straight side view and NOT a symmetric picture. Put every part where frames.png has it, not mirrored and not rearranged.
+
+Input 1, frames.png: the OLD Flash versions, side by side at one scale, blown up, on grey (1536x1024): design, camera angle, ground footprint and size. Each new picture stands on the same footprint, centred on the same spot, base on the same ground line, about the same height, and is not wider. Read the small details from it.
+Input 2, style.png: the Modern look of the other Inferno buildings from the same game. See FINISH below.
+Input 3, base.png: the NEW whole building, already approved (Modern look). This is the building that is damaged or destroyed: same parts, same materials, same colours, same finish.
+
+the level 1 Academy DAMAGED (hit in a battle, still standing), as frames.png shows it: the rock base and its bone spikes whole; the gold shell DENTED and buckled, crumpled in deep folds; the pale slabs behind it broken and leaning apart at angles, the cog wheel knocked loose and tilted; the hub and its spike still on the right face; a few dark scorch marks
+the level 1 Academy DESTROYED: a low wreck on the broken rock base: the gold shell torn off and lying collapsed and crumpled over the rubble, tipped to the left; dark charred rubble and broken red-brown rock under it; the pale slabs snapped into stumps sticking up at angles at the right; the cog wheel lying in front; bone spikes still poking up at the edges
+
+THE FLASH DESIGN, REFRESHED (most important): keep the Flash silhouette, proportions, colour scheme and every signature part in the same place, so a player of the old game instantly recognises it, with richer materials, crisper detail, better lighting and sharper edges. NOT a new design, nothing added or left out, and NOT a plain copy.
+
+FINISH: the finish of style.png (the Modern Inferno buildings of the same game: the painted Under Hall and Resource Pod, the 3D Bone Cruncher and the 3D Magma Tower): crisp, clean, polished, almost rendered stylised 3D, smooth shading, small bevels catching the light, soft light from the upper left, ambient occlusion in the gaps, clean sharp edges, no thick black outline, no cel shading, no pixel art, no painterly brush mess. Right-hand faces in medium shade, readable, not black. COLOURS as Flash's, a little richer: the rock a deep red-brown with darker crevices and a faint warm glow in its deepest cracks, the bone spikes pale ivory, the shell a warm polished gold-orange with bright highlights (gold, not yellow plastic), its rim band pale silver-cream, the slabs pale warm grey stone, the hub dark iron. Not neon, not over-saturated.
+
+Output: ONE image, 1536x1024, the 2 pictures side by side, each centred in its own half of the image, at the same scale as each other (as in frames.png), each complete with margin, nothing crossing into the next one's part of the image.
+Background everywhere: flat pure green #00FF00, also in every gap between the parts. No ground plane, no grass, no tile, no cast shadow on the ground, no grid lines, no text, no labels. The building itself must contain no bright pure green.

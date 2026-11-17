@@ -3,8 +3,9 @@ import { fileURLToPath } from "node:url";
 import { afterEach, describe, expect, it } from "vitest";
 import { setClassicLook } from "@/game/classicLook";
 import { ArtState, resolveArt } from "./buildingArt";
+import { BUILDING_ART_ROWS } from "./buildingArtData";
 import { INFERNO_ART_ROWS } from "./buildingArtInfernoData";
-import { INFERNO_PAINTED_BUILDING_ART, tierArtFor, type TierImage } from "./buildingArtTiers";
+import { CAVERN_ART, INFERNO_PAINTED_BUILDING_ART, tierArtFor, type TierImage } from "./buildingArtTiers";
 import { animPolicy } from "./yardAnim";
 
 /** The game server's assets, which the painted pictures are served from. */
@@ -219,5 +220,114 @@ describe("the painted Resource Pod (the Inferno's storage)", () => {
     expect(tierArtFor(POD, 1, "inferno")).toBeNull();
     expect(resolveArt(POD, 1, ArtState.DEFAULT, "inferno")?.top.url).toBe("/assets/buildings/istoragesilo/top.1.v2.png");
     expect(resolveArt(POD, 1, ArtState.DESTROYED, "inferno")?.top.url).toBe("/assets/buildings/istoragesilo/top.1.destroyed.v2.png");
+  });
+});
+
+/** A painted picture stands where Flash's does: its base within 4 px of Flash's, centred within 4 px. */
+const standsLikeFlash = (painted: TierImage | undefined, old: TierImage, folder: string): void => {
+  expect(painted, old[0]).toBeTruthy();
+  const p = painted as TierImage;
+  expect(Math.abs(bottomOf(p, folder) - bottomOf(old, folder)), p[0]).toBeLessThanOrEqual(4);
+  const [width] = webpSize(folder + p[0]);
+  const [oldWidth] = pngSize(folder + old[0]);
+  expect(Math.abs(p[1] + width / 4 - (old[1] + oldWidth / 2)), p[0]).toBeLessThanOrEqual(4);
+};
+
+describe.each([
+  { type: 128, name: "Housing Bunker", dir: "ihousingbunker", levels: [1], flashTop: ["top.1.v2.png"] },
+])("the painted Inferno $name ($type)", ({ type, dir, levels, flashTop }) => {
+  const folder = `${ASSETS}buildings/${dir}/`;
+  const looks = INFERNO_PAINTED_BUILDING_ART[type] ?? [];
+  const flash = INFERNO_ART_ROWS.find(([one]) => one === type);
+
+  it("has a look for each of Flash's, at the same levels", () => {
+    expect(looks.map((look) => look.from)).toEqual(flash?.[3].map(([level]) => level));
+    expect(looks.map((look) => look.from)).toEqual(levels);
+  });
+
+  it("names only pictures that are on disk", () => {
+    for (const look of looks) {
+      const files = [look.top, look.shadow, look.damaged?.top, look.damaged?.shadow, look.destroyed?.top, look.destroyed?.shadow];
+      for (const file of files) {
+        expect(file).toBeTruthy();
+        expect(existsSync(folder + (file?.[0] ?? "")), file?.[0]).toBe(true);
+      }
+    }
+  });
+
+  it("stands where Flash's does, whole, damaged and destroyed", () => {
+    looks.forEach((look, i) => {
+      const [, top, damaged, destroyed] = flash?.[3][i] ?? [];
+      standsLikeFlash(look.top, top as TierImage, folder);
+      standsLikeFlash(look.damaged?.top, damaged as TierImage, folder);
+      standsLikeFlash(look.destroyed?.top, destroyed as TierImage, folder);
+    });
+  });
+
+  it("keeps Flash's own shadows; a state with none of its own takes its look's, as Flash's does", () => {
+    looks.forEach((look, i) => {
+      const level = flash?.[3][i];
+      expect(look.shadow).toEqual(level?.[4]);
+      expect(look.damaged?.shadow).toEqual(level?.[5] ?? level?.[4]);
+      expect(look.destroyed?.shadow).toEqual(level?.[6] ?? level?.[4]);
+    });
+  });
+
+  it("shows in the Inferno yard at each look's levels, whole, damaged and destroyed, standing still", () => {
+    const root = `/assets/buildings/${dir}/`;
+    for (const look of looks) {
+      const n = look.from;
+      expect(resolveArt(type, n, ArtState.DEFAULT, "inferno")?.top.url).toBe(`${root}top.c${n}@2x.webp`);
+      expect(resolveArt(type, n, ArtState.DEFAULT, "inferno")?.anims).toEqual([]);
+      expect(resolveArt(type, n, ArtState.DAMAGED, "inferno")?.top.url).toBe(`${root}top.c${n}.damaged@2x.webp`);
+      expect(resolveArt(type, n, ArtState.DESTROYED, "inferno")?.top.url).toBe(`${root}top.c${n}.destroyed@2x.webp`);
+      expect(resolveArt(type, n, ArtState.DAMAGED, "inferno")?.shadow?.url).toBe(`${root}${look.damaged?.shadow?.[0]}`);
+    }
+    expect(resolveArt(type, 4, ArtState.DEFAULT, "inferno")?.top.url).toBe(`${root}top.c${levels.at(-1)}@2x.webp`);
+  });
+
+  it("goes back to Flash's with the Classic look", () => {
+    setClassicLook(true);
+    expect(tierArtFor(type, 1, "inferno")).toBeNull();
+    expect(resolveArt(type, 1, ArtState.DEFAULT, "inferno")?.top.url).toBe(`/assets/buildings/${dir}/${flashTop[0]}`);
+  });
+});
+
+describe("the painted Inferno Cavern (Moloch's cave on the main yard)", () => {
+  const CAVE = 127;
+  const folder = `${ASSETS}buildings/iportal/`;
+  const flash = BUILDING_ART_ROWS.find(([type]) => type === CAVE);
+
+  it("has a stage for each of Flash's five, at the same levels", () => {
+    expect(CAVERN_ART.map((look) => look.from)).toEqual(flash?.[3].map(([level]) => level));
+    expect(CAVERN_ART.map((look) => look.from)).toEqual([1, 2, 3, 4, 5]);
+  });
+
+  it("names only pictures that are on disk, and keeps Flash's main-yard shadows (stage 5 only)", () => {
+    CAVERN_ART.forEach((look, i) => {
+      expect(existsSync(folder + look.top[0]), look.top[0]).toBe(true);
+      expect(look.shadow).toEqual(flash?.[3][i]?.[4] ?? null);
+      expect(look.damaged).toBeUndefined();
+      expect(look.destroyed).toBeUndefined();
+    });
+    expect(CAVERN_ART[4]?.shadow?.[0]).toBe("shadow.5.v2.jpg");
+  });
+
+  it("stands where Flash's does at every stage, inside the box the yard keeps room for (cave.ts)", () => {
+    CAVERN_ART.forEach((look, i) => {
+      standsLikeFlash(look.top, flash?.[3][i]?.[1] as TierImage, folder);
+      expect(look.top[1]).toBeGreaterThanOrEqual(-169);
+      expect(look.top[2]).toBeGreaterThanOrEqual(-172);
+    });
+  });
+
+  it("shows on the main yard with the Modern look, and Flash's with the Classic look", () => {
+    for (const level of [1, 2, 3, 4, 5]) {
+      expect(resolveArt(CAVE, level, ArtState.DEFAULT)?.top.url).toBe(`/assets/buildings/iportal/top.c${level}@2x.webp`);
+    }
+    expect(resolveArt(CAVE, 2, ArtState.DEFAULT)?.shadow).toBeNull();
+    expect(resolveArt(CAVE, 5, ArtState.DEFAULT)?.shadow?.url).toBe("/assets/buildings/iportal/shadow.5.v2.jpg");
+    setClassicLook(true);
+    expect(resolveArt(CAVE, 3, ArtState.DEFAULT)?.top.url).toBe("/assets/buildings/iportal/top.3.v2.png");
   });
 });
