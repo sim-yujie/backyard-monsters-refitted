@@ -18,9 +18,12 @@ export const gpuTextureLimit = (renderer: Renderer): number | null => {
   let size: unknown = null;
   if (gl && typeof gl.getParameter === "function") size = gl.getParameter(gl.MAX_TEXTURE_SIZE);
   if (typeof size !== "number" || size <= 0) {
-    const device = (renderer as { device?: { limits?: { maxTextureDimension2D?: unknown } } })
-      .device;
-    size = device?.limits?.maxTextureDimension2D;
+    // WebGPU: Pixi's `renderer.gpu.device` is the GPUDevice (`renderer.device`
+    // is its device system, which has no limits); `device.limits` kept as a
+    // fallback.
+    type Limits = { limits?: { maxTextureDimension2D?: unknown } };
+    const webgpu = renderer as { gpu?: { device?: Limits }; device?: Limits };
+    size = webgpu.gpu?.device?.limits?.maxTextureDimension2D ?? webgpu.device?.limits?.maxTextureDimension2D;
   }
   if (typeof size !== "number" || size <= 0) return null;
   // Remembered for every sheet cutter (the guide's walk-ins too, which have no

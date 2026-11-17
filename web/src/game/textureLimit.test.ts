@@ -98,4 +98,10 @@ describe("textureLimit", () => {
     expect(overLimit(railgunStrip())).toBe(true);
     expect(gpuTextureLimit({} as never)).toBeNull();
   });
+
+  it("reads a WebGPU renderer's limit from its GPU device", () => {
+    const renderer = { gpu: { device: { limits: { maxTextureDimension2D: 4096 } } }, device: {} } as never;
+    expect(gpuTextureLimit(renderer)).toBe(4096);
+    expect(overLimit(railgunStrip())).toBe(true);
+  });
 });
