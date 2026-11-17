@@ -40,6 +40,30 @@ def desat(im, f):
     return Image.fromarray(np.clip(a, 0, 255).astype("uint8"), "RGBA")
 
 
+# The Bunker's three pictures came out in three tones (cream, tan, salmon) and far brighter than Flash's (47/39/44%
+# against 25%): each is pulled onto one hue (Flash's earthy R:G:B, a touch warmer) and a gamma takes it to TONE_BRIGHT,
+# which also deepens the horns' feet toward Flash's dark umber.
+TONE = {"b1", "b1d", "b1x"}
+TONE_RATIO = np.array([1.34, 1.0, 0.71])
+TONE_BRIGHT = 0.37
+TONE_SAT = 0.85   # the gamma raises saturation; back toward the Modern style note's ~55%
+
+
+def tone(im):
+    a = np.asarray(im).astype(float)
+    solid = a[..., 3] > 230
+    mean = a[..., :3][solid].mean(0)
+    rgb = a[..., :3] * (TONE_RATIO / (mean / mean[1]))[None, None, :]
+    rgb = np.clip(rgb, 0, 255) / 255
+    lo, hi = 0.5, 3.0
+    for _ in range(40):
+        g = (lo + hi) / 2
+        lum = (rgb[solid] ** g) @ np.array([0.299, 0.587, 0.114])
+        lo, hi = (g, hi) if lum.mean() > TONE_BRIGHT else (lo, g)
+    a[..., :3] = (rgb ** g) * 255
+    return Image.fromarray(np.clip(a, 0, 255).astype("uint8"), "RGBA")
+
+
 def name_of(look):
     b, lv, st = parse(look)
     return f"top.c{lv}{'.' + st if st else ''}@2x.webp"
@@ -50,6 +74,8 @@ def save2x(look):
     CW, CH, OX, OY = canvas(b)
     im4 = Image.open(OUT / "runs" / PICK[look] / f"new-4x-{look}.png").convert("RGBA")
     im4 = desat(im4, SAT[look])
+    if look in TONE:
+        im4 = desat(tone(im4), TONE_SAT)
     if b == "c":   # on Flash's own soft ground
         g = flash_ground(look).resize((CW * UP, CH * UP), Image.LANCZOS)
         g.alpha_composite(im4)
