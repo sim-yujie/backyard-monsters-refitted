@@ -46,7 +46,7 @@ import {
   type ChampionLesson,
 } from "./brain.js";
 import { DRULL_ID, FOMOR_ID, GORGO_ID, KORATH_ID } from "./champions.js";
-import { DEFAULT_STANCE, ZERO_WEIGHTS, stanceWeights } from "./stance.js";
+import { DEFAULT_STANCE, MONSTER_HABIT_KEYS, ZERO_WEIGHTS, stanceWeights } from "./stance.js";
 import type { ChampionStance, HabitKey, StanceWeights } from "./stance.js";
 import { championByType } from "./stats.js";
 import type { CombatTargetKind } from "./types.js";
@@ -300,6 +300,12 @@ export interface ModeRecord {
 /** `hs` on a champion's save entry: every attack it learned from, and each Mode's record. */
 export interface HabitStats {
   readonly n: number;
+  /**
+   * Which way its attacks are judged: {@link FOMOR_JUDGE} once a Fomor has
+   * been judged by the monsters it backs. Its usual scores from before were
+   * on another scale, so they restart then ({@link learnHabits}).
+   */
+  readonly j?: number;
   readonly off?: ModeRecord;
   readonly hyb?: ModeRecord;
   readonly def?: ModeRecord;
@@ -336,15 +342,66 @@ export const parseHabitStats = (raw: unknown, legacy?: unknown): HabitStats => {
   if (!isRecord(raw)) {
     return { n: isRecord(legacy) ? wholeCount(legacy["n"]) : 0 };
   }
-  const out: { n: number; off?: ModeRecord; hyb?: ModeRecord; def?: ModeRecord } = {
+  const out: { n: number; j?: number; off?: ModeRecord; hyb?: ModeRecord; def?: ModeRecord } = {
     n: wholeCount(raw["n"]),
   };
+  const judge = wholeCount(raw["j"]);
+  if (judge > 0) out.j = judge;
   for (const short of ["off", "hyb", "def"] as const) {
     const record = parseModeRecord(raw[short]);
     if (record) out[short] = record;
   }
   return out;
 };
+
+/** {@link HabitStats.j} for a Fomor judged by the monsters it backs. */
+export const FOMOR_JUDGE = 1;
+
+/** Whether a lesson carries Fomor's own figures (`ChampionLesson.army` and on). */
+const judgedByMonsters = (lesson: ChampionLesson): boolean =>
+  lesson.army !== undefined || lesson.backed !== undefined;
+
+const clamp01 = (value: number): number =>
+  Number.isFinite(value) ? Math.min(Math.max(value, 0), 1) : 0;
+
+/**
+ * The score, 0 to 1, a champion's habits learn from: `lessonScore` for every
+ * champion but Fomor. Fomor is judged by the monsters it backs, not by its
+ * own few points of damage or its nearly always full health (design note
+ * round 2): Offensive the share of your other monsters' damage to buildings
+ * dealt from inside its rage ring while it fought, Defensive the share of the
+ * hurt monsters it backed that lived, Hybrid the mean of the two. null when
+ * the attack gave nothing to judge it by (no monster damage, none backed):
+ * that attack then teaches nothing and leaves the usual score alone.
+ */
+export const habitScore = (lesson: ChampionLesson, stance: ChampionStance): number | null => {
+  if (!judgedByMonsters(lesson)) return lessonScore(lesson, stance);
+  const ring =
+    lesson.army !== undefined && lesson.army > 0 ? clamp01((lesson.ring ?? 0) / lesson.army) : null;
+  const lived =
+    lesson.backed !== undefined && lesson.backed > 0
+      ? clamp01((lesson.backedLived ?? 0) / lesson.backed)
+      : null;
+  if (stance === "offensive") return ring;
+  if (stance === "defensive") return lived;
+  return ring !== null && lived !== null ? (ring + lived) / 2 : null;
+};
+
+/** The stats with every Mode's usual scores restarted, counts kept, under {@link FOMOR_JUDGE}. */
+const restartUsual = (stats: HabitStats): HabitStats => {
+  const out: { n: number; j: number; off?: ModeRecord; hyb?: ModeRecord; def?: ModeRecord } = {
+    n: stats.n,
+    j: FOMOR_JUDGE,
+  };
+  for (const short of ["off", "hyb", "def"] as const) {
+    const record = stats[short];
+    if (record) out[short] = { n: record.n, u: {} };
+  }
+  return out;
+};
+
+const isMonsterHabit = (key: HabitKey): boolean =>
+  (MONSTER_HABIT_KEYS as readonly HabitKey[]).includes(key);
 
 /**
  * The book and stats after one landed attack in `stance` (see the file
@@ -356,8 +413,10 @@ export const parseHabitStats = (raw: unknown, legacy?: unknown): HabitStats => {
  *     habit    = round, within its bounds
  *     usual   += BASELINE_RATE × (score - usual)   (the first attack only sets it)
  *
- * where `usual` is the Mode's usual score on this kind of yard and `credit`
- * the habit's mean over the picks of chosen less the candidates' mean.
+ * where `score` is {@link habitScore}, `usual` the Mode's usual score on
+ * this kind of yard and `credit` the habit's mean over its looks (building
+ * looks, or for Fomor's monster habits its looks at hurt monsters) of chosen
+ * less the candidates' mean. An attack with no score only fades and counts.
  *
  * @param book - The entry's `h`, as stored.
  * @param stats - The entry's `hs`, as stored.
@@ -375,19 +434,25 @@ export const learnHabits = (
 ): { book: HabitBook; stats: HabitStats } => {
   const id = championByType(lesson.t);
   const all = parseHabitBook(book, id);
-  const known = parseHabitStats(stats, legacy);
+  const parsed = parseHabitStats(stats, legacy);
+  // A Fomor's first attack judged by its monsters starts its usual scores afresh.
+  const known =
+    judgedByMonsters(lesson) && parsed.j !== FOMOR_JUDGE ? restartUsual(parsed) : parsed;
   const short = STANCE_SHORT[stance];
   const record = known[short] ?? { n: 0, u: {} };
   const kind = lesson.k ?? "main";
-  const score = lessonScore(lesson, stance);
+  const score = habitScore(lesson, stance);
   const usual = record.u[kind];
 
   const before = all[short] ?? {};
   const after: Partial<Record<HabitKey, number>> = {};
   for (const habit of habitsOf(id, stance)) {
     let weight = Math.trunc((before[habit] ?? 0) * (1 - HABIT_FADE));
-    if (usual !== undefined && lesson.picks > 0) {
-      const credit = (lesson.credit[habit] ?? 0) / lesson.picks;
+    // Fomor's monster habits are credited on its looks at hurt monsters, the
+    // rest on building looks: each is a mean over its own looks.
+    const looks = isMonsterHabit(habit) ? (lesson.allyPicks ?? lesson.picks) : lesson.picks;
+    if (score !== null && usual !== undefined && looks > 0) {
+      const credit = (lesson.credit[habit] ?? 0) / looks;
       weight += Math.min(Math.max(rate * (score - usual) * credit, -HABIT_STEP), HABIT_STEP);
     }
     const [low, high] = habitBounds(habit, stance);
@@ -399,13 +464,16 @@ export const learnHabits = (
   if (Object.keys(after).length > 0) nextBook[short] = after;
   else delete nextBook[short];
 
-  const nextUsual = usual === undefined ? score : usual + BASELINE_RATE * (score - usual);
+  // Nothing to judge it by: the attack counts and fades, the usual score stays.
+  const nextUsual =
+    score === null ? usual : usual === undefined ? score : usual + BASELINE_RATE * (score - usual);
+  const u = nextUsual === undefined ? record.u : { ...record.u, [kind]: nextUsual };
   return {
     book: nextBook,
     stats: {
       ...known,
       n: known.n + 1,
-      [short]: { n: record.n + 1, u: { ...record.u, [kind]: nextUsual } },
+      [short]: { n: record.n + 1, u },
     },
   };
 };

@@ -5,10 +5,12 @@ import { DRULL_ID, FOMOR_ID, GORGO_ID, KORATH_ID, KRALLEN_ID } from "./champions
 import { createBattle } from "./engine.js";
 import {
   CHAMPION_HABITS,
+  FOMOR_JUDGE,
   HABIT_CAP,
   HYBRID_HABIT_CAP,
   habitCap,
   habitPips,
+  habitScore,
   habitsOf,
   hasHabits,
   learnHabits,
@@ -394,5 +396,110 @@ describe("replay safety", () => {
     expect(two.digest).toBe(one.digest);
     expect(two.checkpoints).toEqual(one.checkpoints);
     expect(one.digest).not.toBe(replay({ t: GORGO, l: 2, s: "hybrid" }).digest);
+  });
+});
+
+describe("Fomor is judged by the monsters it backs (design note round 2)", () => {
+  const fomorLesson = (over: Partial<ChampionLesson>): ChampionLesson => ({
+    t: FOMOR,
+    picks: 0,
+    credit: { tower: 0, loot: 0, finish: 0, focus: 0, threat: 0 },
+    // Its own figures: half its damage, all its health. Never read when the
+    // monsters' figures are there.
+    dealt: 50,
+    potential: 100,
+    startHp: 100,
+    endHp: 100,
+    ...over,
+  });
+
+  it("scores Offensive by the ring's share of the monsters' damage, Defensive by the backed that lived", () => {
+    const lesson = fomorLesson({ army: 1000, ring: 800, backed: 4, backedLived: 1 });
+    expect(habitScore(lesson, "offensive")).toBeCloseTo(0.8);
+    expect(habitScore(lesson, "defensive")).toBeCloseTo(0.25);
+    expect(habitScore(lesson, "hybrid")).toBeCloseTo(0.525);
+  });
+
+  it("has no score with nothing to judge it by, and then learns nothing and keeps its usual", () => {
+    const blank = fomorLesson({ army: 0, ring: 0, backed: 0, backedLived: 0 });
+    for (const stance of CHAMPION_STANCES) expect(habitScore(blank, stance)).toBeNull();
+    expect(habitScore(fomorLesson({ army: 100, ring: 50, backed: 0, backedLived: 0 }), "hybrid")).toBeNull();
+    const stats: HabitStats = { n: 5, j: FOMOR_JUDGE, off: { n: 5, u: { tribe: 0.4 } } };
+    const learned = learnHabits({ off: { big: 40 } }, stats, { ...blank, k: "tribe" }, "offensive");
+    expect(learned.book.off?.big).toBe(36);
+    expect(learned.stats.off).toEqual({ n: 6, u: { tribe: 0.4 } });
+    expect(learned.stats.n).toBe(6);
+  });
+
+  it("restarts a Fomor's usual scores, from its own old figures, the first time it is judged by its monsters", () => {
+    const old: HabitStats = { n: 300, off: { n: 40, u: { tribe: 0.9998, main: 0.2 } }, def: { n: 9, u: { tribe: 1 } } };
+    const lesson = { ...fomorLesson({ army: 1000, ring: 300, backed: 2, backedLived: 1 }), k: "tribe" as const };
+    const first = learnHabits({ off: { big: 20 } }, old, lesson, "offensive");
+    // No step from the old scale: only the fade, and the new usual is this score.
+    expect(first.book.off?.big).toBe(18);
+    expect(first.stats).toEqual({ n: 301, j: FOMOR_JUDGE, off: { n: 41, u: { tribe: 0.3 } }, def: { n: 9, u: {} } });
+    // Once judged so, it is never restarted again.
+    const second = learnHabits(first.book, first.stats, { ...lesson, ring: 500 }, "offensive");
+    expect(second.stats.off?.u.tribe).toBeCloseTo(0.35);
+    // Every other champion keeps its usual scores and gets no mark.
+    const gorgo = learnHabits({}, old, { ...fomorLesson({}), t: GORGO, k: "tribe" }, "offensive");
+    expect(gorgo.stats.j).toBeUndefined();
+    expect(gorgo.stats.off?.u.main).toBe(0.2);
+  });
+
+  it("leaves every other champion's score as it was", () => {
+    const gorgo = { ...fomorLesson({}), t: GORGO };
+    expect(habitScore(gorgo, "offensive")).toBeCloseTo(0.5);
+    expect(habitScore(gorgo, "defensive")).toBeCloseTo(1);
+  });
+
+  it("means its monster habits over its looks at monsters, not over every look", () => {
+    // 2 looks at hurt monsters, each picking a bigger one by 1; 100 building looks.
+    const lesson = (ring: number) =>
+      fomorLesson({ picks: 100, allyPicks: 2, credit: { tower: 0, loot: 0, finish: 0, focus: 0, threat: 0, big: 2 }, army: 1000, ring });
+    const first = learnHabits({}, undefined, lesson(200), "offensive");
+    const second = learnHabits(first.book, first.stats, lesson(400), "offensive");
+    // 1000 × (0.4 - 0.2) × (2 / 2) is past the step, so it takes a full step.
+    expect(second.book.off?.big).toBe(15);
+  });
+
+  it("records the monsters' figures on a Fomor's lesson, and only watches", () => {
+    const YARD: CombatBuildingDataMap = {
+      "1": { id: 1, t: 14, l: 5, X: 250, Y: 250 },
+      "2": sniper(2, 400, 300, 5),
+      "3": sniper(3, 300, 400, 5),
+      "4": harvester(4, -350, -350),
+    };
+    const replay = (t: number, stance: ChampionStance, learn: boolean) =>
+      replayAttack({
+        buildingdata: YARD,
+        buildinghealthdata: {},
+        resources: RESOURCES,
+        kind: "main",
+        log: {
+          v: 1,
+          seed: 22001,
+          events: [{ kind: "fling", t: 0, x: 0, y: 0, r: 100, monsters: { C1: 6, C2: 4 }, champion: { t, l: 3, s: stance } }],
+        },
+        levels: {},
+        playerLevel: 20,
+        tailTicks: 6000,
+        ...(learn ? { learn: true } : {}),
+      });
+    for (const stance of CHAMPION_STANCES) {
+      const watched = replay(FOMOR, stance, true);
+      expect(watched.digest).toBe(replay(FOMOR, stance, false).digest);
+      const lesson = watched.lessons?.[0];
+      expect(lesson?.t).toBe(FOMOR);
+      expect(lesson?.army).toBeGreaterThan(0);
+      expect(lesson?.ring).toBeGreaterThanOrEqual(0);
+      expect(lesson?.ring).toBeLessThanOrEqual(lesson?.army ?? 0);
+      expect(lesson?.backed).toBeGreaterThan(0);
+      expect(lesson?.backedLived).toBeLessThanOrEqual(lesson?.backed ?? 0);
+      expect(lesson?.allyPicks).toBeGreaterThan(0);
+    }
+    const gorgo = replay(GORGO, "offensive", true).lessons?.[0];
+    expect(gorgo?.army).toBeUndefined();
+    expect(gorgo?.allyPicks).toBeUndefined();
   });
 });
