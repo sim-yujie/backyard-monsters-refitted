@@ -1667,7 +1667,7 @@ describe("the Flinger's room (owner, 12 Nov 2026)", () => {
   });
 });
 
-describe("the hatch quest through the save that ends the attack (patch 7.7.3)", () => {
+describe("the hatch quest through the save that ends the attack (patch 7.8)", () => {
   const now = () => Math.floor(Date.now() / 1000);
   /** A daily set holding one "hatch N of `monster`" quest at 0, for today. */
   const hatchQuest = (monster: string, need: number) => ({

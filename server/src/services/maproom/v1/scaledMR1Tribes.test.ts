@@ -1107,7 +1107,7 @@ describe("Map Room 1 tribe attack left without a save", () => {
   });
 });
 
-describe("Map Room 1 tribe save: the hatch quest (patch 7.7.3)", () => {
+describe("Map Room 1 tribe save: the hatch quest (patch 7.8)", () => {
   /** A day's record with one "Hatch 50 Pokeys" quest. */
   const hatchQuestDay = () =>
     questsJson({

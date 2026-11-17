@@ -1109,7 +1109,7 @@ describe("a countdown the attack's catch-up finishes", () => {
   }, REPLAY_TIMEOUT_MS);
 });
 
-describe("the hatch quest when the server finishes the attack (patch 7.7.3)", () => {
+describe("the hatch quest when the server finishes the attack (patch 7.8)", () => {
   /** A daily set holding one "hatch N of `monster`" quest at 0, for today. */
   const hatchQuest = (monster: string, need: number) => ({
     v: 1,

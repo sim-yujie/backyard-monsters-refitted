@@ -55,7 +55,7 @@ const em: StandIn = {
   create: (_entity: unknown, data: Row) => data,
   persist: () => {},
   flush: async () => {},
-  // A player's main row by user id, to count a quest (the hatch quest, patch 7.7.3).
+  // A player's main row by user id, to count a quest (the hatch quest, patch 7.8).
   execute: async (sql: string, params: unknown[]) => {
     if (!sql.includes('bym."user"')) throw new Error("no database");
     const main = (tables.get(Save) ?? []).find((row) => row.userid === params[0] && row.type === "main");
@@ -369,7 +369,7 @@ describe("the attack load ends the attacker's bought protection, notice and all 
   });
 });
 
-describe("the hatch quest at the attack load (patch 7.7.3)", () => {
+describe("the hatch quest at the attack load (patch 7.8)", () => {
   /** A daily set holding one "hatch N of `monster`" quest at 0, for today. */
   const hatchQuest = (monster: string, need: number) => ({
     v: 1,

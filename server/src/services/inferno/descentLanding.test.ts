@@ -50,7 +50,7 @@ mock.module("../../server.js", () => ({
       flush: async () => {
         flushes += 1;
       },
-      // The attacker's main row, locked to count a quest (the hatch quest, patch 7.7.3).
+      // The attacker's main row, locked to count a quest (the hatch quest, patch 7.8).
       transactional: async (cb: (tx: unknown) => Promise<unknown>) =>
         cb({
           findOne: async (_entity: unknown, where: Record<string, unknown>) =>
@@ -882,7 +882,7 @@ describe("a Descent save the server's battle overrules (reject mode)", () => {
   });
 });
 
-describe("the hatch quest through the save that ends a Descent attack (patch 7.7.3)", () => {
+describe("the hatch quest through the save that ends a Descent attack (patch 7.8)", () => {
   /** A daily set holding one "hatch N of `monster`" quest at 0, for today. */
   const hatchQuest = (monster: string, need: number) => ({
     v: 1,

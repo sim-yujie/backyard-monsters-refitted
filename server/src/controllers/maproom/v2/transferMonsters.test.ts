@@ -64,7 +64,7 @@ mock.module("../../../server.js", () => ({
         user.save = saves[0];
       },
       transactional: async (run: (tx: typeof em) => Promise<unknown>) => run(em),
-      // The player's main row, found by user id to count a quest (the hatch quest, patch 7.7.3).
+      // The player's main row, found by user id to count a quest (the hatch quest, patch 7.8).
       execute: async (sql: string, params: unknown[]) => {
         if (!sql.includes('bym."user"')) throw new Error("no database");
         return params[0] === ME ? [{ basesaveid: saves[0]!.basesaveid }] : [];
@@ -189,7 +189,7 @@ describe("transferMonsters, the move as a delta (#196)", () => {
   });
 });
 
-describe("transferMonsters, the hatch quest (patch 7.7.3)", () => {
+describe("transferMonsters, the hatch quest (patch 7.8)", () => {
   /** A daily set holding one "hatch N of `monster`" quest at 0, for today. */
   const hatchQuest = (monster: string, need: number) => ({
     v: 1,
