@@ -149,6 +149,12 @@ describe.skipIf(!dbName)("the Defences routes on a real database (issue #360)", 
     expect((await replayAnswer(em(), as(DEFENDER), { id: String(id) })).status).toBe(404);
   });
 
+  test("an older rules version these rules still play the same is playable (patch 7.8)", async () => {
+    await storeDefenceReplay(orm.em, record(DEFENDER, 1), "b4f0c156a8d2afee");
+    const [defence] = (await listAnswer(em(), as(DEFENDER))).body.defences as Record<string, any>[];
+    expect(defence).toMatchObject({ rulesVersion: "b4f0c156a8d2afee", hasReplay: true, playable: true });
+  });
+
   test("an older rules version is listed and sent, but not playable", async () => {
     const id = await storeDefenceReplay(orm.em, record(DEFENDER, 1), "0123456789abcdef");
     const [defence] = (await listAnswer(em(), as(DEFENDER))).body.defences as Record<string, any>[];

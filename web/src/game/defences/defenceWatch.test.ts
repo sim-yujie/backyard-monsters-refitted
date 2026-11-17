@@ -41,6 +41,11 @@ describe("the version check", () => {
     expect(watchRefusal(run("0123456789abcdef"))).toBe("update");
   });
 
+  it("plays one fought under older rules that these rules still play the same (patch 7.8)", () => {
+    expect(defenceRefusal({ hasReplay: true, playable: true, rulesVersion: "b4f0c156a8d2afee" }, "new")).toBeNull();
+    expect(watchRefusal(run("b4f0c156a8d2afee"))).toBeNull();
+  });
+
   it("refuses one the server no longer calls playable, for a client that has not reloaded", () => {
     expect(defenceRefusal({ hasReplay: true, playable: false, rulesVersion: "abc" }, "abc")).toBe("update");
   });
