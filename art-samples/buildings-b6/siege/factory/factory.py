@@ -33,6 +33,7 @@ from mathutils import Euler, Matrix, Vector
 
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE.parents[1] / "inferno"))
+sys.path.insert(0, str(HERE))
 import kit  # noqa: E402
 
 kit.OUT = HERE / os.environ.get("PB_SUB", ".")
@@ -55,7 +56,8 @@ XA = XM - 0.78              # the rocker arm's plane, between the posts
 ZP = 14.3                   # the rocker's pivot
 ZTOP = 16.25                 # the tall posts' tops
 YS, ZS = -1.4, 10.6        # the shaft's line (along X), in front of the posts
-XW, XW2 = -0.85, -4.5      # the big wheel and the small wheel on the shaft
+XW, XW2 = -0.45, -4.1      # the big wheel and the small wheel on the shaft
+REST = 6.0                  # the arm's far end hangs this much at rest (Flash's arm slopes less than the wall)
 LIFT = 29.0                 # the rocker's swing, degrees
 V = Vector
 M = {}
@@ -246,7 +248,7 @@ def post(name, x, y, z0, z1, s, mat, parent=None, bevel=0.06):
 
 # ------------------------------------------------------------------------------------------------------------ parts
 def mound():
-    prof = [(0.01, 0.0), (4.05, 0.0), (4.05, 0.7), (3.9, ZM - 0.5), (3.5, ZM), (0.01, ZM + 0.05)]
+    prof = [(0.01, 0.0), (4.3, 0.0), (4.3, 0.6), (4.1, ZM - 0.55), (3.6, ZM - 0.1), (0.01, ZM + 0.05)]
     ob = kit.lathe("mound", prof, (0, 0, 0), M["lava"], verts=64)
     tex = bpy.data.textures.new("lumps", "VORONOI")
     tex.noise_scale = 1.1
@@ -270,9 +272,25 @@ def mound():
         limb(f"root{i}", [(p0, 0.13), (p1, 0.06), (p2, 0.008)], M["grass" if i % 5 == 1 else "root"], seg=6, sub=5)
 
 
+def blades():
+    """Flash's soft green blades standing round the front of the mound, their tips over the lava's lower edge."""
+    n = 13
+    for i in range(n):
+        a = math.radians(-45 + (i - (n - 1) / 2) * 13.0 + rr.uniform(-3, 3))
+        d = V((math.cos(a), math.sin(a), 0))
+        sd = V((-d.y, d.x, 0))
+        r0 = rr.uniform(4.75, 5.15)
+        h = rr.uniform(0.9, 1.5)
+        lean = rr.uniform(-0.35, 0.35)
+        p0 = d * r0 + V((0, 0, -0.05))
+        p1 = d * (r0 - 0.35) + sd * lean * 0.4 + V((0, 0, h * 0.5))
+        p2 = d * (r0 - 0.75) + sd * lean + V((0, 0, h))
+        limb(f"blade{i}", [(p0, rr.uniform(0.13, 0.2)), (p1, 0.11), (p2, 0.01)], M["grass"], seg=8, sub=5)
+
+
 def vat():
-    kit.box("vat", (2 * H, 2 * H, 2.0), (0, 0, ZT - 2.0), M["vat"], bevel=0.08)
-    belly = kit.box("vat-belly", (2 * H + 0.5, 2 * H + 0.5, ZT - 1.5), (0, 0, 0.6), M["vat"], bevel=1.1)
+    kit.box("vat", (2 * H, 2 * H, 1.3), (0, 0, ZT - 1.3), M["vat"], bevel=0.08)
+    belly = kit.box("vat-belly", (2 * H + 0.25, 2 * H + 0.25, ZT - 0.9), (0, 0, 0.6), M["vat"], bevel=1.1)
     belly.modifiers["bevel"].segments = 8
     belly.modifiers["bevel"].limit_method = "NONE"
     lumpy(belly, 0.12)
@@ -296,62 +314,116 @@ def vat():
 LB = {}          # the bones' strap points
 
 
+def seg_bone(name, a, b, rs, ra, rb, mat, bend=0.0, cond_a=True, cond_b=True, parent=None, vox=0.05, lumps=0.07):
+    """One real long bone from a to b: a shaft that narrows to rs in the middle and bows a little (bend), flaring to
+    its ends (radii ra, rb), each end a pair of rounded condyles side by side as seen from the camera (or one blunt
+    knob). The pieces are fused into one skin (voxel remesh), smoothed and made uneven."""
+    a, b = V(a), V(b)
+    ax = b - a
+    ln = ax.length
+    ax.normalize()
+    side = ax.cross(kit.cam_fwd()).normalized()
+    if kit.scr(a + side)[0] > kit.scr(a)[0]:
+        side = -side                                  # side points to screen left: bend > 0 bows the shaft left
+    dep = ax.cross(side).normalized()
+    if dep.dot(kit.cam_fwd()) > 0:
+        dep = -dep                                    # dep points at the camera
+    bm = bmesh.new()
+    n, seg = 16, 14
+    ph = rr.uniform(0, 6.28)
+    rows = []
+    for i in range(n + 1):
+        t = i / n
+        r = rs * (1 + 0.1 * math.sin(5 * t + ph)) + (ra * 0.8 - rs) * max(0.0, 1 - t / 0.3) ** 2 \
+            + (rb * 0.8 - rs) * max(0.0, 1 - (1 - t) / 0.3) ** 2
+        c = a + ax * (ln * t) + side * (bend * math.sin(math.pi * t))
+        rows.append([bm.verts.new(c + (side * math.cos(2 * math.pi * k / seg) * 1.06
+                                       + dep * math.sin(2 * math.pi * k / seg) * 0.94) * r) for k in range(seg)])
+    for r0, r1 in zip(rows, rows[1:]):
+        for k in range(seg):
+            j = (k + 1) % seg
+            bm.faces.new((r0[k], r0[j], r1[j], r1[k]))
+    bm.faces.new(rows[0][::-1])
+    bm.faces.new(rows[-1])
+    for end, r, on, sg in ((a, ra, cond_a, 1), (b, rb, cond_b, -1)):
+        if on:
+            for s in (-1, 1):
+                c = end + ax * (sg * r * 0.42) + side * (s * r * 0.5) + dep * (0.12 * r)
+                k = rr.uniform(0.92, 1.08)
+                bmesh.ops.create_uvsphere(bm, u_segments=14, v_segments=10, radius=r * 0.62 * k,
+                                          matrix=Matrix.Translation(c))
+            # the ridge between the condyles and the shaft
+            bmesh.ops.create_uvsphere(bm, u_segments=14, v_segments=10, radius=r * 0.7,
+                                      matrix=Matrix.Translation(end + ax * (sg * r * 0.95) - dep * (0.1 * r)))
+        else:
+            bmesh.ops.create_uvsphere(bm, u_segments=14, v_segments=10, radius=r * 0.85,
+                                      matrix=Matrix.Translation(end + ax * (sg * r * 0.5)))
+    bmesh.ops.recalc_face_normals(bm, faces=bm.faces)
+    ob = kit.mesh_ob(name, bm, [mat], parent=parent)
+    rm = ob.modifiers.new("fuse", "REMESH")
+    rm.mode = "VOXEL"
+    rm.voxel_size = vox
+    rm.use_smooth_shade = True
+    sm = ob.modifiers.new("soft", "SMOOTH")
+    sm.factor = 0.7
+    sm.iterations = 4
+    lumpy(ob, lumps)
+    return ob
+
+
 def bones():
     b = M["bone"]
-    # left bone: a foot on the mound at the vat's left corner, a knuckle, then a long bow out and up along the vat's
-    # back-left wall to its pointed head
-    pts = [(P(-46, 38, 0.7), 0.42), (P(-47, 26, 2.2), 0.4), (P(-48, 12, 3.7), 0.48), (P(-48.5, 9, 4.0), 0.78),
-           (P(-49.5, 5, 4.4), 0.5), (P(-54, -6, 5.8), 0.44), (V((-3.85, -3.3, 6.5)), 0.5), (V((-3.8, -3.25, 6.85)), 0.8),
-           (V((-3.85, -3.0, 7.25)), 0.5),
-           (V((-3.9, -2.2, 8.4)), 0.42), (V((-3.6, -1.0, 9.7)), 0.46), (V((-3.5, -0.3, 10.4)), 0.54)]
-    limb("boneL", pts, b, lumps=0.16)
-    kit.ring("boneL-band2", 0.62, 0.08, M["bone2"]).location = (-3.8, -3.25, 6.85)
-    LB["L1"], LB["L0"] = V((-3.85, -3.2, 7.75)), P(-49, 8, 4.1) + V((0, 0, 0.9))
-    tooth("boneL-head", V((-3.5, -0.3, 10.3)), 0.84, 2.3, b, zdir=(0.0, 0.6, 1))
-    kit.ring("boneL-band", 0.6, 0.08, M["bone2"]).location = P(-48.5, 9, 4.0)
-    # front bone: straight up the vat's front corner with two knuckles, then leaning along the right-hand wall to
-    # its head
-    x = H + 0.6
-    pts = [(V((x, -x + 0.1, 0.25)), 0.55), (V((x, -x + 0.1, 1.2)), 0.46), (V((x, -x + 0.1, 1.55)), 0.9),
-           (V((x, -x + 0.1, 1.9)), 0.46), (V((x, -x + 0.1, 3.3)), 0.46), (V((x, -x + 0.1, 3.65)), 0.9),
-           (V((x, -x + 0.1, 4.0)), 0.46), (V((x, -x + 0.1, 6.6)), 0.47), (V((x + 0.05, -x + 0.5, 7.8)), 0.5),
-           (V((x + 0.2, -1.1, 8.8)), 0.52), (V((x + 0.25, -0.3, 9.5)), 0.6)]
-    limb("boneF", pts, b, lumps=0.14)
-    LB["F1"], LB["F0"] = V((x, -x + 0.1, 8.0)), V((x, -x + 0.1, 4.4))
-    tooth("boneF-head", V((x + 0.25, -0.3, 9.3)), 0.92, 2.6, b, zdir=(0.0, 0.3, 1))
-    for i, z in enumerate((1.55, 3.65)):
-        kit.ring(f"boneF-band{i}", 0.7, 0.08, M["bone2"], z=0).location = (x, -x + 0.1, z)
-    kit.blob("boneF-foot", (x, -x + 0.1, 0.3), 0.7, squash=0.6, mat=b)
+    fw = kit.cam_fwd()
+    # left bone (three bones jointed end to end): foot on the mound at the vat's left corner, a joint, a second joint
+    # level with the rim, then a long bone leaning in over the vat to its egg head. Traced from Flash's pixels.
+    j0, j1, j2, j3 = P(-50.5, 39.5, 0.3), P(-50, 13, 3.5), P(-53.5, -16.5, 6.85), P(-33.5, -57, 10.4)
+    seg_bone("boneL-a", j0, j1, 0.3, 0.46, 0.46, b, bend=-0.1)
+    seg_bone("boneL-b", j1, j2, 0.32, 0.46, 0.52, b, bend=-0.1)
+    seg_bone("boneL-c", j2, j3, 0.33, 0.52, 0.4, b, bend=0.3, cond_b=False)
+    tooth("boneL-head", P(-31.8, -57.5, 10.4), 0.6, 2.0, b, zdir=(0.0, 0.46, 1))
+    LB["L1"], LB["L0"] = P(-51, -22, 7.0) - fw * 0.55, P(-49, -1, 4.9) - fw * 0.45
+    # front bone: up the vat's front corner, joints low, at mid height and at the rim, then leaning along the
+    # right-hand wall to its big egg head
+    f0, f1, f2, f3, f4 = P(-8, 64.5, 0.0), P(-8.3, 52.5, 1.1), P(-3.5, 30.5, 3.7), P(-3.3, 6, 6.95), P(16, -32, 9.9)
+    seg_bone("boneF-a", f0, f1, 0.34, 0.4, 0.5, b, cond_a=False)
+    seg_bone("boneF-b", f1, f2, 0.4, 0.5, 0.5, b, bend=0.1)
+    seg_bone("boneF-c", f2, f3, 0.33, 0.5, 0.46, b, bend=0.08)
+    seg_bone("boneF-d", f3, f4, 0.36, 0.46, 0.42, b, bend=0.36, cond_b=False)
+    tooth("boneF-head", P(16, -33.5, 9.9), 0.7, 2.15, b, zdir=(0.0, 0.08, 1))
+    LB["F1"], LB["F0"] = P(-9, -3, 7.2) - fw * 0.55, P(-11, 17, 5.35) - fw * 0.5
     # right bone: darker, at the vat's right corner, up to the pump box
     b2 = M["bone2"]
-    pts = [(V((3.1, 3.1, 0.6)), 0.56), (V((3.2, 3.2, 1.7)), 0.4), (V((3.25, 3.25, 2.2)), 0.62),
-           (V((3.28, 3.28, 2.7)), 0.4), (V((3.3, 3.3, 4.2)), 0.46),
-           (V((3.3, 3.3, 4.6)), 0.76), (V((3.3, 3.3, 5.0)), 0.45), (V((3.3, 3.25, 6.5)), 0.44),
-           (V((3.25, 3.2, 6.9)), 0.66), (V((3.15, 3.1, 7.3)), 0.46),
-           (V((2.9, 2.75, 8.2)), 0.52), (V((2.6, 2.6, 9.0)), 0.58)]
-    limb("boneR", pts, b2, lumps=0.26)
-    kit.ring("boneR-band2", 0.5, 0.09, M["strap"]).location = (3.25, 3.25, 2.2)
-    LB["R0"], LB["R1"] = V((3.3, 3.3, 3.4)), V((3.3, 3.3, 4.6))
-    kit.ring("boneR-band", 0.6, 0.09, M["strap"]).location = (3.3, 3.3, 4.6)
+    r0, r1, r2, r3 = P(37.5, 42, 0.1), P(42.3, 16.5, 3.3), P(42.5, 5.5, 4.5), P(42, -24, 7.8)
+    seg_bone("boneR-a", r0, r1, 0.34, 0.5, 0.46, b2, bend=0.08)
+    seg_bone("boneR-b", r1, r2, 0.4, 0.46, 0.56, b2)
+    seg_bone("boneR-c", r2, r3, 0.34, 0.56, 0.44, b2, bend=-0.05, cond_b=False)
+    LB["R0"], LB["R1"] = P(42, 15.5, 3.3) - fw * 0.5, P(41.5, 8, 4.3) - fw * 0.55
+    # the dark bone from the front bone's head across to the right bone's top, under the pump box
+    seg_bone("boneR-d", P(21, -34, 9.3), P(42, -21.5, 8.0), 0.36, 0.42, 0.46, b2, bend=-0.12, cond_a=False)
+    LB["F0r"] = P(4, 28, 3.9) - fw * 0.5
 
 
 def straps():
-    out = H + 0.5
     # left-hand wall, two tiers, from the left bone to the front bone
-    strap("strapL1", LB["L1"] + V((0.25, -0.1, 0)), LB["F1"] + V((-0.2, -0.3, 0)), (0, 0, 1), sag=0.25)
-    strap("strapL0", LB["L0"] + V((0.2, -0.25, 0)), LB["F0"] + V((-0.2, -0.3, 0)), (0, 0, 1), sag=0.3)
+    strap("strapL1", LB["L1"], LB["F1"], (0, 0, 1), w=1.3, sag=0.1)
+    strap("strapL0", LB["L0"], LB["F0"], (0, 0, 1), w=0.95, sag=0.2)
     # right-hand wall: low, from the front bone to the right bone, hanging; and a short one from the rim down to the
     # right bone's knuckle
-    strap("strapR0", LB["F0"] + V((0.3, 0.2, -0.4)), LB["R0"] + V((0.3, -0.25, 0)), (0, 0, 1), sag=0.55)
-    strap("strapR1", V((H + 0.15, H + 1.1, ZT - 0.5)), LB["R1"] + V((0.1, -0.3, 0.1)), (0, 0, 1), w=0.7, sag=0.1)
+    strap("strapR0", LB["F0r"], LB["R0"], (0, 0, 1), w=0.7, sag=0.35)
+    strap("strapR1", P(24.5, -2.5, ZT - 0.9) - kit.cam_fwd() * 0.25, LB["R1"], (0, 0, 1), w=1.0, sag=0.1)
 
 
 def pillars():
     post("pillarL", -1.87, -1.87, ZT - 0.05, 10.2, 0.42, M["pale"])
-    post("pillarF", 1.8, YS, ZT - 0.05, 9.6, 0.52, M["pale"])
+    post("pillarF", 1.8, YS, ZT - 0.05, 9.95, 0.56, M["pale"])
     s = 0.78
     post("postM", XM, YM, ZT - 0.05, ZTOP, s, M["stone"], bevel=0.07)
-    post("postB", XB, YM, ZT - 0.05, ZTOP, 0.72, M["stone"], bevel=0.07)
+    post("postB", XB - 0.12, YM, ZT - 0.05, ZTOP, 0.95, M["stone"], bevel=0.07)
+    # dark iron between the two posts (the hammer's guide), the pivot block on the front post's right-hand face, and
+    # the dark machine bed the posts stand in, on the vat's back half
+    kit.box("guide", (XM - XB, 0.3, ZTOP - ZT - 1.4), ((XM + XB) / 2, YM + 0.1, ZT), M["iron"], bevel=0.02)
+    kit.box("pivot", (0.34, 0.7, 2.3), (XM + s / 2 + 0.12, YM, ZP - 2.05), M["iron"], bevel=0.05)
+    kit.box("bed", (1.9, 2.5, 1.25), (-1.25, 0.35, ZT - 0.05), M["iron"], bevel=0.08)
     # the rusty beam between their tops
     kit.box("beam", (XM - XB - 0.6, 0.6, 1.0), ((XM + XB) / 2, YM, ZTOP - 1.1), M["strap"], bevel=0.05)
     # bolts on the front post's right-hand face: the rocker's axle and one below
@@ -362,7 +434,7 @@ def pillars():
 
 def pump():
     # the copper pump box on the right bone: a long riveted box along X, its near side dark steel
-    x0, x1, y0, y1, z0, z1 = 0.45, 5.0, 2.15, 3.05, 9.3, 10.4
+    x0, x1, y0, y1, z0, z1 = 0.45, 5.0, 2.15, 3.05, 9.25, 10.55
     kit.box("pump", (x1 - x0, y1 - y0, z1 - z0), ((x0 + x1) / 2, (y0 + y1) / 2, z0), M["copper"], bevel=0.05)
     kit.box("pump-side", (x1 - x0 - 0.3, 0.06, z1 - z0 - 0.32), ((x0 + x1) / 2, y0 - 0.03, z0 + 0.14), M["steel"],
             bevel=0.02)
@@ -421,8 +493,8 @@ def shaft():
     def parts(hub):
         kit.cyl("shaft-rod", 0.23, 3.3 - XW2 + 0.25, (0, 0, XW2 - 0.25), M["shaftflat"], verts=16, bevel=0.02,
                 parent=hub)
-        wheel(hub, XW, 1.3, 1.1, 8, 0.95, 0.3, "wheel", 0.55)
-        wheel(hub, XW2, 0.58, 0.34, 8, 0.42, 0.14, "wheel2", 0.26)
+        wheel(hub, XW, 0.98, 0.9, 8, 0.66, 0.24, "wheel", 0.46)
+        wheel(hub, XW2, 0.44, 0.3, 8, 0.33, 0.12, "wheel2", 0.2)
     e, hub = kit.spinner("shaft", (0, YS, ZS), 0.0, 0.0, parts)
     if not DMG:
         kit.MOVING.append(e)
@@ -465,6 +537,7 @@ def rocker():
 def build():
     M.update(mats())
     mound()
+    blades()
     vat()
     bones()
     straps()
@@ -492,7 +565,7 @@ def lift(k):
 def turn(k):
     k = 0 if DMG else k % N
     PART["shaft"].rotation_euler = (0, 0, 0.3 + (math.pi / 2) * k / N)      # two spike pitches a loop, as Flash
-    th = -math.radians(LIFT) * lift(k)
+    th = -math.radians(REST) - math.radians(LIFT) * lift(k)
     PART["rocker"].rotation_euler = (th, 0, 0)
     q = Matrix.Rotation(th, 3, "X") @ V((0, 2.5, -0.45))
     PART["rod"].location = V((XA, YM, ZP)) + q
@@ -594,6 +667,30 @@ def family(o):
     return n.rstrip("0123456789")
 
 
-kit.run(build, turn, family=family)
+PROJ = float(os.environ.get("PB_PROJ", 0.72))         # how much of Flash's own picture lies on the model (0 = none)
+
+
+def build_all():
+    build()
+    turn(0)
+    bpy.context.view_layer.update()
+    if kit.MODE == "sil" or DMG is None:
+        return
+    if PROJ > 0:
+        import proj
+        src = HERE / "work" / ("flash-dmg.png" if DMG else "flash0.png")
+        proj.apply(src, HERE / "work" / ("proj-dmg" if DMG else "proj"), w=PROJ, emit=0.5, grit=0.1,
+                   per=PER, moving=("rocker", "rod"), skip=SKIP)
+
+
+PER = dict(lava=dict(w=1.0, emit=0.9, grit=0.06))
+SKIP = ("gold", "hub", "hubflat", "shaftflat", "shine", "shaft", "cap")
+
+if kit.MODE == "sil":
+    import proj
+    build_all()
+    proj.sil(HERE / "work" / "sil", 3, family)
+else:
+    kit.run(build_all, turn, family=family)
 if kit.MODE == "where":
     print("PUMP end px %.1f %.1f" % kit.scr(V((5.0, 2.6, 10.75))))
