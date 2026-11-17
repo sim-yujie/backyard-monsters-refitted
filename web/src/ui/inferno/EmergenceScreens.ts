@@ -1,7 +1,9 @@
 import type { MolochGroup } from "@/api/inferno";
 import { monsterName } from "@/game/combat/rules/report";
+import { classicLook } from "@/game/classicLook";
 import {
   CAVE_ART,
+  CAVE_ART_MODERN,
   CAVE_NAME,
   CAVERN_DEFENCE,
   EARTHQUAKE,
@@ -28,7 +30,7 @@ import "@/ui/styles/inferno.css";
  * 1.9), and, after a raid, "stage passed" and the last popup. A popup on a
  * phone, centred on a desktop; the pictures are
  * Flash's own (`portrait_moloch.png`, `popup_emergecomplete.v2.jpg`, the
- * cave's `top.5.v2.png`).
+ * cave's `top.5.v2.png`; with the Modern look the cave's painted `top.c5@2x.webp`).
  */
 
 const element = <K extends keyof HTMLElementTagNameMap>(
@@ -113,7 +115,7 @@ export type CaveMenuActions =
  */
 export const caveMenu = (host: HTMLElement, actions: CaveMenuActions): Popup => {
   const popup = new Popup({ title: CAVE_NAME, className: "inferno-popup inferno-popup--menu" });
-  const art = picture(CAVE_ART, "inferno-menu__art", CAVE_NAME);
+  const art = picture(classicLook() ? CAVE_ART : CAVE_ART_MODERN, "inferno-menu__art", CAVE_NAME);
   const buttons = element("div", "inferno-popup__actions inferno-menu__actions");
   if ("exit" in actions) {
     buttons.append(
