@@ -3,7 +3,7 @@
  * slow internet and older phones. Kept in this browser only, apart from the
  * Classic look and the effects settings.
  *
- * - `high` (the default): the game as painted. Monster and champion sheets at
+ * - `high` (the default on most devices): the game as painted. Monster and champion sheets at
  *   their painted size (`@4x`, `@3x`, Korath 5 and 6 `@2x`), the yard tune at full
  *   quality, ready as soon as the yard opens.
  * - `medium`: the sheets' `@2x` copies (half size, about a quarter of the
@@ -15,6 +15,10 @@
  *   the player turns it on, and the map rooms asking the server again a third
  *   as often (Map Room 2 every 3 minutes, not every minute).
  *
+ * A player who never chose starts on High, or on Medium on a low-memory
+ * device (`defaultQuality`, owner 17 Nov 2026): old phones ran out of
+ * graphics memory with the High sheets and drew monsters as green squares.
+ *
  * The copies are made by `web/tools/sheet_copies.py`, and Pixi reads their
  * size from the `@2x` in the name, so a cell is framed the same at every level.
  */
@@ -22,7 +26,7 @@ export type Quality = "high" | "medium" | "low";
 
 export const QUALITIES: readonly Quality[] = ["high", "medium", "low"];
 
-/** Where the choice is kept: "high", "medium" or "low"; unset is High. */
+/** Where the choice is kept: "high", "medium" or "low"; unset is the device's default (`defaultQuality`). */
 export const QUALITY_KEY = "bymr.quality";
 /** Set once the player turned music on while on Medium: it is not held off again. */
 export const MEDIUM_MUSIC_KEY = "bymr.quality.mediumMusic";
@@ -50,8 +54,111 @@ export const qualityChoice = (store: Storage | null = storage()): Quality | null
   }
 };
 
-/** The Quality in use: the player's choice, else High. */
-export const quality = (store: Storage | null = storage()): Quality => qualityChoice(store) ?? "high";
+/**
+ * The biggest picture this device's graphics card can hold, in pixels a side,
+ * once a renderer has said (`gpuTextureLimit` in `textureLimit.ts`) or the
+ * default Quality's probe has asked (`readDeviceHints`); null until then. Many phones and older PCs hold 4096 or 8192, and WebGL
+ * refuses anything bigger: the monster would not be drawn.
+ */
+let textureLimit: number | null = null;
+
+export const deviceTextureLimit = (): number | null => textureLimit;
+
+/** Remembers the device's texture limit; null forgets it (tests). */
+export const setDeviceTextureLimit = (size: number | null): void => {
+  textureLimit = size !== null && Number.isFinite(size) && size > 0 ? size : null;
+};
+
+/** What the device says about itself, for {@link defaultQuality}; null where it does not say. */
+export interface DeviceHints {
+  /** `navigator.deviceMemory` in GB (Chrome and Edge; Safari and Firefox do not say). */
+  readonly memoryGb: number | null;
+  /** The graphics card's `MAX_TEXTURE_SIZE`, in pixels a side. */
+  readonly textureLimit: number | null;
+}
+
+/** At or under this much memory (GB) a device starts on Medium. */
+export const LOW_MEMORY_GB = 4;
+/** At or under this texture limit a device starts on Medium (iPhones do not report memory). */
+export const LOW_TEXTURE_LIMIT = 4096;
+
+/**
+ * The Quality a player who never chose starts on (owner, 17 Nov 2026):
+ * Medium on a device with 4 GB of memory or less, or a graphics card that
+ * holds 4096 px a side or less; High otherwise, and where the device says
+ * nothing. Never written down, so the same player on a better phone later
+ * still gets High.
+ */
+export const defaultQuality = (hints: DeviceHints): Quality =>
+  (hints.memoryGb !== null && hints.memoryGb <= LOW_MEMORY_GB) ||
+  (hints.textureLimit !== null && hints.textureLimit <= LOW_TEXTURE_LIMIT)
+    ? "medium"
+    : "high";
+
+/** `navigator.deviceMemory`, or null where the browser does not say. */
+export const deviceMemoryGb = (nav: unknown = typeof navigator === "undefined" ? undefined : navigator): number | null => {
+  try {
+    const memory = (nav as { deviceMemory?: unknown } | undefined)?.deviceMemory;
+    return typeof memory === "number" && Number.isFinite(memory) && memory > 0 ? memory : null;
+  } catch {
+    return null;
+  }
+};
+
+/**
+ * The graphics card's texture limit, asked of a throwaway WebGL context
+ * (WebGL 2, else 1, as `app/graphicsOff.ts` does), let go at once so it does
+ * not hold one of the browser's few WebGL slots. Null with no WebGL.
+ */
+export const probeTextureLimit = (
+  makeCanvas: () => HTMLCanvasElement | null = () => (typeof document === "undefined" ? null : document.createElement("canvas")),
+): number | null => {
+  try {
+    const canvas = makeCanvas();
+    if (!canvas) return null;
+    const gl =
+      (canvas.getContext("webgl2") as WebGL2RenderingContext | null) ??
+      (canvas.getContext("webgl") as WebGLRenderingContext | null);
+    if (!gl) return null;
+    const size: unknown = gl.getParameter(gl.MAX_TEXTURE_SIZE);
+    gl.getExtension("WEBGL_lose_context")?.loseContext();
+    return typeof size === "number" && Number.isFinite(size) && size > 0 ? size : null;
+  } catch {
+    return null;
+  }
+};
+
+/**
+ * This device's hints. The texture limit is the renderer's when it has
+ * already said (`gpuTextureLimit`), else a throwaway context's, kept as the
+ * device's limit so the first sheets fetched step down too (`sheetForDevice`).
+ * A device that already reports little memory is not probed.
+ */
+const readDeviceHints = (): DeviceHints => {
+  const memoryGb = deviceMemoryGb();
+  if (memoryGb !== null && memoryGb <= LOW_MEMORY_GB) return { memoryGb, textureLimit: deviceTextureLimit() };
+  let limit = deviceTextureLimit();
+  if (limit === null) {
+    limit = probeTextureLimit();
+    if (limit !== null) setDeviceTextureLimit(limit);
+  }
+  return { memoryGb, textureLimit: limit };
+};
+
+/** The device's default, decided once a page load (`readDeviceHints` probes at most once). */
+let deviceDefault: Quality | null = null;
+
+/** {@link defaultQuality} for this device, decided at its first use and kept for the page load. */
+export const deviceDefaultQuality = (): Quality => (deviceDefault ??= defaultQuality(readDeviceHints()));
+
+/** Forgets the device's default, or sets it (tests). */
+export const setDeviceDefaultQuality = (level: Quality | null): void => {
+  deviceDefault = level;
+};
+
+/** The Quality in use: the player's choice, else the device's default ({@link defaultQuality}). */
+export const quality = (store: Storage | null = storage(), fallback: () => Quality = deviceDefaultQuality): Quality =>
+  qualityChoice(store) ?? fallback();
 
 const listeners = new Set<(level: Quality) => void>();
 
@@ -65,7 +172,7 @@ export const setQuality = (level: Quality, store: Storage | null = storage()): v
   try {
     store?.setItem(QUALITY_KEY, level);
   } catch {
-    // Site data blocked: nothing to remember it by, so the game stays on High.
+    // Site data blocked: nothing to remember it by, so the game stays on the default.
   }
   for (const listener of listeners) listener(level);
 };
@@ -95,21 +202,6 @@ export const sheetAtQuality = (file: string, level: Quality = quality()): string
   const copies = level === "high" ? null : sheetCopies(file);
   if (!copies) return file;
   return level === "medium" ? copies.medium : copies.low;
-};
-
-/**
- * The biggest picture this device's graphics card can hold, in pixels a side,
- * once a renderer has said (`gpuTextureLimit` in `attack/AttackBattleLayer.ts`);
- * null until then. Many phones and older PCs hold 4096 or 8192, and WebGL
- * refuses anything bigger: the monster would not be drawn.
- */
-let textureLimit: number | null = null;
-
-export const deviceTextureLimit = (): number | null => textureLimit;
-
-/** Remembers the device's texture limit; null forgets it (tests). */
-export const setDeviceTextureLimit = (size: number | null): void => {
-  textureLimit = size !== null && Number.isFinite(size) && size > 0 ? size : null;
 };
 
 /** The resolution a sheet file names (`@4x`, `@1.5x`), as Pixi reads it; 1 without one. */

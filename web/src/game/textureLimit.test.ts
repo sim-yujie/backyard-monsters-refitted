@@ -1,6 +1,7 @@
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { CanvasSource, TextureSource } from "pixi.js";
-import { setDeviceTextureLimit } from "@/game/quality";
+import { setDeviceDefaultQuality, setDeviceTextureLimit } from "@/game/quality";
+import { resetGraphicsLog } from "@/game/graphicsLog";
 import { cellTexture, gpuTextureLimit, overLimit } from "./textureLimit";
 
 /**
@@ -37,9 +38,17 @@ const fakeDocument = (): FakeCanvas[] => {
   return made;
 };
 
+beforeEach(() => {
+  // The over-limit report reads the Quality in use: decided here, so it does
+  // not ask a throwaway WebGL canvas (one more canvas than the test counts).
+  setDeviceDefaultQuality("high");
+  resetGraphicsLog();
+});
+
 afterEach(() => {
   vi.unstubAllGlobals();
   setDeviceTextureLimit(null);
+  setDeviceDefaultQuality(null);
 });
 
 describe("textureLimit", () => {

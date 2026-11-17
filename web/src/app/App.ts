@@ -43,6 +43,7 @@ import { makeRaidDue } from "@/api/raid";
 import { RAID_PLUGINS } from "@/game/raid/raidPlugin";
 import { raidWatch } from "@/game/raid/raidWatch";
 import { gpuTextureLimit } from "@/game/textureLimit";
+import { watchGraphics } from "@/game/graphicsLog";
 import { graphicsStartError } from "./graphicsOff";
 // A type only: the dev hook's code is loaded on demand, in DEV alone.
 import type { DevDefenceOptions } from "@/game/defences/devWatchDefence";
@@ -83,6 +84,7 @@ export class App {
   private botCheckCard: BotCheckCard | null = null;
   private stopHearing: (() => void) | null = null;
   private stopTeam: (() => void) | null = null;
+  private stopGraphicsWatch: (() => void) | null = null;
 
   constructor(private readonly host: HTMLElement) {
     this.pixi = new Application();
@@ -135,6 +137,9 @@ export class App {
     // the yard cuts building strips bigger than it (a black box otherwise) and
     // the monster sheets are fetched in a copy it can hold.
     gpuTextureLimit(this.pixi.renderer);
+    // A lost graphics context goes to the owner's dashboard with the card's
+    // name and limit, for old phones that run out of graphics memory.
+    this.stopGraphicsWatch = watchGraphics(this.pixi.renderer);
 
     const canvas = this.pixi.canvas;
     this.host.append(canvas);
@@ -378,6 +383,8 @@ export class App {
     this.perf = null;
     this.overlay?.destroy();
     this.overlay = null;
+    this.stopGraphicsWatch?.();
+    this.stopGraphicsWatch = null;
     this.pixi.destroy(true, { children: true });
   }
 
