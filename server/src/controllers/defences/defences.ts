@@ -5,6 +5,7 @@ import type { User } from "../../database/models/user.model.js";
 import { Status } from "../../enums/StatusCodes.js";
 import { defenceReplayLoadOf } from "../../services/defences/defenceReplayFields.js";
 import { decodeReplay, DEFENCE_REPLAY_LIMIT, type DefenceReplayPayload } from "../../services/defences/defenceReplayStore.js";
+import { rulesPlay } from "../../game-rules/combat/rulesCompat.js";
 import { RULES_VERSION } from "../../services/defences/rulesVersion.js";
 import { playersAndPhotos } from "../../services/profile/visiblePhoto.js";
 import type { JsonObject } from "../../types/JsonObject.js";
@@ -115,7 +116,7 @@ const defenceOf = (row: ListedRow, attackers: ReadonlyMap<number, number | null>
     left: row.attacker_left,
     rulesVersion: row.rules_version,
     hasReplay,
-    playable: hasReplay && row.rules_version === RULES_VERSION,
+    playable: hasReplay && rulesPlay(row.rules_version, RULES_VERSION),
   };
 };
 

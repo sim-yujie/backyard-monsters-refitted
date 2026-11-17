@@ -50,6 +50,13 @@ mock.module("../../server.js", () => ({
       flush: async () => {
         flushes += 1;
       },
+      // The attacker's main row, locked to count a quest (the hatch quest, patch 7.8).
+      transactional: async (cb: (tx: unknown) => Promise<unknown>) =>
+        cb({
+          findOne: async (_entity: unknown, where: Record<string, unknown>) =>
+            where.basesaveid === userSave.basesaveid ? userSave : null,
+          flush: async () => {},
+        }),
       // Only the new yard's base id is answered; anything else fails as with no database.
       execute: async (query: string) => {
         sql.push(query);
@@ -872,5 +879,53 @@ describe("a Descent save the server's battle overrules (reject mode)", () => {
     expect(ctx.body.descent).toMatchObject({ won: false, damage: 12 });
     expect(ctx.body.descent).not.toHaveProperty("overruled");
     expect(reports[0]).toContain("flagged (log)");
+  });
+});
+
+describe("the hatch quest through the save that ends a Descent attack (patch 7.8)", () => {
+  /** A daily set holding one "hatch N of `monster`" quest at 0, for today. */
+  const hatchQuest = (monster: string, need: number) => ({
+    v: 1,
+    daily: {
+      period: new Date(now() * 1000).toISOString().slice(0, 10),
+      swaps: 0,
+      bonus: false,
+      quests: [{ slot: 0, kind: "hatchMonster", variant: monster, need, have: 0, claimed: false, rewards: [] }],
+    },
+  });
+  const hatchHave = () => (userSave.dailyquests as { daily: { quests: { have: number }[] } }).daily.quests[0]!.have;
+
+  test("the main yard's monsters that finish hatching during it count once, and no later catch-up counts them again", async () => {
+    const { catchUpYard } = await import("../yard/catchUp.js");
+    const { jobQuestEvents } = await import("../quests/hooks.js");
+    // The main yard was caught up as the attack began, two minutes ago; a
+    // queue of 4 Pokeys (8 s each at academy level 3) all hatch while it runs.
+    Object.assign(userSave, {
+      type: "main",
+      dailyquests: hatchQuest("C1", 50),
+      academy: { C1: { level: 3 } },
+      buildingdata: {
+        "1": { id: 1, t: 15, l: 6 },
+        "2": { id: 2, t: 15, l: 6 },
+        "3": { id: 3, t: 15, l: 6 },
+        "4": { id: 4, t: 15, l: 6 },
+        "9": { id: 9, t: 13, l: 3 },
+      },
+      savetime: now() - 120,
+      monsters: { saved: now() - 120, housed: { C1: 100 }, h: [["", 0, [["C1", 4, 3]]]], hid: [9], hstage: [0], hcc: [] },
+    });
+    startSession();
+    const save = () => finalSave("201", { monsterupdate: JSON.stringify([{ baseid: MAIN_BASEID, m: { housed: { C1: 96 } } }]) });
+
+    expect(await run(save())).toBeNull();
+
+    // The 4 flung leave, the 4 hatched meanwhile stay and count.
+    expect((userSave.monsters as { housed: unknown }).housed).toEqual({ C1: 100 });
+    expect(hatchHave()).toBe(4);
+    expect(jobQuestEvents(catchUpYard(userSave as never, now()))).toEqual({});
+
+    // The same save sent again lands nothing, so counts nothing.
+    expect((await run(save()))?.data?.reason).toBe("no-session");
+    expect(hatchHave()).toBe(4);
   });
 });

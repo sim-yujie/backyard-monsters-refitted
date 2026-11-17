@@ -1,4 +1,5 @@
 import { CanvasSource, Rectangle, Texture, type Renderer, type TextureSource } from "pixi.js";
+import { pictureName, reportGraphicsProblem } from "@/game/graphicsLog";
 import { deviceTextureLimit, setDeviceTextureLimit } from "@/game/quality";
 
 /**
@@ -17,9 +18,12 @@ export const gpuTextureLimit = (renderer: Renderer): number | null => {
   let size: unknown = null;
   if (gl && typeof gl.getParameter === "function") size = gl.getParameter(gl.MAX_TEXTURE_SIZE);
   if (typeof size !== "number" || size <= 0) {
-    const device = (renderer as { device?: { limits?: { maxTextureDimension2D?: unknown } } })
-      .device;
-    size = device?.limits?.maxTextureDimension2D;
+    // WebGPU: Pixi's `renderer.gpu.device` is the GPUDevice (`renderer.device`
+    // is its device system, which has no limits); `device.limits` kept as a
+    // fallback.
+    type Limits = { limits?: { maxTextureDimension2D?: unknown } };
+    const webgpu = renderer as { gpu?: { device?: Limits }; device?: Limits };
+    size = webgpu.gpu?.device?.limits?.maxTextureDimension2D ?? webgpu.device?.limits?.maxTextureDimension2D;
   }
   if (typeof size !== "number" || size <= 0) return null;
   // Remembered for every sheet cutter (the guide's walk-ins too, which have no
@@ -78,6 +82,23 @@ export const overLimit = (
 ): boolean => limit !== null && (source.pixelWidth > limit || source.pixelHeight > limit);
 
 /**
+ * Tells the owner's dashboard a picture is over the card's limit
+ * (`graphicsLog.ts`, once per picture a page load): cut through a canvas
+ * (`cut` true), or not even that, so it is drawn as a black box.
+ */
+export const reportOverLimit = (
+  source: Pick<TextureSource, "pixelWidth" | "pixelHeight" | "label">,
+  limit: number | null,
+  cut: boolean,
+): void => {
+  reportGraphicsProblem(
+    cut ? "sheet-over-limit" : "sheet-cut-failed",
+    pictureName(source.label),
+    `${source.pixelWidth}x${source.pixelHeight} px, limit ${limit ?? "unknown"}`,
+  );
+};
+
+/**
  * A cell of a picture as a texture the card can draw: framed over the shared
  * source when the picture is within the limit, else copied out through a
  * canvas (`owned` true: the caller destroys it with its source). Where no copy
@@ -90,6 +111,7 @@ export const cellTexture = (
 ): { texture: Texture; owned: boolean } => {
   if (overLimit(source, limit)) {
     const copy = copyCell(source, rect);
+    reportOverLimit(source, limit, copy !== null);
     if (copy) return { texture: copy, owned: true };
   }
   return {

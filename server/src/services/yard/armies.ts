@@ -16,7 +16,9 @@ import {
   type Counts,
   type EntryHoused,
 } from "./attackRoster.js";
-import { academyLevels, catchUpArmy, type ArmyRow } from "./catchUpMonsters.js";
+import { academyLevels, catchUpArmy, type ArmyRow, type MonsterJob } from "./catchUpMonsters.js";
+import { jobQuestEvents } from "../quests/hooks.js";
+import { addQuestEvents, type QuestEvents } from "../quests/state.js";
 
 /**
  * Where the server catches armies up outside a yard action
@@ -30,6 +32,12 @@ import { academyLevels, catchUpArmy, type ArmyRow } from "./catchUpMonsters.js";
  * finished, `resources`), never `buildingdata` or `savetime`. That is safe on
  * a row somebody else's attack owns at that moment, and it leaves the
  * monsters exactly as the owner's next full catch-up would.
+ *
+ * A path that WRITES such a catch-up also moves the production clock
+ * (`monsters.saved`), so the owner's next full catch-up never sees the
+ * monsters that finished hatching in it. Those hatches count for the hatch
+ * quest here instead ({@link armyQuestEvents}), each exactly once: the caller
+ * records them on the owner's main row once the row is written.
  */
 
 /** The columns a monsters-only catch-up reads. */
@@ -64,11 +72,23 @@ export const catchUpArmyRow = (row: ArmyRow & { type?: string }, owner: ArmyOwne
     mainYard: row.type === BaseType.MAIN || row.type === BaseType.INFERNO,
   });
 
-/** Catches a row's monsters up and puts the result on the entity (the caller persists). */
-const applyArmy = (row: Save, owner: ArmyOwner, now: number): void => {
+/**
+ * The hatch quest's share of a written monsters-only catch-up (`hatch` and
+ * `hatch:<monster>`): a main yard's or an outpost's hatches count for the
+ * owner's quests, as the full catch-up counts them; the Inferno's never do.
+ */
+export const armyQuestEvents = (row: { type?: string }, jobs: readonly MonsterJob[]): QuestEvents =>
+  row.type === BaseType.INFERNO ? {} : jobQuestEvents(jobs);
+
+/**
+ * Catches a row's monsters up and puts the result on the entity (the caller
+ * persists, then records the hatches returned on the owner's main row).
+ */
+const applyArmy = (row: Save, owner: ArmyOwner, now: number): QuestEvents => {
   const army = catchUpArmyRow(row, owner, now);
   row.monsters = army.monsters;
   if (army.resources !== row.resources) row.resources = army.resources;
+  return armyQuestEvents(row, army.jobs);
 };
 
 /**
@@ -89,8 +109,12 @@ const applyArmy = (row: Save, owner: ArmyOwner, now: number): void => {
  * Runs before the attack is committed, while nothing on either row has been
  * changed yet: the locked catch-up re-reads the row.
  *
- * @returns The defender entity to carry on with (the locked read's), and
- *   `entryHoused` (Map Room 2 attacks; Map Room 1 attacks, main yard only).
+ * @returns The defender entity to carry on with (the locked read's),
+ *   `entryHoused` (Map Room 2 attacks; Map Room 1 attacks, main yard only),
+ *   and the hatches the outposts' written catch-ups finished, for the hatch
+ *   quest: `attackerHatched` (the attacker's outposts) and `defenderHatched`
+ *   (a defending outpost, its owner's). The main yards' locked catch-ups
+ *   count their own. The caller records them once the rows are written.
  */
 export const catchUpArmiesForAttack = async ({
   user,
@@ -102,10 +126,17 @@ export const catchUpArmiesForAttack = async ({
   defender: Save;
   cell: CellCoords | null;
   mapversion?: MapRoomVersion;
-}): Promise<{ defender: Save; entryHoused: EntryHoused | undefined }> => {
+}): Promise<{
+  defender: Save;
+  entryHoused: EntryHoused | undefined;
+  attackerHatched: QuestEvents;
+  defenderHatched: QuestEvents;
+}> => {
   const now = getCurrentDateTime();
   const userSave = user.save!;
   let target = defender;
+  let defenderHatched: QuestEvents = {};
+  const attackerHatched: QuestEvents[] = [];
 
   if (defender.type === BaseType.MAIN) {
     ({ save: target } = await catchUpLockedYard(postgres.em, defender));
@@ -115,7 +146,7 @@ export const catchUpArmiesForAttack = async ({
       { saveuserid: defender.saveuserid, type: BaseType.MAIN },
       { fields: ["academy", "storedata"] }
     );
-    applyArmy(defender, owner, now);
+    defenderHatched = applyArmy(defender, owner, now);
   }
 
   // Map Room 2 and Map Room 1 attacks settle their roster through
@@ -123,7 +154,9 @@ export const catchUpArmiesForAttack = async ({
   // flings from their main yard's housing only (issue #132): the web client
   // reports the army as `monsterupdate`, never Flash's `attackcreatures`.
   const mapRoom1 = mapversion === MapRoomVersion.V1;
-  if (mapversion !== MapRoomVersion.V2 && !mapRoom1) return { defender: target, entryHoused: undefined };
+  if (mapversion !== MapRoomVersion.V2 && !mapRoom1) {
+    return { defender: target, entryHoused: undefined, attackerHatched: {}, defenderHatched };
+  }
 
   const entryHoused: EntryHoused = {};
 
@@ -148,13 +181,13 @@ export const catchUpArmiesForAttack = async ({
         entryHoused[outpost.baseid] = countsOf(catchUpArmyRow(outpost, userSave, now).monsters?.housed);
         continue;
       }
-      applyArmy(outpost, userSave, now);
+      attackerHatched.push(applyArmy(outpost, userSave, now));
       entryHoused[outpost.baseid] = countsOf(outpost.monsters?.housed);
       postgres.em.persist(outpost);
     }
   }
 
-  return { defender: target, entryHoused };
+  return { defender: target, entryHoused, attackerHatched: addQuestEvents(...attackerHatched), defenderHatched };
 };
 
 /** One `monsterupdate` entry, as the attack save carries it. */
@@ -174,6 +207,10 @@ export interface SentCell {
  * @param entryHoused - From the attack session, if it has one.
  * @param logged - Monsters flung per the fling log, or null without one.
  * @param now - Server seconds.
+ * @returns The hatches the yards' catch-ups finished since the attack began
+ *   (`hatch`, `hatch:<monster>`), for the caller to count on the attacker's
+ *   quests once the landing commits: written here, they are no later
+ *   catch-up's to count (issue: Slimeattikus hatch quest, 17 Nov 2026).
  */
 export const settleAttackArmies = async ({
   userSave,
@@ -187,7 +224,7 @@ export const settleAttackArmies = async ({
   entryHoused?: EntryHoused;
   logged: Counts | null;
   now: number;
-}): Promise<void> => {
+}): Promise<QuestEvents> => {
   const sent: Record<string, Counts> = {};
   const order: string[] = [];
   for (const entry of entries) {
@@ -226,6 +263,7 @@ export const settleAttackArmies = async ({
       postgres.em.persist(row);
     }
   }
+  return addQuestEvents(...armies.map(({ row, army }) => armyQuestEvents(row, army.jobs)));
 };
 
 /**
@@ -254,8 +292,8 @@ export const loadArmyOwner = (basesaveid: number): Promise<ArmyOwner> =>
 
 /**
  * Monster transfers (`transferMonsters.ts`): both yards caught up and put on
- * their entities before the transfer rules read them.
+ * their entities before the transfer rules read them. Returns their hatches,
+ * for the caller to count on the player's quests once the transfer commits.
  */
-export const catchUpTransferYards = (yards: readonly Save[], owner: ArmyOwner, now: number): void => {
-  for (const yard of yards) applyArmy(yard, owner, now);
-};
+export const catchUpTransferYards = (yards: readonly Save[], owner: ArmyOwner, now: number): QuestEvents =>
+  addQuestEvents(...yards.map((yard) => applyArmy(yard, owner, now)));

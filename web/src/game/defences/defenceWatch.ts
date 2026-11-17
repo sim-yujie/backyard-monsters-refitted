@@ -4,6 +4,7 @@ import type { AttackRoster, AttackTarget, SiegeInventory } from "@/game/attack/a
 import { flungOf } from "@/game/attack/attackSave";
 import { RESOURCE_KEYS, type FlingEvent, type ResourceAmounts } from "@/game/combat/rules";
 import manifest from "@/game/combat/rules/MANIFEST.json";
+import { rulesPlay } from "@/game/combat/rules/rulesCompat";
 
 /**
  * Watch on a defence (issue #362, `docs/design/defence-replays.md` §7):
@@ -44,8 +45,9 @@ export const DEFENCE_REFUSAL_TEXT: Readonly<Record<DefenceRefusal, string>> = {
 
 /**
  * Why this defence cannot be watched on this client, or null when it can.
- * The client's own version decides, since its engine plays it; the server's
- * `playable` covers a client that has not reloaded since a server update.
+ * The client's own version decides, since its engine plays it (or an older
+ * version it still plays the same, `rulesCompat.ts`); the server's `playable`
+ * covers a client that has not reloaded since a server update.
  *
  * @param defence - The defence's stored figures.
  * @param ours - The client's rules version.
@@ -55,7 +57,7 @@ export const defenceRefusal = (
   ours: string = CLIENT_RULES_VERSION,
 ): DefenceRefusal | null => {
   if (!defence.hasReplay) return "missing";
-  return defence.playable && defence.rulesVersion === ours ? null : "update";
+  return defence.playable && rulesPlay(defence.rulesVersion, ours) ? null : "update";
 };
 
 /** {@link defenceRefusal} for a whole run, which also needs a payload this client reads. */

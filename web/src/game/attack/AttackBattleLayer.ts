@@ -68,7 +68,8 @@ import { jumpLift } from "./jumpFx";
 import { RaiseFx, riseDrop, saturationMatrix, zombieSaturation, type ZombieAt } from "./raiseFx";
 import { classicLook } from "@/game/classicLook";
 import { deviceTextureLimit, sheetResolution } from "@/game/quality";
-import { copyCell, gpuTextureLimit } from "@/game/textureLimit";
+import { errorWords, pictureName, reportGraphicsProblem } from "@/game/graphicsLog";
+import { copyCell, gpuTextureLimit, reportOverLimit } from "@/game/textureLimit";
 import { MONSTER_SPRITES, type MonsterAnimation, type MonsterSheet } from "./monsterSpriteData";
 import { ShotLedger, type Released, type WoundLike } from "./shotLedger";
 import { StatusIconRow, TowerStatusIcons, statusesOf } from "./statusIcons";
@@ -521,6 +522,7 @@ export class MonsterSheetTextures {
     const rect = frameRect(sheet, column, row);
     if (this.oversized(sheet, source.source)) {
       const cell = copyCell(source.source, rect);
+      reportOverLimit(source.source, this.maxTextureSize, cell !== null);
       if (cell) this.owned.add(cell);
       return cell;
     }
@@ -594,6 +596,7 @@ export class MonsterSheetTextures {
           if (caught instanceof SheetDropped) return;
           this.pending.delete(sheet.key);
           console.warn(`Monster sheet ${sheet.file} did not load; drawing a marker.`, caught);
+          reportGraphicsProblem("sheet-failed", pictureName(sheetUrl(sheet)), errorWords(caught));
           this.failed.add(sheet.key);
         },
       );
