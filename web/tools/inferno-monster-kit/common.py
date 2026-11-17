@@ -145,11 +145,13 @@ def fill_holes(mask):
     return ~reach
 
 
-def key_cell(img, min_part=0.03, choose=None, despill=None, open_holes=False, origin=False):
+def key_cell(img, min_part=0.03, choose=None, despill=None, open_holes=False, origin=False, thin=False):
     """One painted creature on magenta -> tight RGBA cutout (or None).
     Keeps blobs >= min_part of the biggest; `choose(labels, sizes)` may pick the label set instead.
     despill="fire": a creature with no blue or purple in it; any blue above green is magenta bleeding into a
-    thin flame tip, so it is taken out (and that pixel made see-through by as much)."""
+    thin flame tip, so it is taken out (and that pixel made see-through by as much).
+    thin=True (spec key_thin, IC7 Sabnox's whiskers): thin parts joined to the creature (under ~6 px wide, which the
+    speck filter and the 3 px colour core drop or paint black) are kept and coloured from their own middle."""
     rgb = np.asarray(img.convert("RGB"), dtype=float)
     fg = ~magenta(rgb)
     fg = grow(shrink(fg, 2), 2)  # drop specks and noise
@@ -158,6 +160,11 @@ def key_cell(img, min_part=0.03, choose=None, despill=None, open_holes=False, or
         return None
     ids = choose(lab, sizes) if choose else [i for i in range(1, len(sizes)) if sizes[i] >= sizes.max() * min_part]
     keep = fill_holes(np.isin(lab, ids))
+    if thin:
+        raw = ~magenta(rgb)
+        lab2, _ = coarse_labels(keep | raw, f=2)
+        ids2 = np.unique(lab2[keep])
+        keep = keep | (np.isin(lab2, ids2[ids2 > 0]) & raw)
     if open_holes:
         # magenta gaps closed in by the art (Zagnoid's bent arms and claw fingers against its body) become
         # see-through again, with a 2 px rim so no pink fringe is left
@@ -173,7 +180,10 @@ def key_cell(img, min_part=0.03, choose=None, despill=None, open_holes=False, or
         keep &= ~grow(hole, 2) | ~(magenta(rgb) | grow(hole, 1))
     keep = shrink(keep, 1)
     core = shrink(keep, 3)
-    col = fill_out(rgb, core) if core.any() else rgb
+    if thin:
+        # the thin parts' own pixels, less the edge pixels blended toward the key (blue well above green)
+        core = core | (keep & ~grow(core, 3) & (rgb[..., 2] - rgb[..., 1] < 60))
+    col = fill_out(rgb, core, steps=24 if thin else 12) if core.any() else rgb
     col = np.where(core[..., None], rgb, col)
     alpha = np.asarray(Image.fromarray((keep * 255).astype(np.uint8)).filter(ImageFilter.GaussianBlur(1.0))).astype(float)
     if despill == "fire":
@@ -293,12 +303,44 @@ def cast_shadow(spec, col, w, hgt, ox, oy, up):
     level = float(np.median(a[..., 3][sh])) if sh.any() else 0.0
     under = body & low
     under[: y1 - 6] = False  # the ground under the body: its last 6 rows
-    mask = shrink(grow(sh | under, 2), 2)
+    mend = spec.get("shadow_mend", False)
+    if mend:
+        # IC7: the Flash body hides part of its own shadow (a front leg stands in it), and `~grow(body, 1)` cuts that
+        # hidden part out, so the shadow's edge follows the Flash leg: a straight line once the painted body, which
+        # stands elsewhere, leaves it in view. Each row of the lower half is filled where art (the Flash body or its
+        # halo) lies between two shadow pixels: the shadow runs on behind the body.
+        art = (a[..., 3] > 0) & low
+        fill = sh | under
+        for y in np.flatnonzero(fill.any(1)):
+            xs = np.flatnonzero(fill[y])
+            for x0, x1 in zip(xs[:-1], xs[1:]):
+                if x1 - x0 > 1 and art[y, x0 + 1:x1].all():
+                    fill[y, x0 + 1:x1] = True
+        mask = shrink(grow(fill, 2), 2)
+    else:
+        mask = shrink(grow(sh | under, 2), 2)
     m1 = np.where(mask, min(255.0, level + 20), 0).astype(np.uint8)
     big = Image.fromarray(m1, "L").resize((m1.shape[1] * up, m1.shape[0] * up), Image.BILINEAR)
     m = Image.new("L", (w, hgt), 0)
     m.paste(big, (round(ox * up), round(oy * up)))
     m = m.filter(ImageFilter.GaussianBlur(0.8 * up))
+    if mend:
+        # The Flash cell cuts the shadow where it reaches the cell's edge (the bottom on 14 of Sabnox's 30 columns, a
+        # side on 6), and the output cell cuts whatever the blur spreads past its own edge: fade the shadow out over
+        # the last 3 1x px before each such edge instead, so no straight cut shows.
+        ch, cw = mask.shape
+        ramp = 3 * up
+        yy = np.arange(hgt, dtype=float)[:, None]
+        xx = np.arange(w, dtype=float)[None, :]
+        f = np.ones((hgt, w))
+        bottoms = [hgt] + ([(oy + ch) * up] if mask[-1].any() else [])
+        f *= np.clip((min(bottoms) - 1 - yy) / ramp, 0, 1)
+        if mask[0].any():
+            f *= np.clip((yy - oy * up) / ramp, 0, 1)
+        lefts = [0] + ([ox * up] if mask[:, 0].any() else [])
+        rights = [w] + ([(ox + cw) * up] if mask[:, -1].any() else [])
+        f *= np.clip((xx - max(lefts)) / ramp, 0, 1) * np.clip((min(rights) - 1 - xx) / ramp, 0, 1)
+        m = Image.fromarray((np.asarray(m, dtype=float) * f).round().astype(np.uint8), "L")
     lay = Image.new("RGBA", (w, hgt), (25, 18, 12, 0))
     lay.putalpha(m)
     return lay

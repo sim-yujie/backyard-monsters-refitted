@@ -730,6 +730,145 @@ SPECS = {
             "back to the resting pose of ref.png. The head never turns toward the viewer. Cell 12 stays empty magenta."
         ),
     ),
+    # IC7 Sabnox (17 Nov): painted from the PORTRAIT (web/public/portraits/IC7.webp): a plum-magenta salamander-serpent with
+    # a ridged scowling head, yellow eyes, a huge maw of curved ivory fangs, two long thin whisker tendrils, an orange-red
+    # spiny crest down its neck and back, darker tiger stripes on the back, a rust-orange ribbed belly, two clawed front arms
+    # and a long tapering tail (no hind legs). Card colours (median / lit / shade): body #732f4d / #bd628c / #450f28, crest
+    # #a9492d / #ee825e, belly #9b5543 / #ce7b67, whiskers #85544c, eyes ~#d9b669. No card pixel passes common.magenta().
+    # Flash sheet: sabnox.png, 30 x 1 whole-pixel cells of 42 x 34, anchor (21, 17), one pose (it glides), cast shadow to
+    # the lower right baked in. Every column's art lies inside its own 42 px cell (alpha x 0-41) and the body does not creep
+    # (alpha > 235, saturated body centroid: slope -0.008 px a column; the cos term, 1.8 px, is the body orbiting the
+    # anchor), so no flash_w / flash_drift. Symmetry (silhouette XOR / union, centred): mirror partner 15 - c scores 0.20,
+    # 14 - c 0.36, 16 - c 0.37, one 12-degree neighbour 0.36; 15 is the best partner for 26 of 30 columns. Column c faces 12c
+    # (column 0 faces right, 7-8 front, 22-23 back). The card creature is symmetric, so headings 8-22 are painted, lit from
+    # above (Flash lights it from the upper left), the rest mirrored.
+    "IC7": dict(
+        name="Sabnox",
+        out="sabnox",
+        flash="sabnox.png",
+        cell=(42, 34),
+        still_pad=8,                     # room for the whiskers and a tail wider than the Flash cell
+        ref_body_only=True,              # reference cells without the cast shadow, centred
+        ref_smooth=True,
+        portrait=True,
+        design="portrait",
+        anim_colour_lock=True,
+        gamma=1.0,
+        grade=dict(body=((1.0, 0.0), (1.0, 0.0), (1.0, 0.0)), limbs=((1.0, 0.0), (1.0, 0.0), (1.0, 0.0))),
+        grade_chroma=True,
+        # Codex paints the skin brighter and more saturated than the card (h341 / s0.74 / v0.51 vs h335 / 0.61 / 0.41, part
+        # medians from art-work/ic7-sabnox/tools/colours7.py) and the crest and belly more saturated (crest h10 / 0.80 vs
+        # h15 / 0.70, belly h9 / 0.87 vs h11 / 0.72): `tone` moves the skin (two windows round hue 0) toward the card's
+        # wine-plum and the orange parts toward its duller rust; fangs, claws, eyes and whiskers are outside the windows
+        tone=dict(
+            skin=dict(hue=(300, 360), soft=3, min_sat=0.3, chroma=0.76, value=0.86, gains=(1.0, 1.0, 1.08), hi=200),
+            skin2=dict(hue=(0, 3), soft=3, min_sat=0.3, chroma=0.76, value=0.86, gains=(1.0, 1.0, 1.08), hi=200),
+            orange=dict(hue=(4, 35), soft=3, min_sat=0.4, chroma=0.8, value=0.92, gains=(1.0, 1.06, 1.0), hi=210),
+        ),
+        open_holes="core",               # gaps under the arched neck and between the arms
+        key_thin=True,                   # common.key_cell keeps the thin whiskers (the speck filter and colour core dropped them)
+        mirror_walk_roll=3,              # the two arms pull in turn: a mirrored heading plays walk frame k+3
+        anchor=(21, 17),                 # Flash's own (the read window is the Flash cell)
+        flash_columns=30,
+        flash_step=12.0,
+        directions=30,
+        painted=list(range(8, 23)),      # front (96 degrees) -> left -> back (264 degrees); the rest mirrored (15 - h)
+        area=1.15,
+        drop=0.0,
+        shadow="flash",                  # the Flash cast shadow's own shape (to the lower right)
+        shadow_mend=True,                # fill the shadow the Flash legs hide, fade it out at cut cell edges (common.cast_shadow)
+        anim_pad=(8, 12, 2),             # 58 x 48 anim cells, anchor (29, 29); 30 x 4 x 58 = 6960 px
+        walk_lift=(0, 0, 0, 0, 0, 0),
+        loops=(8, 15, 22),
+        face="fanged face",
+        back_range=(246, 294),           # Flash shows the head in profile at the left up to 240 degrees
+        pose_parts="crest, the two clawed arms and the long tail",
+        frames_note=(
+            "their red blob is the plum-purple serpent body, the yellow-orange streak along the top is the orange-red "
+            "spiny crest, the pale spots at the front of the head are the fangs and whiskers, the thin limbs under the "
+            "head are the two clawed front arms and the long tapering part is the tail; the old sprites are redder and "
+            "flatter than the real creature"
+        ),
+        features=(
+            "ridged scowling plum-magenta head with angry yellow eyes, huge maw of curved ivory fangs, two thin whisker "
+            "tendrils, orange-red spiny crest down the neck and back, dark tiger stripes, rust-orange ribbed belly, two "
+            "clawed front arms and a long tapering tail"
+        ),
+        face_marks="the head (the yellow eyes, the open fanged maw and the whiskers) and the orange crest",
+        portrait_note=(
+            "THE DESIGN of Sabnox (its official portrait, seen from the side, facing screen-left): paint exactly this "
+            "creature: a long serpent-salamander body of wrinkled plum-magenta skin with darker tiger stripes across the "
+            "back, an orange-red spiny crest running from the top of the head down the neck and back like a sail, a big "
+            "ridged scowling head with a heavy brow and two angry yellow eyes, a huge open maw lined with long curved ivory "
+            "fangs (two big tusk-like fangs at the corners), two long thin salmon-pink whisker tendrils from the jaw, a "
+            "rust-orange ribbed belly, two strong front arms with three big curved ivory claws each, and a long tapering "
+            "tail curling up behind; no hind legs; in its colours and its painting style"
+        ),
+        style=(
+            "hand-painted digital game illustration in the style of portrait.png: wrinkled glossy plum-magenta skin, "
+            "rich colour, soft painted shading with crisp edges, NO thick black outline, no pixel art; the yellow eyes, "
+            "ivory fangs, orange crest and claws drawn bold and a little exaggerated so they read at a small size"
+        ),
+        light=(
+            "soft light from ABOVE, the same on the left and right halves of the creature (highlights on the head, crest and "
+            "top of the back and tail, darker underneath); no cast shadow on the ground"
+        ),
+        texture=(
+            "wrinkled plum-magenta skin with darker purple tiger stripes, orange-red spiny crest, rust-orange ribbed belly "
+            "plates, glowing yellow eyes, ivory fangs and claws, dark maroon mouth, salmon-pink whiskers"
+        ),
+        no_fx=(
+            "No drool, falling drops, puddles, splashes, sparks, fire, smoke, dust, motion streaks, glow halos or loose bits. "
+            "No part of the creature is pure magenta or hot pink: the skin is a deep WINE-PLUM purple (red clearly above "
+            "blue, like #732f4d with highlights #bd628c), clearly darker and redder than the magenta background"
+        ),
+        creature=(
+            "Sabnox, the fanged salamander-serpent of portrait.png (NOT a dragon, NOT a dinosaur, NOT a snake without "
+            "arms, NOT a worm). Its HEAD is big and ridged with a heavy scowling BROW and TWO ANGRY YELLOW EYES, and a "
+            "HUGE MAW, usually open, lined with long curved IVORY FANGS (two big tusk-like fangs at the corners of the "
+            "jaw) and dark maroon inside; two long thin salmon-pink WHISKER tendrils hang from the jaw and curl, kept close "
+            "to the head (fairly thick, so they read at a small size). Its long serpent BODY rises in an arched S-curve "
+            "behind the head: wrinkled plum-magenta skin with darker purple TIGER STRIPES across the back, an ORANGE-RED "
+            "SPINY CREST (a ridge of short spines joined by a fin, like a sail) running from the top of the head down the "
+            "neck and back, and a rust-orange BELLY of ribbed plates under the neck and chest. TWO STRONG FRONT ARMS stand "
+            "under the neck, each hand with three big curved ivory claws. The body ends in a LONG TAPERING TAIL lying on "
+            "the ground behind it, its tip curling up. No hind legs, no wings. Colours: skin (mid #732f4d, lit #bd628c, "
+            "shade #450f28, stripes darker plum), crest (mid #a9492d, lit #ee825e), belly (mid #9b5543, lit #ce7b67), "
+            "yellow eyes (#d9b669), ivory fangs and claws (#d9d4bd), whiskers (#85544c to #b38b86)."
+        ),
+        parts=(
+            " 1. Head: ONE big ridged plum-magenta head with a heavy scowling brow; from behind only the back of the head and the crest show.\n"
+            " 2. Eyes and maw: TWO angry yellow eyes; a huge open maw of curved ivory fangs, two big tusks at the jaw corners (hidden from behind).\n"
+            " 3. Whiskers: TWO thin salmon-pink whisker tendrils from the jaw, curling close to the head.\n"
+            " 4. Crest: ONE orange-red spiny crest along the top of the head, neck and back.\n"
+            " 5. Body: a long arched serpent body, plum-magenta with darker tiger stripes on the back, a rust-orange ribbed belly.\n"
+            " 6. Arms: TWO strong front arms under the neck, three big curved ivory claws on each hand.\n"
+            " 7. Tail: ONE long tapering tail on the ground behind, the tip curling up.\n"
+            " 8. No hind legs, no wings, no horns, no drool."
+        ),
+        back_note=(
+            "BACK VIEW: the creature faces away from the viewer: the eyes, fangs and belly are NOT visible; the viewer sees "
+            "the striped plum-magenta back with the orange-red crest running up its middle to the back of the head, the two "
+            "arms at the sides and the long tail toward the viewer"
+        ),
+        walk=(
+            "Cells 1-6 are ONE WALK CYCLE (six different steps, then it loops back to cell 1): Sabnox drags itself along "
+            "like a salamander, pulling with its two front arms in turn while its body and tail slither in an S-curve: 1 the "
+            "left arm reaches forward in the facing direction; 2 the left claws grip, the body slides forward; 3 the tail "
+            "swings to one side; 4 the right arm reaches forward; 5 the right claws grip, the body slides forward; 6 the "
+            "tail swings to the other side. The head and crest stay level and keep the angle of ref.png (they bob a "
+            "little). Same size as ref.png, centred in its cell, the claws and tail on the same horizontal ground line in "
+            "every cell."
+        ),
+        attack=(
+            "Cells 7-11 are a RANGED ATTACK (it spits a magma ball from its maw; do NOT paint the magma, fire or any "
+            "projectile, the game draws it): the same creature as ref.png: 7 anticipation: the head and neck pull back and "
+            "up away from the facing direction, the maw half closed; 8 wind-up: the neck rears back furthest, chest puffed, "
+            "maw opening wide; 9 strike: the head thrusts forward in the facing direction with the fanged maw WIDE open "
+            "(spitting); 10 follow-through: the head furthest forward and a little low, maw still open; 11 recovery: back "
+            "to the resting pose of ref.png. The head never turns toward the viewer. Cell 12 stays empty magenta."
+        ),
+    ),
 }
 
 
