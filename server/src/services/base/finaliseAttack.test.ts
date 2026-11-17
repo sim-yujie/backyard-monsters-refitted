@@ -213,6 +213,7 @@ const { attackSessionKey, attackerSessionKey } = await import("./attackSession.j
 const { replayAbandonedAttack } = await import("./combat/abandonedAttack.js");
 const { attackLootOf } = await import("./combat/attackLoot.js");
 const { foughtLoot } = await import("./combat/battle.js");
+const { lootPoints } = await import("./combat/lootPoints.js");
 const { championStatWithFood } = await import("../../game-rules/combat/stats.js");
 const { housingLossOf, housingLossLine } = await import("./combat/housingLoss.js");
 const { defenceReplayLoadKey, defenceReplayLoadOf, keepDefenceReplayLoad } = await import(
@@ -313,6 +314,10 @@ describe("finaliseAbandonedAttack", () => {
     expect(userSave.resources.r1).toBe(1_000_000);
     expect(userSave.resources.r2).toBe(1_000_000 + expected.attackloot.r2 - 100_000);
     expect(userSave.champion[0].hp).toBe(expected.attackerchampion![0]!.hp);
+    // Its loot points (patch 7.7.2) land on the main save, never the outpost
+    // that sent half the army: an outpost's points are its owner's.
+    expect(Number(userSave.points)).toBeGreaterThan(0);
+    expect(outpost.points).toBeUndefined();
 
     // The defender.
     expect(defender.attackid).toBe(0);
@@ -389,6 +394,9 @@ describe("finaliseAbandonedAttack", () => {
 
     // r2 is charged the pebble bomb and stays over the cap, so takes nothing.
     expect(userSave.resources).toEqual({ r1: 13_000, r2: 900_000, r3: 13_000, r4: 13_000 });
+    // Its points are the whole take, as Flash's loot report held it (patch 7.7.2):
+    // far more than the 13,000 that fitted.
+    expect(Number(userSave.points)).toBeGreaterThanOrEqual(expected.attackloot.r1);
     // The defender still loses the whole loot.
     expect(defender.resources.r1).toBe(5_000_000 + expected.defenderDelta.r1);
     expect(-expected.defenderDelta.r1).toBeGreaterThanOrEqual(expected.attackloot.r1);
@@ -420,6 +428,8 @@ describe("finaliseAbandonedAttack", () => {
     // A wild tribe: 25% more Goo (patch 6.9).
     const r4WithBonus = withTribeGooBonus(save.credit, true).r4;
     expect(userSave.resources).toEqual({ r1: save.credit.r1, r2: save.credit.r2, r3: save.credit.r3, r4: r4WithBonus });
+    // One point per resource looted, on the attacker's main save, as the save gives them (patch 7.7.2).
+    expect(userSave.points).toBe(String(lootPoints(withTribeGooBonus(save.credit, true))));
     expect(defender.resources).toEqual({
       r1: 5_000_000 + save.defenderDelta.r1,
       r2: 5_000_000 + save.defenderDelta.r2,
@@ -632,6 +642,8 @@ describe("finaliseAbandonedAttack", () => {
     await arm();
     await finaliseAbandonedAttack(BASESAVEID, "test");
     const after = structuredClone(userSave);
+    // Its loot points (patch 7.7.2) are given once too.
+    expect(Number(after.points)).toBeGreaterThan(0);
 
     expect(await finaliseAbandonedAttack(BASESAVEID, "test")).toBe("none");
     expect(userSave).toEqual(after);
@@ -653,6 +665,8 @@ describe("finaliseAbandonedAttack", () => {
 
     expect(await finaliseAbandonedAttack(BASESAVEID, "test")).toBe("stale");
     expect(userSave.monsters.housed.C1).toBe(200);
+    // Nor are any loot points given (patch 7.7.2).
+    expect(userSave.points).toBeUndefined();
     expect(store.has(attackCheckpointKey(BASESAVEID))).toBe(false);
   }, REPLAY_TIMEOUT_MS);
 });

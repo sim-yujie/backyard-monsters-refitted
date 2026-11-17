@@ -12,6 +12,7 @@ import { monsterUpdateHandler } from "../../../controllers/base/save/handlers/mo
 import { MR1_TRIBES_MAP } from "../../../game-data/tribes/v1/index.js";
 import { combatConfig } from "../../../config/CombatConfig.js";
 import { bankAttackLoot, krallenBuffOf } from "../../base/combat/attackLoot.js";
+import { awardLootPoints } from "../../base/combat/lootPoints.js";
 import { bombSpendOf, catapultLevelOf, chargeBombSpend, type BombSpend } from "../../base/combat/bombSpend.js";
 import { checkpointSession, parseFlingLog } from "../../base/attackCheckpoint.js";
 import type { AbandonedOutcome } from "../../base/combat/abandonedAttack.js";
@@ -293,11 +294,10 @@ const writeTribeLanding = async (
     // Tribe Plunder: the attacker banks that much more; the tribe gives up only `credit` (`weekendBoosts.ts`).
     // Wild tribes also give 25% more Goo (patch 6.9, `tribeGooBonus.ts`).
     const plunder = plunderPercent(true, now);
-    const credited: ResourceAmounts = bankAttackLoot(
-      userSave,
-      withPlunderBonus(withTribeGooBonus(credit, true), plunder),
-      krallenBuff
-    ).credited;
+    const gain = withPlunderBonus(withTribeGooBonus(credit, true), plunder);
+    const credited: ResourceAmounts = bankAttackLoot(userSave, gain, krallenBuff).credited;
+    // One point per resource taken, on the main save (patch 7.7.2, `lootPoints.ts`).
+    awardLootPoints(userSave, gain);
 
     const looted = { ...existingTribe.looted };
     for (const key of RESOURCE_KEYS) looted[key] = (looted[key] ?? 0) + credit[key];

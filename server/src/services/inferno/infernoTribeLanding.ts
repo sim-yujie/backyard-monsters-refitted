@@ -17,6 +17,7 @@ import type { SaveData } from "../../types/EntityData.js";
 import type { TribeData } from "../../types/TribeData.js";
 import { getCurrentDateTime } from "../../utils/getCurrentDateTime.js";
 import { logger } from "../../utils/logger.js";
+import { awardLootPoints } from "../base/combat/lootPoints.js";
 import { checkpointSession, parseFlingLog } from "../base/attackCheckpoint.js";
 import { flungOf, type AbandonedOutcome } from "../base/combat/abandonedAttack.js";
 import { replayAbandonedInWorker } from "../base/combat/replayRunner.js";
@@ -191,8 +192,12 @@ const writeInfernoTribeLanding = async (
 
       syncInfernoCap(main, inferno);
       // Tribe Plunder: the purse takes that much more; the tribe gives up only `loot` (`weekendBoosts.ts`).
-      const funded = fundPurse(main.iresources, withPlunderBonus(loot, plunderPercent(true, now)));
+      const gain = withPlunderBonus(loot, plunderPercent(true, now));
+      const funded = fundPurse(main.iresources, gain);
       main.iresources = funded.iresources;
+      // One point per resource taken, on the Inferno yard the attacker comes
+      // home to: its own points and level (patch 7.7.2, `lootPoints.ts`).
+      awardLootPoints(inferno, gain);
 
       const row = (await tx.findOne(InfernoMaproom, { userid: user.userid }, { lockMode: LockMode.PESSIMISTIC_WRITE })) ??
         tx.create(InfernoMaproom, { userid: user.userid });

@@ -15,6 +15,7 @@ import type { SaveData } from "../../types/EntityData.js";
 import { getCurrentDateTime } from "../../utils/getCurrentDateTime.js";
 import { logger } from "../../utils/logger.js";
 import { recordAchievementEvents } from "../achievements/events.js";
+import { awardLootPoints } from "../base/combat/lootPoints.js";
 import { checkpointSession, parseFlingLog } from "../base/attackCheckpoint.js";
 import type { AbandonedOutcome } from "../base/combat/abandonedAttack.js";
 import { replayAbandonedInWorker } from "../base/combat/replayRunner.js";
@@ -240,6 +241,10 @@ const writeDescentLanding = async (
     // Inferno purse in full.
     const loot = creditableMR1Loot(battle?.attackloot, mr1TribePool(template), kept?.looted);
     userSave.iresources = purseAfterDescentLoot(userSave.iresources, loot);
+    // One point per resource taken, on the main save: Flash comes home from a
+    // Descent attack to the surface yard and adds them there, the capturing
+    // attack too (`ATTACK.as:998-999`; patch 7.7.2, `lootPoints.ts`).
+    awardLootPoints(userSave, loot);
 
     const update = descentProgressAfter(progress, {
       index,
