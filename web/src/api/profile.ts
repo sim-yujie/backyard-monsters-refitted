@@ -28,8 +28,6 @@ export interface ProfileStats {
    * leaderboard ranks by `empirePoints` + this. Absent from an older server.
    */
   readonly outpostPoints?: number;
-  /** How many outposts they hold. Absent from an older server. */
-  readonly outposts?: number;
   readonly achievements: { readonly earned: number; readonly total: number } | null;
   readonly friends: number;
   /** When their main yard was made (ISO); null when unknown. */

@@ -103,25 +103,20 @@ describe("profile window", () => {
     expect(q(".profile__bio-input")).toBeNull();
   });
 
-  it("shows empire points alone, as before, for a player with no outposts", async () => {
-    await open(apiWith(profileOf({ stats: { ...profileOf().stats, outpostPoints: 0, outposts: 0 } })));
+  it("shows one empire points row for a player with no outposts", async () => {
+    await open(apiWith(profileOf({ stats: { ...profileOf().stats, outpostPoints: 0 } })));
     const stats = [...container.querySelectorAll(".profile__stat")].map((item) => item.getAttribute("aria-label"));
-    expect(stats).toContain("Empire points: 123,456");
-    expect(q(".profile__stat--main-yard-points")).toBeNull();
-    expect(q(".profile__stat--outpost-points")).toBeNull();
+    expect(stats.filter((label) => label?.includes("points"))).toEqual(["Empire points: 123,456"]);
   });
 
-  it("splits a player's empire points into main yard and outposts (beta 8)", async () => {
-    await open(apiWith(profileOf({ stats: { ...profileOf().stats, empirePoints: 479_849_665, outpostPoints: 153_448_466, outposts: 36 } })));
+  it("adds the outposts' points into the one empire points row, as the leaderboard ranks (beta 8)", async () => {
+    await open(apiWith(profileOf({ stats: { ...profileOf().stats, empirePoints: 479_849_665, outpostPoints: 153_448_466 } })));
     const stats = [...container.querySelectorAll(".profile__stat")].map((item) => item.getAttribute("aria-label"));
-    // The total, as the leaderboard ranks it, then its two parts.
-    expect(stats).toContain("Empire points: 633,298,131");
-    expect(stats).toContain("Main yard points: 479,849,665");
-    expect(stats).toContain("Outpost points: 153,448,466");
-    const outposts = q<HTMLElement>(".profile__stat--outpost-points")!;
-    expect(outposts.title).toBe("Outpost points, 36 outposts");
-    expect(outposts.querySelector<HTMLImageElement>(".game-icon")!.dataset["icon"]).toBe("outpost");
-    expect(q(".profile__stat--main-yard-points .game-icon")!.getAttribute("data-icon")).toBe("townhall");
+    // One row, the total; no main yard or outpost split.
+    expect(stats.filter((label) => label?.includes("points"))).toEqual(["Empire points: 633,298,131"]);
+    expect(q(".profile__stat--main-yard-points")).toBeNull();
+    expect(q(".profile__stat--outpost-points")).toBeNull();
+    expect(container.querySelector('.profile__stats .game-icon[data-icon="outpost"]')).toBeNull();
   });
 
   it("says when another player has no bio", async () => {

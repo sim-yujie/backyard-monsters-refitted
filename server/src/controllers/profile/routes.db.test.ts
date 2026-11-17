@@ -184,9 +184,9 @@ describe.skipIf(!dbName)("the profile routes on a real database", () => {
     expect((await call("GET", `/api/v/bm/profile/${PLAYER}`, null)).status).toBe(401);
   });
 
-  test("the stats split the leaderboard score: main yard points, and the outposts held with their points", async () => {
+  test("the stats carry the outposts' points, which the profile adds to the main yard's", async () => {
     const before = await profileOf(PLAYER, R1);
-    expect(before.stats).toMatchObject({ outpostPoints: 0, outposts: 0 });
+    expect(before.stats).toMatchObject({ outpostPoints: 0 });
 
     const regular = kitBuildings(STARTER_KITS[0]!, "shiny", {}).buildingdata;
     await sql(
@@ -198,7 +198,8 @@ describe.skipIf(!dbName)("the profile routes on a real database", () => {
     try {
       const after = await profileOf(PLAYER, R1);
       // The main yard's points are unchanged; the Regular Kit's 12,823,091 come apart.
-      expect(after.stats).toMatchObject({ empirePoints: before.stats.empirePoints, outpostPoints: 12_823_091, outposts: 1 });
+      expect(after.stats).toMatchObject({ empirePoints: before.stats.empirePoints, outpostPoints: 12_823_091 });
+      expect(after.stats).not.toHaveProperty("outposts");
     } finally {
       await sql(`DELETE FROM bym.save WHERE userid = ? AND type = 'outpost'`, [PLAYER]);
     }

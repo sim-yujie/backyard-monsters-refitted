@@ -25,8 +25,7 @@ import "./profile.css";
  * out by the server, shown as icons with numbers.
  *
  * Empire points are the leaderboard's score: the main yard's points plus
- * every outpost's (beta 8). A player who holds outposts also sees the split,
- * main yard points (the Town Hall) and outpost points (the outpost).
+ * every outpost's (beta 8), shown as one number.
  *
  * On the player's own profile the bio is a text box with a Save button, and
  * "New photo" opens the crop step (from level 10, once a day). On someone
@@ -112,16 +111,9 @@ export const statsList = (profile: Profile): HTMLElement => {
   const list = el("ul", "profile__stats");
   list.append(stat("Level", statIcon("levelup"), String(stats.level)));
   if (stats.townHall > 0) list.append(stat("Town Hall", statIcon("townhall"), String(stats.townHall)));
-  const outpostPoints = stats.outpostPoints ?? 0;
-  list.append(stat("Empire points", statIcon("empire"), formatAmount(stats.empirePoints + outpostPoints)));
-  // The leaderboard's split (beta 8): the main yard's points and the outposts' points.
-  if (outpostPoints > 0) {
-    list.append(stat("Main yard points", statIcon("townhall"), formatAmount(stats.empirePoints)));
-    const outposts = stats.outposts ?? 0;
-    const item = stat("Outpost points", statIcon("outpost"), formatAmount(outpostPoints));
-    item.title = `Outpost points, ${outposts} ${outposts === 1 ? "outpost" : "outposts"}`;
-    list.append(item);
-  }
+  // The leaderboard's score (beta 8): the main yard's points plus the outposts'.
+  const empirePoints = stats.empirePoints + (stats.outpostPoints ?? 0);
+  list.append(stat("Empire points", statIcon("empire"), formatAmount(empirePoints)));
   if (stats.achievements) {
     list.append(
       stat("Achievements", achievementBadge(1, "gold", true), `${stats.achievements.earned}/${stats.achievements.total}`),

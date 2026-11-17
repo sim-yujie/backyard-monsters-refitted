@@ -31,13 +31,12 @@ export interface ProfileStats {
   empirePoints: number;
   /**
    * Every Map Room 2 outpost they hold, its points added up (beta 8,
-   * `outpostPoints.ts`); the leaderboard ranks by `empirePoints` + this.
+   * `outpostPoints.ts`); the leaderboard ranks by `empirePoints` + this, and
+   * the profile shows that total.
    * Worked out as the profile opens, so it can be up to one board build
    * (10 minutes) ahead of the leaderboard.
    */
   outpostPoints: number;
-  /** Map Room 2 outposts they hold. */
-  outposts: number;
   /** Null when it could not be worked out (the profile still opens). */
   achievements: { earned: number; total: number } | null;
   friends: number;
@@ -200,7 +199,6 @@ export const readProfile = async (
       townHall: Number(row.thlevel ?? 0),
       empirePoints: Number(row.empirepoints ?? 0),
       outpostPoints: held?.points ?? 0,
-      outposts: held?.count ?? 0,
       achievements: await achievementsOf(em, userid, now),
       friends: Number(row.friends),
       joined: joined && !Number.isNaN(joined.getTime()) ? joined.toISOString() : null,
