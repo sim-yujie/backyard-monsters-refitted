@@ -11,6 +11,7 @@ import {
 } from "@/game/combat/rules";
 import { outpostRange } from "@/game/maproom/rules/range";
 import { buildableTypesFor } from "@/game/yard/buildCatalogue";
+import { isSurfaceInferno } from "@/game/yard/surfaceInferno";
 import { BUILDING_COST_ROWS, INFERNO_COST_ROWS } from "@/game/yard/buildingCostData";
 import { maxLevel, quantityOf, rowOf, type YardKind } from "@/game/yard/buildingCosts";
 import { typeName } from "@/game/yard/planner/summary";
@@ -325,13 +326,18 @@ const economyRows = (building: YardBuilding, kind: YardKind): InfoRow[] => {
   return rows;
 };
 
-/** Kinds a Town Hall's `quantity` ladder counts that the player builds. */
+/**
+ * Kinds a Town Hall's `quantity` ladder counts that the player builds. The
+ * Champion Cage's props `type` is "cage" (`YARD_PROPS.as`, id 114), and its
+ * Town Hall 4 unlock is one Flash's own text listed.
+ */
 const COUNTED_KINDS: ReadonlySet<string> = new Set([
   "resource",
   "special",
   "tower",
   "wall",
   "trap",
+  "cage",
 ]);
 
 /**
@@ -343,10 +349,15 @@ const COUNTED_KINDS: ReadonlySet<string> = new Set([
  *
  * Only what the yard's build menu offers is listed, as Flash's own Town Hall
  * text skipped every `block`ed type (`client/scripts/BUILDING14.as:91-94`).
- * The one that matters is the Stone Block (18): a legacy row nobody builds,
- * as a placed Block is upgraded to stone (`BASE.as:1538-1541` turns an old
- * one into a level 2 Block), so its `quantity` ladder caps nothing and a
- * "Stone Block +20" tile read as a stone limit that does not exist.
+ * That drops the Stone Block (18): a legacy row nobody builds, as a placed
+ * Block is upgraded to stone (`BASE.as:1538-1541` turns an old one into a
+ * level 2 Block), so its `quantity` ladder caps nothing and a "Stone Block
+ * +20" tile read as a stone limit that does not exist.
+ *
+ * The main yard's Inferno buildings (Quake and Magma Towers, Siege Factory
+ * and Lab) are left out too: their counts follow the Inferno Under Hall, not
+ * the Town Hall (`GLOBAL.GetBuildingTownHallLevel`, `GLOBAL.as:2149-2157`;
+ * {@link isSurfaceInferno}), so a Town Hall level unlocks none of them.
  */
 export const townHallUnlocks = (level: number, yard: YardKind = "main"): UnlockItem[] => {
   const items: UnlockItem[] = [];
@@ -354,7 +365,7 @@ export const townHallUnlocks = (level: number, yard: YardKind = "main"): UnlockI
   const buildable = buildableTypesFor(yard);
   for (const [type, name, kind] of inferno ? INFERNO_COST_ROWS : BUILDING_COST_ROWS) {
     if (!COUNTED_KINDS.has(kind) || type === TOWN_HALL_TYPE) continue;
-    if (!buildable.has(type)) continue;
+    if (!buildable.has(type) || isSurfaceInferno(type, yard)) continue;
     const before = quantityOf(type, level, yard);
     const after = quantityOf(type, level + 1, yard);
     if (after <= before) continue;

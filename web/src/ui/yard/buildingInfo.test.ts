@@ -203,6 +203,17 @@ describe("Town Hall", () => {
     }
   });
 
+  it("lists no Inferno building: the Under Hall sets their counts, not the Town Hall", () => {
+    for (let level = 0; level < 10; level += 1) {
+      const types = townHallUnlocks(level).map((item) => item.type);
+      for (const type of [129, 132, 133, 134]) expect(types).not.toContain(type);
+    }
+  });
+
+  it("lists the Champion Cage at Town Hall 4", () => {
+    expect(townHallUnlocks(3).map(unlockText)).toContain("Champion Cage new");
+  });
+
   it("lists only what the build menu offers", () => {
     for (const yard of ["main", "inferno"] as const) {
       const buildable = buildableTypesFor(yard);
