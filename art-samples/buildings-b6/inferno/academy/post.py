@@ -4,7 +4,8 @@ python post.py fit <look>      work/cmp-fit-L<n>.png: the quick fit render with 
                                beside Flash and a half-and-half blend
 python post.py frames <look>   render/L<n>-f-kk.png: base + moving parts, every cell
 python post.py sheets          sheet-*.png, crop-*.png
-python post.py mp4             academy-L<n>-training.mp4 (Flash still beside the 3D loop, three times)
+python post.py mp4 <look>      academy-L<n>-training.mp4 (Flash still beside the 3D loop, three times)
+python post.py game            game/: the renders export3d_buildings.py iacademy reads
 """
 import subprocess
 import sys
@@ -234,3 +235,15 @@ if __name__ == "__main__":
         sheets()
     if sys.argv[1] == "mp4":
         mp4(int(sys.argv[2]))
+    if sys.argv[1] == "game":
+        # game/: what export3d_buildings.py iacademy reads (the renders without the extra closing frame)
+        import shutil
+        g = HERE / "game"
+        g.mkdir(exist_ok=True)
+        for p in g.glob("*.png"):
+            p.unlink()
+        for look in (1, 2):
+            for stem in ("base", "alone", "damaged-base", "damaged-alone"):
+                shutil.copy(HERE / f"render/L{look}-{stem}.png", g)
+            for k in range(CELLS[look]):
+                shutil.copy(HERE / f"render/L{look}-parts-{k:02d}.png", g)

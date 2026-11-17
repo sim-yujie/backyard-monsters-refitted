@@ -234,7 +234,6 @@ const standsLikeFlash = (painted: TierImage | undefined, old: TierImage, folder:
 };
 
 describe.each([
-  { type: 26, name: "Academy", dir: "iacademy", levels: [1, 2], flashTop: ["top.1.png", "top.2.png"] },
   { type: 128, name: "Housing Bunker", dir: "ihousingbunker", levels: [1], flashTop: ["top.1.v2.png"] },
 ])("the painted Inferno $name ($type)", ({ type, dir, levels, flashTop }) => {
   const folder = `${ASSETS}buildings/${dir}/`;

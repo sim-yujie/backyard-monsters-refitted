@@ -726,7 +726,9 @@ export const BUILDING_3D_ART: Readonly<Record<number, readonly TierArt[]>> = {
  * `buildings/imonsterlab/`), from art/strongbox-3d (owner on the Review Desk,
  * 14 Nov 2026), exported by `export3d_buildings.py strongbox`; and its
  * Incubator (13, `buildings/ihatchery/`), from art/incubator-3d (owner, 15
- * Nov 2026), exported by `export3d_buildings.py incubator`.
+ * Nov 2026), exported by `export3d_buildings.py incubator`; and its Academy
+ * (26, `buildings/iacademy/`), from art/iacademy-3d (17 Nov 2026), exported
+ * by `export3d_buildings.py iacademy`.
  */
 export const INFERNO_BUILDING_3D_ART: Readonly<Record<number, readonly TierArt[]>> = {
   // 1 Bone Cruncher: 3D (owner, 6 Nov 2026: "3d bone crusher has been approved"), the clean-room model's three tiers,
@@ -818,6 +820,21 @@ export const INFERNO_BUILDING_3D_ART: Readonly<Record<number, readonly TierArt[]
       anim: { strip: ["anim.3d1@2x.webp", -54, -46, 84, 87, 50], columns: 24, body: ["body.3d1@2x.webp", -57, -28] },
       damaged: { top: ["top.3d1.damaged@2x.webp", -66, -28], shadow: ["shadow.3d1.damaged.jpg", -66, 22] } },
   ],
+  // 26 Academy: 3D (owner, 17 Nov 2026: 3D and animated, as the main yard's Academy), Flash's two looks (level 1,
+  // levels 2-4), `export3d_buildings.py iacademy`. While it trains the drill pulls in and out (Flash's own strip,
+  // never shipped), the teeth run over the arch, the cog turns and the pillars pump: 44 and 47 cells, the counts of
+  // Flash's commented-out strips. Each look has its own rough damaged still; destroyed is the painted rubble
+  // (`web/tools/inferno-paint/`), which keeps its look's whole shadow as Flash's falls back to it.
+  26: [
+    { from: 1, top: ["top.3d1@2x.webp", -51, -57], shadow: ["shadow.3d1.jpg", -48, 12], lift: 0,
+      anim: { strip: ["anim.3d1@2x.webp", -33, -60, 71, 82, 44], columns: 28, body: ["body.3d1@2x.webp", -51, -48] },
+      damaged: { top: ["top.3d1.damaged@2x.webp", -51, -55], shadow: ["shadow.3d1.damaged.jpg", -48, 7] },
+      destroyed: { top: ["top.c1.destroyed@2x.webp", -52, -15], shadow: ["shadow.1.jpg", -50, -30] } },
+    { from: 2, top: ["top.3d2@2x.webp", -58, -93], shadow: ["shadow.3d2.jpg", -56, 8], lift: 0,
+      anim: { strip: ["anim.3d2@2x.webp", -35, -79, 87, 84, 47], columns: 23, body: ["body.3d2@2x.webp", -58, -93] },
+      damaged: { top: ["top.3d2.damaged@2x.webp", -58, -94], shadow: ["shadow.3d2.damaged.jpg", -56, 1] },
+      destroyed: { top: ["top.c2.destroyed@2x.webp", -59, -71], shadow: ["shadow.2.jpg", -61, -30] } },
+  ],
   // 16 Incubator Control Centre: 3D look C, on a small magma pool. Each cell is the whole building: 32 cells of its
   // idle loop (the lava's light breathing), then 64 of its loop while it hatches (the crystal pulsing twice as well).
   // No damaged or destroyed look of its own yet: the damaged one is the whole look tinted, the destroyed Flash's.
@@ -854,10 +871,9 @@ export const INFERNO_BUILDING_3D_ART: Readonly<Record<number, readonly TierArt[]
  *
  * Also the Resource Pod (6, `buildings/istoragesilo/`; owner 12 Nov 2026: Codex for the Inferno buildings with no
  * animation), painted the same way from Flash's one look by `web/tools/pod-repaint/`, damaged and destroyed too; and
- * the Inferno's Academy (26, `buildings/iacademy/`, Flash's two looks) and Housing Bunker (128,
- * `buildings/ihousingbunker/`, Flash's one look) by `web/tools/inferno-paint/` (beta 8, owner 17 Nov 2026: no 3D for
- * still buildings), each damaged and destroyed in paint too. The Academy's damaged and destroyed keep its look's one
- * shadow, as Flash's fall back to it.
+ * the Inferno's Housing Bunker (128, `buildings/ihousingbunker/`, Flash's one look) by `web/tools/inferno-paint/`
+ * (beta 8, owner 17 Nov 2026: no 3D for still buildings), damaged and destroyed in paint too. (The Inferno's Academy,
+ * 26, was painted the same day and is 3D now, `INFERNO_BUILDING_3D_ART`; only its painted rubble is still shown.)
  */
 export const INFERNO_PAINTED_BUILDING_ART: Readonly<Record<number, readonly TierArt[]>> = {
   // 6 Resource Pod: painted, Flash's one look (all ten levels), damaged and destroyed in paint too
@@ -889,15 +905,6 @@ export const INFERNO_PAINTED_BUILDING_ART: Readonly<Record<number, readonly Tier
       anim: { strip: ["anim.c6@2x.webp", -35, -125, 78, 235, 48], columns: 8, body: ["body.c6@2x.webp", -51, -55] },
       damaged: { top: ["top.c6.damaged@2x.webp", -51, -53], shadow: ["shadow.3.damaged.v2.jpg", -73, 33] },
       destroyed: { top: ["top.c6.destroyed@2x.webp", -55, 7], shadow: ["shadow.3.destroyed.v2.jpg", -75, 29] } },
-  ],
-  // 26 Academy: painted, Flash's two looks (level 1, levels 2-4), damaged and destroyed in paint too
-  26: [
-    { from: 1, top: ["top.c1@2x.webp", -50, -55], shadow: ["shadow.1.jpg", -50, -30], lift: 0,
-      damaged: { top: ["top.c1.damaged@2x.webp", -49, -23], shadow: ["shadow.1.jpg", -50, -30] },
-      destroyed: { top: ["top.c1.destroyed@2x.webp", -52, -15], shadow: ["shadow.1.jpg", -50, -30] } },
-    { from: 2, top: ["top.c2@2x.webp", -57, -92], shadow: ["shadow.2.jpg", -61, -30], lift: 0,
-      damaged: { top: ["top.c2.damaged@2x.webp", -53, -90], shadow: ["shadow.2.jpg", -61, -30] },
-      destroyed: { top: ["top.c2.destroyed@2x.webp", -59, -71], shadow: ["shadow.2.jpg", -61, -30] } },
   ],
   // 128 Housing Bunker (Flash's Compound): painted, Flash's one look (all six levels), damaged and destroyed in paint too
   128: [

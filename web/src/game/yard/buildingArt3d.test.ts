@@ -201,6 +201,7 @@ describe("the 3D yard buildings", () => {
       [4, INFERNO_BUILDING_3D_ART[4] ?? [], "inferno"] as const,
       [8, INFERNO_BUILDING_3D_ART[8] ?? [], "inferno"] as const,
       [13, INFERNO_BUILDING_3D_ART[13] ?? [], "inferno"] as const,
+      [26, INFERNO_BUILDING_3D_ART[26] ?? [], "inferno"] as const,
     ];
     for (const [type, looks, kind] of sets) {
       const folder = `${ASSETS}${artFolder(type, kind) ?? ""}`;
@@ -383,6 +384,34 @@ describe("the 3D yard buildings", () => {
     expect(resolveArt(8, 1, ArtState.DEFAULT, "inferno")?.anims.map(({ url, frames }) => ({ url, frames }))).toEqual([
       { url: `${folder}anim.1.v2.png`, frames: 31 },
     ]);
+  });
+
+  it("give the Inferno's Academy Flash's two looks in 3D, its drill, teeth, cog and pillars over a still body", () => {
+    const folder = "/assets/buildings/iacademy/";
+    expect((INFERNO_BUILDING_3D_ART[26] ?? []).map((look) => look.from)).toEqual([1, 2]);
+    expect(26 in INFERNO_PAINTED_BUILDING_ART).toBe(false);
+    for (const [level, tag, frames, columns] of [[1, "3d1", 44, 28], [2, "3d2", 47, 23], [4, "3d2", 47, 23]] as const) {
+      const art = resolveArt(26, level, ArtState.DEFAULT, "inferno");
+      const name = `level ${level}`;
+      // The body under one strip of moving parts, in the cell counts of Flash's own (commented-out) strips.
+      expect(art?.topIsAnim, name).toBe(false);
+      expect(art?.top.url, name).toBe(`${folder}body.${tag}@2x.webp`);
+      expect(art?.still?.url, name).toBe(`${folder}top.${tag}@2x.webp`);
+      expect(art?.shadow?.url, name).toBe(`${folder}shadow.${tag}.jpg`);
+      expect(art?.anims.map(({ url, frames: n, columns: c }) => ({ url, frames: n, columns: c })), name).toEqual([
+        { url: `${folder}anim.${tag}@2x.webp`, frames, columns },
+      ]);
+      // Its own damaged still; the painted rubble when destroyed.
+      expect(resolveArt(26, level, ArtState.DAMAGED, "inferno")?.top.url, name).toBe(`${folder}top.${tag}.damaged@2x.webp`);
+      expect(resolveArt(26, level, ArtState.DESTROYED, "inferno")?.top.url, name).toBe(
+        `${folder}top.c${tag.slice(2)}.destroyed@2x.webp`,
+      );
+    }
+    // The Classic look keeps Flash's pictures; the main yard's Academy keeps its own 3D.
+    setClassicLook(true);
+    expect(resolveArt(26, 1, ArtState.DEFAULT, "inferno")?.top.url).toBe(`${folder}top.1.png`);
+    setClassicLook(false);
+    expect(resolveArt(26, 1, ArtState.DEFAULT, "main")?.top.url).toContain("/assets/buildings/academy/");
   });
 
   it("give the Inferno's Incubator its one 3D look, its brood, hose and smoke over a still body in Flash's 50 cells", () => {
