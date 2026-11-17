@@ -546,11 +546,11 @@ def wheel(parent, x, r, w, spikes, sl, sr, name, hub_r):
     for i in range(spikes):
         a = 2 * math.pi * i / spikes
         d = V((math.cos(a), math.sin(a), 0))
-        # a short saw tooth across the drum's width (Flash's drum has short teeth, not long spikes)
+        # a short pointed tooth on the drum's middle (Flash: a smooth gold drum with eight short teeth)
         bm = bmesh.new()
-        bt, hw = sr, w * 0.46
+        bt, hw = sr, w * 0.22
         base = [bm.verts.new((r - 0.04, sy_ * bt, x + sz_ * hw)) for sy_, sz_ in ((-1, -1), (1, -1), (1, 1), (-1, 1))]
-        top = [bm.verts.new((r + sl, bt * 0.45, x + sz_ * hw * 0.8)) for sz_ in (-1, 1)]
+        top = [bm.verts.new((r + sl, bt * 0.45, x + sz_ * hw * 0.12)) for sz_ in (-1, 1)]
         bm.faces.new(base)
         bm.faces.new((base[0], base[1], top[0]))
         bm.faces.new((base[2], base[3], top[1]))
@@ -570,8 +570,8 @@ def shaft():
     def parts(hub):
         kit.cyl("shaft-rod", 0.23, 3.3 - XW2 + 0.25, (0, 0, XW2 - 0.25), M["shaftflat"], verts=16, bevel=0.02,
                 parent=hub)
-        wheel(hub, XW, 1.2, 1.0, 16, 0.36, 0.2, "wheel", 0.5)
-        wheel(hub, XW2, 0.58, 0.36, 16, 0.24, 0.1, "wheel2", 0.22)
+        wheel(hub, XW, 1.2, 1.0, 8, 0.42, 0.17, "wheel", 0.5)
+        wheel(hub, XW2, 0.58, 0.36, 8, 0.3, 0.09, "wheel2", 0.22)
     e, hub = kit.spinner("shaft", (0, YS, ZS), 0.0, 0.0, parts)
     if not DMG:
         kit.MOVING.append(e)
