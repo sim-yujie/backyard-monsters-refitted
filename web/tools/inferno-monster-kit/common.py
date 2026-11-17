@@ -303,12 +303,44 @@ def cast_shadow(spec, col, w, hgt, ox, oy, up):
     level = float(np.median(a[..., 3][sh])) if sh.any() else 0.0
     under = body & low
     under[: y1 - 6] = False  # the ground under the body: its last 6 rows
-    mask = shrink(grow(sh | under, 2), 2)
+    mend = spec.get("shadow_mend", False)
+    if mend:
+        # IC7: the Flash body hides part of its own shadow (a front leg stands in it), and `~grow(body, 1)` cuts that
+        # hidden part out, so the shadow's edge follows the Flash leg: a straight line once the painted body, which
+        # stands elsewhere, leaves it in view. Each row of the lower half is filled where art (the Flash body or its
+        # halo) lies between two shadow pixels: the shadow runs on behind the body.
+        art = (a[..., 3] > 0) & low
+        fill = sh | under
+        for y in np.flatnonzero(fill.any(1)):
+            xs = np.flatnonzero(fill[y])
+            for x0, x1 in zip(xs[:-1], xs[1:]):
+                if x1 - x0 > 1 and art[y, x0 + 1:x1].all():
+                    fill[y, x0 + 1:x1] = True
+        mask = shrink(grow(fill, 2), 2)
+    else:
+        mask = shrink(grow(sh | under, 2), 2)
     m1 = np.where(mask, min(255.0, level + 20), 0).astype(np.uint8)
     big = Image.fromarray(m1, "L").resize((m1.shape[1] * up, m1.shape[0] * up), Image.BILINEAR)
     m = Image.new("L", (w, hgt), 0)
     m.paste(big, (round(ox * up), round(oy * up)))
     m = m.filter(ImageFilter.GaussianBlur(0.8 * up))
+    if mend:
+        # The Flash cell cuts the shadow where it reaches the cell's edge (the bottom on 14 of Sabnox's 30 columns, a
+        # side on 6), and the output cell cuts whatever the blur spreads past its own edge: fade the shadow out over
+        # the last 3 1x px before each such edge instead, so no straight cut shows.
+        ch, cw = mask.shape
+        ramp = 3 * up
+        yy = np.arange(hgt, dtype=float)[:, None]
+        xx = np.arange(w, dtype=float)[None, :]
+        f = np.ones((hgt, w))
+        bottoms = [hgt] + ([(oy + ch) * up] if mask[-1].any() else [])
+        f *= np.clip((min(bottoms) - 1 - yy) / ramp, 0, 1)
+        if mask[0].any():
+            f *= np.clip((yy - oy * up) / ramp, 0, 1)
+        lefts = [0] + ([ox * up] if mask[:, 0].any() else [])
+        rights = [w] + ([(ox + cw) * up] if mask[:, -1].any() else [])
+        f *= np.clip((xx - max(lefts)) / ramp, 0, 1) * np.clip((min(rights) - 1 - xx) / ramp, 0, 1)
+        m = Image.fromarray((np.asarray(m, dtype=float) * f).round().astype(np.uint8), "L")
     lay = Image.new("RGBA", (w, hgt), (25, 18, 12, 0))
     lay.putalpha(m)
     return lay

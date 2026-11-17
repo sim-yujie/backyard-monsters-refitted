@@ -776,6 +776,7 @@ SPECS = {
         area=1.15,
         drop=0.0,
         shadow="flash",                  # the Flash cast shadow's own shape (to the lower right)
+        shadow_mend=True,                # fill the shadow the Flash legs hide, fade it out at cut cell edges (common.cast_shadow)
         anim_pad=(8, 12, 2),             # 58 x 48 anim cells, anchor (29, 29); 30 x 4 x 58 = 6960 px
         walk_lift=(0, 0, 0, 0, 0, 0),
         loops=(8, 15, 22),
