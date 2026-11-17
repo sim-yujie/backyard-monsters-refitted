@@ -314,6 +314,10 @@ describe("finaliseAbandonedAttack", () => {
     expect(userSave.resources.r1).toBe(1_000_000);
     expect(userSave.resources.r2).toBe(1_000_000 + expected.attackloot.r2 - 100_000);
     expect(userSave.champion[0].hp).toBe(expected.attackerchampion![0]!.hp);
+    // Its loot points (patch 7.7.2) land on the main save, never the outpost
+    // that sent half the army: an outpost's points are its owner's.
+    expect(Number(userSave.points)).toBeGreaterThan(0);
+    expect(outpost.points).toBeUndefined();
 
     // The defender.
     expect(defender.attackid).toBe(0);

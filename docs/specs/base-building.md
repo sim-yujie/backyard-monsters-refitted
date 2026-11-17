@@ -1088,12 +1088,13 @@ before the attacker's storage cap (`ATTACK.as:681` against `:703-710`), so loot 
 still scores. The report comes back as `loot` on the attacker's next yard load, and `BASE.Process`
 adds each resource above 0 to that yard's points (`BASE.as:971`, `:1785-1801`). The server adds
 them where it banks the loot, once per landed attack (the final save, the finaliser, a repeat
-attack), on the yard the attacker comes home to (`ATTACK.as:996-1003`, `BASE.as:3352-3358`):
+attack), on the yard the attacker comes home to (`ATTACK.as:996-1003`,
+`com/monsters/maproom_advanced/popup_attackend.as:96-108`):
 
 | Attack | Points go to |
 | --- | --- |
 | Player yard, outpost, Map Room 2 camp, Map Room 1 tribe (from the main yard or an outpost) | the main save |
-| Descent yard (the capturing 13th too) | the main save: Flash returns to the surface yard (`ATTACK.as:998-999`) and adds them there before its pop-up check (`BASE.as:1803`) |
+| Descent yard (the capturing 13th too) | the main save: Flash returns to the surface yard (`ATTACK.as:998-999`, `popup_attackend.as:102-104`) and adds them there before its pop-up check (`BASE.as:1803`) |
 | Moloch tribe, another player's Inferno yard | the attacker's Inferno yard: its own points and Inferno level |
 
 The amount is what the landing hands the attacker's pool before the storage cap, with the server's

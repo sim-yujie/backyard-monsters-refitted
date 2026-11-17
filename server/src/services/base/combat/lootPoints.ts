@@ -17,12 +17,14 @@ import { RESOURCE_KEYS, type ResourceAmounts } from "../../../game-rules/combat/
  * to that yard's `_basePoints` (`BASE.PointsAdd`, `BASE.as:1785-1801`,
  * `:4863-4865`), which the yard's next save stored (`BASE.as:3195`). So the
  * points are what was taken, loot that did not fit included, and they land on
- * the yard the attacker comes home to (`ATTACK.as:996-1003`,
- * `BASE.as:3352-3358`): the main yard after a surface attack (an outpost's
- * points are the main yard's), the Inferno yard after an Inferno one, and the
- * main yard after a Descent attack, which Flash fights as an Inferno yard but
- * comes home from to the surface (`ATTACK.as:998-999`; the "You looted"
- * pop-up is hidden there, `BASE.as:1803`, but the points were added above it).
+ * the yard the attacker comes home to (`ATTACK.as:996-1003`, and the end
+ * pop-up's button, `com/monsters/maproom_advanced/popup_attackend.as:96-108`):
+ * the main yard after a surface attack (an outpost's points are the main
+ * yard's), the Inferno yard after an Inferno one, and the main yard after a
+ * Descent attack, which Flash fights as an Inferno yard but comes home from to
+ * the surface (`ATTACK.as:998-999`, `popup_attackend.as:102-104`; the "You
+ * looted" pop-up is hidden there, `BASE.as:1803`, but the points were added
+ * above it).
  *
  * ## Here
  *
