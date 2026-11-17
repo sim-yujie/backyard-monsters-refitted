@@ -853,7 +853,11 @@ export const INFERNO_BUILDING_3D_ART: Readonly<Record<number, readonly TierArt[]
  * The main yard's Town Hall (also type 14) keeps `TOWN_HALL_ART`.
  *
  * Also the Resource Pod (6, `buildings/istoragesilo/`; owner 12 Nov 2026: Codex for the Inferno buildings with no
- * animation), painted the same way from Flash's one look by `web/tools/pod-repaint/`, damaged and destroyed too.
+ * animation), painted the same way from Flash's one look by `web/tools/pod-repaint/`, damaged and destroyed too; and
+ * the Inferno's Academy (26, `buildings/iacademy/`, Flash's two looks) and Housing Bunker (128,
+ * `buildings/ihousingbunker/`, Flash's one look) by `web/tools/inferno-paint/` (beta 8, owner 17 Nov 2026: no 3D for
+ * still buildings), each damaged and destroyed in paint too. The Academy's damaged and destroyed keep its look's one
+ * shadow, as Flash's fall back to it.
  */
 export const INFERNO_PAINTED_BUILDING_ART: Readonly<Record<number, readonly TierArt[]>> = {
   // 6 Resource Pod: painted, Flash's one look (all ten levels), damaged and destroyed in paint too
@@ -886,11 +890,40 @@ export const INFERNO_PAINTED_BUILDING_ART: Readonly<Record<number, readonly Tier
       damaged: { top: ["top.c6.damaged@2x.webp", -51, -53], shadow: ["shadow.3.damaged.v2.jpg", -73, 33] },
       destroyed: { top: ["top.c6.destroyed@2x.webp", -55, 7], shadow: ["shadow.3.destroyed.v2.jpg", -75, 29] } },
   ],
+  // 26 Academy: painted, Flash's two looks (level 1, levels 2-4), damaged and destroyed in paint too
+  26: [
+    { from: 1, top: ["top.c1@2x.webp", -50, -55], shadow: ["shadow.1.jpg", -50, -30], lift: 0,
+      damaged: { top: ["top.c1.damaged@2x.webp", -49, -27], shadow: ["shadow.1.jpg", -50, -30] },
+      destroyed: { top: ["top.c1.destroyed@2x.webp", -52, -15], shadow: ["shadow.1.jpg", -50, -30] } },
+    { from: 2, top: ["top.c2@2x.webp", -57, -92], shadow: ["shadow.2.jpg", -61, -30], lift: 0,
+      damaged: { top: ["top.c2.damaged@2x.webp", -53, -90], shadow: ["shadow.2.jpg", -61, -30] },
+      destroyed: { top: ["top.c2.destroyed@2x.webp", -59, -71], shadow: ["shadow.2.jpg", -61, -30] } },
+  ],
+  // 128 Housing Bunker (Flash's Compound): painted, Flash's one look (all six levels), damaged and destroyed in paint too
+  128: [
+    { from: 1, top: ["top.c1@2x.webp", -108, -49], shadow: ["shadow.1.jpg", -118, 26], lift: 0,
+      damaged: { top: ["top.c1.damaged@2x.webp", -106, -39], shadow: ["shadow.1.damaged.jpg", -117, 30] },
+      destroyed: { top: ["top.c1.destroyed@2x.webp", -73, 11], shadow: ["shadow.1.destroyed.jpg", -96, 8] } },
+  ],
 };
 
 /**
- * Every type with new art the old-art switch turns back: the towers, the Town Hall (14), the 3D buildings,
- * the Flash decorations' Modern look (`decorationModernArt.ts`) and this project's own decorations' Modern
+ * Moloch's cave on the main yard (127, the Inferno Cavern, `buildings/iportal/`, drawn by `inferno/CaveSprite.ts`):
+ * its five stages painted by Codex from Flash's five looks (`web/tools/inferno-paint/`, beta 8), the new rocks on
+ * Flash's own soft ground of cracks and lava glow, in one picture each. Like Flash's on the main yard, only stage 5
+ * casts a shadow; the cave is never damaged or destroyed.
+ */
+export const CAVERN_ART: readonly TierArt[] = [
+  { from: 1, top: ["top.c1@2x.webp", -86, -7], shadow: null, lift: 0 },
+  { from: 2, top: ["top.c2@2x.webp", -108, -32], shadow: null, lift: 0 },
+  { from: 3, top: ["top.c3@2x.webp", -139, -66], shadow: null, lift: 0 },
+  { from: 4, top: ["top.c4@2x.webp", -141, -116], shadow: null, lift: 0 },
+  { from: 5, top: ["top.c5@2x.webp", -163, -172], shadow: ["shadow.5.v2.jpg", -169, 0], lift: 0 },
+];
+
+/**
+ * Every type with new art the old-art switch turns back: the towers, the Town Hall (14), the 3D buildings, the
+ * Inferno Cavern on the main yard (127), the Flash decorations' Modern look (`decorationModernArt.ts`) and this project's own decorations' Modern
  * look (`revampDecorations.ts`).
  */
 const NEW_ART: Readonly<Record<number, readonly TierArt[]>> = {
@@ -899,6 +932,7 @@ const NEW_ART: Readonly<Record<number, readonly TierArt[]>> = {
   ...BUILDING_3D_ART,
   ...DECORATION_MODERN_ART,
   ...REVAMP_DECORATION_MODERN_ART,
+  127: CAVERN_ART,
 };
 
 /**
