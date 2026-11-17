@@ -618,6 +618,26 @@ export const REPAINT_LAYOUTS: Readonly<Record<string, SheetLayoutOverride>> = {
     },
     strikeFrame: 2,
   },
+  // King Wormzer (IC8): 68x56 cells (the Flash 58x42 cell plus 5 px each side for the drills, 12 px on top for the
+  // drill helmet and the raised drills, 2 at the bottom), so the anchor moves by (5, 12) over Flash's own cast shadow.
+  // The Flash art sits inside whole 58 px cells and does not creep. 30 x 4 x 68 = 8160 px, inside 8192. Painted from
+  // the Hatchery / Locker portrait; headings 8-22 painted, the rest their mirror (the card creature is left-right
+  // symmetric). Rows: 0 idle, 1-6 heavy waddle (the drill arms swing in turn), 7-11 attack (rear back, both drills
+  // raised, slam into the ground, follow-through, recover). In a raid it burrows while it moves, so the attack rows are
+  // what players see there; the waddle shows in the Inferno yard. Flash's single pose glided.
+  "monsters/wormzer.png": {
+    frameWidth: 68,
+    frameHeight: 56,
+    anchorX: 34,
+    anchorY: 33,
+    rows: 12,
+    animations: {
+      idle: { first: 0, count: 1, ticksPerFrame: 8 },
+      walk: { first: 1, count: 6, ticksPerFrame: 8 },
+      attack: { first: 7, count: 5, ticksPerFrame: 4 },
+    },
+    strikeFrame: 2,
+  },
 };
 
 const layoutCache = new Map<MonsterSheet, AnimatedSheet>();
@@ -958,6 +978,7 @@ export const REPAINTED_SHEETS: Readonly<Record<string, string>> = {
   "monsters/balthazar.png": "monsters/balthazar-anim@4x.png", // Balthazar (Inferno IC5) animated repaint (30 headings, wing beat + bite attack)
   "monsters/grokus.v2.png": "monsters/grokus-anim@4x.png", // Grokus (Inferno IC6) animated repaint (30 headings, tentacle crawl + slam attack)
   "monsters/sabnox.png": "monsters/sabnox-anim@4x.png", // Sabnox (Inferno IC7) animated repaint (30 headings, salamander walk + spit attack)
+  "monsters/wormzer.png": "monsters/kingwormzer-anim@4x.png", // King Wormzer (Inferno IC8) animated repaint (30 headings, waddle + drill slam)
   "monsters/ape_1.png": "monsters/ape_1-repaint@4x.png", // Gorgo level 1 repaint (all 16 headings, idle + walk + attack)
   "monsters/fly_1.png": "monsters/fly_1-repaint@4x.png", // Fomor level 1 repaint (all 16 headings, idle + walk)
   "monsters/dragon_1.png": "monsters/dragon_1-repaint@4x.png", // Drull level 1 repaint (all 16 headings painted, idle + walk + attack)
