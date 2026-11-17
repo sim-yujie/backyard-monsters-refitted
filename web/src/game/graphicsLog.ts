@@ -40,7 +40,7 @@ export const SESSION_KEY = "bymr.graphicsLog.sent";
 
 const SUBJECT_MAX = 80;
 const DETAIL_MAX = 100;
-const GPU_MAX = 80;
+const GPU_MAX = 100;
 const AGENT_MAX = 60;
 /** What the server keeps of a message (`ERROR_TEXT_LIMITS.messageMax`). */
 const MESSAGE_MAX = 500;
@@ -84,14 +84,22 @@ export const pictureName = (url: string | null | undefined): string => {
   return /\.(?:png|webp|jpe?g|avif|gif)$/i.test(name) ? `${name} (1x)` : name;
 };
 
-/** An error's words for an entry: `Name: message`, without addresses. */
+/**
+ * An error's words for an entry: `Name: message`, or for Pixi's wrapped
+ * loader errors only the cause (their last line, which names its own error),
+ * with every address left out as `(url)`: the picture is named apart, and
+ * `name@2x.png` in an address would be blanked as an email.
+ */
 export const errorWords = (error: unknown): string => {
   let words: string;
-  if (error instanceof Error) words = `${error.name}: ${error.message}`;
+  if (error instanceof Error) {
+    const lines = error.message.split("\n").filter((line) => line.trim() !== "" && !/^\s+at\s/.test(line));
+    words = lines.length > 1 ? lines[lines.length - 1]! : `${error.name}: ${error.message}`;
+  }
   else if (typeof error === "string") words = error;
   else if (error && typeof error === "object" && "type" in error) words = `${String((error as { type: unknown }).type)} event`;
   else words = String(error);
-  return clip(tidy(words), DETAIL_MAX);
+  return clip(tidy(words.replace(/(?:https?:\/\/|\/)\S*\.(?:png|webp|jpe?g|avif|gif|json)\S*?(?=:?\s|[.:]?$)|https?:\/\/\S+?(?=:?\s|[.:]?$)/gi, "(url)")), DETAIL_MAX);
 };
 
 /**

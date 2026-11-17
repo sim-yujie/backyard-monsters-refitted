@@ -200,8 +200,16 @@ describe("words", () => {
 
   it("gives an error's words without the page's address", () => {
     expect(errorWords(new TypeError("Failed to fetch https://play.example.com/assets/a.png"))).toBe(
-      "TypeError: Failed to fetch /assets/a.png",
+      "TypeError: Failed to fetch (url)",
     );
+    // Pixi's loader wraps the cause: only the cause is kept, its address left out.
+    const pixi = new Error(
+      "[Loader.load] Failed to load http://localhost:5431/assets/monsters/dave-anim@2x.png?v=w3oo.\n" +
+        "Error: [loadImageBitmap] Failed to fetch http://localhost:5431/assets/monsters/dave-anim@2x.png?v=w3oo: 404 Not Found",
+    );
+    expect(errorWords(pixi)).toBe("Error: [loadImageBitmap] Failed to fetch (url): 404 Not Found");
+    const decode = new Error("[Loader.load] Failed to load /assets/monsters/a@4x.png.\nInvalidStateError: The source image could not be decoded.");
+    expect(errorWords(decode)).toBe("InvalidStateError: The source image could not be decoded.");
     expect(errorWords("plain words")).toBe("plain words");
     expect(errorWords({ type: "error" })).toBe("error event");
   });
