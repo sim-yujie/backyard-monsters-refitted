@@ -36,8 +36,11 @@ const em = {
 
 mock.module("../../server.js", () => ({ redis: {}, postgres: { em } }));
 
-const { catchUpArmiesForAttack, monstersForMap } = await import("./armies.js");
+const { armyQuestEvents, catchUpArmiesForAttack, catchUpTransferYards, monstersForMap, settleAttackArmies } =
+  await import("./armies.js");
 const { catchUpYard } = await import("./catchUp.js");
+const { jobQuestEvents } = await import("../quests/hooks.js");
+const { recordQuests, readQuests } = await import("../quests/state.js");
 
 const ATTACKER = 2505;
 const DEFENDER = 3000;
@@ -111,6 +114,35 @@ describe("catchUpArmiesForAttack", () => {
     // The far outpost cannot reach the target: untouched, not recorded.
     expect(farOutpost.monsters.housed).toEqual({ C1: 10 });
     expect(entryHoused).toEqual({ "2000241207": { C1: 14 }, "2000242207": { C1: 12 } });
+  });
+
+  test("returns the outposts' hatches for the hatch quest; the main yards' locked catch-ups count their own", async () => {
+    const { attackerHatched, defenderHatched } = await catchUpArmiesForAttack({
+      user: user(),
+      defender: defenderMain as never,
+      cell: { x: 241, y: 208 },
+      mapversion: MapRoomVersion.V2,
+    });
+
+    // The near outpost's 2 Pokeys; the main yard's 4 went on its quests in the locked catch-up.
+    expect(attackerHatched).toEqual({ hatch: 2, "hatch:C1": 2 });
+    expect(defenderHatched).toEqual({});
+    expect(readQuests(attackerMain.dailyquests).daily).not.toBeNull();
+  });
+
+  test("a defending outpost's hatches are its owner's", async () => {
+    const defenderOutpost = { ...yard(6, "2000241209", DEFENDER, 30), type: "outpost", academy: {} };
+    rows.push(defenderOutpost);
+
+    const { defenderHatched } = await catchUpArmiesForAttack({
+      user: user(),
+      defender: defenderOutpost as never,
+      cell: { x: 241, y: 209 },
+      mapversion: MapRoomVersion.V2,
+    });
+
+    expect(defenderOutpost.monsters.housed).toEqual({ C1: 12 });
+    expect(defenderHatched).toEqual({ hatch: 2, "hatch:C1": 2 });
   });
 
   test("an attacker whose own yard is under attack is measured, not written", async () => {
@@ -209,5 +241,76 @@ describe("monstersForMap", () => {
 
     // Level 6 Pokeys hatch in 5 s: 30 s → 6.
     expect(read?.housed).toEqual({ C1: 16 });
+  });
+});
+
+/** A daily set holding one "hatch N of `monster`" quest at 0. */
+const hatchQuest = (monster: string, need: number) => ({
+  v: 1,
+  daily: {
+    period: new Date(now() * 1000).toISOString().slice(0, 10),
+    swaps: 0,
+    bonus: false,
+    quests: [{ slot: 0, kind: "hatchMonster", variant: monster, need, have: 0, claimed: false, rewards: [] }],
+  },
+});
+
+describe("settleAttackArmies (Slimeattikus hatch quest, 17 Nov 2026)", () => {
+  test("monsters that hatch during an attack count for the hatch quest exactly once", async () => {
+    // Entry caught the yard up 60 s ago (savetime and the production clock);
+    // four Pokeys hatch while the attack runs, none is flung.
+    attackerMain.dailyquests = hatchQuest("C1", 4);
+
+    const hatched = await settleAttackArmies({
+      userSave: attackerMain as never,
+      entries: [{ baseid: attackerMain.baseid, m: { housed: { C1: 10 } } }],
+      entryHoused: { [attackerMain.baseid]: { C1: 10 } },
+      logged: null,
+      now: now(),
+    });
+
+    // The settle wrote them, production clock and all ...
+    expect(attackerMain.monsters.housed).toEqual({ C1: 14 });
+    expect(attackerMain.monsters.saved).toBeGreaterThanOrEqual(now() - 1);
+    // ... so it hands back the hatches for the landing to count ...
+    expect(hatched).toEqual({ hatch: 4, "hatch:C1": 4 });
+
+    // ... and the owner's next full catch-up finds none of them again.
+    const later = catchUpYard(attackerMain as never, now());
+    expect(jobQuestEvents(later)).toEqual({});
+
+    const quests = readQuests(recordQuests(attackerMain as never, now(), hatched));
+    expect(quests.daily?.quests[0]).toMatchObject({ kind: "hatchMonster", variant: "C1", have: 4 });
+  });
+
+  test("an outpost that flung in the attack hands back its hatches too", async () => {
+    const hatched = await settleAttackArmies({
+      userSave: attackerMain as never,
+      entries: [
+        { baseid: attackerMain.baseid, m: { housed: { C1: 10 } } },
+        { baseid: nearOutpost.baseid, m: { housed: { C1: 10 } } },
+      ],
+      entryHoused: { [attackerMain.baseid]: { C1: 10 }, [nearOutpost.baseid]: { C1: 10 } },
+      logged: null,
+      now: now(),
+    });
+
+    // 60 s on the main yard, 30 s on the outpost, at 15 s a Pokey.
+    expect(hatched).toEqual({ hatch: 6, "hatch:C1": 6 });
+    expect(persisted).toContain(nearOutpost);
+  });
+});
+
+describe("armyQuestEvents / catchUpTransferYards", () => {
+  test("a transfer's catch-up hands back both yards' hatches", () => {
+    const hatched = catchUpTransferYards([attackerMain, nearOutpost] as never, attackerMain as never, now());
+    expect(hatched).toEqual({ hatch: 6, "hatch:C1": 6 });
+    expect(catchUpTransferYards([attackerMain, nearOutpost] as never, attackerMain as never, now())).toEqual({});
+  });
+
+  test("the Inferno's hatches never count for the surface's quests", () => {
+    const jobs = (id: string) => [{ kind: "hatch", id, t: null, at: now(), detail: { count: 3 } }] as never;
+    expect(armyQuestEvents({ type: "inferno" }, jobs("IC1"))).toEqual({});
+    expect(armyQuestEvents({ type: "outpost" }, jobs("C17"))).toEqual({ hatch: 3, "hatch:C17": 3 });
   });
 });

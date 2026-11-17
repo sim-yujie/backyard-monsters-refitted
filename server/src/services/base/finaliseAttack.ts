@@ -45,7 +45,8 @@ import { championsAfterLessons } from "./combat/championBrain.js";
 import { landHousingLoss, lostCount, reportWithHousingLoss } from "./combat/housingLoss.js";
 import { getHousingOwner, getOutpostOwnerSave } from "./getOutpostOwnerSave.js";
 import { storedDamage } from "./storedDamage.js";
-import { catchUpArmyRow } from "../yard/armies.js";
+import { armyQuestEvents, catchUpArmyRow } from "../yard/armies.js";
+import { addQuestEvents, type QuestEvents } from "../quests/state.js";
 import { MapRoomVersion } from "../../enums/MapRoom.js";
 import type { FlingLog, ResourceAmounts } from "../../game-rules/combat/index.js";
 import type { AbandonedOutcome } from "./combat/abandonedAttack.js";
@@ -156,7 +157,7 @@ const sourceCells = async (
   attacker: User,
   userSave: Save,
   now: number
-): Promise<{ cells: SourceCell[]; rows: Map<string, Save> }> => {
+): Promise<{ cells: SourceCell[]; rows: Map<string, Save>; hatched: QuestEvents }> => {
   const others = checkpoint.sources.filter((baseid) => baseid !== userSave.baseid);
   const found =
     others.length === 0
@@ -165,14 +166,17 @@ const sourceCells = async (
   const rows = new Map(found.map((row) => [row.baseid, row]));
 
   const cells: SourceCell[] = [];
+  const hatched: QuestEvents[] = [];
   for (const baseid of checkpoint.sources) {
     const row = baseid === userSave.baseid ? userSave : rows.get(baseid);
     if (!row) continue;
     const army = catchUpArmyRow(row, userSave, now);
     if (army.resources !== row.resources) row.resources = army.resources;
     cells.push({ baseid, m: army.monsters ?? {} });
+    // Every cell is written below (`spendFlung` updates each), so its hatches are counted here.
+    hatched.push(armyQuestEvents(row, army.jobs));
   }
-  return { cells, rows };
+  return { cells, rows, hatched: addQuestEvents(...hatched) };
 };
 
 /**
@@ -285,7 +289,7 @@ const finaliseLocked = async (basesaveid: number, trigger: string, options: Land
 
   // The attacker: what was flung leaves its cells for good, and the rest of
   // the attacker's keys land as the save would land them (`baseSave.ts`).
-  const { cells, rows } = await sourceCells(checkpoint, attacker, userSave, now);
+  const { cells, rows, hatched } = await sourceCells(checkpoint, attacker, userSave, now);
   const { updates, unpaid } = spendFlung(cells, outcome.flung);
   for (const update of updates) {
     if (update.baseid === userSave.baseid) {
@@ -407,11 +411,12 @@ const finaliseLocked = async (basesaveid: number, trigger: string, options: Land
   // (logged and lost) cannot take the landing down with it.
   await countAttackLoot(postgres.em, attacker.userid, userSave, loot.credit, now);
 
-  // Quests, as the hand-landed save counts them (`controllers/base/save/baseSave.ts`).
+  // Quests, as the hand-landed save counts them (`controllers/base/save/baseSave.ts`),
+  // the monsters that hatched on the attacker's yards during the attack included.
   await recordQuestEvents(
     postgres.em,
     userSave.basesaveid,
-    attackQuestEvents({
+    addQuestEvents(hatched, attackQuestEvents({
       defender,
       damageBefore,
       damageAfter: landedDamage,
@@ -420,7 +425,7 @@ const finaliseLocked = async (basesaveid: number, trigger: string, options: Land
       log: input.log,
       loot: loot.credit,
       playerYard: await isPlayerYard(postgres.em, defender, attacker.userid),
-    }),
+    })),
     now
   );
   if (defender.type !== BaseType.TRIBE && defender.saveuserid && defender.saveuserid !== attacker.userid) {

@@ -19,6 +19,8 @@ import {
 } from "../../../services/monsters/transferRules.js";
 import type { JsonObject } from "../../../types/JsonObject.js";
 import { catchUpTransferYards } from "../../../services/yard/armies.js";
+import { recordUserQuestEvents } from "../../../services/quests/record.js";
+import type { QuestEvents } from "../../../services/quests/state.js";
 import { isAttackActive } from "../../../services/base/isAttackActive.js";
 import { readAttackSession } from "../../../services/base/attackSessionStore.js";
 import { jsonField } from "../../../schemas/jsonField.js";
@@ -170,7 +172,7 @@ export const transferMonsters: KoaController = async (ctx) => {
   // yard, which an outpost transfer would otherwise never load.
   await postgres.em.populate(currentUser, ["save"]);
 
-  await postgres.em.transactional(async (em) => {
+  const hatched = await postgres.em.transactional(async (em) => {
     // The main yard's row first, then the two yards in id order, as every
     // route that touches more than one of a player's yards locks them.
     const mainId = currentUser.save?.basesaveid;
@@ -189,8 +191,13 @@ export const transferMonsters: KoaController = async (ctx) => {
         });
     }
 
-    await transferBetween(em, currentUser, fromBase, toBase, request);
+    return transferBetween(em, currentUser, fromBase, toBase, request);
   });
+
+  // Monsters that finished hatching on either yard since its last catch-up
+  // count for the hatch quest now: the catch-up above wrote them, so no later
+  // one will see them (as `catchUpLockedOutpost` counts an outpost's).
+  await recordUserQuestEvents(postgres.em, currentUser.userid, hatched);
 
   ctx.status = Status.OK;
   ctx.body = { error: 0 };
@@ -209,7 +216,7 @@ const transferBetween = async (
   fromBase: Save,
   toBase: Save,
   request: TransferRequest
-): Promise<void> => {
+): Promise<QuestEvents> => {
   const { baseid: frombaseid } = fromBase;
   const { baseid: tobaseid } = toBase;
   const mainSave = currentUser.save ?? null;
@@ -218,7 +225,7 @@ const transferBetween = async (
   // Both yards as they are now (docs/design/yard-buildings.md §2.3): the
   // rules measure the caught-up rosters, and what is written keeps the
   // server's production state.
-  catchUpTransferYards([fromBase, toBase], mainSave, now);
+  const hatched = catchUpTransferYards([fromBase, toBase], mainSave, now);
 
   const capacityFor = (save: Save): number =>
     deriveHousingCapacity({
@@ -275,4 +282,5 @@ const transferBetween = async (
 
   em.persist([fromBase, toBase]);
   await em.flush();
+  return hatched;
 };

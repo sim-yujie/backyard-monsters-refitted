@@ -1,5 +1,5 @@
 import { BaseMode, BaseType } from "../../../../enums/Base.js";
-import { recordQuestEvents } from "../../../../services/quests/record.js";
+import { recordQuestEvents, recordUserQuestEvents } from "../../../../services/quests/record.js";
 import { AttackPermission, MapRoomCell, MapRoomVersion } from "../../../../enums/MapRoom.js";
 import { World } from "../../../../database/models/world.model.js";
 import { WorldMapCell } from "../../../../database/models/worldmapcell.model.js";
@@ -270,6 +270,15 @@ export const baseModeAttack = async ({ user, baseid, mapversion, attackerLevel, 
 
   postgres.em.persist(userSave);
   await postgres.em.flush();
+
+  // Monsters the outposts' catch-ups above hatched count for the hatch quest
+  // now that they are written: the attacker's outposts on the attacker's main
+  // row, a defending outpost on its owner's (the main yards' locked catch-ups
+  // counted their own).
+  await recordQuestEvents(postgres.em, userSave.basesaveid, armies.attackerHatched);
+  if (save.type === BaseType.OUTPOST && save.saveuserid) {
+    await recordUserQuestEvents(postgres.em, save.saveuserid, armies.defenderHatched);
+  }
 
   // Bind this attack to the player who started it (issue #25). Only the account
   // recorded here may post the result to `/base/save`, and only for as long as

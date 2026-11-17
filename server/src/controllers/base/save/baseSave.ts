@@ -105,6 +105,7 @@ import { recordDefenceReplay } from "../../../services/defences/recordDefenceRep
 import { recordAttackAchievements } from "../../../services/achievements/events.js";
 import { attackQuestEvents, defenceQuestEvents } from "../../../services/quests/hooks.js";
 import { recordQuestEvents, recordUserQuestEvents } from "../../../services/quests/record.js";
+import { addQuestEvents, type QuestEvents } from "../../../services/quests/state.js";
 import { INFERNO_SAVE_TYPES, refuseOldInferno } from "../../../services/inferno/infernoGate.js";
 import { infernoConfig } from "../../../config/InfernoConfig.js";
 import { isPlayerYard, noteOutpostDefended } from "../../../services/alliance/allianceProgress.js";
@@ -578,9 +579,12 @@ const saveBase = async (
   /** The defence replay and the yard owner's notice, written once the landing has committed. */
   let afterLanding: (() => Promise<void>) | null = null;
 
+  /** Monsters the settle's catch-up hatched on the attacker's yards: the hatch quest's, counted after the commit. */
+  let attackerHatched: QuestEvents = {};
+
   if (isAttack) {
     if (saveData.monsterupdate) {
-      await monsterUpdateHandler(saveData.monsterupdate, userSave, {
+      attackerHatched = await monsterUpdateHandler(saveData.monsterupdate, userSave, {
         session,
         finalises: Boolean(saveData.over),
         flinglog: saveData.flinglog,
@@ -805,13 +809,15 @@ const saveBase = async (
 
     // Quests (`services/quests/hooks.ts`), each on its player's main row
     // under its own lock, after the commit: a won attack, a tribe camp
-    // destroyed, catapult hits and loot (before the cap) for the attacker; a
-    // held defence for the owner of a player's yard. Logged and lost on a failure.
+    // destroyed, catapult hits and loot (before the cap) for the attacker,
+    // and the monsters that hatched on their yards during the attack (the
+    // settle above wrote them, so no later catch-up will count them); a held
+    // defence for the owner of a player's yard. Logged and lost on a failure.
     const damageAfter = Number(baseSave.damage) || 0;
     await recordQuestEvents(
       postgres.em,
       userSave.basesaveid,
-      attackQuestEvents({
+      addQuestEvents(attackerHatched, attackQuestEvents({
         defender: baseSave,
         damageBefore,
         damageAfter,
@@ -820,7 +826,7 @@ const saveBase = async (
         log: battleInput?.log,
         loot: loot?.credit,
         playerYard: await isPlayerYard(postgres.em, baseSave, user.userid),
-      }),
+      })),
       now
     );
     if (baseSave.type !== BaseType.TRIBE && baseSave.saveuserid && baseSave.saveuserid !== user.userid) {
