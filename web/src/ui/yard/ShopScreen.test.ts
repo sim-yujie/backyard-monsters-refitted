@@ -244,9 +244,8 @@ describe("ShopScreen", () => {
     expect(card("BLK2I")!.querySelector(".shop-card__name")!.textContent).toBe(
       "Granite Blocks",
     );
-    expect(card("BLK3I")!.querySelector(".shop-card__gate")!.textContent).toBe(
-      "Needs Under Hall level 4.",
-    );
+    // No Under Hall gate on a wall upgrade (beta 8).
+    expect(card("BLK3I")!.querySelector(".shop-card__gate")?.textContent ?? "").toBe("");
     expect(
       element.querySelector('[data-section="walls"] .shop-section__note')!.textContent,
     ).toContain("granite");
@@ -335,7 +334,7 @@ describe("ShopScreen", () => {
   it("sells the wall upgrades under Walls, priced from the yard's Blocks", async () => {
     const { store, element, card, button } = setup({
       buildingdata: {
-        "0": { id: 0, t: 14, X: 0, Y: 0, l: 3 },
+        "0": { id: 0, t: 14, X: 0, Y: 0, l: 2 },
         "1": { id: 1, t: 17, X: 100, Y: 100, l: 1 },
         "2": { id: 2, t: 17, X: 110, Y: 100, l: 2 },
       },
@@ -347,10 +346,10 @@ describe("ShopScreen", () => {
     // Stone: only the level-1 Block, 3 Shiny.
     expect(card("BLK2")!.querySelector(".shop-card__meta")!.textContent).toBe("1 Block to raise");
     expect(button("BLK2").getAttribute("aria-label")).toBe("Buy Stone Blocks, 3 Shiny");
-    // Metal: 3 + 6 for the first, 6 for the second; Town Hall 3 is short of 4.
+    // Metal: 3 + 6 for the first, 6 for the second; on sale at Town Hall 2 (beta 8).
     expect(card("BLK3")!.querySelector(".shop-card__meta")!.textContent).toBe("2 Blocks to raise");
-    expect(button("BLK3").disabled).toBe(true);
-    expect(card("BLK3")!.querySelector(".shop-card__gate")!.textContent).toBe("Needs Town Hall level 4.");
+    expect(button("BLK3").disabled).toBe(false);
+    expect(button("BLK3").getAttribute("aria-label")).toBe("Buy Metal Blocks, 15 Shiny");
 
     const buy = vi.spyOn(store, "buy").mockImplementation(
       (): Promise<YardActionResult<ShopBuyReport>> =>

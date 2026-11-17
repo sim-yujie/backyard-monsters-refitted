@@ -157,10 +157,19 @@ describe("wallOffers", () => {
     expect(metal).toMatchObject({ blocks: 2, state: { kind: "buy", price: 9 + 6 } });
   });
 
-  it("gates each tier on its Town Hall level in the main yard, then on Shiny", () => {
+  it("sells every tier at any Town Hall level (beta 8), gated on Shiny only", () => {
     const [stone, metal] = wallOffers(storeOf({ ...blocks(3, [1]), credits: 2 }));
     expect(stone!.state).toMatchObject({ blocked: "Not enough Shiny." });
-    expect(metal!.state).toMatchObject({ blocked: "Needs Town Hall level 4." });
+    expect(metal!.state).toMatchObject({ blocked: "Not enough Shiny." });
+    for (const hall of [1, 2]) {
+      const offers = wallOffers(storeOf({ ...blocks(hall, [1]), credits: 1000 }));
+      expect(offers.map((one) => one.state)).toEqual([
+        { kind: "buy", price: 3, blocked: null },
+        { kind: "buy", price: 9, blocked: null },
+        { kind: "buy", price: 19, blocked: null },
+        { kind: "buy", price: 34, blocked: null },
+      ]);
+    }
   });
 
   it("says when every Block has reached a tier, or there are none", () => {
@@ -251,7 +260,7 @@ describe("on the Inferno yard (WP 1.17 items)", () => {
     });
   });
 
-  it("sells Granite and Forged Steel behind Under Hall 3 and 4", () => {
+  it("sells Granite and Forged Steel at any Under Hall level (beta 8)", () => {
     const yard = (hall: number) =>
       inferno({
         buildingdata: {
@@ -259,16 +268,12 @@ describe("on the Inferno yard (WP 1.17 items)", () => {
           "1": { id: 1, t: 17, X: 50, Y: 50, l: 1 },
         },
       });
-    const [granite, steel, ...rest] = wallOffers(yard(3));
+    const [granite, steel, ...rest] = wallOffers(yard(1));
     expect(rest).toEqual([]);
     expect(granite).toMatchObject({
       tier: { item: "BLK2I", name: "Granite Blocks" },
       state: { price: 3, blocked: null },
     });
-    expect(steel).toMatchObject({
-      tier: { item: "BLK3I" },
-      state: { price: 9, blocked: "Needs Under Hall level 4." },
-    });
-    expect(wallOffers(yard(4))[1]!.state).toEqual({ kind: "buy", price: 9, blocked: null });
+    expect(steel).toMatchObject({ tier: { item: "BLK3I" }, state: { kind: "buy", price: 9, blocked: null } });
   });
 });

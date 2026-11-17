@@ -466,3 +466,16 @@ describe("a main-yard Inferno building", () => {
     expect(cancelled.slices.iresources).toMatchObject(PURSE);
   });
 });
+
+describe("Block upgrades need no Town Hall (beta 8), other buildings still do", () => {
+  // Walls climb through the Yard Planner's batch route (`yardplanner/wallUpgrade.ts`,
+  // tested there at Town Hall 1 and 2); this route keeps every other gate.
+  test("a Cannon Tower to level 3 still needs Town Hall 3", () => {
+    const save = yard();
+    save.buildingdata!["0"]!.l = 2;
+    expect(refusal(() => planUpgradeAction(save, 1, NOW)).data).toEqual({
+      reason: "townHall",
+      townHall: { have: 2, need: 3 },
+    });
+  });
+});

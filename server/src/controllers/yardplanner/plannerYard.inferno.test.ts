@@ -282,12 +282,11 @@ describe("batch wall upgrade in the Inferno", () => {
     expect(purse()).toEqual(PURSE);
   });
 
-  test("waits for the Under Hall level each step needs", async () => {
-    (infernoBuildings()["1"] as Row).l = 3;
+  test("waits for no Under Hall level (beta 8): Under Hall 1 takes a wall to level 3", async () => {
+    infernoBuildings()["1"] = { ...UNDER_HALL, l: 1 };
     const answer = await run(upgradeWalls, { ids: "[3]", level: 3, baseid: INFERNO_BASEID });
-    expect(answer.status).toBe(409);
-    expect(infernoBuildings()["3"]).toMatchObject({ l: 1 });
-    expect(purse()).toEqual(PURSE);
+    expect(answer.status).toBe(200);
+    expect(infernoBuildings()["3"]).toMatchObject({ l: 3 });
   });
 
   test("refuses when the Inferno purse is short, whatever the main pool holds", async () => {

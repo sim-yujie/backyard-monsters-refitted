@@ -99,21 +99,24 @@ const text = (harness: Harness, selector: string): string =>
   harness.root.querySelector(selector)?.textContent ?? "";
 
 describe("wallUpgradePanel", () => {
-  it("offers level 2 to 5 and disables the ones the Town Hall has not earned", () => {
-    const yard = yardOf(RICH, 5);
-    const harness = open(yard, [1, 2, 3, 4]);
-
-    expect(harness.levels.map((button) => button.dataset["level"])).toEqual(["2", "3", "4", "5"]);
-    expect(levelButton(harness, 4).disabled).toBe(false);
-    expect(levelButton(harness, 5).disabled).toBe(true);
-    // The reason is in the tooltip, not only in the disabled state.
-    expect(levelButton(harness, 5).title).toContain("Needs Town Hall 6");
+  it("offers level 2 to 5 at any Town Hall level (beta 8)", () => {
+    for (const hall of [1, 2, 5]) {
+      const harness = open(yardOf(RICH, hall), [1, 2, 3, 4]);
+      expect(harness.levels.map((button) => button.dataset["level"])).toEqual(["2", "3", "4", "5"]);
+      for (const level of [2, 3, 4, 5]) {
+        expect(levelButton(harness, level).disabled, `hall ${hall} level ${level}`).toBe(false);
+        expect(levelButton(harness, level).title).not.toContain("Needs Town Hall");
+      }
+    }
   });
 
-  it("opens on the highest level the hall allows", () => {
-    const harness = open(yardOf(RICH, 5), [1, 2, 3, 4]);
-    expect(levelButton(harness, 4).getAttribute("aria-pressed")).toBe("true");
-    expect(text(harness, ".planner-walls__preview")).toContain("level 4");
+  it("opens on the highest level the selection can be paid for", () => {
+    const harness = open(yardOf(RICH, 2), [1, 2, 3, 4]);
+    expect(levelButton(harness, 5).getAttribute("aria-pressed")).toBe("true");
+    expect(text(harness, ".planner-walls__preview")).toContain("level 5");
+    // 10,000 Pebbles pay for one Block to stone and no further.
+    const poor = open(yardOf({ r1: 0, r2: 10_000, r3: 0, r4: 0 }, 1), [1]);
+    expect(levelButton(poor, 2).getAttribute("aria-pressed")).toBe("true");
   });
 
   it("says how many walls would change and how many are already there", () => {

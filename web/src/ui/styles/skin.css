@@ -789,6 +789,15 @@
   background: var(--skin-fill);
 }
 
+/* Classic's NEW on a Town Hall unlock keeps a solid orange under its white
+   word: on the window's cream fill above it was white on cream. The deeper
+   accent (pressed) reads at 5:1, the plain accent only 4:1. */
+:root[data-skin="flash"] .panel .unlock-tile--new .unlock-tile__badge {
+  border-color: var(--colour-border-strong);
+  background: var(--colour-accent-pressed);
+  color: #ffffff;
+}
+
 /* A frozen champion's badge keeps its ice blue (on the window's fill its
    words were lost in both styles). */
 :root[data-skin] .panel .chamber-card--frozen .chamber-card__where {

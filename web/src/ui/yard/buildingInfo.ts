@@ -10,7 +10,9 @@ import {
   towerStats,
 } from "@/game/combat/rules";
 import { outpostRange } from "@/game/maproom/rules/range";
-import { BUILDING_COST_ROWS, INFERNO_BUILDABLE_TYPES, INFERNO_COST_ROWS } from "@/game/yard/buildingCostData";
+import { allowedAt, buildableTypesFor } from "@/game/yard/buildCatalogue";
+import { isSurfaceInferno, SURFACE_INFERNO_TYPES } from "@/game/yard/surfaceInferno";
+import { BUILDING_COST_ROWS, INFERNO_COST_ROWS } from "@/game/yard/buildingCostData";
 import { maxLevel, quantityOf, rowOf, type YardKind } from "@/game/yard/buildingCosts";
 import { typeName } from "@/game/yard/planner/summary";
 import type { YardBuilding } from "@/game/yard/yardModel";
@@ -75,6 +77,8 @@ export interface UnlockItem {
   readonly name: string;
   readonly added: number;
   readonly isNew: boolean;
+  /** The yard whose table names and pictures it, when not the panel's own (the Under Hall's main-yard tiles). */
+  readonly yard?: YardKind;
 }
 
 /** An unlock as words, for a screen reader and the hover: "Cannon Tower +1", "Flinger new". */
@@ -94,6 +98,12 @@ export interface InfoList {
 export interface BuildingInfo {
   readonly rows: readonly InfoRow[];
   readonly list: InfoList | null;
+  /**
+   * The Under Hall's second list: what its next level lets the main yard
+   * build ({@link underHallYardUnlocks}). Null everywhere else, and when
+   * that level adds nothing there.
+   */
+  readonly yardList: InfoList | null;
 }
 
 const FLINGER_TYPE = 5;
@@ -324,13 +334,18 @@ const economyRows = (building: YardBuilding, kind: YardKind): InfoRow[] => {
   return rows;
 };
 
-/** Kinds a Town Hall's `quantity` ladder counts that the player builds. */
+/**
+ * Kinds a Town Hall's `quantity` ladder counts that the player builds. The
+ * Champion Cage's props `type` is "cage" (`YARD_PROPS.as`, id 114), and its
+ * Town Hall 4 unlock is one Flash's own text listed.
+ */
 const COUNTED_KINDS: ReadonlySet<string> = new Set([
   "resource",
   "special",
   "tower",
   "wall",
   "trap",
+  "cage",
 ]);
 
 /**
@@ -338,19 +353,53 @@ const COUNTED_KINDS: ReadonlySet<string> = new Set([
  * whose cap rises, by how many ("Cannon Tower +1"), or marked new when the
  * type was not allowed at all before ("Flinger new"). On the Inferno yard (`yard`), what raising the
  * Under Hall lets it build, from the Inferno table, by the Inferno's names
- * (WP 1.19); only what its build menu offers, as its other rows are blocked.
+ * (WP 1.19).
+ *
+ * Only what the yard's build menu offers is listed, as Flash's own Town Hall
+ * text skipped every `block`ed type (`client/scripts/BUILDING14.as:91-94`).
+ * That drops the Stone Block (18): a legacy row nobody builds, as a placed
+ * Block is upgraded to stone (`BASE.as:1538-1541` turns an old one into a
+ * level 2 Block), so its `quantity` ladder caps nothing and a "Stone Block
+ * +20" tile read as a stone limit that does not exist.
+ *
+ * The main yard's Inferno buildings (Quake and Magma Towers, Siege Factory
+ * and Lab) are left out too: their counts follow the Inferno Under Hall, not
+ * the Town Hall (`GLOBAL.GetBuildingTownHallLevel`, `GLOBAL.as:2149-2157`;
+ * {@link isSurfaceInferno}), so a Town Hall level unlocks none of them.
  */
 export const townHallUnlocks = (level: number, yard: YardKind = "main"): UnlockItem[] => {
   const items: UnlockItem[] = [];
   const inferno = yard === "inferno";
+  const buildable = buildableTypesFor(yard);
   for (const [type, name, kind] of inferno ? INFERNO_COST_ROWS : BUILDING_COST_ROWS) {
     if (!COUNTED_KINDS.has(kind) || type === TOWN_HALL_TYPE) continue;
-    if (inferno && !INFERNO_BUILDABLE_TYPES.includes(type)) continue;
+    if (!buildable.has(type) || isSurfaceInferno(type, yard)) continue;
     const before = quantityOf(type, level, yard);
     const after = quantityOf(type, level + 1, yard);
     if (after <= before) continue;
     const shown = inferno ? typeName(type, yard) : name;
     items.push({ type, name: shown, added: after - before, isNew: before === 0 });
+  }
+  return items;
+};
+
+/**
+ * What raising the Inferno's Under Hall from `level` lets the main yard
+ * build: its Quake and Magma Towers and the Siege Factory and Works count by the
+ * Under Hall, not the Town Hall (`GLOBAL.GetBuildingTownHallLevel`,
+ * `GLOBAL.as:2149-2157`; `server/src/services/yard/surfaceInferno.ts`). Read
+ * from the main table at the Under Hall's level, as the build menu caps them
+ * (`buildCatalogue.ts`), by the main yard's names. The Siege Factory and Works
+ * allow one from Under Hall 1, so no Under Hall upgrade lists them.
+ */
+export const underHallYardUnlocks = (level: number): UnlockItem[] => {
+  const items: UnlockItem[] = [];
+  for (const [type, , , , , quantity] of BUILDING_COST_ROWS) {
+    if (!SURFACE_INFERNO_TYPES.has(type)) continue;
+    const before = allowedAt(quantity, level);
+    const after = allowedAt(quantity, level + 1);
+    if (after <= before) continue;
+    items.push({ type, name: typeName(type, "main"), added: after - before, isNew: before === 0, yard: "main" });
   }
   return items;
 };
@@ -404,6 +453,7 @@ export const buildingInfo = (
   }
 
   let list: InfoList | null = null;
+  let yardList: InfoList | null = null;
   if (building.type === TOWN_HALL_TYPE && nextLevelOf(building, kind) !== null) {
     const next = shownLevel(building) + 1;
     list = {
@@ -411,7 +461,11 @@ export const buildingInfo = (
       title: `${kind === "inferno" ? "Under Hall" : "Town Hall"} ${next} unlocks`,
       items: townHallUnlocks(shownLevel(building), kind),
     };
+    const onYard = kind === "inferno" ? underHallYardUnlocks(shownLevel(building)) : [];
+    if (onYard.length > 0) {
+      yardList = { label: "Main yard", title: `Under Hall ${next} unlocks on your main yard`, items: onYard };
+    }
   }
 
-  return { rows, list };
+  return { rows, list, yardList };
 };

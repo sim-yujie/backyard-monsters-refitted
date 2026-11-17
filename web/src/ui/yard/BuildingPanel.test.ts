@@ -6,6 +6,8 @@ import { setDevDetails } from "@/app/devDetails";
 import { YardStore, type YardUiBinding } from "@/game/yard/YardStore";
 import { resetWeekend, setWeekend, type WeekendRun } from "@/game/weekend";
 import { topUpPrice } from "@/game/yard/resourcePacks";
+import { INFERNO_YARD, type OwnYardTarget } from "@/game/yard/ownYards";
+import { buttonUrl } from "@/game/yard/buildButtonArt";
 import { panelModel } from "./buildingActions";
 import type { Notices } from "@/ui/maproom/Notices";
 import { spokenText } from "@/ui/resourceIcon";
@@ -72,11 +74,13 @@ const setup = (
     panel?: Partial<BuildingPanelOptions>;
     scene?: Partial<YardUiBinding["scene"]>;
     modal?: HTMLElement;
+    target?: OwnYardTarget;
   } = {},
 ) => {
   const api = fakeApi();
   const store = new YardStore({
     save: loadOf(buildings, options.load),
+    ...(options.target ? { target: options.target } : {}),
     api,
     clock: () => T0,
     timers: { set: () => 0, clear: () => undefined },
@@ -481,6 +485,33 @@ describe("BuildingPanel: buildings without an Upgrade here", () => {
     expect(silo.querySelector(".unlock-tile__name")!.textContent).toBe("Storage Silo");
     const fresh = unlocks.querySelector<HTMLElement>(".unlock-tile--new");
     if (fresh) expect(fresh.querySelector(".unlock-tile__badge")!.textContent).toBe("NEW");
+  });
+
+  it("the Under Hall adds what its next level lets the main yard build, by main-yard pictures", () => {
+    const { element } = setup([building(1, 14, 2)], 1, { load: { type: "inferno" }, target: INFERNO_YARD });
+    const unlocks = element.querySelector<HTMLElement>(".building-panel__unlocks")!;
+    const labels = [...unlocks.querySelectorAll(".building-panel__label")].map((one) => one.textContent);
+    expect(labels).toEqual(["Lv 3 unlocks", "Main yard"]);
+    expect(unlocks.querySelector(".building-panel__label--sub")!.getAttribute("title")).toBe(
+      "Under Hall 3 unlocks on your main yard",
+    );
+    const [inferno, yard] = [...unlocks.querySelectorAll<HTMLElement>(".building-panel__unlock-list")];
+    // The Inferno's own Quake Tower is new there; the main yard's gets one more.
+    expect([...inferno!.querySelectorAll(".unlock-tile")].map((one) => one.getAttribute("aria-label"))).toContain(
+      "Quake Tower new",
+    );
+    const tiles = [...yard!.querySelectorAll<HTMLElement>(".unlock-tile")];
+    expect(tiles.map((one) => one.getAttribute("aria-label"))).toEqual(["Quake Tower +1"]);
+    expect(tiles[0]!.querySelector("img")!.getAttribute("src")).toBe(buttonUrl(129, "main"));
+    expect(tiles[0]!.querySelector(".unlock-tile__badge")!.textContent).toBe("+1");
+  });
+
+  it("the Under Hall shows no main-yard group when its next level adds nothing there", () => {
+    const { element } = setup([building(1, 14, 1)], 1, { load: { type: "inferno" }, target: INFERNO_YARD });
+    const unlocks = element.querySelector<HTMLElement>(".building-panel__unlocks")!;
+    expect(unlocks.querySelector(".building-panel__label--sub")).toBeNull();
+    expect(unlocks.querySelectorAll(".building-panel__unlock-list")).toHaveLength(1);
+    expect(unlocks.querySelector(".building-panel__none")).toBeNull();
   });
 
   it("a foreign Town Hall lists no unlocks and a running upgrade shows no countdown", () => {

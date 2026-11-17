@@ -443,18 +443,12 @@ describe("POST /bm/yard/shop/buy: wall upgrades (BLK2..BLK5)", () => {
     expect(buildings()["10"]).toMatchObject({ t: 17, l: 3 });
   });
 
-  test("each tier needs its Town Hall level in the main yard", async () => {
-    const gates: [string, number][] = [["BLK2", 3], ["BLK3", 4], ["BLK4", 5], ["BLK5", 6]];
-    for (const [item, need] of gates) {
-      db.row = wallsRow(need - 1, [{ l: 1 }]);
-      expect(await call(yardShopBuyAction, { item })).toMatchObject({
-        status: 409,
-        body: { reason: "townHall", have: need - 1, need },
-      });
-      expect(db.row).toMatchObject({ credits: 1000 });
-
-      db.row = wallsRow(need, [{ l: 1 }]);
-      expect((await call(yardShopBuyAction, { item })).status).toBe(200);
+  test("every tier sells at any Town Hall level in the main yard (beta 8)", async () => {
+    for (const item of ["BLK2", "BLK3", "BLK4", "BLK5"]) {
+      for (const hall of [1, 2]) {
+        db.row = wallsRow(hall, [{ l: 1 }]);
+        expect((await call(yardShopBuyAction, { item })).status, `${item} at Town Hall ${hall}`).toBe(200);
+      }
     }
   });
 

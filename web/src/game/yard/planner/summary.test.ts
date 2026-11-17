@@ -167,9 +167,9 @@ describe("wallBatchPreview", () => {
     expect(preview.cost.r2).toBe(700_000);
   });
 
-  it("names the Town Hall level the target needs when the yard is short of it", () => {
-    // The fixture's hall is level 5; the level 5 wall step wants 6.
-    expect(wallBatchPreview(nodesOf(RICH, [1]), 5, RICH).gate).toEqual({ level: 5, need: 6 });
+  it("has no Town Hall gate on any wall level (beta 8)", () => {
+    // The fixture's hall is level 5; Flash's level 5 wall step wanted 6.
+    expect(wallBatchPreview(nodesOf(RICH, [1]), 5, RICH).gate).toBeNull();
     expect(wallBatchPreview(nodesOf(RICH, [1]), 4, RICH).gate).toBeNull();
   });
 
@@ -212,16 +212,19 @@ describe("wallBatchPreview", () => {
 });
 
 describe("wallTargets", () => {
-  it("offers level 2 up to the top of the ladder with the hall each one needs", () => {
+  it("offers level 2 up to the top of the ladder, none waiting for the hall (beta 8)", () => {
     expect(wallTargets()).toEqual([
-      { level: 2, need: 3 },
-      { level: 3, need: 4 },
-      { level: 4, need: 5 },
-      { level: 5, need: 6 },
+      { level: 2, need: 0 },
+      { level: 3, need: 0 },
+      { level: 4, need: 0 },
+      { level: 5, need: 0 },
     ]);
   });
 
-  it("stops the Inferno's ladder at 3, gated by the Under Hall", () => {
-    expect(wallTargets("inferno").map(({ level }) => level)).toEqual([2, 3]);
+  it("stops the Inferno's ladder at 3, with no Under Hall gate", () => {
+    expect(wallTargets("inferno")).toEqual([
+      { level: 2, need: 0 },
+      { level: 3, need: 0 },
+    ]);
   });
 });
