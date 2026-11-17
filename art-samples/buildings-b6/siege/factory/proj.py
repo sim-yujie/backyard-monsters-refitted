@@ -36,6 +36,9 @@ def root_of(o):
 
 
 def idmap(s=3):
+    for o in kit.SC.objects:                 # parts the render leaves out (cutters, helpers) are no part of the look
+        if o.hide_render:
+            o.hide_viewport = True
     bpy.context.view_layer.update()
     dg = bpy.context.evaluated_depsgraph_get()
     fwd = kit.cam_fwd()
