@@ -10,8 +10,8 @@ import {
   towerStats,
 } from "@/game/combat/rules";
 import { outpostRange } from "@/game/maproom/rules/range";
-import { buildableTypesFor } from "@/game/yard/buildCatalogue";
-import { isSurfaceInferno } from "@/game/yard/surfaceInferno";
+import { allowedAt, buildableTypesFor } from "@/game/yard/buildCatalogue";
+import { isSurfaceInferno, SURFACE_INFERNO_TYPES } from "@/game/yard/surfaceInferno";
 import { BUILDING_COST_ROWS, INFERNO_COST_ROWS } from "@/game/yard/buildingCostData";
 import { maxLevel, quantityOf, rowOf, type YardKind } from "@/game/yard/buildingCosts";
 import { typeName } from "@/game/yard/planner/summary";
@@ -77,6 +77,8 @@ export interface UnlockItem {
   readonly name: string;
   readonly added: number;
   readonly isNew: boolean;
+  /** The yard whose table names and pictures it, when not the panel's own (the Under Hall's main-yard tiles). */
+  readonly yard?: YardKind;
 }
 
 /** An unlock as words, for a screen reader and the hover: "Cannon Tower +1", "Flinger new". */
@@ -96,6 +98,12 @@ export interface InfoList {
 export interface BuildingInfo {
   readonly rows: readonly InfoRow[];
   readonly list: InfoList | null;
+  /**
+   * The Under Hall's second list: what its next level lets the main yard
+   * build ({@link underHallYardUnlocks}). Null everywhere else, and when
+   * that level adds nothing there.
+   */
+  readonly yardList: InfoList | null;
 }
 
 const FLINGER_TYPE = 5;
@@ -376,6 +384,27 @@ export const townHallUnlocks = (level: number, yard: YardKind = "main"): UnlockI
 };
 
 /**
+ * What raising the Inferno's Under Hall from `level` lets the main yard
+ * build: its Quake and Magma Towers and the Siege Factory and Works count by the
+ * Under Hall, not the Town Hall (`GLOBAL.GetBuildingTownHallLevel`,
+ * `GLOBAL.as:2149-2157`; `server/src/services/yard/surfaceInferno.ts`). Read
+ * from the main table at the Under Hall's level, as the build menu caps them
+ * (`buildCatalogue.ts`), by the main yard's names. The Siege Factory and Works
+ * allow one from Under Hall 1, so no Under Hall upgrade lists them.
+ */
+export const underHallYardUnlocks = (level: number): UnlockItem[] => {
+  const items: UnlockItem[] = [];
+  for (const [type, , , , , quantity] of BUILDING_COST_ROWS) {
+    if (!SURFACE_INFERNO_TYPES.has(type)) continue;
+    const before = allowedAt(quantity, level);
+    const after = allowedAt(quantity, level + 1);
+    if (after <= before) continue;
+    items.push({ type, name: typeName(type, "main"), added: after - before, isNew: before === 0, yard: "main" });
+  }
+  return items;
+};
+
+/**
  * The label of a building's own health. The Champion Cage's says it is the
  * cage's, as its panel also shows the champion's health and full health.
  */
@@ -424,6 +453,7 @@ export const buildingInfo = (
   }
 
   let list: InfoList | null = null;
+  let yardList: InfoList | null = null;
   if (building.type === TOWN_HALL_TYPE && nextLevelOf(building, kind) !== null) {
     const next = shownLevel(building) + 1;
     list = {
@@ -431,7 +461,11 @@ export const buildingInfo = (
       title: `${kind === "inferno" ? "Under Hall" : "Town Hall"} ${next} unlocks`,
       items: townHallUnlocks(shownLevel(building), kind),
     };
+    const onYard = kind === "inferno" ? underHallYardUnlocks(shownLevel(building)) : [];
+    if (onYard.length > 0) {
+      yardList = { label: "Main yard", title: `Under Hall ${next} unlocks on your main yard`, items: onYard };
+    }
   }
 
-  return { rows, list };
+  return { rows, list, yardList };
 };

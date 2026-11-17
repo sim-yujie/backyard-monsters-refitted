@@ -7,6 +7,7 @@ import {
   buildingInfo,
   damagePerSecond,
   townHallUnlocks,
+  underHallYardUnlocks,
   unlockText,
 } from "./buildingInfo";
 
@@ -214,6 +215,18 @@ describe("Town Hall", () => {
     expect(townHallUnlocks(3).map(unlockText)).toContain("Champion Cage new");
   });
 
+  it("lists the Champion Chamber at Town Hall 4, as Flash's quantity ladder has it", () => {
+    // `YARD_PROPS.as:6533`: quantity [0,0,0,0,1,...], re [[14,1,4],[114,1,1]].
+    expect(townHallUnlocks(3).map(unlockText)).toContain("Champion Chamber new");
+    for (const level of [0, 1, 2, 4, 5]) {
+      expect(townHallUnlocks(level).some((item) => item.type === 119), `from ${level}`).toBe(false);
+    }
+  });
+
+  it("a Town Hall has no main-yard second list", () => {
+    expect(buildingInfo(one({ t: 14, l: 2 })).yardList).toBeNull();
+  });
+
   it("lists only what the build menu offers", () => {
     for (const yard of ["main", "inferno"] as const) {
       const buildable = buildableTypesFor(yard);
@@ -252,6 +265,31 @@ describe("Under Hall (WP 1.19)", () => {
     const info = buildingInfo(one({ t: 14, l: 1 }), "inferno");
     expect(info.list?.title).toBe("Under Hall 2 unlocks");
     expect(info.list?.items.map(unlockText)).toContain("Magma Pump +1");
+  });
+
+  it("lists the main yard's Inferno buildings its next level allows more of", () => {
+    // Main table quantity, read at the Under Hall level: Quake Tower
+    // [0,1,1,2,2,4,...], Magma Tower [0,1,1,1,2,...], Siege Factory and
+    // Siege Works [0,1,...]: one from Under Hall 1, so no upgrade lists them.
+    expect(underHallYardUnlocks(1).map(unlockText)).toEqual([]);
+    expect(underHallYardUnlocks(2).map(unlockText)).toEqual(["Quake Tower +1"]);
+    expect(underHallYardUnlocks(3).map(unlockText)).toEqual(["Magma Tower +1"]);
+    expect(underHallYardUnlocks(4).map(unlockText)).toEqual(["Quake Tower +2"]);
+    expect(underHallYardUnlocks(5).map(unlockText)).toEqual([]);
+    expect(underHallYardUnlocks(0).map(unlockText)).toEqual([
+      "Quake Tower new",
+      "Magma Tower new",
+      "Siege Factory new",
+      "Siege Works new",
+    ]);
+    for (const item of underHallYardUnlocks(2)) expect(item.yard).toBe("main");
+  });
+
+  it("the panel's second list is the main yard's, only when it has something", () => {
+    const info = buildingInfo(one({ t: 14, l: 2 }), "inferno");
+    expect(info.yardList).toMatchObject({ label: "Main yard", title: "Under Hall 3 unlocks on your main yard" });
+    expect(info.yardList?.items.map(unlockText)).toEqual(["Quake Tower +1"]);
+    expect(buildingInfo(one({ t: 14, l: 1 }), "inferno").yardList).toBeNull();
   });
 });
 
