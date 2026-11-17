@@ -28,7 +28,7 @@ N = 35
 BG = (112, 142, 72, 255)                # yard grass
 W, H = FRAME[2] - FRAME[0], FRAME[3] - FRAME[1]
 CROP = (-82, -102, 100, 96)             # the building, its smoke and most of its shadow, in Flash px
-MOUTH = (40.0, -48.0)                   # where the smoke leaves the pump box (Flash px)
+MOUTH = (42.0, -50.0)                   # where the smoke leaves the pump box (Flash px)
 
 
 def font(n):
@@ -57,35 +57,36 @@ def flash(i=0, shadow=True, state=""):
 
 PUFFS = []
 _r = random.Random(5)
-for _ in range(240):
-    PUFFS.append(dict(b=_r.uniform(0.3, 24), life=_r.uniform(9, 11), side=_r.uniform(-1, 1), rise=_r.uniform(34, 48),
-                      r=_r.uniform(0.8, 1.2), tone=_r.random(), wob=_r.uniform(0, 6.28)))
+for _ in range(420):
+    PUFFS.append(dict(b=_r.uniform(0, N), life=_r.uniform(11, 16), side=_r.uniform(-1, 1), rise=_r.uniform(36, 52),
+                      r=_r.uniform(0.6, 1.3), tone=_r.random(), wob=_r.uniform(0, 6.28), amp=_r.uniform(1.5, 5)))
 
 
 def smoke(k, size):
-    """The smoke layer of frame k (RGBA, `size` px): yellow-green puffs from the pump box's far end, up and to the
-    right, as Flash's; none at frame 0, and all gone again before the loop wraps."""
+    """The smoke layer of frame k (RGBA, `size` px): thin yellow-green wisps from behind the pump box's far end, up
+    and a little to the right, as Flash's. The puffs are born all round the loop (their age wraps at N), so the
+    smoke never stops and frame N is frame 0."""
     kpx = size[0] / W
     acc = np.zeros((size[1], size[0]))
     col = np.zeros((size[1], size[0], 3))
     for p in PUFFS:
-        t = (k - p["b"]) / p["life"]
+        t = ((k - p["b"]) % N) / p["life"]
         if not 0 <= t <= 1:
             continue
-        x = MOUTH[0] + 15 * t ** 0.7 + p["side"] * (3.0 + 9.0 * t) + 1.2 * math.sin(p["wob"] + 5 * t)
-        y = MOUTH[1] - p["rise"] * t ** 1.1 + p["side"] * 4 * t
-        r = p["r"] * (5.0 + 10.0 * t ** 0.7)
-        a = 0.24 * min(1.0, t / 0.15) * (1 - t) ** 1.2
+        x = MOUTH[0] + 13 * t ** 0.8 + p["side"] * (1.5 + 7.0 * t) + p["amp"] * t * math.sin(p["wob"] + 7 * t)
+        y = MOUTH[1] - p["rise"] * t ** 1.05
+        r = p["r"] * (2.6 + 7.5 * t ** 0.8)
+        a = 0.17 * min(1.0, t / 0.12) * (1 - t) ** 1.1
         cx, cy = (x - FRAME[0]) * kpx, (y - FRAME[1]) * kpx
         rp = r * kpx
         x0, x1 = max(0, int(cx - rp)), min(size[0], int(cx + rp) + 2)
-        y0, y1 = max(0, int(cy - rp)), min(size[1], int(cy + rp) + 2)
+        y0, y1 = max(0, int(cy - 1.5 * rp)), min(size[1], int(cy + 1.5 * rp) + 2)
         if x0 >= x1 or y0 >= y1:
             continue
         yy, xx = np.mgrid[y0:y1, x0:x1]
-        d = np.hypot(xx - cx, yy - cy) / rp
-        al = a * np.clip((1.0 - d) / 0.6, 0, 1) ** 1.5
-        c = np.array([200, 196, 60]) * (1 - p["tone"] * 0.5) + np.array([160, 176, 70]) * p["tone"] * 0.5
+        d = np.hypot(xx - cx, (yy - cy) / 1.5) / rp           # taller than wide: streaks
+        al = a * np.clip((1.0 - d) / 0.7, 0, 1) ** 1.5
+        c = np.array([190, 188, 64]) * (1 - p["tone"] * 0.6) + np.array([138, 158, 70]) * p["tone"] * 0.6
         w = (slice(y0, y1), slice(x0, x1))
         col[w] = col[w] * (1 - al[..., None]) + c * al[..., None]
         acc[w] = 1 - (1 - acc[w]) * (1 - al)
@@ -95,8 +96,31 @@ def smoke(k, size):
     return Image.fromarray(out, "RGBA")
 
 
+_HAZE = {}
+
+
+def haze(size):
+    """Flash's pale ground haze round the foot: a soft pale-green ellipse laid under the building."""
+    if size not in _HAZE:
+        kpx = size[0] / W
+        yy, xx = np.mgrid[0:size[1], 0:size[0]]
+        d = np.hypot((xx / kpx + FRAME[0] + 6) / 70.0, (yy / kpx + FRAME[1] - 52) / 31.0)
+        al = 0.6 * np.clip((1.0 - d) / 0.4, 0, 1) ** 1.2
+        out = np.zeros((size[1], size[0], 4), np.uint8)
+        out[..., :3] = (160, 182, 124)
+        out[..., 3] = (al * 255).astype(np.uint8)
+        _HAZE[size] = Image.fromarray(out, "RGBA")
+    return _HAZE[size]
+
+
+def grounded(im):
+    out = haze(im.size).copy()
+    out.alpha_composite(im)
+    return out
+
+
 def frame(R, k, with_smoke=True):
-    base = Image.open(R / "L1-base.png").convert("RGBA")
+    base = grounded(Image.open(R / "L1-base.png").convert("RGBA"))
     base.alpha_composite(Image.open(R / f"L1-parts-{k:02d}.png").convert("RGBA"))
     if with_smoke:
         base.alpha_composite(smoke(k % N, base.size))
@@ -183,7 +207,7 @@ def mp4():
         print("made", D / name)
 
 
-CROPS = (("machine", (-22, -102, 34, -24), 12), ("wheels", (-56, -70, 14, -22), 24), ("pump", (4, -62, 56, -2), 9),
+CROPS = (("machine", (-22, -102, 34, -24), 12), ("wheels", (-60, -72, 14, -22), 24), ("pump", (4, -62, 56, -2), 9),
          ("rim", (-56, -30, 46, 26), 0), ("foot", (-70, 16, 60, 78), 0), ("leftbone", (-66, -80, -20, 46), 0))
 
 
@@ -199,7 +223,7 @@ def sheets():
         pair(flash(k), m, crop=box, names=("Flash", "3D")).save(D / f"crop-{name}.png")
     dm = D / "damaged" / "render" / "L1-damaged-base.png"
     if dm.exists():
-        pair(flash(0, state="damaged"), Image.open(dm).convert("RGBA"),
+        pair(flash(0, state="damaged"), grounded(Image.open(dm).convert("RGBA")),
              names=("Flash (damaged)", "3D (damaged)")).save(D / "sheet-damaged.png")
     # the ground shadow alone: the base picture's pixels outside the building (the no-ground render's alpha)
     R = D / "anim" / "render"
@@ -222,12 +246,12 @@ def game():
     for k in range(N):
         strip.paste(small(Image.open(D / "anim" / "frames" / f"f-{k:02d}.png")), (size[0] * k, 0))
     strip.save(out / "working-strip.png")
-    small(Image.open(D / "damaged" / "render" / "L1-damaged-base.png")).save(out / "damaged.png")
+    small(grounded(Image.open(D / "damaged" / "render" / "L1-damaged-base.png").convert("RGBA"))).save(out / "damaged.png")
     small(Image.open(D / "shadow.png")).save(out / "shadow.png")
     print("made", out, "cells", size)
 
 
-MOVING = (("machine", (-58, -104, 34, -22)), ("smoke", (26, -104, 100, -30)))
+MOVING = (("machine", (-62, -104, 34, -22)), ("smoke", (26, -104, 100, -30)))
 
 
 def check(tol=10):
