@@ -106,7 +106,7 @@ def mats():
     return dict(
         lava=lava_mat(),
         root=p("root", (58, 50, 30), rough=0.8, wear=(96, 96, 52), dirt=0.2),
-        vat=p("vat", (30, 24, 24), rough=0.6, wear=(104, 70, 54), rust=(64, 44, 38), scale=2.2, dirt=0.3, spec=0.3,
+        vat=p("vat", (12, 10, 10), rough=0.6, wear=(104, 70, 54), rust=(64, 44, 38), scale=2.2, dirt=0.3, spec=0.3,
               rust_at=0.45, grain=0.5, soot=0.4),
         pool=kit.flat("pool", (12, 30, 36), rough=0.6),
         copper=p("copper", (222, 114, 20), rough=0.45, metal=0.25, wear=(248, 168, 44), rust=(110, 50, 16),
@@ -126,8 +126,8 @@ def mats():
                spec=0.6, rust_at=0.62),
         head=p("head", (124, 122, 120), rough=0.5, metal=0.4, wear=(170, 168, 164), rust=(70, 60, 58), scale=8.0,
                dirt=0.1),
-        gold=p("gold", (232, 158, 20), rough=0.4, metal=0.3, wear=(255, 216, 80), rust=(140, 70, 14), scale=6.0,
-               dirt=0.05, rust_at=0.6, spec=0.6),
+        gold=p("gold", (214, 138, 18), rough=0.5, metal=0.2, wear=(250, 204, 70), rust=(96, 50, 16), scale=5.0,
+               dirt=0.3, rust_at=0.5, spec=0.4, soot=0.35),
         hub=p("hub", (22, 26, 36), rough=0.3, metal=0.6, wear=(60, 66, 80), dirt=0.0, spec=0.7),
         hubflat=kit.flat("hubflat", (30, 26, 26), rough=0.55, metal=0.4),
         shaftflat=kit.flat("shaftflat", (48, 48, 58), rough=0.4, metal=0.6),
@@ -137,7 +137,7 @@ def mats():
         steel=p("steel", (108, 102, 94), rough=0.5, metal=0.5, wear=(150, 146, 138), rust=(70, 52, 42), scale=5.0,
                 dirt=0.1, soot=0.3),
         rivet=kit.flat("rivet", (220, 220, 226), rough=0.3, metal=0.7),
-        grass=p("grass", (132, 156, 92), rough=0.8, wear=(168, 186, 120), dirt=0.1),
+        grass=p("grass", (98, 132, 66), rough=0.9, wear=(122, 152, 80), dirt=0.1),
         moss=p("moss", (60, 110, 40), rough=0.9, wear=(100, 150, 50), dirt=0.2),
     )
 
@@ -259,12 +259,12 @@ def mound():
     mo.strength = 0.5
     mo.mid_level = 0.4
     # wispy dark roots round the foot, straggling out over the ground
-    n = 38
+    n = 14
     for i in range(n):
         a = 2 * math.pi * (i + rr.uniform(-0.45, 0.45)) / n
         d = V((math.cos(a), math.sin(a), 0))
         sd = V((-d.y, d.x, 0))
-        ln = rr.uniform(0.3, 1.4)
+        ln = rr.uniform(0.2, 0.9)
         w = rr.uniform(-0.5, 0.5)
         p0 = d * 3.95 + V((0, 0, 0.45))
         p1 = d * (4.3 + ln * 0.45) + sd * w * 0.4 + V((0, 0, 0.1 + rr.uniform(0, 0.25)))
@@ -274,27 +274,28 @@ def mound():
 
 def blades():
     """Flash's soft green blades standing round the front of the mound, their tips over the lava's lower edge."""
-    n = 13
+    n = 10
     for i in range(n):
-        a = math.radians(-45 + (i - (n - 1) / 2) * 13.0 + rr.uniform(-3, 3))
+        a = math.radians(-45 + (i - (n - 1) / 2) * 21.0 + rr.uniform(-6, 6))
         d = V((math.cos(a), math.sin(a), 0))
         sd = V((-d.y, d.x, 0))
         r0 = rr.uniform(4.75, 5.15)
-        h = rr.uniform(0.9, 1.5)
+        h = rr.uniform(0.5, 0.95)
         lean = rr.uniform(-0.35, 0.35)
         p0 = d * r0 + V((0, 0, -0.05))
         p1 = d * (r0 - 0.35) + sd * lean * 0.4 + V((0, 0, h * 0.5))
         p2 = d * (r0 - 0.75) + sd * lean + V((0, 0, h))
-        limb(f"blade{i}", [(p0, rr.uniform(0.13, 0.2)), (p1, 0.11), (p2, 0.01)], M["grass"], seg=8, sub=5)
+        limb(f"blade{i}", [(p0, rr.uniform(0.16, 0.24)), (p1, 0.13), (p2, 0.01)], M["grass"], seg=8, sub=5)
 
 
 def vat():
     kit.box("vat", (2 * H, 2 * H, 1.3), (0, 0, ZT - 1.3), M["vat"], bevel=0.08)
-    belly = kit.box("vat-belly", (2 * H + 0.25, 2 * H + 0.25, ZT - 0.9), (0, 0, 0.6), M["vat"], bevel=1.1)
+    belly = kit.box("vat-belly", (2 * H + 0.25, 2 * H + 0.25, ZT - 0.9), (0, 0, 0.6), M["vat"], bevel=1.7)
     belly.modifiers["bevel"].segments = 8
     belly.modifiers["bevel"].limit_method = "NONE"
     lumpy(belly, 0.12)
-    kit.box("vat-pool", (2 * H - 0.3, 2 * H - 0.3, 0.1), (0, 0, ZT - 0.08), M["pool"], bevel=0.0)
+    kit.box("vat-top", (2 * H - 0.25, 2 * H - 0.25, 1.0), (0, 0, ZT - 0.05), M["vat"], bevel=0.06)
+    kit.box("vat-pool", (2 * H - 0.5, 2 * H - 0.5, 0.1), (0, 0, ZT + 0.9), M["pool"], bevel=0.0)
     # the rim plates: the right-hand one (+X wall) runs on past the back corner; the left-hand one (-Y wall) carries
     # the yellow edge
     z0, z1 = ZT - 1.25, ZT + 0.12
@@ -379,8 +380,8 @@ def bones():
     j0, j1, j2, j3 = P(-50.5, 39.5, 0.3), P(-50, 13, 3.5), P(-53.5, -16.5, 6.85), P(-33.5, -57, 10.4)
     seg_bone("boneL-a", j0, j1, 0.3, 0.46, 0.46, b, bend=-0.1)
     seg_bone("boneL-b", j1, j2, 0.32, 0.46, 0.52, b, bend=-0.1)
-    seg_bone("boneL-c", j2, j3, 0.33, 0.52, 0.4, b, bend=0.3, cond_b=False)
-    tooth("boneL-head", P(-31.8, -57.5, 10.4), 0.6, 2.0, b, zdir=(0.0, 0.46, 1))
+    seg_bone("boneL-c", j2, j3, 0.38, 0.52, 0.42, b, bend=0.2, cond_b=False)
+    tooth("boneL-head", P(-30.8, -57.5, 10.4), 0.7, 2.05, b, zdir=(0.0, 0.46, 1))
     LB["L1"], LB["L0"] = P(-51, -22, 7.0) - fw * 0.55, P(-49, -1, 4.9) - fw * 0.45
     # front bone: up the vat's front corner, joints low, at mid height and at the rim, then leaning along the
     # right-hand wall to its big egg head
@@ -399,13 +400,13 @@ def bones():
     seg_bone("boneR-c", r2, r3, 0.34, 0.56, 0.44, b2, bend=-0.05, cond_b=False)
     LB["R0"], LB["R1"] = P(42, 15.5, 3.3) - fw * 0.5, P(41.5, 8, 4.3) - fw * 0.55
     # the dark bone from the front bone's head across to the right bone's top, under the pump box
-    seg_bone("boneR-d", P(21, -34, 9.3), P(42, -21.5, 8.0), 0.36, 0.42, 0.46, b2, bend=-0.12, cond_a=False)
+    seg_bone("boneR-d", P(22, -30, 9.3), P(42, -20, 8.0), 0.62, 0.7, 0.6, b2, bend=-0.12, cond_a=False)
     LB["F0r"] = P(4, 28, 3.9) - fw * 0.5
 
 
 def straps():
     # left-hand wall, two tiers, from the left bone to the front bone
-    strap("strapL1", LB["L1"], LB["F1"], (0, 0, 1), w=1.3, sag=0.1)
+    strap("strapL1", LB["L1"], LB["F1"], (0, 0, 1), w=1.1, sag=0.1)
     strap("strapL0", LB["L0"], LB["F0"], (0, 0, 1), w=0.95, sag=0.2)
     # right-hand wall: low, from the front bone to the right bone, hanging; and a short one from the rim down to the
     # right bone's knuckle
@@ -414,7 +415,7 @@ def straps():
 
 
 def pillars():
-    post("pillarL", -1.87, -1.87, ZT - 0.05, 10.2, 0.42, M["pale"])
+    post("pillarL", -1.62, -1.75, ZT - 0.05, 10.2, 0.6, M["pale"])
     post("pillarF", 1.8, YS, ZT - 0.05, 9.95, 0.56, M["pale"])
     s = 0.78
     post("postM", XM, YM, ZT - 0.05, ZTOP, s, M["stone"], bevel=0.07)
@@ -424,6 +425,7 @@ def pillars():
     kit.box("guide", (XM - XB, 0.3, ZTOP - ZT - 1.4), ((XM + XB) / 2, YM + 0.1, ZT), M["iron"], bevel=0.02)
     kit.box("pivot", (0.34, 0.7, 2.3), (XM + s / 2 + 0.12, YM, ZP - 2.05), M["iron"], bevel=0.05)
     kit.box("bed", (1.9, 2.5, 1.25), (-1.25, 0.35, ZT - 0.05), M["iron"], bevel=0.08)
+    kit.box("bed2", (3.9, 1.7, 3.1), (0.0, 1.15, ZT - 0.05), M["iron"], bevel=0.25)
     # the rusty beam between their tops
     kit.box("beam", (XM - XB - 0.6, 0.6, 1.0), ((XM + XB) / 2, YM, ZTOP - 1.1), M["strap"], bevel=0.05)
     # bolts on the front post's right-hand face: the rocker's axle and one below
@@ -438,6 +440,7 @@ def pump():
     kit.box("pump", (x1 - x0, y1 - y0, z1 - z0), ((x0 + x1) / 2, (y0 + y1) / 2, z0), M["copper"], bevel=0.05)
     kit.box("pump-side", (x1 - x0 - 0.3, 0.06, z1 - z0 - 0.32), ((x0 + x1) / 2, y0 - 0.03, z0 + 0.14), M["steel"],
             bevel=0.02)
+    kit.box("pump-skirt", (x1 - x0 - 1.6, 0.5, 1.1), ((x0 + x1) / 2 - 0.5, y0 + 0.3, z0 - 1.05), M["steel"], bevel=0.05)
     for i in range(5):
         rivet(f"pump-rv{i}", (x0 + 0.75 + i * 0.85, y0 + 0.2, z1 + 0.02), 0.1)
     for i, z in enumerate((z0 + 0.3, z1 - 0.3)):
@@ -493,8 +496,8 @@ def shaft():
     def parts(hub):
         kit.cyl("shaft-rod", 0.23, 3.3 - XW2 + 0.25, (0, 0, XW2 - 0.25), M["shaftflat"], verts=16, bevel=0.02,
                 parent=hub)
-        wheel(hub, XW, 0.98, 0.9, 8, 0.66, 0.24, "wheel", 0.46)
-        wheel(hub, XW2, 0.44, 0.3, 8, 0.33, 0.12, "wheel2", 0.2)
+        wheel(hub, XW, 1.15, 1.0, 8, 0.4, 0.28, "wheel", 0.5)
+        wheel(hub, XW2, 0.55, 0.36, 8, 0.36, 0.14, "wheel2", 0.22)
     e, hub = kit.spinner("shaft", (0, YS, ZS), 0.0, 0.0, parts)
     if not DMG:
         kit.MOVING.append(e)
@@ -680,11 +683,15 @@ def build_all():
         import proj
         src = HERE / "work" / ("flash-dmg.png" if DMG else "flash0.png")
         proj.apply(src, HERE / "work" / ("proj-dmg" if DMG else "proj"), w=PROJ, emit=0.5, grit=0.1,
-                   per=PER, moving=("rocker", "rod"), skip=SKIP)
+                   per=PER, moving=("rocker", "rod"), skip=SKIP + (DMG_SKIP if DMG else ()))
 
 
-PER = dict(lava=dict(w=1.0, emit=0.9, grit=0.06))
-SKIP = ("gold", "hub", "hubflat", "shaftflat", "shine", "shaft", "cap")
+PER = dict(lava=dict(w=1.0, emit=0.92, grit=0.05), bone=dict(emit=0.25), bone2=dict(emit=0.3), strap=dict(trim=15),
+           vat=dict(w=0.5, emit=0.2), steel=dict(emit=0.3))
+# the wreck does not line up with Flash's damaged picture, so only its lava mound takes Flash's colours
+DMG_SKIP = ("vat", "pool", "copper", "edge", "bone", "bone2", "strap", "stone", "pale", "iron", "head", "steel",
+            "rivet", "moss")
+SKIP = ("gold", "hub", "hubflat", "shaftflat", "shine", "shaft", "cap", "grass", "root")
 
 if kit.MODE == "sil":
     import proj

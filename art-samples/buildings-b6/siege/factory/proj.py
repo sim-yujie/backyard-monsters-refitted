@@ -178,6 +178,19 @@ def _variant(mat, root, img, w, emit, grit, empties, metal_keep):
     t.links.new(col, mx.inputs[7])
     t.links.new(mx.outputs[2], bc)
     bsdf.inputs["Metallic"].default_value *= metal_keep
+    ro = bsdf.inputs["Roughness"]            # no mirror-like plates: Flash's shading is already in the picture
+    for l in list(ro.links):
+        t.links.remove(l)
+    ro.default_value = 0.72
+    ec, es = bsdf.inputs["Emission Color"], bsdf.inputs["Emission Strength"]
+    if ec.is_linked:                         # a glowing material glows in Flash's colours, evenly, with no pattern
+        t.links.remove(ec.links[0])
+        t.links.new(mx.outputs[2], ec)
+        for l in list(es.links):
+            t.links.remove(l)
+        es.default_value = 0.0
+        for l in list(bsdf.inputs["Normal"].links):
+            t.links.remove(l)
     if emit:
         em = t.nodes.new("ShaderNodeEmission")
         t.links.new(mx.outputs[2], em.inputs["Color"])
@@ -190,7 +203,7 @@ def _variant(mat, root, img, w, emit, grit, empties, metal_keep):
     return m
 
 
-def apply(flash_png, workdir, w=0.7, emit=0.5, grit=0.1, per=None, moving=(), skip=(), s=3, up=4, metal_keep=0.4):
+def apply(flash_png, workdir, w=0.7, emit=0.5, grit=0.1, per=None, moving=(), skip=(), s=3, up=4, metal_keep=0.4, trim=0):
     per = per or {}
     workdir = Path(workdir)
     workdir.mkdir(exist_ok=True)
@@ -209,6 +222,13 @@ def apply(flash_png, workdir, w=0.7, emit=0.5, grit=0.1, per=None, moving=(), sk
         if whole.sum() < 3:
             print("PROJ no Flash pixels for", name)
             continue
+        tr = per.get(name, {}).get("trim", trim)
+        if tr and whole.sum() > 40:          # drop the pixels least like the rest (a neighbour's colours)
+            px_ = fl[..., :3][whole].astype(np.float32)
+            d = np.abs(px_ - np.median(px_, axis=0)).sum(1)
+            keep = d <= np.percentile(d, 100 - tr)
+            ys, xs = np.where(whole)
+            whole[ys[~keep], xs[~keep]] = False
         f = fill(fl[..., :3], whole)
         im = Image.fromarray(np.clip(f, 0, 255).astype(np.uint8)).resize((W * up, H * up), Image.BICUBIC)
         p = workdir / ("proj-%s.png" % name)

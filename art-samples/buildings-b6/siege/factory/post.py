@@ -2,6 +2,7 @@
 
 ./py post.py fit [k]     work/cmp-fit.png: Flash cell k beside the quick fit render (work/fit-L1.png), and a half-and-half
                          overlay
+./py post.py refs        work/flash0.png, work/flash-dmg.png: Flash stills on the canvas (inputs of proj.py and outline.py)
 ./py post.py frames      anim/frames/f-NN.png (base + moving parts + the pump's smoke), idle.png (frame 0, no smoke)
 ./py post.py mp4         factory-working.mp4 (Flash beside 3D, the loop three times), factory-working-3d.mp4
 ./py post.py sheets      sheet-idle.png, sheet-working.png, sheet-damaged.png (Flash beside 3D, same scale, at the
@@ -285,9 +286,16 @@ def check(tol=10):
     print("made", D / "loop-check.png")
 
 
+def refs():
+    """Flash's stills on the canvas with no shadow: the pictures proj.py lays on the model and outline.py measures."""
+    (D / "work").mkdir(exist_ok=True)
+    flash(0, shadow=False).save(D / "work" / "flash0.png")
+    flash(0, shadow=False, state="damaged").save(D / "work" / "flash-dmg.png")
+
+
 if __name__ == "__main__":
     cmd = sys.argv[1] if len(sys.argv) > 1 else "fit"
     if cmd == "fit":
         fit(int(sys.argv[2]) if len(sys.argv) > 2 else 0)
     else:
-        {"frames": frames, "mp4": mp4, "sheets": sheets, "check": check, "game": game}[cmd]()
+        {"refs": refs, "frames": frames, "mp4": mp4, "sheets": sheets, "check": check, "game": game}[cmd]()
