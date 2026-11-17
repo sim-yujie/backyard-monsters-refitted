@@ -386,11 +386,11 @@ describe("the 3D yard buildings", () => {
     ]);
   });
 
-  it("give the Inferno's Academy Flash's two looks in 3D, its drill, teeth, cog and pillars over a still body", () => {
+  it("give the Inferno's Academy Flash's two looks in 3D, its drill, cogs and pillars over a still body", () => {
     const folder = "/assets/buildings/iacademy/";
     expect((INFERNO_BUILDING_3D_ART[26] ?? []).map((look) => look.from)).toEqual([1, 2]);
     expect(26 in INFERNO_PAINTED_BUILDING_ART).toBe(false);
-    for (const [level, tag, frames, columns] of [[1, "3d1", 44, 28], [2, "3d2", 47, 23], [4, "3d2", 47, 23]] as const) {
+    for (const [level, tag, frames, columns] of [[1, "3d1", 44, 32], [2, "3d2", 47, 23], [4, "3d2", 47, 23]] as const) {
       const art = resolveArt(26, level, ArtState.DEFAULT, "inferno");
       const name = `level ${level}`;
       // The body under one strip of moving parts, in the cell counts of Flash's own (commented-out) strips.

@@ -822,17 +822,17 @@ export const INFERNO_BUILDING_3D_ART: Readonly<Record<number, readonly TierArt[]
   ],
   // 26 Academy: 3D (owner, 17 Nov 2026: 3D and animated, as the main yard's Academy), Flash's two looks (level 1,
   // levels 2-4), `export3d_buildings.py iacademy`. While it trains the drill pulls in and out (Flash's own strip,
-  // never shipped), the teeth run over the arch, the cog turns and the pillars pump: 44 and 47 cells, the counts of
+  // never shipped), the cogs between the pillars turn and the pillars pump: 44 and 47 cells, the counts of
   // Flash's commented-out strips. Each look has its own rough damaged still; destroyed is the painted rubble
   // (`web/tools/inferno-paint/`), which keeps its look's whole shadow as Flash's falls back to it.
   26: [
-    { from: 1, top: ["top.3d1@2x.webp", -51, -57], shadow: ["shadow.3d1.jpg", -48, 2], lift: 0,
-      anim: { strip: ["anim.3d1@2x.webp", -34, -60, 72, 67, 44], columns: 28, body: ["body.3d1@2x.webp", -51, -48] },
-      damaged: { top: ["top.3d1.damaged@2x.webp", -51, -54], shadow: ["shadow.3d1.damaged.jpg", -48, -4] },
+    { from: 1, top: ["top.3d1@2x.webp", -51, -58], shadow: ["shadow.3d1.jpg", -48, 3], lift: 0,
+      anim: { strip: ["anim.3d1@2x.webp", -26, -61, 64, 68, 44], columns: 32, body: ["body.3d1@2x.webp", -51, -46] },
+      damaged: { top: ["top.3d1.damaged@2x.webp", -51, -59], shadow: ["shadow.3d1.damaged.jpg", -48, -2] },
       destroyed: { top: ["top.c1.destroyed@2x.webp", -52, -15], shadow: ["shadow.1.jpg", -50, -30] } },
-    { from: 2, top: ["top.3d2@2x.webp", -58, -93], shadow: ["shadow.3d2.jpg", -56, -1], lift: 0,
-      anim: { strip: ["anim.3d2@2x.webp", -37, -79, 89, 86, 47], columns: 23, body: ["body.3d2@2x.webp", -58, -93] },
-      damaged: { top: ["top.3d2.damaged@2x.webp", -58, -93], shadow: ["shadow.3d2.damaged.jpg", -56, -7] },
+    { from: 2, top: ["top.3d2@2x.webp", -57, -94], shadow: ["shadow.3d2.jpg", -55, 4], lift: 0,
+      anim: { strip: ["anim.3d2@2x.webp", -32, -79, 86, 85, 47], columns: 23, body: ["body.3d2@2x.webp", -57, -94] },
+      damaged: { top: ["top.3d2.damaged@2x.webp", -57, -94], shadow: ["shadow.3d2.damaged.jpg", -55, -5] },
       destroyed: { top: ["top.c2.destroyed@2x.webp", -59, -71], shadow: ["shadow.2.jpg", -61, -30] } },
   ],
   // 16 Incubator Control Centre: 3D look C, on a small magma pool. Each cell is the whole building: 32 cells of its

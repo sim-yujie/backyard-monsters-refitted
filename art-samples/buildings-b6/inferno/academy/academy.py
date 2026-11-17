@@ -52,23 +52,39 @@ DMG = kit.STATE == "damaged"
 P = {
     1: dict(rot=6.0, at=(0.0, 0.0), a=2.78, rise=2.4, zs=5.7, front=1.3, depth=1.8,
             hub=[(0.88, 3.97, 0.8, 1.0)],                      # (y, z, radius, drill size)
-            pillars=[(-0.73, 5.75, 0.4, -2.8), (0.12, 6.96, 0.7, -2.8), (2.82, 7.68, 1.0, -2.8), (4.74, 6.23, 0.8, -2.8)],   # (y, top z, width, x behind the shell)
-            cogs=[(2.04, 6.99, 1.0, 10)],                      # (y, z, radius, teeth)
-            rock=dict(r0=3.2, h_front=2.5, h_side=4.4, h_right=2.7, top=3.0),
-            lobes=[(-111, 5.6), (-74, 5.2), (-33, 5.0), (21, 5.6), (75, 5.0), (130, 5.0), (190, 5.0)],
-            spikes=[(-1.8, -4.2, 1.0, 3.6), (4.2, 1.6, 1.0, 3.25)], back_zs=3.3, dome=1.0),
+            # pillars and cogs by the Flash pixel they stand on: (px x, px y of the top, width)
+            pillars=[(-20.5, -28, 0.5, -0.85), (-17.5, -40, 0.8), (-3, -54, 1.0), (11, -48, 0.8)],     # (.., further back)
+            # (px x, px y of the axle, radius, teeth, plane: 0 = in front, 1 = behind it)
+            cogs=[(-1, -43, 1.0, 10, 0), (-10, -35, 0.65, 8, 1), (-15.5, -26.5, 0.5, 7, 0)],
+            rungs=(-22.5, 1, 17),
+            rock=dict(r0=3.2, h_front=2.4, h_side=3.9, h_right=2.0, top=3.4),
+            lobes=[(-111, 5.6), (-74, 5.2), (-33, 5.0), (21, 5.7), (75, 5.0), (130, 5.0), (190, 5.0)],
+            spikes=[(-1.8, -4.2, 1.0, 3.6), (4.2, 1.6, 1.0, 3.25)], back_zs=3.3, dome=1.0,
+            gate=(1.1, 1.15, 0.5)),                            # the grate: width, height, how far out of the notch
     2: dict(rot=6.0, at=(0.0, 0.0), a=3.18, rise=3.3, zs=5.8, front=1.4, depth=1.9,
-            hub=[(2.07, 4.09, 1.1, 1.25), (-0.43, 4.7, 0.9, 0.95)],
-            pillars=[(-0.18, 9.88, 1.7, -2.8), (2.85, 9.98, 0.8, -2.8), (5.22, 8.47, 0.8, -2.8)],
-            cogs=[(1.80, 8.67, 0.95, 10), (3.92, 7.34, 0.55, 7)],
-            rock=dict(r0=3.4, h_front=3.3, h_side=7.2, h_right=5.0, top=3.7),
-            lobes=[(-111, 6.3), (-75, 6.4), (-29, 6.1), (27, 6.2), (80, 5.4), (135, 5.4), (190, 5.4)],
-            spikes=[(-1.65, -5.25, 1.2, 5.6), (-1.2, -5.0, 1.0, 4.6), (4.5, 2.0, 0.4, 3.8)], back_zs=4.6, dome=1.4),
+            hub=[(2.07, 4.09, 1.3, 1.35), (-0.43, 4.7, 1.05, 1.05)],
+            pillars=[(-22.5, -61, 1.7), (-3.5, -73.5, 0.8), (11.5, -70, 0.8)],
+            cogs=[(-4.6, -56, 0.95, 10, 0), (-12.5, -47, 0.6, 8, 1), (5, -50.5, 0.55, 7, 1), (-18, -38, 0.5, 7, 0),
+                  (18.7, -52.6, 0.5, 7, 0)],
+            rungs=(-24.5, -5, 14),
+            rock=dict(r0=3.4, h_front=3.1, h_side=6.5, h_right=4.6, top=3.9),
+            lobes=[(-111, 6.2), (-75, 6.3), (-29, 6.0), (27, 6.2), (80, 5.4), (135, 5.4), (190, 5.4)],
+            spikes=[(-1.65, -5.25, 1.2, 5.6), (-1.2, -5.0, 1.0, 4.6), (4.5, 2.0, 0.4, 3.8)], back_zs=4.6, dome=1.4,
+            gate=(1.4, 1.5, 0.7)),
 }[L]
 A, RISE, ZS, FRONT, DEPTH = P["a"], P["rise"], P["zs"], P["front"], P["depth"]
 M = {}
 PART = {}
 BODY = None
+ROT = P["rot"]
+
+
+def S(sx, sy, x):
+    """(y, z) in the body's frame of the point at depth x that lands on Flash pixel (sx, sy)."""
+    c, sn = math.cos(math.radians(ROT)), math.sin(math.radians(ROT))
+    y = ((sx - kit.ORIGIN[0]) / kit.SX - x * (c + sn)) / (c - sn)
+    z = (kit.ORIGIN[1] + kit.SY * (x * (c - sn) - y * (c + sn)) - sy) / kit.SZ
+    return y, z
 
 
 def arch_pts(a, rise, zs, z0, n=40):
@@ -122,7 +138,8 @@ def arch_band(name, a, rise, zs, z0, o1, o2, x0, x1, mat, bevel=0.03, parent=Non
 
 # ------------------------------------------------------------------------------------------------------- materials
 def worn(name, col, rough=0.34, metal=0.7, scale=3.0, blotch=0.4, edge=0.5, dirt=0.25, ao_min=0.5,
-         hi=(255, 246, 232), scratch=0.08, spec=0.5, patch_col=None, soot=0.0, streak=(1.0, 1.0, 0.08), high=2.6):
+         hi=(255, 246, 232), scratch=0.08, spec=0.5, patch_col=None, soot=0.0, streak=(1.0, 1.0, 0.08), high=2.6,
+         scorch=True, grad=None):
     """Hard worn metal (the Strongbox's recipe): hard-edged darker patches (or patches of patch_col), scratches,
     bright worn edges, dirt toward the ground and in the creases; soot = dark smears (the damaged look)."""
     t = kit.NT(name)
@@ -144,12 +161,25 @@ def worn(name, col, rough=0.34, metal=0.7, scale=3.0, blotch=0.4, edge=0.5, dirt
         ao = t.n("ShaderNodeAmbientOcclusion", samples=8, inside=True, only_local=True)
         ao.inputs["Distance"].default_value = 0.07
         c = t.mix(c, kit.srgb(*hi), t.ramp(ao.outputs["AO"], [(0.5, (edge,) * 3 + (1,)), (0.9, (0, 0, 0, 1))]))
-    if soot or DMG:
+    if grad:                       # darker toward one side: (world direction, from, to, darkest, lightest)
+        geo = t.n("ShaderNodeNewGeometry")
+        dot = t.n("ShaderNodeVectorMath", operation="DOT_PRODUCT")
+        t.link(geo.outputs["Position"], dot.inputs[0])
+        dot.inputs[1].default_value = grad[0]
+        mr = t.n("ShaderNodeMapRange")
+        mr.inputs[1].default_value, mr.inputs[2].default_value = grad[1], grad[2]
+        mr.inputs[3].default_value, mr.inputs[4].default_value = grad[4], grad[3]
+        t.link(dot.outputs["Value"], mr.inputs[0])
+        g3 = t.n("ShaderNodeCombineColor")
+        for i in range(3):
+            t.link(mr.outputs[0], g3.inputs[i])
+        c = t.mix(c, g3.outputs[0], 1.0, "MULTIPLY")
+    if soot or (DMG and scorch):
         s = soot or 0.75
         n3 = t.noise(t.coords(loc=(3.1, 1.7, 0.4)), 1.1, 7.0, 0.7, 0.0)
         c = t.mix(c, kit.srgb(16, 13, 11), t.ramp(n3, [(0.5, (0, 0, 0, 1)), (0.58, (s,) * 3 + (1,))]))
     c = t.grime(c, kit.GROUND, high, dirt, ao_min)
-    t.set(**{"Base Color": c, "rough": rough if not DMG else min(0.8, rough + 0.25), "metal": metal, "spec": spec})
+    t.set(**{"Base Color": c, "rough": rough if not (DMG and scorch) else min(0.8, rough + 0.25), "metal": metal, "spec": spec})
     t.bump(t.noise(v, scale * 5, 4.0, 0.6), 0.1, 0.01)
     return t.m
 
@@ -159,8 +189,8 @@ def rock_mat():
     t = kit.NT("rock")
     v = t.coords()
     n1 = t.noise(v, 2.4, 8.0, 0.72, 0.0)
-    c = t.ramp(n1, [(0.36, kit.srgb(9, 6, 5)), (0.5, kit.srgb(34, 16, 12)), (0.6, kit.srgb(96, 36, 20)),
-                    (0.7, kit.srgb(128, 54, 28))])
+    c = t.ramp(n1, [(0.36, kit.srgb(6, 4, 3)), (0.5, kit.srgb(24, 10, 7)), (0.6, kit.srgb(78, 26, 13)),
+                    (0.7, kit.srgb(108, 40, 18))])
     n2 = t.noise(t.coords(loc=(5, 2, 1)), 3.4, 5.0, 0.7, 0.6)
     c = t.mix(c, kit.srgb(150, 58, 22), t.ramp(n2, [(0.62, (0, 0, 0, 1)), (0.7, (0.75,) * 3 + (1,))]))
     n3 = t.noise(t.coords(loc=(1, 4, 2)), 5.5, 6.0, 0.75, 1.0)
@@ -168,7 +198,7 @@ def rock_mat():
     glow = t.mix((0, 0, 0, 1), kit.srgb(255, 96, 20), crack)
     c = t.mix(c, kit.srgb(206, 84, 24), crack)
     c = t.grime(c, kit.GROUND, 3.5, 0.25, 0.35)
-    t.set(**{"Base Color": c, "rough": 0.82, "spec": 0.25})
+    t.set(**{"Base Color": c, "rough": 0.9, "spec": 0.08})
     t.link(glow, t.bsdf.inputs["Emission Color"])
     t.bsdf.inputs["Emission Strength"].default_value = 0.35 if not DMG else 0.15
     h = t.mix(n1, t.noise(t.coords(scale=(1.0, 1.0, 0.25)), 6.0, 6.0, 0.75), 0.5)        # upright crags
@@ -178,11 +208,16 @@ def rock_mat():
 
 def mats():
     m = {}
-    m["gold"] = worn("gold", (236, 150, 18), patch_col=(176, 92, 12), blotch=0.45, hi=(255, 232, 130), edge=0.5,
-                     scale=0.45, rough=0.26, metal=0.8, dirt=0.5, ao_min=0.4, high=7.5, scratch=0.14, streak=(1.0, 0.08, 1.0))
+    m["gold"] = worn("gold", (176, 108, 18), patch_col=(120, 66, 10), blotch=0.45, hi=(255, 232, 130), edge=0.5,
+                     scale=0.45, rough=0.26, metal=0.8, dirt=0.5, ao_min=0.4, high=7.5, scratch=0.14, streak=(1.0, 0.08, 1.0),
+                     scorch=False)
+    # the flat face: the same gold, darker toward its lower right as Flash shades it
+    m["goldface"] = worn("goldface", (236, 150, 18), patch_col=(176, 92, 12), blotch=0.45, hi=(255, 232, 130), edge=0.5,
+                         scale=0.45, rough=0.3, metal=0.8, dirt=0.15, ao_min=0.4, high=7.5, scratch=0.14,
+                         streak=(1.0, 0.08, 1.0), scorch=False, grad=((-0.07, 0.7, -0.71), -4.2, 0.3, 0.42, 0.56))
     m["goldd"] = worn("goldd", (150, 80, 12), patch_col=(190, 110, 20), blotch=0.7, hi=(240, 190, 90), edge=0.4,
-                      scale=0.9, rough=0.36, metal=0.7, dirt=0.3, ao_min=0.4, scratch=0.14)
-    m["pale"] = worn("pale", (196, 178, 140), blotch=0.25, hi=(250, 240, 214), edge=0.5, scale=2.4, rough=0.38,
+                      scale=0.9, rough=0.36, metal=0.7, dirt=0.3, ao_min=0.4, scratch=0.14, scorch=False)
+    m["pale"] = worn("pale", (160, 142, 108), blotch=0.25, hi=(250, 240, 214), edge=0.5, scale=2.4, rough=0.38,
                      metal=0.45, dirt=0.25, scratch=0.1)
     m["tooth"] = worn("tooth", (150, 128, 92), blotch=0.3, hi=(255, 244, 214), edge=0.6, scale=4.0, rough=0.42,
                       metal=0.4, dirt=0.1, ao_min=0.35)
@@ -191,7 +226,7 @@ def mats():
     m["pillar"] = worn("pillar", grey, blotch=0.3, hi=(196, 200, 196), edge=0.5, scale=2.6, rough=0.5, metal=0.35,
                        dirt=0.2, scratch=0.16)
     m["cap"] = worn("cap", cap, blotch=0.3, hi=(180, 184, 182), edge=0.5, scale=3.0, rough=0.5, metal=0.35, dirt=0.1)
-    m["hub"] = worn("hub", (20, 19, 18), blotch=0.3, hi=(120, 116, 108), edge=0.6, scale=5.0, rough=0.4, metal=0.5,
+    m["hub"] = worn("hub", (30, 28, 26), blotch=0.3, hi=(150, 144, 132), edge=0.7, scale=5.0, rough=0.4, metal=0.5,
                     dirt=0.0, scratch=0.0)
     m["drill"] = worn("drill", (190, 176, 132), blotch=0.3, hi=(250, 240, 210), edge=0.4, scale=4.0, rough=0.4,
                       metal=0.45, dirt=0.0, streak=(0.08, 1.0, 1.0))
@@ -216,85 +251,54 @@ def shell():
             for j in range(nb + 1)] + [(b, 1.0)]
     for x, k in secs:
         rings.append([bm.verts.new((x, y, z)) for y, z in arch_pts(af + RB * k, rf + dr * k, ZS, 0.6, n=48)])
-    bm.faces.new(rings[0])
+    bm.faces.new(rings[0]).material_index = 1
     bm.faces.new(list(reversed(rings[-1])))
     for r0, r1 in zip(rings, rings[1:]):
         for i in range(len(r0)):
             j = (i + 1) % len(r0)
             bm.faces.new((r0[i], r1[i], r1[j], r0[j]))
     bmesh.ops.recalc_face_normals(bm, faces=bm.faces)
-    sh = kit.mesh_ob("shell", bm, [M["gold"]], parent=BODY)
+    sh = kit.mesh_ob("shell", bm, [M["gold"], M["goldface"]], parent=BODY)
     add_bevel(sh, 0.03, 2)
     arch_band("shell-inlay", af, rf, ZS, 0.6, 0.0, 0.3, f - 0.3, f - 0.07, M["pale"], bevel=0.03)
     # the pale band round the shell's back edge
     arch_band("band", A + RB * 0.7 + 0.07, RISE + RB * 0.3 + 0.07, ZS, 0.6, 0.0, 0.3, b - 0.42, b, M["pale"], bevel=0.04)
-    # the gold back plate, lower
+    # the gold collar on the viewer's left: a curved plate hugging the works, up the side and a little over the
+    # shoulder (it stops well short of the crown, so nothing behind the shell crosses it)
     bz = P["back_zs"]
-    for sgn in (-1, 1):          # a gold plate each side of the works (two plates, so nothing crosses over the crown)
-        kit.box(f"collar{sgn}", (1.35, 0.2, bz + 1.2), (b - 1.025, sgn * (A + RB * 0.7 + 0.35), 0.6), M["goldd"],
-                bevel=0.08, parent=BODY)
-    # the dark core between the shell and the back plate, so nothing shows through under the track
-    arch_solid("core", A + RB * 0.7 - 0.3, RISE + RB * 0.3 - 0.3, ZS, 0.6, b - 1.25, b - 0.3, M["dark"], bevel=0.02)
+    ca, cr = A + RB * 0.7 + 0.32, RISE * 0.7
+    out, n = [(-ca, 0.3)], 14
+    for i in range(n + 1):
+        t = math.radians(38.0 * i / n)
+        out.append((-ca * math.cos(t), bz + 0.5 + cr * math.sin(t)))
+    bm = bmesh.new()
+    rows = [[bm.verts.new((x, y, z)) for y, z in out] for x in (b - 1.5, b - 0.38)]
+    for i in range(len(out) - 1):
+        bm.faces.new((rows[0][i], rows[1][i], rows[1][i + 1], rows[0][i + 1]))
+    col = kit.mesh_ob("collar", bm, [M["goldd"]], parent=BODY)
+    so = col.modifiers.new("solid", "SOLIDIFY")
+    so.thickness, so.offset = 0.26, 0.0
+    add_bevel(col, 0.07, 3)
+    # a dark core behind the band, so no light comes through between the shell and the works
+    arch_solid("core", A - 1.9, RISE - 1.9, ZS, 0.6, b - 1.4, b - 0.3, M["dark"], bevel=0.02)
 
-
-def track_path():
-    """The teeth's path over the arch as points (y, z, angle of the outward normal) every 0.02 of its length."""
-    pts = arch_pts(A + RB * 0.7 + 0.06, RISE + RB * 0.3 + 0.06, ZS, 0.9, n=200)
-    out = []
-    step = 0.02
-    carry = 0.0
-    for (y0, z0), (y1, z1) in zip(pts, pts[1:]):
-        d = math.hypot(y1 - y0, z1 - z0)
-        ang = math.atan2(z1 - z0, y1 - y0) + math.pi / 2
-        s = carry
-        while s < d:
-            t = s / d
-            out.append((y0 + (y1 - y0) * t, z0 + (z1 - z0) * t, ang))
-            s += step
-        carry = s - d
-    return out, step
-
-
-PITCH = 0.42
 RB = 0.6              # how far the shell swells out sideways past its face
 DOMEX = 1.0           # and over what depth
 TILT = 4.0            # the drills point up a little, as Flash's
-
-
-def track():
-    b = FRONT - DEPTH
-    x = b - 1.0               # the teeth, b-1.25..b-0.75; the cogs stand behind them, the pillars behind the cogs
-    # the belt the teeth sit on
-    arch_band("belt", A + RB * 0.7 + 0.06, RISE + RB * 0.3 + 0.06, ZS, 0.6, 0.0, 0.35, x - 0.25, x + 0.25, M["pale"], bevel=0.03)
-    path, step = track_path()
-    n = int(len(path) * step / PITCH)
-    e = bpy.data.objects.new("track", None)
-    kit.link(e, BODY)
-    kit.MOVING.append(e)
-    teeth = []
-    for i in range(n):
-        t = kit.box(f"tooth{i}", (0.5, 0.2, 0.17), (0, 0, 0), M["tooth"], bevel=0.05, parent=e, origin="centre",
-                    taper=1.0)
-        teeth.append(t)
-    PART["track"] = (teeth, path, step, x, n)
-
-
-def set_track(phase):
-    teeth, path, step, x, n = PART["track"]
-    for i, t in enumerate(teeth):
-        s = ((i + phase) % n) * PITCH
-        y, z, ang = path[min(len(path) - 1, int(s / step))]
-        t.location = (x, y + 0.07 * math.cos(ang), z + 0.07 * math.sin(ang))
-        t.rotation_euler = (ang - math.pi / 2, 0, 0)
+PLANE = (-0.72, -1.17)        # the two planes the cogs turn in, behind the shell's back edge (so none touches another)
+PILLAR_X = -1.95               # the pillars stand behind both
 
 
 def pillars():
+    """Flash's dark capped pillars, standing clear behind the cogs; they pump while it trains."""
     b = FRONT - DEPTH
     PART["pillars"] = []
-    for i, (y, top, w, dx) in enumerate(P["pillars"]):
+    for i, (sx, sy, w, *dx) in enumerate(P["pillars"]):
+        px = b + PILLAR_X + (dx[0] if dx else 0.0)
+        y, top = S(sx, sy, px)
         e = bpy.data.objects.new(f"pillar{i}", None)
         kit.link(e, BODY)
-        e.location = (b + dx + 0.5, y, 0)
+        e.location = (px, y, 0)
         kit.MOVING.append(e)
         z0 = ZS - 1.5 if abs(y) < A - 0.6 else 0.8
         kit.box(f"pillar{i}-post", (0.55, w, top - 0.3 - z0), (0, 0, z0), M["pillar"], bevel=0.05, parent=e)
@@ -304,44 +308,56 @@ def pillars():
 
 
 def cogs():
+    """Flash's cluster of pale cogs between the pillars, each on its own axle, in two planes; they turn while it
+    trains. Below them on the left, the rungs Flash shows down the side (still)."""
     b = FRONT - DEPTH
     PART["cogs"] = []
-    for i, (y, z, r, teeth) in enumerate(P["cogs"]):
+    for i, (sx, sy, r, teeth, plane) in enumerate(P["cogs"]):
+        x = b + PLANE[plane]
+        y, z = S(sx, sy, x)
         e = bpy.data.objects.new(f"cog{i}", None)
         kit.link(e, BODY)
-        e.location = (b - 1.6, y, z)
+        e.location = (x, y, z)
         e.rotation_euler = (0, math.pi / 2, 0)
         kit.MOVING.append(e)
         sp = bpy.data.objects.new(f"cog{i}-spin", None)
         kit.link(sp, e)
-        kit.gear(f"cog{i}-wheel", r, teeth, 0.36, (0, 0, 0), M["tooth"], (0, 0, 0), tooth=0.3, parent=sp)
-        kit.cyl(f"cog{i}-boss", r * 0.42, 0.5, (0, 0, -0.25), M["pale"], parent=sp, bevel=0.04)
-        PART["cogs"].append((sp, teeth, (-1) ** i))
+        kit.gear(f"cog{i}-wheel", r, teeth, 0.3, (0, 0, 0), M["tooth"], (0, 0, 0), tooth=0.3, parent=sp)
+        kit.cyl(f"cog{i}-boss", r * 0.4, 0.4, (0, 0, -0.2), M["pale"], parent=sp, bevel=0.04)
+        for j in range(4):                              # holes round the boss, so the turning shows
+            a = 2 * math.pi * j / 4
+            kit.cyl(f"cog{i}-hole{j}", r * 0.11, 0.32, (r * 0.58 * math.cos(a), r * 0.58 * math.sin(a), -0.16),
+                    M["dark"], parent=sp, bevel=0.0, verts=10)
+        PART["cogs"].append((sp, teeth, 1 if plane == 0 else -1))
+    sx, sy0, sy1 = P["rungs"]
+    for j in range(4):
+        y, z = S(sx, sy0 + (sy1 - sy0) * j / 3, b - 0.6)
+        kit.box(f"rung{j}", (0.36, 0.5, 0.2), (b - 0.6, y, z), M["tooth"], bevel=0.05, parent=BODY, origin="centre")
 
 
 def hub():
     f = FRONT - 0.12
     PART["drills"] = []
     hs = P["hub"]
-    if len(hs) > 1:                                   # the twin hub's plate joins the two
-        (y0, z0, r0, _), (y1, z1, r1, _) = hs
-        d = Vector((0, y1 - y0, z1 - z0))
-        m = kit.box("hub-link", (0.16, r1 * 1.7, d.length), (f, y0, z0), M["hub"], bevel=0.04)
-        m.rotation_euler = Vector((0, 0, 1)).rotation_difference(d).to_euler()
+    big = len(hs) > 1                                 # look 2: Flash's big studded twin hub
     for i, (y, z, r, s) in enumerate(hs):
-        kit.cyl(f"hub{i}-disc", r, 0.2, (f, y, z), M["hub"], rot=(0, 90, 0), bevel=0.05, verts=32)
-        kit.cyl(f"hub{i}-ring", r * 0.6, 0.34, (f, y, z), M["hub"], rot=(0, 90, 0), bevel=0.04, verts=24)
-        for j in range(8):                             # pale studs round it
-            a = 2 * math.pi * (j + 0.5) / 8
-            kit.cyl(f"hub{i}-stud{j}", 0.07 * s, 0.1, (f + 0.2, y + r * 0.8 * math.cos(a), z + r * 0.8 * math.sin(a)),
-                    M["pale"], rot=(0, 90, 0), bevel=0.02, verts=10)
+        # a thick dark disc with a raised rim, a ring of pale studs on it and a collar round the drill
+        kit.lathe(f"hub{i}-disc", [(0.0, 0.0), (r, 0.0), (r, 0.22), (r * 0.9, 0.3), (r * 0.8, 0.3), (r * 0.76, 0.2),
+                                   (r * 0.5, 0.2), (r * 0.46, 0.4), (r * 0.3, 0.4), (0.0, 0.4)],
+                  (f, y, z), M["hub"], rot=(0, 90, 0), verts=36, bevel=0.02)
+        n = 12 if big else 8
+        for j in range(n):
+            a = 2 * math.pi * (j + 0.5) / n
+            kit.cyl(f"hub{i}-stud{j}", (0.085 if big else 0.07) * s, 0.12,
+                    (f + 0.18, y + r * 0.63 * math.cos(a), z + r * 0.63 * math.sin(a)),
+                    M["pale"], rot=(0, 90, 0), bevel=0.025, verts=10)
         e = bpy.data.objects.new(f"drill{i}", None)
         kit.link(e, BODY)
         e.location = (f, y, z)
         e.rotation_euler = (0, math.pi / 2 - math.radians(TILT), 0)
         kit.MOVING.append(e)
-        if L == 2:
-            kit.gear(f"drill{i}-cog", r * 0.62, 10, 0.16, (0, 0, 1.0), M["tooth"], (0, 0, 0), tooth=0.3, parent=e)
+        if big:
+            kit.gear(f"drill{i}-cog", r * 0.44, 10, 0.16, (0, 0, 1.1), M["tooth"], (0, 0, 0), tooth=0.3, parent=e)
         kit.lathe(f"drill{i}-shaft", [(0.0, -0.9), (0.26 * s, -0.9), (0.26 * s, 1.15 * s), (0.2 * s, 1.2 * s),
                                       (0.2 * s, 1.6 * s), (0.11 * s, 1.68 * s), (0.02, 2.8 * s), (0.0, 2.82 * s)],
                   (0, 0, 0), M["drill"], verts=20, parent=e, bevel=0.02)
@@ -359,10 +375,12 @@ def needle(name, base, tip, r, mat=None, parent=None):
 def extras():
     b = FRONT - DEPTH
     if L == 2:
-        px = b - 1.15
-        needle("needle", (b - 2.9, 2.55, ZS), (b - 2.9, 2.55, 12.13), 0.21)             # behind the pillars
-        needle("sidespike", (b - 2.5, -1.3, 7.19), (b - 5.1, -0.48, 7.35), 0.24)
-        kit.cyl("sidespike-collar", 0.34, 0.5, (b - 2.6, -1.3, 7.19), M["pillar"], rot=(0, -88, 0), bevel=0.04)
+        y, z = S(-12, -94, b - 2.7)                              # the tall needle, behind the pillars
+        needle("needle", (b - 2.7, y, ZS), (b - 2.7, y, z), 0.21)
+        y0, z0 = S(-30, -35, b - 2.45)                           # the spike out of the back of the left pillar
+        y1, z1 = S(-46, -42, b - 4.8)
+        needle("sidespike", (b - 2.45, y0, z0), (b - 4.8, y1, z1), 0.24)
+        kit.cyl("sidespike-collar", 0.34, 0.5, (b - 2.5, y0, z0), M["pillar"], rot=(0, -88, 0), bevel=0.04)
 
 
 def lobe(th):
@@ -387,7 +405,8 @@ def rock_h(th):
     w = w * max(0.0, min(1.0, (215 - (th % 360)) / 40)) if th % 360 > 175 else w        # back to the left wall behind
     side = r["h_side"] + (r["h_right"] - r["h_side"]) * w
     h = r["h_front"] + (side - r["h_front"]) * k * k * (3 - 2 * k)
-    return h * (0.82 + 0.36 * noise.noise(Vector((math.cos(math.radians(th)) * 2.2, math.sin(math.radians(th)) * 2.2,
+    jag = abs(math.sin(math.radians(th) * 8.5 + 1.3)) ** 3 * 0.14 + abs(math.sin(math.radians(th) * 19.0)) ** 4 * 0.12
+    return h * (1.0 + jag) * (0.82 + 0.36 * noise.noise(Vector((math.cos(math.radians(th)) * 2.2, math.sin(math.radians(th)) * 2.2,
                                                     3.7 + L))) + 0.1 * lobe(th)[0])
 
 
@@ -412,7 +431,8 @@ def rock():
             d = noise.noise(p * 1.1 + Vector((0, 0, 9.0))) * 0.6 + noise.noise(p * 2.9) * 0.3
             d += noise.noise(Vector((p.x * 3.2, p.y * 3.2, p.z * 0.5 + 5.0))) * 0.4          # upright ridges
             d += (0.5 - abs(noise.noise(Vector((p.x * 2.3, p.y * 2.3, p.z * 1.1 + 2.0))))) * 0.55   # sharp crags
-            d += noise.noise(p * 7.0) * 0.08
+            d += (0.4 - abs(noise.noise(Vector((p.x * 5.1, p.y * 5.1, p.z * 2.0 + 7.0))))) * 0.28   # and chips
+            d += noise.noise(p * 9.0) * 0.1
             p += Vector((c, s, 0.25)) * d * k
             p.z = max(0.0, p.z)
             row.append(bm.verts.new(p))
@@ -435,17 +455,22 @@ def spikes():
 
 
 def grate():
-    th = -55.0
+    """Flash's gate in the front notch: a pale frame with three bars, set into the rock (a dark hole behind it)."""
+    th = -55.0 if L == 1 else -52.0
     c, s = math.cos(math.radians(th)), math.sin(math.radians(th))
-    r = P["rock"]["r0"] + (0.35 if L == 1 else 0.75)
+    w, h, out = P["gate"]
+    r = P["rock"]["r0"] + out
     e = bpy.data.objects.new("grate", None)
     kit.link(e)
     e.location = (r * c, r * s, 0)
     e.rotation_euler = (0, 0, math.radians(th))
-    kit.box("grate-hole", (0.5, 1.0, 0.95), (-0.45, 0, 0), M["dark"], bevel=0.05, parent=e)
-    kit.box("grate-sill", (0.45, 1.1, 0.1), (0.05, 0, 0), M["pale"], bevel=0.04, parent=e)
+    kit.box("grate-hole", (0.9, w + 0.1, h + 0.05), (-0.5, 0, 0), M["dark"], bevel=0.03, parent=e)
+    kit.box("grate-sill", (0.4, w + 0.3, 0.1), (0.05, 0, 0), M["pale"], bevel=0.04, parent=e)
+    kit.box("grate-top", (0.22, w + 0.16, 0.12), (0.0, 0, h - 0.06), M["pale"], bevel=0.04, parent=e)
+    for j in (-1, 1):
+        kit.box(f"grate-post{j}", (0.2, 0.12, h), (0.0, j * (w / 2 + 0.02), 0.05), M["pale"], bevel=0.03, parent=e)
     for j in (-1, 0, 1):
-        kit.cyl(f"grate-bar{j + 1}", 0.06, 0.85, (0.05, 0.32 * j, 0.08), M["pale"], parent=e, verts=10, bevel=0.0)
+        kit.cyl(f"grate-bar{j + 1}", 0.065, h - 0.1, (0.0, w * 0.27 * j, 0.08), M["pale"], parent=e, verts=10, bevel=0.0)
 
 
 def cards():
@@ -455,7 +480,7 @@ def cards():
     r = Vector((1, 1, 0)).normalized()
     u = r.cross(v) if r.cross(v).z > 0 else v.cross(r)
     cen = Vector((0, 0, 5.0))
-    for nm, n, size, col, e in (("card-key", v + u * 0.75 - r * 0.6, 7.0, (1.0, 0.93, 0.76), 40.0),
+    for nm, n, size, col, e in (("card-key", v + u * 0.75 - r * 0.6, 7.0, (1.0, 0.95, 0.7), 90.0),
                                 ("card-sky", v + u * 1.3 + r * 0.2, 16.0, (0.8, 0.8, 0.9), 1.6)):
         n = n.normalized()
         l = (2 * n.dot(v) * n - v).normalized()
@@ -481,7 +506,6 @@ def build():
     BODY.rotation_euler = (0, 0, math.radians(P["rot"]))
     cards()
     shell()
-    track()
     pillars()
     cogs()
     hub()
@@ -510,7 +534,6 @@ def turn(k):
     k = k % N
     if DMG:
         return
-    set_track(4.0 * k / N)
     for e, teeth, sign in PART["cogs"]:
         e.rotation_euler = (0, 0, 2 * math.pi * 3 * k / (N * teeth) * sign)
     for e, i in PART["pillars"]:
