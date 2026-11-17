@@ -145,11 +145,13 @@ def fill_holes(mask):
     return ~reach
 
 
-def key_cell(img, min_part=0.03, choose=None, despill=None, open_holes=False, origin=False):
+def key_cell(img, min_part=0.03, choose=None, despill=None, open_holes=False, origin=False, thin=False):
     """One painted creature on magenta -> tight RGBA cutout (or None).
     Keeps blobs >= min_part of the biggest; `choose(labels, sizes)` may pick the label set instead.
     despill="fire": a creature with no blue or purple in it; any blue above green is magenta bleeding into a
-    thin flame tip, so it is taken out (and that pixel made see-through by as much)."""
+    thin flame tip, so it is taken out (and that pixel made see-through by as much).
+    thin=True (spec key_thin, IC7 Sabnox's whiskers): thin parts joined to the creature (under ~6 px wide, which the
+    speck filter and the 3 px colour core drop or paint black) are kept and coloured from their own middle."""
     rgb = np.asarray(img.convert("RGB"), dtype=float)
     fg = ~magenta(rgb)
     fg = grow(shrink(fg, 2), 2)  # drop specks and noise
@@ -158,6 +160,11 @@ def key_cell(img, min_part=0.03, choose=None, despill=None, open_holes=False, or
         return None
     ids = choose(lab, sizes) if choose else [i for i in range(1, len(sizes)) if sizes[i] >= sizes.max() * min_part]
     keep = fill_holes(np.isin(lab, ids))
+    if thin:
+        raw = ~magenta(rgb)
+        lab2, _ = coarse_labels(keep | raw, f=2)
+        ids2 = np.unique(lab2[keep])
+        keep = keep | (np.isin(lab2, ids2[ids2 > 0]) & raw)
     if open_holes:
         # magenta gaps closed in by the art (Zagnoid's bent arms and claw fingers against its body) become
         # see-through again, with a 2 px rim so no pink fringe is left
@@ -173,7 +180,10 @@ def key_cell(img, min_part=0.03, choose=None, despill=None, open_holes=False, or
         keep &= ~grow(hole, 2) | ~(magenta(rgb) | grow(hole, 1))
     keep = shrink(keep, 1)
     core = shrink(keep, 3)
-    col = fill_out(rgb, core) if core.any() else rgb
+    if thin:
+        # the thin parts' own pixels, less the edge pixels blended toward the key (blue well above green)
+        core = core | (keep & ~grow(core, 3) & (rgb[..., 2] - rgb[..., 1] < 60))
+    col = fill_out(rgb, core, steps=24 if thin else 12) if core.any() else rgb
     col = np.where(core[..., None], rgb, col)
     alpha = np.asarray(Image.fromarray((keep * 255).astype(np.uint8)).filter(ImageFilter.GaussianBlur(1.0))).astype(float)
     if despill == "fire":

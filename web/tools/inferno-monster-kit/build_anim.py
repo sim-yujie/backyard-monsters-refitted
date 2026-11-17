@@ -88,7 +88,7 @@ def flyer_frames(p):
     cells = common.grid_cells(work / "anim" / f"h{p}" / "sheet.png", 4, 3)
     out = []
     for i in range(11):
-        cut, org = common.key_cell(cells[i], choose=pick_main, despill=spec.get("despill"), open_holes=spec.get("open_holes", False), origin=True)
+        cut, org = common.key_cell(cells[i], choose=pick_main, despill=spec.get("despill"), open_holes=spec.get("open_holes", False), origin=True, thin=spec.get("key_thin", False))
         if spec.get("anim_colour_lock"):
             cut = colour_lock(cut, ref)
         out.append((cut, org, cells[i].width))
@@ -145,7 +145,7 @@ def painted_frames(p):
     for i in range(11):
         cell = cells[i]
         rgb = np.asarray(cell.convert("RGB"), dtype=float)
-        cut = common.key_cell(cell, choose=pick_main, despill=spec.get("despill"), open_holes=spec.get("open_holes", False))
+        cut = common.key_cell(cell, choose=pick_main, despill=spec.get("despill"), open_holes=spec.get("open_holes", False), thin=spec.get("key_thin", False))
         m = ~common.magenta(rgb)
         m = common.grow(common.shrink(m, 2), 2)
         xs = np.nonzero(m)[1]

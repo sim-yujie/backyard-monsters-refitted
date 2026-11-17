@@ -43,7 +43,7 @@ for f in sorted((work / "still").glob("b-*/frames-new.png"), key=lambda p: p.sta
     for h, cell in zip(hs, common.grid_cells(f, 2, 2)):
         if (f.parent.name, str(h)) in skip:
             continue
-        cut = common.key_cell(cell, despill=spec.get("despill"), open_holes=spec.get("open_holes", False))
+        cut = common.key_cell(cell, despill=spec.get("despill"), open_holes=spec.get("open_holes", False), thin=spec.get("key_thin", False))
         if cut is not None:
             painted[h] = cut
 if spec.get("view_match"):
