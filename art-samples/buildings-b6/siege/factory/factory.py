@@ -126,7 +126,7 @@ def mats():
                spec=0.6, rust_at=0.62),
         head=p("head", (124, 122, 120), rough=0.5, metal=0.4, wear=(170, 168, 164), rust=(70, 60, 58), scale=8.0,
                dirt=0.1),
-        gold=p("gold", (214, 138, 18), rough=0.5, metal=0.2, wear=(250, 204, 70), rust=(96, 50, 16), scale=5.0,
+        gold=p("gold", (232, 160, 24), rough=0.5, metal=0.2, wear=(255, 226, 90), rust=(96, 50, 16), scale=5.0,
                dirt=0.3, rust_at=0.5, spec=0.4, soot=0.35),
         hub=p("hub", (22, 26, 36), rough=0.3, metal=0.6, wear=(60, 66, 80), dirt=0.0, spec=0.7),
         hubflat=kit.flat("hubflat", (30, 26, 26), rough=0.55, metal=0.4),
@@ -138,7 +138,7 @@ def mats():
                 dirt=0.1, soot=0.3),
         rivet=kit.flat("rivet", (220, 220, 226), rough=0.3, metal=0.7),
         grass=p("grass", (98, 132, 66), rough=0.9, wear=(122, 152, 80), dirt=0.1),
-        moss=p("moss", (60, 110, 40), rough=0.9, wear=(100, 150, 50), dirt=0.2),
+        moss=p("moss", (34, 70, 16), rough=0.9, wear=(70, 118, 30), dirt=0.3),
     )
 
 
@@ -272,20 +272,85 @@ def mound():
         limb(f"root{i}", [(p0, 0.13), (p1, 0.06), (p2, 0.008)], M["grass" if i % 5 == 1 else "root"], seg=6, sub=5)
 
 
+# Flash's grass at the foot: a soft pale fringe of blades round the mound, fading into the lawn. Its reach from
+# Flash px FRINGE_C every 15 degrees (clockwise on screen from screen-right; up and down count double), its greens
+# (dark, mid, pale, crease), where it starts to fade and how solid it is.
+FRINGE_C = (-5, 50)
+FRINGE = [72, 72, 70, 70, 70, 72, 74, 74, 72, 74, 76, 76, 70, 60, 54, 54, 54, 54, 54, 54, 54, 54, 60, 70]
+GRASS = [(84, 118, 62), (104, 138, 80), (128, 160, 104), (40, 56, 26)]
+FADE0, FADE_A = 0.8, 0.88
+if DMG:                                     # Flash's damaged grass is darker and thicker
+    GRASS = [(34, 58, 16), (56, 92, 26), (84, 126, 40), (16, 26, 8)]
+    FADE0, FADE_A = 0.75, 0.97
+
+
+def fringe_mat():
+    t = kit.NT("grass2")
+    v = t.coords()
+    at = t.n("ShaderNodeAttribute", attribute_name="fade")
+    sep = t.n("ShaderNodeSeparateColor")
+    t.link(at.outputs["Color"], sep.inputs[0])
+    far, crease, shade = sep.outputs[0], sep.outputs[1], sep.outputs[2]
+    n = t.noise(v, 1.6, 2.0, 0.5, 0.2)
+    leaf = t.ramp(n, [(0.3, kit.srgb(*GRASS[0])), (0.5, kit.srgb(*GRASS[1])), (0.75, kit.srgb(*GRASS[2]))])
+    sh = t.ramp(shade, [(0.0, (0.66, 0.66, 0.66, 1)), (1.0, (1.1, 1.1, 1.1, 1))])
+    leaf = t.mix(leaf, sh, 1.0, "MULTIPLY")
+    cr = t.ramp(crease, [(0.6, (0, 0, 0, 1)), (0.95, (0.7, 0.7, 0.7, 1))])
+    col = t.mix(leaf, kit.srgb(*GRASS[3]), cr)
+    al = t.ramp(far, [(FADE0, (FADE_A,) * 3 + (1,)), (1.0, (0, 0, 0, 1))])
+    t.set(**{"Base Color": col, "rough": 0.95, "spec": 0.03})
+    t.link(al, t.bsdf.inputs["Alpha"])
+    return t.m
+
+
 def blades():
-    """Flash's soft green blades standing round the front of the mound, their tips over the lava's lower edge."""
-    n = 10
-    for i in range(n):
-        a = math.radians(-45 + (i - (n - 1) / 2) * 21.0 + rr.uniform(-6, 6))
-        d = V((math.cos(a), math.sin(a), 0))
-        sd = V((-d.y, d.x, 0))
-        r0 = rr.uniform(4.75, 5.15)
-        h = rr.uniform(0.5, 0.95)
-        lean = rr.uniform(-0.35, 0.35)
-        p0 = d * r0 + V((0, 0, -0.05))
-        p1 = d * (r0 - 0.35) + sd * lean * 0.4 + V((0, 0, h * 0.5))
-        p2 = d * (r0 - 0.75) + sd * lean + V((0, 0, h))
-        limb(f"blade{i}", [(p0, rr.uniform(0.16, 0.24)), (p1, 0.13), (p2, 0.01)], M["grass"], seg=8, sub=5)
+    """Flash's soft grass tufts round the mound's foot: one flat sheet on the ground, its rim cut into pointed blades
+    that fade out into the lawn (no cones)."""
+    cx_, cy_ = FRINGE_C
+    c = kit.px(cx_, cy_, Z=0.0)
+    lobes, per = 26, 7
+    edges = [0.0]
+    for i in range(lobes):
+        edges.append(edges[-1] + rr.uniform(0.6, 1.4))
+    edges = [e / edges[-1] * 360.0 for e in edges]
+    ring = []
+    for i in range(lobes):
+        lshade, llen = rr.uniform(0.0, 1.0), rr.uniform(0.74, 1.0)
+        for j in range(per):
+            u = j / per
+            d = edges[i] + (edges[i + 1] - edges[i]) * u
+            k = d / 15.0
+            r0, r1 = FRINGE[int(k) % 24], FRINGE[(int(k) + 1) % 24]
+            r = (r0 + (r1 - r0) * (k - int(k))) * llen * (0.74 + 0.26 * (1 - abs(2 * u - 1)) ** 0.8)
+            a = math.radians(d)
+            ring.append((kit.px(cx_ + r * math.cos(a), cy_ + 0.5 * r * math.sin(a), Z=0.0), abs(2 * u - 1),
+                         0.65 * lshade + (0.35 if u < 0.5 else 0.0)))
+    bm = bmesh.new()
+    lay = bm.loops.layers.color.new("fade")
+    R = 10
+    rows, att = [], {}
+    for r in range(1, R + 1):
+        t = r / R
+        row = []
+        for p, cr, shd in ring:
+            v = bm.verts.new(c + (p - c) * t + V((0, 0, 0.03 + 0.1 * (1 - t))))
+            att[v] = (t, cr if t > 0.55 else 0.0, shd)
+            row.append(v)
+        rows.append(row)
+    cv = bm.verts.new(c + V((0, 0, 0.13)))
+    att[cv] = (0.0, 0.0, 0.5)
+    m = len(ring)
+    for i in range(m):
+        bm.faces.new((cv, rows[0][i], rows[0][(i + 1) % m]))
+    for a, b in zip(rows, rows[1:]):
+        for i in range(m):
+            j = (i + 1) % m
+            bm.faces.new((a[i], b[i], b[j], a[j]))
+    for f in bm.faces:
+        for lp in f.loops:
+            lp[lay] = att[lp.vert] + (1.0,)
+    bmesh.ops.recalc_face_normals(bm, faces=bm.faces)
+    kit.mesh_ob("fringe", bm, [fringe_mat()], smooth=True)
 
 
 def vat():
@@ -481,9 +546,18 @@ def wheel(parent, x, r, w, spikes, sl, sr, name, hub_r):
     for i in range(spikes):
         a = 2 * math.pi * i / spikes
         d = V((math.cos(a), math.sin(a), 0))
-        ob = limb(f"{name}-spike{i}", [(V((r - 0.1, 0, x)), sr), (V((r + sl * 0.45, sl * 0.1, x)), sr * 0.72),
-                                       (V((r + sl * 0.85, sl * 0.38, x)), sr * 0.34),
-                                       (V((r + sl, sl * 0.7, x)), 0.02)], g, seg=10, sub=5, parent=parent)
+        # a short saw tooth across the drum's width (Flash's drum has short teeth, not long spikes)
+        bm = bmesh.new()
+        bt, hw = sr, w * 0.46
+        base = [bm.verts.new((r - 0.04, sy_ * bt, x + sz_ * hw)) for sy_, sz_ in ((-1, -1), (1, -1), (1, 1), (-1, 1))]
+        top = [bm.verts.new((r + sl, bt * 0.45, x + sz_ * hw * 0.8)) for sz_ in (-1, 1)]
+        bm.faces.new(base)
+        bm.faces.new((base[0], base[1], top[0]))
+        bm.faces.new((base[2], base[3], top[1]))
+        bm.faces.new((base[1], base[2], top[1], top[0]))
+        bm.faces.new((base[3], base[0], top[0], top[1]))
+        bmesh.ops.recalc_face_normals(bm, faces=bm.faces)
+        ob = kit.mesh_ob(f"{name}-spike{i}", bm, [g], smooth=False, parent=parent)
         ob.rotation_euler = (0, 0, a)
         a2 = a + math.pi / spikes
         d2 = V((math.cos(a2), math.sin(a2), 0))
@@ -496,8 +570,8 @@ def shaft():
     def parts(hub):
         kit.cyl("shaft-rod", 0.23, 3.3 - XW2 + 0.25, (0, 0, XW2 - 0.25), M["shaftflat"], verts=16, bevel=0.02,
                 parent=hub)
-        wheel(hub, XW, 1.15, 1.0, 8, 0.4, 0.28, "wheel", 0.5)
-        wheel(hub, XW2, 0.55, 0.36, 8, 0.36, 0.14, "wheel2", 0.22)
+        wheel(hub, XW, 1.2, 1.0, 16, 0.36, 0.2, "wheel", 0.5)
+        wheel(hub, XW2, 0.58, 0.36, 16, 0.24, 0.1, "wheel2", 0.22)
     e, hub = kit.spinner("shaft", (0, YS, ZS), 0.0, 0.0, parts)
     if not DMG:
         kit.MOVING.append(e)
@@ -580,7 +654,7 @@ def wreck():
     lying in the vat, the left bone fallen outward, the front bone broken, the pump box hanging, moss at the foot."""
     for m in list(bpy.data.materials):
         nt = m.node_tree
-        if nt is None or m.name.startswith(("lava", "moss", "pool")):
+        if nt is None or m.name.startswith(("lava", "moss", "pool", "bone", "grass")):
             continue
         bsdf = next((n for n in nt.nodes if n.type == "BSDF_PRINCIPLED"), None)
         inp = bsdf.inputs["Base Color"] if bsdf else None
@@ -618,21 +692,54 @@ def wreck():
             if o.parent is None and o.name.startswith(names):
                 o.matrix_world = T @ o.matrix_world
 
+    def lean(names, pivot, deg, drop=0.0, zs=1.0):
+        """Turn the named objects on screen (about the camera's line of sight) round a world pivot, squash them
+        toward the pivot's height by zs and lower them by drop."""
+        R = Matrix.Rotation(math.radians(deg), 4, kit.cam_fwd())
+        Sc = Matrix.Diagonal((1, 1, zs, 1))
+        T = Matrix.Translation(V(pivot) - V((0, 0, drop))) @ R @ Sc @ Matrix.Translation(-V(pivot))
+        for o in ob:
+            if o.parent is None and o.name.startswith(names):
+                o.matrix_world = T @ o.matrix_world
+
     bpy.context.view_layer.update()
-    tip(("boneL",), P(-46, 38, 0.7), (38, -30, 0))      # the left bone has fallen out across the yard
-    tip(("strapL1",), LB["F1"], (0, -38, 0))
-    tip(("strapL0",), LB["F0"], (0, -20, 0))
+    # the left bone has come off its foot and stands straight, leaning out, its knobby head up at the top left
+    for o in ob:
+        if o.name.startswith("boneL"):
+            o.hide_render = True
+            o.location.z -= 60
+    seg_bone("dboneL", P(-53, 14, 3.2), P(-45, -50, 10.0), 0.62, 0.8, 0.7, M["bone"], bend=0.05)
+    tooth("dboneL-head", P(-44, -52, 10.2), 0.95, 2.3, M["bone"], zdir=(0.2, 0.5, 1))
+    tooth("dboneL-head2", P(-36, -52, 10.2), 0.6, 1.5, M["bone"], zdir=(1, 1, 0.6))
+    seg_bone("dboneL-low", P(-66, 26, 0.4), P(-56, 22, 0.5), 0.3, 0.4, 0.4, M["bone"])
+    # the front bone has snapped: its upper half lies across the vat, the right bone's head stands behind it
+    for o in ob:
+        if o.name.startswith(("boneF-c", "boneF-d")):
+            o.hide_render = True
+            o.location.z -= 60
+    seg_bone("dboneF-top", P(-12, -7, 8.0), P(17, -13, 8.0), 0.36, 0.5, 0.46, M["bone"], bend=0.1)
+    seg_bone("dboneF-up", P(24, -18, 8.0), P(27, -37, 8.6), 0.34, 0.44, 0.4, M["bone"])
+    # the left rim plate has dropped at its front end, with the upper strap flopped over it
+    tip(("rimL",), V((-H, -H - 0.06, ZT - 0.6)), (0, 26, 0))
+    tip(("strapL1",), LB["F1"], (0, -12, 0))
+    tip(("strapL0",), LB["F0"], (0, -6, 0))
     tip(("pump",), V((2.6, 2.6, 9.0)), (0, 45, 0))      # the pump box hangs off the right bone
     tip(("strapR1",), LB["R1"], (0, 25, 0))
     tip(("rocker", "rod"), V((XA, YM, ZP)), (-30, 0, -18))
-    tip(("postB", "beam"), V((XB, YM, ZT)), (0, -12, 0))
-    tip(("beam",), V((XB, YM, ZT)), (0, 12, 0))         # the beam stays on the front post
-    tip(("pillarL",), V((-1.87, -1.87, ZT)), (30, -20, 0))
+    # the tall posts are broken short (Flash's stand about 12 px lower); what hangs on them comes down with them
+    lean(("postM", "postB", "guide", "pivot", "bolt"), V((XM, YM, ZT)), 0.0, zs=DMG_POST)
+    lean(("beam", "rocker", "rod"), V((XM, YM, ZT)), 0.0, drop=(ZTOP - ZT) * (1 - DMG_POST))
+    lean(("postB",), V((XB, YM, ZT)), DMG_POSTB)
+    tip(("pillarL",), V((-1.87, -1.87, ZT)), (8, -5, 0))
     # the shaft has dropped into the vat, its far end on the back rim
-    tip(("shaft", "cap"), V((XM, YS, ZS)), (0, -40, 10))
+    # and the big wheel lies nearly flat, a gold ring seen from above (Flash px -17, -43)
+    tip(("shaft", "cap"), V((XM, YS, ZS)), (0, -68, 10))
+    bpy.context.view_layer.update()
+    wc = PART["shaft"].matrix_world @ V((0, 0, XW))
+    mv = P(-17, -43, 12.5) - wc
     for o in ob:
         if o.parent is None and o.name.startswith(("shaft", "cap")):
-            o.matrix_world = Matrix.Translation((0, 0, -0.6)) @ o.matrix_world
+            o.matrix_world = Matrix.Translation(mv) @ o.matrix_world
     # the front bone's head is knocked off and lies at the foot
     for o in ob:
         if o.name.startswith("boneF-head"):
@@ -645,7 +752,7 @@ def wreck():
         limb(f"loose{i}", [(c - d, 0.34), (c - d * 0.7, 0.2), (c + d * 0.7, 0.2), (c + d, 0.34)], M["bone"], seg=10,
              sub=4, lumps=0.08)
     # rubble and moss round the foot
-    for i in range(34):
+    for i in range(70):
         a = rr.uniform(0, 2 * math.pi)
         d = rr.uniform(3.9, 5.2)
         kit.blob(f"moss{i}", (d * math.cos(a), d * math.sin(a), 0.1), rr.uniform(0.35, 0.7), squash=0.35,
@@ -656,6 +763,11 @@ def wreck():
         kit.box(f"rubble{i}", (rr.uniform(0.3, 0.6),) * 3, (d * math.cos(a), d * math.sin(a), 0.0),
                 M["pale" if i % 2 else "stone"], rot=(rr.uniform(0, 40), rr.uniform(0, 40), rr.uniform(0, 90)),
                 bevel=0.05)
+
+
+DMG_BONEL = 19.0
+DMG_POST = 0.86             # the tall posts' height against whole
+DMG_POSTB = 3.0             # the back post's lean on screen
 
 
 def family(o):
@@ -686,12 +798,17 @@ def build_all():
                    per=PER, moving=("rocker", "rod"), skip=SKIP + (DMG_SKIP if DMG else ()))
 
 
-PER = dict(lava=dict(w=1.0, emit=0.92, grit=0.05), bone=dict(emit=0.25), bone2=dict(emit=0.3), strap=dict(trim=15),
-           vat=dict(w=0.5, emit=0.2), steel=dict(emit=0.3))
+# the posts, hammer and dark iron stand behind the gold wheels: they take only Flash's grey pixels, never the gold
+_grey = lambda c: (c.max(-1) - c.min(-1)) < 50
+PER = dict(lava=dict(w=1.0, emit=0.92, grit=0.05, only=lambda c: (c[..., 2] < 0.6 * c[..., 0]) | (c.max(-1) < 90)), bone=dict(emit=0.25), bone2=dict(emit=0.3), strap=dict(trim=15),
+           vat=dict(w=0.5, emit=0.2), steel=dict(emit=0.3),
+           stone=dict(w=1.0, emit=0.8, only=_grey), head=dict(only=_grey), iron=dict(only=_grey))
 # the wreck does not line up with Flash's damaged picture, so only its lava mound takes Flash's colours
-DMG_SKIP = ("vat", "pool", "copper", "edge", "bone", "bone2", "strap", "stone", "pale", "iron", "head", "steel",
-            "rivet", "moss")
-SKIP = ("gold", "hub", "hubflat", "shaftflat", "shine", "shaft", "cap", "grass", "root")
+DMG_SKIP = ("vat", "pool", "bone", "bone2", "stone", "pale", "iron", "head", "moss")
+# the straps, rim plates and pump box keep their own crisp painted rust and modelled rivets: Flash's picture smears
+# on thin parts that sit a pixel or two off
+SKIP = ("gold", "hub", "hubflat", "shaftflat", "shine", "shaft", "cap", "grass", "grass2", "root", "strap", "copper",
+        "edge", "steel", "rivet")
 
 if kit.MODE == "sil":
     import proj

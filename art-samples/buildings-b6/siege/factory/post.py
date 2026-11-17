@@ -209,23 +209,34 @@ def mp4():
 
 
 CROPS = (("machine", (-22, -102, 34, -24), 12), ("wheels", (-60, -72, 14, -22), 24), ("pump", (4, -62, 56, -2), 9),
-         ("rim", (-56, -30, 46, 26), 0), ("foot", (-70, 16, 60, 78), 0), ("leftbone", (-66, -80, -20, 46), 0))
+         ("rim", (-56, -30, 46, 26), 0), ("foot", (-76, 16, 66, 90), 0), ("leftbone", (-66, -80, -20, 46), 0))
 
 
 def sheets():
     F = D / "anim" / "frames"
     idle = Image.open(D / "anim" / "idle.png").convert("RGBA")
-    pair(flash(0), idle, names=("Flash (idle)", "3D (idle)")).save(D / "sheet-idle.png")
+    def with_game(fl, m, names):
+        """The full-size pair, and under it the same pair at the game's size (2 px per Flash px), shown 2x."""
+        big = pair(fl, m, names=names)
+        g = m.resize((W * 2, H * 2), Image.LANCZOS)
+        small = pair(fl, g, names=("Flash at the game's size (2x)", "3D at the game's size (2x)"))
+        small = small.resize((small.width * 2, small.height * 2), Image.NEAREST)
+        out = Image.new("RGBA", (big.width, big.height + 12 + small.height), (30, 20, 16, 255))
+        out.paste(big, (0, 0))
+        out.paste(small, (0, big.height + 12))
+        return out
+
+    with_game(flash(0), idle, ("Flash (idle)", "3D (idle)")).save(D / "sheet-idle.png")
     k = 6
-    pair(flash(k), Image.open(F / f"f-{k:02d}.png").convert("RGBA"),
-         names=(f"Flash (working, cell {k})", f"3D (working, frame {k})")).save(D / "sheet-working.png")
+    with_game(flash(k), Image.open(F / f"f-{k:02d}.png").convert("RGBA"),
+              (f"Flash (working, cell {k})", f"3D (working, frame {k})")).save(D / "sheet-working.png")
     for name, box, k in CROPS:
         m = Image.open(F / f"f-{k:02d}.png").convert("RGBA") if k else idle
         pair(flash(k), m, crop=box, names=("Flash", "3D")).save(D / f"crop-{name}.png")
     dm = D / "damaged" / "render" / "L1-damaged-base.png"
     if dm.exists():
-        pair(flash(0, state="damaged"), grounded(Image.open(dm).convert("RGBA")),
-             names=("Flash (damaged)", "3D (damaged)")).save(D / "sheet-damaged.png")
+        with_game(flash(0, state="damaged"), grounded(Image.open(dm).convert("RGBA")),
+                  ("Flash (damaged)", "3D (damaged), one rough pass")).save(D / "sheet-damaged.png")
     # the ground shadow alone: the base picture's pixels outside the building (the no-ground render's alpha)
     R = D / "anim" / "render"
     base = np.asarray(Image.open(R / "L1-base.png").convert("RGBA")).copy()
