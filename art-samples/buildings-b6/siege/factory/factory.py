@@ -15,7 +15,8 @@ pump box), and in front of the posts a dark shaft with a big gold spiked wheel a
 World: Z up, the mound's middle on the origin, the vat's walls along X and Y. The camera looks from +X -Y, so screen
 right is +X+Y; the vat's +X wall is its right-hand face, its -Y wall the left-hand one.
 
-The loop (a siege weapon being made), 35 frames as Flash's strip: the shaft and both wheels turn twice; the rocker
+The loop (a siege weapon being made), 35 frames as Flash's strip: the shaft and both wheels creep round by two
+spike pitches (a quarter turn; every part of them repeats each 45 degrees, so the loop closes); the rocker
 lifts the hammer and drops it twice (Flash: up over 5 cells, held 3, down in 3, at rest 6); the rod follows the arm.
 Idle is frame 0 (hammer down), as Flash holds cell 0. The pump box's yellow smoke is laid on by post.py.
 PB_STATE=damaged: one rough damaged still (mode base).
@@ -107,6 +108,8 @@ def mats():
         gold=p("gold", (240, 172, 26), rough=0.36, metal=0.3, wear=(255, 222, 90), rust=(176, 96, 20), scale=6.0,
                dirt=0.05, rust_at=0.6, spec=0.6),
         hub=p("hub", (22, 26, 36), rough=0.3, metal=0.6, wear=(60, 66, 80), dirt=0.0, spec=0.7),
+        hubflat=kit.flat("hubflat", (24, 28, 38), rough=0.3, metal=0.6),
+        shaftflat=kit.flat("shaftflat", (48, 48, 58), rough=0.4, metal=0.6),
         shine=kit.flat("shine", (232, 236, 244), rough=0.25, metal=0.6),
         shaft=p("shaft", (46, 46, 56), rough=0.4, metal=0.6, wear=(96, 96, 108), dirt=0.0, spec=0.6),
         cap=p("cap", (96, 94, 92), rough=0.5, metal=0.5, wear=(140, 138, 134), rust=(60, 50, 46), dirt=0.0),
@@ -278,7 +281,7 @@ def bones():
     limb("boneL", pts, b, lumps=0.14)
     LB["L1"], LB["L0"] = V((-3.85, -3.2, 7.75)), P(-49, 8, 4.1) + V((0, 0, 0.9))
     tooth("boneL-head", V((-3.5, -0.3, 10.3)), 0.84, 2.3, b, zdir=(0.0, 0.6, 1))
-    kit.ring("boneL-band", 0.56, 0.08, M["bone2"]).location = P(-48.5, 9, 4.0)
+    kit.ring("boneL-band", 0.5, 0.08, M["bone2"]).location = P(-48.5, 9, 4.0)
     # front bone: straight up the vat's front corner with two knuckles, then leaning along the right-hand wall to
     # its head
     x = H + 0.6
@@ -290,7 +293,7 @@ def bones():
     LB["F1"], LB["F0"] = V((x, -x + 0.1, 8.0)), V((x, -x + 0.1, 4.4))
     tooth("boneF-head", V((x + 0.25, -0.3, 9.3)), 0.92, 2.6, b, zdir=(0.0, 0.3, 1))
     for i, z in enumerate((1.55, 3.65)):
-        kit.ring(f"boneF-band{i}", 0.7, 0.08, M["bone2"], z=0).location = (x, -x + 0.1, z)
+        kit.ring(f"boneF-band{i}", 0.6, 0.08, M["bone2"], z=0).location = (x, -x + 0.1, z)
     kit.blob("boneF-foot", (x, -x + 0.1, 0.3), 0.7, squash=0.6, mat=b)
     # right bone: darker, at the vat's right corner, up to the pump box
     b2 = M["bone2"]
@@ -299,7 +302,7 @@ def bones():
            (V((2.9, 2.75, 8.2)), 0.52), (V((2.6, 2.6, 9.0)), 0.58)]
     limb("boneR", pts, b2, lumps=0.2)
     LB["R0"], LB["R1"] = V((3.3, 3.3, 3.4)), V((3.3, 3.3, 4.6))
-    kit.ring("boneR-band", 0.56, 0.09, M["strap"]).location = (3.3, 3.3, 4.6)
+    kit.ring("boneR-band", 0.5, 0.09, M["strap"]).location = (3.3, 3.3, 4.6)
 
 
 def straps():
@@ -344,12 +347,36 @@ def pump():
     kit.cyl("pump-sleeve", 0.17, 0.6, (XA, YM + 2.5, z1 - 0.02), M["iron"], verts=14, bevel=0.02)
 
 
+def wedge(name, r, w, z, mat, parent, turn, n=5):
+    """One eighth of a wheel's rim drum (a pie slice round local Z). The eight are separate, identical objects, so the
+    wheel's worn paint repeats every 45 degrees and the loop can close after a quarter turn."""
+    bm = bmesh.new()
+    a1 = math.pi / 4
+    c0, c1 = bm.verts.new((0, 0, z - w / 2)), bm.verts.new((0, 0, z + w / 2))
+    lo = [bm.verts.new((r * math.cos(a1 * i / n), r * math.sin(a1 * i / n), z - w / 2)) for i in range(n + 1)]
+    hi = [bm.verts.new((r * math.cos(a1 * i / n), r * math.sin(a1 * i / n), z + w / 2)) for i in range(n + 1)]
+    for i in range(n):
+        bm.faces.new((lo[i], lo[i + 1], hi[i + 1], hi[i]))
+        bm.faces.new((c0, lo[i + 1], lo[i]))
+        bm.faces.new((c1, hi[i], hi[i + 1]))
+    bm.faces.new((c0, lo[0], hi[0], c1))
+    bm.faces.new((c0, c1, hi[n], lo[n]))
+    bmesh.ops.recalc_face_normals(bm, faces=bm.faces)
+    ob = kit.mesh_ob(name, bm, [mat], parent=parent)
+    ob.rotation_euler = (0, 0, turn)
+    mo = ob.modifiers.new("split", "EDGE_SPLIT")
+    mo.split_angle = math.radians(40)
+    return ob
+
+
 def wheel(parent, x, r, w, spikes, sl, sr, name, hub_r):
-    """A gold spiked wheel on the shaft (in the spinner's frame: local Z is the shaft, +Z toward +X)."""
+    """A gold spiked wheel on the shaft (in the spinner's frame: local Z is the shaft, +Z toward +X). Everything on
+    it repeats every 45 degrees."""
     g = M["gold"]
-    kit.cyl(f"{name}-rim", r, w, (0, 0, x - w / 2), g, verts=40, bevel=0.04, parent=parent)
-    kit.cyl(f"{name}-well", r * 0.68, 0.04, (0, 0, x + w / 2 - 0.01), M["hub"], verts=40, bevel=0.0, parent=parent)
-    kit.cyl(f"{name}-hub", hub_r, w / 2 + 0.34, (0, 0, x), M["hub"], verts=28, bevel=0.05, parent=parent)
+    for i in range(8):
+        wedge(f"{name}-rim{i}", r, w, x, g, parent, i * math.pi / 4)
+    kit.cyl(f"{name}-well", r * 0.68, 0.04, (0, 0, x + w / 2 - 0.01), M["hubflat"], verts=40, bevel=0.0, parent=parent)
+    kit.cyl(f"{name}-hub", hub_r, w / 2 + 0.34, (0, 0, x), M["hubflat"], verts=32, bevel=0.05, parent=parent)
     kit.ring(f"{name}-shine", hub_r * 0.98, 0.035, M["shine"], parent=parent, z=x + w / 2 + 0.3)
     for i in range(spikes):
         a = 2 * math.pi * i / spikes
@@ -359,24 +386,25 @@ def wheel(parent, x, r, w, spikes, sl, sr, name, hub_r):
         ob.rotation_euler = d.to_track_quat("Z", "Y").to_euler()
         a2 = a + math.pi / spikes
         d2 = V((math.cos(a2), math.sin(a2), 0))
-        ob = kit.cyl(f"{name}-hole{i}", sr * 0.5, 0.05, d2 * (r - 0.03) + V((0, 0, x)), M["hub"], verts=3, bevel=0.0,
-                     parent=parent)
+        ob = kit.cyl(f"{name}-hole{i}", sr * 0.5, 0.05, d2 * (r - 0.03) + V((0, 0, x)), M["hubflat"], verts=3,
+                     bevel=0.0, parent=parent)
         ob.rotation_euler = d2.to_track_quat("Z", "Y").to_euler()
 
 
 def shaft():
     def parts(hub):
-        kit.cyl("shaft-rod", 0.23, 3.3 - XW2 + 0.25, (0, 0, XW2 - 0.25), M["shaft"], verts=18, bevel=0.02, parent=hub)
-        wheel(hub, XW, 1.3, 1.3, 9, 0.85, 0.27, "wheel", 0.55)
+        kit.cyl("shaft-rod", 0.23, 3.3 - XW2 + 0.25, (0, 0, XW2 - 0.25), M["shaftflat"], verts=16, bevel=0.02,
+                parent=hub)
+        wheel(hub, XW, 1.3, 1.3, 8, 0.85, 0.27, "wheel", 0.55)
         wheel(hub, XW2, 0.58, 0.34, 8, 0.42, 0.14, "wheel2", 0.26)
-        # the end cap, with two bolts on its face
-        kit.cyl("shaft-cap", 0.42, 0.75, (0, 0, 3.25), M["cap"], verts=24, bevel=0.05, parent=hub)
-        for i in (-1, 1):
-            rivet(f"shaft-cap-rv{i}", (0.2 * i, 0.08 * i, 4.02), 0.08, parent=hub)
     e, hub = kit.spinner("shaft", (0, YS, ZS), 0.0, 0.0, parts)
     if not DMG:
         kit.MOVING.append(e)
     PART["shaft"] = hub
+    # the end cap with its two bolts: a still bearing cup over the shaft's end (it does not turn in Flash)
+    kit.cyl("cap", 0.42, 0.75, (3.25, YS, ZS), M["cap"], rot=(0, 90, 0), verts=24, bevel=0.05)
+    for i in (-1, 1):
+        rivet(f"cap-rv{i}", (4.02, YS + 0.2 * i, ZS + 0.08 * i), 0.08)
 
 
 def rocker():
@@ -437,7 +465,7 @@ def lift(k):
 
 def turn(k):
     k = 0 if DMG else k % N
-    PART["shaft"].rotation_euler = (0, 0, 2 * math.pi * 2 * k / N)
+    PART["shaft"].rotation_euler = (0, 0, 0.3 + (math.pi / 2) * k / N)      # two spike pitches a loop, as Flash
     th = -math.radians(LIFT) * lift(k)
     PART["rocker"].rotation_euler = (th, 0, 0)
     q = Matrix.Rotation(th, 3, "X") @ V((0, 2.5, -0.45))
@@ -489,15 +517,15 @@ def wreck():
                 o.matrix_world = T @ o.matrix_world
 
     bpy.context.view_layer.update()
-    tip(("boneL",), P(-46, 38, 0.7), (15, -9, 0))
+    tip(("boneL",), P(-49, 8, 5.0), (15, -9, 0))        # the left bone, loose from its upper strap, leans out
     tip(("strapL1",), LB["F1"], (0, -30, 0))
-    tip(("strapL0",), LB["F0"], (0, -14, 0))
     tip(("pump",), V((2.6, 2.6, 9.0)), (0, 32, 0))
     tip(("rocker", "rod"), V((XA, YM, ZP)), (-24, 0, -16))
     tip(("postB", "beam"), V((XB, YM, ZT)), (0, -9, 0))
     tip(("strapR1",), LB["R1"], (0, 25, 0))
-    # the shaft has dropped at its far end: the big wheel lies in the vat
-    tip(("shaft",), V((XM, YS, ZS)), (0, -24, 10))
+    # the shaft has dropped at its far end onto the vat's back rim
+    tip(("shaft", "cap"), V((XM, YS, ZS)), (0, -40, 10))
+    tip(("beam",), V((XB, YM, ZT)), (0, 9, 0))          # the beam stays on the front post
     # the front bone's head is knocked off and lies at the foot
     for o in ob:
         if o.name.startswith("boneF-head"):

@@ -28,7 +28,7 @@ N = 35
 BG = (112, 142, 72, 255)                # yard grass
 W, H = FRAME[2] - FRAME[0], FRAME[3] - FRAME[1]
 CROP = (-82, -102, 100, 96)             # the building, its smoke and most of its shadow, in Flash px
-MOUTH = (42.0, -46.0)                   # where the smoke leaves the pump box (Flash px)
+MOUTH = (40.0, -48.0)                   # where the smoke leaves the pump box (Flash px)
 
 
 def font(n):
@@ -72,10 +72,10 @@ def smoke(k, size):
         t = (k - p["b"]) / p["life"]
         if not 0 <= t <= 1:
             continue
-        x = MOUTH[0] + 22 * t ** 0.7 + p["side"] * (2.0 + 8.0 * t) + 1.2 * math.sin(p["wob"] + 5 * t)
+        x = MOUTH[0] + 15 * t ** 0.7 + p["side"] * (3.0 + 9.0 * t) + 1.2 * math.sin(p["wob"] + 5 * t)
         y = MOUTH[1] - p["rise"] * t ** 1.1 + p["side"] * 4 * t
-        r = p["r"] * (4.0 + 9.0 * t ** 0.7)
-        a = 0.16 * min(1.0, t / 0.15) * (1 - t) ** 1.2
+        r = p["r"] * (5.0 + 10.0 * t ** 0.7)
+        a = 0.24 * min(1.0, t / 0.15) * (1 - t) ** 1.2
         cx, cy = (x - FRAME[0]) * kpx, (y - FRAME[1]) * kpx
         rp = r * kpx
         x0, x1 = max(0, int(cx - rp)), min(size[0], int(cx + rp) + 2)
