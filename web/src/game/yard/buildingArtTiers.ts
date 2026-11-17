@@ -893,7 +893,7 @@ export const INFERNO_PAINTED_BUILDING_ART: Readonly<Record<number, readonly Tier
   // 26 Academy: painted, Flash's two looks (level 1, levels 2-4), damaged and destroyed in paint too
   26: [
     { from: 1, top: ["top.c1@2x.webp", -50, -55], shadow: ["shadow.1.jpg", -50, -30], lift: 0,
-      damaged: { top: ["top.c1.damaged@2x.webp", -49, -27], shadow: ["shadow.1.jpg", -50, -30] },
+      damaged: { top: ["top.c1.damaged@2x.webp", -49, -23], shadow: ["shadow.1.jpg", -50, -30] },
       destroyed: { top: ["top.c1.destroyed@2x.webp", -52, -15], shadow: ["shadow.1.jpg", -50, -30] } },
     { from: 2, top: ["top.c2@2x.webp", -57, -92], shadow: ["shadow.2.jpg", -61, -30], lift: 0,
       damaged: { top: ["top.c2.damaged@2x.webp", -53, -90], shadow: ["shadow.2.jpg", -61, -30] },

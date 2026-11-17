@@ -25,7 +25,7 @@ UP = 4
 # per building: folder, canvas (CW, CH, OX, OY), ground ("lava" or "grass"), looks {level: {state: (file, x, y)}}
 # state keys: top, damaged, destroyed, shadow (the shadow the game draws under every state of that look; None = none)
 B = {
-    "a": dict(name="Academy", type=26, folder="iacademy", canvas=(240, 230, 120, 140), ground="lava", looks={
+    "a": dict(name="Academy", type=26, folder="iacademy", canvas=(240, 270, 120, 140), ground="lava", looks={
         1: dict(top=("top.1.png", -50, -55), damaged=("top.1.damaged.png", -48, -21),
                 destroyed=("top.1.destroyed.png", -59, -21), shadow=("shadow.1.jpg", -50, -30)),
         2: dict(top=("top.2.png", -56, -95), damaged=("top.2.damaged.png", -56, -91),
