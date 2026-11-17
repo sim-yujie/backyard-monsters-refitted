@@ -503,3 +503,46 @@ describe("Fomor is judged by the monsters it backs (design note round 2)", () =>
     expect(gorgo?.allyPicks).toBeUndefined();
   });
 });
+
+describe("Fomor's lesson counts only while it is in battle", () => {
+  const YARD: CombatBuildingDataMap = {
+    "1": { id: 1, t: 14, l: 5, X: 250, Y: 250 },
+    "2": sniper(2, 400, 300, 5),
+    "3": sniper(3, 300, 400, 5),
+    "4": harvester(4, -350, -350),
+  };
+  const replay = (extra: FlingLog["events"]) =>
+    replayAttack({
+      buildingdata: YARD,
+      buildinghealthdata: {},
+      resources: RESOURCES,
+      kind: "main",
+      log: {
+        v: 1,
+        seed: 22001,
+        events: [
+          { kind: "fling", t: 0, x: 0, y: 0, r: 100, monsters: { C1: 6, C2: 4 }, champion: { t: FOMOR, l: 3, s: "offensive" } },
+          ...extra,
+        ],
+      },
+      levels: {},
+      playerLevel: 20,
+      tailTicks: 6000,
+      learn: true,
+    }).lessons?.[0];
+
+  it("adds nothing from the monsters it enraged once it is called back", () => {
+    // Its rage stays on the monsters until the aura's next tick: their blows
+    // after the call-back must not count. Everyone called back at the same
+    // tick is the yardstick (nobody hits after it).
+    const full = replay([]);
+    for (const at of [600, 800]) {
+      const back = replay([{ kind: "championRetreat", t: at, c: FOMOR }]);
+      const all = replay([{ kind: "championRetreat", t: at, c: FOMOR }, { kind: "retreat", t: at }]);
+      expect(back?.army).toBeGreaterThan(0);
+      expect(back?.army).toBe(all?.army);
+      expect(back?.ring).toBe(all?.ring);
+      expect(full?.army).toBeGreaterThan(back?.army ?? 0);
+    }
+  });
+});

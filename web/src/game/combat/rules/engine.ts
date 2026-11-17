@@ -5874,17 +5874,18 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
    * `lessonScore`): every other attacker's blow on a building while it fights
    * goes on its `army`, and a blow from inside its rage ring on its `ring` as
    * well (a ring blow counts for both, so the ring is never more than the
-   * army). Only watches: nothing in the battle reads it.
+   * army). Only while Fomor itself is in battle: once it dies, is called back
+   * or walks home, a rage it left behind (held until the aura's next tick)
+   * adds nothing. Only watches: nothing in the battle reads it.
    */
   const judgeForFomor = (striker: Creep, applied: number): void => {
     if (applied <= 0) return;
     for (const [id, lesson] of lessons) {
       if (!lesson.fomor || id === striker.id) continue;
-      const inRing = striker.enragedBy === id;
       const fomor = byCreepId.get(id);
-      if (!inRing && !(fomor && inBattle(fomor))) continue;
+      if (!fomor || !inBattle(fomor)) continue;
       lesson.fomor.army += applied;
-      if (inRing) lesson.fomor.ring += applied;
+      if (striker.enragedBy === id) lesson.fomor.ring += applied;
     }
   };
 
