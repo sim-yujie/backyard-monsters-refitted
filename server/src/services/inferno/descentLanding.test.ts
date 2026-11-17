@@ -425,6 +425,10 @@ describe("the save that ends a Descent attack", () => {
     });
     // The main yard's resources are not touched.
     expect(userSave.resources).toEqual({ r1: 100, r2: 100, r3: 100, r4: 100 });
+    // One point per resource taken, on the main save: Flash comes home from a
+    // Descent attack to the surface yard and adds them there (patch 7.7.2,
+    // `ATTACK.as:998-999`, `BASE.as:1785-1803`).
+    expect(Number(userSave.points ?? 0)).toBe(1_000);
     expect(store.has(descentSessionKey(ATTACKER))).toBe(false);
     expect(achieved).toHaveBeenCalledTimes(1);
     expect(achieved.mock.calls[0]![1]).toBe(9);
@@ -444,6 +448,8 @@ describe("the save that ends a Descent attack", () => {
       "201": { health: { "1": 0, "2": 120 }, looted: { r1: 40, r2: 30, r3: 0, r4: 0 } },
     });
     expect(userSave.iresources).toEqual({ r1: 3040, r2: 2030, r3: 1000, r4: 500 });
+    // A loss gives points for what it took too.
+    expect(Number(userSave.points ?? 0)).toBe(70);
     expect(ctx.body.descent).toMatchObject({ won: false, damage: 89, level: 1, captured: false });
     // Achievement 18 is earned by any first attack, won or lost.
     expect(achieved.mock.calls[0]![2]).toEqual({ descent: 1 });
@@ -458,6 +464,8 @@ describe("the save that ends a Descent attack", () => {
     expect(await run(finalSave())).toBeNull();
     expect(inputs[0]!.defender.buildinghealthdata).toEqual({ "1": 0 });
     expect((userSave.iresources as Record<string, number>).r1).toBe(PURSE.r1 + 10);
+    // Points only for what the yard still had to give.
+    expect(Number(userSave.points ?? 0)).toBe(10);
     expect(row!.descent_yards!["201"]).toEqual({
       health: { "1": 0, "3": 0 },
       looted: { r1: cap, r2: 0, r3: 0, r4: 0 },
@@ -470,9 +478,12 @@ describe("the save that ends a Descent attack", () => {
     expect(await run(finalSave())).toBeNull();
     const purse = { ...(userSave.iresources as object) };
 
+    expect(Number(userSave.points ?? 0)).toBe(100);
+
     const again = await run(finalSave());
     expect(again?.data?.reason).toBe("no-session");
     expect(userSave.iresources).toEqual(purse);
+    expect(Number(userSave.points ?? 0)).toBe(100);
     expect(row!.descent_destroyed![1]).toBe(0);
     expect(achieved).toHaveBeenCalledTimes(1);
   });
@@ -538,6 +549,9 @@ describe("the 13th win: the Descent is passed", () => {
 
     expect(await run(ctx)).toBeNull();
     expect(ctx.body.descent).toMatchObject({ won: true, level: 14, captured: true, infernobaseid: NEW_YARD_BASEID });
+    // The capturing attack's points land on the main save too: Flash still
+    // comes home to the surface from it (patch 7.7.2).
+    expect(Number(userSave.points ?? 0)).toBe(40);
     expect(inputs[0]!.descentYard).toBe(13);
     expect(row!.descent_destroyed!.every((flag) => flag === 1)).toBe(true);
     expect(row!.descent_passed_at).toBeInstanceOf(Date);
@@ -648,10 +662,13 @@ describe("a Descent attack left without a save", () => {
     expect(store.has(rowlessCheckpointKey(REF))).toBe(false);
     expect(sets.get(ROWLESS_CHECKPOINT_INDEX)?.size ?? 0).toBe(0);
 
+    expect(Number(userSave.points ?? 0)).toBe(1_000);
+
     // Once: the next load finds nothing, and a late save is refused.
     expect(await finaliseRowlessAttacksOf(ATTACKER, "load")).toBe(0);
     expect((await run(finalSave()))?.data?.reason).toBe("no-session");
     expect(userSave.iresources).toEqual({ r1: 3400, r2: 2300, r3: 1200, r4: 600 });
+    expect(Number(userSave.points ?? 0)).toBe(1_000);
     expect(inputs).toHaveLength(1);
   });
 
@@ -696,6 +713,7 @@ describe("a Descent attack left without a save", () => {
 
     expect(await finaliseRowlessAttacksOf(ATTACKER, "load")).toBe(0);
     expect(userSave.iresources).toEqual(purse);
+    expect(Number(userSave.points ?? 0)).toBe(40);
     expect(inputs).toHaveLength(1);
     expect(store.has(rowlessCheckpointKey(REF))).toBe(false);
   });

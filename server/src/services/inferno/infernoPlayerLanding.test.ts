@@ -366,6 +366,8 @@ describe("landing", () => {
     expect(err?.data?.reason).toBe("superseded");
     expect(defenderMain.iresources.r1).toBe(5_000);
     expect(userSave.iresources.r1).toBe(0);
+    // No loot points for an attack that did not land (patch 7.7.2).
+    expect(inferno.points).toBe("0");
     expect(target.attackid).toBe(999);
     expect(notices).toEqual([]);
     // The newer attack's session is not ended by the older one's save.
@@ -405,6 +407,13 @@ describe("landing", () => {
     expect(player.housedlost).toEqual({});
     // The defender's purse lost the whole loot, whatever fitted the attacker's.
     expect(defenderMain.iresources).toMatchObject({ r1: 3_000, r2: 300 });
+    // One point per resource taken, the 1,000 that did not fit included, on
+    // the attacker's Inferno yard, never their main save or the defender's
+    // rows (patch 7.7.2, `ATTACK.as:1002`).
+    expect(inferno.points).toBe("2100");
+    expect(userSave.points).toBeUndefined();
+    expect(target.points).toBe("0");
+    expect(defenderMain.points).toBeUndefined();
     // The monsters that fought left the attacker's Housing Bunkers.
     expect(inferno.monsters.housed).toEqual({ IC1: 4 });
     expect(target).toMatchObject({ attackid: 0, damage: 30, buildinghealthdata: { "50": 400 } });
@@ -574,6 +583,7 @@ describe("an attack left without its final save (owner, 27 Oct)", () => {
     expect(target).toMatchObject({ attackid: 0, damage: 30, buildinghealthdata: { "50": 400 } });
     expect(defenderMain.iresources.r1).toBe(4_000);
     expect(userSave.iresources.r1).toBe(1_000);
+    expect(inferno.points).toBe("1000");
     expect(maprooms.get(DEFENDER)!.neighbors.map((one: { attacksfrom: number }) => one.attacksfrom)).toEqual([1]);
     expect(store.has(infernoPlayerSessionKey(TARGET_SAVEID))).toBe(false);
     expect(store.has(infernoPlayerCheckpointKey(TARGET_SAVEID))).toBe(false);
@@ -590,19 +600,24 @@ describe("an attack left without its final save (owner, 27 Oct)", () => {
     expect(await closeInfernoPlayerAttacksOf(ATTACKER, "build")).toBe(1);
     expect(defenderMain.iresources.r1).toBe(0);
     expect(userSave.iresources.r1).toBe(300);
+    // Its points follow what was really taken.
+    expect(inferno.points).toBe("300");
   });
 
   test("the closed attack cannot be saved afterwards, nor closed twice", async () => {
     startSession();
     await checkpoint();
     canned = { damage: 10 };
+    canned = { damage: 10, attackloot: { r1: 400, r2: 0, r3: 0, r4: 0 }, defenderDelta: { r1: -400, r2: 0, r3: 0, r4: 0 } };
     await closeInfernoPlayerAttacksOf(ATTACKER, "build");
     expect(transactions).toBe(1);
+    expect(inferno.points).toBe("400");
     // The same attack's final save, sent late, finds no attack to bind to.
     target.attackid = ATTACK_ID;
     expect((await run(finalSave()))?.data?.reason).toBeDefined();
     expect(await closeInfernoPlayerAttack(TARGET_SAVEID, "again")).toBe("none");
     expect(transactions).toBe(1);
+    expect(inferno.points).toBe("400");
   });
 
   test("a new attack/start closes it first, and the second attack meets the usual rules: no free retry", async () => {

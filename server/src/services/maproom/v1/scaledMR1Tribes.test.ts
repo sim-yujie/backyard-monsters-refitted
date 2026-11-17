@@ -323,11 +323,16 @@ describe("Map Room 1 tribe save of a started attack", () => {
     expect(store.has(mr1TribeSessionKey(ATTACKER, TRIBE))).toBe(false);
     // Goal WM1 (#227): a Legionnaire tribe destroyed, counted on the attacker's row.
     expect(readOnboarding(userSave).counters.tribes).toMatchObject({ legionnaire: 1, kozu: 0 });
+    // One point per resource looted, on the main save (patch 7.7.2).
+    const points = r1 + r2 + r3 + r4WithBonus;
+    expect(points).toBeGreaterThan(0);
+    expect(Number(userSave.points ?? 0)).toBe(points);
 
     // The same save sent again as the page closes lands nothing.
     const again = await run(ctxFor({ over: "1", attackid: String(ATTACK_ID), flinglog: JSON.stringify(WRECK) }));
     expect(again?.data?.reason).toBe("no-session");
     expect((userSave.resources as Record<string, number>).r1).toBe(100 + r1);
+    expect(Number(userSave.points ?? 0)).toBe(points);
   });
 
   test("loot beyond what the tribe has left is cut to it", async () => {
@@ -351,6 +356,10 @@ describe("Map Room 1 tribe save of a started attack", () => {
     expect(userSave.resources).toEqual({ r1: 100 + battle.attackloot.r1, r2: 10_000, r3: 10_000, r4: 12_000 });
     expect((ctx.body as { lootcredited?: unknown }).lootcredited).toEqual({ r1: battle.attackloot.r1, r2: 50, r3: 0, r4: 0 });
     expect(maproom.tribedata[0]!.looted).toEqual(battle.attackloot);
+    // Its points are the whole take, loot that did not fit included (patch 7.7.2).
+    const { r1, r2, r3, r4 } = battle.attackloot;
+    expect(r2 + r3 + r4).toBeGreaterThan(50);
+    expect(Number(userSave.points ?? 0)).toBe(r1 + r2 + r3 + withTribeGooBonus({ r4 }, true).r4);
   });
 
   test("a save that does not end the attack writes nothing of the battle and credits nothing", async () => {
@@ -367,6 +376,7 @@ describe("Map Room 1 tribe save of a started attack", () => {
       )
     ).toBeNull();
     expect((userSave.resources as Record<string, number>).r1).toBe(100);
+    expect(userSave.points ?? "0").toBe("0");
     expect(maproom.tribedata[0]!.damage).toBeUndefined();
     expect(maproom.tribedata[0]!.tribeHealthData).toEqual({});
     expect(store.has(mr1TribeSessionKey(ATTACKER, TRIBE))).toBe(true);
@@ -927,11 +937,15 @@ describe("Map Room 1 tribe attack left without a save", () => {
     expect(store.has(mr1TribeSessionKey(ATTACKER, TRIBE))).toBe(false);
     expect(store.has(rowlessCheckpointKey(REF))).toBe(false);
     expect(sets.get(ROWLESS_CHECKPOINT_INDEX)?.size ?? 0).toBe(0);
+    // Its loot points, on the main save, as the save gives them (patch 7.7.2).
+    const points = r1 + r2 + r3 + r4WithBonus;
+    expect(Number(userSave.points ?? 0)).toBe(points);
 
     // Once: the next load finds nothing, and a late save is refused.
     expect(await finaliseRowlessAttacksOf(ATTACKER, "load")).toBe(0);
     expect((await run(finalSave()))?.data?.reason).toBe("no-session");
     expect((userSave.resources as Record<string, number>).r1).toBe(100 + r1);
+    expect(Number(userSave.points ?? 0)).toBe(points);
   });
 
   test("never more than the record shows: the battle stops at the checkpoint's tick", async () => {
@@ -976,8 +990,15 @@ describe("Map Room 1 tribe attack left without a save", () => {
     expect(store.has(mr1TribeSessionKey(ATTACKER, TRIBE))).toBe(false);
     expect(store.has(rowlessCheckpointKey(REF))).toBe(true);
     const snapshot = () =>
-      structuredClone({ resources: userSave.resources, monsters: userSave.monsters, tribe: maproom.tribedata[0] });
+      structuredClone({
+        resources: userSave.resources,
+        points: userSave.points,
+        monsters: userSave.monsters,
+        tribe: maproom.tribedata[0],
+      });
     const landed = snapshot();
+    // Its loot points too (patch 7.7.2): given once, with the loot.
+    expect(Number(landed.points)).toBeGreaterThan(0);
     expect((landed.resources as Record<string, number>).r1).toBe(100 + r1);
     persisted.length = 0;
 

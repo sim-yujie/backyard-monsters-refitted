@@ -35,6 +35,7 @@ import { buildingDataWithout, spendFlung, type SourceCell } from "./combat/aband
 import { battleReplayInput, foughtLoot } from "./combat/battle.js";
 import { replayAbandonedInWorker } from "./combat/replayRunner.js";
 import { attackLootOf, bankAttackLoot } from "./combat/attackLoot.js";
+import { awardLootPoints } from "./combat/lootPoints.js";
 import { bombSpendOf, catapultLevelOf, chargeBombSpend } from "./combat/bombSpend.js";
 import { combatCellHeight } from "./combat/cellHeight.js";
 import { garrisonsAfterBattle } from "./combat/bunkerGarrison.js";
@@ -322,17 +323,16 @@ const finaliseLocked = async (basesaveid: number, trigger: string, options: Land
   const fromTribe = defender.type === BaseType.TRIBE;
   const plunder = plunderPercent(fromTribe, now);
   const alliancePercent = await attackLootPercent(postgres.em, attacker.userid, defender.saveuserid);
-  const banked = bankAttackLoot(
-    userSave,
-    withPlunderBonus(
-      withCampLootBonus(
-        withTribeGooBonus(mapByPercent(loot.credit, alliancePercent), fromTribe),
-        isMR2Camp(defender.type, userSave.mapversion)
-      ),
-      plunder
+  const gain = withPlunderBonus(
+    withCampLootBonus(
+      withTribeGooBonus(mapByPercent(loot.credit, alliancePercent), fromTribe),
+      isMR2Camp(defender.type, userSave.mapversion)
     ),
-    loot.krallenBuff
+    plunder
   );
+  const banked = bankAttackLoot(userSave, gain, loot.krallenBuff);
+  // Its points, as the save lands them (patch 7.7.2, `lootPoints.ts`).
+  awardLootPoints(userSave, gain);
   postgres.em.persist(userSave);
 
   // The defender.
