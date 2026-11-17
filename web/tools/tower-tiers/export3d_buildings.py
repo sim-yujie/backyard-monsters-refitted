@@ -43,6 +43,7 @@ px around the building's origin, 12 render px a 1x px), with the same camera as 
 | strongbox | 8 Strongbox in an Inferno yard | art/strongbox-3d | art-samples/buildings-b6/inferno/strongbox (strongbox.py) | one look for its four levels; 30 cells of its loop while it unlocks, each the whole building |
 | iacademy | 26 Academy in an Inferno yard | art/iacademy-3d | art-samples/buildings-b6/inferno/academy (academy.py, `post.py game` -> `game/`) | Flash's two looks (level 1; levels 2-4); 44 and 47 cells of its training loop (the drill, the cogs between the pillars, the pillars); canvas x -80..90, y -110..80; `iacademy:damaged` from the same `game/` folder; destroyed is the painted rubble (`top.c<n>.destroyed@2x.webp`) |
 | siegeworks | 134 Siege Works | art/siege-works-3d | art-samples/buildings-b6/siege/works (works.py, `post.py game` -> `game/`) | one look; 60 cells of its working loop (the rocker, the chain and the bellows, as Flash's three strips together); canvas x -75..125, y -95..95, 8 render px a 1x px; `siegeworks:damaged` from the same `game/` folder; destroyed is Flash's rubble |
+| siegefactory | 133 Siege Factory | art/siege-factory-3d | art-samples/buildings-b6/siege/factory (factory.py, `post.py export` -> `export/`) | one look; an idle cell (the machine at rest, no smoke: `TierAnim.rest`) then the 35 cells of its working loop (the rocker, rod, shaft and wheels, the pump's smoke laid in by post.py); canvas x -84..146, y -104..106; its ground haze laid under the body (`L1-under.png`); `siegefactory:damaged` from the same `export/` folder; destroyed is Flash's rubble |
 
 The Inferno's Strongbox (`strongbox`, moves "frames"; owner on the Review Desk, 14 Nov 2026) is the clean-room model
 (`strongbox.py`), one look for every level as Flash's. Its renders are whole frames, ground shadow and all
@@ -119,6 +120,10 @@ under it the shadow is the nearest shadow outside, and the still parts' own alph
 shadow, `(a - s) / (1 - s)`. A part that moves over open ground leaves nothing behind in the body, since the base never
 saw it.
 
+A look's `under.png` (`L1-under.png`, `L1-damaged-under.png`; only the Siege Factory has one) is something on the ground
+that is not a shadow, the pale haze Flash's Siege Factory stands in: it is laid under the body after the split, its
+colour shaded by the ground shadow there (`laid_under()`), since the game draws the shadow first and the body over it.
+
 A shadow the canvas cuts off is carried on past the edge by `tail()`. The housing's is not cut: it fades out over its
 last ~20 px inside the canvas on its own (the flats' soft sun). A render 40 px wider on the right (31 Oct 2026) gave
 the same shadow, 1 px wider, so housing-v1's own canvas stays.
@@ -193,6 +198,7 @@ BUILDINGS = {
     "strongbox": dict(type=8, folder="imonsterlab", frame=(-70, -52), looks=[(1, "")], moves="frames"),
     "iacademy": dict(type=26, folder="iacademy", frame=(-80, -110), k=6, looks=[(1, "L1"), (2, "L2")], moves="parts"),
     "siegeworks": dict(type=134, folder="siegelab", frame=(-75, -95), k=8, looks=[(1, "L1")], moves="parts"),
+    "siegefactory": dict(type=133, folder="siegefactory", frame=(-84, -104), looks=[(1, "L1")], moves="parts"),
     "locker": dict(type=8, folder="monsterlocker", frame=(-80, -110), k=8, looks=[(n, f"L{n}") for n in range(1, 5)],
                    moves="cells", noise=0.0),
     "booby": dict(type=24, folder="boobytrap", frame=(-24, -14), looks=[(1, "booby-whole")], moves=None),
@@ -209,6 +215,7 @@ CELLS = {"twig": {1: 34, 3: 34, 6: 34, 10: 34}, "pebble": {1: 26, 3: 26, 6: 26, 
          "incubator": {1: 50},
          "iacademy": {1: 44, 2: 47},
          "siegeworks": {1: 60},
+         "siegefactory": {1: 36},
          "strongbox": {1: 30}, "locker": {1: 21, 2: 20, 3: 20, 4: 21}}
 TAIL = 16                      # 1x px a shadow cut by the render's canvas is carried on past it, fading out
 NOISE = 0.07                   # the shadow catcher's faint wash over all the ground (sky occlusion), taken off every shade
@@ -268,6 +275,15 @@ def split(scene, building, noise=NOISE):
                              np.clip(scene[..., :3] * a[..., None] / np.maximum(body_a[..., None], 1e-3), 0, 1), 0)
     body[..., 3] = body_a
     return body, s
+
+
+def laid_under(body, under, shade):
+    """`under` (float RGBA, a haze on the ground) under the still parts, its colour darkened by the ground shadow there:
+    the game multiplies the shadow onto the grass and draws the body over it, and haze * (1 - shade) over grass * (1 -
+    shade) is the shade over haze over grass that the approved pictures show."""
+    u = under.copy()
+    u[..., :3] *= 1 - shade[..., None]
+    return over(body, u)
 
 
 def ramp(n, px=8):
@@ -557,6 +573,8 @@ def export(name, render, state=None):
                 strips.append((f"anim.{tag}.{layer}@2x.webp", box, cells))
         else:
             body, shade = split(base, building, noise)
+            if (render / f"{stem}under.png").exists():
+                body = laid_under(body, load(render / f"{stem}under.png"), shade)
             still = body
             layers = []
             if names:

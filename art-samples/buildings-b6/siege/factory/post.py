@@ -9,6 +9,9 @@
                          render's full size), crop-*.png close-ups, shadow.png
 ./py post.py game        game/: idle.png, working-strip.png (35 cells side by side), damaged.png, shadow.png at the game's 2x
                          size (2 px per Flash px; the canvas 230 x 210 Flash px, its top left at (-84, -104))
+./py post.py export      export/: what export3d_buildings.py siegefactory reads: base and alone, 36 parts cells (cell 0 the
+                         machine at rest with no smoke, the idle look; cells 1-35 the working loop, the pump's smoke laid
+                         in), the damaged base and alone, and the ground haze for each (`L1-under.png`)
 ./py post.py check       the loop check: frame 35 against frame 0, what changes outside the moving parts, loop-check.png
 
 The canvas is factory.py's: Flash px x -84..146, y -104..106, the building's anchor at (0, 0).
@@ -263,6 +266,34 @@ def game():
     print("made", out, "cells", size)
 
 
+def export():
+    """export/: the renders `export3d_buildings.py siegefactory` (and `siegefactory:damaged`) reads. The strip has an
+    idle cell first (`TierAnim.rest`): the machine at frame 0 with no smoke, as the approved idle picture, which the
+    game holds while nothing unlocks; then the 35 cells of the working loop with the smoke in them (parts-35, frame 0
+    again for the loop check, is left out). The haze `grounded()` lays under the building goes to `L1-under.png`
+    (and `L1-damaged-under.png`): the export lays it under the body, shaded by the ground shadow, so the game draws
+    what the approved pictures show (the haze is not a shadow, so it must not go through the base's split)."""
+    import shutil
+    R = D / "anim" / "render"
+    out = D / "export"
+    out.mkdir(exist_ok=True)
+    for p in out.glob("*.png"):
+        p.unlink()
+    for name in ("L1-base.png", "L1-alone.png"):
+        shutil.copy(R / name, out)
+    shutil.copy(R / "L1-parts-00.png", out / "L1-parts-00.png")
+    for k in range(N):
+        parts = Image.open(R / f"L1-parts-{k:02d}.png").convert("RGBA")
+        parts.alpha_composite(smoke(k, parts.size))
+        parts.save(out / f"L1-parts-{k + 1:02d}.png")
+    for name in ("L1-damaged-base.png", "L1-damaged-alone.png"):
+        shutil.copy(D / "damaged" / "render" / name, out)
+    size = Image.open(R / "L1-base.png").size
+    haze(size).save(out / "L1-under.png")
+    haze(size).save(out / "L1-damaged-under.png")
+    print("export", N + 1, "cells ->", out)
+
+
 MOVING = (("machine", (-62, -104, 34, -22)), ("smoke", (26, -104, 100, -30)))
 
 
@@ -309,4 +340,4 @@ if __name__ == "__main__":
     if cmd == "fit":
         fit(int(sys.argv[2]) if len(sys.argv) > 2 else 0)
     else:
-        {"refs": refs, "frames": frames, "mp4": mp4, "sheets": sheets, "check": check, "game": game}[cmd]()
+        {"refs": refs, "frames": frames, "mp4": mp4, "sheets": sheets, "check": check, "game": game, "export": export}[cmd]()
