@@ -22,6 +22,7 @@ DPOINT = {1: (-48, -21), 2: (-56, -91)}
 SHADOW = {1: (-50, -30), 2: (-61, -30)}
 BG = (96, 60, 52)
 CELLS = {1: 44, 2: 47}
+PAD = 16          # Flash px added under the canvas in the sheets (Flash's look 1 damaged picture reaches y 93)
 
 
 def flash_canvas(look, k, state=""):
@@ -29,7 +30,7 @@ def flash_canvas(look, k, state=""):
     name = f"top.{look}{'.' + state if state else ''}.png"
     im = Image.open(FLASH / name).convert("RGBA")
     pt = (DPOINT if state == "damaged" else POINT)[look]
-    w, h = FRAME[2] - FRAME[0], FRAME[3] - FRAME[1]
+    w, h = FRAME[2] - FRAME[0], FRAME[3] - FRAME[1] + PAD
     c = Image.new("RGBA", (w, h), (0, 0, 0, 0))
     c.alpha_composite(im, (pt[0] - FRAME[0], pt[1] - FRAME[1]))
     return c.resize((w * k, h * k), Image.NEAREST)
@@ -52,7 +53,7 @@ def on_bg(im):
 def fit(look):
     r = Image.open(HERE / f"work/fit-L{look}.png").convert("RGBA")
     k = r.width // (FRAME[2] - FRAME[0])
-    f = flash_canvas(look, k)
+    f = flash_canvas(look, k).crop((0, 0, r.width, r.height))
     a = on_bg(r)
     a.alpha_composite(outline(f))
     blend = Image.blend(on_bg(r), on_bg(f), 0.5)
@@ -92,7 +93,7 @@ def frame(look, k, state=""):
 
 def flash_shadowed(look, k, state=""):
     """Flash's picture over its ground shadow (multiplied onto the ground colour), on the render's canvas."""
-    w, h = FRAME[2] - FRAME[0], FRAME[3] - FRAME[1]
+    w, h = FRAME[2] - FRAME[0], FRAME[3] - FRAME[1] + PAD
     g = Image.new("RGB", (w, h), BG)
     sh = Image.open(FLASH / f"shadow.{look}.jpg").convert("RGB")
     pos = (SHADOW[look][0] - FRAME[0], SHADOW[look][1] - FRAME[1])
@@ -148,6 +149,9 @@ def side(look, k=0, state="", zoom=6, box=None):
     r = on_bg(frame(look, k, state))
     if r.width != w * zoom:
         r = r.resize((w * zoom, h * zoom), Image.LANCZOS)
+    full = Image.new("RGBA", (w * zoom, (h + PAD) * zoom), BG + (255,))
+    full.paste(r, (0, 0))
+    r = full
     return flash_shadowed(look, zoom, state).crop(cut).convert("RGB"), r.crop(cut).convert("RGB")
 
 
@@ -169,7 +173,7 @@ def col(ims, gap=6):
     return s
 
 
-DBOX = {1: (-62, -62, 72, 66), 2: (-66, -100, 76, 70)}
+DBOX = (-66, -100, 76, 96)
 CROPS = {"hub": {1: (-2, -18, 44, 20), 2: (-6, -26, 52, 16)}, "top": {1: (-34, -62, 26, -18), 2: (-52, -100, 28, -40)},
          "rock": {1: (-52, 6, 20, 62), 2: (-56, 0, 20, 66)}}
 
@@ -189,7 +193,7 @@ def sheets():
         f, r = side(look, 0, box=both)
         idle.append(row([label(f, f"Flash, look {look} ({'level 1' if look == 1 else 'levels 2-4'})"),
                          label(r, f"3D, look {look}, idle (frame 0)")]))
-        f, r = side(look, 0, "damaged", box=both)
+        f, r = side(look, 0, "damaged", box=DBOX)
         dmg.append(row([label(f, f"Flash, look {look}, damaged"), label(r, f"3D, look {look}, damaged")]))
         n = CELLS[look]
         ks = [0, 12, 24, 36]

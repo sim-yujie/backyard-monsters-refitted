@@ -826,13 +826,13 @@ export const INFERNO_BUILDING_3D_ART: Readonly<Record<number, readonly TierArt[]
   // Flash's commented-out strips. Each look has its own rough damaged still; destroyed is the painted rubble
   // (`web/tools/inferno-paint/`), which keeps its look's whole shadow as Flash's falls back to it.
   26: [
-    { from: 1, top: ["top.3d1@2x.webp", -51, -57], shadow: ["shadow.3d1.jpg", -48, 12], lift: 0,
-      anim: { strip: ["anim.3d1@2x.webp", -33, -60, 71, 82, 44], columns: 28, body: ["body.3d1@2x.webp", -51, -48] },
-      damaged: { top: ["top.3d1.damaged@2x.webp", -51, -55], shadow: ["shadow.3d1.damaged.jpg", -48, 7] },
+    { from: 1, top: ["top.3d1@2x.webp", -51, -57], shadow: ["shadow.3d1.jpg", -48, 2], lift: 0,
+      anim: { strip: ["anim.3d1@2x.webp", -34, -60, 72, 67, 44], columns: 28, body: ["body.3d1@2x.webp", -51, -48] },
+      damaged: { top: ["top.3d1.damaged@2x.webp", -51, -54], shadow: ["shadow.3d1.damaged.jpg", -48, -4] },
       destroyed: { top: ["top.c1.destroyed@2x.webp", -52, -15], shadow: ["shadow.1.jpg", -50, -30] } },
-    { from: 2, top: ["top.3d2@2x.webp", -58, -93], shadow: ["shadow.3d2.jpg", -56, 8], lift: 0,
-      anim: { strip: ["anim.3d2@2x.webp", -35, -79, 87, 84, 47], columns: 23, body: ["body.3d2@2x.webp", -58, -93] },
-      damaged: { top: ["top.3d2.damaged@2x.webp", -58, -94], shadow: ["shadow.3d2.damaged.jpg", -56, 1] },
+    { from: 2, top: ["top.3d2@2x.webp", -58, -93], shadow: ["shadow.3d2.jpg", -56, -1], lift: 0,
+      anim: { strip: ["anim.3d2@2x.webp", -37, -79, 89, 86, 47], columns: 23, body: ["body.3d2@2x.webp", -58, -93] },
+      damaged: { top: ["top.3d2.damaged@2x.webp", -58, -93], shadow: ["shadow.3d2.damaged.jpg", -56, -7] },
       destroyed: { top: ["top.c2.destroyed@2x.webp", -59, -71], shadow: ["shadow.2.jpg", -61, -30] } },
   ],
   // 16 Incubator Control Centre: 3D look C, on a small magma pool. Each cell is the whole building: 32 cells of its

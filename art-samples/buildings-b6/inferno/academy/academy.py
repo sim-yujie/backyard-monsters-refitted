@@ -52,15 +52,15 @@ DMG = kit.STATE == "damaged"
 P = {
     1: dict(rot=6.0, at=(0.0, 0.0), a=2.78, rise=2.4, zs=5.7, front=1.3, depth=1.8,
             hub=[(0.88, 3.97, 0.8, 1.0)],                      # (y, z, radius, drill size)
-            pillars=[(-2.08, 6.8, 0.5, -1.65), (-1.42, 8.01, 0.8, -1.65), (1.4, 8.73, 1.0, -1.65), (3.32, 7.28, 0.8, -1.65)],   # (y, top z, width, x behind the shell)
-            cogs=[(0.95, 7.79, 1.0, 10)],                      # (y, z, radius, teeth)
+            pillars=[(-0.73, 5.75, 0.4, -2.8), (0.12, 6.96, 0.7, -2.8), (2.82, 7.68, 1.0, -2.8), (4.74, 6.23, 0.8, -2.8)],   # (y, top z, width, x behind the shell)
+            cogs=[(2.04, 6.99, 1.0, 10)],                      # (y, z, radius, teeth)
             rock=dict(r0=3.2, h_front=2.5, h_side=4.4, h_right=2.7, top=3.0),
             lobes=[(-111, 5.6), (-74, 5.2), (-33, 5.0), (21, 5.6), (75, 5.0), (130, 5.0), (190, 5.0)],
             spikes=[(-1.8, -4.2, 1.0, 3.6), (4.2, 1.6, 1.0, 3.25)], back_zs=3.3, dome=1.0),
     2: dict(rot=6.0, at=(0.0, 0.0), a=3.18, rise=3.3, zs=5.8, front=1.4, depth=1.9,
             hub=[(2.07, 4.09, 1.1, 1.25), (-0.43, 4.7, 0.9, 0.95)],
-            pillars=[(-1.6, 10.93, 1.7, -1.65), (1.43, 11.03, 0.8, -1.65), (3.8, 9.52, 0.8, -1.65)],
-            cogs=[(0.71, 9.47, 0.95, 10), (2.83, 8.14, 0.55, 7)],
+            pillars=[(-0.18, 9.88, 1.7, -2.8), (2.85, 9.98, 0.8, -2.8), (5.22, 8.47, 0.8, -2.8)],
+            cogs=[(1.80, 8.67, 0.95, 10), (3.92, 7.34, 0.55, 7)],
             rock=dict(r0=3.4, h_front=3.3, h_side=7.2, h_right=5.0, top=3.7),
             lobes=[(-111, 6.3), (-75, 6.4), (-29, 6.1), (27, 6.2), (80, 5.4), (135, 5.4), (190, 5.4)],
             spikes=[(-1.65, -5.25, 1.2, 5.6), (-1.2, -5.0, 1.0, 4.6), (4.5, 2.0, 0.4, 3.8)], back_zs=4.6, dome=1.4),
@@ -230,9 +230,11 @@ def shell():
     arch_band("band", A + RB * 0.7 + 0.07, RISE + RB * 0.3 + 0.07, ZS, 0.6, 0.0, 0.3, b - 0.42, b, M["pale"], bevel=0.04)
     # the gold back plate, lower
     bz = P["back_zs"]
-    arch_band("collar", A + RB * 0.7 + 0.45, RISE * 0.7, bz + 0.5, 0.6, 0.0, 0.2, b - 1.7, b - 0.35, M["goldd"], bevel=0.06)
+    for sgn in (-1, 1):          # a gold plate each side of the works (two plates, so nothing crosses over the crown)
+        kit.box(f"collar{sgn}", (1.35, 0.2, bz + 1.2), (b - 1.025, sgn * (A + RB * 0.7 + 0.35), 0.6), M["goldd"],
+                bevel=0.08, parent=BODY)
     # the dark core between the shell and the back plate, so nothing shows through under the track
-    arch_solid("core", A + RB * 0.7 - 0.3, RISE + RB * 0.3 - 0.3, ZS, 0.6, b - 1.6, b - 0.3, M["dark"], bevel=0.02)
+    arch_solid("core", A + RB * 0.7 - 0.3, RISE + RB * 0.3 - 0.3, ZS, 0.6, b - 1.25, b - 0.3, M["dark"], bevel=0.02)
 
 
 def track_path():
@@ -261,9 +263,9 @@ TILT = 4.0            # the drills point up a little, as Flash's
 
 def track():
     b = FRONT - DEPTH
-    x = b - 0.75
+    x = b - 1.0               # the teeth, b-1.25..b-0.75; the cogs stand behind them, the pillars behind the cogs
     # the belt the teeth sit on
-    arch_band("belt", A + RB * 0.7 + 0.06, RISE + RB * 0.3 + 0.06, ZS, 0.6, 0.0, 0.35, x - 0.3, x + 0.3, M["pale"], bevel=0.03)
+    arch_band("belt", A + RB * 0.7 + 0.06, RISE + RB * 0.3 + 0.06, ZS, 0.6, 0.0, 0.35, x - 0.25, x + 0.25, M["pale"], bevel=0.03)
     path, step = track_path()
     n = int(len(path) * step / PITCH)
     e = bpy.data.objects.new("track", None)
@@ -294,7 +296,7 @@ def pillars():
         kit.link(e, BODY)
         e.location = (b + dx + 0.5, y, 0)
         kit.MOVING.append(e)
-        z0 = ZS - 1.5 if abs(y) < A else 0.8
+        z0 = ZS - 1.5 if abs(y) < A - 0.6 else 0.8
         kit.box(f"pillar{i}-post", (0.55, w, top - 0.3 - z0), (0, 0, z0), M["pillar"], bevel=0.05, parent=e)
         kit.box(f"pillar{i}-cap", (0.75, w + 0.22, 0.34), (0, 0, top - 0.34), M["cap"], bevel=0.07, parent=e)
         kit.box(f"pillar{i}-neck", (0.62, w + 0.08, 0.1), (0, 0, top - 0.52), M["cap"], bevel=0.03, parent=e)
@@ -307,7 +309,7 @@ def cogs():
     for i, (y, z, r, teeth) in enumerate(P["cogs"]):
         e = bpy.data.objects.new(f"cog{i}", None)
         kit.link(e, BODY)
-        e.location = (b - 0.72 + 0.2 * i, y, z)
+        e.location = (b - 1.6, y, z)
         e.rotation_euler = (0, math.pi / 2, 0)
         kit.MOVING.append(e)
         sp = bpy.data.objects.new(f"cog{i}-spin", None)
@@ -339,7 +341,7 @@ def hub():
         e.rotation_euler = (0, math.pi / 2 - math.radians(TILT), 0)
         kit.MOVING.append(e)
         if L == 2:
-            kit.gear(f"drill{i}-cog", r * 0.62, 10, 0.16, (0, 0, 0.42), M["tooth"], (0, 0, 0), tooth=0.3, parent=e)
+            kit.gear(f"drill{i}-cog", r * 0.62, 10, 0.16, (0, 0, 1.0), M["tooth"], (0, 0, 0), tooth=0.3, parent=e)
         kit.lathe(f"drill{i}-shaft", [(0.0, -0.9), (0.26 * s, -0.9), (0.26 * s, 1.15 * s), (0.2 * s, 1.2 * s),
                                       (0.2 * s, 1.6 * s), (0.11 * s, 1.68 * s), (0.02, 2.8 * s), (0.0, 2.82 * s)],
                   (0, 0, 0), M["drill"], verts=20, parent=e, bevel=0.02)
@@ -358,9 +360,9 @@ def extras():
     b = FRONT - DEPTH
     if L == 2:
         px = b - 1.15
-        needle("needle", (px + 0.3, 0.02, ZS + 1.5), (px + 0.3, 0.02, 14.0), 0.21)
-        needle("sidespike", (px - 0.2, -2.4, 8.24), (px - 2.8, -1.9, 8.4), 0.24)
-        kit.cyl("sidespike-collar", 0.34, 0.5, (px - 0.3, -2.4, 8.24), M["pillar"], rot=(0, -88, 0), bevel=0.04)
+        needle("needle", (b - 2.9, 2.55, ZS), (b - 2.9, 2.55, 12.13), 0.21)             # behind the pillars
+        needle("sidespike", (b - 2.5, -1.3, 7.19), (b - 5.1, -0.48, 7.35), 0.24)
+        kit.cyl("sidespike-collar", 0.34, 0.5, (b - 2.6, -1.3, 7.19), M["pillar"], rot=(0, -88, 0), bevel=0.04)
 
 
 def lobe(th):
@@ -515,8 +517,18 @@ def turn(k):
         e.location.z = 0.2 * (math.cos(2 * math.pi * (2 * k / N + i * 0.27)) - math.cos(2 * math.pi * i * 0.27))
     for i, (e, f) in enumerate(PART["drills"]):
         p = pulse(k, 7, 19) if i == 0 else pulse(k, 20, 32)
-        e.location.x = f - 0.75 * p * math.cos(math.radians(TILT))
-        e.location.z = P['hub'][i][1] - 0.75 * p * math.sin(math.radians(TILT))
+        e.location.x = f - 0.6 * p * math.cos(math.radians(TILT))
+        e.location.z = P['hub'][i][1] - 0.6 * p * math.sin(math.radians(TILT))
 
 
-kit.run(build, turn)
+def family(o):
+    """A part's family for the check mode: the moving part it hangs under, else "base"."""
+    p = o
+    while p is not None:
+        if p in kit.MOVING:
+            return p.name
+        p = p.parent
+    return "base"
+
+
+kit.run(build, turn, family=family)
