@@ -10,7 +10,8 @@ import {
   towerStats,
 } from "@/game/combat/rules";
 import { outpostRange } from "@/game/maproom/rules/range";
-import { BUILDING_COST_ROWS, INFERNO_BUILDABLE_TYPES, INFERNO_COST_ROWS } from "@/game/yard/buildingCostData";
+import { buildableTypesFor } from "@/game/yard/buildCatalogue";
+import { BUILDING_COST_ROWS, INFERNO_COST_ROWS } from "@/game/yard/buildingCostData";
 import { maxLevel, quantityOf, rowOf, type YardKind } from "@/game/yard/buildingCosts";
 import { typeName } from "@/game/yard/planner/summary";
 import type { YardBuilding } from "@/game/yard/yardModel";
@@ -338,14 +339,22 @@ const COUNTED_KINDS: ReadonlySet<string> = new Set([
  * whose cap rises, by how many ("Cannon Tower +1"), or marked new when the
  * type was not allowed at all before ("Flinger new"). On the Inferno yard (`yard`), what raising the
  * Under Hall lets it build, from the Inferno table, by the Inferno's names
- * (WP 1.19); only what its build menu offers, as its other rows are blocked.
+ * (WP 1.19).
+ *
+ * Only what the yard's build menu offers is listed, as Flash's own Town Hall
+ * text skipped every `block`ed type (`client/scripts/BUILDING14.as:91-94`).
+ * The one that matters is the Stone Block (18): a legacy row nobody builds,
+ * as a placed Block is upgraded to stone (`BASE.as:1538-1541` turns an old
+ * one into a level 2 Block), so its `quantity` ladder caps nothing and a
+ * "Stone Block +20" tile read as a stone limit that does not exist.
  */
 export const townHallUnlocks = (level: number, yard: YardKind = "main"): UnlockItem[] => {
   const items: UnlockItem[] = [];
   const inferno = yard === "inferno";
+  const buildable = buildableTypesFor(yard);
   for (const [type, name, kind] of inferno ? INFERNO_COST_ROWS : BUILDING_COST_ROWS) {
     if (!COUNTED_KINDS.has(kind) || type === TOWN_HALL_TYPE) continue;
-    if (inferno && !INFERNO_BUILDABLE_TYPES.includes(type)) continue;
+    if (!buildable.has(type)) continue;
     const before = quantityOf(type, level, yard);
     const after = quantityOf(type, level + 1, yard);
     if (after <= before) continue;

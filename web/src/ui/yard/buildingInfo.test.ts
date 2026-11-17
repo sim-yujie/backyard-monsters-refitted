@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { BaseLoadResponse, BuildingData } from "@/api/types";
+import { buildableTypesFor } from "@/game/yard/buildCatalogue";
 import { readYard, type YardBuilding } from "@/game/yard/yardModel";
 import {
   bombResources,
@@ -189,6 +190,26 @@ describe("Town Hall", () => {
     expect(townHallUnlocks(1).map(unlockText)).toContain("Storage Silo +1");
     // The Town Hall itself is not something a Town Hall unlocks.
     expect(townHallUnlocks(1).some((item) => item.name.startsWith("Town Hall"))).toBe(false);
+  });
+
+  it("lists no Stone Block: a Block is upgraded to stone, with no stone cap", () => {
+    // Town Hall 5 (from 4): Blocks rise 120 -> 200, and the legacy Stone Block
+    // row's own ladder (40 -> 60) is not a limit anything enforces.
+    const unlocks = townHallUnlocks(4);
+    expect(unlocks.map(unlockText)).toContain("Block +80");
+    expect(unlocks.some((item) => item.type === 18)).toBe(false);
+    for (let level = 0; level < 10; level += 1) {
+      expect(townHallUnlocks(level).some((item) => item.type === 18)).toBe(false);
+    }
+  });
+
+  it("lists only what the build menu offers", () => {
+    for (const yard of ["main", "inferno"] as const) {
+      const buildable = buildableTypesFor(yard);
+      for (let level = 0; level < 10; level += 1) {
+        for (const item of townHallUnlocks(level, yard)) expect(buildable.has(item.type)).toBe(true);
+      }
+    }
   });
 
   it("the panel titles the list with the next level", () => {
