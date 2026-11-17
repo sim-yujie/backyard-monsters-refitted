@@ -225,6 +225,9 @@ def apply(flash_png, workdir, w=0.7, emit=0.5, grit=0.1, per=None, moving=(), sk
         if whole.sum() < 3:
             print("PROJ no Flash pixels for", name)
             continue
+        only = per.get(name, {}).get("only")      # a test on Flash's colours: keep only this material's own
+        if only is not None and (whole & only(fl[..., :3].astype(np.float32))).sum() >= 6:
+            whole &= only(fl[..., :3].astype(np.float32))
         tr = per.get(name, {}).get("trim", trim)
         if tr and whole.sum() > 40:          # drop the pixels least like the rest (a neighbour's colours)
             px_ = fl[..., :3][whole].astype(np.float32)

@@ -194,8 +194,12 @@ def sheets():
     col([row(rows[:2], 24), row(rows[2:], 24)], 24).save(D / "sheet-working.png")
     dm = D / "damaged" / "render" / "L1-damaged-base.png"
     if dm.exists():
-        pair(flash(0, damaged=True), Image.open(dm).convert("RGBA"), (-75, -95, 122, 90), 4,
-             ("Flash, damaged (4x)", "3D, damaged (4x), one rough pass")).save(D / "sheet-damaged.png")
+        d3 = Image.open(dm).convert("RGBA")
+        dbox = (-75, -95, 117, 90)
+        big = pair(flash(0, damaged=True), d3, dbox, 4, ("Flash, damaged (4x)", "3D, damaged (4x), one rough pass"))
+        game = pair(flash(0, damaged=True), small(d3), dbox, 2,
+                    ("Flash at the game's size (2x)", "3D at the game's size (2x)"))
+        col([big, game]).save(D / "sheet-damaged.png")
     print("wrote sheet-idle.png, sheet-working.png, sheet-damaged.png")
 
 
@@ -206,7 +210,7 @@ CROPS = {                               # name: (Flash-px box, frames)
     "machine": ((14, -2, 62, 56), (0, 3)),
     "posts": ((-44, -12, 26, 62), (0,)),
     "rod": ((12, -62, 58, 2), (0,)),
-    "slab": ((-72, 36, 68, 92), (0,)),
+    "fringe": ((-72, 36, 68, 92), (0,)),
 }
 
 

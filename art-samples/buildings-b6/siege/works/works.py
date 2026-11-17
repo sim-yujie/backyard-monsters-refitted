@@ -45,6 +45,17 @@ kit.FRAMES = N + int(os.environ.get("PB_EXTRA", 0))     # PB_EXTRA=1 also render
 kit.SUN_COL = (1.0, 0.95, 0.86)
 DAMAGED = kit.STATE == "damaged"
 rnd = random.Random(134)
+# Flash's grass fringe: its reach from Flash px FRINGE_C every 15 degrees (clockwise on screen from screen-right, up
+# and down counted double), its greens (dark leaf, leaf, pale leaf, crease), where it starts to fade and how solid
+FRINGE_C = (-3, 52)
+FRINGE = [66, 62, 60, 54, 55, 56, 60, 60, 58, 62, 68, 63, 52, 50, 50, 50, 50, 50, 50, 50, 50, 50, 54, 62]
+FRINGE_LOBES = 13
+GRASS = [(64, 92, 48), (88, 120, 64), (116, 146, 92), (22, 32, 14)]
+FADE0, FADE_A = 0.78, 0.92
+if os.environ.get("PB_STATE") == "damaged":            # Flash's damaged grass is dark and rough
+    GRASS = [(26, 44, 14), (44, 72, 24), (66, 98, 38), (12, 18, 6)]
+    FADE0, FADE_A = 0.7, 0.97
+MOUND = 0.42
 
 HX, HY = 3.5, 3.2                    # the body's half sizes on the ground
 HXL = 3.1                            # ... its left end (Flash's front wall is a little narrower than its gable)
@@ -208,25 +219,23 @@ def flames(name, z0, z1, strength=1.05, scale=3.0, amp=0.55):
 
 
 def turf():
-    """The mound's dark cracked turf; it fades out toward its rim (the vertex colour `fade`), into the lawn."""
+    """Flash's soft grass fringe: pale green leaves with dark creases between them, fading out into the lawn. The
+    vertex colour `fade` carries (how far out, how near a crease, the leaf's own shade)."""
     t = kit.NT("turf")
     v = t.coords()
-    n = t.noise(v, 1.3, 5.0, 0.65, 0.6)
-    col = t.ramp(n, [(0.3, kit.srgb(48, 70, 40)), (0.5, kit.srgb(72, 100, 58)), (0.72, kit.srgb(102, 130, 82))])
-    vo = t.n("ShaderNodeTexVoronoi", feature="DISTANCE_TO_EDGE")
-    vo.inputs["Scale"].default_value = 0.42
-    wv = t.noise(v, 2.5, 3.0, 0.6)
-    wm = t.mix(v, wv, 0.12)
-    t.link(wm, vo.inputs["Vector"])
-    crack = t.ramp(vo.outputs["Distance"], [(0.0, (0.16, 0.18, 0.14, 1)), (0.05, (0.5, 0.52, 0.46, 1)), (0.11, (1, 1, 1, 1))])
-    col = t.mix(col, crack, 1.0, "MULTIPLY")
-    grain = t.ramp(t.noise(v, 22.0, 2.0, 0.5), [(0.3, (0.72, 0.72, 0.72, 1)), (0.6, (1, 1, 1, 1))])
-    col = t.mix(col, grain, 1.0, "MULTIPLY")
     at = t.n("ShaderNodeAttribute", attribute_name="fade")
-    al = t.ramp(at.outputs["Fac"], [(0.84, (1, 1, 1, 1)), (1.0, (0, 0, 0, 1))])
-    t.set(**{"Base Color": col, "rough": 0.95, "spec": 0.05})
+    sep = t.n("ShaderNodeSeparateColor")
+    t.link(at.outputs["Color"], sep.inputs[0])
+    far, crease, shade = sep.outputs[0], sep.outputs[1], sep.outputs[2]
+    n = t.noise(v, 1.6, 2.0, 0.5, 0.2)
+    leaf = t.ramp(n, [(0.3, kit.srgb(*GRASS[0])), (0.5, kit.srgb(*GRASS[1])), (0.75, kit.srgb(*GRASS[2]))])
+    sh = t.ramp(shade, [(0.0, (0.62, 0.62, 0.62, 1)), (1.0, (1.12, 1.12, 1.12, 1))])
+    leaf = t.mix(leaf, sh, 1.0, "MULTIPLY")
+    cr = t.ramp(crease, [(0.62, (0, 0, 0, 1)), (0.95, (0.8, 0.8, 0.8, 1))])
+    col = t.mix(leaf, kit.srgb(*GRASS[3]), cr)
+    al = t.ramp(far, [(FADE0, (FADE_A,) * 3 + (1,)), (1.0, (0, 0, 0, 1))])
+    t.set(**{"Base Color": col, "rough": 0.95, "spec": 0.03})
     t.link(al, t.bsdf.inputs["Alpha"])
-    t.bump(vo.outputs["Distance"], 0.9, 0.05)
     return t.m
 
 
@@ -363,33 +372,46 @@ def body():
 
 
 def slab():
-    """The low mound of cracked dark turf the Works stands on: Flash's ragged outline, highest by the body, fading
-    into the lawn at its rim."""
-    out = [(-72, 55), (-64, 45), (-52, 38), (-30, 29), (0, 20), (30, 26), (50, 36), (64, 46), (62, 57), (50, 67),
-           (32, 75), (8, 82), (-18, 81), (-42, 76), (-60, 68), (-71, 62)]
-    c = kit.px(-2, 54, Z=0.0)
+    """Flash's grass fringe under the Works: a low mound highest by the body, its rim cut into soft leaves that
+    fade into the lawn. The rim follows Flash's fringe (measured every 15 degrees round Flash px (-3, 52), the
+    far side hidden behind the body) and is never wider."""
+    reach = FRINGE
+    cx_, cy_ = FRINGE_C
+    c = kit.px(cx_, cy_, Z=0.0)
+    LOBES, PER_ = FRINGE_LOBES, 9
+    edges = [0.0]
+    for i in range(LOBES):
+        edges.append(edges[-1] + rnd.uniform(0.6, 1.4))
+    edges = [e / edges[-1] * 360.0 for e in edges]
     ring = []
-    for i, (x, y) in enumerate(out):
-        p, q = kit.px(x, y, Z=0.0), kit.px(*out[(i + 1) % len(out)], Z=0.0)
-        for f in (0.0, 0.25, 0.5, 0.75):
-            v = p + (q - p) * f
-            ring.append(c + (v - c) * rnd.uniform(0.9, 1.08))
+    for i in range(LOBES):
+        lshade = rnd.uniform(0.0, 1.0)
+        llen = rnd.uniform(0.72, 1.0)
+        for j in range(PER_):
+            u = j / PER_
+            d = edges[i] + (edges[i + 1] - edges[i]) * u
+            k = d / 15.0
+            r0, r1 = reach[int(k) % 24], reach[(int(k) + 1) % 24]
+            r = (r0 + (r1 - r0) * (k - int(k))) * llen * (0.72 + 0.28 * (1 - abs(2 * u - 1)) ** 0.5)
+            a = math.radians(d)
+            p = kit.px(cx_ + r * math.cos(a), cy_ + 0.5 * r * math.sin(a), Z=0.0)
+            ring.append((p, abs(2 * u - 1), 0.65 * lshade + (0.35 if u < 0.5 else 0.0)))
     bm = bmesh.new()
     lay = bm.loops.layers.color.new("fade")
     R = 14
     rows = []
-    fade = {}
+    att = {}
     for r in range(1, R + 1):
         t = r / R
         row = []
-        for p in ring:
-            z = 0.42 * (1 - t ** 3.0) + (rnd.uniform(-0.03, 0.03) if r < R else 0.0)
+        for p, cr, shd in ring:
+            z = MOUND * (1 - t ** 2.2) + (rnd.uniform(-0.02, 0.02) if r < R else 0.0)
             v = bm.verts.new(c + (p - c) * t + Vector((0, 0, max(0.012, z))))
-            fade[v] = t
+            att[v] = (t, cr if t > 0.3 else 0.0, shd)
             row.append(v)
         rows.append(row)
-    cv = bm.verts.new(c + Vector((0, 0, 0.42)))
-    fade[cv] = 0.0
+    cv = bm.verts.new(c + Vector((0, 0, MOUND)))
+    att[cv] = (0.0, 0.0, 0.5)
     m = len(ring)
     for i in range(m):
         bm.faces.new((cv, rows[0][i], rows[0][(i + 1) % m]))
@@ -399,7 +421,7 @@ def slab():
             bm.faces.new((a[i], b[i], b[j], a[j]))
     for f in bm.faces:
         for lp in f.loops:
-            lp[lay] = (fade[lp.vert],) * 3 + (1.0,)
+            lp[lay] = att[lp.vert] + (1.0,)
     bmesh.ops.recalc_face_normals(bm, faces=bm.faces)
     kit.mesh_ob("slab", bm, [M["turf"]], smooth=True)
 
@@ -517,33 +539,48 @@ def bellows():
     e1 = Vector((-1, -1, 0)).normalized()
     e2 = Vector((1, -1, 0)).normalized()
     root.matrix_world = Matrix(((e1.x, e2.x, 0, o.x), (e1.y, e2.y, 0, o.y), (0, 0, 1, 0), (0, 0, 0, 1)))
-    x0, x1, dp, zt, zb = -2.0, 1.5, 2.9, 2.25, 0.85
+    x0, x1, dp, zt, zb = -2.0, 1.2, 2.1, 2.3, 0.85
+    zf = 1.85                                   # the top board slopes down toward the camera, as Flash's wedge
+
+    def wedge(name, pts, z_lo, lift, mat, bevel):
+        bm = bmesh.new()
+        lo = [bm.verts.new((x, y, z_lo if z_lo is not None else zf + (zt - zf) * min(1.0, max(0.0, -y / dp)))) for x, y in pts]
+        hi = [bm.verts.new((x, y, zf + (zt - zf) * min(1.0, max(0.0, -y / dp)) + lift)) for x, y in pts]
+        n = len(pts)
+        bm.faces.new(lo[::-1])
+        bm.faces.new(hi)
+        for i in range(n):
+            j = (i + 1) % n
+            bm.faces.new((lo[i], lo[j], hi[j], hi[i]))
+        bmesh.ops.recalc_face_normals(bm, faces=bm.faces)
+        return kit.mesh_ob(name, bm, [mat], smooth=False, bevel=bevel, parent=root)
+
     top = [(x0, -0.25), (x1, 0.0), (x1, -dp), (x0 + 0.5, -0.75)]
-    poly("bel-body", [Vector((x, y, zb)) for x, y in top], (0, 0, 1), zt - zb, M["orange"], bevel=0.1, parent=root)
+    wedge("bel-body", top, zb, 0.0, M["orange"], 0.1)
     lid = [(x0 - 0.3, -0.15), (x1 + 0.15, 0.15), (x1 + 0.15, -dp - 0.12), (x0 + 0.35, -0.95)]
-    poly("bel-lid", [Vector((x, y, zt)) for x, y in lid], (0, 0, 1), 0.24, M["orange"], bevel=0.07, parent=root)
+    wedge("bel-lid", lid, None, 0.2, M["orange"], 0.06)
     foot = [(x0 + 0.1, 0.2), (x1 + 0.25, 0.25), (x1 + 0.25, -dp), (x0 + 0.6, -0.9)]
     poly("bel-foot", [Vector((x, y, 0.02)) for x, y in foot], (0, 0, 1), zb - 0.02, M["darkiron"], bevel=0.07, parent=root)
     rivets("bel-rivet", [(x, 0.25, ZS + 0.3) for i, x in enumerate((-1.2, -0.2, 0.8))], (0, 1, 0), r=0.1,
            parent=root)
     for i in range(4):                                             # pleats
         x = x0 + 0.7 + i * 0.7
-        kit.box(f"bel-pleat-{i}", (0.1, 0.1, zt - zb - 0.2), (x, 0.0 - 0.07 * (x1 - x) / 3.2, zb + 0.08), M["bellowsdark"],
+        kit.box(f"bel-pleat-{i}", (0.1, 0.1, zf - zb - 0.1), (x, 0.0 - 0.07 * (x1 - x) / 3.2, zb + 0.08), M["bellowsdark"],
                 bevel=0.03, parent=root)
     nz = bpy.data.objects.new("nozzle", None)
     kit.link(nz, root)
-    nz.location = (x1 - 0.2, -0.45, 1.15)
+    nz.location = (1.3, -0.45, 1.15)
     nz.rotation_euler = (0, math.radians(8), 0)
     kit.cyl("nozzle-pipe", 0.38, 1.35, (-0.3, 0, 0), M["orange"], rot=(0, 90, 0), verts=16, r2=0.27, parent=nz)
     kit.cyl("nozzle-lip", 0.36, 0.2, (0.95, 0, 0), M["orange"], rot=(0, 90, 0), verts=16, parent=nz)
     kit.cyl("nozzle-bore", 0.19, 0.02, (1.15, 0, 0), M["black"], rot=(0, 90, 0), verts=12, bevel=0.0, parent=nz)
     lv = bpy.data.objects.new("lever", None)
     kit.link(lv, root)
-    lv.location = (x0 + 0.75, 0.2, zt + 0.34)
+    lv.location = (x0 + 0.75, 0.15, zf + 0.42)
     bone("lever-bone", (-0.3, 0, 0), (3.0, 0.05, -0.1), 0.15, knob=1.6, foot=1.5, parent=lv, mat=M["pale"])
     for i, (px_, py_, pz_) in enumerate(((-0.3, 0.14, 0), (-0.3, -0.14, 0), (3.0, 0.19, -0.1), (3.0, -0.09, -0.1))):
         kit.blob(f"lever-knob-{i}", (px_, py_, pz_), 0.2, squash=0.9, mat=M["pale"], parent=lv)
-    kit.cyl("lever-pin", 0.1, 0.6, (x0 + 0.75, -0.3, zt + 0.3), M["pale"], rot=(-90, 0, 0), verts=10, parent=root)
+    kit.cyl("lever-pin", 0.1, 0.6, (x0 + 0.75, -0.3, zf + 0.4), M["pale"], rot=(-90, 0, 0), verts=10, parent=root)
     kit.MOVING.extend([nz, lv])
     PART["nozzle"], PART["lever"] = nz, lv
 
@@ -695,14 +732,11 @@ def damage():
     bpy.context.view_layer.update()
     inv = PART["rocker"].matrix_world.inverted()
     for i, c in enumerate(PART["chain"]):
-        if i >= 11:
-            c.hide_render = True
-            c.location.z = -50
-        else:                                   # what is left of the chain stays on the head
+        if i < 11:                              # the chain's top stays on the head; the rest still hangs in the frame
             c.parent = PART["rocker"]
             c.matrix_parent_inverse = inv
-    PART["rocker"].rotation_euler = (math.radians(24), math.radians(13), math.radians(-16))
-    PART["rocker"].location = PIV + Vector((0.1, -0.3, -0.3))
+    PART["rocker"].rotation_euler = tuple(math.radians(v) for v in DMG_ROCK[:3])
+    PART["rocker"].location = PIV + shift(*DMG_ROCK[3:])
     # the broken chain's lower half lies over the rail and the bellows
     for i in range(7):
         pts = []
@@ -712,36 +746,16 @@ def damage():
         t = kit.tube(f"deadchain-{i}", pts, 0.045, M["chain"], verts=6, cyclic=True)
         t.location = (PIV.x - 1.2 + 0.27 * i, -HY - 1.0 - 0.05 * i, 0.3)
         t.rotation_euler = (0, 0, math.radians(20 + 25 * (i % 3)))
-    # the middle post snapped: its top half lies on the slab
-    ob["postm"].scale = (1, 1, 0.5)
-    bone("postm-top", (-0.6, -HY - 2.6, ZS + 0.45), (1.3, -HY - 3.1, ZS + 0.5), 0.4, rings=(0.3, 0.75))
-    ob["postl"].rotation_euler.rotate_axis("X", math.radians(-9))
-    ob["postc"].rotation_euler.rotate_axis("Y", math.radians(8))
-    # holes in the hide: fire shows through, torn dark edges
-    for i, (sx, sy, r) in enumerate([(38, -30, 0.75), (44, -6, 0.6), (24, -30, 0.45)]):
-        p = G(sx, sy, 0.03)
-        pts, rim = [], []
-        for j in range(11):
-            a = 2 * math.pi * j / 11
-            k = r * rnd.uniform(0.6, 1.25)
-            d = Vector((0, math.cos(a), math.sin(a)))
-            pts.append(p + d * k)
-            rim.append(p + d * (k + 0.16) - NG * 0.01)
-        poly(f"hole-rim-{i}", rim, NG, 0.02, M["black"], bevel=0.0)
-        poly(f"hole-{i}", pts, NG, 0.03, M["black"], bevel=0.0)
-        poly(f"hole-ember-{i}", [p + (q - p) * 0.45 for q in pts], NG, 0.04, M["fire"], bevel=0.0)
-    for i, (sx, sy, r) in enumerate([(-16, -22, 1.0), (-28, -6, 0.6)]):          # dead black patches in the forge
-        p = U(sx, sy, 0.1)
-        pts = []
-        for j in range(11):
-            a = 2 * math.pi * j / 11
-            k = r * rnd.uniform(0.6, 1.25)
-            pts.append(p + Vector((math.cos(a), 0, 0)) * k + Vector((0, LEAN, 1)).normalized() * math.sin(a) * k * 1.5)
-        poly(f"dead-{i}", pts, NU, 0.03, M["black"], bevel=0.0)
-    # the frame's right leg knocked loose, the pointed top sagging
-    ob["frame-legr"].rotation_euler = (0, math.radians(5), 0)
-    ob["frame-legr"].location = (-0.45, -0.25, 0.1)
-    ob["frame-arch"].location = (0.1, -0.2, -0.45)
+    # the posts snapped short; the middle one's top half lies in the grass, the corner post's top beside its stump
+    ob["postm"].scale = (1, 1, 0.68)
+    ob["postc"].scale = (1, 1, 0.8)
+    ob["postl"].rotation_euler.rotate_axis("X", math.radians(-12))
+    bone("postm-top", kit.px(-45, 68, Z=0.35), kit.px(-31, 64, Z=0.4), 0.42, rings=(0.3, 0.75))
+    bone("postc-top", kit.px(8, 56, Z=0.2), kit.px(9, 54, Z=1.5), 0.4, rings=(0.5,))
+    # torn flaps of hide sticking out left and right
+    for i, (p0, p1, p2) in enumerate((((-31, -25), (-27, -17), (-43, -34)), ((45, -23), (46, -13), (55, -21)))):
+        f = (U if i == 0 else G)
+        poly(f"torn-{i}", [f(*p0, 0.05), f(*p1, 0.05), f(*p2, 0.05)], NU if i == 0 else NG, 0.08, M["hide"], bevel=0.0)
     # rubble: bits of iron, hide and bone at the foot
     for i in range(16):
         a = rnd.uniform(0, 2 * math.pi)
@@ -777,16 +791,36 @@ def damage():
         b = next(n for n in bpy.data.materials[name].node_tree.nodes if n.type == "BSDF_PRINCIPLED")
         b.inputs["Emission Strength"].default_value *= 0.55
     kit.MOVING.clear()                  # a still picture: nothing is a moving layer
-    # the whole building slumps and leans to the left front, as Flash's damaged picture
+    # the whole building slumps and slides to the left front, as Flash's damaged picture; the machine stays
     lean = bpy.data.objects.new("lean", None)
     kit.link(lean)
-    keep = ("slab", "rubble", "deadchain", "postm-top", "lean")
+    stay = bpy.data.objects.new("stay", None)
+    kit.link(stay)
+    keep = ("slab", "rubble", "deadchain", "postm-top", "postc-top", "lean", "stay", "rocker")
     for o in list(kit.SC.objects):
         if o.parent is None and not o.name.startswith(keep):
-            o.parent = lean
-    lean.rotation_euler = (math.radians(4.5), math.radians(-3.5), 0)
-    lean.scale = (1.03, 1.03, 0.93)
-    lean.location = (0, 0, 0.1)
+            o.parent = stay if o.name.startswith(("mach", "cog")) else lean
+    for o in list(kit.SC.objects):          # the frame, its forge and the chain swing out at the foot
+        if o.parent is lean and o.name.startswith(("frame", "forge", "hood", "rivet", "chain")):
+            o.location = o.location + shift(*DMG_FRAME)
+    lean.rotation_euler = tuple(math.radians(v) for v in DMG_LEAN[:3])
+    lean.scale = DMG_LEAN[3:6]
+    lean.location = kit.px(DMG_LEAN[6], DMG_LEAN[7], Z=0.0) - kit.px(0, 0, Z=0.0)
+    stay.location = kit.px(-8, 4, Z=0.0) - kit.px(0, 0, Z=0.0)
+
+
+def shift(dx, dy):
+    """A move that shows as (dx, dy) Flash px on screen, across the camera's view."""
+    right = Vector((1, 1, 0)).normalized()
+    down = Vector((kit.SY, -kit.SY, -kit.SZ)) / 10.0
+    return right * (dx / 10.0) + down * (dy / 10.0)
+
+
+# the damaged pose, read off Flash's damaged picture: the rocker (turn x, y, z; move in Flash px), the body's
+# lean (turn x, y, z; scale x, y, z; slide on the ground in Flash px)
+DMG_ROCK = (48, 8, -10, -10, -6)
+DMG_LEAN = (2.0, -2.0, 0, 1.0, 1.0, 1.0, -9, 1)
+DMG_FRAME = (-6, 7)                     # the frame's foot swings out: this much further, in Flash px
 
 
 def family(o):
@@ -804,10 +838,14 @@ PROJ = float(os.environ.get("PB_PROJ", 0.75))         # how much of Flash's own 
 _F = dict(w=1.0, emit=0.95, grit=0.03)               # the fires are Flash's painted flames, unlit
 PER = dict(forge=_F, fire=_F, patch=_F, window=_F, rod=_F, bone=dict(emit=0.35), turf=dict(w=0.5, emit=0.15),
            hide=dict(w=0.85, emit=0.4), orange=dict(w=1.0, emit=0.92))
-PER["turf"]["trim"] = 40
+PER["orange"]["only"] = lambda c: (c[..., 2] < 0.5 * c[..., 0]) & (c[..., 0] > 60)
+# parts hidden behind the rocker at rest must not take its pale strips' or the bearings' colours when it swings away
+PER["red"] = dict(only=lambda c: (c[..., 0] > 1.25 * c[..., 1]) & (c[..., 2] < 0.9 * c[..., 0]))
+PER["panel"] = dict(only=lambda c: (c.max(-1) < 140) & (c[..., 0] - c[..., 2] < 40))
+PER["orange"]["trim"] = 0            # the bellows must not pick up the bone lever's and posts' cream
 # the damaged heap does not line up with Flash's damaged picture, so only its fires take Flash's colours
 SKIP = ("hide", "iron", "darkiron", "panel", "rivet", "bone", "red", "darkred", "mach", "cogm", "orange",
-        "bellowsdark", "gold", "pale", "chain", "black", "plank-Z") if DAMAGED else ()
+        "bellowsdark", "gold", "pale", "chain", "black", "plank-Z", "turf") if DAMAGED and os.environ.get("PB_DSKIP") else ("turf", "darkiron") if DAMAGED else ("turf",)
 
 
 def build_all():
