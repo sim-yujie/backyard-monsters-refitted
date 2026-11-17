@@ -47,6 +47,7 @@ DAMAGED = kit.STATE == "damaged"
 rnd = random.Random(134)
 
 HX, HY = 3.5, 3.2                    # the body's half sizes on the ground
+HXL = 3.1                            # ... its left end (Flash's front wall is a little narrower than its gable)
 ZS = 0.3                             # the slab's top
 ZRAIL = 4.5                          # the front wall is upright to here, then leans back
 LEAN = 0.53                          # ... by this much per unit of height
@@ -60,9 +61,9 @@ FWD = kit.cam_fwd()
 M = {}
 PART = {}
 
-# the body's cross-section (Y, Z), the same all along X: upright front, leaning front, round top, bulging back
-SEC = [(-HY, 0.0), (-HY, ZRAIL), (-0.9, 8.85), (-0.55, 9.35), (0.0, 9.65), (0.6, 9.85), (1.4, 9.8), (1.9, 9.2),
-       (2.35, 8.3), (2.8, 7.2), (3.1, 6.0), (3.2, 4.2), (3.1, 1.5), (3.2, 0.0)]
+# the back wall's edge as Flash draws it on the gable (Flash px): steep to the step, a ledge out, then upright
+BACK_PX = [(36, -47), (39, -40), (42, -30), (44, -23), (51, -21.5), (50, 0), (52, 12), (51, 30)]
+RIDGE = 10.17                        # the roof's ridge: the axle lies on it
 
 
 def on(sx, sy, p0, n):
@@ -148,31 +149,71 @@ def rivets(name, pts, n, r=0.09, mat=None, parent=None):
 
 # ----------------------------------------------------------------------------------------------------------- materials
 def glow(name, lo, hi, strength, streak=1.0, dark=(70, 16, 4), scale=2.0, up=None):
-    """A glowing wall of fire: upright streaks from `dark` through `lo` to `hi`; `up` = (z0, z1) fades it darker
-    toward z1 (Flash's forge is brightest low down)."""
+    """A plain glowing surface (the rod, the gable's window): soft streaks from `dark` through `lo` to `hi`."""
     t = kit.NT(name)
     v = t.coords(scale=(1.0, 0.05, 0.12 * streak))
     n = t.noise(v, scale, 4.0, 0.6, 0.6)
     c = t.ramp(n, [(0.3, kit.srgb(*dark)), (0.48, kit.srgb(*lo)), (0.72, kit.srgb(*hi))])
-    broad = t.noise(v, scale * 0.3, 2.0, 0.5, 0.3)
-    c = t.mix(c, t.ramp(broad, [(0.38, (0.42, 0.3, 0.25, 1)), (0.6, (1, 1, 1, 1))]), 1.0, "MULTIPLY")
-    if up:
-        geo = t.n("ShaderNodeNewGeometry")
-        sep = t.n("ShaderNodeSeparateXYZ")
-        t.link(geo.outputs["Position"], sep.inputs[0])
-        mr = t.n("ShaderNodeMapRange")
-        mr.inputs[1].default_value, mr.inputs[2].default_value = up
-        t.link(sep.outputs["Z"], mr.inputs[0])
-        c = t.mix(c, kit.srgb(255, 172, 30), t.ramp(mr.outputs[0], [(0.0, (0.7,) * 3 + (1,)), (0.4, (0, 0, 0, 1))]))
-        c = t.mix(c, kit.srgb(*dark), t.ramp(mr.outputs[0], [(0.3, (0, 0, 0, 1)), (1.0, (0.9,) * 3 + (1,))]))
     t.set(**{"Base Color": (0, 0, 0, 1), "rough": 0.9, "spec": 0.0})
     t.link(c, t.bsdf.inputs["Emission Color"])
     t.bsdf.inputs["Emission Strength"].default_value = strength
     return t.m
 
 
+def flames(name, z0, z1, strength=1.05, scale=3.0, amp=0.55):
+    """Painted fire, as Flash's forge: tongues of pale yellow at the foot (height z0) climbing through orange and red
+    to near black at z1; a noise that changes fast across and slowly upward shapes the tongues."""
+    t = kit.NT(name)
+    geo = t.n("ShaderNodeNewGeometry")
+    sep = t.n("ShaderNodeSeparateXYZ")
+    t.link(geo.outputs["Position"], sep.inputs[0])
+    mr = t.n("ShaderNodeMapRange")
+    mr.inputs[1].default_value, mr.inputs[2].default_value = z0, z1
+    t.link(sep.outputs["Z"], mr.inputs[0])
+    n = t.noise(t.coords(scale=(1.0, 0.05, 0.16)), scale, 3.0, 0.55, 0.5)
+    nr = t.n("ShaderNodeMapRange")
+    nr.inputs[3].default_value, nr.inputs[4].default_value = -amp, amp
+    nr.clamp = False
+    t.link(n, nr.inputs[0])
+    add = t.n("ShaderNodeMath", operation="ADD")
+    t.link(mr.outputs[0], add.inputs[0])
+    t.link(nr.outputs[0], add.inputs[1])
+    c = t.ramp(add.outputs[0], [(0.0, kit.srgb(255, 232, 110)), (0.16, kit.srgb(255, 176, 28)),
+                                (0.38, kit.srgb(236, 96, 8)), (0.6, kit.srgb(160, 42, 6)),
+                                (0.82, kit.srgb(56, 14, 6)), (1.0, kit.srgb(20, 7, 5))])
+    fine = t.noise(t.coords(scale=(1.0, 0.05, 0.05)), scale * 5, 2.0, 0.5)
+    c = t.mix(c, t.ramp(fine, [(0.35, (0.72, 0.6, 0.55, 1)), (0.6, (1, 1, 1, 1))]), 1.0, "MULTIPLY")
+    t.set(**{"Base Color": (0, 0, 0, 1), "rough": 0.9, "spec": 0.0})
+    t.link(c, t.bsdf.inputs["Emission Color"])
+    t.bsdf.inputs["Emission Strength"].default_value = strength
+    return t.m
+
+
+def turf():
+    """The mound's dark cracked turf; it fades out toward its rim (the vertex colour `fade`), into the lawn."""
+    t = kit.NT("turf")
+    v = t.coords()
+    n = t.noise(v, 1.3, 5.0, 0.65, 0.6)
+    col = t.ramp(n, [(0.3, kit.srgb(48, 70, 40)), (0.5, kit.srgb(72, 100, 58)), (0.72, kit.srgb(102, 130, 82))])
+    vo = t.n("ShaderNodeTexVoronoi", feature="DISTANCE_TO_EDGE")
+    vo.inputs["Scale"].default_value = 0.42
+    wv = t.noise(v, 2.5, 3.0, 0.6)
+    wm = t.mix(v, wv, 0.12)
+    t.link(wm, vo.inputs["Vector"])
+    crack = t.ramp(vo.outputs["Distance"], [(0.0, (0.16, 0.18, 0.14, 1)), (0.05, (0.5, 0.52, 0.46, 1)), (0.11, (1, 1, 1, 1))])
+    col = t.mix(col, crack, 1.0, "MULTIPLY")
+    grain = t.ramp(t.noise(v, 22.0, 2.0, 0.5), [(0.3, (0.72, 0.72, 0.72, 1)), (0.6, (1, 1, 1, 1))])
+    col = t.mix(col, grain, 1.0, "MULTIPLY")
+    at = t.n("ShaderNodeAttribute", attribute_name="fade")
+    al = t.ramp(at.outputs["Fac"], [(0.84, (1, 1, 1, 1)), (1.0, (0, 0, 0, 1))])
+    t.set(**{"Base Color": col, "rough": 0.95, "spec": 0.05})
+    t.link(al, t.bsdf.inputs["Alpha"])
+    t.bump(vo.outputs["Distance"], 0.9, 0.05)
+    return t.m
+
+
 def worn(name, col, rough=0.5, metal=0.3, scale=3.0, blotch=0.4, edge=0.5, hi=(255, 246, 232), dirt=0.3,
-         ao_min=0.4, scratch=0.15, spec=0.4, stain=None, stain_at=0.5, soot=0.4, bump=0.12, top=None):
+         ao_min=0.4, scratch=0.15, spec=0.4, stain=None, stain_at=0.5, soot=0.4, bump=0.12, top=None, vein=1.0):
     """A worn, dirty surface as Flash paints them: hard-edged darker patches, upright scratches, soot that runs down
     the part, stains of another colour (`stain`: rust, old blood, moss), pale worn edges (`edge`, colour `hi`), dark
     creases and a darker foot. `top`: faces turned up take this colour (lit moss, a lid)."""
@@ -185,7 +226,7 @@ def worn(name, col, rough=0.5, metal=0.3, scale=3.0, blotch=0.4, edge=0.5, hi=(2
         t.link(geo.outputs["Normal"], sep.inputs[0])
         col = t.mix(col, kit.srgb(*top), t.ramp(sep.outputs["Z"], [(0.45, (0, 0, 0, 1)), (0.85, (1, 1, 1, 1))]))
     if stain:
-        n0 = t.noise(v, scale * 0.7, 5.0, 0.65, 1.0)
+        n0 = t.noise(v, scale * 0.7, 5.0, 0.65, vein)
         col = t.mix(col, kit.srgb(*stain), t.ramp(n0, [(stain_at, (0, 0, 0, 1)), (stain_at + 0.12, (0.8,) * 3 + (1,))]))
     n1 = t.noise(v, scale * 0.5, 3.0, 0.5, 0.4)
     k = 1.0 - blotch
@@ -209,39 +250,40 @@ def worn(name, col, rough=0.5, metal=0.3, scale=3.0, blotch=0.4, edge=0.5, hi=(2
 
 def mats():
     P = kit.painted
-    M["hide"] = worn("hide", (27, 19, 15), rough=0.9, metal=0.0, scale=1.4, blotch=0.5, edge=0.2, hi=(84, 58, 42),
-                     scratch=0.35, spec=0.1, stain=(58, 36, 24), stain_at=0.56, soot=0.7, bump=0.3)
-    M["iron"] = worn("iron", (100, 90, 84), rough=0.5, metal=0.3, scale=4.0, blotch=0.4, edge=0.6,
-                     hi=(206, 198, 188), stain=(100, 62, 42), stain_at=0.56, soot=0.6, bump=0.25)
-    M["darkiron"] = worn("darkiron", (54, 47, 44), rough=0.5, metal=0.3, scale=4.0, blotch=0.4, edge=0.55,
-                         hi=(150, 140, 130), stain=(76, 46, 32), stain_at=0.56, soot=0.5, bump=0.25)
-    M["rivet"] = P("rivet", (222, 216, 204), rough=0.35, metal=0.3, dirt=0.0)
-    M["bone"] = worn("bone", (246, 226, 164), rough=0.6, metal=0.0, scale=2.2, blotch=0.22, edge=0.0, dirt=0.4,
-                     ao_min=0.3, scratch=0.14, spec=0.3, stain=(190, 140, 82), stain_at=0.52, soot=0.3, bump=0.1)
-    M["red"] = worn("red", (176, 80, 78), rough=0.45, metal=0.15, scale=3.5, blotch=0.45, edge=0.55,
-                    hi=(244, 176, 172), stain=(92, 40, 36), stain_at=0.52, soot=0.5, bump=0.2)
-    M["darkred"] = worn("darkred", (96, 46, 40), rough=0.55, metal=0.15, scale=3.5, blotch=0.45, edge=0.45,
-                        hi=(190, 110, 100), stain=(48, 26, 22), stain_at=0.52, soot=0.55, bump=0.2)
-    M["cog"] = worn("cogm", (74, 42, 34), rough=0.5, metal=0.3, scale=5.0, blotch=0.4, edge=0.6, hi=(170, 110, 86),
-                    stain=(36, 22, 18), soot=0.3, dirt=0.0)
-    M["orange"] = worn("orange", (232, 100, 10), rough=0.5, metal=0.0, scale=2.5, blotch=0.25, edge=0.45,
-                       hi=(255, 196, 96), dirt=0.2, ao_min=0.45, stain=(176, 62, 6), stain_at=0.55, soot=0.25,
-                       top=(255, 146, 30), bump=0.15)
-    M["bellowsdark"] = P("bellowsdark", (128, 44, 6), rough=0.7, dirt=0.0)
+    M["hide"] = worn("hide", (20, 14, 12), rough=0.92, metal=0.0, scale=1.4, blotch=0.5, edge=0.0, scratch=0.4,
+                     spec=0.08, stain=(46, 29, 20), stain_at=0.56, soot=0.6, bump=0.35)
+    M["iron"] = worn("iron", (84, 76, 70), rough=0.55, metal=0.3, scale=4.0, blotch=0.5, edge=0.5,
+                     hi=(192, 184, 174), stain=(106, 60, 34), stain_at=0.5, soot=0.7, bump=0.3)
+    M["darkiron"] = worn("darkiron", (44, 39, 37), rough=0.55, metal=0.3, scale=4.0, blotch=0.5, edge=0.45,
+                         hi=(132, 124, 116), stain=(70, 42, 28), stain_at=0.52, soot=0.6, bump=0.3)
+    M["panel"] = worn("panel", (26, 23, 22), rough=0.6, metal=0.3, scale=4.0, blotch=0.4, edge=0.3,
+                      hi=(104, 98, 92), stain=(52, 32, 22), soot=0.4, bump=0.3)
+    M["rivet"] = P("rivet", (214, 206, 190), rough=0.35, metal=0.3, dirt=0.0)
+    M["bone"] = worn("bone", (232, 200, 120), rough=0.65, metal=0.0, scale=1.6, blotch=0.3, edge=0.0, dirt=0.55,
+                     ao_min=0.2, scratch=0.2, spec=0.25, stain=(150, 100, 52), stain_at=0.5, soot=0.4, bump=0.15,
+                     vein=0.25)
+    M["red"] = worn("red", (150, 60, 56), rough=0.4, metal=0.45, scale=3.5, blotch=0.5, edge=0.6,
+                    hi=(238, 152, 146), stain=(56, 26, 24), stain_at=0.46, soot=0.6, bump=0.3)
+    M["darkred"] = worn("darkred", (66, 32, 28), rough=0.5, metal=0.35, scale=3.5, blotch=0.5, edge=0.4,
+                        hi=(150, 84, 74), stain=(34, 18, 16), stain_at=0.5, soot=0.6, bump=0.3)
+    M["mach"] = worn("mach", (38, 25, 23), rough=0.6, metal=0.3, scale=3.5, blotch=0.5, edge=0.3, hi=(98, 60, 54),
+                     stain=(22, 14, 13), soot=0.5, bump=0.3)
+    M["cog"] = worn("cogm", (54, 31, 25), rough=0.5, metal=0.35, scale=5.0, blotch=0.4, edge=0.5, hi=(140, 90, 70),
+                    stain=(28, 17, 14), soot=0.3, dirt=0.0)
+    M["orange"] = worn("orange", (226, 94, 8), rough=0.5, metal=0.0, scale=2.5, blotch=0.35, edge=0.5,
+                       hi=(255, 204, 104), dirt=0.25, ao_min=0.4, stain=(150, 52, 6), stain_at=0.52, soot=0.35,
+                       top=(255, 160, 38), bump=0.2)
+    M["bellowsdark"] = P("bellowsdark", (110, 36, 6), rough=0.7, dirt=0.0)
     M["gold"] = P("gold", (246, 176, 30), rough=0.3, metal=0.5, wear=(255, 226, 110), dirt=0.0)
-    M["pale"] = worn("pale", (232, 224, 204), rough=0.4, metal=0.15, scale=5.0, blotch=0.2, edge=0.0, dirt=0.0,
-                     ao_min=0.5, stain=(170, 150, 120), stain_at=0.58, soot=0.3)
-    M["chain"] = P("chain", (150, 140, 124), rough=0.4, metal=0.5, wear=(226, 220, 204), dirt=0.0)
-    M["moss"] = worn("moss", (44, 62, 38), rough=0.95, metal=0.0, scale=2.2, blotch=0.35, edge=0.18,
-                     hi=(126, 150, 104), dirt=0.0, ao_min=0.4, scratch=0.0, spec=0.05, stain=(96, 112, 70),
-                     stain_at=0.5, soot=0.4, top=(78, 108, 64), bump=0.9)
-    M["mossdark"] = P("mossdark", (30, 44, 28), rough=0.95, dirt=0.0, spec=0.0)
+    M["pale"] = worn("pale", (228, 216, 186), rough=0.45, metal=0.1, scale=5.0, blotch=0.25, edge=0.0, dirt=0.0,
+                     ao_min=0.4, stain=(160, 134, 96), stain_at=0.55, soot=0.35, vein=0.3)
+    M["chain"] = P("chain", (140, 130, 114), rough=0.4, metal=0.5, wear=(222, 216, 200), dirt=0.0)
+    M["turf"] = turf()
     M["black"] = P("black", (10, 8, 7), rough=0.9, dirt=0.0, spec=0.1)
-    M["forge"] = glow("forge", (200, 72, 4), (250, 120, 8), 1.0, streak=0.35, dark=(92, 26, 4), scale=2.4,
-                      up=(4.4, 9.2))
-    M["fire"] = glow("fire", (232, 92, 8), (255, 204, 48), 1.2, streak=0.3, dark=(40, 10, 5), scale=3.4,
-                     up=(0.2, 3.9))
-    M["rod"] = glow("rod", (232, 100, 10), (255, 134, 16), 1.1, dark=(190, 70, 8), scale=1.0)
+    M["forge"] = flames("forge", 4.3, 10.4, strength=1.0, scale=2.6, amp=0.5)
+    M["fire"] = flames("fire", 0.0, 5.6, strength=1.1, scale=3.6, amp=0.6)
+    M["patch"] = flames("patch", 2.0, 4.6, strength=0.9, scale=5.0, amp=0.4)
+    M["rod"] = glow("rod", (226, 96, 10), (255, 132, 16), 1.05, dark=(176, 62, 8), scale=1.0)
     M["window"] = glow("window", (252, 138, 14), (255, 166, 24), 1.15, streak=4.0, dark=(226, 104, 10), scale=1.0)
 
 
@@ -250,13 +292,19 @@ def gable_x(z):
     return HX - GLEAN * z
 
 
+def section():
+    """The body's cross-section (Y, Z), the same all along X: upright front, leaning front up to the ridge, then
+    the back as Flash's outline on the gable: steep, a ledge stepping out, upright to the ground."""
+    back = [G(x, y) for x, y in BACK_PX]
+    return ([(-HY, 0.0), (-HY, ZRAIL), (-0.34, RIDGE - 0.42), (-0.3, RIDGE), (0.15, RIDGE), (0.75, RIDGE - 0.35)]
+            + [(p.y, p.z) for p in back] + [(back[-1].y + 0.05, 0.0)])
+
+
 def body():
+    sec = section()
     bm = bmesh.new()
-    sec = chaikin(  # round only the top; keep the wall kinks
-        [(y, z, 0) for y, z in SEC[2:11]], 2)
-    sec = [Vector((y, z, 0)) for y, z in SEC[:2]] + sec + [Vector((y, z, 0)) for y, z in SEC[11:]]
-    a = [bm.verts.new((-HX, p.x, p.y)) for p in sec]
-    b = [bm.verts.new((gable_x(p.y), p.x, p.y)) for p in sec]
+    a = [bm.verts.new((-HXL, y, z)) for y, z in sec]
+    b = [bm.verts.new((gable_x(z), y, z)) for y, z in sec]
     m = len(sec)
     for i in range(m):
         j = (i + 1) % m
@@ -264,69 +312,78 @@ def body():
     bm.faces.new(b)
     bm.faces.new(a[::-1])
     bmesh.ops.recalc_face_normals(bm, faces=bm.faces)
-    ob = kit.mesh_ob("body", bm, [M["hide"]], smooth=False, bevel=0.06)
-    # the slot the rocker's right head dips into
-    cut = kit.box("bodycut", (BW + 0.5, 4.2, 5.0), (PIV.x, 1.9, 6.6), M["black"], bevel=0.0)
-    cut.hide_render = True
-    cut.display_type = "WIRE"
-    bo = ob.modifiers.new("slot", "BOOLEAN")
-    bo.operation = "DIFFERENCE"
-    bo.object = cut
-    ob.modifiers.move(len(ob.modifiers) - 1, 0)
-    # a small ledge on the gable's back edge (Flash's silhouette steps out there)
-    kit.box("ledge", (0.5, 0.7, 0.45), (gable_x(6.0) - 0.3, 3.1, 5.9), M["darkiron"], bevel=0.06)
+    ob = kit.mesh_ob("body", bm, [M["hide"]], smooth=False, bevel=0.03)
+    # the slot the beam swings in: over the ridge under its hub, and deep behind it where the right head dips
+    for i, (size, at) in enumerate((((BW + 0.5, 5.2, 4.0), (PIV.x, 1.6, 8.75)), ((BW + 0.5, 4.0, 4.0), (PIV.x, 2.2, 6.6)))):
+        cut = kit.box(f"bodycut-{i}", size, at, M["black"], bevel=0.0)
+        cut.hide_render = True
+        cut.display_type = "WIRE"
+        bo = ob.modifiers.new(f"slot{i}", "BOOLEAN")
+        bo.operation = "DIFFERENCE"
+        bo.object = cut
+        ob.modifiers.move(len(ob.modifiers) - 1, 0)
+    # tatters: torn flaps of hide along the back edge and the gable's hem, as Flash's ragged wall
+    back = [G(x, y) for x, y in BACK_PX]
+    k = 0
+    for p, q in zip(back, back[1:]):
+        n = max(1, int((q - p).length / 0.9))
+        for i in range(n):
+            o = p + (q - p) * ((i + rnd.uniform(0.2, 0.8)) / n)
+            w, ln = rnd.uniform(0.12, 0.34), rnd.uniform(0.15, 0.55)
+            d = Vector((0, 1, rnd.uniform(-1.2, -0.2))).normalized()
+            up = (q - p).normalized()
+            poly(f"tatter-{k}", [o - up * w - NG * 0.02 - d * 0.1, o + up * w - NG * 0.02 - d * 0.1,
+                                 o + d * ln + up * rnd.uniform(-0.2, 0.2) - NG * 0.02], NG, 0.05, M["hide"], bevel=0.0)
+            k += 1
+    for i in range(7):                                             # the hem
+        y = -2.6 + i * 0.85 + rnd.uniform(-0.2, 0.2)
+        z = rnd.uniform(0.9, 1.6)
+        o = Vector((gable_x(z) + 0.04, y, z))
+        poly(f"hem-{i}", [o + Vector((0, -0.45, 0)), o + Vector((0, 0.45, 0)),
+                          o + Vector((0.12, rnd.uniform(-0.2, 0.2), -rnd.uniform(0.5, 0.9)))], NG, 0.05, M["hide"],
+             bevel=0.0)
 
 
 def slab():
-    """The cracked mossy rock the Works stands on: Flash's outline on the ground, in low uneven chunks."""
-    out = [(-66, 52), (-58, 44), (-46, 38), (-30, 31), (0, 20), (30, 27), (50, 38), (62, 47), (59, 57), (47, 66),
-           (30, 73), (8, 79), (-18, 78), (-40, 72), (-56, 65), (-64, 58)]
-    pts = [kit.px(x, y, Z=0.0) for x, y in out]
-    mid = sum(pts, Vector()) / len(pts)
-    poly("slabbed", [mid + (p - mid) * 0.84 + Vector((0, 0, 0.02)) for p in pts], (0, 0, 1), 0.1, M["mossdark"],
-         bevel=0.0)
-
-    def inside(p):
-        c = False
-        for i in range(len(pts)):
-            a, b = pts[i], pts[(i + 1) % len(pts)]
-            if (a.y > p.y) != (b.y > p.y) and p.x < (b.x - a.x) * (p.y - a.y) / (b.y - a.y) + a.x:
-                c = not c
-        return c
-
-    step = 1.75
-    grid = {}
-    for i in range(-11, 13):
-        for j in range(-13, 10):
-            grid[i, j] = Vector((i * step + rnd.uniform(-0.7, 0.7), j * step + rnd.uniform(-0.7, 0.7), 0))
-    k = 0
-    for i in range(-11, 12):
-        for j in range(-13, 9):
-            q = [grid[i, j], grid[i + 1, j], grid[i + 1, j + 1], grid[i, j + 1]]
-            c = sum(q, Vector()) / 4
-            if not inside(c):
-                continue
-            if abs(c.x) < HX - 0.8 and abs(c.y) < HY - 0.8:
-                continue                                          # under the body
-            ring = []
-            for a, b in zip(q, q[1:] + q[:1]):                    # a chipped outline: each side broken once
-                ring.append(c + (a - c) * rnd.uniform(0.9, 0.97))
-                ring.append(c + ((a + b) / 2 - c) * rnd.uniform(0.86, 1.0))
-            h = rnd.uniform(0.06, 0.3)
-            tilt = Vector((rnd.uniform(-0.1, 0.1), rnd.uniform(-0.1, 0.1)))
-            bm = bmesh.new()
-            lo = [bm.verts.new(p + Vector((0, 0, 0.08))) for p in ring]
-            hi = [bm.verts.new(c + (p - c) * 0.86 + Vector((0, 0, 0.08 + h + rnd.uniform(-0.04, 0.02)
-                                                             + tilt.x * (p - c).x + tilt.y * (p - c).y))) for p in ring]
-            top = bm.verts.new(c + Vector((0, 0, 0.08 + h)))
-            m = len(ring)
-            for a in range(m):
-                b = (a + 1) % m
-                bm.faces.new((lo[a], lo[b], hi[b], hi[a]))
-                bm.faces.new((hi[a], hi[b], top))
-            bmesh.ops.recalc_face_normals(bm, faces=bm.faces)
-            kit.mesh_ob(f"rock-{k}", bm, [M["moss"]], smooth=False, bevel=0.05)
-            k += 1
+    """The low mound of cracked dark turf the Works stands on: Flash's ragged outline, highest by the body, fading
+    into the lawn at its rim."""
+    out = [(-72, 55), (-64, 45), (-52, 38), (-30, 29), (0, 20), (30, 26), (50, 36), (64, 46), (62, 57), (50, 67),
+           (32, 75), (8, 82), (-18, 81), (-42, 76), (-60, 68), (-71, 62)]
+    c = kit.px(-2, 54, Z=0.0)
+    ring = []
+    for i, (x, y) in enumerate(out):
+        p, q = kit.px(x, y, Z=0.0), kit.px(*out[(i + 1) % len(out)], Z=0.0)
+        for f in (0.0, 0.25, 0.5, 0.75):
+            v = p + (q - p) * f
+            ring.append(c + (v - c) * rnd.uniform(0.9, 1.08))
+    bm = bmesh.new()
+    lay = bm.loops.layers.color.new("fade")
+    R = 14
+    rows = []
+    fade = {}
+    for r in range(1, R + 1):
+        t = r / R
+        row = []
+        for p in ring:
+            z = 0.42 * (1 - t ** 3.0) + (rnd.uniform(-0.03, 0.03) if r < R else 0.0)
+            v = bm.verts.new(c + (p - c) * t + Vector((0, 0, max(0.012, z))))
+            fade[v] = t
+            row.append(v)
+        rows.append(row)
+    cv = bm.verts.new(c + Vector((0, 0, 0.42)))
+    fade[cv] = 0.0
+    m = len(ring)
+    for i in range(m):
+        bm.faces.new((cv, rows[0][i], rows[0][(i + 1) % m]))
+    for a, b in zip(rows, rows[1:]):
+        for i in range(m):
+            j = (i + 1) % m
+            bm.faces.new((a[i], b[i], b[j], a[j]))
+    for f in bm.faces:
+        for lp in f.loops:
+            lp[lay] = (fade[lp.vert],) * 3 + (1.0,)
+    bmesh.ops.recalc_face_normals(bm, faces=bm.faces)
+    kit.mesh_ob("slab", bm, [M["turf"]], smooth=True)
 
 
 def front():
@@ -334,13 +391,20 @@ def front():
     rocks' tops (they are uneven), so nothing hovers over a low rock."""
     z0 = 0.1
     # planks from the left post to the middle post
-    kit.plank_wall("planks", (-3.2, -HY - 0.06), (0.75, -HY - 0.06), z0, ZRAIL - 0.15, lambda ax: kit.wood("plank", (160, 84, 26), (58, 26, 8), axis=ax, rings=5.0), 7,
+    kit.plank_wall("planks", (-2.85, -HY - 0.06), (0.75, -HY - 0.06), z0, ZRAIL - 0.15, lambda ax: kit.wood("plank", (112, 56, 20), (30, 14, 6), axis=ax, rings=5.0), 7,
                    thick=0.14, gap=0.05, jit=0.03)
     # the slit of fire, set into the wall, with a dark lintel
     poly("slit", [(1.3, -HY - 0.03, z0), (3.3, -HY - 0.03, z0), (3.3, -HY - 0.03, ZRAIL + 0.1), (1.3, -HY - 0.03, ZRAIL + 0.1)],
          (0, -1, 0), 0.02, M["fire"], bevel=0.0)
+    # Flash's glowing patch on the planks: a small barred opening on the fire
+    pp = [F(-25, 8.5, 0.16), F(-11, 14.5, 0.16), F(-11, 25, 0.16), F(-25, 19, 0.16)]
+    poly("patch", pp, NF, 0.02, M["patch"], bevel=0.0)
+    for i, f in enumerate((0.3, 0.62)):
+        a, b = pp[0] + (pp[1] - pp[0]) * f, pp[3] + (pp[2] - pp[3]) * f
+        kit.sweep(f"patchbar-{i}", [a + NF * 0.05, b + NF * 0.05], NF, 0.08, 0.14, M["black"], bevel=0.0)
+    kit.sweep("patchsill", [pp[3] + NF * 0.05, pp[2] + NF * 0.05], NF, 0.1, 0.16, M["darkiron"], bevel=0.02)
     # bone posts: left corner, under the frame's right leg, the big corner post
-    bone("postl", (-3.2, -HY - 0.3, z0), (-3.3, -HY - 0.25, ZRAIL - 0.1), 0.42, rings=(0.3, 0.78))
+    bone("postl", (-2.85, -HY - 0.3, z0), (-2.95, -HY - 0.25, ZRAIL - 0.1), 0.42, rings=(0.3, 0.78))
     bone("postm", (0.95, -HY - 0.4, z0), (1.0, -HY - 0.35, ZRAIL - 0.2), 0.47, rings=(0.2, 0.62, 0.86))
     bone("postc", (3.75, -HY + 0.2, z0), (3.45, -2.2, 6.35), 0.44, rings=(0.33,), knob=1.45)
 
@@ -354,14 +418,14 @@ def frame():
     """The iron frame on the leaning wall, the glowing forge inside it. Its pointed top stops at a block left of the
     rocker and its right leg at the bearing right of it: nothing on the wall stands in the beam's way."""
     th = 0.3
-    a = U(-39, -8.5, 0.15)                      # the rail's left end
+    a = U(-36, -7, 0.15)                        # the rail's left end
     b = U(-7, 7.5, 0.15)                        # ... its right end
-    c = U(-23, -48, 0.15)                       # the left leg's top
+    c = U(-21, -48, 0.15)                       # the left leg's top
     b2 = U(-4, 5.5, 0.15)
     xl, xr = PIV.x - BW / 2 - 0.5, PIV.x + BW / 2 + 0.55      # the blocks either side of the beam
     h = UX(xr, 9.75)                            # the right leg's top, at the bearing
     e = UX(xl, 9.55)                            # the top's end, at the left block
-    arch = chaikin([c, UX(-3.05, 9.3), UX(-2.3, 9.95), UX(-1.4, 10.0), e], 2)
+    arch = chaikin([c, UX(-2.75, 9.3), UX(-2.1, 9.9), UX(-1.4, 9.95), e], 2)
     w = 0.62
     kit.sweep("frame-rail", [a, b], NU, th, w, M["iron"], bevel=0.05)
     kit.sweep("frame-legl", [a, c], NU, th, w, M["iron"], bevel=0.05)
@@ -372,17 +436,11 @@ def frame():
     under = [UX(xl, 8.75, 0.0), UX(PIV.x, 8.55, 0.0), UX(xr, 8.75, 0.0)]
     inner = [a, b, b2, h] + [p + NU * 0.15 for p in under[::-1]] + [e] + arch[::-1][1:]
     poly("forge", [p - NU * 0.1 for p in inner], NU, 0.02, M["forge"], bevel=0.0)
-    hood = [U(-25, -40, 0.1), U(-12, -43, 0.1), U(-3, -48, 0.1), U(4, -41, 0.1), UX(xr - 0.3, 8.9, 0.1),
-            UX(xr, 8.75, 0.1), UX(PIV.x, 8.55, 0.1), UX(xl, 8.75, 0.1), e] + arch[::-1][1:-1]
+    hood = [U(-23, -40, 0.1), U(-12, -43, 0.1), UX(xl, 8.75, 0.1), e] + arch[::-1][1:-1]
     poly("hood", hood, NU, 0.06, M["black"], bevel=0.0)
-    kit.box("saddle-l", (0.5, 0.6, 1.5), (xl, PIV.y - 0.1, 9.0), M["darkiron"], bevel=0.06)
     rv = [a + (c - a) * 0.04, a + (b - a) * 0.12, a + (b - a) * 0.5, b + (a - b) * 0.08, b2 + (h - b2) * 0.1,
           a + (c - a) * 0.5, a + (c - a) * 0.96, b2 + (h - b2) * 0.5, b2 + (h - b2) * 0.88]
     rivets("rivet", [p + NU * (th / 2) for p in rv], NU)
-    # the chain box on the rail
-    cx = PIV.x
-    kit.box("chainbox", (0.8, 0.75, 0.6), (cx, PIV.y - RAD - 0.12, ZRAIL - 0.25), M["darkiron"], bevel=0.06)
-    kit.box("chainbox-in", (0.4, 0.4, 0.04), (cx, PIV.y - RAD - 0.12, ZRAIL + 0.335), M["black"], bevel=0.0)
 
 
 def gable():
@@ -390,14 +448,11 @@ def gable():
     # rod from the axle's end into the barrel
     x, y = 2.72, -0.42
     kit.cyl("rod", 0.3, 3.0, (x + 0.08, y, 7.3), M["rod"], verts=16, bevel=0.0)
-    kit.cyl("rodcap", 0.36, 0.25, (x + 0.08, y, 9.2), M["darkiron"], verts=16)
     prof = [(0.0, 0.0), (0.72, 0.0), (0.84, 0.25), (0.86, 1.0), (0.8, 1.7), (0.62, 2.05), (0.4, 2.15), (0.0, 2.15)]
     kit.lathe("barrel", prof, (x + 0.25, y, 5.25), M["darkred"], verts=24)
-    for z in (5.55, 6.9):
-        kit.cyl(f"barrelhoop-{z}", 0.9, 0.16, (x + 0.25, y, z), M["darkiron"], verts=24, bevel=0.03)
     # the window of fire
-    win = [G(23, 10, 0.02), G(29, 6.5, 0.02), G(34, 2, 0.02), G(37.5, 3.5, 0.02), G(41, 9, 0.02),
-           G(41, 24, 0.02), G(31, 28, 0.02), G(22, 25, 0.02)]
+    win = [G(24, 10, 0.02), G(29, 6.5, 0.02), G(34, 2.5, 0.02), G(37.5, 4, 0.02), G(40.5, 9, 0.02),
+           G(40.5, 20.5, 0.02), G(31, 24, 0.02), G(24, 21.5, 0.02)]
     poly("window", win, NG, 0.02, M["window"], bevel=0.0)
 
 
@@ -409,12 +464,12 @@ def machine():
     cx = gable_x(cz) + 0.22
     cy = -0.3
     kit.box("mach-plate", (0.3, 3.3, 2.2), (gable_x(1.4) + 0.02, 1.1, z0), M["hide"], bevel=0.06)
-    kit.box("mach-case", (1.2, 1.9, 1.75), (cx + 0.5, 1.75, z0), M["darkred"], bevel=0.12, taper=0.75)
-    kit.box("mach-foot", (1.6, 3.4, 0.7), (cx + 0.35, 1.0, z0), M["darkiron"], bevel=0.08)
-    kit.box("mach-block", (1.0, 1.3, 1.25), (cx + 0.5, 0.0, z0 + 0.3), M["darkred"], bevel=0.1)
+    kit.box("mach-case", (1.2, 1.9, 1.75), (cx + 0.5, 1.75, z0), M["mach"], bevel=0.12, taper=0.75)
+    kit.box("mach-foot", (1.6, 3.4, 0.7), (cx + 0.35, 1.0, z0), M["mach"], bevel=0.08)
+    kit.box("mach-block", (1.0, 1.3, 1.25), (cx + 0.5, 0.0, z0 + 0.3), M["mach"], bevel=0.1)
     arm = kit.box("mach-arm", (0.42, 2.5, 0.5), (cx + 0.62, 1.0, 2.0), M["red"], rot=(14, 0, 0), bevel=0.12,
                   origin="centre")
-    kit.cyl("mach-armpin", 0.3, 0.3, (cx + 0.78, -0.05, 1.72), M["red"], rot=(0, 90, 0), verts=14)
+    kit.cyl("mach-armpin", 0.3, 0.3, (cx + 0.78, -0.05, 1.72), M["mach"], rot=(0, 90, 0), verts=14)
     bone("peg-a", (cx + 1.05, 0.7, 1.15), (cx + 1.25, 1.75, 0.8), 0.1, knob=1.0, foot=1.0, mat=M["pale"])
     bone("peg-b", (cx + 0.85, 2.15, 1.75), (cx + 0.85, 2.3, 2.75), 0.1, knob=1.0, foot=1.0, mat=M["pale"])
     e = bpy.data.objects.new("cog", None)
@@ -424,7 +479,7 @@ def machine():
     hub = bpy.data.objects.new("cog-spin", None)
     kit.link(hub, e)
     kit.gear("cog-wheel", 1.18, 10, 0.3, (0, 0, 0.16), M["cog"], (0, 0, 0), tooth=0.3, parent=hub)
-    kit.cyl("cog-boss", 0.4, 0.14, (0, 0, 0.31), M["darkred"], verts=16, parent=hub)
+    kit.cyl("cog-boss", 0.4, 0.14, (0, 0, 0.31), M["mach"], verts=16, parent=hub)
     for i in range(5):
         an = 2 * math.pi * i / 5
         kit.cyl(f"cog-hole-{i}", 0.14, 0.03, (0.62 * math.cos(an), 0.62 * math.sin(an), 0.3), M["black"], verts=10,
@@ -440,15 +495,15 @@ def bellows():
     the nozzle, y = toward the camera, z up. The bone lever along its top front edge lifts, the nozzle draws in."""
     root = bpy.data.objects.new("bellows", None)
     kit.link(root)
-    o = kit.px(-31, 35.5, Z=2.25)
+    o = kit.px(-29.5, 36, Z=2.25)
     e1 = Vector((-1, -1, 0)).normalized()
     e2 = Vector((1, -1, 0)).normalized()
     root.matrix_world = Matrix(((e1.x, e2.x, 0, o.x), (e1.y, e2.y, 0, o.y), (0, 0, 1, 0), (0, 0, 0, 1)))
     x0, x1, dp, zt, zb = -2.0, 1.5, 2.9, 2.25, 0.85
     top = [(x0, -0.25), (x1, 0.0), (x1, -dp), (x0 + 0.5, -0.75)]
     poly("bel-body", [Vector((x, y, zb)) for x, y in top], (0, 0, 1), zt - zb, M["orange"], bevel=0.1, parent=root)
-    lid = [(x0 - 0.12, -0.2), (x1 + 0.08, 0.08), (x1 + 0.08, -dp - 0.05), (x0 + 0.45, -0.85)]
-    poly("bel-lid", [Vector((x, y, zt)) for x, y in lid], (0, 0, 1), 0.14, M["orange"], bevel=0.05, parent=root)
+    lid = [(x0 - 0.3, -0.15), (x1 + 0.15, 0.15), (x1 + 0.15, -dp - 0.12), (x0 + 0.35, -0.95)]
+    poly("bel-lid", [Vector((x, y, zt)) for x, y in lid], (0, 0, 1), 0.24, M["orange"], bevel=0.07, parent=root)
     foot = [(x0 + 0.1, 0.2), (x1 + 0.25, 0.25), (x1 + 0.25, -dp), (x0 + 0.6, -0.9)]
     poly("bel-foot", [Vector((x, y, 0.02)) for x, y in foot], (0, 0, 1), zb - 0.02, M["darkiron"], bevel=0.07, parent=root)
     rivets("bel-rivet", [(x, 0.25, ZS + 0.3) for i, x in enumerate((-1.2, -0.2, 0.8))], (0, 1, 0), r=0.1,
@@ -466,9 +521,11 @@ def bellows():
     kit.cyl("nozzle-bore", 0.19, 0.02, (1.15, 0, 0), M["black"], rot=(0, 90, 0), verts=12, bevel=0.0, parent=nz)
     lv = bpy.data.objects.new("lever", None)
     kit.link(lv, root)
-    lv.location = (x0 + 0.75, 0.12, zt + 0.22)
+    lv.location = (x0 + 0.75, 0.2, zt + 0.34)
     bone("lever-bone", (-0.3, 0, 0), (3.0, 0.05, -0.1), 0.15, knob=1.6, foot=1.5, parent=lv, mat=M["pale"])
-    kit.cyl("lever-pin", 0.1, 0.5, (x0 + 0.75, -0.3, zt + 0.2), M["pale"], rot=(-90, 0, 0), verts=10, parent=root)
+    for i, (px_, py_, pz_) in enumerate(((-0.3, 0.14, 0), (-0.3, -0.14, 0), (3.0, 0.19, -0.1), (3.0, -0.09, -0.1))):
+        kit.blob(f"lever-knob-{i}", (px_, py_, pz_), 0.2, squash=0.9, mat=M["pale"], parent=lv)
+    kit.cyl("lever-pin", 0.1, 0.6, (x0 + 0.75, -0.3, zt + 0.3), M["pale"], rot=(-90, 0, 0), verts=10, parent=root)
     kit.MOVING.extend([nz, lv])
     PART["nozzle"], PART["lever"] = nz, lv
 
@@ -500,7 +557,7 @@ def rocker():
             o = o[::-1]
         # the core plate, set in from the rim
         core = [Vector((-BW * 0.36, y, z)) for y, z in o]
-        poly(f"{name}-core", core, (1, 0, 0), BW * 0.72, M["darkiron"], bevel=0.04, parent=hub)
+        poly(f"{name}-core", core, (1, 0, 0), BW * 0.72, M["panel"], bevel=0.04, parent=hub)
         # the rim: a bar all round the outline, the beam's full thickness
         ring = [Vector((0, y, z)) for y, z in (o if sign < 0 else o[::-1])]
         ins = []
@@ -509,10 +566,6 @@ def rocker():
         for p in ring:
             ins.append(p + (cen - p).normalized() * 0.14)
         kit.sweep(f"{name}-rim", ins[1:-1], (1, 0, 0), BW, 0.3, M["iron"], parent=hub, bevel=0.05)
-        # a raised triangle on the side (Flash's heads carry a dark sunk panel with a rib)
-        tri = [cen + (p - cen) * 0.5 for p in (ring[2], ring[2 + 7], ring[-3])]
-        kit.sweep(f"{name}-rib", tri + [tri[0]], (1, 0, 0), 0.12, 0.12, M["iron"], parent=hub, bevel=0.02).location.x = \
-            BW * 0.36 + 0.03
         # pale strips along the top edge, one on each side
         oo = o if sign < 0 else o[::-1]
         top = [Vector((0, y, z + 0.02)) for y, z in oo[:3]]
@@ -529,17 +582,12 @@ def rocker():
         r.rotation_euler = (math.radians(90), 0, 0)
     kit.cyl("rocker-boss", 0.62, BW + 0.16, (-(BW + 0.16) / 2, 0, 0), M["red"], rot=(0, 90, 0), verts=20, parent=hub)
     # the axle and its bearings (still)
-    kit.cyl("axle", 0.33, 6.1, (-3.3, PIV.y, PIV.z), M["darkiron"], rot=(0, 90, 0), verts=16)
-    for name, x0, ln, r in (("capb", -3.35, 0.75, 0.6), ("capm", PIV.x + BW / 2 + 0.25, 0.6, 0.55),
+    kit.cyl("axle", 0.33, 5.7, (-2.95, PIV.y, PIV.z), M["darkiron"], rot=(0, 90, 0), verts=16)
+    for name, x0, ln, r in (("capb", -3.0, 0.75, 0.6), ("capm", PIV.x + BW / 2 + 0.25, 0.6, 0.55),
                             ("capf", 2.15, 0.75, 0.62)):
         kit.cyl(f"bearing-{name}", r, ln, (x0, PIV.y, PIV.z), M["red"], rot=(0, 90, 0), verts=20, bevel=0.07)
-    # saddles from the roof up to the bearings
-    for name, x in (("sadb", -3.0), ("sadf", 2.5)):
-        kit.box(f"saddle-{name}", (0.6, 0.8, 1.3), (x, PIV.y, 9.25), M["darkred"], bevel=0.06, taper=0.8)
     kit.cyl("bearing-capl", 0.55, 0.5, (PIV.x - BW / 2 - 0.75, PIV.y, PIV.z), M["red"], rot=(0, 90, 0), verts=20,
             bevel=0.07)
-    kit.box("saddle-rib", (2.6, 0.45, 0.8), (-1.9, PIV.y + 0.05, 9.35), M["darkiron"], bevel=0.06)
-    kit.box("saddle-m", (0.5, 0.7, 1.2), (PIV.x + BW / 2 + 0.55, PIV.y, 9.15), M["darkiron"], bevel=0.06)
 
 
 CH_PITCH = 0.3
@@ -598,7 +646,7 @@ def pose(k):
             z = PIV.z - (s - on_arc)
             ob.location = Vector((PIV.x, PIV.y - CH_R, z))
             ob.rotation_euler = (0, 0, 0)
-            ob.hide_render = z < ZRAIL + 0.42
+            ob.hide_render = z < ZRAIL + 0.5          # it passes behind the rail, as Flash draws it
     up = bellows_lift(k)
     PART["lever"].rotation_euler = (0, math.radians(-20 * up), 0)
     PART["nozzle"].location.x = 1.3 - 0.4 * up
@@ -644,7 +692,7 @@ def damage():
             a = 2 * math.pi * j / 12
             pts.append((0.1 * math.cos(a), 0.18 * math.sin(a), 0))
         t = kit.tube(f"deadchain-{i}", pts, 0.045, M["chain"], verts=6, cyclic=True)
-        t.location = (PIV.x - 1.2 + 0.27 * i, -HY - 1.0 - 0.05 * i, ZS + 0.33)
+        t.location = (PIV.x - 1.2 + 0.27 * i, -HY - 1.0 - 0.05 * i, 0.3)
         t.rotation_euler = (0, 0, math.radians(20 + 25 * (i % 3)))
     # the middle post snapped: its top half lies on the slab
     ob["postm"].scale = (1, 1, 0.5)
@@ -679,13 +727,13 @@ def damage():
     # rubble: bits of iron, hide and bone at the foot
     for i in range(16):
         a = rnd.uniform(0, 2 * math.pi)
-        q = kit.px(rnd.uniform(-40, 44), rnd.uniform(50, 63), Z=ZS + 0.3)
+        q = kit.px(rnd.uniform(-40, 44), rnd.uniform(50, 63), Z=0.2)
         m = rnd.choice([M["darkiron"], M["hide"], M["darkred"], M["iron"], M["bone"]])
         kit.box(f"rubble-{i}", (rnd.uniform(0.25, 0.7), rnd.uniform(0.2, 0.5), rnd.uniform(0.12, 0.3)), q, m,
                 rot=(rnd.uniform(-20, 20), rnd.uniform(-20, 20), math.degrees(a)), bevel=0.05, jitter=0.04)
     # soot everywhere: every painted surface darker and duller
     for m in bpy.data.materials:
-        if not m.use_nodes or m.name in ("forge", "fire", "rod", "window"):
+        if not m.use_nodes or m.name in ("forge", "fire", "rod", "window", "patch", "turf"):
             continue
         b = next((n for n in m.node_tree.nodes if n.type == "BSDF_PRINCIPLED"), None)
         if b is None or not b.inputs["Base Color"].is_linked:
@@ -711,6 +759,16 @@ def damage():
         b = next(n for n in bpy.data.materials[name].node_tree.nodes if n.type == "BSDF_PRINCIPLED")
         b.inputs["Emission Strength"].default_value *= 0.55
     kit.MOVING.clear()                  # a still picture: nothing is a moving layer
+    # the whole building slumps and leans to the left front, as Flash's damaged picture
+    lean = bpy.data.objects.new("lean", None)
+    kit.link(lean)
+    keep = ("slab", "rubble", "deadchain", "postm-top", "lean")
+    for o in list(kit.SC.objects):
+        if o.parent is None and not o.name.startswith(keep):
+            o.parent = lean
+    lean.rotation_euler = (math.radians(4.5), math.radians(-3.5), 0)
+    lean.scale = (1.03, 1.03, 0.93)
+    lean.location = (0, 0, 0.1)
 
 
 def family(o):
