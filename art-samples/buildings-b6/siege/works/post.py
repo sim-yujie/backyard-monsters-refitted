@@ -230,7 +230,7 @@ def mp4():
         pair(flash(k), m, box, 4).convert("RGB").save(tmp / f"p-{k:02d}.png")
         cut(on(m), box, 6).convert("RGB").save(tmp / f"m-{k:02d}.png")
     for pre, out in (("p", "works-working.mp4"), ("m", "works-working-3d.mp4")):
-        subprocess.run(["ffmpeg", "-v", "error", "-y", "-stream_loop", "2", "-framerate", "30", "-i",
+        subprocess.run(["ffmpeg", "-v", "error", "-y", "-stream_loop", "2", "-framerate", "25", "-i",
                         str(tmp / f"{pre}-%02d.png"), "-vf", "pad=ceil(iw/2)*2:ceil(ih/2)*2", "-c:v", "libx264",
                         "-pix_fmt", "yuv420p", "-crf", "16", str(D / out)], check=True)
         print("wrote", out)

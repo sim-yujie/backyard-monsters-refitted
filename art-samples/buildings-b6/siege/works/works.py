@@ -330,13 +330,14 @@ def slab():
 
 
 def front():
-    """The upright front wall under the rail: bone posts, planks, the slit of fire."""
-    z0 = ZS
+    """The upright front wall under the rail: bone posts, planks, the slit of fire. All of it starts below the
+    rocks' tops (they are uneven), so nothing hovers over a low rock."""
+    z0 = 0.1
     # planks from the left post to the middle post
     kit.plank_wall("planks", (-3.2, -HY - 0.06), (0.75, -HY - 0.06), z0, ZRAIL - 0.15, lambda ax: kit.wood("plank", (160, 84, 26), (58, 26, 8), axis=ax, rings=5.0), 7,
                    thick=0.14, gap=0.05, jit=0.03)
     # the slit of fire, set into the wall, with a dark lintel
-    poly("slit", [(1.3, -HY - 0.03, z0), (3.3, -HY - 0.03, z0), (3.3, -HY - 0.03, 4.9), (1.3, -HY - 0.03, 4.9)],
+    poly("slit", [(1.3, -HY - 0.03, z0), (3.3, -HY - 0.03, z0), (3.3, -HY - 0.03, ZRAIL + 0.1), (1.3, -HY - 0.03, ZRAIL + 0.1)],
          (0, -1, 0), 0.02, M["fire"], bevel=0.0)
     # bone posts: left corner, under the frame's right leg, the big corner post
     bone("postl", (-3.2, -HY - 0.3, z0), (-3.3, -HY - 0.25, ZRAIL - 0.1), 0.42, rings=(0.3, 0.78))
@@ -403,14 +404,14 @@ def gable():
 def machine():
     """The machine at the gable's foot: a cog whose top teeth stand against the window of fire, a red arm across
     it, a dark red casing with bone pegs. The cog turns."""
-    z0 = ZS
+    z0 = 0.05
     cz = 2.35
     cx = gable_x(cz) + 0.22
     cy = -0.3
     kit.box("mach-plate", (0.3, 3.3, 2.2), (gable_x(1.4) + 0.02, 1.1, z0), M["hide"], bevel=0.06)
-    kit.box("mach-case", (1.2, 1.9, 1.5), (cx + 0.5, 1.75, z0), M["darkred"], bevel=0.12, taper=0.75)
-    kit.box("mach-foot", (1.6, 3.4, 0.45), (cx + 0.35, 1.0, z0), M["darkiron"], bevel=0.08)
-    kit.box("mach-block", (1.0, 1.3, 1.0), (cx + 0.5, 0.0, z0 + 0.3), M["darkred"], bevel=0.1)
+    kit.box("mach-case", (1.2, 1.9, 1.75), (cx + 0.5, 1.75, z0), M["darkred"], bevel=0.12, taper=0.75)
+    kit.box("mach-foot", (1.6, 3.4, 0.7), (cx + 0.35, 1.0, z0), M["darkiron"], bevel=0.08)
+    kit.box("mach-block", (1.0, 1.3, 1.25), (cx + 0.5, 0.0, z0 + 0.3), M["darkred"], bevel=0.1)
     arm = kit.box("mach-arm", (0.42, 2.5, 0.5), (cx + 0.62, 1.0, 2.0), M["red"], rot=(14, 0, 0), bevel=0.12,
                   origin="centre")
     kit.cyl("mach-armpin", 0.3, 0.3, (cx + 0.78, -0.05, 1.72), M["red"], rot=(0, 90, 0), verts=14)
@@ -449,7 +450,7 @@ def bellows():
     lid = [(x0 - 0.12, -0.2), (x1 + 0.08, 0.08), (x1 + 0.08, -dp - 0.05), (x0 + 0.45, -0.85)]
     poly("bel-lid", [Vector((x, y, zt)) for x, y in lid], (0, 0, 1), 0.14, M["orange"], bevel=0.05, parent=root)
     foot = [(x0 + 0.1, 0.2), (x1 + 0.25, 0.25), (x1 + 0.25, -dp), (x0 + 0.6, -0.9)]
-    poly("bel-foot", [Vector((x, y, ZS)) for x, y in foot], (0, 0, 1), zb - ZS, M["darkiron"], bevel=0.07, parent=root)
+    poly("bel-foot", [Vector((x, y, 0.02)) for x, y in foot], (0, 0, 1), zb - 0.02, M["darkiron"], bevel=0.07, parent=root)
     rivets("bel-rivet", [(x, 0.25, ZS + 0.3) for i, x in enumerate((-1.2, -0.2, 0.8))], (0, 1, 0), r=0.1,
            parent=root)
     for i in range(4):                                             # pleats
@@ -575,8 +576,12 @@ def bellows_lift(k):
 
 
 def turn(k):
-    if DAMAGED:
+    if DAMAGED:                 # a still: build() has posed frame 0 and damage() has knocked it about
         return
+    pose(k)
+
+
+def pose(k):
     th = rocker_angle(k)
     PART["rocker"].rotation_euler = (th, 0, 0)
     # the chain: fixed at the left ring, over the arc to its leftmost point, then straight down into the box
@@ -611,7 +616,7 @@ def build():
     bellows()
     rocker()
     chain()
-    turn(0)
+    pose(0)
     if DAMAGED:
         damage()
 
