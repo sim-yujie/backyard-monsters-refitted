@@ -8,6 +8,7 @@ python post.py mp4         works-working.mp4 (Flash beside 3D, the loop three ti
 python post.py sheets      sheet-idle.png, sheet-working.png, sheet-damaged.png: Flash beside 3D at the same scale
 python post.py crops       crop-*.png: Flash beside 3D, enlarged, of the risky joints
 python post.py check       loop-check.png and the loop's numbers
+python post.py game        game/: the renders export3d_buildings.py siegeworks reads (base, alone, parts 00-59, damaged)
 
 A frame is the base picture (every still part and the ground shadow) with the moving parts' layer laid over it.
 The canvas is works.py's: Flash px x -75..125, y -95..95, the building's anchor at (0, 0).
@@ -279,9 +280,26 @@ def refs():
     flash(0, shadow=False, damaged=True).save(D / "work" / "flash-dmg.png")
 
 
+def game():
+    """game/: what `export3d_buildings.py siegeworks` (and `siegeworks:damaged`) reads: the renders without the extra
+    closing frame (parts-60 is frame 0 again, for the loop check)."""
+    import shutil
+    g = D / "game"
+    g.mkdir(exist_ok=True)
+    for p in g.glob("*.png"):
+        p.unlink()
+    for name in ("L1-base.png", "L1-alone.png"):
+        shutil.copy(D / "render" / name, g)
+    for k in range(N):
+        shutil.copy(D / "render" / f"L1-parts-{k:02d}.png", g)
+    for name in ("L1-damaged-base.png", "L1-damaged-alone.png"):
+        shutil.copy(D / "damaged" / "render" / name, g)
+    print("game", N, "cells ->", g)
+
+
 if __name__ == "__main__":
     cmd = sys.argv[1] if len(sys.argv) > 1 else "fit"
     if cmd == "fit":
         fit(int(sys.argv[2]) if len(sys.argv) > 2 else 0)
     else:
-        {"refs": refs, "frames": frames, "mp4": mp4, "sheets": sheets, "crops": crops, "check": check}[cmd]()
+        {"refs": refs, "frames": frames, "mp4": mp4, "sheets": sheets, "crops": crops, "check": check, "game": game}[cmd]()

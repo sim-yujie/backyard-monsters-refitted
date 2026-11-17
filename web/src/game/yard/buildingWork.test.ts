@@ -45,6 +45,8 @@ describe("which types animate only while working", () => {
       16: WorkKind.CONTROL,
       26: WorkKind.TRAIN,
       116: WorkKind.RESEARCH,
+      133: WorkKind.SIEGE,
+      134: WorkKind.SIEGE,
       // Decorations, the sign and the Outpost Defender loop for ever in Flash.
       28: null,
       52: null,
@@ -57,8 +59,9 @@ describe("which types animate only while working", () => {
     }
   });
 
-  it("drops only the hatchery back to cell 0 when it stops", () => {
-    expect(animPolicy(13)?.restOnIdle).toBe(true);
+  it("drops the hatchery and the siege buildings back to cell 0 when they stop", () => {
+    // `BUILDING13.as:44-47`; `SiegeLab.as:111`, `SiegeFactory.as:142`.
+    for (const type of [13, 133, 134]) expect(animPolicy(type)?.restOnIdle, `type ${type}`).toBe(true);
     for (const type of [1, 2, 3, 4, 8, 26, 116]) {
       expect(animPolicy(type)?.restOnIdle, `type ${type}`).toBe(false);
     }
@@ -70,7 +73,7 @@ describe("which types animate only while working", () => {
   });
 
   it("holds a working type nobody says is working", () => {
-    for (const type of [1, 8, 13, 26, 116]) {
+    for (const type of [1, 8, 13, 26, 116, 133, 134]) {
       expect(workUntil(type, 7, NO_WORK), `type ${type}`).toBe(Number.NEGATIVE_INFINITY);
     }
   });
@@ -262,6 +265,26 @@ describe("the Monster Academy and the Monster Lab", () => {
     expect(animates(saveWith({ "116": { id: 116, t: 116, l: 1 } }), 116, 116, SAVED)).toBe(
       false,
     );
+  });
+});
+
+describe("the Siege Works and the Siege Factory", () => {
+  it("run while a weapon unlocks in them, and only that building", () => {
+    const save = saveWith({
+      "40": { id: 40, t: 134, l: 1, unlockingWeapons: { jarOfGoo: SAVED + 120 } },
+      "41": { id: 41, t: 133, l: 1, unlockingWeapons: { decoyBot: SAVED + 60 } },
+      "42": { id: 42, t: 133, l: 1 },
+    } as Record<string, Partial<BuildingData>>);
+    expect(animates(save, 134, 40, SAVED + 119)).toBe(true);
+    expect(animates(save, 134, 40, SAVED + 120)).toBe(false);
+    expect(animates(save, 133, 41, SAVED)).toBe(true);
+    expect(animates(save, 133, 41, SAVED + 60)).toBe(false);
+    expect(animates(save, 133, 42, SAVED)).toBe(false);
+  });
+
+  it("stand still with nothing unlocking", () => {
+    const save = saveWith({ "40": { id: 40, t: 134, l: 1, unlockingWeapons: {} } } as Record<string, Partial<BuildingData>>);
+    expect(animates(save, 134, 40, SAVED)).toBe(false);
   });
 });
 
