@@ -268,9 +268,16 @@ def check(tol=10):
     print("wrote loop-check.png")
 
 
+def refs():
+    """Flash's stills on the canvas with no shadow: the pictures proj.py lays on the model and outline.py measures."""
+    (D / "work").mkdir(exist_ok=True)
+    flash(0, shadow=False).save(D / "work" / "flash0.png")
+    flash(0, shadow=False, damaged=True).save(D / "work" / "flash-dmg.png")
+
+
 if __name__ == "__main__":
     cmd = sys.argv[1] if len(sys.argv) > 1 else "fit"
     if cmd == "fit":
         fit(int(sys.argv[2]) if len(sys.argv) > 2 else 0)
     else:
-        {"frames": frames, "mp4": mp4, "sheets": sheets, "crops": crops, "check": check}[cmd]()
+        {"refs": refs, "frames": frames, "mp4": mp4, "sheets": sheets, "crops": crops, "check": check}[cmd]()

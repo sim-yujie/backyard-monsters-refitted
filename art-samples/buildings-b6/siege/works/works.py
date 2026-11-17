@@ -138,6 +138,24 @@ def bone(name, p0, p1, r, rings=(), knob=1.35, foot=1.3, parent=None, mat=None):
     prof.append((0.0, ln))
     ob = kit.lathe(name, prof, p0, mat or M["bone"], verts=20, parent=parent)
     ob.rotation_euler = (p1 - p0).to_track_quat("Z", "Y").to_euler()
+    if r > 0.3 and parent is None and not DAMAGED:
+        # a real long bone, not a turned column: an uneven shaft, and at each end a pair of rounded condyles side by
+        # side as the camera sees them, with the groove between them
+        if "bonelumps" not in bpy.data.textures:
+            tex = bpy.data.textures.new("bonelumps", "CLOUDS")
+            tex.noise_scale = 0.5
+            tex.noise_depth = 2
+        mo = ob.modifiers.new("lumps", "DISPLACE")
+        mo.texture = bpy.data.textures["bonelumps"]
+        mo.texture_coords = "GLOBAL"
+        mo.strength = 0.09
+        mo.mid_level = 0.5
+        ax = (p1 - p0).normalized()
+        side = ax.cross(FWD).normalized()
+        for tag, c, rr_ in (("top", p1 - ax * (0.3 * r), r * knob * 0.62), ("foot", p0 + ax * (0.55 * r), r * foot * 0.62))[knob < 1.4:]:
+            for sg in (-1, 1):
+                kit.blob(f"{name}-{tag}{sg}", c + side * (sg * rr_ * (0.5 if tag == "top" else 0.85)) - FWD * (0.1 * r), rr_ * (0.85 if tag == "top" else 1.0), squash=1.0,
+                         mat=mat or M["bone"])
     return ob
 
 
@@ -782,4 +800,33 @@ def family(o):
 
 if os.environ.get("PB_FITK"):
     kit.K = int(os.environ["PB_FITK"])
-kit.run(build, turn, family=family)
+PROJ = float(os.environ.get("PB_PROJ", 0.75))         # how much of Flash's own picture lies on the model (0 = none)
+_F = dict(w=1.0, emit=0.95, grit=0.03)               # the fires are Flash's painted flames, unlit
+PER = dict(forge=_F, fire=_F, patch=_F, window=_F, rod=_F, bone=dict(emit=0.35), turf=dict(w=0.5, emit=0.15),
+           hide=dict(w=0.85, emit=0.4), orange=dict(w=1.0, emit=0.92))
+PER["turf"]["trim"] = 40
+# the damaged heap does not line up with Flash's damaged picture, so only its fires take Flash's colours
+SKIP = ("hide", "iron", "darkiron", "panel", "rivet", "bone", "red", "darkred", "mach", "cogm", "orange",
+        "bellowsdark", "gold", "pale", "chain", "black", "plank-Z") if DAMAGED else ()
+
+
+def build_all():
+    build()
+    turn(0)
+    bpy.context.view_layer.update()
+    if kit.MODE == "sil" or PROJ <= 0:
+        return
+    sys.path.insert(0, str(HERE))
+    import proj
+    src = HERE / "work" / ("flash-dmg.png" if DAMAGED else "flash0.png")
+    proj.apply(src, HERE / "work" / ("proj-dmg" if DAMAGED else "proj"), w=PROJ, emit=0.62, grit=0.1, per=PER,
+               moving=tuple(r.name for r in kit.MOVING), skip=SKIP)
+
+
+if kit.MODE == "sil":
+    sys.path.insert(0, str(HERE))
+    import proj
+    build_all()
+    proj.sil(HERE / "work" / "sil", 3, family)
+else:
+    kit.run(build_all, turn, family=family)
