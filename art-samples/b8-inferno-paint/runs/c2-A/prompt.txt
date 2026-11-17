@@ -1,0 +1,18 @@
+Use your image generation tool (one call) to create a new image and save it as sample-new.png in the current folder. Do not write code and do not copy or composite pixels from the inputs.
+
+Paint the INFERNO CAVERN, stage 2 of 5: a bigger heap of dark slate-grey rock shards and broken slabs pushed up out of the ground, hot orange lava glowing in the gaps at their feet, and set into the front right of the heap a pale bone-white beast SKULL (a vertebra-like skull with a big round eye socket glowing orange)
+
+It is for the isometric strategy game Backyard Monsters (cartoony, colourful monster world), seen from the game's fixed isometric camera, the same camera, angle and orientation as frames.png (not mirrored).
+
+CAMERA: the isometric 3/4 view of frames.png, seen from the front and above at about 30 degrees, NOT a straight side view and NOT a symmetric picture. Put every part where frames.png has it, not mirrored and not rearranged.
+
+Input 1, frames.png: the OLD Flash version, blown up, on grey (1536x1024): design, camera angle, ground footprint and size. Each new picture stands on the same footprint, centred on the same spot, base on the same ground line, about the same height, and is not wider. Read the small details from it.
+Input 2, style.png: the Modern look of the other Inferno buildings from the same game. See FINISH below.
+Input 3, ref.png: the NEW Modern version of a later stage of this same building, already approved: paint the rock, lava, bone and finish exactly like it (same materials, colours, light and level of detail), but the SHAPE of this stage from frames.png.
+
+THE FLASH DESIGN, REFRESHED (most important): keep the Flash silhouette, proportions, colour scheme and every signature part in the same place, so a player of the old game instantly recognises it, with richer materials, crisper detail, better lighting and sharper edges. NOT a new design, nothing added or left out, and NOT a plain copy.
+
+FINISH: the finish of style.png (the Modern Inferno buildings of the same game: the painted Under Hall and Resource Pod, the 3D Bone Cruncher and the 3D Magma Tower): crisp, clean, polished, almost rendered stylised 3D, smooth shading, small bevels catching the light, soft light from the upper left, ambient occlusion in the gaps, clean sharp edges, no thick black outline, no cel shading, no pixel art, no painterly brush mess. Right-hand faces in medium shade, readable, not black. COLOURS as Flash's: the rock a cool dark slate grey with lighter blue-grey edges where the light catches it, the lava a hot orange with yellow centres glowing from below (glowing but not neon), the skull a pale greenish bone-white, NOTHING painted on the ground around it: no cracks, no glow, no dark patch (the game draws the cracked, glowing ground separately); the lava glow shows only in the gaps between the rocks at their feet.
+
+Output: ONE image, 1536x1024, the building alone, complete and fully inside the image with margin.
+Background everywhere: flat pure green #00FF00, also in every gap between the parts. No ground plane, no grass, no tile, no cast shadow on the ground, no grid lines, no text, no labels. The building itself must contain no bright pure green.

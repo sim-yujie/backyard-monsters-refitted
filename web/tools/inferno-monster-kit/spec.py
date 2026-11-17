@@ -869,6 +869,144 @@ SPECS = {
             "to the resting pose of ref.png. The head never turns toward the viewer. Cell 12 stays empty magenta."
         ),
     ),
+    # IC8 King Wormzer (17 Nov): painted from the PORTRAIT (web/public/portraits/IC8.webp): a huge bloated orange-tan
+    # brute with a small skull-like head sunk between massive shoulders, glowing teal eyes, a wide maw of ivory fangs round a
+    # raw red tongue, a grey cone-drill helmet on top, dark iron spikes along the shoulders and back, two muscular arms ending
+    # in silver DRILL BITS (the screen-right one is the same drill seen end-on: a round face with a hex nut), a dark metal box
+    # on the chest (a heart-monitor screen, pipes, a short nozzle) with grey hoses to the drills, a fat belly of segmented
+    # tan muscle, and an armoured tail ending in a spiked iron tip. Blood stains the drills and the maw. Card colours (median
+    # / lit / shade): shoulders #a96136 / #efab7e / #632004, belly #744825 / #cfbc9c / #42200e, drills #c9bca8 / #ede3d2,
+    # tongue #8e3838. Flash sheet: wormzer.png, 30 x 1 whole-pixel cells of 58 x 42, anchor (29, 21), one pose (it
+    # burrows: in a raid it is underground while it moves and surfaces to hit), cast shadow to the lower right baked in and
+    # cut by the cell bottom in columns 5-6, 9-11 and 21-24. Every column's art lies inside its own 58 px cell (alpha x 1-57)
+    # and the body does not creep (slope 0.05 px a column), so no flash_w / flash_drift. Symmetry: silhouette XOR / union is
+    # inconclusive (axis 15 0.24, 16 0.27, one step 0.26; a round blob, like Grokus), but the card creature is symmetric
+    # (two matching drills, tail centred on the back), so the usual 15 - h: headings 8-22 painted, lit from above.
+    "IC8": dict(
+        name="King Wormzer",
+        out="kingwormzer",               # NOT "wormzer": wormzer-anim*.png is the C13 Wormzer's repaint
+        flash="wormzer.png",
+        cell=(58, 42),
+        still_pad=5,
+        ref_body_only=True,              # reference cells without the cast shadow, centred
+        ref_smooth=True,
+        portrait=True,
+        design="portrait",
+        anim_colour_lock=True,
+        gamma=1.0,
+        grade=dict(body=((1.0, 0.0), (1.0, 0.0), (1.0, 0.0)), limbs=((1.0, 0.0), (1.0, 0.0), (1.0, 0.0))),
+        grade_chroma=True,
+        # Codex paints the skin more saturated and a little brighter than the card (h22-25 / s0.80-0.89 / v0.45-0.53 vs
+        # h22 / 0.67 / 0.43, part medians from art-work/IC8/tools/colours8.py): `tone` moves the orange skin toward the
+        # card's duller brown-orange; the blood (hue under 10), metal, teal eyes and fangs are outside the window
+        tone=dict(skin=dict(hue=(12, 45), soft=3, min_sat=0.4, chroma=0.8, value=0.9, hi=200)),
+        open_holes="core",               # gaps between the drill arms and the body
+        key_thin=True,                   # keeps the thin tail, hoses and spike tips
+        mirror_walk_roll=3,              # the drill arms swing in turn: a mirrored heading plays walk frame k+3
+        anchor=(29, 21),                 # Flash's own (the read window is the Flash cell)
+        flash_columns=30,
+        flash_step=12.0,
+        directions=30,
+        painted=list(range(8, 23)),      # front (96 degrees) -> left -> back (264 degrees); the rest mirrored (15 - h)
+        area=1.15,
+        drop=0.0,
+        shadow="flash",                  # the Flash cast shadow's own shape (to the lower right)
+        shadow_mend=True,                # fill the shadow the Flash drills hide, fade it out at cut cell edges
+        anim_pad=(5, 12, 2),             # 68 x 56 anim cells, anchor (34, 33); 30 x 4 x 68 = 8160 px
+        walk_lift=(0, 0, 0, 0, 0, 0),
+        loops=(8, 15, 22),
+        face="fanged face",
+        pose_parts="drill helmet, the two drill arms and the tail",
+        frames_note=(
+            "their orange blob is the fat body, the spike on top is the drill helmet, the small points on the shoulders are "
+            "the iron spikes, the two grey lumps at the sides are the drill hands and the thin curl at the back is the "
+            "armoured tail; the old sprites are smoother, shinier and more plastic than the real creature, and their face "
+            "is a blur"
+        ),
+        features=(
+            "small skull-like head sunk between huge shoulders, glowing teal eyes, wide maw of ivory fangs round a raw red "
+            "tongue, grey cone-drill helmet, dark iron spikes on the shoulders, two arms ending in silver drill bits, dark "
+            "metal chest box with grey hoses to the drills, fat belly of segmented tan muscle, armoured tail with a spiked tip"
+        ),
+        face_marks="the head (the drill helmet on top, the teal eyes and the fanged maw) and the two drill hands",
+        portrait_note=(
+            "THE DESIGN of King Wormzer (its official portrait, seen from the front): paint exactly this creature: a huge "
+            "bloated brute of wrinkled orange-tan muscle, a small skull-like head sunk low between massive hunched shoulders, "
+            "bony brow ridges round two glowing teal eyes, a wide maw lined with long ivory fangs round a raw dark-red tongue, "
+            "a grey cone-shaped DRILL HELMET with a spiral groove on top of the head, short dark iron spikes along the "
+            "shoulders and back, two thick muscular arms that end in SILVER DRILL BITS instead of hands (spiral cone drills), "
+            "a dark metal box strapped to the chest with a small screen showing a green heartbeat line, short pipes and a "
+            "nozzle under it, grey hoses running from the box to both drills, a huge round belly of segmented tan muscle "
+            "sitting on the ground, and an armoured segmented tail rising behind it with a spiked iron tip; dark red stains on "
+            "the drills and round the maw; in its colours and its painting style"
+        ),
+        style=(
+            "hand-painted digital game illustration in the style of portrait.png: wrinkled glossy orange-tan skin with "
+            "darker brown speckles, rich colour, soft painted shading with crisp edges, NO thick black outline, no pixel "
+            "art; the teal eyes, fangs, drills and helmet drawn bold and a little exaggerated so they read at a small size"
+        ),
+        light=(
+            "soft light from ABOVE, the same on the left and right halves of the creature (highlights on the helmet, the "
+            "shoulders, the drills and the top of the belly, darker underneath); no cast shadow on the ground"
+        ),
+        texture=(
+            "wrinkled glossy orange-tan skin with brown speckles, paler tan segmented belly, silver-grey metal drills, helmet, "
+            "spikes and chest box with dark red stains, glowing teal eyes, ivory fangs, dark-red tongue"
+        ),
+        no_fx=(
+            "No falling drops, drips, puddles, splashes, sparks, smoke, dust, rubble, motion streaks, glow halos or loose "
+            "bits; the blood is only dark red stains painted on the drills and round the maw, nothing drips off. No part of "
+            "the creature is pure magenta or hot pink: the tongue and gums are a dark brick red (like #8e3838), clearly "
+            "different from the magenta background"
+        ),
+        creature=(
+            "King Wormzer, the drill-armed brute of portrait.png (NOT a worm, NOT a toad, NOT a robot, NOT a dinosaur). A "
+            "HUGE BLOATED BODY of wrinkled orange-tan muscle: massive hunched SHOULDERS and a huge round BELLY of segmented tan "
+            "muscle plates that sits on the ground (no visible legs). The HEAD is small and skull-like, sunk low between the "
+            "shoulders: bony brow ridges round TWO GLOWING TEAL EYES and a WIDE MAW lined with long ivory FANGS round a raw "
+            "dark-red tongue. On top of the head sits a grey cone-shaped DRILL HELMET with a spiral groove, its point straight "
+            "up. Short dark iron SPIKES stick out along the shoulders and back. TWO THICK MUSCULAR ARMS hang at the sides and "
+            "end in big SILVER DRILL BITS instead of hands (spiral cone drills pointing forward, the same on both arms). A dark "
+            "metal BOX is strapped to the chest (a small screen with a green heartbeat line, short pipes and a nozzle under it) "
+            "with grey HOSES running from it to both drills. From the middle of the back rises an armoured segmented TAIL that "
+            "curls up and ends in a SPIKED IRON TIP. Dark red stains on the drills and round the maw. Colours: skin (mid "
+            "#a96136, lit #efab7e, shade #632004, dark brown speckles), belly (mid #8a6034, lit #cfbc9c), drills, helmet and "
+            "spikes silver-grey (#c9bca8, lit #ede3d2), chest box dark iron, eyes glowing teal (#9fe8dc), fangs ivory, tongue "
+            "dark brick red (#8e3838)."
+        ),
+        parts=(
+            " 1. Head: ONE small skull-like head sunk low between the shoulders, a grey cone DRILL HELMET on top pointing up; from behind only the helmet and the top of the head show.\n"
+            " 2. Face: TWO glowing teal eyes under bony brows and a wide maw of ivory fangs round a dark-red tongue (hidden from behind).\n"
+            " 3. Spikes: short dark iron spikes along the shoulders and back.\n"
+            " 4. Arms: TWO thick muscular arms, each ending in ONE silver DRILL BIT instead of a hand (no fingers, no claws).\n"
+            " 5. Chest: ONE dark metal box on the chest with grey hoses to both drills (hidden from behind).\n"
+            " 6. Body: a huge round bloated body, the segmented tan belly sitting on the ground; no legs show.\n"
+            " 7. Tail: ONE armoured segmented tail rising from the middle of the back, curling up, a spiked iron tip.\n"
+            " 8. No wings, no horns other than the helmet, no hind legs, no extra arms."
+        ),
+        back_note=(
+            "BACK VIEW: the creature faces away from the viewer: the eyes, maw and chest box are NOT visible; the viewer sees "
+            "the broad orange-tan back with its rows of iron spikes, the top of the drill helmet over it, the two arms and "
+            "drills at the sides and the armoured tail rising from the middle of the back toward the viewer"
+        ),
+        walk=(
+            "Cells 1-6 are ONE WALK CYCLE (six different steps, then it loops back to cell 1): a heavy WADDLE, the huge body "
+            "shuffling forward on its belly, the arms swinging the drills in turn: 1 the left drill swings forward in the "
+            "facing direction, the body leans a little to the right; 2 the body rocks back to upright and bobs down; 3 the "
+            "body rises a little, the right drill starts forward; 4 the right drill swings forward, the body leans a little "
+            "to the left; 5 the body rocks back to upright and bobs down; 6 the body rises, the left drill starts forward. The "
+            "head, helmet and tail keep the angle of ref.png (they bob a little). Same size as ref.png, centred in its cell, "
+            "the belly on the same horizontal ground line in every cell."
+        ),
+        attack=(
+            "Cells 7-11 are an ATTACK (a two-drill GROUND SLAM that hits everything round it), the same creature as ref.png: 7 "
+            "anticipation: the body rears back and up away from the facing direction, both drills lifting; 8 wind-up: both "
+            "drills raised high above the head, the maw roaring wide open; 9 strike: the body lunges forward in the facing "
+            "direction and BOTH drills slam down into the ground in front of it; 10 follow-through: the body furthest forward "
+            "and low, both drill tips driven into the ground; 11 recovery: back to the resting pose of ref.png. The head never "
+            "turns toward the viewer. Do NOT paint dust, rubble, cracks or impact effects. Cell 12 stays empty magenta."
+        ),
+    ),
 }
 
 

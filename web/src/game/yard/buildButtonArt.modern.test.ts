@@ -58,8 +58,19 @@ describe("the build menu's Modern pictures", () => {
   });
 
   it("an Inferno building with no Inferno look of its own keeps its Inferno button", () => {
-    // The main yard's 3D Academy is not the Inferno's.
-    expect(buildPicture(26, "inferno", false)).toEqual({ url: buttonUrl(26, "inferno"), modern: false });
+    // The main yard's 3D Monster Juicer is not shown in an Inferno yard.
+    expect(buildPicture(9, "inferno", false)).toEqual({ url: buttonUrl(9, "inferno"), modern: false });
+  });
+
+  it("the Inferno's painted Academy and Housing Bunker have Modern pictures of their own", () => {
+    for (const type of [26, 128]) {
+      const picture = buildPicture(type, "inferno", false);
+      expect(picture.modern).toBe(true);
+      expect(picture.url).toMatch(new RegExp(`/modern/${type}\\.inferno\\.[0-9a-f]{8}\\.webp$`));
+      expect(buildPicture(type, "inferno", true)).toEqual({ url: buttonUrl(type, "inferno"), modern: false });
+    }
+    // The main yard's 3D Academy keeps its own picture.
+    expect(buildPicture(26, "main", false).url).not.toBe(buildPicture(26, "inferno", false).url);
   });
 
   it("the Inferno's 3D Coal Extractor has a Modern picture of its own, not the Pebble Shiner's", () => {
