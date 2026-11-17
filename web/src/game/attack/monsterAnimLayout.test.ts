@@ -62,7 +62,7 @@ describe("applyLayout", () => {
     expect(applyLayout(POKEY, {})).toBe(POKEY);
   });
 
-  it("ships only the Bandito, Pokey, Bolt, Fink, Eye-ra, Fang, Ichi, Crabatron, Brain, D.A.V.E. (both skins), Project X, Wormzer, Zafreeti, Vorg, Teratorn, Octo-ooze, Rezghul, Slimeattikus (big and mini), Korath 5 and 6, Spurtz, Zagnoid, Malphus, Valgos, Balthazar and Grokus layouts, so every other sheet is exactly the Flash table", () => {
+  it("ships only the Bandito, Pokey, Bolt, Fink, Eye-ra, Fang, Ichi, Crabatron, Brain, D.A.V.E. (both skins), Project X, Wormzer, Zafreeti, Vorg, Teratorn, Octo-ooze, Rezghul, Slimeattikus (big and mini), Korath 5 and 6, Spurtz, Zagnoid, Malphus, Valgos, Balthazar, Grokus and Sabnox layouts, so every other sheet is exactly the Flash table", () => {
     expect(Object.keys(REPAINT_LAYOUTS).sort()).toEqual([
       "monsters/13.png",
       "monsters/14.v1.png",
@@ -80,6 +80,7 @@ describe("applyLayout", () => {
       "monsters/malphus.png",
       "monsters/octoooze.png",
       "monsters/rezghul.png",
+      "monsters/sabnox.png",
       "monsters/slimeattikus_anim.png",
       "monsters/slimeattikusmini_anim.png",
       "monsters/sprite.1.v1.png",
@@ -436,6 +437,33 @@ describe("applyLayout", () => {
     expect(sheet.animations.walk).toEqual({ first: 1, count: 6, ticksPerFrame: 8 });
     expect(sheet.animations.idle).toBeUndefined();
     expect(frameRow(sheet, "idle", 8)).toBe(frameRow(sheet, "walk", 8));
+    expect(sheet.animations.attack?.first).toBe(7);
+    expect((sheet.animations.attack?.first ?? 0) + (sheet.animations.attack?.count ?? 0)).toBe(12);
+    expect(sheet.strikeFrame).toBe(2);
+  });
+
+  it("the Sabnox layout matches the animated PNG and keeps the salamander on its ground point", () => {
+    const old = MONSTER_SPRITES["IC7"];
+    if (!old) throw new Error("no IC7");
+    const sheet = spriteFor("IC7");
+    if (!sheet) throw new Error("no sprite for IC7");
+    const data = readFileSync(resolve(__dirname, "../../../../server/public/assets/monsters/sabnox-anim@4x.png"));
+    expect(data.readUInt32BE(16)).toBe(sheet.width * 4);
+    expect(data.readUInt32BE(20)).toBe(sheet.height * 4);
+    // The Flash cell is 42x34 (whole pixels, no creep); the repaint's is 8 px wider each side, 12 px taller on
+    // top and 2 at the bottom.
+    expect(sheet.frameWidth).toBe(old.frameWidth + 16);
+    expect(sheet.frameHeight).toBe(old.frameHeight + 14);
+    expect(sheet.directions).toBe(30);
+    expect(sheet.packedColumns).toBeUndefined();
+    expect(sheet.width).toBe(58 * 30);
+    expect(sheet.width * 4).toBeLessThanOrEqual(8192);
+    expect(sheet.height).toBe(48 * 12);
+    expect(frameRect(sheet, 29, 11)).toEqual({ x: 29 * 58, y: 11 * 48, width: 58, height: 48 });
+    expect(sheet.anchorX).toBe(old.anchorX + 8);
+    expect(sheet.anchorY).toBe(old.anchorY + 12);
+    expect(sheet.animations.idle).toEqual({ first: 0, count: 1, ticksPerFrame: 8 });
+    expect(sheet.animations.walk).toEqual({ first: 1, count: 6, ticksPerFrame: 8 });
     expect(sheet.animations.attack?.first).toBe(7);
     expect((sheet.animations.attack?.first ?? 0) + (sheet.animations.attack?.count ?? 0)).toBe(12);
     expect(sheet.strikeFrame).toBe(2);
