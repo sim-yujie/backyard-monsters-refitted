@@ -14,13 +14,21 @@ const ASSETS = fileURLToPath(new URL("../../../../server/public/assets/", import
 /**
  * The 3D yard buildings: the first eight (owner, 31 Oct 2026: "All approved"), then the Flinger, Juicer, Yard Planner,
  * Map Room, General Store, Blocks, Stone Block, Baiter, Catapult and Champion Cage (1 Nov 2026), then the Monster
- * Academy and the Monster Lab, then the Champion Chamber (2 Nov 2026), then the Monster Locker (10 Nov 2026).
+ * Academy and the Monster Lab, then the Champion Chamber (2 Nov 2026), then the Monster Locker (10 Nov 2026), then the
+ * Siege Factory and Siege Works (17 Nov 2026).
  */
-const TYPES = [1, 2, 3, 4, 5, 6, 8, 9, 10, 11, 12, 13, 15, 16, 17, 18, 19, 24, 26, 51, 114, 116, 117, 119];
+const TYPES = [1, 2, 3, 4, 5, 6, 8, 9, 10, 11, 12, 13, 15, 16, 17, 18, 19, 24, 26, 51, 114, 116, 117, 119, 133, 134];
 /** The ones whose parts move, as Flash's do; the rest stand still, as Flash's did. */
 const MOVING = [1, 2, 3, 4, 6, 8, 9, 13, 19, 26, 116];
+/**
+ * The ones whose strip is not Flash's cell for cell, each tested on its own: the Siege Factory's (an idle cell before
+ * Flash's 35) and the Siege Works' (one strip of its rocker, chain and bellows for Flash's three of the same cells).
+ */
+const OWN_STRIP = [133, 134];
 /** The ones with no damaged or destroyed 3D look yet: the General Store, tinted and then Flash's rubble. */
 const NO_RUIN = [12];
+/** The ones with a 3D damaged look of their own and Flash's rubble when destroyed: the Siege Factory and Works. */
+const FLASH_RUBBLE = [133, 134];
 /** The traps (art/traps-3d): whole until they fire, then their destroyed look is the fired trap; never damaged. */
 const TRAPS = [24, 117];
 
@@ -28,7 +36,10 @@ const TRAPS = [24, 117];
  * The looks whose model reaches past Flash's picture, `[left, top, right, bottom]` in px each edge may differ: the
  * Putty Squisher's first vial stands 8 px further right and its last wheel 12 px higher, the third Hatchery's front
  * foot 9 px lower, the second Academy's shoulder brackets 7 px higher (as approved, 1 Nov 2026). The second Locker's
- * key stands 7 px further in from the left than Flash's (the owner's key angle, 10 Nov 2026).
+ * key stands 7 px further in from the left than Flash's (the owner's key angle, 10 Nov 2026). The Siege Works' 3D
+ * stays inside Flash's: Flash's picture carries a wide faint rim of stones round its foot, 9 px further left, 19 px
+ * further right and 7 px lower than the 3D's leaves, which fade into the lawn (as approved, 17 Nov 2026); the Siege
+ * Factory's pale fringe of blades reaches 15 px further right in Flash's picture than in the 3D's.
  */
 const WIDER: Record<string, Box> = {
   "3:1": [6, 6, 8, 6],
@@ -36,6 +47,8 @@ const WIDER: Record<string, Box> = {
   "13:3": [6, 6, 6, 9],
   "8:2": [7, 6, 6, 6],
   "26:2": [6, 7, 6, 6],
+  "133:1": [6, 6, 16, 6],
+  "134:1": [10, 6, 20, 8],
 };
 
 /**
@@ -181,7 +194,7 @@ describe("the 3D yard buildings", () => {
         ]);
       }
     }
-    for (const type of TYPES.filter((one) => !MOVING.includes(one))) {
+    for (const type of TYPES.filter((one) => !MOVING.includes(one) && !OWN_STRIP.includes(one))) {
       const art = resolveArt(type, 1, ArtState.DEFAULT);
       expect(art?.anims, `type ${type}`).toEqual([]);
       expect(art?.still).toBeUndefined();
@@ -259,7 +272,7 @@ describe("the 3D yard buildings", () => {
   });
 
   it("show their own 3D damaged and destroyed looks, standing still", () => {
-    for (const type of TYPES.filter((one) => !NO_RUIN.includes(one) && !TRAPS.includes(one))) {
+    for (const type of TYPES.filter((one) => !NO_RUIN.includes(one) && !TRAPS.includes(one) && !FLASH_RUBBLE.includes(one))) {
       const folder = `/assets/${artFolder(type) ?? ""}`;
       for (const look of BUILDING_3D_ART[type] ?? []) {
         const name = `type ${type} look ${look.from}`;
@@ -304,6 +317,68 @@ describe("the 3D yard buildings", () => {
       const ruin = resolveArt(type, 1, ArtState.DESTROYED);
       expect(ruin?.top.url).toBe(`/assets/${artFolder(type) ?? ""}${flashLooks(type)[0]?.[3]?.[0] ?? ""}`);
     }
+  });
+
+  it("give the Siege Factory its one 3D look, an idle cell with no smoke, then Flash's 35 cells while it builds", () => {
+    const folder = "/assets/buildings/siegefactory/";
+    expect((BUILDING_3D_ART[133] ?? []).map((look) => look.from)).toEqual([1]);
+    expect(flashLooks(133)[0]?.[7]?.map((strip) => strip[5])).toEqual([35]);
+    for (const level of [1, 2]) {
+      const art = resolveArt(133, level, ArtState.DEFAULT);
+      const name = `level ${level}`;
+      // The body (standing in its haze) under one strip: its idle cell first (`rest`), then the 35-cell loop.
+      expect(art?.topIsAnim, name).toBe(false);
+      expect(art?.top.url, name).toBe(`${folder}body.3d1@2x.webp`);
+      expect(art?.still?.url, name).toBe(`${folder}top.3d1@2x.webp`);
+      expect(art?.shadow?.url, name).toBe(`${folder}shadow.3d1.jpg`);
+      expect(art?.anims.map(({ url, frames, columns, rest }) => ({ url, frames, columns, rest })), name).toEqual([
+        { url: `${folder}anim.3d1@2x.webp`, frames: 36, columns: 16, rest: 1 },
+      ]);
+      // Its own damaged still; Flash's rubble, and its shadow, when destroyed.
+      const damaged = resolveArt(133, level, ArtState.DAMAGED);
+      expect(damaged?.top.url, name).toBe(`${folder}top.3d1.damaged@2x.webp`);
+      expect(damaged?.shadow?.url, name).toBe(`${folder}shadow.3d1.damaged.jpg`);
+      expect(damaged?.anims, name).toEqual([]);
+      const destroyed = resolveArt(133, level, ArtState.DESTROYED);
+      expect(destroyed?.top.url, name).toBe(`${folder}top.1.destroyed.png`);
+      expect(destroyed?.shadow?.url, name).toBe(`${folder}shadow.1.jpg`);
+    }
+    // The Classic look keeps Flash's pictures and its strip, with no idle cell.
+    setClassicLook(true);
+    const classic = resolveArt(133, 1, ArtState.DEFAULT);
+    expect(classic?.top.url).toBe(`${folder}top.1.v3.png`);
+    expect(classic?.anims.map((anim) => [anim.frames, anim.rest])).toEqual([[35, undefined]]);
+  });
+
+  it("give the Siege Works its one 3D look, its rocker, chain and bellows in one strip of Flash's 60 cells", () => {
+    const folder = "/assets/buildings/siegelab/";
+    expect((BUILDING_3D_ART[134] ?? []).map((look) => look.from)).toEqual([1]);
+    for (const level of [1, 5, 10]) {
+      const art = resolveArt(134, level, ArtState.DEFAULT);
+      const name = `level ${level}`;
+      // The body under one strip of moving parts: Flash's three 60-cell strips (`anim1` to `anim3`) as one.
+      expect(flashLooks(134)[0]?.[7]?.map((strip) => strip[5])).toEqual([60, 60, 60]);
+      expect(art?.topIsAnim, name).toBe(false);
+      expect(art?.top.url, name).toBe(`${folder}body.3d1@2x.webp`);
+      expect(art?.still?.url, name).toBe(`${folder}top.3d1@2x.webp`);
+      expect(art?.shadow?.url, name).toBe(`${folder}shadow.3d1.jpg`);
+      expect(art?.anims.map(({ url, frames, columns }) => ({ url, frames, columns })), name).toEqual([
+        { url: `${folder}anim.3d1@2x.webp`, frames: 60, columns: 21 },
+      ]);
+      // Its own damaged still; Flash's rubble, and its shadow, when destroyed.
+      const damaged = resolveArt(134, level, ArtState.DAMAGED);
+      expect(damaged?.top.url, name).toBe(`${folder}top.3d1.damaged@2x.webp`);
+      expect(damaged?.shadow?.url, name).toBe(`${folder}shadow.3d1.damaged.jpg`);
+      expect(damaged?.anims, name).toEqual([]);
+      const destroyed = resolveArt(134, level, ArtState.DESTROYED);
+      expect(destroyed?.top.url, name).toBe(`${folder}top.1.destroyed.png`);
+      expect(destroyed?.shadow?.url, name).toBe(`${folder}shadow.1.jpg`);
+    }
+    // The Classic look keeps Flash's pictures and its three strips.
+    setClassicLook(true);
+    expect(resolveArt(134, 1, ArtState.DEFAULT)?.top.url).toBe(`${folder}top.1.v6.png`);
+    expect(resolveArt(134, 1, ArtState.DEFAULT)?.anims.map((anim) => anim.frames)).toEqual([60, 60, 60]);
+    expect(resolveArt(134, 1, ArtState.DAMAGED)?.top.url).toBe(`${folder}top.1.damaged.v4.png`);
   });
 
   it("give the Inferno's Blocks their own 3D looks in an Inferno yard, from the Inferno's folder", () => {

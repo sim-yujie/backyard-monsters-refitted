@@ -707,7 +707,28 @@ export const BUILDING_3D_ART: Readonly<Record<number, readonly TierArt[]>> = {
     { from: 1, top: ["top.3d1@2x.webp", -66, -61], shadow: ["shadow.3d1.jpg", -65, 17], lift: 0,
       damaged: { top: ["top.3d1.damaged@2x.webp", -66, -61], shadow: ["shadow.3d1.damaged.jpg", -66, 19] },
       destroyed: { top: ["top.3d1.destroyed@2x.webp", -66, -25], shadow: ["shadow.3d1.destroyed.jpg", -66, 23] } },
-  ],  // 150 Observatory: this project's own (alliances), 3D design C, the lookout deck; it idles (`revampBuildings.ts`)
+  ],
+  // 133 Siege Factory: 3D (owner on the Review Desk, 17 Nov 2026, card b8-siege-3d-r4), Flash's one look, from
+  // art/siege-factory-3d, `export3d_buildings.py siegefactory`, standing in Flash's pale haze (laid into its body).
+  // While a weapon is being built the rocker, rod, shaft and wheels turn and the pump smokes: 35 cells as Flash's,
+  // after one idle cell (`rest`), the machine at rest with no smoke, which it holds while nothing is being built.
+  // Its own damaged still; destroyed is Flash's rubble.
+  133: [
+    { from: 1, top: ["top.3d1@2x.webp", -75, -99], shadow: ["shadow.3d1.jpg", -55, 27], lift: 0,
+      anim: { strip: ["anim.3d1@2x.webp", -52, -104, 124, 75, 36], columns: 16, body: ["body.3d1@2x.webp", -75, -99],
+        rest: 1 },
+      damaged: { top: ["top.3d1.damaged@2x.webp", -75, -87], shadow: ["shadow.3d1.damaged.jpg", -67, 22] } },
+  ],
+  // 134 Siege Works: 3D (owner on the Review Desk, 17 Nov 2026, card b8-siege-3d-r4), Flash's one look, from
+  // art/siege-works-3d, `export3d_buildings.py siegeworks`. While a weapon is being researched the rocker swings, the
+  // chain runs and the bellows pumps: one strip of 60 cells, Flash's three 60-cell strips together. Its own damaged
+  // still; destroyed is Flash's rubble.
+  134: [
+    { from: 1, top: ["top.3d1@2x.webp", -59, -84], shadow: ["shadow.3d1.jpg", -52, 9], lift: 0,
+      anim: { strip: ["anim.3d1@2x.webp", -55, -90, 96, 143, 60], columns: 21, body: ["body.3d1@2x.webp", -59, -74] },
+      damaged: { top: ["top.3d1.damaged@2x.webp", -65, -94], shadow: ["shadow.3d1.damaged.jpg", -65, 10] } },
+  ],
+  // 150 Observatory: this project's own (alliances), 3D design C, the lookout deck; it idles (`revampBuildings.ts`)
   150: OBSERVATORY_MODERN_ART,
 };
 

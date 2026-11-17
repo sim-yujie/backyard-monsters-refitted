@@ -1,0 +1,3 @@
+#!/bin/bash
+# py <args> : python with numpy (Blender's) and Pillow (pip install --target ~/.cache/bym-artpy pillow, with Blender's python)
+PYTHONPATH="$HOME/.cache/bym-artpy" exec "$HOME/opt/blender-5.2.4-linux-x64/5.2/python/bin/python3.13" "$@"

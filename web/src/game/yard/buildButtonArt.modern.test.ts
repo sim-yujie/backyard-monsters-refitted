@@ -42,8 +42,13 @@ describe("the build menu's Modern pictures", () => {
       modern: true,
     });
     expect(buildPicture(1, "main", true)).toEqual({ url: buttonUrl(1), modern: false });
-    // A building with no new look (type 133): Flash's button either way.
-    expect(buildPicture(133, "main", false)).toEqual({ url: buttonUrl(133), modern: false });
+    // A building with no new look (the Outpost Core, 112, read as a main-yard type): Flash's button either way.
+    expect(buildPicture(112, "main", false)).toEqual({ url: buttonUrl(112), modern: false });
+    // The Siege Factory and Siege Works have their 3D looks' pictures (17 Nov 2026).
+    for (const type of [133, 134]) {
+      expect(buildPicture(type, "main", false).url).toMatch(new RegExp(`/modern/${type}\\.main\\.[0-9a-f]{8}\\.webp$`));
+      expect(buildPicture(type, "main", true)).toEqual({ url: buttonUrl(type), modern: false });
+    }
     // The Monster Locker (8) has its 3D look's picture (10 Nov 2026).
     expect(buildPicture(8, "main", false).url).toMatch(/\/modern\/8\.main\.[0-9a-f]{8}\.webp$/);
     expect(buildPicture(8, "main", true)).toEqual({ url: buttonUrl(8), modern: false });
