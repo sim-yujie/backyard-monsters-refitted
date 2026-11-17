@@ -18,7 +18,8 @@ import { deviceMemoryGb, deviceTextureLimit, quality, qualityChoice, type Qualit
  *
  * Kept small: one entry per kind per picture per page load, at most
  * {@link LOAD_MAX} a page load and {@link SESSION_MAX} a browser tab
- * session, on top of the error reporter's own batch caps.
+ * session (a handled over-limit picture has its own, smaller budget,
+ * {@link HANDLED_LOAD_MAX}), on top of the error reporter's own batch caps.
  */
 
 export type GraphicsProblem = "context-lost" | "context-restored" | "sheet-failed" | "sheet-over-limit" | "sheet-cut-failed";
@@ -37,6 +38,15 @@ export const LOAD_MAX = 8;
 export const SESSION_MAX = 20;
 /** Where the tab's count is kept (`sessionStorage`). */
 export const SESSION_KEY = "bymr.graphicsLog.sent";
+/**
+ * A picture over the limit that was cut through a canvas is handled, and a
+ * 4096 phone meets several at every yard (the 3D towers' turret strips), so
+ * these have a budget of their own and never use up the one for real
+ * failures: one a page load, three a tab session.
+ */
+export const HANDLED_LOAD_MAX = 1;
+export const HANDLED_SESSION_MAX = 3;
+export const HANDLED_SESSION_KEY = "bymr.graphicsLog.handled";
 
 const SUBJECT_MAX = 80;
 const DETAIL_MAX = 100;
@@ -214,28 +224,36 @@ const sessionStore = (): Storage | null => {
 
 /** Lets through one entry per kind per picture, at most `loadMax` a page load and `sessionMax` a tab session. */
 export class GraphicsLogThrottle {
-  private readonly seen = new Set<string>();
+  /** Kinds and pictures let through this page load, by budget. */
+  private readonly seen = { shared: new Set<string>(), handled: new Set<string>() };
 
   constructor(
     private readonly loadMax = LOAD_MAX,
     private readonly sessionMax = SESSION_MAX,
     private readonly store: () => Storage | null = sessionStore,
+    private readonly handledLoadMax = HANDLED_LOAD_MAX,
+    private readonly handledSessionMax = HANDLED_SESSION_MAX,
   ) {}
 
   allow(kind: GraphicsProblem, subject: string): boolean {
+    const handled = kind === "sheet-over-limit";
+    const seen = handled ? this.seen.handled : this.seen.shared;
+    const loadMax = handled ? this.handledLoadMax : this.loadMax;
+    const sessionMax = handled ? this.handledSessionMax : this.sessionMax;
+    const sessionKey = handled ? HANDLED_SESSION_KEY : SESSION_KEY;
     const key = `${kind}\n${subject}`;
-    if (this.seen.has(key) || this.seen.size >= this.loadMax) return false;
+    if (seen.has(key) || seen.size >= loadMax) return false;
     const store = this.store();
     let sent = 0;
     try {
-      sent = Number(store?.getItem(SESSION_KEY) ?? 0) || 0;
+      sent = Number(store?.getItem(sessionKey) ?? 0) || 0;
     } catch {
       sent = 0;
     }
-    if (sent >= this.sessionMax) return false;
-    this.seen.add(key);
+    if (sent >= sessionMax) return false;
+    seen.add(key);
     try {
-      store?.setItem(SESSION_KEY, String(sent + 1));
+      store?.setItem(sessionKey, String(sent + 1));
     } catch {
       // Site data blocked: the page load's own cap still holds.
     }

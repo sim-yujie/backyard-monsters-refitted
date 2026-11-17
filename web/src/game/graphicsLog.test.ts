@@ -4,6 +4,7 @@ import {
   errorWords,
   GraphicsLogThrottle,
   graphicsMessage,
+  HANDLED_SESSION_KEY,
   LOAD_MAX,
   pictureName,
   readGpuName,
@@ -105,6 +106,23 @@ describe("the throttle", () => {
     expect(second.allow("sheet-failed", "b0")).toBe(true);
     expect(second.allow("sheet-failed", "b1")).toBe(true);
     expect(second.allow("sheet-failed", "b2")).toBe(false);
+  });
+
+  it("gives a handled over-limit picture its own small budget, so it never crowds out real failures", () => {
+    const store = storage();
+    const throttle = new GraphicsLogThrottle(2, 20, () => store);
+    // A 4096 phone's yard: three turret strips cut through a canvas.
+    expect(throttle.allow("sheet-over-limit", "railguntower/turret.t1.webp (@2x)")).toBe(true);
+    expect(throttle.allow("sheet-over-limit", "flaktower/turret.t1.webp (@2x)")).toBe(false);
+    expect(throttle.allow("sheet-over-limit", "imagmatower/turret.t1.webp (@2x)")).toBe(false);
+    expect(throttle.allow("context-lost", "game canvas")).toBe(true);
+    expect(throttle.allow("sheet-failed", "monsters/a.png (@2x)")).toBe(true);
+    expect(store.getItem(SESSION_KEY)).toBe("2");
+    expect(store.getItem(HANDLED_SESSION_KEY)).toBe("1");
+    // Reloads: three handled ones a tab session in all.
+    for (let load = 0; load < 4; load += 1) new GraphicsLogThrottle(2, 20, () => store).allow("sheet-over-limit", "railguntower/turret.t1.webp (@2x)");
+    expect(store.getItem(HANDLED_SESSION_KEY)).toBe("3");
+    expect(new GraphicsLogThrottle(2, 20, () => store).allow("sheet-cut-failed", "railguntower/turret.t1.webp (@2x)")).toBe(true);
   });
 
   it("still caps a page load with site data blocked", () => {
