@@ -42,7 +42,7 @@ import { usernameProblem } from "@/game/account/rules/accountRules";
 import { saveClassicLook, savedClassicLook, saveMusicChoice, savedMusicChoice, type MusicChoice } from "@/game/classicLook";
 import { setWorldChatOn, worldChatOn } from "@/game/chat/worldChatSetting";
 import { effectsQuality, screenShakeOn, setEffectsQuality, setScreenShake, type EffectsQuality } from "@/game/attack/juice";
-import { quality as downloadQuality, setQuality, type Quality } from "@/game/quality";
+import { quality as downloadQuality, qualityChoice, setQuality, type Quality } from "@/game/quality";
 import { noteShinyLock } from "@/game/shinyLock";
 import { savedFontChoice, setFontChoice, type FontChoice } from "@/ui/fontChoice";
 import { Popup } from "@/ui/Popup";
@@ -137,6 +137,8 @@ export const SETTINGS_TEXT = {
     medium: "Lighter monsters and music. Music waits until you turn it on.",
     low: "For slow internet: lightest monsters, music off, slower map updates.",
   },
+  /** Medium as this device's default, not picked: its music plays as normal (`musicHeld`). */
+  downloadHintDeviceMedium: "Lighter monsters and music.",
   downloadSaved: "Saved. Monsters already on screen change after a reload.",
 } as const;
 
@@ -660,7 +662,11 @@ const downloadRow = (): HTMLElement[] => {
   hint.className = "field__hint";
   hint.id = "settings-quality-hint";
   hint.setAttribute("aria-live", "polite");
-  hint.textContent = SETTINGS_TEXT.downloadHint[select.value as Quality];
+  // Medium the device chose (no choice kept) does not hold the music.
+  hint.textContent =
+    select.value === "medium" && qualityChoice() === null
+      ? SETTINGS_TEXT.downloadHintDeviceMedium
+      : SETTINGS_TEXT.downloadHint[select.value as Quality];
   select.setAttribute("aria-describedby", hint.id);
   select.addEventListener("change", () => {
     const level = select.value as Quality;
