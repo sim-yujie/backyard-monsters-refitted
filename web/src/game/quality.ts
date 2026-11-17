@@ -7,9 +7,9 @@
  *   their painted size (`@4x`, `@3x`, Korath 5 and 6 `@2x`), the yard tune at full
  *   quality, ready as soon as the yard opens.
  * - `medium`: the sheets' `@2x` copies (half size, about a quarter of the
- *   bytes; Korath 5 and 6 `@1.5x`), the lighter yard tune, and music off
- *   until the player turns it on once in this browser: nothing is downloaded
- *   for it until then.
+ *   bytes; Korath 5 and 6 `@1.5x`), the lighter yard tune, and, when the
+ *   player picked it, music off until they turn it on once in this browser:
+ *   nothing is downloaded for it until then.
  * - `low`: the sheets' 1x copies (the size Flash drew them, about a tenth of the
  *   bytes), the lighter yard tune, music off at the start of every visit until
  *   the player turns it on, and the map rooms asking the server again a third
@@ -18,6 +18,7 @@
  * A player who never chose starts on High, or on Medium on a low-memory
  * device (`defaultQuality`, owner 17 Nov 2026): old phones ran out of
  * graphics memory with the High sheets and drew monsters as green squares.
+ * Medium by default plays the music as High does (`musicHeld`).
  *
  * The copies are made by `web/tools/sheet_copies.py`, and Pixi reads their
  * size from the `@2x` in the name, so a cell is framed the same at every level.
@@ -238,9 +239,13 @@ export const lightMusic = (level: Quality = quality()): boolean => level !== "hi
 
 /**
  * Whether the music waits, off, until the player turns it on: every visit on
- * Low; on Medium until they have once turned it on in this browser.
+ * Low; on Medium until they have once turned it on in this browser. Only on a
+ * level the player chose (owner, 17 Nov 2026): a player put on Medium by the
+ * device's default ({@link defaultQuality}) hears the music as on High, in
+ * its lighter copy ({@link lightMusic}).
  */
 export const musicHeld = (level: Quality = quality(), store: Storage | null = storage()): boolean => {
+  if (qualityChoice(store) !== level) return false;
   if (level === "low") return true;
   if (level !== "medium") return false;
   try {

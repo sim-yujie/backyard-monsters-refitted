@@ -92,16 +92,31 @@ describe("music and the map on each level", () => {
     expect([lightMusic("high"), lightMusic("medium"), lightMusic("low")]).toEqual([false, true, true]);
   });
 
-  it("holds the music on Low always, on Medium until it was once turned on here", () => {
+  it("holds the music on a chosen Low always, on a chosen Medium until it was once turned on here", () => {
     const store = storage();
+    setQuality("high", store);
     expect(musicHeld("high", store)).toBe(false);
+    setQuality("low", store);
     expect(musicHeld("low", store)).toBe(true);
-    expect(musicHeld("medium", store)).toBe(true);
     noteMusicTurnedOn("low", store);
+    setQuality("medium", store);
     expect(musicHeld("medium", store)).toBe(true);
     noteMusicTurnedOn("medium", store);
     expect(musicHeld("medium", store)).toBe(false);
+    setQuality("low", store);
     expect(musicHeld("low", store)).toBe(true);
+  });
+
+  it("plays the music as normal on a Medium the device chose, never turned on before (owner, 17 Nov 2026)", () => {
+    const store = storage();
+    expect(qualityChoice(store)).toBeNull();
+    expect(quality(store, () => "medium")).toBe("medium");
+    expect(musicHeld("medium", store)).toBe(false);
+    // Still the lighter copy of the tune.
+    expect(lightMusic("medium")).toBe(true);
+    // Choosing Medium in Settings then holds it, as before.
+    setQuality("medium", store);
+    expect(musicHeld("medium", store)).toBe(true);
   });
 
   it("asks the map a third as often on Low", () => {
