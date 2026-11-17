@@ -1,6 +1,6 @@
 {
   "files": {
-    "brain.ts": "6617051fe034b67cf06a3dbcf38c782dec8b4c4b5c4280631b4070e6d646a113",
+    "brain.ts": "d2c7886a4178074e20e26fbb3c5a51cb2096d2a932402e3da0d440e346865061",
     "champions.ts": "c13176acb364f8bbeddf5d5ee5ec15d54bc4815ad430076b2d74bc0635464d7b",
     "combatStatsData.ts": "69c8d0f053adb913ca54730e83814871cd48714eb0112bc9afaf8c089f158869",
     "damagePercent.ts": "5e16e7435753175489a608f9547f1e8eab10e8f2acb54c2c251a6837e9acb662",
@@ -8,9 +8,9 @@
     "defence.ts": "1efb5e7ce46e7a9a2353183d603948ef7d1f0764827a5281a836526f896e03df",
     "descentBurn.ts": "c17b4f64b405a79c33f245b3c28c606396dcfe9cf0a8d1bcf7b8708f62878f48",
     "digest.ts": "5b989c2765d079953fa20f07589fa378c11af5ab28885e2cfa7fba6e63e5b752",
-    "engine.ts": "0761e84f9793887de310f5e8c428f9f63d83315f6c012e6787e07a728f0528e5",
+    "engine.ts": "bd7a44b7026e441745ae2dfe48683fc5f95463373a5b4d1100c5a7d5e1677c92",
     "grid.ts": "f860efca5ec3023c3505438d4341b916a3c4ee73f07f833817376a816f490eb3",
-    "habits.ts": "496f41adbbd266c05efc2c82cea3262e943a3e4bc2cab8baa0a2b702fa9ab69d",
+    "habits.ts": "6d7a6b78e5bfa46884165b24efd4eb5c9184eec2e68f981110987704826111a4",
     "index.ts": "004dbd22b2c2f66003198d8a8871b3b0bf3bd77955b4620f6284f8b110c1eedb",
     "jars.ts": "306ba51cb6cf1b67f581792fb47b9622dbe3049bb4385c12213ce337b333237e",
     "landFeatures.ts": "5773a36a15c46545adbd6b46edc22def670046eeb06e0b172b00edbfb62966ef",
@@ -18,6 +18,7 @@
     "replay.ts": "3605710fcdeb60f410af54a7e0498f2b95e29de08f3f05e9c654175a72b33dc5",
     "report.ts": "1e02b0502704276e6c16e94c827c39134325e6c1d01607cc72dbecd545981904",
     "rng.ts": "f9e813c674fd46b30904fca04d9a77005e0b3ed8286f91b8732aaa405d641f1d",
+    "rulesCompat.ts": "cac2be9a7932a25ec5769998934d4284f5ccb7a8f7560a5aab5d45fbd2a9c429",
     "siege.ts": "37711bb07325f33bf0c0007205931668fdc5c9bad6d162ed0f7acff958c0521d",
     "specialMoves.ts": "d18ba9f75a58545b1a5cae5e7d9cf4a15422f2af965e6ef46b8eca6af9b49071",
     "stance.ts": "dfd5d648a7936cb63e767845359f1c592ce36bdb88b9e85d7e974f31a804facd",
@@ -27,6 +28,6 @@
     "vacuum.ts": "4009567f942acbfbb4ed22f9934e3c2b38dc69a9fa2a9cfcb8145d43193be999",
     "yard.ts": "d2d044a20eac5a7bcace0189c9723782eb4c59160f5a226aa3a0c189e9a5dcd7"
   },
-  "count": 26,
-  "version": "b4f0c156a8d2afee"
+  "count": 27,
+  "version": "b03bd4b8bac1386d"
 }

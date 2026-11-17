@@ -163,6 +163,21 @@ export interface ChampionLesson {
   /** Its health when flung, and when the battle ended (0 for a death). */
   readonly startHp: number;
   readonly endHp: number;
+  /**
+   * Fomor only (champion modes round 2: "Fomor's own way of judging an
+   * attack"): its looks at two or more hurt monsters to back. Its `big` and
+   * `crowd` credit is summed over these, not over `picks` (building looks).
+   */
+  readonly allyPicks?: number;
+  /**
+   * Fomor only: health the attacker's other monsters took off buildings while
+   * it fought, and how much of that came from monsters inside its rage ring.
+   */
+  readonly army?: number;
+  readonly ring?: number;
+  /** Fomor only: the hurt monsters it chose to back, and how many of them lived. */
+  readonly backed?: number;
+  readonly backedLived?: number;
 }
 
 const clamp01 = (value: number): number =>
@@ -171,7 +186,8 @@ const clamp01 = (value: number): number =>
 /**
  * How the attack went for the champion by its Mode's goal, 0 to 1: Offensive
  * the share of its potential damage it dealt, Defensive the share of its
- * health it kept, Hybrid the mean of the two.
+ * health it kept, Hybrid the mean of the two. (Fomor's habits are judged
+ * otherwise: `habits.ts` `habitScore`.)
  */
 export const lessonScore = (lesson: ChampionLesson, stance: ChampionStance): number => {
   const damage = lesson.potential > 0 ? clamp01(lesson.dealt / lesson.potential) : 0;

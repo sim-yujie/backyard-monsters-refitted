@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { setQuality } from "@/game/quality";
+import { setDeviceDefaultQuality, setQuality } from "@/game/quality";
 import {
   loadSoundSwitches,
   onSoundSwitches,
@@ -162,6 +162,22 @@ describe("soundSwitches on the Quality setting (`game/quality.ts`)", () => {
     fake({ music: true, effects: true, musicVolume: 70, effectsVolume: 100 });
     await loadSoundSwitches();
     expect(soundSwitches()?.music).toBe(true);
+  });
+
+  it("plays the music on a Medium the device chose, never held (owner, 17 Nov 2026)", async () => {
+    const kept = keep({});
+    setDeviceDefaultQuality("medium");
+    try {
+      fake({ music: true, effects: true, musicVolume: 70, effectsVolume: 100 });
+      await loadSoundSwitches();
+      expect(soundSwitches()).toEqual({ music: true, effects: true, musicVolume: 70, effectsVolume: 100 });
+      expect(kept.has("bymr.quality")).toBe(false);
+      // Picking Medium in Settings holds it, as for any player who chooses Medium.
+      setQuality("medium");
+      expect(soundSwitches()?.music).toBe(false);
+    } finally {
+      setDeviceDefaultQuality(null);
+    }
   });
 
   it("stops the music at once when the player picks Low, and lets it play again on High", async () => {

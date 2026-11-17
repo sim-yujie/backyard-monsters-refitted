@@ -241,7 +241,7 @@ const writeTribeLanding = async (
 
   // Marked landed before anything is written: whatever a crash after the
   // write leaves behind lands nothing more (`landRowlessOnce`).
-  const { credit, credited } = await landRowlessOnce(ref, session, async () => {
+  const { credit, credited, hatched } = await landRowlessOnce(ref, session, async () => {
     // The tribe keeps its own monsters, the stored ones or its template's: the
     // save's copy is never written (issue #23, C2). What the battle did to it
     // is the replay's; a landing without one writes none of it.
@@ -260,8 +260,9 @@ const writeTribeLanding = async (
 
     // The army settles as a Map Room 2 attack's does (issue #132): the flung
     // monsters leave the main yard's housing as caught up now, capped by what
-    // it housed at entry (the session's `entryHoused`).
-    await monsterUpdateHandler([...attacker.entries], userSave, {
+    // it housed at entry (the session's `entryHoused`). What hatched during
+    // the attack comes back for the hatch quest, counted below.
+    const hatched = await monsterUpdateHandler([...attacker.entries], userSave, {
       session,
       finalises: true,
       flinglog: attacker.flinglog,
@@ -306,7 +307,7 @@ const writeTribeLanding = async (
     postgres.em.persist(maproom);
     postgres.em.persist(userSave);
     await postgres.em.flush();
-    return { credit, credited };
+    return { credit, credited, hatched };
   });
 
   // Event loot (the monthly Krallen Hunt): the tribe's whole credit, before
@@ -318,12 +319,14 @@ const writeTribeLanding = async (
   const destroyedNow = !!battle?.destroyed && !wasDestroyed;
   if (destroyedNow) await recordTribeDestroyed(postgres.em, userSave.basesaveid, baseid);
   // Quests: the tribe's loot before the cap (decision 13), a tribe's yard
-  // destroyed, which is also a won attack, and catapult hits on the tribe's
-  // buildings (from the replayed log, as a Map Room 2 camp's are counted).
+  // destroyed, which is also a won attack, catapult hits on the tribe's
+  // buildings (from the replayed log, as a Map Room 2 camp's are counted),
+  // and the monsters that hatched on the main yard during the attack.
   await recordQuestEvents(
     postgres.em,
     userSave.basesaveid,
     addQuestEvents(
+      hatched,
       lootQuestEvents(credit),
       destroyedNow ? questEvent("tribeDestroy", tribeOfBase(baseid)) : null,
       destroyedNow ? { attackWin: 1 } : null,

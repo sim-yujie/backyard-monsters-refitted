@@ -1,4 +1,5 @@
 import type { Texture } from "pixi.js";
+import { errorWords, pictureName, reportGraphicsProblem } from "@/game/graphicsLog";
 import { cellTexture } from "@/game/textureLimit";
 import type { ResolvedAnim, ResolvedImage } from "./buildingArt";
 import { LOAD_TRIES, loadWithRetries } from "./retryLoad";
@@ -91,6 +92,7 @@ export class YardTextures {
         })
         .catch((caught: unknown) => {
           console.warn(`Building art ${image.url} did not load in ${LOAD_TRIES} tries; drawing a placeholder.`, caught);
+          reportGraphicsProblem("sheet-failed", pictureName(image.url), errorWords(caught));
           this.failed.add(key);
           this.announce(key);
         })
@@ -140,6 +142,7 @@ export class YardTextures {
         })
         .catch((caught: unknown) => {
           console.warn(`Building animation ${anim.url} did not load in ${LOAD_TRIES} tries; skipping the layer.`, caught);
+          reportGraphicsProblem("sheet-failed", pictureName(anim.url), errorWords(caught));
           this.failed.add(key);
           this.announce(key);
         })

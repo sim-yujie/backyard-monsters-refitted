@@ -1622,6 +1622,21 @@ interface LessonRecord {
   /** When it left the field alive (called back, walked home), or null. */
   leftAt: number | null;
   readonly startHp: number;
+  /**
+   * Fomor's own record, null for any other champion: its looks at hurt
+   * monsters, the other attackers' damage to buildings while it fought and
+   * the part of it from inside its rage ring, and the monsters it backed
+   * ({@link ChampionLesson.allyPicks} and on).
+   */
+  readonly fomor: FomorRecord | null;
+}
+
+/** {@link LessonRecord.fomor}. */
+interface FomorRecord {
+  allyPicks: number;
+  army: number;
+  ring: number;
+  readonly backed: Set<Creep>;
 }
 
 /** An aura's own state: `AOEEnrage`'s counter and list, or `ProximityLootBuff`'s list. */
@@ -2650,6 +2665,7 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
     if (creep && lessons.size > 0) {
       const lesson = lessons.get(creep.id);
       if (lesson) lesson.dealt += applied;
+      if (!creep.friendly) judgeForFomor(creep, applied);
     }
     building.hp -= dealt;
     if (building.hp > 0) {
@@ -3390,6 +3406,7 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
         flungAt: tick,
         leftAt: null,
         startHp: creep.hp,
+        fomor: id === FOMOR_ID ? { allyPicks: 0, army: 0, ring: 0, backed: new Set() } : null,
       });
     }
     championHp = creep.hp;
@@ -5853,6 +5870,26 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
     !creep.gone && creep.hp > 0 && (creep.friendly ? !creep.homing : creep.behaviour === "attack");
 
   /**
+   * What a Fomor's lesson judges it by (champion modes round 2, `brain.ts`
+   * `lessonScore`): every other attacker's blow on a building while it fights
+   * goes on its `army`, and a blow from inside its rage ring on its `ring` as
+   * well (a ring blow counts for both, so the ring is never more than the
+   * army). Only while Fomor itself is in battle: once it dies, is called back
+   * or walks home, a rage it left behind (held until the aura's next tick)
+   * adds nothing. Only watches: nothing in the battle reads it.
+   */
+  const judgeForFomor = (striker: Creep, applied: number): void => {
+    if (applied <= 0) return;
+    for (const [id, lesson] of lessons) {
+      if (!lesson.fomor || id === striker.id) continue;
+      const fomor = byCreepId.get(id);
+      if (!fomor || !inBattle(fomor)) continue;
+      lesson.fomor.army += applied;
+      if (striker.enragedBy === id) lesson.fomor.ring += applied;
+    }
+  };
+
+  /**
    * `AOEEnrage.tick` (`components/abilities/AOEEnrage.as:56-73`): every
    * {@link ENRAGE_INTERVAL} ticks, while Fomor fights, every creep of its side
    * within {@link ENRAGE_RADIUS} but itself is enraged, and every one it
@@ -6022,6 +6059,7 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
     }
     const helper = creep.helpCreep >= 0 ? byCreepId.get(creep.helpCreep) : undefined;
     if (ally) {
+      lesson?.fomor?.backed.add(ally);
       creep.helpCreep = ally.id;
       followAlly(creep, ally);
     } else if (helper && helper.hp > 0 && helper.hp < helper.maxHp) {
@@ -6093,7 +6131,8 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
       }
       lesson.credit.big += bigOf(best.creep) - big / candidates.length;
       lesson.credit.crowd += crowdAt(best.creep) - crowd / candidates.length;
-      lesson.picks += 1;
+      if (lesson.fomor) lesson.fomor.allyPicks += 1;
+      else lesson.picks += 1;
     }
     return best ? best.creep : (hits[from] as CreepHit<Creep>).creep;
   };
@@ -8122,6 +8161,15 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
       potential: lesson.perTick * Math.max(0, (lesson.leftAt ?? tick) - lesson.flungAt),
       startHp: lesson.startHp,
       endHp: Math.max(0, championsHp[lesson.monsterId] ?? 0),
+      ...(lesson.fomor
+        ? {
+            allyPicks: lesson.fomor.allyPicks,
+            army: lesson.fomor.army,
+            ring: lesson.fomor.ring,
+            backed: lesson.fomor.backed.size,
+            backedLived: [...lesson.fomor.backed].filter((ally) => ally.hp > 0).length,
+          }
+        : {}),
     }));
 
   /** {@link Battle.cagedChampions}. */

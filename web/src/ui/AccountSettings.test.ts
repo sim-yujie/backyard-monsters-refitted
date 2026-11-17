@@ -32,6 +32,7 @@ vi.mock("@/api/notificationSettings", async (original) => ({
 }));
 
 import { reduceEffects } from "@/game/attack/juice";
+import { setDeviceDefaultQuality } from "@/game/quality";
 import { resetShinyLockForTests, shinyLocked } from "@/game/shinyLock";
 import { setWorldChatOn, worldChatOn } from "@/game/chat/worldChatSetting";
 import { SETTINGS_TEXT, openAccountSettings } from "./AccountSettings";
@@ -441,6 +442,25 @@ describe("AccountSettings", () => {
     expect(hint.textContent).toContain(SETTINGS_TEXT.downloadHint.low);
     expect(hint.textContent).toContain(SETTINGS_TEXT.downloadSaved);
     localStorage.clear();
+  });
+
+  it("on a Medium this device chose, does not say the music waits; picking Medium does (owner, 17 Nov 2026)", async () => {
+    localStorage.clear();
+    setDeviceDefaultQuality("medium");
+    try {
+      await open({});
+      const select = document.querySelector<HTMLSelectElement>("#settings-quality")!;
+      expect(select.value).toBe("medium");
+      const hint = document.querySelector("#settings-quality-hint")!;
+      expect(hint.textContent).toBe(SETTINGS_TEXT.downloadHintDeviceMedium);
+      expect(hint.textContent).not.toContain("waits");
+      select.value = "medium";
+      select.dispatchEvent(new Event("change"));
+      expect(hint.textContent).toContain(SETTINGS_TEXT.downloadHint.medium);
+    } finally {
+      setDeviceDefaultQuality(null);
+      localStorage.clear();
+    }
   });
 
   it("shows the saved Quality, even when the account fails to load", async () => {

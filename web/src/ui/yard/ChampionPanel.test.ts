@@ -280,7 +280,8 @@ describe("ChampionPanel: Modes, instincts and habits (champion modes round 2)", 
       ["Town Hall first", 0],
       ["Stays close", 0],
     ]);
-    expect(textOf(element, ".champion__mode-foot")).toContain("40 attacks · Habits fade if they stop working.");
+    // The Modes' attacks only (12 + 3), not every attack it ever fought (40).
+    expect(textOf(element, ".champion__mode-foot")).toContain("15 attacks · Habits fade if they stop working.");
 
     tabs(element)[0]!.click();
     expect(shown(element)).toBe("offensive");

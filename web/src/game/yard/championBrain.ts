@@ -234,9 +234,16 @@ export const modeView = (
   };
 };
 
-/** Every attack a champion with habits has learned from, its old brain's count included. */
-export const habitAttacks = (entry: { readonly hs?: unknown; readonly bs?: unknown }): number =>
-  parseHabitStats(entry.hs, entry.bs).n;
+/**
+ * The attacks a champion has fought in its Modes, the three Mode counts
+ * summed: `hs.n` also counts every attack since before Modes, and the old
+ * brain's `bs` count, which taught its habits nothing (Reze: 1,174 shown,
+ * 137 in its Modes).
+ */
+export const habitAttacks = (entry: { readonly hs?: unknown }): number => {
+  const stats = parseHabitStats(entry.hs);
+  return (stats.off?.n ?? 0) + (stats.hyb?.n ?? 0) + (stats.def?.n ?? 0);
+};
 
 /** The Mode names, short, as the tabs show them. */
 export const STANCE_NAMES: Readonly<Record<ChampionStance, string>> = {

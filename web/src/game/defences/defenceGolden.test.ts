@@ -3,6 +3,7 @@ import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 import { AttackSession } from "@/game/attack/AttackSession";
 import { watchEvents, watchTarget } from "@/game/autoAttack/watchRun";
+import { COMPATIBLE_RULES_VERSIONS } from "@/game/combat/rules/rulesCompat";
 import { fixtureRun, type DefenceReplayFixture } from "./defenceFixture";
 import { CLIENT_RULES_VERSION, defenceDrift, defenceWatchRefusal, storedDamageOf, type DefenceWatch } from "./defenceWatch";
 
@@ -73,6 +74,15 @@ describe("the golden defence replay (issue #364)", { timeout: BATTLE_TIMEOUT_MS 
       expectStoredResult(fixtureRun(fixture, { left: true }), fixture.left.server);
     },
   );
+
+  // Recorded under b4f0c156a8d2afee (v2.0.0-beta.7.7.2) and re-stamped by patch
+  // 7.8 with the figures unchanged: stamped with an older version these rules
+  // still play the same (`rulesCompat.ts`), it is offered and plays to its result.
+  for (const stamp of COMPATIBLE_RULES_VERSIONS) {
+    it(`plays to its stored result when stamped with the older rules ${stamp}`, () => {
+      expectStoredResult(fixtureRun(fixture, { rulesVersion: stamp }), fixture.server);
+    });
+  }
 
   it("is not offered once the bundle's version moves on", () => {
     expect(defenceWatchRefusal(fixtureRun(fixture, { rulesVersion: "0000000000000000" }))).not.toBeNull();

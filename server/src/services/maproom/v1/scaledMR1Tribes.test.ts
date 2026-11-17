@@ -1106,3 +1106,54 @@ describe("Map Room 1 tribe attack left without a save", () => {
     expect(store.has(rowlessCheckpointKey(REF))).toBe(true);
   });
 });
+
+describe("Map Room 1 tribe save: the hatch quest (patch 7.8)", () => {
+  /** A day's record with one "Hatch 50 Pokeys" quest. */
+  const hatchQuestDay = () =>
+    questsJson({
+      ...emptyQuests(),
+      daily: {
+        period: new Date().toISOString().slice(0, 10),
+        bonus: false,
+        swaps: 0,
+        quests: [{ slot: 0, kind: "hatchMonster", variant: "C1", need: 50, have: 0, claimed: false, rewards: [] }],
+      },
+    } as never);
+  const hatchHave = () => readQuests(userSave.dailyquests).daily?.quests[0]?.have;
+  const flinglog = (C1: number) => JSON.stringify({ events: [{ kind: "fling", t: 10, monsters: { C1 } }] });
+
+  test("monsters that finish hatching during the attack count once, and no later catch-up counts them again", async () => {
+    const { catchUpYard } = await import("../../yard/catchUp.js");
+    const { jobQuestEvents } = await import("../../quests/hooks.js");
+    // The yard was caught up as the attack began, two minutes ago; a queue of
+    // 4 Pokeys (8 s each at academy level 3) all hatch while it runs.
+    Object.assign(userSave, {
+      type: "main",
+      basesaveid: 9000,
+      dailyquests: hatchQuestDay(),
+      academy: { C1: { level: 3 } },
+      buildingdata: {
+        "1": { id: 1, t: 15, l: 6 },
+        "2": { id: 2, t: 15, l: 6 },
+        "3": { id: 3, t: 15, l: 6 },
+        "4": { id: 4, t: 15, l: 6 },
+        "9": { id: 9, t: 13, l: 3 },
+      },
+      savetime: now() - 120,
+      monsters: { saved: now() - 120, housed: { C1: 10 }, h: [["", 0, [["C1", 4, 3]]]], hid: [9], hstage: [0], hcc: [] },
+    });
+    startSession(ATTACKER, now() - 120);
+    const body = { over: "1", monsterupdate: JSON.stringify([{ baseid: 5000, m: { housed: { C1: 7 } } }]), flinglog: flinglog(3) };
+
+    expect(await run(ctxFor(body))).toBeNull();
+
+    // 3 flung of the 10, the 4 hatched meanwhile kept and counted.
+    expect((userSave.monsters as { housed: unknown }).housed).toEqual({ C1: 11 });
+    expect(hatchHave()).toBe(4);
+    expect(jobQuestEvents(catchUpYard(userSave as never, now()))).toEqual({});
+
+    // The same final save sent again lands nothing, so counts nothing.
+    await run(ctxFor(body));
+    expect(hatchHave()).toBe(4);
+  });
+});
