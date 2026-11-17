@@ -1078,9 +1078,28 @@ points = _basePoints + _baseValue
 rises (`client/scripts/BASE.as:4857-4859`).
 
 `_basePoints` accumulates from actions: banking resources, completing builds and upgrades, buying
-resources with shiny, and outpost auto-banking (`client/scripts/BASE.as:4863-4865`, called from
-`BFOUNDATION.as:2457`, `:2916`, `BRESOURCE.as:457-462`, `STORE.as:2029-2035`,
-`AutoBankManager.as:278`).
+resources with shiny, outpost auto-banking, and attack loot (`client/scripts/BASE.as:4863-4865`,
+called from `BFOUNDATION.as:2457`, `:2916`, `BRESOURCE.as:457-462`, `STORE.as:2029-2035`,
+`AutoBankManager.as:278`, `BASE.as:1785-1801`).
+
+**Attack loot** gives 1 point per resource looted (patch 7.7.2). Flash sends the whole take,
+`ATTACK._loot`, as the attack save's `lootreport` (`BASE.as:2761-2769`, `:3265`); it is counted
+before the attacker's storage cap (`ATTACK.as:681` against `:703-710`), so loot that did not fit
+still scores. The report comes back as `loot` on the attacker's next yard load, and `BASE.Process`
+adds each resource above 0 to that yard's points (`BASE.as:971`, `:1785-1801`). The server adds
+them where it banks the loot, once per landed attack (the final save, the finaliser, a repeat
+attack), on the yard the attacker comes home to (`ATTACK.as:996-1003`, `BASE.as:3352-3358`):
+
+| Attack | Points go to |
+| --- | --- |
+| Player yard, outpost, Map Room 2 camp, Map Room 1 tribe (from the main yard or an outpost) | the main save |
+| Descent yard (the capturing 13th too) | the main save: Flash returns to the surface yard (`ATTACK.as:998-999`) and adds them there before its pop-up check (`BASE.as:1803`) |
+| Moloch tribe, another player's Inferno yard | the attacker's Inferno yard: its own points and Inferno level |
+
+The amount is what the landing hands the attacker's pool before the storage cap, with the server's
+loot boosts in it (Tribe Plunder, the wild-tribe Goo bonus, the camp bonus, the alliance bonus).
+A refused, superseded, rolled-back or unlanded attack gives none
+(`server/src/services/base/combat/lootPoints.ts`).
 
 The level thresholds are a 56-entry table, identical on both sides
 (`client/scripts/BASE.as:289`, `server/src/game-data/stats/experiencePoints.ts:7`):

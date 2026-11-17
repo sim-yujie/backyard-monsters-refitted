@@ -80,6 +80,7 @@ import {
   type AttackLoot,
 } from "../../../services/base/combat/attackLoot.js";
 import { battleReplayInput, battleTick, foughtLoot } from "../../../services/base/combat/battle.js";
+import { awardLootPoints } from "../../../services/base/combat/lootPoints.js";
 import { buildingDataWithout } from "../../../services/base/combat/abandonedAttack.js";
 import { recordBattleMismatches, replayBattleForSave } from "../../../services/base/combat/saveBattle.js";
 import { combatCellHeight } from "../../../services/base/combat/cellHeight.js";
@@ -614,17 +615,17 @@ const saveBase = async (
       const plunder = plunderPercent(fromTribe, now);
       // The attacker's alliance loot bonus and the defender's raiders-carry (`allianceBonuses.ts`).
       const alliancePercent = await attackLootPercent(postgres.em, user.userid, baseSave.saveuserid);
-      banked = bankAttackLoot(
-        userSave,
-        withPlunderBonus(
-          withCampLootBonus(
-            withTribeGooBonus(mapByPercent(loot.credit, alliancePercent), fromTribe),
-            isMR2Camp(baseSave.type, userSave.mapversion)
-          ),
-          plunder
+      const gain = withPlunderBonus(
+        withCampLootBonus(
+          withTribeGooBonus(mapByPercent(loot.credit, alliancePercent), fromTribe),
+          isMR2Camp(baseSave.type, userSave.mapversion)
         ),
-        loot.krallenBuff
-      ).credited;
+        plunder
+      );
+      banked = bankAttackLoot(userSave, gain, loot.krallenBuff).credited;
+      // One point per resource taken, loot that did not fit included, on the
+      // main save, as Flash's `BASE.PointsAdd` gave them (patch 7.7.2, `lootPoints.ts`).
+      awardLootPoints(userSave, gain);
     }
 
     // Each champion that fought learns from the server's battle, once: this

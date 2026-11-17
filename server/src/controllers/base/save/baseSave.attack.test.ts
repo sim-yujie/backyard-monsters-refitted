@@ -181,6 +181,8 @@ const setMode = (mode: typeof MODE) => {
   (combatConfig as { mode: typeof MODE }).mode = mode;
 };
 const { attackLootOf } = await import("../../../services/base/combat/attackLoot.js");
+const { lootPoints } = await import("../../../services/base/combat/lootPoints.js");
+const { withTribeGooBonus } = await import("../../../services/base/tribeGooBonus.js");
 const { replayAbandonedAttack } = await import("../../../services/base/combat/abandonedAttack.js");
 const { battleReplayInput, battleTick, foughtLoot } = await import("../../../services/base/combat/battle.js");
 const { decodeReplay } = await import("../../../services/defences/defenceReplayStore.js");
@@ -599,6 +601,69 @@ describe("attack loot through the save", () => {
 
     expect(attackerSave.resources).toEqual({ r1: 100, r2: 100, r3: 100, r4: 100 });
     expect(defender.resources.r1).toBe(5000);
+  });
+});
+
+describe("points for the loot through the save (patch 7.7.2, Flash's `BASE.PointsAdd`)", () => {
+  /** What the attack takes: the replay's credit, with a wild tribe's Goo bonus. */
+  const taken = () => withTribeGooBonus(replayCap(), true);
+
+  test("the save that ends the attack adds one point per resource looted to the attacker's main save", async () => {
+    attackerSave.points = "1000";
+    const ctx = ctxFor({ over: "1", attackloot: JSON.stringify(CLAIM), flinglog: JSON.stringify(LOG) });
+    // Worked out over the pool the attack was fought against, before it lands.
+    const points = lootPoints(taken());
+
+    await baseSave(ctx, async () => {});
+
+    expect(points).toBeGreaterThan(0);
+    expect(attackerSave.points).toBe(String(1000 + points));
+    // Nothing was turned away by the storage, so the points are the banked loot.
+    expect(lootPoints((ctx.body as { lootcredited: Record<string, number> }).lootcredited)).toBe(points);
+  });
+
+  test("loot that did not fit still counts: Flash's report held the whole take", async () => {
+    attackerSave.points = "0";
+    attackerSave.resources = { r1: 10_000, r2: 10_000, r3: 10_000, r4: 10_000 };
+    const ctx = ctxFor({ over: "1", attackloot: JSON.stringify(CLAIM), flinglog: JSON.stringify(LOG) });
+    const points = lootPoints(taken());
+    expect(points).toBeGreaterThan(0);
+
+    await baseSave(ctx, async () => {});
+
+    expect(lootPoints((ctx.body as { lootcredited: Record<string, number> }).lootcredited)).toBe(0);
+    expect(attackerSave.points).toBe(String(points));
+  });
+
+  test("a save that does not end the attack, or one with no fling log, adds none", async () => {
+    attackerSave.points = "1000";
+    await baseSave(ctxFor({ attackloot: JSON.stringify(CLAIM), flinglog: JSON.stringify(LOG) }), async () => {});
+    await baseSave(ctxFor({ over: "1", attackloot: JSON.stringify(CLAIM) }), async () => {});
+
+    expect(attackerSave.points).toBe("1000");
+  });
+
+  test("the attack's defender gains no points from it", async () => {
+    defender.points = "70";
+    await baseSave(
+      ctxFor({ over: "1", attackloot: JSON.stringify(CLAIM), flinglog: JSON.stringify(LOG), points: "999999" }),
+      async () => {}
+    );
+
+    expect(defender.points).toBe("70");
+  });
+
+  test("the same final save sent twice adds them once", async () => {
+    attackerSave.points = "0";
+    const body = { over: "1", attackloot: JSON.stringify(CLAIM), flinglog: JSON.stringify(LOG) };
+    await baseSave(ctxFor(body), async () => {});
+    const once = attackerSave.points;
+    expect(Number(once)).toBeGreaterThan(0);
+
+    // The attack is closed now (`attackid` 0): the copy is refused or lands nothing.
+    await baseSave(ctxFor(body), async () => {}).catch(() => {});
+
+    expect(attackerSave.points).toBe(once);
   });
 });
 

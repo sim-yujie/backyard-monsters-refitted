@@ -23,6 +23,7 @@ import type { JsonObject } from "../../types/JsonObject.js";
 import type { NeighbourData } from "../../types/NeighbourData.js";
 import { getCurrentDateTime } from "../../utils/getCurrentDateTime.js";
 import { logger } from "../../utils/logger.js";
+import { awardLootPoints } from "../base/combat/lootPoints.js";
 import { parseFlingLog } from "../base/attackCheckpoint.js";
 import { checkAttackBinding } from "../base/attackSession.js";
 import { buildingDataWithout, type AbandonedInput, type AbandonedOutcome } from "../base/combat/abandonedAttack.js";
@@ -288,8 +289,12 @@ export const writePlayerLanding = async (
     if (defenderMain && looted) defenderMain.iresources = looted.iresources;
     const lost: ResourceAmounts = looted?.lost ?? { r1: 0, r2: 0, r3: 0, r4: 0 };
     syncInfernoCap(main, inferno);
-    const funded = fundPurse(main.iresources, creditPaidFor(loot.credit, lost, attack.session.attackerlevel));
+    const gain = creditPaidFor(loot.credit, lost, attack.session.attackerlevel);
+    const funded = fundPurse(main.iresources, gain);
     main.iresources = funded.iresources;
+    // One point per resource taken, on the attacker's Inferno yard: its own
+    // points and level (patch 7.7.2, `lootPoints.ts`).
+    awardLootPoints(inferno, gain);
 
     // The defender's yard as the battle left it.
     let housedLost: Counts = {};

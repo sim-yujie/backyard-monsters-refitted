@@ -334,6 +334,11 @@ describe("landing", () => {
     expect(tribe.respawnat).toBeGreaterThanOrEqual(at + 3_600);
 
     expect((userSave.iresources as Record<string, number>).r1).toBe(cap);
+    // One point per resource taken, the 4,000 that did not fit included, on
+    // the Inferno yard the attacker comes home to; the main save's points are
+    // the surface's and take none (patch 7.7.2, `ATTACK.as:1002`).
+    expect(inferno.points).toBe("5300");
+    expect(userSave.points).toBeUndefined();
     // Only the Inferno yard's monsters left; the main yard's stay.
     expect((inferno.monsters as { housed: Record<string, number> }).housed).toEqual({ IC1: 24, IC2: 5 });
     expect((userSave.monsters as { housed: Record<string, number> }).housed).toEqual({ C1: 10 });
@@ -475,6 +480,7 @@ describe("a Moloch tribe attack left without a save", () => {
     expect(inputs).toHaveLength(1);
     expect(inputs[0]!.tick).toBe(1_200);
     expect((userSave.iresources as Record<string, number>).r1).toBe(purse + 200);
+    expect(inferno.points).toBe("200");
     expect((inferno.monsters as { housed: Record<string, number> }).housed).toEqual({ IC1: 24, IC2: 5 });
     expect(tribeState()?.damage).toBe(30);
     expect(store.has(infernoTribeSessionKey(ATTACKER))).toBe(false);
@@ -485,6 +491,7 @@ describe("a Moloch tribe attack left without a save", () => {
     expect(await finaliseRowlessAttacksOf(ATTACKER, "load")).toBe(0);
     expect((await run(finalSave()))?.data?.reason).toBe("no-session");
     expect((userSave.iresources as Record<string, number>).r1).toBe(purse + 200);
+    expect(inferno.points).toBe("200");
   });
 
   test("a checkpoint that arrives after the save lands nothing more", async () => {
@@ -512,8 +519,10 @@ describe("a Moloch tribe attack left without a save", () => {
     crashOn = null;
     expect(store.has(infernoTribeSessionKey(ATTACKER))).toBe(true);
     expect(store.has(rowlessCheckpointKey(REF))).toBe(true);
-    const snapshot = () => structuredClone({ purse: userSave.iresources, army: inferno.monsters, tribe: tribeState() });
+    const snapshot = () =>
+      structuredClone({ purse: userSave.iresources, points: inferno.points, army: inferno.monsters, tribe: tribeState() });
     const after = snapshot();
+    expect(after.points).toBe("200");
     expect(inputs).toHaveLength(1);
 
     expect((await run(finalSave()))?.data?.reason).toBe("landed");

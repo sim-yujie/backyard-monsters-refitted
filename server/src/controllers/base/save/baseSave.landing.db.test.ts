@@ -103,8 +103,8 @@ describe.skipIf(!dbName)("an attack's result landing, on a real database (audit 
   const sql = <R = Record<string, any>>(query: string, params: unknown[] = []) => em().execute<R[]>(query, params);
 
   const rowOf = async (basesaveid: number) => {
-    const [row] = await sql(`SELECT resources, attackid, damage FROM bym.save WHERE basesaveid = ?`, [basesaveid]);
-    return row as { resources: Record<string, number>; attackid: number; damage: number };
+    const [row] = await sql(`SELECT resources, attackid, damage, points FROM bym.save WHERE basesaveid = ?`, [basesaveid]);
+    return row as { resources: Record<string, number>; attackid: number; damage: number; points: string };
   };
   const addTo = async (basesaveid: number, key: string, amount: number) => {
     const { resources } = await rowOf(basesaveid);
@@ -164,7 +164,7 @@ describe.skipIf(!dbName)("an attack's result landing, on a real database (audit 
     redis.clear();
     await sql(
       `UPDATE bym.save SET resources = ?, buildingdata = '{}', buildinghealthdata = '{}', monsters = NULL, champion = '[]',
-              savetime = ?, attackid = 0, damage = 0, mapversion = 1
+              savetime = ?, attackid = 0, damage = 0, mapversion = 1, points = '0'
         WHERE basesaveid = ?`,
       [JSON.stringify(START), Math.floor(Date.now() / 1000), homeSaveId]
     );
@@ -228,6 +228,7 @@ describe.skipIf(!dbName)("an attack's result landing, on a real database (audit 
 
     // Nothing of it landed: the attack is still open, and nobody was paid.
     expect((await rowOf(homeSaveId)).resources).toEqual(START);
+    expect((await rowOf(homeSaveId)).points).toBe("0");
     const open = await rowOf(campSaveId);
     expect(open.attackid).toBe(ATTACK_ID);
     expect(open.resources).toEqual(CAMP_POOL);
@@ -238,6 +239,8 @@ describe.skipIf(!dbName)("an attack's result landing, on a real database (audit 
     const credited = answer.lootcredited!;
     expect(credited.r1).toBeGreaterThan(0);
     expect((await rowOf(homeSaveId)).resources).toEqual({ ...START, r1: START.r1 + credited.r1 });
+    // One point per resource looted, with the loot (patch 7.7.2).
+    expect((await rowOf(homeSaveId)).points).toBe(String(credited.r1));
     const closed = await rowOf(campSaveId);
     expect(closed.attackid).toBe(0);
     expect(closed.resources.r1).toBeLessThan(CAMP_POOL.r1);
@@ -245,6 +248,7 @@ describe.skipIf(!dbName)("an attack's result landing, on a real database (audit 
     // And once more: the attack is closed, so it is refused and pays nothing.
     await expect(finalSave()).rejects.toThrow();
     expect((await rowOf(homeSaveId)).resources).toEqual({ ...START, r1: START.r1 + credited.r1 });
+    expect((await rowOf(homeSaveId)).points).toBe(String(credited.r1));
     expect((await rowOf(campSaveId)).resources).toEqual(closed.resources);
   });
 
@@ -274,6 +278,7 @@ describe.skipIf(!dbName)("an attack's result landing, on a real database (audit 
 
     // Nothing landed, and the checkpoint is kept for the next pass.
     expect((await rowOf(homeSaveId)).resources).toEqual(START);
+    expect((await rowOf(homeSaveId)).points).toBe("0");
     const open = await rowOf(campSaveId);
     expect(open.attackid).toBe(ATTACK_ID);
     expect(open.resources).toEqual(CAMP_POOL);
@@ -285,12 +290,27 @@ describe.skipIf(!dbName)("an attack's result landing, on a real database (audit 
     const credited = landed.landed!.credited;
     expect(credited.r1).toBeGreaterThan(0);
     expect((await rowOf(homeSaveId)).resources).toEqual({ ...START, r1: START.r1 + credited.r1 });
+    expect((await rowOf(homeSaveId)).points).toBe(String(credited.r1));
     const closed = await rowOf(campSaveId);
     expect(closed.attackid).toBe(0);
     expect(closed.resources.r1).toBeLessThan(CAMP_POOL.r1);
 
     // A third pass finds nothing to land.
     expect((await finalise()).status).toBe("none");
+    expect((await rowOf(homeSaveId)).resources).toEqual({ ...START, r1: START.r1 + credited.r1 });
+    expect((await rowOf(homeSaveId)).points).toBe(String(credited.r1));
+  });
+
+  test("an attack its save landed gives its loot points once, whatever the finaliser finds after (patch 7.7.2)", async () => {
+    // Left with a checkpoint, then the page-close save lands it after all.
+    await leaveAttack();
+    const credited = (await finalSave()).lootcredited!;
+    expect(credited.r1).toBeGreaterThan(0);
+    expect((await rowOf(homeSaveId)).points).toBe(String(credited.r1));
+
+    // The finaliser's pass over the checkpoint lands nothing more.
+    expect((await finalise()).status).not.toBe("finalised");
+    expect((await rowOf(homeSaveId)).points).toBe(String(credited.r1));
     expect((await rowOf(homeSaveId)).resources).toEqual({ ...START, r1: START.r1 + credited.r1 });
   });
 
