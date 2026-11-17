@@ -117,7 +117,7 @@ describe("buildingCosts", () => {
 
   describe("walls", () => {
     // `client/scripts/YARD_PROPS.as:1722-1757`.
-    test("the Wooden Block has five 5-second steps gated on the Town Hall", () => {
+    test("the Wooden Block has five 5-second steps, only the build gated on the Town Hall (beta 8)", () => {
       const wall = costOf(17);
       expect(wall?.kind).toBe("wall");
       expect(wall?.costs.length).toBe(5);
@@ -125,18 +125,31 @@ describe("buildingCosts", () => {
 
       for (const [k, step] of (wall?.costs ?? []).entries()) {
         expect(step[4], `step ${k} time`).toBe(5);
-        expect(step[5], `step ${k} re`).toEqual([[14, 1, k + 2]]);
+        // Flash gated each upgrade on Town Hall k + 2; the owner dropped it
+        // ("Any block can be upgraded any time", 17 Nov 2026).
+        expect(step[5], `step ${k} re`).toEqual(k === 0 ? [[14, 1, 2]] : []);
       }
     });
 
     test("the Wooden Block ladder is the price the props table names", () => {
       expect(costOf(17)?.costs).toEqual([
         [1000, 0, 0, 0, 5, [[14, 1, 2]]],
-        [0, 10000, 0, 0, 5, [[14, 1, 3]]],
-        [100000, 100000, 0, 0, 5, [[14, 1, 4]]],
-        [200000, 200000, 0, 0, 5, [[14, 1, 5]]],
-        [400000, 400000, 0, 0, 5, [[14, 1, 6]]],
+        [0, 10000, 0, 0, 5, []],
+        [100000, 100000, 0, 0, 5, []],
+        [200000, 200000, 0, 0, 5, []],
+        [400000, 400000, 0, 0, 5, []],
       ]);
+    });
+
+    test("the Inferno's Block upgrades need no Under Hall either", () => {
+      expect(costOf(17, "inferno")?.costs.map((step) => step[5])).toEqual([[[14, 1, 2]], [], []]);
+    });
+
+    test("no other type lost a hall entry: every other row still names the hall where Flash did", () => {
+      // The Stone Block (18), the Champion Chamber, the Cannon Tower: as Flash.
+      expect(costOf(18)?.costs[0]?.[5]).toEqual([[14, 1, 3]]);
+      expect(costOf(119)?.costs[0]?.[5]).toEqual([[14, 1, 4], [114, 1, 1]]);
+      expect(costOf(20)?.costs[1]?.[5]).toEqual([[14, 1, 2]]);
     });
 
     test("the Stone Block is the legacy single-step entry", () => {

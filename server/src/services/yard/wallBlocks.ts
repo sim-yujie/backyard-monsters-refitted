@@ -1,6 +1,6 @@
 import type { YardKind } from "../../game-data/buildingCosts.js";
 import type { BuildingData, BuildingDataMap, BuildingHealthData } from "../../types/BuildingData.js";
-import { levelOf, townHallLevel } from "../yardplanner/costs.js";
+import { levelOf } from "../yardplanner/costs.js";
 import { finishBuildingJob, runningCountdown } from "./buildingJobs.js";
 import type { BuildingJob } from "./catchUpBuildings.js";
 import { healed } from "./repair.js";
@@ -14,10 +14,12 @@ import { yardRefusedErr } from "./yardErrors.js";
  * - Price: Shiny per Block, summed over every level it climbs: 3 to reach
  *   level 2, 6 to reach 3, 10 to reach 4, 15 to reach 5. A Block still being
  *   built counts as level 1, so a new one taken to Gold costs 3 + 6 + 10 = 19.
- * - Town Hall: Stone needs Town Hall 3, Metal 4, Gold 5, Black Diamond 6
- *   (`STORE.as:1674-1690`). An outpost has no such gate (Flash read it as
- *   Town Hall 7) and sells all four (`:199`). In the Inferno the Under Hall
- *   is the Town Hall: Granite needs Under Hall 3, Forged Steel 4.
+ * - Town Hall: none (owner, 17 Nov 2026, beta 8: "Any block can be upgraded
+ *   any time"). Flash sold Stone from Town Hall 3, Metal 4, Gold 5 and Black
+ *   Diamond 6 (`STORE.as:1674-1690`), and the Inferno's Granite and Forged
+ *   Steel from Under Hall 3 and 4; every tier is now on sale at any hall, as
+ *   an outpost always had them (`:199`), matching the Block's own upgrade
+ *   steps (`game-data/buildingCosts.ts`).
  * - Applying it: a Block below the tier first finishes the build or upgrade it
  *   had running, then climbs one level at a time, each level awarding its
  *   points as `Upgraded()` does, through the catch-up's own finish
@@ -52,9 +54,6 @@ export const WALL_BLOCK_ITEMS: Readonly<Record<string, number>> = {
 
 /** Shiny per Block to climb into level `n` (index = n). */
 export const WALL_STEP_SHINY: readonly number[] = [0, 0, 3, 6, 10, 15];
-
-/** The Town Hall level each tier needs in the main yard; the Under Hall level in the Inferno. */
-export const WALL_TIER_TOWN_HALL: Readonly<Record<number, number>> = { 2: 3, 3: 4, 4: 5, 5: 6 };
 
 /** A Block's level for pricing: a running build is level 1, a legacy Stone row at least 2. */
 export const blockLevel = (building: BuildingData): number => {
@@ -108,21 +107,11 @@ export interface WallBlockPlan extends WallBlockQuote {
 }
 
 /**
- * Works out a wall upgrade. Refusals: `409 townHall {have, need}` in a main
- * yard (or the Inferno, by its Under Hall) below the tier's Town Hall, `409 nothingToUpgrade {tier}` when every
+ * Works out a wall upgrade, at any Town Hall level. Refusal: `409 nothingToUpgrade {tier}` when every
  * Block is at the tier already (or the yard has none). Shiny lock and balance
  * are the wrapper's.
  */
 export const planWallBlocks = (save: WallBlockSave, tier: number, now: number, kind: YardKind): WallBlockPlan => {
-  if (kind !== "outpost") {
-    const have = townHallLevel(save.buildingdata, kind);
-    const need = WALL_TIER_TOWN_HALL[tier] ?? 0;
-    if (have < need) {
-      const hall = kind === "inferno" ? "Under Hall" : "Town Hall";
-      throw yardRefusedErr("townHall", `Those Blocks need ${hall} level ${need}.`, { have, need });
-    }
-  }
-
   const quote = quoteWallBlocks(save.buildingdata, tier);
   if (quote.blocks === 0) {
     throw yardRefusedErr("nothingToUpgrade", "Every Block is that good already.", { tier });
