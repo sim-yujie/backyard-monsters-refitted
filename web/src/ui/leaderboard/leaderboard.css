@@ -1,7 +1,7 @@
 /*
  * The leaderboard (`ui/leaderboard/LeaderboardDialog.ts`): a popup (the shared
- * `.panel` on a scrim) with one row per player - rank, face, name and
- * outposts, points - the player's own row lit up, and a "You" line under the
+ * `.panel` on a scrim) with one row per player - rank, face, name and the
+ * outpost icon with a count, points - the player's own row lit up, and a "You" line under the
  * list when they are below the top 100.
  */
 
@@ -100,7 +100,9 @@
   text-overflow: ellipsis;
 }
 
+/* The outpost icon and how many they hold (`iconAmount`), only when they hold one. */
 .leaderboard__outposts {
+  align-self: flex-start;
   font-size: var(--text-xs);
   color: var(--colour-text-muted);
 }

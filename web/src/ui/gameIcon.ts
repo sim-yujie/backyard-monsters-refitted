@@ -109,6 +109,12 @@ import { writeAmount, type AmountChange } from "./amountChange";
  * `art-samples/camera-icon`, painted by Codex): `camera`, a chunky red camera
  * with a big blue lens and a yellow flash bulb; `camera2`, the other option, a
  * teal instant camera with a photo of a yard coming out of its top.
+ *
+ * The leaderboard's outpost count and the profile's outpost points (beta 8,
+ * `ui/leaderboard/LeaderboardDialog.ts`, `ui/profile/ProfileDialog.ts`):
+ * `outpost` is a STAND-IN, Flash's own outpost core (`assets/buildings/outpost/
+ * top.1.png`) cut out and made square, until a painted one at the size of the
+ * others is made; replace its `*.webp` files to change it.
  */
 export const GAME_ICONS = {
   health: "Health",
@@ -170,6 +176,7 @@ export const GAME_ICONS = {
   camera2: "Yard picture",
   goals: "Goals",
   goalsclassic: "Goals",
+  outpost: "Outposts",
 } as const satisfies Record<string, string>;
 
 export type GameIconName = keyof typeof GAME_ICONS;

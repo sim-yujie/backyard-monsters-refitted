@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import type { BoardRow, EmpireBoard } from "@/api/leaderboard";
-import { EMPTY, LOAD_FAILED, openLeaderboard, outpostText } from "./LeaderboardDialog";
+import { EMPTY, LOAD_FAILED, openLeaderboard, outpostText, splitText } from "./LeaderboardDialog";
 
 /**
  * The leaderboard popup, driven through its DOM with the request stubbed:
@@ -58,9 +58,33 @@ describe("openLeaderboard", () => {
     expect(shown.map((row) => row.querySelector(".leaderboard__rank")!.textContent)).toEqual(["#1", "#2", "#3"]);
     expect(shown[0]!.querySelector(".leaderboard__name")!.textContent).toBe("player1");
     expect(shown[0]!.querySelector(".leaderboard__points-value")!.textContent).toBe("245,566");
-    expect(shown[1]!.querySelector(".leaderboard__outposts")!.textContent).toBe("2 outposts");
+    // The outpost icon and the count, the words in its label.
+    const held = shown[1]!.querySelector(".leaderboard__outposts")!;
+    expect(held.textContent).toBe("2");
+    expect(held.querySelector("img")!.dataset["icon"]).toBe("outpost");
+    expect(held.querySelector("img")!.getAttribute("aria-label")).toBe("2 outposts");
     expect(shown[0]!.classList.contains("leaderboard__row--medal-1")).toBe(true);
     expect(container.textContent).not.toContain("#1234");
+  });
+
+  it("shows no outpost icon or count for a player with none", async () => {
+    await open(boardOf(3, null));
+    expect(rows()[2]!.querySelector(".leaderboard__outposts")).toBeNull();
+    expect(rows()[2]!.textContent).not.toContain("outpost");
+  });
+
+  it("shows the total, its split in the tooltip when outposts add to it", async () => {
+    await open({
+      ...boardOf(2, null),
+      top: [
+        rowOf(1, { empirePoints: 492_672_756, yardPoints: 479_849_665, outpostPoints: 12_823_091, outposts: 1 }),
+        rowOf(2, { empirePoints: 400_000_000, yardPoints: 400_000_000, outpostPoints: 0, outposts: 0 }),
+      ],
+    });
+    const [first, second] = rows();
+    expect(first!.querySelector(".leaderboard__points-value")!.textContent).toBe("492,672,756");
+    expect(first!.querySelector<HTMLElement>(".leaderboard__points")!.title).toBe("Main yard 479,849,665 + outposts 12,823,091");
+    expect(second!.querySelector<HTMLElement>(".leaderboard__points")!.title).toBe("");
   });
 
   it("shows each player's face, their pick or their default", async () => {
@@ -109,6 +133,13 @@ describe("openLeaderboard", () => {
   it("says so when the board could not be loaded", async () => {
     await open(new Error("offline"));
     expect(container.querySelector(".leaderboard__status--error")!.textContent).toBe(LOAD_FAILED);
+  });
+});
+
+describe("splitText", () => {
+  it("works the main yard part out of an older board without it", () => {
+    expect(splitText(rowOf(1, { empirePoints: 1500, outpostPoints: 500 }))).toBe("Main yard 1,000 + outposts 500");
+    expect(splitText(rowOf(1, { empirePoints: 1500 }))).toBeNull();
   });
 });
 
