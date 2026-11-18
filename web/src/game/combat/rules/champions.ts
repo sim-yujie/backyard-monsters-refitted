@@ -48,6 +48,30 @@ export const FLYING_START_FRAME_SPREAD = 1000;
 /** A champion looks for a new building every 100 of its frames (`ChampionBase.as:804`). */
 export const CHAMPION_RETARGET_FRAMES = 100;
 
+/* ── Melee reach to buildings ─────────────────────────────────────────────── */
+
+/**
+ * How near a melee champion in {@link MELEE_REACH_CHAMPIONS} must stand to
+ * hit a building: yard units from the nearest point of its footprint, one
+ * grid cell. A melee monster's route ends in the cell beside the footprint
+ * and it stops within 10 screen px of that cell's middle, 0 to 25 units off
+ * the tiles; this lets the champion strike no farther out than that.
+ */
+export const MELEE_BUILDING_REACH = 10;
+
+/**
+ * The champions that hit a building from beside it rather than from their
+ * stat `range` (patch 7.10, owner 19 Nov 2026, player arC's report: Gorgo hit
+ * his Town Hall from about four tiles off). Their range stays theirs against
+ * monsters (`fight`, the cage) and for Korath's quake. Drull, Korath and
+ * Krallen are melee too and await the owner's call.
+ */
+export const MELEE_REACH_CHAMPIONS: readonly string[] = [GORGO_ID];
+
+/** A champion's or monster's reach to a building, given its stat range. */
+export const buildingReachOf = (id: string, champion: boolean, range: number): number =>
+  champion && MELEE_REACH_CHAMPIONS.includes(id) ? MELEE_BUILDING_REACH : range;
+
 /* ── Korath (G4) ──────────────────────────────────────────────────────────── */
 
 /**
