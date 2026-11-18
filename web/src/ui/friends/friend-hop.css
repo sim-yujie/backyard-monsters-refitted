@@ -57,9 +57,10 @@
   }
 }
 
-/* While a sheet or a screen is open on a phone the dock's buttons step
-   aside, and these with them (as Friends does). */
-@media (max-width: 620px), (max-height: 500px) {
+/* While a sheet or a screen is open on an upright phone Map and Home step
+   aside, and these with them. On its side Map stays, and so do these: the
+   help panel docks on the right, clear of them. */
+@media (max-width: 620px) {
   .overlay__layer:has(> .panel:not([hidden])) > .friend-hop,
   .overlay__layer:has(> .map-dock--right > *) > .friend-hop,
   .overlay__layer:has(> .monsters-screen:not([hidden])) > .friend-hop {
