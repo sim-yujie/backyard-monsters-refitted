@@ -1,5 +1,6 @@
 import { classicLook } from "@/game/classicLook";
 import { quality as downloadQuality, type Quality } from "@/game/quality";
+import { artUrl } from "../../artUrl";
 
 /**
  * The yard ground the player picks (owner, 12 Nov 2026: "improved background
@@ -83,7 +84,7 @@ export const GROUNDS: Readonly<Record<GroundId, GroundSpec>> = {
   original: {
     id: "original",
     name: "Original",
-    root: "/assets/yardbg/grass/",
+    root: artUrl("/assets/yardbg/grass/"),
     files: FLASH_GRASS_FILES,
     ...FLASH,
     fill: 0x4a7a3a,
@@ -94,7 +95,7 @@ export const GROUNDS: Readonly<Record<GroundId, GroundSpec>> = {
   rock: {
     id: "rock",
     name: "Rocky",
-    root: "/assets/yardbg/",
+    root: artUrl("/assets/yardbg/"),
     files: [
       "rock/2180_isorock1_isorock1.png",
       "rock/2182_isorock2_isorock2.png",
@@ -108,7 +109,7 @@ export const GROUNDS: Readonly<Record<GroundId, GroundSpec>> = {
   sand: {
     id: "sand",
     name: "Sand",
-    root: "/assets/yardbg/sand/",
+    root: artUrl("/assets/yardbg/sand/"),
     files: [
       "2167_isosand1_isosand1.png",
       "2168_isosand2_isosand2.png",
@@ -121,7 +122,7 @@ export const GROUNDS: Readonly<Record<GroundId, GroundSpec>> = {
   crater: {
     id: "crater",
     name: "Crater",
-    root: "/assets/yardbg/crater/",
+    root: artUrl("/assets/yardbg/crater/"),
     files: ["2179_isocrater1_isocrater1.png"],
     ...FLASH,
     fill: 0x56645e,
@@ -129,7 +130,7 @@ export const GROUNDS: Readonly<Record<GroundId, GroundSpec>> = {
   meadow: {
     id: "meadow",
     name: "Meadow",
-    root: "/assets/yardbg/meadow/",
+    root: artUrl("/assets/yardbg/meadow/"),
     files: LAYERS,
     ...PAINTED,
     fill: 0x557f22,
@@ -138,7 +139,7 @@ export const GROUNDS: Readonly<Record<GroundId, GroundSpec>> = {
   autumn: {
     id: "autumn",
     name: "Autumn",
-    root: "/assets/yardbg/autumn/",
+    root: artUrl("/assets/yardbg/autumn/"),
     files: LAYERS,
     ...PAINTED,
     ramps: [null, [0.42, 0.62], [0.5, 0.7]],
@@ -147,7 +148,7 @@ export const GROUNDS: Readonly<Record<GroundId, GroundSpec>> = {
   desert: {
     id: "desert",
     name: "Desert",
-    root: "/assets/yardbg/desert/",
+    root: artUrl("/assets/yardbg/desert/"),
     files: LAYERS,
     ...PAINTED,
     fill: 0xb08c64,
@@ -155,7 +156,7 @@ export const GROUNDS: Readonly<Record<GroundId, GroundSpec>> = {
   snow: {
     id: "snow",
     name: "Snow",
-    root: "/assets/yardbg/snow/",
+    root: artUrl("/assets/yardbg/snow/"),
     files: LAYERS,
     ...PAINTED,
     fill: 0xa9b6c6,
@@ -164,7 +165,7 @@ export const GROUNDS: Readonly<Record<GroundId, GroundSpec>> = {
   swamp: {
     id: "swamp",
     name: "Swamp",
-    root: "/assets/yardbg/swamp/",
+    root: artUrl("/assets/yardbg/swamp/"),
     files: LAYERS,
     ...PAINTED,
     ramps: [[0.35, 0.6], null, [0.45, 0.65]],

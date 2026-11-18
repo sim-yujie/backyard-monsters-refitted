@@ -11,6 +11,7 @@ import { bonusKey, questKey, QuestsPanel, swapKey, type QuestsPanelView, type Qu
 import { dockButton } from "@/ui/yard/YardDock";
 import { YARD_PLUGINS, type YardMounts, type YardPlugin } from "../yardPlugins";
 import { screenBusy } from "./announcements";
+import { artUrl } from "../../../artUrl";
 
 /**
  * Own-yard plugin for the daily login card, daily quests and weekly quests
@@ -82,7 +83,7 @@ const buttonArt = (): HTMLImageElement => {
   image.className = "yard-dock__picture quests-dock-art";
   image.alt = "";
   image.decoding = "async";
-  showPortrait(image, { src: "/assets/popups/completequest.png", fallback: null });
+  showPortrait(image, { src: artUrl("/assets/popups/completequest.png"), fallback: null });
   return image;
 };
 

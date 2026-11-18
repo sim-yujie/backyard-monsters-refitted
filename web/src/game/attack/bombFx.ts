@@ -1,6 +1,7 @@
 import { Assets, Rectangle, Sprite, Texture, type Container } from "pixi.js";
 import { TICKS_PER_SECOND, type BombStats } from "@/game/combat/rules";
 import type { Point } from "@/game/yard/YardGrid";
+import { artUrl } from "../../artUrl";
 
 /**
  * A resource bomb raining down, as the Flash client drew one (issue #87).
@@ -30,10 +31,10 @@ import type { Point } from "@/game/yard/YardGrid";
 export type BombSheet = "twigs" | "pebble" | "pebblehit" | "putty";
 
 const SHEET_URL: Readonly<Record<BombSheet, string>> = {
-  twigs: "/assets/effects/twigs.png",
-  pebble: "/assets/effects/pebble.png",
-  pebblehit: "/assets/effects/pebblehit.png",
-  putty: "/assets/effects/putty.png",
+  twigs: artUrl("/assets/effects/twigs.png"),
+  pebble: artUrl("/assets/effects/pebble.png"),
+  pebblehit: artUrl("/assets/effects/pebblehit.png"),
+  putty: artUrl("/assets/effects/putty.png"),
 };
 
 /** One cell of a sheet, in its pixels, and the point of it that sits on the drop. */

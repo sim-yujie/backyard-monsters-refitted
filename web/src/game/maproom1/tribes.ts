@@ -1,3 +1,4 @@
+import { artUrl } from "../../artUrl";
 /**
  * The four wild monster tribes of Map Room 1.
  *
@@ -36,28 +37,28 @@ export const TRIBES: readonly TribeInfo[] = [
     name: "Legionnaire",
     blurb:
       "The Legionnaires are keen military tacticians, well known for their unwavering valor in battle.",
-    art: "/assets/monsters/tribe_legionnaire_50.jpg",
+    art: artUrl("/assets/monsters/tribe_legionnaire_50.jpg"),
     spot: [196, 771, 209, 184],
   },
   {
     id: TribeId.KOZU,
     name: "Kozu",
     blurb: "The Kozu tribe use exalted masonry to build master mazes that defend their camp.",
-    art: "/assets/monsters/tribe_kozu_50.jpg",
+    art: artUrl("/assets/monsters/tribe_kozu_50.jpg"),
     spot: [605, 478, 186, 174],
   },
   {
     id: TribeId.ABUNAKKI,
     name: "Abunakki",
     blurb: "Known for their savagery, the Abunakki wear the bones of their enemies as jewelry.",
-    art: "/assets/monsters/tribe_abunakki_50.jpg",
+    art: artUrl("/assets/monsters/tribe_abunakki_50.jpg"),
     spot: [917, 1137, 191, 162],
   },
   {
     id: TribeId.DREADNAUT,
     name: "Dreadnaut",
     blurb: "The Dreadnauts use advanced technology and science to build superior weaponry.",
-    art: "/assets/monsters/tribe_dreadnaut_50.jpg",
+    art: artUrl("/assets/monsters/tribe_dreadnaut_50.jpg"),
     spot: [1238, 1084, 198, 174],
   },
 ];

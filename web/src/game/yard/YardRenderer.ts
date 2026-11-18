@@ -50,6 +50,7 @@ import {
   RANGE_FILL_ALPHA,
   rangeHoverFrame,
 } from "./towerRangeHover";
+import { artUrl } from "../../artUrl";
 
 /**
  * The yard's scene graph: ground, mushrooms, buildings and the selection
@@ -1439,7 +1440,7 @@ export class YardRenderer {
 /** A world rectangle every building is inside: the yard picture culls nothing. */
 const EVERYWHERE: Rect = { x: -1e7, y: -1e7, width: 2e7, height: 2e7 };
 
-const PUMPKIN_ART = "/assets/buildings/decorations/pumpkins/top.png";
+const PUMPKIN_ART = artUrl("/assets/buildings/decorations/pumpkins/top.png");
 const PUMPKIN_BASE = 0.9;
 const PUMPKIN_SCALE = 1.3;
 

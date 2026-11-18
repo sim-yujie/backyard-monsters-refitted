@@ -1,6 +1,7 @@
 import { Assets, Rectangle, Sprite, Texture, TilingSprite, type Container } from "pixi.js";
 import type { Point } from "@/game/yard/YardGrid";
 import { bitPath, tintAt } from "./blastFx";
+import { artUrl } from "../../artUrl";
 
 /**
  * The painted bits of the towers' shots (beta.5 tower attack effects): glows,
@@ -32,7 +33,7 @@ import { bitPath, tintAt } from "./blastFx";
  */
 
 /** The sheet: twenty 192 px cells, four across, then the strips (`server/public/assets/fx/`). */
-export const SHOT_FX_SHEET_URL = "/assets/fx/tower-fx.png";
+export const SHOT_FX_SHEET_URL = artUrl("/assets/fx/tower-fx.png");
 export const SHOT_FX_CELL = 192;
 const COLUMNS = 4;
 /** A strip's size on the sheet, two across under the cells. */
@@ -102,7 +103,7 @@ export const boltLook = (index: number, core = false): StripLook => {
 /** The flows, each its own image so it can repeat: 512 x 64, lying left to right. */
 export const FLOW_LOOKS = ["energy", "helix"] as const;
 export type FlowLook = (typeof FLOW_LOOKS)[number];
-export const flowUrl = (look: FlowLook): string => `/assets/fx/tower-fx-${look}.png`;
+export const flowUrl = (look: FlowLook): string => artUrl(`/assets/fx/tower-fx-${look}.png`);
 /** A flow image's painted height, px: its repeat is laid at the line's width. */
 const FLOW_HEIGHT = 64;
 

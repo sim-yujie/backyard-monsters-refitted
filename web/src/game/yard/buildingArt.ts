@@ -4,6 +4,7 @@ import { hasInfernoTiers, tierArtFor, type TierArt } from "./buildingArtTiers";
 import type { YardKind } from "./buildingCostData";
 import { REVAMP_BUILDING_ROWS } from "./revampBuildings";
 import { REVAMP_DECORATION_ROWS } from "./revampDecorations";
+import { artUrl } from "../../artUrl";
 
 /**
  * Resolving a building to its art.
@@ -65,7 +66,7 @@ export const ArtState = {
 export type ArtState = (typeof ArtState)[keyof typeof ArtState];
 
 /** Where the game server keeps the building art. Proxied in development. */
-const ASSET_ROOT = "/assets/";
+const ASSET_ROOT = artUrl("/assets/");
 
 interface ArtRowIndex {
   readonly name: string;

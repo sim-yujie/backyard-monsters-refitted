@@ -1,6 +1,7 @@
 import type { Texture } from "pixi.js";
 import { classicLook } from "@/game/classicLook";
 import { LOAD_TRIES, loadWithRetries } from "./retryLoad";
+import { artUrl } from "../../artUrl";
 
 /**
  * The yard mushrooms' pictures (owner, 12 Nov 2026: the drawn stand-in was
@@ -29,7 +30,7 @@ export type MushroomPicture = readonly [file: string, x: number, y: number];
 export const MUSHROOM_VARIANTS = 5;
 
 /** Where the pictures are served from. */
-export const MUSHROOM_ART_ROOT = "/assets/buildings/mushrooms/";
+export const MUSHROOM_ART_ROOT = artUrl("/assets/buildings/mushrooms/");
 
 /** Flash's five, frame 1 first (`design/mushrooms/make_files.py`, option classic-a). */
 export const CLASSIC_MUSHROOMS: readonly MushroomPicture[] = [

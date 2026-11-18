@@ -1,4 +1,5 @@
 import { EVENT_EXTRAS } from "./EventsPanel";
+import { artUrl } from "../../artUrl";
 
 /**
  * The Halloween card's line on where the pumpkins come from, under its
@@ -8,7 +9,7 @@ import { EVENT_EXTRAS } from "./EventsPanel";
  */
 
 /** The yard pumpkin's picture (the small pumpkin decoration's top). */
-export const PUMPKIN_ICON = "/assets/buildings/decorations/pumpkins/top.png";
+export const PUMPKIN_ICON = artUrl("/assets/buildings/decorations/pumpkins/top.png");
 
 export const PUMPKIN_HUNT_HINT =
   "Pumpkins grow in your yard while Halloween lasts. Tap one to send a worker to pick it; each one counts.";

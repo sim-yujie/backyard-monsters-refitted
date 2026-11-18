@@ -1,5 +1,5 @@
-import { describe, expect, it } from "vitest";
-import { GESTURE_EVENTS, MusicPlayer, type AudioLike, type GestureTarget } from "./MusicPlayer";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import { GESTURE_EVENTS, MusicPlayer, defaultAudio, type AudioLike, type GestureTarget } from "./MusicPlayer";
 import { TUNES } from "./tunes";
 
 /** An `<audio>` stand-in: `play` resolves, or rejects while the browser blocks sound. */
@@ -304,5 +304,36 @@ describe("MusicPlayer volume (the music slider)", () => {
     player.setVolume(1);
     expect(levels.at(-1)).toBeCloseTo(TUNES.attack.volume);
     player.destroy();
+  });
+});
+
+describe("the music element (art from another address, VITE_ART_URL)", () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it("asks with CORS, set before the address so the first download already has it", () => {
+    const steps: string[] = [];
+    class FakeAudio {
+      constructor(url?: string) {
+        if (url !== undefined) steps.push(`constructed with ${url}`);
+      }
+      set crossOrigin(value: string) {
+        steps.push(`crossOrigin=${value}`);
+      }
+      set preload(value: string) {
+        steps.push(`preload=${value}`);
+      }
+      set src(value: string) {
+        steps.push(`src=${value}`);
+      }
+    }
+    vi.stubGlobal("Audio", FakeAudio);
+    defaultAudio("https://cdn.example.test/assets/sounds/music/yard-theme.mp3");
+    expect(steps).toEqual([
+      "crossOrigin=anonymous",
+      "preload=auto",
+      "src=https://cdn.example.test/assets/sounds/music/yard-theme.mp3",
+    ]);
   });
 });
