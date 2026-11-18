@@ -116,6 +116,8 @@ const PHONE_WIDTH = 620;
 
 /** Space kept between the wide-screen dock and the minimap under it, and the least the dock shrinks to. */
 const DOCK_GAP = 12;
+/** Room between the attack strip and the dock column's tab row below it. */
+const STRIP_GAP = 6;
 const MIN_DOCK_HEIGHT = 160;
 
 export { formatClock };
@@ -930,15 +932,18 @@ export class AttackScene implements Scene {
 
   /**
    * The dock column starts under the strip. The stylesheet places it for a
-   * one-row strip; on a narrow tablet a long yard name wraps the strip to two
-   * rows, which covered the dock's tab row (layout check, iPad upright and
-   * Split View). The column is moved down by what the strip overhangs, and
-   * the stylesheet takes the same off its height (`--attack-dock-shift`).
+   * one-row strip, and on a desktop its top 10 px even sat under the strip's
+   * frame (the Army window's sign hid that); on a narrow tablet a long yard
+   * name wraps the strip to two rows, which covered the dock's tab row
+   * (layout check, iPad upright and Split View). The column is moved down by
+   * what the strip overhangs, and the stylesheet takes the same off its
+   * height (`--attack-dock-shift`).
    */
   private clearStrip(dock: HTMLElement, stripBottom: number | null): void {
     dock.style.removeProperty("--attack-dock-shift");
-    if (stripBottom === null) return;
-    const overhang = Math.ceil(stripBottom + DOCK_GAP - dock.getBoundingClientRect().top);
+    // A hidden dock (a raid) measures at the top of the screen: nothing to clear.
+    if (stripBottom === null || dock.hidden) return;
+    const overhang = Math.ceil(stripBottom + STRIP_GAP - dock.getBoundingClientRect().top);
     if (overhang > 0) dock.style.setProperty("--attack-dock-shift", `${overhang}px`);
   }
 
