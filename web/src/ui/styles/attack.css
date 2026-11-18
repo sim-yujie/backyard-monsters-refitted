@@ -1405,6 +1405,13 @@
   display: none;
 }
 
+/* The "Attack over" panel's own row: Attack again is gone (owner, 18 Nov
+   2026), so what is left (Return to map, or Leave and Retry) sits in the
+   middle under the result rather than off to one side. */
+.attack-end__actions--centred {
+  justify-content: center;
+}
+
 @media (pointer: coarse) {
   .attack-end__actions .btn,
   .attack-end__leave-confirm .btn {

@@ -35,7 +35,6 @@ import { INFERNO_YARD, MAIN_YARD, outpostTarget } from "@/game/yard/ownYards";
 import { monsterName } from "@/ui/attack/ArmyPanel";
 import { EndAttackPanel, type SaveFailure, type SavedInfo } from "@/ui/attack/EndAttackPanel";
 import { EndTakeoverOffer } from "@/ui/attack/EndTakeoverOffer";
-import { AutoAttackFlow } from "@/ui/attack/AutoAttackFlow";
 
 /**
  * Attack-scene plugin for the "end" work package (issue #32, WP6).
@@ -412,12 +411,6 @@ export const createEndPlugin = (deps: EndPluginDeps = {}): AttackPlugin => {
     let credited = false;
     /** A tribe attack's save has been sent again after a replay timeout; once. */
     let resent = false;
-    /** Attack again's sheets, once opened (issue #221). */
-    let repeat: AutoAttackFlow | null = null;
-    /**
-     * A Map Room 2 wild camp attack, once saved, is the plan the server repeats
-     * for the camp's tribe and level, so the panel offers it again (owner, #221).
-     */
     /**
      * Moloch's Descent (Inferno WP 1.13): like a Map Room 1 tribe, its way
      * out is home to the main yard, where Flash returned after it, with
@@ -425,7 +418,6 @@ export const createEndPlugin = (deps: EndPluginDeps = {}): AttackPlugin => {
      */
     const descent = target.descentYard !== undefined;
     let stopDescentResult: (() => void) | null = null;
-    const repeatable = target.kind === "wild" && (target.mapversion ?? 2) === 2 && target.cell !== undefined;
     /**
      * A Map Room 1 tribe's timed-out save is sent again once: the server's
      * finaliser would land it only from the last checkpoint, a few seconds
@@ -510,34 +502,10 @@ export const createEndPlugin = (deps: EndPluginDeps = {}): AttackPlugin => {
       panel?.setExtra(offer.element);
     };
 
-    /** Opens Attack again's confirm sheet over the panel. */
-    const attackAgain = (): void => {
-      if (tornDown) return;
-      repeat?.close();
-      repeat = new AutoAttackFlow({
-        baseid: target.baseid,
-        ...(target.cell ? { cell: target.cell } : {}),
-        modal,
-        // The same server attack as the map's Repeat attack, so the same army bar (15 Nov 2026).
-        progressBar: true,
-        onWatch: (run) => mounts.openWatch?.(run),
-        // The loot it banked joins the pool the HUD shows, as this attack's did (#168).
-        onAttacked: (result) => creditLoot(result.loot),
-        // Repeats only ever hit the same wild camp, so a take is always "camp" (#333).
-        onTaken: () => enterNewOutpost("camp", target.baseid, target.cell),
-      });
-      void repeat.start();
-    };
-
-    const offerAgain = (): void => {
-      if (repeatable && panel && shown?.kind === "saved") panel.setAttackAgain(attackAgain);
-    };
-
     const show = (next: SaveShown): void => {
       shown = next;
       if (panel) showOn(panel, next);
       creditHud();
-      offerAgain();
       if (next.kind === "saved" && next.takeover) offerTakeover(next.takeover);
     };
 
@@ -726,7 +694,6 @@ export const createEndPlugin = (deps: EndPluginDeps = {}): AttackPlugin => {
         destroyed: session.state().damagePercent >= VICTORY_THRESHOLD,
       });
       creditHud();
-      offerAgain();
       playDescent();
     };
 
@@ -781,8 +748,6 @@ export const createEndPlugin = (deps: EndPluginDeps = {}): AttackPlugin => {
       offer?.declineOnLeave(false);
       offer?.destroy();
       offer = null;
-      repeat?.close();
-      repeat = null;
       stopDescentResult?.();
       tornDown = true;
       page.window.removeEventListener("pagehide", onPageHide);
