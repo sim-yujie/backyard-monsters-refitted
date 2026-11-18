@@ -26,10 +26,8 @@
   min-width: 68px;
 }
 
-/* An end of the list: the disc stays, greyed out. */
-.friend-hop__button:disabled .yard-dock__disc > svg {
-  opacity: 0.4;
-}
+/* An end of the list: the disc stays, greyed out by the dock's own
+   disabled look (`yard-hud.css`). */
 
 /* Amber, as the Friends button's count of friends who can use help. */
 .friend-hop .yard-dock__badge.friend-hop__badge {

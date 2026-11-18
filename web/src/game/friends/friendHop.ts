@@ -4,7 +4,8 @@ import { canHelp } from "./friendText";
 
 /**
  * Next and Previous friend on a friend's yard (beta 8; players on Discord,
- * owner's grilling 18 Nov 2026): the arrows on the visit bar step through
+ * owner's grilling 18 Nov 2026): Prev and Next, two dock discs beside Map
+ * (`ui/friends/FriendHopButtons.ts`), step through
  * every friend, one yard after another, without going home and back into
  * the Friends window each time.
  *
@@ -13,7 +14,7 @@ import { canHelp } from "./friendText";
  *   is the Friends window's, top to bottom (`windowOrder`: can use help,
  *   online, everyone else), and it is **frozen** when the run starts, so a
  *   friend you just helped does not drop down the list under you. Only a
- *   fresh visit starts a new run; the arrows keep the frozen one.
+ *   fresh visit starts a new run; the discs keep the frozen one.
  * - **The ends stop**: no Next on the last friend, no Previous on the first.
  * - **A yard that will not open** is skipped: the hop goes on the same way
  *   to the friend after; with nobody left that way it goes back to the yard
@@ -33,7 +34,7 @@ export interface HopFriend {
   readonly username: string;
 }
 
-/** What the arrows show: the friend each one opens (null greys it out) and the count on Next. */
+/** What the discs show: the friend each one opens (null greys it out) and the count on Next. */
 export interface HopView {
   readonly prev: HopFriend | null;
   readonly next: HopFriend | null;
@@ -108,7 +109,7 @@ const step = (current: FriendRun, index: number, direction: HopDirection): HopFr
 };
 
 /**
- * What the arrows show on `userid`'s yard, with `live` the friends list as
+ * What the discs show on `userid`'s yard, with `live` the friends list as
  * it is now (for the count). Null when no run is on that friend.
  */
 export const hopView = (userid: number, live: readonly Friend[]): HopView | null => {

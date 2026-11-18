@@ -3,7 +3,7 @@ import { canHelp } from "./friendText";
 
 /**
  * The order the Friends window lists friends in (`ui/friends/FriendsWindow.ts`),
- * here so the visit bar's Next and Previous (`friendHop.ts`) can walk it
+ * here so Prev and Next on a friend's yard (`friendHop.ts`) can walk it
  * without the window.
  */
 

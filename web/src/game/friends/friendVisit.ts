@@ -32,7 +32,7 @@ export const friendTarget = (friend: Pick<Friend, "userid" | "username">, own?: 
 
 /**
  * Sets the friend's yard as the next yard to open; the caller then goes to
- * the yard scene. A fresh visit: the visit bar's Next and Previous start a
+ * the yard scene. A fresh visit: Prev and Next beside Map start a
  * new run from here, in the Friends window's order as it is now
  * (`friendHop.ts`; `friends` for a test, the shared list by default).
  */
@@ -45,7 +45,7 @@ export const visitFriend = (
   setViewTarget(friendTarget(friend, own));
 };
 
-/** Next or Previous on the visit bar: the friend's yard next, in the same run. */
+/** Prev or Next beside Map: the friend's yard next, in the same run. */
 export const hopToFriend = (friend: Pick<Friend, "userid" | "username">, own?: OwnPool): void => {
   setViewTarget(friendTarget(friend, own));
 };
