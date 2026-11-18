@@ -352,6 +352,14 @@ export class App {
     await this.scenes.start(SceneName.BOOT);
   }
 
+  /**
+   * Opens a scene from outside the app: only the layout check's own hooks use
+   * it (main.ts, a dev build or VITE_LAYOUT_CHECK=1).
+   */
+  goTo(name: string): void {
+    this.scenes?.goTo(name);
+  }
+
   destroy(): void {
     this.stopTeam?.();
     this.stopTeam = null;

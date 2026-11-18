@@ -6,7 +6,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import type { BaseLoadResponse } from "@/api/types";
 import { AttackSession } from "@/game/attack/AttackSession";
 import type { AttackRoster, AttackTarget } from "@/game/attack/attackTarget";
-import { Bucket } from "@/game/attack/bucket";
+import { AUTO_LOAD_KEY, Bucket, LAST_ARMY_KEY_PREFIX } from "@/game/attack/bucket";
 import { bucketCost, flingerPayload } from "@/game/combat/rules";
 import {
   ArmyPanel,
@@ -731,9 +731,10 @@ describe("ArmyPanel drop hint (less-text job 4)", () => {
 });
 
 describe("ArmyPanel last army", () => {
-  it("recalls the saved army, and says so when there is none", () => {
+  /** A store like localStorage, in memory. */
+  const memoryStorage = (): Storage => {
     const map = new Map<string, string>();
-    const storage = {
+    return {
       length: 0,
       clear: () => map.clear(),
       getItem: (k: string) => map.get(k) ?? null,
@@ -745,59 +746,112 @@ describe("ArmyPanel last army", () => {
         map.set(k, v);
       },
     } as Storage;
-
-    const session = sessionWith(sandboxRoster());
-    const bucket = new Bucket(session, { storage, playerKey: "2503" });
-    const panel = new ArmyPanel(bucket).mount(document.body);
-    panels.push(panel);
-    const load = control<HTMLButtonElement>(panel.element, ".attack-army__load-last");
-    load.click();
-    expect(load.disabled).toBe(true);
-    expect(bucket.isEmpty()).toBe(true);
-
-    bucket.setCount("C14", 7);
-    bucket.saveLast();
-    bucket.clear();
-
-    const again = new ArmyPanel(new Bucket(session, { storage, playerKey: "2503" })).mount(
-      document.body,
-    );
-    panels.push(again);
-    control<HTMLButtonElement>(again.element, ".attack-army__load-last").click();
-    expect(again.inputFor("C14")?.value).toBe("7");
-  });
-
-  it("puts the batch just sent back after the drop emptied the panel, even if it found none before", () => {
-    const map = new Map<string, string>();
-    const storage = {
-      length: 0,
-      clear: () => map.clear(),
-      getItem: (k: string) => map.get(k) ?? null,
-      key: () => null,
-      removeItem: (k: string) => {
-        map.delete(k);
-      },
-      setItem: (k: string, v: string) => {
-        map.set(k, v);
-      },
-    } as Storage;
-    const session = sessionWith(sandboxRoster());
-    const bucket = new Bucket(session, { storage, playerKey: "2503" });
-    const panel = new ArmyPanel(bucket).mount(document.body);
-    panels.push(panel);
-    const load = control<HTMLButtonElement>(panel.element, ".attack-army__load-last");
-    load.click();
-    expect(load.disabled).toBe(true);
-
-    bucket.setCount("C14", 7);
+  };
+  const autoLoadBox = (panel: ArmyPanel): HTMLInputElement =>
+    control<HTMLInputElement>(panel.element, ".attack-army__auto-load input");
+  const tick = (box: HTMLInputElement, on: boolean): void => {
+    box.checked = on;
+    box.dispatchEvent(new Event("change"));
+  };
+  const fling = (session: AttackSession, bucket: Bucket): void => {
     session.appendFling({ x: 100, y: 100, ...bucket.composition() });
     bucket.afterDrop();
-    expect(panel.inputFor("C14")?.value).toBe("0");
-    expect(load.disabled).toBe(false);
-    expect(load.title).toBe("Recall the composition you sent last");
+  };
 
-    load.click();
+  it("replaces Load last army with an Auto-load tick box, off by default (owner, 18 Nov 2026)", () => {
+    const storage = memoryStorage();
+    const panel = new ArmyPanel(new Bucket(sessionWith(sandboxRoster()), { storage, playerKey: "2503" })).mount(
+      document.body,
+    );
+    panels.push(panel);
+    expect(panel.element.querySelector(".attack-army__load-last")).toBeNull();
+    expect(panel.element.querySelector(".attack-army__auto-load")!.textContent).toBe("Auto-load last army");
+    expect(autoLoadBox(panel).checked).toBe(false);
+    expect(storage.getItem(AUTO_LOAD_KEY)).toBeNull();
+  });
+
+  it("fills the flinger with the last army when ticked, and keeps the tick on this browser", () => {
+    const storage = memoryStorage();
+    const session = sessionWith(sandboxRoster());
+    const first = new Bucket(session, { storage, playerKey: "2503" });
+    first.setCount("C14", 7);
+    first.saveLast();
+    first.clear();
+
+    const panel = new ArmyPanel(first).mount(document.body);
+    panels.push(panel);
+    tick(autoLoadBox(panel), true);
     expect(panel.inputFor("C14")?.value).toBe("7");
-    expect(bucket.composition()).toEqual({ monsters: { C14: 7 } });
+    expect(storage.getItem(AUTO_LOAD_KEY)).toBe("1");
+
+    // The next attack's panel shows it ticked, and starts empty all the same.
+    const next = new ArmyPanel(new Bucket(sessionWith(sandboxRoster()), { storage, playerKey: "2503" })).mount(
+      document.body,
+    );
+    panels.push(next);
+    expect(autoLoadBox(next).checked).toBe(true);
+    expect(next.inputFor("C14")?.value).toBe("0");
+
+    tick(autoLoadBox(next), false);
+    expect(storage.getItem(AUTO_LOAD_KEY)).toBeNull();
+  });
+
+  it("refills after each fling with the box ticked, and empties as before with it clear", () => {
+    const storage = memoryStorage();
+    const session = sessionWith(sandboxRoster());
+    const bucket = new Bucket(session, { storage, playerKey: "2503" });
+    const panel = new ArmyPanel(bucket).mount(document.body);
+    panels.push(panel);
+
+    bucket.setCount("C14", 2);
+    fling(session, bucket);
+    expect(panel.inputFor("C14")?.value).toBe("0");
+
+    tick(autoLoadBox(panel), true);
+    expect(panel.inputFor("C14")?.value).toBe("2");
+    fling(session, bucket);
+    expect(panel.inputFor("C14")?.value).toBe("2");
+    expect(bucket.composition()).toEqual({ monsters: { C14: 2 } });
+  });
+
+  it("keeps the saved army when a refill was cut short by what is left housed", () => {
+    const storage = memoryStorage();
+    const session = sessionWith(rosterOf({ monsters: { C1: 10 } }));
+    const bucket = new Bucket(session, { storage, playerKey: "2503" });
+    const panel = new ArmyPanel(bucket).mount(document.body);
+    panels.push(panel);
+    tick(autoLoadBox(panel), true);
+
+    bucket.setCount("C1", 4);
+    fling(session, bucket); // 6 left: refilled to 4
+    expect(bucket.requestedCount("C1")).toBe(4);
+    fling(session, bucket); // 2 left: refilled to 2, cut short
+    expect(bucket.requestedCount("C1")).toBe(2);
+    fling(session, bucket); // the short batch went out unchanged: none left
+    expect(bucket.requestedCount("C1")).toBe(0);
+    const saved = JSON.parse(storage.getItem(`${LAST_ARMY_KEY_PREFIX}2503`) ?? "{}") as { monsters?: Record<string, number> };
+    expect(saved.monsters).toEqual({ C1: 4 });
+  });
+
+  it("saves a refilled batch the player changed by hand", () => {
+    const storage = memoryStorage();
+    const session = sessionWith(rosterOf({ monsters: { C1: 20 } }));
+    const bucket = new Bucket(session, { storage, playerKey: "2503" });
+    const panel = new ArmyPanel(bucket).mount(document.body);
+    panels.push(panel);
+    tick(autoLoadBox(panel), true);
+    bucket.setCount("C1", 3);
+    fling(session, bucket);
+    bucket.setCount("C1", 5);
+    fling(session, bucket);
+    const saved = JSON.parse(storage.getItem(`${LAST_ARMY_KEY_PREFIX}2503`) ?? "{}") as { monsters?: Record<string, number> };
+    expect(saved.monsters).toEqual({ C1: 5 });
+    expect(bucket.requestedCount("C1")).toBe(5);
+  });
+
+  it("hides the box on a Baiter test, which keeps no last army", () => {
+    const panel = new ArmyPanel(new Bucket(sessionWith(sandboxRoster()), { storage: null })).mount(document.body);
+    panels.push(panel);
+    expect(panel.element.querySelector<HTMLElement>(".attack-army__auto-load")!.hidden).toBe(true);
   });
 });

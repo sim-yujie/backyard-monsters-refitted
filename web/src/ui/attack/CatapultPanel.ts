@@ -144,6 +144,8 @@ export class CatapultPanel {
     this.panel = new Panel({
       title: "Catapult",
       className: "attack-catapult attack-picker",
+      // In the attack dock the tab row is its title and way back (owner, 18 Nov 2026): no ✕.
+      closable: options.onClose !== undefined,
       ...(options.onClose ? { onClose: options.onClose } : {}),
     });
     this.panel.element.dataset["hotkey"] = "B";

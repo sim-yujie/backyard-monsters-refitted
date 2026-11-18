@@ -175,7 +175,9 @@ export class ArmyPanel {
   private readonly meterText: HTMLElement;
   private readonly fillAllButton: HTMLButtonElement;
   private readonly clearButton: HTMLButtonElement;
-  private readonly loadLastButton: HTMLButtonElement;
+  /** The "Auto-load last army" tick box (owner, 18 Nov 2026), in its label. */
+  private readonly autoLoad: HTMLLabelElement;
+  private readonly autoLoadBox: HTMLInputElement;
   private readonly rows: Row[] = [];
   private readonly champions: ChampionRow[] = [];
   private readonly hint: HTMLElement;
@@ -188,11 +190,6 @@ export class ArmyPanel {
   private readonly onStanceChange: ((t: number, stance: ChampionStance) => void) | null;
   private onField: readonly number[] = [];
   private locked: ArmyLock = {};
-  /**
-   * Load last army found nothing saved, at this many drops: it stays off until
-   * the next drop saves one ({@link Bucket.drops}).
-   */
-  private noLastArmyAt: number | null = null;
 
   constructor(bucket: Bucket, options: ArmyPanelOptions = {}) {
     this.bucket = bucket;
@@ -224,17 +221,24 @@ export class ArmyPanel {
     tutTarget(this.fillAllButton, TutTarget.FILL_ALL);
     this.clearButton = button("btn btn--ghost attack-army__clear", "Clear", () => this.bucket.clear());
     this.clearButton.title = "Empty every row and un-pick the champion";
-    this.loadLastButton = button("btn btn--ghost attack-army__load-last", "Load last army", () => {
-      if (!this.bucket.loadLast()) {
-        this.loadLastButton.title = NO_LAST_ARMY_TITLE;
-        this.noLastArmyAt = this.bucket.drops();
-        this.loadLastButton.disabled = true;
-      }
+    // "Auto-load last army" replaces the Load last army button (owner, 18
+    // Nov 2026): ticked, it fills the flinger with the last army now and
+    // again after every fling. Off by default, kept on this browser.
+    this.autoLoad = document.createElement("label");
+    this.autoLoad.className = "attack-army__auto-load";
+    this.autoLoad.title = AUTO_LOAD_TITLE;
+    this.autoLoadBox = document.createElement("input");
+    this.autoLoadBox.type = "checkbox";
+    this.autoLoadBox.checked = bucket.autoLoad();
+    this.autoLoadBox.addEventListener("change", () => {
+      this.bucket.setAutoLoad(this.autoLoadBox.checked);
     });
-    this.loadLastButton.title = LOAD_LAST_TITLE;
-    // A Baiter test keeps no last army, so there is none to recall (#22, WP3).
-    this.loadLastButton.hidden = !bucket.remembersLast();
-    actions.append(this.fillAllButton, this.clearButton, this.loadLastButton);
+    const autoLoadWords = document.createElement("span");
+    autoLoadWords.textContent = AUTO_LOAD_LABEL;
+    this.autoLoad.append(this.autoLoadBox, autoLoadWords);
+    // A Baiter test keeps no last army, so there is none to load (#22, WP3).
+    this.autoLoad.hidden = !bucket.remembersLast();
+    actions.append(this.fillAllButton, this.clearButton, this.autoLoad);
 
     // One row per housed type, in roster order.
     const list = document.createElement("ul");
@@ -516,12 +520,7 @@ export class ArmyPanel {
     const anyRoom = bucket.ids().some((id) => bucket.max(id) > bucket.requestedCount(id));
     this.fillAllButton.disabled = !live || !anyRoom || this.locked.fillAll === true;
     this.clearButton.disabled = !live || bucket.isEmpty() || this.locked.clear === true;
-    // A drop since the empty answer saved one, so the button comes back.
-    if (this.noLastArmyAt !== null && this.noLastArmyAt !== bucket.drops()) {
-      this.noLastArmyAt = null;
-      this.loadLastButton.title = LOAD_LAST_TITLE;
-    }
-    this.loadLastButton.disabled = !live || this.noLastArmyAt !== null || this.locked.clear === true;
+    this.autoLoadBox.disabled = this.locked.clear === true;
 
     for (const row of this.rows) this.refreshRow(row, document.activeElement !== row.input);
 
@@ -610,8 +609,9 @@ export class ArmyPanel {
 /** Bucket units, exact with a thousands separator: "2,150", never "2.2K". */
 const units = (value: number): string => Math.round(value).toLocaleString("en-US");
 
-const LOAD_LAST_TITLE = "Recall the composition you sent last";
-const NO_LAST_ARMY_TITLE = "No army from a previous attack was saved on this browser";
+/** The tick box's words, short (owner: icons over words; the tooltip says the rest). */
+export const AUTO_LOAD_LABEL = "Auto-load last army";
+const AUTO_LOAD_TITLE = "Fill the flinger with the army you sent last, and again after every fling";
 
 /** What the hint says with nothing set to send, and once the attack is over. */
 export const EMPTY_HINT = "Pick monsters, then tap ground";

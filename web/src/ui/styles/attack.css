@@ -175,11 +175,13 @@
 .attack-dock {
   position: absolute;
   right: var(--space-4);
-  top: calc(var(--hud-height) + var(--hud-inset) + var(--space-7) + var(--space-4));
+  /* --attack-dock-shift: how far a strip wrapped to two rows overhangs the
+     place kept for it (AttackScene.clearStrip); 0 when it fits. */
+  top: calc(var(--hud-height) + var(--hud-inset) + var(--space-7) + var(--space-4) + var(--attack-dock-shift, 0px));
   /* Wide enough for an army row inside the skin's frame and a scrollbar. */
   width: 340px;
-  max-height: calc(100vh - var(--hud-height) - var(--hud-inset) - var(--space-7) - var(--space-6));
-  max-height: calc(100dvh - var(--hud-height) - var(--hud-inset) - var(--space-7) - var(--space-6));
+  max-height: calc(100vh - var(--hud-height) - var(--hud-inset) - var(--space-7) - var(--space-6) - var(--attack-dock-shift, 0px));
+  max-height: calc(100dvh - var(--hud-height) - var(--hud-inset) - var(--space-7) - var(--space-6) - var(--attack-dock-shift, 0px));
   display: flex;
   flex-direction: column;
   gap: var(--space-2);
@@ -194,8 +196,35 @@
   display: none;
 }
 
+/*
+ * The tab row (Army, Catapult, Siege; owner, 18 Nov 2026, proposal A,
+ * `ui/attack/DockTabs.ts`): pinned at the top of the dock, out of the
+ * scrolling body, so the Catapult never hides under a long army list.
+ */
+.attack-dock__tabs {
+  flex: 0 0 auto;
+}
+
+.attack-dock__tabs[hidden] {
+  display: none;
+}
+
+/* Only the selected tab's windows; a window no tab claims (the Baiter's
+   test panel) shows under every tab. */
+.attack-dock[data-tab="army"] .attack-dock__body > [data-dock-tab]:not([data-dock-tab="army"]),
+.attack-dock[data-tab="catapult"] .attack-dock__body > [data-dock-tab]:not([data-dock-tab="catapult"]),
+.attack-dock[data-tab="siege"] .attack-dock__body > [data-dock-tab]:not([data-dock-tab="siege"]) {
+  display: none;
+}
+
+/* The tab is the window's title: no title plate (or sign) of its own. */
+.attack-dock--tabs .attack-dock__body > [data-dock-tab] > .panel__titlebar {
+  display: none;
+}
+
 .attack-dock__body {
   display: flex;
+  flex: 1 1 auto;
   flex-direction: column;
   gap: var(--space-2);
   overflow-y: auto;
@@ -348,7 +377,7 @@
 
   .attack-strip__retreat,
   .attack-menu__button {
-    min-height: 40px;
+    min-height: 44px;
   }
 
   /* Tighter, so everything still fits on the one row at 360 px. */
@@ -434,6 +463,20 @@
     content: "▼";
   }
 
+  /* With a tab row the row is the handle: tap a tab to open the sheet on
+     it, the open tab to close it. Clear of the home bar while closed. */
+  .attack-dock--sheet.attack-dock--tabs .attack-dock__handle {
+    display: none;
+  }
+
+  .attack-dock--sheet .attack-dock__tabs {
+    padding: var(--space-2) var(--space-3);
+  }
+
+  .attack-dock--sheet:not(.attack-dock--open) .attack-dock__tabs {
+    padding-bottom: max(var(--space-2), env(safe-area-inset-bottom));
+  }
+
   .attack-dock--sheet .attack-dock__body,
   .attack-dock--sheet .attack-dock__end {
     display: none;
@@ -484,6 +527,11 @@
   .attack-strip__speed-button {
     min-height: 44px;
   }
+
+  /* "2x" was 31 px wide on a phone: a whole tap target (owner, 18 Nov 2026). */
+  .attack-strip__speed-button {
+    min-width: 44px;
+  }
 }
 
 /*
@@ -529,13 +577,13 @@
 
   .attack-strip__retreat,
   .attack-menu__button {
-    min-height: 40px;
+    min-height: 44px;
   }
 
   .attack-dock {
-    top: calc(var(--hud-inset) + 60px + var(--space-2));
-    max-height: calc(100vh - var(--hud-inset) - 60px - var(--space-2) - var(--space-3));
-    max-height: calc(100dvh - var(--hud-inset) - 60px - var(--space-2) - var(--space-3));
+    top: calc(var(--hud-inset) + 60px + var(--space-2) + var(--attack-dock-shift, 0px));
+    max-height: calc(100vh - var(--hud-inset) - 60px - var(--space-2) - var(--space-3) - var(--attack-dock-shift, 0px));
+    max-height: calc(100dvh - var(--hud-inset) - 60px - var(--space-2) - var(--space-3) - var(--attack-dock-shift, 0px));
   }
 
   .yard-viewtools.attack-viewtools {
@@ -747,9 +795,9 @@
 
   /* 12 px lower than before, so the Army window's ribbon clears the bar. */
   .attack-dock {
-    top: calc(var(--hud-inset) + 60px + var(--space-2) + 12px);
-    max-height: calc(100vh - var(--hud-inset) - 60px - var(--space-2) - 12px - var(--space-3));
-    max-height: calc(100dvh - var(--hud-inset) - 60px - var(--space-2) - 12px - var(--space-3));
+    top: calc(var(--hud-inset) + 60px + var(--space-2) + 12px + var(--attack-dock-shift, 0px));
+    max-height: calc(100vh - var(--hud-inset) - 60px - var(--space-2) - 12px - var(--space-3) - var(--attack-dock-shift, 0px));
+    max-height: calc(100dvh - var(--hud-inset) - 60px - var(--space-2) - 12px - var(--space-3) - var(--attack-dock-shift, 0px));
   }
 }
 
@@ -835,6 +883,36 @@
 
 .attack-army__fill-all {
   flex: 1 1 auto;
+}
+
+/* "Auto-load last army" (owner, 18 Nov 2026): a tick box in the actions row. */
+.attack-army__auto-load {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-height: 44px;
+  padding: 0 var(--space-2);
+  font-size: var(--text-sm);
+  font-weight: 700;
+  cursor: pointer;
+  user-select: none;
+}
+
+.attack-army__auto-load input {
+  width: 22px;
+  height: 22px;
+  margin: 0;
+  accent-color: var(--colour-accent);
+  cursor: inherit;
+}
+
+.attack-army__auto-load:has(input:disabled) {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.attack-army__auto-load[hidden] {
+  display: none;
 }
 
 /* Rows */
@@ -1044,8 +1122,7 @@
   font-size: var(--text-sm);
 }
 
-.attack-army__champion-retreat[hidden],
-.attack-army__load-last[hidden] {
+.attack-army__champion-retreat[hidden] {
   display: none;
 }
 
@@ -1348,7 +1425,9 @@
 /* Straight over the yard, so the panels' glass rather than a wash. */
 .attack-tools__button {
   flex: 1 1 0;
-  min-height: var(--control-height-compact);
+  min-width: 0;
+  /* A tap target on every screen (44 px). */
+  min-height: 44px;
   border-color: var(--colour-border);
   background: var(--colour-surface-raised);
   -webkit-backdrop-filter: var(--blur-panel);
@@ -1361,11 +1440,12 @@
 }
 
 /*
- * No 1px press nudge here (ui.css `.btn:active`). The tool bar is the last
+ * No 1px press nudge here (ui.css `.btn:active`). The tool bar was the last
  * thing in the dock body, which scrolls, so the nudge pushed it 1px past the
  * body's edge: the body overflowed, a Windows scrollbar took 15px off its
  * width, the Army panel rewrapped taller and the button slid out from under
  * the pointer before the release, so the click was lost (Brave, beta.4.1).
+ * The tab row is out of the body now; a tab still does not jump.
  */
 .btn.attack-tools__button:active:not(:disabled) {
   transform: none;
@@ -1376,12 +1456,31 @@
   background: var(--colour-surface-raised);
 }
 
-.attack-tools__button[aria-expanded="true"] {
+.attack-tools__button[aria-selected="true"] {
   background: color-mix(in srgb, var(--colour-surface-raised), var(--colour-text) 12%);
   border-color: var(--colour-border-strong);
+  color: var(--colour-text-strong);
 }
 
-/* The bar reads as armed while its picker's tool is waiting for a tap. */
+/* The tab that is up: a bar under its words, so it never reads like an armed tab. */
+.attack-dock__tab {
+  position: relative;
+}
+
+.attack-dock__tab[aria-selected="true"]::after {
+  content: "";
+  position: absolute;
+  left: 18%;
+  right: 18%;
+  bottom: 5px;
+  height: 4px;
+  border-radius: 2px;
+  background: var(--colour-text-strong);
+  box-shadow: 0 1px 2px rgb(0 0 0 / 60%);
+  pointer-events: none;
+}
+
+/* A tab reads as armed while its tool is waiting for a tap, whichever tab is up. */
 .attack-tools__button--armed {
   border-color: var(--colour-accent);
   color: var(--colour-accent);
@@ -1497,15 +1596,6 @@
   vertical-align: middle;
 }
 
-@media (max-width: 620px) {
-  .attack-tools__button {
-    min-height: 44px;
-  }
-}
-/* A picker replaces the Army panel while it is open (#76); the bucket keeps its state. */
-.attack-dock--picker .attack-army {
-  display: none;
-}
 
 /* The Catapult (#76): one compact row per resource, its sizes as a pill switch (#89). */
 .attack-catapult .panel__body {
