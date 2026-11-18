@@ -58,7 +58,8 @@ import type {
  * Every building carries its stored `x`/`y` and `cx`/`cy`, the anchor as
  * `PATHING.FromISO(_mc)` sees it: the stored point after a round trip through
  * the screen, which can sit one unit off it because `GRID.ToISO` floors and
- * `PATHING.FromISO` truncates.
+ * `PATHING.FromISO` truncates. A wall is the exception: it is anchored on its
+ * stored X/Y (see {@link buildEngineYard}).
  *
  * ## Fidelity notes
  *
@@ -400,7 +401,10 @@ export interface EngineBuilding {
   /** Yard units, exactly as `buildingdata` spells them. */
   readonly x: number;
   readonly y: number;
-  /** The anchor as the grid and range tests see it, `PATHING.FromISO(_mc)`. */
+  /**
+   * The anchor as the grid and range tests see it, `PATHING.FromISO(_mc)`;
+   * for a wall, its stored X/Y (the cells it is drawn on).
+   */
   readonly cx: number;
   readonly cy: number;
   /** Where Flash drew the anchor, `_position`: {@link screenOf} the stored X/Y. */
@@ -518,7 +522,18 @@ export const buildEngineYard = (input: EngineYardInput): EngineYard => {
     const level = rawLevel > 0 ? rawLevel : 1;
     const footprint = footprintOf(type, yardKind);
     const onScreen = screenOf(numberOf(data.X), numberOf(data.Y));
-    const anchor = fromIso(onScreen.x, onScreen.y);
+    // A wall blocks the grid exactly where it is drawn: its stored X/Y, not the
+    // screen round trip Flash used. Where X - Y is an odd multiple of 5, the
+    // round trip lands one unit low, the 2x2 cell registration can drop a
+    // whole cell, and a one-cell slit opens inside the drawn wall that
+    // monsters walk through (patch 7.9, owner 18 Nov 2026;
+    // `wallStairLeak.test.ts`). A deliberate break from Flash: on its 10-unit
+    // drag lattice (X - Y a multiple of 10) both give the same point, but many
+    // tribe yards' walls (Map Room 1-3, Moloch) sit off that lattice and now
+    // block a cell from where Flash had them.
+    const anchor = blocksPathing(type)
+      ? { x: numberOf(data.X), y: numberOf(data.Y) }
+      : fromIso(onScreen.x, onScreen.y);
     const ceiling = buildingMaxHp(type, level, yardKind);
     const reported = health[String(id)];
     const hp =

@@ -638,7 +638,9 @@ describe("Map Room 1 tribe save: the battle is the server's (#23, C4)", () => {
       r1: 100 + battle.attackloot.r1,
       r2: 100 + battle.attackloot.r2,
       r3: 100 + battle.attackloot.r3,
-      r4: 100 + battle.attackloot.r4,
+      // Wild tribes give 25% more Goo (patch 6.9). Since the 7.9 wall fix this
+      // scratch reaches a Goo harvester, so the bonus shows here too.
+      r4: 100 + withTribeGooBonus({ r4: battle.attackloot.r4 }, true).r4,
     });
     expect(mismatches()).toEqual([["damage", "destroyed", "buildinghealthdata", "attackloot"]]);
   });
