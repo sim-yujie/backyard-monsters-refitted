@@ -454,6 +454,10 @@ export class AttackScene implements Scene {
     if (this.sinceUiTick >= UI_TICK_SECONDS) {
       this.sinceUiTick = 0;
       if (this.session) this.refreshStrip(this.session.state());
+      // The strip can wrap to a second row (a boosts chip arriving, a long
+      // name): the dock and the inset follow it down.
+      const stripBottom = this.strip?.getBoundingClientRect().bottom;
+      if (stripBottom !== undefined && stripBottom !== this.inset.top) this.measureDock();
     }
   }
 
@@ -917,10 +921,25 @@ export class AttackScene implements Scene {
     const phone = this.viewportWidth > 0 && this.viewportWidth <= PHONE_WIDTH;
     dock.classList.toggle("attack-dock--sheet", phone);
     this.dockTabs?.refresh();
-    const bottom = phone ? dock.getBoundingClientRect().height : 0;
     const top = this.strip ? this.strip.getBoundingClientRect().bottom : this.inset.top;
+    this.clearStrip(dock, phone ? null : top);
+    const bottom = phone ? dock.getBoundingClientRect().height : 0;
     if (bottom !== this.inset.bottom || top !== this.inset.top) this.setInset({ top, bottom });
     else this.fitDock();
+  }
+
+  /**
+   * The dock column starts under the strip. The stylesheet places it for a
+   * one-row strip; on a narrow tablet a long yard name wraps the strip to two
+   * rows, which covered the dock's tab row (layout check, iPad upright and
+   * Split View). The column is moved down by what the strip overhangs, and
+   * the stylesheet takes the same off its height (`--attack-dock-shift`).
+   */
+  private clearStrip(dock: HTMLElement, stripBottom: number | null): void {
+    dock.style.removeProperty("--attack-dock-shift");
+    if (stripBottom === null) return;
+    const overhang = Math.ceil(stripBottom + DOCK_GAP - dock.getBoundingClientRect().top);
+    if (overhang > 0) dock.style.setProperty("--attack-dock-shift", `${overhang}px`);
   }
 
   private setInset(inset: { top: number; bottom: number }): void {
