@@ -207,7 +207,7 @@ describe("a Baiter test", () => {
     // Monsters and champions only (owner answer Q7), and no last army to load.
     // The dock's tab row offers the Army only: no Catapult, no siege weapon.
     expect([...dock.querySelectorAll('[data-dock-tab]')].map((el) => el.getAttribute("data-dock-tab"))).toEqual(["army"]);
-    expect(dock.querySelector<HTMLButtonElement>(".attack-army__load-last")!.hidden).toBe(true);
+    expect(dock.querySelector<HTMLElement>(".attack-army__auto-load")!.hidden).toBe(true);
     // The dock names the test first, above the army.
     expect(dock.firstElementChild?.classList.contains("baiter-dock")).toBe(true);
     expect(dock.textContent).toContain("Test attack: nothing is saved");

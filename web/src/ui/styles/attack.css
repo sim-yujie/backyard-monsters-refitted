@@ -883,6 +883,36 @@
   flex: 1 1 auto;
 }
 
+/* "Auto-load last army" (owner, 18 Nov 2026): a tick box in the actions row. */
+.attack-army__auto-load {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-height: 44px;
+  padding: 0 var(--space-2);
+  font-size: var(--text-sm);
+  font-weight: 700;
+  cursor: pointer;
+  user-select: none;
+}
+
+.attack-army__auto-load input {
+  width: 22px;
+  height: 22px;
+  margin: 0;
+  accent-color: var(--colour-accent);
+  cursor: inherit;
+}
+
+.attack-army__auto-load:has(input:disabled) {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.attack-army__auto-load[hidden] {
+  display: none;
+}
+
 /* Rows */
 
 .attack-army__rows {
@@ -1090,8 +1120,7 @@
   font-size: var(--text-sm);
 }
 
-.attack-army__champion-retreat[hidden],
-.attack-army__load-last[hidden] {
+.attack-army__champion-retreat[hidden] {
   display: none;
 }
 
