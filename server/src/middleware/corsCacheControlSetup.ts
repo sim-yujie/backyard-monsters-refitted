@@ -50,23 +50,38 @@ export const cacheControlFor = (path: string, cacheable = cacheStaticAssets): st
 /**
  * Middleware to set CORS headers and apply cache control.
  *
- * Only an allowed page (`config/CorsConfig.ts`) is told it may read the
- * answer; its own origin is echoed back, with `Vary: Origin` so a cache does
- * not hand one page's answer to another.
+ * - The art (any file in public/, `isStaticPath`) may be read by any page:
+ *   `Access-Control-Allow-Origin: *`, with no `Vary: Origin`. It is public and
+ *   fetched without cookies, and Cloudflare's cache in front of
+ *   `cdn.bymrevamped.com` ignores `Vary`, so one cached copy is handed to
+ *   everyone: it must carry the same header whoever asked first (and asks
+ *   with no Origin at all, as a plain `<img>` or `<audio>` does).
+ * - Everything else (the API): only an allowed page (`config/CorsConfig.ts`)
+ *   is told it may read the answer; its own origin is echoed back, with
+ *   `Vary: Origin` so a cache does not hand one page's answer to another.
+ * - A file that is not there (404) or fails is never kept (`no-store`): a
+ *   week-long 404 at Cloudflare would hide a picture that arrives a moment
+ *   after the client that asks for it.
  *
  * @param {CorsSettings} settings - The allowed origins, read once at start-up.
  * @returns The middleware.
  */
 export const makeCorsCacheControl = (settings: CorsSettings) => async (ctx: Context, next: Next) => {
+  const art = isStaticPath(ctx.path);
   const origin = ctx.get("Origin");
-  if (isAllowedOrigin(origin, settings)) {
-    ctx.set("Access-Control-Allow-Origin", origin);
-    // Lets the same page read the answers' sizes (PerformanceResourceTiming.transferSize), which a
-    // browser reports as 0 across origins otherwise: Map Room 2's open timing counted the getarea
-    // answers as 0 kB on the live game (`web/src/game/maproom/openMarks.ts`).
-    ctx.set("Timing-Allow-Origin", origin);
+  if (art) {
+    ctx.set("Access-Control-Allow-Origin", "*");
+    ctx.set("Timing-Allow-Origin", "*");
+  } else {
+    if (isAllowedOrigin(origin, settings)) {
+      ctx.set("Access-Control-Allow-Origin", origin);
+      // Lets the same page read the answers' sizes (PerformanceResourceTiming.transferSize), which a
+      // browser reports as 0 across origins otherwise: Map Room 2's open timing counted the getarea
+      // answers as 0 kB on the live game (`web/src/game/maproom/openMarks.ts`).
+      ctx.set("Timing-Allow-Origin", origin);
+    }
+    ctx.vary("Origin");
   }
-  ctx.vary("Origin");
 
   ctx.set("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS");
   ctx.set("Access-Control-Allow-Headers", "Content-Type, Authorization");
@@ -79,6 +94,8 @@ export const makeCorsCacheControl = (settings: CorsSettings) => async (ctx: Cont
   }
 
   await next();
+
+  if (art && ctx.status >= 400) ctx.set("Cache-Control", NO_STORE);
 };
 
 export const corsCacheControl = makeCorsCacheControl(corsSettings());

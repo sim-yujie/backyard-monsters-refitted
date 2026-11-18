@@ -1,6 +1,7 @@
 import type { Season } from "@/game/season";
 import { Popup } from "@/ui/Popup";
 import { resourceAmount } from "@/ui/resourceIcon";
+import { artUrl } from "../../artUrl";
 
 /**
  * The golden mushroom popup (`docs/design/yard-buildings.md` §5.6), or at
@@ -12,7 +13,7 @@ import { resourceAmount } from "@/ui/resourceIcon";
  */
 
 /** The picture, served by the game server (`server/public/assets/popups/goldmushroom.png`). */
-export const GOLDEN_MUSHROOM_ART = "/assets/popups/goldmushroom.png";
+export const GOLDEN_MUSHROOM_ART = artUrl("/assets/popups/goldmushroom.png");
 
 export const GOLDEN_TITLE = "Your worker struck gold!";
 
@@ -20,7 +21,7 @@ export const GOLDEN_TITLE = "Your worker struck gold!";
  * The Halloween dress of the same popup: the golden mushroom is a glowing
  * jack-o'-lantern (`game/season.ts`). Same reward, same roll.
  */
-export const JACK_O_LANTERN_ART = "/assets/popups/jack-o-lantern.png";
+export const JACK_O_LANTERN_ART = artUrl("/assets/popups/jack-o-lantern.png");
 export const JACK_O_LANTERN_TITLE = "Your worker found a jack-o'-lantern!";
 
 /**
@@ -30,7 +31,7 @@ export const JACK_O_LANTERN_TITLE = "Your worker found a jack-o'-lantern!";
  * short so the title bar shows it whole, phone width included (the longer
  * "Your worker caught a golden turkey!" was cut to "Your worker caught a g...").
  */
-export const GOLDEN_TURKEY_ART = "/assets/specialevent/thanksgiving/golden-turkey.png";
+export const GOLDEN_TURKEY_ART = artUrl("/assets/specialevent/thanksgiving/golden-turkey.png");
 export const GOLDEN_TURKEY_TITLE = "A golden turkey!";
 
 /** What the popup says in each season: picture, title, and the line around the Shiny. */

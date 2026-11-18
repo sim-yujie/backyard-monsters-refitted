@@ -109,9 +109,17 @@ const FADE_TICK_MS = 25;
 const browserPlaysOgg = (): boolean =>
   typeof document !== "undefined" && document.createElement("audio").canPlayType('audio/ogg; codecs="vorbis"') !== "";
 
-const defaultAudio = (url: string): AudioLike => {
-  const audio = new Audio(url);
+/**
+ * A tune's element. `crossOrigin` is set before the address, as the download
+ * starts with it: when the music comes from another address (`VITE_ART_URL`,
+ * `artUrl.ts`), Web Audio on iPhone and iPad plays a cross-origin element
+ * without CORS as silence. On the page's own address it changes nothing.
+ */
+export const defaultAudio = (url: string): AudioLike => {
+  const audio = new Audio();
+  audio.crossOrigin = "anonymous";
   audio.preload = "auto";
+  audio.src = url;
   return audio;
 };
 

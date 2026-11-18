@@ -3,6 +3,7 @@ import { MONSTER_SPRITES, type MonsterAnimation, type MonsterSheet, type RowCycl
 import { windUpFrame } from "./juice";
 import { SHEET_VERSIONS } from "./sheetVersions";
 import { sheetAtQuality, sheetCopies, sheetForDevice } from "@/game/quality";
+import { artUrl } from "../../artUrl";
 
 /**
  * Picking a cell out of a monster sprite sheet.
@@ -51,7 +52,7 @@ import { sheetAtQuality, sheetCopies, sheetForDevice } from "@/game/quality";
  */
 
 /** Where the game server keeps the sheets. Proxied in development. */
-export const ASSET_ROOT = "/assets/";
+export const ASSET_ROOT = artUrl("/assets/");
 
 /** Ticks a walk or attack frame is shown for (`SPRITES.as:235`, `param5 / 8`). */
 export const TICKS_PER_FRAME = 8;

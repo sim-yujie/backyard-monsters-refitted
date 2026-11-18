@@ -11,6 +11,7 @@ import {
   type TakeoverRefusalReason,
 } from "@/api/types";
 import { formatAmount, formatCountdown } from "@/ui/format";
+import { artUrl } from "../../artUrl";
 
 /**
  * Taking over a Map Room 2 camp or outpost (issue #82, outposts plan WP6).
@@ -68,7 +69,7 @@ export const firstOpenText = (kind: TakeoverKind, name: string): string =>
     : `You destroyed ${name}'s Outpost. Take over their yard and expand your empire.`;
 
 /** The art Flash showed with it (`building-outpost.png`). */
-export const FIRST_OPEN_ART = "/assets/popups/building-outpost.png";
+export const FIRST_OPEN_ART = artUrl("/assets/popups/building-outpost.png");
 
 export type TakeoverKind = "camp" | "outpost";
 

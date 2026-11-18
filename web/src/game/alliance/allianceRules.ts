@@ -10,6 +10,7 @@ import type {
   TypeOption,
 } from "@/api/alliance";
 import { formatCountdown } from "@/ui/format";
+import { artUrl } from "../../artUrl";
 
 /**
  * What the alliance window shows and allows, worked out without the page
@@ -74,7 +75,7 @@ export const SHIELD_COUNT = 41;
 /** A shield's picture, 1 to 41 (Flash's own; `medium` is 46 px, `small` 25 px). */
 export const shieldUrl = (image: number, size: "medium" | "small" = "medium"): string => {
   const shield = Number.isInteger(image) && image >= 1 && image <= SHIELD_COUNT ? image : 1;
-  return `/assets/alliances/${shield}_${size}.png`;
+  return artUrl(`/assets/alliances/${shield}_${size}.png`);
 };
 
 /** Why a name cannot be sent as it is, or null. The server checks again (taken, banned words). */

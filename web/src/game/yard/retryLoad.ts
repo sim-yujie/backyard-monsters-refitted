@@ -1,4 +1,5 @@
 import { Assets, type Texture } from "pixi.js";
+import { artPath } from "../../artUrl";
 
 /**
  * The waits before each try after the first. Flash's `ImageCache` gave a file
@@ -18,9 +19,12 @@ export const LOAD_TRIES = RETRY_DELAYS_MS.length + 1;
  */
 export const BUILDING_ART_VERSION = "10";
 
-/** The address to ask for: a building picture carries {@link BUILDING_ART_VERSION}. */
+/**
+ * The address to ask for: a building picture carries {@link BUILDING_ART_VERSION},
+ * whether it is asked of the page's address or of `VITE_ART_URL`'s (`artUrl.ts`).
+ */
 export const versionedArt = (url: string): string =>
-  url.startsWith("/assets/buildings/") ? `${url}?v=${BUILDING_ART_VERSION}` : url;
+  artPath(url).startsWith("/assets/buildings/") ? `${url}?v=${BUILDING_ART_VERSION}` : url; // art path, not fetched
 
 /**
  * `Assets.load`, asked again when it fails, after waits that double from a

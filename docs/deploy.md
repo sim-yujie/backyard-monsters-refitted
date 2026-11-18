@@ -96,6 +96,7 @@ Records**:
 | Type | Name | Value | Notes |
 |---|---|---|---|
 | A | `api` | the VPS IP address | Points the game server's address straight at the VPS, so Caddy can get its certificate. |
+| CNAME | `cdn` | `api.yourgame.com` | The art's own address (`CDN_DOMAIN`, see "Art through Cloudflare"). Caddy gets a certificate for it too, so add it before step 7. |
 
 The `play` address needs no record of its own: when you add
 `play.yourgame.com` to the Vercel project in step 6, Vercel points it at the
@@ -208,6 +209,7 @@ Go through the file top to bottom. Every line with `FILL IN` or `EXAMPLE.com`
 needs your value:
 
 - `API_DOMAIN=api.yourgame.com` and `WEB_DOMAIN=play.yourgame.com`;
+- `CDN_DOMAIN=cdn.yourgame.com` (the `cdn` record from step 3);
 - `ACME_EMAIL`: your email address;
 - `SECRET_KEY`: the first (longer) random secret;
 - `DB_PASSWORD`: the second random secret;
@@ -322,6 +324,32 @@ If you later connect GitHub instead, set the Vercel project's **Root
 Directory** to `web` (it is empty now, because the page was sent from inside
 the `web` folder) and turn `/opt/bymr` into a `git clone` as in step 7.
 
+## Art through Cloudflare (optional)
+
+The pictures, sounds and language files (`/assets`, `/gamestage`,
+`/templates`) can be served through Cloudflare's free cache, so players far
+from the server get them from a nearby Cloudflare site and Vercel no longer
+passes each one on.
+
+- `CDN_DOMAIN` (production.env) is a second name for the server, a CNAME to
+  `API_DOMAIN`. Caddy answers on it with the three art folders only; anything
+  else is a 404, so no login, save or chat answer can ever be cached there.
+- The server sends `Access-Control-Allow-Origin: *` on every art file and
+  `no-store` on a missing one, so the one copy Cloudflare keeps works for
+  every page and a 404 is never kept.
+- In Cloudflare, set the `cdn` record to Proxied (orange). Keep
+  **SSL/TLS: Full (strict)** and **"Always Use HTTPS" off**: Caddy renews the
+  `cdn` certificate over port 80 (HTTP-01), which Cloudflare passes through
+  only while that switch is off.
+- The web client keeps asking its own page for the art (Vercel's rewrites)
+  until `VITE_ART_URL=https://cdn.yourgame.com` is set in Vercel (Settings →
+  Environment Variables, Production) and the page is deployed again. Removing
+  it and deploying again, or promoting the previous deployment, undoes that.
+- Caddy believes Cloudflare's `CF-Connecting-IP` only from Cloudflare's own
+  addresses (`trusted_proxies` in the Caddyfile, the same list as
+  `CLOUDFLARE_RANGES` in `server/src/config/ProxyConfig.ts`), so login limits
+  still see each player's own address.
+
 ## Backups
 
 **What happens by itself:** the backup helper copies the whole database once
@@ -434,8 +462,12 @@ Quality and graphics card. The fields are listed in
   (`server/src/config/StartupSafety.ts`).
 - Caddy passes each player's real address to the game server
   (`CF-Connecting-IP`); the game server trusts that header from Caddy's fixed
-  internal address only (`TRUSTED_PROXIES`). This is why the `api` DNS record
-  must point straight at the VPS, not through any proxy.
+  internal address only (`TRUSTED_PROXIES`). Caddy itself takes the address
+  from Cloudflare's `CF-Connecting-IP` only when the connection comes from one
+  of Cloudflare's ranges (`trusted_proxies`, `client_ip_headers`); from anyone
+  else it uses the address that connected, so the header cannot be faked by
+  going round Cloudflare. Any other proxy in front of the VPS would hide the
+  players' addresses.
 - The old Flash client's port 843 is not opened: this setup serves the web
   client only.
 - PM2 (`ecosystem.config.mjs`) is not used here; Docker restarts anything that

@@ -12,6 +12,7 @@ import { gameIcon, type GameIconName } from "@/ui/gameIcon";
 import { Popup } from "@/ui/Popup";
 import { resourceIcon, resourceKeyOf, resourceName } from "@/ui/resourceIcon";
 import "@/ui/styles/attack-window.css";
+import { artUrl } from "../../artUrl";
 
 /**
  * The attack window (owner, 9 Nov 2026, option A): Flash's `PopupAttackA`
@@ -354,7 +355,7 @@ const weaponsSection = (model: AttackWindowModel): HTMLElement => {
   }
   if (model.siege) {
     const image = document.createElement("img");
-    image.src = `/assets/siegebuttons/${model.siege.id}.png`;
+    image.src = artUrl(`/assets/siegebuttons/${model.siege.id}.png`);
     image.alt = "";
     image.decoding = "async";
     const element = tile(

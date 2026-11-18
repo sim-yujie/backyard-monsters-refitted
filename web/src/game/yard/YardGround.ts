@@ -4,6 +4,7 @@ import { noiseMask } from "./groundNoise";
 import { currentGround, GROUNDS, groundUrls, type GroundId, type GroundSpec } from "./groundChoice";
 import { leafSpots, PROP_BOXES, PROP_SCALE, PROPS_ART, recolourGround, thanksgivingSkin } from "./thanksgivingSkin";
 import type { YardBounds } from "./YardGrid";
+import { artUrl } from "../../artUrl";
 
 /**
  * The ground the yard sits on: a tiled grass texture over the whole world, with
@@ -60,7 +61,7 @@ import type { YardBounds } from "./YardGrid";
  */
 const SPOOKY: GroundSpec = {
   ...GROUNDS.original,
-  root: "/assets/yardbg/spooky/",
+  root: artUrl("/assets/yardbg/spooky/"),
   fill: 0x5a4c5e,
 };
 
@@ -73,7 +74,7 @@ const SPOOKY: GroundSpec = {
  */
 const LAVA: GroundSpec = {
   ...GROUNDS.original,
-  root: "/assets/yardbg/lava/",
+  root: artUrl("/assets/yardbg/lava/"),
   files: [
     "2169_inferno_lava1_inferno_lava1.png",
     "2171_inferno_lava2_inferno_lava2.png",

@@ -5,6 +5,7 @@ import { shortAmount } from "@/game/events/eventsModel";
 import { classicLook } from "@/game/classicLook";
 import { monsterPortrait, type Portrait } from "@/game/portraits";
 import { typeName } from "@/game/yard/planner/summary";
+import { artUrl } from "../../artUrl";
 
 /**
  * The quest window's words and pictures (beta 6, owner decisions 8-13): what
@@ -15,7 +16,7 @@ import { typeName } from "@/game/yard/planner/summary";
  */
 
 /** Flash's painted pop-up art, served by the game server (proxied in development). */
-const POPUP = "/assets/popups/";
+const POPUP = artUrl("/assets/popups/");
 
 /** The four Wild Monster tribes, by the id a quest names them with. */
 export const TRIBE_NAMES: Readonly<Record<string, string>> = {

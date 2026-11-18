@@ -1,3 +1,4 @@
+import { artUrl } from "../../artUrl";
 /**
  * What Moloch's Descent says and shows (`docs/design/inferno.md` §2.4 and §4,
  * WP 1.13), word for word from Flash's `english.json` under the key named
@@ -14,13 +15,13 @@ export const descentBaseid = (yard: number): string => String(200 + yard);
 /* ── Art ── */
 
 /** The map itself, 700 x 1842 (`DescentView.as:118`, "ui/descent_maproom2.jpg"; `_MAPSIZE`). */
-export const DESCENT_MAP_ART = "/assets/ui/descent_maproom2.jpg";
+export const DESCENT_MAP_ART = artUrl("/assets/ui/descent_maproom2.jpg");
 export const DESCENT_MAP_SIZE = { width: 700, height: 1842 } as const;
 
 /** Moloch's three faces (`INFERNO_DESCENT_POPUPS.as:13-17`). */
-export const MOLOCH_NEUTRAL = "/assets/popups/portrait_moloch.png";
-export const MOLOCH_GLOAT = "/assets/popups/portrait_muloch_gloat.png";
-export const MOLOCH_WHIMPER = "/assets/popups/portrait_muloch_whimper.png";
+export const MOLOCH_NEUTRAL = artUrl("/assets/popups/portrait_moloch.png");
+export const MOLOCH_GLOAT = artUrl("/assets/popups/portrait_muloch_gloat.png");
+export const MOLOCH_WHIMPER = artUrl("/assets/popups/portrait_muloch_whimper.png");
 
 /**
  * Where each yard sits on the map, map pixels (`DescentLayer.as:66`,

@@ -1,5 +1,6 @@
 import { GESTURE_EVENTS, type GestureTarget } from "./MusicPlayer";
 import { sharedAudioContext } from "./soundVolume";
+import { artUrl } from "../../artUrl";
 
 /**
  * Plays the game's short sound effects, the way Flash's `SOUNDS.Play` did
@@ -37,10 +38,10 @@ import { sharedAudioContext } from "./soundVolume";
  */
 
 /** Where the game server keeps Flash's sound folders (`SOUNDS.as:35-45`). */
-const UI = "/assets/sounds/uisounds/";
-const ATTACK = "/assets/sounds/attacksounds/";
-const OTHER = "/assets/sounds/othersounds/";
-const INFERNO = "/assets/sounds/infernosounds/";
+const UI = artUrl("/assets/sounds/uisounds/");
+const ATTACK = artUrl("/assets/sounds/attacksounds/");
+const OTHER = artUrl("/assets/sounds/othersounds/");
+const INFERNO = artUrl("/assets/sounds/infernosounds/");
 
 /**
  * Effects that come as a family of takes, as Flash's `"hit" + int(1 + Math.random() * 3)`:
