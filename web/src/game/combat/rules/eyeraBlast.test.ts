@@ -329,13 +329,14 @@ describe("Eye-ras in the Descent (Inferno WP 1.21)", () => {
 
   it("lets a killed bunker Eye-ra blow up in the Descent, not on an Inferno yard", () => {
     const killed = (descentYard: number | undefined) => {
-      // A level 1 Eye-ra (600 health) falls to Gorgo's first blow.
+      // A level 1 Eye-ra (600 health) falls to Gorgo's first blow. Gorgo lands
+      // far enough out to meet it before the bunker is in its reach (patch 7.9).
       const battle = infernoBattle({ C5: 1 }, descentYard, { defenderLevels: { C5: 1 } });
       battle.apply({
         kind: "fling",
         t: 0,
-        x: 200,
-        y: 200,
+        x: 250,
+        y: 250,
         r: 0,
         monsters: {},
         champion: { t: 1, l: 1 },

@@ -362,21 +362,60 @@ export const screenDistanceSquared = (
 };
 
 /**
- * Whether a creep at a yard position can hit a building from there.
+ * The yard point of a building's drawn top corner, `_position` (`sx`/`sy`)
+ * taken back to the yard. Its footprint runs `w` along yard x and `h` along
+ * yard y from there, exactly the tiles the planner draws.
+ */
+const footprintOrigin = (building: EngineBuilding): Cart => ({
+  x: building.sx * 0.5 + building.sy,
+  y: building.sy - building.sx * 0.5,
+});
+
+/**
+ * The squared reach distance from a yard point to a building: yard units
+ * squared to the nearest point of its footprint, 0 on or inside it.
  *
- * `canShootBuilding` and `canHitBuilding`: the screen distance from the
- * creep's `_tmpPoint` to the building's `_position`, its anchor as drawn, at
- * most `range` (`CreepBase.as:735-741`, `ChampionBase.as:428-429`). The line
- * of sight past walls is the pathing grid's (`PathGrid.lineOfSight`).
+ * Patch 7.9 (owner, 18 Nov 2026): a champion or ranged creep reaches a
+ * building `range` yard units from its nearest tile, the same on every side.
+ * Flash measured screen pixels to the top corner (`CreepBase.as:735-741`,
+ * `ChampionBase.as:428-429`), which let a champion stand up to 64 units off
+ * the back tiles at range 45 but made it walk right up to the front ones.
+ * Only `+ - * /` here, so the server and every browser agree to the bit.
+ */
+export const reachSquared = (x: number, y: number, building: EngineBuilding): number => {
+  const origin = footprintOrigin(building);
+  const u = x - origin.x;
+  const v = y - origin.y;
+  const du = u < 0 ? -u : u > building.w ? u - building.w : 0;
+  const dv = v < 0 ? -v : v > building.h ? v - building.h : 0;
+  return du * du + dv * dv;
+};
+
+/**
+ * Whether a creep at a yard position can reach a building from there:
+ * `range` yard units from its nearest tile ({@link reachSquared}). The line
+ * of sight past walls is checked apart from this (`canShootBuilding`).
  */
 export const reachesBuilding = (
   x: number,
   y: number,
   building: EngineBuilding,
   range: number,
-): boolean => {
-  const at = screenPointOf(x, y);
-  return distanceSquared(at.x, at.y, building.sx, building.sy) <= range * range;
+): boolean => reachSquared(x, y, building) <= range * range;
+
+/**
+ * The footprint point nearest a yard position, where a creep's line of
+ * sight to the building ends (the engine moves it onto the building's own
+ * pathing cells).
+ */
+export const sightPointOf = (x: number, y: number, building: EngineBuilding): Cart => {
+  const origin = footprintOrigin(building);
+  const u = x - origin.x;
+  const v = y - origin.y;
+  return {
+    x: origin.x + (u < 0 ? 0 : u > building.w ? building.w : u),
+    y: origin.y + (v < 0 ? 0 : v > building.h ? building.h : v),
+  };
 };
 
 /** `GLOBAL.QuickDistance`: the plain euclidean distance (`GLOBAL.as:2022-2026`). */
