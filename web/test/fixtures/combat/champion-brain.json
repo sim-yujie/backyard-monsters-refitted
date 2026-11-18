@@ -52,7 +52,7 @@
   },
   "expected": {
     "ticks": 9800,
-    "damage": 7.536742116013755,
+    "damage": 7.114934320872848,
     "destroyed": null,
     "attackloot": {
       "r1": 0,
@@ -67,62 +67,62 @@
       "r4": 0
     },
     "firedTraps": 0,
-    "destroyedBuildings": 23,
+    "destroyedBuildings": 21,
     "creepsFlung": 40,
     "creepsKilled": 40,
-    "championHp": 91462.34337500187,
-    "damagedBuildings": 23,
-    "rngDraws": 2172,
+    "championHp": 51910.68460914725,
+    "damagedBuildings": 22,
+    "rngDraws": 1769,
     "checkpoints": [
       {
         "tick": 800,
-        "digest": "19ad5bbcf45c6b26"
+        "digest": "e294b9de5ff7333c"
       },
       {
         "tick": 1600,
-        "digest": "e58053d381848435"
+        "digest": "6eec1ed275ba329c"
       },
       {
         "tick": 2400,
-        "digest": "f1df2dd9b914c0eb"
+        "digest": "75eb95f2b8b3e248"
       },
       {
         "tick": 3200,
-        "digest": "e9bd422c67597fc6"
+        "digest": "041733267b4e4c10"
       },
       {
         "tick": 4000,
-        "digest": "f0ca45d945db3077"
+        "digest": "3d9d2bc460a03786"
       },
       {
         "tick": 4800,
-        "digest": "2ca9ff10b69e89da"
+        "digest": "efda0c3516ab92df"
       },
       {
         "tick": 5600,
-        "digest": "8527c17db9add3ab"
+        "digest": "535fdf31f0153807"
       },
       {
         "tick": 6400,
-        "digest": "009e759ad66d6e74"
+        "digest": "722514cb95d3ff05"
       },
       {
         "tick": 7200,
-        "digest": "b3a09c999cf9ad13"
+        "digest": "df6d733ba11e53e5"
       },
       {
         "tick": 8000,
-        "digest": "02dfa0164b895378"
+        "digest": "a58ed79f2e082215"
       },
       {
         "tick": 8800,
-        "digest": "715837c103100693"
+        "digest": "9679d5a8eb46973e"
       },
       {
         "tick": 9600,
-        "digest": "f2e396d5204b25df"
+        "digest": "928f8a6d6185ff0f"
       }
     ],
-    "digest": "aac5364a4a213d40"
+    "digest": "1380f0c9edcb5603"
   }
 }

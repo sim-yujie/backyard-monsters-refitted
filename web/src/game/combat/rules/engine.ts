@@ -24,6 +24,7 @@ import {
   QUAKE_SWINGS,
   START_FRAME_SPREAD,
   UNTARGETABLE_TYPES,
+  buildingReachOf,
   championPower,
   enrageArmour,
   enrageMultiplier,
@@ -6615,12 +6616,14 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
     // A Bolt that blinks spends the tick on its hop (issue #352).
     if (creep.rank > 0 && creep.monsterId === BOLT_ID && tickBlink(creep)) return;
 
-    // A ranged creep stops as soon as its target is inside its range, a circle
-    // on screen around the building's anchor, with no wall in the way on foot
-    // (`CreepBase.as:735-748`).
+    // A ranged creep or a champion stops as soon as its target is inside its
+    // reach, with no wall in the way on foot (`CreepBase.as:735-748`): its
+    // range from the nearest tile (patch 7.9), but a melee champion's
+    // one cell, `MELEE_BUILDING_REACH` (patch 7.10, `buildingReachOf`).
     if (!creep.atTarget && creep.range > 1) {
       const aim = creep.targetBuilding >= 0 ? buildingOf(creep.targetBuilding) : null;
-      if (aim && canShootBuilding(creep, aim, creep.range)) creep.atTarget = true;
+      const reach = buildingReachOf(creep.monsterId, creep.champion, creep.range);
+      if (aim && canShootBuilding(creep, aim, reach)) creep.atTarget = true;
     }
 
     if (creep.atTarget) {

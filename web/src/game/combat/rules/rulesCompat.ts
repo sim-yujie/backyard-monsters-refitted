@@ -13,6 +13,10 @@
  * screen pixels from its top corner (`reachSquared`), which moves nearly every
  * battle with one. No replay stamped with an older version (7.7.2's
  * b4f0c156a8d2afee, 7.8's b03bd4b8bac1386d) plays the same any more.
+ * Patch 7.10 (19 Nov 2026) keeps it empty: Gorgo, melee, now hits a building
+ * only from one cell off its nearest tile (`MELEE_REACH_CHAMPIONS`), which
+ * moves every battle he attacks in, so 7.9's fa6de785db1c4615 replays with
+ * Gorgo no longer play the same.
  *
  * Add the version a change replaces only when that change moves no battle.
  * A change that moves any battle result must empty this list.
