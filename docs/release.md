@@ -14,7 +14,7 @@ A release happens only when the owner says "release". Versions are tagged
 1. Bring `revamp` into `main` with a merge (not a rebase), in a fresh
    worktree on `main`:
    `git merge --no-ff origin/revamp`
-2. Run the checks: in `web/` vitest, `tsc`, `eslint`; in `server/` `bun test`.
+2. Run the checks: in `web/` vitest, `tsc`, `eslint`; in `server/` `bun run test` (= `bun test --isolate`, as CI runs it).
    Fix anything that fails on `revamp` first, then merge again.
 3. Look at it in a browser locally (log in, base, one attack).
 4. Write `docs/releases/v2.0.0-beta.N.md`: a short list, in plain words, of

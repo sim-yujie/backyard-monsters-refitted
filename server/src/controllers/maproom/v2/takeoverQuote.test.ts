@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, mock, test } from "bun:test";
+import { afterAll, beforeEach, describe, expect, mock, test } from "bun:test";
 import type { Context } from "koa";
 import { generateBaseId } from "../../../utils/generateBaseId.js";
 import { generateNoise, getTerrainHeight } from "../../../services/maproom/v2/generateMap.js";
@@ -8,7 +8,13 @@ import { kitBuildings } from "../../../services/yard/starterKit.js";
 
 /** A Regular Starter Kit outpost, worth 10,000,000 of each (outpostValue.test.ts). */
 const REGULAR_KIT = kitBuildings(STARTER_KITS[0]!, "shiny", {}).buildingdata;
-import { memoryWelcomeStore, MR2_WELCOME_SECONDS, newWelcome, useWelcomeStore } from "../../../services/events/mr2Welcome.js";
+import {
+  memoryWelcomeStore,
+  MR2_WELCOME_SECONDS,
+  newWelcome,
+  sqlWelcomeStore,
+  useWelcomeStore,
+} from "../../../services/events/mr2Welcome.js";
 import { utcDay } from "../../../services/events/schedule.js";
 
 /**
@@ -126,6 +132,12 @@ beforeEach(() => {
   // "New to Map Room 2": no window unless a test opens one.
   welcome = memoryWelcomeStore(0);
   useWelcomeStore(welcome);
+});
+
+/* mock.module stays registered for later files in a plain `bun test`: leave the stand-in in range, with the SQL welcome store back. */
+afterAll(() => {
+  inRange = true;
+  useWelcomeStore(sqlWelcomeStore);
 });
 
 describe("takeoverQuote", () => {
