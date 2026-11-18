@@ -41,7 +41,8 @@ import {
 } from "@/api/friends";
 import { friendsStore } from "@/game/friends/friendsStore";
 import { HelpedWatch } from "@/game/friends/helpedWatch";
-import { loadFriendYard, visitFailureText, visitFriend } from "@/game/friends/friendVisit";
+import { freezeFriendRun, hopFailed, hopFriend, hopLanded, hopView, skippedText, type HopDirection } from "@/game/friends/friendHop";
+import { hopToFriend, loadFriendYard, visitFailureText, visitFriend } from "@/game/friends/friendVisit";
 import {
   afterHelp,
   afterRefusal,
@@ -174,6 +175,7 @@ import { bankFloat, showBankResult } from "@/ui/yard/CollectAll";
 import { showGoldenMushroom } from "@/ui/yard/MushroomReward";
 import { FriendsButton } from "@/ui/friends/FriendsButton";
 import { HelpPanel } from "@/ui/friends/HelpPanel";
+import { FriendHopButtons } from "@/ui/friends/FriendHopButtons";
 import { HelpAllBar, type HelpAllLine } from "@/ui/friends/HelpAllBar";
 import { helpAllFxMaker, type HelpAllFx, type HelpFxStage } from "@/ui/friends/helpAllFx";
 import { rewardNode, VISIT_REWARD_MS } from "@/ui/friends/visitReward";
@@ -504,6 +506,10 @@ export class YardScene implements Scene {
   private visitHolderWatch: ResizeObserver | null = null;
   /** The one visit bar: "Bob's yard", the tools and "3", Help all; a friend's visit only (beta 8). */
   private helpAllBar: HelpAllBar | null = null;
+  /** Prev and Next beside Map on a friend's yard (beta 8). */
+  private friendHop: FriendHopButtons | null = null;
+  /** Stops Prev and Next following the friends list. */
+  private stopHopWatch: (() => void) | null = null;
   /** Help all's effect while one plays (`helpAllFx.ts`); null plays none. */
   private helpFx: HelpAllFx | null = null;
   /** Keeps the wrenches' "-18m" tags current while visiting. */
@@ -882,6 +888,10 @@ export class YardScene implements Scene {
     this.helpFx = null;
     this.helpAllBar?.destroy();
     this.helpAllBar = null;
+    this.stopHopWatch?.();
+    this.stopHopWatch = null;
+    this.friendHop?.destroy();
+    this.friendHop = null;
     this.visitHolderWatch?.disconnect();
     this.visitHolderWatch = null;
     this.visitHolder?.remove();
@@ -1196,6 +1206,15 @@ export class YardScene implements Scene {
       // A friend's yard that will not open (not friends any more, gone, the
       // server down) sends the player home, saying why (#372).
       if (target?.kind === "friend") {
+        // A Next or Previous whose yard will not open: on to the friend
+        // after, or back to the one the hop started from (`friendHop.ts`).
+        // Not while the server is out of reach, which would try them all.
+        const onward = caught instanceof NetworkError ? null : hopFailed(target.friend ?? 0, target.name);
+        if (onward) {
+          hopToFriend(onward, target.own);
+          context.goTo(SceneName.YARD);
+          return;
+        }
         setYardIntent({ kind: "notice", text: visitFailureText(target.name, caught) });
         context.goTo(SceneName.YARD);
         return;
@@ -1875,6 +1894,36 @@ export class YardScene implements Scene {
     context.goTo(SceneName.YARD);
   }
 
+  /**
+   * Prev and Next beside Map on a friend's yard (beta 8, `friendHop.ts`):
+   * this yard ends the hop that opened it (saying whom it skipped), and the
+   * discs follow the friends list, which freezes the run's order if it had
+   * not loaded when the run began.
+   */
+  private watchHop(layer: HTMLElement): void {
+    const friend = this.target?.kind === "friend" ? (this.target.friend ?? 0) : 0;
+    if (!friend) return;
+    const skipped = hopLanded(friend);
+    if (skipped.length > 0) this.notices.show("friend-hop-skipped", skippedText(skipped), { level: "info" });
+    this.friendHop = new FriendHopButtons({ onHop: (direction) => this.stepFriend(direction) }).mount(layer);
+    this.stopHopWatch = friendsStore.subscribe((snapshot) => {
+      if (snapshot.loaded) freezeFriendRun(snapshot.friends);
+      this.friendHop?.setView(snapshot.loaded ? hopView(friend, snapshot.friends) : null);
+    });
+  }
+
+  /** Prev (-1) or Next (1) beside Map: that friend's yard, in the same run. */
+  private stepFriend(direction: HopDirection): boolean {
+    const context = this.context;
+    const target = this.target;
+    if (!context || target?.kind !== "friend" || this.helpAllBar?.running) return false;
+    const next = hopFriend(target.friend ?? 0, direction);
+    if (!next) return false;
+    hopToFriend(next, this.visitorPool ?? target.own);
+    context.goTo(SceneName.YARD);
+    return true;
+  }
+
   /** A friend's yard has loaded: the one visit bar and the wrenches (#374). */
   private startHelping(response: HelpYardResponse, name: string): void {
     const context = this.context;
@@ -1886,8 +1935,19 @@ export class YardScene implements Scene {
       context.overlay.content.append(this.visitHolder);
     }
     if (!this.helpAllBar) {
-      this.helpAllBar = new HelpAllBar({ onHelpAll: () => this.helpAll() });
+      this.helpAllBar = new HelpAllBar({
+        onHelpAll: async () => {
+          // Prev and Next wait while Help all runs.
+          this.friendHop?.setBusy(true);
+          try {
+            return await this.helpAll();
+          } finally {
+            this.friendHop?.setBusy(false);
+          }
+        },
+      });
       this.visitHolder.append(this.helpAllBar.element);
+      this.watchHop(context.overlay.content);
       // The bar is lower with the name alone than with Help all: the
       // wrenches' clear band follows it.
       if (typeof ResizeObserver !== "undefined") {
