@@ -124,5 +124,10 @@ jobs:
         run: |
           bun --bun x mikro-orm schema:create -r
           bun --bun x mikro-orm migration:up
+      # --isolate: each test file gets a fresh module registry, so a file's
+      # mock.module (process-wide in bun) cannot reach the files after it.
+      # Bun runs files in the order the disk lists them, which differs between
+      # GitHub's Azure and AWS runners; without it the leaks failed CI at
+      # random (18 Nov 2026, RECURRING-PROBLEMS.md).
       - name: Tests
-        run: bun test
+        run: bun test --isolate
