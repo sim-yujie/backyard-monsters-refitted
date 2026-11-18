@@ -1,5 +1,6 @@
 import type { InfernoMapResponse, InfernoTribeView } from "@/api/inferno";
 import { formatRespawn } from "@/game/maproom1/mr1Model";
+import { artUrl } from "../../artUrl";
 
 /**
  * The Inferno map's Moloch tribes as its screen shows them (WP 2.9,
@@ -17,10 +18,10 @@ import { formatRespawn } from "@/game/maproom1/mr1Model";
 export const TRIBE_OWNER = "Moloch";
 
 /** A tribe's picture on the map and in the list (`TRIBES._infernotribes.d.profilepic`). */
-export const TRIBE_PORTRAIT = "/assets/monsters/tribe_moloch_50.jpg";
+export const TRIBE_PORTRAIT = artUrl("/assets/monsters/tribe_moloch_50.jpg");
 
 /** The map's background (`MapView.as:124`, `ui/inferno_maproom1.jpg`), Flash's own. */
-export const INFERNO_MAP_ART = "/assets/ui/inferno_maproom1.jpg";
+export const INFERNO_MAP_ART = artUrl("/assets/ui/inferno_maproom1.jpg");
 
 /** The map's size in Flash's pixels (`MapView._MAPSIZE`). */
 export const INFERNO_MAP_SIZE = { width: 1600, height: 1200 } as const;

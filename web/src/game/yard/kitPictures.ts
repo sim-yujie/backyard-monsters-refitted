@@ -1,5 +1,6 @@
 import { classicLook } from "@/game/classicLook";
 import type { StarterKitSummary } from "./starterKitData";
+import { artUrl } from "../../artUrl";
 
 /**
  * The Starter Kits' pictures (owner, 12 Nov 2026: Flash's 145 × 90 thumbnails
@@ -24,7 +25,7 @@ export const KIT_PICTURE_HEIGHT = 440;
 export const KIT_PICTURE_VERSION = 1;
 
 /** Where the pictures live, under the game server's `public/`. */
-const KIT_PICTURE_ROOT = "/assets/ui/kits/";
+const KIT_PICTURE_ROOT = artUrl("/assets/ui/kits/");
 
 const KIT_FILE_NAME: Readonly<Record<StarterKitSummary["id"], string>> = {
   1: "regular",

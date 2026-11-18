@@ -52,7 +52,8 @@ x-game-env: &game-env
   TRUSTED_PROXIES: 172.28.0.2
 
 services:
-  # HTTPS for the game API and the chat WebSocket (deploy/Caddyfile).
+  # HTTPS for the game API, the chat WebSocket and the art name for
+  # Cloudflare's cache, CDN_DOMAIN (deploy/Caddyfile).
   caddy:
     logging: *logging
     image: caddy:2.10.2-alpine
@@ -63,6 +64,7 @@ services:
       - "${HTTPS_PORT:-443}:443/udp"
     environment:
       API_DOMAIN: ${API_DOMAIN}
+      CDN_DOMAIN: ${CDN_DOMAIN:?CDN_DOMAIN is not set in production.env}
       ACME_EMAIL: ${ACME_EMAIL:?ACME_EMAIL is not set in production.env}
     volumes:
       - ./deploy/Caddyfile:/etc/caddy/Caddyfile:ro

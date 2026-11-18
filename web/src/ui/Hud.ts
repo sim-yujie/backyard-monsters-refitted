@@ -31,6 +31,7 @@ import { lockArt } from "./lockArt";
 import { RESOURCE_KEYS, RESOURCE_NAMES, resourceAmount, resourceName, restyleIcon, type ResourceKey } from "./resourceIcon";
 import { DamageBanner } from "./yard/DamageBanner";
 import { ShinyButton } from "./yard/ShinyButton";
+import { artUrl } from "../artUrl";
 
 /**
  * The persistent top bar: resource readouts on the left, a scene switcher on
@@ -126,7 +127,7 @@ export const fullText = (amount: number, cap: number): string => `${formatShort(
 export const formatRate = (perHour: number): string => `+${formatBarAmount(perHour)}/h`;
 
 /** The worker art: the orange builder with the hammer and the hard hat. */
-const WORKER_ICON_URL = "/assets/archived/worker.v1.png";
+const WORKER_ICON_URL = artUrl("/assets/archived/worker.v1.png");
 
 /** How full a silo is: the fill bar's share, and whether new income is lost. */
 export interface CapState {

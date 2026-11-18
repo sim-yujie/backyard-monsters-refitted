@@ -20,6 +20,7 @@ import {
 import { timeCost } from "@/game/yard/buildingCosts";
 import { JobKind, SIEGE_FACTORY_TYPE, SIEGE_LAB_TYPE, type YardJob } from "@/game/yard/jobs";
 import type { Yard, YardBuilding } from "@/game/yard/yardModel";
+import { artUrl } from "../../artUrl";
 
 /**
  * What the Siege screen shows, as data (Inferno WP 6.4): Flash's Chaos Lab and
@@ -406,9 +407,9 @@ export const WEAPON_DESCRIPTION: Readonly<Record<SiegeId, string>> = {
 
 /** The list icon (`siege_icon_<id>.png`) and the 400x175 video, converted from Flash's FLV. */
 export const weaponArt = (id: SiegeId): { icon: string; video: string; poster: string } => ({
-  icon: `/assets/popups/siege_icon_${id}.png`,
-  video: `/assets/assets/videos/${id}400x175.mp4`,
-  poster: `/assets/assets/videos/${id}400x175.jpg`,
+  icon: artUrl(`/assets/popups/siege_icon_${id}.png`),
+  video: artUrl(`/assets/assets/videos/${id}400x175.mp4`),
+  poster: artUrl(`/assets/assets/videos/${id}400x175.jpg`),
 });
 
 /* ── Keeping the save's copy right ──────────────────────────────────────── */

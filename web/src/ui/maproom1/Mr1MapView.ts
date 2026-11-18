@@ -22,6 +22,7 @@ import { friendMarkOf } from "@/game/friends/friendMarks";
 import { FRIEND_MARK_TEXT, friendBadge } from "@/ui/friends/friendBadge";
 import { onlineDot } from "@/ui/onlineDot";
 import { button, el, icon } from "./icons";
+import { artUrl } from "../../artUrl";
 
 /**
  * The Map view: the painted Map Room 1 map, dragged with the pointer inside
@@ -32,7 +33,7 @@ import { button, el, icon } from "./icons";
  */
 
 /** The painted map, served by the game server. */
-export const MAP_ART = "/assets/ui/map.v1.jpg";
+export const MAP_ART = artUrl("/assets/ui/map.v1.jpg");
 
 /** Pointer travel before a press on the map becomes a drag. */
 const DRAG_THRESHOLD = 5;

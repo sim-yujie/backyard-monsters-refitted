@@ -1,5 +1,6 @@
 import { writeAmount, type AmountChange } from "./amountChange";
 import { formatAmount } from "./format";
+import { artUrl } from "../artUrl";
 
 /**
  * The resource icons every amount on screen is drawn with (issue #93).
@@ -119,11 +120,11 @@ const PILE_CROP = [0, 22, 128, 84] as const;
 const pile = (url: string): IconArt => ({ url, width: 128, height: 128, crop: PILE_CROP });
 
 const ART: Readonly<Record<ResourceKey, IconArt>> = {
-  r1: pile("/assets/popups/resourcetwigs.png"),
-  r2: pile("/assets/popups/resourcepebbles.png"),
-  r3: pile("/assets/popups/resourceputty.png"),
-  r4: pile("/assets/popups/resourcegoo.png"),
-  shiny: { url: "/assets/alliances/shiny-icon.png", width: 40, height: 41, crop: [0, 0, 40, 41] },
+  r1: pile(artUrl("/assets/popups/resourcetwigs.png")),
+  r2: pile(artUrl("/assets/popups/resourcepebbles.png")),
+  r3: pile(artUrl("/assets/popups/resourceputty.png")),
+  r4: pile(artUrl("/assets/popups/resourcegoo.png")),
+  shiny: { url: artUrl("/assets/alliances/shiny-icon.png"), width: 40, height: 41, crop: [0, 0, 40, 41] },
 };
 
 /**
@@ -133,10 +134,10 @@ const ART: Readonly<Record<ResourceKey, IconArt>> = {
  * 128 x 128, trimmed by the same band as the surface's.
  */
 export const INFERNO_ICON_FILES: Readonly<Record<"r1" | "r2" | "r3" | "r4", string>> = {
-  r1: "/assets/popups/resourcebone.png",
-  r2: "/assets/popups/resourcecoal.png",
-  r3: "/assets/popups/resourcesulfur.png",
-  r4: "/assets/popups/resourcemagma.png",
+  r1: artUrl("/assets/popups/resourcebone.png"),
+  r2: artUrl("/assets/popups/resourcecoal.png"),
+  r3: artUrl("/assets/popups/resourcesulfur.png"),
+  r4: artUrl("/assets/popups/resourcemagma.png"),
 };
 
 const INFERNO_ART: Readonly<Record<ResourceKey, IconArt>> = {
