@@ -10,6 +10,7 @@ import {
   yardIsUp,
   type Game,
 } from "./game";
+import { checkAttackDock, openAttack } from "./attackDock";
 import { knownFailure } from "./knownFailures";
 import { checkWindow, pageFacts, type CheckArgs, type CheckReport } from "./measure";
 import { selectedProfiles, type Profile } from "./profiles";
@@ -270,6 +271,23 @@ export const defineLayoutSuite = (profileIds: readonly string[]): void => {
             return "no building under the middle of the screen (the yard is a canvas; the tap is blind)";
           }
           await expectWindow(page, profile, building, "as opened");
+          return null;
+        });
+
+        // Very last: the attack screen's dock (owner, 18 Nov 2026), on a real
+        // attack on a wild monster tribe. It leaves the yard, so nothing follows.
+        const attackDock: WindowCase = {
+          id: "attack-dock",
+          label: "Attack dock",
+          panel: ".attack-dock",
+          items: null,
+          tabs: false,
+          open: async () => true,
+        };
+        await windowStep(page, profile, attackDock, attackDock.id, tally, async () => {
+          const noWayIn = await openAttack(page);
+          if (noWayIn !== null) return noWayIn;
+          await checkAttackDock(page, profile);
           return null;
         });
       } finally {

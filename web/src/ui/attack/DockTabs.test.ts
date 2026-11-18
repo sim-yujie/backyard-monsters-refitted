@@ -89,9 +89,15 @@ describe("DockTabs", () => {
     const { body, tabs } = make();
     tabs.add("army", { label: "Army" });
     tabs.add("catapult", { label: "Catapult" });
+    const window = body.appendChild(document.createElement("section"));
+    const list = window.appendChild(document.createElement("div"));
+    list.className = "panel__body";
+    tabs.claim("catapult", window);
     body.scrollTop = 120;
+    list.scrollTop = 80;
     tabs.show("catapult");
     expect(body.scrollTop).toBe(0);
+    expect(list.scrollTop).toBe(0);
   });
 
   it("drops a removed tab and falls back to the Army", () => {

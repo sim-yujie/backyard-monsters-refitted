@@ -197,11 +197,19 @@ export class DockTabs {
     this.element.remove();
   }
 
-  /** A newly shown tab starts at its top, not where the last one was scrolled to. */
+  /**
+   * A newly shown tab starts at its top, not where the last one was scrolled
+   * to: the dock, its body, and the shown windows' own scrolling bodies.
+   */
   private scrollTop(): void {
-    for (const scroller of [this.host.dock, this.host.dock.querySelector<HTMLElement>(".attack-dock__body")]) {
-      if (scroller) scroller.scrollTop = 0;
-    }
+    const dock = this.host.dock;
+    const scrollers = [
+      dock,
+      ...dock.querySelectorAll<HTMLElement>(
+        `.attack-dock__body, .attack-dock__body > [data-dock-tab="${this.selected}"] .panel__body`,
+      ),
+    ];
+    for (const scroller of scrollers) scroller.scrollTop = 0;
   }
 
   private sync(): void {
