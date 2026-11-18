@@ -45,7 +45,7 @@
   },
   "expected": {
     "ticks": 9800,
-    "damage": 7.34941959911653,
+    "damage": 7.655313283624238,
     "destroyed": null,
     "attackloot": {
       "r1": 0,
@@ -60,62 +60,62 @@
       "r4": 0
     },
     "firedTraps": 0,
-    "destroyedBuildings": 22,
+    "destroyedBuildings": 23,
     "creepsFlung": 40,
     "creepsKilled": 40,
-    "championHp": 87396.70844176035,
-    "damagedBuildings": 23,
-    "rngDraws": 1562,
+    "championHp": 93579.35796106074,
+    "damagedBuildings": 24,
+    "rngDraws": 2178,
     "checkpoints": [
       {
         "tick": 800,
-        "digest": "7111a2d4021e045a"
+        "digest": "4229ef78648e30b6"
       },
       {
         "tick": 1600,
-        "digest": "6b6d1acd627e9ff3"
+        "digest": "8e177ffa73a72914"
       },
       {
         "tick": 2400,
-        "digest": "cd1df711c7a102ab"
+        "digest": "33e2f33658abefd8"
       },
       {
         "tick": 3200,
-        "digest": "1d15b0bc48e5768e"
+        "digest": "2b8d0dfd3535a7ab"
       },
       {
         "tick": 4000,
-        "digest": "809ce1bad09233d4"
+        "digest": "68d8494cad66d55a"
       },
       {
         "tick": 4800,
-        "digest": "3b428ed1de07a29f"
+        "digest": "24f10f104b33a936"
       },
       {
         "tick": 5600,
-        "digest": "af2378da9b50b93c"
+        "digest": "c03c5db41482fab2"
       },
       {
         "tick": 6400,
-        "digest": "405bacdbaf3fa07d"
+        "digest": "5adc2d540428733a"
       },
       {
         "tick": 7200,
-        "digest": "d014f3db05bd7a8d"
+        "digest": "8b918eddccded04f"
       },
       {
         "tick": 8000,
-        "digest": "2c95bc936a41a1e1"
+        "digest": "d90cd7c09735b726"
       },
       {
         "tick": 8800,
-        "digest": "fba5eeebfac3ddc1"
+        "digest": "7a3d43536d7f155d"
       },
       {
         "tick": 9600,
-        "digest": "97e4bfc83d5db03a"
+        "digest": "78e7b85825ac1d26"
       }
     ],
-    "digest": "29739e5b1919fdcd"
+    "digest": "61bb263cd239e0ee"
   }
 }

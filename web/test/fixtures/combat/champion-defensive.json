@@ -45,7 +45,7 @@
   },
   "expected": {
     "ticks": 9800,
-    "damage": 6.784794991447612,
+    "damage": 7.536742116013755,
     "destroyed": null,
     "attackloot": {
       "r1": 0,
@@ -60,62 +60,62 @@
       "r4": 0
     },
     "firedTraps": 0,
-    "destroyedBuildings": 21,
+    "destroyedBuildings": 23,
     "creepsFlung": 40,
     "creepsKilled": 40,
-    "championHp": 66156.02060226597,
-    "damagedBuildings": 22,
-    "rngDraws": 1714,
+    "championHp": 63470.98293189777,
+    "damagedBuildings": 23,
+    "rngDraws": 2284,
     "checkpoints": [
       {
         "tick": 800,
-        "digest": "d0caa20967d742cf"
+        "digest": "df5519b3fa42cbe5"
       },
       {
         "tick": 1600,
-        "digest": "f249a75413792432"
+        "digest": "a34522d99b062bef"
       },
       {
         "tick": 2400,
-        "digest": "65e4e0a5404c935b"
+        "digest": "0263464afda6759c"
       },
       {
         "tick": 3200,
-        "digest": "567a889b2786c2fd"
+        "digest": "10dbb43b6b7c6229"
       },
       {
         "tick": 4000,
-        "digest": "a4a615f99291040f"
+        "digest": "6dfcd4322db5f90c"
       },
       {
         "tick": 4800,
-        "digest": "c96c7c4eb7a07b10"
+        "digest": "b24c2a7062499cda"
       },
       {
         "tick": 5600,
-        "digest": "6f1828f039903b62"
+        "digest": "c2d4b1a1d9678183"
       },
       {
         "tick": 6400,
-        "digest": "3f190da3c52b3b01"
+        "digest": "74eaa69b9144e27d"
       },
       {
         "tick": 7200,
-        "digest": "f13333c4473d85fa"
+        "digest": "13608b561c51d94c"
       },
       {
         "tick": 8000,
-        "digest": "410c6f0582460fcb"
+        "digest": "9abeb35602f106fc"
       },
       {
         "tick": 8800,
-        "digest": "203ad41a4cb35530"
+        "digest": "ef6b18c8c6e5f762"
       },
       {
         "tick": 9600,
-        "digest": "d01e7ef374a0d851"
+        "digest": "793739d661950344"
       }
     ],
-    "digest": "ff1dc4bd585deecf"
+    "digest": "8c291d7967d8c673"
   }
 }

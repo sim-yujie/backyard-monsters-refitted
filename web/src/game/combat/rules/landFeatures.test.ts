@@ -65,7 +65,7 @@ const SANDBOX = fileURLToPath(new URL("../../../../test/fixtures/baseload-sandbo
 const read = (path: string): Record<string, any> => JSON.parse(readFileSync(path, "utf8"));
 
 /** The bench battle on the sandbox yard, as `neighbourBonus.test.ts` runs it. */
-const mixedWaves = (extra: Partial<BattleOptions> = {}) => {
+const mixedWaves = (extra: Partial<BattleOptions> = {}, seed?: number) => {
   const fixture = read(`${FIXTURES}mixed-waves.json`);
   const sandbox = read(SANDBOX);
   return replayAttack({
@@ -73,7 +73,7 @@ const mixedWaves = (extra: Partial<BattleOptions> = {}) => {
     buildinghealthdata: sandbox.buildinghealthdata,
     resources: sandbox.resources,
     kind: fixture.kind,
-    log: fixture.log,
+    log: seed === undefined ? fixture.log : { ...fixture.log, seed },
     levels: fixture.levels,
     playerLevel: fixture.playerLevel,
     tailTicks: fixture.tailTicks,
@@ -189,13 +189,18 @@ describe("switched on", () => {
 
   it("does more to the sandbox yard on marsh and less on rocks", () => {
     const plain = mixedWaves();
-    const marsh = mixedWaves(battleDefence({ ...FORCES, land: LandFeature.MARSH }));
-    const rocks = mixedWaves(battleDefence({ ...FORCES, land: LandFeature.ROCKS }));
     // A forest trades reach for health: in this battle its shorter towers let
     // more through, so it only has to change the fight.
     const forest = mixedWaves(battleDefence({ ...FORCES, land: LandFeature.FOREST }));
     expect(forest.digest).not.toBe(plain.digest);
-    expect(marsh.damage).toBeGreaterThanOrEqual(plain.damage);
-    expect(rocks.damage).toBeLessThanOrEqual(plain.damage);
-  }, 60_000);
+    // One battle is chaotic enough to land either side of plain ground by a
+    // point or so (patch 7.9's reach did that to the fixture's own seed), so
+    // the land is judged on the average of six.
+    const seeds = [read(`${FIXTURES}mixed-waves.json`).log.seed as number, 1, 2, 3, 4, 5];
+    const average = (extra: Partial<BattleOptions> = {}) =>
+      seeds.reduce((sum, seed) => sum + mixedWaves(extra, seed).damage, 0) / seeds.length;
+    const onPlain = average();
+    expect(average(battleDefence({ ...FORCES, land: LandFeature.MARSH }))).toBeGreaterThan(onPlain);
+    expect(average(battleDefence({ ...FORCES, land: LandFeature.ROCKS }))).toBeLessThan(onPlain);
+  }, 120_000);
 });
