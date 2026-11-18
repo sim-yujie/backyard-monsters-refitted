@@ -12,12 +12,10 @@ import { watchEvents, watchTarget } from "@/game/autoAttack/watchRun";
 import { CellPanel } from "@/ui/maproom/CellPanel";
 import { AutoAttackControl } from "@/ui/maproom/AutoAttackControl";
 import { AutoAttackFlow, type AutoAttackCalls } from "./AutoAttackFlow";
-import { EndAttackPanel } from "./EndAttackPanel";
 
 /**
  * Auto-attack's screens (issue #221): the camp panel's Repeat attack, the
- * confirm sheet, the result, Attack again on the end panel, and Watch's
- * handoff.
+ * confirm sheet, the result, and Watch's handoff.
  */
 
 const BASEID = "1000241208";
@@ -509,38 +507,5 @@ describe("the camp panel's Repeat attack", () => {
     expect(control.button.hidden).toBe(true);
     expect(control.detail.hidden).toBe(true);
     expect(plan).toHaveBeenCalledTimes(1);
-  });
-});
-
-describe("Attack again on the end-of-attack panel", () => {
-  const summary = {
-    targetName: "Kozu",
-    kind: "wild",
-    endReason: "exhausted",
-    outcome: "",
-    tone: "lose",
-    damagePercent: 40,
-    buildingsDestroyed: 1,
-    buildingsTotal: 9,
-    loot: { r1: 0, r2: 0, r3: 0, r4: 0 },
-    lootTaken: { r1: 0, r2: 0, r3: 0, r4: 0 },
-    inferno: false,
-    monstersSent: 10,
-    monstersBorn: 0,
-    monstersLost: 10,
-    champions: [],
-    elapsedSeconds: 60,
-  } as never;
-
-  it("appears once the result is saved, and runs the repeat", () => {
-    const again = vi.fn();
-    const panel = new EndAttackPanel({ summary, onReturn: vi.fn(), onRetry: vi.fn(), onLeave: vi.fn() });
-    panel.setAttackAgain(again);
-    expect(button(panel.element, "Attack again")?.hidden).toBe(true);
-    panel.setSaved({});
-    const shown = button(panel.element, "Attack again")!;
-    expect(shown.hidden).toBe(false);
-    shown.click();
-    expect(again).toHaveBeenCalledTimes(1);
   });
 });

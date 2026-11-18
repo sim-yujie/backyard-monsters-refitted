@@ -8,9 +8,8 @@ import { REPEAT_BAR_FULL_HOLD_MS, type BarTimers } from "./repeatBarTiming";
 
 /**
  * Repeat attack's working bar (owner, 15 Nov 2026): at least 5 s, full only
- * once the answer is in, stopped by an error; on the map's Repeat attack and
- * the end panel's Attack again (both ask for it), and a flow that does not
- * ask keeps the plain line.
+ * once the answer is in, stopped by an error; on the map's Repeat attack
+ * (which asks for it), and a flow that does not ask keeps the plain line.
  */
 
 const BASEID = "1000241208";
