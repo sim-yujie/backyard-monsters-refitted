@@ -58,6 +58,7 @@ import { RESOURCE_KEYS, resourceAmount, resourceName, setResourceRealm } from "@
 import { stripLootFigure, stripLootShort } from "@/ui/attack/stripLoot";
 import { gameIcon } from "@/ui/gameIcon";
 import { AttackMenu, sheetHandleLabel } from "@/ui/attack/AttackMenu";
+import { DockTabs } from "@/ui/attack/DockTabs";
 import {
   ATTACK_CONFIRM_CLASS,
   KEEP_FIGHTING,
@@ -203,7 +204,8 @@ export class AttackScene implements Scene {
   private dock: HTMLElement | null = null;
   private dockBody: HTMLElement | null = null;
   private dockHandle: HTMLButtonElement | null = null;
-  private dockOpen = false;
+  /** The dock's tab row (Army, Catapult, Siege); it also keeps the sheet open or closed. */
+  private dockTabs: DockTabs | null = null;
   private dockWatch: MutationObserver | null = null;
   private status: HTMLElement | null = null;
 
@@ -368,6 +370,8 @@ export class AttackScene implements Scene {
     this.dock = null;
     this.dockBody = null;
     this.dockHandle = null;
+    this.dockTabs?.destroy();
+    this.dockTabs = null;
     this.strip?.remove();
     this.strip = null;
     this.clock = null;
@@ -559,8 +563,9 @@ export class AttackScene implements Scene {
   ): void {
     const camera = this.camera;
     const dock = this.dockBody;
+    const dockTabs = this.dockTabs;
     const hudSlot = this.hudSlot;
-    if (!camera || !dock || !hudSlot) return;
+    if (!camera || !dock || !dockTabs || !hudSlot) return;
     const mounts: AttackMounts = {
       session,
       target,
@@ -569,6 +574,7 @@ export class AttackScene implements Scene {
       camera,
       canvas: context.canvas,
       dock,
+      dockTabs,
       hudSlot,
       modal: context.overlay.modal,
       guide: context.overlay.guide,
@@ -855,18 +861,31 @@ export class AttackScene implements Scene {
     const dock = document.createElement("div");
     dock.className = this.live ? "attack-dock attack-dock--live" : "attack-dock";
 
-    // The sheet's handle: only shown at phone widths, by the stylesheet.
+    // The tab row (Army, Catapult, Siege; owner, 18 Nov 2026): pinned above
+    // the scrolling body, the sheet's handle on a phone. The packages add
+    // their tabs; a screen with none (a replay, a raid) keeps the plain handle.
+    const tabs = new DockTabs({
+      dock,
+      sheet: () => dock.classList.contains("attack-dock--sheet"),
+      onChange: () => {
+        this.dockHandle?.setAttribute("aria-expanded", String(tabs.isOpen()));
+        this.measureDock();
+      },
+    });
+
+    // The sheet's handle when there are no tabs: only shown at phone widths, by the stylesheet.
     const handle = document.createElement("button");
     handle.type = "button";
     handle.className = "attack-dock__handle";
     handle.textContent = "Army";
     handle.setAttribute("aria-expanded", "false");
-    handle.addEventListener("click", () => this.toggleDock());
+    handle.addEventListener("click", () => tabs.setOpen(!tabs.isOpen()));
 
     const body = document.createElement("div");
     body.className = "attack-dock__body";
 
-    dock.append(handle, body);
+    dock.append(handle, tabs.element, body);
+    this.dockTabs = tabs;
     context.overlay.content.append(dock);
     this.dock = dock;
     this.dockHandle = handle;
@@ -887,13 +906,6 @@ export class AttackScene implements Scene {
     if (handle.textContent !== label) handle.textContent = label;
   }
 
-  private toggleDock(): void {
-    this.dockOpen = !this.dockOpen;
-    this.dock?.classList.toggle("attack-dock--open", this.dockOpen);
-    this.dockHandle?.setAttribute("aria-expanded", String(this.dockOpen));
-    this.measureDock();
-  }
-
   /**
    * Re-reads how much chrome covers the canvas: the strip along the top (which
    * moves to the top edge once the HUD hides on a phone) and the dock along
@@ -904,6 +916,7 @@ export class AttackScene implements Scene {
     if (!dock) return;
     const phone = this.viewportWidth > 0 && this.viewportWidth <= PHONE_WIDTH;
     dock.classList.toggle("attack-dock--sheet", phone);
+    this.dockTabs?.refresh();
     const bottom = phone ? dock.getBoundingClientRect().height : 0;
     const top = this.strip ? this.strip.getBoundingClientRect().bottom : this.inset.top;
     if (bottom !== this.inset.bottom || top !== this.inset.top) this.setInset({ top, bottom });
