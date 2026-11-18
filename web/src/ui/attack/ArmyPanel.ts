@@ -10,6 +10,7 @@ import {
   type ChampionStance,
 } from "@/game/combat/rules";
 import { championPortrait, monsterPortrait, showPortrait, type Portrait } from "@/game/portraits";
+import { ChampionStatus } from "@/game/yard/championModel";
 import { krallenAuraTimes, krallenAuraTimesLooter } from "@/game/yard/krallenAura";
 import { formatAmount } from "@/ui/format";
 import { Panel } from "@/ui/Panel";
@@ -250,6 +251,8 @@ export class ArmyPanel {
     }
 
     // The champion: a radio group, one pick at most, un-picked by the same control.
+    // A champion frozen in the Chamber can never go, so it is not listed at
+    // all (owner, 18 Nov 2026); with none left, the whole section goes.
     const champions = document.createElement("fieldset");
     champions.className = "attack-army__champions";
     const legend = document.createElement("legend");
@@ -257,6 +260,7 @@ export class ArmyPanel {
     legend.textContent = "Champion";
     champions.append(legend);
     for (const champion of bucket.champions()) {
+      if (champion.status === ChampionStatus.FROZEN) continue;
       const row = this.buildChampion(champion.t, champion.l, champion.hp, champion.lootAura === true);
       this.champions.push(row);
       champions.append(row.element);

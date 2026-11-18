@@ -403,6 +403,39 @@ describe("ArmyPanel champion", () => {
     expect(fine?.disabled).toBe(false);
   });
 
+  it("leaves out a champion frozen in the Chamber (owner, 18 Nov 2026)", () => {
+    const roster = sandboxRoster();
+    const { panel } = mount({
+      ...roster,
+      champions: [{ ...roster.champions[0]!, status: 1 }, roster.champions[1]!],
+    });
+    const listed = radios(panel);
+    expect(listed.map((radio) => radio.value)).toEqual([String(roster.champions[1]!.t)]);
+    expect(panel.element.querySelector<HTMLElement>(".attack-army__champions")?.hidden).toBe(false);
+  });
+
+  it("still lists a juiced champion, greyed out as Away: only frozen ones are left out", () => {
+    const roster = sandboxRoster();
+    const { panel } = mount({
+      ...roster,
+      champions: [{ ...roster.champions[0]!, status: 2 }, roster.champions[1]!],
+    });
+    const [juiced] = radios(panel);
+    expect(radios(panel)).toHaveLength(2);
+    expect(juiced?.disabled).toBe(true);
+    expect(juiced?.closest("label")?.querySelector(".attack-army__note")?.textContent).toBe("Away");
+  });
+
+  it("hides the whole Champion section when every champion is frozen", () => {
+    const roster = sandboxRoster();
+    const { panel } = mount({
+      ...roster,
+      champions: roster.champions.map((champion) => ({ ...champion, status: 1 })),
+    });
+    expect(radios(panel)).toHaveLength(0);
+    expect(panel.element.querySelector<HTMLElement>(".attack-army__champions")?.hidden).toBe(true);
+  });
+
   it("offers Retreat on a champion's row while it is on the field (#222)", () => {
     const session = sessionWith(sandboxRoster());
     const bucket = new Bucket(session, { storage: null, playerKey: "test" });
