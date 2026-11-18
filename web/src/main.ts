@@ -81,6 +81,10 @@ if (import.meta.env.DEV || import.meta.env.VITE_LAYOUT_CHECK === "1") {
       return modal ? previewAutoAttackResult(modal, kind) : null;
     };
   });
+  // The attack screen's dock (owner, 18 Nov 2026): the real attack scene on the own yard.
+  void import("@/game/attack/attackDockPreview").then(({ previewAttackDock }) => {
+    (globalThis as Record<string, unknown>)["__attackDock"] = () => previewAttackDock((scene) => app.goTo(scene));
+  });
 }
 
 // Vite replaces the module on save; tear the old app down so the canvas, the

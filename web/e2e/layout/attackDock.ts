@@ -1,15 +1,16 @@
 import { expect, test, type Page } from "@playwright/test";
-import { BUSY_PAGE_TIMEOUT, closeAll, pressDock } from "./game";
+import { BUSY_PAGE_TIMEOUT, closeAll } from "./game";
 import type { Profile } from "./profiles";
 
 /**
- * The attack dock (owner, 18 Nov 2026, proposal A): the layout check starts
- * a real attack on a Map Room 1 wild monster tribe from the sandbox yard and
- * checks the dock's pinned tab row (Army, Catapult and a siege weapon when
- * the yard has one) with the sheet closed (a phone upright) and on every
- * tab: the row on the screen, never covered, tabs at least 44 px, and the
- * shown tab's window with a list the player can see. Run last on each
- * screen: it leaves the yard for the attack.
+ * The attack dock (owner, 18 Nov 2026, proposal A): the real attack scene
+ * with every package a real attack mounts, opened on the check's own sandbox
+ * yard (`window.__attackDock`, web/src/game/attack/attackDockPreview.ts; the
+ * sandbox yard has no Map Room, so no real target is in reach), and its
+ * pinned tab row (Army, Catapult and a Decoy) checked with the sheet closed
+ * (a phone upright) and on every tab: the row on the screen, never covered,
+ * tabs at least 44 px, and the shown tab's window with a list the player can
+ * see. Run last on each screen: it leaves the yard for the attack.
  */
 
 /** The fewest pixels of the shown window's list in sight (a few rows, layout rules). */
@@ -17,35 +18,17 @@ const MIN_BODY = 120;
 const TAP = 44;
 const TOLERANCE = 2;
 
-/** From the yard into an attack on a wild monster tribe; false with the reason when there is no way in. */
+/** From the yard onto the attack screen; the reason when there is no way in, else null. */
 export const openAttack = async (page: Page): Promise<string | null> => {
   await closeAll(page);
-  if (!(await pressDock(page, "map"))) return "no Map button";
-  const map = page.locator(".mr1");
-  await map.waitFor({ timeout: 60_000 }).catch(() => undefined);
-  if ((await map.count()) === 0) return "no Map Room 1 map";
-  // The list (a phone's first view) or the map's pins: an unwrecked tribe that is not the practice camp.
-  const tile = page.locator(".mr1-tile:not(.mr1-tile--wrecked):not(.mr1-tile--practice)").filter({ visible: true });
-  const pin = page
-    .locator(".mr1-pin--tribe:not(.mr1-pin--practice) .mr1-pin__button")
-    .filter({ visible: true });
-  await Promise.race([
-    tile.first().waitFor({ timeout: 30_000 }),
-    pin.first().waitFor({ timeout: 30_000 }),
-  ]).catch(() => undefined);
-  if ((await tile.count()) > 0) await tile.first().click({ timeout: BUSY_PAGE_TIMEOUT });
-  else if ((await pin.count()) > 0) await pin.first().click({ timeout: BUSY_PAGE_TIMEOUT });
-  else return "no wild monster tribe on the map";
-  const attack = page.locator("button.mr1-card__button.btn--primary:not([disabled])").filter({ visible: true });
-  const ready = await attack
-    .first()
-    .waitFor({ timeout: BUSY_PAGE_TIMEOUT })
-    .then(() => true)
-    .catch(() => false);
-  if (!ready) return "the tribe's Attack button is off";
-  await attack.first().click({ timeout: BUSY_PAGE_TIMEOUT });
-  const tabs = page.locator(".attack-dock__tabs:not([hidden])");
-  const up = await tabs
+  const started = await page.evaluate(async () => {
+    const open = (globalThis as Record<string, unknown>)["__attackDock"];
+    if (typeof open !== "function") return false;
+    return Boolean(await (open as () => Promise<boolean>)());
+  });
+  if (!started) return "no __attackDock hook (not a VITE_LAYOUT_CHECK build)";
+  const up = await page
+    .locator(".attack-dock__tabs:not([hidden])")
     .waitFor({ timeout: 90_000 })
     .then(() => true)
     .catch(() => false);
