@@ -112,7 +112,7 @@ export const SCENARIOS = [
           r: 300,
           monsters: { C1: 120, C2: 30 },
           // At power level 2, so the bonus ladders are pinned too (issue #202).
-          champion: { t: 5, l: 5, pl: 2 },
+          champion: { t: 5, l: 5, pl: 2, aura: true },
         },
         { kind: "bomb", t: 2400, x: 180, y: -480, id: "pb1" },
         { kind: "fling", t: 4800, x: 180, y: -480, r: 300, monsters: { C4: 40, C8: 20 } },
@@ -404,7 +404,7 @@ export const SCENARIOS = [
           y: -360,
           r: 300,
           monsters: { C1: 40 },
-          champion: { t: 5, l: 5, pl: 2 },
+          champion: { t: 5, l: 5, pl: 2, aura: true },
         },
         { kind: "championRetreat", t: 4000, c: 5 },
       ],

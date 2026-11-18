@@ -52,7 +52,7 @@
   },
   "expected": {
     "ticks": 9800,
-    "damage": 6.9508610525267045,
+    "damage": 7.536742116013755,
     "destroyed": null,
     "attackloot": {
       "r1": 0,
@@ -67,62 +67,62 @@
       "r4": 0
     },
     "firedTraps": 0,
-    "destroyedBuildings": 22,
+    "destroyedBuildings": 23,
     "creepsFlung": 40,
     "creepsKilled": 40,
-    "championHp": 84879.13150423153,
-    "damagedBuildings": 22,
-    "rngDraws": 1770,
+    "championHp": 91462.34337500187,
+    "damagedBuildings": 23,
+    "rngDraws": 2172,
     "checkpoints": [
       {
         "tick": 800,
-        "digest": "d0caa20967d742cf"
+        "digest": "19ad5bbcf45c6b26"
       },
       {
         "tick": 1600,
-        "digest": "f249a75413792432"
+        "digest": "e58053d381848435"
       },
       {
         "tick": 2400,
-        "digest": "cce82074be95e61a"
+        "digest": "f1df2dd9b914c0eb"
       },
       {
         "tick": 3200,
-        "digest": "1b110bc0c28174de"
+        "digest": "e9bd422c67597fc6"
       },
       {
         "tick": 4000,
-        "digest": "d99fb346ea6a17c4"
+        "digest": "f0ca45d945db3077"
       },
       {
         "tick": 4800,
-        "digest": "259ccb3b7492480d"
+        "digest": "2ca9ff10b69e89da"
       },
       {
         "tick": 5600,
-        "digest": "2e2f83e176e9cf27"
+        "digest": "8527c17db9add3ab"
       },
       {
         "tick": 6400,
-        "digest": "9e3e05917e64210b"
+        "digest": "009e759ad66d6e74"
       },
       {
         "tick": 7200,
-        "digest": "195e50a2ba473b10"
+        "digest": "b3a09c999cf9ad13"
       },
       {
         "tick": 8000,
-        "digest": "2673bdd42de3e56a"
+        "digest": "02dfa0164b895378"
       },
       {
         "tick": 8800,
-        "digest": "efa1928f68b78fc1"
+        "digest": "715837c103100693"
       },
       {
         "tick": 9600,
-        "digest": "65a7869dab0322a7"
+        "digest": "f2e396d5204b25df"
       }
     ],
-    "digest": "8a5b04b49bd1c3d2"
+    "digest": "aac5364a4a213d40"
   }
 }

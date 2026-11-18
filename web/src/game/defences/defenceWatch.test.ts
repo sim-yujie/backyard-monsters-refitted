@@ -41,9 +41,11 @@ describe("the version check", () => {
     expect(watchRefusal(run("0123456789abcdef"))).toBe("update");
   });
 
-  it("plays one fought under older rules that these rules still play the same (patch 7.8)", () => {
-    expect(defenceRefusal({ hasReplay: true, playable: true, rulesVersion: "b4f0c156a8d2afee" }, "new")).toBeNull();
-    expect(watchRefusal(run("b4f0c156a8d2afee"))).toBeNull();
+  it("refuses one fought under 7.7.2 or 7.8 rules, which the 7.9 wall fix replays differently", () => {
+    for (const stamp of ["b4f0c156a8d2afee", "b03bd4b8bac1386d"]) {
+      expect(defenceRefusal({ hasReplay: true, playable: true, rulesVersion: stamp }, "new")).toBe("update");
+      expect(watchRefusal(run(stamp))).toBe("update");
+    }
   });
 
   it("refuses one the server no longer calls playable, for a client that has not reloaded", () => {

@@ -64,7 +64,7 @@
   },
   "expected": {
     "ticks": 12200,
-    "damage": 4.78006472066626,
+    "damage": 5.126435271120457,
     "destroyed": null,
     "attackloot": {
       "r1": 0,
@@ -79,12 +79,12 @@
       "r4": 0
     },
     "firedTraps": 0,
-    "destroyedBuildings": 16,
+    "destroyedBuildings": 17,
     "creepsFlung": 90,
     "creepsKilled": 91,
     "championHp": 0,
-    "damagedBuildings": 19,
-    "rngDraws": 6799,
+    "damagedBuildings": 20,
+    "rngDraws": 6798,
     "checkpoints": [
       {
         "tick": 800,
@@ -100,54 +100,54 @@
       },
       {
         "tick": 3200,
-        "digest": "bb8f0aa3816cb725"
+        "digest": "952dc5bbcdab5e09"
       },
       {
         "tick": 4000,
-        "digest": "1faa723dba6ce727"
+        "digest": "ae7486278ac69689"
       },
       {
         "tick": 4800,
-        "digest": "105a71e081c5ce6e"
+        "digest": "a18f5f446ff68a16"
       },
       {
         "tick": 5600,
-        "digest": "a6b13f21449f3bbb"
+        "digest": "118a8291c7956773"
       },
       {
         "tick": 6400,
-        "digest": "161beea0667ec2fa"
+        "digest": "62cb20da328425ac"
       },
       {
         "tick": 7200,
-        "digest": "951b0ed0fe567312"
+        "digest": "0b7ca0aaf3ebf4f4"
       },
       {
         "tick": 8000,
-        "digest": "d44e73bfbd15c481"
+        "digest": "22285345b84abe77"
       },
       {
         "tick": 8800,
-        "digest": "8d09a1bdcb11dadf"
+        "digest": "d27f381384eb0fcd"
       },
       {
         "tick": 9600,
-        "digest": "aeeacc82ba6b3b24"
+        "digest": "203ccbbc11ecc11e"
       },
       {
         "tick": 10400,
-        "digest": "b3f321c88ebc2caa"
+        "digest": "c57b0c22be32936c"
       },
       {
         "tick": 11200,
-        "digest": "f8f93fa9806c4d83"
+        "digest": "06a2183781be44f9"
       },
       {
         "tick": 12000,
-        "digest": "53447d370964f339"
+        "digest": "6ddec63d056b248f"
       }
     ],
-    "digest": "e56adec397824ffd",
+    "digest": "924e6911be0fc6cb",
     "bunkerLosses": {
       "83": {
         "C1": 8
