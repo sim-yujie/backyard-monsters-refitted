@@ -49,8 +49,18 @@ export const setControlLocked = (
   control.dataset["lockReason"] = reason;
   control.title = reason;
   if (existing) return;
+  // Loose words get a box of their own, so the label fades like an icon does
+  // while the padlock beside it stays at full colour.
+  for (const node of [...control.childNodes]) {
+    if (node.nodeType !== Node.TEXT_NODE || !node.textContent?.trim()) continue;
+    const label = document.createElement("span");
+    label.className = `${LOCK_CLASS}__label`;
+    node.replaceWith(label);
+    label.append(node);
+  }
   const badge = document.createElement("span");
   badge.className = `${LOCK_CLASS} ${LOCK_CLASS}--${place}`;
+  badge.style.setProperty("--lock-size", `${size}px`);
   badge.append(lockArt(size, "planner-lock__art"));
   if (place === "lead") control.prepend(badge);
   else control.append(badge);

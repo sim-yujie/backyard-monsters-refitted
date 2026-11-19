@@ -398,7 +398,7 @@ class Menu {
       const item = this.checks.get(key);
       if (!item) continue;
       const nested = item.classList.contains("planner-menu__item--nested");
-      setControlLocked(item, reason, "lead", nested ? 12 : 16);
+      setControlLocked(item, reason, "lead", nested ? 16 : 20);
     }
   }
 
@@ -424,6 +424,12 @@ class Menu {
       this.list.classList.toggle("planner-menu__list--up", anchor.bottom > window.innerHeight / 2);
     }
     this.list.hidden = !open;
+    // A trigger near the right edge (an upright iPad) hangs its list from
+    // its right end instead, so no row runs off the screen.
+    this.list.classList.remove("planner-menu__list--end");
+    if (open && this.list.getBoundingClientRect().right > window.innerWidth - 8) {
+      this.list.classList.add("planner-menu__list--end");
+    }
     this.trigger.setAttribute("aria-expanded", String(open));
   }
 }
@@ -1101,7 +1107,7 @@ export class PlannerBar {
     const blueprint = this.views.get(YardView.BLUEPRINT);
     if (blueprint) {
       blueprint.disabled = false;
-      setControlLocked(blueprint, reason, "lead", 14);
+      setControlLocked(blueprint, reason, "lead", 20);
       blueprint.setAttribute("aria-label", reason ? `Blueprint. ${reason}` : "Blueprint");
     }
     this.renderViewSwitch();
@@ -1115,16 +1121,20 @@ export class PlannerBar {
    */
   setToolsLocked(reason: string | null): void {
     this.toolsLock = reason;
-    setControlLocked(this.find, reason, "corner", 16);
-    if (this.snapshot) setControlLocked(this.snapshot, reason, "corner", 16);
+    setControlLocked(this.find, reason, "corner", 22);
+    if (this.snapshot) setControlLocked(this.snapshot, reason, "corner", 22);
     if (!this.readOnly) {
       if (reason !== null) this.upgradeWalls.disabled = false;
-      setControlLocked(this.upgradeWalls, reason, "corner", 16);
+      setControlLocked(this.upgradeWalls, reason, "corner", 22);
     }
     this.viewMenu.setLocked(["ranges", "land", "air", "deadZones"], reason);
   }
 
-  /** The phone's view switch: "3D ⇄", or "3D" and a padlock while Blueprint is locked. */
+  /**
+   * The phone's view switch: "3D ⇄", or, while Blueprint is locked, where it
+   * would go: "Blueprint", muted, with a padlock (astra round 1: a padlock by
+   * "3D" read as if the 3D view itself were locked).
+   */
   private renderViewSwitch(): void {
     const iso = this.view === YardView.ISO;
     // `update` runs on every drag step: redraw only when something changed.
@@ -1132,13 +1142,13 @@ export class PlannerBar {
     if (key === this.viewSwitchKey) return;
     this.viewSwitchKey = key;
     if (iso && this.blueprintLock) {
-      this.viewSwitch.textContent = "3D";
-      setControlLocked(this.viewSwitch, null, "corner", 18);
-      setControlLocked(this.viewSwitch, this.blueprintLock, "corner", 18);
-      this.viewSwitch.setAttribute("aria-label", `Showing the 3D yard. ${this.blueprintLock}`);
+      setControlLocked(this.viewSwitch, null, "lead", 20);
+      this.viewSwitch.textContent = "Blueprint";
+      setControlLocked(this.viewSwitch, this.blueprintLock, "lead", 20);
+      this.viewSwitch.setAttribute("aria-label", `Blueprint. ${this.blueprintLock}`);
       return;
     }
-    setControlLocked(this.viewSwitch, null, "corner", 18);
+    setControlLocked(this.viewSwitch, null, "lead", 20);
     this.viewSwitch.textContent = iso ? "3D ⇄" : "Blueprint ⇄";
     this.viewSwitch.setAttribute(
       "aria-label",

@@ -2759,34 +2759,42 @@
  */
 .is-locked {
   position: relative;
-  color: var(--colour-text-muted);
 }
 
+/* One treatment for every locked tool: its icon and its words fade alike. */
 .is-locked > :not(.planner-lock) {
-  opacity: 0.4;
+  opacity: 0.45;
 }
 
 .planner-lock {
   display: inline-flex;
+  flex: none;
   line-height: 0;
   pointer-events: none;
 }
 
-.planner-lock svg {
-  filter: drop-shadow(0 1px 1px rgb(0 0 0 / 0.45));
+.planner-lock > svg {
+  width: var(--lock-size, 20px);
+  height: var(--lock-size, 20px);
+  filter: drop-shadow(0 1px 1px rgb(0 0 0 / 0.5));
 }
 
 /* Over an icon's lower-right quarter: Find, the yard picture, Upgrade walls. */
 .planner-lock--corner {
   position: absolute;
-  right: 1px;
-  bottom: 1px;
+  right: -3px;
+  bottom: -3px;
 }
 
 /* Before a word: Blueprint, the View rows, Compare. */
 .planner-lock--lead {
-  margin-inline-end: var(--space-1);
-  vertical-align: -2px;
+  margin-inline-end: 2px;
+  vertical-align: -4px;
+}
+
+.is-locked--lead {
+  display: inline-flex;
+  align-items: center;
 }
 
 /* A locked switch shows its padlock in the tick's gutter, and no tick. */
@@ -2799,22 +2807,16 @@
 }
 
 /* A phone's thumb-sized controls carry a larger padlock. */
-.planner-bar[data-layout] .planner-lock--corner svg,
-.planner-more .planner-lock--corner svg {
-  width: 18px;
-  height: 18px;
+.planner-bar[data-layout] .planner-lock--corner > svg,
+.planner-more .planner-lock--corner > svg {
+  width: 24px;
+  height: 24px;
 }
 
-/* The phone's view switch, while Blueprint is locked: "3D" and a padlock. */
-.planner-bar__view-switch.is-locked {
-  color: var(--colour-text);
-  padding-inline-end: 22px;
-}
-
-.planner-bar__view-switch.is-locked .planner-lock--corner {
-  right: 3px;
-  bottom: 50%;
-  transform: translateY(50%);
+/* A menu hung from a trigger near the right edge opens leftward. */
+.planner-menu__list--end {
+  left: auto;
+  right: 0;
 }
 
 /* The Layouts window: one line saying what unlocks the other slots. */
@@ -2837,7 +2839,7 @@
 
 .planner-layouts__gate-kept {
   margin: var(--space-1) 0 0;
-  padding-inline-start: calc(18px + var(--space-2));
+  padding-inline-start: calc(24px + var(--space-2));
   font-size: var(--text-xs);
 }
 
@@ -2862,6 +2864,18 @@
   display: flex;
   flex-direction: column;
   min-width: 0;
+}
+
+/* Pressing a locked slot explains it; it is never shown as picked. */
+.planner-layouts__locked:hover,
+.planner-layouts__locked:active {
+  background: transparent;
+  border-color: transparent;
+}
+
+.planner-layouts__locked:focus-visible {
+  outline: 2px solid var(--colour-accent);
+  outline-offset: -2px;
 }
 
 .planner-layouts__locked-name {

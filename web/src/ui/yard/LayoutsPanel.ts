@@ -147,7 +147,7 @@ export class LayoutsPanel {
     line.className = "planner-layouts__gate-line";
     const words = document.createElement("span");
     words.textContent = `${reason} for ${this.slots} slots`;
-    line.append(lockArt(18, "planner-lock__art"), words);
+    line.append(lockArt(24, "planner-lock__art"), words);
     const kept = [...this.layouts.keys()].some((slot) => slot >= this.usable);
     const parts: HTMLElement[] = [line];
     if (kept) {
@@ -185,7 +185,7 @@ export class LayoutsPanel {
     meta.className = "planner-layouts__meta u-muted";
     meta.textContent = layout ? "Saved · Locked" : "Empty";
     text.append(name, meta);
-    press.append(text, lockArt(18, "planner-lock__art"));
+    press.append(text, lockArt(24, "planner-lock__art"));
     press.addEventListener("click", () => this.actions.onLocked?.());
     row.append(press);
     return row;
@@ -230,7 +230,7 @@ export class LayoutsPanel {
       compare.title = "See this layout beside your plan, with the two compared";
       // Locked, it stays pressable and says why (owner, beta 8).
       compare.disabled = this.locked === null && (!layout || this.busy);
-      setControlLocked(compare, this.locked, "lead", 12);
+      setControlLocked(compare, this.locked, "lead", 18);
     }
 
     const controls = document.createElement("div");
