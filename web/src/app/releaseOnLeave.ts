@@ -16,6 +16,10 @@ import { loadTextures } from "pixi.js";
  * The pictures are noted where Pixi loads them (`notePictureLoads`), held
  * weakly so one the game dropped is not kept alive, and closed by
  * `releaseOnLeave`.
+ *
+ * Beta 8: the texture loader now makes plain `<img>` pictures instead
+ * (`plainPictures.ts`), which this does not note, so on the game's pictures it
+ * closes nothing. Kept as a guard should anything decode to ImageBitmaps again.
  */
 
 /** What is closed: an `ImageBitmap`, or a stand-in in a test. */

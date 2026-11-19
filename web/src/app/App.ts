@@ -1,4 +1,4 @@
-import { Application, Assets, Container } from "pixi.js";
+import { Application, Container } from "pixi.js";
 import { createOverlay, type Overlay } from "@/ui/overlay";
 import {
   captureScreen,
@@ -9,6 +9,7 @@ import {
 } from "@/game/bugReport/screenCapture";
 import { PerfOverlay } from "@/ui/PerfOverlay";
 import { SceneManager, type SceneFactory } from "./SceneManager";
+import { usePlainPictures } from "./plainPictures";
 import { notePictureLoads, releaseOnLeave } from "./releaseOnLeave";
 import { withHold, withPresence, withProtection } from "./presenceScene";
 import { withIdle } from "./idleScene";
@@ -106,16 +107,13 @@ export class App {
     // just with the fallback stack from --font-display/--font-body.
     await loadTitanOne();
 
-    // Pictures are fetched by the page, not by Pixi's worker pool. The pool
-    // fetches and decodes one picture per worker, one worker per processor
-    // core, newest request first: a yard asking for a hundred pictures at once
-    // waited in a queue of four to twelve, its walls (asked for first) served
-    // last, and a 10 MB monster sheet held a worker the whole time. The page's
-    // own fetch lets the browser have them all in flight, in the order asked,
-    // and `createImageBitmap` still decodes them off the main thread.
-    Assets.setPreferences({ preferWorkers: false });
-    // Every picture Pixi decodes is noted, to be closed when the page is left
-    // for good (`releaseOnLeave.ts`, patch 7.12).
+    // Pictures load on the page as plain `<img>` pictures, not as ImageBitmaps
+    // and not in Pixi's worker pool (`plainPictures.ts`, beta 8): each is held
+    // once, not kept decoded on the page as well as on the graphics card.
+    usePlainPictures();
+    // Every ImageBitmap Pixi decodes is noted, to be closed when the page is
+    // left for good (`releaseOnLeave.ts`, patch 7.12). With plain pictures the
+    // texture loader makes none, so this only matters if that ever changes.
     notePictureLoads();
 
     try {
