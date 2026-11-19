@@ -72,24 +72,28 @@ const isImageBitmap = (value: unknown): value is Closable =>
 /** The game's pictures. */
 export const gamePictures = new PictureList();
 
-/** Marks Pixi's `load` once wrapped, so a hot reload does not wrap it twice. */
-const WRAPPED = Symbol.for("bymr.notePictureLoads");
+/** On Pixi's wrapped `load`: the load it wraps, so a hot reload wraps that again (not the wrapper). */
+const ORIGINAL = Symbol.for("bymr.notePictureLoads.original");
 
 type TextureLoad = NonNullable<typeof loadTextures.load>;
+type WrappedLoad = TextureLoad & { [ORIGINAL]?: TextureLoad };
 
 /**
  * Notes every picture Pixi's texture loader decodes, whichever way it decodes
- * it (on the page or in a worker). Call before the first `Assets.load`.
+ * it (on the page or in a worker), into `pictures`. Call before the first
+ * `Assets.load`. Calling again replaces the earlier wrapper (a hot-reloaded
+ * module notes into its own list), never wraps twice.
  */
 export const notePictureLoads = (pictures: PictureList = gamePictures): void => {
-  const load = loadTextures.load as (TextureLoad & { [WRAPPED]?: true }) | undefined;
-  if (!load || load[WRAPPED]) return;
+  const current = loadTextures.load as WrappedLoad | undefined;
+  const load = current?.[ORIGINAL] ?? current;
+  if (!load) return;
   const wrapped = async function (this: typeof loadTextures, ...args: Parameters<TextureLoad>) {
     const texture: unknown = await load.apply(this, args);
     pictures.note((texture as { source?: { resource?: unknown } } | null)?.source?.resource);
     return texture;
-  } as TextureLoad & { [WRAPPED]?: true };
-  wrapped[WRAPPED] = true;
+  } as WrappedLoad;
+  wrapped[ORIGINAL] = load;
   loadTextures.load = wrapped;
 };
 
@@ -116,8 +120,11 @@ export interface ReleaseOptions {
  * turning hidden (`visibilitychange`, fired after `pagehide` by Chrome and
  * Safari) or `unload` (Safari, Firefox; Chrome no longer fires it). Both come
  * after every `pagehide` listener, so the attack's keepalive save
- * (`attack/plugins/end.ts`) and every other save on leaving have run, and
- * after the `visibilitychange` listeners added before the page went.
+ * (`attack/plugins/end.ts`) and every other save on leaving have been sent
+ * (their synchronous work done, the request started; it finishes on its own),
+ * and after the `visibilitychange` listeners added before the page went. A
+ * page already hidden when left closes on `unload` only, so not in Chrome.
+ * Best effort: a phone may end a page without any of these events.
  *
  * Returns a function that removes the listeners.
  */

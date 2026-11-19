@@ -180,6 +180,18 @@ describe("releaseOnLeave", () => {
     expect(page.reloads).toBe(0);
   });
 
+  it("a page already hidden when left closes on unload (Safari, Firefox)", () => {
+    const page = fakePage();
+    const picture = new FakePicture();
+    releaseOnLeave({ pictures: listOf(picture), page });
+
+    hide(page);
+    pageHide(page, false);
+    expect(picture.closes).toBe(0);
+    unload(page);
+    expect(picture.closes).toBe(1);
+  });
+
   it("listens to nothing once stopped", () => {
     const page = fakePage();
     const picture = new FakePicture();
@@ -211,6 +223,18 @@ describe("PictureList", () => {
     expect(list.closeAll()).toBe(0);
     expect(list.size).toBe(0);
   });
+
+  it("notes nothing where WeakRef is missing (old iPhones), rather than holding pictures for good", () => {
+    vi.stubGlobal("WeakRef", undefined);
+    try {
+      const list = new PictureList();
+      list.note(new FakePicture(), isFake);
+      expect(list.size).toBe(0);
+      expect(list.closeAll()).toBe(0);
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
 });
 
 describe("notePictureLoads", () => {
@@ -219,7 +243,7 @@ describe("notePictureLoads", () => {
     loadTextures.load = original;
   });
 
-  it("notes the picture behind each texture Pixi's loader makes, wrapping the loader once", async () => {
+  it("notes the picture behind each texture Pixi's loader makes", async () => {
     const picture = new FakePicture();
     const texture = { source: { resource: picture } };
     loadTextures.load = (async () => texture) as unknown as NonNullable<typeof loadTextures.load>;
@@ -227,12 +251,22 @@ describe("notePictureLoads", () => {
     const list = { note: (value: unknown) => noted.push(value) } as unknown as PictureList;
 
     notePictureLoads(list);
-    const wrapped = loadTextures.load;
-    notePictureLoads(list);
-    expect(loadTextures.load).toBe(wrapped);
-
     const result: unknown = await loadTextures.load?.("yard.png");
     expect(result).toBe(texture);
     expect(noted).toEqual([picture]);
+  });
+
+  it("a second install (hot reload) notes into the new list only, wrapping the original load", async () => {
+    const picture = new FakePicture();
+    const fake = (async () => ({ source: { resource: picture } })) as unknown as NonNullable<typeof loadTextures.load>;
+    loadTextures.load = fake;
+    const first: unknown[] = [];
+    const second: unknown[] = [];
+    notePictureLoads({ note: (value: unknown) => first.push(value) } as unknown as PictureList);
+    notePictureLoads({ note: (value: unknown) => second.push(value) } as unknown as PictureList);
+
+    await loadTextures.load?.("yard.png");
+    expect(first).toEqual([]);
+    expect(second).toEqual([picture]);
   });
 });
