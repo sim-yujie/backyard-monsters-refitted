@@ -299,6 +299,40 @@ export const noteOutpostDefended = async (
 };
 
 /**
+ * The "Take over outposts" goal (design v5 §16): one takeover, unless the
+ * outpost was taken from a member of the taker's own alliance (owner, 19 Nov
+ * 2026), so two mates cannot pass an outpost back and forth for the goal. A
+ * wild camp always counts. Called after the takeover has committed. Returns
+ * whether it counted; a failure is logged, never thrown.
+ */
+export const noteTakeover = async (
+  em: EntityManager,
+  takerUserid: number,
+  previousOwnerId: number | null | undefined
+): Promise<boolean> => {
+  if (!takerUserid) return false;
+  const previous = Number(previousOwnerId) || 0;
+  // A unit-test fake without SQL cannot say who is in which alliance: counted, as before.
+  const canAsk = typeof (em as unknown as Partial<Sql>).execute === "function";
+  if (canAsk && previous && previous !== takerUserid) {
+    try {
+      const rows = await sql(em).execute<{ userid: number; alliance_id: number | null }[]>(
+        `SELECT userid, alliance_id FROM bym."user" WHERE userid IN (?, ?)`,
+        [takerUserid, previous]
+      );
+      const allianceOf = (id: number) => rows.find((r) => Number(r.userid) === id)?.alliance_id ?? null;
+      const mine = allianceOf(takerUserid);
+      if (mine !== null && Number(allianceOf(previous)) === Number(mine)) return false;
+    } catch (err) {
+      logger.error(`Alliance takeover goal for user ${takerUserid} failed: ${err}`);
+      return false;
+    }
+  }
+  noteAllianceEvents(takerUserid, { takeover: 1 });
+  return true;
+};
+
+/**
  * Whether an attacked yard is a player's, for "Win attacks on players"
  * (`attackQuestEvents`' `playerYard`): not a tribe camp, not empty and not the
  * attacker's own. A bot's yard counts like any player's: bots must never be
@@ -355,6 +389,16 @@ const lockLeadOrOfficer = async (em: EntityManager, userid: number) => {
 const parseJson = <T extends object>(raw: unknown): T =>
   ((typeof raw === "string" ? JSON.parse(raw) : raw) ?? {}) as T;
 
+/** The outposts an alliance's members hold now (what "Hold outposts" reads until the week's tally). */
+export const heldOutposts = async (em: EntityManager, allianceId: number): Promise<number> => {
+  const [row] = await sql(em).execute<{ n: number }[]>(
+    `SELECT count(*)::int AS n FROM bym.save s JOIN bym."user" u ON u.userid = s.saveuserid
+      WHERE u.alliance_id = ? AND s.type = 'outpost'`,
+    [allianceId]
+  );
+  return Number(row?.n ?? 0);
+};
+
 /** Adds a goal for this week (Leader and Officers; design v5 §8). */
 export const setGoal = async (em: EntityManager, userid: number, kind: string, tier: GoalTier, now: number) =>
   em.transactional(async (tx) => {
@@ -374,9 +418,18 @@ export const setGoal = async (em: EntityManager, userid: number, kind: string, t
     if (Number(count?.n) >= GOALS_PER_WEEK) {
       throw progressRefusedErr("goalsFull", `Up to ${GOALS_PER_WEEK} goals a week.`);
     }
+    const target = goalTarget(alliance.type, rules, tier);
+    if (kind === "hold") {
+      // A Hold target the alliance already meets would pay for nothing done
+      // (owner, 19 Nov 2026); so would removing it and setting it again lower.
+      const held = await heldOutposts(tx, alliance.id);
+      if (held >= target) {
+        throw progressRefusedErr("holdMet", `Your alliance already holds ${held} outposts. Pick a bigger target.`);
+      }
+    }
     await sql(tx).execute(
       `INSERT INTO bym.alliance_goal (alliance_id, week, kind, tier, target, points, set_by) VALUES (?, ?::date, ?, ?, ?, ?, ?)`,
-      [alliance.id, week, kind, tier, goalTarget(alliance.type, rules, tier), goalPoints(alliance.type, tier), userid]
+      [alliance.id, week, kind, tier, target, goalPoints(alliance.type, tier), userid]
     );
     void say(alliance.id, userid, AllianceMessageType.GOAL_SET, { kind, tier });
   });
