@@ -59,12 +59,14 @@ describe("championsAfterLessons", () => {
     expect(after[0]).toMatchObject(
       (() => {
         const learned = learnHabits(undefined, stored[0]!.hs, lessons[0]!, "offensive");
-        return { h: learned.book, hs: learned.stats };
+        return { h: learned.book, hs: learned.stats, hl: learned.learning };
       })()
     );
-    // Offensive did better than usual: it leans to guarding, and to the smaller gun.
-    expect(after[0]!.h!.off!.guard).toBeGreaterThan(0);
-    expect(after[0]!.h!.off!.gun).toBeLessThan(0);
+    // Offensive did better than usual: guarding and the smaller gun each get
+    // a useful observation (its 1 attack before counted by the migration);
+    // nothing turns Active before the evidence gate (owner's pick B).
+    expect(after[0]!.h).toEqual({});
+    expect(after[0]!.hl!.off).toEqual({ guard: { o: 2 }, gun: { o: 2 }, aerial: { o: 1 } });
     expect(after[0]!.hs).toMatchObject({ n: 3, off: { n: 2 } });
     // Krallen keeps today's brain (owner, 10 Nov): Defensive did worse, away from towers.
     expect(after[1]!.b!.tower).toBeLessThan(0);
@@ -111,8 +113,9 @@ describe("championsAfterLessons", () => {
     ];
     const after = championsAfterLessons(stored, [lesson(5), lesson(1)], logFlinging({ t: 5 }, { t: 1 }))!;
     expect(after[0]!.b).toEqual({ tower: 200, loot: 0, finish: 0, focus: 0, threat: 0 });
-    // Faded once (150 to 135); no quake on Gorgo, and "Stays close" cannot go below 0.
-    expect(after[1]!.h).toEqual({ hyb: { tower: 135 } });
+    // Migrated to B: the tower habit Active at Hybrid's 75; no quake on
+    // Gorgo, and "Stays close" cannot go below 0.
+    expect(after[1]!.h).toEqual({ hyb: { tower: 75 } });
   });
 });
 

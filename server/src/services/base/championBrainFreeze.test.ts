@@ -47,6 +47,8 @@ describe("brainsOf", () => {
       brainsOf([
         // Gorgo's old brain is not frozen: its habits started fresh (champion modes round 2).
         champion(1, { b: BRAIN }),
+        // An old book is migrated as B (owner, 19 Nov): 2+ pips fight at the
+        // fixed weight, the rest at 0.
         champion(2, { h: { off: { gun: -500, guard: 40, hall: 90 } } }),
         champion(3),
         champion(4, { h: { def: {} } }),
@@ -54,7 +56,11 @@ describe("brainsOf", () => {
         { t: 9, b: BRAIN },
         null,
       ])
-    ).toEqual({ "2": { v: 1, off: { gun: -100, guard: 40 } }, "5": { ...ZERO, tower: 200 } });
+    ).toEqual({ "2": { v: 1, off: { gun: -50 } }, "5": { ...ZERO, tower: 200 } });
+    // A champion with B's learning freezes its Active habits, whatever `h` says.
+    expect(
+      brainsOf([champion(1, { h: { hyb: { tower: 150 } }, hl: { v: 1, hyb: { loot: { o: 8, d: -1 }, hall: { o: 8 } } } })])
+    ).toEqual({ "1": { v: 1, hyb: { loot: -75 } } });
     expect(brainsOf([champion(1)])).toBeUndefined();
     expect(brainsOf(null)).toBeUndefined();
   });
@@ -175,11 +181,18 @@ describe("the yard routes keep the brain and never take one", () => {
   });
 
   test("Forget wipes one Mode's habits and keeps the rest", () => {
-    const stored = champion(1, { h: { off: { guard: 60 }, hyb: { loot: 30 } }, hs: { n: 9, off: { n: 4, u: { main: 0.5 } } } });
+    const stored = champion(1, { h: { off: { guard: 60 }, hyb: { loot: 90 } }, hs: { n: 9, off: { n: 4, u: { main: 0.5 } } } });
     const outcome = planChampionForget(yard([stored]), 1, "offensive");
-    expect(outcome.slices.champion[0]).toMatchObject({ h: { hyb: { loot: 30 } }, hs: { n: 9, off: { n: 4 } } });
+    // Migrated to B on the way (owner, 19 Nov): Hybrid's loot is Active at 75.
+    expect(outcome.slices.champion[0]).toMatchObject({
+      h: { hyb: { loot: 75 } },
+      hl: { v: 1, hyb: { loot: { o: 8, d: 1 } } },
+      hs: { n: 9, off: { n: 4 } },
+    });
+    expect(outcome.slices.champion[0]!.hl).not.toHaveProperty("off");
     const all = planChampionForget(yard([champion(1, { h: { off: { guard: 60 } } })]), 1, "offensive");
     expect(all.slices.champion[0]).not.toHaveProperty("h");
+    expect(all.slices.champion[0]!.hl).toEqual({ v: 1 });
     // Krallen has no habits to forget.
     expect(() => planChampionForget(yard([champion(5)]), 5, "hybrid")).toThrow();
   });

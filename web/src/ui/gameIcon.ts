@@ -76,6 +76,12 @@ import { writeAmount, type AmountChange } from "./amountChange";
  * look and `goalsclassic` in the Classic (Flash) one, softer and dustier; the
  * window picks by the Classic/Modern switch.
  *
+ * Champion habits (owner's pick B, 19 Nov 2026; `ui/yard/championModes.ts`,
+ * Codex, how in `art-samples/habit-icons/make.py`): `habitactive` a gold
+ * seal with a green check (an Active habit, and "Learned"), `habitunproven`
+ * a plain grey seal with a dashed rim and a bar (Unproven), `habitfaded` the
+ * gold seal cracked and faded with a down arrow ("Faded"); each with a
+ * `classic` twin in the Classic look.
  * World chat's player strip (`ui/chat/ChatBox.ts`, owner 8 Nov: icons rather than
  * words): `addfriend` is the two monster heads (`friends`) with a green plus disc on
  * their corner (9 Nov, `tools/game-icons/friends_icons.py`, so Add no longer looks
@@ -187,6 +193,12 @@ export const GAME_ICONS = {
   camera2: "Yard picture",
   goals: "Goals",
   goalsclassic: "Goals",
+  habitactive: "Active",
+  habitactiveclassic: "Active",
+  habitunproven: "Unproven",
+  habitunprovenclassic: "Unproven",
+  habitfaded: "Faded",
+  habitfadedclassic: "Faded",
   outpost: "Outposts",
   outpostclassic: "Outposts",
   friendprev: "Previous friend",

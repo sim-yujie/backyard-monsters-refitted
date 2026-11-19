@@ -6,6 +6,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import type { BaseLoadResponse, BuildingData, ChampionSaveEntry, YardResponse } from "@/api/types";
 import type { YardApi } from "@/api/yard";
 import type { ChampionActions } from "@/api/yardChampion";
+import { setClassicLook } from "@/game/classicLook";
 import { YardStore } from "@/game/yard/YardStore";
 import { brainBlock, ChampionPanel, feedGate, hungerText } from "./ChampionPanel";
 import { cageView } from "@/game/yard/championModel";
@@ -242,7 +243,7 @@ describe("ChampionPanel: Modes, instincts and habits (champion modes round 2)", 
   const rows = (root: HTMLElement, kind: "instinct" | "habit") =>
     [...root.querySelectorAll<HTMLElement>(`.champion__trait--${kind}`)].map((row) => [
       row.querySelector(".champion__trait-name")!.textContent,
-      kind === "habit" ? Number(row.dataset["pips"]) : "always",
+      kind === "habit" ? (row.dataset["event"] ?? row.dataset["state"]) : "always",
     ]);
   const shown = (root: HTMLElement) => root.querySelector<HTMLElement>(".champion__mode")!.dataset["stance"];
 
@@ -256,10 +257,12 @@ describe("ChampionPanel: Modes, instincts and habits (champion modes round 2)", 
       ["Goes for towers", "always"],
       ["Finishes hurt buildings", "always"],
     ]);
+    // Owner's pick B: nothing learned yet, every habit Unproven; a two-ended
+    // one is named by what it is about until it leans a way.
     expect(rows(element, "habit")).toEqual([
-      ["Guards its monsters", 0],
-      ["Aerial Defense first", 0],
-      ["Biggest gun first", 0],
+      ["Guards its monsters", "unproven"],
+      ["Aerial Defense first", "unproven"],
+      ["Gun size", "unproven"],
     ]);
   });
 
@@ -273,22 +276,24 @@ describe("ChampionPanel: Modes, instincts and habits (champion modes round 2)", 
     // No saved Mode: Hybrid, which has no instincts.
     expect(shown(element)).toBe("hybrid");
     expect(tabs(element).map((tab) => tab.textContent)).toEqual(["Offensive×12", "Defensive×0", "Hybrid×3"]);
-    expect(rows(element, "instinct")).toEqual([["None: a natural", "always"]]);
+    expect(rows(element, "instinct")).toEqual([["Nearest target", "always"]]);
+    // Old weights migrate (B): 2+ pips (75 in Hybrid) Active, the rest Unproven.
     expect(rows(element, "habit")).toEqual([
-      ["Steers clear of towers", 3],
-      ["Loves loot", 1],
-      ["Town Hall first", 0],
-      ["Stays close", 0],
+      ["Steers clear of towers", "active"],
+      ["Loot preference", "unproven"],
+      ["Town Hall first", "unproven"],
+      ["Stays close", "unproven"],
     ]);
-    // The Modes' attacks only (12 + 3), not every attack it ever fought (40).
-    expect(textOf(element, ".champion__mode-foot")).toContain("15 attacks · Habits fade if they stop working.");
+    // Attack counts are on the tabs alone.
+    expect(textOf(element, ".champion__mode-foot")).toContain("Habits can be learned or lost.");
+    expect(textOf(element, ".champion__mode-foot")).not.toContain("attacks");
 
     tabs(element)[0]!.click();
     expect(shown(element)).toBe("offensive");
     expect(rows(element, "habit")).toEqual([
-      ["Guards its monsters", 0],
-      ["Aerial Defense first", 3],
-      ["Biggest gun first", 1],
+      ["Guards its monsters", "unproven"],
+      ["Aerial Defense first", "active"],
+      ["Gun size", "unproven"],
     ]);
     expect(tabs(element)[0]!.getAttribute("aria-selected")).toBe("true");
   });
@@ -330,7 +335,53 @@ describe("ChampionPanel: Modes, instincts and habits (champion modes round 2)", 
     const { element, panel, store } = setup([gorgo({ s: "offensive" })]);
     store.save.champion![0]!.h = { off: { guard: 100 } };
     panel.tick();
-    expect(rows(element, "habit")[0]).toEqual(["Guards its monsters", 3]);
+    expect(rows(element, "habit")[0]).toEqual(["Guards its monsters", "active"]);
+  });
+
+  it("shows the last attack's change in place of the badge, in its own Mode only", () => {
+    const hl = {
+      v: 1,
+      off: { guard: { o: 8, d: 1 }, aerial: { o: 8 } },
+      hyb: { tower: { o: 8, d: -1 } },
+      r: { m: "off", n: 20, e: { guard: "learned" } },
+    };
+    const { element } = setup([gorgo({ s: "offensive", hl, hs: { n: 20, off: { n: 12, u: {} }, hyb: { n: 8, u: {} } } })]);
+    expect(rows(element, "habit")).toEqual([
+      ["Guards its monsters", "learned"],
+      ["Aerial Defense first", "unproven"],
+      ["Gun size", "unproven"],
+    ]);
+    const row = element.querySelector<HTMLElement>(".champion__trait--habit")!;
+    // One line in the badge's place: never "Active" beside "Learned".
+    expect(row.querySelector(".champion__habit-badge")!.textContent).toBe("Last attackLearned");
+    expect(row.classList.contains("champion__trait--active")).toBe(true);
+    expect(row.querySelector("img")!.dataset["icon"]).toBe("habitactive");
+    tabs(element)[2]!.click();
+    expect(rows(element, "habit")[0]).toEqual(["Steers clear of towers", "active"]);
+    // A receipt older than the last attack is not shown.
+    const stale = setup([gorgo({ s: "offensive", hl, hs: { n: 21, off: { n: 13, u: {} } } })]);
+    expect(rows(stale.element, "habit")[0]).toEqual(["Guards its monsters", "active"]);
+  });
+
+  it("paints each badge in the look the page is in", () => {
+    const hl = { v: 1, off: { guard: { o: 8, d: 1 }, aerial: { o: 8 } }, r: { m: "off", n: 5, e: { aerial: "faded" } } };
+    const icons = (root: HTMLElement) =>
+      [...root.querySelectorAll<HTMLImageElement>(".champion__habit-icon")].map((img) => img.dataset["icon"]);
+    expect(icons(setup([gorgo({ s: "offensive", hl, hs: { n: 5 } })]).element)).toEqual([
+      "habitactive",
+      "habitfaded",
+      "habitunproven",
+    ]);
+    setClassicLook(true);
+    try {
+      expect(icons(setup([gorgo({ s: "offensive", hl, hs: { n: 5 } })]).element)).toEqual([
+        "habitactiveclassic",
+        "habitfadedclassic",
+        "habitunprovenclassic",
+      ]);
+    } finally {
+      setClassicLook(false);
+    }
   });
 
   it("leaves Krallen's card as it was: no Modes, no habits", () => {

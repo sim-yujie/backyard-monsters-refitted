@@ -897,7 +897,7 @@ describe("the attacker's own row through the save (#23, C1)", () => {
     });
 
     // It fought, so it learned its habits from the battle (champion modes round 2); nothing else moved.
-    expect(attackerSave.champion).toEqual([{ ...champion(500), h: expect.any(Object), hs: expect.objectContaining({ n: 1 }) }]);
+    expect(attackerSave.champion).toEqual([{ ...champion(500), h: expect.any(Object), hs: expect.objectContaining({ n: 1 }), hl: expect.objectContaining({ v: 1 }) }]);
     // The one jar the log used is spent, whatever the save said the stock was.
     expect(attackerSave.siege).toEqual({ jars: { quantity: 1 } });
   });
@@ -909,7 +909,7 @@ describe("the attacker's own row through the save (#23, C1)", () => {
       attackersiege: JSON.stringify({ jars: { quantity: 1 } }),
     });
 
-    expect(attackerSave.champion).toEqual([{ ...champion(180), h: expect.any(Object), hs: expect.objectContaining({ n: 1 }) }]);
+    expect(attackerSave.champion).toEqual([{ ...champion(180), h: expect.any(Object), hs: expect.objectContaining({ n: 1 }), hl: expect.objectContaining({ v: 1 }) }]);
     expect(attackerSave.siege).toEqual({ jars: { quantity: 1 } });
   });
 
@@ -977,7 +977,7 @@ describe("a champion healed by Vorgs or Zafreeti keeps the heal through the save
 
     await save({ C16: 6 }, healed);
 
-    expect(attackerSave.champion).toEqual([{ ...fomor(healed), h: expect.any(Object), hs: expect.any(Object) }]);
+    expect(attackerSave.champion).toEqual([{ ...fomor(healed), h: expect.any(Object), hs: expect.any(Object), hl: expect.objectContaining({ v: 1 }) }]);
   });
 
   test("a Zafreeti's heal is kept the same way (the other healer, `Zafreeti.as`)", async () => {
@@ -987,7 +987,7 @@ describe("a champion healed by Vorgs or Zafreeti keeps the heal through the save
 
     await save({ C15: 2 }, healed);
 
-    expect(attackerSave.champion).toEqual([{ ...fomor(healed), h: expect.any(Object), hs: expect.any(Object) }]);
+    expect(attackerSave.champion).toEqual([{ ...fomor(healed), h: expect.any(Object), hs: expect.any(Object), hl: expect.objectContaining({ v: 1 }) }]);
   });
 
   test("Vorgs and Zafreeti together: the replay's figure, never above full", async () => {

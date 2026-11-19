@@ -5,6 +5,7 @@ import {
   type BrainWeights,
   type ChampionStance,
   type HabitBook,
+  type HabitLearning,
   type HabitStats,
 } from "../game-rules/combat/index.js";
 
@@ -46,6 +47,13 @@ export type ChampionData = z.infer<typeof ChampionSchema> & {
    */
   h?: HabitBook;
   hs?: HabitStats;
+  /**
+   * How each habit is being learned by the owner's pick B (19 Nov 2026):
+   * Active or Unproven, its evidence and the last attack's receipt
+   * (`habits.ts` `HabitLearning`). Server-written like `h`; `h` is kept as
+   * the weights it gives, which the battle reads.
+   */
+  hl?: HabitLearning;
   /**
    * Krallen's loot aura runs until then, unix seconds: the Krallen Hunt's 3x
    * mark (`services/events/krallenReward.ts`, `grantKrallenAura`). Written
