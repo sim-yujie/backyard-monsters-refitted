@@ -1,7 +1,8 @@
 // @vitest-environment jsdom
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { setClassicLook } from "@/game/classicLook";
 import type { BoardRow, EmpireBoard } from "@/api/leaderboard";
-import { EMPTY, LOAD_FAILED, openLeaderboard, outpostText } from "./LeaderboardDialog";
+import { EMPTY, LOAD_FAILED, openLeaderboard, outpostIcon, outpostText, splitText } from "./LeaderboardDialog";
 
 /**
  * The leaderboard popup, driven through its DOM with the request stubbed:
@@ -48,19 +49,111 @@ beforeEach(() => {
 });
 
 afterEach(() => {
+  container.querySelectorAll<HTMLButtonElement>('button[aria-label="Close"]').forEach((button) => button.click());
   container.remove();
+  setClassicLook(false);
+  vi.restoreAllMocks();
+  vi.unstubAllGlobals();
 });
 
 describe("openLeaderboard", () => {
+  it.each([false, true])("explains the flag inline in the current look (Classic: %s)", async (classic) => {
+    setClassicLook(classic);
+    await open(boardOf(1, null));
+    const intro = container.querySelector(".leaderboard__intro")!;
+    expect(intro.textContent!.replace(/\s+/g, " ")).toBe("Ranked by empire points: your yard plus your outposts.");
+    const flag = intro.querySelector("img")!;
+    expect(flag.dataset["icon"]).toBe(classic ? "outpostclassic" : "outpost");
+    expect(flag.width).toBe(16);
+    expect(flag.height).toBe(16);
+    expect(flag.getAttribute("aria-hidden")).toBe("true");
+    expect(flag.nextSibling!.textContent).toBe(" outposts.");
+  });
+
+  it("fades overflowing edges after showing the own row, and stops on close", async () => {
+    const observe = vi.fn();
+    const disconnect = vi.fn();
+    const onClose = vi.fn();
+    const popup = openLeaderboard({ container, userId: 1002, load: async () => boardOf(3, rowOf(2)), onClose });
+    Object.defineProperties(popup.body, {
+      clientHeight: { value: 100 },
+      scrollHeight: { value: 300 },
+    });
+    const scrollIntoView = vi.fn(function (this: HTMLElement) {
+      expect(this.dataset["rank"]).toBe("2");
+      popup.body.scrollTop = 50;
+    });
+    vi.stubGlobal("requestAnimationFrame", vi.fn());
+    vi.stubGlobal("ResizeObserver", class {
+      observe = observe;
+      disconnect = disconnect;
+    });
+    Object.defineProperty(HTMLElement.prototype, "scrollIntoView", { configurable: true, value: scrollIntoView });
+    try {
+      await flush();
+      expect(scrollIntoView).toHaveBeenCalledWith({ block: "nearest" });
+      expect(observe.mock.calls.map(([element]) => element)).toEqual([popup.body, container.querySelector(".leaderboard__list")]);
+      expect(popup.body.classList.contains("scroll-fade--more-above")).toBe(true);
+      expect(popup.body.classList.contains("scroll-fade--more-below")).toBe(true);
+      popup.body.scrollTop = 200;
+      popup.body.dispatchEvent(new Event("scroll"));
+      expect(popup.body.classList.contains("scroll-fade--more-below")).toBe(false);
+      popup.close();
+      expect(disconnect).toHaveBeenCalledOnce();
+      expect(onClose).toHaveBeenCalledOnce();
+      popup.body.scrollTop = 0;
+      popup.body.dispatchEvent(new Event("scroll"));
+      expect(popup.body.classList.contains("scroll-fade--more-above")).toBe(true);
+    } finally {
+      Reflect.deleteProperty(HTMLElement.prototype, "scrollIntoView");
+    }
+  });
+
+  it("does not start fading if closed before the board arrives", async () => {
+    let resolve!: (board: EmpireBoard) => void;
+    const popup = openLeaderboard({ container, userId: null, load: () => new Promise((done) => { resolve = done; }) });
+    popup.close();
+    resolve(boardOf(3, null));
+    await flush();
+    expect(popup.body.classList.contains("scroll-fade")).toBe(false);
+    expect(popup.body.querySelector(".leaderboard__list")).toBeNull();
+  });
+
   it("lists the players in rank order with their points and outposts, no Discord tags", async () => {
     await open(boardOf(3, null));
     const shown = rows();
     expect(shown.map((row) => row.querySelector(".leaderboard__rank")!.textContent)).toEqual(["#1", "#2", "#3"]);
     expect(shown[0]!.querySelector(".leaderboard__name")!.textContent).toBe("player1");
     expect(shown[0]!.querySelector(".leaderboard__points-value")!.textContent).toBe("245,566");
-    expect(shown[1]!.querySelector(".leaderboard__outposts")!.textContent).toBe("2 outposts");
+    // The outpost icon and the count, the words in its label.
+    const held = shown[1]!.querySelector(".leaderboard__outposts")!;
+    expect(held.textContent).toBe("2");
+    expect(held.querySelector("img")!.dataset["icon"]).toBe("outpost");
+    expect(outpostIcon(true)).toBe("outpostclassic");
+    expect(outpostIcon(false)).toBe("outpost");
+    expect(held.querySelector("img")!.getAttribute("aria-label")).toBe("2 outposts");
     expect(shown[0]!.classList.contains("leaderboard__row--medal-1")).toBe(true);
     expect(container.textContent).not.toContain("#1234");
+  });
+
+  it("shows no outpost icon or count for a player with none", async () => {
+    await open(boardOf(3, null));
+    expect(rows()[2]!.querySelector(".leaderboard__outposts")).toBeNull();
+    expect(rows()[2]!.textContent).not.toContain("outpost");
+  });
+
+  it("shows the total, its split in the tooltip when outposts add to it", async () => {
+    await open({
+      ...boardOf(2, null),
+      top: [
+        rowOf(1, { empirePoints: 492_672_756, yardPoints: 479_849_665, outpostPoints: 12_823_091, outposts: 1 }),
+        rowOf(2, { empirePoints: 400_000_000, yardPoints: 400_000_000, outpostPoints: 0, outposts: 0 }),
+      ],
+    });
+    const [first, second] = rows();
+    expect(first!.querySelector(".leaderboard__points-value")!.textContent).toBe("492,672,756");
+    expect(first!.querySelector<HTMLElement>(".leaderboard__points")!.title).toBe("Main yard 479,849,665 + outposts 12,823,091");
+    expect(second!.querySelector<HTMLElement>(".leaderboard__points")!.title).toBe("");
   });
 
   it("shows each player's face, their pick or their default", async () => {
@@ -109,6 +202,13 @@ describe("openLeaderboard", () => {
   it("says so when the board could not be loaded", async () => {
     await open(new Error("offline"));
     expect(container.querySelector(".leaderboard__status--error")!.textContent).toBe(LOAD_FAILED);
+  });
+});
+
+describe("splitText", () => {
+  it("works the main yard part out of an older board without it", () => {
+    expect(splitText(rowOf(1, { empirePoints: 1500, outpostPoints: 500 }))).toBe("Main yard 1,000 + outposts 500");
+    expect(splitText(rowOf(1, { empirePoints: 1500 }))).toBeNull();
   });
 });
 

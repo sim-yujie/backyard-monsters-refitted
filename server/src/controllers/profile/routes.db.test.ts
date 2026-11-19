@@ -16,6 +16,8 @@ import { playerLevel } from "../../services/profile/profiles.js";
 import { PHOTO_CHANGE_MS } from "../../services/profile/profileRules.js";
 import { mountProfileRoutes } from "./routes.js";
 
+import { STARTER_KITS } from "../../game-data/starterKits.js";
+import { kitBuildings } from "../../services/yard/starterKit.js";
 /**
  * The profile routes over HTTP against a real Postgres: bios are filtered,
  * photos are re-encoded at 128x128 and limited to level 10 and once a day,
@@ -180,6 +182,27 @@ describe.skipIf(!dbName)("the profile routes on a real database", () => {
     expect((await profileOf(LOW, LOW)).photoState).toMatchObject({ canUpload: false, reason: "lowLevel" });
     expect((await call("GET", `/api/v/bm/profile/99999999`, PLAYER)).status).toBe(404);
     expect((await call("GET", `/api/v/bm/profile/${PLAYER}`, null)).status).toBe(401);
+  });
+
+  test("the stats carry the outposts' points, which the profile adds to the main yard's", async () => {
+    const before = await profileOf(PLAYER, R1);
+    expect(before.stats).toMatchObject({ outpostPoints: 0 });
+
+    const regular = kitBuildings(STARTER_KITS[0]!, "shiny", {}).buildingdata;
+    await sql(
+      `INSERT INTO bym.save (userid, saveuserid, baseid, type, points, basevalue, createtime, name, credits, attacks,
+                             takeover_date, created_at, lastupdate_at, buildingdata)
+       VALUES (?, ?, ?, 'outpost', '0', '0', 0, 'outpost', 0, '[]', now(), now(), now(), ?::jsonb)`,
+      [PLAYER, PLAYER, `${PLAYER}01`, JSON.stringify(regular)],
+    );
+    try {
+      const after = await profileOf(PLAYER, R1);
+      // The main yard's points are unchanged; the Regular Kit's 12,823,091 come apart.
+      expect(after.stats).toMatchObject({ empirePoints: before.stats.empirePoints, outpostPoints: 12_823_091 });
+      expect(after.stats).not.toHaveProperty("outposts");
+    } finally {
+      await sql(`DELETE FROM bym.save WHERE userid = ? AND type = 'outpost'`, [PLAYER]);
+    }
   });
 
   test("bios are trimmed, capped and word-filtered", async () => {

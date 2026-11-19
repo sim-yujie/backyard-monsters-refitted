@@ -3,8 +3,9 @@ import type { ApiEnvelope } from "./types";
 
 /**
  * The leaderboard (beta.4, server `services/leaderboard/empireBoard.ts`):
- * every player ranked by empire points, the original's score (yard points +
- * base value), with their Map Room 2 outposts beside it.
+ * every player ranked by empire points: since beta 8 their main yard's score
+ * (the original's yard points + base value) plus the points of every Map Room
+ * 2 outpost they hold (server `services/maproom/v2/outpostPoints.ts`).
  */
 
 /** One player's place on the board. */
@@ -16,7 +17,13 @@ export interface BoardRow {
   readonly pic: string | null;
   /** Their uploaded photo's upload number; null or absent for the critter (`game/playerPicture.ts`). */
   readonly photo?: number | null;
+  /** The board score: main yard points + outpost points. */
   readonly empirePoints: number;
+  /** The main yard's empire points. Absent from a board built before beta 8. */
+  readonly yardPoints?: number;
+  /** The outposts' points added up. Absent from a board built before beta 8. */
+  readonly outpostPoints?: number;
+  /** Map Room 2 outposts they hold. */
   readonly outposts: number;
 }
 
