@@ -26,22 +26,30 @@
   min-width: 68px;
 }
 
-/* The painted arrow (`hopArt`, owner 18 Nov 2026): as big as the disc
-   allows, 40px on the 68px disc and smaller with the phone's discs, with
-   the dock pictures' soft shadow (as Events' calendar, `events.css`). */
-.friend-hop__art {
-  width: 58%;
-  height: auto;
-  aspect-ratio: 1;
-  object-fit: contain;
-  filter: drop-shadow(0 2px 3px var(--colour-art-shadow));
+/* The painted arrow (`hopArt`, owner 18 Nov 2026) takes the dock's painted
+   picture size and shadow (`.yard-dock__picture`), as Friends and Monsters. */
+
+/* astra, 19 Nov 2026: At either end, and while Help all runs, keep the
+   disc opaque so the yard cannot change its contrast. Lean towards the
+   darker dome colour in either look, keeping the rim, size and shadows. */
+.friend-hop .friend-hop__button:disabled .yard-dock__disc {
+  opacity: 1;
+  background: radial-gradient(
+    circle at 50% 35%,
+    color-mix(in srgb, var(--colour-dome-top) 25%, var(--colour-dome-bottom)),
+    var(--colour-dome-bottom)
+  );
 }
 
-/* An end of the list: the disc stays, greyed out by the dock's own
-   disabled look (`yard-hud.css`), and the golden arrow turns grey so it
-   does not still look pressable. */
-.friend-hop__button:disabled .friend-hop__art {
+/* astra, 19 Nov 2026: Dim the grey arrow on its solid ground, with enough
+   contrast to keep its direction clear. Quiet the label a little too. */
+.friend-hop .friend-hop__button:disabled .friend-hop__art {
   filter: grayscale(1);
+  opacity: 0.7;
+}
+
+.friend-hop .friend-hop__button:disabled .yard-dock__label {
+  opacity: 0.85;
 }
 
 /* Amber, as the Friends button's count of friends who can use help. */

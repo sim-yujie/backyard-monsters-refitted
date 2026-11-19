@@ -116,7 +116,7 @@ import { writeAmount, type AmountChange } from "./amountChange";
  * (`friendnext`), and the same pair in the Classic look, softer with a thin
  * brown outline and no white rim (`friendprevclassic`, `friendnextclassic`).
  * Gold reads on both the slate Modern disc and the brown Classic one. These
- * four also ship 96 and 128 px files for the disc's 40 px arrow on a 3x phone.
+ * four also ship 96 and 128 px files for the 45 px dock picture on a 3x phone.
  */
 export const GAME_ICONS = {
   health: "Health",

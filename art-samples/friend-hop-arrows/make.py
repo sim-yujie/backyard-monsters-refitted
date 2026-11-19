@@ -12,7 +12,7 @@ Cut with the skill's cut_sheet.py; the `.full.png` cuts copied to large/<name>.p
 friendprev, friendnext (Modern), friendprevclassic, friendnextclassic (Classic).
 
 This runs web/tools/game-icons/make.py without numpy (as goals-tab-icon/make_nonp.py) and adds 96 and
-128 px files: the discs show the arrow at 40 px, which wants 120 px on a 3x phone, more than the usual
+128 px files: the discs show the arrow at 45 px (the dock picture size), which wants 135 px on a 3x phone, more than the usual
 64 px top size (FriendHopButtons.ts adds them to the srcset).
 
 usage: python3 -I make.py <worktree>/web/tools/game-icons <this folder>

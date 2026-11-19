@@ -46,15 +46,19 @@ const BADGE_MAX = 99;
 export const hopArt = (direction: HopDirection, classic: boolean = classicLook()): GameIconName =>
   `friend${direction === 1 ? "next" : "prev"}${classic ? "classic" : ""}` as GameIconName;
 
-/** The arrow's size on the disc (`friend-hop.css`, `.friend-hop__art`), in CSS px. */
-export const HOP_ART_PX = 40;
+/**
+ * The arrow's size on the disc, in CSS px: the dock's own painted pictures
+ * (`.yard-dock__picture`, `yard-hud.css`: 45, 40 or 38 px), as Friends and
+ * Monsters beside it.
+ */
+export const HOP_ART_PX = 45;
 
-/** Files past the usual 64 px that these four ship, for 40 px on a 3x phone (120 px). */
+/** Files past the usual 64 px that these four ship, for 45 px on a 3x phone (135 px). */
 export const HOP_ART_LARGE_SIDES = [96, 128] as const;
 
 const hopPicture = (direction: HopDirection): HTMLImageElement => {
   const name = hopArt(direction);
-  const image = gameIcon(name, { size: 32, decorative: true, className: "friend-hop__art" });
+  const image = gameIcon(name, { size: 32, decorative: true, className: "yard-dock__picture friend-hop__art" });
   const url64 = gameIconUrl(name, 64);
   image.srcset = [
     image.srcset,

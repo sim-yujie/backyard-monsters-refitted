@@ -85,7 +85,8 @@ describe("FriendHopButtons", () => {
     const art = hop.element.querySelector<HTMLImageElement>(".friend-hop__button--next .friend-hop__art")!;
     expect(art.getAttribute("src")).toMatch(/ui\/icons\/friendnext-32\.webp$/);
     expect(art.srcset).toMatch(/friendnext-64\.webp 64w, .*friendnext-96\.webp 96w, .*friendnext-128\.webp 128w$/);
-    expect(art.sizes).toBe("40px");
+    expect(art.sizes).toBe("45px");
+    expect(art.classList.contains("yard-dock__picture")).toBe(true);
     expect(art.getAttribute("aria-hidden")).toBe("true");
     expect(hop.element.querySelector("svg")).toBeNull();
     const icons = path.resolve(__dirname, "../../../public/ui/icons");
