@@ -236,3 +236,31 @@ describe("alliance.css: a short screen gives the tab its room (beta 8)", () => {
     expect(css.lastIndexOf("@media (max-height: 540px)")).toBeGreaterThan(css.lastIndexOf(".alliance__head {"));
   });
 });
+
+describe("alliance.css: Recent trades row on one baseline (owner, 19 Nov 2026)", () => {
+  it("lines the pieces up on their text baseline, not on the icons", () => {
+    const line = rulesFor(".trade-recent__line").join("\n");
+    expect(line).toMatch(/display:\s*flex/);
+    expect(line).toMatch(/align-items:\s*baseline/);
+    // An inline-flex amount took its baseline from the icon, so "90K" rode high.
+    const amount = rulesFor(".trade-recent__amount").join("\n");
+    expect(amount).not.toMatch(/inline-flex/);
+    expect(amount).toMatch(/white-space:\s*nowrap/);
+  });
+
+  it("drops the dots on a phone so none is left at a line's end", () => {
+    // Every `@media (max-width: 480px)` block, not only the first.
+    const blocks: string[] = [];
+    for (let at = css.indexOf("@media (max-width: 480px)"); at >= 0; at = css.indexOf("@media (max-width: 480px)", at + 1)) {
+      let depth = 1;
+      let i = css.indexOf("{", at) + 1;
+      const open = i;
+      for (; depth > 0 && i < css.length; i++) {
+        if (css[i] === "{") depth++;
+        else if (css[i] === "}") depth--;
+      }
+      blocks.push(css.slice(open, i - 1));
+    }
+    expect(rulesFor(".trade-recent__sep", blocks.join("\n")).join("\n")).toMatch(/display:\s*none/);
+  });
+});

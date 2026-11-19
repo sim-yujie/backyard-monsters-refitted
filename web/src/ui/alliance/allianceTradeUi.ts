@@ -59,8 +59,8 @@ export const TRADE_TEXT = {
   noRecent: "No trades yet.",
   gave: (from: string, to: string, what: string) => `${from} gave ${to} ${what}`,
   ago: (time: string) => `${time} ago`,
-  /** One side of a swap in Recent trades: "agenttester got". */
-  got: (name: string) => `${name} got`,
+  /** One side of a swap in Recent trades: "agenttester got [goo] 90K". */
+  got: "got",
   hint: "48 h requests · 1 open · 3 posts a day · 1 swap a day · max 10% of storage",
   back: "Back",
   post: "Post",
@@ -356,29 +356,39 @@ export class TradeTab {
       used.add(index);
       const partnerIndex = view.recent.findIndex((other, i) => !used.has(i) && other.at === line.at && other.from === line.to && other.to === line.from);
       const partner = view.recent[partnerIndex];
+      // beta 8 (owner, 19 Nov): one baseline for names, amounts and the time. The
+      // row is a wrapping flex line of whole pieces ("A got [icon] 90K", "·",
+      // "B got [icon] 90K", "·", "2m ago"); text inside a piece sits on its own
+      // baseline, so the painted icons are centred on the digits by `.res-icon`.
+      // A phone stacks one receiver per line and drops the dot between them.
       const row = make("p", "trade-recent__line");
+      const dot = () => {
+        const sep = make("span", "trade-recent__sep", " · ");
+        sep.setAttribute("aria-hidden", "true");
+        return sep;
+      };
       if (partner) {
         used.add(partnerIndex);
         // Round 2 (astra): who got what, so the direction is never guessed.
-        const received = (amounts: Partial<TradeAmounts>) => {
-          const group = make("span", "trade-recent__amount");
+        // A long name may take its own line; "got [icon] 90K" stays together.
+        const side = (name: string, amounts: Partial<TradeAmounts>) => {
+          const piece = make("span", "trade-recent__side");
+          const got = make("span", "trade-recent__got", `${TRADE_TEXT.got} `);
           for (const key of TRADE_KEYS) {
-            if ((amounts[key] ?? 0) > 0) group.append(resourceIcon(key, { decorative: true }), make("span", "", tradeShort(amounts[key] ?? 0)));
+            if ((amounts[key] ?? 0) > 0) {
+              const group = make("span", "trade-recent__amount");
+              group.append(resourceIcon(key, { decorative: true }), make("span", "trade-recent__num", tradeShort(amounts[key] ?? 0)));
+              got.append(group);
+            }
           }
-          return group;
+          piece.append(make("span", "trade-recent__who", `${name} `), got);
+          return piece;
         };
-        row.append(
-          make("span", "", `${TRADE_TEXT.got(line.from)} `),
-          received(partner.arrived),
-          make("span", "", ` · ${TRADE_TEXT.got(line.to)} `),
-          received(line.arrived),
-        );
+        row.append(side(line.from, partner.arrived), dot(), side(line.to, line.arrived));
       } else {
-        row.append(make("span", "", TRADE_TEXT.gave(line.from, line.to, amountsWords(line.arrived))));
+        row.append(make("span", "trade-recent__side", TRADE_TEXT.gave(line.from, line.to, amountsWords(line.arrived))));
       }
-      row.append(
-        make("span", "trade-recent__ago", ` · ${TRADE_TEXT.ago(formatCountdown(Math.max(1, now - line.at)).replace(/ \d+[ms]$/, ""))}`),
-      );
+      row.append(dot(), make("span", "trade-recent__ago", TRADE_TEXT.ago(formatCountdown(Math.max(1, now - line.at)).replace(/ \d+[ms]$/, ""))));
       recent.append(row);
     }
     if (view.recent.length === 0) recent.append(make("p", "trade-note", TRADE_TEXT.noRecent));
