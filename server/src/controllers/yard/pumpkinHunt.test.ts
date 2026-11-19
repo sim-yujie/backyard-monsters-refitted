@@ -142,8 +142,8 @@ describe("Thanksgiving turkey hunt ladder", () => {
   test("a golden turkey pays its Shiny and still counts", async () => {
     setSystemTime(new Date(Date.UTC(2026, 10, 26, 12)));
     const store = memoryProgressStore();
-    // 0.1: golden (one in four); then the variant roll 0.1 gives the small 3 Shiny.
-    const picked = await run(mushroomPickAction(() => 0.1, store), { id: 0 });
+    // 0.05: golden (a turkey is golden one in ten, so below 0.1); then the variant roll 0.05 gives the small 3 Shiny.
+    const picked = await run(mushroomPickAction(() => 0.05, store), { id: 0 });
     expect(picked.body).toMatchObject({ report: { golden: true, shiny: 3, turkeys: 1 } });
   });
 });

@@ -1621,7 +1621,7 @@ export interface MushroomPickReport {
   /** Where it stood, yard units. */
   x: number;
   y: number;
-  /** Golden: one in four, rolled by the server at pick time. */
+  /** Golden: one in four (one in ten for a turkey in the turkey hunt), rolled by the server at pick time. */
   golden: boolean;
   /** Shiny it gave: 0, 3 or 8. */
   shiny: number;

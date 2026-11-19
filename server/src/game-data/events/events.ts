@@ -281,8 +281,10 @@ export const THANKSGIVING_2026_CALENDAR: readonly CalendarDay[] = [
  * (`services/yard/season.ts`, `mushrooms.ts`), and every turkey a player
  * picks adds one to the counter (`controllers/yard/mushrooms.ts`): up to
  * about 24 a day for a player who looks in at least every 10 hours. One pick
- * in four is a golden turkey, worth 3 or 8 Shiny, exactly as a golden
- * mushroom (`GOLDEN_SMALL`, `GOLDEN_BIG` in `services/yard/mushrooms.ts`).
+ * in ten is a golden turkey (`GOLDEN_TURKEY_ODDS`; one in four until the
+ * owner lowered it on 19 Nov 2026, so the Shiny cannot be farmed), worth 3 or
+ * 8 Shiny, exactly as a golden mushroom (`GOLDEN_SMALL`, `GOLDEN_BIG` in
+ * `services/yard/mushrooms.ts`). Golden or not, every turkey counts.
  * Each tier is claimed once, by hand, on the Events page. `need` is the
  * turkey count. The 50 tier's 100 Glimmers are paid through the event's
  * coins ({@link THANKSGIVING_2026_COINS}), on top of the usual ladder
