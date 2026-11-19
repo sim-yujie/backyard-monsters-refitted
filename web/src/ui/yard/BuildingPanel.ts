@@ -21,7 +21,7 @@ import type { RecycleOffer } from "@/game/yard/recycle";
 import { NEED_MORE_PODS, NEED_MORE_SILOS } from "@/game/yard/storage";
 import { progressFraction } from "@/game/yard/jobs";
 import { repairOffer, type RepairOffer } from "@/game/yard/repair";
-import { YARD_PLANNER_TYPE } from "@/game/yard/planner/access";
+import { plannerToolBlock, YARD_PLANNER_TYPE } from "@/game/yard/planner/access";
 import { typeName } from "@/game/yard/planner/summary";
 import { hallWord } from "./BuildMenu";
 import {
@@ -695,21 +695,21 @@ export class BuildingPanel {
       if (model.batch) {
         const wall = WALL_TYPES.includes(building.type);
         const upgradeWalls = this.upgradeWalls;
-        if (wall && upgradeWalls) {
-          // Still no single-wall upgrade here: the button opens the planner's
-          // wall picking with this wall picked, for the player to add more.
-          const button = actionButton("Upgrade walls", () => upgradeWalls(building.id), "btn--primary");
-          button.classList.add("building-panel__walls");
-          button.title = "Open the layout planner and pick the walls to raise";
-          blocks.push(button);
+        if (wall) {
+          // A wall upgrades one at a time above, like any building (owner,
+          // beta 8). With a built Yard Planner in this yard the planner's wall
+          // picking is offered as well, this wall already picked, for the
+          // player to add more; without one it is not offered at all.
+          const unlocked =
+            plannerToolBlock({ kind: yard.store.kind, buildings: yard.store.yard.buildings }) === null;
+          if (upgradeWalls && unlocked && model.upgrade) {
+            const button = actionButton("Pick more walls", () => upgradeWalls(building.id));
+            button.classList.add("building-panel__walls");
+            button.title = "Open the layout planner and pick more walls to raise together";
+            blocks.push(button);
+          }
         } else {
-          blocks.push(
-            note(
-              wall
-                ? "Walls are upgraded in the layout planner."
-                : "Traps are re-armed in the layout planner.",
-            ),
-          );
+          blocks.push(note("Traps are re-armed in the layout planner."));
         }
       }
       const open = housing ? null : this.openButton(model);
@@ -922,7 +922,8 @@ export class BuildingPanel {
     title.className = "building-panel__heading";
     title.textContent = `Lv ${offer.from} → ${offer.to}`;
     title.title = `Upgrade to level ${offer.to}`;
-    head.append(title, stepTime(offer.seconds, "Upgrade time · 1 worker"));
+    // A wall's step is finished at once with no worker (D13): no time to show.
+    head.append(title, ...(offer.seconds > 0 ? [stepTime(offer.seconds, "Upgrade time · 1 worker")] : []));
     // Builder's Weekend: the cost below is already the lower one.
     const off = offer.weekendOff ? weekendChip("builders") : null;
     if (off) head.append(off);
@@ -1379,7 +1380,9 @@ export class BuildingPanel {
     const store = this.yard?.store;
     if (!store) return;
     const result = await store.upgrade(id, topUp);
-    this.report(id, result, (report) => [`Upgrade to ${report.to} started.`]);
+    this.report(id, result, (report) =>
+      report.seconds > 0 ? [`Upgrade to ${report.to} started.`] : [`Reached level ${report.to}.`],
+    );
   }
 
   /**

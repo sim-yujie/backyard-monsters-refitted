@@ -288,14 +288,28 @@ describe("panelModel: which blocks each building gets", () => {
     expect(model.maxed).toBe(true);
   });
 
-  it("walls and traps: no Upgrade here, pointed at the planner", () => {
-    const context = contextOf({ buildings: [HALL(5), building(2, 17, 1), building(3, 24, 1)] });
-    for (const id of [2, 3]) {
-      const model = panelModel(pick(context, id), context);
-      expect(model.upgrade).toBeNull();
-      expect(model.batch).toBe(true);
-      expect(model.maxed).toBe(false);
-    }
+  it("traps: no Upgrade here, pointed at the planner", () => {
+    const context = contextOf({ buildings: [HALL(5), building(3, 24, 1)] });
+    const model = panelModel(pick(context, 3), context);
+    expect(model.upgrade).toBeNull();
+    expect(model.batch).toBe(true);
+    expect(model.maxed).toBe(false);
+  });
+
+  /** Owner, beta 8: one wall at a time from its pop-up, like any building, for everyone. */
+  it("a wall offers its next step like any building: finished at once, so no time, no worker, no Instant", () => {
+    const context = contextOf({ buildings: [HALL(5), building(2, 17, 1), building(4, 20, 2, { cU: 600 })], storedata: {} });
+    const model = panelModel(pick(context, 2), context);
+    expect(model.batch).toBe(true);
+    expect(model.upgrade).toMatchObject({ from: 1, to: 2, seconds: 0, gate: null, instant: false });
+    expect(model.upgrade?.cost.r1).toBeGreaterThanOrEqual(0);
+  });
+
+  it("a wall at the top of its ladder says so", () => {
+    const context = contextOf({ buildings: [HALL(10), building(2, 17, 5)] });
+    const model = panelModel(pick(context, 2), context);
+    expect(model.upgrade).toBeNull();
+    expect(model.maxed).toBe(true);
   });
 
   it("a level 1 Map Room at Town Hall 6 offers the move to Map Room 2 (no Instant) and opens Map Room 1", () => {

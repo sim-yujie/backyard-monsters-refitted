@@ -75,7 +75,7 @@ const mountWith = (
 ): { bar: PlannerBar; fired: PlannerBarActions } => {
   const container = document.createElement("div");
   document.body.append(container);
-  const fired = actions();
+  const fired = { ...actions(), onView: vi.fn(), onFind: vi.fn() };
   return { bar: new PlannerBar(fired, options).mount(container), fired };
 };
 
@@ -445,20 +445,85 @@ describe("the Blueprint button (2026-09-30)", () => {
       (one) => one.textContent === "Blueprint",
     )!;
 
-  it("is off with the reason as its tooltip, and back on with null", () => {
-    const bar = mount();
+  it("is locked with the reason as its tooltip, still pressable, and back on with null", () => {
+    const { bar, fired } = mountWith();
     bar.setBlueprintBlocked("Blueprint view isn't available in outposts");
-    expect(blueprint(bar).disabled).toBe(true);
+    // Pressable, so the planner can say why (beta 8): aria-disabled, a padlock.
+    expect(blueprint(bar).disabled).toBe(false);
+    expect(blueprint(bar).getAttribute("aria-disabled")).toBe("true");
+    expect(blueprint(bar).querySelector(".planner-lock")).not.toBeNull();
     expect(blueprint(bar).title).toBe("Blueprint view isn't available in outposts");
     expect(blueprint(bar).getAttribute("aria-label")).toBe(
       "Blueprint. Blueprint view isn't available in outposts",
     );
+    blueprint(bar).click();
+    expect(fired.onView).toHaveBeenCalledWith(YardView.BLUEPRINT);
 
     bar.setBlueprintBlocked(null);
-    expect(blueprint(bar).disabled).toBe(false);
+    expect(blueprint(bar).hasAttribute("aria-disabled")).toBe(false);
+    expect(blueprint(bar).querySelector(".planner-lock")).toBeNull();
     expect(blueprint(bar).title).toContain("Tab switches");
   });
 });
+
+/** Owner, beta 8: these need a built Yard Planner in the yard; visible, padlocked, pressable. */
+describe("the Yard Planner tools lock", () => {
+  const LOCKED = "Build a Yard Planner";
+  const iconNamed = (bar: PlannerBar, icon: string): HTMLButtonElement =>
+    [...bar.toolbar.querySelectorAll<HTMLButtonElement>("button"), ...bar.actionBar.querySelectorAll<HTMLButtonElement>("button")].find(
+      (one) => one.dataset["icon"] === icon,
+    )!;
+  const rowNamed = (bar: PlannerBar, label: string): HTMLButtonElement =>
+    [...bar.toolbar.querySelectorAll<HTMLButtonElement>(".planner-menu__item")].find(
+      (one) => one.textContent?.trim() === label,
+    )!;
+
+  it("padlocks Find, the yard picture, Upgrade walls and the ranges rows; presses still reach the planner", () => {
+    const container = document.createElement("div");
+    document.body.append(container);
+    const fired = { ...actions(), onFind: vi.fn(), onSnapshot: vi.fn() };
+    const bar = new PlannerBar(fired, {}).mount(container);
+    bar.setWallCount(0);
+    bar.setToolsLocked(LOCKED);
+
+    for (const icon of ["find", "snapshot", "wallupgrade"]) {
+      const control = iconNamed(bar, icon);
+      expect(control.disabled).toBe(false);
+      expect(control.getAttribute("aria-disabled")).toBe("true");
+      expect(control.title).toBe(LOCKED);
+      expect(control.querySelectorAll(".planner-lock")).toHaveLength(1);
+    }
+    for (const label of ["Tower ranges", "Land", "Air", "Dead zones"]) {
+      expect(rowNamed(bar, label).getAttribute("aria-disabled")).toBe("true");
+    }
+    expect(rowNamed(bar, "Centre of yard").hasAttribute("aria-disabled")).toBe(false);
+
+    iconNamed(bar, "find").click();
+    iconNamed(bar, "wallupgrade").click();
+    rowNamed(bar, "Tower ranges").click();
+    expect(fired.onFind).toHaveBeenCalled();
+    expect(fired.onUpgradeWalls).toHaveBeenCalled();
+    expect(fired.onOverlay).toHaveBeenCalledWith("ranges");
+  });
+
+  it("locking twice keeps one padlock; null gives the tools and their tooltips back", () => {
+    const bar = mount();
+    bar.setWallCount(3);
+    const before = iconNamed(bar, "find").title;
+    bar.setToolsLocked(LOCKED);
+    bar.setToolsLocked(LOCKED);
+    expect(iconNamed(bar, "find").querySelectorAll(".planner-lock")).toHaveLength(1);
+    // The wall count does not unlock it.
+    bar.setWallCount(3);
+    expect(iconNamed(bar, "wallupgrade").title).toBe(LOCKED);
+
+    bar.setToolsLocked(null);
+    expect(iconNamed(bar, "find").title).toBe(before);
+    expect(iconNamed(bar, "find").querySelector(".planner-lock")).toBeNull();
+    expect(rowNamed(bar, "Dead zones").hasAttribute("aria-disabled")).toBe(false);
+  });
+});
+
 /* ── Phones (#45) ─────────────────────────────────────────────────────── */
 
 describe("the phone layout (#45)", () => {

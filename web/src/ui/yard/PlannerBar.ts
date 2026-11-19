@@ -6,6 +6,7 @@ import { attachPopover } from "@/ui/Popover";
 import { demo, type DemoName } from "./demos";
 import { isPhone, PlannerLayout } from "./plannerLayout";
 import { iconFace, PLANNER_ICON_WORDS, type PlannerIcon } from "./plannerIcons";
+import { setControlLocked } from "./plannerLock";
 
 /**
  * The planner's two bars: tools across the top, the actions along the bottom
@@ -387,6 +388,20 @@ class Menu {
     item.classList.toggle("planner-menu__item--dim", dimmed);
   }
 
+  /**
+   * Locks the switches named by `keys` (a padlock before the label, the tick
+   * hidden, still pressable so the press can say why), or unlocks them with
+   * null (Yard Planner tools, owner, beta 8). A nested row gets a smaller lock.
+   */
+  setLocked(keys: readonly string[], reason: string | null): void {
+    for (const key of keys) {
+      const item = this.checks.get(key);
+      if (!item) continue;
+      const nested = item.classList.contains("planner-menu__item--nested");
+      setControlLocked(item, reason, "lead", nested ? 12 : 16);
+    }
+  }
+
   destroy(): void {
     document.removeEventListener("pointerdown", this.dismiss, true);
     document.removeEventListener("keydown", this.dismiss, true);
@@ -513,6 +528,12 @@ export class PlannerBar {
   private moreOpen = false;
   private tool: PlannerTool = PlannerTool.SELECT;
   private view: YardView = YardView.ISO;
+  /** Why Blueprint is locked here, or null: the phone's switch shows a padlock for it. */
+  private blueprintLock: string | null = null;
+  /** Why the Yard Planner tools are locked here, or null (owner, beta 8). */
+  private toolsLock: string | null = null;
+  /** What the view switch was last drawn from. */
+  private viewSwitchKey = "";
 
   constructor(
     actions: PlannerBarActions,
@@ -1070,27 +1091,66 @@ export class PlannerBar {
   }
 
   /**
-   * Turns the Blueprint button off with the reason as its tooltip, or back
-   * on with null (owner decision 2026-09-30: it needs a Yard Planner, and an
-   * outpost never has it).
+   * Locks the Blueprint button with the reason as its tooltip, or unlocks it
+   * with null (owner decision 2026-09-30: it needs a Yard Planner, and an
+   * outpost never has it). Locked, it stays pressable: the planner answers
+   * the press with the reason (beta 8; it used to be greyed and dead).
    */
   setBlueprintBlocked(reason: string | null): void {
+    this.blueprintLock = reason;
     const blueprint = this.views.get(YardView.BLUEPRINT);
-    if (!blueprint) return;
-    blueprint.disabled = reason !== null;
-    blueprint.title = reason ?? "Flat top-down view for planning (Tab switches)";
-    blueprint.setAttribute("aria-label", reason ? `Blueprint. ${reason}` : "Blueprint");
+    if (blueprint) {
+      blueprint.disabled = false;
+      setControlLocked(blueprint, reason, "lead", 14);
+      blueprint.setAttribute("aria-label", reason ? `Blueprint. ${reason}` : "Blueprint");
+    }
+    this.renderViewSwitch();
+  }
+
+  /**
+   * Locks the Yard Planner tools (owner, beta 8; `plannerToolBlock`): Find,
+   * the yard picture, the many-walls Upgrade walls and the View menu's Tower
+   * ranges (with Land and Air) and Dead zones. Null unlocks them. Each stays
+   * pressable and the planner says why; the bar only looks the part.
+   */
+  setToolsLocked(reason: string | null): void {
+    this.toolsLock = reason;
+    setControlLocked(this.find, reason, "corner", 16);
+    if (this.snapshot) setControlLocked(this.snapshot, reason, "corner", 16);
+    if (!this.readOnly) {
+      if (reason !== null) this.upgradeWalls.disabled = false;
+      setControlLocked(this.upgradeWalls, reason, "corner", 16);
+    }
+    this.viewMenu.setLocked(["ranges", "land", "air", "deadZones"], reason);
+  }
+
+  /** The phone's view switch: "3D ⇄", or "3D" and a padlock while Blueprint is locked. */
+  private renderViewSwitch(): void {
+    const iso = this.view === YardView.ISO;
+    // `update` runs on every drag step: redraw only when something changed.
+    const key = `${iso}|${this.blueprintLock ?? ""}`;
+    if (key === this.viewSwitchKey) return;
+    this.viewSwitchKey = key;
+    if (iso && this.blueprintLock) {
+      this.viewSwitch.textContent = "3D";
+      setControlLocked(this.viewSwitch, null, "corner", 18);
+      setControlLocked(this.viewSwitch, this.blueprintLock, "corner", 18);
+      this.viewSwitch.setAttribute("aria-label", `Showing the 3D yard. ${this.blueprintLock}`);
+      return;
+    }
+    setControlLocked(this.viewSwitch, null, "corner", 18);
+    this.viewSwitch.textContent = iso ? "3D ⇄" : "Blueprint ⇄";
+    this.viewSwitch.setAttribute(
+      "aria-label",
+      iso ? "Showing the 3D yard. Switch to the blueprint" : "Showing the blueprint. Switch to the 3D yard",
+    );
   }
 
   /** Redraws from the session's state. */
   update(state: PlannerState): void {
     this.tool = state.tool;
     this.view = state.view;
-    this.viewSwitch.textContent = state.view === YardView.ISO ? "3D ⇄" : "Blueprint ⇄";
-    this.viewSwitch.setAttribute(
-      "aria-label",
-      state.view === YardView.ISO ? "Showing the 3D yard. Switch to the blueprint" : "Showing the blueprint. Switch to the 3D yard",
-    );
+    this.renderViewSwitch();
     for (const [tool, element] of this.tools) {
       element.setAttribute("aria-pressed", String(state.tool === tool));
     }
@@ -1247,6 +1307,8 @@ export class PlannerBar {
    */
   setWallCount(count: number): void {
     if (this.readOnly) return;
+    // Locked, it stays pressable and says why (owner, beta 8).
+    if (this.toolsLock !== null) return;
     this.upgradeWalls.disabled = count === 0;
     this.upgradeWalls.title =
       count === 0 ? "No walls in this yard" : "Upgrade walls: pick walls on the yard and raise them a level";

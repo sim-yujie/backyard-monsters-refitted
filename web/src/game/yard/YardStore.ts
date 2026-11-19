@@ -978,10 +978,12 @@ const upgradeRefusal = (
 ): YardRefusal | null => {
   const building = store.building(id);
   if (!building) return refuse("badRequest", "That building is not in your yard.");
-  // On every yard, the Inferno's too (owner decision 2026-10-29).
-  if (WALL_TYPES.includes(building.type) || TRAP_TYPES.includes(building.type)) {
-    return refuse("useBatchRoute", "Walls and traps are upgraded from the layout planner.");
+  // On every yard, the Inferno's too (owner decision 2026-10-29). A wall
+  // upgrades here one at a time like any building (owner, beta 8).
+  if (TRAP_TYPES.includes(building.type)) {
+    return refuse("useBatchRoute", "Traps are re-armed from the layout planner.");
   }
+  const wall = WALL_TYPES.includes(building.type);
   if (options.instant && building.type === MAP_ROOM_TYPE) {
     return refuse("mapRoom", MAP_ROOM_MESSAGE);
   }
@@ -1018,8 +1020,9 @@ const upgradeRefusal = (
   if (short) {
     return refuse("shortfall", "You do not have enough resources for that.", { shortfall });
   }
-  // Every step holds a worker, however short (#137).
-  if (freeWorkers(store) === 0) {
+  // Every step holds a worker, however short (#137), but a wall's, which
+  // the server writes finished (D13, `planOneUpgrade`).
+  if (!wall && freeWorkers(store) === 0) {
     return refuse("workers", "All your workers are busy.", { workers: { ...store.workers } });
   }
   return null;
