@@ -12,7 +12,7 @@ import type { JsonObject } from "../../types/JsonObject.js";
 import { extractTownHall } from "../../utils/extractTownHall.js";
 import { getCurrentDateTime } from "../../utils/getCurrentDateTime.js";
 import { logger } from "../../utils/logger.js";
-import { emergenceHoldsRaids } from "../inferno/emergenceOnLoad.js";
+import { clearEmergencePending, emergenceHoldsRaids } from "../inferno/emergenceOnLoad.js";
 import { isEmergenceRaid, MOLOCH_TRIBE } from "../inferno/emergenceRaid.js";
 import { noteTribeRaid } from "../stats/activity.js";
 import { catchUpLockedRow, catchUpLockedYard } from "../../controllers/yard/yardAction.js";
@@ -676,6 +676,13 @@ const settleRaid = async (
       // for the weekly Fighting quest, on the locked main row.
       if (landed.defended && raid.tribe !== TROJAN_TRIBE && raid.tribe !== MOLOCH_TRIBE) {
         recordQuests(locked, now, { defenceWin: 1 });
+      }
+      // Moloch's stage is played once its raid lands: the next load stops
+      // playing it again (patch 7.12, `emergenceOnLoad.ts`). In this
+      // transaction, so the two are written together.
+      if (raid.tribe === MOLOCH_TRIBE) {
+        const stage = Number((raid.plan as { level?: unknown } | null | undefined)?.level);
+        if (Number.isInteger(stage)) await clearEmergencePending(tx, user.userid, stage);
       }
       // Kept before the row lock goes, so a finish waiting on it finds it
       // whole; never at the cost of the landing itself.

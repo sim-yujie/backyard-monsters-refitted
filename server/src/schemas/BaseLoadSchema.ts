@@ -36,6 +36,13 @@ export const BaseLoadSchema = z.object({
    */
   attackData: optionalJsonField<AttackData>("attackData"),
 
+  /**
+   * Which screen opened the own yard: the yard itself, or a map finding its
+   * home cell (patch 7.12). Logged with Moloch's emergence only; anything
+   * else is dropped, never refused.
+   */
+  screen: z.enum(["yard", "map"]).optional().catch(undefined),
+
   // No `attackcost`: Map Room 3 took its attack cost from here, and a negative
   // one paid the attacker (security audit 2026-10-29, C1). A field sent anyway
   // is dropped by the parse.

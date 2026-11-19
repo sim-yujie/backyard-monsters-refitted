@@ -3,8 +3,9 @@ import { MikroORM } from "@mikro-orm/postgresql";
 
 import { CreateInfernoProgressTable } from "../../database/migrations/20261025_CreateInfernoProgressTable.js";
 import { AddDescentYardsToInfernoProgress } from "../../database/migrations/20261026_AddDescentYardsToInfernoProgress.js";
+import { Migration20261202_AddEmergencePending } from "../../database/migrations/20261202_AddEmergencePending.js";
 import ormConfig from "../../mikro-orm.config.js";
-import { raiseEmergence } from "./emergenceOnLoad.js";
+import { clearEmergencePending, raiseEmergence } from "./emergenceOnLoad.js";
 import { readInfernoProgress } from "./infernoProgress.js";
 import { korathNoticeDue, korathRaisable, markKorathNoticeSeen } from "./korath.js";
 
@@ -50,7 +51,7 @@ describe.skipIf(!dbName)("Inferno progress on a real database", () => {
   });
 
   test("the migrations are additive and can run again", async () => {
-    for (const Step of [CreateInfernoProgressTable, AddDescentYardsToInfernoProgress]) {
+    for (const Step of [CreateInfernoProgressTable, AddDescentYardsToInfernoProgress, Migration20261202_AddEmergencePending]) {
       const migration = new Step(orm.em.getDriver(), orm.config);
       await migration.up();
       for (const query of migration.getQueries()) await sql(String(query));
@@ -73,6 +74,7 @@ describe.skipIf(!dbName)("Inferno progress on a real database", () => {
       "created_at",
       "updated_at",
       "descent_yards",
+      "emergence_pending",
     ]);
   });
 
@@ -145,7 +147,7 @@ describe.skipIf(!dbName)("Inferno progress on a real database", () => {
 
   test("not within 23 hours of the last; from 23 hours on, the next", async () => {
     const NOW = 1_800_000_000;
-    await raiseEmergence(em(), A, 0, NOW);
+    await raiseEmergence(em(), A, 0, NOW, false);
     expect(await raiseEmergence(em(), A, 1, NOW + 82_799)).toBeNull();
     expect(await raiseEmergence(em(), A, 1, NOW + 82_800)).toBe(2);
     expect((await readInfernoProgress(em(), A)).emergenceLastAt).toBe(NOW + 82_800);
@@ -156,6 +158,30 @@ describe.skipIf(!dbName)("Inferno progress on a real database", () => {
     await raiseEmergence(em(), A, 0, NOW);
     expect(await raiseEmergence(em(), A, 0, NOW + 100_000)).toBeNull();
     expect((await readInfernoProgress(em(), A)).emergenceLevel).toBe(1);
+  });
+
+  test("a raise with its raid keeps the stage to be played; none rises past it until it lands (patch 7.12)", async () => {
+    const NOW = 1_800_000_000;
+    expect(await raiseEmergence(em(), A, 0, NOW)).toBe(1);
+    expect((await readInfernoProgress(em(), A)).emergencePending).toBe(1);
+    // Days later, still not played: no new level.
+    expect(await raiseEmergence(em(), A, 1, NOW + 3 * 86_400)).toBeNull();
+    // Another stage's landing leaves it; its own clears it.
+    await clearEmergencePending(em(), A, 2);
+    expect((await readInfernoProgress(em(), A)).emergencePending).toBe(1);
+    await clearEmergencePending(em(), A, 1);
+    expect((await readInfernoProgress(em(), A)).emergencePending).toBeNull();
+    expect(await raiseEmergence(em(), A, 1, NOW + 3 * 86_400)).toBe(2);
+  });
+
+  test("a raise with no raid (the first on a yard at 10% or less) leaves nothing to play", async () => {
+    expect(await raiseEmergence(em(), A, 0, 1_800_000_000, false)).toBe(1);
+    expect((await readInfernoProgress(em(), A)).emergencePending).toBeNull();
+  });
+
+  test("the pending stage stays 1-5", async () => {
+    await raiseEmergence(em(), A, 0, 1_800_000_000);
+    await expect(sql(`UPDATE bym.inferno_progress SET emergence_pending = 6 WHERE userid = ?`, [A])).rejects.toThrow();
   });
 
   test("a row made for something else is raised from level 0 too", async () => {

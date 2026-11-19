@@ -80,6 +80,12 @@ describe("the emergence due rule", () => {
     expect(emergenceDueCheck(facts({ underAttack: true }))).toBe("underAttack");
   });
 
+  test("pending: a stage raised but not played yet holds the next back, however long ago (patch 7.12)", () => {
+    const facts1 = facts({ raidOpen: false });
+    expect(emergenceDueCheck({ ...facts1, progress: { ...facts1.progress, emergencePending: 1 } })).toBe("pending");
+    expect(emergenceDueCheck({ ...facts1, progress: { ...facts1.progress, emergencePending: null } })).toBeNull();
+  });
+
   test("raidOpen: a wild monster raid already open", () => {
     expect(emergenceDueCheck(facts({ raidOpen: true }))).toBe("raidOpen");
   });

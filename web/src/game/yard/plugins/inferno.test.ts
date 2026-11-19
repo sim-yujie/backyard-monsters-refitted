@@ -337,14 +337,42 @@ describe("the earthquake on a raise", () => {
     teardown?.();
   });
 
-  it("plays a raise once, not again when the yard opens on the same load", async () => {
+  it("plays a raise once, not again when the yard opens on the same load after its fight was handed on", async () => {
     vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+    hoisted.start.mockImplementation(async (id: string) => ({
+      error: 0,
+      raid: { ...molochRaid, id, phase: "fighting" },
+      fight: { seed: 1 },
+    }));
     const state = loadState(2, 2);
-    mount(state).teardown?.();
+    const first = mount(state);
+    await vi.advanceTimersByTimeAsync(6_000);
+    engageButton(first.modal).click();
+    await vi.advanceTimersByTimeAsync(0);
+    first.teardown?.();
     const again = mount(state);
     await vi.advanceTimersByTimeAsync(3_000);
     expect(again.scene.centreOn).not.toHaveBeenCalled();
     again.teardown?.();
+  });
+
+  it("plays it again on the next yard when the yard went before the fight was handed on (patch 7.12)", async () => {
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+    const state = loadState(2, 2);
+    // Gone before the quake, and gone with the warning up.
+    mount(state).teardown?.();
+    const second = mount(state);
+    await vi.advanceTimersByTimeAsync(6_000);
+    expect(second.scene.centreOn).toHaveBeenCalledTimes(1);
+    expect(second.modal.textContent).toContain(MOLOCH_ALERT_TITLE);
+    second.teardown?.();
+    // The yard's overlay goes with it.
+    second.modal.remove();
+    const third = mount(state);
+    await vi.advanceTimersByTimeAsync(3_000);
+    expect(third.scene.centreOn).toHaveBeenCalledTimes(1);
+    expect(third.content.textContent).toContain(EARTHQUAKE);
+    third.teardown?.();
   });
 
   it("holds Bob's tips and the achievement card back from load until Moloch's warning is answered", async () => {

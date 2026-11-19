@@ -26,6 +26,13 @@ export class InfernoProgress {
   @Property({ type: Date, nullable: true })
   emergence_last_at?: Date | null;
 
+  /**
+   * The cave level whose Moloch raid was raised but has not landed yet, or
+   * null: the next main-yard load plays that stage again (patch 7.12).
+   */
+  @Property({ type: "number", columnType: "smallint", nullable: true })
+  emergence_pending?: number | null;
+
   /** The 13 Descent yards, in order: 1 once beaten. Shorter while not all were attacked. */
   @Property({ type: "json", columnType: "jsonb", defaultRaw: "'[]'::jsonb" })
   descent_destroyed: Opt<number[]> = [];

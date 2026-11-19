@@ -110,7 +110,7 @@ export const takeAwayJobs = (baseid?: string): CompletedJob[] => {
  * The answer's `completed` is also kept for {@link takeAwayJobs}.
  */
 export const loadOwnYard = async (
-  options: { mapversion?: number } = {},
+  options: { mapversion?: number; screen?: "yard" | "map" } = {},
 ): Promise<BaseLoadResponse> => {
   const session = getSession();
 
@@ -119,6 +119,7 @@ export const loadOwnYard = async (
     userid: session ? String(session.userId) : "0",
     baseid: BaseMode.DEFAULT,
     ...(options.mapversion !== undefined ? { mapversion: options.mapversion } : {}),
+    ...(options.screen !== undefined ? { screen: options.screen } : {}),
   };
 
   const response = await loadBase(body);

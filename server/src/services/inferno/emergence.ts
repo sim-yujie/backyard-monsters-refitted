@@ -101,6 +101,7 @@ export type EmergenceNotDue =
   | "off"
   | "notMainYard"
   | "noCave"
+  | "pending"
   | "done"
   | "tooSoon"
   | "underAttack"
@@ -119,7 +120,8 @@ export interface EmergenceFacts {
   readonly enabled: boolean;
   /** The player's main yard, caught up. */
   readonly save: EmergenceSave;
-  readonly progress: Pick<InfernoProgressRecord, "emergenceLevel" | "emergenceLastAt">;
+  readonly progress: Pick<InfernoProgressRecord, "emergenceLevel" | "emergenceLastAt"> &
+    Partial<Pick<InfernoProgressRecord, "emergencePending">>;
   /** Unix seconds. */
   readonly now: number;
   /** An attack is running on the yard. */
@@ -138,12 +140,15 @@ export interface EmergenceFacts {
  * 1. The new Inferno is switched on.
  * 2. The player's main yard.
  * 3. The cave shows ({@link caveShown}: Town Hall 5, tutorial over).
- * 4. Fewer than five raids so far.
- * 5. 23 hours since the last level-up ({@link EMERGENCE_GAP_SECONDS}; Flash's
+ * 4. No stage still to be played: a level raised whose Moloch raid has not
+ *    landed (`emergencePending`, patch 7.12) is played first, however long
+ *    ago it was raised.
+ * 5. Fewer than five raids so far.
+ * 6. 23 hours since the last level-up ({@link EMERGENCE_GAP_SECONDS}; Flash's
  *    12, `IsBelowMaxLevel`, `:111-119`); the first has no wait.
- * 6. No attack running on the yard and no wild monster raid open: the
+ * 7. No attack running on the yard and no wild monster raid open: the
  *    raid waits for the next load.
- * 7. From the second raid on, the yard above 10% of its full health
+ * 8. From the second raid on, the yard above 10% of its full health
  *    (`isBaseReadyForAttack`, checked with the wait before the cave is
  *    raised, `SetupPortal`, `INFERNO_EMERGENCE_EVENT.as:98`): a yard at 10%
  *    or less keeps its cave as it is until a load finds it mended. Not our
@@ -156,6 +161,7 @@ export const emergenceDueCheck = (facts: EmergenceFacts): EmergenceNotDue | null
   if (!facts.enabled) return "off";
   if (save.type !== BaseType.MAIN) return "notMainYard";
   if (!caveShown(save, progress, facts.skipTutorial)) return "noCave";
+  if (progress.emergencePending != null) return "pending";
   const nextAt = nextEmergenceAt(progress);
   if (nextAt === null) return "done";
   if (now < nextAt) return "tooSoon";
@@ -171,7 +177,7 @@ export const emergenceDueCheck = (facts: EmergenceFacts): EmergenceNotDue | null
  * left the attack out (`UpgradePortal`, `INFERNO_EMERGENCE_EVENT.as:172-176`):
  * no earthquake, no warning, no fight and no "stage passed", yet the level
  * stands, so the next raid is the next level's, 23 hours on. Only the first
- * raise gets here ({@link emergenceDueCheck}, rule 7).
+ * raise gets here ({@link emergenceDueCheck}, rule 8).
  */
 export const emergenceRaidSkipped = (save: Pick<EmergenceSave, "buildingdata" | "buildinghealthdata">): boolean =>
   !(yardHealthShare(save) > EMERGENCE_MIN_HEALTH);
