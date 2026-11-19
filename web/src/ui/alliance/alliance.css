@@ -2532,14 +2532,49 @@
   white-space: nowrap;
 }
 
+/* beta 8 (owner, 19 Nov): one row, one baseline. Whole pieces wrap, never a
+   lone dot; names, amounts and the smaller time share the text baseline, and
+   each painted icon is centred on its digits (`.res-icon` in ui.css). */
 .trade-recent__line {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  column-gap: 6px;
+  row-gap: 2px;
   margin: 0;
   color: var(--colour-text);
+  line-height: 1.5;
+}
+
+.trade-recent__sep {
+  color: var(--colour-text-muted);
+}
+
+/* The stacked phone row (below) also wherever the card itself is narrow, such
+   as an iPad in Split View: two 16-character names need about 570 px on one
+   line, and a wrap there would leave a dot at a line's end. */
+.trade-recent {
+  container-type: inline-size;
+}
+
+@container (max-width: 600px) {
+  .trade-recent__side:first-child {
+    flex-basis: 100%;
+  }
+
+  .trade-recent__sep {
+    display: none;
+  }
+
+  .trade-recent__ago {
+    margin-left: auto;
+  }
 }
 
 .trade-recent__ago {
   color: var(--colour-text-muted);
   font-size: var(--text-xs);
+  white-space: nowrap;
 }
 
 .trade-sheet {
@@ -3160,15 +3195,28 @@
   font-weight: 400;
 }
 
-.trade-status,
-.trade-recent__amount {
+.trade-status {
   display: inline-flex;
   align-items: center;
   gap: 4px;
 }
 
+/* Inline, not inline-flex: an inline-flex group took its baseline from the
+   icon, so "90K" rode above the names (owner, 19 Nov). The icon and its
+   number never part. */
+.trade-recent__got,
+.trade-recent__amount {
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+
+.trade-recent__amount + .trade-recent__amount {
+  margin-left: 0.4em;
+}
+
 .trade-recent__amount .res-icon {
   width: 20px;
+  margin-right: 4px;
 }
 
 @media (pointer: coarse) {
@@ -3185,6 +3233,21 @@
 }
 
 @media (max-width: 480px) {
+  /* beta 8 (owner, 19 Nov; astra): a phone stacks one receiver per line and
+     puts the time at the right end, with no dots, so none is left at a
+     line's end; with long names the time takes its own line. */
+  .trade-recent__side:first-child {
+    flex-basis: 100%;
+  }
+
+  .trade-recent__sep {
+    display: none;
+  }
+
+  .trade-recent__ago {
+    margin-left: auto;
+  }
+
   /* beta 8 (astra): three equal quick choices above the amount controls. */
   .trade-amount {
     display: grid;
