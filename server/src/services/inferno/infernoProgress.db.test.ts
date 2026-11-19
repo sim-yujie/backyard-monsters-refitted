@@ -6,6 +6,7 @@ import { AddDescentYardsToInfernoProgress } from "../../database/migrations/2026
 import { Migration20261202_AddEmergencePending } from "../../database/migrations/20261202_AddEmergencePending.js";
 import ormConfig from "../../mikro-orm.config.js";
 import { clearEmergencePending, raiseEmergence } from "./emergenceOnLoad.js";
+import { nextEmergenceAt } from "./emergence.js";
 import { readInfernoProgress } from "./infernoProgress.js";
 import { korathNoticeDue, korathRaisable, markKorathNoticeSeen } from "./korath.js";
 
@@ -167,11 +168,33 @@ describe.skipIf(!dbName)("Inferno progress on a real database", () => {
     // Days later, still not played: no new level.
     expect(await raiseEmergence(em(), A, 1, NOW + 3 * 86_400)).toBeNull();
     // Another stage's landing leaves it; its own clears it.
-    await clearEmergencePending(em(), A, 2);
-    expect((await readInfernoProgress(em(), A)).emergencePending).toBe(1);
-    await clearEmergencePending(em(), A, 1);
+    await clearEmergencePending(em(), A, 2, NOW + 3 * 86_400);
+    expect(await readInfernoProgress(em(), A)).toMatchObject({ emergencePending: 1, emergenceLastAt: NOW });
+    await clearEmergencePending(em(), A, 1, NOW + 3 * 86_400);
     expect((await readInfernoProgress(em(), A)).emergencePending).toBeNull();
-    expect(await raiseEmergence(em(), A, 1, NOW + 3 * 86_400)).toBe(2);
+    expect(await raiseEmergence(em(), A, 1, NOW + 4 * 86_400)).toBe(2);
+  });
+
+  test("the next rise waits 23 hours from the landing, not the rise (owner, 19 Nov)", async () => {
+    const NOW = 1_800_000_000;
+    const LANDED = NOW + 3 * 86_400;
+    expect(await raiseEmergence(em(), A, 0, NOW)).toBe(1);
+    // Pending for three days; the fight lands.
+    await clearEmergencePending(em(), A, 1, LANDED);
+    const progress = await readInfernoProgress(em(), A);
+    expect(progress).toMatchObject({ emergencePending: null, emergenceLastAt: LANDED });
+    expect(nextEmergenceAt(progress)).toBe(LANDED + 82_800);
+    // Straight after the landing, and up to 23 hours on: not yet.
+    expect(await raiseEmergence(em(), A, 1, LANDED + 1)).toBeNull();
+    expect(await raiseEmergence(em(), A, 1, LANDED + 82_799)).toBeNull();
+    expect(await raiseEmergence(em(), A, 1, LANDED + 82_800)).toBe(2);
+  });
+
+  test("a landing never moves the wait back", async () => {
+    const NOW = 1_800_000_000;
+    await raiseEmergence(em(), A, 0, NOW);
+    await clearEmergencePending(em(), A, 1, NOW - 60);
+    expect((await readInfernoProgress(em(), A)).emergenceLastAt).toBe(NOW);
   });
 
   test("a raise with no raid (the first on a yard at 10% or less) leaves nothing to play", async () => {

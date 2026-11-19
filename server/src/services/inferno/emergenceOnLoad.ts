@@ -93,16 +93,27 @@ export const raiseEmergence = async (
 };
 
 /**
- * The stage `level` is played: its Moloch raid has landed, so the next load
- * no longer plays it again. Run in the landing's own transaction
- * (`raidFlow.ts`'s `settleRaid`). Leaves any other stage alone.
+ * The stage `level` is played: its Moloch raid has landed at `landedAt`
+ * (unix seconds), so the next load no longer plays it again, and the 23-hour
+ * wait for the next rise counts from this landing, not from the rise (owner,
+ * 19 Nov: a stage left waiting for days is not followed by the next one
+ * straight after it lands). Run in the landing's own transaction
+ * (`raidFlow.ts`'s `settleRaid`). Leaves any other stage alone, and never
+ * moves the wait back.
  */
-export const clearEmergencePending = async (em: EntityManager, userid: number, level: number): Promise<void> => {
+export const clearEmergencePending = async (
+  em: EntityManager,
+  userid: number,
+  level: number,
+  landedAt: number
+): Promise<void> => {
   await (em as SqlEntityManager).execute(
     `UPDATE bym.inferno_progress
-        SET emergence_pending = NULL, updated_at = now()
+        SET emergence_pending = NULL,
+            emergence_last_at = GREATEST(emergence_last_at, to_timestamp(?)),
+            updated_at = now()
       WHERE userid = ? AND emergence_pending = ?`,
-    [userid, level]
+    [landedAt, userid, level]
   );
 };
 

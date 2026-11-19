@@ -69,7 +69,7 @@ export const emergenceDone = (progress: Pick<InfernoProgressRecord, "emergenceLe
 
 /**
  * The earliest the next level-up may come, unix seconds: 23 hours after the
- * last ({@link EMERGENCE_GAP_SECONDS}); none yet means any time (0). Null once all five are done.
+ * last, or after its Moloch raid's landing (patch 7.12) ({@link EMERGENCE_GAP_SECONDS}); none yet means any time (0). Null once all five are done.
  */
 export const nextEmergenceAt = (
   progress: Pick<InfernoProgressRecord, "emergenceLevel" | "emergenceLastAt">
@@ -144,8 +144,9 @@ export interface EmergenceFacts {
  *    landed (`emergencePending`, patch 7.12) is played first, however long
  *    ago it was raised.
  * 5. Fewer than five raids so far.
- * 6. 23 hours since the last level-up ({@link EMERGENCE_GAP_SECONDS}; Flash's
- *    12, `IsBelowMaxLevel`, `:111-119`); the first has no wait.
+ * 6. 23 hours since the last level-up, or since its Moloch raid landed when
+ *    it had one (`emergenceLastAt`, patch 7.12) ({@link EMERGENCE_GAP_SECONDS};
+ *    Flash's 12, `IsBelowMaxLevel`, `:111-119`); the first has no wait.
  * 7. No attack running on the yard and no wild monster raid open: the
  *    raid waits for the next load.
  * 8. From the second raid on, the yard above 10% of its full health

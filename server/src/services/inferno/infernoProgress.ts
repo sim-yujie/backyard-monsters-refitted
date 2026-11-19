@@ -12,7 +12,11 @@ import type { DescentYardState } from "./descent.js";
 export interface InfernoProgressRecord {
   /** The cave's level, 0-5: one per emergence raid. */
   readonly emergenceLevel: number;
-  /** Unix seconds the cave last went up a level, or null. */
+  /**
+   * Unix seconds the 23-hour wait for the next rise counts from, or null:
+   * when the cave last went up a level, moved on to its Moloch raid's
+   * landing once that lands (patch 7.12).
+   */
   readonly emergenceLastAt: number | null;
   /**
    * The cave level whose Moloch raid was raised but has not landed yet, or

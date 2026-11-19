@@ -22,7 +22,11 @@ export class InfernoProgress {
   @Property({ type: "number", columnType: "smallint", default: 0 })
   emergence_level: Opt<number> = 0;
 
-  /** When the cave last went up a level; null before the first. */
+  /**
+   * When the cave last went up a level, moved on to its Moloch raid's landing
+   * once that lands (patch 7.12): the next rise waits 23 hours from it. Null
+   * before the first.
+   */
   @Property({ type: Date, nullable: true })
   emergence_last_at?: Date | null;
 

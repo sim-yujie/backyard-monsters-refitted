@@ -678,11 +678,12 @@ const settleRaid = async (
         recordQuests(locked, now, { defenceWin: 1 });
       }
       // Moloch's stage is played once its raid lands: the next load stops
-      // playing it again (patch 7.12, `emergenceOnLoad.ts`). In this
+      // playing it again, and the next rise's 23 hours count from now
+      // (patch 7.12, `emergenceOnLoad.ts`). In this
       // transaction, so the two are written together.
       if (raid.tribe === MOLOCH_TRIBE) {
         const stage = Number((raid.plan as { level?: unknown } | null | undefined)?.level);
-        if (Number.isInteger(stage)) await clearEmergencePending(tx, user.userid, stage);
+        if (Number.isInteger(stage)) await clearEmergencePending(tx, user.userid, stage, now);
       }
       // Kept before the row lock goes, so a finish waiting on it finds it
       // whole; never at the cost of the landing itself.
