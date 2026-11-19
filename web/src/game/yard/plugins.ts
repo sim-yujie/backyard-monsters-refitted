@@ -21,5 +21,6 @@ import "./plugins/quests";
 import "./plugins/raid";
 import "./plugins/slowInternet";
 import "./plugins/teamNotice";
+import "./plugins/safeMode";
 import "./plugins/tips";
 import "./plugins/weekend";

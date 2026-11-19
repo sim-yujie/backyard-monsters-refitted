@@ -42,7 +42,15 @@ import { usernameProblem } from "@/game/account/rules/accountRules";
 import { saveClassicLook, savedClassicLook, saveMusicChoice, savedMusicChoice, type MusicChoice } from "@/game/classicLook";
 import { setWorldChatOn, worldChatOn } from "@/game/chat/worldChatSetting";
 import { effectsQuality, screenShakeOn, setEffectsQuality, setScreenShake, type EffectsQuality } from "@/game/attack/juice";
-import { quality as downloadQuality, qualityChoice, setQuality, type Quality } from "@/game/quality";
+import {
+  deviceDefaultQuality,
+  quality as downloadQuality,
+  qualityChoice,
+  setQuality,
+  type Quality,
+} from "@/game/quality";
+import { safeModeCap } from "@/game/safeMode";
+import { isTouchDevice } from "@/game/touchDevice";
 import { noteShinyLock } from "@/game/shinyLock";
 import { savedFontChoice, setFontChoice, type FontChoice } from "@/ui/fontChoice";
 import { Popup } from "@/ui/Popup";
@@ -139,6 +147,10 @@ export const SETTINGS_TEXT = {
   },
   /** Medium as this device's default, not picked: its music plays as normal (`musicHeld`). */
   downloadHintDeviceMedium: "Lighter monsters and music.",
+  /** High on a phone or tablet: its monsters are Medium's (`monsterSheetLevel`). */
+  downloadHintTouchHigh: "On phones and tablets, High uses lighter monsters.",
+  /** A level safe mode put the game on (`game/safeMode.ts`), not picked. */
+  downloadHintSafeMode: "Lowered because loading failed twice. Pick a level to change it.",
   downloadSaved: "Saved. Monsters already on screen change after a reload.",
 } as const;
 
@@ -637,6 +649,10 @@ const effectsSection = (): HTMLElement => {
   return section;
 };
 
+/** What a level does, in a line; High on a phone or tablet says its monsters are the lighter ones. */
+const levelHint = (level: Quality): string =>
+  level === "high" && isTouchDevice() ? SETTINGS_TEXT.downloadHintTouchHigh : SETTINGS_TEXT.downloadHint[level];
+
 /** "Quality: High / Medium / Low", with a line saying what the chosen level does. */
 const downloadRow = (): HTMLElement[] => {
   const row = document.createElement("label");
@@ -662,17 +678,21 @@ const downloadRow = (): HTMLElement[] => {
   hint.className = "field__hint";
   hint.id = "settings-quality-hint";
   hint.setAttribute("aria-live", "polite");
-  // Medium the device chose (no choice kept) does not hold the music.
+  const chosen = qualityChoice();
   hint.textContent =
-    select.value === "medium" && qualityChoice() === null
-      ? SETTINGS_TEXT.downloadHintDeviceMedium
-      : SETTINGS_TEXT.downloadHint[select.value as Quality];
+    safeModeCap() === select.value && (chosen ?? deviceDefaultQuality()) !== select.value
+      ? // Lower than the choice or the device's default: safe mode's cap.
+        SETTINGS_TEXT.downloadHintSafeMode
+      : select.value === "medium" && chosen === null
+        ? // Medium the device chose (no choice kept) does not hold the music.
+          SETTINGS_TEXT.downloadHintDeviceMedium
+        : levelHint(select.value as Quality);
   select.setAttribute("aria-describedby", hint.id);
   select.addEventListener("change", () => {
     const level = select.value as Quality;
     setQuality(level);
     reportLook();
-    hint.textContent = `${SETTINGS_TEXT.downloadHint[level]} ${SETTINGS_TEXT.downloadSaved}`;
+    hint.textContent = `${levelHint(level)} ${SETTINGS_TEXT.downloadSaved}`;
   });
   return [row, hint];
 };

@@ -151,6 +151,7 @@ import { centredLayout, closeCentreWindow, onCentreWindowOpen } from "@/ui/centr
 import { openCountryPrompt } from "@/ui/chat/CountryPrompt";
 import { supportReminder } from "@/game/support/supportReminder";
 import { quietLogin, setQuietLoginFrom } from "@/game/quietLogin";
+import { noteYardLoading } from "@/game/safeModeYard";
 import { reportLook } from "@/app/lookReport";
 import {
   MONSTERS_TAB_ORDER,
@@ -1088,6 +1089,8 @@ export class YardScene implements Scene {
       this.renderer.setWork(
         store ? { save: () => store.save, now: () => store.now() } : fixedWorkSource(response),
       );
+      // Safe mode's mark, before the yard's art starts loading (patch 7.11).
+      noteYardLoading();
       this.renderer.show(yard);
       // What lives on the yard (#158). A visit's load carries the defender's
       // monsters, champion and workers, which Flash drew there too (#159).

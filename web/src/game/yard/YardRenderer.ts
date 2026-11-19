@@ -18,7 +18,8 @@ import { flyerAltitude } from "@/game/attack/monsterSprites";
 import { playEffect } from "@/game/sound/sound";
 import { routeBetween } from "@/game/guide/MonsterWalkIn";
 import { yardArtAtlas, type YardArtAtlas } from "./yardAtlas";
-import { loadSheet, MonsterSheetTextures, prefersReducedMotion } from "@/game/attack/AttackBattleLayer";
+import { MonsterSheetTextures, prefersReducedMotion } from "@/game/attack/AttackBattleLayer";
+import { loadYardSheet } from "@/game/attack/sheetQueue";
 import { currentSeason, onSeasonChange, type Season } from "@/game/season";
 import { onGroundChange } from "./groundChoice";
 import { classicLook } from "@/game/classicLook";
@@ -133,7 +134,8 @@ export class YardRenderer {
    * {@link SHEET_HOLD_MS} at most. The creatures' sheets wait for it: a
    * painted monster sheet is up to 10 MB, three of them came to 24 MB on a
    * full yard, and fetched alongside the building pictures they held those
-   * back for seconds on a slow link. Once open it stays open.
+   * back for seconds on a slow link. Once open it stays open. Past it they
+   * load two at a time (`yardSheetQueue`, patch 7.11).
    */
   private readonly sheetsAllowed = new Promise<void>((resolve) => {
     this.allowSheets = resolve;
@@ -142,7 +144,7 @@ export class YardRenderer {
   /** What lives on the yard (#158, #159): scenery, never in the battle. */
   private readonly life = new YardLifeLayer({
     reducedMotion: prefersReducedMotion(),
-    textures: new MonsterSheetTextures((url) => this.sheetsAllowed.then(() => loadSheet(url))),
+    textures: new MonsterSheetTextures((url) => loadYardSheet(url, this.sheetsAllowed)),
   });
   /** The planner is open: the creatures step out of the way until it closes. */
   private lifeHidden = false;
