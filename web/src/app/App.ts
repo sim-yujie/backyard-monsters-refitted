@@ -9,6 +9,7 @@ import {
 } from "@/game/bugReport/screenCapture";
 import { PerfOverlay } from "@/ui/PerfOverlay";
 import { SceneManager, type SceneFactory } from "./SceneManager";
+import { notePictureLoads, releaseOnLeave } from "./releaseOnLeave";
 import { withHold, withPresence, withProtection } from "./presenceScene";
 import { withIdle } from "./idleScene";
 import { withMusic } from "./musicScene";
@@ -85,6 +86,7 @@ export class App {
   private stopHearing: (() => void) | null = null;
   private stopTeam: (() => void) | null = null;
   private stopGraphicsWatch: (() => void) | null = null;
+  private stopRelease: (() => void) | null = null;
 
   constructor(private readonly host: HTMLElement) {
     this.pixi = new Application();
@@ -112,6 +114,9 @@ export class App {
     // own fetch lets the browser have them all in flight, in the order asked,
     // and `createImageBitmap` still decodes them off the main thread.
     Assets.setPreferences({ preferWorkers: false });
+    // Every picture Pixi decodes is noted, to be closed when the page is left
+    // for good (`releaseOnLeave.ts`, patch 7.12).
+    notePictureLoads();
 
     try {
       await this.pixi.init({
@@ -140,6 +145,9 @@ export class App {
     // A lost graphics context goes to the owner's dashboard with the card's
     // name and limit, for old phones that run out of graphics memory.
     this.stopGraphicsWatch = watchGraphics(this.pixi.renderer);
+    // Leaving the page (reload, another site) closes the decoded pictures, so a
+    // reload does not hold two yards at once on a phone.
+    this.stopRelease = releaseOnLeave({ stopDrawing: () => this.pixi.ticker.stop() });
 
     const canvas = this.pixi.canvas;
     this.host.append(canvas);
@@ -385,6 +393,8 @@ export class App {
     this.overlay = null;
     this.stopGraphicsWatch?.();
     this.stopGraphicsWatch = null;
+    this.stopRelease?.();
+    this.stopRelease = null;
     this.pixi.destroy(true, { children: true });
   }
 
