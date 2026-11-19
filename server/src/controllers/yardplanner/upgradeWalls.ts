@@ -14,6 +14,7 @@ import type { Save } from "../../database/models/save.model.js";
 import type { User } from "../../database/models/user.model.js";
 import type { KoaController } from "../../utils/KoaController.js";
 import { onPlannerYard } from "./plannerYard.js";
+import { requirePlannerForWallBatch } from "../../services/yardplanner/plannerGate.js";
 
 /**
  * `POST /bm/yardplanner/walls/upgrade` — take every listed wall to one level,
@@ -37,6 +38,10 @@ import { onPlannerYard } from "./plannerYard.js";
  * outpost's (level 5 at most) and the charge is the main pool's, both rows in
  * one transaction (`plannerYard.ts`).
  *
+ * A Yard Planner tool: refused `403 plannerNeeded` in a yard without a
+ * finished one, and so always in an outpost (owner, beta 8,
+ * `services/yardplanner/plannerGate.ts`).
+ *
  * @param {Context} ctx - The Koa context object, which includes the authenticated user.
  * @returns {Promise<void>} - A promise that resolves when the controller is complete.
  */
@@ -55,6 +60,9 @@ export const upgradeWalls: KoaController = async (ctx) => {
 
 /** The batch on one yard (the controller comment); writes nothing but the save it is handed. */
 const upgradeWallsOn = (save: Save, ids: readonly number[], level: number, now: number) => {
+  // Many walls at once is a Yard Planner tool (owner, beta 8); one wall goes
+  // through `yard/upgrade` like any building.
+  requirePlannerForWallBatch(save, now);
   const elapsed = now - Number(save.savetime ?? now);
   save.buildingdata = advanceBuildingTimers(
     save.buildingdata ?? {},

@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, mock, test } from "bun:test";
 import { LockMode } from "@mikro-orm/core";
 import type { Context } from "koa";
 import type { KoaController } from "../../utils/KoaController.js";
-import { COSTS, OUTPOST_COSTS } from "../../game-data/buildingCosts.js";
+import { COSTS } from "../../game-data/buildingCosts.js";
 
 /**
  * The Yard Planner routes on a Map Room 2 outpost (outposts WP3, issue #184):
@@ -64,6 +64,10 @@ const { rearmTraps } = await import("./rearmTraps.js");
 const { MUSHROOM_TYPE, TROJAN_HORSE_TYPE } = await import("../../game-data/buildingFootprints.js");
 const { overlaps, rectOf } = await import("../../services/yardplanner/layoutGeometry.js");
 const { layoutRoute } = await import("./layoutRoute.js");
+const { getLayouts } = await import("./getLayouts.js");
+const { deleteLayout } = await import("./deleteLayout.js");
+const { saveTemplate } = await import("./saveTemplate.js");
+const { readLayouts } = await import("../../services/yardplanner/layoutStorage.js");
 
 const now = () => Math.floor(Date.now() / 1000);
 
@@ -174,13 +178,20 @@ describe("Apply on an outpost", () => {
 });
 
 describe("the wall batch on an outpost", () => {
-  test("upgrades the outpost's wall and charges the main pool", async () => {
+  /**
+   * Owner, beta 8: many walls at once is a Yard Planner tool, and an outpost
+   * cannot build one, so it is locked there for good, even in an outpost that
+   * came with a Yard Planner standing. Its walls go one at a time instead.
+   */
+  test("is refused 403 plannerNeeded, even with a Yard Planner in the outpost", async () => {
+    (outpostSave.buildingdata as Record<string, Row>)["4"] = { id: 4, t: 10, X: -400, Y: -110, l: 1 };
+
     const answer = await run(upgradeWalls, { ids: "[3]", level: 2, baseid: OUTPOST_BASEID });
 
-    expect(answer.status).toBe(200);
-    expect((outpostSave.buildingdata as Record<string, Row>)["3"]).toMatchObject({ l: 2 });
-    const [r1, r2] = OUTPOST_COSTS[17]!.costs[1]!;
-    expect(mainSave.resources).toMatchObject({ r1: 1_000_000 - r1, r2: 1_000_000 - r2 });
+    expect(answer.status).toBe(403);
+    expect(answer.body.reason).toBe("plannerNeeded");
+    expect((outpostSave.buildingdata as Record<string, Row>)["3"]).toMatchObject({ l: 1 });
+    expect(mainSave.resources).toEqual({ r1: 1_000_000, r2: 1_000_000, r3: 1_000_000, r4: 1_000_000 });
   });
 });
 
@@ -249,7 +260,7 @@ describe("Apply refuses planned upgrades", () => {
   });
 
   test("an old layout with planned upgrades still saves, without them", async () => {
-    const answer = await run(saveLayout, { name: "Old", data: planned }, { slot: "2" });
+    const answer = await run(saveLayout, { name: "Old", data: planned }, { slot: "0" });
 
     expect(answer.status).toBe(200);
     const nodes = (answer.body.layout as Row).nodes as Row[];
@@ -472,12 +483,16 @@ describe("basevalue (#209)", () => {
     mainSave.buildingdata = {
       "0": { id: 0, t: 14, X: 0, Y: 0, l: 10 },
       "5": { id: 5, t: 17, X: 300, Y: 0, l: 1 },
+      // The batch is a Yard Planner tool (owner, beta 8).
+      "6": { id: 6, t: 10, X: -300, Y: 0 },
     };
 
     const answer = await run(upgradeWalls, { ids: "[5]", level: 2 });
 
     expect(answer.status).toBe(200);
-    expect(mainSave.basevalue).toBe(String(Math.ceil(0.1 * (worth(14, 10) + worth(17, 2)))));
+    expect(mainSave.basevalue).toBe(
+      String(Math.ceil(0.1 * (worth(14, 10) + worth(17, 2) + worth(10, 1))))
+    );
   });
 
   test("Apply on an outpost writes no base value to either row", async () => {
@@ -509,13 +524,13 @@ describe("a half-finished layout (owner decision 2026-10-05)", () => {
   });
 
   test("saves with a building still in the drawer, and keeps it in the slot", async () => {
-    const answer = await run(saveLayout, { name: "Half", data: half([{ id: 5, t: 20 }]) }, { slot: "3" });
+    const answer = await run(saveLayout, { name: "Half", data: half([{ id: 5, t: 20 }]) }, { slot: "0" });
     expect(answer.status).toBe(200);
     expect((answer.body.layout as Row).stored).toEqual([{ id: 5, t: 20 }]);
 
     const { readLayouts } = await import("../../services/yardplanner/layoutStorage.js");
     const [saved] = readLayouts(mainSave.savetemplate as unknown[]);
-    expect(saved?.slot).toBe(3);
+    expect(saved?.slot).toBe(0);
     expect(saved?.nodes).toEqual([HALL_NODE]);
     expect(saved?.stored).toEqual([{ id: 5, t: 20 }]);
   });
@@ -614,5 +629,90 @@ describe("sight cache invalidation (#329, #330 WP1)", () => {
     await onPlannerYard(user as never, { baseid: OUTPOST_BASEID }, () => {});
 
     expect(redisDel).not.toHaveBeenCalled();
+  });
+});
+
+/**
+ * Owner, beta 8 (grilling of 19 Nov 2026): without a finished Yard Planner in
+ * the yard, one layout slot (slot 1) and no batch wall upgrade. Saves already
+ * in the higher slots are kept and listed, but are not written or deleted
+ * until the yard has a Yard Planner again.
+ */
+describe("the Yard Planner gate (owner, beta 8)", () => {
+  const PLANNER = { id: 25, t: 10, X: -185, Y: 330 };
+  const buildings = () => mainSave.buildingdata as Record<string, Row>;
+  const save = (slot: number, name = "Plan") =>
+    run(saveLayout, { name, data: layout([{ id: 0, t: 14, x: 0, y: 0 }]) }, { slot: String(slot) });
+
+  test("without one: slot 1 saves, slot 2 is refused 403 plannerNeeded and nothing is written", async () => {
+    expect((await save(0)).status).toBe(200);
+
+    const refused = await save(1);
+    expect(refused.status).toBe(403);
+    expect(refused.body.reason).toBe("plannerNeeded");
+    expect(refused.body.usable).toBe(1);
+    expect(readLayouts(mainSave.savetemplate as unknown[]).map((one) => one.slot)).toEqual([0]);
+  });
+
+  test("with a finished one (no `l`, as the server writes it), all ten slots save", async () => {
+    buildings()["25"] = { ...PLANNER };
+    expect((await save(9)).status).toBe(200);
+    expect((await run(getLayouts, {})).body).toMatchObject({ slots: 10, usable: 10 });
+  });
+
+  test("damage does not lock it; a first build still running does", async () => {
+    buildings()["25"] = { ...PLANNER, hp: 10 };
+    expect((await save(4)).status).toBe(200);
+
+    buildings()["25"] = { ...PLANNER, cB: 3600, cL: 43200 };
+    expect((await save(4)).status).toBe(403);
+  });
+
+  test("a first build that ran out since the last save counts as finished", async () => {
+    mainSave.savetime = now() - 7200;
+    buildings()["25"] = { ...PLANNER, cB: 3600, cL: 43200 };
+    expect((await save(4)).status).toBe(200);
+  });
+
+  test("recycled: the saves in slots 2-10 are kept and listed, locked to writes and deletes", async () => {
+    buildings()["25"] = { ...PLANNER };
+    await save(0, "One");
+    await save(3, "Four");
+    delete buildings()["25"];
+
+    const listed = await run(getLayouts, {});
+    expect(listed.body).toMatchObject({ slots: 10, usable: 1 });
+    expect((listed.body.layouts as Row[]).map((one) => one.name)).toEqual(["One", "Four"]);
+
+    const overwrite = await save(3, "Gone");
+    expect(overwrite.status).toBe(403);
+    const removed = await run(deleteLayout, {}, { slot: "3" });
+    expect(removed.status).toBe(403);
+    expect(removed.body.reason).toBe("plannerNeeded");
+    expect(readLayouts(mainSave.savetemplate as unknown[]).map((one) => one.name)).toEqual(["One", "Four"]);
+
+    // Slot 1 stays the player's own.
+    expect((await run(deleteLayout, {}, { slot: "0" })).status).toBe(200);
+    // Built again, the old save is back in reach.
+    buildings()["25"] = { ...PLANNER };
+    expect((await run(deleteLayout, {}, { slot: "3" })).status).toBe(200);
+  });
+
+  test("the Flash client's savetemplate route keeps the same limit", async () => {
+    const answer = await run(saveTemplate, { slotid: 2, name: "Old", data: "[]" });
+    expect(answer.status).toBe(403);
+    expect(answer.body.reason).toBe("plannerNeeded");
+  });
+
+  test("the wall batch needs one in the main yard too", async () => {
+    buildings()["5"] = { id: 5, t: 17, X: 300, Y: 0, l: 1 };
+    const refused = await run(upgradeWalls, { ids: "[5]", level: 2 });
+    expect(refused.status).toBe(403);
+    expect(refused.body.reason).toBe("plannerNeeded");
+    expect(buildings()["5"]).toMatchObject({ l: 1 });
+
+    buildings()["25"] = { ...PLANNER };
+    expect((await run(upgradeWalls, { ids: "[5]", level: 2 })).status).toBe(200);
+    expect(buildings()["5"]).toMatchObject({ l: 2 });
   });
 });

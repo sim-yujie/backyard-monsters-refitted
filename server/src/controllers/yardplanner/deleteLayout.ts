@@ -4,6 +4,8 @@ import { parseSlot } from "../../services/yardplanner/validateLayout.js";
 import type { User } from "../../database/models/user.model.js";
 import type { KoaController } from "../../utils/KoaController.js";
 import { onLayoutYard } from "./plannerYard.js";
+import { requireUsableSlot } from "../../services/yardplanner/plannerGate.js";
+import { getCurrentDateTime } from "../../utils/getCurrentDateTime.js";
 
 /**
  * `DELETE /bm/yardplanner/layouts/:slot`, and the legacy
@@ -34,6 +36,9 @@ export const deleteLayout: KoaController = async (ctx) => {
     user,
     { ...(ctx.query ?? {}), ...((ctx.request.body as object | undefined) ?? {}) },
     (save) => {
+      // A locked slot's save is kept, untouched, until the yard has a Yard
+      // Planner again (owner, beta 8).
+      requireUsableSlot(save, slot, getCurrentDateTime());
       save.savetemplate = removeLayout(save.savetemplate, slot);
     },
     true

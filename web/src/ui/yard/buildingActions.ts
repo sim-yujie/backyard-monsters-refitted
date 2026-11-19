@@ -144,11 +144,14 @@ export interface UpgradeOffer {
   readonly from: number;
   readonly to: number;
   readonly cost: UpgradeCost;
-  /** The countdown the server would write: table time × Sharper Tools, however short (#137). */
+  /**
+   * The countdown the server would write: table time × Sharper Tools, however
+   * short (#137). 0 for a wall, whose step is written finished (D13).
+   */
   readonly seconds: number;
   /** Shiny to buy the level outright. */
   readonly instantPrice: number;
-  /** Whether Instant is offered at all: not on the Map Room. */
+  /** Whether Instant is offered at all: not on the Map Room, nor on a wall, which finishes at once anyway. */
   readonly instant: boolean;
   /** Why Upgrade is disabled; null when it can be pressed. */
   readonly gate: UpgradeGate | null;
@@ -256,7 +259,7 @@ export type OpenTarget =
 
 /** Everything the panel shows for a building on the player's own yard. */
 export interface PanelModel {
-  /** Null when the building has no upgrade here: busy, a wall, a trap, the Map Room, a decoration. */
+  /** Null when the building has no upgrade here: busy, a trap, the Map Room, a decoration. */
   readonly upgrade: UpgradeOffer | null;
   /** The building is at the top of its ladder. */
   readonly maxed: boolean;
@@ -313,10 +316,15 @@ export const isDamaged = (building: YardBuilding, save: BaseLoadResponse): boole
   (save.buildinghealthdata != null && String(building.id) in save.buildinghealthdata);
 
 /**
- * Walls and traps upgrade through the planner's batch routes, on every yard:
- * the Inferno has the planner too (owner decision 2026-10-29).
+ * Walls and traps have planner tools of their own, on every yard: the Inferno
+ * has the planner too (owner decision 2026-10-29). Traps are re-armed there
+ * only; a wall also upgrades one at a time from its own pop-up, like any
+ * building (owner, beta 8), and many at once in the planner.
  */
 export const isBatchType = (type: number): boolean => WALL_TYPES.includes(type) || TRAP_TYPES.includes(type);
+
+/** Whether a wall: upgraded one at a time like any building, its step finished at once (D13). */
+const isWall = (type: number): boolean => WALL_TYPES.includes(type);
 
 /**
  * Whether a type has a ladder the panel could climb at all: in the Inferno
@@ -380,7 +388,8 @@ export const upgradeOffer = (
   context: PanelContext,
 ): UpgradeOffer | null => {
   const { type } = building;
-  if (isBatchType(type) || !hasLadder(type, context.yard.kind)) return null;
+  if (TRAP_TYPES.includes(type) || !hasLadder(type, context.yard.kind)) return null;
+  const wall = isWall(type);
   // A building on a job shows the job instead.
   if (building.countdown) return null;
 
@@ -396,16 +405,18 @@ export const upgradeOffer = (
       cost: ZERO,
       seconds: 0,
       instantPrice: 0,
-      instant: type !== MAP_ROOM_TYPE,
+      instant: type !== MAP_ROOM_TYPE && !wall,
       gate: { reason: "maxLevel", level: from },
       instantGate: { reason: "maxLevel", level: from },
       inferno: isSurfaceInferno(type, context.yard.kind),
     };
   }
 
-  const seconds = Math.floor(
-    step.cost.time * sharperToolsMultiplier(context.save.storedata, context.now()),
-  );
+  // A wall step is written finished, with no worker held (the server's
+  // `planOneUpgrade`, D13): no countdown to show and no worker to wait for.
+  const seconds = wall
+    ? 0
+    : Math.floor(step.cost.time * sharperToolsMultiplier(context.save.storedata, context.now()));
   const fullCost: UpgradeCost = { r1: step.cost.r1, r2: step.cost.r2, r3: step.cost.r3, r4: step.cost.r4 };
   // Builder's Weekend: the server charges this much less (`planOneUpgrade`).
   const weekendOff = weekendPercent("builders", context.now());
@@ -443,7 +454,7 @@ export const upgradeOffer = (
       }
     }
     if (short) gate = { reason: "shortfall", shortfall, overCap };
-    else if (freeWorkers(context) === 0) {
+    else if (!wall && freeWorkers(context) === 0) {
       gate = { reason: "workers", total: context.workers.total, busy: context.workers.busy };
     }
   }
@@ -460,7 +471,7 @@ export const upgradeOffer = (
     cost,
     seconds,
     instantPrice: step.shiny,
-    instant: type !== MAP_ROOM_TYPE,
+    instant: type !== MAP_ROOM_TYPE && !wall,
     gate,
     instantGate,
     inferno,

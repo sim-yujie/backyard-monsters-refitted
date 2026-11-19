@@ -1,3 +1,4 @@
+import { withLegacyWallRead } from "./wallBlocks.js";
 import { costOf } from "../../game-data/buildingCosts.js";
 import type { BuildingData, BuildingDataMap } from "../../types/BuildingData.js";
 import { yardKindOf } from "../yardplanner/costs.js";
@@ -45,10 +46,11 @@ export interface InstantUpgradePlan {
 }
 
 /**
- * Building kinds with their own batch routes (`walls/upgrade`, `traps/rearm`),
- * except on the Inferno yard, which has no planner (WP 1.16).
+ * Building kinds with their own batch route (`traps/rearm`). A wall takes the
+ * instant upgrade one at a time like any building (owner, beta 8; the
+ * `upgrade.ts` comment on its `BATCH_KINDS`).
  */
-const BATCH_KINDS: ReadonlySet<string> = new Set(["wall", "trap"]);
+const BATCH_KINDS: ReadonlySet<string> = new Set(["trap"]);
 
 /** The two checks an instant upgrade skips: it charges no resources and holds no worker. */
 const SKIPPED: ReadonlySet<string> = new Set(["shortfall", "workers"]);
@@ -61,8 +63,8 @@ const SKIPPED: ReadonlySet<string> = new Set(["shortfall", "workers"]);
  * them means everything else passed). Returns the building and the level it
  * is at, or throws the refusal the upgrade route would.
  *
- * Refusals, in order: `400 badRequest` unknown id; `400 useBatchRoute` wall
- * or trap (the Inferno's too, owner decision 2026-10-29); `409 mapRoom`; then `planOneUpgrade`'s: `400 badRequest` no ladder
+ * Refusals, in order: `400 badRequest` unknown id; `400 useBatchRoute` trap
+ * (the Inferno's too); `409 mapRoom`; then `planOneUpgrade`'s: `400 badRequest` no ladder
  * (decoration, mushroom, placeholder), `409 busy` (`409 training` for an
  * Academy that is training, #145), `409 damaged`,
  * `409 townHall {have: 0, need: 1}`, `409 maxLevel {level, max}`,
@@ -79,11 +81,7 @@ export const instantUpgradeGate = (
 
   const kind = costOf(type, yard)?.kind;
   if (kind && BATCH_KINDS.has(kind)) {
-    throw yardBadRequestErr(
-      "Walls and traps are upgraded from the Yard Planner.",
-      { id },
-      "useBatchRoute"
-    );
+    throw yardBadRequestErr("Traps are re-armed from the Yard Planner.", { id }, "useBatchRoute");
   }
   if (type === MAP_ROOM_TYPE) throw mapRoomErr(id);
 
@@ -99,10 +97,12 @@ export const instantUpgradeGate = (
  * wrapper's.
  */
 export const planInstantUpgrade = (
-  save: InstantUpgradeSave,
+  stored: InstantUpgradeSave,
   id: number,
   now: number
 ): InstantUpgradePlan => {
+  // A legacy Stone Block row climbs as the level 2 Block Flash made it.
+  const save = withLegacyWallRead(stored, id);
   const { building, level } = instantUpgradeGate(save, id, now);
   const yard = yardKindOf(save);
 

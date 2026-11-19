@@ -726,20 +726,24 @@ describe("walls and traps in the Inferno", () => {
     });
   }
 
-  test("a wall or trap does not upgrade on its own: the Yard Planner's batch, as on the main yard (owner decision 2026-10-29)", async () => {
-    const yard = {
-      "6": { id: 6, t: WALL, X: 200, Y: 200, l: 1 },
-      "7": { id: 7, t: TRAP, X: 300, Y: 200, l: 1 },
-    };
-    yardWith(layout(3, yard));
+  test("a trap does not upgrade on its own: the Yard Planner re-arms it, as on the main yard (owner decision 2026-10-29)", async () => {
+    yardWith(layout(3, { "7": { id: 7, t: TRAP, X: 300, Y: 200, l: 1 } }));
     const before = structuredClone(infernoSave());
-    for (const id of [6, 7]) {
-      const answer = await inInferno(yardUpgradeAction, { id });
-      expect(answer.status).toBe(400);
-      expect(body(answer).reason).toBe("useBatchRoute");
-    }
+    const answer = await inInferno(yardUpgradeAction, { id: 7 });
+    expect(answer.status).toBe(400);
+    expect(body(answer).reason).toBe("useBatchRoute");
     expect(infernoSave().buildingdata).toEqual(before.buildingdata);
     expect(purse()).toEqual(PURSE);
+  });
+
+  test("a wall upgrades one at a time like any building, paid from the Inferno purse (owner, beta 8)", async () => {
+    yardWith(layout(3, { "6": { id: 6, t: WALL, X: 200, Y: 200, l: 1 } }));
+    const answer = await inInferno(yardUpgradeAction, { id: 6 });
+    expect(answer.status).toBe(200);
+    expect(buildings(infernoSave())["6"]).toMatchObject({ t: WALL, l: 2 });
+    const [r1, r2, r3, r4] = costOf(WALL, "inferno")!.costs[1]!;
+    expect(purse()).toEqual({ r1: PURSE.r1 - r1, r2: PURSE.r2 - r2, r3: PURSE.r3 - r3, r4: PURSE.r4 - r4 });
+    expect(infernoPoints()).toBeGreaterThan(0);
   });
 });
 

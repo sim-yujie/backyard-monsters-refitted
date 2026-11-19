@@ -1218,6 +1218,12 @@ export interface LayoutsResponse extends ApiEnvelope {
   error: number;
   /** How many slots the account has. Ten for everyone (design §8, Q2). */
   slots: number;
+  /**
+   * How many of them, from slot 1 up, the yard may save to: all with a built
+   * Yard Planner in it, one without (owner, beta 8). Saves in the slots above
+   * are still listed, locked. Absent from an older server: every slot.
+   */
+  usable?: number;
   layouts: Layout[];
 }
 

@@ -2,6 +2,7 @@ import { describe, expect, test } from "bun:test";
 import { ClientSafeError } from "../../middleware/clientSafeError.js";
 import type { BuildingDataMap } from "../../types/BuildingData.js";
 import { storageCap } from "../base/economy/resourceBudget.js";
+import { COSTS } from "../../game-data/buildingCosts.js";
 import { planCancelUpgrade, planUpgradeAction, type UpgradeActionSave } from "./upgrade.js";
 
 /**
@@ -70,7 +71,7 @@ describe("upgrade", () => {
       cost: { r1: 50000, r2: 37500, r3: 12500, r4: 0 },
     });
     expect(outcome.debit).toEqual({ r1: 50000, r2: 37500, r3: 12500, r4: 0 });
-    expect(outcome).not.toHaveProperty("points");
+    expect(outcome.points).toBeUndefined();
     expect(outcome.slices.buildingdata["1"]).toEqual({
       id: 1,
       t: CANNON,
@@ -122,7 +123,7 @@ describe("upgrade", () => {
       cL: 300,
     });
     expect(outcome.debit).toEqual({ r1: 0, r2: 1575, r3: 0, r4: 0 });
-    expect(outcome).not.toHaveProperty("points");
+    expect(outcome.points).toBeUndefined();
   });
 
   test("a step of 300 s or less needs a free worker like any other (#137)", () => {
@@ -196,26 +197,60 @@ describe("upgrade", () => {
     expect(planUpgradeAction(save, 1, NOW).report.seconds).toBe(2700);
   });
 
-  test("walls and traps are sent to the planner's batch routes", () => {
+  test("traps are sent to the planner's re-arm route", () => {
     const save = yard();
-    save.buildingdata!["8"] = { id: 8, t: 17, x: 0, y: 0, l: 1 };
     save.buildingdata!["9"] = { id: 9, t: 24, x: 0, y: 0, l: 1 };
-    save.buildingdata!["10"] = { id: 10, t: 18, x: 0, y: 0, l: 1 };
 
-    for (const id of [8, 9, 10]) {
-      expect(refusal(() => planUpgradeAction(save, id, NOW)).data).toEqual({
-        reason: "useBatchRoute",
-        id,
-      });
-      expect(refusal(() => planUpgradeAction(save, id, NOW)).status).toBe(400);
-    }
+    expect(refusal(() => planUpgradeAction(save, 9, NOW)).data).toEqual({ reason: "useBatchRoute", id: 9 });
+    expect(refusal(() => planUpgradeAction(save, 9, NOW)).status).toBe(400);
   });
 
-  test("walls are refused before any rule of the yard's, even when busy", () => {
+  /**
+   * Owner, beta 8: every player upgrades a wall one at a time from its pop-up,
+   * as in Flash (`BUILDINGINFO.as:251-253`): the table's price. The 5 s step is
+   * written finished with its points, no worker held (D13, as the batch).
+   */
+  test("a wall takes one step like any building: costs[level], finished at once, its points", () => {
     const save = yard();
-    save.buildingdata!["8"] = { id: 8, t: 17, x: 0, y: 0, l: 1, cU: 5, hp: 1 };
+    save.buildingdata!["8"] = { id: 8, t: 17, x: 0, y: 0, l: 1 };
 
-    expect(reasonOf(() => planUpgradeAction(save, 8, NOW))).toEqual([400, "useBatchRoute"]);
+    const outcome = planUpgradeAction(save, 8, NOW);
+    const [r1, r2, r3, r4, time] = COSTS[17]!.costs[1]!;
+
+    expect(outcome.report).toEqual({ id: 8, from: 1, to: 2, seconds: 0, cost: { r1, r2, r3, r4 } });
+    expect(time).toBe(5);
+    expect(outcome.slices.buildingdata["8"]).toEqual({ id: 8, t: 17, x: 0, y: 0, l: 2 });
+    expect(outcome.debit).toEqual({ r1, r2, r3, r4 });
+    expect(outcome.points).toBeGreaterThan(0);
+  });
+
+  test("a wall keeps the yard's rules (busy, damaged, top of the ladder) and needs no free worker", () => {
+    const busy = yard();
+    busy.buildingdata!["8"] = { id: 8, t: 17, x: 0, y: 0, l: 1, cU: 5 };
+    expect(reasonOf(() => planUpgradeAction(busy, 8, NOW))).toEqual([409, "busy"]);
+
+    const damaged = yard();
+    damaged.buildingdata!["8"] = { id: 8, t: 17, x: 0, y: 0, l: 1, hp: 1 };
+    expect(reasonOf(() => planUpgradeAction(damaged, 8, NOW))).toEqual([409, "damaged"]);
+
+    const top = yard();
+    top.buildingdata!["0"] = { id: 0, t: HALL, x: 0, y: 0, l: 10 };
+    top.buildingdata!["8"] = { id: 8, t: 17, x: 0, y: 0, l: COSTS[17]!.costs.length };
+    expect(reasonOf(() => planUpgradeAction(top, 8, NOW))).toEqual([409, "maxLevel"]);
+
+    const working = yard();
+    working.buildingdata!["1"] = { id: 1, t: CANNON, x: 0, y: 0, l: 2, cU: 100 };
+    working.buildingdata!["8"] = { id: 8, t: 17, x: 0, y: 0, l: 1 };
+    expect(planUpgradeAction(working, 8, NOW).report).toMatchObject({ from: 1, to: 2 });
+  });
+
+  test("a legacy Stone Block row (t 18) climbs as the level 2 Block Flash made it", () => {
+    const save = yard();
+    save.buildingdata!["10"] = { id: 10, t: 18, x: 0, y: 0, l: 1 };
+
+    const outcome = planUpgradeAction(save, 10, NOW);
+    expect(outcome.report).toMatchObject({ from: 2, to: 3 });
+    expect(outcome.slices.buildingdata["10"]).toMatchObject({ t: 17, l: 3 });
   });
 
   test("the Map Room's L1 to L2 step starts at Town Hall 6: the move to Map Room 2 (D16)", () => {

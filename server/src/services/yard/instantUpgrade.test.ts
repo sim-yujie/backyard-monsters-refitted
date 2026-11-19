@@ -60,16 +60,18 @@ describe("planInstantUpgrade: gates, in order", () => {
     });
   });
 
-  test("walls and traps: 400 useBatchRoute", () => {
-    const yard = yardOf({
-      "2": { id: 2, t: 17, x: 0, y: 0, l: 1 },
-      "3": { id: 3, t: 24, x: 0, y: 0, l: 1 },
-    });
-    expect(refusal(() => planInstantUpgrade(yard, 2, NOW))).toMatchObject({
+  test("traps: 400 useBatchRoute", () => {
+    const yard = yardOf({ "3": { id: 3, t: 24, x: 0, y: 0, l: 1 } });
+    expect(refusal(() => planInstantUpgrade(yard, 3, NOW))).toMatchObject({
       status: 400,
       reason: "useBatchRoute",
     });
-    expect(refusal(() => planInstantUpgrade(yard, 3, NOW)).reason).toBe("useBatchRoute");
+  });
+
+  test("a wall takes the instant upgrade one at a time like any building (owner, beta 8)", () => {
+    const plan = planInstantUpgrade(yardOf({ "2": { id: 2, t: 17, x: 0, y: 0, l: 1 } }), 2, NOW);
+    expect(plan.buildingdata["2"]).toMatchObject({ t: 17, l: 2 });
+    expect(plan.report).toMatchObject({ id: 2, from: 1, to: 2 });
   });
 
   test("a mushroom has no ladder: 400 badRequest", () => {

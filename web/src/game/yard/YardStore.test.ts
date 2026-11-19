@@ -487,7 +487,7 @@ describe("the action queue", () => {
           ...baseBuildings(),
           "4": { X: 300, Y: 0, t: 11, id: 4, l: 1 },
           "5": { X: 400, Y: 0, t: 20, id: 5, l: 2, cU: 600, hp: 10 },
-          "6": { X: 500, Y: 0, t: 17, id: 6, l: 1 },
+          "6": { X: 500, Y: 0, t: 24, id: 6, l: 1 },
         },
       }),
       api,
@@ -510,7 +510,7 @@ describe("the action queue", () => {
     expect(api.cancelUpgrade).not.toHaveBeenCalled();
   });
 
-  it("sends an Inferno wall to the planner's batch, as on the main yard", async () => {
+  it("sends a wall to the ordinary upgrade, one at a time, the Inferno's too (owner, beta 8)", async () => {
     const api = stubApi();
     const { store } = storeWith(
       loadWith({
@@ -519,11 +519,10 @@ describe("the action queue", () => {
       }),
       api,
     );
-    const result = await store.upgrade(6);
-    // Owner decision 29 Oct 2026: the Inferno has the planner, so its walls
-    // upgrade only through the batch, like the main yard's (D13).
-    expect(result.ok ? "ok" : result.refusal.reason).toBe("useBatchRoute");
-    expect(api.upgrade).not.toHaveBeenCalled();
+    void store.upgrade(6);
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(api.upgrade.mock.calls[0]?.[0]).toBe(6);
   });
 
   it("reports a server refusal and fetches the state it was refused against", async () => {

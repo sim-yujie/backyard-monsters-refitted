@@ -166,7 +166,16 @@ const ALL_NODES = [
 const purse = () => mainSave.iresources as Record<string, number>;
 const infernoBuildings = () => infernoSave.buildingdata as Record<string, Row>;
 
+/** A finished Yard Planner, for slot 2 and up and the wall batch (owner, beta 8). */
+const PLANNER = { id: 9, t: 10, X: 400, Y: 400 };
+const givePlanners = () => {
+  infernoBuildings()["9"] = { ...PLANNER };
+  (mainSave.buildingdata as Record<string, Row>)["9"] = { ...PLANNER };
+};
+
 describe("layouts in the Inferno", () => {
+  beforeEach(givePlanners);
+
   test("are saved in the Inferno yard's own slots, never the main yard's", async () => {
     const answer = await run(
       saveLayout,
@@ -259,6 +268,8 @@ describe("Apply in the Inferno", () => {
 });
 
 describe("batch wall upgrade in the Inferno", () => {
+  beforeEach(givePlanners);
+
   test("raises the walls to level 3 at the Inferno table's price, paid from the Inferno purse", async () => {
     const answer = await run(upgradeWalls, { ids: "[3,4]", level: 3, baseid: INFERNO_BASEID });
     expect(answer.status).toBe(200);
@@ -295,6 +306,57 @@ describe("batch wall upgrade in the Inferno", () => {
     expect(answer.status).toBe(409);
     expect(answer.body.shortfall).toMatchObject({ r2: INFERNO_COSTS[17]!.costs[1]![1] });
     expect(mainSave.resources).toEqual(POOL);
+  });
+});
+
+/**
+ * Owner, beta 8: the gate is per yard. The Inferno needs a Yard Planner of its
+ * own; the main yard's does not unlock the Inferno's tools, nor the other way.
+ */
+describe("the Yard Planner gate in the Inferno", () => {
+  test("the main yard's Yard Planner does not unlock the Inferno's slot 2", async () => {
+    (mainSave.buildingdata as Record<string, Row>)["9"] = { ...PLANNER };
+
+    const refused = await run(
+      saveLayout,
+      { name: "Cave", data: layout(ALL_NODES), baseid: INFERNO_BASEID },
+      { slot: "1" }
+    );
+    expect(refused.status).toBe(403);
+    expect(refused.body.reason).toBe("plannerNeeded");
+    expect(readLayouts(infernoSave.savetemplate as unknown[])).toEqual([]);
+
+    const listed = await run(getLayouts, {}, {}, { baseid: INFERNO_BASEID });
+    expect(listed.body.usable).toBe(1);
+    expect((await run(getLayouts, {}, {}, {})).body.usable).toBe(10);
+  });
+
+  test("the Inferno's own Yard Planner unlocks its slots and its wall batch, not the main yard's", async () => {
+    infernoBuildings()["9"] = { ...PLANNER };
+
+    const saved = await run(
+      saveLayout,
+      { name: "Cave", data: layout(ALL_NODES), baseid: INFERNO_BASEID },
+      { slot: "9" }
+    );
+    expect(saved.status).toBe(200);
+    expect((await run(getLayouts, {}, {}, {})).body.usable).toBe(1);
+    const walls = await run(upgradeWalls, { ids: "[3]", level: 2, baseid: INFERNO_BASEID });
+    expect(walls.status).toBe(200);
+  });
+
+  test("slot 1 is the Inferno's without a Yard Planner; the wall batch is not", async () => {
+    const saved = await run(
+      saveLayout,
+      { name: "Cave", data: layout(ALL_NODES), baseid: INFERNO_BASEID },
+      { slot: "0" }
+    );
+    expect(saved.status).toBe(200);
+
+    const walls = await run(upgradeWalls, { ids: "[3]", level: 2, baseid: INFERNO_BASEID });
+    expect(walls.status).toBe(403);
+    expect(walls.body.reason).toBe("plannerNeeded");
+    expect(purse()).toEqual(PURSE);
   });
 });
 

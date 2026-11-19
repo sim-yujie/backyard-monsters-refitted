@@ -405,20 +405,41 @@ describe("BuildingPanel: a held speed-up on a shorter job (patch 6.3)", () => {
 });
 
 describe("BuildingPanel: buildings without an Upgrade here", () => {
-  it("a wall points at the layout planner and offers no Upgrade", () => {
-    const { element } = setup([HALL, building(2, 17, 1)], 2);
-    expect(buttonNamed(element, "Upgrade")).toBeUndefined();
-    expect(element.querySelector(".building-panel__note")?.textContent).toMatch(/layout planner/);
+  /** Owner, beta 8: every player upgrades a wall one at a time, like any building. */
+  it("a wall without a Yard Planner offers its own Upgrade and no wall picking", () => {
+    const upgradeWalls = vi.fn();
+    const { element, api } = setup([HALL, building(2, 17, 1)], 2, { panel: { upgradeWalls } });
+    expect(buttonNamed(element, "Pick more walls")).toBeUndefined();
+    expect(element.querySelector(".building-panel__note")).toBeNull();
+    expect(element.querySelector(".building-panel__time")).toBeNull();
+    expect(buttonNamed(element, "Instant")).toBeUndefined();
+    const upgrade = buttonNamed(element, "Upgrade")!;
+    upgrade.click();
+    expect(api.upgrade).toHaveBeenCalledWith(2);
+    expect(upgradeWalls).not.toHaveBeenCalled();
   });
 
-  it("a wall offers Upgrade walls, which opens the planner's wall picking on it (owner 2026-11-04)", () => {
+  it("with a built Yard Planner it also offers the planner's wall picking, this wall picked", () => {
     const upgradeWalls = vi.fn();
-    const { element } = setup([HALL, building(2, 17, 1)], 2, { panel: { upgradeWalls } });
-    // Still no single-wall upgrade: the one button is the door to the planner.
-    expect(buttons(element).map((button) => button.textContent)).not.toContain("Upgrade");
-    expect(element.querySelector(".building-panel__note")).toBeNull();
-    buttonNamed(element, "Upgrade walls")!.click();
+    const { element } = setup([HALL, building(2, 17, 1), building(3, 10, 1)], 2, { panel: { upgradeWalls } });
+    expect(buttonNamed(element, "Upgrade")).toBeDefined();
+    buttonNamed(element, "Pick more walls")!.click();
     expect(upgradeWalls).toHaveBeenCalledWith(2);
+  });
+
+  it("a Yard Planner still being built does not offer wall picking yet", () => {
+    const upgradeWalls = vi.fn();
+    const { element } = setup([HALL, building(2, 17, 1), building(3, 10, 0, { cB: 600 })], 2, {
+      panel: { upgradeWalls },
+    });
+    expect(buttonNamed(element, "Upgrade")).toBeDefined();
+    expect(buttonNamed(element, "Pick more walls")).toBeUndefined();
+  });
+
+  it("a trap still points at the layout planner and offers no Upgrade", () => {
+    const { element } = setup([HALL, building(2, 24, 1)], 2);
+    expect(buttonNamed(element, "Upgrade")).toBeUndefined();
+    expect(element.querySelector(".building-panel__note")?.textContent).toMatch(/re-armed in the layout planner/);
   });
 
   it("a Map Room 2 opens the map", () => {

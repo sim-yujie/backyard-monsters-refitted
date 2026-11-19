@@ -83,6 +83,7 @@ import { openInfernoMap } from "@/game/inferno/tribeEntry";
 import { backToInferno } from "@/game/inferno/tribeReturn";
 import {
   blueprintBlock,
+  plannerToolBlock,
   PlannerAccess,
   plannerAccess,
   plannerEntryTooltip,
@@ -619,6 +620,20 @@ export class YardScene implements Scene {
 
   async enter(context: SceneContext): Promise<void> {
     this.context = context;
+    if (import.meta.env.DEV) {
+      // For film scripts: open a building's pop-up by id, centred on screen.
+      (window as unknown as { __yardSelect?: (id: number) => boolean }).__yardSelect = (id) => {
+        const building = this.yard?.buildings.find((one) => one.id === id) ?? null;
+        if (!building) return false;
+        const camera = this.camera;
+        if (camera) {
+          camera.centreOn(this.renderer.yardToWorld(building.x, building.y));
+          camera.dirty = true;
+        }
+        this.select(building);
+        return true;
+      };
+    }
     this.viewportWidth = context.width;
     this.viewportHeight = context.height;
     this.canvasWidth = context.width;
@@ -2637,6 +2652,10 @@ export class YardScene implements Scene {
       readOnlyToolbar: hud.element,
       // Blueprint needs a Yard Planner in this yard, and never in an outpost.
       blueprintBlocked: blueprintBlock(yard),
+      // Ranges, dead zones, Find, the yard picture, Compare, slots past the
+      // first and the many-walls upgrade need one too (owner, beta 8). The
+      // tribe editor (LOCAL only) designs camp yards and keeps every tool.
+      toolsBlocked: this.tribe ? null : plannerToolBlock(yard),
       ...(this.save?.firedtraps ? { firedtraps: this.save.firedtraps } : {}),
       // An outpost's Apply and batch actions act on it (outposts WP3).
       ...(this.store?.baseid !== undefined ? { baseid: this.store.baseid } : {}),
