@@ -80,6 +80,16 @@ const HALL = { id: 0, t: 14, x: -70, y: 0, l: 1 };
 /** No silos: the base storage, 10,000; one trade carries up to 1,000 of each, 900 arrive. */
 const STOCK = 5_000;
 
+describe("Recent trades: receipts grouped into trades", () => {
+  const row = (from: number, to: number, at: number) => ({ from_userid: from, to_userid: to, created_at: at });
+  test("a swap's two receipts count once, in either order; a one-way send counts alone", () => {
+    const rows = [row(1, 2, 50), row(3, 4, 50), row(2, 1, 50), row(4, 3, 50), row(5, 6, 40), row(6, 5, 40)];
+    expect(trade.lastTrades(rows, 2)).toEqual(rows.slice(0, 4));
+    expect(trade.lastTrades([row(1, 2, 50), row(3, 1, 40), row(2, 3, 30), row(3, 2, 30)], 2)).toEqual([row(1, 2, 50), row(3, 1, 40)]);
+    expect(trade.lastTrades([], 2)).toEqual([]);
+  });
+});
+
 describe.skipIf(!enabled)("alliance trading on a real database", () => {
   const em = () => orm!.em.fork() as never;
   const sql = <R = Record<string, any>>(query: string, params: unknown[] = []) => orm!.em.fork().execute<R[]>(query, params);
@@ -209,12 +219,23 @@ describe.skipIf(!enabled)("alliance trading on a real database", () => {
     expect(await statusOf(posted.id)).toBe("done");
     expect(await reasonOf(trade.acceptRequest(em(), C, posted.id, NOW))).toBe("requestGone");
 
+    // Taken: it leaves Mates' requests at once, for everyone (owner, 19 Nov 2026), and shows
+    // under Recent trades as one swap (a receipt each way).
     const after = await trade.tradeView(em(), C, NOW);
-    expect(after.requests.find((r) => r.id === posted.id)).toMatchObject({ status: "done", taken_by: `zz_tr_${A}` });
-    expect(after.requests.find((r) => r.id === posted.id)?.mine).toBe(false);
-    // The asker still sees it, done, flagged as theirs.
-    expect((await trade.tradeView(em(), B, NOW)).requests.find((r) => r.id === posted.id)).toMatchObject({ status: "done", mine: true });
+    expect(after.requests.find((r) => r.id === posted.id)).toBeUndefined();
     expect(after.recent).toHaveLength(2);
+    expect(after.recent.map((r) => [r.from, r.to]).sort()).toEqual([
+      [`zz_tr_${A}`, `zz_tr_${B}`],
+      [`zz_tr_${B}`, `zz_tr_${A}`],
+    ]);
+    expect(after.myTaken).toEqual([]);
+    const askerView = await trade.tradeView(em(), B, NOW);
+    expect(askerView.requests.find((r) => r.id === posted.id)).toBeUndefined();
+    expect(askerView.myRequest).toBeNull();
+    // The asker's yard is told once what arrived: the id of their taken request.
+    expect(askerView.myTaken).toEqual([posted.id]);
+    // The daily limits count from the database, not the list: B's post still counts.
+    expect(askerView.today).toMatchObject({ swapsLeft: 0, postsLeft: 2 });
 
     // One completed swap per player per UTC day: neither side can swap again today.
     expect((await trade.tradeView(em(), A, NOW)).today.swapsLeft).toBe(0);
@@ -225,6 +246,26 @@ describe.skipIf(!enabled)("alliance trading on a real database", () => {
     expect(await reasonOf(trade.postRequest(em(), B, "r1", "r4", 100, NOW))).toBe("tradedToday");
     // A new UTC day resets it; C's request (48 h) is still up.
     expect((await trade.acceptRequest(em(), A, third.id, NOW + 86_400)).got).toEqual({ r2: 90 });
+  });
+
+  test("Recent trades: the last 2 swaps of the last 48 hours, then none (owner, 19 Nov 2026)", async () => {
+    const H = 3_600;
+    // 49 h ago: gone; nothing else, so the tab says "No trades yet".
+    await swapped(A, B, NOW - 49 * H);
+    expect((await trade.tradeView(em(), C, NOW)).recent).toEqual([]);
+    // Two swaps within 48 h: both show, newest first, a receipt each way.
+    await swapped(A, C, NOW - 30 * H);
+    await swapped(B, C, NOW - 2 * H);
+    let recent = (await trade.tradeView(em(), A, NOW)).recent;
+    expect(recent.map((r) => r.at)).toEqual([NOW - 2 * H, NOW - 2 * H, NOW - 30 * H, NOW - 30 * H]);
+    expect(recent[0]).toMatchObject({ arrived: { r1: 90 } });
+    // A third pushes the oldest out.
+    await swapped(A, OUT, NOW - H);
+    recent = (await trade.tradeView(em(), A, NOW)).recent;
+    expect(recent.map((r) => r.at)).toEqual([NOW - H, NOW - H, NOW - 2 * H, NOW - 2 * H]);
+    // Later on: a swap 48 h old is gone; once all are, "No trades yet".
+    expect((await trade.tradeView(em(), A, NOW + 46 * H)).recent.map((r) => r.at)).toEqual([NOW - H, NOW - H]);
+    expect((await trade.tradeView(em(), A, NOW + 47 * H)).recent).toEqual([]);
   });
 
   test("two mates accepting at once: exactly one swap", async () => {

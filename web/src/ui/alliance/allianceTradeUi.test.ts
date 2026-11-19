@@ -220,12 +220,16 @@ describe("Trade tab", () => {
     expect(why.textContent).toBe(words);
   });
 
-  it("a done request shows who took it and no Accept", async () => {
+  it("a taken request leaves Mates' requests at once (owner, 19 Nov): it shows under Recent trades instead", async () => {
     await mount(withView({ requests: [request({ status: "done", taken_by: "Tina" })] }));
-    const row = document.querySelector('.trade-request[data-request="7"]')!;
-    expect(row.classList.contains("is-done")).toBe(true);
-    expect(row.textContent).toContain(TRADE_TEXT.takenBy("Tina"));
+    expect(document.querySelector('.trade-request[data-request="7"]')).toBeNull();
     expect(acceptButton()).toBeNull();
+    expect(document.querySelector(".trade-requests")?.textContent).toBe(TRADE_TEXT.noRequests);
+  });
+
+  it("no recent swaps in 48 h: No trades yet", async () => {
+    await mount(withView({ recent: [] }));
+    expect(document.querySelector(".trade-recent")?.textContent).toBe(TRADE_TEXT.noRecent);
   });
 
   it("no requests: one short line", async () => {
@@ -356,19 +360,18 @@ describe("swaps only (owner, 16 Nov 2026)", () => {
     expect(document.querySelector(".trade-today__stat")!.classList.contains("is-used")).toBe(true);
   });
 
-  it("your own request, taken by a mate: reads from your side, and the yard refreshes once for what arrived", async () => {
-    const done = request({ id: 9, userid: 1, username: "Me", give: "r1", want: "r4", amount: 2_000_000, gets: 1_800_000, status: "done", taken_by: "Tina", mine: true });
-    const api = withView({ requests: [done] });
+  it("your own request, taken by a mate: no row is left, and the yard refreshes once for what arrived", async () => {
+    const api = withView({ requests: [], myTaken: [9] });
     const { tab, host } = await mount(api);
-    const row = document.querySelector('.trade-request[data-request="9"]')!;
-    expect([...row.querySelectorAll<HTMLElement>(".trade-swap__side")].map((side) => [side.dataset["key"], side.querySelector(".trade-swap__n")?.textContent])).toEqual([
-      ["r1", "−2,000,000"],
-      ["r4", "+1,800,000"],
-    ]);
-    expect(row.querySelector(".trade-request__given")?.textContent).toBe("✓ Swapped with Tina");
+    expect(document.querySelector('.trade-request[data-request="9"]')).toBeNull();
     expect(host.traded).toHaveBeenCalledTimes(1);
     await tab.load();
     expect(host.traded).toHaveBeenCalledTimes(1);
+  });
+
+  it("no request of yours taken: the yard is not told", async () => {
+    const { host } = await mount(withView({ myTaken: [] }));
+    expect(host.traded).not.toHaveBeenCalled();
   });
 
   it("a reload clears an old line such as Request posted", async () => {

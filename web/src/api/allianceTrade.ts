@@ -37,7 +37,7 @@ export interface TradeRequest {
   readonly status: "open" | "done";
   /** Who accepted it (done requests). */
   readonly taken_by: string | null;
-  /** The reader's own request: a done one reads from their side (what they gave → what they got). */
+  /** The reader's own request. */
   readonly mine?: boolean;
   /** The asker's storage (open requests), for the room check. */
   readonly storage: TradeStorage | null;
@@ -59,7 +59,10 @@ export interface TradeView {
   readonly me: TradeStorage | null;
   readonly myRequest: TradeRequest | null;
   readonly requests: readonly TradeRequest[];
+  /** Last 2 swaps of the last 48 h, a receipt each way (owner, 19 Nov 2026). */
   readonly recent: readonly TradeRecent[];
+  /** Ids of the reader's own requests a mate took in the last day: the yard fetches what arrived once each. */
+  readonly myTaken?: readonly number[];
 }
 
 /** What an accept did, for the accepter. */
