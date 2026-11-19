@@ -2550,6 +2550,27 @@
   color: var(--colour-text-muted);
 }
 
+/* The stacked phone row (below) also wherever the card itself is narrow, such
+   as an iPad in Split View: two 16-character names need about 570 px on one
+   line, and a wrap there would leave a dot at a line's end. */
+.trade-recent {
+  container-type: inline-size;
+}
+
+@container (max-width: 600px) {
+  .trade-recent__side:first-child {
+    flex-basis: 100%;
+  }
+
+  .trade-recent__sep {
+    display: none;
+  }
+
+  .trade-recent__ago {
+    margin-left: auto;
+  }
+}
+
 .trade-recent__ago {
   color: var(--colour-text-muted);
   font-size: var(--text-xs);
