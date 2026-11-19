@@ -305,6 +305,40 @@ describe("wallUpgradePanel picking", () => {
     expect(harness.confirm.disabled).toBe(false);
   });
 
+  it("shows Affordable pressed, not greyed, while the pick is what it would pick", () => {
+    // Owner, 2026-11-19: the grey read as Affordable's selected state and did
+    // not match the selected Level button.
+    const yard = yardOf({ r1: 0, r2: 25_000 }, 10);
+    const harness = pickOpen(yard, [1, 2, 3, 4]);
+    const afford = harness.tool("Affordable");
+    expect(afford.getAttribute("aria-pressed")).toBe("false");
+
+    harness.panel.setNodes(nodesOf(yard, [1, 2]));
+    expect(afford.getAttribute("aria-pressed")).toBe("true");
+    expect(afford.disabled).toBe(false);
+    expect(afford.title).toBe("Your pick is already all you can afford at level 2.");
+    // It takes the same selected rule as the chosen level: the same class
+    // pair the stylesheet keys on, and the same attribute.
+    expect(afford.matches('.planner-walls__tool[aria-pressed="true"]')).toBe(true);
+    expect(harness.level()).toBe("2");
+    // Pressing it again changes nothing.
+    harness.onPick.mockClear();
+    afford.click();
+    expect(harness.onPick).not.toHaveBeenCalled();
+
+    // A pick that differs again lets it go.
+    harness.panel.setNodes(nodesOf(yard, [1]));
+    expect(afford.getAttribute("aria-pressed")).toBe("false");
+    afford.click();
+    expect(harness.onPick).toHaveBeenLastCalledWith([1, 2]);
+  });
+
+  it("leaves Select all and Clear one-shot: no pressed state", () => {
+    const harness = pickOpen(yardOf(RICH, 10), [1, 2, 3, 4]);
+    expect(harness.tool("Select all").hasAttribute("aria-pressed")).toBe(false);
+    expect(harness.tool("Clear").hasAttribute("aria-pressed")).toBe(false);
+  });
+
   it("Affordable with nothing picked picks from every wall", () => {
     const yard = yardOf({ r1: 0, r2: 25_000 }, 10);
     const harness = pickOpen(yard, []);

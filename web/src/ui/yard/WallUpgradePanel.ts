@@ -42,7 +42,9 @@ import { RESOURCE_KEYS, resourceIcon, resourceName } from "@/ui/resourceIcon";
  *    hidden: a level that vanishes tells the player nothing about how to get it.
  * 2. **Select all / Affordable / Clear** (picking only): Select all is greyed
  *    when the yard cannot pay for every wall below the level, Affordable when
- *    it cannot pay for one, Clear when nothing is picked.
+ *    it cannot pay for one, Clear when nothing is picked. While the pick
+ *    already is the affordable one, Affordable shows pressed, in the chosen
+ *    level's look (owner, 2026-11-19); the other two are one-shot.
  * 3. The pick, and what it costs: resource icons and short figures (red when
  *    short; the whole figure in the tooltip), and the time.
  * 4. Upgrade N, greyed when it cannot be sent, and Cancel.
@@ -185,7 +187,9 @@ export const wallUpgradePanel = (options: WallUpgradePanelOptions): WallUpgradeP
   let affordIds: number[] = [];
   if (pick) {
     all.addEventListener("click", () => pick.onPick(allIds));
-    afford.addEventListener("click", () => pick.onPick(affordIds));
+    afford.addEventListener("click", () => {
+      if (afford.getAttribute("aria-pressed") !== "true") pick.onPick(affordIds);
+    });
     clear.addEventListener("click", () => pick.onPick([]));
     tools.append(all, afford, clear);
     content.push(tools);
@@ -267,7 +271,11 @@ export const wallUpgradePanel = (options: WallUpgradePanelOptions): WallUpgradeP
 
       const fill = affordableFill(walls, everything, target, yard);
       affordIds = fill.ids;
-      afford.disabled = fill.reason !== null;
+      // The pick already is the affordable one: the button reads as chosen,
+      // in the chosen level's look, rather than greyed (owner, 2026-11-19).
+      // Pressing it again would change nothing, so the click is ignored.
+      afford.disabled = fill.reason !== null && !fill.applied;
+      afford.setAttribute("aria-pressed", String(fill.applied));
       afford.title = fill.reason ?? `Pick as many walls as you can pay for at level ${target}.`;
     }
     clear.disabled = walls.length === 0;

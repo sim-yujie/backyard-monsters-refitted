@@ -247,7 +247,9 @@
   font-weight: 600;
 }
 
-.planner-walls__level[aria-pressed="true"] {
+/* The chosen level, and Affordable while the pick is already what it would
+   pick (owner, 2026-11-19): one selected look for both rows. */
+:is(.planner-walls__level, .planner-walls__tool)[aria-pressed="true"] {
   background: var(--colour-accent);
   border-color: var(--colour-accent);
   color: var(--colour-accent-text);
@@ -256,7 +258,7 @@
 
 /* On a skin's plate the chosen level takes the Upgrade button's plate, so it is
    a different colour from every other level. */
-:root[data-skin] .planner-walls.panel .planner-walls__level[aria-pressed="true"] {
+:root[data-skin] .planner-walls.panel :is(.planner-walls__level, .planner-walls__tool)[aria-pressed="true"] {
   border-color: transparent;
   border-width: 0 var(--skin-button-cap);
   border-image-source: var(--skin-button);
@@ -268,6 +270,12 @@
   filter: drop-shadow(0 0 4px var(--colour-accent));
   text-shadow:
     0 2px 0 var(--skin-button-stroke), 2px 0 0 var(--skin-button-stroke), -2px 0 0 var(--skin-button-stroke), 0 -2px 0 var(--skin-button-stroke);
+}
+
+/* The rule above outranks the skin's focus glow (skin.css), so a chosen plate
+   reached by keyboard showed no focus: give it the glow back, white first. */
+:root[data-skin] .planner-walls.panel :is(.planner-walls__level, .planner-walls__tool)[aria-pressed="true"]:focus-visible {
+  filter: drop-shadow(0 0 2px #ffffff) drop-shadow(0 0 4px var(--colour-accent));
 }
 
 .planner-walls__level[disabled] .planner-walls__level-art {

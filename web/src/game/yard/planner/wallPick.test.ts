@@ -288,12 +288,20 @@ describe("Affordable at the chosen level", () => {
     expect(fill.reason).toBeNull();
   });
 
-  it("is greyed when the pick is already all the yard can afford", () => {
+  it("is held back, and marked applied, when the pick is already all the yard can afford", () => {
     const yard = yardOf({ r1: 0, r2: 25_000 });
     const plan = planOf(yard);
-    expect(affordableFill(nodes(plan, [1, 2]), plan.buildings(), 2, yard).reason).toBe(
-      "Your pick is already all you can afford at level 2.",
-    );
+    const fill = affordableFill(nodes(plan, [1, 2]), plan.buildings(), 2, yard);
+    expect(fill.reason).toBe("Your pick is already all you can afford at level 2.");
+    expect(fill.applied).toBe(true);
+  });
+
+  it("is not applied when nothing can be paid for, or the pick differs", () => {
+    const poor = yardOf({ r1: 0, r2: 0 });
+    expect(affordableFill([], planOf(poor).buildings(), 2, poor).applied).toBe(false);
+    const yard = yardOf({ r1: 0, r2: 25_000 });
+    const plan = planOf(yard);
+    expect(affordableFill(nodes(plan, [1]), plan.buildings(), 2, yard).applied).toBe(false);
   });
 
   it("is greyed when not one wall can be paid for", () => {
