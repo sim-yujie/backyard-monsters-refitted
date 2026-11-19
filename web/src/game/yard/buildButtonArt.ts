@@ -1,6 +1,7 @@
 import { classicLook } from "@/game/classicLook";
 import { MODERN_BUTTON_FILE } from "./buildButtonModernData";
 import type { YardKind } from "./buildingCosts";
+import { artUrl } from "../../artUrl";
 
 /**
  * The build menu's pictures: the original's building buttons, 120 × 160 JPEGs
@@ -24,7 +25,7 @@ import type { YardKind } from "./buildingCosts";
  */
 
 /** Where the game server keeps the art. Proxied in development. */
-const ROOT = "/assets/buildingbuttons/";
+const ROOT = artUrl("/assets/buildingbuttons/");
 
 /**
  * Types whose button is not simply `<type>.jpg`, the main yard's Inferno

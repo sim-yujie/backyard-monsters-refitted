@@ -13,6 +13,16 @@
 export const SERVER_URL: string = import.meta.env.VITE_SERVER_URL ?? "";
 
 /**
+ * Where the game's art (pictures, sounds, language files under `/assets`,
+ * `/gamestage` and `/templates`) is fetched from: `VITE_ART_URL`, for example
+ * `https://cdn.bymrevamped.com` (Cloudflare's cache in front of the game
+ * server). Empty, the default, keeps the art on the page's own address, as
+ * before: Vercel's rewrites in production, the Vite proxy in development.
+ * Use `artUrl()` (`artUrl.ts`) rather than this.
+ */
+export const ART_URL: string = import.meta.env.VITE_ART_URL ?? "";
+
+/**
  * Sent as the `:apiVersion` path segment on `/api/...` routes. The server only
  * enforces a match when USE_VERSION_MANAGEMENT=enabled
  * (server/src/middleware/apiVersioning.ts); otherwise any value passes.

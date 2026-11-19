@@ -43,9 +43,22 @@ const serverFolders = readdirSync(PUBLIC_DIR, { withFileTypes: true })
 
 const serverOrigin = config.buildCommand.match(/VITE_SERVER_URL=(\S+)/)?.[1];
 
+/** The art's own name behind Cloudflare (server/deploy/Caddyfile, CDN_DOMAIN). */
+const ART_ORIGIN = "https://cdn.bymrevamped.com";
+
 describe("vercel.json", () => {
   it("names the game server in the build command", () => {
     expect(serverOrigin).toMatch(/^https:\/\/[^/]+$/);
+  });
+
+  it("leaves VITE_ART_URL to Vercel's settings, so the art name is switched on without a code change", () => {
+    expect(config.buildCommand).not.toContain("VITE_ART_URL");
+  });
+
+  it("keeps the art rewrites: the rollback, and old open tabs, when VITE_ART_URL is set", () => {
+    for (const folder of ["assets", "gamestage", "templates"]) {
+      expect(config.rewrites.map((rewrite) => rewrite.source)).toContain(`/${folder}/:path*`);
+    }
   });
 
   it("sends every folder the server serves to the game server", () => {
@@ -110,10 +123,18 @@ describe("vercel.json Content-Security-Policy", () => {
     expect(header?.key).toBe("Content-Security-Policy-Report-Only");
   });
 
-  it("lets the game reach its server, over https and the chat's wss", () => {
+  it("lets the game reach its server, over https and the chat's wss, and the art name", () => {
     const host = serverOrigin!.replace(/^https:\/\//, "");
-    expect(directives.get("connect-src")).toEqual(["'self'", `https://${host}`, `wss://${host}`]);
+    expect(directives.get("connect-src")).toEqual(["'self'", `https://${host}`, `wss://${host}`, ART_ORIGIN]);
     expect(directives.get("img-src")).toContain(serverOrigin);
+  });
+
+  // VITE_ART_URL (src/artUrl.ts), set in Vercel's settings once Cloudflare caches the
+  // art: pictures and textures (fetch), sounds (fetch) and music (<audio>) come from it.
+  it("lets the art come from the cdn name (Cloudflare's cache)", () => {
+    for (const directive of ["img-src", "media-src", "connect-src"]) {
+      expect(directives.get(directive), directive).toContain(ART_ORIGIN);
+    }
   });
 
   it("allows scripts only from the page itself and the sign-up bot check, never inline", () => {

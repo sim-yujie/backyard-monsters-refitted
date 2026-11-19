@@ -15,6 +15,7 @@ import { BubbleMenu, bubbleMenuOn } from "./BubbleMenu";
 import { CollectAll } from "./CollectAll";
 import { YardMenu } from "./YardMenu";
 import { YardSwitcher } from "./YardSwitcher";
+import { artUrl } from "../../artUrl";
 
 /**
  * The yard's round buttons: the HUD redesign's "game corner" (#171, option B;
@@ -54,7 +55,7 @@ import { YardSwitcher } from "./YardSwitcher";
  */
 
 /** Monsters' picture: a Pokey, the first monster every player has. */
-const MONSTERS_ICON_URL = "/assets/monsters/C1-small.png";
+const MONSTERS_ICON_URL = artUrl("/assets/monsters/C1-small.png");
 
 export interface YardDockOptions {
   /** Map: the way to the world. */

@@ -207,7 +207,8 @@ describe("attackCheckpoint on a yard with no row", () => {
       expect(await run(tribeCtx(ATTACKER, [fling(400)], "201"))).toBeTruthy();
       expect(sets.get(ROWLESS_CHECKPOINT_INDEX)?.size ?? 0).toBe(0);
     } finally {
-      process.env.INFERNO_ENABLED = saved;
+      if (saved === undefined) delete process.env.INFERNO_ENABLED;
+      else process.env.INFERNO_ENABLED = saved;
     }
   });
 

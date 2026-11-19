@@ -5,7 +5,7 @@ import type { BaseLoadResponse } from "@/api/types";
 import { bucketCost, championByType, championStat, dropRadius, flingerPayload } from "@/game/combat/rules";
 import { AttackSession } from "./AttackSession";
 import type { AttackRoster, AttackTarget } from "./attackTarget";
-import { Bucket, bucketFor, LAST_ARMY_KEY_PREFIX } from "./bucket";
+import { AUTO_LOAD_KEY, Bucket, bucketFor, LAST_ARMY_KEY_PREFIX } from "./bucket";
 
 /**
  * The bucket (`docs/design/attack-flow.md` §F2, §6 WP3): a row never exceeds
@@ -675,5 +675,53 @@ describe("Bucket champion in the payload", () => {
     bucket.fillAll();
     expect(bucket.reserved()).toBe(0);
     expect(bucket.count("C1")).toBe(Math.floor(CAPACITY / bucketCost({ C1: 1 }, {})));
+  });
+});
+
+describe("auto-load last army (owner, 18 Nov 2026)", () => {
+  const fling = (session: AttackSession, bucket: Bucket): void => {
+    session.appendFling({ x: 100, y: 100, ...bucket.composition() });
+    bucket.afterDrop();
+  };
+
+  it("is off by default and starts every attack empty, ticked or not", () => {
+    const storage = fakeStorage();
+    const bucket = new Bucket(sessionWith({ monsters: { C1: 30 } }), { storage, playerKey: "7" });
+    expect(bucket.autoLoad()).toBe(false);
+    bucket.setCount("C1", 5);
+    bucket.saveLast();
+    expect(bucket.setAutoLoad(true)).toBe(true);
+    expect(storage.map.get(AUTO_LOAD_KEY)).toBe("1");
+    const next = new Bucket(sessionWith({ monsters: { C1: 30 } }), { storage, playerKey: "7" });
+    expect(next.autoLoad()).toBe(true);
+    expect(next.isEmpty()).toBe(true);
+  });
+
+  it("shares one last army across modes: a main-yard batch refills a Descent fling to its smaller capacity", () => {
+    const storage = fakeStorage();
+    const main = sessionWith({ monsters: { C1: 400 } });
+    const surface = new Bucket(main, { storage, playerKey: "7" });
+    surface.fillAll();
+    const sent = surface.count("C1");
+    fling(main, surface);
+
+    const descent = sessionWith({ monsters: { C1: 400 }, flingCapacity: 120 });
+    const below = new Bucket(descent, { storage, playerKey: "7" });
+    expect(below.isEmpty()).toBe(true);
+    below.setAutoLoad(true);
+    expect(below.cost()).toBeLessThanOrEqual(below.capacity());
+    expect(below.count("C1")).toBeLessThan(sent);
+    const short = below.count("C1");
+    fling(descent, below);
+    expect(below.count("C1")).toBe(short);
+    // The cut-short batch went out unchanged: the surface's army is still the saved one.
+    const saved = JSON.parse(storage.map.get(`${LAST_ARMY_KEY_PREFIX}7`) ?? "{}") as { monsters?: Record<string, number> };
+    expect(saved.monsters).toEqual({ C1: sent });
+  });
+
+  it("never auto-loads with no store (a Baiter test)", () => {
+    const bucket = new Bucket(sessionWith({ monsters: { C1: 30 } }), { storage: null });
+    expect(bucket.setAutoLoad(true)).toBe(false);
+    expect(bucket.autoLoad()).toBe(false);
   });
 });

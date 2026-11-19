@@ -404,7 +404,9 @@ describe("Fomor (issue #222)", () => {
    * and a Cannon Tower in the middle, some 300 from the walls. A walking
    * Fomor lands outside the north wall, a Pokey pack inside under the tower,
    * which wounds them, so they are the allies Fomor follows and the camp's
-   * buildings theirs. There is no way in but through a wall.
+   * buildings theirs. There is no way in but through a wall. Fomor lands 180
+   * out from the north wall, past its 140 reach (patch 7.9 measures that in
+   * yard units from the nearest tile), so no wall falls before it follows.
    */
   const walledCamp = (seed: number) => {
     const buildings: Record<string, CombatBuildingDataMap[string]> = {
@@ -432,7 +434,7 @@ describe("Fomor (issue #222)", () => {
       kind: "fling",
       t: 0,
       x: 0,
-      y: -420,
+      y: -480,
       r: 5,
       monsters: {},
       champion: { t: 3, l: 1 },

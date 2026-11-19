@@ -1,5 +1,6 @@
 import { classicLook } from "@/game/classicLook";
 import type { ResolvedImage } from "./buildingArt";
+import { artUrl } from "../../artUrl";
 
 /**
  * The fortification overlay art: a back and a front picture drawn around a
@@ -23,7 +24,7 @@ import type { ResolvedImage } from "./buildingArt";
  * Flash's own pictures.
  */
 
-const ASSET_ROOT = "/assets/buildings/fortifications/";
+const ASSET_ROOT = artUrl("/assets/buildings/fortifications/");
 
 /** `[front x, front y, back x, back y]` for tiers 1 to 4. */
 type TierOffsets = readonly (readonly [number, number, number, number])[];

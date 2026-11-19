@@ -24,6 +24,7 @@ import {
   QUAKE_SWINGS,
   START_FRAME_SPREAD,
   UNTARGETABLE_TYPES,
+  buildingReachOf,
   championPower,
   enrageArmour,
   enrageMultiplier,
@@ -69,7 +70,7 @@ import {
 import type { VacuumPlan } from "./vacuum.js";
 import type { BrainKey, BrainWeights, ChampionLesson } from "./brain.js";
 import { CURIOUS_EVERY, habitMind, hasHabits } from "./habits.js";
-import { buildPathGrid, cellOf, pointTarget } from "./grid.js";
+import { buildPathGrid, cellOf, GRID_WIDTH, pointTarget } from "./grid.js";
 import {
   FOMOR_CROWD_CAP,
   FOMOR_CROWD_RANGE,
@@ -233,6 +234,8 @@ import {
   isMainTarget,
   rangePointOf,
   reachesBuilding,
+  reachSquared,
+  sightPointOf,
   screenDistanceSquared,
   screenOf,
   screenPointOf,
@@ -302,6 +305,20 @@ import {
   weakenShare,
   wormzerMultiplier,
 } from "./specialMoves.js";
+
+/** Half the grid, the cell of yard 0 (`PATHING`). */
+const GRID_HALF = GRID_WIDTH >> 1;
+
+/**
+ * The yard middle of the grid cell nearest `value` along one axis, kept
+ * within a building's own cells (`anchor` its grid anchor, `size` its extent).
+ */
+const ownCellMiddle = (value: number, anchor: number, size: number): number => {
+  const first = Math.trunc(anchor * 0.1 + GRID_HALF);
+  const last = first + Math.ceil(size * 0.1) - 1;
+  const cell = Math.trunc(value * 0.1 + GRID_HALF);
+  return ((cell < first ? first : cell > last ? last : cell) - GRID_HALF) * 10 + 5;
+};
 
 /**
  * The deterministic battle: one fixed-timestep simulation both trees run.
@@ -5627,14 +5644,27 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
   /**
    * `canShootBuilding` and `canHitBuilding` (`CreepBase.as:735-748`,
    * `ChampionBase.as:424-438`): the building in range and, for a creep on foot,
-   * no standing wall between it and the building's anchor but the target
-   * itself (`PATHING.LineOfSight`). A flyer shoots over walls
+   * no standing wall between it and the building but the target itself
+   * (`PATHING.LineOfSight`). Since patch 7.9 both are measured to the
+   * footprint tile nearest the creep, in yard units ({@link reachesBuilding});
+   * Flash measured to the anchor, its top corner. A flyer shoots over walls
    * (`ChampionBase.as:432-434`; a flying monster strikes from where it circles
    * in, `MonsterBase.as:1121-1158`). Short of that, a walker keeps to its route.
    */
-  const canShootBuilding = (creep: Creep, building: EngineBuilding, range: number): boolean =>
-    reachesBuilding(creep.ix, creep.iy, building, range) &&
-    (creep.flying || grid.lineOfSight(creep.x, creep.y, building.cx, building.cy, building.id));
+  const canShootBuilding = (creep: Creep, building: EngineBuilding, range: number): boolean => {
+    if (!reachesBuilding(creep.ix, creep.iy, building, range)) return false;
+    if (creep.flying) return true;
+    // Sight runs to the middle of the building's own grid cell nearest the
+    // footprint point in reach, so it ends on the building (patch 7.9).
+    const sight = sightPointOf(creep.ix, creep.iy, building);
+    return grid.lineOfSight(
+      creep.x,
+      creep.y,
+      ownCellMiddle(sight.x, building.cx, building.w),
+      ownCellMiddle(sight.y, building.cy, building.h),
+      building.id,
+    );
+  };
 
   const fight = (creep: Creep, foe: Creep): void => {
     const squared = screenDistanceSquared(creep.ix, creep.iy, foe.ix, foe.iy);
@@ -5864,6 +5894,10 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
     const at = screenPointOf(creep.ix, creep.iy);
     return distanceSquared(at.x, at.y, building.sx, building.sy);
   };
+
+  /** A following Fomor's reach to a building, yard units squared from its nearest tile. */
+  const reachToSquared = (creep: Creep, building: EngineBuilding): number =>
+    reachSquared(creep.ix, creep.iy, building);
 
   /** Whether a champion's aura is live: `inBattleState` (`MonsterBase.as:350-352`). */
   const inBattle = (creep: Creep): boolean =>
@@ -6276,7 +6310,7 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
       } else if (
         apartSquared(creep, ally) < reach &&
         allyAim &&
-        toBuildingSquared(creep, allyAim) < reach
+        reachToSquared(creep, allyAim) < reach
       ) {
         creep.atTarget = true;
       } else if (!creep.attacking && frame % FOMOR_IDLE_FRAMES === 0) {
@@ -6328,7 +6362,7 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
     if ((allyAim && allyAim.hp > 0) || (ownAim && ownAim.hp > 0)) {
       if (ally) creep.targetBuilding = ally.targetBuilding;
       const aim = creep.targetBuilding >= 0 ? buildingOf(creep.targetBuilding) : null;
-      if (aim && toBuildingSquared(creep, aim) < reach) {
+      if (aim && reachToSquared(creep, aim) < reach) {
         creep.attacking = true;
         swing(creep);
       } else if (aim) {
@@ -6582,12 +6616,14 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
     // A Bolt that blinks spends the tick on its hop (issue #352).
     if (creep.rank > 0 && creep.monsterId === BOLT_ID && tickBlink(creep)) return;
 
-    // A ranged creep stops as soon as its target is inside its range, a circle
-    // on screen around the building's anchor, with no wall in the way on foot
-    // (`CreepBase.as:735-748`).
+    // A ranged creep or a champion stops as soon as its target is inside its
+    // reach, with no wall in the way on foot (`CreepBase.as:735-748`): its
+    // range from the nearest tile (patch 7.9), but a melee champion's
+    // one cell, `MELEE_BUILDING_REACH` (patch 7.10, `buildingReachOf`).
     if (!creep.atTarget && creep.range > 1) {
       const aim = creep.targetBuilding >= 0 ? buildingOf(creep.targetBuilding) : null;
-      if (aim && canShootBuilding(creep, aim, creep.range)) creep.atTarget = true;
+      const reach = buildingReachOf(creep.monsterId, creep.champion, creep.range);
+      if (aim && canShootBuilding(creep, aim, reach)) creep.atTarget = true;
     }
 
     if (creep.atTarget) {

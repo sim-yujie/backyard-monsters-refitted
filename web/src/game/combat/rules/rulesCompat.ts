@@ -5,14 +5,23 @@
  * (`defenceWatch.ts`) and the server's Defences list (`defences.ts`) both
  * read it.
  *
- * - b4f0c156a8d2afee: v2.0.0-beta.7.7.2. Patch 7.8 changed only how a
- *   champion's attack is judged after the battle (Fomor's lesson, `habits.ts`);
- *   every battle and its digest is the same (`rulesCompat.test.ts`).
+ * Empty since patch 7.9 (18 Nov 2026): a wall now blocks the pathing grid on
+ * its stored X/Y rather than up to a cell off it (`yard.ts`, `buildEngineYard`),
+ * which moves battles against walls off Flash's 10-unit lattice (many player
+ * yards and most tribe yards have some), and a champion or ranged creep now
+ * reaches a building `range` yard units from its nearest tile instead of
+ * screen pixels from its top corner (`reachSquared`), which moves nearly every
+ * battle with one. No replay stamped with an older version (7.7.2's
+ * b4f0c156a8d2afee, 7.8's b03bd4b8bac1386d) plays the same any more.
+ * Patch 7.10 (19 Nov 2026) keeps it empty: Gorgo, melee, now hits a building
+ * only from one cell off its nearest tile (`MELEE_REACH_CHAMPIONS`), which
+ * moves every battle he attacks in, so 7.9's fa6de785db1c4615 replays with
+ * Gorgo no longer play the same.
  *
  * Add the version a change replaces only when that change moves no battle.
  * A change that moves any battle result must empty this list.
  */
-export const COMPATIBLE_RULES_VERSIONS: readonly string[] = ["b4f0c156a8d2afee"];
+export const COMPATIBLE_RULES_VERSIONS: readonly string[] = [];
 
 /**
  * Whether a battle stamped with the rules version `stamp` plays to its stored

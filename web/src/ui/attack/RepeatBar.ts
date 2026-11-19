@@ -1,4 +1,5 @@
 import type { PlanSummary } from "@/api/autoAttack";
+import { artUrl } from "@/artUrl";
 import { classicLook } from "@/game/classicLook";
 import { championByType } from "@/game/combat/rules";
 import { tribePictureUrl } from "@/game/maproom/tribeAvatars";
@@ -25,7 +26,7 @@ export const MAX_MARCHERS = 4;
 export const tribeGoalPicture = (tribe: string, classic: boolean = classicLook()): string | null => {
   const file = tribe.toLowerCase();
   if (!["legionnaire", "kozu", "abunakki", "dreadnaut"].includes(file)) return null;
-  return classic ? `/assets/popups/tribe_${file}.v2.png` : tribePictureUrl(tribe);
+  return classic ? artUrl(`/assets/popups/tribe_${file}.v2.png`) : tribePictureUrl(tribe);
 };
 
 /** One marcher: a monster kind (with how many) or a champion. */

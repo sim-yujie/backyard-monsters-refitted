@@ -1,3 +1,4 @@
+import { artUrl } from "../../artUrl";
 /**
  * The Thanksgiving yard dress-up (owner, 8 Nov 2026): three looks were made
  * for the owner to choose from, switched with `?tgskin=a`, `b` or `c` on the
@@ -110,7 +111,7 @@ export const thanksgivingSkin = (): ThanksgivingSkin =>
   SKINS[skinIdFrom(typeof location === "undefined" ? "" : location.search)];
 
 /** Where the Thanksgiving pictures are served (`server/public/assets/specialevent/thanksgiving/`). */
-export const THANKSGIVING_ART = "/assets/specialevent/thanksgiving/";
+export const THANKSGIVING_ART = artUrl("/assets/specialevent/thanksgiving/");
 
 /** The painted props and leaves, @2x (drawn at half size): `props.png`. */
 export const PROPS_ART = `${THANKSGIVING_ART}props.png`;
@@ -135,7 +136,7 @@ export const PROP_SCALE = 0.5;
  * small group (picture, offset from the spot in world px). Flash pictures are
  * drawn at their own size.
  */
-const FLASH_DECOR = "/assets/buildings/decorations/";
+const FLASH_DECOR = artUrl("/assets/buildings/decorations/");
 export const CLASSIC_PROPS: Readonly<Record<PropName, readonly { readonly url: string; readonly dx: number; readonly dy: number }[]>> = {
   corn: [{ url: `${FLASH_DECOR}scarecrow/top.png`, dx: 0, dy: 0 }],
   hay: [

@@ -45,7 +45,7 @@
   },
   "expected": {
     "ticks": 9800,
-    "damage": 6.784794991447612,
+    "damage": 7.678064333992069,
     "destroyed": null,
     "attackloot": {
       "r1": 0,
@@ -60,62 +60,62 @@
       "r4": 0
     },
     "firedTraps": 0,
-    "destroyedBuildings": 21,
+    "destroyedBuildings": 22,
     "creepsFlung": 40,
-    "creepsKilled": 40,
-    "championHp": 66156.02060226597,
-    "damagedBuildings": 22,
-    "rngDraws": 1714,
+    "creepsKilled": 37,
+    "championHp": 44890.36471753202,
+    "damagedBuildings": 23,
+    "rngDraws": 2431,
     "checkpoints": [
       {
         "tick": 800,
-        "digest": "d0caa20967d742cf"
+        "digest": "e294b9de5ff7333c"
       },
       {
         "tick": 1600,
-        "digest": "f249a75413792432"
+        "digest": "6eec1ed275ba329c"
       },
       {
         "tick": 2400,
-        "digest": "65e4e0a5404c935b"
+        "digest": "75eb95f2b8b3e248"
       },
       {
         "tick": 3200,
-        "digest": "567a889b2786c2fd"
+        "digest": "ef0703fa6a258448"
       },
       {
         "tick": 4000,
-        "digest": "a4a615f99291040f"
+        "digest": "174463f5189a6c77"
       },
       {
         "tick": 4800,
-        "digest": "c96c7c4eb7a07b10"
+        "digest": "2ef8e336ccdd481c"
       },
       {
         "tick": 5600,
-        "digest": "6f1828f039903b62"
+        "digest": "fcd8c42c9b1d8a0e"
       },
       {
         "tick": 6400,
-        "digest": "3f190da3c52b3b01"
+        "digest": "dafec03d44d73c8f"
       },
       {
         "tick": 7200,
-        "digest": "f13333c4473d85fa"
+        "digest": "cdb50cf4a69f1276"
       },
       {
         "tick": 8000,
-        "digest": "410c6f0582460fcb"
+        "digest": "6fee09b5a6c5dcc3"
       },
       {
         "tick": 8800,
-        "digest": "203ad41a4cb35530"
+        "digest": "f899f25b6aa9744d"
       },
       {
         "tick": 9600,
-        "digest": "d01e7ef374a0d851"
+        "digest": "d6ffab636e376579"
       }
     ],
-    "digest": "ff1dc4bd585deecf"
+    "digest": "fb4f893d5708a583"
   }
 }

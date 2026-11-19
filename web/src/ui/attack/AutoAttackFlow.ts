@@ -46,7 +46,8 @@ import "@/ui/styles/autoattack.css";
 /**
  * Auto-attack's screens (issue #221): the confirm sheet, the working bar,
  * the result, and from it Watch. One flow, opened from the map's camp
- * panel (Repeat attack) and from the end-of-attack panel (Attack again).
+ * panel (Repeat attack). The end-of-attack panel's Attack again that also
+ * opened it is gone (owner, 18 Nov 2026).
  *
  * The owner's rules, as the screens carry them: the sheet is always shown,
  * since monsters are spent, and lists the champion and bombs the attack
@@ -94,8 +95,8 @@ export interface AutoAttackFlowOptions {
   readonly now?: () => number;
   /**
    * Show the working bar while the attack runs (owner, 15 Nov 2026): the
-   * map's Repeat attack and the end panel's Attack again. Without it, the
-   * plain "Your monsters are attacking…" line.
+   * map's Repeat attack asks for it. Without it, the plain "Your monsters
+   * are attacking…" line.
    */
   readonly progressBar?: boolean;
   /** The bar's clock and timer; the real ones by default. */

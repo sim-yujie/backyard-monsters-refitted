@@ -241,7 +241,7 @@ describe("Heights from the screen use Safari's visible height (iPad toolbars)", 
     );
     expect(readSheet("ui/styles/ui.css")).toContain("max-height: min(70dvh, 640px);");
     expect(readSheet("ui/styles/attack.css")).toContain(
-      "max-height: calc(100dvh - var(--hud-height) - var(--hud-inset) - var(--space-7) - var(--space-6));",
+      "max-height: calc(100dvh - var(--hud-height) - var(--hud-inset) - var(--space-7) - var(--space-6) - var(--attack-dock-shift, 0px));",
     );
   });
 });

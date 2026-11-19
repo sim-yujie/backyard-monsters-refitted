@@ -1,13 +1,28 @@
 # The front door of the game server (docs/deploy.md).
 #
-# Caddy answers on ports 80 and 443, gets and renews the HTTPS certificate for
-# API_DOMAIN by itself (Let's Encrypt), and passes each request on to the game
-# server inside Docker. Nothing else on the server is reachable from outside.
+# Caddy answers on ports 80 and 443, gets and renews the HTTPS certificates for
+# API_DOMAIN and CDN_DOMAIN by itself (Let's Encrypt), and passes each request
+# on to the game server inside Docker. Nothing else on the server is reachable
+# from outside.
 #
-# API_DOMAIN and ACME_EMAIL come from production.env (docker-compose.prod.yml).
+# API_DOMAIN, CDN_DOMAIN and ACME_EMAIL come from production.env
+# (docker-compose.prod.yml).
 
 {
 	email {$ACME_EMAIL}
+
+	servers {
+		# Cloudflare's published ranges (https://www.cloudflare.com/ips-v4 and
+		# /ips-v6). A request that connects from one of them came through
+		# Cloudflare, so its CF-Connecting-IP header names the player; from any
+		# other address the header is ignored and the connecting address counts,
+		# so nobody can fake an address by going round Cloudflare.
+		#
+		# Keep this list equal to CLOUDFLARE_RANGES in
+		# server/src/config/ProxyConfig.ts (a test compares the two).
+		trusted_proxies static 173.245.48.0/20 103.21.244.0/22 103.22.200.0/22 103.31.4.0/22 141.101.64.0/18 108.162.192.0/18 190.93.240.0/20 188.114.96.0/20 197.234.240.0/22 198.41.128.0/17 162.158.0.0/15 104.16.0.0/13 104.24.0.0/14 172.64.0.0/13 131.0.72.0/22 2400:cb00::/32 2606:4700::/32 2803:f800::/32 2405:b500::/32 2405:8100::/32 2a06:98c0::/29 2c0f:f248::/32
+		client_ip_headers CF-Connecting-IP
+	}
 }
 
 {$API_DOMAIN} {
@@ -16,20 +31,42 @@
 	# it apart from the game's own routes.
 	handle /chat* {
 		reverse_proxy web:3010 {
-			header_up CF-Connecting-IP {remote_host}
+			header_up CF-Connecting-IP {client_ip}
 		}
 	}
 
 	# Everything else: the game API and the art under /assets, /gamestage and
-	# /templates (which the web client on Vercel fetches through its rewrites).
+	# /templates (which the web client on Vercel fetches through its rewrites,
+	# or from CDN_DOMAIN below once VITE_ART_URL is set).
 	handle {
 		encode zstd gzip
 		# The server keys its rate limits on CF-Connecting-IP when the request
 		# comes from a trusted proxy (TRUSTED_PROXIES, server/src/config/ProxyConfig.ts).
 		# Caddy is that proxy here: it overwrites whatever the visitor sent with
-		# the address that really connected.
+		# {client_ip}, the player's address (see `servers` above): the address
+		# that really connected, or Cloudflare's CF-Connecting-IP when the
+		# connection came from Cloudflare.
 		reverse_proxy web:3001 {
-			header_up CF-Connecting-IP {remote_host}
+			header_up CF-Connecting-IP {client_ip}
 		}
+	}
+}
+
+# The art only, for Cloudflare's cache (VITE_ART_URL in the web client points
+# here). A CNAME to API_DOMAIN, so moving the server stays one DNS change.
+# Nothing but the three art folders is passed on, so no API answer can ever be
+# cached through this name. The certificate is renewed over port 80 (HTTP-01),
+# which Cloudflare passes through as long as its "Always Use HTTPS" is off.
+{$CDN_DOMAIN} {
+	@art path /assets/* /gamestage/* /templates/*
+	handle @art {
+		encode zstd gzip
+		reverse_proxy web:3001 {
+			header_up CF-Connecting-IP {client_ip}
+		}
+	}
+
+	handle {
+		respond 404
 	}
 }

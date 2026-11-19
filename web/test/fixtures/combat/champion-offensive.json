@@ -45,7 +45,7 @@
   },
   "expected": {
     "ticks": 9800,
-    "damage": 7.34941959911653,
+    "damage": 6.177657472142428,
     "destroyed": null,
     "attackloot": {
       "r1": 0,
@@ -60,62 +60,62 @@
       "r4": 0
     },
     "firedTraps": 0,
-    "destroyedBuildings": 22,
+    "destroyedBuildings": 20,
     "creepsFlung": 40,
     "creepsKilled": 40,
-    "championHp": 87396.70844176035,
-    "damagedBuildings": 23,
-    "rngDraws": 1562,
+    "championHp": 70404.01047625409,
+    "damagedBuildings": 21,
+    "rngDraws": 1573,
     "checkpoints": [
       {
         "tick": 800,
-        "digest": "7111a2d4021e045a"
+        "digest": "764871595d92d1bf"
       },
       {
         "tick": 1600,
-        "digest": "6b6d1acd627e9ff3"
+        "digest": "e56858ea86936270"
       },
       {
         "tick": 2400,
-        "digest": "cd1df711c7a102ab"
+        "digest": "54a7298502a5d20b"
       },
       {
         "tick": 3200,
-        "digest": "1d15b0bc48e5768e"
+        "digest": "56168b112d37c69b"
       },
       {
         "tick": 4000,
-        "digest": "809ce1bad09233d4"
+        "digest": "5dccf5818c4f5cc7"
       },
       {
         "tick": 4800,
-        "digest": "3b428ed1de07a29f"
+        "digest": "2bce9ce11c9a8b8f"
       },
       {
         "tick": 5600,
-        "digest": "af2378da9b50b93c"
+        "digest": "1fab77e7c6bf6195"
       },
       {
         "tick": 6400,
-        "digest": "405bacdbaf3fa07d"
+        "digest": "3ba0c32c1bf17856"
       },
       {
         "tick": 7200,
-        "digest": "d014f3db05bd7a8d"
+        "digest": "adeebe39648e7067"
       },
       {
         "tick": 8000,
-        "digest": "2c95bc936a41a1e1"
+        "digest": "443dc8902de021e6"
       },
       {
         "tick": 8800,
-        "digest": "fba5eeebfac3ddc1"
+        "digest": "3495f8dc2c8bd44a"
       },
       {
         "tick": 9600,
-        "digest": "97e4bfc83d5db03a"
+        "digest": "70f9f385853634cf"
       }
     ],
-    "digest": "29739e5b1919fdcd"
+    "digest": "6599382b177c1975"
   }
 }

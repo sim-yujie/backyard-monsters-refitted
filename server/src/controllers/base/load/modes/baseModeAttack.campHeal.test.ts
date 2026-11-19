@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, mock, test } from "bun:test";
+import { afterAll, beforeEach, describe, expect, mock, test } from "bun:test";
 import { Save } from "../../../../database/models/save.model.js";
 import { Truce } from "../../../../database/models/truce.model.js";
 import { User } from "../../../../database/models/user.model.js";
@@ -176,6 +176,12 @@ beforeEach(() => {
   sessions.clear();
   refuseRange = false;
   claims = { tried: 0, won: 0 };
+  rangeBarrier = null;
+});
+
+/* mock.module stays registered for later files in a plain `bun test`: leave the stand-in in range. */
+afterAll(() => {
+  refuseRange = false;
   rangeBarrier = null;
 });
 

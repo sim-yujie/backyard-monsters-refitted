@@ -3,6 +3,7 @@ import type { Roster } from "@/game/combat/rules";
 import { monsterName } from "@/game/combat/rules";
 import { TROJAN_TRIBE } from "@/game/trojan/trojanHorse";
 import { TROJAN_GOOD_DEFENCE } from "@/game/trojan/trojanText";
+import { artUrl } from "../../artUrl";
 
 /**
  * The words and pictures of the raid screens (issue #226 WP4). The text is
@@ -24,22 +25,22 @@ export interface RaidTribe {
 const TRIBES: Readonly<Record<string, RaidTribe>> = {
   Legionnaire: {
     name: "Legionnaire",
-    splash: "/assets/popups/tribe_legionnaire.v2.png",
+    splash: artUrl("/assets/popups/tribe_legionnaire.v2.png"),
     taunt: "We're just getting warmed up!",
   },
   Kozu: {
     name: "Kozu",
-    splash: "/assets/popups/tribe_kozu.v2.png",
+    splash: artUrl("/assets/popups/tribe_kozu.v2.png"),
     taunt: "The source of our power is a secret.",
   },
   Abunakki: {
     name: "Abunakki",
-    splash: "/assets/popups/tribe_abunakki.v2.png",
+    splash: artUrl("/assets/popups/tribe_abunakki.v2.png"),
     taunt: "We'll be back for your bones!",
   },
   Dreadnaut: {
     name: "Dreadnaut",
-    splash: "/assets/popups/tribe_dreadnaut.v2.png",
+    splash: artUrl("/assets/popups/tribe_dreadnaut.v2.png"),
     taunt: "Science will prevail!",
   },
 };
@@ -88,8 +89,8 @@ export const alertMonsters = (monsters: Roster, most = 3): AlertMonster[] =>
       id,
       name: monsterName(id),
       count,
-      picture: `/assets/monsters/${id}-portrait.jpg`,
-      fallback: `/assets/monsters/${id}-small.png`,
+      picture: artUrl(`/assets/monsters/${id}-portrait.jpg`),
+      fallback: artUrl(`/assets/monsters/${id}-small.png`),
     }));
 
 /** How many raiders in all. */

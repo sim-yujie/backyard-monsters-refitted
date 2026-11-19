@@ -621,7 +621,9 @@ describe("the DEV trigger", () => {
       expect(await pending()).toBe(true);
       expect((await readBotCheckLog())[0]).toMatchObject({ event: "trigger", rule: "dev" });
     } finally {
-      process.env.ENV = saved;
+      // `process.env.ENV = undefined` would store the string "undefined".
+      if (saved === undefined) delete process.env.ENV;
+      else process.env.ENV = saved;
     }
   });
 });

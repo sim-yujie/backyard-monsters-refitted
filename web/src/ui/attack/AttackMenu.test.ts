@@ -80,10 +80,9 @@ describe("sheetHandleLabel", () => {
     expect(sheetHandleLabel(document.createElement("div"))).toBe("Army");
   });
 
-  it("names the open picker", () => {
+  it("names the window a replay's sheet holds", () => {
     const dock = document.createElement("div");
-    dock.classList.add("attack-dock--picker");
-    dock.append(panel("attack-army", "Army"), panel("attack-catapult attack-picker", "Catapult"));
-    expect(sheetHandleLabel(dock)).toBe("Catapult");
+    dock.append(panel("map-panel watch-dock", "Replay"));
+    expect(sheetHandleLabel(dock)).toBe("Replay");
   });
 });

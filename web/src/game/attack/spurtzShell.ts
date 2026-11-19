@@ -1,10 +1,11 @@
 import { Assets, Rectangle, Sprite, Texture, type Container } from "pixi.js";
+import { artUrl } from "../../artUrl";
 
 /**
  * The Spurtz Cannon's shell sheet (issue #313, `SPRITES.as:90`): 32 headings
  * across, one 34 x 27 px cell each, five rows of which Flash shows two.
  */
-export const SHELL_SHEET_URL = "/assets/buildings/ispurtz_cannon/spurtz_projectile.png";
+export const SHELL_SHEET_URL = artUrl("/assets/buildings/ispurtz_cannon/spurtz_projectile.png");
 const CELL_WIDTH = 34;
 const CELL_HEIGHT = 27;
 const HEADINGS = 32;

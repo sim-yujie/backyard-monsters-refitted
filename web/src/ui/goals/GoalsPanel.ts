@@ -7,6 +7,7 @@ import { Panel } from "@/ui/Panel";
 import { resourceAmount } from "@/ui/resourceIcon";
 import { REWARD_KEYS, type ClaimFigure } from "./claimFigure";
 import "./goals.css";
+import { artUrl } from "../../artUrl";
 
 /**
  * The Goals panel (`docs/design/tutorial.md` §6.3, issue #227): what is
@@ -133,7 +134,7 @@ const siegeChip = (goal: GoalView): HTMLElement | null => {
   if (!goal.siege) return null;
   const chip = el("span", "goals-monsters goals-siege");
   const image = el("img", "goals-monsters__image");
-  image.src = `/assets/siegebuttons/${goal.siege.id}.png`;
+  image.src = artUrl(`/assets/siegebuttons/${goal.siege.id}.png`);
   image.alt = "";
   chip.append(image, el("span", "goals-monsters__text", siegeText(goal.siege.count, goal.siege.name)));
   return chip;
