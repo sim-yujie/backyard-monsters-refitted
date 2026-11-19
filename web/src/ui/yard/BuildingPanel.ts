@@ -59,7 +59,14 @@ import {
   type UpgradeGate,
   type UpgradeOffer,
 } from "./buildingActions";
-import { buildingHealthLabel, buildingInfo, unlockText, type InfoRow, type InfoValue } from "./buildingInfo";
+import {
+  buildingHealthLabel,
+  buildingInfo,
+  unlockText,
+  type InfoList,
+  type InfoRow,
+  type InfoValue,
+} from "./buildingInfo";
 import { buttonUrl } from "@/game/yard/buildButtonArt";
 import { BaiterPanel } from "./BaiterPanel";
 import { withChampionsHealed } from "@/game/yard/championModel";
@@ -612,14 +619,14 @@ export class BuildingPanel {
 
   private renderInfo(building: YardBuilding): void {
     // Every row tells the level, on a foreign yard a level the server made up.
-    const { rows, list } = this.yard
+    const { rows, list, yardList } = this.yard
       ? buildingInfo(
           building,
           this.yard.store.kind,
           this.yard.store.yard.cellHeight,
           this.yard.store.yard.landRangePct,
         )
-      : { rows: [], list: null };
+      : { rows: [], list: null, yardList: null };
     // With an upgrade to offer, what it changes sits beside the Upgrade
     // button instead (`upgradeGains`); these rows then read as they are now.
     this.gains = this.yard && panelModel(building, this.yard.store).upgrade ? rows.filter((row) => row.next) : [];
@@ -639,49 +646,21 @@ export class BuildingPanel {
     this.unlocks.replaceChildren();
     this.unlocks.hidden = list === null;
     if (list) {
+      const kind = this.yard?.store.kind ?? "main";
       // "Lv 3 unlocks", then each building's picture with its name and a
       // "+1" or NEW badge; the words whole on hover and for a screen reader.
-      const heading = document.createElement("p");
-      heading.className = "building-panel__label";
-      heading.textContent = list.label;
-      heading.title = list.title;
-      if (list.items.length === 0) {
+      // The Under Hall adds a second group for what it lets the main yard
+      // build ("Main yard"); one empty group says nothing.
+      if (list.items.length === 0 && !yardList) {
         const none = document.createElement("p");
         none.className = "building-panel__none";
         none.textContent = "No new buildings";
-        this.unlocks.append(heading, none);
+        this.unlocks.append(unlockHeading(list), none);
         return;
       }
-      const kind = this.yard?.store.kind ?? "main";
-      const items = document.createElement("ul");
-      items.className = "building-panel__unlock-list";
-      items.setAttribute("aria-label", list.title);
-      for (const unlock of list.items) {
-        const words = unlockText(unlock);
-        const item = document.createElement("li");
-        item.className = unlock.isNew ? "unlock-tile unlock-tile--new" : "unlock-tile";
-        item.title = words;
-        item.setAttribute("aria-label", words);
-        const picture = document.createElement("img");
-        picture.className = "unlock-tile__picture";
-        picture.src = buttonUrl(unlock.type, kind);
-        picture.alt = "";
-        picture.width = 60;
-        picture.height = 80;
-        picture.decoding = "async";
-        picture.draggable = false;
-        const badge = document.createElement("span");
-        badge.className = unlock.isNew ? "unlock-tile__badge chip chip--accent" : "unlock-tile__badge chip";
-        badge.setAttribute("aria-hidden", "true");
-        badge.textContent = unlock.isNew ? "NEW" : `+${unlock.added}`;
-        const name = document.createElement("span");
-        name.className = "unlock-tile__name";
-        name.setAttribute("aria-hidden", "true");
-        name.textContent = unlock.name;
-        item.append(picture, badge, name);
-        items.append(item);
-      }
-      this.unlocks.append(heading, items);
+      if (list.items.length > 0) this.unlocks.append(unlockHeading(list), unlockTiles(list, kind));
+      else this.unlocks.append(unlockHeading(list));
+      if (yardList) this.unlocks.append(unlockHeading(yardList, true), unlockTiles(yardList, kind));
     }
   }
 
@@ -1867,6 +1846,48 @@ const realmIcons = (inferno: boolean): ResourceIconOptions => (inferno ? { realm
 const reportIcons = (report: object): ResourceIconOptions => realmIcons("purse" in report);
 
 /** "2 × Monster Locker at level 3", or "a Monster Locker at level 3" for one. */
+/** An unlock group's heading: "Lv 3 unlocks", or a smaller "Main yard" under it. */
+const unlockHeading = (list: InfoList, sub = false): HTMLElement => {
+  const heading = document.createElement("p");
+  heading.className = sub ? "building-panel__label building-panel__label--sub" : "building-panel__label";
+  heading.textContent = list.label;
+  heading.title = list.title;
+  return heading;
+};
+
+/** An unlock group's tiles: each building's picture, a "+1" or NEW badge and its name. */
+const unlockTiles = (list: InfoList, kind: YardKind): HTMLElement => {
+  const items = document.createElement("ul");
+  items.className = "building-panel__unlock-list";
+  items.setAttribute("aria-label", list.title);
+  for (const unlock of list.items) {
+    const words = unlockText(unlock);
+    const item = document.createElement("li");
+    item.className = unlock.isNew ? "unlock-tile unlock-tile--new" : "unlock-tile";
+    item.title = words;
+    item.setAttribute("aria-label", words);
+    const picture = document.createElement("img");
+    picture.className = "unlock-tile__picture";
+    picture.src = buttonUrl(unlock.type, unlock.yard ?? kind);
+    picture.alt = "";
+    picture.width = 60;
+    picture.height = 80;
+    picture.decoding = "async";
+    picture.draggable = false;
+    const badge = document.createElement("span");
+    badge.className = unlock.isNew ? "unlock-tile__badge chip chip--accent" : "unlock-tile__badge chip";
+    badge.setAttribute("aria-hidden", "true");
+    badge.textContent = unlock.isNew ? "NEW" : `+${unlock.added}`;
+    const name = document.createElement("span");
+    name.className = "unlock-tile__name";
+    name.setAttribute("aria-hidden", "true");
+    name.textContent = unlock.name;
+    item.append(picture, badge, name);
+    items.append(item);
+  }
+  return items;
+};
+
 const requirementText = ([type, count, level]: readonly [number, number, number], kind: YardKind): string =>
   `${count === 1 ? "a" : `${count} ×`} ${typeName(type, kind)} at level ${level}`;
 

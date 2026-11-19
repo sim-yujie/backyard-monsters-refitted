@@ -117,11 +117,14 @@ export const wallUpgradePanel = (options: WallUpgradePanelOptions): WallUpgradeP
   });
 
   const allowed = targets.filter((entry) => entry.need <= hall);
-  // Not picking: the highest the hall allows, the answer a player who
-  // selected their walls first almost always wants. Picking: the level
-  // follows the pick (see "Picking" above).
+  // Not picking: the highest the hall allows that the selection can be paid
+  // for, the answer a player who selected their walls first almost always
+  // wants; with none paid for, the lowest. No wall level waits for the hall
+  // since beta 8, so without the purse a Town Hall 1 yard would open on
+  // Black Diamond. Picking: the level follows the pick (see "Picking" above).
+  const paidFor = allowed.filter((entry) => !isShort(wallBatchPreview(walls, entry.level, yard).shortfall));
   let choice: WallTargetChoice = {
-    target: allowed.at(-1)?.level ?? targets[0]?.level ?? 2,
+    target: paidFor.at(-1)?.level ?? allowed[0]?.level ?? targets[0]?.level ?? 2,
     manual: false,
   };
   const follow = (): void => {

@@ -897,17 +897,12 @@ describe("the Inferno shop (STORE.as:210)", () => {
     expect(caps.r1).toBeGreaterThan(START_CAP);
   });
 
-  test("Granite Blocks (BLK2I) wait for Under Hall 3, then raise every Block for 3 Shiny each", async () => {
+  test("Granite Blocks (BLK2I) raise every Block for 3 Shiny each, at any Under Hall level (beta 8)", async () => {
     const walls = {
       "6": { id: 6, t: WALL, X: 200, Y: 200, l: 1 },
       "7": { id: 7, t: WALL, X: 240, Y: 200, l: 1 },
     };
     yardWith(layout(2, walls));
-    const gated = await buy("BLK2I");
-    expect(gated.status).toBe(409);
-    expect(body(gated)).toMatchObject({ reason: "townHall", have: 2, need: 3 });
-
-    yardWith(layout(3, walls));
     const answer = await buy("BLK2I");
     expect(answer.status).toBe(200);
     expect(body(answer).report).toMatchObject({ item: "BLK2I", credits: 6, tier: 2, blocks: 2 });
@@ -919,11 +914,9 @@ describe("the Inferno shop (STORE.as:210)", () => {
     expect(body(await buy("BLK2I")).reason).toBe("nothingToUpgrade");
   });
 
-  test("Forged Steel Blocks (BLK3I) need Under Hall 4 and cost 3 + 6 from level 1", async () => {
+  test("Forged Steel Blocks (BLK3I) cost 3 + 6 from level 1, at any Under Hall level (beta 8)", async () => {
     const walls = { "6": { id: 6, t: WALL, X: 200, Y: 200, l: 1 } };
-    yardWith(layout(3, walls));
-    expect(body(await buy("BLK3I"))).toMatchObject({ reason: "townHall", have: 3, need: 4 });
-    yardWith(layout(4, walls));
+    yardWith(layout(1, walls));
     expect(body(await buy("BLK3I")).report).toMatchObject({ credits: 9, tier: 3, blocks: 1 });
     expect(buildings(infernoSave())["6"]).toMatchObject({ l: 3 });
   });

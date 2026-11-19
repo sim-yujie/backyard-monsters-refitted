@@ -3,6 +3,7 @@ import type { SiegeSnapshot } from "@/game/combat/rules/engine";
 import { siegeData, siegeValue, type SiegeId, type SiegeStat } from "@/game/combat/rules/siege";
 import { TICKS_PER_SECOND } from "@/game/combat/rules/stats";
 import { Panel } from "@/ui/Panel";
+import { artUrl } from "../../artUrl";
 
 /**
  * The siege weapon in an attack: Flash's `SIEGEWEAPONPOPUP`, one weapon and
@@ -139,6 +140,8 @@ export class SiegePanel {
     this.panel = new Panel({
       title: data?.name ?? weapon.id,
       className: "attack-siege attack-picker",
+      // In the attack dock the tab row is its title and way back (owner, 18 Nov 2026): no ✕.
+      closable: options.onClose !== undefined,
       ...(options.onClose ? { onClose: options.onClose } : {}),
     });
     this.panel.element.dataset["hotkey"] = "S";
@@ -148,7 +151,7 @@ export class SiegePanel {
     head.className = "attack-siege__head";
     const image = document.createElement("img");
     image.className = "attack-siege__image";
-    image.src = `/assets/siegebuttons/${weapon.id}.png`;
+    image.src = artUrl(`/assets/siegebuttons/${weapon.id}.png`);
     image.alt = "";
     const level = document.createElement("p");
     level.className = "attack-siege__level";

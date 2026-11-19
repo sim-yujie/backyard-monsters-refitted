@@ -115,9 +115,14 @@ export class App {
 
     try {
       await this.pixi.init({
-        // The canvas fills the window; CSS pins it and `resizeTo` keeps the
-        // backing store in step.
-        resizeTo: window,
+        // The canvas fills the game area (#game-root, pinned to the screen by
+        // CSS) and `resizeTo` keeps the backing store in step. Not `window`:
+        // on an iPhone a pinch zoom makes innerWidth/innerHeight report the
+        // zoomed (smaller) size, a resize then shrinks the canvas, and when the
+        // zoom goes back iOS often sends no resize, so the yard stayed in the
+        // top-left corner (bug #51). The element's own size is its layout size,
+        // which zoom never changes.
+        resizeTo: this.host,
         antialias: true,
         background: "#11141a",
         // Render at the display's true pixel density, capped so a 3x phone does
@@ -319,10 +324,10 @@ export class App {
         ),
     );
 
-    // Pixi's renderer resize fires on the window; mirror it to the scenes.
+    // Pixi's renderer resize; mirror it to the scenes.
     this.pixi.renderer.on("resize", this.handleResize);
-    // resizeTo: window misses the case where the host element itself changes,
-    // which happens with a sidebar or a devtools dock.
+    // Pixi only re-reads the game area's size on a window resize; this
+    // catches every other change to it (phone toolbars, a devtools dock).
     if (typeof ResizeObserver !== "undefined") {
       this.resizeObserver = new ResizeObserver(() => this.pixi.resize());
       this.resizeObserver.observe(this.host);
@@ -345,6 +350,14 @@ export class App {
     });
 
     await this.scenes.start(SceneName.BOOT);
+  }
+
+  /**
+   * Opens a scene from outside the app: only the layout check's own hooks use
+   * it (main.ts, a dev build or VITE_LAYOUT_CHECK=1).
+   */
+  goTo(name: string): void {
+    this.scenes?.goTo(name);
   }
 
   destroy(): void {

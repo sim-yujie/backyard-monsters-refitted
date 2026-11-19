@@ -1,6 +1,7 @@
 import { modReportsApi, type ModReportsApi } from "@/api/modReports";
 import { make } from "@/ui/friends/rows";
 import { ReportsWindow } from "./ReportsWindow";
+import { artUrl } from "../../artUrl";
 
 /**
  * The moderators' way into Reports (owner, 12 Nov 2026): a button in the
@@ -24,7 +25,7 @@ export interface ReportsDoorOptions {
 export const REPORTS_DOOR_TEXT = {
   label: "Reports",
   title: "Reports: chat lines players reported and the word filter caught",
-  picture: "/assets/popups/military.png",
+  picture: artUrl("/assets/popups/military.png"),
 } as const;
 
 /** The badge caps here, so it stays one small disc. */

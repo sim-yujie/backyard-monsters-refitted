@@ -6,7 +6,7 @@ import type { RepairActions, RepairInstantReport } from "@/api/yardRepair";
 import { YardStore, type YardActionResult } from "@/game/yard/YardStore";
 import type { Notices } from "@/ui/maproom/Notices";
 import { spokenText } from "@/ui/resourceIcon";
-import { durationText, protectionText, ShopScreen } from "./ShopScreen";
+import { durationText, protectionText, ShopScreen, syncChildren } from "./ShopScreen";
 
 /**
  * The Shop screen as a player meets it (§8.2): the headed cards, the next
@@ -16,6 +16,8 @@ import { durationText, protectionText, ShopScreen } from "./ShopScreen";
  */
 
 const T0 = 2_000_000;
+/** The store's clock; a test moves it to count a running item down. */
+let clockNow = T0;
 
 const never = <R>() => new Promise<R>(() => undefined);
 
@@ -39,7 +41,7 @@ const setup = (
     } as unknown as BaseLoadResponse,
     ...(kind === "main" ? {} : { target: { baseid: "9", kind } as const }),
     api: { state: vi.fn(() => never<YardResponse<null>>()), ...api } as unknown as YardApi,
-    clock: () => T0,
+    clock: () => clockNow,
     timers: { set: () => 0, clear: () => undefined },
   });
   const repair: RepairActions = {
@@ -69,6 +71,7 @@ const settle = async () => {
 
 afterEach(() => {
   document.body.replaceChildren();
+  clockNow = T0;
 });
 
 describe("ShopScreen", () => {
@@ -244,9 +247,8 @@ describe("ShopScreen", () => {
     expect(card("BLK2I")!.querySelector(".shop-card__name")!.textContent).toBe(
       "Granite Blocks",
     );
-    expect(card("BLK3I")!.querySelector(".shop-card__gate")!.textContent).toBe(
-      "Needs Under Hall level 4.",
-    );
+    // No Under Hall gate on a wall upgrade (beta 8).
+    expect(card("BLK3I")!.querySelector(".shop-card__gate")?.textContent ?? "").toBe("");
     expect(
       element.querySelector('[data-section="walls"] .shop-section__note')!.textContent,
     ).toContain("granite");
@@ -335,7 +337,7 @@ describe("ShopScreen", () => {
   it("sells the wall upgrades under Walls, priced from the yard's Blocks", async () => {
     const { store, element, card, button } = setup({
       buildingdata: {
-        "0": { id: 0, t: 14, X: 0, Y: 0, l: 3 },
+        "0": { id: 0, t: 14, X: 0, Y: 0, l: 2 },
         "1": { id: 1, t: 17, X: 100, Y: 100, l: 1 },
         "2": { id: 2, t: 17, X: 110, Y: 100, l: 2 },
       },
@@ -347,10 +349,10 @@ describe("ShopScreen", () => {
     // Stone: only the level-1 Block, 3 Shiny.
     expect(card("BLK2")!.querySelector(".shop-card__meta")!.textContent).toBe("1 Block to raise");
     expect(button("BLK2").getAttribute("aria-label")).toBe("Buy Stone Blocks, 3 Shiny");
-    // Metal: 3 + 6 for the first, 6 for the second; Town Hall 3 is short of 4.
+    // Metal: 3 + 6 for the first, 6 for the second; on sale at Town Hall 2 (beta 8).
     expect(card("BLK3")!.querySelector(".shop-card__meta")!.textContent).toBe("2 Blocks to raise");
-    expect(button("BLK3").disabled).toBe(true);
-    expect(card("BLK3")!.querySelector(".shop-card__gate")!.textContent).toBe("Needs Town Hall level 4.");
+    expect(button("BLK3").disabled).toBe(false);
+    expect(button("BLK3").getAttribute("aria-label")).toBe("Buy Metal Blocks, 15 Shiny");
 
     const buy = vi.spyOn(store, "buy").mockImplementation(
       (): Promise<YardActionResult<ShopBuyReport>> =>
@@ -402,6 +404,58 @@ describe("ShopScreen", () => {
   it("has no Repairs section when nothing is damaged", () => {
     const { element } = setup();
     expect(element.querySelector("#shop-section-repairs")).toBeNull();
+  });
+
+  it("keeps every section, grid, item and card in place over a tick, changing only the text that changed", () => {
+    // Discord, 18 Nov: the list was rebuilt each second and Chrome's scroll
+    // anchoring lost its place, so the list crept or jumped while read.
+    const { screen, element } = setup({
+      credits: 2_000,
+      protected: T0 + 2 * 86_400 + 3 * 3_600,
+      storedata: { MOD: { q: 1, s: T0 - 60, e: T0 + 5 * 3_600 + 30 * 60 } },
+    });
+    const list = element.querySelector(".shop-list")!;
+    const nodes = [...list.querySelectorAll("*")];
+    const records: MutationRecord[] = [];
+    const observer = new MutationObserver((batch) => records.push(...batch));
+    observer.observe(list, { childList: true, subtree: true, characterData: true });
+
+    screen.tick();
+    expect(observer.takeRecords()).toEqual([]);
+
+    clockNow = T0 + 60;
+    screen.tick();
+    records.push(...observer.takeRecords());
+    observer.disconnect();
+    expect([...list.querySelectorAll("*")]).toEqual(nodes);
+    expect(element.querySelector('.shop-card[data-item="MOD"] .shop-card__meta')!.textContent).toBe(
+      "Running: 5h 29m left. Buying again restarts it",
+    );
+    // Only text nodes went: the two countdowns' lines, nothing else.
+    const changed = records.filter((record) => record.type === "childList");
+    const moved = changed.flatMap((record) => [...record.removedNodes, ...record.addedNodes]);
+    expect(moved.every((node) => node.nodeType === Node.TEXT_NODE)).toBe(true);
+    expect(new Set(changed.map((record) => (record.target as HTMLElement).className))).toEqual(
+      new Set(["shop-card__meta", "shop-section__note"]),
+    );
+  });
+
+  it("keeps an armed Buy button armed and focused over a tick, so the second tap buys", () => {
+    const { screen, store, button } = setup();
+    const buy = vi.spyOn(store, "buy").mockImplementation(() => never());
+    const blur = vi.fn();
+    button("BIP").addEventListener("blur", blur);
+
+    button("BIP").focus();
+    button("BIP").click();
+    expect(button("BIP").getAttribute("aria-pressed")).toBe("true");
+    screen.tick();
+    screen.tick();
+    expect(blur).not.toHaveBeenCalled();
+    expect(document.activeElement).toBe(button("BIP"));
+    expect(button("BIP").getAttribute("aria-pressed")).toBe("true");
+    button("BIP").click();
+    expect(buy).toHaveBeenCalledWith("BIP");
   });
 
   it("closes on Escape and on its close button", () => {
@@ -493,5 +547,40 @@ describe("ShopScreen: Resources (Flash's Resources tab, issue #393)", () => {
   it("is in an outpost's shop too", () => {
     const { element } = setup({ caps: CAPS } as Partial<BaseLoadResponse>, "outpost");
     expect(element.querySelector('[data-section="resources"]')).not.toBeNull();
+  });
+});
+
+describe("syncChildren", () => {
+  const nodes = (...names: string[]) =>
+    names.map((name) => {
+      const node = document.createElement("li");
+      node.id = name;
+      return node;
+    });
+  const ids = (parent: Element) => [...parent.children].map((one) => one.id);
+
+  it("touches nothing when the children are already right", () => {
+    const parent = document.createElement("ul");
+    const [a, b, c] = nodes("a", "b", "c");
+    parent.append(a!, b!, c!);
+    const observer = new MutationObserver(() => undefined);
+    observer.observe(parent, { childList: true });
+    syncChildren(parent, [a!, b!, c!]);
+    expect(observer.takeRecords()).toEqual([]);
+  });
+
+  it("adds, moves and removes only what changed", () => {
+    const parent = document.createElement("ul");
+    const [a, b, c, d] = nodes("a", "b", "c", "d");
+    parent.append(a!, b!, c!);
+    const observer = new MutationObserver(() => undefined);
+    observer.observe(parent, { childList: true });
+    // A section appears in the middle: only it is inserted.
+    syncChildren(parent, [a!, d!, b!, c!]);
+    expect(ids(parent)).toEqual(["a", "d", "b", "c"]);
+    expect(observer.takeRecords().flatMap((record) => [...record.addedNodes])).toEqual([d]);
+    syncChildren(parent, [c!, a!]);
+    expect(ids(parent)).toEqual(["c", "a"]);
+    expect([b!.parentNode, d!.parentNode]).toEqual([null, null]);
   });
 });

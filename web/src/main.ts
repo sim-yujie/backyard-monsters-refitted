@@ -25,11 +25,19 @@ import { UpdatePrompt } from "@/ui/UpdatePrompt";
 import { applySkin } from "@/ui/skin";
 import { applyFontChoice } from "@/ui/fontChoice";
 import { installGameUiSounds } from "@/game/sound/sound";
+import { takeQualityParam } from "@/game/qualityParam";
+import { bootSafeMode } from "@/game/safeMode";
 
 // The bug report's list of recent errors, from the very start, and the
 // owner's dashboard's copy of uncaught errors (the Privacy Policy says so).
 installErrorLog();
 installErrorReporter();
+
+// Quality, before anything asks for it (patch 7.11): `?quality=low` in the
+// address is the player's way out of a game that closes on their phone; then
+// safe mode starts a level lower when the last two loads died (`safeMode.ts`).
+takeQualityParam();
+bootSafeMode();
 
 // Painted windows: steel in Modern, Flash parchment in Classic (`?skin=` to test).
 applySkin();
@@ -80,6 +88,10 @@ if (import.meta.env.DEV || import.meta.env.VITE_LAYOUT_CHECK === "1") {
       const modal = document.querySelector<HTMLElement>(".overlay__layer--modal");
       return modal ? previewAutoAttackResult(modal, kind) : null;
     };
+  });
+  // The attack screen's dock (owner, 18 Nov 2026): the real attack scene on the own yard.
+  void import("@/game/attack/attackDockPreview").then(({ previewAttackDock }) => {
+    (globalThis as Record<string, unknown>)["__attackDock"] = () => previewAttackDock((scene) => app.goTo(scene));
   });
 }
 

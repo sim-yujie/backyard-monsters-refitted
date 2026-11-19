@@ -204,14 +204,15 @@ describe("planWallUpgrade rejections", () => {
     });
   });
 
-  test("townHall: level 5 needs a level 6 Town Hall", () => {
-    const save = sandbox();
-    save.buildingdata!["0"]!.l = 5;
-    const [id] = wallIds(save.buildingdata!);
+  test("no Town Hall level gates a wall level (beta 8): Town Hall 1 and 2 take a Block to stone and to 5", () => {
+    for (const hall of [1, 2]) {
+      const save = sandbox();
+      save.buildingdata!["0"]!.l = hall;
+      const [id] = wallIds(save.buildingdata!);
 
-    const err = rejection(() => planWallUpgrade(save, [id!], 5));
-    expect(err.status).toBe(409);
-    expect(err.data).toMatchObject({ townHall: { have: 5, need: 6 } });
+      expect(planWallUpgrade(save, [id!], 2).buildingdata[String(id)]?.l, `hall ${hall}`).toBe(2);
+      expect(planWallUpgrade(save, [id!], 5).buildingdata[String(id)]?.l, `hall ${hall}`).toBe(5);
+    }
   });
 
   test("townHall: a yard with no hall at all", () => {

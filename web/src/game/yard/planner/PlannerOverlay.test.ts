@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import { NEARBY_STROKE } from "../nearbyFootprints";
 import type { Corners } from "./marquee";
-import { PlannerOverlay, type PlannerVisuals } from "./PlannerOverlay";
+import { heldCells, PlannerOverlay, type PlannerVisuals } from "./PlannerOverlay";
 
 /** The nearby outlines' part of the planner's chrome (#231). */
 
@@ -89,6 +89,45 @@ describe("PlannerOverlay wall line", () => {
     ]);
     expect(circle).toHaveBeenCalledTimes(1);
     expect(circle.mock.calls[0]?.[2]).toBeLessThan(5);
+    overlay.destroy();
+  });
+});
+
+/** Desk fix B (owner, 19 Nov 2026): what is in hand gets the yard's placing box. */
+describe("PlannerOverlay in hand", () => {
+  it("boxes each building green or red rather than in the orange selection outline", () => {
+    expect(heldCells(new Set([1, 2, 3]), new Set([2]), (id) => (id === 3 ? null : square(id * 20)))).toEqual([
+      { corners: square(20), state: "build" },
+      { corners: square(40), state: "blocked" },
+    ]);
+
+    const overlay = new PlannerOverlay();
+    const fill = vi.spyOn(overlay.root, "fill");
+    const stroke = vi.spyOn(overlay.root, "stroke");
+    overlay.draw(visuals({ selected: new Set([1, 2]), invalid: new Set([2]), inHand: true }), (id) => square(id * 20));
+    const fills = fill.mock.calls.map(([style]) => (style as unknown as { color: number }).color);
+    expect(fills).toEqual([0x5cc26a, 0xe05252]);
+    // Red is crossed too: colour is never the only channel.
+    const strokes = stroke.mock.calls.map(([style]) => (style as unknown as { color: number }).color);
+    expect(strokes.filter((colour) => colour === 0xe05252).length).toBeGreaterThanOrEqual(2);
+    overlay.destroy();
+  });
+
+  it("keeps the orange selection outline when nothing is in hand", () => {
+    const overlay = new PlannerOverlay();
+    const fill = vi.spyOn(overlay.root, "fill");
+    overlay.draw(visuals({ selected: new Set([1]) }), (id) => square(id * 20));
+    expect(fill.mock.calls.map(([style]) => (style as unknown as { color: number }).color)).toEqual([0xf0a12e]);
+    overlay.destroy();
+  });
+
+  it("draws the blueprint's boxes as squares", () => {
+    const overlay = new PlannerOverlay();
+    const rect = vi.spyOn(overlay.root, "rect");
+    const poly = vi.spyOn(overlay.root, "poly");
+    overlay.draw(visuals({ selected: new Set([1]), inHand: true, flat: true }), (id) => square(id * 20));
+    expect(rect).toHaveBeenCalled();
+    expect(poly).not.toHaveBeenCalled();
     overlay.destroy();
   });
 });

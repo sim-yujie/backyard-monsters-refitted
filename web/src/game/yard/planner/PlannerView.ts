@@ -152,10 +152,13 @@ export class PlannerView {
     nearby?: ReadonlySet<number>;
     /** A wall line being drawn from the drawer, or null. */
     line?: LineVisual | null;
+    /** The selection is in hand: boxed green or red like the yard's placing box. */
+    inHand?: boolean;
   }): void {
     const { line, ...rest } = state;
     this.renderer.setPlannerVisuals({
       ...rest,
+      flat: this.view === YardView.BLUEPRINT,
       plot: this.renderer.plotCorners(),
       line: line ? this.lineShapes(line) : null,
     });

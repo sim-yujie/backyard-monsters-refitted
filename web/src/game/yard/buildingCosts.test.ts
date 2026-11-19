@@ -78,18 +78,25 @@ describe("the cost table", () => {
     }
   });
 
-  it("prices the Wooden Block exactly as the props table does", () => {
-    // `client/scripts/YARD_PROPS.as:1722-1757`.
+  it("prices the Wooden Block exactly as the props table does, its upgrades at any hall (beta 8)", () => {
+    // `client/scripts/YARD_PROPS.as:1722-1757`; Flash's upgrade steps also
+    // needed Town Hall 3 to 6, which the owner dropped (17 Nov 2026).
     expect(maxLevel(17)).toBe(5);
     expect(kindOf(17)).toBe("wall");
     expect(nameOf(17)).toBe("Block");
-    for (let k = 0; k < 5; k++) {
+    expect(costOf(17, 0)).toEqual([1000, 0, 0, 0, 5, [[14, 1, 2]]]);
+    for (let k = 1; k < 5; k++) {
       const step = costOf(17, k);
       expect(step?.[4], `step ${k} time`).toBe(5);
-      expect(step?.[5], `step ${k} re`).toEqual([[14, 1, k + 2]]);
+      expect(step?.[5], `step ${k} re`).toEqual([]);
     }
-    expect(costOf(17, 4)).toEqual([400000, 400000, 0, 0, 5, [[14, 1, 6]]]);
+    expect(costOf(17, 1)).toEqual([0, 10000, 0, 0, 5, []]);
+    expect(costOf(17, 4)).toEqual([400000, 400000, 0, 0, 5, []]);
     expect(costOf(17, 5)).toBeNull();
+    // The Inferno's Granite and Forged Steel need no Under Hall either.
+    expect(costOf(17, 1, "inferno")?.[5]).toEqual([]);
+    expect(costOf(17, 2, "inferno")?.[5]).toEqual([]);
+    expect(costOf(17, 0, "inferno")?.[5]).toEqual([[14, 1, 2]]);
   });
 
   it("prices both traps as single 5-second builds", () => {

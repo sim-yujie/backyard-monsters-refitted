@@ -23,6 +23,7 @@ import { formatAmount } from "@/ui/format";
 import { Popup } from "@/ui/Popup";
 import { RESOURCE_KEYS, resourceAmount } from "@/ui/resourceIcon";
 import "@/ui/styles/raid.css";
+import { artUrl } from "../../artUrl";
 
 /**
  * The raid's screens on the own yard (issue #226 WP4,
@@ -60,7 +61,7 @@ const splash = (tribe: string, className: string): HTMLImageElement => {
 };
 
 /** The whole horse: its body with the head and mouth cell drawn on (made from `top` + `anim` cell 0). */
-export const HORSE_PICTURE = "/assets/buildings/trojanhorse/whole.1.png";
+export const HORSE_PICTURE = artUrl("/assets/buildings/trojanhorse/whole.1.png");
 
 /**
  * The horse as it stands in the yard: its body with the head and mouth over

@@ -21,6 +21,7 @@
  */
 
 import { classicLook } from "./classicLook";
+import { artUrl } from "../artUrl";
 
 /** The monsters with a painting: C1-C17, C19 and the Inferno ones IC1-IC8. */
 export const PAINTED_MONSTERS: ReadonlySet<string> = new Set([
@@ -59,7 +60,7 @@ const portrait = (paintedFile: string | null, original: string): Portrait =>
 export const monsterPortrait = (id: string, size: PortraitSize): Portrait =>
   portrait(
     PAINTED_MONSTERS.has(id) ? (size === "card" ? id : `${id}-icon`) : null,
-    `/assets/monsters/${id}-${size === "card" ? "portrait.jpg" : "small.png"}`,
+    artUrl(`/assets/monsters/${id}-${size === "card" ? "portrait.jpg" : "small.png"}`),
   );
 
 /** The painting's file name (no extension) for a champion at a level, or null. */
@@ -91,7 +92,7 @@ export const championPortrait = (id: string, level: number, size: PortraitSize):
   const original = ORIGINAL_CHAMPION_LEVEL[id]?.[size] ?? at;
   return portrait(
     file === null ? null : size === "card" ? file : `${file}-icon`,
-    `/assets/monsters/${id}_L${original}-${size === "card" ? "150" : "small"}.png`,
+    artUrl(`/assets/monsters/${id}_L${original}-${size === "card" ? "150" : "small"}.png`),
   );
 };
 

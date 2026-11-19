@@ -149,10 +149,12 @@ describe.skipIf(!dbName)("the Defences routes on a real database (issue #360)", 
     expect((await replayAnswer(em(), as(DEFENDER), { id: String(id) })).status).toBe(404);
   });
 
-  test("an older rules version these rules still play the same is playable (patch 7.8)", async () => {
-    await storeDefenceReplay(orm.em, record(DEFENDER, 1), "b4f0c156a8d2afee");
-    const [defence] = (await listAnswer(em(), as(DEFENDER))).body.defences as Record<string, any>[];
-    expect(defence).toMatchObject({ rulesVersion: "b4f0c156a8d2afee", hasReplay: true, playable: true });
+  test("a 7.7.2, 7.8 or 7.9 rules version is not playable since the 7.9 wall fix and 7.10 Gorgo reach", async () => {
+    for (const stamp of ["b4f0c156a8d2afee", "b03bd4b8bac1386d", "fa6de785db1c4615"]) {
+      await storeDefenceReplay(orm.em, record(DEFENDER, 1), stamp);
+      const defences = (await listAnswer(em(), as(DEFENDER))).body.defences as Record<string, any>[];
+      expect(defences.find((one) => one.rulesVersion === stamp)).toMatchObject({ hasReplay: true, playable: false });
+    }
   });
 
   test("an older rules version is listed and sent, but not playable", async () => {

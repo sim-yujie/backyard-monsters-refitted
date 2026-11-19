@@ -12,6 +12,7 @@ import {
 import { packageArt, type CollectFxArt } from "@/game/yard/CollectFxLayer";
 import type { HarvestKey } from "@/game/yard/harvest";
 import type { Point } from "@/game/yard/YardGrid";
+import { artUrl } from "../../artUrl";
 
 /**
  * The siege weapons on the field, as the Flash client drew them (Inferno
@@ -53,12 +54,12 @@ export interface SiegeStrip {
 
 /** `SPRITES.as:84-94` and `Jars.as:20`. */
 export const SIEGE_STRIPS: Readonly<Record<SiegeSheet, SiegeStrip>> = {
-  wave: { url: "/assets/siegeimages/decoy_wave_anim.png", width: 61, height: 70, frames: 45 },
-  fuse: { url: "/assets/siegeimages/decoy_fuse_anim.png", width: 44, height: 49, frames: 21 },
-  explosion: { url: "/assets/siegeimages/decoy_explosion_anim.png", width: 184, height: 195, frames: 33 },
-  jar: { url: "/assets/siegeimages/jar_anim.v2.png", width: 163, height: 150, frames: 23 },
-  end: { url: "/assets/siegeimages/vacuum-end.png", width: 52, height: 52, frames: 15 },
-  pipe: { url: "/assets/siegeimages/vacuum-pipe.png", width: 26, height: 97, frames: 15 },
+  wave: { url: artUrl("/assets/siegeimages/decoy_wave_anim.png"), width: 61, height: 70, frames: 45 },
+  fuse: { url: artUrl("/assets/siegeimages/decoy_fuse_anim.png"), width: 44, height: 49, frames: 21 },
+  explosion: { url: artUrl("/assets/siegeimages/decoy_explosion_anim.png"), width: 184, height: 195, frames: 33 },
+  jar: { url: artUrl("/assets/siegeimages/jar_anim.v2.png"), width: 163, height: 150, frames: 23 },
+  end: { url: artUrl("/assets/siegeimages/vacuum-end.png"), width: 52, height: 52, frames: 15 },
+  pipe: { url: artUrl("/assets/siegeimages/vacuum-pipe.png"), width: 26, height: 97, frames: 15 },
 };
 
 /** Battle ticks per cell of every strip: Flash's 40 fps `ENTER_FRAME`. */

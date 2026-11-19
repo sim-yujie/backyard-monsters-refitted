@@ -37,6 +37,7 @@
  */
 
 import { flashMusic } from "@/game/classicLook";
+import { artUrl } from "../../artUrl";
 
 export type Tune = "yard" | "attack" | "underAttack" | "infernoYard" | "infernoAttack";
 
@@ -61,15 +62,15 @@ export const TUNES: Readonly<Record<Tune, TuneFile>> = {
   // As loud as Flash's yard tune (-16 against -16.7 LUFS), so Flash's volume holds.
   // 112 kbit/s (1.8 MB), and the 64 kbit/s copy (1 MB) for Medium and Low.
   yard: {
-    url: "/assets/sounds/music/yard-theme.mp3",
-    ogg: "/assets/sounds/music/yard-theme.ogg",
+    url: artUrl("/assets/sounds/music/yard-theme.mp3"),
+    ogg: artUrl("/assets/sounds/music/yard-theme.ogg"),
     volume: 0.6,
-    lite: { url: "/assets/sounds/music/yard-theme-lite.mp3", ogg: "/assets/sounds/music/yard-theme-lite.ogg" },
+    lite: { url: artUrl("/assets/sounds/music/yard-theme-lite.mp3"), ogg: artUrl("/assets/sounds/music/yard-theme-lite.ogg") },
   },
-  attack: { url: "/assets/sounds/music/Music_Attack.mp3", volume: 0.7 },
-  underAttack: { url: "/assets/sounds/music/Music_UnderAttack.mp3", volume: 0.7 },
-  infernoYard: { url: "/assets/sounds/infernomusic/Music_IBuild.mp3", volume: 0.6 },
-  infernoAttack: { url: "/assets/sounds/infernomusic/Music_IAttack.mp3", volume: 0.7 },
+  attack: { url: artUrl("/assets/sounds/music/Music_Attack.mp3"), volume: 0.7 },
+  underAttack: { url: artUrl("/assets/sounds/music/Music_UnderAttack.mp3"), volume: 0.7 },
+  infernoYard: { url: artUrl("/assets/sounds/infernomusic/Music_IBuild.mp3"), volume: 0.6 },
+  infernoAttack: { url: artUrl("/assets/sounds/infernomusic/Music_IAttack.mp3"), volume: 0.7 },
 };
 
 /**
@@ -77,7 +78,7 @@ export const TUNES: Readonly<Record<Tune, TuneFile>> = {
  * the Flash music choice (`game/classicLook.ts`): Flash's own yard tune, `Music_Building.mp3`.
  */
 export const FLASH_TUNES: Readonly<Partial<Record<Tune, TuneFile>>> = {
-  yard: { url: "/assets/sounds/music/Music_Building.mp3", volume: 0.6 },
+  yard: { url: artUrl("/assets/sounds/music/Music_Building.mp3"), volume: 0.6 },
 };
 
 /** A tune's file: Flash's own with Flash music where the revamp replaced it. */

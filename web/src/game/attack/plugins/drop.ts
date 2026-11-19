@@ -3,7 +3,8 @@
  *
  * Mounts tap-to-drop on the enemy yard ({@link AttackInput}), the drop ring
  * it previews, and the two pickers that arm a tool for the next tap: the
- * Catapult's resource bombs and the siege weapons
+ * Catapult's resource bombs and the siege weapons, each behind its tab in
+ * the dock's tab row (`DockTabs`, owner 18 Nov 2026)
  * (`docs/design/attack-flow.md` §F3, §F4, §4.2, §4.3, §4.6).
  *
  * ## Where the attacker's own numbers come from
@@ -20,7 +21,8 @@
  *
  * ## Coexistence
  *
- * Opening either picker changes nothing in the army panel; arming a bomb
+ * Switching tabs only hides and shows windows: a bomb armed on the Catapult
+ * stays armed while the Army is up, and its tab glows. Arming a bomb
  * clears an armed siege weapon and vice versa only because one tap drops one
  * thing — the bucket is untouched either way, and un-arming puts the ring
  * back on the bucket. `session.setUnusedTools` is kept equal to the bombs
@@ -32,7 +34,7 @@
  *
  * As Flash's `SIEGEWEAPONPOPUP` (Inferno WP 6.8), an attack offers one siege
  * weapon, the first in stock ({@link availableSiege}), and fires it once.
- * The Siege button is there only when there is one, and never against an
+ * Its tab (named after the weapon) is there only when there is one, and never against an
  * Inferno yard or in the Descent (`UI_TOP.as:289`). Fire arms the Decoy or
  * the Jars for the next tap; the Vacuum has no drop zone and fires on the
  * spot, onto the Town Hall, with nothing to tap (`SIEGEWEAPONPOPUP.Target`).
@@ -187,28 +189,16 @@ export const createDropPlugin = (flavour: TestFlavour = {}): AttackPlugin => (mo
     mounts.setBottomInset(sheet.getBoundingClientRect().height);
   };
 
-  const tools = document.createElement("div");
-  tools.className = "attack-tools";
-  tools.setAttribute("role", "group");
-  tools.setAttribute("aria-label", "Deployment tools");
-
-  const catapultButton = document.createElement("button");
-  catapultButton.type = "button";
-  catapultButton.className = "btn attack-tools__button";
-  catapultButton.textContent = "Catapult";
-  catapultButton.title = "Resource bombs (B)";
-  catapultButton.setAttribute("aria-expanded", "false");
-
-  const siegeButton = document.createElement("button");
-  siegeButton.type = "button";
-  siegeButton.className = "btn attack-tools__button";
-  siegeButton.textContent = "Siege";
-  siegeButton.title = "Siege weapons (S)";
-  siegeButton.setAttribute("aria-expanded", "false");
-
-  if (!infernoYard) tools.append(catapultButton);
-  if (offered) tools.append(siegeButton);
-  if (!flavour.test && tools.childElementCount > 0) dock.append(tools);
+  const tabs = mounts.dockTabs;
+  /** The Catapult tab: never on an Inferno yard (the Descent's included), nor in a Baiter test. */
+  const catapultTab = flavour.test || infernoYard
+    ? null
+    : tabs.add("catapult", { label: "Catapult", title: "Resource bombs (B)", onShow: () => showCatapult() });
+  /** The siege weapon's tab, named after the one weapon this attack offers. */
+  const siegeTab =
+    offered && offeredSpec
+      ? tabs.add("siege", { label: offeredSpec.name, title: `Siege weapon: ${offeredSpec.name} (S)`, onShow: () => showSiege() })
+      : null;
 
   let catapult: CatapultPanel | null = null;
   let siege: SiegePanel | null = null;
@@ -225,17 +215,6 @@ export const createDropPlugin = (flavour: TestFlavour = {}): AttackPlugin => (mo
   const live = (): boolean => {
     const phase = session.state().phase;
     return phase === "loaded" || phase === "running";
-  };
-
-  /**
-   * A picker takes the Army panel's place while it is open (§7 layout table:
-   * "Docked right, replaces Army temporarily"), so the Catapult fits without
-   * the dock scrolling (#76). The bucket keeps its state underneath and comes
-   * back when the picker closes. Only one picker is open at a time, so the
-   * dock never stacks panels (#59); closing a picker still cancels the tool it armed.
-   */
-  const syncDockMode = (): void => {
-    sheet?.classList.toggle("attack-dock--picker", catapult !== null || siege !== null);
   };
 
   /** The HUD's copy of the pool: goo and the rest as read, bombs spent. */
@@ -261,31 +240,26 @@ export const createDropPlugin = (flavour: TestFlavour = {}): AttackPlugin => (mo
         onField: siegeFired && battle ? siegeOnField(battle.siege(), battle.tick) : null,
       });
     }
-    catapultButton.classList.toggle("attack-tools__button--armed", armedBomb() !== null);
-    siegeButton.classList.toggle("attack-tools__button--armed", armedSiege() !== null);
+    // The tab glows while its tool waits for a tap, seen from any tab and
+    // with the sheet closed: a tap on the yard drops it, not the army.
+    catapultTab?.setArmed(armedBomb() !== null);
+    siegeTab?.setArmed(armedSiege() !== null);
     session.setUnusedTools(unusedToolCount(inventory()));
   };
 
-  const toggleCatapult = (): void => {
-    if (catapult) {
-      catapult.close();
-      return;
-    }
-    // One panel in the dock at a time (#59): the other picker makes way.
-    siege?.close();
+  /**
+   * The Catapult's window, made the first time its tab is shown and kept
+   * until the attack's teardown: the tabs only hide and show it, so a bomb
+   * armed there stays armed while the player looks at the Army (owner, 18
+   * Nov 2026). Escape, a right click or the Arm button un-arm it.
+   */
+  const showCatapult = (): void => {
+    if (catapult) return;
     catapult = new CatapultPanel({
       catapultLevel,
       onPick: (bomb) => input.setTool(bomb ? { kind: "bomb", bomb } : null),
-      onClose: () => {
-        catapult = null;
-        catapultButton.setAttribute("aria-expanded", "false");
-        if (armedBomb()) input.setTool(null);
-        syncDockMode();
-        reportSheet();
-      },
     }).mount(dock);
-    catapultButton.setAttribute("aria-expanded", "true");
-    syncDockMode();
+    tabs.claim("catapult", catapult.element);
     refreshPanels();
     reportSheet();
   };
@@ -321,32 +295,14 @@ export const createDropPlugin = (flavour: TestFlavour = {}): AttackPlugin => (mo
     onToolUsed(tool);
   };
 
-  const toggleSiege = (): void => {
-    if (!offered) return;
-    if (siege) {
-      siege.close();
-      return;
-    }
-    catapult?.close();
-    siege = new SiegePanel({
-      weapon: offered,
-      onFire: fireSiege,
-      onClose: () => {
-        siege = null;
-        siegeButton.setAttribute("aria-expanded", "false");
-        if (armedSiege()) input.setTool(null);
-        syncDockMode();
-        reportSheet();
-      },
-    }).mount(dock);
-    siegeButton.setAttribute("aria-expanded", "true");
-    syncDockMode();
+  /** The siege weapon's window, made once like the Catapult's. */
+  const showSiege = (): void => {
+    if (!offered || siege) return;
+    siege = new SiegePanel({ weapon: offered, onFire: fireSiege }).mount(dock);
+    tabs.claim("siege", siege.element);
     refreshPanels();
     reportSheet();
   };
-
-  catapultButton.addEventListener("click", toggleCatapult);
-  siegeButton.addEventListener("click", toggleSiege);
 
   /* ── The input ────────────────────────────────────────────────────── */
 
@@ -381,8 +337,8 @@ export const createDropPlugin = (flavour: TestFlavour = {}): AttackPlugin => (mo
     ...(flavour.test
       ? {}
       : {
-          ...(infernoYard ? {} : { onOpenCatapult: toggleCatapult }),
-          ...(offered ? { onOpenSiege: toggleSiege } : {}),
+          ...(catapultTab ? { onOpenCatapult: () => tabs.key("catapult") } : {}),
+          ...(siegeTab ? { onOpenSiege: () => tabs.key("siege") } : {}),
         }),
   });
   input.attach();
@@ -403,9 +359,10 @@ export const createDropPlugin = (flavour: TestFlavour = {}): AttackPlugin => (mo
     unsubscribe();
     input.detach();
     highlight.clear();
-    catapult?.close();
-    siege?.close();
-    tools.remove();
+    catapult?.destroy();
+    siege?.destroy();
+    catapultTab?.remove();
+    siegeTab?.remove();
     ring.root.parent?.removeChild(ring.root);
     ring.destroy();
     if (import.meta.env.DEV) {

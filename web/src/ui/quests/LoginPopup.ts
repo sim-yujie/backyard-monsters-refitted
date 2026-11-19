@@ -4,6 +4,7 @@ import { Popup } from "@/ui/Popup";
 import { el } from "./dom";
 import { loginCard, type LoginCardOptions } from "./loginCard";
 import "./quests.css";
+import { artUrl } from "../../artUrl";
 
 /**
  * The login card's pop-up (owner decision 9): on the first yard load of the
@@ -59,7 +60,7 @@ export class LoginPopup {
     const hero = el("div", "quests-login-popup__hero");
     const picture = el("img", "quests-login-popup__picture");
     picture.alt = "";
-    showPortrait(picture, { src: "/assets/popups/completequest.png", fallback: null });
+    showPortrait(picture, { src: artUrl("/assets/popups/completequest.png"), fallback: null });
     const claimed = view.quests.login.claimedToday;
     hero.append(
       picture,

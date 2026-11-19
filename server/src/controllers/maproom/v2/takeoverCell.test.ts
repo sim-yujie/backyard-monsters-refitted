@@ -1,7 +1,8 @@
-import { afterEach, beforeEach, describe, expect, mock, test } from "bun:test";
+import { afterAll, afterEach, beforeEach, describe, expect, mock, test } from "bun:test";
 import {
   memoryWelcomeStore,
   MR2_WELCOME_SECONDS,
+  sqlWelcomeStore,
   newWelcome,
   useWelcomeStore,
   welcomeStatus,
@@ -217,6 +218,17 @@ beforeEach(() => {
 const startingRewards = achievementConfig.rewards;
 afterEach(() => {
   achievementConfig.rewards = startingRewards;
+});
+
+/*
+ * The validateRange stand-in above stays registered for files run after this
+ * one in a plain `bun test` (mock.module is process-wide), so it is left in
+ * range; a test that ends out of range made a later file's attack load throw
+ * "out of range" (baseLoad.viewPrivacy, CI 18 Nov 2026). CI runs `--isolate`.
+ */
+afterAll(() => {
+  inRange = true;
+  useWelcomeStore(sqlWelcomeStore);
 });
 
 describe("takeoverCell", () => {

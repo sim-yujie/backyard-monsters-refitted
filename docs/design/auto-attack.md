@@ -421,7 +421,8 @@ damage figures show the shape of the curve (diminishing returns), not what a goo
   primary button and **Repeat attack** stays available (for loot, Q6).
 - **The end-of-attack panel** (`web/src/ui/attack/EndAttackPanel.ts`), after a manual attack on a
   camp that is still under 90%: **Attack again** runs this exact attack's plan, which skips the
-  trip back to the map. That is the moment the hassle is felt most.
+  trip back to the map. That is the moment the hassle is felt most. *Removed (owner, 18 Nov
+  2026): "no need for that"; the map's Repeat attack stays.*
 - **The result panel** of an auto-attack offers **Attack again** too, so a conquest is a chain of
   taps on one screen.
 
@@ -482,7 +483,7 @@ after their first plan, or camps change hands so fast that players in range neve
 | WP5 | **Plan summary** for the cell panel: needs against has, and the champion. A field on the existing cell request, or `GET /worldmapv2/autoattackplan`. | S |
 | WP6 | **Web: Repeat attack** in `CellPanel`, and the confirmation sheet. | S-M |
 | WP7 | **Web: result panel** (an `EndAttackPanel` variant, the takeover offer reused) and **Attack again**. | M |
-| WP8 | **Web: Attack again** on the manual end-of-attack panel. | S |
+| WP8 | **Web: Attack again** on the manual end-of-attack panel. Removed 18 Nov 2026 (owner). | S |
 
 Order: WP1 → WP2 → WP3 (+ WP4 in parallel) → WP5 → WP6 → WP7 → WP8. WP1 can ship on its own first
 and quietly start recording plans, so players already have a plan for every camp layout they have

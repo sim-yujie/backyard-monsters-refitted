@@ -1,5 +1,6 @@
 import { Assets, Graphics, Sprite, Texture, type ColorMatrix, type Container } from "pixi.js";
 import type { Point } from "@/game/yard/YardGrid";
+import { artUrl } from "../../artUrl";
 
 /**
  * How Rezghul's raise looks: the orb it throws at a corpse, the corpse rising
@@ -322,8 +323,8 @@ export const riseGlowAlpha = (age: number): number => {
 /* ── Pictures ───────────────────────────────────────────────────────────── */
 
 /** Rezghul's orb, painted for the owner (12 Nov 2026): the Classic one at Flash's own path. */
-export const ORB_URL_CLASSIC = "/assets/monsters/projectiles/rezghul_projectile@2x.png";
-export const ORB_URL_MODERN = "/assets/monsters/projectiles/rezghul_projectile.modern@2x.png";
+export const ORB_URL_CLASSIC = artUrl("/assets/monsters/projectiles/rezghul_projectile@2x.png");
+export const ORB_URL_MODERN = artUrl("/assets/monsters/projectiles/rezghul_projectile.modern@2x.png");
 
 /** The rim haze: Flash's white; the Modern look tints it the orb's sea-green. */
 const HAZE_CLASSIC = 0xffffff;

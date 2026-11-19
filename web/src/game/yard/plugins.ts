@@ -22,5 +22,6 @@ import "./plugins/raid";
 import "./plugins/resetClock";
 import "./plugins/slowInternet";
 import "./plugins/teamNotice";
+import "./plugins/safeMode";
 import "./plugins/tips";
 import "./plugins/weekend";

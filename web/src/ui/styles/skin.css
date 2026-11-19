@@ -741,15 +741,36 @@
   filter: drop-shadow(0 4px 6px rgb(0 0 0 / 45%)) brightness(1.12);
 }
 
-/* The attack's Catapult and Siege bar: pressed, still the plate (attack.css
-   keeps its own no-nudge rule); its picker open, lit in the accent. */
-:root[data-skin] .btn.attack-tools__button:is(:active, :disabled, [aria-expanded="true"]) {
+/* The attack dock's tab row: pressed, still the plate (attack.css keeps its
+   own no-nudge rule). The tab that is up: a lighter plate in white words over
+   its bar (attack.css); a tool waiting for its tap: glowing accent words. */
+:root[data-skin] .btn.attack-tools__button:is(:active, :disabled, [aria-selected="true"]) {
   background: none;
 }
 
-:root[data-skin] .attack-tools__button[aria-expanded="true"],
+:root[data-skin] .attack-tools__button[aria-selected="true"] {
+  filter: drop-shadow(0 4px 6px rgb(0 0 0 / 45%)) brightness(1.3);
+}
+
 :root[data-skin] .attack-tools__button--armed {
-  filter: drop-shadow(0 0 3px var(--colour-accent)) drop-shadow(0 4px 6px rgb(0 0 0 / 45%));
+  filter: drop-shadow(0 0 4px var(--colour-accent)) drop-shadow(0 4px 6px rgb(0 0 0 / 45%));
+}
+
+/* It breathes, so an armed tool is noticed with the sheet closed or the Army up. */
+@media (prefers-reduced-motion: no-preference) {
+  :root[data-skin] .attack-tools__button--armed {
+    animation: attack-tab-armed 1.1s ease-in-out infinite alternate;
+  }
+}
+
+@keyframes attack-tab-armed {
+  from {
+    filter: drop-shadow(0 0 2px var(--colour-accent)) drop-shadow(0 4px 6px rgb(0 0 0 / 45%));
+  }
+
+  to {
+    filter: drop-shadow(0 0 9px var(--colour-accent)) drop-shadow(0 4px 6px rgb(0 0 0 / 45%)) brightness(1.2);
+  }
 }
 
 :root[data-skin] .attack-tools__button--armed {
@@ -761,6 +782,12 @@
 @media (min-width: 620.02px) and (min-height: 500.02px) {
   :root[data-skin] .attack-dock__body {
     padding-top: 20px;
+  }
+
+  /* Under the tab row the windows have no sign (the tab is their title);
+     the Baiter's test panel, first in its dock, keeps its sign's room. */
+  :root[data-skin] .attack-dock--tabs .attack-dock__body:has(> [data-dock-tab]:first-child) {
+    padding-top: 0;
   }
 }
 
@@ -787,6 +814,15 @@
   .kit-picker__confirm
 ) {
   background: var(--skin-fill);
+}
+
+/* Classic's NEW on a Town Hall unlock keeps a solid orange under its white
+   word: on the window's cream fill above it was white on cream. The deeper
+   accent (pressed) reads at 5:1, the plain accent only 4:1. */
+:root[data-skin="flash"] .panel .unlock-tile--new .unlock-tile__badge {
+  border-color: var(--colour-border-strong);
+  background: var(--colour-accent-pressed);
+  color: #ffffff;
 }
 
 /* A frozen champion's badge keeps its ice blue (on the window's fill its
@@ -1190,6 +1226,10 @@
   /* Its scrolling body leaves room for the Army window's sign. */
   :root[data-skin] .attack-dock--sheet .attack-dock__body {
     padding-top: 16px;
+  }
+
+  :root[data-skin] .attack-dock--sheet.attack-dock--tabs .attack-dock__body:has(> [data-dock-tab]:first-child) {
+    padding-top: 0;
   }
 
   /* Map Room 1 fills the phone: the window's thinner frame. */

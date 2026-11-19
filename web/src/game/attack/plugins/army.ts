@@ -41,10 +41,11 @@ export const createArmyPlugin =
       mounts.setBottomInset(sheet.getBoundingClientRect().height);
     };
     const session = mounts.session;
+    // A Moloch tribe or an Inferno player is fought with the Inferno yard's Housing Bunkers (WP 2.10, 3.5).
+    const title = fromInfernoYard(mounts.target) ? ATTACK_FORCE : "Army";
     const panel = new ArmyPanel(bucket, {
       onResize: report,
-      // A Moloch tribe or an Inferno player is fought with the Inferno yard's Housing Bunkers (WP 2.10, 3.5).
-      ...(fromInfernoYard(mounts.target) ? { title: ATTACK_FORCE } : {}),
+      ...(title !== "Army" ? { title } : {}),
       // The champion row's Retreat (issue #222).
       onRetreatChampion: (t) => {
         session.retreatChampion(t);
@@ -61,10 +62,14 @@ export const createArmyPlugin =
             },
           }),
     }).mount(mounts.dock);
+    // The dock's first tab, named as the panel is; the tab is its title (owner, 18 Nov 2026).
+    mounts.dockTabs.claim("army", panel.element);
+    const tab = mounts.dockTabs.add("army", { label: title, title: "Your army: pick who goes in the flinger" });
     panel.setChampionsOnField(session.state().championsOnField);
     const unsubscribe = session.subscribe((state) => panel.setChampionsOnField(state.championsOnField));
     return () => {
       unsubscribe();
+      tab.remove();
       panel.destroy();
     };
   };

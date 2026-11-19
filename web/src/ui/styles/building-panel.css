@@ -42,6 +42,11 @@
   color: var(--colour-text-muted);
 }
 
+/* The Under Hall's second group ("Main yard"), clear of the tiles above it. */
+.building-panel__label--sub {
+  margin-top: var(--space-3);
+}
+
 /* Town Hall unlocks: each building's build-menu picture, its name under it
    and a "+1" or NEW badge on its corner. */
 .building-panel__unlock-list {

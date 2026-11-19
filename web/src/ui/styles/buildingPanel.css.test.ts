@@ -55,3 +55,24 @@ describe("building panel rows fit the panel", () => {
     expect(skin).not.toMatch(/building-panel__buttons|building-job|building-panel__head/);
   });
 });
+
+describe("Town Hall unlock badges", () => {
+  // Classic's window fill (skin.css) went under every unlock badge, NEW too,
+  // so NEW was white on cream (17 Nov 2026).
+  it("Classic's NEW keeps a solid accent under its white word", () => {
+    const body = rule(skin, ':root[data-skin="flash"] .panel .unlock-tile--new .unlock-tile__badge');
+    expect(declaration(body, "background")).toBe("var(--colour-accent-pressed)");
+    expect(declaration(body, "color")).toBe("#ffffff");
+  });
+
+  it("the NEW rule comes after the fill every badge on a picture takes", () => {
+    const fill = skin.indexOf(".unlock-tile__badge,");
+    const fresh = skin.indexOf(':root[data-skin="flash"] .panel .unlock-tile--new .unlock-tile__badge');
+    expect(fill).toBeGreaterThan(-1);
+    expect(fresh).toBeGreaterThan(fill);
+  });
+
+  it("the Under Hall's main-yard heading stands clear of the tiles above it", () => {
+    expect(declaration(rule(sheet, ".building-panel__label--sub"), "margin-top")).toBe("var(--space-3)");
+  });
+});

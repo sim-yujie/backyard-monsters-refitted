@@ -152,9 +152,7 @@ export class EndAttackPanel {
   private readonly leaveButton: HTMLButtonElement;
   private readonly homeButton: HTMLButtonElement | null;
   private readonly leaveConfirm: HTMLElement;
-  /** Repeats this attack at once (issue #221); shown once the result is saved. */
-  private readonly againButton: HTMLButtonElement;
-  private again: (() => void) | null = null;
+  /** The button row, centred under the result (owner, 18 Nov 2026). */
   private readonly actions: HTMLElement;
   /** A section hosted above the actions: the takeover offer (issue #82). */
   private extra: HTMLElement | null = null;
@@ -262,14 +260,6 @@ export class EndAttackPanel {
     leaveNo.addEventListener("click", () => this.hideLeave());
     this.leaveConfirm.append(leaveText, leaveNo, leaveYes);
 
-    this.againButton = document.createElement("button");
-    this.againButton.type = "button";
-    this.againButton.className = "btn btn--ghost attack-end__again";
-    this.againButton.textContent = "Attack again";
-    this.againButton.title = "Repeat this attack on this camp now, resolved at once";
-    this.againButton.hidden = true;
-    this.againButton.addEventListener("click", () => this.again?.());
-
     this.homeButton = null;
     if (options.home) {
       const home = options.home;
@@ -284,8 +274,8 @@ export class EndAttackPanel {
     }
 
     const actions = document.createElement("div");
-    actions.className = "attack-end__actions";
-    actions.append(this.leaveButton, this.retryButton, this.againButton);
+    actions.className = "attack-end__actions attack-end__actions--centred";
+    actions.append(this.leaveButton, this.retryButton);
     if (this.homeButton) actions.append(this.homeButton);
     actions.append(this.returnButton);
     this.actions = actions;
@@ -332,16 +322,6 @@ export class EndAttackPanel {
     if (node) this.actions.before(node);
   }
 
-  /**
-   * Offers Attack again (issue #221): this attack, repeated by the server at
-   * once. Shown only while the result is saved, since the repeat is the attack
-   * the server recorded from it. Null takes it away.
-   */
-  setAttackAgain(run: (() => void) | null): void {
-    this.again = run;
-    this.againButton.hidden = run === null || this.status_ !== "saved";
-  }
-
   /** Back to "Saving…", for a retry. */
   setSaving(): void {
     this.status_ = "saving";
@@ -367,7 +347,6 @@ export class EndAttackPanel {
     this.leaveButton.hidden = true;
     this.hideLeave();
     this.setReturnOpen(true);
-    this.againButton.hidden = this.again === null;
 
     const now = info.now ?? Date.now() / 1000;
     const until = info.protectedUntil ?? 0;
