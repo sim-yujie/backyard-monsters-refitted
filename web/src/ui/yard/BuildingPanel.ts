@@ -675,7 +675,10 @@ export class BuildingPanel {
     if (yard) {
       const model = panelModel(building, yard.store);
       // The building on the yard shows its next look while Upgrade is offered (beta 8), even short of resources.
-      yard.scene.previewUpgrade?.(building, model.upgrade?.to ?? null);
+      // Not on a wall: its step finishes at once, so the badge would already
+      // name the level after next beside "Reached level N" (astra round 3).
+      const wallStep = WALL_TYPES.includes(building.type);
+      yard.scene.previewUpgrade?.(building, wallStep ? null : (model.upgrade?.to ?? null));
       const repair = repairOffer(building.id, yard.store.save, yard.store.credits, yard.store.now());
       if (repair) blocks.push(this.repairBlock(building, repair, used));
       if (model.job) blocks.push(this.jobBlock(building, model.job, used));
