@@ -2,7 +2,7 @@ import { classicLook } from "@/game/classicLook";
 import { MONSTER_SPRITES, type MonsterAnimation, type MonsterSheet, type RowCycle } from "./monsterSpriteData";
 import { windUpFrame } from "./juice";
 import { SHEET_VERSIONS } from "./sheetVersions";
-import { sheetAtQuality, sheetCopies, sheetForDevice } from "@/game/quality";
+import { monsterSheetLevel, sheetAtQuality, sheetCopies, sheetForDevice } from "@/game/quality";
 import { artUrl } from "../../artUrl";
 
 /**
@@ -1015,7 +1015,7 @@ export const isHighResolutionSheet = (url: string): boolean => /@\d+(\.\d+)?x\.\
 /**
  * The URL the sheet is served from: `/assets/monsters/<file>`, or, unless the
  * Classic look is on, its repaint in the copy the Quality setting asks for
- * (`game/quality.ts`), stepped down to a smaller copy where that one is
+ * (`game/quality.ts`; the Medium copy at most on a phone or tablet), stepped down to a smaller copy where that one is
  * bigger than this device's graphics card holds (given a sheet, whose size
  * says), with that file's version so a repaint is fetched afresh
  * (`sheetVersions.ts`).
@@ -1024,7 +1024,12 @@ export function sheetUrl(sheet: MonsterSheet | string): string {
   const file = typeof sheet === "string" ? sheet : sheet.file;
   const repaint = classicLook() ? undefined : REPAINTED_SHEETS[file];
   if (!repaint) return `${ASSET_ROOT}${file}`;
-  const copy = typeof sheet === "string" ? sheetAtQuality(repaint) : sheetForDevice(repaint, applyLayout(sheet));
+  // Never above Medium on a phone or tablet, by either way of asking.
+  const level = monsterSheetLevel();
+  const copy =
+    typeof sheet === "string"
+      ? sheetAtQuality(repaint, level)
+      : sheetForDevice(repaint, applyLayout(sheet), undefined, level);
   return versionedUrl(copy);
 }
 

@@ -1,5 +1,6 @@
 import { quietLogin } from "@/game/quietLogin";
 import { setQuality } from "@/game/quality";
+import { safeModeSteppedTo } from "@/game/safeMode";
 import { suggestLowOnce } from "@/game/slowInternet";
 import { openSlowInternet } from "@/ui/quality/SlowInternetDialog";
 import { YARD_PLUGINS, type YardPlugin } from "../yardPlugins";
@@ -14,6 +15,8 @@ import { screenBusy } from "./announcements";
 export const slowInternetPlugin: YardPlugin = (mounts) => {
   // A test server's quiet login: never suggested, and nothing remembered in the browser.
   if (quietLogin()) return;
+  // Safe mode has just lowered the Quality and says so: one Quality pop-up a page load.
+  if (safeModeSteppedTo() !== null) return;
   return suggestLowOnce({
     busy: () => screenBusy(mounts),
     show: () => openSlowInternet({ container: mounts.overlay.modal, onLow: () => setQuality("low") }),

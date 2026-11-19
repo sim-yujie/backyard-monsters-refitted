@@ -170,6 +170,11 @@ export class SheetQueue {
     };
   }
 
+  /** Whether nothing is waiting or in flight. */
+  get idle(): boolean {
+    return this.entries.size === 0;
+  }
+
   private pump(): void {
     while (this.holds === 0) {
       const inFlight = this.active.small + this.active.full;
@@ -211,3 +216,33 @@ export class SheetQueue {
  * the raid scene's battle layer, so they share one order and one limit.
  */
 export const raidSheetQueue = new SheetQueue({ isCached: (url) => Assets.cache.has(url) });
+
+/**
+ * The yard's own queue (patch 7.11): the creatures' sheets two at a time. The
+ * yard used to fetch every monster's sheet at once, and a phone decoding a
+ * dozen big pictures together ran out of memory. Not the raid's queue: a raid
+ * ending holds that one and drops what waits, which would stall or lose the
+ * yard's sheets.
+ */
+export const YARD_SHEETS_AT_ONCE = { maxActive: 2, maxFull: 2 } as const;
+
+export const yardSheetQueue = new SheetQueue({ ...YARD_SHEETS_AT_ONCE, isCached: (url) => Assets.cache.has(url) });
+
+/** Yard sheets asked for and not yet in (or failed): waiting for the gate, queued or in flight. */
+let yardSheetsWanted = 0;
+
+/**
+ * Fetches a yard sheet through `queue` once `gate` opens (the yard holds its
+ * creatures' sheets back until the buildings' pictures are in).
+ */
+export const loadYardSheet = (url: string, gate: Promise<void>, queue: SheetQueue = yardSheetQueue): Promise<Texture> => {
+  yardSheetsWanted += 1;
+  return gate
+    .then(() => queue.load(url))
+    .finally(() => {
+      yardSheetsWanted -= 1;
+    });
+};
+
+/** Whether every yard sheet asked for is in: safe mode's "the yard ran fine" waits for it. */
+export const yardSheetsIdle = (): boolean => yardSheetsWanted === 0;
