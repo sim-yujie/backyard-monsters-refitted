@@ -12,6 +12,8 @@
 }
 
 .leaderboard-popup .panel__body {
+  /* beta 8 (astra round 1): keep the bottom fade shorter than a row. */
+  --scroll-fade-below: 40px;
   flex: 1;
   min-height: 0;
   overflow-y: auto;
@@ -29,6 +31,13 @@
   margin: 0;
   font-size: var(--text-sm);
   color: var(--colour-text-muted);
+}
+
+/* beta 8 (astra round 1): centre the small flag beside its word. */
+.leaderboard__intro > .game-icon {
+  width: 16px;
+  height: 16px;
+  vertical-align: -3px;
 }
 
 .leaderboard__status--error {
@@ -126,6 +135,11 @@
 .leaderboard__outposts > .game-icon {
   width: 20px;
   height: 20px;
+}
+
+/* beta 8 (astra round 1): quiet Modern's flag so the count reads first. */
+:root[data-skin="scrap"] .leaderboard__outposts > .game-icon {
+  filter: brightness(0.94) saturate(0.95);
 }
 
 :root[data-skin="flash"] .leaderboard__outposts {

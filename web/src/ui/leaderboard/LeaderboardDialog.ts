@@ -2,8 +2,9 @@ import { getEmpireBoard, type BoardRow, type EmpireBoard } from "@/api/leaderboa
 import { playerPicture, showPlayerPicture } from "@/game/playerPicture";
 import { formatAmount } from "@/ui/format";
 import { classicLook } from "@/game/classicLook";
-import { iconAmount, type GameIconName } from "@/ui/gameIcon";
+import { gameIcon, iconAmount, type GameIconName } from "@/ui/gameIcon";
 import { Popup } from "@/ui/Popup";
+import { scrollFade } from "@/ui/scrollFade";
 import "./leaderboard.css";
 
 /**
@@ -84,7 +85,10 @@ const row = (item: BoardRow, mine: boolean): HTMLLIElement => {
 /** The board's body: the list, and the "You" line when the player is below it. */
 export const boardContent = (board: EmpireBoard, userId: number | null): HTMLElement => {
   const body = el("div", "leaderboard");
-  body.append(el("p", "leaderboard__intro", "Ranked by empire points: your yard plus your outposts."));
+  // beta 8 (astra round 1): tie the painted flag to its meaning.
+  const intro = el("p", "leaderboard__intro", "Ranked by empire points: your yard plus your ");
+  intro.append(gameIcon(outpostIcon(), { size: 16, decorative: true }), " outposts.");
+  body.append(intro);
   if (board.top.length === 0) {
     body.append(el("p", "leaderboard__empty", EMPTY));
     return body;
@@ -118,10 +122,16 @@ export interface LeaderboardOptions {
 
 /** Opens the leaderboard: a loading line until the board arrives, then the list. */
 export const openLeaderboard = (options: LeaderboardOptions): Popup => {
+  let stopFade: (() => void) | undefined;
+  let closed = false;
   const popup = new Popup({
     title: "Leaderboard",
     className: "leaderboard-popup",
-    ...(options.onClose && { onClose: options.onClose }),
+    onClose: () => {
+      closed = true;
+      stopFade?.();
+      options.onClose?.();
+    },
   });
   const waiting = el("div", "leaderboard");
   waiting.append(el("p", "leaderboard__status", "Loading the leaderboard…"));
@@ -129,11 +139,16 @@ export const openLeaderboard = (options: LeaderboardOptions): Popup => {
 
   void (options.load ?? getEmpireBoard)()
     .then((board) => {
+      if (closed) return;
       popup.setContent(boardContent(board, options.userId));
       // The player's own row in view, without moving the page behind.
       popup.element.querySelector<HTMLElement>(".leaderboard__list .leaderboard__row--you")?.scrollIntoView?.({ block: "nearest" });
+      // beta 8 (astra round 1): fade the edges where more rows wait.
+      const list = popup.body.querySelector<HTMLOListElement>(".leaderboard__list");
+      if (list) stopFade = scrollFade(popup.body, list);
     })
     .catch(() => {
+      if (closed) return;
       const failed = el("div", "leaderboard");
       failed.append(el("p", "leaderboard__status leaderboard__status--error", LOAD_FAILED));
       popup.setContent(failed);

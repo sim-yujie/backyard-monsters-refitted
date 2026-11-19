@@ -1,5 +1,6 @@
 // @vitest-environment jsdom
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { setClassicLook } from "@/game/classicLook";
 import type { BoardRow, EmpireBoard } from "@/api/leaderboard";
 import { EMPTY, LOAD_FAILED, openLeaderboard, outpostIcon, outpostText, splitText } from "./LeaderboardDialog";
 
@@ -48,10 +49,76 @@ beforeEach(() => {
 });
 
 afterEach(() => {
+  container.querySelectorAll<HTMLButtonElement>('button[aria-label="Close"]').forEach((button) => button.click());
   container.remove();
+  setClassicLook(false);
+  vi.restoreAllMocks();
+  vi.unstubAllGlobals();
 });
 
 describe("openLeaderboard", () => {
+  it.each([false, true])("explains the flag inline in the current look (Classic: %s)", async (classic) => {
+    setClassicLook(classic);
+    await open(boardOf(1, null));
+    const intro = container.querySelector(".leaderboard__intro")!;
+    expect(intro.textContent!.replace(/\s+/g, " ")).toBe("Ranked by empire points: your yard plus your outposts.");
+    const flag = intro.querySelector("img")!;
+    expect(flag.dataset["icon"]).toBe(classic ? "outpostclassic" : "outpost");
+    expect(flag.width).toBe(16);
+    expect(flag.height).toBe(16);
+    expect(flag.getAttribute("aria-hidden")).toBe("true");
+    expect(flag.nextSibling!.textContent).toBe(" outposts.");
+  });
+
+  it("fades overflowing edges after showing the own row, and stops on close", async () => {
+    const observe = vi.fn();
+    const disconnect = vi.fn();
+    const onClose = vi.fn();
+    const popup = openLeaderboard({ container, userId: 1002, load: async () => boardOf(3, rowOf(2)), onClose });
+    Object.defineProperties(popup.body, {
+      clientHeight: { value: 100 },
+      scrollHeight: { value: 300 },
+    });
+    const scrollIntoView = vi.fn(function (this: HTMLElement) {
+      expect(this.dataset["rank"]).toBe("2");
+      popup.body.scrollTop = 50;
+    });
+    vi.stubGlobal("requestAnimationFrame", vi.fn());
+    vi.stubGlobal("ResizeObserver", class {
+      observe = observe;
+      disconnect = disconnect;
+    });
+    Object.defineProperty(HTMLElement.prototype, "scrollIntoView", { configurable: true, value: scrollIntoView });
+    try {
+      await flush();
+      expect(scrollIntoView).toHaveBeenCalledWith({ block: "nearest" });
+      expect(observe.mock.calls.map(([element]) => element)).toEqual([popup.body, container.querySelector(".leaderboard__list")]);
+      expect(popup.body.classList.contains("scroll-fade--more-above")).toBe(true);
+      expect(popup.body.classList.contains("scroll-fade--more-below")).toBe(true);
+      popup.body.scrollTop = 200;
+      popup.body.dispatchEvent(new Event("scroll"));
+      expect(popup.body.classList.contains("scroll-fade--more-below")).toBe(false);
+      popup.close();
+      expect(disconnect).toHaveBeenCalledOnce();
+      expect(onClose).toHaveBeenCalledOnce();
+      popup.body.scrollTop = 0;
+      popup.body.dispatchEvent(new Event("scroll"));
+      expect(popup.body.classList.contains("scroll-fade--more-above")).toBe(true);
+    } finally {
+      Reflect.deleteProperty(HTMLElement.prototype, "scrollIntoView");
+    }
+  });
+
+  it("does not start fading if closed before the board arrives", async () => {
+    let resolve!: (board: EmpireBoard) => void;
+    const popup = openLeaderboard({ container, userId: null, load: () => new Promise((done) => { resolve = done; }) });
+    popup.close();
+    resolve(boardOf(3, null));
+    await flush();
+    expect(popup.body.classList.contains("scroll-fade")).toBe(false);
+    expect(popup.body.querySelector(".leaderboard__list")).toBeNull();
+  });
+
   it("lists the players in rank order with their points and outposts, no Discord tags", async () => {
     await open(boardOf(3, null));
     const shown = rows();
