@@ -356,3 +356,96 @@ describe("YardLifeLayer champion trips (#314)", () => {
     expect(layer.count).toBe(0);
   });
 });
+
+describe("YardLifeLayer when the cage moves (planner Apply)", () => {
+  const chamber = { x: 300, y: 300, width: 60, height: 60 };
+  const home = life({ groups: [], pens: [], workers: 0, chamber });
+  const away = life({ groups: [], pens: [], workers: 0, chamber, cage: { id: 6, x: 200, y: -400 } });
+  const frozen = life({ groups: [], pens: [], workers: 0, chamber, champions: [], frozen: ["G1"] });
+  const straight = (from: { x: number; y: number }, to: { x: number; y: number }) => [from, to];
+  const champion = (layer: YardLifeLayer) => layer.walkerList.find((walker) => walker.champion);
+  const inNewCage = (x: number, y: number) => x >= 200 && x <= 360 && y >= -400 && y <= -240;
+  const walkHome = (layer: YardLifeLayer) => {
+    for (let frame = 0; frame < 3000 && champion(layer)?.trip; frame++) layer.update(everywhere, 1 / 10);
+  };
+
+  it("walks the champion it held round to the new spot, where it paces", () => {
+    const { layer } = setUp();
+    const routes: { x: number; y: number }[][] = [];
+    const route = (from: { x: number; y: number }, to: { x: number; y: number }) => {
+      routes.push([from, to]);
+      return [from, { x: from.x, y: to.y }, to];
+    };
+    layer.set(home, bounds, route);
+    const walker = champion(layer)!;
+    const from = { x: walker.x, y: walker.y };
+    layer.set(away, bounds, route);
+    expect(champion(layer)).toBe(walker);
+    expect(routes).toEqual([[from, expect.anything()]]);
+    expect(walker.trip).not.toBeNull();
+    expect(walker.leaving).toBe(false);
+    walkHome(layer);
+    expect(walker.trip).toBeNull();
+    expect(inNewCage(walker.x, walker.y)).toBe(true);
+    expect(layer.count).toBe(1);
+  });
+
+  it("sends nobody anywhere when the yard is read again with the cage where it was", () => {
+    const { layer } = setUp();
+    layer.set(home, bounds, straight);
+    const walker = champion(layer)!;
+    const area = { ...walker.area };
+    layer.set(life({ groups: [], pens: [], workers: 0, chamber }), bounds, straight);
+    expect(walker.trip).toBeNull();
+    expect(walker.area).toEqual(area);
+  });
+
+  it("puts it straight in the new cage under reduced motion, with no route, and on a resized plot", () => {
+    const still = setUp(true);
+    still.layer.set(home, bounds, straight);
+    still.layer.set(away, bounds, straight);
+    const a = champion(still.layer)!;
+    expect(a.trip).toBeNull();
+    expect(inNewCage(a.x, a.y)).toBe(true);
+
+    const noRoute = setUp();
+    noRoute.layer.set(home, bounds, () => null);
+    noRoute.layer.set(away, bounds, () => null);
+    const b = champion(noRoute.layer)!;
+    expect(b.trip).toBeNull();
+    expect(inNewCage(b.x, b.y)).toBe(true);
+
+    const resized = setUp();
+    resized.layer.set(home, bounds, straight);
+    resized.layer.set(away, yardBounds(1), straight);
+    const c = champion(resized.layer)!;
+    expect(c.trip).toBeNull();
+    expect(inNewCage(c.x, c.y)).toBe(true);
+  });
+
+  it("turns one walking back from the Chamber for the new cage", () => {
+    const { layer } = setUp();
+    layer.set(frozen, bounds, straight);
+    layer.set(home, bounds, straight);
+    const walker = champion(layer)!;
+    expect(walker.trip).not.toBeNull();
+    layer.update(everywhere, 1 / 10);
+    layer.set(away, bounds, straight);
+    expect(champion(layer)).toBe(walker);
+    expect(inNewCage(walker.targetX, walker.targetY)).toBe(true);
+    walkHome(layer);
+    expect(inNewCage(walker.x, walker.y)).toBe(true);
+  });
+
+  it("brings one frozen on the way out back to the new cage when it is thawed again", () => {
+    const { layer } = setUp();
+    layer.set(home, bounds, straight);
+    const walker = champion(layer)!;
+    layer.set(frozen, bounds, straight);
+    expect(walker.leaving).toBe(true);
+    layer.set(away, bounds, straight);
+    expect(champion(layer)).toBe(walker);
+    walkHome(layer);
+    expect(inNewCage(walker.x, walker.y)).toBe(true);
+  });
+});
