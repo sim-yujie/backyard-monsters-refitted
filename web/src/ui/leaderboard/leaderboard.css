@@ -12,8 +12,8 @@
 }
 
 .leaderboard-popup .panel__body {
-  /* beta 8 (astra round 1): keep the bottom fade shorter than a row. */
-  --scroll-fade-below: 40px;
+  /* beta 8 (astra rounds 1-2): a short bottom fade, so the next row stays recognisable. */
+  --scroll-fade-below: 24px;
   flex: 1;
   min-height: 0;
   overflow-y: auto;
@@ -86,6 +86,11 @@
 
 .leaderboard__row--medal-3 .leaderboard__rank {
   color: var(--colour-medal-bronze);
+}
+
+/* beta 8 (astra round 2): Classic's light silver sank into the parchment and the lit row's wash. */
+:root[data-skin="flash"] .leaderboard__row--medal-2 .leaderboard__rank {
+  color: #737b80;
 }
 
 .leaderboard__face {
