@@ -34,11 +34,18 @@
    darker dome colour in either look, keeping the rim, size and shadows. */
 .friend-hop .friend-hop__button:disabled .yard-dock__disc {
   opacity: 1;
-  background: radial-gradient(
-    circle at 50% 35%,
-    color-mix(in srgb, var(--colour-dome-top) 25%, var(--colour-dome-bottom)),
-    var(--colour-dome-bottom)
-  );
+}
+
+/* Only where color-mix works (Safari 16.2+): an older iPad keeps the
+   dock's own dome gradient, still opaque, rather than no background. */
+@supports (color: color-mix(in srgb, red, blue)) {
+  .friend-hop .friend-hop__button:disabled .yard-dock__disc {
+    background: radial-gradient(
+      circle at 50% 35%,
+      color-mix(in srgb, var(--colour-dome-top) 25%, var(--colour-dome-bottom)),
+      var(--colour-dome-bottom)
+    );
+  }
 }
 
 /* astra, 19 Nov 2026: Dim the grey arrow on its solid ground, with enough
