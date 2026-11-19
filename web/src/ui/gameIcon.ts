@@ -109,6 +109,14 @@ import { writeAmount, type AmountChange } from "./amountChange";
  * `art-samples/camera-icon`, painted by Codex): `camera`, a chunky red camera
  * with a big blue lens and a yellow flash bulb; `camera2`, the other option, a
  * teal instant camera with a photo of a yard coming out of its top.
+ *
+ * Prev and Next on a friend's yard (beta 8, `ui/friends/FriendHopButtons.ts`,
+ * owner 18 Nov: painted, not line arrows; `art-samples/friend-hop-arrows`):
+ * a fat glossy golden arrow pointing left (`friendprev`) and right
+ * (`friendnext`), and the same pair in the Classic look, softer with a thin
+ * brown outline and no white rim (`friendprevclassic`, `friendnextclassic`).
+ * Gold reads on both the slate Modern disc and the brown Classic one. These
+ * four also ship 96 and 128 px files for the 45 px dock picture on a 3x phone.
  */
 export const GAME_ICONS = {
   health: "Health",
@@ -170,6 +178,10 @@ export const GAME_ICONS = {
   camera2: "Yard picture",
   goals: "Goals",
   goalsclassic: "Goals",
+  friendprev: "Previous friend",
+  friendnext: "Next friend",
+  friendprevclassic: "Previous friend",
+  friendnextclassic: "Next friend",
 } as const satisfies Record<string, string>;
 
 export type GameIconName = keyof typeof GAME_ICONS;

@@ -1,0 +1,99 @@
+/*
+ * Prev and Next on a friend's yard (beta 8, `FriendHopButtons.ts`): two dock
+ * discs beside Map, in the place Friends has on the own yard
+ * (`friends-button.css`), so they take the dock's size and look in Modern and
+ * Classic. `followMapColumn` sets `left` 8px past Map's box once measured;
+ * these are only where they start.
+ *
+ * Every value comes from tokens.css.
+ */
+
+.friend-hop {
+  position: absolute;
+  bottom: 26px;
+  left: calc(24px + 68px + var(--space-4));
+  z-index: var(--z-hud);
+  display: flex;
+  align-items: flex-end;
+  gap: var(--space-2);
+}
+
+.friend-hop[hidden] {
+  display: none;
+}
+
+.friend-hop__button {
+  min-width: 68px;
+}
+
+/* The painted arrow (`hopArt`, owner 18 Nov 2026) takes the dock's painted
+   picture size and shadow (`.yard-dock__picture`), as Friends and Monsters. */
+
+/* astra, 19 Nov 2026: At either end, and while Help all runs, keep the
+   disc opaque so the yard cannot change its contrast. Lean towards the
+   darker dome colour in either look, keeping the rim, size and shadows. */
+.friend-hop .friend-hop__button:disabled .yard-dock__disc {
+  opacity: 1;
+}
+
+/* Only where color-mix works (Safari 16.2+): an older iPad keeps the
+   dock's own dome gradient, still opaque, rather than no background. */
+@supports (color: color-mix(in srgb, red, blue)) {
+  .friend-hop .friend-hop__button:disabled .yard-dock__disc {
+    background: radial-gradient(
+      circle at 50% 35%,
+      color-mix(in srgb, var(--colour-dome-top) 25%, var(--colour-dome-bottom)),
+      var(--colour-dome-bottom)
+    );
+  }
+}
+
+/* astra, 19 Nov 2026: Dim the grey arrow on its solid ground, with enough
+   contrast to keep its direction clear. Quiet the label a little too. */
+.friend-hop .friend-hop__button:disabled .friend-hop__art {
+  filter: grayscale(1);
+  opacity: 0.7;
+}
+
+.friend-hop .friend-hop__button:disabled .yard-dock__label {
+  opacity: 0.85;
+}
+
+/* Amber, as the Friends button's count of friends who can use help. */
+.friend-hop .yard-dock__badge.friend-hop__badge {
+  background: var(--colour-warning);
+  color: var(--colour-warning-text);
+}
+
+/* The yard's status line moves along to stay beside them. */
+@media (min-width: 620.02px) {
+  .overlay__layer:has(> .yard-dock):has(> .friend-hop:not([hidden])) > .cell-readout {
+    left: calc(var(--friend-hop-right, 260px) + var(--space-3));
+  }
+}
+
+/* A phone, upright or on its side: beside Map, as Friends is. */
+@media (max-width: 620px) {
+  .friend-hop {
+    bottom: 18px;
+    left: 88px;
+  }
+}
+
+@media (min-width: 620.02px) and (max-height: 500px) {
+  .friend-hop {
+    bottom: var(--space-4);
+    left: 84px;
+  }
+}
+
+/* While a sheet or a screen is open on an upright phone Map and Home step
+   aside, and these with them. On its side Map stays, and so do these: the
+   help panel docks on the right, clear of them. */
+@media (max-width: 620px) {
+  .overlay__layer:has(> .panel:not([hidden])) > .friend-hop,
+  .overlay__layer:has(> .map-dock--right > *) > .friend-hop,
+  .overlay__layer:has(> .monsters-screen:not([hidden])) > .friend-hop {
+    display: none;
+  }
+}

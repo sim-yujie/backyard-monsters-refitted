@@ -41,6 +41,44 @@ export const FRIENDS_BUTTON_GAP = 8;
 export const friendsButtonLeft = (layer: DOMRect, anchor: DOMRect | null): number | null =>
   anchor && anchor.width > 0 ? Math.round(anchor.right - layer.left + FRIENDS_BUTTON_GAP) : null;
 
+/**
+ * Keeps `element` just right of the corner column's bottom button (Map, or
+ * the phone's Menu), measured rather than guessed: that column is as wide as
+ * its widest word (the yard switcher's "Main yard", or an outpost's name), so
+ * a fixed place let the words overlap on one screen and touch on another. The
+ * CSS place stands until the first measure, and while the column is hidden.
+ * The layer gets `rightVar` (the element's right edge) for the status line
+ * beside it. Used by Friends and, on a friend's yard, Prev and Next
+ * (`FriendHopButtons.ts`). Returns the stop.
+ */
+export const followMapColumn = (layer: HTMLElement, element: HTMLElement, rightVar: string): (() => void) => {
+  const column = (): HTMLElement | null => layer.querySelector<HTMLElement>(":scope > .yard-dock .yard-dock__left");
+  const place = (): void => {
+    const left = column();
+    let anchor: DOMRect | null = null;
+    for (const child of left ? Array.from(left.children) : []) {
+      const box = child.getBoundingClientRect();
+      if (box.width > 0 && (!anchor || box.bottom >= anchor.bottom)) anchor = box;
+    }
+    const at = friendsButtonLeft(layer.getBoundingClientRect(), anchor);
+    if (at === null) return;
+    element.style.left = `${at}px`;
+    layer.style.setProperty(rightVar, `${at + element.offsetWidth}px`);
+  };
+  const watch = typeof ResizeObserver === "function" ? new ResizeObserver(place) : null;
+  const observed = column();
+  if (observed) watch?.observe(observed);
+  watch?.observe(element);
+  window.addEventListener("resize", place);
+  place();
+  void document.fonts?.ready.then(place);
+  return () => {
+    watch?.disconnect();
+    window.removeEventListener("resize", place);
+    layer.style.removeProperty(rightVar);
+  };
+};
+
 /** What the Friends button's badge wears. */
 export interface FriendsBadge {
   readonly kind: "help" | "gift";
@@ -121,41 +159,9 @@ export class FriendsButton {
     return this;
   }
 
-  /**
-   * Keeps Friends just right of the corner column's bottom button (Map, or the
-   * phone's Menu), measured rather than guessed: that column is as wide as its
-   * widest word (the yard switcher's "Main yard", or an outpost's name), so a
-   * fixed place let the words overlap on one screen and touch on another. The
-   * CSS place stands until the first measure, and while the column is hidden.
-   * The layer gets `--friends-button-right` for the status line beside it.
-   */
+  /** Keeps Friends just right of Map (`followMapColumn`); the layer gets `--friends-button-right`. */
   private follow(layer: HTMLElement): () => void {
-    const column = (): HTMLElement | null => layer.querySelector<HTMLElement>(":scope > .yard-dock .yard-dock__left");
-    const place = (): void => {
-      const left = column();
-      // The column's lowest shown button: Map, or Menu on a phone.
-      let anchor: DOMRect | null = null;
-      for (const child of left ? Array.from(left.children) : []) {
-        const box = child.getBoundingClientRect();
-        if (box.width > 0 && (!anchor || box.bottom >= anchor.bottom)) anchor = box;
-      }
-      const at = friendsButtonLeft(layer.getBoundingClientRect(), anchor);
-      if (at === null) return;
-      this.element.style.left = `${at}px`;
-      layer.style.setProperty("--friends-button-right", `${at + this.element.offsetWidth}px`);
-    };
-    const watch = typeof ResizeObserver === "function" ? new ResizeObserver(place) : null;
-    const observed = column();
-    if (observed) watch?.observe(observed);
-    watch?.observe(this.element);
-    window.addEventListener("resize", place);
-    place();
-    void document.fonts?.ready.then(place);
-    return () => {
-      watch?.disconnect();
-      window.removeEventListener("resize", place);
-      layer.style.removeProperty("--friends-button-right");
-    };
+    return followMapColumn(layer, this.element, "--friends-button-right");
   }
 
   /** Opens the Friends window; it is shown once only. */
