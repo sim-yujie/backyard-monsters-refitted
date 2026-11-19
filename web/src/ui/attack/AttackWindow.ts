@@ -42,6 +42,17 @@ import { artUrl } from "../../artUrl";
 /** The sizes a bomb comes in, smallest first (the Catapult panel's words). */
 const TIER_LABELS = ["Small", "Big", "Huge", "Massive"] as const;
 
+/**
+ * A bomb's size word, "Small" to "Massive": its place among its resource's
+ * bombs (Repeat attack's sheet names a bomb by its pile and this word).
+ */
+export const bombSize = (id: string): string => {
+  const bomb = BOMBS.find((one) => one.id === id);
+  if (!bomb) return "";
+  const index = BOMBS.filter((one) => one.resource === bomb.resource).indexOf(bomb);
+  return TIER_LABELS[index] ?? "";
+};
+
 /** One bomb slot: Flash's `CATAPULTITEM`, one per resource. */
 export interface BombSlot {
   /** 1 twigs, 2 pebbles, 3 putty. */
@@ -317,7 +328,7 @@ const section = (icon: GameIconName, words: string, extra: HTMLElement | null, g
 };
 
 /** One square: a picture and a short line under it, its words in the tooltip. */
-const tile = (picture: HTMLElement, caption: string, tip: string, className: string): HTMLElement => {
+export const tile = (picture: HTMLElement, caption: string, tip: string, className: string): HTMLElement => {
   const element = document.createElement("div");
   element.className = `attack-window__tile ${className}`;
   element.title = tip;
@@ -335,7 +346,7 @@ const tile = (picture: HTMLElement, caption: string, tip: string, className: str
   return element;
 };
 
-const grid = (className: string): HTMLElement => {
+export const grid = (className: string): HTMLElement => {
   const element = document.createElement("div");
   element.className = `attack-window__grid ${className}`;
   element.setAttribute("role", "list");
@@ -421,7 +432,7 @@ const monstersSection = (model: AttackWindowModel): HTMLElement => {
  * inside its orange rim. Classic's cut-outs stand on the tile as before; so
  * does a painted one that failed and fell back to its Flash original.
  */
-const paintedCard = (element: HTMLElement, picture: Portrait, art: "ground" | "cut-out"): void => {
+export const paintedCard = (element: HTMLElement, picture: Portrait, art: "ground" | "cut-out"): void => {
   if (picture.fallback === null) return;
   element.classList.add("attack-window__tile--painted");
   if (art === "cut-out") element.classList.add("attack-window__tile--cutout");
@@ -434,7 +445,7 @@ const paintedCard = (element: HTMLElement, picture: Portrait, art: "ground" | "c
 };
 
 /** A portrait image; a broken one is dropped rather than shown as a broken picture. */
-const portrait = (picture: Portrait): HTMLImageElement => {
+export const portrait = (picture: Portrait): HTMLImageElement => {
   const image = document.createElement("img");
   showPortrait(image, picture);
   image.alt = "";

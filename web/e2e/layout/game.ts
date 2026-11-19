@@ -192,6 +192,15 @@ const openWindows = (page: Page) =>
  * fan; if one will not close, reloads the page and waits for the yard again.
  */
 export const closeAll = async (page: Page): Promise<void> => {
+  // Repeat attack's sheet from the build's preview: closed the way it opened
+  // (its working bar has no button while it runs).
+  await page
+    .evaluate(() => {
+      const shut = (globalThis as Record<string, unknown>)["__repeatSheetClose"];
+      (globalThis as Record<string, unknown>)["__repeatSheetClose"] = null;
+      if (typeof shut === "function") (shut as () => void)();
+    })
+    .catch(() => undefined);
   // The Repeat attack's result covers the dock's More bubble on a phone
   // upright, and the test's mouse rests there from the step that pressed
   // More. When the result closes, More is under the mouse again and opens
@@ -415,5 +424,29 @@ export const openRepeatResult = async (page: Page): Promise<boolean> => {
   await page.locator(".overlay__layer .auto-attack--result").first().waitFor({ timeout: 10_000 });
   // The take-over price arrives a moment later (answered in the page).
   await page.locator(".overlay__layer .auto-attack--result .end-takeover__take:not([disabled])").first().waitFor({ timeout: 10_000 }).catch(() => undefined);
+  return true;
+};
+
+/**
+ * Repeat attack's sheet in one of its states (look A), from the build's
+ * preview (`__autoAttackConfirm`, VITE_LAYOUT_CHECK), filled with a fixed busy
+ * army: the sandbox yard is not on Map Room 2. `closeAll` closes it.
+ */
+export const openRepeatSheet = async (page: Page, state: string): Promise<boolean> => {
+  const opened = await page.evaluate((which) => {
+    const open = (globalThis as Record<string, unknown>)["__autoAttackConfirm"];
+    if (typeof open !== "function") return false;
+    const shut = (open as (state: string) => unknown)(which);
+    (globalThis as Record<string, unknown>)["__repeatSheetClose"] = shut;
+    return typeof shut === "function";
+  }, state);
+  if (!opened) return false;
+  await page.locator(".overlay__layer .auto-attack--confirm, .overlay__layer .auto-attack--bar").first().waitFor({ timeout: 10_000 });
+  // The portraits and icons size the tiles: wait for them.
+  await page
+    .waitForFunction(() => [...document.querySelectorAll(".overlay__layer .auto-attack img")].every((image) => (image as HTMLImageElement).complete), null, {
+      timeout: 10_000,
+    })
+    .catch(() => undefined);
   return true;
 };

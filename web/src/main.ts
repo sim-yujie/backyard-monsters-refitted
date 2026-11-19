@@ -89,6 +89,13 @@ if (import.meta.env.DEV || import.meta.env.VITE_LAYOUT_CHECK === "1") {
       return modal ? previewAutoAttackResult(modal, kind) : null;
     };
   });
+  // Repeat attack's sheet in each of its states (look A, owner 20 Nov 2026).
+  void import("@/ui/attack/autoAttackConfirmPreview").then(({ previewAutoAttackConfirm }) => {
+    (globalThis as Record<string, unknown>)["__autoAttackConfirm"] = (state?: Parameters<typeof previewAutoAttackConfirm>[1]) => {
+      const modal = document.querySelector<HTMLElement>(".overlay__layer--modal");
+      return modal ? previewAutoAttackConfirm(modal, state) : null;
+    };
+  });
   // The attack screen's dock (owner, 18 Nov 2026): the real attack scene on the own yard.
   void import("@/game/attack/attackDockPreview").then(({ previewAttackDock }) => {
     (globalThis as Record<string, unknown>)["__attackDock"] = () => previewAttackDock((scene) => app.goTo(scene));

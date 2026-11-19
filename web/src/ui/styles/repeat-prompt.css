@@ -1,0 +1,666 @@
+/*
+ * Repeat attack's sheet, look A "like the Attack window" (owner, 20 Nov 2026;
+ * ui/attack/repeatPrompt.ts): the camp, the army as the hand Attack window's
+ * tiles (attack-window.css), Smart Repeat attack's moves as one card each,
+ * and the refusals' shortages with their pictures.
+ *
+ * Sizes (layout-rules): a phone upright is one column that scrolls as a
+ * whole, the buttons always under it; from 621 px wide the army and the moves
+ * sit side by side and each column scrolls on its own; a phone on its side
+ * (at most 500 px tall) is the same, tighter.
+ */
+
+/* ── The sheet ─────────────────────────────────────────────────────────── */
+
+/* Never taller than the screen below the top bar (layout-rules); a phone's
+   card fills its backdrop's padding instead (autoattack.css), and a phone on
+   its side takes nearly the whole height (below). */
+.attack-end.auto-attack--prompt {
+  min-height: 0;
+  max-height: min(84vh, 760px);
+  max-height: min(84dvh, 760px);
+}
+
+.attack-end.auto-attack--prompt > .panel__body {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
+  gap: var(--space-3);
+  min-height: 0;
+  max-height: none;
+  overflow: hidden;
+}
+
+.attack-end.auto-attack--prompt .auto-attack__scroll {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
+  gap: var(--space-3);
+  min-height: 0;
+  /* The scroll thumb sits clear of the tiles, and the last row clears the fade. */
+  padding-right: 6px;
+  padding-bottom: var(--space-2);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+/* A thumb that shows on the frame where a computer draws one: gold on a dark track. */
+.auto-attack--prompt :is(.auto-attack__scroll, .repeat-prompt__army, .repeat-prompt__moves) {
+  scrollbar-width: thin;
+  scrollbar-color: #f2c14e rgb(0 0 0 / 35%);
+}
+
+.auto-attack--prompt :is(.auto-attack__scroll, .repeat-prompt__army, .repeat-prompt__moves)::-webkit-scrollbar {
+  width: 4px;
+}
+
+.auto-attack--prompt :is(.auto-attack__scroll, .repeat-prompt__army, .repeat-prompt__moves)::-webkit-scrollbar-track {
+  border-radius: 2px;
+  background: rgb(0 0 0 / 35%);
+}
+
+.auto-attack--prompt :is(.auto-attack__scroll, .repeat-prompt__army, .repeat-prompt__moves)::-webkit-scrollbar-thumb {
+  border-radius: 2px;
+  background: #f2c14e;
+}
+
+.auto-attack--prompt .auto-attack__changed {
+  flex: none;
+  margin: 0;
+}
+
+.auto-attack--prompt .auto-attack__refusal {
+  margin: 0;
+  font-size: var(--text-md);
+}
+
+/* The buttons: Cancel a modest plate, the main action given the room. */
+.auto-attack--prompt .attack-end__actions {
+  display: grid;
+  flex: none;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.45fr);
+  gap: var(--space-3);
+  margin: 0;
+}
+
+.auto-attack--prompt .attack-end__actions > .btn {
+  min-width: 0;
+  min-height: 48px;
+  justify-content: center;
+  text-align: center;
+  white-space: nowrap;
+}
+
+/* The refusals after a press: one Close, centred. */
+.auto-attack--failed.auto-attack--prompt .attack-end__actions {
+  grid-template-columns: minmax(0, 220px);
+  justify-content: center;
+}
+
+/* ── The camp ──────────────────────────────────────────────────────────── */
+
+.repeat-prompt__camp {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.repeat-prompt__tribe {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 56px;
+  height: 56px;
+  overflow: hidden;
+  contain: paint;
+  border: 2px solid var(--colour-accent-line);
+  border-radius: var(--radius-md);
+  background:
+    radial-gradient(ellipse 90% 70% at 50% 60%, rgb(214 208 186 / 85%), transparent 75%),
+    linear-gradient(to bottom, #a8aa9f, #bdb9a8);
+}
+
+.repeat-prompt__tribe > img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: 50% 30%;
+}
+
+/* Modern's painting stands small in a wide margin: drawn bigger than its frame. */
+:root:not([data-skin="flash"]) .repeat-prompt__tribe > img {
+  width: 150%;
+  height: 150%;
+  max-width: none;
+}
+
+.repeat-prompt__camp-words {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  min-width: 0;
+}
+
+.repeat-prompt__camp-name {
+  color: var(--colour-text-strong);
+  font-family: var(--font-display);
+  font-size: var(--text-lg);
+  font-weight: var(--display-weight);
+  line-height: var(--leading-tight);
+}
+
+.repeat-prompt__camp-facts {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.repeat-prompt__level,
+.repeat-prompt__damage {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  min-height: 28px;
+  padding: 0 var(--space-2);
+  border-radius: 999px;
+  background: var(--colour-surface-sunken);
+  color: var(--colour-text-strong);
+  font-size: var(--text-md);
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.repeat-prompt__damage {
+  padding-left: 2px;
+}
+
+.repeat-prompt__damage .game-icon {
+  width: 24px;
+  height: 24px;
+}
+
+/* ── The army ──────────────────────────────────────────────────────────── */
+
+.repeat-prompt__army {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  min-width: 0;
+}
+
+.repeat-prompt__army > * {
+  flex: none;
+}
+
+.repeat-prompt__section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+.repeat-prompt__heading {
+  min-height: 28px;
+}
+
+.repeat-prompt__monsters-grid {
+  grid-template-columns: repeat(auto-fill, minmax(64px, 1fr));
+}
+
+.repeat-prompt__bombs-grid {
+  grid-template-columns: repeat(auto-fill, minmax(64px, 76px));
+}
+
+/* ── The moves ─────────────────────────────────────────────────────────── */
+
+.repeat-prompt__columns {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  min-width: 0;
+}
+
+.repeat-prompt__moves {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+/* A card: the yard it leaves over its monsters on the left, the arrow, the
+   yard in range on the right. */
+.repeat-prompt__move {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  grid-template-areas:
+    "from arrow to"
+    "cargo arrow to";
+  align-items: center;
+  column-gap: var(--space-2);
+  row-gap: 4px;
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--colour-border-subtle);
+  border-radius: var(--radius-md);
+  background: var(--colour-surface-sunken);
+}
+
+.repeat-prompt__move > .repeat-prompt__yard--from {
+  grid-area: from;
+}
+
+.repeat-prompt__move > .repeat-prompt__cargo {
+  grid-area: cargo;
+}
+
+.repeat-prompt__move > .repeat-prompt__arrow {
+  grid-area: arrow;
+}
+
+.repeat-prompt__move > .repeat-prompt__yard--to {
+  grid-area: to;
+}
+
+.repeat-prompt__cargo {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  min-width: 0;
+}
+
+.attack-window__tile.repeat-prompt__mini {
+  width: 48px;
+  padding-top: 0;
+}
+
+.repeat-prompt__mini .attack-window__art {
+  width: 44px;
+  height: 34px;
+}
+
+.repeat-prompt__mini .attack-window__caption {
+  font-size: var(--text-xs);
+}
+
+/* The yard on the left: its name and map spot on one line. */
+.repeat-prompt__yard--from .repeat-prompt__yard-words {
+  flex-direction: row;
+  align-items: baseline;
+  gap: 6px;
+}
+
+.repeat-prompt__arrow {
+  flex: none;
+  width: 24px;
+  height: 24px;
+  filter: drop-shadow(0 1px 1px rgb(0 0 0 / 55%));
+}
+
+/* The cue for moves further down: pinned to the bottom of whatever scrolls,
+   a shade over the edge and a painted arrow pointing down with how many. */
+.repeat-prompt__more {
+  position: sticky;
+  bottom: 0;
+  z-index: 1;
+  height: 0;
+  /* The list's gap would push it below the last card. */
+  margin-top: calc(-1 * var(--space-2));
+  pointer-events: none;
+}
+
+.repeat-prompt__more[hidden] {
+  display: none;
+}
+
+.repeat-prompt__more::before {
+  content: "";
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  height: 40px;
+  border-radius: 0 0 var(--radius-md) var(--radius-md);
+  background: linear-gradient(to bottom, transparent, rgb(0 0 0 / 45%));
+}
+
+.repeat-prompt__more-cue {
+  position: absolute;
+  bottom: 6px;
+  left: 50%;
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  min-height: 32px;
+  padding: 0 var(--space-3) 0 var(--space-2);
+  border: 2px solid #f2c14e;
+  border-radius: 999px;
+  background: rgb(24 20 14 / 88%);
+  box-shadow: 0 2px 6px rgb(0 0 0 / 55%);
+  color: #ffe2a0;
+  font: inherit;
+  font-size: var(--text-md);
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+  transform: translateX(-50%);
+  cursor: pointer;
+  pointer-events: auto;
+}
+
+.repeat-prompt__more-arrow {
+  width: 24px;
+  height: 24px;
+  transform: rotate(90deg);
+}
+
+/* ── The yards ─────────────────────────────────────────────────────────── */
+
+.repeat-prompt__yard {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+
+.repeat-prompt__yard .game-icon {
+  flex: none;
+  width: 28px;
+  height: 28px;
+}
+
+.repeat-prompt__yard-words {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  line-height: var(--leading-tight);
+}
+
+.repeat-prompt__yard-name {
+  color: var(--colour-text-strong);
+  font-size: var(--text-md);
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.repeat-prompt__yard-place {
+  color: var(--colour-text-strong);
+  opacity: 0.85;
+  font-size: var(--text-sm);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+/* ── What is short, and the room in range ──────────────────────────────── */
+
+.repeat-prompt__shorts,
+.repeat-prompt__room {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.repeat-prompt__short,
+.repeat-prompt__room-yard {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  min-height: 44px;
+  padding: 4px var(--space-3) 4px 4px;
+  border-radius: var(--radius-md);
+  background: var(--colour-surface-sunken);
+}
+
+.repeat-prompt__room-yard {
+  justify-content: space-between;
+  padding-left: var(--space-2);
+}
+
+.repeat-prompt__short-art {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 40px;
+  height: 36px;
+  overflow: hidden;
+  border-radius: var(--radius-sm);
+}
+
+.repeat-prompt__short-art > img {
+  max-width: 100%;
+  max-height: 100%;
+  object-fit: contain;
+}
+
+.repeat-prompt__short-art > .res-icon {
+  width: 34px;
+}
+
+.repeat-prompt__short-words,
+.repeat-prompt__room-free {
+  color: var(--colour-warning);
+  font-size: var(--text-md);
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.repeat-prompt__room-free {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  white-space: nowrap;
+}
+
+.repeat-prompt__need {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin: 0;
+  color: var(--colour-text-strong);
+  font-size: var(--text-md);
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+/* ── A phone upright: every tile on as few rows as fit ─────────────────── */
+
+@media (max-width: 620px) {
+  .auto-attack--prompt .repeat-prompt__monsters-grid {
+    grid-template-columns: repeat(6, minmax(0, 1fr));
+    gap: 4px;
+  }
+
+  .auto-attack--prompt .repeat-prompt__monsters .attack-window__art {
+    width: 44px;
+    height: 36px;
+  }
+
+  .auto-attack--prompt .repeat-prompt__monsters .attack-window__caption {
+    font-size: var(--text-xs);
+  }
+}
+
+/* ── Wider screens: the army beside the moves ──────────────────────────── */
+
+@media (min-width: 621px) {
+  .attack-end.auto-attack--prompt {
+    width: min(92vw, 460px);
+  }
+
+  .attack-end.auto-attack--prompt-moves {
+    width: min(calc(100vw - 2 * var(--space-4)), 780px);
+    max-width: min(calc(100vw - 2 * var(--space-4)), 780px);
+  }
+
+  /* Each column scrolls on its own, so the moves start at the top. */
+  .attack-end.auto-attack--prompt-moves .auto-attack__scroll {
+    padding-right: 0;
+    padding-bottom: 0;
+    overflow: hidden;
+  }
+
+  .auto-attack--prompt-moves .repeat-prompt__columns {
+    display: grid;
+    flex: 1 1 auto;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1.25fr);
+    grid-template-rows: minmax(0, 1fr);
+    gap: var(--space-4);
+    min-height: 0;
+  }
+
+  .auto-attack--prompt-moves .repeat-prompt__army,
+  .auto-attack--prompt-moves .repeat-prompt__moves {
+    min-height: 0;
+    padding-right: 6px;
+    padding-bottom: var(--space-2);
+    overflow-y: auto;
+    overscroll-behavior: contain;
+  }
+
+  .auto-attack--prompt-moves .repeat-prompt__moves-part {
+    min-height: 0;
+  }
+
+  .auto-attack--prompt-moves .repeat-prompt__moves-part > .repeat-prompt__heading {
+    flex: none;
+  }
+
+  .auto-attack--prompt-moves .repeat-prompt__moves {
+    flex: 1 1 auto;
+  }
+
+  /* A move on one line: the yard it leaves, its monsters, the arrow, the yard in range. */
+  .repeat-prompt__move {
+    grid-template-columns: 96px minmax(0, 1fr) auto auto;
+    grid-template-areas: "from cargo arrow to";
+    padding-block: 6px;
+  }
+
+  .repeat-prompt__yard--from .repeat-prompt__yard-words {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0;
+  }
+
+  /* Cancel a modest plate, the main action beside it. */
+  .auto-attack--prompt .attack-end__actions {
+    grid-template-columns: minmax(0, 200px) minmax(0, 300px);
+    justify-content: center;
+  }
+}
+
+/* Screens that are not short: secondary words and captions at 14 px. */
+@media (min-width: 621px) and (min-height: 501px) {
+  .auto-attack--prompt :is(.repeat-prompt__yard-place, .attack-window__caption) {
+    font-size: 14px;
+  }
+}
+
+/* ── A short screen (a phone on its side) ──────────────────────────────── */
+
+@media (max-height: 500px) {
+  .attack-end.auto-attack--prompt > .panel__body {
+    gap: var(--space-2);
+  }
+
+  .auto-attack--prompt .auto-attack__scroll,
+  .repeat-prompt__army {
+    gap: var(--space-2);
+  }
+
+  .repeat-prompt__section {
+    gap: 6px;
+  }
+
+  .repeat-prompt__tribe {
+    width: 40px;
+    height: 40px;
+  }
+
+  .repeat-prompt__camp {
+    gap: var(--space-2);
+  }
+
+  /* "Legionnaire Lv 33 41%" on one line. */
+  .repeat-prompt__camp-words {
+    flex-direction: row;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--space-2);
+  }
+
+  .repeat-prompt__camp-name {
+    font-size: var(--text-md);
+  }
+
+  .repeat-prompt__camp-word {
+    display: none;
+  }
+
+  .repeat-prompt__heading {
+    min-height: 22px;
+    font-size: var(--text-sm);
+  }
+
+  .repeat-prompt__heading .game-icon {
+    width: 20px;
+    height: 20px;
+  }
+
+  .auto-attack--prompt .repeat-prompt__monsters-grid {
+    grid-template-columns: repeat(auto-fill, minmax(50px, 1fr));
+    gap: 4px;
+  }
+
+  .auto-attack--prompt .repeat-prompt__army .attack-window__art {
+    width: 40px;
+    height: 30px;
+  }
+
+  .auto-attack--prompt .repeat-prompt__army .attack-window__caption {
+    font-size: var(--text-xs);
+  }
+
+  .auto-attack--prompt .repeat-prompt__bombs-grid {
+    grid-template-columns: repeat(auto-fill, minmax(56px, 64px));
+    gap: 4px;
+  }
+
+  .auto-attack--prompt .attack-end__actions > .btn {
+    min-height: 44px;
+  }
+
+  .repeat-prompt__short,
+  .repeat-prompt__room-yard {
+    min-height: 40px;
+    padding-block: 2px;
+  }
+}
+
+@media (min-width: 621px) and (max-height: 500px) {
+  .attack-end.auto-attack--prompt {
+    max-height: calc(100vh - var(--space-6));
+    max-height: calc(100dvh - var(--space-6));
+  }
+
+  .auto-attack--prompt-moves .repeat-prompt__columns {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1.2fr);
+    gap: var(--space-3);
+  }
+
+  .repeat-prompt__moves {
+    gap: 6px;
+  }
+
+  .repeat-prompt__move {
+    grid-template-columns: 84px minmax(0, 1fr) auto auto;
+    column-gap: 6px;
+    padding: 4px var(--space-2);
+  }
+}

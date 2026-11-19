@@ -1,0 +1,372 @@
+import type { NoRoom, PlanShortfall, PlanSummary, YardLabel, YardMove } from "@/api/autoAttack";
+import { classicLook } from "@/game/classicLook";
+import { BOMBS, championByType, monsterName } from "@/game/combat/rules";
+import { championPortrait, monsterPortrait } from "@/game/portraits";
+import { championName } from "@/ui/attack/ArmyPanel";
+import { bombName } from "@/ui/attack/CatapultPanel";
+import { gameIcon, type GameIconName } from "@/ui/gameIcon";
+import { resourceIcon, resourceKeyOf } from "@/ui/resourceIcon";
+import { bombSize, grid, paintedCard, portrait, tile } from "./AttackWindow";
+import { yardName, yardPlace } from "./autoAttackText";
+import { tribeGoalPicture } from "./RepeatBar";
+import "@/ui/styles/repeat-prompt.css";
+
+/**
+ * Repeat attack's sheet, look A "like the Attack window" (owner, 20 Nov 2026):
+ *
+ * - the camp: the tribe's portrait, its name, "Lv N" and a damage chip;
+ * - the army as the hand Attack window's tiles: the champions ("Lv 6") and
+ *   every monster kind with its count, then the bombs as resource piles with
+ *   a size word ("Big ×2" when one repeats);
+ * - Smart Repeat attack's moves, one card per move: the yard they leave, the
+ *   monsters as small tiles, an arrow, the yard in range; the list scrolls
+ *   inside the sheet, with a "more below" cue that shows on a touch screen;
+ * - the refusals keep the same camp and army, then their reason and what is
+ *   short, each with its picture.
+ *
+ * No monster names as words: a tile says its name in its tooltip and to a
+ * screen reader only. No sentences beyond the refusal's reason and the
+ * yellow "Your yards changed" banner.
+ */
+
+const el = <K extends keyof HTMLElementTagNameMap>(tag: K, className: string, text?: string): HTMLElementTagNameMap[K] => {
+  const node = document.createElement(tag);
+  node.className = className;
+  if (text !== undefined) node.textContent = text;
+  return node;
+};
+
+const fmt = (count: number): string => count.toLocaleString("en-US");
+
+/** The monster kinds of a plan or a move, biggest first. */
+export const byCount = (monsters: Readonly<Record<string, number>>): [string, number][] =>
+  Object.entries(monsters)
+    .filter(([, count]) => count > 0)
+    .sort((one, other) => other[1] - one[1] || one[0].localeCompare(other[0]));
+
+/* ── The camp ───────────────────────────────────────────────────────────── */
+
+const damageChip = (damage: number): HTMLElement => {
+  const chip = el("span", "repeat-prompt__damage");
+  chip.title = `Camp damage ${damage}%`;
+  chip.setAttribute("aria-label", chip.title);
+  chip.append(gameIcon("damage", { size: 24, decorative: true }), el("span", "", `${damage}%`));
+  return chip;
+};
+
+/** The tribe's portrait, then the camp's name over its level and damage. */
+export const campHead = (plan: Pick<PlanSummary, "tribe" | "level">, damage: number): HTMLElement => {
+  const head = el("div", "repeat-prompt__camp");
+  const url = tribeGoalPicture(plan.tribe);
+  if (url) {
+    const frame = el("span", "repeat-prompt__tribe");
+    const image = document.createElement("img");
+    image.src = url;
+    image.alt = "";
+    image.decoding = "async";
+    frame.append(image);
+    head.append(frame);
+  }
+  const words = el("div", "repeat-prompt__camp-words");
+  const name = el("span", "repeat-prompt__camp-name", plan.tribe);
+  name.append(el("span", "repeat-prompt__camp-word", " camp"));
+  const facts = el("span", "repeat-prompt__camp-facts");
+  const level = el("span", "repeat-prompt__level", `Lv ${plan.level}`);
+  level.title = `Camp level ${plan.level}`;
+  facts.append(level, damageChip(Math.floor(damage)));
+  words.append(name, facts);
+  head.append(words);
+  return head;
+};
+
+/* ── The army ───────────────────────────────────────────────────────────── */
+
+const monsterTile = (id: string, count: number, extra = ""): HTMLElement => {
+  const picture = monsterPortrait(id, "icon");
+  const element = tile(
+    portrait(picture),
+    `×${fmt(count)}`,
+    `${monsterName(id)} ×${fmt(count)}`,
+    `attack-window__tile--monster repeat-prompt__monster${extra ? ` ${extra}` : ""}`,
+  );
+  element.dataset["monster"] = id;
+  paintedCard(element, picture, "ground");
+  return element;
+};
+
+const championTile = (champion: PlanSummary["champions"][number]): HTMLElement => {
+  const picture = championPortrait(championByType(champion.t) ?? `G${champion.t}`, champion.l, "icon");
+  const element = tile(
+    portrait(picture),
+    `Lv ${champion.l}`,
+    `${championName(champion.t)}, level ${champion.l}`,
+    "attack-window__tile--champion repeat-prompt__champion",
+  );
+  paintedCard(element, picture, "cut-out");
+  return element;
+};
+
+/** A bomb's resource pile. */
+const bombPile = (id: string): HTMLElement =>
+  resourceIcon(resourceKeyOf(BOMBS.find((one) => one.id === id)?.resource ?? 1), { decorative: true, realm: "surface" });
+
+/** The bombs, one tile per kind and size: the pile, the size word, and ×N when it repeats. */
+const bombTiles = (bombs: readonly string[]): HTMLElement[] => {
+  const counts = new Map<string, number>();
+  for (const id of bombs) counts.set(id, (counts.get(id) ?? 0) + 1);
+  return [...counts.entries()].map(([id, count]) => {
+    const size = bombSize(id);
+    const element = tile(
+      bombPile(id),
+      count > 1 ? `${size} ×${count}` : size,
+      count > 1 ? `${bombName(id)} ×${count}` : bombName(id),
+      "attack-window__tile--bomb repeat-prompt__bomb",
+    );
+    element.dataset["bomb"] = id;
+    return element;
+  });
+};
+
+/** A section as the hand Attack window has them: a painted icon, a word, then the tiles. */
+const section = (icon: GameIconName, words: string, tiles: HTMLElement[], className: string, extra?: HTMLElement): HTMLElement => {
+  const part = el("section", `repeat-prompt__section ${className}`);
+  part.setAttribute("aria-label", words);
+  const heading = el("h3", "attack-window__heading repeat-prompt__heading");
+  heading.append(gameIcon(icon, { size: 24, decorative: true }), el("span", "repeat-prompt__heading-word", words));
+  if (extra) heading.append(extra);
+  const list = grid(`repeat-prompt__grid ${className}-grid`);
+  list.append(...tiles);
+  part.append(heading, list);
+  return part;
+};
+
+/** The champions and the monsters (one tile per kind), then the bombs. */
+export const armyParts = (plan: Pick<PlanSummary, "monsters" | "champions" | "bombs">): HTMLElement[] => {
+  const monsters = byCount(plan.monsters);
+  const total = monsters.reduce((sum, [, count]) => sum + count, 0);
+  const totalChip = el("span", "chip attack-window__total repeat-prompt__total", `×${fmt(total)}`);
+  totalChip.title = `${fmt(total)} monsters`;
+  const parts = [
+    section(
+      "swords",
+      "Monsters",
+      [...plan.champions.map(championTile), ...monsters.map(([id, count]) => monsterTile(id, count))],
+      "repeat-prompt__monsters",
+      totalChip,
+    ),
+  ];
+  if (plan.bombs.length > 0) parts.push(section("resourcebomb", "Bombs", bombTiles(plan.bombs), "repeat-prompt__bombs"));
+  return parts;
+};
+
+/* ── The yards and the moves ────────────────────────────────────────────── */
+
+const yardIcon = (label: YardLabel | undefined): HTMLImageElement =>
+  gameIcon(label?.main ? "townhall" : classicLook() ? "outpostclassic" : "outpost", { size: 24, decorative: true });
+
+/** "Main yard" / "Outpost" with its painted icon, and its map spot. */
+export const yardChip = (label: YardLabel | undefined, end: "from" | "to" | "room"): HTMLElement => {
+  const chip = el("span", `repeat-prompt__yard repeat-prompt__yard--${end}`);
+  chip.append(yardIcon(label));
+  const words = el("span", "repeat-prompt__yard-words");
+  words.append(el("span", "repeat-prompt__yard-name", yardName(label)), el("span", "repeat-prompt__yard-place", yardPlace(label)));
+  chip.append(words);
+  return chip;
+};
+
+const arrow = (): HTMLElement => {
+  const node = gameIcon(classicLook() ? "friendnextclassic" : "friendnext", { size: 24, decorative: true });
+  node.classList.add("repeat-prompt__arrow");
+  return node;
+};
+
+const moveLabel = (move: YardMove, yards: Readonly<Record<string, YardLabel>>): string => {
+  const from = yards[move.from];
+  const to = yards[move.to];
+  const what = byCount(move.monsters)
+    .map(([id, count]) => `${fmt(count)} ${monsterName(id)}`)
+    .join(", ");
+  return `${what}: from ${yardName(from)} ${yardPlace(from)} to ${yardName(to)} ${yardPlace(to)}`;
+};
+
+/** One card per move: the yard it leaves on top, its monsters, an arrow, the yard in range. */
+export const moveCards = (moves: readonly YardMove[], yards: Readonly<Record<string, YardLabel>>): HTMLUListElement => {
+  const list = el("ul", "repeat-prompt__moves");
+  list.setAttribute("aria-label", "Monsters that move first");
+  for (const move of moves) {
+    const card = el("li", "repeat-prompt__move");
+    card.setAttribute("aria-label", moveLabel(move, yards));
+    const cargo = el("span", "repeat-prompt__cargo");
+    for (const [id, count] of byCount(move.monsters)) cargo.append(monsterTile(id, count, "repeat-prompt__mini"));
+    card.append(yardChip(yards[move.from], "from"), cargo, arrow(), yardChip(yards[move.to], "to"));
+    list.append(card);
+  }
+  // The cue for moves further down (a touch screen draws no scroll bar): a
+  // painted arrow and how many, pinned to the bottom of whatever scrolls.
+  const more = el("li", "repeat-prompt__more");
+  more.setAttribute("role", "presentation");
+  more.setAttribute("aria-hidden", "true");
+  const cue = el("button", "repeat-prompt__more-cue");
+  cue.type = "button";
+  cue.tabIndex = -1;
+  const down = gameIcon(classicLook() ? "friendnextclassic" : "friendnext", { size: 24, decorative: true });
+  down.classList.add("repeat-prompt__more-arrow");
+  cue.append(down, el("span", "repeat-prompt__more-count"));
+  more.append(cue);
+  more.hidden = true;
+  list.append(more);
+  return list;
+};
+
+/** "5 moves first" over the cards. */
+export const movesPart = (moves: readonly YardMove[], yards: Readonly<Record<string, YardLabel>>): HTMLElement => {
+  const part = el("section", "repeat-prompt__section repeat-prompt__moves-part");
+  const words = moves.length === 1 ? "1 move first" : `${moves.length} moves first`;
+  part.setAttribute("aria-label", words);
+  const heading = el("h3", "attack-window__heading repeat-prompt__heading");
+  heading.append(gameIcon(classicLook() ? "outpostclassic" : "outpost", { size: 24, decorative: true }), el("span", "repeat-prompt__heading-word", words));
+  part.append(heading, moveCards(moves, yards));
+  return part;
+};
+
+/** The nearest box that scrolls up and down: the list itself, or what holds it. */
+const scrollerOf = (element: HTMLElement): HTMLElement | null => {
+  for (let at: HTMLElement | null = element; at; at = at.parentElement) {
+    const style = getComputedStyle(at);
+    if ((style.overflowY === "auto" || style.overflowY === "scroll") && at.scrollHeight > at.clientHeight + 1) return at;
+    if (at.classList.contains("panel__body")) break;
+  }
+  return null;
+};
+
+/**
+ * Keeps the moves' "more below" cue up to date: it shows how many cards are
+ * not wholly in sight below, and a tap brings the next one up. Measures the
+ * laid-out page; does nothing where nothing is laid out (tests).
+ *
+ * @returns Stops watching.
+ */
+export const watchMoreMoves = (list: HTMLElement): (() => void) => {
+  const more = list.querySelector<HTMLElement>(":scope > .repeat-prompt__more");
+  const count = more?.querySelector<HTMLElement>(".repeat-prompt__more-count");
+  const cue = more?.querySelector<HTMLButtonElement>(".repeat-prompt__more-cue");
+  if (!more || !count || !cue) return () => {};
+  let scroller: HTMLElement | null = null;
+  const below = (): HTMLElement[] => {
+    if (!scroller) return [];
+    const bottom = scroller.getBoundingClientRect().bottom;
+    return [...list.querySelectorAll<HTMLElement>(":scope > .repeat-prompt__move")].filter(
+      (card) => card.getBoundingClientRect().bottom > bottom + 1,
+    );
+  };
+  const update = () => {
+    const next = scrollerOf(list);
+    if (next !== scroller) {
+      scroller?.removeEventListener("scroll", update);
+      scroller = next;
+      scroller?.addEventListener("scroll", update, { passive: true });
+    }
+    const hidden = below();
+    more.hidden = hidden.length === 0;
+    count.textContent = `+${hidden.length}`;
+    cue.title = hidden.length === 1 ? "1 more move below" : `${hidden.length} more moves below`;
+  };
+  cue.addEventListener("click", () => {
+    const first = below()[0];
+    if (!scroller || !first) return;
+    const gap = scroller.getBoundingClientRect().bottom - first.getBoundingClientRect().bottom;
+    // The card's foot clears the cue: scroll it up past the bottom edge by the cue's height.
+    scroller.scrollBy({ top: -gap + cue.offsetHeight + 8, behavior: "smooth" });
+  });
+  const observer = typeof ResizeObserver === "undefined" ? null : new ResizeObserver(() => update());
+  observer?.observe(list);
+  const panel = list.closest<HTMLElement>(".panel__body");
+  if (panel) observer?.observe(panel);
+  window.addEventListener("resize", update);
+  requestAnimationFrame(update);
+  for (const image of list.closest(".panel")?.querySelectorAll("img") ?? []) image.addEventListener("load", update, { once: true });
+  update();
+  return () => {
+    scroller?.removeEventListener("scroll", update);
+    observer?.disconnect();
+    window.removeEventListener("resize", update);
+  };
+};
+
+/* ── What is short ──────────────────────────────────────────────────────── */
+
+const shortRow = (picture: HTMLElement, words: string, tip: string, kind: string): HTMLLIElement => {
+  const row = el("li", `repeat-prompt__short repeat-prompt__short--${kind}`);
+  row.title = tip;
+  row.setAttribute("aria-label", tip);
+  const art = el("span", "repeat-prompt__short-art");
+  art.setAttribute("aria-hidden", "true");
+  art.append(picture);
+  const text = el("span", "repeat-prompt__short-words", words);
+  text.setAttribute("aria-hidden", "true");
+  row.append(art, text);
+  return row;
+};
+
+const CHAMPION_SHORT = {
+  hurt: "No health left",
+  away: "Not ready (frozen or away)",
+  none: "No longer yours",
+} as const;
+
+const BOMB_SHORT = {
+  catapult: "Catapult too low",
+  cost: "Not enough resources",
+  unknown: "Not available",
+} as const;
+
+/**
+ * What is missing, one row each with its picture: a monster's portrait and
+ * "35 short", a champion's portrait and why, a bomb's pile, size and why.
+ * Names only in the tooltip and for a screen reader.
+ */
+export const shortageList = (
+  missing: readonly PlanShortfall[],
+  champions: PlanSummary["champions"] = [],
+): HTMLUListElement => {
+  const list = el("ul", "repeat-prompt__shorts");
+  list.setAttribute("aria-label", "What is missing");
+  for (const item of missing) {
+    if (item.kind === "monster") {
+      const short = fmt(item.need - item.have);
+      const picture = monsterPortrait(item.id, "icon");
+      list.append(shortRow(portrait(picture), `${short} short`, `${monsterName(item.id)}: ${short} short`, "monster"));
+    } else if (item.kind === "champion") {
+      const level = champions.find((one) => one.t === item.t)?.l ?? 1;
+      const picture = championPortrait(championByType(item.t) ?? `G${item.t}`, level, "icon");
+      const why = CHAMPION_SHORT[item.reason];
+      list.append(shortRow(portrait(picture), why, `${championName(item.t)}: ${why}`, "champion"));
+    } else {
+      const why = BOMB_SHORT[item.reason];
+      const size = bombSize(item.id);
+      list.append(shortRow(bombPile(item.id), size ? `${size}: ${why}` : why, `${bombName(item.id)}: ${why}`, "bomb"));
+    }
+  }
+  return list;
+};
+
+/**
+ * No room in range: the space the monsters moving in need, and the free
+ * space each yard in range has.
+ */
+export const roomParts = (noRoom: NoRoom, yards: Readonly<Record<string, YardLabel>>): HTMLElement[] => {
+  const need = el("p", "repeat-prompt__need");
+  need.title = `Incoming monsters need ${fmt(noRoom.need)} housing space`;
+  need.append(gameIcon("housing", { size: 24, decorative: true }), el("span", "", `${fmt(noRoom.need)} space needed`));
+  if (noRoom.free.length === 0) return [need];
+  const list = el("ul", "repeat-prompt__room");
+  list.setAttribute("aria-label", "Free housing in range");
+  for (const one of noRoom.free) {
+    const row = el("li", "repeat-prompt__room-yard");
+    const free = el("span", "repeat-prompt__room-free");
+    free.append(gameIcon("housing", { size: 16, decorative: true }), el("span", "", `${fmt(one.free)} free`));
+    row.append(yardChip(yards[one.baseid], "room"), free);
+    list.append(row);
+  }
+  return [need, list];
+};

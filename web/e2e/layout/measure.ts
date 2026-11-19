@@ -36,6 +36,11 @@ export interface CheckArgs {
   readonly minListFull: number;
   /** Rounding slack, in pixels. */
   readonly tolerance: number;
+  /**
+   * The window's way out, when it is not a `Close` button: Repeat attack's
+   * sheet has Cancel; its working bar has none while the attack runs (null).
+   */
+  readonly closeSelector?: string | null;
 }
 
 export interface CheckReport {
@@ -169,8 +174,11 @@ export const checkWindow = (args: CheckArgs): CheckReport => {
   }
 
   // Close button: on the screen and not covered.
-  const close = [...panel.querySelectorAll('button[aria-label^="Close"]')].find(shown) ?? null;
-  if (!close) {
+  const closeSelector = args.closeSelector === undefined ? 'button[aria-label^="Close"]' : args.closeSelector;
+  const close = closeSelector === null ? null : ([...panel.querySelectorAll(closeSelector)].find(shown) ?? null);
+  if (closeSelector === null) {
+    // A window with no way out while it works (Repeat attack's bar).
+  } else if (!close) {
     problems.push("no close button is showing");
   } else {
     const box = visibleBox(close);

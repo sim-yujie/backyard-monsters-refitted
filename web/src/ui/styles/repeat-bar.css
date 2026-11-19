@@ -11,8 +11,9 @@
 
 .repeat-bar {
   --repeat-progress: 0;
-  --repeat-bar-height: 64px;
-  --repeat-track-height: 48px;
+  /* Tall enough for the counts above the portraits as well as below them. */
+  --repeat-bar-height: 86px;
+  --repeat-track-height: 78px;
 
   position: relative;
   display: flex;
@@ -78,14 +79,19 @@
   background: linear-gradient(#b08a52, #7a5a32);
 }
 
+/* Every kind marches (owner, 20 Nov 2026); a count, centred on its marcher,
+   takes turns below and above the portraits, so neighbours' counts are two
+   steps apart and never overlap. The troop keeps clear of the bar's ends by
+   half a count's overhang. */
 .repeat-bar__troop {
   --marcher-size: 32px;
   --marcher-step: 22px;
+  --troop-inset: 6px;
   --troop-width: calc(var(--marcher-size) + (var(--marchers, 1) - 1) * var(--marcher-step));
 
   position: absolute;
-  bottom: 4px;
-  left: calc(var(--repeat-progress) * (100% - var(--troop-width)));
+  bottom: 12px;
+  left: calc(var(--troop-inset) + var(--repeat-progress) * (100% - var(--troop-width) - 2 * var(--troop-inset)));
   display: flex;
   width: var(--troop-width);
   height: var(--marcher-size);
@@ -125,9 +131,11 @@
 
 .repeat-bar__count {
   position: absolute;
-  right: -4px;
-  bottom: -3px;
+  bottom: -7px;
+  left: 50%;
+  z-index: 1;
   padding: 0 4px;
+  transform: translateX(-50%);
   border-radius: var(--radius-pill);
   background: rgb(0 0 0 / 68%);
   color: #ffffff;
@@ -136,6 +144,11 @@
   line-height: 15px;
   text-shadow: none;
   white-space: nowrap;
+}
+
+.repeat-bar__count--high {
+  top: -7px;
+  bottom: auto;
 }
 
 /* The camp's tribe waits at the end of the road. */
@@ -212,8 +225,8 @@
    than over it, so it stays clear of the bar plate and the window's frame. */
 @media (max-width: 620px), (max-height: 500px) {
   .repeat-bar {
-    --repeat-bar-height: 54px;
-    --repeat-track-height: 42px;
+    --repeat-bar-height: 76px;
+    --repeat-track-height: 68px;
   }
 
   .repeat-bar__troop {

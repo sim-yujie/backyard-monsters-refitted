@@ -83,6 +83,7 @@ const expectWindow = async (
     minList: settings.minList,
     minListFull: settings.minListFull,
     tolerance: TOLERANCE,
+    ...(win.closeButton === undefined ? {} : { closeSelector: win.closeButton }),
   });
   const box = report.panel
     ? `${report.panel.width}x${report.panel.height} at ${report.panel.left},${report.panel.top}`

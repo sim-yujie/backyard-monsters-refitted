@@ -19,9 +19,6 @@ export const agoText = (seconds: number): string => {
   return days === 1 ? "1 day ago" : `${days} days ago`;
 };
 
-/** "Kozu camp, level 35". */
-export const campText = (plan: Pick<PlanSummary, "tribe" | "level">): string => `${plan.tribe} camp, level ${plan.level}`;
-
 /**
  * Which attack this repeats (owner, #221: "the button says which attack it
  * repeats"): "Repeats your attack on the Kozu camp at 240, 208, 2 h ago".
@@ -38,30 +35,6 @@ export const planSourceText = (plan: PlanSummary, baseid: string, nowSeconds: nu
       : `the ${plan.tribe} camp at ${plan.recordedOn.x}, ${plan.recordedOn.y}`;
   return `Repeats your attack on ${where}, ${agoText(nowSeconds - plan.recordedAt)}`;
 };
-
-/** "300 Pokey, 40 Bolt", biggest first. */
-export const monstersText = (monsters: Readonly<Record<string, number>>): string =>
-  Object.entries(monsters)
-    .filter(([, count]) => count > 0)
-    .sort((one, other) => other[1] - one[1] || one[0].localeCompare(other[0]))
-    .map(([id, count]) => `${count.toLocaleString("en-US")} ${monsterName(id)}`)
-    .join(", ");
-
-/** "Gorgo L5", with its power level when it has one. */
-export const championText = (champion: { t: number; l: number; pl?: number }): string =>
-  `${championName(champion.t)} L${champion.l}` + (champion.pl ? ` (power ${champion.pl})` : "");
-
-/** "Includes Gorgo L5 and 3 bombs", or null when the plan has neither. */
-export const includesText = (plan: Pick<PlanSummary, "champions" | "bombs">): string | null => {
-  const parts = plan.champions.map(championText);
-  if (plan.bombs.length > 0) parts.push(plan.bombs.length === 1 ? "1 bomb" : `${plan.bombs.length} bombs`);
-  if (parts.length === 0) return null;
-  const last = parts.pop()!;
-  return `Includes ${parts.length > 0 ? `${parts.join(", ")} and ${last}` : last}`;
-};
-
-/** The confirm sheet's line about siege weapons, when the attack used any. */
-export const SIEGE_NOT_REPEATED = "Siege weapons are not repeated.";
 
 /** One missing thing, as the button and the sheet list it. */
 export const shortfallText = (item: PlanShortfall): string => {
@@ -103,9 +76,6 @@ export const NO_ROOM_TEXT = "Not enough Monster Housing in range.";
 
 /** Under {@link NO_ROOM_TEXT}: the space the monsters that would move in take. */
 export const ROOM_NEED_TEXT = (need: number): string => `Incoming monsters need ${need.toLocaleString("en-US")} space.`;
-
-/** Above the moves on the confirm sheet. */
-export const MOVES_LEAD = (count: number): string => `${count} ${count === 1 ? "move" : "moves"} before attacking`;
 
 /** The confirm sheet's button when monsters move first. */
 export const MOVE_AND_ATTACK = "Move and attack";

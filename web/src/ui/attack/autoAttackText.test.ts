@@ -4,8 +4,6 @@ import { ApiError, NetworkError } from "@/api/http";
 import {
   agoText,
   autoAttackErrorText,
-  includesText,
-  monstersText,
   movesLineText,
   planSourceText,
   repeatRefusal,
@@ -46,13 +44,6 @@ describe("autoAttackText", () => {
     expect(planSourceText(PLAN, "1000240208", 1_000_030)).toBe("Repeats your attack on this camp, just now");
     expect(agoText(90)).toBe("1 min ago");
     expect(agoText(86_400 * 3)).toBe("3 days ago");
-  });
-
-  it("names the army, biggest first, and what it brings besides", () => {
-    expect(monstersText(PLAN.monsters)).toBe("300 Pokey, 40 Eye-ra");
-    expect(includesText(PLAN)).toBe("Includes Gorgo L5 and 3 bombs");
-    expect(includesText({ champions: [], bombs: ["tw0"] })).toBe("Includes 1 bomb");
-    expect(includesText({ champions: [], bombs: [] })).toBeNull();
   });
 
   it("lists exactly what is missing", () => {
