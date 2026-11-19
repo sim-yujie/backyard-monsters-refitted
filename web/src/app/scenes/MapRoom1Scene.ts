@@ -170,7 +170,7 @@ export class MapRoom1Scene implements Scene {
   private async loadOwn(): Promise<void> {
     try {
       // The load that chose this map, when there was one (issue #162).
-      const save = takePrimedOwnYard() ?? (await loadOwnYard());
+      const save = takePrimedOwnYard() ?? (await loadOwnYard({ screen: "map" }));
       if (!this.context) return;
       this.ownSave = save;
       this.own = readOwn(save);

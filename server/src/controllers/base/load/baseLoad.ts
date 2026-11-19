@@ -113,7 +113,7 @@ const ownCoinsOnLoad = async (
 
 export const baseLoad: KoaController = async (ctx) => {
   const user: User = ctx.authUser;
-  const { baseid, type, mapversion: requestedVersion, attackData } = BaseLoadSchema.parse(ctx.request.body);
+  const { baseid, type, mapversion: requestedVersion, attackData, screen } = BaseLoadSchema.parse(ctx.request.body);
 
   // The Flash Inferno's modes are gone: the Inferno loads through `/bm/inferno/*` (WP 7.1).
   if (INFERNO_MODES.has(type)) refuseOldInferno(ctx, user, `load ${type}`);
@@ -296,8 +296,18 @@ export const baseLoad: KoaController = async (ctx) => {
     // Moloch's emergence (docs/design/inferno.md §2.2, §3.2): with the new
     // Inferno on, the cave goes up a level when its next raid is due, written
     // before the raid starts. After the raid cancel above, so a raid this load
-    // cancelled does not hold it back.
-    emergence = await emergenceOnLoad(postgres.em, user.userid, baseSave, getCurrentDateTime());
+    // cancelled does not hold it back. A stage raised on an earlier load and
+    // not played yet is answered again (patch 7.12); `screen` (the yard or a
+    // map) is only logged.
+    emergence = await emergenceOnLoad(
+      postgres.em,
+      user.userid,
+      baseSave,
+      getCurrentDateTime(),
+      infernoConfig.enabled,
+      quietLoginOn(),
+      screen ?? "unknown"
+    );
     // The Under Hall the main yard's Inferno buildings count by (WP 6.1).
     underHall = emergence && (await underHallOnceDescended(postgres.em, user.userid, emergence.progress, baseSave));
   } else if (

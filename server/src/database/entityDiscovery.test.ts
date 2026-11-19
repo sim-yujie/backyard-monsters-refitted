@@ -130,6 +130,7 @@ describe("entity discovery", () => {
         userid: { type: "int", nullable: false },
         emergence_level: { type: "smallint", nullable: false },
         emergence_last_at: { type: "timestamptz", nullable: true },
+        emergence_pending: { type: "smallint", nullable: true },
         descent_destroyed: { type: "jsonb", nullable: false },
         descent_best: { type: "jsonb", nullable: false },
         descent_yards: { type: "jsonb", nullable: false },

@@ -286,7 +286,7 @@ export const loadYardFor = (
       ? api.loadOwnBase(own.baseid)
       : own.kind === "inferno"
         ? api.loadInfernoYard()
-        : api.loadOwnYard()
+        : api.loadOwnYard({ screen: "yard" })
     : target.kind === "friend"
       ? api.loadFriendYard(target.friend ?? 0)
       : target.inferno

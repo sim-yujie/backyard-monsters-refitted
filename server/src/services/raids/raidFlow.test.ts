@@ -146,6 +146,14 @@ const em = {
         if (entity) pending = structuredClone(entity);
       },
       transactional: (inner: (fork: unknown) => Promise<unknown>) => inner(fork),
+      // Moloch's landing marks its stage played (`clearEmergencePending`), in this transaction.
+      async execute(sql: string, params: unknown[]) {
+        // Params: the landing time (unix seconds), the user, the stage.
+        if (/SET emergence_pending = NULL/.test(sql) && db.inferno?.emergence_pending === params[2]) {
+          db.inferno = { ...db.inferno, emergence_pending: null, emergence_last_at: params[0] };
+        }
+        return [];
+      },
     };
     try {
       const result = await cb(fork);
@@ -1157,6 +1165,32 @@ describe("Moloch's emergence raid (docs/design/inferno.md §2.3, owner I14/R5)",
       expect(schedule.lastRaidId).toBe(id);
       expect(schedule.recent[0]).toMatchObject({ id, tribe: "moloch" });
       expect(await readOpenRaid(USER)).toBeNull();
+    },
+    FIGHT_TIMEOUT_MS
+  );
+
+  test(
+    "landed: its stage is marked played, so the next load does not play it again, and the next rise waits from the landing (patch 7.12)",
+    async () => {
+      db.inferno = { userid: USER, emergence_level: 1, emergence_pending: 1 };
+      const { id, finishFrom } = await molochFight();
+      expect(db.inferno.emergence_pending).toBe(1);
+      await finishOnTime(id, finishFrom);
+      expect(db.inferno.emergence_pending).toBeNull();
+      expect(db.inferno.emergence_last_at).toBe(finishFrom);
+    },
+    FIGHT_TIMEOUT_MS
+  );
+
+  test(
+    "called off because the game was closed: its stage stays to be played (patch 7.12)",
+    async () => {
+      db.inferno = { userid: USER, emergence_level: 1, emergence_pending: 1 };
+      const { id, finishFrom } = await molochFight();
+      at(finishFrom);
+      await redis.del(lastSeenKey(USER));
+      expect(await refusal(finishRaid(em, user, id, finishFrom))).toEqual({ reason: "cancelled" });
+      expect(db.inferno.emergence_pending).toBe(1);
     },
     FIGHT_TIMEOUT_MS
   );

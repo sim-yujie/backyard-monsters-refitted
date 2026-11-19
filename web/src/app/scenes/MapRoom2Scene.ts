@@ -864,7 +864,7 @@ export class MapRoom2Scene implements Scene {
       // The load that chose this map, when there was one (issue #162).
       const primed = takePrimedOwnYard();
       noteInfo("ownYard", primed ? "primed" : "fetched");
-      const base = primed ?? (await timeSpan("own-yard", () => loadOwnYard()));
+      const base = primed ?? (await timeSpan("own-yard", () => loadOwnYard({ screen: "map" })));
       this.ownSave = base;
       // The alliance's extra reach (and prices) from this load, not the last yard visit.
       setCurrentAllianceBonuses(base.alliancedata);
@@ -1477,7 +1477,7 @@ export class MapRoom2Scene implements Scene {
   /** Reads the player's own yard again: its pool and its army moved. */
   private async refreshOwnSave(): Promise<void> {
     try {
-      const base = await loadOwnYard();
+      const base = await loadOwnYard({ screen: "map" });
       if (!this.context) return;
       this.ownSave = base;
       setCurrentAllianceBonuses(base.alliancedata);

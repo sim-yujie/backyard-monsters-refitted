@@ -178,6 +178,11 @@ export interface BaseLoadRequest {
    * on `attack`/`wmattack` and read on nothing else; see {@link AttackData}.
    */
   attackData?: string;
+  /**
+   * Which screen opens the own yard: the yard itself, or a map finding its
+   * home cell. The server only logs it, beside Moloch's emergence (patch 7.12).
+   */
+  screen?: "yard" | "map";
 }
 
 /* ── Attack ─────────────────────────────────────────────────────────────── */
