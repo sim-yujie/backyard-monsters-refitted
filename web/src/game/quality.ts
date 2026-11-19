@@ -154,15 +154,14 @@ export const probeTextureLimit = (
  * This device's hints. The texture limit is the renderer's when it has
  * already said (`gpuTextureLimit`), else a throwaway context's, kept as the
  * device's limit so the first sheets fetched step down too (`sheetForDevice`).
- * A device that already reports little memory, or is a phone or tablet, is
- * not probed: it is on Medium either way.
+ * A device that already reports little memory is not probed. A phone or
+ * tablet still is: it is on Medium either way, but an old one's small limit
+ * must be known before its first sheets are picked.
  */
 const readDeviceHints = (): DeviceHints => {
   const memoryGb = deviceMemoryGb();
   const touch = isTouchDevice();
-  if (touch || (memoryGb !== null && memoryGb <= LOW_MEMORY_GB)) {
-    return { memoryGb, textureLimit: deviceTextureLimit(), touch };
-  }
+  if (memoryGb !== null && memoryGb <= LOW_MEMORY_GB) return { memoryGb, textureLimit: deviceTextureLimit(), touch };
   let limit = deviceTextureLimit();
   if (limit === null) {
     limit = probeTextureLimit();

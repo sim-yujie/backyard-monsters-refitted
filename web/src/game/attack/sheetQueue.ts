@@ -224,11 +224,9 @@ export const raidSheetQueue = new SheetQueue({ isCached: (url) => Assets.cache.h
  * ending holds that one and drops what waits, which would stall or lose the
  * yard's sheets.
  */
-export const yardSheetQueue = new SheetQueue({
-  maxActive: 2,
-  maxFull: 2,
-  isCached: (url) => Assets.cache.has(url),
-});
+export const YARD_SHEETS_AT_ONCE = { maxActive: 2, maxFull: 2 } as const;
+
+export const yardSheetQueue = new SheetQueue({ ...YARD_SHEETS_AT_ONCE, isCached: (url) => Assets.cache.has(url) });
 
 /** Yard sheets asked for and not yet in (or failed): waiting for the gate, queued or in flight. */
 let yardSheetsWanted = 0;

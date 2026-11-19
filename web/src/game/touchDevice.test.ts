@@ -1,6 +1,13 @@
-import { afterEach, describe, expect, it } from "vitest";
-import { defaultQuality, deviceDefaultQuality, setDeviceDefaultQuality, setDeviceTextureLimit } from "./quality";
-import { isTouchDevice, looksLikeTouchDevice, setTouchDevice, type TouchEnv } from "./touchDevice";
+// @vitest-environment jsdom
+import { afterEach, describe, expect, it, vi } from "vitest";
+import {
+  defaultQuality,
+  deviceDefaultQuality,
+  deviceTextureLimit,
+  setDeviceDefaultQuality,
+  setDeviceTextureLimit,
+} from "./quality";
+import { browserTouchEnv, isTouchDevice, looksLikeTouchDevice, setTouchDevice, type TouchEnv } from "./touchDevice";
 
 /** Patch 7.11: phones and tablets start on Medium; desktops, touch-screen laptops among them, on High. */
 
@@ -47,8 +54,22 @@ describe("the default Quality by kind of device (patch 7.11)", () => {
     expect(deviceDefaultQuality()).toBe("high");
   });
 
+  it("a touch device that never chose still asks for its texture limit, so its first sheets step down", () => {
+    setTouchDevice(true);
+    expect(deviceTextureLimit()).toBeNull();
+    const created = vi.spyOn(document, "createElement").mockReturnValue({
+      getContext: () => ({ MAX_TEXTURE_SIZE: 1, getParameter: () => 4096, getExtension: () => null }),
+    } as unknown as HTMLElement);
+    try {
+      expect(deviceDefaultQuality()).toBe("medium");
+      expect(deviceTextureLimit()).toBe(4096);
+    } finally {
+      created.mockRestore();
+    }
+  });
+
   it("is not a touch device where there is no browser to ask, decided once", () => {
-    expect(isTouchDevice()).toBe(false);
+    expect(looksLikeTouchDevice(browserTouchEnv())).toBe(false);
     setTouchDevice(true);
     expect(isTouchDevice()).toBe(true);
   });

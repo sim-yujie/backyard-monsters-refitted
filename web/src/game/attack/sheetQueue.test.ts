@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { Texture } from "pixi.js";
-import { SheetDropped, SheetQueue, loadYardSheet, sheetLineOf, yardSheetsIdle, type SheetWant } from "./sheetQueue";
+import { SheetDropped, SheetQueue, YARD_SHEETS_AT_ONCE, loadYardSheet, sheetLineOf, yardSheetsIdle, type SheetWant } from "./sheetQueue";
 
 /**
  * Patch 6.4, round 2: a raid's sheets wait in one queue, every stand-in
@@ -324,7 +324,7 @@ describe("SheetQueue on a Trojan Horse fight, Fast 3G model", () => {
  */
 describe("the yard's sheet queue", () => {
   const yardQueue = (loader: ReturnType<typeof manualLoader>): SheetQueue =>
-    new SheetQueue({ load: loader.load, maxActive: 2, maxFull: 2 });
+    new SheetQueue({ load: loader.load, ...YARD_SHEETS_AT_ONCE });
   const medium = (name: string): string => `/assets/monsters/${name}-anim@2x.png?v=2`;
 
   it("never has more than two sheets in flight, whatever their size, and fetches them all in order", async () => {
