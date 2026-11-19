@@ -6,7 +6,7 @@ import type { YardRenderer, YardView } from "../YardRenderer";
 import type { SpotCheck } from "../BuildPlacement";
 import { buildingName } from "../buildingArt";
 import { WALL_TYPES } from "../buildingCosts";
-import type { LinePlan } from "../wallLine";
+import type { LinePlan, PlannedCell } from "../wallLine";
 import { buildChecklist, type Checklist } from "./checklist";
 import {
   CommandStack,
@@ -20,6 +20,7 @@ import { planLoad, payloadFor, type LoadResult } from "./layout";
 import { rectFromCorners } from "./marquee";
 import { snap, type PlanNode } from "./placement";
 import { Grab, PlannerInput, type ViewportInsets } from "./PlannerInput";
+import { inHandMarks } from "./inHand";
 import { PlannerView } from "./PlannerView";
 import type { CompareDiff } from "./PlannerOverlay";
 import { Plan, PlaceBlock, type AbsorbResult } from "./plan";
@@ -584,7 +585,11 @@ export class PlannerSession {
 
   /** Arms a stack of walls for a line: nothing in hand, the next tap is the first corner. */
   private startLine(node: PlanNode): boolean {
-    this.line = new PlannerWallLine({ type: node.type, level: node.level }, node.width);
+    // The Block in hand starts in the middle of the view, as the yard's does,
+    // so a touch screen shows it before the first tap; a mouse takes it over.
+    const middle = this.input.middleWorld();
+    const start = middle ? this.spotUnder(middle, node.width) : null;
+    this.line = new PlannerWallLine({ type: node.type, level: node.level }, node.width, start);
     this.selection.clear();
     this.faulted.clear();
     this.dragInvalid = false;
@@ -625,8 +630,12 @@ export class PlannerSession {
 
   /** The line's spot under a world point: a Block centred on it, snapped to the grid. */
   private lineSpot(world: Point): Point {
+    return this.spotUnder(world, this.line?.step ?? 0);
+  }
+
+  /** A `step`-wide Block centred on a world point, snapped to the grid. */
+  private spotUnder(world: Point, step: number): Point {
     const yard = this.view.worldToYard(world.x, world.y);
-    const step = this.line?.step ?? 0;
     return { x: snap(yard.x - step / 2), y: snap(yard.y - step / 2) };
   }
 
@@ -720,10 +729,18 @@ export class PlannerSession {
     if (!line) return null;
     const stack = this.lineStack();
     const plan = this.linePlan(true, stack.length);
+    // Before the first corner, the one Block in hand (owner, 19 Nov 2026):
+    // green with the stack's wall in it where it can stand, red and crossed
+    // where it cannot, as the yard's own placing box. Drawn only: the state
+    // below still counts nothing to place until a corner is down.
+    const box = plan ? null : line.box(this.lineCheck);
+    const boxCells: PlannedCell[] = box
+      ? [{ x: box.x, y: box.y, state: box.problem ? "blocked" : "build", problem: box.problem, blockedBy: box.blockedBy }]
+      : [];
     const before = this.lineGhosts;
     this.lineGhosts = [];
     if (before.length > 0) this.view.syncStored();
-    plan?.build.forEach((cell, index) => {
+    (plan?.build ?? boxCells.filter((cell) => cell.state === "build")).forEach((cell, index) => {
       const node = stack[index];
       if (!node) return;
       this.view.ghost(node.id, cell.x, cell.y);
@@ -741,7 +758,7 @@ export class PlannerSession {
         stock: stack.length,
         finished: line.finished,
       },
-      visual: { type: line.type, cells: plan?.cells ?? [], anchors: line.anchors },
+      visual: { type: line.type, cells: plan?.cells ?? boxCells, anchors: line.anchors },
     };
   }
 
@@ -1438,11 +1455,21 @@ export class PlannerSession {
     const line = this.drawLine();
     this.lineDrawn = line?.state ?? null;
     const compare = this.compare;
+    const held = inHandMarks({
+      placing: this.placing,
+      carrying: this.input.isCarrying,
+      dragging:
+        this.pressWorld !== null &&
+        this.marquee === null &&
+        (this.dragDelta.dx !== 0 || this.dragDelta.dy !== 0),
+      faulted: this.faulted,
+    });
     this.view.draw({
       line: compare ? null : (line?.visual ?? null),
       selected: compare ? EMPTY : this.selection,
       moved: compare ? EMPTY : this.moved,
-      invalid: compare ? EMPTY : this.faulted,
+      invalid: compare ? EMPTY : held.invalid,
+      inHand: compare ? false : held.inHand,
       diff: compare,
       marquee: this.marquee,
       nearby: compare ? EMPTY : this.nearbyIds(),

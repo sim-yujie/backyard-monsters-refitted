@@ -164,6 +164,8 @@ interface Tile {
   /** Where the tile is drawn right now, in yard units. */
   x: number;
   y: number;
+  /** The {@link BlueprintLayer.settle} round it was last raised in, or -1. */
+  raised: number;
 }
 
 export class BlueprintLayer {
@@ -184,6 +186,12 @@ export class BlueprintLayer {
   private readonly byId = new Map<number, Tile>();
   /** Draw order, so `pick` can walk it backwards. */
   private order: Tile[] = [];
+  /**
+   * Counts the planner's commits ({@link settle}). A tile that moves is
+   * raised over the others once per round, not on every pointer move of the
+   * same drag, which for a 400-wall run would be 400 re-stacks a move.
+   */
+  private round = 0;
 
   /** Tiles whose picture has been asked for but has not arrived yet. */
   private awaiting: Tile[] = [];
@@ -287,6 +295,30 @@ export class BlueprintLayer {
     tile.y = y;
     const world = blueprintToWorld(x, y);
     tile.root.position.set(world.x, world.y);
+    this.raise(tile);
+  }
+
+  /**
+   * A drag or a carry is over (the planner re-stacks the yard on a commit):
+   * the next move raises its tiles afresh.
+   */
+  settle(): void {
+    this.round++;
+  }
+
+  /**
+   * Draws a moving tile over the others (owner, 19 Nov 2026): on top of the
+   * building it is dragged across, as the yard draws the building in hand,
+   * rather than under whichever tile happened to be added after it. Tiles do
+   * not overlap at rest, so the order only shows while something is moving.
+   */
+  private raise(tile: Tile): void {
+    if (tile.raised === this.round) return;
+    tile.raised = this.round;
+    this.tiles.addChild(tile.root);
+    const at = this.order.indexOf(tile);
+    if (at >= 0) this.order.splice(at, 1);
+    this.order.push(tile);
   }
 
   /** Puts every tile back where the save had its building, and shows them all. */
@@ -492,6 +524,7 @@ export class BlueprintLayer {
       icon: null,
       x: building.x,
       y: building.y,
+      raised: -1,
     };
     this.byId.set(building.id, tile);
     this.order.push(tile);

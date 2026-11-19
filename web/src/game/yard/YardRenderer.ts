@@ -967,6 +967,7 @@ export class YardRenderer {
   /** Re-stacks the isometric draw list after a planner move is committed. */
   resortByDepth(): void {
     this.buildings.resortByDepth();
+    this.blueprint.settle();
   }
 
   /* ── The Monster Juicer at work (`juicerShow.ts`) ──────────────────── */

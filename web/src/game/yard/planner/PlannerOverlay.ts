@@ -15,7 +15,9 @@ import type { LineCellState } from "../wallLine";
  *
  * Colour is never the only channel the design allows, so an invalid drop is
  * drawn as a heavier stroke as well as a red fill, and a moved building gets a
- * dashed outline rather than a tint.
+ * dashed outline rather than a tint. Anything in hand (carried, picked up or
+ * dragged) is boxed the way the yard's placing box is instead: green where it
+ * can go, red and crossed where it cannot (owner, 19 Nov 2026).
  *
  * The overlay does not know which view is showing: it is handed each
  * building's corners and draws whatever polygon that is.
@@ -42,6 +44,15 @@ export interface PlannerVisuals {
    * it can be lined up against them. Empty or absent when nothing is.
    */
   readonly nearby?: ReadonlySet<number>;
+  /**
+   * The selection is in hand (owner, 19 Nov 2026): carried out of Stored,
+   * picked up, or dragged. Each building is then boxed the way the yard's
+   * placing box is, green where it can go and red and crossed where it
+   * cannot ({@link heldCells}), in place of the orange selection outline.
+   */
+  readonly inHand?: boolean;
+  /** The flat blueprint is showing, not the isometric yard: boxes get its look. */
+  readonly flat?: boolean;
   /**
    * A wall line being drawn from the drawer (owner, 16 Nov 2026): every Block
    * green (placed), red (blocked) or grey (no wall left for it), and a dot on
@@ -181,9 +192,23 @@ export class PlannerOverlay {
     }
     if (drew) g.stroke({ width: 2, color: MOVED, alpha: 0.6 });
 
+    // In hand: the group's bounds here; the boxes are drawn after the blocker below.
+    if (visuals.inHand) {
+      for (const id of visuals.selected) {
+        const shape = shapeOf(id);
+        if (!shape) continue;
+        for (const [x, y] of shape) {
+          if (x < minX) minX = x;
+          if (x > maxX) maxX = x;
+          if (y < minY) minY = y;
+          if (y > maxY) maxY = y;
+        }
+      }
+    }
+
     let good = false;
     let bad = false;
-    for (const id of visuals.selected) {
+    for (const id of visuals.inHand ? EMPTY_IDS : visuals.selected) {
       const shape = shapeOf(id);
       if (!shape) continue;
       for (const [x, y] of shape) {
@@ -224,6 +249,13 @@ export class PlannerOverlay {
     }
     if (blocker) g.stroke({ width: 3, color: INVALID, alpha: 0.9 });
 
+    // The boxes in hand after the building in the way (astra round 1), so
+    // its outline does not run across the box and its cross.
+    if (visuals.inHand) {
+      const cells = heldCells(visuals.selected, visuals.invalid, shapeOf);
+      if (cells.length > 0) (visuals.flat ? drawFlatLine : drawLine)(g, { cells, anchors: [] });
+    }
+
     // A dashed box around a multi-selection, so the group reads as one thing.
     if (visuals.selected.size > 1 && minX < maxX) {
       dashedRect(g, { x: minX, y: minY, width: maxX - minX, height: maxY - minY });
@@ -245,6 +277,28 @@ export class PlannerOverlay {
 }
 
 const path = (shape: Corners): number[] => shape.flatMap(([x, y]) => [x, y]);
+
+const EMPTY_IDS: ReadonlySet<number> = new Set<number>();
+
+/**
+ * The boxes for a selection in hand: each building green ("build") where it
+ * can go, red ("blocked") where the plan says it cannot. The same states, and
+ * so the same drawing, as a wall line's Blocks, whose colours are the yard's
+ * placing box's (`BuildPlacement.ts`).
+ */
+export const heldCells = (
+  selected: ReadonlySet<number>,
+  invalid: ReadonlySet<number>,
+  shapeOf: ShapeLookup,
+): LineCellVisual[] => {
+  const cells: LineCellVisual[] = [];
+  for (const id of selected) {
+    const shape = shapeOf(id);
+    if (!shape) continue;
+    cells.push({ corners: shape, state: invalid.has(id) ? "blocked" : "build" });
+  }
+  return cells;
+};
 
 /**
  * A wall line's Blocks, one batch per colour, then its corners. A red Block

@@ -109,6 +109,8 @@ interface Harness {
   readonly lineCells: () => string[] | null;
   /** The wall line as the overlay last got it: Block corners and whether drawn flat. */
   readonly lineVisual: () => LineVisualSeen | null;
+  /** Whether the overlay was last told the selection is in hand (boxed green or red). */
+  readonly inHand: () => boolean;
   /** How many times the session asked its owner to open the search box. */
   readonly finds: () => number;
   /** How many taps the session reported to its owner (F14). */
@@ -221,9 +223,11 @@ const planner = (
         invalid: ReadonlySet<number>;
         nearby?: ReadonlySet<number>;
         line?: LineVisualSeen | null;
+        inHand?: boolean;
       } | null,
     ): void => {
       faulted = visuals ? visuals.invalid : new Set<number>();
+      inHand = visuals?.inHand ?? false;
       nearby = visuals?.nearby ?? new Set<number>();
       lineCells = visuals?.line?.cells.map((cell) => cell.state) ?? null;
       lineVisual = visuals?.line ?? null;
@@ -245,6 +249,7 @@ const planner = (
   let nearby: ReadonlySet<number> = new Set<number>();
   let lineCells: string[] | null = null;
   let lineVisual: LineVisualSeen | null = null;
+  let inHand = false;
 
   const setView = (next: YardView): void => {
     if (view === next) return;
@@ -295,6 +300,7 @@ const planner = (
     nearby: () => nearby,
     lineCells: () => lineCells,
     lineVisual: () => lineVisual,
+    inHand: () => inHand,
     finds: () => finds,
     taps: () => taps,
     placements,
@@ -369,6 +375,24 @@ describe("click to carry", () => {
     expect(harness.placements.get(1)).toEqual({ x: 100, y: 0 });
     expect(harness.session.plan.testMove(100, 0).valid).toBe(true);
     expect(harness.session.plan.testMove(200, 0).valid).toBe(false);
+  });
+
+  it("boxes what is in hand green, red where it cannot go, and a plain press not at all (desk fix B)", () => {
+    const harness = planner();
+    // Pressed, not moved: an ordinary selection, orange.
+    harness.press(ONE);
+    expect(harness.inHand()).toBe(false);
+    // Dragged with the button held: in hand, green on a free spot, red on tower two.
+    harness.drag(by(ONE, 100, 0));
+    expect(harness.inHand()).toBe(true);
+    expect(harness.faulted().has(1)).toBe(false);
+    harness.drag(by(ONE, 200, 0));
+    expect(harness.faulted().has(1)).toBe(true);
+    harness.drag(ONE);
+    harness.release(ONE);
+    // Picked up by the click: in hand until it is put down.
+    expect(harness.session.state().carrying).toBe(true);
+    expect(harness.inHand()).toBe(true);
   });
 
   it("measures the carry from the pick-up point, not from the last move", () => {
@@ -1326,6 +1350,26 @@ describe("placing from the drawer", () => {
     expect(state.undoLabel).toContain("Place ");
   });
 
+  it("is boxed green on a free spot and red on a building or off the plot (desk fix B)", () => {
+    const harness = inHand();
+    harness.drag(blueprintToWorld(400, 300));
+    expect(harness.inHand()).toBe(true);
+    expect(harness.faulted().has(1)).toBe(false);
+
+    // Half on tower two at (200, 0): red, and tower two outlined as the one in the way.
+    harness.drag(blueprintToWorld(235, 35));
+    expect(harness.faulted().has(1)).toBe(true);
+    expect(harness.faulted().has(2)).toBe(true);
+
+    // Off the plot, where nothing is in the way: still red.
+    harness.drag(blueprintToWorld(-700, 0));
+    expect(harness.faulted().has(1)).toBe(true);
+    // A click there still puts nothing down.
+    harness.press(blueprintToWorld(-700, 0));
+    expect(harness.session.state().placing).toBe(true);
+    expect(harness.session.state().storedCount).toBe(1);
+  });
+
   it("undoes back into the drawer", () => {
     const harness = inHand();
     const target = blueprintToWorld(400, 300);
@@ -1957,6 +2001,23 @@ describe("drawing walls from the drawer as a line (owner, 16 Nov 2026)", () => {
     expect(state.line).toMatchObject({ type: 17, anchors: 0, place: 0, stock: 4 });
     expect(harness.session.armedStack()).toEqual({ type: 17, level: state.line?.level });
     expect(harness.session.selectedIds()).toEqual([]);
+  });
+
+  it("shows the Block in hand under the mouse before the first click, green or red (desk fix B)", () => {
+    const harness = drawing();
+    harness.drag(block(-100, 20));
+    expect(harness.lineCells()).toEqual(["build"]);
+    expect(harness.placements.get(10)).toEqual({ x: -100, y: 20 });
+    // On tower one: red, and no wall drawn there.
+    harness.drag(block(20, 20));
+    expect(harness.lineCells()).toEqual(["blocked"]);
+    expect(harness.hidden.has(10)).toBe(true);
+    // The box alone places nothing: ✓ needs a corner.
+    expect(harness.session.state().line).toMatchObject({ anchors: 0, place: 0, blocked: 0 });
+    expect(harness.session.placeLine()).toBe(0);
+    // The first click puts a corner where the box was.
+    harness.click(block(-100, 20));
+    expect(harness.session.state().line?.anchors).toBe(1);
   });
 
   it("puts a corner down per click, and says what each Block comes to", () => {
