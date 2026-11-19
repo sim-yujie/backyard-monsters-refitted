@@ -57,8 +57,8 @@ describe("safe mode's notice on the yard", () => {
     const shown = popup();
     expect(shown).not.toBeNull();
     const words = shown!.querySelector("p")!.textContent!;
-    expect(words).toBe("The game did not load twice, so Quality is now Medium. Change it in Settings.");
-    expect(words.split(/\s+/).length).toBeLessThanOrEqual(20);
+    expect(words).toBe("Loading failed twice. Quality is now Medium. You can change it in Settings.");
+    expect(words.split(/\s+/).length).toBeLessThanOrEqual(15);
     expect(document.body.textContent).toContain(SAFE_MODE_TEXT.title);
     const buttons = [...shown!.querySelectorAll("button")];
     expect(buttons.map((button) => button.textContent)).toEqual([SAFE_MODE_TEXT.ok]);

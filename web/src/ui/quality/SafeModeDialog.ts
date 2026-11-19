@@ -5,12 +5,12 @@ import type { SafeModeCap } from "@/game/safeMode";
  * Safe mode's one notice (`game/safeMode.ts`): the game did not load twice in
  * a row, so it started one Quality level lower. Shown once, on the page load
  * where it stepped down. Built as the "Slow internet?" suggestion is, in the
- * same classes.
+ * same classes; like it, only OK or the X closes it, not a tap outside.
  */
 
 export const SAFE_MODE_TEXT = {
-  title: "Safe mode",
-  body: (level: string): string => `The game did not load twice, so Quality is now ${level}. Change it in Settings.`,
+  title: "Quality changed",
+  body: (level: string): string => `Loading failed twice. Quality is now ${level}. You can change it in Settings.`,
   level: { medium: "Medium", low: "Low" },
   ok: "OK",
 } as const;
@@ -23,7 +23,7 @@ export interface SafeModeDialogOptions {
 }
 
 export const openSafeModeNotice = (options: SafeModeDialogOptions): Popup => {
-  const popup = new Popup({ title: SAFE_MODE_TEXT.title, className: "slow-internet-popup safe-mode-popup" });
+  const popup = new Popup({ title: SAFE_MODE_TEXT.title, className: "slow-internet-popup safe-mode-popup", closeOnBackdrop: false });
   const body = document.createElement("div");
   body.className = "slow-internet safe-mode";
   const words = document.createElement("p");

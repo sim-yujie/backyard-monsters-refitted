@@ -150,7 +150,7 @@ export const SETTINGS_TEXT = {
   /** High on a phone or tablet: its monsters are Medium's (`monsterSheetLevel`). */
   downloadHintTouchHigh: "Phones and tablets use lighter monsters. Music plays at once.",
   /** A level safe mode put the game on (`game/safeMode.ts`), not picked. */
-  downloadHintSafeMode: "Safe mode: the game did not load twice. Pick a level to change it.",
+  downloadHintSafeMode: "Lowered because loading failed twice. Pick a level to change it.",
   downloadSaved: "Saved. Monsters already on screen change after a reload.",
 } as const;
 
