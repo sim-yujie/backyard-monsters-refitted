@@ -92,9 +92,12 @@ describe("profile window", () => {
     const stats = [...container.querySelectorAll(".profile__stat")].map((item) => item.getAttribute("aria-label"));
     expect(stats).toContain("Level: 34");
     expect(stats).toContain("Town Hall: 8");
-    expect(stats).toContain("Achievements: 5/22");
     expect(stats).toContain("Friends: 3");
-    // Every stat but achievements (its medal) is a painted icon, never a line icon (owner, 7 Nov).
+    // No achievements count, though the answer carries one (owner, 19 Nov).
+    expect(stats.some((label) => label?.startsWith("Achievements"))).toBe(false);
+    expect(q(".profile__stat--achievements")).toBeNull();
+    expect(q(".profile__stats .ach-badge")).toBeNull();
+    // Every stat is a painted icon, never a line icon (owner, 7 Nov).
     const icons = [...container.querySelectorAll<HTMLImageElement>(".profile__stat-icon .game-icon")];
     expect(icons.map((icon) => icon.dataset["icon"])).toEqual(["levelup", "townhall", "empire", "friends", "time"]);
     expect(q(".profile__stat-icon svg")).toBeNull();

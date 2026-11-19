@@ -6,10 +6,11 @@ import { VIEW_SAVE_FIELDS } from "../../services/achievements/record.js";
 import { publicAchievements, readPublicRecord } from "../../services/achievements/view.js";
 
 /**
- * `GET /api/:apiVersion/bm/achievements/player/:userid`: another player's
- * achievements, as the Map Room panels and the read-only screen show them
- * (`docs/design/achievements.md` §9.2, issue #204, WP4). A function of an
- * entity manager so it runs under test; `routes.ts` binds it to Koa.
+ * Another player's achievements (`docs/design/achievements.md` §9.2, issue
+ * #204, WP4). Its route (`GET bm/achievements/player/:userid`) and the map's
+ * read-only view were removed (owner, 19 Nov 2026); the profile still reads
+ * the earned / total counts from it (`services/profile/profiles.ts`). A
+ * function of an entity manager so it runs under test.
  *
  * Only what is earned and when: no progress, no Shiny. Read-only: a record
  * never worked out (a bot, a seeded player, anyone not loaded since) gets the

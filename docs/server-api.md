@@ -1166,7 +1166,6 @@ while it is off unlocks are stored owed and no answer shows them as earned.
 
 | Method | Path | Middleware | Request fields | Response | Description |
 |---|---|---|---|---|---|
-| GET | `/api/:apiVersion/bm/achievements/player/:userid` | apiVersion, verifyUserAuth, `playerAchievementsLimiter` (30 a minute per user; `429 { error, reason: "rateLimited" }`); no `logRequest` | Path `userid` | `{ error: 0, userid, name, earned, total, achievements: [{ id, name, description, status: "locked" \| "earned", at? }] }`; `404 { error, reason: "notFound" }` for an unknown or banned player, one with no main yard, or an id that is not a positive whole number | Another player's achievements (`docs/design/achievements.md` §9.2; `controllers/achievements/player.ts`), for the Map Room panels and the read-only screen. Only what is earned and when: no progress, no Shiny. Read-only: a record never worked out (`NULL`: a bot, a seeded player, anyone who has not loaded since) gets the backfill worked out on the fly (`services/achievements/view.ts` `readPublicRecord`) and nothing is stored; a stored record is taken as it is, without folding in what the yard shows now. Owed unlocks read `locked` while rewards are off. Any player may be asked for, the caller included. |
 
 ### Wild monster raids (#226)
 

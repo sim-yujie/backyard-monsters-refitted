@@ -30,7 +30,6 @@ import {
   botCheckReadLimiter,
   botCheckAnswerLimiter,
   chatReportLimiter,
-  playerAchievementsLimiter,
   playerMailLimiter,
   truceRequestLimiter,
   mailTruceRequestLimiter,
@@ -133,7 +132,6 @@ import {
 } from "./controllers/notifications/routes.js";
 import { chatPlayerYard, reportChatMessage } from "./controllers/chat/routes.js";
 import { getModerationNotice, seeModerationNotice } from "./controllers/moderation/notice.js";
-import { playerAchievements } from "./controllers/achievements/routes.js";
 import { getDefenceReplay, getDefences } from "./controllers/defences/routes.js";
 import { mountFriendsRoutes } from "./controllers/friends/routes.js";
 import { mountEventsRoutes } from "./controllers/events/routes.js";
@@ -375,12 +373,6 @@ router.get("/api/:apiVersion/bm/chat/yard", apiVersion, verifyUserAuth, chatPlay
 * ──────────────────────────────────────────────── */
 router.get("/api/:apiVersion/bm/moderation/notice", apiVersion, verifyUserAuth, getModerationNotice);
 router.post("/api/:apiVersion/bm/moderation/notice/:id/seen", apiVersion, verifyUserAuth, seeModerationNotice);
-
-/**  ────────────────────────────────────────────────
-* 📦 Achievements: another player's (issue #204, `controllers/achievements/player.ts`).
-*    The player's own are yard actions (`controllers/yard/achievements.ts`).
-* ──────────────────────────────────────────────── */
-router.get("/api/:apiVersion/bm/achievements/player/:userid", apiVersion, verifyUserAuth, playerAchievementsLimiter, playerAchievements);
 
 /**  ────────────────────────────────────────────────
 * 📦 Defences: attacks on the player's Map Room 2 main yard and their replays

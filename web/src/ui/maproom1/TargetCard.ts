@@ -59,11 +59,6 @@ export interface CardHandlers {
   /** Proposes a truce to a neighbour (#203). Absent: no Truce button. */
   readonly onTruce?: (target: Mr1Neighbour) => void;
   /**
-   * A neighbour's achievements line under the name and level (#204,
-   * `ui/achievements/AchievementsLine.ts`). Absent: no line.
-   */
-  readonly achievementsLine?: (target: Mr1Neighbour) => HTMLElement;
-  /**
    * A neighbour's Add friend, or how they stand to the player (friends WP11,
    * #378, `ui/friends/AddFriendButton.ts`), a row under Message and Truce. Absent: none.
    */
@@ -300,9 +295,6 @@ export const targetCard = (
     card.append(el("p", "mr1-card__blurb", tribeInfo(target.tribe).blurb));
     // A wrecked camp says so under its greyed Attack, with its countdown.
     if (respawnIn(target, state.now) === null) card.append(healthMeter(target.damage ?? 0));
-  } else {
-    const line = handlers.achievementsLine?.(target);
-    if (line) card.append(line);
   }
 
   if (gate.warning) {

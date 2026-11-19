@@ -9,7 +9,6 @@ import {
   type Mr1Target,
   type Mr1World,
 } from "@/game/maproom1/mr1Model";
-import { achievementsLine } from "@/ui/achievements/AchievementsLine";
 import { addFriendButton } from "@/ui/friends/AddFriendButton";
 import { Hud } from "@/ui/Hud";
 import { Notices } from "@/ui/maproom/Notices";
@@ -279,7 +278,6 @@ export class MapRoom1Ui {
     const world = this.world;
     this.listView.setSelected(target?.key ?? null);
 
-    const achievements = this.hud.achievements;
     const card = (variant: "float" | "panel" | "sheet"): HTMLElement | null =>
       target && world
         ? targetCard(
@@ -292,7 +290,6 @@ export class MapRoom1Ui {
               onAction: this.handlers.onAction,
               ...(this.handlers.onMessage ? { onMessage: this.handlers.onMessage } : {}),
               ...(this.handlers.onTruce ? { onTruce: this.handlers.onTruce } : {}),
-              ...(achievements ? { achievementsLine: (neighbour: Mr1Neighbour) => this.achievementsLine(neighbour) } : {}),
               addFriend: (neighbour: Mr1Neighbour) =>
                 addFriendButton({
                   userid: neighbour.userid,
@@ -328,16 +325,6 @@ export class MapRoom1Ui {
         panel ?? el("p", "mr1-side__empty", "Pick a tribe or a neighbour to see it here."),
       );
     }
-  }
-
-  /**
-   * A neighbour's achievements on their card (#204 WP7); tapping it opens
-   * their read-only list beside the HUD.
-   */
-  private achievementsLine(neighbour: Mr1Neighbour): HTMLElement {
-    return achievementsLine(neighbour.userid, neighbour.name, {
-      onOpen: (userid, name, known) => void this.hud.achievements?.openPlayer(userid, name, known),
-    });
   }
 
   /** "Ready to send", the Flinger and your protection, before any pick. */
