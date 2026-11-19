@@ -312,7 +312,9 @@ describe("finaliseAbandonedAttack", () => {
     // 13,000 (Krallen's raise included), so a million already holds more than
     // it may take: whatever Krallen loots first (issue #222) is not credited.
     expect(userSave.resources.r1).toBe(1_000_000);
-    expect(userSave.resources.r2).toBe(1_000_000 + expected.attackloot.r2 - 100_000);
+    // Pebbles likewise: Krallen's pebble loot (none before patch 7.10 walked
+    // her up to the building) is over the cap too, so only the bomb counts.
+    expect(userSave.resources.r2).toBe(1_000_000 - 100_000);
     expect(userSave.champion[0].hp).toBe(expected.attackerchampion![0]!.hp);
     // Its loot points (patch 7.7.2) land on the main save, never the outpost
     // that sent half the army: an outpost's points are its owner's.

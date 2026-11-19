@@ -986,8 +986,10 @@ describe("a creep's reach (issue #85, patch 7.9)", () => {
     }
   });
 
-  it("stops a level 5 Krallen 65 units from the nearest tile, from the north or the south", () => {
-    const speed = championStat("G5", "speed", 5) / 4;
+  it("walks a level 5 Krallen up beside the building from the north or the south (patch 7.10)", () => {
+    // Her range is 65, but a melee champion hits a building from one cell off
+    // its nearest tile (`MELEE_BUILDING_REACH`); 7.9 stopped her 65 units off.
+    expect(championStat("G5", "range", 5)).toBe(65);
     for (const up of [-1, 1]) {
       const yard = yardOf({ "1": { id: 1, t: 1, X: 100, Y: 100 } });
       const building = yard.buildings[0]!;
@@ -1002,9 +1004,9 @@ describe("a creep's reach (issue #85, patch 7.9)", () => {
         if (krallen.state !== "attacking") continue;
         stoppedAt = Math.sqrt(reachSquared(krallen.ix, krallen.iy, building));
       }
-      // A screen pixel walked is at most 1.41 yard units (straight down the screen).
-      expect(stoppedAt, `drop ${up}`).toBeLessThanOrEqual(65);
-      expect(stoppedAt, `drop ${up}`).toBeGreaterThan(65 - 2 * Math.SQRT2 * speed);
+      // In the cell beside the footprint, as a melee monster's route ends.
+      expect(stoppedAt, `drop ${up}`).toBeGreaterThanOrEqual(0);
+      expect(stoppedAt, `drop ${up}`).toBeLessThanOrEqual(30);
     }
   });
 });
