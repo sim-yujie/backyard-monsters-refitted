@@ -192,7 +192,7 @@ export class PlannerOverlay {
     }
     if (drew) g.stroke({ width: 2, color: MOVED, alpha: 0.6 });
 
-    // In hand: the yard's placing box on each building, green or red.
+    // In hand: the group's bounds here; the boxes are drawn after the blocker below.
     if (visuals.inHand) {
       for (const id of visuals.selected) {
         const shape = shapeOf(id);
@@ -204,8 +204,6 @@ export class PlannerOverlay {
           if (y > maxY) maxY = y;
         }
       }
-      const cells = heldCells(visuals.selected, visuals.invalid, shapeOf);
-      if (cells.length > 0) (visuals.flat ? drawFlatLine : drawLine)(g, { cells, anchors: [] });
     }
 
     let good = false;
@@ -250,6 +248,13 @@ export class PlannerOverlay {
       blocker = true;
     }
     if (blocker) g.stroke({ width: 3, color: INVALID, alpha: 0.9 });
+
+    // The boxes in hand after the building in the way (astra round 1), so
+    // its outline does not run across the box and its cross.
+    if (visuals.inHand) {
+      const cells = heldCells(visuals.selected, visuals.invalid, shapeOf);
+      if (cells.length > 0) (visuals.flat ? drawFlatLine : drawLine)(g, { cells, anchors: [] });
+    }
 
     // A dashed box around a multi-selection, so the group reads as one thing.
     if (visuals.selected.size > 1 && minX < maxX) {
