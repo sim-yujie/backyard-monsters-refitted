@@ -19,6 +19,7 @@ import {
   purseShortfallErr,
   underHallErr,
 } from "./surfaceInferno.js";
+import { withLegacyWallRead } from "./wallBlocks.js";
 import { yardBadRequestErr, yardRefusedErr } from "./yardErrors.js";
 
 /**
@@ -74,11 +75,19 @@ export interface CancelUpgradeReport {
 }
 
 /**
- * Kinds `upgrade` sends elsewhere: the planner's batch routes upgrade them.
- * Not on the Inferno yard, which has no planner (Flash): there a wall takes
- * the building panel's upgrade like anything else (WP 1.16).
+ * Kinds `upgrade` sends elsewhere: traps, which the planner re-arms.
+ *
+ * A wall is upgraded here one at a time like any building, on every yard and
+ * with or without a Yard Planner (owner, beta 8: "a manual method to upgrade
+ * walls one by one, similar to building"). That is Flash's own path: a
+ * Block's pop-up offered the ordinary Upgrade (`BUILDINGINFO.as:251-253`),
+ * charged from the cost table (`YARD_PROPS.as`, BWALL). Flash ran its 5 s on
+ * a worker, free to finish (`BFOUNDATION.as:2063-2083`); here the step is
+ * written finished with its points, no worker held, as every wall step has
+ * been since D13 ({@link planOneUpgrade}, the batch route's rule). Many walls
+ * at once is the Yard Planner's `walls/upgrade`.
  */
-const BATCH_KINDS: ReadonlySet<string> = new Set(["wall", "trap"]);
+const BATCH_KINDS: ReadonlySet<string> = new Set(["trap"]);
 
 /** The building with this id, or a 400: the client named a building the yard does not have. */
 const buildingOf = (save: UpgradeWalkSave, id: number): BuildingData => {
@@ -162,9 +171,8 @@ export const refusalErr = (refusal: OneUpgradeRefusal, kind: YardKind = "main") 
  * only by the player's own free `SP1` (`services/yard/speedup.ts`).
  *
  * Refuses, in this order: `400 badRequest` (no such building, or one with no
- * ladder: decorations, mushrooms), `400 useBatchRoute` (walls and traps, on
- * every yard: the Inferno's go through the Yard Planner too, owner decision
- * 2026-10-29),
+ * ladder: decorations, mushrooms), `400 useBatchRoute` (traps, on every
+ * yard; walls are upgraded here, {@link BATCH_KINDS}),
  * then `409` `busy` (`training { monster }` for an Academy that is training,
  * #145), `damaged`, `townHall`, `maxLevel`, `requirements`,
  * `shortfall`, `workers`.
@@ -186,17 +194,15 @@ export const refusalErr = (refusal: OneUpgradeRefusal, kind: YardKind = "main") 
  * @param percentOff - The Builder's Weekend percentage running now, 0 when none.
  * @returns The new `buildingdata`, the debit and the report.
  */
-export const planUpgradeAction = (save: UpgradeActionSave, id: number, now: number, percentOff = 0) => {
+export const planUpgradeAction = (stored: UpgradeActionSave, id: number, now: number, percentOff = 0) => {
+  // A legacy Stone Block row climbs as the level 2 Block Flash made it.
+  const save = withLegacyWallRead(stored, id);
   const building = buildingOf(save, id);
   const yard = yardKindOf(save);
 
   const kind = costOf(Number(building.t), yard)?.kind;
   if (kind && BATCH_KINDS.has(kind)) {
-    throw yardBadRequestErr(
-      "Walls and traps are upgraded from the Yard Planner.",
-      { id },
-      "useBatchRoute"
-    );
+    throw yardBadRequestErr("Traps are re-armed from the Yard Planner.", { id }, "useBatchRoute");
   }
   const step = planOneUpgrade(save, id, now, percentOff);
   if (!step.ok) throw refusalErr(step, yard);
@@ -211,11 +217,13 @@ export const planUpgradeAction = (save: UpgradeActionSave, id: number, now: numb
   };
 
   const buildingdata = { ...save.buildingdata, [String(id)]: step.building };
+  // A wall step is written finished (D13, `startUpgrades.ts`): its points now.
+  const points = step.finished && step.points > 0 ? step.points : undefined;
   if (isSurfaceInferno(save, step.t)) {
     const iresources = chargePurse(save.iresources, step.cost);
-    return { report: { ...report, purse: purseReport(iresources) }, slices: { buildingdata, iresources } };
+    return { report: { ...report, purse: purseReport(iresources) }, slices: { buildingdata, iresources }, points };
   }
-  return { report, slices: { buildingdata }, debit: step.cost };
+  return { report, slices: { buildingdata }, debit: step.cost, points };
 };
 
 /**

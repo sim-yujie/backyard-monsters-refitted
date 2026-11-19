@@ -149,3 +149,19 @@ export const planWallBlocks = (save: WallBlockSave, tier: number, now: number, k
 
   return { ...quote, buildingdata, buildinghealthdata: health, points, jobs };
 };
+
+/**
+ * The save with one legacy Stone Block row (`t: 18`) read as Flash read it on
+ * load, a Block at level 2 or more (`BASE.as:1523-1526`), so the one-wall
+ * upgrade (`yard/upgrade`, owner, beta 8) prices and writes it as a type 17
+ * rather than finding the legacy row's one-step ladder already climbed. Any
+ * other building, and a save without that id, comes back as it was.
+ */
+export const withLegacyWallRead = <S extends { buildingdata?: BuildingDataMap | null }>(save: S, id: number): S => {
+  const building = save.buildingdata?.[String(id)];
+  if (!building || Number(building.t) !== LEGACY_WALL_TYPE) return save;
+  return {
+    ...save,
+    buildingdata: { ...save.buildingdata, [String(id)]: { ...building, t: WALL_TYPE, l: blockLevel(building) } },
+  };
+};
