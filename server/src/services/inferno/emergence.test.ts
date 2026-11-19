@@ -76,6 +76,17 @@ describe("the emergence due rule", () => {
     expect(EMERGENCE_GAP_SECONDS).toBe(23 * HOUR);
   });
 
+  test("tooSoon: a stage pending for 3 days waits 23 hours from its fight's landing, not its rise (owner, 19 Nov)", () => {
+    const raisedAt = NOW - 3 * 24 * HOUR;
+    const pending = { ...NO_INFERNO_PROGRESS, emergenceLevel: 1, emergenceLastAt: raisedAt, emergencePending: 1 };
+    expect(emergenceDueCheck(facts({ progress: pending }))).toBe("pending");
+    // The fight lands at NOW: the landing clears the stage and moves the wait to NOW (`clearEmergencePending`).
+    const landed = { ...pending, emergenceLastAt: NOW, emergencePending: null };
+    expect(emergenceDueCheck(facts({ progress: landed, now: NOW + 1 }))).toBe("tooSoon");
+    expect(emergenceDueCheck(facts({ progress: landed, now: NOW + EMERGENCE_GAP_SECONDS - 1 }))).toBe("tooSoon");
+    expect(emergenceDueCheck(facts({ progress: landed, now: NOW + EMERGENCE_GAP_SECONDS }))).toBeNull();
+  });
+
   test("underAttack: an attack running on the yard", () => {
     expect(emergenceDueCheck(facts({ underAttack: true }))).toBe("underAttack");
   });

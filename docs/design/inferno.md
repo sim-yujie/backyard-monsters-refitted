@@ -113,7 +113,7 @@ Later decisions:
 | Below TH5 | Cave answers with an RSVP note (`cavern_pop1/2`) | `INFERNO_EMERGENCE_POPUPS.as` |
 | Cave building | id 127, fixed grid point (-1200,-150), 190x160, not movable/exported; level = emergence level | `INFERNOPORTAL.as:200-215` |
 | Levels | 5 (one per raid) | `INFERNO_EMERGENCE_EVENT.as:53-55` |
-| Gap | **[OWNER, 28 Oct]** 23 h (82,800 s) since the last level-up, checked on a main-yard load. Flash: 12 h (43,200 s) | `:49-51`, `:111-119` |
+| Gap | **[OWNER, 28 Oct]** 23 h (82,800 s) since the last level-up, checked on a main-yard load; **[OWNER, 19 Nov, patch 7.12]** when that level-up had a Moloch raid, counted from the raid's landing instead. Flash: 12 h (43,200 s) | `:49-51`, `:111-119` |
 | Yard health | Must be > 10% for a raid (`isBaseReadyForAttack`, `:197-210`). Raids 2-5: checked with the 23 h gap before the cave grows, so a yard at 10% or less keeps its cave as it is until a later load finds it mended (`SetupPortal`, `:98`). First raise (level 0): no check before it, so the cave goes up to 1 and its time is saved, and only then is the raid skipped (`UpgradePortal`, `:172-176`): no earthquake, no warning, no "stage passed" (only `ATTACK.as:1026`, `:1053` show it, after a fight), and the stage counts, so the next raid (12 h on) is raid 2 | `:91-101`, `:166-181` |
 | Level 0 | Moloch intro dialogue, then level 1 and raid at once | `ai_moloch_intro` |
 | Order | Level and time are **saved before** the raid starts | `UpgradePortal` |
