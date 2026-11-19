@@ -415,5 +415,14 @@ export const TRADE_CAP_SHARE = 0.1;
 /** How long a request stays up: 48 h (owner, 16 Nov 2026). */
 export const TRADE_REQUEST_SECONDS = 48 * 60 * 60;
 
+/**
+ * The Trade tab's "Recent trades": the last 2 swaps of the alliance, only
+ * those of the last 48 hours, then "No trades yet" (owner, Review Desk 19 Nov
+ * 2026, option A). A taken request leaves "Mates' requests" at once and shows
+ * here instead.
+ */
+export const TRADE_RECENT_SWAPS = 2;
+export const TRADE_RECENT_SECONDS = 48 * 60 * 60;
+
 /** Requests a member may post in one UTC day, so cancel-and-ask cannot fill the chat (owner, 16 Nov 2026). */
 export const TRADE_ASKS_PER_DAY = 3;

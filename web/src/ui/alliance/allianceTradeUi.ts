@@ -53,8 +53,6 @@ export const TRADE_TEXT = {
   accept: "Accept",
   /** A request's swap, read out: "You give 1,000 Goo, you get 900 Twigs". */
   swapLabel: (give: string, get: string) => `You give ${give}, you get ${get}`,
-  takenBy: (name: string) => `✓ ${name} took it`,
-  swappedWith: (name: string) => `✓ Swapped with ${name}`,
   recent: "Recent trades",
   noRecent: "No trades yet.",
   gave: (from: string, to: string, what: string) => `${from} gave ${to} ${what}`,
@@ -243,8 +241,8 @@ export class TradeTab {
     this.loadedAt = this.host.now();
     // A mate took the player's request since the yard last looked: what arrived is in the
     // yard on the server, so the yard asks for its resources again (once per swap).
-    const newlyDone = (answer.view?.requests ?? []).filter((row) => row.mine && row.status === "done" && !this.doneSeen.has(row.id));
-    for (const row of newlyDone) this.doneSeen.add(row.id);
+    const newlyDone = (answer.view?.myTaken ?? []).filter((id) => !this.doneSeen.has(id));
+    for (const id of newlyDone) this.doneSeen.add(id);
     if (newlyDone.length > 0) this.host.traded();
     this.focusId = null;
     if (this.pendingFocus !== null) {
@@ -339,11 +337,13 @@ export class TradeTab {
       nodes.push(card(TRADE_TEXT.yourRequest, box));
     }
 
-    // Mates' requests: each with what you give, what you get, and Accept.
+    // Mates' requests: each with what you give, what you get, and Accept. A taken
+    // request leaves the list at once and shows under Recent trades (owner, 19 Nov).
     const list = make("div", "trade-requests");
     list.setAttribute("role", "list");
-    for (const request of view.requests) list.append(this.requestRow(view, request, now));
-    if (view.requests.length === 0) list.append(make("p", "trade-note", TRADE_TEXT.noRequests));
+    const open = view.requests.filter((request) => request.status === "open");
+    for (const request of open) list.append(this.requestRow(view, request, now));
+    if (open.length === 0) list.append(make("p", "trade-note", TRADE_TEXT.noRequests));
     nodes.push(card(TRADE_TEXT.requests, list));
 
     // Recent trades.
@@ -399,25 +399,14 @@ export class TradeTab {
 
   /** A mate's request from the reader's side: you give what they want, you get what they give. */
   private requestRow(view: TradeView, request: TradeRequest, now: number): HTMLElement {
-    const done = request.status === "done";
-    const row = make("div", `trade-request${done ? " is-done" : ""}${this.focusId === request.id ? " is-focus" : ""}`);
+    const row = make("div", `trade-request${this.focusId === request.id ? " is-focus" : ""}`);
     row.setAttribute("role", "listitem");
     row.dataset["request"] = String(request.id);
     const who = make("div", "trade-request__who");
     who.append(make("strong", "trade-request__name", request.username));
     if (request.role && request.role !== "member") who.append(make("span", `alliance__role alliance__role--${request.role}`, request.role === "leader" ? "Leader" : "Officer"));
-    // From the reader's side: a mate's request is "you give what they want"; your own (done) one
-    // is what you gave and what you got.
-    row.append(
-      who,
-      request.mine
-        ? swap({ key: request.give, n: request.amount }, { key: request.want, n: request.gets })
-        : swap({ key: request.want, n: request.amount }, { key: request.give, n: request.gets }),
-    );
-    if (done) {
-      row.append(make("span", "trade-request__given", (request.mine ? TRADE_TEXT.swappedWith : TRADE_TEXT.takenBy)(request.taken_by ?? "?")));
-      return row;
-    }
+    // From the reader's side: a mate's request is "you give what they want".
+    row.append(who, swap({ key: request.want, n: request.amount }, { key: request.give, n: request.gets }));
     const block = acceptBlock(request, view.me, view.today);
     // Accept shows what you get: "Accept +900 (Twigs)".
     const accept = button("", "btn--primary trade-request__act trade-accept", () => void this.accept(request));

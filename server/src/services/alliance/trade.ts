@@ -6,6 +6,8 @@ import {
   TRADE_ASKS_PER_DAY,
   TRADE_CAP_SHARE,
   TRADE_LOSS,
+  TRADE_RECENT_SECONDS,
+  TRADE_RECENT_SWAPS,
   TRADE_REQUEST_SECONDS,
 } from "../../config/AllianceConfig.js";
 import { catchUpLockedRow } from "../../controllers/yard/yardAction.js";
@@ -285,7 +287,7 @@ export interface TradeRequestView {
   status: "open" | "done";
   /** Who accepted it (done requests). */
   taken_by: string | null;
-  /** The caller's own request (a done one stays in the list, read from their side). */
+  /** The caller's own request. */
   mine: boolean;
   /** The asker's storage, for the room check (open requests only). */
   storage: StorageView | null;
@@ -314,9 +316,34 @@ const readStorage = async (em: EntityManager, userids: number[]): Promise<Map<nu
 };
 
 /**
+ * Of an alliance's trade receipts (newest first), those of the last `swaps`
+ * trades. A swap is two receipts, one each way, written in the same second;
+ * an old one-way send is one. Receipts are grouped by that second and the
+ * pair of players, so a swap counts once whichever order its rows come in.
+ */
+export const lastTrades = <R extends { from_userid: number | string; to_userid: number | string; created_at: number | string }>(
+  rows: R[],
+  swaps: number
+): R[] => {
+  const keyOf = (row: R) => {
+    const [a, b] = [Number(row.from_userid), Number(row.to_userid)].sort((x, y) => x - y);
+    return `${Number(row.created_at)}:${a}:${b}`;
+  };
+  const keep: string[] = [];
+  for (const row of rows) {
+    const key = keyOf(row);
+    if (!keep.includes(key) && keep.length < swaps) keep.push(key);
+  }
+  return rows.filter((row) => keep.includes(keyOf(row)));
+};
+
+/**
  * `GET /alliance/trade`: the Trade tab. Today's swap left, the caller's open
- * request, mates' open requests (and those done today, greyed), the last 2
- * trades and the caller's storage. Gives back what run-out requests in the
+ * request, mates' open requests, the last 2 swaps of the last 48 hours and the
+ * caller's storage. A taken request leaves the list at once and shows under
+ * Recent trades instead (owner, Review Desk 19 Nov 2026). `myTaken` holds the
+ * ids of the caller's own requests a mate took in the last day, so the yard
+ * can fetch what arrived once. Gives back what run-out requests in the
  * alliance hold first.
  */
 export const tradeView = async (em: EntityManager, userid: number, now: number) => {
@@ -353,10 +380,10 @@ export const tradeView = async (em: EntityManager, userid: number, now: number) 
        JOIN bym."user" u ON u.userid = r.userid AND u.alliance_id = r.alliance_id
        LEFT JOIN bym."user" g ON g.userid = r.given_by
       WHERE r.alliance_id = ?
-        AND ((r.status = 'open' AND r.expires_at > ?) OR (r.status = 'done' AND r.closed_at >= ?))
-      ORDER BY (r.status = 'open') DESC, r.created_at DESC
+        AND r.status = 'open' AND r.expires_at > ?
+      ORDER BY r.created_at DESC
       LIMIT 50`,
-    [allianceId, now, dayStart]
+    [allianceId, now]
   );
   const askers = [...new Set(rows.filter((row) => row.status === "open").map((row) => Number(row.userid)))];
   const storage = await readStorage(em, [...new Set([userid, ...askers])]);
@@ -387,13 +414,22 @@ export const tradeView = async (em: EntityManager, userid: number, now: number) 
     });
   const mine = requests.find((row) => row.userid === userid && row.status === "open") ?? null;
 
-  const recent = await em.execute<{ from_name: string; to_name: string; arrived: unknown; created_at: number }[]>(
-    `SELECT f.username AS from_name, t.username AS to_name, tr.arrived, tr.created_at
+  // Two receipts per swap; a few spare rows so a swap is never cut in half.
+  const receipts = await em.execute<
+    { from_userid: number; to_userid: number; from_name: string; to_name: string; arrived: unknown; created_at: number }[]
+  >(
+    `SELECT tr.from_userid, tr.to_userid, f.username AS from_name, t.username AS to_name, tr.arrived, tr.created_at
        FROM bym.alliance_trade tr
        JOIN bym."user" f ON f.userid = tr.from_userid
        JOIN bym."user" t ON t.userid = tr.to_userid
-      WHERE tr.alliance_id = ? ORDER BY tr.created_at DESC, tr.id DESC LIMIT 2`,
-    [allianceId]
+      WHERE tr.alliance_id = ? AND tr.created_at > ?
+      ORDER BY tr.created_at DESC, tr.id DESC LIMIT ?`,
+    [allianceId, now - TRADE_RECENT_SECONDS, TRADE_RECENT_SWAPS * 2 + 4]
+  );
+  const recent = lastTrades(receipts, TRADE_RECENT_SWAPS);
+  const taken = await em.execute<{ id: number }[]>(
+    `SELECT id FROM bym.alliance_trade_request WHERE userid = ? AND status = 'done' AND closed_at > ?`,
+    [userid, now - 86_400]
   );
 
   const swapped = await swappedToday(em, userid, now);
@@ -412,6 +448,7 @@ export const tradeView = async (em: EntityManager, userid: number, now: number) 
     me: storage.get(userid) ?? null,
     myRequest: mine,
     requests: requests.filter((row) => row !== mine),
+    myTaken: taken.map((row) => Number(row.id)),
     recent: recent.map((row) => ({
       from: row.from_name,
       to: row.to_name,
