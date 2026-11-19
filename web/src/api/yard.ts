@@ -124,8 +124,8 @@ export const shopBuy = (
 /**
  * Picks a mushroom with a free worker: `id` is its place in `mushrooms.l`,
  * `x`/`y` where the client saw it, so a stale list is refused rather than a
- * different mushroom picked. The server rolls the reward (golden one in four:
- * 3 or 8 Shiny). Refusals: 400 `badRequest`, `moved`, `workers`.
+ * different mushroom picked. The server rolls the reward (golden one in four,
+ * one in ten for a turkey in the turkey hunt: 3 or 8 Shiny). Refusals: 400 `badRequest`, `moved`, `workers`.
  */
 export const pickMushroom = (
   id: number,
