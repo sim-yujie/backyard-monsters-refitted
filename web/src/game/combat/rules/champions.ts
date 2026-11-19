@@ -60,13 +60,13 @@ export const CHAMPION_RETARGET_FRAMES = 100;
 export const MELEE_BUILDING_REACH = 10;
 
 /**
- * The champions that hit a building from beside it rather than from their
- * stat `range` (patch 7.10, owner 19 Nov 2026, player arC's report: Gorgo hit
- * his Town Hall from about four tiles off). Their range stays theirs against
- * monsters (`fight`, the cage) and for Korath's quake. Drull, Korath and
- * Krallen are melee too and await the owner's call.
+ * The melee champions, which hit a building from beside it rather than from
+ * their stat `range` (patch 7.10, owner 19 Nov 2026, after player arC's
+ * report that Gorgo hit his Town Hall from about four tiles off): Gorgo,
+ * Drull, Korath and Krallen. Their range stays theirs against monsters
+ * (`fight`, the cage) and for Korath's quake. Fomor, ranged, keeps his.
  */
-export const MELEE_REACH_CHAMPIONS: readonly string[] = [GORGO_ID];
+export const MELEE_REACH_CHAMPIONS: readonly string[] = [GORGO_ID, DRULL_ID, KORATH_ID, KRALLEN_ID];
 
 /** A champion's or monster's reach to a building, given its stat range. */
 export const buildingReachOf = (id: string, champion: boolean, range: number): number =>
