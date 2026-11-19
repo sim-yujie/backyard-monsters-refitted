@@ -103,12 +103,14 @@ describe("alliance bonuses", () => {
     expect(nextStepPrice(AllianceType.MIDAS, 1)).toBe(20);
     expect(nextStepPrice(AllianceType.MIDAS, 2)).toBe(40);
     expect(nextStepPrice(AllianceType.CONQUEST, 0)).toBe(40);
-    expect(nextStepPrice(AllianceType.FORTRESS, 9)).toBe(400);
+    expect(nextStepPrice(AllianceType.MIDAS, 4)).toBe(120);
+    expect(nextStepPrice(AllianceType.CONQUEST, 4)).toBe(240);
+    expect(nextStepPrice(AllianceType.FORTRESS, 9)).toBe(800);
     expect(nextStepPrice(AllianceType.MIDAS, 10)).toBeNull();
     // A full constellation costs what it did with 5 steps of 2 stars.
-    expect(spentOn(AllianceType.MIDAS, 10)).toBe(600);
+    expect(spentOn(AllianceType.MIDAS, 10)).toBe(1080);
     expect(spentOn(AllianceType.MIDAS, 4)).toBe(120);
-    expect(spentOn(AllianceType.FORTRESS, 10)).toBe(2400);
+    expect(spentOn(AllianceType.FORTRESS, 10)).toBe(4320);
   });
 
   test("percent helpers", () => {

@@ -71,9 +71,10 @@ describe("alliance goal rules", () => {
     expect(players(AllianceType.FORTRESS)).toEqual([12, 32, 60]);
   });
 
-  test("8 players finishing 5 Medium goals a week fill the whole Midas sky in about 13 weeks", () => {
+  test("the whole Midas sky takes about 24 weeks of 5 Medium goals and 13 of 5 Hard (owner, 19 Nov 2026)", () => {
     const sky = 4 * STEP_PRICES.reduce((sum, p) => sum + p, 0);
-    expect(sky).toBe(2400);
-    expect(Math.ceil(sky / (5 * goalPoints(AllianceType.MIDAS, "medium")))).toBe(13);
+    expect(sky).toBe(4320);
+    expect(Math.ceil(sky / (5 * goalPoints(AllianceType.MIDAS, "medium")))).toBe(24);
+    expect(Math.ceil(sky / (5 * goalPoints(AllianceType.MIDAS, "hard")))).toBe(13);
   });
 });
