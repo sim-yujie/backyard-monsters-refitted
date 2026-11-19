@@ -1108,14 +1108,6 @@
   padding: var(--space-1) 0 0 20px;
 }
 
-.mr2-cell__achievements {
-  padding: var(--space-2) 0 0 20px;
-}
-
-.mr2-cell__achievements[hidden] {
-  display: none;
-}
-
 @media (max-width: 620px) {
   .map-dock--right.mr2-cell-dock {
     width: auto;

@@ -159,28 +159,49 @@ describe("another player's yard", () => {
     expect(hidden.classList.contains("is-photo")).toBe(false);
   });
 
-  it("keeps empire value and alliance behind More about this yard", () => {
+  it("shows no empire value on another player's main yard; only the dev-only alliance id behind More (owner, 19 Nov)", () => {
     const { host } = open(player({ aid: 12 }));
     const more = host.querySelector<HTMLDetailsElement>(".mr2-cell__more")!;
     expect(more.hidden).toBe(false);
     expect(more.open).toBe(false);
-    expect([...more.querySelectorAll("dt")].map((node) => node.textContent)).toEqual([
-      "Empire value",
-      "Alliance",
-    ]);
+    expect([...more.querySelectorAll("dt")].map((node) => node.textContent)).toEqual(["Alliance"]);
+    expect(host.textContent).not.toContain("Empire value");
+    expect(host.textContent).not.toContain("123,456");
     expect(host.textContent).not.toContain("user 77");
     expect(host.textContent).not.toContain("/avatars/");
   });
 
-  it("shows a player no alliance id, which names nothing (#150)", () => {
+  it("drops More about this yard on another player's main yard, which has nothing left in it (#150, owner 19 Nov)", () => {
     setDevDetails(false);
     try {
       const { host } = open(player({ aid: 12 }));
-      const more = host.querySelector<HTMLDetailsElement>(".mr2-cell__more")!;
-      expect([...more.querySelectorAll("dt")].map((node) => node.textContent)).toEqual([
-        "Empire value",
-      ]);
+      expect(shown(host, ".mr2-cell__more")).toHaveLength(0);
       expect(host.textContent).not.toContain("#12");
+      expect(host.textContent).not.toContain("Empire value");
+    } finally {
+      setDevDetails(null);
+    }
+  });
+
+  it("keeps empire value and height on another player's outpost", () => {
+    setDevDetails(false);
+    try {
+      const { host } = open(player({ b: 3 }));
+      const more = host.querySelector<HTMLDetailsElement>(".mr2-cell__more")!;
+      expect(more.hidden).toBe(false);
+      expect([...more.querySelectorAll("dt")].map((node) => node.textContent)).toEqual(["Empire value", "Height"]);
+    } finally {
+      setDevDetails(null);
+    }
+  });
+
+  it("keeps empire value on the player's own yard", () => {
+    setDevDetails(false);
+    try {
+      const { host } = open(player({ mine: 1 }));
+      const more = host.querySelector<HTMLDetailsElement>(".mr2-cell__more")!;
+      expect(more.hidden).toBe(false);
+      expect([...more.querySelectorAll("dt")].map((node) => node.textContent)).toContain("Empire value");
     } finally {
       setDevDetails(null);
     }
@@ -231,67 +252,16 @@ describe("the ground an outpost stands on", () => {
   });
 });
 
-describe("another player's achievements (#204)", () => {
-  const line = () =>
-    vi.fn((payload: PlayerCell) => {
-      const node = document.createElement("button");
-      node.className = "ach-line";
-      node.textContent = `Achievements of ${payload.n}`;
-      return node;
-    });
-
-  const expand = (host: HTMLElement): void => {
-    const more = host.querySelector<HTMLDetailsElement>(".mr2-cell__more")!;
-    more.open = true;
-    more.dispatchEvent(new Event("toggle"));
-  };
-
-  it("makes the line only once More about this yard is open, under the facts", () => {
-    const achievementsLine = line();
-    const { host } = open(player(), { achievementsLine });
-    expect(achievementsLine).not.toHaveBeenCalled();
-    expand(host);
-    expect(achievementsLine).toHaveBeenCalledTimes(1);
-    expect(achievementsLine.mock.calls[0]![0].uid).toBe(77);
-    const slot = host.querySelector(".mr2-cell__more .mr2-cell__achievements")!;
-    expect(slot.previousElementSibling?.matches("dl")).toBe(true);
-    expect(text(host, ".ach-line")).toBe("Achievements of Bramblefoot");
-  });
-
-  it("keeps the same player's line through a refresh, and makes a new one for the next", () => {
-    const achievementsLine = line();
-    const { host, panel } = open(player(), { achievementsLine });
-    expand(host);
-    const first = host.querySelector(".ach-line");
-    panel.update(player({ dm: 20 }));
-    expect(host.querySelector(".ach-line")).toBe(first);
-    expect(achievementsLine).toHaveBeenCalledTimes(1);
-    // Another cell closes the section; its line waits for it to open again.
-    panel.show({ col: 1, row: 2 }, player({ uid: 88, n: "Thornback" }));
-    expect(achievementsLine).toHaveBeenCalledTimes(1);
-    expand(host);
-    expect(text(host, ".ach-line")).toBe("Achievements of Thornback");
-  });
-
-  it("shows none on the player's own yard, a camp, or without the option", () => {
-    const achievementsLine = line();
-    const own = open(player({ mine: 1 }), { achievementsLine });
-    expand(own.host);
-    expect(own.host.querySelector(".ach-line")).toBeNull();
-    const wild = open(camp(), { achievementsLine });
-    expect(wild.host.querySelector(".ach-line")).toBeNull();
-    expect(achievementsLine).not.toHaveBeenCalled();
-    const plain = open(player());
-    expand(plain.host);
-    expect(plain.host.querySelector(".ach-line")).toBeNull();
-  });
-
-  it("drops the line when the shown cell stops being another player's", () => {
-    const achievementsLine = line();
-    const { host, panel } = open(player(), { achievementsLine });
-    expand(host);
-    panel.show({ col: 3, row: 4 }, camp());
-    expect(host.querySelector(".ach-line")).toBeNull();
+describe("another player's achievements (owner, 19 Nov: removed)", () => {
+  it("shows no achievements line on any player's yard, open or closed", () => {
+    for (const cell of [player(), player({ b: 3 }), player({ mine: 1 })]) {
+      const { host } = open(cell);
+      const more = host.querySelector<HTMLDetailsElement>(".mr2-cell__more")!;
+      more.open = true;
+      more.dispatchEvent(new Event("toggle"));
+      expect(host.querySelector(".ach-line, .mr2-cell__achievements")).toBeNull();
+      expect(host.textContent).not.toContain("Achievements");
+    }
   });
 });
 
