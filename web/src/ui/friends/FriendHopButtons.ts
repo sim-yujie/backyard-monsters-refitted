@@ -1,5 +1,6 @@
+import { classicLook } from "@/game/classicLook";
 import type { HopDirection, HopView } from "@/game/friends/friendHop";
-import { icon } from "@/ui/icons";
+import { gameIcon, gameIconUrl, type GameIconName } from "@/ui/gameIcon";
 import { dockButton } from "@/ui/yard/YardDock";
 import { followMapColumn } from "./FriendsButton";
 import { make } from "./rows";
@@ -36,6 +37,32 @@ export const FRIEND_HOP_TEXT = {
 
 /** The badge caps at this. */
 const BADGE_MAX = 99;
+
+/**
+ * The painted arrows (owner, 18 Nov 2026: painted, not line icons;
+ * `ui/gameIcon.ts`), golden in Modern and in the softer Classic paint, chosen
+ * by the look the game loaded with.
+ */
+export const hopArt = (direction: HopDirection, classic: boolean = classicLook()): GameIconName =>
+  `friend${direction === 1 ? "next" : "prev"}${classic ? "classic" : ""}` as GameIconName;
+
+/** The arrow's size on the disc (`friend-hop.css`, `.friend-hop__art`), in CSS px. */
+export const HOP_ART_PX = 40;
+
+/** Files past the usual 64 px that these four ship, for 40 px on a 3x phone (120 px). */
+export const HOP_ART_LARGE_SIDES = [96, 128] as const;
+
+const hopPicture = (direction: HopDirection): HTMLImageElement => {
+  const name = hopArt(direction);
+  const image = gameIcon(name, { size: 32, decorative: true, className: "friend-hop__art" });
+  const url64 = gameIconUrl(name, 64);
+  image.srcset = [
+    image.srcset,
+    ...HOP_ART_LARGE_SIDES.map((side) => `${url64.replace(/-64\.webp$/, `-${side}.webp`)} ${side}w`),
+  ].join(", ");
+  image.sizes = `${HOP_ART_PX}px`;
+  return image;
+};
 
 export interface FriendHopOptions {
   /** Previous (-1) or Next (1); false when it did not go. */
@@ -95,7 +122,7 @@ export class FriendHopButtons {
     const { element } = dockButton(
       `friend-${name}`,
       FRIEND_HOP_TEXT[name],
-      icon(name, 29),
+      hopPicture(direction),
       () => {
         if (this.going || this.busy || element.disabled) return;
         this.going = true;

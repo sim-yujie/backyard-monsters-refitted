@@ -1,6 +1,8 @@
 // @vitest-environment jsdom
+import { existsSync, statSync } from "node:fs";
+import path from "node:path";
 import { describe, expect, it, vi } from "vitest";
-import { FriendHopButtons } from "./FriendHopButtons";
+import { FriendHopButtons, HOP_ART_LARGE_SIDES, hopArt } from "./FriendHopButtons";
 
 /** Prev and Next beside Map on a friend's yard (beta 8). */
 
@@ -72,5 +74,27 @@ describe("FriendHopButtons", () => {
     parts(hop).prev.click();
     expect(onHop).toHaveBeenCalledWith(-1);
     expect(parts(hop).prev.disabled).toBe(false);
+  });
+
+  it("shows the painted golden arrows, the Classic paint in the Classic look, sharp on a 3x phone", () => {
+    expect(hopArt(-1, false)).toBe("friendprev");
+    expect(hopArt(1, false)).toBe("friendnext");
+    expect(hopArt(-1, true)).toBe("friendprevclassic");
+    expect(hopArt(1, true)).toBe("friendnextclassic");
+    const hop = new FriendHopButtons({ onHop: () => true });
+    const art = hop.element.querySelector<HTMLImageElement>(".friend-hop__button--next .friend-hop__art")!;
+    expect(art.getAttribute("src")).toMatch(/ui\/icons\/friendnext-32\.webp$/);
+    expect(art.srcset).toMatch(/friendnext-64\.webp 64w, .*friendnext-96\.webp 96w, .*friendnext-128\.webp 128w$/);
+    expect(art.sizes).toBe("40px");
+    expect(art.getAttribute("aria-hidden")).toBe("true");
+    expect(hop.element.querySelector("svg")).toBeNull();
+    const icons = path.resolve(__dirname, "../../../public/ui/icons");
+    for (const name of ["friendprev", "friendnext", "friendprevclassic", "friendnextclassic"]) {
+      for (const side of HOP_ART_LARGE_SIDES) {
+        const file = path.join(icons, `${name}-${side}.webp`);
+        expect(existsSync(file), file).toBe(true);
+        expect(statSync(file).size).toBeLessThan(12_000);
+      }
+    }
   });
 });

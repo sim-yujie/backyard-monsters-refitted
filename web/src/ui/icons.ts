@@ -21,9 +21,6 @@ const ICONS = {
   ],
   map: ["M9 4L3.5 6v14L9 18l6 2 5.5-2V4L15 6 9 4z", "M9 4v14", "M15 6v14"],
   home: ["M3.5 11.5L12 4.5l8.5 7", "M6 10v10h12V10", "M10 20v-5.5h4V20"],
-  // A friend's yard's Prev and Next (beta 8, `FriendHopButtons.ts`).
-  prev: ["M19.5 12h-15", "M10.5 5.5L4 12l6.5 6.5"],
-  next: ["M4.5 12h15", "M13.5 5.5L20 12l-6.5 6.5"],
   yards: ["M5 21V4", "M5 4.5h12l-2.5 4 2.5 4H5"],
   attack: [
     "M14.5 17.5L3 6V3h3l11.5 11.5",

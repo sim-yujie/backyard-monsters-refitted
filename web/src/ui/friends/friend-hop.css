@@ -26,8 +26,23 @@
   min-width: 68px;
 }
 
+/* The painted arrow (`hopArt`, owner 18 Nov 2026): as big as the disc
+   allows, 40px on the 68px disc and smaller with the phone's discs, with
+   the dock pictures' soft shadow (as Events' calendar, `events.css`). */
+.friend-hop__art {
+  width: 58%;
+  height: auto;
+  aspect-ratio: 1;
+  object-fit: contain;
+  filter: drop-shadow(0 2px 3px var(--colour-art-shadow));
+}
+
 /* An end of the list: the disc stays, greyed out by the dock's own
-   disabled look (`yard-hud.css`). */
+   disabled look (`yard-hud.css`), and the golden arrow turns grey so it
+   does not still look pressable. */
+.friend-hop__button:disabled .friend-hop__art {
+  filter: grayscale(1);
+}
 
 /* Amber, as the Friends button's count of friends who can use help. */
 .friend-hop .yard-dock__badge.friend-hop__badge {
