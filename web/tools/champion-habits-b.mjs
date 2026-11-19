@@ -34,7 +34,7 @@
 import { readFileSync, readdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 
-import { BASELINE_RATE, BRAIN_RATE } from "../src/game/combat/rules/brain.ts";
+import { BRAIN_RATE } from "../src/game/combat/rules/brain.ts";
 import {
   FOMOR_JUDGE,
   HABIT_RULES,
