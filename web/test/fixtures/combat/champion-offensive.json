@@ -45,7 +45,7 @@
   },
   "expected": {
     "ticks": 9800,
-    "damage": 7.655313283624238,
+    "damage": 6.177657472142428,
     "destroyed": null,
     "attackloot": {
       "r1": 0,
@@ -60,62 +60,62 @@
       "r4": 0
     },
     "firedTraps": 0,
-    "destroyedBuildings": 23,
+    "destroyedBuildings": 20,
     "creepsFlung": 40,
     "creepsKilled": 40,
-    "championHp": 93579.35796106074,
-    "damagedBuildings": 24,
-    "rngDraws": 2178,
+    "championHp": 70404.01047625409,
+    "damagedBuildings": 21,
+    "rngDraws": 1573,
     "checkpoints": [
       {
         "tick": 800,
-        "digest": "4229ef78648e30b6"
+        "digest": "764871595d92d1bf"
       },
       {
         "tick": 1600,
-        "digest": "8e177ffa73a72914"
+        "digest": "e56858ea86936270"
       },
       {
         "tick": 2400,
-        "digest": "33e2f33658abefd8"
+        "digest": "54a7298502a5d20b"
       },
       {
         "tick": 3200,
-        "digest": "2b8d0dfd3535a7ab"
+        "digest": "56168b112d37c69b"
       },
       {
         "tick": 4000,
-        "digest": "68d8494cad66d55a"
+        "digest": "5dccf5818c4f5cc7"
       },
       {
         "tick": 4800,
-        "digest": "24f10f104b33a936"
+        "digest": "2bce9ce11c9a8b8f"
       },
       {
         "tick": 5600,
-        "digest": "c03c5db41482fab2"
+        "digest": "1fab77e7c6bf6195"
       },
       {
         "tick": 6400,
-        "digest": "5adc2d540428733a"
+        "digest": "3ba0c32c1bf17856"
       },
       {
         "tick": 7200,
-        "digest": "8b918eddccded04f"
+        "digest": "adeebe39648e7067"
       },
       {
         "tick": 8000,
-        "digest": "d90cd7c09735b726"
+        "digest": "443dc8902de021e6"
       },
       {
         "tick": 8800,
-        "digest": "7a3d43536d7f155d"
+        "digest": "3495f8dc2c8bd44a"
       },
       {
         "tick": 9600,
-        "digest": "78e7b85825ac1d26"
+        "digest": "70f9f385853634cf"
       }
     ],
-    "digest": "61bb263cd239e0ee"
+    "digest": "6599382b177c1975"
   }
 }

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { championStat } from "./stats.js";
+import { championStat, monsterRange } from "./stats.js";
 import { createBattle } from "./engine.js";
 import { buildEngineYard, reachSquared, reachesBuilding, screenDistanceSquared } from "./yard.js";
 
@@ -10,7 +10,8 @@ import { buildEngineYard, reachSquared, reachesBuilding, screenDistanceSquared }
  * screen, so from the back it stood up to 64 units off the tiles at range 45,
  * hidden behind the funnel, while from the front it had to walk right up to
  * them. Since patch 7.9 reach is `range` yard units from the nearest tile on
- * every side (`reachSquared`).
+ * every side (`reachSquared`). Since patch 7.10 Gorgo himself and the other
+ * melee champions hit a building only from beside it (`meleeReach.test.ts`).
  */
 
 /** arC's Town Hall: level 4, 130 x 130, top corner drawn at screen (0, -65). */
@@ -41,26 +42,28 @@ describe("Gorgo behind arC's Town Hall (patch 7.9)", () => {
     expect(screenDistanceSquared(front.x, front.y, anchorX, anchorY)).toBeGreaterThan(45 * 45);
   });
 
-  it("stops Gorgo L2 the same 45 units off the tiles walking in from behind or in front", () => {
-    const step = (Math.SQRT2 * championStat("G1", "speed", 2)) / 4;
+  it("stops a Rezghul, ranged, the same 200 units off the tiles walking in from behind or in front", () => {
+    // The melee champions walk up to the building since patch 7.10
+    // (meleeReach.test.ts); a ranged monster keeps patch 7.9's reach.
+    expect(monsterRange("C19", 1)).toBe(200);
     for (const [side, x, y] of [
-      ["behind", -400, -400],
-      ["in front", 400, 400],
+      ["behind", -500, -500],
+      ["in front", 500, 500],
     ] as const) {
       const yard = townHall();
       const building = yard.buildings[0]!;
-      const battle = createBattle(yard, { seed: 3 });
-      battle.apply({ kind: "fling", t: 0, x, y, r: 100, monsters: {}, champion: { t: 1, l: 2 } });
+      const battle = createBattle(yard, { seed: 3, levels: { C19: 1 } });
+      battle.apply({ kind: "fling", t: 0, x, y, r: 100, monsters: { C19: 1 } });
       let stoodOff = -1;
-      for (let tick = 0; tick < 6000 && stoodOff < 0; tick += 1) {
+      for (let tick = 0; tick < 8000 && stoodOff < 0; tick += 1) {
         battle.step();
-        const gorgo = battle.creeps()[0]!;
-        if (gorgo.state === "attacking" && gorgo.targetBuilding === building.id) {
-          stoodOff = Math.sqrt(reachSquared(gorgo.ix, gorgo.iy, building));
+        const rezghul = battle.creeps()[0]!;
+        if (rezghul.state === "attacking" && rezghul.targetBuilding === building.id) {
+          stoodOff = Math.sqrt(reachSquared(rezghul.ix, rezghul.iy, building));
         }
       }
-      expect(stoodOff, side).toBeLessThanOrEqual(45);
-      expect(stoodOff, side).toBeGreaterThan(45 - 2 * step);
+      expect(stoodOff, side).toBeLessThanOrEqual(200);
+      expect(stoodOff, side).toBeGreaterThan(195);
     }
   });
 });
