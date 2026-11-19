@@ -288,6 +288,58 @@ describe.skipIf(!enabled)("alliance progress", () => {
     expect(queued()).toBe(start + 3);
   });
 
+  test("stars 5-10 cost double the launch price; stars already lit stay (19 Nov 2026)", async () => {
+    await sql(`UPDATE bym.alliance SET points = 1000, stars = '{"wormzer": 4}'::jsonb, points_spent = 120 WHERE id = ?`, [
+      ALLIANCE,
+    ]);
+    const lit = await progress.lightStar(em(), LEADER, "wormzer", NOW);
+    expect(lit.price).toBe(120);
+    const after = await alliance();
+    expect(Number(after.points_spent)).toBe(240);
+    expect(after.stars).toEqual({ wormzer: 5 });
+  });
+
+  test("Hold outposts cannot be set at a target the alliance already holds (19 Nov 2026)", async () => {
+    const outposts = async (n: number) => {
+      for (let i = 0; i < n; i++) {
+        await sql(
+          `INSERT INTO bym.save (userid, saveuserid, baseid, type, points, basevalue, createtime, name, credits, attacks,
+                                 takeover_date, created_at, lastupdate_at, worldid, mapversion, mr2upgraded)
+           VALUES (?, ?, ?, 'outpost', 0, '0', 0, 'o', 0, '[]', now(), now(), now(), 'w', 2, true)`,
+          [MEMBER, MEMBER, String(BASE * 10 + 100 + i)]
+        );
+      }
+    };
+    // Midas Easy is 90 outposts.
+    await outposts(90);
+    expect(await progress.heldOutposts(em(), ALLIANCE)).toBe(90);
+    await expect(progress.setGoal(em(), LEADER, "hold", "easy", NOW)).rejects.toThrow("already holds 90 outposts");
+    // Medium (240) is still to reach: allowed.
+    await progress.setGoal(em(), LEADER, "hold", "medium", NOW);
+    // Removed and set again, it still cannot drop to a target already met.
+    const [goal] = await sql<{ id: number }>(`SELECT id FROM bym.alliance_goal WHERE alliance_id = ? AND kind = 'hold'`, [
+      ALLIANCE,
+    ]);
+    await progress.removeGoal(em(), LEADER, Number(goal!.id), NOW);
+    // (revamp's rule, a kind removed this week cannot be set again, refuses it too.)
+    await expect(progress.setGoal(em(), LEADER, "hold", "easy", NOW)).rejects.toThrow(/already holds|used this week/);
+    await sql(`DELETE FROM bym.save WHERE saveuserid = ?`, [MEMBER]);
+  });
+
+  test("a takeover counts for the goal, except one taken from an alliance mate (19 Nov 2026)", async () => {
+    const queued = () => progress.pendingAllianceEvents(LEADER)?.takeover ?? 0;
+    const start = queued();
+    // From a mate: nothing.
+    expect(await progress.noteTakeover(em(), LEADER, MEMBER)).toBe(false);
+    expect(queued()).toBe(start);
+    // From an outsider, and a wild camp (no previous owner): each counts.
+    expect(await progress.noteTakeover(em(), LEADER, OUTSIDER)).toBe(true);
+    expect(await progress.noteTakeover(em(), LEADER, undefined)).toBe(true);
+    expect(queued()).toBe(start + 2);
+    // A taker in no alliance counts as before (their goal-less events are dropped at the flush).
+    expect(await progress.noteTakeover(em(), OUTSIDER, MEMBER)).toBe(true);
+  });
+
   test("goal progress noted in a rolled-back transaction is dropped; a committed one is queued", async () => {
     const tribes = () => progress.pendingAllianceEvents(MEMBER)?.tribeDestroy ?? 0;
     const start = tribes();

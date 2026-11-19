@@ -15,7 +15,8 @@ const DAY = 24 * 3600 * 1000;
 
 const state = (over: Partial<TypeSwitchState> = {}): TypeSwitchState => ({
   type: AllianceType.MIDAS,
-  points: 100,
+  // Earned 1,300 in all, 1,200 of them spent on stars: 100 unspent.
+  points: 1300,
   points_spent: 1200,
   type_changed_at: null,
   members: 10,
@@ -36,12 +37,29 @@ describe("alliance types", () => {
   });
 
   test("down keeps half the spent points and all unspent, then converts", () => {
-    const fortress = state({ type: AllianceType.FORTRESS, points: 400, points_spent: 800 });
+    // Earned 1,200, spent 800: 400 unspent.
+    const fortress = state({ type: AllianceType.FORTRESS, points: 1200, points_spent: 800 });
 
     // (400 + 800 / 2) x 15 / 60 = 200
     expect(pointsAfterSwitch(fortress, AllianceType.MIDAS)).toBe(200);
     // (400 + 400) x 30 / 60 = 400
     expect(pointsAfterSwitch(fortress, AllianceType.CONQUEST)).toBe(400);
+  });
+
+  test("spent points count once: points is the total earned, not what is left (19 Nov 2026)", () => {
+    // Bite Club on 19 Nov 2026: Conquest, earned 150, spent 80 on two stars.
+    const conquest = state({ type: AllianceType.CONQUEST, points: 150, points_spent: 80 });
+
+    // Up: all 150 x 60 / 30 (was (150 + 80) x 2 = 460).
+    expect(pointsAfterSwitch(conquest, AllianceType.FORTRESS)).toBe(300);
+    // Down: (70 + 80 / 2) x 15 / 30 = 55 (was (150 + 40) / 2 = 95).
+    expect(pointsAfterSwitch(conquest, AllianceType.MIDAS)).toBe(55);
+    // Up then down gives back no more than was earned.
+    const up = pointsAfterSwitch(conquest, AllianceType.FORTRESS);
+    const back = pointsAfterSwitch(state({ type: AllianceType.FORTRESS, points: up, points_spent: 0 }), AllianceType.CONQUEST);
+    expect(back).toBe(150);
+    // Staying shows the unspent points.
+    expect(quoteTypeSwitch({ ...conquest }, AllianceType.CONQUEST, NOW).points_after).toBe(70);
   });
 
   test("an up switch is free at once, even right after another switch", () => {

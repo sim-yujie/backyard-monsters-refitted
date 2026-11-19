@@ -1,7 +1,7 @@
 import { YardStarterKitSchema } from "../../schemas/YardSchemas.js";
 import type { AchievementEvents } from "../../services/achievements/evaluate.js";
 import { claimWelcome, welcomeState } from "../../services/events/mr2Welcome.js";
-import { FREE_WELCOME_KIT, planStarterKit } from "../../services/yard/starterKit.js";
+import { FREE_WELCOME_KIT, isKitRebuild, planStarterKit } from "../../services/yard/starterKit.js";
 import { yardRefusedErr } from "../../services/yard/yardErrors.js";
 import { yardKindOf } from "../../services/yardplanner/costs.js";
 import { defineYardAction } from "./yardAction.js";
@@ -38,9 +38,12 @@ export const yardStarterKitAction = defineYardAction({
     if (body.free && !free) {
       throw yardRefusedErr("welcomeUsed", "The free Regular Starter Kit is no longer available.");
     }
+    // Read before the kit replaces the buildings: only a wrecked or empty outpost is a rebuild.
+    const rebuild = isKitRebuild(save);
     const plan = planStarterKit(save, body, now, free, bonuses?.kitCost ?? 0);
-    // Conquest's "Rebuild outposts with Starter Kits" goal (design v5 §16).
-    if (yardKindOf(save) === "outpost") noteAllianceEvents(user.userid, { kitRebuild: 1 });
+    // Conquest's "Rebuild outposts with Starter Kits" goal (design v5 §16):
+    // real rebuilds only, never re-kitting a standing outpost (19 Nov 2026).
+    if (rebuild) noteAllianceEvents(user.userid, { kitRebuild: 1 });
     return { ...plan, achievementEvents: KIT_BOUGHT };
   },
   outposts: "allow",

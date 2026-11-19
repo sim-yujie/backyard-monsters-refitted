@@ -3,6 +3,7 @@ import { mapByPercent } from "../alliance/allianceBonuses.js";
 import { STARTER_KITS, type KitBuilding, type StarterKit } from "../../game-data/starterKits.js";
 import type { BuildingData, BuildingDataMap, BuildingHealthData } from "../../types/BuildingData.js";
 import type { JsonObject } from "../../types/JsonObject.js";
+import { TAKEOVER_DAMAGE } from "../maproom/v2/takeoverRules.js";
 import { queuedProduction } from "../monsters/transferRules.js";
 import { yardKindOf } from "../yardplanner/costs.js";
 import { readBunker } from "./bunker.js";
@@ -91,6 +92,23 @@ export interface StarterKitSave {
   resources?: JsonObject | null;
   academy?: JsonObject | null;
 }
+
+/**
+ * Whether a kit on this outpost is a real rebuild, for Conquest's "Rebuild
+ * outposts with Starter Kits" goal (owner, 19 Nov 2026): the outpost had
+ * nothing standing but its core (a camp just taken over), or it was destroyed
+ * (`damage` at the takeover line, `TAKEOVER_DAMAGE`, as a player's outpost is
+ * when it is taken, or after an attack wrecked it). Re-kitting a standing
+ * outpost does not count. The kit itself heals the yard, so the same outpost
+ * counts again only after it is wrecked again. Read before the kit lands.
+ */
+export const isKitRebuild = (save: StarterKitSave & { damage?: number | string | null }): boolean => {
+  if (yardKindOf(save) !== "outpost") return false;
+  if (Number(save.damage ?? 0) >= TAKEOVER_DAMAGE) return true;
+  return !Object.values(save.buildingdata ?? {}).some(
+    (building) => building && Number(building.t) !== OUTPOST_CORE_TYPE
+  );
+};
 
 /** `report` of `starterkit`. */
 export interface StarterKitReport {
