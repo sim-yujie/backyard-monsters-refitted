@@ -105,17 +105,6 @@
   color: var(--colour-accent);
 }
 
-.profile__stat-icon .ach-badge {
-  zoom: 0.5;
-}
-
-/* The painted medal is 60px, so half was still 30px beside the others' 24px. */
-.profile__stat-icon .ach-badge--art {
-  zoom: 1;
-  width: 24px;
-  height: 24px;
-}
-
 .profile__stat-value {
   white-space: nowrap;
   overflow: hidden;

@@ -2,7 +2,6 @@ import * as profileApi from "@/api/profile";
 import type { Profile } from "@/api/profile";
 import { recordOwnProfile } from "@/api/ownPhoto";
 import { playerPicture, type PlayerPicture } from "@/game/playerPicture";
-import { achievementBadge } from "@/ui/achievements/badge";
 import { formatAmount } from "@/ui/format";
 import { gameIcon, type GameIconName } from "@/ui/gameIcon";
 import { Popup } from "@/ui/Popup";
@@ -16,7 +15,6 @@ import {
 } from "./OwnProfileControls";
 import { friendMarkOf } from "@/game/friends/friendMarks";
 import { friendBadge } from "@/ui/friends/friendBadge";
-import "@/ui/achievements/achievements.css";
 import "./profile.css";
 
 /**
@@ -114,11 +112,7 @@ export const statsList = (profile: Profile): HTMLElement => {
   // The leaderboard's score (beta 8): the main yard's points plus the outposts'.
   const empirePoints = stats.empirePoints + (stats.outpostPoints ?? 0);
   list.append(stat("Empire points", statIcon("empire"), formatAmount(empirePoints)));
-  if (stats.achievements) {
-    list.append(
-      stat("Achievements", achievementBadge(1, "gold", true), `${stats.achievements.earned}/${stats.achievements.total}`),
-    );
-  }
+  // No achievements count here (owner, 19 Nov): the Achievements window shows it.
   list.append(stat("Friends", statIcon("friends"), formatAmount(stats.friends)));
   const joined = joinedText(stats.joined);
   if (joined) list.append(stat("Joined", statIcon("time"), joined));
