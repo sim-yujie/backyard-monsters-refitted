@@ -1,25 +1,16 @@
-import {
-  achievementsApi,
-  type AchievementsApi,
-  type AchievementView,
-  type PlayerAchievements,
-  type PublicAchievementView,
-} from "@/api/achievements";
+import { achievementsApi, type AchievementsApi, type AchievementView } from "@/api/achievements";
 import {
   badgeTier,
   earnedGroup,
   earnedText,
   FOOTER_TEXT,
   isSecret,
-  notEarnedGroup,
-  playerTitle,
   progressRatio,
   progressText,
   rewardText,
   summaryText,
   toDoGroup,
 } from "@/game/achievements/achievements";
-import { ApiError } from "@/api/http";
 import { centreWindow, type CentreWindow } from "@/ui/centreWindow";
 import { Panel } from "@/ui/Panel";
 import { resourceAmount } from "@/ui/resourceIcon";
@@ -30,17 +21,12 @@ import "./achievements.css";
  * The achievements screen (`docs/design/achievements.md` §10.1, issue #204):
  * a docked panel like the mailbox, a full-height sheet on a phone.
  *
- * - The player's own (`open`): "7 of 16 earned · 85 Shiny earned", then
- *   **To do**, closest to done first, each with a bar, "Town Hall 4 / 5" and
- *   "+10 Shiny"; then **Earned**, newest first, each with its date.
- * - Someone else's (`openPlayer`, §10.3): "Name's achievements", read-only,
- *   with no progress and no Shiny: **Earned** with dates, then **Not earned
- *   yet** in Flash's order.
- *
- * Both end in the §5.3 line about the six left out. Every open fetches
- * fresh, except another player's list opened with an answer already in hand
- * (the map's line, under a minute old), which shows that at once; an answer
- * for a view the player has since left is dropped.
+ * The player's own list only (another player's read-only view was removed,
+ * owner 19 Nov 2026): "7 of 16 earned · 85 Shiny earned", then **To do**,
+ * closest to done first, each with a bar, "Town Hall 4 / 5" and "+10 Shiny";
+ * then **Earned**, newest first, each with its date. It ends in the §5.3 line
+ * about the six left out. Every open fetches fresh; an answer that lands
+ * after the screen closed is dropped.
  */
 
 export interface AchievementsScreenOptions {
@@ -50,19 +36,7 @@ export interface AchievementsScreenOptions {
   readonly onClose?: (hadFocus: boolean) => void;
 }
 
-/** Who the screen is showing: the player, or another player by id. */
-type Subject =
-  | { readonly kind: "own" }
-  | {
-      readonly kind: "player";
-      readonly userid: number;
-      readonly name: string | null;
-      /** An answer already in hand, shown instead of asking. */
-      readonly known: PlayerAchievements | null;
-    };
-
 export const LOAD_FAILED = "Could not load achievements. Try again.";
-export const NOT_FOUND = "That player's achievements could not be found.";
 export const ALL_DONE = "Every achievement here is earned.";
 export const NONE_YET = "None yet.";
 
@@ -77,9 +51,6 @@ const make = <K extends keyof HTMLElementTagNameMap>(
   return node;
 };
 
-const isNotFound = (error: unknown): boolean =>
-  error instanceof ApiError && (error.status === 404 || error.serverStatus === 404);
-
 export class AchievementsScreen {
   readonly element: HTMLElement;
 
@@ -89,7 +60,6 @@ export class AchievementsScreen {
   private readonly summary: HTMLElement;
   private readonly status: HTMLElement;
   private readonly groups: HTMLElement;
-  private subject: Subject = { kind: "own" };
   private opened = false;
   private destroyed = false;
   /** Bumped by every fetch, so an answer for a view the player has left is dropped. */
@@ -132,11 +102,6 @@ export class AchievementsScreen {
     return this.opened;
   }
 
-  /** Whose list is showing: null for the player's own. */
-  get shownPlayer(): number | null {
-    return this.subject.kind === "player" ? this.subject.userid : null;
-  }
-
   mount(container: HTMLElement): this {
     container.append(this.element);
     return this;
@@ -144,16 +109,13 @@ export class AchievementsScreen {
 
   /** The player's own list, fetched fresh. */
   async open(): Promise<void> {
-    await this.show({ kind: "own" });
-  }
-
-  /**
-   * Another player's list, read-only (§10.3); `name` titles it until the
-   * answer names them. `known`, an answer already in hand, is shown without
-   * asking the server again.
-   */
-  async openPlayer(userid: number, name?: string | null, known?: PlayerAchievements): Promise<void> {
-    await this.show({ kind: "player", userid, name: name ?? null, known: known ?? null });
+    if (this.destroyed) return;
+    const wasOpen = this.opened;
+    this.opened = true;
+    this.element.hidden = false;
+    this.centre.opened();
+    if (!wasOpen) this.element.querySelector<HTMLElement>(".ach-screen__close")?.focus();
+    await this.refresh();
   }
 
   close(): void {
@@ -173,54 +135,23 @@ export class AchievementsScreen {
     this.element.remove();
   }
 
-  private async show(subject: Subject): Promise<void> {
-    if (this.destroyed) return;
-    const wasOpen = this.opened;
-    this.subject = subject;
-    this.opened = true;
-    this.element.hidden = false;
-    this.centre.opened();
-    this.element.dataset["view"] = subject.kind;
-    this.panel.setTitle(subject.kind === "own" ? "Achievements" : playerTitle(subject.name));
-    if (!wasOpen) this.element.querySelector<HTMLElement>(".ach-screen__close")?.focus();
-    await this.refresh();
-  }
-
   private async refresh(): Promise<void> {
     const generation = ++this.generation;
-    const subject = this.subject;
     this.summary.textContent = "";
     this.groups.replaceChildren();
     this.setStatus("Loading…");
     try {
-      if (subject.kind === "own") {
-        const state = await this.api.state();
-        if (this.destroyed || generation !== this.generation) return;
-        this.setStatus(null);
-        this.summary.textContent = summaryText(state.earned, state.total, state.shinyEarned);
-        this.groups.append(
-          this.group("To do", toDoGroup(state.achievements).map((entry) => this.toDoRow(entry)), ALL_DONE),
-          this.group("Earned", earnedGroup(state.achievements).map((entry) => this.earnedRow(entry)), NONE_YET),
-        );
-      } else {
-        const player = subject.known ?? (await this.api.player(subject.userid));
-        if (this.destroyed || generation !== this.generation) return;
-        this.setStatus(null);
-        this.panel.setTitle(playerTitle(player.name || subject.name));
-        this.summary.textContent = summaryText(player.earned, player.total);
-        this.groups.append(
-          this.group("Earned", earnedGroup(player.achievements).map((entry) => this.earnedRow(entry)), NONE_YET),
-          this.group(
-            "Not earned yet",
-            notEarnedGroup(player.achievements).map((entry) => this.lockedRow(entry)),
-            ALL_DONE,
-          ),
-        );
-      }
-    } catch (error) {
+      const state = await this.api.state();
       if (this.destroyed || generation !== this.generation) return;
-      if (subject.kind === "player" && isNotFound(error)) this.setStatus(NOT_FOUND);
-      else this.setStatus(LOAD_FAILED, () => void this.refresh());
+      this.setStatus(null);
+      this.summary.textContent = summaryText(state.earned, state.total, state.shinyEarned);
+      this.groups.append(
+        this.group("To do", toDoGroup(state.achievements).map((entry) => this.toDoRow(entry)), ALL_DONE),
+        this.group("Earned", earnedGroup(state.achievements).map((entry) => this.earnedRow(entry)), NONE_YET),
+      );
+    } catch {
+      if (this.destroyed || generation !== this.generation) return;
+      this.setStatus(LOAD_FAILED, () => void this.refresh());
     }
   }
 
@@ -251,7 +182,7 @@ export class AchievementsScreen {
   }
 
   /** The badge, name and description every row starts with. */
-  private row(entry: PublicAchievementView, shiny: number | undefined): { row: HTMLElement; text: HTMLElement } {
+  private row(entry: AchievementView, shiny: number | undefined): { row: HTMLElement; text: HTMLElement } {
     const earned = entry.status === "earned";
     const row = make("li", "ach-row");
     row.dataset["achievement"] = String(entry.id);
@@ -302,15 +233,9 @@ export class AchievementsScreen {
     return row;
   }
 
-  private earnedRow(entry: PublicAchievementView): HTMLElement {
-    const shiny = "shiny" in entry && typeof entry.shiny === "number" ? entry.shiny : undefined;
-    const { row } = this.row(entry, shiny);
+  private earnedRow(entry: AchievementView): HTMLElement {
+    const { row } = this.row(entry, entry.shiny);
     row.append(make("span", "ach-row__date", earnedText(entry.at)));
     return row;
-  }
-
-  /** Someone else's entry not earned yet: no progress, no Shiny. */
-  private lockedRow(entry: PublicAchievementView): HTMLElement {
-    return this.row(entry, undefined).row;
   }
 }

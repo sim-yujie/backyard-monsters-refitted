@@ -47,7 +47,7 @@ describe("achievementsApi", () => {
   });
 
   it("has one seen call, the pop-up's, not the screen's", () => {
-    expect(Object.keys(achievementsApi).sort()).toEqual(["player", "state"]);
+    expect(Object.keys(achievementsApi).sort()).toEqual(["state"]);
   });
 });
 
@@ -92,26 +92,5 @@ describe("takeOverCell", () => {
     await takeOverCell("1234", "shiny");
     expect(unlockInbox.size).toBe(0);
     expect(calls[0]?.body.get("shiny")).toBe("1");
-  });
-});
-
-describe("achievementsApi, another player", () => {
-
-  it("reads another player's list by id, keeping only the list's own fields", async () => {
-    stubFetch({ error: 0, userid: 77, name: "Bob", earned: 1, total: 16, achievements: [{ id: 1, status: "earned" }] });
-    expect(await achievementsApi.player(77)).toEqual({
-      userid: 77,
-      name: "Bob",
-      earned: 1,
-      total: 16,
-      achievements: [{ id: 1, status: "earned" }],
-    });
-    expect(calls[0]).toMatchObject({ method: "GET" });
-    expect(calls[0]?.url).toMatch(/\/bm\/achievements\/player\/77$/);
-  });
-
-  it("throws on a 404, for the screen to say so", async () => {
-    stubFetch({ error: "Player not found", reason: "notFound" }, 404);
-    await expect(achievementsApi.player(4040)).rejects.toMatchObject({ status: 404 });
   });
 });

@@ -1,4 +1,4 @@
-import type { AchievementsApi, PlayerAchievements } from "@/api/achievements";
+import type { AchievementsApi } from "@/api/achievements";
 import { setAchievementsOpener } from "@/game/achievements/achievementsView";
 import { AchievementsScreen } from "./AchievementsScreen";
 
@@ -7,8 +7,7 @@ import { AchievementsScreen } from "./AchievementsScreen";
  * screen, made and docked the first time it opens. It has no button of its
  * own: the Account menu's "Achievements" item opens the player's list on
  * every screen with the HUD, the unlock pop-up's View (WP6) does the same
- * through the opener the door registers while it lives, and the map's panels
- * (WP7) open another player's read-only list.
+ * through the opener the door registers while it lives.
  */
 
 export interface AchievementsDoorOptions {
@@ -42,14 +41,6 @@ export class AchievementsDoor {
     if (!screen) return;
     this.options.onOpen?.();
     await screen.open();
-  }
-
-  /** Another player's list, read-only; `known` is an answer already in hand, shown without asking again. */
-  async openPlayer(userid: number, name?: string | null, known?: PlayerAchievements): Promise<void> {
-    const screen = this.ensureScreen();
-    if (!screen) return;
-    this.options.onOpen?.();
-    await screen.openPlayer(userid, name, known);
   }
 
   close(): void {
