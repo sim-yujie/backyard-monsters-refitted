@@ -253,6 +253,12 @@ export interface ChampionSaveEntry {
   /** What its habits learned from: `n` attacks, and each Mode's count and usual scores. */
   hs?: unknown;
   /**
+   * How each habit is learned by the owner's pick B (19 Nov 2026): Active or
+   * Unproven, its evidence and the last attack's receipt (`habits.ts`
+   * `HabitLearning`); the server's alone to write.
+   */
+  hl?: unknown;
+  /**
    * Krallen's loot aura runs until then, unix seconds (the Krallen Hunt's 3x
    * mark, server `services/events/krallenReward.ts`); the server's alone to
    * write. She fights with it at any level (`KRALLEN_AURA_LEVEL`, 1).

@@ -149,6 +149,12 @@
   font-variant-numeric: tabular-nums;
 }
 
+/* The Modes block measures itself: a narrow window (iPad upright, 768 px)
+ * stacks Instincts over Habits, so habit names keep to one line. */
+.champion__part--modes {
+  container-type: inline-size;
+}
+
 .champion__mode {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -158,6 +164,12 @@
   border: 1px solid var(--colour-border);
   border-radius: 0 0 var(--radius-md) var(--radius-md);
   background: var(--colour-surface-base);
+}
+
+@container (max-width: 560px) {
+  .champion__mode {
+    grid-template-columns: minmax(0, 1fr);
+  }
 }
 
 .champion__trait-group {
@@ -194,11 +206,6 @@
   font-weight: 700;
 }
 
-.champion__trait--fresh .champion__trait-name {
-  font-weight: 400;
-  color: var(--colour-text-muted);
-}
-
 /* PLACEHOLDER until painted icons: a line shape in a sunken square. */
 .champion__trait-icon {
   display: grid;
@@ -230,22 +237,55 @@
   color: var(--colour-accent-text);
 }
 
-.champion__pips {
-  display: flex;
-  gap: 3px;
+/*
+ * A habit (owner's pick B, 19 Nov 2026): Active in a solid outline, Unproven
+ * in a dashed one, no fill, so the name stays the loudest thing in the row.
+ * Its badge sits on the right; after the attack that changed it, "Last
+ * attack · Learned / Faded" takes the badge's place, never beside it.
+ */
+.champion__trait--habit {
+  padding: 3px 6px;
+  border: 1px dashed var(--colour-text-muted);
+  border-radius: var(--radius-md);
 }
 
-.champion__pip {
-  width: 10px;
-  height: 10px;
-  border: 1px solid var(--colour-border-strong);
-  border-radius: 50%;
-  background: var(--colour-surface-sunken);
-}
-
-.champion__pip--on {
+.champion__trait--active {
+  border-style: solid;
   border-color: var(--colour-accent-line);
-  background: var(--colour-medal-gold);
+}
+
+.champion__trait--unproven .champion__trait-name {
+  color: var(--colour-text-muted);
+}
+
+.champion__habit-badge {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 0 4px;
+  font-size: var(--text-xs);
+  line-height: 1.25;
+  white-space: nowrap;
+  color: var(--colour-text-muted);
+}
+
+.champion__trait--active .champion__habit-badge {
+  color: var(--colour-accent-text);
+}
+
+.champion__habit-icon {
+  flex: none;
+}
+
+/* "Last attack" reads as a quiet caption to the change it names. */
+.champion__habit-when {
+  font-weight: 400;
+  color: var(--colour-text-muted);
+}
+
+.champion__habit-when::after {
+  content: " ·";
 }
 
 .champion__mode-foot {

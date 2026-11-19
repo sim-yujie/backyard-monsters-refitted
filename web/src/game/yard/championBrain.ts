@@ -217,7 +217,7 @@ export const championNature = (monsterId: string, level: number): string => {
 /** The Hybrid line with no instincts: it picks as the Flash champion. */
 export const naturalRow = (monsterId: string): TraitRow => ({
   icon: "none",
-  name: "None: a natural",
+  name: monsterId === FOMOR_ID ? "Nearest hurt ally" : "Nearest target",
   what:
     monsterId === FOMOR_ID
       ? "Follows the nearest hurt monster, as in Flash."
