@@ -15,10 +15,17 @@
 /* Never taller than the screen below the top bar (layout-rules); a phone's
    card fills its backdrop's padding instead (autoattack.css), and a phone on
    its side takes nearly the whole height (below). */
-.attack-end.auto-attack--prompt {
+.attack-end.auto-attack.auto-attack--prompt {
   min-height: 0;
-  max-height: min(84vh, 760px);
-  max-height: min(84dvh, 760px);
+  /* The yard's top bar is up to about 100 px tall. */
+  max-height: min(calc(100vh - 112px), 760px);
+  max-height: min(calc(100dvh - 112px), 760px);
+}
+
+@media (max-width: 620px) {
+  .attack-end.auto-attack.auto-attack--prompt {
+    max-height: 100%;
+  }
 }
 
 .attack-end.auto-attack--prompt > .panel__body {
@@ -486,36 +493,35 @@
   }
 }
 
-/* ── Wider screens: the army beside the moves ──────────────────────────── */
+/* ── Wider screens: the army beside the moves (or beside what is short) ── */
 
 @media (min-width: 621px) {
   .attack-end.auto-attack--prompt {
     width: min(92vw, 460px);
   }
 
-  .attack-end.auto-attack--prompt-moves {
-    width: min(calc(100vw - 2 * var(--space-4)), 780px);
-    max-width: min(calc(100vw - 2 * var(--space-4)), 780px);
+  .attack-end.auto-attack--prompt-two {
+    width: min(calc(100vw - 2 * var(--space-4)), 880px);
+    max-width: min(calc(100vw - 2 * var(--space-4)), 880px);
   }
 
   /* Each column scrolls on its own, so the moves start at the top. */
-  .attack-end.auto-attack--prompt-moves .auto-attack__scroll {
+  .attack-end.auto-attack--prompt-two .auto-attack__scroll {
     padding-right: 0;
     padding-bottom: 0;
     overflow: hidden;
   }
 
-  .auto-attack--prompt-moves .repeat-prompt__columns {
+  .auto-attack--prompt-two .repeat-prompt__columns {
     display: grid;
     flex: 1 1 auto;
-    grid-template-columns: minmax(0, 1fr) minmax(0, 1.25fr);
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1.45fr);
     grid-template-rows: minmax(0, 1fr);
     gap: var(--space-4);
     min-height: 0;
   }
 
-  .auto-attack--prompt-moves .repeat-prompt__army,
-  .auto-attack--prompt-moves .repeat-prompt__moves {
+  .auto-attack--prompt-two :is(.repeat-prompt__army, .repeat-prompt__moves, .repeat-prompt__refusal-part) {
     min-height: 0;
     padding-right: 6px;
     padding-bottom: var(--space-2);
@@ -523,21 +529,21 @@
     overscroll-behavior: contain;
   }
 
-  .auto-attack--prompt-moves .repeat-prompt__moves-part {
+  .auto-attack--prompt-two .repeat-prompt__moves-part {
     min-height: 0;
   }
 
-  .auto-attack--prompt-moves .repeat-prompt__moves-part > .repeat-prompt__heading {
+  .auto-attack--prompt-two .repeat-prompt__moves-part > .repeat-prompt__heading {
     flex: none;
   }
 
-  .auto-attack--prompt-moves .repeat-prompt__moves {
+  .auto-attack--prompt-two .repeat-prompt__moves {
     flex: 1 1 auto;
   }
 
   /* A move on one line: the yard it leaves, its monsters, the arrow, the yard in range. */
   .repeat-prompt__move {
-    grid-template-columns: 96px minmax(0, 1fr) auto auto;
+    grid-template-columns: max-content minmax(0, 1fr) auto max-content;
     grid-template-areas: "from cargo arrow to";
     padding-block: 6px;
   }
@@ -608,6 +614,11 @@
     font-size: var(--text-sm);
   }
 
+  /* The tiles say what they are; the room goes to the bombs' row. */
+  .repeat-prompt__monsters > .repeat-prompt__heading {
+    display: none;
+  }
+
   .repeat-prompt__heading .game-icon {
     width: 20px;
     height: 20px;
@@ -620,7 +631,7 @@
 
   .auto-attack--prompt .repeat-prompt__army .attack-window__art {
     width: 40px;
-    height: 30px;
+    height: 28px;
   }
 
   .auto-attack--prompt .repeat-prompt__army .attack-window__caption {
@@ -636,6 +647,34 @@
     min-height: 44px;
   }
 
+  /* The bombs on one row: the painted bomb, then the piles. */
+  .repeat-prompt__bombs {
+    flex-direction: row;
+    align-items: center;
+  }
+
+  .repeat-prompt__bombs > .repeat-prompt__heading {
+    flex: none;
+    min-height: 0;
+  }
+
+  .repeat-prompt__bombs > .repeat-prompt__heading > .repeat-prompt__heading-word {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+  }
+
+  .repeat-prompt__bombs > .repeat-prompt__heading .game-icon {
+    width: 28px;
+    height: 28px;
+  }
+
+  .repeat-prompt__bombs > .repeat-prompt__grid {
+    flex: 1 1 auto;
+  }
+
   .repeat-prompt__short,
   .repeat-prompt__room-yard {
     min-height: 40px;
@@ -644,14 +683,19 @@
 }
 
 @media (min-width: 621px) and (max-height: 500px) {
-  .attack-end.auto-attack--prompt {
+  .attack-end.auto-attack.auto-attack--prompt {
     max-height: calc(100vh - var(--space-6));
     max-height: calc(100dvh - var(--space-6));
   }
 
-  .auto-attack--prompt-moves .repeat-prompt__columns {
-    grid-template-columns: minmax(0, 1fr) minmax(0, 1.2fr);
+  .auto-attack--prompt-two .repeat-prompt__columns {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1.3fr);
     gap: var(--space-3);
+  }
+
+  /* One column: wide enough for every tile on one row. */
+  .attack-end.auto-attack--prompt:not(.auto-attack--prompt-two) {
+    width: min(calc(100vw - 2 * var(--space-4)), 660px);
   }
 
   .repeat-prompt__moves {
@@ -659,7 +703,6 @@
   }
 
   .repeat-prompt__move {
-    grid-template-columns: 84px minmax(0, 1fr) auto auto;
     column-gap: 6px;
     padding: 4px var(--space-2);
   }

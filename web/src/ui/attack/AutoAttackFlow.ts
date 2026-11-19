@@ -197,6 +197,31 @@ export const roomList = (answer: AutoAttackPlanResponse): HTMLElement[] => {
     : [need];
 };
 
+/**
+ * Why the sheet cannot run. With rows (what is short, the room in range) it
+ * is a column of its own, beside the army from 621 px wide; a reason alone
+ * goes under the camp, where it is always in sight.
+ */
+const refusalPart = (reason: string, rows: readonly HTMLElement[], army: HTMLElement): HTMLElement | null => {
+  const line = paragraph(reason, "auto-attack__refusal");
+  if (rows.length === 0) {
+    army.querySelector(".repeat-prompt__camp")?.after(line);
+    return null;
+  }
+  const part = document.createElement("section");
+  part.className = "repeat-prompt__refusal-part";
+  part.append(line, ...rows);
+  return part;
+};
+
+/** The army and what goes beside it (the moves, or what is short). */
+const columnsOf = (army: HTMLElement, side: HTMLElement): HTMLElement => {
+  const columns = document.createElement("div");
+  columns.className = "repeat-prompt__columns";
+  columns.append(army, side);
+  return columns;
+};
+
 /** The `reason` of the server's refusal, if it is one. */
 const refusalReason = (caught: unknown): string | null => {
   if (!(caught instanceof ApiError)) return null;
@@ -355,19 +380,21 @@ export class AutoAttackFlow {
     const body: HTMLElement[] = [];
     if (changed) body.push(paragraph(MOVES_CHANGED, "auto-attack__changed"));
     const army = this.armyColumn(plan, answer.damage);
+    let side: HTMLElement | null = null;
     if (refusal) {
-      army.append(paragraph(refusal, "auto-attack__refusal"));
-      if (answer.missing.length > 0) army.append(shortageList(answer.missing, plan.champions));
-      else if (answer.noRoom) army.append(...roomParts(answer.noRoom, answer.yards ?? {}));
-    }
-    if (moves.length > 0) {
+      const rows =
+        answer.missing.length > 0
+          ? [shortageList(answer.missing, plan.champions)]
+          : answer.noRoom
+            ? roomParts(answer.noRoom, answer.yards ?? {})
+            : [];
+      side = refusalPart(refusal, rows, army);
+    } else if (moves.length > 0) {
       // Smart Repeat attack: the yards in range lack monsters other yards hold.
       this.movesKey = answer.movesKey ?? null;
-      const columns = document.createElement("div");
-      columns.className = "repeat-prompt__columns";
-      columns.append(army, movesPart(moves, answer.yards ?? {}));
-      body.push(columns);
-    } else body.push(army);
+      side = movesPart(moves, answer.yards ?? {});
+    }
+    body.push(side ? columnsOf(army, side) : army);
 
     const attack = buttonOf(
       moves.length > 0 ? MOVE_AND_ATTACK : "Attack now",
@@ -377,7 +404,9 @@ export class AutoAttackFlow {
     attack.disabled = refusal !== null;
     this.show(
       "Repeat attack",
-      `auto-attack--confirm auto-attack--prompt${moves.length > 0 ? " auto-attack--prompt-moves" : ""}${refusal ? " auto-attack--refused" : ""}`,
+      `auto-attack--confirm auto-attack--prompt${side ? " auto-attack--prompt-two" : ""}${
+        moves.length > 0 ? " auto-attack--prompt-moves" : ""
+      }${refusal ? " auto-attack--refused" : ""}`,
       body,
       [buttonOf("Cancel", "btn btn--outline auto-attack__cancel", () => this.close()), attack],
     );
@@ -466,11 +495,12 @@ export class AutoAttackFlow {
       const body: HTMLElement[] = [];
       if (this.movesKey) body.push(paragraph("Your yards changed.", "auto-attack__changed auto-attack__failure-context"));
       const army = this.armyColumn(plan, this.damage);
-      army.append(paragraph(reason === "noRoom" ? NO_ROOM_TEXT : message, "auto-attack__refusal"));
-      if (missing.length > 0) army.append(shortageList(missing, plan.champions));
-      if (reason === "noRoom" && data?.noRoom) army.append(...roomParts(data.noRoom, data.yards ?? {}));
-      body.push(army);
-      this.show("Repeat attack", "auto-attack--failed auto-attack--prompt auto-attack--refused", body, [
+      const rows: HTMLElement[] = [];
+      if (missing.length > 0) rows.push(shortageList(missing, plan.champions));
+      if (reason === "noRoom" && data?.noRoom) rows.push(...roomParts(data.noRoom, data.yards ?? {}));
+      const side = refusalPart(reason === "noRoom" ? NO_ROOM_TEXT : message, rows, army);
+      body.push(side ? columnsOf(army, side) : army);
+      this.show("Repeat attack", `auto-attack--failed auto-attack--prompt${side ? " auto-attack--prompt-two" : ""} auto-attack--refused`, body, [
         buttonOf("Close", "btn btn--primary", () => this.close()),
       ]);
       return;
