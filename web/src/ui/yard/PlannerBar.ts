@@ -1131,9 +1131,10 @@ export class PlannerBar {
   }
 
   /**
-   * The phone's view switch: "3D ⇄", or, while Blueprint is locked, where it
-   * would go: "Blueprint", muted, with a padlock (astra round 1: a padlock by
-   * "3D" read as if the 3D view itself were locked).
+   * The phone's view switch: "3D ⇄", or, while Blueprint is locked, the
+   * switch itself padlocked: a muted "⇄" (astra round 1: a padlock by "3D"
+   * read as if the 3D view itself were locked; "Blueprint" in full squeezed
+   * the planner's name on an upright phone). Its name says Blueprint.
    */
   private renderViewSwitch(): void {
     const iso = this.view === YardView.ISO;
@@ -1143,7 +1144,7 @@ export class PlannerBar {
     this.viewSwitchKey = key;
     if (iso && this.blueprintLock) {
       setControlLocked(this.viewSwitch, null, "lead", 20);
-      this.viewSwitch.textContent = "Blueprint";
+      this.viewSwitch.textContent = "⇄";
       setControlLocked(this.viewSwitch, this.blueprintLock, "lead", 20);
       this.viewSwitch.setAttribute("aria-label", `Blueprint. ${this.blueprintLock}`);
       return;

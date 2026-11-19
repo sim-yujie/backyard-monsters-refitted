@@ -2761,9 +2761,17 @@
   position: relative;
 }
 
-/* One treatment for every locked tool: its icon and its words fade alike. */
+/*
+ * One treatment for every locked tool: its icon fades, its words fade less,
+ * so a name stays readable on Classic's parchment as on Modern's steel
+ * (astra round 2); the padlock stays at full colour.
+ */
 .is-locked > :not(.planner-lock) {
   opacity: 0.45;
+}
+
+.is-locked > .planner-lock__label {
+  opacity: 0.65;
 }
 
 .planner-lock {
@@ -2867,8 +2875,9 @@
 }
 
 /* Pressing a locked slot explains it; it is never shown as picked. */
-.planner-layouts__locked:hover,
-.planner-layouts__locked:active {
+.planner-layouts__locked.btn--ghost,
+.planner-layouts__locked.btn--ghost:hover:not(:disabled),
+.planner-layouts__locked.btn--ghost:active:not(:disabled) {
   background: transparent;
   border-color: transparent;
 }
