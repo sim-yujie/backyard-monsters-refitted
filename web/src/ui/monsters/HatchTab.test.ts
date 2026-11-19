@@ -754,6 +754,9 @@ describe("HatchTab: the grid", () => {
     await flush();
     expect(actions.add).toHaveBeenCalledOnce();
     expect(actions.add).toHaveBeenCalledWith(11, "C3", 1);
+    // A full add shows no "Added 1 Bolt" pill (owner, 19 Nov): the queue already shows it.
+    expect(element.querySelector<HTMLElement>(".monsters-status")!.hidden).toBe(true);
+    expect(text(element, ".monsters-status")).toBe("");
   });
 
   it("puts a padlock on a locked monster, and a tap on it opens the Monster Locker on it (owner, 15 Nov)", () => {

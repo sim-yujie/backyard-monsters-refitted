@@ -1769,10 +1769,15 @@ export class HatchTab implements MonstersTab {
       return;
     }
     const result = await this.actions.add(target, monster, count);
+    // A full add says nothing: the queue already shows the new monsters (owner,
+    // 19 Nov: the "Added 2 Pokeys" pill covered the hatcheries). Only a short add
+    // still says how many went in and why the rest did not.
+    if (result.ok && result.report.added === result.report.requested) {
+      this.setStatus(null);
+      return;
+    }
     this.report(result, (report) => {
-      const name = plural(nameOf(report.monster), report.added);
       const cost = report.cost.r4 > 0 ? [": ", resourceAmount("r4", report.cost.r4), " spent."] : ["."];
-      if (report.added === report.requested) return [`Added ${formatAmount(report.added)} ${name}`, ...cost];
       const why = report.stoppedBy === "goo" ? `out of ${this.words.goo}` : "the queue is full";
       return [
         `Added ${formatAmount(report.added)} of ${formatAmount(report.requested)} ${plural(nameOf(report.monster), report.requested)} — ${why}`,
