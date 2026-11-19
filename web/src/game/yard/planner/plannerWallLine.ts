@@ -53,13 +53,21 @@ export class PlannerWallLine {
 
   private anchorList: Point[] = [];
   private hoverSpot: Point | null = null;
+  /**
+   * Where the one Block in hand shows before the first corner (owner, 19 Nov
+   * 2026): the pointer's last spot, or where the line started (the view's
+   * middle, so a touch screen has something to see, as the yard does).
+   * Unlike {@link hoverSpot} it stays when the mouse leaves the yard.
+   */
+  private boxSpot: Point | null = null;
   private ended = false;
   private lastTap: { x: number; y: number; at: number } | null = null;
 
-  constructor(stack: LineStack, step: number) {
+  constructor(stack: LineStack, step: number, start: Point | null = null) {
     this.type = stack.type;
     this.level = stack.level;
     this.step = step;
+    this.boxSpot = start ? { x: start.x, y: start.y } : null;
   }
 
   /** The corners put down so far, each on the Block its stretch ends on. */
@@ -99,16 +107,36 @@ export class PlannerWallLine {
       return "none";
     }
     this.anchorList.push(anchor);
+    this.boxSpot = { x: anchor.x, y: anchor.y };
     this.ended = false;
     return "corner";
   }
 
-  /** The mouse moved to `spot` (null: it left the yard). True when the live stretch changed. */
+  /**
+   * The mouse moved to `spot` (null: it left the yard). True when what is
+   * drawn changed: the live stretch, or before the first corner the Block in
+   * hand ({@link box}), which stays where it was when the mouse leaves.
+   */
   hoverAt(spot: Point | null): boolean {
     const was = this.hoverSpot;
     if (was === spot || (was && spot && was.x === spot.x && was.y === spot.y)) return false;
     this.hoverSpot = spot ? { x: spot.x, y: spot.y } : null;
-    return this.anchorList.length > 0 && !this.ended;
+    const box = this.boxSpot;
+    const boxMoved = spot !== null && !(box && box.x === spot.x && box.y === spot.y);
+    if (boxMoved) this.boxSpot = { x: spot.x, y: spot.y };
+    if (this.anchorList.length === 0) return boxMoved;
+    return !this.ended;
+  }
+
+  /**
+   * The one Block in hand before the first corner, as the yard shows it
+   * (owner, 19 Nov 2026: "the box"): where the next click or tap would start
+   * the line, and whether a Block can stand there. Null once a corner is down
+   * (the line draws its own Blocks) or before there is a spot.
+   */
+  box(check: (x: number, y: number) => SpotCheck): SpotCheck | null {
+    if (this.anchorList.length > 0 || !this.boxSpot) return null;
+    return check(this.boxSpot.x, this.boxSpot.y);
   }
 
   /** Takes the last corner away. False when there was none. */

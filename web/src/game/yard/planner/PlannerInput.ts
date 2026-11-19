@@ -513,6 +513,19 @@ export class PlannerInput {
     this.edgeFrame = null;
   }
 
+  /**
+   * The world point in the middle of the yard's visible area, or null when
+   * the canvas has no size yet. Where a wall line's Block in hand first shows,
+   * so a touch screen has something to see before the first tap (the yard's
+   * build ghost starts there too).
+   */
+  middleWorld(): Point | null {
+    if (typeof this.canvas.getBoundingClientRect !== "function") return null;
+    const area = this.visibleArea();
+    if (!(area.right > area.left) || !(area.bottom > area.top)) return null;
+    return this.worldAt({ clientX: (area.left + area.right) / 2, clientY: (area.top + area.bottom) / 2 });
+  }
+
   /** The yard's visible area in client pixels: the canvas, less the bars. */
   private visibleArea(): ScreenArea {
     const rect = this.canvas.getBoundingClientRect();

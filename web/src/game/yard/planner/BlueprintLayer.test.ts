@@ -137,3 +137,35 @@ describe("BlueprintLayer's first build", () => {
     renderer.destroy();
   });
 });
+
+/** Desk fix B (owner, 19 Nov 2026): the moving tile is drawn over the others, not under them. */
+describe("BlueprintLayer moving tile", () => {
+  it("draws a tile moved onto another over it, and picks it there", () => {
+    const { renderer } = rendererOf();
+    renderer.setView(YardView.BLUEPRINT);
+    // The trap (1) was added first, so it sat under the tower (2) when dragged onto it.
+    renderer.placeBuilding(1, 200, 200);
+    const trap = tileCentre(24, 200, 200);
+    expect(renderer.pick(trap.x, trap.y)?.id).toBe(1);
+    renderer.destroy();
+  });
+
+  it("raises each tile once per drag, and again on the next one", () => {
+    const { renderer } = rendererOf();
+    renderer.setView(YardView.BLUEPRINT);
+    const tiles = (renderer as unknown as { blueprint: { tiles: Pixi.Container } }).blueprint.tiles;
+    const addChild = vi.spyOn(tiles, "addChild");
+    renderer.placeBuilding(1, 200, 200);
+    renderer.placeBuilding(1, 205, 200);
+    renderer.placeBuilding(1, 210, 200);
+    expect(addChild).toHaveBeenCalledTimes(1);
+    // The drop: the planner re-stacks the yard, and the next drag raises again.
+    renderer.resortByDepth();
+    renderer.placeBuilding(2, 0, 0);
+    renderer.placeBuilding(1, 0, 0);
+    expect(addChild).toHaveBeenCalledTimes(3);
+    const trap = tileCentre(24, 0, 0);
+    expect(renderer.pick(trap.x, trap.y)?.id).toBe(1);
+    renderer.destroy();
+  });
+});

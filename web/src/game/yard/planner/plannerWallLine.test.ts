@@ -109,3 +109,44 @@ describe("the Planner's wall line (owner, 16 Nov 2026)", () => {
     expect(drawerBudget(-1).room).toBe(0);
   });
 });
+
+/** The Block in hand before the first corner (owner, 19 Nov 2026: "the box"). */
+describe("the Planner's wall line: the box before the first corner", () => {
+  it("shows no box until there is a spot, then the start spot (a touch screen's middle)", () => {
+    expect(line().box(freeExcept())).toBeNull();
+    const started = new PlannerWallLine({ type: 17, level: 5 }, STEP, { x: 40, y: 20 });
+    expect(started.box(freeExcept())).toEqual({ x: 40, y: 20, problem: null, blockedBy: null });
+  });
+
+  it("follows the mouse, red where a Block cannot stand, and stays when the mouse leaves", () => {
+    const wall = new PlannerWallLine({ type: 17, level: 5 }, STEP, { x: 0, y: 0 });
+    const check = freeExcept("60,0");
+    // Each move to a new spot redraws, before any corner is down.
+    expect(wall.hoverAt({ x: 20, y: 0 })).toBe(true);
+    expect(wall.box(check)).toMatchObject({ x: 20, y: 0, problem: null });
+    expect(wall.hoverAt({ x: 20, y: 0 })).toBe(false);
+    expect(wall.hoverAt({ x: 60, y: 0 })).toBe(true);
+    expect(wall.box(check)).toMatchObject({ x: 60, y: 0, problem: "overlap", blockedBy: 99 });
+    // Off the canvas: nothing to redraw, the box stays put.
+    expect(wall.hoverAt(null)).toBe(false);
+    expect(wall.box(check)).toMatchObject({ x: 60, y: 0 });
+  });
+
+  it("gives way to the line's own Blocks once a corner is down, and comes back with none", () => {
+    const wall = line();
+    wall.hoverAt({ x: 20, y: 20 });
+    wall.tap({ x: 20, y: 20 }, 0);
+    expect(wall.box(freeExcept())).toBeNull();
+    // Still nothing placeable from the box alone: ✓ only places between corners.
+    wall.undo();
+    expect(wall.plan(freeExcept(), 10, true)).toBeNull();
+    expect(wall.box(freeExcept())).toMatchObject({ x: 20, y: 20 });
+  });
+
+  it("keeps the box at the tapped corner for a finger, which never hovers", () => {
+    const wall = new PlannerWallLine({ type: 17, level: 5 }, STEP, { x: 0, y: 0 });
+    wall.tap({ x: 100, y: 40 }, 0);
+    wall.clear();
+    expect(wall.box(freeExcept())).toMatchObject({ x: 100, y: 40 });
+  });
+});
