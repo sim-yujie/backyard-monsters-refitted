@@ -110,6 +110,15 @@ import { writeAmount, type AmountChange } from "./amountChange";
  * with a big blue lens and a yellow flash bulb; `camera2`, the other option, a
  * teal instant camera with a photo of a yard coming out of its top.
  *
+ * The leaderboard's outpost count (beta 8 outpost race,
+ * `ui/leaderboard/LeaderboardDialog.ts`; astra's design advice, 19 Nov 2026,
+ * `art-samples/outpost-icon`): a broad fork-tailed amber flag with a dark red
+ * underside on a wooden stake with a riveted steel foot (`outpost`), and the
+ * same flag in the Classic look, softer and warmer with a thin brown outline
+ * and no white rim (`outpostclassic`). A flag because the dock's outposts
+ * button already shows one; amber, never white, so it is not the `retreat`
+ * flag, and no dome, so it is not the Town Hall.
+ *
  * Prev and Next on a friend's yard (beta 8, `ui/friends/FriendHopButtons.ts`,
  * owner 18 Nov: painted, not line arrows; `art-samples/friend-hop-arrows`):
  * a fat glossy golden arrow pointing left (`friendprev`) and right
@@ -178,6 +187,8 @@ export const GAME_ICONS = {
   camera2: "Yard picture",
   goals: "Goals",
   goalsclassic: "Goals",
+  outpost: "Outposts",
+  outpostclassic: "Outposts",
   friendprev: "Previous friend",
   friendnext: "Next friend",
   friendprevclassic: "Previous friend",

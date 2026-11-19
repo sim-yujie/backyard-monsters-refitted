@@ -24,6 +24,9 @@ import "./profile.css";
  * there is none, or while it is hidden), name, a short bio and stats worked
  * out by the server, shown as icons with numbers.
  *
+ * Empire points are the leaderboard's score: the main yard's points plus
+ * every outpost's (beta 8), shown as one number.
+ *
  * On the player's own profile the bio is a text box with a Save button, and
  * "New photo" opens the crop step (from level 10, once a day). On someone
  * else's, a photo has a small "Report" button: three players' reports hide it
@@ -108,7 +111,9 @@ export const statsList = (profile: Profile): HTMLElement => {
   const list = el("ul", "profile__stats");
   list.append(stat("Level", statIcon("levelup"), String(stats.level)));
   if (stats.townHall > 0) list.append(stat("Town Hall", statIcon("townhall"), String(stats.townHall)));
-  list.append(stat("Empire points", statIcon("empire"), formatAmount(stats.empirePoints)));
+  // The leaderboard's score (beta 8): the main yard's points plus the outposts'.
+  const empirePoints = stats.empirePoints + (stats.outpostPoints ?? 0);
+  list.append(stat("Empire points", statIcon("empire"), formatAmount(empirePoints)));
   if (stats.achievements) {
     list.append(
       stat("Achievements", achievementBadge(1, "gold", true), `${stats.achievements.earned}/${stats.achievements.total}`),

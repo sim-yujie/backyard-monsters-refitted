@@ -21,7 +21,13 @@ export interface ProfileStats {
   readonly level: number;
   /** The main yard's Town Hall level; 0 when unknown. */
   readonly townHall: number;
+  /** The main yard's empire points, outposts not counted. */
   readonly empirePoints: number;
+  /**
+   * The Map Room 2 outposts they hold, their points added up (beta 8); the
+   * leaderboard ranks by `empirePoints` + this. Absent from an older server.
+   */
+  readonly outpostPoints?: number;
   readonly achievements: { readonly earned: number; readonly total: number } | null;
   readonly friends: number;
   /** When their main yard was made (ISO); null when unknown. */
