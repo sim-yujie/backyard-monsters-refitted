@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { Texture } from "pixi.js";
-import { SheetDropped, SheetQueue, sheetLineOf, type SheetWant } from "./sheetQueue";
+import { SheetDropped, SheetQueue, loadYardSheet, sheetLineOf, yardSheetsIdle, type SheetWant } from "./sheetQueue";
 
 /**
  * Patch 6.4, round 2: a raid's sheets wait in one queue, every stand-in
@@ -314,5 +314,93 @@ describe("SheetQueue on a Trojan Horse fight, Fast 3G model", () => {
     for (const name of ["brain", "crabatron", "projectx"]) {
       expect(done.get(small(name))!, name).toBeGreaterThan(SIZES[name]!.spawn);
     }
+  });
+});
+
+/**
+ * Patch 7.11: the yard's creatures' sheets go through a queue of their own,
+ * two at a time. All at once, a phone decoding a dozen big pictures together
+ * ran out of memory.
+ */
+describe("the yard's sheet queue", () => {
+  const yardQueue = (loader: ReturnType<typeof manualLoader>): SheetQueue =>
+    new SheetQueue({ load: loader.load, maxActive: 2, maxFull: 2 });
+  const medium = (name: string): string => `/assets/monsters/${name}-anim@2x.png?v=2`;
+
+  it("never has more than two sheets in flight, whatever their size, and fetches them all in order", async () => {
+    for (const urlOf of [full, medium, small]) {
+      const loader = manualLoader();
+      const queue = yardQueue(loader);
+      const names = ["krallen", "zafreeti", "fomor", "pokey", "octo", "bolt", "fink", "eye-ra"];
+      const asked = names.map((name) => queue.load(urlOf(name)));
+      await flush();
+      expect(loader.open.size).toBe(2);
+      expect(queue.idle).toBe(false);
+      for (const name of names) {
+        expect(loader.open.size).toBeLessThanOrEqual(2);
+        await loader.finish(urlOf(name));
+      }
+      await Promise.all(asked);
+      expect(loader.peak()).toBe(2);
+      expect(loader.started).toEqual(names.map(urlOf));
+      expect(queue.idle).toBe(true);
+    }
+  });
+
+  it("keeps to two with small and big copies mixed, and a failed sheet frees its place", async () => {
+    const loader = manualLoader();
+    const queue = yardQueue(loader);
+    const urls = [full("a"), small("b"), medium("c"), small("d"), full("e")];
+    const asked = urls.map((url) => queue.load(url).catch(() => null));
+    await flush();
+    // The first asked starts at once; the small copy asked next takes the other place.
+    expect([...loader.open.keys()]).toEqual([full("a"), small("b")]);
+    loader.open.get(small("b"))!.reject(new Error("404"));
+    loader.open.delete(small("b"));
+    await flush();
+    // The failed sheet's place goes to the next small copy, ahead of the bigger ones.
+    expect([...loader.open.keys()]).toEqual([full("a"), small("d")]);
+    for (let left = 4; left > 0; left -= 1) {
+      expect(loader.open.size).toBeLessThanOrEqual(2);
+      await loader.finish([...loader.open.keys()][0]!);
+    }
+    expect(loader.started).toEqual([full("a"), small("b"), small("d"), medium("c"), full("e")]);
+    await Promise.all(asked);
+    expect(loader.peak()).toBe(2);
+    expect(queue.idle).toBe(true);
+  });
+
+  it("waits behind the yard's gate, and is not idle until every sheet asked for is in", async () => {
+    const loader = manualLoader();
+    const queue = yardQueue(loader);
+    let open!: () => void;
+    const gate = new Promise<void>((resolve) => {
+      open = resolve;
+    });
+    expect(yardSheetsIdle()).toBe(true);
+    const asked = ["a", "b", "c"].map((name) => loadYardSheet(full(name), gate, queue));
+    await flush();
+    // Held back by the gate: nothing fetched, yet the yard's sheets are not all in.
+    expect(loader.started).toEqual([]);
+    expect(queue.idle).toBe(true);
+    expect(yardSheetsIdle()).toBe(false);
+    open();
+    await flush();
+    expect(loader.open.size).toBe(2);
+    await loader.finish(full("a"));
+    await loader.finish(full("b"));
+    expect(yardSheetsIdle()).toBe(false);
+    await loader.finish(full("c"));
+    await Promise.all(asked);
+    await flush();
+    expect(loader.peak()).toBe(2);
+    expect(yardSheetsIdle()).toBe(true);
+    // A sheet that fails still counts as answered.
+    const failed = loadYardSheet(full("d"), gate, queue).catch(() => "failed");
+    await flush();
+    loader.open.get(full("d"))!.reject(new Error("404"));
+    expect(await failed).toBe("failed");
+    await flush();
+    expect(yardSheetsIdle()).toBe(true);
   });
 });
