@@ -63,6 +63,10 @@ describe("safe mode's notice on the yard", () => {
     const buttons = [...shown!.querySelectorAll("button")];
     expect(buttons.map((button) => button.textContent)).toEqual([SAFE_MODE_TEXT.ok]);
     expect(buttons[0]!.className).toContain("btn--primary");
+    // A tap outside does not close the once-only notice.
+    const backdrop = document.querySelector(".popup-backdrop")!;
+    backdrop.dispatchEvent(new Event("pointerdown", { bubbles: true }));
+    expect(popup()?.isConnected).toBe(true);
     buttons[0]!.click();
     expect(popup()?.isConnected ?? false).toBe(false);
     if (typeof stop === "function") stop();

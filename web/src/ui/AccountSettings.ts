@@ -148,7 +148,7 @@ export const SETTINGS_TEXT = {
   /** Medium as this device's default, not picked: its music plays as normal (`musicHeld`). */
   downloadHintDeviceMedium: "Lighter monsters and music.",
   /** High on a phone or tablet: its monsters are Medium's (`monsterSheetLevel`). */
-  downloadHintTouchHigh: "Phones and tablets use lighter monsters. Music plays at once.",
+  downloadHintTouchHigh: "On phones and tablets, High uses lighter monsters.",
   /** A level safe mode put the game on (`game/safeMode.ts`), not picked. */
   downloadHintSafeMode: "Lowered because loading failed twice. Pick a level to change it.",
   downloadSaved: "Saved. Monsters already on screen change after a reload.",
