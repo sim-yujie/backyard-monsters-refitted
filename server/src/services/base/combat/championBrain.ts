@@ -64,11 +64,13 @@ export const championsAfterLessons = <T extends ChampionData>(
     if (!lesson) return champion;
     const stance = stances.get(lesson.t) ?? DEFAULT_STANCE;
     if (hasHabits(championByType(lesson.t))) {
-      // Its habits for the Mode it fought in (champion modes round 2). The
-      // first time, its old brain goes: habits start fresh, the count stays.
-      const learned = learnHabits(champion.h, champion.hs, lesson, stance, champion.bs);
+      // The first time, its old brain goes: habits start fresh, the count stays.
+      // Its habits for the Mode it fought in (champion modes round 2), by the
+      // owner's pick B (`hl`, 19 Nov 2026); a champion without `hl` yet is
+      // migrated from its old weights here.
+      const learned = learnHabits(champion.h, champion.hs, lesson, stance, champion.bs, champion.hl);
       const { b: _brain, bs: _stats, ...rest } = champion;
-      return { ...rest, h: learned.book, hs: learned.stats } as T;
+      return { ...rest, h: learned.book, hs: learned.stats, hl: learned.learning } as T;
     }
     // Krallen keeps today's brain (owner, 10 Nov).
     const learned = learnFromLesson(champion.b, champion.bs, lesson, stance);

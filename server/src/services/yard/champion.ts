@@ -548,9 +548,9 @@ export const planChampionForget = (save: ChampionSave, type: number, stance: Cha
   );
   if (index < 0) throw yardRefusedErr("noChampion", "You have no champion of that type.");
   const stored = champions[index]!;
-  const book = forgetHabits(stored.h, championByType(type), stance);
+  const { book, learning } = forgetHabits(stored, championByType(type), stance);
   const { h: _old, ...rest } = stored;
-  const changed: ChampionData = Object.keys(book).length > 0 ? { ...rest, h: book } : rest;
+  const changed: ChampionData = Object.keys(book).length > 0 ? { ...rest, h: book, hl: learning } : { ...rest, hl: learning };
   champions[index] = changed;
 
   const report: ChampionReport = { champion: changed };

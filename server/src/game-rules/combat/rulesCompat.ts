@@ -17,11 +17,14 @@
  * only from one cell off its nearest tile (`MELEE_REACH_CHAMPIONS`), which
  * moves every battle he attacks in, so 7.9's fa6de785db1c4615 replays with
  * Gorgo no longer play the same.
+ * Habits learned by the owner's pick B (19 Nov 2026, `habits.ts`) change only
+ * how the server learns between attacks; the engine reads a log's `h` as
+ * before, so 7.10/7.11's 3cb9cc66416d5eda still plays the same.
  *
  * Add the version a change replaces only when that change moves no battle.
  * A change that moves any battle result must empty this list.
  */
-export const COMPATIBLE_RULES_VERSIONS: readonly string[] = [];
+export const COMPATIBLE_RULES_VERSIONS: readonly string[] = ["3cb9cc66416d5eda"];
 
 /**
  * Whether a battle stamped with the rules version `stamp` plays to its stored

@@ -3,6 +3,7 @@ import {
   MAX_RANK,
   championByType,
   frozenHabits,
+  habitBookOf,
   hasHabits,
   isFrozenHabits,
   isZeroBrain,
@@ -201,9 +202,15 @@ export const healthOf = (champions: unknown): ChampionHealth | undefined => {
  * @param habits - The stored `h`, or a frozen book.
  * @param brain - The stored `b`, or a frozen brain.
  */
-const frozenMindOf = (t: number, habits: unknown, brain: unknown): BrainWeights | FrozenHabits | null => {
+const frozenMindOf = (
+  t: number,
+  entry: { h?: unknown; hs?: unknown; hl?: unknown },
+  brain: unknown,
+): BrainWeights | FrozenHabits | null => {
   const id = championByType(t);
-  if (hasHabits(id)) return frozenHabits(habits, id);
+  // B's book (owner, 19 Nov): Active habits at their fixed weight, an old
+  // save's weights migrated as the cage shows them.
+  if (hasHabits(id)) return frozenHabits(habitBookOf(entry, id), id);
   const parsed = parseBrain(brain);
   return isZeroBrain(parsed) ? null : parsed;
 };
@@ -225,8 +232,8 @@ export const brainsOf = (champions: unknown): ChampionBrains | undefined => {
   for (const champion of champions) {
     const t = championTypeOf((champion as { t?: unknown } | null)?.t);
     if (t === null) continue;
-    const entry = champion as { h?: unknown; b?: unknown };
-    const mind = frozenMindOf(t, entry.h, entry.b);
+    const entry = champion as { h?: unknown; hs?: unknown; hl?: unknown; b?: unknown };
+    const mind = frozenMindOf(t, entry, entry.b);
     if (mind) out[String(t)] = mind;
   }
   return Object.keys(out).length > 0 ? out : undefined;
