@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import type { BoardRow, EmpireBoard } from "@/api/leaderboard";
-import { EMPTY, LOAD_FAILED, openLeaderboard, outpostText, splitText } from "./LeaderboardDialog";
+import { EMPTY, LOAD_FAILED, openLeaderboard, outpostIcon, outpostText, splitText } from "./LeaderboardDialog";
 
 /**
  * The leaderboard popup, driven through its DOM with the request stubbed:
@@ -62,6 +62,8 @@ describe("openLeaderboard", () => {
     const held = shown[1]!.querySelector(".leaderboard__outposts")!;
     expect(held.textContent).toBe("2");
     expect(held.querySelector("img")!.dataset["icon"]).toBe("outpost");
+    expect(outpostIcon(true)).toBe("outpostclassic");
+    expect(outpostIcon(false)).toBe("outpost");
     expect(held.querySelector("img")!.getAttribute("aria-label")).toBe("2 outposts");
     expect(shown[0]!.classList.contains("leaderboard__row--medal-1")).toBe(true);
     expect(container.textContent).not.toContain("#1234");

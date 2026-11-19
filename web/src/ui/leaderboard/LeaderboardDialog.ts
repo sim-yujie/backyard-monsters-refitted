@@ -1,7 +1,8 @@
 import { getEmpireBoard, type BoardRow, type EmpireBoard } from "@/api/leaderboard";
 import { playerPicture, showPlayerPicture } from "@/game/playerPicture";
 import { formatAmount } from "@/ui/format";
-import { iconAmount } from "@/ui/gameIcon";
+import { classicLook } from "@/game/classicLook";
+import { iconAmount, type GameIconName } from "@/ui/gameIcon";
 import { Popup } from "@/ui/Popup";
 import "./leaderboard.css";
 
@@ -33,9 +34,17 @@ const el = <K extends keyof HTMLElementTagNameMap>(
 /** "1 outpost", "3 outposts". */
 export const outpostText = (count: number): string => `${formatAmount(count)} ${count === 1 ? "outpost" : "outposts"}`;
 
-/** The outpost icon and how many they hold; null when they hold none. */
+/** The painted outpost flag in the look in use (astra, beta 8): `outpost` Modern, `outpostclassic` Classic. */
+export const outpostIcon = (classic: boolean = classicLook()): GameIconName => (classic ? "outpostclassic" : "outpost");
+
+/**
+ * The outpost flag and how many they hold, as a small badge beside the name
+ * (under it on a phone held upright); null when they hold none, so a row
+ * without outposts is laid out exactly as before. The flag is drawn at 20 px
+ * (leaderboard.css) from the 24 px files.
+ */
 export const outpostCount = (count: number): HTMLElement | null =>
-  count > 0 ? iconAmount("outpost", count, { size: 16, label: outpostText(count), className: "leaderboard__outposts" }) : null;
+  count > 0 ? iconAmount(outpostIcon(), count, { size: 24, label: outpostText(count), className: "leaderboard__outposts" }) : null;
 
 /** "Main yard 479,849,665 + outposts 153,448,466", the total's tooltip; null without outpost points. */
 export const splitText = (item: BoardRow): string | null =>
