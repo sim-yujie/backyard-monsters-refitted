@@ -20,9 +20,20 @@
  * graphics memory with the High sheets and drew monsters as green squares.
  * Medium by default plays the music as High does (`musicHeld`).
  *
+ * Phones and tablets (patch 7.11): iOS closed the tab on iPhones, which
+ * loaded every yard monster at `@4x`. A touch device (`touchDevice.ts`) that
+ * never chose starts on Medium too, and one whose player chose High still
+ * draws its monsters and champions from the Medium copies
+ * (`monsterSheetLevel`); the rest of High (music, map art) is as chosen.
+ * Safe mode (`safeMode.ts`) can cap the level in use below the choice after
+ * the game failed to load twice.
+ *
  * The copies are made by `web/tools/sheet_copies.py`, and Pixi reads their
  * size from the `@2x` in the name, so a cell is framed the same at every level.
  */
+import { clearSafeMode, lowerQuality, safeModeCap } from "./safeMode";
+import { isTouchDevice } from "./touchDevice";
+
 export type Quality = "high" | "medium" | "low";
 
 export const QUALITIES: readonly Quality[] = ["high", "medium", "low"];
@@ -45,13 +56,19 @@ const storage = (): Storage | null => {
 
 const isQuality = (value: unknown): value is Quality => value === "high" || value === "medium" || value === "low";
 
+/**
+ * A choice that could not be written down (site data blocked): it holds for
+ * this page load, so `?quality=low` still rescues such a browser.
+ */
+let unsavedChoice: Quality | null = null;
+
 /** The Quality the player chose, or null while they never have. */
 export const qualityChoice = (store: Storage | null = storage()): Quality | null => {
   try {
     const value = store?.getItem(QUALITY_KEY);
-    return isQuality(value) ? value : null;
+    return isQuality(value) ? value : unsavedChoice;
   } catch {
-    return null;
+    return unsavedChoice;
   }
 };
 
@@ -76,6 +93,8 @@ export interface DeviceHints {
   readonly memoryGb: number | null;
   /** The graphics card's `MAX_TEXTURE_SIZE`, in pixels a side. */
   readonly textureLimit: number | null;
+  /** Whether it is a phone or a tablet (`isTouchDevice`). */
+  readonly touch?: boolean;
 }
 
 /** At or under this much memory (GB) a device starts on Medium. */
@@ -86,11 +105,13 @@ export const LOW_TEXTURE_LIMIT = 4096;
 /**
  * The Quality a player who never chose starts on (owner, 17 Nov 2026):
  * Medium on a device with 4 GB of memory or less, or a graphics card that
- * holds 4096 px a side or less; High otherwise, and where the device says
- * nothing. Never written down, so the same player on a better phone later
- * still gets High.
+ * holds 4096 px a side or less, or on any phone or tablet (patch 7.11:
+ * iPhones report neither, and iOS closed the tab on the High sheets); High
+ * otherwise, and where the device says nothing. Never written down, so the
+ * same player on a desktop later still gets High.
  */
 export const defaultQuality = (hints: DeviceHints): Quality =>
+  hints.touch === true ||
   (hints.memoryGb !== null && hints.memoryGb <= LOW_MEMORY_GB) ||
   (hints.textureLimit !== null && hints.textureLimit <= LOW_TEXTURE_LIMIT)
     ? "medium"
@@ -133,17 +154,21 @@ export const probeTextureLimit = (
  * This device's hints. The texture limit is the renderer's when it has
  * already said (`gpuTextureLimit`), else a throwaway context's, kept as the
  * device's limit so the first sheets fetched step down too (`sheetForDevice`).
- * A device that already reports little memory is not probed.
+ * A device that already reports little memory, or is a phone or tablet, is
+ * not probed: it is on Medium either way.
  */
 const readDeviceHints = (): DeviceHints => {
   const memoryGb = deviceMemoryGb();
-  if (memoryGb !== null && memoryGb <= LOW_MEMORY_GB) return { memoryGb, textureLimit: deviceTextureLimit() };
+  const touch = isTouchDevice();
+  if (touch || (memoryGb !== null && memoryGb <= LOW_MEMORY_GB)) {
+    return { memoryGb, textureLimit: deviceTextureLimit(), touch };
+  }
   let limit = deviceTextureLimit();
   if (limit === null) {
     limit = probeTextureLimit();
     if (limit !== null) setDeviceTextureLimit(limit);
   }
-  return { memoryGb, textureLimit: limit };
+  return { memoryGb, textureLimit: limit, touch };
 };
 
 /** The device's default, decided once a page load (`readDeviceHints` probes at most once). */
@@ -157,9 +182,13 @@ export const setDeviceDefaultQuality = (level: Quality | null): void => {
   deviceDefault = level;
 };
 
-/** The Quality in use: the player's choice, else the device's default ({@link defaultQuality}). */
+/**
+ * The Quality in use: the player's choice, else the device's default
+ * ({@link defaultQuality}); and never above safe mode's cap, while there is
+ * one (`safeMode.ts`).
+ */
 export const quality = (store: Storage | null = storage(), fallback: () => Quality = deviceDefaultQuality): Quality =>
-  qualityChoice(store) ?? fallback();
+  lowerQuality(qualityChoice(store) ?? fallback(), safeModeCap(store));
 
 const listeners = new Set<(level: Quality) => void>();
 
@@ -169,12 +198,20 @@ export const onQualityChange = (listener: (level: Quality) => void): (() => void
   return () => listeners.delete(listener);
 };
 
+/**
+ * The player picks a level (Settings, "Use Low", `?quality=`). It also ends
+ * safe mode: the cap goes, and its count starts afresh.
+ */
 export const setQuality = (level: Quality, store: Storage | null = storage()): void => {
   try {
-    store?.setItem(QUALITY_KEY, level);
+    if (!store) throw new Error("no storage");
+    store.setItem(QUALITY_KEY, level);
+    unsavedChoice = null;
   } catch {
-    // Site data blocked: nothing to remember it by, so the game stays on the default.
+    // Site data blocked: nothing to remember it by, so it holds for this page load only.
+    unsavedChoice = level;
   }
+  clearSafeMode(store);
   for (const listener of listeners) listener(level);
 };
 
@@ -204,6 +241,15 @@ export const sheetAtQuality = (file: string, level: Quality = quality()): string
   if (!copies) return file;
   return level === "medium" ? copies.medium : copies.low;
 };
+
+/**
+ * The level monster and champion sheets are drawn from: the Quality in use,
+ * but never above Medium on a phone or tablet (patch 7.11). A `@4x` sheet is
+ * four times the memory of its `@2x` copy, a phone's screen shows no
+ * difference, and a yard of them made iOS close the tab.
+ */
+export const monsterSheetLevel = (level: Quality = quality(), touch: boolean = isTouchDevice()): Quality =>
+  touch && level === "high" ? "medium" : level;
 
 /** The resolution a sheet file names (`@4x`, `@1.5x`), as Pixi reads it; 1 without one. */
 export const sheetResolution = (file: string): number => Number(/@(\d+(?:\.\d+)?)x\./.exec(file)?.[1] ?? 1);

@@ -33,6 +33,7 @@ vi.mock("@/api/notificationSettings", async (original) => ({
 
 import { reduceEffects } from "@/game/attack/juice";
 import { setDeviceDefaultQuality } from "@/game/quality";
+import { setTouchDevice } from "@/game/touchDevice";
 import { resetShinyLockForTests, shinyLocked } from "@/game/shinyLock";
 import { setWorldChatOn, worldChatOn } from "@/game/chat/worldChatSetting";
 import { SETTINGS_TEXT, openAccountSettings } from "./AccountSettings";
@@ -457,6 +458,81 @@ describe("AccountSettings", () => {
       select.value = "medium";
       select.dispatchEvent(new Event("change"));
       expect(hint.textContent).toContain(SETTINGS_TEXT.downloadHint.medium);
+    } finally {
+      setDeviceDefaultQuality(null);
+      localStorage.clear();
+    }
+  });
+
+  it("High on a phone or tablet says its monsters are the lighter ones; on a desktop it does not (patch 7.11)", async () => {
+    localStorage.clear();
+    localStorage.setItem("bymr.quality", "high");
+    setTouchDevice(true);
+    try {
+      await open({});
+      const select = document.querySelector<HTMLSelectElement>("#settings-quality")!;
+      const hint = document.querySelector("#settings-quality-hint")!;
+      expect(select.value).toBe("high");
+      expect(hint.textContent).toBe(SETTINGS_TEXT.downloadHintTouchHigh);
+      select.value = "medium";
+      select.dispatchEvent(new Event("change"));
+      expect(hint.textContent).toContain(SETTINGS_TEXT.downloadHint.medium);
+      select.value = "high";
+      select.dispatchEvent(new Event("change"));
+      expect(hint.textContent).toBe(`${SETTINGS_TEXT.downloadHintTouchHigh} ${SETTINGS_TEXT.downloadSaved}`);
+      setTouchDevice(false);
+      select.dispatchEvent(new Event("change"));
+      expect(hint.textContent).toBe(`${SETTINGS_TEXT.downloadHint.high} ${SETTINGS_TEXT.downloadSaved}`);
+    } finally {
+      setTouchDevice(null);
+      localStorage.clear();
+    }
+  });
+
+  it("a touch device that never chose shows Medium with the plain hint, music not said to wait (patch 7.11)", async () => {
+    localStorage.clear();
+    setTouchDevice(true);
+    setDeviceDefaultQuality(null);
+    try {
+      await open({});
+      const select = document.querySelector<HTMLSelectElement>("#settings-quality")!;
+      expect(select.value).toBe("medium");
+      expect(document.querySelector("#settings-quality-hint")!.textContent).toBe(SETTINGS_TEXT.downloadHintDeviceMedium);
+    } finally {
+      setTouchDevice(null);
+      setDeviceDefaultQuality(null);
+      localStorage.clear();
+    }
+  });
+
+  it("under safe mode shows the capped level and says so; picking a level ends safe mode (patch 7.11)", async () => {
+    localStorage.clear();
+    localStorage.setItem("bymr.quality", "high");
+    localStorage.setItem("bymr.safeMode", '{"cap":"medium","loads":{}}');
+    try {
+      await open({});
+      const select = document.querySelector<HTMLSelectElement>("#settings-quality")!;
+      const hint = document.querySelector("#settings-quality-hint")!;
+      expect(select.value).toBe("medium");
+      expect(hint.textContent).toBe(SETTINGS_TEXT.downloadHintSafeMode);
+      select.value = "high";
+      select.dispatchEvent(new Event("change"));
+      expect(localStorage.getItem("bymr.safeMode")).toBeNull();
+      expect(localStorage.getItem("bymr.quality")).toBe("high");
+      expect(hint.textContent).toContain(SETTINGS_TEXT.downloadHint.high);
+    } finally {
+      localStorage.clear();
+    }
+  });
+
+  it("under safe mode with no choice kept, says safe mode, not the device's default (patch 7.11)", async () => {
+    localStorage.clear();
+    localStorage.setItem("bymr.safeMode", '{"cap":"low","loads":{}}');
+    setDeviceDefaultQuality("medium");
+    try {
+      await open({});
+      expect(document.querySelector<HTMLSelectElement>("#settings-quality")!.value).toBe("low");
+      expect(document.querySelector("#settings-quality-hint")!.textContent).toBe(SETTINGS_TEXT.downloadHintSafeMode);
     } finally {
       setDeviceDefaultQuality(null);
       localStorage.clear();
