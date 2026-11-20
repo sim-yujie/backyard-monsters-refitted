@@ -903,6 +903,17 @@ export const INFERNO_PAINTED_BUILDING_ART: Readonly<Record<number, readonly Tier
       damaged: { top: ["top.c1.damaged@2x.webp", -48, -49], shadow: ["shadow.1.damaged.v2.jpg", -47, 17] },
       destroyed: { top: ["top.c1.destroyed@2x.webp", -53, -15], shadow: ["shadow.1.destroyed.v2.jpg", -54, 12] } },
   ],
+  // 12 General Store: painted, the Inferno's own shop (owner, 20 Nov 2026, patch 8.1), an original Codex design (Codex
+  // declined a recolour of the surface store), round 3 shop C of `web/tools/store-inferno/` (lava forge shop, painted at
+  // the game's 2:1 camera after the owner found round 2's angle wrong), its 80 x 40 base diamond where Flash's store
+  // stands, in the surface store's folder, with its own shadow (a little darker since the ruin pass, `.v2`). Damaged
+  // and destroyed are its own too (make_ruin.py, one Codex picture of both, fitted onto the shop), as the painted Resource
+  // Pod's and Housing Bunker's are. With the Classic look the Inferno draws Flash's store.
+  12: [
+    { from: 1, top: ["top.ishop3C@2x.webp", -52, -52], shadow: ["shadow.ishop3C.v2.jpg", -35, 25], lift: 0,
+      damaged: { top: ["top.ishop3C.damaged@2x.webp", -52, -62], shadow: ["shadow.ishop3C.damaged.v2.jpg", -35, 22] },
+      destroyed: { top: ["top.ishop3C.destroyed@2x.webp", -48, -3], shadow: ["shadow.ishop3C.destroyed.v2.jpg", -39, 39] } },
+  ],
   // 14 Under Hall: painted, Flash's three looks and three of its own (4 to 6, animated), each damaged and destroyed in paint too
   14: [
     { from: 1, top: ["top.c1@2x.webp", -52, -30], shadow: ["shadow.1.v2.jpg", -65, 49], lift: 0,

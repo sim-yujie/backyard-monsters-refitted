@@ -268,3 +268,58 @@ describe("attacking a wild monster camp straight from the map (camp healing)", (
     expect(tables.get(Save)!.filter((row) => row.baseid === CAMP_BASEID)).toHaveLength(1);
   });
 });
+
+describe("Repeat attack's putty fee: the attack load's beforeCommit hook (owner, 20 Nov 2026)", () => {
+  const withHook = (beforeCommit: (attackerSave: Save) => void) => {
+    const own = tables.get(Save)!.find((row) => row.saveuserid === ATTACKER && row.type === "main")!;
+    const user = { userid: ATTACKER, username: "alice", save: own } as unknown as User;
+    return baseModeAttack({ user, baseid: CAMP_BASEID, mapversion: 2, attackerLevel: 40, beforeCommit });
+  };
+
+  test("runs after every refusal and before the attack is written; its charge is in the session's pool", async () => {
+    const camp = damagedCamp(60 * 60);
+    seed(camp);
+    const seen: { attackid: unknown; sessions: number }[] = [];
+    const flush = em.flush;
+    let flushesAtHook = -1;
+    let flushes = 0;
+    em.flush = async () => {
+      flushes += 1;
+    };
+    try {
+      await withHook((attackerSave) => {
+        seen.push({ attackid: camp.attackid, sessions: sessions.size });
+        flushesAtHook = flushes;
+        attackerSave.resources = { ...(attackerSave.resources as object), r3: 400 } as Save["resources"];
+      });
+    } finally {
+      em.flush = flush;
+    }
+    // Not yet under attack, no session, and the attack's own flush still to
+    // come (the catch-ups before it flush their own rows).
+    expect(seen).toEqual([{ attackid: 0, sessions: 0 }]);
+    expect(flushes).toBeGreaterThan(flushesAtHook);
+    expect(camp.attackid).not.toBe(0);
+    // The pool the Catapult's shots are priced against holds the charge.
+    expect(sessions.get(CAMP_ROW)?.attackerResources?.r3).toBe(400);
+  });
+
+  test("a hook that refuses leaves the camp free and no session", async () => {
+    const camp = damagedCamp(60 * 60);
+    seed(camp);
+    await expect(
+      withHook(() => {
+        throw new Error("not enough putty");
+      })
+    ).rejects.toThrow("not enough putty");
+    expect(camp.attackid).toBe(0);
+    expect(sessions.size).toBe(0);
+  });
+
+  test("with no hook (a hand-played attack) the pool is untouched", async () => {
+    const camp = damagedCamp(60 * 60);
+    seed(camp);
+    await attack();
+    expect(sessions.get(CAMP_ROW)?.attackerResources?.r3).toBe(1_000);
+  });
+});

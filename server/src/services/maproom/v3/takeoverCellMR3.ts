@@ -79,6 +79,8 @@ export const takeoverCellMR3 = async (baseSave: Save, user: User, userSave: Save
   baseSave.damage = 0;
   baseSave.resources = {};
   baseSave.monsters = {};
+  // Main points it paid an earlier owner stay theirs (patch 8.1, `outpostEarned.ts`).
+  baseSave.mainpointsearned = 0;
   baseSave.attacks = [];
   baseSave.tutorialstage = 205;
   baseSave.createtime = getCurrentDateTime();

@@ -1,5 +1,6 @@
 import { PROTECTION_ITEMS, storeItems } from "../../game-data/store/storeItems.js";
 import { builtEvents } from "../../services/achievements/record.js";
+import { boardPointsOf } from "../../services/maproom/v2/outpostEarned.js";
 import { YardShopBuySchema } from "../../schemas/YardSchemas.js";
 import { overdriveGate } from "../../services/yard/hatchery.js";
 import { runningOrThrow } from "../../services/yard/locker.js";
@@ -317,6 +318,8 @@ const buyWalls = ({ save, body, now }: YardActionInput<{ item: string }>) => {
     },
     shiny: plan.shiny,
     points: plan.points,
+    // Blocks count on an outpost's board: booked on its `mainpointsearned` (patch 8.1).
+    boardPoints: plan.jobs.reduce((total, job) => total + boardPointsOf(job.t, job.detail.points), 0),
     achievementEvents: builtEvents(plan.jobs),
   };
 };

@@ -58,6 +58,8 @@ export const INFERNO_BUILD_BLURBS: Readonly<Record<number, string>> = {
   9: "Recycles monsters you no longer want, to make room for bigger and better things.",
   // Not built in Flash's Inferno; the surface's words (owner decision 2026-10-29).
   10: "Gives you a bird's-eye view of the yard, so moving buildings or remodelling it is a snap.",
+  // Flash's Inferno never offered it (owner, 20 Nov 2026); the surface's words.
+  12: "Spend Shiny on upgrades that save you time.",
   13: "Converts Magma into flesh and blood monsters to do your bidding.",
   // Flash's Inferno never offered it (owner decision 2026-11-02).
   16: "Runs all your Incubators from one queue: each monster goes to the next Incubator that is free.",

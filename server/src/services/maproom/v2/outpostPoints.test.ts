@@ -3,7 +3,7 @@ import { OUTPOST_COSTS, OUTPOST_TRAITS } from "../../../game-data/buildingCosts.
 import { STARTER_KITS } from "../../../game-data/starterKits.js";
 import type { BuildingData, BuildingDataMap } from "../../../types/BuildingData.js";
 import { kitBuildings } from "../../yard/starterKit.js";
-import { buildingSum, outpostPoints, outpostSum, tallyOutposts } from "./outpostPoints.js";
+import { buildingSum, countsOnBoard, netOutpostPoints, outpostPoints, outpostSum, tallyOutposts } from "./outpostPoints.js";
 import { buildingValue, outpostValue } from "./outpostValue.js";
 
 /**
@@ -170,5 +170,35 @@ describe("tallyOutposts", () => {
     expect(tally.get(7)).toEqual({ count: 2, points: 2 * 12_823_091 });
     expect(tally.get(9)).toEqual({ count: 1, points: 0 });
     expect(tally.get(8)).toBeUndefined();
+  });
+});
+
+describe("counted once (patch 8.1)", () => {
+  const regular = () => kitBuildings(kitByName("Regular Kit"), "resources", {}).buildingdata;
+
+  test("an outpost's board points are its points less the main points it paid, never below 0", () => {
+    expect(netOutpostPoints(regular(), 0)).toBe(12_823_091);
+    expect(netOutpostPoints(regular(), 823_091)).toBe(12_000_000);
+    expect(netOutpostPoints(regular(), "823091")).toBe(12_000_000);
+    expect(netOutpostPoints(regular(), 99_000_000)).toBe(0);
+    // Missing or junk reads as nothing paid.
+    expect(netOutpostPoints(regular(), null)).toBe(12_823_091);
+    expect(netOutpostPoints(regular(), undefined)).toBe(12_823_091);
+    expect(netOutpostPoints(regular(), "x")).toBe(12_823_091);
+    expect(netOutpostPoints(regular(), -5)).toBe(12_823_091);
+  });
+
+  test("the tally floors each outpost on its own: one that paid more than it counts takes nothing off another", () => {
+    const tally = tallyOutposts([
+      { userid: 7, buildingdata: regular(), mainpointsearned: 99_000_000 },
+      { userid: 7, buildingdata: regular(), mainpointsearned: "2823091" },
+      { userid: 7, buildingdata: JSON.stringify(regular()) },
+    ]);
+    expect(tally.get(7)).toEqual({ count: 3, points: 0 + 10_000_000 + 12_823_091 });
+  });
+
+  test("traps, decorations and junk do not count on the board; buildings, walls and the core do", () => {
+    for (const type of [1, 14, 15, 17, 18, 20, 112, 118]) expect(countsOnBoard(type)).toBe(true);
+    for (const type of [24, 117, 28, 27, 53, 54, 0, Number.NaN]) expect(countsOnBoard(type)).toBe(false);
   });
 });

@@ -29,6 +29,13 @@ import type { BuildingData, BuildingDataMap } from "../../../types/BuildingData.
  * Measured on the three Starter Kits (tests): Regular 12,823,091, Mega
  * 65,947,149 and Ultra 299,272,162 points, so Ultra gives the most points per
  * resource it costs, then Mega, then Regular.
+ *
+ * Counted once (patch 8.1, owner's fix C, 20 Nov 2026): a level the owner
+ * builds, upgrades or fortifies on an outpost also pays main points
+ * (`save.points`, through `poolView`), so the board takes the main points
+ * each outpost already paid, its `mainpointsearned`
+ * (`outpostEarned.ts`), off that outpost's points, never below 0
+ * ({@link netOutpostPoints}). `outpostPoints` itself stays the full formula.
  */
 
 /** The outpost's sum is divided by this, then rounded up. */
@@ -71,23 +78,31 @@ export interface BuildingSum {
 
 const NOTHING: BuildingSum = { build: 0, fortify: 0 };
 
+/** The type a stored building counts as (a legacy Stone Block is a Block); null for one that never counts. */
+const countedType = (type: number): number | null => {
+  if (!type || NEVER_LOADED.has(type)) return null;
+  const counted = type === LEGACY_STONE_BLOCK ? BLOCK : type;
+  const props = costOf(counted, "outpost");
+  return props && !NOT_COUNTED.has(props.kind) ? counted : null;
+};
+
+/**
+ * Whether a building of this type counts towards an outpost's points: not a
+ * trap, decoration, enemy or immovable building, not type 53 or 54. The main
+ * points such a building's steps pay on an outpost are the ones its
+ * `mainpointsearned` books (`outpostEarned.ts`); a trap's are not.
+ */
+export const countsOnBoard = (type: number): boolean => countedType(Math.trunc(Number(type))) !== null;
+
 /** One stored building's part of the outpost's sum S; zeros when it does not count. */
 export const buildingSum = (building: BuildingData | null | undefined): BuildingSum => {
   if (!building || typeof building !== "object") return NOTHING;
 
-  let type = Math.trunc(Number(building.t));
-  if (!type || NEVER_LOADED.has(type)) return NOTHING;
-
-  let level: number;
-  if (type === LEGACY_STONE_BLOCK) {
-    type = BLOCK;
-    level = 2;
-  } else {
-    level = loadedLevel(type, building);
-  }
-
-  const props = costOf(type, "outpost");
-  if (!props || NOT_COUNTED.has(props.kind)) return NOTHING;
+  const stored = Math.trunc(Number(building.t));
+  const type = countedType(stored);
+  if (type === null) return NOTHING;
+  const level = stored === LEGACY_STONE_BLOCK ? 2 : loadedLevel(type, building);
+  const props = costOf(type, "outpost")!;
 
   const fortLevel = Math.max(0, Math.floor(Number(building.fort ?? 0)) || 0);
   return {
@@ -113,6 +128,20 @@ export const outpostSum = (buildingdata: BuildingDataMap | null | undefined): nu
 export const outpostPoints = (buildingdata: BuildingDataMap | null | undefined): number =>
   Math.ceil(outpostSum(buildingdata) / OUTPOST_POINTS_DIVISOR);
 
+/**
+ * What one outpost adds to its owner's board score: its {@link outpostPoints}
+ * less the main points it already paid (`mainpointsearned`), never below 0,
+ * so no level counts twice (patch 8.1). A missing or unreadable
+ * `mainpointsearned` is 0.
+ */
+export const netOutpostPoints = (
+  buildingdata: BuildingDataMap | null | undefined,
+  mainpointsearned: number | string | null | undefined,
+): number => {
+  const earned = Number(mainpointsearned);
+  return Math.max(0, outpostPoints(buildingdata) - (Number.isFinite(earned) && earned > 0 ? earned : 0));
+};
+
 /** A player's outposts in all: how many, and their points added up. */
 export interface OutpostTally {
   count: number;
@@ -120,11 +149,16 @@ export interface OutpostTally {
 }
 
 /**
- * Adds up outposts per owner, from rows of `userid` and `buildingdata` (one
- * query over every outpost, not one per player).
+ * Adds up outposts per owner, from rows of `userid`, `buildingdata` and
+ * `mainpointsearned` (one query over every outpost, not one per player);
+ * each outpost adds its {@link netOutpostPoints}.
  */
 export const tallyOutposts = (
-  rows: readonly { userid: number | string; buildingdata: BuildingDataMap | string | null }[],
+  rows: readonly {
+    userid: number | string;
+    buildingdata: BuildingDataMap | string | null;
+    mainpointsearned?: number | string | null;
+  }[],
 ): Map<number, OutpostTally> => {
   const byUser = new Map<number, OutpostTally>();
   for (const row of rows) {
@@ -132,7 +166,7 @@ export const tallyOutposts = (
     const data = typeof row.buildingdata === "string" ? (JSON.parse(row.buildingdata) as BuildingDataMap) : row.buildingdata;
     const tally = byUser.get(userid) ?? { count: 0, points: 0 };
     tally.count++;
-    tally.points += outpostPoints(data);
+    tally.points += netOutpostPoints(data, row.mainpointsearned);
     byUser.set(userid, tally);
   }
   return byUser;

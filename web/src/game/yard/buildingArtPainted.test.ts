@@ -2,6 +2,7 @@ import { existsSync, readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { afterEach, describe, expect, it } from "vitest";
 import { setClassicLook } from "@/game/classicLook";
+import { buildPicture } from "./buildButtonArt";
 import { ArtState, resolveArt } from "./buildingArt";
 import { BUILDING_ART_ROWS } from "./buildingArtData";
 import { INFERNO_ART_ROWS } from "./buildingArtInfernoData";
@@ -329,5 +330,68 @@ describe("the painted Inferno Cavern (Moloch's cave on the main yard)", () => {
     expect(resolveArt(CAVE, 5, ArtState.DEFAULT)?.shadow?.url).toBe("/assets/buildings/iportal/shadow.5.v2.jpg");
     setClassicLook(true);
     expect(resolveArt(CAVE, 3, ArtState.DEFAULT)?.top.url).toBe("/assets/buildings/iportal/top.3.v2.png");
+  });
+});
+
+/**
+ * The Inferno's General Store (12, owner 20 Nov 2026, patch 8.1): an original painted Inferno shop with the Modern
+ * look (`web/tools/store-inferno/`, shop C), in the surface store's folder, standing on the surface Modern store's
+ * footprint; Flash's store with the Classic look; the surface keeps its own 3D store.
+ */
+describe("the painted Inferno General Store", () => {
+  const STORE = 12;
+  const folder = `${ASSETS}buildings/generalstore/`;
+  const root = "/assets/buildings/generalstore/";
+  const [look] = INFERNO_PAINTED_BUILDING_ART[STORE] ?? [];
+
+  it("is one look from level 1, its picture and shadow on disk, at an even @2x size", () => {
+    expect(INFERNO_PAINTED_BUILDING_ART[STORE]).toHaveLength(1);
+    expect(look?.from).toBe(1);
+    for (const file of [look?.top[0], look?.shadow?.[0]]) expect(existsSync(folder + (file ?? "")), file).toBe(true);
+    const [width, height] = webpSize(folder + (look?.top[0] ?? ""));
+    expect(width % 2).toBe(0);
+    expect(height % 2).toBe(0);
+  });
+
+  it("stands where the surface's Modern store does: base within 4 px, centred within 4 px", () => {
+    const surface = tierArtFor(STORE, 1, "main")?.top as TierImage;
+    expect(surface[0]).toBe("top.3d1@2x.webp");
+    const shop = look?.top as TierImage;
+    expect(Math.abs(bottomOf(shop, folder) - bottomOf(surface, folder))).toBeLessThanOrEqual(4);
+    const centre = (one: TierImage): number => one[1] + webpSize(folder + one[0])[0] / 4;
+    expect(Math.abs(centre(shop) - centre(surface))).toBeLessThanOrEqual(4);
+  });
+
+  it("shows in the Inferno yard with the Modern look, and leaves the surface's 3D store alone", () => {
+    expect(resolveArt(STORE, 1, ArtState.DEFAULT, "inferno")?.top.url).toBe(`${root}${look?.top[0]}`);
+    expect(resolveArt(STORE, 1, ArtState.DEFAULT, "inferno")?.shadow?.url).toBe(`${root}${look?.shadow?.[0]}`);
+    expect(resolveArt(STORE, 1, ArtState.DEFAULT)?.top.url).toBe(`${root}top.3d1@2x.webp`);
+  });
+
+  it("has its own damaged and destroyed looks, on disk, each with its own shadow", () => {
+    for (const state of [look?.damaged, look?.destroyed]) {
+      for (const file of [state?.top[0], state?.shadow?.[0]]) expect(existsSync(folder + (file ?? "")), file).toBe(true);
+    }
+    expect(resolveArt(STORE, 1, ArtState.DAMAGED, "inferno")?.top.url).toBe(`${root}top.ishop3C.damaged@2x.webp`);
+    expect(resolveArt(STORE, 1, ArtState.DESTROYED, "inferno")?.top.url).toBe(`${root}top.ishop3C.destroyed@2x.webp`);
+    expect(resolveArt(STORE, 1, ArtState.DESTROYED, "inferno")?.shadow?.url).toBe(`${root}shadow.ishop3C.destroyed.v2.jpg`);
+    // The surface's store keeps Flash's rubble.
+    expect(resolveArt(STORE, 1, ArtState.DESTROYED)?.top.url).not.toContain("ishop");
+  });
+
+  it("goes back to Flash's store with the Classic look", () => {
+    setClassicLook(true);
+    expect(tierArtFor(STORE, 1, "inferno")).toBeNull();
+    expect(resolveArt(STORE, 1, ArtState.DEFAULT, "inferno")?.top.url).toBe(`${root}top.1.png`);
+  });
+
+  it("has an Inferno build-menu picture of its own with the Modern look, and an Inferno Classic button (flames)", () => {
+    const modern = buildPicture(STORE, "inferno", false);
+    expect(modern.modern).toBe(true);
+    expect(modern.url).toMatch(/\/buildingbuttons\/modern\/12\.inferno\.[0-9a-f]{8}\.webp$/);
+    expect(existsSync(`${ASSETS}buildingbuttons/modern/${modern.url.split("/").at(-1)}`)).toBe(true);
+    expect(buildPicture(STORE, "inferno", true)).toEqual({ url: "/assets/buildingbuttons/general_store.v2.jpg", modern: false });
+    expect(existsSync(`${ASSETS}buildingbuttons/general_store.v2.jpg`)).toBe(true);
+    expect(buildPicture(STORE, "main", true)).toEqual({ url: "/assets/buildingbuttons/12.jpg", modern: false });
   });
 });

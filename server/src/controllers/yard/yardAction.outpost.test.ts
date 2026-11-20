@@ -24,6 +24,8 @@ import { yardShopBuyAction } from "./shopBuy.js";
 import { yardStarterKitAction } from "./starterKit.js";
 import { pendingAllianceEvents } from "../../services/alliance/allianceProgress.js";
 import { yardSpeedupAction } from "./speedup.js";
+import { yardBuildWallsAction } from "./buildWalls.js";
+import { yardInstantUpgradeAction } from "./instantUpgrade.js";
 import { yardStateAction } from "./state.js";
 import { yardCancelUpgradeAction, yardUpgradeAction } from "./upgrade.js";
 import {
@@ -1208,5 +1210,139 @@ describe("achievements (issue #204)", () => {
     expect(readAchievements(mainSave())).toMatchObject({ s: { blocksbuilt: 1, wmoutpost: 1, thlevel: 10 } });
     expect(readAchievements(mainSave()).backfilledAt).toBeGreaterThan(0);
     expect(outpostSave().achievements).toBeUndefined();
+  });
+});
+
+describe("counted once on the empire board (patch 8.1, mainpointsearned)", () => {
+  const RICH = { r1: 20_000_000, r2: 20_000_000, r3: 20_000_000, r4: 7 };
+  const mainPoints = () => Number(mainSave().points ?? 0);
+  const earned = () => Number(outpostSave().mainpointsearned ?? 0);
+
+  /** Runs `act` and gives the main points it paid and what the outpost booked. */
+  const measure = async (act: () => Promise<YardAnswer>) => {
+    const points = mainPoints();
+    const booked = earned();
+    const answer = await act();
+    expect(answer.status).toBe(200);
+    return { paid: mainPoints() - points, booked: earned() - booked, answer };
+  };
+
+  /** Every step the board counts: what main gained is what the outpost booked. */
+  const countedOnce = async (act: () => Promise<YardAnswer>) => {
+    const { paid, booked } = await measure(act);
+    expect(paid).toBeGreaterThan(0);
+    expect(booked).toBe(paid);
+  };
+
+  test("the catch-up's finished build, upgrade and fortification are booked", async () => {
+    db.rows.set(
+      OUTPOST,
+      outpostRow({
+        savetime: now() - 100,
+        buildingdata: {
+          "1": { id: 1, t: 112, X: 0, Y: -50, l: 1, cF: 5 },
+          "2": { id: 2, t: 15, X: 100, Y: 100, l: 1 },
+          "3": { id: 3, t: 20, X: -150, Y: 100, l: 1, cU: 20, cL: 20 },
+          "4": { id: 4, t: 21, X: 200, Y: 200, cB: 30, cL: 30 },
+        },
+      })
+    );
+    const { paid, booked, answer } = await measure(() => onOutpost(yardStateAction));
+    expect((answer.body.completed as unknown[]).length).toBe(3);
+    expect(paid).toBeGreaterThan(0);
+    expect(booked).toBe(paid);
+  });
+
+  test("a build finished by the owner's load (catchUpLockedOutpost) is booked", async () => {
+    db.rows.set(
+      OUTPOST,
+      outpostRow({
+        savetime: now() - 100,
+        buildingdata: { ...buildings(outpostRow()), "4": { id: 4, t: 21, X: 200, Y: 200, cB: 30, cL: 30 } },
+      })
+    );
+    const points = mainPoints();
+    await catchUpLockedOutpost(em as unknown as EntityManager, userOf(), outpostRow() as unknown as Save);
+    expect(mainPoints()).toBeGreaterThan(points);
+    expect(earned()).toBe(mainPoints() - points);
+  });
+
+  test("an instant build, an instant upgrade and a speed-up that finishes are booked", async () => {
+    db.rows.set(MAIN, mainRow({ credits: 100_000 }));
+    await countedOnce(() => onOutpost(yardInstantBuildAction, { type: 20, x: 250, y: -200 }));
+    await countedOnce(() => onOutpost(yardInstantUpgradeAction, { id: 3 }));
+    await onOutpost(yardFortifyAction, { id: 1 });
+    await countedOnce(() => onOutpost(yardSpeedupAction, { id: 1, item: "SP4" }));
+  });
+
+  test("walls: a placed Block, a line of Blocks, a single wall step and a wall upgrade are booked", async () => {
+    await countedOnce(() => onOutpost(yardBuildAction, { type: 17, x: 250, y: -200 }));
+    await countedOnce(() => onOutpost(yardBuildWallsAction, { type: 17, cells: JSON.stringify([[300, -200], [305, -200]]) }));
+    const block = Object.values(buildings(outpostSave())).find((b) => b.t === 17)!;
+    await countedOnce(() => onOutpost(yardUpgradeAction, { id: block.id }));
+    await countedOnce(() => onOutpost(yardShopBuyAction, { item: "BLK5" }));
+  });
+
+  test("a trap's points, a resource pack's and the outpost income are not booked", async () => {
+    db.rows.set(MAIN, mainRow({ credits: 100_000, resources: { r1: 0, r2: 0, r3: 0, r4: 0 } }));
+    const pack = await measure(() => onOutpost(yardShopBuyAction, { item: "BR23" }));
+    expect(pack.paid).toBeGreaterThan(0);
+    expect(pack.booked).toBe(0);
+
+    db.rows.set(MAIN, mainRow({ credits: 100_000 }));
+    const trap = await measure(() => onOutpost(yardBuildAction, { type: 24, x: 250, y: -200 }));
+    expect(trap.paid).toBeGreaterThan(0);
+    expect(trap.booked).toBe(0);
+    const instantTrap = await measure(() => onOutpost(yardInstantBuildAction, { type: 117, x: 300, y: -200 }));
+    expect(instantTrap.paid).toBeGreaterThan(0);
+    expect(instantTrap.booked).toBe(0);
+
+    const snappers = Object.fromEntries(
+      [10, 11].map((id) => [String(id), { id, t: 1, X: -200 + id * 40, Y: -250, l: 10 }])
+    );
+    db.rows.set(MAIN, mainRow({ buildingresources: { t: now() - 3600 } }));
+    db.rows.set(OUTPOST, outpostRow({ buildingdata: { ...buildings(outpostRow()), ...snappers } }));
+    const income = await measure(() => onOutpost(yardStateAction));
+    expect(income.paid).toBeGreaterThan(0);
+    expect(income.booked).toBe(0);
+  });
+
+  test("the main yard's own points are never booked on an outpost", async () => {
+    db.rows.set(MAIN, mainRow({ credits: 100_000 }));
+    await call(yardInstantBuildAction, { type: 20, x: 200, y: 200 });
+    expect(Number(mainSave().points)).toBeGreaterThan(0);
+    expect(mainSave().mainpointsearned).toBeUndefined();
+    expect(earned()).toBe(0);
+  });
+
+  test("a resource kit books only the level-1 build points its prefabs pay when they stand", async () => {
+    db.rows.set(MAIN, mainRow({ resources: RICH }));
+    const kit = await measure(() => onOutpost(yardStarterKitAction, { kit: 1, pay: "resources" }));
+    expect(kit.paid).toBe(0);
+    expect(kit.booked).toBe(0);
+
+    outpostSave().savetime = now() - 29 * 24 * 60 * 60;
+    const done = await measure(() => onOutpost(yardStateAction));
+    expect(done.paid).toBeGreaterThan(0);
+    expect(done.booked).toBe(done.paid);
+  });
+
+  test("a new kit keeps no more than the core's own fortification paid", async () => {
+    const forts = fortifyStepsOf(112, "outpost");
+    const corePaid = Math.floor(forts[0]!.slice(0, 5).reduce((a, b) => Number(a) + Number(b), 0) as number / 3);
+    db.rows.set(
+      OUTPOST,
+      outpostRow({
+        mainpointsearned: 50_000_000,
+        buildingdata: { ...buildings(outpostRow()), "1": { id: 1, t: 112, X: 0, Y: -50, l: 1, fort: 1 } },
+      })
+    );
+    await onOutpost(yardStarterKitAction, { kit: 1, pay: "shiny" });
+    expect(earned()).toBe(corePaid);
+
+    // Nothing paid since: a second kit on a bare core keeps nothing more.
+    db.rows.set(OUTPOST, { ...outpostSave(), mainpointsearned: 3 });
+    await onOutpost(yardStarterKitAction, { kit: 1, pay: "shiny" });
+    expect(earned()).toBe(3);
   });
 });

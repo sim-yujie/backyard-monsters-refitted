@@ -19,6 +19,7 @@ import { EndTakeoverOffer } from "@/ui/attack/EndTakeoverOffer";
 import { icon } from "@/ui/maproom1/icons";
 import { watchMoreBelow } from "@/ui/moreBelow";
 import { Panel } from "@/ui/Panel";
+import { resourceIcon } from "@/ui/resourceIcon";
 import {
   MOVES_CHANGED,
   MOVE_AND_ATTACK,
@@ -140,6 +141,10 @@ export const missingList = (missing: readonly PlanShortfall[]): HTMLElement => {
     if (item.kind === "monster") {
       row.className = "auto-attack__missing-monster";
       row.append(portraitOf(item.id), document.createTextNode(shortfallText(item)));
+    } else if (item.kind === "fee") {
+      // Repeat attack's fee (owner, 20 Nov 2026): "Putty: 1.2M short" by the putty pile.
+      row.className = "auto-attack__missing-fee";
+      row.append(resourceIcon("r3", { decorative: true, realm: "surface" }), document.createTextNode(shortfallText(item)));
     } else {
       row.textContent = shortfallText(item);
     }
@@ -242,6 +247,8 @@ export class AutoAttackFlow {
   private plan: AutoAttackPlanResponse["plan"] = null;
   /** The camp's damage the confirm sheet showed. */
   private damage = 0;
+  /** Repeat attack's putty fee for this camp, as the plan answer gave it (owner, 20 Nov 2026). */
+  private fee = 0;
   /** The key of the moves the confirm sheet showed, sent with "Move and attack". */
   private movesKey: string | null = null;
   private bar: RepeatBar | null = null;
@@ -368,6 +375,7 @@ export class AutoAttackFlow {
     const plan = answer.plan;
     this.plan = plan;
     this.damage = answer.damage;
+    this.fee = answer.fee ?? 0;
     this.movesKey = null;
     if (!plan) {
       this.show("Repeat attack", "auto-attack--confirm", [paragraph("You have no attack to repeat on this camp yet.")], [
@@ -382,7 +390,7 @@ export class AutoAttackFlow {
     const moves = refusal === null ? (answer.moves ?? []) : [];
     const body: HTMLElement[] = [];
     const banner = changed ? paragraph(MOVES_CHANGED, "auto-attack__changed") : null;
-    const army = this.armyColumn(plan, answer.damage);
+    const army = this.armyColumn(plan, answer.damage, answer.missing);
     let side: HTMLElement | null = null;
     if (refusal) {
       const rows =
@@ -417,10 +425,12 @@ export class AutoAttackFlow {
   }
 
   /** The camp, the champions and monsters, and the bombs: the column the sheet starts with. */
-  private armyColumn(plan: PlanSummary, damage: number): HTMLElement {
+  private armyColumn(plan: PlanSummary, damage: number, missing: readonly PlanShortfall[] = []): HTMLElement {
     const army = document.createElement("div");
     army.className = "repeat-prompt__army";
-    army.append(campHead(plan, damage), ...armyParts(plan));
+    const short = missing.find((item) => item.kind === "fee");
+    const fee = this.fee > 0 ? { fee: this.fee, short: short ? short.need - short.have : 0 } : null;
+    army.append(campHead(plan, damage), ...armyParts(plan, fee));
     return army;
   }
 
@@ -498,7 +508,7 @@ export class AutoAttackFlow {
     if (plan && (reason === "missing" || reason === "noRoom")) {
       const body: HTMLElement[] = [];
       if (this.movesKey) body.push(paragraph("Your yards changed.", "auto-attack__changed auto-attack__failure-context"));
-      const army = this.armyColumn(plan, this.damage);
+      const army = this.armyColumn(plan, this.damage, missing);
       const rows: HTMLElement[] = [];
       if (missing.length > 0) rows.push(shortageList(missing, plan.champions));
       if (reason === "noRoom" && data?.noRoom) rows.push(...roomParts(data.noRoom, data.yards ?? {}));

@@ -10,7 +10,8 @@ import type { BuildingDataMap } from "../../types/BuildingData.js";
  * board score is their main yard's empire points, the Flash score (`points` +
  * `basevalue`, `client/scripts/BASE.as:4835-4877`), plus the outpost points
  * (`services/maproom/v2/outpostPoints.ts`) of every Map Room 2 outpost they
- * hold when the board is built. The outpost part is never stored: a lost or
+ * hold when the board is built, less the main points each outpost already
+ * paid them (`mainpointsearned`, patch 8.1), so no level counts twice. The outpost part is never stored: a lost or
  * abandoned outpost stops counting at the next build, the new owner of a
  * taken-over one gains it, and the save's `points`, `basevalue` and
  * `empirepoints` stay the main yard's alone (player level, raids and attack
@@ -60,7 +61,7 @@ export interface BoardRow {
   readonly empirePoints: number;
   /** The main yard's empire points (`save.empirepoints`). */
   readonly yardPoints: number;
-  /** Every outpost they hold, its points added up (`outpostPoints.ts`). */
+  /** Every outpost they hold, its points less what it already paid main, added up (`outpostPoints.ts`). */
   readonly outpostPoints: number;
   /** Map Room 2 outposts they hold. */
   readonly outposts: number;
@@ -104,6 +105,8 @@ interface BoardSqlRow {
 interface OutpostSqlRow {
   userid: number | string;
   buildingdata: BuildingDataMap | string | null;
+  /** Main points the outpost already paid its owner, taken off its points (patch 8.1). */
+  mainpointsearned: number | string | null;
 }
 
 /**
@@ -126,12 +129,12 @@ export const BOARD_SQL = `
 `;
 
 /**
- * Every Map Room 2 outpost and who holds it, in one query for the whole board
- * (not one per player). Inferno yards are `inferno`, never `outpost`, so they
- * stay out.
+ * Every Map Room 2 outpost, who holds it and the main points it already paid
+ * them, in one query for the whole board (not one per player). Inferno yards
+ * are `inferno`, never `outpost`, so they stay out.
  */
 export const OUTPOSTS_SQL = `
-  SELECT o.userid, o.buildingdata
+  SELECT o.userid, o.buildingdata, o.mainpointsearned
   FROM bym.save o
   WHERE o.type = 'outpost'
 `;

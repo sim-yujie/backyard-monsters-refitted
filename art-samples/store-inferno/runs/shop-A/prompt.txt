@@ -1,0 +1,14 @@
+Use your image generation tool (one call) to create a new image and save it as sample-new.png in the current folder. Do not write code.
+
+Paint a small SHOP building for the Inferno, the monsters' underground world of dark volcanic rock, bone and glowing lava, where a player goes to buy things with Shiny (the game's premium currency, shown as small round shiny coins). An ORIGINAL design of your own. It must read as a shop at small size (about 90 px tall in the game): a counter or shop window at the front, and a hanging sign with a round coin symbol (NO letters, NO words). Compact, about as wide as it is tall, standing on a small square footprint.
+
+The design: EMBER TRADING POST: a squat hut of dark basalt blocks with a sloping roof of dark iron plates, a wooden counter at the front under a short iron awning, a small glowing coal lantern hanging at one corner, a few small crates and a sack of goods by the counter, a round brass coin sign hanging from a bracket. Warm orange light glowing from the doorway.
+
+It is for our isometric strategy game (cartoony, colourful monster world). The input, style.png, shows the Modern look of the Inferno buildings already in our game (an Under Hall, a Resource Pod, a Bone Cruncher, a Magma Tower, a Housing Bunker): match their materials, colours, level of detail and finish, so the shop looks made by the same artist.
+
+CAMERA: the game's isometric 3/4 view, seen from the front and above at about 35 degrees, the building turned about 45 degrees so two faces show (one toward the lower left, one toward the lower right), as the buildings in style.png.
+
+FINISH: the finish of input 1 and input 2 (the Modern look of the same game: clean stylised 3D renders): crisp, clean, smooth shading, small bevels catching the light, warm key light from the upper left, right-hand faces in medium shade (readable, not black), soft ambient occlusion in the creases, clean sharp edges, no thick black outline, no cel shading, no painterly brush strokes, no pixel art. Not neon, not over-saturated.
+
+Output: ONE image, 1024x1024, the building alone, complete and fully inside the image with margin, filling about 80% of the image height.
+Background everywhere: flat pure green #00FF00, also in every gap between the parts. No ground plane, no lava pool, no grass, no tile, no cast shadow on the ground, no grid lines, no text, no letters, no labels. The building itself must contain no bright pure green.

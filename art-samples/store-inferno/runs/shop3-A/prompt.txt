@@ -1,0 +1,17 @@
+Use your image generation tool (one call) to create a new image and save it as sample-new.png in the current folder. Do not write code.
+
+Paint a small SHOP building for the Inferno, the monsters' underground world of dark volcanic rock, bone and glowing lava, where a player goes to buy things with Shiny (the game's premium currency, shown as small round shiny coins). An ORIGINAL design of your own. It must read as a shop at small size (about 90 px tall in the game): a counter or shop window at the front, and a hanging sign with a round coin symbol (NO letters, NO words). Compact, about as wide as it is tall, standing on a small square footprint.
+
+The design: EMBER TRADING POST: a squat hut of dark basalt blocks with a sloping roof of dark iron plates, a wooden counter at the front under a short iron awning, a small glowing coal lantern hanging at one corner, a few small crates and a sack of goods by the counter, a round brass coin sign hanging from a bracket. Warm orange light glowing from the doorway.
+
+It is for our isometric strategy game (cartoony, colourful monster world).
+
+CAMERA (most important, an earlier attempt got it wrong): the game's fixed 2:1 isometric camera, exactly as guide.png draws it. The building stands on a SQUARE footprint seen as a diamond twice as wide as it is tall (the white diamond in guide.png). Its FRONT CORNER points straight at the viewer, in the middle of the picture, so its LEFT wall (facing the lower left) and its RIGHT wall (facing the lower right) show EQUALLY wide, each going up and back at the same 2:1 slope as the diamond's edges, and the vertical corners stand straight up. NOT turned, NOT a front view, NOT a three-quarter view with one wall wider.
+Input 1, guide.png (1024x1024): the camera drawn as lines: the base diamond and a box standing on it. Paint the shop IN THE SAME PLACE AND SIZE: its base fills the white diamond, its walls rise along the dark vertical lines, its roof may rise higher. Signs, lanterns and small props may stick out a little. Do NOT draw the guide lines.
+Input 2, angle.png: two of our Inferno buildings at this same camera, the same white 2:1 diamond drawn under each: the ring of horns sits exactly on its diamond, the round Strongbox's base is the same 2:1 ellipse. Match this viewpoint.
+Input 3, style.png: the Modern look of our Inferno buildings: match their materials, colours, level of detail and finish, so the shop looks made by the same artist.
+
+FINISH: the finish of input 1 and input 2 (the Modern look of the same game: clean stylised 3D renders): crisp, clean, smooth shading, small bevels catching the light, warm key light from the upper left, right-hand faces in medium shade (readable, not black), soft ambient occlusion in the creases, clean sharp edges, no thick black outline, no cel shading, no painterly brush strokes, no pixel art. Not neon, not over-saturated.
+
+Output: ONE image, 1024x1024, the building alone where guide.png puts it, complete and fully inside the image.
+Background everywhere: flat pure green #00FF00, also in every gap between the parts. No guide lines, no diamond, no ground plane, no lava pool, no grass, no tile, no cast shadow on the ground, no grid lines, no text, no letters, no labels. The building itself must contain no bright pure green.

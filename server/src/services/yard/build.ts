@@ -20,6 +20,7 @@ import {
   type StorageCapSave,
 } from "../base/economy/resourceBudget.js";
 import { requirementDetail } from "../base/economy/transitions.js";
+import { boardPointsOf } from "../maproom/v2/outpostEarned.js";
 import {
   countOfType,
   hallName,
@@ -177,7 +178,8 @@ export const OUTPOST_BUILDABLE_TYPES: ReadonlySet<number> = new Set(
  * `client/scripts/INFERNOYARDPROPS.as` and `BUILDINGSPOPUP.as`): the four
  * harvesters, the Resource Pod, Monster Locker, Juicer, Incubator, walls,
  * Sniper, booby trap, Academy, Housing Bunker, Quake Tower, Inferno Cannon and
- * Magma Tower. Each one's count and Under Hall level are the table's own.
+ * Magma Tower, and this project's Yard Planner, Incubator Control Centre and
+ * General Store (owner, 20 Nov 2026: the Inferno's way into the Shop). Each one's count and Under Hall level are the table's own.
  */
 export const INFERNO_YARD_BUILDABLE_TYPES: ReadonlySet<number> = new Set(INFERNO_BUILDABLE_TYPES);
 
@@ -435,6 +437,8 @@ export const planBuild = (save: BuildSave, request: BuildRequest, now: number) =
       slices: { buildingdata: { ...save.buildingdata, [String(id)]: finishedBuilding(id, request) } },
       debit: cost,
       points,
+      // A wall's count on an outpost's board, a trap's do not (patch 8.1).
+      boardPoints: boardPointsOf(request.type, points),
     };
   }
 
@@ -497,6 +501,7 @@ export const planInstantBuild = (save: BuildSave, request: BuildRequest, now: nu
     slices: { buildingdata: { ...save.buildingdata, [String(id)]: building } },
     shiny,
     points,
+    boardPoints: boardPointsOf(request.type, points),
   };
 };
 
