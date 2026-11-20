@@ -1,4 +1,5 @@
 import { Status } from "../../enums/StatusCodes.js";
+import { bookOutpostPoints } from "../../services/maproom/v2/outpostEarned.js";
 import { WallUpgradeSchema } from "../../schemas/YardPlannerSchemas.js";
 import { advanceBuildingTimers } from "../../services/base/advanceBuildingTimers.js";
 import { healChampions } from "../../services/yard/catchUpChampions.js";
@@ -79,6 +80,8 @@ const upgradeWallsOn = (save: Save, ids: readonly number[], level: number, now: 
     Operation.SUBTRACT
   );
   save.points = String(Number(save.points ?? "0") + plan.points);
+  // Blocks count on an outpost's board: booked on its `mainpointsearned` (patch 8.1).
+  bookOutpostPoints(save, plan.points);
   syncDerivedLevels(save);
   syncBaseValue(save);
   // The caged champions keep the healing `savetime` moves past.

@@ -235,6 +235,9 @@ export const takeoverCell: KoaController = async (ctx) => {
     cellSave.resources = {};
     cellSave.tutorialstage = 205;
     cellSave.monsters = {};
+    // The main points the outpost paid its old owner stay theirs (patch 8.1):
+    // the new owner's board counts everything that stands on it.
+    cellSave.mainpointsearned = 0;
 
     cellSave.takeoverDate = new Date();
 

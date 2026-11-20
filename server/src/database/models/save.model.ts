@@ -484,6 +484,18 @@ export class Save {
   starterkit!: Opt<number>;
 
   /**
+   * An outpost's main points (`points` on its owner's main row) that its
+   * owner earned there by building, upgrading or fortifying a building the
+   * empire board counts (patch 8.1, owner's fix C, 20 Nov 2026). The board
+   * takes it off the outpost's points so no level counts twice
+   * (`services/maproom/v2/outpostPoints.ts`, `outpostEarned.ts`). 0 on every
+   * other yard, and on an outpost just taken over. Server-only, never sent
+   * to the client.
+   */
+  @Property({ type: new BigIntType("number"), default: 0 })
+  mainpointsearned!: Opt<number>;
+
+  /**
    * The main yard's Town Hall level, 0 for none (`services/yard/townHallColumn.ts`).
    * Kept in step with `buildingdata` by {@link Save.syncTownHallLevel} on every
    * insert and every update that touches `buildingdata`, so no write path has

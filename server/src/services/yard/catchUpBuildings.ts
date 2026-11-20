@@ -11,6 +11,7 @@ import {
   upgradeSteps,
   yardKindOf,
 } from "../yardplanner/costs.js";
+import { boardPointsOf, bookOutpostPoints } from "../maproom/v2/outpostEarned.js";
 import { syncDerivedLevels, type DerivedLevelsSave } from "./derivedLevels.js";
 
 /**
@@ -39,6 +40,10 @@ import { syncDerivedLevels, type DerivedLevelsSave } from "./derivedLevels.js";
  * - **Store buffs** whose `e` has passed are removed, the rule
  *   `services/base/clearExpiredStoreItems.ts` applies on load, here run against
  *   the catch-up's own `now` so the step stays free of the clock.
+ *
+ * On an outpost the points of a building the empire board counts are also
+ * booked on the outpost's `mainpointsearned` (patch 8.1,
+ * `services/maproom/v2/outpostEarned.ts`), so the board counts them once.
  *
  * A fortification that completes earns `Fortified()`'s points, a third of the
  * step's time and resources (`:2485-2503`), from the yard's own fortify ladder
@@ -93,6 +98,8 @@ export interface CatchUpBuildingsSave extends DerivedLevelsSave {
   buildinghealthdata?: BuildingHealthData | null;
   storedata?: JsonObject | null;
   points?: string;
+  /** An outpost's main points paid for counted steps (`outpostEarned.ts`). */
+  mainpointsearned?: number | string | null;
 }
 
 /** A countdown the way `advanceBuildingTimers` reads one: any truthy number. */
@@ -229,6 +236,8 @@ export const catchUpBuildings = (
 
   const points = jobs.reduce((total, job) => total + job.detail.points, 0);
   if (points > 0) save.points = String(Number(save.points ?? "0") + points);
+  // On an outpost, the part the empire board also counts is booked (patch 8.1).
+  bookOutpostPoints(save, jobs.reduce((total, job) => total + boardPointsOf(job.t, job.detail.points), 0));
 
   syncDerivedLevels(save);
 

@@ -196,6 +196,8 @@ beforeEach(() => {
       // 28,000,000; the server never reads it.
       buildingdata: kitBuildings(STARTER_KITS[0]!, "shiny", {}).buildingdata,
       empirevalue: 10_000_000,
+      // Main points it paid the owner (patch 8.1): the taker starts at 0.
+      mainpointsearned: 1_234_567,
     }),
     cellRow(CAMP, 0, 1, { basesaveid: 901, userid: 0, saveuserid: 0, type: "tribe", damage: 95, wmid: 41 }),
   ];
@@ -239,7 +241,7 @@ describe("takeoverCell", () => {
     expect(outpost().protected as number).toBeLessThanOrEqual(now() + 12 * 3600);
     // Its Regular Kit prices it at 10,000,000 of each, not its stored empirevalue.
     expect(takerResources()).toEqual({ r1: 90_000_000, r2: 90_000_000, r3: 90_000_000, r4: 90_000_000 });
-    expect(outpost()).toMatchObject({ userid: TAKER, saveuserid: TAKER, name: "taker" });
+    expect(outpost()).toMatchObject({ userid: TAKER, saveuserid: TAKER, name: "taker", mainpointsearned: 0 });
     expect(outpost().protected as number).toBeGreaterThan(now() + 11 * 3600);
     expect(cells[0]).toMatchObject({ uid: TAKER, base_type: 3 });
     expect(takerSave.outposts).toEqual([[240, 208, OUTPOST]]);
