@@ -631,3 +631,59 @@ describe("the Attacking bar (owner, 20 Nov 2026: a five-kind army showed four co
     flow.close();
   });
 });
+
+describe("Repeat attack's putty fee (owner, 20 Nov 2026)", () => {
+  it("the sheet shows the fee as the putty pile and its amount, Attack now ready", async () => {
+    const modal = document.createElement("div");
+    const flow = new AutoAttackFlow({ baseid: BASEID, cell: CELL, modal, onWatch: vi.fn(), calls: calls(), now: () => 1_007_300 });
+    await flow.start(answer({ fee: 3_000_000 }));
+    const fee = modal.querySelector(".repeat-prompt__fee")!;
+    expect(fee).not.toBeNull();
+    expect(fee.querySelector(".res-icon--r3")).not.toBeNull();
+    expect(text(fee.querySelector(".repeat-prompt__fee-number"))).toBe("3M");
+    expect(fee.getAttribute("aria-label")).toBe("Repeat fee: 3,000,000 putty, paid when the attack starts");
+    expect(fee.classList.contains("repeat-prompt__fee--short")).toBe(false);
+    // After the Catapult's shots, in the cost area.
+    expect(modal.querySelector(".repeat-prompt__bombs + .repeat-prompt__fee")).not.toBeNull();
+    expect(button(modal, "Attack now")?.disabled).toBe(false);
+  });
+
+  it("short of putty: Attack now greyed, the refusal and the fee say how much putty is short", async () => {
+    const modal = document.createElement("div");
+    const flow = new AutoAttackFlow({ baseid: BASEID, cell: CELL, modal, onWatch: vi.fn(), calls: calls(), now: () => 1_007_300 });
+    await flow.start(answer({ fee: 3_000_000, missing: [{ kind: "fee", need: 3_010_000, have: 1_800_000 }] }));
+    expect(button(modal, "Attack now")?.disabled).toBe(true);
+    expect(text(modal.querySelector(".auto-attack__refusal"))).toBe("Not enough putty for the fee.");
+    expect(text(modal.querySelector(".repeat-prompt__short--fee"))).toBe("1.3M short");
+    expect(text(modal.querySelector(".repeat-prompt__fee-short"))).toBe("1.3M short");
+    expect(modal.querySelector(".repeat-prompt__fee--short")).not.toBeNull();
+  });
+
+  it("refused at the server for the fee: the same picture, nothing else", async () => {
+    const modal = document.createElement("div");
+    const refused = new ApiError("You do not have everything that attack used.", {
+      status: 409,
+      details: { data: { reason: "missing", missing: [{ kind: "fee", need: 3_000_000, have: 2_999_000 }] } } as never,
+    });
+    const flow = new AutoAttackFlow({
+      baseid: BASEID,
+      cell: CELL,
+      modal,
+      onWatch: vi.fn(),
+      calls: calls({ run: vi.fn(async () => Promise.reject(refused)) }),
+      now: () => 1_007_300,
+    });
+    await flow.start(answer({ fee: 3_000_000 }));
+    button(modal, "Attack now")!.click();
+    await settle();
+    await settle();
+    expect(text(modal.querySelector(".auto-attack__refusal"))).toBe("Not enough putty for the fee.");
+    expect(text(modal.querySelector(".repeat-prompt__short--fee"))).toBe("1K short");
+  });
+
+  it("the camp panel's short line names the putty", async () => {
+    const { shortfallText } = await import("./autoAttackText");
+    expect(shortfallText({ kind: "fee", need: 2_500_000, have: 1_300_000 })).toBe("Putty: 1.2M short");
+    expect(shortfallText({ kind: "fee", need: 2_500_000, have: 2_499_999 })).toBe("Putty: 1 short");
+  });
+});

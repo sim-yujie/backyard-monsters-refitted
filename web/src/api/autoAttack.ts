@@ -14,7 +14,9 @@ import type { ApiEnvelope, BaseLoadResponse } from "./types";
 export type PlanShortfall =
   | { readonly kind: "monster"; readonly id: string; readonly need: number; readonly have: number }
   | { readonly kind: "champion"; readonly t: number; readonly reason: "none" | "hurt" | "away" }
-  | { readonly kind: "bomb"; readonly id: string; readonly reason: "catapult" | "cost" | "unknown" };
+  | { readonly kind: "bomb"; readonly id: string; readonly reason: "catapult" | "cost" | "unknown" }
+  /** Not enough putty for Repeat attack's fee and the Catapult's putty shots together. */
+  | { readonly kind: "fee"; readonly need: number; readonly have: number };
 
 /** The attack a camp would repeat. */
 export interface PlanSummary {
@@ -76,6 +78,11 @@ export interface AutoAttackPlanResponse extends ApiEnvelope {
   readonly underAttack: boolean;
   /** The camp's damage now, whole. */
   readonly damage: number;
+  /**
+   * Repeat attack's putty fee for this camp, burned before the attack starts
+   * (owner, 20 Nov 2026). Absent from an older server.
+   */
+  readonly fee?: number;
 }
 
 export interface ResourceAmounts {
@@ -106,6 +113,8 @@ export interface AutoAttackResponse extends ApiEnvelope {
   /** Monsters moved into the yards in range before the attack. */
   readonly moved?: readonly YardMove[];
   readonly yards?: Readonly<Record<string, YardLabel>>;
+  /** The putty fee burned before the attack started. */
+  readonly fee?: number;
 }
 
 /** The last auto-attack's battle, for Watch. */

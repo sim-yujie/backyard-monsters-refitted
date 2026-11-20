@@ -236,6 +236,41 @@
   padding-inline: 6px;
 }
 
+/* Repeat attack's putty fee (owner, 20 Nov 2026): one row under the
+   Catapult, the word, the putty pile and the amount; red with what is short
+   when the pool cannot pay it. */
+.repeat-prompt__fee {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2) var(--space-3);
+  min-height: 36px;
+}
+
+.repeat-prompt__fee-word {
+  font-weight: 700;
+}
+
+.repeat-prompt__fee-amount {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  font-size: var(--text-md);
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.repeat-prompt__fee-amount > .res-icon {
+  flex: none;
+  width: 28px;
+}
+
+.repeat-prompt__fee-short {
+  color: var(--colour-warning);
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
 /* ── The moves ─────────────────────────────────────────────────────────── */
 
 .repeat-prompt__columns {
