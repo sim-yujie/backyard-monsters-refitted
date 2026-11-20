@@ -653,6 +653,43 @@
   }
 }
 
+/* A short screen (a phone on its side, a phone upright with Safari's bars,
+   an iPad in Split View): the bombs on one row, the painted bomb then the
+   piles, so the first move card is in sight without scrolling. */
+@media (max-height: 500px), (max-width: 899px) and (max-height: 800px) {
+  /* The bombs on one row: the painted bomb, then the piles. */
+  .repeat-prompt__bombs {
+    flex-direction: row;
+    align-items: center;
+  }
+
+  .repeat-prompt__bombs > .repeat-prompt__heading {
+    flex: none;
+    min-height: 0;
+  }
+
+  .repeat-prompt__bombs > .repeat-prompt__heading > .repeat-prompt__heading-word {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+  }
+
+  .repeat-prompt__bombs > .repeat-prompt__heading .game-icon {
+    width: 28px;
+    height: 28px;
+  }
+
+  .repeat-prompt__bombs > .repeat-prompt__grid {
+    flex: 1 1 auto;
+  }
+
+  .auto-attack--prompt .repeat-prompt__bombs .attack-window__art {
+    height: 30px;
+  }
+}
+
 /* ── A short screen (a phone on its side) ──────────────────────────────── */
 
 @media (max-height: 500px) {
@@ -730,34 +767,6 @@
 
   .auto-attack--prompt .attack-end__actions > .btn {
     min-height: 44px;
-  }
-
-  /* The bombs on one row: the painted bomb, then the piles. */
-  .repeat-prompt__bombs {
-    flex-direction: row;
-    align-items: center;
-  }
-
-  .repeat-prompt__bombs > .repeat-prompt__heading {
-    flex: none;
-    min-height: 0;
-  }
-
-  .repeat-prompt__bombs > .repeat-prompt__heading > .repeat-prompt__heading-word {
-    position: absolute;
-    width: 1px;
-    height: 1px;
-    overflow: hidden;
-    clip-path: inset(50%);
-  }
-
-  .repeat-prompt__bombs > .repeat-prompt__heading .game-icon {
-    width: 28px;
-    height: 28px;
-  }
-
-  .repeat-prompt__bombs > .repeat-prompt__grid {
-    flex: 1 1 auto;
   }
 
   .repeat-prompt__short,
