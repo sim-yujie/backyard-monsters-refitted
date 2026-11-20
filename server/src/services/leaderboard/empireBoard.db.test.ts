@@ -5,6 +5,8 @@ import ormConfig from "../../mikro-orm.config.js";
 import { Save } from "../../database/models/save.model.js";
 import { User } from "../../database/models/user.model.js";
 import { STARTER_KITS } from "../../game-data/starterKits.js";
+import { estimateMainPointsEarned } from "../maproom/v2/outpostEarned.js";
+import { seedMainPointsEarned } from "../maproom/v2/outpostEarnedSeed.js";
 import { tallyOutposts } from "../maproom/v2/outpostPoints.js";
 import { kitBuildings } from "../yard/starterKit.js";
 import { BOARD_SQL, OUTPOSTS_SQL, rankRows } from "./empireBoard.js";
@@ -134,6 +136,48 @@ describe.skipIf(!dbName)("the empire leaderboard query (beta.4)", () => {
     await yardOf(id, "inferno", 2, kitBuildings(STARTER_KITS[2]!, "shiny", {}).buildingdata);
     // 100 main yard points + the Regular Kit's 12,823,091.
     expect(await ours()).toEqual([{ name: "outposter", points: 100 + 12_823_091, outposts: 2 }]);
+  });
+
+  test("each outpost adds its points less the main points it paid, never below 0 (patch 8.1)", async () => {
+    const id = await player("counted", "100");
+    await yardOf(id, "outpost", 0, kitBuildings(STARTER_KITS[0]!, "shiny", {}).buildingdata);
+    await yardOf(id, "outpost", 1, kitBuildings(STARTER_KITS[0]!, "shiny", {}).buildingdata);
+    await sql(`UPDATE bym.save SET mainpointsearned = 2823091 WHERE baseid = ?`, [String(900000000 + id * 10)]);
+    await sql(`UPDATE bym.save SET mainpointsearned = 99000000 WHERE baseid = ?`, [String(900000000 + id * 10 + 1)]);
+    expect(await ours()).toEqual([{ name: "counted", points: 100 + 10_000_000, outposts: 2 }]);
+  });
+
+  test("the one-off seed fills the estimate, never lowers a value, and runs once unless forced", async () => {
+    const id = await player("seeded", "100");
+    const regular = kitBuildings(STARTER_KITS[0]!, "resources", {}).buildingdata;
+    // Every prefab standing: each paid its level-1 build points.
+    const standing = Object.fromEntries(
+      Object.entries(regular).map(([key, b]) => {
+        const { cB: _cB, cL: _cL, prefab, ...rest } = b as unknown as Record<string, unknown>;
+        return [key, prefab ? { ...rest, l: prefab } : rest];
+      }),
+    );
+    await yardOf(id, "outpost", 0, standing);
+    await yardOf(id, "outpost", 1, standing);
+    const [low, high] = [String(900000000 + id * 10), String(900000000 + id * 10 + 1)];
+    await sql(`UPDATE bym.save SET mainpointsearned = 99000000 WHERE baseid = ?`, [high]);
+    const estimate = estimateMainPointsEarned(standing as never, 0);
+    expect(estimate).toBeGreaterThan(0);
+
+    const earned = async () =>
+      (await sql<{ baseid: string; mainpointsearned: string }>(
+        `SELECT baseid, mainpointsearned FROM bym.save WHERE baseid IN (?, ?) ORDER BY baseid`,
+        [low, high],
+      )).map((row) => Number(row.mainpointsearned));
+
+    const dry = await seedMainPointsEarned(orm.em.fork(), {});
+    expect(dry.rows.find((row) => row.basesaveid > 0 && row.userid === id && row.before === 0)?.after).toBe(estimate);
+    expect(await earned()).toEqual([0, 99_000_000]);
+
+    await seedMainPointsEarned(orm.em.fork(), { apply: true, force: true });
+    expect(await earned()).toEqual([estimate, 99_000_000]);
+    await expect(seedMainPointsEarned(orm.em.fork(), { apply: true })).rejects.toThrow("already ran");
+    await sql(`COMMENT ON COLUMN bym.save.mainpointsearned IS NULL`);
   });
 
   test("a big enough outpost lifts a player past one with a bigger main yard", async () => {
