@@ -62,13 +62,17 @@ import {
  * per player and ten a minute.
  *
  * The putty fee (owner, 20 Nov 2026, superseding "free beyond the monsters
- * spent"): a heavy convenience fee by the camp's level (`repeatFee.ts`),
- * burned before the attack starts, in the same flush that starts it
+ * spent"): a heavy convenience fee by the camp's level (`repeatFee.ts`:
+ * Lv 25-29 2M, 30-34 2.5M, 35-39 3M, 40-44 3.5M putty), burned before the
+ * attack starts, in the same flush that starts it
  * (`baseModeAttack`'s `beforeCommit`). The pool must hold the fee and the
  * Catapult's putty shots together, or the attack is refused with nothing
  * spent. Once started the fee is gone, won or lost; only an attack that
  * started but can never land (no session, no checkpoint, its row moved on)
- * gets it back. Hand-played attacks stay free.
+ * gets it back. Hand-played attacks stay free. It is a convenience fee, not a
+ * promise of a putty loss: a full destroy of a fresh camp can bank more putty
+ * than its fee, which the owner accepts (it weighs most on the easy low-level
+ * camps, and players still need putty for outpost kits).
  *
  * Nothing comes from the client but the camp's base id. The attack goes
  * through the same doors as a hand-played one: the attack load's own
