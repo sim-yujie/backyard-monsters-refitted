@@ -368,6 +368,11 @@ describe("the painted Inferno General Store", () => {
     expect(resolveArt(STORE, 1, ArtState.DEFAULT)?.top.url).toBe(`${root}top.3d1@2x.webp`);
   });
 
+  it("has no ruins of its own yet: damaged is the shop itself, destroyed Flash's store rubble", () => {
+    expect(resolveArt(STORE, 1, ArtState.DAMAGED, "inferno")?.top.url).toBe(`${root}${look?.top[0]}`);
+    expect(resolveArt(STORE, 1, ArtState.DESTROYED, "inferno")?.top.url).toBe(`${root}top.1.destroyed.png`);
+  });
+
   it("goes back to Flash's store with the Classic look", () => {
     setClassicLook(true);
     expect(tierArtFor(STORE, 1, "inferno")).toBeNull();

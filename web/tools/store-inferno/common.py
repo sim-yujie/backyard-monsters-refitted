@@ -2,9 +2,11 @@
 an inferno copy for modern theme. No need 3d blender.").
 
 The General Store (type 12) can be built in the Inferno from patch 8.1. With the Classic look it draws Flash's own
-store (`buildings/generalstore/top.1.png`), as on the surface. With the Modern look it draws an Inferno-coloured copy
-of the surface's Modern store (`top.3d1@2x.webp`, the 3D matchbook): the same shape, repainted by Codex in the
-Inferno's palette, fitted onto the surface picture's box and drawn on its shadow (`shadow.3d1.jpg`).
+store (`buildings/generalstore/top.1.png`), as on the surface. Round 1 asked Codex for an Inferno-coloured copy of the
+surface's Modern store; Codex declined all three (art-samples/store-inferno/runs/A-C/prompt.txt are those prompts,
+kept as the record; their scripts are gone). Round 2, the owner's pick: an ORIGINAL Inferno shop in the Modern look,
+three designs (shop_texts.py), painted by run_shop.sh, fitted onto the surface Modern store's footprint (finish.py,
+FIT=band), written into the game by export.py with its own shadow, and shown to the owner by sheet.py.
 
 Reuses web/tools/inferno-paint/common.py (keying on green, premultiplied resize, the yard's ground tiles).
 """

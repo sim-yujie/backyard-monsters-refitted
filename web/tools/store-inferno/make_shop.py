@@ -10,8 +10,7 @@ from PIL import Image
 
 sys.path.insert(0, str(Path(__file__).parent))
 from common import ASSETS, OUT  # noqa: E402
-from shop_texts import SHOP, VARIANTS  # noqa: E402
-from texts import FINISH  # noqa: E402
+from shop_texts import FINISH, SHOP, VARIANTS  # noqa: E402
 
 variant = sys.argv[1]
 out = OUT / "runs" / f"shop-{variant}"

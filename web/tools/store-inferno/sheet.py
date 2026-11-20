@@ -69,3 +69,17 @@ for r in rows:
     y += r.height
 big.save(OUT / "compare-shops-big.png")
 print(OUT / "compare-shops.png", OUT / "compare-shops-big.png", big.size)
+
+# compare-shops-each.png: each shop alone on lava with its shadow, 5 px a world px, two to a row (A B / C)
+cells = []
+for v in "ABC":
+    im, xs = scene([SHOPS[f"Shop {v}"]], step=170, k=5)
+    im = im.crop((60, 380, im.width - 60, 1080))   # around the shop and its shadow
+    xs = [x - 60 for x in xs]
+    cells.append(labelled(im, [f"Shop {v}"], xs))
+cw, ch = cells[0].width, cells[0].height
+each = Image.new("RGB", (cw * 2 + 10, ch * 2 + 10), (24, 24, 24))
+for i, c in enumerate(cells):
+    each.paste(c, ((i % 2) * (cw + 10), (i // 2) * (ch + 10)))
+each.save(OUT / "compare-shops-each.png")
+print(OUT / "compare-shops-each.png", each.size)

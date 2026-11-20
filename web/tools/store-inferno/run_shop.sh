@@ -16,4 +16,4 @@ own=$(ls -t $HOME/.codex/generated_images/$sid/*.png 2>/dev/null | head -1)
 [ -n "$own" ] && cp "$own" sample-new.png   # the raw image of this session, never a copy Codex edited
 echo "$(date +%H:%M) store-inferno shop-$1 $(( $(date +%s) - start ))s $([ -f sample-new.png ] && echo ok || echo NO-OUTPUT)" | tee -a $LOG
 [ -f sample-new.png ] || { tail -5 codex.log; exit 1; }
-$PY -I "$K/finish.py" "shop-$1"
+FIT=band $PY -I "$K/finish.py" "shop-$1"   # band: the signs stick out at the side

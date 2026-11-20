@@ -905,8 +905,8 @@ export const INFERNO_PAINTED_BUILDING_ART: Readonly<Record<number, readonly Tier
   ],
   // 12 General Store: painted, the Inferno's own shop (owner, 20 Nov 2026, patch 8.1), an original Codex design (Codex
   // declined a recolour of the surface store), shop C of `web/tools/store-inferno/` (lava forge shop), on the surface
-  // store's footprint in the surface store's folder, with its own shadow. No damaged look of its own: the whole look
-  // tinted; destroyed is Flash's store rubble. With the Classic look the Inferno draws Flash's store.
+  // store's footprint in the surface store's folder, with its own shadow. No ruins of its own yet: damaged shows the
+  // shop itself, destroyed Flash's matchbook rubble. With the Classic look the Inferno draws Flash's store.
   12: [
     { from: 1, top: ["top.ishopC@2x.webp", -47, -40], shadow: ["shadow.ishopC.jpg", -33, 28], lift: 0 },
   ],

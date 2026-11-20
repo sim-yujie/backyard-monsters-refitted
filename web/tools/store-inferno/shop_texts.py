@@ -20,3 +20,8 @@ VARIANTS = {
           "on the front, a chimney at the back with a faint ember glow at its top, a little copper-roofed porch over "
           "a stone counter, and a large round copper coin sign mounted on the roof's front."),
 }
+
+FINISH = ("FINISH: the finish of input 1 and input 2 (the Modern look of the same game: clean stylised 3D renders): "
+          "crisp, clean, smooth shading, small bevels catching the light, warm key light from the upper left, right-hand "
+          "faces in medium shade (readable, not black), soft ambient occlusion in the creases, clean sharp edges, no "
+          "thick black outline, no cel shading, no painterly brush strokes, no pixel art. Not neon, not over-saturated.")
