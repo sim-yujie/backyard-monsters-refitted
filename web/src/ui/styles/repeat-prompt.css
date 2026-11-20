@@ -563,6 +563,13 @@
 
 /* Screens that are not short: secondary words and captions at 14 px. */
 @media (min-width: 621px) and (min-height: 501px) {
+  /* Beside the moves: five tiles a row, so ten kinds take two rows and the
+     bombs stay in sight on a 1280 x 720 screen. */
+  .auto-attack--prompt-two .repeat-prompt__monsters-grid {
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+    gap: 6px;
+  }
+
   .auto-attack--prompt :is(.repeat-prompt__yard-place, .attack-window__caption) {
     font-size: 14px;
   }
@@ -696,6 +703,7 @@
   /* One column: wide enough for every tile on one row. */
   .attack-end.auto-attack--prompt:not(.auto-attack--prompt-two) {
     width: min(calc(100vw - 2 * var(--space-4)), 660px);
+    max-width: min(calc(100vw - 2 * var(--space-4)), 660px);
   }
 
   .repeat-prompt__moves {
