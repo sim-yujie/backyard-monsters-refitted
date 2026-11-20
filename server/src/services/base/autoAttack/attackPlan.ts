@@ -161,26 +161,46 @@ export interface PlanSupply {
   readonly catapultLevel: number;
   /** Their own resource pool. */
   readonly resources: Readonly<Record<string, number>> | null | undefined;
+  /** Repeat attack's putty fee (`repeatFee.ts`), paid out of the same pool; 0 or absent for none. */
+  readonly fee?: number;
 }
 
 /** Something a plan needs that the attacker does not have. */
 export type PlanShortfall =
   | { readonly kind: "monster"; readonly id: string; readonly need: number; readonly have: number }
   | { readonly kind: "champion"; readonly t: number; readonly reason: "none" | "hurt" | "away" }
-  | { readonly kind: "bomb"; readonly id: string; readonly reason: "catapult" | "cost" | "unknown" };
+  | { readonly kind: "bomb"; readonly id: string; readonly reason: "catapult" | "cost" | "unknown" }
+  /**
+   * The putty pool cannot cover Repeat attack's fee and the Catapult's putty
+   * shots together: `need` is both, `have` the pool's putty.
+   */
+  | { readonly kind: "fee"; readonly need: number; readonly have: number };
 
 const bombById: ReadonlyMap<string, BombStats> = new Map(BOMBS.map((bomb) => [bomb.id, bomb]));
 
 /**
+ * The putty a plan's Catapult shots cost: the putty shots a Catapult of
+ * `catapultLevel` can fire (the rest are refused on their own). Each is paid
+ * as it is fired, out of the pool Repeat attack's fee comes out of.
+ */
+export const puttyShotCost = (bombs: readonly string[], catapultLevel: number): number =>
+  bombs.reduce((sum, id) => {
+    const bomb = bombById.get(id);
+    return bomb && bomb.resource === 3 && bomb.catapultLevel <= catapultLevel ? sum + bomb.cost : sum;
+  }, 0);
+
+/**
  * Everything a plan needs that the attacker lacks, in the plan's order:
- * monsters first, then champions, then bombs. Empty means it can run. No
+ * monsters first, then champions, then Repeat attack's fee, then bombs.
+ * Empty means it can run. No
  * partial attacks (owner, #221): one missing monster refuses the repeat.
  *
  * A champion is missing when they own none of its type, when it has no health
  * left, or when it is away (frozen, juiced: `status` other than 0), as the
  * army panel refuses it (`AttackSession.championBlock`). A bomb is missing when
  * their Catapult is too low for it or their pool cannot pay for it, the two
- * things `fightableLog` would drop it for.
+ * things `fightableLog` would drop it for. The fee is missing when the putty
+ * pool cannot pay it and every putty shot the Catapult can fire together.
  *
  * @param needs - {@link planNeeds}.
  * @param supply - What the attacker has.
@@ -205,8 +225,22 @@ export const planShortfall = (needs: PlanNeeds, supply: PlanSupply): PlanShortfa
   }
 
   // Each bomb is paid for as it is fired (`ResourceBombs.as:301-306`), so the
-  // pool has to cover all of them together.
+  // pool has to cover all of them together, and Repeat attack's fee besides:
+  // the fee and the putty shots come out of one purse (owner, 20 Nov 2026).
+  // Short of putty for both is one line, "fee", never a putty shot's "cost".
+  const fee = Math.max(0, Number(supply.fee ?? 0));
   const spent: Record<number, number> = {};
+  let puttyShort = false;
+  if (fee > 0) {
+    const putty = Number(supply.resources?.r3 ?? 0);
+    const held = Number.isFinite(putty) ? putty : 0;
+    const shots = puttyShotCost(needs.bombs, supply.catapultLevel);
+    if (fee + shots > held) {
+      missing.push({ kind: "fee", need: fee + shots, have: held });
+      puttyShort = true;
+    }
+    spent[3] = fee;
+  }
   for (const id of needs.bombs) {
     const bomb = bombById.get(id);
     if (!bomb) {
@@ -217,6 +251,8 @@ export const planShortfall = (needs: PlanNeeds, supply: PlanSupply): PlanShortfa
       missing.push({ kind: "bomb", id, reason: "catapult" });
       continue;
     }
+    // Already named by the fee's line.
+    if (puttyShort && bomb.resource === 3) continue;
     const held = Number(supply.resources?.[`r${bomb.resource}`] ?? 0);
     const total = (spent[bomb.resource] ?? 0) + bomb.cost;
     if (!Number.isFinite(held) || total > held) {

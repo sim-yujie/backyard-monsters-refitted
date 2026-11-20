@@ -34,11 +34,13 @@ import {
   planLog,
   planNeeds,
   planShortfall,
+  puttyShotCost,
   type CampKey,
   type OwnedChampion,
   type PlanShortfall,
 } from "./attackPlan.js";
 import { findAttackPlan, type StoredPlan } from "./attackPlanStore.js";
+import { repeatFeeFor } from "./repeatFee.js";
 import { movesKey, planMoves, type MovePlan, type YardMove } from "./movePlan.js";
 import {
   labelsOf,
@@ -56,8 +58,17 @@ import {
  *
  * The owner's rules (`docs/design/auto-attack.md`, decisions of 2026-10-01):
  * Map Room 2 wild camps only; one attack per press; no partial attacks, so a
- * single missing monster, the champion or a bomb refuses it; free beyond the
- * monsters spent; one in progress per player and ten a minute.
+ * single missing monster, the champion or a bomb refuses it; one in progress
+ * per player and ten a minute.
+ *
+ * The putty fee (owner, 20 Nov 2026, superseding "free beyond the monsters
+ * spent"): a heavy convenience fee by the camp's level (`repeatFee.ts`),
+ * burned before the attack starts, in the same flush that starts it
+ * (`baseModeAttack`'s `beforeCommit`). The pool must hold the fee and the
+ * Catapult's putty shots together, or the attack is refused with nothing
+ * spent. Once started the fee is gone, won or lost; only an attack that
+ * started but can never land (no session, no checkpoint, its row moved on)
+ * gets it back. Hand-played attacks stay free.
  *
  * Nothing comes from the client but the camp's base id. The attack goes
  * through the same doors as a hand-played one: the attack load's own
@@ -87,6 +98,13 @@ interface Camp {
   /** Its row is past its 12 hours: the camp has regenerated. */
   readonly expired: boolean;
 }
+
+/** Repeat attack's putty fee for a camp; a level no band covers is no camp to repeat. */
+const feeOf = (camp: Camp): number => {
+  const fee = repeatFeeFor(camp.key.level);
+  if (fee === null) throw autoAttackRefusedErr("notACamp");
+  return fee;
+};
 
 /**
  * The Map Room 2 camp a base id names on the player's own world, or a
@@ -137,7 +155,7 @@ interface Assessment {
  * (`planMoves`); a monster is missing only when every yard together lacks it.
  * Champions and bombs are the main yard's, as before.
  */
-const assess = async (user: User, camp: Camp, stored: StoredPlan, now: number): Promise<Assessment> => {
+const assess = async (user: User, camp: Camp, stored: StoredPlan, now: number, fee: number): Promise<Assessment> => {
   const userSave = user.save!;
   const reaching = await ownYardsInReach(user, camp.cell);
   const yards = await repeatYardsFor(user, reaching, now);
@@ -148,6 +166,7 @@ const assess = async (user: User, camp: Camp, stored: StoredPlan, now: number): 
     champions: userSave.champion as OwnedChampion[] | null,
     catapultLevel: catapultLevelOf(userSave),
     resources: userSave.resources as Record<string, number> | null,
+    fee,
   }).filter((item) => item.kind !== "monster");
   const move = planMoves(needs.monsters, yards, sizeOfFor(userSave));
   const monsters: PlanShortfall[] =
@@ -236,6 +255,8 @@ export interface PlanAnswer {
   readonly underAttack: boolean;
   /** The camp's damage now; 0 once it has regenerated. */
   readonly damage: number;
+  /** Repeat attack's putty fee for this camp (`repeatFee.ts`), burned before it starts. */
+  readonly fee: number;
 }
 
 /**
@@ -254,11 +275,12 @@ export const autoAttackPlanFor = async (user: User, baseid: string): Promise<Pla
   const stored = await findAttackPlan(user.userid, camp.key);
   const underAttack = camp.row !== null && !camp.expired && isAttackActive(camp.row);
   const damage = camp.row && !camp.expired ? (camp.row.damage ?? 0) : 0;
+  const fee = feeOf(camp);
   const none = { moves: [], movesKey: null, noRoom: null, yards: {} };
-  if (!stored) return { baseid, plan: null, missing: [], ...none, outOfRange: false, underAttack, damage };
+  if (!stored) return { baseid, plan: null, missing: [], ...none, outOfRange: false, underAttack, damage, fee };
 
   const { verdict } = await rangeCheckV2(user, { baseid, cell: camp.cell });
-  const assessed = await assess(user, camp, stored, now);
+  const assessed = await assess(user, camp, stored, now, fee);
   return {
     baseid,
     plan: summaryOf(camp.key, stored, userSave.champion as OwnedChampion[] | null),
@@ -267,6 +289,7 @@ export const autoAttackPlanFor = async (user: User, baseid: string): Promise<Pla
     outOfRange: !verdict.ok,
     underAttack,
     damage,
+    fee,
   };
 };
 
@@ -297,6 +320,8 @@ export interface AutoAttackResult {
   readonly moved: readonly YardMove[];
   /** Where each yard `moved` names sits. */
   readonly yards: Readonly<Record<string, YardLabel>>;
+  /** The putty fee burned before the attack started. */
+  readonly fee: number;
 }
 
 /** A 32-bit seed for the new battle; a plan's is never reused. */
@@ -346,13 +371,14 @@ export const runAutoAttack = async (user: User, baseid: string, acceptedMoves?: 
 
     const stored = await findAttackPlan(userid, camp.key);
     if (!stored) throw autoAttackRefusedErr("noPlan");
+    const fee = feeOf(camp);
 
     // The range rule a hand-played attack meets (`validateRange`), refused in
     // words the confirm sheet shows rather than the hand path's bare error.
     const { verdict } = await rangeCheckV2(user, { baseid, cell: camp.cell });
     if (!verdict.ok) throw autoAttackRefusedErr("outOfRange");
 
-    const assessed = await assess(user, camp, stored, now);
+    const assessed = await assess(user, camp, stored, now, fee);
     if (assessed.missing.length > 0) throw autoAttackRefusedErr("missing", { missing: assessed.missing });
     const part = movesPart(assessed);
     if (part.noRoom) throw autoAttackRefusedErr("noRoom", { noRoom: part.noRoom, yards: part.yards });
@@ -367,9 +393,36 @@ export const runAutoAttack = async (user: User, baseid: string, acceptedMoves?: 
         ? []
         : await makeRepeatMoves(user, planNeeds(stored.plan).monsters, assessed.reaching, part.movesKey, now);
 
+    // The fee, burned in the attack load's own commit (`beforeCommit`), on
+    // the main save as its catch-up left it: refused there, with nothing of
+    // the attack written, when that pool cannot pay the fee and the putty
+    // shots together (it may have changed since `assess` read it).
+    const planBombs = planNeeds(stored.plan).bombs;
+    let charged = false;
+    const chargeFee = (attackerSave: Save) => {
+      const pool = (attackerSave.resources ?? {}) as Record<string, unknown>;
+      const putty = Number(pool["r3"] ?? 0);
+      const have = Number.isFinite(putty) ? putty : 0;
+      const need = fee + puttyShotCost(planBombs, catapultLevelOf(attackerSave));
+      if (have < need) throw autoAttackRefusedErr("missing", { missing: [{ kind: "fee", need, have }] });
+      attackerSave.resources = { ...pool, r3: have - fee } as Save["resources"];
+      charged = true;
+    };
+    // An attack that started but can never land gives the fee back, before
+    // anything else on this request flushes the save.
+    const refundFee = async () => {
+      if (!charged) return;
+      charged = false;
+      const pool = (userSave.resources ?? {}) as Record<string, unknown>;
+      userSave.resources = { ...pool, r3: Number(pool["r3"] ?? 0) + fee } as Save["resources"];
+      postgres.em.persist(userSave);
+      await postgres.em.flush();
+    };
+
     let save: Save;
     let defenderForces: Awaited<ReturnType<typeof baseModeAttack>>["defenderForces"];
     let session: Awaited<ReturnType<typeof readAttackSession>>;
+    let log: ReturnType<typeof planLog>;
     try {
       // A regenerated camp is a fresh one, as opening it renews it
       // (`baseModeView.ts`): the old row goes, and the attack load below gives
@@ -386,25 +439,28 @@ export const runAutoAttack = async (user: User, baseid: string, acceptedMoves?: 
         baseid,
         mapversion: MapRoomVersion.V2,
         attackerLevel: playerLevelOf(userSave),
+        beforeCommit: chargeFee,
       }));
       session = await readAttackSession(save.basesaveid);
       if (!session?.entryHoused) throw autoAttackRefusedErr("failed");
+
+      log = planLog(stored.plan, mintSeed(), userSave.champion as OwnedChampion[] | null);
+      // Once this is written the attack lands, now or by the sweep, and the fee stays spent.
+      await storeCheckpoint(
+        save.basesaveid,
+        newCheckpoint(
+          session,
+          save.saveuserid,
+          { tick: stored.plan.tick, flinglog: log, sources: Object.keys(session.entryHoused) },
+          now
+        )
+      );
     } catch (err) {
-      // No attack to fling them in: the moves go back where they came from.
+      // No attack to land: the fee comes back, and the moves go back where they came from.
+      await refundFee();
       if (moved.length > 0) await undoRepeatMoves(user, moved, now);
       throw err;
     }
-
-    const log = planLog(stored.plan, mintSeed(), userSave.champion as OwnedChampion[] | null);
-    await storeCheckpoint(
-      save.basesaveid,
-      newCheckpoint(
-        session,
-        save.saveuserid,
-        { tick: stored.plan.tick, flinglog: log, sources: Object.keys(session.entryHoused) },
-        now
-      )
-    );
 
     // What Watch replays: the camp as this battle found it (`mapSaveData`, as
     // the attack load serves it, over the pool the session recorded).
@@ -424,7 +480,13 @@ export const runAutoAttack = async (user: User, baseid: string, acceptedMoves?: 
       if (err instanceof ReplayTimeoutError) throw attackResultPendingErr();
       throw err;
     }
-    if (landed.status !== "finalised" || !landed.landed) throw autoAttackRefusedErr("failed");
+    // Another landing holds it, or has landed it already: it lands, fee and all.
+    if (landed.status === "busy" || landed.status === "none") throw attackResultPendingErr();
+    if (landed.status !== "finalised" || !landed.landed) {
+      // The row moved on and the checkpoint was dropped: nothing landed, so nothing is spent.
+      await refundFee();
+      throw autoAttackRefusedErr("failed");
+    }
     const { outcome, damageBefore, damageAfter, credited, overflow, bombs, fought } = landed.landed;
 
     await keepReplay(userid, {
@@ -459,6 +521,7 @@ export const runAutoAttack = async (user: User, baseid: string, acceptedMoves?: 
       plan: summaryOf(camp.key, stored, userSave.champion as OwnedChampion[] | null),
       moved,
       yards: assessed.yards,
+      fee,
     };
 
     logger.info("Auto-attack by {username} on camp {baseid}: {damageBefore}% to {damageAfter}%", {
@@ -472,6 +535,7 @@ export const runAutoAttack = async (user: User, baseid: string, acceptedMoves?: 
       damageBefore,
       damageAfter,
       loot: credited,
+      fee,
       flung: outcome.flung,
       bombs,
       ...(moved.length > 0 && { moved }),

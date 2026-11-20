@@ -74,6 +74,16 @@ interface BaseModeAttack {
    * an attack moves no vengeance counters.
    */
   mr1Rules?: boolean;
+  /**
+   * Repeat attack's putty fee (owner, 20 Nov 2026, `autoAttack/repeatFee.ts`):
+   * run on the attacker's main save, caught up, after every refusal above and
+   * just before the attack is committed. It may throw to refuse the attack
+   * (nothing of the attack is written then), or charge the save, which the
+   * commit's own flush writes together with the attack, and which the
+   * attack session's pool then holds (the pool the Catapult's shots are
+   * priced against). Hand-played attacks pass none.
+   */
+  beforeCommit?: (attackerSave: Save) => void;
 }
 
 /**
@@ -90,7 +100,14 @@ interface BaseModeAttack {
  *   and their health,
  *   and the attacker's academy levels it is fought at (issue #201)
  */
-export const baseModeAttack = async ({ user, baseid, mapversion, attackerLevel, mr1Rules = true }: BaseModeAttack) => {
+export const baseModeAttack = async ({
+  user,
+  baseid,
+  mapversion,
+  attackerLevel,
+  mr1Rules = true,
+  beforeCommit,
+}: BaseModeAttack) => {
   // Map Room 3 is closed (security audit 2026-10-29, C1): it took the attack's
   // cost and result from the client. The load refuses it first; this is the
   // same rule for any other caller.
@@ -214,6 +231,9 @@ export const baseModeAttack = async ({ user, baseid, mapversion, attackerLevel, 
   // the attack save can take from it. A main yard's catch-up autobanks it.
   const armies = await catchUpArmiesForAttack({ user, defender: save, cell: cellCoords, mapversion });
   save = armies.defender;
+
+  // Repeat attack's fee: refused here, or charged in the commit's flush below.
+  beforeCommit?.(userSave);
 
   // Past this point the attack is committed: everything below writes.
   if (save.attacks.length > 3) save.attacks = save.attacks.slice(-2);
