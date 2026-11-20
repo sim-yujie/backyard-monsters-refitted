@@ -981,6 +981,7 @@ export class YardScene implements Scene {
           -camera.position.y * camera.zoom,
         );
         this.renderer.setZoom(camera.zoom);
+        this.placement?.setZoom(camera.zoom);
         this.compare?.place(camera);
         // The camera is the only thing that knows a wheel or a pinch happened;
         // it goes straight through `Camera`'s own listeners without passing
