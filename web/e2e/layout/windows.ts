@@ -1,5 +1,5 @@
 import type { Page } from "@playwright/test";
-import { openAchievements, openFriendsScreen, openRepeatResult, openShop, pressDock } from "./game";
+import { openAchievements, openFriendsScreen, openRepeatResult, openRepeatSheet, openShop, pressDock } from "./game";
 
 /**
  * Every window the layout check opens on the own yard.
@@ -27,6 +27,11 @@ export interface WindowCase {
   readonly why?: string;
   /** Click through the window's tabs and check each. */
   readonly tabs: boolean;
+  /**
+   * Its way out when that is not a button named "Close…" (Repeat attack's
+   * Cancel), or null for none while it works (Repeat attack's bar).
+   */
+  readonly closeButton?: string | null;
   readonly open: (page: Page) => Promise<boolean>;
 }
 
@@ -156,6 +161,49 @@ export const WINDOWS: readonly WindowCase[] = [
     items: ".end-takeover__take",
     tabs: false,
     open: openRepeatResult,
+  },
+  {
+    // Repeat attack's sheet, look A (owner, 20 Nov 2026), at its busiest:
+    // eight kinds, two champions, eight moves. The camp, the army and at
+    // least one whole move card in sight, Cancel and Move and attack under
+    // them at every size. Opened from the build's preview.
+    id: "repeat-moves",
+    label: "Repeat attack, 8 moves",
+    panel: ".auto-attack--prompt-moves",
+    items: ".repeat-prompt__move",
+    tabs: false,
+    closeButton: ".auto-attack__cancel",
+    open: (page) => openRepeatSheet(page, "moves8"),
+  },
+  {
+    // Refused for short monsters: the army, then a row per shortage.
+    id: "repeat-short",
+    label: "Repeat attack, short monsters",
+    panel: ".auto-attack--refused",
+    items: ".repeat-prompt__short",
+    tabs: false,
+    closeButton: ".auto-attack__cancel",
+    open: (page) => openRepeatSheet(page, "short-monsters"),
+  },
+  {
+    // Refused for room in range: the army, then the room each yard has.
+    id: "repeat-room",
+    label: "Repeat attack, short housing",
+    panel: ".auto-attack--refused",
+    items: ".repeat-prompt__room-yard",
+    tabs: false,
+    closeButton: ".auto-attack__cancel",
+    open: (page) => openRepeatSheet(page, "short-housing"),
+  },
+  {
+    // The Attacking bar with every kind marching (owner, 20 Nov 2026).
+    id: "repeat-bar",
+    label: "Repeat attack, Attacking bar",
+    panel: ".auto-attack--bar",
+    items: ".repeat-bar",
+    tabs: false,
+    closeButton: null,
+    open: (page) => openRepeatSheet(page, "working"),
   },
 ];
 

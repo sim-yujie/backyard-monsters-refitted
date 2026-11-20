@@ -8,36 +8,29 @@ import {
   type PlanShortfall,
   type PlanSummary,
   type YardLabel,
-  type YardMove,
 } from "@/api/autoAttack";
 import { ApiError } from "@/api/http";
 import { declineTakeover, getTakeoverQuote, takeOverCell, type TakeoverPayment } from "@/api/maproom";
 import type { TakeoverQuoteResponse } from "@/api/types";
 import type { WatchRun } from "@/game/autoAttack/watchRun";
 import type { OffsetCell } from "@/game/HexGrid";
-import { championByType } from "@/game/combat/rules";
-import { championPortrait, monsterPortrait, showPortrait } from "@/game/portraits";
-import { championName, monsterName } from "@/ui/attack/ArmyPanel";
+import { monsterPortrait, showPortrait } from "@/game/portraits";
 import { EndTakeoverOffer } from "@/ui/attack/EndTakeoverOffer";
 import { icon } from "@/ui/maproom1/icons";
-import { fitWholeRows, watchMoreBelow } from "@/ui/moreBelow";
+import { watchMoreBelow } from "@/ui/moreBelow";
 import { Panel } from "@/ui/Panel";
 import {
   MOVES_CHANGED,
-  MOVES_LEAD,
   MOVE_AND_ATTACK,
+  NO_ROOM_TEXT,
   ROOM_NEED_TEXT,
-  SIEGE_NOT_REPEATED,
   autoAttackErrorText,
-  campText,
-  includesText,
-  monstersText,
-  planSourceText,
   repeatRefusal,
   shortfallText,
   yardName,
   yardPlace,
 } from "./autoAttackText";
+import { armyParts, campHead, movesPart, roomParts, shortageList, watchMoreRows } from "./repeatPrompt";
 import { resultView } from "./autoAttackResultView";
 import { RepeatBar } from "./RepeatBar";
 import { REAL_TIMERS, REPEAT_BAR_MIN_MS, atLeast, type BarTimers } from "./repeatBarTiming";
@@ -182,101 +175,6 @@ const yardChip = (label: YardLabel | undefined, end: "from" | "to" | "room"): HT
   return chip;
 };
 
-// Smart Repeat attack (astra): the total army and the transfers use the same painted counts.
-const armyUnits = (monsters: Readonly<Record<string, number>>): HTMLElement[] => {
-  return Object.entries(monsters)
-    .filter(([, count]) => count > 0)
-    .sort((one, other) => other[1] - one[1] || one[0].localeCompare(other[0]))
-    .map(([id, count]) => {
-      const unit = document.createElement("span");
-      unit.className = "auto-attack__unit";
-      unit.title = `${count.toLocaleString("en-US")} ${monsterName(id)}`;
-      unit.setAttribute("aria-label", unit.title);
-      const number = document.createElement("span");
-      number.className = "auto-attack__unit-count";
-      number.textContent = `×${count.toLocaleString("en-US")}`;
-      unit.append(portraitOf(id), number);
-      return unit;
-    });
-};
-
-/**
- * Smart Repeat attack (lead's vetting, 16 Nov): the champions and bombs the
- * attack brings on their own line with each champion's portrait, so they do
- * not read as part of the "Already in range" strip.
- */
-const championStrip = (plan: PlanSummary): HTMLElement | null => {
-  if (plan.champions.length === 0 && plan.bombs.length === 0) return null;
-  const strip = document.createElement("div");
-  strip.className = "auto-attack__champion-strip";
-  strip.append(document.createTextNode("Includes"));
-  for (const champion of plan.champions) {
-    const unit = document.createElement("span");
-    unit.className = "auto-attack__unit auto-attack__champion";
-    const picture = document.createElement("img");
-    picture.className = "auto-attack__portrait";
-    showPortrait(picture, championPortrait(championByType(champion.t) ?? `G${champion.t}`, champion.l, "icon"));
-    picture.alt = "";
-    picture.decoding = "async";
-    const words = document.createElement("span");
-    words.textContent = `${championName(champion.t)} L${champion.l}` + (champion.pl ? ` (power ${champion.pl})` : "");
-    unit.append(picture, words);
-    strip.append(unit);
-  }
-  if (plan.bombs.length > 0) {
-    const bombs = document.createElement("span");
-    bombs.className = "auto-attack__unit";
-    bombs.textContent = plan.bombs.length === 1 ? "1 bomb" : `${plan.bombs.length} bombs`;
-    strip.append(bombs);
-  }
-  return strip;
-};
-
-const attackArmy = (monsters: Readonly<Record<string, number>>): HTMLElement => {
-  const strip = document.createElement("div");
-  strip.className = "auto-attack__army-strip";
-  strip.append(document.createTextNode("Attack army"), ...armyUnits(monsters));
-  return strip;
-};
-
-const movesHeading = (count: number): HTMLElement => {
-  const heading = paragraph("", "auto-attack__moves-lead");
-  for (const label of ["From", MOVES_LEAD(count), "To · in range"]) {
-    const part = document.createElement("span");
-    part.textContent = label;
-    heading.append(part);
-  }
-  return heading;
-};
-
-/**
- * The moves, one row each: the yard they leave on the LEFT, what moves, and
- * the yard in range they go to on the RIGHT (owner: "source yard on left, and
- * destination yard on right").
- */
-const movesList = (moves: readonly YardMove[], yards: Readonly<Record<string, YardLabel>>): HTMLElement => {
-  const list = document.createElement("ul");
-  list.className = "auto-attack__moves";
-  list.setAttribute("aria-label", "Monsters that move first");
-  for (const move of moves) {
-    const row = document.createElement("li");
-    row.className = "auto-attack__move";
-    const cargo = document.createElement("span");
-    cargo.className = "auto-attack__cargo";
-    cargo.append(...armyUnits(move.monsters));
-    const arrow = icon("chevronRight", 18, "auto-attack__arrow");
-    const from = yards[move.from];
-    const to = yards[move.to];
-    row.setAttribute(
-      "aria-label",
-      `${monstersText(move.monsters)}: from ${yardName(from)} ${yardPlace(from)} to ${yardName(to)} ${yardPlace(to)}`,
-    );
-    row.append(yardChip(from, "from"), cargo, arrow, yardChip(to, "to"));
-    list.append(row);
-  }
-  return list;
-};
-
 /** No room in range: what the moves need, and the room each yard in range has. */
 export const roomList = (answer: AutoAttackPlanResponse): HTMLElement[] => {
   const noRoom = answer.noRoom;
@@ -299,6 +197,33 @@ export const roomList = (answer: AutoAttackPlanResponse): HTMLElement[] => {
     : [need];
 };
 
+/**
+ * Why the sheet cannot run. With rows (what is short, the room in range) it
+ * is a column of its own, beside the army from 621 px wide; a reason alone
+ * goes under the camp, where it is always in sight.
+ */
+const refusalPart = (reason: string, rows: readonly HTMLElement[], army: HTMLElement): HTMLElement | null => {
+  const line = paragraph(reason, "auto-attack__refusal");
+  if (rows.length === 0) {
+    army.querySelector(".repeat-prompt__camp")?.after(line);
+    return null;
+  }
+  const part = document.createElement("section");
+  part.className = "repeat-prompt__refusal-part";
+  part.append(line, ...rows);
+  return part;
+};
+
+/** The army and what goes beside it (the moves, or what is short). */
+const columnsOf = (army: HTMLElement, side: HTMLElement, banner: HTMLElement | null = null): HTMLElement => {
+  const columns = document.createElement("div");
+  columns.className = `repeat-prompt__columns${banner ? " repeat-prompt__columns--banner" : ""}`;
+  // The banner leads in one column, and tops the moves' column in two.
+  if (banner) columns.append(banner);
+  columns.append(army, side);
+  return columns;
+};
+
 /** The `reason` of the server's refusal, if it is one. */
 const refusalReason = (caught: unknown): string | null => {
   if (!(caught instanceof ApiError)) return null;
@@ -315,6 +240,8 @@ export class AutoAttackFlow {
   private closed = false;
   /** The plan the confirm sheet showed: who the bar's army is. */
   private plan: AutoAttackPlanResponse["plan"] = null;
+  /** The camp's damage the confirm sheet showed. */
+  private damage = 0;
   /** The key of the moves the confirm sheet showed, sent with "Move and attack". */
   private movesKey: string | null = null;
   private bar: RepeatBar | null = null;
@@ -375,23 +302,16 @@ export class AutoAttackFlow {
   private cueLists(root: HTMLElement): void {
     for (const stop of this.stopCues) stop();
     this.stopCues = [];
-    // The result's loot fades at the bottom while more is below (a very short screen).
-    for (const middle of root.querySelectorAll<HTMLElement>(".arv-middle")) {
+    // What scrolls fades at the bottom while more is below: the result's
+    // loot, the sheet's words (a very short screen).
+    for (const middle of root.querySelectorAll<HTMLElement>(".arv-middle, .auto-attack__scroll, .repeat-prompt__army")) {
       this.stopCues.push(watchMoreBelow(middle, "auto-attack__list--more"));
     }
-    for (const list of root.querySelectorAll<HTMLElement>(".auto-attack__moves, .auto-attack__missing, .auto-attack__room")) {
-      this.stopCues.push(watchMoreBelow(list, "auto-attack__list--more"));
-      // Measured once laid out, and again whenever something that sizes the
-      // sheet arrives late: a portrait, the fonts, a new screen size.
-      const refit = () => {
-        fitWholeRows(list);
-        list.dispatchEvent(new Event("scroll"));
-      };
-      requestAnimationFrame(refit);
-      for (const image of root.querySelectorAll("img")) image.addEventListener("load", refit, { once: true });
-      void document.fonts?.ready.then(() => requestAnimationFrame(refit));
-      window.addEventListener("resize", refit);
-      this.stopCues.push(() => window.removeEventListener("resize", refit));
+    // The moves, what is short, the room in range: a painted arrow and how
+    // many more are below (a touch screen draws no scroll bar, and a fade
+    // alone was easy to miss).
+    for (const list of root.querySelectorAll<HTMLElement>(".repeat-prompt__moves, .repeat-prompt__shorts, .repeat-prompt__room")) {
+      this.stopCues.push(watchMoreRows(list));
     }
   }
 
@@ -425,21 +345,13 @@ export class AutoAttackFlow {
         if (loot) words.append(loot);
         view.panel.setContent(...(top ? [top] : []), words, ...rest, row);
       } else if (className.includes("auto-attack--confirm") || className.includes("auto-attack--failed")) {
-        // On a short screen the list (moves, what is short, the room) scrolls
-        // and the words and buttons stay in sight (layout-rules; Smart Repeat
-        // attack's moves make the sheet tall).
+        // On a short screen the words scroll and the buttons stay in sight
+        // under them (layout-rules); with moves on a wide screen, the army
+        // and the moves each scroll in their own column (autoattack.css).
         const words = document.createElement("div");
         words.className = "auto-attack__scroll";
         words.append(...body);
-        if (className.includes("auto-attack--moves")) {
-          // Smart Repeat attack (astra): the cost stays above the buttons, outside the list.
-          const footer = document.createElement("div");
-          footer.className = "auto-attack__footer";
-          footer.append(paragraph("Moving is free. The attack uses up these monsters.", "u-muted auto-attack__spent"), row);
-          view.panel.setContent(words, footer);
-        } else {
-          view.panel.setContent(words, row);
-        }
+        view.panel.setContent(words, row);
       } else {
         view.panel.setContent(...body, row);
       }
@@ -455,6 +367,7 @@ export class AutoAttackFlow {
   private confirm(answer: AutoAttackPlanResponse, changed = false): void {
     const plan = answer.plan;
     this.plan = plan;
+    this.damage = answer.damage;
     this.movesKey = null;
     if (!plan) {
       this.show("Repeat attack", "auto-attack--confirm", [paragraph("You have no attack to repeat on this camp yet.")], [
@@ -463,57 +376,29 @@ export class AutoAttackFlow {
       return;
     }
 
+    // Look A, "like the Attack window" (owner, 20 Nov 2026): the camp, the
+    // army as tiles, then the moves, or why it cannot run and what is short.
     const refusal = repeatRefusal(answer);
     const moves = refusal === null ? (answer.moves ?? []) : [];
     const body: HTMLElement[] = [];
-    if (changed) body.push(paragraph(MOVES_CHANGED, "auto-attack__changed"));
-    body.push(
-      paragraph(
-        moves.length > 0
-          ? `${plan.tribe} camp · Level ${plan.level} · ${Math.floor(answer.damage)}% damaged`
-          : `${campText(plan)} · camp damage now ${Math.floor(answer.damage)}%`,
-        "attack-end__outcome",
-      ),
-      paragraph(planSourceText(plan, this.options.baseid, this.now()), "u-muted auto-attack__source"),
-      moves.length > 0 ? attackArmy(plan.monsters) : paragraph(monstersText(plan.monsters), "auto-attack__army"),
-    );
-    const details: HTMLElement[] = [];
-    // Smart Repeat attack (astra): the rest of the saved army is already in range.
-    if (moves.length > 0) {
-      const inRange = { ...plan.monsters };
-      for (const move of moves)
-        for (const [id, count] of Object.entries(move.monsters)) inRange[id] = (inRange[id] ?? 0) - count;
-      const units = armyUnits(inRange);
-      if (units.length > 0) {
-        const ready = document.createElement("div");
-        ready.className = "auto-attack__in-range";
-        ready.append(document.createTextNode("Already in range:"), ...units);
-        details.push(ready);
-      }
-    }
-    const includes = includesText(plan);
-    const champions = moves.length > 0 ? championStrip(plan) : null;
-    if (champions) details.push(champions);
-    else if (includes) details.push(paragraph(includes, "auto-attack__includes"));
-    if (plan.siege) details.push(paragraph(SIEGE_NOT_REPEATED, "u-muted auto-attack__siege"));
-    if (moves.length > 0 && details.length > 0) {
-      // Smart Repeat attack (astra): short secondary lines share a row when they fit.
-      const summary = document.createElement("div");
-      summary.className = "auto-attack__details";
-      summary.append(...details);
-      body.push(summary);
-    } else body.push(...details);
+    const banner = changed ? paragraph(MOVES_CHANGED, "auto-attack__changed") : null;
+    const army = this.armyColumn(plan, answer.damage);
+    let side: HTMLElement | null = null;
     if (refusal) {
-      body.push(paragraph(refusal, "auto-attack__refusal"));
-      if (answer.missing.length > 0) body.push(missingList(answer.missing));
-      else body.push(...roomList(answer));
+      const rows =
+        answer.missing.length > 0
+          ? [shortageList(answer.missing, plan.champions)]
+          : answer.noRoom
+            ? roomParts(answer.noRoom, answer.yards ?? {})
+            : [];
+      side = refusalPart(refusal, rows, army);
     } else if (moves.length > 0) {
       // Smart Repeat attack: the yards in range lack monsters other yards hold.
       this.movesKey = answer.movesKey ?? null;
-      body.push(movesHeading(moves.length), movesList(moves, answer.yards ?? {}));
-    } else {
-      body.push(paragraph("The monsters are spent, as in an attack by hand. The result comes in a few seconds.", "u-muted"));
+      side = movesPart(moves, answer.yards ?? {});
     }
+    if (side) body.push(columnsOf(army, side, banner));
+    else body.push(...(banner ? [banner] : []), army);
 
     const attack = buttonOf(
       moves.length > 0 ? MOVE_AND_ATTACK : "Attack now",
@@ -523,10 +408,20 @@ export class AutoAttackFlow {
     attack.disabled = refusal !== null;
     this.show(
       "Repeat attack",
-      `auto-attack--confirm${moves.length > 0 ? " auto-attack--moves" : ""}`,
+      `auto-attack--confirm auto-attack--prompt${side ? " auto-attack--prompt-two" : ""}${
+        moves.length > 0 ? " auto-attack--prompt-moves" : ""
+      }${refusal ? " auto-attack--refused" : ""}`,
       body,
-      [buttonOf("Cancel", "btn btn--ghost auto-attack__cancel", () => this.close()), attack],
+      [buttonOf("Cancel", "btn btn--outline auto-attack__cancel", () => this.close()), attack],
     );
+  }
+
+  /** The camp, the champions and monsters, and the bombs: the column the sheet starts with. */
+  private armyColumn(plan: PlanSummary, damage: number): HTMLElement {
+    const army = document.createElement("div");
+    army.className = "repeat-prompt__army";
+    army.append(campHead(plan, damage), ...armyParts(plan));
+    return army;
   }
 
   private async run(): Promise<void> {
@@ -588,20 +483,35 @@ export class AutoAttackFlow {
   private failed(caught: unknown): void {
     // The moves the player agreed to are not the ones needed now: ask again
     // and show the new plan, never move what the player did not see.
-    if (refusalReason(caught) === "movesChanged") {
+    const reason = refusalReason(caught);
+    if (reason === "movesChanged") {
       void this.replan();
       return;
     }
     const { message, missing } = autoAttackErrorText(caught);
-    const body = [paragraph(message, "auto-attack__refusal")];
-    // Smart Repeat attack (astra): explain a stale move offer, without guessing for network errors.
-    if (this.movesKey && ["missing", "noRoom"].includes(refusalReason(caught) ?? "")) {
-      body.unshift(paragraph("Your yards changed.", "u-muted auto-attack__failure-context"));
-    }
-    if (missing.length > 0) body.push(missingList(missing));
-    // No room in range: the space needed and each yard's room, as the confirm sheet shows them.
     const data = caught instanceof ApiError ? (caught.details?.data as Partial<AutoAttackPlanResponse> | undefined) : undefined;
-    if (refusalReason(caught) === "noRoom" && data?.noRoom) body.push(...roomList(data as AutoAttackPlanResponse));
+    // Refused for what is short or for room after "Move and attack" (owner,
+    // 20 Nov 2026): the same camp and army as the sheet, then the reason and
+    // each shortage with its picture. Anything else (no server, ten a
+    // minute, Watch's replay gone) is its one line.
+    const plan = this.plan;
+    if (plan && (reason === "missing" || reason === "noRoom")) {
+      const body: HTMLElement[] = [];
+      if (this.movesKey) body.push(paragraph("Your yards changed.", "auto-attack__changed auto-attack__failure-context"));
+      const army = this.armyColumn(plan, this.damage);
+      const rows: HTMLElement[] = [];
+      if (missing.length > 0) rows.push(shortageList(missing, plan.champions));
+      if (reason === "noRoom" && data?.noRoom) rows.push(...roomParts(data.noRoom, data.yards ?? {}));
+      const side = refusalPart(reason === "noRoom" ? NO_ROOM_TEXT : message, rows, army);
+      body.push(side ? columnsOf(army, side) : army);
+      this.show("Repeat attack", `auto-attack--failed auto-attack--prompt${side ? " auto-attack--prompt-two" : ""} auto-attack--refused`, body, [
+        buttonOf("Close", "btn btn--primary", () => this.close()),
+      ]);
+      return;
+    }
+    const body = [paragraph(message, "auto-attack__refusal")];
+    if (missing.length > 0) body.push(missingList(missing));
+    if (reason === "noRoom" && data?.noRoom) body.push(...roomList(data as AutoAttackPlanResponse));
     this.show("Repeat attack", "auto-attack--failed", body, [
       buttonOf("Close", "btn btn--primary", () => this.close()),
     ]);

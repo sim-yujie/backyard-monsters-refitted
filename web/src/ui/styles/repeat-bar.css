@@ -11,8 +11,9 @@
 
 .repeat-bar {
   --repeat-progress: 0;
-  --repeat-bar-height: 64px;
-  --repeat-track-height: 48px;
+  /* Tall enough for the counts above the portraits as well as below them. */
+  --repeat-bar-height: 86px;
+  --repeat-track-height: 78px;
 
   position: relative;
   display: flex;
@@ -78,14 +79,19 @@
   background: linear-gradient(#b08a52, #7a5a32);
 }
 
+/* Every kind marches (owner, 20 Nov 2026); a count, centred on its marcher,
+   takes turns below and above the portraits, so neighbours' counts are two
+   steps apart and never overlap. The troop keeps clear of the bar's ends by
+   half a count's overhang. */
 .repeat-bar__troop {
   --marcher-size: 32px;
   --marcher-step: 22px;
+  --troop-inset: 6px;
   --troop-width: calc(var(--marcher-size) + (var(--marchers, 1) - 1) * var(--marcher-step));
 
   position: absolute;
-  bottom: 4px;
-  left: calc(var(--repeat-progress) * (100% - var(--troop-width)));
+  bottom: 12px;
+  left: calc(var(--troop-inset) + var(--repeat-progress) * (100% - var(--troop-width) - 2 * var(--troop-inset)));
   display: flex;
   width: var(--troop-width);
   height: var(--marcher-size);
@@ -125,17 +131,24 @@
 
 .repeat-bar__count {
   position: absolute;
-  right: -4px;
-  bottom: -3px;
+  bottom: -7px;
+  left: 50%;
+  z-index: 1;
   padding: 0 4px;
+  transform: translateX(-50%);
   border-radius: var(--radius-pill);
   background: rgb(0 0 0 / 68%);
   color: #ffffff;
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 800;
   line-height: 15px;
   text-shadow: none;
   white-space: nowrap;
+}
+
+.repeat-bar__count--high {
+  top: -7px;
+  bottom: auto;
 }
 
 /* The camp's tribe waits at the end of the road. */
@@ -212,8 +225,8 @@
    than over it, so it stays clear of the bar plate and the window's frame. */
 @media (max-width: 620px), (max-height: 500px) {
   .repeat-bar {
-    --repeat-bar-height: 54px;
-    --repeat-track-height: 42px;
+    --repeat-bar-height: 76px;
+    --repeat-track-height: 68px;
   }
 
   .repeat-bar__troop {
@@ -224,5 +237,55 @@
   .repeat-bar__goal--tribe {
     width: 48px;
     margin-left: 2px;
+  }
+}
+
+/* ── A big army: two staggered ranks (astra, 20 Nov 2026) ─────────────────
+ * From seven marchers (RepeatBar.ts RANKS_FROM) every other one marches a
+ * rank up, its count above it; the rest a rank down, their counts below.
+ * Each rank's marchers are two steps apart, so they hide each other less and
+ * their counts never meet; the bar is taller to hold both ranks. */
+.repeat-bar--ranks {
+  --repeat-bar-height: 96px;
+  --repeat-track-height: 88px;
+}
+
+.repeat-bar--ranks .repeat-bar__troop {
+  --marcher-size: 30px;
+  --marcher-step: 20px;
+  --rank-offset: 16px;
+
+  bottom: 13px;
+  align-items: flex-end;
+  height: calc(var(--marcher-size) + var(--rank-offset));
+}
+
+.repeat-bar--ranks .repeat-bar__marcher--up {
+  align-self: flex-start;
+}
+
+.repeat-bar--ranks .repeat-bar__count {
+  bottom: -4px;
+  font-size: 12px;
+  line-height: 16px;
+}
+
+.repeat-bar--ranks .repeat-bar__count--high {
+  top: -4px;
+  bottom: auto;
+}
+
+@media (max-width: 620px), (max-height: 500px) {
+  .repeat-bar--ranks {
+    --repeat-bar-height: 82px;
+    --repeat-track-height: 74px;
+  }
+
+  .repeat-bar--ranks .repeat-bar__troop {
+    --marcher-size: 26px;
+    --marcher-step: 16px;
+    --rank-offset: 14px;
+
+    bottom: 12px;
   }
 }

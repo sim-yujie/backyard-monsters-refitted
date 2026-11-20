@@ -92,21 +92,70 @@ const text = (root: ParentNode | null) => root?.textContent ?? "";
 const button = (root: ParentNode | null, label: string) =>
   [...(root?.querySelectorAll("button") ?? [])].find((one) => one.textContent === label) as HTMLButtonElement | undefined;
 
-describe("the confirm sheet", () => {
-  it("says what it repeats, what it brings and that siege weapons are left out", async () => {
+/** The words a player sees: text, not tooltips or screen-reader labels. */
+const NAMES = ["Pokey", "Octo-ooze", "Bolt", "Eye-ra", "Fang", "Crabatron", "D.A.V.E.", "Teratorn", "Ichi", "Gorgo", "Fomor", "Krallen"];
+const namesShown = (root: ParentNode | null): string[] => NAMES.filter((name) => text(root).includes(name));
+
+/** The lines look A took out (owner, 20 Nov 2026). */
+const GONE = ["Repeats your attack", "Siege weapons", "are spent", "Already in range", "Moving is free", "power", "Includes"];
+const goneShown = (root: ParentNode | null): string[] => GONE.filter((words) => text(root).includes(words));
+
+const BIG_PLAN: PlanSummary = {
+  ...PLAN,
+  monsters: { C3: 1_240, C5: 180, C14: 120, C10: 60, C12: 40, C1: 300, C8: 90, C6: 24 },
+  champions: [
+    { t: 3, l: 6, pl: 1 },
+    { t: 5, l: 3 },
+  ],
+  bombs: ["tw1", "tw1", "pb1", "pu0"],
+};
+
+describe("the confirm sheet, look A (owner, 20 Nov 2026)", () => {
+  it("the camp, then the army as tiles: no source line, no siege line, no names as words", async () => {
     const modal = document.createElement("div");
     const flow = new AutoAttackFlow({ baseid: BASEID, cell: CELL, modal, onWatch: vi.fn(), calls: calls(), now: () => 1_007_300 });
     await flow.start(answer());
-    const shown = text(modal);
-    expect(shown).toContain("Kozu camp, level 35 · camp damage now 41%");
-    expect(shown).toContain("Repeats your attack on the Kozu camp at 240, 208, 2 h ago");
-    expect(shown).toContain("300 Pokey");
-    expect(shown).toContain("Includes Gorgo L5 and 3 bombs");
-    expect(shown).toContain("Siege weapons are not repeated.");
+    expect(text(modal.querySelector(".repeat-prompt__camp-name"))).toBe("Kozu camp");
+    expect(text(modal.querySelector(".repeat-prompt__level"))).toBe("Lv 35");
+    expect(text(modal.querySelector(".repeat-prompt__damage"))).toBe("41%");
+    expect(modal.querySelector(".repeat-prompt__damage img")).not.toBeNull();
+    // The champion first, "Lv 5", then the monsters with their counts.
+    const tiles = [...modal.querySelectorAll(".repeat-prompt__monsters .attack-window__tile")];
+    expect(tiles.map((one) => text(one))).toEqual(["Lv 5", "×300"]);
+    expect(tiles[0]!.getAttribute("aria-label")).toBe("Gorgo, level 5");
+    expect(tiles[1]!.getAttribute("aria-label")).toBe("Pokey ×300");
+    expect(tiles.every((one) => one.querySelector("img") !== null)).toBe(true);
+    // The Catapult's shots: a resource pile and a size word each, no count.
+    expect(text(modal.querySelector(".repeat-prompt__bombs .repeat-prompt__heading"))).toBe("Catapult");
+    const bombs = [...modal.querySelectorAll(".repeat-prompt__bombs .attack-window__tile")];
+    expect(bombs.map((one) => text(one))).toEqual(["Big", "Big", "Small"]);
+    expect(bombs.map((one) => one.getAttribute("aria-label"))).toEqual(["Catapult, big twigs", "Catapult, big pebbles", "Catapult, small putty"]);
+    // Nothing in the window says "bomb", not even to a screen reader (owner, 20 Nov 2026).
+    const words = [modal.textContent ?? "", ...[...modal.querySelectorAll("[aria-label], [title], [alt]")].flatMap((one) => ["aria-label", "title", "alt"].map((name) => one.getAttribute(name) ?? ""))];
+    expect(words.filter((one) => /bomb/i.test(one))).toEqual([]);
+    expect(bombs.every((one) => one.querySelector(".res-icon") !== null)).toBe(true);
+    expect(namesShown(modal)).toEqual([]);
+    expect(goneShown(modal)).toEqual([]);
+    expect(text(modal)).not.toContain("monsters are spent");
     expect(button(modal, "Attack now")?.disabled).toBe(false);
   });
 
-  it("greys Attack now out and lists everything missing", async () => {
+  it("a big army: one tile per kind and per champion, one Catapult tile per resource (each flies once per attack)", async () => {
+    const modal = document.createElement("div");
+    const flow = new AutoAttackFlow({ baseid: BASEID, modal, onWatch: vi.fn(), calls: calls() });
+    await flow.start(answer({ plan: BIG_PLAN }));
+    expect(modal.querySelectorAll(".repeat-prompt__monster")).toHaveLength(Object.keys(BIG_PLAN.monsters).length);
+    expect([...modal.querySelectorAll(".repeat-prompt__champion")].map((one) => text(one))).toEqual(["Lv 6", "Lv 3"]);
+    // Biggest first.
+    expect(text(modal.querySelector(".repeat-prompt__monster"))).toBe("×1,240");
+    expect(text(modal.querySelector(".repeat-prompt__total"))).toBe("×2,054");
+    // The plan's second twig shot is not shown: a Catapult flings each resource once.
+    expect([...modal.querySelectorAll(".repeat-prompt__bomb")].map((one) => text(one))).toEqual(["Big", "Big", "Small"]);
+    expect(namesShown(modal)).toEqual([]);
+    expect(goneShown(modal)).toEqual([]);
+  });
+
+  it("greys Attack now out and lists everything missing, each with its picture", async () => {
     const modal = document.createElement("div");
     const flow = new AutoAttackFlow({ baseid: BASEID, modal, onWatch: vi.fn(), calls: calls() });
     await flow.start(
@@ -118,8 +167,30 @@ describe("the confirm sheet", () => {
       }),
     );
     expect(button(modal, "Attack now")?.disabled).toBe(true);
-    const items = [...modal.querySelectorAll(".auto-attack__missing li")].map((item) => item.textContent);
-    expect(items).toEqual(["Pokey: 180 short", "Gorgo has no health left"]);
+    // Look A's camp and tiles stay on top of the refusal.
+    expect(modal.querySelector(".repeat-prompt__camp")).not.toBeNull();
+    expect(modal.querySelectorAll(".repeat-prompt__monsters .attack-window__tile")).toHaveLength(2);
+    const items = [...modal.querySelectorAll(".repeat-prompt__shorts li.repeat-prompt__short")];
+    expect(items.map((item) => item.textContent)).toEqual(["180 short", "No health left"]);
+    expect(items.map((item) => item.getAttribute("aria-label"))).toEqual(["Pokey: 180 short", "Gorgo: No health left"]);
+    expect(items.every((item) => item.querySelector("img") !== null)).toBe(true);
+    expect(namesShown(modal)).toEqual([]);
+  });
+
+  it("under attack and out of range: the camp and the army, then the one reason", async () => {
+    for (const [overrides, reason] of [
+      [{ underAttack: true }, "Someone else is attacking this camp right now."],
+      [{ outOfRange: true }, "This camp is out of your Flingers' range."],
+    ] as const) {
+      const modal = document.createElement("div");
+      const flow = new AutoAttackFlow({ baseid: BASEID, modal, onWatch: vi.fn(), calls: calls() });
+      await flow.start(answer(overrides));
+      expect(modal.querySelector(".repeat-prompt__camp")).not.toBeNull();
+      expect(text(modal.querySelector(".auto-attack__refusal"))).toBe(reason);
+      expect(button(modal, "Attack now")?.disabled).toBe(true);
+      expect(namesShown(modal)).toEqual([]);
+      expect(goneShown(modal)).toEqual([]);
+    }
   });
 });
 
@@ -144,52 +215,46 @@ describe("Smart Repeat attack's prompt (owner, 16 Nov 2026)", () => {
     },
   };
 
-  it("lists each move: the yard they leave on the left, the yard in range on the right", async () => {
+  it("one card per move: the yard they leave, its monsters as tiles, an arrow, the yard in range", async () => {
     const modal = document.createElement("div");
     const flow = new AutoAttackFlow({ baseid: BASEID, modal, onWatch: vi.fn(), calls: calls() });
     await flow.start(answer(MOVES));
-    const rows = [...modal.querySelectorAll(".auto-attack__move")];
-    expect(rows).toHaveLength(3);
-    const first = rows[0]!;
-    // Source first in the row, destination last.
-    expect(first.firstElementChild?.classList.contains("auto-attack__yard--from")).toBe(true);
-    expect(first.lastElementChild?.classList.contains("auto-attack__yard--to")).toBe(true);
+    const cards = [...modal.querySelectorAll(".repeat-prompt__move")];
+    expect(cards).toHaveLength(3);
+    const first = cards[0]!;
+    // Source first in the card, destination last, the painted arrow between.
+    expect(first.firstElementChild?.classList.contains("repeat-prompt__yard--from")).toBe(true);
+    expect(first.lastElementChild?.classList.contains("repeat-prompt__yard--to")).toBe(true);
+    expect(first.querySelector(".repeat-prompt__arrow")?.tagName).toBe("IMG");
     expect(text(first.firstElementChild)).toBe("Outpost230, 215");
     expect(text(first.lastElementChild)).toBe("Outpost242, 208");
     // Biggest first, a portrait and a count each.
-    expect([...first.querySelectorAll(".auto-attack__unit")].map((unit) => unit.textContent)).toEqual(["×120", "×4"]);
-    expect(first.querySelectorAll(".auto-attack__unit img")).toHaveLength(2);
+    expect([...first.querySelectorAll(".repeat-prompt__cargo .attack-window__tile")].map((one) => one.textContent)).toEqual(["×120", "×4"]);
+    expect(first.querySelectorAll(".repeat-prompt__cargo img")).toHaveLength(2);
     expect(first.getAttribute("aria-label")).toBe("120 Pokey, 4 D.A.V.E.: from Outpost 230, 215 to Outpost 242, 208");
-    expect(text(rows[1]!.firstElementChild)).toBe("Main yard250, 200");
-    expect(text(modal)).toContain("Kozu camp · Level 35 · 41% damaged");
-    expect(text(modal)).toContain("From3 moves before attackingTo · in range");
-    expect(text(modal.querySelector(".auto-attack__in-range"))).toBe("Already in range:×120");
-    expect(modal.querySelector(".auto-attack__in-range [aria-label='120 Pokey'] img")).not.toBeNull();
-    expect(modal.querySelector(".auto-attack__army-strip [aria-label='300 Pokey']")).not.toBeNull();
-    expect(text(modal.querySelector(".auto-attack__footer"))).toContain("Moving is free. The attack uses up these monsters.");
-    expect(modal.querySelector(".auto-attack__scroll .auto-attack__footer")).toBeNull();
+    expect(text(cards[1]!.firstElementChild)).toBe("Main yard250, 200");
+    expect(text(modal.querySelector(".repeat-prompt__moves-part .repeat-prompt__heading"))).toBe("3 moves first");
+    // The whole army as in #1, the moves beside or under it.
+    expect(modal.querySelector(".repeat-prompt__columns > .repeat-prompt__army .repeat-prompt__camp")).not.toBeNull();
+    expect(modal.querySelectorAll(".repeat-prompt__army .repeat-prompt__monster")).toHaveLength(1);
+    expect(namesShown(modal)).toEqual([]);
+    expect(goneShown(modal)).toEqual([]);
     expect(button(modal, "Attack now")).toBeUndefined();
     expect(button(modal, "Move and attack")?.disabled).toBe(false);
     expect(button(modal, "Cancel")).toBeDefined();
   });
 
-  it("omits the already-in-range line when the whole army moves", async () => {
-    const modal = document.createElement("div");
-    const flow = new AutoAttackFlow({ baseid: BASEID, modal, onWatch: vi.fn(), calls: calls() });
-    await flow.start(answer({ ...MOVES, plan: { ...PLAN, monsters: { C1: 180, C5: 30, C12: 4 } } }));
-    expect(modal.querySelector(".auto-attack__in-range")).toBeNull();
-    expect(modal.querySelectorAll(".auto-attack__move")).toHaveLength(3);
-  });
-
-  it("the champion and bombs get their own line with the champion's portrait (lead's vetting)", async () => {
+  it("the moves list gets its 'more below' cue beside it, hidden until the page measures more below", async () => {
     const modal = document.createElement("div");
     const flow = new AutoAttackFlow({ baseid: BASEID, modal, onWatch: vi.fn(), calls: calls() });
     await flow.start(answer(MOVES));
-    const strip = modal.querySelector(".auto-attack__champion-strip");
-    expect(text(strip)).toContain("Gorgo L5");
-    expect(text(strip)).toContain("3 bombs");
-    expect(strip?.querySelectorAll("img")).toHaveLength(1);
-    expect(strip?.closest(".auto-attack__in-range")).toBeNull();
+    const cue = modal.querySelector<HTMLElement>(".repeat-prompt__moves + .repeat-prompt__more");
+    expect(cue).not.toBeNull();
+    expect(cue!.hidden).toBe(true);
+    expect(cue!.getAttribute("aria-hidden")).toBe("true");
+    expect(cue!.querySelector(".repeat-prompt__more-arrow")).not.toBeNull();
+    // The list itself holds only the cards.
+    expect(modal.querySelectorAll(".repeat-prompt__moves > li")).toHaveLength(3);
   });
 
   it("Move and attack sends the key of the moves shown, and nothing else", async () => {
@@ -227,15 +292,16 @@ describe("Smart Repeat attack's prompt (owner, 16 Nov 2026)", () => {
     await settle();
     expect(api.plan).toHaveBeenCalledTimes(1);
     expect(text(modal)).toContain("Your yards changed. Here is the new plan.");
-    expect(modal.querySelector(".auto-attack__scroll")?.firstElementChild?.className).toBe("auto-attack__changed");
-    expect(modal.querySelectorAll(".auto-attack__move")).toHaveLength(1);
-    expect(text(modal.querySelector(".auto-attack__move .auto-attack__unit"))).toBe("×119");
+    // The banner leads: first in the sheet (one column), atop the moves (two).
+    expect(modal.querySelector(".repeat-prompt__columns--banner")?.firstElementChild?.className).toBe("auto-attack__changed");
+    expect(modal.querySelectorAll(".repeat-prompt__move")).toHaveLength(1);
+    expect(text(modal.querySelector(".repeat-prompt__move .attack-window__tile"))).toBe("×119");
     button(modal, "Move and attack")!.click();
     await settle();
     expect(api.run).toHaveBeenLastCalledWith(BASEID, "new-key");
   });
 
-  it("not enough monsters even from every yard: refused, each short type with its portrait", async () => {
+  it("not enough monsters even from every yard: refused, each short kind with its portrait, no name", async () => {
     const modal = document.createElement("div");
     const flow = new AutoAttackFlow({ baseid: BASEID, modal, onWatch: vi.fn(), calls: calls() });
     await flow.start(
@@ -247,10 +313,11 @@ describe("Smart Repeat attack's prompt (owner, 16 Nov 2026)", () => {
       }),
     );
     expect(text(modal)).toContain("Not enough monsters for that attack.");
-    const items = [...modal.querySelectorAll(".auto-attack__missing li")].map((item) => item.textContent);
-    expect(items).toEqual(["Pokey: 12 short", "D.A.V.E.: 6 short"]);
-    expect(modal.querySelectorAll(".auto-attack__missing img")).toHaveLength(2);
-    expect(modal.querySelector(".auto-attack__moves")).toBeNull();
+    const items = [...modal.querySelectorAll(".repeat-prompt__shorts li.repeat-prompt__short")].map((item) => item.textContent);
+    expect(items).toEqual(["12 short", "6 short"]);
+    expect(modal.querySelectorAll(".repeat-prompt__short img")).toHaveLength(2);
+    expect(modal.querySelector(".repeat-prompt__moves")).toBeNull();
+    expect(namesShown(modal)).toEqual([]);
     expect(button(modal, "Attack now")?.disabled).toBe(true);
   });
 
@@ -266,14 +333,22 @@ describe("Smart Repeat attack's prompt (owner, 16 Nov 2026)", () => {
     const shown = text(modal);
     expect(shown).toContain("Not enough Monster Housing in range.");
     expect(shown).not.toContain("short");
-    expect(shown).toContain("Incoming monsters need 1,840 space");
-    expect(modal.querySelector(".auto-attack__room")?.previousElementSibling?.textContent).toBe("Receiving yards in range");
-    expect([...modal.querySelectorAll(".auto-attack__room li")].map((row) => row.textContent)).toEqual([
-      "Outpost242, 20840 space free",
-      "Main yard250, 200300 space free",
+    expect(text(modal.querySelector(".repeat-prompt__need"))).toBe("1,840 space needed");
+    expect([...modal.querySelectorAll(".repeat-prompt__room li.repeat-prompt__room-yard")].map((row) => row.textContent)).toEqual([
+      "Outpost242, 20840 free",
+      "Main yard250, 200300 free",
     ]);
+    expect(modal.querySelector(".repeat-prompt__camp")).not.toBeNull();
     expect(button(modal, "Attack now")?.disabled).toBe(true);
     expect(button(modal, "Move and attack")).toBeUndefined();
+  });
+
+  it("not enough housing and no yard in range has room: the space needed alone", async () => {
+    const modal = document.createElement("div");
+    const flow = new AutoAttackFlow({ baseid: BASEID, modal, onWatch: vi.fn(), calls: calls() });
+    await flow.start(answer({ noRoom: { need: 900, free: [] }, yards: MOVES.yards }));
+    expect(text(modal.querySelector(".repeat-prompt__need"))).toBe("900 space needed");
+    expect(modal.querySelector(".repeat-prompt__room")).toBeNull();
   });
 
   it("Move and attack refused for room: the refusal shows the space needed and each yard's room", async () => {
@@ -287,9 +362,30 @@ describe("Smart Repeat attack's prompt (owner, 16 Nov 2026)", () => {
     button(modal, "Move and attack")!.click();
     await settle();
     expect(text(modal)).toContain("Not enough Monster Housing in range.");
-    expect(text(modal)).toContain("Incoming monsters need 900 space");
-    expect(text(modal)).toContain("Your yards changed.");
-    expect([...modal.querySelectorAll(".auto-attack__room li")].map((row) => row.textContent)).toEqual(["Outpost242, 20840 space free"]);
+    expect(text(modal.querySelector(".repeat-prompt__need"))).toBe("900 space needed");
+    expect(text(modal.querySelector(".auto-attack__changed"))).toBe("Your yards changed.");
+    // The sheet's camp and army stay on top.
+    expect(modal.querySelector(".repeat-prompt__camp")).not.toBeNull();
+    expect(modal.querySelectorAll(".repeat-prompt__monsters .attack-window__tile")).toHaveLength(2);
+    expect([...modal.querySelectorAll(".repeat-prompt__room li.repeat-prompt__room-yard")].map((row) => row.textContent)).toEqual(["Outpost242, 20840 free"]);
+    expect(button(modal, "Close")).toBeDefined();
+  });
+
+  it("Move and attack refused for monsters: the camp, the army and each shortage with its portrait", async () => {
+    const modal = document.createElement("div");
+    const refused = new ApiError("You do not have everything that attack used.", {
+      status: 409,
+      details: { data: { reason: "missing", missing: [{ kind: "monster", id: "C1", need: 300, have: 100 }] } } as never,
+    });
+    const flow = new AutoAttackFlow({ baseid: BASEID, modal, onWatch: vi.fn(), calls: calls({ run: vi.fn(async () => Promise.reject(refused)) }) });
+    await flow.start(answer(MOVES));
+    button(modal, "Move and attack")!.click();
+    await settle();
+    expect(text(modal.querySelector(".auto-attack__changed"))).toBe("Your yards changed.");
+    expect(text(modal)).toContain("Not enough monsters for that attack.");
+    expect([...modal.querySelectorAll(".repeat-prompt__shorts li.repeat-prompt__short")].map((row) => row.textContent)).toEqual(["200 short"]);
+    expect(modal.querySelector(".repeat-prompt__camp")).not.toBeNull();
+    expect(namesShown(modal)).toEqual([]);
   });
 
   it("the result leaves out what moved in first (owner, 16 Nov 2026: only the loot and the take-over cost)", async () => {
@@ -358,7 +454,10 @@ describe("the result", () => {
     button(modal, "Attack now")!.click();
     await settle();
     expect(text(modal)).toContain("Missing from the attack:");
-    expect(text(modal)).toContain("Big twig bomb: not enough resources to fire it");
+    const row = modal.querySelector(".repeat-prompt__shorts li.repeat-prompt__short");
+    expect(row?.textContent).toBe("Big: Not enough resources");
+    expect(row?.getAttribute("aria-label")).toBe("Catapult, big twigs: Not enough resources");
+    expect(row?.querySelector(".res-icon")).not.toBeNull();
   });
 
   it("Watch fetches the battle and hands it to the watch scene", async () => {
@@ -507,5 +606,28 @@ describe("the camp panel's Repeat attack", () => {
     expect(control.button.hidden).toBe(true);
     expect(control.detail.hidden).toBe(true);
     expect(plan).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("the Attacking bar (owner, 20 Nov 2026: a five-kind army showed four counts)", () => {
+  it("marches every kind with its count, and the champions", async () => {
+    const modal = document.createElement("div");
+    const flow = new AutoAttackFlow({
+      baseid: BASEID,
+      modal,
+      onWatch: vi.fn(),
+      calls: calls({ run: vi.fn(() => new Promise<AutoAttackResponse>(() => {})) }),
+      progressBar: true,
+      barReducedMotion: true,
+    });
+    await flow.start(answer({ plan: BIG_PLAN }));
+    button(modal, "Attack now")!.click();
+    await settle();
+    const kinds = Object.keys(BIG_PLAN.monsters).length;
+    expect(modal.querySelectorAll(".repeat-bar__marcher")).toHaveLength(kinds + BIG_PLAN.champions.length);
+    const counts = [...modal.querySelectorAll(".repeat-bar__count")].map((one) => one.textContent);
+    expect(counts).toHaveLength(kinds);
+    expect(counts).toContain("1.2K");
+    flow.close();
   });
 });

@@ -3,7 +3,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import type { AutoAttackPlanResponse, AutoAttackResponse, PlanSummary } from "@/api/autoAttack";
 import { setClassicLook } from "@/game/classicLook";
 import { AutoAttackFlow, type AutoAttackCalls } from "./AutoAttackFlow";
-import { MAX_MARCHERS, RepeatBar, marchersOf, tribeGoalPicture } from "./RepeatBar";
+import { RepeatBar, marchersOf, tribeGoalPicture } from "./RepeatBar";
 import { REPEAT_BAR_FULL_HOLD_MS, type BarTimers } from "./repeatBarTiming";
 
 /**
@@ -230,26 +230,41 @@ describe("the bar's timing on Repeat attack", () => {
 });
 
 describe("the marching army", () => {
-  it("the plan's biggest kinds march (at most 4), champions lead, the tribe waits at the end", () => {
+  it("big counts are short on the bar: 1.2K, not 1,240", () => {
+    const bar = new RepeatBar({ plan: { ...PLAN, monsters: { C3: 1_240 }, champions: [] }, reducedMotion: false });
+    expect(bar.element.querySelector(".repeat-bar__count")?.textContent).toBe("1.2K");
+  });
+
+  it("every kind marches with its count (owner, 20 Nov 2026: five kinds showed four), champions lead, the tribe waits at the end", () => {
     const marchers = marchersOf(PLAN);
-    expect(marchers.map((one) => one.name)).toEqual(["C1", "C2", "C12", "C5", "G3"]);
-    expect(marchers.filter((one) => one.count !== null)).toHaveLength(MAX_MARCHERS);
+    expect(marchers.map((one) => one.name)).toEqual(["Pokey", "Octo-ooze", "D.A.V.E.", "Eye-ra", "Brain", "Fomor"]);
+    expect(marchers.filter((one) => one.count !== null)).toHaveLength(Object.keys(PLAN.monsters).length);
 
     const bar = new RepeatBar({ plan: PLAN, reducedMotion: false });
     const units = [...bar.element.querySelectorAll(".repeat-bar__marcher")];
-    expect(units).toHaveLength(5);
+    expect(units).toHaveLength(6);
     // Left to right: smallest kind at the back, the champion in front.
     expect(units.map((one) => one.querySelector(".repeat-bar__count")?.textContent ?? "champion")).toEqual([
+      "1",
       "3",
       "9",
       "12",
       "40",
       "champion",
     ]);
-    expect(units[0]!.querySelector("img")!.getAttribute("src")).toContain("C5");
+    // Neighbours' counts take turns below and above, so two never overlap.
+    expect(units.slice(0, 5).map((one) => one.querySelector(".repeat-bar__count--high") !== null)).toEqual([
+      false,
+      true,
+      false,
+      true,
+      false,
+    ]);
+    expect(units[0]!.getAttribute("title")).toBe("Brain ×1");
+    expect(units[0]!.querySelector("img")!.getAttribute("src")).toContain("C9");
     // Modern's square monster paintings march as round tokens; the champion's cut-out as it is.
     expect(units[0]!.classList.contains("repeat-bar__marcher--token")).toBe(true);
-    expect(units[4]!.classList.contains("repeat-bar__marcher--token")).toBe(false);
+    expect(units[5]!.classList.contains("repeat-bar__marcher--token")).toBe(false);
     expect(bar.element.querySelector<HTMLImageElement>(".repeat-bar__goal-pic")!.getAttribute("src")).toBe(
       "/tribes/abunakki-256.png",
     );
@@ -260,7 +275,7 @@ describe("the marching army", () => {
     setClassicLook(true);
     const bar = new RepeatBar({ plan: PLAN, reducedMotion: false });
     expect(bar.element.querySelector(".repeat-bar__marcher img")!.getAttribute("src")).toBe(
-      "/assets/monsters/C5-small.png",
+      "/assets/monsters/C9-small.png",
     );
     expect(bar.element.querySelector(".repeat-bar__marcher--token")).toBeNull();
     expect(tribeGoalPicture("Abunakki")).toBe("/assets/popups/tribe_abunakki.v2.png");

@@ -1,10 +1,11 @@
 import type { PlanSummary } from "@/api/autoAttack";
 import { artUrl } from "@/artUrl";
 import { classicLook } from "@/game/classicLook";
-import { championByType } from "@/game/combat/rules";
+import { championByType, monsterName } from "@/game/combat/rules";
+import { championName } from "@/ui/attack/ArmyPanel";
 import { tribePictureUrl } from "@/game/maproom/tribeAvatars";
 import { championPortrait, monsterPortrait, showPortrait, type Portrait } from "@/game/portraits";
-import { formatAmount } from "@/ui/format";
+import { formatCompact } from "@/ui/format";
 import { REAL_TIMERS, REPEAT_BAR_FULL_HOLD_MS, REPEAT_BAR_MIN_MS, waitingProgress, type BarTimers } from "./repeatBarTiming";
 import "@/ui/styles/repeat-bar.css";
 
@@ -19,8 +20,8 @@ import "@/ui/styles/repeat-bar.css";
  * the element drives it; the CSS does the rest.
  */
 
-/** Monster kinds that march at most, so the troop fits a phone's bar. */
-export const MAX_MARCHERS = 4;
+/** From this many marchers, two staggered ranks. */
+export const RANKS_FROM = 7;
 
 /** The tribe's portrait at the end of the army's road: Modern's painting, Classic's Flash splash. */
 export const tribeGoalPicture = (tribe: string, classic: boolean = classicLook()): string | null => {
@@ -38,19 +39,19 @@ export interface Marcher {
 }
 
 /**
- * Who marches: the plan's most numerous monster kinds (at most
- * {@link MAX_MARCHERS}), then its champions, which lead.
+ * Who marches: every monster kind of the plan, the most numerous first, then
+ * its champions, which lead. Every kind marches with its count (owner, 20 Nov
+ * 2026: a five-kind army showed four counts).
  */
 export const marchersOf = (plan: Pick<PlanSummary, "monsters" | "champions"> | null): Marcher[] => {
   if (!plan) return [];
   const kinds = Object.entries(plan.monsters)
     .filter(([, count]) => count > 0)
     .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
-    .slice(0, MAX_MARCHERS)
-    .map(([id, count]): Marcher => ({ picture: monsterPortrait(id, "icon"), count, name: id }));
+    .map(([id, count]): Marcher => ({ picture: monsterPortrait(id, "icon"), count, name: monsterName(id) }));
   const champions = plan.champions.map((champion): Marcher => {
     const id = championByType(champion.t) ?? `G${champion.t}`;
-    return { picture: championPortrait(id, champion.l, "icon"), count: null, name: id };
+    return { picture: championPortrait(id, champion.l, "icon"), count: null, name: championName(champion.t) };
   });
   return [...kinds, ...champions];
 };
@@ -206,6 +207,7 @@ export class RepeatBar {
         }`,
       );
       unit.style.setProperty("--marcher", String(index));
+      if (index % 2 === 1) unit.classList.add("repeat-bar__marcher--up");
       const image = document.createElement("img");
       image.className = "repeat-bar__marcher-pic";
       image.alt = "";
@@ -213,14 +215,19 @@ export class RepeatBar {
       showPortrait(image, marcher.picture);
       unit.append(image);
       if (marcher.count !== null) {
-        const count = part("repeat-bar__count", "span");
-        count.textContent = formatAmount(marcher.count);
+        // Next to each other the counts take turns above and below the
+        // portraits, so two never overlap (owner, 20 Nov 2026).
+        const count = part(`repeat-bar__count${index % 2 === 1 ? " repeat-bar__count--high" : ""}`, "span");
+        count.textContent = formatCompact(marcher.count);
         unit.append(count);
       }
       unit.title = marcher.count === null ? marcher.name : `${marcher.name} ×${marcher.count}`;
       troop.append(unit);
     });
     troop.style.setProperty("--marchers", String(Math.max(1, marchers.length)));
+    // A big army marches in two staggered ranks (astra, 20 Nov 2026: ten in
+    // one line hid each other): every other marcher a rank up, its count above.
+    if (marchers.length >= RANKS_FROM) root.classList.add("repeat-bar--ranks");
     track.append(troop);
 
     const goal = part("repeat-bar__goal repeat-bar__goal--tribe");

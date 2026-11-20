@@ -4,8 +4,6 @@ import { ApiError, NetworkError } from "@/api/http";
 import {
   agoText,
   autoAttackErrorText,
-  includesText,
-  monstersText,
   movesLineText,
   planSourceText,
   repeatRefusal,
@@ -48,19 +46,12 @@ describe("autoAttackText", () => {
     expect(agoText(86_400 * 3)).toBe("3 days ago");
   });
 
-  it("names the army, biggest first, and what it brings besides", () => {
-    expect(monstersText(PLAN.monsters)).toBe("300 Pokey, 40 Eye-ra");
-    expect(includesText(PLAN)).toBe("Includes Gorgo L5 and 3 bombs");
-    expect(includesText({ champions: [], bombs: ["tw0"] })).toBe("Includes 1 bomb");
-    expect(includesText({ champions: [], bombs: [] })).toBeNull();
-  });
-
   it("lists exactly what is missing", () => {
     expect(shortfallText({ kind: "monster", id: "C1", need: 300, have: 288 })).toBe(
       "Pokey: 12 short",
     );
     expect(shortfallText({ kind: "champion", t: 1, reason: "hurt" })).toBe("Gorgo has no health left");
-    expect(shortfallText({ kind: "bomb", id: "tw1", reason: "catapult" })).toBe("Big twig bomb: your Catapult is too low");
+    expect(shortfallText({ kind: "bomb", id: "tw1", reason: "catapult" })).toBe("Catapult, big twigs: your Catapult is too low");
   });
 
   it("greys Repeat attack out for what the server says", () => {

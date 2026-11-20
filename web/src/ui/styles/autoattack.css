@@ -2,22 +2,15 @@
  * Auto-attack (issue #221): the confirm sheet and the result, which reuse the
  * end-of-attack panel's frame (`attack.css`, `.attack-end`), and the camp
  * panel's Repeat attack line on the map. Every value comes from tokens.css.
+ * The confirm sheet's own look A (owner, 20 Nov 2026) is repeat-prompt.css.
  */
-
-.auto-attack__army {
-  margin: 0 0 var(--space-1);
-  font-weight: 700;
-}
-
-.auto-attack__includes,
-.auto-attack__siege {
-  margin: 0 0 var(--space-2);
-}
 
 .auto-attack__refusal {
   margin: var(--space-2) 0 var(--space-1);
   color: var(--colour-warning);
   font-weight: 700;
+  /* A server error can carry a long address with no spaces: it wraps inside the panel. */
+  overflow-wrap: anywhere;
 }
 
 .auto-attack__missing {
@@ -101,13 +94,10 @@
   }
 }
 
-/* ── Smart Repeat attack (owner, 16 Nov 2026) ─────────────────────────────
- * The confirm sheet lists the monsters that move into the yards in range
- * first, one row per move: the yard they leave on the LEFT, the monsters,
- * an arrow, and the yard in range on the RIGHT (owner's words). Its words
- * scroll inside the sheet on a short screen and its buttons stay under them
- * (layout-rules: start from the content, `flex: 1 1 auto`). */
-
+/* ── The confirm and refusal sheets ───────────────────────────────────────
+ * Their words scroll inside the sheet on a short screen and their buttons
+ * stay under them (layout-rules: start from the content, `flex: 1 1 auto`).
+ * Look A's own layout is repeat-prompt.css. */
 .attack-end.auto-attack--confirm > .panel__body {
   display: flex;
   flex-direction: column;
@@ -115,13 +105,6 @@
   max-height: min(84vh, 760px);
   max-height: min(84dvh, 760px);
   overflow: hidden;
-}
-
-/* Room for a move's three parts side by side (a phone upright has the whole width). */
-@media (min-width: 621px) {
-  .attack-end.auto-attack--moves {
-    width: min(92vw, 540px);
-  }
 }
 
 .auto-attack__scroll {
@@ -141,7 +124,6 @@
   flex: none;
 }
 
-.auto-attack__scroll > .auto-attack__moves:has(> li + li),
 .auto-attack__scroll > .auto-attack__missing:has(> li + li),
 .auto-attack__scroll > .auto-attack__room:has(> li + li) {
   flex: 0 1 auto;
@@ -150,18 +132,10 @@
   overscroll-behavior: contain;
 }
 
-/* A short screen (a phone on its side): tighter gaps, and over the moves only
-   the camp, the champion line and the rows (the rows name every monster that
-   moves), so two moves show before any scroll. */
+/* A short screen (a phone on its side): tighter gaps. */
 @media (max-height: 500px) {
   .auto-attack__scroll {
     gap: var(--space-2);
-  }
-
-  .auto-attack--moves .auto-attack__source,
-  .auto-attack--moves .auto-attack__army-strip,
-.auto-attack__in-range {
-    display: none;
   }
 }
 
@@ -182,11 +156,6 @@
   font-weight: 700;
 }
 
-.auto-attack__moves-lead {
-  font-weight: 700;
-}
-
-.auto-attack__moves,
 .auto-attack__room {
   display: flex;
   flex-direction: column;
@@ -196,29 +165,11 @@
   list-style: none;
 }
 
-.auto-attack__move {
-  display: grid;
-  /* Fixed yard columns, so every row's parts line up; the chevron sits next
-     to the yard the monsters go to. */
-  grid-template-columns: 88px minmax(0, 1fr) 18px 88px;
-  align-items: center;
-  gap: var(--space-2);
-  padding: var(--space-2);
-  border: 1px solid var(--colour-border);
-  border-radius: var(--radius-sm);
-  background: var(--colour-surface-sunken);
-}
-
 .auto-attack__yard {
   display: flex;
   flex-direction: column;
   min-width: 0;
   line-height: 1.2;
-}
-
-.auto-attack__yard--to {
-  align-items: flex-end;
-  text-align: right;
 }
 
 .auto-attack__yard-name {
@@ -241,34 +192,11 @@
   white-space: nowrap;
 }
 
-.auto-attack__cargo {
-  display: flex;
-  flex-wrap: wrap;
-  justify-content: flex-start;
-  gap: var(--space-1) var(--space-2);
-  min-width: 0;
-}
-
-.auto-attack__unit {
-  display: inline-flex;
-  align-items: center;
-  gap: 2px;
-  font-weight: 700;
-  font-size: var(--text-sm);
-  font-variant-numeric: tabular-nums;
-  white-space: nowrap;
-}
-
 .auto-attack__portrait {
   flex: none;
   width: 28px;
   height: 28px;
   object-fit: contain;
-}
-
-.auto-attack__arrow {
-  flex: none;
-  color: var(--colour-accent);
 }
 
 .auto-attack__missing-monster {
@@ -306,102 +234,6 @@
   color: var(--colour-warning);
 }
 
-/* Smart Repeat attack (astra): keep the total army separate from what moves.
-   From and To share the transfer heading's line, including on a short screen. */
-.auto-attack__army-strip,
-.auto-attack__in-range {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: var(--space-1) var(--space-2);
-  font-size: var(--text-sm);
-}
-
-/* Lead's vetting (16 Nov): "Already in range" and the champion line each
-   get their own line, so the champion never reads as part of the strip. */
-.auto-attack__details {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: var(--space-1);
-}
-
-.auto-attack__champion-strip {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: var(--space-1) var(--space-2);
-  font-size: var(--text-sm);
-}
-
-.auto-attack__details > p {
-  margin: 0;
-}
-
-.auto-attack--moves .auto-attack__moves-lead {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding-inline: var(--space-2);
-  font-size: var(--text-sm);
-}
-
-.auto-attack--moves .auto-attack__source,
-.auto-attack--moves .auto-attack__includes,
-.auto-attack--moves .auto-attack__siege {
-  font-size: var(--text-sm);
-  line-height: calc((var(--text-sm) + var(--text-lg)) / 2 + var(--space-1) / 2);
-}
-
-/* Smart Repeat attack (astra): only the move list gives way; spare phone
-   space stays above a compact footer, with the cost always next to the buttons. */
-.attack-end.auto-attack--moves {
-  max-height: calc(100vh - var(--space-6) - var(--space-4));
-  max-height: calc(100dvh - var(--space-6) - var(--space-4));
-  min-height: 0;
-}
-
-@media (max-width: 620px) {
-  .attack-end.auto-attack--moves {
-    max-height: 100%;
-  }
-}
-
-.attack-end.auto-attack--moves > .panel__body {
-  flex: 1 1 auto;
-  min-height: 0;
-  max-height: none;
-  gap: var(--space-2);
-  padding-bottom: max(var(--space-4), env(safe-area-inset-bottom));
-}
-
-.auto-attack--moves .auto-attack__scroll {
-  gap: var(--space-2);
-  overflow: hidden;
-}
-
-.auto-attack--moves .auto-attack__scroll > .auto-attack__moves {
-  flex: 0 1 auto;
-  min-height: calc(var(--space-7) + var(--space-2));
-  overflow-y: auto;
-  overscroll-behavior: contain;
-}
-
-.auto-attack__footer {
-  display: flex;
-  flex-direction: column;
-  flex: none;
-  gap: var(--space-2);
-  padding-top: var(--space-3);
-  border-top: calc(var(--space-1) / 4) solid var(--colour-border);
-}
-
-.auto-attack__footer .auto-attack__spent {
-  margin: 0;
-  font-size: var(--text-sm);
-  line-height: calc(var(--text-sm) * 1.3);
-}
-
 .auto-attack__failure-context {
   font-size: calc((var(--text-sm) + var(--text-md)) / 2);
 }
@@ -411,78 +243,9 @@
 }
 
 /* Smart Repeat attack (astra): explicit hit areas also cover touch tablets. */
-.auto-attack--moves .attack-end__actions .btn,
 .auto-attack--failed .attack-end__actions .btn {
   min-height: calc(var(--space-6) + var(--space-3));
   min-width: calc(var(--space-6) + var(--space-3));
-}
-
-@media (max-height: 500px) {
-  /* Smart Repeat attack (astra): save space above the rows, not at the buttons.
-     As before, leave the total army and history out here; keep champion and
-     siege information, and the fixed spending note. */
-  .auto-attack--moves .auto-attack__scroll {
-    gap: calc(var(--space-3) / 2);
-  }
-
-  .auto-attack--moves .auto-attack__moves {
-    gap: calc(var(--space-3) / 2);
-  }
-
-  .auto-attack--moves .attack-end__outcome {
-    font-size: calc(var(--text-md) + var(--space-1) / 4);
-    line-height: var(--text-xl);
-  }
-
-  .auto-attack--moves .auto-attack__move {
-    padding-block: var(--space-1);
-  }
-
-  .auto-attack--moves .auto-attack__changed {
-    padding-block: var(--space-1);
-    font-size: var(--text-sm);
-  }
-}
-
-/* Smart Repeat attack (astra): readable counts and coordinates without the
-   heavy secondary shadow on steel. The no-move prompt and result keep their type. */
-.auto-attack--moves :is(.auto-attack__yard-name, .auto-attack__unit) {
-  font-size: calc((var(--text-sm) + var(--text-md)) / 2);
-}
-
-.auto-attack--moves :is(.auto-attack__yard-place, .auto-attack__source, .auto-attack__includes, .auto-attack__siege) {
-  font-size: var(--text-sm);
-  line-height: calc(var(--text-sm) * 1.3);
-  font-weight: var(--body-weight);
-}
-
-:root[data-skin="scrap"] .auto-attack--moves :is(.auto-attack__yard-place, .auto-attack__source, .auto-attack__includes, .auto-attack__siege, .auto-attack__spent) {
-  text-shadow: 0 calc(var(--space-1) / 4) calc(var(--space-1) / 4) var(--colour-shade-strong);
-}
-
-.auto-attack--moves .auto-attack__moves-lead {
-  gap: var(--space-2);
-}
-
-.auto-attack__moves-lead > :nth-child(2) {
-  text-align: center;
-  font-size: calc((var(--text-sm) + var(--text-md)) / 2);
-}
-
-.auto-attack__moves-lead > :last-child {
-  text-align: right;
-}
-
-/* Smart Repeat attack (astra): Cancel has a visible thumb target on tablets
-   and both phone orientations, with the same fill as the upright sheet. */
-.auto-attack--moves .auto-attack__cancel {
-  padding-inline: var(--space-4);
-  background: var(--colour-surface-control);
-  border-color: var(--colour-border);
-}
-
-.auto-attack--moves .auto-attack__cancel:hover {
-  background: var(--colour-surface-control-hover);
 }
 
 /* Smart Repeat attack (astra): housing facts stay together in the camp panel,
@@ -538,95 +301,14 @@
   .attack-end.auto-attack--failed {
     max-height: 100%;
   }
-
-  .auto-attack--moves .attack-end__outcome {
-    font-size: calc(var(--text-md) + var(--space-1) / 4);
-  }
-}
-
-@media (max-height: 500px) {
-  /* Smart Repeat attack (astra): fund the spending sentence with body and
-     footer spacing; the existing edge shadows mark any longer move list. */
-  .attack-end.auto-attack--moves > .panel__body {
-    padding-top: var(--space-3);
-    padding-bottom: max(var(--space-2), env(safe-area-inset-bottom));
-    gap: var(--space-2);
-  }
-
-  .auto-attack--moves .auto-attack__footer {
-    padding-top: 0;
-    border-top: 0;
-    gap: var(--space-1);
-  }
-}
-
-@media (min-width: 621px) and (max-height: 500px) {
-  /* Smart Repeat attack (astra): the centred landscape sheet leaves room for
-     the painted sign. Put the cost beside the actions to give three rows room. */
-  .attack-end.auto-attack--moves {
-    max-height: calc(100vh - var(--space-6));
-    max-height: calc(100dvh - var(--space-6));
-  }
-
-  .auto-attack--moves .auto-attack__footer {
-    display: grid;
-    grid-template-columns: minmax(0, 1fr) auto;
-    align-items: center;
-    gap: var(--space-2);
-  }
-
-  .auto-attack--moves .attack-end__actions {
-    flex-wrap: nowrap;
-  }
 }
 
 /* ── Lead's vetting of the round-3 shots (16 Nov 2026) ───────────────────
- * A scrolling list never rests on a half-cut row (`fitWholeRows`,
- * ui/moreBelow.ts) and fades out at the bottom while more rows are below
- * (`watchMoreBelow` sets the class). */
+ * What scrolls fades out at the bottom while more is below
+ * (`watchMoreBelow`, ui/moreBelow.ts, sets the class). */
 .auto-attack__list--more {
   -webkit-mask-image: linear-gradient(to bottom, #000 calc(100% - var(--space-4)), transparent);
   mask-image: linear-gradient(to bottom, #000 calc(100% - var(--space-4)), transparent);
-}
-
-/* A short screen: tighter move rows and no "Already in range" strip (the
-   rows and the champion line stay), so three moves fit a phone on its side;
-   more than fit scroll, resting on whole rows. */
-@media (max-height: 500px) {
-  .auto-attack--moves .auto-attack__details > .auto-attack__in-range {
-    display: none;
-  }
-
-  /* Room for the third row whole, border and corners included, with a gap
-     before the footer (lead's vetting: it was cut by about 1px). */
-  .auto-attack__footer {
-    padding-top: var(--space-2);
-  }
-
-  .auto-attack--moves .auto-attack__scroll {
-    gap: var(--space-1);
-  }
-
-  .auto-attack--moves .attack-end__outcome {
-    font-size: var(--text-md);
-  }
-
-  .attack-end.auto-attack--moves > .panel__body {
-    padding-bottom: max(var(--space-3), env(safe-area-inset-bottom));
-  }
-
-  .auto-attack__moves {
-    gap: var(--space-1);
-  }
-
-  .auto-attack--moves .auto-attack__moves > .auto-attack__move {
-    padding-block: calc(var(--space-1) / 2);
-  }
-
-  .auto-attack__move .auto-attack__portrait {
-    width: 24px;
-    height: 24px;
-  }
 }
 
 /* A phone upright: the confirm and refusal sheets are a card that hugs its
@@ -654,12 +336,6 @@
     border: 1px solid var(--colour-border);
     border-radius: var(--radius-lg);
   }
-}
-
-/* The move rows' borders sit clear of the list's top and bottom edges at
-   every size (measured in the browser, lead's vetting 16 Nov). */
-.auto-attack--moves .auto-attack__scroll > .auto-attack__moves {
-  padding-block: calc(var(--space-1) / 2);
 }
 
 /* ── The Repeat attack's result (owner, 16 Nov 2026: "I just want to know the
