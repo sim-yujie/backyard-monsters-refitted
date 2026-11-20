@@ -7,7 +7,7 @@ import { outpostPoints, tallyOutposts } from "./outpostPoints.js";
 
 /**
  * The one-off seed of `save.mainpointsearned` for outposts built before patch
- * 8.1 tracked it (`database/seeds/seed_outpost_mainpoints.ts` runs it).
+ * 8.1 tracked it (`database/seeds/backfill_outpost_mainpoints.ts` runs it).
  *
  * Each outpost's value becomes the larger of what it holds (what the yard
  * rules booked since the deploy, exact) and the estimate from its stored

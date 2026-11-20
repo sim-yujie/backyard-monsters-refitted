@@ -7,7 +7,7 @@ import { Migration } from "@mikro-orm/migrations";
  * level counts twice (`services/maproom/v2/outpostEarned.ts`).
  *
  * Every row starts at 0. Additive only: no row is rewritten here. The past is
- * filled by the one-off seed script `server/scripts/seed-outpost-mainpoints.ts`,
+ * filled by the one-off seed script `database/seeds/backfill_outpost_mainpoints.ts`,
  * run by hand after the deploy; the column comment records whether it ran.
  */
 export class Migration20261203_AddMainPointsEarnedToSave extends Migration {

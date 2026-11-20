@@ -104,7 +104,7 @@ const upgradePoints = (steps: readonly CostStep[], from: number, to: number): nu
 
 /**
  * The one-off seed's estimate of the main points an outpost's buildings have
- * paid so far (`server/scripts/seed-outpost-mainpoints.ts`), from its stored
+ * paid so far (`database/seeds/backfill_outpost_mainpoints.ts`), from its stored
  * buildings alone, the same estimate as the read-only diagnosis
  * (`archive/empire-once/tally.ts`, 20 Nov 2026):
  *

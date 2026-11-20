@@ -9,8 +9,8 @@ import { seedMainPointsEarned } from "../../services/maproom/v2/outpostEarnedSee
  * (`services/maproom/v2/outpostEarnedSeed.ts`). Run once, right after the
  * deploy that adds the column:
  *
- *   bun src/database/seeds/seed_outpost_mainpoints.ts            dry run: writes nothing
- *   bun src/database/seeds/seed_outpost_mainpoints.ts --apply    writes, once
+ *   bun src/database/seeds/backfill_outpost_mainpoints.ts            dry run: writes nothing
+ *   bun src/database/seeds/backfill_outpost_mainpoints.ts --apply    writes, once
  *
  * `--force` runs `--apply` again on a database it already ran on (the column
  * comment says so); `--rows` prints every outpost's figures. The database is
