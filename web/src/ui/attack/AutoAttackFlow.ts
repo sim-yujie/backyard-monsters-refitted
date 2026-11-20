@@ -30,7 +30,7 @@ import {
   yardName,
   yardPlace,
 } from "./autoAttackText";
-import { armyParts, campHead, movesPart, roomParts, shortageList, watchMoreMoves } from "./repeatPrompt";
+import { armyParts, campHead, movesPart, roomParts, shortageList, watchMoreRows } from "./repeatPrompt";
 import { resultView } from "./autoAttackResultView";
 import { RepeatBar } from "./RepeatBar";
 import { REAL_TIMERS, REPEAT_BAR_MIN_MS, atLeast, type BarTimers } from "./repeatBarTiming";
@@ -305,10 +305,11 @@ export class AutoAttackFlow {
     for (const middle of root.querySelectorAll<HTMLElement>(".arv-middle, .auto-attack__scroll, .repeat-prompt__army")) {
       this.stopCues.push(watchMoreBelow(middle, "auto-attack__list--more"));
     }
-    // The moves: a painted arrow and how many more are below (a touch screen
-    // draws no scroll bar, and a fade alone was easy to miss).
-    for (const list of root.querySelectorAll<HTMLElement>(".repeat-prompt__moves")) {
-      this.stopCues.push(watchMoreMoves(list));
+    // The moves, what is short, the room in range: a painted arrow and how
+    // many more are below (a touch screen draws no scroll bar, and a fade
+    // alone was easy to miss).
+    for (const list of root.querySelectorAll<HTMLElement>(".repeat-prompt__moves, .repeat-prompt__shorts, .repeat-prompt__room")) {
+      this.stopCues.push(watchMoreRows(list));
     }
   }
 

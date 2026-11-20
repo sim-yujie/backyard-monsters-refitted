@@ -17,7 +17,7 @@ import "@/ui/styles/repeat-prompt.css";
  * - the camp: the tribe's portrait, its name, "Lv N" and a damage chip;
  * - the army as the hand Attack window's tiles: the champions ("Lv 6") and
  *   every monster kind with its count, then the bombs as resource piles with
- *   a size word ("Big ×2" when one repeats);
+ *   a size word and how many ("Big ×2", "Small ×1");
  * - Smart Repeat attack's moves, one card per move: the yard they leave, the
  *   monsters as small tiles, an arrow, the yard in range; the list scrolls
  *   inside the sheet, with a "more below" cue that shows on a touch screen;
@@ -110,7 +110,7 @@ const championTile = (champion: PlanSummary["champions"][number]): HTMLElement =
 const bombPile = (id: string): HTMLElement =>
   resourceIcon(resourceKeyOf(BOMBS.find((one) => one.id === id)?.resource ?? 1), { decorative: true, realm: "surface" });
 
-/** The bombs, one tile per kind and size: the pile, the size word, and ×N when it repeats. */
+/** The bombs, one tile per kind and size: the pile, the size word and how many (astra: "Big ×1" too). */
 const bombTiles = (bombs: readonly string[]): HTMLElement[] => {
   const counts = new Map<string, number>();
   for (const id of bombs) counts.set(id, (counts.get(id) ?? 0) + 1);
@@ -118,7 +118,7 @@ const bombTiles = (bombs: readonly string[]): HTMLElement[] => {
     const size = bombSize(id);
     const element = tile(
       bombPile(id),
-      count > 1 ? `${size} ×${count}` : size,
+      `${size} ×${count}`,
       count > 1 ? `${bombName(id)} ×${count}` : bombName(id),
       "attack-window__tile--bomb repeat-prompt__bomb",
     );
@@ -201,8 +201,16 @@ export const moveCards = (moves: readonly YardMove[], yards: Readonly<Record<str
     card.append(yardChip(yards[move.from], "from"), cargo, arrow(), yardChip(yards[move.to], "to"));
     list.append(card);
   }
-  // The cue for moves further down (a touch screen draws no scroll bar): a
-  // painted arrow and how many, pinned to the bottom of whatever scrolls.
+  list.append(moreCue());
+  return list;
+};
+
+/**
+ * The cue for rows further down a list (a touch screen draws no scroll bar):
+ * a painted arrow and how many, pinned to the bottom of whatever scrolls.
+ * {@link watchMoreRows} keeps it up to date.
+ */
+const moreCue = (): HTMLLIElement => {
   const more = el("li", "repeat-prompt__more");
   more.setAttribute("role", "presentation");
   more.setAttribute("aria-hidden", "true");
@@ -214,8 +222,7 @@ export const moveCards = (moves: readonly YardMove[], yards: Readonly<Record<str
   cue.append(down, el("span", "repeat-prompt__more-count"));
   more.append(cue);
   more.hidden = true;
-  list.append(more);
-  return list;
+  return more;
 };
 
 /** "5 moves first" over the cards. */
@@ -240,13 +247,14 @@ const scrollerOf = (element: HTMLElement): HTMLElement | null => {
 };
 
 /**
- * Keeps the moves' "more below" cue up to date: it shows how many cards are
- * not wholly in sight below, and a tap brings the next one up. Measures the
- * laid-out page; does nothing where nothing is laid out (tests).
+ * Keeps a list's "more below" cue up to date (the moves, what is short, the
+ * room in range): it shows how many rows are not wholly in sight below, and
+ * a tap brings the next one up. Measures the laid-out page; does nothing
+ * where nothing is laid out (tests).
  *
  * @returns Stops watching.
  */
-export const watchMoreMoves = (list: HTMLElement): (() => void) => {
+export const watchMoreRows = (list: HTMLElement): (() => void) => {
   const more = list.querySelector<HTMLElement>(":scope > .repeat-prompt__more");
   const count = more?.querySelector<HTMLElement>(".repeat-prompt__more-count");
   const cue = more?.querySelector<HTMLButtonElement>(".repeat-prompt__more-cue");
@@ -255,7 +263,7 @@ export const watchMoreMoves = (list: HTMLElement): (() => void) => {
   const below = (): HTMLElement[] => {
     if (!scroller) return [];
     const bottom = scroller.getBoundingClientRect().bottom;
-    return [...list.querySelectorAll<HTMLElement>(":scope > .repeat-prompt__move")].filter(
+    return [...list.querySelectorAll<HTMLElement>(":scope > li:not(.repeat-prompt__more)")].filter(
       (card) => card.getBoundingClientRect().bottom > bottom + 1,
     );
   };
@@ -266,17 +274,20 @@ export const watchMoreMoves = (list: HTMLElement): (() => void) => {
       scroller = next;
       scroller?.addEventListener("scroll", update, { passive: true });
     }
+    // While the list runs past what shows, the cue keeps a strip at the
+    // bottom (astra: rows stop above it, the last one clears it); it shows
+    // while rows are below, and its strip stays when scrolled to the end, so
+    // nothing jumps.
     const hidden = below();
-    more.hidden = hidden.length === 0;
+    more.hidden = scroller === null;
+    more.classList.toggle("repeat-prompt__more--done", hidden.length === 0);
     count.textContent = `+${hidden.length}`;
-    cue.title = hidden.length === 1 ? "1 more move below" : `${hidden.length} more moves below`;
+    cue.title = `${hidden.length} more below`;
   };
   cue.addEventListener("click", () => {
-    const first = below()[0];
-    if (!scroller || !first) return;
-    const gap = scroller.getBoundingClientRect().bottom - first.getBoundingClientRect().bottom;
-    // The card's foot clears the cue: scroll it up past the bottom edge by the cue's height.
-    scroller.scrollBy({ top: -gap + cue.offsetHeight + 8, behavior: "smooth" });
+    // One screenful on, keeping the row that was cut off in sight.
+    if (!scroller) return;
+    scroller.scrollBy({ top: Math.max(48, scroller.clientHeight - 96), behavior: "smooth" });
   });
   const observer = typeof ResizeObserver === "undefined" ? null : new ResizeObserver(() => update());
   observer?.observe(list);
@@ -347,6 +358,7 @@ export const shortageList = (
       list.append(shortRow(bombPile(item.id), size ? `${size}: ${why}` : why, `${bombName(item.id)}: ${why}`, "bomb"));
     }
   }
+  list.append(moreCue());
   return list;
 };
 
@@ -368,5 +380,6 @@ export const roomParts = (noRoom: NoRoom, yards: Readonly<Record<string, YardLab
     row.append(yardChip(yards[one.baseid], "room"), free);
     list.append(row);
   }
+  list.append(moreCue());
   return [need, list];
 };

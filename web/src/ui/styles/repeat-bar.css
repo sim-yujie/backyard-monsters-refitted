@@ -239,3 +239,51 @@
     margin-left: 2px;
   }
 }
+
+/* ── A big army: two staggered ranks (astra, 20 Nov 2026) ─────────────────
+ * From seven marchers (RepeatBar.ts RANKS_FROM) every other one marches a
+ * rank up, its count above it; the rest a rank down, their counts below.
+ * Each rank's marchers are two steps apart, so they hide each other less and
+ * their counts never meet; the bar is taller to hold both ranks. */
+.repeat-bar--ranks {
+  --repeat-bar-height: 96px;
+  --repeat-track-height: 88px;
+}
+
+.repeat-bar--ranks .repeat-bar__troop {
+  --marcher-size: 30px;
+  --marcher-step: 18px;
+  --rank-offset: 16px;
+
+  bottom: 13px;
+  align-items: flex-end;
+  height: calc(var(--marcher-size) + var(--rank-offset));
+}
+
+.repeat-bar--ranks .repeat-bar__marcher--up {
+  align-self: flex-start;
+}
+
+.repeat-bar--ranks .repeat-bar__count {
+  bottom: -4px;
+}
+
+.repeat-bar--ranks .repeat-bar__count--high {
+  top: -4px;
+  bottom: auto;
+}
+
+@media (max-width: 620px), (max-height: 500px) {
+  .repeat-bar--ranks {
+    --repeat-bar-height: 82px;
+    --repeat-track-height: 74px;
+  }
+
+  .repeat-bar--ranks .repeat-bar__troop {
+    --marcher-size: 26px;
+    --marcher-step: 16px;
+    --rank-offset: 14px;
+
+    bottom: 12px;
+  }
+}

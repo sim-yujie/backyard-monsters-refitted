@@ -71,9 +71,17 @@
   background: #f2c14e;
 }
 
+/* The yellow banner on one line on a phone. */
 .auto-attack--prompt .auto-attack__changed {
   flex: none;
   margin: 0;
+  padding: 6px var(--space-3);
+  font-size: var(--text-sm);
+}
+
+/* Modern's text shadow is heavy for the small numbers: a lighter one. */
+:root:not([data-skin="flash"]) .auto-attack--prompt :is(.repeat-prompt__yard-place, .attack-window__caption) {
+  text-shadow: 0 1px 1px rgb(0 0 0 / 75%);
 }
 
 .auto-attack--prompt .auto-attack__refusal {
@@ -307,15 +315,17 @@
   filter: drop-shadow(0 1px 1px rgb(0 0 0 / 55%));
 }
 
-/* The cue for moves further down: pinned to the bottom of whatever scrolls,
-   a shade over the edge and a painted arrow pointing down with how many. */
+/* The cue for rows further down (the moves, what is short, the room): a
+   strip pinned to the bottom of whatever scrolls, shaded so rows stop above
+   it, with a painted arrow pointing down and how many (astra, round 1). At
+   the end of the list the strip stays, empty, so the last row clears it. */
 .repeat-prompt__more {
   position: sticky;
   bottom: 0;
   z-index: 1;
-  height: 0;
-  /* The list's gap would push it below the last card. */
-  margin-top: calc(-1 * var(--space-2));
+  height: 48px;
+  /* The list's gap would push it below the last row. */
+  margin-top: calc(-1 * var(--space-2) + 4px);
   pointer-events: none;
 }
 
@@ -326,26 +336,32 @@
 .repeat-prompt__more::before {
   content: "";
   position: absolute;
-  right: 0;
-  bottom: 0;
-  left: 0;
-  height: 40px;
-  border-radius: 0 0 var(--radius-md) var(--radius-md);
-  background: linear-gradient(to bottom, transparent, rgb(0 0 0 / 45%));
+  inset: 0;
+  background: linear-gradient(to bottom, transparent, rgb(0 0 0 / 55%) 45%);
+  border-radius: var(--radius-md);
+  transition: opacity 120ms ease-out;
+}
+
+.repeat-prompt__more--done::before,
+.repeat-prompt__more--done > .repeat-prompt__more-cue {
+  opacity: 0;
+  visibility: hidden;
 }
 
 .repeat-prompt__more-cue {
   position: absolute;
-  bottom: 6px;
+  bottom: 2px;
   left: 50%;
   display: inline-flex;
   align-items: center;
+  justify-content: center;
   gap: 2px;
-  min-height: 32px;
+  min-width: 72px;
+  min-height: 44px;
   padding: 0 var(--space-3) 0 var(--space-2);
   border: 2px solid #f2c14e;
   border-radius: 999px;
-  background: rgb(24 20 14 / 88%);
+  background: rgb(24 20 14 / 92%);
   box-shadow: 0 2px 6px rgb(0 0 0 / 55%);
   color: #ffe2a0;
   font: inherit;
@@ -473,6 +489,34 @@
   font-size: var(--text-md);
   font-weight: 700;
   font-variant-numeric: tabular-nums;
+}
+
+/* ── One column (a phone upright, an iPad upright) ──────────────────────
+   A refused sheet puts its reason and what is short right under the camp,
+   before the tiles (astra, round 1): the reason is the news. */
+@media (max-width: 620px), (max-width: 899px) and (min-height: 501px) {
+  .auto-attack--refused .repeat-prompt__columns > .repeat-prompt__army {
+    display: contents;
+  }
+
+  .auto-attack--refused .repeat-prompt__columns > .repeat-prompt__army > .repeat-prompt__camp {
+    order: 0;
+  }
+
+  .auto-attack--refused .repeat-prompt__columns > .repeat-prompt__refusal-part {
+    order: 1;
+  }
+
+  .auto-attack--refused .repeat-prompt__columns > .repeat-prompt__army > .repeat-prompt__section {
+    order: 2;
+  }
+}
+
+.repeat-prompt__refusal-part {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  min-width: 0;
 }
 
 /* ── A phone upright: every tile on as few rows as fit ─────────────────── */

@@ -127,7 +127,7 @@ describe("the confirm sheet, look A (owner, 20 Nov 2026)", () => {
     expect(tiles.every((one) => one.querySelector("img") !== null)).toBe(true);
     // The bombs: a resource pile and a size word each.
     const bombs = [...modal.querySelectorAll(".repeat-prompt__bombs .attack-window__tile")];
-    expect(bombs.map((one) => text(one))).toEqual(["Big", "Big", "Small"]);
+    expect(bombs.map((one) => text(one))).toEqual(["Big ×1", "Big ×1", "Small ×1"]);
     expect(bombs.every((one) => one.querySelector(".res-icon") !== null)).toBe(true);
     expect(namesShown(modal)).toEqual([]);
     expect(goneShown(modal)).toEqual([]);
@@ -144,7 +144,7 @@ describe("the confirm sheet, look A (owner, 20 Nov 2026)", () => {
     // Biggest first.
     expect(text(modal.querySelector(".repeat-prompt__monster"))).toBe("×1,240");
     expect(text(modal.querySelector(".repeat-prompt__total"))).toBe("×2,054");
-    expect([...modal.querySelectorAll(".repeat-prompt__bomb")].map((one) => text(one))).toEqual(["Big ×2", "Big", "Small"]);
+    expect([...modal.querySelectorAll(".repeat-prompt__bomb")].map((one) => text(one))).toEqual(["Big ×2", "Big ×1", "Small ×1"]);
     expect(namesShown(modal)).toEqual([]);
     expect(goneShown(modal)).toEqual([]);
   });
@@ -164,7 +164,7 @@ describe("the confirm sheet, look A (owner, 20 Nov 2026)", () => {
     // Look A's camp and tiles stay on top of the refusal.
     expect(modal.querySelector(".repeat-prompt__camp")).not.toBeNull();
     expect(modal.querySelectorAll(".repeat-prompt__monsters .attack-window__tile")).toHaveLength(2);
-    const items = [...modal.querySelectorAll(".repeat-prompt__shorts li")];
+    const items = [...modal.querySelectorAll(".repeat-prompt__shorts li.repeat-prompt__short")];
     expect(items.map((item) => item.textContent)).toEqual(["180 short", "No health left"]);
     expect(items.map((item) => item.getAttribute("aria-label"))).toEqual(["Pokey: 180 short", "Gorgo: No health left"]);
     expect(items.every((item) => item.querySelector("img") !== null)).toBe(true);
@@ -304,9 +304,9 @@ describe("Smart Repeat attack's prompt (owner, 16 Nov 2026)", () => {
       }),
     );
     expect(text(modal)).toContain("Not enough monsters for that attack.");
-    const items = [...modal.querySelectorAll(".repeat-prompt__shorts li")].map((item) => item.textContent);
+    const items = [...modal.querySelectorAll(".repeat-prompt__shorts li.repeat-prompt__short")].map((item) => item.textContent);
     expect(items).toEqual(["12 short", "6 short"]);
-    expect(modal.querySelectorAll(".repeat-prompt__shorts img")).toHaveLength(2);
+    expect(modal.querySelectorAll(".repeat-prompt__short img")).toHaveLength(2);
     expect(modal.querySelector(".repeat-prompt__moves")).toBeNull();
     expect(namesShown(modal)).toEqual([]);
     expect(button(modal, "Attack now")?.disabled).toBe(true);
@@ -325,7 +325,7 @@ describe("Smart Repeat attack's prompt (owner, 16 Nov 2026)", () => {
     expect(shown).toContain("Not enough Monster Housing in range.");
     expect(shown).not.toContain("short");
     expect(text(modal.querySelector(".repeat-prompt__need"))).toBe("1,840 space needed");
-    expect([...modal.querySelectorAll(".repeat-prompt__room li")].map((row) => row.textContent)).toEqual([
+    expect([...modal.querySelectorAll(".repeat-prompt__room li.repeat-prompt__room-yard")].map((row) => row.textContent)).toEqual([
       "Outpost242, 20840 free",
       "Main yard250, 200300 free",
     ]);
@@ -358,7 +358,7 @@ describe("Smart Repeat attack's prompt (owner, 16 Nov 2026)", () => {
     // The sheet's camp and army stay on top.
     expect(modal.querySelector(".repeat-prompt__camp")).not.toBeNull();
     expect(modal.querySelectorAll(".repeat-prompt__monsters .attack-window__tile")).toHaveLength(2);
-    expect([...modal.querySelectorAll(".repeat-prompt__room li")].map((row) => row.textContent)).toEqual(["Outpost242, 20840 free"]);
+    expect([...modal.querySelectorAll(".repeat-prompt__room li.repeat-prompt__room-yard")].map((row) => row.textContent)).toEqual(["Outpost242, 20840 free"]);
     expect(button(modal, "Close")).toBeDefined();
   });
 
@@ -374,7 +374,7 @@ describe("Smart Repeat attack's prompt (owner, 16 Nov 2026)", () => {
     await settle();
     expect(text(modal.querySelector(".auto-attack__changed"))).toBe("Your yards changed.");
     expect(text(modal)).toContain("Not enough monsters for that attack.");
-    expect([...modal.querySelectorAll(".repeat-prompt__shorts li")].map((row) => row.textContent)).toEqual(["200 short"]);
+    expect([...modal.querySelectorAll(".repeat-prompt__shorts li.repeat-prompt__short")].map((row) => row.textContent)).toEqual(["200 short"]);
     expect(modal.querySelector(".repeat-prompt__camp")).not.toBeNull();
     expect(namesShown(modal)).toEqual([]);
   });
@@ -445,7 +445,7 @@ describe("the result", () => {
     button(modal, "Attack now")!.click();
     await settle();
     expect(text(modal)).toContain("Missing from the attack:");
-    const row = modal.querySelector(".repeat-prompt__shorts li");
+    const row = modal.querySelector(".repeat-prompt__shorts li.repeat-prompt__short");
     expect(row?.textContent).toBe("Big: Not enough resources");
     expect(row?.getAttribute("aria-label")).toBe("Big twig bomb: Not enough resources");
     expect(row?.querySelector(".res-icon")).not.toBeNull();

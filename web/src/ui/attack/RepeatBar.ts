@@ -20,6 +20,9 @@ import "@/ui/styles/repeat-bar.css";
  * the element drives it; the CSS does the rest.
  */
 
+/** From this many marchers, two staggered ranks. */
+export const RANKS_FROM = 7;
+
 /** The tribe's portrait at the end of the army's road: Modern's painting, Classic's Flash splash. */
 export const tribeGoalPicture = (tribe: string, classic: boolean = classicLook()): string | null => {
   const file = tribe.toLowerCase();
@@ -204,6 +207,7 @@ export class RepeatBar {
         }`,
       );
       unit.style.setProperty("--marcher", String(index));
+      if (index % 2 === 1) unit.classList.add("repeat-bar__marcher--up");
       const image = document.createElement("img");
       image.className = "repeat-bar__marcher-pic";
       image.alt = "";
@@ -221,6 +225,9 @@ export class RepeatBar {
       troop.append(unit);
     });
     troop.style.setProperty("--marchers", String(Math.max(1, marchers.length)));
+    // A big army marches in two staggered ranks (astra, 20 Nov 2026: ten in
+    // one line hid each other): every other marcher a rank up, its count above.
+    if (marchers.length >= RANKS_FROM) root.classList.add("repeat-bar--ranks");
     track.append(troop);
 
     const goal = part("repeat-bar__goal repeat-bar__goal--tribe");
