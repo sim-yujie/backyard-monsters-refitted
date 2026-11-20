@@ -64,9 +64,9 @@ export const puttyAmount = (value: number, round: "down" | "up" = "down"): strin
   return `${Math.ceil(whole / (unit / 10)) / 10}${word}`;
 };
 
-/** Repeat attack's fee, for a tooltip and a screen reader. */
+/** astra, round 1: the fee and when it is spent, for a tooltip and a screen reader. */
 export const feeLabel = (fee: number): string =>
-  `Repeat fee: ${fee.toLocaleString("en-US")} putty, paid when the attack starts`;
+  `Repeat fee: ${fee.toLocaleString("en-US")} putty, paid when the attack starts, even on defeat`;
 
 /** One missing thing, as the button and the sheet list it. */
 export const shortfallText = (item: PlanShortfall): string => {

@@ -639,10 +639,13 @@ describe("Repeat attack's putty fee (owner, 20 Nov 2026)", () => {
     await flow.start(answer({ fee: 3_000_000 }));
     const fee = modal.querySelector(".repeat-prompt__fee")!;
     expect(fee).not.toBeNull();
+    expect(text(fee.querySelector(".repeat-prompt__fee-word"))).toBe("Repeat fee");
     expect(fee.querySelector(".res-icon--r3")).not.toBeNull();
     expect(text(fee.querySelector(".repeat-prompt__fee-number"))).toBe("3M");
-    expect(fee.getAttribute("aria-label")).toBe("Repeat fee: 3,000,000 putty, paid when the attack starts");
+    expect(text(fee.querySelector(".repeat-prompt__fee-note"))).toBe("Spent on start, even on defeat.");
+    expect(fee.getAttribute("aria-label")).toBe("Repeat fee: 3,000,000 putty, paid when the attack starts, even on defeat");
     expect(fee.classList.contains("repeat-prompt__fee--short")).toBe(false);
+    expect(fee.querySelector(".repeat-prompt__fee-short")).toBeNull();
     // After the Catapult's shots, in the cost area.
     expect(modal.querySelector(".repeat-prompt__bombs + .repeat-prompt__fee")).not.toBeNull();
     expect(button(modal, "Attack now")?.disabled).toBe(false);
@@ -655,8 +658,9 @@ describe("Repeat attack's putty fee (owner, 20 Nov 2026)", () => {
     expect(button(modal, "Attack now")?.disabled).toBe(true);
     expect(text(modal.querySelector(".auto-attack__refusal"))).toBe("Not enough putty for the fee.");
     expect(text(modal.querySelector(".repeat-prompt__short--fee"))).toBe("1.3M short");
-    // How much is short is said once, in the refusal's list.
-    expect(modal.querySelectorAll(".repeat-prompt__fee-short")).toHaveLength(0);
+    // astra, round 1: the fee also shows the shortage, rounded up, beside its unchanged amount.
+    expect(text(modal.querySelector(".repeat-prompt__fee-short"))).toBe("1.3M short");
+    expect(text(modal.querySelector(".repeat-prompt__fee-number"))).toBe("3M");
     expect(modal.querySelector(".repeat-prompt__fee--short")).not.toBeNull();
   });
 
@@ -680,6 +684,7 @@ describe("Repeat attack's putty fee (owner, 20 Nov 2026)", () => {
     await settle();
     expect(text(modal.querySelector(".auto-attack__refusal"))).toBe("Not enough putty for the fee.");
     expect(text(modal.querySelector(".repeat-prompt__short--fee"))).toBe("1K short");
+    expect(text(modal.querySelector(".repeat-prompt__fee-short"))).toBe("1K short");
   });
 
   it("the camp panel's short line names the putty", async () => {

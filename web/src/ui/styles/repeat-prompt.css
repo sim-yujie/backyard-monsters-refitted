@@ -236,9 +236,8 @@
   padding-inline: 6px;
 }
 
-/* Repeat attack's putty fee (owner, 20 Nov 2026): one row under the
-   Catapult, the word, the putty pile and the amount; the amount in the
-   warning colour when the pool cannot pay it. */
+/* astra, round 1: under the Catapult, the label, putty pile and amount,
+   then a separate warning when short. The spending note sits below. */
 .repeat-prompt__fee {
   display: flex;
   flex-wrap: wrap;
@@ -249,6 +248,7 @@
 
 .repeat-prompt__fee-word {
   font-weight: 700;
+  white-space: nowrap;
 }
 
 .repeat-prompt__fee-amount {
@@ -265,8 +265,25 @@
   width: 28px;
 }
 
-.repeat-prompt__fee--short .repeat-prompt__fee-number {
+.repeat-prompt__fee-short {
   color: var(--colour-warning);
+  font-size: var(--text-md);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.repeat-prompt__fee-note {
+  flex-basis: 100%;
+  color: var(--colour-text-muted);
+  font-size: var(--text-sm);
+}
+
+@media (max-height: 500px) {
+  /* astra, round 1: hide the note here so it adds no height on a phone
+     on its side. The fee's tooltip and accessible label still explain it. */
+  .repeat-prompt__fee-note {
+    display: none;
+  }
 }
 
 /* ── The moves ─────────────────────────────────────────────────────────── */

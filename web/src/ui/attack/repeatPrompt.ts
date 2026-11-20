@@ -17,9 +17,9 @@ import "@/ui/styles/repeat-prompt.css";
  * - the army as the hand Attack window's tiles: the champions ("Lv 6") and
  *   every monster kind with its count, then the Catapult's shots as resource
  *   piles with a size word, one per resource and no count;
- * - Repeat attack's putty fee (owner, 20 Nov 2026): the putty pile and the
- *   amount, under the Catapult; in the warning colour when the pool cannot
- *   pay it;
+ * - Repeat attack's putty fee (owner, 20 Nov 2026; astra, round 1): the putty pile and the
+ *   amount, under the Catapult; a warning-coloured shortage and a short
+ *   note that it is spent on start, even on defeat;
  * - Smart Repeat attack's moves, one card per move: the yard they leave, the
  *   monsters as small tiles, an arrow, the yard in range; the list scrolls
  *   inside the sheet, with a "more below" cue that shows on a touch screen;
@@ -157,24 +157,30 @@ export interface FeeShown {
 }
 
 /**
- * Repeat attack's fee (owner, 20 Nov 2026): the putty pile and "2M", the
- * amount in the warning colour when the pool cannot pay it (the refusal's
- * list says how much is short). The words are for the tooltip and a screen
- * reader.
+ * astra, round 1: the putty pile and amount keep their normal colour.
+ * A separate warning says how much is short, rounded up; the refusal keeps
+ * its own list. The spending note hides on short screens to save height,
+ * but the tooltip and screen reader keep the full explanation.
  */
 export const feeLine = ({ fee, short = 0 }: FeeShown): HTMLElement => {
   const line = el("section", `repeat-prompt__fee${short > 0 ? " repeat-prompt__fee--short" : ""}`);
   const tip = short > 0 ? `${feeLabel(fee)}. Putty: ${fmt(short)} short` : feeLabel(fee);
   line.title = tip;
   line.setAttribute("aria-label", tip);
-  const heading = el("span", "repeat-prompt__fee-word", "Fee");
+  const heading = el("span", "repeat-prompt__fee-word", "Repeat fee");
   heading.setAttribute("aria-hidden", "true");
   const amount = el("span", "repeat-prompt__fee-amount");
   amount.setAttribute("aria-hidden", "true");
   amount.append(resourceIcon("r3", { decorative: true, realm: "surface" }), el("span", "repeat-prompt__fee-number", puttyAmount(fee)));
-  // Short: the amount in the warning colour; how much is short is the
-  // refusal's own row ("1.2M short"), never said twice.
   line.append(heading, amount);
+  if (short > 0) {
+    const shortage = el("span", "repeat-prompt__fee-short", `${puttyAmount(short, "up")} short`);
+    shortage.setAttribute("aria-hidden", "true");
+    line.append(shortage);
+  }
+  const note = el("span", "repeat-prompt__fee-note", "Spent on start, even on defeat.");
+  note.setAttribute("aria-hidden", "true");
+  line.append(note);
   return line;
 };
 
