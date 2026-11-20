@@ -316,42 +316,29 @@
 }
 
 /* The cue for rows further down (the moves, what is short, the room): a
-   strip pinned to the bottom of whatever scrolls, shaded so rows stop above
-   it, with a painted arrow pointing down and how many (astra, round 1). At
-   the end of the list the strip stays, empty, so the last row clears it. */
+   strip of its own right under whatever scrolls, so it never covers a row
+   (astra, rounds 1 and 2), with a painted arrow pointing down and how many.
+   At the end of the list the strip stays with its cue dimmed, so nothing
+   jumps. */
 .repeat-prompt__more {
-  position: sticky;
-  bottom: 0;
-  z-index: 1;
-  height: 48px;
-  /* The list's gap would push it below the last row. */
-  margin-top: calc(-1 * var(--space-2) + 4px);
-  pointer-events: none;
+  display: flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  height: 44px;
+  margin-top: calc(-1 * var(--space-1));
 }
 
 .repeat-prompt__more[hidden] {
   display: none;
 }
 
-.repeat-prompt__more::before {
-  content: "";
-  position: absolute;
-  inset: 0;
-  background: linear-gradient(to bottom, transparent, rgb(0 0 0 / 55%) 45%);
-  border-radius: var(--radius-md);
-  transition: opacity 120ms ease-out;
-}
-
-.repeat-prompt__more--done::before,
 .repeat-prompt__more--done > .repeat-prompt__more-cue {
-  opacity: 0;
-  visibility: hidden;
+  opacity: 0.35;
+  filter: grayscale(1);
 }
 
 .repeat-prompt__more-cue {
-  position: absolute;
-  bottom: 2px;
-  left: 50%;
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -369,9 +356,8 @@
   font-weight: 800;
   font-variant-numeric: tabular-nums;
   line-height: 1;
-  transform: translateX(-50%);
   cursor: pointer;
-  pointer-events: auto;
+  transition: opacity 120ms ease-out;
 }
 
 .repeat-prompt__more-arrow {
@@ -616,12 +602,26 @@
     grid-area: side;
   }
 
-  .auto-attack--prompt-two :is(.repeat-prompt__army, .repeat-prompt__moves, .repeat-prompt__refusal-part) {
+  .auto-attack--prompt-two :is(.repeat-prompt__army, .repeat-prompt__moves, .repeat-prompt__shorts, .repeat-prompt__room) {
     min-height: 0;
     padding-right: 6px;
     padding-bottom: var(--space-2);
     overflow-y: auto;
     overscroll-behavior: contain;
+  }
+
+  /* What is short: the reason stays on top, the rows scroll under it. */
+  .auto-attack--prompt-two .repeat-prompt__refusal-part {
+    min-height: 0;
+    overflow: hidden;
+  }
+
+  .auto-attack--prompt-two .repeat-prompt__refusal-part > :not(.repeat-prompt__shorts, .repeat-prompt__room) {
+    flex: none;
+  }
+
+  .auto-attack--prompt-two :is(.repeat-prompt__shorts, .repeat-prompt__room) {
+    flex: 0 1 auto;
   }
 
   .auto-attack--prompt-two .repeat-prompt__moves-part {

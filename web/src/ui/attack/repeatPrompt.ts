@@ -201,18 +201,17 @@ export const moveCards = (moves: readonly YardMove[], yards: Readonly<Record<str
     card.append(yardChip(yards[move.from], "from"), cargo, arrow(), yardChip(yards[move.to], "to"));
     list.append(card);
   }
-  list.append(moreCue());
   return list;
 };
 
 /**
  * The cue for rows further down a list (a touch screen draws no scroll bar):
- * a painted arrow and how many, pinned to the bottom of whatever scrolls.
- * {@link watchMoreRows} keeps it up to date.
+ * a painted arrow and how many, in a strip of its own right under whatever
+ * scrolls, so it never covers a row (astra, round 2). {@link watchMoreRows}
+ * places it and keeps it up to date.
  */
-const moreCue = (): HTMLLIElement => {
-  const more = el("li", "repeat-prompt__more");
-  more.setAttribute("role", "presentation");
+const moreCue = (): HTMLElement => {
+  const more = el("div", "repeat-prompt__more");
   more.setAttribute("aria-hidden", "true");
   const cue = el("button", "repeat-prompt__more-cue");
   cue.type = "button";
@@ -255,31 +254,33 @@ const scrollerOf = (element: HTMLElement): HTMLElement | null => {
  * @returns Stops watching.
  */
 export const watchMoreRows = (list: HTMLElement): (() => void) => {
-  const more = list.querySelector<HTMLElement>(":scope > .repeat-prompt__more");
-  const count = more?.querySelector<HTMLElement>(".repeat-prompt__more-count");
-  const cue = more?.querySelector<HTMLButtonElement>(".repeat-prompt__more-cue");
-  if (!more || !count || !cue) return () => {};
+  const more = moreCue();
+  const count = more.querySelector<HTMLElement>(".repeat-prompt__more-count")!;
+  const cue = more.querySelector<HTMLButtonElement>(".repeat-prompt__more-cue")!;
+  list.after(more);
   let scroller: HTMLElement | null = null;
+  // Rows were below at some point in this scroller: the strip stays for good.
+  let needed = false;
   const below = (): HTMLElement[] => {
     if (!scroller) return [];
     const bottom = scroller.getBoundingClientRect().bottom;
-    return [...list.querySelectorAll<HTMLElement>(":scope > li:not(.repeat-prompt__more)")].filter(
-      (card) => card.getBoundingClientRect().bottom > bottom + 1,
-    );
+    return [...list.querySelectorAll<HTMLElement>(":scope > li")].filter((row) => row.getBoundingClientRect().bottom > bottom + 1);
   };
   const update = () => {
     const next = scrollerOf(list);
     if (next !== scroller) {
       scroller?.removeEventListener("scroll", update);
       scroller = next;
+      needed = false;
       scroller?.addEventListener("scroll", update, { passive: true });
+      // The strip sits right under what scrolls: the list, or the sheet's words.
+      if (scroller && more.previousElementSibling !== scroller) scroller.after(more);
     }
-    // While the list runs past what shows, the cue keeps a strip at the
-    // bottom (astra: rows stop above it, the last one clears it); it shows
-    // while rows are below, and its strip stays when scrolled to the end, so
-    // nothing jumps.
+    // While the list runs past what shows the strip stays, its cue lit while
+    // rows are below and dim at the end, so nothing jumps as it scrolls.
     const hidden = below();
-    more.hidden = scroller === null;
+    if (hidden.length > 0) needed = true;
+    more.hidden = scroller === null || !needed;
     more.classList.toggle("repeat-prompt__more--done", hidden.length === 0);
     count.textContent = `+${hidden.length}`;
     cue.title = `${hidden.length} more below`;
@@ -287,7 +288,7 @@ export const watchMoreRows = (list: HTMLElement): (() => void) => {
   cue.addEventListener("click", () => {
     // One screenful on, keeping the row that was cut off in sight.
     if (!scroller) return;
-    scroller.scrollBy({ top: Math.max(48, scroller.clientHeight - 96), behavior: "smooth" });
+    scroller.scrollBy({ top: Math.max(48, scroller.clientHeight - 64), behavior: "smooth" });
   });
   const observer = typeof ResizeObserver === "undefined" ? null : new ResizeObserver(() => update());
   observer?.observe(list);
@@ -301,6 +302,7 @@ export const watchMoreRows = (list: HTMLElement): (() => void) => {
     scroller?.removeEventListener("scroll", update);
     observer?.disconnect();
     window.removeEventListener("resize", update);
+    more.remove();
   };
 };
 
@@ -358,7 +360,6 @@ export const shortageList = (
       list.append(shortRow(bombPile(item.id), size ? `${size}: ${why}` : why, `${bombName(item.id)}: ${why}`, "bomb"));
     }
   }
-  list.append(moreCue());
   return list;
 };
 
@@ -380,6 +381,5 @@ export const roomParts = (noRoom: NoRoom, yards: Readonly<Record<string, YardLab
     row.append(yardChip(yards[one.baseid], "room"), free);
     list.append(row);
   }
-  list.append(moreCue());
   return [need, list];
 };

@@ -238,15 +238,17 @@ describe("Smart Repeat attack's prompt (owner, 16 Nov 2026)", () => {
     expect(button(modal, "Cancel")).toBeDefined();
   });
 
-  it("the moves list ends in its 'more below' cue, hidden until the page measures more below", async () => {
+  it("the moves list gets its 'more below' cue beside it, hidden until the page measures more below", async () => {
     const modal = document.createElement("div");
     const flow = new AutoAttackFlow({ baseid: BASEID, modal, onWatch: vi.fn(), calls: calls() });
     await flow.start(answer(MOVES));
-    const cue = modal.querySelector<HTMLElement>(".repeat-prompt__moves > .repeat-prompt__more");
+    const cue = modal.querySelector<HTMLElement>(".repeat-prompt__moves + .repeat-prompt__more");
     expect(cue).not.toBeNull();
     expect(cue!.hidden).toBe(true);
     expect(cue!.getAttribute("aria-hidden")).toBe("true");
     expect(cue!.querySelector(".repeat-prompt__more-arrow")).not.toBeNull();
+    // The list itself holds only the cards.
+    expect(modal.querySelectorAll(".repeat-prompt__moves > li")).toHaveLength(3);
   });
 
   it("Move and attack sends the key of the moves shown, and nothing else", async () => {
