@@ -655,7 +655,8 @@ describe("Repeat attack's putty fee (owner, 20 Nov 2026)", () => {
     expect(button(modal, "Attack now")?.disabled).toBe(true);
     expect(text(modal.querySelector(".auto-attack__refusal"))).toBe("Not enough putty for the fee.");
     expect(text(modal.querySelector(".repeat-prompt__short--fee"))).toBe("1.3M short");
-    expect(text(modal.querySelector(".repeat-prompt__fee-short"))).toBe("1.3M short");
+    // How much is short is said once, in the refusal's list.
+    expect(modal.querySelectorAll(".repeat-prompt__fee-short")).toHaveLength(0);
     expect(modal.querySelector(".repeat-prompt__fee--short")).not.toBeNull();
   });
 

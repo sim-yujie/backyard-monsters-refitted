@@ -237,8 +237,8 @@
 }
 
 /* Repeat attack's putty fee (owner, 20 Nov 2026): one row under the
-   Catapult, the word, the putty pile and the amount; red with what is short
-   when the pool cannot pay it. */
+   Catapult, the word, the putty pile and the amount; the amount in the
+   warning colour when the pool cannot pay it. */
 .repeat-prompt__fee {
   display: flex;
   flex-wrap: wrap;
@@ -265,10 +265,8 @@
   width: 28px;
 }
 
-.repeat-prompt__fee-short {
+.repeat-prompt__fee--short .repeat-prompt__fee-number {
   color: var(--colour-warning);
-  font-weight: 700;
-  font-variant-numeric: tabular-nums;
 }
 
 /* ── The moves ─────────────────────────────────────────────────────────── */
@@ -539,7 +537,7 @@
     order: 1;
   }
 
-  .auto-attack--refused .repeat-prompt__columns > .repeat-prompt__army > .repeat-prompt__section {
+  .auto-attack--refused .repeat-prompt__columns > .repeat-prompt__army > :is(.repeat-prompt__section, .repeat-prompt__fee) {
     order: 2;
   }
 }

@@ -18,7 +18,7 @@ import "@/ui/styles/repeat-prompt.css";
  *   every monster kind with its count, then the Catapult's shots as resource
  *   piles with a size word, one per resource and no count;
  * - Repeat attack's putty fee (owner, 20 Nov 2026): the putty pile and the
- *   amount, under the Catapult; red, with what is short, when the pool cannot
+ *   amount, under the Catapult; in the warning colour when the pool cannot
  *   pay it;
  * - Smart Repeat attack's moves, one card per move: the yard they leave, the
  *   monsters as small tiles, an arrow, the yard in range; the list scrolls
@@ -157,9 +157,10 @@ export interface FeeShown {
 }
 
 /**
- * Repeat attack's fee (owner, 20 Nov 2026): the putty pile and "2M", with
- * "1.2M short" beside it in red when the pool cannot pay it. The words are
- * for the tooltip and a screen reader.
+ * Repeat attack's fee (owner, 20 Nov 2026): the putty pile and "2M", the
+ * amount in the warning colour when the pool cannot pay it (the refusal's
+ * list says how much is short). The words are for the tooltip and a screen
+ * reader.
  */
 export const feeLine = ({ fee, short = 0 }: FeeShown): HTMLElement => {
   const line = el("section", `repeat-prompt__fee${short > 0 ? " repeat-prompt__fee--short" : ""}`);
@@ -171,12 +172,9 @@ export const feeLine = ({ fee, short = 0 }: FeeShown): HTMLElement => {
   const amount = el("span", "repeat-prompt__fee-amount");
   amount.setAttribute("aria-hidden", "true");
   amount.append(resourceIcon("r3", { decorative: true, realm: "surface" }), el("span", "repeat-prompt__fee-number", puttyAmount(fee)));
+  // Short: the amount in the warning colour; how much is short is the
+  // refusal's own row ("1.2M short"), never said twice.
   line.append(heading, amount);
-  if (short > 0) {
-    const missing = el("span", "repeat-prompt__fee-short", `${puttyAmount(short, "up")} short`);
-    missing.setAttribute("aria-hidden", "true");
-    line.append(missing);
-  }
   return line;
 };
 
