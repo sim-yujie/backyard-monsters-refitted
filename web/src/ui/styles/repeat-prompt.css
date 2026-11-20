@@ -493,19 +493,49 @@
   }
 }
 
-/* ── Wider screens: the army beside the moves (or beside what is short) ── */
+/* ── Wider screens ─────────────────────────────────────────────────────── */
 
 @media (min-width: 621px) {
   .attack-end.auto-attack--prompt {
     width: min(92vw, 460px);
   }
 
+  /* An iPad upright (and other screens 621 to 899 px wide): one column, as
+     on a phone, wide enough for a move on one line. */
+  .attack-end.auto-attack--prompt-two {
+    width: min(calc(100vw - 2 * var(--space-4)), 600px);
+    max-width: min(calc(100vw - 2 * var(--space-4)), 600px);
+  }
+
+  /* A move on one line: the yard it leaves, its monsters, the arrow, the yard in range. */
+  .repeat-prompt__move {
+    grid-template-columns: max-content minmax(0, 1fr) auto max-content;
+    grid-template-areas: "from cargo arrow to";
+    padding-block: 6px;
+  }
+
+  .repeat-prompt__yard--from .repeat-prompt__yard-words {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0;
+  }
+
+  /* Cancel a modest plate, the main action beside it. */
+  .auto-attack--prompt .attack-end__actions {
+    grid-template-columns: minmax(0, 200px) minmax(0, 300px);
+    justify-content: center;
+  }
+}
+
+/* From 900 px wide, and on a phone on its side: the army beside the moves
+   (or beside what is short), each column scrolling on its own, so the moves
+   start at the top. */
+@media (min-width: 900px), (min-width: 621px) and (max-height: 500px) {
   .attack-end.auto-attack--prompt-two {
     width: min(calc(100vw - 2 * var(--space-4)), 880px);
     max-width: min(calc(100vw - 2 * var(--space-4)), 880px);
   }
 
-  /* Each column scrolls on its own, so the moves start at the top. */
   .attack-end.auto-attack--prompt-two .auto-attack__scroll {
     padding-right: 0;
     padding-bottom: 0;
@@ -540,36 +570,19 @@
   .auto-attack--prompt-two .repeat-prompt__moves {
     flex: 1 1 auto;
   }
+}
 
-  /* A move on one line: the yard it leaves, its monsters, the arrow, the yard in range. */
-  .repeat-prompt__move {
-    grid-template-columns: max-content minmax(0, 1fr) auto max-content;
-    grid-template-areas: "from cargo arrow to";
-    padding-block: 6px;
-  }
-
-  .repeat-prompt__yard--from .repeat-prompt__yard-words {
-    flex-direction: column;
-    align-items: flex-start;
-    gap: 0;
-  }
-
-  /* Cancel a modest plate, the main action beside it. */
-  .auto-attack--prompt .attack-end__actions {
-    grid-template-columns: minmax(0, 200px) minmax(0, 300px);
-    justify-content: center;
+/* Beside the moves: five tiles a row, so ten kinds take two rows and the
+   bombs stay in sight on a 1280 x 720 screen. */
+@media (min-width: 900px) and (min-height: 501px) {
+  .auto-attack--prompt-two .repeat-prompt__monsters-grid {
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+    gap: 6px;
   }
 }
 
 /* Screens that are not short: secondary words and captions at 14 px. */
 @media (min-width: 621px) and (min-height: 501px) {
-  /* Beside the moves: five tiles a row, so ten kinds take two rows and the
-     bombs stay in sight on a 1280 x 720 screen. */
-  .auto-attack--prompt-two .repeat-prompt__monsters-grid {
-    grid-template-columns: repeat(5, minmax(0, 1fr));
-    gap: 6px;
-  }
-
   .auto-attack--prompt :is(.repeat-prompt__yard-place, .attack-window__caption) {
     font-size: 14px;
   }
