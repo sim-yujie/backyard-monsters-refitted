@@ -15,8 +15,11 @@ export const MOLOCH_PORTRAIT = artUrl("/assets/popups/portrait_moloch.png");
 /** The picture over the last popup (`ShowComplete`, "popups/popup_emergecomplete.v2.jpg"). */
 export const EMERGE_COMPLETE_ART = artUrl("/assets/popups/popup_emergecomplete.v2.jpg");
 
-/** The cave at its last level, for its menu (`buildings/iportal/top.5.v2.png`). */
+/** The cave at its last level, for its menu (`buildings/iportal/top.5.v2.png`): Flash's, for the Classic look. */
 export const CAVE_ART = artUrl("/assets/buildings/iportal/top.5.v2.png");
+
+/** The same with the Modern look: the painted stage 5 the main yard draws (`CAVERN_ART`, `buildingArtTiers.ts`). */
+export const CAVE_ART_MODERN = artUrl("/assets/buildings/iportal/top.c5@2x.webp");
 
 /** `ai_moloch_intro`: before the first raid. */
 export const MOLOCH_INTRO =

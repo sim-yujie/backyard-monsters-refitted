@@ -2,7 +2,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { PlannerTool, type PlannerState } from "@/game/yard/planner/PlannerSession";
 import { YardView } from "@/game/yard/YardRenderer";
-import { PlannerBar, type PlannerBarActions } from "./PlannerBar";
+import { lineTip, PlannerBar, type PlannerBarActions } from "./PlannerBar";
 import { PlannerLayout } from "./plannerLayout";
 
 /**
@@ -56,6 +56,7 @@ const stateOf = (overrides: Partial<PlannerState> = {}): PlannerState => ({
   previewing: false,
   readOnly: false,
   wallPicking: false,
+  line: null,
   ...overrides,
 });
 
@@ -74,7 +75,7 @@ const mountWith = (
 ): { bar: PlannerBar; fired: PlannerBarActions } => {
   const container = document.createElement("div");
   document.body.append(container);
-  const fired = actions();
+  const fired = { ...actions(), onView: vi.fn(), onFind: vi.fn() };
   return { bar: new PlannerBar(fired, options).mount(container), fired };
 };
 
@@ -444,20 +445,85 @@ describe("the Blueprint button (2026-09-30)", () => {
       (one) => one.textContent === "Blueprint",
     )!;
 
-  it("is off with the reason as its tooltip, and back on with null", () => {
-    const bar = mount();
+  it("is locked with the reason as its tooltip, still pressable, and back on with null", () => {
+    const { bar, fired } = mountWith();
     bar.setBlueprintBlocked("Blueprint view isn't available in outposts");
-    expect(blueprint(bar).disabled).toBe(true);
+    // Pressable, so the planner can say why (beta 8): aria-disabled, a padlock.
+    expect(blueprint(bar).disabled).toBe(false);
+    expect(blueprint(bar).getAttribute("aria-disabled")).toBe("true");
+    expect(blueprint(bar).querySelector(".planner-lock")).not.toBeNull();
     expect(blueprint(bar).title).toBe("Blueprint view isn't available in outposts");
     expect(blueprint(bar).getAttribute("aria-label")).toBe(
       "Blueprint. Blueprint view isn't available in outposts",
     );
+    blueprint(bar).click();
+    expect(fired.onView).toHaveBeenCalledWith(YardView.BLUEPRINT);
 
     bar.setBlueprintBlocked(null);
-    expect(blueprint(bar).disabled).toBe(false);
+    expect(blueprint(bar).hasAttribute("aria-disabled")).toBe(false);
+    expect(blueprint(bar).querySelector(".planner-lock")).toBeNull();
     expect(blueprint(bar).title).toContain("Tab switches");
   });
 });
+
+/** Owner, beta 8: these need a built Yard Planner in the yard; visible, padlocked, pressable. */
+describe("the Yard Planner tools lock", () => {
+  const LOCKED = "Build a Yard Planner";
+  const iconNamed = (bar: PlannerBar, icon: string): HTMLButtonElement =>
+    [...bar.toolbar.querySelectorAll<HTMLButtonElement>("button"), ...bar.actionBar.querySelectorAll<HTMLButtonElement>("button")].find(
+      (one) => one.dataset["icon"] === icon,
+    )!;
+  const rowNamed = (bar: PlannerBar, label: string): HTMLButtonElement =>
+    [...bar.toolbar.querySelectorAll<HTMLButtonElement>(".planner-menu__item")].find(
+      (one) => one.textContent?.trim() === label,
+    )!;
+
+  it("padlocks Find, the yard picture, Upgrade walls and the ranges rows; presses still reach the planner", () => {
+    const container = document.createElement("div");
+    document.body.append(container);
+    const fired = { ...actions(), onFind: vi.fn(), onSnapshot: vi.fn() };
+    const bar = new PlannerBar(fired, {}).mount(container);
+    bar.setWallCount(0);
+    bar.setToolsLocked(LOCKED);
+
+    for (const icon of ["find", "snapshot", "wallupgrade"]) {
+      const control = iconNamed(bar, icon);
+      expect(control.disabled).toBe(false);
+      expect(control.getAttribute("aria-disabled")).toBe("true");
+      expect(control.title).toBe(LOCKED);
+      expect(control.querySelectorAll(".planner-lock")).toHaveLength(1);
+    }
+    for (const label of ["Tower ranges", "Land", "Air", "Dead zones"]) {
+      expect(rowNamed(bar, label).getAttribute("aria-disabled")).toBe("true");
+    }
+    expect(rowNamed(bar, "Centre of yard").hasAttribute("aria-disabled")).toBe(false);
+
+    iconNamed(bar, "find").click();
+    iconNamed(bar, "wallupgrade").click();
+    rowNamed(bar, "Tower ranges").click();
+    expect(fired.onFind).toHaveBeenCalled();
+    expect(fired.onUpgradeWalls).toHaveBeenCalled();
+    expect(fired.onOverlay).toHaveBeenCalledWith("ranges");
+  });
+
+  it("locking twice keeps one padlock; null gives the tools and their tooltips back", () => {
+    const bar = mount();
+    bar.setWallCount(3);
+    const before = iconNamed(bar, "find").title;
+    bar.setToolsLocked(LOCKED);
+    bar.setToolsLocked(LOCKED);
+    expect(iconNamed(bar, "find").querySelectorAll(".planner-lock")).toHaveLength(1);
+    // The wall count does not unlock it.
+    bar.setWallCount(3);
+    expect(iconNamed(bar, "wallupgrade").title).toBe(LOCKED);
+
+    bar.setToolsLocked(null);
+    expect(iconNamed(bar, "find").title).toBe(before);
+    expect(iconNamed(bar, "find").querySelector(".planner-lock")).toBeNull();
+    expect(rowNamed(bar, "Dead zones").hasAttribute("aria-disabled")).toBe(false);
+  });
+});
+
 /* ── Phones (#45) ─────────────────────────────────────────────────────── */
 
 describe("the phone layout (#45)", () => {
@@ -513,7 +579,8 @@ describe("the phone layout (#45)", () => {
     // ~88 + More 44 + Apply ~88 = 308, four 2 px gaps and 8 px padding each
     // side = 332. No test here lays out pixels; keep this sum when adding one.
     expect(actionRow(bar)).toEqual(["Box", "Upgrade walls", "Stored", "More", "Apply"]);
-    expect(bar.actionBar.querySelector("[data-icon='undo'], [data-icon='redo']")).toBeNull();
+    // The plan's Undo and Redo buttons; the wall line's own ↶ (a corner) may sit here.
+    expect(bar.actionBar.querySelector("button[data-icon='undo'], button[data-icon='redo']")).toBeNull();
     // Buttons only: no cost line, no readouts (owner, 2026-11-04).
     expect(bar.actionBar.querySelector(".planner-bar__cost-line")).toBeNull();
     expect(bar.actionBar.querySelector(".planner-cost__cell")).toBeNull();
@@ -760,5 +827,79 @@ describe("the yard picture button (owner, 2026-11-11)", () => {
     expect(bar.moreElement.contains(snapshotButton(bar))).toBe(true);
     bar.setLayout(PlannerLayout.DESKTOP, false);
     expect(snapshotButton(bar)!.parentElement).toBe(bar.toolbar);
+  });
+});
+
+describe("the wall line's controls (owner, 16 Nov 2026)", () => {
+  const LINE = { type: 17, level: 5, anchors: 2, place: 6, blocked: 2, short: 5, stock: 6, finished: false };
+
+  const parts = (bar: PlannerBar) => ({
+    group: bar.actionBar.querySelector<HTMLElement>(".planner-bar__line"),
+    tip: bar.actionBar.querySelector<HTMLElement>(".planner-bar__line-tip"),
+    counts: bar.actionBar.querySelector<HTMLElement>(".planner-bar__line-counts"),
+    undo: bar.actionBar.querySelector<HTMLButtonElement>(".planner-bar__line-undo"),
+    clear: bar.actionBar.querySelector<HTMLButtonElement>(".planner-bar__line-clear"),
+    place: bar.actionBar.querySelector<HTMLButtonElement>(".planner-bar__line-place"),
+    done: bar.actionBar.querySelector<HTMLButtonElement>(".planner-bar__put-back"),
+  });
+
+  it("is hidden with no line, and Put back keeps its words", () => {
+    const bar = mount();
+    bar.update(stateOf());
+    const { group, done } = parts(bar);
+    expect(group?.hidden).toBe(true);
+    expect(done?.hidden).toBe(true);
+    expect(done?.textContent).toBe("Put back");
+  });
+
+  it("shows the counts and ✓ Place N, with Put back reading Done", () => {
+    const bar = mount();
+    bar.update(stateOf({ line: LINE }));
+    const { group, tip, counts, undo, clear, place, done } = parts(bar);
+    expect(group?.hidden).toBe(false);
+    expect(done?.hidden).toBe(false);
+    expect(done?.textContent).toBe("Done");
+    expect(tip?.hidden).toBe(true);
+    expect(counts?.textContent).toBe("✓6✕25 over stock");
+    expect(place?.textContent).toBe("✓ Place 6");
+    expect(place?.disabled).toBe(false);
+    expect(undo?.disabled).toBe(false);
+    expect(clear?.disabled).toBe(false);
+    expect(bar.actionBar.classList.contains("planner-bar--line")).toBe(true);
+  });
+
+  it("says what to do before the first corner, in a mouse's words or a finger's", () => {
+    const bar = mount();
+    bar.update(stateOf({ line: { ...LINE, anchors: 0, place: 0, blocked: 0, short: 0 } }));
+    const { tip, counts, undo, place } = parts(bar);
+    expect(tip?.textContent).toBe("Click corners, then ✓ Place");
+    expect(counts?.hidden).toBe(true);
+    expect(undo?.disabled).toBe(true);
+    expect(place?.disabled).toBe(true);
+    expect(place?.textContent).toBe("✓ Place");
+
+    bar.setLayout(PlannerLayout.PORTRAIT, true);
+    expect(parts(bar).tip?.textContent).toBe("Tap corners, then ✓ Place");
+  });
+
+  it("says why nothing can be placed", () => {
+    expect(lineTip(false, { ...LINE, place: 0, blocked: 3 })).toBe("Nothing here can be placed.");
+    expect(lineTip(false, { ...LINE, place: 0, blocked: 0 })).toBe("No walls left.");
+  });
+
+  it("hands ↶, ✗ and ✓ to the scene", () => {
+    const { bar, fired } = mountWith();
+    const onLineUndo = vi.fn();
+    const onLineClear = vi.fn();
+    const onLinePlace = vi.fn();
+    Object.assign(fired, { onLineUndo, onLineClear, onLinePlace });
+    bar.update(stateOf({ line: LINE }));
+    const { undo, clear, place } = parts(bar);
+    undo?.click();
+    clear?.click();
+    place?.click();
+    expect(onLineUndo).toHaveBeenCalledOnce();
+    expect(onLineClear).toHaveBeenCalledOnce();
+    expect(onLinePlace).toHaveBeenCalledOnce();
   });
 });

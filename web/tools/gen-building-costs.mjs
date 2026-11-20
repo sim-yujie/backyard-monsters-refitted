@@ -658,6 +658,28 @@ const INFERNO_CONTROL_CENTRE = 16;
   }
 }
 
+/* ── Block upgrades need no hall (owner, 17 Nov 2026, beta 8) ─────────────────
+ *
+ * "Any block can be upgraded any time, not just once town hall 3." Flash held
+ * each Block upgrade behind the Town Hall: Stone at 3, Metal 4, Gold 5, Black
+ * Diamond 6 (`YARD_PROPS.as:1722`, `re [[14,1,N]]`), and the Inferno's Granite
+ * and Forged Steel behind the Under Hall at 3 and 4 (`INFERNOYARDPROPS.as:1343`).
+ * Those hall entries are dropped from every upgrade step (step 1 and up); the
+ * build step keeps its Town Hall 2 and the Block's count ladder is unchanged,
+ * as are the costs and times. An outpost's Block steps name only the core
+ * (`[112, 1, 1]`), which an outpost always has, so its table is left alone.
+ */
+const BLOCK = 17;
+for (const [table, hall, file] of [
+  [entries, 14, "YARD_PROPS.as"],
+  [infernos, UNDER_HALL, "INFERNOYARDPROPS.as"],
+]) {
+  const block = table.find((one) => one.id === BLOCK);
+  if (!block || block.steps.length < 2) throw new Error(`${file}: the Block (${BLOCK}) has no upgrade steps`);
+  for (const one of block.steps.slice(1)) one.re = one.re.filter(([type]) => type !== hall);
+  block.anyHall = true;
+}
+
 /* ── Emit ─────────────────────────────────────────────────────────────────── */
 
 const re = (list) => `[${list.map((one) => `[${one.join(",")}]`).join(",")}]`;
@@ -681,7 +703,8 @@ const costRows = (list, file) =>
       (entry) =>
         `  // ${entry.id} ${entry.name}${entry.kind ? ` (${entry.kind})` : ""} ` +
         `— ${entry.source ?? `${file}:${entry.line}`}${entry.mr2 ? `, Map Room 2 override ${entry.mr2}` : ""}` +
-        `${entry.capped ? `, capped at level ${entry.capped} (D16)` : ""}\n` +
+        `${entry.capped ? `, capped at level ${entry.capped} (D16)` : ""}` +
+        `${entry.anyHall ? ", upgrades need no hall (beta 8)" : ""}\n` +
         `  [${entry.id}, ${JSON.stringify(entry.name)}, ${JSON.stringify(entry.kind)}, ` +
         `${entry.group}, [\n` +
         entry.steps.map((one) => `    ${step(one)},`).join("\n") +

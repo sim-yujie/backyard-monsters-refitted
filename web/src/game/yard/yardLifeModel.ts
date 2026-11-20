@@ -806,7 +806,8 @@ export const walkerSpecs = (
  *
  * A kept walker takes the new spec's area, so a pen that moved has its
  * creatures walk over to it rather than blink there, and a kept champion keeps
- * the cage spot it already chose. A champion that evolved keeps its key and
+ * the cage spot it already chose (a cage that moved sends it over itself,
+ * {@link recageTrip}). A champion that evolved keeps its key and
  * spot but takes its new level's sheet (#311). A champion on its way into the
  * Chamber is kept though the save no longer has it, until it gets there (#314).
  */
@@ -962,6 +963,44 @@ export const thawTrip = (walker: Walker, door: YardPoint, route: TripRoute): boo
   if (startTrip(walker, route(from, home), false)) return true;
   walker.trip = null;
   walker.leaving = false;
+  walker.moving = false;
+  walker.x = walker.targetX = home.x;
+  walker.y = walker.targetY = home.y;
+  return false;
+};
+
+/**
+ * Whether the yard's cage now stands somewhere else, though it is the same
+ * cage (same building id): the Yard Planner's Apply, by hand or from a saved
+ * layout, moved it. Only the cage's own corner counts, never a champion's wander
+ * area, which {@link cageArea} nudges at random on every read.
+ */
+export const cageMoved = (before: YardLife, after: YardLife): boolean =>
+  before.cage !== null &&
+  after.cage !== null &&
+  before.cage.id === after.cage.id &&
+  (before.cage.x !== after.cage.x || before.cage.y !== after.cage.y);
+
+/**
+ * Sends a champion to its cage's new spot after the cage moved, as Flash's
+ * cage did at the end of a move (`CHAMPIONCAGE.as:577-587`, `StopMoveB` sets
+ * every champion's `_targetCenter` to the cage and calls `changeModeCage`,
+ * `ChampionBase.as:295-303`, which paths it there round the buildings).
+ *
+ * The walker takes `area`, the new cage's wander area, and walks along `route`
+ * from where it stands to a point in it; one already walking back from the
+ * Chamber turns there from where it is. One on its way into the Chamber keeps
+ * going, but takes the new area, so it comes back to the new cage if it is
+ * thawed again before it gets there. With no route, or `route` null (reduced
+ * motion, a yard read fresh), it is put straight in the new cage. Returns
+ * whether it walks.
+ */
+export const recageTrip = (walker: Walker, area: LifeArea, route: TripRoute | null, random: Random): boolean => {
+  walker.area = area;
+  if (walker.leaving) return false;
+  const home = pointIn(area, random);
+  if (route && startTrip(walker, route({ x: walker.x, y: walker.y }, home), false)) return true;
+  walker.trip = null;
   walker.moving = false;
   walker.x = walker.targetX = home.x;
   walker.y = walker.targetY = home.y;

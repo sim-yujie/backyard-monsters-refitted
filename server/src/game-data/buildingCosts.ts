@@ -247,13 +247,13 @@ export const BUILDING_COST_ROWS: readonly CostRow[] = [
   [16, "Hatchery Control Center", "special", 2, [
     [4000000,4000000,4000000,0,90000,[[14,1,3],[13,3,2]]],
   ], [0,0,0,1,1,1,1,1,1,1,1]],
-  // 17 Block (wall) — YARD_PROPS.as:1722
+  // 17 Block (wall) — YARD_PROPS.as:1722, upgrades need no hall (beta 8)
   [17, "Block", "wall", 3, [
     [1000,0,0,0,5,[[14,1,2]]],
-    [0,10000,0,0,5,[[14,1,3]]],
-    [100000,100000,0,0,5,[[14,1,4]]],
-    [200000,200000,0,0,5,[[14,1,5]]],
-    [400000,400000,0,0,5,[[14,1,6]]],
+    [0,10000,0,0,5,[]],
+    [100000,100000,0,0,5,[]],
+    [200000,200000,0,0,5,[]],
+    [400000,400000,0,0,5,[]],
   ], [0,0,30,60,120,200,220,280,300,340,400]],
   // 18 Stone Block (wall) — YARD_PROPS.as:1844
   [18, "Stone Block", "wall", 3, [
@@ -1892,11 +1892,11 @@ export const INFERNO_COST_ROWS: readonly CostRow[] = [
   [16, "Incubator Control Centre", "special", 2, [
     [4000000,4000000,4000000,0,90000,[[14,1,4],[13,2,3]]],
   ], [0,0,0,0,1,1,1]],
-  // 17 Block (wall) — INFERNOYARDPROPS.as:1343
+  // 17 Block (wall) — INFERNOYARDPROPS.as:1343, upgrades need no hall (beta 8)
   [17, "Block", "wall", 3, [
     [1000,0,0,0,5,[[14,1,2]]],
-    [0,10000,0,0,5,[[14,1,3]]],
-    [100000,100000,0,0,5,[[14,1,4]]],
+    [0,10000,0,0,5,[]],
+    [100000,100000,0,0,5,[]],
   ], [0,0,30,60,120,200,220]],
   // 18 Stone Block (wall) — INFERNOYARDPROPS.as:1418
   [18, "Stone Block", "wall", 3, [

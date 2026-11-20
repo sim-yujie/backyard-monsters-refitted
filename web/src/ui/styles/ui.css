@@ -1057,6 +1057,55 @@ select option {
   }
 }
 
+/* A float in the lane under its readout's cell (`Hud.floatBelow`): centred
+   on the cell, it settles from a little lower and fades where it stands, so
+   it never crosses the digits above it. */
+.hud__delta--lane {
+  animation-name: hud-delta-lane;
+}
+
+@keyframes hud-delta-lane {
+  0% {
+    opacity: 0;
+    transform: translate(-50%, 6px) scale(0.85);
+  }
+  15% {
+    opacity: 1;
+    transform: translate(-50%, 0) scale(1.08);
+  }
+  25% {
+    transform: translate(-50%, 0) scale(1);
+  }
+  75% {
+    opacity: 1;
+    transform: translate(-50%, 0);
+  }
+  100% {
+    opacity: 0;
+    transform: translate(-50%, 0);
+  }
+}
+
+/* Something just landed in a readout (`Hud.pulse`): its cell lights up. */
+.hud__resource-button--pulse {
+  animation: hud-readout-pulse 380ms ease-out;
+}
+
+@keyframes hud-readout-pulse {
+  0% {
+    transform: scale(1);
+    filter: brightness(1);
+  }
+  30% {
+    transform: scale(1.12);
+    filter: brightness(1.5);
+  }
+  100% {
+    transform: scale(1);
+    filter: brightness(1);
+  }
+}
+
 @keyframes hud-delta-fade {
   0%,
   70% {
@@ -1070,6 +1119,14 @@ select option {
 @media (prefers-reduced-motion: reduce) {
   .hud__delta {
     animation-name: hud-delta-fade;
+  }
+
+  .hud__delta--lane {
+    transform: translateX(-50%);
+  }
+
+  .hud__resource-button--pulse {
+    animation: none;
   }
 }
 

@@ -20,6 +20,9 @@ describe("QUIET_LOGIN", () => {
 
   test("is refused on a production server, with one warning in the log", () => {
     const warn = spyOn(logger, "warn").mockImplementation((() => undefined) as never);
+    // In a plain `bun test` an earlier file's logger mock can still be in
+    // place, and spyOn then hands back that mock with its calls (CI 18 Nov 2026).
+    warn.mockClear();
     expect(quietLoginOn({ QUIET_LOGIN: "1", NODE_ENV: "production" })).toBe(false);
     expect(quietLoginOn({ QUIET_LOGIN: "1", ENV: "production" })).toBe(false);
     expect(quietLoginOn({ QUIET_LOGIN: "on", ENV: "production", NODE_ENV: "production" })).toBe(false);

@@ -2,22 +2,15 @@
  * Auto-attack (issue #221): the confirm sheet and the result, which reuse the
  * end-of-attack panel's frame (`attack.css`, `.attack-end`), and the camp
  * panel's Repeat attack line on the map. Every value comes from tokens.css.
+ * The confirm sheet's own look A (owner, 20 Nov 2026) is repeat-prompt.css.
  */
-
-.auto-attack__army {
-  margin: 0 0 var(--space-1);
-  font-weight: 700;
-}
-
-.auto-attack__includes,
-.auto-attack__siege {
-  margin: 0 0 var(--space-2);
-}
 
 .auto-attack__refusal {
   margin: var(--space-2) 0 var(--space-1);
   color: var(--colour-warning);
   font-weight: 700;
+  /* A server error can carry a long address with no spaces: it wraps inside the panel. */
+  overflow-wrap: anywhere;
 }
 
 .auto-attack__missing {
@@ -26,21 +19,8 @@
   color: var(--colour-text-secondary);
 }
 
-.auto-attack__conquered {
-  color: var(--colour-success, var(--colour-text));
-}
-
-.auto-attack__added {
-  color: var(--colour-accent);
-}
-
-.auto-attack__stalled {
-  margin: 0 0 var(--space-3);
-  color: var(--colour-warning);
-}
-
 /* The map's camp panel: the Repeat attack button sits under Attack, and its
-   line under the actions says which attack it repeats or what is missing. */
+   line under its button says which attack it repeats or what is missing. */
 .auto-attack-action {
   margin: var(--space-1) 0 0;
   font-size: var(--text-xs);
@@ -51,7 +31,584 @@
   color: var(--colour-warning);
 }
 
+/* Smart Repeat attack (astra): the normal refusal path has the sheet's diagnostics too. */
 .auto-attack-action__missing {
-  margin: var(--space-1) 0 0;
-  padding-left: var(--space-4);
+  margin-top: var(--space-2);
+  font-size: calc((var(--text-sm) + var(--text-md)) / 2);
+}
+
+.auto-attack-action__missing .auto-attack__missing {
+  padding: 0;
+  list-style: none;
+}
+
+.auto-attack-action__missing .auto-attack__missing-monster {
+  min-height: calc(var(--space-5) + var(--space-1));
+  gap: calc(var(--space-3) / 2);
+}
+
+.auto-attack-action__history {
+  margin: 0 0 var(--space-2);
+  color: var(--colour-text-muted);
+}
+
+/* ── The working bar's sheet (Repeat attack, 15 Nov 2026) ─────────────────
+ * Just the bar and one short line under it: no empty row for buttons, and
+ * the body's gaps and the line's own margins taken in. Specific enough to
+ * win over `.map-panel .panel__body` (maproom.css) and the window style's
+ * padding (skin.css) whatever order the files load in. */
+
+.map-panel.auto-attack--bar > .panel__body {
+  gap: var(--space-1);
+  padding-block: var(--space-2) var(--space-3);
+}
+
+.auto-attack__working {
+  margin: 0;
+  font-size: var(--text-sm);
+  text-align: center;
+}
+
+/* A phone: a compact sheet in the middle of the screen, not the whole screen
+   that the confirm sheet and the result take (attack.css), with a 16px gutter
+   and clear of the notch and the home bar. */
+@media (max-width: 620px) {
+  .attack-end__backdrop.auto-attack__backdrop--bar {
+    place-items: center stretch;
+    padding: max(var(--space-4), env(safe-area-inset-top)) max(var(--space-4), env(safe-area-inset-right))
+      max(var(--space-4), env(safe-area-inset-bottom)) max(var(--space-4), env(safe-area-inset-left));
+  }
+
+  /* The painted sign rides above the frame's top edge (skin.css): room for it. */
+  :root[data-skin] .attack-end__backdrop.auto-attack__backdrop--bar {
+    padding-top: max(32px, env(safe-area-inset-top));
+  }
+
+  .attack-end.auto-attack--bar {
+    align-self: center;
+    width: auto;
+    height: auto;
+    max-height: 100%;
+    border: 1px solid var(--colour-border);
+    border-radius: var(--radius-lg);
+  }
+}
+
+/* ── The confirm and refusal sheets ───────────────────────────────────────
+ * Their words scroll inside the sheet on a short screen and their buttons
+ * stay under them (layout-rules: start from the content, `flex: 1 1 auto`).
+ * Look A's own layout is repeat-prompt.css. */
+.attack-end.auto-attack--confirm > .panel__body {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  max-height: min(84vh, 760px);
+  max-height: min(84dvh, 760px);
+  overflow: hidden;
+}
+
+.auto-attack__scroll {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+/* The words keep their height; a list of two or more gives way first, down
+   to about one row, and scrolls inside (layout-rules: only the list
+   scrolls). A list of one keeps its own height, with no gap under it. */
+.auto-attack__scroll > * {
+  flex: none;
+}
+
+.auto-attack__scroll > .auto-attack__missing:has(> li + li),
+.auto-attack__scroll > .auto-attack__room:has(> li + li) {
+  flex: 0 1 auto;
+  min-height: 56px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+/* A short screen (a phone on its side): tighter gaps. */
+@media (max-height: 500px) {
+  .auto-attack__scroll {
+    gap: var(--space-2);
+  }
+}
+
+.auto-attack__scroll > p {
+  margin-block: 0;
+}
+
+.auto-attack .attack-end__actions {
+  flex: none;
+}
+
+.auto-attack__changed {
+  margin: 0;
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-sm);
+  background: var(--colour-surface-sunken);
+  color: var(--colour-warning);
+  font-weight: 700;
+}
+
+.auto-attack__room {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.auto-attack__yard {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  line-height: 1.2;
+}
+
+.auto-attack__yard-name {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  font-weight: 700;
+  font-size: var(--text-sm);
+  white-space: nowrap;
+}
+
+.auto-attack__yard-icon {
+  flex: none;
+}
+
+.auto-attack__yard-place {
+  font-size: var(--text-xs);
+  color: var(--colour-text-muted);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.auto-attack__portrait {
+  flex: none;
+  width: 28px;
+  height: 28px;
+  object-fit: contain;
+}
+
+.auto-attack__missing-monster {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+}
+
+.auto-attack__missing-monster + .auto-attack__missing-monster {
+  margin-top: var(--space-1);
+}
+
+.auto-attack__missing-monster .auto-attack__portrait {
+  width: 24px;
+  height: 24px;
+}
+
+.auto-attack__room-need {
+  font-weight: 700;
+}
+
+.auto-attack__room-yard {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  padding: var(--space-1) var(--space-2);
+  border-radius: var(--radius-sm);
+  background: var(--colour-surface-sunken);
+}
+
+.auto-attack__room-free {
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  color: var(--colour-warning);
+}
+
+.auto-attack__failure-context {
+  font-size: calc((var(--text-sm) + var(--text-md)) / 2);
+}
+
+.auto-attack__room-free {
+  text-align: right;
+}
+
+/* Smart Repeat attack (astra): explicit hit areas also cover touch tablets. */
+.auto-attack--failed .attack-end__actions .btn {
+  min-height: calc(var(--space-6) + var(--space-3));
+  min-width: calc(var(--space-6) + var(--space-3));
+}
+
+/* Smart Repeat attack (astra): housing facts stay together in the camp panel,
+   with no second scroll box inside its existing scrolling body. */
+.auto-attack-action__missing > :is(p, ul) {
+  margin-block: 0 var(--space-1);
+}
+
+.auto-attack__room-label {
+  font-size: var(--text-sm);
+  font-weight: var(--body-weight);
+  color: var(--colour-text-secondary);
+}
+
+/* Smart Repeat attack (astra): refusal text wraps naturally; only its list
+   scrolls, so the reason and Close stay in sight on short screens too. */
+.attack-end.auto-attack--failed {
+  min-height: 0;
+  max-height: calc(100vh - var(--space-6) - var(--space-4));
+  max-height: calc(100dvh - var(--space-6) - var(--space-4));
+}
+
+.attack-end.auto-attack--failed > .panel__body {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
+  min-height: 0;
+  max-height: none;
+  overflow: hidden;
+}
+
+.auto-attack--failed .auto-attack__scroll {
+  overflow: hidden;
+}
+
+.auto-attack--failed .auto-attack__refusal {
+  white-space: normal;
+  font-size: calc(var(--text-md) + var(--space-1) / 4);
+  line-height: var(--text-xl);
+}
+
+.auto-attack--failed .auto-attack__failure-context {
+  font-weight: var(--body-weight);
+  line-height: calc(var(--space-4) + var(--space-1));
+}
+
+.auto-attack--failed .auto-attack__missing {
+  font-size: calc(var(--text-md) + var(--space-1) / 4);
+  line-height: var(--space-5);
+}
+
+@media (max-width: 620px) {
+  .attack-end.auto-attack--failed {
+    max-height: 100%;
+  }
+}
+
+/* ── Lead's vetting of the round-3 shots (16 Nov 2026) ───────────────────
+ * What scrolls fades out at the bottom while more is below
+ * (`watchMoreBelow`, ui/moreBelow.ts, sets the class). */
+.auto-attack__list--more {
+  -webkit-mask-image: linear-gradient(to bottom, #000 calc(100% - var(--space-4)), transparent);
+  mask-image: linear-gradient(to bottom, #000 calc(100% - var(--space-4)), transparent);
+}
+
+/* A phone upright: the confirm and refusal sheets are a card that hugs its
+   content, centred, with the buttons right under the list (no empty band),
+   with a 16px gutter and clear of the notch and the home bar, as the working
+   bar's sheet. Taller than the screen, its list scrolls inside. */
+@media (max-width: 620px) {
+  .attack-end__backdrop.auto-attack__backdrop--card {
+    place-items: center stretch;
+    padding: max(var(--space-4), env(safe-area-inset-top)) max(var(--space-4), env(safe-area-inset-right))
+      max(var(--space-4), env(safe-area-inset-bottom)) max(var(--space-4), env(safe-area-inset-left));
+  }
+
+  :root[data-skin] .attack-end__backdrop.auto-attack__backdrop--card {
+    padding-top: max(32px, env(safe-area-inset-top));
+  }
+
+  .attack-end.auto-attack--confirm,
+  .attack-end.auto-attack--failed,
+  .attack-end.auto-attack--result {
+    align-self: center;
+    width: auto;
+    height: auto;
+    max-height: 100%;
+    border: 1px solid var(--colour-border);
+    border-radius: var(--radius-lg);
+  }
+}
+
+/* ── The Repeat attack's result (owner, 16 Nov 2026: "I just want to know the
+ * loot, and resource needed to take over") ────────────────────────────────
+ * The camp and whether it was won, the loot, the take-over price with Take
+ * over, then Watch and Close (autoAttackResultView.ts). It fits every
+ * supported screen without scrolling; only the loot would scroll on a
+ * screen shorter than those. */
+
+.attack-end.auto-attack--result > .panel__body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  min-height: 0;
+  max-height: min(84vh, 760px);
+  max-height: min(84dvh, 760px);
+  overflow: hidden;
+}
+
+.attack-end.auto-attack--result > .panel__body > :not(.arv-middle) {
+  flex: none;
+}
+
+.auto-attack--result .arv-middle {
+  gap: var(--space-2);
+}
+
+.auto-attack--result .attack-end__actions {
+  margin: 0;
+}
+
+.auto-attack--result .attack-end__actions .btn {
+  min-width: 112px;
+  min-height: 44px;
+}
+
+/* astra round 2: the camp portrait, name and level, and the outcome word. */
+.arv-head {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.arv-head__tribe {
+  flex: none;
+  width: 56px;
+  height: 56px;
+  object-fit: contain;
+  border-radius: var(--radius-md);
+  background: var(--colour-surface-sunken);
+}
+
+.arv-head__words {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.arv-head__camp {
+  margin: 0;
+  font-size: var(--text-sm);
+  font-weight: 700;
+  color: var(--colour-text-secondary);
+}
+
+.arv-head__outcome {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-1) var(--space-3);
+  margin: 0;
+}
+
+.arv-head__word {
+  font-family: var(--font-display);
+  font-size: var(--text-xl);
+  line-height: 1.1;
+}
+
+.arv-head__outcome--won .arv-head__word {
+  color: var(--colour-success, var(--colour-text));
+}
+
+/* Review round 1: a loss reads as one at a glance, without an alarm red. */
+.arv-head__outcome:not(.arv-head__outcome--won) .arv-head__word {
+  color: var(--colour-warning);
+}
+
+/* A part's small heading ("Loot"; the offer's "Takeover cost" matches it). */
+.arv-label,
+.end-takeover--compact .end-takeover__lead {
+  margin: 0;
+  font-size: var(--text-sm);
+  font-weight: 700;
+  color: var(--colour-text-secondary);
+}
+
+.arv-part {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+/* The loot, two by two, the same size whatever the numbers. */
+.arv-loot {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.arv-loot__item {
+  display: flex;
+  align-items: center;
+  min-height: 36px;
+  padding: var(--space-1) var(--space-2);
+  border: 1px solid var(--colour-border);
+  border-radius: var(--radius-md);
+  font-size: var(--text-md);
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.arv-loot__item--none {
+  color: var(--colour-text-muted);
+  opacity: 0.75;
+}
+
+.arv-note {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+  margin: 0;
+  font-size: var(--text-sm);
+  font-weight: 700;
+  color: var(--colour-warning);
+}
+
+/* The take-over offer, short (EndTakeoverOffer `compact`): "Takeover cost"
+   and the price on the left, Take over on the right. */
+.end-takeover.end-takeover--compact {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2) var(--space-3);
+  margin: 0;
+  padding: var(--space-2) var(--space-3);
+}
+
+/* The price takes the line; Take over drops under it when they do not fit. */
+.end-takeover--compact .end-takeover__info {
+  display: flex;
+  flex: 1 1 200px;
+  flex-direction: column;
+  gap: var(--space-1);
+  min-width: 0;
+}
+
+.end-takeover--compact .end-takeover__actions {
+  flex: 0 0 auto;
+  justify-content: flex-end;
+  margin: 0 0 0 auto;
+}
+
+.end-takeover--compact .end-takeover__take {
+  min-height: 44px;
+}
+
+.end-takeover--compact .end-takeover__price {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-1) var(--space-2);
+  margin: 0;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.end-takeover__each {
+  display: inline-flex;
+  align-items: center;
+  gap: 1px;
+  white-space: nowrap;
+}
+
+/* astra round 3: a clear gap after the four icons, so "450,000 each" is not
+   read as the Goo's price alone. */
+.end-takeover__each > :nth-child(4) {
+  margin-inline-end: 4px;
+}
+
+.end-takeover__alt {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  white-space: nowrap;
+}
+
+.end-takeover__or {
+  font-weight: 400;
+  color: var(--colour-text-secondary);
+}
+
+.end-takeover--compact .end-takeover__message {
+  flex: 1 1 100%;
+  margin: 0;
+}
+
+.end-takeover--compact .end-takeover__message:empty {
+  display: none;
+}
+
+/* Review round 1: a phone upright puts Take over under the price at full
+   width, so the box has no empty half and the button is in thumb reach. */
+@media (max-width: 620px) {
+  .end-takeover--compact .end-takeover__actions {
+    flex: 1 1 100%;
+    margin: 0;
+  }
+
+  .end-takeover--compact .end-takeover__take {
+    width: 100%;
+  }
+}
+
+/* Room for the price and Take over side by side with a clear gap (at 440px
+   "450,000 each" ran into the button, 5px over in Classic). */
+@media (min-width: 621px) {
+  .attack-end.auto-attack--result {
+    width: min(calc(100vw - 2 * var(--space-4)), 480px);
+    max-width: min(calc(100vw - 2 * var(--space-4)), 480px);
+  }
+}
+
+/* A wide, short screen (a phone on its side): a wider window, the loot four
+   across and the camp tighter, so it all fits without scrolling. */
+@media (min-width: 621px) and (max-height: 500px) {
+  .attack-end.auto-attack--result {
+    width: min(calc(100vw - 2 * var(--space-4)), 640px);
+    max-width: min(calc(100vw - 2 * var(--space-4)), 640px);
+  }
+}
+
+@media (max-height: 500px) {
+  .attack-end.auto-attack--result > .panel__body {
+    gap: var(--space-2);
+  }
+
+  .arv-loot {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+
+  .arv-loot__item {
+    min-height: 32px;
+    padding-block: 2px;
+  }
+
+  .arv-head__tribe {
+    width: 40px;
+    height: 40px;
+  }
+
+  .arv-head__words {
+    flex-direction: row;
+    flex-wrap: wrap;
+    align-items: baseline;
+    column-gap: var(--space-3);
+  }
+
+  .arv-head__word {
+    font-size: 18px;
+  }
 }

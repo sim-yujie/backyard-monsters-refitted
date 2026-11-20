@@ -207,3 +207,64 @@ describe("alliance.css: the marketplace keeps one height", () => {
     expect(head).toMatch(/border-bottom:/);
   });
 });
+
+describe("alliance.css: a short screen gives the tab its room (beta 8)", () => {
+  /** The text of the short-screen block, `@media (max-height: 540px) { ... }`. */
+  const shortCss = ((): string => {
+    const at = css.lastIndexOf("@media (max-height: 540px)");
+    const open = css.indexOf("{", at);
+    let depth = 1;
+    let i = open + 1;
+    for (; depth > 0 && i < css.length; i++) {
+      if (css[i] === "{") depth++;
+      else if (css[i] === "}") depth--;
+    }
+    return css.slice(open + 1, i - 1);
+  })();
+
+  it("hides the shield / name / type / count block and the Leave foot, and shows Leave at the end of Overview", () => {
+    expect(rulesFor(".alliance__head--mine", shortCss).join(" ")).toMatch(/display:\s*none/);
+    expect(rulesFor(".alliance__foot--leave", shortCss).join(" ")).toMatch(/display:\s*none/);
+    expect(rulesFor(".alliance__leave-row", shortCss).join(" ")).toMatch(/display:\s*flex/);
+  });
+
+  it("keeps Overview's Leave row hidden on a taller screen", () => {
+    expect(rulesFor(".alliance__leave-row").join(" ")).toMatch(/display:\s*none/);
+  });
+
+  it("sits after every `.alliance__head` rule, so it wins over them", () => {
+    expect(css.lastIndexOf("@media (max-height: 540px)")).toBeGreaterThan(css.lastIndexOf(".alliance__head {"));
+  });
+});
+
+describe("alliance.css: today's swap on one baseline (owner, 19 + 20 Nov 2026)", () => {
+  it("lines the pieces up on their text baseline, not on the icons", () => {
+    const line = rulesFor(".trade-done").join("\n");
+    expect(line).toMatch(/display:\s*flex/);
+    expect(line).toMatch(/align-items:\s*baseline/);
+    // An inline-flex amount took its baseline from the icon, so "90K" rode high.
+    const amount = rulesFor(".trade-done__amount").join("\n");
+    expect(amount).not.toMatch(/inline-flex/);
+    expect(amount).toMatch(/white-space:\s*nowrap/);
+  });
+
+  it("drops the dots on a phone so none is left at a line's end", () => {
+    // Every `@media (max-width: 480px)` block, not only the first.
+    const blocks: string[] = [];
+    for (let at = css.indexOf("@media (max-width: 480px)"); at >= 0; at = css.indexOf("@media (max-width: 480px)", at + 1)) {
+      let depth = 1;
+      let i = css.indexOf("{", at) + 1;
+      const open = i;
+      for (; depth > 0 && i < css.length; i++) {
+        if (css[i] === "{") depth++;
+        else if (css[i] === "}") depth--;
+      }
+      blocks.push(css.slice(open, i - 1));
+    }
+    expect(rulesFor(".trade-done__sep", blocks.join("\n")).join("\n")).toMatch(/display:\s*none/);
+  });
+
+  it("has no Recent trades rules left", () => {
+    expect(css).not.toMatch(/trade-recent/);
+  });
+});

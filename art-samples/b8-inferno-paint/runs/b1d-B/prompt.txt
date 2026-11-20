@@ -1,0 +1,22 @@
+Use your image generation tool (one call) to create a new image and save it as sample-new.png in the current folder. Do not write code and do not copy or composite pixels from the inputs.
+
+Paint the DAMAGED look of the Housing Bunker (level 1), described below
+
+It is for the isometric strategy game Backyard Monsters (cartoony, colourful monster world), seen from the game's fixed isometric camera, the same camera, angle and orientation as frames.png (not mirrored).
+
+CAMERA: the isometric 3/4 view of frames.png, seen from the front and above at about 30 degrees, NOT a straight side view and NOT a symmetric picture. Put every part where frames.png has it, not mirrored and not rearranged.
+
+Input 1, frames.png: the OLD Flash version, blown up, on grey (1536x1024): design, camera angle, ground footprint and size. Each new picture stands on the same footprint, centred on the same spot, base on the same ground line, about the same height, and is not wider. Read the small details from it.
+Input 2, style.png: the Modern look of the other Inferno buildings from the same game. See FINISH below.
+Input 3, base.png: the NEW whole building, already approved (Modern look). This is the building that is damaged or destroyed: same parts, same materials, same colours, same finish.
+
+the Housing Bunker DAMAGED (still standing), as frames.png shows it: the same ring of horns and rope with a few horns broken short or knocked over (one lies fallen at the right), the rope sagging and snapped in places, the skull hut at the back cracked and chipped, one of its horns broken
+
+THE FLASH DESIGN, REFRESHED (most important): keep the Flash silhouette, proportions, colour scheme and every signature part in the same place, so a player of the old game instantly recognises it, with richer materials, crisper detail, better lighting and sharper edges. NOT a new design, nothing added or left out, and NOT a plain copy.
+
+FINISH: the finish of style.png (the Modern Inferno buildings of the same game: the painted Under Hall and Resource Pod, the 3D Bone Cruncher and the 3D Magma Tower): crisp, clean, polished, almost rendered stylised 3D, smooth shading, small bevels catching the light, soft light from the upper left, ambient occlusion in the gaps, clean sharp edges, no thick black outline, no cel shading, no pixel art, no painterly brush mess. Right-hand faces in medium shade, readable, not black. COLOURS as Flash's: the horns dark umber-brown at the foot fading to pale bone at the tips, the rope a light tan, the hut pale cracked bone and dried mud with dark shadowed openings. Earthy and muted, not orange. The thin horns and rope must stay crisp and readable at small game size.
+
+Output: ONE image, 1536x1024, the building alone, complete and fully inside the image with margin.
+Background everywhere: flat pure green #00FF00, also in every gap between the parts. No ground plane, no grass, no tile, no cast shadow on the ground, no grid lines, no text, no labels. The building itself must contain no bright pure green.
+
+IMPORTANT CORRECTION (an earlier attempt got this wrong): Keep base.png's proportions exactly: the skull hut is NOT bigger than in base.png (about two fifths of the ring's width), the ring the same shape and size. The damage must be clearly visible, as in frames.png: the hut tilted and sagging, cracked, a chunk broken off its brim, one of its three top horns snapped off; several fence horns broken short or knocked over, one long horn lying fallen at the right, the rope snapped and hanging loose in places. Colours exactly as base.png: pale cream bone fading to dark umber at the horn feet, NOT orange, NOT salmon or pink.

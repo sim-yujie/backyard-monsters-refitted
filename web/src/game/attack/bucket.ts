@@ -68,6 +68,15 @@ import { KRALLEN_TYPE, type AttackSession, type ChampionBlockReason } from "./At
  * per-player `localStorage` key; {@link loadLast} reads them back through the
  * same clamps. Both go through try/catch and a blocked store means "nothing
  * saved", never an error (§F2 "Last army").
+ *
+ * ## Auto-load (owner, 18 Nov 2026)
+ *
+ * With the "Auto-load last army" box ticked ({@link setAutoLoad}, off by
+ * default, kept on this browser) the bucket refills itself after each fling
+ * with the last army, as far as housing and the payload allow. An attack
+ * still starts empty. Only a batch the player set by hand is remembered: a
+ * refill (or a tick's fill) that went out unchanged saves nothing, so a
+ * refill cut short by what is left housed never shrinks the saved army.
  */
 
 /** What one tap sends: the rows above zero, and the champion if picked. */
@@ -113,6 +122,12 @@ export interface BucketOptions {
 /** `localStorage` key prefix; the player id follows. */
 export const LAST_ARMY_KEY_PREFIX = "bymr.attack.last-army.";
 
+/**
+ * The "Auto-load last army" tick box (owner, 18 Nov 2026): kept on this
+ * browser, in the same store as the last army, for every account and mode.
+ */
+export const AUTO_LOAD_KEY = "bymr.attack.auto-load";
+
 /** How the last army is written. Versioned so a later shape can skip an old one. */
 interface LastArmyRecord {
   readonly v: 1;
@@ -154,6 +169,11 @@ export class Bucket {
   private sessionSignature = "";
   /** Drops sent through {@link afterDrop}, for {@link drops}. */
   private dropCount = 0;
+  /**
+   * Whether the batch in the bucket was set by hand since the last drop or
+   * load: only then does {@link afterDrop} save it as the last army.
+   */
+  private byHand = false;
 
   constructor(session: AttackSession, options: BucketOptions = {}) {
     this.session = session;
@@ -281,7 +301,7 @@ export class Bucket {
     if (next === this.requestedCount(id)) return;
     if (next === 0) delete this.requested[id];
     else this.requested[id] = next;
-    this.notify();
+    this.edited();
   }
 
   /** Tops the row up to its maximum. */
@@ -302,7 +322,7 @@ export class Bucket {
       else this.requested[id] = next;
       changed = true;
     }
-    if (changed) this.notify();
+    if (changed) this.edited();
   }
 
   /** Empties every row and drops the champion pick. */
@@ -311,7 +331,7 @@ export class Bucket {
     for (const id of Object.keys(this.requested)) delete this.requested[id];
     const hadChampion = this.championTypes.length > 0;
     this.championTypes = [];
-    if (hadRows || hadChampion) this.notify();
+    if (hadRows || hadChampion) this.edited();
   }
 
   /* ── The champion ───────────────────────────────────────────────────── */
@@ -342,7 +362,7 @@ export class Bucket {
     if (t === null) {
       if (this.championTypes.length === 0) return;
       this.championTypes = [];
-      this.notify();
+      this.edited();
       return;
     }
     if (!this.champions().some((champion) => champion.t === t && champion.available)) return;
@@ -350,14 +370,14 @@ export class Bucket {
     const keep = this.championTypes.filter((other) => (other === KRALLEN_TYPE) !== (t === KRALLEN_TYPE));
     this.championTypes = [...keep, t];
     this.trimToPayload();
-    this.notify();
+    this.edited();
   }
 
   /** Takes one champion off the pick, leaving the other. */
   unpickChampion(t: number): void {
     if (!this.championTypes.includes(t)) return;
     this.championTypes = this.championTypes.filter((other) => other !== t);
-    this.notify();
+    this.edited();
   }
 
   /** Whether `t` is picked (and can still go). */
@@ -414,12 +434,42 @@ export class Bucket {
    * was sent: `remaining()` has already shrunk by the time this runs.
    */
   afterDrop(): void {
-    this.saveLast();
+    if (this.byHand) this.saveLast();
     this.dropCount += 1;
     for (const id of Object.keys(this.requested)) delete this.requested[id];
     this.championTypes = [];
+    this.byHand = false;
     this.sessionSignature = this.signature();
+    // Auto-load: the same batch again, as far as what is left allows.
+    if (this.autoLoad()) this.applyLast();
     this.notify();
+  }
+
+  /** Whether the "Auto-load last army" box is ticked on this browser. Never on a Baiter test. */
+  autoLoad(): boolean {
+    if (!this.storage) return false;
+    try {
+      return this.storage.getItem(AUTO_LOAD_KEY) === "1";
+    } catch {
+      return false;
+    }
+  }
+
+  /**
+   * Ticks or clears the box. Ticking fills the flinger with the last army at
+   * once (as Load last army did). True when the choice was saved.
+   */
+  setAutoLoad(on: boolean): boolean {
+    if (!this.storage) return false;
+    let saved = true;
+    try {
+      if (on) this.storage.setItem(AUTO_LOAD_KEY, "1");
+      else this.storage.removeItem(AUTO_LOAD_KEY);
+    } catch {
+      saved = false;
+    }
+    if (on && this.live()) this.loadLast();
+    return saved;
   }
 
   /* ── Listening ──────────────────────────────────────────────────────── */
@@ -466,6 +516,13 @@ export class Bucket {
    * be read.
    */
   loadLast(): boolean {
+    const found = this.applyLast();
+    if (found) this.notify();
+    return found;
+  }
+
+  /** {@link loadLast} without the notice: fills the rows and picks from the record. */
+  private applyLast(): boolean {
     let record: LastArmyRecord | null = null;
     try {
       const raw = this.storage?.getItem(LAST_ARMY_KEY_PREFIX + this.playerKey);
@@ -500,7 +557,8 @@ export class Bucket {
       this.championTypes.push(t);
     }
     this.trimToPayload();
-    this.notify();
+    // Loaded, not set by hand: sent unchanged, it is not saved again.
+    this.byHand = false;
     return true;
   }
 
@@ -532,6 +590,12 @@ export class Bucket {
       .map((entry) => this.session.championBlock(entry.t) ?? "ok")
       .join(",");
     return `${state.phase}|${champions}|${JSON.stringify(state.remaining)}`;
+  }
+
+  /** A change the player made: the batch is theirs, and is saved when it goes out. */
+  private edited(): void {
+    this.byHand = true;
+    this.notify();
   }
 
   private notify(): void {

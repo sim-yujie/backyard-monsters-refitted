@@ -22,9 +22,20 @@ export class InfernoProgress {
   @Property({ type: "number", columnType: "smallint", default: 0 })
   emergence_level: Opt<number> = 0;
 
-  /** When the cave last went up a level; null before the first. */
+  /**
+   * When the cave last went up a level, moved on to its Moloch raid's landing
+   * once that lands (patch 7.12): the next rise waits 23 hours from it. Null
+   * before the first.
+   */
   @Property({ type: Date, nullable: true })
   emergence_last_at?: Date | null;
+
+  /**
+   * The cave level whose Moloch raid was raised but has not landed yet, or
+   * null: the next main-yard load plays that stage again (patch 7.12).
+   */
+  @Property({ type: "number", columnType: "smallint", nullable: true })
+  emergence_pending?: number | null;
 
   /** The 13 Descent yards, in order: 1 once beaten. Shorter while not all were attacked. */
   @Property({ type: "json", columnType: "jsonb", defaultRaw: "'[]'::jsonb" })

@@ -8,6 +8,7 @@ import type { RaidRun } from "@/game/raid/raidSession";
 import type { OwnYardTarget } from "@/game/yard/ownYards";
 import type { Yard } from "@/game/yard/yardModel";
 import type { YardRenderer } from "@/game/yard/YardRenderer";
+import type { DockTabs } from "@/ui/attack/DockTabs";
 import type { Notices } from "@/ui/maproom/Notices";
 import type { AttackPresentation } from "./attackPresentation";
 import type { AttackSession } from "./AttackSession";
@@ -39,6 +40,12 @@ export interface AttackMounts {
    * The army panel, the catapult and siege pickers mount here (`Panel.mount`).
    */
   readonly dock: HTMLElement;
+  /**
+   * The dock's pinned tab row (owner, 18 Nov 2026): the army package adds
+   * Army, the drop package Catapult and the siege weapon, and each claims
+   * its window for its tab (`DockTabs.claim`).
+   */
+  readonly dockTabs: DockTabs;
   /** A spare slot on the HUD strip, between the readouts and Retreat. */
   readonly hudSlot: HTMLElement;
   /** The overlay's modal layer, for the end-of-attack panel. */

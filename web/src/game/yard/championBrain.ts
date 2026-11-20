@@ -7,11 +7,11 @@ import {
   KRALLEN_ID,
   STANCE_SHORT,
   championByType,
-  habitPips,
+  habitLearningOf,
   habitsOf,
+  hasLearned,
   parseBrain,
   parseBrainStats,
-  parseHabitBook,
   parseHabitStats,
   type BrainKey,
   type ChampionStance,
@@ -105,9 +105,17 @@ export interface TraitRow {
   readonly name: string;
   /** One line of what it does, for the tooltip. */
   readonly what: string;
-  /** For a habit, 0 to 3; an instinct has none, being always on. */
-  readonly pips?: number;
+  /**
+   * For a habit (owner's pick B, 19 Nov 2026): Active (it changes picks) or
+   * Unproven (it does not, yet); an instinct has none, being always on.
+   */
+  readonly state?: HabitState;
+  /** For a habit the last attack turned on or off, in the Mode it fought in. */
+  readonly event?: "learned" | "faded";
 }
+
+/** A habit is Active or Unproven: nothing in between (no pips). */
+export type HabitState = "active" | "unproven";
 
 /** One Mode as the cage shows it. */
 export interface ModeView {
@@ -116,7 +124,7 @@ export interface ModeView {
   readonly attacks: number;
   readonly instincts: readonly TraitRow[];
   readonly habits: readonly TraitRow[];
-  /** Whether it has any habit in this Mode, so Forget has something to wipe. */
+  /** Whether it has an Active habit or any evidence in this Mode, so Forget has something to wipe. */
   readonly learned: boolean;
 }
 
@@ -176,6 +184,18 @@ const HABIT_WORDS: Readonly<
   },
 };
 
+/**
+ * A two-ended habit's name while Unproven: it leans neither way yet, so the
+ * cage names what it is about, not a side (pips prototype, astra round 2).
+ */
+const NEUTRAL_NAMES: Partial<Record<HabitKey, readonly [string, string]>> = {
+  tower: ["Tower preference", "May learn to go for towers, or steer clear."],
+  loot: ["Loot preference", "May learn to love loot, or ignore it."],
+  gun: ["Gun size", "May learn to take the biggest gun first, or the smallest."],
+  big: ["Ally size", "May learn to back your biggest hurt monster, or the smallest."],
+  crowd: ["Group size", "May learn to back the hurt monster in a crowd, or one alone."],
+};
+
 /** What a champion is, in one short fixed line. */
 export const championNature = (monsterId: string, level: number): string => {
   switch (monsterId) {
@@ -197,7 +217,7 @@ export const championNature = (monsterId: string, level: number): string => {
 /** The Hybrid line with no instincts: it picks as the Flash champion. */
 export const naturalRow = (monsterId: string): TraitRow => ({
   icon: "none",
-  name: "None: a natural",
+  name: monsterId === FOMOR_ID ? "Nearest hurt ally" : "Nearest target",
   what:
     monsterId === FOMOR_ID
       ? "Follows the nearest hurt monster, as in Flash."
@@ -206,31 +226,44 @@ export const naturalRow = (monsterId: string): TraitRow => ({
 
 /**
  * One Mode of a champion's mind as the cage shows it: its instincts, and
- * each habit in its row with the pips it has earned.
+ * each habit in its row, Active or Unproven (owner's pick B), with the last
+ * attack's change when that attack was in this Mode.
  *
- * @param entry - The champion's save entry; its `t`, `h`, `hs` and `bs` are read, safely.
+ * @param entry - The champion's save entry; its `t`, `h`, `hs` and `hl` are read, safely.
  * @param stance - The Mode.
  */
 export const modeView = (
-  entry: { readonly t: number; readonly h?: unknown; readonly hs?: unknown },
+  entry: { readonly t: number; readonly h?: unknown; readonly hs?: unknown; readonly hl?: unknown },
   stance: ChampionStance,
 ): ModeView => {
   const id = championByType(entry.t);
-  const book = parseHabitBook(entry.h, id);
-  const weights = book[STANCE_SHORT[stance]] ?? {};
+  const learning = habitLearningOf(entry, id);
+  const tracks = learning[STANCE_SHORT[stance]] ?? {};
   const stats = parseHabitStats(entry.hs);
+  // Only the champion's latest learning attack has a "Last attack" line.
+  const receipt =
+    learning.r && learning.r.m === STANCE_SHORT[stance] && learning.r.n === stats.n ? learning.r.e : {};
   const habits = habitsOf(id, stance).map((key): TraitRow => {
-    const weight = weights[key] ?? 0;
+    const way = tracks[key]?.d;
     const words = HABIT_WORDS[key];
-    const [name, what] = weight < 0 && words.off ? words.off : words.on;
-    return { icon: words.icon, name, what, pips: habitPips(weight, stance) };
+    const neutral = NEUTRAL_NAMES[key];
+    const [name, what] =
+      way === undefined && neutral ? neutral : way === -1 && words.off ? words.off : words.on;
+    const event = receipt[key];
+    return {
+      icon: words.icon,
+      name,
+      what,
+      state: way === undefined ? "unproven" : "active",
+      ...(event ? { event } : {}),
+    };
   });
   return {
     stance,
     attacks: stats[STANCE_SHORT[stance]]?.n ?? 0,
     instincts: INSTINCTS[stance],
     habits,
-    learned: Object.keys(weights).length > 0,
+    learned: hasLearned(learning, stance),
   };
 };
 

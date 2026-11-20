@@ -178,6 +178,11 @@ export interface BaseLoadRequest {
    * on `attack`/`wmattack` and read on nothing else; see {@link AttackData}.
    */
   attackData?: string;
+  /**
+   * Which screen opens the own yard: the yard itself, or a map finding its
+   * home cell. The server only logs it, beside Moloch's emergence (patch 7.12).
+   */
+  screen?: "yard" | "map";
 }
 
 /* ── Attack ─────────────────────────────────────────────────────────────── */
@@ -252,6 +257,12 @@ export interface ChampionSaveEntry {
   h?: unknown;
   /** What its habits learned from: `n` attacks, and each Mode's count and usual scores. */
   hs?: unknown;
+  /**
+   * How each habit is learned by the owner's pick B (19 Nov 2026): Active or
+   * Unproven, its evidence and the last attack's receipt (`habits.ts`
+   * `HabitLearning`); the server's alone to write.
+   */
+  hl?: unknown;
   /**
    * Krallen's loot aura runs until then, unix seconds (the Krallen Hunt's 3x
    * mark, server `services/events/krallenReward.ts`); the server's alone to
@@ -1218,6 +1229,12 @@ export interface LayoutsResponse extends ApiEnvelope {
   error: number;
   /** How many slots the account has. Ten for everyone (design §8, Q2). */
   slots: number;
+  /**
+   * How many of them, from slot 1 up, the yard may save to: all with a built
+   * Yard Planner in it, one without (owner, beta 8). Saves in the slots above
+   * are still listed, locked. Absent from an older server: every slot.
+   */
+  usable?: number;
   layouts: Layout[];
 }
 
@@ -1604,7 +1621,7 @@ export interface MushroomPickReport {
   /** Where it stood, yard units. */
   x: number;
   y: number;
-  /** Golden: one in four, rolled by the server at pick time. */
+  /** Golden: one in four (one in ten for a turkey in the turkey hunt), rolled by the server at pick time. */
   golden: boolean;
   /** Shiny it gave: 0, 3 or 8. */
   shiny: number;

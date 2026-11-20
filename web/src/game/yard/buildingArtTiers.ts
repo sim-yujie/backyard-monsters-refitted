@@ -219,6 +219,14 @@ export interface TierAnim {
    * same point of the loop (`loopAnimLayers`).
    */
   readonly rest?: number;
+  /**
+   * A building whose look at rest is cell 0 and no other (the Inferno's 3D
+   * Strongbox: the owner approved its still with the hand at one o'clock and
+   * the latch up): it starts on cell 0 and goes back to it when its work
+   * ends, where Flash's strip starts on a cell of its own choosing and stops
+   * wherever it is (`startFrame`, `BFOUNDATION.as:1136`).
+   */
+  readonly home?: boolean;
 }
 
 /** A 3D building's damaged or destroyed look: one still and its shadow (none where it casts none). */
@@ -699,7 +707,28 @@ export const BUILDING_3D_ART: Readonly<Record<number, readonly TierArt[]>> = {
     { from: 1, top: ["top.3d1@2x.webp", -66, -61], shadow: ["shadow.3d1.jpg", -65, 17], lift: 0,
       damaged: { top: ["top.3d1.damaged@2x.webp", -66, -61], shadow: ["shadow.3d1.damaged.jpg", -66, 19] },
       destroyed: { top: ["top.3d1.destroyed@2x.webp", -66, -25], shadow: ["shadow.3d1.destroyed.jpg", -66, 23] } },
-  ],  // 150 Observatory: this project's own (alliances), 3D design C, the lookout deck; it idles (`revampBuildings.ts`)
+  ],
+  // 133 Siege Factory: 3D (owner on the Review Desk, 17 Nov 2026, card b8-siege-3d-r4), Flash's one look, from
+  // art/siege-factory-3d, `export3d_buildings.py siegefactory`, standing in Flash's pale haze (laid into its body).
+  // While a weapon is being built the rocker, rod, shaft and wheels turn and the pump smokes: 35 cells as Flash's,
+  // after one idle cell (`rest`), the machine at rest with no smoke, which it holds while nothing is being built.
+  // Its own damaged still; destroyed is Flash's rubble.
+  133: [
+    { from: 1, top: ["top.3d1@2x.webp", -75, -99], shadow: ["shadow.3d1.jpg", -55, 27], lift: 0,
+      anim: { strip: ["anim.3d1@2x.webp", -52, -104, 124, 75, 36], columns: 16, body: ["body.3d1@2x.webp", -75, -99],
+        rest: 1 },
+      damaged: { top: ["top.3d1.damaged@2x.webp", -75, -87], shadow: ["shadow.3d1.damaged.jpg", -67, 22] } },
+  ],
+  // 134 Siege Works: 3D (owner on the Review Desk, 17 Nov 2026, card b8-siege-3d-r4), Flash's one look, from
+  // art/siege-works-3d, `export3d_buildings.py siegeworks`. While a weapon is being researched the rocker swings, the
+  // chain runs and the bellows pumps: one strip of 60 cells, Flash's three 60-cell strips together. Its own damaged
+  // still; destroyed is Flash's rubble.
+  134: [
+    { from: 1, top: ["top.3d1@2x.webp", -59, -84], shadow: ["shadow.3d1.jpg", -52, 9], lift: 0,
+      anim: { strip: ["anim.3d1@2x.webp", -55, -90, 96, 143, 60], columns: 21, body: ["body.3d1@2x.webp", -59, -74] },
+      damaged: { top: ["top.3d1.damaged@2x.webp", -65, -94], shadow: ["shadow.3d1.damaged.jpg", -65, 10] } },
+  ],
+  // 150 Observatory: this project's own (alliances), 3D design C, the lookout deck; it idles (`revampBuildings.ts`)
   150: OBSERVATORY_MODERN_ART,
 };
 
@@ -714,7 +743,13 @@ export const BUILDING_3D_ART: Readonly<Record<number, readonly TierArt[]>> = {
  * Incubator Control Centre (16, in the Hatchery Control Center's folder,
  * which the Inferno's row shares), look C from art/icc-inferno-looks (owner,
  * 2 Nov 2026: "I want to see it in the inferno + the soft animated glow of the
- * lava"), exported by `export3d_buildings.py icc`.
+ * lava"), exported by `export3d_buildings.py icc`; and its Strongbox (8,
+ * `buildings/imonsterlab/`), from art/strongbox-3d (owner on the Review Desk,
+ * 14 Nov 2026), exported by `export3d_buildings.py strongbox`; and its
+ * Incubator (13, `buildings/ihatchery/`), from art/incubator-3d (owner, 15
+ * Nov 2026), exported by `export3d_buildings.py incubator`; and its Academy
+ * (26, `buildings/iacademy/`), from art/iacademy-3d (17 Nov 2026), exported
+ * by `export3d_buildings.py iacademy`.
  */
 export const INFERNO_BUILDING_3D_ART: Readonly<Record<number, readonly TierArt[]>> = {
   // 1 Bone Cruncher: 3D (owner, 6 Nov 2026: "3d bone crusher has been approved"), the clean-room model's three tiers,
@@ -729,6 +764,97 @@ export const INFERNO_BUILDING_3D_ART: Readonly<Record<number, readonly TierArt[]
       anim: { strip: ["anim.3d3@2x.webp", -28, -37, 62, 85, 36], columns: 33, body: ["body.3d3@2x.webp", -48, -37] } },
     { from: 7, top: ["top.3d7@2x.webp", -48, -37], shadow: ["shadow.3d7.jpg", -47, 16], lift: 0,
       anim: { strip: ["anim.3d7@2x.webp", -29, -37, 80, 85, 36], columns: 25, body: ["body.3d7@2x.webp", -48, -37] } },
+  ],
+  // 2 Coal Extractor: 3D, the clean-room model of art/coal-fable (`export3d_buildings.py coal`), three tiers at levels
+  // 1-2, 3-6 and 7-10 as the Bone Cruncher's (Flash's has two looks, from 1 and 3; the middle tier is in between).
+  // A lump of coal goes up the intake and along the copper pipe, the coal jiggles and the furnace flickers, in Flash's
+  // 47 cells (levels 1-2) and 45. Each tier has its own damaged still (sooted, plates torn off the drum, the copper pipe
+  // hanging, the funnel at its feet), one rough pass (`coal:damaged`). Destroyed is Flash's rubble, as the others'.
+  2: [
+    { from: 1, top: ["top.3d1@2x.webp", -40, -45], shadow: ["shadow.3d1.jpg", -29, 8], lift: 0,
+      anim: { strip: ["anim.3d1@2x.webp", -40, -46, 62, 94, 47], columns: 33, body: ["body.3d1@2x.webp", -40, -41] },
+      damaged: { top: ["top.3d1.damaged@2x.webp", -42, -47], shadow: ["shadow.3d1.damaged.jpg", -29, 8] } },
+    { from: 3, top: ["top.3d3@2x.webp", -44, -50], shadow: ["shadow.3d3.jpg", -28, 9], lift: 0,
+      anim: { strip: ["anim.3d3@2x.webp", -40, -51, 68, 101, 45], columns: 30, body: ["body.3d3@2x.webp", -44, -42] },
+      damaged: { top: ["top.3d3.damaged@2x.webp", -44, -52], shadow: ["shadow.3d3.damaged.jpg", -28, 8] } },
+    { from: 7, top: ["top.3d7@2x.webp", -41, -50], shadow: ["shadow.3d7.jpg", -24, 4], lift: 0,
+      anim: { strip: ["anim.3d7@2x.webp", -39, -51, 69, 102, 45], columns: 29, body: ["body.3d7@2x.webp", -41, -47] },
+      damaged: { top: ["top.3d7.damaged@2x.webp", -45, -50], shadow: ["shadow.3d7.damaged.jpg", -24, 8] } },
+  ],
+  // 3 Sulfur Swirler: 3D (owner, 14 Nov 2026, Review Desk), the clean-room model of art/sulfur-3d
+  // (`export3d_buildings.py sulfur`), three tiers at levels 1-2, 3-6 and 7-10 as the Bone Cruncher's (Flash's has two
+  // looks, from 1 and 3; the top tier adds the side boiler, the big gear and the lit firebox). The chain runs round its
+  // wheels, a lump of sulfur goes up the gold pipe and the sulfur swirls behind the window, in Flash's 51 cells
+  // (levels 1-2) and 45. Each tier has its own damaged still (sooted, holes in the shell running sulfur, the pipe off
+  // its hood, the chain drive askew, the window dim and cracked, plates and stones at its feet), one rough pass
+  // (`sulfur:damaged`). Destroyed is Flash's rubble, as the others'.
+  3: [
+    { from: 1, top: ["top.3d1@2x.webp", -36, -59], shadow: ["shadow.3d1.jpg", -10, 10], lift: 0,
+      anim: { strip: ["anim.3d1@2x.webp", -37, -56, 52, 92, 51], columns: 39, body: ["body.3d1@2x.webp", -36, -59] },
+      damaged: { top: ["top.3d1.damaged@2x.webp", -42, -55], shadow: ["shadow.3d1.damaged.jpg", -10, 10] } },
+    { from: 3, top: ["top.3d3@2x.webp", -37, -61], shadow: ["shadow.3d3.jpg", -16, 18], lift: 0,
+      anim: { strip: ["anim.3d3@2x.webp", -38, -61, 50, 119, 45], columns: 40, body: ["body.3d3@2x.webp", -37, -59] },
+      damaged: { top: ["top.3d3.damaged@2x.webp", -37, -54], shadow: ["shadow.3d3.damaged.jpg", -16, 17] } },
+    { from: 7, top: ["top.3d7@2x.webp", -40, -61], shadow: ["shadow.3d7.jpg", -26, 17], lift: 0,
+      anim: { strip: ["anim.3d7@2x.webp", -38, -61, 50, 119, 45], columns: 40, body: ["body.3d7@2x.webp", -40, -59] },
+      damaged: { top: ["top.3d7.damaged@2x.webp", -40, -54], shadow: ["shadow.3d7.damaged.jpg", -28, 16] } },
+  ],
+  // 4 Magma Pump: 3D (owner, 14 Nov 2026, Review Desk), the clean-room model of art/magma-3d
+  // (`export3d_buildings.py magma`), three tiers at levels 1-2, 3-6 and 7-10 as the Bone Cruncher's (Flash's has one
+  // look in play; tier 2 adds the feet, the full brass frame, the vent's grille and the sight tank, tier 3 the horns,
+  // the spiked brimming pot, the slotted belt and the magma ring round the well). The pot's ribs light and it puffs
+  // smoke, a swelling goes up the elbow pipe and the vent breathes, in Flash's 49 cells. Each tier has its own damaged
+  // still (sooted and cracked, the pot tilted off its seat with magma running down the lid and the left face, a corner
+  // post torn off, the elbow knocked off its stub, the vent dead, stones and magma pools at its feet), one rough pass
+  // (`magma:damaged`). Destroyed is Flash's rubble, as the others'.
+  4: [
+    { from: 1, top: ["top.3d1@2x.webp", -36, -37], shadow: ["shadow.3d1.jpg", -26, 9], lift: 0,
+      anim: { strip: ["anim.3d1@2x.webp", -29, -69, 61, 110, 49], columns: 33, body: ["body.3d1@2x.webp", -36, -37] },
+      damaged: { top: ["top.3d1.damaged@2x.webp", -46, -39], shadow: ["shadow.3d1.damaged.jpg", -43, 9] } },
+    { from: 3, top: ["top.3d3@2x.webp", -35, -41], shadow: ["shadow.3d3.jpg", -33, 5], lift: 0,
+      anim: { strip: ["anim.3d3@2x.webp", -29, -72, 64, 109, 49], columns: 32, body: ["body.3d3@2x.webp", -35, -41] },
+      damaged: { top: ["top.3d3.damaged@2x.webp", -46, -43], shadow: ["shadow.3d3.damaged.jpg", -38, 5] } },
+    { from: 7, top: ["top.3d7@2x.webp", -35, -45], shadow: ["shadow.3d7.jpg", -33, 5], lift: 0,
+      anim: { strip: ["anim.3d7@2x.webp", -29, -72, 68, 121, 49], columns: 30, body: ["body.3d7@2x.webp", -35, -45] },
+      damaged: { top: ["top.3d7.damaged@2x.webp", -46, -47], shadow: ["shadow.3d7.damaged.jpg", -38, 5] } },
+  ],
+  // 8 Strongbox: 3D (owner on the Review Desk, 14 Nov 2026), the clean-room model, one look for its four levels as
+  // Flash's. Each cell is the whole building, 30 cells of its loop while a monster is unlocked (the hand swings over
+  // the lock and back, its shadow crossing the disc, so no part of it stands still to be a body); at rest it holds
+  // cell 0, the approved still (`home`). Its own ground shadow, where Flash's has none. Flash has no damaged or destroyed picture for
+  // it and neither has the 3D: damaged is the whole look tinted, destroyed the 3D still (tinted darker), where Flash
+  // goes on showing its whole picture.
+  8: [
+    { from: 1, top: ["top.3d1@2x.webp", -57, -38], shadow: ["shadow.3d1.jpg", -61, 31], lift: 0,
+      anim: { strip: ["anim.3d1@2x.webp", -57, -41, 115, 127, 30], columns: 17, whole: true, home: true },
+      destroyed: { top: ["top.3d1@2x.webp", -57, -38], shadow: ["shadow.3d1.jpg", -61, 31] } },
+  ],
+  // 13 Incubator: 3D (owner, 15 Nov 2026, round 3 approved as is), the clean-room model, one look for its three levels
+  // as Flash's. Its moving parts over a still body, in Flash's 50 cells: the brood churns in the porthole and the
+  // feed hose pumps, twice a loop, and green smoke puffs from the vent once (laid into the cells by its post.py). It
+  // runs only while a monster hatches and drops back to cell 0, the approved still with no smoke, when it stops, as
+  // Flash's hatchery (`yardAnim.ts` type 13). Its own damaged still, one rough pass (`incubator:damaged`): dented and
+  // sooted, the hose torn off the pump, the glass cracked and the brood running down the front. Destroyed is Flash's
+  // rubble, as the others'.
+  13: [
+    { from: 1, top: ["top.3d1@2x.webp", -57, -28], shadow: ["shadow.3d1.jpg", -57, 22], lift: 0,
+      anim: { strip: ["anim.3d1@2x.webp", -54, -46, 84, 87, 50], columns: 24, body: ["body.3d1@2x.webp", -57, -28] },
+      damaged: { top: ["top.3d1.damaged@2x.webp", -66, -28], shadow: ["shadow.3d1.damaged.jpg", -66, 22] } },
+  ],
+  // 26 Academy: 3D (owner, 17 Nov 2026: 3D and animated, as the main yard's Academy), Flash's two looks (level 1,
+  // levels 2-4), `export3d_buildings.py iacademy`. While it trains the drill pulls in and out (Flash's own strip,
+  // never shipped), the cogs between the pillars turn and the pillars pump: 44 and 47 cells, the counts of
+  // Flash's commented-out strips. Each look has its own rough damaged still; destroyed is the painted rubble
+  // (`web/tools/inferno-paint/`), which keeps its look's whole shadow as Flash's falls back to it.
+  26: [
+    { from: 1, top: ["top.3d1@2x.webp", -51, -58], shadow: ["shadow.3d1.jpg", -48, 3], lift: 0,
+      anim: { strip: ["anim.3d1@2x.webp", -26, -61, 64, 68, 44], columns: 32, body: ["body.3d1@2x.webp", -51, -46] },
+      damaged: { top: ["top.3d1.damaged@2x.webp", -51, -59], shadow: ["shadow.3d1.damaged.jpg", -48, -2] },
+      destroyed: { top: ["top.c1.destroyed@2x.webp", -52, -15], shadow: ["shadow.1.jpg", -50, -30] } },
+    { from: 2, top: ["top.3d2@2x.webp", -57, -94], shadow: ["shadow.3d2.jpg", -55, 4], lift: 0,
+      anim: { strip: ["anim.3d2@2x.webp", -32, -79, 86, 85, 47], columns: 23, body: ["body.3d2@2x.webp", -57, -94] },
+      damaged: { top: ["top.3d2.damaged@2x.webp", -57, -94], shadow: ["shadow.3d2.damaged.jpg", -55, -5] },
+      destroyed: { top: ["top.c2.destroyed@2x.webp", -59, -71], shadow: ["shadow.2.jpg", -61, -30] } },
   ],
   // 16 Incubator Control Centre: 3D look C, on a small magma pool. Each cell is the whole building: 32 cells of its
   // idle loop (the lava's light breathing), then 64 of its loop while it hatches (the crystal pulsing twice as well).
@@ -756,11 +882,28 @@ export const INFERNO_BUILDING_3D_ART: Readonly<Record<number, readonly TierArt[]
  * centre building of every Inferno yard, `buildings/itownhall/`; owner on the Review Desk, 6 Nov 2026: "Underhall can
  * be repainted"), painted by Codex from Flash's three looks (levels 1, 2 and 3 to 6) in the finish of the painted
  * Town Hall, and fitted onto Flash's footprint by `web/tools/underhall-repaint/` (`finish.py`, then `export.py`), on
- * Flash's own shadows. Each look has its own damaged and destroyed picture, as Flash's has; like Flash's, it stands
- * still. The main yard's Town Hall (also type 14) keeps `TOWN_HALL_ART`.
+ * Flash's own shadows. Each look has its own damaged and destroyed picture, as Flash's has; levels 1 to 3, like
+ * Flash's, stand still. Levels 4, 5 and 6 are this project's own (owner, 14 Nov 2026: direction B, Lava and Black
+ * Iron, fire option 3 "No open flame"), each a Codex edit of the level below on level 3's footprint and shadows
+ * (`art-samples/b8/underhall-levels/`): its body with a 48-cell loop over it (8 cells a row, 2.4 s round at
+ * `yardAnim.ts`'s rate for type 14) of the lava's glow, the funnel's flicker, sparks and thin smoke, and behind level
+ * 6's gate a bed of coals; `top` is cell 24 over the body, the still for the icons. Damaged and destroyed stand still.
+ * The main yard's Town Hall (also type 14) keeps `TOWN_HALL_ART`.
+ *
+ * Also the Resource Pod (6, `buildings/istoragesilo/`; owner 12 Nov 2026: Codex for the Inferno buildings with no
+ * animation), painted the same way from Flash's one look by `web/tools/pod-repaint/`, damaged and destroyed too; and
+ * the Inferno's Housing Bunker (128, `buildings/ihousingbunker/`, Flash's one look) by `web/tools/inferno-paint/`
+ * (beta 8, owner 17 Nov 2026: no 3D for still buildings), damaged and destroyed in paint too. (The Inferno's Academy,
+ * 26, was painted the same day and is 3D now, `INFERNO_BUILDING_3D_ART`; only its painted rubble is still shown.)
  */
 export const INFERNO_PAINTED_BUILDING_ART: Readonly<Record<number, readonly TierArt[]>> = {
-  // 14 Under Hall: painted, Flash's three looks, each damaged and destroyed in paint too
+  // 6 Resource Pod: painted, Flash's one look (all ten levels), damaged and destroyed in paint too
+  6: [
+    { from: 1, top: ["top.c1@2x.webp", -45, -53], shadow: ["shadow.1.v2.jpg", -48, 17], lift: 0,
+      damaged: { top: ["top.c1.damaged@2x.webp", -48, -49], shadow: ["shadow.1.damaged.v2.jpg", -47, 17] },
+      destroyed: { top: ["top.c1.destroyed@2x.webp", -53, -15], shadow: ["shadow.1.destroyed.v2.jpg", -54, 12] } },
+  ],
+  // 14 Under Hall: painted, Flash's three looks and three of its own (4 to 6, animated), each damaged and destroyed in paint too
   14: [
     { from: 1, top: ["top.c1@2x.webp", -52, -30], shadow: ["shadow.1.v2.jpg", -65, 49], lift: 0,
       damaged: { top: ["top.c1.damaged@2x.webp", -57, -38], shadow: ["shadow.1.damaged.v2.jpg", -65, 47] },
@@ -771,12 +914,44 @@ export const INFERNO_PAINTED_BUILDING_ART: Readonly<Record<number, readonly Tier
     { from: 3, top: ["top.c3@2x.webp", -51, -54], shadow: ["shadow.3.v2.jpg", -74, 35], lift: 0,
       damaged: { top: ["top.c3.damaged@2x.webp", -56, -65], shadow: ["shadow.3.damaged.v2.jpg", -73, 33] },
       destroyed: { top: ["top.c3.destroyed@2x.webp", -61, -21], shadow: ["shadow.3.destroyed.v2.jpg", -75, 29] } },
+    { from: 4, top: ["top.c4@2x.webp", -51, -80], shadow: ["shadow.3.v2.jpg", -74, 35], lift: 0,
+      anim: { strip: ["anim.c4@2x.webp", -35, -91, 78, 193, 48], columns: 8, body: ["body.c4@2x.webp", -51, -54] },
+      damaged: { top: ["top.c4.damaged@2x.webp", -50, -50], shadow: ["shadow.3.damaged.v2.jpg", -73, 33] },
+      destroyed: { top: ["top.c4.destroyed@2x.webp", -51, 6], shadow: ["shadow.3.destroyed.v2.jpg", -75, 29] } },
+    { from: 5, top: ["top.c5@2x.webp", -51, -94], shadow: ["shadow.3.v2.jpg", -74, 35], lift: 0,
+      anim: { strip: ["anim.c5@2x.webp", -35, -108, 78, 218, 48], columns: 8, body: ["body.c5@2x.webp", -51, -54] },
+      damaged: { top: ["top.c5.damaged@2x.webp", -51, -54], shadow: ["shadow.3.damaged.v2.jpg", -73, 33] },
+      destroyed: { top: ["top.c5.destroyed@2x.webp", -54, 14], shadow: ["shadow.3.destroyed.v2.jpg", -75, 29] } },
+    { from: 6, top: ["top.c6@2x.webp", -51, -109], shadow: ["shadow.3.v2.jpg", -74, 35], lift: 0,
+      anim: { strip: ["anim.c6@2x.webp", -35, -125, 78, 235, 48], columns: 8, body: ["body.c6@2x.webp", -51, -55] },
+      damaged: { top: ["top.c6.damaged@2x.webp", -51, -53], shadow: ["shadow.3.damaged.v2.jpg", -73, 33] },
+      destroyed: { top: ["top.c6.destroyed@2x.webp", -55, 7], shadow: ["shadow.3.destroyed.v2.jpg", -75, 29] } },
+  ],
+  // 128 Housing Bunker (Flash's Compound): painted, Flash's one look (all six levels), damaged and destroyed in paint too
+  128: [
+    { from: 1, top: ["top.c1@2x.webp", -108, -49], shadow: ["shadow.1.jpg", -118, 26], lift: 0,
+      damaged: { top: ["top.c1.damaged@2x.webp", -106, -39], shadow: ["shadow.1.damaged.jpg", -117, 30] },
+      destroyed: { top: ["top.c1.destroyed@2x.webp", -73, 11], shadow: ["shadow.1.destroyed.jpg", -96, 8] } },
   ],
 };
 
 /**
- * Every type with new art the old-art switch turns back: the towers, the Town Hall (14), the 3D buildings,
- * the Flash decorations' Modern look (`decorationModernArt.ts`) and this project's own decorations' Modern
+ * Moloch's cave on the main yard (127, the Inferno Cavern, `buildings/iportal/`, drawn by `inferno/CaveSprite.ts`):
+ * its five stages painted by Codex from Flash's five looks (`web/tools/inferno-paint/`, beta 8), the new rocks on
+ * Flash's own soft ground of cracks and lava glow, in one picture each. Like Flash's on the main yard, only stage 5
+ * casts a shadow; the cave is never damaged or destroyed.
+ */
+export const CAVERN_ART: readonly TierArt[] = [
+  { from: 1, top: ["top.c1@2x.webp", -86, -7], shadow: null, lift: 0 },
+  { from: 2, top: ["top.c2@2x.webp", -108, -32], shadow: null, lift: 0 },
+  { from: 3, top: ["top.c3@2x.webp", -139, -66], shadow: null, lift: 0 },
+  { from: 4, top: ["top.c4@2x.webp", -141, -116], shadow: null, lift: 0 },
+  { from: 5, top: ["top.c5@2x.webp", -163, -172], shadow: ["shadow.5.v2.jpg", -169, 0], lift: 0 },
+];
+
+/**
+ * Every type with new art the old-art switch turns back: the towers, the Town Hall (14), the 3D buildings, the
+ * Inferno Cavern on the main yard (127), the Flash decorations' Modern look (`decorationModernArt.ts`) and this project's own decorations' Modern
  * look (`revampDecorations.ts`).
  */
 const NEW_ART: Readonly<Record<number, readonly TierArt[]>> = {
@@ -785,6 +960,7 @@ const NEW_ART: Readonly<Record<number, readonly TierArt[]>> = {
   ...BUILDING_3D_ART,
   ...DECORATION_MODERN_ART,
   ...REVAMP_DECORATION_MODERN_ART,
+  127: CAVERN_ART,
 };
 
 /**

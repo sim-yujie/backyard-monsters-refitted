@@ -80,6 +80,28 @@ if (import.meta.env.DEV) {
   (globalThis as Record<string, unknown>)["bymr"] = app;
 }
 
+// The layout check's way to the Repeat attack's result (web/e2e/layout): a
+// dev build, or the check's own build (VITE_LAYOUT_CHECK=1); never a release.
+if (import.meta.env.DEV || import.meta.env.VITE_LAYOUT_CHECK === "1") {
+  void import("@/ui/attack/autoAttackResultPreview").then(({ previewAutoAttackResult }) => {
+    (globalThis as Record<string, unknown>)["__autoAttackResult"] = (kind?: "won" | "lost") => {
+      const modal = document.querySelector<HTMLElement>(".overlay__layer--modal");
+      return modal ? previewAutoAttackResult(modal, kind) : null;
+    };
+  });
+  // Repeat attack's sheet in each of its states (look A, owner 20 Nov 2026).
+  void import("@/ui/attack/autoAttackConfirmPreview").then(({ previewAutoAttackConfirm }) => {
+    (globalThis as Record<string, unknown>)["__autoAttackConfirm"] = (state?: Parameters<typeof previewAutoAttackConfirm>[1]) => {
+      const modal = document.querySelector<HTMLElement>(".overlay__layer--modal");
+      return modal ? previewAutoAttackConfirm(modal, state) : null;
+    };
+  });
+  // The attack screen's dock (owner, 18 Nov 2026): the real attack scene on the own yard.
+  void import("@/game/attack/attackDockPreview").then(({ previewAttackDock }) => {
+    (globalThis as Record<string, unknown>)["__attackDock"] = () => previewAttackDock((scene) => app.goTo(scene));
+  });
+}
+
 // Vite replaces the module on save; tear the old app down so the canvas, the
 // overlay and the ticker do not accumulate.
 if (import.meta.hot) {

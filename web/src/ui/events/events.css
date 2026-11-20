@@ -122,6 +122,11 @@
   max-height: calc(100dvh - var(--hud-height) - 150px);
   min-width: 0;
   transform: translateX(-50%);
+  /* Never under 260px in the middle: the title and frame take about 80px,
+     so the list keeps 180px. At 980x551 it stopped above Main yard at about
+     192px (list 124px Modern, 114px Classic, 16 Nov); now it reaches over
+     the dock instead (ui.css). */
+  --centre-min-height: 260px;
 }
 
 .events-panel .panel__body {

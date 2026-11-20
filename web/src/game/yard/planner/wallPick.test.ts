@@ -162,12 +162,12 @@ describe("Affordable", () => {
     expect(affordablePick(nodes(planOf(yard), [5, 1]), 2, yard)).toEqual([1]);
   });
 
-  it("is empty when the hall does not allow the level, or nothing can be paid for", () => {
+  it("is empty when nothing can be paid for, but not for a low hall (beta 8)", () => {
     const poor = yardOf({ r1: 0, r2: 0 });
     expect(affordablePick(nodes(planOf(poor), [1, 2]), 2, poor)).toEqual([]);
 
     const lowHall = yardOf(RICH, 1);
-    expect(affordablePick(nodes(planOf(lowHall), [1, 2]), 5, lowHall)).toEqual([]);
+    expect(affordablePick(nodes(planOf(lowHall), [1, 2]), 5, lowHall)).not.toEqual([]);
   });
 });
 
@@ -259,9 +259,9 @@ describe("Select all at the chosen level", () => {
     );
   });
 
-  it("names the hall level a gated level needs", () => {
+  it("needs no hall level for any wall level (beta 8)", () => {
     const yard = yardOf(RICH, 1);
-    expect(selectAllCheck(planOf(yard).buildings(), 5, yard).reason).toMatch(/^Level 5 needs Town Hall \d+\.$/);
+    expect(selectAllCheck(planOf(yard).buildings(), 5, yard).reason ?? "").not.toMatch(/needs Town Hall/);
   });
 });
 
@@ -288,12 +288,20 @@ describe("Affordable at the chosen level", () => {
     expect(fill.reason).toBeNull();
   });
 
-  it("is greyed when the pick is already all the yard can afford", () => {
+  it("is held back, and marked applied, when the pick is already all the yard can afford", () => {
     const yard = yardOf({ r1: 0, r2: 25_000 });
     const plan = planOf(yard);
-    expect(affordableFill(nodes(plan, [1, 2]), plan.buildings(), 2, yard).reason).toBe(
-      "Your pick is already all you can afford at level 2.",
-    );
+    const fill = affordableFill(nodes(plan, [1, 2]), plan.buildings(), 2, yard);
+    expect(fill.reason).toBe("Your pick is already all you can afford at level 2.");
+    expect(fill.applied).toBe(true);
+  });
+
+  it("is not applied when nothing can be paid for, or the pick differs", () => {
+    const poor = yardOf({ r1: 0, r2: 0 });
+    expect(affordableFill([], planOf(poor).buildings(), 2, poor).applied).toBe(false);
+    const yard = yardOf({ r1: 0, r2: 25_000 });
+    const plan = planOf(yard);
+    expect(affordableFill(nodes(plan, [1]), plan.buildings(), 2, yard).applied).toBe(false);
   });
 
   it("is greyed when not one wall can be paid for", () => {

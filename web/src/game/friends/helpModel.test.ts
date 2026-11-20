@@ -6,17 +6,27 @@ import {
   afterRefusal,
   buildingHelp,
   fromVisitSave,
+  HELP_ALL_REPAIRS,
+  helpAllCount,
+  helpAllCountText,
+  helpAllTargets,
+  helpMarksOf,
+  helperBadgeOf,
+  helperBadgeText,
+  isHelpOpen,
+  savedText,
+  savingTag,
+  tagSeconds,
   helpableIds,
   helpersOf,
   helpersText,
-  helpingLine,
   helpRefusalText,
   refusalStays,
-  spentRepairIds,
   repairText,
   rewardText,
   speedupSeconds,
   speedupText,
+  spentRepairIds,
   thanksText,
   timeLeft,
 } from "./helpModel";
@@ -74,10 +84,6 @@ describe("the help block, per building (#374)", () => {
 });
 
 describe("the words (#372, #374)", () => {
-  it("says who is helped, and no count of helps left (no daily cap since 15 Nov 2026)", () => {
-    expect(helpingLine("Bob")).toBe("Helping Bob");
-  });
-
   it("says what a speed-up takes off: 5% of the time left now, rounded down", () => {
     expect(speedupSeconds(7_800)).toBe(390);
     expect(speedupSeconds(19)).toBe(0);
@@ -127,28 +133,6 @@ describe("the block after a help (#374)", () => {
     expect(next.rewardsLeft).toBe(4);
     expect(next.buildings["7"]).toEqual({ speedup: "alreadyHelped" });
     expect(helpableIds(next).has(7)).toBe(false);
-  });
-
-  it("a repair leaves the other damaged buildings with a grey wrench, not none (owner's report, 16 Nov 2026)", () => {
-    const yard: HelpBlock = {
-      buildings: { "1": { repair: true }, "2": { repair: true }, "3": { repair: true }, "4": { speedup: true, repair: true } },
-    };
-    const next = afterHelp(yard, 1, "repair", 4);
-    // The repaired one has nothing left; the others are still damaged, their repair used up today.
-    expect([...helpableIds(next)]).toEqual([4]);
-    expect([...spentRepairIds(next)].sort((a, b) => a - b)).toEqual([2, 3]);
-    expect(spentRepairIds(next).has(1)).toBe(false);
-    // A visit later the same day: the server sends every repair as repairedToday.
-    const later: HelpBlock = { buildings: { "2": { repair: "repairedToday" }, "3": { repair: "repairedToday" } } };
-    expect([...spentRepairIds(later)].sort((a, b) => a - b)).toEqual([2, 3]);
-    expect(buildingHelp(later, 2)?.repair).toEqual({
-      allowed: false,
-      reason: "repairedToday",
-      text: "You already repaired a building here today.",
-    });
-    // Nothing used up: no grey wrench.
-    expect(spentRepairIds(yard).size).toBe(0);
-    expect(spentRepairIds(null).size).toBe(0);
   });
 
   it("a repair leaves nothing to repair", () => {
@@ -247,5 +231,178 @@ describe("the building a help answers with (#374)", () => {
   it("leaves a frozen countdown and a building with no job as they are", () => {
     expect(fromVisitSave({ X: 0, Y: 0, t: 6, id: 45, cU: 4_930 }, 600, true)).toEqual({ X: 0, Y: 0, t: 6, id: 45, cU: 4_930 });
     expect(fromVisitSave({ X: 0, Y: 0, t: 6, id: 45 }, 600, false)).toEqual({ X: 0, Y: 0, t: 6, id: 45 });
+  });
+});
+
+describe("the visit's marks and Help all (beta 8)", () => {
+  const block: HelpBlock = {
+    rewardsLeft: 5,
+    buildings: {
+      "7": { speedup: true },
+      "3": { speedup: true, repair: true },
+      "9": { repair: true },
+      "4": { speedup: "alreadyHelped" },
+      "5": { speedup: "helpersFull", repair: true },
+    },
+  };
+
+  it("Help all and its count are speed-ups only (owner, 15 Nov 2026)", () => {
+    expect(HELP_ALL_REPAIRS).toBe(false);
+    expect(helpAllTargets(block)).toEqual([
+      { id: 3, kind: "speedup" },
+      { id: 7, kind: "speedup" },
+    ]);
+    expect(helpAllCount(block)).toBe(2);
+    expect(helpAllCountText(2)).toBe("2 to speed up");
+    expect(helpAllCount(null)).toBe(0);
+  });
+
+  it("with repairs on, a building taking both counts once and gets both, speed-up first", () => {
+    expect(helpAllTargets(block, true)).toEqual([
+      { id: 3, kind: "speedup" },
+      { id: 3, kind: "repair" },
+      { id: 5, kind: "repair" },
+      { id: 7, kind: "speedup" },
+      { id: 9, kind: "repair" },
+    ]);
+    expect(helpAllCount(block, true)).toBe(4);
+  });
+
+  it("drops a building from the count once helped", () => {
+    expect(helpAllCount(afterHelp(block, 7, "speedup", 4))).toBe(1);
+    expect(isHelpOpen(afterHelp(block, 7, "speedup", 4), { id: 7, kind: "speedup" })).toBe(false);
+    expect(isHelpOpen(block, { id: 3, kind: "repair" })).toBe(true);
+  });
+
+  it("marks a speed-up big with its saving, a repair only small with none", () => {
+    const silo = { ...building({ countdown: upgrading(21_600) }), id: 7 } as YardBuilding;
+    const both = { ...building({ countdown: upgrading(10, true) }), id: 3 } as YardBuilding;
+    const hurt = { ...building(), id: 9 } as YardBuilding;
+    const helped = { ...building({ countdown: upgrading(600) }), id: 4 } as YardBuilding;
+    expect(helpMarksOf(block, [silo, both, hurt, helped], NOW)).toEqual([
+      { id: 7, kind: "speedup", saving: 1080 },
+      // 5% of 10 s is under a second: no tag.
+      { id: 3, kind: "speedup", saving: null },
+      { id: 9, kind: "repair", saving: null },
+    ]);
+  });
+
+  it("after today's repair in the yard, no amber repair wrench or Help all target is left, only grey ones (owner, 16 Nov 2026)", () => {
+    const silo = { ...building({ countdown: upgrading(21_600) }), id: 7 } as YardBuilding;
+    const hurt = { ...building(), id: 9 } as YardBuilding;
+    const full = { ...building(), id: 5 } as YardBuilding;
+    const repaired = afterRefusal(block, 9, "repair", "repairedToday");
+    expect(repaired.buildings["9"]).toEqual({ repair: "repairedToday" });
+    expect(repaired.buildings["5"]).toEqual({ speedup: "helpersFull", repair: "repairedToday" });
+    // Still damaged, their repair used up today: the small wrench in grey, never an amber one.
+    expect(helpMarksOf(repaired, [silo, hurt, full], NOW)).toEqual([
+      { id: 7, kind: "speedup", saving: 1080 },
+      { id: 9, kind: "spent", saving: null },
+      { id: 5, kind: "spent", saving: null },
+    ]);
+    expect(helpAllTargets(repaired, true).filter((target) => target.kind === "repair")).toEqual([]);
+    expect(helpAllTargets(repaired)).toEqual(helpAllTargets(block));
+  });
+
+  it("a friend's repair leaves the other damaged buildings a grey wrench and the repaired one none (owner's report, 16 Nov 2026)", () => {
+    const yard: HelpBlock = {
+      buildings: { "1": { repair: true }, "2": { repair: true }, "3": { repair: true }, "4": { speedup: true, repair: true } },
+    };
+    const at = (id: number, countdown: YardCountdown | null = null) => ({ ...building({ countdown }), id }) as YardBuilding;
+    const buildings = [at(1), at(2), at(3), at(4, upgrading(21_600))];
+    // Before: every damaged building wears the amber wrench.
+    expect(helpMarksOf(yard, buildings, NOW).map((mark) => [mark.id, mark.kind])).toEqual([
+      [1, "repair"],
+      [2, "repair"],
+      [3, "repair"],
+      [4, "speedup"],
+    ]);
+    const next = afterHelp(yard, 1, "repair", 4);
+    // The repaired one has nothing left; the others are still damaged, their repair used up today.
+    expect(helpMarksOf(next, buildings, NOW)).toEqual([
+      { id: 2, kind: "spent", saving: null },
+      { id: 3, kind: "spent", saving: null },
+      // A speed-up still open keeps the big amber wrench.
+      { id: 4, kind: "speedup", saving: 1080 },
+    ]);
+    expect([...spentRepairIds(next)].sort((a, b) => a - b)).toEqual([2, 3]);
+    expect(spentRepairIds(next).has(1)).toBe(false);
+    // Once that speed-up is given too, its building is still damaged: grey.
+    expect(helpMarksOf(afterHelp(next, 4, "speedup", 3), buildings, NOW).map((mark) => [mark.id, mark.kind])).toEqual([
+      [2, "spent"],
+      [3, "spent"],
+      [4, "spent"],
+    ]);
+  });
+
+  it("a visit later the same day (or a save repaired before the fix) shows every damaged building grey", () => {
+    // The server sends every repair as repairedToday once today's is given.
+    const later: HelpBlock = { buildings: { "2": { repair: "repairedToday" }, "3": { repair: "repairedToday" } } };
+    const buildings = [2, 3, 8].map((id) => ({ ...building(), id }) as YardBuilding);
+    expect(helpMarksOf(later, buildings, NOW)).toEqual([
+      { id: 2, kind: "spent", saving: null },
+      { id: 3, kind: "spent", saving: null },
+    ]);
+    expect(buildingHelp(later, 2)?.repair).toEqual({
+      allowed: false,
+      reason: "repairedToday",
+      text: "You already repaired a building here today.",
+    });
+  });
+
+  it("no grey wrench when nothing is used up, on the own yard (no block), or for another refusal", () => {
+    const hurt = { ...building(), id: 9 } as YardBuilding;
+    expect(helpMarksOf({ buildings: { "9": { repair: true } } }, [hurt], NOW)).toEqual([{ id: 9, kind: "repair", saving: null }]);
+    expect(helpMarksOf(null, [hurt], NOW)).toEqual([]);
+    expect(spentRepairIds(null).size).toBe(0);
+    expect(helpMarksOf({ buildings: { "9": { repair: "underAttack" } } }, [hurt], NOW)).toEqual([]);
+    // A building the yard no longer has draws nothing.
+    expect(helpMarksOf({ buildings: { "9": { repair: "repairedToday" } } }, [], NOW)).toEqual([]);
+  });
+
+  it("tags a saving in its largest unit", () => {
+    expect(savingTag(1080)).toBe("-18m");
+    expect(savingTag(1110)).toBe("-18m");
+    expect(savingTag(40)).toBe("-40s");
+    expect(savingTag(7500)).toBe("-2h 5m");
+    expect(savingTag(7200)).toBe("-2h");
+    expect(savingTag(97_200)).toBe("-1d 3h");
+  });
+
+  it("cuts seconds to what the tag shows, and says a total with every unit", () => {
+    expect(tagSeconds(9539)).toBe(9480);
+    expect(savingTag(tagSeconds(9539))).toBe(savingTag(9539));
+    expect(tagSeconds(40.7)).toBe(40);
+    expect(tagSeconds(97_250)).toBe(97_200);
+    expect(savedText(96_600)).toBe("1d 2h 50m");
+    expect(savedText(7200)).toBe("2h");
+    expect(savedText(40)).toBe("40s");
+  });
+});
+
+describe("the own yard's helper badge (beta 8)", () => {
+  it("shows on a running build, upgrade or fortify, with its helpers out of 5", () => {
+    expect(helperBadgeOf(building({ countdown: upgrading(600), hl: [11, 12] }), NOW)).toEqual({
+      id: 7,
+      helpers: 2,
+      full: false,
+    });
+    expect(helperBadgeOf(building({ countdown: upgrading(600) }), NOW)).toMatchObject({ helpers: 0, full: false });
+    const fortify: YardCountdown = { kind: "fortify", endsAt: NOW + 60, seconds: 60, paused: false };
+    expect(helperBadgeOf(building({ countdown: fortify, hl: [1, 2, 3, 4, 5] }), NOW)).toMatchObject({
+      helpers: 5,
+      full: true,
+    });
+    expect(helperBadgeText(2)).toBe("2/5");
+  });
+
+  it("stays on a paused job; goes with no job, a finished one, or a rebuild", () => {
+    expect(helperBadgeOf(building({ countdown: upgrading(600, true), hl: [1] }), NOW + 9_999)).toMatchObject({
+      helpers: 1,
+    });
+    expect(helperBadgeOf(building(), NOW)).toBeNull();
+    expect(helperBadgeOf(building({ countdown: upgrading(600), hl: [1] }), NOW + 600)).toBeNull();
+    const rebuild: YardCountdown = { kind: "rebuild", endsAt: NOW + 60, seconds: 60, paused: false };
+    expect(helperBadgeOf(building({ countdown: rebuild }), NOW)).toBeNull();
   });
 });

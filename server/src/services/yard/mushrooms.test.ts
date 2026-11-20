@@ -4,7 +4,10 @@ import type { BuildingDataMap } from "../../types/BuildingData.js";
 import { overlaps, rectOf, yardSize, type FootprintRect } from "../yardplanner/layoutGeometry.js";
 import {
   GOLDEN_BIG,
+  GOLDEN_ODDS,
   GOLDEN_SMALL,
+  GOLDEN_TURKEY_ODDS,
+  goldenOdds,
   MUSHROOM_CAP,
   MUSHROOM_CLEARANCE,
   MUSHROOM_STORED_CAP,
@@ -275,6 +278,25 @@ describe("rollReward", () => {
     expect(rollReward(sequence(0.1, 0.0))).toEqual({ golden: true, shiny: GOLDEN_SMALL });
     expect(rollReward(sequence(0.1, 0.4))).toEqual({ golden: true, shiny: GOLDEN_BIG });
     expect(rollReward(sequence(0.1, 0.9))).toEqual({ golden: true, shiny: GOLDEN_SMALL });
+  });
+
+  test("a turkey in the turkey hunt is golden one time in ten: 0.09 is, 0.1 is not", () => {
+    expect(rollReward(sequence(0.09, 0.0), GOLDEN_TURKEY_ODDS)).toEqual({ golden: true, shiny: GOLDEN_SMALL });
+    expect(rollReward(sequence(0.05, 0.4), GOLDEN_TURKEY_ODDS)).toEqual({ golden: true, shiny: GOLDEN_BIG });
+    for (const draw of [0.1, 0.2, 0.99]) {
+      expect(rollReward(sequence(draw), GOLDEN_TURKEY_ODDS)).toEqual({ golden: false, shiny: 0 });
+    }
+  });
+});
+
+describe("goldenOdds", () => {
+  test("one in ten for turkeys, one in four for pumpkins and ordinary mushrooms (owner, 19 Nov 2026)", () => {
+    expect(GOLDEN_ODDS).toBe(4);
+    expect(GOLDEN_TURKEY_ODDS).toBe(10);
+    expect(goldenOdds("turkeys")).toBe(10);
+    expect(goldenOdds("pumpkins")).toBe(4);
+    expect(goldenOdds(null)).toBe(4);
+    expect(goldenOdds(undefined)).toBe(4);
   });
 });
 

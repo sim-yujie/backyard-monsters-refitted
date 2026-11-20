@@ -87,15 +87,12 @@ export class AttackMenu {
 }
 
 /**
- * What the phone sheet's handle says: the panel the sheet is showing, so it
- * reads "Catapult" over the Catapult and the army panel's own name otherwise
- * ("Army", or "Attack Force" in a Moloch tribe attack). Reads the dock's
- * own mode class (`attack-dock--picker`, from the drop plugin). An enemy
- * building never takes the sheet: it opens nothing during an attack (#258).
+ * What the phone sheet's handle says when the dock has no tab row (a replay,
+ * a defence replay): the name of the window it holds ("Replay"), or "Army"
+ * before any is mounted. A live attack's sheet has its tab row instead
+ * (`DockTabs`, owner 18 Nov 2026), whose tabs name the windows.
  */
 export const sheetHandleLabel = (dock: HTMLElement): string => {
-  const shown = dock.classList.contains("attack-dock--picker")
-    ? dock.querySelector(".attack-picker .panel__title")
-    : dock.querySelector(".attack-army .panel__title");
+  const shown = dock.querySelector(".attack-army .panel__title") ?? dock.querySelector(".panel .panel__title");
   return shown?.textContent?.trim() || "Army";
 };

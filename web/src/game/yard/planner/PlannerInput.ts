@@ -106,8 +106,8 @@ export interface PlannerInputHandlers {
    * `"carry"` keeps (or puts) the selection in hand.
    */
   release: (world: Point, grab: Grab, travelled: boolean) => "carry" | void;
-  /** A press the planner did not claim ended without travelling: a click. */
-  clickEmpty: (shift: boolean) => void;
+  /** A press the planner did not claim ended without travelling: a click, and where. */
+  clickEmpty: (shift: boolean, world: Point) => void;
   /** The secondary button while carrying: put it back. */
   cancel: () => void;
   /**
@@ -123,6 +123,16 @@ export interface PlannerInputHandlers {
   key: (event: KeyboardEvent) => boolean;
   /** Two fingers tapped together (F14): undo. */
   twoFingerTap?: () => void;
+  /**
+   * A mouse or pen moved over the canvas with nothing claimed, or left it
+   * (null): the Planner's wall line follows the pointer with its next stretch.
+   */
+  hover?: (world: Point | null) => void;
+  /**
+   * A right-click with nothing in hand. Returns true when the planner used it
+   * (the wall line takes its last corner away), which keeps the browser's menu shut.
+   */
+  secondary?: () => boolean;
 }
 
 /**
@@ -230,6 +240,7 @@ export class PlannerInput {
     window.addEventListener("keydown", this.onKeyDown, true);
     window.addEventListener("click", this.onClick, true);
     this.canvas.addEventListener("contextmenu", this.onContextMenu);
+    this.canvas.addEventListener("pointerleave", this.onPointerLeave);
   }
 
   detach(): void {
@@ -241,6 +252,7 @@ export class PlannerInput {
     window.removeEventListener("keydown", this.onKeyDown, true);
     window.removeEventListener("click", this.onClick, true);
     this.canvas.removeEventListener("contextmenu", this.onContextMenu);
+    this.canvas.removeEventListener("pointerleave", this.onPointerLeave);
     this.cancel();
   }
 
@@ -400,7 +412,13 @@ export class PlannerInput {
     }
 
     const grab = this.grab;
-    if (!grab) return;
+    if (!grab) {
+      // Hovering, not pressing: only a mouse or pen has a pointer to follow.
+      if (event.pointerType !== "touch" && event.target === this.canvas) {
+        this.handlers.hover?.(this.worldAt(event));
+      }
+      return;
+    }
     // A carry follows any pointer; a drag follows the one that pressed.
     if (grab !== Grab.CARRY && this.pointerId !== event.pointerId) return;
     if (grab === Grab.CARRY && event.target !== this.canvas) return;
@@ -448,7 +466,13 @@ export class PlannerInput {
     if (travelled) return;
     // A finger that was never held is a tap: it selects and nothing else.
     if (this.touchPress) this.handlers.tap(this.worldAt(event), event.shiftKey);
-    else this.handlers.clickEmpty(event.shiftKey);
+    else this.handlers.clickEmpty(event.shiftKey, this.worldAt(event));
+  };
+
+  /** The pointer left the canvas (for the bar, say): nothing is hovered any more. */
+  private readonly onPointerLeave = (event: PointerEvent): void => {
+    if (event.pointerType === "touch") return;
+    this.handlers.hover?.(null);
   };
 
   /**
@@ -487,6 +511,19 @@ export class PlannerInput {
       cancelAnimationFrame(this.edgeFrame);
     }
     this.edgeFrame = null;
+  }
+
+  /**
+   * The world point in the middle of the yard's visible area, or null when
+   * the canvas has no size yet. Where a wall line's Block in hand first shows,
+   * so a touch screen has something to see before the first tap (the yard's
+   * build ghost starts there too).
+   */
+  middleWorld(): Point | null {
+    if (typeof this.canvas.getBoundingClientRect !== "function") return null;
+    const area = this.visibleArea();
+    if (!(area.right > area.left) || !(area.bottom > area.top)) return null;
+    return this.worldAt({ clientX: (area.left + area.right) / 2, clientY: (area.top + area.bottom) / 2 });
   }
 
   /** The yard's visible area in client pixels: the canvas, less the bars. */
@@ -581,7 +618,11 @@ export class PlannerInput {
     // The secondary button is a cancel while carrying, never a browser menu.
     const suppress = this.suppressContextMenu || this.grab === Grab.CARRY;
     this.suppressContextMenu = false;
-    if (suppress) event.preventDefault();
+    if (suppress) {
+      event.preventDefault();
+      return;
+    }
+    if (this.grab === null && this.handlers.secondary?.()) event.preventDefault();
   };
 
   private readonly onKeyDown = (event: KeyboardEvent): void => {

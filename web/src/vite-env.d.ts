@@ -20,6 +20,8 @@ interface ImportMetaEnv {
   readonly VITE_TERMS_URL?: string;
   /** Where the sign-up form's Privacy Policy link goes. */
   readonly VITE_PRIVACY_URL?: string;
+  /** "1" in the layout check's own build: installs its window openers (web/e2e/layout). */
+  readonly VITE_LAYOUT_CHECK?: string;
 }
 
 interface ImportMeta {

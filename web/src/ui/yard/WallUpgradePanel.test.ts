@@ -99,21 +99,24 @@ const text = (harness: Harness, selector: string): string =>
   harness.root.querySelector(selector)?.textContent ?? "";
 
 describe("wallUpgradePanel", () => {
-  it("offers level 2 to 5 and disables the ones the Town Hall has not earned", () => {
-    const yard = yardOf(RICH, 5);
-    const harness = open(yard, [1, 2, 3, 4]);
-
-    expect(harness.levels.map((button) => button.dataset["level"])).toEqual(["2", "3", "4", "5"]);
-    expect(levelButton(harness, 4).disabled).toBe(false);
-    expect(levelButton(harness, 5).disabled).toBe(true);
-    // The reason is in the tooltip, not only in the disabled state.
-    expect(levelButton(harness, 5).title).toContain("Needs Town Hall 6");
+  it("offers level 2 to 5 at any Town Hall level (beta 8)", () => {
+    for (const hall of [1, 2, 5]) {
+      const harness = open(yardOf(RICH, hall), [1, 2, 3, 4]);
+      expect(harness.levels.map((button) => button.dataset["level"])).toEqual(["2", "3", "4", "5"]);
+      for (const level of [2, 3, 4, 5]) {
+        expect(levelButton(harness, level).disabled, `hall ${hall} level ${level}`).toBe(false);
+        expect(levelButton(harness, level).title).not.toContain("Needs Town Hall");
+      }
+    }
   });
 
-  it("opens on the highest level the hall allows", () => {
-    const harness = open(yardOf(RICH, 5), [1, 2, 3, 4]);
-    expect(levelButton(harness, 4).getAttribute("aria-pressed")).toBe("true");
-    expect(text(harness, ".planner-walls__preview")).toContain("level 4");
+  it("opens on the highest level the selection can be paid for", () => {
+    const harness = open(yardOf(RICH, 2), [1, 2, 3, 4]);
+    expect(levelButton(harness, 5).getAttribute("aria-pressed")).toBe("true");
+    expect(text(harness, ".planner-walls__preview")).toContain("level 5");
+    // 10,000 Pebbles pay for one Block to stone and no further.
+    const poor = open(yardOf({ r1: 0, r2: 10_000, r3: 0, r4: 0 }, 1), [1]);
+    expect(levelButton(poor, 2).getAttribute("aria-pressed")).toBe("true");
   });
 
   it("says how many walls would change and how many are already there", () => {
@@ -300,6 +303,40 @@ describe("wallUpgradePanel picking", () => {
     harness.panel.setNodes(nodesOf(yard, [1, 2]));
     expect(harness.read(".planner-walls__note")).toBe("");
     expect(harness.confirm.disabled).toBe(false);
+  });
+
+  it("shows Affordable pressed, not greyed, while the pick is what it would pick", () => {
+    // Owner, 2026-11-19: the grey read as Affordable's selected state and did
+    // not match the selected Level button.
+    const yard = yardOf({ r1: 0, r2: 25_000 }, 10);
+    const harness = pickOpen(yard, [1, 2, 3, 4]);
+    const afford = harness.tool("Affordable");
+    expect(afford.getAttribute("aria-pressed")).toBe("false");
+
+    harness.panel.setNodes(nodesOf(yard, [1, 2]));
+    expect(afford.getAttribute("aria-pressed")).toBe("true");
+    expect(afford.disabled).toBe(false);
+    expect(afford.title).toBe("Your pick is already all you can afford at level 2.");
+    // It takes the same selected rule as the chosen level: the same class
+    // pair the stylesheet keys on, and the same attribute.
+    expect(afford.matches('.planner-walls__tool[aria-pressed="true"]')).toBe(true);
+    expect(harness.level()).toBe("2");
+    // Pressing it again changes nothing.
+    harness.onPick.mockClear();
+    afford.click();
+    expect(harness.onPick).not.toHaveBeenCalled();
+
+    // A pick that differs again lets it go.
+    harness.panel.setNodes(nodesOf(yard, [1]));
+    expect(afford.getAttribute("aria-pressed")).toBe("false");
+    afford.click();
+    expect(harness.onPick).toHaveBeenLastCalledWith([1, 2]);
+  });
+
+  it("leaves Select all and Clear one-shot: no pressed state", () => {
+    const harness = pickOpen(yardOf(RICH, 10), [1, 2, 3, 4]);
+    expect(harness.tool("Select all").hasAttribute("aria-pressed")).toBe(false);
+    expect(harness.tool("Clear").hasAttribute("aria-pressed")).toBe(false);
   });
 
   it("Affordable with nothing picked picks from every wall", () => {

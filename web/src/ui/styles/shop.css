@@ -21,6 +21,12 @@
   max-width: none;
   min-width: 0;
   --centre-height: 820px;
+  /* Never under 260px in the middle: the title, Shiny line and frame take
+     about 80px, so the list keeps 180px. On a short screen in Classic
+     (980x551, 16 Nov) Main yard's wider ribbon sat under the window, which
+     stopped above it at 192px with 112px of list (half a card); now it
+     reaches over the dock instead (ui.css), as Modern already did. */
+  --centre-min-height: 260px;
 }
 
 .shop-screen[hidden] {

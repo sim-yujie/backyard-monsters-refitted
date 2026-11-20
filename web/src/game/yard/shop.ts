@@ -1,7 +1,6 @@
 import type { StoreData } from "@/api/types";
 import { overdriveBlocked, runningUnlock, type LockerContext } from "@/game/monsters/lockerModel";
 import type { YardKind } from "./buildingCostData";
-import { townHallLevel } from "./buildingCosts";
 import { damagedAt, repairNowPrice } from "./repair";
 import type { YardStoreReader } from "./YardStore";
 
@@ -414,31 +413,30 @@ export interface WallTier {
   readonly name: string;
   /** "stone", "metal", … for the lines on the card. */
   readonly material: string;
-  /** The Town Hall level it needs in the main yard (`client/scripts/STORE.as:1674-1690`); outposts have no gate. */
-  readonly townHall: number;
 }
 
+/*
+ * No tier waits for the Town Hall (owner, 17 Nov 2026, beta 8: "Any block can
+ * be upgraded any time"), where Flash sold Stone from Town Hall 3 to Black
+ * Diamond from 6 (`client/scripts/STORE.as:1674-1690`). The server's
+ * `services/yard/wallBlocks.ts` sells them the same way.
+ */
+
 export const WALL_TIERS: readonly WallTier[] = [
-  { item: "BLK2", tier: 2, name: "Stone Blocks", material: "stone", townHall: 3 },
-  { item: "BLK3", tier: 3, name: "Metal Blocks", material: "metal", townHall: 4 },
-  { item: "BLK4", tier: 4, name: "Gold Blocks", material: "gold", townHall: 5 },
-  { item: "BLK5", tier: 5, name: "Black Diamond Blocks", material: "black diamond", townHall: 6 },
+  { item: "BLK2", tier: 2, name: "Stone Blocks", material: "stone" },
+  { item: "BLK3", tier: 3, name: "Metal Blocks", material: "metal" },
+  { item: "BLK4", tier: 4, name: "Gold Blocks", material: "gold" },
+  { item: "BLK5", tier: 5, name: "Black Diamond Blocks", material: "black diamond" },
 ];
 
 /**
  * The Inferno's two (`STORE.as:210`, `services/yard/wallBlocks.ts`): Flash's
- * Stone and Metal under Inferno names, the same Block, prices and rule, behind
- * the Under Hall (`townHall`) at 3 and 4.
+ * Stone and Metal under Inferno names, the same Block, prices and rule, at any
+ * Under Hall level.
  */
 export const INFERNO_WALL_TIERS: readonly WallTier[] = [
-  { item: "BLK2I", tier: 2, name: "Granite Blocks", material: "granite", townHall: 3 },
-  {
-    item: "BLK3I",
-    tier: 3,
-    name: "Forged Steel Blocks",
-    material: "forged steel",
-    townHall: 4,
-  },
+  { item: "BLK2I", tier: 2, name: "Granite Blocks", material: "granite" },
+  { item: "BLK3I", tier: 3, name: "Forged Steel Blocks", material: "forged steel" },
 ];
 
 /** The wall upgrades a yard of `kind` sells. */
@@ -527,8 +525,6 @@ export const wallOffers = (reader: YardStoreReader): readonly WallOffer[] => {
   const levels = reader.yard.buildings
     .filter((one) => one.type === WALL_TYPE || one.type === LEGACY_WALL_TYPE)
     .map((one) => blockLevel(one.type, one.level));
-  const hall = townHallLevel(reader.yard);
-  const hallWord = reader.kind === "inferno" ? "Under Hall" : "Town Hall";
   return wallTiersFor(reader.kind).map((tier): WallOffer => {
     if (levels.length === 0) return { tier, blocks: 0, state: { kind: "none" } };
     let blocks = 0;
@@ -539,12 +535,7 @@ export const wallOffers = (reader: YardStoreReader): readonly WallOffer[] => {
       for (let step = level + 1; step <= tier.tier; step++) price += WALL_STEP_SHINY[step] ?? 0;
     }
     if (blocks === 0) return { tier, blocks, state: { kind: "reached" } };
-    const blocked =
-      reader.kind !== "outpost" && hall < tier.townHall
-        ? `Needs ${hallWord} level ${tier.townHall}.`
-        : reader.credits < price
-          ? NOT_ENOUGH_SHINY
-          : null;
+    const blocked = reader.credits < price ? NOT_ENOUGH_SHINY : null;
     return { tier, blocks, state: { kind: "buy", price, blocked } };
   });
 };

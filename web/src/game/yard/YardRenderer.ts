@@ -7,7 +7,8 @@ import type { HarvestKey } from "./harvest";
 import { YardGround } from "./YardGround";
 import { LOAD_TRIES, loadWithRetries } from "./retryLoad";
 import { CHOSEN_FILL, YardHatchMarks, type HatcheryMarks } from "./YardHatchMarks";
-import { YardHelpMarks } from "./YardHelpMarks";
+import { YardHelpMarks, type HelpMarkExit, type HelpMarksBox } from "./YardHelpMarks";
+import type { HelpMark } from "@/game/friends/helpModel";
 import { BAR_HEIGHT, jobBarScale, YardJobBars } from "./YardJobBars";
 import { MAX_JUICE_WALKERS, YardLifeLayer } from "./YardLifeLayer";
 import { holdBack, juicerDoor, type LifeHold, type YardLife, type YardPoint } from "./yardLifeModel";
@@ -26,11 +27,13 @@ import { classicLook } from "@/game/classicLook";
 import { thanksgivingSkin } from "./thanksgivingSkin";
 import { YardTurkeys } from "./YardTurkeys";
 import { YardDressUp } from "./YardDressUp";
+import { UpgradePreview } from "./UpgradePreview";
+import { upgradeLook } from "./upgradeLook";
 import { BlueprintLayer } from "./planner/BlueprintLayer";
-import { blueprintToYard, blueprintToWorld } from "./planner/blueprint";
+import { blueprintToYard, blueprintToWorld, rectCorners, tileRect } from "./planner/blueprint";
 import { PlannerOverlay, type PlannerVisuals } from "./planner/PlannerOverlay";
 import { diamondCorners, type Corners, type Diamond } from "./planner/marquee";
-import { fromIso, toIso, yardFitRect, yardToWorld, type Point, type Rect } from "./YardGrid";
+import { footprintCorners, fromIso, toIso, yardFitRect, yardToWorld, type Point, type Rect } from "./YardGrid";
 import { loadMushroomArt, mushroomAnchor, mushroomArtIndex, mushroomPictureFor } from "./mushroomArt";
 import { mushroomAt, mushroomKey, mushroomZIndex } from "./mushroomPick";
 import { MUSHROOM_POP_SECONDS, mushroomPopScale, newMushroomKeys } from "./mushroomPop";
@@ -99,6 +102,10 @@ export class YardRenderer {
   private readonly turkeys = new YardTurkeys(this.buildings);
   /** Thanksgiving: the props round the plot (`YardDressUp.ts`). */
   private readonly dressUp = new YardDressUp(this.buildings);
+  /** The ghost of a building's next look while its window offers the upgrade (beta 8); see `setUpgradePreview`. */
+  private readonly upgradePreview = new UpgradePreview();
+  /** Holds the ghost, so the blueprint view can hide it while the ghost keeps its own visibility. */
+  private readonly upgradePreviewLayer = new Container();
   /** Each mushroom's sprite by `mushroomKey`, rebuilt with every `show`. */
   private readonly mushroomSprites = new Map<string, Sprite>();
   /** Mushrooms shaking for a pick, by `mushroomKey` (`BMUSHROOM.as:76-81`). */
@@ -126,7 +133,13 @@ export class YardRenderer {
   /** The hatchery numbers while the Hatch tab is open (#268), above a job bar where there is one. */
   private readonly hatchMarks = new YardHatchMarks((id) => this.hatchMarkAnchor(id));
   /** The wrenches over a friend's yard on a visit (#374); see `YardHelpMarks`. */
-  private readonly helpMarks = new YardHelpMarks((id) => this.hatchMarkAnchor(id));
+  private readonly helpMarks = new YardHelpMarks(
+    (id) => this.hatchMarkAnchor(id),
+    (id) => (this.currentView === YardView.ISO ? this.cornersOf(id) : null),
+    { reducedMotion: prefersReducedMotion() },
+  );
+  /** See `setHelpMarksTop`. */
+  private helpMarksTop: number | null = null;
   /** Opens {@link sheetsAllowed}; see there. */
   private allowSheets: () => void = () => {};
   /**
@@ -234,6 +247,8 @@ export class YardRenderer {
     this.buildings.onArtReady(() => this.openSheets());
     this.life.onJuiceArrive = (monster, juicer) => this.juiceArrived(monster, juicer);
     this.isoDecals.eventMode = "none";
+    this.upgradePreviewLayer.eventMode = "none";
+    this.upgradePreviewLayer.addChild(this.upgradePreview.root);
     this.rangeOval.eventMode = "none";
     this.rangeOval.visible = false;
     this.root.addChild(
@@ -241,16 +256,20 @@ export class YardRenderer {
       this.isoDecals,
       this.giblets.ground,
       this.rangeOval,
+      this.helpMarks.ground,
       this.buildings.shadows,
       this.buildings.tops,
       this.giblets.root,
       this.collect.root,
       this.blueprint.root,
       this.chrome,
+      this.upgradePreviewLayer,
       this.planner.root,
       this.buildings.markers,
       this.jobBars.root,
+      this.jobBars.helperRoot,
       this.hatchMarks.root,
+      this.helpMarks.front,
       this.helpMarks.root,
       this.buildings.labels,
     );
@@ -365,6 +384,8 @@ export class YardRenderer {
     this.setHovered(null);
     this.setRangeHover(null);
     this.setSelected(null);
+    // The sprites go; the window asks for its preview again once it has the new building.
+    this.clearUpgradePreview();
     this.yard = yard;
     this.byId.clear();
     // Fresh sprites are drawn, so nothing is hidden any more. A planner that
@@ -450,7 +471,13 @@ export class YardRenderer {
       this.jobBars.update();
       // A handful of badges: cheap to place every frame.
       if (this.hatchMarks.current) this.hatchMarks.reposition();
-      if (this.helpMarks.active) this.helpMarks.reposition();
+      if (this.helpMarks.active) {
+        this.helpMarks.update(deltaSeconds);
+        this.helpMarks.setViewTop(
+          this.helpMarksTop === null ? null : visible.y + this.helpMarksTop / Math.max(this.zoomLevel, 1e-6),
+        );
+        this.helpMarks.reposition();
+      }
       this.shakeMushrooms();
       this.popMushrooms(deltaSeconds);
       if (this.turkeysOn) this.turkeys.update(deltaSeconds);
@@ -527,6 +554,50 @@ export class YardRenderer {
     if (this.selected?.id === building?.id) return;
     this.selected = building;
     this.chromeDirty = true;
+    // The preview belongs to the selected building's window.
+    if (this.upgradePreview.buildingId !== null && this.upgradePreview.buildingId !== building?.id) {
+      this.clearUpgradePreview();
+    }
+  }
+
+  /* ── Upgrade preview (beta 8, owner 15 Nov 2026) ────────────────────── */
+
+  /**
+   * Shows the selected building as a blue ghost of its look at level `to`,
+   * over itself drawn faded, while its window offers that upgrade; or puts it
+   * back when passed null. Only when the look changes (`upgradeLook`: never
+   * with the Classic look, nor for a level of the same tier), only on the
+   * building selected, and not while the planner is drawing. Asking again for
+   * the ghost already up costs nothing; the building window asks on every
+   * redraw.
+   */
+  setUpgradePreview(building: YardBuilding | null, to: number | null): void {
+    const yard = this.yard;
+    const shown = building ? this.byId.get(building.id) : undefined;
+    const art =
+      yard && shown && to !== null && this.selected?.id === shown.id && !this.plannerVisuals
+        ? upgradeLook(shown.type, Math.max(shown.level, 1), to, yard.kind)
+        : null;
+    const shape = art && shown && !this.stored.has(shown.id) && !this.concealed.has(shown.id) ? this.isoShapeOf(shown.id) : null;
+    if (!art || !shown || to === null || !shape) {
+      this.clearUpgradePreview();
+      return;
+    }
+    this.upgradePreview.show({ building: shown, art, level: to, corners: diamondCorners(shape) });
+    this.buildings.setFaded(shown.id);
+    this.chromeDirty = true;
+  }
+
+  /** The building whose upgrade preview is up, or null. */
+  get upgradePreviewId(): number | null {
+    return this.upgradePreview.buildingId;
+  }
+
+  private clearUpgradePreview(): void {
+    if (this.upgradePreview.buildingId === null && this.buildings.fadedId === null) return;
+    this.upgradePreview.clear();
+    this.buildings.setFaded(null);
+    this.chromeDirty = true;
   }
 
   /* ── Views ──────────────────────────────────────────────────────────── */
@@ -544,13 +615,17 @@ export class YardRenderer {
       this.ground.root,
       this.isoDecals,
       this.giblets.ground,
+      this.helpMarks.ground,
       this.buildings.shadows,
       this.buildings.tops,
       this.giblets.root,
       this.collect.root,
+      this.upgradePreviewLayer,
       this.buildings.markers,
       this.jobBars.root,
+      this.jobBars.helperRoot,
       this.hatchMarks.root,
+      this.helpMarks.front,
       this.helpMarks.root,
       this.buildings.labels,
     ]) {
@@ -639,6 +714,7 @@ export class YardRenderer {
     this.zoomLevel = zoom;
     this.blueprint.setZoom(zoom);
     this.jobBars.setZoom(zoom);
+    this.upgradePreview.setZoom(zoom);
     this.hatchMarks.setZoom(zoom);
     this.helpMarks.setZoom(zoom);
     this.zoomWatcher?.(zoom);
@@ -684,12 +760,55 @@ export class YardRenderer {
   }
 
   /**
-   * Puts a wrench over these buildings of a friend's yard (#374), or none
-   * when empty, and a grey one over `spent`: still damaged, today's repair
-   * in the yard used up.
+   * Marks these buildings of a friend's yard (#374, beta 8): a ground ring, a
+   * wrench and what a speed-up would save; none when empty. See `YardHelpMarks`.
    */
-  setHelpMarks(ids: ReadonlySet<number>, spent?: ReadonlySet<number>): void {
-    this.helpMarks.set(ids, spent);
+  setHelpMarks(marks: readonly HelpMark[]): void {
+    this.helpMarks.set(marks);
+  }
+
+  /** Keeps these wrenches drawn after their helps land, until each leaves (`YardHelpMarks.hold`). */
+  holdHelpMarks(ids: readonly number[]): void {
+    this.helpMarks.hold(ids);
+  }
+
+  /** Lets a held wrench go, playing `exit` where it stands (`YardHelpMarks.leave`). */
+  leaveHelpMark(id: number, exit?: HelpMarkExit): void {
+    this.helpMarks.leave(id, exit);
+  }
+
+  /** Lets every held wrench go at once, with no exit. */
+  releaseHelpMarks(): void {
+    this.helpMarks.releaseHeld();
+  }
+
+  /**
+   * How far down the screen (px from the canvas top) the visit's top column
+   * reaches: no big wrench stands above it (`YardHelpMarks.setViewTop`). Null
+   * off a visit.
+   */
+  setHelpMarksTop(screenY: number | null): void {
+    this.helpMarksTop = screenY;
+  }
+
+  /** The big wrenches' discs, world pixels (see `YardHelpMarks.discs`). */
+  helpMarkDiscs(): { id: number; x: number; y: number; radius: number; visible: boolean }[] {
+    return this.helpMarks.discs;
+  }
+
+  /** The world rectangle the friend's marks take (see `YardHelpMarks.worldBox`); null with none. */
+  helpMarksBox(): HelpMarksBox | null {
+    return this.helpMarks.worldBox();
+  }
+
+  /** The tag on each friend's wrench now ("-18m", or null), by building id. */
+  get helpMarkTags(): Map<number, string | null> {
+    return this.helpMarks.tags;
+  }
+
+  /** The helper badge on each of the player's own jobs now ("2/5"), by building id. */
+  get helperBadges(): { id: number; text: string; full: boolean }[] {
+    return this.jobBars.helperBadges;
   }
 
   /** The buildings wearing a wrench now, by id. */
@@ -848,6 +967,7 @@ export class YardRenderer {
   /** Re-stacks the isometric draw list after a planner move is committed. */
   resortByDepth(): void {
     this.buildings.resortByDepth();
+    this.blueprint.settle();
   }
 
   /* ── The Monster Juicer at work (`juicerShow.ts`) ──────────────────── */
@@ -1121,6 +1241,19 @@ export class YardRenderer {
     this.jobBars.reposition();
   }
 
+  /**
+   * The corners a footprint of `type` would have with its origin at `(x, y)`
+   * yard units, in the active view: what the Planner's wall line outlines
+   * Blocks that are not buildings yet with.
+   */
+  footprintCornersAt(type: number, x: number, y: number): Corners {
+    const kind = this.yard?.kind ?? "main";
+    if (this.currentView === YardView.BLUEPRINT) return rectCorners(tileRect(type, x, y, kind));
+    const bounds = this.yard?.bounds;
+    if (!bounds) return [];
+    return footprintCorners(bounds, type, x, y, kind).map((point) => [point.x, point.y] as const);
+  }
+
   /** A building's footprint corners where it is drawn now, in the active view. */
   cornersOf(id: number): Corners | null {
     if (this.stored.has(id) || this.concealed.has(id)) return null;
@@ -1217,6 +1350,7 @@ export class YardRenderer {
     this.hatchMarks.destroy();
     this.helpMarks.destroy();
     this.blueprint.destroy();
+    this.upgradePreview.destroy();
     this.byId.clear();
     this.yard = null;
     this.buildings.destroy();
@@ -1279,7 +1413,10 @@ export class YardRenderer {
       }
     }
 
-    if (this.selected && !this.plannerVisuals && this.selected.id !== chosen) {
+    // A building under its upgrade preview wears the preview's own blue diamond instead (the isometric view only:
+    // the blueprint hides the preview, and keeps the selection's outline).
+    const previewed = this.currentView === YardView.ISO ? this.upgradePreview.buildingId : null;
+    if (this.selected && !this.plannerVisuals && this.selected.id !== chosen && this.selected.id !== previewed) {
       const corners = this.cornersOf(this.selected.id);
       if (corners) {
         this.chrome
@@ -1387,7 +1524,10 @@ export class YardRenderer {
     const traps = snapshotHiddenIds(yard.buildings).filter((id) => !this.concealed.has(id));
     const shown = this.root.children.map((child) => [child, child.visible] as const);
     const wasGroup = this.root.isRenderGroup;
+    // The picture shows the yard as built: a building under its upgrade preview is drawn whole.
+    const faded = this.buildings.fadedId;
     try {
+      this.buildings.setFaded(null);
       for (const id of traps) this.setConcealed(id, true);
       // Every building drawn, not only those on screen.
       this.buildings.draw(EVERYWHERE, 0, this.work?.now() ?? 0);
@@ -1407,6 +1547,7 @@ export class YardRenderer {
     } finally {
       for (const [child, visible] of shown) child.visible = visible;
       for (const id of traps) this.setConcealed(id, false);
+      this.buildings.setFaded(faded);
       // Drawing a container on its own makes it a render group; the yard was not one.
       if (!wasGroup && this.root.isRenderGroup) this.root.disableRenderGroup();
       // The next frame culls to the screen again; until then, the screen as it was.

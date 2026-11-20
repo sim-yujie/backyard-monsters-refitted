@@ -55,7 +55,7 @@ export class MapGateScene implements Scene {
     const context = this.context;
     if (!context) return;
     try {
-      const save = await loadOwnYard();
+      const save = await loadOwnYard({ screen: "map" });
       if (this.context !== context) return;
       primeOwnYard(save);
       context.goTo(sceneForMap(mapRoomOf(save)));

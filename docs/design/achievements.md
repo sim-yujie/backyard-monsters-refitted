@@ -381,7 +381,7 @@ lock, the catch-up and the backfill for free:
 
 ### 9.2 Someone else's
 
-- `GET /api/:apiVersion/bm/achievements/player/:userid` (verifyUserAuth, a rate limiter like
+- **Removed 19 Nov 2026 (owner), with the map's line and the read-only screen; the profile still reads the counts from `playerAchievementsAnswer`.** `GET /api/:apiVersion/bm/achievements/player/:userid` (verifyUserAuth, a rate limiter like
   `publicReadLimiter`) → `{ userid, name, earned, total, achievements: [{ id, name, description,
   status, at? }] }`. **No progress numbers, no Shiny**: only what is earned and when. Read-only:
   a `NULL` record is worked out on the fly and not stored (§8). A banned or unknown user is `404`.

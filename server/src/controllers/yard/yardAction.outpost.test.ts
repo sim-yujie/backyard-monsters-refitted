@@ -955,6 +955,8 @@ describe("Starter Kits (outposts WP9, issue #188)", () => {
     const userid = userOf().userid;
     const kits = () => pendingAllianceEvents(userid)?.kitRebuild ?? 0;
     const before = kits();
+    // A wrecked outpost: a kit on it is a real rebuild (19 Nov 2026).
+    db.rows.set(OUTPOST, outpostRow({ damage: 95, buildinghealthdata: { "1": 10_000, "2": 0, "3": 0 } }));
     const refused = await onOutpost(yardStarterKitAction, { kit: 1, pay: "resources" });
     expect(refused.status).toBe(409);
     expect(kits()).toBe(before);
@@ -983,6 +985,22 @@ describe("Starter Kits (outposts WP9, issue #188)", () => {
     const bought = await onOutpost(yardStarterKitAction, { kit: 1, pay: "shiny" });
     expect(bought.status).toBe(200);
     expect(kits()).toBe(before + 1);
+
+    // The kit healed it: a second kit on the standing outpost is no rebuild.
+    mainSave().credits = 10_000;
+    const again = await onOutpost(yardStarterKitAction, { kit: 1, pay: "shiny" });
+    expect(again.status).toBe(200);
+    expect(kits()).toBe(before + 1);
+  });
+
+  test("re-kitting a standing outpost does not count towards the kit goal (19 Nov 2026)", async () => {
+    const userid = userOf().userid;
+    const kits = () => pendingAllianceEvents(userid)?.kitRebuild ?? 0;
+    const before = kits();
+    mainSave().credits = 10_000;
+    const bought = await onOutpost(yardStarterKitAction, { kit: 1, pay: "shiny" });
+    expect(bought.status).toBe(200);
+    expect(kits()).toBe(before);
   });
 
   test("a damaged outpost's damage drops with the kit, so the map shows it at once", async () => {

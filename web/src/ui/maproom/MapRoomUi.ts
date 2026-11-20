@@ -12,7 +12,6 @@ import type { CellRange } from "@/game/maproom/zones";
 import type { TakeoverCandidate, TakeoverKind } from "@/game/maproom/takeover";
 import type { OwnOutpost } from "@/game/yard/ownYards";
 import type { AchievementsDoor } from "@/ui/achievements/AchievementsDoor";
-import { achievementsLine } from "@/ui/achievements/AchievementsLine";
 import { addFriendButton } from "@/ui/friends/AddFriendButton";
 import { Hud } from "@/ui/Hud";
 import { ZoomControl } from "@/ui/ZoomControl";
@@ -458,7 +457,6 @@ export class MapRoomUi {
         ...(this.handlers.myAlliance ? { myAlliance: this.handlers.myAlliance } : {}),
         onRangeToggle: (on) => this.toggleRange(on),
         extraAction: this.autoAttack ? [this.autoAttack, this.takeover] : this.takeover,
-        ...(this.hud.achievements ? { achievementsLine: (payload: PlayerCell) => this.achievementsLine(payload) } : {}),
         addFriend: (payload: PlayerCell) =>
           addFriendButton({
             userid: payload.uid,
@@ -598,16 +596,6 @@ export class MapRoomUi {
   /** The achievements screen behind the HUD's Account menu (#204). */
   get achievements(): AchievementsDoor | null {
     return this.hud.achievements;
-  }
-
-  /**
-   * Another player's achievements in the cell panel (#204 WP7); tapping it
-   * opens their read-only list, which docks where the panel does.
-   */
-  private achievementsLine(payload: PlayerCell): HTMLElement {
-    return achievementsLine(payload.uid, payload.n, {
-      onOpen: (userid, name, known) => void this.achievements?.openPlayer(userid, name, known),
-    });
   }
 
   /** The bottom edge of the HUD: the map shows nothing above it. */

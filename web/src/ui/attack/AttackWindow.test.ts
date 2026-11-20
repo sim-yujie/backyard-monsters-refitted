@@ -174,6 +174,12 @@ describe("confirmAttackWindow", () => {
     expect(host.querySelector<HTMLElement>(".attack-window__total")?.title).toBe("48 monsters, plus the champion");
   });
 
+  it("shows no champion tile when every champion is frozen (owner, 18 Nov 2026)", () => {
+    const { host } = open({ champions: [champion(1, { status: 1 }), champion(5, { status: 1 })] });
+    expect(host.querySelector("[data-champion]")).toBeNull();
+    expect(host.querySelector<HTMLElement>(".attack-window__total")?.title).toBe("48 monsters");
+  });
+
   it("draws the painted portraits in Modern and the Flash originals in Classic", () => {
     const modern = open();
     expect(modern.host.querySelector("[data-monster='C1'] img")?.getAttribute("src")).toMatch(/portraits\/C1-icon\.webp$/);

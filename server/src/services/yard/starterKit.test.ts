@@ -5,8 +5,10 @@ import { costOf, maxLevel, OUTPOST_CORE_TYPE } from "../../game-data/buildingCos
 import { STARTER_KITS } from "../../game-data/starterKits.js";
 import type { BuildingDataMap } from "../../types/BuildingData.js";
 import { advanceBuildingTimers } from "../base/advanceBuildingTimers.js";
+import { catchUpDamage } from "./catchUpDamage.js";
 import { busyWorkers } from "../yardplanner/workers.js";
 import {
+  isKitRebuild,
   kitBuildings,
   kitShortfall,
   kitTopUpShiny,
@@ -253,5 +255,44 @@ describe("alliance kit price", () => {
     expect(plan.report.cost.r1).toBe(Math.round(kit.resources.r1 * 0.9));
     const shiny = planStarterKit(rich, { kit: 1, pay: "shiny" }, NOW, false, -10);
     expect(shiny.report.shiny).toBe(kit.shiny);
+  });
+});
+
+describe("a kit counts towards the rebuild goal only on a wrecked or empty outpost (19 Nov 2026)", () => {
+  test("a standing outpost re-kitted does not count", () => {
+    expect(isKitRebuild({ ...outpost(), damage: 0 })).toBe(false);
+    expect(isKitRebuild({ ...outpost(), damage: 89 })).toBe(false);
+  });
+
+  test("a destroyed outpost (damage at the takeover line) counts", () => {
+    expect(isKitRebuild({ ...outpost(), damage: 90 })).toBe(true);
+    expect(isKitRebuild({ ...outpost(), damage: 100 })).toBe(true);
+  });
+
+  test("an outpost with nothing but its core counts (a camp just taken)", () => {
+    const core = { "1": { id: 1, t: OUTPOST_CORE_TYPE, X: 0, Y: 0, l: 1 } } as unknown as BuildingDataMap;
+    expect(isKitRebuild(outpost({ buildingdata: core }))).toBe(true);
+    expect(isKitRebuild(outpost({ buildingdata: {} }))).toBe(true);
+    expect(isKitRebuild(outpost({ buildingdata: null }))).toBe(true);
+  });
+
+  test("the kit's own yard is standing, so a second kit straight after does not count", () => {
+    const empty = outpost({ buildingdata: {} });
+    const plan = planStarterKit(empty, { kit: 1, pay: "shiny" }, NOW);
+    expect(isKitRebuild({ ...empty, ...plan.slices, damage: 0 })).toBe(false);
+  });
+
+  test("a kit on a destroyed outpost heals it below the line (the route's catch-up), so it counts once", () => {
+    for (const pay of ["shiny", "resources"] as const) {
+      const wrecked = { ...outpost(), damage: 100 };
+      const plan = planStarterKit(wrecked, { kit: 1, pay }, NOW);
+      const after = { ...wrecked, ...plan.slices };
+      catchUpDamage(after);
+      expect(isKitRebuild(after)).toBe(false);
+    }
+  });
+
+  test("a main yard never counts", () => {
+    expect(isKitRebuild({ ...outpost({ type: "main", buildingdata: {} }), damage: 100 })).toBe(false);
   });
 });

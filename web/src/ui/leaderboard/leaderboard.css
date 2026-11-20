@@ -1,7 +1,7 @@
 /*
  * The leaderboard (`ui/leaderboard/LeaderboardDialog.ts`): a popup (the shared
- * `.panel` on a scrim) with one row per player - rank, face, name and
- * outposts, points - the player's own row lit up, and a "You" line under the
+ * `.panel` on a scrim) with one row per player - rank, face, name and the
+ * outpost icon with a count, points - the player's own row lit up, and a "You" line under the
  * list when they are below the top 100.
  */
 
@@ -12,6 +12,8 @@
 }
 
 .leaderboard-popup .panel__body {
+  /* beta 8 (astra rounds 1-2): a short bottom fade, so the next row stays recognisable. */
+  --scroll-fade-below: 24px;
   flex: 1;
   min-height: 0;
   overflow-y: auto;
@@ -29,6 +31,13 @@
   margin: 0;
   font-size: var(--text-sm);
   color: var(--colour-text-muted);
+}
+
+/* beta 8 (astra round 1): centre the small flag beside its word. */
+.leaderboard__intro > .game-icon {
+  width: 16px;
+  height: 16px;
+  vertical-align: -3px;
 }
 
 .leaderboard__status--error {
@@ -79,6 +88,11 @@
   color: var(--colour-medal-bronze);
 }
 
+/* beta 8 (astra round 2): Classic's light silver sank into the parchment and the lit row's wash. */
+:root[data-skin="flash"] .leaderboard__row--medal-2 .leaderboard__rank {
+  color: #737b80;
+}
+
 .leaderboard__face {
   width: 2.5rem;
   height: 2.5rem;
@@ -87,37 +101,75 @@
   object-fit: cover;
 }
 
+/*
+ * Name, then the outpost badge on the same line (beta 8, astra's design
+ * advice A, 19 Nov 2026). A row without outposts has no badge and keeps its
+ * name where it always was, centred in the row; on a phone held upright every
+ * row goes to two lines (below).
+ */
 .leaderboard__who {
   display: flex;
-  flex-direction: column;
+  align-items: center;
+  gap: var(--space-2);
   min-width: 0;
 }
 
 .leaderboard__name {
   overflow: hidden;
+  font-size: var(--text-md);
   font-weight: 700;
   white-space: nowrap;
   text-overflow: ellipsis;
 }
 
+/* The outpost flag (painted, `outpost` / `outpostclassic`) and how many they hold: a quiet inset badge. */
 .leaderboard__outposts {
+  flex: none;
+  gap: 3px;
+  height: 22px;
+  padding: 0 7px 0 3px;
+  border-radius: 999px;
+  background: rgb(0 0 0 / 24%);
+  box-shadow: inset 0 1px 2px rgb(0 0 0 / 30%);
   font-size: var(--text-xs);
-  color: var(--colour-text-muted);
+  font-weight: 700;
+  line-height: 1;
+  color: var(--colour-text);
 }
 
+.leaderboard__outposts > .game-icon {
+  width: 20px;
+  height: 20px;
+}
+
+/* beta 8 (astra round 1): quiet Modern's flag so the count reads first. */
+:root[data-skin="scrap"] .leaderboard__outposts > .game-icon {
+  filter: brightness(0.94) saturate(0.95);
+}
+
+:root[data-skin="flash"] .leaderboard__outposts {
+  background: rgb(120 80 30 / 14%);
+  box-shadow: inset 0 1px 2px rgb(90 55 20 / 22%);
+}
+
+/* The total and a small "pts" after it, on one line. */
 .leaderboard__points {
   display: flex;
-  flex-direction: column;
-  align-items: flex-end;
+  align-items: baseline;
+  justify-content: flex-end;
+  gap: 4px;
   font-variant-numeric: tabular-nums;
+  white-space: nowrap;
 }
 
 .leaderboard__points-value {
+  font-size: var(--text-md);
   font-weight: 700;
 }
 
 .leaderboard__points-unit {
-  font-size: var(--text-xs);
+  font-size: 11px;
+  font-weight: 700;
   color: var(--colour-text-muted);
 }
 
@@ -133,14 +185,44 @@
   font-weight: 700;
 }
 
+/*
+ * A phone held upright: the name gets the whole line (no "MightyW…"), and the
+ * outpost badge and the total share the line under it, in every row.
+ */
 @media (max-width: 480px) {
   .leaderboard__row {
     grid-template-columns: minmax(2.75rem, max-content) 2rem minmax(0, 1fr) auto;
-    gap: var(--space-1);
+    grid-template-areas:
+      "rank face name name"
+      "rank face badge points";
+    column-gap: var(--space-2);
+    row-gap: 2px;
+  }
+
+  .leaderboard__rank {
+    grid-area: rank;
   }
 
   .leaderboard__face {
+    grid-area: face;
     width: 2rem;
     height: 2rem;
+  }
+
+  .leaderboard__who {
+    display: contents;
+  }
+
+  .leaderboard__name {
+    grid-area: name;
+  }
+
+  .leaderboard__outposts {
+    grid-area: badge;
+    justify-self: start;
+  }
+
+  .leaderboard__points {
+    grid-area: points;
   }
 }

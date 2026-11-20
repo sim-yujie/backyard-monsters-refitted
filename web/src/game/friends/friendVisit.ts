@@ -2,6 +2,8 @@ import { chatApi, type ChatApi } from "@/api/chat";
 import { friendRefusal, friendsApi, type Friend, type FriendsApi, type HelpYardResponse } from "@/api/friends";
 import { ApiError, NetworkError } from "@/api/http";
 import { setViewTarget, type ViewTarget } from "@/game/attack/attackTarget";
+import { startFriendRun } from "./friendHop";
+import { friendsStore } from "./friendsStore";
 
 /**
  * Visiting a friend (`docs/design/friends.md` §3.3, issue #372): the friend's
@@ -28,8 +30,23 @@ export const friendTarget = (friend: Pick<Friend, "userid" | "username">, own?: 
   ...(own && { own }),
 });
 
-/** Sets the friend's yard as the next yard to open; the caller then goes to the yard scene. */
-export const visitFriend = (friend: Pick<Friend, "userid" | "username">, own?: OwnPool): void => {
+/**
+ * Sets the friend's yard as the next yard to open; the caller then goes to
+ * the yard scene. A fresh visit: Prev and Next beside Map start a
+ * new run from here, in the Friends window's order as it is now
+ * (`friendHop.ts`; `friends` for a test, the shared list by default).
+ */
+export const visitFriend = (
+  friend: Pick<Friend, "userid" | "username">,
+  own?: OwnPool,
+  friends: readonly Friend[] | null = friendsStore.snapshot.loaded ? friendsStore.friends : null,
+): void => {
+  startFriendRun(friend, friends);
+  setViewTarget(friendTarget(friend, own));
+};
+
+/** Prev or Next beside Map: the friend's yard next, in the same run. */
+export const hopToFriend = (friend: Pick<Friend, "userid" | "username">, own?: OwnPool): void => {
   setViewTarget(friendTarget(friend, own));
 };
 

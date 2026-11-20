@@ -1,5 +1,6 @@
 // @vitest-environment jsdom
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { setClassicLook } from "@/game/classicLook";
 import {
   CAVERN_DEFENCE,
   EARTHQUAKE,
@@ -41,6 +42,7 @@ const labels = (root: ParentNode): string[] =>
 
 afterEach(() => {
   document.body.replaceChildren();
+  setClassicLook(false);
 });
 
 describe("Moloch's dialogue", () => {
@@ -95,6 +97,20 @@ describe("the open cave's menu", () => {
     const modal = host();
     caveMenu(modal, { enter: vi.fn() });
     expect(labels(modal)).toEqual([ENTER_CAVERN]);
+  });
+
+  it("shows the cave as the yard draws it: painted with the Modern look, Flash's with the Classic look", () => {
+    const modal = host();
+    caveMenu(modal, { enter: vi.fn() });
+    expect(modal.querySelector<HTMLImageElement>(".inferno-menu__art")?.getAttribute("src")).toBe(
+      "/assets/buildings/iportal/top.c5@2x.webp",
+    );
+    modal.replaceChildren();
+    setClassicLook(true);
+    caveMenu(modal, { enter: vi.fn() });
+    expect(modal.querySelector<HTMLImageElement>(".inferno-menu__art")?.getAttribute("src")).toBe(
+      "/assets/buildings/iportal/top.5.v2.png",
+    );
   });
 });
 

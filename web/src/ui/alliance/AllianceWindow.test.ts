@@ -576,7 +576,7 @@ describe("AllianceWindow: my alliance", () => {
     expect(buttonNamed(ALLIANCE_TEXT.rename)).toBeDefined();
     expect(buttonNamed(ALLIANCE_TEXT.changeType)).toBeDefined();
     const tabs = [...document.querySelectorAll(".alliance__tab")].map((tab) => tab.getAttribute("aria-label"));
-    expect(tabs).toEqual(["Overview", "Constellation", "Members", "Trade", "Territory"]);
+    expect(tabs).toEqual(["Overview", "Goals", "Constellation", "Members", "Trade", "Territory"]);
     // Trading is off unless the server says on (beta 7): Trade is there, greyed out.
     expect(document.querySelector<HTMLButtonElement>('.alliance__tab[data-tab="trade"]')!.disabled).toBe(true);
   });
@@ -637,17 +637,19 @@ describe("AllianceWindow: my alliance", () => {
     expect(api.edit).toHaveBeenCalledWith(expect.objectContaining({ description: long.slice(0, 120).trim() }));
   });
 
-  it("shows phase 2's Overview cards, and a goal set from the menu reloads on the same tab", async () => {
-    const goal = { id: 7, kind: "tribeDestroy", name: "Destroy tribe yards", tier: "easy", target: 150, progress: 60, points: 10, done: false, removable: false } as const;
+  it("shows phase 2's Overview cards with one Goals line, which opens the Goals tab", async () => {
+    const goals = [
+      { id: 7, kind: "tribeDestroy", name: "Destroy tribe yards", tier: "easy", target: 150, progress: 60, points: 10, done: false, removable: true },
+      { id: 8, kind: "loot", name: "Loot resources", tier: "hard", target: 2_250_000_000, progress: 2_250_000_000, points: 70, done: true, removable: false },
+    ] as const;
     const api = fakeApi({
       mine: vi.fn(() =>
         ok({
           alliance: mine({
             today: { contributed: 1, members: 2, points_today: 3, helped_ids: [1] },
-            goals: [goal],
+            goals: [...goals],
             goals_per_week: 5,
-            week_ends_at: 1_000_000 + 3600,
-            goal_menu: [{ kind: "kitRebuild", name: "Rebuild outposts with Starter Kits", only: "conquest", tiers: [{ tier: "easy", target: 40, points: 10 }] }],
+            week_ends_at: 1_000_000 + 3 * 86_400 + 4 * 3_600,
             top_helpers: [{ userid: 1, username: "Player 1", quests: 3, goal_share: 40 }],
           }),
           rejoinAt: null,
@@ -656,48 +658,149 @@ describe("AllianceWindow: my alliance", () => {
     });
     const progress = fakeProgress({ news: vi.fn(() => ok({ news: [{ name: "Player 1", type: "goal_set", text: "Player 1 set a goal", ts: 999_000_000 }] })) });
     await open(api, { progressApi: progress });
-    expect(document.querySelectorAll(".alliance-card").length).toBeGreaterThanOrEqual(4);
-    expect(document.querySelector(".alliance-goal__count")!.textContent).toBe("60 / 150");
+    expect(document.querySelectorAll(".alliance-card").length).toBeGreaterThanOrEqual(3);
+    // No goal cards on the Overview: one line, icons and numbers.
+    expect(document.querySelector(".alliance-goal")).toBeNull();
+    const line = document.querySelector<HTMLButtonElement>(".alliance-goals-line")!;
+    expect(line.textContent).toBe("1/2★ 703d 4h›");
+    expect(line.getAttribute("aria-label")).toBe("Goals: 1 of 2 done, 70 points, week ends in 3d 4h");
     expect(document.querySelector(".alliance-news__text")!.textContent).toBe("Player 1 set a goal");
-
-    buttonNamed("Add goal")!.click();
-    document.querySelector<HTMLButtonElement>(".alliance-goal-menu__tier")!.click();
-    await flush();
-    expect(progress.setGoal).toHaveBeenCalledWith("kitRebuild", "easy");
-    expect(api.mine).toHaveBeenCalledTimes(2);
-    expect(document.querySelector(".alliance__tab[aria-selected='true']")!.getAttribute("aria-label")).toBe("Overview");
+    line.click();
+    expect(document.querySelector(".alliance__tab[aria-selected='true']")!.getAttribute("data-tab")).toBe("goals");
+    expect(document.querySelectorAll(".alliance-goal")).toHaveLength(2);
   });
 
-  it("the goal picker says once, per tier, who it is sized for and what it pays; buttons show short targets", async () => {
+  it("the Goals tab is the 6th tab, second in the row, with its painted target in each look", async () => {
+    await open(fakeApi({ mine: vi.fn(() => ok({ alliance: mine(), rejoinAt: null })) }));
+    const tabs = [...document.querySelectorAll<HTMLElement>(".alliance__tab")];
+    expect(tabs.map((t) => t.dataset["tab"])).toEqual(["overview", "goals", "constellation", "members", "trade", "territory"]);
+    expect(tabs[1]!.getAttribute("aria-label")).toBe("Goals");
+    expect(tabs[1]!.querySelector("img")!.getAttribute("src")).toContain("/ui/icons/goals-24.webp");
+    document.body.replaceChildren();
+    setClassicLook(true);
+    await open(fakeApi({ mine: vi.fn(() => ok({ alliance: mine(), rejoinAt: null })) }));
+    const classic = document.querySelector('.alliance__tab[data-tab="goals"] img')!;
+    expect(classic.getAttribute("src")).toContain("/ui/icons/goalsclassic-24.webp");
+  });
+
+  describe("the Goals tab (owner, 15 Nov 2026)", () => {
+    const goals = [
+      { id: 7, kind: "tribeDestroy", name: "Destroy tribe yards", tier: "medium", target: 550, progress: 312, points: 37, done: false, removable: true },
+      { id: 8, kind: "loot", name: "Loot resources", tier: "hard", target: 2_250_000_000, progress: 2_249_999_999, points: 70, done: false, removable: true },
+      { id: 9, kind: "hold", name: "Hold outposts at the end of the week", tier: "easy", target: 90, progress: 11, points: 15, done: false, removable: true },
+      { id: 10, kind: "attackWin", name: "Win attacks on players", tier: "easy", target: 300, progress: 300, points: 15, done: true, removable: false },
+    ] as const;
     const tiers = [
       { tier: "easy", target: 450_000_000, points: 15, players: 3 },
       { tier: "medium", target: 1_200_000_000, points: 37, players: 8 },
       { tier: "hard", target: 2_250_000_000, points: 70, players: 15 },
     ] as const;
-    const api = fakeApi({
-      mine: vi.fn(() =>
-        ok({
-          alliance: mine({
-            goals: [],
-            goals_per_week: 5,
-            goal_menu: [
-              { kind: "loot", name: "Loot resources", only: null, tiers },
-              { kind: "upgrade", name: "Upgrade buildings", only: null, tiers: tiers.map((t) => ({ ...t, target: 90 })) },
-            ],
-          }),
-          rejoinAt: null,
-        }),
-      ),
+    const menu = [
+      { kind: "loot", name: "Loot resources", only: null, used: true, tiers },
+      { kind: "catapultHit", name: "Catapult hits", only: null, used: true, tiers: tiers.map((t) => ({ ...t, target: 900 })) },
+      { kind: "upgrade", name: "Upgrade buildings", only: null, used: false, tiers: tiers.map((t) => ({ ...t, target: 90 })) },
+      { kind: "harvest", name: "Harvest resources", only: "midas", tiers },
+    ] as const;
+    const openGoals = async (role: MyAlliance["role"], progress = fakeProgress(), extra: Partial<MyAlliance> = {}) => {
+      const api = fakeApi({
+        mine: vi.fn(() => ok({ alliance: mine({ role, goals: [...goals], goals_per_week: 5, week_ends_at: 1_000_000 + 7_200, goal_menu: [...menu], ...extra }), rejoinAt: null })),
+      });
+      await open(api, { progressApi: progress, tab: "goals" });
+      return api;
+    };
+
+    it("shows a roomy card a goal: icon, name, ★ and tier, the bar with a short count rounded down", async () => {
+      await openGoals("leader");
+      const cards = [...document.querySelectorAll<HTMLElement>(".alliance-goal")];
+      expect(cards).toHaveLength(4);
+      expect(cards.map((c) => c.querySelector(".alliance-goal__count")!.textContent)).toEqual(["312 / 550", "2.24B / 2.25B", "11 / 90", "300 / 300"]);
+      expect(cards[1]!.querySelector(".alliance-goal__name")!.textContent).toBe("Loot resources");
+      expect(cards[1]!.querySelector(".alliance-goal__pay")!.textContent).toBe("★ 70");
+      expect(cards[1]!.querySelector(".alliance-goal__tier")!.textContent).toBe("Hard");
+      expect(cards[1]!.querySelector("img")!.getAttribute("src")).toContain("resourcebomb");
+      // 99.99% never draws as a full bar.
+      expect(cards[1]!.querySelector<HTMLElement>(".alliance-goal__fill")!.style.width).toBe("99%");
+      expect(cards[3]!.querySelector(".alliance-goal__pay")!.textContent).toBe("✓ 15");
+      expect(document.querySelector(".alliance-goals__slots")!.textContent).toBe("4/5");
+      expect(document.querySelector(".alliance-goals__ends")!.textContent).toBe("2h 0m");
     });
-    await open(api, { progressApi: fakeProgress() });
-    buttonNamed("Add goal")!.click();
-    const cols = [...document.querySelectorAll(".alliance-goal-menu__col")].map((c) => c.textContent);
-    expect(cols).toEqual(["Easy~3★ 15", "Medium~8★ 37", "Hard~15★ 70"]);
-    expect(document.querySelectorAll(".alliance-goal-menu__head").length).toBe(1);
-    const picks = [...document.querySelectorAll<HTMLButtonElement>(".alliance-goal-menu__tier")];
-    expect(picks.slice(0, 3).map((b) => b.textContent)).toEqual(["450M", "1.2B", "2.25B"]);
-    expect(picks[0]!.title).toBe("Easy: 450,000,000 · ★ 15, sized for about 3 players");
-    expect(picks[0]!.getAttribute("aria-label")).toBe("Loot resources, Easy 450,000,000");
+
+    it("the Leader and Officers get × on unfinished goals and Add; a finished goal is locked", async () => {
+      await openGoals("officer");
+      const removable = [...document.querySelectorAll<HTMLElement>(".alliance-goal")].map((c) => c.querySelector(".alliance-goal__remove") !== null);
+      expect(removable).toEqual([true, true, true, false]);
+      expect(document.querySelector(".alliance-goals__add")).not.toBeNull();
+    });
+
+    it("a member sees no × and no Add", async () => {
+      await openGoals("member");
+      expect(document.querySelectorAll(".alliance-goal")).toHaveLength(4);
+      expect(document.querySelector(".alliance-goal__remove")).toBeNull();
+      expect(document.querySelector(".alliance-goals__add")).toBeNull();
+    });
+
+    it("× asks first; the pop-up says the progress is lost, and Remove removes it", async () => {
+      const progress = fakeProgress();
+      const api = await openGoals("leader", progress);
+      document.querySelectorAll<HTMLButtonElement>(".alliance-goal__remove")[1]!.click();
+      const dialog = document.querySelector(".goal-remove-dialog")!;
+      expect(dialog.textContent).toContain("Loot resources");
+      expect(dialog.querySelector(".goal-remove-dialog__lost")!.textContent).toBe("Its progress is lost (2.24B / 2.25B).");
+      expect(dialog.querySelector(".goal-remove-dialog__once")!.textContent).toBe("It can't be set again this week.");
+      [...dialog.querySelectorAll<HTMLButtonElement>("button")].find((b) => b.textContent === "Remove")!.click();
+      await flush();
+      expect(progress.removeGoal).toHaveBeenCalledWith(8);
+      expect(api.mine).toHaveBeenCalledTimes(2);
+      expect(document.querySelector(".alliance__tab[aria-selected='true']")!.getAttribute("data-tab")).toBe("goals");
+    });
+
+    it("Hold's pop-up does not say progress is lost; Cancel keeps the goal", async () => {
+      const progress = fakeProgress();
+      await openGoals("leader", progress);
+      document.querySelectorAll<HTMLButtonElement>(".alliance-goal__remove")[2]!.click();
+      const dialog = document.querySelector(".goal-remove-dialog")!;
+      expect(dialog.textContent).toContain("Hold outposts at the end of the week");
+      expect(dialog.querySelector(".goal-remove-dialog__lost")).toBeNull();
+      expect(dialog.textContent).not.toContain("lost");
+      [...dialog.querySelectorAll<HTMLButtonElement>("button")].find((b) => b.textContent === "Cancel")!.click();
+      await flush();
+      expect(progress.removeGoal).not.toHaveBeenCalled();
+      expect(document.querySelector(".goal-remove-dialog")).toBeNull();
+    });
+
+    it("Add swaps the cards for every kind with Easy / Medium / Hard; used kinds are greyed; Back returns", async () => {
+      const progress = fakeProgress();
+      await openGoals("leader", progress);
+      document.querySelector<HTMLButtonElement>(".alliance-goals__add")!.click();
+      expect(document.querySelector(".alliance-goal")).toBeNull();
+      const rows = [...document.querySelectorAll<HTMLElement>(".goal-pick")];
+      // Set now (loot) or removed this week (catapultHit, the server's `used`): greyed, after the rest, cannot be picked.
+      expect(rows.map((r) => r.dataset["kind"])).toEqual(["upgrade", "harvest", "loot", "catapultHit"]);
+      expect(rows.map((r) => r.classList.contains("goal-pick--used"))).toEqual([false, false, true, true]);
+      expect([...rows[2]!.querySelectorAll<HTMLButtonElement>(".goal-pick__tier")].every((b) => b.disabled)).toBe(true);
+      const harvest = [...rows[1]!.querySelectorAll<HTMLButtonElement>(".goal-pick__tier")];
+      expect(harvest.map((b) => b.textContent)).toEqual(["450M★15", "1.2B★37", "2.25B★70"]);
+      expect(harvest[1]!.getAttribute("aria-label")).toBe("Harvest resources, Medium 1,200,000,000, 37 points");
+      const cols = [...document.querySelectorAll(".goal-picker__col")].map((c) => c.textContent);
+      expect(cols).toEqual(["Easy~3", "Medium~8", "Hard~15"]);
+      document.querySelector<HTMLButtonElement>(".goal-picker__back")!.click();
+      expect(document.querySelector(".goal-picker")).toBeNull();
+      expect(document.querySelectorAll(".alliance-goal")).toHaveLength(4);
+      document.querySelector<HTMLButtonElement>(".alliance-goals__add")!.click();
+      document.querySelectorAll<HTMLButtonElement>(".goal-pick")[0]!.querySelector<HTMLButtonElement>(".goal-pick__tier--hard")!.click();
+      await flush();
+      expect(progress.setGoal).toHaveBeenCalledWith("upgrade", "hard");
+      // Set: back on the cards of the Goals tab.
+      expect(document.querySelector(".goal-picker")).toBeNull();
+      expect(document.querySelector(".alliance__tab[aria-selected='true']")!.getAttribute("data-tab")).toBe("goals");
+    });
+
+    it("all five set: no Add", async () => {
+      await openGoals("leader", fakeProgress(), {
+        goals: [...goals, { id: 11, kind: "upgrade", name: "Upgrade buildings", tier: "easy", target: 90, progress: 0, points: 15, done: false, removable: true }],
+      });
+      expect(document.querySelector(".alliance-goals__add")).toBeNull();
+    });
   });
 
   it("Territory loads its board and switches type; Constellation draws the sky", async () => {
@@ -801,7 +904,8 @@ describe("AllianceWindow: my alliance", () => {
     const view = await open(api);
     buttonNamed(ALLIANCE_TEXT.leave)!.click();
     expect(document.body.textContent).toContain(ALLIANCE_TEXT.leaveConfirm);
-    buttonNamed(ALLIANCE_TEXT.yes)!.click();
+    expect(buttonNamed(ALLIANCE_TEXT.leaveNo)).toBeDefined();
+    buttonNamed(ALLIANCE_TEXT.leaveYes)!.click();
     await flush();
     await flush();
     expect(api.leave).toHaveBeenCalled();
@@ -812,6 +916,18 @@ describe("AllianceWindow: my alliance", () => {
   it("keeps the Leader of a full alliance from leaving", async () => {
     await open(fakeApi({ mine: vi.fn(() => ok({ alliance: mine({ number_of_members: 5 }), rejoinAt: null })) }));
     expect(buttonNamed(ALLIANCE_TEXT.leave)).toBeUndefined();
+    expect(document.querySelector(".alliance__leave-row")).toBeNull();
+  });
+
+  it("puts Leave at the end of Overview too, for a short screen whose CSS hides the foot (beta 8)", async () => {
+    await open(fakeApi({ mine: vi.fn(() => ok({ alliance: mine({ role: "member", permissions: [] }), rejoinAt: null })) }));
+    const body = document.querySelector(".alliance__body")!;
+    expect(body.lastElementChild?.classList.contains("alliance__leave-row")).toBe(true);
+    expect(body.lastElementChild?.textContent).toContain(ALLIANCE_TEXT.leave);
+    expect(document.querySelector(".alliance__foot")!.classList.contains("alliance__foot--leave")).toBe(true);
+    // Still two taps: Leave asks first, in the row too.
+    body.querySelector<HTMLButtonElement>(".alliance__leave-row .alliance__leave")!.click();
+    expect(document.querySelector(".alliance__leave-row")!.textContent).toContain(ALLIANCE_TEXT.leaveConfirm);
   });
 });
 
@@ -842,20 +958,18 @@ describe("AllianceWindow: Trade sheet Back, then another tab (lead, 11 Nov)", ()
       view: vi.fn(() =>
         ok({
           view: {
-            today: { sendsLeft: 1, receivesLeft: 1, postsLeft: 3, newDayIn: 3_600 },
-            rules: { loss: 0.1, capShare: 0.1, requestSeconds: 86_400 },
+            today: { swapsLeft: 1, postsLeft: 3, newDayIn: 3_600 },
+            rules: { loss: 0.1, capShare: 0.1, requestSeconds: 172_800 },
             me: storage,
             myRequest: null,
             requests: [],
-            recent: [],
-            mate: null,
+            swap: null,
           },
         }),
       ),
       post: vi.fn(() => ok({})),
       cancel: vi.fn(() => ok({})),
       accept: vi.fn(() => ok({})),
-      send: vi.fn(() => ok({})),
     } as unknown as NonNullable<AllianceWindowOptions["tradeApi"]>;
     const onClose = vi.fn();
     const view = await open(fakeApi({ mine: vi.fn(() => ok({ alliance: mine({ trade_on: true }), rejoinAt: null })) }), {
@@ -887,7 +1001,6 @@ describe("AllianceWindow: trading's switch (owner 11 Nov: greyed out for beta 7)
       post: vi.fn(() => ok({})),
       cancel: vi.fn(() => ok({})),
       accept: vi.fn(() => ok({})),
-      send: vi.fn(() => ok({})),
     }) as unknown as NonNullable<AllianceWindowOptions["tradeApi"]>;
   const tabNames = () => [...document.querySelectorAll(".alliance__tab")].map((tab) => tab.getAttribute("data-tab"));
   const tradeTab = () => document.querySelector<HTMLButtonElement>('.alliance__tab[data-tab="trade"]')!;
@@ -900,11 +1013,11 @@ describe("AllianceWindow: trading's switch (owner 11 Nov: greyed out for beta 7)
 
   afterEach(() => setAllianceTradeOn(false));
 
-  it("switch off: Trade and a mate's Send are there but greyed out, Coming soon, and never reach the server", async () => {
+  it("switch off: Trade is there but greyed out, Coming soon, and never reaches the server", async () => {
     setAllianceTradeOn(true);
     const trade = tradeApi();
     const view = await open(withMembers(mine({ trade_on: false })), { tab: "trade", focus: { request: 5 }, tradeApi: trade });
-    expect(tabNames()).toEqual(["overview", "constellation", "members", "trade", "territory"]);
+    expect(tabNames()).toEqual(["overview", "goals", "constellation", "members", "trade", "territory"]);
     expect(tradeTab().disabled).toBe(true);
     expect(tradeTab().title).toBe(TRADE_OFF_TITLE);
     // A Trade ask (chat, an old tab) lands on Overview.
@@ -916,21 +1029,10 @@ describe("AllianceWindow: trading's switch (owner 11 Nov: greyed out for beta 7)
     await flush();
     expect(selected()).toBe("overview");
 
-    view.showTab("trade", { send: { userid: 3, username: "Player 3" } });
+    view.showTab("trade", { request: 5 });
     await flush();
     expect(selected()).toBe("overview");
     expect(document.querySelector(".trade-new")).toBeNull();
-
-    view.showTab("members");
-    await flush();
-    document.querySelector<HTMLButtonElement>("[data-userid='3'] .alliance__row")!.click();
-    const send = document.querySelector<HTMLButtonElement>(".alliance__send")!;
-    expect(send).not.toBeNull();
-    expect(send.disabled).toBe(true);
-    expect(send.title).toBe(TRADE_OFF_TITLE);
-    send.dispatchEvent(new MouseEvent("click", { bubbles: true }));
-    await flush();
-    expect(selected()).toBe("members");
     expect(trade.view).not.toHaveBeenCalled();
   });
 
@@ -939,7 +1041,7 @@ describe("AllianceWindow: trading's switch (owner 11 Nov: greyed out for beta 7)
     expect(tradeTab().disabled).toBe(true);
   });
 
-  it("switch on: Trade and a mate's Send work as before", async () => {
+  it("switch on: Trade works; a mate's row has no Send (swaps only, owner 16 Nov 2026)", async () => {
     const trade = tradeApi();
     const view = await open(withMembers(mine({ trade_on: true })), { tradeApi: trade });
     expect(tradeTab().disabled).toBe(false);
@@ -948,8 +1050,10 @@ describe("AllianceWindow: trading's switch (owner 11 Nov: greyed out for beta 7)
     view.showTab("members");
     await flush();
     document.querySelector<HTMLButtonElement>("[data-userid='3'] .alliance__row")!.click();
-    const send = document.querySelector<HTMLButtonElement>(".alliance__send")!;
-    expect(send.disabled).toBe(false);
+    // The leader's own rank actions open; no Send among them.
+    expect(document.querySelector("[data-userid='3'] .alliance__row-more")).not.toBeNull();
+    expect(document.querySelector(".alliance__send")).toBeNull();
+    expect([...document.querySelectorAll("[data-userid='3'] .alliance__row-more button")].map((b) => b.textContent)).not.toContain("Send");
     tradeTab().click();
     await flush();
     expect(selected()).toBe("trade");

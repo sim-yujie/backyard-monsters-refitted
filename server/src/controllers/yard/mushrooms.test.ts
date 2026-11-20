@@ -202,6 +202,34 @@ describe("the Halloween pumpkin hunt", () => {
     expect(store.rows.has("2505:halloween-2026")).toBe(false);
   });
 
+  test("golden odds: a draw of 0.2 is golden for a mushroom or a pumpkin (one in four), not for a turkey (one in ten)", async () => {
+    const turkeys = YARD_HUNTS.find((hunt) => hunt.event === TURKEY_HUNT_EVENT)!;
+    const pumpkins = YARD_HUNTS.find((hunt) => hunt.event !== TURKEY_HUNT_EVENT)!;
+    const pickIn = async (hunt: YardHunt | null, ...draws: number[]) => {
+      db.row = rowOf();
+      return runYardAction(
+        em as unknown as EntityManager,
+        userOf(),
+        mushroomPickAction(sequence(...draws), memoryProgressStore(), () => hunt),
+        { id: "0" }
+      );
+    };
+
+    expect((await pickIn(null, 0.2, 0.0)).body).toMatchObject({ report: { golden: true, shiny: 3 } });
+    expect((await pickIn(pumpkins, 0.2, 0.0)).body).toMatchObject({ report: { golden: true, shiny: 3, pumpkins: 1 } });
+    expect((await pickIn(turkeys, 0.2)).body).toMatchObject({ report: { golden: false, shiny: 0, turkeys: 1 } });
+
+    // The turkey's boundary: 0.09 is golden, 0.1 is not.
+    expect((await pickIn(turkeys, 0.09, 0.0)).body).toMatchObject({ credits: 13, report: { golden: true, shiny: 3 } });
+    expect((await pickIn(turkeys, 0.1)).body).toMatchObject({ credits: 10, report: { golden: false, shiny: 0 } });
+    expect(readOnboarding({ onboarding: db.row!.onboarding }).counters).toMatchObject({ mushrooms: 1, goldMushrooms: 0 });
+
+    // A golden turkey keeps the 3-or-8 Shiny roll and counts for the golden-mushroom quests.
+    const big = await pickIn(turkeys, 0.05, 0.4);
+    expect(big.body).toMatchObject({ credits: 18, report: { golden: true, shiny: 8, turkeys: 1 } });
+    expect(readOnboarding({ onboarding: db.row!.onboarding }).counters).toMatchObject({ mushrooms: 1, goldMushrooms: 1 });
+  });
+
   test("a refused pick counts nothing", async () => {
     const store = memoryProgressStore();
 

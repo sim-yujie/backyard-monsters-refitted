@@ -82,6 +82,12 @@ const MAX_PLACEHOLDER_LABELS = 60;
 /** How strongly a placeholder shows: a faint footprint, not a grey box. */
 const PLACEHOLDER_ALPHA = 0.3;
 
+/**
+ * How faded a building is drawn under its upgrade preview (`UpgradePreview.ts`):
+ * still there, so the ghost reads as what it turns into.
+ */
+export const UPGRADE_FADE_ALPHA = 0.25;
+
 /** Performance marks around the wait for a yard's pictures; see `markArtReady`. */
 const YARD_ART_SHOWN = "yard-art-shown";
 const YARD_ART_READY = "yard-art-ready";
@@ -248,6 +254,8 @@ export class YardBuildings {
   /** Buildings drawn highlighted, and the one filter they all share (#88). */
   private readonly highlighted = new Set<number>();
   private highlightFilter: ColorMatrixFilter | null = null;
+  /** The building drawn faded under its upgrade preview, if any; see {@link setFaded}. */
+  private faded: number | null = null;
   /** What stands among the buildings for a while, kept through a redraw: see `addGuest`. */
   private readonly guests = new Set<Container>();
 
@@ -378,7 +386,7 @@ export class YardBuildings {
         swapShadowResolved: true,
         animsSuppressed: false,
         workUntil: workUntil(building.type, building.id, work),
-        restOnIdle: anims[0]?.policy.restOnIdle === true,
+        restOnIdle: anims[0]?.policy.restOnIdle === true || anims[0]?.anim.home === true,
       };
       this.views.push(view);
       this.byId.set(building.id, view);
@@ -747,6 +755,7 @@ export class YardBuildings {
       layer.sprite.zIndex = view.top.zIndex + index + 1;
       layer.sprite.tint = tint;
       layer.sprite.filters = this.filtersFor(view);
+      layer.sprite.alpha = this.alphaOf(view);
       this.tops.addChildAt(layer.sprite, Math.min(at, this.tops.children.length));
       at += 1;
     });
@@ -840,6 +849,7 @@ export class YardBuildings {
     this.views = [];
     this.byId.clear();
     this.highlighted.clear();
+    this.faded = null;
     this.labelCount = 0;
   }
 
@@ -918,7 +928,7 @@ export class YardBuildings {
         if (texture) {
           applyArt(view.top, texture, view.building, art.top);
           view.top.tint = DAMAGE_TINTS[view.damageStep] ?? 0xffffff;
-          view.top.alpha = 1;
+          view.top.alpha = this.alphaOf(view);
           view.resolved = true;
 
           view.label?.destroy();
@@ -983,7 +993,7 @@ export class YardBuildings {
       if (texture) {
         applyArt(view.top, texture, view.building, swap.top);
         view.top.tint = DAMAGE_TINTS[view.damageStep] ?? 0xffffff;
-        view.top.alpha = 1;
+        view.top.alpha = this.alphaOf(view);
         view.resolved = true;
         view.swapResolved = true;
         view.label?.destroy();
@@ -1065,6 +1075,46 @@ export class YardBuildings {
   /** Whether a building is drawn highlighted. */
   isHighlighted(id: number): boolean {
     return this.highlighted.has(id);
+  }
+
+  /* ── Faded, under an upgrade preview ────────────────────────────────── */
+
+  /**
+   * Draws one building faded (`UPGRADE_FADE_ALPHA`), with its strips, shadow
+   * and fortification, under the ghost of its next level, or puts it back
+   * when passed null. Kept as state, so a picture or strip that arrives later
+   * comes in faded too; `show` puts every building back, and the preview is
+   * asked for again after it.
+   */
+  setFaded(id: number | null): void {
+    const before = this.faded;
+    if (before === id) return;
+    this.faded = id;
+    if (before !== null) this.applyFade(before);
+    if (id !== null) this.applyFade(id);
+  }
+
+  /** The building drawn faded under an upgrade preview, or null. */
+  get fadedId(): number | null {
+    return this.faded;
+  }
+
+  private alphaOf(view: BuildingView): number {
+    return this.faded === view.building.id ? UPGRADE_FADE_ALPHA : 1;
+  }
+
+  private applyFade(id: number): void {
+    const view = this.byId.get(id);
+    if (!view) return;
+    const alpha = this.alphaOf(view);
+    // A placeholder keeps its own see-through grey until the picture is in.
+    if (view.resolved) view.top.alpha = alpha;
+    if (view.shadow) view.shadow.alpha = alpha;
+    for (const layer of view.anims) layer.sprite.alpha = alpha;
+    if (view.fort) {
+      view.fort.back.alpha = alpha;
+      view.fort.front.alpha = alpha;
+    }
   }
 
   private filtersFor(view: BuildingView): ColorMatrixFilter[] | null {

@@ -97,6 +97,61 @@ export const blueprintBlock = (
   return yardPlannerBuilding(yard) ? BLUEPRINT_PLANNER_BUILDING : BLUEPRINT_NEEDS_PLANNER;
 };
 
+/*
+ * The Yard Planner building's gate on the planner's tools (owner, beta 8,
+ * grilling of 19 Nov 2026). Layout mode stays every player's — moving,
+ * Apply, undo and redo, Stored, re-arming traps, Select and Box — but these
+ * need a finished Yard Planner in the yard shown (the Blueprint rule above:
+ * level 1 or more, damage and upgrades never matter):
+ *
+ * - layout slots 2 to 10 (one slot without; the server holds the same line,
+ *   `server/src/services/yardplanner/plannerGate.ts`);
+ * - Tower ranges and Dead zones (and the coverage panel they open);
+ * - Find, the yard picture and Compare;
+ * - the many-walls Upgrade walls (one wall at a time is free, from its pop-up);
+ * - the Blueprint view ({@link blueprintBlock}, as before).
+ *
+ * The main yard and the Inferno each need their own; an outpost never has
+ * one, so there they stay locked for good (the owner chose that knowingly),
+ * even in an outpost that came with a Yard Planner standing.
+ */
+
+/** Layout slots a yard without a Yard Planner may use: slot 1. */
+export const FREE_LAYOUT_SLOTS = 1;
+
+/** What a locked tool says without a Yard Planner. */
+export const TOOL_NEEDS_PLANNER = "Build a Yard Planner";
+/** What it says while the Yard Planner is still being built. */
+export const TOOL_PLANNER_BUILDING = "Finish your Yard Planner";
+/** What it says in an outpost, which can never build one. */
+export const TOOL_NOT_IN_OUTPOSTS = "Not in outposts";
+
+/**
+ * Why the Yard Planner's tools (the comment above) are locked in this yard,
+ * or null when they are not.
+ */
+export const plannerToolBlock = (
+  yard: PlannerAccessYard & { readonly kind?: string },
+): string | null => {
+  if (yard.kind === "outpost") return TOOL_NOT_IN_OUTPOSTS;
+  if (hasYardPlanner(yard)) return null;
+  return yardPlannerBuilding(yard) ? TOOL_PLANNER_BUILDING : TOOL_NEEDS_PLANNER;
+};
+
+/** How many layout slots, from slot 1 up, the yard may save to. */
+export const usableLayoutSlots = (blocked: string | null, slots: number): number =>
+  blocked === null ? slots : Math.min(FREE_LAYOUT_SLOTS, slots);
+
+/**
+ * Whether the planner offers saved layouts (the Layouts button and panel,
+ * Ctrl+S) in this yard. An outpost has none (`BasePlanner.as:41`, #191); the
+ * main yard and the Inferno yard each have their own (owner decision I17,
+ * 2026-10-29). The Inferno yard is opened with a `baseid`, so "has a baseid"
+ * is not the test: until 16 Nov 2026 that hid its Layouts button and left its
+ * slots reachable only by Ctrl+S.
+ */
+export const hasLayoutSlots = (yard: { readonly kind?: string }): boolean => yard.kind !== "outpost";
+
 /**
  * The Layout button's tooltip. Someone else's yard has no button to put it
  * on; the locked text is there for any other way in that is ever added.

@@ -1,4 +1,4 @@
-import { Application, Assets, Container } from "pixi.js";
+import { Application, Container } from "pixi.js";
 import { createOverlay, type Overlay } from "@/ui/overlay";
 import {
   captureScreen,
@@ -9,6 +9,8 @@ import {
 } from "@/game/bugReport/screenCapture";
 import { PerfOverlay } from "@/ui/PerfOverlay";
 import { SceneManager, type SceneFactory } from "./SceneManager";
+import { usePlainPictures } from "./plainPictures";
+import { notePictureLoads, releaseOnLeave } from "./releaseOnLeave";
 import { withHold, withPresence, withProtection } from "./presenceScene";
 import { withIdle } from "./idleScene";
 import { withMusic } from "./musicScene";
@@ -85,6 +87,7 @@ export class App {
   private stopHearing: (() => void) | null = null;
   private stopTeam: (() => void) | null = null;
   private stopGraphicsWatch: (() => void) | null = null;
+  private stopRelease: (() => void) | null = null;
 
   constructor(private readonly host: HTMLElement) {
     this.pixi = new Application();
@@ -104,20 +107,25 @@ export class App {
     // just with the fallback stack from --font-display/--font-body.
     await loadTitanOne();
 
-    // Pictures are fetched by the page, not by Pixi's worker pool. The pool
-    // fetches and decodes one picture per worker, one worker per processor
-    // core, newest request first: a yard asking for a hundred pictures at once
-    // waited in a queue of four to twelve, its walls (asked for first) served
-    // last, and a 10 MB monster sheet held a worker the whole time. The page's
-    // own fetch lets the browser have them all in flight, in the order asked,
-    // and `createImageBitmap` still decodes them off the main thread.
-    Assets.setPreferences({ preferWorkers: false });
+    // Pictures load on the page as plain `<img>` pictures, not as ImageBitmaps
+    // and not in Pixi's worker pool (`plainPictures.ts`, beta 8): each is held
+    // once, not kept decoded on the page as well as on the graphics card.
+    usePlainPictures();
+    // Every ImageBitmap Pixi decodes is noted, to be closed when the page is
+    // left for good (`releaseOnLeave.ts`, patch 7.12). With plain pictures the
+    // texture loader makes none, so this only matters if that ever changes.
+    notePictureLoads();
 
     try {
       await this.pixi.init({
-        // The canvas fills the window; CSS pins it and `resizeTo` keeps the
-        // backing store in step.
-        resizeTo: window,
+        // The canvas fills the game area (#game-root, pinned to the screen by
+        // CSS) and `resizeTo` keeps the backing store in step. Not `window`:
+        // on an iPhone a pinch zoom makes innerWidth/innerHeight report the
+        // zoomed (smaller) size, a resize then shrinks the canvas, and when the
+        // zoom goes back iOS often sends no resize, so the yard stayed in the
+        // top-left corner (bug #51). The element's own size is its layout size,
+        // which zoom never changes.
+        resizeTo: this.host,
         antialias: true,
         background: "#11141a",
         // Render at the display's true pixel density, capped so a 3x phone does
@@ -140,6 +148,9 @@ export class App {
     // A lost graphics context goes to the owner's dashboard with the card's
     // name and limit, for old phones that run out of graphics memory.
     this.stopGraphicsWatch = watchGraphics(this.pixi.renderer);
+    // Leaving the page (reload, another site) closes the decoded pictures, so a
+    // reload does not hold two yards at once on a phone.
+    this.stopRelease = releaseOnLeave({ stopDrawing: () => this.pixi.ticker.stop() });
 
     const canvas = this.pixi.canvas;
     this.host.append(canvas);
@@ -319,10 +330,10 @@ export class App {
         ),
     );
 
-    // Pixi's renderer resize fires on the window; mirror it to the scenes.
+    // Pixi's renderer resize; mirror it to the scenes.
     this.pixi.renderer.on("resize", this.handleResize);
-    // resizeTo: window misses the case where the host element itself changes,
-    // which happens with a sidebar or a devtools dock.
+    // Pixi only re-reads the game area's size on a window resize; this
+    // catches every other change to it (phone toolbars, a devtools dock).
     if (typeof ResizeObserver !== "undefined") {
       this.resizeObserver = new ResizeObserver(() => this.pixi.resize());
       this.resizeObserver.observe(this.host);
@@ -345,6 +356,14 @@ export class App {
     });
 
     await this.scenes.start(SceneName.BOOT);
+  }
+
+  /**
+   * Opens a scene from outside the app: only the layout check's own hooks use
+   * it (main.ts, a dev build or VITE_LAYOUT_CHECK=1).
+   */
+  goTo(name: string): void {
+    this.scenes?.goTo(name);
   }
 
   destroy(): void {
@@ -385,6 +404,8 @@ export class App {
     this.overlay = null;
     this.stopGraphicsWatch?.();
     this.stopGraphicsWatch = null;
+    this.stopRelease?.();
+    this.stopRelease = null;
     this.pixi.destroy(true, { children: true });
   }
 

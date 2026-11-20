@@ -1,11 +1,10 @@
 // @vitest-environment jsdom
 import { afterEach, describe, expect, it, vi } from "vitest";
-import type { AchievementsApi, AchievementsStateReport, PlayerAchievements } from "@/api/achievements";
-import { ApiError } from "@/api/http";
+import type { AchievementsApi, AchievementsStateReport } from "@/api/achievements";
 import { FOOTER_TEXT } from "@/game/achievements/achievements";
 import { achievementsOpener, setAchievementsOpener } from "@/game/achievements/achievementsView";
 import { AchievementsDoor } from "./AchievementsDoor";
-import { ALL_DONE, AchievementsScreen, LOAD_FAILED, NONE_YET, NOT_FOUND } from "./AchievementsScreen";
+import { ALL_DONE, AchievementsScreen, LOAD_FAILED, NONE_YET } from "./AchievementsScreen";
 
 /** The achievements screen (issue #204, §10.1) and the door that docks it. */
 
@@ -62,21 +61,8 @@ const ownState = (): AchievementsStateReport => ({
   fresh: [],
 });
 
-const someone = (): PlayerAchievements => ({
-  userid: 77,
-  name: "Bob",
-  earned: 1,
-  total: 3,
-  achievements: [
-    { id: 12, name: "Great Wall", description: "Build 200 Blocks", status: "locked" },
-    { id: 1, name: "Moving Up", description: "Town Hall 2", status: "earned", at: noon("2026-09-20") },
-    { id: 3, name: "Backyard Boss", description: "Town Hall 8", status: "locked" },
-  ],
-});
-
 const api = (over: Partial<AchievementsApi> = {}): AchievementsApi => ({
   state: vi.fn(async () => ownState()),
-  player: vi.fn(async () => someone()),
   ...over,
 });
 
@@ -186,6 +172,14 @@ describe("AchievementsScreen: the player's own", () => {
     expect(text(screen.element, ".ach-group:nth-child(1) .ach-group__empty")).toBe(ALL_DONE);
   });
 
+  it("says None yet when nothing is earned", async () => {
+    const state = { ...ownState(), earned: 0 };
+    state.achievements = state.achievements.filter((one) => one.status !== "earned");
+    const screen = new AchievementsScreen({ api: api({ state: vi.fn(async () => state) }) }).mount(document.body);
+    await screen.open();
+    expect(text(screen.element, ".ach-group:nth-child(2) .ach-group__empty")).toBe(NONE_YET);
+  });
+
   it("offers Try again when the list cannot load, and fetches again on it", async () => {
     const state = vi.fn().mockRejectedValueOnce(new Error("offline")).mockResolvedValueOnce(ownState());
     const screen = new AchievementsScreen({ api: api({ state }) }).mount(document.body);
@@ -214,79 +208,23 @@ describe("AchievementsScreen: the player's own", () => {
     expect(screen.isOpen).toBe(false);
   });
 
-  it("drops an answer that arrives after the player has moved on", async () => {
+  it("drops an answer that arrives after the screen closed", async () => {
     let answer: (state: AchievementsStateReport) => void = () => {};
     const state = vi.fn(() => new Promise<AchievementsStateReport>((resolve) => (answer = resolve)));
     const screen = new AchievementsScreen({ api: api({ state }) }).mount(document.body);
     const opening = screen.open();
-    await screen.openPlayer(77, "Bob");
+    screen.close();
     answer(ownState());
     await opening;
-    expect(text(screen.element, ".panel__title")).toBe("Bob's achievements");
-    expect(screen.element.querySelectorAll(".ach-row__reward").length).toBe(0);
+    expect(screen.element.querySelectorAll(".ach-row").length).toBe(0);
   });
 });
 
-describe("AchievementsScreen: someone else's, read-only", () => {
-  afterEach(() => document.body.replaceChildren());
-
-  it("titles it with their name and shows Earned then Not earned yet, with no progress and no Shiny", async () => {
-    const calls = api();
-    const screen = new AchievementsScreen({ api: calls }).mount(document.body);
-    await screen.openPlayer(77, "Bobby");
-    expect(calls.player).toHaveBeenCalledWith(77);
-    expect(calls.state).not.toHaveBeenCalled();
-    expect(screen.shownPlayer).toBe(77);
-    expect(screen.element.dataset["view"]).toBe("player");
-    // The answer's name wins over the one the opener knew.
-    expect(text(screen.element, ".panel__title")).toBe("Bob's achievements");
-    expect(text(screen.element, ".ach-summary")).toBe("1 of 3 earned");
-    expect(groupTitles(screen)).toEqual(["Earned", "Not earned yet"]);
-    expect(rows(screen, 1).map((row) => row.dataset["achievement"])).toEqual(["1"]);
-    expect(text(rows(screen, 1)[0]!, ".ach-row__date")).toBe("Earned 20 Sep 2026");
-    expect(rows(screen, 2).map((row) => row.dataset["achievement"])).toEqual(["3", "12"]);
-    expect(screen.element.querySelector(".ach-bar, .ach-row__reward, .ach-row__figures")).toBeNull();
-    expect(screen.element.querySelectorAll(".ach-badge--plain").length).toBe(3);
-  });
-
-  it("shows an answer already in hand without asking again", async () => {
-    const calls = api();
-    const screen = new AchievementsScreen({ api: calls }).mount(document.body);
-    await screen.openPlayer(77, "Bobby", someone());
-    expect(calls.player).not.toHaveBeenCalled();
-    expect(text(screen.element, ".panel__title")).toBe("Bob's achievements");
-    expect(text(screen.element, ".ach-summary")).toBe("1 of 3 earned");
-    expect(rows(screen, 1).map((row) => row.dataset["achievement"])).toEqual(["1"]);
-    // Opened again with nothing in hand, it asks.
-    await screen.openPlayer(77, "Bobby");
-    expect(calls.player).toHaveBeenCalledOnce();
-  });
-
-  it("says None yet when they have earned nothing", async () => {
-    const nothing = { ...someone(), earned: 0, achievements: someone().achievements.filter((one) => one.status !== "earned") };
-    const screen = new AchievementsScreen({ api: api({ player: vi.fn(async () => nothing) }) }).mount(document.body);
-    await screen.openPlayer(77);
-    expect(text(screen.element, ".ach-group:nth-child(1) .ach-group__empty")).toBe(NONE_YET);
-  });
-
-  it("says the player cannot be found on a 404, without Try again", async () => {
-    const player = vi.fn(async () => {
-      throw new ApiError("not found", { status: 404 });
-    });
-    const screen = new AchievementsScreen({ api: api({ player }) }).mount(document.body);
-    await screen.openPlayer(4040, "Ghost");
-    expect(text(screen.element, ".panel__title")).toBe("Ghost's achievements");
-    expect(text(screen.element, ".ach-status__text")).toBe(NOT_FOUND);
-    expect(screen.element.querySelector(".ach-status__retry")).toBeNull();
-  });
-
-  it("goes back to the player's own list on open", async () => {
-    const screen = new AchievementsScreen({ api: api() }).mount(document.body);
-    await screen.openPlayer(77);
-    await screen.open();
-    expect(screen.shownPlayer).toBeNull();
-    expect(text(screen.element, ".panel__title")).toBe("Achievements");
-    expect(groupTitles(screen)).toEqual(["To do", "Earned"]);
+describe("AchievementsScreen: no view of another player's list (owner, 19 Nov)", () => {
+  it("has no way to open someone else's list", () => {
+    const screen = new AchievementsScreen({ api: api() });
+    expect("openPlayer" in screen).toBe(false);
+    expect("player" in api()).toBe(false);
   });
 });
 
@@ -335,13 +273,11 @@ describe("AchievementsDoor", () => {
     expect(container.querySelectorAll(".ach-screen").length).toBe(1);
     expect(door.isOpen).toBe(true);
 
-    await door.openPlayer(77, "Bob");
+    await door.open();
     expect(container.querySelectorAll(".ach-screen").length).toBe(1);
     expect(onOpen).toHaveBeenCalledTimes(2);
-
-    // An answer in hand reaches the screen, which does not ask for it.
-    await door.openPlayer(77, "Bob", someone());
-    expect(calls.player).toHaveBeenCalledOnce();
+    expect(calls.state).toHaveBeenCalledTimes(2);
+    expect("openPlayer" in door).toBe(false);
 
     door.close();
     expect(door.isOpen).toBe(false);

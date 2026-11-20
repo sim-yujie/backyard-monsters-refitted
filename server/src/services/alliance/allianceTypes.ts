@@ -37,13 +37,22 @@ export const officerLimit = (type: AllianceType): number => ALLIANCE_TYPES[type]
 /** True when `to` allows more members than `from`. */
 export const isUpSwitch = (from: AllianceType, to: AllianceType): boolean => memberLimit(to) > memberLimit(from);
 
+/** Points left to spend: earned (`points`) minus spent on stars, never below 0. */
+export const unspentPoints = (state: Pick<TypeSwitchState, "points" | "points_spent">): number =>
+  Math.max(0, state.points - state.points_spent);
+
 /**
- * The points an alliance has after switching type. Stars reset, so everything
- * comes back as unspent points. Up: all of it, converted by the member-limit
- * ratio. Down: the kept shares (`TYPE_SWITCH`), then converted. Rounded down.
+ * The points an alliance has after switching type. `points` is every point
+ * the alliance has earned and `points_spent` the part spent on stars, so the
+ * unspent ones are `points - points_spent` (as `lightStar` reads them). Stars
+ * reset, so everything comes back as unspent points. Up: all of it, converted
+ * by the member-limit ratio. Down: the kept shares (`TYPE_SWITCH`), then
+ * converted. Rounded down.
  *
- * Example (design v5 §4): a Midas with 1,200 spent and 100 unspent going down
- * would keep 600 + 100; going up to Conquest it keeps all 1,300 x 2 = 2,600.
+ * Example (design v5 §4): a Midas that earned 1,300 and spent 1,200 of them
+ * (100 unspent) going down would keep 600 + 100; going up to Conquest it keeps
+ * all 1,300 x 2 = 2,600. Spent points count once (before 19 Nov 2026 they were
+ * added on top of `points` a second time).
  *
  * @param {Pick<TypeSwitchState, "type" | "points" | "points_spent">} state - The alliance before the switch.
  * @param {AllianceType} to - The type being switched to.
@@ -54,9 +63,11 @@ export const pointsAfterSwitch = (
   to: AllianceType
 ): number => {
   const ratio = memberLimit(to) / memberLimit(state.type);
+  const spent = Math.max(0, state.points_spent);
+  const unspent = unspentPoints(state);
   const kept = isUpSwitch(state.type, to)
-    ? state.points + state.points_spent
-    : state.points * TYPE_SWITCH.downKeepUnspent + state.points_spent * TYPE_SWITCH.downKeepSpent;
+    ? unspent + spent
+    : unspent * TYPE_SWITCH.downKeepUnspent + spent * TYPE_SWITCH.downKeepSpent;
 
   return Math.floor(kept * ratio);
 };
@@ -84,7 +95,7 @@ export const quoteTypeSwitch = (state: TypeSwitchState, to: AllianceType, now: D
     available_at: null,
   };
 
-  if (to === state.type) return { ...quote, refusal: "sameType", points_after: state.points };
+  if (to === state.type) return { ...quote, refusal: "sameType", points_after: unspentPoints(state) };
   if (state.members > memberLimit(to)) return { ...quote, refusal: "tooManyMembers" };
   if (state.officers > officerLimit(to)) return { ...quote, refusal: "tooManyOfficers" };
 

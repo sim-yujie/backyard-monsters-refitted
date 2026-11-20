@@ -11,6 +11,8 @@ import {
 import type { User } from "../../database/models/user.model.js";
 import type { KoaController } from "../../utils/KoaController.js";
 import { onLayoutYard } from "./plannerYard.js";
+import { requireUsableSlot } from "../../services/yardplanner/plannerGate.js";
+import { getCurrentDateTime } from "../../utils/getCurrentDateTime.js";
 
 /**
  * `PUT /bm/yardplanner/layouts/:slot` — store one layout, overwriting the slot.
@@ -34,6 +36,9 @@ import { onLayoutYard } from "./plannerYard.js";
  * own slots, checked with the Inferno's footprints and ladders
  * (`plannerYard.ts`, `onLayoutYard`); an outpost's is refused.
  *
+ * Slot 2 and up need a finished Yard Planner in the yard the layout is for
+ * (`403 plannerNeeded`, `services/yardplanner/plannerGate.ts`).
+ *
  * @param {Context} ctx - The Koa context object, which includes the authenticated user.
  * @returns {Promise<void>} - A promise that resolves when the controller is complete.
  */
@@ -49,6 +54,8 @@ export const saveLayout: KoaController = async (ctx) => {
     user,
     ctx.request.body,
     (save, kind) => {
+      // Slot 2 and up need a Yard Planner in this yard (owner, beta 8).
+      requireUsableSlot(save, slot, getCurrentDateTime());
       const stored = payload.stored ?? [];
       checkNodesOwned([...payload.nodes, ...stored], save.buildingdata);
       checkNodePlacement(payload.nodes, payload.expansion, save.buildingdata, kind);

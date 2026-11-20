@@ -864,7 +864,7 @@ export class MapRoom2Scene implements Scene {
       // The load that chose this map, when there was one (issue #162).
       const primed = takePrimedOwnYard();
       noteInfo("ownYard", primed ? "primed" : "fetched");
-      const base = primed ?? (await timeSpan("own-yard", () => loadOwnYard()));
+      const base = primed ?? (await timeSpan("own-yard", () => loadOwnYard({ screen: "map" })));
       this.ownSave = base;
       // The alliance's extra reach (and prices) from this load, not the last yard visit.
       setCurrentAllianceBonuses(base.alliancedata);
@@ -1442,12 +1442,21 @@ export class MapRoom2Scene implements Scene {
       baseid,
       cell,
       modal,
+      // The army bar while the server fights it (owner, 15 Nov 2026).
+      progressBar: true,
       onWatch: (run) => {
         setWatchRun(run);
         context.goTo(SceneName.WATCH);
       },
-      onAttacked: () => {
+      onAttacked: (result) => {
         this.store.invalidateCell(cell.col, cell.row);
+        // Smart Repeat attack: the yards monsters moved between hold other armies now.
+        for (const move of result.moved ?? []) {
+          for (const baseid of [move.from, move.to]) {
+            const yard = result.yards?.[baseid];
+            if (yard) this.store.invalidateCell(yard.x, yard.y);
+          }
+        }
         this.store.refreshVisible();
         void this.refreshOwnSave();
         this.ui?.refreshAutoAttack();
@@ -1468,7 +1477,7 @@ export class MapRoom2Scene implements Scene {
   /** Reads the player's own yard again: its pool and its army moved. */
   private async refreshOwnSave(): Promise<void> {
     try {
-      const base = await loadOwnYard();
+      const base = await loadOwnYard({ screen: "map" });
       if (!this.context) return;
       this.ownSave = base;
       setCurrentAllianceBonuses(base.alliancedata);

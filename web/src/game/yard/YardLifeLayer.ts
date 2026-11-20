@@ -17,6 +17,7 @@ import {
 import { fromIso, type Point, type Rect, type YardBounds } from "./YardGrid";
 import {
   cageMiddle,
+  cageMoved,
   chamberDoor,
   championTrips,
   championWalkerKey,
@@ -25,6 +26,7 @@ import {
   freezeTrip,
   juiceTrip,
   MAX_TICKS_PER_FRAME,
+  recageTrip,
   reconcileWalkers,
   reconcileWorkers,
   stepWalker,
@@ -69,7 +71,8 @@ import {
  * A champion frozen or thawed on the yard in view walks between its cage and
  * the Champion Chamber (#314) when `set` is handed a route to walk; under
  * reduced motion, with no route, or on a yard read fresh it is simply gone
- * from the cage or back in it.
+ * from the cage or back in it. When the cage itself moves, its champion walks
+ * round the buildings to the new spot the same way, or is put straight in.
  */
 
 /** World px of slack around the view before a creature counts as off screen. */
@@ -213,10 +216,19 @@ export class YardLifeLayer {
       }
     }
 
-    const kept = reconcileWalkers(this.walkers, walkerSpecs(next, this.random), this.random);
+    const specs = walkerSpecs(next, this.random);
+    const kept = reconcileWalkers(this.walkers, specs, this.random);
     if (!first && life !== null) {
       for (const [key, walker] of this.walkers) {
         if (!kept.has(key) && !walker.champion && !walker.juice) this.dropped.set(key, walker);
+      }
+    }
+    // The cage moved (the planner's Apply): a champion it already held walks
+    // round the buildings to it, as in Flash, or is put straight in.
+    if (life !== null && cageMoved(before, next)) {
+      for (const spec of specs) {
+        const walker = spec.champion && this.walkers.has(spec.key) ? kept.get(spec.key) : undefined;
+        if (walker) recageTrip(walker, spec.area, way, this.random);
       }
     }
     this.walkers = kept;

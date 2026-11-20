@@ -11,6 +11,7 @@ import {
   frameRect,
   frameRow,
   REPAINT_LAYOUTS,
+  sheetColumn,
   sheetUrl,
   spriteFor,
   type SheetLayoutOverride,
@@ -61,21 +62,25 @@ describe("applyLayout", () => {
     expect(applyLayout(POKEY, {})).toBe(POKEY);
   });
 
-  it("ships only the Bandito, Pokey, Bolt, Fink, Eye-ra, Fang, Ichi, Crabatron, Brain, D.A.V.E. (both skins), Project X, Wormzer, Zafreeti, Vorg, Teratorn, Octo-ooze, Rezghul, Slimeattikus (big and mini) and Korath 5 and 6 layouts, so every other sheet is exactly the Flash table", () => {
+  it("ships only the Bandito, Pokey, Bolt, Fink, Eye-ra, Fang, Ichi, Crabatron, Brain, D.A.V.E. (both skins), Project X, Wormzer, Zafreeti, Vorg, Teratorn, Octo-ooze, Rezghul, Slimeattikus (big and mini), Korath 5 and 6, Spurtz, Zagnoid, Malphus, Valgos, Balthazar, Grokus, Sabnox and King Wormzer layouts, so every other sheet is exactly the Flash table", () => {
     expect(Object.keys(REPAINT_LAYOUTS).sort()).toEqual([
       "monsters/13.png",
       "monsters/14.v1.png",
+      "monsters/balthazar.png",
       "monsters/bandito.png",
       "monsters/brain.v2.png",
       "monsters/crabatron.png",
       "monsters/eyera.png",
       "monsters/fang.png",
       "monsters/fink.png",
+      "monsters/grokus.v2.png",
       "monsters/ichi.png",
       "monsters/korath_5.png",
       "monsters/korath_6.png",
+      "monsters/malphus.png",
       "monsters/octoooze.png",
       "monsters/rezghul.png",
+      "monsters/sabnox.png",
       "monsters/slimeattikus_anim.png",
       "monsters/slimeattikusmini_anim.png",
       "monsters/sprite.1.v1.png",
@@ -83,12 +88,16 @@ describe("applyLayout", () => {
       "monsters/sprite.12.gold.png",
       "monsters/sprite.12.v2.png",
       "monsters/sprite.3.v2.png",
+      "monsters/spurtz.png",
+      "monsters/valgos.png",
       "monsters/vorg_anim.png",
+      "monsters/wormzer.png",
       "monsters/zafreeti.v2.png",
+      "monsters/zagnoid.png",
     ]);
-    const other = MONSTER_SPRITES["IC8"];
-    if (!other) throw new Error("no IC8");
-    expect(spriteFor("IC8")).toBe(other);
+    const other = MONSTER_SPRITES["worker"];
+    if (!other) throw new Error("no worker");
+    expect(spriteFor("worker")).toBe(other);
   });
 
   it("the Pokey layout matches the animated PNG and keeps the ball where it was", () => {
@@ -300,6 +309,216 @@ describe("applyLayout", () => {
     expect(sheet.anchorX).toBe(old.anchorX + 8);
     expect(sheet.anchorY).toBe(old.anchorY + 14);
     expect(sheet.frameWidth - sheet.anchorX).toBe(old.frameWidth - old.anchorX + 8);
+    expect(sheet.animations.attack?.first).toBe(7);
+    expect((sheet.animations.attack?.first ?? 0) + (sheet.animations.attack?.count ?? 0)).toBe(12);
+    expect(sheet.strikeFrame).toBe(2);
+  });
+
+  it("the Spurtz layout matches the animated PNG, has all 32 headings and keeps the fireball where it was", () => {
+    const old = MONSTER_SPRITES["IC1"];
+    if (!old) throw new Error("no IC1");
+    const sheet = spriteFor("IC1");
+    if (!sheet) throw new Error("no sprite for IC1");
+    const data = readFileSync(resolve(__dirname, "../../../../server/public/assets/monsters/spurtz-anim@4x.png"));
+    expect(data.readUInt32BE(16)).toBe(sheet.width * 4);
+    expect(data.readUInt32BE(20)).toBe(sheet.height * 4);
+    // The Flash sheet has 30 columns for 32 headings; the repaint has one column per heading.
+    expect(old.columns).toBe(30);
+    expect(sheet.directions).toBe(32);
+    expect(sheet.packedColumns).toBe(32);
+    expect(sheet.width).toBe(sheet.frameWidth * 32);
+    expect(sheet.height).toBe(sheet.frameHeight * 12);
+    // A monster heading 350 degrees reads column 31, which is on the painted sheet.
+    expect(sheetColumn(sheet, (350 * Math.PI) / 180)).toBe(31);
+    expect(frameRect(sheet, 31, 11)).toEqual({ x: 31 * 36, y: 11 * 42, width: 36, height: 42 });
+    expect(frameRect(sheet, 5, 3)).toEqual({ x: 5 * 36, y: 3 * 42, width: 36, height: 42 });
+    // 6 px added left and right, 12 px on top: the fireball stays on the same ground point.
+    expect(sheet.anchorX).toBe(old.anchorX + 6);
+    expect(sheet.anchorY).toBe(old.anchorY + 12);
+    expect(sheet.frameWidth - sheet.anchorX).toBe(old.frameWidth - old.anchorX + 6);
+    expect(sheet.animations.walk).toEqual({ first: 1, count: 6, ticksPerFrame: 8 });
+    expect(sheet.animations.attack?.first).toBe(7);
+    expect((sheet.animations.attack?.first ?? 0) + (sheet.animations.attack?.count ?? 0)).toBe(12);
+    expect(sheet.strikeFrame).toBe(2);
+  });
+
+  it("the Zagnoid layout matches the animated PNG, cuts whole-pixel cells and keeps the slug on its ground line", () => {
+    const old = MONSTER_SPRITES["IC2"];
+    if (!old) throw new Error("no IC2");
+    const sheet = spriteFor("IC2");
+    if (!sheet) throw new Error("no sprite for IC2");
+    const data = readFileSync(resolve(__dirname, "../../../../server/public/assets/monsters/zagnoid-anim@4x.png"));
+    expect(data.readUInt32BE(16)).toBe(sheet.width * 4);
+    expect(data.readUInt32BE(20)).toBe(sheet.height * 4);
+    // The Flash cell is 64.4 px wide; the repaint's is a whole 76 (64 + 6 each side).
+    expect(old.frameWidth).toBeCloseTo(64.4, 6);
+    expect(sheet.frameWidth).toBe(76);
+    expect(sheet.directions).toBe(30);
+    expect(sheet.packedColumns).toBeUndefined();
+    expect(sheet.width).toBe(76 * 30);
+    expect(sheet.height).toBe(58 * 12);
+    expect(frameRect(sheet, 29, 11)).toEqual({ x: 29 * 76, y: 11 * 58, width: 76, height: 58 });
+    // 6 px added left and right, 10 px on top: the anchor moves with the padding.
+    expect(sheet.anchorX).toBe(old.anchorX + 6);
+    expect(sheet.anchorY).toBe(old.anchorY + 10);
+    expect(sheet.animations.walk).toEqual({ first: 1, count: 6, ticksPerFrame: 8 });
+    expect(sheet.animations.attack?.first).toBe(7);
+    expect((sheet.animations.attack?.first ?? 0) + (sheet.animations.attack?.count ?? 0)).toBe(12);
+    expect(sheet.strikeFrame).toBe(2);
+  });
+
+  it("the Malphus layout matches the animated PNG and keeps the spider-demon on its ground point", () => {
+    const old = MONSTER_SPRITES["IC3"];
+    if (!old) throw new Error("no IC3");
+    const sheet = spriteFor("IC3");
+    if (!sheet) throw new Error("no sprite for IC3");
+    const data = readFileSync(resolve(__dirname, "../../../../server/public/assets/monsters/malphus-anim@4x.png"));
+    expect(data.readUInt32BE(16)).toBe(sheet.width * 4);
+    expect(data.readUInt32BE(20)).toBe(sheet.height * 4);
+    // The Flash cell is 51x35; the repaint's is 63x47 (6 px each side, 10 on top, 2 at the bottom).
+    expect(sheet.frameWidth).toBe(old.frameWidth + 12);
+    expect(sheet.frameHeight).toBe(old.frameHeight + 12);
+    expect(sheet.directions).toBe(30);
+    expect(sheet.packedColumns).toBeUndefined();
+    expect(sheet.width).toBe(63 * 30);
+    expect(sheet.height).toBe(47 * 12);
+    expect(frameRect(sheet, 29, 11)).toEqual({ x: 29 * 63, y: 11 * 47, width: 63, height: 47 });
+    expect(sheet.anchorX).toBe(old.anchorX + 6);
+    expect(sheet.anchorY).toBe(old.anchorY + 10);
+    expect(sheet.animations.walk).toEqual({ first: 1, count: 6, ticksPerFrame: 8 });
+    expect(sheet.animations.attack?.first).toBe(7);
+    expect((sheet.animations.attack?.first ?? 0) + (sheet.animations.attack?.count ?? 0)).toBe(12);
+    expect(sheet.strikeFrame).toBe(2);
+  });
+
+  it("the Valgos layout matches the animated PNG and keeps the maw beast on its ground point", () => {
+    const old = MONSTER_SPRITES["IC4"];
+    if (!old) throw new Error("no IC4");
+    const sheet = spriteFor("IC4");
+    if (!sheet) throw new Error("no sprite for IC4");
+    const data = readFileSync(resolve(__dirname, "../../../../server/public/assets/monsters/valgos-anim@4x.png"));
+    expect(data.readUInt32BE(16)).toBe(sheet.width * 4);
+    expect(data.readUInt32BE(20)).toBe(sheet.height * 4);
+    // The Flash cell is 55x32; the repaint's is 67x44 (6 px each side, 10 on top, 2 at the bottom).
+    expect(sheet.frameWidth).toBe(old.frameWidth + 12);
+    expect(sheet.frameHeight).toBe(old.frameHeight + 12);
+    expect(sheet.directions).toBe(30);
+    expect(sheet.packedColumns).toBeUndefined();
+    expect(sheet.width).toBe(67 * 30);
+    expect(sheet.height).toBe(44 * 12);
+    expect(frameRect(sheet, 29, 11)).toEqual({ x: 29 * 67, y: 11 * 44, width: 67, height: 44 });
+    expect(sheet.anchorX).toBe(old.anchorX + 6);
+    expect(sheet.anchorY).toBe(old.anchorY + 10);
+    expect(sheet.animations.walk).toEqual({ first: 1, count: 6, ticksPerFrame: 8 });
+    expect(sheet.animations.attack?.first).toBe(7);
+    expect((sheet.animations.attack?.first ?? 0) + (sheet.animations.attack?.count ?? 0)).toBe(12);
+    expect(sheet.strikeFrame).toBe(2);
+  });
+
+  it("the Balthazar layout matches the animated PNG, keeps the flyer over its shadow and flaps when standing", () => {
+    const old = MONSTER_SPRITES["IC5"];
+    if (!old) throw new Error("no IC5");
+    const sheet = spriteFor("IC5");
+    if (!sheet) throw new Error("no sprite for IC5");
+    const data = readFileSync(resolve(__dirname, "../../../../server/public/assets/monsters/balthazar-anim@4x.png"));
+    expect(data.readUInt32BE(16)).toBe(sheet.width * 4);
+    expect(data.readUInt32BE(20)).toBe(sheet.height * 4);
+    // The Flash cell is 56x37; the repaint's is 68x65, reading Flash x -1 to 67 (the wings spill past the
+    // cell), 20 px more on top for the raised wings and 8 at the bottom.
+    expect(sheet.frameWidth).toBe(68);
+    expect(sheet.frameHeight).toBe(old.frameHeight + 28);
+    expect(sheet.directions).toBe(30);
+    expect(sheet.packedColumns).toBeUndefined();
+    expect(sheet.width).toBe(68 * 30);
+    expect(sheet.width * 4).toBeLessThanOrEqual(8192);
+    expect(sheet.height).toBe(65 * 12);
+    expect(frameRect(sheet, 29, 11)).toEqual({ x: 29 * 68, y: 11 * 65, width: 68, height: 65 });
+    expect(sheet.anchorX).toBe(old.anchorX + 1);
+    expect(sheet.anchorY).toBe(old.anchorY + 20);
+    expect(sheet.animations.walk).toEqual({ first: 1, count: 6, ticksPerFrame: 8 });
+    expect(sheet.animations.idle).toBeUndefined();
+    expect(frameRow(sheet, "idle", 8)).toBe(frameRow(sheet, "walk", 8));
+    expect(sheet.animations.attack?.first).toBe(7);
+    expect((sheet.animations.attack?.first ?? 0) + (sheet.animations.attack?.count ?? 0)).toBe(12);
+    expect(sheet.strikeFrame).toBe(2);
+  });
+
+  it("the Sabnox layout matches the animated PNG and keeps the salamander on its ground point", () => {
+    const old = MONSTER_SPRITES["IC7"];
+    if (!old) throw new Error("no IC7");
+    const sheet = spriteFor("IC7");
+    if (!sheet) throw new Error("no sprite for IC7");
+    const data = readFileSync(resolve(__dirname, "../../../../server/public/assets/monsters/sabnox-anim@4x.png"));
+    expect(data.readUInt32BE(16)).toBe(sheet.width * 4);
+    expect(data.readUInt32BE(20)).toBe(sheet.height * 4);
+    // The Flash cell is 42x34 (whole pixels, no creep); the repaint's is 8 px wider each side, 12 px taller on
+    // top and 2 at the bottom.
+    expect(sheet.frameWidth).toBe(old.frameWidth + 16);
+    expect(sheet.frameHeight).toBe(old.frameHeight + 14);
+    expect(sheet.directions).toBe(30);
+    expect(sheet.packedColumns).toBeUndefined();
+    expect(sheet.width).toBe(58 * 30);
+    expect(sheet.width * 4).toBeLessThanOrEqual(8192);
+    expect(sheet.height).toBe(48 * 12);
+    expect(frameRect(sheet, 29, 11)).toEqual({ x: 29 * 58, y: 11 * 48, width: 58, height: 48 });
+    expect(sheet.anchorX).toBe(old.anchorX + 8);
+    expect(sheet.anchorY).toBe(old.anchorY + 12);
+    expect(sheet.animations.idle).toEqual({ first: 0, count: 1, ticksPerFrame: 8 });
+    expect(sheet.animations.walk).toEqual({ first: 1, count: 6, ticksPerFrame: 8 });
+    expect(sheet.animations.attack?.first).toBe(7);
+    expect((sheet.animations.attack?.first ?? 0) + (sheet.animations.attack?.count ?? 0)).toBe(12);
+    expect(sheet.strikeFrame).toBe(2);
+  });
+
+  it("the King Wormzer layout matches the animated PNG and keeps the brute on its ground point", () => {
+    const old = MONSTER_SPRITES["IC8"];
+    if (!old) throw new Error("no IC8");
+    const sheet = spriteFor("IC8");
+    if (!sheet) throw new Error("no sprite for IC8");
+    const data = readFileSync(resolve(__dirname, "../../../../server/public/assets/monsters/kingwormzer-anim@4x.png"));
+    expect(data.readUInt32BE(16)).toBe(sheet.width * 4);
+    expect(data.readUInt32BE(20)).toBe(sheet.height * 4);
+    // The Flash cell is 58x42 (whole pixels, no creep); the repaint's is 5 px wider each side, 12 px taller on
+    // top and 2 at the bottom.
+    expect(sheet.frameWidth).toBe(old.frameWidth + 10);
+    expect(sheet.frameHeight).toBe(old.frameHeight + 14);
+    expect(sheet.directions).toBe(30);
+    expect(sheet.packedColumns).toBeUndefined();
+    expect(sheet.width).toBe(68 * 30);
+    expect(sheet.width * 4).toBeLessThanOrEqual(8192);
+    expect(sheet.height).toBe(56 * 12);
+    expect(frameRect(sheet, 29, 11)).toEqual({ x: 29 * 68, y: 11 * 56, width: 68, height: 56 });
+    expect(sheet.anchorX).toBe(old.anchorX + 5);
+    expect(sheet.anchorY).toBe(old.anchorY + 12);
+    expect(sheet.animations.idle).toEqual({ first: 0, count: 1, ticksPerFrame: 8 });
+    expect(sheet.animations.walk).toEqual({ first: 1, count: 6, ticksPerFrame: 8 });
+    expect(sheet.animations.attack?.first).toBe(7);
+    expect((sheet.animations.attack?.first ?? 0) + (sheet.animations.attack?.count ?? 0)).toBe(12);
+    expect(sheet.strikeFrame).toBe(2);
+  });
+
+  it("the Grokus layout matches the animated PNG and keeps the octopus on its ground point", () => {
+    const old = MONSTER_SPRITES["IC6"];
+    if (!old) throw new Error("no IC6");
+    const sheet = spriteFor("IC6");
+    if (!sheet) throw new Error("no sprite for IC6");
+    const data = readFileSync(resolve(__dirname, "../../../../server/public/assets/monsters/grokus-anim@4x.png"));
+    expect(data.readUInt32BE(16)).toBe(sheet.width * 4);
+    expect(data.readUInt32BE(20)).toBe(sheet.height * 4);
+    // The Flash cell is 57x39 (cut at whole pixels; the art creeps right 0.26 px a column); the repaint's is
+    // 68x51, reading Flash x -5 to 63 with the creep taken out, 10 px more on top and 2 at the bottom.
+    expect(sheet.frameWidth).toBe(68);
+    expect(sheet.frameHeight).toBe(old.frameHeight + 12);
+    expect(sheet.directions).toBe(30);
+    expect(sheet.packedColumns).toBeUndefined();
+    expect(sheet.width).toBe(68 * 30);
+    expect(sheet.width * 4).toBeLessThanOrEqual(8192);
+    expect(sheet.height).toBe(51 * 12);
+    expect(frameRect(sheet, 29, 11)).toEqual({ x: 29 * 68, y: 11 * 51, width: 68, height: 51 });
+    expect(sheet.anchorX).toBe(old.anchorX + 5);
+    expect(sheet.anchorY).toBe(old.anchorY + 10);
+    expect(sheet.animations.idle).toEqual({ first: 0, count: 1, ticksPerFrame: 8 });
+    expect(sheet.animations.walk).toEqual({ first: 1, count: 6, ticksPerFrame: 8 });
     expect(sheet.animations.attack?.first).toBe(7);
     expect((sheet.animations.attack?.first ?? 0) + (sheet.animations.attack?.count ?? 0)).toBe(12);
     expect(sheet.strikeFrame).toBe(2);

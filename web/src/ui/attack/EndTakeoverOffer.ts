@@ -11,6 +11,8 @@ import {
 } from "@/game/maproom/takeover";
 import { formatSpan } from "@/ui/attack/EndAttackPanel";
 import { TakeoverDialog, type TakeoverDialogPrice } from "@/ui/maproom/TakeoverDialog";
+import { formatAmount } from "@/ui/format";
+import { RESOURCE_KEYS, resourceAmount, resourceIcon } from "@/ui/resourceIcon";
 
 /**
  * The takeover offer on the end-of-attack panel (issue #82, outposts plan
@@ -50,6 +52,12 @@ export interface EndTakeoverOfferOptions {
   readonly onTaken: (payment: TakeoverPayment) => void;
   /** Local seconds; `Date.now` by default. */
   readonly now?: () => number;
+  /**
+   * The short form for the Repeat attack's result (owner, 16 Nov 2026: only
+   * the resources needed to take over): "Take-over cost", the price as
+   * painted resource icons, Take over beside it. Wild camps only.
+   */
+  readonly compact?: boolean;
 }
 
 /** Where the offer stands. */
@@ -58,6 +66,28 @@ export type EndTakeoverState = "open" | "declining" | "declined" | "taken" | "en
 /** The text under Not now, so leaving is not a surprise. */
 export const LEAVING_DECLINES =
   "Not now, or leaving this screen, turns the offer down and starts this outpost's damage protection.";
+
+/**
+ * The compact offer's price: the four painted resource icons, "450,000 each",
+ * "or", the Shiny icon and its amount. No "Frontier Pass" or "Half price":
+ * the owner only needs the price (16 Nov 2026).
+ */
+const compactPrice = (price: { resources: number; shiny?: number | undefined }): Node[] => {
+  const each = document.createElement("span");
+  each.className = "end-takeover__each";
+  each.setAttribute("aria-label", `${formatAmount(price.resources)} of each resource`);
+  for (const key of RESOURCE_KEYS) each.append(resourceIcon(key, { decorative: true }));
+  each.append(document.createTextNode(` ${formatAmount(price.resources)} each`));
+  if (price.shiny === undefined) return [each];
+  // "or [Shiny] 965" never breaks apart.
+  const alternative = document.createElement("span");
+  alternative.className = "end-takeover__alt";
+  const or = document.createElement("span");
+  or.className = "end-takeover__or";
+  or.textContent = "or";
+  alternative.append(or, resourceAmount("shiny", price.shiny, { tooltip: false }));
+  return [each, alternative];
+};
 
 export class EndTakeoverOffer {
   readonly element: HTMLElement;
@@ -119,7 +149,17 @@ export class EndTakeoverOffer {
     actions.className = "end-takeover__actions";
     actions.append(this.notNowButton, this.takeButton);
 
-    this.element.append(lead, this.priceLine, this.countdown, actions, this.message);
+    if (options.compact && kind === "camp") {
+      this.element.classList.add("end-takeover--compact");
+      lead.textContent = "Takeover cost";
+      this.message.textContent = "";
+      const info = document.createElement("div");
+      info.className = "end-takeover__info";
+      info.append(lead, this.priceLine);
+      this.element.append(info, actions, this.message);
+    } else {
+      this.element.append(lead, this.priceLine, this.countdown, actions, this.message);
+    }
 
     this.showPrice(grant ?? {});
     if (kind === "camp") this.takeButton.disabled = true;
@@ -198,6 +238,10 @@ export class EndTakeoverOffer {
   }): void {
     if (price.resources === undefined) {
       this.priceLine.textContent = this.options.kind === "camp" ? "Checking the price…" : "";
+      return;
+    }
+    if (this.element.classList.contains("end-takeover--compact")) {
+      this.priceLine.replaceChildren(...compactPrice({ resources: price.resources, shiny: price.shiny }));
       return;
     }
     // The welcome price is a flat 10% of the full price: no half price on top.

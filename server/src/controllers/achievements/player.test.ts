@@ -104,7 +104,7 @@ afterEach(() => {
   achievementConfig.rewards = startingRewards;
 });
 
-describe("GET bm/achievements/player/:userid", () => {
+describe("playerAchievementsAnswer (another player's achievements; the profile reads its counts)", () => {
   test("a record never worked out gets the backfill on the fly, and nothing is stored", async () => {
     const answer = await ask();
 

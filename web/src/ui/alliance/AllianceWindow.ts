@@ -63,7 +63,6 @@ import {
 } from "@/api/allianceProgress";
 import {
   constellationTab,
-  goalsCard,
   helpersCard,
   newsCard,
   statTiles,
@@ -71,6 +70,7 @@ import {
   todayCard,
   type ProgressHost,
 } from "./allianceProgressUi";
+import { confirmRemoveGoal, goalsLine, goalsTab, goalsTabIcon, type GoalsHost } from "./goalsTab";
 import { onlineDot } from "@/ui/onlineDot";
 import { Popup } from "@/ui/Popup";
 import { StarEditor } from "@/ui/alliance/StarEditor";
@@ -165,14 +165,19 @@ export const ALLIANCE_TEXT = {
   back: "Back",
   overview: "Overview",
   members: "Members",
-  tabs: { overview: "Overview", constellation: "Constellation", members: "Members", trade: "Trade", territory: "Territory" } as Readonly<
+  tabs: {
+    overview: "Overview",
+    goals: "Goals",
+    constellation: "Constellation",
+    members: "Members",
+    trade: "Trade",
+    territory: "Territory",
+  } as Readonly<
     Record<AllianceTab, string>
   >,
   membersCount: (count: number, limit: number): string => `${formatAmount(count)} / ${formatAmount(limit)} members`,
   online: (count: number): string => `${formatAmount(count)} online`,
   points: "Alliance points",
-  /** A mate's row: send them resources (the Trade tab's Send sheet). */
-  send: "Send",
   /** The short word under each Overview tile's number. */
   tileCaption: { members: "members", online: "online now", points: "points" },
   edit: "Edit",
@@ -186,6 +191,9 @@ export const ALLIANCE_TEXT = {
   takeOverNote: "Your Leader has been away a week. You can lead now.",
   leave: "Leave alliance",
   leaveConfirm: "Leave? You wait 24 h before joining another.",
+  /** The confirm's own buttons: what each does, not Yes / No (astra, beta 8). */
+  leaveYes: "Leave",
+  leaveNo: "Stay",
   yes: "Yes",
   no: "No",
   invite: "Invite",
@@ -259,7 +267,7 @@ export interface AllianceWindowOptions {
   readonly now?: () => number;
   /** The tab a member's window opens on. */
   readonly tab?: AllianceTab;
-  /** On the Trade tab: open Give on a request, or Send to a mate. */
+  /** On the Trade tab: a mate's request to show lit. */
   readonly focus?: AllianceFocus;
   /** The trade routes; the game's own unless a test swaps them. */
   readonly tradeApi?: AllianceTradeApi;
@@ -349,16 +357,20 @@ const adLine = (ad: Partial<AdForm>): HTMLElement => {
   return line;
 };
 
+/** Anyone may leave, but a Leader only once alone (they hand over first). */
+const canLeave = (alliance: MyAlliance): boolean => !(alliance.role === "leader" && (alliance.number_of_members ?? 1) > 1);
+
 const typeBadge = (type: AllianceType): HTMLElement =>
   make("span", `alliance__type alliance__type--${type}`, TYPE_INFO[type]?.label ?? type);
 
 export class AllianceWindow {
   /** The member tabs, in order (design v5 §7b). */
-  static readonly TABS: readonly AllianceTab[] = ["overview", "constellation", "members", "trade", "territory"];
+  static readonly TABS: readonly AllianceTab[] = ["overview", "goals", "constellation", "members", "trade", "territory"];
 
   /** Each tab's painted icon; on a phone the tabs show only it. */
   static readonly TAB_ICONS: Readonly<Record<AllianceTab, GameIconName>> = {
     overview: "alliance",
+    goals: "goals",
     constellation: "empire",
     members: "friends",
     trade: "income",
@@ -369,7 +381,7 @@ export class AllianceWindow {
 
   /** The Trade tab (design v5 §12b), which keeps its own data and sheets. */
   private readonly trade: TradeTab;
-  /** Where the Trade tab opens on its first load (chat's Give, a Send). */
+  /** Where the Trade tab opens on its first load (chat's Trade on a request). */
   private focus: AllianceFocus | null;
 
   private readonly options: AllianceWindowOptions;
@@ -431,6 +443,19 @@ export class AllianceWindow {
     run: (action) => void this.runProgress(action),
     redraw: () => this.render(),
     now: () => this.now(),
+  };
+  /** The Goals tab's view of the window: its calls, the Add list and the remove pop-up. */
+  private readonly goalsHost: GoalsHost = {
+    run: (action) => void this.runProgress(action),
+    now: () => this.now(),
+    adding: () => this.addingGoal,
+    setAdding: (open) => {
+      this.addingGoal = open;
+      this.say(null);
+      this.render();
+      this.popup.body.scrollTop = 0;
+    },
+    confirmRemove: (goal) => confirmRemoveGoal(this.container ?? document.body, goal),
   };
 
   private static newDraft(): { name: string; image: number; description: string; type: AllianceType } & AdDraft {
@@ -495,8 +520,8 @@ export class AllianceWindow {
 
   /**
    * Whether the server lets the alliance trade (`trade_on`; the server's
-   * `ALLIANCE_TRADE_ENABLED`, off in beta 7): off, the Trade tab and every
-   * Send stay but are greyed out, "Coming soon" (owner 11 Nov).
+   * `ALLIANCE_TRADE_ENABLED`; the release turns it on for beta 8): off, the
+   * Trade tab stays but is greyed out, "Coming soon" (owner 11 Nov).
    */
   private tradeOn(): boolean {
     return this.view.kind === "mine" && this.view.alliance.trade_on === true;
@@ -509,7 +534,7 @@ export class AllianceWindow {
     this.focus = null;
   }
 
-  /** Shows a member tab; on Trade, `focus` opens Give or Send. */
+  /** Shows a member tab; on Trade, `focus` lights a request. */
   showTab(tab: AllianceTab, focus?: AllianceFocus): void {
     if (focus) this.focus = focus;
     this.tab = tab;
@@ -525,12 +550,11 @@ export class AllianceWindow {
     if (this.tab === "trade") this.loadTrade();
   }
 
-  /** Loads the Trade tab, opening the sheet a focus asks for. */
+  /** Loads the Trade tab, lighting the request a focus asks for. */
   private loadTrade(): void {
     const focus = this.focus;
     this.focus = null;
-    if (focus && "request" in focus) this.trade.openRequest(focus.request);
-    else if (focus && "send" in focus) this.trade.openSend(focus.send.userid, focus.send.username);
+    if (focus) this.trade.openRequest(focus.request);
     else void this.trade.load();
   }
 
@@ -691,6 +715,7 @@ export class AllianceWindow {
     const view = this.view;
     this.foot.replaceChildren();
     this.foot.hidden = true;
+    this.foot.classList.remove("alliance__foot--leave");
     if (view.kind === "loading" || view.kind === "failed") {
       this.popup.setTitle(ALLIANCE_TEXT.title);
       this.popup.setHead(this.status);
@@ -1449,7 +1474,7 @@ export class AllianceWindow {
       const off = tab === "trade" && !this.tradeOn();
       const node = make("button", "tabs__tab alliance__tab");
       node.append(
-        gameIcon(AllianceWindow.TAB_ICONS[tab], { size: 24, decorative: true }),
+        gameIcon(tab === "goals" ? goalsTabIcon() : AllianceWindow.TAB_ICONS[tab], { size: 24, decorative: true }),
         make("span", "alliance__tab-words", words),
       );
       node.title = words;
@@ -1471,8 +1496,24 @@ export class AllianceWindow {
     this.popup.setHead(head, tabs, this.status);
     this.popup.body.replaceChildren(...this.tabBody(alliance));
 
-    this.foot.hidden = alliance.role === "leader" && (alliance.number_of_members ?? 1) > 1;
-    if (!this.foot.hidden) this.foot.append(...this.leaveButtons());
+    this.foot.hidden = !canLeave(alliance);
+    if (!this.foot.hidden) {
+      // `--leave`: a short screen hides this foot and shows Leave at the end of Overview instead (alliance.css).
+      this.foot.classList.add("alliance__foot--leave");
+      this.foot.append(...this.leaveButtons());
+    }
+  }
+
+  /**
+   * Leave at the end of Overview (beta 8): shown only on a short screen (a
+   * phone on its side), where the foot under every tab goes so the tab keeps
+   * room for its list (alliance.css). Still two taps: Leave, then Yes.
+   */
+  private leaveRow(alliance: MyAlliance): HTMLElement | null {
+    if (!canLeave(alliance)) return null;
+    const row = make("div", "alliance__leave-row");
+    row.append(...this.leaveButtons());
+    return row;
   }
 
   private leaveButtons(): HTMLElement[] {
@@ -1480,12 +1521,14 @@ export class AllianceWindow {
       return [button(ALLIANCE_TEXT.leave, "btn--outline alliance__leave", () => {
         this.leaving = true;
         this.render();
+        // The confirm replaced Leave at the end of Overview: keep it in sight (short screens).
+        this.popup.body.querySelector(".alliance__leave-row")?.scrollIntoView?.({ block: "nearest" });
       })];
     }
     return [
       make("span", "alliance__confirm-words", ALLIANCE_TEXT.leaveConfirm),
-      button(ALLIANCE_TEXT.yes, "btn--primary", () => void this.leave()),
-      button(ALLIANCE_TEXT.no, "btn--outline", () => {
+      button(ALLIANCE_TEXT.leaveYes, "btn--primary", () => void this.leave()),
+      button(ALLIANCE_TEXT.leaveNo, "btn--outline", () => {
         this.leaving = false;
         this.render();
       }),
@@ -1522,6 +1565,8 @@ export class AllianceWindow {
           },
           alliance.can_edit_stars ? () => this.openStarEditor() : undefined,
         );
+      case "goals":
+        return goalsTab(alliance, this.goalsHost, this.progressApi);
       case "trade":
         return this.trade.render();
       case "territory":
@@ -1589,21 +1634,15 @@ export class AllianceWindow {
     if (this.editing === "rename") nodes.push(this.renameForm(alliance));
     if (this.editing === "type") nodes.push(this.typeSwitch(alliance, now));
 
-    const adding = {
-      open: this.addingGoal,
-      toggle: () => {
-        this.addingGoal = !this.addingGoal;
-        this.render();
-      },
-    };
     for (const part of [
       todayCard(alliance),
-      goalsCard(alliance, this.host, this.progressApi, adding),
+      goalsLine(alliance, now, () => this.showTab("goals")),
       helpersCard(alliance),
       newsCard(this.news, this.showAllNews, this.host, () => {
         this.showAllNews = !this.showAllNews;
         this.render();
       }),
+      this.leaveRow(alliance),
     ]) {
       if (part) nodes.push(part);
     }
@@ -1787,16 +1826,15 @@ export class AllianceWindow {
   }
 
   private memberRow(alliance: MyAlliance, member: AllianceMember, actions: readonly MemberAction[]): HTMLElement {
-    // Every mate but yourself can be sent resources (design v5 §7b, §12b).
-    const canSend = member.user_id !== (this.myId() ?? -1);
-    const opened = this.openMember === member.user_id && (actions.length > 0 || canSend);
+    // Trading is swaps only (owner, 16 Nov 2026): a row opens for its rank actions alone.
+    const opened = this.openMember === member.user_id && actions.length > 0;
     const item = make("div", "alliance__item");
     item.setAttribute("role", "listitem");
     item.dataset["userid"] = String(member.user_id);
     item.classList.toggle("is-open", opened);
     const row = make("button", "alliance__row");
     row.type = "button";
-    row.disabled = actions.length === 0 && !canSend;
+    row.disabled = actions.length === 0;
     row.setAttribute("aria-expanded", String(opened));
     const role = member.role ?? "member";
     const words = make("span", "alliance__row-words");
@@ -1827,19 +1865,6 @@ export class AllianceWindow {
           }),
         );
       } else {
-        if (canSend) {
-          const tradeOn = this.tradeOn();
-          const send = button(ALLIANCE_TEXT.send, "btn--outline alliance__send", () => {
-            if (tradeOn) this.showTab("trade", { send: { userid: member.user_id, username: member.display_name } });
-          });
-          send.prepend(gameIcon("income", { size: 16, decorative: true }));
-          // Trading switched off: Send stays, greyed out, "Coming soon".
-          if (!tradeOn) {
-            send.disabled = true;
-            send.title = TRADE_OFF_TITLE;
-          }
-          more.append(send);
-        }
         for (const action of actions) {
           more.append(
             button(ALLIANCE_TEXT.action[action], action === "kick" ? "btn--outline alliance__kick" : "btn--outline", () => {

@@ -5,8 +5,6 @@ import {
   earnedGroup,
   earnedText,
   isSecret,
-  notEarnedGroup,
-  playerTitle,
   progressRatio,
   progressText,
   rewardText,
@@ -48,14 +46,12 @@ describe("achievements: progress words", () => {
     expect(progressRatio({ value: 1, target: 0 })).toBe(0);
   });
 
-  it("words the reward, the date, the header and the read-only title", () => {
+  it("words the reward, the date and the header", () => {
     expect(rewardText(25)).toBe("+25 Shiny");
     expect(earnedText(noon("2026-10-03"))).toBe("Earned 3 Oct 2026");
     expect(earnedText(undefined)).toBe("Earned");
     expect(summaryText(7, 16, 85)).toBe("7 of 16 earned · 85 Shiny earned");
     expect(summaryText(7, 16)).toBe("7 of 16 earned");
-    expect(playerTitle("Bob")).toBe("Bob's achievements");
-    expect(playerTitle("  ")).toBe("Achievements");
   });
 
   it("tiers the placeholder badge by reward: bronze 5, silver 10-15, gold 20-25, plain without one", () => {
@@ -85,15 +81,6 @@ describe("achievements: the groups", () => {
     ];
     expect(earnedGroup(list).map((one) => one.id)).toEqual([2, 1, 6]);
   });
-
-  it("keeps someone else's not-earned entries in Flash's order", () => {
-    const list = [
-      { id: 12, status: "locked" as const },
-      { id: 1, status: "earned" as const, at: 5 },
-      { id: 3, status: "locked" as const },
-    ];
-    expect(notEarnedGroup(list).map((one) => one.id)).toEqual([3, 12]);
-  });
 });
 
 describe("hidden achievements (#299)", () => {
@@ -103,18 +90,13 @@ describe("hidden achievements (#299)", () => {
     expect(isSecret({ status: "locked" })).toBe(false);
   });
 
-  it("puts secret entries after every visible one in both not-earned groups", () => {
+  it("puts secret entries after every visible one in To do", () => {
     const own = [
       entry(24, { hidden: true, progress: { value: 0, target: 1 } }),
       entry(2, { progress: { value: 0, target: 5 } }),
       entry(23, { hidden: true, progress: { value: 0, target: 1 } }),
     ];
     expect(toDoGroup(own).map((one) => one.id)).toEqual([2, 23, 24]);
-    const theirs = [
-      { id: 25, status: "locked" as const, hidden: true as const },
-      { id: 12, status: "locked" as const },
-    ];
-    expect(notEarnedGroup(theirs).map((one) => one.id)).toEqual([12, 25]);
   });
 
   it("names the units of the five new entries", () => {

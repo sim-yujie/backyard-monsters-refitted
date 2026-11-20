@@ -480,6 +480,165 @@ export const REPAINT_LAYOUTS: Readonly<Record<string, SheetLayoutOverride>> = {
   // layout, 16 wide and 30 tall, even the 2x sheet passed 8192 px.
   "monsters/korath_5.png": { frameWidth: 200, columns: 20 },
   "monsters/korath_6.png": { frameHeight: 168, columns: 20 },
+  // Spurtz (IC1): 36x42 cells (the old 24x28 cell plus 6 px each side, 12 px on top and 2 at the
+  // bottom), so the anchor moves by (6, 12) and the fireball and its shadow stay put. The Flash
+  // sheet has only 30 columns for the 32 headings the game reads (headings 30 and 31 fell off the
+  // sheet); the repaint has all 32, 11.25 degrees apart, one row per frame: `columns: 32` with the
+  // 32 directions packs exactly one heading per column. Rows: 0 idle, 1-6 hopping walk, 7-11 attack
+  // (squash, flare up, lunge, follow-through, recover).
+  "monsters/spurtz.png": {
+    frameWidth: 36,
+    frameHeight: 42,
+    anchorX: 18,
+    anchorY: 26,
+    rows: 12,
+    columns: 32,
+    animations: {
+      idle: { first: 0, count: 1, ticksPerFrame: 8 },
+      walk: { first: 1, count: 6, ticksPerFrame: 8 },
+      attack: { first: 7, count: 5, ticksPerFrame: 4 },
+    },
+    strikeFrame: 2,
+  },
+  // Zagnoid (IC2): 76x58 cells. The Flash cell is 64.4 px wide (1933 px / 30), drawn at fractional
+  // x; the repaint cuts it at whole pixels as a 64 px cell and adds 6 px each side, 10 on top and 2
+  // at the bottom, so the anchor moves by (6, 10) and the slug stands on the same ground line over
+  // Flash's own long cast shadow. The Flash art creeps right 0.25 px a column (laid out 64.65 apart,
+  // cut 64.4 apart) and jumps back between headings 29 and 0; the repaint takes that out, so it sits
+  // up to about 4 px either way from Flash's spot. 30 headings on 30 columns, as Flash. Rows: 0 idle, 1-6 crawl, 7-11 attack (rear back, rear up,
+  // lunge with claws and bite, follow-through, recover). Flash's single pose glided.
+  "monsters/zagnoid.png": {
+    frameWidth: 76,
+    frameHeight: 58,
+    anchorX: 32,
+    anchorY: 38,
+    rows: 12,
+    animations: {
+      idle: { first: 0, count: 1, ticksPerFrame: 8 },
+      walk: { first: 1, count: 6, ticksPerFrame: 8 },
+      attack: { first: 7, count: 5, ticksPerFrame: 4 },
+    },
+    strikeFrame: 2,
+  },
+  // Malphus (IC3): 63x47 cells, the 51x35 Flash cell plus 6 px each side, 10 on top and 2 at the
+  // bottom, so the anchor moves by (6, 10) and the spider-demon stands on the same ground point over
+  // Flash's cast shadow. 30 headings on 30 columns, as Flash. Painted from the Hatchery / Locker
+  // portrait; headings 8-22 painted, the rest their mirror (it is left-right symmetric). Rows: 0 idle,
+  // 1-6 four-legged scuttle, 7-11 attack (rear back, arms up, slash and tusk gore, follow-through,
+  // recover). Flash had an 8-frame walk and no attack.
+  "monsters/malphus.png": {
+    frameWidth: 63,
+    frameHeight: 47,
+    anchorX: 31,
+    anchorY: 27,
+    rows: 12,
+    animations: {
+      idle: { first: 0, count: 1, ticksPerFrame: 8 },
+      walk: { first: 1, count: 6, ticksPerFrame: 8 },
+      attack: { first: 7, count: 5, ticksPerFrame: 4 },
+    },
+    strikeFrame: 2,
+  },
+  // Valgos (IC4): 67x44 cells, the 55x32 Flash cell plus 6 px each side, 10 on top and 2 at the
+  // bottom, so the anchor moves by (6, 10) and the maw beast stands on the same ground point over
+  // Flash's cast shadow. 30 headings on 30 columns, as Flash, which draws its columns 6 degrees early:
+  // the repaint keeps that turn (headings 8-23 painted, front to back; the rest are their mirror, h <-> 16 - h).
+  // The Flash art creeps right 0.4 px a column; the repaint takes that out. Painted from the Hatchery /
+  // Locker portrait. Rows: 0 idle, 1-6 four-legged plod (seen in the yard; in battle it tunnels between
+  // bites), 7-11 attack (head back, maw wide, lunge, crunching bite, recover). Flash had one pose.
+  "monsters/valgos.png": {
+    frameWidth: 67,
+    frameHeight: 44,
+    anchorX: 17,
+    anchorY: 25,
+    rows: 12,
+    animations: {
+      idle: { first: 0, count: 1, ticksPerFrame: 8 },
+      walk: { first: 1, count: 6, ticksPerFrame: 8 },
+      attack: { first: 7, count: 5, ticksPerFrame: 4 },
+    },
+    strikeFrame: 2,
+  },
+  // Balthazar (IC5): 68x65 cells. The Flash cell is 56x37, but its wings spill past it (-4 to +66 px) and
+  // the art creeps right 0.8 px a column; with the creep taken out, the repaint's cell reads Flash x -1 to
+  // 67 (anchor 33 -> 34) and adds 20 px on top for the raised wings and 8 at the bottom (anchor 18.5 ->
+  // 38.5), so the flyer stays over its own shadow sprite. 30 x 4 x 68 = 8160 px, inside 8192. Painted from
+  // the Hatchery / Locker portrait; headings 8-22 painted, the rest their mirror (left-right symmetric).
+  // Rows: 0 the still pose (not played), 1-6 the wing beat at Flash's 8 ticks a frame, 7-11 attack (pull
+  // back, jaws wide, lunge, snapping bite, recover). No idle: a flyer flaps whenever it is drawn, as in
+  // Flash (a housed one standing in the yard keeps flapping too). Flash had the wing beat only.
+  "monsters/balthazar.png": {
+    frameWidth: 68,
+    frameHeight: 65,
+    anchorX: 34,
+    anchorY: 38.5,
+    rows: 12,
+    animations: {
+      walk: { first: 1, count: 6, ticksPerFrame: 8 },
+      attack: { first: 7, count: 5, ticksPerFrame: 4 },
+    },
+    strikeFrame: 2,
+  },
+  // Grokus (IC6): 68x51 cells. The game cuts the Flash sheet at whole 57 px cells, but the art was laid out
+  // ~57.27 apart, so it creeps right 0.26 px a column (7.5 px over the turn) and reaches 3 px left of a cell
+  // and 3 px right of it; the repaint takes the creep out and reads Flash x -5 to 63 (anchor 28 -> 33), with
+  // 10 px more on top for the crystal crown and 2 at the bottom (anchor 20 -> 30), over Flash's own cast
+  // shadow. 30 x 4 x 68 = 8160 px, inside 8192. Painted from the Hatchery / Locker portrait; headings 8-22
+  // painted, the rest their mirror (the card creature is left-right symmetric). Rows: 0 idle, 1-6 tentacle
+  // crawl, 7-11 attack (rear back, toothed tentacles raised, lunge and slam, bite, recover). Flash's single
+  // pose glided.
+  "monsters/grokus.v2.png": {
+    frameWidth: 68,
+    frameHeight: 51,
+    anchorX: 33,
+    anchorY: 30,
+    rows: 12,
+    animations: {
+      idle: { first: 0, count: 1, ticksPerFrame: 8 },
+      walk: { first: 1, count: 6, ticksPerFrame: 8 },
+      attack: { first: 7, count: 5, ticksPerFrame: 4 },
+    },
+    strikeFrame: 2,
+  },
+  // Sabnox (IC7): 58x48 cells (the Flash 42x34 cell plus 8 px each side for the whiskers and the tail, 12 px
+  // on top for the crest and 2 at the bottom), so the anchor moves by (8, 12) over Flash's own cast shadow.
+  // The Flash art sits inside whole 42 px cells and does not creep. 30 x 4 x 58 = 6960 px. Painted from the
+  // Hatchery / Locker portrait; headings 8-22 painted, the rest their mirror (the card creature is left-right
+  // symmetric). Rows: 0 idle, 1-6 salamander walk (the arms pull in turn), 7-11 ranged attack (rear back, maw
+  // open, thrust and spit, follow-through, recover; the game draws the magma ball). Flash's single pose glided.
+  "monsters/sabnox.png": {
+    frameWidth: 58,
+    frameHeight: 48,
+    anchorX: 29,
+    anchorY: 29,
+    rows: 12,
+    animations: {
+      idle: { first: 0, count: 1, ticksPerFrame: 8 },
+      walk: { first: 1, count: 6, ticksPerFrame: 8 },
+      attack: { first: 7, count: 5, ticksPerFrame: 4 },
+    },
+    strikeFrame: 2,
+  },
+  // King Wormzer (IC8): 68x56 cells (the Flash 58x42 cell plus 5 px each side for the drills, 12 px on top for the
+  // drill helmet and the raised drills, 2 at the bottom), so the anchor moves by (5, 12) over Flash's own cast shadow.
+  // The Flash art sits inside whole 58 px cells and does not creep. 30 x 4 x 68 = 8160 px, inside 8192. Painted from
+  // the Hatchery / Locker portrait; headings 8-22 painted, the rest their mirror (the card creature is left-right
+  // symmetric). Rows: 0 idle, 1-6 heavy waddle (the drill arms swing in turn), 7-11 attack (rear back, both drills
+  // raised, slam into the ground, follow-through, recover). In a raid it burrows while it moves, so the attack rows are
+  // what players see there; the waddle shows in the Inferno yard. Flash's single pose glided.
+  "monsters/wormzer.png": {
+    frameWidth: 68,
+    frameHeight: 56,
+    anchorX: 34,
+    anchorY: 33,
+    rows: 12,
+    animations: {
+      idle: { first: 0, count: 1, ticksPerFrame: 8 },
+      walk: { first: 1, count: 6, ticksPerFrame: 8 },
+      attack: { first: 7, count: 5, ticksPerFrame: 4 },
+    },
+    strikeFrame: 2,
+  },
 };
 
 const layoutCache = new Map<MonsterSheet, AnimatedSheet>();
@@ -813,6 +972,14 @@ export const REPAINTED_SHEETS: Readonly<Record<string, string>> = {
   "monsters/slimeattikus_anim.png": "monsters/slimeattikus-anim@4x.png", // Slimeattikus animated repaint
   "monsters/slimeattikusmini_anim.png": "monsters/slimeattikusmini-anim@4x.png", // mini slime animated repaint (same frames scaled)
   "monsters/rezghul.png": "monsters/rezghul-anim@4x.png", // Rezghul animated repaint (glide walk + attack, tail knob)
+  "monsters/spurtz.png": "monsters/spurtz-anim@4x.png", // Spurtz (Inferno IC1) animated repaint (32 headings, hop walk + attack)
+  "monsters/zagnoid.png": "monsters/zagnoid-anim@4x.png", // Zagnoid (Inferno IC2) animated repaint (30 headings, crawl + claw attack)
+  "monsters/malphus.png": "monsters/malphus-anim@4x.png", // Malphus (Inferno IC3) animated repaint (30 headings, scuttle + slash attack)
+  "monsters/valgos.png": "monsters/valgos-anim@4x.png", // Valgos (Inferno IC4) animated repaint (30 headings, plod + bite attack)
+  "monsters/balthazar.png": "monsters/balthazar-anim@4x.png", // Balthazar (Inferno IC5) animated repaint (30 headings, wing beat + bite attack)
+  "monsters/grokus.v2.png": "monsters/grokus-anim@4x.png", // Grokus (Inferno IC6) animated repaint (30 headings, tentacle crawl + slam attack)
+  "monsters/sabnox.png": "monsters/sabnox-anim@4x.png", // Sabnox (Inferno IC7) animated repaint (30 headings, salamander walk + spit attack)
+  "monsters/wormzer.png": "monsters/kingwormzer-anim@4x.png", // King Wormzer (Inferno IC8) animated repaint (30 headings, waddle + drill slam)
   "monsters/ape_1.png": "monsters/ape_1-repaint@4x.png", // Gorgo level 1 repaint (all 16 headings, idle + walk + attack)
   "monsters/fly_1.png": "monsters/fly_1-repaint@4x.png", // Fomor level 1 repaint (all 16 headings, idle + walk)
   "monsters/dragon_1.png": "monsters/dragon_1-repaint@4x.png", // Drull level 1 repaint (all 16 headings painted, idle + walk + attack)

@@ -5,10 +5,16 @@ import {
   BLUEPRINT_NOT_IN_OUTPOSTS,
   BLUEPRINT_PLANNER_BUILDING,
   blueprintBlock,
+  hasLayoutSlots,
   hasYardPlanner,
   PlannerAccess,
   plannerAccess,
   plannerEntryTooltip,
+  plannerToolBlock,
+  TOOL_NEEDS_PLANNER,
+  TOOL_NOT_IN_OUTPOSTS,
+  TOOL_PLANNER_BUILDING,
+  usableLayoutSlots,
   YARD_PLANNER_TYPE,
 } from "./access";
 
@@ -88,5 +94,51 @@ describe("blueprintBlock (2026-09-30)", () => {
     expect(blueprintBlock({ ...WITH, kind: "outpost" })).toBe(BLUEPRINT_NOT_IN_OUTPOSTS);
     expect(blueprintBlock({ ...WITHOUT, kind: "outpost" })).toBe(BLUEPRINT_NOT_IN_OUTPOSTS);
     expect(BLUEPRINT_NOT_IN_OUTPOSTS).toBe("Blueprint view isn't available in outposts");
+  });
+});
+
+describe("hasLayoutSlots (I17, 2026-10-29)", () => {
+  it("offers saved layouts on the main yard and the Inferno yard, never in an outpost", () => {
+    expect(hasLayoutSlots({ kind: "main" })).toBe(true);
+    expect(hasLayoutSlots({ kind: "inferno" })).toBe(true);
+    expect(hasLayoutSlots({ kind: "outpost" })).toBe(false);
+  });
+});
+
+/** Owner, beta 8 (grilling of 19 Nov 2026): the Yard Planner tools need one built in the yard. */
+describe("plannerToolBlock (beta 8)", () => {
+  it("is open with a finished Yard Planner, main yard and Inferno alike", () => {
+    expect(plannerToolBlock(WITH)).toBeNull();
+    expect(plannerToolBlock({ ...WITH, kind: "main" })).toBeNull();
+    expect(plannerToolBlock({ ...WITH, kind: "inferno" })).toBeNull();
+  });
+
+  it("is locked without one (a Town Hall 1-2 yard cannot build one yet), and says so in a few words", () => {
+    expect(plannerToolBlock(WITHOUT)).toBe(TOOL_NEEDS_PLANNER);
+    expect(plannerToolBlock({ ...WITHOUT, kind: "inferno" })).toBe(TOOL_NEEDS_PLANNER);
+    expect(TOOL_NEEDS_PLANNER).toBe("Build a Yard Planner");
+  });
+
+  it("waits for a Yard Planner still being built; a damaged one counts", () => {
+    const building = { buildings: [{ type: 14, level: 3 }, { type: YARD_PLANNER_TYPE, level: 0 }] };
+    expect(plannerToolBlock(building)).toBe(TOOL_PLANNER_BUILDING);
+    expect(TOOL_PLANNER_BUILDING).toBe("Finish your Yard Planner");
+  });
+
+  it("is locked for good in an outpost, even one that holds a Yard Planner", () => {
+    expect(plannerToolBlock({ ...WITH, kind: "outpost" })).toBe(TOOL_NOT_IN_OUTPOSTS);
+    expect(plannerToolBlock({ ...WITHOUT, kind: "outpost" })).toBe(TOOL_NOT_IN_OUTPOSTS);
+  });
+
+  it("locks again once the Yard Planner is recycled", () => {
+    const yard = { buildings: [...WITH.buildings] };
+    expect(plannerToolBlock(yard)).toBeNull();
+    yard.buildings = yard.buildings.filter((building) => building.type !== YARD_PLANNER_TYPE);
+    expect(plannerToolBlock(yard)).toBe(TOOL_NEEDS_PLANNER);
+  });
+
+  it("leaves slot 1 usable when locked, and every slot when not", () => {
+    expect(usableLayoutSlots(null, 10)).toBe(10);
+    expect(usableLayoutSlots(TOOL_NEEDS_PLANNER, 10)).toBe(1);
   });
 });

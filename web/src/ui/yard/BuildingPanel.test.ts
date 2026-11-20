@@ -6,6 +6,8 @@ import { setDevDetails } from "@/app/devDetails";
 import { YardStore, type YardUiBinding } from "@/game/yard/YardStore";
 import { resetWeekend, setWeekend, type WeekendRun } from "@/game/weekend";
 import { topUpPrice } from "@/game/yard/resourcePacks";
+import { INFERNO_YARD, type OwnYardTarget } from "@/game/yard/ownYards";
+import { buttonUrl } from "@/game/yard/buildButtonArt";
 import { panelModel } from "./buildingActions";
 import type { Notices } from "@/ui/maproom/Notices";
 import { spokenText } from "@/ui/resourceIcon";
@@ -72,11 +74,13 @@ const setup = (
     panel?: Partial<BuildingPanelOptions>;
     scene?: Partial<YardUiBinding["scene"]>;
     modal?: HTMLElement;
+    target?: OwnYardTarget;
   } = {},
 ) => {
   const api = fakeApi();
   const store = new YardStore({
     save: loadOf(buildings, options.load),
+    ...(options.target ? { target: options.target } : {}),
     api,
     clock: () => T0,
     timers: { set: () => 0, clear: () => undefined },
@@ -401,20 +405,41 @@ describe("BuildingPanel: a held speed-up on a shorter job (patch 6.3)", () => {
 });
 
 describe("BuildingPanel: buildings without an Upgrade here", () => {
-  it("a wall points at the layout planner and offers no Upgrade", () => {
-    const { element } = setup([HALL, building(2, 17, 1)], 2);
-    expect(buttonNamed(element, "Upgrade")).toBeUndefined();
-    expect(element.querySelector(".building-panel__note")?.textContent).toMatch(/layout planner/);
+  /** Owner, beta 8: every player upgrades a wall one at a time, like any building. */
+  it("a wall without a Yard Planner offers its own Upgrade and no wall picking", () => {
+    const upgradeWalls = vi.fn();
+    const { element, api } = setup([HALL, building(2, 17, 1)], 2, { panel: { upgradeWalls } });
+    expect(buttonNamed(element, "Pick more walls")).toBeUndefined();
+    expect(element.querySelector(".building-panel__note")).toBeNull();
+    expect(element.querySelector(".building-panel__time")).toBeNull();
+    expect(buttonNamed(element, "Instant")).toBeUndefined();
+    const upgrade = buttonNamed(element, "Upgrade")!;
+    upgrade.click();
+    expect(api.upgrade).toHaveBeenCalledWith(2);
+    expect(upgradeWalls).not.toHaveBeenCalled();
   });
 
-  it("a wall offers Upgrade walls, which opens the planner's wall picking on it (owner 2026-11-04)", () => {
+  it("with a built Yard Planner it also offers the planner's wall picking, this wall picked", () => {
     const upgradeWalls = vi.fn();
-    const { element } = setup([HALL, building(2, 17, 1)], 2, { panel: { upgradeWalls } });
-    // Still no single-wall upgrade: the one button is the door to the planner.
-    expect(buttons(element).map((button) => button.textContent)).not.toContain("Upgrade");
-    expect(element.querySelector(".building-panel__note")).toBeNull();
-    buttonNamed(element, "Upgrade walls")!.click();
+    const { element } = setup([HALL, building(2, 17, 1), building(3, 10, 1)], 2, { panel: { upgradeWalls } });
+    expect(buttonNamed(element, "Upgrade")).toBeDefined();
+    buttonNamed(element, "Pick more walls")!.click();
     expect(upgradeWalls).toHaveBeenCalledWith(2);
+  });
+
+  it("a Yard Planner still being built does not offer wall picking yet", () => {
+    const upgradeWalls = vi.fn();
+    const { element } = setup([HALL, building(2, 17, 1), building(3, 10, 0, { cB: 600 })], 2, {
+      panel: { upgradeWalls },
+    });
+    expect(buttonNamed(element, "Upgrade")).toBeDefined();
+    expect(buttonNamed(element, "Pick more walls")).toBeUndefined();
+  });
+
+  it("a trap still points at the layout planner and offers no Upgrade", () => {
+    const { element } = setup([HALL, building(2, 24, 1)], 2);
+    expect(buttonNamed(element, "Upgrade")).toBeUndefined();
+    expect(element.querySelector(".building-panel__note")?.textContent).toMatch(/re-armed in the layout planner/);
   });
 
   it("a Map Room 2 opens the map", () => {
@@ -481,6 +506,33 @@ describe("BuildingPanel: buildings without an Upgrade here", () => {
     expect(silo.querySelector(".unlock-tile__name")!.textContent).toBe("Storage Silo");
     const fresh = unlocks.querySelector<HTMLElement>(".unlock-tile--new");
     if (fresh) expect(fresh.querySelector(".unlock-tile__badge")!.textContent).toBe("NEW");
+  });
+
+  it("the Under Hall adds what its next level lets the main yard build, by main-yard pictures", () => {
+    const { element } = setup([building(1, 14, 2)], 1, { load: { type: "inferno" }, target: INFERNO_YARD });
+    const unlocks = element.querySelector<HTMLElement>(".building-panel__unlocks")!;
+    const labels = [...unlocks.querySelectorAll(".building-panel__label")].map((one) => one.textContent);
+    expect(labels).toEqual(["Lv 3 unlocks", "Main yard"]);
+    expect(unlocks.querySelector(".building-panel__label--sub")!.getAttribute("title")).toBe(
+      "Under Hall 3 unlocks on your main yard",
+    );
+    const [inferno, yard] = [...unlocks.querySelectorAll<HTMLElement>(".building-panel__unlock-list")];
+    // The Inferno's own Quake Tower is new there; the main yard's gets one more.
+    expect([...inferno!.querySelectorAll(".unlock-tile")].map((one) => one.getAttribute("aria-label"))).toContain(
+      "Quake Tower new",
+    );
+    const tiles = [...yard!.querySelectorAll<HTMLElement>(".unlock-tile")];
+    expect(tiles.map((one) => one.getAttribute("aria-label"))).toEqual(["Quake Tower +1"]);
+    expect(tiles[0]!.querySelector("img")!.getAttribute("src")).toBe(buttonUrl(129, "main"));
+    expect(tiles[0]!.querySelector(".unlock-tile__badge")!.textContent).toBe("+1");
+  });
+
+  it("the Under Hall shows no main-yard group when its next level adds nothing there", () => {
+    const { element } = setup([building(1, 14, 1)], 1, { load: { type: "inferno" }, target: INFERNO_YARD });
+    const unlocks = element.querySelector<HTMLElement>(".building-panel__unlocks")!;
+    expect(unlocks.querySelector(".building-panel__label--sub")).toBeNull();
+    expect(unlocks.querySelectorAll(".building-panel__unlock-list")).toHaveLength(1);
+    expect(unlocks.querySelector(".building-panel__none")).toBeNull();
   });
 
   it("a foreign Town Hall lists no unlocks and a running upgrade shows no countdown", () => {
@@ -1091,5 +1143,30 @@ describe("BuildingPanel: fortifying in a Builder's Weekend", () => {
     const block = fortifyBlock();
     expect(block.querySelector(".weekend-chip")).toBeNull();
     expect(spokenText(block.querySelector(".building-panel__cost")!)).toContain("50,000");
+  });
+});
+
+describe("BuildingPanel: the upgrade preview (beta 8)", () => {
+  it("asks the yard for the next level's look while Upgrade is offered, and puts it back on close", () => {
+    const previewUpgrade = vi.fn();
+    const { panel } = setup([HALL, building(2, 4, 5)], 2, { scene: { previewUpgrade } });
+    expect(previewUpgrade).toHaveBeenLastCalledWith(expect.objectContaining({ id: 2, level: 5 }), 6);
+    panel.close();
+    expect(previewUpgrade).toHaveBeenLastCalledWith(null, null);
+  });
+
+  it("asks even when the upgrade is gated (short of the Town Hall level)", () => {
+    const previewUpgrade = vi.fn();
+    setup([building(1, 14, 1), building(2, 4, 5)], 2, { scene: { previewUpgrade } });
+    expect(previewUpgrade).toHaveBeenLastCalledWith(expect.objectContaining({ id: 2 }), 6);
+  });
+
+  it("asks for nothing on a maxed building or one already upgrading", () => {
+    const previewUpgrade = vi.fn();
+    setup([building(1, 14, 10), building(2, 4, 10)], 2, { scene: { previewUpgrade } });
+    expect(previewUpgrade).toHaveBeenLastCalledWith(expect.objectContaining({ id: 2 }), null);
+    const busy = vi.fn();
+    setup([HALL, building(2, 4, 5, { cU: 5_400 })], 2, { scene: { previewUpgrade: busy } });
+    expect(busy).toHaveBeenLastCalledWith(expect.objectContaining({ id: 2 }), null);
   });
 });

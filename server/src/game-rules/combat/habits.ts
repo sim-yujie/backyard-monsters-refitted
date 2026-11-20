@@ -8,14 +8,15 @@
  * habits in its champion type's row ({@link CHAMPION_HABITS}) exist for it:
  * the engine never reads, and the server never learns, any other.
  *
- * Learning cannot lock in, by four rules ({@link learnHabits}):
+ * Habits are learned by the owner's pick B (19 Nov 2026, {@link learnHabits}):
+ * each is Active at one fixed weight or Unproven at 0, never in between.
+ * Learning cannot lock in:
  *
  * 1. Each Mode has its own habits; Offensive's are never read in Defensive.
- * 2. A habit tops out at {@link HABIT_CAP} (Hybrid, which has no instincts,
- *    {@link HYBRID_HABIT_CAP}), below every instinct, so a Mode always shows.
- * 3. Each attack in a Mode first fades that Mode's habits by
- *    {@link HABIT_FADE}, then learns: a habit with no fresh proof halves in
- *    about seven attacks.
+ * 2. An Active habit's weight ({@link HABIT_RULES}) is half its Mode's cap
+ *    ({@link HABIT_CAP}, Hybrid {@link HYBRID_HABIT_CAP}), below every
+ *    instinct, so a Mode always shows.
+ * 3. An Active habit that keeps failing its checks turns Unproven again.
  * 4. Every {@link CURIOUS_EVERY}th look the champion picks by its instincts
  *    alone, so it keeps seeing the other choice. Counted, never drawn, so the
  *    server's replay sees the same looks.
@@ -38,7 +39,6 @@
 
 import {
   BASELINE_RATE,
-  BRAIN_RATE,
   isZeroBrain,
   lessonScore,
   parseBrain,
@@ -59,12 +59,6 @@ export const HABIT_CAP = 100;
 
 /** Hybrid has no instincts, so its habits may grow a little stronger. */
 export const HYBRID_HABIT_CAP = 150;
-
-/** The share of each habit an attack in its Mode takes away before it learns. */
-export const HABIT_FADE = 0.1;
-
-/** No habit moves more than this in one attack. */
-export const HABIT_STEP = 15;
 
 /** Every this-many-th look picks by instinct alone. */
 export const CURIOUS_EVERY = 5;
@@ -403,26 +397,306 @@ const restartUsual = (stats: HabitStats): HabitStats => {
 const isMonsterHabit = (key: HabitKey): boolean =>
   (MONSTER_HABIT_KEYS as readonly HabitKey[]).includes(key);
 
+
+/* ── Active or Unproven (owner's pick B, 19 Nov 2026) ─────────────────────── */
+
 /**
- * The book and stats after one landed attack in `stance` (see the file
- * comment). Only the habits in the champion's row for that Mode move; the
- * other Modes are untouched, and do not fade.
+ * How a habit is learned since the owner's pick B (desk, 19 Nov 2026): a
+ * habit is either **Active**, at one fixed weight, or **Unproven**, at 0.
+ * There are no strengths in between, so the Champion Cage shows no pips.
  *
- *     habit    = trunc(habit × (1 - HABIT_FADE))
- *     habit   += RATE × (score - usual) × credit,   held within ±HABIT_STEP
- *     habit    = round, within its bounds
- *     usual   += BASELINE_RATE × (score - usual)   (the first attack only sets it)
+ * Per habit and Mode the save keeps a {@link HabitTrack}:
  *
- * where `score` is {@link habitScore}, `usual` the Mode's usual score on
- * this kind of yard and `credit` the habit's mean over its looks (building
- * looks, or for Fomor's monster habits its looks at hurt monsters) of chosen
- * less the candidates' mean. An attack with no score only fades and counts.
+ * 1. An attack is a *useful observation* for a habit when it has a score
+ *    ({@link habitScore}), the Mode already has a usual score on that kind of
+ *    yard, the champion had looks to choose between, and the habit's credit
+ *    (chosen less the candidates' mean) is not 0. Its *way* is the sign of
+ *    `(score - usual) × credit`: + when picking more of the feature went with
+ *    a better than usual attack (or less of it with a worse one), - otherwise.
+ * 2. The first {@link HabitRules.gate} useful observations only count: they
+ *    are the evidence gate. Every useful observation after them is a *check*.
+ * 3. Unproven: {@link HabitRules.support} checks in a row the same way make
+ *    the habit Active that way (a one-ended habit only on the + side).
+ * 4. Active: {@link HabitRules.doubt} checks in a row against its way make it
+ *    Unproven again; one check for it starts the count over. Turning round
+ *    then takes fresh checks the other way.
  *
- * @param book - The entry's `h`, as stored.
+ * An attack with nothing useful for a habit leaves its track as it was:
+ * B has no fade. Each attack that turned a habit on or off leaves a
+ * {@link HabitReceipt} for the cage's "Last attack" line.
+ *
+ * The weights the engine reads are still the book `h` ({@link HabitBook}),
+ * now only ever 0 or ± the fixed weight, so the battle code, the fling log's
+ * `h`/`hv` and every replay are as they were.
+ */
+export interface HabitRules {
+  /** Useful observations before any check counts. */
+  readonly gate: number;
+  /** Checks in a row one way that make an Unproven habit Active. */
+  readonly support: number;
+  /** Checks in a row against an Active habit that make it Unproven. */
+  readonly doubt: number;
+  /** An Active habit's weight in Offensive and Defensive. */
+  readonly weight: number;
+  /** An Active habit's weight in Hybrid, which has no instincts. */
+  readonly hybridWeight: number;
+}
+
+export const HABIT_RULES: HabitRules = {
+  gate: 8,
+  support: 3,
+  doubt: 8,
+  weight: 50,
+  hybridWeight: 75,
+};
+
+/** The weight an Active habit fights with in a Mode. */
+export const activeWeight = (stance: ChampionStance, rules: HabitRules = HABIT_RULES): number =>
+  stance === "hybrid" ? rules.hybridWeight : rules.weight;
+
+/** Which way a habit leans: + is its "on" name, - its "off" name (two-ended habits only). */
+export type HabitWay = 1 | -1;
+
+/** One habit's learning in one Mode (`hl` on the save). */
+export interface HabitTrack {
+  /** Useful observations seen, up to the gate. */
+  readonly o: number;
+  /** Active, and which way; absent while Unproven. */
+  readonly d?: HabitWay;
+  /** Unproven: the way its last checks agreed on, and how many in a row. */
+  readonly c?: HabitWay;
+  readonly s?: number;
+  /** Active: checks in a row against it. */
+  readonly f?: number;
+}
+
+export type ModeTracks = Readonly<Partial<Record<HabitKey, HabitTrack>>>;
+
+/** What one attack did to a habit, for the cage's "Last attack" line. */
+export type HabitEvent = "learned" | "faded";
+
+/** The habits the champion's last learning attack turned on or off. */
+export interface HabitReceipt {
+  /** The Mode it fought in. */
+  readonly m: StanceShort;
+  /** `hs.n` after that attack: a receipt older than the last attack is not shown. */
+  readonly n: number;
+  readonly e: Readonly<Partial<Record<HabitKey, HabitEvent>>>;
+}
+
+/** The version of `hl`; a save without it is migrated ({@link migrateHabits}). */
+export const HABIT_LEARNING_VERSION = 1;
+
+/** `hl` on a champion's save entry: each Mode's tracks and the last receipt. */
+export interface HabitLearning {
+  readonly v: number;
+  readonly off?: ModeTracks;
+  readonly hyb?: ModeTracks;
+  readonly def?: ModeTracks;
+  readonly r?: HabitReceipt;
+}
+
+const SHORTS: readonly StanceShort[] = ["off", "hyb", "def"];
+
+const STANCE_OF: Readonly<Record<StanceShort, ChampionStance>> = {
+  off: "offensive",
+  hyb: "hybrid",
+  def: "defensive",
+};
+
+const isOneEnded = (key: HabitKey): boolean => !TWO_ENDED_HABITS.includes(key);
+
+const wayOf = (raw: unknown, key: HabitKey): HabitWay | undefined =>
+  raw === 1 ? 1 : raw === -1 && !isOneEnded(key) ? -1 : undefined;
+
+const parseTrack = (raw: unknown, key: HabitKey): HabitTrack | undefined => {
+  if (!isRecord(raw)) return undefined;
+  const o = wholeCount(raw["o"]);
+  const d = wayOf(raw["d"], key);
+  const track: { o: number; d?: HabitWay; c?: HabitWay; s?: number; f?: number } = { o };
+  if (d !== undefined) {
+    track.d = d;
+    const f = wholeCount(raw["f"]);
+    if (f > 0) track.f = f;
+  } else {
+    const c = wayOf(raw["c"], key);
+    const s = wholeCount(raw["s"]);
+    if (c !== undefined && s > 0) {
+      track.c = c;
+      track.s = s;
+    }
+  }
+  return track.o > 0 || track.d !== undefined ? track : undefined;
+};
+
+const parseModeTracks = (raw: unknown, monsterId: string | undefined, stance: ChampionStance) => {
+  const out: Partial<Record<HabitKey, HabitTrack>> = {};
+  if (!isRecord(raw)) return out;
+  for (const key of habitsOf(monsterId, stance)) {
+    const track = parseTrack(raw[key], key);
+    if (track) out[key] = track;
+  }
+  return out;
+};
+
+const parseReceipt = (raw: unknown, monsterId: string | undefined): HabitReceipt | undefined => {
+  if (!isRecord(raw) || !isRecord(raw["e"])) return undefined;
+  const m = raw["m"];
+  if (m !== "off" && m !== "hyb" && m !== "def") return undefined;
+  const e: Partial<Record<HabitKey, HabitEvent>> = {};
+  for (const key of habitsOf(monsterId, STANCE_OF[m])) {
+    const event = raw["e"][key];
+    if (event === "learned" || event === "faded") e[key] = event;
+  }
+  const n = wholeCount(raw["n"]);
+  return Object.keys(e).length > 0 && n > 0 ? { m, n, e } : undefined;
+};
+
+type MutableLearning = {
+  v: number;
+  off?: ModeTracks;
+  hyb?: ModeTracks;
+  def?: ModeTracks;
+  r?: HabitReceipt;
+};
+
+/** `hl` made safe for one champion type; null when there is none of this version yet. */
+export const parseHabitLearning = (
+  raw: unknown,
+  monsterId: string | undefined,
+): HabitLearning | null => {
+  if (!isRecord(raw) || raw["v"] !== HABIT_LEARNING_VERSION) return null;
+  const out: MutableLearning = { v: HABIT_LEARNING_VERSION };
+  for (const short of SHORTS) {
+    const tracks = parseModeTracks(raw[short], monsterId, STANCE_OF[short]);
+    if (Object.keys(tracks).length > 0) out[short] = tracks;
+  }
+  const receipt = parseReceipt(raw["r"], monsterId);
+  if (receipt) out.r = receipt;
+  return out;
+};
+
+/**
+ * The migration to B, for a champion whose save has no `hl` yet: a habit
+ * whose old weight is at least B's fixed weight (2 or 3 pips) starts Active
+ * that way with its evidence gate passed; every other habit starts Unproven
+ * at 0, its Mode's attacks so far counted towards the gate (at most the gate).
+ * Nothing else is given or taken: no loot, no back pay.
+ *
+ * @param book - The entry's `h`, as stored before B.
+ * @param stats - The entry's `hs`.
+ * @param monsterId - The champion id.
+ */
+export const migrateHabits = (
+  book: unknown,
+  stats: unknown,
+  monsterId: string | undefined,
+  rules: HabitRules = HABIT_RULES,
+): HabitLearning => {
+  const all = parseHabitBook(book, monsterId);
+  const known = parseHabitStats(stats);
+  const out: MutableLearning = { v: HABIT_LEARNING_VERSION };
+  for (const short of SHORTS) {
+    const stance = STANCE_OF[short];
+    const weights = all[short] ?? {};
+    const seen = Math.min(known[short]?.n ?? 0, rules.gate);
+    const tracks: Partial<Record<HabitKey, HabitTrack>> = {};
+    for (const key of habitsOf(monsterId, stance)) {
+      const weight = weights[key] ?? 0;
+      if (Math.abs(weight) >= activeWeight(stance, rules)) {
+        tracks[key] = { o: rules.gate, d: weight > 0 ? 1 : -1 };
+      } else if (seen > 0) {
+        tracks[key] = { o: seen };
+      }
+    }
+    if (Object.keys(tracks).length > 0) out[short] = tracks;
+  }
+  return out;
+};
+
+/**
+ * A champion's learning as B reads it: its `hl`, or, before its first attack
+ * or Forget since B, its old `h` migrated. The freeze at launch, the cage
+ * and the learning all read it through here, so they never disagree.
+ */
+export const habitLearningOf = (
+  entry: { readonly h?: unknown; readonly hs?: unknown; readonly hl?: unknown },
+  monsterId: string | undefined,
+  rules: HabitRules = HABIT_RULES,
+): HabitLearning =>
+  parseHabitLearning(entry.hl, monsterId) ?? migrateHabits(entry.h, entry.hs, monsterId, rules);
+
+/** The book the engine fights with: each Active habit at its Mode's fixed weight, its way. */
+export const bookOfLearning = (
+  learning: HabitLearning,
+  monsterId: string | undefined,
+  rules: HabitRules = HABIT_RULES,
+): HabitBook => {
+  const out: { off?: HabitWeights; hyb?: HabitWeights; def?: HabitWeights } = {};
+  for (const short of SHORTS) {
+    const stance = STANCE_OF[short];
+    const weights: Partial<Record<HabitKey, number>> = {};
+    for (const key of habitsOf(monsterId, stance)) {
+      const way = learning[short]?.[key]?.d;
+      if (way !== undefined) weights[key] = way * activeWeight(stance, rules);
+    }
+    if (Object.keys(weights).length > 0) out[short] = weights;
+  }
+  return out;
+};
+
+/** A champion's book as B has it, for the freeze at launch. */
+export const habitBookOf = (
+  entry: { readonly h?: unknown; readonly hs?: unknown; readonly hl?: unknown },
+  monsterId: string | undefined,
+): HabitBook => bookOfLearning(habitLearningOf(entry, monsterId), monsterId);
+
+/**
+ * One habit's track after one attack (rules 2 to 4 of the B comment).
+ *
+ * @param track - Its track before.
+ * @param way - The attack's way for it; 0 when the attack was no useful observation.
+ * @param key - The habit, for whether it can lean the - way.
+ */
+export const checkHabit = (
+  track: HabitTrack,
+  way: HabitWay | 0,
+  key: HabitKey,
+  rules: HabitRules = HABIT_RULES,
+): { track: HabitTrack; event?: HabitEvent } => {
+  if (way === 0) return { track };
+  const o = track.o;
+  if (o < rules.gate) return { track: { ...track, o: o + 1 } };
+  if (track.d !== undefined) {
+    if (way === track.d) return { track: { o, d: track.d } };
+    const f = (track.f ?? 0) + 1;
+    if (f >= rules.doubt) return { track: { o }, event: "faded" };
+    return { track: { o, d: track.d, f } };
+  }
+  if (way === -1 && isOneEnded(key)) return { track: { o } };
+  const s = track.c === way ? (track.s ?? 0) + 1 : 1;
+  if (s >= rules.support) return { track: { o, d: way }, event: "learned" };
+  return { track: { o, c: way, s } };
+};
+
+/** Below this, a credit or a score difference is rounding, not evidence. */
+const NO_EVIDENCE = 1e-9;
+
+/**
+ * The book, stats and learning after one landed attack in `stance` (B; see
+ * {@link HabitRules}). Only the habits in the champion's row for that Mode
+ * move; other Modes keep their tracks. The usual score per kind of yard moves
+ * as before:
+ *
+ *     usual += BASELINE_RATE × (score - usual)   (the first attack only sets it)
+ *
+ * @param book - The entry's `h`, as stored (read only to migrate).
  * @param stats - The entry's `hs`, as stored.
  * @param lesson - What the server's replay recorded for it.
  * @param stance - The Mode it fought in.
  * @param legacy - The entry's old `bs`, for its attack count.
+ * @param learning - The entry's `hl`; none migrates `book`.
+ * @param rules - The thresholds (the evaluation tool tries others).
  */
 export const learnHabits = (
   book: unknown,
@@ -430,11 +704,12 @@ export const learnHabits = (
   lesson: ChampionLesson,
   stance: ChampionStance,
   legacy?: unknown,
-  rate: number = BRAIN_RATE,
-): { book: HabitBook; stats: HabitStats } => {
+  learning?: unknown,
+  rules: HabitRules = HABIT_RULES,
+): { book: HabitBook; stats: HabitStats; learning: HabitLearning } => {
   const id = championByType(lesson.t);
-  const all = parseHabitBook(book, id);
   const parsed = parseHabitStats(stats, legacy);
+  const current = habitLearningOf({ h: book, hs: parsed, hl: learning }, id, rules);
   // A Fomor's first attack judged by its monsters starts its usual scores afresh.
   const known =
     judgedByMonsters(lesson) && parsed.j !== FOMOR_JUDGE ? restartUsual(parsed) : parsed;
@@ -444,53 +719,62 @@ export const learnHabits = (
   const score = habitScore(lesson, stance);
   const usual = record.u[kind];
 
-  const before = all[short] ?? {};
-  const after: Partial<Record<HabitKey, number>> = {};
+  const before = current[short] ?? {};
+  const tracks: Partial<Record<HabitKey, HabitTrack>> = {};
+  const events: Partial<Record<HabitKey, HabitEvent>> = {};
   for (const habit of habitsOf(id, stance)) {
-    let weight = Math.trunc((before[habit] ?? 0) * (1 - HABIT_FADE));
     // Fomor's monster habits are credited on its looks at hurt monsters, the
-    // rest on building looks: each is a mean over its own looks.
+    // rest on building looks.
     const looks = isMonsterHabit(habit) ? (lesson.allyPicks ?? lesson.picks) : lesson.picks;
+    let way: HabitWay | 0 = 0;
     if (score !== null && usual !== undefined && looks > 0) {
-      const credit = (lesson.credit[habit] ?? 0) / looks;
-      weight += Math.min(Math.max(rate * (score - usual) * credit, -HABIT_STEP), HABIT_STEP);
+      const signal = (score - usual) * ((lesson.credit[habit] ?? 0) / looks);
+      if (Math.abs(signal) > NO_EVIDENCE) way = signal > 0 ? 1 : -1;
     }
-    const [low, high] = habitBounds(habit, stance);
-    const whole = Math.min(Math.max(Math.round(weight), low), high);
-    if (whole !== 0) after[habit] = whole;
+    const step = checkHabit(before[habit] ?? { o: 0 }, way, habit, rules);
+    if (step.track.o > 0 || step.track.d !== undefined) tracks[habit] = step.track;
+    if (step.event) events[habit] = step.event;
   }
 
-  const nextBook: { off?: HabitWeights; hyb?: HabitWeights; def?: HabitWeights } = { ...all };
-  if (Object.keys(after).length > 0) nextBook[short] = after;
-  else delete nextBook[short];
+  const n = known.n + 1;
+  const next: MutableLearning = { ...current };
+  if (Object.keys(tracks).length > 0) next[short] = tracks;
+  else delete next[short];
+  if (Object.keys(events).length > 0) next.r = { m: short, n, e: events };
+  else delete next.r;
 
-  // Nothing to judge it by: the attack counts and fades, the usual score stays.
+  // Nothing to judge it by: the attack counts, the usual score stays.
   const nextUsual =
     score === null ? usual : usual === undefined ? score : usual + BASELINE_RATE * (score - usual);
   const u = nextUsual === undefined ? record.u : { ...record.u, [kind]: nextUsual };
   return {
-    book: nextBook,
+    book: bookOfLearning(next, id, rules),
     stats: {
       ...known,
-      n: known.n + 1,
+      n,
       [short]: { n: record.n + 1, u },
     },
+    learning: next,
   };
 };
 
-/** The book with one Mode's habits wiped (the panel's Forget); its record is kept. */
+/**
+ * The book and learning with one Mode wiped (the panel's Forget): its habits
+ * Unproven with no evidence, and its "Last attack" line gone. Its attack
+ * count and usual scores (`hs`) stay.
+ */
 export const forgetHabits = (
-  book: unknown,
+  entry: { readonly h?: unknown; readonly hs?: unknown; readonly hl?: unknown },
   monsterId: string | undefined,
   stance: ChampionStance,
-): HabitBook => {
-  const all: { off?: HabitWeights; hyb?: HabitWeights; def?: HabitWeights } = {
-    ...parseHabitBook(book, monsterId),
-  };
-  delete all[STANCE_SHORT[stance]];
-  return all;
+): { book: HabitBook; learning: HabitLearning } => {
+  const short = STANCE_SHORT[stance];
+  const next: MutableLearning = { ...habitLearningOf(entry, monsterId) };
+  delete next[short];
+  if (next.r?.m === short) delete next.r;
+  return { book: bookOfLearning(next, monsterId), learning: next };
 };
 
-/** How many of the panel's three pips a habit fills: a quarter of its cap each. */
-export const habitPips = (weight: number, stance: ChampionStance): number =>
-  Math.min(3, Math.floor((Math.abs(weight) * 4) / habitCap(stance)));
+/** Whether a Mode has anything to forget: an Active habit or any evidence. */
+export const hasLearned = (learning: HabitLearning, stance: ChampionStance): boolean =>
+  Object.keys(learning[STANCE_SHORT[stance]] ?? {}).length > 0;

@@ -55,7 +55,11 @@ const DRAG_SLOP = 6;
 
 /**
  * The raise last played, so a yard opened again on the same answer (a store
- * kept across a scene) does not play it twice. Keyed by level and time.
+ * kept across a scene) does not play it twice. Keyed by level and time. Only
+ * a raise seen through (Moloch's fight handed on, or a raise with no raid
+ * grown) stays marked: one whose yard went first is played by the next yard
+ * that opens on it, as the server answers it again until its raid lands
+ * (patch 7.12).
  */
 let playedRaise: string | null = null;
 
@@ -287,27 +291,40 @@ export const infernoYardPlugin: YardPlugin = (mounts) => {
     });
   };
   // "Engage Attack": the server fights Moloch's raid and the raid scene plays it.
-  const molochRaid = (id: string, groups: readonly MolochGroup[]) => ({
+  const molochRaid = (id: string, groups: readonly MolochGroup[], engaged: () => void) => ({
     groups,
-    start: () =>
-      startMolochRaid(id, {
+    start: async () => {
+      const done = await startMolochRaid(id, {
         api: raidApi,
         notice,
         fight: (start) => {
+          // Seen through before the raid scene takes the yard away.
+          engaged();
           raidWatch.set(start.raid);
           setRaidRun({ raid: start.raid, fight: start.fight, save: store.save });
           scene.openRaid();
         },
-      }),
+      });
+      if (done) engaged();
+      return done;
+    },
   });
+  /** The raise this yard is playing and not yet seen through; forgotten if the yard goes first. */
+  let unseenRaise: string | null = null;
   const raiseKey = state.raised !== null ? `${state.raised}:${state.emergence.lastAt ?? 0}` : null;
   if (state.raised !== null && raiseKey !== playedRaise) {
     playedRaise = raiseKey;
+    unseenRaise = raiseKey;
     raidRunning = true;
     const raised = state.raised;
-    const raid = state.raid ? molochRaid(state.raid.id, state.raid.groups) : null;
+    const seen = (): void => {
+      unseenRaise = null;
+    };
+    const raid = state.raid ? molochRaid(state.raid.id, state.raid.groups, seen) : null;
     void staged(() => playEmergence(raised, { view, wait, alive: () => alive, raid })).finally(() => {
       raidRunning = false;
+      // A raise with no raid is seen once the cave has grown on a yard still open.
+      if (!raid && alive) seen();
     });
   }
 
@@ -338,6 +355,8 @@ export const infernoYardPlugin: YardPlugin = (mounts) => {
 
   return () => {
     alive = false;
+    // Not seen through: the next yard opened plays it (patch 7.12).
+    if (unseenRaise !== null && playedRaise === unseenRaise) playedRaise = null;
     for (const release of holds) release();
     holds.clear();
     stopShake();

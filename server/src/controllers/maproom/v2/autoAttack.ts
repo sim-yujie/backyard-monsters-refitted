@@ -15,6 +15,14 @@ const AutoAttackSchema = z.object({
   baseid: z.string().regex(/^\d{1,20}$/),
 });
 
+const RunAutoAttackSchema = AutoAttackSchema.extend({
+  /**
+   * Smart Repeat attack: the `movesKey` of the moves the player agreed to.
+   * Only compared with the server's own plan, never moved from.
+   */
+  moves: z.string().max(4_000).optional(),
+});
+
 /**
  * `POST /worldmapv2/autoattackplan { baseid }` (issue #221): the attack a
  * camp's Repeat attack would repeat, and what the player lacks for it.
@@ -36,10 +44,10 @@ export const autoAttackPlan: KoaController = async (ctx) => {
  */
 export const autoAttack: KoaController = async (ctx) => {
   if (!ctx.meetsDiscordAgeCheck) throw discordAgeErr();
-  const { baseid } = AutoAttackSchema.parse(ctx.request.body);
+  const { baseid, moves } = RunAutoAttackSchema.parse(ctx.request.body);
 
   ctx.status = Status.OK;
-  ctx.body = { error: 0, ...(await runAutoAttack(ctx.authUser, baseid)) };
+  ctx.body = { error: 0, ...(await runAutoAttack(ctx.authUser, baseid, moves)) };
 };
 
 /**

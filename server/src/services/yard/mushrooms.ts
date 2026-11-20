@@ -26,8 +26,10 @@ import { yardBadRequestErr, yardRefusedErr } from "./yardErrors.js";
  * **Golden.** The original decided a golden mushroom from its position with a
  * seeded generator (`MUSHROOMS.as:223-224`) that nothing on the server
  * reproduces. The decision moves to a server roll at pick time with the same
- * odds, one in four, and the same variant roll after it (`:236-241`): 8 Shiny
- * with probability 1/3, 3 Shiny with 2/3. The original drew no difference
+ * odds, one in four ({@link GOLDEN_ODDS}), and the same variant roll after it
+ * (`:236-241`): 8 Shiny with probability 1/3, 3 Shiny with 2/3. During
+ * Thanksgiving's turkey hunt a turkey is golden only one time in ten
+ * ({@link GOLDEN_TURKEY_ODDS}). The original drew no difference
  * between a golden mushroom and any other, so nothing is lost by not knowing
  * in advance.
  *
@@ -88,6 +90,21 @@ export const NUDGE_ATTEMPTS = 200;
 /** Shiny a golden mushroom gives: `MUSHROOM1` 3, `MUSHROOM2` 8 (`game-data/store/purchaseKeys.ts`). */
 export const GOLDEN_SMALL = 3;
 export const GOLDEN_BIG = 8;
+
+/** A pick is golden one time in this many: the original's one in four. */
+export const GOLDEN_ODDS = 4;
+
+/**
+ * During Thanksgiving's turkey hunt (`season.ts`) a turkey is golden one time
+ * in this many, so the hunt's many picks cannot be farmed for Shiny (owner,
+ * 19 Nov 2026; was one in four). Pumpkins and ordinary mushrooms keep
+ * {@link GOLDEN_ODDS}.
+ */
+export const GOLDEN_TURKEY_ODDS = 10;
+
+/** The golden odds for a pick while `hunt` (a `YardHunt` field, or null) is on. */
+export const goldenOdds = (hunt: "pumpkins" | "turkeys" | null | undefined): number =>
+  hunt === "turkeys" ? GOLDEN_TURKEY_ODDS : GOLDEN_ODDS;
 
 /** A random number in `[0, 1)`, like `Math.random`. */
 export type Random = () => number;
@@ -342,7 +359,7 @@ export interface MushroomPickReport {
   /** Where it stood, yard units. */
   x: number;
   y: number;
-  /** One in four. */
+  /** One in four; one in ten for a turkey in the turkey hunt ({@link goldenOdds}). */
   golden: boolean;
   /** Shiny it gave: 0, 3 or 8. */
   shiny: number;
@@ -356,12 +373,13 @@ export interface MushroomPickReport {
 }
 
 /**
- * The server's reward roll: golden one time in four, then the original's
- * variant roll, `int(random × 3 + 1)` with 3 read as 1, so variant 2 (8 Shiny)
- * comes up one time in three (`MUSHROOMS.as:224`, `:236-241`).
+ * The server's reward roll: golden one time in `odds` (four, or ten for a
+ * turkey, {@link goldenOdds}), then the original's variant roll,
+ * `int(random × 3 + 1)` with 3 read as 1, so variant 2 (8 Shiny) comes up one
+ * time in three (`MUSHROOMS.as:224`, `:236-241`).
  */
-export const rollReward = (random: Random): { golden: boolean; shiny: number } => {
-  if (Math.floor(random() * 4) !== 0) return { golden: false, shiny: 0 };
+export const rollReward = (random: Random, odds: number = GOLDEN_ODDS): { golden: boolean; shiny: number } => {
+  if (Math.floor(random() * odds) !== 0) return { golden: false, shiny: 0 };
   const variant = Math.floor(random() * 3 + 1);
   return { golden: true, shiny: variant === 2 ? GOLDEN_BIG : GOLDEN_SMALL };
 };
@@ -383,13 +401,15 @@ export const rollReward = (random: Random): { golden: boolean; shiny: number } =
  * @param id - The mushroom's index in `mushrooms.l`.
  * @param at - Where the client saw it, to check the index still means the same mushroom.
  * @param random - The reward roll's source.
+ * @param odds - Golden one time in this many ({@link goldenOdds}).
  * @returns The new `mushrooms` column, the Shiny to credit and the report.
  */
 export const planMushroomPick = (
   save: MushroomYardSave,
   id: number,
   at: { x?: number | undefined; y?: number | undefined },
-  random: Random
+  random: Random,
+  odds: number = GOLDEN_ODDS
 ): { report: MushroomPickReport; mushrooms: MushroomSave; shiny: number } => {
   const { l, s } = readMushrooms(save.mushrooms);
   const entry = l[id];
@@ -409,7 +429,7 @@ export const planMushroomPick = (
     throw yardRefusedErr("workers", "All your workers are busy.", { workers: { total, busy } });
   }
 
-  const { golden, shiny } = rollReward(random);
+  const { golden, shiny } = rollReward(random, odds);
   return {
     report: { id, x, y, golden, shiny },
     mushrooms: { l: l.filter((_, index) => index !== id), s },

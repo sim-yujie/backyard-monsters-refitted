@@ -2,7 +2,7 @@ import z from "zod";
 import { sqlProgressStore, type EventProgressStore } from "../../services/events/progressStore.js";
 import { countMushroom } from "../../services/goals/counters.js";
 import type { Random } from "../../services/yard/mushrooms.js";
-import { planMushroomPick } from "../../services/yard/mushrooms.js";
+import { goldenOdds, planMushroomPick } from "../../services/yard/mushrooms.js";
 import { yardHuntAt, type YardHunt } from "../../services/yard/season.js";
 import { defineYardAction } from "./yardAction.js";
 
@@ -45,9 +45,11 @@ export const mushroomPickAction = (
   defineYardAction({
     schema: YardMushroomPickSchema,
     run: async ({ save, user, body, now, em }) => {
-      const pick = planMushroomPick(save, body.id, { x: body.x, y: body.y }, random);
-      if (pick.shiny > 0) save.credits = Number(save.credits ?? 0) + pick.shiny;
       const hunt = huntAt(now);
+      // A turkey is golden one time in ten, anything else one in four (owner, 19 Nov 2026).
+      const odds = goldenOdds(hunt?.field);
+      const pick = planMushroomPick(save, body.id, { x: body.x, y: body.y }, random, odds);
+      if (pick.shiny > 0) save.credits = Number(save.credits ?? 0) + pick.shiny;
       const count = hunt ? await store.addToCounter(em, user.userid, hunt.event, 1) : undefined;
       return {
         report: hunt && count !== undefined ? { ...pick.report, [hunt.field]: count } : pick.report,

@@ -70,6 +70,18 @@ import { writeAmount, type AmountChange } from "./amountChange";
  * `pin`, a glossy red push-pin with a steel needle (painted by Codex, 9 Nov:
  * the stand-in copy of the gold crown read as a crown, tester 9 Nov).
  *
+ * The Alliance window's Goals tab (owner, 15 Nov 2026; Codex, how in
+ * `art-samples/goals-tab-icon/make_nonp.py`): a red and white archery
+ * target with a gold-fletched arrow in the bullseye, `goals` in the Modern
+ * look and `goalsclassic` in the Classic (Flash) one, softer and dustier; the
+ * window picks by the Classic/Modern switch.
+ *
+ * Champion habits (owner's pick B, 19 Nov 2026; `ui/yard/championModes.ts`,
+ * Codex, how in `art-samples/habit-icons/make.py`): `habitactive` a gold
+ * seal with a green check (an Active habit, and "Learned"), `habitunproven`
+ * a plain grey seal with a dashed rim and a bar (Unproven), `habitfaded` the
+ * gold seal cracked and faded with a down arrow ("Faded"); each with a
+ * `classic` twin in the Classic look.
  * World chat's player strip (`ui/chat/ChatBox.ts`, owner 8 Nov: icons rather than
  * words): `addfriend` is the two monster heads (`friends`) with a green plus disc on
  * their corner (9 Nov, `tools/game-icons/friends_icons.py`, so Add no longer looks
@@ -103,6 +115,28 @@ import { writeAmount, type AmountChange } from "./amountChange";
  * `art-samples/camera-icon`, painted by Codex): `camera`, a chunky red camera
  * with a big blue lens and a yellow flash bulb; `camera2`, the other option, a
  * teal instant camera with a photo of a yard coming out of its top.
+ *
+ * The leaderboard's outpost count (beta 8 outpost race,
+ * `ui/leaderboard/LeaderboardDialog.ts`; astra's design advice, 19 Nov 2026,
+ * `art-samples/outpost-icon`): a broad fork-tailed amber flag with a dark red
+ * underside on a wooden stake with a riveted steel foot (`outpost`), and the
+ * same flag in the Classic look, softer and warmer with a thin brown outline
+ * and no white rim (`outpostclassic`). A flag because the dock's outposts
+ * button already shows one; amber, never white, so it is not the `retreat`
+ * flag, and no dome, so it is not the Town Hall.
+ *
+ * Prev and Next on a friend's yard (beta 8, `ui/friends/FriendHopButtons.ts`,
+ * owner 18 Nov: painted, not line arrows; `art-samples/friend-hop-arrows`):
+ * a fat glossy golden arrow pointing left (`friendprev`) and right
+ * (`friendnext`), and the same pair in the Classic look, softer with a thin
+ * brown outline and no white rim (`friendprevclassic`, `friendnextclassic`).
+ * Gold reads on both the slate Modern disc and the brown Classic one. These
+ * four also ship 96 and 128 px files for the 45 px dock picture on a 3x phone.
+ *
+ * The Trade tab's "−10% on the way" (owner, 20 Nov 2026, pick D over the
+ * gravestone): the Flash "Mogul" banknote (`assets/popups/mogul.v2.png`) made
+ * into an icon, brighter with a white rim (`tradetax`), and softer with a thin
+ * brown outline in the Classic look (`tradetaxclassic`).
  */
 export const GAME_ICONS = {
   health: "Health",
@@ -162,6 +196,22 @@ export const GAME_ICONS = {
   mail: "Friend requests",
   camera: "Yard picture",
   camera2: "Yard picture",
+  goals: "Goals",
+  goalsclassic: "Goals",
+  habitactive: "Active",
+  habitactiveclassic: "Active",
+  habitunproven: "Unproven",
+  habitunprovenclassic: "Unproven",
+  habitfaded: "Faded",
+  habitfadedclassic: "Faded",
+  outpost: "Outposts",
+  outpostclassic: "Outposts",
+  friendprev: "Previous friend",
+  friendnext: "Next friend",
+  friendprevclassic: "Previous friend",
+  friendnextclassic: "Next friend",
+  tradetax: "Lost on the way",
+  tradetaxclassic: "Lost on the way",
 } as const satisfies Record<string, string>;
 
 export type GameIconName = keyof typeof GAME_ICONS;

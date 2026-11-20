@@ -21,7 +21,7 @@ import type { RecycleOffer } from "@/game/yard/recycle";
 import { NEED_MORE_PODS, NEED_MORE_SILOS } from "@/game/yard/storage";
 import { progressFraction } from "@/game/yard/jobs";
 import { repairOffer, type RepairOffer } from "@/game/yard/repair";
-import { YARD_PLANNER_TYPE } from "@/game/yard/planner/access";
+import { plannerToolBlock, YARD_PLANNER_TYPE } from "@/game/yard/planner/access";
 import { typeName } from "@/game/yard/planner/summary";
 import { hallWord } from "./BuildMenu";
 import {
@@ -59,7 +59,14 @@ import {
   type UpgradeGate,
   type UpgradeOffer,
 } from "./buildingActions";
-import { buildingHealthLabel, buildingInfo, unlockText, type InfoRow, type InfoValue } from "./buildingInfo";
+import {
+  buildingHealthLabel,
+  buildingInfo,
+  unlockText,
+  type InfoList,
+  type InfoRow,
+  type InfoValue,
+} from "./buildingInfo";
 import { buttonUrl } from "@/game/yard/buildButtonArt";
 import { BaiterPanel } from "./BaiterPanel";
 import { withChampionsHealed } from "@/game/yard/championModel";
@@ -612,14 +619,14 @@ export class BuildingPanel {
 
   private renderInfo(building: YardBuilding): void {
     // Every row tells the level, on a foreign yard a level the server made up.
-    const { rows, list } = this.yard
+    const { rows, list, yardList } = this.yard
       ? buildingInfo(
           building,
           this.yard.store.kind,
           this.yard.store.yard.cellHeight,
           this.yard.store.yard.landRangePct,
         )
-      : { rows: [], list: null };
+      : { rows: [], list: null, yardList: null };
     // With an upgrade to offer, what it changes sits beside the Upgrade
     // button instead (`upgradeGains`); these rows then read as they are now.
     this.gains = this.yard && panelModel(building, this.yard.store).upgrade ? rows.filter((row) => row.next) : [];
@@ -639,49 +646,21 @@ export class BuildingPanel {
     this.unlocks.replaceChildren();
     this.unlocks.hidden = list === null;
     if (list) {
+      const kind = this.yard?.store.kind ?? "main";
       // "Lv 3 unlocks", then each building's picture with its name and a
       // "+1" or NEW badge; the words whole on hover and for a screen reader.
-      const heading = document.createElement("p");
-      heading.className = "building-panel__label";
-      heading.textContent = list.label;
-      heading.title = list.title;
-      if (list.items.length === 0) {
+      // The Under Hall adds a second group for what it lets the main yard
+      // build ("Main yard"); one empty group says nothing.
+      if (list.items.length === 0 && !yardList) {
         const none = document.createElement("p");
         none.className = "building-panel__none";
         none.textContent = "No new buildings";
-        this.unlocks.append(heading, none);
+        this.unlocks.append(unlockHeading(list), none);
         return;
       }
-      const kind = this.yard?.store.kind ?? "main";
-      const items = document.createElement("ul");
-      items.className = "building-panel__unlock-list";
-      items.setAttribute("aria-label", list.title);
-      for (const unlock of list.items) {
-        const words = unlockText(unlock);
-        const item = document.createElement("li");
-        item.className = unlock.isNew ? "unlock-tile unlock-tile--new" : "unlock-tile";
-        item.title = words;
-        item.setAttribute("aria-label", words);
-        const picture = document.createElement("img");
-        picture.className = "unlock-tile__picture";
-        picture.src = buttonUrl(unlock.type, kind);
-        picture.alt = "";
-        picture.width = 60;
-        picture.height = 80;
-        picture.decoding = "async";
-        picture.draggable = false;
-        const badge = document.createElement("span");
-        badge.className = unlock.isNew ? "unlock-tile__badge chip chip--accent" : "unlock-tile__badge chip";
-        badge.setAttribute("aria-hidden", "true");
-        badge.textContent = unlock.isNew ? "NEW" : `+${unlock.added}`;
-        const name = document.createElement("span");
-        name.className = "unlock-tile__name";
-        name.setAttribute("aria-hidden", "true");
-        name.textContent = unlock.name;
-        item.append(picture, badge, name);
-        items.append(item);
-      }
-      this.unlocks.append(heading, items);
+      if (list.items.length > 0) this.unlocks.append(unlockHeading(list), unlockTiles(list, kind));
+      else this.unlocks.append(unlockHeading(list));
+      if (yardList) this.unlocks.append(unlockHeading(yardList, true), unlockTiles(yardList, kind));
     }
   }
 
@@ -695,6 +674,11 @@ export class BuildingPanel {
 
     if (yard) {
       const model = panelModel(building, yard.store);
+      // The building on the yard shows its next look while Upgrade is offered (beta 8), even short of resources.
+      // Not on a wall: its step finishes at once, so the badge would already
+      // name the level after next beside "Reached level N" (astra round 3).
+      const wallStep = WALL_TYPES.includes(building.type);
+      yard.scene.previewUpgrade?.(building, wallStep ? null : (model.upgrade?.to ?? null));
       const repair = repairOffer(building.id, yard.store.save, yard.store.credits, yard.store.now());
       if (repair) blocks.push(this.repairBlock(building, repair, used));
       if (model.job) blocks.push(this.jobBlock(building, model.job, used));
@@ -714,21 +698,21 @@ export class BuildingPanel {
       if (model.batch) {
         const wall = WALL_TYPES.includes(building.type);
         const upgradeWalls = this.upgradeWalls;
-        if (wall && upgradeWalls) {
-          // Still no single-wall upgrade here: the button opens the planner's
-          // wall picking with this wall picked, for the player to add more.
-          const button = actionButton("Upgrade walls", () => upgradeWalls(building.id), "btn--primary");
-          button.classList.add("building-panel__walls");
-          button.title = "Open the layout planner and pick the walls to raise";
-          blocks.push(button);
+        if (wall) {
+          // A wall upgrades one at a time above, like any building (owner,
+          // beta 8). With a built Yard Planner in this yard the planner's wall
+          // picking is offered as well, this wall already picked, for the
+          // player to add more; without one it is not offered at all.
+          const unlocked =
+            plannerToolBlock({ kind: yard.store.kind, buildings: yard.store.yard.buildings }) === null;
+          if (upgradeWalls && unlocked && model.upgrade) {
+            const button = actionButton("Pick more walls", () => upgradeWalls(building.id));
+            button.classList.add("building-panel__walls");
+            button.title = "Open the layout planner and pick more walls to raise together";
+            blocks.push(button);
+          }
         } else {
-          blocks.push(
-            note(
-              wall
-                ? "Walls are upgraded in the layout planner."
-                : "Traps are re-armed in the layout planner.",
-            ),
-          );
+          blocks.push(note("Traps are re-armed in the layout planner."));
         }
       }
       const open = housing ? null : this.openButton(model);
@@ -941,7 +925,8 @@ export class BuildingPanel {
     title.className = "building-panel__heading";
     title.textContent = `Lv ${offer.from} → ${offer.to}`;
     title.title = `Upgrade to level ${offer.to}`;
-    head.append(title, stepTime(offer.seconds, "Upgrade time · 1 worker"));
+    // A wall's step is finished at once with no worker (D13): no time to show.
+    head.append(title, ...(offer.seconds > 0 ? [stepTime(offer.seconds, "Upgrade time · 1 worker")] : []));
     // Builder's Weekend: the cost below is already the lower one.
     const off = offer.weekendOff ? weekendChip("builders") : null;
     if (off) head.append(off);
@@ -1398,7 +1383,9 @@ export class BuildingPanel {
     const store = this.yard?.store;
     if (!store) return;
     const result = await store.upgrade(id, topUp);
-    this.report(id, result, (report) => [`Upgrade to ${report.to} started.`]);
+    this.report(id, result, (report) =>
+      report.seconds > 0 ? [`Upgrade to ${report.to} started.`] : [`Reached level ${report.to}.`],
+    );
   }
 
   /**
@@ -1588,6 +1575,7 @@ export class BuildingPanel {
   }
 
   private dispose(): void {
+    this.yard?.scene.previewUpgrade?.(null, null);
     this.closeBaiter();
     this.closeJuice();
     this.toggleMore(false);
@@ -1864,6 +1852,48 @@ const realmIcons = (inferno: boolean): ResourceIconOptions => (inferno ? { realm
 const reportIcons = (report: object): ResourceIconOptions => realmIcons("purse" in report);
 
 /** "2 × Monster Locker at level 3", or "a Monster Locker at level 3" for one. */
+/** An unlock group's heading: "Lv 3 unlocks", or a smaller "Main yard" under it. */
+const unlockHeading = (list: InfoList, sub = false): HTMLElement => {
+  const heading = document.createElement("p");
+  heading.className = sub ? "building-panel__label building-panel__label--sub" : "building-panel__label";
+  heading.textContent = list.label;
+  heading.title = list.title;
+  return heading;
+};
+
+/** An unlock group's tiles: each building's picture, a "+1" or NEW badge and its name. */
+const unlockTiles = (list: InfoList, kind: YardKind): HTMLElement => {
+  const items = document.createElement("ul");
+  items.className = "building-panel__unlock-list";
+  items.setAttribute("aria-label", list.title);
+  for (const unlock of list.items) {
+    const words = unlockText(unlock);
+    const item = document.createElement("li");
+    item.className = unlock.isNew ? "unlock-tile unlock-tile--new" : "unlock-tile";
+    item.title = words;
+    item.setAttribute("aria-label", words);
+    const picture = document.createElement("img");
+    picture.className = "unlock-tile__picture";
+    picture.src = buttonUrl(unlock.type, unlock.yard ?? kind);
+    picture.alt = "";
+    picture.width = 60;
+    picture.height = 80;
+    picture.decoding = "async";
+    picture.draggable = false;
+    const badge = document.createElement("span");
+    badge.className = unlock.isNew ? "unlock-tile__badge chip chip--accent" : "unlock-tile__badge chip";
+    badge.setAttribute("aria-hidden", "true");
+    badge.textContent = unlock.isNew ? "NEW" : `+${unlock.added}`;
+    const name = document.createElement("span");
+    name.className = "unlock-tile__name";
+    name.setAttribute("aria-hidden", "true");
+    name.textContent = unlock.name;
+    item.append(picture, badge, name);
+    items.append(item);
+  }
+  return items;
+};
+
 const requirementText = ([type, count, level]: readonly [number, number, number], kind: YardKind): string =>
   `${count === 1 ? "a" : `${count} ×`} ${typeName(type, kind)} at level ${level}`;
 

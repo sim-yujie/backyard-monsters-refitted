@@ -8,6 +8,7 @@ import { cellsText } from "@/game/maproom/attackRange";
 import { TRIBE_COLOURS } from "@/game/maproom/cellVisuals";
 import { tribePictureUrl } from "@/game/maproom/tribeAvatars";
 import { button, el, icon, type IconName } from "@/ui/maproom1/icons";
+import { watchMoreBelow } from "@/ui/moreBelow";
 import { GROUND_BONUS_TITLE, groundBonusIcons, heightIcon } from "./groundBonus";
 import { isFlatGround } from "@/game/maproom/ground";
 import { landFeatureChip } from "./landFeatureRow";
@@ -107,12 +108,6 @@ export interface CellPanelOptions {
    */
   extraAction?: CellPanelAction | readonly CellPanelAction[];
   /**
-   * Another player's achievements line, last in "More about this yard"
-   * (#204, `ui/achievements/AchievementsLine.ts`). Made only once that
-   * section is open, so a closed one costs no fetch. Absent: no line.
-   */
-  achievementsLine?: (payload: PlayerCell) => HTMLElement;
-  /**
    * Another player's yard: Add friend, or how they stand to the player
    * (friends WP11, #378, `ui/friends/AddFriendButton.ts`), a row of its own
    * under Message and Truce. Absent: no row.
@@ -208,10 +203,6 @@ export class CellPanel {
   private friendOf: number | null = null;
   private readonly more: HTMLDetailsElement;
   private readonly facts: HTMLDListElement;
-  /** Under the facts: another player's achievements line (#204). */
-  private readonly achievementsSlot: HTMLElement;
-  /** The other player's cell the slot is for, or null. */
-  private achievementsOf: PlayerCell | null = null;
 
   private cell: OffsetCell | null = null;
   private payload: MapCell | undefined;
@@ -356,9 +347,7 @@ export class CellPanel {
     summary.append(icon("chevronRight", 14, "map-icon mr2-cell__more-icon"), "More about this yard");
     this.more = document.createElement("details");
     this.more.className = "mr2-cell__more";
-    this.achievementsSlot = el("div", "mr2-cell__achievements");
-    this.more.append(summary, this.facts, this.achievementsSlot);
-    this.more.addEventListener("toggle", () => this.syncAchievements());
+    this.more.append(summary, this.facts);
 
     this.element.append(
       grip,
@@ -370,6 +359,16 @@ export class CellPanel {
       ...this.extras.map((action) => action.detail),
       this.more,
     );
+    // Smart Repeat attack (astra): keep the camp's head fixed and each explanation with its button.
+    // Panels without Repeat attack keep their existing layout.
+    if (this.extras.some((action) => action.button.classList.contains("auto-attack-action__button"))) {
+      const body = el("div", "mr2-cell__repeat-body");
+      body.append(...[...this.element.children].filter((node) => node !== grip && node !== head));
+      for (const action of this.extras) action.button.after(action.detail);
+      this.element.append(body);
+      // Lead's vetting (16 Nov): a cut last line fades out while there is more below.
+      watchMoreBelow(body, "mr2-cell__repeat-body--more");
+    }
     this.element.addEventListener("keydown", (event) => {
       if (event.key !== "Escape") return;
       event.stopPropagation();
@@ -390,9 +389,13 @@ export class CellPanel {
     const cell = this.cell;
     if (!cell) return;
     this.payload = payload;
+    this.element.classList.toggle(
+      "mr2-cell--repeat",
+      !!payload && !isWaterCell(payload) && payload.b === CellType.WILD_MONSTER
+        && this.extras.some((action) => action.button.classList.contains("auto-attack-action__button")),
+    );
     for (const action of this.extras) action.setCell(cell, payload);
     this.render(cell, payload);
-    this.syncAchievements();
     for (const action of this.extras) if (action.chip) this.chips.append(action.chip);
   }
 
@@ -435,7 +438,6 @@ export class CellPanel {
     this.flinger.hidden = true;
     this.more.hidden = true;
     this.attackNote.hidden = true;
-    this.achievementsOf = null;
 
     if (!payload) {
       this.setHead({ kind: "loading" }, "Loading…", "", where);
@@ -519,7 +521,6 @@ export class CellPanel {
       this.social.hidden = this.messageButton.hidden && this.truceButton.hidden;
       this.inviteRow.hidden =
         this.options.onInviteToOutpost === undefined || !(this.options.canInviteToOutpost?.(payload) ?? true);
-      this.achievementsOf = payload;
       this.showAddFriend(payload);
     }
 
@@ -549,8 +550,8 @@ export class CellPanel {
       );
     }
 
-    this.more.hidden = false;
-    this.addFact("Empire value", payload.v.toLocaleString());
+    // Another player's main yard shows no empire value (owner, 19 Nov: "not necessary").
+    if (mine || outpost) this.addFact("Empire value", payload.v.toLocaleString());
     // The cell names no alliance, only its id, which says nothing to a player (#150).
     if (payload.aid !== null && devDetails()) this.addFact("Alliance", `#${payload.aid}`);
     if (outpost) {
@@ -559,26 +560,8 @@ export class CellPanel {
     // Only the player's own: the server sends no one else's (owner 2026-10-22).
     if (mine && payload.f !== undefined) this.addFact("Flinger", `Level ${payload.f}`);
     if (mine && payload.c !== undefined) this.addFact("Catapult", `Level ${payload.c}`);
-  }
-
-  /**
-   * Puts the shown player's achievements line under the facts once "More
-   * about this yard" is open, and keeps it while the same player stays shown.
-   */
-  private syncAchievements(): void {
-    const payload = this.achievementsOf;
-    const make = this.options.achievementsLine;
-    this.achievementsSlot.hidden = !payload || !make;
-    if (!payload || !make) {
-      this.achievementsSlot.replaceChildren();
-      delete this.achievementsSlot.dataset["uid"];
-      return;
-    }
-    if (!this.more.open) return;
-    const uid = String(payload.uid);
-    if (this.achievementsSlot.dataset["uid"] === uid && this.achievementsSlot.firstChild) return;
-    this.achievementsSlot.dataset["uid"] = uid;
-    this.achievementsSlot.replaceChildren(make(payload));
+    // No fold with nothing in it: another player's main yard has none (owner, 19 Nov).
+    this.more.hidden = this.facts.childElementCount === 0;
   }
 
   /** The own-yard line: how far the Flinger reaches, and the range switch. */

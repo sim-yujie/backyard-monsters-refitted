@@ -123,6 +123,18 @@ describe("HelpPanel (#374)", () => {
     expect(panel.message).toBe("");
   });
 
+  it("scrolls a new message up into view inside its body, as on a phone on its side", () => {
+    const { panel } = mount();
+    panel.show(silo, buildingHelp({ buildings: { "7": { speedup: "alreadyHelped" } } }, 7));
+    const body = panel.element.querySelector<HTMLElement>(".panel__body")!;
+    const status = panel.element.querySelector<HTMLElement>(".help-panel__status")!;
+    const rect = (top: number, bottom: number) => ({ top, bottom }) as DOMRect;
+    vi.spyOn(body, "getBoundingClientRect").mockReturnValue(rect(124, 358));
+    vi.spyOn(status, "getBoundingClientRect").mockReturnValue(rect(337, 412.4));
+    panel.setMessage("Thanks for helping!", "thanks");
+    expect(body.scrollTop).toBe(55);
+  });
+
   it("closes, telling its owner", () => {
     const onClose = vi.fn();
     const host = document.createElement("div");

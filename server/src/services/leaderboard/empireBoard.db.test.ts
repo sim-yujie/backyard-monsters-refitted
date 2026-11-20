@@ -4,7 +4,10 @@ import { MikroORM } from "@mikro-orm/postgresql";
 import ormConfig from "../../mikro-orm.config.js";
 import { Save } from "../../database/models/save.model.js";
 import { User } from "../../database/models/user.model.js";
-import { BOARD_SQL } from "./empireBoard.js";
+import { STARTER_KITS } from "../../game-data/starterKits.js";
+import { tallyOutposts } from "../maproom/v2/outpostPoints.js";
+import { kitBuildings } from "../yard/starterKit.js";
+import { BOARD_SQL, OUTPOSTS_SQL, rankRows } from "./empireBoard.js";
 
 /**
  * The leaderboard's query against a real Postgres (beta.4): the order, the
@@ -45,11 +48,11 @@ describe.skipIf(!dbName)("the empire leaderboard query (beta.4)", () => {
     return user.userid;
   };
 
-  /** Our test players in board order, as the query ranks them among everyone. */
+  /** Our test players in board order, as the two queries rank them among everyone. */
   const ours = async () =>
-    (await sql<{ username: string; empirepoints: string; outposts: number }>(BOARD_SQL))
-      .filter((row) => row.username.startsWith(PREFIX))
-      .map((row) => ({ name: row.username.slice(PREFIX.length), points: Number(row.empirepoints), outposts: Number(row.outposts) }));
+    rankRows(await sql(BOARD_SQL), tallyOutposts(await sql(OUTPOSTS_SQL)))
+      .filter((row) => row.name.startsWith(PREFIX))
+      .map((row) => ({ name: row.name.slice(PREFIX.length), points: row.empirePoints, outposts: row.outposts }));
 
   beforeAll(async () => {
     if (dbName === "bym") throw new Error("BOTS_TEST_DB must be a throwaway database, not bym");
@@ -111,19 +114,35 @@ describe.skipIf(!dbName)("the empire leaderboard query (beta.4)", () => {
     expect((await ours()).map((row) => row.name)).toEqual(["real"]);
   });
 
-  test("only the main yard counts towards the score, and outposts are counted", async () => {
-    const id = await player("outposter", "100");
+  /** A copy of the player's main yard row as another yard of `type` holding `buildingdata`. */
+  const yardOf = async (id: number, type: string, i: number, buildingdata: object) => {
     const [main] = await sql<{ basesaveid: number }>(`SELECT basesaveid FROM bym.save WHERE userid = ? AND type = 'main'`, [id]);
-    for (let i = 0; i < 2; i++) {
-      await sql(
-        `INSERT INTO bym.save (baseid, userid, saveuserid, type, createtime, name, credits, attacks, takeover_date,
-                              created_at, lastupdate_at, points, basevalue, empirepoints)
-         SELECT ?, userid, saveuserid, 'outpost', createtime, name, credits, attacks, takeover_date,
-                created_at, lastupdate_at, '99999', '99999', 199998
-           FROM bym.save WHERE basesaveid = ?`,
-        [String(900000000 + id * 10 + i), main!.basesaveid],
-      );
-    }
-    expect(await ours()).toEqual([{ name: "outposter", points: 100, outposts: 2 }]);
+    await sql(
+      `INSERT INTO bym.save (baseid, userid, saveuserid, type, createtime, name, credits, attacks, takeover_date,
+                            created_at, lastupdate_at, points, basevalue, empirepoints, buildingdata)
+       SELECT ?, userid, saveuserid, ?, createtime, name, credits, attacks, takeover_date,
+              created_at, lastupdate_at, '99999', '99999', 199998, ?::jsonb
+         FROM bym.save WHERE basesaveid = ?`,
+      [String(900000000 + id * 10 + i), type, JSON.stringify(buildingdata), main!.basesaveid],
+    );
+  };
+
+  test("outposts add their points (not their saved points), an empty one adds 0, an Inferno yard nothing", async () => {
+    const id = await player("outposter", "100");
+    await yardOf(id, "outpost", 0, {});
+    await yardOf(id, "outpost", 1, kitBuildings(STARTER_KITS[0]!, "shiny", {}).buildingdata);
+    await yardOf(id, "inferno", 2, kitBuildings(STARTER_KITS[2]!, "shiny", {}).buildingdata);
+    // 100 main yard points + the Regular Kit's 12,823,091.
+    expect(await ours()).toEqual([{ name: "outposter", points: 100 + 12_823_091, outposts: 2 }]);
+  });
+
+  test("a big enough outpost lifts a player past one with a bigger main yard", async () => {
+    await player("bigyard", "200000000");
+    const kitter = await player("kitter", "1000");
+    await yardOf(kitter, "outpost", 0, kitBuildings(STARTER_KITS[2]!, "resources", {}).buildingdata);
+    expect(await ours()).toEqual([
+      { name: "kitter", points: 1000 + 299_272_162, outposts: 1 },
+      { name: "bigyard", points: 200_000_000, outposts: 0 },
+    ]);
   });
 });

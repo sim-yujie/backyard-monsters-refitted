@@ -15,7 +15,7 @@ import { formatAmount, formatCountdown } from "@/ui/format";
 /**
  * Helping in a friend's yard (`docs/design/friends.md` §3.3 and §4, issue
  * #374): what the help block says each building can take, put into the words
- * the help panel, the wrench markers and the "Helping Bob" line show.
+ * the help panel, the wrench markers and the visit bar show.
  *
  * The server decides everything (§7 rule 6). The time a speed-up would save
  * is worked out here only to say it before the press, the same way the
@@ -104,9 +104,11 @@ export const helpableIds = (block: HelpBlock | null): Set<number> => {
 /**
  * The buildings still damaged whose repair is used up for today
  * (`repairedToday`: one repair a friend's yard a UTC day, owner 16 Nov 2026)
- * and that have no other help open: they wear a grey wrench. A visit draws
- * no damage, so without it the yard looks fully repaired once today's repair
- * is given (owner's bug report, 16 Nov 2026: "it all repaired").
+ * and that have no speed-up open: they wear a grey wrench. The wrench is the
+ * visit's clear sign of which buildings are damaged, so without it the yard
+ * looks fully repaired once today's repair is given (owner's bug report,
+ * 16 Nov 2026: "it all repaired"). The same on a
+ * visit later that day, when the server sends every repair as `repairedToday`.
  */
 export const spentRepairIds = (block: HelpBlock | null): Set<number> => {
   const ids = new Set<number>();
@@ -125,9 +127,6 @@ export const spentRepairIds = (block: HelpBlock | null): Set<number> => {
  */
 export const refusalStays = (reason: string): boolean =>
   reason !== "underAttack" && reason !== "notFriends" && reason !== "rateLimited";
-
-/** "Helping Bob". No count: there is no daily cap on helps (owner, 15 Nov 2026: was 20). */
-export const helpingLine = (name: string): string => `Helping ${name}`;
 
 /** The seconds left on a building's job now; its frozen time when paused. Null with no job. */
 export const timeLeft = (building: YardBuilding, now: number): number | null => {
@@ -270,3 +269,165 @@ export const afterRefusal = (block: HelpBlock, id: number, kind: HelpKind, reaso
       : {};
   return { ...block, ...gate, buildings: { ...block.buildings, [key]: { ...offer, [kind]: reason } } };
 };
+
+/* ── The marks and the Help all bar on a visit (beta 8, owner 15 Nov 2026) ── */
+
+/**
+ * Whether the bar's count and Help all take repairs as well as speed-ups:
+ * no (owner, 15 Nov 2026). Speed-ups only; a building to repair keeps its
+ * small wrench and is helped from its panel, as before.
+ */
+export const HELP_ALL_REPAIRS = false;
+
+/** One help Help all would give: a building and the kind. */
+export interface HelpTarget {
+  readonly id: number;
+  readonly kind: HelpKind;
+}
+
+/**
+ * Every help the visitor can give now, in the order Help all gives them:
+ * building by building (by id, so the order holds still), a speed-up before
+ * a repair on the same building. Repairs only with `repairs`.
+ */
+export const helpAllTargets = (block: HelpBlock | null, repairs: boolean = HELP_ALL_REPAIRS): HelpTarget[] => {
+  if (!block) return [];
+  const targets: HelpTarget[] = [];
+  const ids = Object.keys(block.buildings)
+    .map(Number)
+    .filter((id) => Number.isFinite(id))
+    .sort((a, b) => a - b);
+  for (const id of ids) {
+    const offer = block.buildings[String(id)];
+    if (offer?.speedup === true) targets.push({ id, kind: "speedup" });
+    if (repairs && offer?.repair === true) targets.push({ id, kind: "repair" });
+  }
+  return targets;
+};
+
+/** The buildings the bar counts ("3 to speed up"): each once, however many kinds it takes. */
+export const helpAllCount = (block: HelpBlock | null, repairs: boolean = HELP_ALL_REPAIRS): number =>
+  new Set(helpAllTargets(block, repairs).map((target) => target.id)).size;
+
+/** Whether a help on this building of this kind is still open in the block. */
+export const isHelpOpen = (block: HelpBlock | null, target: HelpTarget): boolean =>
+  block?.buildings[String(target.id)]?.[target.kind] === true;
+
+/**
+ * What a wrench on a visit stands for: a speed-up open (the big marks), a
+ * repair open (today's small amber wrench), or a repair used up for today
+ * on a building still damaged (the small wrench in grey, `spentRepairIds`).
+ */
+export type HelpMarkKind = HelpKind | "spent";
+
+/**
+ * One wrench on a visit: the building, whether it takes a speed-up (the big
+ * marks: ring, big wrench, tag), only a repair (today's small wrench) or
+ * nothing now but is still damaged (`spent`: the small wrench in grey), and
+ * the seconds a speed-up would save now (null: no tag).
+ */
+export interface HelpMark {
+  readonly id: number;
+  readonly kind: HelpMarkKind;
+  readonly saving: number | null;
+}
+
+/**
+ * The wrenches a visit draws: one per building with a help open
+ * ({@link helpableIds}), and a grey one per building whose repair is used
+ * up for today ({@link spentRepairIds}). A speed-up open makes it a
+ * `speedup` mark tagged with what it would save at `now` (no tag under a
+ * second); a repair only, a `repair` mark with no tag; a spent repair, a
+ * `spent` mark with no tag.
+ *
+ * @param now - Unix seconds
+ */
+export const helpMarksOf = (block: HelpBlock | null, buildings: readonly YardBuilding[], now: number): HelpMark[] => {
+  const ids = helpableIds(block);
+  const spent = spentRepairIds(block);
+  const marks: HelpMark[] = [];
+  for (const building of buildings) {
+    if (spent.has(building.id)) {
+      marks.push({ id: building.id, kind: "spent", saving: null });
+      continue;
+    }
+    if (!ids.has(building.id)) continue;
+    const offer = block?.buildings[String(building.id)];
+    const kind: HelpKind = offer?.speedup === true ? "speedup" : "repair";
+    const left = kind === "speedup" ? timeLeft(building, now) : null;
+    const saving = left === null ? 0 : speedupSeconds(left);
+    marks.push({ id: building.id, kind, saving: saving > 0 ? saving : null });
+  }
+  return marks;
+};
+
+/** A wrench's tag: "-18m", "-2h 5m", "-1d 3h", "-40s". The largest unit, and the next only above an hour. */
+export const savingTag = (seconds: number): string => {
+  const whole = Math.max(0, Math.floor(seconds));
+  const days = Math.floor(whole / 86_400);
+  const hours = Math.floor((whole % 86_400) / 3_600);
+  const minutes = Math.floor((whole % 3_600) / 60);
+  if (days > 0) return hours > 0 ? `-${days}d ${hours}h` : `-${days}d`;
+  if (hours > 0) return minutes > 0 ? `-${hours}h ${minutes}m` : `-${hours}h`;
+  if (minutes > 0) return `-${minutes}m`;
+  return `-${whole}s`;
+};
+
+/**
+ * The seconds a tag shows: `seconds` cut to the tag's last unit (whole
+ * minutes under a day, whole hours from a day, whole seconds under a
+ * minute). Help all adds these up, so its total is the sum of the tags the
+ * visitor read (lead's check, 15 Nov 2026: three tags of 8h 36m came to
+ * "saved 8h 38m" when the exact seconds were added).
+ */
+export const tagSeconds = (seconds: number): number => {
+  const whole = Math.max(0, Math.floor(seconds));
+  if (whole >= 86_400) return whole - (whole % 3_600);
+  if (whole >= 60) return whole - (whole % 60);
+  return whole;
+};
+
+/** A length of time with every unit it has, down to the minute ("1d 2h 50m"; "40s" under a minute). */
+export const savedText = (seconds: number): string => {
+  const whole = Math.max(0, Math.floor(seconds));
+  if (whole < 60) return `${whole}s`;
+  const days = Math.floor(whole / 86_400);
+  const hours = Math.floor((whole % 86_400) / 3_600);
+  const minutes = Math.floor((whole % 3_600) / 60);
+  return [days > 0 ? `${days}d` : "", hours > 0 ? `${hours}h` : "", minutes > 0 ? `${minutes}m` : ""]
+    .filter(Boolean)
+    .join(" ");
+};
+
+/** The bar's count: "3 to speed up". */
+export const helpAllCountText = (count: number): string => `${count} to speed up`;
+
+/* ── The own yard: friends who sped up a job (beta 8) ─────────────────── */
+
+/** A job a friend can speed up: a build, an upgrade or a fortify (the server's `HELP_COUNTDOWNS`). */
+const HELPED_JOBS: ReadonlySet<string> = new Set(["build", "upgrade", "fortify"]);
+
+/** What a job's helper badge says: friends who helped, and whether that is all 5. */
+export interface HelperBadge {
+  readonly id: number;
+  readonly helpers: number;
+  readonly full: boolean;
+}
+
+/**
+ * The helper badge of one of the player's own buildings at `now`, or null
+ * when no build, upgrade or fortify runs on it (a paused one still runs: it
+ * waits for a repair). A job whose time is up has none: it is about to finish.
+ *
+ * @param now - Unix seconds
+ */
+export const helperBadgeOf = (building: YardBuilding, now: number): HelperBadge | null => {
+  const countdown = building.countdown;
+  if (!countdown || !HELPED_JOBS.has(countdown.kind)) return null;
+  if (!countdown.paused && countdown.endsAt <= now) return null;
+  const helpers = helpersOf(building);
+  return { id: building.id, helpers, full: helpers >= HELPERS_PER_JOB };
+};
+
+/** The badge's words: "2/5". */
+export const helperBadgeText = (helpers: number): string => `${helpers}/${HELPERS_PER_JOB}`;

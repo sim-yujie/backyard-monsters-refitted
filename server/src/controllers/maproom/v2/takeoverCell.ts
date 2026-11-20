@@ -35,7 +35,7 @@ import { readAttackSession } from "../../../services/base/attackSessionStore.js"
 import { recordAchievements, unseenAchievements } from "../../../services/achievements/record.js";
 import type { AchievementEvents } from "../../../services/achievements/evaluate.js";
 import { claimWelcome, onMapRoom2, readWelcome, welcomeReady } from "../../../services/events/mr2Welcome.js";
-import { noteAllianceEvents } from "../../../services/alliance/allianceProgress.js";
+import { noteTakeover } from "../../../services/alliance/allianceProgress.js";
 import { countTakeover, takeoverPoints } from "../../../services/events/takeoverEvents.js";
 import { calculateTribeLevel } from "../../../services/maproom/v2/calculateTribeLevel.js";
 import { outpostValue } from "../../../services/maproom/v2/outpostValue.js";
@@ -287,8 +287,8 @@ export const takeoverCell: KoaController = async (ctx) => {
     ],
   );
 
-  // The "Take over outposts" weekly goal (design v5 §16).
-  noteAllianceEvents(currentUser.userid, { takeover: 1 });
+  // The "Take over outposts" weekly goal (design v5 §16): not from an alliance mate.
+  await noteTakeover(postgres.em, currentUser.userid, previousOwnerId);
 
   ctx.status = Status.OK;
   // The paid unlocks not yet shown, as yard answers carry them (§9.3).

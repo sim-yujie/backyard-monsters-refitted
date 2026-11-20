@@ -140,6 +140,8 @@ export class SiegePanel {
     this.panel = new Panel({
       title: data?.name ?? weapon.id,
       className: "attack-siege attack-picker",
+      // In the attack dock the tab row is its title and way back (owner, 18 Nov 2026): no ✕.
+      closable: options.onClose !== undefined,
       ...(options.onClose ? { onClose: options.onClose } : {}),
     });
     this.panel.element.dataset["hotkey"] = "S";

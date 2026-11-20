@@ -2,6 +2,8 @@ import type { EntityManager } from "@mikro-orm/postgresql";
 
 import { playerAchievementsAnswer } from "../../controllers/achievements/player.js";
 import { calculateBaseLevel } from "../base/calculateBaseLevel.js";
+import { tallyOutposts } from "../maproom/v2/outpostPoints.js";
+import type { BuildingDataMap } from "../../types/BuildingData.js";
 import { logger } from "../../utils/logger.js";
 import {
   AUTO_HIDE_REPORTS,
@@ -25,7 +27,16 @@ export interface ProfileStats {
   level: number;
   /** The main yard's Town Hall level; 0 when unknown. */
   townHall: number;
+  /** The main yard's empire points (`save.empirepoints`), outposts not counted. */
   empirePoints: number;
+  /**
+   * Every Map Room 2 outpost they hold, its points added up (beta 8,
+   * `outpostPoints.ts`); the leaderboard ranks by `empirePoints` + this, and
+   * the profile shows that total.
+   * Worked out as the profile opens, so it can be up to one board build
+   * (10 minutes) ahead of the leaderboard.
+   */
+  outpostPoints: number;
   /** Null when it could not be worked out (the profile still opens). */
   achievements: { earned: number; total: number } | null;
   friends: number;
@@ -169,6 +180,13 @@ export const readProfile = async (
     };
   }
 
+  const held = tallyOutposts(
+    await em.execute<{ userid: number; buildingdata: BuildingDataMap | null }[]>(
+      `SELECT userid, buildingdata FROM bym.save WHERE userid = ? AND type = 'outpost'`,
+      [userid],
+    ),
+  ).get(Number(row.userid));
+
   const joined = asDate(row.joined);
   return {
     userid: Number(row.userid),
@@ -180,6 +198,7 @@ export const readProfile = async (
       level,
       townHall: Number(row.thlevel ?? 0),
       empirePoints: Number(row.empirepoints ?? 0),
+      outpostPoints: held?.points ?? 0,
       achievements: await achievementsOf(em, userid, now),
       friends: Number(row.friends),
       joined: joined && !Number.isNaN(joined.getTime()) ? joined.toISOString() : null,

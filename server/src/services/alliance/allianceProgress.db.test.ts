@@ -195,6 +195,63 @@ describe.skipIf(!enabled)("alliance progress", () => {
     expect(schedule.current).toBeGreaterThan(before);
   });
 
+  test("the Leader or an Officer removes any unfinished goal; its slot frees but its kind stays used this week", async () => {
+    await progress.setGoal(em(), LEADER, "tribeDestroy", "easy", NOW);
+    await progress.setGoal(em(), LEADER, "loot", "easy", NOW);
+    await progress.setGoal(em(), LEADER, "hold", "easy", NOW);
+    await progress.addGoalProgress(em(), MEMBER, { tribeDestroy: 50 }, NOW);
+    const goals = async () => (await progress.progressView(em(), ALLIANCE, AllianceType.MIDAS, NOW)).goals;
+    const id = (kind: string) => async () => (await goals()).find((g) => g.kind === kind)!.id;
+    expect(await goals()).toEqual([
+      expect.objectContaining({ kind: "tribeDestroy", progress: 50, removable: true }),
+      expect.objectContaining({ kind: "loot", progress: 0, removable: true }),
+      expect.objectContaining({ kind: "hold", removable: true }),
+    ]);
+    // A member cannot remove one; the role is checked on the server.
+    const tribes = await id("tribeDestroy")();
+    await expect(progress.removeGoal(em(), MEMBER, tribes, NOW)).rejects.toThrow("Leader and Officers");
+    // An Officer can, even with progress on it (the progress is lost).
+    await sql(`UPDATE bym."user" SET alliance_role = 'officer' WHERE userid = ?`, [MEMBER]);
+    await progress.removeGoal(em(), MEMBER, tribes, NOW);
+    await progress.removeGoal(em(), LEADER, await id("hold")(), NOW);
+    expect((await goals()).map((g) => g.kind)).toEqual(["loot"]);
+    // Removed again: gone.
+    await expect(progress.removeGoal(em(), LEADER, tribes, NOW)).rejects.toThrow("no longer set");
+    // A removed goal gains nothing.
+    await progress.addGoalProgress(em(), MEMBER, { tribeDestroy: 500 }, NOW);
+    expect(Number((await alliance()).points)).toBe(0);
+    // Its kind is used for the week, and the menu greys it; its slot is free.
+    await expect(progress.setGoal(em(), LEADER, "tribeDestroy", "hard", NOW)).rejects.toThrow("used this week");
+    await expect(progress.setGoal(em(), LEADER, "hold", "easy", NOW)).rejects.toThrow("used this week");
+    const menu = (await progress.progressView(em(), ALLIANCE, AllianceType.MIDAS, NOW)).goal_menu;
+    expect(menu.filter((g) => g.used).map((g) => g.kind).sort()).toEqual(["hold", "loot", "tribeDestroy"]);
+    for (const kind of ["takeover", "attackWin", "defenceWin", "upgrade"]) await progress.setGoal(em(), LEADER, kind, "easy", NOW);
+    expect(await goals()).toHaveLength(5);
+    await expect(progress.setGoal(em(), LEADER, "catapultHit", "easy", NOW)).rejects.toThrow("Up to 5");
+    // A finished goal stays.
+    await progress.addGoalProgress(em(), MEMBER, { loot: 450_000_000 }, NOW);
+    const loot = (await goals()).find((g) => g.kind === "loot")!;
+    expect(loot).toMatchObject({ done: true, removable: false });
+    await expect(progress.removeGoal(em(), LEADER, loot.id, NOW)).rejects.toThrow("finished goal stays");
+    // Next week every kind is free again.
+    const nextWeek = NOW + 7 * 86_400;
+    await progress.setGoal(em(), LEADER, "tribeDestroy", "easy", nextWeek);
+    expect((await progress.progressView(em(), ALLIANCE, AllianceType.MIDAS, nextWeek)).goal_menu.find((g) => g.kind === "tribeDestroy")!.used).toBe(true);
+    expect((await progress.progressView(em(), ALLIANCE, AllianceType.MIDAS, nextWeek)).goal_menu.find((g) => g.kind === "loot")!.used).toBe(false);
+  });
+
+  test("a removed Hold goal is not settled by the Monday tally", async () => {
+    await progress.setGoal(em(), LEADER, "hold", "easy", NOW);
+    const [goal] = (await progress.progressView(em(), ALLIANCE, AllianceType.MIDAS, NOW)).goals;
+    await progress.removeGoal(em(), LEADER, goal!.id, NOW);
+    await sql(`UPDATE bym.alliance_goal SET target = 0 WHERE id = ?`, [goal!.id]);
+    const monday = Date.parse("2026-11-16T01:00:00Z") / 1000;
+    await progress.runTerritoryTally(em(), monday);
+    const [row] = await sql<{ done_at: Date | null }>(`SELECT done_at FROM bym.alliance_goal WHERE id = ?`, [goal!.id]);
+    expect(row!.done_at).toBeNull();
+    expect(Number((await alliance()).points)).toBe(0);
+  });
+
   test("the territory tally counts members' outposts once a day; the board ranks them", async () => {
     await sql(
       `INSERT INTO bym.save (userid, saveuserid, baseid, type, points, basevalue, createtime, name, credits, attacks,
@@ -229,6 +286,58 @@ describe.skipIf(!enabled)("alliance progress", () => {
     expect(await defend(OUTSIDER, 0, OUTPOST + 1)).toBe(true);
     expect(await defend(OUTSIDER, 0, OUTPOST, NOW + 86_400)).toBe(true);
     expect(queued()).toBe(start + 3);
+  });
+
+  test("stars 5-10 cost double the launch price; stars already lit stay (19 Nov 2026)", async () => {
+    await sql(`UPDATE bym.alliance SET points = 1000, stars = '{"wormzer": 4}'::jsonb, points_spent = 120 WHERE id = ?`, [
+      ALLIANCE,
+    ]);
+    const lit = await progress.lightStar(em(), LEADER, "wormzer", NOW);
+    expect(lit.price).toBe(120);
+    const after = await alliance();
+    expect(Number(after.points_spent)).toBe(240);
+    expect(after.stars).toEqual({ wormzer: 5 });
+  });
+
+  test("Hold outposts cannot be set at a target the alliance already holds (19 Nov 2026)", async () => {
+    const outposts = async (n: number) => {
+      for (let i = 0; i < n; i++) {
+        await sql(
+          `INSERT INTO bym.save (userid, saveuserid, baseid, type, points, basevalue, createtime, name, credits, attacks,
+                                 takeover_date, created_at, lastupdate_at, worldid, mapversion, mr2upgraded)
+           VALUES (?, ?, ?, 'outpost', 0, '0', 0, 'o', 0, '[]', now(), now(), now(), 'w', 2, true)`,
+          [MEMBER, MEMBER, String(BASE * 10 + 100 + i)]
+        );
+      }
+    };
+    // Midas Easy is 90 outposts.
+    await outposts(90);
+    expect(await progress.heldOutposts(em(), ALLIANCE)).toBe(90);
+    await expect(progress.setGoal(em(), LEADER, "hold", "easy", NOW)).rejects.toThrow("already holds 90 outposts");
+    // Medium (240) is still to reach: allowed.
+    await progress.setGoal(em(), LEADER, "hold", "medium", NOW);
+    // Removed and set again, it still cannot drop to a target already met.
+    const [goal] = await sql<{ id: number }>(`SELECT id FROM bym.alliance_goal WHERE alliance_id = ? AND kind = 'hold'`, [
+      ALLIANCE,
+    ]);
+    await progress.removeGoal(em(), LEADER, Number(goal!.id), NOW);
+    // (revamp's rule, a kind removed this week cannot be set again, refuses it too.)
+    await expect(progress.setGoal(em(), LEADER, "hold", "easy", NOW)).rejects.toThrow(/already holds|used this week/);
+    await sql(`DELETE FROM bym.save WHERE saveuserid = ?`, [MEMBER]);
+  });
+
+  test("a takeover counts for the goal, except one taken from an alliance mate (19 Nov 2026)", async () => {
+    const queued = () => progress.pendingAllianceEvents(LEADER)?.takeover ?? 0;
+    const start = queued();
+    // From a mate: nothing.
+    expect(await progress.noteTakeover(em(), LEADER, MEMBER)).toBe(false);
+    expect(queued()).toBe(start);
+    // From an outsider, and a wild camp (no previous owner): each counts.
+    expect(await progress.noteTakeover(em(), LEADER, OUTSIDER)).toBe(true);
+    expect(await progress.noteTakeover(em(), LEADER, undefined)).toBe(true);
+    expect(queued()).toBe(start + 2);
+    // A taker in no alliance counts as before (their goal-less events are dropped at the flush).
+    expect(await progress.noteTakeover(em(), OUTSIDER, MEMBER)).toBe(true);
   });
 
   test("goal progress noted in a rolled-back transaction is dropped; a committed one is queued", async () => {

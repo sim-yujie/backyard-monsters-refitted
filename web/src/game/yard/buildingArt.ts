@@ -210,6 +210,8 @@ export interface ResolvedAnim {
    * Control Centre); absent for a strip that is one loop.
    */
   readonly rest?: number;
+  /** The strip starts on cell 0 and goes back to it when the building stops working (`TierAnim.home`). */
+  readonly home?: boolean;
 }
 
 /**
@@ -296,7 +298,7 @@ const imageOf = (folder: string, entry: ArtImage): ResolvedImage | null => {
   };
 };
 
-const animOf = (folder: string, entry: ArtAnim, columns?: number, rest?: number): ResolvedAnim => ({
+const animOf = (folder: string, entry: ArtAnim, columns?: number, rest?: number, home?: boolean): ResolvedAnim => ({
   url: `${ASSET_ROOT}${folder}${entry[0]}`,
   x: entry[1],
   y: entry[2],
@@ -305,6 +307,7 @@ const animOf = (folder: string, entry: ArtAnim, columns?: number, rest?: number)
   frames: entry[5],
   ...(columns ? { columns } : {}),
   ...(rest ? { rest } : {}),
+  ...(home ? { home } : {}),
 });
 
 /** Indices into an `ArtLevel` tuple for the default, damaged and destroyed art. */
@@ -406,7 +409,13 @@ export const resolveArt = (
         top,
         shadow: imageOf(row.folder, tier.shadow),
         anims: layers.map((layer) =>
-          animOf(row.folder, layer, columnsOf(layer), layer === anim?.strip ? anim.rest : undefined),
+          animOf(
+            row.folder,
+            layer,
+            columnsOf(layer),
+            layer === anim?.strip ? anim.rest : undefined,
+            layer === anim?.strip ? anim.home : undefined,
+          ),
         ),
         topIsAnim: whole,
         ...(turret || whole || body ? { still } : {}),

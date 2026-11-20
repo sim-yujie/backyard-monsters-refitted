@@ -139,8 +139,9 @@ describe("upgradeSteps", () => {
     // `costs[k]` leaves level `k`, so 1 to 5 is steps 1, 2, 3 and 4.
     const steps = upgradeSteps(17, 1, 5);
     expect(steps.length).toBe(4);
-    expect(steps[0]).toEqual([0, 10000, 0, 0, 5, [[14, 1, 3]]]);
-    expect(steps[3]).toEqual([400000, 400000, 0, 0, 5, [[14, 1, 6]]]);
+    // No upgrade step names the Town Hall since beta 8.
+    expect(steps[0]).toEqual([0, 10000, 0, 0, 5, []]);
+    expect(steps[3]).toEqual([400000, 400000, 0, 0, 5, []]);
   });
 
   test("building from nothing includes the initial step", () => {

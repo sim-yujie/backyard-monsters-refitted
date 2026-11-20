@@ -17,6 +17,7 @@ import {
 } from "@/api/yardplanner";
 import type { Camera } from "@/game/Camera";
 import { TRAP_TYPES } from "@/game/yard/buildingCosts";
+import { hasLayoutSlots } from "@/game/yard/planner/access";
 import { blueprintToWorld } from "@/game/yard/planner/blueprint";
 import type { Checklist } from "@/game/yard/planner/checklist";
 import type { LoadMiss } from "@/game/yard/planner/layout";
@@ -231,6 +232,13 @@ export interface YardPlannerOptions {
    */
   blueprintBlocked?: string | null;
   /**
+   * Why the Yard Planner tools are locked in this yard, or null/absent when
+   * they are not (`access.ts`, `plannerToolBlock`; owner, beta 8): layout
+   * slots past the first, Tower ranges and Dead zones, Find, the yard
+   * picture, Compare and the many-walls Upgrade walls.
+   */
+  toolsBlocked?: string | null;
+  /**
    * The outpost or Inferno yard this planner is over (outposts WP5): Apply,
    * the wall upgrade and the trap re-arm act on it, an outpost's charged to
    * the main pool and the Inferno's to the Inferno purse; the Inferno's
@@ -392,15 +400,36 @@ export class YardPlanner {
       insets: () => this.insets,
     });
 
+    // Development only: the film scripts store walls and tap exact yard spots (wall line, 16 Nov 2026).
+    if (import.meta.env.DEV) {
+      const { camera, canvas, renderer } = options;
+      (window as unknown as { __planner?: unknown }).__planner = {
+        session: this.session,
+        screenOf: (x: number, y: number) => {
+          const screen = camera.worldToScreen(renderer.yardToWorld(x, y));
+          const rect = canvas.getBoundingClientRect();
+          return { x: screen.x + rect.left, y: screen.y + rect.top };
+        },
+        centreOn: (x: number, y: number, zoom?: number) => {
+          const world = renderer.yardToWorld(x, y);
+          if (zoom !== undefined) camera.zoomAt(zoom, camera.worldToScreen(world));
+          camera.centreOn(world);
+          camera.dirty = true;
+        },
+      };
+    }
+
     this.layouts = new YardPlannerLayouts({
       session: this.session,
       dock: this.dock,
       // An outpost has no layout slots (`BasePlanner.as:41`, #191): no panel, no Ctrl+S.
       // The Inferno yard has its own (owner decision 2026-10-29).
-      readOnly: this.readOnly || options.yard.kind === "outpost",
+      readOnly: this.readOnly || !hasLayoutSlots(options.yard),
       ...(options.baseid !== undefined ? { baseid: options.baseid } : {}),
       onLoad: (layout) => this.loadLayout(layout, false),
       onPreview: (layout) => this.loadLayout(layout, true),
+      locked: options.toolsBlocked ?? null,
+      onLocked: () => this.toolLocked(),
       ...(options.save && options.compare && options.baseid === undefined
         ? { onCompare: (layout: Layout) => this.openCompare(layout) }
         : {}),
@@ -431,6 +460,9 @@ export class YardPlanner {
       onRearmTraps: () => this.showRearm(),
       onApply: () => this.apply(),
       onPutBack: () => this.session.putBack(),
+      onLineUndo: () => this.session.undoCorner(),
+      onLineClear: () => this.session.clearLine(),
+      onLinePlace: () => this.session.placeLine(),
       onStore: () => this.storeSelection(),
       onClearYard: () => this.confirmClearYard(),
       onInventory: () => this.toggleInventory(),
@@ -438,7 +470,7 @@ export class YardPlanner {
       onSnapshot: () => this.showSnapshot(),
       onExit: () => this.requestExit(),
       onMore: () => this.applySheet(),
-    }, { readOnly: this.readOnly, layouts: options.baseid === undefined });
+    }, { readOnly: this.readOnly, layouts: hasLayoutSlots(options.yard) });
     this.bar.mount(options.overlay);
     // A press on the planner's own bars and panels is work in it, as a plan
     // edit is (`refreshBar`): "Stay protected?" waits while the player is busy
@@ -477,8 +509,9 @@ export class YardPlanner {
     // The crosshair holds its size on screen, so it has to hear about a wheel
     // as well as about a plan edit.
     options.renderer.watchZoom((zoom) => this.centreMark.setZoom(zoom));
-    this.bar.setOverlays(this.overlays);
+    this.bar.setOverlays(this.shownOverlays);
     this.bar.setBlueprintBlocked(options.blueprintBlocked ?? null);
+    this.bar.setToolsLocked(this.toolsBlocked);
     options.canvas.addEventListener("pointermove", this.onHoverMove, { passive: true });
     this.refreshBar();
     this.bar.setRearmCount(this.rearmTargets().length);
@@ -550,6 +583,7 @@ export class YardPlanner {
    * player just asked for in as many words.
    */
   private toggleOverlay(name: OverlayName): void {
+    if (name !== "centre" && this.toolLocked()) return;
     const now = { ...this.overlays, [name]: !this.overlays[name] };
     // Tower ranges and Dead zones both read Land and Air: turning either on
     // with both families off would draw nothing and look broken.
@@ -568,11 +602,37 @@ export class YardPlanner {
     if (name === "deadZones" && now.deadZones) this.coverageClosed = false;
     this.overlays = now;
     saveOverlays(now);
-    this.bar.setOverlays(now);
+    this.bar.setOverlays(this.shownOverlays);
     this.drawOverlays();
     // With nothing selected the coverage panel is up while Dead zones is on,
     // and closed otherwise.
     this.refreshCoverage(this.session.selectedNodes());
+  }
+
+  /** Why the Yard Planner tools are locked here, or null (owner, beta 8). */
+  private get toolsBlocked(): string | null {
+    return this.options.toolsBlocked ?? null;
+  }
+
+  /**
+   * The overlays as drawn: the saved switches, with Tower ranges and Dead
+   * zones off while the tools are locked. The saved choice itself is kept,
+   * so building a Yard Planner brings back what the player had on.
+   */
+  private get shownOverlays(): OverlayToggles {
+    return this.toolsBlocked ? { ...this.overlays, ranges: false, deadZones: false } : this.overlays;
+  }
+
+  /**
+   * True, after saying why, when the Yard Planner tools are locked: every
+   * locked tool's way in (its button, its key, a wall pop-up) asks this
+   * first, as `setView` does for Blueprint.
+   */
+  private toolLocked(): boolean {
+    const blocked = this.toolsBlocked;
+    if (!blocked) return false;
+    this.options.notices.show(NOTICE, blocked, { level: "info", timeoutMs: 4000 });
+    return true;
   }
 
   /** Hands both layers to whichever view is showing. */
@@ -594,7 +654,7 @@ export class YardPlanner {
    */
   private drawOverlays(): void {
     const renderer = this.options.renderer;
-    const on = this.overlays;
+    const on = this.shownOverlays;
 
     this.ranges.draw({
       nodes: on.ranges ? this.session.plan.buildings() : [],
@@ -775,7 +835,13 @@ export class YardPlanner {
     this.openInventory();
   }
 
+  /** True while walls are drawn as a line from the drawer: the yard's hover outline steps aside. */
+  get drawingLine(): boolean {
+    return this.session.drawingLine;
+  }
+
   destroy(): void {
+    if (import.meta.env.DEV) delete (window as unknown as { __planner?: unknown }).__planner;
     window.removeEventListener("resize", this.onResize);
     this.dockObserver?.disconnect();
     this.dockObserver = null;
@@ -832,6 +898,7 @@ export class YardPlanner {
   private openCompare(layout: Layout): void {
     const { save, compare } = this.options;
     if (!save || !compare) return;
+    if (this.toolLocked()) return;
     this.closeCompare();
     this.layouts.close();
 
@@ -1064,6 +1131,8 @@ export class YardPlanner {
    */
   startWallPick(ids?: readonly number[]): void {
     if (this.readOnly) return;
+    // Many walls at once is a Yard Planner tool; one wall upgrades from its pop-up.
+    if (this.toolLocked()) return;
     if (this.session.wallPicking && this.wallPanel) {
       if (ids) this.session.selectOnly(ids);
       return;
@@ -1223,6 +1292,7 @@ export class YardPlanner {
    * button is the one that closes it.
    */
   private openSearch(): void {
+    if (this.toolLocked()) return;
     if (this.search) {
       if (this.hiddenOnPhone(this.search.element)) this.reveal(this.search.element);
       this.search.focus();
@@ -1288,7 +1358,7 @@ export class YardPlanner {
     // Outside the count guard: Escape ends a run of placements without moving
     // anything between the yard and the drawer, and the pressed row has to let
     // go all the same (#57). The panel ignores a repeat of the same answer.
-    this.inventory?.setArmed(this.session.armedStack());
+    this.inventory?.setArmed(this.session.armedStack(), state.line !== null);
 
     this.refreshCoverage(nodes);
     this.refreshPhoneTools(nodes);
@@ -1304,7 +1374,7 @@ export class YardPlanner {
    * with its upgrade ladder, was removed so a player can line buildings up.
    */
   private refreshCoverage(nodes: readonly PlanNode[]): void {
-    const show = nodes.length === 0 && this.overlays.deadZones && !this.coverageClosed;
+    const show = nodes.length === 0 && this.shownOverlays.deadZones && !this.coverageClosed;
     if (!show) {
       this.closeCoverage();
       return;
@@ -1537,6 +1607,7 @@ export class YardPlanner {
    * window opens, so nothing on screen changes.
    */
   private showSnapshot(): void {
+    if (this.toolLocked()) return;
     const caption = this.options.snapshotCaption?.() ?? {};
     const drawn = this.options.renderer.snapshot();
     const picture = drawn

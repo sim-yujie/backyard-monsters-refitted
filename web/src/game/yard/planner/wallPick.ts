@@ -233,12 +233,19 @@ export const selectAllCheck = (
  * A pick that is too dear is trimmed down to what can be paid for
  * ({@link affordablePick}); a pick that can be paid for is kept and topped up
  * from the rest of the yard with what is left over, so the button never throws
- * away walls the player chose. `reason` says why the button is greyed: nothing
- * can be paid for, or the pick is already all the yard can afford.
+ * away walls the player chose. `reason` says why pressing it would change
+ * nothing: no wall can be paid for, or the pick is already all the yard can
+ * afford.
+ *
+ * `applied` is the second case: the pick IS what Affordable would pick. The
+ * panel then shows the button pressed, in the chosen level's look, rather than
+ * greyed (owner, 2026-11-19: the grey read as Affordable's selected state and
+ * did not match the selected Level button).
  */
 export interface AffordableCheck {
   readonly ids: number[];
   readonly reason: string | null;
+  readonly applied: boolean;
 }
 
 export const affordableFill = (
@@ -251,7 +258,7 @@ export const affordableFill = (
   const pickPreview = wallBatchPreview(walls, target, yard);
   const below = all.filter((node) => isPickableWall(node) && effectiveLevel(node) < target);
   if (below.length === 0) {
-    return { ids: [], reason: `Every wall is already at level ${target} or higher.` };
+    return { ids: [], reason: `Every wall is already at level ${target} or higher.`, applied: false };
   }
 
   let ids: number[];
@@ -276,13 +283,13 @@ export const affordableFill = (
   }
 
   if (ids.length === 0) {
-    return { ids, reason: `You cannot afford a single wall at level ${target} yet.` };
+    return { ids, reason: `You cannot afford a single wall at level ${target} yet.`, applied: false };
   }
   const same =
     ids.length === pickPreview.eligible.length &&
     ids.every((id) => pickPreview.eligible.includes(id)) &&
     !isShort(pickPreview.shortfall);
   return same
-    ? { ids, reason: `Your pick is already all you can afford at level ${target}.` }
-    : { ids, reason: null };
+    ? { ids, reason: `Your pick is already all you can afford at level ${target}.`, applied: true }
+    : { ids, reason: null, applied: false };
 };

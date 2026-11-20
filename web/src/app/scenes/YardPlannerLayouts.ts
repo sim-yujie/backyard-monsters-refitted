@@ -2,6 +2,7 @@ import { ApiError, NetworkError } from "@/api/http";
 import type { Layout } from "@/api/types";
 import { deleteLayout, listLayouts, saveLayout } from "@/api/yardplanner";
 import type { PlannerSession } from "@/game/yard/planner/PlannerSession";
+import { usableLayoutSlots } from "@/game/yard/planner/access";
 import { LayoutsPanel } from "@/ui/yard/LayoutsPanel";
 
 /**
@@ -41,6 +42,13 @@ export interface LayoutsControllerOptions {
   /** Compare the plan with a slot (#9). Absent, the rows have no Compare. */
   onCompare?: (layout: Layout) => void;
   notify: (message: string, level: "info" | "error") => void;
+  /**
+   * Why the slots past the first and Compare are locked in this yard, or
+   * null (owner, beta 8; `access.ts`, `plannerToolBlock`).
+   */
+  locked?: string | null;
+  /** A locked slot or Compare was pressed: says why. */
+  onLocked?: () => void;
 }
 
 export class YardPlannerLayouts {
@@ -84,6 +92,7 @@ export class YardPlannerLayouts {
       ...(this.options.onCompare ? { onCompare: this.options.onCompare } : {}),
       onSave: (slot, name) => void this.save(slot, name),
       onDelete: (slot) => void this.remove(slot),
+      onLocked: () => this.options.onLocked?.(),
       onClose: () => {
         this.panel = null;
       },
@@ -102,12 +111,16 @@ export class YardPlannerLayouts {
       const response = await listLayouts(this.options.baseid);
       // The panel may have been closed while the request was in flight.
       if (this.panel !== panel) return;
+      const locked = this.options.locked ?? null;
+      // The server's count is the word on it; an older server sends none.
+      const usable = Math.min(response.usable ?? response.slots, usableLayoutSlots(locked, response.slots));
       panel.show(
         response.layouts,
         response.slots,
         response.layouts.length === 0
           ? "No saved layouts yet. Arrange your yard, then press Save."
           : undefined,
+        { usable, locked },
       );
       panel.setCurrentSlot(this.options.session.state().slot);
     } catch (caught) {

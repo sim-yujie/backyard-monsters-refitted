@@ -3,7 +3,10 @@ import type { Camera } from "@/game/Camera";
 import type { Point, Rect } from "../YardGrid";
 import type { Yard } from "../yardModel";
 import type { YardRenderer, YardView } from "../YardRenderer";
+import type { SpotCheck } from "../BuildPlacement";
 import { buildingName } from "../buildingArt";
+import { WALL_TYPES } from "../buildingCosts";
+import type { LinePlan, PlannedCell } from "../wallLine";
 import { buildChecklist, type Checklist } from "./checklist";
 import {
   CommandStack,
@@ -17,11 +20,16 @@ import { planLoad, payloadFor, type LoadResult } from "./layout";
 import { rectFromCorners } from "./marquee";
 import { snap, type PlanNode } from "./placement";
 import { Grab, PlannerInput, type ViewportInsets } from "./PlannerInput";
+import { inHandMarks } from "./inHand";
 import { PlannerView } from "./PlannerView";
 import type { CompareDiff } from "./PlannerOverlay";
-import { Plan, type AbsorbResult } from "./plan";
+import { Plan, PlaceBlock, type AbsorbResult } from "./plan";
+import { PlannerWallLine } from "./plannerWallLine";
 import { plannerAction } from "./shortcuts";
 import { allWallIds, boxPick, isPickableWall, togglePick, wallsOnly } from "./wallPick";
+
+/** The clock a double-tap is timed by. */
+const now = (): number => (typeof performance === "undefined" ? Date.now() : performance.now());
 
 /** Nothing selected, moved or faulted: what compare shows of the planner's own marks. */
 const EMPTY: ReadonlySet<number> = new Set();
@@ -111,6 +119,36 @@ export interface PlannerState {
    * tap pick walls only, nothing moves, and Escape leaves the mode.
    */
   readonly wallPicking: boolean;
+  /**
+   * A wall line being drawn from the drawer (owner, 16 Nov 2026), or null.
+   * While it is up nothing is in hand: taps put corners down, a drag pans.
+   */
+  readonly line: PlannerLineState | null;
+}
+
+/** Where a Planner wall line stands, for the bar (`plannerWallLine.ts`). */
+export interface PlannerLineState {
+  readonly type: number;
+  readonly level: number;
+  /** Corners put down (↶ takes the last one away). */
+  readonly anchors: number;
+  /** Green Blocks: what ✓ Place puts down, live stretch included. */
+  readonly place: number;
+  /** Red Blocks: off the plot or on a building, skipped. */
+  readonly blocked: number;
+  /** Grey Blocks: past the walls left on the stack, not placed. */
+  readonly short: number;
+  /** Walls left on the stack in the drawer. */
+  readonly stock: number;
+  /** A double-tap ended the line: what is drawn is what ✓ places. */
+  readonly finished: boolean;
+}
+
+/** The Blocks a line preview draws, for the overlay. */
+export interface LineVisual {
+  readonly type: number;
+  readonly cells: LinePlan["cells"];
+  readonly anchors: readonly Point[];
 }
 
 /**
@@ -186,6 +224,14 @@ export class PlannerSession {
   /** The pick a box started from, which the box adds to while it is drawn. */
   private pickBase: ReadonlySet<number> | null = null;
   private readonly onWallPickCancel: (() => void) | undefined;
+  /**
+   * The wall line being drawn from the drawer, or null (owner, 16 Nov 2026).
+   * Unlike {@link placing} nothing is in hand: the press goes to the camera
+   * and a click or tap that did not travel puts a corner down.
+   */
+  private line: PlannerWallLine | null = null;
+  /** The stored walls drawn at the line's green Blocks, to hide again on the next draw. */
+  private lineGhosts: number[] = [];
   /**
    * The yard as the server last described it.
    *
@@ -268,7 +314,11 @@ export class PlannerSession {
         tap: (world, shift) => this.tap(world, shift),
         move: (world, grab) => this.onMove(world, grab),
         release: (world, grab, travelled) => this.onRelease(world, grab, travelled),
-        clickEmpty: (shift) => {
+        clickEmpty: (shift, world) => {
+          if (this.line) {
+            this.lineTap(world);
+            return;
+          }
           // Picking walls, a click off them keeps the pick: Clear is a button.
           if (!shift && !this.wallPick) this.clearSelection();
         },
@@ -277,6 +327,13 @@ export class PlannerSession {
         key: (event) => this.onKey(event),
         // F14: two fingers tapped together, the touch spelling of Ctrl+Z.
         twoFingerTap: () => this.undo(),
+        hover: (world) => this.lineHover(world),
+        secondary: () => {
+          if (!this.line) return false;
+          // A right-click takes the last corner away; with none, the line ends.
+          if (!this.undoCorner()) this.endLine();
+          return true;
+        },
       },
     });
   }
@@ -317,6 +374,7 @@ export class PlannerSession {
       readOnly: this.readOnly,
       view: this.view.view,
       wallPicking: this.wallPick,
+      line: this.lineState(),
     };
   }
 
@@ -327,6 +385,7 @@ export class PlannerSession {
     // Choosing a tool is one of the ways out of a run of placements (#57):
     // the building in hand goes back to the drawer before the tool changes.
     if (this.placing) this.abandonPlacement();
+    if (this.line) this.endLine();
     this.tool = tool;
     this.refresh();
   }
@@ -358,6 +417,7 @@ export class PlannerSession {
     if (this.readOnly && on) return;
     if (this.wallPick === on) return;
     if (this.placing) this.abandonPlacement();
+    if (this.line) this.endLine();
     if (this.input.isGrabbing) this.cancel();
     this.wallPick = on;
     this.pickBase = null;
@@ -483,6 +543,7 @@ export class PlannerSession {
    * drop while the row stays the same.
    */
   armedStack(): { type: number; level: number } | null {
+    if (this.line) return { type: this.line.type, level: this.line.level };
     const node = this.placing ? this.plan.get(this.placing.id) : undefined;
     return node ? { type: node.type, level: node.level } : null;
   }
@@ -497,7 +558,8 @@ export class PlannerSession {
    *
    * The row stays armed after the drop (#57): while the drawer holds another
    * building of the same type and level, the next one is in hand at once, so
-   * a run of walls is one click per wall rather than two. See
+   * a run of buildings is one click each rather than two (walls are drawn
+   * as a line instead, {@link startLine}, owner 16 Nov 2026). See
    * {@link dropPlacement} for how the run ends.
    *
    * Returns false when there is nothing to place: a read-only session, or an
@@ -509,12 +571,203 @@ export class PlannerSession {
     if (!node || !node.stored) return false;
 
     if (this.input.isGrabbing) this.cancel();
+    // A wall is drawn as a line, corner to corner (owner, 16 Nov 2026).
+    if (WALL_TYPES.includes(node.type)) return this.startLine(node);
+    if (this.line) this.endLine();
     this.selection = new Set([id]);
     this.moveGhost(node, node.x, node.y);
     this.input.beginCarry();
     this.refresh();
     return true;
   }
+
+  /* ── The wall line (owner, 16 Nov 2026) ─────────────────────────────── */
+
+  /** Arms a stack of walls for a line: nothing in hand, the next tap is the first corner. */
+  private startLine(node: PlanNode): boolean {
+    // The Block in hand starts in the middle of the view, as the yard's does,
+    // so a touch screen shows it before the first tap; a mouse takes it over.
+    const middle = this.input.middleWorld();
+    const start = middle ? this.spotUnder(middle, node.width) : null;
+    this.line = new PlannerWallLine({ type: node.type, level: node.level }, node.width, start);
+    this.selection.clear();
+    this.faulted.clear();
+    this.dragInvalid = false;
+    this.refresh();
+    return true;
+  }
+
+  /** True while a wall line is up. */
+  get drawingLine(): boolean {
+    return this.line !== null;
+  }
+
+  /** The line's stack in the drawer, lowest id first: the order a line places them in. */
+  private lineStack(): PlanNode[] {
+    const line = this.line;
+    if (!line) return [];
+    return this.plan
+      .storedNodes()
+      .filter((node) => node.type === line.type && node.level === line.level);
+  }
+
+  /** Whether a Block of the line can stand at `(x, y)` on the plan as it is now. */
+  private readonly lineCheck = (x: number, y: number): SpotCheck => {
+    const check = this.plan.canPlace(this.line?.type ?? 0, x, y);
+    if (check.reason === null) return { x, y, problem: null, blockedBy: null };
+    return {
+      x,
+      y,
+      problem: check.reason === PlaceBlock.BOUNDS ? "outOfBounds" : "overlap",
+      blockedBy: check.blockedBy,
+    };
+  };
+
+  /** The line's plan: with the live stretch to the pointer (`live`), or only its corners. */
+  private linePlan(live: boolean, stock = this.lineStack().length): LinePlan | null {
+    return this.line?.plan(this.lineCheck, stock, live) ?? null;
+  }
+
+  /** The line's spot under a world point: a Block centred on it, snapped to the grid. */
+  private lineSpot(world: Point): Point {
+    return this.spotUnder(world, this.line?.step ?? 0);
+  }
+
+  /** A `step`-wide Block centred on a world point, snapped to the grid. */
+  private spotUnder(world: Point, step: number): Point {
+    const yard = this.view.worldToYard(world.x, world.y);
+    return { x: snap(yard.x - step / 2), y: snap(yard.y - step / 2) };
+  }
+
+  /** A click or tap on the yard with a line up: a corner, or (twice on the last one) the end. */
+  private lineTap(world: Point): void {
+    const line = this.line;
+    if (!line || this.readOnly) return;
+    line.tap(this.lineSpot(world), now());
+    this.refresh();
+  }
+
+  /** The mouse moved (null: it left the yard): the live stretch follows it. */
+  private lineHover(world: Point | null): void {
+    const line = this.line;
+    if (!line) return;
+    if (line.hoverAt(world ? this.lineSpot(world) : null)) this.refresh();
+  }
+
+  /** ↶, Backspace, a right-click, Ctrl+Z: takes the last corner away. False when there was none. */
+  undoCorner(): boolean {
+    if (!this.line?.undo()) return false;
+    this.refresh();
+    return true;
+  }
+
+  /** ✗ and Escape: the corners go, the stack stays armed. */
+  clearLine(): void {
+    if (!this.line || this.line.anchors.length === 0) return;
+    this.line.clear();
+    this.refresh();
+  }
+
+  /** A double-click from outside the canvas's own taps (the bar, a test): ends the live stretch. */
+  finishLine(): void {
+    if (!this.line) return;
+    this.line.finish();
+    this.refresh();
+  }
+
+  /**
+   * ✓ Place: puts the green Blocks between the corners down (never the live
+   * stretch to the pointer), the stack's walls in id order, as one undo step.
+   * The stack stays armed while it has walls left. Returns how many went down.
+   */
+  placeLine(): number {
+    const line = this.line;
+    if (!line || this.readOnly) return 0;
+    const stack = this.lineStack();
+    const plan = this.linePlan(false, stack.length);
+    if (!plan || plan.build.length === 0) return 0;
+
+    // The preview's walls go back to the drawer's hiding first: `place` draws them for real.
+    this.hideLineGhosts();
+    const entries: StoreEntry[] = [];
+    plan.build.forEach((cell, index) => {
+      const node = stack[index];
+      const entry = node ? this.plan.place(node.id, cell.x, cell.y) : null;
+      if (entry) entries.push(entry);
+    });
+    line.clear();
+    if (entries.length === 0) {
+      this.refresh();
+      return 0;
+    }
+    this.recordStore(entries, storeLabel("Place", entries.length, this.plan, entries[0]?.id));
+    return entries.length;
+  }
+
+  /** Stops drawing walls: Done, Put back, Escape with no corner, another tool. */
+  private endLine(): void {
+    if (!this.line) return;
+    this.line = null;
+    this.hideLineGhosts();
+    this.refresh();
+  }
+
+  /** Puts the walls the preview drew back out of sight. */
+  private hideLineGhosts(): void {
+    if (this.lineGhosts.length === 0) return;
+    this.lineGhosts = [];
+    this.view.syncStored();
+  }
+
+  /**
+   * Draws the line's green Blocks with the stack's own walls, the way a carry
+   * out of the drawer draws the one in hand: the real art in either view.
+   * Returns what the overlay outlines, or null with no line.
+   */
+  private drawLine(): { state: PlannerLineState; visual: LineVisual } | null {
+    const line = this.line;
+    if (!line) return null;
+    const stack = this.lineStack();
+    const plan = this.linePlan(true, stack.length);
+    // Before the first corner, the one Block in hand (owner, 19 Nov 2026):
+    // green with the stack's wall in it where it can stand, red and crossed
+    // where it cannot, as the yard's own placing box. Drawn only: the state
+    // below still counts nothing to place until a corner is down.
+    const box = plan ? null : line.box(this.lineCheck);
+    const boxCells: PlannedCell[] = box
+      ? [{ x: box.x, y: box.y, state: box.problem ? "blocked" : "build", problem: box.problem, blockedBy: box.blockedBy }]
+      : [];
+    const before = this.lineGhosts;
+    this.lineGhosts = [];
+    if (before.length > 0) this.view.syncStored();
+    (plan?.build ?? boxCells.filter((cell) => cell.state === "build")).forEach((cell, index) => {
+      const node = stack[index];
+      if (!node) return;
+      this.view.ghost(node.id, cell.x, cell.y);
+      this.lineGhosts.push(node.id);
+    });
+    if (before.length > 0 || this.lineGhosts.length > 0) this.view.resort();
+    return {
+      state: {
+        type: line.type,
+        level: line.level,
+        anchors: line.anchors.length,
+        place: plan?.build.length ?? 0,
+        blocked: plan?.blocked ?? 0,
+        short: plan?.short ?? 0,
+        stock: stack.length,
+        finished: line.finished,
+      },
+      visual: { type: line.type, cells: plan?.cells ?? boxCells, anchors: line.anchors },
+    };
+  }
+
+  /** The line's state as last drawn, for `state()`. */
+  private lineState(): PlannerLineState | null {
+    return this.line ? this.lineDrawn : null;
+  }
+
+  private lineDrawn: PlannerLineState | null = null;
 
   /** Where the pointer would put the building in hand, and whether it fits. */
   private moveGhost(node: PlanNode, x: number, y: number): void {
@@ -644,7 +897,7 @@ export class PlannerSession {
 
   /** Arrow keys: one grid step, or ten with Shift. */
   nudge(dx: number, dy: number): void {
-    if (this.readOnly || this.wallPick) return;
+    if (this.readOnly || this.wallPick || this.line) return;
     if (this.selection.size === 0) return;
     if (this.input.isGrabbing) this.cancel();
     this.plan.beginMove(this.selection);
@@ -658,6 +911,8 @@ export class PlannerSession {
 
   undo(): void {
     if (this.readOnly) return;
+    // Corners down: Ctrl+Z (and two fingers) takes the last one, as ↶ does.
+    if (this.undoCorner()) return;
     if (this.input.isGrabbing) this.cancel();
     if (this.stack.undo()) this.afterHistory();
   }
@@ -680,6 +935,8 @@ export class PlannerSession {
    */
   viewChanged(): void {
     if (this.input.isGrabbing) this.cancel();
+    // The pointer's spot was read in the other view.
+    this.line?.hoverAt(null);
     this.refresh();
   }
 
@@ -844,6 +1101,8 @@ export class PlannerSession {
    * to the camera. Kept beside `claim` so the two cannot drift.
    */
   private wouldClaim(world: Point, shift: boolean): Grab | null {
+    // Drawing a wall line, a finger is the camera's until it taps: then a corner.
+    if (this.line) return null;
     if (this.tool === PlannerTool.BOX) return Grab.MARQUEE;
     // Picking walls with Select: a finger on a wall is a tap, never a carry.
     if (this.wallPick) return shift ? Grab.MARQUEE : null;
@@ -862,6 +1121,10 @@ export class PlannerSession {
    */
   private tap(world: Point, shift: boolean): void {
     this.onTap?.();
+    if (this.line) {
+      this.lineTap(world);
+      return;
+    }
     const id = this.view.pick(world.x, world.y);
     if (this.wallPick) {
       this.selection = togglePick(this.selection, id, (key) => this.plan.get(key));
@@ -880,6 +1143,8 @@ export class PlannerSession {
   }
 
   private claim(world: Point, shift: boolean): Grab | null {
+    // A wall line claims nothing: a drag pans, a click is a corner (`clickEmpty`).
+    if (this.line) return null;
     if (this.tool === PlannerTool.BOX) return this.startMarquee(world);
     if (this.wallPick) return this.claimPick(world, shift);
 
@@ -1042,6 +1307,10 @@ export class PlannerSession {
    * that says "put back".
    */
   putBack(): void {
+    if (this.line) {
+      this.endLine();
+      return;
+    }
     if (this.input.isGrabbing) this.cancel();
   }
 
@@ -1049,6 +1318,12 @@ export class PlannerSession {
   private cancel(): void {
     if (this.placing) {
       this.abandonPlacement();
+      return;
+    }
+    // Escape lets a drawn line go first, then stops drawing.
+    if (this.line) {
+      if (this.line.anchors.length > 0) this.clearLine();
+      else this.endLine();
       return;
     }
     if (!this.input.isGrabbing) {
@@ -1079,6 +1354,12 @@ export class PlannerSession {
       this.wallPick &&
       (action.kind === "nudge" || action.kind === "store")
     ) {
+      return true;
+    }
+    // Drawing a wall line: Backspace takes the last corner (Delete too), and
+    // nothing is selected to nudge.
+    if (this.line && (action.kind === "nudge" || action.kind === "store")) {
+      if (action.kind === "store") this.undoCorner();
       return true;
     }
 
@@ -1152,6 +1433,11 @@ export class PlannerSession {
    */
   setCompare(diff: CompareDiff | null): void {
     const was = this.compare !== null;
+    // Compare is read-only: a wall line being drawn stops.
+    if (diff && this.line) {
+      this.line = null;
+      this.hideLineGhosts();
+    }
     this.compare = diff;
     if (diff && !was) this.input.detach();
     if (!diff && was) this.input.attach();
@@ -1161,11 +1447,29 @@ export class PlannerSession {
   private compare: CompareDiff | null = null;
 
   private refresh(): void {
+    // The stack ran out (the last walls placed, an undo, a rebase): the line ends.
+    if (this.line && this.lineStack().length === 0) {
+      this.line = null;
+      this.hideLineGhosts();
+    }
+    const line = this.drawLine();
+    this.lineDrawn = line?.state ?? null;
     const compare = this.compare;
+    const held = inHandMarks({
+      placing: this.placing,
+      carrying: this.input.isCarrying,
+      dragging:
+        this.pressWorld !== null &&
+        this.marquee === null &&
+        (this.dragDelta.dx !== 0 || this.dragDelta.dy !== 0),
+      faulted: this.faulted,
+    });
     this.view.draw({
+      line: compare ? null : (line?.visual ?? null),
       selected: compare ? EMPTY : this.selection,
       moved: compare ? EMPTY : this.moved,
-      invalid: compare ? EMPTY : this.faulted,
+      invalid: compare ? EMPTY : held.invalid,
+      inHand: compare ? false : held.inHand,
       diff: compare,
       marquee: this.marquee,
       nearby: compare ? EMPTY : this.nearbyIds(),

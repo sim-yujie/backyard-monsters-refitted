@@ -247,7 +247,9 @@
   font-weight: 600;
 }
 
-.planner-walls__level[aria-pressed="true"] {
+/* The chosen level, and Affordable while the pick is already what it would
+   pick (owner, 2026-11-19): one selected look for both rows. */
+:is(.planner-walls__level, .planner-walls__tool)[aria-pressed="true"] {
   background: var(--colour-accent);
   border-color: var(--colour-accent);
   color: var(--colour-accent-text);
@@ -256,7 +258,7 @@
 
 /* On a skin's plate the chosen level takes the Upgrade button's plate, so it is
    a different colour from every other level. */
-:root[data-skin] .planner-walls.panel .planner-walls__level[aria-pressed="true"] {
+:root[data-skin] .planner-walls.panel :is(.planner-walls__level, .planner-walls__tool)[aria-pressed="true"] {
   border-color: transparent;
   border-width: 0 var(--skin-button-cap);
   border-image-source: var(--skin-button);
@@ -268,6 +270,12 @@
   filter: drop-shadow(0 0 4px var(--colour-accent));
   text-shadow:
     0 2px 0 var(--skin-button-stroke), 2px 0 0 var(--skin-button-stroke), -2px 0 0 var(--skin-button-stroke), 0 -2px 0 var(--skin-button-stroke);
+}
+
+/* The rule above outranks the skin's focus glow (skin.css), so a chosen plate
+   reached by keyboard showed no focus: give it the glow back, white first. */
+:root[data-skin] .planner-walls.panel :is(.planner-walls__level, .planner-walls__tool)[aria-pressed="true"]:focus-visible {
+  filter: drop-shadow(0 0 2px #ffffff) drop-shadow(0 0 4px var(--colour-accent));
 }
 
 .planner-walls__level[disabled] .planner-walls__level-art {
@@ -2607,4 +2615,296 @@
   flex: none;
   min-height: 44px;
   background: var(--colour-surface-control);
+  /* astra round 2 (wall line): it read as disabled; the bar's Done outline, full-strength words. */
+  border: 1px solid var(--colour-accent);
+  color: var(--colour-text);
+  opacity: 1;
+}
+
+/* ── The wall line (owner, 16 Nov 2026) ─────────────────────────────────── */
+
+/*
+ * Walls out of the drawer are drawn corner to corner, as in build mode: the
+ * build bar's line controls in the Planner's bottom bar, beside Done (Put
+ * back's words while a line is up). The counts are numbers and colour plus a
+ * mark: ×N green to place, ✕N red skipped, "N not placed" grey.
+ */
+.planner-bar__line {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+.planner-bar__line[hidden] {
+  display: none;
+}
+
+.planner-bar__line-tip {
+  color: var(--colour-text);
+  font-size: var(--text-sm);
+  line-height: 1.25;
+}
+
+.planner-bar__line-counts {
+  display: inline-flex;
+  align-items: baseline;
+  gap: var(--space-3);
+  white-space: nowrap;
+}
+
+.planner-bar__line-place-count {
+  color: #8fe39a;
+  font-size: var(--text-lg);
+}
+
+.planner-bar__line-blocked {
+  color: #ff7b6b;
+  font-weight: 700;
+}
+
+.planner-bar__line-short {
+  color: var(--colour-text-muted);
+  font-size: var(--text-sm);
+}
+
+.planner-bar__line :is(.planner-bar__line-undo, .planner-bar__line-clear, .planner-bar__line-place) {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 44px;
+  min-height: 44px;
+  padding-block: 0;
+}
+
+.planner-bar .btn:is(.planner-bar__line-undo, .planner-bar__line-clear) {
+  width: 44px;
+  min-width: 44px;
+  padding-inline: 0;
+  border: 1px solid var(--colour-border-strong);
+  border-radius: 10px;
+  background: rgb(0 0 0 / 26%);
+  color: var(--colour-text);
+}
+
+.planner-bar .btn:is(.planner-bar__line-undo, .planner-bar__line-clear):hover:not(:disabled) {
+  background: rgb(255 255 255 / 12%);
+}
+
+.planner-bar .btn:is(.planner-bar__line-undo, .planner-bar__line-clear):disabled {
+  border-color: transparent;
+  background: rgb(0 0 0 / 16%);
+  opacity: 0.55;
+}
+
+.planner-bar__line-undo .game-icon {
+  display: block;
+}
+
+.planner-bar .btn.planner-bar__line-clear {
+  font-size: var(--text-lg);
+}
+
+.planner-bar .btn.planner-bar__line-place {
+  min-width: 112px;
+  padding-inline: var(--space-3);
+  border-color: #2c7a35;
+  background: #3d9b46;
+  color: #ffffff;
+  font-size: var(--text-md);
+  white-space: nowrap;
+  text-shadow: 0 1px 1px rgb(0 0 0 / 45%);
+}
+
+.planner-bar .btn.planner-bar__line-place:hover:not(:disabled) {
+  border-color: #348a3d;
+  background: #47ad50;
+}
+
+.planner-bar .btn.planner-bar__line-place:disabled {
+  border-color: transparent;
+  background: var(--colour-surface-sunken);
+  color: var(--colour-text-disabled);
+  text-shadow: none;
+}
+
+/*
+ * A phone: the line takes the bar while it is drawn. Its controls get the
+ * row the tools had (the tools come back with Done), so nothing wraps or
+ * scrolls at 360 px; the tip wraps to two lines rather than pushing ✓ off.
+ */
+.planner-bar--bottom[data-layout].planner-bar--line .planner-bar__actions {
+  display: none;
+}
+
+/* The drawer's strip over the bar already says what to do and has Done:
+   the bar keeps the counts and the three buttons, on one row. */
+.planner-bar--bottom[data-layout].planner-bar--line > .planner-bar__put-back,
+.planner-bar--bottom[data-layout] .planner-bar__line-tip {
+  display: none;
+}
+
+.planner-bar--bottom[data-layout] > .planner-bar__line {
+  flex: 1 1 auto;
+  justify-content: flex-end;
+}
+
+.planner-bar--bottom[data-layout] .planner-bar__line-counts {
+  margin-inline-end: auto;
+}
+
+.planner-bar--bottom[data-layout] .btn.planner-bar__line-place {
+  min-width: 96px;
+}
+
+/* ── Locked Yard Planner tools (owner, beta 8; astra, direction B) ───────
+ *
+ * Without a built Yard Planner in the yard, several tools stay on screen
+ * padlocked (`plannerLock.ts`). The content is muted, never the whole
+ * control: the gold padlock stays at full colour and the control stays
+ * pressable (`aria-disabled`), as a press is what says why.
+ */
+.is-locked {
+  position: relative;
+}
+
+/*
+ * One treatment for every locked tool: its icon fades, its words fade less,
+ * so a name stays readable on Classic's parchment as on Modern's steel
+ * (astra round 2); the padlock stays at full colour.
+ */
+.is-locked > :not(.planner-lock) {
+  opacity: 0.45;
+}
+
+.is-locked > .planner-lock__label {
+  opacity: 0.65;
+}
+
+.planner-lock {
+  display: inline-flex;
+  flex: none;
+  line-height: 0;
+  pointer-events: none;
+}
+
+.planner-lock > svg {
+  width: var(--lock-size, 20px);
+  height: var(--lock-size, 20px);
+  filter: drop-shadow(0 1px 1px rgb(0 0 0 / 0.5));
+}
+
+/* Over an icon's lower-right quarter: Find, the yard picture, Upgrade walls. */
+.planner-lock--corner {
+  position: absolute;
+  right: -3px;
+  bottom: -3px;
+}
+
+/* Before a word: Blueprint, the View rows, Compare. */
+.planner-lock--lead {
+  margin-inline-end: 2px;
+  vertical-align: -4px;
+}
+
+.is-locked--lead {
+  display: inline-flex;
+  align-items: center;
+}
+
+/* A locked switch shows its padlock in the tick's gutter, and no tick. */
+.planner-menu__item--check.is-locked::before {
+  display: none;
+}
+
+.planner-menu__item.is-locked {
+  opacity: 1;
+}
+
+/* A phone's thumb-sized controls carry a larger padlock. */
+.planner-bar[data-layout] .planner-lock--corner > svg,
+.planner-more .planner-lock--corner > svg {
+  width: 24px;
+  height: 24px;
+}
+
+/* A menu hung from a trigger near the right edge opens leftward. */
+.planner-menu__list--end {
+  left: auto;
+  right: 0;
+}
+
+/* The Layouts window: one line saying what unlocks the other slots. */
+.planner-layouts__gate {
+  margin-bottom: var(--space-2);
+}
+
+.planner-layouts__gate[hidden] {
+  display: none;
+}
+
+.planner-layouts__gate-line {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin: 0;
+  font-weight: 700;
+  color: var(--colour-text-strong);
+}
+
+.planner-layouts__gate-kept {
+  margin: var(--space-1) 0 0;
+  padding-inline-start: calc(24px + var(--space-2));
+  font-size: var(--text-xs);
+}
+
+/* A locked slot: one compact row, its name, a short line and a padlock. */
+.planner-layouts__row--locked {
+  padding: 0;
+}
+
+.planner-layouts__locked {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+  width: 100%;
+  min-height: 48px;
+  padding: var(--space-1) var(--space-2);
+  text-align: start;
+  white-space: normal;
+}
+
+.planner-layouts__locked-text {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+/* Pressing a locked slot explains it; it is never shown as picked. */
+.planner-layouts__locked.btn--ghost,
+.planner-layouts__locked.btn--ghost:hover:not(:disabled),
+.planner-layouts__locked.btn--ghost:active:not(:disabled) {
+  background: transparent;
+  border-color: transparent;
+}
+
+.planner-layouts__locked:focus-visible {
+  outline: 2px solid var(--colour-accent);
+  outline-offset: -2px;
+}
+
+.planner-layouts__locked-name {
+  overflow-wrap: anywhere;
+  color: var(--colour-text);
+}
+
+.planner-layouts__locked .lock-art,
+.planner-layouts__locked .planner-lock__art {
+  flex: none;
+}
+
+.planner-layouts__gate-line .planner-lock__art {
+  flex: none;
 }

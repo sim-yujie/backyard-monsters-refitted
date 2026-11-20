@@ -12,8 +12,17 @@ import type { DescentYardState } from "./descent.js";
 export interface InfernoProgressRecord {
   /** The cave's level, 0-5: one per emergence raid. */
   readonly emergenceLevel: number;
-  /** Unix seconds the cave last went up a level, or null. */
+  /**
+   * Unix seconds the 23-hour wait for the next rise counts from, or null:
+   * when the cave last went up a level, moved on to its Moloch raid's
+   * landing once that lands (patch 7.12).
+   */
   readonly emergenceLastAt: number | null;
+  /**
+   * The cave level whose Moloch raid was raised but has not landed yet, or
+   * null: the main yard's next load plays it again (patch 7.12).
+   */
+  readonly emergencePending: number | null;
   /** The 13 Descent yards in order, 1 once beaten. */
   readonly descentDestroyed: readonly number[];
   /** Best damage (0-100) on each Descent yard, in order. */
@@ -36,6 +45,7 @@ export interface InfernoProgressRecord {
 export const NO_INFERNO_PROGRESS: InfernoProgressRecord = {
   emergenceLevel: 0,
   emergenceLastAt: null,
+  emergencePending: null,
   descentDestroyed: [],
   descentBest: [],
   descentYards: {},
@@ -83,12 +93,19 @@ const descentYards = (raw: unknown): Record<string, DescentYardState> => {
   return yards;
 };
 
+/** A stored pending stage, 1-5; anything else is none. */
+const pendingLevel = (raw: unknown): number | null => {
+  const level = Math.trunc(Number(raw));
+  return raw !== null && raw !== undefined && level >= 1 && level <= 5 ? level : null;
+};
+
 /** A stored row as a record. */
 export const progressRecordOf = (row: InfernoProgress | null | undefined): InfernoProgressRecord =>
   row
     ? {
         emergenceLevel: Math.min(5, Math.max(0, Number(row.emergence_level) || 0)),
         emergenceLastAt: seconds(row.emergence_last_at),
+        emergencePending: pendingLevel(row.emergence_pending),
         descentDestroyed: numbers(row.descent_destroyed),
         descentBest: numbers(row.descent_best),
         descentYards: descentYards(row.descent_yards),

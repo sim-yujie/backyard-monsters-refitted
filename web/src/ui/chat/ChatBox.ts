@@ -85,8 +85,6 @@ export const ALLIANCE_ROOM_TEXT = {
   /** A trade request line's button: opens the Trade tab on that request (design v5 §7c). */
   trade: "Trade",
   tradeTitle: "Open this request in the Trade tab",
-  /** A mate's name in the Alliance room: the Send sheet (resources). */
-  send: "Send",
 } as const;
 
 /** What the open box says under the lines while the room is not joined. */
@@ -628,21 +626,7 @@ export class ChatBox {
       // Muted, the same picture sits on a lit button and the word turns to Unmute.
       mute.classList.toggle("chat-box__action--on", muted);
       actions.append(friend, mute, this.iconButton(CHAT_STRIP_TEXT.viewYard, "townhall", () => void this.viewYard(line)));
-      const openAlliance = allianceOpener();
-      // A mate in the Alliance room: Send resources (design v5 §7c); greyed out, "Coming soon", while trading is off.
-      if (this.state.channel === ALLIANCE_ROOM && openAlliance) {
-        const tradeOn = allianceTradeOn();
-        const send = this.iconButton(ALLIANCE_ROOM_TEXT.send, "income", () => {
-          if (!tradeOn) return;
-          this.pick(null);
-          allianceOpener()?.("trade", { send: { userid: line.userId, username: line.name } });
-        });
-        if (!tradeOn) {
-          send.disabled = true;
-          send.title = TRADE_OFF_TITLE;
-        }
-        actions.append(send);
-      }
+      // Trading is swaps only (owner, 16 Nov 2026): a mate's name has no Send; their request lines carry Trade.
       // The Alliance room's lines are not reported: the server takes no alliance reports, and members kick.
       if (this.state.channel !== ALLIANCE_ROOM) {
         actions.append(

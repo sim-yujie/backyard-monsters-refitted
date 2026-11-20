@@ -1,3 +1,5 @@
+import { mock } from "bun:test";
+
 /**
  * Runs before every `bun test` file (`bunfig.toml`).
  *
@@ -38,6 +40,42 @@ delete process.env.BOTS_TOTAL;
  * after the lines above, so nothing reads the environment before it is set.
  */
 delete process.env.WEEKEND_FORCE;
+/*
+ * Nor does a developer's `EVENTS_FORCE_ON` (e.g. `thanksgiving-2026` in
+ * server/.env) turn an event on: it failed the pumpkin hunt test locally
+ * (18 Nov 2026). The event tests set it themselves and put it back.
+ */
+delete process.env.EVENTS_FORCE_ON;
+
+/*
+ * No test starts the real server. Importing `server.ts` connects to the
+ * database and Redis, runs migrations and listens on port 3001, and many
+ * modules reach it (`isBot`, `online`, `chatChannels`, ...). Most test files
+ * mock it themselves; the few that did not (chatShouts, mapSaveData,
+ * viewMask, friendWorld, giftWishes, infernoProgress.db, botPicture) only
+ * passed because an earlier file's mock was still in place, and run first
+ * they booted the real server (18 Nov 2026). This stand-in answers for them;
+ * a test that needs `postgres` or `redis` mocks `server.js` itself, and the
+ * stand-in says so if it is used. Under `bun test --isolate` it is set up
+ * again before every file.
+ */
+const notMocked = (name: string) =>
+  new Proxy(
+    {},
+    {
+      get: (_target, key) => {
+        if (key === "then" || typeof key === "symbol") return undefined;
+        throw new Error(`server.js stand-in: this test uses ${name}.${String(key)}; mock "server.js" in the test file`);
+      },
+    }
+  );
+mock.module("../server.js", () => ({
+  app: notMocked("app"),
+  PORT: 3001,
+  BASE_URL: undefined,
+  postgres: notMocked("postgres"),
+  redis: notMocked("redis"),
+}));
 const { DEFAULT_WEEKEND_SETTINGS } = await import("../game-data/events/weekendEvents.js");
 const { setWeekendSettings } = await import("../services/events/weekendSettings.js");
 setWeekendSettings({ ...DEFAULT_WEEKEND_SETTINGS, enabled: false });

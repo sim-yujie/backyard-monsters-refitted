@@ -184,11 +184,14 @@ export const STARS_PER_STEP = 1;
 
 /**
  * Point price of stars 1-10 for Midas; Conquest pays 2x and Fortress 4x (by
- * capacity, never by member count; design v5 §9). Each old 2-star step's
- * price split evenly over its two stars, so a full constellation still costs
- * 600 (Midas).
+ * capacity, never by member count; design v5 §9). Stars 5-10 cost double the
+ * launch prices (owner, 19 Nov 2026: Bite Club's pace showed a full alliance
+ * on hard goals would light the whole sky in about 7 weeks), so a full
+ * constellation costs 1,080 (Midas) and the whole sky 4,320. Stars 1-4 keep
+ * their price. A price is read when a star is lit, so stars already lit stay
+ * and only the next ones cost the new price.
  */
-export const STEP_PRICES = [20, 20, 40, 40, 60, 60, 80, 80, 100, 100];
+export const STEP_PRICES = [20, 20, 40, 40, 120, 120, 160, 160, 200, 200];
 
 /** Capacity factor per type: point prices, goal targets and goal points scale with it. */
 export const TYPE_SCALE: Record<AllianceType, number> = {
@@ -302,7 +305,8 @@ export type GoalTier = (typeof GOAL_TIERS)[number];
  * Points a goal pays for Midas; Conquest 2x, Fortress 4x (`TYPE_SCALE`).
  * Goals are the only source of points (owner, 12 Nov 2026: daily quests no
  * longer pay). Aim: 8 hardcore players finishing 5 Medium goals a week light
- * the whole sky (2,400 Midas) in about 13 weeks.
+ * the whole sky (4,320 Midas) in about 24 weeks; 5 Hard goals a week, the
+ * most a week can pay, take about 13.
  */
 export const GOAL_POINTS: Record<GoalTier, number> = { easy: 15, medium: 37, hard: 70 };
 
@@ -381,30 +385,35 @@ export const STANCE_LABEL: Record<AllianceStance, string> = {
 
 
 // ---------------------------------------------------------------------------
-// Trading between members (design v5 §12a, §12b). Placeholders until the
-// owner balances them.
+// Trading between members (design v5 §12a, §12b). Swaps only; the numbers
+// below are the owner's (beta 8 grilling, 16 Nov 2026).
 // ---------------------------------------------------------------------------
 
 /**
  * Trading's switch (owner 11 Nov 2026: "disable trades for now. We can polish
- * it for beta 8"). Off unless `ALLIANCE_TRADE_ENABLED` is `on` (or `true`):
- * every `/alliance/trade` route refuses with `reason: "trade_off"`, and
- * `myalliance` and the yard load's `alliancedata` say `trade_on: false`, so
- * the web hides the Trade tab and every Send / Trade button. Refunds of a
- * request that somehow exists still run (all of them while it is off). Read
- * on each request, so tests can flip it.
+ * it for beta 8"; on for beta 8, the release sets it). Off unless
+ * `ALLIANCE_TRADE_ENABLED` is `on` (or `true`): every `/alliance/trade` route
+ * refuses with `reason: "trade_off"`, and `myalliance` and the yard load's
+ * `alliancedata` say `trade_on: false`, so the web greys out the Trade tab
+ * and chat's Trade buttons ("Coming soon"). Refunds of a request that
+ * somehow exists still run (all of them while it is off). Read on each
+ * request, so tests can flip it.
  */
 export const allianceTradeEnabled = (env: Record<string, string | undefined> = process.env): boolean =>
   isSwitchOn(env.ALLIANCE_TRADE_ENABLED);
 
-/** What is lost on the way, as a share of what leaves (10%). */
+/** What is lost on the way, as a share of what leaves: each side of a swap receives 90% (owner, 16 Nov 2026). */
 export const TRADE_LOSS = 0.1;
 
-/** One trade carries up to this share of the smaller storage cap, per resource (10%, ASSUMED). */
+/**
+ * One swap carries up to this share of storage, per resource (owner, 16 Nov
+ * 2026): the asker's own cap when posting, and the accepter's own cap (and the
+ * asker's, still) when accepting, so the smaller cap rules.
+ */
 export const TRADE_CAP_SHARE = 0.1;
 
-/** How long a request stays up (24 h, ASSUMED). */
-export const TRADE_REQUEST_SECONDS = 24 * 60 * 60;
+/** How long a request stays up: 48 h (owner, 16 Nov 2026). */
+export const TRADE_REQUEST_SECONDS = 48 * 60 * 60;
 
-/** Requests a member may post in one UTC day, so cancel-and-ask cannot fill the chat (ASSUMED). */
+/** Requests a member may post in one UTC day, so cancel-and-ask cannot fill the chat (owner, 16 Nov 2026). */
 export const TRADE_ASKS_PER_DAY = 3;

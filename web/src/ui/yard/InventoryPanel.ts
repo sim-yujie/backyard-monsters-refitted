@@ -1,4 +1,4 @@
-import type { YardKind } from "@/game/yard/buildingCosts";
+import { WALL_TYPES, type YardKind } from "@/game/yard/buildingCosts";
 import { ArtState, resolveArt, stripCrop } from "@/game/yard/buildingArt";
 import type { PlanNode } from "@/game/yard/planner/placement";
 import {
@@ -61,7 +61,9 @@ import { Panel } from "@/ui/Panel";
  *
  * But it is a source that keeps giving (#57): after a drop the session takes
  * the next building off the same stack, so a run of walls is one click on the
- * yard per wall, not a trip back to the drawer each time. The row shows as
+ * yard per wall, not a trip back to the drawer each time. Walls themselves
+ * are drawn as a line instead (owner, 16 Nov 2026, `plannerWallLine.ts`):
+ * corners, then ✓ Place, the stack staying armed while it has walls. The row shows as
  * pressed while it is armed, and clicking it again is how the drawer itself
  * ends the run; Escape, the secondary button, another tool or an empty stack
  * end it from elsewhere, and {@link setArmed} keeps the row honest about which.
@@ -114,6 +116,11 @@ const stackKey = (stack: InventoryStack): string => `${stack.type}:${stack.level
  */
 const ICON_PX = 28;
 
+/** The phone strip's hint while one building at a time is placed. */
+const ONE_EACH = "Tap the yard once per building";
+/** The phone strip's hint while walls are drawn as a line. */
+const LINE_HINT = "Tap corners, then ✓ Place";
+
 export class InventoryPanel {
   readonly element: HTMLElement;
 
@@ -127,6 +134,7 @@ export class InventoryPanel {
   /** The phone's placing strip: what is armed, and Done. */
   private readonly strip: HTMLElement;
   private readonly stripName: HTMLElement;
+  private readonly stripHint: HTMLElement;
 
   /** Folded categories, by kind. Survives the redraw after every edit. */
   private readonly collapsed = new Set<string>();
@@ -174,7 +182,8 @@ export class InventoryPanel {
     this.stripName.className = "planner-inventory__strip-name";
     const hint = document.createElement("span");
     hint.className = "planner-inventory__strip-hint u-muted";
-    hint.textContent = "Tap the yard once per building";
+    hint.textContent = ONE_EACH;
+    this.stripHint = hint;
     const words = document.createElement("span");
     words.className = "planner-inventory__strip-words";
     words.append(this.stripName, hint);
@@ -237,7 +246,9 @@ export class InventoryPanel {
    * nowhere near this panel. Cheap when nothing changed, which is nearly
    * always; a redraw only when the pressed row has to move.
    */
-  setArmed(stack: InventoryStack | null): void {
+  setArmed(stack: InventoryStack | null, line = false): void {
+    // Walls are drawn as a line (owner, 16 Nov 2026): corners, not one tap each.
+    this.stripHint.textContent = line ? LINE_HINT : ONE_EACH;
     const key = stack ? stackKey(stack) : null;
     if (key === this.armed) return;
     this.armed = key;
@@ -424,9 +435,11 @@ export class InventoryPanel {
     pick.setAttribute("aria-pressed", String(armed));
     pick.title = armed
       ? "Placing from this stack. Click again, or press Esc, to stop"
-      : group.ids.length === 1
-        ? "Pick it up, then click the yard to put it down"
-        : "Pick one up, then click the yard once per building. Esc stops";
+      : WALL_TYPES.includes(group.type)
+        ? "Draw a line of them: click the corners, then ✓ Place. Esc stops"
+        : group.ids.length === 1
+          ? "Pick it up, then click the yard to put it down"
+          : "Pick one up, then click the yard once per building. Esc stops";
 
     const name = document.createElement("span");
     name.className = "planner-search__name planner-inventory__name";

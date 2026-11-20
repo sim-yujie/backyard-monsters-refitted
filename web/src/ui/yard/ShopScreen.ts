@@ -69,7 +69,35 @@ interface PackCard {
   readonly gate: HTMLElement;
 }
 
+/** One section's long-lived parts: the note is in the section only while it has text. */
+interface Section {
+  readonly element: HTMLElement;
+  readonly heading: HTMLElement;
+  readonly note: HTMLElement;
+  readonly grid: HTMLElement;
+}
+
 const FIX_KEY = "FIX";
+
+/** Sets `element`'s text only when it changed, so an unchanged line is not redrawn. */
+const setText = (element: HTMLElement, text: string): void => {
+  if (element.textContent !== text) element.textContent = text;
+};
+
+/**
+ * Makes `parent`'s children exactly `wanted`, in order, moving or adding only
+ * the ones out of place and removing the rest. When nothing changed it touches
+ * nothing: a node taken out of the page loses focus (an armed Buy button
+ * disarms on blur) and Chrome's scroll anchoring loses its place, which made
+ * the list jump every second (Discord, 18 Nov).
+ */
+export const syncChildren = (parent: Element, wanted: readonly Element[]): void => {
+  wanted.forEach((child, index) => {
+    const current = parent.children[index];
+    if (current !== child) parent.insertBefore(child, current ?? null);
+  });
+  while (parent.children.length > wanted.length) parent.lastElementChild!.remove();
+};
 
 /** "r1", "r1I": a pack card's key, one per resource and realm. */
 const packCardKey = (group: PackGroup): string => `${group.resource}${group.inferno ? "I" : ""}`;
@@ -172,8 +200,13 @@ export class ShopScreen {
   /** Resources: one card per resource, and one button per offer keyed by its item (`BR21`). */
   private readonly packCards = new Map<string, PackCard>();
   private readonly packButtons = new Map<string, ShinyButton>();
-  /** The "Coming later" section never changes, so it is drawn once. */
-  private comingLater: HTMLElement | null = null;
+  /** Each section's heading, note and grid, made once and updated in place. */
+  private readonly sections = new Map<string, Section>();
+  /** Each card's list item in its section's grid, made once with the card. */
+  private readonly items = new WeakMap<HTMLElement, HTMLLIElement>();
+  /** The "Coming later" cards never change, so they are drawn once. */
+  private laterCards: HTMLElement[] | null = null;
+  private balanceText = "";
   private readonly unsubscribe: () => void;
 
   private opened = false;
@@ -287,9 +320,15 @@ export class ShopScreen {
     const model = shopModel(store);
     const now = store.now();
 
-    this.balance.replaceChildren(resourceAmount("shiny", formatAmount(store.credits)));
-    this.balance.title = `Shiny: ${formatAmount(store.credits)}`;
+    const balance = formatAmount(store.credits);
+    if (balance !== this.balanceText) {
+      this.balanceText = balance;
+      this.balance.replaceChildren(resourceAmount("shiny", balance));
+      this.balance.title = `Shiny: ${balance}`;
+    }
 
+    // The same sections, grids and cards every time, updated in place
+    // (`section`, `syncChildren`): the once-a-second tick moves no node.
     const sections: HTMLElement[] = [];
     for (const section of Object.values(ShopSection)) {
       const offers = model.offers.filter((offer) => offer.item.section === section);
@@ -319,15 +358,13 @@ export class ShopScreen {
     if (model.repair) sections.push(this.section("repairs", "Repairs", [this.repairCard(model.repair)]));
     // Flash's Inferno store never listed the Shiny decorations.
     if (store.kind !== "inferno" && COMING_LATER.length > 0) {
-      this.comingLater ??= this.section(
-        "later",
-        "Coming later",
-        COMING_LATER.map((one) => this.laterCard(one.items[0] ?? one.name, one.name, one.blurb)),
-        "Not sold yet: this game does not do what they did.",
+      this.laterCards ??= COMING_LATER.map((one) =>
+        this.laterCard(one.items[0] ?? one.name, one.name, one.blurb),
       );
-      sections.push(this.comingLater);
+      const note = "Not sold yet: this game does not do what they did.";
+      sections.push(this.section("later", "Coming later", this.laterCards, note));
     }
-    this.list.replaceChildren(...sections);
+    syncChildren(this.list, sections);
     this.syncPending();
   }
 
@@ -337,38 +374,52 @@ export class ShopScreen {
     return groups.length > 0 ? [this.section("resources", "Resources", groups.map((group) => this.packCard(group)))] : [];
   }
 
+  /**
+   * Section `id` with its heading, note (when there is one) and `cards`, in
+   * that order. Made once and reused: a redraw only changes text that changed
+   * and moves a node only when the cards or their order changed.
+   */
   private section(
     id: string,
     title: string,
     cards: readonly HTMLElement[],
     note: string | null = null,
   ): HTMLElement {
-    const section = document.createElement("section");
-    section.className = "shop-section";
-    section.dataset["section"] = id;
-    // `shop-protection`, … for Bob's tips (issue #227).
-    tutTarget(section, `shop-${id}`);
-    const heading = document.createElement("h3");
-    heading.className = "shop-section__title";
-    heading.id = `shop-section-${id}`;
-    heading.textContent = title;
-    section.setAttribute("aria-labelledby", heading.id);
-    section.append(heading);
-    if (note) {
+    let section = this.sections.get(id);
+    if (!section) {
+      const element = document.createElement("section");
+      element.className = "shop-section";
+      element.dataset["section"] = id;
+      // `shop-protection`, … for Bob's tips (issue #227).
+      tutTarget(element, `shop-${id}`);
+      const heading = document.createElement("h3");
+      heading.className = "shop-section__title";
+      heading.id = `shop-section-${id}`;
+      element.setAttribute("aria-labelledby", heading.id);
       const line = document.createElement("p");
       line.className = "shop-section__note";
-      line.textContent = note;
-      section.append(line);
+      const grid = document.createElement("ul");
+      grid.className = "shop-grid";
+      section = { element, heading, note: line, grid };
+      this.sections.set(id, section);
     }
-    const grid = document.createElement("ul");
-    grid.className = "shop-grid";
-    for (const card of cards) {
-      const item = document.createElement("li");
+    setText(section.heading, title);
+    if (note) setText(section.note, note);
+    const { heading, grid } = section;
+    syncChildren(section.element, note ? [heading, section.note, grid] : [heading, grid]);
+    syncChildren(grid, cards.map((card) => this.item(card)));
+    return section.element;
+  }
+
+  /** The list item that holds `card` in its grid, made with the card's first draw. */
+  private item(card: HTMLElement): HTMLLIElement {
+    let item = this.items.get(card);
+    if (!item) {
+      item = document.createElement("li");
       item.append(card);
-      grid.append(item);
+      this.items.set(card, item);
     }
-    section.append(grid);
-    return section;
+    return item;
   }
 
   /** A held-back item: its name and what it will do, no price, no button. */
@@ -393,8 +444,11 @@ export class ShopScreen {
   private offerCard(offer: ShopOffer, now: number): HTMLElement {
     const { item, state } = offer;
     const card = this.card(item.item, item.name, item.blurb, "Buy", () => void this.buy(item.item, item.name), true);
-    if (item.effects && !card.element.dataset["effects"]) this.drawEffects(card, item.blurb, item.effects, item.seconds);
-    card.meta.textContent = offerMeta(offer, now);
+    // Once: its chips never change.
+    if (item.effects && card.element.dataset["effects"] === undefined) {
+      this.drawEffects(card, item.blurb, item.effects, item.seconds);
+    }
+    setText(card.meta, offerMeta(offer, now));
     card.meta.hidden = card.meta.textContent === "";
     card.element.dataset["state"] = state.kind;
     // A running battle boost glows (`shop-card--boosted`) while it stays on sale.
@@ -405,7 +459,7 @@ export class ShopScreen {
       card.button.element.hidden = false;
       card.button.setPrice(state.price);
       card.button.setBlocked(state.blocked);
-      card.gate.textContent = state.blocked ?? "";
+      setText(card.gate, state.blocked ?? "");
       card.gate.hidden = state.blocked === null;
     } else {
       card.button.element.hidden = true;
@@ -425,13 +479,13 @@ export class ShopScreen {
       () => void this.buy(tier.item, tier.name),
       true,
     );
-    card.meta.textContent = wallMeta(offer);
+    setText(card.meta, wallMeta(offer));
     card.element.dataset["state"] = state.kind;
     if (state.kind === "buy") {
       card.button.element.hidden = false;
       card.button.setPrice(state.price);
       card.button.setBlocked(state.blocked);
-      card.gate.textContent = state.blocked ?? "";
+      setText(card.gate, state.blocked ?? "");
       card.gate.hidden = state.blocked === null;
     } else {
       card.button.element.hidden = true;
@@ -473,10 +527,11 @@ export class ShopScreen {
    */
   private restoreFocus(key: string): void {
     if (!this.opened) return;
-    // The player has already moved on.
-    const active = document.activeElement;
-    if (active && active !== document.body) return;
     const button = (this.cards.get(key)?.button ?? this.packButtons.get(key))?.element;
+    // The player has already moved on. The list keeps its nodes now, so a
+    // browser may still count the hidden or disabled button itself as focused.
+    const active = document.activeElement;
+    if (active && active !== document.body && active !== button) return;
     const target =
       button && button.isConnected && !button.hidden && !button.disabled
         ? button
@@ -512,7 +567,7 @@ export class ShopScreen {
       card = { element, meta, gate };
       this.packCards.set(key, card);
     }
-    card.meta.textContent = packMeta(group);
+    setText(card.meta, packMeta(group));
     card.meta.title = `${resourceName(group.resource, realm)}: ${formatAmount(group.held)} of ${formatAmount(group.cap)}`;
     for (const offer of group.offers) {
       const button = this.packButton(group, offer);
@@ -521,7 +576,7 @@ export class ShopScreen {
       button.setBlocked(offer.blocked);
     }
     const reason = packGate(group);
-    card.gate.textContent = reason ?? "";
+    setText(card.gate, reason ?? "");
     card.gate.hidden = reason === null;
     card.element.dataset["state"] = reason === null ? "buy" : "blocked";
     return card.element;
@@ -552,12 +607,12 @@ export class ShopScreen {
       "Repair now",
       () => void this.repairNow(),
     );
-    card.meta.textContent = count;
+    setText(card.meta, count);
     card.element.dataset["state"] = "buy";
     card.button.element.hidden = false;
     card.button.setPrice(offer.price);
     card.button.setBlocked(offer.blocked);
-    card.gate.textContent = offer.blocked ?? "";
+    setText(card.gate, offer.blocked ?? "");
     card.gate.hidden = offer.blocked === null;
     return card.element;
   }

@@ -4,9 +4,10 @@ import {
   hasHabits,
   type ChampionStance,
 } from "@/game/combat/rules";
+import { classicLook } from "@/game/classicLook";
+import { gameIcon, type GameIconName } from "../gameIcon";
 import {
   STANCE_NAMES,
-  habitAttacks,
   modeView,
   naturalRow,
   type TraitIcon,
@@ -18,7 +19,10 @@ import {
  * round 2, option B "Instincts and Habits"; design
  * `review-desk/drafts/champion-modes-fable.md`): one tab per Mode with the
  * attacks fought in it, the Mode's instincts marked "always", each habit in
- * the champion's row with 0 to 3 pips, and Forget for that Mode's habits.
+ * the champion's row Active (solid outline) or Unproven (dashed), and Forget
+ * for that Mode's habits. A habit the last attack turned on or off shows
+ * "Last attack · Learned" or "Faded" in place of its badge (owner's pick B,
+ * desk 19 Nov 2026, from astra's pips prototype; no pips any more).
  *
  * Krallen has no habits (owner, 10 Nov): the cage keeps the old block for any
  * champion without them.
@@ -76,16 +80,27 @@ export const savedStance = (entry: { readonly s?: unknown }): ChampionStance =>
   CHAMPION_STANCES.find((stance) => stance === entry.s) ?? "hybrid";
 
 /** What a redraw compares: a learned or forgotten habit redraws the cage. */
-export const modesShape = (entry: { readonly t: number; readonly h?: unknown; readonly hs?: unknown }): string =>
+export const modesShape = (entry: {
+  readonly t: number;
+  readonly h?: unknown;
+  readonly hs?: unknown;
+  readonly hl?: unknown;
+}): string =>
   showsModes(entry)
     ? TAB_ORDER.map((stance) => {
         const mode = modeView(entry, stance);
-        return `${mode.attacks}/${mode.habits.map((row) => `${row.name}${row.pips ?? 0}`).join(",")}`;
+        return `${mode.attacks}/${mode.habits.map((row) => `${row.name}:${row.state}:${row.event ?? ""}`).join(",")}`;
       }).join("|")
     : "";
 
 export interface ModesBlockOptions {
-  readonly entry: { readonly t: number; readonly h?: unknown; readonly hs?: unknown; readonly bs?: unknown };
+  readonly entry: {
+    readonly t: number;
+    readonly h?: unknown;
+    readonly hs?: unknown;
+    readonly hl?: unknown;
+    readonly bs?: unknown;
+  };
   /** The tab to show. */
   readonly stance: ChampionStance;
   /** A tab was picked: the caller keeps it over redraws and swaps the block. */
@@ -96,7 +111,45 @@ export interface ModesBlockOptions {
   readonly forgetting: (stance: ChampionStance) => boolean;
 }
 
-/** One trait's row: icon, name, and "always" for an instinct or 3 pips for a habit. */
+/** A habit's painted badge icon in the look the page is in (Modern, or Classic's softer paint). */
+const habitIcon = (kind: "active" | "unproven" | "faded"): HTMLImageElement =>
+  gameIcon(`habit${kind}${classicLook() ? "classic" : ""}` as GameIconName, {
+    size: 16,
+    decorative: true,
+    className: "champion__habit-icon",
+  });
+
+const span = (className: string, text: string): HTMLElement => {
+  const element = document.createElement("span");
+  element.className = className;
+  element.textContent = text;
+  return element;
+};
+
+/**
+ * A habit's badge: Active or Unproven; after the attack that turned it on or
+ * off, "Last attack · Learned" or "Faded" in its place (never both).
+ */
+const habitBadge = (row: TraitRow): HTMLElement => {
+  const badge = document.createElement("span");
+  badge.className = "champion__habit-badge";
+  if (row.event) {
+    badge.classList.add("champion__habit-badge--event");
+    badge.title = row.event === "learned" ? "The last attack made this habit active." : "The last attack made this habit unproven again.";
+    badge.append(
+      span("champion__habit-when", "Last attack"),
+      habitIcon(row.event === "learned" ? "active" : "faded"),
+      span("champion__habit-word", row.event === "learned" ? "Learned" : "Faded"),
+    );
+    return badge;
+  }
+  const active = row.state === "active";
+  badge.title = active ? "Active: it changes the champion's picks." : "Unproven: no effect yet; it may be learned.";
+  badge.append(habitIcon(active ? "active" : "unproven"), span("champion__habit-word", active ? "Active" : "Unproven"));
+  return badge;
+};
+
+/** One trait's row: icon, name, and "always" for an instinct or its badge for a habit. */
 const traitRow = (row: TraitRow, kind: "instinct" | "habit"): HTMLElement => {
   const item = document.createElement("li");
   item.className = `champion__trait champion__trait--${kind}`;
@@ -112,20 +165,11 @@ const traitRow = (row: TraitRow, kind: "instinct" | "habit"): HTMLElement => {
     item.append(lock);
     return item;
   }
-  const filled = row.pips ?? 0;
-  item.dataset["pips"] = String(filled);
-  item.classList.toggle("champion__trait--fresh", filled === 0);
-  const pips = document.createElement("span");
-  pips.className = "champion__pips";
-  pips.setAttribute("role", "img");
-  pips.setAttribute("aria-label", `${filled} of 3`);
-  for (let i = 0; i < 3; i++) {
-    const pip = document.createElement("span");
-    pip.className = "champion__pip";
-    pip.classList.toggle("champion__pip--on", i < filled);
-    pips.append(pip);
-  }
-  item.append(pips);
+  const state = row.state ?? "unproven";
+  item.dataset["state"] = state;
+  item.classList.add(`champion__trait--${state}`);
+  if (row.event) item.dataset["event"] = row.event;
+  item.append(habitBadge(row));
   return item;
 };
 
@@ -202,8 +246,8 @@ export const modesBlock = (options: ModesBlockOptions): HTMLElement => {
   foot.className = "champion__mode-foot";
   const fade = document.createElement("p");
   fade.className = "champion__note";
-  const total = habitAttacks(entry);
-  fade.textContent = `${total > 0 ? `${total} attacks · ` : ""}Habits fade if they stop working.`;
+  // Attack counts are on the Mode tabs alone (astra round 2).
+  fade.textContent = "Habits can be learned or lost.";
   const forget = document.createElement("button");
   forget.type = "button";
   forget.className = "btn btn--ghost champion__forget";

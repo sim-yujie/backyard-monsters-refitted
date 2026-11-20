@@ -21,6 +21,15 @@ describe("the animation rate table", () => {
     }
   });
 
+  it("runs the siege buildings at one frame every other tick while a weapon unlocks", () => {
+    // Flash steps them every tick (`SiegeBuilding.as:104-109`); 20 a second is the nearest the yard runs to the 25
+    // the owner approved the 3D loops at (Review Desk card b8-siege-3d-r4, 17 Nov 2026).
+    for (const type of [133, 134]) {
+      expect(animPolicy(type)?.ticksPerFrame, `type ${type}`).toBe(2);
+      expect(animPolicy(type)?.work, `type ${type}`).toBe("siege");
+    }
+  });
+
   it("holds every tower on one cell", () => {
     // A tower's strip is a facing, not a loop: `_animTick` comes from the angle
     // to the target and `AnimFrame` never advances it (BUILDING21.as:27-32).
@@ -67,7 +76,7 @@ describe("the starting cell", () => {
   it("starts the classes that opt out on cell 0", () => {
     // BUILDING4.as:28, BUILDING13.as:24, SpurtzCannon.as:49 and the four types
     // BFOUNDATION.as:1141 names outright.
-    for (const type of [4, 9, 13, 19, 25, 54, 129, 136, 137]) {
+    for (const type of [4, 9, 13, 19, 25, 54, 129, 133, 134, 136, 137]) {
       expect(startFrame(animPolicy(type)!, 30, 7), `type ${type}`).toBe(0);
     }
   });

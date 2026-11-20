@@ -12,6 +12,7 @@ import { battlePlugin } from "@/game/attack/plugins/battle";
 import { dropPlugin, testDropPlugin } from "@/game/attack/plugins/drop";
 import "@/game/attack/plugins";
 import { readYard } from "@/game/yard/yardModel";
+import { DockTabs } from "@/ui/attack/DockTabs";
 import { formatAmount } from "@/ui/format";
 import { Notices } from "@/ui/maproom/Notices";
 import { BAITER_PLUGINS, BAITER_REPLAY_PLUGINS, baiterPlugin, createBaiterPlugin } from "./baiterPlugin";
@@ -92,6 +93,7 @@ const mountsOf = (
     battleLayer: new Container(),
     setBottomInset: () => {},
     showResources: () => {},
+    dockTabs: new DockTabs({ dock: parts.dock, sheet: () => false, onChange: () => {} }),
     ...parts,
     presentation: new AttackPresentation(),
     goToMap: vi.fn(),
@@ -203,8 +205,9 @@ describe("a Baiter test", () => {
     expect(dock.querySelectorAll(".attack-army__row")).toHaveLength(2);
     expect(dock.textContent).toContain("L2");
     // Monsters and champions only (owner answer Q7), and no last army to load.
-    expect(dock.querySelector(".attack-tools")).toBeNull();
-    expect(dock.querySelector<HTMLButtonElement>(".attack-army__load-last")!.hidden).toBe(true);
+    // The dock's tab row offers the Army only: no Catapult, no siege weapon.
+    expect([...dock.querySelectorAll('[data-dock-tab]')].map((el) => el.getAttribute("data-dock-tab"))).toEqual(["army"]);
+    expect(dock.querySelector<HTMLElement>(".attack-army__auto-load")!.hidden).toBe(true);
     // The dock names the test first, above the army.
     expect(dock.firstElementChild?.classList.contains("baiter-dock")).toBe(true);
     expect(dock.textContent).toContain("Test attack: nothing is saved");

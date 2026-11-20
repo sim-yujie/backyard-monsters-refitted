@@ -4,8 +4,10 @@ import {
   harvesterFullAt,
   hatcheryJobs,
   lockerJobs,
+  unlockRealmOf,
   researchJobs,
   savedAtOf,
+  siegeJobs,
   trainingJobs,
 } from "./jobs";
 import { animPolicy, WorkKind } from "./yardAnim";
@@ -31,7 +33,8 @@ import { animPolicy, WorkKind } from "./yardAnim";
  * - every Monster Locker works while any monster is unlocking, because the
  *   original asks the one global `CREATURELOCKER._unlocking`
  *   (`client/scripts/BUILDING8.as:32`);
- * - an Academy works while its training runs, the Lab while its research does;
+ * - an Academy works while its training runs, the Lab while its research does,
+ *   a Siege Works or Siege Factory while a weapon is unlocking in it;
  * - a hatchery works while its monster is at stage 1 — not stage 2, waiting
  *   for housing (`BUILDING13.as:34`) — and past the end of that monster when
  *   more are queued behind it, in its own queue or, with a working HCC, in the
@@ -120,7 +123,8 @@ export const readWork = (save: WorkSave): WorkMap => {
     later(work, id, harvesterFullAt({ ...raw, id }, savedAt, health));
   }
 
-  const unlocking = lockerJobs(save.lockerdata, null, save.storedata, savedAt).reduce(
+  // The Inferno yard's Strongbox works on the Inferno's unlocks (`IC…`), a surface Locker on the surface's.
+  const unlocking = lockerJobs(save.lockerdata, null, save.storedata, savedAt, unlockRealmOf(save)).reduce(
     (end, job) => Math.max(end, job.endsAt ?? Number.NEGATIVE_INFINITY),
     Number.NEGATIVE_INFINITY,
   );
@@ -132,6 +136,8 @@ export const readWork = (save: WorkSave): WorkMap => {
     later(work, job.buildingId, job.endsAt);
   }
   for (const job of researchJobs(buildings)) later(work, job.buildingId, job.endsAt);
+  // A Siege Works or Siege Factory while a weapon is unlocking (`SiegeBuilding.TickFast`).
+  for (const job of siegeJobs(buildings)) later(work, job.buildingId, job.endsAt);
 
   // Stage 2, waiting for housing, comes back with no end and is left idle.
   const queues = save.monsters?.h ?? [];

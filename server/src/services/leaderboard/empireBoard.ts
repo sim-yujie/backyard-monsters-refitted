@@ -1,19 +1,27 @@
 import type { EntityManager } from "@mikro-orm/postgresql";
 
+import { tallyOutposts, type OutpostTally } from "../maproom/v2/outpostPoints.js";
 import { visiblePhotos } from "../profile/visiblePhoto.js";
+import type { BuildingDataMap } from "../../types/BuildingData.js";
 
 /**
  * The leaderboard (beta.4): one board for every player, ordered by empire
- * points, the Flash score (`points` + `basevalue`, `client/scripts/BASE.as:4835-4877`).
- * Only the main yard counts: Flash kept an outpost's value apart and never
- * added it in (`BASE.as:4853-4855`). Each row also shows how many Map Room 2
- * outposts the player holds.
+ * points. Since beta 8 (owner 17 Nov 2026, the "outpost race") a player's
+ * board score is their main yard's empire points, the Flash score (`points` +
+ * `basevalue`, `client/scripts/BASE.as:4835-4877`), plus the outpost points
+ * (`services/maproom/v2/outpostPoints.ts`) of every Map Room 2 outpost they
+ * hold when the board is built. The outpost part is never stored: a lost or
+ * abandoned outpost stops counting at the next build, the new owner of a
+ * taken-over one gains it, and the save's `points`, `basevalue` and
+ * `empirepoints` stay the main yard's alone (player level, raids and attack
+ * ranges never see the outposts). Each row also says how many outposts the
+ * player holds.
  *
  * Owner decisions (2026-10-20):
  *
  * - Ties go to whoever reached the score first: `save.empirepointsat`, the
- *   time the score last changed, earliest first, then the lower user id, so
- *   the order never shuffles between two reads of the same data.
+ *   time the main yard's score last changed, earliest first, then the lower
+ *   user id, so the order never shuffles between two reads of the same data.
  * - Left out: every account with a `bym.bot` row, whatever its state (the
  *   Map Room 1 neighbours, and the `seeded` Map Room 2 dev players, which the
  *   seed scripts refuse to make on production), and banned accounts.
@@ -48,7 +56,12 @@ export interface BoardRow {
    * looked up for each answer, so a new or hidden photo shows at once.
    */
   readonly photo?: number | null;
+  /** The board score: {@link yardPoints} + {@link outpostPoints}. */
   readonly empirePoints: number;
+  /** The main yard's empire points (`save.empirepoints`). */
+  readonly yardPoints: number;
+  /** Every outpost they hold, its points added up (`outpostPoints.ts`). */
+  readonly outpostPoints: number;
   /** Map Room 2 outposts they hold. */
   readonly outposts: number;
 }
@@ -84,11 +97,17 @@ interface BoardSqlRow {
   username: string;
   pic_square: string | null;
   empirepoints: number | string;
-  outposts: number | string;
+  /** When the main yard's score last changed, unix seconds; absent sorts last. */
+  empirepointsat?: number | string | null;
+}
+
+interface OutpostSqlRow {
+  userid: number | string;
+  buildingdata: BuildingDataMap | string | null;
 }
 
 /**
- * Every ranked player, in board order. Bots (any `bym.bot` row) and banned
+ * Every ranked player, by main yard points (outposts are added in {@link rankRows}). Bots (any `bym.bot` row) and banned
  * accounts are left out; a player with no main yard has no row.
  */
 export const BOARD_SQL = `
@@ -97,7 +116,7 @@ export const BOARD_SQL = `
     u.username,
     u.pic_square,
     s.empirepoints,
-    (SELECT count(*) FROM bym.save o WHERE o.userid = s.userid AND o.type = 'outpost')::int AS outposts
+    s.empirepointsat
   FROM bym.save s
   JOIN bym."user" u ON u.save_basesaveid = s.basesaveid
   WHERE s.type = 'main'
@@ -106,20 +125,53 @@ export const BOARD_SQL = `
   ORDER BY s.empirepoints DESC, s.empirepointsat ASC, s.userid ASC
 `;
 
-/** The rows a query gave, ranked 1, 2, 3... in the order they came. */
-export const rankRows = (rows: readonly BoardSqlRow[]): BoardRow[] =>
-  rows.map((row, index) => ({
-    rank: index + 1,
-    userId: Number(row.userid),
-    name: row.username,
-    pic: row.pic_square ?? null,
-    empirePoints: Number(row.empirepoints),
-    outposts: Number(row.outposts),
-  }));
+/**
+ * Every Map Room 2 outpost and who holds it, in one query for the whole board
+ * (not one per player). Inferno yards are `inferno`, never `outpost`, so they
+ * stay out.
+ */
+export const OUTPOSTS_SQL = `
+  SELECT o.userid, o.buildingdata
+  FROM bym.save o
+  WHERE o.type = 'outpost'
+`;
+
+/**
+ * The board: each player's main yard points plus their outposts' points,
+ * most first, ranked 1, 2, 3... Players on the same total go by who reached
+ * their main yard's score first (`empirepointsat`), then the lower user id.
+ */
+export const rankRows = (
+  rows: readonly BoardSqlRow[],
+  outposts: ReadonlyMap<number, OutpostTally> = new Map(),
+): BoardRow[] =>
+  rows
+    .map((row) => {
+      const at = Number(row.empirepointsat);
+      const userId = Number(row.userid);
+      const yardPoints = Number(row.empirepoints);
+      const held = outposts.get(userId);
+      const outpostPoints = held?.points ?? 0;
+      return {
+        userId,
+        name: row.username,
+        pic: row.pic_square ?? null,
+        empirePoints: yardPoints + outpostPoints,
+        yardPoints,
+        outpostPoints,
+        outposts: held?.count ?? 0,
+        at: Number.isFinite(at) && row.empirepointsat !== null && row.empirepointsat !== undefined ? at : Infinity,
+      };
+    })
+    .sort((a, b) => b.empirePoints - a.empirePoints || a.at - b.at || a.userId - b.userId)
+    .map(({ at: _at, ...row }, index) => ({ rank: index + 1, ...row }));
 
 /** Works the board out from the database and stores it; returns the stored build. */
 const buildBoard = async (em: EntityManager, redis: BoardRedis, now: number): Promise<StoredBoard> => {
-  const ranked = rankRows(await em.getConnection().execute<BoardSqlRow[]>(BOARD_SQL));
+  const connection = em.getConnection();
+  const players = await connection.execute<BoardSqlRow[]>(BOARD_SQL);
+  const outposts = tallyOutposts(await connection.execute<OutpostSqlRow[]>(OUTPOSTS_SQL));
+  const ranked = rankRows(players, outposts);
   const ranksKey = `${RANKS_KEY_PREFIX}${now}`;
 
   // The hash first, so a board in the store always has its ranks.

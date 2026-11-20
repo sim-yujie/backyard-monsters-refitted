@@ -372,22 +372,37 @@ export const unlockEndsAt = (
   return e - 4 * boosted;
 };
 
+/** An Inferno yard's save `type` (`yardModel.ts`). */
+const INFERNO_TYPE = "inferno";
+
 /**
- * The running surface unlock (`lockerdata[id] = { t: 1, e }`), absolute `e`,
- * brought forward by a Locker Overdrive running after `savedAt`
- * ({@link unlockEndsAt}). Inferno (`IC…`) entries are not the server's to
- * finish (D19) and are left out.
+ * Whose unlocks a save's Locker runs: the surface monsters' (`C…`) on a main
+ * yard or outpost, the Inferno ones' (`IC…`) in the Inferno yard's Strongbox,
+ * as Flash's `CREATURELOCKER.Tick` picks them (`:895-903`) and the server's
+ * `monsterRealmOf` does (`server/src/services/yard/locker.ts`).
+ */
+export const unlockRealmOf = (save: { type?: string | null }): "surface" | "inferno" =>
+  save.type === INFERNO_TYPE ? "inferno" : "surface";
+
+/**
+ * The running unlock of `realm` (`lockerdata[id] = { t: 1, e }`), absolute
+ * `e`, brought forward by a Locker Overdrive running after `savedAt`
+ * ({@link unlockEndsAt}). A surface yard leaves Inferno (`IC…`) entries out
+ * and the Inferno yard surface ones, as the server's catch-up does
+ * (`catchUpLocker.ts`, `runningUnlock`).
  */
 export const lockerJobs = (
   lockerdata: LockerData | null | undefined,
   lockerId: number | null = null,
   storedata: StoreData | null | undefined = null,
   savedAt = 0,
+  realm: "surface" | "inferno" = "surface",
 ): YardJob[] => {
   const jobs: YardJob[] = [];
   for (const [monster, entry] of Object.entries(lockerdata ?? {})) {
     const ends = finite(entry?.e);
-    if (entry?.t !== 1 || ends === null || !monster.startsWith("C")) continue;
+    const ours = realm === "inferno" ? /^IC\d+$/.test(monster) : monster.startsWith("C");
+    if (entry?.t !== 1 || ends === null || !ours) continue;
     const started = finite(entry.s);
     jobs.push({
       kind: JobKind.UNLOCK,
@@ -638,7 +653,7 @@ export const yardJobs = (save: BaseLoadResponse): YardJob[] => {
   const buildings = save.buildingdata;
   const jobs = [
     ...buildingJobs(buildings, savedAt, save.buildinghealthdata),
-    ...lockerJobs(save.lockerdata, firstOfType(buildings, LOCKER_TYPE), save.storedata, savedAt),
+    ...lockerJobs(save.lockerdata, firstOfType(buildings, LOCKER_TYPE), save.storedata, savedAt, unlockRealmOf(save)),
     ...trainingJobs(save.academy, savedAt, buildings),
     ...researchJobs(buildings),
     ...siegeJobs(buildings),
@@ -713,6 +728,8 @@ export const predictCompletion = (
         if (!row) break;
         delete row.cU;
         delete row.cL;
+        // The job's helpers go with it, as the server drops them (`advanceBuildingTimers`).
+        delete row.hl;
         row.l = (typeof row.l === "number" && row.l > 0 ? row.l : 1) + 1;
         break;
       }
@@ -721,6 +738,7 @@ export const predictCompletion = (
         if (!row) break;
         delete row.cB;
         delete row.cL;
+        delete row.hl;
         if (typeof row["prefab"] === "number" && row["prefab"] > 0) row.l = row["prefab"];
         delete row["prefab"];
         break;
@@ -729,6 +747,7 @@ export const predictCompletion = (
         const row = building(job.buildingId);
         if (!row) break;
         delete row.cF;
+        delete row.hl;
         row.fort = (typeof row.fort === "number" ? row.fort : 0) + 1;
         break;
       }

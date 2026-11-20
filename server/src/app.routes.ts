@@ -30,7 +30,6 @@ import {
   botCheckReadLimiter,
   botCheckAnswerLimiter,
   chatReportLimiter,
-  playerAchievementsLimiter,
   playerMailLimiter,
   truceRequestLimiter,
   mailTruceRequestLimiter,
@@ -133,7 +132,6 @@ import {
 } from "./controllers/notifications/routes.js";
 import { chatPlayerYard, reportChatMessage } from "./controllers/chat/routes.js";
 import { getModerationNotice, seeModerationNotice } from "./controllers/moderation/notice.js";
-import { playerAchievements } from "./controllers/achievements/routes.js";
 import { getDefenceReplay, getDefences } from "./controllers/defences/routes.js";
 import { mountFriendsRoutes } from "./controllers/friends/routes.js";
 import { mountEventsRoutes } from "./controllers/events/routes.js";
@@ -188,7 +186,6 @@ import {
   tradePostController,
   tradeCancelController,
   tradeAcceptController,
-  tradeSendController,
   tradeViewController,
 } from "./controllers/alliance/trade.js";
 import { tradeSwitchGate } from "./services/alliance/tradeSwitch.js";
@@ -378,12 +375,6 @@ router.get("/api/:apiVersion/bm/moderation/notice", apiVersion, verifyUserAuth, 
 router.post("/api/:apiVersion/bm/moderation/notice/:id/seen", apiVersion, verifyUserAuth, seeModerationNotice);
 
 /**  ────────────────────────────────────────────────
-* 📦 Achievements: another player's (issue #204, `controllers/achievements/player.ts`).
-*    The player's own are yard actions (`controllers/yard/achievements.ts`).
-* ──────────────────────────────────────────────── */
-router.get("/api/:apiVersion/bm/achievements/player/:userid", apiVersion, verifyUserAuth, playerAchievementsLimiter, playerAchievements);
-
-/**  ────────────────────────────────────────────────
 * 📦 Defences: attacks on the player's Map Room 2 main yard and their replays
 *    (issue #360, `controllers/defences/defences.ts`). The caller's own only.
 * ──────────────────────────────────────────────── */
@@ -432,12 +423,11 @@ router.post("/alliance/suggeststar", verifyUserAuth, logRequest, suggestStarCont
 router.post("/alliance/setgoal", verifyUserAuth, logRequest, setGoalController);
 router.post("/alliance/removegoal", verifyUserAuth, logRequest, removeGoalController);
 router.get("/alliance/territory", verifyUserAuth, logRequest, territoryController);
-// Trading refuses every route while ALLIANCE_TRADE_ENABLED is off (the default, beta 7).
+// Trading (swaps only, owner 16 Nov 2026) refuses every route while ALLIANCE_TRADE_ENABLED is off (the default).
 router.get("/alliance/trade", verifyUserAuth, tradeSwitchGate, logRequest, tradeViewController);
 router.post("/alliance/trade/post", verifyUserAuth, tradeSwitchGate, logRequest, tradePostController);
 router.post("/alliance/trade/cancel", verifyUserAuth, tradeSwitchGate, logRequest, tradeCancelController);
 router.post("/alliance/trade/accept", verifyUserAuth, tradeSwitchGate, logRequest, tradeAcceptController);
-router.post("/alliance/trade/send", verifyUserAuth, tradeSwitchGate, logRequest, tradeSendController);
 router.get("/alliance/news", verifyUserAuth, logRequest, allianceNewsController);
 
 /**  ────────────────────────────────────────────────

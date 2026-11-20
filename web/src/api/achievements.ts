@@ -1,6 +1,6 @@
 import { actionKey, type YardActionResult, type YardStore } from "@/game/yard/YardStore";
-import { get, post } from "./http";
-import type { ApiEnvelope, YardResponse } from "./types";
+import { post } from "./http";
+import type { YardResponse } from "./types";
 import { yardBody } from "./yard";
 
 /**
@@ -8,7 +8,6 @@ import { yardBody } from "./yard";
  *
  *   POST /api/:apiVersion/bm/yard/achievements/state         the player's own list
  *   POST /api/:apiVersion/bm/yard/achievements/seen  ids     pop-ups shown
- *   GET  /api/:apiVersion/bm/achievements/player/:userid     someone else's
  *
  * The two yard routes are yard actions on the account's record, and both work
  * on an outpost. `state` never sends a `baseid`: from an outpost, a map or an
@@ -23,7 +22,6 @@ import { yardBody } from "./yard";
 
 const STATE_PATH = "/api/:apiVersion/bm/yard/achievements/state";
 const SEEN_PATH = "/api/:apiVersion/bm/yard/achievements/seen";
-const PLAYER_PATH = "/api/:apiVersion/bm/achievements/player";
 
 export type AchievementStatus = "locked" | "earned";
 
@@ -77,28 +75,6 @@ export interface AchievementsStateReport {
   fresh: AchievementUnlock[];
 }
 
-/** One entry of someone else's list: earned or not and when, no progress, no Shiny. */
-export interface PublicAchievementView {
-  id: number;
-  name: string;
-  description: string;
-  status: AchievementStatus;
-  at?: number;
-  /** A hidden entry: until earned it reads `name: "???"` with no description. */
-  hidden?: true;
-}
-
-/** `GET achievements/player/:userid`. */
-export interface PlayerAchievements {
-  userid: number;
-  name: string;
-  earned: number;
-  total: number;
-  achievements: PublicAchievementView[];
-}
-
-type PlayerAchievementsResponse = ApiEnvelope & PlayerAchievements;
-
 /** The player's own list, with progress and Shiny. */
 export const achievementsState = async (): Promise<AchievementsStateReport> =>
   (await post<YardResponse<AchievementsStateReport>>(STATE_PATH)).report;
@@ -128,24 +104,11 @@ export const markSeenAction = (
 ): Promise<YardActionResult<AchievementsSeenReport>> =>
   store.run({ key: AchievementsSeenKey, send: (_api, ...yard) => send(ids, ...yard) });
 
-/**
- * Another player's list (the caller's own too). Refusals: 404 `notFound` for
- * an unknown or banned player, 429 `rateLimited` (30 a minute).
- */
-export const playerAchievements = async (userid: number): Promise<PlayerAchievements> => {
-  const { userid: id, name, earned, total, achievements } = await get<PlayerAchievementsResponse>(
-    `${PLAYER_PATH}/${encodeURIComponent(String(userid))}`,
-  );
-  return { userid: id, name, earned, total, achievements };
-};
-
 /** The calls the screen makes, so tests can hand it stand-ins. */
 export interface AchievementsApi {
   state: typeof achievementsState;
-  player: typeof playerAchievements;
 }
 
 export const achievementsApi: AchievementsApi = {
   state: achievementsState,
-  player: playerAchievements,
 };

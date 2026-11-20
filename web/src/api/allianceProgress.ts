@@ -41,6 +41,8 @@ export interface GoalMenuItem {
   readonly kind: string;
   readonly name: string;
   readonly only: AllianceType | null;
+  /** Set this week, live or removed: it cannot be set again until next week (owner, 15 Nov 2026); an older server sends none. */
+  readonly used?: boolean;
   readonly tiers: readonly {
     readonly tier: GoalView["tier"];
     readonly target: number;

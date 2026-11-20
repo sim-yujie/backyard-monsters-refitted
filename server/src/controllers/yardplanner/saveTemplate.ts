@@ -17,6 +17,8 @@ import { postgres } from "../../server.js";
 import type { User } from "../../database/models/user.model.js";
 import type { KoaController } from "../../utils/KoaController.js";
 import { refuseOutpostLayouts } from "./plannerYard.js";
+import { requireUsableSlot } from "../../services/yardplanner/plannerGate.js";
+import { getCurrentDateTime } from "../../utils/getCurrentDateTime.js";
 
 /**
  * Controller to handle saving a Yard Planner slot/template for the authenticated user.
@@ -58,6 +60,9 @@ export const saveTemplate: KoaController = async (ctx) => {
       { bytes: size }
     );
   }
+
+  // Slot 2 and up need a Yard Planner, on this route too (owner, beta 8).
+  requireUsableSlot(save, slotid, getCurrentDateTime());
 
   const name = (parsed.data.name ?? "").trim().slice(0, LAYOUT_NAME_MAX);
   const layout = makeLayout(

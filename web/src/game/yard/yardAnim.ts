@@ -50,8 +50,8 @@
  * Several others are event-driven in the same way and idle on a fixed cell: the
  * silo's cell is its fill level (`BUILDING6.as:49-58`), the juicer's runs only
  * while it is blending (`BUILDING9.as:75-92`), the Monster Baiter's only while
- * it is baiting (`BUILDING19.as:42-62`), and the siege buildings' only while a
- * weapon is unlocking (`SiegeFactory.as:127`, `SiegeLab.as:90`).
+ * it is baiting (`BUILDING19.as:42-62`). The siege buildings' runs only while a
+ * weapon is unlocking (`SiegeBuilding.as:104-109`), a `work` of their own.
  *
  * A type this table does not name has no animation layers at all, and asking
  * about it costs a map lookup that misses.
@@ -115,6 +115,8 @@ export const WorkKind = {
   RESEARCH: "research",
   /** A Hatchery Control Centre while any hatchery in its yard is growing a monster. */
   CONTROL: "control",
+  /** A Siege Works researching a weapon, a Siege Factory building one (`unlockingWeapons`). */
+  SIEGE: "siege",
 } as const;
 export type WorkKind = (typeof WorkKind)[keyof typeof WorkKind];
 
@@ -167,6 +169,9 @@ const POLICIES = new Map<number, AnimPolicy>([
   [16, whileWorking(WorkKind.CONTROL, whenIdle(every(3, false)))],
   // Monster Baiter: `BFOUNDATION.as:1141` names type 19.
   [19, STATIC_FIXED],
+  // Under Hall (Town Hall in the main yard): only the Inferno's own levels 4 to 6 have a strip (its lava, sparks and
+  // smoke, `INFERNO_PAINTED_BUILDING_ART`), a 48-cell loop at 20 a second from cell 0; nothing else of type 14 has one.
+  [14, every(2, false)],
   // Towers. The cell is a facing, set only when something is being shot at.
   [21, STATIC],
   // Monster Bunker: its strip is its shutters, down (cell 0) at rest; its `TickFast` brings them down
@@ -190,9 +195,12 @@ const POLICIES = new Map<number, AnimPolicy>([
   [54, every(2, false)],
   // Monster Lab: only while `_upgrading`, a research (`MONSTERLAB.as:210`).
   [116, whileWorking(WorkKind.RESEARCH, whenIdle(every(3)))],
-  // Siege factory and lab: only while a weapon is unlocking.
-  [133, STATIC_FIXED],
-  [134, STATIC_FIXED],
+  // Siege Factory and Siege Works: only while a weapon is unlocking (`SiegeBuilding.TickFast` while
+  // `upgradingWeapon`), from cell 0, and back to cell 0 when it ends (`SiegeLab.as:111`, `SiegeFactory.as:142`).
+  // Flash steps a cell every tick (40 a second); this runs at 20 a second, the nearest to the 25 the owner approved
+  // the 3D loops at (Review Desk card b8-siege-3d-r4). The Classic look's Flash strips run the same way.
+  [133, { ...whileWorking(WorkKind.SIEGE, every(2, false)), restOnIdle: true }],
+  [134, { ...whileWorking(WorkKind.SIEGE, every(2, false)), restOnIdle: true }],
   [140, every(1, false)],
   // Observatory (this project's own, alliances): stands still (owner 10 Nov: "Just make it still").
   [150, STATIC_FIXED],
