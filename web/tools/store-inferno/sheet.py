@@ -103,3 +103,21 @@ for i, c in enumerate(cells):
     each.paste(c, ((i % 2) * (cw + 10), (i // 2) * (ch + 10)))
 each.save(OUT / "compare-round3-each.png")
 print(OUT / "compare-round3.png", OUT / "compare-round3-each.png")
+
+# The ruin pass (20 Nov 2026): the wired shop whole, damaged and destroyed (game files), beside the painted Resource
+# Pod's and Housing Bunker's destroyed looks, as the yard draws them
+G = B / "generalstore"
+POD_X = (B / "istoragesilo/top.c1.destroyed@2x.webp", -53, -15, B / "istoragesilo/shadow.1.destroyed.v2.jpg", -54, 12)
+BUNKER_X = (B / "ihousingbunker/top.c1.destroyed@2x.webp", -73, 11, B / "ihousingbunker/shadow.1.destroyed.jpg", -96, 8)
+STATES = {
+    "Store": (G / "top.ishop3C@2x.webp", -52, -52, G / "shadow.ishop3C.v2.jpg", -35, 25),
+    "Store damaged": (G / "top.ishop3C.damaged@2x.webp", -52, -62, G / "shadow.ishop3C.damaged.v2.jpg", -35, 22),
+    "Store destroyed": (G / "top.ishop3C.destroyed@2x.webp", -48, -3, G / "shadow.ishop3C.destroyed.v2.jpg", -39, 39),
+    "Pod destroyed": POD_X,
+    "Housing Bunker destroyed": BUNKER_X,
+}
+names = list(STATES)
+rr, xr = scene([STATES[n] for n in names], step=170, k=4)
+rr = rr.crop((0, 260, rr.width, rr.height - 120))
+labelled(rr, names, xr).save(OUT / "compare-ruin.png")
+print(OUT / "compare-ruin.png")

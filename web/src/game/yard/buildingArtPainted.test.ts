@@ -368,9 +368,15 @@ describe("the painted Inferno General Store", () => {
     expect(resolveArt(STORE, 1, ArtState.DEFAULT)?.top.url).toBe(`${root}top.3d1@2x.webp`);
   });
 
-  it("has no ruins of its own yet: damaged is the shop itself, destroyed Flash's store rubble", () => {
-    expect(resolveArt(STORE, 1, ArtState.DAMAGED, "inferno")?.top.url).toBe(`${root}${look?.top[0]}`);
-    expect(resolveArt(STORE, 1, ArtState.DESTROYED, "inferno")?.top.url).toBe(`${root}top.1.destroyed.png`);
+  it("has its own damaged and destroyed looks, on disk, each with its own shadow", () => {
+    for (const state of [look?.damaged, look?.destroyed]) {
+      for (const file of [state?.top[0], state?.shadow?.[0]]) expect(existsSync(folder + (file ?? "")), file).toBe(true);
+    }
+    expect(resolveArt(STORE, 1, ArtState.DAMAGED, "inferno")?.top.url).toBe(`${root}top.ishop3C.damaged@2x.webp`);
+    expect(resolveArt(STORE, 1, ArtState.DESTROYED, "inferno")?.top.url).toBe(`${root}top.ishop3C.destroyed@2x.webp`);
+    expect(resolveArt(STORE, 1, ArtState.DESTROYED, "inferno")?.shadow?.url).toBe(`${root}shadow.ishop3C.destroyed.v2.jpg`);
+    // The surface's store keeps Flash's rubble.
+    expect(resolveArt(STORE, 1, ArtState.DESTROYED)?.top.url).not.toContain("ishop");
   });
 
   it("goes back to Flash's store with the Classic look", () => {
@@ -379,11 +385,13 @@ describe("the painted Inferno General Store", () => {
     expect(resolveArt(STORE, 1, ArtState.DEFAULT, "inferno")?.top.url).toBe(`${root}top.1.png`);
   });
 
-  it("has an Inferno build-menu picture of its own with the Modern look, and Flash's button with the Classic look", () => {
+  it("has an Inferno build-menu picture of its own with the Modern look, and an Inferno Classic button (flames)", () => {
     const modern = buildPicture(STORE, "inferno", false);
     expect(modern.modern).toBe(true);
     expect(modern.url).toMatch(/\/buildingbuttons\/modern\/12\.inferno\.[0-9a-f]{8}\.webp$/);
     expect(existsSync(`${ASSETS}buildingbuttons/modern/${modern.url.split("/").at(-1)}`)).toBe(true);
-    expect(buildPicture(STORE, "inferno", true)).toEqual({ url: "/assets/buildingbuttons/12.jpg", modern: false });
+    expect(buildPicture(STORE, "inferno", true)).toEqual({ url: "/assets/buildingbuttons/general_store.v2.jpg", modern: false });
+    expect(existsSync(`${ASSETS}buildingbuttons/general_store.v2.jpg`)).toBe(true);
+    expect(buildPicture(STORE, "main", true)).toEqual({ url: "/assets/buildingbuttons/12.jpg", modern: false });
   });
 });
