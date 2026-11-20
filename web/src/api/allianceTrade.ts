@@ -45,11 +45,14 @@ export interface TradeRequest {
   readonly ready: boolean;
 }
 
-export interface TradeRecent {
-  readonly from: string;
-  readonly to: string;
-  readonly arrived: Partial<TradeAmounts>;
-  readonly at: number;
+/** The reader's swap of this UTC day, for their own box (owner, 20 Nov 2026; replaces Recent trades). */
+export interface TradeSwapToday {
+  /** The mate they swapped with. */
+  readonly with: string;
+  /** What arrived in their storage. */
+  readonly got: Partial<TradeAmounts>;
+  /** True when a mate took the reader's request; false when the reader took a mate's. */
+  readonly taken: boolean;
 }
 
 export interface TradeView {
@@ -59,10 +62,10 @@ export interface TradeView {
   readonly me: TradeStorage | null;
   readonly myRequest: TradeRequest | null;
   readonly requests: readonly TradeRequest[];
-  /** Last 2 swaps of the last 48 h, a receipt each way (owner, 19 Nov 2026). */
-  readonly recent: readonly TradeRecent[];
   /** Ids of the reader's own requests a mate took in the last day: the yard fetches what arrived once each. */
   readonly myTaken?: readonly number[];
+  /** Today's swap, or null before it. */
+  readonly swap?: TradeSwapToday | null;
 }
 
 /** What an accept did, for the accepter. */
