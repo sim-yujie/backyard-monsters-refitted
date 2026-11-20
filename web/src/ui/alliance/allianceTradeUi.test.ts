@@ -183,17 +183,19 @@ describe("Trade tab", () => {
     expect(line.querySelector(".trade-done__num")?.textContent).toBe("+1.99M");
   });
 
-  it("an open request of your own keeps its row; today's swap shows above it, with no time of its own", async () => {
+  it("an open request of your own keeps its card; today's swap gets its own card above it", async () => {
     await mount(withView({
       today: { ...today, swapsLeft: 0 },
       myRequest: request({ userid: 1, username: "Me", mine: true, ready: false }),
       requests: [],
       swap: { with: "Tina", got: { r4: 90 }, taken: false },
     }));
-    const box = document.querySelector(".trade-request--mine")!.closest(".trade-card")!;
-    const line = box.querySelector(".trade-done")!;
+    const titles = [...document.querySelectorAll(".alliance-card__title")].map((title) => title.textContent);
+    expect(titles).toEqual([TRADE_TEXT.todaySwap, TRADE_TEXT.yourRequest, TRADE_TEXT.requests]);
+    const line = document.querySelector(".trade-done")!;
+    expect(line.closest(".trade-card")?.querySelector(".trade-request--mine")).toBeNull();
     expect(line.textContent).toBe(`${TRADE_TEXT.swappedWith("Tina")}·+90`);
-    expect(line.compareDocumentPosition(box.querySelector(".trade-request--mine")!) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(document.querySelector(".trade-request__why")?.textContent).toBe(TRADE_TEXT.block.mineWaits("6h"));
   });
 
   it("no Recent trades section any more (owner, 20 Nov 2026)", async () => {

@@ -60,6 +60,8 @@ export const TRADE_TEXT = {
   /** …or you took theirs. */
   swappedWith: (name: string) => `Swapped with ${name}`,
   newDayIn: (time: string) => `new day in ${time}`,
+  /** Its own card when the player also has an open request. */
+  todaySwap: "Today's swap",
   hint: "48 h requests · 1 open · 3 posts a day · 1 swap a day · max 10% of storage",
   back: "Back",
   post: "Post",
@@ -76,7 +78,8 @@ export const TRADE_TEXT = {
   block: {
     traded: (time: string) => `1 swap a day · new day in ${time}`,
     mateTraded: (name: string) => `${name} swapped today: tomorrow`,
-    mineWaits: (time: string) => `You swapped today · open again in ${time}`,
+    // astra (20 Nov): say what waits, not that you swapped (the card above says so).
+    mineWaits: (time: string) => `Mates can accept it in ${time}`,
     short: (need: string, what: string, held: string) => `Need ${need} ${what} · you have ${held}`,
     // Round 2 (astra): say it limits what you GIVE, so "max" is not read against Accept's "+".
     overCap: (amount: string) => `You give max ${amount} (10% of your storage)`,
@@ -352,9 +355,10 @@ export class TradeTab {
         button(TRADE_TEXT.cancel, "btn--outline trade-request__act", () => void this.cancel()),
       );
       if (!mine.ready) row.append(blockLine("mateTraded", mine, view, this.newDay(view), true));
-      // Posted, then took a mate's request the same day: that swap shows above it.
-      const done = view.swap ? [doneLine(view.swap, null)] : [];
-      nodes.push(card(TRADE_TEXT.yourRequest, ...done, row, make("p", "trade-note trade-note--small", TRADE_TEXT.held)));
+      // Posted, then took a mate's request the same day: that swap gets its own card
+      // above, so it is not read as part of the open request (astra, 20 Nov).
+      if (view.swap) nodes.push(card(TRADE_TEXT.todaySwap, doneLine(view.swap, null)));
+      nodes.push(card(TRADE_TEXT.yourRequest, row, make("p", "trade-note trade-note--small", TRADE_TEXT.held)));
     } else {
       const traded = view.today.swapsLeft === 0;
       const box = make("div", "trade-ask-row");
