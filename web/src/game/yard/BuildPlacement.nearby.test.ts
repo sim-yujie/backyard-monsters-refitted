@@ -4,6 +4,7 @@ import type { BaseLoadResponse, BuildingData } from "@/api/types";
 import type { Camera } from "@/game/Camera";
 import { BuildPlacement, type DropOutcome } from "./BuildPlacement";
 import type * as BuildingArt from "./buildingArt";
+import type { Point } from "./YardGrid";
 import { readYard, type Yard } from "./yardModel";
 
 // No art to fetch: the ghost's picture is not what these are about.
@@ -18,9 +19,10 @@ vi.mock("./buildingArt", async (importOriginal) => ({
  * changes, and taking in each wall of a run as it lands.
  */
 
-const yardOf = (buildings: BuildingData[]): Yard =>
+const yardOf = (buildings: BuildingData[], type?: "inferno"): Yard =>
   readYard({
     error: 0,
+    ...(type && { type }),
     currenttime: 1,
     savetime: 1,
     buildingdata: Object.fromEntries(buildings.map((one) => [String(one.id), one])),
@@ -45,6 +47,7 @@ afterEach(() => {
 const carry = (
   yard: Yard,
   onDrop: (x: number, y: number) => Promise<DropOutcome> = async () => "placed",
+  onBuild?: (cells: readonly Point[]) => Promise<DropOutcome>,
 ): BuildPlacement => {
   const placement = new BuildPlacement({
     type: BLOCK,
@@ -56,6 +59,15 @@ const carry = (
     onDrop,
     onCancel: () => {},
     repeat: true,
+    ...(onBuild && {
+      line: {
+        on: true,
+        budget: () => ({ afford: 100, room: 100 }),
+        unitCost: { r1: 1000, r2: 0, r3: 0, r4: 0 },
+        onPlan: () => {},
+        onBuild,
+      },
+    }),
   });
   open.push(placement);
   return placement;
@@ -109,5 +121,60 @@ describe("BuildPlacement nearby outlines", () => {
     const placement = carry(yardOf([HALL]));
     placement.moveTo(400, 200);
     expect(placement.nearbyShown).toEqual([]);
+  });
+});
+
+/**
+ * While a wall line is drawn (owner, 20 Nov 2026): the Block in hand is
+ * hidden once the first corner is down, and the neighbours stay outlined
+ * round the line's Blocks instead, with the same reach, in both yards.
+ */
+describe("BuildPlacement nearby outlines along a wall line", () => {
+  const FAR_TOWER: BuildingData = { id: 3, t: 20, X: 300, Y: 600 };
+  const line = (yard: Yard, onBuild = async (): Promise<DropOutcome> => "placed") =>
+    carry(yard, async () => "placed", onBuild);
+
+  for (const kind of [undefined, "inferno"] as const) {
+    it(`outlines what is near any Block of the line, after the first corner too (${kind ?? "main"} yard)`, () => {
+      const placement = line(yardOf([HALL, TOWER, FAR_TOWER], kind));
+      placement.lineTap(600, 200);
+      expect(placement.lineNearbyShown).toEqual([]);
+
+      // Back along x towards the tower: the far end comes within reach of it.
+      placement.lineTap(240, 200);
+      expect(placement.linePlan?.cells.length).toBeGreaterThan(1);
+      expect(placement.lineNearbyShown).toEqual([{ type: 20, x: 300, y: 200 }]);
+    });
+  }
+
+  it("keeps the single Block's reach: a tower just past it stays plain", () => {
+    // 140 units round a 20-unit Block at 400: its far edge reaches 560 on x.
+    const placement = line(yardOf([HALL, { id: 2, t: 20, X: 600, Y: 200 }]));
+    placement.lineTap(400, 200);
+    placement.lineTap(400, 260);
+    expect(placement.lineNearbyShown).toEqual([]);
+  });
+
+  it("never outlines the line's own Blocks while ✓ holds their spots", async () => {
+    let answer: (outcome: DropOutcome) => void = () => {};
+    const placement = line(
+      yardOf([HALL, TOWER]),
+      () => new Promise<DropOutcome>((resolve) => (answer = resolve)),
+    );
+    placement.lineTap(240, 200);
+    placement.lineTap(240, 260);
+    const confirming = placement.confirmLine();
+    expect(placement.lineNearbyShown).toEqual([{ type: 20, x: 300, y: 200 }]);
+    answer("placed");
+    await confirming;
+  });
+
+  it("lets the outlines go with the line", () => {
+    const placement = line(yardOf([HALL, TOWER]));
+    placement.lineTap(240, 200);
+    placement.lineTap(240, 260);
+    expect(placement.lineNearbyShown).not.toEqual([]);
+    placement.clearLine();
+    expect(placement.lineNearbyShown).toEqual([]);
   });
 });

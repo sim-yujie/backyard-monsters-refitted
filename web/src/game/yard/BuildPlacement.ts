@@ -170,9 +170,19 @@ export class PlacementGrid {
    * all (#263).
    */
   nearby(type: number, x: number, y: number): NearbyFootprint[] {
+    return this.nearbyAll(type, [{ x, y }]);
+  }
+
+  /**
+   * What stands near any of several spots for a building of `type`, each
+   * looked round as {@link nearby} does: a wall line's Blocks. One pass over
+   * the grid for the lot, so a long line costs no more than its blocks.
+   */
+  nearbyAll(type: number, spots: readonly Point[]): NearbyFootprint[] {
     const [width, height] = footprintOf(type, this.kind);
+    const areas = spots.map((spot) => nearbyArea(spot.x, spot.y, width, height));
     const found: NearbyFootprint[] = [];
-    for (const id of this.occupancy.occupantsIn([nearbyArea(x, y, width, height)])) {
+    for (const id of this.occupancy.occupantsIn(areas)) {
       if (id >= PENDING_ID_BASE) {
         const node = this.pending.get(id);
         if (node) found.push({ type: node.type, x: node.x, y: node.y });
@@ -339,6 +349,13 @@ export class BuildPlacement {
   private linePlanNow: LinePlan | null = null;
   /** The line's Blocks: footprints, then pictures, drawn over the yard. */
   private readonly lineLayer = new Container();
+  /**
+   * The neighbours' outlines round the line's Blocks (#231), under them. Its
+   * own layer, not the ghost's: the ghost is hidden while a line is drawn,
+   * and the line is when lining up matters most (owner, 20 Nov 2026).
+   */
+  private readonly lineNearby = new Graphics();
+  private lineNearbyDrawn: readonly NearbyFootprint[] = [];
   private readonly lineOutlines = new Graphics();
   private readonly linePictures = new Container();
   /** A dot on every corner, over the pictures, so the bends show. */
@@ -356,7 +373,7 @@ export class BuildPlacement {
     this.ghost.visible = false;
     options.layer.addChild(this.ghost);
     this.lineLayer.eventMode = "none";
-    this.lineLayer.addChild(this.lineOutlines, this.linePictures, this.lineMarks);
+    this.lineLayer.addChild(this.lineNearby, this.lineOutlines, this.linePictures, this.lineMarks);
     options.layer.addChild(this.lineLayer);
     void this.loadArt();
 
@@ -538,6 +555,8 @@ export class BuildPlacement {
     if (!plan) {
       this.lineOutlines.clear();
       this.lineMarks.clear();
+      this.lineNearby.clear();
+      this.lineNearbyDrawn = [];
       this.linePictures.removeChildren().forEach((child) => child.destroy({ children: true }));
       // The one Block in hand shows again where the next press goes.
       if (this.spot && !this.done) this.draw(this.spot);
@@ -550,6 +569,7 @@ export class BuildPlacement {
   }
 
   private drawLine(plan: LinePlan): void {
+    this.drawLineNearby(plan);
     const g = this.lineOutlines;
     g.clear();
     this.linePictures.removeChildren().forEach((child) => child.destroy({ children: true }));
@@ -593,6 +613,37 @@ export class BuildPlacement {
       const cy = corners.reduce((sum, point) => sum + point.y, 0) / corners.length;
       marks.circle(cx, cy, 5).fill({ color: 0xffffff, alpha: 0.95 }).stroke({ width: 2, color: 0x1d252d, alpha: 0.9 });
     }
+  }
+
+  /**
+   * Outlines what stands near any of the line's Blocks (#231), with the same
+   * reach as round a single Block. The line's own Blocks are not neighbours,
+   * not even while ✓ holds their spots in the grid.
+   */
+  private drawLineNearby(plan: LinePlan): void {
+    const type = this.options.type;
+    const own = new Set(plan.cells.map((cell) => `${cell.x},${cell.y}`));
+    const found = this.grid
+      .nearbyAll(type, plan.cells)
+      .filter((one) => one.type !== type || !own.has(`${one.x},${one.y}`));
+    this.lineNearbyDrawn = found;
+    this.strokeNearby(this.lineNearby, found);
+  }
+
+  /** What the nearby outlines are drawn round while a line is drawn. */
+  get lineNearbyShown(): readonly NearbyFootprint[] {
+    return this.lineNearbyDrawn;
+  }
+
+  /** One path and one stroke for the lot, as the planner's overlay does. */
+  private strokeNearby(g: Graphics, found: readonly NearbyFootprint[]): void {
+    g.clear();
+    if (found.length === 0) return;
+    for (const one of found) {
+      const corners = footprintCorners(this.yard.bounds, one.type, one.x, one.y, this.yard.kind);
+      g.poly(corners.flatMap((point) => [point.x, point.y]));
+    }
+    g.stroke(NEARBY_STROKE);
   }
 
   /* ── Drawing ────────────────────────────────────────────────────────── */
@@ -699,17 +750,9 @@ export class BuildPlacement {
     if (key === this.nearbyFor) return;
     this.nearbyFor = key;
 
-    const g = this.nearby;
-    g.clear();
     const found = this.grid.nearby(this.options.type, x, y);
     this.nearbyDrawn = found;
-    if (found.length === 0) return;
-    // One path and one stroke for the lot, as the planner's overlay does.
-    for (const one of found) {
-      const corners = footprintCorners(this.yard.bounds, one.type, one.x, one.y, this.yard.kind);
-      g.poly(corners.flatMap((point) => [point.x, point.y]));
-    }
-    g.stroke(NEARBY_STROKE);
+    this.strokeNearby(this.nearby, found);
   }
 
   /** What the nearby outlines are drawn round now. A new array only when redrawn. */
