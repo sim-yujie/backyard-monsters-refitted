@@ -9,6 +9,8 @@
   margin: var(--space-2) 0 var(--space-1);
   color: var(--colour-warning);
   font-weight: 700;
+  /* A server error can carry a long address with no spaces: it wraps inside the panel. */
+  overflow-wrap: anywhere;
 }
 
 .auto-attack__missing {
