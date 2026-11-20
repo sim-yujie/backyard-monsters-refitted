@@ -5,6 +5,10 @@ default 1.0), centred on the box's centre, bottom on its bottom, so the copy sta
 FIT=band (the original shops of round 2, whose signs stick out at the side): the width of the bottom 30% = the same
 band of the surface store (the same footprint), centred on it, base on its base line, never more than CAP times its
 height nor WIDE times its width.
+FIT=guide (round 3, painted on make_shop3.py's guide.png): the guide's base diamond (front corner at 512, 900 of the
+1024 image, 300 px half-width) becomes the Store's base diamond in the yard, BASE_HW (default 40, as wide as Flash's store) world px half-width,
+its front corner at (0, BASE_Y) (default 56: Flash's store stands there) below the building's origin, the top corner
+of its 70 footprint.
 Writes new-4x.png (the shared canvas at 4x) and prints the scale.
 """
 import os
@@ -26,7 +30,15 @@ old = surface_rgba()
 fb, pb = old.getbbox(), painted.getbbox()
 CW, CH, _, _ = CANVAS
 c4 = Image.new("RGBA", (CW * UP, CH * UP), (0, 0, 0, 0))
-if os.environ.get("FIT", "box") == "band":
+fit = os.environ.get("FIT", "box")
+if fit == "guide":
+    base_hw, base_y = float(os.environ.get("BASE_HW", "40")), float(os.environ.get("BASE_Y", "56"))
+    g = painted.width / 1024   # Codex may answer at another size than the guide's 1024 (1254 is common)
+    k = base_hw * UP / (300 * g)
+    full = resize_pm(painted, (round(painted.width * k), round(painted.height * k)))
+    _, _, OX, OY = CANVAS
+    c4.alpha_composite(full, (round(OX * UP - 512 * g * k), round((OY + base_y) * UP - 900 * g * k)))
+elif fit == "band":
     CAP, WIDE = float(os.environ.get("CAP", "1.12")), float(os.environ.get("WIDE", "1.25"))
     l0, r0, b0, t0 = band(old, 128)
     l1, r1, b1, t1 = band(painted, 128)

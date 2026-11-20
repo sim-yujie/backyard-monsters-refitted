@@ -1,4 +1,5 @@
-"""export.py <variant> [<out folder>] : write one fitted shop (runs/shop-<variant>/new-4x.png) as game files.
+"""export.py <variant> [<out folder>] : write one fitted shop as game files. <variant> is A, B or C for round 2
+(runs/shop-<v>/new-4x.png) or 3A, 3B, 3C for round 3 (runs/shop3-<v>/new-4x.png, the game camera).
 
     ~/.cache/bymr-art-venv/bin/python -I web/tools/store-inferno/export.py A
 
@@ -60,7 +61,8 @@ variant = sys.argv[1]
 dest = Path(sys.argv[2]) if len(sys.argv) > 2 else FOLDER
 dest.mkdir(parents=True, exist_ok=True)
 CW, CH, OX, OY = CANVAS
-im4 = Image.open(OUT / "runs" / f"shop-{variant}" / "new-4x.png").convert("RGBA")
+run = f"shop3-{variant[1:]}" if variant.startswith("3") else f"shop-{variant}"
+im4 = Image.open(OUT / "runs" / run / "new-4x.png").convert("RGBA")
 x0, y0, x1, y1 = im4.getbbox()
 box = (x0 // UP * UP, y0 // UP * UP, -(-x1 // UP) * UP, -(-y1 // UP) * UP)
 part = im4.crop(box)

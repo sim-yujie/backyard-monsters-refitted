@@ -83,3 +83,23 @@ for i, c in enumerate(cells):
     each.paste(c, ((i % 2) * (cw + 10), (i // 2) * (ch + 10)))
 each.save(OUT / "compare-shops-each.png")
 print(OUT / "compare-shops-each.png", each.size)
+
+# Round 3 (the game camera, owner 20 Nov 2026): old shop C beside the new A, B, C and two real Inferno buildings
+ROWS3 = {"3A": (-43, -45, -32, 26), "3B": (-51, -60, -41, 26), "3C": (-52, -52, -35, 25)}
+NEW = {f"New {v[1]}": (FILES / f"top.ishop{v}@2x.webp", x, y, FILES / f"shadow.ishop{v}.jpg", sx, sy)
+       for v, (x, y, sx, sy) in ROWS3.items()}
+order3 = ["Resource Pod", "Old C", "New A", "New B", "New C", "Strongbox"]
+pool = {**REAL, "Old C": SHOPS["Shop C"], **NEW}
+r3, x3 = scene([pool[n] for n in order3], k=3)
+labelled(r3, order3, x3).save(OUT / "compare-round3.png")
+cells = []
+for n in ["Old C", "New A", "New B", "New C"]:
+    im, xs = scene([pool[n]], step=170, k=5)
+    im = im.crop((60, 330, im.width - 60, 1080))
+    cells.append(labelled(im, [n], [x - 60 for x in xs]))
+cw, ch = cells[0].width, cells[0].height
+each = Image.new("RGB", (cw * 2 + 10, ch * 2 + 10), (24, 24, 24))
+for i, c in enumerate(cells):
+    each.paste(c, ((i % 2) * (cw + 10), (i // 2) * (ch + 10)))
+each.save(OUT / "compare-round3-each.png")
+print(OUT / "compare-round3.png", OUT / "compare-round3-each.png")
