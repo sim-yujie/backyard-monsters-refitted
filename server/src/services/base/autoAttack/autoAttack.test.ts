@@ -354,8 +354,8 @@ const nothingWritten = () => {
 describe("runAutoAttack lands the plan", () => {
   test("monsters spent, bomb charged, loot banked, the camp's damage kept, and the result says so", async () => {
     // Room in storage for the loot: no silos is a cap of 10,000, and twigs are
-    // empty. Putty: exactly the camp's fee (level 35, 4,000,000), burned to 0.
-    userSave.resources = { r1: 0, r2: 1_000_000, r3: 4_000_000, r4: 0 };
+    // empty. Putty: exactly the camp's fee (level 35, 3,000,000), burned to 0.
+    userSave.resources = { r1: 0, r2: 1_000_000, r3: 3_000_000, r4: 0 };
     const result = await runAutoAttack(user() as never, CAMP);
 
     // The attacker: 150 Pokeys spent, the pebble bomb's 100,000 charged, the loot banked.
@@ -366,7 +366,7 @@ describe("runAutoAttack lands the plan", () => {
     expect(result.loot.r2).toBe(0);
     expect(userSave.resources.r2).toBe(900_000);
     // The fee burned before the attack: what putty is left is the loot alone.
-    expect(result.fee).toBe(4_000_000);
+    expect(result.fee).toBe(3_000_000);
     expect(userSave.resources.r3).toBe(result.loot.r3);
     // The camp lost at least what was banked.
     expect(5_000_000 - camp.resources.r1).toBeGreaterThanOrEqual(result.loot.r1);
@@ -799,8 +799,8 @@ describe("POST /worldmapv2/autoattack with moves (Smart Repeat attack, the route
 });
 
 describe("Repeat attack's putty fee (owner, 20 Nov 2026)", () => {
-  // The camp is level 35: 4,000,000 putty.
-  const FEE = 4_000_000;
+  // The camp is level 35: 3,000,000 putty.
+  const FEE = 3_000_000;
   /** A plan that flings one Pokey: the camp stands, the attack is lost. */
   const LOST_PLAN = { v: 1, tick: 2_000, events: [{ kind: "fling", t: 480, x: -615, y: 115, r: 300, monsters: { C1: 1 } }] };
   /** The plan with a putty shot (100,000) instead of the pebble one; a level 3 Catapult fires it. */
@@ -818,10 +818,10 @@ describe("Repeat attack's putty fee (owner, 20 Nov 2026)", () => {
     expect(answer.missing).toEqual([{ kind: "fee", need: FEE, have: FEE - 1 }]);
     expect(flush).not.toHaveBeenCalled();
 
-    // A camp of another band: level 29 is 2,500,000.
+    // A camp of another band: level 29 is 2,000,000.
     camp.level = 29;
     planRow!.level = 29;
-    expect((await autoAttackPlanFor(user() as never, CAMP)).fee).toBe(2_500_000);
+    expect((await autoAttackPlanFor(user() as never, CAMP)).fee).toBe(2_000_000);
   });
 
   test("short of putty: refused before anything is written, the pool untouched", async () => {

@@ -225,14 +225,15 @@ champion) in order. Proposed defaults:
 - **A heavy putty fee, no per-camp cooldown** (owner, 20 Nov 2026, superseding "no fee"): "I want
   quite heavy penalty for putty (not loot based). Players should not be able to profit on putty for
   repeat attacks and should suffer a loss as it is automated. Take it as a convenience fee." The
-  fee goes by the camp's level (`server/src/services/base/autoAttack/repeatFee.ts`):
+  fee goes by the camp's level (`server/src/services/base/autoAttack/repeatFee.ts`; the owner's
+  second table, 20 Nov 2026):
 
   | Camp level | Fee (putty) |
   | --- | --- |
-  | 25-29 | 2,500,000 |
-  | 30-34 | 3,000,000 |
-  | 35-39 | 4,000,000 |
-  | 40-44 | 4,500,000 |
+  | 25-29 | 2,000,000 |
+  | 30-34 | 2,500,000 |
+  | 35-39 | 3,000,000 |
+  | 40-44 | 3,500,000 |
 
   - It is burned before the attack starts, in the same flush that starts it (`baseModeAttack`'s
     `beforeCommit`), so the player needs the putty in advance. The pool has to hold the fee and the
@@ -243,13 +244,35 @@ champion) in order. Proposed defaults:
     started but can never land (no session or checkpoint written, or its row moved on) gets the fee
     back.
   - Hand-played attacks stay free. Twigs, pebbles and goo still come in as loot.
-  - **Always a putty loss, on a normal day.** Every band's fee is above the most putty a full
-    destroy of a fresh camp of that band can bank, with the +15% Map Room 2 camp bonus
-    (`repeatFee.test.ts`). The thinnest margin is Abunakki 31: 2,994,501 against 3,000,000. Tribe
-    Plunder weekends (+30%), the alliance loot star (up to +15%) and the low-level loot bonus (below
-    player level 20) can lift some camps over the fee (Plunder alone: 14 of the 19 tribe and level
-    keys, up to Abunakki 43's 5.24M against 4.5M), and storage hits add a few thousand. The owner
-    accepted that (20 Nov 2026).
+  - **Not a promise of a putty loss** (owner, 20 Nov 2026). A full destroy of a fresh camp can
+    bank more putty than its fee. The owner accepts that: it is a convenience fee that weighs most
+    on the easy low-level camps, and players still need putty for outpost kits. For reference, the
+    most putty one full destroy of a fresh camp can bank (every storage falls in the order that pays
+    most, plus the putty harvesters' buffers), with the +15% Map Room 2 camp bonus, and on a Tribe
+    Plunder weekend (+30% on top). The alliance loot star (up to +15%), the low-level loot bonus
+    (below player level 20) and storage hits during the fight (a few thousand) can add more.
+
+    | Camp | Fee | Most putty (+15%) | On Plunder (+30%) |
+    | --- | --- | --- | --- |
+    | Legionnaire 25 | 2.0M | 1,387,326 | 1,803,523 |
+    | Legionnaire 29 | 2.0M | 1,847,901 | 2,402,271 |
+    | Legionnaire 33 | 2.5M | 2,305,010 | 2,996,513 |
+    | Legionnaire 37 | 3.0M | 2,657,012 | 3,454,115 |
+    | Legionnaire 41 | 3.5M | 2,993,709 | 3,891,821 |
+    | Kozu 30 | 2.5M | 2,307,837 | 3,000,188 |
+    | Kozu 34 | 2.5M | 2,764,718 | 3,594,133 |
+    | Kozu 38 | 3.0M | 3,225,034 | 4,192,544 |
+    | Kozu 42 | 3.5M | 3,577,239 | 4,650,410 |
+    | Abunakki 27 | 2.0M | 2,422,822 | 3,149,668 |
+    | Abunakki 31 | 2.5M | 2,994,501 | 3,892,851 |
+    | Abunakki 35 | 3.0M | 3,457,752 | 4,495,077 |
+    | Abunakki 39 | 3.0M | 3,799,072 | 4,938,793 |
+    | Abunakki 43 | 3.5M | 4,029,072 | 5,237,793 |
+    | Dreadnaut 28 | 2.0M | 2,187,944 | 2,844,327 |
+    | Dreadnaut 32 | 2.5M | 2,648,517 | 3,443,072 |
+    | Dreadnaut 36 | 3.0M | 3,114,339 | 4,048,640 |
+    | Dreadnaut 40 | 3.5M | 3,510,552 | 4,563,717 |
+    | Dreadnaut 44 | 3.5M | 3,795,752 | 4,934,477 |
 
   The other levers, in case playtests show camps falling too fast:
 
@@ -257,7 +280,7 @@ champion) in order. Proposed defaults:
 | --- | --- | --- | --- |
 | Per-user auto-attacks per minute | 10 `[PLACEHOLDER]` | 4-20 | Server CPU (section 6.3), not balance |
 | Auto-attacks in flight per user | 1 | 1 | One battle at a time, as by hand |
-| Fee per auto-attack | The putty table above (owner, 20 Nov 2026) | By camp level | A Repeat attack never gains putty on a normal day |
+| Fee per auto-attack | The putty table above (owner, 20 Nov 2026) | By camp level | A convenience fee for an automated attack |
 | "Until destroyed" attacks per request | 5 `[PLACEHOLDER]` | 3-10 | Bounds unattended spending |
 | Stall threshold for "until destroyed" | +2% damage `[PLACEHOLDER]` | 1-5% | Stops a plan that has stopped working |
 

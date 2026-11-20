@@ -12,13 +12,11 @@
  * - The pool has to cover the fee and the Catapult's putty shots together.
  * - Hand-played attacks stay free. Twigs, pebbles and goo still come in as loot.
  *
- * The promise "a Repeat attack never gains putty" holds on a normal day: every
- * band's fee is above the most putty a full destroy of a fresh camp of that
- * band can bank with the Map Room 2 camp bonus (`repeatFee.test.ts`). The
- * thinnest margin is Abunakki 31 (2,994,501 against 3,000,000). On a Tribe
- * Plunder weekend (+30%), with an alliance's loot star (up to +15%) or the
- * low-level loot bonus (below player level 20), some camps can still pay a
- * little putty over the fee; the owner accepted that (20 Nov 2026).
+ * Not a promise that a Repeat attack always loses putty (owner, 20 Nov 2026):
+ * a full destroy of a fresh camp can bank more putty than its fee (the
+ * per-camp numbers are in `docs/design/auto-attack.md` §5.2). It is a
+ * convenience fee that weighs most on the easy low-level camps, and players
+ * still need their putty for outpost kits.
  */
 
 /** One band of camp levels and its fee in putty. */
@@ -28,12 +26,12 @@ export interface RepeatFeeBand {
   readonly putty: number;
 }
 
-/** The owner's table (20 Nov 2026), lowest band first. */
+/** The owner's table (20 Nov 2026, second version), lowest band first. */
 export const REPEAT_FEE_BANDS: readonly RepeatFeeBand[] = [
-  { from: 25, to: 29, putty: 2_500_000 },
-  { from: 30, to: 34, putty: 3_000_000 },
-  { from: 35, to: 39, putty: 4_000_000 },
-  { from: 40, to: 44, putty: 4_500_000 },
+  { from: 25, to: 29, putty: 2_000_000 },
+  { from: 30, to: 34, putty: 2_500_000 },
+  { from: 35, to: 39, putty: 3_000_000 },
+  { from: 40, to: 44, putty: 3_500_000 },
 ];
 
 /**
