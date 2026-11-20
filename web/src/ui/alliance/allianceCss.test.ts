@@ -237,13 +237,13 @@ describe("alliance.css: a short screen gives the tab its room (beta 8)", () => {
   });
 });
 
-describe("alliance.css: Recent trades row on one baseline (owner, 19 Nov 2026)", () => {
+describe("alliance.css: today's swap on one baseline (owner, 19 + 20 Nov 2026)", () => {
   it("lines the pieces up on their text baseline, not on the icons", () => {
-    const line = rulesFor(".trade-recent__line").join("\n");
+    const line = rulesFor(".trade-done").join("\n");
     expect(line).toMatch(/display:\s*flex/);
     expect(line).toMatch(/align-items:\s*baseline/);
     // An inline-flex amount took its baseline from the icon, so "90K" rode high.
-    const amount = rulesFor(".trade-recent__amount").join("\n");
+    const amount = rulesFor(".trade-done__amount").join("\n");
     expect(amount).not.toMatch(/inline-flex/);
     expect(amount).toMatch(/white-space:\s*nowrap/);
   });
@@ -261,6 +261,10 @@ describe("alliance.css: Recent trades row on one baseline (owner, 19 Nov 2026)",
       }
       blocks.push(css.slice(open, i - 1));
     }
-    expect(rulesFor(".trade-recent__sep", blocks.join("\n")).join("\n")).toMatch(/display:\s*none/);
+    expect(rulesFor(".trade-done__sep", blocks.join("\n")).join("\n")).toMatch(/display:\s*none/);
+  });
+
+  it("has no Recent trades rules left", () => {
+    expect(css).not.toMatch(/trade-recent/);
   });
 });

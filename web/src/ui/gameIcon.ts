@@ -132,6 +132,11 @@ import { writeAmount, type AmountChange } from "./amountChange";
  * brown outline and no white rim (`friendprevclassic`, `friendnextclassic`).
  * Gold reads on both the slate Modern disc and the brown Classic one. These
  * four also ship 96 and 128 px files for the 45 px dock picture on a 3x phone.
+ *
+ * The Trade tab's "−10% on the way" (owner, 20 Nov 2026, pick D over the
+ * gravestone): the Flash "Mogul" banknote (`assets/popups/mogul.v2.png`) made
+ * into an icon, brighter with a white rim (`tradetax`), and softer with a thin
+ * brown outline in the Classic look (`tradetaxclassic`).
  */
 export const GAME_ICONS = {
   health: "Health",
@@ -205,6 +210,8 @@ export const GAME_ICONS = {
   friendnext: "Next friend",
   friendprevclassic: "Previous friend",
   friendnextclassic: "Next friend",
+  tradetax: "Lost on the way",
+  tradetaxclassic: "Lost on the way",
 } as const satisfies Record<string, string>;
 
 export type GameIconName = keyof typeof GAME_ICONS;

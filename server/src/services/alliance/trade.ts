@@ -6,8 +6,6 @@ import {
   TRADE_ASKS_PER_DAY,
   TRADE_CAP_SHARE,
   TRADE_LOSS,
-  TRADE_RECENT_SECONDS,
-  TRADE_RECENT_SWAPS,
   TRADE_REQUEST_SECONDS,
 } from "../../config/AllianceConfig.js";
 import { catchUpLockedRow } from "../../controllers/yard/yardAction.js";
@@ -316,35 +314,14 @@ const readStorage = async (em: EntityManager, userids: number[]): Promise<Map<nu
 };
 
 /**
- * Of an alliance's trade receipts (newest first), those of the last `swaps`
- * trades. A swap is two receipts, one each way, written in the same second;
- * an old one-way send is one. Receipts are grouped by that second and the
- * pair of players, so a swap counts once whichever order its rows come in.
- */
-export const lastTrades = <R extends { from_userid: number | string; to_userid: number | string; created_at: number | string }>(
-  rows: R[],
-  swaps: number
-): R[] => {
-  const keyOf = (row: R) => {
-    const [a, b] = [Number(row.from_userid), Number(row.to_userid)].sort((x, y) => x - y);
-    return `${Number(row.created_at)}:${a}:${b}`;
-  };
-  const keep: string[] = [];
-  for (const row of rows) {
-    const key = keyOf(row);
-    if (!keep.includes(key) && keep.length < swaps) keep.push(key);
-  }
-  return rows.filter((row) => keep.includes(keyOf(row)));
-};
-
-/**
  * `GET /alliance/trade`: the Trade tab. Today's swap left, the caller's open
- * request, mates' open requests, the last 2 swaps of the last 48 hours and the
- * caller's storage. A taken request leaves the list at once and shows under
- * Recent trades instead (owner, Review Desk 19 Nov 2026). `myTaken` holds the
- * ids of the caller's own requests a mate took in the last day, so the yard
- * can fetch what arrived once. Gives back what run-out requests in the
- * alliance hold first.
+ * request, mates' open requests and the caller's storage. A taken request
+ * leaves the list at once (owner, Review Desk 19 Nov 2026). `swap` is the
+ * caller's swap of this UTC day, for their own box: who with, what they got,
+ * and whether a mate took their request or they took a mate's (owner, 20 Nov
+ * 2026: no "Recent trades" list). `myTaken` holds the ids of the caller's own
+ * requests a mate took in the last day, so the yard can fetch what arrived
+ * once. Gives back what run-out requests in the alliance hold first.
  */
 export const tradeView = async (em: EntityManager, userid: number, now: number) => {
   const [me] = await em.execute<{ alliance_id: number | null }[]>(`SELECT alliance_id FROM bym."user" WHERE userid = ?`, [userid]);
@@ -414,19 +391,17 @@ export const tradeView = async (em: EntityManager, userid: number, now: number) 
     });
   const mine = requests.find((row) => row.userid === userid && row.status === "open") ?? null;
 
-  // Two receipts per swap; a few spare rows so a swap is never cut in half.
-  const receipts = await em.execute<
-    { from_userid: number; to_userid: number; from_name: string; to_name: string; arrived: unknown; created_at: number }[]
-  >(
-    `SELECT tr.from_userid, tr.to_userid, f.username AS from_name, t.username AS to_name, tr.arrived, tr.created_at
+  // The caller's swap today: the one receipt to them (one a UTC day, a unique
+  // index). Its sender is the mate; the request's owner says who posted.
+  const [got] = await em.execute<{ partner: string | null; arrived: unknown; asker: number | string | null }[]>(
+    `SELECT f.username AS partner, tr.arrived, r.userid AS asker
        FROM bym.alliance_trade tr
-       JOIN bym."user" f ON f.userid = tr.from_userid
-       JOIN bym."user" t ON t.userid = tr.to_userid
-      WHERE tr.alliance_id = ? AND tr.created_at > ?
-      ORDER BY tr.created_at DESC, tr.id DESC LIMIT ?`,
-    [allianceId, now - TRADE_RECENT_SECONDS, TRADE_RECENT_SWAPS * 2 + 4]
+       LEFT JOIN bym."user" f ON f.userid = tr.from_userid
+       LEFT JOIN bym.alliance_trade_request r ON r.id = tr.request_id
+      WHERE tr.to_userid = ? AND tr.day = ?::date
+      ORDER BY tr.created_at DESC, tr.id DESC LIMIT 1`,
+    [userid, utcDay(now)]
   );
-  const recent = lastTrades(receipts, TRADE_RECENT_SWAPS);
   const taken = await em.execute<{ id: number }[]>(
     `SELECT id FROM bym.alliance_trade_request WHERE userid = ? AND status = 'done' AND closed_at > ?`,
     [userid, now - 86_400]
@@ -449,12 +424,14 @@ export const tradeView = async (em: EntityManager, userid: number, now: number) 
     myRequest: mine,
     requests: requests.filter((row) => row !== mine),
     myTaken: taken.map((row) => Number(row.id)),
-    recent: recent.map((row) => ({
-      from: row.from_name,
-      to: row.to_name,
-      arrived: nonZero(amountsOf(parseJson(row.arrived))),
-      at: Number(row.created_at),
-    })),
+    swap: got
+      ? {
+          with: got.partner ?? "",
+          got: nonZero(amountsOf(parseJson(got.arrived))),
+          /** True when a mate took the caller's request; false when the caller took theirs. */
+          taken: got.asker !== null && Number(got.asker) === userid,
+        }
+      : null,
   };
 };
 

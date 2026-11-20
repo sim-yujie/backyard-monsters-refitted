@@ -47,7 +47,7 @@ const view = (extra: Partial<TradeView> = {}): TradeView => ({
   me: storage(5_000_000),
   myRequest: null,
   requests: [request()],
-  recent: [{ from: "Mira", to: "Thornback", arrived: { r4: 800_000 }, at: 1_000_000 - 7_200 }],
+  swap: null,
   ...extra,
 });
 
@@ -164,25 +164,53 @@ describe("Trade tab", () => {
     expect(host.said.at(-1)).toBe(TRADE_TEXT.swapped("PebbleKing", `${text} ${resourceName("r1")}`));
   });
 
-  it("pairs reciprocal recent receipts by time and players before limiting to two swaps", async () => {
-    await mount(withView({ recent: [
-      { from: "A", to: "B", arrived: { r1: 1_800_000 }, at: 999_988 },
-      { from: "C", to: "D", arrived: { r2: 900_000 }, at: 999_988 },
-      { from: "B", to: "A", arrived: { r3: 1_350_000 }, at: 999_988 },
-      { from: "D", to: "C", arrived: { r4: 900_000 }, at: 999_988 },
-      { from: "E", to: "F", arrived: { r1: 500 }, at: 999_980 },
-    ] }));
-    const lines = [...document.querySelectorAll(".trade-recent__line")];
-    expect(lines.map((line) => line.textContent)).toEqual([
-      "A got 1.35M · B got 1.8M · 12s ago",
-      "C got 900K · D got 900K · 12s ago",
-    ]);
-    expect(lines[0]!.querySelectorAll(".res-icon")).toHaveLength(2);
+  it("after a swap your box says who took your request and what arrived (owner, 20 Nov 2026)", async () => {
+    await mount(withView({ today: { ...today, swapsLeft: 0 }, swap: { with: "agenttester", got: { r2: 63_000 }, taken: true } }));
+    const line = document.querySelector<HTMLElement>(".trade-done")!;
+    expect(line.dataset["side"]).toBe("taken");
+    expect(line.textContent).toBe(`${TRADE_TEXT.takenBy("agenttester")}·+63K·${TRADE_TEXT.newDayIn("6h")}`);
+    expect(line.querySelectorAll(".res-icon")).toHaveLength(1);
+    expect(line.querySelector(".trade-done__got")?.getAttribute("aria-label")).toBe(`+63K ${resourceName("r2")}`);
+    expect(document.querySelector(".trade-status")).toBeNull();
+    expect(document.querySelector(".trade-new")).toBeNull();
   });
 
-  it("keeps an unpaired recent receipt", async () => {
+  it("the mate who accepted sees who they swapped with and what arrived", async () => {
+    await mount(withView({ today: { ...today, swapsLeft: 0 }, swap: { with: "yardtester", got: { r1: 1_996_000 }, taken: false } }));
+    const line = document.querySelector<HTMLElement>(".trade-done")!;
+    expect(line.dataset["side"]).toBe("took");
+    expect(line.querySelector(".trade-done__who")?.textContent).toBe(TRADE_TEXT.swappedWith("yardtester"));
+    expect(line.querySelector(".trade-done__num")?.textContent).toBe("+1.99M");
+  });
+
+  it("an open request of your own keeps its card; today's swap gets its own card above it", async () => {
+    await mount(withView({
+      today: { ...today, swapsLeft: 0 },
+      myRequest: request({ userid: 1, username: "Me", mine: true, ready: false }),
+      requests: [],
+      swap: { with: "Tina", got: { r4: 90 }, taken: false },
+    }));
+    const titles = [...document.querySelectorAll(".alliance-card__title")].map((title) => title.textContent);
+    expect(titles).toEqual([TRADE_TEXT.todaySwap, TRADE_TEXT.yourRequest, TRADE_TEXT.requests]);
+    const line = document.querySelector(".trade-done")!;
+    expect(line.closest(".trade-card")?.querySelector(".trade-request--mine")).toBeNull();
+    expect(line.textContent).toBe(`${TRADE_TEXT.swappedWith("Tina")}·+90`);
+    expect(document.querySelector(".trade-request__why")?.textContent).toBe(TRADE_TEXT.block.mineWaits("6h"));
+  });
+
+  it("−10% on the way shows the banknote, not the Monsters lost gravestone (owner, 20 Nov 2026)", async () => {
     await mount(fakeApi());
-    expect(document.querySelector(".trade-recent__line")?.textContent).toBe(`Mira gave Thornback 800K ${resourceName("r4")} · 2h ago`);
+    const icons = [...document.querySelectorAll<HTMLElement>(".trade-today .game-icon")].map((icon) => icon.dataset["icon"]);
+    expect(icons).toEqual(["income", "time", "tradetax"]);
+  });
+
+  it("no Recent trades section any more (owner, 20 Nov 2026)", async () => {
+    await mount(fakeApi());
+    expect(document.querySelector(".trade-recent")).toBeNull();
+    expect([...document.querySelectorAll(".alliance-card__title")].map((title) => title.textContent)).toEqual([
+      TRADE_TEXT.yourRequest,
+      TRADE_TEXT.requests,
+    ]);
   });
 
   it("uses the elapsed Today countdown in all daily status lines", async () => {
@@ -220,16 +248,11 @@ describe("Trade tab", () => {
     expect(why.textContent).toBe(words);
   });
 
-  it("a taken request leaves Mates' requests at once (owner, 19 Nov): it shows under Recent trades instead", async () => {
+  it("a taken request leaves Mates' requests at once (owner, 19 Nov)", async () => {
     await mount(withView({ requests: [request({ status: "done", taken_by: "Tina" })] }));
     expect(document.querySelector('.trade-request[data-request="7"]')).toBeNull();
     expect(acceptButton()).toBeNull();
     expect(document.querySelector(".trade-requests")?.textContent).toBe(TRADE_TEXT.noRequests);
-  });
-
-  it("no recent swaps in 48 h: No trades yet", async () => {
-    await mount(withView({ recent: [] }));
-    expect(document.querySelector(".trade-recent")?.textContent).toBe(TRADE_TEXT.noRecent);
   });
 
   it("no requests: one short line", async () => {

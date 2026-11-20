@@ -2401,8 +2401,7 @@
   gap: var(--space-2);
 }
 
-.trade-requests,
-.trade-recent {
+.trade-requests {
   display: flex;
   flex-direction: column;
   gap: var(--space-2);
@@ -2521,11 +2520,17 @@
   white-space: nowrap;
 }
 
-/* beta 8 (owner, 19 Nov): one row, one baseline. Whole pieces wrap, never a
-   lone dot; names, amounts and the smaller time share the text baseline, and
-   each painted icon is centred on its digits (`.res-icon` in ui.css). */
-.trade-recent__line {
+/* Today's swap in the own box (owner, 20 Nov 2026; replaced Recent trades):
+   one row on one baseline. Whole pieces wrap, never a lone dot; names,
+   amounts and the time share the text baseline, and each painted icon is
+   centred on its digits (`.res-icon` in ui.css). */
+.trade-ask-row {
+  container-type: inline-size;
+}
+
+.trade-done {
   display: flex;
+  flex: 1 1 100%;
   flex-wrap: wrap;
   align-items: baseline;
   column-gap: 6px;
@@ -2535,35 +2540,62 @@
   line-height: 1.5;
 }
 
-.trade-recent__sep {
+.trade-done__who {
+  min-width: 0;
+  font-weight: 700;
+  overflow-wrap: anywhere;
+}
+
+.trade-done__sep {
   color: var(--colour-text-muted);
 }
 
-/* The stacked phone row (below) also wherever the card itself is narrow, such
-   as an iPad in Split View: two 16-character names need about 570 px on one
-   line, and a wrap there would leave a dot at a line's end. */
-.trade-recent {
-  container-type: inline-size;
+/* Inline, not inline-flex: an inline-flex group takes its baseline from the
+   icon, so the number would ride above the name (owner, 19 Nov). */
+.trade-done__got,
+.trade-done__amount {
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
 }
 
-@container (max-width: 600px) {
-  .trade-recent__side:first-child {
+/* What arrived, green like "You get" (`.trade-swap__in`). */
+.trade-done__num {
+  color: var(--colour-gain);
+}
+
+.trade-done__amount + .trade-done__amount {
+  margin-left: 0.4em;
+}
+
+.trade-done__amount .res-icon {
+  width: 20px;
+  margin-right: 4px;
+}
+
+.trade-done__day {
+  color: var(--colour-text-muted);
+  white-space: nowrap;
+}
+
+.trade-done__day .game-icon {
+  margin-right: 4px;
+  vertical-align: -3px;
+}
+
+/* A narrow card (a phone, an iPad in Split View): the name on its own line,
+   what arrived under it and the new-day time at the right end, no dots. */
+@container (max-width: 520px) {
+  .trade-done__who {
     flex-basis: 100%;
   }
 
-  .trade-recent__sep {
+  .trade-done__sep {
     display: none;
   }
 
-  .trade-recent__ago {
+  .trade-done__day {
     margin-left: auto;
   }
-}
-
-.trade-recent__ago {
-  color: var(--colour-text-muted);
-  font-size: var(--text-xs);
-  white-space: nowrap;
 }
 
 .trade-sheet {
@@ -3189,24 +3221,6 @@
   gap: 4px;
 }
 
-/* Inline, not inline-flex: an inline-flex group took its baseline from the
-   icon, so "90K" rode above the names (owner, 19 Nov). The icon and its
-   number never part. */
-.trade-recent__got,
-.trade-recent__amount {
-  white-space: nowrap;
-  font-variant-numeric: tabular-nums;
-}
-
-.trade-recent__amount + .trade-recent__amount {
-  margin-left: 0.4em;
-}
-
-.trade-recent__amount .res-icon {
-  width: 20px;
-  margin-right: 4px;
-}
-
 @media (pointer: coarse) {
   .trade-new,
   .trade-request__act,
@@ -3221,18 +3235,17 @@
 }
 
 @media (max-width: 480px) {
-  /* beta 8 (owner, 19 Nov; astra): a phone stacks one receiver per line and
-     puts the time at the right end, with no dots, so none is left at a
-     line's end; with long names the time takes its own line. */
-  .trade-recent__side:first-child {
+  /* beta 8 (owner, 20 Nov): today's swap stacks on a phone, also where
+     container queries are missing (older Safari). */
+  .trade-done__who {
     flex-basis: 100%;
   }
 
-  .trade-recent__sep {
+  .trade-done__sep {
     display: none;
   }
 
-  .trade-recent__ago {
+  .trade-done__day {
     margin-left: auto;
   }
 
@@ -3301,7 +3314,8 @@
     gap: 4px;
   }
 
-  .trade-status {
+  .trade-status,
+  .trade-done {
     font-size: 13px;
     line-height: 1.3;
   }

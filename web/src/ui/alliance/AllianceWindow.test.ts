@@ -963,7 +963,7 @@ describe("AllianceWindow: Trade sheet Back, then another tab (lead, 11 Nov)", ()
             me: storage,
             myRequest: null,
             requests: [],
-            recent: [],
+            swap: null,
           },
         }),
       ),

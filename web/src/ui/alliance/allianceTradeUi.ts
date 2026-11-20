@@ -6,8 +6,10 @@ import {
   type TradeAmounts,
   type TradeKey,
   type TradeRequest,
+  type TradeSwapToday,
   type TradeView,
 } from "@/api/allianceTrade";
+import { classicLook } from "@/game/classicLook";
 import { acceptBlock, arriveFor, carryCap, postCap, roomOf, type AcceptBlock } from "@/game/alliance/tradeRules";
 import { formatAmount, formatCountdown, formatShort } from "@/ui/format";
 import { make } from "@/ui/friends/rows";
@@ -21,7 +23,8 @@ import { resourceIcon, resourceName } from "@/ui/resourceIcon";
  * - the tab: Today (swap left, new day, −10%), your request (what you give →
  *   what you get, Cancel) or New request, mates' requests each with one
  *   Accept that shows what you get (greyed with the reason when it cannot
- *   go), the last 2 trades, the rules in one line;
+ *   go), the rules in one line. After the day's swap the own box says who
+ *   with and what arrived (owner, 20 Nov 2026; no Recent trades list);
  * - New request: what you give (one resource), what you get (another), the
  *   amount (500K / 1M / Most or typed, up to 10% of your storage), the swap
  *   with the 10% shown, Post. What you give is held by the request until a
@@ -53,12 +56,13 @@ export const TRADE_TEXT = {
   accept: "Accept",
   /** A request's swap, read out: "You give 1,000 Goo, you get 900 Twigs". */
   swapLabel: (give: string, get: string) => `You give ${give}, you get ${get}`,
-  recent: "Recent trades",
-  noRecent: "No trades yet.",
-  gave: (from: string, to: string, what: string) => `${from} gave ${to} ${what}`,
-  ago: (time: string) => `${time} ago`,
-  /** One side of a swap in Recent trades: "agenttester got [goo] 90K". */
-  got: "got",
+  /** Today's swap in your own box (owner, 20 Nov 2026): a mate took your request… */
+  takenBy: (name: string) => `Taken by ${name}`,
+  /** …or you took theirs. */
+  swappedWith: (name: string) => `Swapped with ${name}`,
+  newDayIn: (time: string) => `new day in ${time}`,
+  /** Its own card when the player also has an open request. */
+  todaySwap: "Today's swap",
   hint: "48 h requests · 1 open · 3 posts a day · 1 swap a day · max 10% of storage",
   back: "Back",
   post: "Post",
@@ -75,7 +79,8 @@ export const TRADE_TEXT = {
   block: {
     traded: (time: string) => `1 swap a day · new day in ${time}`,
     mateTraded: (name: string) => `${name} swapped today: tomorrow`,
-    mineWaits: (time: string) => `You swapped today · open again in ${time}`,
+    // astra (20 Nov): say what waits, not that you swapped (the card above says so).
+    mineWaits: (time: string) => `Mates can accept it in ${time}`,
     short: (need: string, what: string, held: string) => `Need ${need} ${what} · you have ${held}`,
     // Round 2 (astra): say it limits what you GIVE, so "max" is not read against Accept's "+".
     overCap: (amount: string) => `You give max ${amount} (10% of your storage)`,
@@ -158,6 +163,41 @@ const swap = (out: { key: TradeKey; n: number }, back: { key: TradeKey; n: numbe
 const typed = (value: string): number => {
   const digits = value.replace(/[^\d]/g, "");
   return digits ? Math.min(Number(digits), 1_000_000_000) : 0;
+};
+
+/**
+ * Today's swap in the reader's own box (owner, 20 Nov 2026; replaces Recent
+ * trades): "Taken by agenttester · [pebbles] +63K · [time] new day in 23h".
+ * Whole pieces wrap, an icon never leaves its number, and a narrow card puts
+ * the name on its own line with no dots, so none is left at a line's end.
+ */
+const doneLine = (done: TradeSwapToday, tail: string | null): HTMLElement => {
+  const line = make("p", "trade-done");
+  line.dataset["side"] = done.taken ? "taken" : "took";
+  const dot = () => {
+    const sep = make("span", "trade-done__sep", "·");
+    sep.setAttribute("aria-hidden", "true");
+    return sep;
+  };
+  line.append(make("span", "trade-done__who", done.taken ? TRADE_TEXT.takenBy(done.with) : TRADE_TEXT.swappedWith(done.with)));
+  const keys = TRADE_KEYS.filter((key) => (done.got[key] ?? 0) > 0);
+  if (keys.length > 0) {
+    const got = make("span", "trade-done__got");
+    got.setAttribute("role", "img");
+    got.setAttribute("aria-label", `+${amountsWords(done.got)}`);
+    for (const key of keys) {
+      const group = make("span", "trade-done__amount");
+      group.append(resourceIcon(key, { decorative: true }), make("span", "trade-done__num", `+${tradeShort(done.got[key] ?? 0)}`));
+      got.append(group);
+    }
+    line.append(dot(), got);
+  }
+  if (tail) {
+    const day = make("span", "trade-done__day");
+    day.append(gameIcon("time", { size: 16, decorative: true }), make("span", "", tail));
+    line.append(dot(), day);
+  }
+  return line;
 };
 
 /** Why Accept is off: an icon and a few words. */
@@ -301,7 +341,8 @@ export class TradeTab {
     today.append(
       stat(gameIcon("income", { size: 24, decorative: true }), String(view.today.swapsLeft), `${view.today.swapsLeft === 1 ? TRADE_TEXT.swap : TRADE_TEXT.swaps} ${TRADE_TEXT.left}`, view.today.swapsLeft === 0),
       stat(gameIcon("time", { size: 24, decorative: true }), this.newDay(view), TRADE_TEXT.newDay),
-      stat(gameIcon("lost", { size: 24, decorative: true }), TRADE_TEXT.lossShort, TRADE_TEXT.loss.replace("−10% ", "")),
+      // The banknote, not the gravestone (owner, 20 Nov 2026), painted for each look.
+      stat(gameIcon(classicLook() ? "tradetaxclassic" : "tradetax", { size: 24, decorative: true }), TRADE_TEXT.lossShort, TRADE_TEXT.loss.replace("−10% ", "")),
     );
     nodes.push(today);
 
@@ -316,11 +357,16 @@ export class TradeTab {
         button(TRADE_TEXT.cancel, "btn--outline trade-request__act", () => void this.cancel()),
       );
       if (!mine.ready) row.append(blockLine("mateTraded", mine, view, this.newDay(view), true));
+      // Posted, then took a mate's request the same day: that swap gets its own card
+      // above, so it is not read as part of the open request (astra, 20 Nov).
+      if (view.swap) nodes.push(card(TRADE_TEXT.todaySwap, doneLine(view.swap, null)));
       nodes.push(card(TRADE_TEXT.yourRequest, row, make("p", "trade-note trade-note--small", TRADE_TEXT.held)));
     } else {
       const traded = view.today.swapsLeft === 0;
       const box = make("div", "trade-ask-row");
-      if (traded || view.today.postsLeft === 0) {
+      if (traded && view.swap) {
+        box.append(doneLine(view.swap, TRADE_TEXT.newDayIn(this.newDay(view))));
+      } else if (traded || view.today.postsLeft === 0) {
         const line = make("p", "trade-note trade-status");
         line.append(gameIcon("time", { size: 16, decorative: true }), make("span", "", traded ? TRADE_TEXT.tradedToday(this.newDay(view)) : TRADE_TEXT.postsUsed));
         box.append(line);
@@ -338,7 +384,7 @@ export class TradeTab {
     }
 
     // Mates' requests: each with what you give, what you get, and Accept. A taken
-    // request leaves the list at once and shows under Recent trades (owner, 19 Nov).
+    // request leaves the list at once (owner, 19 Nov); each side's own box shows it.
     const list = make("div", "trade-requests");
     list.setAttribute("role", "list");
     const open = view.requests.filter((request) => request.status === "open");
@@ -346,53 +392,6 @@ export class TradeTab {
     if (open.length === 0) list.append(make("p", "trade-note", TRADE_TEXT.noRequests));
     nodes.push(card(TRADE_TEXT.requests, list));
 
-    // Recent trades.
-    const recent = make("div", "trade-recent");
-    // beta 8 (astra): pair reciprocal receipts before limiting the list to two swaps.
-    const used = new Set<number>();
-    for (const [index, line] of view.recent.entries()) {
-      if (used.has(index)) continue;
-      if (recent.childElementCount >= 2) break;
-      used.add(index);
-      const partnerIndex = view.recent.findIndex((other, i) => !used.has(i) && other.at === line.at && other.from === line.to && other.to === line.from);
-      const partner = view.recent[partnerIndex];
-      // beta 8 (owner, 19 Nov): one baseline for names, amounts and the time. The
-      // row is a wrapping flex line of whole pieces ("A got [icon] 90K", "·",
-      // "B got [icon] 90K", "·", "2m ago"); text inside a piece sits on its own
-      // baseline, so the painted icons are centred on the digits by `.res-icon`.
-      // A phone stacks one receiver per line and drops the dot between them.
-      const row = make("p", "trade-recent__line");
-      const dot = () => {
-        const sep = make("span", "trade-recent__sep", " · ");
-        sep.setAttribute("aria-hidden", "true");
-        return sep;
-      };
-      if (partner) {
-        used.add(partnerIndex);
-        // Round 2 (astra): who got what, so the direction is never guessed.
-        // A long name may take its own line; "got [icon] 90K" stays together.
-        const side = (name: string, amounts: Partial<TradeAmounts>) => {
-          const piece = make("span", "trade-recent__side");
-          const got = make("span", "trade-recent__got", `${TRADE_TEXT.got} `);
-          for (const key of TRADE_KEYS) {
-            if ((amounts[key] ?? 0) > 0) {
-              const group = make("span", "trade-recent__amount");
-              group.append(resourceIcon(key, { decorative: true }), make("span", "trade-recent__num", tradeShort(amounts[key] ?? 0)));
-              got.append(group);
-            }
-          }
-          piece.append(make("span", "trade-recent__who", `${name} `), got);
-          return piece;
-        };
-        row.append(side(line.from, partner.arrived), dot(), side(line.to, line.arrived));
-      } else {
-        row.append(make("span", "trade-recent__side", TRADE_TEXT.gave(line.from, line.to, amountsWords(line.arrived))));
-      }
-      row.append(dot(), make("span", "trade-recent__ago", TRADE_TEXT.ago(formatCountdown(Math.max(1, now - line.at)).replace(/ \d+[ms]$/, ""))));
-      recent.append(row);
-    }
-    if (view.recent.length === 0) recent.append(make("p", "trade-note", TRADE_TEXT.noRecent));
-    nodes.push(card(TRADE_TEXT.recent, recent));
     nodes.push(make("p", "trade-note trade-hint", TRADE_TEXT.hint));
     return nodes;
   }
