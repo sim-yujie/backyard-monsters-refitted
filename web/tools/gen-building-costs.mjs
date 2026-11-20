@@ -607,6 +607,20 @@ const INFERNO_YARD_PLANNER = 10;
 }
 
 /**
+ * The General Store (12) is buildable in the Inferno: owner, 20 Nov 2026
+ * (patch 8.1), so the Inferno has a way into the Shop, whose Open Shop button
+ * is the Store's. Flash `block`ed it there (`INFERNOYARDPROPS.as:978`); its
+ * row is kept as it is: 1,080 Bone and 720 Coal, 10 seconds, Under Hall 1,
+ * one at every Under Hall level.
+ */
+const INFERNO_GENERAL_STORE = 12;
+{
+  const store = infernos.find((one) => one.id === INFERNO_GENERAL_STORE);
+  if (!store) throw new Error(`INFERNOYARDPROPS.as: no General Store (${INFERNO_GENERAL_STORE}) entry`);
+  store.blocked = false;
+}
+
+/**
  * The Incubator Control Centre (16) is buildable in the Inferno: owner,
  * 2 Nov 2026 ("put it in game first for me to make a judgement call"). Flash
  * has an unused, `block`ed row for it (`INFERNOYARDPROPS.as:1289-1330`, the

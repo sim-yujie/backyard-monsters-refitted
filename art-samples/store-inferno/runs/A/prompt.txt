@@ -1,0 +1,19 @@
+Use your image generation tool (one call) to create a new image and save it as sample-new.png in the current folder. Do not write code and do not copy or composite pixels from the inputs.
+
+Paint the GENERAL STORE of Backyard Monsters: a giant MATCHBOOK standing on the ground like a small kiosk, as input 1 shows it: a boxy cover, its front face toward the lower left and its side face toward the lower right; on the front face a printed label reading MATCH BOOK in chunky pale letters on two lines, with a rounded triangular emblem (like a guitar pick, with a small dark hole and a thin string) above the words; on the side face two columns of three round spots, like dice spots; on top, a sloping roof of four long flat rounded strips side by side (paper matches lying across the box), held along the ridge by a folded metal STRIP with a row of small dark holes, and a crumpled tuft of torn paper sticking up behind it at the back; four thin LEGS with round flat foot pads lifting the box a little off the ground, one under each corner. Keep exactly this shape, these parts, their sizes and places, and the same camera.
+
+It is for the isometric strategy game Backyard Monsters (cartoony, colourful monster world). This copy stands in the INFERNO, the monsters' underground world of dark volcanic rock, bone and glowing lava, so only its COLOURS and MATERIALS change, to belong there beside the Inferno's own buildings.
+
+CAMERA: the isometric 3/4 view of input 1, seen from the front and above at about 35 degrees, NOT a straight side view and NOT mirrored. Every part where input 1 has it.
+
+Input 1, frames.png: the store as it is now on the surface (Modern look), blown up, on grey (1024x1024): design, camera, footprint and size. The new picture has the same silhouette, the same parts in the same places, and the same proportions. Read the small details from it.
+Input 2, style.png: the Modern look of the Inferno's own buildings in the same game (the Under Hall, the Resource Pod, the Bone Cruncher, the Magma Tower, the Housing Bunker): their materials and colours.
+
+THE SAME STORE, INFERNO COLOURS (most important): a player must instantly see it is the same General Store as input 1, recoloured and re-materialed for the Inferno. NOT a new design, nothing added or left out.
+
+COLOURS AND MATERIALS: CHARRED EMBER: the cover a deep scorched oxblood red, darkening to sooty black at its edges and corners as if singed; the label's letters a pale ash white, the emblem a glowing ember orange; the dice spots dark with a faint orange glow deep inside; the four roof strips (the matches) charcoal grey, glowing ember orange at their ends like smouldering match heads (a soft glow, no flames), the ridge strip blackened iron, the paper tuft ash grey; the legs and foot pads dark blackened iron with warm highlights.
+
+FINISH: the finish of input 1 and input 2 (the Modern look of the same game: clean stylised 3D renders): crisp, clean, smooth shading, small bevels catching the light, warm key light from the upper left, right-hand faces in medium shade (readable, not black), soft ambient occlusion in the creases, clean sharp edges, no thick black outline, no cel shading, no painterly brush strokes, no pixel art. Not neon, not over-saturated.
+
+Output: ONE image, 1024x1024, the store alone, complete and fully inside the image with margin, about the size it has in input 1.
+Background everywhere: flat pure green #00FF00, also in every gap between the legs and parts. No ground plane, no lava pool, no grass, no tile, no cast shadow on the ground, no grid lines, no extra text or labels besides MATCH BOOK on the front. The store itself must contain no bright pure green.

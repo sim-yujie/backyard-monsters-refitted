@@ -203,11 +203,13 @@ Buildable in the Inferno (`INFERNOYARDPROPS.as`, 135 ids; counts per Under Hall 
 | 132 | Magma Tower | 6 | from UH3 [0,0,0,1,2,2,3] |
 | 10 | Yard Planner | 1 | **[OWNER I17]** one per yard from UH3; 250,000 Bone + 250,000 Coal, 12 h (43,200 s), hp 16,000: Flash's own `INFERNOYARDPROPS.as` row, which Flash blocked |
 | 16 | Incubator Control Centre | 1 | **[OWNER, 2 Nov: in game for review; numbers PROPOSED]** one per yard from UH4; needs UH4 and two Incubators at level 3; 4,000,000 Bone + 4,000,000 Coal + 4,000,000 Sulfur, 0 Magma, 25 h (90,000 s), hp 64,000. See 2.5.1 |
+| 12 | General Store | 1 | **[OWNER, 20 Nov 2026, patch 8.1]** one per yard from UH1; 1,080 Bone + 720 Coal, 10 s, hp 4,000: Flash's own `INFERNOYARDPROPS.as:978` row, which Flash blocked. Its Open Shop button opens the Inferno Shop (Inferno workers). Classic: Flash's store; Modern: an original Codex Inferno shop (`web/tools/store-inferno/`) |
 | 127 | Inferno entrance | — | exit, not built |
 
-Blocked in the Inferno: flinger, map room, store building, cage/chamber, catapult, bunker,
+Blocked in the Inferno: flinger, map room, cage/chamber, catapult, bunker,
 laser, tesla and the other surface-only ids. (Flash also blocked the Yard Planner; I17 unblocks it,
-and the Incubator Control Centre, 2.5.1.)
+the Incubator Control Centre, 2.5.1, and the General Store, owner 20 Nov 2026: the store building is
+no longer blocked, so the Inferno has a way into the Shop.)
 
 #### 2.5.1 The Incubator Control Centre (proposed)
 

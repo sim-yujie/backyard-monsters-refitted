@@ -4,6 +4,7 @@ import { ClientSafeError } from "../../middleware/clientSafeError.js";
 import { storageCap } from "../base/economy/resourceBudget.js";
 import {
   BUILDABLE_TYPES,
+  buildableTypesOf,
   nextBuildingId,
   planBuild,
   planCancelBuild,
@@ -518,5 +519,52 @@ describe("build in the Inferno yard: the Incubator Control Centre", () => {
     save.buildingdata!["20"] = { id: 20, t: CONTROL_CENTRE, X: 250, Y: -350, l: 1 } as never;
     const [, data] = refusedWith(() => planBuild(save, { type: CONTROL_CENTRE, x: 250, y: 100 }, NOW));
     expect(data).toMatchObject({ reason: "limit", limit: { have: 1, allowed: 1 } });
+  });
+});
+
+/**
+ * The Inferno yard's General Store (owner, 20 Nov 2026, patch 8.1: the
+ * Inferno's way into the Shop): Flash's blocked row (`INFERNOYARDPROPS.as:978`)
+ * kept as it is: 1,080 Bone and 720 Coal, 10 seconds, Under Hall 1, one per
+ * yard at every Under Hall level.
+ */
+describe("build in the Inferno yard: the General Store", () => {
+  const STORE = 12;
+
+  /** An Inferno yard with its Under Hall at `underHall`. */
+  const inferno = (underHall: number): BuildSave => {
+    const save = yard({ type: "inferno" });
+    save.buildingdata!["1"] = { id: 1, t: HALL, X: -65, Y: -65, l: underHall } as never;
+    return save;
+  };
+
+  test("is in the Inferno's build menu", () => {
+    expect(buildableTypesOf("inferno").has(STORE)).toBe(true);
+  });
+
+  test("Under Hall 1: it starts, 10 seconds, 1,080 Bone and 720 Coal", () => {
+    const outcome = planBuild(inferno(1), { type: STORE, x: 250, y: -350 }, NOW);
+    expect(outcome.report).toMatchObject({
+      t: STORE,
+      seconds: 10,
+      cost: { r1: 1_080, r2: 720, r3: 0, r4: 0 },
+    });
+  });
+
+  test("only one", () => {
+    const save = inferno(6);
+    save.buildingdata!["20"] = { id: 20, t: STORE, X: 250, Y: -350, l: 1 } as never;
+    const [status, data] = refusedWith(() => planBuild(save, { type: STORE, x: 250, y: 100 }, NOW));
+    expect(status).toBe(409);
+    expect(data).toMatchObject({ reason: "limit", limit: { have: 1, allowed: 1 } });
+  });
+
+  test("no Under Hall (below level 1): 409 townHall {have 0, need 1}", () => {
+    // A hall saved at level 0 reads as level 1 (`levelOf`), so "below 1" is a yard without one.
+    const save = inferno(1);
+    delete save.buildingdata!["1"];
+    const [status, data] = refusedWith(() => planBuild(save, { type: STORE, x: 250, y: -350 }, NOW));
+    expect(status).toBe(409);
+    expect(data).toMatchObject({ reason: "townHall", townHall: { have: 0, need: 1 } });
   });
 });
