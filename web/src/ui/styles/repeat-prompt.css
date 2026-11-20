@@ -279,10 +279,10 @@
 }
 
 @media (max-height: 500px) {
-  /* astra, round 1: hide the note here so it adds no height on a phone
-     on its side. The fee's tooltip and accessible label still explain it. */
+  /* astra, round 2: on a phone on its side the note sits on the fee's own
+     row, after the amount, where there is room across, so it adds no line. */
   .repeat-prompt__fee-note {
-    display: none;
+    flex-basis: auto;
   }
 }
 

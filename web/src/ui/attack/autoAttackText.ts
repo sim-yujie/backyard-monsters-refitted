@@ -106,8 +106,12 @@ export const repeatRefusal = (answer: AutoAttackPlanResponse, context: "sheet" |
 
 /* ── Smart Repeat attack (owner, 16 Nov 2026) ─────────────────────────── */
 
-/** The refusal when the only thing short is putty for the fee (and the Catapult's putty). */
-export const NOT_ENOUGH_PUTTY = "Not enough putty for the fee.";
+/**
+ * The refusal when the only thing short is putty: the fee and the Catapult's
+ * putty shots together (astra, round 2: "for the fee" read as if the fee
+ * alone were too dear).
+ */
+export const NOT_ENOUGH_PUTTY = "Not enough putty.";
 
 /** The refusal when the army could be gathered but not housed in range. */
 export const NO_ROOM_TEXT = "Not enough Monster Housing in range.";

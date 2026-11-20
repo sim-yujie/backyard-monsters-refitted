@@ -159,8 +159,8 @@ export interface FeeShown {
 /**
  * astra, round 1: the putty pile and amount keep their normal colour.
  * A separate warning says how much is short, rounded up; the refusal keeps
- * its own list. The spending note hides on short screens to save height,
- * but the tooltip and screen reader keep the full explanation.
+ * its own list. The spending note goes under the row, or after the amount
+ * on a phone on its side (astra, round 2).
  */
 export const feeLine = ({ fee, short = 0 }: FeeShown): HTMLElement => {
   const line = el("section", `repeat-prompt__fee${short > 0 ? " repeat-prompt__fee--short" : ""}`);

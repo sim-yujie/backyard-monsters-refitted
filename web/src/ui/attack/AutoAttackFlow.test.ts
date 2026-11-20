@@ -656,7 +656,7 @@ describe("Repeat attack's putty fee (owner, 20 Nov 2026)", () => {
     const flow = new AutoAttackFlow({ baseid: BASEID, cell: CELL, modal, onWatch: vi.fn(), calls: calls(), now: () => 1_007_300 });
     await flow.start(answer({ fee: 3_000_000, missing: [{ kind: "fee", need: 3_010_000, have: 1_800_000 }] }));
     expect(button(modal, "Attack now")?.disabled).toBe(true);
-    expect(text(modal.querySelector(".auto-attack__refusal"))).toBe("Not enough putty for the fee.");
+    expect(text(modal.querySelector(".auto-attack__refusal"))).toBe("Not enough putty.");
     expect(text(modal.querySelector(".repeat-prompt__short--fee"))).toBe("1.3M short");
     // astra, round 1: the fee also shows the shortage, rounded up, beside its unchanged amount.
     expect(text(modal.querySelector(".repeat-prompt__fee-short"))).toBe("1.3M short");
@@ -682,7 +682,7 @@ describe("Repeat attack's putty fee (owner, 20 Nov 2026)", () => {
     button(modal, "Attack now")!.click();
     await settle();
     await settle();
-    expect(text(modal.querySelector(".auto-attack__refusal"))).toBe("Not enough putty for the fee.");
+    expect(text(modal.querySelector(".auto-attack__refusal"))).toBe("Not enough putty.");
     expect(text(modal.querySelector(".repeat-prompt__short--fee"))).toBe("1K short");
     expect(text(modal.querySelector(".repeat-prompt__fee-short"))).toBe("1K short");
   });
