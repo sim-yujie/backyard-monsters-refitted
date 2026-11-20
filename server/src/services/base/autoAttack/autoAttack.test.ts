@@ -109,7 +109,7 @@ const reset = () => {
     catapult: 2,
     buildingdata: {},
     outposts: [],
-    resources: { r1: 1_000_000, r2: 1_000_000, r3: 1_000_000, r4: 1_000_000 },
+    resources: { r1: 1_000_000, r2: 1_000_000, r3: 5_000_000, r4: 1_000_000 },
     monsters: { housed: { C1: 200 }, space: 400 },
     academy: { C1: { level: 3 } },
     champion: [{ t: 5, l: 5, hp: 62000, status: 0 }],
@@ -257,6 +257,11 @@ mock.module("../../../controllers/base/load/modes/baseModeAttack.js", () => ({
     if (!standIn) return realLoad.baseModeAttack(...args);
     await mint();
     if (mintRefuses) throw new Error("the attack load said no");
+    // Someone spends putty between the checks and the commit.
+    if (spendBeforeCommit) userSave.resources = { ...userSave.resources, r3: 0 };
+    // Repeat attack's fee, charged at the commit as the real load does it.
+    args[0].beforeCommit?.(userSave as never);
+    if (mintFailsAfterCommit) throw new Error("the attack session could not be written");
     camp.attackid = 4242;
     camp.attacks.push({ starttime: now() });
     store.set(
@@ -279,6 +284,10 @@ const runner = (await import(REAL.runner)) as typeof import("../combat/replayRun
 let slotFree = true;
 /** The attack load refuses after the checks (Smart Repeat attack's all-or-nothing). */
 let mintRefuses = false;
+/** The attack load fails after its commit (the session's write). */
+let mintFailsAfterCommit = false;
+/** The pool's putty is spent elsewhere after the checks, before the commit. */
+let spendBeforeCommit = false;
 mock.module("../combat/replayRunner.js", () => ({
   ...runner,
   reserveReplaySlot: async (...args: Parameters<typeof runner.reserveReplaySlot>) => {
@@ -297,6 +306,8 @@ beforeEach(() => {
   inRange = true;
   slotFree = true;
   mintRefuses = false;
+  mintFailsAfterCommit = false;
+  spendBeforeCommit = false;
   transactions = 0;
 });
 
@@ -336,14 +347,15 @@ const nothingWritten = () => {
   expect(flush).not.toHaveBeenCalled();
   expect(camp.attackid).toBe(0);
   expect(userSave.monsters.housed).toEqual({ C1: 200 });
-  expect(userSave.resources).toEqual({ r1: 1_000_000, r2: 1_000_000, r3: 1_000_000, r4: 1_000_000 });
+  expect(userSave.resources).toEqual({ r1: 1_000_000, r2: 1_000_000, r3: 5_000_000, r4: 1_000_000 });
   expect(store.has(autoAttackLockKey(ATTACKER))).toBe(false);
 };
 
 describe("runAutoAttack lands the plan", () => {
   test("monsters spent, bomb charged, loot banked, the camp's damage kept, and the result says so", async () => {
-    // Room in storage for the loot: no silos is a cap of 10,000, and twigs are empty.
-    userSave.resources = { r1: 0, r2: 1_000_000, r3: 0, r4: 0 };
+    // Room in storage for the loot: no silos is a cap of 10,000, and twigs are
+    // empty. Putty: exactly the camp's fee (level 35, 3,000,000), burned to 0.
+    userSave.resources = { r1: 0, r2: 1_000_000, r3: 3_000_000, r4: 0 };
     const result = await runAutoAttack(user() as never, CAMP);
 
     // The attacker: 150 Pokeys spent, the pebble bomb's 100,000 charged, the loot banked.
@@ -353,6 +365,9 @@ describe("runAutoAttack lands the plan", () => {
     // Pebbles stay over the cap after the bomb, so take nothing.
     expect(result.loot.r2).toBe(0);
     expect(userSave.resources.r2).toBe(900_000);
+    // The fee burned before the attack: what putty is left is the loot alone.
+    expect(result.fee).toBe(3_000_000);
+    expect(userSave.resources.r3).toBe(result.loot.r3);
     // The camp lost at least what was banked.
     expect(5_000_000 - camp.resources.r1).toBeGreaterThanOrEqual(result.loot.r1);
     expect(result.flung).toEqual({ C1: 150 });
@@ -430,11 +445,11 @@ describe("runAutoAttack refuses, writing nothing", () => {
   });
 
   test("a bomb the pool cannot pay for", async () => {
-    userSave.resources = { r1: 1_000_000, r2: 99_999, r3: 1_000_000, r4: 1_000_000 };
+    userSave.resources = { r1: 1_000_000, r2: 99_999, r3: 5_000_000, r4: 1_000_000 };
     expect((await refusal(runAutoAttack(user() as never, CAMP))).missing).toEqual([
       { kind: "bomb", id: "pb1", reason: "cost" },
     ]);
-    userSave.resources = { r1: 1_000_000, r2: 1_000_000, r3: 1_000_000, r4: 1_000_000 };
+    userSave.resources = { r1: 1_000_000, r2: 1_000_000, r3: 5_000_000, r4: 1_000_000 };
     nothingWritten();
   });
 
@@ -780,5 +795,92 @@ describe("POST /worldmapv2/autoattack with moves (Smart Repeat attack, the route
     split();
     await expect(post({ baseid: CAMP, moves: KEY }, false)).rejects.toThrow(/discord/i);
     expect(transactions).toBe(0);
+  });
+});
+
+describe("Repeat attack's putty fee (owner, 20 Nov 2026)", () => {
+  // The camp is level 35: 3,000,000 putty.
+  const FEE = 3_000_000;
+  /** A plan that flings one Pokey: the camp stands, the attack is lost. */
+  const LOST_PLAN = { v: 1, tick: 2_000, events: [{ kind: "fling", t: 480, x: -615, y: 115, r: 300, monsters: { C1: 1 } }] };
+  /** The plan with a putty shot (100,000) instead of the pebble one; a level 3 Catapult fires it. */
+  const puttyPlan = () => ({
+    ...PLAN,
+    events: PLAN.events.map((event) => (event.kind === "bomb" ? { ...event, id: "pu1" } : event)),
+  });
+
+  test("the plan answer carries the fee by the camp's level, and is short when the pool cannot pay it", async () => {
+    expect((await autoAttackPlanFor(user() as never, CAMP)).fee).toBe(FEE);
+    expect((await autoAttackPlanFor(user() as never, CAMP)).missing).toEqual([]);
+
+    userSave.resources.r3 = FEE - 1;
+    const answer = await autoAttackPlanFor(user() as never, CAMP);
+    expect(answer.missing).toEqual([{ kind: "fee", need: FEE, have: FEE - 1 }]);
+    expect(flush).not.toHaveBeenCalled();
+
+    // A camp of another band: level 29 is 2,000,000.
+    camp.level = 29;
+    planRow!.level = 29;
+    expect((await autoAttackPlanFor(user() as never, CAMP)).fee).toBe(2_000_000);
+  });
+
+  test("short of putty: refused before anything is written, the pool untouched", async () => {
+    userSave.resources.r3 = FEE - 1;
+    const refused = await refusal(runAutoAttack(user() as never, CAMP));
+    expect(refused.reason).toBe("missing");
+    expect(refused.missing).toEqual([{ kind: "fee", need: FEE, have: FEE - 1 }]);
+    expect(mint).not.toHaveBeenCalled();
+    expect(flush).not.toHaveBeenCalled();
+    expect(camp.attackid).toBe(0);
+    expect(userSave.resources.r3).toBe(FEE - 1);
+    expect(userSave.monsters.housed).toEqual({ C1: 200 });
+  });
+
+  test("the fee and the Catapult's putty shots come out of one purse", async () => {
+    userSave.catapult = 3;
+    planRow!.plan = puttyPlan();
+    userSave.resources.r3 = FEE + 100_000 - 1;
+    // One line for the putty, not the fee and the shot apart.
+    expect((await autoAttackPlanFor(user() as never, CAMP)).missing).toEqual([
+      { kind: "fee", need: FEE + 100_000, have: FEE + 100_000 - 1 },
+    ]);
+    expect((await refusal(runAutoAttack(user() as never, CAMP))).missing).toEqual([
+      { kind: "fee", need: FEE + 100_000, have: FEE + 100_000 - 1 },
+    ]);
+    expect(camp.attackid).toBe(0);
+    expect(userSave.resources.r3).toBe(FEE + 100_000 - 1);
+
+    // Enough for both: the fee goes before the attack, the shot as it is fired.
+    userSave.resources = { r1: 0, r2: 0, r3: FEE + 100_000, r4: 0 };
+    const result = await runAutoAttack(user() as never, CAMP);
+    expect(result.bombs).toEqual(["pu1"]);
+    expect(userSave.resources.r3).toBe(result.loot.r3);
+  }, REPLAY_TIMEOUT_MS);
+
+  test("a lost attack: the fee is gone all the same", async () => {
+    planRow!.plan = LOST_PLAN;
+    userSave.resources = { r1: 0, r2: 0, r3: 10_000_000, r4: 0 };
+    const result = await runAutoAttack(user() as never, CAMP);
+    expect(result.destroyed).toBe(0);
+    expect(result.fee).toBe(FEE);
+    expect(userSave.resources.r3).toBe(10_000_000 - FEE + result.loot.r3);
+    expect(userSave.monsters.housed).toEqual({ C1: 199 });
+  }, REPLAY_TIMEOUT_MS);
+
+  test("putty spent between the checks and the commit: refused at the commit, nothing charged", async () => {
+    spendBeforeCommit = true;
+    const refused = await refusal(runAutoAttack(user() as never, CAMP));
+    expect(refused.missing).toEqual([{ kind: "fee", need: FEE, have: 0 }]);
+    expect(camp.attackid).toBe(0);
+    expect(userSave.resources.r3).toBe(0);
+    expect(store.has(attackCheckpointKey(BASESAVEID))).toBe(false);
+  });
+
+  test("an attack that started but can never land gives the fee back", async () => {
+    mintFailsAfterCommit = true;
+    expect((await refusal(runAutoAttack(user() as never, CAMP))).message).toBe("the attack session could not be written");
+    expect(userSave.resources.r3).toBe(5_000_000);
+    expect(flush).toHaveBeenCalled();
+    expect(store.has(attackCheckpointKey(BASESAVEID))).toBe(false);
   });
 });

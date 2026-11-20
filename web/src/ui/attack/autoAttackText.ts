@@ -3,6 +3,7 @@ import { ApiError, NetworkError } from "@/api/http";
 import { championName, monsterName } from "@/ui/attack/ArmyPanel";
 import { BOMBS } from "@/game/combat/rules";
 import { bombSize } from "./AttackWindow";
+import { formatShort } from "@/ui/format";
 
 /**
  * What auto-attack says (issue #221): which attack a camp's Repeat attack
@@ -51,6 +52,21 @@ export const catapultLabel = (id: string): string => {
   return `Catapult, ${size ? `${size} ` : ""}${RESOURCE_WORDS[resource] ?? "resources"}`;
 };
 
+/**
+ * Putty as short as it reads: "2.5M", "850K". A shortfall rounds UP, so
+ * "1.3M short" is never less than what is missing.
+ */
+export const puttyAmount = (value: number, round: "down" | "up" = "down"): string => {
+  const whole = Math.max(0, Math.ceil(value));
+  if (round === "down" || whole < 1_000) return formatShort(whole);
+  const unit = whole < 1_000_000 ? 1_000 : whole < 1_000_000_000 ? 1_000_000 : 1_000_000_000;
+  const word = unit === 1_000 ? "K" : unit === 1_000_000 ? "M" : "B";
+  return `${Math.ceil(whole / (unit / 10)) / 10}${word}`;
+};
+
+/** The fee, for a tooltip and a screen reader. */
+export const feeLabel = (fee: number): string => `Repeat fee: ${fee.toLocaleString("en-US")} putty`;
+
 /** One missing thing, as the button and the sheet list it. */
 export const shortfallText = (item: PlanShortfall): string => {
   switch (item.kind) {
@@ -64,6 +80,9 @@ export const shortfallText = (item: PlanShortfall): string => {
       if (item.reason === "away") return `${name} is not ready (frozen or away)`;
       return `${name}: you no longer have this champion`;
     }
+    case "fee":
+      // The owner's words, "Putty: 1.2M short" (20 Nov 2026).
+      return `Putty: ${puttyAmount(item.need - item.have, "up")} short`;
     case "bomb":
       if (item.reason === "catapult") return `${catapultLabel(item.id)}: your Catapult is too low`;
       if (item.reason === "cost") return `${catapultLabel(item.id)}: not enough resources to fire it`;
@@ -85,6 +104,13 @@ export const repeatRefusal = (answer: AutoAttackPlanResponse, context: "sheet" |
 };
 
 /* ── Smart Repeat attack (owner, 16 Nov 2026) ─────────────────────────── */
+
+/**
+ * The refusal when the only thing short is putty: the fee and the Catapult's
+ * putty shots together (astra, round 2: "for the fee" read as if the fee
+ * alone were too dear).
+ */
+export const NOT_ENOUGH_PUTTY = "Not enough putty.";
 
 /** The refusal when the army could be gathered but not housed in range. */
 export const NO_ROOM_TEXT = "Not enough Monster Housing in range.";
@@ -114,7 +140,9 @@ export const noPlanText = (tribe: string, level: number): string =>
 
 // Smart Repeat attack (astra): name the shortage without calling bombs or champions monsters.
 const missingHeadline = (missing: readonly PlanShortfall[], context: "sheet" | "panel" = "sheet"): string =>
-  missing.some((item) => item.kind === "monster")
+  missing.length > 0 && missing.every((item) => item.kind === "fee")
+    ? NOT_ENOUGH_PUTTY
+    : missing.some((item) => item.kind === "monster")
     ? context === "panel"
       ? "Missing monsters for that attack:"
       : "Not enough monsters for that attack."

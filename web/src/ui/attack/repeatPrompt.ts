@@ -6,7 +6,7 @@ import { championName } from "@/ui/attack/ArmyPanel";
 import { gameIcon, type GameIconName } from "@/ui/gameIcon";
 import { resourceIcon, resourceKeyOf } from "@/ui/resourceIcon";
 import { bombSize, grid, paintedCard, portrait, tile } from "./AttackWindow";
-import { catapultLabel, yardName, yardPlace } from "./autoAttackText";
+import { catapultLabel, feeLabel, puttyAmount, yardName, yardPlace } from "./autoAttackText";
 import { tribeGoalPicture } from "./RepeatBar";
 import "@/ui/styles/repeat-prompt.css";
 
@@ -17,6 +17,9 @@ import "@/ui/styles/repeat-prompt.css";
  * - the army as the hand Attack window's tiles: the champions ("Lv 6") and
  *   every monster kind with its count, then the Catapult's shots as resource
  *   piles with a size word, one per resource and no count;
+ * - Repeat attack's putty fee (owner, 20 Nov 2026; astra, round 1): the putty pile and the
+ *   amount, under the Catapult, and a warning-coloured shortage (the owner
+ *   dropped the "Spent on start" note, 20 Nov 2026);
  * - Smart Repeat attack's moves, one card per move: the yard they leave, the
  *   monsters as small tiles, an arrow, the yard in range; the list scrolls
  *   inside the sheet, with a "more below" cue that shows on a touch screen;
@@ -145,8 +148,40 @@ const section = (icon: GameIconName, words: string, tiles: HTMLElement[], classN
   return part;
 };
 
-/** The champions and the monsters (one tile per kind), then the Catapult's shots. */
-export const armyParts = (plan: Pick<PlanSummary, "monsters" | "champions" | "bombs">): HTMLElement[] => {
+/** The fee, as it is paid and as it is short. */
+export interface FeeShown {
+  /** The fee in putty. */
+  readonly fee: number;
+  /** Putty short of the fee and the Catapult's putty shots together; 0 or absent when it can be paid. */
+  readonly short?: number;
+}
+
+/**
+ * astra, round 1: the putty pile and amount keep their normal colour.
+ * A separate warning says how much is short, rounded up; the refusal keeps
+ * its own list.
+ */
+export const feeLine = ({ fee, short = 0 }: FeeShown): HTMLElement => {
+  const line = el("section", `repeat-prompt__fee${short > 0 ? " repeat-prompt__fee--short" : ""}`);
+  const tip = short > 0 ? `${feeLabel(fee)}. Putty: ${fmt(short)} short` : feeLabel(fee);
+  line.title = tip;
+  line.setAttribute("aria-label", tip);
+  const heading = el("span", "repeat-prompt__fee-word", "Repeat fee");
+  heading.setAttribute("aria-hidden", "true");
+  const amount = el("span", "repeat-prompt__fee-amount");
+  amount.setAttribute("aria-hidden", "true");
+  amount.append(resourceIcon("r3", { decorative: true, realm: "surface" }), el("span", "repeat-prompt__fee-number", puttyAmount(fee)));
+  line.append(heading, amount);
+  if (short > 0) {
+    const shortage = el("span", "repeat-prompt__fee-short", `${puttyAmount(short, "up")} short`);
+    shortage.setAttribute("aria-hidden", "true");
+    line.append(shortage);
+  }
+  return line;
+};
+
+/** The champions and the monsters (one tile per kind), then the Catapult's shots, then the fee. */
+export const armyParts = (plan: Pick<PlanSummary, "monsters" | "champions" | "bombs">, fee?: FeeShown | null): HTMLElement[] => {
   const monsters = byCount(plan.monsters);
   const total = monsters.reduce((sum, [, count]) => sum + count, 0);
   const totalChip = el("span", "chip attack-window__total repeat-prompt__total", `×${fmt(total)}`);
@@ -161,6 +196,7 @@ export const armyParts = (plan: Pick<PlanSummary, "monsters" | "champions" | "bo
     ),
   ];
   if (plan.bombs.length > 0) parts.push(section("resourcebomb", "Catapult", bombTiles(plan.bombs), "repeat-prompt__bombs"));
+  if (fee && fee.fee > 0) parts.push(feeLine(fee));
   return parts;
 };
 
@@ -354,6 +390,11 @@ export const shortageList = (
       const short = fmt(item.need - item.have);
       const picture = monsterPortrait(item.id, "icon");
       list.append(shortRow(portrait(picture), `${short} short`, `${monsterName(item.id)}: ${short} short`, "monster"));
+    } else if (item.kind === "fee") {
+      // The owner's words, "Putty: 1.2M short" (20 Nov 2026): the fee and the putty shots together.
+      const short = puttyAmount(item.need - item.have, "up");
+      const tip = `Putty: ${fmt(item.need - item.have)} short (the fee and the Catapult's putty)`;
+      list.append(shortRow(resourceIcon("r3", { decorative: true, realm: "surface" }), `${short} short`, tip, "fee"));
     } else if (item.kind === "champion") {
       const level = champions.find((one) => one.t === item.t)?.l ?? 1;
       const picture = championPortrait(championByType(item.t) ?? `G${item.t}`, level, "icon");

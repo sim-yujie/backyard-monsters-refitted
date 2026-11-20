@@ -222,16 +222,65 @@ champion) in order. Proposed defaults:
 
 - **Monsters are spent as in a manual attack.** Everything flung leaves its source cell for good
   (`spendFlung`). The champion's health and the siege stock land as the save lands them.
-- **No fee and no per-camp cooldown** `[PLACEHOLDER]`. The army already is the cost: monsters have
-  to be hatched and housed again before the next repeat, and that is the natural cooldown. A fee
-  would tax exactly the players the feature is for. The levers are listed in case playtests show
-  camps falling too fast:
+- **A heavy putty fee, no per-camp cooldown** (owner, 20 Nov 2026, superseding "no fee"): "I want
+  quite heavy penalty for putty (not loot based). Players should not be able to profit on putty for
+  repeat attacks and should suffer a loss as it is automated. Take it as a convenience fee." The
+  fee goes by the camp's level (`server/src/services/base/autoAttack/repeatFee.ts`; the owner's
+  second table, 20 Nov 2026):
+
+  | Camp level | Fee (putty) |
+  | --- | --- |
+  | 25-29 | 2,000,000 |
+  | 30-34 | 2,500,000 |
+  | 35-39 | 3,000,000 |
+  | 40-44 | 3,500,000 |
+
+  - It is burned before the attack starts, in the same flush that starts it (`baseModeAttack`'s
+    `beforeCommit`), so the player needs the putty in advance. The pool has to hold the fee and the
+    Catapult's putty shots together; otherwise Repeat attack is refused with nothing spent, and the
+    window says how much putty is short.
+  - Once the attack has started the fee is gone, won or lost. A server that falls over mid-attack
+    leaves the checkpoint, which the sweep lands later; the fee stays spent. Only an attack that
+    started but can never land (no session or checkpoint written, or its row moved on) gets the fee
+    back.
+  - Hand-played attacks stay free. Twigs, pebbles and goo still come in as loot.
+  - **Not a promise of a putty loss** (owner, 20 Nov 2026). A full destroy of a fresh camp can
+    bank more putty than its fee. The owner accepts that: it is a convenience fee that weighs most
+    on the easy low-level camps, and players still need putty for outpost kits. For reference, the
+    most putty one full destroy of a fresh camp can bank (every storage falls in the order that pays
+    most, plus the putty harvesters' buffers), with the +15% Map Room 2 camp bonus, and on a Tribe
+    Plunder weekend (+30% on top). The alliance loot star (up to +15%), the low-level loot bonus
+    (below player level 20) and storage hits during the fight (a few thousand) can add more.
+
+    | Camp | Fee | Most putty (+15%) | On Plunder (+30%) |
+    | --- | --- | --- | --- |
+    | Legionnaire 25 | 2.0M | 1,387,326 | 1,803,523 |
+    | Legionnaire 29 | 2.0M | 1,847,901 | 2,402,271 |
+    | Legionnaire 33 | 2.5M | 2,305,010 | 2,996,513 |
+    | Legionnaire 37 | 3.0M | 2,657,012 | 3,454,115 |
+    | Legionnaire 41 | 3.5M | 2,993,709 | 3,891,821 |
+    | Kozu 30 | 2.5M | 2,307,837 | 3,000,188 |
+    | Kozu 34 | 2.5M | 2,764,718 | 3,594,133 |
+    | Kozu 38 | 3.0M | 3,225,034 | 4,192,544 |
+    | Kozu 42 | 3.5M | 3,577,239 | 4,650,410 |
+    | Abunakki 27 | 2.0M | 2,422,822 | 3,149,668 |
+    | Abunakki 31 | 2.5M | 2,994,501 | 3,892,851 |
+    | Abunakki 35 | 3.0M | 3,457,752 | 4,495,077 |
+    | Abunakki 39 | 3.0M | 3,799,072 | 4,938,793 |
+    | Abunakki 43 | 3.5M | 4,029,072 | 5,237,793 |
+    | Dreadnaut 28 | 2.0M | 2,187,944 | 2,844,327 |
+    | Dreadnaut 32 | 2.5M | 2,648,517 | 3,443,072 |
+    | Dreadnaut 36 | 3.0M | 3,114,339 | 4,048,640 |
+    | Dreadnaut 40 | 3.5M | 3,510,552 | 4,563,717 |
+    | Dreadnaut 44 | 3.5M | 3,795,752 | 4,934,477 |
+
+  The other levers, in case playtests show camps falling too fast:
 
 | Lever | Default | Range | Why it exists |
 | --- | --- | --- | --- |
 | Per-user auto-attacks per minute | 10 `[PLACEHOLDER]` | 4-20 | Server CPU (section 6.3), not balance |
 | Auto-attacks in flight per user | 1 | 1 | One battle at a time, as by hand |
-| Fee per auto-attack | 0 `[PLACEHOLDER]` | 0 to 5% of the camp's loot | Only if camps fall too fast in playtests |
+| Fee per auto-attack | The putty table above (owner, 20 Nov 2026) | By camp level | A convenience fee for an automated attack |
 | "Until destroyed" attacks per request | 5 `[PLACEHOLDER]` | 3-10 | Bounds unattended spending |
 | Stall threshold for "until destroyed" | +2% damage `[PLACEHOLDER]` | 1-5% | Stops a plan that has stopped working |
 
@@ -506,7 +555,7 @@ Each question has a proposed default, which applies if the owner has no preferen
 | --- | --- | --- |
 | Q1 | Map Room 2 camps only in v1, with Map Room 1 tribes later? | Yes. Map Room 1 tribes respawn every 10 minutes, so auto-attack there is mostly loot farming; it is worth a separate decision. |
 | Q2 | Should a plan be reused on every camp with the same layout (same tribe and level bucket), or only on the camp it was recorded on? | Every camp with the same layout. One manual attack per layout, then repeats everywhere. |
-| Q3 | Any cost beyond the monsters spent: a fee or a cooldown? | None. Rate limits exist for the server only. Revisit if playtests show camps falling too fast. |
+| Q3 | Any cost beyond the monsters spent: a fee or a cooldown? | ~~None.~~ Superseded by the owner, 20 Nov 2026: a heavy putty fee by camp level, burned before the attack starts (section 5.2). No cooldown. |
 | Q4 | Should a repeat also fire the original's bombs and siege weapons? | No: monsters and champion only. |
 | Q5 | When the player is short of monsters for the plan: fling what they have, or refuse? | Fling what they have, after the confirmation shows the shortfall. |
 | Q6 | Allow repeats on a camp already at 90% or more (for loot)? | Yes, with Take over as the primary button. |

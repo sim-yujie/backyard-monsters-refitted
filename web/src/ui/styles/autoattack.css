@@ -214,6 +214,17 @@
   height: 24px;
 }
 
+.auto-attack__missing-fee {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+}
+
+.auto-attack__missing-fee > .res-icon {
+  flex: none;
+  width: 24px;
+}
+
 .auto-attack__room-need {
   font-weight: 700;
 }
