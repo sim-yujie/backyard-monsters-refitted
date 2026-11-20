@@ -1,0 +1,71 @@
+"""sheet.py : the owner's comparison sheet of the original Inferno shops (round 2), as the yard draws them.
+
+    ~/.cache/bymr-art-venv/bin/python -I web/tools/store-inferno/sheet.py
+
+From art-samples/store-inferno/files/ (export.py <v> art-samples/store-inferno/files), on the Inferno's own lava
+ground, each with its shadow, beside real Modern Inferno buildings (the painted Resource Pod and the 3D Strongbox),
+enlarged. Writes art-samples/store-inferno/compare-shops.png (all in a row, 3 px a world px) and
+compare-shops-big.png (each shop alone between the two real ones, 4x, one per row).
+"""
+import sys
+from pathlib import Path
+
+from PIL import Image, ImageDraw
+
+sys.path.insert(0, str(Path(__file__).parent))
+from common import ASSETS, OUT, ground, multiply  # noqa: E402
+
+B = ASSETS / "buildings"
+FILES = OUT / "files"
+# (label, top file, top x, y, shadow file, shadow x, y): world px, the yard's own rows
+REAL = {
+    "Resource Pod": (B / "istoragesilo/top.c1@2x.webp", -45, -53, B / "istoragesilo/shadow.1.v2.jpg", -48, 17),
+    "Strongbox": (B / "imonsterlab/top.3d1@2x.webp", -57, -38, B / "imonsterlab/shadow.3d1.jpg", -61, 31),
+}
+ROWS = {"A": (-49, -26, -32, 32), "B": (-41, -39, -33, 29), "C": (-47, -40, -33, 28)}
+SHOPS = {f"Shop {v}": (FILES / f"top.ishop{v}@2x.webp", x, y, FILES / f"shadow.ishop{v}.jpg", sx, sy)
+         for v, (x, y, sx, sy) in ROWS.items()}
+
+
+def scene(items, step=150, k=2):
+    """The items in a row on lava at k px a world px (2 = the game's @2x art at full size)."""
+    W, H = step * len(items) + 40, 240
+    g = ground("lava", W, H).convert("RGB").resize((W * k, H * k), Image.LANCZOS)
+    ox = [40 + step // 2 - 20 + i * step for i in range(len(items))]
+    oy = 140
+    for (top, x, y, sh, sx, sy), cx in zip(items, ox):
+        s = Image.open(sh).convert("RGB")
+        g = multiply(g, s.resize((s.width * k, s.height * k), Image.LANCZOS), (cx + sx) * k, (oy + sy) * k)
+    g = g.convert("RGBA")
+    for (top, x, y, sh, sx, sy), cx in zip(items, ox):
+        t = Image.open(top).convert("RGBA")
+        t = t.resize((t.width * k // 2, t.height * k // 2), Image.LANCZOS)
+        g.alpha_composite(t, ((cx + x) * k, (oy + y) * k))
+    return g.convert("RGB"), [o * k for o in ox]
+
+
+def labelled(im, labels, xs):
+    out = Image.new("RGB", (im.width, im.height + 34), (24, 24, 24))
+    out.paste(im, (0, 34))
+    d = ImageDraw.Draw(out)
+    for t, x in zip(labels, xs):
+        d.text((x - 4 * len(t), 10), t, fill=(240, 240, 240))
+    return out
+
+
+order = ["Resource Pod", "Shop A", "Shop B", "Shop C", "Strongbox"]
+items = [REAL.get(n) or SHOPS[n] for n in order]
+b, xb = scene(items, k=3)
+labelled(b, order, xb).save(OUT / "compare-shops.png")
+
+rows = []
+for v in "ABC":
+    im, xs = scene([REAL["Resource Pod"], SHOPS[f"Shop {v}"], REAL["Strongbox"]], k=4)
+    rows.append(labelled(im, ["Resource Pod", f"Shop {v}", "Strongbox"], xs))
+big = Image.new("RGB", (rows[0].width, sum(r.height for r in rows)), (24, 24, 24))
+y = 0
+for r in rows:
+    big.paste(r, (0, y))
+    y += r.height
+big.save(OUT / "compare-shops-big.png")
+print(OUT / "compare-shops.png", OUT / "compare-shops-big.png", big.size)

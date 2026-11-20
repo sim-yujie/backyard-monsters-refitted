@@ -177,7 +177,8 @@ export const OUTPOST_BUILDABLE_TYPES: ReadonlySet<number> = new Set(
  * `client/scripts/INFERNOYARDPROPS.as` and `BUILDINGSPOPUP.as`): the four
  * harvesters, the Resource Pod, Monster Locker, Juicer, Incubator, walls,
  * Sniper, booby trap, Academy, Housing Bunker, Quake Tower, Inferno Cannon and
- * Magma Tower. Each one's count and Under Hall level are the table's own.
+ * Magma Tower, and this project's Yard Planner, Incubator Control Centre and
+ * General Store (owner, 20 Nov 2026: the Inferno's way into the Shop). Each one's count and Under Hall level are the table's own.
  */
 export const INFERNO_YARD_BUILDABLE_TYPES: ReadonlySet<number> = new Set(INFERNO_BUILDABLE_TYPES);
 

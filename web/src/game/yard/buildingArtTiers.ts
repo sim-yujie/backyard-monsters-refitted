@@ -903,6 +903,13 @@ export const INFERNO_PAINTED_BUILDING_ART: Readonly<Record<number, readonly Tier
       damaged: { top: ["top.c1.damaged@2x.webp", -48, -49], shadow: ["shadow.1.damaged.v2.jpg", -47, 17] },
       destroyed: { top: ["top.c1.destroyed@2x.webp", -53, -15], shadow: ["shadow.1.destroyed.v2.jpg", -54, 12] } },
   ],
+  // 12 General Store: painted, the Inferno's own shop (owner, 20 Nov 2026, patch 8.1), an original Codex design (Codex
+  // declined a recolour of the surface store), shop C of `web/tools/store-inferno/` (lava forge shop), on the surface
+  // store's footprint in the surface store's folder, with its own shadow. No damaged look of its own: the whole look
+  // tinted; destroyed is Flash's store rubble. With the Classic look the Inferno draws Flash's store.
+  12: [
+    { from: 1, top: ["top.ishopC@2x.webp", -47, -40], shadow: ["shadow.ishopC.jpg", -33, 28], lift: 0 },
+  ],
   // 14 Under Hall: painted, Flash's three looks and three of its own (4 to 6, animated), each damaged and destroyed in paint too
   14: [
     { from: 1, top: ["top.c1@2x.webp", -52, -30], shadow: ["shadow.1.v2.jpg", -65, 49], lift: 0,
