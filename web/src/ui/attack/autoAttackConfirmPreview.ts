@@ -55,7 +55,7 @@ const MOVES_2: YardMove[] = [
   { from: out(3), to: out(1), monsters: { C10: 60, C5: 100 } },
 ];
 
-const planOf = (): PlanSummary => ({
+const planOf = (overrides: Partial<PlanSummary> = {}): PlanSummary => ({
   tribe: "Legionnaire",
   level: 33,
   recordedOn: { baseid: "preview-camp-before", x: 239, y: 209 },
@@ -67,6 +67,7 @@ const planOf = (): PlanSummary => ({
   ],
   bombs: ["tw1", "tw1", "pb1", "pu0"],
   siege: true,
+  ...overrides,
 });
 
 const answerOf = (overrides: Partial<AutoAttackPlanResponse> = {}): AutoAttackPlanResponse => ({
@@ -122,6 +123,9 @@ export const CONFIRM_STATES = [
   "no-plan",
   "loading",
   "working",
+  "big-bombs",
+  "big-moves",
+  "working5",
 ] as const;
 
 export type ConfirmState = (typeof CONFIRM_STATES)[number];
@@ -177,6 +181,22 @@ const setups = (): Record<ConfirmState, Setup> => ({
   "no-plan": { answer: answerOf({ plan: null }) },
   loading: { plan: never },
   working: { answer: answerOf(), run: never, progressBar: true, press: true },
+  // The longest bomb captions: "Massive ×2", "Huge ×1".
+  "big-bombs": { answer: answerOf({ plan: planOf({ bombs: ["pb3", "pb3", "pu3", "tw2"] }) }) },
+  // A four-digit count inside a move card.
+  "big-moves": {
+    answer: answerOf({
+      moves: [{ from: MAIN, to: out(0), monsters: { C3: 1_240, C5: 180, C14: 120 } }, ...MOVES_5.slice(1, 3)],
+      movesKey: "kb",
+    }),
+  },
+  // The owner's own case: five kinds and one champion (one rank, under RANKS_FROM).
+  working5: {
+    answer: answerOf({ plan: planOf({ monsters: { C3: 1_240, C5: 180, C14: 120, C10: 60, C12: 40 }, champions: [{ t: 3, l: 6 }] }) }),
+    run: never,
+    progressBar: true,
+    press: true,
+  },
 });
 
 /** Opens the sheet in `state` in `modal`; returns a function that closes it. */
