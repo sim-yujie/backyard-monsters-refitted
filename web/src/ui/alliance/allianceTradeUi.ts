@@ -9,6 +9,7 @@ import {
   type TradeSwapToday,
   type TradeView,
 } from "@/api/allianceTrade";
+import { classicLook } from "@/game/classicLook";
 import { acceptBlock, arriveFor, carryCap, postCap, roomOf, type AcceptBlock } from "@/game/alliance/tradeRules";
 import { formatAmount, formatCountdown, formatShort } from "@/ui/format";
 import { make } from "@/ui/friends/rows";
@@ -340,7 +341,8 @@ export class TradeTab {
     today.append(
       stat(gameIcon("income", { size: 24, decorative: true }), String(view.today.swapsLeft), `${view.today.swapsLeft === 1 ? TRADE_TEXT.swap : TRADE_TEXT.swaps} ${TRADE_TEXT.left}`, view.today.swapsLeft === 0),
       stat(gameIcon("time", { size: 24, decorative: true }), this.newDay(view), TRADE_TEXT.newDay),
-      stat(gameIcon("lost", { size: 24, decorative: true }), TRADE_TEXT.lossShort, TRADE_TEXT.loss.replace("−10% ", "")),
+      // The banknote, not the gravestone (owner, 20 Nov 2026), painted for each look.
+      stat(gameIcon(classicLook() ? "tradetaxclassic" : "tradetax", { size: 24, decorative: true }), TRADE_TEXT.lossShort, TRADE_TEXT.loss.replace("−10% ", "")),
     );
     nodes.push(today);
 

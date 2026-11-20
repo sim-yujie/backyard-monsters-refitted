@@ -198,6 +198,12 @@ describe("Trade tab", () => {
     expect(document.querySelector(".trade-request__why")?.textContent).toBe(TRADE_TEXT.block.mineWaits("6h"));
   });
 
+  it("−10% on the way shows the banknote, not the Monsters lost gravestone (owner, 20 Nov 2026)", async () => {
+    await mount(fakeApi());
+    const icons = [...document.querySelectorAll<HTMLElement>(".trade-today .game-icon")].map((icon) => icon.dataset["icon"]);
+    expect(icons).toEqual(["income", "time", "tradetax"]);
+  });
+
   it("no Recent trades section any more (owner, 20 Nov 2026)", async () => {
     await mount(fakeApi());
     expect(document.querySelector(".trade-recent")).toBeNull();
