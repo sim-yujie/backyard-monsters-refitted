@@ -125,9 +125,14 @@ describe("the confirm sheet, look A (owner, 20 Nov 2026)", () => {
     expect(tiles[0]!.getAttribute("aria-label")).toBe("Gorgo, level 5");
     expect(tiles[1]!.getAttribute("aria-label")).toBe("Pokey ×300");
     expect(tiles.every((one) => one.querySelector("img") !== null)).toBe(true);
-    // The bombs: a resource pile and a size word each.
+    // The Catapult's shots: a resource pile and a size word each, no count.
+    expect(text(modal.querySelector(".repeat-prompt__bombs .repeat-prompt__heading"))).toBe("Catapult");
     const bombs = [...modal.querySelectorAll(".repeat-prompt__bombs .attack-window__tile")];
-    expect(bombs.map((one) => text(one))).toEqual(["Big ×1", "Big ×1", "Small ×1"]);
+    expect(bombs.map((one) => text(one))).toEqual(["Big", "Big", "Small"]);
+    expect(bombs.map((one) => one.getAttribute("aria-label"))).toEqual(["Catapult, big twigs", "Catapult, big pebbles", "Catapult, small putty"]);
+    // Nothing in the window says "bomb", not even to a screen reader (owner, 20 Nov 2026).
+    const words = [modal.textContent ?? "", ...[...modal.querySelectorAll("[aria-label], [title], [alt]")].flatMap((one) => ["aria-label", "title", "alt"].map((name) => one.getAttribute(name) ?? ""))];
+    expect(words.filter((one) => /bomb/i.test(one))).toEqual([]);
     expect(bombs.every((one) => one.querySelector(".res-icon") !== null)).toBe(true);
     expect(namesShown(modal)).toEqual([]);
     expect(goneShown(modal)).toEqual([]);
@@ -135,7 +140,7 @@ describe("the confirm sheet, look A (owner, 20 Nov 2026)", () => {
     expect(button(modal, "Attack now")?.disabled).toBe(false);
   });
 
-  it("a big army: one tile per kind and per champion, a bomb that repeats shows ×N once", async () => {
+  it("a big army: one tile per kind and per champion, one Catapult tile per resource (each flies once per attack)", async () => {
     const modal = document.createElement("div");
     const flow = new AutoAttackFlow({ baseid: BASEID, modal, onWatch: vi.fn(), calls: calls() });
     await flow.start(answer({ plan: BIG_PLAN }));
@@ -144,7 +149,8 @@ describe("the confirm sheet, look A (owner, 20 Nov 2026)", () => {
     // Biggest first.
     expect(text(modal.querySelector(".repeat-prompt__monster"))).toBe("×1,240");
     expect(text(modal.querySelector(".repeat-prompt__total"))).toBe("×2,054");
-    expect([...modal.querySelectorAll(".repeat-prompt__bomb")].map((one) => text(one))).toEqual(["Big ×2", "Big ×1", "Small ×1"]);
+    // The plan's second twig shot is not shown: a Catapult flings each resource once.
+    expect([...modal.querySelectorAll(".repeat-prompt__bomb")].map((one) => text(one))).toEqual(["Big", "Big", "Small"]);
     expect(namesShown(modal)).toEqual([]);
     expect(goneShown(modal)).toEqual([]);
   });
@@ -450,7 +456,7 @@ describe("the result", () => {
     expect(text(modal)).toContain("Missing from the attack:");
     const row = modal.querySelector(".repeat-prompt__shorts li.repeat-prompt__short");
     expect(row?.textContent).toBe("Big: Not enough resources");
-    expect(row?.getAttribute("aria-label")).toBe("Big twig bomb: Not enough resources");
+    expect(row?.getAttribute("aria-label")).toBe("Catapult, big twigs: Not enough resources");
     expect(row?.querySelector(".res-icon")).not.toBeNull();
   });
 

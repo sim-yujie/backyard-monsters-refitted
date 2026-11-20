@@ -51,7 +51,7 @@ describe("autoAttackText", () => {
       "Pokey: 12 short",
     );
     expect(shortfallText({ kind: "champion", t: 1, reason: "hurt" })).toBe("Gorgo has no health left");
-    expect(shortfallText({ kind: "bomb", id: "tw1", reason: "catapult" })).toBe("Big twig bomb: your Catapult is too low");
+    expect(shortfallText({ kind: "bomb", id: "tw1", reason: "catapult" })).toBe("Catapult, big twigs: your Catapult is too low");
   });
 
   it("greys Repeat attack out for what the server says", () => {

@@ -3,11 +3,10 @@ import { classicLook } from "@/game/classicLook";
 import { BOMBS, championByType, monsterName } from "@/game/combat/rules";
 import { championPortrait, monsterPortrait } from "@/game/portraits";
 import { championName } from "@/ui/attack/ArmyPanel";
-import { bombName } from "@/ui/attack/CatapultPanel";
 import { gameIcon, type GameIconName } from "@/ui/gameIcon";
 import { resourceIcon, resourceKeyOf } from "@/ui/resourceIcon";
 import { bombSize, grid, paintedCard, portrait, tile } from "./AttackWindow";
-import { yardName, yardPlace } from "./autoAttackText";
+import { catapultLabel, yardName, yardPlace } from "./autoAttackText";
 import { tribeGoalPicture } from "./RepeatBar";
 import "@/ui/styles/repeat-prompt.css";
 
@@ -16,8 +15,8 @@ import "@/ui/styles/repeat-prompt.css";
  *
  * - the camp: the tribe's portrait, its name, "Lv N" and a damage chip;
  * - the army as the hand Attack window's tiles: the champions ("Lv 6") and
- *   every monster kind with its count, then the bombs as resource piles with
- *   a size word and how many ("Big ×2", "Small ×1");
+ *   every monster kind with its count, then the Catapult's shots as resource
+ *   piles with a size word, one per resource and no count;
  * - Smart Repeat attack's moves, one card per move: the yard they leave, the
  *   monsters as small tiles, an arrow, the yard in range; the list scrolls
  *   inside the sheet, with a "more below" cue that shows on a touch screen;
@@ -106,26 +105,32 @@ const championTile = (champion: PlanSummary["champions"][number]): HTMLElement =
   return element;
 };
 
-/** A bomb's resource pile. */
+/** A catapult shot's resource pile. */
 const bombPile = (id: string): HTMLElement =>
   resourceIcon(resourceKeyOf(BOMBS.find((one) => one.id === id)?.resource ?? 1), { decorative: true, realm: "surface" });
 
-/** The bombs, one tile per kind and size: the pile, the size word and how many (astra: "Big ×1" too). */
-const bombTiles = (bombs: readonly string[]): HTMLElement[] => {
-  const counts = new Map<string, number>();
-  for (const id of bombs) counts.set(id, (counts.get(id) ?? 0) + 1);
-  return [...counts.entries()].map(([id, count]) => {
-    const size = bombSize(id);
-    const element = tile(
-      bombPile(id),
-      `${size} ×${count}`,
-      count > 1 ? `${bombName(id)} ×${count}` : bombName(id),
-      "attack-window__tile--bomb repeat-prompt__bomb",
-    );
+/**
+ * The catapult's shots, one tile per resource: the pile and its size word,
+ * never a count. A catapult flings each resource at most once per attack
+ * (`BOMBS`, `ResourceBombs.as:310-314`), so a plan holding a second shot of a
+ * resource shows the first (owner, 20 Nov 2026).
+ */
+export const catapultShots = (bombs: readonly string[]): string[] => {
+  const seen = new Set<number>();
+  return bombs.filter((id) => {
+    const resource = BOMBS.find((one) => one.id === id)?.resource ?? 0;
+    if (seen.has(resource)) return false;
+    seen.add(resource);
+    return true;
+  });
+};
+
+const bombTiles = (bombs: readonly string[]): HTMLElement[] =>
+  catapultShots(bombs).map((id) => {
+    const element = tile(bombPile(id), bombSize(id), catapultLabel(id), "attack-window__tile--bomb repeat-prompt__bomb");
     element.dataset["bomb"] = id;
     return element;
   });
-};
 
 /** A section as the hand Attack window has them: a painted icon, a word, then the tiles. */
 const section = (icon: GameIconName, words: string, tiles: HTMLElement[], className: string, extra?: HTMLElement): HTMLElement => {
@@ -140,7 +145,7 @@ const section = (icon: GameIconName, words: string, tiles: HTMLElement[], classN
   return part;
 };
 
-/** The champions and the monsters (one tile per kind), then the bombs. */
+/** The champions and the monsters (one tile per kind), then the Catapult's shots. */
 export const armyParts = (plan: Pick<PlanSummary, "monsters" | "champions" | "bombs">): HTMLElement[] => {
   const monsters = byCount(plan.monsters);
   const total = monsters.reduce((sum, [, count]) => sum + count, 0);
@@ -155,7 +160,7 @@ export const armyParts = (plan: Pick<PlanSummary, "monsters" | "champions" | "bo
       totalChip,
     ),
   ];
-  if (plan.bombs.length > 0) parts.push(section("resourcebomb", "Bombs", bombTiles(plan.bombs), "repeat-prompt__bombs"));
+  if (plan.bombs.length > 0) parts.push(section("resourcebomb", "Catapult", bombTiles(plan.bombs), "repeat-prompt__bombs"));
   return parts;
 };
 
@@ -335,7 +340,7 @@ const BOMB_SHORT = {
 
 /**
  * What is missing, one row each with its picture: a monster's portrait and
- * "35 short", a champion's portrait and why, a bomb's pile, size and why.
+ * "35 short", a champion's portrait and why, a catapult shot's pile, size and why.
  * Names only in the tooltip and for a screen reader.
  */
 export const shortageList = (
@@ -357,7 +362,7 @@ export const shortageList = (
     } else {
       const why = BOMB_SHORT[item.reason];
       const size = bombSize(item.id);
-      list.append(shortRow(bombPile(item.id), size ? `${size}: ${why}` : why, `${bombName(item.id)}: ${why}`, "bomb"));
+      list.append(shortRow(bombPile(item.id), size ? `${size}: ${why}` : why, `${catapultLabel(item.id)}: ${why}`, "bomb"));
     }
   }
   return list;

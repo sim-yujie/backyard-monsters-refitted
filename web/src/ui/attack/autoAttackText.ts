@@ -1,7 +1,8 @@
 import type { AutoAttackPlanResponse, PlanShortfall, PlanSummary, YardLabel } from "@/api/autoAttack";
 import { ApiError, NetworkError } from "@/api/http";
 import { championName, monsterName } from "@/ui/attack/ArmyPanel";
-import { bombName } from "@/ui/attack/CatapultPanel";
+import { BOMBS } from "@/game/combat/rules";
+import { bombSize } from "./AttackWindow";
 
 /**
  * What auto-attack says (issue #221): which attack a camp's Repeat attack
@@ -36,6 +37,20 @@ export const planSourceText = (plan: PlanSummary, baseid: string, nowSeconds: nu
   return `Repeats your attack on ${where}, ${agoText(nowSeconds - plan.recordedAt)}`;
 };
 
+/** The resources a catapult flings. */
+const RESOURCE_WORDS: Readonly<Record<number, string>> = { 1: "twigs", 2: "pebbles", 3: "putty" };
+
+/**
+ * "Catapult, big twigs": one of the Catapult's shots in words (screen
+ * readers, the camp panel). Repeat attack never says "bomb" (owner, 20 Nov
+ * 2026: "it's not bombs but catapult").
+ */
+export const catapultLabel = (id: string): string => {
+  const resource = BOMBS.find((one) => one.id === id)?.resource ?? 1;
+  const size = bombSize(id).toLowerCase();
+  return `Catapult, ${size ? `${size} ` : ""}${RESOURCE_WORDS[resource] ?? "resources"}`;
+};
+
 /** One missing thing, as the button and the sheet list it. */
 export const shortfallText = (item: PlanShortfall): string => {
   switch (item.kind) {
@@ -50,9 +65,9 @@ export const shortfallText = (item: PlanShortfall): string => {
       return `${name}: you no longer have this champion`;
     }
     case "bomb":
-      if (item.reason === "catapult") return `${bombName(item.id)}: your Catapult is too low`;
-      if (item.reason === "cost") return `${bombName(item.id)}: not enough resources to fire it`;
-      return `${bombName(item.id)}: not available`;
+      if (item.reason === "catapult") return `${catapultLabel(item.id)}: your Catapult is too low`;
+      if (item.reason === "cost") return `${catapultLabel(item.id)}: not enough resources to fire it`;
+      return `${catapultLabel(item.id)}: not available`;
   }
 };
 
