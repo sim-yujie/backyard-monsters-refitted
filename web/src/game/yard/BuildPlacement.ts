@@ -4,7 +4,13 @@ import { cellTexture } from "@/game/textureLimit";
 import { versionedArt } from "./retryLoad";
 import { ArtState, resolveArt, restingLayers, type ResolvedImage } from "./buildingArt";
 import type { YardKind } from "./buildingCostData";
-import { nearbyArea, NEARBY_STROKE } from "./nearbyFootprints";
+import {
+  INFERNO_NEARBY_LINE,
+  infernoKeylineStroke,
+  nearbyArea,
+  nearbyEdges,
+  NEARBY_STROKE,
+} from "./nearbyFootprints";
 import {
   inBounds,
   Occupancy,
@@ -215,6 +221,10 @@ export class PlacementGrid {
   }
 }
 
+/** A zoom to size the keyline by: the camera's, or 1 when there is none to read. */
+const validZoom = (zoom: number | undefined): number =>
+  zoom !== undefined && Number.isFinite(zoom) && zoom > 0 ? zoom : 1;
+
 /** Whether a yard point lies inside a building's footprint placed at `spot`. */
 export const insideFootprint = (
   type: number,
@@ -360,6 +370,8 @@ export class BuildPlacement {
   private readonly linePictures = new Container();
   /** A dot on every corner, over the pictures, so the bends show. */
   private readonly lineMarks = new Graphics();
+  /** The camera's zoom the Inferno's keyline was last drawn for. */
+  private zoom = 1;
   /** The loaded picture layers, so every Block of a line can be drawn with them. */
   private artTextures: { texture: Texture; layer: ResolvedImage }[] = [];
 
@@ -367,6 +379,7 @@ export class BuildPlacement {
     this.options = options;
     this.yard = options.yard;
     this.grid = new PlacementGrid(options.yard);
+    this.zoom = validZoom(options.camera.zoom);
 
     this.ghost.eventMode = "none";
     this.ghost.addChild(this.nearby, this.outline, this.art);
@@ -635,15 +648,44 @@ export class BuildPlacement {
     return this.lineNearbyDrawn;
   }
 
-  /** One path and one stroke for the lot, as the planner's overlay does. */
+  /**
+   * The camera's zoom changed (a wheel, a pinch, the buttons). Only the
+   * Inferno's keyline cares: it holds its 3 screen pixels at any zoom.
+   */
+  setZoom(zoom: number): void {
+    const next = validZoom(zoom);
+    if (next === this.zoom) return;
+    this.zoom = next;
+    if (this.yard.kind !== "inferno" || this.done) return;
+    this.strokeNearby(this.nearby, this.nearbyDrawn);
+    this.strokeNearby(this.lineNearby, this.lineNearbyDrawn);
+  }
+
+  /**
+   * The outlines themselves. The main yard: one path and one faint white
+   * stroke for the lot, as the planner's overlay does. The Inferno: a
+   * charcoal keyline under a cool white line, each shared edge drawn once,
+   * so it reads on the glowing lava Blocks and ground (owner, 20 Nov 2026).
+   */
   private strokeNearby(g: Graphics, found: readonly NearbyFootprint[]): void {
     g.clear();
     if (found.length === 0) return;
-    for (const one of found) {
-      const corners = footprintCorners(this.yard.bounds, one.type, one.x, one.y, this.yard.kind);
-      g.poly(corners.flatMap((point) => [point.x, point.y]));
+    const outlines = found.map((one) =>
+      footprintCorners(this.yard.bounds, one.type, one.x, one.y, this.yard.kind),
+    );
+    if (this.yard.kind !== "inferno") {
+      for (const corners of outlines) g.poly(corners.flatMap((point) => [point.x, point.y]));
+      g.stroke(NEARBY_STROKE);
+      return;
     }
-    g.stroke(NEARBY_STROKE);
+    const edges = nearbyEdges(outlines);
+    const path = () => {
+      for (const edge of edges) g.moveTo(edge.x1, edge.y1).lineTo(edge.x2, edge.y2);
+    };
+    path();
+    g.stroke(infernoKeylineStroke(this.zoom));
+    path();
+    g.stroke(INFERNO_NEARBY_LINE);
   }
 
   /* ── Drawing ────────────────────────────────────────────────────────── */

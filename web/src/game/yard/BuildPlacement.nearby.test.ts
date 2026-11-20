@@ -1,8 +1,9 @@
-import { Container } from "pixi.js";
+import { Container, type Graphics } from "pixi.js";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { BaseLoadResponse, BuildingData } from "@/api/types";
 import type { Camera } from "@/game/Camera";
 import { BuildPlacement, type DropOutcome } from "./BuildPlacement";
+import { INFERNO_NEARBY_LINE, NEARBY_STROKE } from "./nearbyFootprints";
 import type * as BuildingArt from "./buildingArt";
 import type { Point } from "./YardGrid";
 import { readYard, type Yard } from "./yardModel";
@@ -48,13 +49,15 @@ const carry = (
   yard: Yard,
   onDrop: (x: number, y: number) => Promise<DropOutcome> = async () => "placed",
   onBuild?: (cells: readonly Point[]) => Promise<DropOutcome>,
+  layer = new Container(),
+  zoom?: number,
 ): BuildPlacement => {
   const placement = new BuildPlacement({
     type: BLOCK,
     yard,
-    camera: { screenToWorld: (point: { x: number; y: number }) => point } as unknown as Camera,
+    camera: { screenToWorld: (point: { x: number; y: number }) => point, zoom } as unknown as Camera,
     canvas: new EventTarget() as HTMLCanvasElement,
-    layer: new Container(),
+    layer,
     worldToYard: (x, y) => ({ x, y }),
     onDrop,
     onCancel: () => {},
@@ -176,5 +179,42 @@ describe("BuildPlacement nearby outlines along a wall line", () => {
     expect(placement.lineNearbyShown).not.toEqual([]);
     placement.clearLine();
     expect(placement.lineNearbyShown).toEqual([]);
+  });
+});
+
+/**
+ * The outline's look (owner, 20 Nov 2026): the Inferno gets a charcoal
+ * keyline under a cool white line so it reads on lava; the main yard keeps
+ * its one faint white stroke exactly as it was.
+ */
+describe("BuildPlacement nearby outline style", () => {
+  /** The strokes the single Block's nearby outlines were drawn with. */
+  const strokesOf = (layer: Container) => {
+    const ghost = layer.children[0] as Container;
+    const nearby = ghost.children[0] as Graphics;
+    return nearby.context.instructions
+      .filter((one) => one.action === "stroke")
+      .map((one) => one.data.style as { color: number; alpha: number; width: number; pixelLine: boolean });
+  };
+
+  it("keeps the main yard's single faint white line", () => {
+    const layer = new Container();
+    const placement = carry(yardOf([HALL, TOWER]), undefined, undefined, layer);
+    placement.moveTo(220, 200);
+    const strokes = strokesOf(layer);
+    expect(strokes).toHaveLength(1);
+    expect(strokes[0]).toMatchObject({ color: 0xffffff, alpha: NEARBY_STROKE.alpha, pixelLine: true });
+  });
+
+  it("draws the Inferno's keyline under its line, 3 screen pixels at the camera's zoom", () => {
+    const layer = new Container();
+    const placement = carry(yardOf([HALL, TOWER], "inferno"), undefined, undefined, layer, 0.5);
+    placement.moveTo(220, 200);
+    const [keyline, line] = strokesOf(layer);
+    expect(keyline).toMatchObject({ color: 0x171b20, alpha: 0.7, width: 6 });
+    expect(line).toMatchObject({ color: INFERNO_NEARBY_LINE.color, alpha: 0.8, pixelLine: true });
+
+    placement.setZoom(2);
+    expect(strokesOf(layer)[0]).toMatchObject({ width: 1.5 });
   });
 });
