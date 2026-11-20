@@ -642,8 +642,10 @@ describe("Repeat attack's putty fee (owner, 20 Nov 2026)", () => {
     expect(text(fee.querySelector(".repeat-prompt__fee-word"))).toBe("Repeat fee");
     expect(fee.querySelector(".res-icon--r3")).not.toBeNull();
     expect(text(fee.querySelector(".repeat-prompt__fee-number"))).toBe("3M");
-    expect(text(fee.querySelector(".repeat-prompt__fee-note"))).toBe("Spent on start, even on defeat.");
-    expect(fee.getAttribute("aria-label")).toBe("Repeat fee: 3,000,000 putty, paid when the attack starts, even on defeat");
+    // The owner dropped the "Spent on start, even on defeat." note (20 Nov 2026).
+    expect(fee.querySelector(".repeat-prompt__fee-note")).toBeNull();
+    expect(fee.textContent).not.toMatch(/defeat|spent/i);
+    expect(fee.getAttribute("aria-label")).toBe("Repeat fee: 3,000,000 putty");
     expect(fee.classList.contains("repeat-prompt__fee--short")).toBe(false);
     expect(fee.querySelector(".repeat-prompt__fee-short")).toBeNull();
     // After the Catapult's shots, in the cost area.

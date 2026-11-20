@@ -18,8 +18,8 @@ import "@/ui/styles/repeat-prompt.css";
  *   every monster kind with its count, then the Catapult's shots as resource
  *   piles with a size word, one per resource and no count;
  * - Repeat attack's putty fee (owner, 20 Nov 2026; astra, round 1): the putty pile and the
- *   amount, under the Catapult; a warning-coloured shortage and a short
- *   note that it is spent on start, even on defeat;
+ *   amount, under the Catapult, and a warning-coloured shortage (the owner
+ *   dropped the "Spent on start" note, 20 Nov 2026);
  * - Smart Repeat attack's moves, one card per move: the yard they leave, the
  *   monsters as small tiles, an arrow, the yard in range; the list scrolls
  *   inside the sheet, with a "more below" cue that shows on a touch screen;
@@ -159,8 +159,7 @@ export interface FeeShown {
 /**
  * astra, round 1: the putty pile and amount keep their normal colour.
  * A separate warning says how much is short, rounded up; the refusal keeps
- * its own list. The spending note goes under the row, or after the amount
- * on a phone on its side (astra, round 2).
+ * its own list.
  */
 export const feeLine = ({ fee, short = 0 }: FeeShown): HTMLElement => {
   const line = el("section", `repeat-prompt__fee${short > 0 ? " repeat-prompt__fee--short" : ""}`);
@@ -178,9 +177,6 @@ export const feeLine = ({ fee, short = 0 }: FeeShown): HTMLElement => {
     shortage.setAttribute("aria-hidden", "true");
     line.append(shortage);
   }
-  const note = el("span", "repeat-prompt__fee-note", "Spent on start, even on defeat.");
-  note.setAttribute("aria-hidden", "true");
-  line.append(note);
   return line;
 };
 

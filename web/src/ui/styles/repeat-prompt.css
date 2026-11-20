@@ -237,7 +237,7 @@
 }
 
 /* astra, round 1: under the Catapult, the label, putty pile and amount,
-   then a separate warning when short. The spending note sits below. */
+   then a separate warning when short. */
 .repeat-prompt__fee {
   display: flex;
   flex-wrap: wrap;
@@ -272,37 +272,13 @@
   white-space: nowrap;
 }
 
-.repeat-prompt__fee-note {
-  flex-basis: 100%;
-  color: var(--colour-text-muted);
-  font-size: var(--text-sm);
-}
-
-@media (max-height: 500px) {
-  /* astra, round 2: on a phone on its side the note sits on the fee's own
-     row, after the amount, where there is room across, so it adds no line. */
-  .repeat-prompt__fee-note {
-    flex-basis: auto;
-  }
-}
-
 /* A short screen (the layout check's iPad Split View 694x768 and iPhone
-   with Safari's bars 390x664): the fee row as tight as the bombs' row and
-   the note in small type. With moves to make, the moves' cards need that
-   room (the first one stays in sight), so the note goes there; the fee's
-   tooltip and screen-reader label still say it. */
+   with Safari's bars 390x664, and a phone on its side): the fee row as
+   tight as the bombs' row, so the moves' first card stays in sight. */
 @media (max-height: 500px), (max-width: 899px) and (max-height: 800px) {
   .repeat-prompt__fee {
     min-height: 0;
     row-gap: 0;
-  }
-
-  .repeat-prompt__fee-note {
-    font-size: var(--text-xs);
-  }
-
-  .auto-attack--prompt-moves .repeat-prompt__fee-note {
-    display: none;
   }
 }
 
