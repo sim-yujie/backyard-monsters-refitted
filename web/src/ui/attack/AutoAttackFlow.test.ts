@@ -284,7 +284,8 @@ describe("Smart Repeat attack's prompt (owner, 16 Nov 2026)", () => {
     await settle();
     expect(api.plan).toHaveBeenCalledTimes(1);
     expect(text(modal)).toContain("Your yards changed. Here is the new plan.");
-    expect(modal.querySelector(".auto-attack__scroll")?.firstElementChild?.className).toBe("auto-attack__changed");
+    // The banner leads: first in the sheet (one column), atop the moves (two).
+    expect(modal.querySelector(".repeat-prompt__columns--banner")?.firstElementChild?.className).toBe("auto-attack__changed");
     expect(modal.querySelectorAll(".repeat-prompt__move")).toHaveLength(1);
     expect(text(modal.querySelector(".repeat-prompt__move .attack-window__tile"))).toBe("×119");
     button(modal, "Move and attack")!.click();

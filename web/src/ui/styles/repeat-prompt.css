@@ -591,8 +591,29 @@
     flex: 1 1 auto;
     grid-template-columns: minmax(0, 1fr) minmax(0, 1.45fr);
     grid-template-rows: minmax(0, 1fr);
-    gap: var(--space-4);
+    grid-template-areas: "army side";
+    gap: var(--space-2) var(--space-4);
     min-height: 0;
+  }
+
+  /* The plan changed: the banner tops the moves' column, the army beside both. */
+  .auto-attack--prompt-two .repeat-prompt__columns--banner {
+    grid-template-rows: auto minmax(0, 1fr);
+    grid-template-areas:
+      "army banner"
+      "army side";
+  }
+
+  .auto-attack--prompt-two .repeat-prompt__columns > .auto-attack__changed {
+    grid-area: banner;
+  }
+
+  .auto-attack--prompt-two .repeat-prompt__columns > .repeat-prompt__army {
+    grid-area: army;
+  }
+
+  .auto-attack--prompt-two .repeat-prompt__columns > :is(.repeat-prompt__moves-part, .repeat-prompt__refusal-part) {
+    grid-area: side;
   }
 
   .auto-attack--prompt-two :is(.repeat-prompt__army, .repeat-prompt__moves, .repeat-prompt__refusal-part) {

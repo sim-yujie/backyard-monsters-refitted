@@ -215,9 +215,11 @@ const refusalPart = (reason: string, rows: readonly HTMLElement[], army: HTMLEle
 };
 
 /** The army and what goes beside it (the moves, or what is short). */
-const columnsOf = (army: HTMLElement, side: HTMLElement): HTMLElement => {
+const columnsOf = (army: HTMLElement, side: HTMLElement, banner: HTMLElement | null = null): HTMLElement => {
   const columns = document.createElement("div");
-  columns.className = "repeat-prompt__columns";
+  columns.className = `repeat-prompt__columns${banner ? " repeat-prompt__columns--banner" : ""}`;
+  // The banner leads in one column, and tops the moves' column in two.
+  if (banner) columns.append(banner);
   columns.append(army, side);
   return columns;
 };
@@ -379,7 +381,7 @@ export class AutoAttackFlow {
     const refusal = repeatRefusal(answer);
     const moves = refusal === null ? (answer.moves ?? []) : [];
     const body: HTMLElement[] = [];
-    if (changed) body.push(paragraph(MOVES_CHANGED, "auto-attack__changed"));
+    const banner = changed ? paragraph(MOVES_CHANGED, "auto-attack__changed") : null;
     const army = this.armyColumn(plan, answer.damage);
     let side: HTMLElement | null = null;
     if (refusal) {
@@ -395,7 +397,8 @@ export class AutoAttackFlow {
       this.movesKey = answer.movesKey ?? null;
       side = movesPart(moves, answer.yards ?? {});
     }
-    body.push(side ? columnsOf(army, side) : army);
+    if (side) body.push(columnsOf(army, side, banner));
+    else body.push(...(banner ? [banner] : []), army);
 
     const attack = buttonOf(
       moves.length > 0 ? MOVE_AND_ATTACK : "Attack now",
