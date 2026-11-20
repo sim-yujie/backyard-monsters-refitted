@@ -1,4 +1,5 @@
 import { costOf, OUTPOST_CORE_TYPE } from "../../game-data/buildingCosts.js";
+import { earnedAfterKit } from "../maproom/v2/outpostEarned.js";
 import { mapByPercent } from "../alliance/allianceBonuses.js";
 import { STARTER_KITS, type KitBuilding, type StarterKit } from "../../game-data/starterKits.js";
 import type { BuildingData, BuildingDataMap, BuildingHealthData } from "../../types/BuildingData.js";
@@ -86,6 +87,8 @@ export const FREE_WELCOME_KIT = 1;
 /** The slice of a save a kit reads. */
 export interface StarterKitSave {
   type?: string;
+  /** The outpost's main points paid for counted steps (`outpostEarned.ts`). */
+  mainpointsearned?: number | string | null;
   buildingdata?: BuildingDataMap | null;
   buildinghealthdata?: BuildingHealthData | null;
   monsters?: JsonObject | null;
@@ -347,6 +350,8 @@ export const planStarterKit = (
       // The one durable record of which kit this outpost wears (issue #334):
       // the map's kit tint and kit filter read it off `getArea`'s outpost cells.
       starterkit: kit.id,
+      // Only the core stays: the counter keeps no more than its fortification paid (patch 8.1).
+      mainpointsearned: earnedAfterKit(save.mainpointsearned, before),
     },
     debit,
     ...(shiny > 0 ? { shiny } : {}),

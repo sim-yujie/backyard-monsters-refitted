@@ -1,6 +1,7 @@
 import { FREE_SPEEDUP_KEYS, type FreeSpeedupItem } from "../../game-data/events/eventRewards.js";
 import { YardSpeedupSchema } from "../../schemas/YardSchemas.js";
 import { builtEvents } from "../../services/achievements/record.js";
+import { boardPointsOf } from "../../services/maproom/v2/outpostEarned.js";
 import { planSpeedup } from "../../services/yard/speedup.js";
 import type { JsonObject } from "../../types/JsonObject.js";
 import { defineYardAction } from "./yardAction.js";
@@ -46,6 +47,7 @@ export const yardSpeedupAction = defineYardAction({
       },
       shiny: key ? 0 : plan.shiny,
       points: plan.points,
+      boardPoints: plan.report.finished ? boardPointsOf(plan.report.finished.t, plan.points) : 0,
       achievementEvents: builtEvents(plan.report.finished ? [plan.report.finished] : []),
     };
   },

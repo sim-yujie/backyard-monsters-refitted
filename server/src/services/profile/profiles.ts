@@ -181,8 +181,8 @@ export const readProfile = async (
   }
 
   const held = tallyOutposts(
-    await em.execute<{ userid: number; buildingdata: BuildingDataMap | null }[]>(
-      `SELECT userid, buildingdata FROM bym.save WHERE userid = ? AND type = 'outpost'`,
+    await em.execute<{ userid: number; buildingdata: BuildingDataMap | null; mainpointsearned: number | string }[]>(
+      `SELECT userid, buildingdata, mainpointsearned FROM bym.save WHERE userid = ? AND type = 'outpost'`,
       [userid],
     ),
   ).get(Number(row.userid));

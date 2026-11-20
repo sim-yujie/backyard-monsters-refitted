@@ -44,6 +44,13 @@ export const POOL_FIELDS: ReadonlySet<PropertyKey> = new Set([
 const POOL_CAP = "poolCap";
 
 /**
+ * Whether `save` is an outpost seen through {@link poolView}, so the points a
+ * rule adds to it land on the owner's main row (`outpostEarned.ts` books
+ * them only then).
+ */
+export const isPoolView = (save: object): boolean => POOL_CAP in save;
+
+/**
  * The outpost `yard` with the player-level columns of `pool`, its owner's main
  * yard. Reads and writes go straight through to the two rows.
  *

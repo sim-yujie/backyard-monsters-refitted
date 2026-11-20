@@ -138,9 +138,9 @@ describe("rankRows", () => {
 });
 
 describe("OUTPOSTS_SQL", () => {
-  test("reads every Map Room 2 outpost and its holder in one query, never an Inferno yard", () => {
+  test("reads every Map Room 2 outpost, its holder and what it paid main in one query, never an Inferno yard", () => {
     const sql = OUTPOSTS_SQL.replace(/\s+/g, " ");
-    expect(sql).toContain("SELECT o.userid, o.buildingdata FROM bym.save o");
+    expect(sql).toContain("SELECT o.userid, o.buildingdata, o.mainpointsearned FROM bym.save o");
     expect(sql).toContain("o.type = 'outpost'");
     expect(sql).not.toContain("inferno");
     expect(sql).not.toContain("?");

@@ -1,4 +1,5 @@
 import { costOf, OUTPOST_CORE_TYPE, type YardKind } from "../../game-data/buildingCosts.js";
+import { boardPointsOf } from "../maproom/v2/outpostEarned.js";
 import type { BuildingData } from "../../types/BuildingData.js";
 import { cancelRefund, type StorageCapSave } from "../base/economy/resourceBudget.js";
 import { costLessBy } from "../events/weekendBoosts.js";
@@ -219,11 +220,13 @@ export const planUpgradeAction = (stored: UpgradeActionSave, id: number, now: nu
   const buildingdata = { ...save.buildingdata, [String(id)]: step.building };
   // A wall step is written finished (D13, `startUpgrades.ts`): its points now.
   const points = step.finished && step.points > 0 ? step.points : undefined;
+  // Booked on an outpost's `mainpointsearned` (patch 8.1).
+  const boardPoints = points ? boardPointsOf(step.t, points) : undefined;
   if (isSurfaceInferno(save, step.t)) {
     const iresources = chargePurse(save.iresources, step.cost);
-    return { report: { ...report, purse: purseReport(iresources) }, slices: { buildingdata, iresources }, points };
+    return { report: { ...report, purse: purseReport(iresources) }, slices: { buildingdata, iresources }, points, boardPoints };
   }
-  return { report, slices: { buildingdata }, debit: step.cost, points };
+  return { report, slices: { buildingdata }, debit: step.cost, points, boardPoints };
 };
 
 /**

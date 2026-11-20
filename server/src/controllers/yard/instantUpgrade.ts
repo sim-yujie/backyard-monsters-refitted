@@ -1,4 +1,5 @@
 import { YardInstantUpgradeSchema } from "../../schemas/YardSchemas.js";
+import { boardPointsOf } from "../../services/maproom/v2/outpostEarned.js";
 import { planInstantUpgrade } from "../../services/yard/instantUpgrade.js";
 import { upgradeQuestEvents } from "../../services/quests/hooks.js";
 import { withInfernoStanding } from "../../services/yard/surfaceInferno.js";
@@ -22,6 +23,7 @@ export const yardInstantUpgradeAction = defineYardAction({
       slices: { buildingdata: plan.buildingdata },
       shiny: plan.shiny,
       points: plan.points,
+      boardPoints: boardPointsOf(plan.job.t, plan.points),
       questEvents: upgradeQuestEvents(type),
     };
   },

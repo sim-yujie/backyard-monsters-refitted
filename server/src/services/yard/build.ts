@@ -20,6 +20,7 @@ import {
   type StorageCapSave,
 } from "../base/economy/resourceBudget.js";
 import { requirementDetail } from "../base/economy/transitions.js";
+import { boardPointsOf } from "../maproom/v2/outpostEarned.js";
 import {
   countOfType,
   hallName,
@@ -435,6 +436,8 @@ export const planBuild = (save: BuildSave, request: BuildRequest, now: number) =
       slices: { buildingdata: { ...save.buildingdata, [String(id)]: finishedBuilding(id, request) } },
       debit: cost,
       points,
+      // A wall's count on an outpost's board, a trap's do not (patch 8.1).
+      boardPoints: boardPointsOf(request.type, points),
     };
   }
 
@@ -497,6 +500,7 @@ export const planInstantBuild = (save: BuildSave, request: BuildRequest, now: nu
     slices: { buildingdata: { ...save.buildingdata, [String(id)]: building } },
     shiny,
     points,
+    boardPoints: boardPointsOf(request.type, points),
   };
 };
 

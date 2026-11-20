@@ -9,6 +9,7 @@ import { Status } from "../../enums/StatusCodes.js";
 import { ClientSafeError } from "../../middleware/clientSafeError.js";
 import { YardTargetSchema } from "../../schemas/YardSchemas.js";
 import { RESOURCE_KEYS, type ResourceKey } from "../../services/base/economy/resourceBudget.js";
+import { bookOutpostPoints } from "../../services/maproom/v2/outpostEarned.js";
 import { playerLevelOf, playerPointsOf } from "../../services/base/calculateBaseLevel.js";
 import { isAttackActive } from "../../services/base/isAttackActive.js";
 import { addEvents, builtEvents, recordAchievements, unseenAchievements } from "../../services/achievements/record.js";
@@ -166,6 +167,9 @@ export type YardSlices = Partial<
     // Which Starter Kit an outpost last took (issue #334); see the column's
     // own comment on `Save`.
     | "starterkit"
+    // An outpost's main points paid for counted steps (patch 8.1): a Starter
+    // Kit lowers it (`earnedAfterKit`). Not a pool field, so the outpost's own.
+    | "mainpointsearned"
     // The tutorial's record (`services/onboarding/state.ts`); always written
     // whole, through `updateOnboarding`. On an outpost it lands on the main row.
     | "onboarding"
@@ -242,6 +246,14 @@ export interface YardOutcome<Report> {
   grantCoins?: CoinChange;
   /** Empire points to add. */
   points?: number;
+  /**
+   * The part of {@link points} paid for building steps the empire board's
+   * outpost formula counts (`boardPointsOf`: every building but a trap). On
+   * an outpost the wrapper books it on the outpost's `mainpointsearned`, so
+   * the board counts those levels once (patch 8.1, `outpostEarned.ts`). Left
+   * out, nothing is booked: a resource pack, a trap.
+   */
+  boardPoints?: number;
   /**
    * Achievement event stats the action brought about (issue #204): a Block or
    * Heavy Trap it placed finished, a Starter Kit. The catch-up's finished
@@ -386,6 +398,8 @@ export const applyOutcome = (save: Save, user: User, outcome: YardOutcome<unknow
 
   const points = amount(outcome.points);
   if (points > 0) save.points = String(Number(save.points ?? "0") + points);
+  // A no-op off an outpost; never more than the points actually added.
+  bookOutpostPoints(save, Math.min(points, amount(outcome.boardPoints)));
 
   syncDerivedLevels(save);
   // A no-op on an outpost: the view keeps the outpost's `type`.

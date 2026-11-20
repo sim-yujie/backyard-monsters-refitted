@@ -1,4 +1,5 @@
 import { costOf } from "../../game-data/buildingCosts.js";
+import { boardPointsOf } from "../maproom/v2/outpostEarned.js";
 import type { BuildingData, BuildingDataMap } from "../../types/BuildingData.js";
 import { ClientSafeError } from "../../middleware/clientSafeError.js";
 import { stepAmounts } from "../base/economy/resourceBudget.js";
@@ -188,5 +189,6 @@ export const planBuildWalls = (save: BuildSave, request: BuildWallsRequest) => {
   if (built.length === 0) throw stop?.error ?? firstBlocked ?? yardRefusedErr("placement", "Nothing was built.");
 
   const report: BuildWallsReport = { t: type, built, refused, cost: spent, points };
-  return { report, slices: { buildingdata }, debit: spent, points };
+  // Walls count on an outpost's board: booked on its `mainpointsearned` (patch 8.1).
+  return { report, slices: { buildingdata }, debit: spent, points, boardPoints: boardPointsOf(type, points) };
 };
