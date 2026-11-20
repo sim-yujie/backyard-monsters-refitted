@@ -1,5 +1,8 @@
 """export.py <variant> [<out folder>] : write one fitted shop as game files. <variant> is A, B or C for round 2
-(runs/shop-<v>/new-4x.png) or 3A, 3B, 3C for round 3 (runs/shop3-<v>/new-4x.png, the game camera).
+(runs/shop-<v>/new-4x.png) or 3A, 3B, 3C for round 3 (runs/shop3-<v>/new-4x.png, the game camera). STATE=damaged or
+STATE=destroyed with RUIN=<run> writes that look from runs/ruin-<run>/new-4x-<state>.png (make_ruin.py) instead, as
+top.ishop<variant>.<state>@2x.webp. Shadows are named .v2: the ruin pass (20 Nov 2026) darkened them a little
+(YARD_DARK 0.75 -> 0.88; the lead: "slightly stronger").
 
     ~/.cache/bymr-art-venv/bin/python -I web/tools/store-inferno/export.py A
 
@@ -10,6 +13,7 @@ the dark crisp yard shadow of the game-art skill's make_game_files.py). The vari
 different pick is a new file and needs no BUILDING_ART_VERSION bump. Prints the TierArt row for
 INFERNO_PAINTED_BUILDING_ART[12].
 """
+import os
 import sys
 from pathlib import Path
 
@@ -26,7 +30,7 @@ DARK = 0.62      # the build buttons' shadow strength
 # Yard shadows, matched to Flash's of similar size (Bonsai, Bird House, Beehive, Outhouse): darkest pixel
 # 50-90 of 255, most of the shadow solid. The first cut (DARK, blur 1.6, floor 0.35) was too light and
 # soft in the yard (tester, 10 Nov 2026).
-YARD_DARK, YARD_BLUR, YARD_FLOOR = 0.75, 0.7, 0.6
+YARD_DARK, YARD_BLUR, YARD_FLOOR = 0.88, 0.7, 0.6   # make_game_files.py has 0.75; a little darker here
 BOTTOM = {20: 15, 30: 22, 40: 30, 50: 37, 60: 45}
 
 
@@ -62,17 +66,22 @@ dest = Path(sys.argv[2]) if len(sys.argv) > 2 else FOLDER
 dest.mkdir(parents=True, exist_ok=True)
 CW, CH, OX, OY = CANVAS
 run = f"shop3-{variant[1:]}" if variant.startswith("3") else f"shop-{variant}"
-im4 = Image.open(OUT / "runs" / run / "new-4x.png").convert("RGBA")
+state = os.environ.get("STATE", "")
+if state:
+    im4 = Image.open(OUT / "runs" / f"ruin-{os.environ['RUIN']}" / f"new-4x-{state}.png").convert("RGBA")
+else:
+    im4 = Image.open(OUT / "runs" / run / "new-4x.png").convert("RGBA")
+dot = f".{state}" if state else ""
 x0, y0, x1, y1 = im4.getbbox()
 box = (x0 // UP * UP, y0 // UP * UP, -(-x1 // UP) * UP, -(-y1 // UP) * UP)
 part = im4.crop(box)
 two = resize_pm(part, (part.width // 2, part.height // 2))
-top = f"top.ishop{variant}@2x.webp"
+top = f"top.ishop{variant}{dot}@2x.webp"
 two.save(dest / top, "WEBP", quality=92, method=6, exact=False)
 tx, ty = box[0] // UP - OX, box[1] // UP - OY
 one = resize_pm(part, (part.width // UP, part.height // UP))
 mask, sx, sy = shadow_mask(one.getchannel("A"), dark=YARD_DARK, blur_px=YARD_BLUR, floor=YARD_FLOOR)
-shadow = f"shadow.ishop{variant}.jpg"
+shadow = f"shadow.ishop{variant}{dot}.v2.jpg"
 ImageChops.subtract(Image.new("L", mask.size, 255), mask).convert("RGB").save(dest / shadow, quality=90)
 bottom = ty + one.height
-print(f'    {{ from: 1, top: ["{top}", {tx}, {ty}], shadow: ["{shadow}", {tx + sx}, {bottom + sy}], lift: 0 }},')
+print(f'{state or "whole"}: top: ["{top}", {tx}, {ty}], shadow: ["{shadow}", {tx + sx}, {bottom + sy}]')

@@ -72,7 +72,8 @@ export const SILHOUETTE_FILE: Readonly<Record<number, string>> = {
  * are on disk. The Block's first is Brimstone, `coal_wall.v3`. The Monster
  * Juicer names none, so it shows `9.jpg`, as on the surface. The Yard
  * Planner, which Flash never let the Inferno build, has a painted one in the
- * style of the others (29 Oct 2026, beside its `buildings/iyardplanner/`).
+ * style of the others (29 Oct 2026, beside its `buildings/iyardplanner/`). So does the General Store (owner, 20 Nov
+ * 2026): Flash's store before the Booby Trap button's flames (`web/tools/store-inferno/button.py`).
  */
 export const INFERNO_BUTTON_FILE: Readonly<Record<number, string>> = {
   1: "bone_crusher.v2.jpg",
@@ -82,6 +83,7 @@ export const INFERNO_BUTTON_FILE: Readonly<Record<number, string>> = {
   6: "sillo.v2.jpg",
   8: "monster_locker.v2.jpg",
   10: "yard_planner.v2.jpg",
+  12: "general_store.v2.jpg",
   13: "hatchery.v2.jpg",
   17: "coal_wall.v3.jpg",
   21: "sniper_tower.v2.jpg",
