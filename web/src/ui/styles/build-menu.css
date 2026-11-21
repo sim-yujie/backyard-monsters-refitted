@@ -1591,6 +1591,11 @@
     grid-area: needs;
   }
 
+  /* The tick says it is a need; the heading only got sliced under the pinned row. */
+  .build-info__needs .build-info__label {
+    display: none;
+  }
+
   .build-info__actions {
     grid-area: actions;
     align-self: end;
@@ -1679,7 +1684,8 @@
     text-shadow: 0 1px 2px rgb(0 0 0 / 70%);
   }
 
-  .build-placing--blocked .build-placing__hint,
+  /* As the pill rule above (0,3,0): the "Can't build here" tip in the error tint, as upright. */
+  .build-placing.build-placing--blocked .build-placing__hint,
   .build-placing .build-placing__message[data-tone="bad"] {
     color: #ffc2b8;
   }
@@ -1702,10 +1708,16 @@
     gap: var(--space-2);
   }
 
-  /* The × in line mode: drawn small in the corner, touched as 44 px. */
+  /* The × in line mode: drawn small above the bar's corner, touched as 44 px,
+     and clear of ✓ Build below it (its old spot overlapped Build's corner). */
+  .build-placing--line .btn.build-placing__cancel {
+    top: -36px;
+    right: -6px;
+  }
+
   .build-placing--line .btn.build-placing__cancel::after {
     content: "";
     position: absolute;
-    inset: -6px;
+    inset: -10px -6px -2px -6px;
   }
 }
