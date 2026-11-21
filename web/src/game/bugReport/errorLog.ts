@@ -1,3 +1,4 @@
+import { requestUrlOf } from "@/api/http";
 /**
  * The last few game errors, kept in memory for the bug report form
  * (`ui/bugReport/BugReportDialog.ts`): uncaught errors, unhandled promise
@@ -55,7 +56,8 @@ export const describeValue = (value: unknown): string => {
 /** One value as readable text: an error's name, message and the top of its stack. */
 export const describeError = (value: unknown): string => {
   if (value instanceof Error) {
-    const head = `${value.name}: ${value.message}`;
+    const url = requestUrlOf(value);
+    const head = `${value.name}: ${value.message}${url ? ` (${url})` : ""}`;
     const stack = (value.stack ?? "")
       .split("\n")
       .map((line) => line.trim())

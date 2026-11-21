@@ -567,9 +567,11 @@ describe("BuildMenu", () => {
     const rules = [...css.matchAll(/\.build-info__actions \{([^}]*)\}/g)].map((match) => match[1]!);
     expect(rules[0]).toMatch(/position: sticky;\s*bottom: 0;/);
     expect(rules[0]).toMatch(/background: [^;]*var\(--colour-surface-base\);/);
-    // The phone layouts clear the info's own ground; the bar keeps one.
-    expect(rules.slice(1)).toHaveLength(2);
-    for (const rule of rules.slice(1)) expect(rule).toMatch(/background: var\(--colour-surface-base\);/);
+    // The phone layouts clear the info's own ground; the bar keeps one. (Other
+    // rules only place it in a grid or lay it out in a row, beta 9.)
+    const grounds = rules.slice(1).filter((rule) => /background:/.test(rule));
+    expect(grounds).toHaveLength(2);
+    for (const rule of grounds) expect(rule).toMatch(/background: var\(--colour-surface-base\);/);
     expect(css).not.toMatch(/\.build-info__actions \{[^}]*position: (static|relative)/);
   });
 });

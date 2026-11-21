@@ -1,6 +1,6 @@
 import type { Renderer } from "pixi.js";
 import { reportCaughtError } from "@/game/bugReport/errorReporter";
-import { deviceMemoryGb, deviceTextureLimit, quality, qualityChoice, type Quality } from "@/game/quality";
+import { deviceMemoryGb, deviceTextureLimit, quality, qualityChoice, readRendererName, type Quality } from "@/game/quality";
 
 /**
  * Graphics problems, sent to the owner's dashboard with the game's other
@@ -152,20 +152,7 @@ export const shortAgent = (ua: string): string => {
 let gpuName: string | null = null;
 
 /** The graphics card's name WebGL gives, unmasked where the browser allows; null with nothing to read. */
-export const readGpuName = (gl: WebGLRenderingContext): string | null => {
-  try {
-    // Firefox already gives the real (rounded) name here, and warns about the
-    // debug extension; Chrome and Safari give "WebKit WebGL" without it.
-    const plain = gl.getParameter(gl.RENDERER) as unknown;
-    if (typeof plain === "string" && plain !== "" && !/^WebKit WebGL$/i.test(plain)) return plain;
-    const info = gl.getExtension("WEBGL_debug_renderer_info");
-    const unmasked = info ? (gl.getParameter(info.UNMASKED_RENDERER_WEBGL) as unknown) : null;
-    if (typeof unmasked === "string" && unmasked !== "") return unmasked;
-    return typeof plain === "string" && plain !== "" ? plain : null;
-  } catch {
-    return null;
-  }
-};
+export const readGpuName = readRendererName;
 
 /** This device's graphics details, as they are now. */
 export const graphicsDevice = (): GraphicsDevice => {

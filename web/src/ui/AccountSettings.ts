@@ -147,6 +147,8 @@ export const SETTINGS_TEXT = {
   },
   /** Medium as this device's default, not picked: its music plays as normal (`musicHeld`). */
   downloadHintDeviceMedium: "Lighter monsters and music.",
+  /** Low as this device's default, not picked: WebGL draws in software (`defaultQuality`; it may have a card Chrome is not using); its music plays. */
+  downloadHintDeviceLow: "Set for this browser's graphics: lightest monsters.",
   /** High on a phone or tablet: its monsters are Medium's (`monsterSheetLevel`). */
   downloadHintTouchHigh: "On phones and tablets, High uses lighter monsters.",
   /** A level safe mode put the game on (`game/safeMode.ts`), not picked. */
@@ -686,7 +688,10 @@ const downloadRow = (): HTMLElement[] => {
       : select.value === "medium" && chosen === null
         ? // Medium the device chose (no choice kept) does not hold the music.
           SETTINGS_TEXT.downloadHintDeviceMedium
-        : levelHint(select.value as Quality);
+        : select.value === "low" && chosen === null
+          ? // Low the device chose (no graphics card): the music is not held either.
+            SETTINGS_TEXT.downloadHintDeviceLow
+          : levelHint(select.value as Quality);
   select.setAttribute("aria-describedby", hint.id);
   select.addEventListener("change", () => {
     const level = select.value as Quality;

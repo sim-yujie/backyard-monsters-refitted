@@ -150,6 +150,36 @@
   flex: 1;
 }
 
+/* A phone upright (beta 9): a notice with an action ("Back to the map",
+   "Retry") gives its words the whole row beside ×, the action under them,
+   rather than a narrow column of six lines. */
+@media (max-width: 620px) {
+  .notice:has(> .btn:not(.btn--icon)) {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-areas:
+      "text dismiss"
+      "action action";
+    gap: var(--space-1) var(--space-3);
+  }
+
+  .notice:has(> .btn:not(.btn--icon)) > .notice__text {
+    grid-area: text;
+    align-self: center;
+  }
+
+  .notice:has(> .btn:not(.btn--icon)) > .btn:not(.btn--icon) {
+    grid-area: action;
+    justify-self: start;
+    min-height: 44px;
+  }
+
+  .notice:has(> .btn:not(.btn--icon)) > .btn--icon {
+    grid-area: dismiss;
+    align-self: start;
+  }
+}
+
 /* ── Compact panel body for the map docks ───────────────────────────────── */
 
 .map-panel .panel__body {

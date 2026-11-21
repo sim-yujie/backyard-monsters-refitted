@@ -24,6 +24,8 @@ export class ApiError extends Error {
   readonly code: string | number | undefined;
   readonly details: ApiErrorDetails | undefined;
   readonly body: unknown;
+  /** The address asked, for the console and error reports; never in `message`, which players read. */
+  readonly url: string | undefined;
 
   constructor(
     message: string,
@@ -33,6 +35,7 @@ export class ApiError extends Error {
       code?: string | number;
       details?: ApiErrorDetails;
       body?: unknown;
+      url?: string;
     },
   ) {
     super(message);
@@ -42,6 +45,7 @@ export class ApiError extends Error {
     this.code = init.code;
     this.details = init.details;
     this.body = init.body;
+    this.url = init.url;
   }
 
   /** True when the caller should send the player back to the login screen. */
@@ -60,11 +64,19 @@ export class ApiError extends Error {
 
 /** Thrown when the server could not be reached at all. */
 export class NetworkError extends Error {
-  constructor(message: string, cause: unknown) {
+  /** The address asked, for the console and error reports; never in `message`, which players read. */
+  readonly url: string | undefined;
+
+  constructor(message: string, cause: unknown, url?: string) {
     super(message, { cause });
     this.name = "NetworkError";
+    this.url = url;
   }
 }
+
+/** A failed request's address, for error reports and the bug report's error list; "" for anything else. */
+export const requestUrlOf = (error: unknown): string =>
+  (error instanceof ApiError || error instanceof NetworkError) && error.url ? error.url : "";
 
 /** A form field value. Objects and arrays must be JSON-stringified by the caller. */
 export type FormValue = string | number | boolean | undefined | null;
@@ -150,6 +162,25 @@ const readBody = async (response: Response): Promise<unknown> => {
 };
 
 /**
+ * What a player reads when a failed answer gives no words of its own (beta 9):
+ * the server down or a proxy's error page. Many windows show an ApiError's
+ * message as it is (the Repeat attack sheet showed "Request to
+ * http://…/worldmapv2/autoattack failed with status 500"), so it never names
+ * the address; that goes to the console and {@link ApiError.url}.
+ */
+export const SERVER_TROUBLE_TEXT = "Server problem. Try again in a moment.";
+
+/** A {@link NetworkError}'s words: the server could not be reached at all. */
+export const NO_REACH_TEXT = "Could not reach the server. Check your connection.";
+
+/** A plain-text answer short enough to show: not a web page, no address in it. */
+const readableText = (body: unknown): string => {
+  if (typeof body !== "string") return "";
+  const text = body.trim();
+  return text.length <= 200 && !/[<>]|https?:\/\/|\/api\//i.test(text) ? text : "";
+};
+
+/**
  * Turns a response into either the parsed envelope or an ApiError.
  *
  * Success needs both a 2xx status and an `error` field that is absent or 0.
@@ -163,19 +194,16 @@ const unwrap = <T extends ApiEnvelope>(response: Response, body: unknown): T => 
   const failedByEnvelope = code !== undefined && code !== 0 && code !== "0";
 
   if (failedByStatus || failedByEnvelope) {
-    const message =
-      (typeof code === "string" && code) ||
-      details?.message ||
-      details?.error ||
-      (typeof body === "string" && body) ||
-      `Request to ${response.url} failed with status ${response.status}`;
+    const words = (typeof code === "string" && code) || details?.message || details?.error || readableText(body);
+    if (!words) console.warn(`Request to ${response.url} failed with status ${response.status}`);
 
-    throw new ApiError(message, {
+    throw new ApiError(words || SERVER_TROUBLE_TEXT, {
       status: response.status,
       ...(details?.status !== undefined ? { serverStatus: details.status } : {}),
       ...(code !== undefined ? { code } : {}),
       ...(details !== undefined ? { details } : {}),
       body,
+      url: response.url,
     });
   }
 
@@ -257,7 +285,8 @@ export const send = async <T extends ApiEnvelope>(
       ...(options.keepalive ? { keepalive: true } : {}),
     });
   } catch (cause) {
-    throw new NetworkError(`Could not reach ${url}`, cause);
+    // Many windows show the message as it is: the address stays out of it (beta 9).
+    throw new NetworkError(NO_REACH_TEXT, cause, url);
   }
 
   const envelope = unwrap<T>(response, await readBody(response));

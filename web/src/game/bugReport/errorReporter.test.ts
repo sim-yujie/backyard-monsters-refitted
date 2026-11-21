@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { ClientErrorBatch, ClientErrorSendResult } from "@/api/clientErrors";
+import { ApiError, SERVER_TROUBLE_TEXT } from "@/api/http";
 import { GAME_VERSION } from "@/data/gameVersion";
 import { BATCH_MAX, BATCHES_MAX, FIRST_SEND_DELAY_MS, SEND_GAP_MS, installErrorReporter, isNoise, reportCaughtError } from "./errorReporter";
 
@@ -130,6 +131,13 @@ describe("the error sender", () => {
 });
 
 describe("errors the game caught itself", () => {
+  it("names a failed request's address in the report, not in what the player read (beta 9)", async () => {
+    const { sent } = setUp("sent", false);
+    reportCaughtError(new ApiError(SERVER_TROUBLE_TEXT, { status: 500, url: "http://play.test/worldmapv2/autoattack" }));
+    await vi.advanceTimersByTimeAsync(FIRST_SEND_DELAY_MS);
+    expect(sent[0]!.batch.errors[0]!.message).toBe(`ApiError: ${SERVER_TROUBLE_TEXT} (http://play.test/worldmapv2/autoattack)`);
+  });
+
   it("sends one the game hands over (graphics off), counted like any other", async () => {
     const { sent } = setUp("sent", false);
     const error = new Error("Graphics off: WebGL is disabled due to your security policy (No available renderer)");

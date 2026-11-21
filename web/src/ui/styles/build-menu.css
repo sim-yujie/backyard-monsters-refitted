@@ -647,7 +647,9 @@
 /*
  * The Build button keeps to the bottom of the window when the info is taller
  * than the room for it (a short screen, a long list of needs), so it is in
- * sight and in reach without scrolling the info first.
+ * sight and in reach without scrolling the info first. The cost chips and the
+ * line saying why it cannot be built go with it: left above it, the pinned
+ * button covered them (1440x900, beta 9).
  */
 .build-info__actions {
   position: sticky;
@@ -660,6 +662,76 @@
   padding: var(--space-2) 0 var(--space-1);
   /* Solid, so the needs scrolled under it do not show through. */
   background: linear-gradient(var(--colour-surface-sunken), var(--colour-surface-sunken)), var(--colour-surface-base);
+}
+
+/* The chips and the reason line sit a step apart from the button below them. */
+.build-info__actions > :is(.build-info__facts, .build-info__gate) {
+  margin-bottom: var(--space-1);
+}
+
+/* Pinned, the chips are a size smaller, so the cost, the button and Build
+   instantly leave the column as much room as they can. */
+.build-info__actions .build-info__facts {
+  gap: var(--space-1);
+}
+
+.build-info__actions .build-info__fact {
+  gap: var(--space-1);
+  padding: 2px var(--space-2);
+  font-size: var(--text-sm);
+}
+
+/*
+ * A window up to 1050px tall on a computer or an iPad (beta 9): the picture
+ * goes beside the name and the words, not above them, so the name, the words,
+ * the needs and the pinned cost all fit without scrolling at 1280x720 and up.
+ */
+@media (min-width: 620.02px) and (min-height: 500.02px) and (max-height: 1050px) {
+  .build-info {
+    display: grid;
+    grid-template-columns: 72px minmax(0, 1fr);
+    grid-template-rows: auto auto auto auto 1fr;
+    grid-template-areas:
+      "back back"
+      "picture head"
+      "picture blurb"
+      "needs needs"
+      "actions actions";
+    gap: var(--space-2) var(--space-3);
+  }
+
+  .build-info__empty {
+    grid-area: 1 / 1 / -1 / -1;
+  }
+
+  .build-info__back {
+    grid-area: back;
+  }
+
+  .build-info__picture {
+    grid-area: picture;
+    align-self: start;
+    width: 72px;
+  }
+
+  .build-info__head {
+    grid-area: head;
+    align-self: end;
+  }
+
+  .build-info__blurb {
+    grid-area: blurb;
+    font-size: var(--text-sm);
+  }
+
+  .build-info__needs {
+    grid-area: needs;
+  }
+
+  .build-info__actions {
+    grid-area: actions;
+    align-self: end;
+  }
 }
 
 .build-info__build {
@@ -1031,8 +1103,10 @@
   line-height: 1;
 }
 
-/* Line off: Cancel and the Line switch still match in height. */
-.build-placing:not(.build-placing--line):has(.build-placing__line-toggle) .build-placing__buttons .btn {
+/* Line off: Cancel and the Line switch still match in height. Not the hidden
+   ↶, ✗ and ✓ Build: this rule outranks `.btn[hidden]`, and showed them off
+   the bar's edge on a phone (beta 9). */
+.build-placing:not(.build-placing--line):has(.build-placing__line-toggle) .build-placing__buttons .btn:not([hidden]) {
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -1255,8 +1329,9 @@
     display: inline-flex;
   }
 
+  /* Small enough that the needs fit above the pinned cost at 390x844 (beta 9). */
   .build-info__picture {
-    width: 96px;
+    width: 72px;
   }
 
   .build-placing {
@@ -1337,17 +1412,22 @@
     min-width: 0;
   }
 
-  /* The Blocks' picture is already on the left; the switch says it alone. */
-  .build-placing--line .build-placing__line-icon {
+  /* The Blocks' picture is already on the left; the switch says it alone,
+     with Line off too, so Build here keeps one line (beta 9). */
+  .build-placing .build-placing__line-icon {
     display: none;
+  }
+
+  .build-placing__buttons .btn {
+    white-space: nowrap;
   }
 
   .build-placing--line .btn.build-placing__cancel {
     top: var(--space-2);
     right: var(--space-3);
-    width: 40px;
+    width: 44px;
     min-width: 0;
-    height: 40px;
+    height: 44px;
     min-height: 0;
   }
 
@@ -1474,7 +1554,170 @@
     display: inline-flex;
   }
 
+  /* Back, the picture and the name on one row (beta 9), so the name stays in
+     sight above the pinned cost. */
+  .build-info {
+    display: grid;
+    grid-template-columns: auto 40px minmax(0, 1fr);
+    grid-template-rows: auto auto auto 1fr;
+    grid-template-areas:
+      "back picture head"
+      "blurb blurb blurb"
+      "needs needs needs"
+      "actions actions actions";
+    align-items: center;
+    gap: var(--space-1) var(--space-3);
+  }
+
+  .build-info__back {
+    grid-area: back;
+  }
+
   .build-info__picture {
-    width: 64px;
+    grid-area: picture;
+    width: 40px;
+  }
+
+  .build-info__head {
+    grid-area: head;
+  }
+
+  .build-info__blurb {
+    grid-area: blurb;
+    font-size: var(--text-sm);
+  }
+
+  .build-info__needs {
+    grid-area: needs;
+  }
+
+  /* The tick says it is a need; the heading only got sliced under the pinned row. */
+  .build-info__needs .build-info__label {
+    display: none;
+  }
+
+  .build-info__actions {
+    grid-area: actions;
+    align-self: end;
+  }
+
+  /* The pinned cost and Build on one row (beta 9): stacked, they took 144 of
+     the 162 px the info has on a phone on its side. */
+  .build-info__actions {
+    flex-direction: row;
+    flex-wrap: wrap;
+    align-items: center;
+    column-gap: var(--space-3);
+  }
+
+  .build-info__actions > .build-info__facts {
+    flex: 1 1 0;
+    min-width: 0;
+    margin-bottom: 0;
+  }
+
+  .build-info__actions > .build-info__gate {
+    flex-basis: 100%;
+    margin-bottom: 0;
+  }
+
+  .build-info__actions > .btn,
+  .build-info__actions > .shiny-button {
+    flex: none;
+  }
+
+  .build-info__build {
+    min-height: 44px;
+    padding-inline: var(--space-4);
+    font-size: var(--text-md);
+  }
+
+  /* The building in hand (beta 9): one low row along the bottom edge, between
+     the corner buttons, with the tip floating above it as in line mode. It
+     stood in the middle of the screen in two or three rows and hid a third of
+     the yard. */
+  .build-placing,
+  .build-placing--line {
+    bottom: max(var(--space-2), env(safe-area-inset-bottom, 0px));
+    flex-wrap: nowrap;
+    gap: var(--space-3);
+    padding: var(--space-1) var(--space-1) var(--space-1) var(--space-3);
+  }
+
+  .build-placing__picture,
+  .build-placing__line-icon {
+    display: none;
+  }
+
+  .build-placing__name {
+    font-size: var(--text-md);
+  }
+
+  .build-placing__price {
+    flex-wrap: nowrap;
+    white-space: nowrap;
+    font-size: var(--text-xs);
+  }
+
+  .build-placing .build-placing__notes {
+    position: absolute;
+    bottom: calc(100% + var(--space-2));
+    left: 50%;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: var(--space-1);
+    width: max-content;
+    max-width: min(92vw, 520px);
+    transform: translateX(-50%);
+    pointer-events: none;
+  }
+
+  .build-placing :is(.build-placing__hint, .build-placing__message:not(:empty)) {
+    padding: var(--space-1) var(--space-3);
+    border-radius: 999px;
+    background: rgb(12 16 22 / 80%);
+    color: #ffffff;
+    font-size: var(--text-sm);
+    font-weight: 700;
+    text-align: center;
+    text-shadow: 0 1px 2px rgb(0 0 0 / 70%);
+  }
+
+  /* As the pill rule above (0,3,0): the "Can't build here" tip in the error tint, as upright. */
+  .build-placing.build-placing--blocked .build-placing__hint,
+  .build-placing .build-placing__message[data-tone="bad"] {
+    color: #ffc2b8;
+  }
+
+  .build-placing .build-placing__message[data-tone="good"] {
+    color: #b8f0c4;
+  }
+
+  .build-placing__buttons {
+    flex: none;
+    align-items: center;
+  }
+
+  .build-placing__buttons .btn {
+    min-height: 44px;
+    white-space: nowrap;
+  }
+
+  .build-placing__line {
+    gap: var(--space-2);
+  }
+
+  /* The × in line mode: drawn small above the bar's corner, touched as 44 px,
+     and clear of ✓ Build below it (its old spot overlapped Build's corner). */
+  .build-placing--line .btn.build-placing__cancel {
+    top: -36px;
+    right: -6px;
+  }
+
+  .build-placing--line .btn.build-placing__cancel::after {
+    content: "";
+    position: absolute;
+    inset: -10px -6px -2px -6px;
   }
 }

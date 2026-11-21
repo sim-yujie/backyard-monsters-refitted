@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { ApiError, post, postJson, send, setAuthToken } from "./http";
+import { ApiError, NO_REACH_TEXT, NetworkError, SERVER_TROUBLE_TEXT, post, postJson, send, setAuthToken } from "./http";
 
 /** The request `send` handed to fetch, flattened to what the assertions need. */
 interface Captured {
@@ -125,5 +125,60 @@ describe("send", () => {
 
     expect(captured[0]?.contentType).toBe("application/json");
     expect(captured[0]?.body).toBe("{}");
+  });
+});
+
+describe("a failed answer's words (beta 9)", () => {
+  const failWith = (body: string, status: number) => {
+    vi.stubGlobal("fetch", () => {
+      const response = new Response(body, { status });
+      Object.defineProperty(response, "url", { value: "http://localhost:5361/worldmapv2/autoattack" });
+      return Promise.resolve(response);
+    });
+  };
+  const caught = async (): Promise<ApiError> => {
+    try {
+      await post("/worldmapv2/autoattack", {});
+    } catch (error) {
+      return error as ApiError;
+    }
+    throw new Error("did not fail");
+  };
+
+  it("never shows the address to the player when the server says nothing (server down)", async () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    failWith("", 500);
+    const error = await caught();
+    expect(error).toBeInstanceOf(ApiError);
+    expect(error.message).toBe(SERVER_TROUBLE_TEXT);
+    expect(error.message).not.toMatch(/http|worldmapv2|Request to/);
+    expect(error.status).toBe(500);
+    // The address stays for the console and error reports.
+    expect(error.url).toBe("http://localhost:5361/worldmapv2/autoattack");
+    expect(warn).toHaveBeenCalledWith(expect.stringContaining("http://localhost:5361/worldmapv2/autoattack"));
+    warn.mockRestore();
+  });
+
+  it("never shows a proxy's error page", async () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    failWith("<html><body><h1>502 Bad Gateway</h1></body></html>", 502);
+    expect((await caught()).message).toBe(SERVER_TROUBLE_TEXT);
+    warn.mockRestore();
+  });
+
+  it("keeps the server's own words: a short plain answer, or the envelope's", async () => {
+    failWith("Not enough putty.", 400);
+    expect((await caught()).message).toBe("Not enough putty.");
+    failWith(JSON.stringify({ error: "That camp is gone." }), 200);
+    expect((await caught()).message).toBe("That camp is gone.");
+  });
+
+  it("never shows the address when the server cannot be reached at all", async () => {
+    vi.stubGlobal("fetch", () => Promise.reject(new TypeError("Failed to fetch")));
+    const error = await post("/worldmapv2/autoattack", {}).catch((caught: unknown) => caught as NetworkError);
+    expect(error).toBeInstanceOf(NetworkError);
+    expect(error.message).toBe(NO_REACH_TEXT);
+    expect(error.message).not.toMatch(/http|worldmapv2/);
+    expect(error.url).toContain("/worldmapv2/autoattack");
   });
 });

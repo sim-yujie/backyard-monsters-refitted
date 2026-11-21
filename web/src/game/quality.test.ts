@@ -4,7 +4,10 @@ import {
   deviceDefaultQuality,
   deviceMemoryGb,
   deviceTextureLimit,
+  isSoftwareRenderer,
+  probeGraphics,
   probeTextureLimit,
+  readDeviceHints,
   setDeviceDefaultQuality,
   setDeviceTextureLimit,
   lightMusic,
@@ -253,5 +256,99 @@ describe("the default Quality (old phones, owner 17 Nov 2026)", () => {
     setDeviceDefaultQuality(null);
     expect(deviceDefaultQuality()).toBe("high");
     expect(deviceTextureLimit()).toBe(16384);
+  });
+});
+
+describe("a PC with no graphics card starts on Low (beta 9)", () => {
+  afterEach(() => {
+    setDeviceDefaultQuality(null);
+    setDeviceTextureLimit(null);
+  });
+
+  const SOFTWARE = [
+    "ANGLE (Google, Vulkan 1.3.0 (SwiftShader Device (Subzero) (0x0000C0DE)), SwiftShader driver)",
+    "Google SwiftShader",
+    "llvmpipe (LLVM 15.0.7, 256 bits)",
+    "ANGLE (Mesa, llvmpipe (LLVM 17.0.6 256 bits), OpenGL 4.5)",
+    "softpipe",
+    "ANGLE (Microsoft, Microsoft Basic Render Driver Direct3D11 vs_5_0 ps_5_0, D3D11)",
+    "Microsoft Basic Render Driver, or similar",
+    "Apple Software Renderer",
+  ];
+  const HARDWARE = [
+    "ANGLE (NVIDIA, NVIDIA GeForce RTX 5070 Ti (0x00002C05) Direct3D11 vs_5_0 ps_5_0, D3D11)",
+    "NVIDIA GeForce GTX 980, or similar",
+    "Apple GPU",
+    "Adreno (TM) 640",
+    "Mali-G78",
+    "ANGLE (Intel, Intel(R) UHD Graphics 620 Direct3D11 vs_5_0 ps_5_0, D3D11)",
+    "WebKit WebGL",
+  ];
+
+  for (const name of SOFTWARE) {
+    it(`knows "${name}" as software rendering`, () => expect(isSoftwareRenderer(name)).toBe(true));
+  }
+  for (const name of HARDWARE) {
+    it(`knows "${name}" as a graphics card`, () => expect(isSoftwareRenderer(name)).toBe(false));
+  }
+  it("says nothing of a renderer it cannot name", () => expect(isSoftwareRenderer(null)).toBe(false));
+
+  it("starts on Low, whatever the memory, limit or touch screen, and a stored choice always wins", () => {
+    for (const hints of [
+      { memoryGb: null, textureLimit: null },
+      { memoryGb: 16, textureLimit: 16384 },
+      { memoryGb: 2, textureLimit: 4096, touch: true },
+    ]) {
+      const fallback = (): ReturnType<typeof defaultQuality> => defaultQuality({ ...hints, software: true });
+      expect(fallback()).toBe("low");
+      expect(quality(storage(), fallback)).toBe("low");
+      for (const chosen of ["high", "medium", "low"] as const) {
+        expect(quality(storage({ "bymr.quality": chosen }), fallback)).toBe(chosen);
+      }
+      expect(defaultQuality({ ...hints, software: false })).not.toBe("low");
+    }
+  });
+
+  it("never writes the Low default down, and holds no music for it", () => {
+    const store = storage();
+    expect(quality(store, () => "low")).toBe("low");
+    expect(qualityChoice(store)).toBeNull();
+    expect(store.getItem("bymr.quality")).toBeNull();
+    expect(musicHeld("low", store)).toBe(false);
+  });
+
+  it("reads the renderer's name from the throwaway context, the unmasked one where the plain one is hidden", () => {
+    let lost = 0;
+    const UNMASKED = 0x9246;
+    const gl = {
+      MAX_TEXTURE_SIZE: 0x0d33,
+      RENDERER: 0x1f01,
+      getParameter: (name: number) =>
+        name === 0x0d33 ? 8192 : name === 0x1f01 ? "WebKit WebGL" : name === UNMASKED ? "Google SwiftShader" : null,
+      getExtension: (name: string) =>
+        name === "WEBGL_lose_context"
+          ? { loseContext: () => void (lost += 1) }
+          : name === "WEBGL_debug_renderer_info"
+            ? { UNMASKED_RENDERER_WEBGL: UNMASKED }
+            : null,
+    };
+    const canvas = { getContext: (kind: string) => (kind === "webgl2" ? gl : null) } as unknown as HTMLCanvasElement;
+    expect(probeGraphics(() => canvas)).toEqual({ textureLimit: 8192, renderer: "Google SwiftShader" });
+    expect(lost).toBe(1);
+    expect(probeGraphics(() => null)).toEqual({ textureLimit: null, renderer: null });
+  });
+
+  it("names a software renderer in the device's hints, even on a device low on memory, and keeps the probed limit", () => {
+    const hints = readDeviceHints(() => ({ textureLimit: 8192, renderer: "llvmpipe (LLVM 15.0.7, 256 bits)" }));
+    expect(hints.software).toBe(true);
+    expect(hints.textureLimit).toBe(8192);
+    expect(deviceTextureLimit()).toBe(8192);
+    expect(defaultQuality(hints)).toBe("low");
+    // The renderer's own limit, once it has said, wins over the throwaway context's.
+    setDeviceTextureLimit(4096);
+    expect(readDeviceHints(() => ({ textureLimit: 16384, renderer: "Apple GPU" }))).toMatchObject({
+      textureLimit: 4096,
+      software: false,
+    });
   });
 });

@@ -1,4 +1,4 @@
-import { getAuthToken } from "@/api/http";
+import { getAuthToken, requestUrlOf } from "@/api/http";
 import { sendClientErrors, type ClientErrorItem, type ClientErrorSendResult } from "@/api/clientErrors";
 import { GAME_VERSION } from "@/data/gameVersion";
 import { describeValue } from "./errorLog";
@@ -65,7 +65,11 @@ const clip = (text: string, max: number): string => (text.length > max ? text.sl
 const stackOf = (value: unknown): string =>
   value instanceof Error && value.stack ? value.stack.split("\n").slice(0, STACK_LINES).join("\n") : "";
 
-const messageOf = describeValue;
+const messageOf = (value: unknown): string => {
+  // A failed request's address is kept out of its message (players read that), but the report names it.
+  const url = value instanceof Error ? requestUrlOf(value) : "";
+  return `${describeValue(value)}${url ? ` (${url})` : ""}`;
+};
 
 /** Whether an error is someone else's (an extension, another site) or a harmless browser warning. */
 export const isNoise = (message: string, place: string, stack: string): boolean =>
