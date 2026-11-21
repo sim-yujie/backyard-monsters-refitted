@@ -186,6 +186,10 @@ export class B9HccR2 {
     const add = this.root.querySelector(".hatch-add__add");
     add?.querySelector(".b9r2h-addflag")?.remove();
     if (add && this.remote) add.prepend(art("outpost", 24, "b9r2h-addflag"));
+    for (const clear of this.root.querySelectorAll<HTMLButtonElement>("button.hatch-clear")) {
+      // Keep the live control's accessible name and confirmation handler.
+      clear.replaceChildren(el("span", "", "Clear"));
+    }
     this.renderStrip();
     this.renderSeal();
     this.renderMixes();
@@ -280,10 +284,12 @@ export class B9HccR2 {
     const coming = this.remote ? 2_022 : this.level >= 3 ? 17_500 : 11_880;
     const over = housed + coming > room;
     const box = btn(`b9r2h-housing${over ? " b9r2h-housing--over" : ""}`, "Housing");
+    box.setAttribute("aria-label", `Housing ${housed} of ${room}; queue adds ${coming}`);
     const numbers = el("span", "b9r2h-housing__numbers");
     numbers.append(
       art("housing", 24, "b9r2h-housing__icon"),
       el("span", "b9r2h-housing__now", `${housed.toLocaleString("en-US")}/${room.toLocaleString("en-US")}`),
+      el("span", "b9r2h-housing__compact", `${(housed / 1000).toFixed(1)}K/${(room / 1000).toFixed(1)}K`),
       el("span", "b9r2h-housing__coming", `+${short(coming)}`),
     );
     const bar = el("span", "b9r2h-housing__bar");
@@ -311,6 +317,8 @@ export class B9HccR2 {
     picture.alt = "";
     hatchery.append(picture, el("span", "b9r2h-seal__number", `${busy}/${yard.hatcheries.length}`));
     if (stalled) hatchery.append(art("housing", 24, "b9r2h-seal__blocked"));
+    if (stalled) hatchery.querySelector(".b9r2h-seal__number")?.append(el("span", "b9r2h-seal__state", "Full"));
+    this.seal.setAttribute("aria-label", stalled ? "Housing full: inspect the queue and waiting hatcheries" : "The queue and the hatcheries");
     const queue = el("span", "b9r2h-seal__part b9r2h-seal__part--queue");
     const faces = el("span", "b9r2h-faces");
     const seen = new Set<string>();
@@ -385,6 +393,7 @@ export class B9HccR2 {
     head.append(el("span", "b9r2h-mix__number b9r2h-mixcard__number", String((this.mixOpen ?? 0) + 1)), cost, close);
     const actions = el("div", "b9r2h-mixcard__actions");
     const load = btn("btn btn--primary b9r2h-mixcard__load", "Load this mix into the queue", "Load");
+    // Load stays enabled on a full queue: whether it replaces or adds is the owner's call (report).
     const replace = btn("btn btn--secondary b9r2h-mixcard__tool", "Save the queue over this mix", art("lastarmy", 24), "Save over");
     const bin = btn("btn btn--ghost b9r2h-mixcard__tool b9r2h-mixcard__bin", "Empty this mix", "Empty");
     actions.append(load, replace, bin);

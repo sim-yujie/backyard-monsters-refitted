@@ -1077,3 +1077,39 @@
     grid-template-columns: repeat(5, 64px);
   }
 }
+
+/* Review 2: local content fixes; retain the existing scroll and panel geometry. */
+.b9r2h-housing__compact {
+  display: none;
+}
+.b9r2h .hatch-line__totals > button.hatch-clear {
+  font-size: 12px;
+  color: var(--colour-danger);
+}
+.b9r2h-seal__state {
+  display: block;
+  font-size: 10px;
+  line-height: 1;
+}
+.b9r2h-seal__part--stalled .b9r2h-seal__number {
+  line-height: 1.1;
+}
+@media (max-width: 620px) {
+  .b9r2h-opt-d.b9r2h-remote .b9r2h-housing__numbers {
+    display: grid;
+    grid-template-columns: 18px minmax(0, 1fr);
+    width: 100%;
+    line-height: 1.1;
+  }
+  .b9r2h-opt-d.b9r2h-remote .b9r2h-housing__now {
+    display: none;
+  }
+  .b9r2h-opt-d.b9r2h-remote .b9r2h-housing__compact {
+    display: inline;
+    font-size: 11px;
+  }
+  .b9r2h-opt-d.b9r2h-remote .b9r2h-housing__coming {
+    grid-column: 1 / -1;
+    font-size: 11px;
+  }
+}

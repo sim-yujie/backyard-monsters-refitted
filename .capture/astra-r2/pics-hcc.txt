@@ -11,10 +11,11 @@
 /home/yujiesim/Coding/backyard-monsters-refitted/worktrees/screens-r2/shots/hcc/r2-d-l2-modern-768x1024.png | D, L2, Modern iPad 768x1024
 /home/yujiesim/Coding/backyard-monsters-refitted/worktrees/screens-r2/shots/hcc/r2-e-l3-remote-classic-768x1024.png | E, L3 outpost, Classic iPad 768x1024
 /home/yujiesim/Coding/backyard-monsters-refitted/worktrees/screens-r2/shots/hcc/r2-d-l3-remote-modern-1024x768.png | D, L3 outpost, Modern iPad 1024x768
+/home/yujiesim/Coding/backyard-monsters-refitted/worktrees/screens-r2/shots/hcc/r2-now-classic-768x1024.png | LIVE TODAY, Classic iPad 768x1024 (baseline)
 /home/yujiesim/Coding/backyard-monsters-refitted/worktrees/screens-r2/shots/hcc/r2-e-l2-classic-1024x768.png | E, L2, Classic iPad 1024x768
 /home/yujiesim/Coding/backyard-monsters-refitted/worktrees/screens-r2/shots/hcc/r2-d-l2-modern-1280x720.png | D, L2, Modern 1280x720
 /home/yujiesim/Coding/backyard-monsters-refitted/worktrees/screens-r2/shots/hcc/r2-e-l2-classic-1280x720.png | E, L2, Classic 1280x720
-/home/yujiesim/Coding/backyard-monsters-refitted/worktrees/screens-r2/shots/hcc/r2-d-l3-remote-classic-1366x768.png | D, L3 outpost, Classic 1366x768
+/home/yujiesim/Coding/backyard-monsters-refitted/worktrees/screens-r2/shots/hcc/r2-now-modern-844x390.png | LIVE TODAY, Modern 844x390 (baseline)
 /home/yujiesim/Coding/backyard-monsters-refitted/worktrees/screens-r2/shots/hcc/r2-e-l3-remote-modern-1920x1080.png | E, L3 outpost, Modern 1920x1080
 /home/yujiesim/Coding/backyard-monsters-refitted/worktrees/screens-r2/shots/hcc/r2-e-l3-yards-modern-1280x720.png | E, L3 yard page, Modern 1280x720
 /home/yujiesim/Coding/backyard-monsters-refitted/worktrees/screens-r2/shots/hcc/r2-e-l2-mix-classic-1280x720.png | E, mix 1's card open, Classic 1280x720
