@@ -203,8 +203,8 @@ export const probeTextureLimit = (makeCanvas?: () => HTMLCanvasElement | null): 
 
 /**
  * This device's hints. One throwaway context (`probeGraphics`) names the
- * renderer, so a PC with no graphics card is known on every device, low on
- * memory or not. The texture limit is the renderer's when it has already said
+ * renderer, so a PC with no graphics card is known, low on memory or not (a
+ * phone or tablet low on memory is not probed, as before). The texture limit is the renderer's when it has already said
  * (`gpuTextureLimit`), else the throwaway context's, kept as the device's
  * limit so the first sheets fetched step down too (`sheetForDevice`): a phone
  * or tablet is on Medium either way, but an old one's small limit must be
@@ -213,6 +213,9 @@ export const probeTextureLimit = (makeCanvas?: () => HTMLCanvasElement | null): 
 export const readDeviceHints = (probe: () => GraphicsProbe = probeGraphics): DeviceHints => {
   const memoryGb = deviceMemoryGb();
   const touch = isTouchDevice();
+  // A phone or tablet low on memory is on Medium already and draws on its own
+  // graphics chip: it is spared the throwaway context, as before beta 9.
+  if (touch && memoryGb !== null && memoryGb <= LOW_MEMORY_GB) return { memoryGb, textureLimit: deviceTextureLimit(), touch };
   const probed = probe();
   let limit = deviceTextureLimit();
   if (limit === null && probed.textureLimit !== null) {
