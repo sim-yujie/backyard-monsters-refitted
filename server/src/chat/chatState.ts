@@ -12,6 +12,8 @@ export interface SocketData {
   lastMsgAt: number;
   /** Closes the connection if it has not logged in in time (`chatLimits.ts`). */
   loginDeadline?: ReturnType<typeof setTimeout> | null;
+  /** When this socket's last presence ping was taken, ms (`chatPresence.ts`). */
+  lastPresenceAt?: number;
 }
 
 /**

@@ -292,9 +292,11 @@ export interface YardAction<Schema extends z.ZodType, Report> {
    * Builds the report again once the wrapper has evaluated the account's
    * achievements (issue #204), for a route that answers with that record, so
    * the answer holds this request's backfill and unlocks. `save` is the one
-   * `run` saw, with the outcome applied. Replaces the report `run` returned.
+   * `run` saw, with the outcome applied; `report` is the one `run` returned,
+   * which this replaces.
    */
-  reportAfterAchievements?: (save: Save) => Report;
+  // Method syntax keeps `YardAction<..., Report>` assignable to `YardAction<..., unknown>`.
+  reportAfterAchievements?(save: Save, report: Report): Report;
 }
 
 /** An event coin change and why, for the coin log. */
@@ -787,7 +789,7 @@ export const runYardAction = async <Schema extends z.ZodType, Report>(
         : addEvents(builtEvents(completed), outcome.achievementEvents);
       await recordAchievements(tx, yard.main, now, events, yard.outpost);
       const report = action.reportAfterAchievements
-        ? action.reportAfterAchievements(save)
+        ? action.reportAfterAchievements(save, outcome.report)
         : outcome.report;
 
       await tx.flush();

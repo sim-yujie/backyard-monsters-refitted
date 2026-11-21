@@ -49,12 +49,26 @@ export const PRESENCE_TTL_SECONDS = 120;
  */
 export const presence: KoaController = async (ctx) => {
   const user: User = ctx.authUser;
+  ctx.status = Status.OK;
+  ctx.body = await answerPing(user, ctx.request.body);
+};
+
+/**
+ * One presence ping, as `POST /bm/presence` answers it: the body it sends.
+ * Shared with the chat socket's ping (`chat/chatPresence.ts`, beta 9), so
+ * the two count and answer exactly alike. Runs on `postgres.em`, so the
+ * caller provides a request context.
+ *
+ * @param user - The signed-in caller, loaded in full (its `save` is read).
+ * @param body - The ping's body: `{ where, planner }`, or none.
+ */
+export const answerPing = async (user: User, body: unknown): Promise<Record<string, unknown>> => {
   const now = getCurrentDateTime();
   await redis.setex(`last-seen:main:${user.userid}`, PRESENCE_TTL_SECONDS, now.toString());
   // Played today, for the owner's dashboard: a game left open past midnight counts on both days.
   noteActivePlayer(user.userid);
 
-  const screen = parseRaidScreen(ctx.request.body);
+  const screen = parseRaidScreen(body);
   if (screen) await recordRaidScreen(user.userid, screen);
   let raid: RaidView | undefined;
   try {
@@ -67,8 +81,7 @@ export const presence: KoaController = async (ctx) => {
     });
   }
 
-  ctx.status = Status.OK;
-  ctx.body = { error: 0, ...(await presenceAnswer(user, now)), ...(raid && { raid }) };
+  return { error: 0, ...(await presenceAnswer(user, now)), ...(raid && { raid }) };
 };
 
 /**
