@@ -11,7 +11,7 @@ import {
 import { cellTexture } from "@/game/textureLimit";
 import type { ResolvedArt } from "./buildingArt";
 import type { Corners } from "./planner/marquee";
-import { versionedArt } from "./retryLoad";
+import { yardArtUrl } from "./retryLoad";
 import { previewLayers } from "./upgradeLook";
 import type { YardBuilding } from "./yardModel";
 import { jobBarScale } from "./YardJobBars";
@@ -189,7 +189,7 @@ export class UpgradePreview {
     let textures: Texture[];
     try {
       textures = await Promise.all(
-        layers.map((layer) => Assets.load<Texture>(versionedArt(layer.url))),
+        layers.map((layer) => Assets.load<Texture>(yardArtUrl(layer.url))),
       );
     } catch {
       // No picture: the footprint and the tag still say what is coming.

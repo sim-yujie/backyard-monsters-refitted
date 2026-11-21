@@ -1,7 +1,7 @@
 import { AlphaFilter, Assets, Container, Graphics, Sprite, type Texture } from "pixi.js";
 import type { Camera } from "@/game/Camera";
 import { cellTexture } from "@/game/textureLimit";
-import { versionedArt } from "./retryLoad";
+import { yardArtUrl } from "./retryLoad";
 import { ArtState, resolveArt, restingLayers, type ResolvedImage } from "./buildingArt";
 import type { YardKind } from "./buildingCostData";
 import {
@@ -701,7 +701,7 @@ export class BuildPlacement {
     const layers = restingLayers(art);
     try {
       const textures = await Promise.all(
-        layers.map((layer) => Assets.load<Texture>(versionedArt(layer.url))),
+        layers.map((layer) => Assets.load<Texture>(yardArtUrl(layer.url))),
       );
       if (this.done) return;
       layers.forEach((layer, index) => {

@@ -21,6 +21,7 @@ import { routeBetween } from "@/game/guide/MonsterWalkIn";
 import { yardArtAtlas, type YardArtAtlas } from "./yardAtlas";
 import { MonsterSheetTextures, prefersReducedMotion } from "@/game/attack/AttackBattleLayer";
 import { loadYardSheet } from "@/game/attack/sheetQueue";
+import { yardArtGate } from "./yardArtGate";
 import { currentSeason, onSeasonChange, type Season } from "@/game/season";
 import { onGroundChange } from "./groundChoice";
 import { classicLook } from "@/game/classicLook";
@@ -143,17 +144,23 @@ export class YardRenderer {
   /** Opens {@link sheetsAllowed}; see there. */
   private allowSheets: () => void = () => {};
   /**
-   * Settles once the first yard shown has every building's picture, or after
-   * {@link SHEET_HOLD_MS} at most. The creatures' sheets wait for it: a
-   * painted monster sheet is up to 10 MB, three of them came to 24 MB on a
-   * full yard, and fetched alongside the building pictures they held those
-   * back for seconds on a slow link. Once open it stays open. Past it they
-   * load two at a time (`yardSheetQueue`, patch 7.11).
+   * Settles once the first yard shown has every picture in or known missing,
+   * its shadows and strips as well as its tops (beta 9), or once no building
+   * picture has arrived for {@link SHEET_STALL_MS}, or after
+   * {@link SHEET_HOLD_MAX_MS} at most. The creatures' sheets wait for it, and
+   * the page's music for the first one (`yardArtGate.ts`): a painted monster
+   * sheet is up to 10 MB, and fetched alongside the building pictures they
+   * held those back for half a minute on Slow 4G (beta 9 measurements; the
+   * old fixed 4 s wait opened long before the pictures were in). Once open it
+   * stays open. Past it they load two at a time (`yardSheetQueue`, patch 7.11).
    */
   private readonly sheetsAllowed = new Promise<void>((resolve) => {
     this.allowSheets = resolve;
   });
+  private sheetsOpen = false;
   private sheetHold: ReturnType<typeof setTimeout> | null = null;
+  private sheetStall: ReturnType<typeof setTimeout> | null = null;
+  private unwatchSheetArt: (() => void) | null = null;
   /** What lives on the yard (#158, #159): scenery, never in the battle. */
   private readonly life = new YardLifeLayer({
     reducedMotion: prefersReducedMotion(),
@@ -244,7 +251,7 @@ export class YardRenderer {
   private zoomWatcher: ((zoom: number) => void) | null = null;
 
   constructor() {
-    this.buildings.onArtReady(() => this.openSheets());
+    this.buildings.onAllArtReady(() => this.openSheets());
     this.life.onJuiceArrive = (monster, juicer) => this.juiceArrived(monster, juicer);
     this.isoDecals.eventMode = "none";
     this.upgradePreviewLayer.eventMode = "none";
@@ -319,7 +326,8 @@ export class YardRenderer {
     }
     if (season === "thanksgiving") {
       // The mushrooms stay until the turkeys arrive, and for good if they never do.
-      void this.turkeys.load().then((ready) => {
+      // Behind the buildings' pictures, like the monsters (beta 9).
+      void this.sheetsAllowed.then(() => (this.destroyed ? false : this.turkeys.load())).then((ready) => {
         if (ready && !this.destroyed && this.season === "thanksgiving") this.replaceFinds();
       });
     } else if (this.turkeys.count > 0) {
@@ -405,7 +413,7 @@ export class YardRenderer {
       yard.kind === "inferno" ? "lava" : "grass",
     );
     void this.ground.loadTiles();
-    this.sheetHold ??= setTimeout(() => this.openSheets(), SHEET_HOLD_MS);
+    this.holdSheets();
 
     // The creatures outlive a redraw: out of the containers the yard is about
     // to empty, and back in once it has refilled them.
@@ -1323,10 +1331,42 @@ export class YardRenderer {
     if (sprite && mushroom) sprite.position.set(mushroom.worldX, mushroom.worldY);
   }
 
-  /** Lets the creatures' sheets load; see {@link sheetsAllowed}. */
+  /**
+   * Settles once this yard's pictures are in, or the wait for them gave up
+   * ({@link sheetsAllowed}): for what else should not share the line with
+   * them, such as a raid's sheets warmed on the yard.
+   */
+  get artIn(): Promise<void> {
+    return this.sheetsAllowed;
+  }
+
+  /** Starts the waits that open {@link sheetsAllowed} if the pictures never all come. */
+  private holdSheets(): void {
+    if (this.sheetsOpen) return;
+    this.sheetHold ??= setTimeout(() => this.openSheets(), SHEET_HOLD_MAX_MS);
+    this.unwatchSheetArt ??= this.buildings.art.watch(() => this.restartSheetStall());
+    this.restartSheetStall();
+  }
+
+  /** A building picture arrived (or failed): the stall wait starts again. */
+  private restartSheetStall(): void {
+    if (this.sheetsOpen) return;
+    if (this.sheetStall !== null) clearTimeout(this.sheetStall);
+    this.sheetStall = setTimeout(() => this.openSheets(), SHEET_STALL_MS);
+  }
+
+  /** Lets the creatures' sheets load, and the page's music; see {@link sheetsAllowed}. */
   private openSheets(): void {
     this.allowSheets();
+    yardArtGate.open();
+    if (this.sheetsOpen) return;
+    this.sheetsOpen = true;
     if (this.sheetHold !== null) clearTimeout(this.sheetHold);
+    if (this.sheetStall !== null) clearTimeout(this.sheetStall);
+    this.sheetHold = null;
+    this.sheetStall = null;
+    this.unwatchSheetArt?.();
+    this.unwatchSheetArt = null;
   }
 
   destroy(): void {
@@ -1590,9 +1630,17 @@ const PUMPKIN_SCALE = 1.3;
 /**
  * The longest the creatures' sheets wait for the building pictures, in
  * milliseconds: a building picture that never answers must not keep the
- * yard empty of monsters.
+ * yard empty of monsters. On Slow 4G a Modern yard's pictures took about
+ * 45 s before beta 9.
  */
-const SHEET_HOLD_MS = 4000;
+const SHEET_HOLD_MAX_MS = 60_000;
+
+/**
+ * How long the sheets wait with no building picture arriving before they
+ * stop waiting: a picture still coming moves at least this often on any line
+ * the yard can be played on.
+ */
+const SHEET_STALL_MS = 10_000;
 
 /** How far a hatchery's number is raised over a job bar and its time, world pixels at zoom 1. */
 const JOB_BAR_CLEARANCE = BAR_HEIGHT + 22;

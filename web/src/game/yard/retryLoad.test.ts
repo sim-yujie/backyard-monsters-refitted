@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { Assets, Texture } from "pixi.js";
-import { BUILDING_ART_VERSION, LOAD_TRIES, loadWithRetries, RETRY_DELAYS_MS, versionedArt } from "./retryLoad";
+import { BUILDING_ART_VERSION, COPY_TRIES, LOAD_TRIES, loadWithRetries, RETRY_DELAYS_MS, versionedArt } from "./retryLoad";
+import { setQuality } from "@/game/quality";
 
 /** Every wait the retries make, run straight through. */
 const waitAll = async () => {
@@ -48,6 +49,28 @@ describe("loadWithRetries", () => {
 
     await expect(loaded).resolves.toBe(Texture.WHITE);
     expect(calls).toBe(4);
+  });
+
+  it("asks for the Quality copy of a building picture twice, then for its @2x (beta 9)", async () => {
+    setQuality("low", null);
+    const asked: string[] = [];
+    vi.spyOn(Assets, "load").mockImplementation(((url: string) => {
+      asked.push(url);
+      return url.includes("@2x") ? Promise.resolve(Texture.WHITE) : Promise.reject(new Error("404"));
+    }) as typeof Assets.load);
+    try {
+      const loaded = loadWithRetries("/assets/buildings/snipertower/turret.t2@2x.webp");
+      await waitAll();
+      await expect(loaded).resolves.toBe(Texture.WHITE);
+      expect(asked).toEqual([
+        `/assets/buildings/snipertower/turret.t2@1x.webp?v=${BUILDING_ART_VERSION}`,
+        `/assets/buildings/snipertower/turret.t2@1x.webp?v=${BUILDING_ART_VERSION}`,
+        `/assets/buildings/snipertower/turret.t2@2x.webp?v=${BUILDING_ART_VERSION}`,
+      ]);
+      expect(COPY_TRIES).toBe(2);
+    } finally {
+      setQuality("high", null);
+    }
   });
 
   it("fails with the last error after five tries", async () => {

@@ -196,6 +196,8 @@ import { BAITER_TYPE, setBaiterRun } from "@/game/baiter/baiterSession";
 import { trojanApi } from "@/api/trojan";
 import { setRaidRun } from "@/game/raid/raidSession";
 import { warmTrojanSheets } from "@/game/raid/raidSheets";
+import { raidSheetQueue } from "@/game/attack/sheetQueue";
+import { freeAttackArt, UNUSED_MS, type TextureCollector } from "@/game/attack/attackArt";
 import { TROJAN_HORSE_TYPE, findTrojanHorse } from "@/game/trojan/trojanHorse";
 import { TrojanFlow } from "@/game/trojan/trojanFlow";
 import { TrojanLetter } from "@/ui/trojan/TrojanLetter";
@@ -483,6 +485,8 @@ export class YardScene implements Scene {
   private unsubscribeJuice: (() => void) | null = null;
   /** Stops waiting for the yard to go quiet before Map Room 2's warm-up (`mr2Prewarm.ts`). */
   private stopMr2Prewarm: (() => void) | null = null;
+  /** Lets the raid queue start again once this yard's pictures are in (beta 9); see `load`. */
+  private releaseRaidSheets: (() => void) | null = null;
   /** What the panel and the HUD are handed on the own yard. */
   private binding: YardUiBinding | null = null;
   /** The tab came back while the planner was open; refresh once it closes. */
@@ -858,6 +862,7 @@ export class YardScene implements Scene {
 
   exit(): void {
     presence.setScreen(ELSEWHERE);
+    this.releaseRaidSheets?.();
     this.stopSupportOffer?.();
     this.stopSupportOffer = null;
     this.tribeBar?.close();
@@ -1150,6 +1155,26 @@ export class YardScene implements Scene {
       // Safe mode's mark, before the yard's art starts loading (patch 7.11).
       noteYardLoading();
       this.renderer.show(yard);
+      // Buildings first (beta 9): a raid's or the Trojan Horse's sheets warmed
+      // here wait until this yard's pictures are in, as its monsters' do.
+      if (!this.releaseRaidSheets) {
+        const release = raidSheetQueue.hold();
+        this.releaseRaidSheets = release;
+        void this.renderer.artIn.then(release);
+      }
+      // The last attack's pictures come off the graphics card once this yard's own are in
+      // (`attackArt.ts`, beta 9): Pixi's collector took 60-95 s, 45-55 MB on a phone meanwhile.
+      void this.renderer.artIn.then(() => {
+        // A moment later, so the yard has drawn (and so kept) what it uses.
+        // Asked again while no frame is being drawn (a hidden tab), for up to a minute.
+        let tries = 0;
+        const free = (): void => {
+          if (this.context !== context) return;
+          const result = freeAttackArt((context.renderer as { gc?: TextureCollector }).gc);
+          if (result === "wait" && ++tries < 240) setTimeout(free, 250);
+        };
+        setTimeout(free, UNUSED_MS + 500);
+      });
       // What lives on the yard (#158). A visit's load carries the defender's
       // monsters, champion and workers, which Flash drew there too (#159).
       this.renderer.setLife(yardLifeOf(response, yard, store ? "own" : "visit"));
