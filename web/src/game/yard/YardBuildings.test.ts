@@ -407,6 +407,53 @@ describe("YardBuildings: loading the pictures", () => {
   });
 });
 
+describe("YardBuildings.onAllArtReady (beta 9: monsters and music after the buildings)", () => {
+  const everywhere = { x: -10_000, y: -10_000, width: 20_000, height: 20_000 };
+  const settle = async (buildings: YardBuildings): Promise<void> => {
+    for (let pass = 0; pass < 5; pass++) {
+      await new Promise((resolve) => setTimeout(resolve, 0));
+      buildings.draw(everywhere);
+    }
+  };
+
+  it("waits for the shadows and strips as well as the tops, and counts a missing picture as in", async () => {
+    // Tops come at once; the sniper's gun strip waits for `release`; one shadow fails for good.
+    let release: () => void = () => {};
+    const strips = new Promise<void>((resolve) => (release = resolve));
+    const load = vi.spyOn(Assets, "load").mockImplementation((async (url: string) => {
+      if (/shadow/.test(url) && /boobytrap/.test(url)) throw new Error("gone");
+      if (/turret|anim/.test(url)) await strips;
+      return Texture.WHITE;
+    }) as typeof Assets.load);
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+    try {
+      const buildings = new YardBuildings();
+      let tops = 0;
+      let all = 0;
+      buildings.onArtReady(() => (tops += 1));
+      buildings.onAllArtReady(() => (all += 1));
+      buildings.show(readYard(yardResponse()), fakeAtlas());
+      for (let pass = 0; pass < 10; pass++) {
+        await vi.advanceTimersByTimeAsync(1000);
+        buildings.draw(everywhere);
+      }
+      expect(tops).toBe(1);
+      expect(all).toBe(0);
+      release();
+      vi.useRealTimers();
+      await settle(buildings);
+      expect(all).toBe(1);
+      expect(performance.getEntriesByName("yard-art-all")).toHaveLength(1);
+      buildings.destroy();
+    } finally {
+      vi.useRealTimers();
+      load.mockRestore();
+      warn.mockRestore();
+    }
+  });
+});
+
 describe("YardBuildings.setFaded (the upgrade preview, beta 8)", () => {
   const fortifiedSniper = (): BaseLoadResponse => {
     const response = yardResponse();

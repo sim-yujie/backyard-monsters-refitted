@@ -92,6 +92,14 @@ export const UPGRADE_FADE_ALPHA = 0.25;
 const YARD_ART_SHOWN = "yard-art-shown";
 const YARD_ART_READY = "yard-art-ready";
 const YARD_ART_WAIT = "yard-art";
+/**
+ * Marked once a page, the first time a yard's every picture (tops, shadows and
+ * strips) is in or known missing (`markAllArtReady`): when the yard lets its
+ * monsters' sheets and the music start (beta 9). Never cleared, so a load test
+ * reads the first yard's.
+ */
+export const YARD_ART_ALL = "yard-art-all";
+let allArtMarked = false;
 
 interface FortOverlay {
   readonly art: FortArt;
@@ -245,6 +253,10 @@ export class YardBuildings {
   private pending = true;
   /** True until every building of the shown yard has its picture; see `markArtReady`. */
   private awaitingArt = false;
+  /** True until every picture of the shown yard, shadows and strips too, is in or missing; see `markAllArtReady`. */
+  private awaitingAllArt = false;
+  /** Told once every picture of the shown yard is in or known missing. */
+  private allArtListener: (() => void) | null = null;
   /** The area the last frame drew, for `requestTopsFirst`; null before the first. */
   private lastVisible: Rect | null = null;
   /** Placeholder labels made since the last `show`, against `MAX_PLACEHOLDER_LABELS`. */
@@ -282,6 +294,15 @@ export class YardBuildings {
     this.artReadyListener = listener;
   }
 
+  /**
+   * Says when the shown yard's every picture, its shadows and animation
+   * strips as well as its tops, is in or known missing: the yard's monster
+   * sheets and the music wait for it (beta 9).
+   */
+  onAllArtReady(listener: (() => void) | null): void {
+    this.allArtListener = listener;
+  }
+
   /** Buildings still showing a placeholder. */
   get placeholderCount(): number {
     return this.views.reduce((count, view) => count + (view.resolved ? 0 : 1), 0);
@@ -314,6 +335,7 @@ export class YardBuildings {
     performance.clearMeasures(YARD_ART_WAIT);
     performance.mark(YARD_ART_SHOWN);
     this.awaitingArt = true;
+    this.awaitingAllArt = true;
 
     for (const building of yard.buildings) {
       const art = artFor(building, yard.kind);
@@ -946,6 +968,7 @@ export class YardBuildings {
       }
     }
     this.markArtReady();
+    this.markAllArtReady();
   }
 
   /**
@@ -960,6 +983,30 @@ export class YardBuildings {
     performance.mark(YARD_ART_READY);
     performance.measure(YARD_ART_WAIT, YARD_ART_SHOWN, YARD_ART_READY);
     this.artReadyListener?.();
+  }
+
+  /** Whether a view still waits for a picture: its top, its shadow or a strip, none known missing. */
+  private waitsForArt(view: BuildingView): boolean {
+    const art = view.art;
+    if (!art) return false;
+    if (!view.resolved && !this.textures.isMissing(art.top)) return true;
+    if (!view.shadowResolved && view.shadow && art.shadow && !this.textures.isMissing(art.shadow)) return true;
+    return view.animsPending;
+  }
+
+  /**
+   * The first moment the shown yard has all its pictures (`waitsForArt`): the
+   * listener is told, and the first time a page the `yard-art-all` mark is set.
+   */
+  private markAllArtReady(): void {
+    if (!this.awaitingAllArt) return;
+    if (this.views.some((view) => this.waitsForArt(view))) return;
+    this.awaitingAllArt = false;
+    if (!allArtMarked) {
+      allArtMarked = true;
+      performance.mark(YARD_ART_ALL);
+    }
+    this.allArtListener?.();
   }
 
   /** Puts a fortification's back and front pictures on their sprites as they arrive. */
