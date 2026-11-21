@@ -777,7 +777,14 @@ export class BuildMenu {
     worker.append(glyph(WORKER, "build-info__fact-icon"), offer.atOnce ? "No worker" : "1 worker");
     facts.append(time, worker);
 
-    const nodes: Node[] = [back, picture(offer, "build-info__picture", kind), head, blurb, needs, facts];
+    const nodes: Node[] = [back, picture(offer, "build-info__picture", kind), head, blurb, needs];
+
+    // The cost, the reason it cannot be built and the Build button keep to the
+    // window's foot together (`.build-info__actions`): with the chips above
+    // it, the pinned button covered them on a short window (1440x900, beta 9).
+    const actions = document.createElement("div");
+    actions.className = "build-info__actions";
+    actions.append(facts);
 
     // The needs list already says what a locked building waits for.
     const gate = offer.gate;
@@ -786,11 +793,9 @@ export class BuildMenu {
     if (gate && saysWhy) {
       const reason = gateLine(gate, kind, offer.inferno);
       reason.id = reasonId;
-      nodes.push(reason);
+      actions.append(reason);
     }
 
-    const actions = document.createElement("div");
-    actions.className = "build-info__actions";
     const build = document.createElement("button");
     build.type = "button";
     // Only a building that can be built wears the primary colour.
@@ -838,7 +843,6 @@ export class BuildMenu {
 
   /** A stored decoration's facts and its Place button: free, at once, no worker (§8.3). */
   private storageActions(offer: BuildOffer, name: string): HTMLElement {
-    const wrap = document.createElement("div");
     const facts = document.createElement("ul");
     facts.className = "build-info__facts";
     facts.setAttribute("aria-label", "Cost");
@@ -853,8 +857,10 @@ export class BuildMenu {
       fact.append(text);
       facts.append(fact);
     }
+    // The chips keep to the foot with the button (`build-info__actions`), never under it.
     const actions = document.createElement("div");
     actions.className = "build-info__actions";
+    actions.append(facts);
     const place = document.createElement("button");
     place.type = "button";
     place.className = "btn btn--primary build-info__build";
@@ -863,8 +869,7 @@ export class BuildMenu {
     place.setAttribute("aria-label", `Place ${name} from storage`);
     place.addEventListener("click", () => this.onPick(offer.type, false));
     actions.append(place);
-    wrap.append(facts, actions);
-    return wrap;
+    return actions;
   }
 
   /**
@@ -876,7 +881,6 @@ export class BuildMenu {
    */
   private buyActions(offer: BuildOffer, name: string): HTMLElement {
     const price = offer.price ?? 0;
-    const wrap = document.createElement("div");
     const facts = document.createElement("ul");
     facts.className = "build-info__facts";
     facts.setAttribute("aria-label", "Cost");
@@ -893,17 +897,16 @@ export class BuildMenu {
       fact.append(glyph(icon, "build-info__fact-icon"), text);
       facts.append(fact);
     }
-    wrap.append(facts);
-    if (offer.gate) wrap.append(gateLine(offer.gate));
-
+    // The chips keep to the foot with the button (`build-info__actions`), never under it.
     const actions = document.createElement("div");
     actions.className = "build-info__actions";
+    actions.append(facts);
+    if (offer.gate) actions.append(gateLine(offer.gate));
     const buy = this.buyButton(offer.type, name);
     buy.setPrice(price);
     buy.setBlocked(offer.gate ? "Not enough Glimmers." : null);
     actions.append(buy.element);
-    wrap.append(actions);
-    return wrap;
+    return actions;
   }
 
   /** Buy for a decoration, kept across redraws as Build instantly is (keyed by the negative type). */

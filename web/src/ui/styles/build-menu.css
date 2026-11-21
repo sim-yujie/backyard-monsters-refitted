@@ -130,6 +130,11 @@
   background: linear-gradient(var(--colour-surface-sunken), var(--colour-surface-sunken)), var(--colour-surface-base);
 }
 
+/* The chips and the reason line sit a step apart from the button below them. */
+.build-info__actions > :is(.build-info__facts, .build-info__gate) {
+  margin-bottom: var(--space-1);
+}
+
 .build-menu__kinds[hidden] {
   display: none;
 }
@@ -647,7 +652,9 @@
 /*
  * The Build button keeps to the bottom of the window when the info is taller
  * than the room for it (a short screen, a long list of needs), so it is in
- * sight and in reach without scrolling the info first.
+ * sight and in reach without scrolling the info first. The cost chips and the
+ * line saying why it cannot be built go with it: left above it, the pinned
+ * button covered them (1440x900, beta 9).
  */
 .build-info__actions {
   position: sticky;
