@@ -20,7 +20,7 @@ async function open(w, h, hash, scale = 1) {
   await page.waitForTimeout(700);
   return { context, page };
 }
-const shot = (page, name) => page.screenshot({ path: `${W}/demo/${useFirefox ? "shots-ff" : "shots"}/${name}.png /* converted to .jpg before commit */` });
+const shot = (page, name) => page.screenshot({ path: `${W}/demo/${useFirefox ? "shots-ff" : "shots"}/${name}.png` });
 const F = (sel) => `#frame ${sel}`;
 
 // 1. Bare 1:1 frames in the prototype's own picture states, to put beside shots/hcc/r2-*.
