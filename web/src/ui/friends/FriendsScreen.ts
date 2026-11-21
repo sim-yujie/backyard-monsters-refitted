@@ -1,4 +1,6 @@
 import { friendsApi, type FriendsApi } from "@/api/friends";
+import { b9, b9Baiter } from "@/proto/b9";
+import { testsTab, B9_COUNTS } from "@/proto/b9Baiter";
 import { friendsStore as sharedStore, type FriendsStore } from "@/game/friends/friendsStore";
 import { centreWindow, type CentreWindow } from "@/ui/centreWindow";
 import { Panel } from "@/ui/Panel";
@@ -105,10 +107,16 @@ export class FriendsScreen {
       new FindTab({ api, store: this.store, ...(options.debounceMs !== undefined && { debounceMs: options.debounceMs }) }),
     );
 
+    // PROTOTYPE (b9 Baiter B): the Friends desk's Tests tab.
+    if (b9Baiter() === "b") {
+      const open = (b9("b9pane") ?? "invite") as "invite" | "invited" | "results";
+      this.tabs.set("tests" as FriendsTabId, { element: testsTab(open), show: async () => {}, destroy: () => {} });
+    }
     const strip = make("div", "tabs tab-row friends-tabs");
     strip.setAttribute("role", "tablist");
     strip.setAttribute("aria-label", "Friends");
-    for (const { id, label } of FRIENDS_TABS) {
+    const tabList = b9Baiter() === "b" ? [...FRIENDS_TABS, { id: "tests" as FriendsTabId, label: "Tests" }] : FRIENDS_TABS;
+    for (const { id, label } of tabList) {
       if (!this.tabs.has(id)) continue;
       const tab = make("button", "tabs__tab friends-tabs__tab");
       tab.type = "button";
@@ -131,6 +139,7 @@ export class FriendsScreen {
     this.unsubscribe = this.store.subscribe((snapshot) => {
       this.setCount("requests", snapshot.requestsIn);
       this.setCount("gifts", snapshot.giftsWaiting);
+      if (b9Baiter() === "b") this.setCount("tests" as FriendsTabId, B9_COUNTS.invitedMe + B9_COUNTS.fresh);
     });
   }
 

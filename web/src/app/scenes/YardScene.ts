@@ -622,6 +622,9 @@ export class YardScene implements Scene {
     this.context = context;
     if (import.meta.env.DEV) {
       // For film scripts: open a building's pop-up by id, centred on screen.
+      // PROTOTYPE (b9): a notice for the Baiter-for-friends shots.
+      (window as unknown as { __b9notice?: (text: string, action: string) => void }).__b9notice = (text, action) =>
+        this.notices.show("b9", text, { level: "info", actionLabel: action, onAction: () => {} });
       (window as unknown as { __yardSelect?: (id: number) => boolean }).__yardSelect = (id) => {
         const building = this.yard?.buildings.find((one) => one.id === id) ?? null;
         if (!building) return false;

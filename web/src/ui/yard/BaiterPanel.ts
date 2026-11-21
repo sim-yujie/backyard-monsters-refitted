@@ -1,4 +1,7 @@
 import { tutTarget, TutTarget } from "@/game/guide/targets";
+import { b9, b9Baiter } from "@/proto/b9";
+import { invitePane, invitedMePane, resultsPane, B9_COUNTS } from "@/proto/b9Baiter";
+import { gameIcon } from "@/ui/gameIcon";
 import type { BaseLoadResponse } from "@/api/types";
 import { KRALLEN_TYPE } from "@/game/attack/AttackSession";
 import {
@@ -132,8 +135,9 @@ export class BaiterPanel {
     const save = options.save();
     this.testArmy = clampArmy(remembered ?? emptyArmy(save), this.cap);
 
+    const host = b9("b9host");
     this.popup = new Popup({
-      title: "Baiter: test attack",
+      title: host ? `Test ${host}'s yard` : "Baiter: test attack",
       className: "baiter-window",
       // A stray tap beside the window must not close it.
       closeOnBackdrop: false,
@@ -146,11 +150,13 @@ export class BaiterPanel {
     this.body.className = "baiter";
     this.body.setAttribute("aria-label", "Defence test");
 
-    const lead = text(
-      "p",
-      "baiter__note",
-      "Make up any army and test it against your yard as it stands. Tests are free, and nothing is saved.",
-    );
+    const lead = host
+      ? b9HostLead(host)
+      : text(
+          "p",
+          "baiter__note",
+          "Make up any army and test it against your yard as it stands. Tests are free, and nothing is saved.",
+        );
 
     // Shortcuts.
     const shortcuts = document.createElement("div");
@@ -232,7 +238,17 @@ export class BaiterPanel {
     army.append(lead, top, list, foot);
 
     const recent = options.recent ?? recentTests();
-    if (recent.length > 0) {
+    if (b9Baiter() === "a" && !host) {
+      // PROTOTYPE (b9 Baiter A): the Baiter is the home of every test, yours and your friends'.
+      const views: [string, HTMLElement][] = [
+        ["Army", army],
+        ["Invite", invitePane()],
+        [`Invites ${B9_COUNTS.invitedMe}`, invitedMePane()],
+        [`Results ${B9_COUNTS.results}`, resultsPane()],
+      ];
+      for (const [, view] of views.slice(1)) view.classList.add("baiter__view");
+      this.body.append(this.tabs(views, Number(b9("b9tab") ?? 0)), ...views.map(([, view]) => view));
+    } else if (recent.length > 0) {
       const history = document.createElement("div");
       history.className = "baiter__view baiter__view--recent";
       history.append(
@@ -274,7 +290,7 @@ export class BaiterPanel {
   }
 
   /** The tab row over the army and the recent tests; the army is shown first. */
-  private tabs(views: ReadonlyArray<readonly [string, HTMLElement]>): HTMLElement {
+  private tabs(views: ReadonlyArray<readonly [string, HTMLElement]>, first = 0): HTMLElement {
     const row = document.createElement("div");
     row.className = "tab-row baiter__tabs";
     row.setAttribute("role", "tablist");
@@ -314,7 +330,7 @@ export class BaiterPanel {
       select(next);
       controls[next]?.focus();
     });
-    select(0);
+    select(first);
     return row;
   }
 
@@ -612,4 +628,17 @@ const field = (caption: string, control: HTMLElement): HTMLElement => {
   element.className = "baiter-champion__field";
   element.append(text("span", "baiter-champion__caption", caption), control);
   return element;
+};
+
+/** PROTOTYPE (b9): the line over a friend's test army: whose yard, the cap, time left. */
+const b9HostLead = (host: string): HTMLElement => {
+  const lead = document.createElement("p");
+  lead.className = "baiter__note b9b-hostlead";
+  lead.append(
+    gameIcon("friends", { size: 24, decorative: true }),
+    ` ${host} invited you to test their main yard. Free army, up to their Baiter's cap. `,
+    gameIcon("time", { size: 16, decorative: true }),
+    ` ${b9("b9left") ?? "23h"} left`,
+  );
+  return lead;
 };

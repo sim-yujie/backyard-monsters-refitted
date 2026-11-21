@@ -1,4 +1,5 @@
 import type { Friend, FriendsApi } from "@/api/friends";
+import { b9Baiter } from "@/proto/b9";
 import { playerPicture, showPlayerPicture } from "@/game/playerPicture";
 import { canHelp } from "@/game/friends/friendText";
 import { groupFriends, type FriendGroups } from "@/game/friends/friendOrder";
@@ -382,6 +383,11 @@ export class FriendsWindow {
       }
     }, sent ? FRIENDS_WINDOW_TEXT.giftSentTitle : FRIENDS_WINDOW_TEXT.gift);
     gift.disabled = sent;
+    // PROTOTYPE (b9 Baiter B): invite this friend to test your main yard.
+    if (b9Baiter() === "b") {
+      const test = add("Test my yard", "outline", () => {}, "Invite them to test your main yard for 24 h");
+      test.prepend(gameIcon("swords", { size: 16, decorative: true }), " ");
+    }
     actions.dataset["count"] = String(actions.childElementCount);
     return actions;
   }
