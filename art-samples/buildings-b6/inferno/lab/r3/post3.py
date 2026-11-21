@@ -145,7 +145,7 @@ def stills():
     # what each level adds
     for lv in (2, 3):
         cur = Image.open(R / f"L{lv}-alone.png").convert("RGBA")
-        d, _ = changed(Image.open(R / f"L{lv - 1}-alone.png").convert("RGBA"), cur, 40)
+        d, _ = changed(Image.open(R / f"L{lv - 1}-alone.png").convert("RGBA"), cur, 12)
         print("level %d against level %d: %d changed pixels (of %d), box %s" % (
             lv, lv - 1, d.histogram()[255], d.width * d.height, d.getbbox()))
         im = redden(on_bg(cur), d).crop(BOX)
@@ -240,7 +240,7 @@ def crops():
         # level 3's parts
         "L3-crown": (3, [(0.0, -1.4, 16.2, 760, 760)]),
         "L3-flasks": (3, [(-5.9, 1.75, 10.2, 520, 520), (5.9, 1.75, 10.2, 520, 520)]),
-        "L3-channel": (3, [(0.0, 4.4, 0.3, 1500, 560)]),
+        "L3-channel": (3, [(0.0, 3.6, 0.3, 1500, 760)]),
     }
     for name, (lv, boxes) in spots.items():
         row([crop_at(w[lv], *b) for b in boxes], gap=8).convert("RGB").save(OUT / f"crop-{name}.png")

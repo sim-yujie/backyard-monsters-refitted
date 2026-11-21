@@ -187,9 +187,29 @@ def lump(name, at, size, mat, seed, squash=0.6):
     return ob
 
 
+def roughen(o, strength=0.09, size=0.55, levels=3):
+    """imats.roughen (simple subdivision, then a world-space colour-cloud displacement) with one cloud texture PER
+    SIZE: imats' own shares one texture and each call resets its size, so a part added at a higher level would change
+    the dents of every part below it."""
+    sub = o.modifiers.new("sub", "SUBSURF")
+    sub.subdivision_type = "SIMPLE"
+    sub.levels = sub.render_levels = levels
+    key = "l3-clouds-%.3f" % size
+    tex = bpy.data.textures.get(key) or bpy.data.textures.new(key, "CLOUDS")
+    tex.cloud_type = "COLOR"
+    tex.noise_scale = size
+    tex.noise_depth = 3
+    d = o.modifiers.new("disp", "DISPLACE")
+    d.texture = tex
+    d.texture_coords = "GLOBAL"
+    d.direction = "RGB_TO_XYZ"
+    d.strength = strength
+    d.mid_level = 0.5
+
+
 def dent(ob, strength=0.05, size=0.5, levels=2):
     """Knock a smooth part about: its surface pushed in and out by a world-space cloud (dents and lumps)."""
-    imats.roughen(ob, strength=strength, size=size, levels=levels)
+    roughen(ob, strength=strength, size=size, levels=levels)
 
 
 def notch(ob, pts, seed):
@@ -485,7 +505,7 @@ def blocks(name, a, b, door, seed, parent, missing=0.0, zmax=None):
                     bmesh.ops.create_cube(bm, size=1.0, matrix=m)
                 s = e
     ob = mesh_ob(name, bm, [M["block"]], smooth=False, bevel=0.05, segs=2, parent=parent)
-    imats.roughen(ob, strength=0.075, size=0.45, levels=2)
+    roughen(ob, strength=0.075, size=0.45, levels=2)
     return lost
 
 
@@ -939,7 +959,10 @@ def channel():
             m = Matrix.Translation((p.x, p.y, 0.1)) @ Matrix.Rotation(ang, 4, "Z") @ Matrix.Diagonal((0.24, 0.6, 0.2, 1))
             bmesh.ops.create_cube(bm, size=1.0, matrix=m)
     ob = mesh_ob("channelcurb", bm, [M["stone"]], smooth=False, bevel=0.04, segs=2)
-    imats.roughen(ob, strength=0.06, size=0.4, levels=2)
+    roughen(ob, strength=0.06, size=0.4, levels=2)
+    # an iron path on the ground from the door's sill to the grate: the channel is tied to the body by it
+    w = Vector(uv(0.0, 2.95))
+    box("channelpath", (1.5, 2.0, 0.12), (w.x, w.y, 0.0), M["deckedge"], rot=(0, 0, 45), bevel=0.03)
     g = Vector(uv(0.0, 5.0))
     box("channelgrate", (1.7, 1.1, 0.06), (g.x, g.y, 0.21), M["deckedge"], rot=(0, 0, 45), bevel=0.02)
     for s in (-0.6, -0.2, 0.2, 0.6):
@@ -1033,14 +1056,16 @@ def wreck_damaged():
         p = Vector((x, y, 0.0)) + d * rnd.uniform(0.5, 1.3)
         o = box(f"fallen{len(bpy.data.objects)}", (w * 0.8, 0.5, 0.3), (p.x, p.y, 0.02), M["stone"],
                 rot=(rnd.uniform(-14, 14), rnd.uniform(-10, 10), rnd.uniform(0, 180)), bevel=0.05)
-        imats.roughen(o, strength=0.07, size=0.45, levels=2)
+        roughen(o, strength=0.07, size=0.45, levels=2)
     dome_cracks()
     cx, cy = uv(*DOME_UV)
-    for j, (u, w, drop) in enumerate(((0.9, 0.2, 0.75), (1.25, 0.11, 0.4))):      # brew running over the deck's edge
+    for j, (u, w, drop) in enumerate(((0.9, 0.24, 0.7),)):      # brew running over the deck's edge
         e = P(u, 3.79, 0.0)
         box(f"leak{j}", (w, 0.05, drop + 0.05), (e.x, e.y, LD_Z1 - drop), M["pipe"], rot=(0, 0, 45), bevel=0.02)
         e = P(u, 3.55, 0.0)
         box(f"leaktop{j}", (w, 0.36, 0.04), (e.x, e.y, LD_Z1), M["pipe"], rot=(0, 0, 45), bevel=0.015)
+        e = P(u, 3.82, 0.0)
+        kit.blob(f"leakdrop{j}", (e.x, e.y, LD_Z1 - drop), 0.17, squash=1.2, mat=M["pipe"])
     # the snapped horn and the bent coil
     for k, deg in ((1, 58),):
         o = bpy.data.objects[f"horn{k}"]
@@ -1056,7 +1081,7 @@ def wreck_damaged():
             x, y = mir(uv(*FLASK_UV))
             move(left, (x, y, UD_Z1), toward(tuple(V_DIR + U_DIR * 0.5)[:2]), 84, shift=(0, 0, 0.3))
     # the whole upper tier: sunk a little into the lower deck, leaning toward the viewer's left
-    up = named("uwall", "upost", "pilaster", "ustrip", "uband", "urivet", "ubolt", "pipe", "udeck", "plinth", "bell",
+    up = named("uwall", "upost", "pilaster", "ustrip", "uband", "urivet", "ubolt", "udeck", "plinth", "bell",
                "horn", "ucorner", "flask", "crown", "bcoil", "fold")
     up = [o for o in up if not o.name.startswith("fold") or any(
         c.name.startswith(("horn", "bellC", "crown", "flask")) for c in o.children)]
@@ -1138,7 +1163,7 @@ def wreck_destroyed():
             o = box(f"fallen{i}", (rnd.uniform(0.5, 1.0), rnd.uniform(0.4, 0.6), rnd.uniform(0.25, 0.5)), (x, y, z),
                     M["block" if i % 4 == 1 else "stone"], rot=(rnd.uniform(-25, 25), rnd.uniform(-25, 25),
                                                                rnd.uniform(0, 180)), bevel=0.05)
-            imats.roughen(o, strength=0.07, size=0.45, levels=2)
+            roughen(o, strength=0.07, size=0.45, levels=2)
         else:
             lump(f"debris{i}", (x, y, z), rnd.uniform(0.2, 0.5), M["stone"], seed=800 + i)
     for i in range(5):                                  # torn deck plate
