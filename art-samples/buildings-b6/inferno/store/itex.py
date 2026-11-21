@@ -1,6 +1,7 @@
 """itex.py : the Inferno covers' prints, from the surface Store's own matchbook.png (store-v1/mbtex.py): its letters,
 flame and match are taken off the red card as masks and repainted, so every shape stays where the surface cover has it.
-    python3 itex.py   ->  cover-<d|e|f>.png (colour) and cover-<d|e|f>-glow.png (its own light; black = none)
+    python3 itex.py   ->  cover-<d|e|f>.png (colour) and cover-<d|e|f>-glow.png (its own light; black = none), and
+                          cover-e-plain.png and -glow.png: E's cover without the words MATCH BOOK
 Pillow only (this PC's python3 has no numpy)."""
 import random
 from pathlib import Path
@@ -43,16 +44,18 @@ rim = rim.filter(ImageFilter.GaussianBlur(70))
 rim = ImageChops.multiply(rim, mottle(40, 0.5).point(lambda v: min(255, v * 2)))
 
 
-def make(v, base, letter, flame_col, head_col, glow_flame, glow_letter):
+def make(v, base, letter, flame_col, head_col, glow_flame, glow_letter, words=True):
     col = times(times(Image.new("RGB", (W, H), base), mottle(24, 0.14)), mottle(90, 0.2))
     dark = col.point(lambda x: round(x * 0.4))
     col = Image.composite(col, dark, rim)
-    col = Image.composite(times(Image.new("RGB", (W, H), letter), mottle(40, 0.12)), col, letters)
+    if words:
+        col = Image.composite(times(Image.new("RGB", (W, H), letter), mottle(40, 0.12)), col, letters)
     col = Image.composite(Image.new("RGB", (W, H), flame_col), col, flame)
     col = Image.composite(Image.new("RGB", (W, H), head_col), col, head)
     col.save(HERE / f"cover-{v}.png")
     g = Image.new("RGB", (W, H), (0, 0, 0))
-    g = Image.composite(times(Image.new("RGB", (W, H), glow_letter), mottle(30, 0.35)), g, letters)
+    if words:
+        g = Image.composite(times(Image.new("RGB", (W, H), glow_letter), mottle(30, 0.35)), g, letters)
     g = Image.composite(times(Image.new("RGB", (W, H), glow_flame), mottle(30, 0.35)), g, flame)
     g.filter(ImageFilter.GaussianBlur(2)).save(HERE / f"cover-{v}-glow.png")
 
@@ -60,6 +63,12 @@ def make(v, base, letter, flame_col, head_col, glow_flame, glow_letter):
 # d: the red card burnt dark, ash letters, the flame an ember
 make("d", (112, 34, 30), (176, 160, 136), (236, 120, 30), (20, 14, 14), (255, 110, 20), (0, 0, 0))
 # e: black iron, the letters and the flame branded in and glowing
+before_e = rnd.getstate()
 make("e", (50, 46, 48), (200, 84, 22), (255, 150, 40), (14, 10, 10), (255, 120, 24), (190, 60, 10))
+# e without the words MATCH BOOK (STORE_LETTERS=0 in istore.py): the flame and the match only, on the same iron
+after_e = rnd.getstate()
+rnd.setstate(before_e)          # the same clouds as "e": only the letters differ
+make("e-plain", (50, 46, 48), (200, 84, 22), (255, 150, 40), (14, 10, 10), (255, 120, 24), (190, 60, 10), words=False)
+rnd.setstate(after_e)
 # f: blackened copper, brass letters and flame, no glow
 make("f", (112, 60, 34), (190, 134, 56), (206, 150, 60), (30, 22, 18), (0, 0, 0), (0, 0, 0))

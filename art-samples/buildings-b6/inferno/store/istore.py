@@ -17,7 +17,14 @@ the Inferno kit's camera, light and render modes (../kit.py, untouched; the same
   f  "Copper Works": the die clad in the Inferno Academy's blackened copper with rivets and green brimstone portholes
      for pips, iron slats, a brass strap, a copper cover with brass letters.
 The covers' prints are cover-<v>.png and cover-<v>-glow.png (itex.py, from the surface Store's matchbook.png).
-Nothing moves (the surface Store has no animation either).
+Nothing in the model moves (the surface Store has no animation either).
+
+LOOK E FINISHED (22 Nov 2026, the owner's pick; all.sh renders everything, post_e.py makes the loop and the pictures):
+  - the two horns lean straight across the screen, one shape mirrored, so they stand equally tall, and their seats sit
+    on the strap's middle line, clear of its holes and of the paper;
+  - STORE_LETTERS=0 leaves the words MATCH BOOK off the cover (colour and glow), into e-plain/ : the one switch;
+  - PB_STATE=damaged / destroyed: the wrecked looks (wreck_damaged, wreck_destroyed), one rough pass each;
+  - STORE_PIP / STORE_CRACK scale the pips' and the cracks' light for the glow loop's three renders (post_e.py).
 """
 import math
 import os
@@ -38,7 +45,13 @@ import imats  # noqa: E402
 import stack as S  # noqa: E402
 
 VAR = os.environ.get("STORE_VAR", "d")
-kit.OUT = HERE / VAR
+LETTERS = os.environ.get("STORE_LETTERS", "1") != "0"      # 0: E's cover without the words MATCH BOOK (-> e-plain/)
+GLOW_PIP = float(os.environ.get("STORE_PIP", 1.0))         # the loop's renders: the pips' / the cracks' light scaled
+GLOW_CRACK = float(os.environ.get("STORE_CRACK", 1.0))
+STATE = kit.STATE                                          # "damaged", "destroyed", or a loop render's tag
+DMG, DEAD = STATE == "damaged", STATE == "destroyed"
+DIM = 0.7 if DMG else 0.32 if DEAD else 1.0                # a wrecked store's fires burn low
+kit.OUT = HERE / (VAR if LETTERS else VAR + "-plain")
 kit.OUT.mkdir(exist_ok=True)
 kit.ORIGIN = S.ORIGIN                    # the surface Store's origin (3.0, 33.5)
 kit.FRAME = (-56, -60, 90, 76)           # the surface Store's canvas (-50,-44,80,72), wider for the horns and shadow
@@ -518,7 +531,8 @@ def materials():
     M["blob"] = P_("s-blob", (84, 78, 74), rough=0.45, metal=0.8, wear=(120, 112, 104), scale=6.0, dirt=0.2)
     M["stone"] = imats.rock("s-stone", (34, 30, 30), (66, 60, 56), scale=2.5)
     M["bone"] = imats.bone("s-bone", col=(176, 158, 122), tip=(52, 42, 36), z0=S.ZSTICK, z1=S.ZSTICK + 3.2)
-    cov, glow = HERE / f"cover-{VAR}.png", HERE / f"cover-{VAR}-glow.png"
+    tag = VAR if LETTERS or VAR != "e" else "e-plain"
+    cov, glow = HERE / f"cover-{tag}.png", HERE / f"cover-{tag}-glow.png"
     if VAR == "d":
         # the surface die's red, burnt: scorched dark-red enamel on iron, the iron showing at the worn places
         M["die"] = P_("s-die", (128, 40, 30), rough=0.55, metal=0.45, wear=(62, 56, 56), rust=(120, 62, 30), scale=1.5,
@@ -535,13 +549,14 @@ def materials():
         M["paper"] = P_("s-hide", (86, 48, 36), rough=0.9, wear=(128, 84, 58), scale=5.0, dirt=0.2, soot=0.6)
     elif VAR == "e":
         M["die"] = imats.rock("s-basalt", (38, 34, 34), (72, 64, 60), crack=(255, 120, 24), crack_scale=1.1,
-                              crack_cover=0.38, glow=4.0, scale=2.4)
-        M["pip"] = imats.magma("s-pip", hot=(255, 112, 16), core=(255, 200, 80), strength=1.9, scale=2.0)
-        M["cover"] = printed_glow("s-cover", cov, glow, 2.6, rough=0.55, dirt=0.45, metal=0.6)
+                              crack_cover=0.45 if DMG or DEAD else 0.38, glow=4.0 * GLOW_CRACK * DIM, scale=2.4)
+        M["pip"] = imats.magma("s-pip", hot=(255, 112, 16), core=(255, 200, 80), strength=1.9 * GLOW_PIP * DIM, scale=2.0)
+        M["cover"] = printed_glow("s-cover", cov, glow, 2.6 * DIM, rough=0.55, dirt=0.45, metal=0.6)
         M["striker"] = M["iron"]
         for i in range(4):                      # old bone slats, yellowed and sooty
             c = (176 - 8 * i, 156 - 9 * i, 118 - 9 * i)
-            M[f"stick{i}"] = P_(f"s-slat{i}", c, rough=0.7, wear=(118, 100, 74), scale=3.0, dirt=0.5, soot=0.6)
+            M[f"stick{i}"] = P_(f"s-slat{i}", c, rough=0.7, wear=(118, 100, 74), scale=3.0, dirt=0.5,
+                                soot=0.85 if DMG or DEAD else 0.6)
         M["strap"] = P_("s-strap", (60, 54, 54), rough=0.5, metal=0.8, wear=(104, 94, 86), rust=(98, 52, 32), scale=3.0,
                         dirt=0.3, soot=0.5, rust_at=0.55)
         M["paper"] = P_("s-hide", (70, 36, 30), rough=0.9, wear=(120, 64, 40), scale=5.0, dirt=0.2, soot=0.6)
@@ -549,6 +564,9 @@ def materials():
                        scale=2.0, dirt=0.4, soot=0.5, rust_at=0.6)
         M["tackdark"] = M["tack"]
         M["pin"] = M["iron"]
+        # what shows where a wrecked die is broken open: lava going cold under a dark crust
+        M["core"] = imats.magma("s-core", hot=(255, 104, 16), core=(255, 190, 70), strength=2.2 * DIM, crust_at=0.5,
+                                scale=1.6)
     else:
         M["die"] = P_("s-copper", (150, 80, 40), rough=0.34, metal=0.95, wear=(104, 52, 28), rust=(64, 110, 88),
                       scale=1.2, dirt=0.45, soot=0.6, rust_at=0.6, streak=1.0, grain=0.2)
@@ -1012,16 +1030,23 @@ def rounded_poly(corners, rad, n=8):
 
 
 # ------------------------------------------------------------------------------------------------------------ Inferno parts
+HORN_SIDE = Vector((1.0, 1.0, 0.0)).normalized()      # straight across the screen (the camera looks from +X -Y)
+
+
 def horn(name, base, lean):
-    """A horn standing on the strap: an iron seat, then bone curving out (lean = +1 right, -1 left) and up."""
+    """A horn standing on the strap's middle line: an iron seat, then bone curving out and up. It leans straight
+    across the screen (lean = +1 to the viewer's right, -1 left), so the two are one shape mirrored as the player
+    sees them and stand equally tall (round 2's leaned along the strap, which runs down the screen to the right: the
+    left one drew taller than the right)."""
     x, y, z = base
-    kit.cyl(name + "seat", 0.36, 0.22, (x, y, z), M["iron"], verts=20, bevel=0.03)
+    kit.cyl(name + "seat", 0.28, 0.2, (x, y, z), M["iron"], verts=20, bevel=0.03)     # clear of the holes beside it
     pts = []
     for i in range(13):
         t = i / 12
         a = math.radians(100 * t)
-        pts.append((x + lean * 1.15 * (1 - math.cos(a)), y + 0.25 * t, z + 0.1 + 2.3 * math.sin(a) * (0.55 + 0.45 * t)))
-    kit.tube(name, pts, 0.3, M["bone"], verts=14, r_end=0.03, smooth=True)
+        out = lean * 1.15 * (1 - math.cos(a))
+        pts.append((x + HORN_SIDE.x * out, y + HORN_SIDE.y * out, z + 0.1 + 2.3 * math.sin(a) * (0.55 + 0.45 * t)))
+    kit.tube(name, pts, 0.245, M["bone"], verts=14, r_end=0.03, smooth=True)
 
 
 def rivets():
@@ -1074,9 +1099,8 @@ def build():
     paper()
     strap()
     if VAR == "e":
-        zs = S.ZSTICK + S.STRAP_RAISE + S.STRAP_T + 0.02
-        horn("hornL", (-1.05, S.STRAP_Y - 0.3, zs), -1)
-        horn("hornR", (1.4, S.STRAP_Y - 0.3, zs + S.STRAP_LIFT), 1)
+        horn("hornL", (-1.05, S.STRAP_Y, S.ZSTICK + 0.04 + S.STRAP_T + lift(-1.05)), -1)
+        horn("hornR", (1.4, S.STRAP_Y, S.ZSTICK + 0.04 + S.STRAP_T + lift(1.4)), 1)
     if VAR == "f":
         rivets()
     bpy.context.view_layer.update()
@@ -1087,11 +1111,193 @@ def build():
     tacks()
     if VAR == "e":
         rubble()
+        if DMG:
+            wreck_damaged()
+        if DEAD:
+            wreck_destroyed()
+
+
+# ------------------------------------------------------------------------------------------------- damaged, destroyed
+# One rough pass each (owner: damage looks loose), roughly after Flash's: damaged, the roof sticks knocked apart and one
+# on the ground, the strap torn up at its left end, the cover torn, bits lying about; destroyed, the die broken open
+# and toppled among its parts. Every part is the standing store's own, moved; nothing is rebuilt.
+def named(*names):
+    """The objects called so; a name ending in * takes every object that starts with it."""
+    out = []
+    for o in COLL.objects:
+        if any(o.name == n or (n.endswith("*") and o.name.startswith(n[:-1])) for n in names):
+            out.append(o)
+    return out
+
+
+def world_pts(obs):
+    bpy.context.view_layer.update()
+    dg = bpy.context.evaluated_depsgraph_get()
+    pts = []
+    for o in obs:
+        e = o.evaluated_get(dg)
+        me = e.to_mesh()
+        pts += [e.matrix_world @ v.co for v in me.vertices]
+        e.to_mesh_clear()
+    return pts
+
+
+def about(pivot, rot, move=(0, 0, 0)):
+    """A turn (degrees round X, Y, Z) about the point pivot, then a shift."""
+    P_ = Matrix.Translation(Vector(pivot))
+    R = Euler([math.radians(a) for a in rot]).to_matrix().to_4x4()
+    return Matrix.Translation(Vector(move)) @ P_ @ R @ P_.inverted()
+
+
+def put(names, T):
+    for o in named(*names):
+        o.matrix_world = T @ o.matrix_world
+
+
+def rest(names, z=0.012):
+    """Let the parts down (or up) together until the lowest of them lies on the ground."""
+    obs = named(*names)
+    low = min(p.z for p in world_pts(obs))
+    for o in obs:
+        o.matrix_world = Matrix.Translation((0, 0, z - low)) @ o.matrix_world
+
+
+def lay(names, to, rot):
+    """Turn the parts about their middle, carry the middle over the ground point `to`, and let them down onto it."""
+    obs = named(*names)
+    pts = world_pts(obs)
+    c = sum(pts, Vector()) / len(pts)
+    put(names, about(c, rot, (to[0] - c.x, to[1] - c.y, 0.0)))
+    rest(names)
+
+
+def lay_horn(name, to, spin):
+    """A broken-off horn flat on the ground (its curve lies in the upright plane across the screen), turned by spin."""
+    o = named(name)[0]
+    pts = world_pts([o])
+    c = sum(pts, Vector()) / len(pts)
+    R = (Matrix.Rotation(math.radians(spin), 4, "Z") @ Matrix.Rotation(math.radians(90), 4, "X")
+         @ Matrix.Rotation(math.radians(-45), 4, "Z"))
+    o.matrix_world = Matrix.Translation((to[0], to[1], 0.0)) @ R @ Matrix.Translation(-c) @ o.matrix_world
+    rest((name,))
+
+
+def gone(*names):
+    for o in named(*names):
+        bpy.data.objects.remove(o)
+
+
+def bite(ob, cuts, mat):
+    """Break rough pieces out of a mesh part: cuts are (place, size, seed, (sx, sy, sz)); the broken faces take mat."""
+    for k, (at, size, seed, sc) in enumerate(cuts):
+        c = lump("bite", at, size, mat, seed)
+        c.scale = sc
+        bake(c)
+        mo = ob.modifiers.new(f"bite{k}", "BOOLEAN")
+        mo.operation = "DIFFERENCE"
+        mo.object = c
+        try:
+            mo.solver = "EXACT"
+        except TypeError:
+            pass
+        mo.material_mode = "TRANSFER"
+        bake(ob)
+        bpy.data.objects.remove(c)
+
+
+def half(ob, name, keep_above, z, tilt):
+    """A copy of ob cut along a slanted line: the part above (or below) it."""
+    c = ob.copy()
+    c.data = ob.data.copy()
+    c.name = name
+    link(c)
+    bm = bmesh.new()
+    bmesh.ops.create_cube(bm, size=1.0)
+    for v in bm.verts:
+        v.co.x *= 30
+        v.co.y *= 30
+        v.co.z = (v.co.z + 0.5) * 30 * (1 if keep_above else -1)
+    k = mesh_ob("halfcut", bm, [ob.data.materials[0]], smooth=False)
+    k.matrix_world = about((0, 0, 0), (0, tilt, 0), (0, 0, z))
+    mo = c.modifiers.new("half", "BOOLEAN")
+    mo.operation = "INTERSECT"
+    mo.object = k
+    try:
+        mo.solver = "EXACT"
+    except TypeError:
+        pass
+    bake(c)
+    bpy.data.objects.remove(k)
+    return c
+
+
+def more_rubble(spots, seed0, mat="stone"):
+    for i, (x, y, r) in enumerate(spots):
+        lump(f"rubbleX{seed0}_{i}", (x, y, r * 0.3), r, M[mat], seed0 + i)
+
+
+STRAP_SET = ("strap", "strapend", "strapholeT*", "strapholeS", "paperblob")
+
+
+def wreck_damaged():
+    zt = S.ZTOP
+    gone("wireA", "wireB", "rubble4", "paperwad")                  # the roof's binding has burnt through
+    # the strap torn loose at its left: swung up about the foot of its bent end, the right horn still on it; the left
+    # horn has snapped off its seat and lies at the store's foot
+    T = about((A + 0.1, S.STRAP_Y, zt - 0.6), (0, 10, 0))
+    put(STRAP_SET + ("hornR", "hornRseat", "hornLseat"), T)
+    lay_horn("hornL", (5.3, 2.9), 60)
+    lay(("ring",), (5.6, -0.4), (0, 90, 0))                       # the ring has dropped off its hole
+    # the roof: the left stick has slid off and lies before the cover, the third is cocked up, the fourth pushed forward
+    lay(("stick0",), (2.5, -5.1), (0, 0, -49))
+    put(("stick2",), about((0.7, 2.85, zt), (0, 0, 9), (0, 0, 0.03)))
+    put(("stick3",), about((1.8, 0.0, zt), (0, 0, 6), (0.0, -0.8, 0.07)))       # (the top leans: forward is up)
+    put(("stick1",), about((-0.8, 0.0, zt), (0, 0, 5), (-0.25, 0.3, 0.0)))
+    # the cover torn at its left edge, top and bottom; the die bitten open low on its right face
+    bite(named("mbcover")[0], (((-3.1, -2.5, 1.0), 1.25, 31, (1.0, 1.0, 1.4)), ((-3.2, -2.5, 5.5), 0.9, 32, (1.3, 1.0, 1.0)),
+                              ((-0.6, -2.5, 0.3), 0.7, 33, (1.6, 1.0, 1.0))), M["iron"])
+    bite(named("die")[0], (((A + 0.1, 0.3, S.DIE_Z0 + 0.1), 0.95, 34, (1.0, 1.3, 1.5)),
+                           ((A + 0.2, -2.0, zt - 0.3), 0.6, 35, (1.0, 1.2, 1.2))), M["core"])
+    more_rubble(((3.4, 0.4, 0.34), (3.9, -0.4, 0.22), (3.1, 1.3, 0.2), (-4.6, -2.4, 0.2),
+                 (-1.4, -4.6, 0.2)), 700)
+    more_rubble(((3.7, 1.0, 0.25), (4.3, 0.1, 0.16)), 760, "die")
+
+
+def wreck_destroyed():
+    zt = S.ZTOP
+    gone("wireA", "wireB", "tackpin2", "tackpin3", "tackboss2", "tackboss3", "tack2", "tack3", "hornLseat", "rubble0",
+         "rubble4")
+    d = named("die")[0]
+    cov = named("mbcover")[0]
+    # the cover torn across: its top half stays glued to the die and falls with it, its bottom half lies in front
+    half(cov, "mbtop", True, 3.1, 9)
+    half(cov, "mblow", False, 3.1, 9)
+    bpy.data.objects.remove(cov)
+    # the die broken open (a big piece off its top front corner, one off its right face, one off its back) and toppled
+    # onto its side edge; the strap still hooked over it with the paper, one stick and the right horn
+    bite(d, (((A - 0.2, -A + 0.3, zt), 2.3, 41, (1.1, 1.0, 1.3)), ((A + 0.2, 1.6, S.DIE_Z0 + 2.0), 1.3, 42, (1.0, 1.2, 1.4)),
+             ((-1.2, 1.9, zt + 0.2), 1.5, 43, (1.3, 1.2, 1.0))), M["core"])
+    body = ("die", "mbtop", "stick3", "hornR", "hornRseat", "paper", "paperwad") + STRAP_SET
+    put(body, about((0.0, 0.0, S.DIE_Z0), (-13, 21, 8)))
+    rest(body)
+    lay(("mblow",), (2.3, -5.5), (-84, 0, 45))
+    # the rest of the roof, the left horn and the ring thrown down round it
+    lay(("stick0",), (-4.3, -2.8), (0, 0, 45))
+    lay(("stick1",), (5.8, -2.0), (0, 0, 64))
+    lay(("stick2",), (5.3, 1.6), (0, 4, -28))
+    lay_horn("hornL", (7.6, 2.6), 152)
+    lay(("ring",), (7.2, 0.3), (0, 90, 0))
+    for i, lean in ((0, (22, 14, 0)), (1, (-18, 20, 0))):        # the two front tacks stand, their pins bent
+        gx, gy = S.TACKS[i][0]
+        put((f"tackpin{i}",), about((gx, gy, S.TACK_T), lean))
+    more_rubble(((6.0, 0.6, 0.28), (3.4, 2.9, 0.36), (2.2, 5.6, 0.3), (-0.6, -4.4, 0.36), (6.6, -4.4, 0.26),
+                 (-2.6, -1.9, 0.3)), 800)
+    more_rubble(((4.0, -2.9, 0.42), (-3.3, -3.7, 0.4), (0.4, -3.6, 0.4), (3.4, 0.9, 0.55)), 860, "die")
 
 
 FAMILY = (("die", "die"), ("wire", "wire"), ("mbcover", "cover"), ("tackpin", "pin"), ("tackboss", "tack"),
           ("tack", "tack"), ("stick", "stick"), ("straphole", "strap"), ("strap", "strap"), ("ring", "ring"),
-          ("paper", "paper"), ("horn", "strap"), ("rivets", "die"), ("rubble", "rubble"))
+          ("paper", "paper"), ("horn", "horn"), ("mbtop", "cover"), ("mblow", "cover"), ("rivets", "die"), ("rubble", "rubble"))
 
 
 def family(o):

@@ -42,6 +42,7 @@ px around the building's origin, 12 render px a 1x px), with the same camera as 
 | incubator | 13 Incubator in an Inferno yard | art/incubator-3d | art-samples/buildings-b6/inferno/incubator (incubator.py, `post.py game` -> `game/`) | one look for its three levels; 50 cells of its hatching loop, the vent's smoke laid into the cells by post.py; canvas x -80..80, y -60..90; `incubator:damaged` from the same `game/` folder; destroyed is Flash's rubble |
 | strongbox | 8 Strongbox in an Inferno yard | art/strongbox-3d | art-samples/buildings-b6/inferno/strongbox (strongbox.py) | one look for its four levels; 30 cells of its loop while it unlocks, each the whole building |
 | iacademy | 26 Academy in an Inferno yard | art/iacademy-3d | art-samples/buildings-b6/inferno/academy (academy.py, `post.py game` -> `game/`) | Flash's two looks (level 1; levels 2-4); 44 and 47 cells of its training loop (the drill, the cogs between the pillars, the pillars); canvas x -80..90, y -110..80; `iacademy:damaged` from the same `game/` folder; destroyed is the painted rubble (`top.c<n>.destroyed@2x.webp`) |
+| istore | 12 General Store in an Inferno yard | art/inferno-store-r2 | art-samples/buildings-b6/inferno/store (istore.py look E, `all.sh`, `post_e.py cells` -> `e/render/`) | one look, "Bone and Brimstone": the surface Store's shape in the Inferno's materials (owner, 22 Nov 2026); 32 whole-scene cells of its glow (`L1-cell-NN.png`: the lava pips and the magma in the cracks swell and fade); canvas x -56..90, y -60..76; `istore:damaged` and `istore:destroyed` from the same folder; files `*.i3d1*` beside the surface store's `*.3d1*` |
 | siegeworks | 134 Siege Works | art/siege-works-3d | art-samples/buildings-b6/siege/works (works.py, `post.py game` -> `game/`) | one look; 60 cells of its working loop (the rocker, the chain and the bellows, as Flash's three strips together); canvas x -75..125, y -95..95, 8 render px a 1x px; `siegeworks:damaged` from the same `game/` folder; destroyed is Flash's rubble |
 | siegefactory | 133 Siege Factory | art/siege-factory-3d | art-samples/buildings-b6/siege/factory (factory.py, `post.py export` -> `export/`) | one look; an idle cell (the machine at rest, no smoke: `TierAnim.rest`) then the 35 cells of its working loop (the rocker, rod, shaft and wheels, the pump's smoke laid in by post.py); canvas x -84..146, y -104..106; its ground haze laid under the body (`L1-under.png`); `siegefactory:damaged` from the same `export/` folder; destroyed is Flash's rubble |
 
@@ -201,6 +202,9 @@ BUILDINGS = {
     "siegefactory": dict(type=133, folder="siegefactory", frame=(-84, -104), looks=[(1, "L1")], moves="parts"),
     "locker": dict(type=8, folder="monsterlocker", frame=(-80, -110), k=8, looks=[(n, f"L{n}") for n in range(1, 5)],
                    moves="cells", noise=0.0),
+    # the Inferno's store shares the surface store's folder: its files are `*.i3d1*` (`tag`)
+    "istore": dict(type=12, folder="generalstore", frame=(-56, -60), looks=[(1, "L1")], moves="cells", tag="i3d",
+                   even=True),
     "booby": dict(type=24, folder="boobytrap", frame=(-24, -14), looks=[(1, "booby-whole")], moves=None),
     "heavy": dict(type=117, folder="heavytrap", frame=(-24, -14), looks=[(1, "heavy-whole")], moves=None),
 }
@@ -216,7 +220,7 @@ CELLS = {"twig": {1: 34, 3: 34, 6: 34, 10: 34}, "pebble": {1: 26, 3: 26, 6: 26, 
          "iacademy": {1: 44, 2: 47},
          "siegeworks": {1: 60},
          "siegefactory": {1: 36},
-         "strongbox": {1: 30}, "locker": {1: 21, 2: 20, 3: 20, 4: 21}}
+         "strongbox": {1: 30}, "locker": {1: 21, 2: 20, 3: 20, 4: 21}, "istore": {1: 32}}
 TAIL = 16                      # 1x px a shadow cut by the render's canvas is carried on past it, fading out
 NOISE = 0.07                   # the shadow catcher's faint wash over all the ground (sky occlusion), taken off every shade
 MOVED = 8                      # levels (of 255) a Lab cell must differ from the first to count as moving, past the noise
@@ -540,7 +544,7 @@ def export(name, render, state=None):
             assert tuple(map(len, names)) == CELLS[name][level], (name, level, [len(n) for n in names])
         elif moves:
             assert len(names) == CELLS[name][level], (name, level, len(names))
-        tag = f"3d{level}.{state}" if state else f"3d{level}"
+        tag = f"{cfg.get('tag', '3d')}{level}" + (f".{state}" if state else "")
 
         if moves == "cells":
             # Every pixel any cell changes, grown a 1x px: the sack's box. Each cell is split like the base, the
@@ -553,6 +557,12 @@ def export(name, render, state=None):
             changed = ndimage.binary_dilation(changed, iterations=k)
             box = bbox(changed.astype("float32"), 0.5, k)
             x0, y0, x1, y1 = box
+            if cfg.get("even"):
+                # A cell an even number of 1x px each way, so the Medium Quality's @1.5x copy has whole pixels.
+                x1 += (x1 - x0) // k % 2 * k
+                y1 += (y1 - y0) // k % 2 * k
+                assert x1 <= building.shape[1] and y1 <= building.shape[0], (name, box)
+                box = (x0, y0, x1, y1)
             layers = []
             for n in names:
                 c = load(n)

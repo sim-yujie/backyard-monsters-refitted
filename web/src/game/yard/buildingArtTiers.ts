@@ -757,7 +757,10 @@ export const BUILDING_3D_ART: Readonly<Record<number, readonly TierArt[]>> = {
  * Incubator (13, `buildings/ihatchery/`), from art/incubator-3d (owner, 15
  * Nov 2026), exported by `export3d_buildings.py incubator`; and its Academy
  * (26, `buildings/iacademy/`), from art/iacademy-3d (17 Nov 2026), exported
- * by `export3d_buildings.py iacademy`.
+ * by `export3d_buildings.py iacademy`; and its General Store (12, in the
+ * surface store's folder, which the Inferno's row shares), look E from
+ * art/inferno-store-r2 (owner, 22 Nov 2026), exported by
+ * `export3d_buildings.py istore`.
  */
 export const INFERNO_BUILDING_3D_ART: Readonly<Record<number, readonly TierArt[]>> = {
   // 1 Bone Cruncher: 3D (owner, 6 Nov 2026: "3d bone crusher has been approved"), the clean-room model's three tiers,
@@ -837,6 +840,19 @@ export const INFERNO_BUILDING_3D_ART: Readonly<Record<number, readonly TierArt[]
       anim: { strip: ["anim.3d1@2x.webp", -57, -41, 115, 127, 30], columns: 17, whole: true, home: true },
       destroyed: { top: ["top.3d1@2x.webp", -57, -38], shadow: ["shadow.3d1.jpg", -61, 31] } },
   ],
+  // 12 General Store: 3D (owner on the Review Desk, 22 Nov 2026: look E, "Bone and Brimstone"), the surface Store's
+  // own model (the die on its tacks, the stick roof, the Match Book cover, the strap) in the Inferno's materials: a
+  // cracked basalt die with lava pips, bone slats, an iron cover with the words branded in, two horns on the strap
+  // (art/inferno-store-r2, `export3d_buildings.py istore`). It replaces the painted lava forge shop of patch 8.1. In
+  // the surface store's folder as `*.i3d1*`, beside the surface's `*.3d1*`. Its lava pips and the magma in its cracks
+  // swell and fade, 32 cells over the body, all the time (`yardAnim.ts`). Damaged and destroyed are its own renders,
+  // one rough pass each after Flash's. With the Classic look the Inferno draws Flash's store.
+  12: [
+    { from: 1, top: ["top.i3d1@2x.webp", -43, -49], shadow: ["shadow.i3d1.jpg", -41, 1], lift: 0,
+      anim: { strip: ["anim.i3d1@2x.webp", -29, -16, 66, 68, 32], columns: 31, body: ["body.i3d1@2x.webp", -43, -49] },
+      damaged: { top: ["top.i3d1.damaged@2x.webp", -50, -44], shadow: ["shadow.i3d1.damaged.jpg", -51, 0] },
+      destroyed: { top: ["top.i3d1.destroyed@2x.webp", -54, -40], shadow: ["shadow.i3d1.destroyed.jpg", -56, 2] } },
+  ],
   // 13 Incubator: 3D (owner, 15 Nov 2026, round 3 approved as is), the clean-room model, one look for its three levels
   // as Flash's. Its moving parts over a still body, in Flash's 50 cells: the brood churns in the porthole and the
   // feed hose pumps, twice a loop, and green smoke puffs from the vent once (laid into the cells by its post.py). It
@@ -910,17 +926,6 @@ export const INFERNO_PAINTED_BUILDING_ART: Readonly<Record<number, readonly Tier
     { from: 1, top: ["top.c1@2x.webp", -45, -53], shadow: ["shadow.1.v2.jpg", -48, 17], lift: 0,
       damaged: { top: ["top.c1.damaged@2x.webp", -48, -49], shadow: ["shadow.1.damaged.v2.jpg", -47, 17] },
       destroyed: { top: ["top.c1.destroyed@2x.webp", -53, -15], shadow: ["shadow.1.destroyed.v2.jpg", -54, 12] } },
-  ],
-  // 12 General Store: painted, the Inferno's own shop (owner, 20 Nov 2026, patch 8.1), an original Codex design (Codex
-  // declined a recolour of the surface store), round 3 shop C of `web/tools/store-inferno/` (lava forge shop, painted at
-  // the game's 2:1 camera after the owner found round 2's angle wrong), its 80 x 40 base diamond where Flash's store
-  // stands, in the surface store's folder, with its own shadow (a little darker since the ruin pass, `.v2`). Damaged
-  // and destroyed are its own too (make_ruin.py, one Codex picture of both, fitted onto the shop), as the painted Resource
-  // Pod's and Housing Bunker's are. With the Classic look the Inferno draws Flash's store.
-  12: [
-    { from: 1, top: ["top.ishop3C@2x.webp", -52, -52], shadow: ["shadow.ishop3C.v2.jpg", -35, 25], lift: 0,
-      damaged: { top: ["top.ishop3C.damaged@2x.webp", -52, -62], shadow: ["shadow.ishop3C.damaged.v2.jpg", -35, 22] },
-      destroyed: { top: ["top.ishop3C.destroyed@2x.webp", -48, -3], shadow: ["shadow.ishop3C.destroyed.v2.jpg", -39, 39] } },
   ],
   // 14 Under Hall: painted, Flash's three looks and three of its own (4 to 6, animated), each damaged and destroyed in paint too
   14: [

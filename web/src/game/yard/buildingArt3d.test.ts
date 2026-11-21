@@ -3,6 +3,7 @@ import { fileURLToPath } from "node:url";
 import { inflateSync } from "node:zlib";
 import { afterEach, describe, expect, it } from "vitest";
 import { setClassicLook } from "@/game/classicLook";
+import { buildPicture } from "./buildButtonArt";
 import { ArtState, artFolder, resolveArt, restingLayers } from "./buildingArt";
 import { BUILDING_ART_ROWS } from "./buildingArtData";
 import { BUILDING_3D_ART, INFERNO_BUILDING_3D_ART, INFERNO_PAINTED_BUILDING_ART, tierArtFor } from "./buildingArtTiers";
@@ -659,6 +660,73 @@ describe("the 3D yard buildings", () => {
     setClassicLook(true);
     expect(resolveArt(4, 1, ArtState.DEFAULT, "inferno")?.top.url).toBe(`${folder}top.1.v2.png`);
     expect(resolveArt(4, 7, ArtState.DEFAULT, "inferno")?.top.url).toBe(`${folder}top.1.v2.png`);
+  });
+
+  it("give the Inferno's General Store look E in 3D, its lava glowing in 32 cells over a still body, with its own ruins", () => {
+    const STORE = 12;
+    const root = "/assets/buildings/generalstore/";
+    const folder = `${ASSETS}buildings/generalstore/`;
+    expect((INFERNO_BUILDING_3D_ART[STORE] ?? []).map((look) => look.from)).toEqual([1]);
+    expect(STORE in INFERNO_PAINTED_BUILDING_ART).toBe(false);
+    const [look] = INFERNO_BUILDING_3D_ART[STORE] ?? [];
+    const art = resolveArt(STORE, 1, ArtState.DEFAULT, "inferno");
+    expect(art?.name).toBe("General Store");
+    // The body under one strip of its glowing places; the still for the icons.
+    expect(art?.topIsAnim).toBe(false);
+    expect(art?.top.url).toBe(`${root}body.i3d1@2x.webp`);
+    expect(art?.still?.url).toBe(`${root}top.i3d1@2x.webp`);
+    expect(art?.shadow?.url).toBe(`${root}shadow.i3d1.jpg`);
+    expect(art?.anims.map(({ url, frames, columns }) => ({ url, frames, columns }))).toEqual([
+      { url: `${root}anim.i3d1@2x.webp`, frames: 32, columns: 31 },
+    ]);
+    // Every file on disk; the strip as big as its cells, each an even number of game px (so it has a @1.5x copy).
+    const [strip, , , cellWidth, cellHeight, cells] = look?.anim?.strip ?? ["", 0, 0, 0, 0, 0];
+    const rows = Math.ceil(cells / (look?.anim?.columns ?? cells));
+    expect(webpSize(folder + strip)).toEqual([cellWidth * 2 * (look?.anim?.columns ?? cells), cellHeight * 2 * rows]);
+    expect([cellWidth % 2, cellHeight % 2]).toEqual([0, 0]);
+    for (const file of [look?.top[0], look?.shadow?.[0], look?.anim?.body?.[0], look?.damaged?.top[0],
+      look?.damaged?.shadow?.[0], look?.destroyed?.top[0], look?.destroyed?.shadow?.[0]]) {
+      expect(existsSync(folder + (file ?? "")), file).toBe(true);
+    }
+    // Its glow never stops, each store from a cell of its own; the surface's store has no strip to run.
+    expect(animPolicy(STORE)?.ticksPerFrame).toBe(4);
+    expect(animPolicy(STORE)?.work).toBeNull();
+    expect(resolveArt(STORE, 1, ArtState.DEFAULT)?.anims).toEqual([]);
+    // Its own damaged and destroyed looks, standing still.
+    const damaged = resolveArt(STORE, 1, ArtState.DAMAGED, "inferno");
+    expect(damaged?.top.url).toBe(`${root}top.i3d1.damaged@2x.webp`);
+    expect(damaged?.shadow?.url).toBe(`${root}shadow.i3d1.damaged.jpg`);
+    expect(damaged?.anims).toEqual([]);
+    const destroyed = resolveArt(STORE, 1, ArtState.DESTROYED, "inferno");
+    expect(destroyed?.top.url).toBe(`${root}top.i3d1.destroyed@2x.webp`);
+    expect(destroyed?.shadow?.url).toBe(`${root}shadow.i3d1.destroyed.jpg`);
+    expect(destroyed?.anims).toEqual([]);
+    // It is the surface store's own model: it stands where the surface's Modern store does, its die's foot within
+    // 4 px (its rubble lies a little lower) and centred within 4 px.
+    const surface = tierArtFor(STORE, 1, "main")?.top ?? ["", 0, 0];
+    expect(surface[0]).toBe("top.3d1@2x.webp");
+    const top = look?.top ?? ["", 0, 0];
+    const bottom = (one: readonly [string, number, number]): number => one[2] + webpSize(folder + one[0])[1] / 2;
+    const centre = (one: readonly [string, number, number]): number => one[1] + webpSize(folder + one[0])[0] / 4;
+    expect(Math.abs(bottom(top) - bottom(surface))).toBeLessThanOrEqual(4);
+    expect(Math.abs(centre(top) - centre(surface))).toBeLessThanOrEqual(4);
+    // The surface keeps its own 3D store and Flash's rubble; the Classic look is Flash's store in the Inferno too.
+    expect(resolveArt(STORE, 1, ArtState.DEFAULT)?.top.url).toBe(`${root}top.3d1@2x.webp`);
+    expect(resolveArt(STORE, 1, ArtState.DESTROYED)?.top.url).not.toContain("i3d");
+    setClassicLook(true);
+    expect(tierArtFor(STORE, 1, "inferno")).toBeNull();
+    expect(resolveArt(STORE, 1, ArtState.DEFAULT, "inferno")?.top.url).toBe(`${root}top.1.png`);
+    expect(resolveArt(STORE, 1, ArtState.DEFAULT, "inferno")?.anims).toEqual([]);
+  });
+
+  it("give the Inferno's General Store a build-menu picture of its own with the Modern look, Flash's flames with Classic", () => {
+    const modern = buildPicture(12, "inferno", false);
+    expect(modern.modern).toBe(true);
+    expect(modern.url).toMatch(/\/buildingbuttons\/modern\/12\.inferno\.[0-9a-f]{8}\.webp$/);
+    expect(existsSync(`${ASSETS}buildingbuttons/modern/${modern.url.split("/").at(-1)}`)).toBe(true);
+    expect(buildPicture(12, "inferno", true)).toEqual({ url: "/assets/buildingbuttons/general_store.v2.jpg", modern: false });
+    expect(existsSync(`${ASSETS}buildingbuttons/general_store.v2.jpg`)).toBe(true);
+    expect(buildPicture(12, "main", true)).toEqual({ url: "/assets/buildingbuttons/12.jpg", modern: false });
   });
 
   it("never show in an Inferno yard: the Inferno's own art there, even where it shares Flash's folder", () => {
