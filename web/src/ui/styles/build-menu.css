@@ -682,11 +682,11 @@
 }
 
 /*
- * A window under 1000px tall on a computer or an iPad (beta 9): the picture
+ * A window up to 1050px tall on a computer or an iPad (beta 9): the picture
  * goes beside the name and the words, not above them, so the name, the words,
  * the needs and the pinned cost all fit without scrolling at 1280x720 and up.
  */
-@media (min-width: 620.02px) and (min-height: 500.02px) and (max-height: 1000px) {
+@media (min-width: 620.02px) and (min-height: 500.02px) and (max-height: 1050px) {
   .build-info {
     display: grid;
     grid-template-columns: 72px minmax(0, 1fr);
@@ -1329,8 +1329,9 @@
     display: inline-flex;
   }
 
+  /* Small enough that the needs fit above the pinned cost at 390x844 (beta 9). */
   .build-info__picture {
-    width: 96px;
+    width: 72px;
   }
 
   .build-placing {
