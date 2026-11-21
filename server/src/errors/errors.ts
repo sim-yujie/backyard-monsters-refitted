@@ -157,14 +157,6 @@ export const unknownAvatarErr = () =>
     isClientFriendly: true,
   });
 
-export const saveFailureErr = () =>
-  new ClientSafeError({
-    message: "We encountered an error while saving",
-    status: Status.INTERNAL_SERVER_ERROR,
-    data: {},
-    isClientFriendly: true,
-  });
-
 /**
  * A save for a base whose row is no longer there (`services/base/missingBase.ts`):
  * a camp that regrew, an outpost moved or taken, an owner deleted. Expected,
@@ -286,14 +278,6 @@ export const userOnlineErr = () =>
   new ClientSafeError({
     message: "This player is currently online and cannot be attacked. Please try again later.",
     status: Status.CONFLICT,
-    data: {},
-    isClientFriendly: false,
-  });
-
-export const takeoverCellErr = () =>
-  new ClientSafeError({
-    message: "The server attempted to take over this cell but failed unexpectedly. Please try again.",
-    status: Status.INTERNAL_SERVER_ERROR,
     data: {},
     isClientFriendly: false,
   });
@@ -643,38 +627,6 @@ export const cannotPromoteErr = () =>
   new ClientSafeError({
     message: "You cannot promote members.",
     status: Status.FORBIDDEN,
-    data: {},
-    isClientFriendly: true,
-  });
-
-export const joinMapVersionErr = () =>
-  new ClientSafeError({
-    message: "That Alliance is on a different Map Room version.",
-    status: Status.FORBIDDEN,
-    data: {},
-    isClientFriendly: true,
-  });
-
-export const inviteMapVersionErr = (username: string) =>
-  new ClientSafeError({
-    message: `${username} is too far away to join your Alliance. They are on a different Map Room version.`,
-    status: Status.FORBIDDEN,
-    data: {},
-    isClientFriendly: true,
-  });
-
-export const notEnoughShinyErr = () =>
-  new ClientSafeError({
-    message: "You do not have enough Shiny for that.",
-    status: Status.CONFLICT,
-    data: {},
-    isClientFriendly: true,
-  });
-
-export const notEnoughResourcesErr = () =>
-  new ClientSafeError({
-    message: "You do not have enough resources for that.",
-    status: Status.CONFLICT,
     data: {},
     isClientFriendly: true,
   });

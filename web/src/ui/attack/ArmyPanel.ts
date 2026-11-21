@@ -17,7 +17,7 @@ import { Panel } from "@/ui/Panel";
 import { QuantityStepper } from "@/ui/QuantityStepper";
 
 // The row control moved to `QuantityStepper.ts`; its timings stay importable from here.
-export { HOLD_DELAY_MS, HOLD_FAST_MS, HOLD_RAMP_MS, HOLD_START_MS, holdInterval, holdToRepeat } from "@/ui/QuantityStepper";
+export { HOLD_DELAY_MS, HOLD_FAST_MS, HOLD_START_MS } from "@/ui/QuantityStepper";
 
 /**
  * The army panel: one row per housed monster type, the champion, and the
@@ -51,7 +51,7 @@ export { HOLD_DELAY_MS, HOLD_FAST_MS, HOLD_RAMP_MS, HOLD_START_MS, holdInterval,
 
 // The display names moved to the shared rules, whose attack report the server
 // writes too (issue #23, C6); they stay importable from here.
-export { MONSTER_NAMES, monsterName } from "@/game/combat/rules";
+export { monsterName } from "@/game/combat/rules";
 
 /**
  * The short reason a champion row cannot be picked, or "" when it can.

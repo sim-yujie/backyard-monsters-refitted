@@ -56,9 +56,6 @@ const PAINTED: Partial<Record<PlannerIcon, () => HTMLElement>> = {
   snapshot: painted("camera"),
 };
 
-/** Whether a button shows its painted icon rather than its words. */
-export const isPainted = (name: PlannerIcon): boolean => PAINTED[name] !== undefined;
-
 /**
  * The inside of an icon button: the painted icon and a label the More sheet
  * shows beside it, or, until the icon is painted, the words (a phone's glyph

@@ -53,28 +53,6 @@ export const logAttackViolation = async (user: User, message: string) => {
 };
 
 /**
- * Logs a ban report for a user with a message and timestamp.
- * Increments the user's violation count and sets the ban reason.
- *
- * @param {User} user - The user being banned.
- * @param {string} message - The message explaining the reason for the ban.
- * @returns {Promise<void>}
- */
-export const logBanReport = async (user: User, message: string) => {
-  const incident = await getOrCreateReport(user);
-
-  const banReason: ReportEntry = {
-    message,
-    timestamp: new Date().toISOString(),
-  };
-
-  incident.banReason = banReason;
-  user.banned = true;
-  postgres.em.persist(incident);
-  await postgres.em.flush();
-};
-
-/**
  * Fetches an existing report for the user or creates a new one if none exists.
  * Also increments the violation count.
  *

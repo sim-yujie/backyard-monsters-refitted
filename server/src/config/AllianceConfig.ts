@@ -140,19 +140,6 @@ export const ALLIANCE_STATS = [
 ] as const;
 export type AllianceStat = (typeof ALLIANCE_STATS)[number];
 
-/**
- * Stats a battle reads. Health, tower and trap damage are frozen into the
- * attack load's defence (`allianceDefenceOf` in `allianceBonuses.ts`, the
- * shared rules' `DefenderForces.alliance`); `reach` is the map's attack range.
- */
-export const BATTLE_STATS: readonly AllianceStat[] = [
-  "buildingHealth",
-  "outpostHealth",
-  "towerDamage",
-  "trapDamage",
-  "reach",
-];
-
 /** One stat a constellation moves: its value with no stars, and what each star adds. */
 export interface ConstellationEffect {
   stat: AllianceStat;
@@ -178,9 +165,6 @@ export interface ConstellationRules {
  * 2026: one at a time, not two; design v5 §9 had 5 steps of 2).
  */
 export const CONSTELLATION_STEPS = 10;
-
-/** Stars each step lights. */
-export const STARS_PER_STEP = 1;
 
 /**
  * Point price of stars 1-10 for Midas; Conquest pays 2x and Fortress 4x (by
