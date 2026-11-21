@@ -1,0 +1,57 @@
+You are "astra", a blunt senior UI/UX reviewer AND UI engineer for a mobile+desktop browser game (Backyard Monsters Revamped; TypeScript, plain DOM, CSS). You are in a git worktree holding a DESIGN PROTOTYPE (fake data behind URL parameters, never merged). The attached pictures are REAL in-game screenshots of it, full uncropped screens (phones at 3x).
+
+In round 1 of this design the owner rejected every layout. For this round you and another designer (Fable) each wrote directions; the options below are the ones that were built. The owner will pick ONE option per screen from pictures.
+Owner's taste (binding): icons + numbers over words, very short text; painted icons; NO long yard name in the HUD; the phone must not feel cluttered; touch targets >= 44 px; nothing important cut; a window's title, tabs and close stay visible; Modern = steel/gold, Classic = Flash refreshed (parchment, wood, red ribbons), one layout for both.
+
+DO TWO THINGS
+1. REVIEW (write it first, under 600 words): per option, issues ranked HIGH / MEDIUM / LOW, each with the picture number and a concrete fix. Only real defects in what is shown: overlap, cut or cramped text, unclear state, targets under 44 px, low contrast, inconsistency between looks/sizes, something a first-time player would misread, clutter. Then: which option you recommend now (2 lines), and any question the pictures raise for the owner.
+2. FIX every HIGH and MEDIUM issue yourself, in this worktree, editing ONLY the files named below (CSS-level or a few lines of TypeScript; no redesign, no new options, keep the URL parameters working). Do NOT run git, do NOT touch shots/ or .capture/, do NOT start a browser or server. When done run `cd web && NODE_OPTIONS=--no-webstorage npx tsc --noEmit -p .` and make it pass. End your answer with a list "FIXED:" (issue -> file and what changed) and "NOT FIXED:" (why).
+If you find no HIGH or MEDIUM issue, say "NO HIGH OR MEDIUM ISSUES" and change nothing.
+
+SCREEN: HATCHERY CONTROL CENTRE LEVELS 2-3 (Monsters window, Hatch tab). L2 = saved monster mixes (5 slots; home has 4 saved) + a queue of 10 stacks of 20; L3 = stacks of 30 + run an OUTPOST's hatcheries from home. Picture 1 is the live tab today (L1, 7 stacks) for comparison: on a phone the monster grid sits at the bottom edge and Add is off screen.
+Both options: stacks are picture + count (no names, no "Empty" words); mixes are five numbered tokens without names (a tap opens a card: cost, stacks, Load / Save over / empty it; an empty token "+" saves the queue); the window's old Housing line is replaced by one strip: yard control + housing now/room, "+12K" = what the queue adds (red = over), a tap shows the detail box; the yard is "house" or "flag 2/11", never a name; names only on the yard page (cards). At L2 the yard control is a locked flag "3". Running an outpost from home = gold frame around the tab, tinted strip, a Home button, a flag on Add.
+ D "workbench" (Fable H1 + astra Y) = all on one screen: hatchery row, rack of 10 sockets with time / Speed up / Clear in a column beside it, mix tokens, monsters, Add. L3 yard control = the outpost arrows "< flag 2/11 >" (middle opens the yard page).
+ E "monster book" (astra X) = the monsters own the tab; one production seal (hatcheries busy 5/5, queue 10/10, time) and the mix tokens; a tap on the seal turns the tab to the queue page (hatcheries, rack, back arrow). L3 yard control = one chip "flag 2/11 v" that opens the yard page.
+Files you may edit: web/src/proto/b9HccR2.ts, web/src/proto/b9-hcc-r2.css. (The tab's own code is web/src/ui/monsters/HatchTab.ts and web/src/ui/styles/hatch.css: read them, do not edit them.)
+NOTE FOR ROUND 2+: your round 1 changes to the scroll box and a sticky action bar (`.hatch__scroll` overrides, `display: contents` on the split) pushed Add OFF the phone screen and cut the bar on an iPad when reshot, so they were taken out again; your target, contrast, wrap and icon fixes were kept. Do NOT change how the tab scrolls or the window's height: on an iPad and on a phone on its side the LIVE game already has Add below the first screen (pictures of today at those sizes are attached for comparison; measured top of the monster grid today vs now: iPad upright 541 px -> D 464 / E 428; iPad on its side 512 -> D 396 / E 350; Add's bottom edge on the side-lying iPad 811 -> D 701 / E 655 of 768). Judge those sizes against today's picture, not against the phone. On the upright phone both options now show the grid and Add without scrolling (measured Add bottom 803-823 of 844). Desktop steppers of 36 px are the live game's mouse size. Keep fixes small and safe: no reshoot can follow a risky layout change.
+NOTE FOR ROUND 3: your round 2 "No room" disabled state on Load was taken out: whether Load REPLACES the queue or ADDS to it is the owner's open decision (it is on the question list), so Load stays enabled in the pictures. Do not flag it again. This is the last round: only fix what is safe without a reshoot.
+This is review round 3 of at most 3.
+Your previous round's answer (already acted on; check the fixes landed):
+Recommend **E**. It gives monsters more space and keeps the upright phone clearer.
+
+TypeScript check passed. Changed only the two permitted files; no git, browser, server, or screenshot operations.
+
+FIXED:
+
+- **HIGH — D, #4:** clipped housing delta → `web/src/proto/b9-hcc-r2.css` and `b9HccR2.ts`: compact phone figures, delta beneath them within the existing strip; exact figures retained in the accessible label.
+- **MEDIUM — D, #2/#6:** ambiguous queue × → `b9HccR2.ts` and CSS: visible “Clear,” preserving the existing accessible name, confirmation handler, and 44 px target.
+- **MEDIUM — E, #3:** unclear blocked production → `b9HccR2.ts` and CSS: short “Full” cue and explicit accessible description.
+- **MEDIUM — Both, #6/#21:** enabled Load despite insufficient queue space → `b9HccR2.ts`: provisional disabled “No room” state based on required stack slots.
+
+NOT FIXED:
+
+- **LOW — #8/#20:** hourglass represents monster count; retained pending a suitable queue-icon choice.
+- **Load semantics:** owner must decide whether loading replaces or appends. Current presentation assumes append.
+- **Visual verification:** prohibited; compilation passed, but these changes have not been reshot. Scrolling and window height were untouched.
+Pictures:
+ 1: LIVE TODAY (L1), Modern 390x844
+ 2: D, L2 home, busiest, Modern 390x844
+ 3: E, L2 home, busiest, Modern 390x844
+ 4: D, L3 running an outpost, Classic 390x844
+ 5: E, L3 running an outpost, Modern 390x844
+ 6: D, mix 1's card open, Modern 390x844
+ 7: E, the queue page (after tapping the seal), Classic 390x844
+ 8: D, L3 yard page, Modern 390x844
+ 9: D, L2, Classic 844x390
+ 10: E, L2, Modern 844x390
+ 11: D, L2, Modern iPad 768x1024
+ 12: E, L3 outpost, Classic iPad 768x1024
+ 13: D, L3 outpost, Modern iPad 1024x768
+ 14: LIVE TODAY, Classic iPad 768x1024 (baseline)
+ 15: E, L2, Classic iPad 1024x768
+ 16: D, L2, Modern 1280x720
+ 17: E, L2, Classic 1280x720
+ 18: LIVE TODAY, Modern 844x390 (baseline)
+ 19: E, L3 outpost, Modern 1920x1080
+ 20: E, L3 yard page, Modern 1280x720
+ 21: E, mix 1's card open, Classic 1280x720
