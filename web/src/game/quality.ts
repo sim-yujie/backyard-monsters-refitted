@@ -299,9 +299,19 @@ const fittedCopy = (
  * from their 1x copy even where the `@2x` would fit (beta 9, owner 21 Nov
  * 2026, card b9-speed-picks): Fomor level 6's `@2x` is 3968 x 1470, about
  * 30 MB of graphics memory with its mipmaps for one monster, and its 1x copy
- * (375 KB) looks the same at a phone's zoom. By the painted file's name.
+ * (375 KB) looks the same at a phone's zoom. The owner added the four
+ * heaviest `@2x` sheets (pick "merge-plus4"), each a quarter of the memory as
+ * its 1x copy (sizes without mipmaps): Korath 3 (4096 x 3672, 57 MB), Korath 2
+ * (3808 x 2754, 40 MB), Drull 3 (3648 x 2550, 36 MB) and Gorgo 3
+ * (3296 x 2640, 33 MB). By the painted file's name.
  */
-export const SMALL_DEVICE_1X_SHEETS: ReadonlySet<string> = new Set(["monsters/fly_6-repaint@4x.png"]);
+export const SMALL_DEVICE_1X_SHEETS: ReadonlySet<string> = new Set([
+  "monsters/fly_6-repaint@4x.png",
+  "monsters/korath_3-repaint@4x.png",
+  "monsters/korath_2-repaint@4x.png",
+  "monsters/dragon_3-repaint@4x.png",
+  "monsters/ape_3-repaint@4x.png",
+]);
 
 /** Whether the yard tune is the lighter copy (Medium and Low). */
 export const lightMusic = (level: Quality = quality()): boolean => level !== "high";

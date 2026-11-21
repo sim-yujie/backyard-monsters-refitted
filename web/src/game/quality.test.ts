@@ -17,6 +17,7 @@ import {
   setQuality,
   sheetAtQuality,
   sheetForDevice,
+  SMALL_DEVICE_1X_SHEETS,
 } from "./quality";
 
 /** A stand-in for the browser's storage. */
@@ -96,6 +97,37 @@ describe("sheetAtQuality", () => {
     // Other sheets keep their @2x on a phone.
     expect(sheetForDevice("monsters/fly_4-repaint@4x.png", { width: 1920, height: 644 }, 4096, "medium", true)).toBe(
       "monsters/fly_4-repaint@2x.png",
+    );
+  });
+
+  it("draws Korath 3 and 2, Drull 3 and Gorgo 3 from their 1x copy on a phone or a 4096 card too (beta 9, merge-plus4)", () => {
+    const sheets = [
+      { name: "monsters/korath_3", size: { width: 2048, height: 1836 } },
+      { name: "monsters/korath_2", size: { width: 1904, height: 1377 } },
+      { name: "monsters/dragon_3", size: { width: 1824, height: 1275 } },
+      { name: "monsters/ape_3", size: { width: 1648, height: 1320 } },
+    ];
+    for (const { name, size } of sheets) {
+      const painted = `${name}-repaint@4x.png`;
+      expect(SMALL_DEVICE_1X_SHEETS.has(painted)).toBe(true);
+      // A phone (Medium at most): the 1x copy, never the @2x.
+      expect(sheetForDevice(painted, size, 4096, "medium", true)).toBe(`${name}-repaint.png`);
+      expect(sheetForDevice(painted, size, 8192, "medium", true)).toBe(`${name}-repaint.png`);
+      expect(sheetForDevice(painted, size, null, "medium", true)).toBe(`${name}-repaint.png`);
+      // Low on a phone stays the 1x.
+      expect(sheetForDevice(painted, size, 4096, "low", true)).toBe(`${name}-repaint.png`);
+      // A desktop whose card holds 4096: High steps down past the @2x as well.
+      expect(sheetForDevice(painted, size, 4096, "high", false)).toBe(`${name}-repaint.png`);
+      // A desktop with a bigger card keeps the copy its Quality asks for.
+      expect(sheetForDevice(painted, size, 8192, "medium", false)).toBe(`${name}-repaint@2x.png`);
+      expect(sheetForDevice(painted, size, 16384, "high", false)).toBe(painted);
+    }
+    // The other levels of the same monsters keep their @2x on a phone.
+    expect(sheetForDevice("monsters/korath_1-repaint@4x.png", { width: 1152, height: 833 }, 4096, "medium", true)).toBe(
+      "monsters/korath_1-repaint@2x.png",
+    );
+    expect(sheetForDevice("monsters/ape_2-repaint@4x.png", { width: 1424, height: 1095 }, 4096, "medium", true)).toBe(
+      "monsters/ape_2-repaint@2x.png",
     );
   });
 
