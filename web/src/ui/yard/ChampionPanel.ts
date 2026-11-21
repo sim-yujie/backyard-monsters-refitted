@@ -41,6 +41,7 @@ import { resourceAmount } from "@/ui/resourceIcon";
 import "@/ui/styles/champion.css";
 import { modesBlock, modesShape, savedStance, showsModes } from "./championModes";
 import { ShinyButton } from "./ShinyButton";
+import { refusalText } from "@/ui/dom";
 
 /**
  * The Champion Cage's controls, in the Monsters screen's Champion tab
@@ -1013,11 +1014,6 @@ const fedText = (report: ChampionFeedReport): (Node | string)[] => {
 };
 
 const bad = (refusal: YardRefusal): Status => ({ tone: "bad", content: [refusalText(refusal)] });
-
-const refusalText = (refusal: YardRefusal): string =>
-  refusal.reason === "network"
-    ? "Could not reach the server. Try again."
-    : refusal.message || "That did not work.";
 
 const heading = (text: string): HTMLElement => {
   const element = document.createElement("h4");

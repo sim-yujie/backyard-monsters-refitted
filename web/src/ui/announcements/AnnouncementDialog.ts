@@ -4,6 +4,7 @@ import { Popup } from "@/ui/Popup";
 import { announcementContent } from "./announcementContent";
 import { announcementGift } from "./announcementGift";
 import "./announcements.css";
+import { el } from "@/ui/dom";
 
 /**
  * The owner's announcements in the game: the pop-up that shows one after the
@@ -18,17 +19,6 @@ import "./announcements.css";
  * decorations, where Glimmers are spent (owner, 13 Nov 2026: "promote
  * decorations in game").
  */
-
-const el = <K extends keyof HTMLElementTagNameMap>(
-  tag: K,
-  className: string,
-  text?: string,
-): HTMLElementTagNameMap[K] => {
-  const element = document.createElement(tag);
-  element.className = className;
-  if (text !== undefined) element.textContent = text;
-  return element;
-};
 
 /** The popup's class: what {@link isAnnouncementOpen} looks for. */
 const POPUP_CLASS = "announcement-popup";

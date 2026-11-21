@@ -3,6 +3,7 @@ import { FIRST_OPEN_ART } from "@/game/maproom/takeover";
 import { STARTER_KIT_SUMMARIES } from "@/game/yard/starterKits";
 import { gameIcon } from "@/ui/gameIcon";
 import { eventsArt } from "./eventsArt";
+import { el } from "@/ui/dom";
 
 /**
  * The "Frontier Pass" card on the Events page (owner, 9 Nov 2026; 7 sets in
@@ -61,13 +62,6 @@ export const welcomeLeftText = (left: number, sets: number): string => `${left}/
 /** Which of the 10 days `at` falls on: 1 on the first day, 10 on the last (kept inside them). */
 export const welcomeDay = (startsAt: number, at: number): number =>
   Math.min(WELCOME_DAYS, Math.max(1, Math.floor((at - startsAt) / DAY) + 1));
-
-const el = <K extends keyof HTMLElementTagNameMap>(tag: K, className: string, text?: string): HTMLElementTagNameMap[K] => {
-  const element = document.createElement(tag);
-  element.className = className;
-  if (text !== undefined) element.textContent = text;
-  return element;
-};
 
 const picture = (src: string, alt: string): HTMLImageElement => {
   const image = el("img", "events-welcome__picture");

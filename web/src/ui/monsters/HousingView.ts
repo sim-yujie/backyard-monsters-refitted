@@ -1,4 +1,3 @@
-import type { YardRefusal } from "@/api/yard";
 import {
   expansionEndsAt,
   housingBuildings,
@@ -24,6 +23,7 @@ import "@/ui/styles/housing.css";
 import { ShinyButton } from "@/ui/yard/ShinyButton";
 import { monsterPicture } from "./LockerTab";
 import { MonstersTabId } from "./monstersTab";
+import { refusalText } from "@/ui/dom";
 
 /**
  * What lives in the yard's Housing, drawn as the approved Housing panel
@@ -406,7 +406,3 @@ export class HousingView {
   }
 }
 
-const refusalText = (refusal: YardRefusal): string =>
-  refusal.reason === "network"
-    ? "Could not reach the server. Try again."
-    : refusal.message || "That did not work.";

@@ -3,7 +3,6 @@ import {
   hatcheryActions,
   type HatcheryActions,
 } from "@/api/yardHatchery";
-import type { YardRefusal } from "@/api/yard";
 import { monsterStat } from "@/game/combat/rules";
 import {
   activeOverdrive,
@@ -65,6 +64,7 @@ import {
   type MonstersTabContext,
 } from "./monstersTab";
 import { weekendChip } from "@/ui/events/weekendUi";
+import { refusalText } from "@/ui/dom";
 
 /** Hatch Rush's "−30%" chip after a hatch time, or nothing. */
 const hatchRushChip = (): (Node | string)[] => {
@@ -2129,7 +2129,3 @@ export const lineSentence = (
   }
 };
 
-const refusalText = (refusal: YardRefusal): string =>
-  refusal.reason === "network"
-    ? "Could not reach the server. Try again."
-    : refusal.message || "That did not work.";
