@@ -139,6 +139,16 @@
 .b9-travel-open .b9r2-tile {
   border-color: var(--colour-accent);
 }
+.b9r2-tile::after {
+  content: "";
+  width: 7px;
+  height: 7px;
+  margin: 4px 0 0 4px;
+  border-top: 2px solid currentColor;
+  border-right: 2px solid currentColor;
+  transform: rotate(-45deg);
+  flex: none;
+}
 .b9r2-travel {
   position: fixed;
   left: 0;
@@ -192,18 +202,15 @@
   padding: 10px;
 }
 .b9r2-travel__list {
-  position: absolute;
-  right: -4px;
-  bottom: -4px;
-  width: 24px;
+  display: block;
+  width: 30px;
   height: 24px;
-  border-radius: 50%;
-  background: var(--colour-accent);
-  color: var(--colour-on-accent, #1b1b1b);
-  font-size: 15px;
-  font-weight: 700;
-  line-height: 24px;
-  text-align: center;
+  color: var(--colour-text);
+  background: repeating-linear-gradient(to bottom,
+    currentColor 0 4px, transparent 4px 10px);
+  /* Break each row into a list bullet and its line. */
+  mask-image: linear-gradient(to right,
+    #000 0 4px, transparent 4px 9px, #000 9px);
 }
 /* The travel bar stands in for the dock: its buttons rest under it. */
 .b9-travel-open .yard-dock > :not(.yard-dock__left),

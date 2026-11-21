@@ -1,0 +1,20 @@
+/home/yujiesim/Coding/backyard-monsters-refitted/worktrees/screens-r2/shots/arrows/r2-now-modern-390x844.png | LIVE TODAY, Main yard, Modern 390x844 (name plaque under the flag)
+/home/yujiesim/Coding/backyard-monsters-refitted/worktrees/screens-r2/shots/arrows/r2-d-modern-390x844.png | D, outpost, Modern 390x844
+/home/yujiesim/Coding/backyard-monsters-refitted/worktrees/screens-r2/shots/arrows/r2-e-modern-390x844.png | E, outpost, Modern 390x844
+/home/yujiesim/Coding/backyard-monsters-refitted/worktrees/screens-r2/shots/arrows/r2-f-modern-390x844.png | F at rest, outpost, Modern 390x844
+/home/yujiesim/Coding/backyard-monsters-refitted/worktrees/screens-r2/shots/arrows/r2-f-open-modern-390x844.png | F travel bar open, outpost, Modern 390x844
+/home/yujiesim/Coding/backyard-monsters-refitted/worktrees/screens-r2/shots/arrows/r2-d-classic-390x844.png | D, outpost, Classic 390x844
+/home/yujiesim/Coding/backyard-monsters-refitted/worktrees/screens-r2/shots/arrows/r2-e-classic-390x844.png | E, outpost, Classic 390x844
+/home/yujiesim/Coding/backyard-monsters-refitted/worktrees/screens-r2/shots/arrows/r2-f-open-classic-390x844.png | F travel bar open, Classic 390x844
+/home/yujiesim/Coding/backyard-monsters-refitted/worktrees/screens-r2/shots/arrows/r2-d-modern-390x844-main.png | D on the MAIN yard, Modern 390x844
+/home/yujiesim/Coding/backyard-monsters-refitted/worktrees/screens-r2/shots/arrows/r2-e-modern-390x844-main.png | E on the MAIN yard, Modern 390x844
+/home/yujiesim/Coding/backyard-monsters-refitted/worktrees/screens-r2/shots/arrows/r2-d-modern-844x390.png | D, Modern 844x390
+/home/yujiesim/Coding/backyard-monsters-refitted/worktrees/screens-r2/shots/arrows/r2-e-classic-844x390.png | E, Classic 844x390
+/home/yujiesim/Coding/backyard-monsters-refitted/worktrees/screens-r2/shots/arrows/r2-f-open-modern-844x390.png | F travel bar open, Modern 844x390
+/home/yujiesim/Coding/backyard-monsters-refitted/worktrees/screens-r2/shots/arrows/r2-d-classic-768x1024.png | D, Classic iPad 768x1024
+/home/yujiesim/Coding/backyard-monsters-refitted/worktrees/screens-r2/shots/arrows/r2-e-modern-1024x768.png | E, Modern iPad 1024x768
+/home/yujiesim/Coding/backyard-monsters-refitted/worktrees/screens-r2/shots/arrows/r2-f-open-classic-1024x768.png | F travel bar open, Classic iPad 1024x768
+/home/yujiesim/Coding/backyard-monsters-refitted/worktrees/screens-r2/shots/arrows/r2-d-modern-1280x720.png | D, Modern 1280x720
+/home/yujiesim/Coding/backyard-monsters-refitted/worktrees/screens-r2/shots/arrows/r2-e-classic-1366x768.png | E, Classic 1366x768
+/home/yujiesim/Coding/backyard-monsters-refitted/worktrees/screens-r2/shots/arrows/r2-f-open-modern-1920x1080.png | F travel bar open, Modern 1920x1080
+/home/yujiesim/Coding/backyard-monsters-refitted/worktrees/screens-r2/shots/arrows/r2-f-modern-1280x720.png | F at rest, Modern 1280x720

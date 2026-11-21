@@ -1,0 +1,4721 @@
+Reading prompt from stdin...
+OpenAI Codex v0.169.0
+--------
+workdir: /home/yujiesim/Coding/backyard-monsters-refitted/worktrees/screens-r2
+model: gpt-6-astra
+provider: openai
+approval: never
+sandbox: workspace-write [workdir, /tmp, $TMPDIR]
+reasoning effort: none
+reasoning summaries: none
+session id: 01a1fee9-5987-7a62-b3a7-5cb3aa6fa3ce
+--------
+user
+You are "astra", a blunt senior UI/UX reviewer AND UI engineer for a mobile+desktop browser game (Backyard Monsters Revamped; TypeScript, plain DOM, CSS). You are in a git worktree holding a DESIGN PROTOTYPE (fake data behind URL parameters, never merged). The attached pictures are REAL in-game screenshots of it, full uncropped screens (phones at 3x).
+
+In round 1 of this design the owner rejected every layout. For this round you and another designer (Fable) each wrote directions; the options below are the ones that were built. The owner will pick ONE option per screen from pictures.
+Owner's taste (binding): icons + numbers over words, very short text; painted icons; NO long yard name in the HUD; the phone must not feel cluttered; touch targets >= 44 px; nothing important cut; a window's title, tabs and close stay visible; Modern = steel/gold, Classic = Flash refreshed (parchment, wood, red ribbons), one layout for both.
+
+DO TWO THINGS
+1. REVIEW (write it first, under 600 words): per option, issues ranked HIGH / MEDIUM / LOW, each with the picture number and a concrete fix. Only real defects in what is shown: overlap, cut or cramped text, unclear state, targets under 44 px, low contrast, inconsistency between looks/sizes, something a first-time player would misread, clutter. Then: which option you recommend now (2 lines), and any question the pictures raise for the owner.
+2. FIX every HIGH and MEDIUM issue yourself, in this worktree, editing ONLY the files named below (CSS-level or a few lines of TypeScript; no redesign, no new options, keep the URL parameters working). Do NOT run git, do NOT touch shots/ or .capture/, do NOT start a browser or server. When done run `cd web && NODE_OPTIONS=--no-webstorage npx tsc --noEmit -p .` and make it pass. End your answer with a list "FIXED:" (issue -> file and what changed) and "NOT FIXED:" (why).
+If you find no HIGH or MEDIUM issue, say "NO HIGH OR MEDIUM ISSUES" and change nothing.
+
+SCREEN: HATCHERY CONTROL CENTRE LEVELS 2-3 (Monsters window, Hatch tab). L2 = saved monster mixes (5 slots; home has 4 saved) + a queue of 10 stacks of 20; L3 = stacks of 30 + run an OUTPOST's hatcheries from home. Picture 1 is the live tab today (L1, 7 stacks) for comparison: on a phone the monster grid sits at the bottom edge and Add is off screen.
+Both options: stacks are picture + count (no names, no "Empty" words); mixes are five numbered tokens without names (a tap opens a card: cost, stacks, Load / Save over / empty it; an empty token "+" saves the queue); the window's old Housing line is replaced by one strip: yard control + housing now/room, "+12K" = what the queue adds (red = over), a tap shows the detail box; the yard is "house" or "flag 2/11", never a name; names only on the yard page (cards). At L2 the yard control is a locked flag "3". Running an outpost from home = gold frame around the tab, tinted strip, a Home button, a flag on Add.
+ D "workbench" (Fable H1 + astra Y) = all on one screen: hatchery row, rack of 10 sockets with time / Speed up / Clear in a column beside it, mix tokens, monsters, Add. L3 yard control = the outpost arrows "< flag 2/11 >" (middle opens the yard page).
+ E "monster book" (astra X) = the monsters own the tab; one production seal (hatcheries busy 5/5, queue 10/10, time) and the mix tokens; a tap on the seal turns the tab to the queue page (hatcheries, rack, back arrow). L3 yard control = one chip "flag 2/11 v" that opens the yard page.
+Files you may edit: web/src/proto/b9HccR2.ts, web/src/proto/b9-hcc-r2.css. (The tab's own code is web/src/ui/monsters/HatchTab.ts and web/src/ui/styles/hatch.css: read them, do not edit them.)
+This is review round 1 of at most 3.
+Pictures:
+ 1: LIVE TODAY (L1), Modern 390x844
+ 2: D, L2 home, busiest, Modern 390x844
+ 3: E, L2 home, busiest, Modern 390x844
+ 4: D, L3 running an outpost, Classic 390x844
+ 5: E, L3 running an outpost, Modern 390x844
+ 6: D, mix 1's card open, Modern 390x844
+ 7: E, the queue page (after tapping the seal), Classic 390x844
+ 8: D, L3 yard page, Modern 390x844
+ 9: D, L2, Classic 844x390
+ 10: E, L2, Modern 844x390
+ 11: D, L2, Modern iPad 768x1024
+ 12: E, L3 outpost, Classic iPad 768x1024
+ 13: D, L3 outpost, Modern iPad 1024x768
+ 14: E, L2, Classic iPad 1024x768
+ 15: D, L2, Modern 1280x720
+ 16: E, L2, Classic 1280x720
+ 17: D, L3 outpost, Classic 1366x768
+ 18: E, L3 outpost, Modern 1920x1080
+ 19: E, L3 yard page, Modern 1280x720
+ 20: E, mix 1's card open, Classic 1280x720
+
+hook: SessionStart
+hook: SessionStart Completed
+hook: UserPromptSubmit
+hook: UserPromptSubmit Completed
+codex
+**Review**
+
+**D — workbench**
+- **HIGH · #9–11, #13:** Landscape phones lose the monsters and Add below the window; portrait iPad loses Add; landscape iPad cuts the action panel. The fixed chrome leaves too little usable height. Fix: make the tab’s content scroll within the window and keep the quantity/Add controls reachable without clipping.
+- **MEDIUM · #11:** The queue time and speed control run into the right frame. Fix: let the production columns shrink or wrap before their combined width exceeds the tab.
+- **MEDIUM · #4:** “Max (40)” extends outside its button. Fix: size the label to fit the available button width.
+- **MEDIUM · #15, #17:** Hatchery and queue items, mix tokens, and yard-arrow controls are densely packed; several controls are narrower than 44 CSS px. Fix: enforce minimum interactive dimensions and allow wrapping.
+
+**E — monster book**
+- **HIGH · #10, #12:** The monster book and/or Add disappear beneath the window edge. Compact production helps, but does not solve the short-height layout. Fix: use the same bounded scrolling and reachable action controls as D.
+- **MEDIUM · #3, #10, #14, #16:** The blocked hatchery count uses pale yellow, with especially weak contrast on Classic parchment. Fix: use a stronger theme-specific warning foreground.
+- **MEDIUM · #14, #16, #18:** Small quantity controls and the Home/yard controls fall below the required 44 px target width. Fix: enforce minimum dimensions without shrinking the labels.
+
+**Shared**
+- **MEDIUM · #2–5:** The phone housing strip shows a red overflow amount, but hides the corresponding positive queue amount in the outpost state (#5). That makes the same bar change meaning without an explanation. Fix: retain the queue delta in both states.
+- **MEDIUM · #6, #20:** The mix card shows “2.9M” without a resource icon, and two separate × controls mean close and delete. Fix: add the goo icon and use a distinct delete symbol with an accessible label.
+- **LOW · #8, #19:** An empty search field relies entirely on the magnifier. A short accessible name is needed; visible placeholder text is optional.
+- **LOW · #7:** The queue page leaves a large empty lower area. This is acceptable for an inspection page; filling it would add clutter.
+
+I recommend **E**: it gives monster selection priority and keeps the busiest phone state manageable.  
+Keep its queue inspection page; fix the viewport and target-size defects before choosing from another capture.
+
+Owner question raised by the pictures: should a full queue still permit loading a saved mix by replacing the queue, or should Load be disabled? The screenshots leave that behavior unclear.
+
+I’ll inspect the prototype and its underlying tab styles, then fix the HIGH and MEDIUM issues within the two permitted files.
+hook: PreToolUse
+hook: PreToolUse Completed
+exec
+/bin/bash -lc "pwd; rg --files -g AGENTS.md -g 'b9HccR2.ts' -g 'b9-hcc-r2.css' -g 'HatchTab.ts' -g hatch.css" in /home/yujiesim/Coding/backyard-monsters-refitted/worktrees/screens-r2
+ succeeded in 0ms:
+/home/yujiesim/Coding/backyard-monsters-refitted/worktrees/screens-r2
+web/src/proto/b9HccR2.ts
+web/src/proto/b9-hcc-r2.css
+web/src/ui/monsters/HatchTab.ts
+web/src/ui/styles/hatch.css
+
+hook: PostToolUse
+hook: PostToolUse Completed
+hook: PreToolUse
+hook: PreToolUse Completed
+exec
+/bin/bash -lc 'cat web/src/proto/b9-hcc-r2.css; cat web/src/proto/b9HccR2.ts' in /home/yujiesim/Coding/backyard-monsters-refitted/worktrees/screens-r2
+ succeeded in 0ms:
+/* DESIGN PROTOTYPE (b9 HCC levels 2-3, round 2), never merged.
+   D = workbench (all on one screen), E = monster book with a production seal. */
+
+.hatch.b9r2h {
+  position: relative;
+}
+
+/* The window's own housing line gives way to the strip's (one housing line, not two). */
+.b9r2h-window:has(.hatch.b9r2h) .monsters-header {
+  display: none;
+}
+
+/* ── The strip: which yard, its housing ─────────────────────────────── */
+.b9r2h-strip {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 48px;
+  padding: 6px 12px;
+  border-bottom: 1px solid var(--colour-border-subtle);
+}
+.b9r2h-arrow {
+  width: 30px;
+  height: 30px;
+  object-fit: contain;
+  filter: drop-shadow(0 2px 2px var(--colour-art-shadow));
+}
+.b9r2h button:disabled .b9r2h-arrow {
+  filter: grayscale(1);
+  opacity: 0.4;
+}
+.b9r2h-where {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.b9r2h-where__icon {
+  width: 30px;
+  height: 30px;
+  object-fit: contain;
+}
+.b9r2h-stepper,
+.b9r2h-yard {
+  flex: none;
+  display: inline-flex;
+  align-items: stretch;
+  height: 48px;
+  box-sizing: border-box;
+  border: 2px solid var(--colour-border-strong);
+  border-radius: 999px;
+  background: var(--colour-surface-control);
+  color: var(--colour-text);
+  font: inherit;
+}
+.b9r2h-yard {
+  align-items: center;
+  gap: 4px;
+  min-width: 46px;
+  justify-content: center;
+  padding: 0 10px;
+  cursor: pointer;
+}
+.b9r2h-yard--home {
+  padding: 0;
+  width: 46px;
+}
+.b9r2h-yard--locked {
+  position: relative;
+  opacity: 0.75;
+  cursor: default;
+}
+.b9r2h-yard--locked .b9r2h-where__icon {
+  filter: grayscale(1);
+}
+.b9r2h-lock__level {
+  font-family: var(--font-display);
+  font-weight: 700;
+}
+.b9r2h-caret {
+  color: var(--colour-accent);
+  font-size: 13px;
+}
+.b9r2h-stepper__arrow,
+.b9r2h-stepper__where {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+}
+.b9r2h-stepper__arrow {
+  width: 44px;
+}
+.b9r2h-stepper__where {
+  min-width: 64px;
+  padding: 0 4px;
+  border-inline: 1px solid var(--colour-border);
+}
+
+.b9r2h-housing {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 3px;
+  min-height: 44px;
+  padding: 0 4px;
+  border: 0;
+  background: none;
+  color: var(--colour-text);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.b9r2h-housing__numbers {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.b9r2h-housing__icon {
+  width: 22px;
+  height: 22px;
+}
+.b9r2h-housing__coming {
+  margin-left: auto;
+  color: var(--colour-info);
+  font-size: var(--text-sm);
+}
+.b9r2h-housing--over .b9r2h-housing__coming {
+  padding: 0 6px;
+  border-radius: 999px;
+  background: var(--colour-danger);
+  color: #fff;
+}
+.b9r2h-housing__bar {
+  display: flex;
+  height: 6px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: var(--colour-surface-sunken);
+}
+.b9r2h-housing__fill {
+  background: var(--colour-meter, var(--colour-text));
+}
+.b9r2h-housing__more {
+  background: var(--colour-info);
+}
+.b9r2h-housing--over .b9r2h-housing__more {
+  background: var(--colour-danger);
+}
+
+/* The tab's own housing box: only when the strip's housing is tapped. */
+.b9r2h:not(.b9r2h-show-housing) .hatch-message {
+  display: none;
+}
+
+/* Running an outpost from home: a gold frame, a tinted strip, the flag on Add. */
+.b9r2h-remote::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  border: 3px solid var(--colour-accent);
+  border-radius: var(--radius-md);
+  pointer-events: none;
+}
+.b9r2h-remote .b9r2h-strip {
+  background: var(--colour-accent-soft);
+}
+.b9r2h-remote .b9r2h-stepper,
+.b9r2h-remote .b9r2h-yard--chip {
+  border-color: var(--colour-accent);
+}
+.b9r2h-addflag {
+  width: 26px;
+  height: 26px;
+  margin-right: 6px;
+  vertical-align: middle;
+}
+
+/* ── Sockets: a stack is its picture and its count ──────────────────── */
+.b9r2h .hatch-slot__name,
+.b9r2h .hatch-slot__note,
+.b9r2h .hatch-slot__minus,
+.b9r2h .hatch-slot__empty {
+  display: none;
+}
+.b9r2h .hatch-slot {
+  width: auto;
+  min-width: 44px;
+  min-height: 48px;
+  padding: 2px;
+  border-radius: var(--radius-md);
+}
+.b9r2h .hatch-slot--empty {
+  border: 1px solid var(--colour-border-subtle);
+  background: var(--colour-surface-sunken);
+  box-shadow: inset 0 2px 5px rgb(0 0 0 / 35%);
+  opacity: 0.6;
+}
+.b9r2h .hatch-slot__picture {
+  width: 34px;
+  height: 34px;
+  margin: 0;
+}
+.b9r2h .hatch-slot__count {
+  top: auto;
+  left: auto;
+  right: 1px;
+  bottom: 1px;
+  min-width: 0;
+  padding: 0 4px;
+  font-size: 11px;
+  line-height: 1.35;
+}
+
+/* The line: hatcheries in a slim row, then the rack with the clock and Clear beside it. */
+.b9r2h .hatch-line--hcc > .hatch-line__now {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 6px;
+}
+.b9r2h .hatch-line--hcc .hatch-now {
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0;
+  width: auto;
+  min-height: 48px;
+  padding: 2px;
+}
+.b9r2h .hatch-line--hcc .hatch-now__state {
+  font-size: 11px;
+  line-height: 1.1;
+  white-space: nowrap;
+}
+.b9r2h .hatch-line--hcc .hatch-now__words {
+  display: block;
+  line-height: 1;
+}
+.b9r2h .hatch-line--hcc .hatch-now__label,
+.b9r2h .hatch-line--hcc .hatch-now__name,
+.b9r2h .hatch-line--hcc .hatch-now__cancel {
+  display: none;
+}
+.b9r2h .hatch-line--hcc .hatch-now__body {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+}
+.b9r2h .hatch-line--hcc .hatch-now__picture {
+  width: 28px;
+  height: 28px;
+  margin: 0;
+}
+.b9r2h .hatch-line--hcc .hatch-now__words-long {
+  display: none;
+}
+.b9r2h .hatch-line--hcc .hatch-now__words-short {
+  display: inline;
+}
+.b9r2h .hatch-line--hcc .hatch-now--more {
+  font-size: 0;
+}
+.b9r2h .hatch-line--hcc > .hatch-line__slots {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr)) 64px;
+  grid-template-rows: 50px 50px;
+  grid-auto-rows: 50px;
+  gap: 6px;
+  min-height: 0;
+  margin-top: 6px;
+  overflow: visible;
+}
+.b9r2h .hatch-line--hcc > .hatch-line__slots > .hatch-line__totals {
+  grid-column: 6 !important;
+  grid-row: 1 / span 2 !important;
+  order: 0 !important;
+  width: auto;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  justify-content: space-between;
+  gap: 2px;
+  margin: 0;
+  padding: 0;
+  min-width: 0;
+}
+.b9r2h .hatch-line__done-label,
+.b9r2h .hatch-line__boost-words,
+.b9r2h .hatch-line__done-icon {
+  display: none;
+}
+.b9r2h .hatch-line__done {
+  font-size: 12px;
+  line-height: 1;
+  text-align: center;
+  white-space: nowrap;
+}
+.b9r2h .hatch-line__boost-link,
+.b9r2h .hatch-line__totals .hatch-clear {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 0;
+  height: 44px;
+  flex: none;
+  padding: 0;
+  border: 1px solid var(--colour-border);
+  border-radius: var(--radius-md);
+  background: var(--colour-surface-control);
+}
+.b9r2h .hatch-line__boost-link::after {
+  content: "»";
+  margin-left: 3px;
+  color: var(--colour-accent);
+  font-weight: 700;
+}
+.b9r2h .hatch-line__totals .hatch-clear {
+  font-size: 0;
+}
+.b9r2h .hatch-line__totals .hatch-clear__cross {
+  font-size: 20px;
+  color: var(--colour-danger);
+}
+.b9r2h .hatch-lines {
+  margin-bottom: 0;
+}
+
+/* ── Mix tokens ─────────────────────────────────────────────────────── */
+.b9r2h-mixes {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 6px;
+  margin: 8px 0;
+}
+.b9r2h-mix {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0;
+  height: 52px;
+  padding: 2px;
+  border: 2px solid var(--colour-border-strong);
+  border-radius: 14px;
+  background: radial-gradient(circle at 50% 30%, var(--colour-surface-control-hover), var(--colour-surface-control));
+  color: var(--colour-text);
+  font: inherit;
+  cursor: pointer;
+}
+.b9r2h-mix--on {
+  border-color: var(--colour-accent);
+  box-shadow: 0 0 0 2px var(--colour-accent-soft);
+}
+.b9r2h-mix--empty {
+  border-style: dashed;
+  border-color: var(--colour-border);
+  background: none;
+}
+.b9r2h-mix__number {
+  position: absolute;
+  top: -5px;
+  left: -4px;
+  z-index: 1;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: var(--colour-accent);
+  color: var(--colour-text-inverse, #1b1b1b);
+  font-family: var(--font-display);
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 18px;
+  text-align: center;
+}
+.b9r2h-mix--empty .b9r2h-mix__number {
+  background: var(--colour-surface-sunken);
+  color: var(--colour-text-muted);
+}
+.b9r2h-mix__plus {
+  color: var(--colour-accent);
+  font-size: 26px;
+  font-weight: 700;
+  line-height: 1;
+}
+.b9r2h-faces {
+  display: inline-flex;
+}
+.b9r2h-face {
+  width: 26px;
+  height: 26px;
+  object-fit: contain;
+}
+.b9r2h-face + .b9r2h-face {
+  margin-left: -9px;
+}
+.b9r2h-mix__total {
+  font-family: var(--font-display);
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1.1;
+}
+
+/* A token's card. */
+.b9r2h-mixcard {
+  position: absolute;
+  left: 12px;
+  right: 12px;
+  z-index: 4;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-width: 420px;
+  padding: 10px;
+  border: 2px solid var(--colour-accent);
+  border-radius: var(--radius-lg);
+  background: var(--colour-surface-raised);
+  box-shadow: var(--shadow-popup);
+}
+.b9r2h-mixcard[hidden] {
+  display: none;
+}
+.b9r2h-mixcard__head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.b9r2h-mixcard__number {
+  position: static;
+  flex: none;
+  width: 26px;
+  height: 26px;
+  font-size: 15px;
+  line-height: 26px;
+}
+.b9r2h-mixcard__cost {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-family: var(--font-display);
+  font-weight: 700;
+}
+.b9r2h-mixcard__cost .b9r2h-housing__icon {
+  margin-left: 8px;
+}
+.b9r2h-mixcard__close {
+  width: 44px;
+  height: 44px;
+  margin: -6px -6px -6px 0;
+  border: 0;
+  background: none;
+  color: var(--colour-text);
+  font-size: 18px;
+  cursor: pointer;
+}
+.b9r2h-mixcard__stacks {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.b9r2h-socket {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 56px;
+  height: 48px;
+  border: 1px solid var(--colour-border);
+  border-radius: var(--radius-md);
+  background: var(--colour-surface-sunken);
+}
+.b9r2h-socket__picture {
+  width: 34px;
+  height: 34px;
+  object-fit: contain;
+}
+.b9r2h-socket__count {
+  position: absolute;
+  right: 1px;
+  bottom: 1px;
+  padding: 0 4px;
+  border-radius: 999px;
+  background: var(--colour-text);
+  color: var(--colour-text-inverse);
+  font-family: var(--font-display);
+  font-size: 11px;
+  font-weight: 700;
+}
+.b9r2h-mixcard__actions {
+  display: flex;
+  gap: 8px;
+}
+.b9r2h-mixcard__load {
+  flex: 1;
+  min-height: 44px;
+}
+.b9r2h-mixcard__tool {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  min-width: 44px;
+  min-height: 44px;
+  white-space: nowrap;
+}
+.b9r2h-mixcard__bin {
+  color: var(--colour-danger);
+  font-size: 18px;
+}
+
+/* ── E: the production seal, and the queue page behind it ───────────── */
+.b9r2h-seal {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+  width: 100%;
+  min-height: 56px;
+  padding: 4px 10px;
+  border: 2px solid var(--colour-border-strong);
+  border-radius: var(--radius-lg);
+  background: linear-gradient(var(--colour-surface-control-hover), var(--colour-surface-control));
+  color: var(--colour-text);
+  font: inherit;
+  cursor: pointer;
+}
+.b9r2h-seal__part {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+.b9r2h-seal__hatchery {
+  width: 40px;
+  height: 44px;
+  object-fit: contain;
+}
+.b9r2h-seal__blocked {
+  position: absolute;
+  left: 22px;
+  top: -4px;
+  width: 20px;
+  height: 20px;
+  padding: 1px;
+  border-radius: 50%;
+  background: var(--colour-danger);
+}
+.b9r2h-seal__part--stalled .b9r2h-seal__number {
+  color: var(--colour-warning-bright, var(--colour-warning));
+}
+.b9r2h-seal__number {
+  font-family: var(--font-display);
+  font-size: var(--text-md, 16px);
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.b9r2h-seal__clock {
+  width: 24px;
+  height: 24px;
+}
+.b9r2h-seal__go {
+  color: var(--colour-accent);
+  font-size: 26px;
+  font-weight: 700;
+  line-height: 1;
+}
+.b9r2h-seal .b9r2h-face {
+  width: 30px;
+  height: 30px;
+}
+.b9r2h-back {
+  display: none;
+  align-items: center;
+  justify-content: center;
+  width: 48px;
+  height: 44px;
+  margin-bottom: 6px;
+  border: 2px solid var(--colour-border-strong);
+  border-radius: 999px;
+  background: var(--colour-surface-control);
+  cursor: pointer;
+}
+.b9r2h-opt-e:not(.b9r2h-inspect) .hatch-lines,
+.b9r2h-opt-e:not(.b9r2h-inspect) .hatch-boosts {
+  display: none;
+}
+.b9r2h-opt-e.b9r2h-inspect .b9r2h-seal,
+.b9r2h-opt-e.b9r2h-inspect .b9r2h-mixes,
+.b9r2h-opt-e.b9r2h-inspect .hatch__split {
+  display: none;
+}
+.b9r2h-opt-e.b9r2h-inspect .b9r2h-back {
+  display: flex;
+}
+/* The queue page has the room: bigger sockets. */
+.b9r2h-opt-e.b9r2h-inspect .hatch-line--hcc > .hatch-line__slots {
+  grid-template-rows: 64px 64px;
+}
+.b9r2h-opt-e.b9r2h-inspect .hatch-slot__picture {
+  width: 44px;
+  height: 44px;
+}
+.b9r2h-opt-e.b9r2h-inspect .hatch-line--hcc .hatch-now {
+  min-height: 56px;
+}
+
+/* ── The yard page ──────────────────────────────────────────────────── */
+.b9r2h-yards {
+  position: absolute;
+  inset: 0;
+  z-index: 5;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 8px 12px 12px;
+  background: var(--colour-surface-raised);
+}
+.b9r2h-yards[hidden] {
+  display: none;
+}
+.b9r2h-yards__head {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.b9r2h-yards__back {
+  flex: none;
+  width: 48px;
+  height: 44px;
+  border: 2px solid var(--colour-border-strong);
+  border-radius: 999px;
+  background: var(--colour-surface-control);
+  cursor: pointer;
+}
+.b9r2h-search {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  height: 44px;
+  padding: 0 10px;
+  border: 1px solid var(--colour-border);
+  border-radius: 999px;
+  background: var(--colour-surface-input);
+}
+.b9r2h-search__input {
+  flex: 1;
+  min-width: 0;
+  border: 0;
+  background: none;
+  color: var(--colour-text);
+  font: inherit;
+}
+.b9r2h-yards__grid {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(104px, 1fr));
+  grid-auto-rows: min-content;
+  gap: 8px;
+  padding: 6px 2px;
+}
+.b9r2h-yardcard {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  min-height: 84px;
+  padding: 6px 4px;
+  border: 2px solid var(--colour-border);
+  border-radius: var(--radius-lg);
+  background: var(--colour-surface-control);
+  color: var(--colour-text);
+  font: inherit;
+  cursor: pointer;
+}
+.b9r2h-yardcard--on {
+  border-color: var(--colour-accent);
+  background: var(--colour-surface-selected);
+}
+.b9r2h-yardcard--off {
+  opacity: 0.5;
+  cursor: default;
+}
+.b9r2h-yardcard__top {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+.b9r2h-yardcard__number {
+  font-family: var(--font-display);
+  font-size: 20px;
+  font-weight: 700;
+}
+.b9r2h-yardcard__pin {
+  width: 14px;
+  height: 14px;
+}
+.b9r2h-yardcard__name {
+  max-width: 100%;
+  color: var(--colour-text-secondary);
+  font-size: 11.5px;
+  line-height: 1.15;
+  overflow-wrap: anywhere;
+}
+.b9r2h-yardcard__queue {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  margin-top: auto;
+  font-family: var(--font-display);
+  font-size: 12.5px;
+  font-weight: 700;
+}
+.b9r2h-yardcard__queue img {
+  width: 16px;
+  height: 16px;
+}
+.b9r2h-yardcard--idle .b9r2h-yardcard__queue {
+  color: var(--colour-text-muted);
+}
+
+/* ── A phone: the monster grid and Add on the first screen ──────────── */
+@media (max-width: 620px), (max-height: 500px) {
+  .b9r2h .hatch-info {
+    position: sticky;
+    bottom: 0;
+    z-index: 1;
+  }
+  .b9r2h .hatch-info__blurb,
+  .b9r2h .hatch-info__level,
+  .b9r2h .hatch-info__details,
+  .b9r2h .hatch-info__stats {
+    display: none;
+  }
+  .b9r2h .hatch-info__portrait,
+  .b9r2h .hatch-info__picture {
+    width: 36px;
+    height: 36px;
+  }
+  .b9r2h .hatch-info {
+    padding-block: 6px;
+  }
+  .b9r2h .hatch-add {
+    gap: 6px;
+    padding-top: 0;
+    margin-top: 4px;
+  }
+  /* E: the monsters own the tab: a grid, not one sliding row. */
+  .b9r2h-opt-e .hatch__grid {
+    grid-auto-flow: row;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    grid-auto-columns: auto;
+    overflow: visible;
+    margin-inline: 0;
+    padding-inline: 0;
+  }
+}
+
+@media (max-width: 620px), (max-height: 500px) {
+  /* The chosen monster: its name and price on one line, the steps, then Max beside Add. */
+  .b9r2h .hatch-info {
+    display: grid;
+    grid-template-columns: auto 1fr;
+    align-items: center;
+    column-gap: 8px;
+    row-gap: 4px;
+  }
+  .b9r2h .hatch-info__head {
+    min-width: 0;
+    margin: 0;
+  }
+  .b9r2h .hatch-info__each {
+    justify-self: end;
+    margin: 0;
+    white-space: nowrap;
+  }
+  .b9r2h .hatch-add {
+    grid-column: 1 / -1;
+    display: grid;
+    grid-template-columns: 1fr 2fr;
+  }
+  .b9r2h .hatch-add > * {
+    grid-column: 1 / -1;
+  }
+  .b9r2h .hatch-add__controls {
+    display: grid;
+    grid-template-columns: repeat(5, minmax(0, 1fr)) auto;
+    gap: 6px;
+  }
+  .b9r2h .hatch-add__controls > .hatch-add__fill {
+    grid-column: auto;
+    min-width: 76px;
+    padding-inline: 6px;
+  }
+  .b9r2h .hatch-add__controls > * {
+    min-width: 0;
+    width: auto;
+    flex: none;
+  }
+  .b9r2h .b9r2h-strip {
+    padding-inline: 10px;
+    gap: 6px;
+  }
+  .b9r2h .b9r2h-housing__numbers {
+    font-size: 13px;
+    gap: 3px;
+  }
+  .b9r2h-remote .b9r2h-housing:not(.b9r2h-housing--over) .b9r2h-housing__coming {
+    display: none;
+  }
+}
+
+.b9r2h .hatch-line__totals > .hatch-line__boost-link,
+.b9r2h .hatch-line__totals > .btn.hatch-clear {
+  width: 100%;
+  min-width: 44px;
+  box-sizing: border-box;
+}
+@media (max-width: 620px), (max-height: 500px) {
+  .b9r2h .b9r2h-strip {
+    min-height: 0;
+    padding-block: 3px;
+  }
+  .b9r2h .hatch-line--hcc .hatch-now {
+    min-height: 44px;
+  }
+  .b9r2h-mixes {
+    margin: 6px 0 2px;
+  }
+  .b9r2h .hatch-add__controls {
+    grid-template-columns: repeat(5, minmax(0, 1fr)) 70px;
+    gap: 4px;
+  }
+  .b9r2h .hatch-add__controls > .hatch-add__fill {
+    min-width: 0;
+    padding-inline: 2px;
+  }
+  .b9r2h-remote .b9r2h-strip {
+    gap: 4px;
+    padding-inline: 8px;
+  }
+  .b9r2h-remote .b9r2h-stepper__where {
+    min-width: 58px;
+  }
+  .b9r2h-remote .b9r2h-housing__numbers {
+    font-size: 12px;
+  }
+  .b9r2h-remote .b9r2h-housing__icon {
+    width: 18px;
+    height: 18px;
+  }
+  .b9r2h .hatch-add__gate {
+    margin: 0;
+    font-size: 12px;
+    line-height: 1.2;
+  }
+}
+
+/* ── An iPad and a desktop: the bench is one band, the monsters under it ─ */
+.b9r2h-bench {
+  display: flex;
+  flex-direction: column;
+}
+@media (min-width: 620.02px) {
+  .b9r2h-strip {
+    padding-inline: 16px;
+  }
+  .b9r2h-housing {
+    flex: 0 1 340px;
+  }
+  .b9r2h-bench {
+    flex-direction: row;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 10px 20px;
+    margin-bottom: 10px;
+  }
+  .b9r2h-bench > .hatch-lines {
+    flex: none;
+    margin: 0;
+  }
+  .b9r2h-mixes {
+    flex: none;
+    grid-template-columns: repeat(5, 64px);
+    gap: 8px;
+    margin: 0;
+  }
+  .b9r2h-mix {
+    height: 60px;
+  }
+  .b9r2h-opt-d .hatch-lines .hatch-line.hatch-line--hcc {
+    display: flex !important;
+    flex-flow: row wrap;
+    align-items: stretch;
+    gap: 8px 16px;
+    padding: 0;
+  }
+  .b9r2h .hatch-line--hcc > .hatch-line__now {
+    grid-template-columns: repeat(5, 56px);
+  }
+  .b9r2h .hatch-line--hcc .hatch-now {
+    min-height: 106px;
+  }
+  .b9r2h .hatch-line--hcc .hatch-now__picture {
+    width: 44px;
+    height: 44px;
+  }
+  .b9r2h .hatch-line--hcc > .hatch-line__slots {
+    grid-template-columns: repeat(5, 54px) 64px;
+    margin-top: 0;
+  }
+  .b9r2h-seal {
+    flex: 0 1 430px;
+    width: auto;
+    min-height: 60px;
+  }
+  .b9r2h-opt-e.b9r2h-inspect .hatch-line--hcc > .hatch-line__now {
+    grid-template-columns: repeat(5, 96px);
+  }
+  .b9r2h-opt-e.b9r2h-inspect .hatch-line--hcc > .hatch-line__slots {
+    grid-template-columns: repeat(5, 96px) 80px;
+    margin-top: 10px;
+  }
+  .b9r2h-mixcard {
+    right: auto;
+    width: 400px;
+  }
+}
+
+/* The pages and cards over the tab are solid, whatever the look's panel paint. */
+.b9r2h-yards,
+.b9r2h-mixcard {
+  background: linear-gradient(var(--colour-surface-raised), var(--colour-surface-raised)), var(--b9r2h-solid, #303d4b);
+}
+:root[data-skin="flash"] .b9r2h {
+  --b9r2h-solid: #e7d6ad;
+}
+/**
+ * DESIGN PROTOTYPE ONLY (b9 round 2, never merged): the Hatchery Control
+ * Centre at levels 2 and 3 on the Hatch tab, with fake data. The owner
+ * rejected round 1's A/B/C (21 Nov 2026).
+ *
+ * URL: `b9hcc=2|3`, `b9hccopt=d|e`, `b9state=` any of `remote`, `yards`,
+ * `mix`, `inspect`, `housing` (comma list) to open a state for a picture.
+ *
+ * Shared: pictures and numbers, hardly a word. Mixes are five numbered
+ * tokens (no names): a tap opens the mix's card with Load. The yard is "the
+ * house" or "flag 3/11", never a name; the full names live in the yard page.
+ *
+ * - D "workbench" (Fable H1 + astra Y): everything on one screen. Hatcheries
+ *   in a slim row, the ten stacks as a rack of sockets, the mix tokens, the
+ *   monsters, Add. The yard is stepped with the outpost arrows.
+ * - E "monster book" (astra X): the monsters own the tab. One production
+ *   seal sums up the hatcheries, the queue and the time; a tap turns the tab
+ *   over to the queue page. The yard chip opens the yard page.
+ */
+import type { HatchYard, QueueStack } from "@/game/monsters/hatchPlan";
+import { monsterEntry } from "@/game/monsters/monsterCatalogue";
+import { classicLook } from "@/game/classicLook";
+import { gameIcon, type GameIconName } from "@/ui/gameIcon";
+import { lockArt } from "@/ui/lockArt";
+import { monsterPicture } from "@/ui/monsters/LockerTab";
+import { ownYardsOf } from "@/game/yard/ownYards";
+import { outpostLabels } from "@/game/yard/outpostLabels";
+import type { BaseLoadResponse } from "@/api/types";
+import { b9, b9HccLevel, b9HccOption } from "./b9";
+import "./b9-hcc-r2.css";
+
+const states = (): Set<string> => new Set((b9("b9state") ?? "").split(",").filter(Boolean));
+
+/** The outpost with no HCC of its own in yardtester's copy. */
+const NO_HCC = new Set(["22913802238208"]);
+
+type Mix = readonly [string, number][];
+
+const HOME_MIXES: readonly Mix[] = [
+  [["C8", 60], ["C7", 40], ["C1", 40]],
+  [["C12", 40], ["C5", 40], ["C10", 20]],
+  [["C14", 40], ["C13", 60], ["C3", 40], ["C6", 20]],
+  [["C6", 100], ["C9", 40]],
+];
+const OUTPOST_MIXES: readonly Mix[] = [
+  [["C7", 60], ["C2", 40]],
+  [["C1", 60]],
+];
+const MIX_SLOTS = 5;
+
+const busyQueue = (size: number): QueueStack[] =>
+  (
+    [
+      ["C12", size - 1],
+      ["C12", size],
+      ["C8", size],
+      ["C8", size],
+      ["C7", size],
+      ["C14", size],
+      ["C5", size],
+      ["C3", size],
+      ["C1", size],
+      ["C6", Math.round(size / 2)],
+    ] as const
+  ).map(([id, count]) => [id, count, 6] as QueueStack);
+
+const outpostQueue = (size: number): QueueStack[] =>
+  (
+    [
+      ["C7", size],
+      ["C7", size],
+      ["C2", size],
+      ["C2", size],
+      ["C1", size - 4],
+    ] as const
+  ).map(([id, count]) => [id, count, 4] as QueueStack);
+
+const el = <K extends keyof HTMLElementTagNameMap>(tag: K, className: string, text?: string): HTMLElementTagNameMap[K] => {
+  const node = document.createElement(tag);
+  node.className = className;
+  if (text !== undefined) node.textContent = text;
+  return node;
+};
+
+const btn = (className: string, label: string, ...content: (Node | string)[]): HTMLButtonElement => {
+  const node = el("button", className);
+  node.type = "button";
+  node.setAttribute("aria-label", label);
+  node.append(...content);
+  return node;
+};
+
+const portrait = (id: string, className: string): Node => {
+  const entry = monsterEntry(id);
+  return entry ? monsterPicture(entry, "small", className) : el("span", className);
+};
+
+const art = (name: GameIconName, size: number, className = ""): HTMLImageElement =>
+  gameIcon(name, { size: size as 16 | 24 | 32, decorative: true, ...(className ? { className } : {}) });
+
+const arrow = (direction: -1 | 1): HTMLImageElement =>
+  art(`friend${direction === 1 ? "next" : "prev"}${classicLook() ? "classic" : ""}` as GameIconName, 32, "b9r2h-arrow");
+
+const short = (value: number): string =>
+  value >= 1_000_000 ? `${(value / 1_000_000).toFixed(1)}M` : value >= 10_000 ? `${Math.round(value / 1000)}K` : value.toLocaleString("en-US");
+
+interface YardRow {
+  readonly kind: "main" | "outpost";
+  readonly baseid: string;
+  readonly title: string;
+  readonly hcc: boolean;
+  readonly pinned: boolean;
+}
+
+export class B9HccR2 {
+  readonly level = b9HccLevel();
+  readonly option = b9HccOption() === "e" ? "e" : "d";
+  private readonly open = states();
+  private remote: YardRow | null = null;
+  private mixOpen: number | null = null;
+  private yard: HatchYard | null = null;
+  private readonly strip = el("div", "b9r2h-strip");
+  private readonly seal = btn("b9r2h-seal", "The queue and the hatcheries");
+  private readonly mixes = el("div", "b9r2h-mixes");
+  private readonly bench = el("div", "b9r2h-bench");
+  private readonly mixCard = el("section", "b9r2h-mixcard");
+  private readonly yardsPage = el("section", "b9r2h-yards");
+  private readonly back = btn("b9r2h-back", "Back to the monsters");
+
+  constructor(
+    private readonly root: HTMLElement,
+    private readonly scroll: HTMLElement,
+    private readonly save: () => BaseLoadResponse,
+    private readonly redraw: () => void,
+    private readonly hatcheryArt: () => string,
+  ) {
+    root.classList.add("b9r2h", `b9r2h-opt-${this.option}`, `b9r2h-level-${this.level}`);
+    root.closest(".monsters-screen, .panel")?.classList.add("b9r2h-window");
+    if (this.open.has("remote") && this.level >= 3) {
+      this.remote = this.hccYards().find((one) => one.kind === "outpost") ?? null;
+    }
+    if (this.open.has("mix")) this.mixOpen = 0;
+    root.prepend(this.strip);
+    root.append(this.mixCard, this.yardsPage);
+    this.yardsPage.hidden = !(this.open.has("yards") && this.level >= 3);
+    this.mixes.setAttribute("role", "group");
+    this.mixes.setAttribute("aria-label", "Saved mixes");
+    this.seal.addEventListener("click", () => this.setInspect(true));
+    this.back.append(arrow(-1));
+    this.back.addEventListener("click", () => this.setInspect(false));
+    if (this.option === "e" && this.open.has("inspect")) root.classList.add("b9r2h-inspect");
+    if (this.open.has("housing")) root.classList.add("b9r2h-show-housing");
+  }
+
+  /** The yard the tab shows: the fake busiest queue, or the outpost being run from home. */
+  fakeYard(yard: HatchYard): HatchYard {
+    const size = this.level >= 3 ? 30 : 20;
+    if (this.remote) {
+      const endsAt = Math.floor(Date.now() / 1000) + 620;
+      const hatcheries = yard.hatcheries
+        .slice(0, 2)
+        .map((one) => ({ ...one, monster: "C7", stage: 1 as const, countdown: 620, state: "producing" as const, endsAt }));
+      return { ...yard, hatcheries, shared: outpostQueue(size), capacity: 9_600, housed: { C7: 120, C2: 80 }, goo: 18_400_000 };
+    }
+    return { ...yard, shared: busyQueue(size) };
+  }
+
+  /** After each draw of the tab: the strip, the seal and the mix tokens take their places. */
+  afterDraw(yard?: HatchYard): void {
+    if (yard) this.yard = yard;
+    this.root.closest(".monsters-screen, .panel")?.classList.add("b9r2h-window");
+    this.root.classList.toggle("b9r2h-remote", this.remote !== null);
+    const lines = this.scroll.querySelector(".hatch-lines");
+    if (lines && !this.bench.isConnected) {
+      // The bench: the production (D: the line itself, E: its seal) with the mix tokens beside or under it.
+      lines.before(this.bench);
+      if (this.option === "e") {
+        this.bench.append(this.seal, this.mixes);
+        lines.before(this.back);
+      } else {
+        this.bench.append(lines, this.mixes);
+      }
+    }
+    // Remote: Add wears the outpost's flag, so the last tap says where it goes.
+    const add = this.root.querySelector(".hatch-add__add");
+    add?.querySelector(".b9r2h-addflag")?.remove();
+    if (add && this.remote) add.prepend(art("outpost", 24, "b9r2h-addflag"));
+    this.renderStrip();
+    this.renderSeal();
+    this.renderMixes();
+    this.renderMixCard();
+    this.renderYards();
+  }
+
+  private yards(): YardRow[] {
+    const entries = ownYardsOf(this.save(), { kind: "main" } as never, outpostLabels());
+    return entries.map((entry) => {
+      const target = entry.target as unknown as { kind: string; baseid?: string };
+      const baseid = target.baseid ?? "main";
+      const kind = target.kind === "outpost" ? ("outpost" as const) : ("main" as const);
+      return { kind, baseid, title: entry.title, hcc: kind === "main" || !NO_HCC.has(baseid), pinned: entry.pinned };
+    });
+  }
+
+  private hccYards(): YardRow[] {
+    return this.yards().filter((one) => one.hcc);
+  }
+
+  private place(): { at: number; of: number } {
+    const yards = this.hccYards();
+    const at = this.remote ? yards.findIndex((one) => one.baseid === this.remote!.baseid) : 0;
+    return { at: Math.max(0, at), of: yards.length };
+  }
+
+  private setRemote(remote: YardRow | null): void {
+    this.remote = remote && remote.kind === "outpost" ? remote : null;
+    this.yardsPage.hidden = true;
+    this.mixOpen = null;
+    this.redraw();
+  }
+
+  private setInspect(on: boolean): void {
+    this.root.classList.toggle("b9r2h-inspect", on);
+    this.mixOpen = null;
+    this.renderMixCard();
+  }
+
+  /* ── The strip: which yard, and its housing ───────────────────────── */
+
+  private where(): HTMLElement {
+    const { at, of } = this.place();
+    const where = el("span", "b9r2h-where");
+    where.append(art(this.remote ? "outpost" : "townhall", 32, "b9r2h-where__icon"), el("span", "b9r2h-where__count", `${at + 1}/${of}`));
+    return where;
+  }
+
+  private renderStrip(): void {
+    const parts: Node[] = [];
+    if (this.level < 3) {
+      const locked = btn("b9r2h-yard b9r2h-yard--locked", "Run your outposts from here at HCC level 3");
+      locked.disabled = true;
+      locked.append(art("outpost", 32, "b9r2h-where__icon"), lockArt(16, "b9r2h-lock"), el("span", "b9r2h-lock__level", "3"));
+      parts.push(locked);
+    } else {
+      if (this.remote) {
+        const home = btn("b9r2h-yard b9r2h-yard--home", "Back to the main yard", art("townhall", 32, "b9r2h-where__icon"));
+        home.addEventListener("click", () => this.setRemote(null));
+        parts.push(home);
+      }
+      if (this.option === "d") {
+        const yards = this.hccYards();
+        const { at } = this.place();
+        const stepper = el("div", "b9r2h-stepper");
+        const prev = btn("b9r2h-stepper__arrow", "Previous yard", arrow(-1));
+        prev.disabled = at <= 0;
+        prev.addEventListener("click", () => this.setRemote(yards[at - 1] ?? null));
+        const next = btn("b9r2h-stepper__arrow", "Next yard", arrow(1));
+        next.disabled = at >= yards.length - 1;
+        next.addEventListener("click", () => this.setRemote(yards[at + 1] ?? null));
+        const middle = btn("b9r2h-stepper__where", "All your yards with an HCC", this.where());
+        middle.addEventListener("click", () => this.toggleYards());
+        stepper.append(prev, middle, next);
+        parts.push(stepper);
+      } else {
+        const chip = btn("b9r2h-yard b9r2h-yard--chip", "Choose a yard", this.where(), el("span", "b9r2h-caret", "▾"));
+        chip.addEventListener("click", () => this.toggleYards());
+        parts.push(chip);
+      }
+    }
+    parts.push(this.housing());
+    this.strip.replaceChildren(...parts);
+  }
+
+  /** The housing: now / room, what the queue adds, and the bar. A tap shows the tab's own housing box. */
+  private housing(): HTMLElement {
+    const yard = this.yard;
+    const housed = this.remote ? 3_200 : 2_080;
+    const room = yard && this.remote ? yard.capacity : 2_160;
+    const coming = this.remote ? 2_022 : this.level >= 3 ? 17_500 : 11_880;
+    const over = housed + coming > room;
+    const box = btn(`b9r2h-housing${over ? " b9r2h-housing--over" : ""}`, "Housing");
+    const numbers = el("span", "b9r2h-housing__numbers");
+    numbers.append(
+      art("housing", 24, "b9r2h-housing__icon"),
+      el("span", "b9r2h-housing__now", `${housed.toLocaleString("en-US")}/${room.toLocaleString("en-US")}`),
+      el("span", "b9r2h-housing__coming", `+${short(coming)}`),
+    );
+    const bar = el("span", "b9r2h-housing__bar");
+    const fill = el("span", "b9r2h-housing__fill");
+    fill.style.width = `${Math.min(100, (housed / room) * 100)}%`;
+    const more = el("span", "b9r2h-housing__more");
+    more.style.width = `${Math.max(0, Math.min(100, ((housed + coming) / room) * 100) - (housed / room) * 100)}%`;
+    bar.append(fill, more);
+    box.append(numbers, bar);
+    box.addEventListener("click", () => this.root.classList.toggle("b9r2h-show-housing"));
+    return box;
+  }
+
+  /* ── E: the production seal ───────────────────────────────────────── */
+
+  private renderSeal(): void {
+    if (this.option !== "e") return;
+    const yard = this.yard;
+    if (!yard) return;
+    const busy = yard.hatcheries.filter((one) => one.monster !== null).length;
+    const stalled = this.root.querySelector(".hatch-now--stalled") !== null;
+    const hatchery = el("span", `b9r2h-seal__part${stalled ? " b9r2h-seal__part--stalled" : ""}`);
+    const picture = el("img", "b9r2h-seal__hatchery");
+    picture.src = this.hatcheryArt();
+    picture.alt = "";
+    hatchery.append(picture, el("span", "b9r2h-seal__number", `${busy}/${yard.hatcheries.length}`));
+    if (stalled) hatchery.append(art("housing", 24, "b9r2h-seal__blocked"));
+    const queue = el("span", "b9r2h-seal__part b9r2h-seal__part--queue");
+    const faces = el("span", "b9r2h-faces");
+    const seen = new Set<string>();
+    for (const [id] of yard.shared) {
+      if (seen.has(id) || seen.size >= 4) continue;
+      seen.add(id);
+      faces.append(portrait(id, "b9r2h-face"));
+    }
+    queue.append(faces, el("span", "b9r2h-seal__number", `${yard.shared.length}/10`));
+    const time = el("span", "b9r2h-seal__part");
+    const done = this.root.querySelector(".hatch-line__done")?.textContent ?? "";
+    time.append(art("time", 24, "b9r2h-seal__clock"), el("span", "b9r2h-seal__number", done));
+    this.seal.replaceChildren(hatchery, queue, time, el("span", "b9r2h-seal__go", "›"));
+  }
+
+  /* ── Mixes: five numbered tokens ──────────────────────────────────── */
+
+  private mixList(): readonly Mix[] {
+    return this.remote ? OUTPOST_MIXES : HOME_MIXES;
+  }
+
+  private renderMixes(): void {
+    const mixes = this.mixList();
+    const tokens: Node[] = [];
+    for (let at = 0; at < MIX_SLOTS; at += 1) {
+      const mix = mixes[at];
+      if (!mix) {
+        const empty = btn("b9r2h-mix b9r2h-mix--empty", `Save the queue as mix ${at + 1}`, el("span", "b9r2h-mix__number", String(at + 1)), el("span", "b9r2h-mix__plus", "+"));
+        tokens.push(empty);
+        continue;
+      }
+      const total = mix.reduce((sum, [, count]) => sum + count, 0);
+      const token = btn(`b9r2h-mix${this.mixOpen === at ? " b9r2h-mix--on" : ""}`, `Mix ${at + 1}, ${total} monsters`);
+      const faces = el("span", "b9r2h-faces");
+      for (const [id] of mix.slice(0, 3)) faces.append(portrait(id, "b9r2h-face"));
+      token.append(el("span", "b9r2h-mix__number", String(at + 1)), faces, el("span", "b9r2h-mix__total", `×${total}`));
+      token.addEventListener("click", () => {
+        this.mixOpen = this.mixOpen === at ? null : at;
+        this.renderMixes();
+        this.renderMixCard();
+      });
+      tokens.push(token);
+    }
+    this.mixes.replaceChildren(...tokens);
+  }
+
+  /** A token's card: every stack of the mix, what it costs, Load; replace and bin as pictures. */
+  private renderMixCard(): void {
+    const mix = this.mixOpen === null ? undefined : this.mixList()[this.mixOpen];
+    this.mixCard.hidden = !mix;
+    if (!mix) return;
+    const head = el("header", "b9r2h-mixcard__head");
+    const stacks = el("div", "b9r2h-mixcard__stacks");
+    let goo = 0;
+    let space = 0;
+    for (const [id, count] of mix) {
+      const stack = el("span", "b9r2h-socket");
+      stack.append(portrait(id, "b9r2h-socket__picture"), el("span", "b9r2h-socket__count", `×${count}`));
+      stacks.append(stack);
+      goo += count * 21_000;
+      space += count * 8;
+    }
+    const cost = el("span", "b9r2h-mixcard__cost");
+    const gooIcon = el("span", "res-icon res-icon--r4");
+    cost.append(gooIcon, el("span", "", short(goo)), art("housing", 24, "b9r2h-housing__icon"), el("span", "", short(space)));
+    const close = btn("b9r2h-mixcard__close", "Close", "✕");
+    close.addEventListener("click", () => {
+      this.mixOpen = null;
+      this.renderMixes();
+      this.renderMixCard();
+    });
+    head.append(el("span", "b9r2h-mix__number b9r2h-mixcard__number", String((this.mixOpen ?? 0) + 1)), cost, close);
+    const actions = el("div", "b9r2h-mixcard__actions");
+    const load = btn("btn btn--primary b9r2h-mixcard__load", "Load this mix into the queue", "Load");
+    const replace = btn("btn btn--secondary b9r2h-mixcard__tool", "Save the queue over this mix", art("lastarmy", 24), "Save over");
+    const bin = btn("btn btn--ghost b9r2h-mixcard__tool b9r2h-mixcard__bin", "Empty this mix", "✕");
+    actions.append(load, replace, bin);
+    this.mixCard.replaceChildren(head, stacks, actions);
+    // Under the tokens, wherever the option put them.
+    const tokens = this.mixes.getBoundingClientRect();
+    const box = this.root.getBoundingClientRect();
+    this.mixCard.style.top = `${Math.round(tokens.bottom - box.top + 6)}px`;
+    // Wide: under its own tokens, kept inside the tab.
+    this.mixCard.style.left = box.width > 620 ? `${Math.round(Math.max(12, Math.min(tokens.left - box.left, box.width - 420)))}px` : "";
+  }
+
+  /* ── The yard page (L3): every yard with an HCC, as cards ─────────── */
+
+  private toggleYards(): void {
+    this.yardsPage.hidden = !this.yardsPage.hidden;
+    this.mixOpen = null;
+    this.renderMixCard();
+  }
+
+  private renderYards(): void {
+    if (this.level < 3) {
+      this.yardsPage.hidden = true;
+      return;
+    }
+    const head = el("header", "b9r2h-yards__head");
+    const back = btn("b9r2h-yards__back", "Back", arrow(-1));
+    back.addEventListener("click", () => this.toggleYards());
+    const search = el("label", "b9r2h-search");
+    const input = el("input", "b9r2h-search__input");
+    input.setAttribute("aria-label", "Find a yard");
+    search.append(art("find", 24), input);
+    head.append(back, search);
+    const grid = el("div", "b9r2h-yards__grid");
+    const yards = this.yards();
+    const withHcc = yards.filter((one) => one.hcc);
+    withHcc.forEach((yard, at) => {
+      const current = this.remote ? yard.baseid === this.remote.baseid : yard.kind === "main";
+      const card = btn(`b9r2h-yardcard${current ? " b9r2h-yardcard--on" : ""}`, yard.title);
+      const top = el("span", "b9r2h-yardcard__top");
+      top.append(art(yard.kind === "main" ? "townhall" : "outpost", 32, "b9r2h-where__icon"), el("span", "b9r2h-yardcard__number", String(at + 1)));
+      if (yard.pinned) top.append(art("pin", 16, "b9r2h-yardcard__pin"));
+      const queue = el("span", "b9r2h-yardcard__queue");
+      const count = yard.kind === "main" ? (this.level >= 3 ? 284 : 190) : yard.baseid.endsWith("9") ? 140 : at % 3 === 0 ? 0 : 60;
+      queue.append(art("time", 16), el("span", "", count ? `×${count}` : "0"));
+      if (!count) card.classList.add("b9r2h-yardcard--idle");
+      card.append(top, el("span", "b9r2h-yardcard__name", yard.title), queue);
+      card.addEventListener("click", () => this.setRemote(yard));
+      grid.append(card);
+    });
+    for (const yard of yards.filter((one) => !one.hcc)) {
+      const card = btn("b9r2h-yardcard b9r2h-yardcard--off", `${yard.title}: no HCC`);
+      card.disabled = true;
+      const top = el("span", "b9r2h-yardcard__top");
+      top.append(art("outpost", 32, "b9r2h-where__icon"), lockArt(16, "b9r2h-lock"));
+      card.append(top, el("span", "b9r2h-yardcard__name", yard.title));
+      grid.append(card);
+    }
+    this.yardsPage.replaceChildren(head, grid);
+  }
+}
+
+hook: PostToolUse
+hook: PostToolUse Completed
+hook: PreToolUse
+hook: PreToolUse Completed
+exec
+/bin/bash -lc "cat web/src/ui/styles/hatch.css; rg -n 'scroll|split|info|b9Hcc' web/src/ui/monsters/HatchTab.ts; tail -65 web/src/proto/b9-hcc-r2.css; rg -n 'goo|trash|delete' web/src/ui/gameIcon.ts; rg -n 'monsters-screen|monsters-body|monsters-content' web/src/ui/styles/monsters.css; rg --files /home/yujiesim/Coding/backyard-monsters-refitted -g AGENTS.md" in /home/yujiesim/Coding/backyard-monsters-refitted/worktrees/screens-r2
+ exited 1 in 0ms:
+/*
+ * The Hatch tab (`web/src/ui/monsters/HatchTab.ts`, issue #156): the
+ * original's hatchery popup in style B. A tab per hatchery and the chosen
+ * one's line (or the HCC's hatcheries and shared queue) on top, the message
+ * and housing bar, then the monster grid beside the info panel with the
+ * batch add. On a phone
+ * the same order, with the add controls in a bar fixed to the sheet's bottom
+ * (on a tall one; on a shorter one the bar scrolls with the rest).
+ *
+ * Same rule as ui.css: every value comes from tokens.css. The frame, the
+ * header and `.monsters-status` / `.monsters-gate` are monsters.css; buttons
+ * are `.btn`, the count `.qty-stepper`, Shiny spends `.shiny-button`,
+ * amounts `.res-amount`.
+ *
+ * The tab lays itself out by its own width (a container query), not the
+ * window's: the frame narrows with the screen.
+ */
+
+/* ── The frame: the original's popup was wide, so the tab is too ─────────── */
+
+@media (min-width: 620.02px) {
+  .monsters-screen[data-tab="hatch"] {
+    width: min(1160px, calc(100vw - 2 * var(--space-4)));
+    /* Never narrowed to clear the Events column (ui.css `.panel--centre`):
+       the inside's 1160px plus the widest painted frame (skin.css), so the
+       hatchery's seven slots and "All done in" fit in one row whenever the
+       screen has the room; it covers Events instead. */
+    --centre-min-width: 1212px;
+  }
+}
+
+/* The hatchery tabs stay fixed at the top (owner, 6 Nov 2026): the tab is
+   the row of tabs over a scroll box (ui.css `.tab-scroll`), and only the
+   box scrolls. The box reaches the tab's edges (the add bar on a phone
+   spans them), and the container keeps its old width for the queries. */
+.hatch {
+  --hatch-pad: var(--space-5);
+  /* A waiting stack's height, which the hatchery cards and the HCC's empty
+     queue row share (owner, 15 Nov 2026: slimmer). */
+  --hatch-slot-height: 80px;
+
+  container: hatch / inline-size;
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  padding: 0 var(--hatch-pad);
+  overflow: hidden;
+}
+
+/* As tall as its content (patch 7.6.1, owner 15 Nov 2026: "look at the
+   amount of space now"): the other tabs' fixed height (monsters.css
+   `--monsters-height`) left a third of the window empty under Add. The top
+   stays where that window's top is, so the tab strip does not move from tab
+   to tab, and only the bottom edge follows the content. Every part of the
+   tab is as tall idle as busy (below), so it does not jump between them. The
+   tab starts from its content's height, not a zero basis that Safari can
+   size to nothing in a window that fits its content (layout-rules). */
+@media (min-width: 620.02px) and (min-height: 500.02px) {
+  .overlay__layer > .panel.panel--centre.monsters-screen[data-tab="hatch"] {
+    --hatch-drop: max(0px, (100% - var(--centre-top) - var(--centre-bottom) - var(--monsters-height)) / 2);
+    --centre-height: max-content;
+
+    top: calc(var(--centre-top) + var(--hatch-drop));
+    max-height: calc(100% - var(--centre-top) - var(--centre-bottom) - var(--hatch-drop));
+    margin-top: 0;
+  }
+
+  .monsters-screen[data-tab="hatch"] .hatch {
+    flex: 1 1 auto;
+  }
+}
+
+.hatch__tabs-row {
+  flex: none;
+  padding-top: var(--space-2);
+}
+
+.hatch__tabs-row[hidden] {
+  display: none;
+}
+
+.hatch__scroll {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  margin-inline: calc(-1 * var(--hatch-pad));
+  padding: var(--space-2) var(--hatch-pad) var(--space-3);
+  scrollbar-width: thin;
+}
+
+/* Under the tabs, the chosen hatchery's line sits as far below them as it
+   did when they shared a box. */
+.hatch__tabs-row:not([hidden]) + .hatch__scroll {
+  padding-top: var(--space-3);
+}
+
+/* What the last action did ("Added 5 Vorgs: 312,500 spent.") floats over
+   the top of the tab for a few seconds (`STATUS_SHOW_MS`) instead of taking a
+   line of its own (patch 7.6, owner 15 Nov 2026): that line pushed the tab
+   past the window's bottom and brought up a scroll bar. It lets taps through
+   to whatever is under it. */
+.hatch > .hatch__status {
+  position: absolute;
+  top: var(--space-1);
+  left: 50%;
+  z-index: 2;
+  width: max-content;
+  max-width: calc(100% - 2 * var(--hatch-pad));
+  padding: var(--space-2) var(--space-4);
+  border: 1px solid var(--colour-border);
+  border-radius: var(--radius-lg);
+  background: var(--colour-surface-raised);
+  box-shadow: var(--shadow-popup);
+  text-align: center;
+  transform: translateX(-50%);
+  pointer-events: none;
+}
+
+.hatch > .hatch__status[hidden] {
+  display: none;
+}
+
+/* Narrower, the Control Centre's title and count fill the top row: the
+   status floats at the bottom of the tab instead (a phone's add bar is down
+   there, so a phone keeps it at the top). */
+@container hatch (560px <= width < 880px) {
+  .hatch > .hatch__status {
+    top: auto;
+    bottom: var(--space-2);
+  }
+}
+
+/* A container query cannot style its own container: the tab's padding
+   follows the window. No bottom padding on a phone, where the add bar
+   sits flush with the sheet's bottom edge. */
+@media (max-width: 620px) {
+  .hatch {
+    --hatch-pad: var(--space-3);
+  }
+
+  .hatch__scroll {
+    padding-bottom: 0;
+  }
+}
+
+.hatch__none {
+  margin: 0;
+  color: var(--colour-text-muted);
+}
+
+/* ── The line: hatching now, the waiting slots, the totals ─────────────── */
+
+.hatch-lines {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.hatch-line {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+.hatch-line--hcc {
+  gap: var(--space-1);
+}
+
+/* ── The tabs: one per hatchery, the chosen one's line under them ──────── */
+
+.hatch-tabs {
+  display: flex;
+  gap: var(--space-1);
+  min-width: 0;
+  overflow-x: auto;
+  scrollbar-width: thin;
+  padding: 2px;
+}
+
+/* The row fills the window, the tabs equal in it (ui.css `.tab-row`); with
+   many hatcheries it slides sideways, its thin bar showing there is more.
+   A tab's floor is a set width, not its words: its countdown ticks, and a
+   width that followed it would make the row twitch. */
+.hatch-tabs.tab-row {
+  scrollbar-width: thin;
+}
+
+.hatch-tabs > .hatch-tab {
+  flex: 1 1 0;
+  min-width: 132px;
+}
+
+.hatch-tab {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-1) var(--space-2);
+  border: 1px solid var(--colour-border);
+  border-radius: var(--radius-md);
+  background: var(--colour-surface-sunken);
+  color: var(--colour-text-secondary);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition:
+    background var(--motion-fast) var(--easing),
+    border-color var(--motion-fast) var(--easing);
+}
+
+.hatch-tab:hover {
+  background: var(--colour-surface-control-hover);
+  color: var(--colour-text);
+}
+
+.hatch-tab:focus-visible {
+  outline: none;
+  box-shadow: var(--focus-ring);
+}
+
+.hatch-tab[aria-selected="true"] {
+  border-color: var(--colour-accent);
+  background: var(--colour-accent-soft);
+  box-shadow: inset 0 0 0 1px var(--colour-accent);
+  color: var(--colour-text-strong);
+}
+
+.hatch-tab__art {
+  position: relative;
+  flex: none;
+  width: 36px;
+  height: 48px;
+}
+
+/* The hatchery as the yard draws it at this level. */
+.hatch-tab__picture {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  object-position: bottom;
+}
+
+/* The number the yard shows over this hatchery while the tab is open. */
+.hatch-tab__number {
+  position: absolute;
+  top: -4px;
+  left: -4px;
+  display: grid;
+  place-items: center;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: var(--colour-warning);
+  color: var(--colour-warning-text);
+  font-family: var(--font-display);
+  font-size: var(--text-xs);
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.hatch-tab[aria-selected="true"] .hatch-tab__number {
+  background: var(--colour-accent);
+  color: var(--colour-accent-text);
+}
+
+.hatch-tab__body {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.hatch-tab__level {
+  font-family: var(--font-display);
+  font-size: var(--text-sm);
+  font-weight: 700;
+  letter-spacing: var(--display-tracking);
+}
+
+.hatch-tab__status {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+  font-size: var(--text-xs);
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+/* Green hatching, grey idle, amber held up (full, upgrading, building), red damaged. */
+.hatch-tab__light {
+  flex: none;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--colour-text-muted);
+}
+
+.hatch-tab--busy .hatch-tab__light {
+  background: var(--colour-success);
+  box-shadow: 0 0 6px var(--colour-success);
+}
+
+.hatch-tab--held .hatch-tab__light {
+  background: var(--colour-warning);
+}
+
+.hatch-tab--broken .hatch-tab__light {
+  background: var(--colour-danger);
+}
+
+.hatch-tab--idle .hatch-tab__state {
+  color: var(--colour-text-muted);
+}
+
+.hatch-tab--held .hatch-tab__state {
+  color: var(--colour-warning);
+}
+
+.hatch-tab--broken .hatch-tab__state {
+  color: var(--colour-danger);
+}
+
+.hatch-tab__monster {
+  flex: none;
+  width: 20px;
+  height: 20px;
+  object-fit: contain;
+}
+
+/* Monsters waiting in its queue. */
+.hatch-tab__waiting {
+  margin-left: auto;
+  align-self: flex-start;
+  padding: 0 6px;
+  border-radius: var(--radius-pill);
+  background: var(--colour-text);
+  color: var(--colour-text-inverse);
+  font-family: var(--font-display);
+  font-size: var(--text-xs);
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+/* The chosen tab's line, framed so it reads as that tab's. */
+.hatch-line--tabbed {
+  padding: var(--space-2);
+  border-radius: var(--radius-lg);
+  box-shadow: inset 0 0 0 1px var(--colour-accent-line);
+}
+
+/* The number the yard shows over this hatchery while the tab is open. */
+.hatch-line__number {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background: var(--colour-warning);
+  color: var(--colour-warning-text);
+  font-family: var(--font-display);
+  font-size: var(--text-sm);
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.hatch-line__head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-1) var(--space-3);
+  /* As tall as its Clear all button, which shows only while monsters wait,
+     so the cards under it stay put (patch 7.6). */
+  min-height: var(--control-height-compact);
+}
+
+.hatch-line__title {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: var(--text-md);
+  font-weight: 600;
+  letter-spacing: var(--display-tracking);
+}
+
+.hatch-line__waiting {
+  font-size: var(--text-sm);
+  color: var(--colour-text-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+/* Waiting after the chosen batch: "25 → 30 waiting". */
+.hatch-line__after {
+  color: var(--colour-accent);
+}
+
+/* Clear all, at the right of the line's head; its "Clear 44?" in its place. */
+.hatch-clear {
+  margin-inline-start: auto;
+}
+
+.btn.hatch-clear {
+  gap: var(--space-1);
+  min-height: var(--control-height-compact);
+  padding: var(--space-1) var(--space-2);
+  border-color: var(--colour-border-strong);
+  font-size: var(--text-sm);
+}
+
+.btn.hatch-clear:hover:not(:disabled) {
+  border-color: var(--colour-danger);
+  color: var(--colour-danger);
+}
+
+.hatch-clear__cross {
+  font-size: var(--text-md);
+  font-weight: 700;
+  line-height: 1;
+  color: var(--colour-danger);
+}
+
+.hatch-clear--confirm {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-1) var(--space-2);
+  padding: var(--space-1) var(--space-2);
+  border: 1px solid var(--colour-danger);
+  border-radius: var(--radius-md);
+  background: var(--colour-danger-soft);
+}
+
+.hatch-clear__question {
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.hatch-clear__refund {
+  font-size: var(--text-sm);
+  color: var(--colour-text-secondary);
+  white-space: nowrap;
+}
+
+.hatch-clear--confirm > .btn {
+  min-height: var(--control-height-compact);
+  padding: var(--space-1) var(--space-3);
+  font-size: var(--text-sm);
+}
+
+.hatch-line__slots,
+.hatch-line__now {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: stretch;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+/* The HCC's waiting stacks keep one slot's height with none waiting (no
+   "Empty" boxes since 15 Nov 2026), so the first batch chosen or added never
+   moves what is under the row. */
+.hatch-line--hcc > .hatch-line__slots {
+  min-height: var(--hatch-slot-height);
+}
+
+.hatch-line__arrow {
+  flex: none;
+  align-self: center;
+  color: var(--colour-text-muted);
+  font-size: var(--text-xl);
+  line-height: 1;
+}
+
+/* The monster hatching now. A button when there is one: a tap cancels it, holding cancels more. */
+/* Slim (owner, 15 Nov 2026): its number, the picture, the countdown and the
+   bar; no "Hatchery" word or monster name (both on hover and for a screen
+   reader). The picture stands left of the number and the time. */
+.hatch-now {
+  position: relative;
+  flex: none;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-content: center;
+  align-items: center;
+  gap: 0 var(--space-2);
+  width: 150px;
+  min-height: var(--hatch-slot-height);
+  padding: var(--space-2) var(--space-3) 10px var(--space-2);
+  border: 1px solid var(--colour-border);
+  border-radius: var(--radius-lg);
+  background: var(--colour-surface-sunken);
+  color: var(--colour-text);
+  font: inherit;
+  text-align: left;
+}
+
+/* Held to cancel or take out more (owner, 12 Nov): a finger must not select
+   text or open the long-press menu. Panning the row still works; the browser
+   then cancels the press and nothing is taken. */
+button.hatch-now,
+button.hatch-slot {
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
+  touch-action: manipulation;
+}
+
+button.hatch-now {
+  border-color: var(--colour-accent-line);
+  background: var(--colour-accent-soft);
+  cursor: pointer;
+  transition: border-color var(--motion-fast) var(--easing);
+}
+
+button.hatch-now:hover:not(:disabled) {
+  border-color: var(--colour-accent);
+}
+
+button.hatch-now:focus-visible {
+  outline: none;
+  box-shadow: var(--focus-ring);
+}
+
+button.hatch-now:disabled {
+  cursor: progress;
+}
+
+.hatch-now__label {
+  grid-column: 2;
+  font-family: var(--font-display);
+  font-size: var(--text-sm);
+  font-weight: 700;
+  color: var(--colour-text-secondary);
+  font-variant-numeric: tabular-nums;
+}
+
+/* A hatchery's own line has no number to show: "Hatching now" is for a screen reader. */
+.hatch-now:not(.hatch-now--compact) .hatch-now__label,
+.hatch-now__name,
+.hatch-line--hcc .hatch-now__label-word {
+  display: none;
+}
+
+.hatch-line--hcc .hatch-now__label-number::before {
+  content: "#";
+}
+
+.hatch-now__body,
+.hatch-now__words {
+  display: contents;
+}
+
+.hatch-now__picture {
+  grid-column: 1;
+  grid-row: 1 / span 2;
+  width: 40px;
+  height: 40px;
+  object-fit: contain;
+}
+
+/* Never wider than the card (patch 7.6.1, owner 15 Nov 2026: "Waiting for
+   hou" was cut by the next card): short words, and a second line if they
+   still do not fit. */
+.hatch-now__state {
+  grid-column: 2;
+  min-width: 0;
+  overflow-wrap: break-word;
+  text-wrap: balance;
+  font-size: var(--text-sm);
+  font-weight: 700;
+  color: var(--colour-text);
+  font-variant-numeric: tabular-nums;
+  line-height: var(--leading-tight);
+}
+
+/* A phone's card has room for the short words only (`stateWords`). */
+.hatch-now__words-short {
+  display: none;
+}
+
+.hatch-now--stalled .hatch-now__state,
+.hatch-now--upgrading .hatch-now__state,
+.hatch-now--building .hatch-now__state {
+  color: var(--colour-warning);
+  font-weight: 700;
+}
+
+.hatch-now--damaged .hatch-now__state {
+  color: var(--colour-danger);
+  font-weight: 700;
+}
+
+.hatch-now--idle .hatch-now__state {
+  color: var(--colour-text-muted);
+  font-weight: 400;
+}
+
+/* Without a picture (idle, damaged, being built) the words take the card. */
+div.hatch-now:not(.hatch-now--preview) .hatch-now__label,
+div.hatch-now:not(.hatch-now--preview) .hatch-now__state {
+  grid-column: 1 / -1;
+  justify-self: center;
+  text-align: center;
+}
+
+.hatch-now--compact.hatch-now--idle:not(.hatch-now--preview) .hatch-now__label {
+  color: var(--colour-text-muted);
+  font-size: var(--text-md);
+}
+
+.hatch-now__cancel {
+  position: absolute;
+  top: var(--space-1);
+  right: var(--space-2);
+  color: var(--colour-text-secondary);
+  font-size: var(--text-md);
+  line-height: 1;
+}
+
+.hatch-now__bar {
+  position: absolute;
+  left: var(--space-2);
+  right: var(--space-2);
+  bottom: 5px;
+  display: block;
+  height: 4px;
+  border-radius: var(--radius-pill);
+  background: var(--colour-surface-overlay);
+  overflow: hidden;
+}
+
+.hatch-now__fill {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--colour-accent);
+  transition: width var(--motion-normal) var(--easing);
+}
+
+/* Idle, with the chosen batch about to start in it. */
+.hatch-now--preview {
+  border: 1.5px dashed var(--colour-accent);
+  background: transparent;
+}
+
+.hatch-now--preview .hatch-now__picture {
+  opacity: 0.8;
+}
+
+/* The HCC's row: one small card per hatchery, as tall idle as hatching
+   (patch 7.6). */
+.hatch-now--compact {
+  flex: 1 1 116px;
+  width: auto;
+  max-width: 200px;
+  min-height: 60px;
+}
+
+.hatch-now--more {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-style: dashed;
+  background: transparent;
+  color: var(--colour-text-muted);
+  font-size: var(--text-sm);
+  text-align: center;
+}
+
+/* A waiting stack: ×N, the monster, a tap takes one out. */
+.hatch-slot {
+  position: relative;
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  width: 96px;
+  min-height: var(--hatch-slot-height);
+  padding: var(--space-1) var(--space-1) 5px;
+  border: 1px solid var(--colour-border);
+  border-radius: var(--radius-lg);
+  background: var(--colour-surface-sunken);
+  color: var(--colour-text);
+  font: inherit;
+  text-align: center;
+}
+
+button.hatch-slot {
+  cursor: pointer;
+  transition: background var(--motion-fast) var(--easing);
+}
+
+button.hatch-slot:hover:not(:disabled) {
+  background: var(--colour-surface-control-hover);
+}
+
+/* Being held: the count runs down in the danger colour until the release sends it. */
+button.hatch-slot.hatch-slot--taking {
+  border-color: var(--colour-danger);
+  background: var(--colour-danger-soft);
+}
+
+.hatch-slot--taking .hatch-slot__count {
+  color: var(--colour-danger);
+}
+
+button.hatch-slot:focus-visible {
+  outline: none;
+  box-shadow: var(--focus-ring);
+}
+
+button.hatch-slot:disabled {
+  cursor: progress;
+}
+
+.hatch-slot__count {
+  position: absolute;
+  z-index: 1;
+  top: var(--space-1);
+  left: var(--space-1);
+  min-width: 26px;
+  padding: 0 6px;
+  border-radius: var(--radius-pill);
+  background: var(--colour-text);
+  color: var(--colour-text-inverse);
+  font-family: var(--font-display);
+  font-size: var(--text-sm);
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.hatch-slot__minus {
+  position: absolute;
+  z-index: 1;
+  top: var(--space-1);
+  right: var(--space-1);
+  display: grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: var(--colour-surface-control);
+  color: var(--colour-text-secondary);
+  font-weight: 700;
+  line-height: 1;
+}
+
+.hatch-slot__picture {
+  width: 40px;
+  height: 40px;
+  margin-top: var(--space-2);
+  object-fit: contain;
+}
+
+.hatch-slot__name {
+  font-size: var(--text-sm);
+  font-weight: 700;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* "23s each" and "Adding" are on hover only (owner, 15 Nov 2026: slimmer). */
+.hatch-slot__note {
+  display: none;
+}
+
+/* The chosen batch, dashed where it would go: a new stack, or a top-up. */
+.hatch-slot--preview,
+.hatch-slot--topup {
+  border: 1.5px dashed var(--colour-accent);
+}
+
+.hatch-slot--preview {
+  background: transparent;
+}
+
+.hatch-slot--preview .hatch-slot__count,
+.hatch-slot__adding {
+  background: var(--colour-accent);
+  color: var(--colour-accent-text);
+}
+
+.hatch-slot--preview .hatch-slot__picture {
+  opacity: 0.8;
+}
+
+/* A top-up: "+5" where the − was. */
+.hatch-slot__adding {
+  position: absolute;
+  z-index: 1;
+  top: var(--space-1);
+  right: var(--space-1);
+  padding: 0 6px;
+  border-radius: var(--radius-pill);
+  font-family: var(--font-display);
+  font-size: var(--text-xs);
+  font-weight: 700;
+}
+
+.hatch-slot--topup .hatch-slot__minus {
+  display: none;
+}
+
+/* A free slot (back in patch 7.6.1, owner 15 Nov 2026): faint and dashed,
+   so the queue's row shows how many batches fit. */
+.hatch-slot--empty {
+  border-style: dashed;
+  border-color: var(--colour-border-subtle);
+  background: transparent;
+}
+
+.hatch-slot__empty {
+  font-size: var(--text-xs);
+  color: var(--colour-text-muted);
+}
+
+/* The slot the next Hatchery level opens: the padlock and Upgrade; what it
+   opens is on hover and for a screen reader. */
+.hatch-slot--locked {
+  gap: var(--space-1);
+  border-color: var(--colour-border-subtle);
+  background: transparent;
+  color: var(--colour-text-muted);
+}
+
+.hatch-slot__why {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+.hatch-slot__upgrade {
+  min-height: var(--control-height-compact);
+  padding-inline: var(--space-2);
+  font-size: var(--text-sm);
+}
+
+/* How long the line takes, Finish now or speed up, and Clear all: one row,
+   kept but hidden while nothing hatches or waits (owner, 15 Nov 2026). */
+.hatch-line__totals {
+  flex: 1 1 300px;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  align-content: center;
+  gap: 2px var(--space-2);
+  min-width: 0;
+  padding-left: var(--space-3);
+  border-left: 1px solid var(--colour-border-subtle);
+}
+
+.hatch-line__totals--idle {
+  visibility: hidden;
+}
+
+.hatch-line__totals > .hatch-clear {
+  margin-inline-start: auto;
+}
+
+.hatch-line__done-label {
+  font-size: var(--text-sm);
+  color: var(--colour-text-muted);
+}
+
+.hatch-line__done-icon,
+.hatch-line__boost-words--short {
+  display: none;
+}
+
+.hatch-line__done {
+  font-family: var(--font-display);
+  font-size: var(--text-lg);
+  font-weight: var(--display-weight);
+  letter-spacing: var(--display-tracking);
+  font-variant-numeric: tabular-nums;
+}
+
+.hatch-line__overdrive {
+  font-size: var(--text-xs);
+  font-weight: 700;
+  color: var(--colour-success);
+}
+
+/* A mouse needs no 44px link: with Clear all under it the row stays one
+   slot high. */
+@media (pointer: fine) {
+  .hatch-line__totals > .hatch-line__boost-link,
+  .hatch-line__totals > .btn.hatch-clear,
+  .hatch-line__totals .hatch-clear--confirm > .btn {
+    min-height: 28px;
+  }
+
+  .hatch-line__totals > .btn.hatch-clear {
+    padding-block: 0;
+  }
+}
+
+/* The one small link to Finish now and the Overdrive: secondary on purpose. */
+.hatch-line__boost-link {
+  align-self: flex-start;
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  min-height: var(--control-height);
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--colour-text-secondary);
+  font: inherit;
+  font-size: var(--text-sm);
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.hatch-line__boost-link::after {
+  content: "›";
+  font-size: var(--text-lg);
+  line-height: 1;
+  transition: transform var(--motion-fast) var(--easing);
+}
+
+.hatch-line__boost-link[aria-expanded="true"]::after {
+  transform: rotate(90deg);
+}
+
+.hatch-line__boost-link:hover {
+  color: var(--colour-text);
+}
+
+.hatch-line__boost-link:hover .hatch-line__boost-words {
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.hatch-line__boost-link:focus-visible {
+  outline: none;
+  box-shadow: var(--focus-ring);
+  border-radius: var(--radius-sm);
+}
+
+.hatch-line__boost-link .res-icon {
+  height: 16px;
+}
+
+/* ── Finish now and the Overdrive, behind the link ─────────────────────── */
+
+.hatch-boosts {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2) var(--space-5);
+  padding: var(--space-3);
+  border: 1px solid var(--colour-border);
+  border-radius: var(--radius-md);
+  background: var(--colour-surface-sunken);
+}
+
+.hatch-boosts__finish,
+.hatch-boosts__overdrive {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.hatch-boosts__label {
+  font-size: var(--text-sm);
+  color: var(--colour-text-muted);
+}
+
+.hatch-boosts__running {
+  margin: 0;
+  font-size: var(--text-sm);
+  color: var(--colour-success);
+}
+
+/* ── The message and where they go ───────────────────────────────────── */
+
+/* The words and the housing row share a line when both fit whole, else the
+   housing row goes under the words (patch 7.6.1, owner 15 Nov 2026: the
+   numbers ran on under the panel beside it). */
+.hatch-message {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-1) var(--space-4);
+  padding: 6px var(--space-3);
+  border: 1px solid var(--colour-border);
+  border-radius: var(--radius-md);
+  background: var(--colour-surface-sunken);
+}
+
+/* With a warning the words take the first line and the housing row the
+   second, always: a "+20" added to the key would otherwise push the row
+   under the words and move the grid and Add (patch 7.6.1). */
+@container hatch (width >= 560px) {
+  .hatch-message--warning > .hatch-housing {
+    flex-basis: 100%;
+  }
+}
+
+.hatch-message__words {
+  flex: 0 1 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.hatch-message__title {
+  font-size: var(--text-sm);
+  font-weight: 700;
+  text-wrap: pretty;
+}
+
+.hatch-message__title--warning {
+  color: var(--colour-warning);
+}
+
+/* The housing row (owner, 15 Nov 2026: about half as tall): the painted
+   house, after / total, the bar, and its key as numbers. */
+.hatch-housing {
+  flex: 1 1 0;
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  /* As narrow as the house, the numbers, the shortest bar and the key, never
+     narrower: anything less wraps the row under the words. */
+  min-width: min-content;
+  max-width: 100%;
+}
+
+.hatch-housing__label {
+  display: flex;
+  flex: none;
+}
+
+.hatch-housing__value {
+  flex: none;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+/* "After:" in front of the total (owner, 16 Nov 2026): quieter than the numbers. */
+.hatch-housing__after {
+  color: var(--colour-text-secondary);
+}
+
+.hatch-housing--over .hatch-housing__value {
+  color: var(--colour-warning);
+}
+
+.hatch-housing__bar {
+  flex: 1 1 120px;
+  display: flex;
+  gap: 2px;
+  min-width: 60px;
+  height: 8px;
+  border-radius: var(--radius-pill);
+  background: var(--colour-surface-overlay);
+  overflow: hidden;
+}
+
+.hatch-housing__part {
+  flex: none;
+  height: 100%;
+}
+
+.hatch-housing__part--housed {
+  background: var(--colour-meter);
+}
+
+.hatch-housing__part--pending {
+  background: var(--colour-info);
+}
+
+.hatch-housing__part--adding {
+  background: var(--colour-accent);
+}
+
+.hatch-housing--over .hatch-housing__part--adding {
+  background: var(--colour-warning);
+}
+
+/* The key and the warning: beside the bar, one line (in full on hover). */
+.hatch-housing__foot {
+  flex: 0 1 auto;
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  min-width: min-content;
+}
+
+/* What each colour of the bar is. */
+.hatch-housing__key {
+  flex: none;
+  display: flex;
+  gap: var(--space-3);
+  font-size: var(--text-xs);
+  color: var(--colour-text-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.hatch-housing__item {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  white-space: nowrap;
+}
+
+.hatch-housing__item::before {
+  content: "";
+  width: 8px;
+  height: 8px;
+  border-radius: 2px;
+  background: var(--colour-meter);
+}
+
+.hatch-housing__item--pending::before {
+  background: var(--colour-info);
+}
+
+.hatch-housing__item--adding {
+  color: var(--colour-text);
+  font-weight: 700;
+}
+
+.hatch-housing__item--adding::before {
+  background: var(--colour-accent);
+}
+
+.hatch-housing--over .hatch-housing__item--adding::before {
+  background: var(--colour-warning);
+}
+
+/* Whole, on two lines if it must: never cut. */
+.hatch-housing__over {
+  min-width: 0;
+  font-size: var(--text-xs);
+  font-weight: 700;
+  line-height: var(--leading-tight);
+  color: var(--colour-warning);
+}
+
+/* ── The grid and the info panel, side by side ───────────────────────── */
+
+.hatch__split {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--space-3);
+}
+
+.hatch-pick {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.hatch__grid {
+  display: grid;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  gap: var(--space-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+/* Each card fills its cell, so a row's cards are one height when a name
+   takes two lines on a phone. */
+.hatch__grid > li {
+  display: flex;
+  min-width: 0;
+}
+
+.hatch-monster {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
+  width: 100%;
+  padding: 6px 2px var(--space-2);
+  border: 1px solid var(--colour-border);
+  border-radius: var(--radius-md);
+  background: var(--colour-surface-sunken);
+  color: var(--colour-text);
+  font: inherit;
+  cursor: pointer;
+  transition:
+    background var(--motion-fast) var(--easing),
+    border-color var(--motion-fast) var(--easing);
+}
+
+/* Only with a mouse: a phone keeps a tapped card "hovered", which read as a
+   second chosen monster. */
+@media (hover: hover) {
+  .hatch-monster:hover {
+    background: var(--colour-surface-control-hover);
+  }
+}
+
+.hatch-monster:active {
+  transform: translateY(1px);
+}
+
+/* The chosen monster is a different colour, not a glow (owner, 9 Nov): a
+   strong wash of the look's accent inside its 2px rim, in either look. The
+   1px less padding keeps the picture and name where they were. */
+.hatch-monster[aria-pressed="true"],
+.hatch-monster[aria-pressed="true"]:hover {
+  padding: 5px 1px 7px;
+  border: 2px solid var(--colour-accent);
+  background: color-mix(in srgb, var(--colour-accent) 36%, transparent);
+  color: var(--colour-text-strong);
+}
+
+.hatch-monster[aria-pressed="true"] .hatch-monster__note {
+  color: var(--colour-text-strong);
+}
+
+.hatch-monster:focus-visible {
+  outline: none;
+  box-shadow: var(--focus-ring);
+}
+
+.hatch-monster__picture {
+  width: 52px;
+  height: 52px;
+  object-fit: contain;
+}
+
+.hatch-monster__name {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: var(--text-xs);
+  font-weight: 700;
+  line-height: var(--leading-tight);
+}
+
+.hatch-monster__note {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  min-height: 18px;
+  font-size: var(--text-xs);
+  font-weight: 600;
+  color: var(--colour-text-secondary);
+  font-variant-numeric: tabular-nums;
+}
+
+.hatch-monster--locked,
+.hatch-monster--unlocking {
+  border-color: var(--colour-border-subtle);
+  background: transparent;
+  color: var(--colour-text-secondary);
+}
+
+.hatch-monster--locked .hatch-monster__picture,
+.hatch-monster--unlocking .hatch-monster__picture {
+  filter: grayscale(1) brightness(0.65);
+}
+
+.hatch-monster--locked .hatch-monster__note,
+.hatch-monster--unlocking .hatch-monster__note {
+  color: var(--colour-text-muted);
+}
+
+/* A locked monster wears a padlock on its grey picture, an unlocking one
+   the hourglass; a tap opens the Monster Locker on it (owner, 15 Nov 2026:
+   no "Grey monsters are locked" note). */
+.hatch-monster {
+  position: relative;
+}
+
+.hatch-monster__lock {
+  position: absolute;
+  top: 30px;
+  left: calc(50% + 4px);
+  filter: drop-shadow(0 1px 1px rgb(0 0 0 / 60%));
+  pointer-events: none;
+}
+
+/* The chosen monster: portrait, name and level, what one costs, takes and
+   fills, and the batch add. Its blurb and six numbers are behind Details on
+   every screen (owner, 15 Nov 2026; a phone's since 6 Nov). */
+.hatch-info {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  min-width: 0;
+  padding: var(--space-3) var(--space-4);
+  border: 1px solid var(--colour-border);
+  border-radius: var(--radius-lg);
+  background: var(--colour-surface-sunken);
+}
+
+.hatch-info__head {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.hatch-info__portrait {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 72px;
+  height: 72px;
+  border-radius: var(--radius-md);
+  background: radial-gradient(circle at 50% 42%, var(--colour-accent-soft), transparent 72%);
+}
+
+.hatch-info__picture {
+  width: 66px;
+  height: 66px;
+  border-radius: var(--radius-md);
+  object-fit: cover;
+}
+
+.hatch-info__heading {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.hatch-info__level {
+  font-size: var(--text-xs);
+  font-weight: 600;
+  color: var(--colour-text-muted);
+}
+
+.hatch-info__name {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: var(--text-xl);
+  font-weight: var(--display-weight);
+  letter-spacing: var(--display-tracking);
+  line-height: var(--leading-tight);
+}
+
+/* Three lines at most beside the portrait; the whole blurb is its title. */
+.hatch-info__blurb {
+  display: none;
+  margin: 0;
+  overflow: hidden;
+  font-size: var(--text-sm);
+  line-height: var(--leading-normal);
+  color: var(--colour-text-secondary);
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
+  line-clamp: 3;
+}
+
+.hatch-info__blurb strong {
+  color: var(--colour-text);
+}
+
+/* The one-line summary (goo · time · housing, painted icons) and Details. */
+.hatch-info__each {
+  font-size: var(--text-sm);
+  color: var(--colour-text-secondary);
+}
+
+.hatch-info__details {
+  /* patch 7.6.1 (astra): in the head row, centred beside the name. */
+  flex: none;
+  margin-left: auto;
+  padding-inline: var(--space-1);
+  font-size: var(--text-sm);
+}
+
+.hatch-info--details .hatch-info__blurb {
+  display: -webkit-box;
+}
+
+.hatch-info--details .hatch-info__stats {
+  display: grid;
+}
+
+.hatch-info__stats {
+  display: none;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 6px;
+  margin: 0;
+}
+
+/* A painted icon (the word on hover and for a screen reader) and its number. */
+.hatch-info__stat {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 2px 6px;
+  padding: 5px 10px;
+  border-radius: var(--radius-sm);
+  background: var(--colour-surface-sunken);
+}
+
+.hatch-info__stat dt {
+  display: flex;
+  flex: none;
+}
+
+.hatch-info__stat dt > .res-icon {
+  height: 24px;
+}
+
+.hatch-info__stat dd {
+  margin: 0;
+  font-size: var(--text-md);
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Hatch Rush's "−30%" under the time (a 98 px tile at 1280 has no room for
+   it beside "4s"): its own line, the chip a little tighter. */
+.hatch-info__stat dd.hatch-info__stat-extra {
+  display: flex;
+  flex-basis: 100%;
+  font-size: inherit;
+}
+
+.hatch-info__stat-extra > .chip {
+  padding: 1px 6px;
+  gap: 3px;
+}
+
+.hatch-add {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  margin-top: auto;
+  padding-top: var(--space-2);
+  border-top: 1px solid var(--colour-border-subtle);
+}
+
+/* "Adding to Hatchery 2 (Level 3)" (#268, C). */
+.hatch-add__to {
+  margin: 0;
+  font-size: var(--text-sm);
+  color: var(--colour-text-secondary);
+}
+
+.hatch-add__to strong {
+  color: var(--colour-text-strong);
+}
+
+.hatch-add__controls .qty-stepper__step,
+.hatch-add__count,
+.hatch-add__fill {
+  min-height: var(--control-height);
+}
+
+.hatch-add__count {
+  font-size: var(--text-lg);
+}
+
+/* "Max (81)" on one line; the box gives way first. */
+.hatch-add__fill {
+  white-space: nowrap;
+}
+
+.hatch-add__fill[aria-pressed="true"]:not(:disabled) {
+  border-color: var(--colour-accent-line);
+  background: var(--colour-accent-soft);
+  color: var(--colour-text-strong);
+}
+
+.hatch-add__add {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 2px var(--space-3);
+  min-height: 48px;
+}
+
+.hatch-add__words {
+  font-family: var(--font-display);
+  font-size: var(--text-lg);
+  font-weight: var(--display-weight);
+  text-wrap: balance;
+}
+
+.hatch-add__warning {
+  margin: 0;
+  font-size: var(--text-sm);
+  line-height: var(--leading-normal);
+  font-variant-numeric: tabular-nums;
+}
+
+.hatch-add__warning {
+  color: var(--colour-warning);
+  font-weight: 700;
+}
+
+.hatch-add__unlock {
+  margin-top: var(--space-1);
+  font-size: var(--text-sm);
+}
+
+/* ── Wide enough: the grid and the panel side by side, nine across ─────── */
+
+@container hatch (width >= 880px) {
+  /* The panel stands beside the message and the grid, so Add is in view
+     without scrolling under the tab strip and header. */
+  .hatch__split {
+    grid-template-columns: minmax(0, 1fr) 340px;
+    grid-template-rows: auto 1fr;
+    gap: var(--space-3) var(--space-5);
+  }
+
+  .hatch-info {
+    grid-column: 2;
+    grid-row: 1 / span 2;
+  }
+}
+
+/* The whole tab in the window with no scroll bar, down to 1366x768 (owner,
+   15 Nov 2026): side by side, the spacing is a little tighter. Each part is
+   as tall idle as busy (the cards, the queue row, the housing row), so the
+   grid and Add never move as monsters are chosen and added. */
+@container hatch (width >= 880px) {
+  .hatch__scroll {
+    gap: var(--space-2);
+    padding-top: var(--space-1);
+    padding-bottom: 6px;
+  }
+
+  .hatch__tabs-row:not([hidden]) + .hatch__scroll {
+    padding-top: var(--space-2);
+  }
+
+  .hatch-line--tabbed {
+    gap: 6px;
+    padding: 6px var(--space-2);
+  }
+
+  .hatch__split {
+    row-gap: 6px;
+  }
+
+  .hatch-info {
+    gap: 6px;
+    padding-block: var(--space-2);
+  }
+
+  .hatch-info__blurb {
+    -webkit-line-clamp: 2;
+    line-clamp: 2;
+  }
+
+  /* patch 7.6.1 (astra): the long names fit nine across without taller tiles. */
+  .hatch-monster__name--mid {
+    font-size: 10px;
+    letter-spacing: -0.6px;
+  }
+
+  /* patch 7.6.1 (astra): the box gives way to Max, including the painted
+     skin's 4ch minimum. The row still fills the same width as Add. */
+  .hatch-add__count,
+  :root[data-skin] .panel .hatch .hatch-add__count {
+    flex: 1 1 0;
+    /* Never narrower than three digits (the most is 400): "145" was cut at 1920x1080. */
+    min-width: calc(3ch + 6px);
+    width: 0;
+    padding-inline: 2px;
+  }
+
+  /* A finger's 44px steps and "Max (145)" ran 20px past the panel's edge
+     on an iPad on its side (patch 7.6.1): a little less room between them. */
+  @media (pointer: coarse) {
+    .hatch-add__controls {
+      gap: 1px;
+    }
+
+    /* patch 7.6.1 (astra): pinch the painted ends too, leaving the count
+       three digits of room while every step keeps its 44px target. */
+    :root[data-skin] .panel .hatch .hatch-add__controls .btn--outline {
+      --skin-button2-cap: 10px;
+    }
+
+    .hatch-add__controls .qty-stepper__step {
+      padding-inline: var(--space-1);
+    }
+
+    .hatch-add__fill {
+      padding-inline: var(--space-2);
+      font-size: var(--text-xs);
+    }
+  }
+
+  /* With a mouse, "Max (145)" ran 9px past Add's right edge (patch 7.6.1):
+     a little less room between the steps and inside Max. */
+  @media (pointer: fine) {
+    .hatch-add__controls {
+      gap: 4px;
+    }
+
+    .hatch-add__fill {
+      padding-inline: var(--space-2);
+    }
+  }
+
+  /* A mouse needs no 36px Clear all. */
+  @media (pointer: fine) {
+    .hatch-line__head {
+      min-height: 28px;
+    }
+
+    .btn.hatch-clear,
+    .hatch-clear--confirm > .btn {
+      min-height: 28px;
+      padding-block: 0;
+    }
+
+    /* patch 7.6.1 (astra): reclaim 30px without changing rows or the art.
+       Idle keeps the same head height as Clear all; touch keeps its targets. */
+    .hatch__tabs-row {
+      padding-top: var(--space-1);
+    }
+
+    .hatch-tab {
+      padding-block: 0;
+    }
+
+    .hatch__tabs-row:not([hidden]) + .hatch__scroll {
+      padding-top: var(--space-1);
+    }
+
+    .hatch-line--tabbed {
+      gap: 2px;
+      padding-block: 2px;
+    }
+
+    .hatch-line--tabbed > .hatch-line__head,
+    .hatch-line--tabbed > .hatch-line__head > .btn.hatch-clear {
+      min-height: 26px;
+    }
+  }
+
+  /* patch 7.6.1 (astra): the short warning fits the kept line, with no cut. */
+  .hatch-add__warning {
+    white-space: nowrap;
+  }
+
+  /* A short screen (1280x720): smaller monster pictures give back the line
+     the housing numbers take under a warning, so the whole tab still fits
+     with no scroll bar (patch 7.6.1). */
+  @media (max-height: 760px) {
+    .hatch-monster {
+      padding-top: var(--space-1);
+    }
+
+    .hatch-monster__picture {
+      width: 42px;
+      height: 42px;
+    }
+  }
+
+  /* 1366x768 and lower: a smaller portrait, so the panel (taller with a
+     hatchery's "Adding to Hatchery 1" line and the warning's kept line)
+     does not make the tab scroll where 7.6 did not (patch 7.6.1). */
+  @media (max-height: 800px) {
+    .hatch-info__portrait {
+      width: 52px;
+      height: 52px;
+    }
+
+    .hatch-info__picture {
+      width: 48px;
+      height: 48px;
+    }
+  }
+
+  /* Its line is kept, empty, while there is no warning (patch 7.6.1): Add,
+     pinned to the panel's bottom, rose by a line whenever a count went past
+     the housing, and the window grew under it. */
+  .hatch .hatch-add__warning[hidden] {
+    display: block;
+    visibility: hidden;
+  }
+
+  /* "The queue is full." already holds a line there: no second one. */
+  .hatch .hatch-add__gate:not([hidden]) ~ .hatch-add__warning[hidden] {
+    display: none;
+  }
+}
+
+@container hatch (width >= 1040px) {
+  .hatch__grid {
+    grid-template-columns: repeat(9, minmax(0, 1fr));
+  }
+}
+
+/* ── Add under the grid (an iPad upright, a phone on its side) ──────────
+   The totals take their own line under the stacks, so the stacks never push
+   them down a line; idle, the line gives its room back (the first Add moves
+   what is below it once, never a + or a choice). */
+@container hatch (width < 880px) {
+  /* Narrower cards can take "Needs housing" on two lines: every card has
+     room for two from the start, so a hatchery that stalls never makes the
+     row taller (patch 7.6.1). */
+  .hatch-now--compact {
+    min-height: 70px;
+  }
+
+  .hatch-line__totals {
+    flex-basis: 100%;
+    padding-left: 0;
+    border-left: 0;
+  }
+
+  .hatch-line__totals--idle {
+    display: none;
+  }
+
+  /* The HCC's totals on the first line, the stacks under them in a row kept
+     one slot high: a stack chosen or added never pushes the totals down. */
+  /* Its seven slots (`HCC_STACKS`) in one row, narrower if they must be: with
+     the empty boxes back the seventh fell alone onto a second row on an
+     upright iPad (patch 7.6.1). */
+  .hatch-line--hcc > .hatch-line__slots {
+    display: grid;
+    grid-template-columns: repeat(7, minmax(0, 96px));
+    grid-template-rows: auto var(--hatch-slot-height);
+    min-height: 0;
+  }
+
+  .hatch-line--hcc > .hatch-line__slots > .hatch-line__totals {
+    grid-column: 1 / -1;
+    grid-row: 1;
+  }
+
+  /* Idle, the HCC's totals still hold the first line, at no height: with
+     them gone the first stack chosen took that line and the held one stayed
+     empty under it, so a sixth + pushed the grid and Add down a slot. */
+  .hatch-line--hcc > .hatch-line__slots > .hatch-line__totals--idle {
+    display: block;
+    height: 0;
+    overflow: hidden;
+  }
+}
+
+/* ── A phone: the same order, the add controls in a bar at the bottom ─── */
+
+@container hatch (width < 560px) {
+  /* (The container itself cannot be styled from its own query: its box.) */
+  .hatch__scroll {
+    --hatch-slot-height: 80px;
+  }
+
+  /* Every tab fits across: the picture over the level and the light. */
+  .hatch-tabs > .hatch-tab {
+    min-width: 62px;
+  }
+
+  .hatch-tab {
+    flex-direction: column;
+    gap: 2px;
+    padding: var(--space-1) 2px;
+    text-align: center;
+  }
+
+  .hatch-tab__art {
+    width: 27px;
+    height: 36px;
+  }
+
+  .hatch-tab__body {
+    align-items: center;
+  }
+
+  .hatch-tab__monster {
+    display: none;
+  }
+
+  .hatch-tab__waiting {
+    position: absolute;
+    top: 2px;
+    right: 2px;
+    margin: 0;
+    padding: 0 4px;
+  }
+
+  .hatch-line--tabbed {
+    padding: var(--space-1);
+  }
+
+  .hatch-line__slots,
+  .hatch-line__now,
+  .hatch-line--hcc > .hatch-line__slots {
+    display: grid;
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+    gap: 6px;
+    overflow: visible;
+  }
+
+  .hatch-line__arrow,
+  .hatch-now__label,
+  .hatch-now__name,
+  .hatch-now__cancel,
+  .hatch-slot__note,
+  .hatch-slot__minus,
+  .hatch-slot__why {
+    display: none;
+  }
+
+  .hatch-line--hcc .hatch-now__label {
+    display: block;
+    max-width: 100%;
+    overflow: hidden;
+    font-size: var(--text-xs);
+    letter-spacing: 0;
+    text-overflow: ellipsis;
+    text-transform: none;
+    white-space: nowrap;
+  }
+
+  /* A card is its number over the picture and the time, five across. */
+  .hatch-now,
+  .hatch-now--compact,
+  .hatch-slot {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    width: auto;
+    min-height: var(--hatch-slot-height);
+    padding: var(--space-1);
+    border-radius: var(--radius-md);
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+  }
+
+  .hatch-now__picture,
+  .hatch-slot__picture {
+    width: 34px;
+    height: 34px;
+  }
+
+  .hatch-slot__picture {
+    margin-top: var(--space-3);
+  }
+
+  .hatch-now__state {
+    max-width: 100%;
+    font-size: var(--text-xs);
+    font-weight: 700;
+  }
+
+  .hatch-now__words-long {
+    display: none;
+  }
+
+  .hatch-now__words-short {
+    display: inline;
+  }
+
+  .hatch-now__bar {
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    height: 4px;
+    border-radius: 0;
+  }
+
+  .hatch-now--more {
+    font-size: var(--text-xs);
+  }
+
+  .hatch-slot__count {
+    top: 5px;
+    left: 5px;
+    min-width: 0;
+    padding: 0 6px;
+    font-size: var(--text-xs);
+  }
+
+  .hatch-slot__name {
+    font-size: var(--text-xs);
+  }
+
+  .hatch-slot__upgrade {
+    min-height: var(--control-height-compact);
+    padding-inline: var(--space-1);
+    font-size: var(--text-xs);
+  }
+
+  /* One row: the hourglass and time, "Speed up", Clear all. */
+  .hatch-line__totals {
+    grid-column: 1 / -1;
+    flex-wrap: nowrap;
+    padding: 0;
+    border: 0;
+  }
+
+  .hatch-line__done-label,
+  .hatch-line__boost-words {
+    display: none;
+  }
+
+  .hatch-line__done-icon,
+  .hatch-line__boost-words--short {
+    display: inline;
+  }
+
+  .hatch-line__done {
+    font-size: var(--text-md);
+  }
+
+  .hatch-line__boost-link {
+    margin-left: auto;
+  }
+
+  .hatch-message {
+    flex-direction: column;
+    align-items: stretch;
+    gap: var(--space-1);
+    padding: var(--space-2) var(--space-3);
+  }
+
+  /* The key and any warning on a line under the bar. */
+  .hatch-housing {
+    flex-wrap: wrap;
+    row-gap: 2px;
+    min-width: 0;
+  }
+
+  .hatch-housing__foot {
+    flex-basis: 100%;
+    min-width: 0;
+    flex-wrap: wrap;
+  }
+
+  /* Four across, not five (owner, 9 Nov: "needs polishing"): at 390 px a
+     fifth card was 68 px, too narrow for "Slimeattikus" or "Crabatron" in
+     the display font, cut to "Slimeat…". A name stays whole on one line: a
+     long one ("Slimeattikus", `hatch-monster__name--long`) in smaller
+     letters, never broken mid-word ("Slimeattik / us", tester 9 Nov). */
+  .hatch__grid {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 6px;
+  }
+
+  .hatch-monster__picture {
+    width: 48px;
+    height: 48px;
+  }
+
+  .hatch-monster__name--long {
+    font-size: 10.5px;
+    letter-spacing: -0.2px;
+  }
+
+  /* The info panel becomes the bar fixed to the sheet's bottom (not on a
+     screen under 960 px tall: see the end of this file). The split
+     steps aside so the bar's containing block is the whole scrolling tab:
+     inside the split it could only stick while the split reached the
+     sheet's bottom edge. */
+  .hatch__split {
+    display: contents;
+  }
+
+  .hatch-info {
+    position: sticky;
+    bottom: 0;
+    z-index: 1;
+    gap: var(--space-2);
+    margin: 0 calc(-1 * var(--space-3));
+    padding: var(--space-3) var(--space-4) var(--space-4);
+    border-width: 1px 0 0;
+    border-radius: var(--radius-lg) var(--radius-lg) 0 0;
+    background: var(--colour-surface-base);
+    box-shadow: var(--shadow-float);
+  }
+
+  .hatch-info__portrait {
+    width: 48px;
+    height: 48px;
+  }
+
+  .hatch-info__picture {
+    width: 44px;
+    height: 44px;
+  }
+
+  .hatch-info__name {
+    font-size: var(--text-md);
+  }
+
+  .hatch-info__each {
+    margin-top: calc(-1 * var(--space-2));
+    padding-left: calc(48px + var(--space-2));
+    font-size: var(--text-xs);
+    color: var(--colour-text-muted);
+  }
+
+  .hatch-info--details .hatch-info__blurb {
+    display: block;
+  }
+
+  .hatch-add {
+    gap: var(--space-1);
+    margin-top: 0;
+    padding-top: 0;
+    border-top: 0;
+  }
+
+  .hatch-add__to {
+    font-size: var(--text-xs);
+  }
+
+  /* If Max does not fit beside the steps it takes its own line rather than
+     running past the edge (6 Nov UI check: "Max (145)" was cut at 390 px
+     wide). */
+  .hatch-add__controls {
+    flex-wrap: wrap;
+    gap: var(--space-1);
+  }
+
+  /* A finger's width each, 44 px (owner, 9 Nov: phone polish). */
+  .hatch-add__controls .qty-stepper__step {
+    flex: 1 1 var(--control-height-compact);
+    min-width: var(--control-height-compact);
+  }
+
+  .hatch-add__jump {
+    padding-inline: var(--space-1);
+  }
+
+  .hatch-add__count {
+    flex: none;
+    width: 44px;
+    padding-inline: 0;
+  }
+
+  .hatch-add__fill {
+    flex: 1 0 auto;
+    padding-inline: var(--space-2);
+  }
+
+  .hatch-add__add {
+    min-height: var(--control-height);
+    padding: var(--space-1) var(--space-2);
+  }
+
+  .hatch-add__words {
+    font-size: var(--text-md);
+  }
+}
+
+/* ── A phone, upright or on its side: the monsters in one sliding row ────
+   (owner, 15 Nov 2026: "make the monsters scrollable horizontally to save
+   vertical space"). The phone layout's own query (phoneLayout.ts); an iPad
+   and a desktop keep the grid. The row reaches the sheet's edges and a card
+   is cut there, so it shows there is more; a swipe slides it, never the
+   tab. The cards keep their size, so nothing gets harder to tap. */
+@media (max-width: 620px), (max-height: 500px) {
+  /* patch 7.6.1 (astra): shorter waiting slots, still all present. A long
+     name may wrap here; the monster grid below keeps its single line. */
+  .hatch-slot {
+    min-height: 64px;
+    gap: 0;
+    padding: 2px;
+  }
+
+  .hatch-line--hcc > .hatch-line__slots {
+    grid-template-rows: auto minmax(64px, auto);
+    grid-auto-rows: minmax(64px, auto);
+    min-height: 0;
+  }
+
+  /* Under the "×20" badge, not behind it. */
+  .hatch-slot__picture {
+    width: 28px;
+    height: 28px;
+    margin-top: 14px;
+  }
+
+  .hatch-slot__name {
+    font-size: 10.5px;
+    line-height: var(--leading-tight);
+    letter-spacing: -0.4px;
+    white-space: normal;
+    overflow: visible;
+    overflow-wrap: anywhere;
+  }
+
+  /* patch 7.6.1 (astra): badges have their own corners above the roof. */
+  @container hatch (width < 560px) {
+    .hatch-tab__number {
+      left: -12px;
+    }
+
+    .hatch-tab__waiting {
+      right: 0;
+      padding-inline: 2px;
+      font-size: 10.5px;
+    }
+  }
+
+  /* Upright, four cards and a part of the fifth: the row is the tab's width
+     (100cqi) and both edges' padding, the first card starts one padding in.
+     Never under 76 px, the width "Octo-ooze" and "Slimeattikus" need. */
+  .hatch__grid {
+    --hatch-card-width: clamp(76px, calc((100cqi + var(--hatch-pad) - 4 * 6px) / 4.35), 88px);
+
+    grid-template-columns: none;
+    grid-auto-flow: column;
+    grid-auto-columns: var(--hatch-card-width);
+    gap: 6px;
+    margin-inline: calc(-1 * var(--hatch-pad));
+    padding: 3px var(--hatch-pad);
+    overflow-x: auto;
+    overflow-y: hidden;
+    overscroll-behavior-x: contain;
+    scroll-padding-inline: var(--hatch-pad);
+    scroll-snap-type: x proximity;
+    scrollbar-width: none;
+  }
+
+  /* Narrower (a 375 px phone), four would leave no part of a fifth to see:
+     three cards and half the fourth. */
+  @container hatch (width < 336px) {
+    .hatch__grid {
+      --hatch-card-width: calc((100cqi + var(--hatch-pad) - 3 * 6px) / 3.5);
+    }
+  }
+
+  .hatch__grid::-webkit-scrollbar {
+    display: none;
+  }
+
+  .hatch__grid > li {
+    scroll-snap-align: start;
+  }
+
+  /* A name stays whole: the card gives it its full width, the letters sit a
+     little closer, a long one ("Slimeattikus") smaller still. */
+  .hatch-monster {
+    padding-inline: 1px;
+  }
+
+  .hatch-monster[aria-pressed="true"],
+  .hatch-monster[aria-pressed="true"]:hover {
+    padding-inline: 0;
+  }
+
+  .hatch-monster__name {
+    letter-spacing: -0.2px;
+  }
+
+  .hatch-monster__name--long {
+    font-size: 10.5px;
+    letter-spacing: -0.4px;
+  }
+}
+
+/* ── A short screen: the content keeps its room under the fixed rows ─────
+   Under the window's title, tabs and header and the hatchery tabs, all fixed
+   (owner, 6 Nov 2026), the add bar fixed to a phone's bottom (287 px) left
+   the monster list and the queue no room at all at 375x667 and one row at
+   375x812 (patch 6.3). Below 960 px tall the bar scrolls with the content,
+   under the monster grid. */
+@media (max-height: 960px) {
+  .hatch-info {
+    position: relative;
+    box-shadow: none;
+  }
+}
+
+/* A phone on its side (812x375): smaller hatchery tabs, so the box under
+   them shows three rows or more. */
+@media (max-height: 500px) {
+  .hatch__tabs-row {
+    padding-top: var(--space-1);
+  }
+
+  .hatch__tabs-row:not([hidden]) + .hatch__scroll {
+    padding-top: var(--space-2);
+  }
+
+  .hatch-tab {
+    padding-block: 2px;
+  }
+
+  .hatch-tab__art {
+    width: 24px;
+    height: 32px;
+  }
+
+  /* The monsters' row (above) has the width for more: eight cards and half
+     the ninth. */
+  .hatch__grid {
+    --hatch-card-width: clamp(76px, calc((100cqi + var(--hatch-pad) - 8 * 6px) / 8.5), 100px);
+  }
+}
+
+/* `hidden` wins over the display each block sets above. */
+.hatch [hidden] {
+  display: none;
+}
+68:import { B9Hcc, b9HccOn, b9Stacks } from "@/proto/b9Hcc";
+69:import { B9HccR2 } from "@/proto/b9HccR2";
+70:import { b9HccOption } from "@/proto/b9";
+88: *   the stacked lines were too long to scroll), numbered as the yard
+115: * - **The info panel**: the chosen monster's portrait, level, blurb and six
+138: * tab past the window's bottom and brought up a scroll bar.
+197:/** A stat as the info panel prints it: whole numbers grouped, speeds to two places. */
+241:  /** The hatchery tabs, over the scroll box: they never scroll out of sight (owner, 6 Nov 2026). */
+243:  /** Everything under the tabs; only this scrolls. */
+244:  private readonly scroll: HTMLElement;
+249:  private readonly info: HTMLElement;
+250:  private readonly infoHead: HTMLElement;
+251:  private readonly infoEach: HTMLElement;
+304:  /** When the player last scrolled the box by hand (`performance.now()`), so a late check leaves it be. */
+305:  private scrolledAt = Number.NEGATIVE_INFINITY;
+323:    this.scroll = document.createElement("div");
+324:    this.scroll.className = "tab-scroll hatch__scroll";
+325:    // The player's own scrolling: a finger dragging, a wheel, a key, the
+326:    // scrollbar. A redraw's late check (`settleScroll`) never undoes it.
+327:    const scrolledByHand = (): void => {
+328:      this.scrolledAt = performance.now();
+331:      this.scroll.addEventListener(name, scrolledByHand, { passive: true });
+333:    this.scroll.addEventListener(
+336:        if (event.target === this.scroll) scrolledByHand();
+353:    const split = document.createElement("div");
+354:    split.className = "hatch__split";
+367:    this.info = document.createElement("section");
+368:    this.info.className = "hatch-info";
+369:    this.infoHead = document.createElement("div");
+370:    this.infoHead.className = "hatch-info__head";
+371:    this.infoEach = document.createElement("span");
+372:    this.infoEach.className = "hatch-info__each";
+375:    this.detailsButton.className = "btn btn--ghost hatch-info__details";
+381:    this.stats.className = "hatch-info__stats";
+418:    this.info.append(this.infoHead, this.infoEach, this.stats, this.addBlock);
+419:    // The message sits in the split so the info panel can stand beside it on a wide screen.
+420:    split.append(this.message, pick, this.info);
+421:    this.scroll.append(this.lines, this.boosts, split);
+422:    // The status floats over the top of the tab, outside the scroll box, so a
+424:    this.element.append(this.tabsRow, this.scroll, this.status);
+426:    if (b9HccOn()) {
+427:      const option = b9HccOption();
+430:          ? new B9HccR2(this.element, this.scroll, () => this.store.save, () => this.render(), () => hatcheryPicture(6, this.store.kind))
+431:          : new B9Hcc(this.element, this.scroll, () => this.store.save, () => this.render());
+473:   * is moved by itself, never with scrollIntoView, which would move the tab too.
+477:    if (!this.selected || grid.scrollWidth <= grid.clientWidth) return;
+483:    grid.scrollLeft += tile.left - row.left - (row.width - tile.width) / 2;
+544:   * Runs a redraw with the scroll box held where the player left it (owner,
+551:   *   the new copy without a scroll. A plain focus() scrolls the box to it,
+553:   * - The box's height: a shorter info panel (D.A.V.E.'s after Crabatron's)
+554:   *   made the box shorter while it was scrolled to the bottom, and the
+555:   *   browser pulled the scroll up (tester, 9 Nov). The panel keeps the
+559:   *   without the player scrolling it goes back.
+562:    const box = this.scroll;
+565:    const scrolled = box.scrollTop;
+566:    const tall = box.scrollHeight;
+567:    // The info panel's held height is let go; it is measured again.
+568:    this.info.style.minHeight = "";
+573:    this.holdScroll(scrolled, tall);
+574:    this.settleScroll(scrolled, tall);
+577:  /** Puts the box back at `scrolled`, the info panel keeping any height the box lost. */
+578:  private holdScroll(scrolled: number, tall: number): void {
+579:    const box = this.scroll;
+580:    if (box.scrollTop === scrolled) return;
+581:    const lost = tall - box.scrollHeight;
+582:    if (lost > 0) this.info.style.minHeight = `${this.info.offsetHeight + lost}px`;
+583:    box.scrollTop = scrolled;
+587:  private settleScroll(scrolled: number, tall: number): void {
+591:    const since = this.scrolledAt;
+597:      // The player scrolled meanwhile: where they put it is where it stays.
+598:      if (!this.scroll.isConnected || this.scrolledAt !== since) return;
+599:      this.holdScroll(scrolled, tall);
+661:   * hold, so the grid and the info panel are left alone. The line over the
+784:  /** The tab strip in its row over the scroll box, or no row at all. */
+1070:    // finger that only meant to scroll the row must not cost a monster.
+1491:  /* ── The info panel ─────────────────────────────────────────────────── */
+1495:      this.info.hidden = true;
+1498:    this.info.hidden = false;
+1500:    this.info.setAttribute("aria-label", monster.name);
+1503:    portrait.className = "hatch-info__portrait";
+1504:    portrait.append(monsterPicture(monster, "portrait", "hatch-info__picture"));
+1506:    heading.className = "hatch-info__heading";
+1508:    level.className = "hatch-info__level";
+1511:    name.className = "hatch-info__name";
+1514:    blurb.className = "hatch-info__blurb";
+1519:    this.infoHead.replaceChildren(portrait, heading, this.detailsButton);
+1522:    this.infoEach.replaceChildren(
+1549:        item.className = "hatch-info__stat";
+1557:          more.className = "hatch-info__stat-extra";
+1568:    this.info.classList.toggle("hatch-info--details", this.detailsOpen);
+1740:    this.scroll.scrollTop = 0;
+1836:   * the browser took the touch for a scroll, nothing does. The queue is read
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 10px 20px;
+    margin-bottom: 10px;
+  }
+  .b9r2h-bench > .hatch-lines {
+    flex: none;
+    margin: 0;
+  }
+  .b9r2h-mixes {
+    flex: none;
+    grid-template-columns: repeat(5, 64px);
+    gap: 8px;
+    margin: 0;
+  }
+  .b9r2h-mix {
+    height: 60px;
+  }
+  .b9r2h-opt-d .hatch-lines .hatch-line.hatch-line--hcc {
+    display: flex !important;
+    flex-flow: row wrap;
+    align-items: stretch;
+    gap: 8px 16px;
+    padding: 0;
+  }
+  .b9r2h .hatch-line--hcc > .hatch-line__now {
+    grid-template-columns: repeat(5, 56px);
+  }
+  .b9r2h .hatch-line--hcc .hatch-now {
+    min-height: 106px;
+  }
+  .b9r2h .hatch-line--hcc .hatch-now__picture {
+    width: 44px;
+    height: 44px;
+  }
+  .b9r2h .hatch-line--hcc > .hatch-line__slots {
+    grid-template-columns: repeat(5, 54px) 64px;
+    margin-top: 0;
+  }
+  .b9r2h-seal {
+    flex: 0 1 430px;
+    width: auto;
+    min-height: 60px;
+  }
+  .b9r2h-opt-e.b9r2h-inspect .hatch-line--hcc > .hatch-line__now {
+    grid-template-columns: repeat(5, 96px);
+  }
+  .b9r2h-opt-e.b9r2h-inspect .hatch-line--hcc > .hatch-line__slots {
+    grid-template-columns: repeat(5, 96px) 80px;
+    margin-top: 10px;
+  }
+  .b9r2h-mixcard {
+    right: auto;
+    width: 400px;
+  }
+}
+
+/* The pages and cards over the tab are solid, whatever the look's panel paint. */
+.b9r2h-yards,
+.b9r2h-mixcard {
+  background: linear-gradient(var(--colour-surface-raised), var(--colour-surface-raised)), var(--b9r2h-solid, #303d4b);
+}
+:root[data-skin="flash"] .b9r2h {
+  --b9r2h-solid: #e7d6ad;
+}
+21:.monsters-screen {
+40:.monsters-screen[hidden] {
+44:.monsters-screen .panel__titlebar {
+53:.monsters-screen .panel__title {
+58:.monsters-screen__close {
+62:.monsters-screen .panel__body {
+81:.monsters-screen .monsters-tabs {
+151:.monsters-body {
+518:  .monsters-screen {
+523:  .monsters-screen .panel__titlebar {
+527:  .monsters-screen .panel__title {
+543:  .monsters-screen {
+558:  .monsters-screen .monsters-tabs {
+563:  .monsters-screen .tabs__tab {
+570:  :root[data-skin] .monsters-screen:not(.siege-screen) .panel__titlebar > .guide-help {
+
+hook: PostToolUse
+hook: PostToolUse Completed
+codex
+The code confirms the main layout fault: D’s production band keeps its desktop width on the upright iPad, while the Add panel stays inside a split that cannot stick to the bottom in several sizes. I’m correcting those constraints. The yard search already has an accessible name, so that LOW item needs no change. Some controls I flagged are already 44 px or larger; I’ll preserve those and fix the quantity controls that actually shrink below the limit.
+hook: PreToolUse
+hook: PreToolUse Completed
+exec
+/bin/bash -lc "sed -n '60,85p' web/src/ui/styles/monsters.css; sed -n '145,170p' web/src/ui/styles/monsters.css; rg -n 'hatch__split|hatch__pick|hatch-info|hatch-add__controls|hatch-add__fill' web/src/ui/styles/hatch.css; cat web/src/ui/gameIcon.ts | head -65; rg -n 'res-icon--r4|res-icon ' web/src/ui/styles/*.css | head -15; rg -n 'tab-scroll' web/src/ui/ui.css web/src/ui/styles/*.css | head -15" in /home/yujiesim/Coding/backyard-monsters-refitted/worktrees/screens-r2
+ succeeded in 0ms:
+}
+
+.monsters-screen .panel__body {
+  flex: 1;
+  min-height: 0;
+  max-height: none;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+/* ── Tab strip: the shared tabs (ui.css `.tabs`), scrolling when narrow ── */
+
+.monsters-tabs {
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+/* In the title bar (Monsters, Chaos Weapons): the room between the title
+   and the close button, the tabs equal in it (ui.css `.tab-row`). */
+.monsters-screen .monsters-tabs {
+  flex: 1 1 0;
+  min-width: 0;
+}
+
+.monsters-bar--full .monsters-bar__fill {
+  background: var(--colour-warning);
+}
+
+/* ── Body ────────────────────────────────────────────────────────────────── */
+
+.monsters-body {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.monsters-status {
+  margin: 0;
+  padding: var(--space-2) var(--space-4) 0;
+  font-size: var(--text-sm);
+}
+
+/* A done action reads in plain text: only its amounts carry the red/green
+   of a loss or gain ("Unlocking Vorg: −384,000"), so the words around them
+   do not take a colour of their own. */
+.monsters-status--good {
+  color: var(--colour-text);
+}
+1160:.hatch__split {
+1301:.hatch-info {
+1313:.hatch-info__head {
+1319:.hatch-info__portrait {
+1329:.hatch-info__picture {
+1336:.hatch-info__heading {
+1344:.hatch-info__level {
+1350:.hatch-info__name {
+1360:.hatch-info__blurb {
+1372:.hatch-info__blurb strong {
+1377:.hatch-info__each {
+1382:.hatch-info__details {
+1390:.hatch-info--details .hatch-info__blurb {
+1394:.hatch-info--details .hatch-info__stats {
+1398:.hatch-info__stats {
+1406:.hatch-info__stat {
+1416:.hatch-info__stat dt {
+1421:.hatch-info__stat dt > .res-icon {
+1425:.hatch-info__stat dd {
+1434:.hatch-info__stat dd.hatch-info__stat-extra {
+1440:.hatch-info__stat-extra > .chip {
+1465:.hatch-add__controls .qty-stepper__step,
+1467:.hatch-add__fill {
+1476:.hatch-add__fill {
+1480:.hatch-add__fill[aria-pressed="true"]:not(:disabled) {
+1524:  .hatch__split {
+1530:  .hatch-info {
+1556:  .hatch__split {
+1560:  .hatch-info {
+1565:  .hatch-info__blurb {
+1590:    .hatch-add__controls {
+1596:    :root[data-skin] .panel .hatch .hatch-add__controls .btn--outline {
+1600:    .hatch-add__controls .qty-stepper__step {
+1604:    .hatch-add__fill {
+1613:    .hatch-add__controls {
+1617:    .hatch-add__fill {
+1682:    .hatch-info__portrait {
+1687:    .hatch-info__picture {
+1979:  .hatch__split {
+1983:  .hatch-info {
+1996:  .hatch-info__portrait {
+2001:  .hatch-info__picture {
+2006:  .hatch-info__name {
+2010:  .hatch-info__each {
+2017:  .hatch-info--details .hatch-info__blurb {
+2035:  .hatch-add__controls {
+2041:  .hatch-add__controls .qty-stepper__step {
+2056:  .hatch-add__fill {
+2185:  .hatch-info {
+import { writeAmount, type AmountChange } from "./amountChange";
+
+/**
+ * The painted icons that stand in for words on screen (owner, 28 Oct: "icons
+ * ok"): a red heart for health, a red claw for damage, a winged shoe for
+ * speed, and so on, drawn with a number beside them instead of a sentence.
+ *
+ * ## The art
+ *
+ * Painted with Codex in the style of the resource piles and the status
+ * stickers (branch `art/game-icons`, `art-samples/icons/`), and made into
+ * `public/ui/icons/<name>-<side>.webp` by `tools/game-icons/make.py`: one
+ * square WebP per side in {@link GAME_ICON_SIDES}, each resized from the
+ * painting and sharpened for its own size. An icon shown at 24 px fetches
+ * the 24 px file on an ordinary screen and the 48 px one on a sharp screen
+ * (`srcset`); nothing is fetched until an icon is drawn.
+ *
+ * These are pictures, not the line icons of `icons.ts`, which stay for the
+ * yard's round buttons. Never draw a new line icon where a word is cut: the
+ * owner wants them painted. A missing picture is new art, not new code.
+ *
+ * ## The word is still there
+ *
+ * Like `resourceIcon.ts`, every icon is `role="img"` with its word as the
+ * `aria-label` and the `title`, so a screen reader still says "Health 480"
+ * and a mouse can hover the picture to learn what it means.
+ */
+
+/**
+ * Every icon and the word it stands for. The owner's picks (27 Oct) where
+ * two were painted: damage is the red claw (`damage`, not `fist`), yard
+ * damage is the broken brick wall (`yarddamage2`). Monsters lost, last army
+ * and per hour keep their words for now; their pictures are here for later.
+ *
+ * The Map Room's ground (`art-samples/mr2-ground/icons`, waiting on the
+ * owner's pick): tower range is the cannon tower with range rings (`range`;
+ * `range2` is the cannonball and target), income the mixed resource pile,
+ * height the hill with a flag. None carries an arrow, as its number can be a
+ * gain or a loss.
+ *
+ * Map Room 2's neighbour defence bonus (`art-samples/mr2-bonus5/icon`): the
+ * teal shield with linked cells and two up arrows (`neighbours`); `neighbours2`
+ * is the hex shield with friends either side, the other option.
+ *
+ * Map Room 2's "Tilted map" button (`ui/maproom/TiltToggle.ts`,
+ * `art-samples/mr2-markers/icon`): a grass slab with hex tiles, a tree and a
+ * flag, seen at an angle (`maptilt`) while the map is tilted and from above
+ * (`mapflat`) while it is flat.
+ *
+ * "Support the game" (`ui/support/SupportPanel.ts`, `art-samples/support-heart`):
+ * a red heart held in green monster hands (`support`), so it is not read as
+ * Health's plain heart; `support2` is the heart with a gold coin, the other option.
+ *
+ * The Yard Planner's buttons (`art-samples/planner-icons`, owner 4 Nov: "I
+ * don't like simple icons. This is a game after all"): blue curved arrows for
+ * undo and redo, a green monster hand tapping for select (`select2` is a gold
+ * mouse pointer), a hazard-striped frame with a pointer for box select
+ * (`box2` is gold corner brackets round stone blocks), a gold magnifier for
+ * find, a stone wall with the level up arrow for upgrade walls, and a set bear
+ * trap inside a yellow reload arrow for re-arm traps (`rearm2` is a spiked
+ * mine in the same arrow).
+ *
+ * The profile window's stats (`ui/profile/ProfileDialog.ts`,
+ * `art-samples/profile-icons`, painted 7 Nov in place of line icons): the
+ * domed Town Hall with its horn antenna (`townhall`), a gold crown for empire
+web/src/ui/styles/attack.css:681:  .attack-strip .attack-strip__loot .res-amount > .res-icon {
+web/src/ui/styles/attack.css:744:  .attack-strip .attack-strip__loot .res-amount > .res-icon {
+web/src/ui/styles/attack.css:786:  .attack-strip .attack-strip__loot .res-amount > .res-icon {
+web/src/ui/styles/attack.css:1648:.attack-catapult__resource .res-icon {
+web/src/ui/styles/attack-window.css:174:.attack-window__art > .res-icon {
+web/src/ui/styles/attack-window.css:374:  .attack-window__art > .res-icon {
+web/src/ui/styles/monsters.css:462:.monster-stats .res-amount > .res-icon {
+web/src/ui/styles/shop.css:238:.shop-card__name--pack .res-icon {
+web/src/ui/styles/yard-hud.css:74:.hud--corner .hud__resource-button .res-icon {
+web/src/ui/styles/yard-hud.css:101:.hud--corner .hud__resource-button .res-icon {
+web/src/ui/styles/yard-hud.css:116:.hud--corner .hud__resource--shiny .res-icon {
+web/src/ui/styles/yard-hud.css:1002:  .hud--corner .hud__resource:not(.hud__resource--shiny, .hud__resource--coins) .res-icon {
+web/src/ui/styles/yard-hud.css:1028:  .hud--corner .hud__resource--shiny .res-icon {
+web/src/ui/styles/yard-hud.css:1372:  .hud--corner .hud__resource--shiny .res-icon {
+web/src/ui/styles/ui.css:521:.res-icon {
+rg: web/src/ui/ui.css: No such file or directory (os error 2)
+web/src/ui/styles/ui.css:363: * - `.tab-scroll`: the scroll box under a tab row that lives inside the body
+web/src/ui/styles/ui.css:390:.tab-scroll {
+web/src/ui/styles/ui.css:2328:/* The scroll box is the shared `.tab-scroll` (above); only its padding here. */
+web/src/ui/styles/hatch.css:33:   the row of tabs over a scroll box (ui.css `.tab-scroll`), and only the
+
+hook: PostToolUse
+hook: PostToolUse Completed
+hook: PreToolUse
+hook: PreToolUse Completed
+exec
+/bin/bash -lc "sed -n '1160,1185p' web/src/ui/styles/hatch.css; sed -n '1300,1315p' web/src/ui/styles/hatch.css; sed -n '1445,1485p' web/src/ui/styles/hatch.css; sed -n '1520,1628p' web/src/ui/styles/hatch.css; cat web/src/ui/resourceIcon.ts | head -100; sed -n '390,405p' web/src/ui/styles/ui.css; rg -n 'trash|bin|remove|recycle' web/src/ui/gameIcon.ts" in /home/yujiesim/Coding/backyard-monsters-refitted/worktrees/screens-r2
+ exited 1 in 0ms:
+.hatch__split {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--space-3);
+}
+
+.hatch-pick {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.hatch__grid {
+  display: grid;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  gap: var(--space-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+/* Each card fills its cell, so a row's cards are one height when a name
+   takes two lines on a phone. */
+.hatch__grid > li {
+  display: flex;
+  min-width: 0;
+   every screen (owner, 15 Nov 2026; a phone's since 6 Nov). */
+.hatch-info {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  min-width: 0;
+  padding: var(--space-3) var(--space-4);
+  border: 1px solid var(--colour-border);
+  border-radius: var(--radius-lg);
+  background: var(--colour-surface-sunken);
+}
+
+.hatch-info__head {
+  display: flex;
+  align-items: center;
+.hatch-add {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  margin-top: auto;
+  padding-top: var(--space-2);
+  border-top: 1px solid var(--colour-border-subtle);
+}
+
+/* "Adding to Hatchery 2 (Level 3)" (#268, C). */
+.hatch-add__to {
+  margin: 0;
+  font-size: var(--text-sm);
+  color: var(--colour-text-secondary);
+}
+
+.hatch-add__to strong {
+  color: var(--colour-text-strong);
+}
+
+.hatch-add__controls .qty-stepper__step,
+.hatch-add__count,
+.hatch-add__fill {
+  min-height: var(--control-height);
+}
+
+.hatch-add__count {
+  font-size: var(--text-lg);
+}
+
+/* "Max (81)" on one line; the box gives way first. */
+.hatch-add__fill {
+  white-space: nowrap;
+}
+
+.hatch-add__fill[aria-pressed="true"]:not(:disabled) {
+  border-color: var(--colour-accent-line);
+  background: var(--colour-accent-soft);
+  color: var(--colour-text-strong);
+}
+
+
+@container hatch (width >= 880px) {
+  /* The panel stands beside the message and the grid, so Add is in view
+     without scrolling under the tab strip and header. */
+  .hatch__split {
+    grid-template-columns: minmax(0, 1fr) 340px;
+    grid-template-rows: auto 1fr;
+    gap: var(--space-3) var(--space-5);
+  }
+
+  .hatch-info {
+    grid-column: 2;
+    grid-row: 1 / span 2;
+  }
+}
+
+/* The whole tab in the window with no scroll bar, down to 1366x768 (owner,
+   15 Nov 2026): side by side, the spacing is a little tighter. Each part is
+   as tall idle as busy (the cards, the queue row, the housing row), so the
+   grid and Add never move as monsters are chosen and added. */
+@container hatch (width >= 880px) {
+  .hatch__scroll {
+    gap: var(--space-2);
+    padding-top: var(--space-1);
+    padding-bottom: 6px;
+  }
+
+  .hatch__tabs-row:not([hidden]) + .hatch__scroll {
+    padding-top: var(--space-2);
+  }
+
+  .hatch-line--tabbed {
+    gap: 6px;
+    padding: 6px var(--space-2);
+  }
+
+  .hatch__split {
+    row-gap: 6px;
+  }
+
+  .hatch-info {
+    gap: 6px;
+    padding-block: var(--space-2);
+  }
+
+  .hatch-info__blurb {
+    -webkit-line-clamp: 2;
+    line-clamp: 2;
+  }
+
+  /* patch 7.6.1 (astra): the long names fit nine across without taller tiles. */
+  .hatch-monster__name--mid {
+    font-size: 10px;
+    letter-spacing: -0.6px;
+  }
+
+  /* patch 7.6.1 (astra): the box gives way to Max, including the painted
+     skin's 4ch minimum. The row still fills the same width as Add. */
+  .hatch-add__count,
+  :root[data-skin] .panel .hatch .hatch-add__count {
+    flex: 1 1 0;
+    /* Never narrower than three digits (the most is 400): "145" was cut at 1920x1080. */
+    min-width: calc(3ch + 6px);
+    width: 0;
+    padding-inline: 2px;
+  }
+
+  /* A finger's 44px steps and "Max (145)" ran 20px past the panel's edge
+     on an iPad on its side (patch 7.6.1): a little less room between them. */
+  @media (pointer: coarse) {
+    .hatch-add__controls {
+      gap: 1px;
+    }
+
+    /* patch 7.6.1 (astra): pinch the painted ends too, leaving the count
+       three digits of room while every step keeps its 44px target. */
+    :root[data-skin] .panel .hatch .hatch-add__controls .btn--outline {
+      --skin-button2-cap: 10px;
+    }
+
+    .hatch-add__controls .qty-stepper__step {
+      padding-inline: var(--space-1);
+    }
+
+    .hatch-add__fill {
+      padding-inline: var(--space-2);
+      font-size: var(--text-xs);
+    }
+  }
+
+  /* With a mouse, "Max (145)" ran 9px past Add's right edge (patch 7.6.1):
+     a little less room between the steps and inside Max. */
+  @media (pointer: fine) {
+    .hatch-add__controls {
+      gap: 4px;
+    }
+
+    .hatch-add__fill {
+      padding-inline: var(--space-2);
+    }
+  }
+
+  /* A mouse needs no 36px Clear all. */
+  @media (pointer: fine) {
+    .hatch-line__head {
+      min-height: 28px;
+    }
+
+    .btn.hatch-clear,
+import { writeAmount, type AmountChange } from "./amountChange";
+import { formatAmount } from "./format";
+import { artUrl } from "../artUrl";
+
+/**
+ * The resource icons every amount on screen is drawn with (issue #93).
+ *
+ * The owner asked for the resource's picture where a number of it is shown,
+ * rather than the word, so the HUD, the attack panels, the map's cell panel
+ * and the planner all spell "12,500 twigs" the same way: a small pile of twigs
+ * and the number. One helper, so a change of art or size lands everywhere.
+ *
+ * ## The art
+ *
+ * The four resources are piles drawn for the game (`/assets/popups/resource*.png`,
+ * 128 x 128 with a transparent ground): sticks, grey stones, purple putty,
+ * green goo. The old popup art was a sack spilling its contents and had to be
+ * cropped to the pile on the right; these are all pile, so the whole width
+ * shows. Only the empty rows above and below are trimmed, by one band shared
+ * by every pile so all four are drawn at the same scale. The trim is done with
+ * `background-size`/`background-position` on the one served image, so there is
+ * no second copy of the art to keep in step.
+ *
+ * Shiny is the coin stack from `/assets/alliances/shiny-icon.png`, used whole:
+ * it is already square and small, and it reads as money at any size, where
+ * `missionicon/icon_shiny.png` is a flat heap in a 256-colour palette that
+ * turns to a yellow smudge under 20 px.
+ *
+ * ## The word is still there
+ *
+ * Every icon is `role="img"` with the resource's name as its `aria-label` and
+ * `title`, so a screen reader says "Twigs 12,500" and a mouse can hover the
+ * picture to learn what it is. Plain-text surfaces — native tooltips, notices,
+ * the attack report the server stores — cannot hold a picture and keep the
+ * words.
+ */
+
+export type ResourceKey = "r1" | "r2" | "r3" | "r4" | "shiny";
+
+/** The four harvested resources in the order the game has always shown them. */
+export const RESOURCE_KEYS = ["r1", "r2", "r3", "r4"] as const;
+
+/**
+ * Which four resources the screen is showing: the surface's, or the Inferno's
+ * while the player is on their Inferno yard (Inferno WP 1.19). The Inferno's
+ * are Bone, Coal, Sulfur and Magma in the same four slots, as Flash swaps
+ * `GLOBAL._resourceNames` for the loaded yard; Shiny is the same in both.
+ *
+ * The yard scene sets it when it opens a yard and puts it back when it leaves
+ * ({@link setResourceRealm}), so every panel drawn meanwhile names and draws
+ * the Inferno's without being told. A node already on screen keeps what it was
+ * drawn with; {@link restyleIcon} brings a long-lived one (the HUD) up to date.
+ */
+export type ResourceRealm = "surface" | "inferno";
+
+let realm: ResourceRealm = "surface";
+
+/** The resources the screen shows now. */
+export const resourceRealm = (): ResourceRealm => realm;
+
+/** Shows the Inferno's resources from now on, or the surface's again. */
+export const setResourceRealm = (next: ResourceRealm): void => {
+  realm = next;
+};
+
+const SURFACE_NAMES: Readonly<Record<ResourceKey, string>> = {
+  r1: "Twigs",
+  r2: "Pebbles",
+  r3: "Putty",
+  r4: "Goo",
+  shiny: "Shiny",
+};
+
+/** The Inferno's four (`#r_bone#`.. in Flash's keys), Shiny unchanged. */
+export const INFERNO_RESOURCE_NAMES: Readonly<Record<ResourceKey, string>> = {
+  r1: "Bone",
+  r2: "Coal",
+  r3: "Sulfur",
+  r4: "Magma",
+  shiny: "Shiny",
+};
+
+/** A resource's name in `inRealm`, the screen's own by default. */
+export const resourceName = (key: ResourceKey, inRealm: ResourceRealm = realm): string =>
+  (inRealm === "inferno" ? INFERNO_RESOURCE_NAMES : SURFACE_NAMES)[key];
+
+/**
+ * Each resource's name in the screen's realm: "Twigs" on the surface, "Bone"
+ * in the Inferno. Read when used, so it follows {@link setResourceRealm}.
+ */
+export const RESOURCE_NAMES: Readonly<Record<ResourceKey, string>> = Object.defineProperties(
+  {},
+  Object.fromEntries(
+    (Object.keys(SURFACE_NAMES) as ResourceKey[]).map((key) => [
+      key,
+      { enumerable: true, get: () => resourceName(key) },
+    ]),
+  ),
+) as Readonly<Record<ResourceKey, string>>;
+
+.tab-scroll {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+/*
+ * `.tab-row`: every row of tabs fills its window's width, its tabs sharing it
+ * equally (owner, 6 Nov 2026). A tab never gets narrower than its words: when
+ * the row has more tabs than fit (many hatcheries, chat rooms, a phone) it
+ * scrolls sideways rather than cut or wrap a label. Only width here; each
+ * look keeps its own tab plates (skin.css). The attribute in the selectors
+ * lifts them over the windows' own rules, which load after this file.
+ */
+
+hook: PostToolUse
+hook: PostToolUse Completed
+hook: PreToolUse
+hook: PreToolUse Completed
+exec
+/bin/bash -lc "rg -n 'export function resourceIcon|export const resourceIcon' web/src/ui/resourceIcon.ts; rg -n 'trash|delete|recycle|bin|empty' web/src/ui/gameIcon.ts; sed -n '335,365p' web/src/ui/monsters/HatchTab.ts; ls -a | head" in /home/yujiesim/Coding/backyard-monsters-refitted/worktrees/screens-r2
+ succeeded in 0ms:
+196:export const resourceIcon = (key: ResourceKey, options: ResourceIconOptions = {}): HTMLElement => {
+      (event) => {
+        if (event.target === this.scroll) scrolledByHand();
+      },
+      { passive: true },
+    );
+
+    this.lines = document.createElement("section");
+    this.lines.className = "hatch-lines";
+    this.lines.setAttribute("aria-label", "Hatching line");
+
+    this.boosts = document.createElement("div");
+    this.boosts.className = "hatch-boosts";
+    this.boosts.id = "hatch-boosts";
+    this.boosts.hidden = true;
+
+    this.message = document.createElement("div");
+    this.message.className = "hatch-message";
+
+    const split = document.createElement("div");
+    split.className = "hatch__split";
+
+    // No "Monsters" heading, hint or locked-monsters note (owner, 15 Nov
+    // 2026): a locked monster wears a padlock and a tap on it opens the
+    // Monster Locker on it.
+    const pick = document.createElement("section");
+    pick.className = "hatch-pick";
+    pick.setAttribute("aria-label", "Monsters");
+    this.grid = document.createElement("ul");
+    this.grid.className = "hatch__grid";
+    this.grid.setAttribute("aria-label", "Monsters to hatch");
+    pick.append(this.grid);
+.
+..
+.agents
+.aws
+.capture
+.codex
+.git
+.gitattributes
+.github
+.gitignore
+
+hook: PostToolUse
+hook: PostToolUse Completed
+hook: PreToolUse
+hook: PreToolUse Completed
+apply patch
+patch: completed
+/home/yujiesim/Coding/backyard-monsters-refitted/worktrees/screens-r2/web/src/proto/b9HccR2.ts
+diff --git a/web/src/proto/b9HccR2.ts b/web/src/proto/b9HccR2.ts
+index 1a642740354c1224b431d8d16a10a6c6ef0b674b..bb82e436071d0ea9cfc1760954942634891583ce
+--- a/web/src/proto/b9HccR2.ts
++++ b/web/src/proto/b9HccR2.ts
+@@ -22,6 +22,7 @@
+ import { classicLook } from "@/game/classicLook";
+ import { gameIcon, type GameIconName } from "@/ui/gameIcon";
+ import { lockArt } from "@/ui/lockArt";
++import { resourceIcon } from "@/ui/resourceIcon";
+ import { monsterPicture } from "@/ui/monsters/LockerTab";
+ import { ownYardsOf } from "@/game/yard/ownYards";
+ import { outpostLabels } from "@/game/yard/outpostLabels";
+@@ -373,7 +374,7 @@
+       space += count * 8;
+     }
+     const cost = el("span", "b9r2h-mixcard__cost");
+-    const gooIcon = el("span", "res-icon res-icon--r4");
++    const gooIcon = resourceIcon("r4");
+     cost.append(gooIcon, el("span", "", short(goo)), art("housing", 24, "b9r2h-housing__icon"), el("span", "", short(space)));
+     const close = btn("b9r2h-mixcard__close", "Close", "✕");
+     close.addEventListener("click", () => {
+@@ -385,7 +386,7 @@
+     const actions = el("div", "b9r2h-mixcard__actions");
+     const load = btn("btn btn--primary b9r2h-mixcard__load", "Load this mix into the queue", "Load");
+     const replace = btn("btn btn--secondary b9r2h-mixcard__tool", "Save the queue over this mix", art("lastarmy", 24), "Save over");
+-    const bin = btn("btn btn--ghost b9r2h-mixcard__tool b9r2h-mixcard__bin", "Empty this mix", "✕");
++    const bin = btn("btn btn--ghost b9r2h-mixcard__tool b9r2h-mixcard__bin", "Empty this mix", "Empty");
+     actions.append(load, replace, bin);
+     this.mixCard.replaceChildren(head, stacks, actions);
+     // Under the tokens, wherever the option put them.
+
+hook: PostToolUse
+hook: PostToolUse Completed
+hook: PreToolUse
+hook: PreToolUse Completed
+exec
+/bin/bash -lc "cat >> web/src/proto/b9-hcc-r2.css <<'EOF'
+
+/* Review 1: preserve the scroll extent instead of shrinking production and
+   selection into the clipped viewport. Window chrome stays outside this box. */
+.b9r2h .hatch__scroll > * {
+  flex-shrink: 0;
+}
+.b9r2h .hatch__scroll {
+  min-height: 0;
+  overflow-y: auto;
+  padding-bottom: 12px;
+}
+.b9r2h-bench > .hatch-lines {
+  max-width: 100%;
+  min-width: 0;
+}
+.b9r2h .hatch-line--hcc > .hatch-line__now {
+  grid-template-columns: repeat(5, minmax(44px, 1fr));
+}
+.b9r2h .hatch-line--hcc > .hatch-line__slots {
+  grid-template-columns: repeat(5, minmax(44px, 1fr)) 64px;
+  max-width: 100%;
+  box-sizing: border-box;
+}
+.b9r2h .b9r2h-stepper__arrow,
+.b9r2h .b9r2h-yard,
+.b9r2h .b9r2h-mix {
+  min-width: 44px;
+  flex-shrink: 0;
+}
+:root[data-skin] .panel .hatch.b9r2h .hatch-add__controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+:root[data-skin] .panel .hatch.b9r2h .hatch-add__controls > * {
+  flex: 1 0 44px;
+  min-width: 44px;
+  min-height: 44px;
+  width: auto;
+  box-sizing: border-box;
+  padding-inline: 2px;
+}
+:root[data-skin] .panel .hatch.b9r2h .hatch-add__controls > .hatch-add__fill {
+  flex: 1 0 86px;
+  min-width: 86px;
+  font-size: 12px;
+}
+.b9r2h .b9r2h-seal__part--stalled .b9r2h-seal__number {
+  color: #ffdb72;
+}
+:root[data-skin=\"flash\"] .b9r2h .b9r2h-seal__part--stalled .b9r2h-seal__number {
+  color: #854800;
+}
+.b9r2h .b9r2h-mixcard__bin {
+  font-size: 12px;
+}
+.b9r2h .b9r2h-mixcard__cost .res-icon {
+  flex-shrink: 0;
+}
+@media (min-width: 620.02px) {
+  .b9r2h .hatch-line--hcc > .hatch-line__now {
+    width: 304px;
+  }
+  .b9r2h .hatch-line--hcc > .hatch-line__slots {
+    width: 364px;
+  }
+}
+/* Narrow tablets need the same bottom action bar as upright phones. */
+@container hatch (width < 880px) {
+  @media (min-height: 500.02px) {
+    .b9r2h .hatch__split {
+      display: contents;
+    }
+    .b9r2h .hatch-info {
+      position: sticky;
+      bottom: -12px;
+      z-index: 1;
+      background: var(--colour-surface-base);
+      min-height: 0 "'!important;
+    }
+    .b9r2h .hatch-info__stats,
+    .b9r2h .hatch-info__blurb {
+      display: none;
+    }
+  }
+}
+/* On a short landscape screen the action card must scroll in full, rather
+   than sticking a tall card across the entire remaining viewport. */
+@media (max-height: 500px) {
+  .b9r2h .hatch-info {
+    position: relative;
+    bottom: auto;
+    min-height: 0 !important;
+  }
+}
+@media (max-width: 620px) {
+  .b9r2h-remote .b9r2h-strip {
+    flex-wrap: wrap;
+  }
+  .b9r2h-remote .b9r2h-housing {
+    flex: 1 0 100%;
+  }
+  .b9r2h-remote .b9r2h-housing:not(.b9r2h-housing--over) .b9r2h-housing__coming {
+    display: inline;
+  }
+}
+EOF
+cd web && NODE_OPTIONS=--no-webstorage npx tsc --noEmit -p .' in /home/yujiesim/Coding/backyard-monsters-refitted/worktrees/screens-r2
+ succeeded in 10051ms:
+npm notice run bymr-web@0.1.0 npx
+npm notice run 'tsc' --noEmit -p .
+
+codex
+The fixes are in place. Production now wraps within the tab width, quantity controls have a 44 px minimum, Max has room for its label, and the outpost strip retains its queue delta. I also replaced the non-rendering goo span with the resource-icon helper and changed the mix deletion control to “Empty” so it cannot be mistaken for Close.
+
+The TypeScript check is running. I haven’t used a browser or changed the screenshots, so visual confirmation will need the next capture round.
+hook: PostToolUse
+hook: PostToolUse Completed
+hook: PreToolUse
+hook: PreToolUse Completed
+exec
+/bin/bash -lc "sed -n '165,205p' web/src/ui/resourceIcon.ts; rg -n 'hatch__split|hatch-pick|hatch-info' web/src/proto/b9-hcc-r2.css | tail -18" in /home/yujiesim/Coding/backyard-monsters-refitted/worktrees/screens-r2
+ succeeded in 0ms:
+  inRealm: ResourceRealm = realm,
+): { backgroundImage: string; backgroundSize: string; backgroundPosition: string; aspectRatio: string } => {
+  const { url, width, height, crop } = (inRealm === "inferno" ? INFERNO_ART : ART)[key];
+  const [x, y, w, h] = crop;
+  const along = (offset: number, image: number, part: number): string =>
+    image === part ? "0%" : percent((offset / (image - part)) * 100);
+  return {
+    backgroundImage: `url("${url}")`,
+    backgroundSize: `${percent((width / w) * 100)} ${percent((height / h) * 100)}`,
+    backgroundPosition: `${along(x, width, w)} ${along(y, height, h)}`,
+    aspectRatio: `${w} / ${h}`,
+  };
+};
+
+/**
+ * One resource's icon. Sized by the stylesheet to the surrounding text, so it
+ * sits in a HUD readout and in a sentence alike.
+ *
+ * `decorative` drops the name from the accessibility tree and the tooltip, for
+ * a control that already carries the name in its own label. `tooltip: false`
+ * keeps the name for a screen reader but leaves hover to an ancestor whose own
+ * `title` says more, which the icon's would otherwise hide. `realm` draws it
+ * as that realm's whatever the screen's is: an Inferno fight's loot on the
+ * attack screen, which shows the surface's (Inferno WP 1.13).
+ */
+export interface ResourceIconOptions {
+  readonly decorative?: boolean;
+  readonly tooltip?: boolean;
+  readonly realm?: ResourceRealm;
+}
+
+export const resourceIcon = (key: ResourceKey, options: ResourceIconOptions = {}): HTMLElement => {
+  const icon = document.createElement("span");
+  icon.className = `res-icon res-icon--${key}`;
+  if (options.decorative) icon.setAttribute("aria-hidden", "true");
+  else icon.setAttribute("role", "img");
+  if (options.tooltip === false) icon.dataset["notip"] = "";
+  restyleIcon(icon, key, options.realm);
+  return icon;
+};
+
+609:.b9r2h-opt-e.b9r2h-inspect .hatch__split {
+748:  .b9r2h .hatch-info {
+753:  .b9r2h .hatch-info__blurb,
+754:  .b9r2h .hatch-info__level,
+755:  .b9r2h .hatch-info__details,
+756:  .b9r2h .hatch-info__stats {
+759:  .b9r2h .hatch-info__portrait,
+760:  .b9r2h .hatch-info__picture {
+764:  .b9r2h .hatch-info {
+785:  .b9r2h .hatch-info {
+792:  .b9r2h .hatch-info__head {
+796:  .b9r2h .hatch-info__each {
+1032:    .b9r2h .hatch__split {
+1035:    .b9r2h .hatch-info {
+1042:    .b9r2h .hatch-info__stats,
+1043:    .b9r2h .hatch-info__blurb {
+1051:  .b9r2h .hatch-info {
+
+hook: PostToolUse
+hook: PostToolUse Completed
+codex
+Recommend **E**. It gives monsters priority and keeps the busiest phone screen clearer.
+
+Changed only the two permitted files. TypeScript check passed. No git, browser, server, or screenshot changes.
+
+FIXED:
+- Clipped content → `b9-hcc-r2.css`: prevented scroll-content shrinking; added sticky actions for narrow tablets and full scrolling on short screens.
+- Overflowing production band → CSS: constrained widths and allowed wrapping.
+- Small quantity targets / overflowing Max → CSS: enforced 44 px minimums and reserved label width.
+- Weak blocked-state contrast → CSS: separate Modern and Classic warning colors.
+- Missing outpost queue delta → CSS: retained the delta and wrapped the strip.
+- Missing goo icon / ambiguous × → `b9HccR2.ts`: used the resource-icon helper; deletion now reads “Empty.”
+
+NOT FIXED:
+- Visual verification: requires another capture; browser use was prohibited.
+- Full-queue Load behavior: needs the owner’s decision on replacement semantics.
+- Queue-page whitespace: retained intentionally.
+- Search accessibility: already correctly labeled.
+hook: Stop
+hook: Stop Completed
+tokens used
+89,104

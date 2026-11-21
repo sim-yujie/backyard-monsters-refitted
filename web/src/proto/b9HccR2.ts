@@ -22,6 +22,7 @@ import { monsterEntry } from "@/game/monsters/monsterCatalogue";
 import { classicLook } from "@/game/classicLook";
 import { gameIcon, type GameIconName } from "@/ui/gameIcon";
 import { lockArt } from "@/ui/lockArt";
+import { resourceIcon } from "@/ui/resourceIcon";
 import { monsterPicture } from "@/ui/monsters/LockerTab";
 import { ownYardsOf } from "@/game/yard/ownYards";
 import { outpostLabels } from "@/game/yard/outpostLabels";
@@ -373,7 +374,7 @@ export class B9HccR2 {
       space += count * 8;
     }
     const cost = el("span", "b9r2h-mixcard__cost");
-    const gooIcon = el("span", "res-icon res-icon--r4");
+    const gooIcon = resourceIcon("r4");
     cost.append(gooIcon, el("span", "", short(goo)), art("housing", 24, "b9r2h-housing__icon"), el("span", "", short(space)));
     const close = btn("b9r2h-mixcard__close", "Close", "✕");
     close.addEventListener("click", () => {
@@ -385,7 +386,7 @@ export class B9HccR2 {
     const actions = el("div", "b9r2h-mixcard__actions");
     const load = btn("btn btn--primary b9r2h-mixcard__load", "Load this mix into the queue", "Load");
     const replace = btn("btn btn--secondary b9r2h-mixcard__tool", "Save the queue over this mix", art("lastarmy", 24), "Save over");
-    const bin = btn("btn btn--ghost b9r2h-mixcard__tool b9r2h-mixcard__bin", "Empty this mix", "✕");
+    const bin = btn("btn btn--ghost b9r2h-mixcard__tool b9r2h-mixcard__bin", "Empty this mix", "Empty");
     actions.append(load, replace, bin);
     this.mixCard.replaceChildren(head, stacks, actions);
     // Under the tokens, wherever the option put them.

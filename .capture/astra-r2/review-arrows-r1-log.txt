@@ -1,0 +1,731 @@
+Reading prompt from stdin...
+OpenAI Codex v0.169.0
+--------
+workdir: /home/yujiesim/Coding/backyard-monsters-refitted/worktrees/screens-r2
+model: gpt-6-astra
+provider: openai
+approval: never
+sandbox: workspace-write [workdir, /tmp, $TMPDIR]
+reasoning effort: none
+reasoning summaries: none
+session id: 01a1fee9-5986-7b52-ba4d-e1ed868884a6
+--------
+user
+You are "astra", a blunt senior UI/UX reviewer AND UI engineer for a mobile+desktop browser game (Backyard Monsters Revamped; TypeScript, plain DOM, CSS). You are in a git worktree holding a DESIGN PROTOTYPE (fake data behind URL parameters, never merged). The attached pictures are REAL in-game screenshots of it, full uncropped screens (phones at 3x).
+
+In round 1 of this design the owner rejected every layout. For this round you and another designer (Fable) each wrote directions; the options below are the ones that were built. The owner will pick ONE option per screen from pictures.
+Owner's taste (binding): icons + numbers over words, very short text; painted icons; NO long yard name in the HUD; the phone must not feel cluttered; touch targets >= 44 px; nothing important cut; a window's title, tabs and close stay visible; Modern = steel/gold, Classic = Flash refreshed (parchment, wood, red ribbons), one layout for both.
+
+DO TWO THINGS
+1. REVIEW (write it first, under 600 words): per option, issues ranked HIGH / MEDIUM / LOW, each with the picture number and a concrete fix. Only real defects in what is shown: overlap, cut or cramped text, unclear state, targets under 44 px, low contrast, inconsistency between looks/sizes, something a first-time player would misread, clutter. Then: which option you recommend now (2 lines), and any question the pictures raise for the owner.
+2. FIX every HIGH and MEDIUM issue yourself, in this worktree, editing ONLY the files named below (CSS-level or a few lines of TypeScript; no redesign, no new options, keep the URL parameters working). Do NOT run git, do NOT touch shots/ or .capture/, do NOT start a browser or server. When done run `cd web && NODE_OPTIONS=--no-webstorage npx tsc --noEmit -p .` and make it pass. End your answer with a list "FIXED:" (issue -> file and what changed) and "NOT FIXED:" (why).
+If you find no HIGH or MEDIUM issue, say "NO HIGH OR MEDIUM ISSUES" and change nothing.
+
+SCREEN: OUTPOST ARROWS on the player's own yard (step through your own yards: Main, pinned outposts, the rest). The live game today (picture 1) has a flag disc with a count badge and the yard's NAME on a plaque under it; the owner called that name "very distracting and lengthy... very cluttered" and asked for better mobile UI/UX. All options drop the name from the HUD: a painted house (Main) or flag (an outpost) and the place in the order ("2/12") say where you are; names stay in the yard list.
+ D (Fable) = three discs, no words: Prev / where-disc with "2/12" plaque / Next above Map and Friends. The middle opens the yard list.
+ E (Fable) = one capsule: "< flag 2/12 >"; the middle opens the list.
+ F (astra's Y) = a small tile "flag 2/12" at rest; a tap swaps the dock for a travel bar (full name, close, big Prev / All yards / Next) that stays open from yard to yard.
+Ends grey out (no wrap). Shots are on the outpost "main outpost" (2/12) of the test account, except where "Main" is said.
+Files you may edit: web/src/proto/b9ArrowsR2.ts, web/src/proto/b9-arrows-r2.css.
+This is review round 1 of at most 3.
+Pictures:
+ 1: LIVE TODAY, Main yard, Modern 390x844 (name plaque under the flag)
+ 2: D, outpost, Modern 390x844
+ 3: E, outpost, Modern 390x844
+ 4: F at rest, outpost, Modern 390x844
+ 5: F travel bar open, outpost, Modern 390x844
+ 6: D, outpost, Classic 390x844
+ 7: E, outpost, Classic 390x844
+ 8: F travel bar open, Classic 390x844
+ 9: D on the MAIN yard, Modern 390x844
+ 10: E on the MAIN yard, Modern 390x844
+ 11: D, Modern 844x390
+ 12: E, Classic 844x390
+ 13: F travel bar open, Modern 844x390
+ 14: D, Classic iPad 768x1024
+ 15: E, Modern iPad 1024x768
+ 16: F travel bar open, Classic iPad 1024x768
+ 17: D, Modern 1280x720
+ 18: E, Classic 1366x768
+ 19: F travel bar open, Modern 1920x1080
+ 20: F at rest, Modern 1280x720
+
+hook: SessionStart
+hook: SessionStart Completed
+hook: UserPromptSubmit
+hook: UserPromptSubmit Completed
+codex
+D — **LOW** (2, 6, 9, 11, 14, 17): the three separate discs give yard navigation almost as much visual weight as the main game actions. They also read as three independent actions. E’s shared outline groups them more clearly; no change to D’s defining layout this round.
+
+E — No visible high or medium defect in the capsule (3, 7, 10, 12, 15, 18). Its counter stays readable, the ends are clearly separated, and the disabled previous arrow on Main communicates the boundary.
+
+F — **MEDIUM** (5, 8, 13, 16, 19): the center flag repeats the current-yard icon, while a tiny menu badge carries the only indication that it opens the yard list. A first-time player could mistake this for “go to this outpost.” Replace that center icon with a clear painted list/group cue if one already exists, or make the menu symbol prominent within the existing full-size button.
+**MEDIUM** (4, 20): the resting tile has no visible expansion cue. It looks like a status counter rather than the way to reveal travel controls. Add a small chevron inside the existing tile.
+**LOW** (5, 8, 13): the expanded bar spends considerable space repeating the current yard’s name. This is outside the persistent HUD, but still heavier than D or E.
+
+Across options — **MEDIUM** (14–20): several navigation controls appear smaller than the required 44 px touch target at tablet/desktop scale. Visible artwork alone cannot establish the hit area; I’ll inspect the actual button dimensions and correct any undersized targets in these prototype files.
+
+I recommend **E**: it exposes both directions and the yard list in one compact, readable group.
+It works consistently in both looks without requiring F’s extra opening tap.
+
+Question for the owner: does “no long yard name” also apply to F’s expanded travel bar, or only its resting HUD? I’ll preserve the specified expanded name for now.
+
+I’ll check the prototype styles and handlers, fix the medium issues above, and run the requested TypeScript check without starting a browser or server.
+hook: PreToolUse
+hook: PreToolUse Completed
+exec
+/bin/bash -lc "pwd && rg --files -g AGENTS.md -g '"'!node_modules'"' -g '"'!shots'"' -g '"'!.capture'"' /home/yujiesim/Coding/backyard-monsters-refitted 2>/dev/null | head -60" in /home/yujiesim/Coding/backyard-monsters-refitted/worktrees/screens-r2
+ succeeded in 0ms:
+/home/yujiesim/Coding/backyard-monsters-refitted/worktrees/screens-r2
+
+hook: PostToolUse
+hook: PostToolUse Completed
+hook: PreToolUse
+hook: PreToolUse Completed
+exec
+/bin/bash -lc 'cat web/src/proto/b9ArrowsR2.ts web/src/proto/b9-arrows-r2.css' in /home/yujiesim/Coding/backyard-monsters-refitted/worktrees/screens-r2
+ succeeded in 0ms:
+/**
+ * DESIGN PROTOTYPE ONLY (b9 round 2, never merged): outpost arrows without a
+ * yard name in the HUD (owner, 21 Nov 2026: the name plaque is "distracting
+ * and lengthy"). `b9arrows=d|e|f`.
+ *
+ * - D: three discs, no words: Prev / where / Next above Map and Friends. The
+ *   middle disc is a painted house (Main) or flag (an outpost) over "2/12".
+ * - E: one capsule: `< house 2/12 >`, a single 46 px control.
+ * - F (astra's Y): a small tile `flag 2/12` at rest; a tap swaps the dock for
+ *   a travel bar with big Prev / All yards / Next and the yard's full name.
+ */
+import type { OwnYardEntry } from "@/game/yard/ownYards";
+import { classicLook } from "@/game/classicLook";
+import { gameIcon, gameIconUrl, type GameIconName } from "@/ui/gameIcon";
+import "./b9-arrows-r2.css";
+
+export type B9ArrowsR2Option = "d" | "e" | "f";
+
+interface Hooks {
+  readonly step: (direction: -1 | 1) => boolean;
+  readonly openList: () => void;
+}
+
+const el = <K extends keyof HTMLElementTagNameMap>(tag: K, className: string, text?: string): HTMLElementTagNameMap[K] => {
+  const node = document.createElement(tag);
+  node.className = className;
+  if (text !== undefined) node.textContent = text;
+  return node;
+};
+
+const arrowArt = (direction: -1 | 1, px: number): HTMLImageElement => {
+  const name = `friend${direction === 1 ? "next" : "prev"}${classicLook() ? "classic" : ""}` as GameIconName;
+  const image = gameIcon(name, { size: 32, decorative: true, className: "b9r2-art" });
+  const url64 = gameIconUrl(name, 64);
+  image.srcset = [image.srcset, ...[96, 128].map((side) => `${url64.replace(/-64\.webp$/, `-${side}.webp`)} ${side}w`)].join(", ");
+  image.sizes = `${px}px`;
+  return image;
+};
+
+/** F's travel bar stays open from yard to yard (the dock is rebuilt on each). */
+let travelOpen = new URLSearchParams(window.location.search).get("b9state") === "travel";
+
+export class B9ArrowsR2 {
+  private readonly prevs: HTMLButtonElement[] = [];
+  private readonly nexts: HTMLButtonElement[] = [];
+  private readonly wheres: HTMLElement[] = [];
+  private readonly travel: HTMLElement | null = null;
+  private readonly travelName = el("span", "b9r2-travel__name");
+  private going = false;
+
+  constructor(
+    option: B9ArrowsR2Option,
+    root: HTMLElement,
+    private readonly hooks: Hooks,
+  ) {
+    document.documentElement.classList.add("b9-arrows-r2", `b9-arrows-${option}`);
+    if (option === "d") {
+      const row = el("div", "b9r2-discs");
+      row.append(this.arrow(-1, "yard-dock__disc b9r2-disc", 34), this.whereDisc(), this.arrow(1, "yard-dock__disc b9r2-disc", 34));
+      root.prepend(row);
+    } else if (option === "e") {
+      const pill = el("div", "b9r2-pill");
+      pill.append(this.arrow(-1, "b9r2-pill__arrow", 30), this.whereChip("b9r2-pill__where", () => hooks.openList()), this.arrow(1, "b9r2-pill__arrow", 30));
+      root.prepend(pill);
+    } else {
+      const tile = this.whereChip("b9r2-tile", () => this.setTravel(!travelOpen));
+      root.prepend(tile);
+      const bar = el("div", "b9r2-travel");
+      const head = el("div", "b9r2-travel__head");
+      const close = el("button", "b9r2-travel__close", "✕");
+      close.type = "button";
+      close.setAttribute("aria-label", "Close travel");
+      close.addEventListener("click", () => this.setTravel(false));
+      const where = el("span", "b9r2-where b9r2-travel__where");
+      this.wheres.push(where);
+      head.append(where, this.travelName, close);
+      const row = el("div", "b9r2-travel__row");
+      const all = el("button", "b9r2-travel__button");
+      all.type = "button";
+      all.setAttribute("aria-label", "All yards");
+      const disc = el("span", "yard-dock__disc b9r2-travel__disc");
+      disc.append(gameIcon("outpost", { size: 32, decorative: true, className: "b9r2-art" }), el("span", "b9r2-travel__list", "≡"));
+      all.append(disc);
+      all.addEventListener("click", () => hooks.openList());
+      row.append(this.arrow(-1, "yard-dock__disc b9r2-travel__disc", 44, "b9r2-travel__button"), all, this.arrow(1, "yard-dock__disc b9r2-travel__disc", 44, "b9r2-travel__button"));
+      bar.append(head, row);
+      bar.hidden = !travelOpen;
+      this.travel = bar;
+      root.append(bar);
+      document.documentElement.classList.toggle("b9-travel-open", travelOpen);
+    }
+  }
+
+  render(entries: readonly OwnYardEntry[]): void {
+    const at = Math.max(0, entries.findIndex((entry) => entry.current));
+    const current = entries[at];
+    this.going = false;
+    for (const prev of this.prevs) prev.disabled = at <= 0;
+    for (const next of this.nexts) next.disabled = at >= entries.length - 1;
+    const main = !current || current.target.kind !== "outpost";
+    for (const where of this.wheres) {
+      where.replaceChildren(
+        gameIcon(main ? "townhall" : "outpost", { size: 32, decorative: true, className: "b9r2-where__icon" }),
+        el("span", `b9r2-where__count${where.closest(".b9r2-wheredisc") ? " yard-dock__label" : ""}`, `${at + 1}/${Math.max(1, entries.length)}`),
+      );
+    }
+    this.travelName.textContent = current?.title ?? "";
+  }
+
+  private setTravel(open: boolean): void {
+    travelOpen = open;
+    if (this.travel) this.travel.hidden = !open;
+    document.documentElement.classList.toggle("b9-travel-open", open);
+  }
+
+  private arrow(direction: -1 | 1, discClass: string, px: number, buttonClass = "b9r2-arrow"): HTMLButtonElement {
+    const button = el("button", buttonClass);
+    button.type = "button";
+    button.setAttribute("aria-label", direction === 1 ? "Next yard" : "Previous yard");
+    const disc = el("span", discClass);
+    disc.append(arrowArt(direction, px));
+    button.append(disc);
+    button.addEventListener("click", () => {
+      if (this.going || button.disabled) return;
+      this.going = this.hooks.step(direction);
+    });
+    (direction === 1 ? this.nexts : this.prevs).push(button);
+    return button;
+  }
+
+  /** D's middle: a dock disc with the house or flag, the place in the order on its plaque. */
+  private whereDisc(): HTMLButtonElement {
+    const button = el("button", "yard-dock__button b9r2-wheredisc");
+    button.type = "button";
+    button.setAttribute("aria-label", "Your yards");
+    const where = el("span", "b9r2-where");
+    this.wheres.push(where);
+    button.append(where);
+    button.addEventListener("click", () => this.hooks.openList());
+    return button;
+  }
+
+  private whereChip(className: string, onTap: () => void): HTMLButtonElement {
+    const button = el("button", `b9r2-where ${className}`);
+    button.type = "button";
+    button.setAttribute("aria-label", "Your yards");
+    this.wheres.push(button);
+    button.addEventListener("click", onTap);
+    return button;
+  }
+}
+/* DESIGN PROTOTYPE (b9 outpost arrows, round 2), never merged.
+   No yard name in the HUD: the place in the order ("2/12") says where you are. */
+
+/* The live flag disc and its name plaque give way to the option's own control. */
+.b9-arrows-r2 .yard-switcher__button {
+  display: none;
+}
+.b9-arrows-r2 .yard-switcher {
+  flex-direction: column;
+  align-items: flex-start;
+}
+.b9-arrows-r2 .yard-dock__left {
+  align-items: flex-start;
+}
+
+.b9r2-art {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  filter: drop-shadow(0 2px 3px var(--colour-art-shadow));
+}
+
+.b9r2-arrow,
+.b9r2-travel__button,
+.b9r2-pill__arrow {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border: 0;
+  background: none;
+  cursor: pointer;
+  pointer-events: auto;
+  -webkit-tap-highlight-color: transparent;
+}
+.b9r2-arrow:disabled .b9r2-art,
+.b9r2-travel__button:disabled .b9r2-art,
+.b9r2-pill__arrow:disabled .b9r2-art {
+  filter: grayscale(1);
+  opacity: 0.45;
+}
+.b9r2-arrow:disabled,
+.b9r2-travel__button:disabled,
+.b9r2-pill__arrow:disabled {
+  cursor: default;
+}
+
+/* Where you are: the painted house or flag and "2/12". */
+.b9r2-where {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--colour-text);
+  font: inherit;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.b9r2-where__icon {
+  width: 30px;
+  height: 30px;
+  object-fit: contain;
+  filter: drop-shadow(0 2px 3px var(--colour-art-shadow));
+}
+
+/* ── D: three discs, no words ───────────────────────────────────────── */
+.b9r2-discs {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+}
+.b9r2-discs .b9r2-disc {
+  width: 52px;
+  height: 52px;
+  padding: 7px;
+  margin-top: 6px;
+}
+.b9r2-wheredisc .b9r2-where {
+  flex-direction: column;
+  gap: 0;
+}
+.b9r2-wheredisc .b9r2-where__icon {
+  box-sizing: border-box;
+  width: 64px;
+  height: 64px;
+  padding: 11px;
+  border: 3px solid var(--colour-dome-rim);
+  border-radius: 50%;
+  background: radial-gradient(circle at 50% 35%, var(--colour-dome-top), var(--colour-dome-bottom));
+  box-shadow: var(--shadow-dome-drop), var(--shadow-dome-edge);
+  filter: none;
+}
+.b9r2-wheredisc .b9r2-where__count {
+  margin-top: 6px;
+  font-variant-numeric: tabular-nums;
+}
+
+/* ── E: one capsule ─────────────────────────────────────────────────── */
+.b9r2-pill {
+  display: flex;
+  align-items: stretch;
+  height: 50px;
+  box-sizing: border-box;
+  border: 3px solid var(--colour-dome-rim);
+  border-radius: 999px;
+  background: linear-gradient(var(--colour-dome-top), var(--colour-dome-bottom));
+  box-shadow: var(--shadow-dome-drop), var(--shadow-dome-edge);
+  pointer-events: auto;
+}
+.b9r2-pill__arrow {
+  width: 46px;
+  padding: 6px 8px;
+}
+.b9r2-pill__where {
+  min-width: 78px;
+  justify-content: center;
+  padding: 0 6px;
+  border: 0;
+  border-inline: 2px solid color-mix(in srgb, var(--colour-dome-rim) 60%, transparent);
+  background: none;
+  font-size: var(--text-md, 16px);
+  cursor: pointer;
+}
+
+/* ── F: a tile at rest, a travel bar on a tap ───────────────────────── */
+.b9r2-tile {
+  height: 48px;
+  min-width: 92px;
+  justify-content: center;
+  padding: 0 10px;
+  border: 3px solid var(--colour-dome-rim);
+  border-radius: 999px;
+  background: linear-gradient(var(--colour-dome-top), var(--colour-dome-bottom));
+  box-shadow: var(--shadow-dome-drop), var(--shadow-dome-edge);
+  font-size: var(--text-md, 16px);
+  cursor: pointer;
+  pointer-events: auto;
+}
+.b9-travel-open .b9r2-tile {
+  border-color: var(--colour-accent);
+}
+.b9r2-travel {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 5;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 8px 12px calc(10px + env(safe-area-inset-bottom));
+  border-top: 3px solid var(--colour-dome-rim);
+  background: var(--colour-surface-raised);
+  box-shadow: 0 -6px 18px rgb(0 0 0 / 45%);
+  pointer-events: auto;
+}
+.b9r2-travel[hidden] {
+  display: none;
+}
+.b9r2-travel__head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 44px;
+}
+.b9r2-travel__name {
+  flex: 1;
+  min-width: 0;
+  color: var(--colour-text);
+  font-weight: 700;
+  overflow-wrap: anywhere;
+}
+.b9r2-travel__close {
+  flex: none;
+  width: 44px;
+  height: 44px;
+  border: 2px solid var(--colour-border);
+  border-radius: 50%;
+  background: none;
+  color: var(--colour-text);
+  font-size: 18px;
+  cursor: pointer;
+}
+.b9r2-travel__row {
+  display: flex;
+  justify-content: center;
+  gap: 40px;
+}
+.b9r2-travel .b9r2-travel__disc {
+  width: 68px;
+  height: 68px;
+  padding: 10px;
+}
+.b9r2-travel__list {
+  position: absolute;
+  right: -4px;
+  bottom: -4px;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background: var(--colour-accent);
+  color: var(--colour-on-accent, #1b1b1b);
+  font-size: 15px;
+  font-weight: 700;
+  line-height: 24px;
+  text-align: center;
+}
+/* The travel bar stands in for the dock: its buttons rest under it. */
+.b9-travel-open .yard-dock > :not(.yard-dock__left),
+.b9-travel-open .yard-dock__left > :not(.yard-switcher),
+.b9-travel-open .friends-button,
+.b9-travel-open .b9r2-tile {
+  visibility: hidden;
+}
+.b9-travel-open .yard-switcher__list {
+  position: fixed;
+  left: 12px;
+  bottom: calc(150px + env(safe-area-inset-bottom));
+  z-index: 6;
+}
+
+@media (max-width: 620px), (max-height: 500px) {
+  .b9r2-discs .b9r2-disc {
+    width: 48px;
+    height: 48px;
+    padding: 6px;
+  }
+  .b9r2-discs {
+    gap: 4px;
+  }
+  .b9r2-wheredisc .b9r2-where__icon {
+    width: 60px;
+    height: 60px;
+  }
+  .b9r2-pill__arrow {
+    width: 44px;
+  }
+}
+/* A phone on its side: the travel bar is one row. */
+@media (max-height: 500px) {
+  .b9r2-travel {
+    flex-direction: row;
+    align-items: center;
+    padding-block: 6px;
+  }
+  .b9r2-travel__head {
+    flex: 1;
+    order: 0;
+  }
+  .b9r2-travel__row {
+    gap: 24px;
+  }
+  .b9r2-travel .b9r2-travel__disc {
+    width: 56px;
+    height: 56px;
+  }
+}
+
+hook: PostToolUse
+hook: PostToolUse Completed
+hook: PreToolUse
+hook: PreToolUse Completed
+exec
+/bin/bash -lc 'for p in /AGENTS.md /home/AGENTS.md /home/yujiesim/AGENTS.md /home/yujiesim/Coding/AGENTS.md /home/yujiesim/Coding/backyard-monsters-refitted/AGENTS.md /home/yujiesim/Coding/backyard-monsters-refitted/worktrees/AGENTS.md AGENTS.md web/AGENTS.md web/src/AGENTS.md web/src/proto/AGENTS.md; do if [ -f "$p" ]; then cat "$p"; fi; done
+rg -n '"'list|yards|outpost' web/src/ui/gameIcon.ts
+rg -n 'b9r2|yard-dock__button|yard-dock__disc' web/src -g '*.css' | head -65" in /home/yujiesim/Coding/backyard-monsters-refitted/worktrees/screens-r2
+ succeeded in 0ms:
+69: * Pinning a friend to the top of the list (beta 7, `ui/friends/FriendsTab.ts`):
+119: * The leaderboard's outpost count (beta 8 outpost race,
+121: * `art-samples/outpost-icon`): a broad fork-tailed amber flag with a dark red
+122: * underside on a wooden stake with a riveted steel foot (`outpost`), and the
+124: * and no white rim (`outpostclassic`). A flag because the dock's outposts
+207:  outpost: "Outposts",
+208:  outpostclassic: "Outposts",
+web/src/proto/b9-arrows.css:4:.yard-switcher .friend-hop__button:disabled .yard-dock__disc,
+web/src/proto/b9-arrows.css:5:.b9-tray .friend-hop__button:disabled .yard-dock__disc {
+web/src/proto/b9-arrows.css:32:.b9-arrows-a .yard-switcher > .friend-hop__button .yard-dock__disc {
+web/src/proto/b9-arrows.css:62:.b9-tray .yard-dock__button {
+web/src/proto/b9-arrows.css:67:  .b9-arrows-a .yard-switcher > .friend-hop__button .yard-dock__disc {
+web/src/proto/b9-arrows.css:91:  .b9-arrows-a .yard-switcher > .friend-hop__button .yard-dock__disc {
+web/src/proto/b9-arrows.css:116:  .b9-arrows-b .friend-hop .yard-dock__disc {
+web/src/proto/b9-arrows.css:143:.b9-arrows-a .yard-switcher__button > .yard-dock__disc {
+web/src/proto/b9-arrows.css:172:.b9-arrows-a .yard-switcher__button > .yard-dock__disc::after,
+web/src/proto/b9-arrows.css:173:.b9-arrows-c .yard-switcher__button > .yard-dock__disc::after {
+web/src/proto/b9-arrows.css:186:.b9-arrows-c .yard-switcher:has(.b9-tray:not([hidden])) .yard-switcher__button .yard-dock__disc {
+web/src/proto/b9-arrows-r2.css:16:.b9r2-art {
+web/src/proto/b9-arrows-r2.css:23:.b9r2-arrow,
+web/src/proto/b9-arrows-r2.css:24:.b9r2-travel__button,
+web/src/proto/b9-arrows-r2.css:25:.b9r2-pill__arrow {
+web/src/proto/b9-arrows-r2.css:36:.b9r2-arrow:disabled .b9r2-art,
+web/src/proto/b9-arrows-r2.css:37:.b9r2-travel__button:disabled .b9r2-art,
+web/src/proto/b9-arrows-r2.css:38:.b9r2-pill__arrow:disabled .b9r2-art {
+web/src/proto/b9-arrows-r2.css:42:.b9r2-arrow:disabled,
+web/src/proto/b9-arrows-r2.css:43:.b9r2-travel__button:disabled,
+web/src/proto/b9-arrows-r2.css:44:.b9r2-pill__arrow:disabled {
+web/src/proto/b9-arrows-r2.css:49:.b9r2-where {
+web/src/proto/b9-arrows-r2.css:59:.b9r2-where__icon {
+web/src/proto/b9-arrows-r2.css:67:.b9r2-discs {
+web/src/proto/b9-arrows-r2.css:72:.b9r2-discs .b9r2-disc {
+web/src/proto/b9-arrows-r2.css:78:.b9r2-wheredisc .b9r2-where {
+web/src/proto/b9-arrows-r2.css:82:.b9r2-wheredisc .b9r2-where__icon {
+web/src/proto/b9-arrows-r2.css:93:.b9r2-wheredisc .b9r2-where__count {
+web/src/proto/b9-arrows-r2.css:99:.b9r2-pill {
+web/src/proto/b9-arrows-r2.css:110:.b9r2-pill__arrow {
+web/src/proto/b9-arrows-r2.css:114:.b9r2-pill__where {
+web/src/proto/b9-arrows-r2.css:126:.b9r2-tile {
+web/src/proto/b9-arrows-r2.css:139:.b9-travel-open .b9r2-tile {
+web/src/proto/b9-arrows-r2.css:142:.b9r2-travel {
+web/src/proto/b9-arrows-r2.css:157:.b9r2-travel[hidden] {
+web/src/proto/b9-arrows-r2.css:160:.b9r2-travel__head {
+web/src/proto/b9-arrows-r2.css:166:.b9r2-travel__name {
+web/src/proto/b9-arrows-r2.css:173:.b9r2-travel__close {
+web/src/proto/b9-arrows-r2.css:184:.b9r2-travel__row {
+web/src/proto/b9-arrows-r2.css:189:.b9r2-travel .b9r2-travel__disc {
+web/src/proto/b9-arrows-r2.css:194:.b9r2-travel__list {
+web/src/proto/b9-arrows-r2.css:212:.b9-travel-open .b9r2-tile {
+web/src/proto/b9-arrows-r2.css:223:  .b9r2-discs .b9r2-disc {
+web/src/proto/b9-arrows-r2.css:228:  .b9r2-discs {
+web/src/proto/b9-arrows-r2.css:231:  .b9r2-wheredisc .b9r2-where__icon {
+web/src/proto/b9-arrows-r2.css:235:  .b9r2-pill__arrow {
+web/src/proto/b9-arrows-r2.css:241:  .b9r2-travel {
+web/src/proto/b9-arrows-r2.css:246:  .b9r2-travel__head {
+web/src/proto/b9-arrows-r2.css:250:  .b9r2-travel__row {
+web/src/proto/b9-arrows-r2.css:253:  .b9r2-travel .b9r2-travel__disc {
+web/src/proto/b9-hcc-r2.css:4:.hatch.b9r2h {
+web/src/proto/b9-hcc-r2.css:9:.b9r2h-window:has(.hatch.b9r2h) .monsters-header {
+web/src/proto/b9-hcc-r2.css:14:.b9r2h-strip {
+web/src/proto/b9-hcc-r2.css:23:.b9r2h-arrow {
+web/src/proto/b9-hcc-r2.css:29:.b9r2h button:disabled .b9r2h-arrow {
+web/src/proto/b9-hcc-r2.css:33:.b9r2h-where {
+web/src/proto/b9-hcc-r2.css:42:.b9r2h-where__icon {
+web/src/proto/b9-hcc-r2.css:47:.b9r2h-stepper,
+web/src/proto/b9-hcc-r2.css:48:.b9r2h-yard {
+web/src/proto/b9-hcc-r2.css:60:.b9r2h-yard {
+web/src/proto/b9-hcc-r2.css:68:.b9r2h-yard--home {
+web/src/proto/b9-hcc-r2.css:72:.b9r2h-yard--locked {
+web/src/proto/b9-hcc-r2.css:77:.b9r2h-yard--locked .b9r2h-where__icon {
+web/src/proto/b9-hcc-r2.css:80:.b9r2h-lock__level {
+web/src/proto/b9-hcc-r2.css:84:.b9r2h-caret {
+
+hook: PostToolUse
+hook: PostToolUse Completed
+hook: PreToolUse
+hook: PreToolUse Completed
+exec
+/bin/bash -lc "rg -n '\\.yard-dock__disc|\\.yard-dock__button' web/src -g '*.css' -g '"'!proto/*'"' | tail -25" in /home/yujiesim/Coding/backyard-monsters-refitted/worktrees/screens-r2
+ succeeded in 0ms:
+web/src/ui/styles/bubble-menu.css:108:.bubble-menu__fan .yard-dock__disc {
+web/src/ui/styles/bubble-menu.css:119:.yard-dock--bubbles .yard-dock__right > .yard-dock__button--kits {
+web/src/ui/styles/bubble-menu.css:126:.yard-dock--bubbles .yard-dock__right > .yard-dock__button--kits {
+web/src/ui/styles/bubble-menu.css:136:  .yard-dock--bubbles .yard-dock__right > .yard-dock__button--kits {
+web/src/ui/styles/bubble-menu.css:141:  .yard-dock--bubbles .yard-dock__right > .yard-dock__button--kits {
+web/src/ui/styles/bubble-menu.css:171:  .yard-dock--bubbles .yard-dock__right > .yard-dock__button--monsters {
+web/src/ui/styles/bubble-menu.css:186:  .yard-dock--bubbles .yard-dock__right > .yard-dock__button--kits {
+web/src/ui/styles/bubble-menu.css:235:  .yard-dock--bubbles .yard-dock__right > .yard-dock__button--kits {
+web/src/ui/styles/bubble-menu.css:245:.bubble-menu--grid .bubble-menu__fan > .yard-dock__button {
+web/src/ui/styles/bubble-menu.css:256:.bubble-menu--grid.bubble-menu--open .bubble-menu__fan > .yard-dock__button {
+web/src/ui/styles/bubble-menu.css:265:  .bubble-menu__fan > .yard-dock__button,
+web/src/ui/styles/bubble-menu.css:266:  .bubble-menu--open .bubble-menu__fan > .yard-dock__button {
+web/src/ui/styles/bubble-menu.css:271:  .yard-dock__button--more .yard-dock__disc > svg {
+web/src/ui/quests/quests.css:14:.yard-dock__right > .yard-dock__button--quests {
+web/src/ui/quests/quests.css:21:.yard-dock__right:has(> .yard-dock__button--defences:not([hidden])) > .yard-dock__button--quests {
+web/src/ui/quests/quests.css:33:.quests-door[aria-expanded="true"] .yard-dock__disc {
+web/src/ui/styles/mail.css:14:.yard-dock__right > .yard-dock__button--mail {
+web/src/ui/styles/mail.css:661:  .yard-dock__right > .yard-dock__button--mail {
+web/src/ui/styles/defences.css:14:.yard-dock__right > .yard-dock__button--defences {
+web/src/ui/styles/defences.css:19:.yard-dock__right:has(> .yard-dock__button--defences:not([hidden])) > .yard-dock__button--bell {
+web/src/ui/styles/defences.css:228:  .yard-dock__right > .yard-dock__button--defences {
+web/src/ui/styles/defences.css:233:  .yard-dock__right:has(> .yard-dock__button--defences:not([hidden])) > .yard-dock__button--bell {
+web/src/ui/styles/yard-menu.css:104:.yard-menu__grid > .yard-dock__button--defences {
+web/src/ui/styles/notifications.css:14:.yard-dock__right > .yard-dock__button--bell {
+web/src/ui/styles/notifications.css:147:  .yard-dock__right > .yard-dock__button--bell {
+
+hook: PostToolUse
+hook: PostToolUse Completed
+hook: PreToolUse
+hook: PreToolUse Completed
+exec
+/bin/bash -lc "rg -n 'yard-dock__disc|yard-dock__button' web/src/ui/yardDock*" in /home/yujiesim/Coding/backyard-monsters-refitted/worktrees/screens-r2
+ exited 2 in 0ms:
+rg: web/src/ui/yardDock*: IO error for operation on web/src/ui/yardDock*: No such file or directory (os error 2)
+
+hook: PostToolUse
+hook: PostToolUse Completed
+codex
+The prototype’s travel targets already meet 44 px: D uses 48–64 px discs, E has a 44 px inner height, and F uses a 48 px tile and a 44 px close button. I’m withdrawing the target-size finding; the screenshots made those controls look smaller than their CSS dimensions.
+
+I’m fixing F’s two affordances: an upward chevron on the resting tile and a prominent list symbol inside the center travel button. The layouts, themes, and URL parameters stay intact.
+hook: PreToolUse
+hook: PreToolUse Completed
+apply patch
+patch: completed
+/home/yujiesim/Coding/backyard-monsters-refitted/worktrees/screens-r2/web/src/proto/b9-arrows-r2.css
+/home/yujiesim/Coding/backyard-monsters-refitted/worktrees/screens-r2/web/src/proto/b9ArrowsR2.ts
+diff --git a/web/src/proto/b9-arrows-r2.css b/web/src/proto/b9-arrows-r2.css
+index a14a6fe96c8321f0b6e5fc47a79eafb42a073f8a..4cde0e2c5af156f2d8db46cf3b9522545b7651bb
+--- a/web/src/proto/b9-arrows-r2.css
++++ b/web/src/proto/b9-arrows-r2.css
+@@ -139,6 +139,16 @@
+ .b9-travel-open .b9r2-tile {
+   border-color: var(--colour-accent);
+ }
++.b9r2-tile::after {
++  content: "";
++  width: 7px;
++  height: 7px;
++  margin: 4px 0 0 4px;
++  border-top: 2px solid currentColor;
++  border-right: 2px solid currentColor;
++  transform: rotate(-45deg);
++  flex: none;
++}
+ .b9r2-travel {
+   position: fixed;
+   left: 0;
+@@ -192,18 +202,15 @@
+   padding: 10px;
+ }
+ .b9r2-travel__list {
+-  position: absolute;
+-  right: -4px;
+-  bottom: -4px;
+-  width: 24px;
++  display: block;
++  width: 30px;
+   height: 24px;
+-  border-radius: 50%;
+-  background: var(--colour-accent);
+-  color: var(--colour-on-accent, #1b1b1b);
+-  font-size: 15px;
+-  font-weight: 700;
+-  line-height: 24px;
+-  text-align: center;
++  color: var(--colour-text);
++  background: repeating-linear-gradient(to bottom,
++    currentColor 0 4px, transparent 4px 10px);
++  /* Break each row into a list bullet and its line. */
++  mask-image: linear-gradient(to right,
++    #000 0 4px, transparent 4px 9px, #000 9px);
+ }
+ /* The travel bar stands in for the dock: its buttons rest under it. */
+ .b9-travel-open .yard-dock > :not(.yard-dock__left),
+diff --git a/web/src/proto/b9ArrowsR2.ts b/web/src/proto/b9ArrowsR2.ts
+index bda094be6b50a1dfec11c2544a35d806e1e27088..c821aeac52c94ca30374d9533244be8e4e9663b9
+--- a/web/src/proto/b9ArrowsR2.ts
++++ b/web/src/proto/b9ArrowsR2.ts
+@@ -79,7 +79,9 @@
+       all.type = "button";
+       all.setAttribute("aria-label", "All yards");
+       const disc = el("span", "yard-dock__disc b9r2-travel__disc");
+-      disc.append(gameIcon("outpost", { size: 32, decorative: true, className: "b9r2-art" }), el("span", "b9r2-travel__list", "≡"));
++      const listIcon = el("span", "b9r2-travel__list");
++      listIcon.setAttribute("aria-hidden", "true");
++      disc.append(listIcon);
+       all.append(disc);
+       all.addEventListener("click", () => hooks.openList());
+       row.append(this.arrow(-1, "yard-dock__disc b9r2-travel__disc", 44, "b9r2-travel__button"), all, this.arrow(1, "yard-dock__disc b9r2-travel__disc", 44, "b9r2-travel__button"));
+
+hook: PostToolUse
+hook: PostToolUse Completed
+hook: PreToolUse
+hook: PreToolUse Completed
+exec
+/bin/bash -lc 'cd web && NODE_OPTIONS=--no-webstorage npx tsc --noEmit -p .' in /home/yujiesim/Coding/backyard-monsters-refitted/worktrees/screens-r2
+ succeeded in 11085ms:
+npm notice run bymr-web@0.1.0 npx
+npm notice run 'tsc' --noEmit -p .
+
+hook: PostToolUse
+hook: PostToolUse Completed
+codex
+**Recommend E.** It groups navigation clearly, keeps both arrows available, and works consistently across both looks.
+
+F’s two medium issues are fixed. The suspected undersized travel targets were disproved by CSS inspection: all meet 44 px. No high issues found.
+
+Requested TypeScript check passed. No browser, server, git commands, or screenshot changes.
+
+Owner question: should the prohibition on long yard names also cover F’s expanded travel bar?
+
+FIXED:
+
+- F’s resting tile looked noninteractive (4, 20) → `web/src/proto/b9-arrows-r2.css`: added an upward chevron.
+- F’s yard-list action looked like a current-yard destination (5, 8, 13, 16, 19) → `web/src/proto/b9ArrowsR2.ts` and `web/src/proto/b9-arrows-r2.css`: replaced the flag and tiny badge with a prominent list icon inside the existing button.
+
+NOT FIXED:
+
+- D’s visual weight: low severity; changing its three-disc structure would redesign the option.
+- F’s expanded name: preserved as explicitly specified.
+- Visual verification after edits: not performed because browser use was prohibited.
+hook: Stop
+hook: Stop Completed
+tokens used
+70,519

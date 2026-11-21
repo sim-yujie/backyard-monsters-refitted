@@ -1,0 +1,6 @@
+SCREEN: OUTPOST ARROWS on the player's own yard (step through your own yards: Main, pinned outposts, the rest). The live game today (picture 1) has a flag disc with a count badge and the yard's NAME on a plaque under it; the owner called that name "very distracting and lengthy... very cluttered" and asked for better mobile UI/UX. All options drop the name from the HUD: a painted house (Main) or flag (an outpost) and the place in the order ("2/12") say where you are; names stay in the yard list.
+ D (Fable) = three discs, no words: Prev / where-disc with "2/12" plaque / Next above Map and Friends. The middle opens the yard list.
+ E (Fable) = one capsule: "< flag 2/12 >"; the middle opens the list.
+ F (astra's Y) = a small tile "flag 2/12" at rest; a tap swaps the dock for a travel bar (full name, close, big Prev / All yards / Next) that stays open from yard to yard.
+Ends grey out (no wrap). Shots are on the outpost "main outpost" (2/12) of the test account, except where "Main" is said.
+Files you may edit: web/src/proto/b9ArrowsR2.ts, web/src/proto/b9-arrows-r2.css.

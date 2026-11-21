@@ -914,9 +914,9 @@
   }
   .b9r2h-opt-d .hatch-lines .hatch-line.hatch-line--hcc {
     display: flex !important;
-    flex-direction: row;
+    flex-flow: row wrap;
     align-items: stretch;
-    gap: 16px;
+    gap: 8px 16px;
     padding: 0;
   }
   .b9r2h .hatch-line--hcc > .hatch-line__now {
@@ -958,4 +958,110 @@
 }
 :root[data-skin="flash"] .b9r2h {
   --b9r2h-solid: #e7d6ad;
+}
+
+/* Review 1: preserve the scroll extent instead of shrinking production and
+   selection into the clipped viewport. Window chrome stays outside this box. */
+.b9r2h .hatch__scroll > * {
+  flex-shrink: 0;
+}
+.b9r2h .hatch__scroll {
+  min-height: 0;
+  overflow-y: auto;
+  padding-bottom: 12px;
+}
+.b9r2h-bench > .hatch-lines {
+  max-width: 100%;
+  min-width: 0;
+}
+.b9r2h .hatch-line--hcc > .hatch-line__now {
+  grid-template-columns: repeat(5, minmax(44px, 1fr));
+}
+.b9r2h .hatch-line--hcc > .hatch-line__slots {
+  grid-template-columns: repeat(5, minmax(44px, 1fr)) 64px;
+  max-width: 100%;
+  box-sizing: border-box;
+}
+.b9r2h .b9r2h-stepper__arrow,
+.b9r2h .b9r2h-yard,
+.b9r2h .b9r2h-mix {
+  min-width: 44px;
+  flex-shrink: 0;
+}
+:root[data-skin] .panel .hatch.b9r2h .hatch-add__controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+:root[data-skin] .panel .hatch.b9r2h .hatch-add__controls > * {
+  flex: 1 0 44px;
+  min-width: 44px;
+  min-height: 44px;
+  width: auto;
+  box-sizing: border-box;
+  padding-inline: 2px;
+}
+:root[data-skin] .panel .hatch.b9r2h .hatch-add__controls > .hatch-add__fill {
+  flex: 1 0 86px;
+  min-width: 86px;
+  font-size: 12px;
+}
+.b9r2h .b9r2h-seal__part--stalled .b9r2h-seal__number {
+  color: #ffdb72;
+}
+:root[data-skin="flash"] .b9r2h .b9r2h-seal__part--stalled .b9r2h-seal__number {
+  color: #854800;
+}
+.b9r2h .b9r2h-mixcard__bin {
+  font-size: 12px;
+}
+.b9r2h .b9r2h-mixcard__cost .res-icon {
+  flex-shrink: 0;
+}
+@media (min-width: 620.02px) {
+  .b9r2h .hatch-line--hcc > .hatch-line__now {
+    width: 304px;
+  }
+  .b9r2h .hatch-line--hcc > .hatch-line__slots {
+    width: 364px;
+  }
+}
+/* Narrow tablets need the same bottom action bar as upright phones. */
+@container hatch (width < 880px) {
+  @media (min-height: 500.02px) {
+    .b9r2h .hatch__split {
+      display: contents;
+    }
+    .b9r2h .hatch-info {
+      position: sticky;
+      bottom: -12px;
+      z-index: 1;
+      background: var(--colour-surface-base);
+      min-height: 0 !important;
+    }
+    .b9r2h .hatch-info__stats,
+    .b9r2h .hatch-info__blurb {
+      display: none;
+    }
+  }
+}
+/* On a short landscape screen the action card must scroll in full, rather
+   than sticking a tall card across the entire remaining viewport. */
+@media (max-height: 500px) {
+  .b9r2h .hatch-info {
+    position: relative;
+    bottom: auto;
+    min-height: 0 !important;
+  }
+}
+@media (max-width: 620px) {
+  .b9r2h-remote .b9r2h-strip {
+    flex-wrap: wrap;
+  }
+  .b9r2h-remote .b9r2h-housing {
+    flex: 1 0 100%;
+  }
+  .b9r2h-remote .b9r2h-housing:not(.b9r2h-housing--over) .b9r2h-housing__coming {
+    display: inline;
+  }
 }

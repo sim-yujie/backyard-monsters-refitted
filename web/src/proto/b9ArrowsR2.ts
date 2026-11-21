@@ -79,7 +79,9 @@ export class B9ArrowsR2 {
       all.type = "button";
       all.setAttribute("aria-label", "All yards");
       const disc = el("span", "yard-dock__disc b9r2-travel__disc");
-      disc.append(gameIcon("outpost", { size: 32, decorative: true, className: "b9r2-art" }), el("span", "b9r2-travel__list", "≡"));
+      const listIcon = el("span", "b9r2-travel__list");
+      listIcon.setAttribute("aria-hidden", "true");
+      disc.append(listIcon);
       all.append(disc);
       all.addEventListener("click", () => hooks.openList());
       row.append(this.arrow(-1, "yard-dock__disc b9r2-travel__disc", 44, "b9r2-travel__button"), all, this.arrow(1, "yard-dock__disc b9r2-travel__disc", 44, "b9r2-travel__button"));
