@@ -24,7 +24,7 @@ import { BUILDING_ART_COPIES } from "./buildingArtCopiesData";
  * `@2x`.
  */
 
-const BUILDINGS = "/assets/buildings/";
+const BUILDINGS = "/assets/buildings/"; // art path, not fetched
 
 /**
  * The copy of a building picture to load at `level`: `.../anim.3d1@2x.webp`
