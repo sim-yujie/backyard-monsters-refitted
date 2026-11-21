@@ -1,0 +1,257 @@
+/* DESIGN PROTOTYPE (b9 outpost arrows, round 2), never merged.
+   No yard name in the HUD: the place in the order ("2/12") says where you are. */
+
+/* The live flag disc and its name plaque give way to the option's own control. */
+.b9-arrows-r2 .yard-switcher__button {
+  display: none;
+}
+.b9-arrows-r2 .yard-switcher {
+  flex-direction: column;
+  align-items: flex-start;
+}
+.b9-arrows-r2 .yard-dock__left {
+  align-items: flex-start;
+}
+
+.b9r2-art {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  filter: drop-shadow(0 2px 3px var(--colour-art-shadow));
+}
+
+.b9r2-arrow,
+.b9r2-travel__button,
+.b9r2-pill__arrow {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border: 0;
+  background: none;
+  cursor: pointer;
+  pointer-events: auto;
+  -webkit-tap-highlight-color: transparent;
+}
+.b9r2-arrow:disabled .b9r2-art,
+.b9r2-travel__button:disabled .b9r2-art,
+.b9r2-pill__arrow:disabled .b9r2-art {
+  filter: grayscale(1);
+  opacity: 0.45;
+}
+.b9r2-arrow:disabled,
+.b9r2-travel__button:disabled,
+.b9r2-pill__arrow:disabled {
+  cursor: default;
+}
+
+/* Where you are: the painted house or flag and "2/12". */
+.b9r2-where {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--colour-text);
+  font: inherit;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.b9r2-where__icon {
+  width: 30px;
+  height: 30px;
+  object-fit: contain;
+  filter: drop-shadow(0 2px 3px var(--colour-art-shadow));
+}
+
+/* ── D: three discs, no words ───────────────────────────────────────── */
+.b9r2-discs {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+}
+.b9r2-discs .b9r2-disc {
+  width: 52px;
+  height: 52px;
+  padding: 7px;
+  margin-top: 6px;
+}
+.b9r2-wheredisc .b9r2-where {
+  flex-direction: column;
+  gap: 0;
+}
+.b9r2-wheredisc .b9r2-where__icon {
+  box-sizing: border-box;
+  width: 64px;
+  height: 64px;
+  padding: 11px;
+  border: 3px solid var(--colour-dome-rim);
+  border-radius: 50%;
+  background: radial-gradient(circle at 50% 35%, var(--colour-dome-top), var(--colour-dome-bottom));
+  box-shadow: var(--shadow-dome-drop), var(--shadow-dome-edge);
+  filter: none;
+}
+.b9r2-wheredisc .b9r2-where__count {
+  margin-top: 6px;
+  font-variant-numeric: tabular-nums;
+}
+
+/* ── E: one capsule ─────────────────────────────────────────────────── */
+.b9r2-pill {
+  display: flex;
+  align-items: stretch;
+  height: 50px;
+  box-sizing: border-box;
+  border: 3px solid var(--colour-dome-rim);
+  border-radius: 999px;
+  background: linear-gradient(var(--colour-dome-top), var(--colour-dome-bottom));
+  box-shadow: var(--shadow-dome-drop), var(--shadow-dome-edge);
+  pointer-events: auto;
+}
+.b9r2-pill__arrow {
+  width: 46px;
+  padding: 6px 8px;
+}
+.b9r2-pill__where {
+  min-width: 78px;
+  justify-content: center;
+  padding: 0 6px;
+  border: 0;
+  border-inline: 2px solid color-mix(in srgb, var(--colour-dome-rim) 60%, transparent);
+  background: none;
+  font-size: var(--text-md, 16px);
+  cursor: pointer;
+}
+
+/* ── F: a tile at rest, a travel bar on a tap ───────────────────────── */
+.b9r2-tile {
+  height: 48px;
+  min-width: 92px;
+  justify-content: center;
+  padding: 0 10px;
+  border: 3px solid var(--colour-dome-rim);
+  border-radius: 999px;
+  background: linear-gradient(var(--colour-dome-top), var(--colour-dome-bottom));
+  box-shadow: var(--shadow-dome-drop), var(--shadow-dome-edge);
+  font-size: var(--text-md, 16px);
+  cursor: pointer;
+  pointer-events: auto;
+}
+.b9-travel-open .b9r2-tile {
+  border-color: var(--colour-accent);
+}
+.b9r2-travel {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 5;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 8px 12px calc(10px + env(safe-area-inset-bottom));
+  border-top: 3px solid var(--colour-dome-rim);
+  background: var(--colour-surface-raised);
+  box-shadow: 0 -6px 18px rgb(0 0 0 / 45%);
+  pointer-events: auto;
+}
+.b9r2-travel[hidden] {
+  display: none;
+}
+.b9r2-travel__head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 44px;
+}
+.b9r2-travel__name {
+  flex: 1;
+  min-width: 0;
+  color: var(--colour-text);
+  font-weight: 700;
+  overflow-wrap: anywhere;
+}
+.b9r2-travel__close {
+  flex: none;
+  width: 44px;
+  height: 44px;
+  border: 2px solid var(--colour-border);
+  border-radius: 50%;
+  background: none;
+  color: var(--colour-text);
+  font-size: 18px;
+  cursor: pointer;
+}
+.b9r2-travel__row {
+  display: flex;
+  justify-content: center;
+  gap: 40px;
+}
+.b9r2-travel .b9r2-travel__disc {
+  width: 68px;
+  height: 68px;
+  padding: 10px;
+}
+.b9r2-travel__list {
+  position: absolute;
+  right: -4px;
+  bottom: -4px;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background: var(--colour-accent);
+  color: var(--colour-on-accent, #1b1b1b);
+  font-size: 15px;
+  font-weight: 700;
+  line-height: 24px;
+  text-align: center;
+}
+/* The travel bar stands in for the dock: its buttons rest under it. */
+.b9-travel-open .yard-dock > :not(.yard-dock__left),
+.b9-travel-open .yard-dock__left > :not(.yard-switcher),
+.b9-travel-open .friends-button,
+.b9-travel-open .b9r2-tile {
+  visibility: hidden;
+}
+.b9-travel-open .yard-switcher__list {
+  position: fixed;
+  left: 12px;
+  bottom: calc(150px + env(safe-area-inset-bottom));
+  z-index: 6;
+}
+
+@media (max-width: 620px), (max-height: 500px) {
+  .b9r2-discs .b9r2-disc {
+    width: 48px;
+    height: 48px;
+    padding: 6px;
+  }
+  .b9r2-discs {
+    gap: 4px;
+  }
+  .b9r2-wheredisc .b9r2-where__icon {
+    width: 60px;
+    height: 60px;
+  }
+  .b9r2-pill__arrow {
+    width: 44px;
+  }
+}
+/* A phone on its side: the travel bar is one row. */
+@media (max-height: 500px) {
+  .b9r2-travel {
+    flex-direction: row;
+    align-items: center;
+    padding-block: 6px;
+  }
+  .b9r2-travel__head {
+    flex: 1;
+    order: 0;
+  }
+  .b9r2-travel__row {
+    gap: 24px;
+  }
+  .b9r2-travel .b9r2-travel__disc {
+    width: 56px;
+    height: 56px;
+  }
+}

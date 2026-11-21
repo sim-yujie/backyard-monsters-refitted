@@ -1,0 +1,157 @@
+Reading prompt from stdin...
+OpenAI Codex v0.169.0
+--------
+workdir: /home/yujiesim/Coding/backyard-monsters-refitted/worktrees/screens-r2/.capture/astra-r2
+model: gpt-6-astra
+provider: openai
+approval: never
+sandbox: read-only
+reasoning effort: none
+reasoning summaries: none
+session id: 01a1feaf-c17c-7f20-ab07-503766ec199a
+--------
+user
+You are "astra", a blunt senior UI/UX designer for a mobile+desktop browser game (Backyard Monsters Revamped, a remake of the 2010 Flash base-builder). Do not run commands or edit files; look at the attached real in-game screenshots and write DESIGN ADVICE.
+
+This is ROUND 2. The owner REJECTED every layout from round 1 (pictures of them are attached). Do not restyle them; bring structurally new ideas.
+
+OWNER'S TASTE (binding)
+- Icons + numbers over words; very short in-game text. Icons are PAINTED game-style pictures (the game has painted arrows, flags, house, monster portraits, resource icons), never thin line icons.
+- The phone (390x844 upright, then 844x390) must not feel cluttered. Design from the phone outward, then iPad and desktop 1280x720 to 1920x1080.
+- Two looks share one layout: Modern = dark steel/riveted windows, gold plaques, gold buttons; Classic = the Flash look refreshed (parchment, brown wood, red ribbons).
+- Touch targets >= 44 px. Nothing important cut with "...". Windows: title, tabs and close always visible; only the list inside scrolls.
+- The owner picks from real in-game pictures, so each direction must be concrete enough to build today: where each element sits, its size in px, what it shows, what a tap does.
+
+YOUR ANSWER
+Give 2 or 3 STRUCTURALLY different directions, named X/Y/Z. For each: one-line summary; layout at 390x844; at 844x390; at desktop; the flow step by step; the count of words visible in the resting state; the main risk. Then your pick and why (3 lines). Then the detail questions the owner must still decide. Under 900 words.
+
+SCREEN: HATCHERY CONTROL CENTRE (HCC) LEVELS 2 AND 3
+Today (pictures 1-3) the HCC has one level. With an HCC, the Monsters window's Hatch tab shows: the housing line, a row of hatchery cards (#1..#5, what each hatches now), the totals line (time for all, Speed up, Clear all), ONE shared queue of 7 stacks (each up to 20 of one monster: "x20" badge, picture, name; free slots are dashed "Empty" boxes), a housing forecast box, the monster grid (tap = choose) and the info panel (portrait, stepper -, count, +, +5, +10, Max, big Add). On the phone today the monster grid starts near the bottom of the first screen and the Add bar is off screen: already too much above the work.
+
+Fixed decisions (owner, 21 Nov):
+- L2: SAVED MONSTER MIXES (presets): save the current queue as a mix, load a mix with one tap (fills the queue, paying goo as usual). Assume 5 mix slots. The queue grows from 7 to 10 stacks of 20.
+- L3: stacks of 30 (still 10), plus "run an OUTPOST's hatcheries from home": from the main yard's HCC, pick one of your outposts that has its own HCC (a player can own hundreds; the test account has 11, 10 with an HCC), then edit THAT outpost's queue as if standing in it (its hatcheries, housing and goo). Outpost mixes are saved apart from home mixes.
+
+Round 1 built three layouts; the owner rejected all three: "ask astra and fable for UI suggestions. Not impressed by all." Picture 4 is the sheet (top two rows desktop: A, B, C at L2 then at L3 remote; bottom row phones), pictures 5-7 one phone screen of each:
+ A = queue first; a top bar with an "Outposts" chip, totals and a "Mixes" button that opens a drawer of named mix rows with "Load" buttons and "Save queue here" rows.
+ B = two workspaces (monsters + Add | queue + mix tiles); on a phone a "Build | Queue" switch.
+ C = a yard rail/list on the left, mixes in a drop-down.
+Likely reasons (my reading, not the owner's words): too many words and named rows, generic drop-downs/drawers, the phone is a wall of small boxes, nothing feels like the game.
+
+HARD RULES for round 2
+- Not a drawer of named rows, not a Build|Queue switch, not a yard rail/list as the main structure. Bring something structurally different.
+- At 390x844, in the busiest state (10 stacks queued, 5 hatcheries busy, 4 of 5 mixes saved), the monster grid AND the Add control must be visible without scrolling. Say what you shrink or remove to pay for that (px budget, top to bottom).
+- Count the words. Mixes should work with pictures and numbers (do they need names at all?).
+- Say how it is unmistakable that you are editing OUTPOST X and not home, without a long name in the header, and how you get back.
+- Say how the outpost choice scales to hundreds of outposts, and how locked L2/L3 features show on a lower-level HCC.
+- Keep the existing choose -> stepper -> Add flow unless you flag clearly that you are changing it and why.
+
+Pictures: 1 Hatch tab today, Modern 390x844; 2 today, Modern 1280x720; 3 today, Classic 390x844; 4 round 1 sheet (rejected); 5 round 1 A mixes drawer, 390x844; 6 round 1 B queue view, 390x844; 7 round 1 C editing an outpost, 390x844.
+
+hook: SessionStart
+hook: SessionStart Completed
+hook: UserPromptSubmit
+hook: UserPromptSubmit Completed
+codex
+The current phone spends most of its height reporting production before letting you produce anything. Shrink that reporting, preserve the monster artwork, and anchor Add. Both directions below use the same geometry for steel/gold Modern and parchment/wood/ribbon Classic. Every interactive target is at least 44×44 px; all icons are painted assets.
+
+## X — Monster book with a production seal
+
+**The catalogue owns the window. One large illustrated seal summarizes production; tapping it opens a dedicated inspection page.**
+
+**390×844 — top-to-bottom budget**
+
+| Area | Height |
+|---|---:|
+| Compact external HUD: goo, coins, gems | 44 |
+| Title, help, close | 48 |
+| Six persistent Monsters tabs | 44 |
+| Yard identity strip | 48 |
+| Production seal and housing meter | 64 |
+| Five mix medallions | 56 |
+| Scrollable monster grid | 416 |
+| Fixed selected monster, stepper, Add | 108 |
+| Borders and safe-area allowance | 16 |
+| **Total** | **844** |
+
+The production seal is a painted hatchery with **5/5**, a queue portrait cluster with **10/10**, and an hourglass with **12h51m**. Housing shows a house, **2,080/2,160**, and a narrow forecast segment. No hatchery cards, empty boxes, explanatory paragraph or standing Clear all button.
+
+Five 52×52 mix medallions show a three-monster collage and slot number. The unused fifth shows a painted plus. Four columns of 82×92 monster cards show portrait and goo cost; names appear only for the selected monster.
+
+The bottom 108 px contains a 44 px portrait/name row and controls: minus, count, plus, Max; underneath, a full-width 44 px gold **Add** button. Remove +5/+10; holding plus repeats.
+
+**844×390:** Same 48 px title and 44 px tabs. Remaining interior: 200 px production/mix block beside a 612 px catalogue. The catalogue’s bottom 96 px holds controls; its grid scrolls above. No workspace switch.
+
+**Desktop:** A broad illustrated catalogue with a fixed 260 px production instrument beside it. Controls remain under the catalogue. Tapping the instrument opens inspection in the existing window body, never a drawer.
+
+**Flow**
+1. Choose monster → stepper → Add.
+2. Tap a saved medallion: immediately fill the queue and pay goo; briefly animate portraits travelling into the seal.
+3. Tap the empty medallion: save current queue. Hold a saved one to inspect, replace or erase.
+4. Tap production seal: inspect individual hatcheries and ten stacks; remove stacks or use speed-up/clear controls. Painted back arrow restores catalogue.
+
+**Resting words:** **10**: Monsters; six tab labels; Pokey; Max; Add. Mixes have no names. Numbers and units excluded.
+
+**Main risk:** Individual queue contents require another tap. The seal must visibly signal stalled housing and a full queue.
+
+## Y — Ten-socket hatchery workbench
+
+**The queue becomes a compact, directly editable rack above the catalogue; mixes are physical recipe tokens beside Add.**
+
+**390×844 — top-to-bottom budget**
+
+| Area | Height |
+|---|---:|
+| Compact external HUD | 44 |
+| Title, help, close | 48 |
+| Six persistent tabs | 44 |
+| Yard identity strip | 48 |
+| Five hatchery portraits plus housing strip | 60 |
+| Ten queue sockets: two rows of five | 104 |
+| Scrollable monster grid | 288 |
+| Five recipe tokens | 52 |
+| Fixed selection, stepper, Add | 140 |
+| Borders and safe-area allowance | 16 |
+| **Total** | **844** |
+
+Each queue socket is 64×48: portrait plus quantity, no name. Empty sockets are shallow dark recesses, not labelled boxes. Each hatchery is a 44 px portrait target with a progress arc; blocked hatcheries receive a painted house badge. Tapping reveals its exact timer.
+
+The housing strip shows current/capacity and forecast numerically. Four-column monster cards are 82×88. The bottom controls include selected portrait/name, total goo and completion time, then stepper and Add. Ten full stacks, five busy hatcheries and four saved mixes all fit.
+
+**844×390:** After title/tabs, split the body into a 340 px workbench and 472 px catalogue. Queue, hatcheries and recipes occupy the workbench; catalogue controls stay pinned beneath its scrolling grid.
+
+**Desktop:** One horizontal ten-socket rack, catalogue beneath, recipe tokens and selection controls permanently along the bottom.
+
+**Flow**
+1. Choose → stepper → Add; portraits animate into sockets.
+2. Tap a socket to replace the selection controls temporarily with quantity removal controls.
+3. Recipe tokens load/save exactly as X.
+
+**Resting words:** **10**, same count as X.
+
+**Main risk:** More visual density; socket artwork needs restrained borders.
+
+## Shared yard navigation and locks
+
+The 48 px yard strip always shows a painted home-return target, flag, immutable short yard ID and coordinates. Remote mode adds a gold inner border; Add repeats that flag. Full names appear in inspection.
+
+Tap the flag to open a full-body territory atlas: search names/coordinates, favourites, clustered map markers. Results become selectable map cards, not a permanent yard rail. Scale through search and clustering to hundreds.
+
+Below L2, replace recipe tokens with one locked collage marked **2**. Below L3, the atlas flag bears a lock and **3**.
+
+## My pick
+
+**X.** It gives monsters the most space and removes the wall of boxes.
+Production inspection remains available without governing the resting layout.
+Build Y only if seeing every queued stack continuously is essential.
+
+## Owner decisions
+
+- Does loading a mix append or replace?
+- If goo or queue space is insufficient: reject entirely or load partially?
+- Are picture-only mixes acceptable, with optional names inside inspection?
+- Can outposts receive stable short IDs?
+hook: Stop
+hook: Stop Completed
+tokens used
+35,410

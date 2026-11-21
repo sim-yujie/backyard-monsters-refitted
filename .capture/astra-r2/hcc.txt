@@ -1,0 +1,22 @@
+SCREEN: HATCHERY CONTROL CENTRE (HCC) LEVELS 2 AND 3
+Today (pictures 1-3) the HCC has one level. With an HCC, the Monsters window's Hatch tab shows: the housing line, a row of hatchery cards (#1..#5, what each hatches now), the totals line (time for all, Speed up, Clear all), ONE shared queue of 7 stacks (each up to 20 of one monster: "x20" badge, picture, name; free slots are dashed "Empty" boxes), a housing forecast box, the monster grid (tap = choose) and the info panel (portrait, stepper -, count, +, +5, +10, Max, big Add). On the phone today the monster grid starts near the bottom of the first screen and the Add bar is off screen: already too much above the work.
+
+Fixed decisions (owner, 21 Nov):
+- L2: SAVED MONSTER MIXES (presets): save the current queue as a mix, load a mix with one tap (fills the queue, paying goo as usual). Assume 5 mix slots. The queue grows from 7 to 10 stacks of 20.
+- L3: stacks of 30 (still 10), plus "run an OUTPOST's hatcheries from home": from the main yard's HCC, pick one of your outposts that has its own HCC (a player can own hundreds; the test account has 11, 10 with an HCC), then edit THAT outpost's queue as if standing in it (its hatcheries, housing and goo). Outpost mixes are saved apart from home mixes.
+
+Round 1 built three layouts; the owner rejected all three: "ask astra and fable for UI suggestions. Not impressed by all." Picture 4 is the sheet (top two rows desktop: A, B, C at L2 then at L3 remote; bottom row phones), pictures 5-7 one phone screen of each:
+ A = queue first; a top bar with an "Outposts" chip, totals and a "Mixes" button that opens a drawer of named mix rows with "Load" buttons and "Save queue here" rows.
+ B = two workspaces (monsters + Add | queue + mix tiles); on a phone a "Build | Queue" switch.
+ C = a yard rail/list on the left, mixes in a drop-down.
+Likely reasons (my reading, not the owner's words): too many words and named rows, generic drop-downs/drawers, the phone is a wall of small boxes, nothing feels like the game.
+
+HARD RULES for round 2
+- Not a drawer of named rows, not a Build|Queue switch, not a yard rail/list as the main structure. Bring something structurally different.
+- At 390x844, in the busiest state (10 stacks queued, 5 hatcheries busy, 4 of 5 mixes saved), the monster grid AND the Add control must be visible without scrolling. Say what you shrink or remove to pay for that (px budget, top to bottom).
+- Count the words. Mixes should work with pictures and numbers (do they need names at all?).
+- Say how it is unmistakable that you are editing OUTPOST X and not home, without a long name in the header, and how you get back.
+- Say how the outpost choice scales to hundreds of outposts, and how locked L2/L3 features show on a lower-level HCC.
+- Keep the existing choose -> stepper -> Add flow unless you flag clearly that you are changing it and why.
+
+Pictures: 1 Hatch tab today, Modern 390x844; 2 today, Modern 1280x720; 3 today, Classic 390x844; 4 round 1 sheet (rejected); 5 round 1 A mixes drawer, 390x844; 6 round 1 B queue view, 390x844; 7 round 1 C editing an outpost, 390x844.

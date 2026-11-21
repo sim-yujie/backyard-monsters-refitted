@@ -1,0 +1,14 @@
+SCREEN: OUTPOST ARROWS ON YOUR OWN YARD
+Fixed (owner, 21 Nov): add < > buttons that step through YOUR OWN yards in the yard switcher's order: Main yard -> pinned outposts -> the rest. It mirrors beta 8's friend arrows (picture 6: on a FRIEND's yard the dock shows Home, Map, then painted Prev / Next discs). Players can own HUNDREDS of outposts; the switcher list (picture 5; opens from the flag disc with the count badge above Map) stays for jumps.
+
+Round 1 built three options (picture 7 = sheet of all three, top row phones, bottom row desktop; picture 8 = option A full phone screen): A arrows either side of the flag with the yard's name plaque under them; B Prev/Next in the bottom row in Friends' place (Friends moved into More); C the flag opens a tray with Prev / All yards / Next.
+The owner's verdict, word for word: "I find the 'main outpost' text very distracting and lengthy. Causes the UI to be very cluttered. Can UI/UX for mobile be better done?"
+
+HARD RULES for round 2
+- NO yard name in the HUD at rest. Allowed instead: a painted icon/flag, a short label of a few characters, or a count/number. (The name plaque under the flag is live beta 8 UI; you may remove or replace it.) Say exactly what the HUD shows on the Main yard and on an outpost, and how a player with 200 outposts knows which one they are in.
+- Map, Friends, More, Kits, Monsters, Build keep their places unless your direction gives a strong reason.
+- Phone first: say what the bottom-left of 390x844 looks like, to the pixel, and why it is LESS cluttered than picture 2 (today, without arrows).
+- Anything that floats over the yard must not be hit by accident while panning the yard with a thumb.
+- Decide: at the ends, wrap (Main <- last outpost) or grey out?
+
+Pictures: 1 own yard today, Modern 1280x720; 2 own yard today, Modern 390x844; 3 own yard today, Modern 844x390; 4 own yard today, Classic 390x844; 5 the yard switcher list open, 390x844; 6 a friend's yard with beta 8's Prev/Next, 390x844; 7 round 1 sheet (rejected); 8 round 1 option A, 390x844 (rejected).

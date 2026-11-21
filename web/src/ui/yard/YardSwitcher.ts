@@ -25,7 +25,8 @@ import type { YardUiBinding } from "@/game/yard/YardStore";
 import { gameIcon, iconAmount } from "@/ui/gameIcon";
 import { icon } from "@/ui/icons";
 import "@/ui/styles/yard-switcher.css";
-import { b9Arrows } from "@/proto/b9";
+import { b9Arrows, b9ArrowsR2 } from "@/proto/b9";
+import { B9ArrowsR2 } from "@/proto/b9ArrowsR2";
 import { FriendHopButtons } from "@/ui/friends/FriendHopButtons";
 import "@/proto/b9-arrows.css";
 
@@ -129,6 +130,8 @@ export class YardSwitcher {
   /** PROTOTYPE (b9 arrows): the < > discs, reusing the friend arrows. */
   readonly hop: FriendHopButtons | null = null;
   private readonly tray: HTMLElement | null = null;
+  /** PROTOTYPE (b9 arrows, round 2). */
+  private readonly r2: B9ArrowsR2 | null = null;
 
   constructor(options: YardSwitcherOptions) {
     this.onSelect = options.onSelect;
@@ -202,6 +205,13 @@ export class YardSwitcher {
         this.element.append(tray);
       }
     }
+    const r2 = b9ArrowsR2();
+    if (r2) {
+      this.r2 = new B9ArrowsR2(r2, this.element, {
+        step: (direction) => this.step(direction),
+        openList: () => this.toggle(this.list.hidden),
+      });
+    }
     document.addEventListener("pointerdown", this.dismiss, true);
     document.addEventListener("keydown", this.dismiss, true);
     this.unsubscribe = onOutpostLabels(() => this.render());
@@ -257,6 +267,7 @@ export class YardSwitcher {
         ahead: 0,
       });
     }
+    this.r2?.render(this.entries);
     if (this.open) this.renderList();
   }
 
