@@ -42,14 +42,16 @@ const socket = () => {
 };
 const client = { userId: 2503 } as ChatClient;
 
-const ping = (extra: Record<string, unknown> = {}) => ({
-  type: ClientMessageType.Presence,
-  id: 7,
-  token: "good",
-  apiVersion: "v1.6.1-beta",
-  screen: { where: "yard", planner: false },
-  ...extra,
-});
+/** A presence frame; `extra` may break its shape on purpose (a bad id, no token), as a client could. */
+const ping = (extra: Record<string, unknown> = {}): Parameters<typeof handlePresence>[2] =>
+  ({
+    type: ClientMessageType.Presence,
+    id: 7,
+    token: "good",
+    apiVersion: "v1.6.1-beta",
+    screen: { where: "yard", planner: false },
+    ...extra,
+  }) as Parameters<typeof handlePresence>[2];
 
 beforeEach(() => {
   pinged.length = 0;
