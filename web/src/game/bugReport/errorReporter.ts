@@ -1,6 +1,6 @@
 import { getAuthToken } from "@/api/http";
 import { sendClientErrors, type ClientErrorItem, type ClientErrorSendResult } from "@/api/clientErrors";
-import { LATEST_RELEASE } from "@/data/changelog";
+import { GAME_VERSION } from "@/data/gameVersion";
 import { currentScreenName } from "./screenCapture";
 
 /**
@@ -50,7 +50,9 @@ export interface ErrorReporterDeps {
 const defaultDeps: ErrorReporterDeps = {
   send: sendClientErrors,
   signedIn: () => getAuthToken() !== null,
-  context: () => ({ gameVersion: LATEST_RELEASE?.version ?? "", screen: currentScreenName() }),
+  // The full version, patch number included (`data/gameVersion.ts`): the changelog's names only the
+  // release whose "What's new" cards pop up, so every patch's errors read as that release.
+  context: () => ({ gameVersion: GAME_VERSION, screen: currentScreenName() }),
   now: () => Date.now(),
   setTimer: (run, ms) => setTimeout(run, ms),
   clearTimer: (timer) => clearTimeout(timer as ReturnType<typeof setTimeout>),

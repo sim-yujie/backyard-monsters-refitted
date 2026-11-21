@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { ClientErrorBatch, ClientErrorSendResult } from "@/api/clientErrors";
+import { GAME_VERSION } from "@/data/gameVersion";
 import { BATCH_MAX, BATCHES_MAX, FIRST_SEND_DELAY_MS, SEND_GAP_MS, installErrorReporter, isNoise, reportCaughtError } from "./errorReporter";
 
 /** The game's own error sender, for the owner's dashboard. */
@@ -55,6 +56,23 @@ describe("the error sender", () => {
       expect.objectContaining({ kind: "rejection", message: "Error: load failed", place: "", count: 1 }),
     ]);
     expect(sent[0]!.batch.errors[0]!.stack).toContain("TypeError");
+  });
+
+  it("names the full game version, patch number included, not the changelog's release", async () => {
+    vi.useFakeTimers();
+    const target = new EventTarget() as unknown as Window;
+    const sent: ClientErrorBatch[] = [];
+    stop = installErrorReporter(target, {
+      send: async (batch) => {
+        sent.push(batch);
+        return "sent";
+      },
+      signedIn: () => true,
+    });
+    target.dispatchEvent(new ErrorEvent("error", { message: "boom", filename: "https://play.test/a.js", lineno: 1, colno: 1 }));
+    await vi.advanceTimersByTimeAsync(FIRST_SEND_DELAY_MS);
+    expect(sent).toHaveLength(1);
+    expect(sent[0]!.gameVersion).toBe(GAME_VERSION);
   });
 
   it("skips extensions, other sites' scripts and ResizeObserver warnings", async () => {
