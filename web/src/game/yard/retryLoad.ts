@@ -1,5 +1,6 @@
 import { Assets, type Texture } from "pixi.js";
 import { artPath } from "../../artUrl";
+import { buildingArtCopy } from "./buildingArtCopies";
 
 /**
  * The waits before each try after the first. Flash's `ImageCache` gave a file
@@ -17,7 +18,7 @@ export const LOAD_TRIES = RETRY_DELAYS_MS.length + 1;
  * an old turret strip cut at new cell sizes draws the gun off its tower. Raise this
  * in any release that changes a building's pictures.
  */
-export const BUILDING_ART_VERSION = "23";
+export const BUILDING_ART_VERSION = "24";
 
 /**
  * The address to ask for: a building picture carries {@link BUILDING_ART_VERSION},
@@ -25,6 +26,14 @@ export const BUILDING_ART_VERSION = "23";
  */
 export const versionedArt = (url: string): string =>
   artPath(url).startsWith("/assets/buildings/") ? `${url}?v=${BUILDING_ART_VERSION}` : url; // art path, not fetched
+
+/**
+ * The address the yard draws a picture from: the Quality's copy of a Modern
+ * building picture (`buildingArtCopies.ts`, beta 9), with
+ * {@link BUILDING_ART_VERSION}. For Pixi only; a picture in a window keeps
+ * its `@2x` ({@link versionedArt}).
+ */
+export const yardArtUrl = (url: string): string => versionedArt(buildingArtCopy(url));
 
 /**
  * `Assets.load`, asked again when it fails, after waits that double from a
@@ -42,7 +51,7 @@ export const versionedArt = (url: string): string =>
 export const loadWithRetries = async (url: string, gone: () => boolean = () => false): Promise<Texture> => {
   for (let attempt = 0; ; attempt++) {
     try {
-      return await Assets.load<Texture>(versionedArt(url));
+      return await Assets.load<Texture>(yardArtUrl(url));
     } catch (caught) {
       const delay = RETRY_DELAYS_MS[attempt];
       if (delay === undefined) throw caught;

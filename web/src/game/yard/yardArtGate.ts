@@ -49,6 +49,8 @@ export const MUSIC_WAIT_MAX_MS = 60_000;
 
 /** {@link yardArtGate}, or {@link MUSIC_WAIT_MAX_MS} after the call, whichever comes first. */
 export const musicGate = (
-  wait: (ms: number) => Promise<void> = (ms) => new Promise((resolve) => setTimeout(resolve, ms)),
+  wait: (ms: number) => Promise<void> = (ms) =>
+    new Promise((resolve) => setTimeout(resolve, ms)),
   gate: Gate = yardArtGate,
-): Promise<void> => (gate.isOpen ? Promise.resolve() : Promise.race([gate.promise, wait(MUSIC_WAIT_MAX_MS)]));
+): Promise<void> =>
+  gate.isOpen ? Promise.resolve() : Promise.race([gate.promise, wait(MUSIC_WAIT_MAX_MS)]);

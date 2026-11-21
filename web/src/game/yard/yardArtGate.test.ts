@@ -20,13 +20,10 @@ describe("yardArtGate (beta 9: the yard's pictures first)", () => {
     const waits: number[] = [];
     let timeUp!: () => void;
     let done = false;
-    void musicGate(
-      (ms) => {
-        waits.push(ms);
-        return new Promise((resolve) => (timeUp = resolve));
-      },
-      gate,
-    ).then(() => (done = true));
+    void musicGate((ms) => {
+      waits.push(ms);
+      return new Promise((resolve) => (timeUp = resolve));
+    }, gate).then(() => (done = true));
     await Promise.resolve();
     expect(done).toBe(false);
     expect(waits).toEqual([MUSIC_WAIT_MAX_MS]);
