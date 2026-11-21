@@ -1,0 +1,652 @@
+/* DESIGN PROTOTYPE (b9 HCC levels 2 and 3), never merged. Tokens from tokens.css. */
+
+.b9-hcc-bar {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: var(--space-2);
+  min-height: 48px;
+  padding: var(--space-1) 0;
+}
+
+.b9-hcc-bar__spacer {
+  flex: 1;
+}
+
+.b9-chip,
+.b9-yard {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-height: 44px;
+  padding: 0 var(--space-3);
+  border: 1px solid var(--colour-border);
+  border-radius: var(--radius-lg);
+  background: var(--colour-surface-sunken);
+  color: var(--colour-text);
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.b9-chip--locked {
+  opacity: 0.75;
+  cursor: default;
+}
+
+.b9-lock {
+  padding: 2px var(--space-2);
+  border-radius: var(--radius-pill, 999px);
+  background: var(--colour-surface-raised);
+  color: var(--colour-text-secondary);
+  font-size: var(--text-xs, 12px);
+}
+
+.b9-caret {
+  color: var(--colour-text-secondary);
+}
+
+.b9-remote-chip {
+  display: inline-flex;
+  gap: var(--space-2);
+}
+
+/* Running an outpost from home: the bar turns amber so it can't be missed. */
+.b9-remote .b9-hcc-bar {
+  margin: 0 calc(-1 * var(--hatch-pad));
+  padding: var(--space-1) var(--hatch-pad);
+  background: color-mix(in srgb, var(--colour-warning) 28%, transparent);
+  border-bottom: 2px solid var(--colour-warning);
+}
+
+.b9-chip--remote {
+  border-color: var(--colour-warning);
+  color: var(--colour-warning);
+}
+
+.b9-badge,
+.b9-switch__count {
+  min-width: 22px;
+  padding: 1px 6px;
+  border-radius: 999px;
+  background: var(--colour-accent);
+  color: var(--colour-accent-text, #fff);
+  font-size: var(--text-xs, 12px);
+  text-align: center;
+}
+
+.b9-mixes-button {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-height: 44px;
+}
+
+/* B's Build | Queue switch: phones only; desktop shows both side by side. */
+.b9-switch {
+  display: none;
+  border: 1px solid var(--colour-border);
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+}
+
+.b9-switch__tab {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  min-height: 44px;
+  padding: 0 var(--space-4);
+  border: 0;
+  background: var(--colour-surface-sunken);
+  color: var(--colour-text-secondary);
+  font: inherit;
+  font-weight: 700;
+}
+
+.b9-switch__tab--on {
+  background: var(--colour-accent);
+  color: var(--colour-accent-text, #fff);
+}
+
+/* ── Panels: the Mixes drawer (A) and the yard picker (A, B) ─────────── */
+
+.b9-mixes,
+.b9-yards {
+  position: absolute;
+  z-index: 5;
+  top: 52px;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  max-height: calc(100% - 60px);
+  padding: var(--space-3);
+  border: 1px solid var(--colour-border);
+  border-radius: var(--radius-lg);
+  background: linear-gradient(var(--colour-surface-raised), var(--colour-surface-raised)), var(--colour-surface-base);
+  box-shadow: var(--shadow-popup);
+}
+
+.b9-mixes {
+  right: var(--hatch-pad);
+  width: 400px;
+}
+
+.b9-yards {
+  left: var(--hatch-pad);
+  width: 340px;
+}
+
+.b9-mixes[hidden],
+.b9-yards[hidden] {
+  display: none;
+}
+
+.b9-panel__head,
+.b9-mixrows__head {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.b9-panel__title {
+  display: inline-flex;
+  flex: 1;
+  align-items: center;
+  gap: var(--space-2);
+  margin: 0;
+  font-size: var(--text-md, 16px);
+}
+
+.b9-panel__slots {
+  color: var(--colour-text-secondary);
+  font-size: var(--text-sm);
+}
+
+.b9-panel__close {
+  width: 44px;
+  height: 44px;
+  border: 0;
+  border-radius: var(--radius-md);
+  background: var(--colour-surface-sunken);
+  color: var(--colour-text);
+  font-size: 18px;
+}
+
+.b9-panel__note {
+  margin: 0;
+  color: var(--colour-text-secondary);
+  font-size: var(--text-sm);
+}
+
+.b9-mix-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  margin: 0;
+  padding: 0;
+  overflow-y: auto;
+  list-style: none;
+}
+
+.b9-mix {
+  flex: none;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto auto;
+  align-items: center;
+  gap: var(--space-2);
+  min-height: 56px;
+  padding: var(--space-1) var(--space-2);
+  border: 1px solid var(--colour-border);
+  border-radius: var(--radius-md);
+  background: var(--colour-surface-sunken);
+}
+
+.b9-mix--empty {
+  grid-template-columns: 1fr;
+  border-style: dashed;
+  background: transparent;
+}
+
+.b9-mix__words {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.b9-mix__name {
+  font-weight: 700;
+}
+
+.b9-mix__meta {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--colour-text-secondary);
+  font-size: var(--text-sm);
+}
+
+.b9-mix__faces {
+  display: flex;
+  gap: 2px;
+}
+
+.b9-mix__face {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.b9-mix__picture {
+  width: 34px;
+  height: 34px;
+  border-radius: var(--radius-sm, 6px);
+}
+
+.b9-mix__count {
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 1;
+}
+
+.b9-mix__load,
+.b9-mix__edit,
+.b9-mix__saveslot {
+  min-height: 44px;
+}
+
+.b9-mix__edit {
+  min-width: 44px;
+  padding: 0;
+}
+
+.b9-mix__saveslot {
+  display: inline-flex;
+  justify-content: center;
+  align-items: center;
+  gap: var(--space-2);
+  width: 100%;
+}
+
+/* ── Yards ───────────────────────────────────────────────────────────── */
+
+.b9-search {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-height: 44px;
+  padding: 0 var(--space-2);
+  border: 1px solid var(--colour-border);
+  border-radius: var(--radius-md);
+  background: var(--colour-surface-sunken);
+}
+
+.b9-search__input {
+  flex: 1;
+  min-width: 0;
+  border: 0;
+  background: transparent;
+  color: var(--colour-text);
+  font: inherit;
+}
+
+.b9-yard-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  overflow-y: auto;
+}
+
+.b9-yard {
+  flex: none;
+  width: 100%;
+  text-align: left;
+}
+
+.b9-yard--on {
+  border-color: var(--colour-accent);
+  box-shadow: inset 0 0 0 1px var(--colour-accent);
+}
+
+.b9-yard--off {
+  opacity: 0.55;
+  cursor: default;
+}
+
+.b9-yard__words {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.b9-yard__queue,
+.b9-yard__tag {
+  color: var(--colour-text-secondary);
+  font-size: var(--text-sm);
+}
+
+/* ── C: Save and the mix drop-down in the bar; the yard rail ─────────── */
+
+.b9-select {
+  min-height: 44px;
+  padding: 0 var(--space-3);
+  border: 1px solid var(--colour-border);
+  border-radius: var(--radius-md);
+  background: var(--colour-surface-sunken);
+  color: var(--colour-text);
+  font: inherit;
+  font-weight: 700;
+}
+
+.b9-save {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-height: 44px;
+}
+
+.b9-opt-c.b9-level-3 {
+  display: grid;
+  grid-template-columns: 240px minmax(0, 1fr);
+  grid-template-rows: auto minmax(0, 1fr);
+  column-gap: var(--space-4);
+}
+
+.b9-opt-c.b9-level-3 > .b9-rail {
+  grid-row: 1 / span 3;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  min-height: 0;
+  padding: var(--space-2) 0;
+}
+
+.b9-opt-c.b9-level-3 > .b9-hcc-bar,
+.b9-opt-c.b9-level-3 > .hatch__tabs-row,
+.b9-opt-c.b9-level-3 > .hatch__scroll {
+  grid-column: 2;
+}
+
+.b9-opt-c .b9-rail .b9-yard {
+  min-height: 48px;
+}
+
+/* ── A: ten stacks in one row, the totals on a line of their own ─────── */
+
+.b9-opt-a .hatch-line--hcc > .hatch-line__slots,
+.b9-opt-c .hatch-line--hcc > .hatch-line__slots {
+  flex-wrap: wrap;
+}
+
+.b9-opt-a .hatch-line--hcc .hatch-slot,
+.b9-opt-c .hatch-line--hcc .hatch-slot {
+  width: calc((100% - 9 * var(--space-2)) / 10);
+}
+
+.b9-opt-a .hatch-line--hcc .hatch-line__totals,
+.b9-opt-c .hatch-line--hcc .hatch-line__totals {
+  flex-basis: 100%;
+  order: -1;
+}
+
+/* ── B, wide: the monsters on the left, the queue workspace on the right ── */
+
+.b9-col {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+@container hatch (width < 880px) {
+  .b9-col {
+    display: contents;
+  }
+}
+
+@container hatch (width >= 880px) {
+  .b9-opt-b .hatch__split {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 430px;
+    grid-template-rows: auto;
+    align-items: start;
+    column-gap: var(--space-4);
+  }
+
+  .b9-opt-b .b9-col--build {
+    grid-column: 1;
+    grid-row: 1;
+  }
+
+  .b9-opt-b .b9-col--queue {
+    grid-column: 2;
+    grid-row: 1;
+  }
+
+  .b9-opt-b .hatch-now__state {
+    display: none;
+  }
+
+  .b9-opt-b .hatch__grid {
+    grid-template-columns: repeat(9, minmax(0, 1fr));
+  }
+
+  /* B's mixes: five slots across, one tap loads. */
+  .b9-opt-b .b9-mix-list {
+    display: grid;
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+    gap: var(--space-2);
+  }
+
+  .b9-opt-b .b9-mix {
+    position: relative;
+    grid-template-columns: 1fr;
+    grid-template-areas: "faces" "words" "load";
+    justify-items: center;
+    gap: 2px;
+    padding: var(--space-1);
+    text-align: center;
+  }
+
+  .b9-opt-b .b9-mix__faces { grid-area: faces; }
+  .b9-opt-b .b9-mix__words { grid-area: words; align-items: center; }
+  .b9-opt-b .b9-mix__load { grid-area: load; width: 100%; min-height: 32px; padding: 0; }
+  .b9-opt-b .b9-mix__meta { display: none; }
+  .b9-opt-b .b9-mixrows { gap: 4px; }
+  .b9-opt-b .b9-mix__face:nth-child(n + 3) { display: none; }
+  .b9-opt-b .b9-mix__picture { width: 30px; height: 30px; }
+  .b9-opt-b .b9-mix__name { font-size: 12px; line-height: 1.1; }
+  .b9-opt-b .b9-mix__edit {
+    position: absolute;
+    top: -6px;
+    right: -6px;
+    min-width: 28px;
+    min-height: 28px;
+    border-radius: 999px;
+    background: var(--colour-surface-base);
+    font-size: 12px;
+  }
+  .b9-opt-b .b9-mix--empty { grid-template-areas: none; align-content: center; }
+  .b9-opt-b .b9-mix__saveslot { flex-direction: column; height: 100%; padding: 0; font-size: 12px; }
+
+  .b9-opt-b .hatch-line__now {
+    flex-wrap: nowrap;
+  }
+
+  .b9-opt-b .hatch-line__now .hatch-now {
+    width: 80px;
+    grid-template-columns: 1fr;
+    justify-items: center;
+    text-align: center;
+    padding: var(--space-1);
+    font-size: 11px;
+  }
+
+  .b9-opt-b .hatch-line__now .hatch-now--more {
+    display: none;
+  }
+
+  /* The info panel as one bar under the grid: who, then the stepper and Add. */
+  .b9-opt-b .hatch-info {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1.2fr);
+    align-items: center;
+    column-gap: var(--space-4);
+  }
+
+  .b9-opt-b .hatch-info > .hatch-add {
+    grid-column: 2;
+    grid-row: 1 / span 3;
+  }
+
+  .b9-opt-b .hatch-info__stats {
+    display: none;
+  }
+
+  .b9-opt-b .hatch-line--hcc .hatch-slot {
+    width: calc((100% - 4 * var(--space-2)) / 5);
+  }
+
+  .b9-opt-b .hatch-line--hcc .hatch-line__totals {
+    flex-basis: 100%;
+  }
+}
+
+.b9-mixrows {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+/* ── Phones ──────────────────────────────────────────────────────────── */
+
+@container hatch (width < 880px) {
+  .b9-opt-b .b9-switch {
+    display: inline-flex;
+  }
+
+  .b9-opt-b.b9-view-queue .hatch-pick,
+  .b9-opt-b.b9-view-queue .hatch-info {
+    display: none;
+  }
+
+  .b9-opt-b.b9-view-build .hatch-lines,
+  .b9-opt-b.b9-view-build .hatch-message,
+  .b9-opt-b.b9-view-build .b9-mixrows {
+    display: none;
+  }
+
+  .b9-hcc .hatch-line--hcc .hatch-slot {
+    width: auto;
+  }
+
+  .b9-hcc .hatch-line--hcc > .hatch-line__slots {
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+    grid-template-rows: none;
+  }
+
+  .b9-hcc-bar {
+    flex-wrap: wrap;
+    row-gap: var(--space-1);
+  }
+
+  .b9-hcc-bar > * {
+    flex: none;
+    white-space: nowrap;
+  }
+
+  .b9-hcc-bar > .hatch-line__totals {
+    flex: 1 1 100%;
+    order: 5;
+  }
+
+  .b9-select {
+    flex: 1 1 auto;
+    min-width: 0;
+  }
+
+  .b9-mixes,
+  .b9-yards {
+    left: var(--space-2);
+    right: var(--space-2);
+    width: auto;
+    top: 56px;
+    max-height: calc(100% - 64px);
+  }
+
+  .b9-mix {
+    grid-template-columns: minmax(0, 1fr) auto auto;
+    grid-template-areas: "words load edit" "faces faces faces";
+  }
+
+  .b9-mix__words {
+    grid-area: words;
+  }
+
+  .b9-mix__faces {
+    grid-area: faces;
+  }
+
+  .b9-mix__load {
+    grid-area: load;
+  }
+
+  .b9-mix__edit {
+    grid-area: edit;
+  }
+
+  .b9-mix--empty {
+    grid-template-areas: none;
+  }
+
+  .b9-chip__words {
+    max-width: 9rem;
+    overflow-wrap: anywhere;
+  }
+
+  /* C on a phone: the rail is a list first; here it sits over the editor. */
+  .b9-opt-c.b9-level-3 > .b9-rail {
+    display: none;
+  }
+}
+
+.b9-only-phone {
+  display: none;
+}
+
+@container hatch (width < 880px) {
+  .b9-only-phone {
+    display: inline-flex;
+  }
+
+  .b9-opt-c.b9-level-3.b9-show-rail > .b9-rail {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-2);
+    flex: 1;
+    min-height: 0;
+  }
+
+  .b9-opt-c.b9-level-3.b9-show-rail > :not(.b9-rail) {
+    display: none;
+  }
+}
+
+@media (max-width: 620px), (max-height: 500px) {
+  .b9-opt-c.b9-level-3 {
+    display: flex;
+  }
+}
+
+/* A and C: the line's totals (time, speed up, Clear all) ride in the bar, saving a row. */
+.b9-hcc-bar > .hatch-line__totals {
+  flex: 1;
+  order: 0;
+  flex-basis: auto;
+  margin: 0;
+}
+
+.b9-hcc-bar > .b9-hcc-bar__spacer:has(+ * ) {
+  flex: 0;
+}

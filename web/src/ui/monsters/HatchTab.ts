@@ -65,6 +65,7 @@ import {
   type MonstersTabContext,
 } from "./monstersTab";
 import { weekendChip } from "@/ui/events/weekendUi";
+import { B9Hcc, b9HccOn, b9Stacks } from "@/proto/b9Hcc";
 
 /** Hatch Rush's "−30%" chip after a hatch time, or nothing. */
 const hatchRushChip = (): (Node | string)[] => {
@@ -419,7 +420,13 @@ export class HatchTab implements MonstersTab {
     // The status floats over the top of the tab, outside the scroll box, so a
     // message never makes the tab taller (patch 7.6).
     this.element.append(this.tabsRow, this.scroll, this.status);
+    // PROTOTYPE (b9 HCC levels 2 and 3), never merged.
+    if (b9HccOn()) {
+      this.b9 = new B9Hcc(this.element, this.scroll, () => this.store.save, () => this.render());
+    }
   }
+
+  private b9: B9Hcc | null = null;
 
   private get store() {
     return this.context.binding.store;
@@ -592,7 +599,8 @@ export class HatchTab implements MonstersTab {
 
   private draw(): void {
     const store = this.store;
-    const yard = readHatchYard(store.save, store.now());
+    const read = readHatchYard(store.save, store.now());
+    const yard = this.b9 && read.hcc ? this.b9.fakeYard(read) : read;
     this.yard = yard;
     this.numbers = hatcheryNumbers(yard);
     this.target = pickTarget(yard, this.target);
@@ -622,6 +630,7 @@ export class HatchTab implements MonstersTab {
     }
     this.drawCount(document.activeElement !== this.stepper.input);
     this.markYard(yard.hcc || yard.hatcheries.length === 0 ? null : this.target);
+    this.b9?.afterDraw();
   }
 
   /**
@@ -968,7 +977,7 @@ export class HatchTab implements MonstersTab {
     slots.setAttribute("role", "group");
     slots.setAttribute("aria-label", "Waiting");
     yard.shared.forEach((stack, at) => slots.append(this.stackSlot("hcc", stack, at + 1, preview)));
-    let free = HCC_STACKS - yard.shared.length;
+    let free = b9Stacks(HCC_STACKS) - yard.shared.length;
     for (const count of preview?.fresh ?? []) {
       if (free <= 0) break;
       slots.append(previewSlot(preview!.monster, count));
