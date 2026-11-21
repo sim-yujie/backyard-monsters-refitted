@@ -385,7 +385,8 @@ export class FriendsWindow {
     gift.disabled = sent;
     // PROTOTYPE (b9 Baiter B): invite this friend to test your main yard.
     if (b9Baiter() === "b") {
-      const test = add("Test my yard", "outline", () => {}, "Invite them to test your main yard for 24 h");
+      const test = add("Invite", "outline", () => {}, "Invite them to test your main yard for 24 h");
+      test.setAttribute("aria-label", "Invite to test my yard");
       test.prepend(gameIcon("swords", { size: 16, decorative: true }), " ");
     }
     actions.dataset["count"] = String(actions.childElementCount);

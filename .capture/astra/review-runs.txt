@@ -1,0 +1,3 @@
+hcc exit 0
+arrows exit 0
+baiter exit 0

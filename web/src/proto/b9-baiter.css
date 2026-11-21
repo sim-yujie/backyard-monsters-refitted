@@ -125,12 +125,10 @@
   color: var(--colour-accent-text, #fff);
 }
 
+/* A picked person: the whole row's frame and fill take a soft accent tint. */
 .b9b-row--on {
-  box-shadow: inset 3px 0 0 var(--colour-accent);
-}
-
-.b9b-row--new {
-  box-shadow: inset 3px 0 0 var(--colour-warning);
+  border-color: color-mix(in srgb, var(--colour-accent) 60%, var(--colour-border));
+  background: color-mix(in srgb, var(--colour-accent) 14%, transparent);
 }
 
 .b9b-iconbtn {
@@ -273,5 +271,70 @@
     width: min(900px, calc(100vw - 2 * var(--space-4)));
     --centre-height: 620px;
     --centre-min-height: 600px;
+  }
+}
+
+/* Review round 1 (astra). */
+.b9b-cancel {
+  width: 44px;
+  height: 44px;
+  padding: 0;
+}
+
+.b9b-left {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  font-weight: 700;
+}
+
+.b9b-results .friends-row__meta,
+.b9b-received .friends-row__meta {
+  flex-wrap: wrap;
+  white-space: normal;
+}
+
+.b9b-results .friends-row__note {
+  overflow: visible;
+  text-overflow: clip;
+  white-space: nowrap;
+}
+
+/* New results: a dot by the name. */
+.b9b-row--new .friends-row__name::after {
+  content: "";
+  display: inline-block;
+  width: 9px;
+  height: 9px;
+  margin-left: 6px;
+  border-radius: 50%;
+  background: var(--colour-warning);
+  vertical-align: middle;
+}
+
+.b9b-seg {
+  flex-wrap: nowrap;
+}
+
+.b9b-seg__tab {
+  flex: 1;
+  padding: 0 var(--space-2);
+}
+
+/* A on a phone: four tabs share the head's width. */
+@media (max-width: 620px) {
+  .baiter__tabs {
+    display: flex;
+    flex-wrap: nowrap;
+    gap: 4px;
+  }
+
+  .baiter__tabs > .baiter__tab {
+    flex: 1 1 0;
+    min-width: 0;
+    padding: 0 4px;
+    font-size: 12px;
+    white-space: normal;
+    line-height: 1.1;
   }
 }

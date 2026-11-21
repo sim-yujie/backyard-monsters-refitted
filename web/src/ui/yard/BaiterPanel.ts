@@ -243,11 +243,13 @@ export class BaiterPanel {
       const views: [string, HTMLElement][] = [
         ["Army", army],
         ["Invite", invitePane()],
-        [`Invites ${B9_COUNTS.invitedMe}`, invitedMePane()],
+        [`Invited me ${B9_COUNTS.invitedMe}`, invitedMePane()],
         [`Results ${B9_COUNTS.results}`, resultsPane()],
       ];
       for (const [, view] of views.slice(1)) view.classList.add("baiter__view");
-      this.body.append(this.tabs(views, Number(b9("b9tab") ?? 0)), ...views.map(([, view]) => view));
+      // The tabs in the window's fixed head, so they never scroll away on a phone.
+      this.popup.setHead(this.tabs(views, Number(b9("b9tab") ?? 0)));
+      this.body.append(...views.map(([, view]) => view));
     } else if (recent.length > 0) {
       const history = document.createElement("div");
       history.className = "baiter__view baiter__view--recent";

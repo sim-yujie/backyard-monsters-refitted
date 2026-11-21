@@ -13,6 +13,7 @@
 import type { HatchYard, QueueStack } from "@/game/monsters/hatchPlan";
 import { monsterEntry } from "@/game/monsters/monsterCatalogue";
 import { gameIcon } from "@/ui/gameIcon";
+import { lockArt } from "@/ui/lockArt";
 import { monsterPicture } from "@/ui/monsters/LockerTab";
 import { ownYardsOf } from "@/game/yard/ownYards";
 import { outpostLabels } from "@/game/yard/outpostLabels";
@@ -142,6 +143,15 @@ export class B9Hcc {
   /** After each draw of the tab: the mix rows of B go under the queue. */
   afterDraw(): void {
     this.root.classList.toggle("b9-remote", this.remote !== null);
+    // The window's housing line names the yard it counts while an outpost is run from home.
+    const value = this.root.closest(".monsters-screen, .panel")?.querySelector<HTMLElement>(".monsters-header__value");
+    const label = this.root.closest(".monsters-screen, .panel")?.querySelector<HTMLElement>(".monsters-header__label");
+    if (value && label) {
+      if (!label.dataset["b9"]) label.dataset["b9"] = label.textContent ?? "";
+      if (!value.dataset["b9"]) value.dataset["b9"] = value.textContent ?? "";
+      label.textContent = this.remote ? `Housing · ${this.remote.title}` : label.dataset["b9"];
+      value.textContent = this.remote ? "4,000 / 9,600" : value.dataset["b9"];
+    }
     this.root.classList.toggle("b9-view-build", this.view === "build");
     this.root.classList.toggle("b9-view-queue", this.view === "queue");
     {
@@ -206,6 +216,12 @@ export class B9Hcc {
     if (this.option !== "c" || this.level < 3) parts.push(this.yardChip());
     else {
       // C on a phone: the editor's way back to the yard list.
+      if (this.remote) {
+        const home = btn("b9-chip b9-chip--home");
+        home.append(gameIcon("townhall", { size: 24, decorative: true }), el("span", "b9-chip__words", "Home"));
+        home.addEventListener("click", () => this.setRemote(null));
+        parts.push(home);
+      }
       const back = btn(`b9-chip${this.remote ? " b9-chip--remote" : " b9-only-phone"}`);
       back.append("‹ ", gameIcon("outpost", { size: 24, decorative: true }), el("span", "b9-chip__words", this.remote?.title ?? "Main yard"));
       back.addEventListener("click", () => {
@@ -226,7 +242,9 @@ export class B9Hcc {
       const locked = btn("b9-chip b9-chip--locked");
       locked.disabled = true;
       locked.title = "Run your outposts' HCCs from here at HCC level 3";
-      locked.append(gameIcon("outpost", { size: 24, decorative: true }), el("span", "b9-chip__words", "Outposts"), el("span", "b9-lock", "HCC 3"));
+      const lock = el("span", "b9-lock");
+      lock.append(lockArt(14), " HCC 3");
+      locked.append(gameIcon("outpost", { size: 24, decorative: true }), el("span", "b9-chip__words", "Outposts"), lock);
       return locked;
     }
     if (this.remote) {
@@ -317,7 +335,7 @@ export class B9Hcc {
     }
     const total = mix.stacks.reduce((sum, [, count]) => sum + count, 0);
     const meta = el("span", "b9-mix__meta");
-    meta.append(gameIcon("housing", { size: 16, decorative: true }), `${total}`);
+    meta.append(gameIcon("housing", { size: 16, decorative: true }), `${total * 8} space`);
     const load = btn("btn btn--primary b9-mix__load", "Load");
     load.title = `Fill the queue with ${mix.name}`;
     const edit = btn("btn btn--ghost b9-mix__edit", "✎");
@@ -351,13 +369,14 @@ export class B9Hcc {
     }
     const head = el("header", "b9-panel__head");
     const title = el("h3", "b9-panel__title");
-    title.append(gameIcon("lastarmy", { size: 24, decorative: true }), this.remote ? `Mixes · ${this.remote.title}` : "Mixes · Main yard");
+    title.append(gameIcon("lastarmy", { size: 24, decorative: true }), "Mixes");
     const close = btn("b9-panel__close", "✕");
     close.setAttribute("aria-label", "Close mixes");
     close.addEventListener("click", () => this.toggle(this.drawer));
-    head.append(title, el("span", "b9-panel__slots", `${this.mixes().length}/${MIX_SLOTS}`), close);
-    const note = el("p", "b9-panel__note", "Load adds the mix to the queue and pays its goo.");
-    this.drawer.replaceChildren(head, this.mixList(), note);
+    const save = btn("btn btn--secondary b9-save");
+    save.append(gameIcon("lastarmy", { size: 24, decorative: true }), "Save queue");
+    head.append(title, el("span", "b9-panel__slots", `${this.mixes().length}/${MIX_SLOTS}`), save, close);
+    this.drawer.replaceChildren(head, this.mixList());
   }
 
   private renderMixRows(): void {
@@ -417,7 +436,10 @@ export class B9Hcc {
     const count = this.yards().filter((one) => one.kind === "outpost" && one.hcc).length;
     const title = el("h3", "b9-panel__title");
     title.append(gameIcon("outpost", { size: 24, decorative: true }), "Run an HCC");
-    head.append(title, el("span", "b9-panel__slots", `${count} outposts`));
+    const close = btn("b9-panel__close", "✕");
+    close.setAttribute("aria-label", "Close the yard list");
+    close.addEventListener("click", () => this.toggle(this.picker));
+    head.append(title, el("span", "b9-panel__slots", `${count} outposts`), close);
     this.picker.replaceChildren(head, this.search(), this.yardList());
   }
 

@@ -148,8 +148,8 @@ export const invitePane = (): HTMLElement => {
 
   const foot = make("footer", "b9b-foot");
   foot.append(
-    make("span", "b9b-foot__note", "24 h, as many tests as they like"),
-    iconBtn("mail", `Invite ${SELECTED.size}`, "primary", "b9b-send"),
+    make("span", "b9b-foot__note", `${SELECTED.size} picked · 24 h, any number of tests`),
+    iconBtn("mail", `Send ${SELECTED.size}`, "primary", "b9b-send"),
   );
   pane.append(pick, side, foot);
   return pane;
@@ -165,7 +165,9 @@ export const invitedMePane = (onTest?: (name: string, cap: string, left: string)
     test.addEventListener("click", () => onTest?.(row.name, row.cap, row.left));
     const cap = make("span", "b9b-cap");
     cap.append(gameIcon("housing", { size: 16, label: "Army cap" }), row.cap);
-    list.append(playerRow(person(row.userid, row.name), { note: `${row.left} left`, marks: [cap], actions: [test] }));
+    const left = make("span", "b9b-left");
+    left.append(gameIcon("time", { size: 16, label: "Time left" }), row.left);
+    list.append(playerRow(person(row.userid, row.name), { marks: [cap, left], actions: [test] }));
   }
   pane.append(list);
   return pane;
@@ -183,6 +185,7 @@ export const resultsPane = (): HTMLElement => {
     damage.append(gameIcon("yarddamage", { size: 16, label: "Damage" }), `${row.damage}%`);
     const watch = iconBtn("camera", "Watch", "outline", "b9b-watch");
     const report = iconBtn("report", "Report", "ghost", "b9b-report");
+    report.title = "The battle report";
     const item = playerRow(person(row.userid, row.name), {
       note: `${row.ago} ago · ${row.time}`,
       marks: [result, damage],

@@ -1,0 +1,114 @@
+Reading prompt from stdin...
+OpenAI Codex v0.169.0
+--------
+workdir: /home/yujiesim/Coding/backyard-monsters-refitted/worktrees/b9-screens/.capture/astra
+model: gpt-6-astra
+provider: openai
+approval: never
+sandbox: read-only
+reasoning effort: none
+reasoning summaries: none
+session id: 01a1fd1e-b13e-7252-bf6d-c3d2f4e4951a
+--------
+user
+You are "astra", a blunt senior UI/UX designer for a mobile+desktop browser game (Backyard Monsters Revamped, a remake of the 2010 Flash base-builder). Do not run commands or edit files; look at the attached real in-game screenshots and write DESIGN ADVICE.
+
+OWNER'S TASTE (binding)
+- Icons over words; short in-game text (a few words); icons are PAINTED game-style pictures (the game already has painted arrows, flags, house, monster portraits, resource icons), never thin line icons.
+- Two looks share one layout: Modern = dark steel/riveted windows with gold plaques and gold buttons; Classic = the Flash look refreshed (parchment, brown wood). Design once, both looks must work.
+- Screens: desktop 1280x720 up to 1920x1080, iPad, phone upright 390x844, phone on its side 844x390. Touch targets >= 44 px. Nothing important cut with "...". Windows: title, tabs and close always visible; only the list inside scrolls.
+- The owner is visual and picks from pictures, so each direction must be concrete enough to build: say where each element sits, its size, what it shows, and what a tap does, at desktop AND at 390x844.
+
+YOUR ANSWER
+For the screen below give 2 or 3 STRUCTURALLY different directions (not restyles of one idea), named A/B/C. For each: one-line summary; layout at desktop; layout at 390x844 (and 844x390 if relevant); the flow step by step; the main risk. Then your recommended pick and why (3 lines). Then the open questions the owner must decide that the fixed decisions do not cover. Be concise: under 900 words.
+
+SCREEN 2: HATCHERY CONTROL CENTRE (HCC) LEVELS 2 AND 3
+Today (pictures 1-4) the HCC has one level. With an HCC, the Monsters window's Hatch tab shows: a row of hatchery cards (#1..#5, what each hatches now), then ONE shared queue row of 7 stacks (each stack up to 20 of one monster: "x20" badge, picture, name, "-" to take one out; free slots are dashed "Empty" boxes), then the totals ("All done in 20h 0m", "Finish now or speed up", "Clear all"), the housing line, the monster grid (tap = choose) and the info panel (portrait, stepper -, count, +, +5, +10, Max, big Add). On a phone the panel is a bar fixed at the bottom.
+Fixed decisions (owner, 21 Nov):
+- L2: SAVED MONSTER MIXES (presets): save the current queue as a named mix, load a mix with one tap (it fills the queue with that mix, paying goo as usual). Number of mix slots not decided; assume 3-5. The queue grows from 7 to 10 stacks of 20.
+- L3: stacks of 30 (still 10 stacks), plus "manage your outposts from home": from the main yard's HCC, pick one of your outposts THAT HAS ITS OWN HCC from a list (a player can own hundreds of outposts; yardtester has 11, 10 with an HCC), then edit THAT outpost's queue here as if standing in it (its own hatcheries, its own housing, its own goo? assume the outpost's own resources). Outpost mixes are saved separately from home mixes.
+Design: where the mixes live (strip, dropdown, side tab...), how save/load/rename/overwrite works, how 10 stacks fit at 1280 (today 7 + totals already fill the width) and at 390, how the L3 outpost picker works and how the window makes it unmistakable that you are now editing OUTPOST X and not home (and how to get back), and how locked L2/L3 features show on an L1 HCC (upgrade teaser or hidden).
+Pictures: 1 Hatch tab with HCC, Modern 1280x720 (busy: 5 hatcheries waiting for housing, 5 stacks queued); 2 same Classic; 3 Modern 390x844; 4 Classic 390x844.
+
+hook: SessionStart
+hook: SessionStart Completed
+hook: UserPromptSubmit
+hook: UserPromptSubmit Completed
+codex
+The current phone layout spends most of the screen on hatcheries and empty queue slots. Adding mixes underneath will bury the work. Shrink those summaries, give totals their own line, and keep the bottom Add bar fully visible.
+
+All directions use painted monster portraits, houses, flags, arrows and goo icons. Modern gets steel surfaces and gold action buttons; Classic gets parchment and wood. Interactive targets are at least 44 px. Title, tabs, close and yard identity stay fixed; only the active list scrolls.
+
+## A — Queue first, mixes in a drawer
+
+**Summary:** Keep the familiar workbench; move saved mixes into a dedicated drawer.
+
+**Desktop:** Inside the existing roughly 1160 px window, place a 44 px yard selector below the tabs, with a painted flag and full yard name. At right: **Mixes** and its painted stacked-portraits icon. Below, five 48 px hatchery summaries show number, portrait and status.
+
+Give all ten queue stacks one row: approximately 96 × 68 px each. Show portrait and count; selecting one exposes its name and 44 px remove control in the right panel. Empty slots become quiet numbered sockets. Put time, speed-up and Clear on a separate 44 px line. Below: compact housing forecast, monster grid left, existing quantity/Add panel right.
+
+**390 × 844:** Use a near-fullscreen window. Reserve approximately 145 px for title, tabs and yard selector; tabs scroll horizontally without truncation. Five hatcheries share one 44 px summary row. Queue uses five columns × two rows of 52 × 48 px portrait/count tiles. A 44 px totals row follows. Housing becomes a house icon plus **18,720 / 2,160**, with details on tap. The monster list scrolls above a fixed 104 px quantity/Add bar.
+
+**Flow:**
+1. Open Mixes: a 320 px desktop drawer or phone sheet replaces the list area.
+2. Three–five 64 px rows show name, portrait previews, total count and goo cost. Tap a row to load immediately.
+3. **Save queue** opens a name field and empty slots. Selecting an occupied slot shows the old/new composition and **Overwrite**.
+4. Each row has a 44 px edit button for Rename.
+5. L3 yard selector opens a searchable list: Home pinned, recent outposts next, then eligible outposts. Selecting one switches all data and closes the picker.
+
+While remote, retain **Outpost · [name]**, its goo balance and a painted 44 px **Home** button. Long names wrap.
+
+**L1:** Locked Mixes and outpost controls open short **HCC 2** / **HCC 3** upgrade previews.
+
+**Main risk:** Even compressed, the phone still carries substantial status above monster selection.
+
+## B — Build and Queue are separate workspaces
+
+**Summary:** Give monster selection and queue management their own space; mixes belong beside the queue.
+
+**Desktop:** Keep the yard selector below the main tabs. Split the body into a 680 px monster catalogue and a 400 px queue workspace. The catalogue includes the selected monster’s quantity/Add controls along its bottom. The queue side contains five compact hatchery indicators, ten stacks in a five-by-two grid, housing/time totals, then three–five mix rows. Queue cards are approximately 68 × 60 px; mix rows are 44 px high.
+
+**390 × 844:** Below the fixed title, main tabs and yard selector, add a 44 px **Build | Queue · 10** switch. Build shows a three-column monster grid and fixed 104 px Add bar. Queue shows hatcheries, five-by-two stacks, totals and mixes in one scrolling list. Its fixed footer holds Speed up and Clear. Adding a monster updates the Queue count immediately.
+
+**844 × 390:** Use the desktop split with independently scrolling lists and fixed controls; compact header, tabs and yard identity consume roughly 100 px.
+
+**Flow:**
+1. Choose monsters in Build; set quantity; Add.
+2. Open Queue to inspect stacks or remove monsters.
+3. Tap a saved mix row to load; updated stacks appear immediately above it.
+4. **Save queue** creates a named slot; an edit button opens Rename or **Replace with current queue**, followed by an explicit overwrite comparison.
+5. L3 opens the same searchable, Home-pinned outpost picker as A. Yard name and local goo remain above both workspaces, with a persistent Home button.
+
+**L1:** Show one compact locked mix row in Queue; a locked flag beside Home previews remote control.
+
+**Main risk:** Phone users must switch views to inspect the full queue while building it.
+
+## C — Yard roster, then focused queue editor
+
+**Summary:** Make L3 a management destination for players with many outposts.
+
+**Desktop:** A 240 px searchable yard rail stays left; Home is pinned. Each 56 px row shows flag, name and blocked/working status. The remaining editor uses ten stacks in two rows, a monster catalogue and bottom Add controls. Mixes sit in a named dropdown beside **Save queue**.
+
+**390 × 844:** Enter on a searchable yard list. Tap Home or an eligible outpost to open its editor. A fixed **Yards** back button, full yard name and local goo identify the target. The editor uses B’s Build/Queue switch. At 844 × 390, restore the yard rail.
+
+**Flow:** Select yard → build or edit queue → open mix dropdown → tap to load. Save queue chooses an empty or occupied slot; occupied slots require Overwrite. Dropdown edit controls rename mixes. Home stays first in the yard list.
+
+**L1:** Open directly into Home; locked Mixes and Yards controls preview their upgrade levels.
+
+**Main risk:** Adds navigation overhead for players who mostly hatch at home.
+
+**Recommended: B.** It gives the phone enough room to choose monsters and makes ten stacks manageable.  
+Desktop preserves simultaneous catalogue and queue visibility.  
+Choose C only if managing many outposts is the dominant activity.
+
+**Owner decisions still needed:**
+
+- Three, four or five mix slots?
+- Does loading replace or append to an existing queue?
+- If goo or queue space is insufficient: reject the load or allow a partial mix?
+- Does a mix capture waiting, already-hatched monsters?
+- Are remote capabilities limited by the target outpost’s HCC level?
+hook: Stop
+hook: Stop Completed
+tokens used
+14,988

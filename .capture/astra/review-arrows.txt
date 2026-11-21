@@ -1,0 +1,3 @@
+
+SCREEN: OUTPOST ARROWS. < > step through your own yards (Main -> pinned outposts -> the rest); here the player is on the pinned outpost "main outpost" (2nd in order), so both arrows are live. A = arrows either side of the yard-switcher flag, the yard name under all three, above Map/Friends. B = Prev/Next beside Map in the bottom row; Friends moves into the More menu (not shown). C = the flag opens a small tray: Prev, All yards (the full list), Next.
+Pictures: 1 A Modern 390x844; 2 B Modern 390x844; 3 C Modern 390x844 (tray open); 4 A Classic 844x390; 5 B Classic 844x390; 6 C Modern 844x390 (tray opens to the right); 7 A Modern 1280x720; 8 B Classic 1280x720; 9 C Classic 1280x720.

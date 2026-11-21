@@ -167,3 +167,31 @@
     left: calc(100% + var(--space-2));
   }
 }
+
+/* Review round 1 (astra): the flag says it opens the list; C's open flag glows, not greys. */
+.b9-arrows-a .yard-switcher__button > .yard-dock__disc::after,
+.b9-arrows-c .yard-switcher__button > .yard-dock__disc::after {
+  content: "▾";
+  position: absolute;
+  bottom: 2px;
+  left: 50%;
+  transform: translateX(-50%);
+  color: var(--colour-accent);
+  font-size: 14px;
+  line-height: 1;
+}
+.b9-arrows-a .yard-switcher > .friend-hop__button {
+  align-self: center;
+}
+.b9-arrows-c .yard-switcher:has(.b9-tray:not([hidden])) .yard-switcher__button .yard-dock__disc {
+  box-shadow: 0 0 0 3px var(--colour-accent), var(--shadow-popup);
+}
+.b9-tray .friend-hop__button .yard-dock__label {
+  display: none;
+}
+.b9-tray {
+  padding: var(--space-2);
+}
+.b9-tray .friend-hop__button {
+  align-self: flex-start;
+}

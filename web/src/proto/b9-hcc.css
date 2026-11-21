@@ -348,7 +348,7 @@
 
 .b9-opt-c.b9-level-3 {
   display: grid;
-  grid-template-columns: 240px minmax(0, 1fr);
+  grid-template-columns: 200px minmax(0, 1fr);
   grid-template-rows: auto minmax(0, 1fr);
   column-gap: var(--space-4);
 }
@@ -425,7 +425,8 @@
   }
 
   .b9-opt-b .hatch-now__state {
-    display: none;
+    font-size: 10px;
+    line-height: 1.1;
   }
 
   .b9-opt-b .hatch__grid {
@@ -454,7 +455,7 @@
   .b9-opt-b .b9-mix__load { grid-area: load; width: 100%; min-height: 32px; padding: 0; }
   .b9-opt-b .b9-mix__meta { display: none; }
   .b9-opt-b .b9-mixrows { gap: 4px; }
-  .b9-opt-b .b9-mix__face:nth-child(n + 3) { display: none; }
+  .b9-opt-b .b9-mix__face:nth-child(n + 2) { display: none; }
   .b9-opt-b .b9-mix__picture { width: 30px; height: 30px; }
   .b9-opt-b .b9-mix__name { font-size: 12px; line-height: 1.1; }
   .b9-opt-b .b9-mix__edit {
@@ -649,4 +650,28 @@
 
 .b9-hcc-bar > .b9-hcc-bar__spacer:has(+ * ) {
   flex: 0;
+}
+
+.b9-lock {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.b9-yard-list {
+  padding-bottom: var(--space-3);
+}
+
+/* C: fewer monsters across beside the rail. */
+@container hatch (width >= 880px) {
+  .b9-opt-c.b9-level-3 .hatch__grid {
+    grid-template-columns: repeat(6, minmax(0, 1fr));
+  }
+}
+
+/* C, wide: the rail already marks the outpost; the bar keeps Home only. */
+@container hatch (width >= 880px) {
+  .b9-opt-c .b9-hcc-bar > .b9-chip--remote {
+    display: none;
+  }
 }
