@@ -5,6 +5,7 @@ const ALL = {
   "a-l2-mixes": "b9hcc=2&b9hccopt=a&b9state=mixes",
   "a-l3-picker": "b9hcc=3&b9hccopt=a&b9state=picker",
   "a-l3-remote": "b9hcc=3&b9hccopt=a&b9state=remote",
+  "a-l3-remote-mixes": "b9hcc=3&b9hccopt=a&b9state=remote,mixes",
   "b-l2": "b9hcc=2&b9hccopt=b",
   "b-l3-picker": "b9hcc=3&b9hccopt=b&b9state=picker",
   "b-l3-remote": "b9hcc=3&b9hccopt=b&b9state=remote",

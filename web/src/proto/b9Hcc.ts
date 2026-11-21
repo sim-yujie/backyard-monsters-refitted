@@ -134,7 +134,10 @@ export class B9Hcc {
   fakeYard(yard: HatchYard): HatchYard {
     const size = b9StackSize(20);
     if (this.remote) {
-      const hatcheries = yard.hatcheries.slice(0, 2).map((one) => ({ ...one, monster: "C7", stage: 1 as const }));
+      const endsAt = Math.floor(Date.now() / 1000) + 620;
+      const hatcheries = yard.hatcheries
+        .slice(0, 2)
+        .map((one) => ({ ...one, monster: "C7", stage: 1 as const, countdown: 620, state: "producing" as const, endsAt }));
       return { ...yard, hatcheries, shared: outpostQueue(size), capacity: 9_600, housed: { C7: 120, C2: 80 }, goo: 18_400_000 };
     }
     return { ...yard, shared: busyQueue(size) };
@@ -150,7 +153,7 @@ export class B9Hcc {
       if (!label.dataset["b9"]) label.dataset["b9"] = label.textContent ?? "";
       if (!value.dataset["b9"]) value.dataset["b9"] = value.textContent ?? "";
       label.textContent = this.remote ? `Housing · ${this.remote.title}` : label.dataset["b9"];
-      value.textContent = this.remote ? "4,000 / 9,600" : value.dataset["b9"];
+      value.textContent = this.remote ? "3,200 / 9,600" : value.dataset["b9"];
     }
     this.root.classList.toggle("b9-view-build", this.view === "build");
     this.root.classList.toggle("b9-view-queue", this.view === "queue");

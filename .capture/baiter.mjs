@@ -3,14 +3,16 @@ const NOTE_IN = ["SlimeQueen invited you to test their yard (24 h)", "Test"];
 const NOTE_OUT = ["VorgLord tested your yard: Flattened, 100%", "Watch"];
 const ALL = {
   "a-invite": ["b9baiter=a&b9tab=1", "baiter"],
-  "a-invites": ["b9baiter=a&b9tab=2", "baiter", NOTE_IN],
+  "a-invites": ["b9baiter=a&b9tab=2", "baiter"],
+  "note-in": ["b9baiter=a", "yard", NOTE_IN],
+  "note-out": ["b9baiter=a", "yard", NOTE_OUT],
   "a-host": ["b9baiter=a&b9host=SlimeQueen", "baiter"],
-  "a-results": ["b9baiter=a&b9tab=3", "baiter", NOTE_OUT],
+  "a-results": ["b9baiter=a&b9tab=3", "baiter"],
   "b-row": ["b9baiter=b", "row"],
   "b-invite": ["b9baiter=b&b9pane=invite", "tests"],
-  "b-invited": ["b9baiter=b&b9pane=invited", "tests", NOTE_IN],
+  "b-invited": ["b9baiter=b&b9pane=invited", "tests"],
   "b-host": ["b9baiter=b&b9host=SlimeQueen", "baiter"],
-  "b-results": ["b9baiter=b&b9pane=results", "tests", NOTE_OUT],
+  "b-results": ["b9baiter=b&b9pane=results", "tests"],
 };
 const jobs = (process.argv[2] || Object.keys(ALL).join(",")).split(",");
 const looks = (process.argv[3] || "modern,classic").split(",");
@@ -28,7 +30,12 @@ for (const look of looks) for (const [w, h] of sizes) {
       await page.keyboard.press("Escape").catch(() => {});
       if (note) { await page.evaluate(([t, a]) => window.__b9notice(t, a), note); await page.waitForTimeout(300); }
       let sel = ".popup, .panel";
-      if (where === "baiter") {
+      if (where === "yard") {
+        await page.waitForTimeout(500);
+        await shot(page, `baiter/${tag}`);
+        await crop(page, ".notice", `baiter/${tag}-crop`, 12);
+        continue;
+      } else if (where === "baiter") {
         await page.evaluate(() => window.__yardSelect(592)); await page.waitForTimeout(1200);
         await page.getByRole("button", { name: "Test attack" }).first().click(); await page.waitForTimeout(1500);
         sel = ".baiter-window";
