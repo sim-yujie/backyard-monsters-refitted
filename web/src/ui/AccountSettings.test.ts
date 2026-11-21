@@ -464,6 +464,25 @@ describe("AccountSettings", () => {
     }
   });
 
+  it("on a Low this device chose (no graphics card), says so and not that the music is off; picking Low does (beta 9)", async () => {
+    localStorage.clear();
+    setDeviceDefaultQuality("low");
+    try {
+      await open({});
+      const select = document.querySelector<HTMLSelectElement>("#settings-quality")!;
+      expect(select.value).toBe("low");
+      const hint = document.querySelector("#settings-quality-hint")!;
+      expect(hint.textContent).toBe(SETTINGS_TEXT.downloadHintDeviceLow);
+      select.value = "low";
+      select.dispatchEvent(new Event("change"));
+      expect(localStorage.getItem("bymr.quality")).toBe("low");
+      expect(hint.textContent).toContain(SETTINGS_TEXT.downloadHint.low);
+    } finally {
+      setDeviceDefaultQuality(null);
+      localStorage.clear();
+    }
+  });
+
   it("High on a phone or tablet says its monsters are the lighter ones; on a desktop it does not (patch 7.11)", async () => {
     localStorage.clear();
     localStorage.setItem("bymr.quality", "high");
