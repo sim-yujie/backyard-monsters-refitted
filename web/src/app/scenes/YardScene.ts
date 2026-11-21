@@ -1166,10 +1166,14 @@ export class YardScene implements Scene {
       // (`attackArt.ts`, beta 9): Pixi's collector took 60-95 s, 45-55 MB on a phone meanwhile.
       void this.renderer.artIn.then(() => {
         // A moment later, so the yard has drawn (and so kept) what it uses.
-        setTimeout(() => {
+        // Asked again while no frame is being drawn (a hidden tab), for up to a minute.
+        let tries = 0;
+        const free = (): void => {
           if (this.context !== context) return;
-          freeAttackArt((context.renderer as { gc?: TextureCollector }).gc);
-        }, UNUSED_MS + 500);
+          const result = freeAttackArt((context.renderer as { gc?: TextureCollector }).gc);
+          if (result === "wait" && ++tries < 240) setTimeout(free, 250);
+        };
+        setTimeout(free, UNUSED_MS + 500);
       });
       // What lives on the yard (#158). A visit's load carries the defender's
       // monsters, champion and workers, which Flash drew there too (#159).

@@ -20,8 +20,17 @@
 /** The part of Pixi's `GCSystem` used here. */
 export interface TextureCollector {
   maxUnusedTime: number;
+  /** When the last frame was drawn (`performance.now()` at its prerender): "unused" counts from it. */
+  readonly now: number;
   run(): void;
 }
+
+/**
+ * How recent the last drawn frame must be for the collector to run: in a
+ * hidden tab, or behind a long task, the yard's own pictures would look
+ * unused too.
+ */
+export const FRESH_FRAME_MS = 250;
 
 /** How long a texture must have gone undrawn to be taken off after an attack, in ms. */
 export const UNUSED_MS = 2000;
@@ -34,12 +43,18 @@ export const noteAttackEnd = (): void => {
 };
 
 /**
- * After an attack, runs the collector with a {@link UNUSED_MS} window, once;
- * returns whether it ran. For the yard to call once its own pictures are in
- * and drawn, so that what it draws counts as in use.
+ * After an attack, runs the collector with a {@link UNUSED_MS} window, once:
+ * "ran"; "nothing" when no attack ended (or there is no collector); "wait"
+ * when no frame was drawn in the last {@link FRESH_FRAME_MS}, to be asked
+ * again later. For the yard to call once its own pictures are in and drawn,
+ * so that what it draws counts as in use.
  */
-export const freeAttackArt = (collector: TextureCollector | null | undefined): boolean => {
-  if (!attackEnded || !collector) return false;
+export const freeAttackArt = (
+  collector: TextureCollector | null | undefined,
+  now: number = performance.now(),
+): "ran" | "nothing" | "wait" => {
+  if (!attackEnded || !collector) return "nothing";
+  if (now - collector.now > FRESH_FRAME_MS) return "wait";
   attackEnded = false;
   const usual = collector.maxUnusedTime;
   collector.maxUnusedTime = UNUSED_MS;
@@ -48,7 +63,7 @@ export const freeAttackArt = (collector: TextureCollector | null | undefined): b
   } finally {
     collector.maxUnusedTime = usual;
   }
-  return true;
+  return "ran";
 };
 
 /** Forgets an ended attack (tests). */
