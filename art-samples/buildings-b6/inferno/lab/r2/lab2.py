@@ -210,13 +210,14 @@ def mats():
     M["hole"] = kit.flat("l2-hole", (10, 8, 8), rough=1.0)
     M["doorplate"] = P_("l2-doorplate", (64, 60, 60), rough=0.55, metal=0.6, wear=(100, 94, 88), rust=(92, 50, 32),
                         scale=4.0, dirt=0.35, soot=0.5)
-    M["cog"] = P_("l2-cog", (74, 70, 68), rough=0.6, metal=0.6, wear=(120, 114, 106), rust=(96, 54, 34), scale=4.0,
-                  dirt=0.2, soot=0.4)
+    M["cog"] = P_("l2-cog", (56, 53, 52), rough=0.6, metal=0.7, wear=(98, 90, 82), rust=(104, 56, 32), scale=5.0,
+                  dirt=0.3, soot=0.6, rust_at=0.56, grain=0.3)
     M["stone"] = imats.rock("l2-stone", (34, 30, 30), (66, 60, 56), scale=2.5)
     M["plinth"] = M["stone"]
-    M["bone"] = imats.bone("l2-bone", col=(204, 188, 152), z0=9.5, z1=15.5)
-    M["bonelow"] = imats.bone("l2-bonelow", col=(170, 152, 120), z0=-1.5, z1=9.0)   # sooty, darker toward its top
-    M["pilaster"] = M["bonelow"]
+    M["bone"] = imats.bone("l2-bone", col=(176, 158, 122), tip=(52, 42, 36), z0=11.0, z1=15.6)   # the horns: old, charred toward the tips
+    # the columns' and pilasters' bone: old, yellowed and sooty (painted, so it takes the soot and the ground dirt)
+    M["bonelow"] = P_("l2-bonelow", (172, 152, 114), rough=0.7, wear=(118, 100, 74), scale=3.0, dirt=0.55, soot=0.6)
+    M["pilaster"] = P_("l2-pilaster", (136, 122, 94), rough=0.7, wear=(92, 80, 60), scale=3.0, dirt=0.4, soot=0.7)
     M["lava"] = imats.magma("l2-lava", crust_at=0.5, strength=2.6, scale=1.4)
     M["hot"] = kit.flat("l2-hot", (255, 110, 22), rough=0.4, emit=3.0)
     if VAR == "d":
@@ -225,7 +226,7 @@ def mats():
                        dirt=0.45, soot=0.7, rust_at=0.6)
         M["uwall"] = M["wall"]
         M["dome"] = imats.brew("l2-magma", (96, 18, 6), (214, 70, 12), (255, 150, 40), (255, 214, 120), strength=0.8)
-        M["pipe"] = imats.liquid("l2-pipelava", (214, 80, 16), glow=0.5)
+        M["pipe"] = imats.brew("l2-pipemagma", (70, 14, 6), (170, 54, 10), (236, 124, 34), (255, 190, 100), strength=0.45, scale=2.6)
         M["groove"] = kit.flat("l2-groovehot", (255, 96, 18), rough=0.5, emit=2.2)
     elif VAR == "e":
         M["wall"] = imats.rock("l2-basalt", (36, 32, 32), (70, 62, 58), crack=GLOW, crack_scale=0.9, crack_cover=0.5,
@@ -237,12 +238,12 @@ def mats():
         M["deckside"] = P_("l2-decksideiron", (44, 40, 40), rough=0.6, metal=0.6, wear=(78, 70, 64), scale=2.0,
                            dirt=0.3, soot=0.6)
         M["dome"] = imats.brew("l2-green", (22, 86, 20), (70, 170, 36), (168, 240, 60), (226, 255, 150), strength=0.8)
-        M["pipe"] = imats.liquid("l2-pipegreen", (78, 160, 34), glow=0.5)
+        M["pipe"] = imats.brew("l2-pipegreen", (16, 60, 14), (50, 124, 28), (128, 200, 48), (190, 236, 120), strength=0.45, scale=2.6)
         M["groove"] = kit.flat("l2-groove", (14, 12, 12), rough=0.9)
     else:
         # the Inferno Academy's copper, blackened and streaked, green where it has weathered
         M["wall"] = P_("l2-copper", (150, 80, 40), rough=0.34, metal=0.95, wear=(104, 52, 28), rust=(64, 110, 88),
-                       scale=1.4, dirt=0.45, soot=0.6, rust_at=0.62, streak=0.8)
+                       scale=1.0, dirt=0.45, soot=0.6, rust_at=0.6, streak=1.0, grain=0.2)
         M["uwall"] = M["wall"]
         M["deck"] = P_("l2-deckiron", (58, 52, 52), rough=0.5, metal=0.7, wear=(98, 88, 80), rust=(92, 50, 32),
                        scale=1.6, dirt=0.3, soot=0.7, rust_at=0.56, streak=1.0)
@@ -250,7 +251,7 @@ def mats():
                            dirt=0.3, soot=0.6)
         M["dome"] = imats.brew("l2-violet", (62, 18, 96), (130, 44, 176), (206, 110, 240), (240, 190, 255),
                                strength=0.8, scale=1.6)
-        M["pipe"] = imats.liquid("l2-pipeviolet", (132, 58, 184), glow=0.5)
+        M["pipe"] = imats.brew("l2-pipeviolet", (44, 14, 70), (96, 34, 132), (160, 84, 196), (214, 160, 236), strength=0.45, scale=2.6)
         M["groove"] = kit.flat("l2-groove", (14, 12, 12), rough=0.9)
         M["bell"] = P_("l2-bellbrass", (150, 100, 44), rough=0.38, metal=0.85, wear=(96, 60, 26), scale=3.0, dirt=0.35,
                        soot=0.6)
@@ -556,15 +557,12 @@ def extras():
             ob = cyl(f"cornerspike{i}", 0.26, h, (x, y, z + 0.12), M["iron"], verts=16, bevel=0.0, r2=0.02)
             ob.rotation_euler = lean.to_track_quat("Z", "Y").to_euler()
     if VAR in ("e", "f"):
-        # basalt rubble against the foot of the walls, clear of the doors and their plates
-        rr = random.Random(116)
-        out = xy(LW)
-        spots = [(out[0], out[1], f) for f in (0.02, 0.72, 0.9)] + [(out[6], out[7], f) for f in (0.1, 0.28, 0.98)]
-        spots += [(out[7], out[8], f) for f in (0.12, 0.3)] + [(out[8], out[0], f) for f in (0.7, 0.88)]
-        for i, (a, b, f) in enumerate(spots):
-            a, b, t, n, _ = face(a, b)
-            p = a.lerp(b, f) + n * rr.uniform(0.25, 0.4)
-            lump(f"rubble{i}", (p.x, p.y, 0.08), rr.uniform(0.32, 0.5), M["stone"], seed=500 + i)
+        # basalt rubble on the ground at the two side corners and in the recess beside the door (clear of the
+        # columns, the side doors and their plates)
+        for i, (u, v, r) in enumerate(((-9.6, -0.25, 0.4), (-9.15, -1.0, 0.3), (9.4, 0.25, 0.4), (9.75, -0.5, 0.28),
+                                       (-2.2, 2.2, 0.26), (2.05, 2.35, 0.3))):
+            x, y = uv(u, v)
+            lump(f"rubble{i}", (x, y, 0.06), r, M["stone"], seed=500 + i)
 
 
 def build():
