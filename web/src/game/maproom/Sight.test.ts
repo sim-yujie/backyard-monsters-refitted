@@ -85,6 +85,36 @@ describe("Sight", () => {
     expect(fetcher).toHaveBeenCalledTimes(1);
     expect(sight.sv).toBe("v2");
   });
+
+  it("keeps the sight it holds when a fetch fails, and never rejects (the map calls it with void)", async () => {
+    const fetcher = vi.fn(async () => response({ sv: "v1" }));
+    const onChange = vi.fn();
+    const sight = new Sight({ fetcher, onChange });
+    await sight.refresh();
+    onChange.mockClear();
+
+    fetcher.mockRejectedValueOnce(new Error("offline"));
+    await expect(sight.refresh()).resolves.toBeUndefined();
+    fetcher.mockRejectedValueOnce(new Error("timeout"));
+    await expect(sight.syncVersion("v2")).resolves.toBeUndefined();
+
+    expect(sight.sv).toBe("v1");
+    expect(sight.loaded).toBe(true);
+    expect(sight.isCellVisible(101, 101)).toBe(true);
+    expect(onChange).not.toHaveBeenCalled();
+
+    // The next sv that disagrees asks again, and lands.
+    fetcher.mockResolvedValueOnce(response({ sv: "v2" }));
+    await sight.syncVersion("v2");
+    expect(sight.sv).toBe("v2");
+  });
+
+  it("stays unloaded when the very first fetch fails, so zones are still fetched", async () => {
+    const sight = new Sight({ fetcher: async () => Promise.reject(new Error("offline")) });
+    await sight.refresh();
+    expect(sight.loaded).toBe(false);
+    expect(sight.isZoneFullyFogged({ id: 0, originX: 700, originY: 700 })).toBe(false);
+  });
 });
 
 /**
