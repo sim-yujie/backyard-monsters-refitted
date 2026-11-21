@@ -197,6 +197,7 @@ import { trojanApi } from "@/api/trojan";
 import { setRaidRun } from "@/game/raid/raidSession";
 import { warmTrojanSheets } from "@/game/raid/raidSheets";
 import { raidSheetQueue } from "@/game/attack/sheetQueue";
+import { freeAttackArt, UNUSED_MS, type TextureCollector } from "@/game/attack/attackArt";
 import { TROJAN_HORSE_TYPE, findTrojanHorse } from "@/game/trojan/trojanHorse";
 import { TrojanFlow } from "@/game/trojan/trojanFlow";
 import { TrojanLetter } from "@/ui/trojan/TrojanLetter";
@@ -1161,6 +1162,15 @@ export class YardScene implements Scene {
         this.releaseRaidSheets = release;
         void this.renderer.artIn.then(release);
       }
+      // The last attack's pictures come off the graphics card once this yard's own are in
+      // (`attackArt.ts`, beta 9): Pixi's collector took 60-95 s, 45-55 MB on a phone meanwhile.
+      void this.renderer.artIn.then(() => {
+        // A moment later, so the yard has drawn (and so kept) what it uses.
+        setTimeout(() => {
+          if (this.context !== context) return;
+          freeAttackArt((context.renderer as { gc?: TextureCollector }).gc);
+        }, UNUSED_MS + 500);
+      });
       // What lives on the yard (#158). A visit's load carries the defender's
       // monsters, champion and workers, which Flash drew there too (#159).
       this.renderer.setLife(yardLifeOf(response, yard, store ? "own" : "visit"));
