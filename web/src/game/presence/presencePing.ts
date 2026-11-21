@@ -1,5 +1,7 @@
 import { getAuthToken } from "@/api/http";
 import { ELSEWHERE, sendPresence, type PresenceScreen } from "@/api/presence";
+import { API_VERSION } from "@/config";
+import { worldChat, type PresenceFrame } from "@/game/chat/chatSession";
 
 /**
  * Keeping the player "online" while they sit in the game (bot neighbours WP9,
@@ -158,8 +160,34 @@ export class PresencePing {
   }
 }
 
+/** Where a ping goes: the chat socket when it can take it, else `POST /bm/presence`. */
+export interface PresenceRoutes {
+  /** The ping on the chat socket; null when it cannot take one now. */
+  readonly socket: (frame: PresenceFrame) => Promise<unknown> | null;
+  readonly http: (screen: PresenceScreen) => Promise<unknown>;
+  readonly token: () => string | null;
+}
+
+/**
+ * One ping (beta 9, speed-ups item 10): on the chat socket an idle player
+ * already holds open, so it costs no request of its own, and over HTTP
+ * whenever the socket cannot take it (World chat off, the socket down or
+ * reconnecting, a server from before beta 9) or does not answer it in time,
+ * or refuses it. The answer is the route's either way, so the listeners
+ * cannot tell which way it went.
+ */
+export const pingVia = (routes: PresenceRoutes, screen: PresenceScreen): Promise<unknown> => {
+  const token = routes.token();
+  const onSocket = token
+    ? routes.socket({ token, apiVersion: API_VERSION, screen: { where: screen.where, planner: screen.planner } })
+    : null;
+  if (!onSocket) return routes.http(screen);
+  return onSocket.catch(() => routes.http(screen));
+};
+
 /** The game's one presence ping. */
 export const presence = new PresencePing({
-  ping: (screen) => sendPresence(screen),
+  ping: (screen) =>
+    pingVia({ socket: (frame) => worldChat.presence(frame), http: sendPresence, token: getAuthToken }, screen),
   signedIn: () => getAuthToken() !== null,
 });

@@ -73,7 +73,8 @@ export type ChatErrorCode =
 
 /** What the server sends on the socket; anything else is ignored. */
 export type ChatServerMessage =
-  | { type: "auth_ok"; userId: number; displayName: string }
+  /** `presence`: the server answers presence pings on this socket (beta 9); absent on an older one. */
+  | { type: "auth_ok"; userId: number; displayName: string; presence?: boolean }
   | { type: "auth_fail"; reason: "invalid_token" | "user_not_found" }
   | { type: "joined"; channel: string; history: ChatLineWire[] }
   | ({ type: "message"; channel: string } & ChatLineWire)
@@ -91,7 +92,9 @@ export type ChatServerMessage =
   /** New mail for this player: the game asks `/player/mailstatus` what came (owner, beta 7). */
   | { type: "mail" }
   /** Taken out of a room: left or was kicked from the alliance (beta 7). */
-  | { type: "left"; channel: string };
+  | { type: "left"; channel: string }
+  /** The answer to a presence ping sent on the socket (beta 9, `ChatSession.presence`). */
+  | { type: "presence"; id: number; ok: boolean; answer?: unknown; reason?: string };
 
 /** Everything needed to reach world chat, from the owner's yard load. */
 export interface ChatConfig {
