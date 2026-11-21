@@ -1,0 +1,27 @@
+Use your image generation tool (one call) to create a new image and save it as sample-new.png in the current folder. Do not write code.
+
+I am the developer of this isometric strategy game (a cartoony monster world). Input 1, surface-store.png, is OUR OWN game asset: the General Store building of the game's surface world, a 3D render our team made for this project. The game also has an underground world, the Inferno (dark volcanic rock, burnt iron, bone, glowing lava). I need the Inferno version of this same building for our own game: the SAME building shape, rebuilt in Inferno materials, so players see at once that it is the General Store's underground cousin.
+
+The building in input 1, part by part (keep every part, in the same place, the same size and the same camera):
+- a cube body with softly rounded edges (a giant die: six round pips on its right face, two columns of three);
+- a flat printed cover sheet fixed to its left face, a little taller than the cube, with a dark folded strip wrapping the front corner;
+- the cube stands on four thumbtacks: a flat round disc on the ground with a thin pin going up into the body (three are visible);
+- a roof of four flat rounded sticks laid side by side on top, sticking out over the left face;
+- a strap with four holes laid across the back of the sticks, its right end bent down over the right face, a thin wire ring hanging from it;
+- a crumpled torn sheet behind the strap.
+
+The Inferno version, same shape, new materials, worn and sooty, never clean and bright:
+- the cube: charred blue-black iron plates with rust at the edges; the six pips are round holes glowing molten orange from inside;
+- the cover sheet: a scorched, blackened metal plate with a burnt, faintly glowing flame emblem, NO letters, NO words;
+- the thumbtacks: dark sooty brass discs and iron pins;
+- the stick roof: four charred bone-coloured slats, sooty, burnt darker toward the front;
+- the strap: a rusted iron band with four rivet holes; the wire ring: dark iron;
+- the crumpled sheet: a scrap of scorched hide, ember-red along its torn edge.
+
+Input 2, inferno-style.png: four of our Inferno buildings in the game's Modern look. Match their materials, darkness, wear, level of detail and finish, so this one looks made by the same artist and stands beside them.
+
+CAMERA: exactly as input 1: the game's fixed 2:1 isometric camera, the cube's front corner toward the viewer, left and right faces equally wide. Same size and place in the picture as input 1.
+FINISH: a clean stylised 3D render, small bevels catching the light, warm key light from the upper left, right-hand faces in readable medium shade, soft ambient occlusion, no thick black outline, no cel shading, no painterly strokes. Not neon, not over-saturated; only the pips, emblem and torn edge glow.
+
+Output: ONE image, 1024x1024, the building alone, complete and fully inside the image.
+Background everywhere: flat pure green #00FF00, also in every gap between the parts. No ground plane, no lava pool, no cast shadow on the ground, no text, no letters, no labels. The building itself must contain no bright pure green.
