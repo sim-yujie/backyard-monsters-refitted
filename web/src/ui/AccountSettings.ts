@@ -147,8 +147,8 @@ export const SETTINGS_TEXT = {
   },
   /** Medium as this device's default, not picked: its music plays as normal (`musicHeld`). */
   downloadHintDeviceMedium: "Lighter monsters and music.",
-  /** Low as this device's default, not picked: a PC with no graphics card (`defaultQuality`); its music plays. */
-  downloadHintDeviceLow: "No graphics card found: lightest monsters.",
+  /** Low as this device's default, not picked: WebGL draws in software (`defaultQuality`; it may have a card Chrome is not using); its music plays. */
+  downloadHintDeviceLow: "Set for this browser's graphics: lightest monsters.",
   /** High on a phone or tablet: its monsters are Medium's (`monsterSheetLevel`). */
   downloadHintTouchHigh: "On phones and tablets, High uses lighter monsters.",
   /** A level safe mode put the game on (`game/safeMode.ts`), not picked. */
