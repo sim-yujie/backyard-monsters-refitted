@@ -37,7 +37,7 @@ DIRN = os.environ.get("LAB_DIR", "a")
 kit.OUT = HERE / DIRN
 kit.OUT.mkdir(exist_ok=True)
 kit.ORIGIN = (0.0, 45.0)                 # the surface Monster Lab's origin (lab-v1/lab.py: (-0.5, 45))
-kit.FRAME = (-86, -104, 86, 82)          # the surface Monster Lab's canvas, its left 172 px
+kit.FRAME = (-86, -104, 126, 82)         # the surface Monster Lab's canvas (room on the right for the shadow)
 kit.FRAMES = 1
 kit.SUN_COL = (1.0, 0.93, 0.82)          # as the Incubator, Strongbox and Academy
 rnd = random.Random(116)
@@ -169,7 +169,7 @@ def mats():
                     soot=0.3)
     M["copper"] = P_("lab-copper", (196, 100, 56), rough=0.3, metal=0.92, wear=(140, 70, 40), rust=(84, 140, 112),
                      scale=3.0, dirt=0.25, rust_at=0.7)
-    M["bone"] = imats.bone("lab-bone", z0=1.0, z1=9.5)
+    M["bone"] = imats.bone("lab-bone", z0=4.0, z1=14.0)      # the tusks: charred toward their tips
     M["bonelow"] = imats.bone("lab-bonelow")
     M["green"] = imats.brew("lab-green", (22, 86, 20), (70, 170, 36), (168, 240, 60), (226, 255, 150))
     M["violet"] = imats.brew("lab-violet", (62, 18, 96), (130, 44, 176), (206, 110, 240), (240, 190, 255), scale=1.6)
@@ -211,7 +211,7 @@ def dir_a():
     for s in (1, -1):
         c = Vector((0, 0, zn + 0.4))
         horn(f"horn{s}", [c + U * s * 0.85, c + U * s * 1.75 + Vector((0, 0, 0.1)), c + U * s * 2.3 + Vector((0, 0, 0.8)),
-                          c + U * s * 2.15 + Vector((0, 0, 1.7))], 0.27, M["bone"])
+                          c + U * s * 2.15 + Vector((0, 0, 1.7))], 0.27, M["bonelow"])
     # the copper coil out of the stopper and the pipe down to the side flask
     zt = top + 0.4
     SF = P(-100, 3.95, ZD + 0.5 + 1.0)                       # the side flask's middle
@@ -318,11 +318,11 @@ def dir_c():
     crag = kit.lathe("crag", [(6.1, -0.1), (5.7, 0.55), (4.9, 1.3), (4.0, 2.0), (3.2, 2.5), (1.5, 2.65), (0.0, 2.7)],
                      (0, 0, 0), M["crag"], verts=40)
     imats.roughen(crag, strength=0.5, size=1.3, levels=3)
-    foot_rocks(6.0, 22, 900, lo=0.3, hi=0.6, skip=((300, 330),))
+    foot_rocks(6.0, 22, 900, lo=0.3, hi=0.6, skip=())
     # a lava puddle at the front of the foot
-    kit.lathe("puddle", [(0.0, 0.06), (1.0, 0.06), (1.12, -0.02)], P(-45, 5.75), M["lava"], verts=40)
+    kit.lathe("puddle", [(0.0, 0.5), (0.9, 0.42), (1.0, 0.3)], P(-45, 4.9), M["lava"], verts=40)
     for k in range(7):
-        lump("puddlerock", P(-45, 5.75, 0.04) + P(k * 40 - 165, 1.12), rnd.uniform(0.2, 0.32), M["stone"], seed=950 + k)
+        lump("puddlerock", P(-45, 4.9, 0.42) + P(k * 40 - 165, 1.0), rnd.uniform(0.2, 0.32), M["stone"], seed=950 + k)
     # the tank: iron seat, glass, iron lid
     Z0, RT, HT = 3.3, 1.95, 5.2
     kit.lathe("seat", [(2.9, 2.1), (2.9, 2.85), (2.55, 3.15), (2.2, Z0), (0.0, Z0)], (0, 0, 0), M["iron"], verts=48)
@@ -360,13 +360,13 @@ def dir_c():
         mid = i % 3 == 1
         zt = ZL - (0.2 if mid else 1.1)
         horn(f"rib{i}", [P(az, 4.3, 1.3), P(az, 4.75, 3.3), P(az, 4.35 if mid else 4.1, 5.6),
-                         P(az, 3.2, zt - 0.6), P(az, RT + 0.2, zt)], 0.4 if mid else 0.32, M["bone"], r_end=0.05)
+                         P(az, 3.2, zt - 0.6), P(az, RT + 0.2, zt)], 0.4 if mid else 0.32, M["bonelow"], r_end=0.05)
         lump(f"ribroot{i}", P(az, 4.3, 1.25), 0.62, M["stone"], seed=980 + i)
     for s_ in (1, -1):
         c2 = Vector((0, 0, ZL + 0.75))
         horn(f"lidhorn{s_}", [c2 + U * s_ * 1.5, c2 + U * s_ * 2.3 + Vector((0, 0, 0.25)),
                               c2 + U * s_ * 2.75 + Vector((0, 0, 1.0)), c2 + U * s_ * 2.5 + Vector((0, 0, 1.9))], 0.3,
-             M["bone"])
+             M["bonelow"])
     # where levels 2 and 3 mount their side tanks: two iron pads with capped sockets on the crag's front shoulders
     for i, az in enumerate((-2, -88)):
         pad = P(az, 4.6, 1.5)
@@ -385,8 +385,7 @@ def grow(k):
 def build():
     mats()
     {"a": dir_a, "b": dir_b, "c": dir_c}[DIRN]()
-    if DIRN == "b":
-        grow(1.22)
+    grow({"a": 1.15, "b": 1.3, "c": 1.15}[DIRN])       # level 1 fills the surface lab's plot, as its neighbours do
 
 
 kit.run(build, lambda k: None)
