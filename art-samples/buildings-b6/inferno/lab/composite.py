@@ -4,13 +4,13 @@ and the Strongbox. A COMPOSITE, not an in-game shot: the building is not in the 
 camera and its own ground shadow; it is only scaled 12 -> 4 px per Flash px (the game shows @2x art the same way).
 Writes shots/<dir>-yard.png (cropped to the neighbourhood), shots/<dir>-yard-full.png and shots/yard-all.png."""
 from pathlib import Path
-from PIL import Image
+from PIL import Image, ImageChops, ImageDraw
 
 HERE = Path(__file__).resolve().parent
 ROOT = HERE.parents[3]
 OUT = ROOT / "shots"
 SHOT = OUT / "yard" / "inferno-in2.png"
-PX = 4                          # screen px per Flash px in the screenshot (Strongbox: 114 Flash px = 456 px, measured)
+PX = 4                          # screen px per Flash px in the screenshot (the Strongbox's sprite matched, see scale())
 SPOT = (1560, 960)              # where the building's origin (its footprint's middle on the ground) goes
 FRAME, ORIGIN = (-86, -104), (0.0, 45.0)
 CROP = (560, 300, 2560, 1500)
@@ -19,6 +19,13 @@ row = []
 for d in "abc":
     yard = Image.open(SHOT).convert("RGBA")
     base = Image.open(HERE / d / "render" / "L1-base.png").convert("RGBA")
+    edge = Image.new("RGBA", base.size, (0, 0, 0, 0))            # the render's outermost rows carry a stray line of
+    edge.paste(base.crop((6, 6, base.width - 6, base.height - 6)), (6, 6))      # alpha (the denoiser's edge): dropped
+    base = edge
+    ramp = Image.new("L", base.size, 0)                            # and the shadow's faint tail fades out over the last
+    for k in range(60):                                            # 60 px, so no canvas edge shows on the ground
+        ImageDraw.Draw(ramp).rectangle((k, k, base.width - 1 - k, base.height - 1 - k), outline=None, fill=round(255 * (k + 1) / 60))
+    base.putalpha(ImageChops.multiply(base.getchannel("A"), ramp))
     im = base.resize((base.width * PX // 12, base.height * PX // 12), Image.LANCZOS)
     at = (round(SPOT[0] - (ORIGIN[0] - FRAME[0]) * PX), round(SPOT[1] - (ORIGIN[1] - FRAME[1]) * PX))
     yard.alpha_composite(im, at)

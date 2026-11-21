@@ -12,7 +12,7 @@ untouched, as the Incubator's, Strongbox's and Academy's.
   b  "Tube Furnace": a riveted iron furnace with a lit firebox and three giant test tubes in a rack held by two
      tusks. Levels 2/3: more tubes in the capped sockets, a side boiler, a crown.
   c  "Specimen Tank": a tall glass tank of violet fluid with a specimen in it, held in a ribcage of bone on a
-     basalt crag that bleeds lava. Levels 2/3: side tanks on the iron pads, more ribs, a horned crown.
+     basalt crag cracked with lava. Levels 2/3: side tanks on the iron pads, more ribs, a horned crown.
 
 World: Z up. The camera looks from +X -Y: +X is the front right on screen, -Y the front left, (1, 1) screen right.
 Azimuths are from +X toward +Y.
@@ -37,7 +37,7 @@ DIRN = os.environ.get("LAB_DIR", "a")
 kit.OUT = HERE / DIRN
 kit.OUT.mkdir(exist_ok=True)
 kit.ORIGIN = (0.0, 45.0)                 # the surface Monster Lab's origin (lab-v1/lab.py: (-0.5, 45))
-kit.FRAME = (-86, -104, 126, 82)         # the surface Monster Lab's canvas (room on the right for the shadow)
+kit.FRAME = (-86, -104, 150, 96)         # the surface Monster Lab's canvas, wider and deeper for the whole shadow
 kit.FRAMES = 1
 kit.SUN_COL = (1.0, 0.93, 0.82)          # as the Incubator, Strongbox and Academy
 rnd = random.Random(116)
@@ -184,7 +184,7 @@ def dir_a():
     imats.roughen(pl, strength=0.16, size=0.8, levels=4)
     hexa("deck", 5.05, ZP - 0.1, ZD, M["iron"], bevel=0.06)
     hexa("deckband", 5.16, ZP + 0.06, ZP + 0.24, M["brass"], bevel=0.04)
-    foot_rocks(6.15, 16, 300, lo=0.42, hi=0.7)
+    foot_rocks(5.75, 16, 300, lo=0.4, hi=0.6)
     for i in range(6):                                           # a spike on a brass seat at each corner
         az = -15 + 60 * i
         kit.cyl(f"seat{i}", 0.42, 0.22, P(az, 4.45, ZD), M["brass"], verts=16)
@@ -204,14 +204,10 @@ def dir_a():
                  0.3, M["iron"], verts=16, r_end=0.13, smooth=True)
         kit.cyl(f"clawfoot{i}", 0.42, 0.2, P(az, 3.5, ZD), M["brass"], verts=16)
     kit.ring("girdle", R + 0.08, 0.1, M["iron"], z=ZC + 0.45)
-    # collar, stopper, horns
+    # collar and stopper (the horns come with level 2: at level 1 they crossed the pipe as the camera sees it)
     zn = ZC + R * math.cos(math.asin(0.78 / R))
     kit.cyl("collar", 0.98, 0.4, (0, 0, zn + 0.2), M["brass"], verts=32, bevel=0.05)
     kit.cyl("stopper", 0.72, 0.45, (0, 0, top - 0.05), M["iron"], verts=24, bevel=0.06)
-    for s in (1, -1):
-        c = Vector((0, 0, zn + 0.4))
-        horn(f"horn{s}", [c + U * s * 0.85, c + U * s * 1.75 + Vector((0, 0, 0.1)), c + U * s * 2.3 + Vector((0, 0, 0.8)),
-                          c + U * s * 2.15 + Vector((0, 0, 1.7))], 0.27, M["bonelow"])
     # the copper coil out of the stopper and the pipe down to the side flask
     zt = top + 0.4
     SF = P(-100, 3.95, ZD + 0.5 + 1.0)                       # the side flask's middle
@@ -307,22 +303,18 @@ def dir_b():
     # corner spikes on the deck's front, a slag heap and a lava dribble at the foot
     spike("spikeF", V * 4.5 + Vector((0, 0, ZD)), D(-45, 70), 1.1, 0.28, M["iron"])
     spike("spikeB", V * -4.5 + Vector((0, 0, ZD)), D(135, 70), 1.1, 0.28, M["iron"])
-    kit.lathe("slag", [(0.0, 0.05), (1.25, 0.05), (1.4, -0.02)], (0.0, -S - 1.25, 0), M["lava"], verts=40)
+    kit.lathe("slag", [(0.0, 0.05), (0.68, 0.05), (0.78, -0.02)], (0.0, -S - 0.6, 0), M["lava"], verts=40)
     for k in range(9):
-        lump("slagrock", Vector((0.0, -S - 1.25, 0.04)) + P(k * 40 + 10, 1.4), rnd.uniform(0.22, 0.34), M["stone"],
+        lump("slagrock", Vector((0.0, -S - 0.6, 0.04)) + P(k * 40 + 10, 0.78), rnd.uniform(0.14, 0.2), M["stone"],
              seed=700 + k)
 
 
 # -------------------------------------------------------------------------------------------------- c: the tank
 def dir_c():
-    crag = kit.lathe("crag", [(6.1, -0.1), (5.7, 0.55), (4.9, 1.3), (4.0, 2.0), (3.2, 2.5), (1.5, 2.65), (0.0, 2.7)],
+    crag = kit.lathe("crag", [(5.9, -0.1), (5.6, 0.55), (4.9, 1.3), (4.0, 2.0), (3.2, 2.5), (1.5, 2.65), (0.0, 2.7)],
                      (0, 0, 0), M["crag"], verts=40)
     imats.roughen(crag, strength=0.5, size=1.3, levels=3)
-    foot_rocks(6.0, 22, 900, lo=0.3, hi=0.6, skip=())
-    # a lava puddle at the front of the foot
-    kit.lathe("puddle", [(0.0, 0.5), (0.9, 0.42), (1.0, 0.3)], P(-45, 4.9), M["lava"], verts=40)
-    for k in range(7):
-        lump("puddlerock", P(-45, 4.9, 0.42) + P(k * 40 - 165, 1.0), rnd.uniform(0.2, 0.32), M["stone"], seed=950 + k)
+    foot_rocks(5.75, 22, 900, lo=0.3, hi=0.5)
     # the tank: iron seat, glass, iron lid
     Z0, RT, HT = 3.3, 1.95, 5.2
     kit.lathe("seat", [(2.9, 2.1), (2.9, 2.85), (2.55, 3.15), (2.2, Z0), (0.0, Z0)], (0, 0, 0), M["iron"], verts=48)
@@ -331,7 +323,9 @@ def dir_c():
         az = 36 * i + 9
         spike(f"seatspike{i}", P(az, 2.8, 2.55), D(az, 18), 0.8, 0.2, M["iron"])
     liq = imats.liquid("tank-liq", (132, 52, 200), glow=0.8, clear=0.8)
-    kit.cyl("tank", RT, HT, (0, 0, Z0), liq, verts=64, bevel=0.0)
+    kit.cyl("tank", RT, HT, (0, 0, Z0), liq, verts=96, bevel=0.0)
+    kit.lathe("tankfloor", [(0.0, Z0 + 0.03), (RT - 0.03, Z0 + 0.03)], (0, 0, 0),
+              kit.flat("tankfloor-m", (70, 26, 110), rough=0.5, emit=0.5), verts=96)
     for z in (Z0 + 0.12, Z0 + HT - 0.12):
         kit.ring(f"tankband{z:.0f}", RT + 0.03, 0.12, M["brass"], z=z)
     ZL = Z0 + HT
@@ -341,7 +335,7 @@ def dir_c():
     kit.cyl("lidcap", 0.62, 0.2, (0, 0, ZL + 1.7), M["iron"], verts=6, bevel=0.04)
     rivets("lidrivet", [P(a, RT + 0.27, ZL + 0.1) for a in range(0, 360, 30)], r=0.08)
     # the specimen: a curled dark thing with one lit eye, and bubbles
-    sm = kit.flat("specimen", (14, 6, 20), rough=0.7)
+    sm = kit.flat("specimen", (226, 204, 240), rough=0.6, emit=0.5)        # pale: it reads through the violet
     c = Vector((0, 0, Z0 + 2.5)) + V * 0.55
     ball("spec-body", c, 0.95, sm, squash=1.25)
     ball("spec-head", c + Vector((0, 0, 1.15)) + V * 0.25 + U * 0.3, 0.68, sm)
@@ -352,7 +346,7 @@ def dir_c():
         kit.tube(f"spec-arm{s}", [tuple(c + U * s * 0.7 + Vector((0, 0, 0.5))), tuple(c + U * s * 1.15 + V * 0.3),
                                   tuple(c + U * s * 0.85 + V * 0.6 + Vector((0, 0, -0.45)))], 0.17, sm, verts=10,
                  r_end=0.05, smooth=True)
-    ball("spec-eye", c + Vector((0, 0, 1.22)) + V * 0.86 + U * 0.36, 0.27, kit.flat("eye", (255, 226, 70), emit=8.0),
+    ball("spec-eye", c + Vector((0, 0, 1.22)) + V * 0.86 + U * 0.36, 0.3, kit.flat("eye", (40, 10, 10), rough=0.3),
          seg=16)
     bubbles("tank-bub", (0, 0, Z0), RT - 0.2, HT, 14, (240, 190, 255), 77)
     # the ribcage: bone ribs up the two sides of the tank
@@ -385,7 +379,8 @@ def grow(k):
 def build():
     mats()
     {"a": dir_a, "b": dir_b, "c": dir_c}[DIRN]()
-    grow({"a": 1.15, "b": 1.3, "c": 1.15}[DIRN])       # level 1 fills the surface lab's plot, as its neighbours do
+    grow({"a": 1.0, "b": 1.3, "c": 1.0}[DIRN])     # inside the plot: 100 yard units square (YardGrid.ts, type 116), a
+    # round base to radius 6 at most, as the Incubator Control Centre's pool (5.6 and its rim stones)
 
 
 kit.run(build, lambda k: None)
