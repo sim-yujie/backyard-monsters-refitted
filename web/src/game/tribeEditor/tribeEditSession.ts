@@ -61,8 +61,5 @@ export const endTribeEdit = (): void => {
   setLocalRoute(null);
 };
 
-/** The tribe yard open in the editor, or null. */
-export const tribeEdit = (): TribeEdit | null => current;
-
 /** Whether the yard on screen is a tribe yard in the editor (free, instant, no limits). */
 export const isTribeEditing = (): boolean => current !== null;

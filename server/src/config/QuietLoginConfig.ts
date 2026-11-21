@@ -1,6 +1,6 @@
 import { Env } from "../enums/Env.js";
 import { logger } from "../utils/logger.js";
-import { isSwitchOn } from "./BotConfig.js";
+import { isSwitchOn } from "./envValues.js";
 
 /**
  * The quiet-login switch, for local test servers only (owner, 11 Nov 2026).

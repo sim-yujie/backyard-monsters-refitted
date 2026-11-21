@@ -101,6 +101,7 @@ export const ORDINARY_WORDS: readonly string[] = [
 ];
 
 /** Invisible characters: zero-width spaces and joiners, soft hyphens, direction marks. */
+// oxlint-disable-next-line no-misleading-character-class -- lone combining marks are what it finds
 const INVISIBLE = /[­͏؜ᅟᅠ឴឵᠎​-‏‪-‮⁠-⁤⁪-⁯﻿]/u;
 
 /** Cyrillic and Greek letters that look like Latin ones, and a few Latin oddities. */

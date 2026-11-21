@@ -6,10 +6,12 @@ import type { CombatBuildingDataMap, FlingLog } from "./types.js";
 
 /**
  * Older rules versions these rules still play the same (`rulesCompat.ts`).
- * The digests below were recorded with the v2.0.0-beta.7.7.2 rules
- * (b4f0c156a8d2afee): Fomor attacking in each Mode, with and without habits,
+ * The digests below were recorded with the v2.0.0-beta.7.10/7.11 rules
+ * (3cb9cc66416d5eda, run from that commit's rules folder; re-recorded 21 Nov
+ * 2026, when 7.7.2's b4f0c156a8d2afee had left the list and these four had
+ * stopped running): Fomor attacking in each Mode, with and without habits,
  * called back, and Fomor defending from its cage, each with and without the
- * lesson watching. If a change moves one, b4f0c156a8d2afee no longer plays the
+ * lesson watching. If a change moves one, 3cb9cc66416d5eda no longer plays the
  * same: take it off the list (this test then stops running).
  */
 
@@ -27,7 +29,7 @@ interface Case {
   readonly champion: { t: number; l: number; s: ChampionStance; hv?: number; h?: Record<string, number> };
   readonly extra?: FlingLog["events"];
   readonly defenders?: { t: number; l: number; hp: number }[];
-  /** The digest, and the last checkpoint's, under b4f0c156a8d2afee. */
+  /** The digest, and the last checkpoint's, under 3cb9cc66416d5eda. */
   readonly digest: string;
   readonly last: { tick: number; digest: string };
 }
@@ -35,25 +37,25 @@ interface Case {
 const CASES: Record<string, Case> = {
   "Fomor, Offensive": {
     champion: { t: FOMOR, l: 3, s: "offensive" },
-    digest: "706a698375ed5e35",
-    last: { tick: 5600, digest: "e2df133c2f712a2a" },
+    digest: "6a5409f05e56d4e2",
+    last: { tick: 5600, digest: "2c2f487837a15816" },
   },
   "Fomor, Defensive with habits": {
     champion: { t: FOMOR, l: 6, s: "defensive", hv: 1, h: { big: 120, crowd: -80, aerial: 60 } },
-    digest: "024286161ed232e0",
-    last: { tick: 5600, digest: "3938c5dba493eecd" },
+    digest: "50ec37bc061ad0de",
+    last: { tick: 5600, digest: "e62ae09b9622c125" },
   },
   "Fomor, Hybrid with habits, called back": {
     champion: { t: FOMOR, l: 4, s: "hybrid", hv: 1, h: { big: -60, tower: 40 } },
     extra: [{ kind: "championRetreat", t: 600, c: FOMOR }],
-    digest: "20ec997768829c41",
-    last: { tick: 6400, digest: "86ebce6fc1104b49" },
+    digest: "c38a5456c908e80c",
+    last: { tick: 6400, digest: "211aa2ce541bc4b4" },
   },
   "Fomor defending from its cage": {
     champion: { t: 1, l: 4, s: "hybrid" },
     defenders: [{ t: FOMOR, l: 5, hp: 40000 }],
-    digest: "3d4c7e0a84b92a98",
-    last: { tick: 5600, digest: "f241510b9061b5b9" },
+    digest: "433b14b59c04e67f",
+    last: { tick: 5600, digest: "f0fefdc9abdd0793" },
   },
 };
 
@@ -64,7 +66,7 @@ describe("older rules versions that still play the same (patch 7.8)", () => {
     expect(rulesPlay("0123456789abcdef", "abc")).toBe(false);
   });
 
-  describe.runIf(COMPATIBLE_RULES_VERSIONS.includes("b4f0c156a8d2afee"))("b4f0c156a8d2afee (v2.0.0-beta.7.7.2)", () => {
+  describe.runIf(COMPATIBLE_RULES_VERSIONS.includes("3cb9cc66416d5eda"))("3cb9cc66416d5eda (v2.0.0-beta.7.10, 7.11)", () => {
     for (const [name, one] of Object.entries(CASES)) {
       it(`plays ${name} to the digest it had then`, () => {
         for (const learn of [false, true]) {

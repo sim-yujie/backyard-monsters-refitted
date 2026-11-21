@@ -82,18 +82,6 @@ export const getSight = (): Promise<SightResponse> => post<SightResponse>(SIGHT_
 export const cellAt = (response: GetAreaResponse, x: number, y: number): MapCell | undefined =>
   response.data[String(x)]?.[String(y)];
 
-/** Walks every cell in an area response with its coordinates. */
-export function* iterateCells(
-  response: GetAreaResponse,
-): Generator<{ x: number; y: number; cell: MapCell }> {
-  for (const [xKey, column] of Object.entries(response.data)) {
-    const x = Number(xKey);
-    for (const [yKey, cell] of Object.entries(column)) {
-      yield { x, y: Number(yKey), cell };
-    }
-  }
-}
-
 /* ── Takeover (issue #82) ─────────────────────────────────────────────── */
 
 /**

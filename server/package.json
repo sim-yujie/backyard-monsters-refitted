@@ -29,6 +29,7 @@
     "alerts:check": "bun src/scripts/alerts.ts check",
     "alerts:summary": "bun src/scripts/alerts.ts summary",
     "typecheck": "bunx tsc --noEmit",
+    "lint": "oxlint src scripts",
     "test": "bun test --isolate"
   },
   "engines": {
@@ -68,6 +69,7 @@
     "@types/koa-static": "4.0.4",
     "@types/koa2-ratelimit": "0.9.7",
     "bun-types": "1.4.2",
+    "oxlint": "1.91.0",
     "typescript": "7.0.2"
   },
   "mikro-orm": {

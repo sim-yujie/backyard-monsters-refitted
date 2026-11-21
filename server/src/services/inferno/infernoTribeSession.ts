@@ -36,10 +36,6 @@ export const startInfernoTribeSession = async (userid: number, tribe: InfernoTri
 export const readInfernoTribeSession = async (userid: number): Promise<InfernoTribeSession | null> =>
   parseDescentSession(await redis.get(infernoTribeSessionKey(userid)));
 
-export const endInfernoTribeSession = async (userid: number): Promise<void> => {
-  await redis.del(infernoTribeSessionKey(userid));
-};
-
 /** @returns True when the caller now holds the lock. */
 export const acquireInfernoTribeFinalLock = async (userid: number): Promise<boolean> =>
   (await redis.set(infernoTribeFinalLockKey(userid), "1", "EX", String(ATTACK_FINAL_LOCK_SECONDS), "NX")) === "OK";

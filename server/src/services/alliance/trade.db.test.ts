@@ -185,6 +185,8 @@ describe.skipIf(!enabled)("alliance trading on a real database", () => {
 
     const seen = await trade.tradeView(em(), A, NOW);
     expect(seen.today).toMatchObject({ swapsLeft: 1, postsLeft: 3 });
+    // The pre-beta-8 names, for old open tabs (remove in beta 10).
+    expect(seen.today).toMatchObject({ sendsLeft: 1, receivesLeft: 1 });
     expect(seen).not.toHaveProperty("mate");
     expect(seen.requests.find((r) => r.id === posted.id)).toMatchObject({
       userid: B,
@@ -214,7 +216,8 @@ describe.skipIf(!enabled)("alliance trading on a real database", () => {
     // mate sees no swap.
     const after = await trade.tradeView(em(), C, NOW);
     expect(after.requests.find((r) => r.id === posted.id)).toBeUndefined();
-    expect(after).not.toHaveProperty("recent");
+    // No Recent trades any more: an empty list only for tabs open from before beta 8.
+    expect(after.recent).toEqual([]);
     expect(after.swap).toBeNull();
     expect(after.myTaken).toEqual([]);
     const askerView = await trade.tradeView(em(), B, NOW);
@@ -225,7 +228,7 @@ describe.skipIf(!enabled)("alliance trading on a real database", () => {
     // The asker's yard is told once what arrived: the id of their taken request.
     expect(askerView.myTaken).toEqual([posted.id]);
     // The daily limits count from the database, not the list: B's post still counts.
-    expect(askerView.today).toMatchObject({ swapsLeft: 0, postsLeft: 2 });
+    expect(askerView.today).toMatchObject({ swapsLeft: 0, postsLeft: 2, sendsLeft: 0, receivesLeft: 0 });
 
     // One completed swap per player per UTC day: neither side can swap again today.
     expect((await trade.tradeView(em(), A, NOW)).today.swapsLeft).toBe(0);

@@ -57,9 +57,6 @@ export const markShownOnThisPage = (ids: readonly number[]): void => {
   for (const id of ids) shownOnThisPage.add(id);
 };
 
-/** Forgets what this page showed (tests). */
-export const resetShownOnThisPage = (): void => shownOnThisPage.clear();
-
 export class AnnouncementQueue {
   private readonly deps: AnnouncementQueueDeps;
   private readonly shown: Set<number>;

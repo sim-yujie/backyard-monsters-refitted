@@ -54,9 +54,6 @@ import { artUrl } from "../../artUrl";
 /** Where the game server keeps the sheets. Proxied in development. */
 export const ASSET_ROOT = artUrl("/assets/");
 
-/** Ticks a walk or attack frame is shown for (`SPRITES.as:235`, `param5 / 8`). */
-export const TICKS_PER_FRAME = 8;
-
 /**
  * The canvas point a cell's anchor is copied to (`SpriteData.as:8-10`).
  * Only the shadow placement below still needs it; monster anchors are folded

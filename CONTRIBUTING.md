@@ -23,22 +23,25 @@ written up in `docs/specs/`, and new features in `docs/design/`.
 ## Before you send it
 
 ```bash
-cd web && bun run typecheck && bun run test
-cd server && bun run typecheck && bun test
+cd web && bun run typecheck && bun run lint && bun run test
+cd server && bun run typecheck && bun run lint && bun test
 ```
 
 Both must pass. Add or update tests for the behaviour you change.
 
 ## Code
 
-- Match the style of the code around your change (Prettier settings are in
-  `web/.prettierrc.json`).
+- Match the style of the code around your change.
 - The server decides game rules (costs, timers, combat results); the web
   client never trusts itself for those. Use the ORM for every database query.
 - Use TypeScript types properly, and prefer JSDoc comments that say why
   something is the way it is.
 - When a rule comes from the original game, cite where (for example
   `client/scripts/BASE.as:4830`).
+- A field taken out of a server reply stays in it, empty or neutral, for one
+  more release, with a comment saying when it goes. Players leave game tabs
+  open across an update, and an old tab that reads a missing field crashes
+  (beta 8's Trade tab, 20 Nov 2026).
 - You are welcome to use AI tools, but you must understand, test and be able
   to explain every line you send.
 

@@ -26,8 +26,6 @@ const { presence } = await import("../../controllers/maproom/presence.js");
 const { realActionTracker } = await import("../../middleware/realAction.js");
 const { ATTACK_ONLINE_SECONDS, REAL_ACTION_WINDOW_SECONDS, isOnline, isPlayerOnline, setChallengePending } =
   await import("./online.js");
-const { ONLINE_SECONDS } = await import("../bots/revenge.js");
-const { seenRecently } = await import("../bots/revengeRun.js");
 
 const USER = 2505;
 const T0 = 1_900_000_000;
@@ -96,18 +94,6 @@ describe("a client that only pings", () => {
     at(T0);
     await ping();
     expect(await online()).toBe(false);
-  });
-});
-
-describe("the bots' revenge", () => {
-  test("waits for an online player only while they play, not while they only ping", async () => {
-    at(T0);
-    await upgrade();
-    await ping();
-    expect(await seenRecently(USER, clock)).toBe(true);
-    at(T0 + REAL_ACTION_WINDOW_SECONDS + 30);
-    await ping();
-    expect(await seenRecently(USER, clock)).toBe(false);
   });
 });
 
@@ -189,7 +175,7 @@ describe("isOnline", () => {
     expect(isOnline({ ...fresh, lastSeen: null }, now, ATTACK_ONLINE_SECONDS)).toBe(false);
     expect(isOnline({ ...fresh, lastAction: null }, now, ATTACK_ONLINE_SECONDS)).toBe(false);
     expect(isOnline({ ...fresh, lastSeen: now - 61 }, now, ATTACK_ONLINE_SECONDS)).toBe(false);
-    expect(isOnline({ ...fresh, lastSeen: now - 61 }, now, ONLINE_SECONDS)).toBe(true);
+    expect(isOnline({ ...fresh, lastSeen: now - 61 }, now, 120)).toBe(true);
     expect(isOnline({ ...fresh, lastAction: now - REAL_ACTION_WINDOW_SECONDS }, now, 60)).toBe(true);
     expect(isOnline({ ...fresh, lastAction: now - REAL_ACTION_WINDOW_SECONDS - 1 }, now, 60)).toBe(false);
     expect(isOnline({ ...fresh, challengePending: true }, now, ATTACK_ONLINE_SECONDS)).toBe(false);

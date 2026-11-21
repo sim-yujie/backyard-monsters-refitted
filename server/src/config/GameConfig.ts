@@ -79,12 +79,6 @@ export const devConfig = {
   shiny: 1500,
 
   /*
-   * Enable or disable the debug console. Requires a client restart.
-   * A list of all available commands can be found in `ConsoleCommands.as`
-   */
-  debugMode: process.env.ENV === Env.PROD ? false : false,
-
-  /*
    * Inserts a sandbox test base into the database, with all buildings placed.
    * Must be set before creating a new record.
    */

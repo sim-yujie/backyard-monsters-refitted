@@ -1,4 +1,4 @@
-import { positiveNumber } from "./BotConfig.js";
+import { positiveNumber } from "./envValues.js";
 
 /**
  * Telegram alerts to the owner (`services/alerts/`, docs/alerts.md).

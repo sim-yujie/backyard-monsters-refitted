@@ -416,6 +416,3 @@ export const ribbonOutline = (points: readonly RiverPoint[], extra = 0, scale = 
   for (let i = right.length - 2; i >= 0; i -= 2) outline.push(right[i]!, right[i + 1]!);
   return outline;
 };
-
-/** The corners of a path (its ends), for round caps where paths meet. */
-export const pathEnds = (path: RiverPath): Point[] => [path.points[0]!, path.points[path.points.length - 1]!];

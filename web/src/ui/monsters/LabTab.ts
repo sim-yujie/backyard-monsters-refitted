@@ -1,5 +1,4 @@
 import { LAB_KEYS, labActions, type LabActions } from "@/api/yardLab";
-import type { YardRefusal } from "@/api/yard";
 import {
   MAX_RANK,
   cancelRefund,
@@ -29,6 +28,7 @@ import { ShinyButton } from "@/ui/yard/ShinyButton";
 import { monsterPicture } from "./LockerTab";
 import type { MonstersFocus, MonstersTab, MonstersTabContext } from "./monstersTab";
 import { studySeconds, weekendChip, withWeekendChip } from "@/ui/events/weekendUi";
+import { refusalText } from "@/ui/dom";
 
 /**
  * The Lab tab: the Monster Lab (`docs/design/yard-buildings.md` §6 "Lab tab").
@@ -593,7 +593,3 @@ const plainButton = (label: string, onClick: () => void, variant?: string): HTML
   return button;
 };
 
-const refusalText = (refusal: YardRefusal): string =>
-  refusal.reason === "network"
-    ? "Could not reach the server. Try again."
-    : refusal.message || "That did not work.";

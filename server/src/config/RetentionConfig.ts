@@ -1,4 +1,4 @@
-import { positiveNumber } from "./BotConfig.js";
+import { positiveNumber } from "./envValues.js";
 
 /**
  * How long the server keeps personal data before deleting it on its own, in

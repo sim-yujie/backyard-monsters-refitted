@@ -8,7 +8,6 @@ import { TrainTab } from "./TrainTab";
 import {
   MonsterBuilding,
   MonstersTabId,
-  type MonstersTab,
   type MonstersTabDefinition,
 } from "./monstersTab";
 
@@ -17,23 +16,6 @@ import {
  * contract). A work package that builds a tab replaces its placeholder's
  * `create` here — one line — and leaves `MonstersScreen.ts` alone.
  */
-
-/** A tab whose work package has not landed: says what is coming and nothing else. */
-export const placeholderTab = (text: string): MonstersTab => {
-  const element = document.createElement("div");
-  element.className = "monsters-placeholder";
-  const paragraph = document.createElement("p");
-  paragraph.className = "monsters-placeholder__text";
-  paragraph.textContent = text;
-  element.append(paragraph);
-  return {
-    element,
-    show: () => undefined,
-    update: () => undefined,
-    tick: () => undefined,
-    destroy: () => element.remove(),
-  };
-};
 
 export const MONSTERS_TABS: readonly MonstersTabDefinition[] = [
   {

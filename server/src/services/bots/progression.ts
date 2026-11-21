@@ -607,6 +607,8 @@ export class Progression {
       points: gain.points,
       raw: gain.raw,
       total: this.points + gain.points + valueOfRaw(this.raw + gain.raw),
+      // A plan step's follow-up, never awaited.
+      // oxlint-disable-next-line unicorn/no-thenable
       ...(then && { then: { kind: then.kind, id: then.id, t: then.t, to: then.from + 1 } }),
     };
   }
@@ -777,6 +779,7 @@ export class Progression {
     const then = this.byType.has(LOCKER_TYPE)
       ? this.upgradeCandidate(LOCKER_TYPE, next)
       : this.buildCandidate(LOCKER_TYPE, next);
+    // oxlint-disable-next-line unicorn/no-thenable -- a plan step's follow-up, never awaited
     return then ? { ...hall, then } : hall;
   }
 

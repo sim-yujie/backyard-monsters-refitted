@@ -1,16 +1,15 @@
-import { beforeEach, describe, expect, spyOn, test } from "bun:test";
+import { beforeEach, describe, expect, test } from "bun:test";
 import type { EntityManager } from "@mikro-orm/postgresql";
 
 import { YARD_ATTACKED } from "../maproom/v2/outpostNotices.js";
 import { afterYardDefended, type YardDefence } from "./afterYardDefended.js";
 
 /**
- * The after-defence hook (issue #241, `docs/design/bot-neighbours.md` §4.5,
- * §4.8): every Map Room 1 main-yard defence tells a real defender, whoever
- * attacked, and an attacked bot books its jobs instead. A Map Room 2 main yard
- * (#361, `docs/design/defence-replays.md` §8) tells its defender the same, and
- * books no bot job. Driven over an in-memory stand-in for the mail tables,
- * `bym.bot` and `bym.bot_job`.
+ * The after-defence hook (issue #241; Map Room 2 by #361,
+ * `docs/design/defence-replays.md` §8): every Map Room 1 or 2 main-yard
+ * defence tells a real defender, whoever attacked; a (retired) bot's yard gets
+ * nothing. Driven over an in-memory stand-in for the mail tables, `bym.bot`
+ * and `bym.bot_job` (which nothing writes any more).
  *
  * Map Room 2 cases use saves really on Map Room 2 (`mapversion` 2): the
  * `db:seed:mr2` dev players' saves stay on `mapversion` 1, so they are Map Room
@@ -167,16 +166,7 @@ describe("a Map Room 2 main yard (#361)", () => {
   });
 
   test("a bot's yard there is told nothing and books nothing", async () => {
-    const before = process.env.BOTS_REVENGE;
-    const roll = spyOn(Math, "random").mockReturnValue(0);
-    try {
-      process.env.BOTS_REVENGE = "on";
-      await afterYardDefended(request, mr2({ yard: { saveuserid: BOT } }));
-    } finally {
-      roll.mockRestore();
-      if (before === undefined) delete process.env.BOTS_REVENGE;
-      else process.env.BOTS_REVENGE = before;
-    }
+    await afterYardDefended(request, mr2({ yard: { saveuserid: BOT } }));
     expect(messages).toEqual([]);
     expect(jobs).toEqual([]);
   });
@@ -205,100 +195,28 @@ describe("nothing outside a Map Room 1 or 2 main yard", () => {
   });
 });
 
-describe("a bot defender", () => {
-  test("attacked by a real player books its repair, and gets no notice", async () => {
-    // Revenge is a random roll (issue #269); hold it off so this case always
-    // sees the one repair job, whatever the environment's BOTS_REVENGE is.
-    const before = process.env.BOTS_REVENGE;
-    try {
-      process.env.BOTS_REVENGE = "off";
-      await afterYardDefended(request, defence({ yard: { saveuserid: BOT } }));
-    } finally {
-      if (before === undefined) delete process.env.BOTS_REVENGE;
-      else process.env.BOTS_REVENGE = before;
-    }
-    expect(messages).toEqual([]);
-    expect(jobs).toEqual([expect.objectContaining({ params: [BOT, expect.any(Date)] })]);
-    expect(String(jobs[0]!.sql)).toContain("'repair'");
-    const due = (jobs[0]!.params as [number, Date])[1].getTime();
-    expect(due).toBeGreaterThanOrEqual((NOW + 3600) * 1000);
-    expect(due).toBeLessThan((NOW + 4 * 3600) * 1000);
-  });
-
-  test("bots retired (owner, 12 Nov 2026): no revenge even with BOTS_REVENGE=on and the roll allowing it", async () => {
-    const before = process.env.BOTS_REVENGE;
-    const roll = spyOn(Math, "random").mockReturnValue(0);
-    try {
-      process.env.BOTS_REVENGE = "on";
-      await afterYardDefended(request, defence({ yard: { saveuserid: BOT } }));
-    } finally {
-      roll.mockRestore();
-      if (before === undefined) delete process.env.BOTS_REVENGE;
-      else process.env.BOTS_REVENGE = before;
-    }
-    expect(messages).toEqual([]);
-    expect(jobs).toEqual([expect.objectContaining({ params: [BOT, expect.any(Date)] })]);
-    expect(String(jobs[0]!.sql)).toContain("'repair'");
-  });
-
-  test("attacked by another bot books nothing", async () => {
-    await afterYardDefended(request, defence({ yard: { saveuserid: BOT }, attacker: { userid: OTHER_BOT, username: "Kai" } }));
+describe("a bot defender (bots retired; the bot sweep and its jobs removed in beta 9)", () => {
+  test("attacked by a real player gets no notice and books nothing", async () => {
+    await afterYardDefended(request, defence({ yard: { saveuserid: BOT } }));
     expect(messages).toEqual([]);
     expect(jobs).toEqual([]);
   });
 
-  test("a failure to book is logged, never thrown into the landing", async () => {
-    const failing = {
-      ...request,
-      getContext: () => failing,
-      fork: () => failing,
-      transactional: async () => {
-        throw new Error("database gone");
-      },
-    } as unknown as EntityManager;
-    await afterYardDefended(failing, defence({ yard: { saveuserid: BOT } }));
+  test("attacked by another bot gets nothing either", async () => {
+    await afterYardDefended(request, defence({ yard: { saveuserid: BOT }, attacker: { userid: OTHER_BOT, username: "Kai" } }));
+    expect(messages).toEqual([]);
     expect(jobs).toEqual([]);
   });
 });
 
 describe("a seeded Map Room 2 dev player (issue #233)", () => {
-  const withEnv = async (env: Record<string, string>, body: () => Promise<void>) => {
-    const before = Object.fromEntries(Object.keys(env).map((key) => [key, process.env[key]]));
-    const roll = spyOn(Math, "random").mockReturnValue(0);
-    try {
-      Object.assign(process.env, env);
-      await body();
-    } finally {
-      roll.mockRestore();
-      for (const [key, value] of Object.entries(before)) {
-        if (value === undefined) delete process.env[key];
-        else process.env[key] = value;
-      }
-    }
-  };
-
-  test("books its repair and never a revenge, and is told as a player is", async () => {
-    await withEnv({ ENV: "local", BOTS_REVENGE: "on" }, () =>
-      afterYardDefended(request, defence({ yard: { saveuserid: SEEDED } }))
-    );
-    expect(jobs).toEqual([expect.objectContaining({ params: [SEEDED, expect.any(Date)] })]);
-    expect(String(jobs[0]!.sql)).toContain("'repair'");
-    expect(messages).toEqual([expect.objectContaining({ targetid: SEEDED, messagetype: YARD_ATTACKED })]);
-  });
-
-  test("on a save really on Map Room 2, is told and books nothing (#361)", async () => {
-    await withEnv({ ENV: "local", BOTS_REVENGE: "on" }, () =>
-      afterYardDefended(request, defence({ yard: { saveuserid: SEEDED, mapversion: 2 } }))
-    );
+  test("is told as a player is and books nothing, on either map", async () => {
+    await afterYardDefended(request, defence({ yard: { saveuserid: SEEDED } }));
+    await afterYardDefended(request, defence({ yard: { saveuserid: SEEDED, mapversion: 2 } }));
     expect(jobs).toEqual([]);
-    expect(messages).toEqual([expect.objectContaining({ targetid: SEEDED, messagetype: YARD_ATTACKED })]);
-  });
-
-  test("on production books nothing, and is still told", async () => {
-    await withEnv({ ENV: "production", BOTS_REVENGE: "on" }, () =>
-      afterYardDefended(request, defence({ yard: { saveuserid: SEEDED } }))
-    );
-    expect(jobs).toEqual([]);
-    expect(messages).toEqual([expect.objectContaining({ targetid: SEEDED, messagetype: YARD_ATTACKED })]);
+    expect(messages).toEqual([
+      expect.objectContaining({ targetid: SEEDED, messagetype: YARD_ATTACKED }),
+      expect.objectContaining({ targetid: SEEDED, messagetype: YARD_ATTACKED }),
+    ]);
   });
 });

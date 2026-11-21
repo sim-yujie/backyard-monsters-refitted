@@ -2,6 +2,7 @@ import { CHANGELOG, type ChangelogCard, type ChangelogRelease } from "@/data/cha
 import { Popup } from "@/ui/Popup";
 import { supportLine } from "@/ui/support/SupportPanel";
 import "./whats-new.css";
+import { el } from "@/ui/dom";
 
 /**
  * The "What's new" cards: a picture, a title and a line or two per change in
@@ -13,17 +14,6 @@ import "./whats-new.css";
  * (owner 12 Nov). At the foot, above the button, one support line with the
  * Patreon and Ko-fi links (owner 24 Oct).
  */
-
-const el = <K extends keyof HTMLElementTagNameMap>(
-  tag: K,
-  className: string,
-  text?: string,
-): HTMLElementTagNameMap[K] => {
-  const element = document.createElement(tag);
-  element.className = className;
-  if (text !== undefined) element.textContent = text;
-  return element;
-};
 
 const card = (item: ChangelogCard): HTMLElement => {
   const box = el("li", "whats-new__card");

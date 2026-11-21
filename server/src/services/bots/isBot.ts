@@ -71,10 +71,10 @@ export const botsAmong = async (userids: readonly number[], em: EntityManager): 
 };
 
 /**
- * Whether a user is one of the `db:seed:mr2` dev players whose yard the bot
- * sweep repairs and grows (issue #233, `seededPlayers.ts`). To everything
- * else they stay ordinary accounts: they can log in, and they get the notices
- * a real player gets.
+ * Whether a user is one of the `db:seed:mr2` dev players whose yard the bots'
+ * yard generator drew (issue #233, `seededPlayers.ts`). To everything else
+ * they stay ordinary accounts: they can log in, and they get the notices a
+ * real player gets.
  *
  * @param {number} userid - The user to ask about
  * @param {EntityManager} em - The entity manager to read with (the request's by default)
@@ -82,16 +82,3 @@ export const botsAmong = async (userids: readonly number[], em: EntityManager): 
  */
 export const isSeededPlayer = async (userid: number, em?: EntityManager): Promise<boolean> =>
   (await botRowState(userid, em)) === "seeded";
-
-/**
- * Whether a user is a bot still at work on Map Room 1: a `bot` row in state
- * `active`. A `retired` bot (every bot since the owner retired them, 12 Nov
- * 2026, migration `20261117_RetireBots.ts`) answers nothing: a truce or friend
- * request to one waits and lapses as with a player who stopped playing.
- *
- * @param {number} userid - The user to ask about
- * @param {EntityManager} em - The entity manager to read with (the request's by default)
- * @returns {Promise<boolean>} True when the user's `bot` row is `active`
- */
-export const isActiveBot = async (userid: number, em?: EntityManager): Promise<boolean> =>
-  (await botRowState(userid, em)) === "active";

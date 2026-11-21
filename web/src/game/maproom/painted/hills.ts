@@ -53,7 +53,6 @@ export const CLIFF_STRIP_PIXELS: readonly { top: number; height: number }[] = [
   { top: 238, height: 107 },
   { top: 361, height: 122 },
 ];
-export const CLIFF_PIECES_TOP = 512;
 
 export const CLIFF_STRIPS: readonly CliffStrip[] = CLIFF_STRIP_PIXELS.map(({ top, height }) => ({
   top: top / SHEET,

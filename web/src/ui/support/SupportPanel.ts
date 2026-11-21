@@ -2,6 +2,7 @@ import { KOFI_URL, PATREON_URL } from "@/config";
 import { gameIcon } from "@/ui/gameIcon";
 import { Popup } from "@/ui/Popup";
 import "./support.css";
+import { el } from "@/ui/dom";
 
 /**
  * "Support the game" (owner 24 Oct 2026; built 4 Nov): one line on why, a
@@ -31,17 +32,6 @@ export const SUPPORT_TEXT = {
 
 /** The popup's class: Bob's tips and the reminder look for it. */
 export const SUPPORT_POPUP_CLASS = "support-popup";
-
-const el = <K extends keyof HTMLElementTagNameMap>(
-  tag: K,
-  className: string,
-  text?: string,
-): HTMLElementTagNameMap[K] => {
-  const element = document.createElement(tag);
-  element.className = className;
-  if (text !== undefined) element.textContent = text;
-  return element;
-};
 
 /** One outside link styled as a button, opened in a new tab with no referrer. */
 const link = (href: string, label: string, note: string | null, className: string): HTMLAnchorElement => {
@@ -146,9 +136,6 @@ export const openSupportPanel = (options: SupportPanelOptions): Popup => {
   popup.setContent(body).mount(options.container);
   return popup;
 };
-
-/** Whether the panel is up (the reminder waits while it, or any popup, is). */
-export const isSupportOpen = (): boolean => document.querySelector(`.${SUPPORT_POPUP_CLASS}`) !== null;
 
 /**
  * The support line at the foot of the "What's new" cards: the small heart,

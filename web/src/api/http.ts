@@ -11,7 +11,7 @@ import type { ApiEnvelope, ApiErrorDetails } from "./types";
  *    ErrorInterceptor rewrites any ClientSafeError built with
  *    `isClientFriendly: false` to status 200 so the old Flash client would not
  *    choke on it (baseUnderAttackErr, baseProtectedErr, userOnlineErr,
- *    takeoverCellErr, truceActiveErr, mapRoomDisabledErr). A few controllers
+ *    truceActiveErr, mapRoomDisabledErr). A few controllers
  *    also return `error: 1` on a soft failure. So the body, not the status, is
  *    what decides success.
  */

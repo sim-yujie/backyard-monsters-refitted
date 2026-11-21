@@ -348,10 +348,6 @@ export const hatcheryNumbers = (yard: Pick<HatchYard, "hatcheries">): ReadonlyMa
       .map((id, index) => [id, index + 1]),
   );
 
-/** The queue a target adds to: the HCC's shared queue, or a hatchery's own. */
-export const queueOf = (yard: HatchYard, target: HatchTarget): QueueStack[] | null =>
-  target === "hcc" ? yard.shared : (yard.hatcheries.find((one) => one.id === target)?.queue ?? null);
-
 /** Monsters waiting in a queue. */
 export const queuedCount = (queue: readonly QueueStack[]): number =>
   queue.reduce((total, stack) => total + stack[1], 0);

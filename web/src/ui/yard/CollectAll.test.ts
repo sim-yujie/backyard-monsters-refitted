@@ -119,7 +119,9 @@ describe("CollectAll", () => {
     expect(fill()).toBe("100%");
   });
 
-  it("asks the server nothing from its per-second refresh, however long the buffers fill", () => {
+  // Six hours of one-second ticks: well under a second alone, but past Vitest's
+  // 5 s default when the whole suite runs beside the server's (21 Nov 2026).
+  it("asks the server nothing from its per-second refresh, however long the buffers fill", { timeout: 30_000 }, () => {
     collect.bind(binding);
     for (let second = 1; second <= 6 * 3600; second++) {
       clock = T0 + second;

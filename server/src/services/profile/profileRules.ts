@@ -21,6 +21,7 @@ export const PHOTO_CHANGE_MS = 24 * 60 * 60 * 1000;
 export const AUTO_HIDE_REPORTS = 3;
 
 /** Control characters other than the line break, zero-width and direction marks. */
+// oxlint-disable-next-line no-control-regex -- matching them is the point
 const CONTROL_CHARACTERS = new RegExp("[\\u0000-\\u0009\\u000b-\\u001f\\u007f\\u200b-\\u200f\\u2028-\\u202e\\u2066-\\u2069\\ufeff]", "g");
 
 export type BioRefusal = "tooLong" | "badWords";
