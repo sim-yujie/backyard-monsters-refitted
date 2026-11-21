@@ -337,3 +337,54 @@ describe("the music element (art from another address, VITE_ART_URL)", () => {
     ]);
   });
 });
+
+describe("MusicPlayer behind a gate (beta 9: the yard's pictures first)", () => {
+  const gated = (page: FakePage, gate: Promise<void>, asked: { n: number }) =>
+    new MusicPlayer({
+      canPlayOgg: false,
+      createAudio: (url) => {
+        const audio = new FakeAudio(url, page);
+        page.audios.push(audio);
+        return audio;
+      },
+      gestures: page,
+      gate: () => {
+        asked.n += 1;
+        return gate;
+      },
+    });
+
+  it("downloads nothing until the gate opens, then starts the tune the screen wants by then", async () => {
+    const page = new FakePage();
+    let open!: () => void;
+    const asked = { n: 0 };
+    const player = gated(page, new Promise<void>((resolve) => (open = resolve)), asked);
+    player.setEnabled(true);
+    player.want("yard");
+    player.want("attack");
+    await settle();
+    expect(page.audios).toHaveLength(0);
+    expect(asked.n).toBe(1);
+    open();
+    await settle();
+    expect(page.audios).toHaveLength(1);
+    expect(page.audios[0]?.url).toBe(TUNES.attack.url);
+    expect(page.audios[0]?.paused).toBe(false);
+    // Once open, a change of tune starts at once.
+    player.want("yard");
+    await settle();
+    expect(page.audios).toHaveLength(2);
+  });
+
+  it("starts nothing when the music was turned off while it waited", async () => {
+    const page = new FakePage();
+    let open!: () => void;
+    const player = gated(page, new Promise<void>((resolve) => (open = resolve)), { n: 0 });
+    player.setEnabled(true);
+    player.want("yard");
+    player.setEnabled(false);
+    open();
+    await settle();
+    expect(page.audios).toHaveLength(0);
+  });
+});

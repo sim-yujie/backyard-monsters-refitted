@@ -47,6 +47,7 @@ import { readYard, type Yard } from "@/game/yard/yardModel";
 import { fellPens, withCagedChampions, withRosters, yardLifeOf, type YardLife } from "@/game/yard/yardLifeModel";
 import { setYardIntent } from "@/game/yard/yardIntent";
 import { YardRenderer } from "@/game/yard/YardRenderer";
+import { noteAttackEnd } from "@/game/attack/attackArt";
 import { YardInput } from "@/game/yard/YardInput";
 import { formatAmount } from "@/ui/format";
 import { AMOUNT_CHANGE_WORDS, writeAmount, type AmountChange } from "@/ui/amountChange";
@@ -352,6 +353,8 @@ export class AttackScene implements Scene {
 
   exit(): void {
     for (const teardown of this.teardowns.splice(0)) teardown();
+    // The pictures only this attack drew come off the graphics card once the yard is home (`attackArt.ts`).
+    noteAttackEnd();
     this.unsubscribe?.();
     this.unsubscribe = null;
     this.confirm?.close();
