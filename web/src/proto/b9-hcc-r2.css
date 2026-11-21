@@ -1,0 +1,961 @@
+/* DESIGN PROTOTYPE (b9 HCC levels 2-3, round 2), never merged.
+   D = workbench (all on one screen), E = monster book with a production seal. */
+
+.hatch.b9r2h {
+  position: relative;
+}
+
+/* The window's own housing line gives way to the strip's (one housing line, not two). */
+.b9r2h-window:has(.hatch.b9r2h) .monsters-header {
+  display: none;
+}
+
+/* ── The strip: which yard, its housing ─────────────────────────────── */
+.b9r2h-strip {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 48px;
+  padding: 6px 12px;
+  border-bottom: 1px solid var(--colour-border-subtle);
+}
+.b9r2h-arrow {
+  width: 30px;
+  height: 30px;
+  object-fit: contain;
+  filter: drop-shadow(0 2px 2px var(--colour-art-shadow));
+}
+.b9r2h button:disabled .b9r2h-arrow {
+  filter: grayscale(1);
+  opacity: 0.4;
+}
+.b9r2h-where {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.b9r2h-where__icon {
+  width: 30px;
+  height: 30px;
+  object-fit: contain;
+}
+.b9r2h-stepper,
+.b9r2h-yard {
+  flex: none;
+  display: inline-flex;
+  align-items: stretch;
+  height: 48px;
+  box-sizing: border-box;
+  border: 2px solid var(--colour-border-strong);
+  border-radius: 999px;
+  background: var(--colour-surface-control);
+  color: var(--colour-text);
+  font: inherit;
+}
+.b9r2h-yard {
+  align-items: center;
+  gap: 4px;
+  min-width: 46px;
+  justify-content: center;
+  padding: 0 10px;
+  cursor: pointer;
+}
+.b9r2h-yard--home {
+  padding: 0;
+  width: 46px;
+}
+.b9r2h-yard--locked {
+  position: relative;
+  opacity: 0.75;
+  cursor: default;
+}
+.b9r2h-yard--locked .b9r2h-where__icon {
+  filter: grayscale(1);
+}
+.b9r2h-lock__level {
+  font-family: var(--font-display);
+  font-weight: 700;
+}
+.b9r2h-caret {
+  color: var(--colour-accent);
+  font-size: 13px;
+}
+.b9r2h-stepper__arrow,
+.b9r2h-stepper__where {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+}
+.b9r2h-stepper__arrow {
+  width: 44px;
+}
+.b9r2h-stepper__where {
+  min-width: 64px;
+  padding: 0 4px;
+  border-inline: 1px solid var(--colour-border);
+}
+
+.b9r2h-housing {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 3px;
+  min-height: 44px;
+  padding: 0 4px;
+  border: 0;
+  background: none;
+  color: var(--colour-text);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.b9r2h-housing__numbers {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.b9r2h-housing__icon {
+  width: 22px;
+  height: 22px;
+}
+.b9r2h-housing__coming {
+  margin-left: auto;
+  color: var(--colour-info);
+  font-size: var(--text-sm);
+}
+.b9r2h-housing--over .b9r2h-housing__coming {
+  padding: 0 6px;
+  border-radius: 999px;
+  background: var(--colour-danger);
+  color: #fff;
+}
+.b9r2h-housing__bar {
+  display: flex;
+  height: 6px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: var(--colour-surface-sunken);
+}
+.b9r2h-housing__fill {
+  background: var(--colour-meter, var(--colour-text));
+}
+.b9r2h-housing__more {
+  background: var(--colour-info);
+}
+.b9r2h-housing--over .b9r2h-housing__more {
+  background: var(--colour-danger);
+}
+
+/* The tab's own housing box: only when the strip's housing is tapped. */
+.b9r2h:not(.b9r2h-show-housing) .hatch-message {
+  display: none;
+}
+
+/* Running an outpost from home: a gold frame, a tinted strip, the flag on Add. */
+.b9r2h-remote::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  border: 3px solid var(--colour-accent);
+  border-radius: var(--radius-md);
+  pointer-events: none;
+}
+.b9r2h-remote .b9r2h-strip {
+  background: var(--colour-accent-soft);
+}
+.b9r2h-remote .b9r2h-stepper,
+.b9r2h-remote .b9r2h-yard--chip {
+  border-color: var(--colour-accent);
+}
+.b9r2h-addflag {
+  width: 26px;
+  height: 26px;
+  margin-right: 6px;
+  vertical-align: middle;
+}
+
+/* ── Sockets: a stack is its picture and its count ──────────────────── */
+.b9r2h .hatch-slot__name,
+.b9r2h .hatch-slot__note,
+.b9r2h .hatch-slot__minus,
+.b9r2h .hatch-slot__empty {
+  display: none;
+}
+.b9r2h .hatch-slot {
+  width: auto;
+  min-width: 44px;
+  min-height: 48px;
+  padding: 2px;
+  border-radius: var(--radius-md);
+}
+.b9r2h .hatch-slot--empty {
+  border: 1px solid var(--colour-border-subtle);
+  background: var(--colour-surface-sunken);
+  box-shadow: inset 0 2px 5px rgb(0 0 0 / 35%);
+  opacity: 0.6;
+}
+.b9r2h .hatch-slot__picture {
+  width: 34px;
+  height: 34px;
+  margin: 0;
+}
+.b9r2h .hatch-slot__count {
+  top: auto;
+  left: auto;
+  right: 1px;
+  bottom: 1px;
+  min-width: 0;
+  padding: 0 4px;
+  font-size: 11px;
+  line-height: 1.35;
+}
+
+/* The line: hatcheries in a slim row, then the rack with the clock and Clear beside it. */
+.b9r2h .hatch-line--hcc > .hatch-line__now {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 6px;
+}
+.b9r2h .hatch-line--hcc .hatch-now {
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0;
+  width: auto;
+  min-height: 48px;
+  padding: 2px;
+}
+.b9r2h .hatch-line--hcc .hatch-now__state {
+  font-size: 11px;
+  line-height: 1.1;
+  white-space: nowrap;
+}
+.b9r2h .hatch-line--hcc .hatch-now__words {
+  display: block;
+  line-height: 1;
+}
+.b9r2h .hatch-line--hcc .hatch-now__label,
+.b9r2h .hatch-line--hcc .hatch-now__name,
+.b9r2h .hatch-line--hcc .hatch-now__cancel {
+  display: none;
+}
+.b9r2h .hatch-line--hcc .hatch-now__body {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+}
+.b9r2h .hatch-line--hcc .hatch-now__picture {
+  width: 28px;
+  height: 28px;
+  margin: 0;
+}
+.b9r2h .hatch-line--hcc .hatch-now__words-long {
+  display: none;
+}
+.b9r2h .hatch-line--hcc .hatch-now__words-short {
+  display: inline;
+}
+.b9r2h .hatch-line--hcc .hatch-now--more {
+  font-size: 0;
+}
+.b9r2h .hatch-line--hcc > .hatch-line__slots {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr)) 64px;
+  grid-template-rows: 50px 50px;
+  grid-auto-rows: 50px;
+  gap: 6px;
+  min-height: 0;
+  margin-top: 6px;
+  overflow: visible;
+}
+.b9r2h .hatch-line--hcc > .hatch-line__slots > .hatch-line__totals {
+  grid-column: 6 !important;
+  grid-row: 1 / span 2 !important;
+  order: 0 !important;
+  width: auto;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  justify-content: space-between;
+  gap: 2px;
+  margin: 0;
+  padding: 0;
+  min-width: 0;
+}
+.b9r2h .hatch-line__done-label,
+.b9r2h .hatch-line__boost-words,
+.b9r2h .hatch-line__done-icon {
+  display: none;
+}
+.b9r2h .hatch-line__done {
+  font-size: 12px;
+  line-height: 1;
+  text-align: center;
+  white-space: nowrap;
+}
+.b9r2h .hatch-line__boost-link,
+.b9r2h .hatch-line__totals .hatch-clear {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 0;
+  height: 44px;
+  flex: none;
+  padding: 0;
+  border: 1px solid var(--colour-border);
+  border-radius: var(--radius-md);
+  background: var(--colour-surface-control);
+}
+.b9r2h .hatch-line__boost-link::after {
+  content: "»";
+  margin-left: 3px;
+  color: var(--colour-accent);
+  font-weight: 700;
+}
+.b9r2h .hatch-line__totals .hatch-clear {
+  font-size: 0;
+}
+.b9r2h .hatch-line__totals .hatch-clear__cross {
+  font-size: 20px;
+  color: var(--colour-danger);
+}
+.b9r2h .hatch-lines {
+  margin-bottom: 0;
+}
+
+/* ── Mix tokens ─────────────────────────────────────────────────────── */
+.b9r2h-mixes {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 6px;
+  margin: 8px 0;
+}
+.b9r2h-mix {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0;
+  height: 52px;
+  padding: 2px;
+  border: 2px solid var(--colour-border-strong);
+  border-radius: 14px;
+  background: radial-gradient(circle at 50% 30%, var(--colour-surface-control-hover), var(--colour-surface-control));
+  color: var(--colour-text);
+  font: inherit;
+  cursor: pointer;
+}
+.b9r2h-mix--on {
+  border-color: var(--colour-accent);
+  box-shadow: 0 0 0 2px var(--colour-accent-soft);
+}
+.b9r2h-mix--empty {
+  border-style: dashed;
+  border-color: var(--colour-border);
+  background: none;
+}
+.b9r2h-mix__number {
+  position: absolute;
+  top: -5px;
+  left: -4px;
+  z-index: 1;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: var(--colour-accent);
+  color: var(--colour-text-inverse, #1b1b1b);
+  font-family: var(--font-display);
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 18px;
+  text-align: center;
+}
+.b9r2h-mix--empty .b9r2h-mix__number {
+  background: var(--colour-surface-sunken);
+  color: var(--colour-text-muted);
+}
+.b9r2h-mix__plus {
+  color: var(--colour-accent);
+  font-size: 26px;
+  font-weight: 700;
+  line-height: 1;
+}
+.b9r2h-faces {
+  display: inline-flex;
+}
+.b9r2h-face {
+  width: 26px;
+  height: 26px;
+  object-fit: contain;
+}
+.b9r2h-face + .b9r2h-face {
+  margin-left: -9px;
+}
+.b9r2h-mix__total {
+  font-family: var(--font-display);
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1.1;
+}
+
+/* A token's card. */
+.b9r2h-mixcard {
+  position: absolute;
+  left: 12px;
+  right: 12px;
+  z-index: 4;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-width: 420px;
+  padding: 10px;
+  border: 2px solid var(--colour-accent);
+  border-radius: var(--radius-lg);
+  background: var(--colour-surface-raised);
+  box-shadow: var(--shadow-popup);
+}
+.b9r2h-mixcard[hidden] {
+  display: none;
+}
+.b9r2h-mixcard__head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.b9r2h-mixcard__number {
+  position: static;
+  flex: none;
+  width: 26px;
+  height: 26px;
+  font-size: 15px;
+  line-height: 26px;
+}
+.b9r2h-mixcard__cost {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-family: var(--font-display);
+  font-weight: 700;
+}
+.b9r2h-mixcard__cost .b9r2h-housing__icon {
+  margin-left: 8px;
+}
+.b9r2h-mixcard__close {
+  width: 44px;
+  height: 44px;
+  margin: -6px -6px -6px 0;
+  border: 0;
+  background: none;
+  color: var(--colour-text);
+  font-size: 18px;
+  cursor: pointer;
+}
+.b9r2h-mixcard__stacks {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.b9r2h-socket {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 56px;
+  height: 48px;
+  border: 1px solid var(--colour-border);
+  border-radius: var(--radius-md);
+  background: var(--colour-surface-sunken);
+}
+.b9r2h-socket__picture {
+  width: 34px;
+  height: 34px;
+  object-fit: contain;
+}
+.b9r2h-socket__count {
+  position: absolute;
+  right: 1px;
+  bottom: 1px;
+  padding: 0 4px;
+  border-radius: 999px;
+  background: var(--colour-text);
+  color: var(--colour-text-inverse);
+  font-family: var(--font-display);
+  font-size: 11px;
+  font-weight: 700;
+}
+.b9r2h-mixcard__actions {
+  display: flex;
+  gap: 8px;
+}
+.b9r2h-mixcard__load {
+  flex: 1;
+  min-height: 44px;
+}
+.b9r2h-mixcard__tool {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  min-width: 44px;
+  min-height: 44px;
+  white-space: nowrap;
+}
+.b9r2h-mixcard__bin {
+  color: var(--colour-danger);
+  font-size: 18px;
+}
+
+/* ── E: the production seal, and the queue page behind it ───────────── */
+.b9r2h-seal {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+  width: 100%;
+  min-height: 56px;
+  padding: 4px 10px;
+  border: 2px solid var(--colour-border-strong);
+  border-radius: var(--radius-lg);
+  background: linear-gradient(var(--colour-surface-control-hover), var(--colour-surface-control));
+  color: var(--colour-text);
+  font: inherit;
+  cursor: pointer;
+}
+.b9r2h-seal__part {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+.b9r2h-seal__hatchery {
+  width: 40px;
+  height: 44px;
+  object-fit: contain;
+}
+.b9r2h-seal__blocked {
+  position: absolute;
+  left: 22px;
+  top: -4px;
+  width: 20px;
+  height: 20px;
+  padding: 1px;
+  border-radius: 50%;
+  background: var(--colour-danger);
+}
+.b9r2h-seal__part--stalled .b9r2h-seal__number {
+  color: var(--colour-warning-bright, var(--colour-warning));
+}
+.b9r2h-seal__number {
+  font-family: var(--font-display);
+  font-size: var(--text-md, 16px);
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.b9r2h-seal__clock {
+  width: 24px;
+  height: 24px;
+}
+.b9r2h-seal__go {
+  color: var(--colour-accent);
+  font-size: 26px;
+  font-weight: 700;
+  line-height: 1;
+}
+.b9r2h-seal .b9r2h-face {
+  width: 30px;
+  height: 30px;
+}
+.b9r2h-back {
+  display: none;
+  align-items: center;
+  justify-content: center;
+  width: 48px;
+  height: 44px;
+  margin-bottom: 6px;
+  border: 2px solid var(--colour-border-strong);
+  border-radius: 999px;
+  background: var(--colour-surface-control);
+  cursor: pointer;
+}
+.b9r2h-opt-e:not(.b9r2h-inspect) .hatch-lines,
+.b9r2h-opt-e:not(.b9r2h-inspect) .hatch-boosts {
+  display: none;
+}
+.b9r2h-opt-e.b9r2h-inspect .b9r2h-seal,
+.b9r2h-opt-e.b9r2h-inspect .b9r2h-mixes,
+.b9r2h-opt-e.b9r2h-inspect .hatch__split {
+  display: none;
+}
+.b9r2h-opt-e.b9r2h-inspect .b9r2h-back {
+  display: flex;
+}
+/* The queue page has the room: bigger sockets. */
+.b9r2h-opt-e.b9r2h-inspect .hatch-line--hcc > .hatch-line__slots {
+  grid-template-rows: 64px 64px;
+}
+.b9r2h-opt-e.b9r2h-inspect .hatch-slot__picture {
+  width: 44px;
+  height: 44px;
+}
+.b9r2h-opt-e.b9r2h-inspect .hatch-line--hcc .hatch-now {
+  min-height: 56px;
+}
+
+/* ── The yard page ──────────────────────────────────────────────────── */
+.b9r2h-yards {
+  position: absolute;
+  inset: 0;
+  z-index: 5;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 8px 12px 12px;
+  background: var(--colour-surface-raised);
+}
+.b9r2h-yards[hidden] {
+  display: none;
+}
+.b9r2h-yards__head {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.b9r2h-yards__back {
+  flex: none;
+  width: 48px;
+  height: 44px;
+  border: 2px solid var(--colour-border-strong);
+  border-radius: 999px;
+  background: var(--colour-surface-control);
+  cursor: pointer;
+}
+.b9r2h-search {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  height: 44px;
+  padding: 0 10px;
+  border: 1px solid var(--colour-border);
+  border-radius: 999px;
+  background: var(--colour-surface-input);
+}
+.b9r2h-search__input {
+  flex: 1;
+  min-width: 0;
+  border: 0;
+  background: none;
+  color: var(--colour-text);
+  font: inherit;
+}
+.b9r2h-yards__grid {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(104px, 1fr));
+  grid-auto-rows: min-content;
+  gap: 8px;
+  padding: 6px 2px;
+}
+.b9r2h-yardcard {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  min-height: 84px;
+  padding: 6px 4px;
+  border: 2px solid var(--colour-border);
+  border-radius: var(--radius-lg);
+  background: var(--colour-surface-control);
+  color: var(--colour-text);
+  font: inherit;
+  cursor: pointer;
+}
+.b9r2h-yardcard--on {
+  border-color: var(--colour-accent);
+  background: var(--colour-surface-selected);
+}
+.b9r2h-yardcard--off {
+  opacity: 0.5;
+  cursor: default;
+}
+.b9r2h-yardcard__top {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+.b9r2h-yardcard__number {
+  font-family: var(--font-display);
+  font-size: 20px;
+  font-weight: 700;
+}
+.b9r2h-yardcard__pin {
+  width: 14px;
+  height: 14px;
+}
+.b9r2h-yardcard__name {
+  max-width: 100%;
+  color: var(--colour-text-secondary);
+  font-size: 11.5px;
+  line-height: 1.15;
+  overflow-wrap: anywhere;
+}
+.b9r2h-yardcard__queue {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  margin-top: auto;
+  font-family: var(--font-display);
+  font-size: 12.5px;
+  font-weight: 700;
+}
+.b9r2h-yardcard__queue img {
+  width: 16px;
+  height: 16px;
+}
+.b9r2h-yardcard--idle .b9r2h-yardcard__queue {
+  color: var(--colour-text-muted);
+}
+
+/* ── A phone: the monster grid and Add on the first screen ──────────── */
+@media (max-width: 620px), (max-height: 500px) {
+  .b9r2h .hatch-info {
+    position: sticky;
+    bottom: 0;
+    z-index: 1;
+  }
+  .b9r2h .hatch-info__blurb,
+  .b9r2h .hatch-info__level,
+  .b9r2h .hatch-info__details,
+  .b9r2h .hatch-info__stats {
+    display: none;
+  }
+  .b9r2h .hatch-info__portrait,
+  .b9r2h .hatch-info__picture {
+    width: 36px;
+    height: 36px;
+  }
+  .b9r2h .hatch-info {
+    padding-block: 6px;
+  }
+  .b9r2h .hatch-add {
+    gap: 6px;
+    padding-top: 0;
+    margin-top: 4px;
+  }
+  /* E: the monsters own the tab: a grid, not one sliding row. */
+  .b9r2h-opt-e .hatch__grid {
+    grid-auto-flow: row;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    grid-auto-columns: auto;
+    overflow: visible;
+    margin-inline: 0;
+    padding-inline: 0;
+  }
+}
+
+@media (max-width: 620px), (max-height: 500px) {
+  /* The chosen monster: its name and price on one line, the steps, then Max beside Add. */
+  .b9r2h .hatch-info {
+    display: grid;
+    grid-template-columns: auto 1fr;
+    align-items: center;
+    column-gap: 8px;
+    row-gap: 4px;
+  }
+  .b9r2h .hatch-info__head {
+    min-width: 0;
+    margin: 0;
+  }
+  .b9r2h .hatch-info__each {
+    justify-self: end;
+    margin: 0;
+    white-space: nowrap;
+  }
+  .b9r2h .hatch-add {
+    grid-column: 1 / -1;
+    display: grid;
+    grid-template-columns: 1fr 2fr;
+  }
+  .b9r2h .hatch-add > * {
+    grid-column: 1 / -1;
+  }
+  .b9r2h .hatch-add__controls {
+    display: grid;
+    grid-template-columns: repeat(5, minmax(0, 1fr)) auto;
+    gap: 6px;
+  }
+  .b9r2h .hatch-add__controls > .hatch-add__fill {
+    grid-column: auto;
+    min-width: 76px;
+    padding-inline: 6px;
+  }
+  .b9r2h .hatch-add__controls > * {
+    min-width: 0;
+    width: auto;
+    flex: none;
+  }
+  .b9r2h .b9r2h-strip {
+    padding-inline: 10px;
+    gap: 6px;
+  }
+  .b9r2h .b9r2h-housing__numbers {
+    font-size: 13px;
+    gap: 3px;
+  }
+  .b9r2h-remote .b9r2h-housing:not(.b9r2h-housing--over) .b9r2h-housing__coming {
+    display: none;
+  }
+}
+
+.b9r2h .hatch-line__totals > .hatch-line__boost-link,
+.b9r2h .hatch-line__totals > .btn.hatch-clear {
+  width: 100%;
+  min-width: 44px;
+  box-sizing: border-box;
+}
+@media (max-width: 620px), (max-height: 500px) {
+  .b9r2h .b9r2h-strip {
+    min-height: 0;
+    padding-block: 3px;
+  }
+  .b9r2h .hatch-line--hcc .hatch-now {
+    min-height: 44px;
+  }
+  .b9r2h-mixes {
+    margin: 6px 0 2px;
+  }
+  .b9r2h .hatch-add__controls {
+    grid-template-columns: repeat(5, minmax(0, 1fr)) 70px;
+    gap: 4px;
+  }
+  .b9r2h .hatch-add__controls > .hatch-add__fill {
+    min-width: 0;
+    padding-inline: 2px;
+  }
+  .b9r2h-remote .b9r2h-strip {
+    gap: 4px;
+    padding-inline: 8px;
+  }
+  .b9r2h-remote .b9r2h-stepper__where {
+    min-width: 58px;
+  }
+  .b9r2h-remote .b9r2h-housing__numbers {
+    font-size: 12px;
+  }
+  .b9r2h-remote .b9r2h-housing__icon {
+    width: 18px;
+    height: 18px;
+  }
+  .b9r2h .hatch-add__gate {
+    margin: 0;
+    font-size: 12px;
+    line-height: 1.2;
+  }
+}
+
+/* ── An iPad and a desktop: the bench is one band, the monsters under it ─ */
+.b9r2h-bench {
+  display: flex;
+  flex-direction: column;
+}
+@media (min-width: 620.02px) {
+  .b9r2h-strip {
+    padding-inline: 16px;
+  }
+  .b9r2h-housing {
+    flex: 0 1 340px;
+  }
+  .b9r2h-bench {
+    flex-direction: row;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 10px 20px;
+    margin-bottom: 10px;
+  }
+  .b9r2h-bench > .hatch-lines {
+    flex: none;
+    margin: 0;
+  }
+  .b9r2h-mixes {
+    flex: none;
+    grid-template-columns: repeat(5, 64px);
+    gap: 8px;
+    margin: 0;
+  }
+  .b9r2h-mix {
+    height: 60px;
+  }
+  .b9r2h-opt-d .hatch-lines .hatch-line.hatch-line--hcc {
+    display: flex !important;
+    flex-direction: row;
+    align-items: stretch;
+    gap: 16px;
+    padding: 0;
+  }
+  .b9r2h .hatch-line--hcc > .hatch-line__now {
+    grid-template-columns: repeat(5, 56px);
+  }
+  .b9r2h .hatch-line--hcc .hatch-now {
+    min-height: 106px;
+  }
+  .b9r2h .hatch-line--hcc .hatch-now__picture {
+    width: 44px;
+    height: 44px;
+  }
+  .b9r2h .hatch-line--hcc > .hatch-line__slots {
+    grid-template-columns: repeat(5, 54px) 64px;
+    margin-top: 0;
+  }
+  .b9r2h-seal {
+    flex: 0 1 430px;
+    width: auto;
+    min-height: 60px;
+  }
+  .b9r2h-opt-e.b9r2h-inspect .hatch-line--hcc > .hatch-line__now {
+    grid-template-columns: repeat(5, 96px);
+  }
+  .b9r2h-opt-e.b9r2h-inspect .hatch-line--hcc > .hatch-line__slots {
+    grid-template-columns: repeat(5, 96px) 80px;
+    margin-top: 10px;
+  }
+  .b9r2h-mixcard {
+    right: auto;
+    width: 400px;
+  }
+}
+
+/* The pages and cards over the tab are solid, whatever the look's panel paint. */
+.b9r2h-yards,
+.b9r2h-mixcard {
+  background: linear-gradient(var(--colour-surface-raised), var(--colour-surface-raised)), var(--b9r2h-solid, #303d4b);
+}
+:root[data-skin="flash"] .b9r2h {
+  --b9r2h-solid: #e7d6ad;
+}

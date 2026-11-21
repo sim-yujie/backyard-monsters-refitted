@@ -98,7 +98,7 @@ const portrait = (id: string, className: string): Node => {
 
 export class B9Hcc {
   readonly level = b9HccLevel();
-  readonly option = b9HccOption();
+  readonly option = b9HccOption() as "a" | "b" | "c";
   private readonly open = states();
   private remote: { baseid: string; title: string } | null = null;
   private view: "build" | "queue" = "queue";
@@ -144,7 +144,7 @@ export class B9Hcc {
   }
 
   /** After each draw of the tab: the mix rows of B go under the queue. */
-  afterDraw(): void {
+  afterDraw(_yard?: HatchYard): void {
     this.root.classList.toggle("b9-remote", this.remote !== null);
     // The window's housing line names the yard it counts while an outpost is run from home.
     const value = this.root.closest(".monsters-screen, .panel")?.querySelector<HTMLElement>(".monsters-header__value");
