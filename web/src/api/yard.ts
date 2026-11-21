@@ -53,10 +53,15 @@ export const yardBody = (body: FormBody = {}, baseid?: string): FormBody =>
  * Catches the yard up on the server, writes it and answers with it.
  * `parts` (beta 9): the start-up reads to answer in the same call, e.g.
  * `"goals,quests"`; the server answers them in `report` under their names
- * (`YardStore.startRead`). Left out, the call goes out exactly as before.
+ * (`YardStore.startRead`). `have`: the stamps of the views the client holds,
+ * `goals:<stamp>,quests:<stamp>`, answered `{ same: true }` when unchanged.
+ * Left out, the call goes out exactly as before.
  */
-export const yardState = (baseid?: string, parts?: string): Promise<YardResponse<unknown>> =>
-  post<YardResponse<unknown>>(`${YARD_PATH}/state`, yardBody(parts ? { parts } : {}, baseid));
+export const yardState = (baseid?: string, parts?: string, have?: string): Promise<YardResponse<unknown>> =>
+  post<YardResponse<unknown>>(
+    `${YARD_PATH}/state`,
+    yardBody(parts ? { parts, ...(have ? { have } : {}) } : {}, baseid),
+  );
 
 /**
  * Starts an upgrade: a countdown holding a worker, however short the step

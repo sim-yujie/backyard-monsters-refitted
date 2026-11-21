@@ -34,6 +34,7 @@ import { freeWorkers, holdsWorker } from "./workers";
 import { readYard, type Yard, type YardBuilding, type YardWorkers } from "./yardModel";
 import { isTribeEditing } from "@/game/tribeEditor/tribeEditSession";
 import { costLessBy, weekendPercent } from "@/game/weekend";
+import { cachePart, cachedPart } from "./startReadCache";
 
 /**
  * One of the player's own yards, the main yard or an outpost, as one source
@@ -232,7 +233,7 @@ export interface YardStoreActions {
   run<Report>(action: YardStoreAction<Report>): Promise<YardActionResult<Report>>;
   refresh(): Promise<YardActionResult<null>>;
   /** A read riding the yard's first `state` call; see `YardStore.startRead`. */
-  startRead?(part: string): Promise<unknown> | null;
+  startRead?(part: string, have?: string): Promise<unknown> | null;
 }
 
 /** What the scene lets the panel and the HUD do to it. */
@@ -307,23 +308,48 @@ export interface YardUiBinding {
   readonly modal?: HTMLElement;
 }
 
+/** A part the client already holds, unchanged (server `controllers/yard/state.ts` `SamePart`). */
+interface SamePart {
+  readonly same: true;
+  readonly stamp: string;
+  readonly now?: number;
+}
+
+const isSamePart = (value: unknown): value is SamePart =>
+  typeof value === "object" && value !== null && (value as SamePart).same === true && typeof (value as SamePart).stamp === "string";
+
 /**
  * A package's first read of `part` as the yard opens (beta 9, speed-ups
  * item 5): inside the yard's first `state` call when it has not gone yet
  * ({@link YardStore.startRead}), else, or when that answer has no valid
  * report for it, through `own` as before.
+ *
+ * Item 6: the view it last brought for this yard kind is kept with its stamp
+ * (`startReadCache.ts`) and the stamp rides the call; the server answers
+ * `same` when the view is unchanged, and the kept view is used, `revive`d
+ * with the answer's fresh fields (the quest view's `now`). A `same` for a
+ * view no longer kept (it should not happen) falls back to `own`.
  */
 export const startReadOr = <Report>(
-  store: Pick<YardStoreActions, "startRead">,
+  store: Pick<YardStoreActions, "startRead"> & Partial<Pick<YardStoreReader, "kind">>,
   part: string,
   isReport: (report: unknown) => report is Report,
   own: () => Promise<YardActionResult<Report>>,
+  revive: (kept: Report, same: { now?: number }) => Report = (kept) => kept,
 ): Promise<YardActionResult<Report>> => {
-  const joined = store.startRead?.(part) ?? null;
+  const key = `${store.kind ?? "main"}:${part}`;
+  const kept = cachedPart(key);
+  const joined = store.startRead?.(part, kept?.stamp) ?? null;
   if (!joined) return own();
-  return joined.then((report) =>
-    isReport(report) ? { ok: true as const, report, completed: [] } : own(),
-  );
+  return joined.then((answer) => {
+    if (isSamePart(answer) && kept && answer.stamp === kept.stamp && isReport(kept.report)) {
+      return { ok: true as const, report: revive(kept.report, answer), completed: [] };
+    }
+    if (!isReport(answer)) return own();
+    const stamp = (answer as { stamp?: unknown }).stamp;
+    if (typeof stamp === "string" && stamp) cachePart(key, stamp, answer);
+    return { ok: true as const, report: answer, completed: [] };
+  });
 };
 
 /** The queue key for an action on a target: `upgrade:12`, `buy:BST`. */
@@ -416,6 +442,8 @@ interface QueuedRefresh {
 /** One start-up read riding the first `state` call: its part, and who hears its report. */
 interface StartRead {
   readonly part: string;
+  /** The stamp of the view the client holds for this part, if any. */
+  readonly have?: string;
   /** The part's report from the answer; undefined when the answer has none (an older server, a failure). */
   readonly resolve: (report: unknown) => void;
 }
@@ -651,17 +679,20 @@ export class YardStore implements YardStoreReader, YardStoreActions {
    * behind it. Only while that call has not gone yet (the task in which
    * {@link start} ran); null otherwise, and the caller makes its own call.
    *
+   * `have`: the stamp of the view the caller already holds (item 6); the
+   * answer may then be `{ same: true, stamp }` instead of the view.
+   *
    * Resolves with the part's report once the answer is merged, or with
    * undefined when the answer carries none (a server from before beta 9, a
    * yard without that part, a failed call): the caller then makes its own
    * call, as before.
    */
-  startRead(part: string): Promise<unknown> | null {
+  startRead(part: string, have?: string): Promise<unknown> | null {
     if (!this.gathering || this.destroyed) return null;
     const waiting = this.queue.find((entry): entry is QueuedRefresh => entry.type === "refresh");
     if (!waiting) return null;
     return new Promise<unknown>((resolve) => {
-      waiting.parts.push({ part, resolve });
+      waiting.parts.push({ part, ...(have !== undefined && { have }), resolve });
     });
   }
 
@@ -871,11 +902,13 @@ export class YardStore implements YardStoreReader, YardStoreActions {
 
     let result: YardActionResult<unknown>;
     try {
-      const parts = entry.type === "refresh" ? entry.parts.map((read) => read.part) : [];
+      const reads = entry.type === "refresh" ? entry.parts : [];
+      const parts = [...new Set(reads.map((read) => read.part))].join(",");
+      const have = reads.flatMap((read) => (read.have ? [`${read.part}:${read.have}`] : [])).join(",");
       const response =
         entry.type === "refresh"
-          ? parts.length > 0
-            ? await this.api.state(this.baseid, [...new Set(parts)].join(","))
+          ? parts
+            ? await this.api.state(this.baseid, parts, have || undefined)
             : await this.api.state(...this.yardArgs)
           : await entry.send(this.api, ...this.yardArgs);
       if (this.destroyed) {

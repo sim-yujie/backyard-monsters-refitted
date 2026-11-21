@@ -127,7 +127,7 @@ export const isGoalsReport = (report: unknown): report is GoalsStateReport =>
   typeof report === "object" && report !== null && Array.isArray((report as GoalsStateReport).goals);
 
 export const goalsActions = (
-  store: Pick<YardStore, "run"> & Partial<Pick<YardStore, "startRead">>,
+  store: Pick<YardStore, "run"> & Partial<Pick<YardStore, "startRead" | "kind">>,
   api: GoalsApi = goalsApi,
 ): GoalsActions => ({
   // The first read rides the yard's first `state` call when it can (beta 9).

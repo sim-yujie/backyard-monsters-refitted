@@ -137,12 +137,19 @@ export const isQuestsReport = (report: unknown): report is QuestsReport => {
 };
 
 export const questsActions = (
-  store: Pick<YardStore, "run"> & Partial<Pick<YardStore, "startRead">>,
+  store: Pick<YardStore, "run"> & Partial<Pick<YardStore, "startRead" | "kind">>,
   api: QuestsApi = questsApi,
 ): QuestsActions => ({
   // The first read rides the yard's first `state` call when it can (beta 9).
   state: () =>
-    startReadOr(store, "quests", isQuestsReport, () => store.run({ key: QuestsKey.STATE, send: () => api.state() })),
+    startReadOr(
+      store,
+      "quests",
+      isQuestsReport,
+      () => store.run({ key: QuestsKey.STATE, send: () => api.state() }),
+      // An unchanged view (item 6) comes back with the server's clock, the one thing that moved.
+      (kept, same) => (typeof same.now === "number" ? { ...kept, quests: { ...kept.quests, now: same.now } } : kept),
+    ),
   claimLogin: () => store.run({ key: QuestsKey.LOGIN, send: () => api.claimLogin() }),
   claim: (period, slot) => store.run({ key: QuestsKey.claim(period, slot), send: () => api.claim(period, slot) }),
   claimBonus: (period) => store.run({ key: QuestsKey.bonus(period), send: () => api.claimBonus(period) }),

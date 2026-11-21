@@ -39,9 +39,16 @@ export const YardTargetSchema = z.object({
 /**
  * `POST /bm/yard/state`: no fields, or `parts`, the start-up reads to answer
  * in the same call (`controllers/yard/state.ts`): `"goals"`, `"quests"`,
- * comma-separated. A name it does not know is ignored.
+ * comma-separated. A name it does not know is ignored. `have`: see below.
  */
-export const YardStateSchema = z.object({ parts: z.string().max(64).optional() });
+export const YardStateSchema = z.object({
+  parts: z.string().max(64).optional(),
+  /**
+   * The stamps of the parts the client already holds, `goals:<stamp>,quests:<stamp>`:
+   * a part whose view has not changed comes back as `{ same: true, stamp }`.
+   */
+  have: z.string().max(200).optional(),
+});
 
 /** `POST /bm/yard/upgrade`: the building to take one level up. */
 /**

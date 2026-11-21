@@ -7,7 +7,9 @@ import type { BaiterTokenStore } from "../../services/goals/baiterRun.js";
 import { readQuests } from "../../services/quests/state.js";
 import { goalsActions } from "./goalsActions.js";
 import { questsActions } from "./questsActions.js";
-import { partsFor, yardStateAction, type StatePartsReport } from "./state.js";
+import { haveOf, partsFor, stampOf, yardStateAction, type StatePartsReport } from "./state.js";
+import type { GoalsStateReport } from "../../services/goals/claim.js";
+import type { QuestsReport } from "./questsActions.js";
 import { runYardAction, type YardAction, type YardAnswer } from "./yardAction.js";
 
 /**
@@ -97,26 +99,77 @@ describe("POST /bm/yard/state with parts", () => {
   test("goals and quests come back in one answer, exactly as their own routes answer them", async () => {
     const answer = await call(yardStateAction, { parts: "goals,quests" });
     expect(answer.status).toBe(200);
-    const report = answer.body.report as StatePartsReport;
-    expect(report.goals?.goals.length).toBeGreaterThan(0);
-    expect(report.quests?.quests.daily.quests.length).toBeGreaterThan(0);
+    const report = answer.body.report as { goals: GoalsStateReport & { stamp: string }; quests: QuestsReport & { stamp: string } };
+    expect(report.goals.goals.length).toBeGreaterThan(0);
+    expect(report.quests.quests.daily.quests.length).toBeGreaterThan(0);
     // The quest record was rolled to today and written, as `quests/state` writes it.
-    expect(readQuests(db.row!.dailyquests).daily?.quests.length).toBe(report.quests!.quests.daily.quests.length);
+    expect(readQuests(db.row!.dailyquests).daily?.quests.length).toBe(report.quests.quests.daily.quests.length);
 
-    // Their own routes, now on the written row, answer the same.
+    // Their own routes, now on the written row, answer the same (each part also carries its stamp).
     const goalsAnswer = await call(goals.state, {});
     const questsAnswer = await call(quests.state, {});
-    expect(goalsAnswer.body.report).toEqual(report.goals);
-    expect(questsAnswer.body.report).toEqual(report.quests);
+    const { stamp: goalsStamp, ...goalsView } = report.goals;
+    const { stamp: questsStamp, ...questsView } = report.quests;
+    expect(goalsAnswer.body.report).toEqual(goalsView);
+    expect(questsAnswer.body.report).toEqual(questsView);
+    expect(goalsStamp).toBe(stampOf("goals", goalsView));
+    expect(questsStamp).toBe(stampOf("quests", questsView));
+    expect(goalsStamp).toHaveLength(16);
     // The rest of the answer is the yard, as any yard route's.
     expect(answer.body.questsClaimable).toBe(questsAnswer.body.questsClaimable);
     expect(answer.body.caps).toEqual(goalsAnswer.body.caps);
+  });
+
+  test("a part the client holds unchanged comes back as same, not re-sent (item 6)", async () => {
+    const first = (await call(yardStateAction, { parts: "goals,quests" })).body.report as Record<string, { stamp: string }>;
+    const have = `goals:${first.goals!.stamp},quests:${first.quests!.stamp}`;
+
+    // A minute later: the quest view's clock moved, nothing the windows show did.
+    setSystemTime(new Date((MONDAY + 60) * 1000));
+    const again = (await call(yardStateAction, { parts: "goals,quests", have })).body.report;
+    expect(again).toEqual({
+      goals: { same: true, stamp: first.goals!.stamp },
+      quests: { same: true, stamp: first.quests!.stamp, now: MONDAY + 60 },
+    });
+  });
+
+  test("a changed view is sent again with its new stamp: progress, a new day, a stale stamp", async () => {
+    const first = (await call(yardStateAction, { parts: "goals,quests" })).body.report as Record<string, { stamp: string }>;
+    const have = `goals:${first.goals!.stamp},quests:${first.quests!.stamp}`;
+
+    // A new UTC day: new daily quests and login day, so the quest view changes.
+    setSystemTime(new Date((MONDAY + 86_400) * 1000));
+    const nextDay = (await call(yardStateAction, { parts: "goals,quests", have })).body.report as Record<string, Record<string, unknown>>;
+    expect(nextDay.quests!.same).toBeUndefined();
+    expect(nextDay.quests!.quests).toBeDefined();
+    expect(nextDay.quests!.stamp).not.toBe(first.quests!.stamp);
+    // Goals did not change in a day of doing nothing.
+    expect(nextDay.goals).toEqual({ same: true, stamp: first.goals!.stamp });
+
+    // Progress: a Town Hall level up changes what the Goals window shows.
+    const buildings = db.row!.buildingdata as Record<string, Record<string, unknown>>;
+    buildings["0"] = { ...buildings["0"], l: 5 };
+    const progressed = (await call(yardStateAction, { parts: "goals", have: `goals:${first.goals!.stamp}` })).body.report as Record<string, Record<string, unknown>>;
+    expect(progressed.goals!.same).toBeUndefined();
+    expect(progressed.goals!.goals).toBeDefined();
+
+    // A stamp that matches nothing gets the view.
+    const stale = (await call(yardStateAction, { parts: "goals", have: "goals:nope" })).body.report as Record<string, Record<string, unknown>>;
+    expect(stale.goals!.goals).toBeDefined();
   });
 
   test("an unknown part is ignored; one part alone comes back alone", async () => {
     const answer = await call(yardStateAction, { parts: "goals,mystery" });
     const report = answer.body.report as StatePartsReport;
     expect(Object.keys(report)).toEqual(["goals"]);
+  });
+});
+
+describe("haveOf", () => {
+  test("reads part:stamp pairs and skips anything else", () => {
+    expect([...haveOf("goals:abc,quests:def")]).toEqual([["goals", "abc"], ["quests", "def"]]);
+    expect([...haveOf("goals,:x,quests:")]).toEqual([]);
+    expect([...haveOf(undefined)]).toEqual([]);
   });
 });
 
