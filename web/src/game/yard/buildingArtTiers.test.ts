@@ -348,7 +348,8 @@ describe("the turning turrets", () => {
         // The 3D Cannon's prongs are cut out of each barrel cell, so no tower has a front layer now.
         expect(art?.anims).toHaveLength(1);
         expect(art?.anims[0]).toMatchObject({
-          url: `/assets/${folder}turret.t${n}@2x.webp`,
+          // A strip over 4096 px in one row is wrapped into a grid of 8 a row, under its own name.
+          url: `/assets/${folder}turret.t${n}${tier.turret?.grid ? `.g${tier.turret.grid}` : ""}@2x.webp`,
           frames: FRAMES[type] ?? 32,
         });
       });
