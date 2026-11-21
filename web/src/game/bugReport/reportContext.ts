@@ -1,11 +1,12 @@
-import { LATEST_RELEASE } from "@/data/changelog";
+import { GAME_VERSION } from "@/data/gameVersion";
 import { recentErrors } from "./errorLog";
 import { currentScreenName } from "./screenCapture";
 
 /**
  * What a bug report carries besides the player's words, gathered when the
- * form opens: the game version (the newest "What's new" release), the screen
- * they were on, phone or computer, the browser, the screen size and the last
+ * form opens: the full game version, patch number included (`GAME_VERSION`;
+ * the changelog's names only the release whose "What's new" cards pop up),
+ * the screen they were on, phone or computer, the browser, the screen size and the last
  * game errors (`errorLog.ts`).
  */
 
@@ -33,7 +34,7 @@ export const screenSizeText = (win: Window = window): string => {
 };
 
 export const reportContext = (win: Window = window): ReportContext => ({
-  gameVersion: LATEST_RELEASE?.version ?? "",
+  gameVersion: GAME_VERSION,
   screen: currentScreenName(),
   device: deviceKind(win),
   userAgent: win.navigator?.userAgent ?? "",
