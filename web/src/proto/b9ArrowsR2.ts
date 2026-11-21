@@ -79,9 +79,8 @@ export class B9ArrowsR2 {
       all.type = "button";
       all.setAttribute("aria-label", "All yards");
       const disc = el("span", "yard-dock__disc b9r2-travel__disc");
-      const listIcon = el("span", "b9r2-travel__list");
-      listIcon.setAttribute("aria-hidden", "true");
-      disc.append(listIcon);
+      // Painted, not a line glyph (owner: icons are painted): the empire picture = all your yards.
+      disc.append(gameIcon("empire", { size: 32, decorative: true, className: "b9r2-art" }));
       all.append(disc);
       all.addEventListener("click", () => hooks.openList());
       row.append(this.arrow(-1, "yard-dock__disc b9r2-travel__disc", 44, "b9r2-travel__button"), all, this.arrow(1, "yard-dock__disc b9r2-travel__disc", 44, "b9r2-travel__button"));
