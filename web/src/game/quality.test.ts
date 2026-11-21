@@ -81,6 +81,24 @@ describe("sheetAtQuality", () => {
     expect(sheetForDevice("monsters/korath_5-repaint@2x.png", korath, 4096, "high")).toBe("monsters/korath_5-repaint.png");
   });
 
+  it("draws Fomor level 6 from its 1x copy on a phone or a 4096 card, where its @2x would fit (beta 9)", () => {
+    const fomor6 = "monsters/fly_6-repaint@4x.png";
+    const size = { width: 1984, height: 735 };
+    // A phone (Medium at most): the 1x copy, never the @2x.
+    expect(sheetForDevice(fomor6, size, 4096, "medium", true)).toBe("monsters/fly_6-repaint.png");
+    expect(sheetForDevice(fomor6, size, 8192, "medium", true)).toBe("monsters/fly_6-repaint.png");
+    expect(sheetForDevice(fomor6, size, null, "medium", true)).toBe("monsters/fly_6-repaint.png");
+    // A desktop whose card holds 4096: High steps down past the @2x as well.
+    expect(sheetForDevice(fomor6, size, 4096, "high", false)).toBe("monsters/fly_6-repaint.png");
+    // A desktop with a bigger card keeps the copy its Quality asks for.
+    expect(sheetForDevice(fomor6, size, 8192, "medium", false)).toBe("monsters/fly_6-repaint@2x.png");
+    expect(sheetForDevice(fomor6, size, 8192, "high", false)).toBe(fomor6);
+    // Other sheets keep their @2x on a phone.
+    expect(sheetForDevice("monsters/fly_4-repaint@4x.png", { width: 1920, height: 644 }, 4096, "medium", true)).toBe(
+      "monsters/fly_4-repaint@2x.png",
+    );
+  });
+
   it("leaves a sheet that is not a big painting alone", () => {
     expect(sheetAtQuality("monsters/spurtz.png", "low")).toBe("monsters/spurtz.png");
     expect(sheetAtQuality("monsters/small@1x.png", "low")).toBe("monsters/small@1x.png");
