@@ -31,8 +31,7 @@ Both must pass. Add or update tests for the behaviour you change.
 
 ## Code
 
-- Match the style of the code around your change (Prettier settings are in
-  `web/.prettierrc.json`).
+- Match the style of the code around your change.
 - The server decides game rules (costs, timers, combat results); the web
   client never trusts itself for those. Use the ORM for every database query.
 - Use TypeScript types properly, and prefer JSDoc comments that say why
