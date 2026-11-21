@@ -103,7 +103,7 @@ const arrow = (direction: -1 | 1): HTMLImageElement =>
   art(`friend${direction === 1 ? "next" : "prev"}${classicLook() ? "classic" : ""}` as GameIconName, 32, "b9r2h-arrow");
 
 const short = (value: number): string =>
-  value >= 1_000_000 ? `${(value / 1_000_000).toFixed(1)}M` : value >= 10_000 ? `${Math.round(value / 1000)}K` : value.toLocaleString("en-US");
+  value >= 1_000_000 ? `${(value / 1_000_000).toFixed(1)}M` : value >= 1_000 ? `${Math.round(value / 1000)}K` : value.toLocaleString("en-US");
 
 interface YardRow {
   readonly kind: "main" | "outpost";

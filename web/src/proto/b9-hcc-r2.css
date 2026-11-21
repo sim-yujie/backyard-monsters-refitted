@@ -960,16 +960,8 @@
   --b9r2h-solid: #e7d6ad;
 }
 
-/* Review 1: preserve the scroll extent instead of shrinking production and
-   selection into the clipped viewport. Window chrome stays outside this box. */
-.b9r2h .hatch__scroll > * {
-  flex-shrink: 0;
-}
-.b9r2h .hatch__scroll {
-  min-height: 0;
-  overflow-y: auto;
-  padding-bottom: 12px;
-}
+/* Review 1 (astra), kept: widths that wrap, 44 px targets, contrast. Its scroll-box and sticky
+   rules were taken out again in round 2: they pushed Add off a phone and cut the bar on an iPad. */
 .b9r2h-bench > .hatch-lines {
   max-width: 100%;
   min-width: 0;
@@ -988,23 +980,25 @@
   min-width: 44px;
   flex-shrink: 0;
 }
-:root[data-skin] .panel .hatch.b9r2h .hatch-add__controls {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 4px;
-}
-:root[data-skin] .panel .hatch.b9r2h .hatch-add__controls > * {
-  flex: 1 0 44px;
-  min-width: 44px;
-  min-height: 44px;
-  width: auto;
-  box-sizing: border-box;
-  padding-inline: 2px;
-}
-:root[data-skin] .panel .hatch.b9r2h .hatch-add__controls > .hatch-add__fill {
-  flex: 1 0 86px;
-  min-width: 86px;
-  font-size: 12px;
+@media (max-width: 620px) {
+  :root[data-skin] .panel .hatch.b9r2h .hatch-add__controls {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+  }
+  :root[data-skin] .panel .hatch.b9r2h .hatch-add__controls > * {
+    flex: 1 0 44px;
+    min-width: 44px;
+    min-height: 44px;
+    width: auto;
+    box-sizing: border-box;
+    padding-inline: 2px;
+  }
+  :root[data-skin] .panel .hatch.b9r2h .hatch-add__controls > .hatch-add__fill {
+    flex: 1 0 86px;
+    min-width: 86px;
+    font-size: 12px;
+  }
 }
 .b9r2h .b9r2h-seal__part--stalled .b9r2h-seal__number {
   color: #ffdb72;
@@ -1020,48 +1014,66 @@
 }
 @media (min-width: 620.02px) {
   .b9r2h .hatch-line--hcc > .hatch-line__now {
-    width: 304px;
+    grid-template-columns: repeat(5, 52px);
+    width: auto;
   }
   .b9r2h .hatch-line--hcc > .hatch-line__slots {
-    width: 364px;
+    grid-template-columns: repeat(5, 50px) 64px;
+    width: auto;
+  }
+  .b9r2h-opt-e.b9r2h-inspect .hatch-line--hcc > .hatch-line__now {
+    grid-template-columns: repeat(5, 96px);
+  }
+  .b9r2h-opt-e.b9r2h-inspect .hatch-line--hcc > .hatch-line__slots {
+    grid-template-columns: repeat(5, 96px) 80px;
   }
 }
-/* Narrow tablets need the same bottom action bar as upright phones. */
+/* An iPad upright: the rack fills the row, so the five tokens go in one row under it. */
 @container hatch (width < 880px) {
-  @media (min-height: 500.02px) {
-    .b9r2h .hatch__split {
-      display: contents;
-    }
-    .b9r2h .hatch-info {
-      position: sticky;
-      bottom: -12px;
-      z-index: 1;
-      background: var(--colour-surface-base);
-      min-height: 0 !important;
-    }
-    .b9r2h .hatch-info__stats,
-    .b9r2h .hatch-info__blurb {
-      display: none;
-    }
+  .b9r2h-opt-d .b9r2h-mixes {
+    grid-template-columns: repeat(5, 64px);
   }
 }
-/* On a short landscape screen the action card must scroll in full, rather
-   than sticking a tall card across the entire remaining viewport. */
-@media (max-height: 500px) {
-  .b9r2h .hatch-info {
-    position: relative;
-    bottom: auto;
-    min-height: 0 !important;
+/* An iPad: the chosen monster's panel without its blurb, so Add is nearer. */
+@media (min-width: 620.02px) {
+  .b9r2h .hatch-info__blurb {
+    display: none;
+  }
+  /* D: the five tokens as three and two, beside the rack, so the bench stays one band at 1024. */
+  .b9r2h-opt-d .b9r2h-mixes {
+    grid-template-columns: repeat(3, 64px);
+    gap: 6px 8px;
+  }
+  .b9r2h-opt-d .b9r2h-mix {
+    height: 50px;
   }
 }
+/* Round 2 (Fable): the outpost strip stays ONE row on a phone (a second row pushed Add off
+   the screen); the queue's "+2K" stays, in short form. */
 @media (max-width: 620px) {
-  .b9r2h-remote .b9r2h-strip {
-    flex-wrap: wrap;
-  }
-  .b9r2h-remote .b9r2h-housing {
-    flex: 1 0 100%;
-  }
   .b9r2h-remote .b9r2h-housing:not(.b9r2h-housing--over) .b9r2h-housing__coming {
     display: inline;
+  }
+  .b9r2h-remote .b9r2h-housing__numbers {
+    gap: 2px;
+    letter-spacing: -0.2px;
+  }
+}
+
+/* Round 2 (Fable): the hatchery row is as wide as its hatcheries (an outpost has two);
+   an iPad upright keeps hatcheries and rack on one row, the five tokens in a row under them. */
+@media (min-width: 620.02px) {
+  .b9r2h:not(.b9r2h-inspect) .hatch-line--hcc > .hatch-line__now {
+    grid-template-columns: none;
+    grid-auto-flow: column;
+    grid-auto-columns: 52px;
+  }
+}
+@media (min-width: 620.02px) and (max-width: 900px) {
+  .b9r2h-opt-d .hatch-lines .hatch-line.hatch-line--hcc {
+    flex-wrap: nowrap;
+  }
+  .b9r2h-opt-d .b9r2h-mixes {
+    grid-template-columns: repeat(5, 64px);
   }
 }
