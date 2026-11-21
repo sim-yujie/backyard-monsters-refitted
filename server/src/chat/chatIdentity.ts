@@ -140,7 +140,7 @@ export const authenticate = async (ws: ServerWebSocket<SocketData>, message: Aut
 
   clients.set(user.userid, client);
 
-  send(ws, { type: ServerMessageType.AuthOk, userId: user.userid, displayName });
+  send(ws, { type: ServerMessageType.AuthOk, userId: user.userid, displayName, presence: true });
 };
 
 /**

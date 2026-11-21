@@ -1,6 +1,6 @@
 # The checks every push and pull request to revamp or main must pass: the web
 # client's typecheck, lint and tests, the combat-rules copies being in sync,
-# and the server's typecheck and tests, the database tests included (audit
+# and the server's typecheck, lint (oxlint, server/.oxlintrc.json) and tests, the database tests included (audit
 # 2026-10-29: agent-handoffs/reports/audit-metrics-2026-10-29.md, fix #1),
 # and the layout check: every window in WebKit at phone, iPad and desktop
 # sizes (the `layout` job at the end).
@@ -96,6 +96,7 @@ jobs:
       # Test-only; the server refuses to start without one (StartupSafety.ts).
       SECRET_KEY: ci-only-test-key
       # The opt-in database suites (see the top of this file).
+      ALLIANCE_TEST_DB: bym_ci
       BOTS_TEST_DB: bym_ci
       BUG_REPORT_TEST_DB: bym_ci
       DASHBOARD_TEST_DB: bym_ci
@@ -108,7 +109,7 @@ jobs:
       NOTICES_TEST_DB: bym_ci
       NOTIF_TEST_DB: bym_ci
       PRIVACY_TEST_DB: bym_ci
-      BOTS_TEST_REDIS: redis://localhost:6379/1
+      SAVE_TEST_DB: bym_ci
       HEALTH_TEST_REDIS: redis://localhost:6379/1
     steps:
       - uses: actions/checkout@v4
@@ -119,6 +120,8 @@ jobs:
         run: bun install --frozen-lockfile
       - name: Typecheck
         run: bun run typecheck
+      - name: Lint
+        run: bun run lint
       - name: Build the test database (as db:init does)
         env:
           # Quiets the ORM's query log (mikro-orm.config.ts).

@@ -39,13 +39,6 @@ export const MONSTER_MADNESS_CLAIM_DAYS = 7;
 /** The id every run's id starts with, and the one `EVENTS_FORCE_ON` names. */
 export const MONSTER_MADNESS_ID = "monster-madness";
 
-/** Korath's powers by level (`KorathReward` in `enums/Rewards.ts`, `Korath.as:11-15`). */
-export const KORATH_POWER_NAMES: Readonly<Record<number, string>> = {
-  1: "Burn",
-  2: "Breath of Fire",
-  3: "Fists of Doom",
-};
-
 /** The highest power an event gives (`CHAMPION_MAX_POWER_LEVEL` in the fight rules). */
 export const KORATH_MAX_POWER = 3;
 

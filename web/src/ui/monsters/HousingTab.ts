@@ -1,4 +1,3 @@
-import type { YardRefusal } from "@/api/yard";
 import type { JuiceActions } from "@/api/yardJuice";
 import { expansionEndsAt, housingExpansionOf } from "@/game/monsters/housing";
 import { monsterRealmOf, monsterWords } from "@/game/monsters/realm";
@@ -17,6 +16,7 @@ import {
   type MonstersTab,
   type MonstersTabContext,
 } from "./monstersTab";
+import { refusalText } from "@/ui/dom";
 
 /**
  * The Housing tab (`docs/design/yard-buildings.md` §4.5).
@@ -309,7 +309,3 @@ const fillSection = (element: HTMLElement, body: readonly HTMLElement[]): void =
   element.replaceChildren(...(title ? [title] : []), ...body);
 };
 
-const refusalText = (refusal: YardRefusal): string =>
-  refusal.reason === "network"
-    ? "Could not reach the server. Try again."
-    : refusal.message || "That did not work.";

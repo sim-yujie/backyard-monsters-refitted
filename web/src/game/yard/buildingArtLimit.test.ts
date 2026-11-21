@@ -68,7 +68,9 @@ const everyPicture = (): Map<string, string> => {
 
 afterEach(() => setClassicLook(false));
 
-describe("building pictures within the phones' texture limit", () => {
+// Reads every building picture's header from disk: a tenth of a second alone,
+// past Vitest's 5 s default when the suite runs beside the server's (21 Nov 2026).
+describe("building pictures within the phones' texture limit", { timeout: 30_000 }, () => {
   it(`draws no building picture wider or taller than ${STRIP_LIMIT_PX} px`, () => {
     const over: string[] = [];
     let checked = 0;

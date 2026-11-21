@@ -242,12 +242,6 @@ export interface CoverageFigures {
   readonly air: number;
 }
 
-export const figuresOf = (coverage: Coverage): CoverageFigures => ({
-  towers: coverage.towers,
-  land: coverage.land.share,
-  air: coverage.air.share,
-});
-
 /**
  * "87%": a share as the bar and the inspector print it. Rounded down, so a
  * plot with one cell open never reads 100%.

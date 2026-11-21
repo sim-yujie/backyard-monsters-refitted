@@ -23,14 +23,7 @@ import { TRUCE_REQUEST_LIFETIME } from "./truceTimes.js";
  * and are re-exported here.
  */
 
-export {
-  isRequestOpen,
-  requestLapsesAt,
-  truceEndsAt,
-  TRUCE_DURATION,
-  TRUCE_REQUEST_LIFETIME,
-  TRUCE_RETRY_AFTER_REJECTION,
-} from "./truceTimes.js";
+export { truceEndsAt, TRUCE_DURATION, TRUCE_REQUEST_LIFETIME, TRUCE_RETRY_AFTER_REJECTION } from "./truceTimes.js";
 
 /** The filter for a truce that still binds its pair at `now`: a waiting request, or an unexpired accepted truce. */
 export const liveTruceFilter = (now: number) => ({

@@ -6,7 +6,6 @@ import { verifyUserAuth, verifyAccountStatus } from "./middleware/auth.js";
 import { verifyApiConsumer } from "./middleware/apiConsumer.js";
 import {
   changeUsernameLimiter,
-  debugDataLimiter,
   getAreaLimiter,
   attackLogsLimiter,
   sightLimiter,
@@ -52,7 +51,6 @@ import {
 } from "./middleware/rateLimiters.js";
 import { Status } from "./enums/StatusCodes.js";
 
-import { init } from "./controllers/init.js";
 import { supportedLangs } from "./controllers/supportedLangs.js";
 
 import { login } from "./controllers/auth/login.js";
@@ -152,7 +150,6 @@ import { getEmpireBoard } from "./controllers/leaderboards/getEmpireBoard.js";
 import { getAttackLogs } from "./controllers/attacklogs/getAttackLogs.js";
 
 import { wildMonsterInvasion } from "./controllers/events/wildMonsterInvasion.js";
-import { recordDebugData } from "./controllers/debug/recordDebugData.js";
 
 import { createAlliance } from "./controllers/alliance/createAlliance.js";
 import { editAlliance } from "./controllers/alliance/editAlliance.js";
@@ -196,7 +193,6 @@ const router = new Router();
 /**  ────────────────────────────────────────────────
 * 📦 General
 * ──────────────────────────────────────────────── */
-router.post("/init", logRequest, init);
 router.get("/connection", (ctx) => (ctx.status = Status.OK));
 
 /**  ────────────────────────────────────────────────
@@ -511,10 +507,5 @@ mountOutpostLabelRoutes(router, {
   limiter: outpostLabelLimiter,
   filter: sharedWordFilter,
 });
-
-/**  ────────────────────────────────────────────────
-* 📦 Debug
-* ──────────────────────────────────────────────── */
-router.post("/api/:apiVersion/player/recorddebugdata", apiVersion, debugDataLimiter, recordDebugData);
 
 export default router;

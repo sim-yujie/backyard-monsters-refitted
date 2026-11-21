@@ -1,4 +1,3 @@
-import type { YardRefusal } from "@/api/yard";
 import { SIEGE_KEYS, siegeActions, type SiegeActions } from "@/api/yardSiege";
 import { SIEGE_MAX_LEVEL, siegeData, type SiegeId } from "@/game/combat/rules/siege";
 import {
@@ -34,6 +33,7 @@ import "@/ui/styles/monsters.css";
 import "@/ui/styles/siege.css";
 import { ShinyButton } from "@/ui/yard/ShinyButton";
 import { INFERNO_RESOURCE_NAMES, infernoAmount } from "./infernoResources";
+import { refusalText } from "@/ui/dom";
 
 /**
  * The Siege screen (Inferno WP 6.4): Flash's Chaos Lab and Chaos Factory
@@ -857,5 +857,3 @@ const plainButton = (label: string, onClick: () => void, variant?: string): HTML
   return button;
 };
 
-const refusalText = (refusal: YardRefusal): string =>
-  refusal.reason === "network" ? "Could not reach the server. Try again." : refusal.message || "That did not work.";

@@ -93,6 +93,12 @@ export interface MusicPlayerOptions {
   readonly clearInterval?: (handle: unknown) => void;
   /** Routes a new element through a gain; the Web Audio route on iOS when left out. */
   readonly route?: (audio: AudioLike) => MusicRoute | null;
+  /**
+   * What the first tune waits for before its download starts, asked once, at
+   * the first tune: the yard's pictures in (`yardArtGate.ts`, beta 9). None
+   * when left out.
+   */
+  readonly gate?: () => Promise<void>;
 }
 
 /**
@@ -149,6 +155,9 @@ export class MusicPlayer {
   private current: Tune | null = null;
   private fading: Fading[] = [];
   private waitingForGesture = false;
+  private readonly gate: (() => Promise<void>) | null;
+  /** Null until the first tune asks; then whether the gate has opened. */
+  private gateOpen: boolean | null;
 
   constructor(options: MusicPlayerOptions = {}) {
     this.createAudio = options.createAudio ?? defaultAudio;
@@ -158,6 +167,8 @@ export class MusicPlayer {
     this.startTimer = options.setInterval ?? ((run, ms) => setInterval(run, ms));
     this.stopTimer = options.clearInterval ?? ((handle) => clearInterval(handle as ReturnType<typeof setInterval>));
     this.route = options.route ?? defaultRoute;
+    this.gate = options.gate ?? null;
+    this.gateOpen = this.gate ? null : true;
   }
 
   /**
@@ -218,8 +229,27 @@ export class MusicPlayer {
     if (next === this.current) return;
     if (this.current) this.fadeOut(this.current);
     this.current = next;
-    if (next) this.start(next);
+    if (next) this.startWhenOpen(next);
     else this.stopListening();
+  }
+
+  /**
+   * Starts a tune, or, while the gate is shut, leaves it as `current` to be
+   * started when it opens: nothing is downloaded until then.
+   */
+  private startWhenOpen(tune: Tune): void {
+    if (this.gateOpen === true) {
+      this.start(tune);
+      return;
+    }
+    if (this.gateOpen === null && this.gate) {
+      this.gateOpen = false;
+      const opened = (): void => {
+        this.gateOpen = true;
+        if (this.current) this.start(this.current);
+      };
+      this.gate().then(opened, opened);
+    }
   }
 
   private element(tune: Tune): AudioLike {

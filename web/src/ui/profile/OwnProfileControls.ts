@@ -2,6 +2,9 @@ import * as profileApi from "@/api/profile";
 import type { OwnPhotoState, Profile } from "@/api/profile";
 import { gameIcon } from "@/ui/gameIcon";
 import { loadPicture, PhotoCropper } from "./PhotoCropper";
+import { el } from "@/ui/dom";
+
+export { el };
 
 /**
  * The player's own profile controls: the photo buttons ("New photo", which
@@ -34,17 +37,6 @@ export interface ProfileHost {
   /** Shows the crop step in place of the profile. */
   readonly showCrop: (step: HTMLElement) => void;
 }
-
-export const el = <K extends keyof HTMLElementTagNameMap>(
-  tag: K,
-  className: string,
-  text?: string,
-): HTMLElementTagNameMap[K] => {
-  const element = document.createElement(tag);
-  element.className = className;
-  if (text !== undefined) element.textContent = text;
-  return element;
-};
 
 export const btn = (className: string, text: string, onClick: () => void): HTMLButtonElement => {
   const button = el("button", `btn ${className}`, text);

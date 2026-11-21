@@ -21,6 +21,7 @@ import {
 } from "./chatRooms.js";
 import { applyModeration } from "./chatModeration.js";
 import { applyMailNudge } from "./chatMail.js";
+import { handlePresence } from "./chatPresence.js";
 import { MODERATORS_REFRESH_MS, refreshChatModerators } from "./chatModerators.js";
 import { clients, type SocketData } from "./chatState.js";
 import { initTransport, subscribeControl } from "./chatTransport.js";
@@ -157,6 +158,10 @@ const dispatch = async (ws: ServerWebSocket<SocketData>, data: string | Buffer) 
 
     case ClientMessageType.Unignore:
       await removeIgnore(client, message.targetId);
+      return;
+
+    case ClientMessageType.Presence:
+      await handlePresence(ws, client, message);
       return;
 
     case ClientMessageType.UpdateName:

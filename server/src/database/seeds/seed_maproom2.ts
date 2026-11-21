@@ -11,7 +11,7 @@ import { Save } from "../models/save.model.js";
 import { User } from "../models/user.model.js";
 import { joinOrCreateWorld } from "../../services/maproom/v2/joinOrCreateWorld.js";
 import { logger } from "../../utils/logger.js";
-import { botConfig, seededYardsOn } from "../../config/BotConfig.js";
+import { botPace, seededYardsOn } from "../../config/BotConfig.js";
 import { mulberry32 } from "../../game-rules/combat/rng.js";
 import { giveSeededYards } from "../../services/bots/seededPlayers.js";
 
@@ -84,7 +84,7 @@ const NEXT_USER_BASEID = `SELECT nextval('bym.user_baseid_seq') AS baseid`;
     const { given } = await giveSeededYards(orm.em.fork(), {
       rng: mulberry32(Date.now() >>> 0),
       now: Math.floor(Date.now() / 1000),
-      pace: botConfig().pace,
+      pace: botPace(),
     });
     logger.info(`Gave ${given.length} seeded players a yard`);
 

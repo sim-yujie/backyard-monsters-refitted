@@ -7,6 +7,8 @@ import {
   MAX_ENTRIES,
   MAX_RETRY_MS,
   PING_INTERVAL_MS,
+  PRESENCE_TIMEOUT_MS,
+  PresenceRefused,
   RATE_LIMITED_TEXT,
   visibleEntries,
   worldChat,
@@ -505,5 +507,82 @@ describe("the game team (dashboard moderation)", () => {
     stop();
     latest().hear({ type: "notice" });
     expect(heard).toEqual([{ kind: "notice" }]);
+  });
+});
+
+describe("presence ping on the socket (beta 9)", () => {
+  const FRAME = { token: "bearer", apiVersion: "v1.6.1-beta", screen: { where: "yard", planner: false } };
+  /** Signed in to a server that takes presence pings. */
+  const ready = () => {
+    const session = newSession();
+    session.configure(CONFIG);
+    latest().open();
+    latest().hear({ type: "auth_ok", ...ME, presence: true });
+    latest().hear({ type: "joined", channel: CONFIG.channel, history: [] });
+    return session;
+  };
+
+  it("sends the ping with an id and resolves with the route's answer under that id", async () => {
+    const session = ready();
+    const ping = session.presence(FRAME);
+    expect(ping).not.toBeNull();
+    const sent = latest().sent.at(-1)!;
+    expect(sent).toEqual({ type: "presence", id: 1, ...FRAME });
+    latest().hear({ type: "presence", id: 1, ok: true, answer: { error: 0, now: 5, lastAction: 0 } });
+    await expect(ping).resolves.toEqual({ error: 0, now: 5, lastAction: 0 });
+  });
+
+  it("is not offered by a server from before beta 9 (no presence on auth_ok)", () => {
+    const session = joined();
+    expect(session.presence(FRAME)).toBeNull();
+  });
+
+  it("is not offered with World chat off, before sign-in, or while reconnecting", () => {
+    const off = ready();
+    off.setEnabled(false);
+    expect(off.presence(FRAME)).toBeNull();
+    off.setEnabled(true);
+
+    const early = newSession();
+    early.configure(CONFIG);
+    latest().open();
+    expect(early.presence(FRAME)).toBeNull();
+
+    const dropped = ready();
+    latest().drop();
+    expect(dropped.current.status).toBe(ChatStatus.RECONNECTING);
+    expect(dropped.presence(FRAME)).toBeNull();
+  });
+
+  it("is not offered once signed in elsewhere or refused", () => {
+    const elsewhere = ready();
+    latest().drop(1000);
+    expect(elsewhere.current.status).toBe(ChatStatus.ELSEWHERE);
+    expect(elsewhere.presence(FRAME)).toBeNull();
+  });
+
+  it("rejects when the server refuses it, when no answer comes in time, and when the socket drops", async () => {
+    const session = ready();
+    const refused = session.presence(FRAME)!;
+    latest().hear({ type: "presence", id: 1, ok: false, reason: "auth" });
+    await expect(refused).rejects.toBeInstanceOf(PresenceRefused);
+
+    const silent = session.presence(FRAME)!;
+    vi.advanceTimersByTime(PRESENCE_TIMEOUT_MS + 1);
+    await expect(silent).rejects.toBeInstanceOf(PresenceRefused);
+
+    const cut = session.presence(FRAME)!;
+    latest().drop();
+    await expect(cut).rejects.toBeInstanceOf(PresenceRefused);
+  });
+
+  it("leaves an oversized token to HTTP rather than pass the server's frame cap", () => {
+    const session = ready();
+    expect(session.presence({ ...FRAME, token: "x".repeat(3_001) })).toBeNull();
+  });
+
+  it("ignores an answer for no ping it sent", () => {
+    ready();
+    expect(() => latest().hear({ type: "presence", id: 99, ok: true, answer: {} })).not.toThrow();
   });
 });

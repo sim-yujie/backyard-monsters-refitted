@@ -27,6 +27,36 @@ export interface AuthTokenPayload {
 }
 
 /**
+ * The signed-in player a session token belongs to, by the same checks as
+ * {@link verifyUserAuth}: a valid signature, still the session's current
+ * token (a newer sign-in replaces it), and a player who is not banned. Null
+ * when any check fails; throws only what {@link verifyJwtToken} throws for a
+ * token it cannot read. Also used by the chat socket's presence ping
+ * (`chat/chatPresence.ts`), so a ping there counts exactly when one over
+ * HTTP would.
+ *
+ * @param {string} token - The bearer token, without `Bearer `.
+ */
+export const sessionUser = async (
+  token: string
+): Promise<{ user: User; meetsDiscordAgeCheck: boolean } | null> => {
+  const decodedToken = verifyJwtToken(token);
+
+  const sessionType = decodedToken.user.sessionType;
+  const email = decodedToken.user.email;
+
+  const storedToken = await redis.get(sessionTokenKey(sessionType, email));
+
+  if (storedToken !== token) return null;
+
+  const user = await postgres.em.findOne(User, { email });
+
+  if (!user || user.banned) return null;
+
+  return { user, meetsDiscordAgeCheck: decodedToken.user.meetsDiscordAgeCheck };
+};
+
+/**
  * Middleware to enforce authentication for protected routes.
  *
  * This middleware checks for the presence of a valid Bearer token in the
@@ -43,21 +73,12 @@ export const verifyUserAuth = async (ctx: Context, next: Next) => {
   if (!authHeader || !authHeader.startsWith("Bearer ")) throw authFailureErr();
 
   const token = authHeader.replace("Bearer ", "");
-  const decodedToken = verifyJwtToken(token);
+  const signedIn = await sessionUser(token);
 
-  const sessionType = decodedToken.user.sessionType;
-  const email = decodedToken.user.email;
+  if (!signedIn) throw authFailureErr();
 
-  const storedToken = await redis.get(sessionTokenKey(sessionType, email));
-
-  if (storedToken !== token) throw authFailureErr();
-
-  const user = await postgres.em.findOne(User, { email });
-
-  if (!user || user.banned) throw authFailureErr();
-
-  ctx.authUser = user;
-  ctx.meetsDiscordAgeCheck = decodedToken.user.meetsDiscordAgeCheck;
+  ctx.authUser = signedIn.user;
+  ctx.meetsDiscordAgeCheck = signedIn.meetsDiscordAgeCheck;
 
   if (!ctx.authUser) throw authFailureErr();
   await next();

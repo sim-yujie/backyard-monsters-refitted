@@ -224,7 +224,6 @@ export const REAL_ACTION_ROUTES: readonly RealActionRoute[] = [
  */
 export const NOT_REAL_ACTION_ROUTES: readonly string[] = [
   // Sign-in and the account's own settings.
-  "POST /init",
   "POST /api/:apiVersion/player/getinfo",
   "POST /api/:apiVersion/player/logout",
   "POST /api/:apiVersion/player/register",
@@ -313,7 +312,6 @@ export const NOT_REAL_ACTION_ROUTES: readonly string[] = [
   "POST /api/:apiVersion/clienterrors",
   "POST /api/:apiVersion/clienterrors/guest",
   "POST /api/:apiVersion/clienttiming",
-  "POST /api/:apiVersion/player/recorddebugdata",
   // DEV only.
   "POST /api/:apiVersion/bm/presence/check/dev",
   "POST /api/:apiVersion/bm/raid/dev/due",

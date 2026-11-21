@@ -54,9 +54,6 @@ export const JUICER_TYPE = 9;
 /** Goo per unit of hatch cost, by Juicer level 1..3 (`BUILDING9.as:56-62`). */
 export const JUICER_RATES: readonly number[] = [0.6, 0.8, 1];
 
-/** The most one request may juice: far above any housing. */
-export const MAX_JUICE = 100_000;
-
 /** The slice of a save the Juicer reads. */
 export interface JuiceSave extends StorageCapSave {
   /** `BaseType`: an outpost's Juicer reads the outpost health ladder, the Inferno yard's the Inferno one. */

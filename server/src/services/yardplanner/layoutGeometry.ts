@@ -1,5 +1,5 @@
 import type { YardKind } from "../../game-data/buildingCosts.js";
-import { footprintOf, MUSHROOM_TYPE } from "../../game-data/buildingFootprints.js";
+import { footprintOf } from "../../game-data/buildingFootprints.js";
 import type { JsonObject } from "../../types/JsonObject.js";
 
 /**
@@ -148,24 +148,4 @@ export const sweepOverlaps = <T>(
     active.push(entry);
   }
   return null;
-};
-
-/**
- * Mushroom footprints from `save.mushrooms`, which stores `{ l: [[frame, X, Y], ...] }`
- * (`client/scripts/MUSHROOMS.as:84-90`). Entries that are not a usable
- * coordinate pair are skipped rather than treated as an obstacle at the origin.
- */
-export const mushroomRects = (mushrooms: JsonObject | null | undefined): FootprintRect[] => {
-  const list = (mushrooms as { l?: unknown } | null | undefined)?.l;
-  if (!Array.isArray(list)) return [];
-
-  const rects: FootprintRect[] = [];
-  for (const entry of list.slice(0, 20)) {
-    if (!Array.isArray(entry)) continue;
-    const x = Number(entry[1]);
-    const y = Number(entry[2]);
-    if (!Number.isFinite(x) || !Number.isFinite(y)) continue;
-    rects.push(rectOf(MUSHROOM_TYPE, x, y));
-  }
-  return rects;
 };

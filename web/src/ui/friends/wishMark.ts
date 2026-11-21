@@ -2,15 +2,6 @@ import type { GiftResource } from "@/api/friends";
 import { resourceName } from "@/ui/resourceIcon";
 import { make } from "./rows";
 
-/**
- * The gift wish marker (#391, owner 7 Nov: "just star? thats so plain"): a
- * Codex-painted gold star rosette (`public/friends/wish-mark.webp`, kit in
- * `tools/wish-mark-codex`) with the wish's rank, 1 to 3, in white on its red
- * centre. Drawn by `friends.css` (`.wish-mark`); the picture is a background
- * so the rank is ordinary text on top of it.
- */
-export const WISH_MARK_URL = "/friends/wish-mark.webp";
-
 /** The marker; `rank` (1-3) on its centre, or a bare marker for a legend. */
 export const wishMark = (rank: number | null = null, className?: string): HTMLElement => {
   const mark = make("span", className ? `wish-mark ${className}` : "wish-mark");

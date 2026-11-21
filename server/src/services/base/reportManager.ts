@@ -56,6 +56,10 @@ export const logAttackViolation = async (user: User, message: string) => {
  * Logs a ban report for a user with a message and timestamp.
  * Increments the user's violation count and sets the ban reason.
  *
+ * Nothing in this repository calls it: it is for the private anti-cheat a
+ * production server may drop in (`scripts/anticheat/pub/anticheat.stub.ts`:
+ * "Create Report records with ban reasons"), so it stays.
+ *
  * @param {User} user - The user being banned.
  * @param {string} message - The message explaining the reason for the ban.
  * @returns {Promise<void>}

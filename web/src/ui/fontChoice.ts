@@ -21,8 +21,6 @@
  */
 export type FontChoice = "game" | "clear" | "readable";
 
-export const FONT_CHOICES: readonly FontChoice[] = ["game", "clear", "readable"];
-
 /** Where this browser keeps the choice: "clear" or "readable"; unset is the game font. */
 export const FONT_KEY = "bymr.font";
 

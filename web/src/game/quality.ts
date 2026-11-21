@@ -322,10 +322,25 @@ export const sheetForDevice = (
   size: { readonly width: number; readonly height: number },
   limit: number | null = deviceTextureLimit(),
   level: Quality = quality(),
+  touch: boolean = isTouchDevice(),
 ): string => {
   const chosen = sheetAtQuality(file, level);
   const copies = sheetCopies(file);
-  if (!copies || limit === null) return chosen;
+  if (!copies) return chosen;
+  const fitted = limit === null ? chosen : fittedCopy(file, copies, chosen, size, limit);
+  // A sheet too heavy for a small device at its `@2x` (beta 9): its 1x copy instead.
+  const small = touch || (limit !== null && limit <= LOW_TEXTURE_LIMIT);
+  return small && fitted === copies.medium && SMALL_DEVICE_1X_SHEETS.has(file) ? copies.low : fitted;
+};
+
+/** The biggest copy, from `chosen` down, that fits a card holding `limit` px a side; else the 1x. */
+const fittedCopy = (
+  file: string,
+  copies: { readonly medium: string; readonly low: string },
+  chosen: string,
+  size: { readonly width: number; readonly height: number },
+  limit: number,
+): string => {
   const ladder = [file, copies.medium, copies.low];
   for (const copy of ladder.slice(ladder.indexOf(chosen))) {
     const scale = sheetResolution(copy);
@@ -333,6 +348,25 @@ export const sheetForDevice = (
   }
   return copies.low;
 };
+
+/**
+ * Painted sheets a phone, a tablet or a card that holds 4096 px or less draws
+ * from their 1x copy even where the `@2x` would fit (beta 9, owner 21 Nov
+ * 2026, card b9-speed-picks): Fomor level 6's `@2x` is 3968 x 1470, about
+ * 30 MB of graphics memory with its mipmaps for one monster, and its 1x copy
+ * (375 KB) looks the same at a phone's zoom. The owner added the four
+ * heaviest `@2x` sheets (pick "merge-plus4"), each a quarter of the memory as
+ * its 1x copy (sizes without mipmaps): Korath 3 (4096 x 3672, 57 MB), Korath 2
+ * (3808 x 2754, 40 MB), Drull 3 (3648 x 2550, 36 MB) and Gorgo 3
+ * (3296 x 2640, 33 MB). By the painted file's name.
+ */
+export const SMALL_DEVICE_1X_SHEETS: ReadonlySet<string> = new Set([
+  "monsters/fly_6-repaint@4x.png",
+  "monsters/korath_3-repaint@4x.png",
+  "monsters/korath_2-repaint@4x.png",
+  "monsters/dragon_3-repaint@4x.png",
+  "monsters/ape_3-repaint@4x.png",
+]);
 
 /** Whether the yard tune is the lighter copy (Medium and Low). */
 export const lightMusic = (level: Quality = quality()): boolean => level !== "high";

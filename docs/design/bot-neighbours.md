@@ -1,5 +1,14 @@
 # Bot Neighbours for Map Room 1 — Design
 
+> **Removed in beta 9 (21 Nov 2026).** The owner decommissioned the bots on
+> 12 Nov 2026 ("bots can be decommissioned from game") and approved removing
+> the code on 21 Nov. The sweep, neighbour fill, revenge, truce and friend
+> declines, `scripts/bots.ts` and the `BOTS_*` switches are gone. What stays:
+> the retired bots' accounts and `bym.bot` rows, `isBot` (bots still cannot log
+> in, be gifted or be attacked in the Inferno), and the yard generator the
+> seeded Map Room 2 dev players use (`services/bots/seededPlayers.ts`). This
+> document describes the system as it was.
+
 > **Retired (owner, 12 Nov 2026):** "bots can be decommissioned from game. we have a
 > sufficiently big population now." `BOTS_RETIRED` (`server/src/config/BotConfig.ts`) holds
 > `BOTS_FILL` and `BOTS_REVENGE` off and never runs the sweep on production (outside it,

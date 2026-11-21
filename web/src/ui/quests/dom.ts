@@ -1,15 +1,8 @@
-/** Small DOM helpers the quest window's files share. */
+/** Small DOM helpers the quest window's files share (`el` is the game-wide one, `ui/dom.ts`). */
 
-export const el = <K extends keyof HTMLElementTagNameMap>(
-  tag: K,
-  className: string,
-  text?: string,
-): HTMLElementTagNameMap[K] => {
-  const element = document.createElement(tag);
-  element.className = className;
-  if (text !== undefined) element.textContent = text;
-  return element;
-};
+import { el } from "@/ui/dom";
+
+export { el };
 
 /** A refusal under the claim it answers. */
 export const refusalNote = (message: string): HTMLElement => {

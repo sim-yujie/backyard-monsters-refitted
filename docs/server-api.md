@@ -162,9 +162,8 @@ All thrown errors that controllers want to surface use `ClientSafeError`
   `${CDN_URL}/versionManifest.json`, e.g. producing strings like `"v1.6.1-beta"`). If the
   manifest was loaded (`USE_VERSION_MANAGEMENT=enabled`) and the segment doesn't match either
   the desktop or Android version, the request is rejected with `400`. When version management
-  is disabled (the default/dev case), any value in the URL segment is accepted. `POST /init`
-  performs the same check itself via a zod schema before the client even starts talking to
-  numbered endpoints.
+  is disabled (the default/dev case), any value in the URL segment is accepted. (The Flash
+  client's `POST /init`, which made the same check, was removed in beta 9.)
 - **`setMapVersion`** (`controllers/maproom/setMapVersion.ts`, routed at both
   `/worldmapv2/setmapversion` and `/worldmapv3/setmapversion`): this is an ordinary
   authenticated controller, not middleware, that switches **which Map Room a player's save is
@@ -1813,17 +1812,10 @@ and starts the clock. It runs under the main row's lock in the owner's build loa
 outpost), in every yard action before `run` (so `state` pays), and in an attack load before the
 loot snapshot (see the attack section); nothing is added to `completed`.
 
-### Debug
-
-| Method | Path | Middleware | Request fields | Response | Description |
-|---|---|---|---|---|---|
-| POST | `/api/:apiVersion/player/recorddebugdata` | apiVersion, debugDataLimiter (120/min/IP) — **no auth** | `{ key, saveid, value }` (all required strings, cast not zod-validated) | `{ error: 0 }`; `debugClientErr()` (404) if any field is falsy/missing | Client-side telemetry/error sink — purely logs to the server log (`key === "err"` exactly logs at error level, anything else at info level), nothing is persisted to the DB. |
-
 ### Misc
 
 | Method | Path | Middleware | Description |
 |---|---|---|---|
-| POST | `/init` | logRequest | Validates `apiVersion` against the version manifest via a zod schema (`InitSchema`); `500 {error, versionMismatch:true}` on mismatch, else `200 {debugMode: devConfig.debugMode}`. The very first call a client makes. |
 | GET | `/connection` | none | Heartbeat: `200`, no body. Polled by every connected client roughly every 30 seconds — treat a failure here as "server unreachable," not a game-logic error. |
 
 ---

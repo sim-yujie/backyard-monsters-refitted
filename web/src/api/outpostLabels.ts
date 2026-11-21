@@ -1,4 +1,4 @@
-import { get, postJson } from "./http";
+import { postJson } from "./http";
 import type { ApiEnvelope } from "./types";
 
 /**
@@ -53,9 +53,6 @@ export const readOutpostLabels = (raw: unknown): OutpostLabels => {
 };
 
 type LabelsAnswer = ApiEnvelope & { labels?: unknown };
-
-export const fetchOutpostLabels = async (): Promise<OutpostLabels> =>
-  readOutpostLabels((await get<LabelsAnswer>("/api/:apiVersion/bm/outposts/labels")).labels);
 
 /** Names one of the player's outposts; "" puts it back to its coordinates. */
 export const renameOutpost = async (baseid: string, name: string): Promise<OutpostLabels> =>

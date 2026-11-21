@@ -1,10 +1,7 @@
 import { Save } from "../../../database/models/save.model.js";
 import { postgres } from "../../../server.js";
 import { EnumYardType } from "../../../enums/EnumYardType.js";
-import {
-  STRUCTURE_SAVES,
-  OUTPOST_SAVES,
-} from "../../../config/MapRoom3Config.js";
+import { mr3TribeSaves } from "./mr3TribeSaves.js";
 import { Tribes } from "../../../enums/Tribes.js";
 import { getGeneratedCells, cellKey } from "./generateCells.js";
 import { calculateStructureLevel } from "./calculateStructureLevel.js";
@@ -23,18 +20,22 @@ import { MapRoomVersion } from "../../../enums/MapRoom.js";
  * 1. Player yard defenders: checked first via a DB query for an adjacent PLAYER
  *    yard. Player yards are dynamic, so their defender positions are not in the generated cache
  *
- * 2. Generated OUTPOST: tribe-specific save looked up via OUTPOST_SAVES.
+ * 2. Generated OUTPOST: tribe-specific save looked up in the outpost templates.
  *    wmid encodes the tribe (tribeIndex * 10 + 1) so the client resolves
  *    L_IDS/K_IDS/A_IDS/D_IDS correctly.
  *
  * 3. Generated structure (STRONGHOLD, RESOURCE, FORTIFICATION): deterministic
- *    level from coordinates, save from STRUCTURE_SAVES.
+ *    level from coordinates, save from the structure templates.
+ *
+ * The templates (`mr3TribeSaves`) are read from disk on the first call, not at
+ * server start.
  *
  * @param {string} baseid - The base ID encoding world hash and cell coordinates
  * @param {string} worldid - The world UUID, used to scope the player yard DB lookup
  * @returns {Promise<Save | null>} A new Save entity for the structure, or null
  */
 export const tribeSaveV3 = async (baseid: string, worldid: string): Promise<Save | null> => {
+  const { structures: STRUCTURE_SAVES, outposts: OUTPOST_SAVES } = await mr3TribeSaves();
   const cellX = parseInt(baseid.slice(-6, -3));
   const cellY = parseInt(baseid.slice(-3));
 

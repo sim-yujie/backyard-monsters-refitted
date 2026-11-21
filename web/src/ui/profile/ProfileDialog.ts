@@ -40,7 +40,7 @@ export const LOAD_FAILED = "Could not load this profile. Try again in a moment."
 export const NO_BIO = "No bio yet.";
 export const REPORTED = "Reported";
 export const REPORT_ASK = "Report this photo?";
-export { BIO_SAVED, PHOTO_HIDDEN, SAVE_FAILED, nextText, photoNote, type ProfileApi } from "./OwnProfileControls";
+export { BIO_SAVED, PHOTO_HIDDEN, SAVE_FAILED, photoNote, type ProfileApi } from "./OwnProfileControls";
 
 export interface ProfileOptions {
   readonly container: HTMLElement;

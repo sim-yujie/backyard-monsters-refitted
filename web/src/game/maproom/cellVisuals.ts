@@ -257,7 +257,6 @@ export const unexploredColour = (col: number, row: number): number =>
  */
 export const RANGE_COLOUR = 0x3dd6f5;
 export const OWN_COLOUR = RANGE_COLOUR;
-export const SHIELD_COLOUR = 0x9cb9ff;
 export const DAMAGE_COLOUR = 0xe05252;
 export const SELECT_COLOUR = 0xffffff;
 /** A damaged camp's health bar fill: green over half, amber to a quarter, then the damage red. */
@@ -269,8 +268,6 @@ export const campHealthColour = (health: number): number =>
   health > 50 ? HEALTH_GOOD_COLOUR : health > 25 ? HEALTH_HURT_COLOUR : DAMAGE_COLOUR;
 export const HOVER_COLOUR = 0xffffff;
 export const GRID_LINE_COLOUR = 0x0d1017;
-/** Another player's marker ring and a plate's text, `--colour-text`. */
-export const PLAYER_RING_COLOUR = 0xedf1f5;
 /** The fill behind a marker, a badge and a plate: the panels' dark glass. */
 export const MARKER_FILL_COLOUR = 0x0c1016;
 /** Text on the player's own cyan plate, `--colour-accent-text`. */

@@ -37,10 +37,6 @@ export const startMR1TribeSession = async (
 export const readMR1TribeSession = async (userid: number, baseid: string): Promise<AttackSession | null> =>
   parseAttackSession(await redis.get(mr1TribeSessionKey(userid, baseid)));
 
-export const endMR1TribeSession = async (userid: number, baseid: string): Promise<void> => {
-  await redis.del(mr1TribeSessionKey(userid, baseid));
-};
-
 /** @returns True when the caller now holds the lock. */
 export const acquireMR1TribeFinalLock = async (userid: number, baseid: string): Promise<boolean> =>
   (await redis.set(

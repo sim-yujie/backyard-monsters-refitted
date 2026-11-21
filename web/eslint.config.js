@@ -1,7 +1,6 @@
 import js from "@eslint/js";
 import globals from "globals";
 import tseslint from "typescript-eslint";
-import prettier from "eslint-config-prettier";
 
 export default tseslint.config(
   { ignores: ["dist/**", "node_modules/**", "e2e/layout/results/**", "e2e/layout/report/**"] },
@@ -40,6 +39,4 @@ export default tseslint.config(
       eqeqeq: ["error", "smart"],
     },
   },
-  // Must stay last: turns off every rule Prettier already handles.
-  prettier,
 );

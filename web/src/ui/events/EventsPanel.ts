@@ -30,6 +30,7 @@ import { eventsArt } from "./eventsArt";
 import { mr2WelcomeCard, paintWelcomeReward, paintWelcomeTimeline, welcomeDaysText } from "./mr2WelcomeCard";
 import { tickCheckin, WEEKEND_ICON, weekendAmount, weekendCheckinBlock } from "./weekendUi";
 import "./events.css";
+import { el } from "@/ui/dom";
 
 /**
  * The Events page: every event on now with its banner, a countdown to its
@@ -104,17 +105,6 @@ export interface EventsPanelOptions {
   /** The weekend card's Check in. */
   onCheckInWeekend?(): void;
 }
-
-const el = <K extends keyof HTMLElementTagNameMap>(
-  tag: K,
-  className: string,
-  text?: string,
-): HTMLElementTagNameMap[K] => {
-  const element = document.createElement(tag);
-  element.className = className;
-  if (text !== undefined) element.textContent = text;
-  return element;
-};
 
 /** A decoration's name, as the yard names it. */
 const decorationName = (type: number): string => typeName(type);

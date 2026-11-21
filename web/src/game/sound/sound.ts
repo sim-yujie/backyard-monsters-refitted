@@ -1,3 +1,4 @@
+import { musicGate } from "@/game/yard/yardArtGate";
 import { EffectsPlayer, type Effect } from "./EffectsPlayer";
 import { MusicPlayer } from "./MusicPlayer";
 import { onSoundSwitches, soundSwitches, type SoundSwitches } from "./soundSwitches";
@@ -32,7 +33,8 @@ const tuneEffects = (made: EffectsPlayer, switches: SoundSwitches | null): void 
 
 const musicPlayer = (): MusicPlayer => {
   if (player) return player;
-  const made = new MusicPlayer();
+  // The music waits for the first yard's pictures (beta 9, `yardArtGate.ts`).
+  const made = new MusicPlayer({ gate: () => musicGate() });
   tuneMusic(made, soundSwitches());
   onSoundSwitches((switches) => tuneMusic(made, switches));
   player = made;

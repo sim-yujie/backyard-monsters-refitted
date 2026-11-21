@@ -29,8 +29,6 @@ import { readPace, type QuestPace } from "../quests/state.js";
 
 export type ModerationKind = "warn" | "mute" | "unmute" | "ban" | "unban";
 
-export const MODERATION_KINDS: readonly ModerationKind[] = ["warn", "mute", "unmute", "ban", "unban"];
-
 /** The longest reason the owner can type. */
 export const MAX_MODERATION_REASON = 300;
 /** A timed ban is 1 to this many days. */

@@ -15,8 +15,14 @@ describe("cacheControlFor", () => {
     expect(cacheControlFor("/assets/buildings/townhall.JPG", true)).toBe("public, max-age=604800");
   });
 
+  test("keeps sounds and music a week (beta 9)", () => {
+    expect(cacheControlFor("/assets/sounds/music/yard-theme.mp3", true)).toBe("public, max-age=604800");
+    expect(cacheControlFor("/assets/sounds/music/yard-theme-lite.ogg", true)).toBe("public, max-age=604800");
+    expect(cacheControlFor("/assets/sounds/uisounds/click.WAV", true)).toBe("public, max-age=604800");
+  });
+
   test("keeps any other static file an hour", () => {
-    expect(cacheControlFor("/assets/sounds/music/yard-theme.mp3", true)).toBe("public, max-age=3600");
+    expect(cacheControlFor("/gamestage/strings.json", true)).toBe("public, max-age=3600");
   });
 
   test("keeps nothing from the API", () => {

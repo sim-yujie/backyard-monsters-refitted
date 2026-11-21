@@ -235,10 +235,6 @@ export const weekendPercent = (id: WeekendEventId, t: number = weekendNow()): nu
 export const lessByPercent = (amount: number, percent: number): number =>
   percent > 0 && amount > 0 ? Math.ceil((amount * (100 - percent)) / 100) : amount;
 
-/** `amount` plus `percent`%, rounded down. */
-export const moreByPercent = (amount: number, percent: number): number =>
-  percent > 0 && amount > 0 ? Math.floor((amount * (100 + percent)) / 100) : amount;
-
 /** A timer `percent`% shorter, at least 1 second. */
 export const shorterBy = (seconds: number, percent: number): number =>
   percent > 0 && seconds > 0 ? Math.max(1, Math.ceil((seconds * (100 - percent)) / 100)) : seconds;

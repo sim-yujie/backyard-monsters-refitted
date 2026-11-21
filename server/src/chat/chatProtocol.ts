@@ -10,6 +10,8 @@ export enum ClientMessageType {
   Unignore = "unignore",
   UpdateName = "updatename",
   Ping = "ping",
+  /** The game's presence ping (beta 9, `chatPresence.ts`): `POST /bm/presence` over this socket. */
+  Presence = "presence",
 }
 
 export enum ServerMessageType {
@@ -30,6 +32,8 @@ export enum ServerMessageType {
   Mail = "mail",
   /** The player was taken out of a room (left or was kicked from their alliance): the client drops its tab. */
   Left = "left",
+  /** The answer to a {@link ClientMessageType.Presence} ping, under the ping's `id`. */
+  Presence = "presence",
 }
 
 export enum ErrorCode {
@@ -83,10 +87,22 @@ export type ClientMessage =
   | { type: ClientMessageType.Ignore; targetId: string }
   | { type: ClientMessageType.Unignore; targetId: string }
   | { type: ClientMessageType.UpdateName }
-  | { type: ClientMessageType.Ping };
+  | { type: ClientMessageType.Ping }
+  | {
+      type: ClientMessageType.Presence;
+      /** The client's number for this ping; the answer carries it back. */
+      id: number;
+      /** The game session's bearer token, checked as `verifyUserAuth` checks it. */
+      token: string;
+      /** The API version the client would put in the route's path. */
+      apiVersion?: string;
+      /** What `POST /bm/presence` takes as its body: `{ where, planner }`. */
+      screen?: unknown;
+    };
 
 export type ServerMessage =
-  | { type: ServerMessageType.AuthOk; userId: number; displayName: string }
+  /** `presence`: this server answers presence pings on the socket (beta 9); an older one leaves it out. */
+  | { type: ServerMessageType.AuthOk; userId: number; displayName: string; presence?: true }
   | { type: ServerMessageType.AuthFail; reason: AuthFailReason }
   | { type: ServerMessageType.Joined; channel: string; history: HistoryEntry[] }
   | { type: ServerMessageType.Message; channel: string; messageType: AllianceMessageType; userId: number; displayName: string; picSquare: string | null; photo?: number; allianceImage: number | null; body: string; ts: number; cell?: { x: number; y: number }; tradeRequest?: number; gm?: boolean; mod?: boolean }
@@ -100,7 +116,10 @@ export type ServerMessage =
   | { type: ServerMessageType.Kicked; reason: "banned"; until: number | null; text: string; banReason: string }
   | { type: ServerMessageType.Notice }
   | { type: ServerMessageType.Mail }
-  | { type: ServerMessageType.Left; channel: string };
+  | { type: ServerMessageType.Left; channel: string }
+  /** `answer`: what `POST /bm/presence` would have answered. `ok: false`: send that ping over HTTP instead. */
+  | { type: ServerMessageType.Presence; id: number; ok: true; answer: Record<string, unknown> }
+  | { type: ServerMessageType.Presence; id: number; ok: false; reason: "throttled" | "auth" | "version" | "error" };
 
 interface Sender { send(data: string): void; }
 

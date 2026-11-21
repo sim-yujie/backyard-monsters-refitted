@@ -1,4 +1,4 @@
-import { actionKey, type YardActionResult, type YardStore } from "@/game/yard/YardStore";
+import { actionKey, startReadOr, type YardActionResult, type YardStore } from "@/game/yard/YardStore";
 import { post } from "./http";
 import type { UpgradeCost, YardResponse } from "./types";
 import { yardBody } from "./yard";
@@ -122,7 +122,18 @@ export interface GoalsActions {
  * answer. They name the store's yard: none on the main yard, the Inferno
  * yard's `baseid` there (the panel is not mounted on an outpost).
  */
-export const goalsActions = (store: Pick<YardStore, "run">, api: GoalsApi = goalsApi): GoalsActions => ({
-  state: () => store.run({ key: GoalsKey.STATE, send: (_api, ...yard) => api.state(...yard) }),
+/** A `goals/state` report, as the yard's first `state` call may carry it (`startReadOr`). */
+export const isGoalsReport = (report: unknown): report is GoalsStateReport =>
+  typeof report === "object" && report !== null && Array.isArray((report as GoalsStateReport).goals);
+
+export const goalsActions = (
+  store: Pick<YardStore, "run"> & Partial<Pick<YardStore, "startRead" | "kind">>,
+  api: GoalsApi = goalsApi,
+): GoalsActions => ({
+  // The first read rides the yard's first `state` call when it can (beta 9).
+  state: () =>
+    startReadOr(store, "goals", isGoalsReport, () =>
+      store.run({ key: GoalsKey.STATE, send: (_api, ...yard) => api.state(...yard) }),
+    ),
   claim: (id) => store.run({ key: GoalsKey.claim(id), send: (_api, ...yard) => api.claim(id, ...yard) }),
 });

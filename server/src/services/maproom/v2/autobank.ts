@@ -92,12 +92,7 @@ import { levelOf, type ResourceAmounts } from "../../yardplanner/costs.js";
  * stand-in entity manager.
  */
 
-export {
-  AUTOBANK_OVERDRIVE,
-  AUTOBANK_TICK,
-  autobankTicks,
-  type AutobankTicks,
-} from "../../../game-rules/maproom/autobank.js";
+export { AUTOBANK_TICK, autobankTicks, type AutobankTicks } from "../../../game-rules/maproom/autobank.js";
 
 /** `GLOBAL._averageAltitude` (`client/scripts/GLOBAL.as:398`). */
 export const AVERAGE_ALTITUDE = 125;

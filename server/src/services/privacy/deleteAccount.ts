@@ -136,7 +136,7 @@ export const findAccount = async (em: EntityManager, who: string): Promise<Accou
   if (!account) throw new AccountDeletionRefused(`No account matches "${text}"`);
 
   const [bot] = await sql(`SELECT 1 FROM bym.bot WHERE userid = ?`, [account.userid]);
-  if (bot) throw new AccountDeletionRefused(`User id ${account.userid} is a bot: use src/scripts/bots.ts instead`);
+  if (bot) throw new AccountDeletionRefused(`User id ${account.userid} is a (retired) bot account, which this script does not delete`);
 
   return { ...account, userid: Number(account.userid), alliance_id: account.alliance_id === null ? null : Number(account.alliance_id) };
 };

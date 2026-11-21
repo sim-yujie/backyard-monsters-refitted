@@ -3,7 +3,6 @@ import { postgres } from "../../server.js";
 import { logger } from "../../utils/logger.js";
 import { PLACEHOLDER_PIC_SQUARE, picSquareAfterDiscordRefresh } from "../../game-data/avatars.js";
 
-export const BYMR_CDN = "https://cdn.bymrefitted.com";
 export const DISCORD_CDN = "https://cdn.discordapp.com";
 
 const CHECK_INTERVAL_MS = 24 * 60 * 60 * 1000;

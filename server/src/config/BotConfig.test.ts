@@ -1,41 +1,18 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 
 import {
-  botConfig,
-  BOTS_RETIRED,
-  isSwitchOn,
+  botPace,
   DAYS_ON_LEVEL,
   daysBetween,
   daysOn,
-  DEFAULT_BOTS_GROWING_FLOW,
-  DEFAULT_BOTS_FRESH_PER_DAY,
-  DEFAULT_BOTS_LEVEL_SLACK,
-  DEFAULT_BOTS_NEW_PER_DAY,
-  DEFAULT_BOTS_QUIET_ONLINE,
-  DEFAULT_BOTS_QUIET_RATE,
   DEFAULT_BOTS_FLOOR_LEVEL,
-  DEFAULT_BOTS_PER_LEVEL,
-  BOTS_SHOWN_FROM_LEVEL,
   botFloorLevel,
-  defaultBotsTotal,
   levelWeights,
+  seededYardsOn,
 } from "./BotConfig.js";
+import { isSwitchOn, positiveNumber } from "./envValues.js";
 
-const KEYS = [
-  "BOTS_FILL",
-  "BOTS_BRAIN",
-  "BOTS_REVENGE",
-  "BOTS_TOTAL",
-  "BOTS_FLOOR_LEVEL",
-  "BOTS_PACE_SCALE",
-  "BOTS_QUIET_RATE",
-  "BOTS_QUIET_ONLINE",
-  "BOTS_GROWING_FLOW",
-  "BOTS_NEW_PER_DAY",
-  "BOTS_LEVEL_SLACK",
-  "BOTS_FRESH_PER_DAY",
-  "ENV",
-];
+const KEYS = ["BOTS_FLOOR_LEVEL", "BOTS_PACE_SCALE", "ENV"];
 const saved: Record<string, string | undefined> = {};
 
 beforeEach(() => {
@@ -52,102 +29,31 @@ afterEach(() => {
   }
 });
 
-describe("bot switches (issue #235)", () => {
-  test("everything is off with the defaults when nothing is set", () => {
-    expect(botConfig()).toEqual({
-      fill: false,
-      brain: false,
-      revenge: false,
-      total: defaultBotsTotal(DEFAULT_BOTS_FLOOR_LEVEL),
-      pace: DAYS_ON_LEVEL,
-      quietRate: DEFAULT_BOTS_QUIET_RATE,
-      quietOnline: DEFAULT_BOTS_QUIET_ONLINE,
-      growingFlow: DEFAULT_BOTS_GROWING_FLOW,
-      newPerDay: DEFAULT_BOTS_NEW_PER_DAY,
-      freshPerDay: DEFAULT_BOTS_FRESH_PER_DAY,
-      levelSlack: DEFAULT_BOTS_LEVEL_SLACK,
-      seeded: true,
-      retired: true,
-    });
-    expect(botConfig().total).toBe(185);
+describe("what is left of the bot settings (bot system removed in beta 9)", () => {
+  test("seeded Map Room 2 dev yards are given everywhere but production (issue #233)", () => {
+    expect(seededYardsOn({})).toBe(true);
+    expect(seededYardsOn({ ENV: "local" })).toBe(true);
+    expect(seededYardsOn({ ENV: "production" })).toBe(false);
   });
 
-  test("seeded Map Room 2 dev yards are tended everywhere but production (issue #233)", () => {
-    process.env.ENV = "local";
-    expect(botConfig().seeded).toBe(true);
-    process.env.ENV = "production";
-    expect(botConfig().seeded).toBe(false);
+  test("the pace scale stretches the growth curve, and anything but a positive number reads as 1", () => {
+    expect(botPace()).toBe(DAYS_ON_LEVEL);
+    expect(botPace("2")).toEqual(DAYS_ON_LEVEL.map((days) => days * 2));
+    for (const bad of ["", "0", "-1", "fast"]) expect(botPace(bad)).toBe(DAYS_ON_LEVEL);
+    process.env.BOTS_PACE_SCALE = "0.1";
+    expect(botPace()).toEqual(DAYS_ON_LEVEL.map((days) => days * 0.1));
   });
+});
 
+describe("the environment readers (envValues.ts)", () => {
   test("on or true turns a switch on; anything else leaves it off", () => {
-    for (const on of ["on", " TRUE ", "true", "ON"]) expect(isSwitchOn(on)).toBe(true);
-    for (const off of [undefined, "", "off", "yes", "1"]) expect(isSwitchOn(off)).toBe(false);
+    for (const on of ["on", "ON", " true ", "True"]) expect(isSwitchOn(on)).toBe(true);
+    for (const off of [undefined, "", "off", "1", "yes", "false"]) expect(isSwitchOn(off)).toBe(false);
   });
 
-  test("bots are retired (owner, 12 Nov 2026): BOTS_FILL and BOTS_REVENGE are ignored, the sweep never runs on production", () => {
-    expect(BOTS_RETIRED).toBe(true);
-    process.env.BOTS_FILL = "on";
-    process.env.BOTS_BRAIN = "on";
-    process.env.BOTS_REVENGE = "on";
-
-    // Live's own settings: nothing of the bots runs.
-    process.env.ENV = "production";
-    expect(botConfig()).toMatchObject({ fill: false, brain: false, revenge: false, retired: true, seeded: false });
-
-    // A dev server still runs the sweep with BOTS_BRAIN=on, for the seeded Map Room 2 yards alone.
-    process.env.ENV = "local";
-    expect(botConfig()).toMatchObject({ fill: false, brain: true, revenge: false, retired: true, seeded: true });
-    process.env.BOTS_BRAIN = "off";
-    expect(botConfig().brain).toBe(false);
-  });
-
-  test("the count and pace scale take positive numbers and fall back otherwise", () => {
-    process.env.BOTS_TOTAL = "750";
-    process.env.BOTS_PACE_SCALE = "0.5";
-    const config = botConfig();
-    expect(config.total).toBe(750);
-    expect(daysOn(config.pace, 20)).toBeCloseTo(DAYS_ON_LEVEL[20]! / 2, 9);
-
-    for (const bad of ["", "0", "-3", "lots", "0.4"]) {
-      process.env.BOTS_TOTAL = bad;
-      process.env.BOTS_PACE_SCALE = bad === "0.4" ? "0" : bad;
-      expect(botConfig()).toMatchObject({ total: 185, pace: DAYS_ON_LEVEL });
-    }
-  });
-
-  test("the quiet rate takes 0-1, the daily cap and slack whole numbers, the flow a positive number", () => {
-    process.env.BOTS_QUIET_RATE = "0";
-    process.env.BOTS_QUIET_ONLINE = "0.2";
-    process.env.BOTS_NEW_PER_DAY = "0";
-    process.env.BOTS_LEVEL_SLACK = "3";
-    process.env.BOTS_GROWING_FLOW = "0.6";
-    expect(botConfig()).toMatchObject({ quietRate: 0, quietOnline: 0.2, newPerDay: 0, levelSlack: 3, growingFlow: 0.6 });
-
-    for (const bad of ["", "1.5", "-0.1", "lots"]) {
-      process.env.BOTS_QUIET_RATE = bad;
-      process.env.BOTS_QUIET_ONLINE = bad;
-      process.env.BOTS_NEW_PER_DAY = bad === "" ? "2.5" : bad;
-      process.env.BOTS_LEVEL_SLACK = bad;
-      process.env.BOTS_GROWING_FLOW = bad === "" ? "0" : bad === "1.5" ? "-1" : bad;
-      expect(botConfig()).toMatchObject({
-        quietRate: DEFAULT_BOTS_QUIET_RATE,
-        quietOnline: DEFAULT_BOTS_QUIET_ONLINE,
-        newPerDay: DEFAULT_BOTS_NEW_PER_DAY,
-        levelSlack: DEFAULT_BOTS_LEVEL_SLACK,
-        growingFlow: DEFAULT_BOTS_GROWING_FLOW,
-      });
-    }
-  });
-
-  test("the bots started at level 1 a day take any number 0 or more; 0 turns it off", () => {
-    process.env.BOTS_FRESH_PER_DAY = "0";
-    expect(botConfig().freshPerDay).toBe(0);
-    process.env.BOTS_FRESH_PER_DAY = " 2.5 ";
-    expect(botConfig().freshPerDay).toBe(2.5);
-    for (const bad of ["", "-1", "lots"]) {
-      process.env.BOTS_FRESH_PER_DAY = bad;
-      expect(botConfig().freshPerDay).toBe(DEFAULT_BOTS_FRESH_PER_DAY);
-    }
+  test("a positive number, or the fallback", () => {
+    expect(positiveNumber("2.5", 1)).toBe(2.5);
+    for (const bad of [undefined, "", "0", "-3", "many"]) expect(positiveNumber(bad, 7)).toBe(7);
   });
 });
 
@@ -213,23 +119,4 @@ describe("the level floor (owner 3 Nov 2026)", () => {
       expect(botFloorLevel()).toBe(DEFAULT_BOTS_FLOOR_LEVEL);
     }
   });
-
-  test("players are shown bots from level 15, whatever the floor", () => {
-    expect(BOTS_SHOWN_FROM_LEVEL).toBe(15);
-  });
-
-  test("the default total keeps about 11.5 bots a level from the floor up: 300 at 15, 185 at 25", () => {
-    expect(DEFAULT_BOTS_PER_LEVEL).toBeCloseTo(11.54, 2);
-    expect(defaultBotsTotal(15)).toBe(300);
-    expect(defaultBotsTotal(25)).toBe(185);
-    expect(defaultBotsTotal(40)).toBe(12);
-    expect(botConfig().total).toBe(185);
-    process.env.BOTS_FLOOR_LEVEL = "20";
-    expect(botConfig().total).toBe(equalShare(20));
-    // BOTS_TOTAL still wins when set.
-    process.env.BOTS_TOTAL = "300";
-    expect(botConfig().total).toBe(300);
-  });
 });
-
-const equalShare = (floor: number) => Math.round((300 / 26) * (41 - floor));

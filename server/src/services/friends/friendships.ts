@@ -1,7 +1,6 @@
 import type { EntityManager } from "@mikro-orm/postgresql";
 
 import { friendRefusedErr } from "../../errors/errors.js";
-import { bookFriendDecline } from "../bots/friendDecline.js";
 import { notifyFriend, type FriendNotice } from "./friendNotifications.js";
 import { dropWaitingGifts } from "./gifts.js";
 import { askAgainAt, blockedIdsOf, FRIEND_LIMITS, lapseCutoff, secondsOf, utcDayStart } from "./friendRules.js";
@@ -150,8 +149,9 @@ export interface RequestOutcome {
  * waiting), `dailyCap` (30 sent today) and `declinedRecently` (with `from`,
  * when asking is possible again).
  *
- * A request to an account covered by the §6.2 rule is stored and answered
- * like any other, and its decline booked (`bookFriendDecline`).
+ * A request to an account covered by the §6.2 rule (a retired bot) is stored
+ * like any other and never answered, so it lapses as one to a player who
+ * stopped playing.
  *
  * @param {number} now - Unix seconds
  */
@@ -215,7 +215,6 @@ export const sendFriendRequest = async (
       [me, other, dateOf(now)]
     );
     const id = Number(row!.id);
-    await bookFriendDecline(tx, { id, from_userid: me, to_userid: other }, now);
     const notice: FriendNotice = { event: "request", userid: me, username: mine.username };
     return { requestid: id, accepted: false, notices: [{ userid: other, notice }] };
   });

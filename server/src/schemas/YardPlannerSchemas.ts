@@ -177,11 +177,6 @@ export const TrapRearmSchema = z.object({
 /** The parsed form of `traps`. */
 export const TrapPlacementListSchema = z.array(TrapPlacementSchema).max(BATCH_TRAP_MAX);
 
-/** `POST /deletetemplate` body, the legacy alias for `DELETE /layouts/:slot`. */
-export const DeleteTemplateSchema = z.object({
-  slotid: z.coerce.number().int().min(0).max(LAYOUT_SLOTS - 1),
-});
-
 /**
  * `POST /savetemplate` body, the Flash client's route.
  *

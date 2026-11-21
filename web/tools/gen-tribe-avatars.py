@@ -4,7 +4,7 @@ Generate refreshed wild-monster tribe avatars with Gemini's image model.
 Usage (from the repo root):
 
     pip install google-genai pillow
-    set GEMINI_API_KEY=...          (PowerShell: $env:GEMINI_API_KEY="...")
+    export GEMINI_API_KEY=...
     python web/tools/gen-tribe-avatars.py [--model MODEL] [--variants N] [--tribe NAME]
 
 Each tribe's original avatar (server/public/assets/popups/tribe_<name>.v2.png)

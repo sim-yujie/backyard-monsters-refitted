@@ -697,6 +697,3 @@ const plugin: YardPlugin = (mounts) => {
 };
 
 YARD_PLUGINS.push(plugin);
-
-/** The plugin itself, for the tests. */
-export { plugin as guidedStartPlugin };

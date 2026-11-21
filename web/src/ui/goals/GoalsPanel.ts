@@ -8,6 +8,7 @@ import { resourceAmount } from "@/ui/resourceIcon";
 import { REWARD_KEYS, type ClaimFigure } from "./claimFigure";
 import "./goals.css";
 import { artUrl } from "../../artUrl";
+import { el } from "@/ui/dom";
 
 /**
  * The Goals panel (`docs/design/tutorial.md` §6.3, issue #227): what is
@@ -101,17 +102,6 @@ export const siegeText = (count: number, name: string): string => `${formatAmoun
 export const SIEGE_ROOM_NOTE =
   "You cannot collect this reward now. You may need to build a Chaos Factory first. " +
   "Otherwise, your Chaos Factory is building a Chaos Weapon, or currently has one stored.";
-
-const el = <K extends keyof HTMLElementTagNameMap>(
-  tag: K,
-  className: string,
-  text?: string,
-): HTMLElementTagNameMap[K] => {
-  const element = document.createElement(tag);
-  element.className = className;
-  if (text !== undefined) element.textContent = text;
-  return element;
-};
 
 /** The monster reward: its small portrait and "10 Octo-oozes". */
 const monsterChip = (goal: GoalView): HTMLElement | null => {

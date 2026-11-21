@@ -62,10 +62,6 @@ export const parseDescentSession = (raw: string | null | undefined): DescentSess
 export const readDescentSession = async (userid: number): Promise<DescentSession | null> =>
   parseDescentSession(await redis.get(descentSessionKey(userid)));
 
-export const endDescentSession = async (userid: number): Promise<void> => {
-  await redis.del(descentSessionKey(userid));
-};
-
 /** @returns True when the caller now holds the lock. */
 export const acquireDescentFinalLock = async (userid: number): Promise<boolean> =>
   (await redis.set(descentFinalLockKey(userid), "1", "EX", String(ATTACK_FINAL_LOCK_SECONDS), "NX")) === "OK";

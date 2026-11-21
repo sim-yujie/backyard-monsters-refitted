@@ -57,9 +57,22 @@ export class Sight {
     return this.snapshot !== EMPTY;
   }
 
-  /** Fetches the whole sight fresh: on entering the map, and on Refresh. */
+  /**
+   * Fetches the whole sight fresh: on entering the map, and on Refresh.
+   *
+   * Never rejects: the map calls it without waiting (`void`), so a failed
+   * `/worldmapv2/sight` (offline, a timeout, a server error) used to surface
+   * as an unhandled rejection in the error reports (beta 9 audit, 21 Nov
+   * 2026). A failure keeps the sight already held; the next zone fetch's `sv`
+   * or the next Refresh asks again.
+   */
   async refresh(): Promise<void> {
-    const response = await this.fetcher();
+    let response: SightResponse;
+    try {
+      response = await this.fetcher();
+    } catch {
+      return;
+    }
     this.apply(response);
   }
 
