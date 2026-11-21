@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import type { EntityManager } from "@mikro-orm/postgresql";
 
-import { botConfig, seededYardsOn } from "../../config/BotConfig.js";
+import { seededYardsOn } from "../../config/BotConfig.js";
 import { Bot } from "../../database/models/bot.model.js";
 import type { User } from "../../database/models/user.model.js";
 import { BaseType } from "../../enums/Base.js";
@@ -11,7 +11,6 @@ import type { BuildingDataMap } from "../../types/BuildingData.js";
 import { starterBuildingData } from "../yard/starterBase.js";
 import { BOT_MAX_LEVEL, evenSpread } from "./factory.js";
 import { giveSeededYards, isBlankSeedYard, planSeededLevels, SEEDED_FLOOR } from "./seededPlayers.js";
-import { bookFirstGrows, tends } from "./sweep.js";
 
 /**
  * Real yards for the seeded Map Room 2 dev players (issue #233): which yards
@@ -109,50 +108,10 @@ describe("planSeededLevels", () => {
 });
 
 describe("the dev-only guard", () => {
-  test("seeded yards are given and tended everywhere but production", () => {
+  test("seeded yards are given everywhere but production", () => {
     expect(seededYardsOn({ ENV: "local" })).toBe(true);
     expect(seededYardsOn({})).toBe(true);
     expect(seededYardsOn({ ENV: "production" })).toBe(false);
-  });
-
-  test("the bot config carries it, and the sweep tends seeded rows only with it", () => {
-    const env = process.env.ENV;
-    try {
-      process.env.ENV = "production";
-      expect(botConfig().seeded).toBe(false);
-      process.env.ENV = "local";
-      expect(botConfig().seeded).toBe(true);
-    } finally {
-      if (env === undefined) delete process.env.ENV;
-      else process.env.ENV = env;
-    }
-    expect(tends("active", {})).toBe(true);
-    expect(tends("active", { seeded: false })).toBe(true);
-    expect(tends("seeded", { seeded: true })).toBe(true);
-    expect(tends("seeded", { seeded: false })).toBe(false);
-    expect(tends("seeded", {})).toBe(false);
-    expect(tends("retired", { seeded: true })).toBe(false);
-    // Bots retired (owner, 12 Nov 2026): no active bot is tended; seeded players still are.
-    expect(tends("active", { retired: true, seeded: true })).toBe(false);
-    expect(tends("seeded", { retired: true, seeded: true })).toBe(true);
-  });
-
-  test("the sweep books seeded players' first grows only when told to", async () => {
-    const calls: { sql: string; params: unknown[] }[] = [];
-    const em = {
-      execute: async (sql: string, params: unknown[]) => {
-        calls.push({ sql, params });
-        return [];
-      },
-    } as unknown as EntityManager;
-    await bookFirstGrows(em, NOW);
-    await bookFirstGrows(em, NOW, true);
-    // Bots retired (owner, 12 Nov 2026): seeded players only.
-    await bookFirstGrows(em, NOW, true, false);
-    expect(calls[0]!.sql).toContain("((?::boolean AND b.state = 'active') OR (?::boolean AND b.state = 'seeded'))");
-    expect(calls[0]!.params).toEqual([NOW, 3600, true, false]);
-    expect(calls[1]!.params).toEqual([NOW, 3600, true, true]);
-    expect(calls[2]!.params).toEqual([NOW, 3600, false, true]);
   });
 
   test("giving yards on production is refused before anything is read", async () => {

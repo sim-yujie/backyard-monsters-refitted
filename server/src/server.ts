@@ -43,8 +43,6 @@ import { startDailySummary } from "./services/alerts/dailySummary.js";
 import { trackResponseTimes } from "./services/health/responseTimes.js";
 import { turnstileSecretKey } from "./services/auth/turnstile.js";
 import { requiresDiscordVerification } from "./config/AccountConfig.js";
-import { botConfig } from "./config/BotConfig.js";
-import { PRESENCE_TTL_SECONDS } from "./controllers/maproom/presence.js";
 import { clientIp } from "./middleware/clientIp.js";
 import { trustedProxies } from "./config/ProxyConfig.js";
 import { startupRefusals } from "./config/StartupSafety.js";
@@ -205,28 +203,9 @@ redis.onclose = (err) => logger.error(`Redis disconnected: ${err.message}`);
       }),
   });
 
-  // The bot sweep (issue #240): grows, repairs and rebalances Map Room 1 bots.
-  // Off unless BOTS_BRAIN=on, and then not even loaded, so a server without
-  // bots runs exactly as before; a failure to start it never stops the server.
-  // Bots are retired (owner, 12 Nov 2026, BOTS_RETIRED): never on production;
-  // elsewhere it tends only the seeded Map Room 2 dev players.
-  if (botConfig().brain) {
-    try {
-      const { startBotSweep } = await import("./services/bots/sweep.js");
-      // Revenge attacks (issue #244) run only while BOTS_REVENGE is on too.
-      const { runRevengeAttack, seenRecently } = await import("./services/bots/revengeRun.js");
-      startBotSweep({
-        em: postgres.em,
-        markOnline: async (userid, now) => {
-          await redis.setex(`last-seen:main:${userid}`, PRESENCE_TTL_SECONDS, String(now));
-        },
-        revenge: { isOnline: seenRecently, attack: (input) => runRevengeAttack(input) },
-      });
-      logger.info(`Bot sweep (BOTS_BRAIN): on; revenge (BOTS_REVENGE): ${botConfig().revenge ? "on" : "off"}`);
-    } catch (err) {
-      logger.error(`Bot sweep could not start: ${err}`);
-    }
-  }
+  // The Map Room 1 bot sweep (grow, repair, revenge) was removed in beta 9:
+  // bots are decommissioned (owner, 12 + 13 Nov 2026). Their accounts stay,
+  // and isBot still keeps them out (services/bots/isBot.ts).
 
   // Say which economy audit mode is live, once, at boot: `log` and `reject`
   // behave very differently for a player and the variable is read only here

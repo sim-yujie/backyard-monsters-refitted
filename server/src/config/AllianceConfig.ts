@@ -1,5 +1,5 @@
 import { AllianceMessageType, AllianceStance, AllianceType } from "../enums/Alliance.js";
-import { isSwitchOn } from "./BotConfig.js";
+import { isSwitchOn } from "./envValues.js";
 
 /*
  * Every alliance number lives in this file so balance can be tuned in one

@@ -2,7 +2,7 @@ import mikroOrmConfig from "../../mikro-orm.config.js";
 
 import { MikroORM } from "@mikro-orm/postgresql";
 
-import { botConfig, seededYardsOn } from "../../config/BotConfig.js";
+import { botPace, seededYardsOn } from "../../config/BotConfig.js";
 import { mulberry32 } from "../../game-rules/combat/rng.js";
 import { findSeededPlayers, giveSeededYards, isBlankSeedYard } from "../../services/bots/seededPlayers.js";
 
@@ -45,7 +45,7 @@ try {
     const { given, notBlank } = await giveSeededYards(em, {
       rng: mulberry32(seed),
       now: Math.floor(Date.now() / 1000),
-      pace: botConfig().pace,
+      pace: botPace(),
       onBatch: (batch) => {
         for (const player of batch) byLevel[player.level] = (byLevel[player.level] ?? 0) + 1;
         process.stdout.write(".");

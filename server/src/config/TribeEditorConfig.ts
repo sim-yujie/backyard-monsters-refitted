@@ -1,5 +1,5 @@
 import { Env } from "../enums/Env.js";
-import { isSwitchOn } from "./BotConfig.js";
+import { isSwitchOn } from "./envValues.js";
 
 /**
  * The tribe yard editor's switch (local servers only).

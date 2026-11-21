@@ -22,22 +22,18 @@ import { BOT_YARD_VERSION } from "./yardGenerator.js";
  * Owner decisions (2026-10-05):
  *
  * 1. **Dev testing only.** Nothing here runs when `ENV` is production
- *    ({@link seededYardsOn}): the seed scripts refuse, the sweep leaves
- *    seeded rows alone and an attack books them nothing.
+ *    ({@link seededYardsOn}): the seed scripts refuse.
  * 2. **The bots' yard generator**, with the levels spread over 15-40 the way
  *    the bots were (`fillPlan`), drawn exactly as the factory draws a bot.
  *    They keep the lowest floor, 15 ({@link SEEDED_FLOOR}), when the bots'
  *    floor rises (`BOTS_FLOOR_LEVEL`, owner 3 Nov 2026): they are the dev
  *    world map, not neighbours.
- * 3. **They repair and grow like the Map Room 1 bots**, by the bot sweep's
- *    own `grow` and `repair` jobs. Each player gets a `bym.bot` row in state
- *    `seeded`, which keeps them out of everything that reads bots
- *    (`state = 'active'`): neighbour lists, the 500 total, the rebalance,
- *    retire-all, remove-all. `isBot` is false for them, so they can still log
- *    in and are told of attacks as a player is. The sweep treats them as a
- *    bot with three differences (`sweep.ts`): they never retire (their
- *    growth stops at the top of level 40), they never look at Map Room 1's
- *    tribes, and they never show online. They never take revenge.
+ * 3. **A `bym.bot` row in state `seeded`** for each, which marks them for
+ *    {@link giveSeededYards} and keeps them out of everything that reads bots.
+ *    `isBot` is false for them, so they can still log in and are told of
+ *    attacks as a player is. Until beta 9 the bot sweep also repaired and grew
+ *    them (with `BOTS_BRAIN=on` outside production); it was removed with the
+ *    rest of the bot system, so their yards now stay as drawn.
  *
  * Only blank yards are given one ({@link isBlankSeedYard}): a seeded account
  * someone has logged in to and built on keeps its yard and gets no row.

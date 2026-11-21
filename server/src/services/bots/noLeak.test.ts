@@ -34,18 +34,8 @@ const READERS: Record<string, string> = {
   "controllers/auth/forgotPassword.ts": "refuses a bot's reset mail as an unknown email",
   "controllers/auth/resetPassword.ts": "refuses a bot's reset as a bad token",
   "mikro-orm.config.ts": "registers the entities",
-  "services/maproom/v1/findOverworldNeighbours.ts":
-    "fills empty neighbour places with bots, built by the same createNeighbourData as real players and shuffled in with them",
   "services/base/afterYardDefended.ts":
-    "after a defence lands: a real defender gets the same notice whoever attacked, a bot books jobs; returns nothing to the response",
-  "server.ts":
-    "starts the bot sweep, with its revenge runner, when BOTS_BRAIN is on (a background timer; it answers no request)",
-  "controllers/mail/requestTruce.ts":
-    "books a bot's decline of the request after the route has answered alike for anyone (#245); writes only a bot_job row",
-  "services/mail/handleTruceRequest.ts":
-    "books a bot's decline of the request (#245); returns the same as for a player, writes only a bot_job row",
-  "services/friends/friendships.ts":
-    "books the decline of a friend request under the friends design's §6.2 rule (#368); the request is stored and answered alike for anyone, writes only a bot_job row",
+    "after a defence lands: a real defender gets the same notice whoever attacked, a bot's yard nothing; returns nothing to the response",
   "controllers/friends/gift.ts":
     "refuses a gift to or from a bot as notFriends, the same answer as for any player who is not a friend (#375)",
   "controllers/friends/giftAll.ts":
