@@ -157,14 +157,6 @@ export const unknownAvatarErr = () =>
     isClientFriendly: true,
   });
 
-export const debugClientErr = () =>
-  new ClientSafeError({
-    message: "Sorry, it appears this cannot be found.",
-    status: Status.NOT_FOUND,
-    data: {},
-    isClientFriendly: true,
-  });
-
 export const saveFailureErr = () =>
   new ClientSafeError({
     message: "We encountered an error while saving",

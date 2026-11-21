@@ -87,7 +87,7 @@ describe("the request body limit (security audit 2026-10-29, M4)", () => {
     const answer = await post("/base/save", `buildingdata=${"x".repeat(BODY_LIMIT + 1)}`);
     expect(answer.status).toBe(413);
 
-    const json = await postJson("/api/v1/player/recorddebugdata", { key: "err", value: "x".repeat(BODY_LIMIT) });
+    const json = await postJson("/api/v1/clienterrors", { errors: [{ message: "x".repeat(BODY_LIMIT) }] });
     expect(json.status).toBe(413);
   });
 
