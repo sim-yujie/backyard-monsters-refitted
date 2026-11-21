@@ -35,6 +35,9 @@ export const versionedArt = (url: string): string =>
  */
 export const yardArtUrl = (url: string): string => versionedArt(buildingArtCopy(url));
 
+/** Tries of a building picture's Quality copy before the `@2x` is asked for instead. */
+export const COPY_TRIES = 2;
+
 /**
  * `Assets.load`, asked again when it fails, after waits that double from a
  * quarter of a second: five tries over about four seconds.
@@ -49,9 +52,12 @@ export const yardArtUrl = (url: string): string => versionedArt(buildingArtCopy(
  * @returns {Promise<Texture>} The picture, or the last try's error.
  */
 export const loadWithRetries = async (url: string, gone: () => boolean = () => false): Promise<Texture> => {
+  const copy = yardArtUrl(url);
+  const painted = versionedArt(url);
   for (let attempt = 0; ; attempt++) {
     try {
-      return await Assets.load<Texture>(yardArtUrl(url));
+      // A Quality copy that fails twice (not on the server yet, say) gives way to the `@2x` (beta 9).
+      return await Assets.load<Texture>(attempt < COPY_TRIES ? copy : painted);
     } catch (caught) {
       const delay = RETRY_DELAYS_MS[attempt];
       if (delay === undefined) throw caught;
