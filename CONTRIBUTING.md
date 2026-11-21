@@ -39,6 +39,10 @@ Both must pass. Add or update tests for the behaviour you change.
   something is the way it is.
 - When a rule comes from the original game, cite where (for example
   `client/scripts/BASE.as:4830`).
+- A field taken out of a server reply stays in it, empty or neutral, for one
+  more release, with a comment saying when it goes. Players leave game tabs
+  open across an update, and an old tab that reads a missing field crashes
+  (beta 8's Trade tab, 20 Nov 2026).
 - You are welcome to use AI tools, but you must understand, test and be able
   to explain every line you send.
 

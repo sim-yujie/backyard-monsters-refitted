@@ -418,6 +418,11 @@ export const tradeView = async (em: EntityManager, userid: number, now: number) 
       swapsLeft: swapped ? 0 : 1,
       postsLeft: Math.max(0, TRADE_ASKS_PER_DAY - Number(posts?.n ?? 0)),
       newDayIn: newDayIn(now),
+      // Kept for game tabs still open from before beta 8, whose Trade tab reads
+      // them (a removed field stays one more release, CONTRIBUTING.md). Remove
+      // in beta 10.
+      sendsLeft: swapped ? 0 : 1,
+      receivesLeft: swapped ? 0 : 1,
     },
     rules: { loss: TRADE_LOSS, capShare: TRADE_CAP_SHARE, requestSeconds: TRADE_REQUEST_SECONDS },
     me: storage.get(userid) ?? null,
@@ -432,6 +437,10 @@ export const tradeView = async (em: EntityManager, userid: number, now: number) 
           taken: got.asker !== null && Number(got.asker) === userid,
         }
       : null,
+    // Recent trades left the tab in beta 8 (owner, 20 Nov 2026), but a beta 7
+    // tab still open called `recent.slice` and crashed (live errors 20 Nov).
+    // Always empty; kept one more release (CONTRIBUTING.md). Remove in beta 10.
+    recent: [] as never[],
   };
 };
 
