@@ -1,0 +1,57 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>HCC Demo</title>
+<style>
+/*GAME_FONTS_AND_ART*/
+</style>
+<style data-frame="phone">
+/*CSS_PHONE*/
+</style>
+<style data-frame="desktop">
+/*CSS_DESKTOP*/
+</style>
+<style>
+/*CHROME_CSS*/
+</style>
+</head>
+<body>
+<div id="demo">
+  <header class="demo-top">
+    <h1>Hatchery Control Center <span id="demo-option"></span></h1>
+    <div class="demo-controls">
+      <div class="demo-seg" role="group" aria-label="Design">
+        <button type="button" data-set="opt=d"><b>D</b> Workbench</button>
+        <button type="button" data-set="opt=e"><b>E</b> Monster book</button>
+      </div>
+      <div class="demo-seg" role="group" aria-label="HCC level">
+        <button type="button" data-set="level=2">Level 2</button>
+        <button type="button" data-set="level=3">Level 3</button>
+      </div>
+      <div class="demo-seg" role="group" aria-label="Screen">
+        <button type="button" data-set="frame=phone">Phone</button>
+        <button type="button" data-set="frame=desktop">Desktop</button>
+      </div>
+      <button type="button" class="demo-reset" data-reset="1">Start over</button>
+    </div>
+    <p class="demo-diff"><b>D</b> shows it all on one screen: hatcheries, queue, mixes, monsters. <b>E</b> gives the screen to the monsters and folds hatcheries + queue into one bar you tap to open.</p>
+  </header>
+  <main class="demo-main">
+    <aside class="demo-try">
+      <h2>Try this</h2>
+      <ol id="demo-steps"></ol>
+      <p class="demo-note">Demo data. Time runs 10× faster. Nothing is saved. Level 3 holds 30 per stack, Level 2 holds 20.</p>
+    </aside>
+    <div id="stage"><div id="frame-holder"><div id="frame"></div></div></div>
+  </main>
+</div>
+<script>
+/*DATA*/
+</script>
+<script>
+/*APP*/
+</script>
+</body>
+</html>

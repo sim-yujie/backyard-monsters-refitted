@@ -1,0 +1,10 @@
+# Raw game captures: only the few the build reads are kept
+capture/*.png
+capture/*.json
+!capture/css-e-l3-remote-1280x720.json
+!capture/monsters.json
+!capture/d-l3-remote-1280x720.json
+!capture/d-l3-yards-1280x720.json
+!capture/d-l2-1280x720.json
+!capture/d-l2-390x844.json
+shots-ff/
