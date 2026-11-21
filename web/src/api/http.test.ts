@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { ApiError, SERVER_TROUBLE_TEXT, post, postJson, send, setAuthToken } from "./http";
+import { ApiError, NO_REACH_TEXT, NetworkError, SERVER_TROUBLE_TEXT, post, postJson, send, setAuthToken } from "./http";
 
 /** The request `send` handed to fetch, flattened to what the assertions need. */
 interface Captured {
@@ -171,5 +171,14 @@ describe("a failed answer's words (beta 9)", () => {
     expect((await caught()).message).toBe("Not enough putty.");
     failWith(JSON.stringify({ error: "That camp is gone." }), 200);
     expect((await caught()).message).toBe("That camp is gone.");
+  });
+
+  it("never shows the address when the server cannot be reached at all", async () => {
+    vi.stubGlobal("fetch", () => Promise.reject(new TypeError("Failed to fetch")));
+    const error = await post("/worldmapv2/autoattack", {}).catch((caught: unknown) => caught as NetworkError);
+    expect(error).toBeInstanceOf(NetworkError);
+    expect(error.message).toBe(NO_REACH_TEXT);
+    expect(error.message).not.toMatch(/http|worldmapv2/);
+    expect(error.url).toContain("/worldmapv2/autoattack");
   });
 });

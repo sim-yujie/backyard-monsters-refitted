@@ -1,4 +1,4 @@
-import { getAuthToken } from "@/api/http";
+import { getAuthToken, requestUrlOf } from "@/api/http";
 import { sendClientErrors, type ClientErrorItem, type ClientErrorSendResult } from "@/api/clientErrors";
 import { GAME_VERSION } from "@/data/gameVersion";
 import { currentScreenName } from "./screenCapture";
@@ -65,7 +65,11 @@ const stackOf = (value: unknown): string =>
   value instanceof Error && value.stack ? value.stack.split("\n").slice(0, STACK_LINES).join("\n") : "";
 
 const messageOf = (value: unknown): string => {
-  if (value instanceof Error) return `${value.name}: ${value.message}`;
+  if (value instanceof Error) {
+    // A failed request's address is kept out of its message (players read that), but the report names it.
+    const url = requestUrlOf(value);
+    return `${value.name}: ${value.message}${url ? ` (${url})` : ""}`;
+  }
   if (typeof value === "string") return value;
   try {
     return JSON.stringify(value) ?? String(value);

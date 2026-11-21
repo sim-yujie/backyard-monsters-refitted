@@ -1,4 +1,5 @@
 // @vitest-environment jsdom
+import { ApiError, NO_REACH_TEXT, NetworkError, SERVER_TROUBLE_TEXT } from "@/api/http";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   ERROR_LINE_MAX,
@@ -49,6 +50,15 @@ describe("the error list", () => {
     expect(describeError("plain")).toBe("plain");
     expect(describeError({ code: 5 })).toBe('{"code":5}');
     expect(describeError(undefined)).toBe("undefined");
+  });
+
+  it("names a failed request's address, which its message leaves out for players (beta 9)", () => {
+    const failed = new ApiError(SERVER_TROUBLE_TEXT, { status: 500, url: "http://play.test/worldmapv2/autoattack" });
+    failed.stack = "";
+    expect(describeError(failed)).toBe(`ApiError: ${SERVER_TROUBLE_TEXT} (http://play.test/worldmapv2/autoattack)`);
+    const unreached = new NetworkError(NO_REACH_TEXT, null, "http://play.test/base/load");
+    unreached.stack = "";
+    expect(describeError(unreached)).toBe(`NetworkError: ${NO_REACH_TEXT} (http://play.test/base/load)`);
   });
 });
 
