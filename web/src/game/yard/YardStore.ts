@@ -231,6 +231,8 @@ export interface YardStoreActions {
   buy(item: string, price?: number): Promise<YardActionResult<ShopBuyReport>>;
   run<Report>(action: YardStoreAction<Report>): Promise<YardActionResult<Report>>;
   refresh(): Promise<YardActionResult<null>>;
+  /** A read riding the yard's first `state` call; see `YardStore.startRead`. */
+  startRead?(part: string): Promise<unknown> | null;
 }
 
 /** What the scene lets the panel and the HUD do to it. */
@@ -304,6 +306,25 @@ export interface YardUiBinding {
    */
   readonly modal?: HTMLElement;
 }
+
+/**
+ * A package's first read of `part` as the yard opens (beta 9, speed-ups
+ * item 5): inside the yard's first `state` call when it has not gone yet
+ * ({@link YardStore.startRead}), else, or when that answer has no valid
+ * report for it, through `own` as before.
+ */
+export const startReadOr = <Report>(
+  store: Pick<YardStoreActions, "startRead">,
+  part: string,
+  isReport: (report: unknown) => report is Report,
+  own: () => Promise<YardActionResult<Report>>,
+): Promise<YardActionResult<Report>> => {
+  const joined = store.startRead?.(part) ?? null;
+  if (!joined) return own();
+  return joined.then((report) =>
+    isReport(report) ? { ok: true as const, report, completed: [] } : own(),
+  );
+};
 
 /** The queue key for an action on a target: `upgrade:12`, `buy:BST`. */
 export const actionKey = (action: string, target: number | string): string =>
@@ -388,6 +409,15 @@ interface QueuedRefresh {
   readonly after: number;
   readonly promise: Promise<YardActionResult<null>>;
   readonly resolve: (result: YardActionResult<null>) => void;
+  /** Start-up reads riding this call ({@link YardStore.startRead}); empty for any other refresh. */
+  readonly parts: StartRead[];
+}
+
+/** One start-up read riding the first `state` call: its part, and who hears its report. */
+interface StartRead {
+  readonly part: string;
+  /** The part's report from the answer; undefined when the answer has none (an older server, a failure). */
+  readonly resolve: (report: unknown) => void;
 }
 
 type QueueEntry = QueuedAction | QueuedRefresh;
@@ -441,6 +471,12 @@ export class YardStore implements YardStoreReader, YardStoreActions {
   /** The load's `completed`, until {@link start} announces it. */
   private away: readonly CompletedJob[];
   private destroyed = false;
+  /**
+   * True from {@link start} to the end of that task: the first `state` call
+   * waits, so the reads the yard's packages make as they mount can ride it
+   * ({@link startRead}).
+   */
+  private gathering = false;
   /** The outpost income between answers (#207). */
   private readonly income: IncomePrediction;
 
@@ -596,7 +632,37 @@ export class YardStore implements YardStoreReader, YardStoreActions {
     const away = this.away;
     this.away = [];
     if (away.length > 0) this.emit({ reason: YardChangeReason.AWAY, completed: away, predicted: [] });
-    if (!this.current.caps) void this.refresh();
+    if (!this.current.caps) {
+      // Sent once the scene has mounted the yard's packages in this same
+      // task, so their start-up reads go out with it (beta 9, speed-ups 5).
+      this.gathering = true;
+      void this.refresh();
+      queueMicrotask(() => {
+        this.gathering = false;
+        this.pump();
+      });
+    }
+  }
+
+  /**
+   * A start-up read (beta 9, speed-ups item 5): the Goals and Quests doors'
+   * first `goals/state` and `quests/state` reads, made as the yard opens, go
+   * out inside the yard's first `state` call rather than one after another
+   * behind it. Only while that call has not gone yet (the task in which
+   * {@link start} ran); null otherwise, and the caller makes its own call.
+   *
+   * Resolves with the part's report once the answer is merged, or with
+   * undefined when the answer carries none (a server from before beta 9, a
+   * yard without that part, a failed call): the caller then makes its own
+   * call, as before.
+   */
+  startRead(part: string): Promise<unknown> | null {
+    if (!this.gathering || this.destroyed) return null;
+    const waiting = this.queue.find((entry): entry is QueuedRefresh => entry.type === "refresh");
+    if (!waiting) return null;
+    return new Promise<unknown>((resolve) => {
+      waiting.parts.push({ part, resolve });
+    });
   }
 
   /**
@@ -659,6 +725,7 @@ export class YardStore implements YardStoreReader, YardStoreActions {
     this.listeners.clear();
     for (const entry of this.queue.splice(0)) {
       entry.resolve({ ok: false, refusal: refuse("error", "The yard was closed.") });
+      if (entry.type === "refresh") for (const read of entry.parts) read.resolve(undefined);
     }
   }
 
@@ -700,7 +767,7 @@ export class YardStore implements YardStoreReader, YardStoreActions {
     const promise = new Promise<YardActionResult<null>>((done) => {
       resolve = done;
     });
-    this.queue.push({ type: "refresh", key: REFRESH_KEY, after: this.sent, promise, resolve });
+    this.queue.push({ type: "refresh", key: REFRESH_KEY, after: this.sent, promise, resolve, parts: [] });
     this.emitPending();
     this.pump();
     return promise;
@@ -771,11 +838,11 @@ export class YardStore implements YardStoreReader, YardStoreActions {
 
   /** Sends the next request if none is in flight. */
   private pump(): void {
-    if (this.inFlight || this.destroyed) return;
+    if (this.inFlight || this.destroyed || this.gathering) return;
 
     let entry: QueueEntry | undefined;
     while ((entry = this.queue.shift())) {
-      if (entry.type === "refresh" && this.applied > entry.after) {
+      if (entry.type === "refresh" && this.applied > entry.after && entry.parts.length === 0) {
         entry.resolve({ ok: true, report: null, completed: [] });
         continue;
       }
@@ -804,9 +871,12 @@ export class YardStore implements YardStoreReader, YardStoreActions {
 
     let result: YardActionResult<unknown>;
     try {
+      const parts = entry.type === "refresh" ? entry.parts.map((read) => read.part) : [];
       const response =
         entry.type === "refresh"
-          ? await this.api.state(...this.yardArgs)
+          ? parts.length > 0
+            ? await this.api.state(this.baseid, [...new Set(parts)].join(","))
+            : await this.api.state(...this.yardArgs)
           : await entry.send(this.api, ...this.yardArgs);
       if (this.destroyed) {
         result = { ok: false, refusal: refuse("error", "The yard was closed.") };
@@ -837,6 +907,11 @@ export class YardStore implements YardStoreReader, YardStoreActions {
     }
 
     (entry.resolve as (result: YardActionResult<unknown>) => void)(result);
+    if (entry.type === "refresh" && entry.parts.length > 0) {
+      const report = result.ok ? result.report : null;
+      const reports = report !== null && typeof report === "object" ? (report as Record<string, unknown>) : {};
+      for (const read of entry.parts) read.resolve(reports[read.part]);
+    }
     this.emitPending();
     this.pump();
   }

@@ -36,8 +36,12 @@ export const YardTargetSchema = z.object({
     .transform((raw) => (raw === undefined || String(raw) === "0" ? undefined : String(raw))),
 });
 
-/** `POST /bm/yard/state` takes no fields. */
-export const YardStateSchema = z.object({});
+/**
+ * `POST /bm/yard/state`: no fields, or `parts`, the start-up reads to answer
+ * in the same call (`controllers/yard/state.ts`): `"goals"`, `"quests"`,
+ * comma-separated. A name it does not know is ignored.
+ */
+export const YardStateSchema = z.object({ parts: z.string().max(64).optional() });
 
 /** `POST /bm/yard/upgrade`: the building to take one level up. */
 /**

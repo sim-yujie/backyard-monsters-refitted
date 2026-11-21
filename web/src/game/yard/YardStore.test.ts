@@ -7,6 +7,7 @@ import { housingSpace } from "@/game/monsters/monsterCatalogue";
 import {
   YardChangeReason,
   YardStore,
+  startReadOr,
   type YardActionResult,
   type YardChange,
 } from "./YardStore";
@@ -719,6 +720,86 @@ describe("lifecycle", () => {
     storeWith(loadWith({ caps: { r1: 1, r2: 1, r3: 1, r4: 1 } }), withCaps).store.start();
     await flush();
     expect(withCaps.state).not.toHaveBeenCalled();
+  });
+
+  it("sends the first state call with no parts, as before, when no package asks to ride it", async () => {
+    const api = stubApi();
+    const { store } = storeWith(loadWith(), api);
+    store.start();
+    await flush();
+    expect(api.state).toHaveBeenCalledWith();
+  });
+
+  it("carries the packages' start-up reads in the first state call, one request (beta 9)", async () => {
+    const goals = { goals: [{ id: "G1" }] };
+    const quests = { quests: { login: { day: 1 } } };
+    const api = stubApi({ state: vi.fn(() => Promise.resolve(answer(T0, {}, { goals, quests }))) });
+    const { store } = storeWith(loadWith(), api);
+    store.start();
+    // The packages mount in the same task as start().
+    const goalsRead = store.startRead("goals");
+    const questsRead = store.startRead("quests");
+    expect(api.state).not.toHaveBeenCalled();
+    await flush();
+    expect(api.state).toHaveBeenCalledTimes(1);
+    expect(api.state).toHaveBeenCalledWith(undefined, "goals,quests");
+    await expect(goalsRead).resolves.toEqual(goals);
+    await expect(questsRead).resolves.toEqual(quests);
+    // The answer is merged like any refresh: the caps arrive.
+    expect(store.caps).not.toBeNull();
+  });
+
+  it("takes no start-up read once the first state call has gone", async () => {
+    const { store } = storeWith(loadWith(), stubApi());
+    store.start();
+    await flush();
+    expect(store.startRead("goals")).toBeNull();
+    // Nor before start(), nor when the load carried the caps (no first state call).
+    const early = storeWith(loadWith(), stubApi()).store;
+    expect(early.startRead("goals")).toBeNull();
+    const withCaps = storeWith(loadWith({ caps: { r1: 1, r2: 1, r3: 1, r4: 1 } }), stubApi()).store;
+    withCaps.start();
+    expect(withCaps.startRead("goals")).toBeNull();
+  });
+
+  it("an older server's answer (report null) or a failed call leaves the read to its own route", async () => {
+    const api = stubApi();
+    const { store } = storeWith(loadWith(), api);
+    store.start();
+    const read = store.startRead("goals");
+    await flush();
+    await expect(read).resolves.toBeUndefined();
+
+    const failing = stubApi({ state: vi.fn(() => Promise.reject(new Error("offline"))) });
+    const second = storeWith(loadWith(), failing).store;
+    second.start();
+    const lost = second.startRead("quests");
+    await flush();
+    await expect(lost).resolves.toBeUndefined();
+  });
+
+  it("startReadOr uses the carried report, and falls back to the route's own call without one", async () => {
+    const isReport = (report: unknown): report is { goals: unknown[] } =>
+      typeof report === "object" && report !== null && Array.isArray((report as { goals?: unknown }).goals);
+    const own = vi.fn(() => Promise.resolve({ ok: true as const, report: { goals: ["own"] }, completed: [] }));
+
+    const api = stubApi({ state: vi.fn(() => Promise.resolve(answer(T0, {}, { goals: { goals: ["carried"] } }))) });
+    const { store } = storeWith(loadWith(), api);
+    store.start();
+    const carried = startReadOr(store, "goals", isReport, own);
+    await flush();
+    await expect(carried).resolves.toEqual({ ok: true, report: { goals: ["carried"] }, completed: [] });
+    expect(own).not.toHaveBeenCalled();
+
+    // An older server answers report null: the route's own call goes out.
+    const old = storeWith(loadWith(), stubApi()).store;
+    old.start();
+    const fallback = startReadOr(old, "goals", isReport, own);
+    await flush();
+    await expect(fallback).resolves.toEqual({ ok: true, report: { goals: ["own"] }, completed: [] });
+    // Later reads (the panel opening) never wait for a state call.
+    await startReadOr(old, "goals", isReport, own);
+    expect(own).toHaveBeenCalledTimes(2);
   });
 
   it("announces what the load finished while the player was away, once, at start (#135)", async () => {
