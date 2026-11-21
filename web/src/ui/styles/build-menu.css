@@ -1038,8 +1038,10 @@
   line-height: 1;
 }
 
-/* Line off: Cancel and the Line switch still match in height. */
-.build-placing:not(.build-placing--line):has(.build-placing__line-toggle) .build-placing__buttons .btn {
+/* Line off: Cancel and the Line switch still match in height. Not the hidden
+   ↶, ✗ and ✓ Build: this rule outranks `.btn[hidden]`, and showed them off
+   the bar's edge on a phone (beta 9). */
+.build-placing:not(.build-placing--line):has(.build-placing__line-toggle) .build-placing__buttons .btn:not([hidden]) {
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -1344,17 +1346,22 @@
     min-width: 0;
   }
 
-  /* The Blocks' picture is already on the left; the switch says it alone. */
-  .build-placing--line .build-placing__line-icon {
+  /* The Blocks' picture is already on the left; the switch says it alone,
+     with Line off too, so Build here keeps one line (beta 9). */
+  .build-placing .build-placing__line-icon {
     display: none;
+  }
+
+  .build-placing__buttons .btn {
+    white-space: nowrap;
   }
 
   .build-placing--line .btn.build-placing__cancel {
     top: var(--space-2);
     right: var(--space-3);
-    width: 40px;
+    width: 44px;
     min-width: 0;
-    height: 40px;
+    height: 44px;
     min-height: 0;
   }
 
@@ -1483,5 +1490,87 @@
 
   .build-info__picture {
     width: 64px;
+  }
+
+  /* The building in hand (beta 9): one low row along the bottom edge, between
+     the corner buttons, with the tip floating above it as in line mode. It
+     stood in the middle of the screen in two or three rows and hid a third of
+     the yard. */
+  .build-placing,
+  .build-placing--line {
+    bottom: max(var(--space-2), env(safe-area-inset-bottom, 0px));
+    flex-wrap: nowrap;
+    gap: var(--space-3);
+    padding: var(--space-1) var(--space-1) var(--space-1) var(--space-3);
+  }
+
+  .build-placing__picture,
+  .build-placing__line-icon {
+    display: none;
+  }
+
+  .build-placing__name {
+    font-size: var(--text-md);
+  }
+
+  .build-placing__price {
+    flex-wrap: nowrap;
+    white-space: nowrap;
+    font-size: var(--text-xs);
+  }
+
+  .build-placing .build-placing__notes {
+    position: absolute;
+    bottom: calc(100% + var(--space-2));
+    left: 50%;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: var(--space-1);
+    width: max-content;
+    max-width: min(92vw, 520px);
+    transform: translateX(-50%);
+    pointer-events: none;
+  }
+
+  .build-placing :is(.build-placing__hint, .build-placing__message:not(:empty)) {
+    padding: var(--space-1) var(--space-3);
+    border-radius: 999px;
+    background: rgb(12 16 22 / 80%);
+    color: #ffffff;
+    font-size: var(--text-sm);
+    font-weight: 700;
+    text-align: center;
+    text-shadow: 0 1px 2px rgb(0 0 0 / 70%);
+  }
+
+  .build-placing--blocked .build-placing__hint,
+  .build-placing .build-placing__message[data-tone="bad"] {
+    color: #ffc2b8;
+  }
+
+  .build-placing .build-placing__message[data-tone="good"] {
+    color: #b8f0c4;
+  }
+
+  .build-placing__buttons {
+    flex: none;
+    align-items: center;
+  }
+
+  .build-placing__buttons .btn {
+    min-height: 44px;
+    white-space: nowrap;
+  }
+
+  .build-placing__line {
+    gap: var(--space-2);
+  }
+
+  /* The × in line mode: drawn small in the corner, touched as 44 px. */
+  .build-placing--line .btn.build-placing__cancel::after {
+    content: "";
+    position: absolute;
+    inset: -6px;
   }
 }
