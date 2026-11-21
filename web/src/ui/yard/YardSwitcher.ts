@@ -25,6 +25,9 @@ import type { YardUiBinding } from "@/game/yard/YardStore";
 import { gameIcon, iconAmount } from "@/ui/gameIcon";
 import { icon } from "@/ui/icons";
 import "@/ui/styles/yard-switcher.css";
+import { b9Arrows } from "@/proto/b9";
+import { FriendHopButtons } from "@/ui/friends/FriendHopButtons";
+import "@/proto/b9-arrows.css";
 
 /**
  * The HUD's yard switcher (outposts WP5, #146): which of the player's yards is
@@ -123,6 +126,9 @@ export class YardSwitcher {
   private editing: { baseid: string; saving: boolean } | null = null;
   /** Outposts whose pin is on its way to the server. */
   private readonly pinning = new Set<string>();
+  /** PROTOTYPE (b9 arrows): the < > discs, reusing the friend arrows. */
+  readonly hop: FriendHopButtons | null = null;
+  private readonly tray: HTMLElement | null = null;
 
   constructor(options: YardSwitcherOptions) {
     this.onSelect = options.onSelect;
@@ -141,7 +147,14 @@ export class YardSwitcher {
     disc.append(icon("yards", 27), this.count);
     this.title = make("span", "yard-dock__label yard-switcher__title");
     this.button.append(disc, this.title);
-    this.button.addEventListener("click", () => this.toggle(this.list.hidden));
+    this.button.addEventListener("click", () => {
+      if (this.tray) {
+        if (!this.list.hidden) this.toggle(false);
+        this.tray.hidden = !this.tray.hidden;
+        return;
+      }
+      this.toggle(this.list.hidden);
+    });
 
     this.list = make("div", "yard-switcher__list");
     this.list.setAttribute("role", "dialog");
@@ -157,6 +170,38 @@ export class YardSwitcher {
     this.list.append(this.heading, this.error, this.rows);
 
     this.element.append(this.button, this.list);
+    const option = b9Arrows();
+    if (option) {
+      document.documentElement.classList.add(`b9-arrows-${option}`);
+      const hop = new FriendHopButtons({ onHop: (direction) => this.step(direction) });
+      this.hop = hop;
+      const [prev, next] = Array.from(hop.element.children) as HTMLElement[];
+      prev!.querySelector(".yard-dock__label")!.textContent = "Prev";
+      next!.querySelector(".yard-dock__label")!.textContent = "Next";
+      if (option === "a") {
+        this.element.prepend(prev!);
+        this.element.append(next!);
+      } else if (option === "c") {
+        const tray = make("div", "yard-switcher__list b9-tray");
+        tray.hidden = true;
+        const all = make("button", "yard-dock__button b9-tray__all");
+        all.type = "button";
+        const disc = make("span", "yard-dock__disc");
+        disc.append(gameIcon("outpost", { size: 32, decorative: true, className: "yard-dock__picture" }));
+        const word = make("span", "yard-dock__label");
+        word.textContent = "All yards";
+        all.append(disc, word);
+        all.addEventListener("click", () => {
+          tray.hidden = true;
+          this.toggle(true);
+        });
+        const row = make("div", "b9-tray__row");
+        row.append(prev!, all, next!);
+        tray.append(row);
+        this.tray = tray;
+        this.element.append(tray);
+      }
+    }
     document.addEventListener("pointerdown", this.dismiss, true);
     document.addEventListener("keydown", this.dismiss, true);
     this.unsubscribe = onOutpostLabels(() => this.render());
@@ -201,6 +246,17 @@ export class YardSwitcher {
     this.count.textContent = String(outposts);
     this.count.hidden = outposts <= 0;
     this.button.setAttribute("aria-label", `Your yards: ${title}, ${countText}`);
+    if (this.hop) {
+      const entries = this.entries;
+      const at = entries.findIndex((entry) => entry.current);
+      const prev = entries[at - 1];
+      const next = entries[at + 1];
+      this.hop.setView({
+        prev: prev ? ({ userid: 0, username: prev.title } as never) : null,
+        next: next ? ({ userid: 0, username: next.title } as never) : null,
+        ahead: 0,
+      });
+    }
     if (this.open) this.renderList();
   }
 
@@ -397,6 +453,16 @@ export class YardSwitcher {
   private showError(words: string | null): void {
     this.error.textContent = words ?? "";
     this.error.hidden = !words;
+  }
+
+  /** PROTOTYPE: the yard before (-1) or after (1) this one, in the list's order. */
+  private step(direction: -1 | 1): boolean {
+    const entries = this.entries;
+    const at = entries.findIndex((entry) => entry.current);
+    const to = entries[at + direction];
+    if (!to) return false;
+    this.onSelect(to.target);
+    return true;
   }
 
   private toggle(open: boolean): void {

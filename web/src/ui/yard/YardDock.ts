@@ -1,4 +1,5 @@
 import { tutTarget } from "@/game/guide/targets";
+import { b9Arrows } from "@/proto/b9";
 import {
   finishedMonstersJobs,
   finishedText,
@@ -314,6 +315,8 @@ export class YardDock {
 
   mount(container: HTMLElement): this {
     container.append(this.element);
+    // PROTOTYPE (b9 arrows B): Prev and Next beside Map, where Friends was.
+    if (this.switcher?.hop && b9Arrows() === "b") this.switcher.hop.mount(container);
     return this;
   }
 

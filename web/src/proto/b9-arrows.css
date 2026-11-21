@@ -1,0 +1,169 @@
+/* DESIGN PROTOTYPE (b9 outpost arrows), never merged. */
+
+/* Shared: the moved discs keep the friend arrows' greyed look at an end. */
+.yard-switcher .friend-hop__button:disabled .yard-dock__disc,
+.b9-tray .friend-hop__button:disabled .yard-dock__disc {
+  opacity: 1;
+  background: radial-gradient(
+    circle at 50% 35%,
+    color-mix(in srgb, var(--colour-dome-top) 25%, var(--colour-dome-bottom)),
+    var(--colour-dome-bottom)
+  );
+}
+.yard-switcher .friend-hop__button:disabled .friend-hop__art {
+  filter: grayscale(1);
+  opacity: 0.7;
+}
+.yard-switcher .friend-hop__button {
+  pointer-events: auto;
+}
+
+/* A: Prev / flag / Next in one row above Map and Friends. */
+.b9-arrows-a .yard-dock__left {
+  align-items: flex-start;
+}
+.b9-arrows-a .yard-switcher {
+  align-items: flex-end;
+  gap: var(--space-2);
+}
+.b9-arrows-a .yard-switcher > .friend-hop__button {
+  min-width: 0;
+}
+.b9-arrows-a .yard-switcher > .friend-hop__button .yard-dock__disc {
+  width: 56px;
+  height: 56px;
+}
+.b9-arrows-a .yard-switcher > .friend-hop__button .friend-hop__art {
+  width: 38px;
+  height: 38px;
+}
+.b9-arrows-a .yard-switcher__title {
+  max-width: 8.5rem;
+}
+
+/* B: Prev and Next take Friends' place beside Map; Friends moves into More. */
+.b9-arrows-b .friends-button {
+  display: none !important;
+}
+
+/* C: the flag opens a small tray: Prev, All yards, Next. */
+.b9-tray {
+  width: auto;
+  padding: var(--space-3);
+}
+.b9-tray[hidden] {
+  display: none;
+}
+.b9-tray__row {
+  display: flex;
+  align-items: flex-end;
+  gap: var(--space-3);
+}
+.b9-tray .yard-dock__button {
+  pointer-events: auto;
+}
+
+@media (max-width: 620px), (max-height: 500px) {
+  .b9-arrows-a .yard-switcher > .friend-hop__button .yard-dock__disc {
+    width: 50px;
+    height: 50px;
+  }
+  .b9-arrows-a .yard-switcher > .friend-hop__button .friend-hop__art {
+    width: 34px;
+    height: 34px;
+  }
+}
+
+/* A: the name under the flag needs the room; the arrows speak for themselves. */
+.b9-arrows-a .yard-switcher > .friend-hop__button .yard-dock__label {
+  display: none;
+}
+.b9-arrows-a .yard-switcher > .friend-hop__button {
+  align-self: flex-start;
+}
+
+/* Phones: A's arrows hug the flag as two ears so the row stays clear of More;
+   B's discs shrink so Map, Prev, Next, Monsters and Build share the row. */
+@media (max-width: 620px), (max-height: 500px) {
+  .b9-arrows-a .yard-switcher {
+    gap: 0;
+  }
+  .b9-arrows-a .yard-switcher > .friend-hop__button .yard-dock__disc {
+    width: 46px;
+    height: 46px;
+  }
+  .b9-arrows-a .yard-switcher > .friend-hop__button .friend-hop__art {
+    width: 32px;
+    height: 32px;
+  }
+  .b9-arrows-a .yard-switcher > .friend-hop__button:first-child {
+    margin-right: -8px;
+    margin-top: 7px;
+    z-index: 1;
+  }
+  .b9-arrows-a .yard-switcher > .friend-hop__button:last-child {
+    margin-left: -8px;
+    margin-top: 7px;
+    z-index: 1;
+  }
+  .b9-arrows-b .yard-dock__left {
+    align-items: flex-start;
+  }
+  .b9-arrows-b .friend-hop {
+    left: 80px !important;
+    gap: 2px;
+  }
+  .b9-arrows-b .friend-hop .yard-dock__disc {
+    width: 52px;
+    height: 52px;
+  }
+  .b9-arrows-b .friend-hop .friend-hop__button {
+    min-width: 56px;
+  }
+  .b9-arrows-b .friend-hop .friend-hop__art {
+    width: 36px;
+    height: 36px;
+  }
+}
+
+/* A, all sizes: one group, the arrows either side of the flag's disc and the
+   yard's name under all three (the flag button's box is dissolved into the grid). */
+.b9-arrows-a .yard-switcher {
+  display: grid;
+  grid-template-columns: auto auto auto;
+  grid-template-areas: "prev disc next" "label label label";
+  align-items: center;
+  justify-items: center;
+  column-gap: 6px;
+  row-gap: 0;
+}
+.b9-arrows-a .yard-switcher__button {
+  display: contents;
+}
+.b9-arrows-a .yard-switcher__button > .yard-dock__disc {
+  grid-area: disc;
+}
+.b9-arrows-a .yard-switcher__title {
+  grid-area: label;
+  max-width: none;
+  margin-top: -4px;
+}
+.b9-arrows-a .yard-switcher > .friend-hop__button:first-child {
+  grid-area: prev;
+  margin: 0;
+}
+.b9-arrows-a .yard-switcher > .friend-hop__button:last-child {
+  grid-area: next;
+  margin: 0;
+}
+.b9-arrows-a .yard-switcher > .yard-switcher__list {
+  grid-area: unset;
+}
+
+/* C on a phone on its side: the tray opens to the right of the flag, not up over World chat. */
+@media (max-height: 500px) {
+  .b9-tray {
+    bottom: 0;
+    left: calc(100% + var(--space-2));
+  }
+}
