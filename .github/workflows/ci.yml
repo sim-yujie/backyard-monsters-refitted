@@ -1,6 +1,6 @@
 # The checks every push and pull request to revamp or main must pass: the web
 # client's typecheck, lint and tests, the combat-rules copies being in sync,
-# and the server's typecheck and tests, the database tests included (audit
+# and the server's typecheck, lint (oxlint, server/.oxlintrc.json) and tests, the database tests included (audit
 # 2026-10-29: agent-handoffs/reports/audit-metrics-2026-10-29.md, fix #1),
 # and the layout check: every window in WebKit at phone, iPad and desktop
 # sizes (the `layout` job at the end).
@@ -120,6 +120,8 @@ jobs:
         run: bun install --frozen-lockfile
       - name: Typecheck
         run: bun run typecheck
+      - name: Lint
+        run: bun run lint
       - name: Build the test database (as db:init does)
         env:
           # Quiets the ORM's query log (mikro-orm.config.ts).

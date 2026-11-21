@@ -28,7 +28,7 @@ export const joinOrCreateWorld = async (
   user: User,
   save: Save,
   em: EntityManager<PostgreSqlDriver> = postgres.em,
-  relocate: Boolean = false
+  relocate: boolean = false
 ) => {
   let world: World | null = null;
 

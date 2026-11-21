@@ -23,8 +23,8 @@ written up in `docs/specs/`, and new features in `docs/design/`.
 ## Before you send it
 
 ```bash
-cd web && bun run typecheck && bun run test
-cd server && bun run typecheck && bun test
+cd web && bun run typecheck && bun run lint && bun run test
+cd server && bun run typecheck && bun run lint && bun test
 ```
 
 Both must pass. Add or update tests for the behaviour you change.
