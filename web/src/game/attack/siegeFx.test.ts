@@ -1,5 +1,6 @@
-import { describe, expect, it } from "vitest";
-import { Container, Texture, type Sprite } from "pixi.js";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import { CanvasSource, Container, Texture, TextureSource, type Sprite } from "pixi.js";
+import { setDeviceDefaultQuality, setDeviceTextureLimit } from "@/game/quality";
 import type { SiegeSnapshot } from "@/game/combat/rules/engine";
 import { JAR_FALL_TICKS } from "@/game/combat/rules/jars";
 import { TICKS_PER_SECOND } from "@/game/combat/rules/stats";
@@ -13,6 +14,7 @@ import {
   HOSE_BALL_TICKS,
   hoseBallAt,
   SiegeFx,
+  SiegeSheetTextures,
   decoyCells,
   dropOffset,
   expoEaseIn,
@@ -191,5 +193,64 @@ describe("SiegeFx", () => {
     expect((air.children[0] as Container).y).toBe(75);
     fx.update(none, decoy.explodesAt);
     expect(fx.shown.decoy).toBeNull();
+  });
+});
+
+describe("SiegeSheetTextures", () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    setDeviceTextureLimit(null);
+    setDeviceDefaultQuality(null);
+  });
+
+  /** The Decoy's explosion as the server has it: 33 cells of 184 x 195 in one 6072 px row, at 1x. */
+  const explosionSheet = (): Texture =>
+    new Texture({ source: new TextureSource({ width: 6072, height: 195, resolution: 1, resource: { picture: true } as never }) });
+
+  /** A `document` whose canvases record what is copied onto them. */
+  const fakeCanvases = (): { width: number; height: number; drawn: unknown[][] }[] => {
+    const made: { width: number; height: number; drawn: unknown[][] }[] = [];
+    vi.stubGlobal("document", {
+      createElement: () => {
+        const canvas = { width: 0, height: 0, drawn: [] as unknown[][], getContext: () => ({ drawImage: (...args: unknown[]) => canvas.drawn.push(args) }) };
+        made.push(canvas);
+        return canvas;
+      },
+    });
+    return made;
+  };
+
+  it("frames the explosion's cells over the sheet where the card holds it", async () => {
+    setDeviceTextureLimit(8192);
+    const sheet = explosionSheet();
+    const art = new SiegeSheetTextures(async () => sheet);
+    expect(art.cell("explosion", 5)).toBeNull();
+    await Promise.resolve();
+    await Promise.resolve();
+    const cell = art.cell("explosion", 5)!;
+    expect(cell.source).toBe(sheet.source);
+    expect([cell.frame.x, cell.frame.width, cell.frame.height]).toEqual([5 * 184, 184, 195]);
+    art.destroy();
+  });
+
+  it("copies each explosion cell out through a canvas on a 4096 card, so it is not drawn black", async () => {
+    setDeviceDefaultQuality("high");
+    setDeviceTextureLimit(4096);
+    const canvases = fakeCanvases();
+    const sheet = explosionSheet();
+    const art = new SiegeSheetTextures(async () => sheet);
+    art.cell("explosion", 0);
+    await Promise.resolve();
+    await Promise.resolve();
+    const last = art.cell("explosion", SIEGE_STRIPS.explosion.frames - 1)!;
+    expect(last.source).toBeInstanceOf(CanvasSource);
+    expect(last.source).not.toBe(sheet.source);
+    expect(canvases).toHaveLength(1);
+    expect([canvases[0]!.width, canvases[0]!.height]).toEqual([184, 195]);
+    expect(canvases[0]!.drawn[0]!.slice(1)).toEqual([32 * 184, 0, 184, 195, 0, 0, 184, 195]);
+    // Asked again, the same copy.
+    expect(art.cell("explosion", SIEGE_STRIPS.explosion.frames - 1)).toBe(last);
+    art.destroy();
+    expect(last.destroyed).toBe(true);
   });
 });

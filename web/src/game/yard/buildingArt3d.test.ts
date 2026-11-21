@@ -457,7 +457,8 @@ describe("the 3D yard buildings", () => {
     setClassicLook(true);
     expect(resolveArt(8, 1, ArtState.DEFAULT, "inferno")?.top.url).toBe(`${folder}top.1.v2.png`);
     expect(resolveArt(8, 1, ArtState.DEFAULT, "inferno")?.anims.map(({ url, frames }) => ({ url, frames }))).toEqual([
-      { url: `${folder}anim.1.v2.png`, frames: 31 },
+      // Repacked into a grid of 8 a row, as Flash's one row is 5504 px wide (`GRID_REPACKS`).
+      { url: `${folder}anim.1.v2.g8.webp`, frames: 31 },
     ]);
   });
 

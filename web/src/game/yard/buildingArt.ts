@@ -205,6 +205,12 @@ export interface ResolvedAnim {
   /** Cells in a row, for a strip of several rows (the 3D Laser's tilts); one row without it. */
   readonly columns?: number;
   /**
+   * The rows are one run of cells only wrapped to keep the file within 4096
+   * px (`TierTurret.grid`, {@link GRID_REPACKS}), not loops of their own: a
+   * random first cell is picked from every cell, not from the first row.
+   */
+  readonly grid?: boolean;
+  /**
    * The first `rest` cells are the building's loop while it is not working,
    * the others its loop while it is (`TierAnim.rest`, the Inferno's Incubator
    * Control Centre); absent for a strip that is one loop.
@@ -298,7 +304,15 @@ const imageOf = (folder: string, entry: ArtImage): ResolvedImage | null => {
   };
 };
 
-const animOf = (folder: string, entry: ArtAnim, columns?: number, rest?: number, home?: boolean): ResolvedAnim => ({
+/** How a strip's cells are laid out and played, beyond its `ArtAnim`. */
+interface AnimLayout {
+  readonly columns?: number | undefined;
+  readonly grid?: boolean | undefined;
+  readonly rest?: number | undefined;
+  readonly home?: boolean | undefined;
+}
+
+const animOf = (folder: string, entry: ArtAnim, { columns, grid, rest, home }: AnimLayout = {}): ResolvedAnim => ({
   url: `${ASSET_ROOT}${folder}${entry[0]}`,
   x: entry[1],
   y: entry[2],
@@ -306,9 +320,36 @@ const animOf = (folder: string, entry: ArtAnim, columns?: number, rest?: number,
   height: entry[4],
   frames: entry[5],
   ...(columns ? { columns } : {}),
+  ...(columns && grid ? { grid } : {}),
   ...(rest ? { rest } : {}),
   ...(home ? { home } : {}),
 });
+
+/** Cells a row of every {@link GRID_REPACKS} file. */
+export const GRID_COLUMNS = 8;
+
+/**
+ * Flash strips wider than 4096 px, the texture limit of many phones, and the
+ * grid each was repacked into (`web/tools/tower-tiers/repack_grid.py`):
+ * {@link GRID_COLUMNS} cells a row, pixel for pixel the same cells, under a
+ * new name so a week-old copy of the one-row file is never cut as a grid. By
+ * folder and file as in `buildingArtData.ts`, which is generated and keeps
+ * the Flash names.
+ */
+export const GRID_REPACKS: Readonly<Record<string, string>> = {
+  "buildings/outpostdefender/anim.1.png": "anim.1.g8.webp",
+  "buildings/imonsterlab/anim.1.v2.png": "anim.1.v2.g8.webp",
+  "buildings/iboneharvester/anim.2.png": "anim.2.g8.webp",
+  "buildings/siegefactory/anim.1.v2.png": "anim.1.v2.g8.webp",
+};
+
+/** A Flash strip, from its grid where it was repacked into one. */
+const flashAnimOf = (folder: string, entry: ArtAnim): ResolvedAnim => {
+  const grid = GRID_REPACKS[`${folder}${entry[0]}`];
+  return grid
+    ? animOf(folder, [grid, entry[1], entry[2], entry[3], entry[4], entry[5]], { columns: GRID_COLUMNS, grid: true })
+    : animOf(folder, entry);
+};
 
 /** Indices into an `ArtLevel` tuple for the default, damaged and destroyed art. */
 const TOP_INDEX: Record<ArtState, 1 | 2 | 3> = { "": 1, damaged: 2, destroyed: 3 };
@@ -389,7 +430,7 @@ export const resolveArt = (
         ? [anim.strip, ...(anim.more ?? [])]
         : [];
     const columnsOf = (layer: ArtAnim): number | undefined =>
-      layer === turret?.strip ? turret.columns : layer === anim?.strip ? anim.columns : undefined;
+      layer === turret?.strip ? (turret.columns ?? turret.grid) : layer === anim?.strip ? anim.columns : undefined;
     const still = imageOf(row.folder, tier.top);
     const whole = !turret && anim?.whole === true;
     // A 3D building whose moving parts are cut out of its body (the Twig Snapper's saw) draws the body under its cells.
@@ -409,13 +450,12 @@ export const resolveArt = (
         top,
         shadow: imageOf(row.folder, tier.shadow),
         anims: layers.map((layer) =>
-          animOf(
-            row.folder,
-            layer,
-            columnsOf(layer),
-            layer === anim?.strip ? anim.rest : undefined,
-            layer === anim?.strip ? anim.home : undefined,
-          ),
+          animOf(row.folder, layer, {
+            columns: columnsOf(layer),
+            grid: layer === turret?.strip && turret.columns === undefined && turret.grid !== undefined,
+            rest: layer === anim?.strip ? anim.rest : undefined,
+            home: layer === anim?.strip ? anim.home : undefined,
+          }),
         ),
         topIsAnim: whole,
         ...(turret || whole || body ? { still } : {}),
@@ -444,9 +484,7 @@ export const resolveArt = (
     imageOf(row.folder, chosen[SHADOW_INDEX[ArtState.DEFAULT]]);
 
   const animIndex = ANIM_INDEX[usedState];
-  const anims = (animIndex === null ? [] : (chosen[animIndex] ?? [])).map((entry) =>
-    animOf(row.folder, entry),
-  );
+  const anims = (animIndex === null ? [] : (chosen[animIndex] ?? [])).map((entry) => flashAnimOf(row.folder, entry));
 
   return {
     name: row.name,

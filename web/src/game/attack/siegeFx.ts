@@ -1,4 +1,4 @@
-import { Assets, Container, Rectangle, Sprite, Texture } from "pixi.js";
+import { Assets, Container, Sprite, Texture } from "pixi.js";
 import type { SiegeSnapshot } from "@/game/combat/rules/engine";
 import { JAR_FALL_TICKS } from "@/game/combat/rules/jars";
 import { TICKS_PER_SECOND } from "@/game/combat/rules/stats";
@@ -12,6 +12,7 @@ import {
 import { packageArt, type CollectFxArt } from "@/game/yard/CollectFxLayer";
 import type { HarvestKey } from "@/game/yard/harvest";
 import type { Point } from "@/game/yard/YardGrid";
+import { cellTexture } from "@/game/textureLimit";
 import { artUrl } from "../../artUrl";
 
 /**
@@ -138,11 +139,19 @@ export interface SiegeArt {
   destroy(): void;
 }
 
-/** {@link SiegeArt} over Pixi's `Assets`, one fetch per sheet and one framed texture per cell. */
+/**
+ * {@link SiegeArt} over Pixi's `Assets`, one fetch per sheet and one framed
+ * texture per cell. A sheet wider than the graphics card holds (the Decoy's
+ * explosion, 6072 px, on a 4096 phone) has each cell copied out through a
+ * canvas (`cellTexture`) instead, or WebGL refuses it and the blast is drawn
+ * as black boxes.
+ */
 export class SiegeSheetTextures implements SiegeArt {
   private readonly sources = new Map<SiegeSheet, Texture>();
   private readonly asked = new Set<SiegeSheet>();
   private readonly cells = new Map<string, Texture>();
+  /** Cells copied out of an oversized sheet: theirs to destroy with their canvas. */
+  private readonly owned = new Set<Texture>();
 
   constructor(
     private readonly load: (url: string) => Promise<Texture> = (url) => Assets.load<Texture>(url),
@@ -156,16 +165,15 @@ export class SiegeSheetTextures implements SiegeArt {
     if (cached) return cached;
     const source = this.source(sheet);
     if (!source) return null;
-    const texture = new Texture({
-      source: source.source,
-      frame: new Rectangle(index * strip.width, 0, strip.width, strip.height),
-    });
-    this.cells.set(key, texture);
-    return texture;
+    const made = cellTexture(source.source, { x: index * strip.width, y: 0, width: strip.width, height: strip.height });
+    if (made.owned) this.owned.add(made.texture);
+    this.cells.set(key, made.texture);
+    return made.texture;
   }
 
   destroy(): void {
-    for (const texture of this.cells.values()) texture.destroy(false);
+    for (const texture of this.cells.values()) texture.destroy(this.owned.has(texture));
+    this.owned.clear();
     this.cells.clear();
     this.sources.clear();
   }
