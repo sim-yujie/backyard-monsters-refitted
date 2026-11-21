@@ -5,6 +5,7 @@ import {
   ERROR_LOG_SIZE,
   clearErrorLog,
   describeError,
+  describeValue,
   installErrorLog,
   recentErrors,
   recordError,
@@ -49,6 +50,36 @@ describe("the error list", () => {
     expect(describeError("plain")).toBe("plain");
     expect(describeError({ code: 5 })).toBe('{"code":5}');
     expect(describeError(undefined)).toBe("undefined");
+  });
+});
+
+describe("describeValue (beta 9 audit: rejections reported as {})", () => {
+  it("names an event, a class instance and an empty object instead of {} or [object Object]", () => {
+    expect(describeValue(new Event("error"))).toBe('Event "error"');
+    class Response {
+      status = 404;
+    }
+    expect(describeValue(new Response())).toBe('Response {"status":404}');
+    class Quiet {}
+    expect(describeValue(new Quiet())).toBe("Quiet (no details)");
+    expect(describeValue({})).toBe("Object (no details)");
+    expect(describeValue(Object.create(null))).toBe("Object (no details)");
+  });
+
+  it("keeps errors, text, plain data and nothing as they were", () => {
+    expect(describeValue(new TypeError("bad"))).toBe("TypeError: bad");
+    expect(describeValue("words")).toBe("words");
+    expect(describeValue({ code: 3 })).toBe('{"code":3}');
+    expect(describeValue([1, 2])).toBe("[1,2]");
+    expect(describeValue(undefined)).toBe("undefined");
+    expect(describeValue(null)).toBe("null");
+    expect(describeValue(7)).toBe("7");
+  });
+
+  it("names an object that cannot be serialised by its keys", () => {
+    const loop: Record<string, unknown> = { a: 1 };
+    loop.self = loop;
+    expect(describeValue(loop)).toBe("Object {a, self}");
   });
 });
 
