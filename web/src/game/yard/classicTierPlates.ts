@@ -17,11 +17,10 @@ import { INFERNO_TOWER_TIER_ART, MODERN_TOWERS, TOWER_TIER_ART } from "./buildin
  */
 
 /** The plates' files, painted with Codex (`art-samples/tier-plates`), 26 x 17 world px at 1:1. */
-export const TIER_PLATE_FILES: readonly string[] = [
-  "/assets/buildings/tierplates/plate.t1@2x.png",
-  "/assets/buildings/tierplates/plate.t2@2x.png",
-  "/assets/buildings/tierplates/plate.t3@2x.png",
-];
+export const TIER_PLATE_FILES: readonly string[] = ["plate.t1@2x.png", "plate.t2@2x.png", "plate.t3@2x.png"];
+
+/** Where the plates live, through `artUrl()` like every art path. */
+const TIER_PLATE_ROOT = artUrl("/assets/buildings/tierplates/");
 
 /** The plate's size in world px at 1:1 (its `@2x` file is twice that). */
 export const TIER_PLATE_WIDTH = 26;
@@ -30,7 +29,7 @@ export const TIER_PLATE_HEIGHT = 17;
 /** The plate picture for a tier (1-3), as the yard's texture cache asks for it. */
 export const tierPlateImage = (tier: number): ResolvedImage | null => {
   const file = TIER_PLATE_FILES[tier - 1];
-  return file ? { url: artUrl(file), x: 0, y: 0, frame: null } : null;
+  return file ? { url: TIER_PLATE_ROOT + file, x: 0, y: 0, frame: null } : null;
 };
 
 /**

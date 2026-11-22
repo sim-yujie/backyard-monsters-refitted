@@ -80,7 +80,7 @@ describe("the tier plates' pictures and spots", () => {
   it("are three @2x PNGs of the plate's size on disk", () => {
     expect(TIER_PLATE_FILES).toHaveLength(3);
     for (const file of TIER_PLATE_FILES) {
-      expect(pngSize(onDisk(file)), file).toEqual([TIER_PLATE_WIDTH * 2, TIER_PLATE_HEIGHT * 2]);
+      expect(pngSize(onDisk(`/assets/buildings/tierplates/${file}`)), file).toEqual([TIER_PLATE_WIDTH * 2, TIER_PLATE_HEIGHT * 2]);
     }
     expect(tierPlateImage(2)?.url).toContain("/assets/buildings/tierplates/plate.t2@2x.png");
     expect(tierPlateImage(0)).toBeNull();
