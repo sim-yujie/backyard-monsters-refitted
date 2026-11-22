@@ -29,7 +29,7 @@ export const b9ArrowsR2 = (): "d" | "e" | "f" | null => {
 };
 
 export const b9HccLevel = (): number => Number(b9("b9hcc") ?? 1) || 1;
-export const b9HccOption = (): "a" | "b" | "c" | "d" | "e" => (b9("b9hccopt") as "a" | "b" | "c" | "d" | "e" | null) ?? "a";
+export const b9HccOption = (): "a" | "b" | "c" | "d" | "e" | "r3" => (b9("b9hccopt") as "a" | "b" | "c" | "d" | "e" | "r3" | null) ?? "a";
 export const b9Baiter = (): "a" | "b" | null => {
   const v = b9("b9baiter");
   return v === "a" || v === "b" ? v : null;

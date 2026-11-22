@@ -67,6 +67,7 @@ import {
 import { weekendChip } from "@/ui/events/weekendUi";
 import { B9Hcc, b9HccOn, b9Stacks } from "@/proto/b9Hcc";
 import { B9HccR2 } from "@/proto/b9HccR2";
+import { B9HccR3 } from "@/proto/b9HccR3";
 import { b9HccOption } from "@/proto/b9";
 
 /** Hatch Rush's "−30%" chip after a hatch time, or nothing. */
@@ -426,13 +427,15 @@ export class HatchTab implements MonstersTab {
     if (b9HccOn()) {
       const option = b9HccOption();
       this.b9 =
-        option === "d" || option === "e"
+        option === "r3"
+          ? new B9HccR3(this.element, this.scroll, () => this.store.save, () => this.render())
+          : option === "d" || option === "e"
           ? new B9HccR2(this.element, this.scroll, () => this.store.save, () => this.render(), () => hatcheryPicture(6, this.store.kind))
           : new B9Hcc(this.element, this.scroll, () => this.store.save, () => this.render());
     }
   }
 
-  private b9: B9Hcc | B9HccR2 | null = null;
+  private b9: B9Hcc | B9HccR2 | B9HccR3 | null = null;
 
   private get store() {
     return this.context.binding.store;

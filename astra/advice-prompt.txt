@@ -1,0 +1,51 @@
+You are "astra", a blunt senior UI/UX designer for a mobile+desktop browser game (Backyard Monsters Revamped, a remake of the Flash base-builder). Do not run commands or edit files; look at the attached screenshots and write DESIGN ADVICE (not a review).
+
+CONTEXT
+The Hatch tab of the Monsters window, for players with a Hatchery Control Centre (HCC) level 2 or 3. The owner chose the "workbench" layout (pictures 1-3): top strip (yard switch: house/flag + "2/11" with arrows at Level 3, locked flag at Level 2; housing bar), a row of hatcheries, the queue rack of 10 stack sockets with total time / speed-up / Clear, then (round 2) a row of five numbered "mix" tokens, then the monster grid and the Add panel (stepper -, count, +, +5, +10, Max, Add).
+Picture 4 is TODAY's live tab with the owner's red box: the strip between the queue rack and the monster grid, which today holds the red line "Housing is full: N hatched monsters wait in the Hatcheries for room." and the "After: x / y" housing bar.
+
+THE OWNER'S DECISION (final; do not argue with it)
+- Keep the workbench. In the red-box strip put a two-tab switch: "Monsters" | "Presets".
+- Monsters tab = today's monster grid + Add panel.
+- Presets tab = where the player CREATES presets (picks monsters and counts there; there is NO "save the current queue as a preset") and SENDS one to the queue.
+- Send ADDS to the end of the waiting queue. If goo or queue room runs out, it adds what fits and says e.g. "Added 82 of 140, the queue is full".
+- Presets are numbered, no names. 3 preset slots at HCC Level 2, 5 at Level 3.
+- Level 3 (running outposts from the main yard): two lists of presets: one for the main yard, one shared by all outposts.
+- The round 2 row of mix tokens under the rack goes away (presets live in the Presets tab) unless there is a strong reason for a quick-send row.
+- The housing-full warning and the housing "After" bar must stay visible somewhere sensible.
+- Owner rules: painted icons + numbers over words, short in-game text, phone tap targets >= 44 px, nothing cut off; the phone screen (390x844, and 390x664 with Safari bars, and 844x390 on its side) is already full to the bottom, so the tab switch must use the room the mix-token row frees, not add height. A queue stack holds up to 20 (L2) / 30 (L3) of one monster; the queue has 10 stacks.
+
+WHAT I NEED
+Give 2-3 distinct DIRECTIONS for the Presets tab, each concrete enough to build, covering:
+ a) how a player builds a preset in one of the numbered slots (pick monsters + counts), and edits/empties it;
+ b) how Send looks and where it sits; how the "Added 82 of 140" result shows;
+ c) how the Monsters | Presets switch sits in that strip on a 390 px phone and on desktop, and what else shares the strip;
+ d) where the housing-full warning and the After bar go;
+ e) how the Level 3 "main yard list vs shared outposts list" is shown without long words;
+ f) what the phone layout looks like top to bottom (rough heights).
+Then say which ONE you would build and why, and name the 3 biggest risks of it. Then comment on MY directions below (which is strongest, what is wrong with each).
+
+MY DIRECTIONS
+# hcc-r3: my own directions for the Presets tab (written before asking astra)
+
+Shared by all three: a two-part switch "Monsters | Presets" takes the row the round 2 mix tokens used (no new row).
+The housing bar stays in the top strip (now/room, +queue, red when over). The "housing is full, N wait" warning
+becomes a small red housing chip with the number at the right end of the tab row.
+
+1. Rows with Send (list -> editor). Presets tab = N numbered rows (3 at L2, 5 at L3). Each row: number badge, the
+   stacks as small portraits with counts, total goo, a Send button. Tap the row body to edit: the page turns to
+   the monster grid + stepper, "Add" now adds to preset N; a Done button goes back. Send is one tap.
+2. Slot rail + in-place editor. A row of N numbered slot tokens (like round 2); the chosen slot's stacks show as a
+   rack under it, then the same monster grid + stepper (adds to the preset) and ONE Send button. Everything on one
+   page, no second level; but it is tall on a phone and Send needs select-then-send (2 taps).
+3. Count grid. Choose slot 1..N at the top; the monster grid itself is the editor: every monster card carries a
+   count badge and -/+; Send at the bottom. Fast to build, but 18 cards with steppers do not fit a phone.
+
+My pick: 1 (Send is the everyday action and should be one tap; editing is rare and can take a second step that
+reuses the Monsters tab's own grid and stepper, so nothing new to learn).
+
+PICTURES (attach order)
+1. Round 2 workbench, phone 390x844 (3x), Level 2, busiest: queue full, housing full, four mix tokens.
+2. Round 2 workbench, phone 390x844, Level 3, running outpost 2/11 from home.
+3. Round 2 workbench, desktop 1280x720, Level 3, outpost from home.
+4. Today's live tab (desktop crop) with the owner's red box marking the strip.
