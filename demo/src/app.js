@@ -510,7 +510,7 @@
         const sent = S.sent && S.sent.scope === here && S.sent.slot === at;
         return (
           `<div class="b9r5h-quick${sent ? " b9r5h-quick--sent" : ""}"><button class="b9r5h-quick__body" type="button" data-act="tab" data-tab="presets" aria-label="Preset ${at + 1}, ${totalOf(preset)} monsters: open the presets">${badge(at)}<span class="b9r5h-quick__faces">${preset.map(stackHtml).join("")}</span><span class="b9r5h-quick__total">×${totalOf(preset)}</span></button>` +
-          `<button class="btn btn--primary b9r3h-send b9r5h-quick__send" type="button" data-act="preset-send" data-preset="${at}" title="Send preset ${at + 1}" aria-label="Send preset ${at + 1} to the end of the queue">${remote() ? icon("outpost", 24, "b9r2h-addflag") : ""}<span class="b9r5h-quick__n">${at + 1} ▸</span><span class="b9r5h-quick__word">Send</span></button></div>`
+          `<button class="btn btn--primary b9r3h-send b9r5h-quick__send" type="button" data-act="preset-send" data-preset="${at}" title="Send preset ${at + 1}" aria-label="Send preset ${at + 1} to the end of the queue">${remote() ? icon("outpost", 24, "b9r2h-addflag") : ""}<span class="b9r5h-quick__n">${at + 1} Send</span><span class="b9r5h-quick__word">Send</span></button></div>`
         );
       })
       .join("");
