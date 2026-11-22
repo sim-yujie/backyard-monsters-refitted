@@ -362,7 +362,11 @@ export class HccBench {
     const numbers = el("span", "hcc-housing__numbers");
     const remote = this.host.remote();
     const name = remote ? (this.yards().find((one) => one.baseid === remote)?.title ?? "") : "";
-    if (name) numbers.append(el("span", "hcc-housing__yard", name));
+    if (name) {
+      const yard = el("span", "hcc-housing__yard", name);
+      yard.title = `Running ${name} from home`;
+      numbers.append(yard);
+    }
     numbers.append(
       art("housing", 24, "hcc-housing__icon"),
       el("span", "hcc-housing__now", `${housed.toLocaleString("en-US")}/${room.toLocaleString("en-US")}`),
@@ -447,6 +451,12 @@ export class HccBench {
       note.prepend(this.badge(this.sent.slot));
       parts.push(note);
     }
+    // A full queue is said in this row on either tab, where it never pushes the list down.
+    if (this.editing === null && this.queueFull() && !parts.some((part) => part instanceof HTMLElement && part.classList.contains("hcc-note"))) {
+      const full = el("span", "hcc-note hcc-note--full", "Queue full");
+      full.title = this.tab === "presets" ? "Send works again when a box is free" : "Add works again when a box is free";
+      parts.push(full);
+    }
     const waiting = this.root.querySelectorAll(".hatch-now--stalled").length;
     if (waiting > 0) {
       const warn = btn("hcc-warn", `Housing is full: ${waiting} hatched monsters wait in the Hatcheries for room`);
@@ -464,6 +474,11 @@ export class HccBench {
   }
 
   /* ── The Presets tab: numbered rows, Send on each ─────────────────── */
+
+  /** Every box of the queue taken: Add and Send have no room. */
+  private queueFull(): boolean {
+    return (this.yard?.shared.length ?? 0) >= hccLimits(this.level).stacks;
+  }
 
   private priceOf(id: string): number {
     const yard = this.yard;
@@ -528,10 +543,7 @@ export class HccBench {
   private renderPresets(): void {
     const list = this.listOf();
     const rows: Node[] = [];
-    const full = (this.yard?.shared.length ?? 0) >= hccLimits(this.level).stacks;
-    if (full && this.presets().some((preset) => preset.length > 0)) {
-      rows.push(el("p", "hcc-presets__full", "The queue is full: Send works again when a box is free."));
-    }
+    const full = this.queueFull();
     this.presets().forEach((preset, at) => {
       const row = el("div", `hcc-row${preset.length ? "" : " hcc-row--empty"}`);
       if (!preset.length) {

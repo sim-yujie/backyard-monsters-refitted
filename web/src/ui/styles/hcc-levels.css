@@ -1815,11 +1815,18 @@
   color: #1a1206;
   font-size: var(--text-sm);
 }
-.hcc-presets__full {
-  grid-column: 1 / -1;
-  margin: 0;
-  color: var(--colour-text-muted);
+/* "Queue full" in the switch's row (neon round 3: a line over the presets pushed rows 5-6 off a 720 px screen). */
+.hcc-note--full {
+  padding: 4px 10px;
+  border-radius: 999px;
+  background: var(--colour-surface-sunken);
+  color: var(--colour-text);
   font-size: var(--text-sm);
+  white-space: nowrap;
+}
+.hcc-on .hcc-send:disabled {
+  opacity: 0.55;
+  filter: grayscale(0.6);
 }
 /* Touch screens (iPads too): every control on the bench is a 44 px target. */
 @media (pointer: coarse) {
@@ -1828,5 +1835,43 @@
   .hcc-on .hcc-stepper__arrow {
     min-height: 44px;
     min-width: 44px;
+  }
+}
+/* A phone: the outpost's name before the numbers gets the room the icon and "+N" had. */
+@container hatch (max-width: 559px) {
+  .hcc-remote .hcc-housing__yard {
+    flex: 0 1 auto;
+    max-width: none;
+    padding: 0 6px;
+    font-size: 11px;
+    letter-spacing: -0.01em;
+  }
+  .hcc-remote .hcc-housing__now {
+    flex: none;
+  }
+  .hcc-remote .hcc-housing__numbers:has(.hcc-housing__yard) .hcc-housing__icon,
+  .hcc-remote .hcc-housing__numbers:has(.hcc-housing__yard) .hcc-housing__coming {
+    display: none;
+  }
+}
+/* A phone: the outpost's name on a line of its own over the housing numbers, never cut to "m...". */
+@container hatch (max-width: 559px) {
+  .hcc-remote .hcc-housing__numbers:has(.hcc-housing__yard) {
+    flex-wrap: wrap;
+    row-gap: 2px;
+  }
+  .hcc-remote .hcc-housing__numbers .hcc-housing__yard {
+    flex: 0 1 100%;
+    box-sizing: border-box;
+    line-height: 14px;
+    text-align: center;
+  }
+}
+@container hatch (min-width: 560px) {
+  .hcc-tabs > .hcc-note--full {
+    display: inline-flex;
+    flex: none;
+    align-items: center;
+    margin-left: auto;
   }
 }
