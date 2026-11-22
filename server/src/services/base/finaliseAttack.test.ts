@@ -898,15 +898,26 @@ describe("a new attack over one that could not land yet (22 Nov 2026)", () => {
     expect(await attackLandingDeferred(BASESAVEID)).toBe(false);
   }, REPLAY_TIMEOUT_MS);
 
-  test("a timed-out replay holds the row too", async () => {
+  test("a timed-out replay holds the row too, but not past the third deadline in a row", async () => {
     await arm({ startedat: now() - attackWindowSeconds() });
     replayFails = "timeout";
     try {
       await finaliseBeforeLoad(31337, "attack", defender.baseid, true);
+      expect(await attackLandingDeferred(BASESAVEID)).toBe(true);
+      await finaliseBeforeLoad(31337, "attack", defender.baseid, true);
+      expect(await attackLandingDeferred(BASESAVEID)).toBe(true);
+      // Workers failing to load in between neither count nor end it.
+      replayFails = "load";
+      await finaliseBeforeLoad(31337, "attack", defender.baseid, true);
+      expect(await attackLandingDeferred(BASESAVEID)).toBe(true);
+      replayFails = "timeout";
+      await finaliseBeforeLoad(31337, "attack", defender.baseid, true);
     } finally {
       replayFails = null;
     }
-    expect(await attackLandingDeferred(BASESAVEID)).toBe(true);
+    // A replay that never finishes in time does not keep the yard from being attacked.
+    expect(store.has(attackCheckpointKey(BASESAVEID))).toBe(true);
+    expect(await attackLandingDeferred(BASESAVEID)).toBe(false);
   }, REPLAY_TIMEOUT_MS);
 });
 
