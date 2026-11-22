@@ -67,6 +67,7 @@ export const REAL_ACTION_YARD_PATHS: readonly string[] = [
   "hatchery/remove",
   "hatchery/clear",
   "hatchery/finish",
+  "hatchery/preset/send",
   // Collecting: the bank and the mushrooms.
   "bank",
   "mushroom/pick",
@@ -144,6 +145,9 @@ export const NOT_REAL_ACTION_YARD_PATHS: readonly string[] = [
   "quests/state",
   "quests/login/claim",
   "quests/swap",
+  // The HCC's preset edits and its level 3 yard list (beta 9): setting up, not playing.
+  "hatchery/preset/save",
+  "hatchery/outposts",
 ];
 
 /** An in-game check's answer (#273) counts only when it was right. */
@@ -178,6 +182,8 @@ export const REAL_ACTION_ROUTES: readonly RealActionRoute[] = [
   { method: "POST", path: "/worldmapv2/declinetakeover" },
   { method: "POST", path: "/worldmapv2/autoattack" },
   { method: "POST", path: "/worldmapv2/transferassets" },
+  // The world map's move tray (beta 9 #7): one move of several pairs.
+  { method: "POST", path: "/worldmapv2/transferbatch" },
   // The Yard Planner's writes to the yard.
   { method: "POST", path: "/api/:apiVersion/bm/yardplanner/apply" },
   { method: "POST", path: "/api/:apiVersion/bm/yardplanner/walls/upgrade" },
@@ -299,6 +305,8 @@ export const NOT_REAL_ACTION_ROUTES: readonly string[] = [
   "POST /worldmapv2/sight",
   "POST /worldmapv2/takeoverquote",
   "POST /worldmapv2/autoattackplan",
+  // The move tray reading every own yard's army (beta 9 #7): a read.
+  "POST /worldmapv2/ownarmies",
   "POST /worldmapv2/setmapversion",
   // Marked seen.
   "POST /api/:apiVersion/bm/inferno/korath/seen",

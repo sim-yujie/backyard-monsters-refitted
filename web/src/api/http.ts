@@ -112,6 +112,22 @@ export const onAnswer = (listener: AnswerListener): (() => void) => {
   };
 };
 
+type RefusalListener = (error: ApiError) => void;
+const refusalListeners = new Set<RefusalListener>();
+
+/**
+ * Hears every refusal the server sends, whatever asked: the maintenance
+ * switch's cut-off refuses every request at once, and the game signs the
+ * player out on the first one (`app/maintenanceWatch.ts`). The caller still
+ * gets the error. Returns the unsubscribe.
+ */
+export const onRefusal = (listener: RefusalListener): (() => void) => {
+  refusalListeners.add(listener);
+  return () => {
+    refusalListeners.delete(listener);
+  };
+};
+
 /** Expands `:apiVersion` in a path template and prefixes the server origin. */
 export const apiUrl = (path: string): string =>
   `${SERVER_URL}${path.replace(":apiVersion", encodeURIComponent(API_VERSION))}`;
@@ -289,7 +305,21 @@ export const send = async <T extends ApiEnvelope>(
     throw new NetworkError(NO_REACH_TEXT, cause, url);
   }
 
-  const envelope = unwrap<T>(response, await readBody(response));
+  let envelope: T;
+  try {
+    envelope = unwrap<T>(response, await readBody(response));
+  } catch (caught) {
+    if (caught instanceof ApiError) {
+      for (const listener of [...refusalListeners]) {
+        try {
+          listener(caught);
+        } catch {
+          // A listener's mistake is not the request's.
+        }
+      }
+    }
+    throw caught;
+  }
   for (const listener of [...answerListeners]) {
     try {
       listener(envelope);

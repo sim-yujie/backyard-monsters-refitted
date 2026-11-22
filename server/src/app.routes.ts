@@ -24,6 +24,7 @@ import {
   takeoverQuoteLimiter,
   autoAttackLimiter,
   autoAttackPlanLimiter,
+  ownArmiesLimiter,
   defencesLimiter,
   leaderboardLimiter,
   botCheckReadLimiter,
@@ -54,6 +55,7 @@ import { Status } from "./enums/StatusCodes.js";
 import { supportedLangs } from "./controllers/supportedLangs.js";
 
 import { login } from "./controllers/auth/login.js";
+import { maintenanceStatus } from "./controllers/auth/maintenanceStatus.js";
 import { logout } from "./controllers/auth/logout.js";
 import { register } from "./controllers/auth/register.js";
 import { signUpOptions } from "./controllers/auth/signUpOptions.js";
@@ -100,6 +102,8 @@ import { declineTakeover } from "./controllers/maproom/v2/declineTakeover.js";
 import { takeoverQuote } from "./controllers/maproom/v2/takeoverQuote.js";
 import { autoAttack, autoAttackPlan, autoAttackReplay } from "./controllers/maproom/v2/autoAttack.js";
 import { transferMonsters } from "./controllers/maproom/v2/transferMonsters.js";
+import { transferBatch } from "./controllers/maproom/v2/transferBatch.js";
+import { ownArmies } from "./controllers/maproom/v2/ownArmies.js";
 import { saveBookmarks } from "./controllers/maproom/v2/saveBookmarks.js";
 
 
@@ -205,6 +209,8 @@ router.get("/api/:apiVersion/player/signupoptions", apiVersion, signUpOptions);
 router.post("/api/:apiVersion/player/forgotPassword", apiVersion, forgotPasswordIpLimiter, forgotPasswordEmailLimiter, forgotPassword);
 router.post("/api/:apiVersion/player/reset-password", resetPasswordLimiter, resetPassword);
 router.get("/api/:apiVersion/supportedLangs", apiVersion, logRequest, supportedLangs);
+// The maintenance switch, for the sign-in screen and a game without chat (`controllers/auth/maintenanceStatus.ts`).
+router.get("/api/:apiVersion/maintenance", apiVersion, maintenanceStatus);
 router.get("/api/:apiVersion/player/account", apiVersion, verifyUserAuth, getAccount);
 router.post("/api/:apiVersion/player/changeusername", apiVersion, verifyUserAuth, changeUsernameLimiter, logRequest, changeUsername);
 router.post("/api/:apiVersion/player/settings", apiVersion, verifyUserAuth, logRequest, updateSettings);
@@ -292,6 +298,9 @@ router.post("/worldmapv2/autoattackplan", verifyUserAuth, verifyAccountStatus, a
 router.post("/worldmapv2/autoattack", verifyUserAuth, verifyAccountStatus, autoAttackLimiter, logRequest, autoAttack);
 router.get("/worldmapv2/autoattackreplay", verifyUserAuth, verifyAccountStatus, autoAttackPlanLimiter, autoAttackReplay);
 router.post("/worldmapv2/transferassets", verifyUserAuth, verifyAccountStatus, logRequest, transferMonsters);
+// The world map's move tray (beta 9 #7): every own yard's army, and one move of several pairs.
+router.post("/worldmapv2/ownarmies", verifyUserAuth, verifyAccountStatus, ownArmiesLimiter, logRequest, ownArmies);
+router.post("/worldmapv2/transferbatch", verifyUserAuth, verifyAccountStatus, logRequest, transferBatch);
 router.post("/api/:apiVersion/player/savebookmarks", apiVersion, verifyUserAuth, verifyAccountStatus, logRequest, saveBookmarks);
 
 /**  ────────────────────────────────────────────────

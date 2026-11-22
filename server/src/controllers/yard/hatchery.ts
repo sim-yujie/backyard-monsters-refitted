@@ -3,7 +3,14 @@ import {
   YardHatcheryClearSchema,
   YardHatcheryFinishSchema,
   YardHatcheryRemoveSchema,
+  YardHccOutpostsSchema,
+  YardHccPresetSaveSchema,
+  YardHccPresetSendSchema,
 } from "../../schemas/YardSchemas.js";
+import { checkRemote, planPresetSave, planPresetSend } from "../../services/yard/hccPresets.js";
+import { planHccOutposts } from "../../services/yard/hccOutposts.js";
+import { Save } from "../../database/models/save.model.js";
+import { BaseType } from "../../enums/Base.js";
 import {
   planHatcheryAdd,
   planHatcheryClear,
@@ -30,8 +37,10 @@ import { defineYardAction } from "./yardAction.js";
  */
 export const yardHatcheryAddAction = defineYardAction({
   schema: YardHatcheryAddSchema,
-  run: ({ save, body, now, bonuses }) =>
-    planHatcheryAdd(save, body.hatchery, body.monster, body.count, now, bonuses?.outpostHatchCost ?? 0),
+  run: ({ save, main, body, now, bonuses }) => {
+    checkRemote(save, main, body.remote);
+    return planHatcheryAdd(save, body.hatchery, body.monster, body.count, now, bonuses?.outpostHatchCost ?? 0);
+  },
   outposts: "allow",
   inferno: "allow",
 });
@@ -39,7 +48,10 @@ export const yardHatcheryAddAction = defineYardAction({
 /** `POST /bm/yard/hatchery/remove` — take monsters off a slot for the goo paid (capped). */
 export const yardHatcheryRemoveAction = defineYardAction({
   schema: YardHatcheryRemoveSchema,
-  run: ({ save, body, now }) => planHatcheryRemove(save, body.hatchery, body.slot, body.count, now),
+  run: ({ save, main, body, now }) => {
+    checkRemote(save, main, body.remote);
+    return planHatcheryRemove(save, body.hatchery, body.slot, body.count, now);
+  },
   outposts: "allow",
   inferno: "allow",
 });
@@ -47,7 +59,10 @@ export const yardHatcheryRemoveAction = defineYardAction({
 /** `POST /bm/yard/hatchery/clear` — Clear all: empty a queue's waiting stacks for the goo paid (capped). */
 export const yardHatcheryClearAction = defineYardAction({
   schema: YardHatcheryClearSchema,
-  run: ({ save, body, now }) => planHatcheryClear(save, body.hatchery, now),
+  run: ({ save, main, body, now }) => {
+    checkRemote(save, main, body.remote);
+    return planHatcheryClear(save, body.hatchery, now);
+  },
   outposts: "allow",
   inferno: "allow",
 });
@@ -55,11 +70,52 @@ export const yardHatcheryClearAction = defineYardAction({
 /** `POST /bm/yard/hatchery/finish` — house what fits now for Shiny. */
 export const yardHatcheryFinishAction = defineYardAction({
   schema: YardHatcheryFinishSchema,
-  run: ({ save, body, now }) => {
+  run: ({ save, main, body, now }) => {
+    checkRemote(save, main, body.remote);
     const plan = planHatcheryFinish(save, body.hatchery, now);
     // Monsters housed now finished hatching: they count for the hatch quest.
     return { ...plan, questEvents: housedQuestEvents(plan.report.housed) };
   },
   outposts: "allow",
   inferno: "allow",
+});
+
+/**
+ * `POST /bm/yard/hatchery/preset/save` (beta 9) — the HCC preset in `slot`
+ * becomes `stacks`. The list is the yard's: the main yard's, or the one every
+ * outpost shares; it lives on the main row either way (`hccPresets.ts`).
+ */
+export const yardHccPresetSaveAction = defineYardAction({
+  schema: YardHccPresetSaveSchema,
+  run: ({ save, main, body }) => planPresetSave(save, main, body.slot, body.stacks, body.remote),
+  outposts: "allow",
+});
+
+/** `POST /bm/yard/hatchery/preset/send` (beta 9) — adds a preset to the end of the HCC's queue. */
+export const yardHccPresetSendAction = defineYardAction({
+  schema: YardHccPresetSendSchema,
+  run: ({ save, main, body, now, bonuses }) =>
+    planPresetSend(save, main, body.slot, body.remote, now, bonuses?.outpostHatchCost ?? 0),
+  outposts: "allow",
+});
+
+/**
+ * `POST /bm/yard/hatchery/outposts` (beta 9) — the main yard's level 3 HCC's
+ * yard list: each of the player's Map Room 2 outposts, whether it has an HCC
+ * and how much its queue holds, as last saved. Main yard only.
+ */
+export const yardHccOutpostsAction = defineYardAction({
+  schema: YardHccOutpostsSchema,
+  run: async ({ save, user, em }) => {
+    const ids = (save.outposts ?? []).map(([, , id]) => String(id));
+    const rows =
+      ids.length === 0
+        ? []
+        : await em.find(
+            Save,
+            { baseid: { $in: ids }, userid: user.userid, type: BaseType.OUTPOST },
+            { fields: ["baseid", "buildingdata", "buildinghealthdata", "monsters", "type", "worldid"] }
+          );
+    return { report: planHccOutposts(save, rows.filter((row) => row.worldid === save.worldid)) };
+  },
 });

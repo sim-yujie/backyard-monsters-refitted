@@ -47,8 +47,9 @@ import { yardBadRequestErr, yardRefusedErr } from "./yardErrors.js";
  *   into its **first** non-full stack of that monster, else opens a new stack
  *   while it has fewer than `1 + level` (`client/scripts/HATCHERYPOPUP.as:234-292`,
  *   MH §5.2 step 4). The HCC's queue merges only into its **last** stack, else
- *   opens a new one while it has fewer than 7 (`HATCHERYCCPOPUP.as:302-350`).
- *   Stacks hold 20. A stack also carries the academy level whose price was
+ *   opens a new one while it has fewer than 7 (`HATCHERYCCPOPUP.as:302-350`);
+ *   from HCC level 2, 10 (beta 9, {@link hccLimits}). Stacks hold 20, the
+ *   HCC's 30 at level 3. A stack also carries the academy level whose price was
  *   paid, and merges only with a stack paid at the same level (§10 Q2). Each
  *   monster costs `hatchCost(id, academy level)` goo.
  * - **Remove** takes monsters off one stack, or the one in production, for the
@@ -77,8 +78,40 @@ export const HCC_TYPE = 16;
 /** Monsters per stack, hatchery and HCC alike (`HATCHERYPOPUP.as:255`, `HATCHERYCC.queueLimit`). */
 export const STACK_SIZE = 20;
 
-/** Stacks in the HCC's shared queue (`HATCHERYCCPOPUP.as:323`). */
+/** Stacks in the HCC's shared queue at level 1 (`HATCHERYCCPOPUP.as:323`). */
 export const HCC_STACKS = 7;
+
+/**
+ * The HCC's levels (beta 9, owner 21-22 Nov 2026; costs in `buildingCosts.ts`):
+ * level 1 is Flash's, 7 stacks of 20; level 2 holds 10 stacks of 20; level 3
+ * 10 stacks of 30 and runs the player's outposts that have an HCC of their own
+ * from home. Presets (`hccPresets.ts`): 2, 4 and 6. An outpost's HCC goes to
+ * level 2; the Inferno's Incubator Control Centre stays at 1.
+ */
+export interface HccLimits {
+  /** The level these are for, 1 to 3. */
+  level: number;
+  /** Stacks the shared queue holds. */
+  stacks: number;
+  /** Monsters one stack of the shared queue holds. */
+  size: number;
+  /** Presets the HCC's window holds. */
+  presets: number;
+}
+
+/** The HCC's top level. */
+export const HCC_MAX_LEVEL = 3;
+
+/** {@link HccLimits} at `level`, clamped to 1..3. */
+export const hccLimits = (level: number): HccLimits => {
+  const at = Math.max(1, Math.min(HCC_MAX_LEVEL, Math.floor(level) || 1));
+  return {
+    level: at,
+    stacks: at >= 2 ? 10 : HCC_STACKS,
+    size: at >= 3 ? 30 : STACK_SIZE,
+    presets: at >= 3 ? 6 : at >= 2 ? 4 : 2,
+  };
+};
 
 /** The most one add request may ask for: five level-3 hatcheries' worth (5 × 80). */
 export const MAX_ADD = 400;
@@ -110,7 +143,7 @@ export interface HatcherySave extends StorageCapSave {
 }
 
 /** A finite number off a jsonb field, 0 otherwise. */
-const numberOf = (raw: unknown): number => {
+export const numberOf = (raw: unknown): number => {
   const value = Number(raw);
   return Number.isFinite(value) ? value : 0;
 };
@@ -157,6 +190,16 @@ export const hatcheryIds = (save: HatcherySave): number[] => {
 /** The yard's HCC building, or null. */
 const hccOf = (save: HatcherySave): [number, BuildingData] | null =>
   buildingsOfType(save, HCC_TYPE)[0] ?? null;
+
+/**
+ * The level of the yard's HCC once it has finished building, 0 without one.
+ * A level being upgraded counts as the level it is at until the upgrade ends.
+ */
+export const hccLevel = (save: HatcherySave): number => {
+  const hcc = hccOf(save);
+  if (!hcc || underConstruction(hcc[1])) return 0;
+  return Math.max(1, Math.min(HCC_MAX_LEVEL, Math.floor(numberOf(hcc[1].l)) || 1));
+};
 
 /** True once an HCC has finished building: it has replaced the hatchery queues (`BUILDING16.as:287-294`). */
 export const hccPresent = (save: HatcherySave): boolean => {
@@ -214,7 +257,7 @@ const spaceOf = (id: string, levels: Readonly<Record<string, number>>): number =
   housingSpace(id, levelOf(levels, id)) ?? 0;
 
 /** Goo one `id` cost at the paid academy `level`. */
-const gooOf = (id: string, level: number): number => hatchCost(id, level) ?? 0;
+export const gooOf = (id: string, level: number): number => hatchCost(id, level) ?? 0;
 
 /**
  * Starts the head of `queue` on an idle hatchery; false when the queue is
@@ -248,7 +291,7 @@ const clear = (hatchery: HatcheryModel) =>
  * The HCC's hand-out: every idle hatchery that can work takes the head of the
  * shared queue, in service order (`BUILDING16.as:107-134`).
  */
-const handOut = (
+export const handOut = (
   save: HatcherySave,
   model: ProductionModel,
   levels: Readonly<Record<string, number>>,
@@ -273,7 +316,7 @@ export const isMapRoom3Monsters = (monsters: JsonObject | null | undefined): boo
   );
 
 /** The state every route starts from. */
-const modelOf = (save: HatcherySave) => {
+export const modelOf = (save: HatcherySave) => {
   if (isMapRoom3Monsters(save.monsters)) {
     throw yardRefusedErr("mapRoom3", "Hatcheries on a Map Room 3 yard are not supported yet.");
   }
@@ -357,15 +400,16 @@ export interface HatcheryFinishReport {
  * there is no room. A hatchery's queue fills its first non-full stack of the
  * same monster and paid level; the HCC's only its last stack.
  */
-const push = (
+export const push = (
   queue: QueueStack[],
   id: string,
   level: number,
   limit: number,
-  hcc: boolean
+  hcc: boolean,
+  size: number = STACK_SIZE
 ): boolean => {
   const same = (stack: QueueStack | undefined) =>
-    stack !== undefined && stack[0] === id && stack[2] === level && stack[1] < STACK_SIZE;
+    stack !== undefined && stack[0] === id && stack[2] === level && stack[1] < size;
   const stack = hcc ? (same(queue.at(-1)) ? queue.at(-1) : undefined) : queue.find(same);
   if (stack) {
     stack[1] += 1;
@@ -411,7 +455,9 @@ export const planHatcheryAdd = (
   const { levels, model } = modelOf(save);
   const resolved = targetOf(save, model, target);
   const queue = resolved.hcc ? model.hcc : resolved.hatchery.queue;
-  const limit = resolved.hcc ? HCC_STACKS : stackLimit(resolved.building);
+  const hccAt = hccLimits(hccLevel(save));
+  const limit = resolved.hcc ? hccAt.stacks : stackLimit(resolved.building);
+  const size = resolved.hcc ? hccAt.size : STACK_SIZE;
 
   const level = levelOf(levels, monster);
   // A Midas Council's dearer hatching on outposts (`outpostHatchCost`,
@@ -429,7 +475,7 @@ export const planHatcheryAdd = (
       stoppedBy = "goo";
       break;
     }
-    if (!push(queue, monster, level, limit, resolved.hcc)) {
+    if (!push(queue, monster, level, limit, resolved.hcc, size)) {
       stoppedBy = "queue";
       break;
     }

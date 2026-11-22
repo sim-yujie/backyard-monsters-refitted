@@ -25,7 +25,8 @@ import { YardTextures } from "./YardTextures";
 import type { YardArtAtlas } from "./yardAtlas";
 import type { Rect } from "./YardGrid";
 import { spriteBox, unionRect } from "./yardSnapshot";
-import { artFor, type Yard, type YardBuilding } from "./yardModel";
+import { artFor, BuildingCondition, type Yard, type YardBuilding } from "./yardModel";
+import { classicTowerTier, tierPlateImage, tierPlateScale, tierPlateSpot } from "./classicTierPlates";
 
 /**
  * The building sprites: one per building, built once and never rebuilt.
@@ -156,6 +157,14 @@ interface BuildingView {
    * overlay art.
    */
   readonly fort: FortOverlay | null;
+  /**
+   * The Classic look's tier plate (`classicTierPlates.ts`), in `markers`, and
+   * the tier it shows; null and 0 for a building that has none.
+   */
+  readonly plate: Sprite | null;
+  readonly plateTier: number;
+  /** True once the plate's picture is on it, or known never to come. */
+  plateResolved: boolean;
   /** True once the real picture is on the sprite. */
   resolved: boolean;
   /**
@@ -270,6 +279,8 @@ export class YardBuildings {
   private faded: number | null = null;
   /** What stands among the buildings for a while, kept through a redraw: see `addGuest`. */
   private readonly guests = new Set<Container>();
+  /** The tier plates' scale at the camera's zoom (`setZoom`). */
+  private plateScale = 1;
 
   constructor() {
     this.textures = new YardTextures(() => {
@@ -384,6 +395,15 @@ export class YardBuildings {
         this.shadows.addChild(shadow);
       }
 
+      // The Classic look's tier plate, over the buildings and under the job bars.
+      const plateTier = classicTowerTier(building.type, building.level, yard.kind);
+      let plate: Sprite | null = null;
+      if (plateTier > 0) {
+        plate = new Sprite(Texture.EMPTY);
+        plate.visible = false;
+        this.markers.addChild(plate);
+      }
+
       const view: BuildingView = {
         building,
         art,
@@ -391,6 +411,9 @@ export class YardBuildings {
         shadow,
         anims,
         fort,
+        plate,
+        plateTier,
+        plateResolved: plate === null,
         // A building with no art row at all is named at once: nothing is coming.
         label: art ? null : this.addLabel(building),
         marker: building.countdown ? this.addCountdownMarker(building, atlas) : null,
@@ -507,6 +530,7 @@ export class YardBuildings {
         view.fort.back.visible = shown && view.fort.backResolved;
         view.fort.front.visible = shown && view.fort.frontResolved;
       }
+      if (view.plate) this.placePlate(view, view.plate, on);
 
       if (view.anims.length === 0) continue;
       for (const layer of view.anims) layer.sprite.visible = animsOn && layer.resolved;
@@ -629,6 +653,7 @@ export class YardBuildings {
     if (view.marker) view.marker.visible = !hidden && !view.badgeHidden;
     if (!hidden) return;
     view.top.visible = false;
+    if (view.plate) view.plate.visible = false;
     if (view.shadow) view.shadow.visible = false;
     if (view.label) view.label.visible = false;
     for (const layer of view.anims) layer.sprite.visible = false;
@@ -936,6 +961,7 @@ export class YardBuildings {
   private resolveTextures(): void {
     for (const view of this.views) {
       if (view.fort) this.resolveFort(view.fort, view.building);
+      if (!view.plateResolved) this.resolvePlate(view);
       if (view.swap && !(view.swapResolved && view.swapShadowResolved)) this.resolveSwap(view);
       if (view.resolved && view.shadowResolved && !view.animsPending) continue;
       const art = view.art;
@@ -1080,6 +1106,47 @@ export class YardBuildings {
     marker.tint = building.countdown?.kind === "build" ? 0xffd479 : 0x8fd0ff;
     this.markers.addChild(marker);
     return marker;
+  }
+
+  /* ── Tier plates, for the Classic look (beta 9) ───────────────────────── */
+
+  /** Tells the tier plates the camera zoom (`YardRenderer.setZoom`): they grow when it zooms out. */
+  setZoom(zoom: number): void {
+    this.plateScale = tierPlateScale(zoom);
+  }
+
+  /** Puts a building's tier plate on, once its picture is in. */
+  private resolvePlate(view: BuildingView): void {
+    const image = tierPlateImage(view.plateTier);
+    if (!view.plate || !image) {
+      view.plateResolved = true;
+      return;
+    }
+    const texture = this.textures.get(image);
+    if (texture) {
+      view.plate.texture = texture;
+      view.plateResolved = true;
+    } else if (this.textures.isMissing(image)) {
+      view.plateResolved = true;
+    }
+  }
+
+  /**
+   * Stands a tier plate on its tower, wherever the planner has moved it, at
+   * the camera's plate size; gone with the tower once it is rubble, and while
+   * its picture is not in.
+   */
+  private placePlate(view: BuildingView, plate: Sprite, on: boolean): void {
+    const building = view.building;
+    plate.visible =
+      on &&
+      plate.texture !== Texture.EMPTY &&
+      view.damageStep < 4 &&
+      building.condition !== BuildingCondition.DESTROYED;
+    if (!plate.visible) return;
+    const [left, top] = tierPlateSpot(building.type, this.kind);
+    plate.position.set(building.worldX + left + view.offsetX, building.worldY + top + view.offsetY);
+    plate.scale.set(this.plateScale);
   }
 
   /* ── Hit flash, for a live battle (#63) ─────────────────────────────── */

@@ -496,6 +496,17 @@ export class Save {
   mainpointsearned!: Opt<number>;
 
   /**
+   * The Hatchery Control Centre's presets (beta 9, `services/yard/hccPresets.ts`):
+   * `{ home, out }`, the main yard's list and the one every outpost shares, each
+   * up to six presets of `[monster, count]` stacks in the order they are sent.
+   * Kept on the main row (a pool field, `poolView.ts`), so an outpost reads and
+   * writes the player's one copy. Written only by the preset route; sent to the
+   * owner only (`mapSaveData.ts`), never to anyone viewing the yard.
+   */
+  @Property({ type: "json", columnType: "jsonb", nullable: true })
+  hccpresets?: JsonObject | null = null;
+
+  /**
    * The main yard's Town Hall level, 0 for none (`services/yard/townHallColumn.ts`).
    * Kept in step with `buildingdata` by {@link Save.syncTownHallLevel} on every
    * insert and every update that touches `buildingdata`, so no write path has

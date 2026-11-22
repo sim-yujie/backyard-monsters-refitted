@@ -1,4 +1,5 @@
 import type { AllianceMessageType } from "../enums/Alliance.js";
+import type { MaintenanceNotice } from "../services/admin/maintenance.js";
 
 export enum ClientMessageType {
   Auth = "auth",
@@ -30,6 +31,12 @@ export enum ServerMessageType {
   Notice = "notice",
   /** New mail arrived for this player: the game fetches it (`/player/mailstatus`) to show. */
   Mail = "mail",
+  /**
+   * The maintenance switch (`services/admin/maintenance.ts`): on with the time
+   * left to the cut-off, or off. At the cut-off a non-owner gets it with no
+   * time left and the connection closes after it.
+   */
+  Maintenance = "maintenance",
   /** The player was taken out of a room (left or was kicked from their alliance): the client drops its tab. */
   Left = "left",
   /** The answer to a {@link ClientMessageType.Presence} ping, under the ping's `id`. */
@@ -116,6 +123,7 @@ export type ServerMessage =
   | { type: ServerMessageType.Kicked; reason: "banned"; until: number | null; text: string; banReason: string }
   | { type: ServerMessageType.Notice }
   | { type: ServerMessageType.Mail }
+  | ({ type: ServerMessageType.Maintenance } & MaintenanceNotice)
   | { type: ServerMessageType.Left; channel: string }
   /** `answer`: what `POST /bm/presence` would have answered. `ok: false`: send that ping over HTTP instead. */
   | { type: ServerMessageType.Presence; id: number; ok: true; answer: Record<string, unknown> }

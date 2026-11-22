@@ -8,6 +8,7 @@ import "@/ui/styles/building-panel.css";
 import "@/ui/styles/attack.css";
 import "@/ui/styles/monsters.css";
 import "@/ui/styles/hatch.css";
+import "@/ui/styles/hcc-levels.css";
 import "@/ui/styles/harvest.css";
 import "@/ui/styles/repair.css";
 import "@/ui/styles/recycle.css";
@@ -16,11 +17,13 @@ import "@/ui/styles/moveyards.css";
 import "@/ui/styles/skin.css";
 
 import { App } from "@/app/App";
+import { preloadGameScenes } from "@/app/gameLoader";
+import { installChunkErrorReload } from "@/app/chunkReload";
 import { installErrorLog } from "@/game/bugReport/errorLog";
 import { installErrorReporter, reportCaughtError } from "@/game/bugReport/errorReporter";
 import { GraphicsOffError } from "@/app/graphicsOff";
 import { showGraphicsOffNotice } from "@/ui/GraphicsOffNotice";
-import { UpdateCheck, fetchLivePage, runningBundleName } from "@/app/updateCheck";
+import { UpdateCheck, bundleNameIn, fetchLivePage, runningBundleName } from "@/app/updateCheck";
 import { UpdatePrompt } from "@/ui/UpdatePrompt";
 import { applySkin } from "@/ui/skin";
 import { applyFontChoice } from "@/ui/fontChoice";
@@ -32,6 +35,12 @@ import { bootSafeMode } from "@/game/safeMode";
 // owner's dashboard's copy of uncaught errors (the Privacy Policy says so).
 installErrorLog();
 installErrorReporter();
+
+// The game past the sign-in screen is a script piece of its own (beta 9 speed
+// work): its download starts now, beside the boot screen's last pieces, so the
+// sign-in screen no longer waits for it and it is in hand by the time the
+// player has signed in or a stored session has been checked (`gameLoader.ts`).
+preloadGameScenes();
 
 // Quality, before anything asks for it (patch 7.11): `?quality=low` in the
 // address is the player's way out of a game that closes on their phone; then
@@ -69,6 +78,12 @@ void app.start().catch((error: unknown) => {
 // "New version": a tab left open across a release learns the live page now
 // runs another build. A dev build serves /src/main.ts and has nothing to compare.
 const running = runningBundleName();
+// A tab older than the live release that asks for a piece the release no
+// longer has reloads once, onto the new release (`chunkReload.ts`).
+installChunkErrorReload({
+  running,
+  liveBundle: async () => bundleNameIn(await fetchLivePage()),
+});
 if (running) {
   const prompt = new UpdatePrompt(host);
   new UpdateCheck({ running, fetchPage: fetchLivePage, onNewVersion: () => prompt.show() }).start();
@@ -94,6 +109,14 @@ if (import.meta.env.DEV || import.meta.env.VITE_LAYOUT_CHECK === "1") {
     (globalThis as Record<string, unknown>)["__autoAttackConfirm"] = (state?: Parameters<typeof previewAutoAttackConfirm>[1]) => {
       const modal = document.querySelector<HTMLElement>(".overlay__layer--modal");
       return modal ? previewAutoAttackConfirm(modal, state) : null;
+    };
+  });
+  // The world map's move tray and its List (beta 9 #7), with a fixed busy empire.
+  void import("@/ui/maproom/transferPreview").then(({ previewTransferMode }) => {
+    (globalThis as Record<string, unknown>)["__transferPreview"] = (state?: "tray" | "list") => {
+      const layer = document.querySelector<HTMLElement>(".overlay__layer:not(.overlay__layer--modal)");
+      const modal = document.querySelector<HTMLElement>(".overlay__layer--modal");
+      return layer && modal ? previewTransferMode(layer, modal, state) : null;
     };
   });
   // The attack screen's dock (owner, 18 Nov 2026): the real attack scene on the own yard.

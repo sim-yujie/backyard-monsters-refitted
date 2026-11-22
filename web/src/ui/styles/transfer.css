@@ -1,0 +1,1783 @@
+/*
+ * Moving monsters from the world map (beta 9 #7, ui/maproom/TransferMode.ts):
+ * the plates on the player's yards, the tray, the army card, the result and
+ * the List window. neon's direction 2 (22 Nov 2026): two-band plates whose
+ * monsters sit on light wells (dark monsters read on the dark plate), the
+ * room on a dark strip under them, "•••" for more types (a "+" on the map
+ * only ever means monsters coming in), and the tray a real window of the
+ * look the player chose, centred and only as wide as it needs.
+ *
+ * Both looks: Modern is blue-grey steel with orange, Classic is Flash brown
+ * with orange-yellow; only the custom properties below differ.
+ */
+
+:root {
+  --xfer-plate-bg: linear-gradient(180deg, #4b5a69 0%, #34414e 55%, #2a3540 100%);
+  --xfer-plate-edge: #0f151b;
+  --xfer-plate-hi: rgb(255 255 255 / 22%);
+  --xfer-recess: rgb(10 16 22 / 78%);
+  --xfer-well: linear-gradient(180deg, #e2e8ee 0%, #b9c3cd 100%);
+  --xfer-well-ink: #17202a;
+  --xfer-ink: #f4f7fa;
+  --xfer-on: #ff6d1f;
+  --xfer-on-glow: rgb(255 109 31 / 55%);
+  --xfer-gold: #f0b938;
+  --xfer-gold-bg: linear-gradient(180deg, #5b4a22 0%, #3a2d14 100%);
+  --xfer-gold-ink: #ffe082;
+  --xfer-room-ok: #56c85a;
+  --xfer-room-low: #e5a92b;
+  --xfer-room-full: #d94b38;
+  --xfer-in: repeating-linear-gradient(-45deg, #ff7b29 0 3px, #ffb347 3px 6px);
+  --xfer-out: repeating-linear-gradient(-45deg, rgb(255 255 255 / 90%) 0 3px, rgb(255 255 255 / 45%) 3px 6px);
+  --xfer-attack: repeating-linear-gradient(-45deg, #7a1b17 0 6px, #5e1310 6px 12px);
+  --xfer-attack-edge: #e03a2e;
+  --xfer-tag-sub: linear-gradient(180deg, #ffd25e 0%, #e6a521 100%);
+  --xfer-tag-sub-ink: #2c1a04;
+  --xfer-good: #3fbf55;
+}
+
+:root[data-skin="flash"] {
+  --xfer-plate-bg: linear-gradient(180deg, #6a4020 0%, #4a2a12 55%, #3a200e 100%);
+  --xfer-plate-edge: #1d0e04;
+  --xfer-plate-hi: rgb(255 220 160 / 30%);
+  --xfer-recess: rgb(30 14 4 / 82%);
+  --xfer-well: linear-gradient(180deg, #fffaf0 0%, #f0e2c4 100%);
+  --xfer-well-ink: #2c180a;
+  --xfer-ink: #fff8e8;
+  --xfer-on: #ff9e0d;
+  --xfer-on-glow: rgb(255 158 13 / 60%);
+  --xfer-gold: #ffe042;
+  --xfer-gold-bg: linear-gradient(180deg, #8a5a10 0%, #5a3606 100%);
+  --xfer-gold-ink: #fff3c4;
+  --xfer-room-ok: #44ad3a;
+  --xfer-room-low: #e8a317;
+  --xfer-room-full: #d13426;
+  --xfer-in: repeating-linear-gradient(-45deg, #ffa71a 0 3px, #ffd15c 3px 6px);
+  --xfer-attack: repeating-linear-gradient(-45deg, #a31d17 0 6px, #7e1410 6px 12px);
+  --xfer-attack-edge: #ff5247;
+}
+
+/* ── Move mode on the map: what steps aside ─────────────────────────────── */
+
+/* Find and the map's tools make way for the tray; the zoom buttons stay on a
+   desktop, raised over it. On a phone pinching zooms, so they all go. */
+.overlay__layer.xfer-on > .mr2-find-dock,
+.overlay__layer.xfer-on :is(.yard-dock, .yard-viewtools) {
+  display: none;
+}
+
+.overlay__layer.xfer-on > .mr2-tools-dock {
+  bottom: calc(var(--xfer-tray-height, 150px) + 40px);
+}
+
+.overlay__layer.xfer-on > .mr2-tools-dock > :not(.mr2-toolrow),
+.overlay__layer.xfer-on .mr2-toolrow > :not(.zoom-controls) {
+  display: none;
+}
+
+@media (max-width: 620px), (max-height: 500px) {
+  .overlay__layer.xfer-on > .mr2-tools-dock {
+    display: none;
+  }
+}
+
+/* The List is up: one window at a time. */
+.overlay__layer.xfer-listing > .xfer-tray {
+  visibility: hidden;
+}
+
+/* ── The plates ─────────────────────────────────────────────────────────── */
+
+/* Under the HUD and the tray (first in the layer), over the map. Only the
+   plates themselves take a pointer: the map between them still pans. */
+.overlay__layer > .xfer,
+.overlay__layer > .xfer-over {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+.xfer__plates {
+  position: absolute;
+  inset: 0;
+}
+
+.xfer-plate {
+  position: absolute;
+  top: 0;
+  left: 0;
+  display: flex;
+  flex-direction: column;
+  box-sizing: border-box;
+  width: 98px;
+  margin: 0;
+  padding: 0;
+  overflow: visible;
+  border: 1.5px solid var(--xfer-plate-edge);
+  border-radius: 7px;
+  background: var(--xfer-plate-bg);
+  box-shadow:
+    inset 0 1px 0 var(--xfer-plate-hi),
+    0 3px 6px rgb(0 0 0 / 55%);
+  color: var(--xfer-ink);
+  font: inherit;
+  line-height: 1;
+  text-align: left;
+  cursor: pointer;
+  pointer-events: auto;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
+  transition:
+    opacity 0.15s ease,
+    filter 0.15s ease,
+    box-shadow 0.15s ease;
+}
+
+/* Rivets in the four corners (Modern's steel; small brass nails in Classic). */
+.xfer-plate[data-size="full"]::before {
+  content: "";
+  position: absolute;
+  inset: 3px;
+  pointer-events: none;
+  background:
+    radial-gradient(circle at 1.5px 1.5px, rgb(255 255 255 / 45%) 0 1.2px, transparent 1.6px) top left / 4px 4px no-repeat,
+    radial-gradient(circle at 2.5px 1.5px, rgb(255 255 255 / 45%) 0 1.2px, transparent 1.6px) top right / 4px 4px no-repeat;
+}
+
+.xfer-plate__top {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  height: 25px;
+  padding: 2px 4px 2px 3px;
+  box-sizing: border-box;
+}
+
+/* A monster and how many: the picture on a light well, nothing over its face. */
+.xfer-mon {
+  display: inline-flex;
+  flex: 0 1 auto;
+  align-items: center;
+  gap: 2px;
+  min-width: 0;
+  height: 20px;
+  padding: 0 4px 0 1px;
+  border-radius: 4px;
+  background: var(--xfer-well);
+  box-shadow: inset 0 -1px 0 rgb(0 0 0 / 18%);
+  color: var(--xfer-well-ink);
+  text-shadow: none;
+}
+
+.xfer-mon__pic {
+  flex: none;
+  width: 19px;
+  height: 19px;
+  border-radius: 3px;
+  object-fit: cover;
+}
+
+.xfer-mon__n {
+  font-size: 12px;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+/* The type the tray picked, where it already lives: a gold rim. */
+.xfer-mon.is-picked {
+  box-shadow:
+    0 0 0 1.5px var(--xfer-gold),
+    0 0 6px rgb(255 200 60 / 55%);
+}
+
+.xfer-plate__top:has(.xfer-mon.is-picked) .xfer-mon:not(.is-picked) {
+  opacity: 0.6;
+}
+
+/* More types than shown: three dots, never a "+". */
+.xfer-plate__more {
+  flex: none;
+  margin-left: auto;
+  padding: 1px 3px;
+  border-radius: 4px;
+  background: rgb(0 0 0 / 40%);
+  color: #d8e0e8;
+  font-size: 11px;
+  font-weight: 800;
+  line-height: 14px;
+  text-shadow: none;
+}
+
+/* An empty yard: one faint dashed well, no word. */
+.xfer-plate__none {
+  flex: 1 1 auto;
+  height: 18px;
+  border: 1.5px dashed rgb(255 255 255 / 45%);
+  border-radius: 4px;
+  color: #e3eaf1;
+  font-size: 11px;
+  font-weight: 800;
+  line-height: 15px;
+  text-align: center;
+  text-shadow: 0 1px 1px rgb(0 0 0 / 80%);
+}
+
+.xfer-plate__word {
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0.02em;
+  text-shadow: 0 1px 1px rgb(0 0 0 / 80%);
+}
+
+.xfer-plate__ico {
+  flex: none;
+  width: 18px;
+  height: 18px;
+}
+
+/* The room: a dark strip, the bar and the room left with the housing icon. */
+.xfer-plate__room {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  height: 14px;
+  padding: 0 4px 0 5px;
+  border-radius: 0 0 5px 5px;
+  background: var(--xfer-recess);
+}
+
+.xfer-bar {
+  position: relative;
+  display: block;
+  flex: 1 1 auto;
+  min-width: 20px;
+  height: 5px;
+  overflow: hidden;
+  border-radius: 3px;
+  background: rgb(0 0 0 / 60%);
+  box-shadow: inset 0 1px 1px rgb(0 0 0 / 70%);
+}
+
+.xfer-bar > i {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 0;
+}
+
+.xfer-bar__used {
+  background: var(--xfer-room-ok);
+}
+
+.xfer-bar__used.is-low {
+  background: var(--xfer-room-low);
+}
+
+.xfer-bar__used.is-full {
+  background: var(--xfer-room-full);
+}
+
+.xfer-bar__add {
+  background: var(--xfer-in);
+}
+
+.xfer-bar__sub {
+  background: var(--xfer-out);
+}
+
+.xfer-plate__free {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: 1px;
+  font-size: 11px;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  text-shadow: 0 1px 1px rgb(0 0 0 / 90%);
+}
+
+.xfer-plate__free.is-full {
+  color: #ff9f93;
+}
+
+.xfer-plate__house {
+  width: 12px;
+  height: 12px;
+}
+
+/* Zoomed out: one monster, a thin bar. Far out: a dot. */
+.xfer-plate[data-size="slim"] {
+  width: 62px;
+  border-radius: 5px;
+}
+
+.xfer-plate[data-size="slim"] .xfer-plate__top {
+  height: 22px;
+}
+
+.xfer-bar--thin {
+  flex: none;
+  height: 4px;
+  margin: 0 3px 3px;
+}
+
+.xfer-plate[data-size="dot"] {
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  border-width: 2px;
+}
+
+.xfer-plate__dot {
+  position: absolute;
+  inset: 4px;
+  border-radius: 50%;
+  background: var(--xfer-room-ok);
+}
+
+.xfer-plate.is-dim .xfer-plate__dot {
+  background: #8b949c;
+}
+
+/* The yard the move started from: gold, over its neighbours. */
+.xfer-plate.is-anchor {
+  z-index: 1;
+  border-color: var(--xfer-gold);
+  box-shadow:
+    0 0 0 1px rgb(0 0 0 / 60%),
+    0 0 10px rgb(255 200 60 / 45%),
+    0 3px 6px rgb(0 0 0 / 55%);
+  cursor: default;
+}
+
+.xfer-plate.is-anchor .xfer-plate__top {
+  justify-content: center;
+  gap: 4px;
+  border-radius: 5px 5px 0 0;
+  background: var(--xfer-gold-bg);
+  color: var(--xfer-gold-ink);
+}
+
+.xfer-plate.is-anchor .xfer-plate__dot {
+  background: var(--xfer-gold);
+}
+
+/* A ticked yard: orange edge and glow, a check seal on its corner. */
+.xfer-plate.is-on {
+  border-color: var(--xfer-on);
+  box-shadow:
+    0 0 0 1px rgb(0 0 0 / 70%),
+    0 0 12px var(--xfer-on-glow),
+    0 3px 6px rgb(0 0 0 / 55%);
+}
+
+.xfer-plate.is-on .xfer-plate__dot {
+  background: var(--xfer-on);
+}
+
+.xfer-plate__tick {
+  position: absolute;
+  top: -8px;
+  left: -8px;
+  width: 18px;
+  height: 18px;
+  border: 1.5px solid #1e0b02;
+  border-radius: 50%;
+  background: var(--xfer-on) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 20 20'%3E%3Cpath d='M4.5 10.5l3.5 3.5L15.5 6' fill='none' stroke='%23fff' stroke-width='3.2' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") center / 13px 13px no-repeat;
+  box-shadow: 0 1px 3px rgb(0 0 0 / 60%);
+}
+
+.xfer-plate[data-size="dot"] .xfer-plate__tick {
+  display: none;
+}
+
+/* Ticked but nothing of what is picked can go there or come from there. */
+.xfer-plate.is-idle {
+  border-style: dashed;
+}
+
+/* Cannot take part: full (moving out), empty (bringing in), or the main yard
+   from the main yard. Still readable, clearly out of play. */
+.xfer-plate.is-dim {
+  filter: grayscale(0.7);
+  cursor: not-allowed;
+}
+
+.xfer-plate.is-dim:not(.is-nohousing) .xfer-plate__top {
+  opacity: 0.92;
+}
+
+.xfer-plate.is-nohousing {
+  background: #3a434e;
+}
+
+:root[data-skin="flash"] .xfer-plate.is-nohousing {
+  background: #4a3f35;
+}
+
+.xfer-plate.is-nohousing .xfer-plate__top {
+  justify-content: center;
+  gap: 4px;
+  color: #d2dbe4;
+}
+
+.xfer-plate.is-nohousing .xfer-plate__word {
+  font-size: 11px;
+  white-space: nowrap;
+}
+
+.xfer-plate.is-dim .xfer-plate__free {
+  color: #e8eef4;
+}
+
+/* Under attack: hazard stripes and swords. */
+.xfer-plate.is-attack {
+  border-color: rgb(201 74 74 / 80%);
+  background: var(--xfer-attack);
+  box-shadow: inset 0 0 0 1px rgb(0 0 0 / 35%), 0 3px 6px rgb(0 0 0 / 55%);
+  filter: saturate(0.7);
+  cursor: not-allowed;
+}
+
+.xfer-plate.is-attack .xfer-plate__word {
+  font-size: 11px;
+}
+
+.xfer-plate.is-attack .xfer-plate__top {
+  justify-content: center;
+  gap: 4px;
+  height: 24px;
+}
+
+/* A tap where nothing can go: a short shake. */
+.xfer-plate.is-nope {
+  animation: xfer-nope 0.28s ease;
+}
+
+@keyframes xfer-nope {
+  0%,
+  100% {
+    translate: 0 0;
+  }
+
+  25% {
+    translate: -4px 0;
+  }
+
+  75% {
+    translate: 4px 0;
+  }
+}
+
+/* What the move did, on each yard that got or gave. */
+.xfer-plate.is-done {
+  border-color: var(--xfer-good);
+  box-shadow:
+    0 0 0 1px rgb(0 0 0 / 60%),
+    0 0 14px rgb(80 220 100 / 60%),
+    0 3px 6px rgb(0 0 0 / 55%);
+}
+
+.xfer-plate.is-peeked {
+  z-index: 3;
+  outline: 2px solid #fff;
+  outline-offset: 1px;
+}
+
+@media (hover: hover) {
+  .xfer-plate:not(.is-anchor, .is-dim, .is-attack):hover {
+    filter: brightness(1.12);
+  }
+}
+
+/* ── The tag: "+11 [Pokey]" a yard will get, "−11" it will give ─────────── */
+
+.xfer-tag {
+  position: absolute;
+  top: 0;
+  left: 0;
+  z-index: 1;
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  height: 19px;
+  padding: 0 2px 0 5px;
+  box-sizing: border-box;
+  border: 1.5px solid #1e0b02;
+  border-radius: 10px;
+  background: linear-gradient(180deg, #e8621a 0%, #c44a08 100%);
+  box-shadow: 0 2px 4px rgb(0 0 0 / 55%);
+  color: #fff;
+  font-size: 12px;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+  white-space: nowrap;
+  text-shadow: 0 1px 1px rgb(80 20 0 / 90%);
+  pointer-events: none;
+  z-index: 2;
+}
+
+:root[data-skin="flash"] .xfer-tag:not(.xfer-tag--inline) {
+  height: 17px;
+  font-size: 11px;
+}
+
+:root[data-skin="flash"] .xfer-tag:not(.xfer-tag--inline) .xfer-tag__pic {
+  width: 13px;
+  height: 13px;
+}
+
+.xfer-tag--sub {
+  background: var(--xfer-tag-sub);
+  color: var(--xfer-tag-sub-ink);
+  text-shadow: 0 1px 0 rgb(255 240 200 / 70%);
+}
+
+.xfer-tag__pic + .xfer-tag__pic {
+  margin-left: -6px;
+  box-shadow: -1px 0 0 rgb(0 0 0 / 50%);
+}
+
+.xfer-tag__pic {
+  width: 14px;
+  height: 14px;
+  border-radius: 3px;
+  background: var(--xfer-well);
+  object-fit: cover;
+}
+
+.xfer-tag--inline {
+  position: static;
+  height: 22px;
+  font-size: 13px;
+}
+
+/* After Go: the tags rise and fade. */
+.xfer-tag.is-done {
+  animation: xfer-rise 2.4s ease-out forwards;
+}
+
+@keyframes xfer-rise {
+  0% {
+    opacity: 0;
+    translate: 0 6px;
+  }
+
+  15% {
+    opacity: 1;
+    translate: 0 0;
+  }
+
+  75% {
+    opacity: 1;
+    translate: 0 -10px;
+  }
+
+  100% {
+    opacity: 0;
+    translate: 0 -18px;
+  }
+}
+
+/* ── The army card (hover, or press and hold on a touch screen) ─────────── */
+
+.xfer-peek {
+  position: absolute;
+  top: 0;
+  left: 0;
+  z-index: 3;
+  display: grid;
+  gap: 6px;
+  box-sizing: border-box;
+  width: max-content;
+  min-width: 196px;
+  max-width: 300px;
+  padding: 8px 10px 10px;
+  border-radius: 8px;
+  background: var(--xfer-plate-bg);
+  border: 1.5px solid var(--xfer-plate-edge);
+  box-shadow:
+    inset 0 1px 0 var(--xfer-plate-hi),
+    0 8px 18px rgb(0 0 0 / 55%);
+  color: var(--xfer-ink);
+  pointer-events: none;
+}
+
+:root[data-skin] .xfer-peek {
+  border-style: solid;
+  border-color: transparent;
+  border-width: var(--skin-bar-edge);
+  border-image-source: var(--skin-bar);
+  border-image-slice: var(--skin-bar-slice) fill;
+  border-image-width: var(--skin-bar-width);
+  border-image-repeat: round;
+  background: none;
+  box-shadow: none;
+  filter: drop-shadow(0 6px 10px rgb(0 0 0 / 50%));
+}
+
+.xfer-peek[hidden] {
+  display: none;
+}
+
+.xfer-peek__caret {
+  position: absolute;
+  left: var(--xfer-caret, 50%);
+  bottom: -14px;
+  width: 0;
+  height: 0;
+  margin-left: -9px;
+  border: 9px solid transparent;
+  border-top-color: var(--xfer-caret-ink, #b57b3e);
+  filter: drop-shadow(0 2px 1px rgb(0 0 0 / 50%));
+}
+
+.xfer-peek.is-below .xfer-peek__caret {
+  top: -14px;
+  bottom: auto;
+  border-top-color: transparent;
+  border-bottom-color: var(--xfer-caret-ink, #b57b3e);
+}
+
+.xfer-peek:has(.xfer-peek__close) .xfer-peek__head {
+  padding-right: 26px;
+}
+
+.xfer-peek__close {
+  position: absolute;
+  top: -14px;
+  right: -14px;
+  width: 44px;
+  height: 44px;
+  border: 0;
+  background: var(--skin-close, #d94b38) center / 32px 32px no-repeat;
+  pointer-events: auto;
+  cursor: pointer;
+}
+
+.xfer-peek__left {
+  margin-top: -4px;
+  color: var(--skin-ink-3, #c8d3df);
+  font-size: 12px;
+  font-weight: 700;
+  text-align: right;
+}
+
+/* Classic: a card of the windows' parchment, as the yard card. */
+:root[data-skin="flash"] .xfer-peek {
+  --skin-ink-3: #6e4f30;
+  --xfer-caret-ink: #8a5a2a;
+
+  border: 2px solid #8a5a2a;
+  border-image: none;
+  border-radius: 10px;
+  background: #f8e4c0;
+  color: #3d2410;
+  filter: drop-shadow(0 6px 10px rgb(0 0 0 / 45%));
+}
+
+:root[data-skin="flash"] .xfer-peek :is(.xfer-peek__name, .xfer-peek__free) {
+  text-shadow: none;
+}
+
+.xfer-peek__head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+
+.xfer-peek__ico {
+  flex: none;
+  width: 22px;
+  height: 22px;
+}
+
+.xfer-peek__name {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  font-size: 15px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  text-shadow: 0 1px 2px rgb(0 0 0 / 80%);
+}
+
+.xfer-peek__far {
+  flex: none;
+  color: var(--skin-ink-3, #c8d3df);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.xfer-peek__grid {
+  display: grid;
+  grid-template-columns: repeat(3, max-content);
+  gap: 4px;
+}
+
+.xfer-mon--big {
+  position: relative;
+  height: 32px;
+  gap: 3px;
+  padding-right: 5px;
+}
+
+.xfer-mon--big .xfer-mon__pic {
+  width: 30px;
+  height: 30px;
+}
+
+.xfer-mon--big .xfer-mon__n {
+  font-size: 14px;
+}
+
+.xfer-mon--big.is-new .xfer-mon__n {
+  opacity: 0.5;
+}
+
+.xfer-mon__add,
+.xfer-mon__sub {
+  position: absolute;
+  top: -7px;
+  right: -4px;
+  padding: 1px 4px;
+  border: 1px solid #1e0b02;
+  border-radius: 8px;
+  background: #e8580e;
+  color: #fff;
+  font-size: 11px;
+  font-style: normal;
+  font-weight: 800;
+  line-height: 1.1;
+}
+
+.xfer-mon__sub {
+  background: #e6a521;
+  color: #2c1a04;
+}
+
+.xfer-peek__none {
+  grid-column: 1 / -1;
+  color: var(--skin-ink-3, #c8d3df);
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.xfer-peek__room {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.xfer-peek__room .xfer-bar {
+  height: 7px;
+}
+
+.xfer-peek__free {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: 2px;
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+}
+
+.xfer-peek__free small {
+  color: var(--skin-ink-3, #c8d3df);
+  font-size: 11px;
+}
+
+/* ── The result (and loading, and refusals) ─────────────────────────────── */
+
+.xfer-toast {
+  position: absolute;
+  top: calc(var(--hud-height, 60px) + var(--space-3));
+  left: 50%;
+  z-index: 4;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  max-width: calc(100vw - 24px);
+  box-sizing: border-box;
+  padding: 8px 16px 8px 10px;
+  translate: -50% 0;
+  border-radius: 10px;
+  background: var(--xfer-plate-bg);
+  border: 1.5px solid var(--xfer-plate-edge);
+  color: var(--xfer-ink);
+  pointer-events: auto;
+  cursor: pointer;
+  animation: xfer-toast-in 0.18s ease-out;
+}
+
+:root[data-skin] .xfer-toast {
+  border-style: solid;
+  border-color: transparent;
+  border-width: var(--skin-bar-edge);
+  border-image-source: var(--skin-bar);
+  border-image-slice: var(--skin-bar-slice) fill;
+  border-image-width: var(--skin-bar-width);
+  border-image-repeat: round;
+  background: none;
+  filter: drop-shadow(0 6px 10px rgb(0 0 0 / 50%));
+}
+
+.xfer-toast[hidden] {
+  display: none;
+}
+
+@keyframes xfer-toast-in {
+  from {
+    opacity: 0;
+    translate: -50% -8px;
+  }
+}
+
+.xfer-toast__mark {
+  flex: none;
+  width: 28px;
+  height: 28px;
+  border: 2px solid #0c2a10;
+  border-radius: 50%;
+  background: var(--xfer-good) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 20 20'%3E%3Cpath d='M4.5 10.5l3.5 3.5L15.5 6' fill='none' stroke='%23fff' stroke-width='3.2' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") center / 18px 18px no-repeat;
+}
+
+.xfer-toast__mark.is-bad {
+  border-color: #3a0906;
+  background: #d94b38 url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 20 20'%3E%3Cpath d='M10 4v7M10 15v.5' fill='none' stroke='%23fff' stroke-width='3.4' stroke-linecap='round'/%3E%3C/svg%3E") center / 18px 18px no-repeat;
+}
+
+.xfer-toast__body {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.xfer-toast__line {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 5px;
+  font-size: 17px;
+  font-weight: 800;
+  text-shadow: 0 1px 2px rgb(0 0 0 / 80%);
+}
+
+.xfer-toast__pic {
+  width: 26px;
+  height: 26px;
+  border-radius: 4px;
+  background: var(--xfer-well);
+  object-fit: cover;
+}
+
+.xfer-toast__sub {
+  color: var(--skin-ink-2, #dde5ee);
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.xfer-toast .game-icon {
+  width: 24px;
+  height: 24px;
+}
+
+/* The arrow on Go and in the result. */
+.xfer-go__arrow {
+  display: inline-block;
+  flex: none;
+  width: 20px;
+  height: 14px;
+  background: currentColor;
+  -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 22 16'%3E%3Cpath d='M1 8h15M11 2l7 6-7 6' fill='none' stroke='%23000' stroke-width='3.4' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") center / contain no-repeat;
+  mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 22 16'%3E%3Cpath d='M1 8h15M11 2l7 6-7 6' fill='none' stroke='%23000' stroke-width='3.4' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") center / contain no-repeat;
+}
+
+/* ── The tray ───────────────────────────────────────────────────────────── */
+
+.panel.xfer-tray {
+  position: absolute;
+  left: 50%;
+  bottom: calc(var(--space-2) + env(safe-area-inset-bottom, 0px));
+  /* Over everything else in the map's layer (its own layer: windows and
+     pop-ups still open above it). */
+  z-index: 40;
+  display: flex;
+  flex-direction: column;
+  box-sizing: border-box;
+  width: min(940px, calc(100vw - 160px));
+  min-width: 0;
+  max-width: none;
+  max-height: none;
+  translate: -50% 0;
+}
+
+.panel.xfer-tray > .panel__body {
+  display: grid;
+  gap: 8px;
+  padding: 2px 4px 4px;
+  overflow: visible;
+}
+
+/* The close disc sits on the frame's top right corner, as on every window. */
+.panel.xfer-tray > .panel__titlebar {
+  min-height: 12px;
+}
+
+.xfer-tray.is-busy .panel__body {
+  opacity: 0.75;
+  pointer-events: none;
+}
+
+.xfer-tray__row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.xfer-tray__none {
+  padding: 0 8px;
+  color: var(--colour-text-muted);
+  font-weight: 700;
+}
+
+/* The monster chips: one line that scrolls sideways, "All" pinned beside it. */
+.xfer-chips {
+  display: flex;
+  flex: 0 1 auto;
+  gap: 6px;
+  min-width: 0;
+  padding: 4px 2px;
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
+  scrollbar-width: thin;
+}
+
+.xfer-chips.is-more-right {
+  -webkit-mask-image: linear-gradient(to right, #000 calc(100% - 36px), transparent);
+  mask-image: linear-gradient(to right, #000 calc(100% - 36px), transparent);
+}
+
+.xfer-chip {
+  position: relative;
+  display: flex;
+  flex: none;
+  align-items: stretch;
+  height: 52px;
+  box-sizing: border-box;
+  border: 2px solid var(--colour-border-strong);
+  border-radius: 8px;
+  background: var(--colour-surface-sunken);
+}
+
+.xfer-chip.is-on {
+  border-color: var(--xfer-on);
+  box-shadow: 0 0 0 1px rgb(0 0 0 / 40%), 0 0 8px var(--xfer-on-glow);
+}
+
+.xfer-chip__face {
+  position: relative;
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 48px;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 6px 0 0 6px;
+  background: var(--xfer-well);
+  cursor: pointer;
+}
+
+.xfer-chip__pic {
+  width: 40px;
+  height: 40px;
+  border-radius: 4px;
+  object-fit: cover;
+}
+
+.xfer-chip__check {
+  display: block;
+  width: 18px;
+  height: 18px;
+  border: 1.5px solid #1e0b02;
+  border-radius: 50%;
+  background: var(--xfer-on) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 20 20'%3E%3Cpath d='M4.5 10.5l3.5 3.5L15.5 6' fill='none' stroke='%23fff' stroke-width='3.2' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") center / 13px 13px no-repeat;
+}
+
+.xfer-chip__face > .xfer-chip__check {
+  position: absolute;
+  right: -5px;
+  bottom: -5px;
+}
+
+.xfer-chip__count {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: center;
+  gap: 1px;
+  min-width: 54px;
+  margin: 0;
+  padding: 0 8px 0 9px;
+  border: 0;
+  border-radius: 0 6px 6px 0;
+  background: none;
+  color: var(--colour-text);
+  font: inherit;
+  cursor: pointer;
+}
+
+.xfer-chip__count b {
+  font-size: 17px;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+}
+
+.xfer-chip__count b.is-zero {
+  color: var(--xfer-room-full);
+}
+
+.xfer-chip__count small {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  color: var(--colour-text-muted);
+  font-size: 12px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.xfer-chip__size .game-icon {
+  width: 14px;
+  height: 14px;
+}
+
+/* The stepper inside the chip. */
+.xfer-chip.is-stepping {
+  gap: 4px;
+  padding-right: 4px;
+}
+
+.xfer-step {
+  display: grid;
+  place-items: center;
+  align-self: center;
+  width: 40px;
+  height: 40px;
+  margin: 0;
+  padding: 0;
+  border: 1.5px solid var(--colour-border-strong);
+  border-radius: 6px;
+  background: var(--colour-surface-control);
+  color: var(--colour-text);
+  font: inherit;
+  font-size: 22px;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.xfer-step:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+.xfer-step--ok {
+  border-color: transparent;
+  background: none;
+}
+
+.xfer-step--ok .xfer-chip__check {
+  width: 26px;
+  height: 26px;
+  background-size: 18px 18px;
+}
+
+.xfer-step__n {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-width: 46px;
+  font-variant-numeric: tabular-nums;
+}
+
+.xfer-step__n b {
+  font-size: 17px;
+  line-height: 1;
+}
+
+.xfer-step__n small {
+  color: var(--colour-text-muted);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+/* The tools and Go. */
+.xfer-tray__row--act {
+  flex-wrap: nowrap;
+}
+
+.xfer-tray__tools {
+  display: flex;
+  flex: none;
+  gap: 6px;
+}
+
+.xfer-tray .btn,
+.xfer-list .btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  white-space: nowrap;
+}
+
+.xfer-tray .btn .game-icon,
+.xfer-list .btn .game-icon {
+  width: 24px;
+  height: 24px;
+}
+
+.xfer-all {
+  flex: none;
+  min-width: 64px;
+  min-height: 48px;
+}
+
+.xfer-quick,
+.xfer-listb,
+.xfer-split {
+  min-height: 42px;
+  padding-inline: 12px;
+}
+
+.xfer-tray .xfer-quick.is-active {
+  filter: drop-shadow(0 0 2px #ffa73b) drop-shadow(0 0 5px rgb(255 167 59 / 80%));
+}
+
+.xfer-chip__edit {
+  position: absolute;
+  top: 5px;
+  right: 4px;
+  width: 12px;
+  height: 8px;
+  background: currentColor;
+  opacity: 0.6;
+  clip-path: polygon(0 0, 100% 0, 50% 100%);
+}
+
+.xfer-listb__n {
+  padding: 1px 6px;
+  border-radius: 9px;
+  background: rgb(0 0 0 / 22%);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Even split: three equal bars; in order: falling bars. */
+.xfer-split__ico {
+  display: inline-block;
+  width: 18px;
+  height: 16px;
+  background:
+    linear-gradient(currentColor, currentColor) 0 100% / 4px 100% no-repeat,
+    linear-gradient(currentColor, currentColor) 7px 100% / 4px 100% no-repeat,
+    linear-gradient(currentColor, currentColor) 14px 100% / 4px 100% no-repeat;
+}
+
+.xfer-split[aria-pressed="false"] .xfer-split__ico {
+  background:
+    linear-gradient(currentColor, currentColor) 0 100% / 4px 100% no-repeat,
+    linear-gradient(currentColor, currentColor) 7px 100% / 4px 60% no-repeat,
+    linear-gradient(currentColor, currentColor) 14px 100% / 4px 25% no-repeat;
+}
+
+.xfer-status {
+  display: flex;
+  flex: 1 0 auto;
+  white-space: nowrap;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 12px;
+  min-width: 0;
+  padding: 0 6px;
+}
+
+.xfer-status__item {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 17px;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+}
+
+.xfer-status__item small {
+  color: var(--colour-text-muted);
+  font-size: 13px;
+}
+
+.xfer-status__item .game-icon {
+  width: 24px;
+  height: 24px;
+}
+
+.xfer-status__warn {
+  padding: 2px 8px;
+  border-radius: 9px;
+  background: rgb(217 75 56 / 22%);
+  color: var(--colour-danger);
+  font-size: 13px;
+  font-weight: 800;
+}
+
+:root[data-skin="scrap"] .xfer-status__warn {
+  color: #ffb0a6;
+}
+
+.xfer-go {
+  flex: none;
+  min-width: 200px;
+  min-height: 46px;
+  padding-inline: 18px;
+  font-size: 18px;
+}
+
+.xfer-go .game-icon {
+  width: 26px;
+  height: 26px;
+}
+
+.xfer-go.is-done:disabled {
+  opacity: 1;
+  filter: none;
+}
+
+.xfer-go .xfer-chip__check {
+  width: 24px;
+  height: 24px;
+  background-color: var(--xfer-good);
+  background-size: 16px 16px;
+}
+
+/* Waiting for a pick or a tick: Go says the next step, greyed. */
+.xfer-go.is-waiting {
+  font-size: 15px;
+}
+
+/* Touch screens: every control a finger wide. */
+@media (pointer: coarse) {
+  .xfer-tray .btn,
+  .xfer-list .btn {
+    min-height: 44px;
+  }
+
+  .xfer-step {
+    width: 44px;
+    height: 44px;
+  }
+}
+
+/* ── Phone ─────────────────────────────────────────────────────────────── */
+
+@media (max-width: 620px), (max-height: 500px) {
+  .panel.xfer-tray {
+    left: calc(4px + env(safe-area-inset-left, 0px));
+    right: calc(4px + env(safe-area-inset-right, 0px));
+    width: auto;
+    min-width: 0;
+    max-width: none;
+    translate: none;
+  }
+}
+
+/* On its side: two thin bands. */
+@media (min-width: 620.02px) and (max-height: 500px) {
+  .panel.xfer-tray > .panel__body {
+    gap: 4px;
+  }
+
+  .xfer-chip {
+    height: 46px;
+  }
+
+  .xfer-chip__face {
+    width: 42px;
+  }
+
+  .xfer-chip__pic {
+    width: 36px;
+    height: 36px;
+  }
+
+  .xfer-all {
+    min-height: 44px;
+  }
+
+  .xfer-quick,
+  .xfer-listb,
+  .xfer-split {
+    min-height: 44px;
+    padding-inline: 8px;
+  }
+
+  .xfer-go {
+    min-width: 0;
+    min-height: 44px;
+    font-size: 16px;
+  }
+
+  .xfer-status__item {
+    font-size: 15px;
+  }
+
+  .xfer-status {
+    flex: none;
+    padding: 0 2px;
+  }
+
+  .xfer-tray__row--act .xfer-go {
+    margin-left: auto;
+  }
+
+  .xfer-tray__tools {
+    gap: 4px;
+  }
+
+
+  /* The sign over the tray would take a third of the map: its words stay
+     for screen readers, the close disc stays on the corner. */
+  .panel.xfer-tray > .panel__titlebar {
+    min-height: 0;
+    padding: 0;
+  }
+
+  .panel.xfer-tray > .panel__titlebar > .panel__title {
+    clip-path: inset(50%);
+    width: 1px;
+    min-width: 0;
+    height: 1px;
+    overflow: hidden;
+  }
+
+}
+
+@media (min-width: 620.02px) and (max-width: 900px) and (min-height: 501px) {
+  .panel.xfer-tray {
+    width: calc(100vw - 32px);
+    min-width: 0;
+    max-width: none;
+  }
+}
+
+@media (max-width: 620px) {
+  .xfer-listb__n {
+    display: none;
+  }
+
+  .xfer-chip__face {
+    width: 42px;
+  }
+
+  .xfer-chip__pic {
+    width: 36px;
+    height: 36px;
+  }
+
+  .xfer-all {
+    min-width: 52px;
+  }
+
+  .xfer-tray .btn .game-icon {
+    width: 20px;
+    height: 20px;
+  }
+
+  :root[data-skin] .xfer-tray__tools > .btn {
+    padding-inline: 4px;
+    font-size: 15px;
+  }
+
+  .xfer-chip__count {
+    min-width: 40px;
+    padding: 0 6px;
+  }
+}
+
+/* Narrow and tall (a phone or an iPad upright): three bands, Go across the
+   whole width (TransferMode.ts STACKED_QUERY). */
+@media (max-width: 900px) and (min-height: 501px) {
+  .xfer-tray__row--act {
+    flex-wrap: wrap;
+  }
+
+  .xfer-tray__tools {
+    flex: 1 1 100%;
+    min-width: 0;
+  }
+
+  .xfer-tray__tools > .btn {
+    flex: 1 1 auto;
+    min-width: 0;
+    min-height: 44px;
+    padding-inline: 6px;
+  }
+
+  .xfer-status {
+    justify-content: center;
+  }
+
+  .xfer-go {
+    flex: 1 1 100%;
+    min-height: 50px;
+  }
+}
+
+/* ── The List window ────────────────────────────────────────────────────── */
+
+.xfer-list {
+  display: flex;
+  flex-direction: column;
+  width: min(720px, calc(100vw - 24px));
+  min-width: 0;
+  max-width: none;
+  height: min(640px, calc(100vh - var(--hud-height, 60px) - 60px));
+  height: min(640px, calc(100dvh - var(--hud-height, 60px) - 60px));
+}
+
+.xfer-list > .panel__head {
+  flex: none;
+}
+
+.xfer-list__head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  padding: 0 0 8px;
+}
+
+.xfer-list__search {
+  display: flex;
+  flex: 1 1 200px;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  min-height: 44px;
+  padding: 0 10px;
+  border: 1.5px solid var(--colour-border-strong);
+  border-radius: 8px;
+  background: var(--colour-surface-input);
+}
+
+.xfer-list__input {
+  flex: 1 1 auto;
+  min-width: 0;
+  border: 0;
+  background: none;
+  color: var(--colour-text);
+  font: inherit;
+  font-size: 16px;
+  font-weight: 700;
+  outline: none;
+}
+
+.xfer-list > .panel__body {
+  flex: 1 1 auto;
+  min-height: 120px;
+  overflow-y: auto;
+}
+
+.xfer-list__rows {
+  display: grid;
+  align-content: start;
+  gap: 6px;
+}
+
+.xfer-row {
+  display: grid;
+  grid-template-columns: 32px minmax(160px, 1.3fr) minmax(0, 1.4fr) 180px 92px;
+  align-items: center;
+  gap: 10px;
+  min-height: 54px;
+  margin: 0;
+  padding: 4px 10px;
+  border: 2px solid var(--colour-border);
+  border-radius: 8px;
+  background: var(--colour-surface-sunken);
+  color: var(--colour-text);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.xfer-row.is-on {
+  border-color: var(--xfer-on);
+  background: var(--colour-surface-selected);
+}
+
+.xfer-row.is-idle {
+  border-style: dashed;
+}
+
+@media (hover: hover) {
+  .xfer-row:hover {
+    background: var(--colour-surface-control-hover);
+  }
+}
+
+.xfer-row__box {
+  display: grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  box-sizing: border-box;
+  border: 2px solid var(--colour-border-strong);
+  border-radius: 6px;
+  background: var(--colour-surface-input);
+}
+
+.xfer-row__box .xfer-chip__check {
+  width: 24px;
+  height: 24px;
+  background-size: 17px 17px;
+}
+
+.xfer-row__name {
+  display: grid;
+  min-width: 0;
+}
+
+.xfer-row__name b {
+  overflow: hidden;
+  font-size: 16px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.xfer-row__name small {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--colour-text-muted);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.xfer-row__name small .game-icon {
+  width: 16px;
+  height: 16px;
+}
+
+.xfer-row__mons {
+  display: flex;
+  flex-wrap: nowrap;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+  overflow: hidden;
+}
+
+.xfer-row__mons .xfer-mon.is-picked {
+  box-shadow: inset 0 -1px 0 rgb(0 0 0 / 18%);
+}
+
+.xfer-row__mons .xfer-mon {
+  height: 26px;
+}
+
+.xfer-row__mons .xfer-mon__pic {
+  width: 25px;
+  height: 25px;
+}
+
+.xfer-row__mons .xfer-mon__n {
+  font-size: 13px;
+}
+
+.xfer-row__mons .xfer-plate__more {
+  margin-left: 0;
+  background-color: rgb(0 0 0 / 25%);
+}
+
+:root[data-skin="flash"] .xfer-row__mons .xfer-plate__more {
+  background: #5c4630;
+  color: #fff;
+}
+
+.xfer-row__empty {
+  color: var(--colour-text-muted);
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.xfer-row__room {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.xfer-row__room .xfer-bar {
+  height: 7px;
+}
+
+.xfer-row__room b {
+  display: grid;
+  grid-template-columns: 16px 1fr;
+  align-items: center;
+  gap: 3px;
+  min-width: 60px;
+  font-size: 14px;
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+
+.xfer-row__room b.is-full {
+  color: var(--colour-danger);
+}
+
+.xfer-row__room .game-icon {
+  width: 16px;
+  height: 16px;
+}
+
+.xfer-row__tag {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.xfer-list__none {
+  padding: 24px 8px;
+  color: var(--colour-text-muted);
+  font-weight: 700;
+  text-align: center;
+}
+
+.xfer-list__foot {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: 14px;
+  padding: 10px 4px 2px;
+  border-top: 2px solid var(--colour-border);
+}
+
+.xfer-list__foot .xfer-done {
+  min-width: 140px;
+  min-height: 46px;
+  margin-left: auto;
+}
+
+@media (max-width: 620px) {
+  /* Two lines: tick, name and what comes; then what it houses and its room. */
+  .xfer-row {
+    grid-template-columns: 30px minmax(0, 1fr) auto;
+    grid-template-areas:
+      "box name tag"
+      "box mons room";
+    gap: 4px 8px;
+    padding: 6px 8px;
+  }
+
+  .xfer-row__box {
+    grid-area: box;
+  }
+
+  .xfer-row__name {
+    grid-area: name;
+  }
+
+  .xfer-row__name small {
+    white-space: nowrap;
+  }
+
+  .xfer-row__mons {
+    grid-area: mons;
+  }
+
+  .xfer-row__room {
+    grid-area: room;
+    width: 120px;
+  }
+
+  .xfer-row__tag {
+    grid-area: tag;
+  }
+
+  .xfer-row__room b {
+    min-width: 44px;
+  }
+
+  .xfer-row__mons .xfer-mon__pic {
+    width: 22px;
+    height: 22px;
+  }
+
+  .xfer-row__name b {
+    font-size: 14px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .xfer-plate,
+  .xfer-tag.is-done,
+  .xfer-toast,
+  .xfer-plate.is-nope {
+    animation: none;
+    transition: none;
+  }
+}
+
+/* A phone on its side: the List gets the rows. Last in the file, so these win
+   over the List's own rules above. */
+@media (min-width: 620.02px) and (max-height: 500px) {
+  .xfer-list {
+    height: calc(100vh - 16px);
+    height: calc(100dvh - 16px);
+  }
+
+  .xfer-list .xfer-list__head {
+    flex-wrap: nowrap;
+    gap: 6px;
+    padding-bottom: 4px;
+  }
+
+  .xfer-list .xfer-list__search {
+    flex: 1 1 120px;
+    min-width: 100px;
+  }
+
+  .xfer-list .xfer-list__head .btn {
+    padding-inline: 8px;
+  }
+
+  .xfer-list .xfer-list__count {
+    flex: none;
+    font-size: 14px;
+  }
+
+  .xfer-list .xfer-list__head .xfer-done {
+    flex: none;
+    min-width: 84px;
+    margin-left: 0;
+  }
+
+  .xfer-list .xfer-row {
+    min-height: 46px;
+    padding-block: 2px;
+  }
+
+  .xfer-list .xfer-list__foot[hidden] {
+    display: none;
+  }
+}

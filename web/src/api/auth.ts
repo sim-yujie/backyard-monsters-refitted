@@ -169,6 +169,20 @@ export const restoreStoredSession = (): Session | null => {
 };
 
 /**
+ * Puts the session aside without ending it: the maintenance switch's cut-off
+ * (`app/maintenanceWatch.ts`). Nothing in this tab uses the token any more,
+ * but the saved copy stays, so once the owner turns maintenance off the
+ * sign-in screen's "Try again" (or the next start) comes back in without the
+ * password. The server keeps the session too.
+ */
+export const pauseSession = (): void => {
+  current = null;
+  lastBookmarks = undefined;
+  setAuthToken(null);
+  forgetCoinBalance();
+};
+
+/**
  * Signs out on the server: POST /api/:apiVersion/player/logout with the
  * session's token, which the server then drops, so a copy of the token stops
  * working at once (security audit 2026-10-29, L4).

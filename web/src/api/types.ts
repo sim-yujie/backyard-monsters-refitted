@@ -839,6 +839,13 @@ export interface BaseLoadResponse extends ApiEnvelope {
    */
   questsClaimable?: number;
   /**
+   * The Hatchery Control Centre's presets (beta 9), the owner's only, from the
+   * main save in every own yard: `home` the main yard's list, `out` the one
+   * every outpost shares; each preset `[monster, count]` stacks in the order
+   * they are sent (`game/monsters/hccPresets.ts`). Absent until one is saved.
+   */
+  hccpresets?: HccPresetsWire | null;
+  /**
    * The owner's loads: how to reach world chat (#282, `game/chat/chatSession.ts`).
    * `chatservers` is every load's, the chat WebSocket's `host:port`;
    * `chattoken` (a day's, per player) and `chatchannel` (the world room for
@@ -1530,7 +1537,15 @@ export type YardResponse<Report> = ApiEnvelope &
     eventcoins?: number;
     /** What this action paid in event coins, for the "+15" moment. */
     coinsGained?: CoinGain[];
+    /** The HCC's presets (beta 9), once the player has saved one. */
+    hccpresets?: HccPresetsWire | null;
   };
+
+/** `hccpresets` on the wire: each list's presets by slot, each `[monster, count][]`. */
+export interface HccPresetsWire {
+  home?: [string, number][][];
+  out?: [string, number][][];
+}
 
 /** One event coin payment (`server/src/services/events/eventCoins.ts`). */
 export interface CoinGain {

@@ -1693,7 +1693,9 @@ select option {
   display: flex;
   flex-direction: column;
   gap: var(--space-3);
-  min-width: min(84vw, 320px);
+  /* Never wider than the panel's inside: a phone's frame and padding leave
+     less than 320px at 390px wide, and the fields ran under the frame. */
+  min-width: min(84vw, 320px, 100%);
   max-width: 360px;
 }
 
@@ -1966,6 +1968,371 @@ select option {
 .update-prompt__reload,
 .update-prompt__close {
   flex: none;
+}
+
+/* Maintenance countdown (ui/MaintenanceBanner.ts, owner 22 Nov 2026): a card
+   centred under the resource bar like "New version", on every screen. Folds
+   to a pill; the last minute is open, red and cannot fold. */
+.maint-banner {
+  position: absolute;
+  top: calc(var(--hud-height) + var(--space-2));
+  inset-inline: var(--space-3);
+  z-index: var(--z-system);
+  display: flex;
+  justify-content: center;
+  pointer-events: none;
+}
+
+.maint-banner__card,
+.maint-banner__pill {
+  pointer-events: auto;
+}
+
+.maint-banner__card {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  width: fit-content;
+  max-width: min(420px, 100%);
+  padding: var(--space-2) var(--space-2) var(--space-2) var(--space-3);
+  border: 1px solid var(--colour-warning-line);
+  border-radius: var(--radius-lg);
+  background: var(--colour-surface-raised);
+  box-shadow: var(--shadow-popup);
+  -webkit-backdrop-filter: var(--blur-panel);
+  backdrop-filter: var(--blur-panel);
+}
+
+.maint-banner--folded .maint-banner__card,
+.maint-banner:not(.maint-banner--folded) .maint-banner__pill {
+  display: none;
+}
+
+.maint-banner__icon {
+  flex: none;
+}
+
+.maint-banner__text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.maint-banner__head {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-2);
+  white-space: nowrap;
+}
+
+.maint-banner__clock {
+  font-family: var(--font-display);
+  font-size: var(--text-xl);
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+  color: var(--colour-warning);
+}
+
+.maint-banner__title {
+  font-family: var(--font-display);
+  font-size: var(--text-md);
+  color: var(--colour-text-strong);
+}
+
+.maint-banner__message,
+.maint-banner__back {
+  margin: 0;
+  font-size: 14px;
+  line-height: var(--leading-tight);
+  color: var(--colour-text);
+  overflow-wrap: anywhere;
+}
+
+.maint-banner__back {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+  color: var(--colour-text-muted);
+}
+
+.maint-banner__back[hidden] {
+  display: none;
+}
+
+.maint-banner__fold {
+  flex: none;
+  align-self: flex-start;
+  min-width: 44px;
+  min-height: 44px;
+  font-size: var(--text-lg);
+}
+
+.maint-banner__fold[hidden] {
+  display: none;
+}
+
+.maint-banner__pill {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-height: 44px;
+  padding: 0 var(--space-3) 0 var(--space-2);
+  border: 1px solid var(--colour-warning-line);
+  border-radius: 999px;
+  background: var(--colour-surface-raised);
+  box-shadow: var(--shadow-popup);
+  color: inherit;
+  cursor: pointer;
+  -webkit-backdrop-filter: var(--blur-panel);
+  backdrop-filter: var(--blur-panel);
+}
+
+.maint-banner__pill .maint-banner__clock {
+  font-size: var(--text-lg);
+}
+
+.maint-banner__chevron {
+  font-size: var(--text-md);
+  line-height: 1;
+  color: var(--colour-text-strong);
+}
+
+/* The owner's own card: he is never signed out. */
+.maint-banner__stay {
+  display: none;
+  padding: 2px var(--space-2);
+  border-radius: 999px;
+  background: rgb(247 201 72 / 18%);
+  color: var(--colour-warning);
+  font-size: var(--text-xs);
+}
+
+.maint-banner--exempt .maint-banner__stay {
+  display: inline-block;
+}
+
+:root[data-skin="flash"] .maint-banner__stay {
+  border: 1px solid rgb(120 70 10 / 50%);
+  background: rgb(247 201 72 / 55%);
+  color: var(--colour-text-strong);
+}
+
+:root[data-skin="scrap"] .maint-banner--final :is(.maint-banner__clock, .maint-banner__title) {
+  color: #ff8a80;
+}
+
+.maint-banner__fold {
+  border: 1px solid var(--colour-warning-line);
+}
+
+/* Phones held upright: below the help, daily-reset, Events and chat row,
+   so the card (open in the last minute) never covers them. */
+@media (max-width: 599px) {
+  .maint-banner {
+    top: calc(var(--hud-height) + 96px);
+  }
+
+  /* Folded, the pill fits the gap in that row, between the timers and Events. */
+  .maint-banner--folded {
+    top: calc(var(--hud-height) + 8px);
+  }
+}
+
+/* Phones held sideways: to the right of that column, clear of the zoom
+   buttons. */
+@media (max-height: 500px) and (min-width: 600px) {
+  .maint-banner {
+    padding-inline: 290px 64px;
+  }
+
+  .maint-banner__card {
+    max-width: min(380px, 100%);
+  }
+}
+
+.maint-banner--final .maint-banner__card {
+  border-color: var(--colour-danger);
+  animation: maint-pulse 1s ease-in-out infinite;
+}
+
+.maint-banner--final .maint-banner__clock,
+.maint-banner--final .maint-banner__title {
+  color: var(--colour-danger);
+}
+
+.maint-banner--on .maint-banner__clock {
+  display: none;
+}
+
+@keyframes maint-pulse {
+  50% {
+    filter: drop-shadow(0 0 10px rgb(255 70 70 / 75%));
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .maint-banner--final .maint-banner__card {
+    animation: none;
+  }
+}
+
+/* The sign-in screen's maintenance card (ui/MaintenanceCard.ts), above the
+   sign-in panel: the form below still works for the owner. */
+.login-stack__maintenance {
+  display: contents;
+}
+
+/* With the card above it the sign-in panel is not squeezed: the screen
+   scrolls instead, so Create account is never hidden. */
+.login-stack:has(.maint-card) {
+  max-height: none;
+}
+
+.maint-card {
+  text-align: start;
+  display: grid;
+  grid-template-columns: 1fr auto;
+  grid-template-areas:
+    "head retry"
+    "message retry"
+    "back retry";
+  align-items: center;
+  gap: var(--space-1) var(--space-4);
+  flex-shrink: 0;
+  width: min(520px, 100%);
+  padding: var(--space-2) var(--space-4);
+  border: 1px solid var(--colour-warning-line);
+  border-radius: var(--radius-lg);
+  background: var(--colour-surface-raised);
+  box-shadow: var(--shadow-popup);
+}
+
+.maint-card__head {
+  grid-area: head;
+  display: flex;
+  flex-wrap: nowrap;
+  white-space: nowrap;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.maint-card__message {
+  grid-area: message;
+}
+
+.maint-card__back {
+  grid-area: back;
+}
+
+.maint-card__retry {
+  grid-area: retry;
+}
+
+/* After the countdown: "Signed out" beside the title. */
+.maint-card__out {
+  padding: 2px var(--space-2);
+  border-radius: 999px;
+  background: rgb(255 70 70 / 18%);
+  color: var(--colour-danger);
+  font-size: var(--text-sm);
+}
+
+.maint-card__out[hidden] {
+  display: none;
+}
+
+/* Narrow: one column, centred, Try again under the words. */
+@media (max-width: 520px) {
+  .maint-card {
+    grid-template-columns: 1fr;
+    grid-template-areas:
+      "head"
+      "message"
+      "back"
+      "retry";
+    justify-items: center;
+    text-align: center;
+  }
+
+  .maint-card__head {
+    flex-wrap: wrap;
+    justify-content: center;
+  }
+}
+
+.maint-card__title {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: var(--text-xl);
+  color: var(--colour-warning);
+}
+
+.maint-card__message {
+  margin: 0;
+  font-size: var(--text-md);
+  line-height: var(--leading-normal);
+  color: var(--colour-text-strong);
+  overflow-wrap: anywhere;
+}
+
+.maint-card__back {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+  margin: 0;
+  font-size: var(--text-md);
+  color: var(--colour-text);
+}
+
+.maint-card__back[hidden] {
+  display: none;
+}
+
+.maint-card__retry {
+  min-width: 140px;
+  min-height: 44px;
+}
+
+.maint-card__retry:disabled {
+  color: var(--colour-text-muted);
+  opacity: 0.6;
+}
+
+/* While the card shows, the form is second choice (the owner's way in):
+   Play is no longer the bright button and Create account is toned down. */
+.login-stack:has(.maint-card) .login-form__switch-button {
+  filter: grayscale(1) brightness(0.85);
+  opacity: 0.85;
+}
+
+:root[data-skin="flash"] .login-stack:has(.maint-card) .login-form button[type="submit"] {
+  box-shadow: inset 0 0 0 1px rgb(90 50 10 / 45%);
+}
+
+.maint-card--shake {
+  animation: maint-shake 0.4s ease-in-out;
+}
+
+.maint-card--over .maint-card__retry {
+  pointer-events: none;
+}
+
+@keyframes maint-shake {
+  20%,
+  60% {
+    transform: translateX(-6px);
+  }
+  40%,
+  80% {
+    transform: translateX(6px);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .maint-card--shake {
+    animation: none;
+  }
 }
 
 /* "Graphics are off" (ui/GraphicsOffNotice.ts): the browser will not let the

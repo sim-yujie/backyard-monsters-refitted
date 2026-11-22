@@ -117,6 +117,21 @@ describe("vercel.json", () => {
     }
   });
 
+  /**
+   * Beta 9 (speed item 9): the game's script is split into pieces the page fetches as it
+   * goes (`vite.config.ts` bundles them to /static/, named after their contents). They
+   * must stay on Vercel and be kept for good; a rewrite would send them to the server.
+   */
+  it("keeps the build's script pieces on the page, cached for good", () => {
+    const cacheFor = config.headers
+      .find((rule) => rule.source === "/static/(.*)")
+      ?.headers.find((h) => h.key === "Cache-Control")?.value;
+    expect(cacheFor).toBe("public, max-age=31536000, immutable");
+    for (const rule of config.rewrites) expect(rule.source.startsWith("/static")).toBe(false);
+    const viteConfig = readFileSync(fileURLToPath(new URL("../vite.config.ts", import.meta.url)), "utf8");
+    expect(viteConfig).toMatch(/assetsDir: "static"/);
+  });
+
   it("opens the emailed reset link on the game page", () => {
     // With cleanUrls on, "/index.html" is itself redirected, so a rewrite to it answers 404 on
     // Vercel (live bug, 7 Nov 2026): the reset page must rewrite to "/".

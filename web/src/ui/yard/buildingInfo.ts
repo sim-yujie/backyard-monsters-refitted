@@ -17,6 +17,7 @@ import { maxLevel, quantityOf, rowOf, type YardKind } from "@/game/yard/building
 import { typeName } from "@/game/yard/planner/summary";
 import type { YardBuilding } from "@/game/yard/yardModel";
 import { CHAMPION_CAGE_TYPE } from "@/game/yard/championModel";
+import { HCC_TYPE, hccLimits } from "@/game/monsters/hatchPlan";
 import { resourceKeyOf, type ResourceKey } from "@/ui/resourceIcon";
 
 /**
@@ -257,6 +258,29 @@ const capacityRow = (building: YardBuilding, label: string, kind: YardKind): Inf
   );
 };
 
+/**
+ * The Hatchery Control Centre's levels (beta 9): its queue, its presets and,
+ * at level 3 on the main yard, the outposts it runs from home. The Inferno's
+ * Incubator Control Centre has one level and none of these rows.
+ */
+const hccRows = (building: YardBuilding, kind: YardKind): InfoRow[] => {
+  if (kind === "inferno") return [];
+  const level = shownLevel(building);
+  const nextLevel = nextLevelOf(building, kind);
+  const now = hccLimits(level);
+  const next = nextLevel !== null ? hccLimits(nextLevel) : null;
+  const queue = (at: typeof now) => text(`${at.stacks} × ${at.size}`);
+  const rows = [
+    row("Queue", queue(now), next ? queue(next) : null),
+    row("Presets", text(String(now.presets)), next ? text(String(next.presets)) : null),
+  ];
+  if (kind === "main") {
+    const runs = (at: number) => text(at >= 3 ? "From home" : "No");
+    rows.push(row("Runs outposts", runs(level), nextLevel !== null ? runs(nextLevel) : null));
+  }
+  return rows;
+};
+
 const flingerRows = (building: YardBuilding, kind: YardKind): InfoRow[] => {
   const level = shownLevel(building);
   const nextLevel = nextLevelOf(building, kind);
@@ -441,6 +465,9 @@ export const buildingInfo = (
       break;
     case CATAPULT_TYPE:
       rows.push(...catapultRows(building, kind));
+      break;
+    case HCC_TYPE:
+      rows.push(...hccRows(building, kind));
       break;
     default: {
       rows.push(...towerRows(building, kind, height, landPct));

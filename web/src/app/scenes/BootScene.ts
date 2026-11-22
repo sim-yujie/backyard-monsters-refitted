@@ -1,4 +1,6 @@
-import { loginWithToken, logout, restoreStoredSession } from "@/api/auth";
+import { loginWithToken, logout, pauseSession, restoreStoredSession } from "@/api/auth";
+import { maintenanceRefusal } from "@/api/maintenance";
+import { setMaintenanceBlock } from "../maintenanceBlock";
 import { Panel } from "@/ui/Panel";
 import type { Scene, SceneContext } from "../SceneManager";
 import { SceneName } from "../sceneName";
@@ -48,7 +50,16 @@ export class BootScene implements Scene {
     try {
       await loginWithToken(stored.token, stored.sessionType);
       context.goTo(SceneName.YARD);
-    } catch {
+    } catch (caught) {
+      // Maintenance: the sign-in screen says so at once, and the saved
+      // session is kept for its Try again (`app/maintenanceWatch.ts`).
+      const maintenance = maintenanceRefusal(caught);
+      if (maintenance) {
+        setMaintenanceBlock(maintenance);
+        pauseSession();
+        context.goTo(SceneName.LOGIN);
+        return;
+      }
       // Expired, superseded or the server is down. Either way the player needs
       // the form; the specific reason is surfaced there when they retry.
       logout();

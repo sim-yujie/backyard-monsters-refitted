@@ -352,3 +352,19 @@ describe("on an outpost (#191)", () => {
     expect(stretched.find((entry) => entry.label === "Range")?.now).toEqual({ text: "344" });
   });
 });
+
+describe("the Hatchery Control Centre's levels (beta 9)", () => {
+  it("level 1 shows its queue and presets and what level 2 brings", () => {
+    expect(row({ t: 16, l: 1 }, "Queue")).toEqual({ label: "Queue", now: { text: "7 × 20" }, next: { text: "10 × 20" } });
+    expect(row({ t: 16, l: 1 }, "Presets")).toEqual({ label: "Presets", now: { text: "2" }, next: { text: "4" } });
+    expect(row({ t: 16, l: 2 }, "Runs outposts")).toEqual({ label: "Runs outposts", now: { text: "No" }, next: { text: "From home" } });
+  });
+
+  it("level 3 is the top; an outpost's HCC goes to level 2 and runs no outposts", () => {
+    expect(row({ t: 16, l: 3 }, "Queue")).toEqual({ label: "Queue", now: { text: "10 × 30" } });
+    const outpost = buildingInfo(one({ t: 16, l: 1 }), "outpost").rows;
+    expect(outpost.find((entry) => entry.label === "Presets")).toEqual({ label: "Presets", now: { text: "2" }, next: { text: "4" } });
+    expect(outpost.find((entry) => entry.label === "Runs outposts")).toBeUndefined();
+    expect(buildingInfo(one({ t: 16, l: 1 }), "inferno").rows.find((entry) => entry.label === "Queue")).toBeUndefined();
+  });
+});
