@@ -1,6 +1,6 @@
 // Step 2 of the build: puts demo/index.html together from build/ (prep.mjs) and src/, with every picture and font inlined.
 import fs from "node:fs";
-const W = "/home/yujiesim/Coding/backyard-monsters-refitted/worktrees/hcc-demo";
+const W = "/home/yujiesim/Coding/backyard-monsters-refitted/worktrees/hcc-r3";
 const PUB = `${W}/web/public`, B = `${W}/demo/build`, SRC = `${W}/demo/src`;
 const MIME = { webp: "image/webp", png: "image/png", jpg: "image/jpeg", woff2: "font/woff2", svg: "image/svg+xml" };
 const missing = [];

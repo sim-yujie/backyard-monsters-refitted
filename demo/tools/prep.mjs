@@ -3,12 +3,12 @@
 //   build/data.json                             (window skeleton, monsters, yards)
 import { createRequire } from "node:module";
 import fs from "node:fs";
-const W = "/home/yujiesim/Coding/backyard-monsters-refitted/worktrees/hcc-demo";
+const W = "/home/yujiesim/Coding/backyard-monsters-refitted/worktrees/hcc-r3";
 const require = createRequire(`${W}/web/package.json`);
 const { chromium } = require("playwright");
 const CAP = `${W}/demo/capture`, OUT = `${W}/demo/build`;
 const read = (name) => JSON.parse(fs.readFileSync(`${CAP}/${name}.json`, "utf8"));
-const sheets = read("css-e-l3-remote-1280x720");
+const sheets = read("css-r3-l3-remote-1280x720");
 const browser = await chromium.launch({ args: ["--mute-audio"], executablePath: "/home/yujiesim/.cache/ms-playwright/chromium_headless_shell-1254/chrome-headless-shell-linux64/chrome-headless-shell" });
 
 for (const [name, w, h] of [["phone", 390, 844], ["desktop", 1280, 720]]) {
@@ -45,7 +45,7 @@ for (const [name, w, h] of [["phone", 390, 844], ["desktop", 1280, 720]]) {
   fs.writeFileSync(`${OUT}/css-${name}.css`, text);
   console.log(name, text.length, JSON.stringify(css.kinds), (text.match(/x-html/g) || []).length, (text.match(/x-body/g) || []).length, (text.match(/\.x-root/g) || []).length, (text.match(/@container[^{]*/g) || []).slice(0, 3));
   if (phone) {
-    const monsters = read("monsters"), remote = read("d-l3-remote-1280x720"), yardsCap = read("d-l3-yards-1280x720"), full = read("d-l2-1280x720");
+    const monsters = read("monsters"), remote = read("r3-l3-remote-1280x720"), yardsCap = read("r3-l3-yards-1280x720"), full = read("r3-l2-1280x720");
     const data = await page.evaluate(({ monsters, remote, yardsCap }) => {
       const dom = (html) => new DOMParser().parseFromString(html, "text/html");
       const strip = (root) => { for (const n of root.querySelectorAll("[srcset],[loading],[data-focus-key],[data-tut]")) for (const a of ["srcset", "sizes", "loading", "decoding", "data-focus-key", "data-tut"]) n.removeAttribute(a); };
@@ -73,8 +73,8 @@ for (const [name, w, h] of [["phone", 390, 844], ["desktop", 1280, 720]]) {
       out.lock = y.querySelector(".b9r2h-yardcard--off svg")?.outerHTML;
       return out;
     }, { monsters, remote, yardsCap });
-    data.layerStyle = { desktop: read("d-l2-1280x720").html.match(/class="overlay__layer" style="([^"]*)"/)?.[1], phone: read("d-l2-390x844").html.match(/class="overlay__layer" style="([^"]*)"/)?.[1] };
-    data.panelStyle = { desktop: read("d-l2-1280x720").html.match(/monsters-screen[^>]*style="([^"]*)"/)?.[1] ?? "", phone: read("d-l2-390x844").html.match(/monsters-screen[^>]*style="([^"]*)"/)?.[1] ?? "" };
+    data.layerStyle = { desktop: read("r3-l2-1280x720").html.match(/class="overlay__layer" style="([^"]*)"/)?.[1], phone: read("r3-l2-390x844").html.match(/class="overlay__layer" style="([^"]*)"/)?.[1] };
+    data.panelStyle = { desktop: read("r3-l2-1280x720").html.match(/monsters-screen[^>]*style="([^"]*)"/)?.[1] ?? "", phone: read("r3-l2-390x844").html.match(/monsters-screen[^>]*style="([^"]*)"/)?.[1] ?? "" };
     fs.writeFileSync(`${OUT}/data.json`, JSON.stringify(data, null, 1));
     console.log("data", data.order.join(","), data.yards.length, JSON.stringify(data.layerStyle), JSON.stringify(data.panelStyle), data.panel.length);
     console.log(JSON.stringify(Object.fromEntries(Object.entries(data.monsters).map(([k, v]) => [k, [v.name, v.price, v.time, v.space]]))));

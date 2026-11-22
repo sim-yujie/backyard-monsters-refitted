@@ -1,12 +1,11 @@
 // Captures the prototype's real DOM, CSS and backdrop from the running game (ports 5351/3351).
 import { createRequire } from "node:module";
 import fs from "node:fs";
-const W = "/home/yujiesim/Coding/backyard-monsters-refitted/worktrees/hcc-demo";
+const W = "/home/yujiesim/Coding/backyard-monsters-refitted/worktrees/hcc-r3";
 const require = createRequire(`${W}/web/package.json`);
 const { chromium } = require("playwright");
 const BASE = "http://localhost:5351"; const OUT = `${W}/demo/capture`;
-const JOBS = { "now": "", "d-l2": "b9hcc=2&b9hccopt=d", "d-l2-mix": "b9hcc=2&b9hccopt=d&b9state=mix", "d-l3": "b9hcc=3&b9hccopt=d", "d-l3-remote": "b9hcc=3&b9hccopt=d&b9state=remote", "d-l3-yards": "b9hcc=3&b9hccopt=d&b9state=yards",
-  "e-l2": "b9hcc=2&b9hccopt=e", "e-l2-mix": "b9hcc=2&b9hccopt=e&b9state=mix", "e-l2-inspect": "b9hcc=2&b9hccopt=e&b9state=inspect", "e-l3": "b9hcc=3&b9hccopt=e", "e-l3-remote": "b9hcc=3&b9hccopt=e&b9state=remote", "e-l3-yards": "b9hcc=3&b9hccopt=e&b9state=yards" };
+const JOBS = { "now": "", "r3-l2": "b9hcc=2&b9hccopt=r3", "r3-l3-remote": "b9hcc=3&b9hccopt=r3&b9state=remote", "r3-l3-yards": "b9hcc=3&b9hccopt=r3&b9state=yards" };
 const only = process.argv[2] ? process.argv[2].split(",") : Object.keys(JOBS);
 const browser = await chromium.launch({ args: ["--mute-audio"], executablePath: "/home/yujiesim/.cache/ms-playwright/chromium_headless_shell-1254/chrome-headless-shell-linux64/chrome-headless-shell" });
 for (const [w, h] of [[390, 844], [1280, 720]]) {
@@ -45,11 +44,11 @@ for (const [w, h] of [[390, 844], [1280, 720]]) {
           rects: { hatch: r(".hatch"), win: r(".b9r2h-window"), mixcard: r(".b9r2h-mixcard") }, fonts: [...document.fonts].map((f) => `${f.family}|${f.weight}|${f.status}`) };
       });
       fs.writeFileSync(`${OUT}/${tag}.json`, JSON.stringify(data));
-      if (job === "e-l3-remote" || job === "now") {
+      if (job === "r3-l3-remote" || job === "now") {
         const css = await page.evaluate(async () => { const out = []; for (const s of document.styleSheets) { let text = ""; try { text = [...s.cssRules].map((x) => x.cssText).join("\n"); } catch (e) { text = "/* blocked " + s.href + " */"; } out.push({ id: s.ownerNode?.getAttribute?.("data-vite-dev-id") || s.href || "inline", text }); } return out; });
         fs.writeFileSync(`${OUT}/css-${tag}.json`, JSON.stringify(css));
       }
-      if (job === "d-l2") { // backdrop: the game with the window hidden
+      if (job === "never") { // backdrop: the game with the window hidden
         await page.evaluate(() => { let win = document.querySelector(".hatch"); while (win.parentElement && win.parentElement !== document.body) win = win.parentElement; win.style.visibility = "hidden"; });
         await page.waitForTimeout(300);
         await page.screenshot({ path: `${OUT}/backdrop-${w}x${h}.png` });

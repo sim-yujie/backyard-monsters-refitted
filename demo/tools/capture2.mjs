@@ -1,7 +1,7 @@
 // Second pass: backdrops (game with the window hidden), each monster's info card, the add panel with a count.
 import { createRequire } from "node:module";
 import fs from "node:fs";
-const W = "/home/yujiesim/Coding/backyard-monsters-refitted/worktrees/hcc-demo";
+const W = "/home/yujiesim/Coding/backyard-monsters-refitted/worktrees/hcc-r3";
 const require = createRequire(`${W}/web/package.json`);
 const { chromium } = require("playwright");
 const BASE = "http://localhost:5351"; const OUT = `${W}/demo/capture`;

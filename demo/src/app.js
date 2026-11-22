@@ -1,13 +1,13 @@
 /*
- * HCC Level 2/3 demo: options D "workbench" and E "monster book".
- * A stand-alone copy of the design prototype on design/b9-screens-r2 (web/src/proto/b9HccR2.ts):
+ * HCC Level 2/3 demo, round 3: the "workbench" with the Monsters | Presets switch.
+ * A stand-alone copy of the design prototype on design/b9-hcc-r3 (web/src/proto/b9HccR3.ts):
  * the window, the Hatch tab and the prototype's parts are the game's own markup and CSS; this file
  * only plays the game's part (a pretend yard, queue and timers). Demo data, nothing is saved.
  *
  * Build: tools/prep.mjs (game captures -> build/), then tools/build.mjs (-> index.html). Check: tools/shots.mjs.
- * Address options after "#", joined with "&": opt=d|e, level=2|3, frame=phone|desktop,
- * state=busy,remote,mix,yards,inspect,housing (the prototype's picture states), bare (frame only, 1:1),
- * paused (clock stopped), load=replace (Load clears the queue first; the default adds).
+ * Address options after "#", joined with "&": level=2|3, frame=phone|desktop,
+ * state=busy,room,remote,yards,housing,presets,empty,filled,edit,sent (the prototype's picture states),
+ * bare (frame only, 1:1), paused (clock stopped).
  */
 (() => {
   "use strict";
@@ -15,38 +15,36 @@
   const ASSETS = window.HCC_ASSETS || {};
   const M = D.monsters;
 
-  /* ── Choices the prototype never wired (the owner has not decided these) ── */
-  /** What Load does: "add" = adds the mix to the queue like Add does; "replace" = clears the queue first. */
-  let LOAD_MODE = "add";
-  const MIX_SLOTS = 5;
   const STACKS = 10;
   /** Game seconds that pass per real second. */
   const SPEED = 10;
   const TICK_MS = 500;
 
+  /** Presets a list holds: 3 at HCC level 2, 5 at level 3. */
+  const slots = () => (S.level >= 3 ? 5 : 3);
+
   const hash = new Map(location.hash.replace(/^#/, "").split("&").filter(Boolean).map((p) => p.split("=").map(decodeURIComponent)));
   const flags = new Set((hash.get("state") || "").split(",").filter(Boolean));
-  if (hash.get("load") === "replace") LOAD_MODE = "replace";
   const BARE = hash.has("bare");
   const PAUSED = hash.has("paused");
 
   const S = {
-    opt: hash.get("opt") === "e" ? "e" : "d",
     level: hash.get("level") === "3" ? 3 : 2,
     frame: hash.get("frame") === "desktop" ? "desktop" : "phone",
     at: 0, // index into the yards that have an HCC; 0 = home
     sel: "C1",
     count: 0,
-    mixOpen: null,
+    tab: "monsters",
+    editing: null, // the preset slot being built
+    sent: null, // what the last Send did: { scope, slot, added, of, why }
     yardsOpen: false,
-    inspect: false,
     showHousing: false,
     details: false,
     boosts: false,
     find: "",
   };
   let yards = [];
-  let mixes = { home: [], outpost: [] };
+  let presets = { main: [], outposts: [] };
 
   /* ── Small helpers ─────────────────────────────────────────────────── */
   const $ = (sel, root = document) => root.querySelector(sel);
@@ -86,7 +84,7 @@
     if (busy) {
       // The prototype's own picture state: ten full stacks, housing full, every hatchery waiting.
       home.housed = 2080;
-      home.queue = stacksOf([["C12", size - 1], ["C12", size], ["C8", size], ["C8", size], ["C7", size], ["C14", size], ["C5", size], ["C3", size], ["C1", size], ["C6", Math.round(size / 2)]]);
+      home.queue = stacksOf([["C12", size - 1], ["C12", size], ["C8", size], ["C8", size], ["C7", size], ["C14", size], ["C5", size], ["C3", size], ["C1", size], ["C6", Math.round(size / 2)]]).slice(0, flags.has("room") ? 8 : STACKS);
       home.hatcheries = [1, 2, 3, 4, 5].map(() => ({ monster: "C12", left: 0, total: M.C12.time, stalled: true }));
     } else {
       home.housed = 640;
@@ -109,35 +107,40 @@
       }
       return base;
     });
-    mixes = {
-      home: [
-        [["C8", 60], ["C7", 40], ["C1", 40]],
-        [["C12", 40], ["C5", 40], ["C10", 20]],
-        [["C14", 40], ["C13", 60], ["C3", 40], ["C6", 20]],
-        [["C6", 100], ["C9", 40]],
-        null,
-      ],
-      outpost: [[["C7", 60], ["C2", 40]], [["C1", 60]], null, null, null],
-    };
+    const MAIN = [[["C8", 60], ["C7", 40], ["C1", 40]], [["C12", 40], ["C5", 40], ["C10", 20]], [["C14", 40], ["C13", 60], ["C3", 40], ["C6", 20]], [["C6", 100], ["C9", 40]], [["C2", 60], ["C4", 60], ["C11", 30]]];
+    const OUTPOSTS = [[["C7", 60], ["C2", 40]], [["C1", 60]], [["C8", 30], ["C5", 30]], [["C6", 90]], [["C3", 60], ["C4", 30], ["C1", 30]]];
+    // The demo starts with one preset made, so there is one to send and empty slots to build in.
+    const filled = flags.has("empty") ? 0 : flags.has("filled") ? slots() : busy ? 2 : 1;
+    const list = (from) => Array.from({ length: slots() }, (_, at) => (at < filled ? stacksOf(from[at]) : []));
+    presets = { main: list(MAIN), outposts: list(OUTPOSTS) };
     S.at = 0;
     S.count = 0;
-    S.mixOpen = null;
+    S.tab = "monsters";
+    S.editing = null;
+    S.sent = null;
     S.yardsOpen = false;
-    S.inspect = false;
     S.showHousing = false;
     S.boosts = false;
     S.find = "";
     if (S.level >= 3 && flags.has("remote")) S.at = 1;
-    if (flags.has("mix")) S.mixOpen = 0;
     if (S.level >= 3 && flags.has("yards")) S.yardsOpen = true;
-    if (S.opt === "e" && flags.has("inspect")) S.inspect = true;
     if (flags.has("housing")) S.showHousing = true;
+    if (flags.has("presets") || flags.has("edit") || flags.has("sent")) S.tab = "presets";
+    if (flags.has("edit")) {
+      S.editing = 0;
+      if (flags.has("empty")) presetList()[0] = [["C8", 40], ["C7", 20]];
+    }
+    if (flags.has("sent")) send(0);
   }
 
   const hccYards = () => yards.filter((one) => one.hcc);
   const yard = () => hccYards()[S.at] || yards[0];
   const remote = () => S.at > 0;
-  const mixList = () => (remote() ? mixes.outpost : mixes.home);
+  const scope = () => (remote() ? "outposts" : "main");
+  const presetList = () => presets[scope()];
+  const totalOf = (preset) => preset.reduce((sum, [, count]) => sum + count, 0);
+  const gooOf = (preset) => preset.reduce((sum, [id, count]) => sum + count * M[id].price, 0);
+  const stacksIn = (preset) => preset.reduce((sum, [, count]) => sum + Math.ceil(count / stackSize()), 0);
   const queued = (one) => one.queue.reduce((sum, [, count]) => sum + count, 0);
   const pendingSpace = (one) =>
     one.queue.reduce((sum, [id, count]) => sum + count * M[id].space, 0) + one.hatcheries.reduce((sum, h) => sum + (h.monster ? M[h.monster].space : 0), 0);
@@ -185,6 +188,24 @@
     for (const [id, count] of one.queue) one.goo += count * M[id].price;
     one.queue = [];
   };
+
+  /** Send: the preset joins the END of the queue, as far as the stacks and the goo go. */
+  function send(at) {
+    const one = yard();
+    const preset = presetList()[at];
+    if (!preset || !preset.length) return;
+    let added = 0;
+    let why = null;
+    for (const [id, count] of preset) {
+      const report = addTo(one, id, count);
+      added += report.added;
+      if (report.stoppedBy) {
+        why = report.stoppedBy;
+        break;
+      }
+    }
+    S.sent = { scope: scope(), slot: at, added, of: totalOf(preset), why };
+  }
 
   function tick(seconds) {
     for (const one of yards) {
@@ -234,38 +255,30 @@
   const strip = $(".b9r2h-strip", hatch);
   const scroll = $(".hatch__scroll", hatch);
   const status = $(".hatch__status", hatch);
-  const mixCard = $(".b9r2h-mixcard", hatch);
   const yardsPage = $(".b9r2h-yards", hatch);
 
   // The scroll area, built once; the prototype moves the line into or out of the bench per option.
   scroll.innerHTML =
     `<div class="b9r2h-bench"></div>` +
     `<div class="hatch-boosts" id="hatch-boosts" hidden>${fix(D.boosts)}</div>` +
-    `<div class="hatch__split"><div class="hatch-message"></div><section class="hatch-pick" aria-label="Monsters">${fix(D.grid)}</section><section class="hatch-info"></section></div>`;
+    `<div class="b9r3h-tabs" role="tablist"></div><div class="hatch-message"></div><section class="b9r3h-presets" aria-label="Presets"></section>` +
+    `<div class="hatch__split"><section class="hatch-pick" aria-label="Monsters">${fix(D.grid)}</section><section class="hatch-info"></section></div>`;
   const bench = $(".b9r2h-bench", scroll);
   const boosts = $(".hatch-boosts", scroll);
   const message = $(".hatch-message", scroll);
   const info = $(".hatch-info", scroll);
+  const tabsRow = $(".b9r3h-tabs", scroll);
+  const list = $(".b9r3h-presets", scroll);
+  const editHead = document.createElement("div");
+  editHead.className = "b9r3h-edit";
+  const editBox = document.createElement("div");
+  editBox.className = "b9r3h-set hatch-add";
   const lines = document.createElement("section");
   lines.className = "hatch-lines";
   lines.setAttribute("aria-label", "Hatching line");
   lines.innerHTML = `<div class="hatch-line hatch-line--hcc"><div class="hatch-line__now" role="group" aria-label="Hatching now"></div><div class="hatch-line__slots" role="group" aria-label="Waiting"></div></div>`;
   const nowRow = $(".hatch-line__now", lines);
   const slotRow = $(".hatch-line__slots", lines);
-  const mixRow = document.createElement("div");
-  mixRow.className = "b9r2h-mixes";
-  mixRow.setAttribute("role", "group");
-  mixRow.setAttribute("aria-label", "Saved mixes");
-  const seal = document.createElement("button");
-  seal.type = "button";
-  seal.className = "b9r2h-seal";
-  seal.dataset.act = "inspect";
-  const back = document.createElement("button");
-  back.type = "button";
-  back.className = "b9r2h-back";
-  back.dataset.act = "back";
-  back.setAttribute("aria-label", "Back to the monsters");
-  back.innerHTML = icon("friendprev", 32, "b9r2h-arrow");
   const holder = document.createElement("div");
   holder.innerHTML = fix(D.add);
   const add = holder.firstElementChild;
@@ -277,14 +290,9 @@
 
   /* ── Drawing ───────────────────────────────────────────────────────── */
   function drawShell() {
-    hatch.className = `hatch b9r2h b9r2h-opt-${S.opt} b9r2h-level-${S.level}${remote() ? " b9r2h-remote" : ""}${S.inspect && S.opt === "e" ? " b9r2h-inspect" : ""}${S.showHousing ? " b9r2h-show-housing" : ""}`;
-    if (S.opt === "e") {
-      bench.replaceChildren(seal, mixRow);
-      bench.after(back, lines);
-    } else {
-      back.remove();
-      bench.replaceChildren(lines, mixRow);
-    }
+    const editing = S.editing !== null;
+    hatch.className = `hatch b9r2h b9r2h-opt-d b9r3h b9r2h-level-${S.level}${remote() ? " b9r2h-remote" : ""}${S.showHousing ? " b9r2h-show-housing" : ""}${S.tab === "presets" && !editing ? " b9r3h-on-presets" : ""}${editing ? " b9r3h-editing" : ""}`;
+    if (lines.parentElement !== bench) bench.replaceChildren(lines);
     boosts.hidden = !S.boosts;
   }
 
@@ -301,15 +309,13 @@
       );
     } else {
       if (remote()) parts.push(`<button class="b9r2h-yard b9r2h-yard--home" type="button" data-act="home" aria-label="Back to the main yard">${icon("townhall", 32, "b9r2h-where__icon")}</button>`);
-      if (S.opt === "d") {
+      {
         const of = hccYards().length;
         parts.push(
           `<div class="b9r2h-stepper"><button class="b9r2h-stepper__arrow" type="button" data-act="step" data-by="-1" aria-label="Previous yard"${S.at <= 0 ? " disabled" : ""}>${icon("friendprev", 32, "b9r2h-arrow")}</button>` +
             `<button class="b9r2h-stepper__where" type="button" data-act="yards" aria-label="All your yards with an HCC">${where()}</button>` +
             `<button class="b9r2h-stepper__arrow" type="button" data-act="step" data-by="1" aria-label="Next yard"${S.at >= of - 1 ? " disabled" : ""}>${icon("friendnext", 32, "b9r2h-arrow")}</button></div>`,
         );
-      } else {
-        parts.push(`<button class="b9r2h-yard b9r2h-yard--chip" type="button" data-act="yards" aria-label="Choose a yard">${where()}<span class="b9r2h-caret">▾</span></button>`);
       }
     }
     parts.push(
@@ -406,69 +412,100 @@
       if (text) text.textContent = `×${count}`;
     });
     $(".hatch-line__done", slotRow).textContent = one.queue.length || one.hatcheries.some((h) => h.monster) ? clock(doneIn(one)) : "0s";
-    drawSeal(force);
+    drawWarn();
   }
 
-  let sealKey = "";
-  function drawSeal(force) {
-    if (S.opt !== "e") return;
-    const one = yard();
-    const busy = one.hatcheries.filter((h) => h.monster).length;
-    const stalled = one.hatcheries.some((h) => h.stalled);
-    const faces = [];
-    for (const [id] of one.queue) if (!faces.includes(id) && faces.length < 4) faces.push(id);
-    const key = `${S.at}|${busy}|${stalled}|${faces.join(",")}|${one.queue.length}`;
-    if (force || key !== sealKey) {
-      sealKey = key;
-      seal.setAttribute("aria-label", stalled ? "Housing full: inspect the queue and waiting hatcheries" : "The queue and the hatcheries");
-      seal.innerHTML =
-        `<span class="b9r2h-seal__part${stalled ? " b9r2h-seal__part--stalled" : ""}"><img class="b9r2h-seal__hatchery" src="${asset("/assets/buildings/hatchery/top.3d3@2x.webp")}" alt=""><span class="b9r2h-seal__number">${busy}/${one.hatcheries.length}${stalled ? `<span class="b9r2h-seal__state">Full</span>` : ""}</span>${stalled ? icon("housing", 24, "b9r2h-seal__blocked") : ""}</span>` +
-        `<span class="b9r2h-seal__part b9r2h-seal__part--queue"><span class="b9r2h-faces">${faces.map((id) => face(id, "b9r2h-face")).join("")}</span><span class="b9r2h-seal__number">${one.queue.length}/${STACKS}</span></span>` +
-        `<span class="b9r2h-seal__part">${icon("time", 24, "b9r2h-seal__clock")}<span class="b9r2h-seal__number b9r2h-seal__time"></span></span><span class="b9r2h-seal__go">›</span>`;
+  /* ── Round 3: the Monsters | Presets switch, the preset rows, building one ── */
+  const badge = (at) => `<span class="b9r2h-mix__number b9r3h-number">${at + 1}</span>`;
+  const scopeIcon = (cls) => (S.level >= 3 ? icon(remote() ? "outpost" : "townhall", 24, cls) : "");
+
+  let warnKey = "";
+  /** The housing warning in the switch's row: redrawn only when the number waiting changes. */
+  function drawWarn(force) {
+    const waiting = yard().hatcheries.filter((h) => h.stalled).length;
+    const key = `${S.at}|${waiting}`;
+    if (!force && key === warnKey) return;
+    warnKey = key;
+    $(".b9r3h-warn", tabsRow)?.remove();
+    if (!waiting) return;
+    tabsRow.insertAdjacentHTML(
+      "beforeend",
+      `<button class="b9r3h-warn" type="button" data-act="housing" aria-label="Housing is full: ${waiting} hatched monsters wait in the Hatcheries for room">${icon("housing", 24, "b9r3h-warn__icon")}<span class="b9r3h-warn__words">Housing full</span><span class="b9r3h-warn__short">Full</span><span class="b9r3h-warn__count">${waiting} waiting</span><span class="b9r3h-warn__count b9r3h-warn__count--short">×${waiting}</span></button>`,
+    );
+  }
+
+  function drawTabs() {
+    const tab = (id, words, extra = "") =>
+      `<button class="b9r3h-tab${S.tab === id ? " b9r3h-tab--on" : ""}" type="button" role="tab" data-act="tab" data-tab="${id}" aria-selected="${S.tab === id}" aria-label="${words}">${extra}<span>${words}</span></button>`;
+    if (S.editing === null) {
+      editHead.remove();
+      tabsRow.innerHTML = `<div class="b9r3h-switch">${tab("monsters", "Monsters")}${tab("presets", "Presets", scopeIcon("b9r3h-tab__scope"))}</div>`;
+    } else {
+      // While a preset is built, its head takes the switch's place.
+      tabsRow.replaceChildren(editHead);
     }
-    $(".b9r2h-seal__time", seal).textContent = $(".hatch-line__done", slotRow).textContent;
+    drawWarn(true);
   }
 
-  function drawMixes() {
-    mixRow.innerHTML = mixList()
-      .map((mix, at) => {
-        if (!mix) return `<button class="b9r2h-mix b9r2h-mix--empty" type="button" data-act="mix-save" data-mix="${at}" aria-label="Save the queue as mix ${at + 1}"><span class="b9r2h-mix__number">${at + 1}</span><span class="b9r2h-mix__plus">+</span></button>`;
-        const total = mix.reduce((sum, [, count]) => sum + count, 0);
-        return `<button class="b9r2h-mix${S.mixOpen === at ? " b9r2h-mix--on" : ""}" type="button" data-act="mix-open" data-mix="${at}" aria-label="Mix ${at + 1}, ${total} monsters"><span class="b9r2h-mix__number">${at + 1}</span><span class="b9r2h-faces">${mix.slice(0, 3).map(([id]) => face(id, "b9r2h-face")).join("")}</span><span class="b9r2h-mix__total">×${total}</span></button>`;
+  function drawPresets() {
+    const here = scope();
+    list.dataset.scope = here;
+    list.innerHTML = presetList()
+      .map((preset, at) => {
+        if (!preset.length)
+          return `<div class="b9r3h-row b9r3h-row--empty"><button class="b9r3h-row__body" type="button" data-act="preset-edit" data-preset="${at}" aria-label="Make preset ${at + 1}">${badge(at)}<span class="b9r3h-row__plus">+</span></button></div>`;
+        const sent = S.sent && S.sent.scope === here && S.sent.slot === at ? S.sent : null;
+        const inside = sent
+          ? `<span class="b9r3h-said${sent.why ? " b9r3h-said--short" : ""}" role="status"><strong>${sent.why ? `Added ${num(sent.added)} of ${num(sent.of)}` : `Added ${num(sent.added)}`}</strong><span>${sent.why === "queue" ? "The queue is full" : sent.why === "goo" ? "Not enough goo" : "At the end of the queue"}</span></span>`
+          : `<span class="b9r3h-stacks">${preset.map(([id, count], index) => `<span class="b9r3h-stack${index >= 3 ? " b9r3h-stack--extra" : ""}">${face(id, "b9r3h-stack__picture")}<span class="b9r3h-stack__count">×${count}</span></span>`).join("")}${preset.length > 3 ? `<span class="b9r3h-stacks__more">+${preset.length - 3}</span>` : ""}</span><span class="b9r3h-row__cost">${GOO_ICON}<span>${short(gooOf(preset))}</span></span>`;
+        return (
+          `<div class="b9r3h-row"><button class="b9r3h-row__body" type="button" data-act="preset-edit" data-preset="${at}" aria-label="Preset ${at + 1}, ${totalOf(preset)} monsters: change it">${badge(at)}${inside}</button>` +
+          `<button class="btn btn--primary b9r3h-send" type="button" data-act="preset-send" data-preset="${at}" aria-label="Send preset ${at + 1} to the end of the queue">${remote() ? icon("outpost", 24, "b9r2h-addflag") : ""}<span>Send</span></button></div>`
+        );
       })
       .join("");
-    drawMixCard();
   }
 
-  function drawMixCard() {
-    const mix = S.mixOpen === null ? null : mixList()[S.mixOpen];
-    mixCard.hidden = !mix;
-    if (!mix) return;
-    let goo = 0;
-    let space = 0;
-    const stacks = mix
-      .map(([id, count]) => {
-        goo += count * M[id].price;
-        space += count * M[id].space;
-        return `<span class="b9r2h-socket">${face(id, "b9r2h-socket__picture")}<span class="b9r2h-socket__count">×${count}</span></span>`;
-      })
-      .join("");
-    mixCard.innerHTML =
-      `<header class="b9r2h-mixcard__head"><span class="b9r2h-mix__number b9r2h-mixcard__number">${S.mixOpen + 1}</span><span class="b9r2h-mixcard__cost">${GOO_ICON}<span>${short(goo)}</span>${icon("housing", 24, "b9r2h-housing__icon")}<span>${short(space)}</span></span><button class="b9r2h-mixcard__close" type="button" data-act="mix-close" aria-label="Close">✕</button></header>` +
-      `<div class="b9r2h-mixcard__stacks">${stacks}</div>` +
-      `<div class="b9r2h-mixcard__actions"><button class="btn btn--primary b9r2h-mixcard__load" type="button" data-act="mix-load" aria-label="Load this mix into the queue">Load</button><button class="btn btn--secondary b9r2h-mixcard__tool" type="button" data-act="mix-over" aria-label="Save the queue over this mix">${icon("lastarmy", 24)}Save over</button><button class="btn btn--ghost b9r2h-mixcard__tool b9r2h-mixcard__bin" type="button" data-act="mix-empty" aria-label="Empty this mix">Empty</button></div>`;
-    placeMixCard();
+  /** The most of `id` the preset being built can hold: a preset is never bigger than the queue's ten stacks. */
+  const presetRoom = (preset, id) => (STACKS - stacksIn(preset.filter(([one]) => one !== id))) * stackSize();
+
+  function drawEditor() {
+    for (const mark of scroll.querySelectorAll(".b9r3h-inpreset")) mark.remove();
+    const at = S.editing;
+    if (at === null) return;
+    const preset = presetList()[at];
+    editHead.innerHTML =
+      `<button class="b9r3h-edit__back" type="button" data-act="edit-done" aria-label="Back to the presets">${icon("friendprev", 32, "b9r2h-arrow")}</button>` +
+      `<span class="b9r3h-edit__which">${scopeIcon("b9r3h-edit__scope")}${badge(at)}</span>` +
+      `<div class="b9r3h-edit__chips">${preset.length ? "" : `<span class="b9r3h-edit__hint">Pick a monster, set how many</span>`}${preset.map(([id, count]) => `<button class="b9r3h-chip${id === S.sel ? " b9r3h-chip--on" : ""}" type="button" data-act="chip" data-monster="${id}" aria-label="${M[id].name}, ${count}">${face(id, "b9r3h-chip__picture")}<span class="b9r3h-chip__count">×${count}</span></button>`).join("")}</div>` +
+      `<span class="b9r3h-edit__sum"><span class="b9r3h-edit__stacks" title="Queue stacks this preset fills">${stacksIn(preset)}/${STACKS}</span><span class="b9r3h-edit__goo">${GOO_ICON}<span>${short(gooOf(preset))}</span></span></span>` +
+      `<button class="b9r3h-edit__bin" type="button" data-act="preset-empty" aria-label="Empty preset ${at + 1}"${preset.length ? "" : " disabled"}>Empty</button>`;
+    for (const [id, count] of preset) $(`.hatch-monster[data-monster="${id}"]`, scroll)?.insertAdjacentHTML("beforeend", `<span class="b9r3h-inpreset">×${count}</span>`);
+    const now = (preset.find(([id]) => id === S.sel) || [0, 0])[1];
+    const max = presetRoom(preset, S.sel);
+    const off = now >= max ? " disabled" : "";
+    const active = document.activeElement && document.activeElement.classList.contains("b9r3h-count");
+    if (active) return; // typing: the box is left alone, the rest is already drawn
+    editBox.innerHTML =
+      `<span class="qty-stepper hatch-add__controls"><button type="button" class="btn qty-stepper__step hatch-add__step hatch-add__step--minus" data-set="${now - 1}" aria-label="One fewer"${now <= 0 ? " disabled" : ""}>−</button>` +
+      `<input type="number" class="field__input qty-stepper__count hatch-add__count b9r3h-count" min="0" max="${max}" step="1" inputmode="numeric" aria-label="How many in preset ${at + 1}" value="${now}">` +
+      `<button type="button" class="btn qty-stepper__step hatch-add__step hatch-add__step--plus" data-set="${now + 1}" aria-label="One more"${off}>+</button>` +
+      `<button type="button" class="btn qty-stepper__step qty-stepper__jump hatch-add__jump" data-set="${now + 5}" aria-label="5 more"${off}>+5</button>` +
+      `<button type="button" class="btn qty-stepper__step qty-stepper__jump hatch-add__jump" data-set="${now + 10}" aria-label="10 more"${off}>+10</button>` +
+      `<button type="button" class="btn btn--outline qty-stepper__fill hatch-add__fill" data-set="${now + stackSize()}" aria-label="One more full stack"${off}>+${stackSize()}</button></span>` +
+      `<button type="button" class="btn btn--primary hatch-add__add b9r3h-done" data-act="edit-done" aria-label="Done: back to the presets">${badge(at)}<span class="hatch-add__words">Done</span></button>`;
   }
 
-  /** As the prototype: under the tokens, wherever the option put them; on a wide tab under its own tokens. */
-  function placeMixCard() {
-    if (mixCard.hidden) return;
-    const scale = frameScale();
-    const tokens = mixRow.getBoundingClientRect();
-    const box = hatch.getBoundingClientRect();
-    const width = box.width / scale;
-    mixCard.style.top = `${Math.round((tokens.bottom - box.top) / scale + 6)}px`;
-    mixCard.style.left = width > 620 ? `${Math.round(Math.max(12, Math.min((tokens.left - box.left) / scale, width - 420)))}px` : "";
+  /** The chosen monster's count in the preset being built; every step is kept at once, 0 takes it out. */
+  function setPresetCount(id, value) {
+    const preset = presetList()[S.editing];
+    const next = Math.max(0, Math.min(Math.floor(Number(value) || 0), presetRoom(preset, id)));
+    const at = preset.findIndex(([one]) => one === id);
+    if (next === 0) {
+      if (at >= 0) preset.splice(at, 1);
+    } else if (at >= 0) preset[at][1] = next;
+    else preset.push([id, next]);
+    drawEditor();
   }
 
   function drawYards() {
@@ -499,7 +536,7 @@
     info.setAttribute("aria-label", monster.name);
     info.className = `hatch-info${S.details ? " hatch-info--details" : ""}`;
     info.innerHTML = fix(monster.info);
-    info.append(add);
+    info.append(add, editBox);
     const details = $(".hatch-info__details", info);
     if (details) {
       details.dataset.act = "details";
@@ -507,6 +544,7 @@
     }
     for (const cell of scroll.querySelectorAll(".hatch-monster")) cell.setAttribute("aria-pressed", String(cell.dataset.monster === S.sel));
     drawAdd();
+    drawEditor();
   }
 
   function drawAdd() {
@@ -549,26 +587,18 @@
     drawShell();
     drawStrip();
     drawLines(true);
-    drawMixes();
+    drawTabs();
+    drawPresets();
     drawYards();
     drawInfo();
-    placeMixCard();
   }
 
   /* ── What a tap does ───────────────────────────────────────────────── */
-  const snapshot = (one) => {
-    const mix = [];
-    for (const [id, count] of one.queue) {
-      const same = mix.find(([seen]) => seen === id);
-      if (same) same[1] += count;
-      else mix.push([id, count]);
-    }
-    return mix;
-  };
   const setYard = (at) => {
     S.at = Math.max(0, Math.min(hccYards().length - 1, at));
     S.yardsOpen = false;
-    S.mixOpen = null;
+    S.editing = null;
+    S.sent = null;
     S.count = 0;
     S.find = "";
     yardsPage.replaceChildren();
@@ -581,25 +611,42 @@
     yard: (el) => setYard(Number(el.dataset.yard)),
     yards: () => {
       S.yardsOpen = !S.yardsOpen;
-      S.mixOpen = null;
-      drawMixes();
       drawYards();
     },
     housing: () => {
       S.showHousing = !S.showHousing;
       drawShell();
     },
-    inspect: () => {
-      S.inspect = true;
-      S.mixOpen = null;
-      drawShell();
-      drawMixes();
+    tab: (el) => {
+      S.tab = el.dataset.tab;
+      S.editing = null;
+      drawAll();
     },
-    back: () => {
-      S.inspect = false;
-      S.mixOpen = null;
-      drawShell();
-      drawMixes();
+    "preset-edit": (el) => {
+      S.editing = Number(el.dataset.preset);
+      S.sent = null;
+      drawAll();
+    },
+    "edit-done": () => {
+      S.editing = null;
+      S.tab = "presets";
+      drawAll();
+    },
+    "preset-empty": () => {
+      presetList()[S.editing].length = 0;
+      drawEditor();
+    },
+    "preset-send": (el) => {
+      send(Number(el.dataset.preset));
+      tick(0);
+      drawLines(true);
+      drawPresets();
+      drawAdd();
+    },
+    chip: (el) => {
+      S.sel = el.dataset.monster;
+      S.count = 0;
+      drawInfo();
     },
     boosts: () => {
       S.boosts = !S.boosts;
@@ -639,59 +686,6 @@
       drawLines();
       drawAdd();
     },
-    "mix-open": (el) => {
-      const at = Number(el.dataset.mix);
-      S.mixOpen = S.mixOpen === at ? null : at;
-      drawMixes();
-    },
-    "mix-close": () => {
-      S.mixOpen = null;
-      drawMixes();
-    },
-    "mix-save": (el) => {
-      const one = yard();
-      if (!one.queue.length) return say("The queue is empty: nothing to save.");
-      mixList()[Number(el.dataset.mix)] = snapshot(one);
-      say(`Queue saved as mix ${Number(el.dataset.mix) + 1}.`);
-      drawMixes();
-    },
-    "mix-over": () => {
-      const one = yard();
-      if (!one.queue.length) return say("The queue is empty: nothing to save.");
-      mixList()[S.mixOpen] = snapshot(one);
-      say(`Queue saved over mix ${S.mixOpen + 1}.`);
-      drawMixes();
-    },
-    "mix-empty": () => {
-      mixList()[S.mixOpen] = null;
-      S.mixOpen = null;
-      drawMixes();
-    },
-    "mix-load": () => {
-      const one = yard();
-      const mix = mixList()[S.mixOpen];
-      if (!mix) return;
-      if (LOAD_MODE === "replace") clearQueue(one);
-      let added = 0;
-      let asked = 0;
-      let stoppedBy = null;
-      for (const [id, count] of mix) {
-        asked += count;
-        if (stoppedBy) continue;
-        const report = addTo(one, id, count);
-        added += report.added;
-        stoppedBy = report.stoppedBy;
-      }
-      const at = S.mixOpen + 1;
-      S.mixOpen = null;
-      tick(0);
-      if (added === 0) say(stoppedBy === "goo" ? "Not enough goo." : "The shared queue is full.");
-      else if (stoppedBy) say(`Mix ${at}: added ${num(added)} of ${num(asked)} — ${stoppedBy === "goo" ? "out of goo" : "the queue is full"}`);
-      else say(`Mix ${at} loaded: ${num(added)} monsters.`);
-      drawLines(true);
-      drawMixes();
-      drawAdd();
-    },
   };
 
   const setCount = (value) => {
@@ -703,6 +697,7 @@
     const el = event.target.closest("button, [data-act]");
     if (!el || el.disabled) return;
     if (el.dataset.act && acts[el.dataset.act]) return acts[el.dataset.act](el);
+    if (el.closest(".b9r3h-set")) return el.dataset.set === undefined ? undefined : setPresetCount(S.sel, el.dataset.set);
     if (el.classList.contains("hatch-monster")) {
       if (el.classList.contains("hatch-monster--locked")) return say("Rezghul is locked.");
       S.sel = el.dataset.monster;
@@ -726,6 +721,7 @@
   });
   frame.addEventListener("input", (event) => {
     if (event.target === addCount) setCount(addCount.value);
+    if (event.target.classList.contains("b9r3h-count")) setPresetCount(S.sel, event.target.value);
     if (event.target.classList.contains("b9r2h-search__input")) {
       S.find = event.target.value;
       drawYards();
@@ -748,7 +744,6 @@
     const holder = $("#frame-holder");
     holder.style.width = `${Math.floor(w * scale)}px`;
     holder.style.height = `${Math.floor(h * scale)}px`;
-    placeMixCard();
   }
 
   function setFrame() {
@@ -761,14 +756,13 @@
   }
 
   const pic = (name) => `<img class="demo-ic" src="${asset(`/ui/icons/${name}-48.webp`)}" alt="">`;
-  const TOKEN = `<span class="demo-token">5 <i>+</i></span>`;
   const NUMBER = `<span class="demo-token demo-token--full">1</span>`;
-  const ADD = `Tap a monster, <b>+10</b>, <b>Add</b>.`;
+  const PLUS = `<span class="demo-token">2 <i>+</i></span>`;
+  const BUILD = ["Build", `Tap <b>Presets</b>, then an empty slot ${PLUS}. Tap a monster and <b>+10</b>; tap another and <b>+10</b>. <b>Done</b>.`];
+  const SEND = ["Send", `Tap <b>Send</b> on a preset ${NUMBER}. It joins the end of the queue. Keep sending: when the queue fills, the row says how many fitted.`];
   const STEPS = {
-    d2: [["Add", `${ADD} It lands in the rack of ten stacks.`], ["Save", `Tap the empty token ${TOKEN}. The queue is now mix 5.`], ["Load", `Tap <b>Clear</b>, then a token ${NUMBER} and <b>Load</b>.`]],
-    e2: [["Add", `${ADD} The bar on top counts it.`], ["Queue", `Tap the bar to open the queue. ${pic("friendprev")} goes back.`], ["Mix", `Tap ${TOKEN} to save the queue. Tap a token ${NUMBER}, then <b>Load</b>.`]],
-    d3: [["Add", `${ADD} It lands in the rack of ten stacks.`], ["Mix", `Tap ${TOKEN} to save the queue. Tap a token ${NUMBER}, then <b>Load</b>.`], ["Outposts", `${pic("friendprev")}${pic("friendnext")} step to an outpost ${pic("outpost")}: gold frame, flag on Add. ${pic("townhall")} goes home. The middle opens the list.`]],
-    e3: [["Add", `${ADD} The bar on top counts it; tap it to open the queue.`], ["Mix", `Tap ${TOKEN} to save the queue. Tap a token ${NUMBER}, then <b>Load</b>.`], ["Outposts", `Tap ${pic("townhall")}<b>1/11</b> and pick an outpost ${pic("outpost")}: gold frame, flag on Add. ${pic("townhall")} goes home.`]],
+    2: [BUILD, SEND, ["Change", `Tap a preset's row to change it: the count is that monster's number in the preset. <b>Empty</b> clears the slot.`]],
+    3: [BUILD, SEND, ["Outposts", `${pic("friendnext")} steps to an outpost ${pic("outpost")}: gold frame, and <b>Presets</b> ${pic("outpost")} is now the list shared by all outposts. ${pic("townhall")} goes home to the main yard's list.`]],
   };
 
   function drawChrome() {
@@ -776,9 +770,9 @@
       const [key, value] = button.dataset.set.split("=");
       button.setAttribute("aria-pressed", String(String(S[key]) === value));
     }
-    const steps = STEPS[`${S.opt}${S.level}`];
+    const steps = STEPS[S.level];
     $("#demo-steps").innerHTML = steps.map(([name, words], at) => `<li><span class="demo-step__n">${at + 1}</span><span><strong>${name}</strong> ${words}</span></li>`).join("");
-    $("#demo-option").textContent = S.opt === "d" ? "D · Workbench" : "E · Monster book";
+    $("#demo-option").textContent = `Level ${S.level}`;
   }
 
   document.addEventListener("click", (event) => {
@@ -790,12 +784,6 @@
       if (S[key] === next) return;
       S[key] = next;
       if (key === "level") reset(); // the stacks hold 20 at level 2 and 30 at level 3
-      if (key === "opt") {
-        S.inspect = false;
-        S.mixOpen = null;
-        S.yardsOpen = false;
-        yardsPage.replaceChildren();
-      }
       if (key === "frame") setFrame();
     } else {
       flags.clear();
@@ -813,7 +801,6 @@
   drawChrome();
   drawAll();
   window.addEventListener("resize", fit);
-  if (document.fonts && document.fonts.ready) document.fonts.ready.then(() => placeMixCard());
   if (!PAUSED) {
     setInterval(() => {
       tick((SPEED * TICK_MS) / 1000);

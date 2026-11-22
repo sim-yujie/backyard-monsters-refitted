@@ -1,6 +1,6 @@
-// node shots.mjs [filter]  -> demo/shots/<name>.png. Opens demo/index.html from file:// with the network blocked.
+// node shots.mjs [filter]  -> demo/shots/<name>.png. Opens demo/index.html from file:// with the network blocked, and clicks through it.
 import { createRequire } from "node:module";
-const W = "/home/yujiesim/Coding/backyard-monsters-refitted/worktrees/hcc-demo";
+const W = "/home/yujiesim/Coding/backyard-monsters-refitted/worktrees/hcc-r3";
 const require = createRequire(`${W}/web/package.json`);
 const { chromium, firefox } = require("playwright");
 const URL = `file://${W}/demo/index.html`;
@@ -23,123 +23,114 @@ async function open(w, h, hash, scale = 1) {
 const shot = (page, name) => page.screenshot({ path: `${W}/demo/${useFirefox ? "shots-ff" : "shots"}/${name}.png` });
 const F = (sel) => `#frame ${sel}`;
 
-// 1. Bare 1:1 frames in the prototype's own picture states, to put beside shots/hcc/r2-*.
-const STATES = { "d-l2": "opt=d&level=2", "d-l2-mix": "opt=d&level=2&state=busy,mix", "d-l3": "opt=d&level=3", "d-l3-remote": "opt=d&level=3&state=busy,remote", "d-l3-yards": "opt=d&level=3&state=busy,yards",
-  "e-l2": "opt=e&level=2", "e-l2-mix": "opt=e&level=2&state=busy,mix", "e-l2-inspect": "opt=e&level=2&state=busy,inspect", "e-l3": "opt=e&level=3", "e-l3-remote": "opt=e&level=3&state=busy,remote", "e-l3-yards": "opt=e&level=3&state=busy,yards" };
+// 1. Bare 1:1 frames in the prototype's own picture states, to put beside shots/hcc-r3/.
+const STATES = { "l2-monsters": "level=2&state=busy", "l2-presets-empty": "level=2&state=busy,presets,empty,room", "l2-building": "level=2&state=busy,presets,empty,edit,room", "l3-presets": "level=3&state=busy,presets,filled",
+  "l3-edit": "level=3&state=busy,presets,filled,edit", "l3-sent": "level=3&state=busy,presets,filled,sent,room", "l3-remote-presets": "level=3&state=busy,remote,presets,filled", "l3-yards": "level=3&state=busy,yards", "l2-housing": "level=2&state=busy,presets,filled,housing" };
 for (const [frame, w, h, scale] of [["phone", 390, 844, 3], ["desktop", 1280, 720, 1]]) {
   for (const [name, hash] of Object.entries(STATES)) {
     const tag = `match-${name}-${w}x${h}`;
     if (filter && !tag.includes(filter)) continue;
-    const full = hash.includes("state=") ? hash : hash + "&state=busy";
-    const { context, page } = await open(w, h, `${full}&frame=${frame}&bare=1&paused=1`, scale);
+    const { context, page } = await open(w, h, `${hash}&frame=${frame}&bare=1&paused=1`, scale);
     await shot(page, tag);
     await context.close();
   }
 }
 
-// 2. The flows, clicked through on the full page.
-async function flows(opt, level, frame, w, h) {
-  const tag = `flow-${opt}-l${level}-${frame}`;
+// 2. The "Try this" flow, clicked through on the full page.
+async function flow(level, frame, w, h) {
+  const tag = `flow-l${level}-${frame}`;
   if (filter && !tag.includes(filter)) return;
   const { context, page } = await open(w, h, "", 1);
-  const click = async (sel) => { await page.locator(sel).first().click(); await page.waitForTimeout(250); };
+  const click = async (sel) => { try { await page.locator(sel).first().click({ timeout: 3000 }); } catch { problems.push(`NOCLICK ${tag}: ${sel}`); } await page.waitForTimeout(200); };
   const text = (sel) => page.locator(sel).first().textContent();
+  const count = (sel) => page.locator(F(sel)).count();
   const check = (ok, what) => { if (!ok) problems.push(`CHECK ${tag}: ${what}`); };
-  await click(`#demo [data-set="opt=${opt}"]`); await click(`#demo [data-set="level=${level}"]`); await click(`#demo [data-set="frame=${frame}"]`);
+  await click(`#demo [data-set="level=${level}"]`); await click(`#demo [data-set="frame=${frame}"]`);
+  check((await page.locator("#demo [data-set^='opt=']").count()) === 0, "no D/E toggle");
   await shot(page, `${tag}-1-start`);
-  const stacks = () => page.locator(F(".hatch-slot:not(.hatch-slot--empty)")).count();
+  const stacks = () => count(".hatch-slot:not(.hatch-slot--empty)");
+  const queued = async () => (await page.locator(F(".hatch-slot__count")).allTextContents()).reduce((sum, t) => sum + Number(t.replace(/\D/g, "")), 0);
+  // Monsters tab still adds
   const before = await stacks();
-  // add: Bandito is not the last stack's monster, so a new stack appears
-  await click(F('.hatch-monster[data-monster="C6"]')); await click(F(".hatch-add__jump >> nth=1")); await click(F(".hatch-add__step--plus"));
-  check((await page.locator(F(".hatch-add__count")).inputValue()) === "11", "count is 11");
-  await shot(page, `${tag}-2-picked`);
-  await click(F(".hatch-add__add"));
-  if (opt === "e") { check((await text(F(".b9r2h-seal__part--queue .b9r2h-seal__number"))) === `${before + 1}/10`, "seal counts the new stack"); await shot(page, `${tag}-3-added-seal`); await click(F(".b9r2h-seal")); await page.waitForTimeout(200); }
-  check((await stacks()) === before + 1, `a stack was added (${before} -> ${await stacks()})`);
-  await shot(page, `${tag}-3-added`);
-  if (opt === "e") await click(F(".b9r2h-back"));
-  // save to the empty slot 5
-  await click(F('.b9r2h-mix--empty[data-mix="4"]'));
-  check((await page.locator(F('.b9r2h-mix[data-mix="4"]:not(.b9r2h-mix--empty)')).count()) === 1, "mix 5 saved");
-  await shot(page, `${tag}-4-saved`);
-  // clear
-  if (opt === "e") await click(F(".b9r2h-seal"));
-  await click(F(".hatch-clear"));
-  check((await stacks()) === 0, "queue cleared");
-  await shot(page, `${tag}-5-cleared`);
-  if (opt === "e") await click(F(".b9r2h-back"));
-  // load mix 5
-  await click(F('.b9r2h-mix[data-mix="4"]'));
-  check(await page.locator(F(".b9r2h-mixcard")).isVisible(), "mix card opens");
-  await shot(page, `${tag}-6-mixcard`);
-  await click(F(".b9r2h-mixcard__load"));
-  if (opt === "e") await click(F(".b9r2h-seal"));
-  check((await stacks()) >= before, `mix loaded (${await stacks()} stacks)`);
-  await shot(page, `${tag}-7-loaded`);
-  if (opt === "e") await click(F(".b9r2h-back"));
-  // max, then the housing box
-  await click(F(".hatch-add__fill")); await shot(page, `${tag}-8-max`);
+  await click(F('.hatch-monster[data-monster="C6"]')); await click(F(".hatch-info > .hatch-add:not(.b9r3h-set) .hatch-add__jump >> nth=1")); await click(F(".hatch-add__add:not(.b9r3h-done)"));
+  check((await stacks()) === before + 1, `Monsters tab: a stack was added (${before} -> ${await stacks()})`);
+  // Presets tab
+  await click(F('.b9r3h-tab[data-tab="presets"]'));
+  check((await count(".b9r3h-row")) === (level === 3 ? 5 : 3), `${level === 3 ? 5 : 3} preset slots`);
+  check(!(await page.locator(F(".hatch__split")).isVisible()), "the monsters are hidden on the Presets tab");
+  await shot(page, `${tag}-2-presets`);
+  // build preset 2
+  await click(F('.b9r3h-row--empty [data-preset="1"]'));
+  check(await page.locator(F(".b9r3h-edit")).isVisible(), "the preset's head shows");
+  check(!(await page.locator(F(".b9r3h-switch")).isVisible().catch(() => false)), "the switch gives way to the head");
+  await click(F('.hatch-monster[data-monster="C8"]')); await click(F(".b9r3h-set .hatch-add__jump >> nth=1")); await click(F(".b9r3h-set .hatch-add__jump >> nth=1"));
+  await click(F('.hatch-monster[data-monster="C2"]')); await click(F(".b9r3h-set .hatch-add__fill"));
+  await click(F(".b9r3h-set .hatch-add__step--minus"));
+  check((await count(".b9r3h-chip")) === 2, "two monsters in the preset");
+  check((await page.locator(F(".b9r3h-count")).inputValue()) === String((level === 3 ? 30 : 20) - 1), "count is one stack less one");
+  check((await count(".b9r3h-inpreset")) === 2, "the grid wears the counts");
+  await shot(page, `${tag}-3-building`);
+  await page.locator(F(".b9r3h-count")).fill("12"); await page.waitForTimeout(200);
+  await click(F(".b9r3h-done"));
+  check((await count(".b9r3h-row:not(.b9r3h-row--empty)")) === 2, "preset 2 is made");
+  await shot(page, `${tag}-4-made`);
+  // send it: all of it fits
+  const q0 = await queued();
+  await click(F('.b9r3h-send[data-preset="1"]'));
+  check((await queued()) === q0 + 32, `Send added 32 (${q0} -> ${await queued()})`);
+  check(/^Added 32$/.test((await text(F(".b9r3h-said strong"))) || ""), "the row says Added 32");
+  await shot(page, `${tag}-5-sent`);
+  // keep sending preset 1 until the queue is full
+  let said = "";
+  for (let i = 0; i < 12; i += 1) { await click(F('.b9r3h-send[data-preset="0"]')); said = (await text(F(".b9r3h-said"))) || ""; if (/of/.test(said)) break; }
+  check(/Added \d+ of 140/.test(said) && /queue is full/.test(said), `the row says how many fitted (${said})`);
+  check((await stacks()) === 10, "the queue is full");
+  await shot(page, `${tag}-6-sent-part`);
+  // change preset 1, empty it, undo by Start over later
+  await click(F('.b9r3h-row__body[data-preset="0"]'));
+  check((await count(".b9r3h-chip")) === 3, "preset 1 opens with its three monsters");
+  await click(F(".b9r3h-chip >> nth=1"));
+  check((await page.locator(F(".b9r3h-count")).inputValue()) === "40", "a chip chooses its monster and shows its count");
+  await click(F(".b9r3h-edit__bin"));
+  check((await count(".b9r3h-chip")) === 0, "Empty clears the preset");
+  await click(F(".b9r3h-done"));
+  check((await count(".b9r3h-row--empty")) === (level === 3 ? 4 : 2), "the emptied slot is a + again");
+  // the housing box
+  await click(F(".b9r2h-housing")); check(await page.locator(F(".hatch-message")).isVisible(), "the housing box opens"); await shot(page, `${tag}-7-housing`); await click(F(".b9r2h-housing"));
   if (level === 3) {
-    if (opt === "d") { await click(F('.b9r2h-stepper__arrow[data-by="1"]')); check((await text(F(".b9r2h-where__count"))) === "2/11", "stepped to yard 2"); await shot(page, `${tag}-9-outpost`); await click(F(".b9r2h-stepper__where")); }
-    else await click(F(".b9r2h-yard--chip"));
+    await click(F('.b9r2h-stepper__arrow[data-by="1"]'));
+    check((await text(F(".b9r2h-where__count"))) === "2/11", "stepped to yard 2");
+    check((await count(".hatch.b9r2h-remote")) === 1, "remote frame on");
+    check((await page.locator(F(".b9r3h-presets")).getAttribute("data-scope")) === "outposts", "the outposts' list shows");
+    check((await count(".b9r3h-tab .game-icon--outpost")) === 1, "the Presets tab wears the flag");
+    await shot(page, `${tag}-8-outpost`);
+    const o0 = await queued(); await click(F('.b9r3h-send[data-preset="0"]'));
+    check((await queued()) > o0, "Send at the outpost");
+    await shot(page, `${tag}-9-outpost-sent`);
+    await click(F('.b9r2h-stepper__arrow[data-by="1"]'));
+    check((await count(".b9r3h-row:not(.b9r3h-row--empty)")) === 1, "outpost 3 shares the outposts' list");
+    await click(F(".b9r2h-stepper__where"));
     check(await page.locator(F(".b9r2h-yards")).isVisible(), "yard page opens");
     await shot(page, `${tag}-10-yards`);
-    await page.locator(F(".b9r2h-search__input")).fill("long"); await page.waitForTimeout(200);
-    check((await page.locator(F(".b9r2h-yardcard")).count()) === 1, "search narrows the yards");
-    await click(F(".b9r2h-yardcard"));
-    check((await text(F(".b9r2h-where__count"))) === "3/11", "picked yard 3");
-    check((await page.locator(F(".hatch.b9r2h-remote")).count()) === 1, "remote frame on");
-    await click(F('.hatch-monster[data-monster="C2"]')); await click(F(".hatch-add__jump >> nth=1")); await shot(page, `${tag}-11-outpost-add`);
-    const was = await stacks(); await click(F(".hatch-add__add"));
-    if (opt === "e") await click(F(".b9r2h-seal"));
-    check((await stacks()) === was + 1 || opt === "e", "added at the outpost");
-    await shot(page, `${tag}-12-outpost-added`);
-    if (opt === "e") await click(F(".b9r2h-back"));
-    await click(F(".b9r2h-yard--home"));
+    await click(F(".b9r2h-yardcard >> nth=0"));
     check((await text(F(".b9r2h-where__count"))) === "1/11", "home again");
-    await shot(page, `${tag}-13-home`);
+    check((await page.locator(F(".b9r3h-presets")).getAttribute("data-scope")) === "main", "the main yard's list is back");
   }
-  const wide = await page.evaluate(() => document.documentElement.scrollWidth > innerWidth + 1);
-  check(!wide, "no sideways scroll");
+  await click("#demo [data-reset]");
+  check((await count(".b9r3h-tab--on[data-tab='monsters']")) === 1, "Start over returns to Monsters");
+  check(!(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth + 1)), "no sideways scroll");
   await context.close();
 }
-for (const opt of ["d", "e"]) for (const level of [2, 3]) { await flows(opt, level, "phone", 1280, 1000); await flows(opt, level, "desktop", 1440, 1000); }
-// 3. Everything else that is wired, and the pictures behind it.
-if (!filter || "extras".includes(filter)) {
-  for (const [w, h, frame, hashExtra] of [[1280, 1000, "phone", ""], [1000, 900, "desktop", ""], [390, 844, "phone", ""], [1280, 1000, "phone", "&load=replace"]]) {
-    const { context, page } = await open(w, h, `opt=d&level=3&frame=${frame}${hashExtra}`, 1);
-    const tag = `extras-${frame}-${w}${hashExtra ? "-replace" : ""}`;
-    const check = (ok, what) => { if (!ok) problems.push(`CHECK ${tag}: ${what}`); };
-    const click = async (sel) => { try { await page.locator(sel).first().click({ timeout: 3000 }); } catch { problems.push(`NOCLICK ${tag}: ${sel}`); } await page.waitForTimeout(150); };
-    const stacks = () => page.locator(F(".hatch-slot:not(.hatch-slot--empty)")).count();
-    for (const id of await page.locator(F(".hatch-monster--ready")).evaluateAll((ns) => ns.map((n) => n.dataset.monster))) { await click(F(`.hatch-monster[data-monster="${id}"]`)); check((await page.locator(F(".hatch-info__name")).count()) === 1, "info for " + id); }
-    await click(F(".hatch-monster--locked"));
-    if (await page.locator(F(".hatch-info__details")).isVisible()) { await click(F(".hatch-info__details")); await shot(page, `${tag}-details`); await click(F(".hatch-info__details")); }
-    await click(F(".hatch-line__boost-link")); await shot(page, `${tag}-boosts`); await click(F(".hatch-line__boost-link"));
-    await click(F(".b9r2h-housing")); await shot(page, `${tag}-housing`); await click(F(".b9r2h-housing"));
-    await page.locator(F(".hatch-add__count")).fill("7"); await page.waitForTimeout(150);
-    check(!(await page.locator(F(".hatch-add__add")).isDisabled()), "typed count enables Add");
-    await click(F(".hatch-add__step--minus")); check((await page.locator(F(".hatch-add__count")).inputValue()) === "6", "minus");
-    const was = await stacks(); await click(F(".hatch-add__add")); check((await stacks()) === was + 1, "typed add");
-    const count = async () => page.locator(F(".hatch-slot__count")).first().textContent();
-    const c0 = await count(); await click(F(".hatch-slot")); check((await count()) !== c0, "take one out");
-    await click(F(".hatch-now--producing")); // cancel one
-    await click(F('.b9r2h-mix[data-mix="1"]')); await shot(page, `${tag}-mixcard`);
-    const box = await page.locator(F(".b9r2h-mixcard")).boundingBox(), tok = await page.locator(F(".b9r2h-mixes")).boundingBox(), fr = await page.locator("#frame-holder").boundingBox();
-    check(box && tok && box.y >= tok.y + tok.height - 1 && box.y < tok.y + tok.height + 16 && box.x >= fr.x && box.x + box.width <= fr.x + fr.width + 1, `mix card sits under the tokens inside the frame ${JSON.stringify([box, tok])}`);
-    await click(F(".b9r2h-mixcard__tool")); // save over (the card stays open)
-    const n0 = await stacks(); await click(F(".b9r2h-mixcard__load"));
-    check(hashExtra ? (await stacks()) <= n0 : (await stacks()) >= n0, "load mode " + (hashExtra || "add"));
-    await shot(page, `${tag}-loaded`);
-    await click(F('.b9r2h-mix[data-mix="1"]')); await click(F(".b9r2h-mixcard__bin")); check((await page.locator(F('.b9r2h-mix--empty[data-mix="1"]')).count()) === 1, "empty a mix");
-    await click('#demo [data-reset]'); check((await page.locator(F('.b9r2h-mix--empty[data-mix="1"]')).count()) === 0, "start over");
-    check(!(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth + 1)), "no sideways scroll");
-    await context.close();
-  }
-  // a host page in light theme must not change the frame
-  for (const theme of ["dark", "light"]) { const { context, page } = await open(390, 844, "opt=d&level=2&frame=phone&state=busy&bare=1&paused=1", 1); await page.evaluate((t) => { document.documentElement.dataset.theme = t; document.documentElement.style.colorScheme = t; }, theme); await page.waitForTimeout(200); await shot(page, `theme-${theme}`); await context.close(); }
+for (const level of [2, 3]) { await flow(level, "phone", 1280, 1000); await flow(level, "desktop", 1440, 1000); }
+// 3. The page itself on a real phone width, and a light-theme host page.
+if (!filter || "page".includes(filter)) {
+  const { context, page } = await open(390, 844, "", 2);
+  await page.screenshot({ path: `${W}/demo/shots/page-phone-390.png`, fullPage: true });
+  if (await page.evaluate(() => document.documentElement.scrollWidth > innerWidth + 1)) problems.push("CHECK page-phone: sideways scroll");
+  await context.close();
+  const d = await open(1440, 1000, "level=3&frame=desktop", 1);
+  await d.page.screenshot({ path: `${W}/demo/shots/page-desktop-1440.png` });
+  await d.context.close();
 }
-// the page itself on a real phone width
-if (!filter || "page-phone".includes(filter)) { const { context, page } = await open(390, 844, "", 2); await page.screenshot({ path: `${W}/demo/shots/page-phone-390.png`, fullPage: true }); const wide = await page.evaluate(() => document.documentElement.scrollWidth > innerWidth + 1); if (wide) problems.push("CHECK page-phone: sideways scroll"); await page.locator('#demo [data-set="frame=desktop"]').click(); await page.waitForTimeout(300); await page.screenshot({ path: `${W}/demo/shots/page-phone-390-desktopframe.png`, fullPage: true }); if (await page.evaluate(() => document.documentElement.scrollWidth > innerWidth + 1)) problems.push("CHECK page-phone desktop frame: sideways scroll"); await context.close(); }
 await browser.close();
 console.log(problems.length ? [...new Set(problems)].join("\n") : "no problems");

@@ -2,6 +2,10 @@
    Monsters | Presets switch. Builds on b9-hcc-r2.css (option D's classes). */
 
 /* ── The switch, in the strip between the rack and the monsters ─────── */
+.b9r3h-tabs,
+.b9r3h-presets {
+  flex: none;
+}
 .b9r3h-tabs {
   display: flex;
   align-items: center;
@@ -108,7 +112,7 @@
   gap: 8px;
   align-content: start;
   /* As tall as the Monsters pane, so the window does not jump between the two tabs. */
-  min-height: 240px;
+  min-height: 200px;
 }
 .b9r3h-row {
   display: flex;
@@ -187,7 +191,7 @@
   padding: 0 4px;
   border-radius: 8px;
   background: rgb(18 26 36 / 0.92);
-  color: var(--colour-text);
+  color: #fff;
   font-family: var(--font-display);
   font-size: 12px;
   line-height: 16px;
@@ -246,7 +250,7 @@
   color: var(--colour-warning, #f2b33d);
 }
 /* A wide row has room for every monster of the preset. */
-@container hatch (width > 620px) {
+@container hatch (width > 880px) {
   .b9r3h-stack--extra {
     display: block;
   }
@@ -336,7 +340,7 @@
   padding: 0 4px;
   border-radius: 8px;
   background: rgb(18 26 36 / 0.92);
-  color: var(--colour-text);
+  color: #fff;
   font-family: var(--font-display);
   font-size: 12px;
   line-height: 16px;
