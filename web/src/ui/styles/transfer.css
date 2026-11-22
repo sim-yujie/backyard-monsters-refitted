@@ -421,6 +421,11 @@
   color: #d2dbe4;
 }
 
+.xfer-plate.is-nohousing .xfer-plate__word {
+  font-size: 11px;
+  white-space: nowrap;
+}
+
 .xfer-plate.is-dim .xfer-plate__free {
   color: #e8eef4;
 }
@@ -1134,7 +1139,7 @@
 }
 
 .xfer-tray .xfer-quick.is-active {
-  box-shadow: 0 0 0 2px #ffa73b, 0 0 10px rgb(255 167 59 / 55%);
+  filter: drop-shadow(0 0 2px #ffa73b) drop-shadow(0 0 5px rgb(255 167 59 / 80%));
 }
 
 .xfer-chip__edit {

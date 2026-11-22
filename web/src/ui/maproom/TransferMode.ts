@@ -585,7 +585,7 @@ export class TransferMode {
         if (types.length > room) top.append(moreDots(types.length - room));
       }
       node.append(top);
-      if (!yard.attack && size === "full") {
+      if (!yard.attack && size === "full" && !node.classList.contains("is-nohousing")) {
         const room = el("span", "xfer-plate__room");
         room.append(roomBar(yard, sizeOf, delta));
         const word = el("b", full && !isAnchor ? "xfer-plate__free is-full" : "xfer-plate__free");
