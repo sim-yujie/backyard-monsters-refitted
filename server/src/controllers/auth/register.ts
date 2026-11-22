@@ -9,6 +9,7 @@ import {
   botCheckUnavailableErr,
   emailUniqueErr,
   invalidAccountErr,
+  maintenanceErr,
   usernameUniqueErr,
 } from "../../errors/errors.js";
 import { logger } from "../../utils/logger.js";
@@ -20,6 +21,7 @@ import { assertUsernameAllowed } from "../../services/user/usernameFilter.js";
 import { verifyTurnstileToken } from "../../services/auth/turnstile.js";
 import { devConfig } from "../../config/GameConfig.js";
 import { maskEmail } from "../../utils/maskEmail.js";
+import { maintenanceNotice, maintenanceState } from "../../services/admin/maintenance.js";
 
 /**
  * Controller to handle user registration.
@@ -40,6 +42,11 @@ import { maskEmail } from "../../utils/maskEmail.js";
  * @throws {ClientSafeError} - If the request body is invalid or the username or email is taken.
  */
 export const register: KoaController = async (ctx) => {
+  // No new accounts during maintenance: nobody but the owner could sign in
+  // with one, and the database may be mid-change (`services/admin/maintenance.ts`).
+  const maintenance = maintenanceState();
+  if (maintenance.on) throw maintenanceErr(maintenanceNotice(maintenance, Date.now()));
+
   const parsed = UserRegistrationSchema.safeParse(ctx.request.body ?? {});
 
   if (!parsed.success) {

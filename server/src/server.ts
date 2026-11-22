@@ -1,4 +1,5 @@
 import { startWeekendSettingsRefresh } from "./services/events/weekendSettings.js";
+import { startMaintenanceRefresh } from "./services/admin/maintenance.js";
 import { startMonsterMadnessRefresh } from "./services/events/monsterMadnessRuns.js";
 import { getCurrentDateTime } from "./utils/getCurrentDateTime.js";
 import { ensureWelcomeLaunch } from "./services/events/mr2Welcome.js";
@@ -91,6 +92,11 @@ redis.onclose = (err) => logger.error(`Redis disconnected: ${err.message}`);
   }
 
   await redis.connect();
+
+  // The maintenance switch (`services/admin/maintenance.ts`), read before the
+  // first request or chat connection so a restart during maintenance never
+  // lets anyone in; then every few seconds.
+  await startMaintenanceRefresh(() => postgres.em.fork());
 
   startChatServer();
 

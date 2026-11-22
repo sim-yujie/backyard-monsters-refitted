@@ -215,6 +215,19 @@ export const userBannedErr = (ban: { until: Date | null; reason: string | null }
     isClientFriendly: true,
   });
 
+/**
+ * The maintenance switch is on (`services/admin/maintenance.ts`): a sign-in,
+ * or past the countdown any request, from anyone but the owner. The game
+ * words it in the player's own time from `data` (`web/src/app/maintenance.ts`).
+ */
+export const maintenanceErr = (notice: { message: string; backAt: string | null }) =>
+  new ClientSafeError({
+    message: `Maintenance: ${notice.message}${notice.backAt ? ` Back at ${notice.backAt.slice(11, 16)} UTC.` : ""}`,
+    status: Status.FORBIDDEN,
+    data: { reason: "maintenance", maintenanceMessage: notice.message, backAt: notice.backAt },
+    isClientFriendly: true,
+  });
+
 export const antiCheatBanErr = () =>
   new ClientSafeError({
     message:
