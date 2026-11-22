@@ -21,10 +21,16 @@
  * how the server learns between attacks; the engine reads a log's `h` as
  * before, so 7.10/7.11's 3cb9cc66416d5eda still plays the same.
  *
+ * Emptied again in beta 9 (Infernal Monster Lab, owner 21 Nov 2026): without
+ * a Lab rank Balthazar strikes monsters 1x (an attacking one hunted at 3x) and
+ * King Wormzer splashes nothing (x4 within 100 before), which moves every
+ * battle either fights in; 8.x's 0ba3fde8701104af and 7.10/7.11's
+ * 3cb9cc66416d5eda replays with them no longer play the same.
+ *
  * Add the version a change replaces only when that change moves no battle.
  * A change that moves any battle result must empty this list.
  */
-export const COMPATIBLE_RULES_VERSIONS: readonly string[] = ["3cb9cc66416d5eda"];
+export const COMPATIBLE_RULES_VERSIONS: readonly string[] = [];
 
 /**
  * Whether a battle stamped with the rules version `stamp` plays to its stored
