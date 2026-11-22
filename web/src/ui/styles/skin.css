@@ -19,7 +19,7 @@
 
 /* ── Modern: scrap metal and bone ───────────────────────────────────────── */
 
-:root[data-skin="scrap"] :is(.panel, .stay-protected, .presence-check, .chat-box--open, .mr1) {
+:root[data-skin="scrap"] :is(.panel, .stay-protected, .presence-check, .chat-box--open, .mr1, .maint-banner__card, .maint-card) {
   --skin-frame: url("/ui/skin/scrap/frame.webp");
   --skin-frame-slice: 100;
   --skin-frame-width: 50px;
@@ -91,7 +91,7 @@
 
 /* ── Classic: Flash refreshed ───────────────────────────────────────────── */
 
-:root[data-skin="flash"] :is(.panel, .stay-protected, .presence-check, .chat-box--open, .mr1) {
+:root[data-skin="flash"] :is(.panel, .stay-protected, .presence-check, .chat-box--open, .mr1, .maint-banner__card, .maint-card) {
   --skin-frame: url("/ui/skin/flash/frame.webp");
   --skin-frame-slice: 95;
   --skin-frame-width: 47.5px;
@@ -167,7 +167,7 @@
 
 /* Also the cards that float over the game: "Stay protected?", the quick
    check, world chat open and Map Room 1. */
-:root[data-skin] :is(.panel, .stay-protected, .presence-check, .chat-box--open, .mr1) {
+:root[data-skin] :is(.panel, .stay-protected, .presence-check, .chat-box--open, .mr1, .maint-banner__card, .maint-card) {
   color: var(--colour-text);
   background: none;
   border-style: solid;
@@ -384,17 +384,17 @@
 }
 
 /* A plain button on steel: a lit plate with a clear rim, not a dim smudge. */
-:root[data-skin="scrap"] :is(.panel, .stay-protected, .presence-check, .chat-box--open, .mr1) .btn:not(.btn--primary, .btn--outline, .btn--ghost, .btn--danger, .build-info__build, .tabs__tab, .mr1-card__close, .mr1__close) {
+:root[data-skin="scrap"] :is(.panel, .stay-protected, .presence-check, .chat-box--open, .mr1, .maint-banner__card, .maint-card) .btn:not(.btn--primary, .btn--outline, .btn--ghost, .btn--danger, .build-info__build, .tabs__tab, .mr1-card__close, .mr1__close) {
   border-color: rgb(255 255 255 / 26%);
   background: linear-gradient(rgb(255 255 255 / 16%), rgb(255 255 255 / 6%));
   box-shadow: 0 2px 0 rgb(0 0 0 / 35%);
 }
 
-:root[data-skin="scrap"] :is(.panel, .stay-protected, .presence-check, .chat-box--open, .mr1) .btn:not(.btn--primary, .btn--outline, .btn--ghost, .btn--danger, .build-info__build, .tabs__tab, .mr1-card__close, .mr1__close):hover:not(:disabled) {
+:root[data-skin="scrap"] :is(.panel, .stay-protected, .presence-check, .chat-box--open, .mr1, .maint-banner__card, .maint-card) .btn:not(.btn--primary, .btn--outline, .btn--ghost, .btn--danger, .build-info__build, .tabs__tab, .mr1-card__close, .mr1__close):hover:not(:disabled) {
   background: linear-gradient(rgb(255 255 255 / 24%), rgb(255 255 255 / 12%));
 }
 
-:root[data-skin="scrap"] :is(.panel, .stay-protected, .presence-check, .chat-box--open, .mr1) .btn:not(.btn--primary, .btn--outline, .btn--ghost, .btn--danger, .build-info__build, .tabs__tab, .mr1-card__close, .mr1__close):disabled {
+:root[data-skin="scrap"] :is(.panel, .stay-protected, .presence-check, .chat-box--open, .mr1, .maint-banner__card, .maint-card) .btn:not(.btn--primary, .btn--outline, .btn--ghost, .btn--danger, .build-info__build, .tabs__tab, .mr1-card__close, .mr1__close):disabled {
   border-color: rgb(255 255 255 / 10%);
   background: rgb(0 0 0 / 20%);
   box-shadow: none;
@@ -961,12 +961,12 @@
 /* ── Floating cards: the window's frame, without a title sign ─────────── */
 
 /* A card is smaller than a window: the phone's thinner frame. */
-:root[data-skin="scrap"] :is(.stay-protected, .presence-check, .chat-box--open) {
+:root[data-skin="scrap"] :is(.stay-protected, .presence-check, .chat-box--open, .maint-banner__card, .maint-card) {
   --skin-frame-width: 32px;
   --skin-edge: 15px;
 }
 
-:root[data-skin="flash"] :is(.stay-protected, .presence-check, .chat-box--open) {
+:root[data-skin="flash"] :is(.stay-protected, .presence-check, .chat-box--open, .maint-banner__card, .maint-card) {
   --skin-frame-width: 30px;
   --skin-edge: 16px;
 }
@@ -1039,7 +1039,7 @@
   filter: brightness(1.08);
 }
 
-:root[data-skin] :is(.planner-bar, .hud, .mr2-float, .chat-box--open, .stay-protected, .presence-check, .mr1, .build-placing, .raid-bar, .ach-card, .descent-card, .inferno-card, .test-report__peek) .btn--primary {
+:root[data-skin] :is(.planner-bar, .hud, .mr2-float, .chat-box--open, .stay-protected, .presence-check, .maint-banner, .maint-card, .mr1, .build-placing, .raid-bar, .ach-card, .descent-card, .inferno-card, .test-report__peek) .btn--primary {
   /* Even padding (was 0 2px 3px, 1.5 px high), as the panel plate above. */
   --btn-ascent: var(--font-display-ascent);
   --btn-descent: var(--font-display-descent);
@@ -1062,12 +1062,12 @@
     1.5px 1.5px 0 var(--skin-button-stroke), -1.5px 1.5px 0 var(--skin-button-stroke), 1.5px -1.5px 0 var(--skin-button-stroke), -1.5px -1.5px 0 var(--skin-button-stroke);
 }
 
-:root[data-skin] :is(.planner-bar, .hud, .mr2-float, .chat-box--open, .stay-protected, .presence-check, .mr1, .build-placing, .raid-bar, .ach-card, .descent-card, .inferno-card, .test-report__peek) .btn--primary:hover:not(:disabled) {
+:root[data-skin] :is(.planner-bar, .hud, .mr2-float, .chat-box--open, .stay-protected, .presence-check, .maint-banner, .maint-card, .mr1, .build-placing, .raid-bar, .ach-card, .descent-card, .inferno-card, .test-report__peek) .btn--primary:hover:not(:disabled) {
   background: none;
   filter: brightness(1.08);
 }
 
-:root[data-skin] :is(.planner-bar, .hud, .mr2-float, .chat-box--open, .stay-protected, .presence-check, .mr1, .build-placing, .raid-bar, .ach-card, .descent-card, .inferno-card, .test-report__peek) .btn--primary:disabled {
+:root[data-skin] :is(.planner-bar, .hud, .mr2-float, .chat-box--open, .stay-protected, .presence-check, .maint-banner, .maint-card, .mr1, .build-placing, .raid-bar, .ach-card, .descent-card, .inferno-card, .test-report__peek) .btn--primary:disabled {
   background: none;
   filter: grayscale(1) brightness(0.85);
 }

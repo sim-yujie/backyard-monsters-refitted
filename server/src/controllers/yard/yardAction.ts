@@ -177,6 +177,8 @@ export type YardSlices = Partial<
     // written whole, through `updateAchievements`. On an outpost it lands on
     // the main row. The wrapper evaluates it again after the slices land.
     | "achievements"
+    // The HCC's presets (beta 9, `hccPresets.ts`): on the main row from an outpost too.
+    | "hccpresets"
     // The Siege Lab and Factory (Inferno WP 6.3, `services/yard/siege.ts`):
     // the weapons, and the Inferno purse they are paid from, which the plans
     // charge and fund themselves (the wrapper's pool is the surface one).
@@ -211,6 +213,13 @@ export interface YardActionInput<Body> {
    * a refusal. Never use it to write the save itself: return `slices`.
    */
   em: EntityManager;
+  /**
+   * The caller's main yard row, locked: `save` itself on the main yard. A
+   * route acting on an outpost reads the main yard's buildings from it (the
+   * HCC's level 3 runs outposts from home, `hccRemote.ts`). Read-only.
+   * Optional so tests may leave it out.
+   */
+  main?: Save;
   /**
    * The player's alliance strengths and weaknesses (`allianceBonuses.ts`),
    * all zeros outside an alliance. Optional so tests may leave it out.
@@ -762,7 +771,7 @@ export const runYardAction = async <Schema extends z.ZodType, Report>(
       if (onMain) await autobankYard(tx, yard.main, now, completed);
       if (onMain) await settleFactorSteps(tx, yard.main, schedule as FactorSchedule, now);
 
-      const outcome = await action.run({ save, user, body: parsed.data, now, completed, em: tx, bonuses });
+      const outcome = await action.run({ save, user, body: parsed.data, now, completed, em: tx, bonuses, main: yard.main });
       applyOutcome(save, user, outcome);
       await applyCoins(tx, user, outcome);
       // A Resource Pod built, finished or recycled moves the main yard's
@@ -800,6 +809,8 @@ export const runYardAction = async <Schema extends z.ZodType, Report>(
         report,
         playerlevel: playerLevelOf(yard.main),
         playerpoints: playerPointsOf(yard.main),
+        // The HCC's presets (beta 9): the player's, from the main row.
+        hccpresets: yard.main.hccpresets ?? null,
         // The account's, so from the main row on an outpost's answer too. On
         // the Inferno the badge counts the Inferno quests (`goalBookOf`).
         onboarding: onboardingSummary(yard.inferno ? save : yard.main),
@@ -826,6 +837,8 @@ export const runYardAction = async <Schema extends z.ZodType, Report>(
         report: answer.report,
         playerlevel: answer.playerlevel,
         playerpoints: answer.playerpoints,
+        // Once the player has saved one (the column starts NULL).
+        ...(answer.hccpresets != null && { hccpresets: answer.hccpresets }),
         ...(answer.achievements.length > 0 && { achievements: answer.achievements }),
         // The quest window's red number (`services/quests/state.ts`).
         ...(answer.questsClaimable !== null && { questsClaimable: answer.questsClaimable }),

@@ -134,7 +134,7 @@ describe("readHatchYard", () => {
       saveOf({ monsters: monsters({ hcc: shared }) }, [building(20, 16, 1)]),
       T0,
     );
-    expect(built.hcc).toEqual({ id: 20, works: true });
+    expect(built.hcc).toEqual({ id: 20, works: true, level: 1 });
     expect(built.shared).toEqual([["C1", 4, 1]]);
     const unbuilt = readHatchYard(saveOf({}, [building(20, 16, 1, { cB: 10 })]), T0);
     expect(unbuilt.hcc).toBeNull();

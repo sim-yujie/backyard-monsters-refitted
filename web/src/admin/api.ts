@@ -1169,6 +1169,34 @@ export const fetchWeekend = (): Promise<Envelope<WeekendPanelView>> => adminGet(
 export const changeWeekend = (change: WeekendChange): Promise<Envelope<WeekendPanelView>> =>
   adminPost(`${ADMIN}/weekend`, change as unknown as JsonBody);
 
+/* ── Maintenance switch (`server/src/controllers/admin/maintenance.ts`) ── */
+
+export interface MaintenancePanelView {
+  /** Server clock (ms) when answered. */
+  now: number;
+  on: boolean;
+  message: string;
+  /** ms; null for none. */
+  backAt: number | null;
+  startedAt: number | null;
+  cutoffAt: number | null;
+  /** Until players are signed out; 0 once they are (or when off). */
+  remainingMs: number;
+  cutOff: boolean;
+  updatedAt: string | null;
+  updatedBy: number | null;
+  limits: { minutes: number[]; defaultMinutes: number; defaultMessage: string; messageMax: number };
+}
+
+export type MaintenanceChange =
+  | { action: "on"; message?: string; backAt?: string | null; minutes?: number }
+  | { action: "off" };
+
+export const fetchMaintenancePanel = (): Promise<Envelope<MaintenancePanelView>> => adminGet(`${ADMIN}/maintenance`);
+
+export const changeMaintenance = (change: MaintenanceChange): Promise<Envelope<MaintenancePanelView>> =>
+  adminPost(`${ADMIN}/maintenance`, change as unknown as JsonBody);
+
 /* ── Monster Madness (`server/src/controllers/admin/monsterMadness.ts`) ── */
 
 /** One run, unix seconds; a stopped run ends when it was stopped. */

@@ -243,9 +243,11 @@ export const BUILDING_COST_ROWS: readonly CostRow[] = [
     [552960,552960,0,0,72000,[[14,1,6],[8,1,1]]],
     [2211840,2211840,0,0,144000,[[14,1,6],[8,1,1]]],
   ], [0,1,1,2,2,3,3,3,4,4,4]],
-  // 16 Hatchery Control Center (special) — YARD_PROPS.as:1676
+  // 16 Hatchery Control Center (special) — YARD_PROPS.as:1676, levels 2-3 beta 9
   [16, "Hatchery Control Center", "special", 2, [
     [4000000,4000000,4000000,0,90000,[[14,1,3],[13,3,2]]],
+    [8000000,8000000,8000000,0,172800,[[14,1,6],[13,4,3]]],
+    [16000000,16000000,16000000,0,345600,[[14,1,8]]],
   ], [0,0,0,1,1,1,1,1,1,1,1]],
   // 17 Block (wall) — YARD_PROPS.as:1722, upgrades need no hall (beta 8)
   [17, "Block", "wall", 3, [
@@ -1007,9 +1009,10 @@ export const OUTPOST_COST_ROWS: readonly CostRow[] = [
     [552960,552960,0,0,72000,[[112,1,1]]],
     [2211840,2211840,0,0,144000,[[112,1,1]]],
   ], [0,1]],
-  // 16 Hatchery Control Center (special) — OUTPOST_YARD_PROPS.as:1206
+  // 16 Hatchery Control Center (special) — OUTPOST_YARD_PROPS.as:1206, level 2 beta 9
   [16, "Hatchery Control Center", "special", 2, [
     [500000,500000,500000,0,90000,[[112,1,1],[13,2,1]]],
+    [1000000,1000000,1000000,0,172800,[[112,1,1],[13,2,3]]],
   ], [0,1]],
   // 17 Block (wall) — OUTPOST_YARD_PROPS.as:1251
   [17, "Block", "wall", 3, [

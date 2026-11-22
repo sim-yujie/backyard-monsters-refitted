@@ -4,21 +4,23 @@ import {
   bombBlast,
   buildingClass,
   cellOf,
+  ellipseEdgeDistance,
   ELLIPSE_SQUASH,
   GRID_CELL,
   GRID_HEIGHT,
   GRID_WIDTH,
   isTower,
   propsSizeOf,
+  overlappingBuildings,
   puttyReach,
   type BattleState,
   type BombStats,
+  type DropObstacle,
   type Ellipse,
 } from "@/game/combat/rules";
 import { JAR_TOWER_TYPES } from "@/game/combat/rules/jars";
 import { DECOY, JARS, VACUUM, type SiegeId } from "@/game/combat/rules/siege";
 import type { Point } from "@/game/yard/YardGrid";
-import { toIso } from "@/game/yard/YardGrid";
 import type { Yard } from "@/game/yard/yardModel";
 import type { YardInputOptions } from "@/game/yard/YardInput";
 import type { YardRenderer } from "@/game/yard/YardRenderer";
@@ -59,8 +61,9 @@ import type { Bucket } from "./bucket";
  * centres are closer than the two edge distances along the line between them
  * (`EllipseEdgeDistance`, `BASE.as:4995-5006`). Traps, destroyed buildings,
  * decorations and mushrooms are skipped (`DROPZONE.as` passes `true, true,
- * true`). The shared rules module carries no such test yet, so it is
- * transcribed here, function for function, and `AttackInput.test.ts` pins it.
+ * true`). The test lives in the shared rules (`combat/rules/dropZone.ts`,
+ * beta 9), where the server's Repeat attack reads it too, and
+ * `AttackInput.test.ts` pins it.
  *
  * The drop zone's size is what the Flash client called `_size`: for a fling
  * `max(200, bucket / 4)`, twice the logged radius (`ATTACK.as:667-671`,
@@ -82,39 +85,9 @@ export const ISO_SQUASH = ELLIPSE_SQUASH;
 /** The Decoy's clearance, `DROPZONE.SIEGEWEAPON_GROUND_SPECIAL_RADIUS`. */
 export const DECOY_CLEARANCE = 30;
 
-/**
- * `BASE.EllipseEdgeDistance`: how far from the centre of an ellipse of the
- * given full width and height its edge lies along `angle`.
- */
-export const ellipseEdgeDistance = (angle: number, width: number, height: number): number => {
-  const tan = Math.tan(angle);
-  let x = Math.pow(Math.pow(width / 2, -2) + tan * tan * Math.pow(height / 2, -2), -0.5);
-  const degrees = (angle * 180) / Math.PI;
-  if (degrees < -90 || degrees > 90) x *= -1;
-  const y = tan * x;
-  return Math.sqrt(x * x + y * y);
-};
-
-/** A building as the overlap test sees it. */
-export interface DropObstacle {
-  readonly id: number;
-  readonly type: number;
-  /** Yard units, as `buildingdata.X/Y`. */
-  readonly x: number;
-  readonly y: number;
-  /**
-   * The props `size`, `BFOUNDATION._size` (`BFOUNDATION.as:659`): an `int`, so
-   * 0 for the few types whose props entry has none (the Laser and Tesla
-   * towers among them).
-   */
-  readonly size: number;
-  /** Half the footprint height, `BFOUNDATION._middle` (`:678`). */
-  readonly middle: number;
-  readonly kind: ReturnType<typeof buildingClass>;
-  readonly tower: boolean;
-  /** Standing: at or above one health. */
-  readonly alive: boolean;
-}
+// The test itself is the shared rules' (`combat/rules/dropZone.ts`), so the
+// server's Repeat attack checks a saved plan by the same rule (beta 9).
+export { ellipseEdgeDistance, overlappingBuildings, type DropObstacle };
 
 /**
  * The yard's buildings as obstacles, with the ones at zero health marked.
@@ -140,40 +113,6 @@ export const obstaclesOf = (
     tower: isTower(building.type),
     alive: !down.has(building.id) && (building.hp === null || building.hp > 0),
   }));
-};
-
-/** Whether `BuildingOverlap(…, true, true, true)` would even look at this one. */
-const blocks = (obstacle: DropObstacle): boolean =>
-  obstacle.alive && obstacle.kind !== "trap" && obstacle.kind !== "decoration";
-
-/**
- * Every standing building a drop zone of `size` at `point` overlaps, in id
- * order. `point` is in yard units; the test is in isometric pixels.
- */
-export const overlappingBuildings = (
-  point: Point,
-  size: number,
-  obstacles: readonly DropObstacle[],
-): DropObstacle[] => {
-  const at = toIso(point.x, point.y);
-  const hits: DropObstacle[] = [];
-  for (const obstacle of obstacles) {
-    if (!blocks(obstacle)) continue;
-    const iso = toIso(obstacle.x, obstacle.y);
-    const centreX = iso.x;
-    const centreY = iso.y + obstacle.middle;
-    const toObstacle = Math.atan2(at.y - centreY, at.x - centreX);
-    const zoneEdge = ellipseEdgeDistance(toObstacle, size, size * ISO_SQUASH);
-    const toPoint = Math.atan2(centreY - at.y, centreX - at.x);
-    const buildingEdge = ellipseEdgeDistance(
-      toPoint,
-      obstacle.size * 0.5,
-      obstacle.size * 0.5 * ISO_SQUASH,
-    );
-    const apart = Math.trunc(Math.hypot(at.x - centreX, at.y - centreY));
-    if (apart < zoneEdge + buildingEdge) hits.push(obstacle);
-  }
-  return hits;
 };
 
 /* ── Siege weapons ────────────────────────────────────────────────────────── */

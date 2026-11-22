@@ -42,6 +42,36 @@ export const STACK_SIZE = 20;
 /** Stacks in the HCC's shared queue (`client/scripts/HATCHERYCCPOPUP.as:323`). */
 export const HCC_STACKS = 7;
 
+/**
+ * The HCC at each level (beta 9; the server's `hccLimits`, `services/yard/hatchery.ts`):
+ * level 1 is Flash's 7 stacks of 20 and 2 presets; level 2 10 stacks of 20 and 4
+ * presets; level 3 10 stacks of 30, 6 presets, and the player's outposts with an
+ * HCC run from home. An outpost's HCC goes to level 2; the Inferno's stays at 1.
+ */
+export interface HccLimits {
+  readonly level: number;
+  readonly stacks: number;
+  readonly size: number;
+  readonly presets: number;
+}
+
+/** The HCC's top level. */
+export const HCC_MAX_LEVEL = 3;
+
+/** The most stacks an HCC queue ever holds (level 2 and up), the box grid's width. */
+export const HCC_MAX_STACKS = 10;
+
+/** {@link HccLimits} at `level`, clamped to 1..3. */
+export const hccLimits = (level: number): HccLimits => {
+  const at = Math.max(1, Math.min(HCC_MAX_LEVEL, Math.floor(level) || 1));
+  return {
+    level: at,
+    stacks: at >= 2 ? HCC_MAX_STACKS : HCC_STACKS,
+    size: at >= 3 ? 30 : STACK_SIZE,
+    presets: at >= 3 ? 6 : at >= 2 ? 4 : 2,
+  };
+};
+
 /** The most one add request may ask for (`MAX_ADD` on the server). */
 export const MAX_ADD = 400;
 
@@ -117,8 +147,8 @@ export interface HatcheryView {
 export interface HatchYard {
   /** In service order: `hid` first, then new ones by id. */
   readonly hatcheries: HatcheryView[];
-  /** The finished HCC, or null: once it exists its queue replaces the hatcheries'. */
-  readonly hcc: { readonly id: number; readonly works: boolean } | null;
+  /** The finished HCC, or null: once it exists its queue replaces the hatcheries'. `level` 1..3 (beta 9). */
+  readonly hcc: HccView | null;
   /** The HCC's shared queue. */
   readonly shared: QueueStack[];
   /** Housed monsters, whole counts. */
@@ -213,11 +243,19 @@ const underConstruction = (building: BuildingData): boolean => (finite(building.
  * The yard's HCC, once built, and whether it works (hands the shared queue to
  * the hatcheries): above {@link HCC_MIN_HEALTH}. Null when the yard has none.
  */
-export const readHcc = (save: HccSave): { readonly id: number; readonly works: boolean } | null => {
+export const readHcc = (save: HccSave): HccView | null => {
   const found = buildingsOfType(save, HCC_TYPE)[0] ?? null;
   if (!found || underConstruction(found[1])) return null;
-  return { id: found[0], works: (healthOf(save, found[0], found[1]) ?? Infinity) > HCC_MIN_HEALTH };
+  const level = Math.max(1, Math.min(HCC_MAX_LEVEL, Math.floor(finite(found[1].l) ?? 1) || 1));
+  return { id: found[0], works: (healthOf(save, found[0], found[1]) ?? Infinity) > HCC_MIN_HEALTH, level };
 };
+
+/** The yard's finished HCC: its building id, whether it hands out work, and its level (1..3). */
+export interface HccView {
+  readonly id: number;
+  readonly works: boolean;
+  readonly level: number;
+}
 
 /** The hatcheries in service order, as the server orders them: `hid` first, then new ones by id. */
 const serviceOrder = (save: BaseLoadResponse): [number, BuildingData][] => {
@@ -426,9 +464,16 @@ const cloneForAdd = (yard: HatchYard) => ({
 });
 
 /** Puts one monster into a queue by the building's rule; false when there is no room. */
-const push = (queue: QueueStack[], id: string, level: number, limit: number, hcc: boolean): boolean => {
+export const pushStack = (
+  queue: QueueStack[],
+  id: string,
+  level: number,
+  limit: number,
+  hcc: boolean,
+  size: number = STACK_SIZE,
+): boolean => {
   const same = (stack: QueueStack | undefined) =>
-    stack !== undefined && stack[0] === id && stack[2] === level && stack[1] < STACK_SIZE;
+    stack !== undefined && stack[0] === id && stack[2] === level && stack[1] < size;
   const stack = hcc ? (same(queue.at(-1)) ? queue.at(-1) : undefined) : queue.find(same);
   if (stack) {
     stack[1] += 1;
@@ -466,7 +511,9 @@ export const previewAdd = (
   const hatchery = hcc ? null : copy.hatcheries.find((one) => one.id === target);
   if (!hcc && !hatchery) return null;
   const queue = hcc ? copy.shared : hatchery!.queue;
-  const limit = hcc ? HCC_STACKS : hatchery!.stackLimit;
+  const hccAt = hccLimits(yard.hcc?.level ?? 1);
+  const limit = hcc ? hccAt.stacks : hatchery!.stackLimit;
+  const size = hcc ? hccAt.size : STACK_SIZE;
   const before = new Map(queue.map((stack) => [stack, stack[1]]));
   const level = levelIn(yard.levels, monster);
   const price = priceOf(monster, level, yard.pricePercent);
@@ -480,7 +527,7 @@ export const previewAdd = (
       stoppedBy = "goo";
       break;
     }
-    if (!push(queue, monster, level, limit, hcc)) {
+    if (!pushStack(queue, monster, level, limit, hcc, size)) {
       stoppedBy = "queue";
       break;
     }

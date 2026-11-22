@@ -4,6 +4,7 @@ import type { Context, Next } from "koa";
 import {
   authFailureErr,
   discordAgeErr,
+  maintenanceErr,
   tokenAuthFailureErr,
 } from "../errors/errors.js";
 import JWT from "jsonwebtoken";
@@ -13,6 +14,7 @@ import { requiresDiscordVerification } from "../config/AccountConfig.js";
 import type { SessionType } from "../enums/SessionType.js";
 import { logger } from "../utils/logger.js";
 import { sessionTokenKey } from "../services/auth/sessions.js";
+import { maintenanceNotice, maintenanceState, requestBlocked } from "../services/admin/maintenance.js";
 
 export interface JwtClaims {
   user: {
@@ -76,6 +78,11 @@ export const verifyUserAuth = async (ctx: Context, next: Next) => {
   const signedIn = await sessionUser(token);
 
   if (!signedIn) throw authFailureErr();
+
+  // Past the maintenance countdown, every request from anyone but the owner
+  // is refused (`services/admin/maintenance.ts`); the session itself is kept,
+  // so the game can come back in once the owner turns it off.
+  if (requestBlocked(signedIn.user.userid)) throw maintenanceErr(maintenanceNotice(maintenanceState(), Date.now()));
 
   ctx.authUser = signedIn.user;
   ctx.meetsDiscordAgeCheck = signedIn.meetsDiscordAgeCheck;

@@ -38,5 +38,11 @@ A release happens only when the owner says "release". Versions are tagged
      linked; run `vercel link` there if it is ever lost.
 7. Merge `main` back into `revamp` so the two do not drift:
    `git merge --no-ff main` on `revamp`, push.
+8. Read the new errors one hour and one day after it went live (owner,
+   19 Nov 2026), every release and patch:
+   `bash .claude/scripts/post-release-errors.sh` (read-only: the live
+   `bym.app_error` and `bym.bug_report` tables and the server log, compared
+   with the same length of time before the release). The release skill
+   schedules both checks; `release.sh` prints the reminder at the end.
 
 Never deploy by hand from `revamp` or a feature branch.
