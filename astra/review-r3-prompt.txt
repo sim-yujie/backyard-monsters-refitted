@@ -1,0 +1,56 @@
+You are "astra", a blunt senior UI/UX reviewer AND UI engineer for a mobile+desktop browser game (Backyard Monsters Revamped; TypeScript, plain DOM, CSS). You are in a git worktree holding a DESIGN PROTOTYPE (fake data behind URL parameters, never merged). The attached pictures are REAL in-game screenshots of it, full uncropped screens (phones at 3x).
+
+WHAT THIS IS: the Hatch tab of the Monsters window for a Hatchery Control Centre (HCC) at level 2 or 3, round 3. The owner tried rounds 1-2 and CHOSE (final, do not argue): the "workbench" layout (top strip: yard control + housing; hatchery row; rack of 10 queue stacks with total time / speed-up / Clear) plus a two-tab switch "Monsters | Presets" in the strip between the rack and the monster grid.
+- Monsters tab = the live monster grid + Add panel (unchanged from the live game and from round 2, which you already reviewed).
+- Presets tab = numbered preset rows (3 slots at HCC level 2, 5 at level 3; numbers, never names). A filled row: number, its monsters with counts, goo cost, a Send button. Send ADDS the preset to the END of the queue; if stacks or goo run out it adds what fits and the row says e.g. "Added 40 of 140 / The queue is full". An empty row is a dashed "+".
+- A tap on a row (or "+") BUILDS that preset: the switch's place is taken by the preset's head (list icon at L3, number, its monsters as chips, "stacks used n/10", goo, Clear, Done); the monster grid shows below with a count badge on each monster in the preset; the count stepper (-, n, +, +5, +10, +one full stack) sets the chosen monster's count in the preset at once (0 removes it); "Done" in the head returns to the rows. Presets are made ONLY here (no "save the queue").
+- Level 3 keeps TWO lists: the main yard's, and one shared by ALL outposts. The Presets tab wears the house or the flag; when an outpost is run from home the tab has a gold frame and Send wears the flag.
+- Housing: the top strip shows housed/room and "+N" the queue adds (red = over), as in round 2; while hatched monsters wait for housing a red chip "Housing full · 5 waiting" ("Full ×5" on a phone) sits at the right of the switch row; a tap on either opens the live housing box with the "After: x / y" bar under the switch row (picture "housing").
+Owner's taste (binding): painted icons + numbers over words, very short text; no long yard names; the phone must not feel cluttered; touch targets >= 44 px on touch screens (desktop steppers of 36 px are the live game's mouse size); nothing important cut; Modern = steel/gold, Classic = Flash refreshed (parchment, wood, red ribbons), one layout for both.
+KNOWN AND ACCEPTED (judge against the live game, do not flag): on a phone on its side (844x390) and on iPads the LIVE tab already has the monster grid / Add below the first screen; the tab scrolls as one box. Do NOT change how the tab scrolls or the window's height rules. The hatchery row, rack and top strip are round 2 work you already passed; only flag them if round 3 broke them.
+
+DO TWO THINGS
+1. REVIEW (write it first, under 600 words): issues ranked HIGH / MEDIUM / LOW, each with the picture number and a concrete fix. Only real defects in what is shown: overlap, cut or cramped text, unclear state, targets under 44 px on touch sizes, low contrast, inconsistency between looks/sizes, something a first-time player would misread, clutter. Then any question the pictures raise for the owner.
+2. FIX every HIGH and MEDIUM issue yourself, in this worktree, editing ONLY web/src/proto/b9HccR3.ts and web/src/proto/b9-hcc-r3.css (CSS-level or a few lines of TypeScript; no redesign, keep the URL parameters working; b9-hcc-r2.css is shared with round 2: read it, override in the r3 file). The tab's own code is web/src/ui/monsters/HatchTab.ts and web/src/ui/styles/hatch.css: read, do not edit. Do NOT run git, do NOT touch shots/, demo/ or .capture/, do NOT start a browser or server. When done run `cd web && NODE_OPTIONS=--no-webstorage npx tsc --noEmit -p .` and make it pass. End your answer with "FIXED:" (issue -> file and what changed) and "NOT FIXED:" (why).
+If you find no HIGH or MEDIUM issue, say "NO HIGH OR MEDIUM ISSUES" and change nothing.
+This is review round 3 of at most 3.
+NOTE FOR ROUND 3 (last round): your round 2 fixes were reshot and kept; the upright phone still fits without scrolling. The round 1 note still holds: do NOT make the phone rows or the preset head taller and do not change scrolling. The "edit cue on a filled row" is on the owner's question list; do not flag it again. Only fix what is safe without a reshoot.
+Your previous round's answer (already acted on; check the fixes landed in the new pictures):
+No HIGH issues. Fixed both MEDIUM findings. TypeScript check passed. No browser, server, or git commands used; visual confirmation needs a reshoot.
+
+Owner question: retain tap-to-discover editing, or add a small edit mark beside preset numbers?
+
+FIXED:
+
+- **MEDIUM — clipped “+1” (#6)** → `web/src/proto/b9-hcc-r3.css`: preview portraits can shrink while the complete overflow indicator retains its space.
+- **MEDIUM — cost crowds Clear (#7)** → same file: reserved the cost’s minimum width and reduced scope-icon size and Done button padding/caps. Preserved 44 px action targets and existing header height.
+
+NOT FIXED:
+
+- **LOW — filled-row editing lacks a visible cue (#5, #6, #18, #23):** left pending the owner’s preference.
+- Visual verification: no browser started, as instructed.Pictures (attach order). States: 'monsters' = Monsters tab, queue full, housing full; 'presets-empty' = Presets tab, nothing made, queue has 2 free stacks; 'building' = first preset being built (2 monsters set); 'presets' = every slot filled, queue full; 'edit' = preset 1 open for change; 'sent' = preset 1 just sent with 2 free stacks (part fitted); 'remote-presets' = L3 running outpost 2/11 from home, the outposts' list; 'housing' = the housing box opened; 'today' = the LIVE tab (baseline). l2/l3 = HCC level.
+ 1: today-modern-390x844
+ 2: l2-monsters-modern-390x844
+ 3: l2-presets-empty-modern-390x844
+ 4: l2-building-modern-390x844
+ 5: l3-presets-modern-390x844
+ 6: l3-presets-classic-390x844
+ 7: l3-edit-classic-390x844
+ 8: l3-sent-modern-390x844
+ 9: l3-remote-presets-classic-390x844
+ 10: l2-housing-modern-390x844
+ 11: l3-presets-modern-844x390
+ 12: l3-edit-classic-844x390
+ 13: today-modern-844x390
+ 14: l3-presets-classic-768x1024
+ 15: l3-edit-modern-768x1024
+ 16: l3-remote-presets-modern-1024x768
+ 17: l3-edit-classic-1024x768
+ 18: l3-presets-modern-1280x720
+ 19: l3-edit-modern-1280x720
+ 20: l3-sent-classic-1280x720
+ 21: l2-presets-empty-classic-1366x768
+ 22: l3-remote-presets-modern-1366x768
+ 23: l3-presets-classic-1920x1080
+ 24: l3-edit-modern-1920x1080
+ 25: l2-housing-classic-1280x720
