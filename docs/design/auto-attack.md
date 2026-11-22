@@ -226,14 +226,14 @@ champion) in order. Proposed defaults:
   quite heavy penalty for putty (not loot based). Players should not be able to profit on putty for
   repeat attacks and should suffer a loss as it is automated. Take it as a convenience fee." The
   fee goes by the camp's level (`server/src/services/base/autoAttack/repeatFee.ts`; the owner's
-  second table, 20 Nov 2026):
+  second table, 20 Nov 2026, lowered by 1M at every level on 22 Nov 2026 for patch 8.2):
 
-  | Camp level | Fee (putty) |
-  | --- | --- |
-  | 25-29 | 2,000,000 |
-  | 30-34 | 2,500,000 |
-  | 35-39 | 3,000,000 |
-  | 40-44 | 3,500,000 |
+  | Camp level | Fee (putty) | Until 8.2 |
+  | --- | --- | --- |
+  | 25-29 | 1,000,000 | 2,000,000 |
+  | 30-34 | 1,500,000 | 2,500,000 |
+  | 35-39 | 2,000,000 | 3,000,000 |
+  | 40-44 | 2,500,000 | 3,500,000 |
 
   - It is burned before the attack starts, in the same flush that starts it (`baseModeAttack`'s
     `beforeCommit`), so the player needs the putty in advance. The pool has to hold the fee and the
@@ -254,25 +254,25 @@ champion) in order. Proposed defaults:
 
     | Camp | Fee | Most putty (+15%) | On Plunder (+30%) |
     | --- | --- | --- | --- |
-    | Legionnaire 25 | 2.0M | 1,387,326 | 1,803,523 |
-    | Legionnaire 29 | 2.0M | 1,847,901 | 2,402,271 |
-    | Legionnaire 33 | 2.5M | 2,305,010 | 2,996,513 |
-    | Legionnaire 37 | 3.0M | 2,657,012 | 3,454,115 |
-    | Legionnaire 41 | 3.5M | 2,993,709 | 3,891,821 |
-    | Kozu 30 | 2.5M | 2,307,837 | 3,000,188 |
-    | Kozu 34 | 2.5M | 2,764,718 | 3,594,133 |
-    | Kozu 38 | 3.0M | 3,225,034 | 4,192,544 |
-    | Kozu 42 | 3.5M | 3,577,239 | 4,650,410 |
-    | Abunakki 27 | 2.0M | 2,422,822 | 3,149,668 |
-    | Abunakki 31 | 2.5M | 2,994,501 | 3,892,851 |
-    | Abunakki 35 | 3.0M | 3,457,752 | 4,495,077 |
-    | Abunakki 39 | 3.0M | 3,799,072 | 4,938,793 |
-    | Abunakki 43 | 3.5M | 4,029,072 | 5,237,793 |
-    | Dreadnaut 28 | 2.0M | 2,187,944 | 2,844,327 |
-    | Dreadnaut 32 | 2.5M | 2,648,517 | 3,443,072 |
-    | Dreadnaut 36 | 3.0M | 3,114,339 | 4,048,640 |
-    | Dreadnaut 40 | 3.5M | 3,510,552 | 4,563,717 |
-    | Dreadnaut 44 | 3.5M | 3,795,752 | 4,934,477 |
+    | Legionnaire 25 | 1.0M | 1,387,326 | 1,803,523 |
+    | Legionnaire 29 | 1.0M | 1,847,901 | 2,402,271 |
+    | Legionnaire 33 | 1.5M | 2,305,010 | 2,996,513 |
+    | Legionnaire 37 | 2.0M | 2,657,012 | 3,454,115 |
+    | Legionnaire 41 | 2.5M | 2,993,709 | 3,891,821 |
+    | Kozu 30 | 1.5M | 2,307,837 | 3,000,188 |
+    | Kozu 34 | 1.5M | 2,764,718 | 3,594,133 |
+    | Kozu 38 | 2.0M | 3,225,034 | 4,192,544 |
+    | Kozu 42 | 2.5M | 3,577,239 | 4,650,410 |
+    | Abunakki 27 | 1.0M | 2,422,822 | 3,149,668 |
+    | Abunakki 31 | 1.5M | 2,994,501 | 3,892,851 |
+    | Abunakki 35 | 2.0M | 3,457,752 | 4,495,077 |
+    | Abunakki 39 | 2.0M | 3,799,072 | 4,938,793 |
+    | Abunakki 43 | 2.5M | 4,029,072 | 5,237,793 |
+    | Dreadnaut 28 | 1.0M | 2,187,944 | 2,844,327 |
+    | Dreadnaut 32 | 1.5M | 2,648,517 | 3,443,072 |
+    | Dreadnaut 36 | 2.0M | 3,114,339 | 4,048,640 |
+    | Dreadnaut 40 | 2.5M | 3,510,552 | 4,563,717 |
+    | Dreadnaut 44 | 2.5M | 3,795,752 | 4,934,477 |
 
   The other levers, in case playtests show camps falling too fast:
 

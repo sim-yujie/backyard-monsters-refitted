@@ -2,16 +2,16 @@ import { describe, expect, test } from "bun:test";
 import { REPEAT_FEE_BANDS, repeatFeeFor } from "./repeatFee.js";
 
 describe("Repeat attack's putty fee (owner, 20 Nov 2026)", () => {
-  test("the owner's table (second version), by the camp's level", () => {
+  test("the owner's table (lowered by 1M on 22 Nov 2026), by the camp's level", () => {
     const cases: [number, number][] = [
-      [25, 2_000_000],
-      [29, 2_000_000],
-      [30, 2_500_000],
-      [34, 2_500_000],
-      [35, 3_000_000],
-      [39, 3_000_000],
-      [40, 3_500_000],
-      [44, 3_500_000],
+      [25, 1_000_000],
+      [29, 1_000_000],
+      [30, 1_500_000],
+      [34, 1_500_000],
+      [35, 2_000_000],
+      [39, 2_000_000],
+      [40, 2_500_000],
+      [44, 2_500_000],
     ];
     for (const [level, putty] of cases) expect(repeatFeeFor(level), `level ${level}`).toBe(putty);
   });
