@@ -373,8 +373,10 @@ export const finishAnswer = async (em: EntityManager, user: User, body: unknown,
     rulesVersion: deps.rulesVersion,
     payload,
   });
-  await countTest(em, ticket.inviter, me);
-  await deps.notify(em, ticket.inviter, {
+  // One notice per invite, on its first test: the rest show as New on the Results tab
+  // (a tester may run a test a minute; the inviter's notices would fill with them).
+  const tests = await countTest(em, ticket.inviter, me);
+  if (tests === null || tests <= 1) await deps.notify(em, ticket.inviter, {
     event: "baiterTest",
     userid: me,
     username: user.username,

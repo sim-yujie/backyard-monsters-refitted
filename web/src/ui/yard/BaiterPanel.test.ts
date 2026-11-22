@@ -376,7 +376,7 @@ describe("BaiterPanel", () => {
 
     it("a friend's yard: titled for them, capped by THEIR Baiter, and Start asks for their yard", async () => {
       let answer: (words: string | null) => void = () => {};
-      const start = vi.fn(() => new Promise<string | null>((resolve) => (answer = resolve)));
+      const start = vi.fn((_army: unknown) => new Promise<string | null>((resolve) => (answer = resolve)));
       const { options } = open({
         level: 7,
         host: { inviter: 21, name: "VorgLord", cap: 600, expiresAt: 1_000 + 2 * 3_600, start, now: () => 1_000 },

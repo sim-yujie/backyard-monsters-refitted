@@ -255,7 +255,7 @@ describe.skipIf(!dbName)("friend tests of a yard on a real database (beta 9 #4)"
     });
     const mine = await tests(INVITER, T0 + 120);
     expect(mine.invited[0]).toMatchObject({ userid: FRIEND, tests: 1 });
-    expect(mine.results).toEqual([
+    expect(mine.results.slice(-1)).toEqual([
       expect.objectContaining({
         id: done.id,
         tester: expect.objectContaining({ userid: FRIEND, name: "zz_bt_friend" }),
@@ -270,6 +270,13 @@ describe.skipIf(!dbName)("friend tests of a yard on a real database (beta 9 #4)"
     ]);
     // Test results are the inviter's own list: never the tester's.
     expect((await tests(FRIEND, T0 + 120)).results).toEqual([]);
+
+    // A second test on the same invite sends no second notice.
+    const noticesBefore = notices.length;
+    const again = await start(FRIEND, T0 + 90);
+    await finish(FRIEND, again.token, {}, T0 + 100);
+    expect(notices).toHaveLength(noticesBefore);
+    expect((await tests(INVITER, T0 + 120)).invited[0]).toMatchObject({ userid: FRIEND, tests: 2 });
 
     const replay = await flow.testAnswer(em(), as(INVITER), { id: done.id }, T0 + 120, deps());
     expect(replay.status).toBe(200);

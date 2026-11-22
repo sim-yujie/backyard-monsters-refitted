@@ -39,7 +39,9 @@ const data = (extra: Partial<BaiterTestsResponse> = {}): BaiterTestsResponse => 
   ...extra,
 });
 
-const fakeApi = (answer: BaiterTestsResponse = data()): BaiterTestsApi & Record<string, ReturnType<typeof vi.fn>> =>
+type FakeApi = BaiterTestsApi & { [K in keyof BaiterTestsApi]: ReturnType<typeof vi.fn> };
+
+const fakeApi = (answer: BaiterTestsResponse = data()): FakeApi =>
   ({
     list: vi.fn(async () => answer),
     invite: vi.fn(async (ids: readonly number[]) => ({ invited: ids.length, skipped: 0 })),

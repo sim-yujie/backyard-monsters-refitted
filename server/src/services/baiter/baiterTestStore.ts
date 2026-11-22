@@ -175,9 +175,13 @@ export const openInvite = async (em: EntityManager, inviter: number, tester: num
   return row ? inviteOf(row) : null;
 };
 
-/** Counts one more test on an open invite. */
-export const countTest = async (em: EntityManager, inviter: number, tester: number): Promise<void> => {
-  await em.execute(`UPDATE bym.baiter_invite SET tests = tests + 1 WHERE inviter_userid = ? AND tester_userid = ?`, [inviter, tester]);
+/** Counts one more test on the invite; the new count, or null when the invite is gone. */
+export const countTest = async (em: EntityManager, inviter: number, tester: number): Promise<number | null> => {
+  const [row] = await em.execute<{ tests: number }[]>(
+    `UPDATE bym.baiter_invite SET tests = tests + 1 WHERE inviter_userid = ? AND tester_userid = ? RETURNING tests`,
+    [inviter, tester]
+  );
+  return row ? Number(row.tests) : null;
 };
 
 /** Removes every invite that has lapsed; the count removed. */

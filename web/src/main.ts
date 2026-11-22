@@ -96,6 +96,18 @@ if (import.meta.env.DEV || import.meta.env.VITE_LAYOUT_CHECK === "1") {
       return modal ? previewAutoAttackConfirm(modal, state) : null;
     };
   });
+  // The Baiter window's friend tabs and a friend's test army (beta 9 #4), at their busiest.
+  void import("@/ui/yard/baiterFriendsPreview").then(({ previewBaiterWindow, previewFriendTest }) => {
+    const modal = () => document.querySelector<HTMLElement>(".overlay__layer--modal");
+    (globalThis as Record<string, unknown>)["__baiterWindow"] = (view?: Parameters<typeof previewBaiterWindow>[1]) => {
+      const layer = modal();
+      return layer ? previewBaiterWindow(layer, view) : null;
+    };
+    (globalThis as Record<string, unknown>)["__baiterFriendTest"] = () => {
+      const layer = modal();
+      return layer ? previewFriendTest(layer) : null;
+    };
+  });
   // The attack screen's dock (owner, 18 Nov 2026): the real attack scene on the own yard.
   void import("@/game/attack/attackDockPreview").then(({ previewAttackDock }) => {
     (globalThis as Record<string, unknown>)["__attackDock"] = () => previewAttackDock((scene) => app.goTo(scene));
