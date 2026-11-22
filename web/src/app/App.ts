@@ -1,4 +1,17 @@
 import { Application, Container } from "pixi.js";
+// Pixi teaches the renderer to draw each kind of object (tiling sprites,
+// meshes, text, bitmap text, nine-slice sprites, graphics) when that kind's
+// module first runs, and a renderer only learns the kinds known when it is
+// made. Most of them are used only past the sign-in screen, whose code now
+// arrives later (`gameScenes.ts`), so they are named here to be known before
+// `pixi.init` (a yard with no ground otherwise). `vite.config.ts` fails the
+// build if one ends up anywhere else.
+import "pixi.js/graphics";
+import "pixi.js/mesh";
+import "pixi.js/sprite-tiling";
+import "pixi.js/text";
+import "pixi.js/text-bitmap";
+import "pixi.js/sprite-nine-slice";
 import { createOverlay, type Overlay } from "@/ui/overlay";
 import {
   captureScreen,
