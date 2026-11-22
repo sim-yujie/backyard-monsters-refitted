@@ -31,6 +31,7 @@ import { getCurrentDateTime } from "../../utils/getCurrentDateTime.js";
 import type { KoaController } from "../../utils/KoaController.js";
 import { closeInfernoPlayerAttacksOf } from "../../services/inferno/infernoPlayerFinalise.js";
 import { finaliseRowlessAttacksOf } from "../../services/base/finaliseRowlessAttack.js";
+import { readRowlessCheckpoint, rowlessKindOf } from "../../services/base/rowlessCheckpoint.js";
 import { startInfernoPlayerAttack, type InfernoPlayerAttackStart } from "./playerAttack.js";
 import { startInfernoTribeAttack, type InfernoTribeAttackStart } from "./tribeAttack.js";
 
@@ -171,6 +172,12 @@ export const infernoAttackStart: KoaController = async (ctx) => {
   // So is a Descent or Moloch tribe attack they left (`finaliseRowlessAttack.ts`),
   // whose session the new one would replace.
   await finaliseRowlessAttacksOf(ctx.authUser.userid, `attack-start:${String(body.kind)}`);
+  // One the finaliser could not land just now still holds its checkpoint: a
+  // new attack on that yard would replace it and lose that attack (22 Nov 2026).
+  const rowlessKind = rowlessKindOf(baseid);
+  if (rowlessKind && rowlessKind !== "mr1" && (await readRowlessCheckpoint({ kind: rowlessKind, userid: ctx.authUser.userid, baseid }))) {
+    throw infernoAttackRefusedErr("lastAttackLanding");
+  }
   if (body.kind === "descent") start = await startDescentAttack(postgres.em, ctx.authUser, baseid, getCurrentDateTime());
   else if (body.kind === "tribe") start = await startInfernoTribeAttack(postgres.em, ctx.authUser, baseid, getCurrentDateTime());
   else if (body.kind === "player") start = await startInfernoPlayerAttack(postgres.em, ctx.authUser, baseid, getCurrentDateTime());

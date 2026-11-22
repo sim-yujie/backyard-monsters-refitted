@@ -1,12 +1,21 @@
-import { describe, expect, test } from "bun:test";
-import { readFileSync } from "node:fs";
-import { fileURLToPath } from "node:url";
+import { afterEach, describe, expect, test } from "bun:test";
+import { mkdtempSync, readFileSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { fileURLToPath, pathToFileURL } from "node:url";
 import { replayAbandonedAttack } from "./abandonedAttack.js";
 import {
   ReplayTimeoutError,
+  ReplayWorkerLoadError,
+  WORKER_LOAD_FAILURE_LIMIT,
+  WORKER_LOAD_FAILURE_WINDOW_MS,
+  isReplayDeferred,
+  isReplayWorkerLoadError,
+  onReplayWorkersBroken,
   replayAbandonedInWorker,
   replayLoad,
   reserveReplaySlot,
+  type ReplayWorkersBroken,
 } from "./replayRunner.js";
 
 /**
@@ -145,4 +154,93 @@ describe("the auto-attack slots (issue #221)", () => {
     expect(replayLoad().running).toBe(0);
     slot!();
   }, REPLAY_TIMEOUT_MS);
+});
+
+/**
+ * Worker modules for the load-failure tests, written at test time so the
+ * type check and the linter never see them: one that does not parse (the
+ * 22 Nov 2026 outage's "SyntaxError: Unexpected keyword 'else'"), and one
+ * that loads, says so, then dies before it answers.
+ */
+const WORKER_DIR = mkdtempSync(join(tmpdir(), "bymr-replay-worker-"));
+const workerFile = (name: string, text: string): URL => {
+  const path = join(WORKER_DIR, name);
+  writeFileSync(path, text);
+  return pathToFileURL(path);
+};
+const BROKEN_WORKER = workerFile("broken.js", "if (globalThis.x) { } else else { }\n");
+const DIES_AFTER_LOAD = workerFile(
+  "dies.js",
+  "self.onmessage = () => { setTimeout(() => { throw new Error('the replay blew up'); }, 0); };\nself.postMessage({ ready: true });\n"
+);
+
+describe("a replay worker that fails to load (22 Nov 2026)", () => {
+  afterEach(() => onReplayWorkersBroken(null));
+
+  test("rejects with ReplayWorkerLoadError, which leaves the attack for later", async () => {
+    const caught = await replayAbandonedInWorker(abandonedInput(), 10_000, BROKEN_WORKER).catch((err: unknown) => err);
+    expect(caught).toBeInstanceOf(ReplayWorkerLoadError);
+    expect(isReplayWorkerLoadError(caught)).toBe(true);
+    expect(isReplayDeferred(caught)).toBe(true);
+    expect(String((caught as Error).message)).toContain("SyntaxError");
+    expect(replayLoad().running).toBe(0);
+  });
+
+  test("one that loaded and then died is the replay's own failure, not a load failure", async () => {
+    const caught = await replayAbandonedInWorker(abandonedInput(), 10_000, DIES_AFTER_LOAD).catch((err: unknown) => err);
+    expect(caught).toBeInstanceOf(Error);
+    expect(isReplayWorkerLoadError(caught)).toBe(false);
+    expect(isReplayDeferred(caught)).toBe(false);
+  });
+
+  test("a timeout is deferred too; a replay's own error is not", () => {
+    expect(isReplayDeferred(new ReplayTimeoutError(5_000))).toBe(true);
+    expect(isReplayDeferred(new Error("Battle replay failed: bad log"))).toBe(false);
+  });
+
+  test(`${WORKER_LOAD_FAILURE_LIMIT} in a row tell the broken-workers handler, once`, async () => {
+    const told: ReplayWorkersBroken[] = [];
+    onReplayWorkersBroken((broken) => told.push(broken));
+    for (let i = 0; i < WORKER_LOAD_FAILURE_LIMIT - 1; i++) {
+      await replayAbandonedInWorker(abandonedInput(), 10_000, BROKEN_WORKER).catch(() => null);
+    }
+    expect(told).toHaveLength(0);
+    await replayAbandonedInWorker(abandonedInput(), 10_000, BROKEN_WORKER).catch(() => null);
+    expect(told).toHaveLength(1);
+    expect(told[0]!.failures).toBe(WORKER_LOAD_FAILURE_LIMIT);
+    expect(told[0]!.lastError).toContain("SyntaxError");
+    // Told once: the server is on its way out.
+    await replayAbandonedInWorker(abandonedInput(), 10_000, BROKEN_WORKER).catch(() => null);
+    expect(told).toHaveLength(1);
+  });
+
+  test("a worker that loads in between starts the count again", async () => {
+    const told: ReplayWorkersBroken[] = [];
+    onReplayWorkersBroken((broken) => told.push(broken));
+    for (let i = 0; i < WORKER_LOAD_FAILURE_LIMIT - 1; i++) {
+      await replayAbandonedInWorker(abandonedInput(), 10_000, BROKEN_WORKER).catch(() => null);
+    }
+    await replayAbandonedInWorker(abandonedInput(), 10_000, DIES_AFTER_LOAD).catch(() => null);
+    for (let i = 0; i < WORKER_LOAD_FAILURE_LIMIT - 1; i++) {
+      await replayAbandonedInWorker(abandonedInput(), 10_000, BROKEN_WORKER).catch(() => null);
+    }
+    expect(told).toHaveLength(0);
+  });
+
+  test("failures spread over more than the window do not add up", async () => {
+    const told: ReplayWorkersBroken[] = [];
+    onReplayWorkersBroken((broken) => told.push(broken));
+    const realNow = Date.now;
+    let shift = 0;
+    Date.now = () => realNow() + shift;
+    try {
+      for (let i = 0; i < WORKER_LOAD_FAILURE_LIMIT; i++) {
+        await replayAbandonedInWorker(abandonedInput(), 10_000, BROKEN_WORKER).catch(() => null);
+        shift += WORKER_LOAD_FAILURE_WINDOW_MS / (WORKER_LOAD_FAILURE_LIMIT - 1) + 1_000;
+      }
+    } finally {
+      Date.now = realNow;
+    }
+    expect(told).toHaveLength(0);
+  });
 });

@@ -9,6 +9,7 @@ import { landDescentFromCheckpoint } from "../inferno/descentLanding.js";
 import { landInfernoTribeFromCheckpoint } from "../inferno/infernoTribeLanding.js";
 import { landMR1TribeFromCheckpoint } from "../maproom/v1/scaledMR1Tribes.js";
 import { checkpointExpired } from "./attackCheckpoint.js";
+import { isReplayWorkerLoadError } from "./combat/replayRunner.js";
 import {
   acquireRowlessFinalLock,
   countRowlessCloseFailure,
@@ -57,6 +58,10 @@ import {
  * fails {@link ROWLESS_CLOSE_ATTEMPTS} times is given up: the attack lands
  * with no battle, its flung monsters spent; one that cannot land even so is
  * dropped after as many more, never retried for the checkpoint's 7 days.
+ * A replay worker that failed to load (`ReplayWorkerLoadError`) fought no
+ * battle and is not counted: the attack waits for the next pass (22 Nov
+ * 2026, when Bun 1.4.2 broke every worker on the live server and attacks
+ * landed with no battle after three such passes).
  */
 
 export type RowlessOutcome = "finalised" | "none" | "busy" | "stale";
@@ -112,7 +117,8 @@ const finaliseLocked = async (ref: RowlessRef, trigger: string): Promise<Rowless
   try {
     await LANDERS[ref.kind](user, stored, getCurrentDateTime(), replay);
   } catch (err) {
-    await countRowlessCloseFailure(ref);
+    // A worker that never loaded says nothing about this battle (see above).
+    if (!isReplayWorkerLoadError(err)) await countRowlessCloseFailure(ref);
     throw err;
   }
   logger.info("Finalised an attack its attacker left, from its checkpoint", {

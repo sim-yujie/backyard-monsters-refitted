@@ -1,7 +1,7 @@
 # ===============================
 # Base image
 # ===============================
-FROM oven/bun:1.4.2
+FROM oven/bun:1.4.4
 WORKDIR /app
 
 # Copy package definitions and install all deps

@@ -1,6 +1,6 @@
 import { replayAbandonedAttack } from "./abandonedAttack.js";
 import { fightRaid } from "../../raids/raidFight.js";
-import type { ReplayJob, ReplayReply } from "./replayRunner.js";
+import type { ReplayJob, ReplayReply, ReplayWorkerReady } from "./replayRunner.js";
 
 /**
  * The combat engine off the request thread (issue #23, C5): one job in, one
@@ -26,3 +26,8 @@ self.onmessage = (event: MessageEvent<ReplayJob>): void => {
   }
   self.postMessage(reply);
 };
+
+// Every module above has loaded: say so first, so a failure from here on is
+// the replay's own and not a worker that never started (`ReplayWorkerLoadError`).
+const ready: ReplayWorkerReady = { ready: true };
+self.postMessage(ready);

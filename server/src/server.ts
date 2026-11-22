@@ -35,6 +35,7 @@ import { economyConfig, economyModeWasUnrecognised } from "./config/EconomyConfi
 import { combatConfig, combatModeWasUnrecognised } from "./config/CombatConfig.js";
 import { ownerSaveConfig, ownerSaveModeWasUnrecognised } from "./config/OwnerSaveConfig.js";
 import { startAttackFinaliser } from "./services/base/finaliseAttack.js";
+import { startReplayWorkerWatch } from "./services/base/combat/replayWorkerWatch.js";
 import { startInfernoPlayerFinaliser } from "./services/inferno/infernoPlayerFinalise.js";
 import { startRetentionSweep } from "./services/privacy/retention.js";
 import { startAllianceProgress } from "./services/alliance/progressFeed.js";
@@ -151,6 +152,11 @@ redis.onclose = (err) => logger.error(`Redis disconnected: ${err.message}`);
   // "New to Map Room 2": players already on Map Room 2 get their 10 days from
   // the first start of a server with this feature (`services/events/mr2Welcome.ts`).
   void ensureWelcomeLaunch(postgres.em.fork(), getCurrentDateTime());
+
+  // Battle replay workers that keep failing to load (Bun 1.4.2's transpiler,
+  // 22 Nov 2026) alert the owner and restart the server
+  // (`services/base/combat/replayWorkerWatch.ts`).
+  startReplayWorkerWatch();
 
   // Finishes attacks whose window closed without a save (issue #138).
   // `ATTACK_FINALISER_SWEEP=off` leaves the sweep to another server sharing

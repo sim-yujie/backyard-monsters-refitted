@@ -18,7 +18,9 @@ import { generateBaseId } from "../../../../utils/generateBaseId.js";
 import { createAttackLog } from "../../../../services/base/createAttackLog.js";
 import { isAttackActive } from "../../../../services/base/isAttackActive.js";
 import { raidFighting } from "../../../../services/raids/raidLock.js";
-import { baseNotFoundErr, baseUnderAttackErr, baseProtectedErr, userOnlineErr, truceActiveErr, mapRoom3ClosedErr } from "../../../../errors/errors.js";
+import { baseNotFoundErr, baseUnderAttackErr, baseProtectedErr, userOnlineErr, truceActiveErr, mapRoom3ClosedErr, lastAttackLandingErr } from "../../../../errors/errors.js";
+import { attackLandingDeferred } from "../../../../services/base/finaliseAttack.js";
+import { readRowlessCheckpoint } from "../../../../services/base/rowlessCheckpoint.js";
 import { ATTACK_ONLINE_SECONDS, isPlayerOnline } from "../../../../services/user/online.js";
 import { isTruceActive } from "../../../../services/mail/isTruceActive.js";
 import { MR1_TRIBE_IDS } from "../../../../game-data/tribes/v1/index.js";
@@ -121,6 +123,11 @@ export const baseModeAttack = async ({
   if (mapversion === MapRoomVersion.V1) {
     if (MR1_TRIBE_IDS.has(baseid)) {
       await requireAttackableMR1Tribe(user, baseid, getCurrentDateTime());
+      // The last attack on this tribe still holds its checkpoint: the
+      // finaliser could not land it before this load (`finaliseBeforeLoad`).
+      // A new attack's first checkpoint would replace it and lose that
+      // attack (22 Nov 2026), so this one waits.
+      if (await readRowlessCheckpoint({ kind: "mr1", userid: user.userid, baseid })) throw lastAttackLandingErr();
       save = await tribeSaveHandler(baseid, mapversion, null, user);
     } else {
       // Map Room 1 has its own players' main yards and its own tribes, nothing
@@ -148,6 +155,12 @@ export const baseModeAttack = async ({
     save?.type === BaseType.TRIBE &&
     isWildMonsterExpired(save, getCurrentDateTime());
   if (regrown && (await isCampInPlay(save!.basesaveid))) throw baseUnderAttackErr();
+  // The row's last attack could not be landed just now (its replay worker
+  // failed to load or timed out, `finaliseAttack.ts`): a new attack would put
+  // its first checkpoint over that one and lose it (22 Nov 2026).
+  if (save?.basesaveid && !MR1_TRIBE_IDS.has(baseid) && (await attackLandingDeferred(save.basesaveid))) {
+    throw lastAttackLandingErr();
+  }
   const readSavetime = save?.savetime ?? 0;
   // What Map Room 1's level rule allowed, for the vengeance counters.
   let mr1Permission = AttackPermission.ATTACKABLE;

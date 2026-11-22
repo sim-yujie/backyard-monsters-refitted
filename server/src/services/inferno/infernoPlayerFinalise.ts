@@ -7,7 +7,7 @@ import { postgres } from "../../server.js";
 import { getCurrentDateTime } from "../../utils/getCurrentDateTime.js";
 import { logger } from "../../utils/logger.js";
 import { sessionWindowSeconds } from "../base/attackSession.js";
-import { replayAbandonedInWorker } from "../base/combat/replayRunner.js";
+import { isReplayWorkerLoadError, replayAbandonedInWorker } from "../base/combat/replayRunner.js";
 import {
   acquireInfernoPlayerFinalLock,
   countInfernoPlayerCloseFailure,
@@ -141,7 +141,9 @@ const closeLocked = async (basesaveid: number, trigger: string): Promise<Inferno
       return "landed";
     }
   } catch (err) {
-    await countInfernoPlayerCloseFailure(basesaveid);
+    // A replay worker that never loaded fought no battle: not counted, the
+    // attack waits for the next pass (`ReplayWorkerLoadError`, 22 Nov 2026).
+    if (!isReplayWorkerLoadError(err)) await countInfernoPlayerCloseFailure(basesaveid);
     throw err;
   }
 
