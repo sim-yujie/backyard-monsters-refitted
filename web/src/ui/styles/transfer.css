@@ -403,8 +403,22 @@
 /* Cannot take part: full (moving out), empty (bringing in), or the main yard
    from the main yard. Still readable, clearly out of play. */
 .xfer-plate.is-dim {
-  filter: grayscale(0.8) brightness(0.85);
+  filter: grayscale(0.7);
   cursor: not-allowed;
+}
+
+.xfer-plate.is-dim:not(.is-nohousing) .xfer-plate__top {
+  opacity: 0.85;
+}
+
+.xfer-plate.is-nohousing {
+  opacity: 0.75;
+}
+
+.xfer-plate.is-nohousing .xfer-plate__top {
+  justify-content: center;
+  gap: 4px;
+  color: #d2dbe4;
 }
 
 .xfer-plate.is-dim .xfer-plate__free {
@@ -475,7 +489,6 @@
 
 .xfer-tag {
   position: absolute;
-  transform-origin: 100% 100%;
   top: 0;
   left: 0;
   z-index: 1;
@@ -512,8 +525,8 @@
 }
 
 .xfer-tag__pic {
-  width: 16px;
-  height: 16px;
+  width: 15px;
+  height: 15px;
   border-radius: 3px;
   background: var(--xfer-well);
   object-fit: cover;
@@ -560,7 +573,9 @@
   display: grid;
   gap: 6px;
   box-sizing: border-box;
-  width: 248px;
+  width: max-content;
+  min-width: 196px;
+  max-width: 300px;
   padding: 8px 10px 10px;
   border-radius: 8px;
   background: var(--xfer-plate-bg);
@@ -597,14 +612,27 @@
   height: 0;
   margin-left: -9px;
   border: 9px solid transparent;
-  border-top-color: var(--xfer-caret-ink, #2a3540);
+  border-top-color: var(--xfer-caret-ink, #b57b3e);
+  filter: drop-shadow(0 2px 1px rgb(0 0 0 / 50%));
 }
 
 .xfer-peek.is-below .xfer-peek__caret {
   top: -14px;
   bottom: auto;
   border-top-color: transparent;
-  border-bottom-color: var(--xfer-caret-ink, #2a3540);
+  border-bottom-color: var(--xfer-caret-ink, #b57b3e);
+}
+
+.xfer-peek__close {
+  position: absolute;
+  top: -14px;
+  right: -14px;
+  width: 44px;
+  height: 44px;
+  border: 0;
+  background: var(--skin-close, #d94b38) center / 32px 32px no-repeat;
+  pointer-events: auto;
+  cursor: pointer;
 }
 
 .xfer-peek__left {
@@ -664,7 +692,7 @@
 
 .xfer-peek__grid {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(3, max-content);
   gap: 4px;
 }
 
@@ -856,9 +884,9 @@
   display: flex;
   flex-direction: column;
   box-sizing: border-box;
-  width: fit-content;
-  min-width: min(720px, calc(100vw - 160px));
-  max-width: min(960px, calc(100vw - 160px));
+  width: min(940px, calc(100vw - 160px));
+  min-width: 0;
+  max-width: none;
   max-height: none;
   translate: -50% 0;
 }
@@ -964,6 +992,7 @@
 }
 
 .xfer-chip__count {
+  position: relative;
   display: flex;
   flex-direction: column;
   align-items: flex-start;
@@ -1104,6 +1133,21 @@
   padding-inline: 12px;
 }
 
+.xfer-tray .xfer-quick.is-active {
+  box-shadow: 0 0 0 2px #ffa73b, 0 0 10px rgb(255 167 59 / 55%);
+}
+
+.xfer-chip__edit {
+  position: absolute;
+  right: 4px;
+  bottom: 4px;
+  width: 12px;
+  height: 8px;
+  background: currentColor;
+  opacity: 0.6;
+  clip-path: polygon(0 0, 100% 0, 50% 100%);
+}
+
 .xfer-listb__n {
   padding: 1px 6px;
   border-radius: 9px;
@@ -1132,7 +1176,8 @@
 
 .xfer-status {
   display: flex;
-  flex: 1 1 auto;
+  flex: 1 0 auto;
+  white-space: nowrap;
   flex-wrap: wrap;
   align-items: center;
   gap: 4px 12px;
@@ -1534,6 +1579,10 @@
   overflow: hidden;
 }
 
+.xfer-row__mons .xfer-mon.is-picked {
+  box-shadow: inset 0 -1px 0 rgb(0 0 0 / 18%);
+}
+
 .xfer-row__mons .xfer-mon {
   height: 26px;
 }
@@ -1575,11 +1624,11 @@
 }
 
 .xfer-row__room b {
-  display: inline-flex;
+  display: grid;
+  grid-template-columns: 16px 1fr;
   align-items: center;
-  justify-content: flex-end;
-  gap: 2px;
-  min-width: 52px;
+  gap: 3px;
+  min-width: 60px;
   font-size: 14px;
   font-variant-numeric: tabular-nums;
   text-align: right;
@@ -1622,31 +1671,43 @@
 }
 
 @media (max-width: 620px) {
+  /* Two lines: tick, name and what comes; then what it houses and its room. */
   .xfer-row {
-    grid-template-columns: 30px minmax(0, 1fr) minmax(0, 1.1fr) 70px;
-    gap: 6px;
-    padding: 4px 6px;
+    grid-template-columns: 30px minmax(0, 1fr) auto;
+    grid-template-areas:
+      "box name tag"
+      "box mons room";
+    gap: 4px 8px;
+    padding: 6px 8px;
   }
 
-  .xfer-row__tag {
-    display: none;
+  .xfer-row__box {
+    grid-area: box;
   }
 
-  .xfer-row__name small .xfer-tag {
-    height: 20px;
-    margin-left: 4px;
-    font-size: 12px;
+  .xfer-row__name {
+    grid-area: name;
+  }
+
+  .xfer-row__name small {
+    white-space: nowrap;
+  }
+
+  .xfer-row__mons {
+    grid-area: mons;
   }
 
   .xfer-row__room {
-    flex-direction: column;
-    align-items: stretch;
-    gap: 3px;
+    grid-area: room;
+    width: 120px;
   }
 
-  .xfer-row__room .xfer-bar {
-    flex: none;
-    width: 100%;
+  .xfer-row__tag {
+    grid-area: tag;
+  }
+
+  .xfer-row__room b {
+    min-width: 44px;
   }
 
   .xfer-row__mons .xfer-mon__pic {
