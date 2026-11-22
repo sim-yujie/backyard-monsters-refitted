@@ -1219,9 +1219,11 @@
 
 @media (max-width: 620px), (max-height: 500px) {
   .panel.xfer-tray {
-    left: 4px;
-    right: 4px;
+    left: calc(4px + env(safe-area-inset-left, 0px));
+    right: calc(4px + env(safe-area-inset-right, 0px));
     width: auto;
+    min-width: 0;
+    max-width: none;
     translate: none;
   }
 }
@@ -1332,10 +1334,26 @@
 @media (min-width: 620.02px) and (max-width: 900px) and (min-height: 501px) {
   .panel.xfer-tray {
     width: calc(100vw - 32px);
+    min-width: 0;
+    max-width: none;
   }
 }
 
 @media (max-width: 620px) {
+  .xfer-listb__n {
+    display: none;
+  }
+
+  .xfer-tray .btn .game-icon {
+    width: 20px;
+    height: 20px;
+  }
+
+  :root[data-skin] .xfer-tray__tools > .btn {
+    padding-inline: 4px;
+    font-size: 15px;
+  }
+
   .xfer-chip__count {
     min-width: 40px;
     padding: 0 6px;
@@ -1351,10 +1369,11 @@
 
   .xfer-tray__tools {
     flex: 1 1 100%;
+    min-width: 0;
   }
 
   .xfer-tray__tools > .btn {
-    flex: 1 1 0;
+    flex: 1 1 auto;
     min-width: 0;
     min-height: 44px;
     padding-inline: 6px;
