@@ -91,7 +91,7 @@ describe("hatcheryTabs", () => {
   it("makes no tabs for a lone hatchery, none, or an HCC's shared queue", () => {
     expect(hatcheryTabs({ hatcheries: [view(10)], hcc: null }, numbers)).toEqual([]);
     expect(hatcheryTabs({ hatcheries: [], hcc: null }, numbers)).toEqual([]);
-    expect(hatcheryTabs({ hatcheries: [view(10), view(11)], hcc: { id: 50, works: true } }, numbers)).toEqual([]);
+    expect(hatcheryTabs({ hatcheries: [view(10), view(11)], hcc: { id: 50, works: true, level: 1 } }, numbers)).toEqual([]);
   });
 });
 

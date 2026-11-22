@@ -94,7 +94,7 @@ describe("outpostValue", () => {
     expect(outpostValue(kitBuildings(STARTER_KITS[2]!, "shiny", {}).buildingdata)).toBe(41_497_094);
   });
 
-  test("a built-up outpost: four level 10 Cannons is 41,000,000; everything at its cap and top level 63,500,000", () => {
+  test("a built-up outpost: four level 10 Cannons is 41,000,000; everything at its cap and top level 63,750,000", () => {
     const cannons = yard(CORE, ...Array.from({ length: 4 }, () => building(20, { l: 10 })));
     expect(outpostValue(cannons)).toBe(22_935_081);
     expect(price(22_935_081)).toBe(41_000_000);
@@ -105,8 +105,9 @@ describe("outpostValue", () => {
       if (["decoration", "enemy", "immovable", "trap"].includes(row.kind)) continue;
       for (let i = 0; i < (row.quantity[1] ?? 0); i++) maxed.push(building(Number(type), { l: row.costs.length }));
     }
-    expect(outpostValue(yard(...maxed))).toBe(95_531_750);
-    expect(price(95_531_750)).toBe(63_500_000);
+    // Beta 9: the outpost HCC's level 2 (1M x3) adds 158,280 to the value, and 250,000 to the price.
+    expect(outpostValue(yard(...maxed))).toBe(95_690_030);
+    expect(price(95_690_030)).toBe(63_750_000);
   });
 });
 

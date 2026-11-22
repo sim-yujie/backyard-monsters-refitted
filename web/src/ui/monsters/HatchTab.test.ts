@@ -105,6 +105,12 @@ const setup = (
     ),
     finish: vi.fn((hatchery: number | "hcc") => ok({ hatchery, housed: { C3: 1, C1: 25 }, credits: 12, finishedAll: true })),
     overdrive: vi.fn((item: string) => ok({ item, credits: 30, q: 1, endsAt: T0 + 3600 })),
+    presetSave: vi.fn((slot: number, stacks: readonly [string, number][]) =>
+      ok({ list: "home" as const, slot, preset: stacks.map(([id, count]): [string, number] => [id, count]) }),
+    ),
+    presetSend: vi.fn((slot: number) =>
+      ok({ list: "home" as const, slot, added: 100, requested: 100, stoppedBy: null, skipped: [], cost: { r4: 25_000 } }),
+    ),
   } satisfies HatcheryActions;
   const showTab = vi.fn();
   const selectBuilding = vi.fn();

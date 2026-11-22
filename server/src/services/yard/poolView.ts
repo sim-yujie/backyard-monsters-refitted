@@ -38,6 +38,8 @@ export const POOL_FIELDS: ReadonlySet<PropertyKey> = new Set([
   "onboarding",
   // So is the achievements' record (issue #204).
   "achievements",
+  // The HCC's presets (beta 9): one main list and one every outpost shares.
+  "hccpresets",
 ]);
 
 /** The extra key the view adds: the main yard's storage cap. */
