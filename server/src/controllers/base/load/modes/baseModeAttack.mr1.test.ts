@@ -75,7 +75,9 @@ mock.module("../../../../services/base/attackSessionStore.js", () => ({
 }));
 
 // A Map Room 1 tribe's own rules (range, respawn) are `mr1TribeAttack.test.ts`'s; here every tribe may be attacked.
-const realTribeAttack = await import("../../../../services/maproom/v1/mr1TribeAttack.ts?real");
+// The query makes the real module one no mock replaces.
+const REAL_TRIBE_ATTACK = "../../../../services/maproom/v1/mr1TribeAttack.ts?real";
+const realTribeAttack = (await import(REAL_TRIBE_ATTACK)) as typeof import("../../../../services/maproom/v1/mr1TribeAttack.js");
 mock.module("../../../../services/maproom/v1/mr1TribeAttack.js", () => ({
   ...realTribeAttack,
   requireAttackableMR1Tribe: async () => {},
@@ -314,7 +316,7 @@ describe("a yard whose last attack could not land yet (22 Nov 2026)", () => {
 
 describe("a Map Room 1 tribe whose last attack could not land yet (22 Nov 2026)", () => {
   test("refused while the attacker's checkpoint on it is still held, nothing written", async () => {
-    const tribe = [...MR1_TRIBE_IDS][1]!;
+    const tribe = String([...MR1_TRIBE_IDS][1]);
     const at = now() - 60;
     store.set(
       rowlessCheckpointKey({ kind: "mr1", userid: ATTACKER, baseid: tribe }),
