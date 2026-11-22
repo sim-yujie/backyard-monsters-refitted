@@ -271,6 +271,7 @@ export class ChatSession {
   private listeners = new Set<(state: ChatState) => void>();
   private teamListeners = new Set<(event: TeamEvent) => void>();
   private mailListeners = new Set<() => void>();
+  private maintenanceListeners = new Set<(notice: unknown) => void>();
   private retryTimer: ReturnType<typeof setTimeout> | null = null;
   private pingTimer: ReturnType<typeof setInterval> | null = null;
   /**
@@ -334,6 +335,17 @@ export class ChatSession {
     this.mailListeners.add(listener);
     return () => {
       this.mailListeners.delete(listener);
+    };
+  }
+
+  /**
+   * The maintenance switch's news (`app/maintenanceWatch.ts`), as the server
+   * sent it: on with the time left, or off. Checked by the listener.
+   */
+  onMaintenance(listener: (notice: unknown) => void): () => void {
+    this.maintenanceListeners.add(listener);
+    return () => {
+      this.maintenanceListeners.delete(listener);
     };
   }
 
@@ -711,6 +723,9 @@ export class ChatSession {
         return;
       case "mail":
         for (const listener of [...this.mailListeners]) listener();
+        return;
+      case "maintenance":
+        for (const listener of [...this.maintenanceListeners]) listener(message);
         return;
       case "presence": {
         const waiting = this.presencePending.get(Number(message.id));

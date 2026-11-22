@@ -95,6 +95,14 @@ export interface AbandonedInput {
    * shared engine burns surface monsters (WP 1.21). Absent outside the Descent.
    */
   descentYard?: number;
+  /**
+   * Events, by their index in the log once in tick order, before which the
+   * battle's flattened buildings are noted ({@link AbandonedOutcome.fallenBefore}):
+   * Repeat attack's plan check (`autoAttack/planCheck.ts`, beta 9) asks
+   * whether a fling would have landed on a building still standing. Changes
+   * nothing in the battle.
+   */
+  fallenBefore?: readonly number[];
 }
 
 /** Everything the attack save would have carried, derived. */
@@ -126,6 +134,11 @@ export interface AbandonedOutcome {
   defenderChampions: { t: number; hp: number }[];
   /** What each attacking champion learned, for its brain (`championBrain.ts`, issue #219). */
   lessons?: readonly ChampionLesson[];
+  /**
+   * For each event {@link AbandonedInput.fallenBefore} names, by its index:
+   * the ids of the buildings flattened before it was applied.
+   */
+  fallenBefore?: Record<string, number[]>;
 }
 
 /** The web client's name for the kind of yard (`AttackTargetKind`). */
@@ -226,8 +239,11 @@ export const replayAbandonedAttack = (input: AbandonedInput): AbandonedOutcome =
   );
 
   const championsFlung = new Set<number>();
-  for (const event of events) {
+  const watched = new Set(input.fallenBefore ?? []);
+  const fallenBefore: Record<string, number[]> = {};
+  for (const [index, event] of events.entries()) {
     battle.runTo(Math.max(0, Math.floor(event.t)));
+    if (watched.has(index)) fallenBefore[String(index)] = [...battle.state().destroyedIds];
     battle.apply(event);
     if (event.kind === "fling" && event.champion) championsFlung.add(event.champion.t);
   }
@@ -282,6 +298,7 @@ export const replayAbandonedAttack = (input: AbandonedInput): AbandonedOutcome =
     bunkerGarrisons: state.bunkerGarrisons,
     defenderChampions: state.defenderChampions.map((caged) => ({ t: caged.t, hp: caged.hp })),
     lessons: state.lessons ?? [],
+    ...(watched.size > 0 && { fallenBefore }),
   };
 };
 

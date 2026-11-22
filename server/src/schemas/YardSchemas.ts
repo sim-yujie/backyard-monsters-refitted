@@ -111,10 +111,22 @@ export const HatcheryTargetField = z.union([z.literal("hcc"), BuildingIdField]);
  * many (1..400, five level-3 hatcheries' worth). Only the shape; whether the
  * monster is unlocked and the queue has room is the route's rule.
  */
+/**
+ * `remote`: the request comes from the main yard's HCC window running this
+ * outpost (HCC level 3, beta 9); the server then checks the main yard's HCC is
+ * at level 3 and the outpost has an HCC of its own (`hccRemote.ts`). Left out,
+ * the request is the player's own, in that yard, as before.
+ */
+export const HccRemoteField = z
+  .union([z.literal("1"), z.literal("true"), z.literal(true), z.literal("0"), z.literal("false"), z.literal(false)])
+  .optional()
+  .transform((raw) => raw === "1" || raw === "true" || raw === true);
+
 export const YardHatcheryAddSchema = z.object({
   hatchery: HatcheryTargetField,
   monster: z.string().min(1).max(16),
   count: z.coerce.number().int().min(1).max(400),
+  remote: HccRemoteField,
 });
 
 /**
@@ -126,17 +138,46 @@ export const YardHatcheryRemoveSchema = z.object({
   hatchery: HatcheryTargetField,
   slot: z.coerce.number().int().min(0).max(16),
   count: z.union([z.literal("all"), z.coerce.number().int().min(1)]).default(1),
+  remote: HccRemoteField,
 });
 
 /** `POST /bm/yard/hatchery/clear`: a hatchery, or `hcc` for the shared queue (Clear all). */
 export const YardHatcheryClearSchema = z.object({
   hatchery: HatcheryTargetField,
+  remote: HccRemoteField,
 });
 
 /** `POST /bm/yard/hatchery/finish`: a hatchery, or `hcc` for everything the HCC feeds. */
 export const YardHatcheryFinishSchema = z.object({
   hatchery: HatcheryTargetField,
+  remote: HccRemoteField,
 });
+
+/** One preset stack on the wire: `[monster id, count]`. */
+const PresetStackField = z.tuple([z.string().min(1).max(16), z.number().int().min(1).max(300)]);
+
+/**
+ * `POST /bm/yard/hatchery/preset/save` (beta 9): the HCC preset in `slot`
+ * (0-based) becomes `stacks`, a JSON array of `[monster, count]` in the order
+ * they are sent; `[]` empties the slot. The list is the yard's: the main
+ * yard's own, or the one every outpost shares (`hccPresets.ts`).
+ */
+export const YardHccPresetSaveSchema = z.object({
+  slot: z.coerce.number().int().min(0).max(5),
+  stacks: jsonField("stacks must be a JSON array of [monster, count] pairs").pipe(
+    z.array(PresetStackField).max(30)
+  ),
+  remote: HccRemoteField,
+});
+
+/** `POST /bm/yard/hatchery/preset/send` (beta 9): adds the preset in `slot` to the end of the HCC's queue. */
+export const YardHccPresetSendSchema = z.object({
+  slot: z.coerce.number().int().min(0).max(5),
+  remote: HccRemoteField,
+});
+
+/** `POST /bm/yard/hatchery/outposts` (beta 9): no fields; the main yard's outposts as its level 3 HCC runs them. */
+export const YardHccOutpostsSchema = z.object({});
 
 /**
  * `POST /bm/yard/bank`: `ids`, a JSON array of harvester building ids (a JSON

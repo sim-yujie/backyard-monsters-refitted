@@ -17,6 +17,7 @@ import { onLevelChange } from "./levelChangeBus.js";
 import { leaveAllChannels } from "./chatRooms.js";
 import { clients, type ChatClient, type SocketData } from "./chatState.js";
 import { publishToChannel } from "./chatTransport.js";
+import { refusedForMaintenance, tellOnSignIn } from "./chatMaintenance.js";
 
 type ServerWebSocket<T> = import("bun").ServerWebSocket<T>;
 
@@ -113,6 +114,9 @@ export const authenticate = async (ws: ServerWebSocket<SocketData>, message: Aut
     return;
   }
 
+  // Past the maintenance countdown only the owner gets in (`chatMaintenance.ts`).
+  if (refusedForMaintenance(ws, user.userid)) return;
+
   const displayName = getDisplayName(user);
   const mutedUntil = await readMutedUntil(user.userid);
 
@@ -141,6 +145,7 @@ export const authenticate = async (ws: ServerWebSocket<SocketData>, message: Aut
   clients.set(user.userid, client);
 
   send(ws, { type: ServerMessageType.AuthOk, userId: user.userid, displayName, presence: true });
+  tellOnSignIn(client);
 };
 
 /**

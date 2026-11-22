@@ -1,5 +1,5 @@
 import type { Page } from "@playwright/test";
-import { openAchievements, openBaiterPreview, openFriendsScreen, openRepeatResult, openRepeatSheet, openShop, pressDock } from "./game";
+import { openAchievements, openBaiterPreview, openFriendsScreen, openMoveTray, openRepeatResult, openRepeatSheet, openShop, pressDock } from "./game";
 
 /**
  * Every window the layout check opens on the own yard.
@@ -224,6 +224,26 @@ export const WINDOWS: readonly WindowCase[] = [
     items: ".baiter__row",
     tabs: false,
     open: (page) => openBaiterPreview(page, "host"),
+  },
+  {
+    // The world map's move tray (beta 9 #7) at its busiest: seven kinds, three
+    // picked, five outposts ticked. The chips, the tools and Go in sight at
+    // every size. Opened from the build's preview (no outposts in a sandbox).
+    id: "move-tray",
+    label: "Move monsters tray",
+    panel: ".xfer-tray",
+    items: ".xfer-chip",
+    tabs: false,
+    open: (page) => openMoveTray(page, "tray"),
+  },
+  {
+    // Its List of every outpost: search, the rows, Done.
+    id: "move-list",
+    label: "Move monsters list",
+    panel: ".xfer-list",
+    items: ".xfer-row",
+    tabs: false,
+    open: (page) => openMoveTray(page, "list"),
   },
 ];
 

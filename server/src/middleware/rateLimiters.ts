@@ -323,6 +323,21 @@ export const botCheckAnswerLimiter = RateLimit.middleware({
 });
 
 /**
+ * Rate limit for the world map's move tray (beta 9 #7) - 30 a minute per user:
+ * it reads every own yard's army when a move starts and after each move.
+ */
+export const ownArmiesLimiter = RateLimit.middleware({
+  interval: { min: 1 },
+  max: 30,
+  prefixKey: "ownarmies",
+  keyGenerator: byUser("ownarmies"),
+  handler: async (ctx: Context) => {
+    ctx.status = Status.TOO_MANY_REQUESTS;
+    ctx.body = { error: "Too many requests. Please slow down." };
+  },
+});
+
+/**
  * Rate limit for the auto-attack plan and its replay - 120 a minute per user:
  * the map asks for a camp's plan each time its panel opens.
  */

@@ -26,6 +26,9 @@ import {
 } from "./champion.js";
 import {
   yardHatcheryAddAction,
+  yardHccOutpostsAction,
+  yardHccPresetSaveAction,
+  yardHccPresetSendAction,
   yardHatcheryClearAction,
   yardHatcheryFinishAction,
   yardHatcheryRemoveAction,
@@ -107,6 +110,9 @@ export const yardRoutes: YardRouteEntry[] = [
   { path: "hatchery/remove", controller: yardRoute(yardHatcheryRemoveAction) },
   { path: "hatchery/clear", controller: yardRoute(yardHatcheryClearAction) },
   { path: "hatchery/finish", controller: yardRoute(yardHatcheryFinishAction) },
+  { path: "hatchery/preset/save", controller: yardRoute(yardHccPresetSaveAction) },
+  { path: "hatchery/preset/send", controller: yardRoute(yardHccPresetSendAction) },
+  { path: "hatchery/outposts", controller: yardRoute(yardHccOutpostsAction) },
   { path: "bank", controller: yardRoute(yardBankAction) },
   { path: "mushroom/pick", controller: yardRoute(yardMushroomPickAction) },
   { path: "build", controller: yardRoute(yardBuildAction) },

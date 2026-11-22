@@ -3,10 +3,11 @@ import { formatCountdown } from "@/ui/format";
 
 /**
  * Moving between the player's own yards on Map Room 2 (outposts WP7, #186):
- * "Move main yard here" on an own outpost, and "Move monsters" between any
- * two of the player's yards. Pure: the texts, the prices, and the monster
- * sums the two dialogs show and send. The server checks all of it again
- * (`migrateBase.ts`, `transferMonsters.ts` and `transferRules.ts`).
+ * "Move main yard here" on an own outpost, and reading an own cell's monsters
+ * (the yard card, the relocate warning). Moving monsters between yards is the
+ * map's move mode since beta 9 (`transferPlan.ts`, `ui/maproom/TransferMode.ts`).
+ * Pure: the texts, the prices and the monster sums. The server checks all of
+ * it again (`migrateBase.ts`, `transferBatch.ts` and `transferRules.ts`).
  */
 
 /* ── Move main yard here (`PopupRelocateMe.as`) ───────────────────────── */
@@ -96,89 +97,3 @@ export const relocateAffordable = (
   shiny: Number(credits ?? 0) >= RELOCATE_PRICE.shiny,
 });
 
-/* ── Move monsters (`PopupMonstersA.as`, `PopupMonstersB.as`, `MapRoom.as:694-936`) ── */
-
-export const TRANSFER_TEXT = {
-  button: "Move monsters",
-  title: "Move Monsters",
-  lead: "Pick the monsters, then where they go.",
-  from: "From",
-  to: "To",
-  go: "Transfer",
-  busy: "Moving monsters...",
-  done: "All monsters successfully transferred.",
-  none: "No monsters to transfer.",
-  noHousing: "You don't have any Monster Housing at this Outpost.",
-  problem: "There was a problem with the transfer: ",
-  noOutposts: "You need an outpost to move monsters to.",
-} as const;
-
-/** Flash's `newmap_tr_space`: some went, and the rest had no room. */
-export const partlyMovedText = (moved: number): string =>
-  `${moved} monsters successfully transferred.  There was not enough space for all the monsters.`;
-
-/** One end of a transfer: a yard, what it houses and how much room it has. */
-export interface TransferYard {
-  readonly baseid: string;
-  readonly housed: Readonly<Record<string, number>>;
-  /** Its housing capacity (`m.space`, which the server keeps). */
-  readonly space: number;
-}
-
-/** The room a yard has left: its space less every housed monster's size (`MapRoom.as:811-814`). */
-export const freeSpace = (yard: TransferYard, sizeOf: (id: string) => number): number =>
-  Object.entries(yard.housed).reduce(
-    (left, [id, count]) => left - count * sizeOf(id),
-    yard.space,
-  );
-
-/**
- * The picked counts cut down to what the source has and the target can
- * house, in roster order, as Flash cut them as it sent them
- * (`MapRoom.as:819-849`): each type moves while room is left, the last only as
- * many as fit.
- */
-export const clampTransfer = (
-  picked: Readonly<Record<string, number>>,
-  from: TransferYard,
-  to: TransferYard,
-  sizeOf: (id: string) => number,
-): Record<string, number> => {
-  let room = Math.max(0, freeSpace(to, sizeOf));
-  const moved: Record<string, number> = {};
-  for (const { id } of countsList(from.housed)) {
-    const want = Math.min(Math.max(0, Math.floor(picked[id] ?? 0)), from.housed[id] ?? 0);
-    if (want <= 0) continue;
-    const size = sizeOf(id);
-    const fits = size > 0 ? Math.min(want, Math.floor(room / size)) : want;
-    if (fits <= 0) continue;
-    moved[id] = fits;
-    room -= fits * size;
-  }
-  return moved;
-};
-
-/**
- * The most of one type that can move now, with the other picks as they are:
- * what the source has, and what the room left after the others holds.
- */
-export const maxOf = (
-  id: string,
-  picked: Readonly<Record<string, number>>,
-  from: TransferYard,
-  to: TransferYard,
-  sizeOf: (id: string) => number,
-): number => {
-  const others = Object.entries(picked).reduce(
-    (used, [other, count]) => (other === id ? used : used + count * sizeOf(other)),
-    0,
-  );
-  const room = Math.max(0, freeSpace(to, sizeOf) - others);
-  const size = sizeOf(id);
-  const fits = size > 0 ? Math.floor(room / size) : Number.POSITIVE_INFINITY;
-  return Math.max(0, Math.min(from.housed[id] ?? 0, fits));
-};
-
-/** How many monsters a pick moves in all. */
-export const totalOf = (counts: Readonly<Record<string, number>>): number =>
-  Object.values(counts).reduce((sum, count) => sum + Math.max(0, count), 0);

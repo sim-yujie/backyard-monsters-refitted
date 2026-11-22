@@ -1,3 +1,4 @@
+import type { MaintenanceNotice } from "./maintenance";
 import { get, post } from "./http";
 import type { ApiEnvelope } from "./types";
 
@@ -91,6 +92,8 @@ export type ChatServerMessage =
   | { type: "notice" }
   /** New mail for this player: the game asks `/player/mailstatus` what came (owner, beta 7). */
   | { type: "mail" }
+  /** The maintenance switch: on with the time left, or off (`app/maintenanceWatch.ts`). */
+  | ({ type: "maintenance" } & MaintenanceNotice)
   /** Taken out of a room: left or was kicked from the alliance (beta 7). */
   | { type: "left"; channel: string }
   /** The answer to a presence ping sent on the socket (beta 9, `ChatSession.presence`). */

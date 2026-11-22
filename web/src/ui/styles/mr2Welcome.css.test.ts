@@ -37,7 +37,7 @@ const contrast = (a: Rgb, b: Rgb): number => {
 };
 
 /** Classic's window tokens: the cream fill, the card shade and the accent tint. */
-const classic = rule(skin, ':root[data-skin="flash"] :is(.panel, .stay-protected, .presence-check, .chat-box--open, .mr1)');
+const classic = rule(skin, ':root[data-skin="flash"] :is(.panel, .stay-protected, .presence-check, .chat-box--open, .mr1, .maint-banner__card, .maint-card)');
 const token = (name: string): string => new RegExp(`--${name}: ([^;]+);`).exec(classic)?.[1] ?? "";
 const textColour = (sheet: string, selector: string): Rgb => {
   const h = /color: #([0-9a-f]{6});/.exec(rule(sheet, selector))?.[1];
