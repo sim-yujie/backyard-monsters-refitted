@@ -243,7 +243,8 @@ export class HccBench {
     const slots = this.scroll.querySelector(".hatch-line--hcc > .hatch-line__slots");
     if (!slots || slots.querySelector(".hcc-box--locked")) return;
     const totals = slots.querySelector(":scope > .hatch-line__totals");
-    for (let at = hccLimits(this.level).stacks; at < HCC_MAX_STACKS; at += 1) {
+    // A queue never holds more than its level allows; should an older one, the boxes it fills stay unlocked.
+    for (let at = Math.max(hccLimits(this.level).stacks, this.yard?.shared.length ?? 0); at < HCC_MAX_STACKS; at += 1) {
       const box = el("div", "hcc-box--locked");
       box.title = "More queue stacks at HCC level 2";
       box.setAttribute("aria-hidden", "true");
