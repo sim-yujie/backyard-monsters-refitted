@@ -43,6 +43,7 @@ import {
 import { QueueView } from "./queue";
 import { ShinyView } from "./shiny";
 import { MonsterMadnessView } from "./monsterMadness";
+import { MaintenanceView } from "./maintenance";
 import { WeekendView } from "./weekend";
 import { applyTheme, readTheme, themePicker } from "./theme";
 import {
@@ -236,6 +237,8 @@ class Dashboard {
   private readonly weekend = new WeekendView({ say: (message) => this.say(message) });
   /** Monster Madness (owner-started only), above the weekend events. */
   private readonly monsterMadness = new MonsterMadnessView({ say: (message) => this.say(message) });
+  /** The maintenance switch (owner, 22 Nov 2026), at the top of Server health. */
+  private readonly maintenance = new MaintenanceView({ say: (message) => this.say(message) });
   private readonly errors = new ErrorsView(
     (message) => this.say(message),
     (totals) => {
@@ -397,7 +400,7 @@ class Dashboard {
     replace(this.sections.shiny.body, this.shiny.element);
     replace(this.sections.announcements.body, this.announcements.element);
     replace(this.sections.events.body, this.monsterMadness.element, this.weekend.element);
-    replace(this.sections.health.body, this.errorsBox);
+    replace(this.sections.health.body, this.maintenance.element, this.errorsBox);
 
     this.home = h(
       "section",
@@ -501,6 +504,7 @@ class Dashboard {
       this.photos.refresh(),
       this.weekend.refresh(),
       this.monsterMadness.refresh(),
+      this.maintenance.refresh(),
     ]);
   }
 
@@ -578,6 +582,7 @@ class Dashboard {
       this.photos.refresh(),
       this.weekend.refresh(),
       this.monsterMadness.refresh(),
+      this.maintenance.refresh(),
     ]);
     this.refreshButton.classList.remove("is-busy");
     this.refreshButton.disabled = false;

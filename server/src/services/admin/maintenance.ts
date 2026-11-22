@@ -29,7 +29,7 @@ import { logger } from "../../utils/logger.js";
 export const SETTING_KEY = "maintenance";
 
 /** How often the copy in memory is read again: a second server learns of a change within seconds. */
-export const REFRESH_MS = 5_000;
+export const REFRESH_MS = 10_000;
 
 /** The countdowns the dashboard offers, in minutes. */
 export const COUNTDOWN_MINUTES = [1, 5, 10, 15] as const;
