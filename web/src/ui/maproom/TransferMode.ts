@@ -507,7 +507,8 @@ export class TransferMode {
         // building: never on the plates of the row above.
         if (plate.tag) {
           const top = y - 21 * fit;
-          plate.tag.style.transform = `translate(${Math.round(at.x)}px, ${Math.round(top + 3)}px) translate(-50%, -100%)`;
+          // Mostly over its own plate's top edge: it reaches only 8 px above it.
+          plate.tag.style.transform = `translate(${Math.round(at.x)}px, ${Math.round(top + 11)}px) translate(-50%, -100%)`;
         }
         plate.at = at;
       }
