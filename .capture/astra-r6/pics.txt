@@ -1,0 +1,9 @@
+desktop-1-hatch-l1-modern-1280x720|Hatch tab, HCC level 1, main yard (yard switcher greyed with a lock; 7 queue boxes + 3 locked), Modern desktop 1280x720
+desktop-1-hatch-l2-modern-1280x720|Hatch tab, level 2, main yard, Modern desktop
+desktop-1-hatch-l3-modern-1280x720|Hatch tab, level 3, main yard (switcher live, 1/11), Modern desktop
+desktop-1-hatch-l3-outpost-modern-1280x720|Hatch tab, level 3, an outpost (2/11, two hatcheries), Modern desktop
+compare-b-desktop-hatch-round5-round6-1280x720|Desktop Hatch tab: round 5 (left, preset Send rail on the right) | round 6 (right, rail removed, bigger hatcheries and queue)
+phone-1-hatch-l1-modern-390x844|Hatch tab, level 1, Modern phone 390x844
+phone-1-hatch-l3-modern-390x844|Hatch tab, level 3, Modern phone
+phone-1-hatch-l3-outpost-modern-390x844|Hatch tab, level 3, an outpost, Modern phone
+compare-a-top-strip-l1-l2-l3-outpost-desktop-2x|The top of the tab at L1, L2, L3 and an outpost stacked (desktop, 2x), red guides = left edges that must not move
