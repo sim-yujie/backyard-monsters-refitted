@@ -23,6 +23,9 @@ LOOK E FINISHED (22 Nov 2026, the owner's pick; all.sh renders everything, post_
   - the two horns lean straight across the screen, one shape mirrored, so they stand equally tall, and their seats sit
     on the strap's middle line, clear of its holes and of the paper;
   - STORE_LETTERS=0 leaves the words MATCH BOOK off the cover (colour and glow), into e-plain/ : the one switch;
+  - the words are weathered (owner, 22 Nov: "some of the alphabets scratched off, or dropped off"): itex.py's worn()
+    levels, standing 1, damaged 2, destroyed 3, and the dropped O lies on the ground (fallen_letter);
+    STORE_WEAR=heavy takes one level more each, into e-heavy/ (a sample for the owner; the game has light);
   - PB_STATE=damaged / destroyed: the wrecked looks (wreck_damaged, wreck_destroyed), one rough pass each;
   - STORE_PIP / STORE_CRACK scale the pips' and the cracks' light for the glow loop's three renders (post_e.py).
 """
@@ -51,7 +54,9 @@ GLOW_CRACK = float(os.environ.get("STORE_CRACK", 1.0))
 STATE = kit.STATE                                          # "damaged", "destroyed", or a loop render's tag
 DMG, DEAD = STATE == "damaged", STATE == "destroyed"
 DIM = 0.7 if DMG else 0.32 if DEAD else 1.0                # a wrecked store's fires burn low
-kit.OUT = HERE / (VAR if LETTERS else VAR + "-plain")
+HEAVY = os.environ.get("STORE_WEAR", "light") == "heavy"   # E's words one level more worn (-> e-heavy/); see itex.py
+WEAR = {"damaged": 2, "destroyed": 3}.get(STATE, 1) + (1 if HEAVY else 0)      # the loop's renders: as the standing
+kit.OUT = HERE / (VAR + "-plain" if not LETTERS else VAR + "-heavy" if HEAVY and VAR == "e" else VAR)
 kit.OUT.mkdir(exist_ok=True)
 kit.ORIGIN = S.ORIGIN                    # the surface Store's origin (3.0, 33.5)
 kit.FRAME = (-56, -60, 90, 76)           # the surface Store's canvas (-50,-44,80,72), wider for the horns and shadow
@@ -531,7 +536,7 @@ def materials():
     M["blob"] = P_("s-blob", (84, 78, 74), rough=0.45, metal=0.8, wear=(120, 112, 104), scale=6.0, dirt=0.2)
     M["stone"] = imats.rock("s-stone", (34, 30, 30), (66, 60, 56), scale=2.5)
     M["bone"] = imats.bone("s-bone", col=(176, 158, 122), tip=(52, 42, 36), z0=S.ZSTICK, z1=S.ZSTICK + 3.2)
-    tag = VAR if LETTERS or VAR != "e" else "e-plain"
+    tag = VAR if VAR != "e" else f"e-w{WEAR}" if LETTERS else "e-plain"     # E's words weathered (itex.py worn())
     cov, glow = HERE / f"cover-{tag}.png", HERE / f"cover-{tag}-glow.png"
     if VAR == "d":
         # the surface die's red, burnt: scorched dark-red enamel on iron, the iron showing at the worn places
@@ -1087,6 +1092,47 @@ def lump(name, at, size, mat, seed):
     return ob
 
 
+def fallen_letter():
+    """E: the second O of BOOK, dropped off the cover (itex.py leaves its ghost there), on the ground below its place,
+    leaning back on the lump of basalt there (rubble2); it has cooled to a dull ember. The same in every state. Its size is the print's:
+    the cover's 924 px are MB_X0..MB_X1, so the O (165 x 143 px, its hole 84 x 64) is 0.82 x 0.71."""
+    k = (S.MB_X1 - S.MB_X0) / 924.0
+    ro, ri, t = (165 * k / 2, 143 * k / 2), (84 * k / 2, 64 * k / 2), 0.07
+    bm = bmesh.new()
+    n = 40
+    rings = []
+    for y in (0.0, t):
+        for rx, rz in (ro, ri):
+            rings.append([bm.verts.new((rx * math.cos(2 * math.pi * i / n), y, rz * math.sin(2 * math.pi * i / n)))
+                          for i in range(n)])
+    fo, fi, bo, bi = rings
+    for i in range(n):
+        j = (i + 1) % n
+        bm.faces.new((fo[i], fo[j], fi[j], fi[i]))
+        bm.faces.new((bo[j], bo[i], bi[i], bi[j]))
+        bm.faces.new((fo[j], fo[i], bo[i], bo[j]))
+        bm.faces.new((fi[i], fi[j], bi[j], bi[i]))
+    bmesh.ops.recalc_face_normals(bm, faces=bm.faces)
+    m = P_letter()
+    ob = mesh_ob("fallenO", bm, [m], smooth=True, bevel=0.015, segs=2)
+    at = FALLEN_AT
+    # facing the cover's way (-Y), its top leaning back by 46 degrees, turned a little toward the front corner
+    ob.matrix_world = (Matrix.Translation((at[0], at[1], 0.0)) @ Matrix.Rotation(math.radians(16), 4, "Z")
+                       @ Matrix.Rotation(math.radians(-46), 4, "X"))
+    rest(("fallenO",))
+
+
+FALLEN_AT = (0.28, -4.5)        # before the basalt lump rubble2 (0.2, -4.1), which props it
+
+
+def P_letter():
+    m = kit.painted("s-letter", (150, 64, 22), rough=0.5, metal=0.6, wear=(84, 50, 34), scale=5.0, dirt=0.3, soot=0.45)
+    b = next(x for x in m.node_tree.nodes if x.type == "BSDF_PRINCIPLED")
+    b.inputs["Emission Color"].default_value = (1.0, 0.2, 0.02, 1.0)
+    b.inputs["Emission Strength"].default_value = 0.4 * DIM
+    return m
+
+
 def rubble():
     """E: basalt lumps on the ground round the feet (clear of the tack discs and the cover's foot)."""
     for i, (x, y, r) in enumerate(((3.6, -1.2, 0.42), (3.9, 0.6, 0.3), (0.2, -4.1, 0.36), (-1.2, -4.3, 0.26),
@@ -1114,6 +1160,8 @@ def build():
     tacks()
     if VAR == "e":
         rubble()
+        if LETTERS:
+            fallen_letter()
         if DMG:
             wreck_damaged()
         if DEAD:
@@ -1283,7 +1331,7 @@ def wreck_destroyed():
     body = ("die", "mbtop", "stick3", "hornR", "hornRseat", "paper", "paperwad") + STRAP_SET
     put(body, about((0.0, 0.0, S.DIE_Z0), (-13, 21, 8)))
     rest(body)
-    lay(("mblow",), (2.3, -5.5), (-84, 0, 45))
+    lay(("mblow",), (2.65, -5.85), (-84, 0, 45))      # (clear of the dropped O as the camera sees it)
     # the rest of the roof, the left horn and the ring thrown down round it
     lay(("stick0",), (-4.3, -2.8), (0, 0, 45))
     lay(("stick1",), (5.8, -2.0), (0, 0, 64))
@@ -1300,7 +1348,8 @@ def wreck_destroyed():
 
 FAMILY = (("die", "die"), ("wire", "wire"), ("mbcover", "cover"), ("tackpin", "pin"), ("tackboss", "tack"),
           ("tack", "tack"), ("stick", "stick"), ("straphole", "strap"), ("strap", "strap"), ("ring", "ring"),
-          ("paper", "paper"), ("horn", "horn"), ("mbtop", "cover"), ("mblow", "cover"), ("rivets", "die"), ("rubble", "rubble"))
+          ("paper", "paper"), ("horn", "horn"), ("mbtop", "cover"), ("mblow", "cover"), ("rivets", "die"), ("rubble", "rubble"),
+          ("fallen", "cover"))
 
 
 def family(o):
