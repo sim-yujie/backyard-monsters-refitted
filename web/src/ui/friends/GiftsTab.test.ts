@@ -4,12 +4,13 @@ import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { GiftResource } from "@/api/friends";
-import { ApiError } from "@/api/http";
+import { ApiError, NetworkError } from "@/api/http";
 import { fixtureApi, fixtureGift, fixtureList } from "@/game/friends/friendsFixture";
 import { FriendsStore } from "@/game/friends/friendsStore";
 import { setPlayerPool } from "@/game/friends/friendsView";
 import { setResourceRealm } from "@/ui/resourceIcon";
-import { GIFTS_TEXT, GiftsTab, lapseText, overflowOf } from "./GiftsTab";
+import { NETWORK_REFUSAL } from "@/api/friends";
+import { GIFTS_TEXT, GiftsTab, WISH_RETRY_MS, lapseText, overflowOf } from "./GiftsTab";
 
 /** The Gifts tab (issue #375): the gifts waiting, Collect, Collect all with the short-storage warning, Send one back. */
 
@@ -376,6 +377,84 @@ describe("my wishes (#391)", () => {
     await settle();
     expect(pressed(tab)).toEqual(["r2"]);
     expect(tab.statusText).toBe(GIFTS_TEXT.wishesFailed);
+  });
+
+  it("says the server's own words when it refuses (bug #58)", async () => {
+    const limited = new ApiError("Too many wish changes. Please slow down.", {
+      status: 429,
+      details: { message: "Too many wish changes. Please slow down.", status: 429, data: { reason: "rateLimited" } },
+    });
+    const { tab } = setup({ gifts: { ...twoGifts, wishes: ["r2"] }, setWishes: limited });
+    await tab.show();
+    toggle(tab, "r1").click();
+    await settle();
+    expect(pressed(tab)).toEqual(["r2"]);
+    expect(tab.statusText).toBe("Too many wish changes. Please slow down.");
+  });
+
+  it("sends a save that never reached the server once more by itself, and says nothing when it lands (bug #58)", async () => {
+    vi.useFakeTimers();
+    try {
+      const { api } = fixtureApi({ gifts: { ...twoGifts, wishes: ["r2"] } });
+      const setWishes = vi
+        .fn<typeof api.setWishes>()
+        .mockRejectedValueOnce(new NetworkError("Failed to fetch", null))
+        .mockImplementation(async (wishes) => [...wishes]);
+      api.setWishes = setWishes;
+      const tab = new GiftsTab({ api, store: new FriendsStore({ api }), now: () => NOW, onSendBack: vi.fn() });
+      document.body.append(tab.element);
+      await tab.show();
+      toggle(tab, "r1").click();
+      await vi.advanceTimersByTimeAsync(0);
+      expect(setWishes).toHaveBeenCalledTimes(1);
+      expect(pressed(tab)).toEqual(["r1", "r2"]);
+      await vi.advanceTimersByTimeAsync(WISH_RETRY_MS);
+      expect(setWishes).toHaveBeenCalledTimes(2);
+      expect(pressed(tab)).toEqual(["r1", "r2"]);
+      expect(tab.statusText).toBe("");
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("a second miss puts the saved wishes back and says the server could not be reached", async () => {
+    vi.useFakeTimers();
+    try {
+      const { tab, calls } = setup({
+        gifts: { ...twoGifts, wishes: ["r2"] },
+        setWishes: new NetworkError("Failed to fetch", null),
+      });
+      await tab.show();
+      toggle(tab, "r1").click();
+      await vi.advanceTimersByTimeAsync(WISH_RETRY_MS);
+      expect(calls.filter(([method]) => method === "setWishes")).toHaveLength(2);
+      expect(pressed(tab)).toEqual(["r2"]);
+      expect(tab.statusText).toBe(NETWORK_REFUSAL);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("a later save that lands clears the line a failed one put up", async () => {
+    const limited = new ApiError("Too many wish changes.", {
+      status: 429,
+      details: { message: "Too many wish changes.", status: 429, data: { reason: "rateLimited" } },
+    });
+    const { api } = fixtureApi({ gifts: { ...twoGifts, wishes: ["r2"] } });
+    api.setWishes = vi
+      .fn<typeof api.setWishes>()
+      .mockRejectedValueOnce(limited)
+      .mockImplementation(async (wishes) => [...wishes]);
+    const tab = new GiftsTab({ api, store: new FriendsStore({ api }), now: () => NOW, onSendBack: vi.fn() });
+    document.body.append(tab.element);
+    await tab.show();
+    toggle(tab, "r1").click();
+    await settle();
+    expect(tab.statusText).toBe("Too many wish changes.");
+    toggle(tab, "r3").click();
+    await settle();
+    expect(pressed(tab)).toEqual(["r2", "r3"]);
+    expect(tab.statusText).toBe("");
   });
 });
 
