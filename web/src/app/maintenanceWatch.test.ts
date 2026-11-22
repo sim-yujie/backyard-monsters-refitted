@@ -129,6 +129,15 @@ describe("MaintenanceWatch", () => {
     expect(maintenanceBlock()).toEqual({ message: "Moving", backAt: null });
   });
 
+  it("a request refused on its way out (an attack's last save) keeps the Signed out mark", () => {
+    const t = setup();
+    t.chat(on(1_000));
+    t.advance(1_000);
+    t.refuse(maintenanceError());
+    expect(t.signOut).toHaveBeenCalledTimes(1);
+    expect(maintenanceBlock()).toEqual({ message: "Moving", backAt: null, signedOut: true });
+  });
+
   it("other refusals are not its business", () => {
     const t = setup();
     t.refuse(new ApiError("Nope", { status: 403 }));

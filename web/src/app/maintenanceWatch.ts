@@ -6,7 +6,7 @@ import {
   type MaintenanceRefusal,
 } from "@/api/maintenance";
 import type { MaintenanceBannerView } from "@/ui/MaintenanceBanner";
-import { setMaintenanceBlock } from "./maintenanceBlock";
+import { maintenanceBlock, setMaintenanceBlock } from "./maintenanceBlock";
 
 /**
  * The maintenance switch in a running game (owner, 22 Nov 2026;
@@ -151,7 +151,9 @@ export class MaintenanceWatch {
     if (!refusal) return;
     // A refused sign-in is shown by the sign-in screen itself.
     if ((error.url ?? "").includes(SIGN_IN_ROUTE) || !this.deps.signedIn()) {
-      setMaintenanceBlock(refusal);
+      // A request still on its way out (an attack's last save) keeps the
+      // card's "Signed out" from the countdown that just ended.
+      setMaintenanceBlock(maintenanceBlock()?.signedOut ? { ...refusal, signedOut: true } : refusal);
       return;
     }
     this.cut(refusal);
