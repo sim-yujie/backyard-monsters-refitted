@@ -523,6 +523,16 @@
   z-index: 2;
 }
 
+:root[data-skin="flash"] .xfer-tag:not(.xfer-tag--inline) {
+  height: 17px;
+  font-size: 11px;
+}
+
+:root[data-skin="flash"] .xfer-tag:not(.xfer-tag--inline) .xfer-tag__pic {
+  width: 13px;
+  height: 13px;
+}
+
 .xfer-tag--sub {
   background: var(--xfer-tag-sub);
   color: var(--xfer-tag-sub-ink);
