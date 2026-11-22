@@ -106,6 +106,41 @@
   display: none;
 }
 
+/* Round 4 (owner, 22 Nov): while a preset is built, the hatcheries, the queue, the yard and
+   housing strip and the housing warning are off the page; only the preset shows above the
+   monsters. `b9state=live` keeps round 3's view for the before/after picture. */
+.b9r3h-editing:not(.b9r3h-live) .b9r2h-strip,
+.b9r3h-editing:not(.b9r3h-live) .b9r2h-bench,
+.b9r3h-editing:not(.b9r3h-live) .b9r3h-warn {
+  display: none;
+}
+.b9r3h-editing:not(.b9r3h-live) .b9r3h-tabs {
+  margin-top: 0;
+  /* Where the tab scrolls (a phone on its side, an upright tablet) the preset stays in sight. */
+  position: sticky;
+  top: 0;
+  z-index: 3;
+}
+/* Solid, so the monsters do not show through it as they scroll under. */
+.b9r3h-editing:not(.b9r3h-live) .b9r3h-edit {
+  background:
+    linear-gradient(var(--colour-surface-control), var(--colour-surface-control)),
+    var(--colour-surface-base);
+}
+/* A phone on its side shows too little of the tab to pin anything in it. */
+@media (max-height: 500px) {
+  .b9r3h-editing:not(.b9r3h-live) .b9r3h-tabs {
+    position: static;
+  }
+}
+/* The stacks in order take as many lines as they need (ten stacks fill two on a phone). */
+.b9r3h-editing:not(.b9r3h-live) .b9r3h-edit__chips {
+  flex-wrap: wrap;
+  overflow: visible;
+  row-gap: 6px;
+  padding: 4px 2px 4px 0;
+}
+
 /* ── The presets: numbered rows, Send on each ───────────────────────── */
 .b9r3h-presets {
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -402,6 +437,86 @@
   padding: 0 12px;
 }
 
+/* ── Round 4: the stacks are a sequence ─────────────────────────────── */
+/* In a row: an arrow between one stack and the next. */
+.b9r3h-stacks {
+  gap: 4px 12px;
+}
+.b9r3h-stack + .b9r3h-stack::before {
+  content: "›";
+  position: absolute;
+  left: -12px;
+  top: 50%;
+  width: 12px;
+  transform: translateY(-54%);
+  color: var(--colour-text-muted);
+  font-family: var(--font-display);
+  font-size: 16px;
+  line-height: 1;
+  text-align: center;
+}
+.b9r3h-row__body {
+  grid-template-columns: 24px minmax(0, 1fr) auto auto;
+}
+.b9r3h-row__pencil {
+  flex: none;
+  width: 16px;
+  color: var(--colour-text-muted);
+  font-size: 15px;
+  line-height: 1;
+  text-align: center;
+}
+.b9r3h-row--empty .b9r3h-row__body {
+  grid-template-columns: 24px minmax(0, 1fr);
+}
+/* While it is built: arrows between the stacks; the last stack is the one the count works on. */
+.b9r3h-then {
+  flex: none;
+  width: 8px;
+  color: var(--colour-text-muted);
+  font-family: var(--font-display);
+  font-size: 16px;
+  line-height: 1;
+  text-align: center;
+}
+.b9r3h-chip--set {
+  cursor: default;
+}
+.b9r3h-chip--next {
+  border-style: dashed;
+  border-color: var(--colour-border-strong);
+  background: none;
+  cursor: default;
+}
+.b9r3h-chip--next .b9r3h-chip__picture {
+  opacity: 0.45;
+}
+.b9r3h-chip--next .b9r3h-chip__count {
+  background: var(--colour-accent);
+  color: var(--colour-text-inverse, #1b1b1b);
+}
+.b9r3h-edit__undo {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  padding: 0;
+  border: 0;
+  border-radius: 12px;
+  background: none;
+  cursor: pointer;
+}
+.b9r3h-edit__undo:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+
+/* Round 3's view (the "before" picture) has no Undo. */
+.b9r3h-live .b9r3h-edit__undo {
+  display: none;
+}
+
 /* ── A phone ────────────────────────────────────────────────────────── */
 @media (max-width: 620px), (max-height: 500px) {
   .b9r3h-tabs {
@@ -487,7 +602,7 @@
   }
   .b9r3h-editing .b9r3h-edit {
     display: grid;
-    grid-template-columns: auto minmax(min-content, 1fr) auto auto;
+    grid-template-columns: auto minmax(min-content, 1fr) auto auto auto;
     align-items: center;
     gap: 2px 4px;
     padding: 2px 4px 4px 6px;
@@ -508,13 +623,17 @@
     padding-left: 4px;
     white-space: nowrap;
   }
-  .b9r3h-edit__bin {
+  .b9r3h-edit__undo {
     grid-column: 3;
+    grid-row: 1;
+  }
+  .b9r3h-edit__bin {
+    grid-column: 4;
     grid-row: 1;
   }
   .b9r3h .b9r3h-edit__done {
     --skin-button2-cap: 14px;
-    grid-column: 4;
+    grid-column: 5;
     grid-row: 1;
     min-width: 58px;
     padding: 0 4px;
@@ -543,5 +662,45 @@
 @media (max-width: 620px) and (max-height: 700px) {
   .b9r3h .hatch-info {
     position: static;
+  }
+}
+
+/* Round 4, a phone row: the pencil sits under the number, and the arrows keep their gap. */
+@media (max-width: 620px), (max-height: 500px) {
+  .b9r3h-row__body {
+    grid-template-columns: 24px minmax(0, 1fr) auto;
+    grid-template-rows: auto auto;
+    row-gap: 0;
+  }
+  .b9r3h-row__body > .b9r3h-number {
+    grid-area: 1 / 1;
+    align-self: end;
+  }
+  .b9r3h-row__pencil {
+    grid-area: 2 / 1;
+    width: 24px;
+    font-size: 12px;
+    align-self: start;
+  }
+  .b9r3h-row__body > .b9r3h-stacks,
+  .b9r3h-row__body > .b9r3h-said {
+    grid-row: 1 / 3;
+  }
+  .b9r3h-row__body > .b9r3h-row__cost {
+    grid-area: 1 / 3 / 3 / 4;
+  }
+  .b9r3h-row__body > .b9r3h-said {
+    grid-column: 2 / -1;
+  }
+  .b9r3h-row--empty .b9r3h-row__body {
+    grid-template-rows: auto;
+  }
+  .b9r3h-stacks {
+    gap: 3px 10px;
+  }
+  .b9r3h-stack + .b9r3h-stack::before {
+    left: -10px;
+    width: 10px;
+    font-size: 14px;
   }
 }

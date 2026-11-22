@@ -82,15 +82,15 @@ async function flow(level, frame, w, h) {
   await shot(page, `${tag}-5-sent`);
   // keep sending preset 1 until the queue is full
   let said = "";
-  for (let i = 0; i < 12; i += 1) { await click(F('.b9r3h-send[data-preset="0"]')); said = (await text(F(".b9r3h-said"))) || ""; if (/of/.test(said)) break; }
-  check(/Added \d+ of 140/.test(said) && /queue is full/.test(said), `the row says how many fitted (${said})`);
+  for (let i = 0; i < 12; i += 1) { await click(F('.b9r3h-send[data-preset="0"]')); said = (await text(F(".b9r3h-said"))) || ""; if (/Added \d+ of/.test(said)) break; }
+  check(/Added \d+ of 100/.test(said) && /queue is full/.test(said), `the row says how many fitted (${said})`);
   check((await stacks()) === 10, "the queue is full");
   await shot(page, `${tag}-6-sent-part`);
   // change preset 1, empty it, undo by Start over later
   await click(F('.b9r3h-row__body[data-preset="0"]'));
-  check((await count(".b9r3h-chip")) === 3, "preset 1 opens with its three monsters");
-  await click(F(".b9r3h-chip >> nth=1"));
-  check((await page.locator(F(".b9r3h-count")).inputValue()) === "40", "a chip chooses its monster and shows its count");
+  check((await count(".b9r3h-chip:not(.b9r3h-chip--next)")) === 3, "preset 1 opens with its three stacks, in order");
+  await click(F(".b9r3h-chip--last"));
+  check((await page.locator(F(".b9r3h-count")).inputValue()) === "30", "the last stack's chip chooses its monster and shows its count");
   await click(F(".b9r3h-edit__bin"));
   check((await count(".b9r3h-chip")) === 0, "Clear empties the preset");
   await click(F(".b9r3h-edit__done"));

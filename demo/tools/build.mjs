@@ -25,7 +25,7 @@ const app = fs.readFileSync(`${SRC}/app.js`, "utf8");
 const paths = new Set();
 const blob = JSON.stringify(data).replace(/\\"/g, '"').replace(/&quot;/g, '"') + app;
 for (const [p] of blob.matchAll(/\/(?:ui|portraits|assets)\/[\w@.\/-]+\.(?:webp|png)/g)) paths.add(p);
-const icons = new Set(["townhall", "outpost", "housing", "time", "find", "pin", "lastarmy", "friendprev", "friendnext"]);
+const icons = new Set(["townhall", "outpost", "housing", "time", "find", "pin", "lastarmy", "undo", "friendprev", "friendnext"]);
 for (const p of [...paths]) { const m = p.match(/^\/ui\/icons\/([a-z0-9]+)-\d+\.webp$/); if (m) { icons.add(m[1]); paths.delete(p); } }
 for (const name of icons) for (const size of [32, 48, 64]) paths.add(`/ui/icons/${name}-${size}.webp`);
 for (const id of [...data.order, "C19"]) paths.add(`/portraits/${id}-icon.webp`);
