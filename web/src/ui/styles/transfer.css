@@ -66,7 +66,7 @@
 }
 
 .overlay__layer.xfer-on > .mr2-tools-dock {
-  bottom: calc(var(--xfer-tray-height, 150px) + var(--space-4));
+  bottom: calc(var(--xfer-tray-height, 150px) + 40px);
 }
 
 .overlay__layer.xfer-on > .mr2-tools-dock > :not(.mr2-toolrow),
@@ -78,6 +78,11 @@
   .overlay__layer.xfer-on > .mr2-tools-dock {
     display: none;
   }
+}
+
+/* The List is up: one window at a time. */
+.overlay__layer.xfer-listing > .xfer-tray {
+  visibility: hidden;
 }
 
 /* ── The plates ─────────────────────────────────────────────────────────── */
@@ -98,12 +103,9 @@
 }
 
 .xfer-plate {
-  --xfer-scale: 1;
-
   position: absolute;
   top: 0;
   left: 0;
-  scale: var(--xfer-scale);
   display: flex;
   flex-direction: column;
   box-sizing: border-box;
@@ -199,24 +201,29 @@
 /* More types than shown: three dots, never a "+". */
 .xfer-plate__more {
   flex: none;
-  width: 11px;
-  height: 18px;
   margin-left: auto;
-  border-radius: 3px;
-  background:
-    radial-gradient(circle, var(--xfer-ink) 0 1.4px, transparent 1.8px) center 3px / 4px 4px no-repeat,
-    radial-gradient(circle, var(--xfer-ink) 0 1.4px, transparent 1.8px) center 7px / 4px 4px no-repeat,
-    radial-gradient(circle, var(--xfer-ink) 0 1.4px, transparent 1.8px) center 11px / 4px 4px no-repeat,
-    rgb(0 0 0 / 35%);
-  opacity: 0.85;
+  padding: 1px 3px;
+  border-radius: 4px;
+  background: rgb(0 0 0 / 40%);
+  color: #d8e0e8;
+  font-size: 11px;
+  font-weight: 800;
+  line-height: 14px;
+  text-shadow: none;
 }
 
 /* An empty yard: one faint dashed well, no word. */
 .xfer-plate__none {
   flex: 1 1 auto;
   height: 18px;
-  border: 1.5px dashed rgb(255 255 255 / 35%);
+  border: 1.5px dashed rgb(255 255 255 / 45%);
   border-radius: 4px;
+  color: #e3eaf1;
+  font-size: 11px;
+  font-weight: 800;
+  line-height: 15px;
+  text-align: center;
+  text-shadow: 0 1px 1px rgb(0 0 0 / 80%);
 }
 
 .xfer-plate__word {
@@ -336,8 +343,9 @@
   background: #8b949c;
 }
 
-/* The yard the move started from: gold. */
+/* The yard the move started from: gold, over its neighbours. */
 .xfer-plate.is-anchor {
+  z-index: 1;
   border-color: var(--xfer-gold);
   box-shadow:
     0 0 0 1px rgb(0 0 0 / 60%),
@@ -395,16 +403,25 @@
 /* Cannot take part: full (moving out), empty (bringing in), or the main yard
    from the main yard. Still readable, clearly out of play. */
 .xfer-plate.is-dim {
-  filter: grayscale(0.75) brightness(0.72);
+  filter: grayscale(0.8) brightness(0.85);
   cursor: not-allowed;
+}
+
+.xfer-plate.is-dim .xfer-plate__free {
+  color: #e8eef4;
 }
 
 /* Under attack: hazard stripes and swords. */
 .xfer-plate.is-attack {
-  border-color: var(--xfer-attack-edge);
+  border-color: rgb(201 74 74 / 80%);
   background: var(--xfer-attack);
-  opacity: 0.95;
-  filter: none;
+  box-shadow: inset 0 0 0 1px rgb(0 0 0 / 35%), 0 3px 6px rgb(0 0 0 / 55%);
+  filter: saturate(0.7);
+  cursor: not-allowed;
+}
+
+.xfer-plate.is-attack .xfer-plate__word {
+  font-size: 11px;
 }
 
 .xfer-plate.is-attack .xfer-plate__top {
@@ -442,6 +459,12 @@
     0 3px 6px rgb(0 0 0 / 55%);
 }
 
+.xfer-plate.is-peeked {
+  z-index: 3;
+  outline: 2px solid #fff;
+  outline-offset: 1px;
+}
+
 @media (hover: hover) {
   .xfer-plate:not(.is-anchor, .is-dim, .is-attack):hover {
     filter: brightness(1.12);
@@ -463,7 +486,7 @@
   box-sizing: border-box;
   border: 1.5px solid #1e0b02;
   border-radius: 11px;
-  background: linear-gradient(180deg, #ff8a3c 0%, #e8580e 100%);
+  background: linear-gradient(180deg, #e8621a 0%, #c44a08 100%);
   box-shadow: 0 2px 4px rgb(0 0 0 / 55%);
   color: #fff;
   font-size: 13px;
@@ -473,12 +496,18 @@
   white-space: nowrap;
   text-shadow: 0 1px 1px rgb(80 20 0 / 90%);
   pointer-events: none;
+  z-index: 2;
 }
 
 .xfer-tag--sub {
   background: var(--xfer-tag-sub);
   color: var(--xfer-tag-sub-ink);
   text-shadow: 0 1px 0 rgb(255 240 200 / 70%);
+}
+
+.xfer-tag__pic + .xfer-tag__pic {
+  margin-left: -6px;
+  box-shadow: -1px 0 0 rgb(0 0 0 / 50%);
 }
 
 .xfer-tag__pic {
@@ -557,6 +586,49 @@
 
 .xfer-peek[hidden] {
   display: none;
+}
+
+.xfer-peek__caret {
+  position: absolute;
+  left: var(--xfer-caret, 50%);
+  bottom: -14px;
+  width: 0;
+  height: 0;
+  margin-left: -9px;
+  border: 9px solid transparent;
+  border-top-color: var(--xfer-caret-ink, #2a3540);
+}
+
+.xfer-peek.is-below .xfer-peek__caret {
+  top: -14px;
+  bottom: auto;
+  border-top-color: transparent;
+  border-bottom-color: var(--xfer-caret-ink, #2a3540);
+}
+
+.xfer-peek__left {
+  margin-top: -4px;
+  color: var(--skin-ink-3, #c8d3df);
+  font-size: 12px;
+  font-weight: 700;
+  text-align: right;
+}
+
+/* Classic: a card of the windows' parchment, as the yard card. */
+:root[data-skin="flash"] .xfer-peek {
+  --skin-ink-3: #6e4f30;
+  --xfer-caret-ink: #8a5a2a;
+
+  border: 2px solid #8a5a2a;
+  border-image: none;
+  border-radius: 10px;
+  background: #f8e4c0;
+  color: #3d2410;
+  filter: drop-shadow(0 6px 10px rgb(0 0 0 / 45%));
+}
+
+:root[data-skin="flash"] .xfer-peek :is(.xfer-peek__name, .xfer-peek__free) {
+  text-shadow: none;
 }
 
 .xfer-peek__head {
@@ -783,9 +855,9 @@
   display: flex;
   flex-direction: column;
   box-sizing: border-box;
-  width: min(960px, calc(100vw - 160px));
-  min-width: 0;
-  max-width: none;
+  width: fit-content;
+  min-width: min(720px, calc(100vw - 160px));
+  max-width: min(960px, calc(100vw - 160px));
   max-height: none;
   translate: -50% 0;
 }
@@ -830,6 +902,11 @@
   overflow-x: auto;
   overscroll-behavior-x: contain;
   scrollbar-width: thin;
+}
+
+.xfer-chips.is-more-right {
+  -webkit-mask-image: linear-gradient(to right, #000 calc(100% - 36px), transparent);
+  mask-image: linear-gradient(to right, #000 calc(100% - 36px), transparent);
 }
 
 .xfer-chip {
@@ -1071,6 +1148,11 @@
   font-variant-numeric: tabular-nums;
 }
 
+.xfer-status__item small {
+  color: var(--colour-text-muted);
+  font-size: 13px;
+}
+
 .xfer-status__item .game-icon {
   width: 24px;
   height: 24px;
@@ -1102,9 +1184,34 @@
   height: 26px;
 }
 
+.xfer-go.is-done:disabled {
+  opacity: 1;
+  filter: none;
+}
+
+.xfer-go .xfer-chip__check {
+  width: 24px;
+  height: 24px;
+  background-color: var(--xfer-good);
+  background-size: 16px 16px;
+}
+
 /* Waiting for a pick or a tick: Go says the next step, greyed. */
 .xfer-go.is-waiting {
   font-size: 15px;
+}
+
+/* Touch screens: every control a finger wide. */
+@media (pointer: coarse) {
+  .xfer-tray .btn,
+  .xfer-list .btn {
+    min-height: 44px;
+  }
+
+  .xfer-step {
+    width: 44px;
+    height: 44px;
+  }
 }
 
 /* ── Phone ─────────────────────────────────────────────────────────────── */
@@ -1157,10 +1264,62 @@
   .xfer-status__item {
     font-size: 15px;
   }
+
+  /* The sign over the tray would take a third of the map: its words stay
+     for screen readers, the close disc stays on the corner. */
+  .panel.xfer-tray > .panel__titlebar {
+    min-height: 0;
+    padding: 0;
+  }
+
+  .panel.xfer-tray > .panel__titlebar > .panel__title {
+    clip-path: inset(50%);
+    width: 1px;
+    min-width: 0;
+    height: 1px;
+    overflow: hidden;
+  }
+
+  .xfer-list {
+    height: calc(100vh - 16px);
+    height: calc(100dvh - 16px);
+  }
+
+  .xfer-list__head {
+    flex-wrap: nowrap;
+    padding-bottom: 4px;
+  }
+
+  .xfer-list__search {
+    flex: 1 1 auto;
+  }
+
+  .xfer-row {
+    min-height: 48px;
+    padding-block: 2px;
+  }
+
+  .xfer-list__foot {
+    padding-top: 4px;
+  }
 }
 
-/* Upright: three bands, Go across the whole width. */
+@media (min-width: 620.02px) and (max-width: 900px) and (min-height: 501px) {
+  .panel.xfer-tray {
+    width: calc(100vw - 32px);
+  }
+}
+
 @media (max-width: 620px) {
+  .xfer-chip__count {
+    min-width: 40px;
+    padding: 0 6px;
+  }
+}
+
+/* Narrow and tall (a phone or an iPad upright): three bands, Go across the
+   whole width (TransferMode.ts STACKED_QUERY). */
+@media (max-width: 900px) and (min-height: 501px) {
   .xfer-tray__row--act {
     flex-wrap: wrap;
   }
@@ -1249,7 +1408,7 @@
 
 .xfer-row {
   display: grid;
-  grid-template-columns: 32px minmax(90px, 1.2fr) minmax(0, 1.6fr) 170px 64px;
+  grid-template-columns: 32px minmax(160px, 1.3fr) minmax(0, 1.4fr) 180px 92px;
   align-items: center;
   gap: 10px;
   min-height: 54px;
@@ -1427,6 +1586,12 @@
 
   .xfer-row__tag {
     display: none;
+  }
+
+  .xfer-row__name small .xfer-tag {
+    height: 20px;
+    margin-left: 4px;
+    font-size: 12px;
   }
 
   .xfer-row__room {

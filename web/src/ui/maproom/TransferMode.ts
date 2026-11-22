@@ -2,7 +2,6 @@ import { monsterName } from "@/game/combat/rules";
 import { monsterPortrait, showPortrait } from "@/game/portraits";
 import { classicLook } from "@/game/classicLook";
 import {
-  afterPlan,
   canTick,
   countOf,
   currentPlan,
@@ -15,7 +14,6 @@ import {
   pairsOf,
   rankTypes,
   roomOf,
-  topOf,
   trayTypes,
   usedRoom,
   type ArmyYard,
@@ -62,6 +60,7 @@ export const MOVE_TEXT = {
   near: "Near 5",
   allHome: "All home",
   every: "All",
+  tickAll: "Tick all",
   list: "List",
   even: "Even",
   inOrder: "In order",
@@ -74,7 +73,9 @@ export const MOVE_TEXT = {
   to: "To",
   empty: "Empty",
   full: "Full",
-  attack: "Attack",
+  free: "free",
+  attack: "Under attack",
+  attackLong: "Under attack: no moves until it ends",
   noneHere: "No monsters here",
   noneOut: "Your outposts are empty",
   noRoom: (n: number) => `${formatAmount(n)} don't fit`,
@@ -92,6 +93,7 @@ export const MOVE_TEXT = {
   fromMany: (n: number) => `from ${n} yards`,
   fromOne: (name: string) => `from ${name}`,
   home: "home",
+  moved: (n: number) => `Moved ${formatAmount(n)}`,
   close: "Close move",
   closeList: "Close list",
 } as const;
@@ -174,12 +176,20 @@ const monsterCount = (id: string, count: number, className = "xfer-mon"): HTMLEl
   return wrap;
 };
 
-/** Three dots for more types than shown: a "+" on the map only means monsters coming in. */
+/** More types than shown: a small grey "+2", never the orange of monsters coming in. */
 const moreDots = (more: number): HTMLElement => {
-  const dots = el("span", "xfer-plate__more");
-  dots.title = `${more} more`;
+  const dots = el("span", "xfer-plate__more", `+${more}`);
+  dots.title = `${more} more kinds`;
   return dots;
 };
+
+/** The pictures on a "+15" tag: the one kind moving, or the two biggest of several. */
+const tagPictures = (moving: Readonly<Record<string, number>>): HTMLElement[] =>
+  Object.keys(moving)
+    .filter((id) => (moving[id] ?? 0) > 0)
+    .sort((a, b) => (moving[b] ?? 0) - (moving[a] ?? 0))
+    .slice(0, 2)
+    .map((id) => portrait(id, "xfer-tag__pic"));
 
 /** A room bar: used, and the move's preview (stripes in, pale out). */
 const roomBar = (yard: ArmyYard, sizeOf: SizeOf, delta: number, className = "xfer-bar"): HTMLElement => {
@@ -209,6 +219,10 @@ const roomBar = (yard: ArmyYard, sizeOf: SizeOf, delta: number, className = "xfe
 
 type Place = { x: number; y: number; hexWidth: number };
 
+/** The tray in three bands: narrow and tall screens (transfer.css, the same query). */
+const STACKED_QUERY = "(max-width: 900px) and (min-height: 501px)";
+const stackedTray = (): boolean => window.matchMedia?.(STACKED_QUERY).matches ?? false;
+
 export class TransferMode {
   private readonly options: TransferModeOptions;
   private yards: ArmyYard[] = [];
@@ -224,7 +238,7 @@ export class TransferMode {
   private held = false;
   private busy = false;
   /** What the last move did, shown on the plates until move mode ends. */
-  private result: { add: MovePlan["add"]; sub: MovePlan["sub"] } | null = null;
+  private result: { add: MovePlan["add"]; sub: MovePlan["sub"]; total: number } | null = null;
   private resultTimer: ReturnType<typeof setTimeout> | null = null;
   private query = "";
 
@@ -325,7 +339,7 @@ export class TransferMode {
     this.plateOf.clear();
     this.options.mark(null);
     this.peekCard.hidden = true;
-    this.options.layer.classList.remove("xfer-on");
+    this.options.layer.classList.remove("xfer-on", "xfer-listing");
     this.options.layer.style.removeProperty("--xfer-tray-height");
     this.root.remove();
     if (this.toast.hidden) this.over.remove();
@@ -481,10 +495,10 @@ export class TransferMode {
       if (!plate.at || plate.at.x !== at.x || plate.at.y !== at.y || plate.at.hexWidth !== at.hexWidth) {
         // The plate sits on the lower half of the hex.
         const y = at.y + (size === "dot" ? 0 : at.hexWidth * 0.12);
-        plate.node.style.transform = `translate(${Math.round(at.x)}px, ${Math.round(y)}px) translate(-50%, -50%)`;
-        // Neighbours never overlap: a full plate is at most 94% of its hex.
-        const fit = size === "full" ? Math.min(1, (at.hexWidth * 0.94) / PLATE_WIDTH) : 1;
-        plate.node.style.setProperty("--xfer-scale", fit.toFixed(3));
+        // Neighbours never overlap: a full plate is at most 90% of its hex. The
+        // scale comes last, so it shrinks the plate and not where it stands.
+        const fit = size === "full" ? Math.min(1, (at.hexWidth * 0.9) / PLATE_WIDTH) : 1;
+        plate.node.style.transform = `translate(${Math.round(at.x)}px, ${Math.round(y)}px) translate(-50%, -50%) scale(${fit.toFixed(3)})`;
         // The tag rides inside the hex's top point, clear of the plates beside it.
         if (plate.tag)
           plate.tag.style.transform = `translate(${Math.round(at.x)}px, ${Math.round(at.y - at.hexWidth * 0.3)}px) translate(-50%, -50%)`;
@@ -517,7 +531,8 @@ export class TransferMode {
     const gives = shown?.sub[yard.baseid];
     const moving = (isAnchor ? (out ? gives : gets) : out ? gets : gives) ?? {};
     const delta = this.result ? 0 : roomOf(gets, sizeOf) - roomOf(gives, sizeOf);
-    const now = this.result ? yard : plan ? afterPlan(yard, plan) : yard;
+    // What the yard houses now, as the army card and the List show it; the tag says what comes or goes.
+    const now = yard;
     const smallest = this.smallest();
     const tickable = canTick(yard, anchor, state.mode, sizeOf, smallest);
 
@@ -542,6 +557,7 @@ export class TransferMode {
       const top = el("span", "xfer-plate__top");
       if (yard.attack) {
         top.append(icon("swords", 16, "xfer-plate__ico"), el("span", "xfer-plate__word", MOVE_TEXT.attack));
+        node.title = MOVE_TEXT.attackLong;
       } else if (isAnchor) {
         top.append(
           yard.main ? icon("townhall", 16, "xfer-plate__ico") : outpostIcon(16, "xfer-plate__ico"),
@@ -549,11 +565,7 @@ export class TransferMode {
         );
       } else {
         const types = rankTypes(now, sizeOf, state.picks, moving);
-        if (types.length === 0) {
-          const none = el("span", "xfer-plate__none");
-          none.title = MOVE_TEXT.empty;
-          top.append(none);
-        }
+        if (types.length === 0) top.append(el("span", "xfer-plate__none", MOVE_TEXT.empty));
         const room = size === "full" ? 2 : 1;
         for (const id of types.slice(0, room)) {
           const count = monsterCount(id, now.housed[id] ?? 0);
@@ -567,7 +579,7 @@ export class TransferMode {
         const room = el("span", "xfer-plate__room");
         room.append(roomBar(yard, sizeOf, delta));
         const word = el("b", full && !isAnchor ? "xfer-plate__free is-full" : "xfer-plate__free");
-        word.append(icon("housing", 16, "xfer-plate__house"), document.createTextNode(formatAmount(free)));
+        word.append(icon("housing", 16, "xfer-plate__house"), document.createTextNode(full && !isAnchor ? MOVE_TEXT.full : formatAmount(free)));
         room.append(word);
         node.append(room);
       } else if (!yard.attack && size === "slim") {
@@ -612,9 +624,7 @@ export class TransferMode {
     if (!isAnchor && n > 0 && size !== "dot") {
       const plus = out || (this.result !== null && !!gets);
       tag = el("span", `xfer-tag ${plus ? "xfer-tag--add" : "xfer-tag--sub"}${this.result ? " is-done" : ""}`);
-      tag.append(el("b", "", `${plus ? "+" : "−"}${formatAmount(n)}`));
-      const top = topOf(moving);
-      if (top) tag.append(portrait(top, "xfer-tag__pic"));
+      tag.append(el("b", "", `${plus ? "+" : "−"}${formatAmount(n)}`), ...tagPictures(moving));
     }
     return { node, tag };
   }
@@ -650,6 +660,7 @@ export class TransferMode {
   private hidePeek(): void {
     this.peek = null;
     this.peekCard.hidden = true;
+    for (const plate of this.plateOf.values()) plate.node.classList.remove("is-peeked");
   }
 
   private renderPeek(): void {
@@ -701,11 +712,14 @@ export class TransferMode {
 
     const room = el("div", "xfer-peek__room");
     room.append(roomBar(yard, sizeOf, delta));
+    // Housed / room, as the yard card says it, then what is left.
     const free = Math.max(0, freeRoom(yard, sizeOf) - delta);
+    const used = Math.max(0, yard.capacity - free);
     const words = el("span", "xfer-peek__free");
-    words.append(icon("housing", 16), el("b", "", formatAmount(free)), el("small", "", `/${formatAmount(yard.capacity)}`));
+    words.append(icon("housing", 16), el("b", "", `${formatAmount(used)} / ${formatAmount(yard.capacity)}`));
     room.append(words);
-    card.append(room);
+    card.append(room, el("small", "xfer-peek__left", `${formatAmount(free)} ${MOVE_TEXT.free}`));
+    card.append(el("i", "xfer-peek__caret"));
 
     card.hidden = false;
     this.placePeek();
@@ -728,6 +742,9 @@ export class TransferMode {
     const top = above ? at.y - half * 0.6 - height - 6 : at.y + half * 0.9 + 6;
     const left = Math.min(Math.max(at.x - width / 2, 8), view.width - width - 8);
     card.style.transform = `translate(${Math.round(left)}px, ${Math.round(Math.max(8, top))}px)`;
+    // The caret points at the yard.
+    card.style.setProperty("--xfer-caret", `${Math.round(Math.min(Math.max(at.x - left, 16), width - 16))}px`);
+    for (const [baseid, plate] of this.plateOf) plate.node.classList.toggle("is-peeked", baseid === yard.baseid);
     card.classList.toggle("is-below", !above);
   }
 
@@ -762,8 +779,9 @@ export class TransferMode {
     if (!tray || !state || !anchor || !current) return;
     const { src, dst, plan } = current;
     const out = state.mode === "out";
-    // Upright phone: three bands, Go on its own line. On its side: two, as on a desktop.
-    const phone = isPhoneLayout() && window.innerWidth <= 620;
+    // Narrow and tall (a phone or an iPad upright): three bands, Go on its own
+    // line. A phone on its side: two, as on a desktop (transfer.css).
+    const phone = stackedTray();
     const sizeOf = this.options.sizeOf;
 
     // Keep the chips' scroll where it was.
@@ -778,7 +796,7 @@ export class TransferMode {
     if (types.length === 0) chips.append(el("span", "xfer-tray__none", out ? MOVE_TEXT.noneHere : MOVE_TEXT.noneOut));
     for (const id of types) chips.append(this.chip(id, src, pool, plan, state));
 
-    const all = button("btn btn--secondary xfer-all", "Pick every monster");
+    const all = button("btn btn--outline xfer-all", "Pick every monster");
     all.append(el("span", "", MOVE_TEXT.every));
     all.disabled = types.length === 0;
     all.addEventListener("click", () => {
@@ -791,7 +809,7 @@ export class TransferMode {
     rowA.append(chips, all);
 
     // Quick picks.
-    const quick = button("btn btn--secondary xfer-quick");
+    const quick = button("btn btn--outline xfer-quick");
     if (out || !anchor.main) {
       quick.append(outpostIcon(24), el("span", "", MOVE_TEXT.near));
       quick.setAttribute("aria-label", out ? "Tick the 5 nearest outposts with room" : "Tick the 5 nearest yards with monsters");
@@ -812,15 +830,18 @@ export class TransferMode {
       });
     }
 
-    const listButton = button("btn btn--secondary xfer-listb", "List every yard");
-    const others = this.yards.length - 1;
+    const listButton = button("btn btn--outline xfer-listb", "List every yard you can pick");
+    const smallestNow = this.smallest();
+    const others = this.yards.filter(
+      (yard) => (out ? !(yard.main && anchor.main) : true) && (state.ticks.includes(yard.baseid) || canTick(yard, anchor, state.mode, sizeOf, smallestNow)),
+    ).length;
     listButton.append(icon("find", 24), el("span", "", MOVE_TEXT.list), el("small", "xfer-listb__n", formatAmount(others)));
     listButton.addEventListener("click", () => this.openList());
 
     const controls = el("div", "xfer-tray__tools");
     if (out) {
       const split = button(
-        "btn btn--secondary xfer-split",
+        "btn btn--outline xfer-split",
         state.even ? "Split evenly (tap for in order)" : "Fill in order (tap to split evenly)",
       );
       split.append(el("i", "xfer-split__ico"), el("span", "", state.even ? MOVE_TEXT.even : MOVE_TEXT.inOrder));
@@ -831,25 +852,26 @@ export class TransferMode {
     controls.append(quick, listButton);
 
     // Status: yards ticked, and the room left on the side that takes.
+    // (How many yards is on Go itself.)
     const status = el("div", "xfer-status");
-    const yardsN = Object.keys(out ? plan.add : plan.sub).length || state.ticks.length;
-    const ticked = el("span", "xfer-status__item");
-    ticked.title = "Yards ticked";
-    ticked.append(el("b", "", formatAmount(yardsN)), outpostIcon(24));
     const roomLeft = out
       ? dst.reduce((sum, yard) => sum + freeRoom(yard, sizeOf), 0) - roomOf(plan.moved, sizeOf)
       : freeRoom(anchor, sizeOf) - roomOf(plan.moved, sizeOf);
     const room = el("span", "xfer-status__item");
     room.title = out ? "Room left in the yards ticked" : `Room left at ${this.options.nameOf(anchor)}`;
-    room.append(icon("housing", 24), el("b", "", formatAmount(Math.max(0, roomLeft))));
-    status.append(ticked, room);
+    room.append(icon("housing", 24), el("b", "", formatAmount(Math.max(0, roomLeft))), el("small", "", MOVE_TEXT.free));
+    status.append(room);
     if (plan.leftTotal > 0)
       status.append(el("span", "xfer-status__warn", out ? MOVE_TEXT.noRoom(plan.leftTotal) : MOVE_TEXT.stayOut(plan.leftTotal)));
 
     // Go says the next step until there is something to move.
     const go = button("btn btn--primary xfer-go");
     const picked = Object.keys(state.picks).length > 0;
-    if (plan.total > 0) {
+    if (this.result) {
+      // Done: what moved, until move mode ends a moment later.
+      go.classList.add("is-done");
+      go.append(el("i", "xfer-chip__check"), el("span", "", MOVE_TEXT.moved(this.result.total)));
+    } else if (plan.total > 0) {
       if (out) {
         go.append(
           el("span", "", MOVE_TEXT.move(plan.total)),
@@ -878,6 +900,12 @@ export class TransferMode {
       tray.setContent(rowA, rowB);
     }
     chips.scrollLeft = scrollLeft;
+    // More chips than fit: the strip fades at its right edge until scrolled to the end.
+    const fade = (): void => {
+      chips.classList.toggle("is-more-right", chips.scrollLeft + chips.clientWidth < chips.scrollWidth - 4);
+    };
+    chips.addEventListener("scroll", fade, { passive: true });
+    requestAnimationFrame(fade);
     tray.element.classList.toggle("is-busy", this.busy);
     // The map's tools sit above the tray while it is up.
     requestAnimationFrame(() => {
@@ -977,7 +1005,7 @@ export class TransferMode {
       this.yards = this.yards.map((yard) => this.byId.get(yard.baseid) ?? yard);
       this.options.onMoved(pairs.flatMap((pair) => [pair.from, pair.to]));
       this.busy = false;
-      this.result = { add: plan.add, sub: plan.sub };
+      this.result = { add: plan.add, sub: plan.sub, total: plan.total };
       this.showResult(plan, src, dst, state.mode);
       this.render();
       this.resultTimer = setTimeout(() => this.end(), RESULT_MS);
@@ -1048,6 +1076,7 @@ export class TransferMode {
       onClose: () => {
         this.list = null;
         this.listBody = null;
+        this.options.layer.classList.remove("xfer-listing");
         this.render();
       },
     });
@@ -1055,7 +1084,7 @@ export class TransferMode {
 
     const head = el("div", "xfer-list__head");
     const out = state.mode === "out";
-    const near = button("btn btn--secondary xfer-quick");
+    const near = button("btn btn--outline xfer-quick");
     if (out || !anchor.main) near.append(outpostIcon(24), el("span", "", MOVE_TEXT.near));
     else near.append(icon("townhall", 24), el("span", "", MOVE_TEXT.allHome));
     near.addEventListener("click", () => {
@@ -1066,8 +1095,8 @@ export class TransferMode {
         this.update({ ticks: everySource(this.yards, anchor, sizeOf, this.options.distance) });
       } else this.update({ ticks: everySource(this.yards, anchor, sizeOf, this.options.distance).slice(0, 5) });
     });
-    const all = button("btn btn--secondary xfer-quick", out ? "Tick every yard with room" : "Tick every yard with monsters");
-    all.append(el("span", "", MOVE_TEXT.every));
+    const all = button("btn btn--outline xfer-quick", out ? "Tick every yard with room" : "Tick every yard with monsters");
+    all.append(el("i", "xfer-chip__check"), el("span", "", MOVE_TEXT.tickAll));
     all.addEventListener("click", () => {
       const sizeOf = this.options.sizeOf;
       const smallest = this.smallest();
@@ -1096,6 +1125,8 @@ export class TransferMode {
     popup.setContent(this.listBody);
     popup.element.append(foot);
     this.list = popup;
+    // One window at a time: the tray steps out of sight behind the List.
+    this.options.layer.classList.add("xfer-listing");
     popup.mount(this.options.modal);
     this.renderList();
   }
@@ -1163,11 +1194,11 @@ export class TransferMode {
       const n = countOf(moving);
       if (n > 0) {
         const tag = el("span", `xfer-tag xfer-tag--inline ${out ? "xfer-tag--add" : "xfer-tag--sub"}`);
-        tag.append(el("b", "", `${out ? "+" : "−"}${formatAmount(n)}`));
-        const top = topOf(moving);
-        if (top) tag.append(portrait(top, "xfer-tag__pic"));
+        tag.append(el("b", "", `${out ? "+" : "−"}${formatAmount(n)}`), ...tagPictures(moving));
         preview.append(tag);
       }
+      // A phone has no room for a tag column: it rides on the name's line.
+      if (phone) name.querySelector("small")?.append(...preview.childNodes);
       row.append(box, name, mons, room, preview);
       row.addEventListener("click", () => this.toggle(yard.baseid));
       body.append(row);
@@ -1182,11 +1213,7 @@ export class TransferMode {
       const status = el("span", "xfer-status__item");
       status.append(el("b", "", formatAmount(state.ticks.length)), outpostIcon(24));
       const total = el("span", "xfer-status__item");
-      if (plan.total > 0) {
-        const top = topOf(plan.moved);
-        if (top) total.append(portrait(top, "xfer-tag__pic"));
-        total.append(el("b", "", formatAmount(plan.total)));
-      }
+      if (plan.total > 0) total.append(...tagPictures(plan.moved), el("b", "", formatAmount(plan.total)));
       const done = button("btn btn--primary xfer-done");
       done.append(el("span", "", MOVE_TEXT.done));
       done.addEventListener("click", () => popup.close());
