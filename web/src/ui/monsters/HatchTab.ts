@@ -49,7 +49,7 @@ import { ArtState, resolveArt } from "@/game/yard/buildingArt";
 import { maxLevel, quantityOf, townHallLevel, type YardKind } from "@/game/yard/buildingCosts";
 import { NEED_MORE_SILOS, overCap } from "@/game/yard/storage";
 import { YardChangeReason, YardStore, type YardActionResult, type YardChange } from "@/game/yard/YardStore";
-import { outpostTarget, withCell } from "@/game/yard/ownYards";
+import { MAIN_YARD, outpostTarget, ownYardsOf, withCell } from "@/game/yard/ownYards";
 import { HccBench } from "./HccBench";
 import { formatAmount, formatCountdown, formatShortPrice } from "@/ui/format";
 import { holdPress } from "@/ui/holdPress";
@@ -570,6 +570,7 @@ export class HatchTab implements MonstersTab {
     this.bench ??= new HccBench(this.element, this.scroll, {
       save: () => this.store.save,
       homeSave: () => this.context.binding.store.save,
+      homeYard: () => readHatchYard(this.context.binding.store.save, this.context.binding.store.now()),
       kind: () => this.store.kind,
       remote: () => this.remote?.baseid ?? null,
       goRemote: (baseid) => void this.goRemote(baseid),
@@ -643,7 +644,8 @@ export class HatchTab implements MonstersTab {
     this.dropRemote();
     this.remote = { baseid, store, actions: hatcheryActions(store, hatcheryApi, { remote: true }), unsubscribe };
     this.target = "hcc";
-    this.setStatus(null);
+    const name = ownYardsOf(home.save, MAIN_YARD).find((entry) => entry.target.kind === "outpost" && entry.target.baseid === baseid)?.title ?? "this outpost";
+    this.setStatus({ tone: "good", content: [`Running ${name} from home`] });
     this.render();
   }
 

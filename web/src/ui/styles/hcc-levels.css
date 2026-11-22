@@ -1757,3 +1757,48 @@
     height: 22px;
   }
 }
+
+/* ── neon review, round 1 ──────────────────────────────────────────── */
+/* The pencil that opens a preset reads as a control. */
+.hcc-row__pencil {
+  font-size: 16px;
+  color: var(--colour-text);
+}
+/* "6 boxes left": the word only where there is room. */
+.hcc-edit__unit {
+  display: none;
+}
+@container hatch (min-width: 560px) {
+  .hcc-edit__unit {
+    display: inline;
+  }
+}
+/* Done is a 44 px target on a touch screen. */
+@media (pointer: coarse) {
+  .hcc-on .hcc-edit__done,
+  .hcc-on .hcc-send {
+    min-height: 44px;
+  }
+}
+/* A locked yard card: readable, not washed out. */
+.hcc-yardcard--off {
+  opacity: 1;
+  color: var(--colour-text-muted);
+  filter: saturate(0.4);
+}
+.hcc-yardcard__why {
+  font-size: 11px;
+  color: var(--colour-text-muted);
+}
+/* Running an outpost from home in the Flash look: a frame the parchment cannot swallow. */
+:root[data-skin="flash"] .hcc-remote::after {
+  border-width: 4px;
+  border-color: #c87800;
+}
+:root[data-skin="flash"] .hcc-remote .hcc-strip {
+  background: rgb(232 160 32 / 0.28);
+}
+/* A phone on its side: the strip scrolls away with the bench (`HccBench` moves it into the scroll box). */
+.hatch__scroll > .hcc-strip {
+  position: static;
+}

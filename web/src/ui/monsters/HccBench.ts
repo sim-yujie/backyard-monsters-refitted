@@ -20,7 +20,7 @@
  * The rules are the server's (`server/src/services/yard/hccPresets.ts`);
  * the counts here only show what the server will do.
  */
-import { HCC_MAX_STACKS, hccLimits, housedSpace, pendingSpace, priceOf, type HatchYard } from "@/game/monsters/hatchPlan";
+import { HCC_MAX_STACKS, hccLimits, housedSpace, pendingSpace, priceOf, queuedCount, type HatchYard } from "@/game/monsters/hatchPlan";
 import { monsterEntry } from "@/game/monsters/monsterCatalogue";
 import { classicLook } from "@/game/classicLook";
 import { gameIcon, type GameIconName } from "@/ui/gameIcon";
@@ -39,6 +39,8 @@ export interface HccBenchHost {
   save(): BaseLoadResponse;
   /** The main yard's save (the Monsters screen's own store); the same as `save` there. */
   homeSave(): BaseLoadResponse;
+  /** The main yard's hatcheries and queue. */
+  homeYard(): HatchYard;
   /** The yard's kind: `main`, or `outpost` (one the player is in, or one run from home). */
   kind(): "main" | "outpost" | "inferno";
   /** The outpost run from home, or null. */
@@ -193,9 +195,12 @@ export class HccBench {
     if (!this.on) {
       this.on = true;
       this.root.classList.add("hcc-on");
-      this.root.prepend(this.strip);
       this.root.append(this.yardsPage);
     }
+    // A phone on its side has no height to spare: the strip scrolls away with the bench there.
+    const short = typeof matchMedia === "function" && matchMedia("(max-height: 500px)").matches;
+    const home = short ? this.scroll : this.root;
+    if (this.strip.parentElement !== home) home.prepend(this.strip);
     for (const level of [1, 2, 3]) this.root.classList.toggle(`hcc-level-${level}`, level === this.level);
     this.root.closest(".monsters-screen, .panel")?.classList.add("hcc-window");
     this.root.classList.toggle("hcc-remote", this.host.remote() !== null);
@@ -213,6 +218,10 @@ export class HccBench {
       if (message) this.tabs.after(message);
     }
     this.lockMissingBoxes();
+    for (const clear of this.bench.querySelectorAll<HTMLButtonElement>("button.hatch-clear")) {
+      // One word that fits its box on a phone; the button keeps its own accessible name.
+      if (clear.textContent !== "Clear") clear.replaceChildren(el("span", "", "Clear"));
+    }
     const info = this.root.querySelector(".hatch-info");
     if (info && this.editBox.parentElement !== info) info.append(this.editBox);
     // Run from home: Add wears the outpost's flag, so the last tap says where it goes.
@@ -245,7 +254,7 @@ export class HccBench {
     const listed = new Map((this.host.outposts() ?? []).map((one) => [one.baseid, one]));
     return ownYardsOf(this.host.homeSave(), MAIN_YARD, outpostLabels()).map((entry) => {
       if (entry.target.kind !== "outpost") {
-        return { kind: "main" as const, baseid: "main", title: entry.title, pinned: false, hcc: this.homeLevel(), queued: null };
+        return { kind: "main" as const, baseid: "main", title: entry.title, pinned: false, hcc: this.homeLevel(), queued: this.homeQueued() };
       }
       const row = listed.get(entry.target.baseid);
       return {
@@ -257,6 +266,12 @@ export class HccBench {
         queued: row?.queued ?? null,
       };
     });
+  }
+
+  /** Monsters the main yard is hatching or has waiting, as its save holds them. */
+  private homeQueued(): number {
+    const yard = this.host.homeYard();
+    return queuedCount(yard.shared) + yard.hatcheries.filter((one) => one.monster !== null).length;
   }
 
   private hccYards(): YardRow[] {
@@ -318,7 +333,8 @@ export class HccBench {
       this.host.kind() === "outpost" && !this.host.remote()
         ? "Run your outposts from your main yard's Hatchery Control Centre at level 3"
         : "Run your outposts from here at HCC level 3";
-    const middle = btn("hcc-stepper__where", locked ? why : "All your yards with an HCC", this.where(locked));
+    const here = this.host.remote() ? (yards[at]?.title ?? "Outpost") : this.host.kind() === "outpost" ? "This outpost" : "Main yard";
+    const middle = btn("hcc-stepper__where", locked ? why : `${here}: all your yards with an HCC`, this.where(locked));
     if (locked) {
       middle.disabled = true;
       middle.title = why;
@@ -354,6 +370,7 @@ export class HccBench {
     const more = el("span", "hcc-housing__more");
     more.style.width = `${Math.max(0, Math.min(100, ((housed + coming) / room) * 100) - now)}%`;
     bar.append(fill, more);
+    box.title = `Housing ${housed.toLocaleString("en-US")} of ${room.toLocaleString("en-US")}; the queue and the hatcheries add ${coming.toLocaleString("en-US")} more`;
     box.append(numbers, bar);
     box.addEventListener("click", () => this.root.classList.toggle("hcc-show-housing"));
     return box;
@@ -569,6 +586,8 @@ export class HccBench {
     if (last && this.host.chosen() !== last[0]) this.host.choose(last[0]);
     this.renderTabs();
     this.renderEditor();
+    // The preset being built stands at the top of the tab: start there.
+    this.scroll.scrollTop = 0;
   }
 
   /** The last stack when it is `id`'s, else null: the only stack the count works on. */
@@ -668,7 +687,7 @@ export class HccBench {
     const sum = el("span", "hcc-edit__sum");
     const goo = preset.reduce((total, [id, count]) => total + count * this.priceOf(id), 0);
     const stacks = el("span", `hcc-edit__stacks${left === 0 ? " hcc-edit__stacks--full" : ""}`);
-    stacks.append(el("strong", "", String(left)), el("span", "", " left"));
+    stacks.append(el("strong", "", String(left)), el("span", "hcc-edit__unit", " boxes"), el("span", "", " left"));
     stacks.title = `Boxes left of ${most}; each holds up to ${size} monsters.`;
     stacks.setAttribute("aria-label", `${left} of ${most} boxes left; up to ${size} monsters per box`);
     const monsters = el("span", "hcc-edit__total", `×${totalOf(preset)}`);
@@ -796,6 +815,7 @@ export class HccBench {
         card.append(top, el("span", "hcc-yardcard__name", yard.title));
         if (yard.queued !== null) {
           const queue = el("span", "hcc-yardcard__queue");
+          queue.title = yard.queued ? `${yard.queued} monsters hatching or waiting` : "Nothing hatching";
           queue.append(art("time", 16), el("span", "", yard.queued ? `×${yard.queued}` : "0"));
           if (!yard.queued) card.classList.add("hcc-yardcard--idle");
           card.append(queue);
@@ -808,7 +828,7 @@ export class HccBench {
       card.disabled = true;
       const top = el("span", "hcc-yardcard__top");
       top.append(art("outpost", 32, "hcc-where__icon"), lockArt(16, "hcc-lock"));
-      card.append(top, el("span", "hcc-yardcard__name", yard.title));
+      card.append(top, el("span", "hcc-yardcard__name", yard.title), el("span", "hcc-yardcard__why", "No HCC"));
       grid.append(card);
     }
     this.yardsPage.replaceChildren(head, grid);
