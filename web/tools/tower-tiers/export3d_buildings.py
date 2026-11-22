@@ -204,7 +204,7 @@ BUILDINGS = {
                    moves="cells", noise=0.0),
     # the Inferno's store shares the surface store's folder: its files are `*.i3d1*` (`tag`)
     "istore": dict(type=12, folder="generalstore", frame=(-56, -60), looks=[(1, "L1")], moves="cells", tag="i3d",
-                   even=True),
+                   even=True, whole_body=True),
     "booby": dict(type=24, folder="boobytrap", frame=(-24, -14), looks=[(1, "booby-whole")], moves=None),
     "heavy": dict(type=117, folder="heavytrap", frame=(-24, -14), looks=[(1, "heavy-whole")], moves=None),
 }
@@ -571,7 +571,11 @@ def export(name, render, state=None):
             body, shade = split(c, building | (c[..., 3] > 0.99) & changed, noise)
             del c
             still = body.copy()
-            body[y0:y1, x0:x1] = 0
+            # The body loses the cells' box, unless the cells only change its light (`whole_body`, the Inferno store's
+            # glow): then every cell lies over the same picture, and a hole would only show as a hairline round the
+            # box wherever the game's zoom blurs the two edges.
+            if not cfg.get("whole_body"):
+                body[y0:y1, x0:x1] = 0
             strips = [(f"anim.{tag}@2x.webp", box, layers)]
         elif moves == "boxes":
             body, shade = split(base, building, noise)

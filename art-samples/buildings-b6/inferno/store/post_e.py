@@ -108,7 +108,9 @@ def mp4():
 
 
 def game_pic(name):
-    return Image.open(ART / "generalstore" / name).convert("RGBA")
+    """A game picture of the store; the painted shop E replaced is kept from git in e/work (see `sheets`)."""
+    own = ART / "generalstore" / name
+    return Image.open(own if own.exists() else HERE / "e" / "work" / ("live-" + name.removeprefix("top."))).convert("RGBA")
 
 
 def sheets():
@@ -138,20 +140,20 @@ def sheets():
             z = 2 if tag == "horns" else 4
             a, b = (i.resize((i.width * z, i.height * z), Image.LANCZOS) for i in (a, b))
             row([label(a, "before (round 2)"), label(b, "after")], gap=8).save(OUT / f"fix-{tag}-before-after.png")
-    # surface Store | E | the live Inferno store today: the game's own @2x pictures, each set on the game's ground
+    # surface Store | E | the live Inferno store today (the painted shop, no longer in the folder:
+    #   git show 0512440f2:server/public/assets/buildings/generalstore/top.ishop3C@2x.webp > e/work/live-ishop3C@2x.webp
+    # ): the game's own @2x pictures, each set on the game's ground
     # point (so they stand as they do in the yard), 4 px per Flash px
     looks = (("Surface General Store", "top.3d1@2x.webp", (-42, -38)), ("E  Bone and Brimstone", "top.i3d1@2x.webp", None),
              ("Live Inferno store today", "top.ishop3C@2x.webp", (-52, -52)))
     tiles = []
     for name, file, at in looks:
-        if not (ART / "generalstore" / file).exists():
-            continue
         if at is None:
             at = OFFSETS.get(file)
         im = game_pic(file)
         t = Image.new("RGBA", (150 * 4, 150 * 4), BG + (255,))
         big = im.resize((im.width * 2, im.height * 2), Image.LANCZOS)
-        t.alpha_composite(big, ((75 + at[0]) * 4, (95 + at[1]) * 4))
+        t.alpha_composite(big, ((75 + at[0]) * 4, (78 + at[1]) * 4))
         tiles.append(label(t.convert("RGB"), name))
     if len(tiles) == 3:
         row(tiles).save(OUT / "compare-surface-e-live.png")
