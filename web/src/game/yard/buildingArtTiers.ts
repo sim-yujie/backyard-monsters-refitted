@@ -760,7 +760,9 @@ export const BUILDING_3D_ART: Readonly<Record<number, readonly TierArt[]>> = {
  * by `export3d_buildings.py iacademy`; and its General Store (12, in the
  * surface store's folder, which the Inferno's row shares), look E from
  * art/inferno-store-r2 (owner, 22 Nov 2026), exported by
- * `export3d_buildings.py istore`.
+ * `export3d_buildings.py istore`; and its Monster Lab (116, the Infernal
+ * Monster Lab, in the surface Lab's folder, which the Inferno shares), look E
+ * from art/infernal-lab-3d, exported by `export3d_buildings.py ilab`.
  */
 export const INFERNO_BUILDING_3D_ART: Readonly<Record<number, readonly TierArt[]>> = {
   // 1 Bone Cruncher: 3D (owner, 6 Nov 2026: "3d bone crusher has been approved"), the clean-room model's three tiers,
@@ -898,6 +900,32 @@ export const INFERNO_BUILDING_3D_ART: Readonly<Record<number, readonly TierArt[]
     { from: 3, top: ["top.3d3@2x.webp", -20, -24], shadow: ["shadow.3d3.jpg", -20, -3], lift: 0,
       damaged: { top: ["top.3d3.damaged@2x.webp", -20, -24], shadow: ["shadow.3d3.damaged.jpg", -20, -3] },
       destroyed: { top: ["top.3d3.destroyed@2x.webp", -20, -3], shadow: ["shadow.3d3.destroyed.jpg", -17, 7] } },
+  ],
+  // 116 Monster Lab, the Infernal Monster Lab: 3D (the owner's pick, round 2's look E, "Bone and Brimstone"), the
+  // surface Lab's own shape in the Inferno's materials: a basalt lower tier with magma in its joints, bone columns, iron
+  // decks, a dome of green brew, three iron bells with horns (art/infernal-lab-3d, `export3d_buildings.py ilab`). Three
+  // levels, each the level below plus parts (2: brew canisters, copper coils and outward horns; 3: a brazier crown, brew
+  // flasks and a lava channel), standing where the surface's Modern Lab does. In the surface Lab's folder as
+  // `*.i3d<n>*`, beside the surface's `*.3d1*`. Its brew swirls and its lava and magma drift and pulse, 24 cells over
+  // the body, while it researches (`yardAnim.ts`, the surface Lab's rate), from cell 0 and back to it when the research
+  // ends (`home`). Each level has its own damaged look; the destroyed one is level 1's ruin for all three. With the
+  // Classic look the Inferno draws Flash's Lab.
+  116: [
+    { from: 1, top: ["top.i3d1@2x.webp", -74, -89], shadow: ["shadow.i3d1.jpg", -74, 5], lift: 0,
+      anim: { strip: ["anim.i3d1@2x.webp", -65, -23, 130, 76, 24], columns: 15, body: ["body.i3d1@2x.webp", -74, -89],
+        home: true },
+      damaged: { top: ["top.i3d1.damaged@2x.webp", -74, -82], shadow: ["shadow.i3d1.damaged.jpg", -74, 5] },
+      destroyed: { top: ["top.i3d1.destroyed@2x.webp", -74, -18], shadow: ["shadow.i3d1.destroyed.jpg", -74, 21] } },
+    { from: 2, top: ["top.i3d2@2x.webp", -74, -89], shadow: ["shadow.i3d2.jpg", -74, 5], lift: 0,
+      anim: { strip: ["anim.i3d2@2x.webp", -65, -23, 130, 76, 24], columns: 15, body: ["body.i3d2@2x.webp", -74, -89],
+        home: true },
+      damaged: { top: ["top.i3d2.damaged@2x.webp", -74, -82], shadow: ["shadow.i3d2.damaged.jpg", -74, 5] },
+      destroyed: { top: ["top.i3d1.destroyed@2x.webp", -74, -18], shadow: ["shadow.i3d1.destroyed.jpg", -74, 21] } },
+    { from: 3, top: ["top.i3d3@2x.webp", -74, -118], shadow: ["shadow.i3d3.jpg", -74, 6], lift: 0,
+      anim: { strip: ["anim.i3d3@2x.webp", -65, -115, 130, 180, 24], columns: 15,
+        body: ["body.i3d3@2x.webp", -74, -118], home: true },
+      damaged: { top: ["top.i3d3.damaged@2x.webp", -74, -104], shadow: ["shadow.i3d3.damaged.jpg", -74, 6] },
+      destroyed: { top: ["top.i3d1.destroyed@2x.webp", -74, -18], shadow: ["shadow.i3d1.destroyed.jpg", -74, 21] } },
   ],
 };
 
