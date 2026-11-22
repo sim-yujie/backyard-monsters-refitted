@@ -922,22 +922,39 @@
   "frames": [],
   "strips": []
  },
+ "assets/buildings/generalstore/anim.i3d1@2x.webp": {
+  "whole": false,
+  "frames": [],
+  "strips": [
+   {
+    "w": 66,
+    "h": 68,
+    "frames": 32,
+    "columns": 31
+   }
+  ]
+ },
+ "assets/buildings/generalstore/body.i3d1@2x.webp": {
+  "whole": true,
+  "frames": [],
+  "strips": []
+ },
  "assets/buildings/generalstore/top.3d1@2x.webp": {
   "whole": true,
   "frames": [],
   "strips": []
  },
- "assets/buildings/generalstore/top.ishop3C.damaged@2x.webp": {
+ "assets/buildings/generalstore/top.i3d1.damaged@2x.webp": {
   "whole": true,
   "frames": [],
   "strips": []
  },
- "assets/buildings/generalstore/top.ishop3C.destroyed@2x.webp": {
+ "assets/buildings/generalstore/top.i3d1.destroyed@2x.webp": {
   "whole": true,
   "frames": [],
   "strips": []
  },
- "assets/buildings/generalstore/top.ishop3C@2x.webp": {
+ "assets/buildings/generalstore/top.i3d1@2x.webp": {
   "whole": true,
   "frames": [],
   "strips": []

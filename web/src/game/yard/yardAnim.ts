@@ -160,6 +160,10 @@ const POLICIES = new Map<number, AnimPolicy>([
   // Juicer: runs only while blending, and starts on cell 0
   // (`BUILDING9.as:206`, and `BFOUNDATION.as:1141` names type 9 explicitly).
   [9, STATIC_FIXED],
+  // General Store: Flash's and the main yard's 3D stand still (no strip). The Inferno's 3D store (look E,
+  // `INFERNO_BUILDING_3D_ART`) has a 32-cell loop of its lava's glow, 10 a second, all the time, each store from a
+  // cell of its own.
+  [12, every(4)],
   // Hatchery: only with a monster in production, back to cell 0 when not
   // (`BUILDING13.as:34-47`).
   [13, { ...whileWorking(WorkKind.HATCH, whenIdle(every(2, false))), restOnIdle: true }],
