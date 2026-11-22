@@ -18,13 +18,14 @@
   const LOCKED = "C19";
   if (!M[LOCKED]) M[LOCKED] = { name: "Rezghul", price: 1_000_000, locked: true };
 
-  const STACKS = 10;
   /** Game seconds that pass per real second. */
   const SPEED = 10;
   const TICK_MS = 500;
 
-  /** Presets a list holds: 3 at HCC level 2, 5 at level 3. */
-  const slots = () => (S.level >= 3 ? 5 : 3);
+  /** Presets a list holds: 2 at HCC level 1, 4 at level 2, 6 at level 3 (owner, 22 Nov). */
+  const slots = () => (S.level >= 3 ? 6 : S.level >= 2 ? 4 : 2);
+  /** Boxes (stacks) the queue holds: today's 7 at level 1, 10 from level 2. */
+  const stacks = () => (S.level >= 2 ? 10 : 7);
 
   const hash = new Map(location.hash.replace(/^#/, "").split("&").filter(Boolean).map((p) => p.split("=").map(decodeURIComponent)));
   const flags = new Set((hash.get("state") || "").split(",").filter(Boolean));
@@ -32,7 +33,7 @@
   const PAUSED = hash.has("paused");
 
   const S = {
-    level: hash.get("level") === "3" ? 3 : 2,
+    level: [1, 2, 3].includes(Number(hash.get("level"))) ? Number(hash.get("level")) : 2,
     frame: hash.get("frame") === "desktop" ? "desktop" : "phone",
     at: 0, // index into the yards that have an HCC; 0 = home
     sel: "C1",
@@ -87,7 +88,7 @@
     if (busy) {
       // The prototype's own picture state: ten full stacks, housing full, every hatchery waiting.
       home.housed = 2080;
-      home.queue = stacksOf([["C12", size - 1], ["C12", size], ["C8", size], ["C8", size], ["C7", size], ["C14", size], ["C5", size], ["C3", size], ["C1", size], ["C6", Math.round(size / 2)]]).slice(0, flags.has("room") ? 8 : STACKS);
+      home.queue = stacksOf([["C12", size - 1], ["C12", size], ["C8", size], ["C8", size], ["C7", size], ["C14", size], ["C5", size], ["C3", size], ["C1", size], ["C6", Math.round(size / 2)]]).slice(0, stacks() - (flags.has("room") ? 2 : 0));
       home.hatcheries = [1, 2, 3, 4, 5].map(() => ({ monster: "C12", left: 0, total: M.C12.time, stalled: true }));
     } else {
       home.housed = 640;
@@ -110,10 +111,10 @@
       }
       return base;
     });
-    const MAIN = [[["C1", 30], ["C2", 40], ["C1", 30]], [["C12", 40], ["C5", 40], ["C12", 20]], [["C14", 40], ["C13", 60], ["C3", 40], ["C6", 20]], [["C6", 100], ["C9", 40]], [["C2", 60], [LOCKED, 30], ["C4", 60]]];
-    const OUTPOSTS = [[["C7", 60], ["C2", 40]], [["C1", 60]], [["C8", 30], ["C5", 30]], [["C6", 90]], [["C3", 60], ["C4", 30], ["C1", 30]]];
-    // The demo starts with one preset made, so there is one to send and empty slots to build in.
-    const filled = flags.has("empty") ? 0 : flags.has("filled") ? slots() : busy ? 2 : 1;
+    const MAIN = [[["C1", 30], ["C2", 40], ["C1", 30]], [["C12", 40], ["C5", 40], ["C12", 20]], [["C14", size], ["C13", size], ["C3", size], ["C6", size], ["C1", size], ["C2", size], ["C12", size], ["C5", size / 2]], [["C6", 100], ["C9", 40]], [["C2", 60], [LOCKED, 30], ["C4", 60]], [["C8", 60], ["C7", 30]]];
+    const OUTPOSTS = [[["C7", 60], ["C2", 40]], [["C1", 60]], [["C8", 30], ["C5", 30]], [["C6", 90]], [["C3", 60], ["C4", 30], ["C1", 30]], [["C2", 90], ["C7", 30]]];
+    // The demo starts with every preset but the last made, so each level shows its list and has a slot to build in.
+    const filled = flags.has("empty") ? 0 : flags.has("filled") ? slots() : slots() - 1;
     const list = (from) => Array.from({ length: slots() }, (_, at) => (at < filled ? stacksOf(from[at]) : []));
     presets = { main: list(MAIN), outposts: list(OUTPOSTS) };
     S.at = 0;
@@ -159,7 +160,7 @@
       last[1] += 1;
       return true;
     }
-    if (queue.length >= STACKS) return false;
+    if (queue.length >= stacks()) return false;
     queue.push([id, 1]);
     return true;
   };
@@ -184,7 +185,7 @@
   const roomFor = (one, id) => {
     const last = one.queue[one.queue.length - 1];
     const inLast = last && last[0] === id ? stackSize() - last[1] : 0;
-    const queue = (STACKS - one.queue.length) * stackSize() + inLast;
+    const queue = (stacks() - one.queue.length) * stackSize() + inLast;
     return { queue, fill: Math.max(0, Math.min(queue, Math.floor(one.goo / M[id].price))) };
   };
   const clearQueue = (one) => {
@@ -281,6 +282,9 @@
   editHead.className = "b9r3h-edit";
   const editBox = document.createElement("div");
   editBox.className = "b9r3h-set hatch-add";
+  const rail = document.createElement("section");
+  rail.className = "b9r5h-rail";
+  rail.setAttribute("aria-label", "Send a preset");
   const lines = document.createElement("section");
   lines.className = "hatch-lines";
   lines.setAttribute("aria-label", "Hatching line");
@@ -302,7 +306,7 @@
     hatch.className = `hatch b9r2h b9r2h-opt-d b9r3h b9r2h-level-${S.level}${remote() ? " b9r2h-remote" : ""}${S.showHousing ? " b9r2h-show-housing" : ""}${S.tab === "presets" && !editing ? " b9r3h-on-presets" : ""}${editing ? " b9r3h-editing" : ""}${flags.has("live") ? " b9r3h-live" : ""}`;
     // Round 4: building a preset hides the hatcheries and the queue; the tab keeps the height it had.
     if (!editing || flags.has("live")) hatch.style.minHeight = "";
-    if (lines.parentElement !== bench) bench.replaceChildren(lines);
+    if (lines.parentElement !== bench) bench.replaceChildren(lines, rail);
     boosts.hidden = !S.boosts;
   }
 
@@ -392,7 +396,7 @@
           })
           .join("") + (one.hatcheries.length < 5 ? `<div class="hatch-now hatch-now--more">Build another Hatchery to hatch more at once</div>` : "");
       const slots = [];
-      for (let at = 0; at < STACKS; at += 1) {
+      for (let at = 0; at < stacks(); at += 1) {
         const stack = one.queue[at];
         if (!stack) {
           slots.push(`<div class="hatch-slot hatch-slot--empty"><span class="hatch-slot__empty">Empty</span></div>`);
@@ -449,13 +453,29 @@
       `<button class="b9r3h-tab${S.tab === id ? " b9r3h-tab--on" : ""}" type="button" role="tab" data-act="tab" data-tab="${id}" aria-selected="${S.tab === id}" aria-label="${words}">${extra}<span>${words}</span></button>`;
     if (S.editing === null) {
       editHead.remove();
-      tabsRow.innerHTML = `<div class="b9r3h-switch">${tab("monsters", "Monsters")}${tab("presets", "Presets", scopeIcon("b9r3h-tab__scope"))}</div>`;
+      // A Send from the quick-send rail, seen from the Monsters tab: what it did is said here.
+      const note = S.sent && S.tab === "monsters" && S.sent.scope === scope() ? saidHtml(S.sent, "b9r5h-note", badge(S.sent.slot)) : "";
+      tabsRow.innerHTML = `<div class="b9r3h-switch">${tab("monsters", "Monsters")}${tab("presets", "Presets", scopeIcon("b9r3h-tab__scope"))}</div>${note}`;
     } else {
       // While a preset is built, its head takes the switch's place.
       tabsRow.replaceChildren(editHead);
     }
     drawWarn(true);
   }
+
+  /** What a Send did: "Added 60 of 140", and why it stopped or what it skipped. */
+  const saidHtml = (sent, cls = "", lead = "") =>
+    `<span class="b9r3h-said${sent.why ? " b9r3h-said--short" : ""}${cls ? " " + cls : ""}" role="status">${lead}<strong>${sent.why ? `Added ${num(sent.added)} of ${num(sent.of)}` : `Added ${num(sent.added)}`}</strong><span>${sent.skipped.length ? `${sent.skipped.join(", ")} locked: skipped` : sent.why === "queue" ? "The queue is full" : sent.why === "goo" ? "Not enough goo" : "At the end of the queue"}</span></span>`;
+  const stackHtml = ([id, count]) => `<span class="b9r3h-stack">${face(id, "b9r3h-stack__picture")}<span class="b9r3h-stack__count">×${count}</span></span>`;
+
+  /** A strip of stacks that scrolls sideways fades out on the side that has more. */
+  const markStrip = (strip) => {
+    strip.classList.toggle("b9r5h-more-left", strip.scrollLeft > 2);
+    strip.classList.toggle("b9r5h-more-right", strip.scrollLeft + strip.clientWidth < strip.scrollWidth - 2);
+  };
+  const markStrips = () => {
+    for (const strip of list.querySelectorAll(".b9r3h-row__stacks")) markStrip(strip);
+  };
 
   function drawPresets() {
     const here = scope();
@@ -465,14 +485,32 @@
         if (!preset.length)
           return `<div class="b9r3h-row b9r3h-row--empty"><button class="b9r3h-row__body" type="button" data-act="preset-edit" data-preset="${at}" aria-label="Make preset ${at + 1}">${badge(at)}<span class="b9r3h-row__plus">+</span></button></div>`;
         const sent = S.sent && S.sent.scope === here && S.sent.slot === at ? S.sent : null;
-        const said = sent
-          ? `<span class="b9r3h-said${sent.why ? " b9r3h-said--short" : ""}" role="status"><strong>${sent.why ? `Added ${num(sent.added)} of ${num(sent.of)}` : `Added ${num(sent.added)}`}</strong><span>${sent.skipped.length ? `${sent.skipped.join(", ")} locked: skipped` : sent.why === "queue" ? "The queue is full" : sent.why === "goo" ? "Not enough goo" : "At the end of the queue"}</span></span>`
-          : "";
-        // The stacks stay in the row; what a Send did is said beside them.
-        const inside = `<span class="b9r3h-stacks">${preset.map(([id, count], index) => `<span class="b9r3h-stack${index >= 3 ? " b9r3h-stack--extra" : ""}">${face(id, "b9r3h-stack__picture")}<span class="b9r3h-stack__count">×${count}</span></span>`).join("")}${preset.length > 3 ? `<span class="b9r3h-stacks__more b9r3h-stacks__more--3">+${preset.length - 3}</span>` : ""}${preset.length > 2 ? `<span class="b9r3h-stacks__more b9r3h-stacks__more--2">+${preset.length - 2}</span>` : ""}</span><span class="b9r3h-row__cost">${GOO_ICON}<span>${short(gooOf(preset))}</span></span><span class="b9r3h-row__pencil">✎</span>`;
+        // The stacks are beside the button, not in it, so the strip scrolls sideways; a tap on them opens the preset too.
         return (
-          `<div class="b9r3h-row"><button class="b9r3h-row__body" type="button" data-act="preset-edit" data-preset="${at}" aria-label="Preset ${at + 1}, ${totalOf(preset)} monsters: change it">${badge(at)}${inside}</button>${said}` +
-          `<button class="btn btn--primary b9r3h-send" type="button" data-act="preset-send" data-preset="${at}" aria-label="Send preset ${at + 1} to the end of the queue">${remote() ? icon("outpost", 24, "b9r2h-addflag") : ""}<span>Send</span></button></div>`
+          `<div class="b9r3h-row"><button class="b9r3h-row__body" type="button" data-act="preset-edit" data-preset="${at}" aria-label="Preset ${at + 1}, ${totalOf(preset)} monsters: change it">${badge(at)}<span class="b9r3h-row__pencil">✎</span></button>` +
+          `<span class="b9r3h-stacks b9r3h-row__stacks" data-act="preset-edit" data-preset="${at}" aria-label="Preset ${at + 1}: ${preset.length} stacks in order">${preset.map(stackHtml).join("")}</span>` +
+          `<span class="b9r3h-row__cost" data-act="preset-edit" data-preset="${at}">${GOO_ICON}<span>${short(gooOf(preset))}</span></span>` +
+          `<button class="btn btn--primary b9r3h-send" type="button" data-act="preset-send" data-preset="${at}" aria-label="Send preset ${at + 1} to the end of the queue">${remote() ? icon("outpost", 24, "b9r2h-addflag") : ""}<span>Send</span></button>${sent ? saidHtml(sent) : ""}</div>`
+        );
+      })
+      .join("");
+    markStrips();
+    requestAnimationFrame(markStrips);
+    drawRail();
+  }
+
+  /** The quick-send rail beside the queue (wide screens): one small Send per preset, on either tab. */
+  function drawRail() {
+    const here = scope();
+    rail.className = `b9r5h-rail b9r5h-rail--${slots()}`;
+    rail.innerHTML = presetList()
+      .map((preset, at) => {
+        if (!preset.length)
+          return `<div class="b9r5h-quick b9r5h-quick--empty"><button class="b9r5h-quick__body" type="button" data-act="preset-edit" data-preset="${at}" aria-label="Make preset ${at + 1}">${badge(at)}<span class="b9r5h-quick__plus">+</span></button></div>`;
+        const sent = S.sent && S.sent.scope === here && S.sent.slot === at;
+        return (
+          `<div class="b9r5h-quick${sent ? " b9r5h-quick--sent" : ""}"><button class="b9r5h-quick__body" type="button" data-act="tab" data-tab="presets" aria-label="Preset ${at + 1}, ${totalOf(preset)} monsters: open the presets">${badge(at)}<span class="b9r5h-quick__faces">${preset.map(stackHtml).join("")}</span><span class="b9r5h-quick__total">×${totalOf(preset)}</span></button>` +
+          `<button class="btn btn--primary b9r3h-send b9r5h-quick__send" type="button" data-act="preset-send" data-preset="${at}" title="Send preset ${at + 1}" aria-label="Send preset ${at + 1} to the end of the queue">${remote() ? icon("outpost", 24, "b9r2h-addflag") : ""}<span class="b9r5h-quick__n">${at + 1} ▸</span><span class="b9r5h-quick__word">Send</span></button></div>`
         );
       })
       .join("");
@@ -484,7 +522,7 @@
     return last && last[0] === id ? last : null;
   };
   /** The most the stack being counted may hold: a preset is never bigger than the queue's ten stacks. */
-  const presetRoom = (preset, id) => Math.max(0, (STACKS - stacksIn(lastOf(preset, id) ? preset.slice(0, -1) : preset)) * stackSize());
+  const presetRoom = (preset, id) => Math.max(0, (stacks() - stacksIn(lastOf(preset, id) ? preset.slice(0, -1) : preset)) * stackSize());
 
   function drawEditor() {
     for (const mark of scroll.querySelectorAll(".b9r3h-inpreset")) mark.remove();
@@ -494,23 +532,33 @@
     const mine = lastOf(preset, S.sel);
     const now = mine ? mine[1] : 0;
     const max = presetRoom(preset, S.sel);
-    const THEN = `<span class="b9r3h-then" aria-hidden="true">›</span>`;
-    // The stacks in the order they were added: earlier ones are set, the last is the one the count works on.
-    const chips = preset
-      .map(([id, count], index) =>
-        index < preset.length - 1
-          ? `<span class="b9r3h-chip b9r3h-chip--set" role="listitem" aria-label="Stack ${index + 1}: ${M[id].name}, ${count}">${face(id, "b9r3h-chip__picture")}<span class="b9r3h-chip__count">×${count}</span></span>`
-          : `<button class="b9r3h-chip b9r3h-chip--last${id === S.sel ? " b9r3h-chip--on" : ""}" type="button" data-act="chip" data-monster="${id}" aria-label="Stack ${index + 1}, the last: ${M[id].name}, ${count}. Change its count">${face(id, "b9r3h-chip__picture")}<span class="b9r3h-chip__count">×${count}</span>${id === S.sel ? `<span class="b9r3h-count-mark">✎</span>` : ""}</button>`,
-      )
-      .join(THEN);
-    // Another monster is chosen: its stack would be the next one, shown faint at the end.
-    const ghost = preset.length && !mine && max > 0 && !M[S.sel].locked ? `${THEN}<span class="b9r3h-chip b9r3h-chip--next" aria-hidden="true">${face(S.sel, "b9r3h-chip__picture")}<span class="b9r3h-chip__count">+</span></span>` : "";
+    // The preset as the queue's own box grid: one box per queue stack, so the empty boxes are the room that is left.
+    const size = stackSize();
+    const used = stacksIn(preset);
+    const left = stacks() - used;
+    const boxes = [];
+    preset.forEach(([id, count], index) => {
+      const last = index === preset.length - 1;
+      for (let rest = count; rest > 0; rest -= size) {
+        const holds = Math.min(rest, size);
+        const inside = `<span class="hatch-slot__count">×${holds}</span>${face(id, "hatch-slot__picture")}`;
+        boxes.push(
+          last
+            ? `<button class="hatch-slot b9r5h-box b9r5h-box--last${id === S.sel ? " b9r5h-box--on" : ""}" type="button" role="listitem" data-act="chip" data-monster="${id}" aria-label="Box ${boxes.length + 1}, the last stack: ${M[id].name}, ${holds}. Change its count">${inside}${id === S.sel && rest <= size ? `<span class="b9r3h-count-mark">✎</span>` : ""}</button>`
+            : `<div class="hatch-slot b9r5h-box" role="listitem" aria-label="Box ${boxes.length + 1}: ${M[id].name}, ${holds}">${inside}</div>`,
+        );
+      }
+    });
+    // Another monster is chosen: its stack would start in the next box, shown faint.
+    if (preset.length && !mine && max > 0 && !M[S.sel].locked) boxes.push(`<div class="hatch-slot b9r5h-box b9r5h-box--next" aria-hidden="true"><span class="hatch-slot__count">+</span>${face(S.sel, "hatch-slot__picture")}</div>`);
+    while (boxes.length < stacks()) boxes.push(`<div class="hatch-slot hatch-slot--empty b9r5h-box" role="listitem" aria-label="Empty box"></div>`);
     editHead.innerHTML =
       `<span class="b9r3h-edit__which">${scopeIcon("b9r3h-edit__scope")}${badge(at)}</span>` +
-      `<div class="b9r3h-edit__chips" role="list" aria-label="Preset ${at + 1}: its stacks in order">${preset.length ? "" : `<span class="b9r3h-edit__hint">Pick a monster, set how many</span>`}${chips}${ghost}</div>` +
-      `<span class="b9r3h-edit__sum"><span class="b9r3h-edit__stacks" title="Queue slots used; each holds up to ${stackSize()} monsters. A group may fill multiple slots." aria-label="${stacksIn(preset)} of ${STACKS} queue slots; up to ${stackSize()} monsters per slot">${stacksIn(preset)}/${STACKS}</span><span class="b9r3h-edit__goo">${GOO_ICON}<span>${short(gooOf(preset))}</span></span></span>` +
-      `<button class="b9r3h-edit__undo" type="button" data-act="preset-undo" aria-label="Take off the last stack"${preset.length ? "" : " disabled"}>${icon("undo", 24)}</button>` +
-      `<button class="b9r3h-edit__bin" type="button" data-act="preset-empty" aria-label="Clear preset ${at + 1}"${preset.length ? "" : " disabled"}>Clear</button>` +
+      `<div class="b9r5h-boxes" role="list" aria-label="Preset ${at + 1}: ${used} of ${stacks()} boxes filled, ${left} left">${boxes.join("")}</div>` +
+      `<span class="b9r3h-edit__side"><button class="b9r3h-edit__undo" type="button" data-act="preset-undo" aria-label="Take off the last box"${preset.length ? "" : " disabled"}>${icon("undo", 24)}</button>` +
+      `<button class="b9r3h-edit__bin" type="button" data-act="preset-empty" aria-label="Clear preset ${at + 1}"${preset.length ? "" : " disabled"}>Clear</button></span>` +
+      `<span class="b9r3h-edit__sum"><span class="b9r3h-edit__stacks${left === 0 ? " b9r3h-edit__stacks--full" : ""}" title="Boxes left of ${stacks()}; each holds up to ${size} monsters." aria-label="${left} of ${stacks()} boxes left; up to ${size} monsters per box"><strong>${left}</strong><span> left</span></span><span class="b9r3h-edit__total" aria-label="${totalOf(preset)} monsters">×${totalOf(preset)}</span><span class="b9r3h-edit__goo">${GOO_ICON}<span>${short(gooOf(preset))}</span></span></span>` +
+      `<ol class="b9r3h-edit__words" aria-label="The stacks in the order they are sent">${preset.map(([id, count]) => `<li><span>${M[id].name}</span><strong> ×${count}</strong></li>`).join("")}</ol>` +
       `<button class="btn btn--primary b9r3h-edit__done" type="button" data-act="edit-done" aria-label="Done: back to the presets">Done</button>`;
     // The monsters wear how many of them the preset holds, over all its stacks.
     const totals = new Map();
@@ -661,6 +709,7 @@
     "preset-edit": (el) => {
       // The tab keeps the height it has now, so the window does not jump when the queue is hidden.
       if (!flags.has("live")) hatch.style.minHeight = `${hatch.offsetHeight}px`;
+      S.tab = "presets";
       S.editing = Number(el.dataset.preset);
       S.sent = null;
       drawAll();
@@ -675,13 +724,20 @@
       drawEditor();
     },
     "preset-undo": () => {
-      presetList()[S.editing].pop();
+      // The last box goes: a stack over several boxes loses its last one.
+      const preset = presetList()[S.editing];
+      const last = preset[preset.length - 1];
+      if (last) {
+        last[1] -= last[1] % stackSize() || stackSize();
+        if (last[1] <= 0) preset.pop();
+      }
       drawEditor();
     },
     "preset-send": (el) => {
       send(Number(el.dataset.preset));
       tick(0);
       drawLines(true);
+      drawTabs();
       drawPresets();
       drawAdd();
     },
@@ -766,6 +822,19 @@
       drawAdd();
     }
   });
+  frame.addEventListener("scroll", (event) => event.target.classList && event.target.classList.contains("b9r3h-row__stacks") && markStrip(event.target), true);
+  // A mouse wheel moves a row's stacks sideways (a desktop has no finger to drag them with).
+  frame.addEventListener(
+    "wheel",
+    (event) => {
+      const strip = event.target.closest && event.target.closest(".b9r3h-row__stacks");
+      if (!strip || strip.scrollWidth <= strip.clientWidth || Math.abs(event.deltaY) < Math.abs(event.deltaX)) return;
+      const before = strip.scrollLeft;
+      strip.scrollLeft += event.deltaY;
+      if (strip.scrollLeft !== before) event.preventDefault();
+    },
+    { passive: false },
+  );
   frame.addEventListener("input", (event) => {
     if (event.target === addCount) setCount(addCount.value);
     if (event.target.classList.contains("b9r3h-count")) setPresetCount(S.sel, event.target.value);
@@ -800,16 +869,26 @@
     layer.setAttribute("style", D.layerStyle[S.frame] || "");
     panel.setAttribute("style", D.panelStyle[S.frame] || "");
     fit();
+    requestAnimationFrame(markStrips);
   }
 
   const pic = (name) => `<img class="demo-ic" src="${asset(`/ui/icons/${name}-48.webp`)}" alt="">`;
   const NUMBER = `<span class="demo-token demo-token--full">1</span>`;
   const PLUS = `<span class="demo-token">2 <i>+</i></span>`;
-  const BUILD = ["Build", `Tap <b>Presets</b>, then an empty slot ${PLUS}. Tap a monster and <b>+10</b>, another and <b>+10</b>, then the first again: that is a third stack. They are sent in this order. <b>Done</b>.`];
-  const SEND = ["Send", `Tap <b>Send</b> on a preset ${NUMBER}. It joins the end of the queue. Keep sending: when the queue fills, the row says how many fitted.`];
+  const BUILD = ["Build", `Tap <b>Presets</b>, then the empty slot ${PLUS}. Tap a monster and <b>+10</b>, another and <b>+10</b>, then the first again: each fills the next box. The empty boxes are the room left. <b>Done</b>.`];
+  const SEND = ["Send", `Tap <b>Send</b> on a preset ${NUMBER}. It joins the end of the queue. Keep sending: when the queue fills, it says how many fitted.`];
+  const CHANGE = ["Change", `Tap a preset's number ✎ to change it: the count works on the last stack, a different monster starts a new box. ${pic("undo")} takes the last box off, <b>Clear</b> empties the slot.`];
+  const LONG = ["Long preset", `On <b>Phone</b>, preset <b>3</b> has eight stacks: drag its monsters sideways to see them all. <b>Send</b> and the cost stay put.`];
+  const RAIL = ["Quick send", `On <b>Desktop</b>, the small <b>Send</b> buttons beside the queue send a preset from either tab.`];
   const STEPS = {
-    2: [BUILD, SEND, ["Change", `Tap a preset's row ✎ to change it: the count works on the last stack, a different monster starts a new one. ${pic("undo")} takes the last stack off, <b>Clear</b> empties the slot.`]],
-    3: [BUILD, SEND, ["Outposts", `${pic("friendnext")} steps to an outpost ${pic("outpost")}: gold frame, and <b>Presets</b> ${pic("outpost")} is now the list shared by all outposts. ${pic("townhall")} goes home to the main yard's list.`]],
+    1: [BUILD, SEND, CHANGE, RAIL],
+    2: [BUILD, SEND, LONG, RAIL],
+    3: [BUILD, SEND, LONG, RAIL, ["Outposts", `${pic("friendnext")} steps to an outpost ${pic("outpost")}: gold frame, and <b>Presets</b> ${pic("outpost")} is now the list shared by all outposts. ${pic("townhall")} goes home to the main yard's list.`]],
+  };
+  const LEVELS = {
+    1: ["Level 1", "7 queue boxes of 20", "<b>2</b> presets", "this yard only"],
+    2: ["Level 2", "10 queue boxes of 20", "<b>4</b> presets", "this yard only"],
+    3: ["Level 3", "10 queue boxes of 30", "<b>6</b> presets, plus 6 shared by all outposts", "runs every outpost from home"],
   };
 
   function drawChrome() {
@@ -820,6 +899,12 @@
     const steps = STEPS[S.level];
     $("#demo-steps").innerHTML = steps.map(([name, words], at) => `<li><span class="demo-step__n">${at + 1}</span><span><strong>${name}</strong> ${words}</span></li>`).join("");
     $("#demo-option").textContent = `Level ${S.level}`;
+    $("#demo-levels").innerHTML = [1, 2, 3]
+      .map((level) => {
+        const [name, ...has] = LEVELS[level];
+        return `<button type="button" class="demo-level" data-set="level=${level}" aria-pressed="${S.level === level}"><strong>${name}</strong>${has.map((line) => `<span>${line}</span>`).join("")}</button>`;
+      })
+      .join("");
   }
 
   document.addEventListener("click", (event) => {
@@ -830,7 +915,7 @@
       const next = key === "level" ? Number(value) : value;
       if (S[key] === next) return;
       S[key] = next;
-      if (key === "level") reset(); // the stacks hold 20 at level 2 and 30 at level 3
+      if (key === "level") reset(); // each level has its own queue, stack size and preset slots
       if (key === "frame") setFrame();
     } else {
       flags.clear();

@@ -23,8 +23,9 @@
     <h1>Hatchery Control Center <span id="demo-option"></span></h1>
     <div class="demo-controls">
       <div class="demo-seg" role="group" aria-label="HCC level">
-        <button type="button" data-set="level=2">Level 2</button>
-        <button type="button" data-set="level=3">Level 3</button>
+        <button type="button" data-set="level=1">L1</button>
+        <button type="button" data-set="level=2">L2</button>
+        <button type="button" data-set="level=3">L3</button>
       </div>
       <div class="demo-seg" role="group" aria-label="Screen">
         <button type="button" data-set="frame=phone">Phone</button>
@@ -32,13 +33,14 @@
       </div>
       <button type="button" class="demo-reset" data-reset="1">Start over</button>
     </div>
-<p class="demo-diff">The workbench, with a <b>Monsters | Presets</b> switch under the queue. Presets are numbered: <b>3</b> at Level 2, <b>5</b> at Level 3. <b>Send</b> adds a preset to the end of the queue.</p>
+<div id="demo-levels" class="demo-levels" role="group" aria-label="What each HCC level has"></div>
+<p class="demo-diff">The workbench, with a <b>Monsters | Presets</b> switch under the queue. <b>Send</b> adds a numbered preset to the end of the queue. A preset is built in the same boxes as the queue.</p>
   </header>
   <main class="demo-main">
     <aside class="demo-try">
       <h2>Try this</h2>
       <ol id="demo-steps"></ol>
-      <p class="demo-note">Demo data. Time runs 10× faster. Nothing is saved. Level 3 holds 30 per stack, Level 2 holds 20. Level 3 keeps two preset lists: the main yard's, and one shared by all outposts.</p>
+      <p class="demo-note">Demo data. Time runs 10× faster. Nothing is saved. Level 3 keeps two preset lists: the main yard's, and one shared by all outposts.</p>
     </aside>
     <div id="stage"><div id="frame-holder"><div id="frame"></div></div></div>
   </main>
