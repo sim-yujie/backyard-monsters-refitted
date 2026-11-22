@@ -20,6 +20,7 @@ import {
   postMessage,
 } from "./chatRooms.js";
 import { applyModeration } from "./chatModeration.js";
+import { initMaintenanceWatch } from "./chatMaintenance.js";
 import { applyMailNudge } from "./chatMail.js";
 import { handlePresence } from "./chatPresence.js";
 import { MODERATORS_REFRESH_MS, refreshChatModerators } from "./chatModerators.js";
@@ -38,6 +39,7 @@ export const initGateway = () => {
   void refreshChatModerators();
   setInterval(() => void refreshChatModerators(), MODERATORS_REFRESH_MS).unref?.();
   initTransport(() => subscribeControl(handleControlMessage));
+  initMaintenanceWatch();
 };
 
 /**

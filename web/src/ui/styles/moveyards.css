@@ -1,6 +1,7 @@
 /*
  * Moving between the player's own yards (outposts WP7, #186): the cell
- * panel's Move monsters and Move main yard here, and their two dialogs. The
+ * panel's Move main yard here and its dialog (moving monsters is the map's
+ * move mode since beta 9, transfer.css). The
  * relocate dialog borrows the takeover dialog's cost list, choice and confirm
  * (takeover.css). Every value is a token.
  */
@@ -74,127 +75,6 @@
 
 .relocate-dialog__lost-count {
   font-weight: 700;
-}
-
-/* ── Move monsters ──────────────────────────────────────────────────────── */
-
-.transfer-dialog {
-  width: min(92vw, 460px);
-}
-
-.transfer-dialog .panel__body {
-  display: grid;
-  /* minmax(0, 1fr): a long outpost name in a select must not widen the
-     dialog past a phone screen (6 Nov UI check: 126 px sideways scroll). */
-  grid-template-columns: minmax(0, 1fr);
-  gap: var(--space-3);
-}
-
-.transfer-dialog__field {
-  min-width: 0;
-}
-
-.transfer-dialog__select {
-  width: 100%;
-  min-width: 0;
-  max-width: 100%;
-  text-overflow: ellipsis;
-}
-
-.transfer-dialog [hidden] {
-  display: none;
-}
-
-.transfer-dialog__lead {
-  margin: 0;
-  color: var(--colour-text-secondary);
-}
-
-.transfer-dialog__ends {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: var(--space-3);
-}
-
-.transfer-dialog__room {
-  margin: 0;
-  padding: var(--space-2) var(--space-3);
-  border-radius: var(--radius-md);
-  background: var(--colour-surface-sunken);
-  font-size: var(--text-sm);
-  font-weight: 700;
-  font-variant-numeric: tabular-nums;
-}
-
-.transfer-dialog__room--full {
-  color: var(--colour-warning);
-}
-
-/* The list hugs its rows and only scrolls past its max-height. Two rules keep
-   a press on Fill, + or − from moving anything (owner, 14 Nov 2026: Fill made
-   a scroll bar appear and slid out from under the pointer):
-   - A pressed button drops 1-2px (`.btn:active`, ui.css and skin.css). With
-     no padding the box ended exactly at the last row's bottom, so the press
-     itself overflowed it and a scroll bar came up. The padding (taken back by
-     the margin, so the rows stay in line with the rest) holds the press and
-     the focus rings inside the box.
-   - `scrollbar-gutter: stable` keeps the bar's width free at all times, so a
-     bar coming or going never narrows the rows (which re-wrapped them and
-     moved the buttons) and never lies over Fill. */
-.transfer-dialog__list {
-  display: grid;
-  gap: var(--space-2);
-  margin: calc(-1 * var(--space-1));
-  padding: var(--space-1);
-  list-style: none;
-  max-height: min(46vh, 360px);
-  max-height: min(46dvh, 360px);
-  overflow-y: auto;
-  scrollbar-gutter: stable;
-  scrollbar-width: thin;
-}
-
-.transfer-dialog__list:empty {
-  display: none;
-}
-
-.transfer-row {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: var(--space-2) var(--space-3);
-  min-width: 0;
-}
-
-.transfer-row__picture {
-  flex: none;
-  width: 36px;
-  height: 36px;
-  object-fit: contain;
-  border-radius: var(--radius-sm);
-}
-
-.transfer-row__label {
-  flex: 1 1 110px;
-  display: flex;
-  flex-direction: column;
-  min-width: 0;
-}
-
-.transfer-row__name {
-  font-weight: 700;
-}
-
-.transfer-row__have {
-  font-size: var(--text-xs);
-  color: var(--colour-text-muted);
-  font-variant-numeric: tabular-nums;
-}
-
-@media (max-width: 620px) {
-  .transfer-dialog__ends {
-    grid-template-columns: minmax(0, 1fr);
-  }
 }
 
 /* ── Move to a random spot (#366) ───────────────────────────────────────── */

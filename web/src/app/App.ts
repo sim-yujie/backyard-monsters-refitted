@@ -1,4 +1,17 @@
 import { Application, Container } from "pixi.js";
+// Pixi teaches the renderer to draw each kind of object (tiling sprites,
+// meshes, text, bitmap text, nine-slice sprites, graphics) when that kind's
+// module first runs, and a renderer only learns the kinds known when it is
+// made. Most of them are used only past the sign-in screen, whose code now
+// arrives later (`gameScenes.ts`), so they are named here to be known before
+// `pixi.init` (a yard with no ground otherwise). `vite.config.ts` fails the
+// build if one ends up anywhere else.
+import "pixi.js/graphics";
+import "pixi.js/mesh";
+import "pixi.js/sprite-tiling";
+import "pixi.js/text";
+import "pixi.js/text-bitmap";
+import "pixi.js/sprite-nine-slice";
 import { createOverlay, type Overlay } from "@/ui/overlay";
 import {
   captureScreen,
@@ -16,7 +29,10 @@ import { withIdle } from "./idleScene";
 import { withMusic } from "./musicScene";
 import { type DisconnectReason, IdleWatch, idleDurationText, idleTimingsFor } from "@/game/presence/idleWatch";
 import { IdleWarning } from "@/ui/IdleWarning";
-import { getAuthToken, onAnswer } from "@/api/http";
+import { getAuthToken, onAnswer, onRefusal } from "@/api/http";
+import { fetchMaintenance } from "@/api/maintenance";
+import { MaintenanceBanner } from "@/ui/MaintenanceBanner";
+import { MaintenanceWatch } from "./maintenanceWatch";
 import { stayProtected } from "@/api/presence";
 import { ProtectionWatch, protectionTimingsFor } from "@/game/presence/protectionWatch";
 import { onPlannerActivity } from "@/game/presence/plannerActivity";
@@ -26,23 +42,18 @@ import { answerBotCheck, fetchBotCheck, forceBotCheck } from "@/api/botCheck";
 import { BotCheckWatch } from "@/game/presence/botCheckWatch";
 import { BotCheckCard } from "@/ui/BotCheckCard";
 import { BootScene } from "./scenes/BootScene";
-import { logout } from "@/api/auth";
+import { logout, pauseSession } from "@/api/auth";
 import { banWords } from "@/api/moderation";
 import { worldChat } from "@/game/chat/chatSession";
 import { setSignInNotice } from "./signInNotice";
 import { LoginScene } from "./scenes/LoginScene";
-import { MapGateScene } from "./scenes/MapGateScene";
-import { MapRoom1Scene } from "./scenes/MapRoom1Scene";
-import { MapRoom2Scene } from "./scenes/MapRoom2Scene";
-import { YardScene } from "./scenes/YardScene";
-import { AttackScene } from "./scenes/AttackScene";
 import { AwayScene, awayText } from "./scenes/AwayScene";
 import { SceneName } from "./sceneName";
 import { guardTick } from "./guardedTick";
-import { BAITER_PLUGINS, BAITER_REPLAY_PLUGINS } from "@/game/baiter/baiterPlugin";
-import { WATCH_PLUGINS } from "@/game/autoAttack/watchPlugin";
+import type { GameScenes } from "./gameScenes";
+import { gameScenesSource } from "./gameLoader";
+import { lazyScene } from "./lazyScene";
 import { makeRaidDue } from "@/api/raid";
-import { RAID_PLUGINS } from "@/game/raid/raidPlugin";
 import { raidWatch } from "@/game/raid/raidWatch";
 import { gpuTextureLimit } from "@/game/textureLimit";
 import { watchGraphics } from "@/game/graphicsLog";
@@ -86,6 +97,7 @@ export class App {
   private botCheckCard: BotCheckCard | null = null;
   private stopHearing: (() => void) | null = null;
   private stopTeam: (() => void) | null = null;
+  private maintenance: MaintenanceWatch | null = null;
   private stopGraphicsWatch: (() => void) | null = null;
   private stopRelease: (() => void) | null = null;
 
@@ -302,20 +314,23 @@ export class App {
       );
     // Every screen asks for its own tune as it opens (`musicScene.ts`).
     const register = (name: SceneName, factory: SceneFactory) => scenes.register(name, withMusic(name, factory));
+    // The screens past sign-in come from their own script piece, fetched from
+    // the start (`main.ts`, `gameLoader.ts`; beta 9 speed work).
+    const later =
+      (name: keyof GameScenes): SceneFactory =>
+      () =>
+        lazyScene(gameScenesSource, (scenes) => scenes[name]());
     register(SceneName.BOOT, () => new BootScene());
     register(SceneName.LOGIN, () => new LoginScene());
-    register(SceneName.MAP, game(() => new MapGateScene()));
-    register(SceneName.MAP_ROOM_1, game(() => new MapRoom1Scene()));
-    register(SceneName.MAP_ROOM_2, game(() => new MapRoom2Scene()));
-    register(SceneName.YARD, game(() => new YardScene()));
-    register(SceneName.ATTACK, game(() => new AttackScene(), true));
-    register(SceneName.BAITER, game(() => new AttackScene(BAITER_PLUGINS, { practice: true }), true, true));
-    register(
-      SceneName.BAITER_REPLAY,
-      game(() => new AttackScene(BAITER_REPLAY_PLUGINS, { practice: true }), true, true),
-    );
-    register(SceneName.WATCH, game(() => new AttackScene(WATCH_PLUGINS, { watch: true }), true));
-    register(SceneName.RAID, game(() => new AttackScene(RAID_PLUGINS, { raid: true }), true));
+    register(SceneName.MAP, game(later("map")));
+    register(SceneName.MAP_ROOM_1, game(later("mapRoom1")));
+    register(SceneName.MAP_ROOM_2, game(later("mapRoom2")));
+    register(SceneName.YARD, game(later("yard")));
+    register(SceneName.ATTACK, game(later("attack"), true));
+    register(SceneName.BAITER, game(later("baiter"), true, true));
+    register(SceneName.BAITER_REPLAY, game(later("baiterReplay"), true, true));
+    register(SceneName.WATCH, game(later("watch"), true));
+    register(SceneName.RAID, game(later("raid"), true));
     register(
       SceneName.AWAY,
       () =>
@@ -355,6 +370,25 @@ export class App {
       scenes.goTo(SceneName.LOGIN);
     });
 
+    // The maintenance switch (owner, 22 Nov 2026): a countdown card on every
+    // screen, then everyone but the owner signed out at zero, the saved
+    // session kept for Try again (`maintenanceWatch.ts`).
+    const maintenanceBanner = new MaintenanceBanner(this.host);
+    this.maintenance = new MaintenanceWatch({
+      chat: worldChat,
+      onRefusal,
+      fetch: fetchMaintenance,
+      signedIn: () => getAuthToken() !== null,
+      banner: maintenanceBanner,
+      signOut: () => {
+        protection.stop();
+        botCheck.stop();
+        pauseSession();
+        scenes.goTo(SceneName.LOGIN);
+      },
+    });
+    this.maintenance.start();
+
     await this.scenes.start(SceneName.BOOT);
   }
 
@@ -369,6 +403,8 @@ export class App {
   destroy(): void {
     this.stopTeam?.();
     this.stopTeam = null;
+    this.maintenance?.stop();
+    this.maintenance = null;
     this.resizeObserver?.disconnect();
     this.resizeObserver = null;
     this.idle?.destroy();

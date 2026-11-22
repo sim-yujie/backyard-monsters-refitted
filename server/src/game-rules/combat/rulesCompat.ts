@@ -20,12 +20,17 @@
  * Habits learned by the owner's pick B (19 Nov 2026, `habits.ts`) change only
  * how the server learns between attacks; the engine reads a log's `h` as
  * before, so 7.10/7.11's 3cb9cc66416d5eda still plays the same.
+ * Beta 9's drop-zone test (`dropZone.ts`, the overlap rule moved out of the
+ * web's tap-to-drop so the server can check a Repeat attack's plan) is read
+ * by no battle, so 8.x's 0ba3fde8701104af still plays the same.
  *
  * Emptied again in beta 9 (Infernal Monster Lab, owner 21 Nov 2026): without
  * a Lab rank Balthazar strikes monsters 1x (an attacking one hunted at 3x) and
  * King Wormzer splashes nothing (x4 within 100 before), which moves every
- * battle either fights in; 8.x's 0ba3fde8701104af and 7.10/7.11's
- * 3cb9cc66416d5eda replays with them no longer play the same.
+ * battle either fights in; 8.x's 0ba3fde8701104af, 7.10/7.11's
+ * 3cb9cc66416d5eda and the drop-zone version b1991244e863f4d8 replays with
+ * them no longer play the same. The owner (desk, 23 Nov 2026) chose to drop
+ * them: replays from before beta 9 stop playing.
  *
  * Add the version a change replaces only when that change moves no battle.
  * A change that moves any battle result must empty this list.

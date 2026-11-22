@@ -6,14 +6,13 @@ import { worldChat } from "@/game/chat/chatSession";
 import { mailApi } from "@/api/mail";
 import { INVITE_SUBJECT, INVITE_WITHDRAW_TEXT } from "@/game/mail/invite";
 import {
-  cellAt,
   declineTakeover,
   getArea,
+  getOwnArmies,
   getTakeoverQuote,
   moveMainYard,
   takeOverCell,
-  transferMonsters,
-  zoneOrigin,
+  transferBatch,
   type TakeoverPayment,
 } from "@/api/maproom";
 import { takePrimedOwnYard } from "@/game/maproom/mapRoute";
@@ -92,13 +91,8 @@ import {
   type MapView,
 } from "@/game/maproom/mapFocus";
 import { panClearOfPanel } from "@/game/maproom/keepClear";
-import {
-  TRANSFER_TEXT,
-  housedOf,
-  relocateAffordable,
-  spaceOf,
-  type TransferYard,
-} from "@/game/maproom/moveYards";
+import { housedOf, relocateAffordable } from "@/game/maproom/moveYards";
+import type { ArmyYard } from "@/game/maproom/transferPlan";
 import { academyLevel } from "@/game/monsters/housing";
 import { housingSpace } from "@/game/monsters/monsterCatalogue";
 import { takenOverResources, type TakeoverCandidate } from "@/game/maproom/takeover";
@@ -130,7 +124,6 @@ import { IncomePrediction, overdriveEndOf } from "@/game/yard/outpostIncome";
 import { seedOutpostLabels } from "@/game/yard/outpostLabels";
 import {
   MAIN_YARD_TITLE,
-  namedOutpostTitle,
   outpostsOf,
   outpostTarget,
   setOwnYardTarget,
@@ -138,7 +131,8 @@ import {
 import { hoverContentFor } from "@/ui/maproom/HoverCard";
 import { MapRoomUi } from "@/ui/maproom/MapRoomUi";
 import { RelocateDialog } from "@/ui/maproom/RelocateDialog";
-import { TransferDialog, type TransferChoice } from "@/ui/maproom/TransferDialog";
+import { TransferMode } from "@/ui/maproom/TransferMode";
+import { outpostName } from "@/game/yard/outpostLabels";
 import { formatSpan } from "@/ui/attack/EndAttackPanel";
 import { previewEndTakeover, type EndTakeoverPreviewOptions } from "@/ui/attack/endTakeoverPreview";
 import { devStats } from "../devDetails";
@@ -163,6 +157,8 @@ import { SceneName } from "../sceneName";
  * same ratio, so the two agree.
  */
 const ZOOM_STEP = 1.5;
+/** Move mode needs hexes wide enough for the plates: below this zoom it comes in to the usual one (beta 9 #7). */
+const MOVE_MIN_ZOOM = 0.72;
 
 /** How often the request queue is drained. Faster than this just burns budget. */
 const PUMP_INTERVAL_SECONDS = 0.25;
@@ -256,6 +252,8 @@ export class MapRoom2Scene implements Scene {
 
   private context: SceneContext | null = null;
   private ui: MapRoomUi | null = null;
+  /** Move mode (beta 9 #7), made on first use. */
+  private transfer: TransferMode | null = null;
 
   /**
    * The tilted camera (`tilt.ts`, MR2 look plan step 4): the account's side
@@ -482,12 +480,12 @@ export class MapRoom2Scene implements Scene {
           monsters: this.ownSave !== null && outpostsOf(this.ownSave).length > 0,
           relocate: payload.b === CellType.OUTPOST,
         }),
-        onMoveMonsters: (_cell, payload) => this.openTransfer(payload.bid),
+        onMoveMonsters: (_cell, payload) => this.startMove(payload.bid, "out"),
         // The own yard's info card (beta 7, owner's design B).
         yardCard: {
           sizeOf: (id) => (this.ownSave ? housingSpace(id, academyLevel(this.ownSave.academy, id)) ?? 1 : 1),
           cellsFromHome: (cell) => (this.home ? cellDistance(this.home, cell) : null),
-          onBringMonsters: (_cell, payload) => this.bringMonsters(payload.bid),
+          onBringMonsters: (_cell, payload) => this.startMove(payload.bid, "in"),
         },
         onRelocate: (cell, payload) => this.openRelocate(cell, payload),
         onMessage: (payload) => void this.mail?.openCompose({ userid: payload.uid, name: payload.n }),
@@ -564,10 +562,23 @@ export class MapRoom2Scene implements Scene {
       camera: this.camera,
       canvas: context.canvas,
       onHover: (cell) => this.handleHover(cell),
-      onSelect: (cell) => this.selectCell(cell),
-      onZoomToCell: (cell) => this.zoomToCell(cell),
+      // In move mode a tap on one of the player's yards ticks it (beta 9 #7).
+      onSelect: (cell) => {
+        if (this.transfer?.tapCell(cell.col, cell.row)) return;
+        this.selectCell(cell);
+      },
+      onZoomToCell: (cell) => {
+        if (this.transfer?.tapCell(cell.col, cell.row)) return;
+        this.zoomToCell(cell);
+      },
       onZoomStep: (direction) => this.zoomTo(this.camera.zoom * Math.pow(ZOOM_STEP, direction)),
-      onCancel: () => this.clearSelection(),
+      onCancel: () => {
+        if (this.transfer?.active) {
+          this.transfer.end();
+          return;
+        }
+        this.clearSelection();
+      },
       liftOf: this.renderer.liftAt,
       screenToFlat: () => this.tiltToFlat,
       // The "Preparing map" screen is up: the map waits (its pointer events stop at the screen).
@@ -654,6 +665,8 @@ export class MapRoom2Scene implements Scene {
     window.removeEventListener("offline", this.handleOffline);
     if (import.meta.env.DEV) delete (globalThis as Record<string, unknown>)["__takeoverPreview"];
 
+    this.transfer?.destroy();
+    this.transfer = null;
     this.mail?.destroy();
     this.mail = null;
     this.ui?.destroy();
@@ -809,6 +822,8 @@ export class MapRoom2Scene implements Scene {
       this.ui?.setZoom(this.camera.zoom);
       // The card follows its cell as the map moves under a still pointer.
       this.showHoverCard();
+      // Move mode's plates follow their yards (beta 9 #7).
+      this.transfer?.place();
     }
 
     this.renderer.draw(this.range, this.camera.zoom);
@@ -1153,6 +1168,12 @@ export class MapRoom2Scene implements Scene {
   private handleHover(cell: OffsetCell | null): void {
     this.renderer.setHovered(cell);
     this.hovered = cell;
+    if (this.transfer?.active) {
+      // Move mode: a yard's whole army instead of the map's hover card.
+      this.ui?.hideHover();
+      this.transfer.hoverCell(cell);
+      return;
+    }
     this.showHoverCard();
   }
 
@@ -1164,6 +1185,10 @@ export class MapRoom2Scene implements Scene {
     const ui = this.ui;
     const cell = this.hovered;
     if (!ui) return;
+    if (this.transfer?.active) {
+      ui.hideHover();
+      return;
+    }
     const content =
       cell && this.canHover && !this.camera.isInteracting
         ? hoverContentFor(this.store.getCell(cell.col, cell.row), reachTo(cell, this.rangeSources))
@@ -1492,86 +1517,91 @@ export class MapRoom2Scene implements Scene {
 
   /* ── Moving between own yards (outposts WP7, #186) ──────────────────── */
 
-  /** The player's yards, main yard first, with where each is. */
-  private ownYards(): { choice: TransferChoice; cell: OffsetCell }[] {
+  /**
+   * Move mode (beta 9 #7, the owner's "B1 steel plates", 22 Nov 2026): from a
+   * yard card's "Move monsters from here" / "Bring monsters here", every one of
+   * the player's yards wears a plate and a tray docks at the bottom
+   * (`ui/maproom/TransferMode.ts`). Replaces the old Move Monsters dialog.
+   */
+  private startMove(anchor: string, mode: "out" | "in"): void {
     const save = this.ownSave;
-    if (!save) return [];
-    const yards: { choice: TransferChoice; cell: OffsetCell }[] = [];
-    if (this.home) {
-      yards.push({
-        choice: { baseid: String(save.baseid), label: MAIN_YARD_TITLE, main: true },
-        cell: this.home,
-      });
-    }
-    for (const outpost of outpostsOf(save)) {
-      yards.push({
-        choice: { baseid: outpost.baseid, label: namedOutpostTitle(outpost.baseid, outpost.cell), main: false },
-        cell: outpost.cell,
-      });
-    }
-    return yards;
-  }
-
-  /**
-   * One cell as the server has it now, fetched afresh rather than read from the
-   * zone cache: a transfer sends both yards' whole rosters, so they must be
-   * current (Flash waited for any pending zone request, `MapRoom.as:889-893`).
-   */
-  private async freshCell(cell: OffsetCell) {
-    const area = await getArea(zoneOrigin(cell.col), zoneOrigin(cell.row));
-    return cellAt(area, cell.col, cell.row);
-  }
-
-  /**
-   * "Bring monsters here" (the yard info card): the transfer dialog with this
-   * yard as the target, from the main yard when this is an outpost, else from
-   * the first outpost (one end must be an outpost, `transferRules.ts`).
-   */
-  private bringMonsters(to: string): void {
-    const yards = this.ownYards().map(({ choice }) => choice);
-    const target = yards.find((yard) => yard.baseid === to);
-    const from = yards.find((yard) => yard.baseid !== to && !(target?.main && yard.main));
-    if (!target || !from) {
-      this.ui?.notices.show("transfer", TRANSFER_TEXT.noOutposts, { level: "info", timeoutMs: 4_000 });
+    if (!save || outpostsOf(save).length === 0) {
+      this.ui?.notices.show("transfer", "You need an outpost to move monsters.", { level: "info", timeoutMs: 4_000 });
       return;
     }
-    this.openTransfer(from.baseid, to);
+    const context = this.context;
+    if (!context) return;
+    this.clearSelection();
+    this.ui?.hideHover();
+    // Plates need a hex wide enough to read: zoomed far out, come in to the usual zoom.
+    const anchorCell = anchor === String(save.baseid) ? this.home : outpostsOf(save).find((o) => o.baseid === anchor)?.cell;
+    if (anchorCell && this.camera.zoom < MOVE_MIN_ZOOM) this.jumpTo(anchorCell, MOVE_MIN_ZOOM, false);
+    this.transfer ??= new TransferMode({
+      layer: context.overlay.content,
+      modal: context.overlay.modal,
+      sizeOf: (id) => (this.ownSave ? housingSpace(id, academyLevel(this.ownSave.academy, id)) ?? 1 : 1),
+      distance: (a, b) => cellDistance({ col: a.x, row: a.y }, { col: b.x, row: b.y }),
+      nameOf: (yard) => (yard.main ? MAIN_YARD_TITLE : outpostName(yard.baseid) || `${yard.x}, ${yard.y}`),
+      place: (yard) => this.placeOfYard(yard),
+      load: async () => {
+        const answer = await getOwnArmies();
+        return answer.yards ?? [];
+      },
+      send: async (pairs) => {
+        const answer = await transferBatch(pairs);
+        return { yards: answer.yards ?? [] };
+      },
+      onMoved: (baseids) => {
+        const cells = new Map<string, OffsetCell>();
+        if (this.home && this.ownSave) cells.set(String(this.ownSave.baseid), this.home);
+        if (this.ownSave) for (const outpost of outpostsOf(this.ownSave)) cells.set(outpost.baseid, outpost.cell);
+        for (const id of baseids) {
+          const cell = cells.get(id);
+          if (cell) this.store.invalidateCell(cell.col, cell.row);
+        }
+        void this.store.pump();
+      },
+      mark: (marks) =>
+        this.renderer.setMarks(marks ? marks.map((mark) => ({ cell: { col: mark.col, row: mark.row }, kind: mark.kind })) : null),
+      onEnd: () => {
+        this.renderer.setMarks(null);
+        this.showHoverCard();
+      },
+    });
+    void this.transfer.start(anchor, mode).then(() => {
+      if (anchorCell && this.transfer?.active) this.centreForMove(anchorCell);
+    });
   }
 
-  /** "Move monsters" from one of the player's yards, to `to` when given. */
-  private openTransfer(from: string, to?: string): void {
-    const save = this.ownSave;
-    const yards = this.ownYards();
-    if (!save || yards.length < 2) {
-      this.ui?.notices.show("transfer", TRANSFER_TEXT.noOutposts, { level: "info", timeoutMs: 4_000 });
+  /** Puts the yard a move started from in the middle of the map left between the top bar and the tray. */
+  private centreForMove(cell: OffsetCell): void {
+    const ui = this.ui;
+    const trayTop = this.transfer?.trayTop();
+    if (!ui || trayTop === null || trayTop === undefined) return;
+    const now = this.worldToCanvas(this.cellPoint(cell));
+    const dx = this.viewportWidth / 2 - now.x;
+    const dy = (ui.hudBottom() + trayTop) / 2 - now.y;
+    if (Math.abs(dx) < 4 && Math.abs(dy) < 4) return;
+    this.camera.settle();
+    if (this.tilt) {
+      const from = this.tilt.toFlat(now);
+      const to = this.tilt.toFlat({ x: now.x + dx, y: now.y + dy });
+      this.camera.panByScreen(to.x - from.x, to.y - from.y);
       return;
     }
-    const cells = new Map(yards.map(({ choice, cell }) => [choice.baseid, cell]));
-    this.ui?.openDialog(
-      new TransferDialog({
-        yards: yards.map(({ choice }) => choice),
-        from,
-        ...(to === undefined ? {} : { to }),
-        load: async (baseid): Promise<TransferYard> => {
-          const cell = cells.get(baseid);
-          const payload = cell ? await this.freshCell(cell) : undefined;
-          return { baseid, housed: housedOf(payload), space: spaceOf(payload) };
-        },
-        sizeOf: (id) => housingSpace(id, academyLevel(save.academy, id)) ?? 1,
-        send: (fromId, toId, moved) => transferMonsters(fromId, toId, moved),
-        onMoved: (fromId, toId, message) => {
-          for (const id of [fromId, toId]) {
-            const cell = cells.get(id);
-            if (cell) this.store.invalidateCell(cell.col, cell.row);
-          }
-          void this.store.pump();
-          // A fresh line for each move (#191): the same words written over the
-          // last move's line change nothing on screen and are not announced.
-          this.ui?.notices.clear("transfer");
-          this.ui?.notices.show("transfer", message, { level: "info", timeoutMs: 8_000 });
-        },
-      }),
-    );
+    this.camera.panByScreen(dx, dy);
+  }
+
+  /** Where a yard is drawn on screen now and how wide its hex is, or null when out of sight. */
+  private placeOfYard(yard: ArmyYard): { x: number; y: number; hexWidth: number } | null {
+    const cell = { col: yard.x, row: yard.y };
+    const point = this.worldToCanvas(this.cellPoint(cell));
+    const scale = this.camera.zoom * (this.tilt ? this.tilt.scaleAt(point.y) : 1);
+    const hexWidth = mapRoomGrid.cellWidth * scale;
+    const margin = hexWidth;
+    if (point.x < -margin || point.y < -margin || point.x > this.viewportWidth + margin || point.y > this.viewportHeight + margin)
+      return null;
+    return { x: point.x, y: point.y, hexWidth };
   }
 
   /**

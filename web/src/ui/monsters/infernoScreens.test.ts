@@ -87,6 +87,8 @@ const hatcheryActions = (): HatcheryActions => ({
   remove: vi.fn(() => never<never>()),
   clear: vi.fn(() => never<never>()),
   finish: vi.fn(() => never<never>()),
+  presetSave: vi.fn(() => never<never>()),
+  presetSend: vi.fn(() => never<never>()),
   overdrive: vi.fn((item: string) => ok({ item, credits: 30, q: 1, endsAt: T0 + 3600 })),
 });
 

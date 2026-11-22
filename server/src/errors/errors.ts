@@ -215,6 +215,19 @@ export const userBannedErr = (ban: { until: Date | null; reason: string | null }
     isClientFriendly: true,
   });
 
+/**
+ * The maintenance switch is on (`services/admin/maintenance.ts`): a sign-in,
+ * or past the countdown any request, from anyone but the owner. The game
+ * words it in the player's own time from `data` (`web/src/app/maintenance.ts`).
+ */
+export const maintenanceErr = (notice: { message: string; backAt: string | null }) =>
+  new ClientSafeError({
+    message: `Maintenance: ${notice.message}${notice.backAt ? ` Back at ${notice.backAt.slice(11, 16)} UTC.` : ""}`,
+    status: Status.FORBIDDEN,
+    data: { reason: "maintenance", maintenanceMessage: notice.message, backAt: notice.backAt },
+    isClientFriendly: true,
+  });
+
 export const antiCheatBanErr = () =>
   new ClientSafeError({
     message:
@@ -1129,7 +1142,8 @@ export type AutoAttackRefusal =
   | "busy"
   | "failed"
   | "noRoom"
-  | "movesChanged";
+  | "movesChanged"
+  | "planOnBuilding";
 
 const AUTO_ATTACK_REFUSAL_MESSAGES: Record<AutoAttackRefusal, string> = {
   notMapRoom2: "Auto-attack is for Map Room 2 only.",
@@ -1142,6 +1156,7 @@ const AUTO_ATTACK_REFUSAL_MESSAGES: Record<AutoAttackRefusal, string> = {
   failed: "The auto-attack could not be worked out. Nothing was spent.",
   noRoom: "Not enough Monster Housing in range.",
   movesChanged: "Your yards changed since you looked. Check the moves again.",
+  planOnBuilding: "Attack once by hand on a fresh camp to record a new plan.",
 };
 
 /**
@@ -1151,6 +1166,8 @@ const AUTO_ATTACK_REFUSAL_MESSAGES: Record<AutoAttackRefusal, string> = {
  * could be gathered but the yards in range cannot house them; carries
  * `noRoom` and `yards`) and `movesChanged` (the moves needed are not the ones
  * the player agreed to; the client asks for the plan again). `busy` is a 503: the server's replay workers are full.
+ * `planOnBuilding` (beta 9): a fling of the saved plan would land on a building
+ * of the camp's fresh layout (`autoAttack/planCheck.ts`); nothing is spent.
  *
  * @param {AutoAttackRefusal} reason - Which rule refused it.
  * @param {object} [details] - Anything the refusal carries, such as `missing`.

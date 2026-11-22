@@ -720,6 +720,7 @@ export class YardRenderer {
    */
   setZoom(zoom: number): void {
     this.zoomLevel = zoom;
+    this.buildings.setZoom(zoom);
     this.blueprint.setZoom(zoom);
     this.jobBars.setZoom(zoom);
     this.upgradePreview.setZoom(zoom);

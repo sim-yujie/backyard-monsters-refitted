@@ -1,4 +1,17 @@
-import { fetchSignUpOptions, login, register, requestPasswordReset, resetPassword } from "@/api/auth";
+import {
+  fetchSignUpOptions,
+  login,
+  loginWithToken,
+  logout,
+  pauseSession,
+  register,
+  requestPasswordReset,
+  resetPassword,
+  restoreStoredSession,
+} from "@/api/auth";
+import { fetchMaintenance, maintenanceRefusal, type MaintenanceNotice, type MaintenanceRefusal } from "@/api/maintenance";
+import { maintenanceBlock, onMaintenanceBlock, setMaintenanceBlock } from "@/app/maintenanceBlock";
+import { MaintenanceCard } from "@/ui/MaintenanceCard";
 import { ApiError, NetworkError } from "@/api/http";
 import { unlockInbox } from "@/game/achievements/unlockInbox";
 import { clearTestHistory } from "@/game/baiter/testHistory";
@@ -257,6 +270,9 @@ export class LoginScene implements Scene {
   private panel: Panel | null = null;
   private wrapper: HTMLElement | null = null;
   private botCheck: BotCheck | null = null;
+  private maintenanceSlot: HTMLElement | null = null;
+  private maintenanceCard: MaintenanceCard | null = null;
+  private stopMaintenance: (() => void) | null = null;
 
   /** @param turnstileSiteKey The build's site key by default; empty shows no bot check. */
   constructor(private readonly turnstileSiteKey: string = TURNSTILE_SITE_KEY) {}
@@ -274,9 +290,17 @@ export class LoginScene implements Scene {
 
     const stack = document.createElement("div");
     stack.className = "login-stack";
-    stack.append(brand(), this.panel.element, footerLinks(this.turnstileSiteKey));
+    this.maintenanceSlot = document.createElement("div");
+    this.maintenanceSlot.className = "login-stack__maintenance";
+    stack.append(brand(), this.maintenanceSlot, this.panel.element, footerLinks(this.turnstileSiteKey));
     this.wrapper.append(stack);
     context.overlay.content.append(this.wrapper);
+
+    // Maintenance (owner, 22 Nov 2026): the card above the form, from a
+    // refused sign-in, the countdown's end, or asking the server now.
+    this.showMaintenance(context, maintenanceBlock());
+    this.stopMaintenance = onMaintenanceBlock((block) => this.showMaintenance(context, block));
+    void this.checkMaintenance();
 
     // The emailed reset link opens straight on the new-password form.
     const resetToken = resetTokenFromLocation(window.location);
@@ -285,11 +309,91 @@ export class LoginScene implements Scene {
   }
 
   exit(): void {
+    this.stopMaintenance?.();
+    this.stopMaintenance = null;
+    this.maintenanceCard?.remove();
+    this.maintenanceCard = null;
+    this.maintenanceSlot = null;
     this.dropBotCheck();
     this.panel?.close();
     this.panel = null;
     this.wrapper?.remove();
     this.wrapper = null;
+  }
+
+  /** Asks the server whether maintenance is on, for the card; quiet on failure. */
+  private async checkMaintenance(): Promise<MaintenanceNotice | null> {
+    let notice: MaintenanceNotice | null = null;
+    try {
+      notice = await fetchMaintenance();
+    } catch {
+      return null;
+    }
+    if (!this.maintenanceSlot || !notice) return notice;
+    // Newer words, but still "Signed out" if the countdown brought the player here.
+    const signedOut = maintenanceBlock()?.signedOut === true;
+    setMaintenanceBlock(notice.on ? { message: notice.message, backAt: notice.backAt, ...(signedOut && { signedOut }) } : null);
+    // The form took the focus before the answer came: Try again is the way on now.
+    const focused = document.activeElement;
+    if (notice.on && focused instanceof HTMLInputElement && !focused.value && this.panel?.element.contains(focused)) {
+      focused.blur();
+    }
+    return notice;
+  }
+
+  /**
+   * While the maintenance card shows, its Try again is the one bright button:
+   * the form's own (Play, Create account) turns second-choice, still there for
+   * the owner.
+   */
+  private muteSignIn(muted: boolean): void {
+    const submit = this.panel?.element.querySelector<HTMLButtonElement>('form button[type="submit"]');
+    submit?.classList.toggle("btn--primary", !muted);
+  }
+
+  private showMaintenance(context: SceneContext, block: MaintenanceRefusal | null): void {
+    if (!this.maintenanceSlot) return;
+    this.muteSignIn(block !== null);
+    if (!block) {
+      this.maintenanceCard?.remove();
+      this.maintenanceCard = null;
+      return;
+    }
+    if (this.maintenanceCard) {
+      this.maintenanceCard.update(block);
+      return;
+    }
+    this.maintenanceCard = new MaintenanceCard(block, {
+      check: () => this.checkMaintenance(),
+      // `check` above has already taken the newest words.
+      onStill: () => undefined,
+      onOver: () => void this.maintenanceOver(context),
+    });
+    this.maintenanceSlot.append(this.maintenanceCard.element);
+  }
+
+  /** Maintenance is over: back in with the saved session, or the form. */
+  private async maintenanceOver(context: SceneContext): Promise<void> {
+    const stored = restoreStoredSession();
+    if (stored) {
+      try {
+        await loginWithToken(stored.token, stored.sessionType);
+        setMaintenanceBlock(null);
+        context.goTo(SceneName.YARD);
+        return;
+      } catch (caught) {
+        const again = maintenanceRefusal(caught);
+        if (again) {
+          pauseSession();
+          setMaintenanceBlock(again);
+          this.maintenanceCard?.nudge();
+          return;
+        }
+        logout();
+      }
+    }
+    setMaintenanceBlock(null);
+    this.panel?.element.querySelector<HTMLInputElement>("input")?.focus();
   }
 
   private showSignIn(
@@ -348,7 +452,9 @@ export class LoginScene implements Scene {
     });
 
     this.panel?.setTitle("Sign in").setContent(form);
-    (email.input.value ? password.input : email.input).focus();
+    this.muteSignIn(maintenanceBlock() !== null);
+    // During maintenance the card's Try again is the way on, not the form.
+    if (!maintenanceBlock()) (email.input.value ? password.input : email.input).focus();
   }
 
   /** Asks for the email and has the server send a reset link. */
@@ -650,10 +756,17 @@ export class LoginScene implements Scene {
 
     try {
       await login(form.email, form.password);
+      setMaintenanceBlock(null);
       // The yard first, for every player (issue #172); the map is one click on.
       context.goTo(SceneName.YARD);
     } catch (caught) {
-      form.error.textContent = describe(caught);
+      const maintenance = maintenanceRefusal(caught);
+      if (maintenance) {
+        // The card above says it all; a second copy here would only repeat it.
+        setMaintenanceBlock(maintenance);
+        this.maintenanceCard?.nudge();
+      }
+      form.error.textContent = maintenance ? "" : describe(caught);
       form.submit.disabled = false;
       form.submit.textContent = "Play";
     }
@@ -686,6 +799,8 @@ export class LoginScene implements Scene {
       await register(request);
     } catch (caught) {
       form.onFailed();
+      const maintenance = maintenanceRefusal(caught);
+      if (maintenance) setMaintenanceBlock(maintenance);
       const failure = describeSignUpFailure(caught);
       if (failure.field) form.onRefused(failure.field, failure.message);
       else form.error.textContent = failure.message;

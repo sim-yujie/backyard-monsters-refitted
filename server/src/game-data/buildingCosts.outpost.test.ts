@@ -33,7 +33,8 @@ const OUTPOST_BUILDABLE: readonly (readonly [number, number, number])[] = [
   [10, 1, 1],
   [13, 2, 3],
   [15, 1, 6],
-  [16, 1, 1],
+  // Beta 9: the outpost HCC goes to level 2 (owner, 21 Nov 2026).
+  [16, 1, 2],
   [17, 100, 5],
   [20, 4, 10],
   [21, 4, 10],
