@@ -1,3 +1,5 @@
+import type { ReceivedInvite } from "@/api/baiterTests";
+import type { TestReport } from "@/game/baiter/testReport";
 import type { DecorKind } from "@/game/yard/decorShop";
 import { coinBalance, noteCoins } from "@/game/eventCoins";
 import type {
@@ -256,6 +258,10 @@ export interface YardSceneHooks {
   watchBaiter?(run: BaiterRun): void;
   /** Reopens a finished Baiter test's report over the yard (#22, WP5). Absent where there is none. */
   showBaiterReport?(test: RecordedTest): void;
+  /** Opens a friend's test army for their yard (beta 9 #4). Absent where there is none. */
+  openFriendTest?(invite: ReceivedInvite): void;
+  /** Shows a friend's test of the player's yard: its report, and its replay when playable (beta 9 #4). */
+  showFriendReport?(report: TestReport, run: BaiterRun | null): void;
   /**
    * Opens the Shop (§8.2): the General Store's Open Shop button and the HUD's
    * Shiny counter use it. Absent where there is no screen.

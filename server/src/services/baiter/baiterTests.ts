@@ -186,15 +186,29 @@ export const testsAnswer = async (em: EntityManager, user: User, now: number, de
 };
 
 const id = z.coerce.number().int().positive().max(2_147_483_647);
-export const InviteSchema = z.object({ userids: z.array(id).min(1).max(MAX_INVITES_PER_SEND) });
+
+/**
+ * A JSON body's arrays and objects arrive re-stringified (`middleware/jsonBody.ts`),
+ * so a string is parsed first.
+ */
+export const parsedField = (value: unknown): unknown => {
+  if (typeof value !== "string") return value;
+  try {
+    return JSON.parse(value);
+  } catch {
+    return value;
+  }
+};
+
+export const InviteSchema = z.object({ userids: z.preprocess(parsedField, z.array(id).min(1).max(MAX_INVITES_PER_SEND)) });
 export const CancelSchema = z.object({ userid: id });
 export const StartSchema = z.object({ inviter: id });
 export const FinishSchema = z.object({
   token: z.string().min(8).max(64),
-  army: z.unknown(),
-  flinglog: z.unknown(),
+  army: z.preprocess(parsedField, z.unknown()),
+  flinglog: z.preprocess(parsedField, z.unknown()),
   tick: z.coerce.number().int().min(0).max(MAX_TEST_TICK),
-  report: z.unknown().optional(),
+  report: z.preprocess(parsedField, z.unknown()).optional(),
 });
 const TestIdSchema = z.object({ id: z.coerce.number().int().positive().max(Number.MAX_SAFE_INTEGER) });
 

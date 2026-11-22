@@ -278,6 +278,25 @@ describe.skipIf(!dbName)("friend tests of a yard on a real database (beta 9 #4)"
     expect((await flow.testAnswer(em(), as(FRIEND), { id: done.id }, T0 + 120, deps())).status).toBe(404);
   });
 
+  test("a JSON body's lists and objects arrive as strings (middleware/jsonBody.ts) and are read all the same", async () => {
+    expect(await flow.inviteAnswer(em(), as(INVITER), { userids: JSON.stringify([FRIEND]) }, T0, deps())).toMatchObject({ invited: 1 });
+    const started = await start(FRIEND);
+    const done = await flow.finishAnswer(
+      em(),
+      as(FRIEND),
+      {
+        token: started.token,
+        army: JSON.stringify(ARMY),
+        flinglog: JSON.stringify({ v: 1, seed: 777, events: [{ kind: "fling", t: 400, x: 10, y: 10, r: 0, monsters: { C1: 40 } }] }),
+        tick: String(400 + 80 * 90),
+        report: JSON.stringify({ result: "time", resultLine: "x", damagePercent: 42 }),
+      },
+      T0 + 60,
+      deps()
+    );
+    expect(done).toMatchObject({ error: 0, damage: 42, result: "time", reportKept: true });
+  });
+
   test("the ticket is spent once, and a test cannot be sent without one", async () => {
     await invite([FRIEND]);
     const started = await start(FRIEND);

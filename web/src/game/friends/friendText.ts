@@ -1,5 +1,6 @@
 import type { Friend, FriendOnline } from "@/api/friends";
 import type { FriendsOpenTab } from "@/game/friends/friendsView";
+import type { BaiterView } from "@/game/yard/yardIntent";
 import { buildingName } from "@/game/yard/buildingArt";
 import { formatAmount, formatCountdown } from "@/ui/format";
 
@@ -95,6 +96,13 @@ export const friendNoticeText = (notice: FriendNotice): string => {
       const building = buildingOf(notice);
       return building === "a building" ? `${name} repaired a building in your yard.` : `${name} repaired your ${building}.`;
     }
+    // Friend tests of a yard (beta 9 #4).
+    case "baiterInvite":
+      return `${name} invited you to test their yard (24 h).`;
+    case "baiterTest": {
+      const damage = Math.max(0, Math.floor(Number(notice.damage) || 0));
+      return `${name} tested your yard: ${damage}% damage. Watch it in your Baiter.`;
+    }
     default:
       return name === "Someone" ? "News from your friends." : `News from ${name}.`;
   }
@@ -108,5 +116,13 @@ export const friendLineText = (jobs: readonly unknown[]): string => {
 };
 
 /** The Friends tab a `friend` row opens when clicked: "gifts" for a gift, else none. */
+/** The Baiter window tab a friend-test notice leads to, or null for any other notice (beta 9 #4). */
+export const friendLineBaiter = (jobs: readonly unknown[]): BaiterView | null => {
+  const events = jobs.map((job) => (typeof job === "object" && job !== null ? (job as FriendNotice).event : null));
+  if (events.includes("baiterTest")) return "results";
+  if (events.includes("baiterInvite")) return "invitedMe";
+  return null;
+};
+
 export const friendLineTab = (jobs: readonly unknown[]): FriendsOpenTab | null =>
   jobs.some((job) => typeof job === "object" && job !== null && (job as FriendNotice).event === "gift") ? "gifts" : null;

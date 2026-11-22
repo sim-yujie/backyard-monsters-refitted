@@ -1,0 +1,369 @@
+/*
+ * The Baiter window's friend tabs (beta 9 #4, design A, desk card
+ * b9-baiter-screen): Invite, Invited me and Results
+ * (`web/src/ui/yard/BaiterFriends.ts`), the line over a friend's test army
+ * (`BaiterPanel.ts`, `.baiter__host`), the "Test a friend's yard" window
+ * (`BaiterInvitesWindow.ts`) and the sent line on a test's report.
+ * Rows are the Friends window's `.friends-row`. Every value comes from tokens.css.
+ */
+
+.baiter-friends {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  min-height: 0;
+  overflow-y: auto;
+}
+
+.baiter-friends[hidden] {
+  display: none;
+}
+
+/* Invite: the people to pick on the left, the open invites on the right, Send below. */
+.baiter-friends--invite:not([hidden]) {
+  display: grid;
+  grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr);
+  grid-template-rows: minmax(0, 1fr) auto;
+  gap: var(--space-2) var(--space-4);
+  overflow: hidden;
+}
+
+.baiter-friends__col {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  min-height: 0;
+}
+
+.baiter-friends__list {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
+  gap: 4px;
+  min-height: 0;
+  margin: 0;
+  padding: 0;
+  overflow-y: auto;
+  list-style: none;
+}
+
+.baiter-friends__list > li {
+  flex: none;
+}
+
+.baiter-friends__empty {
+  padding: var(--space-3);
+  color: var(--colour-text-secondary);
+  font-size: var(--text-sm);
+}
+
+.baiter-friends__head {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin: 0;
+  font-size: var(--text-md, 16px);
+}
+
+.baiter-friends__chips {
+  display: flex;
+  flex: none;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+.baiter-friends__chip {
+  min-height: 40px;
+  padding: 0 var(--space-3);
+}
+
+.baiter-friends__search {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: var(--space-2);
+  min-height: 44px;
+  padding: 0 var(--space-2);
+  border: 1px solid var(--colour-border);
+  border-radius: var(--radius-md);
+  background: var(--colour-surface-sunken);
+}
+
+.baiter-friends__search-input {
+  flex: 1;
+  min-width: 0;
+  min-height: 40px;
+  border: 0;
+  background: transparent;
+  color: var(--colour-text);
+  font: inherit;
+}
+
+.baiter-friends__search-input:focus {
+  outline: none;
+}
+
+.baiter-friends__search:focus-within {
+  border-color: var(--colour-accent-line);
+}
+
+.baiter-friends__tick {
+  width: 44px;
+  height: 44px;
+  border: 2px solid var(--colour-border-strong);
+  border-radius: var(--radius-md);
+  background: var(--colour-surface-sunken);
+  color: var(--colour-text);
+  font-size: 22px;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.baiter-friends__tick--on {
+  border-color: var(--colour-accent);
+  background: var(--colour-accent);
+  color: var(--colour-accent-text);
+}
+
+.baiter-friends__row--on {
+  border-color: var(--colour-accent-line);
+  background: var(--colour-accent-soft);
+}
+
+.baiter-friends__foot {
+  grid-column: 1 / -1;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--space-2) var(--space-3);
+  padding-top: var(--space-2);
+  border-top: 1px solid var(--colour-border);
+}
+
+.baiter-friends__foot-note {
+  color: var(--colour-text-secondary);
+  font-size: var(--text-sm);
+}
+
+.baiter-friends__status {
+  margin: 0;
+  font-size: var(--text-sm);
+  font-weight: 700;
+}
+
+.baiter-friends__status:empty {
+  display: none;
+}
+
+.baiter-friends__status--good {
+  color: var(--colour-success);
+}
+
+.baiter-friends__status--bad {
+  color: var(--colour-danger);
+}
+
+.baiter-friends__iconbtn {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  min-height: 44px;
+}
+
+.baiter-friends__cancel {
+  width: 44px;
+  min-width: 44px;
+  height: 44px;
+  padding: 0;
+}
+
+.baiter-friends__cap,
+.baiter-friends__left,
+.baiter-friends__damage {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  font-weight: 700;
+}
+
+.baiter-friends__result {
+  padding: 1px var(--space-2);
+  border-radius: 999px;
+  font-size: var(--text-xs, 12px);
+  font-weight: 800;
+}
+
+.baiter-friends__result--held {
+  background: color-mix(in srgb, var(--colour-success) 22%, transparent);
+  color: var(--colour-success);
+}
+
+.baiter-friends__result--flattened {
+  background: color-mix(in srgb, var(--colour-danger) 22%, transparent);
+  color: var(--colour-danger);
+}
+
+.baiter-friends__result--time {
+  background: color-mix(in srgb, var(--colour-warning) 22%, transparent);
+  color: var(--colour-warning);
+}
+
+.baiter-friends__result--stopped {
+  background: var(--colour-surface-overlay);
+  color: var(--colour-text-secondary);
+}
+
+.baiter-friends--results .friends-row__meta,
+.baiter-friends--received .friends-row__meta {
+  flex-wrap: wrap;
+  white-space: normal;
+}
+
+.baiter-friends--results .friends-row__note {
+  overflow: visible;
+  text-overflow: clip;
+  white-space: nowrap;
+}
+
+/* A test not seen yet: a dot by the tester's name. */
+.baiter-friends__row--new .friends-row__name::after {
+  content: "";
+  display: inline-block;
+  width: 9px;
+  height: 9px;
+  margin-left: 6px;
+  border-radius: 50%;
+  background: var(--colour-warning);
+  vertical-align: middle;
+}
+
+.baiter-friends__keep {
+  flex: none;
+}
+
+.baiter-friends__own {
+  display: flex;
+  flex: none;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding-top: var(--space-2);
+  border-top: 1px solid var(--colour-border);
+}
+
+/* Results has a test not seen yet: a dot on its tab. */
+.baiter__tab--fresh::after {
+  content: "";
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  margin-left: 6px;
+  border-radius: 50%;
+  background: var(--colour-warning);
+  vertical-align: middle;
+}
+
+/* The line over a friend's test army: whose yard, the cap, the time left. */
+.baiter__host {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px;
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--colour-warning-line);
+  border-radius: var(--radius-md);
+  background: var(--colour-warning-soft);
+  color: var(--colour-text);
+  font-weight: 700;
+}
+
+.baiter__gate[hidden] {
+  display: none;
+}
+
+/* A friend's test report: where the test went. */
+.test-report__sent {
+  margin: 0;
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-md);
+  background: var(--colour-surface-sunken);
+  font-weight: 700;
+}
+
+.test-report__sent[hidden] {
+  display: none;
+}
+
+.test-report__sent--good {
+  color: var(--colour-success);
+}
+
+.test-report__sent--bad {
+  color: var(--colour-danger);
+}
+
+/* "Test a friend's yard": the Invited me list on its own. */
+.baiter-invites {
+  width: min(92vw, 640px);
+}
+
+.baiter-invites .panel__body {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+/* A phone: one column; the open invites under the list; Send stays in reach. */
+@media (max-width: 620px), (max-height: 500px) {
+  .baiter-friends--invite:not([hidden]) {
+    display: flex;
+    flex-direction: column;
+    overflow-y: auto;
+  }
+
+  .baiter-friends--invite .baiter-friends__col,
+  .baiter-friends--invite .baiter-friends__list {
+    flex: none;
+    overflow: visible;
+  }
+
+  .baiter-friends__foot {
+    position: sticky;
+    bottom: 0;
+    background: var(--colour-surface-base);
+    padding-bottom: var(--space-2);
+  }
+
+  .baiter-friends__foot-note {
+    flex: 1 1 auto;
+  }
+
+  .baiter-friends__chip,
+  .baiter-friends__iconbtn {
+    min-height: 44px;
+  }
+}
+
+/* A phone upright: four tabs share the head's width. */
+@media (max-width: 620px) {
+  .baiter__tabs {
+    display: flex;
+    flex-wrap: nowrap;
+    gap: 4px;
+  }
+
+  .baiter__tabs > .baiter__tab {
+    flex: 1 1 0;
+    min-width: 0;
+    padding: 0 4px;
+    font-size: var(--text-xs, 12px);
+    white-space: normal;
+    line-height: 1.1;
+  }
+
+  .baiter-friends--results .friends-row__actions,
+  .baiter-friends--received .friends-row__actions {
+    width: 100%;
+    justify-content: flex-end;
+  }
+}
