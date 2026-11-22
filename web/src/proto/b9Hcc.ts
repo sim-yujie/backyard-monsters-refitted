@@ -21,7 +21,8 @@ import type { BaseLoadResponse } from "@/api/types";
 import { b9, b9HccLevel, b9HccOption } from "./b9";
 import "./b9-hcc.css";
 
-export const b9HccOn = (): boolean => b9HccLevel() >= 2;
+/** Round 5: the r3 workbench also shows level 1 (its real 7 stacks of 20), when `b9hcc=1` is in the address. */
+export const b9HccOn = (): boolean => b9HccLevel() >= 2 || (b9HccOption() === "r3" && b9("b9hcc") !== null);
 export const b9Stacks = (normal: number): number => (b9HccLevel() >= 2 ? 10 : normal);
 export const b9StackSize = (normal: number): number => (b9HccLevel() >= 3 ? 30 : normal);
 

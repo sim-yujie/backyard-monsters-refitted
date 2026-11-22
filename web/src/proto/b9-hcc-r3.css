@@ -133,14 +133,6 @@
     position: static;
   }
 }
-/* The stacks in order take as many lines as they need (ten stacks fill two on a phone). */
-.b9r3h-editing:not(.b9r3h-live) .b9r3h-edit__chips {
-  flex-wrap: wrap;
-  overflow: visible;
-  row-gap: 6px;
-  padding: 4px 2px 4px 0;
-}
-
 /* ── The presets: numbered rows, Send on each ───────────────────────── */
 .b9r3h-presets {
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -149,12 +141,16 @@
   /* As tall as the Monsters pane, so the window does not jump between the two tabs. */
   min-height: 200px;
 }
+/* Round 5: a row is the number (tap it to change the preset), the stacks in order, the cost and
+   Send. The stacks scroll sideways inside the row; the number, the cost and Send stay put. */
 .b9r3h-row {
-  display: flex;
-  align-items: stretch;
-  gap: 6px;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: 0 6px;
   min-width: 0;
   min-height: 56px;
+  box-sizing: border-box;
   border: 2px solid var(--colour-border-strong);
   border-radius: 14px;
   background: var(--colour-surface-control);
@@ -165,20 +161,25 @@
   background: none;
 }
 .b9r3h-row__body {
-  flex: 1 1 auto;
+  align-self: stretch;
   display: grid;
-  grid-template-columns: 24px minmax(0, 1fr) auto;
-  align-items: center;
-  gap: 8px;
-  min-width: 0;
-  padding: 4px 4px 4px 8px;
+  align-content: center;
+  justify-items: center;
+  min-width: 44px;
+  min-height: 44px;
+  padding: 0 0 0 4px;
   border: 0;
   border-radius: 12px;
   background: none;
   color: var(--colour-text);
   font: inherit;
-  text-align: left;
   cursor: pointer;
+}
+.b9r3h-row--empty .b9r3h-row__body {
+  grid-column: 1 / -1;
+  grid-template-columns: 44px minmax(0, 1fr);
+  align-items: center;
+  padding-right: 48px;
 }
 .b9r3h .b9r3h-number {
   position: static;
@@ -193,22 +194,50 @@
   color: var(--colour-text-muted);
 }
 .b9r3h-row__plus {
-  flex: 1;
   color: var(--colour-accent);
   font-size: 28px;
   line-height: 1;
   text-align: center;
-  padding-right: 32px;
 }
+.b9r3h-row__pencil {
+  color: var(--colour-text-muted);
+  font-size: 12px;
+  line-height: 1;
+}
+/* The stacks in order, an arrow between one and the next. */
 .b9r3h-stacks {
-  flex: 1 1 auto;
   display: flex;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
   align-items: center;
-  gap: 4px;
+  gap: 0 12px;
   min-width: 0;
-  /* Counts extend two pixels beyond the portraits. Reserve their space. */
-  padding: 0 2px 2px 0;
+}
+.b9r3h-row__stacks {
+  align-self: stretch;
+  overflow-x: auto;
+  overflow-y: hidden;
+  overscroll-behavior-x: contain;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+  /* The counts reach two pixels past the portraits. */
+  padding: 2px 4px 2px 0;
+  cursor: pointer;
+}
+.b9r3h-row__stacks::-webkit-scrollbar {
+  display: none;
+}
+/* More stacks off the edge: the strip fades out on that side. */
+.b9r5h-more-right {
+  -webkit-mask-image: linear-gradient(to right, #000 calc(100% - 34px), transparent);
+  mask-image: linear-gradient(to right, #000 calc(100% - 34px), transparent);
+}
+.b9r5h-more-left {
+  -webkit-mask-image: linear-gradient(to right, transparent, #000 34px);
+  mask-image: linear-gradient(to right, transparent, #000 34px);
+}
+.b9r5h-more-left.b9r5h-more-right {
+  -webkit-mask-image: linear-gradient(to right, transparent, #000 34px, #000 calc(100% - 34px), transparent);
+  mask-image: linear-gradient(to right, transparent, #000 34px, #000 calc(100% - 34px), transparent);
 }
 .b9r3h-stack {
   position: relative;
@@ -235,23 +264,27 @@
   font-size: 12px;
   line-height: 16px;
 }
-.b9r3h-stack--extra {
-  display: none;
-}
-.b9r3h-stacks__more {
-  flex: none;
+.b9r3h-stack + .b9r3h-stack::before {
+  content: "›";
+  position: absolute;
+  left: -12px;
+  top: 50%;
+  width: 12px;
+  transform: translateY(-54%);
   color: var(--colour-text-muted);
   font-family: var(--font-display);
-  font-size: 13px;
+  font-size: 16px;
+  line-height: 1;
+  text-align: center;
 }
 .b9r3h-row__cost {
-  flex: none;
   display: flex;
   align-items: center;
   gap: 3px;
   font-family: var(--font-display);
   font-size: 13px;
   white-space: nowrap;
+  cursor: pointer;
 }
 .b9r3h-row__cost .res-icon {
   width: 20px;
@@ -268,37 +301,163 @@
   margin: 4px 4px 4px 0;
   padding: 0 12px;
 }
+.b9r3h-row > .b9r3h-row__body {
+  grid-area: 1 / 1;
+}
+.b9r3h-row > .b9r3h-row__stacks {
+  grid-area: 1 / 2;
+}
+.b9r3h-row > .b9r3h-row__cost {
+  grid-area: 1 / 3;
+}
+.b9r3h-row > .b9r3h-send {
+  grid-area: 1 / 4;
+}
+.b9r3h-row--empty > .b9r3h-row__body {
+  grid-area: 1 / 1 / 2 / -1;
+}
+/* What a Send did: a second line under the stacks it describes. */
 .b9r3h-said {
-  grid-column: 2 / -1;
-  flex: 1 1 auto;
   display: flex;
-  flex-direction: column;
+  flex-wrap: wrap;
+  gap: 2px 8px;
   min-width: 0;
+  font-size: 12px;
   line-height: 1.15;
 }
-
-.b9r3h-row--empty .b9r3h-row__plus {
-  grid-column: 2 / -1;
+.b9r3h-row > .b9r3h-said {
+  grid-column: 1 / -1;
+  grid-row: 2;
+  padding: 0 8px 6px 50px;
 }
 
-/* Two tablet columns cannot hold portraits, cost and the painted Send ends. */
+/* An upright tablet: two columns cannot hold the stacks, the cost and the painted Send ends. */
 @container hatch (560px <= width < 880px) {
   .b9r3h-presets {
     grid-template-columns: minmax(0, 1fr);
   }
 }
 
-.b9r3h-stacks__more--2 {
+/* ── Round 5: the quick-send rail beside the queue (wide screens) ───── */
+.b9r5h-rail,
+.b9r5h-note {
   display: none;
 }
-
-/* A wide row has room for every monster of the preset. */
-@container hatch (width > 880px) {
-  .b9r3h-stack--extra {
-    display: block;
+@container hatch (min-width: 880px) {
+  .b9r5h-rail {
+    flex: 1 1 200px;
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    grid-auto-rows: 50px;
+    gap: 6px;
+    min-width: 0;
   }
-  .b9r3h-stacks__more {
+  .b9r5h-rail--2 {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .b9r5h-rail--4 {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .b9r3h-tabs > .b9r5h-note {
+    flex: 1 1 auto;
+    display: flex;
+    flex-wrap: nowrap;
+    align-items: center;
+    gap: 8px;
+    font-size: 13px;
+    white-space: nowrap;
+    overflow: hidden;
+  }
+}
+.b9r5h-quick {
+  container-type: inline-size;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+  box-sizing: border-box;
+  border: 2px solid var(--colour-border-strong);
+  border-radius: 12px;
+  background: var(--colour-surface-control);
+}
+.b9r5h-quick--empty {
+  border-style: dashed;
+  border-color: var(--colour-border);
+  background: none;
+}
+.b9r5h-quick--sent {
+  border-color: var(--colour-accent);
+}
+.b9r5h-quick__body {
+  flex: 1 1 auto;
+  align-self: stretch;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  padding: 0 0 0 5px;
+  border: 0;
+  border-radius: 10px;
+  background: none;
+  color: var(--colour-text);
+  font: inherit;
+  cursor: pointer;
+}
+.b9r5h-quick__plus {
+  flex: 1 1 auto;
+  padding-right: 30px;
+  color: var(--colour-accent);
+  font-size: 24px;
+  line-height: 1;
+  text-align: center;
+}
+.b9r5h-quick__faces {
+  flex: 1 1 auto;
+  display: flex;
+  align-items: center;
+  gap: 0 11px;
+  min-width: 0;
+  overflow: hidden;
+  padding: 2px 0;
+  -webkit-mask-image: linear-gradient(to right, #000 calc(100% - 14px), transparent);
+  mask-image: linear-gradient(to right, #000 calc(100% - 14px), transparent);
+}
+.b9r5h-quick .b9r3h-stack {
+  width: 36px;
+  height: 36px;
+}
+.b9r5h-quick .b9r3h-stack + .b9r3h-stack::before {
+  left: -11px;
+  width: 11px;
+  font-size: 14px;
+}
+.b9r5h-quick__total {
+  display: none;
+  font-family: var(--font-display);
+  font-size: 13px;
+  white-space: nowrap;
+}
+.b9r3h .b9r5h-quick__send {
+  --skin-button2-cap: 10px;
+  min-width: 0;
+  width: 72px;
+  margin: 0 2px 0 0;
+  padding: 0;
+  font-size: 13px;
+}
+.b9r2h-remote .b9r5h-quick__send .b9r2h-addflag {
+  display: none;
+}
+/* A narrow chip (six presets): the number, how many monsters, Send. */
+@container (max-width: 190px) {
+  .b9r3h .b9r5h-quick__send {
+    width: 64px;
+  }
+  .b9r5h-quick__faces {
     display: none;
+  }
+  .b9r5h-quick__total {
+    display: inline;
   }
 }
 
@@ -343,51 +502,6 @@
   align-items: center;
   gap: 4px;
 }
-.b9r3h-edit__chips {
-  flex: 1 1 auto;
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  min-width: 0;
-  overflow-x: auto;
-  scrollbar-width: none;
-}
-.b9r3h-edit__hint {
-  color: var(--colour-text-muted);
-  font-size: 13px;
-  white-space: nowrap;
-}
-.b9r3h-chip {
-  position: relative;
-  flex: none;
-  width: 44px;
-  height: 44px;
-  padding: 0;
-  border: 2px solid transparent;
-  border-radius: 10px;
-  background: var(--colour-surface-sunken);
-  cursor: pointer;
-}
-.b9r3h-chip--on {
-  border-color: var(--colour-accent);
-}
-.b9r3h-chip__picture {
-  width: 100%;
-  height: 100%;
-  object-fit: contain;
-}
-.b9r3h-chip__count {
-  position: absolute;
-  right: -2px;
-  bottom: -2px;
-  padding: 0 4px;
-  border-radius: 8px;
-  background: rgb(18 26 36 / 0.92);
-  color: #fff;
-  font-family: var(--font-display);
-  font-size: 12px;
-  line-height: 16px;
-}
 .b9r3h-edit__sum {
   flex: none;
   display: flex;
@@ -407,10 +521,6 @@
 }
 .b9r3h-edit__stacks {
   white-space: nowrap;
-}
-.b9r3h-edit__stacks::before {
-  content: "▦ ";
-  color: var(--colour-text-muted);
 }
 .b9r3h .hatch-monster {
   position: relative;
@@ -437,64 +547,6 @@
   padding: 0 12px;
 }
 
-/* ── Round 4: the stacks are a sequence ─────────────────────────────── */
-/* In a row: an arrow between one stack and the next. */
-.b9r3h-stacks {
-  gap: 4px 12px;
-}
-.b9r3h-stack + .b9r3h-stack::before {
-  content: "›";
-  position: absolute;
-  left: -12px;
-  top: 50%;
-  width: 12px;
-  transform: translateY(-54%);
-  color: var(--colour-text-muted);
-  font-family: var(--font-display);
-  font-size: 16px;
-  line-height: 1;
-  text-align: center;
-}
-.b9r3h-row__body {
-  grid-template-columns: 24px minmax(0, 1fr) auto auto;
-}
-.b9r3h-row__pencil {
-  flex: none;
-  width: 16px;
-  color: var(--colour-text-muted);
-  font-size: 15px;
-  line-height: 1;
-  text-align: center;
-}
-.b9r3h-row--empty .b9r3h-row__body {
-  grid-template-columns: 24px minmax(0, 1fr);
-}
-/* While it is built: arrows between the stacks; the last stack is the one the count works on. */
-.b9r3h-then {
-  flex: none;
-  width: 8px;
-  color: var(--colour-text-muted);
-  font-family: var(--font-display);
-  font-size: 16px;
-  line-height: 1;
-  text-align: center;
-}
-.b9r3h-chip--set {
-  cursor: default;
-}
-.b9r3h-chip--next {
-  border-style: dashed;
-  border-color: var(--colour-border-strong);
-  background: none;
-  cursor: default;
-}
-.b9r3h-chip--next .b9r3h-chip__picture {
-  opacity: 0.45;
-}
-.b9r3h-chip--next .b9r3h-chip__count {
-  background: var(--colour-accent);
-  color: var(--colour-text-inverse, #1b1b1b);
-}
 .b9r3h-edit__undo {
   flex: none;
   display: grid;
@@ -543,33 +595,6 @@
     gap: 4px;
     min-height: 0;
   }
-  .b9r3h-row {
-    min-height: 50px;
-    box-sizing: border-box;
-    gap: 2px;
-  }
-  .b9r3h-row__body {
-    gap: 6px;
-    padding: 2px 2px 2px 6px;
-  }
-  .b9r3h-stack {
-    width: 38px;
-    height: 38px;
-  }
-  .b9r3h-stacks {
-    gap: 3px;
-  }
-  .b9r3h-row__cost .res-icon {
-    width: 18px;
-  }
-  .b9r3h .b9r3h-send {
-    min-width: 70px;
-    margin: 0 3px 0 0;
-    padding: 0 8px;
-  }
-  .b9r3h-row__cost {
-    font-size: 12px;
-  }
   /* Building: the warning shrinks to its picture and number. */
   .b9r3h-editing .b9r3h-warn__short {
     display: none;
@@ -579,37 +604,122 @@
   }
 }
 
-/* A phone: the preset's head is two lines (number, size, Clear, Done; then its monsters, whole),
-   and Done sits there instead of under the count, so the tab is no taller than Monsters. */
-@media (max-width: 620px), (max-height: 500px) {
-  .b9r3h-stacks {
-    flex-wrap: nowrap;
+/* ── Round 5: a preset is built in the queue's own box grid ─────────── */
+.b9r3h-edit {
+  gap: 12px;
+  padding: 6px 8px 6px 10px;
+}
+.b9r5h-boxes {
+  flex: none;
+  display: grid;
+  grid-template-columns: repeat(5, 50px);
+  grid-auto-rows: 50px;
+  gap: 6px;
+}
+.b9r3h .b9r5h-box {
+  position: relative;
+  margin: 0;
+  cursor: default;
+}
+.b9r3h button.b9r5h-box--last {
+  border-color: var(--colour-accent);
+  cursor: pointer;
+}
+.b9r3h .b9r5h-box--on {
+  box-shadow: 0 0 0 2px var(--colour-accent);
+}
+.b9r3h .b9r5h-box--next {
+  border: 1px dashed var(--colour-accent);
+  background: none;
+}
+.b9r5h-box--next .hatch-slot__picture {
+  opacity: 0.45;
+}
+.b9r5h-box--next .hatch-slot__count {
+  background: var(--colour-accent);
+  color: var(--colour-text-inverse, #1b1b1b);
+}
+/* Undo and Clear stand where the queue has its speed-up and Clear. */
+.b9r3h-edit__side {
+  flex: none;
+  display: grid;
+  grid-auto-rows: 50px;
+  gap: 6px;
+  width: 64px;
+}
+.b9r3h-edit__side > .b9r3h-edit__undo,
+.b9r3h-edit__side > .b9r3h-edit__bin {
+  width: auto;
+  height: auto;
+  min-width: 0;
+  border: 1px solid var(--colour-border);
+  border-radius: var(--radius-md);
+  background: var(--colour-surface-raised);
+}
+.b9r3h-edit__sum {
+  align-items: flex-start;
+  gap: 4px;
+  font-size: 14px;
+}
+.b9r3h-edit__stacks strong {
+  font-size: 22px;
+  font-weight: inherit;
+  color: var(--colour-accent);
+}
+.b9r3h-edit__stacks--full strong {
+  color: var(--colour-danger);
+}
+.b9r3h .b9r3h-edit__done {
+  margin-left: auto;
+}
+/* The order in words: only where the band has room beside the boxes. */
+.b9r3h-edit__words {
+  display: none;
+}
+@container hatch (min-width: 880px) {
+  .b9r3h-edit__words {
+    flex: 1 1 0;
+    align-self: stretch;
+    display: flex;
+    flex-flow: column wrap;
+    align-content: flex-start;
+    gap: 1px 18px;
+    min-width: 0;
+    max-height: 106px;
+    margin: 0;
+    padding: 0 0 0 30px;
     overflow: hidden;
+    border-left: 1px solid var(--colour-border);
+    color: var(--colour-text-muted);
+    font-size: 12px;
+    line-height: 20px;
   }
-  /* The +N is information, not expendable overflow. Shrink only the
-     decorative portraits when Classic's painted Send ends take more room. */
-  .b9r3h-stacks > .b9r3h-stack {
-    flex-shrink: 1;
-    min-width: 32px;
-  }
-  .b9r3h-stacks__more {
+  .b9r3h-edit__words li {
+    width: 128px;
     white-space: nowrap;
   }
+  .b9r3h-edit__words strong {
+    color: var(--colour-text);
+    font-family: var(--font-display);
+    font-weight: inherit;
+  }
 }
+
+/* A phone: the number, what is left and Done on one line; the boxes under it, Undo and Clear
+   beside them (as the queue's own grid and its side column). */
 @media (max-width: 620px) {
   .b9r3h-editing .b9r3h-tabs {
     align-items: flex-start;
   }
   .b9r3h-editing .b9r3h-edit {
     display: grid;
-    grid-template-columns: auto minmax(min-content, 1fr) auto auto auto;
+    grid-template-columns: auto minmax(0, 1fr) 64px;
     align-items: center;
-    gap: 2px 4px;
-    padding: 2px 4px 4px 6px;
+    gap: 6px;
+    padding: 4px 6px 6px;
   }
   .b9r3h-edit__which {
-    grid-column: 1;
-    grid-row: 1;
+    grid-area: 1 / 1;
     gap: 2px;
   }
   .b9r3h-edit__scope {
@@ -617,43 +727,79 @@
     height: 20px;
   }
   .b9r3h-edit__sum {
-    grid-column: 2;
-    grid-row: 1;
-    align-items: flex-start;
+    grid-area: 1 / 2;
+    flex-direction: row;
+    align-items: baseline;
+    gap: 10px;
     padding-left: 4px;
+    font-size: 13px;
     white-space: nowrap;
   }
-  .b9r3h-edit__undo {
-    grid-column: 3;
-    grid-row: 1;
-  }
-  .b9r3h-edit__bin {
-    grid-column: 4;
-    grid-row: 1;
+  .b9r3h-edit__stacks strong {
+    font-size: 18px;
   }
   .b9r3h .b9r3h-edit__done {
     --skin-button2-cap: 14px;
-    grid-column: 5;
-    grid-row: 1;
-    min-width: 58px;
+    grid-area: 1 / 3;
+    min-width: 0;
+    margin: 0;
     padding: 0 4px;
   }
-  .b9r3h-edit__bin {
-    padding: 0 2px;
+  .b9r5h-boxes {
+    grid-area: 2 / 1 / 3 / 3;
+    grid-template-columns: repeat(5, minmax(0, 1fr));
   }
-  .b9r3h-edit__chips {
-    grid-column: 1 / -1;
-    grid-row: 2;
+  .b9r3h-edit__side {
+    grid-area: 2 / 3;
+  }
+}
+@media (max-width: 620px), (max-height: 500px) {
+  .b9r3h-row {
     min-height: 46px;
-    padding: 0 2px 2px 0;
+    gap: 0 4px;
   }
-  /* Beside the flagged Send (an outpost run from home) a row holds two monsters, then "+N". */
-  .b9r2h-remote .b9r3h-stack:nth-child(n + 3),
-  .b9r2h-remote .b9r3h-stacks__more--3 {
-    display: none;
+  .b9r3h-row__body {
+    min-width: 40px;
+    padding-left: 2px;
   }
-  .b9r2h-remote .b9r3h-stacks__more--2 {
-    display: inline;
+  .b9r3h-stack {
+    width: 38px;
+    height: 38px;
+  }
+  .b9r3h-stacks {
+    gap: 0 10px;
+  }
+  .b9r3h-stack + .b9r3h-stack::before {
+    left: -10px;
+    width: 10px;
+    font-size: 14px;
+  }
+  .b9r3h-row__cost {
+    font-size: 12px;
+  }
+  .b9r3h-row__cost .res-icon {
+    width: 18px;
+  }
+  .b9r3h .b9r3h-send {
+    min-width: 70px;
+    margin: 0 3px 0 0;
+    padding: 0 8px;
+  }
+  /* What a Send did takes the stacks' and the cost's place for a moment, so six rows keep
+     their height on the upright phone. */
+  .b9r3h-row:has(.b9r3h-said) > .b9r3h-row__stacks,
+  .b9r3h-row:has(.b9r3h-said) > .b9r3h-row__cost {
+    visibility: hidden;
+  }
+  .b9r3h-row > .b9r3h-said {
+    grid-column: 2 / 4;
+    grid-row: 1;
+    flex-direction: column;
+    flex-wrap: nowrap;
+    gap: 0;
+    padding: 0;
+    font-size: 13px;
+    pointer-events: none;
   }
 }
 
@@ -663,71 +809,6 @@
   .b9r3h .hatch-info {
     position: static;
   }
-}
-
-/* Round 4, a phone row: the pencil sits under the number, and the arrows keep their gap. */
-@media (max-width: 620px), (max-height: 500px) {
-  .b9r3h-row__body {
-    grid-template-columns: 24px minmax(0, 1fr) auto;
-    grid-template-rows: auto auto;
-    row-gap: 0;
-  }
-  .b9r3h-row__body > .b9r3h-number {
-    grid-area: 1 / 1;
-    align-self: end;
-  }
-  .b9r3h-row__pencil {
-    grid-area: 2 / 1;
-    width: 24px;
-    font-size: 12px;
-    align-self: start;
-  }
-  .b9r3h-row__body > .b9r3h-stacks,
-  .b9r3h-row__body > .b9r3h-said {
-    grid-row: 1 / 3;
-  }
-  .b9r3h-row__body > .b9r3h-row__cost {
-    grid-area: 1 / 3 / 3 / 4;
-  }
-  .b9r3h-row__body > .b9r3h-said {
-    grid-column: 2 / -1;
-  }
-  .b9r3h-row--empty .b9r3h-row__body {
-    grid-template-rows: auto;
-  }
-  .b9r3h-stacks {
-    gap: 3px 10px;
-  }
-  .b9r3h-stack + .b9r3h-stack::before {
-    left: -10px;
-    width: 10px;
-    font-size: 14px;
-  }
-}
-
-/* Review: keep Send feedback alongside the sequence it describes. */
-.b9r3h-row:has(.b9r3h-said) {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  align-items: center;
-}
-.b9r3h-row > .b9r3h-said {
-  grid-column: 1 / -1;
-  grid-row: 2;
-  padding: 0 8px 6px;
-  font-size: 12px;
-  flex-direction: row;
-  flex-wrap: wrap;
-  gap: 2px 8px;
-}
-/* Wrap whole chips and +N instead of cutting off the sequence summary. */
-.b9r3h-row .b9r3h-stacks {
-  flex-wrap: wrap;
-  overflow: visible;
-}
-.b9r3h-row .b9r3h-stacks__more {
-  white-space: nowrap;
-  min-width: 20px;
 }
 
 /* Match the editable tail to its quantity field; totals have a quieter treatment. */
@@ -792,43 +873,26 @@
   }
 }
 
-/* A phone row stays one line (five rows must fit the upright phone): the stacks shrink a little
-   and "+N" keeps its room, instead of wrapping to a second line. */
-@media (max-width: 620px), (max-height: 500px) {
-  .b9r3h-row .b9r3h-stacks {
-    flex-wrap: nowrap;
-    overflow: hidden;
-    gap: 3px 9px;
+
+.b9r5h-quick__n {
+  display: none;
+}
+@container (max-width: 126px) {
+  .b9r5h-quick:not(.b9r5h-quick--empty) > .b9r5h-quick__body,
+  .b9r5h-quick__word {
+    display: none;
   }
-  .b9r3h-row .b9r3h-stacks > .b9r3h-stack {
-    flex: 0 1 38px;
-    min-width: 28px;
+  .b9r5h-quick__n {
+    display: inline;
+    font-size: 15px;
+    white-space: nowrap;
   }
-  .b9r3h-row .b9r3h-stacks__more {
-    flex: none;
-    min-width: 0;
+  .b9r3h .b9r5h-quick__send {
+    flex: 1 1 auto;
+    width: auto;
+    margin: 0 2px;
   }
-  .b9r3h-stack + .b9r3h-stack::before {
-    left: -9px;
-    width: 9px;
-  }
-  /* What a Send did takes the stacks' place for a moment (as round 3), so the fifth row's
-     words never fall below the window. */
-  .b9r3h-row:has(.b9r3h-said) .b9r3h-row__body > :not(.b9r3h-number) {
-    visibility: hidden;
-  }
-  .b9r3h-row > .b9r3h-row__body,
-  .b9r3h-row > .b9r3h-said {
-    grid-row: 1;
-    grid-column: 1;
-  }
-  .b9r3h-row > .b9r3h-said {
-    flex-direction: column;
-    flex-wrap: nowrap;
-    gap: 0;
-    align-self: center;
-    padding: 0 4px 0 38px;
-    font-size: 13px;
-    pointer-events: none;
+  .b9r5h-quick__plus {
+    padding-right: 4px;
   }
 }

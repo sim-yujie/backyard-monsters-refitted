@@ -16,7 +16,13 @@
  *   `housing`  the tab's own housing box is open
  *   `live`     round 3's edit view: the hatcheries and the queue stay on show while a preset is built
  *
- * - Presets are numbered, never named: 3 slots at level 2, 5 at level 3.
+ * - Presets are numbered, never named. Round 5 (owner, 22 Nov): 2 slots at level 1, 4 at level 2,
+ *   6 at level 3. Level 1 is today's HCC (7 stacks of 20) plus its two presets (`b9hcc=1`).
+ * - Round 5: a preset is built in the SAME box grid as the queue (one box = one queue stack), so
+ *   the empty boxes say how much room is left; Undo takes the last box off.
+ * - Round 5: a preset row's stacks scroll sideways (no "+N"); Send and the cost stay put.
+ * - Round 5: on a wide screen the free room beside the queue holds a quick-send rail, one small
+ *   Send per preset, on either tab; what a Send did is said in the switch's row.
  * - A preset is made only here: tap a slot, pick monsters and counts.
  * - Round 4 (owner, 22 Nov): a preset is a SEQUENCE of stacks, kept in the order they were
  *   added, and the same monster may come back later ("30 Pokey > 40 Octo-ooze > 30 Pokey").
@@ -30,7 +36,7 @@
  *   runs out it adds what fits and says how many ("Added 82 of 140").
  * - Level 3 keeps two lists: the main yard's, and one shared by every outpost.
  */
-import { type HatchYard, type QueueStack, academyLevels, priceOf, spaceOf } from "@/game/monsters/hatchPlan";
+import { HCC_STACKS, type HatchYard, type QueueStack, academyLevels, priceOf, spaceOf } from "@/game/monsters/hatchPlan";
 import { monsterEntry } from "@/game/monsters/monsterCatalogue";
 import { classicLook } from "@/game/classicLook";
 import { gameIcon, type GameIconName } from "@/ui/gameIcon";
@@ -48,7 +54,6 @@ const states = (): Set<string> => new Set((b9("b9state") ?? "").split(",").filte
 
 /** The outpost with no HCC of its own in yardtester's copy. */
 const NO_HCC = new Set(["22913802238208"]);
-const QUEUE_STACKS = 10;
 
 /** The stacks in the order they were added; the same monster may come back, never twice in a row. */
 type Preset = [id: string, count: number][];
@@ -59,9 +64,21 @@ type Scope = "main" | "outposts";
 const MAIN_PRESETS: readonly Preset[] = [
   [["C1", 30], ["C2", 40], ["C1", 30]],
   [["C12", 40], ["C5", 40], ["C12", 20]],
-  [["C14", 40], ["C13", 60], ["C3", 40], ["C6", 20]],
+  // A long one (eight queue stacks at either level; `long()` sizes it): its row scrolls sideways.
+  [],
   [["C6", 100], ["C9", 40]],
   [["C2", 60], [LOCKED, 30], ["C4", 60]],
+  [["C8", 60], ["C7", 30]],
+];
+const long = (size: number): Preset => [
+  ["C14", size],
+  ["C13", size],
+  ["C3", size],
+  ["C6", size],
+  ["C1", size],
+  ["C2", size],
+  ["C12", size],
+  ["C5", size / 2],
 ];
 const OUTPOST_PRESETS: readonly Preset[] = [
   [["C7", 60], ["C2", 40]],
@@ -69,6 +86,7 @@ const OUTPOST_PRESETS: readonly Preset[] = [
   [["C8", 30], ["C5", 30]],
   [["C6", 90]],
   [["C3", 60], ["C4", 30], ["C1", 30]],
+  [["C2", 90], ["C7", 30]],
 ];
 /** What a first preset looks like half-way through being built. */
 const BUILDING: Preset = [["C1", 30], ["C2", 40]];
@@ -153,8 +171,10 @@ interface Sent {
 
 export class B9HccR3 {
   readonly level = b9HccLevel();
-  /** Presets a list holds: 3 at level 2, 5 at level 3 (owner, 21 Nov 2026). */
-  readonly slots = this.level >= 3 ? 5 : 3;
+  /** Presets a list holds: 2 at level 1, 4 at level 2, 6 at level 3 (owner, 22 Nov 2026). */
+  readonly slots = this.level >= 3 ? 6 : this.level >= 2 ? 4 : 2;
+  /** Stacks (boxes) the queue holds: today's 7 at level 1, 10 from level 2. */
+  readonly stacks = this.level >= 2 ? 10 : HCC_STACKS;
   /** Monsters one stack holds. */
   readonly size = this.level >= 3 ? 30 : 20;
   private readonly open = states();
@@ -170,6 +190,7 @@ export class B9HccR3 {
   private readonly bench = el("div", "b9r2h-bench");
   private readonly tabs = el("div", "b9r3h-tabs");
   private readonly list = el("section", "b9r3h-presets");
+  private readonly rail = el("section", "b9r5h-rail");
   private readonly editHead = el("div", "b9r3h-edit");
   private readonly editBox = el("div", "b9r3h-set");
   private readonly yardsPage = el("section", "b9r2h-yards");
@@ -187,10 +208,12 @@ export class B9HccR3 {
     }
     const fill = (from: readonly Preset[]): Preset[] => {
       const filled = this.open.has("empty") ? 0 : this.open.has("filled") ? this.slots : 2;
-      return Array.from({ length: this.slots }, (_, at) => (at < filled ? (from[at] ?? []).map(([id, count]) => [id, count] as [string, number]) : []));
+      return Array.from({ length: this.slots }, (_, at) =>
+        at < filled ? (from[at]?.length ? from[at]! : long(this.size)).map(([id, count]) => [id, count] as [string, number]) : [],
+      );
     };
     this.presets = { main: fill(MAIN_PRESETS), outposts: fill(OUTPOST_PRESETS) };
-    this.queues = { main: busyQueue(this.size, this.open.has("room") ? 8 : QUEUE_STACKS), outposts: outpostQueue(this.size) };
+    this.queues = { main: busyQueue(this.size, this.stacks - (this.open.has("room") ? 2 : 0)), outposts: outpostQueue(this.size) };
     if (this.open.has("presets") || this.open.has("edit") || this.open.has("sent")) this.tab = "presets";
     if (this.open.has("edit")) {
       this.editing = 0;
@@ -201,6 +224,7 @@ export class B9HccR3 {
     this.yardsPage.hidden = !(this.open.has("yards") && this.level >= 3);
     this.tabs.setAttribute("role", "tablist");
     this.list.setAttribute("aria-label", "Presets");
+    this.rail.setAttribute("aria-label", "Send a preset");
     if (this.open.has("housing")) root.classList.add("b9r2h-show-housing");
     if (this.open.has("sent")) queueMicrotask(() => this.send(0));
   }
@@ -231,7 +255,7 @@ export class B9HccR3 {
     const split = this.scroll.querySelector(".hatch__split");
     if (lines && !this.bench.isConnected) {
       lines.before(this.bench);
-      this.bench.append(lines);
+      this.bench.append(lines, this.rail);
     }
     if (split && !this.tabs.isConnected) {
       // The switch sits in the strip between the rack and the monsters; the tab's own
@@ -253,6 +277,7 @@ export class B9HccR3 {
     this.renderStrip();
     this.renderTabs();
     this.renderPresets();
+    this.renderRail();
     this.renderEditor();
     this.renderYards();
   }
@@ -362,6 +387,7 @@ export class B9HccR3 {
     this.editing = null;
     this.renderTabs();
     this.renderPresets();
+    this.renderRail();
     this.renderEditor();
   }
 
@@ -406,6 +432,13 @@ export class B9HccR3 {
     group.append(tab("monsters", "Monsters"), tab("presets", "Presets", ...scope));
     // While a preset is built, its head takes the switch's place: the tab is no taller than Monsters.
     const parts: Node[] = [this.editing === null ? group : this.editHead];
+    // A Send from the quick-send rail, seen from the Monsters tab: what it did is said here.
+    if (this.sent && this.editing === null && this.tab === "monsters" && this.sent.scope === this.scope()) {
+      const note = this.said(this.sent);
+      note.classList.add("b9r5h-note");
+      note.prepend(this.badge(this.sent.slot));
+      parts.push(note);
+    }
     const waiting = this.root.querySelectorAll(".hatch-now--stalled").length;
     if (waiting > 0) {
       const warn = btn("b9r3h-warn", `Housing is full: ${waiting} hatched monsters wait in the Hatcheries for room`);
@@ -436,6 +469,55 @@ export class B9HccR3 {
     return el("span", "b9r2h-mix__number b9r3h-number", String(at + 1));
   }
 
+  /** What a Send did: "Added 60 of 140", and why it stopped or what it skipped. */
+  private said(sent: Sent): HTMLElement {
+    const said = el("span", `b9r3h-said${sent.why ? " b9r3h-said--short" : ""}`);
+    said.setAttribute("role", "status");
+    said.append(
+      el("strong", "", sent.why ? `Added ${sent.added} of ${sent.of}` : `Added ${sent.added}`),
+      el(
+        "span",
+        "",
+        sent.skipped.length
+          ? `${sent.skipped.join(", ")} locked: skipped`
+          : sent.why === "queue"
+            ? "The queue is full"
+            : sent.why === "goo"
+              ? "Not enough goo"
+              : "At the end of the queue",
+      ),
+    );
+    return said;
+  }
+
+  /** A preset's stacks in order. They scroll sideways when the row is too narrow; a fade says so. */
+  private faces(preset: Preset, className: string): HTMLElement {
+    const faces = el("span", `b9r3h-stacks ${className}`);
+    for (const [id, count] of preset) {
+      const one = el("span", "b9r3h-stack");
+      one.append(portrait(id, "b9r3h-stack__picture"), el("span", "b9r3h-stack__count", `×${count}`));
+      faces.append(one);
+    }
+    const mark = (): void => {
+      faces.classList.toggle("b9r5h-more-left", faces.scrollLeft > 2);
+      faces.classList.toggle("b9r5h-more-right", faces.scrollLeft + faces.clientWidth < faces.scrollWidth - 2);
+    };
+    faces.addEventListener("scroll", mark, { passive: true });
+    // A mouse wheel moves the strip sideways (a desktop has no finger to drag it with).
+    faces.addEventListener(
+      "wheel",
+      (event) => {
+        if (faces.scrollWidth <= faces.clientWidth || Math.abs(event.deltaY) < Math.abs(event.deltaX)) return;
+        const before = faces.scrollLeft;
+        faces.scrollLeft += event.deltaY;
+        if (faces.scrollLeft !== before) event.preventDefault();
+      },
+      { passive: false },
+    );
+    new ResizeObserver(mark).observe(faces);
+    return faces;
+  }
+
   private renderPresets(): void {
     const scope = this.scope();
     const rows: Node[] = [];
@@ -449,54 +531,67 @@ export class B9HccR3 {
         return;
       }
       const total = totalOf(preset);
-      const body = btn("b9r3h-row__body", `Preset ${at + 1}, ${total} monsters: change it`, this.badge(at));
-      const sent = this.sent && this.sent.scope === scope && this.sent.slot === at ? this.sent : null;
-      if (sent) {
-        const said = el("span", `b9r3h-said${sent.why ? " b9r3h-said--short" : ""}`);
-        said.setAttribute("role", "status");
-        said.append(
-          el("strong", "", sent.why ? `Added ${sent.added} of ${sent.of}` : `Added ${sent.added}`),
-          el(
-            "span",
-            "",
-            sent.skipped.length
-              ? `${sent.skipped.join(", ")} locked: skipped`
-              : sent.why === "queue"
-                ? "The queue is full"
-                : sent.why === "goo"
-                  ? "Not enough goo"
-                  : "At the end of the queue",
-          ),
-        );
-        row.append(said);
-      }
-      {
-        const faces = el("span", "b9r3h-stacks");
-        preset.forEach(([id, count], index) => {
-          const one = el("span", "b9r3h-stack");
-          one.append(portrait(id, "b9r3h-stack__picture"), el("span", "b9r3h-stack__count", `×${count}`));
-          if (index >= 3) one.classList.add("b9r3h-stack--extra");
-          faces.append(one);
-        });
-        // A phone row shows three monsters (two beside the wider flagged Send), then how many more.
-        if (preset.length > 3) faces.append(el("span", "b9r3h-stacks__more b9r3h-stacks__more--3", `+${preset.length - 3}`));
-        if (preset.length > 2) faces.append(el("span", "b9r3h-stacks__more b9r3h-stacks__more--2", `+${preset.length - 2}`));
-        const cost = el("span", "b9r3h-row__cost");
-        const goo = preset.reduce((sum, [id, count]) => sum + count * this.priceOf(id), 0);
-        cost.append(resourceIcon("r4"), el("span", "", short(goo)));
-        // The row opens the preset to change it: a small pencil says so.
-        body.append(faces, cost, el("span", "b9r3h-row__pencil", "✎"));
-      }
+      // The number (with a small pencil) opens the preset to change it; so does a tap on its stacks.
+      const body = btn("b9r3h-row__body", `Preset ${at + 1}, ${total} monsters: change it`, this.badge(at), el("span", "b9r3h-row__pencil", "✎"));
       body.addEventListener("click", () => this.edit(at));
+      // The stacks are NOT inside the button: a strip inside a button does not scroll in every browser.
+      const faces = this.faces(preset, "b9r3h-row__stacks");
+      faces.setAttribute("aria-label", `Preset ${at + 1}: ${preset.length} stacks in order`);
+      faces.addEventListener("click", () => this.edit(at));
+      const cost = el("span", "b9r3h-row__cost");
+      const goo = preset.reduce((sum, [id, count]) => sum + count * this.priceOf(id), 0);
+      cost.append(resourceIcon("r4"), el("span", "", short(goo)));
+      cost.addEventListener("click", () => this.edit(at));
       const send = btn("btn btn--primary b9r3h-send", `Send preset ${at + 1} to the end of the queue`);
       if (this.remote) send.append(art("outpost", 24, "b9r2h-addflag"));
       send.append(el("span", "", "Send"));
       send.addEventListener("click", () => this.send(at));
-      row.append(body, send);
+      row.append(body, faces, cost, send);
+      const sent = this.sent && this.sent.scope === scope && this.sent.slot === at ? this.sent : null;
+      if (sent) row.append(this.said(sent));
       rows.push(row);
     });
     this.list.replaceChildren(...rows);
     this.list.dataset.scope = scope;
+  }
+
+  /**
+   * The quick-send rail: on a wide screen the room beside the queue holds one small Send per
+   * preset, on either tab. It only sends; a preset is still made and changed in the Presets tab.
+   */
+  private renderRail(): void {
+    const scope = this.scope();
+    const chips: Node[] = [];
+    this.presets[scope].forEach((preset, at) => {
+      const chip = el("div", `b9r5h-quick${preset.length ? "" : " b9r5h-quick--empty"}`);
+      if (!preset.length) {
+        const make = btn("b9r5h-quick__body", `Make preset ${at + 1}`, this.badge(at), el("span", "b9r5h-quick__plus", "+"));
+        make.addEventListener("click", () => this.edit(at));
+        chip.append(make);
+        chips.push(chip);
+        return;
+      }
+      const body = btn("b9r5h-quick__body", `Preset ${at + 1}, ${totalOf(preset)} monsters: open the presets`, this.badge(at));
+      const faces = el("span", "b9r5h-quick__faces");
+      for (const [id, count] of preset) {
+        const one = el("span", "b9r3h-stack");
+        one.append(portrait(id, "b9r3h-stack__picture"), el("span", "b9r3h-stack__count", `×${count}`));
+        faces.append(one);
+      }
+      body.append(faces, el("span", "b9r5h-quick__total", `×${totalOf(preset)}`));
+      body.addEventListener("click", () => this.setTab("presets"));
+      const send = btn("btn btn--primary b9r3h-send b9r5h-quick__send", `Send preset ${at + 1} to the end of the queue`);
+      if (this.remote) send.append(art("outpost", 24, "b9r2h-addflag"));
+      // A very narrow chip (six presets on a tablet) is the button alone: its number and an arrow.
+      send.append(el("span", "b9r5h-quick__n", `${at + 1} ▸`), el("span", "b9r5h-quick__word", "Send"));
+      send.title = `Send preset ${at + 1}`;
+      send.addEventListener("click", () => this.send(at));
+      if (this.sent && this.sent.scope === scope && this.sent.slot === at) chip.classList.add("b9r5h-quick--sent");
+      chip.append(body, send);
+      chips.push(chip);
+    });
+    this.rail.className = `b9r5h-rail b9r5h-rail--${this.slots}`;
+    this.rail.replaceChildren(...chips);
   }
 
   /** Adds the preset to the end of the queue by the HCC's stacking rule, as far as stacks and goo go. */
@@ -525,7 +620,7 @@ export class B9HccR3 {
         }
         const last = queue.at(-1);
         if (last && last[0] === id && last[1] < this.size) last[1] += 1;
-        else if (queue.length < QUEUE_STACKS) queue.push([id, 1, level]);
+        else if (queue.length < this.stacks) queue.push([id, 1, level]);
         else {
           why = "queue";
           break outer;
@@ -542,6 +637,7 @@ export class B9HccR3 {
   /* ── Building a preset: the monsters and the count, for slot N ────── */
 
   private edit(at: number): void {
+    this.tab = "presets";
     this.editing = at;
     this.sent = null;
     this.renderTabs();
@@ -568,7 +664,7 @@ export class B9HccR3 {
   /** The most the stack being counted may hold: a preset never outgrows the queue's ten stacks. */
   private roomFor(preset: Preset, id: string | null): number {
     const others = this.lastOf(preset, id) ? preset.slice(0, -1) : preset;
-    return Math.max(0, (QUEUE_STACKS - this.stacksOf(others)) * this.size);
+    return Math.max(0, (this.stacks - this.stacksOf(others)) * this.size);
   }
 
   /**
@@ -602,57 +698,70 @@ export class B9HccR3 {
     const now = mine ? mine[1] : 0;
     const max = this.roomFor(preset, chosen);
 
-    // The head: the slot's number (and whose list), its stacks in order, its size, Undo, Clear, Done.
+    // The head: the slot's number (and whose list), then the preset as the queue's own box grid:
+    // one box per queue stack, so the empty boxes are the room that is left.
     const which = el("span", "b9r3h-edit__which");
     if (this.level >= 3) which.append(art(this.remote ? "outpost" : "townhall", 24, "b9r3h-edit__scope"));
     which.append(this.badge(at));
-    const chips = el("div", "b9r3h-edit__chips");
-    chips.setAttribute("role", "list");
-    chips.setAttribute("aria-label", `Preset ${at + 1}: its stacks in order`);
-    if (!preset.length) chips.append(el("span", "b9r3h-edit__hint", "Pick a monster, set how many"));
-    const then = (): HTMLElement => {
-      const mark = el("span", "b9r3h-then", "›");
-      mark.setAttribute("aria-hidden", "true");
-      return mark;
-    };
+    const used = this.stacksOf(preset);
+    const left = this.stacks - used;
+    const boxes = el("div", "b9r5h-boxes");
+    boxes.setAttribute("role", "list");
+    boxes.setAttribute("aria-label", `Preset ${at + 1}: ${used} of ${this.stacks} boxes filled, ${left} left`);
+    let box = 0;
     preset.forEach(([id, count], index) => {
       const name = monsterEntry(id)?.name ?? id;
-      if (index > 0) chips.append(then());
-      if (index < preset.length - 1) {
-        // An earlier stack: set, in its place.
-        const chip = el("span", "b9r3h-chip b9r3h-chip--set");
-        chip.setAttribute("role", "listitem");
-        chip.setAttribute("aria-label", `Stack ${index + 1}: ${name}, ${count}`);
-        chip.append(portrait(id, "b9r3h-chip__picture"), el("span", "b9r3h-chip__count", `×${count}`));
-        chips.append(chip);
-        return;
+      const last = index === preset.length - 1;
+      for (let rest = count; rest > 0; rest -= this.size) {
+        const holds = Math.min(rest, this.size);
+        box += 1;
+        // The last stack's boxes are the ones the count works on; a tap chooses its monster.
+        const one = last
+          ? btn(`hatch-slot b9r5h-box b9r5h-box--last${id === chosen ? " b9r5h-box--on" : ""}`, `Box ${box}, the last stack: ${name}, ${holds}. Change its count`)
+          : el("div", "hatch-slot b9r5h-box");
+        if (!last) one.setAttribute("aria-label", `Box ${box}: ${name}, ${holds}`);
+        one.setAttribute("role", "listitem");
+        one.append(el("span", "hatch-slot__count", `×${holds}`), portrait(id, "hatch-slot__picture"));
+        if (last && id === chosen && rest <= this.size) one.append(el("span", "b9r3h-count-mark", "✎"));
+        if (last) one.addEventListener("click", () => this.root.querySelector<HTMLElement>(`.hatch-monster[data-monster="${id}"]`)?.click());
+        boxes.append(one);
       }
-      // The last stack: the one the count works on. A tap chooses its monster.
-      const chip = btn(`b9r3h-chip b9r3h-chip--last${id === chosen ? " b9r3h-chip--on" : ""}`, `Stack ${index + 1}, the last: ${name}, ${count}. Change its count`);
-      chip.append(portrait(id, "b9r3h-chip__picture"), el("span", "b9r3h-chip__count", `×${count}`));
-      if (id === chosen) chip.append(el("span", "b9r3h-count-mark", "✎"));
-      chip.addEventListener("click", () => this.root.querySelector<HTMLElement>(`.hatch-monster[data-monster="${id}"]`)?.click());
-      chips.append(chip);
     });
-    // Another monster is chosen: its stack would be the next one, shown faint at the end.
+    // Another monster is chosen: its stack would start in the next box, shown faint.
+    let ghost = false;
     if (preset.length && chosen && ready && !mine && max > 0) {
-      const ghost = el("span", "b9r3h-chip b9r3h-chip--next");
-      ghost.setAttribute("aria-hidden", "true");
-      ghost.append(portrait(chosen, "b9r3h-chip__picture"), el("span", "b9r3h-chip__count", "+"));
-      chips.append(then(), ghost);
+      const next = el("div", "hatch-slot b9r5h-box b9r5h-box--next");
+      next.setAttribute("aria-hidden", "true");
+      next.append(el("span", "hatch-slot__count", "+"), portrait(chosen, "hatch-slot__picture"));
+      boxes.append(next);
+      ghost = true;
+    }
+    for (let at = used + (ghost ? 1 : 0); at < this.stacks; at += 1) {
+      const empty = el("div", "hatch-slot hatch-slot--empty b9r5h-box");
+      empty.setAttribute("role", "listitem");
+      empty.setAttribute("aria-label", "Empty box");
+      boxes.append(empty);
     }
     const sum = el("span", "b9r3h-edit__sum");
     const goo = preset.reduce((total, [id, count]) => total + count * this.priceOf(id), 0);
-    const stacks = el("span", "b9r3h-edit__stacks", `${this.stacksOf(preset)}/${QUEUE_STACKS}`);
-    stacks.title = `Queue slots used; each holds up to ${this.size} monsters. A group may fill multiple slots.`;
-    stacks.setAttribute("aria-label", `${this.stacksOf(preset)} of ${QUEUE_STACKS} queue slots; up to ${this.size} monsters per slot`);
+    const stacks = el("span", `b9r3h-edit__stacks${left === 0 ? " b9r3h-edit__stacks--full" : ""}`);
+    stacks.append(el("strong", "", String(left)), el("span", "", " left"));
+    stacks.title = `Boxes left of ${this.stacks}; each holds up to ${this.size} monsters.`;
+    stacks.setAttribute("aria-label", `${left} of ${this.stacks} boxes left; up to ${this.size} monsters per box`);
+    const monsters = el("span", "b9r3h-edit__total", `×${totalOf(preset)}`);
+    monsters.setAttribute("aria-label", `${totalOf(preset)} monsters`);
     const cost = el("span", "b9r3h-edit__goo");
     cost.append(resourceIcon("r4"), el("span", "", short(goo)));
-    sum.append(stacks, cost);
-    const undo = btn("b9r3h-edit__undo", "Take off the last stack", art("undo", 24));
+    sum.append(stacks, monsters, cost);
+    const undo = btn("b9r3h-edit__undo", "Take off the last box", art("undo", 24));
     undo.disabled = preset.length === 0;
     undo.addEventListener("click", () => {
-      preset.pop();
+      // The last box goes: a stack over several boxes loses its last one.
+      const last = preset.at(-1);
+      if (last) {
+        last[1] -= last[1] % this.size || this.size;
+        if (last[1] <= 0) preset.pop();
+      }
       this.renderEditor();
     });
     const bin = btn("b9r3h-edit__bin", `Clear preset ${at + 1}`, "Clear");
@@ -661,9 +770,19 @@ export class B9HccR3 {
       preset.length = 0;
       this.renderEditor();
     });
+    const side = el("span", "b9r3h-edit__side");
+    side.append(undo, bin);
     const done = btn("btn btn--primary b9r3h-edit__done", "Done: back to the presets", "Done");
     done.addEventListener("click", () => this.setTab("presets"));
-    this.editHead.replaceChildren(which, chips, sum, undo, bin, done);
+    // A wide screen has room to say the order in words too (a stack over several boxes is one line).
+    const words = el("ol", "b9r3h-edit__words");
+    words.setAttribute("aria-label", "The stacks in the order they are sent");
+    for (const [id, count] of preset) {
+      const line = el("li", "");
+      line.append(el("span", "", monsterEntry(id)?.name ?? id), el("strong", "", ` ×${count}`));
+      words.append(line);
+    }
+    this.editHead.replaceChildren(which, boxes, side, sum, words, done);
 
     // The monsters wear how many of them the preset holds, over all its stacks.
     const totals = new Map<string, number>();
