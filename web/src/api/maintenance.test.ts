@@ -16,13 +16,13 @@ describe("maintenance words", () => {
     const later = new Date(2026, 10, 22, 15, 30);
     const tomorrow = new Date(2026, 10, 23, 9, 0);
     expect(backAtWords(later.toISOString(), today)).toBe(
-      later.toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" }),
+      later.toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" }).replace(/\s/g, "\u00a0"),
     );
     expect(backAtWords(tomorrow.toISOString(), today)).toContain(
-      tomorrow.toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" }),
+      tomorrow.toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" }).replace(/\s/g, "\u00a0"),
     );
     expect(backAtWords(tomorrow.toISOString(), today)).not.toBe(
-      tomorrow.toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" }),
+      tomorrow.toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" }).replace(/\s/g, "\u00a0"),
     );
     expect(backAtWords(null)).toBeNull();
     expect(backAtWords("soon")).toBeNull();

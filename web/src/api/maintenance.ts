@@ -67,7 +67,8 @@ export const backAtWords = (backAt: string | null, now: Date = new Date()): stri
   if (!backAt) return null;
   const when = new Date(backAt);
   if (Number.isNaN(when.getTime())) return null;
-  const time = when.toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" });
+  // No-break spaces: "1:30 AM" never leaves "AM" alone on a line.
+  const time = when.toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" }).replace(/\s/g, "\u00a0");
   if (when.toDateString() === now.toDateString()) return time;
   const day = when.toLocaleDateString(undefined, { weekday: "short", day: "numeric", month: "short" });
   return `${day} ${time}`;
