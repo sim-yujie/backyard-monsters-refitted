@@ -537,3 +537,11 @@
     display: inline;
   }
 }
+
+/* A phone with Safari's bars (390 x 664): the count panel no longer sticks to the bottom,
+   where it covered the Monsters | Presets switch; the tab scrolls to it instead. */
+@media (max-width: 620px) and (max-height: 700px) {
+  .b9r3h .hatch-info {
+    position: static;
+  }
+}
