@@ -47,6 +47,7 @@ const em = {
 mock.module("../../server.js", () => ({
   postgres: { em },
   redis: {
+    get: async (key: string) => store.get(key) ?? null,
     setex: async (key: string, _ttl: number, value: string) => {
       store.set(key, value);
       return "OK";
@@ -195,6 +196,27 @@ describe("starting a tribe attack", () => {
     inferno = infernoYard(4, { IC1: 0 });
     expect(await refusalOf({ kind: "tribe", baseid: "214" })).toBe("noMonsters");
     expect(store.size).toBe(0);
+  });
+
+  test("refused while its last attack on that tribe still holds a checkpoint the finaliser could not land (22 Nov 2026)", async () => {
+    const { rowlessCheckpointKey } = await import("../../services/base/rowlessCheckpoint.js");
+    store.set(rowlessCheckpointKey({ kind: "inferno-tribe", userid: ATTACKER, baseid: "217" }), JSON.stringify({
+      flingerCapacity: 780,
+      checkpoint: JSON.stringify({
+        attackerid: ATTACKER,
+        defenderid: 0,
+        attackid: 4242,
+        startedat: Math.floor(Date.now() / 1000) - 600,
+        at: Math.floor(Date.now() / 1000) - 60,
+        tick: 40,
+        flinglog: { v: 1, seed: 1, events: [{ kind: "fling", t: 10, x: 0, y: 0, r: 100, monsters: { IC1: 1 } }] },
+        sources: [],
+      }),
+    }));
+    expect(await refusalOf({ kind: "tribe", baseid: "217" })).toBe("lastAttackLanding");
+    expect(store.has(infernoTribeSessionKey(ATTACKER))).toBe(false);
+    // Another tribe is not held by it.
+    expect(await refusalOf({ kind: "tribe", baseid: "218" })).not.toBe("lastAttackLanding");
   });
 
   test("starts with the Inferno army only, a level 4 bunker's 780 per fling", async () => {

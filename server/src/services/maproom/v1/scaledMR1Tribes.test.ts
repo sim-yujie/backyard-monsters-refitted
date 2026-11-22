@@ -102,10 +102,13 @@ mock.module("../../base/reportManager.js", () => ({
 const REAL_RUNNER = "../../base/combat/replayRunner.ts?real";
 const realRunner = (await import(REAL_RUNNER)) as typeof import("../../base/combat/replayRunner.js");
 let replayTimesOut = false;
+// A worker that never loads (Bun 1.4.2's transpiler, 22 Nov 2026).
+let workerFailsToLoad = false;
 mock.module("../../base/combat/replayRunner.js", () => ({
   ...realRunner,
   replayAbandonedInWorker: async (...args: Parameters<typeof realRunner.replayAbandonedInWorker>) => {
     if (replayTimesOut) throw new realRunner.ReplayTimeoutError(5_000);
+    if (workerFailsToLoad) throw new realRunner.ReplayWorkerLoadError("SyntaxError: Unexpected keyword 'else'");
     return realRunner.replayAbandonedInWorker(...args);
   },
 }));
@@ -129,7 +132,7 @@ const { ROWLESS_CLOSE_ATTEMPTS, finaliseExpiredRowlessAttacks, finaliseRowlessAt
   "../../base/finaliseRowlessAttack.js"
 );
 const { mr1TribeFinalLockKey } = await import("./mr1TribeSession.js");
-const { ROWLESS_CHECKPOINT_INDEX, rowlessCheckpointKey } = await import("../../base/rowlessCheckpoint.js");
+const { ROWLESS_CHECKPOINT_INDEX, readRowlessCloseFailures, rowlessCheckpointKey } = await import("../../base/rowlessCheckpoint.js");
 const { combatConfig } = await import("../../../config/CombatConfig.js");
 const { emptyQuests, questsJson, readQuests } = await import("../../quests/state.js");
 /** The mode the suite runs in, put back after a test changes it (C7). */
@@ -1086,6 +1089,30 @@ describe("Map Room 1 tribe attack left without a save", () => {
     expect(userSave.resources).toEqual({ r1: 100, r2: 100, r3: 100, r4: 100 });
     expect(maproom.tribedata[0]!.destroyed).not.toBe(1);
     expect(store.has(rowlessCheckpointKey(REF))).toBe(false);
+  });
+
+  test("a replay worker that fails to load is not a failed replay: the attack waits, then lands with its battle", async () => {
+    startSession(ATTACKER, now(), ARMY);
+    userSave.monsters = { housed: { ...ARMY } };
+    expect(await checkpoint(WRECK, WRECK_TICK)).toMatchObject({ stored: true });
+    workerFailsToLoad = true;
+    try {
+      // Far past the three failed replays that would land it with no battle.
+      for (let attempt = 0; attempt < 3 * ROWLESS_CLOSE_ATTEMPTS; attempt++) {
+        expect(await finaliseRowlessAttacksOf(ATTACKER, "load")).toBe(0);
+      }
+    } finally {
+      workerFailsToLoad = false;
+    }
+    expect((userSave.monsters as { housed: unknown }).housed).toEqual(ARMY);
+    expect(store.has(rowlessCheckpointKey(REF))).toBe(true);
+    expect(await readRowlessCloseFailures(REF)).toBe(0);
+
+    // The workers load again (a restarted server): the battle is replayed, not skipped.
+    expect(await finaliseRowlessAttacksOf(ATTACKER, "load")).toBe(1);
+    expect(store.has(rowlessCheckpointKey(REF))).toBe(false);
+    expect(maproom.tribedata[0]).toMatchObject({ destroyed: 1 });
+    expect(userSave.resources).not.toEqual({ r1: 100, r2: 100, r3: 100, r4: 100 });
   });
 
   test("the minute sweep lands it only once its window has closed", async () => {

@@ -19,7 +19,7 @@ import { advanceBuildingTimers } from "./advanceBuildingTimers.js";
 import { invalidateSightAfterLanding } from "../maproom/sight/sightService.js";
 import { syncAttackedYardLevels } from "../yard/derivedLevels.js";
 import { beginAttackLanding, commitAttackLanding, rollbackAttackLanding } from "./attackLanding.js";
-import { checkpointExpired, checkpointSession, type AttackCheckpoint } from "./attackCheckpoint.js";
+import { ATTACK_CHECKPOINT_TTL, checkpointExpired, checkpointSession, type AttackCheckpoint } from "./attackCheckpoint.js";
 import {
   acquireFinalLock,
   discardCheckpoint,
@@ -33,7 +33,7 @@ import { finaliseExpiredRowlessAttacks, finaliseRowlessAttacksOf } from "./final
 import { endAttackSession, readAttackSession } from "./attackSessionStore.js";
 import { buildingDataWithout, spendFlung, type SourceCell } from "./combat/abandonedAttack.js";
 import { battleReplayInput, foughtLoot } from "./combat/battle.js";
-import { replayAbandonedInWorker } from "./combat/replayRunner.js";
+import { isReplayDeferred, replayAbandonedInWorker } from "./combat/replayRunner.js";
 import { attackLootOf, bankAttackLoot } from "./combat/attackLoot.js";
 import { awardLootPoints } from "./combat/lootPoints.js";
 import { bombSpendOf, catapultLevelOf, chargeBombSpend } from "./combat/bombSpend.js";
@@ -183,6 +183,44 @@ const sourceCells = async (
  * Writes an abandoned attack's result. Runs inside its own ORM context and
  * holding the final lock.
  */
+/**
+ * The mark that a row's checkpointed attack could not be landed just now: its
+ * replay worker failed to load or ran past its deadline, so nothing was
+ * learnt about the battle and the attack waits for the next pass. While the
+ * mark names the checkpoint still held, a new attack on that row is refused
+ * ({@link attackLandingDeferred}): its first checkpoint would replace this
+ * one and lose the attack (22 Nov 2026). A replay that fails for any other
+ * reason clears the mark, so a checkpoint that can never land does not keep
+ * the yard from being attacked.
+ */
+export const landingDeferredKey = (basesaveid: number): string => `attack-landing-deferred:${basesaveid}`;
+
+const noteLandingFailure = async (basesaveid: number, attackid: number, err: unknown): Promise<void> => {
+  try {
+    if (isReplayDeferred(err)) {
+      await redis.setex(landingDeferredKey(basesaveid), ATTACK_CHECKPOINT_TTL, String(attackid));
+    } else {
+      await redis.del(landingDeferredKey(basesaveid));
+    }
+  } catch (markErr) {
+    logger.warn(`The landing mark of the attack on ${basesaveid} was not written: ${markErr}`);
+  }
+};
+
+/**
+ * Whether the row still holds an attack the finaliser could not land just
+ * now ({@link landingDeferredKey}): a new attack on it must wait
+ * (`lastAttackLandingErr`, `baseModeAttack.ts`).
+ *
+ * @param basesaveid - The row about to be attacked.
+ */
+export const attackLandingDeferred = async (basesaveid: number): Promise<boolean> => {
+  const marked = await redis.get(landingDeferredKey(basesaveid));
+  if (!marked) return false;
+  const checkpoint = await readCheckpoint(basesaveid);
+  return checkpoint !== null && String(checkpoint.attackid) === marked;
+};
+
 const finaliseLocked = async (basesaveid: number, trigger: string, options: LandOptions): Promise<Finalised> => {
   const checkpoint = await readCheckpoint(basesaveid);
   if (!checkpoint) return { status: "none" };
@@ -240,7 +278,13 @@ const finaliseLocked = async (basesaveid: number, trigger: string, options: Land
     await discardCheckpoint(basesaveid);
     return { status: "stale" };
   }
-  const outcome = await replayAbandonedInWorker(input);
+  let outcome: AbandonedOutcome;
+  try {
+    outcome = await replayAbandonedInWorker(input);
+  } catch (err) {
+    await noteLandingFailure(basesaveid, checkpoint.attackid, err);
+    throw err;
+  }
 
   // Both sides' loot by the final save's rule, the replay standing in for the
   // client's figures, against the rows before anything below is written (the

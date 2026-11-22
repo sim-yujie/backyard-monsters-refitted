@@ -54,6 +54,14 @@ export type ReplayReply =
   | { readonly ok: true; readonly kind: "raid"; readonly result: RaidFightOutcome }
   | { readonly ok: false; readonly error: string };
 
+/** What the worker says first, once its modules have loaded: it can take the job. */
+export interface ReplayWorkerReady {
+  readonly ready: true;
+}
+
+/** Every message a replay worker sends. */
+export type ReplayWorkerMessage = ReplayWorkerReady | ReplayReply;
+
 /** The replay did not answer before its deadline, and was stopped. */
 export class ReplayTimeoutError extends Error {
   constructor(readonly deadlineMs: number) {
@@ -62,7 +70,78 @@ export class ReplayTimeoutError extends Error {
   }
 }
 
+/**
+ * The worker failed before it could take the job: its modules did not load,
+ * so no battle was fought. On 22 Nov 2026 Bun 1.4.2's transpiler broke after
+ * ~12,000 workers on the live server and every replay died like this
+ * ("SyntaxError: Unexpected keyword 'else'"). It says nothing about the
+ * attack, so a finaliser never counts it as a failed replay: the attack waits
+ * for its next pass ({@link isReplayWorkerLoadError}).
+ */
+export class ReplayWorkerLoadError extends Error {
+  constructor(readonly reason: string) {
+    super(`Battle replay worker failed to load: ${reason}`);
+    this.name = "ReplayWorkerLoadError";
+  }
+}
+
+/** Whether `err` is a worker that never loaded ({@link ReplayWorkerLoadError}), not a replay that failed. */
+export const isReplayWorkerLoadError = (err: unknown): err is ReplayWorkerLoadError =>
+  err instanceof ReplayWorkerLoadError || (err instanceof Error && err.name === "ReplayWorkerLoadError");
+
+/**
+ * Whether `err` leaves the attack to land later as it is (the worker did not
+ * load, or the replay ran past its deadline), rather than saying anything
+ * about the battle itself.
+ */
+export const isReplayDeferred = (err: unknown): boolean =>
+  isReplayWorkerLoadError(err) || err instanceof ReplayTimeoutError || (err instanceof Error && err.name === "ReplayTimeoutError");
+
 const WORKER_URL = new URL("./replayWorker.ts", import.meta.url);
+
+/**
+ * Workers failing to load in a row, this many within
+ * {@link WORKER_LOAD_FAILURE_WINDOW_MS}, mean the process itself is broken
+ * (Bun 1.4.2's transpiler, 22 Nov 2026): every replay fails until it
+ * restarts. The handler set by {@link onReplayWorkersBroken} is told once.
+ */
+export const WORKER_LOAD_FAILURE_LIMIT = 5;
+export const WORKER_LOAD_FAILURE_WINDOW_MS = 60_000;
+
+/** What the broken-workers handler is told. */
+export interface ReplayWorkersBroken {
+  /** Load failures in a row, within the window. */
+  readonly failures: number;
+  /** The last one's words (e.g. "SyntaxError: Unexpected keyword 'else'"). */
+  readonly lastError: string;
+}
+
+let loadFailures: number[] = [];
+let brokenHandler: ((broken: ReplayWorkersBroken) => void) | null = null;
+let brokenTold = false;
+
+/**
+ * Sets what happens once workers keep failing to load (`replayWorkerWatch.ts`
+ * alerts the owner and exits, so Docker restarts the server); null for
+ * nothing. Starts the count afresh.
+ */
+export const onReplayWorkersBroken = (handler: ((broken: ReplayWorkersBroken) => void) | null): void => {
+  brokenHandler = handler;
+  brokenTold = false;
+  loadFailures = [];
+};
+
+/** A worker loaded: the run of failures is over. */
+const noteWorkerLoaded = (): void => {
+  loadFailures = [];
+};
+
+const noteWorkerLoadFailure = (reason: string, now = Date.now()): void => {
+  loadFailures = [...loadFailures.filter((at) => now - at < WORKER_LOAD_FAILURE_WINDOW_MS), now];
+  if (loadFailures.length < WORKER_LOAD_FAILURE_LIMIT || brokenTold || !brokenHandler) return;
+  brokenTold = true;
+  brokenHandler({ failures: loadFailures.length, lastError: reason });
+};
 
 /** How many replays may run at once before an auto-attack has to wait: a core is left for the server. */
 export const REPLAY_WORKER_CAP = Math.max(1, availableParallelism() - 1);
@@ -104,11 +183,13 @@ export const reserveReplaySlot = async (
   };
 };
 
-const run = (job: ReplayJob, deadlineMs: number): Promise<ReplayReply & { ok: true }> =>
+const run = (job: ReplayJob, deadlineMs: number, workerUrl: URL = WORKER_URL): Promise<ReplayReply & { ok: true }> =>
   new Promise((resolve, reject) => {
-    const worker = new Worker(WORKER_URL);
+    const worker = new Worker(workerUrl);
     running++;
     let settled = false;
+    /** Whether the worker said it loaded ({@link ReplayWorkerReady}). */
+    let loaded = false;
     const finish = (settle: () => void): void => {
       if (settled) return;
       settled = true;
@@ -118,12 +199,24 @@ const run = (job: ReplayJob, deadlineMs: number): Promise<ReplayReply & { ok: tr
       settle();
     };
     const timer = setTimeout(() => finish(() => reject(new ReplayTimeoutError(deadlineMs))), deadlineMs);
-    worker.onmessage = (event: MessageEvent<ReplayReply>) => {
-      const reply = event.data;
-      finish(() => (reply.ok ? resolve(reply) : reject(new Error(`Battle replay failed: ${reply.error}`))));
+    worker.onmessage = (event: MessageEvent<ReplayWorkerMessage>) => {
+      const message = event.data;
+      if (!loaded) {
+        loaded = true;
+        noteWorkerLoaded();
+      }
+      if ("ready" in message) return;
+      finish(() => (message.ok ? resolve(message) : reject(new Error(`Battle replay failed: ${message.error}`))));
     };
     worker.onerror = (event: ErrorEvent) => {
-      finish(() => reject(new Error(`Battle replay worker failed: ${event.message}`)));
+      const reason = String(event.message ?? "unknown error");
+      if (loaded) {
+        finish(() => reject(new Error(`Battle replay worker failed: ${reason}`)));
+        return;
+      }
+      // Before the worker said it loaded: its modules never ran, so no battle was fought.
+      finish(() => reject(new ReplayWorkerLoadError(reason)));
+      noteWorkerLoadFailure(reason);
     };
     worker.postMessage(job);
   });
@@ -131,13 +224,16 @@ const run = (job: ReplayJob, deadlineMs: number): Promise<ReplayReply & { ok: tr
 /**
  * An abandoned attack's replay (`replayAbandonedAttack`), in a worker.
  *
+ * @param workerUrl - The worker module; tests pass one that fails to load.
  * @throws {ReplayTimeoutError} Past the deadline.
+ * @throws {ReplayWorkerLoadError} The worker never loaded.
  */
 export const replayAbandonedInWorker = async (
   input: AbandonedInput,
-  deadlineMs = FINALISE_REPLAY_DEADLINE_MS
+  deadlineMs = FINALISE_REPLAY_DEADLINE_MS,
+  workerUrl: URL = WORKER_URL
 ): Promise<AbandonedOutcome> => {
-  const reply = await run({ kind: "abandoned", input }, deadlineMs);
+  const reply = await run({ kind: "abandoned", input }, deadlineMs, workerUrl);
   if (reply.kind !== "abandoned") throw new Error("Battle replay answered the wrong job");
   return reply.result;
 };

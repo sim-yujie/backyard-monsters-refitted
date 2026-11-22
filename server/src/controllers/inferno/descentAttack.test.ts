@@ -34,6 +34,7 @@ mock.module("../../server.js", () => ({
     },
   },
   redis: {
+    get: async (key: string) => store.get(key) ?? null,
     setex: async (key: string, _ttl: number, value: string) => {
       calls.push("setex");
       store.set(key, value);
