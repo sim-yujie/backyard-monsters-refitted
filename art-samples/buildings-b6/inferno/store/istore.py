@@ -1300,7 +1300,7 @@ def wreck_damaged():
     lay_horn("hornL", (5.3, 2.9), 60)
     lay(("ring",), (5.6, -0.4), (0, 90, 0))                       # the ring has dropped off its hole
     # the roof: the left stick has slid off and lies before the cover, the third is cocked up, the fourth pushed forward
-    lay(("stick0",), (2.5, -5.1), (0, 0, -49))
+    lay(("stick0",), (2.75, -5.35), (0, 0, -49))        # (clear of the dropped O as the camera sees it)
     put(("stick2",), about((0.7, 2.85, zt), (0, 0, 9), (0, 0, 0.03)))
     put(("stick3",), about((1.8, 0.0, zt), (0, 0, 6), (0.0, -0.8, 0.07)))       # (the top leans: forward is up)
     put(("stick1",), about((-0.8, 0.0, zt), (0, 0, 5), (-0.25, 0.3, 0.0)))
