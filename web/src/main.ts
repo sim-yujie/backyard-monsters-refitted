@@ -16,11 +16,13 @@ import "@/ui/styles/moveyards.css";
 import "@/ui/styles/skin.css";
 
 import { App } from "@/app/App";
+import { preloadGameScenes } from "@/app/gameLoader";
+import { installChunkErrorReload } from "@/app/chunkReload";
 import { installErrorLog } from "@/game/bugReport/errorLog";
 import { installErrorReporter, reportCaughtError } from "@/game/bugReport/errorReporter";
 import { GraphicsOffError } from "@/app/graphicsOff";
 import { showGraphicsOffNotice } from "@/ui/GraphicsOffNotice";
-import { UpdateCheck, fetchLivePage, runningBundleName } from "@/app/updateCheck";
+import { UpdateCheck, bundleNameIn, fetchLivePage, runningBundleName } from "@/app/updateCheck";
 import { UpdatePrompt } from "@/ui/UpdatePrompt";
 import { applySkin } from "@/ui/skin";
 import { applyFontChoice } from "@/ui/fontChoice";
@@ -32,6 +34,12 @@ import { bootSafeMode } from "@/game/safeMode";
 // owner's dashboard's copy of uncaught errors (the Privacy Policy says so).
 installErrorLog();
 installErrorReporter();
+
+// The game past the sign-in screen is a script piece of its own (beta 9 speed
+// work): its download starts now, beside the boot screen's last pieces, so the
+// sign-in screen no longer waits for it and it is in hand by the time the
+// player has signed in or a stored session has been checked (`gameLoader.ts`).
+preloadGameScenes();
 
 // Quality, before anything asks for it (patch 7.11): `?quality=low` in the
 // address is the player's way out of a game that closes on their phone; then
@@ -69,6 +77,12 @@ void app.start().catch((error: unknown) => {
 // "New version": a tab left open across a release learns the live page now
 // runs another build. A dev build serves /src/main.ts and has nothing to compare.
 const running = runningBundleName();
+// A tab older than the live release that asks for a piece the release no
+// longer has reloads once, onto the new release (`chunkReload.ts`).
+installChunkErrorReload({
+  running,
+  liveBundle: async () => bundleNameIn(await fetchLivePage()),
+});
 if (running) {
   const prompt = new UpdatePrompt(host);
   new UpdateCheck({ running, fetchPage: fetchLivePage, onNewVersion: () => prompt.show() }).start();

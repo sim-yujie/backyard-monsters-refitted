@@ -1,5 +1,5 @@
 import { fileURLToPath, URL } from "node:url";
-import { loadEnv, type ProxyOptions } from "vite";
+import { loadEnv, type Plugin, type ProxyOptions } from "vite";
 // vitest/config re-exports Vite's defineConfig with the `test` block typed.
 import { defineConfig } from "vitest/config";
 
@@ -28,6 +28,93 @@ const SERVER_PATHS = [
   "/templates",
 ];
 
+/**
+ * Pixi fetches its renderer and its browser setup as pieces of their own the
+ * moment the game starts (`autoDetectRenderer`, `browserExt`), only after the
+ * first script has run, which put one more round trip in front of the sign-in
+ * screen on a phone. The game page names them up front instead, so they
+ * download beside the first script. WebGL only: it is the renderer the game
+ * asks for first (`App.ts`), and WebGPU and the canvas fallback stay on demand.
+ */
+const PIXI_START_PIECES = [
+  /\/pixi\.js\/lib\/rendering\/renderers\/gl\/WebGLRenderer\.mjs$/,
+  /\/pixi\.js\/lib\/environment-browser\/browserAll\.mjs$/,
+];
+
+/** Pixi's own setup pieces, loaded during `pixi.init` before the renderer is made. */
+const PIXI_ENVIRONMENT_PIECES = [
+  /\/pixi\.js\/lib\/environment-browser\/browserAll\.mjs$/,
+  /\/pixi\.js\/lib\/environment-webworker\/webworkerAll\.mjs$/,
+];
+/** A Pixi module that registers renderer features as it runs (`extensions.add`). */
+const PIXI_REGISTRATION = /\/pixi\.js\/lib\/.*\/init\.mjs$/;
+
+const preloadPixiStart = (): Plugin => ({
+  name: "bymr-pixi-start",
+  apply: "build",
+  // A renderer learns only the object kinds registered before it is made
+  // (`App.ts`): every Pixi registration must run with the first script or
+  // Pixi's own setup pieces, never in a piece fetched later (gameScenes).
+  generateBundle(_options, bundle) {
+    const chunks = Object.values(bundle).filter((item) => item.type === "chunk");
+    const early = new Set<string>();
+    const addStatic = (fileName: string): void => {
+      if (early.has(fileName)) return;
+      early.add(fileName);
+      for (const next of chunks.find((item) => item.fileName === fileName)?.imports ?? []) addStatic(next);
+    };
+    for (const chunk of chunks) {
+      const id = (chunk.facadeModuleId ?? "").replaceAll("\\", "/");
+      if ((chunk.isEntry && chunk.name === "index") || PIXI_ENVIRONMENT_PIECES.some((p) => p.test(id))) addStatic(chunk.fileName);
+    }
+    for (const chunk of chunks) {
+      if (early.has(chunk.fileName) || (chunk.isEntry && chunk.name !== "index")) continue;
+      const late = Object.keys(chunk.modules).filter((id) => PIXI_REGISTRATION.test(id.replaceAll("\\", "/")));
+      if (late.length)
+        this.error(
+          `Pixi registrations in the later piece ${chunk.fileName}: ${late.map((id) => id.split("pixi.js/lib/")[1]).join(", ")}. ` +
+            `Import them in web/src/app/App.ts (e.g. import "pixi.js/sprite-tiling") so the renderer knows them.`,
+        );
+    }
+  },
+  transformIndexHtml: {
+    order: "post",
+    handler(html, ctx) {
+      const bundle = ctx.bundle;
+      if (!bundle || !ctx.filename.endsWith("index.html")) return html;
+      const chunks = Object.values(bundle).filter((item) => item.type === "chunk");
+      // What the page already loads: the entry and everything it imports statically.
+      const named = new Set<string>();
+      const entry = chunks.find((chunk) => chunk.isEntry && chunk.name === "index");
+      const addStatic = (fileName: string): void => {
+        if (named.has(fileName)) return;
+        named.add(fileName);
+        const chunk = chunks.find((item) => item.fileName === fileName);
+        for (const next of chunk?.imports ?? []) addStatic(next);
+      };
+      if (entry) addStatic(entry.fileName);
+      const wanted: string[] = [];
+      const want = (fileName: string): void => {
+        if (named.has(fileName)) return;
+        named.add(fileName);
+        wanted.push(fileName);
+        const chunk = chunks.find((item) => item.fileName === fileName);
+        for (const next of chunk?.imports ?? []) want(next);
+      };
+      for (const pattern of PIXI_START_PIECES) {
+        const chunk = chunks.find((item) => item.facadeModuleId && pattern.test(item.facadeModuleId.replaceAll("\\", "/")));
+        if (!chunk) throw new Error(`Pixi start piece not found in the build: ${pattern}`);
+        want(chunk.fileName);
+      }
+      return wanted.map((fileName) => ({
+        tag: "link",
+        attrs: { rel: "modulepreload", crossorigin: "", href: `/${fileName}` },
+        injectTo: "head" as const,
+      }));
+    },
+  },
+});
+
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd(), "VITE_");
   const target = env["VITE_PROXY_TARGET"] ?? "http://localhost:3001";
@@ -46,6 +133,7 @@ export default defineConfig(({ mode }) => {
     // exactly (not "TURNSTILE_") keeps TURNSTILE_SECRET_KEY out of the bundle
     // even if someone puts it in this .env.
     envPrefix: ["VITE_", "TURNSTILE_SITE_KEY"],
+    plugins: [preloadPixiStart()],
     resolve: {
       alias: { "@": fileURLToPath(new URL("./src", import.meta.url)) },
     },
