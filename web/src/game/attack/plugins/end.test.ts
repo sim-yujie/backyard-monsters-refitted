@@ -159,6 +159,20 @@ describe("the end plugin", () => {
     expect(items.map((item) => item.querySelector(".res-amount__value")?.textContent)).toEqual(["+7", "0", "0", "0"]);
   });
 
+  it("says the Repeat plan was not saved when the camp was already damaged (patch 8.2)", async () => {
+    const save = vi.fn(
+      async (_payload: AttackSavePayload): Promise<BaseSaveResponse> =>
+        ({ error: 0, basesaveid: 1, repeatplan: "camp-damaged" }) as BaseSaveResponse,
+    );
+    act();
+    mount(save);
+    session.retreat();
+    await flush();
+    expect(modal.querySelector(".attack-end__status")!.textContent).toBe(
+      "Result saved. Repeat plan not saved: camp was already damaged.",
+    );
+  });
+
   it("puts the banked loot on the HUD once, as the panel shows the landed save (#168)", async () => {
     const banked = { r1: 1_200, r2: 0, r3: 300, r4: 0 };
     const save = vi.fn(

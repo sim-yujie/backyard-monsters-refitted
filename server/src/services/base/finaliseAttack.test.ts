@@ -760,6 +760,16 @@ describe("the plan an abandoned camp attack leaves (issue #221)", () => {
     expect(upsert).not.toHaveBeenCalled();
   }, REPLAY_TIMEOUT_MS);
 
+  test("a camp already damaged before the attack keeps the old plan (patch 8.2)", async () => {
+    asKozuCamp();
+    // One building below full health before the attack began.
+    defender.buildinghealthdata = { "1": 1 };
+    await arm();
+
+    expect(await finaliseAbandonedAttack(BASESAVEID, "test")).toBe("finalised");
+    expect(upsert).not.toHaveBeenCalled();
+  }, REPLAY_TIMEOUT_MS);
+
   test("an attack on anything but a camp leaves no plan", async () => {
     await arm();
     expect(await finaliseAbandonedAttack(BASESAVEID, "test")).toBe("finalised");

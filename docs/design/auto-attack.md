@@ -125,6 +125,12 @@ is two taps per repeat, instead of a full attack.
 
 - Keep the last *landed* fling log for each attacker (the log the replay actually fought, after
   `fightableLog`). It is recorded from both the save and the finaliser.
+- **Only from an untouched camp** (owner, 22 Nov 2026, patch 8.2). A plan is recorded only when
+  the camp had no damaged building before the attack (its stored `buildinghealthdata` was empty;
+  the stored `damage` number is rounded down, so it is not used). An attack on a camp that was
+  already damaged keeps the player's old plan, and the result panel says "Result saved. Repeat
+  plan not saved: camp was already damaged." (`repeatplan: "camp-damaged"` in the save's answer;
+  `recordAttackPlan` in `server/src/services/base/autoAttack/attackPlanStore.ts`).
 - Add one endpoint that mints an attack session and builds a checkpoint from the plan, with a fresh
   seed and the full tick span. It then runs the finaliser's landing on it at once.
 - The finaliser's write half becomes a shared `landAttack()` function, so a manual attack and an
