@@ -330,7 +330,14 @@ export class LoginScene implements Scene {
       return null;
     }
     if (!this.maintenanceSlot || !notice) return notice;
-    setMaintenanceBlock(notice.on ? { message: notice.message, backAt: notice.backAt } : null);
+    // Newer words, but still "Signed out" if the countdown brought the player here.
+    const signedOut = maintenanceBlock()?.signedOut === true;
+    setMaintenanceBlock(notice.on ? { message: notice.message, backAt: notice.backAt, ...(signedOut && { signedOut }) } : null);
+    // The form took the focus before the answer came: Try again is the way on now.
+    const focused = document.activeElement;
+    if (notice.on && focused instanceof HTMLInputElement && !focused.value && this.panel?.element.contains(focused)) {
+      focused.blur();
+    }
     return notice;
   }
 
@@ -358,7 +365,8 @@ export class LoginScene implements Scene {
     }
     this.maintenanceCard = new MaintenanceCard(block, {
       check: () => this.checkMaintenance(),
-      onStill: (refusal) => setMaintenanceBlock(refusal),
+      // `check` above has already taken the newest words.
+      onStill: () => undefined,
       onOver: () => void this.maintenanceOver(context),
     });
     this.maintenanceSlot.append(this.maintenanceCard.element);

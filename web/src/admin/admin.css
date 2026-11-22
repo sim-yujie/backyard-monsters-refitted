@@ -5763,6 +5763,7 @@ tbody th {
 /* ── Maintenance switch (`maintenance.ts`) ───────────────────────────── */
 
 .maint-admin {
+  grid-column: 1 / -1;
   display: grid;
   gap: 14px;
   margin-bottom: 24px;

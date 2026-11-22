@@ -1693,7 +1693,9 @@ select option {
   display: flex;
   flex-direction: column;
   gap: var(--space-3);
-  min-width: min(84vw, 320px);
+  /* Never wider than the panel's inside: a phone's frame and padding leave
+     less than 320px at 390px wide, and the fields ran under the frame. */
+  min-width: min(84vw, 320px, 100%);
   max-width: 360px;
 }
 
@@ -2110,11 +2112,30 @@ select option {
   display: inline-block;
 }
 
+:root[data-skin="flash"] .maint-banner__stay {
+  border: 1px solid rgb(120 70 10 / 50%);
+  background: rgb(247 201 72 / 55%);
+  color: var(--colour-text-strong);
+}
+
+:root[data-skin="scrap"] .maint-banner--final :is(.maint-banner__clock, .maint-banner__title) {
+  color: #ff8a80;
+}
+
+.maint-banner__fold {
+  border: 1px solid var(--colour-warning-line);
+}
+
 /* Phones held upright: below the help, daily-reset, Events and chat row,
    so the card (open in the last minute) never covers them. */
 @media (max-width: 599px) {
   .maint-banner {
     top: calc(var(--hud-height) + 96px);
+  }
+
+  /* Folded, the pill fits the gap in that row, between the timers and Events. */
+  .maint-banner--folded {
+    top: calc(var(--hud-height) + 8px);
   }
 }
 
@@ -2270,6 +2291,17 @@ select option {
 
 .maint-card__retry:disabled {
   color: var(--colour-text-muted);
+  opacity: 0.6;
+}
+
+/* While the card shows, the form is second choice (the owner's way in):
+   Play is no longer the bright button and Create account is toned down. */
+.login-stack:has(.maint-card) .login-form__switch-button {
+  filter: saturate(0.35) brightness(0.9);
+}
+
+:root[data-skin="flash"] .login-stack:has(.maint-card) .login-form button[type="submit"] {
+  box-shadow: inset 0 0 0 1px rgb(90 50 10 / 45%);
 }
 
 .maint-card--shake {

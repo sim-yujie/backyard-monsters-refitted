@@ -691,7 +691,7 @@ class Dashboard {
   /** Server health's cards, from the last report and error totals; the error list stays below. */
   private renderServer(): void {
     if (!this.report) return;
-    replace(this.sections.health.body, ...renderHealth(this.report, this.errorReading), this.errorsBox);
+    replace(this.sections.health.body, this.maintenance.element, ...renderHealth(this.report, this.errorReading), this.errorsBox);
   }
 
   /**

@@ -23,7 +23,8 @@ export const clock = (ms: number): string => {
 
 /** A time in this browser's clock: "Sun 22 Nov, 15:30". */
 const when = (ms: number): string =>
-  new Date(ms).toLocaleString("en-GB", { weekday: "short", day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" });
+  // The browser's own format, as the back-at field shows it.
+  new Date(ms).toLocaleString(undefined, { weekday: "short", day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" });
 
 /** The panel's one sentence: off, counting down, or players out. */
 export const maintenanceSentence = (panel: MaintenancePanelView, remainingMs: number): string => {
@@ -135,11 +136,11 @@ export class MaintenanceView {
     );
 
     // The words: message and back-at time, for On and for changing them while on.
-    const message = h("input", {
+    const message = h("textarea", {
       class: "field-input",
       attrs: {
         id: "maint-message",
-        type: "text",
+        rows: "2",
         maxlength: String(panel.limits.messageMax),
         placeholder: panel.limits.defaultMessage,
         autocomplete: "off",
@@ -239,9 +240,9 @@ export class MaintenanceView {
       {
         class: "button quiet",
         attrs: { type: "button" },
-        onClick: () => void this.send({ action: "on", ...words() }, null, "Words saved"),
+        onClick: () => void this.send({ action: "on", ...words() }, null, "Changes saved"),
       },
-      "Save words",
+      "Save changes",
     );
     off.disabled = this.busy;
     save.disabled = this.busy;
