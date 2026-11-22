@@ -9,11 +9,13 @@ import {
   buildEngineYard,
   cellOf,
   createBattle,
+  dropObstaclesOf,
   dropRadius,
   puttyReach,
   scatterRadius,
   screenPointOf,
   TICKS_PER_SECOND,
+  type DropObstacle,
 } from "@/game/combat/rules";
 import { Camera } from "@/game/Camera";
 import { readYard, type Yard } from "@/game/yard/yardModel";
@@ -37,6 +39,7 @@ import {
 import { AttackSession } from "./AttackSession";
 import type { AttackTarget } from "./attackTarget";
 import { Bucket } from "./bucket";
+import sandboxYard from "../../../test/fixtures/baseload-sandbox-yard.json";
 
 /**
  * The drop rules (§F3, §F4) on a fixture yard: one Cannon Tower at the
@@ -125,6 +128,18 @@ const rig = (overrides: Partial<AttackTarget> = {}): Rig => {
 const OPEN = { x: -400, y: 200 };
 
 describe("overlap rule", () => {
+  it("is the shared rule the server checks a Repeat plan with: the same obstacles from the stored yard", () => {
+    // `dropObstaclesOf` (combat/rules/dropZone.ts) builds them from
+    // `buildingdata` alone, as the server does for a camp's fresh layout.
+    const load = sandboxYard as unknown as BaseLoadResponse;
+    const fromYard = obstaclesOf(readYard(load)).sort((one, other) => one.id - other.id);
+    const fromData = dropObstaclesOf(load.buildingdata as never, load.buildinghealthdata as never);
+    expect(fromData.length).toBeGreaterThan(100);
+    // Type 111 is a decoration (never blocks) whose two footprint tables differ.
+    const blocking = (list: readonly DropObstacle[]) => list.filter((o) => o.type !== 111);
+    expect(blocking(fromData)).toEqual(blocking(fromYard));
+  });
+
   it("refuses a fling centre on a footprint and accepts open ground, per DROPZONE.as:64", () => {
     const yard = readYard(fixtureLoad());
     const obstacles = obstaclesOf(yard);

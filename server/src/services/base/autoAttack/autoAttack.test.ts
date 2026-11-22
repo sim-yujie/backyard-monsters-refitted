@@ -201,6 +201,7 @@ const REAL = {
   mapSaveData: "../mapSaveData.ts?real",
   load: "../../../controllers/base/load/modes/baseModeAttack.ts?real",
   runner: "../combat/replayRunner.ts?real",
+  layouts: "../../maproom/v2/tribeLayouts.ts?real",
 };
 
 // Other files leave a stand-in session store behind, so this file puts back
@@ -231,6 +232,25 @@ mock.module("../../maproom/v2/validateRange.js", () => ({
     standIn
       ? { cell: null, verdict: inRange ? { ok: true } : { ok: false, reason: "out-of-range" } }
       : realRange.rangeCheckV2(...args),
+}));
+
+// The camp's fresh layout, which Repeat attack's plan check (beta 9,
+// `planCheck.ts`) holds the plan against: open ground unless a test says
+// otherwise, since the stand-in plan's fling lands on the sandbox yard's
+// walls (`planCheck.test.ts` checks the plans themselves).
+const realLayouts = (await import(REAL.layouts)) as typeof import("../../maproom/v2/tribeLayouts.js");
+/** The fresh layout's buildings, when a test wants one other than the camp's. */
+let freshLayout: Record<string, unknown> | null = null;
+mock.module("../../maproom/v2/tribeLayouts.js", () => ({
+  ...realLayouts,
+  tribeLayoutFor: (...args: Parameters<typeof realLayouts.tribeLayoutFor>) =>
+    standIn
+      ? {
+          from: args[1],
+          save: { buildingdata: freshLayout ?? {}, resources: camp.resources },
+          saved: false,
+        }
+      : realLayouts.tribeLayoutFor(...args),
 }));
 
 const realMapSaveData = (await import(REAL.mapSaveData)) as typeof import("../mapSaveData.js");
@@ -309,6 +329,7 @@ beforeEach(() => {
   mintFailsAfterCommit = false;
   spendBeforeCommit = false;
   transactions = 0;
+  freshLayout = null;
 });
 
 /** One of the attacker's outposts, at a cell with a Flinger level and housing. */
@@ -883,4 +904,34 @@ describe("Repeat attack's putty fee (owner, 20 Nov 2026)", () => {
     expect(flush).toHaveBeenCalled();
     expect(store.has(attackCheckpointKey(BASESAVEID))).toBe(false);
   });
+});
+
+describe("Repeat attack's plan check (beta 9, owner's fix 2)", () => {
+  test("a fling on a building of the camp's fresh layout: refused in the owner's words, nothing spent", async () => {
+    // The stand-in plan's fling lands on the sandbox yard's walls.
+    freshLayout = sandbox.buildingdata;
+    const refused = await refusal(runAutoAttack(user() as never, CAMP));
+    expect(refused.reason).toBe("planOnBuilding");
+    expect(refused.message).toBe("Attack once by hand on a fresh camp to record a new plan.");
+    expect(refused.fling).toEqual({ t: 480, x: -615, y: 115 });
+    // No fee, no attack, no monsters, no moves.
+    expect(mint).not.toHaveBeenCalled();
+    expect(flush).not.toHaveBeenCalled();
+    expect(transactions).toBe(0);
+    expect(camp.attackid).toBe(0);
+    expect(userSave.resources.r3).toBe(5_000_000);
+    expect(userSave.monsters.housed).toEqual({ C1: 200 });
+    expect(store.has(attackCheckpointKey(BASESAVEID))).toBe(false);
+    expect(store.has(autoAttackLockKey(ATTACKER))).toBe(false);
+  });
+
+  test("the same plan on a fresh layout with that ground open still lands, fee and all", async () => {
+    const open = Object.fromEntries(
+      Object.entries(sandbox.buildingdata as Record<string, { t: number }>).filter(([, building]) => building.t !== 17)
+    );
+    freshLayout = open;
+    const result = await runAutoAttack(user() as never, CAMP);
+    expect(result.fee).toBe(2_000_000);
+    expect(userSave.resources.r3).toBeLessThan(5_000_000);
+  }, REPLAY_TIMEOUT_MS);
 });

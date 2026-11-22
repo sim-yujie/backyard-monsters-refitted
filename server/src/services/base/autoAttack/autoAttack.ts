@@ -40,6 +40,7 @@ import {
   type PlanShortfall,
 } from "./attackPlan.js";
 import { findAttackPlan, type StoredPlan } from "./attackPlanStore.js";
+import { planFlingOnBuilding } from "./planCheck.js";
 import { repeatFeeFor } from "./repeatFee.js";
 import { movesKey, planMoves, type MovePlan, type YardMove } from "./movePlan.js";
 import {
@@ -60,6 +61,10 @@ import {
  * Map Room 2 wild camps only; one attack per press; no partial attacks, so a
  * single missing monster, the champion or a bomb refuses it; one in progress
  * per player and ten a minute.
+ *
+ * A plan is checked against the camp's fresh layout before it runs (beta 9,
+ * `planCheck.ts`): a fling that would land on a standing building refuses the
+ * Repeat with nothing spent, and the player records a new plan by hand.
  *
  * The putty fee (owner, 20 Nov 2026, superseding "free beyond the monsters
  * spent"): a heavy convenience fee by the camp's level (`repeatFee.ts`:
@@ -392,6 +397,32 @@ export const runAutoAttack = async (user: User, baseid: string, acceptedMoves?: 
     release = await reserveReplaySlot();
     if (!release) throw autoAttackRefusedErr("busy");
 
+    // The plan against the camp's fresh layout (beta 9, `planCheck.ts`): a
+    // fling a hand-played attack could not have dropped there is refused
+    // before anything moves or is charged. The check fights under the seed
+    // the attack will, so a fling into a building its own monsters flattened
+    // passes here as it did by hand.
+    const seed = mintSeed();
+    const clash = await planFlingOnBuilding(
+      stored.plan,
+      camp.key,
+      { academy: userSave.academy, champion: userSave.champion as OwnedChampion[] | null, storedata: userSave.storedata },
+      seed,
+      now
+    );
+    if (clash) {
+      logger.info("Repeat attack by {username} refused: plan for {wmid}/{level} flings on a building", {
+        event: "auto-attack-plan-on-building",
+        userid,
+        username: user.username,
+        baseid,
+        ...camp.key,
+        plan: { from: stored.baseid, recordedAt: stored.recordedAt },
+        fling: clash,
+      });
+      throw autoAttackRefusedErr("planOnBuilding", { fling: { t: clash.t, x: clash.x, y: clash.y } });
+    }
+
     const moved =
       part.movesKey === null
         ? []
@@ -448,7 +479,7 @@ export const runAutoAttack = async (user: User, baseid: string, acceptedMoves?: 
       session = await readAttackSession(save.basesaveid);
       if (!session?.entryHoused) throw autoAttackRefusedErr("failed");
 
-      log = planLog(stored.plan, mintSeed(), userSave.champion as OwnedChampion[] | null);
+      log = planLog(stored.plan, seed, userSave.champion as OwnedChampion[] | null);
       // Once this is written the attack lands, now or by the sweep, and the fee stays spent.
       await storeCheckpoint(
         save.basesaveid,
