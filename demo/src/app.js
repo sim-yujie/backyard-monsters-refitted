@@ -282,9 +282,6 @@
   editHead.className = "b9r3h-edit";
   const editBox = document.createElement("div");
   editBox.className = "b9r3h-set hatch-add";
-  const rail = document.createElement("section");
-  rail.className = "b9r5h-rail";
-  rail.setAttribute("aria-label", "Send a preset");
   const lines = document.createElement("section");
   lines.className = "hatch-lines";
   lines.setAttribute("aria-label", "Hatching line");
@@ -306,32 +303,28 @@
     hatch.className = `hatch b9r2h b9r2h-opt-d b9r3h b9r2h-level-${S.level}${remote() ? " b9r2h-remote" : ""}${S.showHousing ? " b9r2h-show-housing" : ""}${S.tab === "presets" && !editing ? " b9r3h-on-presets" : ""}${editing ? " b9r3h-editing" : ""}${flags.has("live") ? " b9r3h-live" : ""}`;
     // Round 4: building a preset hides the hatcheries and the queue; the tab keeps the height it had.
     if (!editing || flags.has("live")) hatch.style.minHeight = "";
-    if (lines.parentElement !== bench) bench.replaceChildren(lines, rail);
+    if (lines.parentElement !== bench) bench.replaceChildren(lines);
     boosts.hidden = !S.boosts;
   }
 
-  const where = () => {
+  // Locked (below level 3): the lock stands where the count goes, so the control keeps its width.
+  const where = (locked) => {
     const of = hccYards().length;
-    return `<span class="b9r2h-where">${icon(remote() ? "outpost" : "townhall", 32, "b9r2h-where__icon")}<span class="b9r2h-where__count">${S.at + 1}/${of}</span></span>`;
+    return `<span class="b9r2h-where">${icon(remote() ? "outpost" : "townhall", 32, "b9r2h-where__icon")}${locked ? D.lock.replace(/class="[^"]*"/, 'class="b9r2h-where__lock"') : `<span class="b9r2h-where__count">${S.at + 1}/${of}</span>`}</span>`;
   };
 
   function drawStrip() {
+    // Round 6 (owner, 22 Nov): ONE yard switcher at every level and in every yard, the same size and
+    // place. Below level 3 it is greyed with a lock; in an outpost there is no extra home button.
     const parts = [];
-    if (S.level < 3) {
-      parts.push(
-        `<button class="b9r2h-yard b9r2h-yard--locked" type="button" aria-label="Run your outposts from here at HCC level 3" disabled>${icon("outpost", 32, "b9r2h-where__icon")}${D.lock}<span class="b9r2h-lock__level">3</span></button>`,
-      );
-    } else {
-      if (remote()) parts.push(`<button class="b9r2h-yard b9r2h-yard--home" type="button" data-act="home" aria-label="Back to the main yard">${icon("townhall", 32, "b9r2h-where__icon")}</button>`);
-      {
-        const of = hccYards().length;
-        parts.push(
-          `<div class="b9r2h-stepper"><button class="b9r2h-stepper__arrow" type="button" data-act="step" data-by="-1" aria-label="Previous yard"${S.at <= 0 ? " disabled" : ""}>${icon("friendprev", 32, "b9r2h-arrow")}</button>` +
-            `<button class="b9r2h-stepper__where" type="button" data-act="yards" aria-label="All your yards with an HCC">${where()}</button>` +
-            `<button class="b9r2h-stepper__arrow" type="button" data-act="step" data-by="1" aria-label="Next yard"${S.at >= of - 1 ? " disabled" : ""}>${icon("friendnext", 32, "b9r2h-arrow")}</button></div>`,
-        );
-      }
-    }
+    const locked = S.level < 3;
+    const of = hccYards().length;
+    const off = (yes) => (locked || yes ? " disabled" : "");
+    parts.push(
+      `<div class="b9r2h-stepper${locked ? " b9r2h-stepper--locked" : ""}"><button class="b9r2h-stepper__arrow" type="button" data-act="step" data-by="-1" aria-label="Previous yard"${off(S.at <= 0)}>${icon("friendprev", 32, "b9r2h-arrow")}</button>` +
+        `<button class="b9r2h-stepper__where" type="button" data-act="yards" aria-label="${locked ? "Run your outposts from here at HCC level 3" : "All your yards with an HCC"}"${locked ? ' disabled title="Run your outposts from here at HCC level 3"' : ""}>${where(locked)}</button>` +
+        `<button class="b9r2h-stepper__arrow" type="button" data-act="step" data-by="1" aria-label="Next yard"${off(S.at >= of - 1)}>${icon("friendnext", 32, "b9r2h-arrow")}</button></div>`,
+    );
     parts.push(
       `<button class="b9r2h-housing" type="button" data-act="housing"><span class="b9r2h-housing__numbers">${icon("housing", 24, "b9r2h-housing__icon")}<span class="b9r2h-housing__now"></span><span class="b9r2h-housing__compact"></span><span class="b9r2h-housing__coming"></span></span><span class="b9r2h-housing__bar"><span class="b9r2h-housing__fill"></span><span class="b9r2h-housing__more"></span></span></button>`,
     );
@@ -407,6 +400,8 @@
           `<button class="hatch-slot" data-act="takeout" data-slot="${at}" type="button" aria-label="${monster.name}: take one out and get its goo back"><span class="hatch-slot__count"></span><span class="hatch-slot__minus" aria-hidden="true">−</span>${face(stack[0], "hatch-slot__picture")}<span class="hatch-slot__name">${monster.name}</span><span class="hatch-slot__note">${monster.timeText} each</span></button>`,
         );
       }
+      // Round 6: level 1's three missing stacks stand locked, so the box grid is the same at every level.
+      for (let at = stacks(); at < 10; at += 1) slots.push(`<div class="b9r6h-box--locked" aria-hidden="true" title="More queue stacks at HCC level 2">${D.lock.replace(/class="[^"]*"/, 'class="b9r6h-box__lock"')}</div>`);
       slotRow.innerHTML =
         slots.join("") +
         `<div class="hatch-line__totals"><span class="hatch-line__done-label">All done in</span>${icon("time", 16, "hatch-line__done-icon")}<span class="hatch-line__done"></span>` +
@@ -431,7 +426,8 @@
 
   /* ── Round 3: the Monsters | Presets switch, the preset rows, building one ── */
   const badge = (at) => `<span class="b9r2h-mix__number b9r3h-number">${at + 1}</span>`;
-  const scopeIcon = (cls) => (S.level >= 3 ? icon(remote() ? "outpost" : "townhall", 24, cls) : "");
+  // Round 6: at every level, so the tab's words do not move with the level.
+  const scopeIcon = (cls) => icon(remote() ? "outpost" : "townhall", 24, cls);
 
   let warnKey = "";
   /** The housing warning in the switch's row: redrawn only when the number waiting changes. */
@@ -453,7 +449,7 @@
       `<button class="b9r3h-tab${S.tab === id ? " b9r3h-tab--on" : ""}" type="button" role="tab" data-act="tab" data-tab="${id}" aria-selected="${S.tab === id}" aria-label="${words}">${extra}<span>${words}</span></button>`;
     if (S.editing === null) {
       editHead.remove();
-      // A Send from the quick-send rail, seen from the Monsters tab: what it did is said here.
+      // What the last Send did, seen from the Monsters tab (wide screens): said in this row.
       const note = S.sent && S.tab === "monsters" && S.sent.scope === scope() ? saidHtml(S.sent, "b9r5h-note", badge(S.sent.slot)) : "";
       tabsRow.innerHTML = `<div class="b9r3h-switch">${tab("monsters", "Monsters")}${tab("presets", "Presets", scopeIcon("b9r3h-tab__scope"))}</div>${note}`;
     } else {
@@ -496,24 +492,6 @@
       .join("");
     markStrips();
     requestAnimationFrame(markStrips);
-    drawRail();
-  }
-
-  /** The quick-send rail beside the queue (wide screens): one small Send per preset, on either tab. */
-  function drawRail() {
-    const here = scope();
-    rail.className = `b9r5h-rail b9r5h-rail--${slots()}`;
-    rail.innerHTML = presetList()
-      .map((preset, at) => {
-        if (!preset.length)
-          return `<div class="b9r5h-quick b9r5h-quick--empty"><button class="b9r5h-quick__body" type="button" data-act="preset-edit" data-preset="${at}" aria-label="Make preset ${at + 1}">${badge(at)}<span class="b9r5h-quick__plus">+</span></button></div>`;
-        const sent = S.sent && S.sent.scope === here && S.sent.slot === at;
-        return (
-          `<div class="b9r5h-quick${sent ? " b9r5h-quick--sent" : ""}"><button class="b9r5h-quick__body" type="button" data-act="tab" data-tab="presets" aria-label="Preset ${at + 1}, ${totalOf(preset)} monsters: open the presets">${badge(at)}<span class="b9r5h-quick__faces">${preset.map(stackHtml).join("")}</span><span class="b9r5h-quick__total">×${totalOf(preset)}</span></button>` +
-          `<button class="btn btn--primary b9r3h-send b9r5h-quick__send" type="button" data-act="preset-send" data-preset="${at}" title="Send preset ${at + 1}" aria-label="Send preset ${at + 1} to the end of the queue">${remote() ? icon("outpost", 24, "b9r2h-addflag") : ""}<span class="b9r5h-quick__n">${at + 1} Send</span><span class="b9r5h-quick__word">Send</span></button></div>`
-        );
-      })
-      .join("");
   }
 
   /** The last stack when it is `id`'s, else null: the only stack the count works on. */
@@ -879,11 +857,11 @@
   const SEND = ["Send", `Tap <b>Send</b> on a preset ${NUMBER}. It joins the end of the queue. Keep sending: when the queue fills, it says how many fitted.`];
   const CHANGE = ["Change", `Tap a preset's number ✎ to change it: the count works on the last stack, a different monster starts a new box. ${pic("undo")} takes the last box off, <b>Clear</b> empties the slot.`];
   const LONG = ["Long preset", `On <b>Phone</b>, preset <b>3</b> has eight stacks: drag its monsters sideways to see them all. <b>Send</b> and the cost stay put.`];
-  const RAIL = ["Quick send", `On <b>Desktop</b>, the small <b>Send</b> buttons beside the queue send a preset from either tab.`];
+  const STILL = ["Nothing moves", `Switch <b>L1 | L2 | L3</b> above: the yard switcher ${pic("friendprev")} ${pic("friendnext")}, the hatcheries, the queue boxes and the tabs keep their places. Below level 3 the switcher is greyed with a lock.`];
   const STEPS = {
-    1: [BUILD, SEND, CHANGE, RAIL],
-    2: [BUILD, SEND, LONG, RAIL],
-    3: [BUILD, SEND, LONG, RAIL, ["Outposts", `${pic("friendnext")} steps to an outpost ${pic("outpost")}: gold frame, and <b>Presets</b> ${pic("outpost")} is now the list shared by all outposts. ${pic("townhall")} goes home to the main yard's list.`]],
+    1: [BUILD, SEND, CHANGE, STILL],
+    2: [BUILD, SEND, LONG, STILL],
+    3: [BUILD, SEND, LONG, STILL, ["Outposts", `${pic("friendnext")} steps to an outpost ${pic("outpost")}: gold frame, and <b>Presets</b> ${pic("outpost")} is now the list shared by all outposts. ${pic("friendprev")} (or tapping ${pic("outpost")} for the yard list) goes back to the main yard's list. Nothing else moves.`]],
   };
   const LEVELS = {
     1: ["Level 1", "7 queue boxes of 20", "<b>2</b> presets", "this yard only"],
