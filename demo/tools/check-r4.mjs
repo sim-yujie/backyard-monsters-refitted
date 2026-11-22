@@ -42,9 +42,9 @@ try {
     await add("C2", 30);
     await click(F(".b9r3h-set .hatch-add__jump >> nth=1")); // +10 on the last stack
     await add("C1", 30);
-    const chips = () => page.locator(F(".b9r3h-edit__chips .b9r3h-chip:not(.b9r3h-chip--next)")).evaluateAll((ns) => ns.map((n) => `${n.getAttribute("aria-label").match(/: ([^,]+),/)[1]}${n.textContent.trim()}`).join(" > "));
+    const chips = () => page.locator(F(".b9r3h-edit__chips .b9r3h-chip:not(.b9r3h-chip--next)")).evaluateAll((ns) => ns.map((n) => `${n.getAttribute("aria-label").match(/: ([^,]+),/)[1]}${n.textContent.trim().replace("✎", "")}`).join(" > "));
     check((await chips()) === "Pokey×30 > Octo-ooze×40 > Pokey×30", `the stacks keep the order they were added in (${await chips()})`);
-    check((await page.locator(F('.hatch-monster[data-monster="C1"] .b9r3h-inpreset')).textContent()) === "×60", "Pokey's card says ×60 over both its stacks");
+    check((await page.locator(F('.hatch-monster[data-monster="C1"] .b9r3h-inpreset')).textContent()) === "Σ 60", "Pokey's card says Σ 60 over both its stacks");
     await shot("2-building");
     await click(F(".b9r3h-edit__undo"));
     check((await chips()) === "Pokey×30 > Octo-ooze×40", `Undo takes the last stack off (${await chips()})`);

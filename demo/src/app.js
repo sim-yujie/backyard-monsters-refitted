@@ -465,11 +465,13 @@
         if (!preset.length)
           return `<div class="b9r3h-row b9r3h-row--empty"><button class="b9r3h-row__body" type="button" data-act="preset-edit" data-preset="${at}" aria-label="Make preset ${at + 1}">${badge(at)}<span class="b9r3h-row__plus">+</span></button></div>`;
         const sent = S.sent && S.sent.scope === here && S.sent.slot === at ? S.sent : null;
-        const inside = sent
+        const said = sent
           ? `<span class="b9r3h-said${sent.why ? " b9r3h-said--short" : ""}" role="status"><strong>${sent.why ? `Added ${num(sent.added)} of ${num(sent.of)}` : `Added ${num(sent.added)}`}</strong><span>${sent.skipped.length ? `${sent.skipped.join(", ")} locked: skipped` : sent.why === "queue" ? "The queue is full" : sent.why === "goo" ? "Not enough goo" : "At the end of the queue"}</span></span>`
-          : `<span class="b9r3h-stacks">${preset.map(([id, count], index) => `<span class="b9r3h-stack${index >= 3 ? " b9r3h-stack--extra" : ""}">${face(id, "b9r3h-stack__picture")}<span class="b9r3h-stack__count">×${count}</span></span>`).join("")}${preset.length > 3 ? `<span class="b9r3h-stacks__more b9r3h-stacks__more--3">+${preset.length - 3}</span>` : ""}${preset.length > 2 ? `<span class="b9r3h-stacks__more b9r3h-stacks__more--2">+${preset.length - 2}</span>` : ""}</span><span class="b9r3h-row__cost">${GOO_ICON}<span>${short(gooOf(preset))}</span></span><span class="b9r3h-row__pencil">✎</span>`;
+          : "";
+        // The stacks stay in the row; what a Send did is said beside them.
+        const inside = `<span class="b9r3h-stacks">${preset.map(([id, count], index) => `<span class="b9r3h-stack${index >= 3 ? " b9r3h-stack--extra" : ""}">${face(id, "b9r3h-stack__picture")}<span class="b9r3h-stack__count">×${count}</span></span>`).join("")}${preset.length > 3 ? `<span class="b9r3h-stacks__more b9r3h-stacks__more--3">+${preset.length - 3}</span>` : ""}${preset.length > 2 ? `<span class="b9r3h-stacks__more b9r3h-stacks__more--2">+${preset.length - 2}</span>` : ""}</span><span class="b9r3h-row__cost">${GOO_ICON}<span>${short(gooOf(preset))}</span></span><span class="b9r3h-row__pencil">✎</span>`;
         return (
-          `<div class="b9r3h-row"><button class="b9r3h-row__body" type="button" data-act="preset-edit" data-preset="${at}" aria-label="Preset ${at + 1}, ${totalOf(preset)} monsters: change it">${badge(at)}${inside}</button>` +
+          `<div class="b9r3h-row"><button class="b9r3h-row__body" type="button" data-act="preset-edit" data-preset="${at}" aria-label="Preset ${at + 1}, ${totalOf(preset)} monsters: change it">${badge(at)}${inside}</button>${said}` +
           `<button class="btn btn--primary b9r3h-send" type="button" data-act="preset-send" data-preset="${at}" aria-label="Send preset ${at + 1} to the end of the queue">${remote() ? icon("outpost", 24, "b9r2h-addflag") : ""}<span>Send</span></button></div>`
         );
       })
@@ -498,7 +500,7 @@
       .map(([id, count], index) =>
         index < preset.length - 1
           ? `<span class="b9r3h-chip b9r3h-chip--set" role="listitem" aria-label="Stack ${index + 1}: ${M[id].name}, ${count}">${face(id, "b9r3h-chip__picture")}<span class="b9r3h-chip__count">×${count}</span></span>`
-          : `<button class="b9r3h-chip b9r3h-chip--last${id === S.sel ? " b9r3h-chip--on" : ""}" type="button" data-act="chip" data-monster="${id}" aria-label="Stack ${index + 1}, the last: ${M[id].name}, ${count}. Change its count">${face(id, "b9r3h-chip__picture")}<span class="b9r3h-chip__count">×${count}</span></button>`,
+          : `<button class="b9r3h-chip b9r3h-chip--last${id === S.sel ? " b9r3h-chip--on" : ""}" type="button" data-act="chip" data-monster="${id}" aria-label="Stack ${index + 1}, the last: ${M[id].name}, ${count}. Change its count">${face(id, "b9r3h-chip__picture")}<span class="b9r3h-chip__count">×${count}</span>${id === S.sel ? `<span class="b9r3h-count-mark">✎</span>` : ""}</button>`,
       )
       .join(THEN);
     // Another monster is chosen: its stack would be the next one, shown faint at the end.
@@ -506,20 +508,20 @@
     editHead.innerHTML =
       `<span class="b9r3h-edit__which">${scopeIcon("b9r3h-edit__scope")}${badge(at)}</span>` +
       `<div class="b9r3h-edit__chips" role="list" aria-label="Preset ${at + 1}: its stacks in order">${preset.length ? "" : `<span class="b9r3h-edit__hint">Pick a monster, set how many</span>`}${chips}${ghost}</div>` +
-      `<span class="b9r3h-edit__sum"><span class="b9r3h-edit__stacks" title="Queue stacks this preset fills">${stacksIn(preset)}/${STACKS}</span><span class="b9r3h-edit__goo">${GOO_ICON}<span>${short(gooOf(preset))}</span></span></span>` +
+      `<span class="b9r3h-edit__sum"><span class="b9r3h-edit__stacks" title="Queue slots used; each holds up to ${stackSize()} monsters. A group may fill multiple slots." aria-label="${stacksIn(preset)} of ${STACKS} queue slots; up to ${stackSize()} monsters per slot">${stacksIn(preset)}/${STACKS}</span><span class="b9r3h-edit__goo">${GOO_ICON}<span>${short(gooOf(preset))}</span></span></span>` +
       `<button class="b9r3h-edit__undo" type="button" data-act="preset-undo" aria-label="Take off the last stack"${preset.length ? "" : " disabled"}>${icon("undo", 24)}</button>` +
       `<button class="b9r3h-edit__bin" type="button" data-act="preset-empty" aria-label="Clear preset ${at + 1}"${preset.length ? "" : " disabled"}>Clear</button>` +
       `<button class="btn btn--primary b9r3h-edit__done" type="button" data-act="edit-done" aria-label="Done: back to the presets">Done</button>`;
     // The monsters wear how many of them the preset holds, over all its stacks.
     const totals = new Map();
     for (const [id, count] of preset) totals.set(id, (totals.get(id) || 0) + count);
-    for (const [id, count] of totals) $(`.hatch-monster[data-monster="${id}"]`, scroll)?.insertAdjacentHTML("beforeend", `<span class="b9r3h-inpreset">×${count}</span>`);
+    for (const [id, count] of totals) $(`.hatch-monster[data-monster="${id}"]`, scroll)?.insertAdjacentHTML("beforeend", `<span class="b9r3h-inpreset" title="Total across all stacks in this preset" aria-label="${count} total across all preset stacks">Σ ${count}</span>`);
     const off = now >= max ? " disabled" : "";
     const active = document.activeElement && document.activeElement.classList.contains("b9r3h-count");
     if (active) return; // typing: the box is left alone, the rest is already drawn
     editBox.innerHTML =
       `<span class="qty-stepper hatch-add__controls"><button type="button" class="btn qty-stepper__step hatch-add__step hatch-add__step--minus" data-by="-1" aria-label="One fewer"${now <= 0 ? " disabled" : ""}>−</button>` +
-      `<input type="number" class="field__input qty-stepper__count hatch-add__count b9r3h-count" min="0" max="${max}" step="1" inputmode="numeric" aria-label="${mine ? `How many in the last stack of preset ${at + 1}` : `How many in a new stack at the end of preset ${at + 1}`}" value="${now}">` +
+      `<label class="b9r3h-count-field"><span class="b9r3h-count-mark" aria-hidden="true">${mine ? "✎" : "+"}</span><input type="number" class="field__input qty-stepper__count hatch-add__count b9r3h-count" min="0" max="${max}" step="1" inputmode="numeric" aria-label="${mine ? `How many in the last stack of preset ${at + 1}` : `How many in a new stack at the end of preset ${at + 1}`}" value="${now}"></label>` +
       `<button type="button" class="btn qty-stepper__step hatch-add__step hatch-add__step--plus" data-by="1" aria-label="One more"${off}>+</button>` +
       `<button type="button" class="btn qty-stepper__step qty-stepper__jump hatch-add__jump" data-by="5" aria-label="5 more"${off}>+5</button>` +
       `<button type="button" class="btn qty-stepper__step qty-stepper__jump hatch-add__jump" data-by="10" aria-label="10 more"${off}>+10</button>` +

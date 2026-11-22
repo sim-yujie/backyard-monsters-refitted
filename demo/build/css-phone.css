@@ -4134,6 +4134,26 @@ button.hatch-slot:disabled{cursor: progress;}
 .b9r3h-row--empty .b9r3h-row__body{grid-template-rows: auto;}
 .b9r3h-stacks{gap: 3px 10px;}
 .b9r3h-stack + .b9r3h-stack::before{left: -10px; width: 10px; font-size: 14px;}
+.b9r3h-row:has(.b9r3h-said){display: grid; grid-template-columns: minmax(0px, 1fr) auto; align-items: center;}
+.b9r3h-row > .b9r3h-said{grid-area: 2 / 1 / auto / -1; padding: 0px 8px 6px; font-size: 12px; flex-flow: wrap; gap: 2px 8px;}
+.b9r3h-row .b9r3h-stacks{flex-wrap: wrap; overflow: visible;}
+.b9r3h-row .b9r3h-stacks__more{white-space: nowrap; min-width: 20px;}
+.b9r3h-count-mark{position: absolute; top: -3px; right: -3px; z-index: 1; min-width: 16px; border-radius: 8px; background: var(--colour-accent); color: var(--colour-text-inverse, #1b1b1b); font-size: 12px; line-height: 16px; text-align: center; pointer-events: none;}
+.b9r3h-inpreset{background: var(--colour-surface-sunken); color: var(--colour-text); border: 1px solid var(--colour-border-strong);}
+.b9r3h-count-field{position: relative; display: flex; flex: 1 1 44px; min-width: 44px;}
+.b9r3h .b9r3h-count-field > input{width: 100%; min-width: 0px; box-sizing: border-box; border-color: var(--colour-accent);}
+.x-root[data-skin] .panel .hatch.b9r3h .b9r3h-set .hatch-add__controls > *{min-width: 44px; min-height: 44px; box-sizing: border-box;}
+.b9r3h .b9r3h-set .hatch-add__controls{flex-wrap: wrap;}
+.b9r3h-editing .hatch-info{grid-template-columns: minmax(0px, 1fr);}
+.b9r3h-editing .hatch-info__name{white-space: nowrap;}
+.b9r3h-editing .hatch-info__each{white-space: normal; flex-wrap: wrap; justify-self: start; padding-left: 0px;}
+.b9r3h-row .b9r3h-stacks{flex-wrap: nowrap; overflow: hidden; gap: 3px 9px;}
+.b9r3h-row .b9r3h-stacks > .b9r3h-stack{flex: 0 1 38px; min-width: 28px;}
+.b9r3h-row .b9r3h-stacks__more{flex: 0 0 auto; min-width: 0px;}
+.b9r3h-stack + .b9r3h-stack::before{left: -9px; width: 9px;}
+.b9r3h-row:has(.b9r3h-said) .b9r3h-row__body > :not(.b9r3h-number){visibility: hidden;}
+.b9r3h-row > .b9r3h-row__body, .b9r3h-row > .b9r3h-said{grid-area: 1 / 1;}
+.b9r3h-row > .b9r3h-said{flex-flow: column; gap: 0px; align-self: center; padding: 0px 4px 0px 38px; font-size: 13px; pointer-events: none;}
 
 /* ui/styles/bunker.css */
 .bunker{display: flex; flex-direction: column; gap: var(--space-3); padding: var(--space-3); border: 1px solid var(--colour-border); border-radius: var(--radius-md); background: var(--colour-surface-sunken);}

@@ -1,0 +1,18 @@
+l3-presets-modern-390x844|Presets tab, L3, five presets as sequences, Modern phone 390x844
+l3-edit-before-modern-390x844|ROUND 3 (before): changing preset 1 with the hatcheries and queue still shown, Modern phone
+l3-edit-modern-390x844|ROUND 4: changing preset 1 (Pokey 30 > Octo-ooze 40 > Pokey 30), progress hidden, Modern phone
+l3-edit-next-modern-390x844|ROUND 4: same, another monster (Bolt) chosen: faint next stack at the end, count 0, Modern phone
+l3-edit-ten-modern-390x844|ROUND 4: a preset at its limit, 9 stacks filling 10/10 queue stacks, Modern phone
+l3-edit-ten-classic-390x844|ROUND 4: same at the limit, Classic phone
+l3-sent-locked-modern-390x844|Presets tab after Send of preset 5 (a locked monster skipped), Modern phone
+l3-remote-presets-modern-390x844|Presets tab for an outpost run from home (flagged Send), Modern phone
+l3-edit-ten-modern-390x664|ROUND 4: at the limit, phone with Safari bars 390x664
+l3-edit-modern-844x390|ROUND 4: changing preset 1, phone on its side 844x390
+l3-edit-ten-modern-768x1024|ROUND 4: at the limit after scrolling, iPad upright 768x1024 (preset head pinned)
+l3-presets-modern-768x1024|Presets tab, iPad upright 768x1024
+l3-presets-modern-1280x720|Presets tab, L3, Modern desktop 1280x720
+l3-edit-before-modern-1280x720|ROUND 3 (before): changing preset 1, progress shown, Modern desktop
+l3-edit-modern-1280x720|ROUND 4: changing preset 1, progress hidden, Modern desktop
+l3-edit-ten-modern-1280x720|ROUND 4: at the limit, Modern desktop
+l3-edit-ten-classic-1280x720|ROUND 4: at the limit, Classic desktop
+l3-presets-classic-1280x720|Presets tab, Classic desktop

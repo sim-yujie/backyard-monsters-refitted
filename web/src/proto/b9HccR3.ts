@@ -468,8 +468,9 @@ export class B9HccR3 {
                   : "At the end of the queue",
           ),
         );
-        body.append(said);
-      } else {
+        row.append(said);
+      }
+      {
         const faces = el("span", "b9r3h-stacks");
         preset.forEach(([id, count], index) => {
           const one = el("span", "b9r3h-stack");
@@ -629,6 +630,7 @@ export class B9HccR3 {
       // The last stack: the one the count works on. A tap chooses its monster.
       const chip = btn(`b9r3h-chip b9r3h-chip--last${id === chosen ? " b9r3h-chip--on" : ""}`, `Stack ${index + 1}, the last: ${name}, ${count}. Change its count`);
       chip.append(portrait(id, "b9r3h-chip__picture"), el("span", "b9r3h-chip__count", `×${count}`));
+      if (id === chosen) chip.append(el("span", "b9r3h-count-mark", "✎"));
       chip.addEventListener("click", () => this.root.querySelector<HTMLElement>(`.hatch-monster[data-monster="${id}"]`)?.click());
       chips.append(chip);
     });
@@ -642,7 +644,8 @@ export class B9HccR3 {
     const sum = el("span", "b9r3h-edit__sum");
     const goo = preset.reduce((total, [id, count]) => total + count * this.priceOf(id), 0);
     const stacks = el("span", "b9r3h-edit__stacks", `${this.stacksOf(preset)}/${QUEUE_STACKS}`);
-    stacks.title = "Queue stacks this preset fills";
+    stacks.title = `Queue slots used; each holds up to ${this.size} monsters. A group may fill multiple slots.`;
+    stacks.setAttribute("aria-label", `${this.stacksOf(preset)} of ${QUEUE_STACKS} queue slots; up to ${this.size} monsters per slot`);
     const cost = el("span", "b9r3h-edit__goo");
     cost.append(resourceIcon("r4"), el("span", "", short(goo)));
     sum.append(stacks, cost);
@@ -667,7 +670,10 @@ export class B9HccR3 {
     for (const [id, count] of preset) totals.set(id, (totals.get(id) ?? 0) + count);
     for (const [id, count] of totals) {
       const card = this.root.querySelector(`.hatch-monster[data-monster="${id}"]`);
-      card?.append(el("span", "b9r3h-inpreset", `×${count}`));
+      const total = el("span", "b9r3h-inpreset", `Σ ${count}`);
+      total.title = "Total across all stacks in this preset";
+      total.setAttribute("aria-label", `${count} total across all preset stacks`);
+      card?.append(total);
     }
 
     // The count: the last stack's number when the chosen monster is its own, else 0 (a new stack).
@@ -689,9 +695,13 @@ export class B9HccR3 {
     input.addEventListener("change", () => chosen && this.setCount(chosen, Number(input.value)));
     const stack = step("btn--outline qty-stepper__fill hatch-add__fill", "One more full stack", `+${this.size}`, now + this.size, now >= max);
     stack.classList.remove("qty-stepper__step");
+    const countField = el("label", "b9r3h-count-field");
+    const marker = el("span", "b9r3h-count-mark", mine ? "✎" : "+");
+    marker.setAttribute("aria-hidden", "true");
+    countField.append(marker, input);
     controls.append(
       step("hatch-add__step hatch-add__step--minus", "One fewer", "−", now - 1, now <= 0),
-      input,
+      countField,
       step("hatch-add__step hatch-add__step--plus", "One more", "+", now + 1, now >= max),
       step("qty-stepper__jump hatch-add__jump", "5 more", "+5", now + 5, now >= max),
       step("qty-stepper__jump hatch-add__jump", "10 more", "+10", now + 10, now >= max),

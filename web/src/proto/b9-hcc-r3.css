@@ -704,3 +704,131 @@
     font-size: 14px;
   }
 }
+
+/* Review: keep Send feedback alongside the sequence it describes. */
+.b9r3h-row:has(.b9r3h-said) {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+}
+.b9r3h-row > .b9r3h-said {
+  grid-column: 1 / -1;
+  grid-row: 2;
+  padding: 0 8px 6px;
+  font-size: 12px;
+  flex-direction: row;
+  flex-wrap: wrap;
+  gap: 2px 8px;
+}
+/* Wrap whole chips and +N instead of cutting off the sequence summary. */
+.b9r3h-row .b9r3h-stacks {
+  flex-wrap: wrap;
+  overflow: visible;
+}
+.b9r3h-row .b9r3h-stacks__more {
+  white-space: nowrap;
+  min-width: 20px;
+}
+
+/* Match the editable tail to its quantity field; totals have a quieter treatment. */
+.b9r3h-count-mark {
+  position: absolute;
+  top: -3px;
+  right: -3px;
+  z-index: 1;
+  min-width: 16px;
+  border-radius: 8px;
+  background: var(--colour-accent);
+  color: var(--colour-text-inverse, #1b1b1b);
+  font-size: 12px;
+  line-height: 16px;
+  text-align: center;
+  pointer-events: none;
+}
+.b9r3h-inpreset {
+  background: var(--colour-surface-sunken);
+  color: var(--colour-text);
+  border: 1px solid var(--colour-border-strong);
+}
+.b9r3h-count-field {
+  position: relative;
+  display: flex;
+  flex: 1 1 44px;
+  min-width: 44px;
+}
+.b9r3h .b9r3h-count-field > input {
+  width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+  border-color: var(--colour-accent);
+}
+:root[data-skin] .panel .hatch.b9r3h .b9r3h-set .hatch-add__controls > * {
+  min-width: 44px;
+  min-height: 44px;
+  box-sizing: border-box;
+}
+.b9r3h .b9r3h-set .hatch-add__controls {
+  flex-wrap: wrap;
+}
+
+@media (max-width: 620px), (max-height: 500px) {
+  .b9r3h-editing .hatch-info {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .b9r3h-editing .hatch-info__name {
+    white-space: nowrap;
+  }
+  .b9r3h-editing .hatch-info__each {
+    white-space: normal;
+    flex-wrap: wrap;
+    justify-self: start;
+    padding-left: 0;
+  }
+}
+@media (max-height: 500px) {
+  .b9r3h-editing .hatch-info {
+    position: static;
+    margin-top: 12px;
+  }
+}
+
+/* A phone row stays one line (five rows must fit the upright phone): the stacks shrink a little
+   and "+N" keeps its room, instead of wrapping to a second line. */
+@media (max-width: 620px), (max-height: 500px) {
+  .b9r3h-row .b9r3h-stacks {
+    flex-wrap: nowrap;
+    overflow: hidden;
+    gap: 3px 9px;
+  }
+  .b9r3h-row .b9r3h-stacks > .b9r3h-stack {
+    flex: 0 1 38px;
+    min-width: 28px;
+  }
+  .b9r3h-row .b9r3h-stacks__more {
+    flex: none;
+    min-width: 0;
+  }
+  .b9r3h-stack + .b9r3h-stack::before {
+    left: -9px;
+    width: 9px;
+  }
+  /* What a Send did takes the stacks' place for a moment (as round 3), so the fifth row's
+     words never fall below the window. */
+  .b9r3h-row:has(.b9r3h-said) .b9r3h-row__body > :not(.b9r3h-number) {
+    visibility: hidden;
+  }
+  .b9r3h-row > .b9r3h-row__body,
+  .b9r3h-row > .b9r3h-said {
+    grid-row: 1;
+    grid-column: 1;
+  }
+  .b9r3h-row > .b9r3h-said {
+    flex-direction: column;
+    flex-wrap: nowrap;
+    gap: 0;
+    align-self: center;
+    padding: 0 4px 0 38px;
+    font-size: 13px;
+    pointer-events: none;
+  }
+}
