@@ -27,7 +27,8 @@ ROOT = HERE.parents[3]
 # STORE_LETTERS=0: everything from e-plain/render, the renders without the words (all.sh under the same switch)
 PLAIN = os.environ.get("STORE_LETTERS", "1") == "0"
 R = HERE / ("e-plain" if PLAIN else "e") / "render"
-OUT = ROOT / "shots" / ("istore-e-plain" if os.environ.get("STORE_LETTERS", "1") == "0" else "istore-e")
+# STORE_SHOTS=<folder under shots/>: where the pictures go (the weathered words' are in shots/istore-letters)
+OUT = ROOT / "shots" / os.environ.get("STORE_SHOTS", "istore-e-plain" if PLAIN else "istore-e")
 ART = ROOT / "server/public/assets/buildings"
 N = 32
 GLOW = 6                     # levels of 255 a glow must change a pixel by for it to count as lit
