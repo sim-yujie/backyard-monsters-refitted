@@ -743,7 +743,7 @@ describe("the 3D yard buildings", () => {
     for (const [i, look] of looks.entries()) {
       const level = i + 1;
       const art = resolveArt(LAB, level, ArtState.DEFAULT, "inferno");
-      expect(art?.name).toBe("Monster Lab");
+      expect(art?.name).toBe("Infernal Lab");
       // The body under one strip of its moving parts; the still for the icons.
       expect(art?.topIsAnim).toBe(false);
       expect(art?.top.url).toBe(`${root}body.i3d${level}@2x.webp`);
