@@ -262,6 +262,11 @@ export class TransferMode {
     });
   }
 
+  /** The tray's top edge on screen, or null when it is not up. */
+  trayTop(): number | null {
+    return this.tray ? this.tray.element.getBoundingClientRect().top : null;
+  }
+
   /** Whether move mode is on. */
   get active(): boolean {
     return this.state !== null;
@@ -273,7 +278,8 @@ export class TransferMode {
    */
   async start(anchor: string, mode: MoveMode): Promise<void> {
     this.end(false);
-    this.state = { mode, anchor, ticks: [], picks: {}, even: false };
+    // Split evenly by default, as in the owner's prototype: "Near 5" then fills five outposts alike.
+    this.state = { mode, anchor, ticks: [], picks: {}, even: true };
     this.options.layer.classList.add("xfer-on");
     if (!this.root.isConnected) this.options.layer.prepend(this.root);
     this.showToast([el("span", "xfer-toast__line", MOVE_TEXT.loading)], false, 0);
@@ -1149,7 +1155,9 @@ export class TransferMode {
       const room = el("span", "xfer-row__room");
       room.append(roomBar(yard, sizeOf, delta));
       const free = Math.max(0, freeRoom(yard, sizeOf) - delta);
-      room.append(el("b", free < smallest ? "is-full" : "", free < smallest ? MOVE_TEXT.full : formatAmount(free)));
+      const word = el("b", free < smallest ? "is-full" : "");
+      word.append(icon("housing", 16), document.createTextNode(free < smallest ? MOVE_TEXT.full : formatAmount(free)));
+      room.append(word);
 
       const preview = el("span", "xfer-row__tag");
       const n = countOf(moving);

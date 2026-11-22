@@ -395,8 +395,7 @@
 /* Cannot take part: full (moving out), empty (bringing in), or the main yard
    from the main yard. Still readable, clearly out of play. */
 .xfer-plate.is-dim {
-  opacity: 0.62;
-  filter: saturate(0.55);
+  filter: grayscale(0.75) brightness(0.72);
   cursor: not-allowed;
 }
 
@@ -824,7 +823,7 @@
 /* The monster chips: one line that scrolls sideways, "All" pinned beside it. */
 .xfer-chips {
   display: flex;
-  flex: 1 1 auto;
+  flex: 0 1 auto;
   gap: 6px;
   min-width: 0;
   padding: 4px 2px;
@@ -1250,7 +1249,7 @@
 
 .xfer-row {
   display: grid;
-  grid-template-columns: 32px minmax(90px, 1.2fr) minmax(0, 1.6fr) 150px 64px;
+  grid-template-columns: 32px minmax(90px, 1.2fr) minmax(0, 1.6fr) 170px 64px;
   align-items: center;
   gap: 10px;
   min-height: 54px;
@@ -1373,7 +1372,11 @@
 }
 
 .xfer-row__room b {
-  min-width: 34px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 2px;
+  min-width: 52px;
   font-size: 14px;
   font-variant-numeric: tabular-nums;
   text-align: right;
@@ -1381,6 +1384,11 @@
 
 .xfer-row__room b.is-full {
   color: var(--colour-danger);
+}
+
+.xfer-row__room .game-icon {
+  width: 16px;
+  height: 16px;
 }
 
 .xfer-row__tag {

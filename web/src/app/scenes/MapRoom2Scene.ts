@@ -1568,7 +1568,28 @@ export class MapRoom2Scene implements Scene {
         this.showHoverCard();
       },
     });
-    void this.transfer.start(anchor, mode);
+    void this.transfer.start(anchor, mode).then(() => {
+      if (anchorCell && this.transfer?.active) this.centreForMove(anchorCell);
+    });
+  }
+
+  /** Puts the yard a move started from in the middle of the map left between the top bar and the tray. */
+  private centreForMove(cell: OffsetCell): void {
+    const ui = this.ui;
+    const trayTop = this.transfer?.trayTop();
+    if (!ui || trayTop === null || trayTop === undefined) return;
+    const now = this.worldToCanvas(this.cellPoint(cell));
+    const dx = this.viewportWidth / 2 - now.x;
+    const dy = (ui.hudBottom() + trayTop) / 2 - now.y;
+    if (Math.abs(dx) < 4 && Math.abs(dy) < 4) return;
+    this.camera.settle();
+    if (this.tilt) {
+      const from = this.tilt.toFlat(now);
+      const to = this.tilt.toFlat({ x: now.x + dx, y: now.y + dy });
+      this.camera.panByScreen(to.x - from.x, to.y - from.y);
+      return;
+    }
+    this.camera.panByScreen(dx, dy);
   }
 
   /** Where a yard is drawn on screen now and how wide its hex is, or null when out of sight. */
