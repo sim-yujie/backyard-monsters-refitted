@@ -73,6 +73,7 @@ export const MOVE_TEXT = {
   to: "To",
   empty: "Empty",
   full: "Full",
+  noHousing: "No room",
   free: "free",
   attack: "Under attack",
   attackLong: "Under attack: no moves until it ends",
@@ -499,9 +500,13 @@ export class TransferMode {
         // scale comes last, so it shrinks the plate and not where it stands.
         const fit = size === "full" ? Math.min(1, (at.hexWidth * 0.9) / PLATE_WIDTH) : 1;
         plate.node.style.transform = `translate(${Math.round(at.x)}px, ${Math.round(y)}px) translate(-50%, -50%) scale(${fit.toFixed(3)})`;
-        // The tag rides inside the hex's top point, clear of the plates beside it.
-        if (plate.tag)
-          plate.tag.style.transform = `translate(${Math.round(at.x)}px, ${Math.round(at.y - at.hexWidth * 0.3)}px) translate(-50%, -50%)`;
+        // The tag sits on the plate's top right corner, over its own yard's
+        // building: never on the plates of the row above.
+        if (plate.tag) {
+          const half = (PLATE_WIDTH * fit) / 2;
+          const top = y - 21 * fit;
+          plate.tag.style.transform = `translate(${Math.round(at.x + half + 4)}px, ${Math.round(top - 4)}px) translate(-100%, -100%)`;
+        }
         plate.at = at;
       }
     }
@@ -579,7 +584,8 @@ export class TransferMode {
         const room = el("span", "xfer-plate__room");
         room.append(roomBar(yard, sizeOf, delta));
         const word = el("b", full && !isAnchor ? "xfer-plate__free is-full" : "xfer-plate__free");
-        word.append(icon("housing", 16, "xfer-plate__house"), document.createTextNode(full && !isAnchor ? MOVE_TEXT.full : formatAmount(free)));
+        const words = yard.capacity <= 0 ? MOVE_TEXT.noHousing : full && !isAnchor ? MOVE_TEXT.full : formatAmount(free);
+        word.append(icon("housing", 16, "xfer-plate__house"), document.createTextNode(words));
         room.append(word);
         node.append(room);
       } else if (!yard.attack && size === "slim") {
@@ -1218,6 +1224,17 @@ export class TransferMode {
       done.append(el("span", "", MOVE_TEXT.done));
       done.addEventListener("click", () => popup.close());
       foot.append(status, total, done);
+      // A phone on its side: the rows get the height; Done joins the search line.
+      const short = window.innerHeight <= 500;
+      foot.hidden = short;
+      const head = popup.element.querySelector<HTMLElement>(".xfer-list__head");
+      head?.querySelector(".xfer-done")?.remove();
+      if (short && head) {
+        const headDone = button("btn btn--primary xfer-done");
+        headDone.append(el("span", "", MOVE_TEXT.done));
+        headDone.addEventListener("click", () => popup.close());
+        head.append(headDone);
+      }
     }
   }
 }

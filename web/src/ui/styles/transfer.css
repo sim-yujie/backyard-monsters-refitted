@@ -475,6 +475,7 @@
 
 .xfer-tag {
   position: absolute;
+  transform-origin: 100% 100%;
   top: 0;
   left: 0;
   z-index: 1;
@@ -1263,6 +1264,30 @@
 
   .xfer-status__item {
     font-size: 15px;
+  }
+
+  .xfer-status {
+    flex: none;
+    padding: 0 2px;
+  }
+
+  .xfer-status__item small,
+  .xfer-listb__n {
+    display: none;
+  }
+
+  .xfer-tray__tools {
+    gap: 4px;
+  }
+
+  .xfer-list__foot[hidden] {
+    display: none;
+  }
+
+  .xfer-list__head .xfer-done {
+    flex: none;
+    min-width: 96px;
+    margin-left: 0;
   }
 
   /* The sign over the tray would take a third of the map: its words stay
