@@ -243,8 +243,11 @@ export const SABNOX_BURN_SECONDS = 4;
 /**
  * IC8 King Wormzer: "Quake Splash": each blow splashes the buildings round
  * it, the blow times this, falling to a fifth at the edge, once per target
- * in a row: x1, x2, x3 within 60, 80, 100 px. Without a rank there is no
- * splash (beta 9's live nerf: it splashed x4 within 100 before).
+ * in a row: x1, x2, x4 within 60, 80, 100 px. Rank 3 is exactly the splash
+ * every King Wormzer had before beta 9 (x4 within 100, Flash's
+ * `KING_WORMZER_MULTIPLIER`; owner, 23 Nov 2026: "rank 3 do x4"), so
+ * Moloch's raiders, fixed at rank 3, keep it. Without a rank there is no
+ * splash (beta 9's live nerf).
  */
-export const kingWormzerMultiplier = (rank: number): number => atRank([1, 2, 3], rank);
+export const kingWormzerMultiplier = (rank: number): number => atRank([1, 2, 4], rank);
 export const kingWormzerRadius = (rank: number): number => atRank([60, 80, 100], rank);

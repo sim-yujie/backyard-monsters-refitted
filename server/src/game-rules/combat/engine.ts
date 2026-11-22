@@ -5323,9 +5323,10 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
   /**
    * King Wormzer's splash ({@link KING_WORMZER_ID}), a Lab rank's gift since
    * beta 9 (Lab "Quake Splash"): the buildings within its rank's reach, 60,
-   * 80, 100, the swing times its rank, once per target in a row. Rank 0
-   * splashes nothing (before beta 9 every King Wormzer splashed x4 within
-   * 100). No monster is hurt, and a defender's splash finds no building.
+   * 80, 100, the swing times x1, x2, x4, once per target in a row. Rank 0
+   * splashes nothing; rank 3 is the x4 within 100 every King Wormzer had
+   * before beta 9. No monster is hurt, and a defender's splash finds no
+   * building.
    */
   const kingWormzerSplash = (
     creep: Creep,

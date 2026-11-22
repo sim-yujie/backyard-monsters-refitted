@@ -18,7 +18,7 @@ import {
   valgosExtraWalls,
   zagnoidHealShare,
 } from "./specialMoves.js";
-import { TICKS_PER_SECOND, monsterAttackDelay, monsterStat } from "./stats.js";
+import { KING_WORMZER_MULTIPLIER, TICKS_PER_SECOND, monsterAttackDelay, monsterStat } from "./stats.js";
 import type { CombatBuildingDataMap, FlingEvent, MonsterRanks } from "./types.js";
 import { buildEngineYard } from "./yard.js";
 
@@ -84,7 +84,9 @@ describe("the numbers per rank (numbers card b9-numbers)", () => {
     expect([1, 2, 3].map(grokusRadius)).toEqual([60, 70, 80]);
     expect([1, 2, 3].map(sabnoxBurnShare)).toEqual([0.1, 0.2, 0.3]);
     expect(SABNOX_BURN_SECONDS).toBe(4);
-    expect([0, 1, 2, 3].map(kingWormzerMultiplier)).toEqual([0, 1, 2, 3]);
+    // Rank 3 is the pre-beta-9 splash, x4 within 100 (owner, 23 Nov 2026).
+    expect([0, 1, 2, 3].map(kingWormzerMultiplier)).toEqual([0, 1, 2, 4]);
+    expect(kingWormzerMultiplier(3)).toBe(KING_WORMZER_MULTIPLIER);
     expect([1, 2, 3].map(kingWormzerRadius)).toEqual([60, 80, 100]);
   });
 
@@ -404,6 +406,22 @@ describe("Moloch's emergence raids keep their strength", () => {
     battle.apply({ kind: "raid", t: 0, x: 400, y: 0, r: 20, monsters: { IC1: 1, IC5: 1, IC8: 1 } });
     const ranks = Object.fromEntries(battle.creeps().map((creep) => [creep.monsterId, creep.rank ?? 0]));
     expect(ranks).toEqual({ IC1: 0, IC5: 2, IC8: 3 });
+  });
+
+  it("splash with their King Wormzer exactly as before beta 9: x4 within 100", () => {
+    // Two touching harvesters; the raider strikes one and its splash reaches the other.
+    const yard = yardOf({ "1": harvester(1, 0, 0), "2": harvester(2, 40, 0) });
+    const battle = createBattle(yard, { seed: 1, raid: true });
+    battle.apply({ kind: "raid", t: 0, x: 400, y: 0, r: 0, monsters: { IC8: 1 } });
+    const radii: number[] = [];
+    watch(battle, TICKS_PER_SECOND * 40, (_creeps, events) => {
+      for (const event of events) if (event.kind === "splash") radii.push(event.radius);
+    });
+    expect(radii.length).toBeGreaterThan(0);
+    for (const radius of radii) expect(radius).toBe(kingWormzerRadius(3));
+    expect(kingWormzerRadius(3)).toBe(100);
+    expect(kingWormzerMultiplier(MOLOCH_RAID_RANKS.IC8 ?? 0)).toBe(KING_WORMZER_MULTIPLIER);
+    expect(lostBy(yard, 1) + lostBy(yard, 2)).toBeGreaterThan(0);
   });
 
   it("ignore any Lab ranks a player passes in", () => {

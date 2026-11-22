@@ -845,7 +845,7 @@ export const INFERNO_LAB_ABILITIES: readonly LabAbility[] = [
     description: "King Wormzer's blows splash the buildings around it.",
     upgradeDescription: "A wider, stronger splash.",
     costs: [[6000000, 345600], [9000000, 345600], [13500000, 345600]],
-    effect: [1, 2, 3],
+    effect: [1, 2, 4],
   },
 ];
 

@@ -671,7 +671,8 @@ const INFERNO_ABILITIES = [
     description: "King Wormzer's blows splash the buildings around it.",
     upgradeDescription: "A wider, stronger splash.",
     costs: sulfurSteps(6000000, 345600),
-    effect: [1, 2, 3],
+    // Rank 3 is the splash every King Wormzer had before beta 9 (owner, 23 Nov 2026: "rank 3 do x4").
+    effect: [1, 2, 4],
   },
 ].map((one, k) => ({ ...one, order: k + 1, line: null, decided: "beta 9, owner, 21 Nov 2026" }));
 for (const one of INFERNO_ABILITIES) {
