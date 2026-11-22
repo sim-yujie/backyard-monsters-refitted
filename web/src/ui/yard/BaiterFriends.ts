@@ -128,7 +128,8 @@ export class BaiterFriends {
   private readonly status: HTMLElement;
   private readonly resultsStatus: HTMLElement;
   private footNote: HTMLElement | null = null;
-  private sendButton: HTMLButtonElement | null = null;
+  /** Send, in the foot and (a phone on its side) in the pinned row by the search. */
+  private sendButtons: HTMLButtonElement[] = [];
   private destroyed = false;
 
   constructor(options: BaiterFriendsOptions) {
@@ -260,10 +261,13 @@ export class BaiterFriends {
     }
     // The chips and the search stay at the top while the list scrolls on a phone.
     const tools = make("div", "baiter-friends__tools");
-    tools.append(chips, box);
+    // A phone on its side has height for one pinned row: Send joins it there (CSS).
+    const sendTop = iconBtn("mail", "", "primary", "baiter-friends__send baiter-friends__send--top");
+    sendTop.addEventListener("click", () => void this.send(sendTop));
+    tools.append(chips, box, sendTop);
     // Under the pinned chips, so on a phone it scrolls away with the list rather than taking room.
     const lead = make("p", "baiter__note baiter-friends__lead", "Invited players can test your main yard for 24 h with a free army. Nothing is lost.");
-    pick.append(tools, lead, list);
+    pick.append(tools, lead, this.status, list);
 
     const side = make("section", "baiter-friends__col baiter-friends__col--open");
     side.setAttribute("aria-label", "Invited");
@@ -277,9 +281,9 @@ export class BaiterFriends {
     const foot = make("footer", "baiter-friends__foot");
     const send = iconBtn("mail", "", "primary", "baiter-friends__send");
     send.addEventListener("click", () => void this.send(send));
-    this.sendButton = send;
+    this.sendButtons = [send, sendTop];
     this.footNote = make("span", "baiter-friends__foot-note");
-    foot.append(this.footNote, this.status, send);
+    foot.append(this.footNote, send);
     this.invite.replaceChildren(pick, side, foot);
     this.renderPicked();
   }
@@ -288,9 +292,9 @@ export class BaiterFriends {
   private renderPicked(): void {
     const count = this.picked.size;
     if (this.footNote) this.footNote.textContent = `${count} picked · 24 h, any number of tests`;
-    if (this.sendButton) {
-      this.sendButton.disabled = count === 0;
-      const label = this.sendButton.querySelector("span");
+    for (const button of this.sendButtons) {
+      button.disabled = count === 0;
+      const label = button.querySelector("span");
       if (label) label.textContent = `Send ${count}`;
     }
   }

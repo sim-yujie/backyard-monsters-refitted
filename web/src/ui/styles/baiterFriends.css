@@ -436,6 +436,52 @@
   }
 }
 
+/* The second Send, in the pinned row, is for a phone on its side only. */
+.baiter-friends__send--top {
+  display: none;
+}
+
+/* A short screen (a small tablet, a zoomed page): the chips and the search
+   share one row and the lead line goes, so the lists keep a few rows. */
+@media (max-height: 640px) {
+  .baiter-friends__tools {
+    flex-direction: row;
+    align-items: center;
+  }
+
+  .baiter-friends__tools > .baiter-friends__chips {
+    flex: 1 1 auto;
+    flex-wrap: nowrap;
+    min-width: 0;
+    overflow-x: auto;
+  }
+
+  .baiter-friends__chip {
+    flex: none;
+  }
+
+  .baiter-friends__tools > .baiter-friends__search {
+    flex: 0 1 220px;
+    min-width: 150px;
+  }
+
+  .baiter-friends__lead {
+    display: none;
+  }
+}
+
+/* A phone on its side: one pinned row (chips, search, Send) and no foot. */
+@media (min-width: 621px) and (max-height: 500px) {
+  .baiter-friends__send--top {
+    display: inline-flex;
+    flex: none;
+  }
+
+  .baiter-friends--invite .baiter-friends__foot {
+    display: none;
+  }
+}
+
 /* A phone upright: four tabs share the head's width. */
 @media (max-width: 620px) {
   /* An upright phone: chips above the search, both pinned while the list scrolls. */
