@@ -456,6 +456,11 @@ export interface BaseSaveResponse extends ApiEnvelope {
    * destroyed (issue #182), on the save that ends the attack.
    */
   takeovergrant?: TakeoverGrantOffer;
+  /**
+   * "camp-damaged" when a Map Room 2 camp attack did not become the Repeat
+   * attack plan because the camp was already damaged before it (patch 8.2).
+   */
+  repeatplan?: "camp-damaged";
 }
 
 /**

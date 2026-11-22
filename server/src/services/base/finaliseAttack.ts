@@ -553,8 +553,11 @@ const finaliseLocked = async (basesaveid: number, trigger: string, options: Land
   await discardDefenceReplayLoad(basesaveid);
 
   // An attack played by hand on a Map Room 2 camp is the attacker's plan for
-  // its tribe and level from now on (issue #221); an auto-attack never is.
-  if (options.recordPlan ?? true) await recordAttackPlan(attacker.userid, defender, input.log, input.tick);
+  // its tribe and level from now on (issue #221), only from a camp untouched
+  // before the attack (patch 8.2); an auto-attack never is.
+  if (options.recordPlan ?? true) {
+    await recordAttackPlan(attacker.userid, defender, input.log, input.tick, storedHealthData);
+  }
 
   // A Map Room 2 Kozu Town Hall the battle brought down, and each biggest
   // Putty bomb fired, count towards the attacker's achievements, hand-played
