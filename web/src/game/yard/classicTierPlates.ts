@@ -63,7 +63,7 @@ export const classicTowerTier = (type: number, level: number, kind: YardKind): n
 export const TIER_PLATE_SPOT: Readonly<Record<number, readonly [left: number, top: number]>> = {
   20: [4, -4], // Cannon Tower: on its bone ring
   21: [4, -5], // Sniper Tower: on its right face
-  22: [7, 5], // Monster Bunker: on the grater's right side, not over the wall behind
+  22: [5, 7], // Monster Bunker: on the grater's right side, not over the wall behind
   23: [3, -5], // Laser Tower
   25: [3, -5], // Tesla Tower
   115: [8, 13], // Aerial Defense Tower: on its base
@@ -74,7 +74,7 @@ export const TIER_PLATE_SPOT: Readonly<Record<number, readonly [left: number, to
 /** An Inferno yard's own towers, drawn from the Inferno's pictures. */
 export const TIER_PLATE_SPOT_INFERNO: Readonly<Record<number, readonly [left: number, top: number]>> = {
   20: [2, -1], // Blast Tower: on its drum
-  21: [2, 0], // Sharpshooter: where its stem meets the base ring
+  21: [-1, 0], // Sharpshooter: where its stem meets the base ring
   130: [2, -1], // Blast Tower
 };
 
