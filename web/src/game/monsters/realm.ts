@@ -73,7 +73,7 @@ export interface MonsterWords {
   readonly goo: string;
   /** The unlock and training resource: "putty", "Sulfur". */
   readonly putty: string;
-  /** The building that researches abilities: "Monster Lab", "Infernal Monster Lab" (beta 9). */
+  /** The building that researches abilities: "Monster Lab", "Infernal Lab" (beta 9). */
   readonly lab: string;
 }
 
@@ -101,7 +101,7 @@ const INFERNO_WORDS: MonsterWords = {
   academy: "Infernal Academy",
   goo: "Magma",
   putty: "Sulfur",
-  lab: "Infernal Monster Lab",
+  lab: "Infernal Lab",
 };
 
 /** The words for `realm`'s monster screens. */

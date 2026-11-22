@@ -121,7 +121,7 @@ export class LabTab implements MonstersTab {
     return labRealmOf(this.store);
   }
 
-  /** "Monster Lab", or "Infernal Monster Lab" on the Inferno yard. */
+  /** "Monster Lab", or "Infernal Lab" on the Inferno yard. */
   private get labName(): string {
     return monsterWords(this.realm).lab;
   }
@@ -131,6 +131,25 @@ export class LabTab implements MonstersTab {
     const wanted = focus.monster ?? runningResearch(this.store)?.monster.id;
     if (wanted && labAbility(wanted)) this.select(wanted, false);
     this.render();
+    this.revealSelected();
+  }
+
+  /**
+   * Scrolls the list, when it is its own scroller (desktop, tablet), so the
+   * selected row shows: the research running opens selected and may sit
+   * below the fold (neon review, beta 9). On a phone the page scrolls as a
+   * whole and is left where it is.
+   */
+  private revealSelected(): void {
+    const list = this.list;
+    if (list.scrollHeight <= list.clientHeight + 1) return;
+    const row = list.querySelector<HTMLElement>(`.lab-row[data-monster="${this.selected ?? ""}"]`);
+    const item = row?.closest("li") ?? row;
+    if (!item) return;
+    const top = item.offsetTop - list.offsetTop;
+    if (top < list.scrollTop || top + item.offsetHeight > list.scrollTop + list.clientHeight) {
+      list.scrollTop = Math.max(0, top + item.offsetHeight - list.clientHeight);
+    }
   }
 
   update(change: YardChange): void {
@@ -381,7 +400,7 @@ export class LabTab implements MonstersTab {
         this.rowClocks.push({ node: clock, endsAt: row.research.endsAt });
         state.append(`Researching → ${row.research.rank} · `, clock);
       } else if (row.step) {
-        state.append(`→ ${row.rank + 1}: `, resourceAmount("r3", row.step[0]), ` · ${duration(studySeconds(row.step[1]))}`);
+        state.append(`Rank ${row.rank + 1}: `, resourceAmount("r3", row.step[0]), ` · ${duration(studySeconds(row.step[1]))}`);
       } else {
         state.textContent = "Fully researched";
       }

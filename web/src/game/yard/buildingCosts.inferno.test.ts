@@ -25,7 +25,7 @@ describe("the Inferno cost table", () => {
     expect([...INFERNO_BUILDABLE_TYPES]).toEqual([
       1, 2, 3, 4, 6, 8, 9, 10, 12, 13, 16, 17, 21, 24, 26, 116, 128, 129, 130, 132,
     ]);
-    expect(nameOf(116, "inferno")).toBe("Infernal Monster Lab");
+    expect(nameOf(116, "inferno")).toBe("Infernal Lab");
     expect(nameOf(16, "inferno")).toBe("Incubator Control Centre");
     expect(nameOf(12, "inferno")).toBe("General Store");
   });

@@ -403,19 +403,19 @@ const EFFECTS: Readonly<
   C10: { label: "Double-damage chance", value: percent },
   C17: { label: "Split", value: (v, rank) => `${splitCopyCount(rank)} × ${percent(v)} health` },
   // The Infernal Lab's eight (beta 9, owner, 21 Nov 2026; `combat/rules/specialMoves.ts`).
-  IC1: { label: "Fury", value: (v) => `up to +${percent(v)} speed and damage` },
-  IC2: { label: "Regeneration", value: (v) => `${percentOne(v)} health a second` },
-  IC3: { label: "Dodge", value: (v) => `${percent(v)} of hits` },
+  IC1: { label: "Speed and damage", value: (v) => `up to +${percent(v)}` },
+  IC2: { label: "Healing", value: (v) => `${percentOne(v)} of its health a second` },
+  IC3: { label: "Dodge chance", value: (v) => `${percent(v)} of hits` },
   IC4: { label: "Walls hit", value: (v) => `+${v} beside the one struck` },
   IC5: { label: "Damage to monsters", value: times, base: "1×" },
   IC6: {
-    label: "Shockwave",
-    value: (v, rank) => `${percent(v)} on buildings within ${grokusRadius(rank)}`,
+    label: "Building splash",
+    value: (v, rank) => `${percent(v)} of each hit, reach ${grokusRadius(rank)}`,
   },
-  IC7: { label: "Burn", value: (v) => `${percent(v)} of the hit a second, 4 s` },
+  IC7: { label: "Fire", value: (v) => `${percent(v)} of the hit a second for 4 s` },
   IC8: {
-    label: "Quake splash",
-    value: (v, rank) => `${times(v)} its damage within ${kingWormzerRadius(rank)}`,
+    label: "Building splash",
+    value: (v, rank) => `${times(v)} its damage, reach ${kingWormzerRadius(rank)}`,
   },
 };
 

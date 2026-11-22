@@ -2320,8 +2320,8 @@ export const INFERNO_COST_ROWS: readonly CostRow[] = [
     [13500000,11000000,2000000,0,518400,[[14,1,7]]],
     [16000000,14000000,4000000,0,691200,[[14,1,9]]],
   ], [0,0,0,0,0,0]],
-  // 116 Infernal Monster Lab (special) — INFERNOYARDPROPS.as:5520
-  [116, "Infernal Monster Lab", "special", 2, [
+  // 116 Infernal Lab (special) — INFERNOYARDPROPS.as:5520
+  [116, "Infernal Lab", "special", 2, [
     [100000,100000,0,0,10800,[[14,1,5],[8,1,3],[26,1,2]]],
     [300000,300000,0,0,43200,[[14,1,6],[8,1,4],[26,1,3]]],
     [600000,600000,0,0,86400,[[14,1,6],[8,1,4],[26,1,4]]],

@@ -665,7 +665,7 @@ const INFERNO_MONSTER_LAB = 116;
     throw new Error(`INFERNOYARDPROPS.as:${lab.line}: the Monster Lab has ${lab.steps.length} steps, not 3`);
   }
   lab.blocked = false;
-  lab.name = "Infernal Monster Lab";
+  lab.name = "Infernal Lab";
   lab.quantity = [0, 0, 0, 0, 0, 1, 1];
   for (const one of lab.steps) {
     one.re = one.re.map(([type, count, level]) => (type === UNDER_HALL ? [type, count, Math.min(level, 6)] : [type, count, level]));

@@ -565,6 +565,9 @@ for (const [id, { baseurl, offsets }] of Object.entries(INFERNO_ADDED)) {
  */
 const INFERNO_RENAMED = {
   16: "Incubator Control Centre",
+  // The Infernal Monster Lab (beta 9, owner, 21 Nov 2026): Flash's blocked
+  // Inferno Monster Lab row; Classic draws Flash's surface Lab, Modern its 3D.
+  116: "Infernal Lab",
 };
 
 for (const [id, name] of Object.entries(INFERNO_RENAMED)) {

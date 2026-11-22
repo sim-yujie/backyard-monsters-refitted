@@ -120,10 +120,10 @@ describe("LabTab: slot and list", () => {
       "C12",
     ]);
     expect(spokenText(row(element, "C3"))).toBe(
-      "Bolt Rank 0/3 → 1: Putty 48,000 · 1d 0h Blink range: none → 150",
+      "Bolt Rank 0/3 Rank 1: Putty 48,000 · 1d 0h Blink range: none → 150",
     );
     expect(spokenText(row(element, "C8"))).toBe(
-      "Fang Rank 0/3 → 1: Putty 2,000,000 · 1d 12h Venom: none → 10% of its damage Needs Fang at level 2",
+      "Fang Rank 0/3 Rank 1: Putty 2,000,000 · 1d 12h Venom: none → 10% of its damage Needs Fang at level 2",
     );
     expect(row(element, "C12").textContent).toContain("Fully researched");
     expect(row(element, "C12").textContent).toContain("Rocket range: 220 (top rank)");
@@ -266,7 +266,7 @@ describe("LabTab: the Infernal Monster Lab", () => {
 
   it("lists the eight Inferno monsters under its own name", () => {
     const { element } = setup(inferno(), INFERNO_YARD);
-    expect(spokenText(slot(element))).toBe("Infernal Monster Lab · level 1 Idle");
+    expect(spokenText(slot(element))).toBe("Infernal Lab · level 1 Idle");
     expect(rows(element).map((one) => one.dataset["monster"])).toEqual([
       "IC1",
       "IC2",
@@ -286,7 +286,7 @@ describe("LabTab: the Infernal Monster Lab", () => {
     expect(balthazar.textContent).toContain("Damage to monsters: 2× → 3×");
     // Its rank 2 needs Lab level 2.
     expect(balthazar.textContent).toContain("Needs Lab level 2");
-    expect(row(element, "IC1").textContent).toContain("Fury: none → up to +5% speed and damage");
+    expect(row(element, "IC1").textContent).toContain("Speed and damage: none → up to +5%");
   });
 
   it("says Strongbox for a locked monster and the level a rank needs", () => {
