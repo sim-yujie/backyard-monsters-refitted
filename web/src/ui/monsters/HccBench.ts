@@ -607,7 +607,12 @@ export class HccBench {
     this.editHead.hidden = editing === null;
     this.editBox.hidden = editing === null;
     for (const mark of this.root.querySelectorAll(".hcc-inpreset")) mark.remove();
-    if (editing === null) return;
+    if (editing === null) {
+      // `.hatch-add` would show it whatever `hidden` says: off the page until the next preset.
+      this.editBox.className = "hcc-set";
+      this.editBox.replaceChildren();
+      return;
+    }
     const { boxes: most, size } = this.limits();
     const preset = editing.preset;
     const chosen = this.host.chosen();

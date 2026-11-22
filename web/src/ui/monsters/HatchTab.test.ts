@@ -1225,3 +1225,64 @@ describe("HatchTab: the numbers in the yard (#268, B)", () => {
     expect(last()).toBeNull();
   });
 });
+
+describe("the HCC's levels 2 and 3 (beta 9): switcher, presets", () => {
+  const hccAt = (level: number, extra: Partial<BaseLoadResponse> = {}) =>
+    loadOf(
+      {
+        monsters: { saved: T0, housed: {}, hid: [10, 11], h: [["", 0, []], ["", 0, []]], hstage: [0, 0], hcc: [] },
+        ...extra,
+      },
+      [building(10, 13, 3), building(11, 13, 3), building(20, 16, level)],
+    );
+  const click = (element: HTMLElement, label: RegExp) => {
+    const button = [...element.querySelectorAll<HTMLButtonElement>("button")].find((one) =>
+      label.test(one.getAttribute("aria-label") ?? one.textContent ?? ""),
+    );
+    if (!button) throw new Error(`no button ${label}`);
+    button.click();
+  };
+
+  it("level 1: two presets, the switcher locked, the queue's three missing boxes locked", () => {
+    const { element } = setup(hccAt(1));
+    expect(element.classList.contains("hcc-on")).toBe(true);
+    expect(element.querySelector(".hcc-stepper--locked")).not.toBeNull();
+    expect(element.querySelectorAll(".hcc-box--locked")).toHaveLength(3);
+    click(element, /^Presets$/);
+    expect(element.querySelectorAll(".hcc-presets .hcc-row")).toHaveLength(2);
+  });
+
+  it("level 2: four presets and a 10-box queue", () => {
+    const { element } = setup(hccAt(2));
+    expect(element.querySelectorAll(".hcc-box--locked")).toHaveLength(0);
+    click(element, /^Presets$/);
+    expect(element.querySelectorAll(".hcc-presets .hcc-row")).toHaveLength(4);
+  });
+
+  it("a preset is built at its end and saved on Done, in order", async () => {
+    const { element, actions } = setup(hccAt(2), { monster: "C1" });
+    click(element, /^Presets$/);
+    click(element, /^Make preset 1$/);
+    expect(element.classList.contains("hcc-editing")).toBe(true);
+    const editor = element.querySelector<HTMLElement>(".hcc-set")!;
+    click(editor, /^10 more$/);
+    click(editor, /^5 more$/);
+    click(element, /^Done/);
+    await flush();
+    expect(actions.presetSave).toHaveBeenCalledWith(0, [["C1", 15]]);
+    expect(element.classList.contains("hcc-editing")).toBe(false);
+  });
+
+  it("Send sends the slot and says what went in", async () => {
+    const { element, actions } = setup(hccAt(3, { hccpresets: { home: [[["C1", 30], ["C3", 40], ["C1", 30]]] } }));
+    click(element, /^Presets$/);
+    const stacks = element.querySelector(".hcc-row__stacks")!;
+    expect([...stacks.querySelectorAll(".hcc-stack__count")].map((one) => one.textContent)).toEqual(["×30", "×40", "×30"]);
+    expect(element.querySelectorAll(".hcc-presets .hcc-row")).toHaveLength(6);
+    click(element, /^Send preset 1/);
+    await flush();
+    expect(actions.presetSend).toHaveBeenCalledWith(0);
+    expect(element.querySelector(".hcc-said")?.textContent).toContain("Added 100");
+  });
+
+});
