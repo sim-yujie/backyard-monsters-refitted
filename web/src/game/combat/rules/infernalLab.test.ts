@@ -210,7 +210,7 @@ describe("IC3 Malphus: Dodge", () => {
 describe("IC4 Valgos: Wall Crusher", () => {
   /** Valgos dropped by a line of walls: how many walls its first blow hurt. */
   const wallsHurt = (rank: number) => {
-    const walls: CombatBuildingDataMap = {};
+    const walls: Record<string, CombatBuildingDataMap[string]> = {};
     for (let k = 0; k < 8; k += 1) walls[String(10 + k)] = { id: 10 + k, t: 17, l: 1, X: 0, Y: k * 10 };
     const yard = yardOf({ ...walls, "1": harvester(1, -200, 40) });
     const battle = createBattle(yard, { seed: 3, ranks: ranksOf("IC4", rank) });
