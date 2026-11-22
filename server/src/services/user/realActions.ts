@@ -67,6 +67,7 @@ export const REAL_ACTION_YARD_PATHS: readonly string[] = [
   "hatchery/remove",
   "hatchery/clear",
   "hatchery/finish",
+  "hatchery/preset/send",
   // Collecting: the bank and the mushrooms.
   "bank",
   "mushroom/pick",
@@ -144,6 +145,9 @@ export const NOT_REAL_ACTION_YARD_PATHS: readonly string[] = [
   "quests/state",
   "quests/login/claim",
   "quests/swap",
+  // The HCC's preset edits and its level 3 yard list (beta 9): setting up, not playing.
+  "hatchery/preset/save",
+  "hatchery/outposts",
 ];
 
 /** An in-game check's answer (#273) counts only when it was right. */
