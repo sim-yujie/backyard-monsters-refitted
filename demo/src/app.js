@@ -457,7 +457,7 @@
         const sent = S.sent && S.sent.scope === here && S.sent.slot === at ? S.sent : null;
         const inside = sent
           ? `<span class="b9r3h-said${sent.why ? " b9r3h-said--short" : ""}" role="status"><strong>${sent.why ? `Added ${num(sent.added)} of ${num(sent.of)}` : `Added ${num(sent.added)}`}</strong><span>${sent.why === "queue" ? "The queue is full" : sent.why === "goo" ? "Not enough goo" : "At the end of the queue"}</span></span>`
-          : `<span class="b9r3h-stacks">${preset.map(([id, count], index) => `<span class="b9r3h-stack${index >= 3 ? " b9r3h-stack--extra" : ""}">${face(id, "b9r3h-stack__picture")}<span class="b9r3h-stack__count">×${count}</span></span>`).join("")}${preset.length > 3 ? `<span class="b9r3h-stacks__more">+${preset.length - 3}</span>` : ""}</span><span class="b9r3h-row__cost">${GOO_ICON}<span>${short(gooOf(preset))}</span></span>`;
+          : `<span class="b9r3h-stacks">${preset.map(([id, count], index) => `<span class="b9r3h-stack${index >= 3 ? " b9r3h-stack--extra" : ""}">${face(id, "b9r3h-stack__picture")}<span class="b9r3h-stack__count">×${count}</span></span>`).join("")}${preset.length > 3 ? `<span class="b9r3h-stacks__more b9r3h-stacks__more--3">+${preset.length - 3}</span>` : ""}${preset.length > 2 ? `<span class="b9r3h-stacks__more b9r3h-stacks__more--2">+${preset.length - 2}</span>` : ""}</span><span class="b9r3h-row__cost">${GOO_ICON}<span>${short(gooOf(preset))}</span></span>`;
         return (
           `<div class="b9r3h-row"><button class="b9r3h-row__body" type="button" data-act="preset-edit" data-preset="${at}" aria-label="Preset ${at + 1}, ${totalOf(preset)} monsters: change it">${badge(at)}${inside}</button>` +
           `<button class="btn btn--primary b9r3h-send" type="button" data-act="preset-send" data-preset="${at}" aria-label="Send preset ${at + 1} to the end of the queue">${remote() ? icon("outpost", 24, "b9r2h-addflag") : ""}<span>Send</span></button></div>`
@@ -475,11 +475,11 @@
     if (at === null) return;
     const preset = presetList()[at];
     editHead.innerHTML =
-      `<button class="b9r3h-edit__back" type="button" data-act="edit-done" aria-label="Back to the presets">${icon("friendprev", 32, "b9r2h-arrow")}</button>` +
       `<span class="b9r3h-edit__which">${scopeIcon("b9r3h-edit__scope")}${badge(at)}</span>` +
       `<div class="b9r3h-edit__chips">${preset.length ? "" : `<span class="b9r3h-edit__hint">Pick a monster, set how many</span>`}${preset.map(([id, count]) => `<button class="b9r3h-chip${id === S.sel ? " b9r3h-chip--on" : ""}" type="button" data-act="chip" data-monster="${id}" aria-label="${M[id].name}, ${count}">${face(id, "b9r3h-chip__picture")}<span class="b9r3h-chip__count">×${count}</span></button>`).join("")}</div>` +
       `<span class="b9r3h-edit__sum"><span class="b9r3h-edit__stacks" title="Queue stacks this preset fills">${stacksIn(preset)}/${STACKS}</span><span class="b9r3h-edit__goo">${GOO_ICON}<span>${short(gooOf(preset))}</span></span></span>` +
-      `<button class="b9r3h-edit__bin" type="button" data-act="preset-empty" aria-label="Empty preset ${at + 1}"${preset.length ? "" : " disabled"}>Empty</button>`;
+      `<button class="b9r3h-edit__bin" type="button" data-act="preset-empty" aria-label="Clear preset ${at + 1}"${preset.length ? "" : " disabled"}>Clear</button>` +
+      `<button class="btn btn--primary b9r3h-edit__done" type="button" data-act="edit-done" aria-label="Done: back to the presets">Done</button>`;
     for (const [id, count] of preset) $(`.hatch-monster[data-monster="${id}"]`, scroll)?.insertAdjacentHTML("beforeend", `<span class="b9r3h-inpreset">×${count}</span>`);
     const now = (preset.find(([id]) => id === S.sel) || [0, 0])[1];
     const max = presetRoom(preset, S.sel);
@@ -492,8 +492,7 @@
       `<button type="button" class="btn qty-stepper__step hatch-add__step hatch-add__step--plus" data-set="${now + 1}" aria-label="One more"${off}>+</button>` +
       `<button type="button" class="btn qty-stepper__step qty-stepper__jump hatch-add__jump" data-set="${now + 5}" aria-label="5 more"${off}>+5</button>` +
       `<button type="button" class="btn qty-stepper__step qty-stepper__jump hatch-add__jump" data-set="${now + 10}" aria-label="10 more"${off}>+10</button>` +
-      `<button type="button" class="btn btn--outline qty-stepper__fill hatch-add__fill" data-set="${now + stackSize()}" aria-label="One more full stack"${off}>+${stackSize()}</button></span>` +
-      `<button type="button" class="btn btn--primary hatch-add__add b9r3h-done" data-act="edit-done" aria-label="Done: back to the presets">${badge(at)}<span class="hatch-add__words">Done</span></button>`;
+      `<button type="button" class="btn btn--outline qty-stepper__fill hatch-add__fill" data-set="${now + stackSize()}" aria-label="One more full stack"${off}>+${stackSize()}</button></span>`;
   }
 
   /** The chosen monster's count in the preset being built; every step is kept at once, 0 takes it out. */
@@ -761,7 +760,7 @@
   const BUILD = ["Build", `Tap <b>Presets</b>, then an empty slot ${PLUS}. Tap a monster and <b>+10</b>; tap another and <b>+10</b>. <b>Done</b>.`];
   const SEND = ["Send", `Tap <b>Send</b> on a preset ${NUMBER}. It joins the end of the queue. Keep sending: when the queue fills, the row says how many fitted.`];
   const STEPS = {
-    2: [BUILD, SEND, ["Change", `Tap a preset's row to change it: the count is that monster's number in the preset. <b>Empty</b> clears the slot.`]],
+    2: [BUILD, SEND, ["Change", `Tap a preset's row to change it: the count is that monster's number in the preset. <b>Clear</b> empties the slot.`]],
     3: [BUILD, SEND, ["Outposts", `${pic("friendnext")} steps to an outpost ${pic("outpost")}: gold frame, and <b>Presets</b> ${pic("outpost")} is now the list shared by all outposts. ${pic("townhall")} goes home to the main yard's list.`]],
   };
 

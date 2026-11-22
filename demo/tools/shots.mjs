@@ -52,7 +52,7 @@ async function flow(level, frame, w, h) {
   const queued = async () => (await page.locator(F(".hatch-slot__count")).allTextContents()).reduce((sum, t) => sum + Number(t.replace(/\D/g, "")), 0);
   // Monsters tab still adds
   const before = await stacks();
-  await click(F('.hatch-monster[data-monster="C6"]')); await click(F(".hatch-info > .hatch-add:not(.b9r3h-set) .hatch-add__jump >> nth=1")); await click(F(".hatch-add__add:not(.b9r3h-done)"));
+  await click(F('.hatch-monster[data-monster="C6"]')); await click(F(".hatch-info > .hatch-add:not(.b9r3h-set) .hatch-add__jump >> nth=1")); await click(F(".hatch-add__add"));
   check((await stacks()) === before + 1, `Monsters tab: a stack was added (${before} -> ${await stacks()})`);
   // Presets tab
   await click(F('.b9r3h-tab[data-tab="presets"]'));
@@ -71,7 +71,7 @@ async function flow(level, frame, w, h) {
   check((await count(".b9r3h-inpreset")) === 2, "the grid wears the counts");
   await shot(page, `${tag}-3-building`);
   await page.locator(F(".b9r3h-count")).fill("12"); await page.waitForTimeout(200);
-  await click(F(".b9r3h-done"));
+  await click(F(".b9r3h-edit__done"));
   check((await count(".b9r3h-row:not(.b9r3h-row--empty)")) === 2, "preset 2 is made");
   await shot(page, `${tag}-4-made`);
   // send it: all of it fits
@@ -92,8 +92,8 @@ async function flow(level, frame, w, h) {
   await click(F(".b9r3h-chip >> nth=1"));
   check((await page.locator(F(".b9r3h-count")).inputValue()) === "40", "a chip chooses its monster and shows its count");
   await click(F(".b9r3h-edit__bin"));
-  check((await count(".b9r3h-chip")) === 0, "Empty clears the preset");
-  await click(F(".b9r3h-done"));
+  check((await count(".b9r3h-chip")) === 0, "Clear empties the preset");
+  await click(F(".b9r3h-edit__done"));
   check((await count(".b9r3h-row--empty")) === (level === 3 ? 4 : 2), "the emptied slot is a + again");
   // the housing box
   await click(F(".b9r2h-housing")); check(await page.locator(F(".hatch-message")).isVisible(), "the housing box opens"); await shot(page, `${tag}-7-housing`); await click(F(".b9r2h-housing"));

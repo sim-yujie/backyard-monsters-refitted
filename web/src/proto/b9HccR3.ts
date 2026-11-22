@@ -428,7 +428,9 @@ export class B9HccR3 {
           if (index >= 3) one.classList.add("b9r3h-stack--extra");
           faces.append(one);
         });
-        if (preset.length > 3) faces.append(el("span", "b9r3h-stacks__more", `+${preset.length - 3}`));
+        // A phone row shows three monsters (two beside the wider flagged Send), then how many more.
+        if (preset.length > 3) faces.append(el("span", "b9r3h-stacks__more b9r3h-stacks__more--3", `+${preset.length - 3}`));
+        if (preset.length > 2) faces.append(el("span", "b9r3h-stacks__more b9r3h-stacks__more--2", `+${preset.length - 2}`));
         const cost = el("span", "b9r3h-row__cost");
         const goo = preset.reduce((sum, [id, count]) => sum + count * this.priceOf(id), 0);
         cost.append(resourceIcon("r4"), el("span", "", short(goo)));
@@ -519,9 +521,7 @@ export class B9HccR3 {
     const preset = this.presets[scope][at]!;
     const chosen = this.chosen();
 
-    // The head: back, the slot's number (and whose list), what is in it, its size, empty.
-    const back = btn("b9r3h-edit__back", "Back to the presets", arrow(-1));
-    back.addEventListener("click", () => this.setTab("presets"));
+    // The head: the slot's number (and whose list), what is in it, its size, Clear, Done.
     const which = el("span", "b9r3h-edit__which");
     if (this.level >= 3) which.append(art(this.remote ? "outpost" : "townhall", 24, "b9r3h-edit__scope"));
     which.append(this.badge(at));
@@ -540,13 +540,15 @@ export class B9HccR3 {
     const cost = el("span", "b9r3h-edit__goo");
     cost.append(resourceIcon("r4"), el("span", "", short(goo)));
     sum.append(stacks, cost);
-    const bin = btn("b9r3h-edit__bin", `Empty preset ${at + 1}`, "Empty");
+    const bin = btn("b9r3h-edit__bin", `Clear preset ${at + 1}`, "Clear");
     bin.disabled = preset.length === 0;
     bin.addEventListener("click", () => {
       preset.length = 0;
       this.renderEditor();
     });
-    this.editHead.replaceChildren(back, which, chips, sum, bin);
+    const done = btn("btn btn--primary b9r3h-edit__done", "Done: back to the presets", "Done");
+    done.addEventListener("click", () => this.setTab("presets"));
+    this.editHead.replaceChildren(which, chips, sum, bin, done);
 
     // The monsters wear their count in this preset.
     for (const [id, count] of preset) {
@@ -585,11 +587,8 @@ export class B9HccR3 {
       step("qty-stepper__jump hatch-add__jump", "10 more", "+10", now + 10, now >= max),
       stack,
     );
-    const done = btn("btn btn--primary hatch-add__add b9r3h-done", `Done: back to the presets`);
-    done.append(this.badge(at), el("span", "hatch-add__words", "Done"));
-    done.addEventListener("click", () => this.setTab("presets"));
     this.editBox.className = "b9r3h-set hatch-add";
-    this.editBox.replaceChildren(controls, done);
+    this.editBox.replaceChildren(controls);
   }
 
   /* ── The yard page (L3): every yard with an HCC, as cards (as round 2) ── */

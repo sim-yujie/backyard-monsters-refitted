@@ -131,7 +131,8 @@
 }
 .b9r3h-row__body {
   flex: 1 1 auto;
-  display: flex;
+  display: grid;
+  grid-template-columns: 24px minmax(0, 1fr) auto;
   align-items: center;
   gap: 8px;
   min-width: 0;
@@ -167,9 +168,12 @@
 .b9r3h-stacks {
   flex: 1 1 auto;
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: 4px;
   min-width: 0;
+  /* Counts extend two pixels beyond the portraits. Reserve their space. */
+  padding: 0 2px 2px 0;
 }
 .b9r3h-stack {
   position: relative;
@@ -212,6 +216,7 @@
   gap: 3px;
   font-family: var(--font-display);
   font-size: 13px;
+  white-space: nowrap;
 }
 .b9r3h-row__cost .res-icon {
   width: 20px;
@@ -229,26 +234,29 @@
   padding: 0 12px;
 }
 .b9r3h-said {
+  grid-column: 2 / -1;
   flex: 1 1 auto;
   display: flex;
   flex-direction: column;
   min-width: 0;
   line-height: 1.15;
 }
-.b9r3h-said strong {
-  color: var(--colour-success, #8fd15a);
-  font-family: var(--font-display);
-  font-size: 15px;
-  font-weight: 400;
+
+.b9r3h-row--empty .b9r3h-row__plus {
+  grid-column: 2 / -1;
 }
-.b9r3h-said span {
-  color: var(--colour-text-muted);
-  font-size: 13px;
+
+/* Two tablet columns cannot hold portraits, cost and the painted Send ends. */
+@container hatch (560px <= width < 880px) {
+  .b9r3h-presets {
+    grid-template-columns: minmax(0, 1fr);
+  }
 }
-.b9r3h-said--short strong,
-.b9r3h-said--short span {
-  color: var(--colour-warning, #f2b33d);
+
+.b9r3h-stacks__more--2 {
+  display: none;
 }
+
 /* A wide row has room for every monster of the preset. */
 @container hatch (width > 880px) {
   .b9r3h-stack--extra {
@@ -362,6 +370,9 @@
 .b9r3h-edit__goo .res-icon {
   width: 18px;
 }
+.b9r3h-edit__stacks {
+  white-space: nowrap;
+}
 .b9r3h-edit__stacks::before {
   content: "▦ ";
   color: var(--colour-text-muted);
@@ -384,11 +395,11 @@
 .b9r3h-set {
   flex-direction: column;
 }
-.b9r3h .b9r3h-done {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 8px;
+.b9r3h .b9r3h-edit__done {
+  flex: none;
+  min-width: 64px;
+  min-height: 44px;
+  padding: 0 12px;
 }
 
 /* ── A phone ────────────────────────────────────────────────────────── */
@@ -444,12 +455,70 @@
   .b9r3h-row__cost {
     font-size: 12px;
   }
-  /* Building: the Done button is the way back; the warning shrinks to its picture and number. */
-  .b9r3h-edit__back,
+  /* Building: the warning shrinks to its picture and number. */
   .b9r3h-editing .b9r3h-warn__short {
     display: none;
   }
   .b9r3h-editing .b9r3h-set {
     display: grid;
+  }
+}
+
+/* A phone: the preset's head is two lines (number, size, Clear, Done; then its monsters, whole),
+   and Done sits there instead of under the count, so the tab is no taller than Monsters. */
+@media (max-width: 620px), (max-height: 500px) {
+  .b9r3h-stacks {
+    flex-wrap: nowrap;
+    overflow: hidden;
+  }
+}
+@media (max-width: 620px) {
+  .b9r3h-editing .b9r3h-tabs {
+    align-items: flex-start;
+  }
+  .b9r3h-editing .b9r3h-edit {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr) auto auto;
+    align-items: center;
+    gap: 2px 4px;
+    padding: 2px 4px 4px 6px;
+  }
+  .b9r3h-edit__which {
+    grid-column: 1;
+    grid-row: 1;
+  }
+  .b9r3h-edit__sum {
+    grid-column: 2;
+    grid-row: 1;
+    align-items: flex-start;
+    padding-left: 4px;
+    white-space: nowrap;
+  }
+  .b9r3h-edit__bin {
+    grid-column: 3;
+    grid-row: 1;
+  }
+  .b9r3h .b9r3h-edit__done {
+    grid-column: 4;
+    grid-row: 1;
+    min-width: 58px;
+    padding: 0 8px;
+  }
+  .b9r3h-edit__bin {
+    padding: 0 2px;
+  }
+  .b9r3h-edit__chips {
+    grid-column: 1 / -1;
+    grid-row: 2;
+    min-height: 46px;
+    padding: 0 2px 2px 0;
+  }
+  /* Beside the flagged Send (an outpost run from home) a row holds two monsters, then "+N". */
+  .b9r2h-remote .b9r3h-stack:nth-child(n + 3),
+  .b9r2h-remote .b9r3h-stacks__more--3 {
+    display: none;
+  }
+  .b9r2h-remote .b9r3h-stacks__more--2 {
+    display: inline;
   }
 }

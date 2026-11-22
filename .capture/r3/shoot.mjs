@@ -27,12 +27,16 @@ export const ALL = {
 const jobs = (process.argv[2] || Object.keys(ALL).join(",")).split(",");
 const looks = (process.argv[3] || "modern").split(",");
 const sizes = (process.argv[4] || "390x844,1280x720").split(",").map((s) => s.split("x").map(Number));
+// ONLY=<tag,tag> (env) narrows the run to exact pictures, e.g. l3-edit-classic-390x844
+const ONLY = process.env.ONLY ? new Set(process.env.ONLY.split(",")) : null;
 const OUT = process.argv[5] || `${W}/shots/hcc-r3/work`;
 const count = () => Number(execSync("pgrep -af chrome-headless-shell | grep -vc -- '--type=' || true").toString().trim() || 0);
 for (let i = 0; i < 120 && count() >= 3; i++) await new Promise((r) => setTimeout(r, 5000));
 const browser = await chromium.launch({ args: ["--mute-audio"], executablePath: "/home/yujiesim/.cache/ms-playwright/chromium_headless_shell-1254/chrome-headless-shell-linux64/chrome-headless-shell" });
 try {
   for (const look of looks) for (const [w, h] of sizes) {
+    const mine = jobs.filter((job) => !ONLY || ONLY.has(`${job}-${look}-${w}x${h}`));
+    if (!mine.length) continue;
     const phone = w <= 620 || h <= 500;
     const context = await browser.newContext({ viewport: { width: w, height: h }, deviceScaleFactor: phone ? 3 : 1, hasTouch: phone, isMobile: phone });
     await context.addInitScript((s) => { try { if (s === "classic") localStorage.setItem("bymr.look", "classic"); else localStorage.removeItem("bymr.look"); } catch {} }, look);
@@ -44,7 +48,7 @@ try {
     await page.getByRole("button", { name: "Play", exact: true }).click();
     await page.getByRole("button", { name: "Map", exact: true }).waitFor({ timeout: 90000 });
     await page.waitForTimeout(3500);
-    for (const job of jobs) {
+    for (const job of mine) {
       const tag = `${job}-${look}-${w}x${h}`;
       try {
         await page.goto(`${BASE}/?skin=auto&${ALL[job]}`);
