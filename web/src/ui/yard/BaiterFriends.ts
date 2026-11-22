@@ -220,10 +220,11 @@ export class BaiterFriends {
     };
     chips.append(
       chip("all", `All ${data.candidates.length}`),
+      // A phone has no room for the open invites beside the list: they are a filter of
+      // their own, second so it is in sight without swiping the chips.
+      chip("invited", `Invited ${data.invited.length}`),
       chip("friends", `Friends ${friends}`),
       chip("alliance", `Alliance ${mates}`),
-      // A phone has no room for the open invites beside the list: they are a filter of their own.
-      chip("invited", `Invited ${data.invited.length}`),
     );
 
     const box = make("label", "baiter-friends__search");
@@ -295,7 +296,7 @@ export class BaiterFriends {
   /** The open invites: time left, tests run, and a cancel. */
   private openRows(): HTMLElement[] {
     return (this.data?.invited ?? []).map((invite) => {
-      const cancel = btn("✕", "outline", "baiter-friends__cancel");
+      const cancel = btn("Cancel", "outline", "baiter-friends__cancel");
       cancel.setAttribute("aria-label", `Cancel ${invite.username}'s invite`);
       cancel.title = "Cancel the invite";
       cancel.addEventListener("click", () => void this.cancel(invite.userid, cancel));

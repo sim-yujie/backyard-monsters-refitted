@@ -72,7 +72,7 @@ describe("the Baiter window's friend tabs (beta 9 #4, design A)", () => {
     await friends.load();
     const view = friends.invite;
     // "Invited 1" is the phone's way to the open invites (CSS hides it beside the column).
-    expect(texts(view, ".baiter-friends__chip")).toEqual(["All 3", "Friends 2", "Alliance 2", "Invited 1"]);
+    expect(texts(view, ".baiter-friends__chip")).toEqual(["All 3", "Invited 1", "Friends 2", "Alliance 2"]);
     expect(texts(view, ".baiter-friends__col--pick .friends-row__name")).toEqual(["GooGobbler", "TwigTitan", "SlimeQueen"]);
     // Already invited: no tick, "Invited" instead.
     expect(view.querySelector('[aria-label="Invite TwigTitan"]')).toBeNull();

@@ -177,10 +177,8 @@
 }
 
 .baiter-friends__cancel {
-  width: 44px;
-  min-width: 44px;
-  height: 44px;
-  padding: 0;
+  min-height: 44px;
+  padding: 0 var(--space-3);
 }
 
 .baiter-friends__cap,
@@ -236,7 +234,8 @@
   padding: 1px var(--space-2);
   border-radius: 999px;
   background: var(--colour-warning);
-  color: var(--colour-warning-text);
+  /* Dark on Modern's gold, cream on Classic's brown. */
+  color: var(--colour-text-inverse);
   font-size: var(--text-xs, 12px);
   font-weight: 800;
 }
@@ -277,6 +276,9 @@
 
 .baiter-friends__keep {
   flex: none;
+  margin: 0;
+  padding-top: var(--space-2);
+  border-top: 1px solid var(--colour-border);
 }
 
 .baiter-friends__own {
@@ -302,16 +304,22 @@
 
 /* The line over a friend's test army: whose yard, the cap, the time left. */
 .baiter__host {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 4px;
+  display: block;
   padding: var(--space-2) var(--space-3);
   border: 1px solid var(--colour-warning-line);
   border-radius: var(--radius-md);
   background: var(--colour-warning-soft);
   color: var(--colour-text);
   font-weight: 700;
+}
+
+.baiter__host .game-icon,
+.baiter__host img {
+  vertical-align: middle;
+}
+
+.baiter__host-left {
+  white-space: nowrap;
 }
 
 .baiter__gate[hidden] {
@@ -373,26 +381,40 @@
     display: inline-flex;
   }
 
-  .baiter-friends__tools {
-    position: sticky;
-    top: 0;
-    z-index: 1;
-    padding-bottom: var(--space-2);
-    background: var(--colour-surface-base);
-  }
-
   .baiter-friends__lead {
     display: none;
   }
 
-  /* The testers' chips: one row that scrolls sideways. */
-  .baiter-friends--results .baiter-friends__chips {
+  /* The chips: one row that scrolls sideways, fading at the edge where more wait. */
+  .baiter-friends__chips {
     flex-wrap: nowrap;
     overflow-x: auto;
     padding-bottom: 2px;
+    mask-image: linear-gradient(to right, #000 calc(100% - 28px), transparent);
   }
 
-  .baiter-friends--results .baiter-friends__chip {
+  /* Chips and search share one pinned row (a phone on its side has height for little else). */
+  .baiter-friends__tools {
+    position: sticky;
+    top: 0;
+    z-index: 1;
+    flex-direction: row;
+    align-items: center;
+    padding-bottom: var(--space-2);
+    background: var(--colour-surface-base);
+  }
+
+  .baiter-friends__tools > .baiter-friends__chips {
+    flex: 1 1 auto;
+    min-width: 0;
+  }
+
+  .baiter-friends__tools > .baiter-friends__search {
+    flex: 0 1 220px;
+    min-width: 150px;
+  }
+
+  .baiter-friends__chip {
     flex: none;
   }
 
@@ -415,17 +437,32 @@
 
 /* A phone upright: four tabs share the head's width. */
 @media (max-width: 620px) {
+  /* An upright phone: chips above the search, both pinned while the list scrolls. */
+  .baiter-friends__tools {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .baiter-friends__tools > .baiter-friends__search {
+    flex: none;
+  }
+
   /* Room above the full-screen sheet for its title plate and close button. */
   .baiter-window__backdrop {
     padding-top: calc(var(--space-4) + env(safe-area-inset-top, 0px));
   }
 
-  /* Start test stays in reach under a long army. */
+  /* Start test stays in reach under a long army; the champions scroll with it. */
   .baiter__view--army > .baiter__foot {
+    display: contents;
+  }
+
+  .baiter__view--army > .baiter__foot > .baiter__actions {
     position: sticky;
     bottom: 0;
     z-index: 1;
-    padding-bottom: var(--space-2);
+    padding: var(--space-2) 0;
+    border-top: 1px solid var(--colour-border-subtle);
     background: var(--colour-surface-base);
   }
 
@@ -435,11 +472,12 @@
     gap: 4px;
   }
 
+  /* Words kept clear of the tab plates' corner rivets and bones. */
   .baiter__tabs > .baiter__tab {
     flex: 1 1 0;
     min-width: 0;
-    padding: 0 4px;
-    font-size: var(--text-xs, 12px);
+    padding: 0 10px;
+    font-size: 11px;
     white-space: normal;
     line-height: 1.1;
   }

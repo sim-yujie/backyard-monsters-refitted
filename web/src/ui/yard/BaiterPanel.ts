@@ -673,11 +673,13 @@ const hostLead = (host: BaiterHost): HTMLElement => {
   const lead = document.createElement("p");
   lead.className = "baiter__note baiter__host";
   const now = host.now?.() ?? Math.floor(Date.now() / 1000);
+  const left = document.createElement("span");
+  left.className = "baiter__host-left";
+  left.append(gameIcon("time", { size: 16, decorative: true }), ` ${leftText(host.expiresAt - now)} left`);
   lead.append(
     gameIcon("friends", { size: 24, decorative: true }),
     ` ${host.name} invited you to test their main yard. A free made-up army, up to their Baiter's ${formatAmount(host.cap)}. Nothing is lost or won. `,
-    gameIcon("time", { size: 16, decorative: true }),
-    ` ${leftText(host.expiresAt - now)} left`,
+    left,
   );
   return lead;
 };
