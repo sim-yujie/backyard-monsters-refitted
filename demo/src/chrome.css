@@ -67,3 +67,7 @@ body.demo-bare #demo #stage { display: block; }
 body.demo-bare #frame-holder { border-radius: 0; box-shadow: none; }
 /* Demo only: the tab's message pill ("Mix 5 saved") sits at the bottom with a solid back, clear of the prototype's strip. */
 #frame .hatch__status { top: auto; bottom: 10px; z-index: 40; background: #1b222c; color: #fff; }
+#demo .demo-ic { width: 20px; height: 20px; vertical-align: -5px; margin: 0 1px; }
+#demo .demo-token { display: inline-flex; align-items: center; gap: 3px; padding: 0 6px; height: 20px; border: 1.5px dashed #7f8a99; border-radius: 6px; font: 400 12px/1 "Titan One", system-ui, sans-serif; color: var(--demo-ink); vertical-align: -4px; }
+#demo .demo-token i { font-style: normal; color: var(--demo-accent); }
+#demo .demo-token--full { border: 0; border-radius: 50%; width: 20px; padding: 0; justify-content: center; background: var(--demo-accent); color: var(--demo-accent-ink); }

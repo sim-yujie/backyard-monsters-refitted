@@ -104,6 +104,41 @@ async function flows(opt, level, frame, w, h) {
   await context.close();
 }
 for (const opt of ["d", "e"]) for (const level of [2, 3]) { await flows(opt, level, "phone", 1280, 1000); await flows(opt, level, "desktop", 1440, 1000); }
+// 3. Everything else that is wired, and the pictures behind it.
+if (!filter || "extras".includes(filter)) {
+  for (const [w, h, frame, hashExtra] of [[1280, 1000, "phone", ""], [1000, 900, "desktop", ""], [390, 844, "phone", ""], [1280, 1000, "phone", "&load=replace"]]) {
+    const { context, page } = await open(w, h, `opt=d&level=3&frame=${frame}${hashExtra}`, 1);
+    const tag = `extras-${frame}-${w}${hashExtra ? "-replace" : ""}`;
+    const check = (ok, what) => { if (!ok) problems.push(`CHECK ${tag}: ${what}`); };
+    const click = async (sel) => { try { await page.locator(sel).first().click({ timeout: 3000 }); } catch { problems.push(`NOCLICK ${tag}: ${sel}`); } await page.waitForTimeout(150); };
+    const stacks = () => page.locator(F(".hatch-slot:not(.hatch-slot--empty)")).count();
+    for (const id of await page.locator(F(".hatch-monster--ready")).evaluateAll((ns) => ns.map((n) => n.dataset.monster))) { await click(F(`.hatch-monster[data-monster="${id}"]`)); check((await page.locator(F(".hatch-info__name")).count()) === 1, "info for " + id); }
+    await click(F(".hatch-monster--locked"));
+    if (await page.locator(F(".hatch-info__details")).isVisible()) { await click(F(".hatch-info__details")); await shot(page, `${tag}-details`); await click(F(".hatch-info__details")); }
+    await click(F(".hatch-line__boost-link")); await shot(page, `${tag}-boosts`); await click(F(".hatch-line__boost-link"));
+    await click(F(".b9r2h-housing")); await shot(page, `${tag}-housing`); await click(F(".b9r2h-housing"));
+    await page.locator(F(".hatch-add__count")).fill("7"); await page.waitForTimeout(150);
+    check(!(await page.locator(F(".hatch-add__add")).isDisabled()), "typed count enables Add");
+    await click(F(".hatch-add__step--minus")); check((await page.locator(F(".hatch-add__count")).inputValue()) === "6", "minus");
+    const was = await stacks(); await click(F(".hatch-add__add")); check((await stacks()) === was + 1, "typed add");
+    const count = async () => page.locator(F(".hatch-slot__count")).first().textContent();
+    const c0 = await count(); await click(F(".hatch-slot")); check((await count()) !== c0, "take one out");
+    await click(F(".hatch-now--producing")); // cancel one
+    await click(F('.b9r2h-mix[data-mix="1"]')); await shot(page, `${tag}-mixcard`);
+    const box = await page.locator(F(".b9r2h-mixcard")).boundingBox(), tok = await page.locator(F(".b9r2h-mixes")).boundingBox(), fr = await page.locator("#frame-holder").boundingBox();
+    check(box && tok && box.y >= tok.y + tok.height - 1 && box.y < tok.y + tok.height + 16 && box.x >= fr.x && box.x + box.width <= fr.x + fr.width + 1, `mix card sits under the tokens inside the frame ${JSON.stringify([box, tok])}`);
+    await click(F(".b9r2h-mixcard__tool")); // save over (the card stays open)
+    const n0 = await stacks(); await click(F(".b9r2h-mixcard__load"));
+    check(hashExtra ? (await stacks()) <= n0 : (await stacks()) >= n0, "load mode " + (hashExtra || "add"));
+    await shot(page, `${tag}-loaded`);
+    await click(F('.b9r2h-mix[data-mix="1"]')); await click(F(".b9r2h-mixcard__bin")); check((await page.locator(F('.b9r2h-mix--empty[data-mix="1"]')).count()) === 1, "empty a mix");
+    await click('#demo [data-reset]'); check((await page.locator(F('.b9r2h-mix--empty[data-mix="1"]')).count()) === 0, "start over");
+    check(!(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth + 1)), "no sideways scroll");
+    await context.close();
+  }
+  // a host page in light theme must not change the frame
+  for (const theme of ["dark", "light"]) { const { context, page } = await open(390, 844, "opt=d&level=2&frame=phone&state=busy&bare=1&paused=1", 1); await page.evaluate((t) => { document.documentElement.dataset.theme = t; document.documentElement.style.colorScheme = t; }, theme); await page.waitForTimeout(200); await shot(page, `theme-${theme}`); await context.close(); }
+}
 // the page itself on a real phone width
 if (!filter || "page-phone".includes(filter)) { const { context, page } = await open(390, 844, "", 2); await page.screenshot({ path: `${W}/demo/shots/page-phone-390.png`, fullPage: true }); const wide = await page.evaluate(() => document.documentElement.scrollWidth > innerWidth + 1); if (wide) problems.push("CHECK page-phone: sideways scroll"); await page.locator('#demo [data-set="frame=desktop"]').click(); await page.waitForTimeout(300); await page.screenshot({ path: `${W}/demo/shots/page-phone-390-desktopframe.png`, fullPage: true }); if (await page.evaluate(() => document.documentElement.scrollWidth > innerWidth + 1)) problems.push("CHECK page-phone desktop frame: sideways scroll"); await context.close(); }
 await browser.close();

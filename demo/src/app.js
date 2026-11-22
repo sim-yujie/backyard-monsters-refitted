@@ -90,8 +90,8 @@
       home.hatcheries = [1, 2, 3, 4, 5].map(() => ({ monster: "C12", left: 0, total: M.C12.time, stalled: true }));
     } else {
       home.housed = 640;
-      home.queue = stacksOf([["C8", size], ["C7", size], ["C1", 12]]);
-      home.hatcheries = [making("C8", 0.3), making("C8", 0.55), making("C7", 0.4), making("C7", 0.8), making("C1", 1)];
+      home.queue = stacksOf([["C8", size], ["C7", size], ["C2", 12]]);
+      home.hatcheries = [making("C8", 0.3), making("C8", 0.55), making("C7", 0.4), making("C7", 0.8), making("C2", 1)];
     }
     yards = D.yards.map((yard, index) => {
       if (yard.kind === "main") return { ...yard, ...home };
@@ -760,21 +760,15 @@
     fit();
   }
 
+  const pic = (name) => `<img class="demo-ic" src="${asset(`/ui/icons/${name}-48.webp`)}" alt="">`;
+  const TOKEN = `<span class="demo-token">5 <i>+</i></span>`;
+  const NUMBER = `<span class="demo-token demo-token--full">1</span>`;
+  const ADD = `Tap a monster, <b>+10</b>, <b>Add</b>.`;
   const STEPS = {
-    d: [
-      ["Add", "Tap a monster, tap <b>+10</b>, then <b>Add</b>. It drops into the rack of ten stacks."],
-      ["Save", "Tap the empty token <b>5 +</b>. The queue is now mix 5."],
-      ["Load", "Tap <b>Clear</b>. Then tap a numbered token and <b>Load</b>."],
-    ],
-    e: [
-      ["Add", "Tap a monster, tap <b>+10</b>, then <b>Add</b>. The bar on top counts it."],
-      ["Queue", "Tap the bar to open the queue page. The arrow goes back."],
-      ["Mix", "Tap the empty token <b>5 +</b> to save the queue. Tap a numbered token, then <b>Load</b>."],
-    ],
-  };
-  const OUTPOST_STEP = {
-    d: ["Outposts", "Use the <b>arrows</b> at the top to step to an outpost: the frame turns gold and Add gets a flag. The <b>house</b> goes home. The middle opens the list."],
-    e: ["Outposts", "Tap the <b>house 1/11</b> chip and pick an outpost: the frame turns gold and Add gets a flag. The <b>house</b> goes home."],
+    d2: [["Add", `${ADD} It lands in the rack of ten stacks.`], ["Save", `Tap the empty token ${TOKEN}. The queue is now mix 5.`], ["Load", `Tap <b>Clear</b>, then a token ${NUMBER} and <b>Load</b>.`]],
+    e2: [["Add", `${ADD} The bar on top counts it.`], ["Queue", `Tap the bar to open the queue. ${pic("friendprev")} goes back.`], ["Mix", `Tap ${TOKEN} to save the queue. Tap a token ${NUMBER}, then <b>Load</b>.`]],
+    d3: [["Add", `${ADD} It lands in the rack of ten stacks.`], ["Mix", `Tap ${TOKEN} to save the queue. Tap a token ${NUMBER}, then <b>Load</b>.`], ["Outposts", `${pic("friendprev")}${pic("friendnext")} step to an outpost ${pic("outpost")}: gold frame, flag on Add. ${pic("townhall")} goes home. The middle opens the list.`]],
+    e3: [["Add", `${ADD} The bar on top counts it; tap it to open the queue.`], ["Mix", `Tap ${TOKEN} to save the queue. Tap a token ${NUMBER}, then <b>Load</b>.`], ["Outposts", `Tap ${pic("townhall")}<b>1/11</b> and pick an outpost ${pic("outpost")}: gold frame, flag on Add. ${pic("townhall")} goes home.`]],
   };
 
   function drawChrome() {
@@ -782,7 +776,7 @@
       const [key, value] = button.dataset.set.split("=");
       button.setAttribute("aria-pressed", String(String(S[key]) === value));
     }
-    const steps = [...STEPS[S.opt], ...(S.level >= 3 ? [OUTPOST_STEP[S.opt]] : [])];
+    const steps = STEPS[`${S.opt}${S.level}`];
     $("#demo-steps").innerHTML = steps.map(([name, words], at) => `<li><span class="demo-step__n">${at + 1}</span><span><strong>${name}</strong> ${words}</span></li>`).join("");
     $("#demo-option").textContent = S.opt === "d" ? "D · Workbench" : "E · Monster book";
   }
@@ -812,6 +806,7 @@
     drawAll();
   });
 
+  document.documentElement.style.fontSize = "15px"; // the game's rem base, whatever the host page says
   if (BARE) document.body.classList.add("demo-bare");
   reset();
   setFrame();
