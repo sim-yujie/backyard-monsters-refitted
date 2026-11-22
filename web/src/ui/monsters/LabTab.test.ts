@@ -201,7 +201,7 @@ describe("LabTab: a running research", () => {
     // 23 of 24 hours done.
     expect(card.querySelector(".train-slot__bar")!.getAttribute("aria-valuenow")).toBe("96");
     expect(spokenText(card.querySelector(".shiny-button")!)).toMatch(/^Finish now.*20$/);
-    expect(spokenText(row(element, "C3"))).toMatch(/^Bolt Rank 0\/3 Researching → 1 · 1h 0m/);
+    expect(spokenText(row(element, "C3"))).toMatch(/^Bolt Rank 0\/3 Researching rank 1 · 1h 0m/);
     // It opens on the research, and nothing else can start.
     expect(row(element, "C3").getAttribute("aria-pressed")).toBe("true");
     row(element, "C4").click();

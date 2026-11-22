@@ -412,7 +412,7 @@ const EFFECTS: Readonly<
     label: "Building splash",
     value: (v, rank) => `${percent(v)} of each hit, reach ${grokusRadius(rank)}`,
   },
-  IC7: { label: "Fire", value: (v) => `${percent(v)} of the hit a second for 4 s` },
+  IC7: { label: "Fire", value: (v) => `${percent(v)} of the hit a second for 4\u00a0s` },
   IC8: {
     label: "Building splash",
     value: (v, rank) => `${times(v)} its damage, reach ${kingWormzerRadius(rank)}`,

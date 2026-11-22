@@ -398,7 +398,7 @@ export class LabTab implements MonstersTab {
         clock.className = "locker-row__clock";
         clock.textContent = duration(row.research.endsAt - store.now());
         this.rowClocks.push({ node: clock, endsAt: row.research.endsAt });
-        state.append(`Researching → ${row.research.rank} · `, clock);
+        state.append(`Researching rank ${row.research.rank} · `, clock);
       } else if (row.step) {
         state.append(`Rank ${row.rank + 1}: `, resourceAmount("r3", row.step[0]), ` · ${duration(studySeconds(row.step[1]))}`);
       } else {
