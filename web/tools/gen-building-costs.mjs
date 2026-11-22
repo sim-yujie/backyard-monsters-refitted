@@ -647,6 +647,31 @@ const INFERNO_CONTROL_CENTRE = 16;
   ];
 }
 
+/**
+ * The Monster Lab (116) is buildable in the Inferno as the Infernal Monster
+ * Lab: owner, 21 Nov 2026 (beta 9 grilling rounds 4-5: "same rules as the
+ * surface Lab"; numbers card b9-num-lab, 21 Nov: OK). Flash has an unused,
+ * `block`ed Inferno row for it (`INFERNOYARDPROPS.as:5520`), kept as it is:
+ * 100,000 / 300,000 / 600,000 Bone and Coal, 3 h / 12 h / 1 day, each level
+ * needing the Strongbox (8) and the Academy (26) at Flash's levels. Two
+ * changes: one from Under Hall 5 (Flash's `quantity` is all 0), and level 3
+ * needs Under Hall 6, the Inferno's top, where Flash's row says 7.
+ */
+const INFERNO_MONSTER_LAB = 116;
+{
+  const lab = infernos.find((one) => one.id === INFERNO_MONSTER_LAB);
+  if (!lab) throw new Error(`INFERNOYARDPROPS.as: no Monster Lab (${INFERNO_MONSTER_LAB}) entry`);
+  if (lab.steps.length !== 3) {
+    throw new Error(`INFERNOYARDPROPS.as:${lab.line}: the Monster Lab has ${lab.steps.length} steps, not 3`);
+  }
+  lab.blocked = false;
+  lab.name = "Infernal Monster Lab";
+  lab.quantity = [0, 0, 0, 0, 0, 1, 1];
+  for (const one of lab.steps) {
+    one.re = one.re.map(([type, count, level]) => (type === UNDER_HALL ? [type, count, Math.min(level, 6)] : [type, count, level]));
+  }
+}
+
 {
   const hall = infernos.find((one) => one.id === UNDER_HALL);
   if (!hall) throw new Error(`INFERNOYARDPROPS.as: no Under Hall (${UNDER_HALL}) entry`);

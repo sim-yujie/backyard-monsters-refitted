@@ -581,6 +581,103 @@ abilities.push(...REVAMP_ABILITIES.map(({ decided, ...one }) => ({ ...one, line:
 for (const one of abilities) one.order = LAB_LIST.indexOf(one.id) + 1;
 abilities.sort((a, b) => a.order - b.order);
 
+/*
+ * The Infernal Monster Lab's eight abilities (owner, beta 9 grilling rounds
+ * 4-6, 21 Nov 2026; numbers card b9-numbers: "all OK, Spurtz middle ladder").
+ * Flash's Inferno had no Lab. Same rules as the surface Lab (rank N needs Lab
+ * level N and the monster at level N + 1), priced in Sulfur, each rank 1.5
+ * times the one before. Balthazar has two ranks only. What each effect number
+ * means, and the rest of each ability's numbers, are in
+ * `combat/rules/specialMoves.ts`:
+ *   IC1 Spurtz: the most it grows, as a share (middle ladder: ranks 1-2 low, 3 strong);
+ *   IC2 Zagnoid: share of full health healed each second;
+ *   IC3 Malphus: chance to dodge a hit;
+ *   IC4 Valgos: extra walls hit within 60;
+ *   IC5 Balthazar: damage multiplier against monsters (1x without a rank);
+ *   IC6 Grokus: share of the blow splashed on nearby buildings;
+ *   IC7 Sabnox: share of the blow burned each second for 4 seconds;
+ *   IC8 King Wormzer: splash multiplier on nearby buildings (none without a rank).
+ */
+const sulfurSteps = (first, seconds, ranks = 3) =>
+  Array.from({ length: ranks }, (_, k) => [Math.round(first * 1.5 ** k), seconds]);
+const INFERNO_ABILITIES = [
+  {
+    id: "IC1",
+    name: "Fury",
+    effectLabel: "Most Speed and Damage",
+    description: "Spurtz gets faster and hits harder every second it fights.",
+    upgradeDescription: "Spurtz builds up its fury faster and further.",
+    costs: sulfurSteps(25000, 86400),
+    effect: [0.05, 0.08, 0.2],
+  },
+  {
+    id: "IC2",
+    name: "Regeneration",
+    effectLabel: "Health Healed per Second",
+    description: "Zagnoid heals a little of its health every second.",
+    upgradeDescription: "Zagnoid heals faster.",
+    costs: sulfurSteps(50000, 86400),
+    effect: [0.01, 0.015, 0.02],
+  },
+  {
+    id: "IC3",
+    name: "Dodge",
+    effectLabel: "Dodge Chance",
+    description: "Malphus has a chance to dodge any hit: towers, monsters, traps and splashes.",
+    upgradeDescription: "Malphus dodges more often.",
+    costs: sulfurSteps(400000, 108000),
+    effect: [0.1, 0.2, 0.3],
+  },
+  {
+    id: "IC4",
+    name: "Wall Crusher",
+    effectLabel: "Extra Walls Hit",
+    description: "Each blow Valgos lands on a wall also hits other walls next to it.",
+    upgradeDescription: "Valgos hits more walls at once.",
+    costs: sulfurSteps(800000, 108000),
+    effect: [1, 2, 3],
+  },
+  {
+    id: "IC5",
+    name: "Monster Hunter",
+    effectLabel: "Damage to Monsters",
+    description: "Balthazar hits monsters harder.",
+    upgradeDescription: "Balthazar hits monsters even harder.",
+    costs: sulfurSteps(2000000, 172800, 2),
+    effect: [2, 3],
+  },
+  {
+    id: "IC6",
+    name: "Shockwave",
+    effectLabel: "Splash on Buildings",
+    description: "Grokus's blows shake the buildings around its target too.",
+    upgradeDescription: "A bigger, stronger shockwave.",
+    costs: sulfurSteps(3000000, 216000),
+    effect: [0.3, 0.45, 0.6],
+  },
+  {
+    id: "IC7",
+    name: "Burn",
+    effectLabel: "Burn per Second",
+    description: "Sabnox sets what it hits on fire for 4 seconds. A new hit restarts the fire; fires do not stack.",
+    upgradeDescription: "Sabnox's fire burns hotter.",
+    costs: sulfurSteps(4500000, 259200),
+    effect: [0.1, 0.2, 0.3],
+  },
+  {
+    id: "IC8",
+    name: "Quake Splash",
+    effectLabel: "Splash Damage",
+    description: "King Wormzer's blows splash the buildings around it.",
+    upgradeDescription: "A wider, stronger splash.",
+    costs: sulfurSteps(6000000, 345600),
+    effect: [1, 2, 3],
+  },
+].map((one, k) => ({ ...one, order: k + 1, line: null, decided: "beta 9, owner, 21 Nov 2026" }));
+for (const one of INFERNO_ABILITIES) {
+  if (!INFERNO.includes(one.id)) fail(LAB, 0, `${one.id} is not an Inferno monster`);
+}
+
 /* ── Emit ─────────────────────────────────────────────────────────────────── */
 
 const list = (values) => `[${values.join(", ")}]`;
@@ -613,7 +710,7 @@ const monsterRow = (one) => {
 
 const abilityRow = (one) =>
   [
-    `  // ${one.id} ${byId.get(one.id).name} — ` +
+    `  // ${one.id} ${(byId.get(one.id) ?? infernoRows.find((row) => row.id === one.id)).name} — ` +
       (one.line === null ? `revamp (${one.decided ?? "owner, 2 Nov 2026"})` : `MONSTERLAB.as:${one.line}`),
     `  {`,
     `    id: ${JSON.stringify(one.id)},`,
@@ -734,12 +831,21 @@ export const LAB_ABILITIES: readonly LabAbility[] = [
 ${abilities.map(abilityRow).join("\n")}
 ];
 
+/**
+ * The Infernal Monster Lab's abilities (beta 9, owner, 21 Nov 2026), one per
+ * Inferno monster, researched in the Inferno yard's Lab for Sulfur. Balthazar
+ * (IC5) has two ranks; the others three.
+ */
+export const INFERNO_LAB_ABILITIES: readonly LabAbility[] = [
+${INFERNO_ABILITIES.map(abilityRow).join("\n")}
+];
+
 const MONSTERS_BY_ID: ReadonlyMap<string, MonsterEntry> = new Map(
   [...MONSTER_CATALOGUE, ...INFERNO_MONSTER_CATALOGUE].map((entry) => [entry.id, entry]),
 );
 
 const ABILITIES_BY_ID: ReadonlyMap<string, LabAbility> = new Map(
-  LAB_ABILITIES.map((ability) => [ability.id, ability]),
+  [...LAB_ABILITIES, ...INFERNO_LAB_ABILITIES].map((ability) => [ability.id, ability]),
 );
 
 /**
