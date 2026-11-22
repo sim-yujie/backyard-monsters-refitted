@@ -10,7 +10,9 @@ import type { AttackPlan } from "./attackPlan.js";
  * fling touches a building something before it might have flattened.
  */
 
-const realLayouts = await import("../../maproom/v2/tribeLayouts.ts?real");
+// A plain string keeps tsc from resolving the "?real" query (as baseSave.attack.test.ts does).
+const REAL_LAYOUTS = "../../maproom/v2/tribeLayouts.ts?real";
+const realLayouts = (await import(REAL_LAYOUTS)) as typeof import("../../maproom/v2/tribeLayouts.js");
 /** The fresh layout the check reads; null for the real data files'. */
 let layout: Record<string, unknown> | null = null;
 mock.module("../../maproom/v2/tribeLayouts.js", () => ({
