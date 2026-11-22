@@ -31,18 +31,13 @@ import { banWords } from "@/api/moderation";
 import { worldChat } from "@/game/chat/chatSession";
 import { setSignInNotice } from "./signInNotice";
 import { LoginScene } from "./scenes/LoginScene";
-import { MapGateScene } from "./scenes/MapGateScene";
-import { MapRoom1Scene } from "./scenes/MapRoom1Scene";
-import { MapRoom2Scene } from "./scenes/MapRoom2Scene";
-import { YardScene } from "./scenes/YardScene";
-import { AttackScene } from "./scenes/AttackScene";
 import { AwayScene, awayText } from "./scenes/AwayScene";
 import { SceneName } from "./sceneName";
 import { guardTick } from "./guardedTick";
-import { BAITER_PLUGINS, BAITER_REPLAY_PLUGINS } from "@/game/baiter/baiterPlugin";
-import { WATCH_PLUGINS } from "@/game/autoAttack/watchPlugin";
+import type { GameScenes } from "./gameScenes";
+import { gameScenesSource } from "./gameLoader";
+import { lazyScene } from "./lazyScene";
 import { makeRaidDue } from "@/api/raid";
-import { RAID_PLUGINS } from "@/game/raid/raidPlugin";
 import { raidWatch } from "@/game/raid/raidWatch";
 import { gpuTextureLimit } from "@/game/textureLimit";
 import { watchGraphics } from "@/game/graphicsLog";
@@ -302,20 +297,23 @@ export class App {
       );
     // Every screen asks for its own tune as it opens (`musicScene.ts`).
     const register = (name: SceneName, factory: SceneFactory) => scenes.register(name, withMusic(name, factory));
+    // The screens past sign-in come from their own script piece, fetched from
+    // the start (`main.ts`, `gameLoader.ts`; beta 9 speed work).
+    const later =
+      (name: keyof GameScenes): SceneFactory =>
+      () =>
+        lazyScene(gameScenesSource, (scenes) => scenes[name]());
     register(SceneName.BOOT, () => new BootScene());
     register(SceneName.LOGIN, () => new LoginScene());
-    register(SceneName.MAP, game(() => new MapGateScene()));
-    register(SceneName.MAP_ROOM_1, game(() => new MapRoom1Scene()));
-    register(SceneName.MAP_ROOM_2, game(() => new MapRoom2Scene()));
-    register(SceneName.YARD, game(() => new YardScene()));
-    register(SceneName.ATTACK, game(() => new AttackScene(), true));
-    register(SceneName.BAITER, game(() => new AttackScene(BAITER_PLUGINS, { practice: true }), true, true));
-    register(
-      SceneName.BAITER_REPLAY,
-      game(() => new AttackScene(BAITER_REPLAY_PLUGINS, { practice: true }), true, true),
-    );
-    register(SceneName.WATCH, game(() => new AttackScene(WATCH_PLUGINS, { watch: true }), true));
-    register(SceneName.RAID, game(() => new AttackScene(RAID_PLUGINS, { raid: true }), true));
+    register(SceneName.MAP, game(later("map")));
+    register(SceneName.MAP_ROOM_1, game(later("mapRoom1")));
+    register(SceneName.MAP_ROOM_2, game(later("mapRoom2")));
+    register(SceneName.YARD, game(later("yard")));
+    register(SceneName.ATTACK, game(later("attack"), true));
+    register(SceneName.BAITER, game(later("baiter"), true, true));
+    register(SceneName.BAITER_REPLAY, game(later("baiterReplay"), true, true));
+    register(SceneName.WATCH, game(later("watch"), true));
+    register(SceneName.RAID, game(later("raid"), true));
     register(
       SceneName.AWAY,
       () =>
