@@ -400,7 +400,6 @@ export class YardBuildings {
       let plate: Sprite | null = null;
       if (plateTier > 0) {
         plate = new Sprite(Texture.EMPTY);
-        plate.anchor.set(0.5, 0);
         plate.visible = false;
         this.markers.addChild(plate);
       }
@@ -1145,8 +1144,8 @@ export class YardBuildings {
       view.damageStep < 4 &&
       building.condition !== BuildingCondition.DESTROYED;
     if (!plate.visible) return;
-    const [x, top] = tierPlateSpot(building.type, this.kind);
-    plate.position.set(building.worldX + x + view.offsetX, building.worldY + top + view.offsetY);
+    const [left, top] = tierPlateSpot(building.type, this.kind);
+    plate.position.set(building.worldX + left + view.offsetX, building.worldY + top + view.offsetY);
     plate.scale.set(this.plateScale);
   }
 

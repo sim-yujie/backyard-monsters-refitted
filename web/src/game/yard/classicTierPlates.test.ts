@@ -99,11 +99,11 @@ describe("the tier plates' pictures and spots", () => {
     expect(tierPlateSpot(23, "inferno")).toBe(TIER_PLATE_SPOT[23]);
   });
 
-  it("grows when the camera zooms out, never past 1.7 times", () => {
+  it("grows when the camera zooms out, never past 1.5 times", () => {
     expect(tierPlateScale(1)).toBe(1);
     expect(tierPlateScale(2)).toBe(1);
-    expect(tierPlateScale(0.6) * TIER_PLATE_WIDTH * 0.6).toBeCloseTo(24);
-    expect(tierPlateScale(0.1)).toBe(1.7);
+    expect(tierPlateScale(0.7) * TIER_PLATE_WIDTH * 0.7).toBeCloseTo(24);
+    expect(tierPlateScale(0.1)).toBe(1.5);
   });
 });
 

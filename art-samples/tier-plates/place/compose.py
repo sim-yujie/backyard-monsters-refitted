@@ -1,5 +1,5 @@
 # Draws each Classic tower as the yard does (fort back, top, first anim cell, fort front), with the
-# building origin (+), the battle health bar (red box) and the plate box, to pick plate positions.
+# building origin (+), the battle health bar (red box) and the plate box ([left, top] from the origin), to pick plate spots.
 import json, sys
 from PIL import Image, ImageDraw
 A = "/home/yujiesim/Coding/backyard-monsters-refitted/worktrees/tier-build/server/public/assets/"
@@ -17,7 +17,7 @@ TOWERS = {  # key: (folder, top, anims)
 }
 FORT = {"m20 cannon", "m21 sniper", "m23 laser", "m25 tesla", "m115 aerial", "m118 railgun"}
 plates = json.loads(sys.argv[1]) if len(sys.argv) > 1 else {}
-PW, PH = 26, 18
+PW, PH = 26, 17
 Z = 4
 W, H = 160, 170; OX, OY = 80, 105  # canvas px per tower at 1x, origin position
 def img(path, x, y, w=None, h=None):
@@ -40,7 +40,7 @@ for key, (folder, top, anims) in TOWERS.items():
     d.rectangle([(OX-26)*Z, (OY-14)*Z, (OX+25)*Z, (OY-8)*Z], outline="red", width=3)
     p = plates.get(key.split()[0])
     if p:
-        x0, y0 = OX + p[0] - PW/2, OY + p[1]
+        x0, y0 = OX + p[0], OY + p[1]
         d.rectangle([x0*Z, y0*Z, (x0+PW)*Z, (y0+PH)*Z], outline="cyan", width=3)
     d.text((6, 6), key, fill="white")
     cells.append(c)

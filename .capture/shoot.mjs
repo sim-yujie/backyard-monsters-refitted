@@ -44,6 +44,8 @@ async function dismiss(page) {
       const b = page.getByRole("button", { name, exact: true }).first();
       if (await b.isVisible().catch(() => false)) await b.click().catch(() => {});
     }
+    const x = page.getByRole("button", { name: /^(×|Dismiss|Close notice|Hide)$/ }).first();
+    if (await x.isVisible().catch(() => false)) await x.click().catch(() => {});
     await page.keyboard.press("Escape").catch(() => {});
     await page.waitForTimeout(800);
   }
@@ -123,10 +125,12 @@ async function attack(page, tag) {
   const W = page.viewportSize().width;
   const zoomNow = await cam(page, "zoom");
   // The row of test towers at Y 500 (ids 9001-9006, 9101-9103): drop round it.
-  const group = { x: 1190, y: 1150 };
+  const row = (await list(page)).filter((b) => b.id >= 9001 && b.id <= 9103);
+  const group = { x: row.reduce((a, b) => a + b.cx, 0) / row.length, y: row.reduce((a, b) => a + b.cy, 0) / row.length };
+  console.log("group", Math.round(group.x), Math.round(group.y), row.length);
   await cam(page, "focus", { x: group.x, y: group.y, zoom: W < 600 ? 0.4 : zoomNow });
   await page.waitForTimeout(800);
-  const tries = Array.from({ length: 48 }, (_, i) => { const r = 220 + Math.floor(i / 16) * 70; const t = (i % 16) / 16 * Math.PI * 2; return [group.x + Math.cos(t) * r, group.y + Math.sin(t) * r * 0.6]; });
+  const tries = Array.from({ length: 48 }, (_, i) => { const r = 260 + Math.floor(i / 16) * 80; const t = (i % 16) / 16 * Math.PI * 2; return [group.x + Math.cos(t) * r, group.y + Math.sin(t) * r * 0.6]; });
   let dropped = 0;
   for (const [x, y] of tries) {
     if (dropped >= (W < 600 ? 4 : 8)) break;
