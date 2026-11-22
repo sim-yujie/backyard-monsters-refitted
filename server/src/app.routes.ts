@@ -24,6 +24,7 @@ import {
   takeoverQuoteLimiter,
   autoAttackLimiter,
   autoAttackPlanLimiter,
+  ownArmiesLimiter,
   defencesLimiter,
   leaderboardLimiter,
   botCheckReadLimiter,
@@ -101,6 +102,8 @@ import { declineTakeover } from "./controllers/maproom/v2/declineTakeover.js";
 import { takeoverQuote } from "./controllers/maproom/v2/takeoverQuote.js";
 import { autoAttack, autoAttackPlan, autoAttackReplay } from "./controllers/maproom/v2/autoAttack.js";
 import { transferMonsters } from "./controllers/maproom/v2/transferMonsters.js";
+import { transferBatch } from "./controllers/maproom/v2/transferBatch.js";
+import { ownArmies } from "./controllers/maproom/v2/ownArmies.js";
 import { saveBookmarks } from "./controllers/maproom/v2/saveBookmarks.js";
 
 
@@ -295,6 +298,9 @@ router.post("/worldmapv2/autoattackplan", verifyUserAuth, verifyAccountStatus, a
 router.post("/worldmapv2/autoattack", verifyUserAuth, verifyAccountStatus, autoAttackLimiter, logRequest, autoAttack);
 router.get("/worldmapv2/autoattackreplay", verifyUserAuth, verifyAccountStatus, autoAttackPlanLimiter, autoAttackReplay);
 router.post("/worldmapv2/transferassets", verifyUserAuth, verifyAccountStatus, logRequest, transferMonsters);
+// The world map's move tray (beta 9 #7): every own yard's army, and one move of several pairs.
+router.post("/worldmapv2/ownarmies", verifyUserAuth, verifyAccountStatus, ownArmiesLimiter, logRequest, ownArmies);
+router.post("/worldmapv2/transferbatch", verifyUserAuth, verifyAccountStatus, logRequest, transferBatch);
 router.post("/api/:apiVersion/player/savebookmarks", apiVersion, verifyUserAuth, verifyAccountStatus, logRequest, saveBookmarks);
 
 /**  ────────────────────────────────────────────────

@@ -217,6 +217,8 @@ export class MapRenderer {
 
   private hovered: OffsetCell | null = null;
   private selected: OffsetCell | null = null;
+  /** Move mode's outlines (beta 9 #7): the yard the move started from, and the yards ticked. */
+  private marks: readonly MapMark[] = [];
 
   /** The viewer's own alliance id (#334), or null; drives the "your alliance" plate colour. */
   private myAlliance: number | null = null;
@@ -473,6 +475,12 @@ export class MapRenderer {
   /** Draws the range of these flingers, or hides it for null (#177). */
   setRange(sources: readonly RangeSource[] | null): void {
     this.range.show(sources);
+  }
+
+  /** Outlines the move tray's yards (beta 9 #7): gold for the yard it started from, orange for each ticked. */
+  setMarks(marks: readonly MapMark[] | null): void {
+    this.marks = marks ?? [];
+    this.drawHighlight();
   }
 
   setSelected(cell: OffsetCell | null): void {
@@ -949,6 +957,18 @@ export class MapRenderer {
     this.highlight.clear();
     const zoom = this.lastZoom || 1;
 
+    for (const mark of this.marks) {
+      const corners = this.liftedCorners(mark.cell);
+      const colour = MARK_COLOURS[mark.kind];
+      this.highlight.poly(corners);
+      this.highlight.fill({ color: colour, alpha: mark.kind === "anchor" ? 0.16 : 0.2 });
+      // A dark rim under the bright one, so it reads on sand, grass and water alike.
+      this.highlight.poly(corners);
+      this.highlight.stroke({ width: 7 / zoom, color: 0x1a0c02, alpha: 0.55 });
+      this.highlight.poly(corners);
+      this.highlight.stroke({ width: 3.5 / zoom, color: colour });
+    }
+
     if (this.selected) {
       const corners = this.liftedCorners(this.selected);
       this.highlight.poly(corners);
@@ -971,6 +991,15 @@ export class MapRenderer {
     return liftCorners(mapRoomGrid.writeCellCorners(cell.col, cell.row, []), this.liftAt(cell.col, cell.row));
   }
 }
+
+/** One of move mode's outlined cells. */
+export interface MapMark {
+  readonly cell: OffsetCell;
+  readonly kind: "anchor" | "on";
+}
+
+/** Gold for the yard the move started from, the tray's orange for a ticked yard. */
+const MARK_COLOURS: Readonly<Record<MapMark["kind"], number>> = { anchor: 0xf0b938, on: 0xff6d1f };
 
 const same = (a: OffsetCell | null, b: OffsetCell | null): boolean =>
   a === b || (a !== null && b !== null && a.col === b.col && a.row === b.row);

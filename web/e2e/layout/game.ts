@@ -182,6 +182,8 @@ const WINDOW_CLASSES = [
   ".alliance-window",
   ".building-panel",
   ".auto-attack--result",
+  ".xfer-tray",
+  ".xfer-list",
 ];
 
 const openWindows = (page: Page) =>
@@ -199,6 +201,10 @@ export const closeAll = async (page: Page): Promise<void> => {
       const shut = (globalThis as Record<string, unknown>)["__repeatSheetClose"];
       (globalThis as Record<string, unknown>)["__repeatSheetClose"] = null;
       if (typeof shut === "function") (shut as () => void)();
+      // The move tray's preview (beta 9 #7) likewise.
+      const tray = (globalThis as Record<string, unknown>)["__transferPreviewClose"];
+      (globalThis as Record<string, unknown>)["__transferPreviewClose"] = null;
+      if (typeof tray === "function") (tray as () => void)();
     })
     .catch(() => undefined);
   // The Repeat attack's result covers the dock's More bubble on a phone
@@ -445,6 +451,29 @@ export const openRepeatSheet = async (page: Page, state: string): Promise<boolea
   // The portraits and icons size the tiles: wait for them.
   await page
     .waitForFunction(() => [...document.querySelectorAll(".overlay__layer .auto-attack img")].every((image) => (image as HTMLImageElement).complete), null, {
+      timeout: 10_000,
+    })
+    .catch(() => undefined);
+  return true;
+};
+
+/**
+ * The world map's move tray (beta 9 #7), or its List window over it, from the
+ * build's preview (`__transferPreview`, VITE_LAYOUT_CHECK): the sandbox yard
+ * has no outposts. `closeAll` closes it with its close button.
+ */
+export const openMoveTray = async (page: Page, state: "tray" | "list"): Promise<boolean> => {
+  const opened = await page.evaluate(async (which) => {
+    const open = (globalThis as Record<string, unknown>)["__transferPreview"];
+    if (typeof open !== "function") return false;
+    const shut = await (open as (state: string) => Promise<() => void> | null)(which);
+    (globalThis as Record<string, unknown>)["__transferPreviewClose"] = shut;
+    return typeof shut === "function";
+  }, state);
+  if (!opened) return false;
+  await page.locator(state === "list" ? ".overlay__layer .xfer-list" : ".overlay__layer .xfer-tray").first().waitFor({ timeout: 10_000 });
+  await page
+    .waitForFunction(() => [...document.querySelectorAll(".overlay__layer :is(.xfer-tray, .xfer-list) img")].every((image) => (image as HTMLImageElement).complete), null, {
       timeout: 10_000,
     })
     .catch(() => undefined);

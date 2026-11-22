@@ -111,6 +111,14 @@ if (import.meta.env.DEV || import.meta.env.VITE_LAYOUT_CHECK === "1") {
       return modal ? previewAutoAttackConfirm(modal, state) : null;
     };
   });
+  // The world map's move tray and its List (beta 9 #7), with a fixed busy empire.
+  void import("@/ui/maproom/transferPreview").then(({ previewTransferMode }) => {
+    (globalThis as Record<string, unknown>)["__transferPreview"] = (state?: "tray" | "list") => {
+      const layer = document.querySelector<HTMLElement>(".overlay__layer:not(.overlay__layer--modal)");
+      const modal = document.querySelector<HTMLElement>(".overlay__layer--modal");
+      return layer && modal ? previewTransferMode(layer, modal, state) : null;
+    };
+  });
   // The attack screen's dock (owner, 18 Nov 2026): the real attack scene on the own yard.
   void import("@/game/attack/attackDockPreview").then(({ previewAttackDock }) => {
     (globalThis as Record<string, unknown>)["__attackDock"] = () => previewAttackDock((scene) => app.goTo(scene));
