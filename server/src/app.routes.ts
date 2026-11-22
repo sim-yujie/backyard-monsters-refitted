@@ -54,6 +54,7 @@ import { Status } from "./enums/StatusCodes.js";
 import { supportedLangs } from "./controllers/supportedLangs.js";
 
 import { login } from "./controllers/auth/login.js";
+import { maintenanceStatus } from "./controllers/auth/maintenanceStatus.js";
 import { logout } from "./controllers/auth/logout.js";
 import { register } from "./controllers/auth/register.js";
 import { signUpOptions } from "./controllers/auth/signUpOptions.js";
@@ -205,6 +206,8 @@ router.get("/api/:apiVersion/player/signupoptions", apiVersion, signUpOptions);
 router.post("/api/:apiVersion/player/forgotPassword", apiVersion, forgotPasswordIpLimiter, forgotPasswordEmailLimiter, forgotPassword);
 router.post("/api/:apiVersion/player/reset-password", resetPasswordLimiter, resetPassword);
 router.get("/api/:apiVersion/supportedLangs", apiVersion, logRequest, supportedLangs);
+// The maintenance switch, for the sign-in screen and a game without chat (`controllers/auth/maintenanceStatus.ts`).
+router.get("/api/:apiVersion/maintenance", apiVersion, maintenanceStatus);
 router.get("/api/:apiVersion/player/account", apiVersion, verifyUserAuth, getAccount);
 router.post("/api/:apiVersion/player/changeusername", apiVersion, verifyUserAuth, changeUsernameLimiter, logRequest, changeUsername);
 router.post("/api/:apiVersion/player/settings", apiVersion, verifyUserAuth, logRequest, updateSettings);

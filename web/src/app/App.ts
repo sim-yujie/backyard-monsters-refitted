@@ -16,7 +16,10 @@ import { withIdle } from "./idleScene";
 import { withMusic } from "./musicScene";
 import { type DisconnectReason, IdleWatch, idleDurationText, idleTimingsFor } from "@/game/presence/idleWatch";
 import { IdleWarning } from "@/ui/IdleWarning";
-import { getAuthToken, onAnswer } from "@/api/http";
+import { getAuthToken, onAnswer, onRefusal } from "@/api/http";
+import { fetchMaintenance } from "@/api/maintenance";
+import { MaintenanceBanner } from "@/ui/MaintenanceBanner";
+import { MaintenanceWatch } from "./maintenanceWatch";
 import { stayProtected } from "@/api/presence";
 import { ProtectionWatch, protectionTimingsFor } from "@/game/presence/protectionWatch";
 import { onPlannerActivity } from "@/game/presence/plannerActivity";
@@ -26,7 +29,7 @@ import { answerBotCheck, fetchBotCheck, forceBotCheck } from "@/api/botCheck";
 import { BotCheckWatch } from "@/game/presence/botCheckWatch";
 import { BotCheckCard } from "@/ui/BotCheckCard";
 import { BootScene } from "./scenes/BootScene";
-import { logout } from "@/api/auth";
+import { logout, pauseSession } from "@/api/auth";
 import { banWords } from "@/api/moderation";
 import { worldChat } from "@/game/chat/chatSession";
 import { setSignInNotice } from "./signInNotice";
@@ -86,6 +89,7 @@ export class App {
   private botCheckCard: BotCheckCard | null = null;
   private stopHearing: (() => void) | null = null;
   private stopTeam: (() => void) | null = null;
+  private maintenance: MaintenanceWatch | null = null;
   private stopGraphicsWatch: (() => void) | null = null;
   private stopRelease: (() => void) | null = null;
 
@@ -355,6 +359,25 @@ export class App {
       scenes.goTo(SceneName.LOGIN);
     });
 
+    // The maintenance switch (owner, 22 Nov 2026): a countdown card on every
+    // screen, then everyone but the owner signed out at zero, the saved
+    // session kept for Try again (`maintenanceWatch.ts`).
+    const maintenanceBanner = new MaintenanceBanner(this.host);
+    this.maintenance = new MaintenanceWatch({
+      chat: worldChat,
+      onRefusal,
+      fetch: fetchMaintenance,
+      signedIn: () => getAuthToken() !== null,
+      banner: maintenanceBanner,
+      signOut: () => {
+        protection.stop();
+        botCheck.stop();
+        pauseSession();
+        scenes.goTo(SceneName.LOGIN);
+      },
+    });
+    this.maintenance.start();
+
     await this.scenes.start(SceneName.BOOT);
   }
 
@@ -369,6 +392,8 @@ export class App {
   destroy(): void {
     this.stopTeam?.();
     this.stopTeam = null;
+    this.maintenance?.stop();
+    this.maintenance = null;
     this.resizeObserver?.disconnect();
     this.resizeObserver = null;
     this.idle?.destroy();

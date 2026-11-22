@@ -13,6 +13,7 @@ import {
   userBannedErr,
   tokenAuthFailureErr,
   loginBackoffErr,
+  maintenanceErr,
 } from "../../errors/errors.js";
 import { logger } from "../../utils/logger.js";
 import { type JwtClaims, verifyJwtToken } from "../../middleware/auth.js";
@@ -31,6 +32,7 @@ import {
   rememberAddress,
 } from "../../services/auth/loginBackoff.js";
 import { banAtSignIn, banText } from "../../services/admin/moderation.js";
+import { maintenanceNotice, maintenanceState, signInBlocked } from "../../services/admin/maintenance.js";
 
 type SessionLifetime = NonNullable<SignOptions["expiresIn"]>;
 
@@ -120,6 +122,10 @@ export const login: KoaController = async (ctx) => {
     if (ban) throw ban.until || ban.reason ? userBannedErr(ban, banText(ban.until, ban.reason)) : userPermaBannedErr();
     user.banned = false;
   }
+
+  // The maintenance switch lets nobody but the owner in, with a password or a
+  // saved token alike (`services/admin/maintenance.ts`).
+  if (signInBlocked(user.userid)) throw maintenanceErr(maintenanceNotice(maintenanceState(), Date.now()));
 
   // Generate and set the token
   const sessionLifeTime = process.env.SESSION_LIFETIME || "30d";

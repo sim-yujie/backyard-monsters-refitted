@@ -26,6 +26,7 @@ import { getCurrentDateTime } from "../../utils/getCurrentDateTime.js";
 import { adminHealthReport } from "../../services/health/adminHealth.js";
 import { mountAdminMonsterMadnessRoutes } from "./monsterMadness.js";
 import { mountAdminWeekendRoutes } from "./weekend.js";
+import { mountAdminMaintenanceRoutes } from "./maintenance.js";
 import { mountAdminStarFigureRoutes } from "./starFigures.js";
 import { daysBetween, readDailyStats, statsOverview, type StatsDeps } from "../../services/stats/dailyStats.js";
 import { LOG_BASE, LOG_DIR, logger } from "../../utils/logger.js";
@@ -203,6 +204,9 @@ export const mountAdminRoutes = (router: Router): void => {
 
   // Weekend events: rotation, swaps, skips, percentages, run now (`weekend.ts`).
   mountAdminWeekendRoutes(router, admin, adminOnly, () => postgres.em.fork());
+
+  // Maintenance switch: only the owner signs in, countdown for the rest (`maintenance.ts`).
+  mountAdminMaintenanceRoutes(router, admin, adminOnly, () => postgres.em.fork());
 
   // The in-game constellation star editor (`starFigures.ts`).
   mountAdminStarFigureRoutes(router, admin, adminOnly, () => postgres.em.fork());
