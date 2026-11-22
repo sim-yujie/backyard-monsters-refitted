@@ -1009,7 +1009,7 @@ export const OUTPOST_COST_ROWS: readonly CostRow[] = [
     [552960,552960,0,0,72000,[[112,1,1]]],
     [2211840,2211840,0,0,144000,[[112,1,1]]],
   ], [0,1]],
-  // 16 Hatchery Control Center (special) — OUTPOST_YARD_PROPS.as:1206, levels 2-3 beta 9
+  // 16 Hatchery Control Center (special) — OUTPOST_YARD_PROPS.as:1206, level 2 beta 9
   [16, "Hatchery Control Center", "special", 2, [
     [500000,500000,500000,0,90000,[[112,1,1],[13,2,1]]],
     [1000000,1000000,1000000,0,172800,[[112,1,1],[13,2,3]]],

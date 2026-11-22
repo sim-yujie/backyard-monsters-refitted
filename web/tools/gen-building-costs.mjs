@@ -726,7 +726,7 @@ for (const [table, file, steps] of [
   const centre = table.find((one) => one.id === HCC);
   if (!centre || centre.steps.length !== 1) throw new Error(`${file}: the Hatchery Control Center no longer has one step`);
   centre.steps.push(...steps);
-  centre.hccLevels = true;
+  centre.hccLevels = centre.steps.length === 3 ? "levels 2-3 beta 9" : "level 2 beta 9";
 }
 
 /* ── Emit ─────────────────────────────────────────────────────────────────── */
@@ -754,7 +754,7 @@ const costRows = (list, file) =>
         `— ${entry.source ?? `${file}:${entry.line}`}${entry.mr2 ? `, Map Room 2 override ${entry.mr2}` : ""}` +
         `${entry.capped ? `, capped at level ${entry.capped} (D16)` : ""}` +
         `${entry.anyHall ? ", upgrades need no hall (beta 8)" : ""}` +
-        `${entry.hccLevels ? ", levels 2-3 beta 9" : ""}\n` +
+        `${entry.hccLevels ? `, ${entry.hccLevels}` : ""}\n` +
         `  [${entry.id}, ${JSON.stringify(entry.name)}, ${JSON.stringify(entry.kind)}, ` +
         `${entry.group}, [\n` +
         entry.steps.map((one) => `    ${step(one)},`).join("\n") +
