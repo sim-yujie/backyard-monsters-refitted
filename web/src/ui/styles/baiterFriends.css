@@ -103,6 +103,11 @@
   outline: none;
 }
 
+.baiter-friends__search-input::placeholder {
+  color: var(--colour-text-muted);
+  opacity: 1;
+}
+
 .baiter-friends__search:focus-within {
   border-color: var(--colour-accent-line);
 }
@@ -210,8 +215,8 @@
 }
 
 .baiter-friends__result--stopped {
-  background: var(--colour-surface-overlay);
-  color: var(--colour-text-secondary);
+  background: color-mix(in srgb, var(--colour-text-secondary) 22%, transparent);
+  color: var(--colour-text);
 }
 
 .baiter-friends--results .friends-row__meta,
@@ -226,16 +231,48 @@
   white-space: nowrap;
 }
 
-/* A test not seen yet: a dot by the tester's name. */
-.baiter-friends__row--new .friends-row__name::after {
-  content: "";
-  display: inline-block;
-  width: 9px;
-  height: 9px;
-  margin-left: 6px;
-  border-radius: 50%;
+/* A test not seen yet: a "New" tag first on its line. */
+.baiter-friends__new {
+  padding: 1px var(--space-2);
+  border-radius: 999px;
   background: var(--colour-warning);
-  vertical-align: middle;
+  color: var(--colour-warning-text);
+  font-size: var(--text-xs, 12px);
+  font-weight: 800;
+}
+
+.baiter-friends__mate {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  font-weight: 700;
+}
+
+/* The open invites' "21h left · 3 tests" wraps rather than cuts off. */
+.baiter-friends .baiter-friends__open-note {
+  overflow: visible;
+  text-overflow: clip;
+  white-space: normal;
+}
+
+.baiter-friends__report {
+  min-height: 44px;
+}
+
+.baiter-friends__tools {
+  display: flex;
+  flex: none;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.baiter-friends__lead {
+  margin: 0;
+}
+
+/* The Invited filter is for phones; elsewhere the open invites have their own column. */
+.baiter-friends__chip--invited {
+  display: none;
 }
 
 .baiter-friends__keep {
@@ -327,6 +364,38 @@
     overflow: visible;
   }
 
+  /* One column: the open invites are the Invited filter, the chips and search stay on top. */
+  .baiter-friends__col--open {
+    display: none;
+  }
+
+  .baiter-friends__chip--invited {
+    display: inline-flex;
+  }
+
+  .baiter-friends__tools {
+    position: sticky;
+    top: 0;
+    z-index: 1;
+    padding-bottom: var(--space-2);
+    background: var(--colour-surface-base);
+  }
+
+  .baiter-friends__lead {
+    display: none;
+  }
+
+  /* The testers' chips: one row that scrolls sideways. */
+  .baiter-friends--results .baiter-friends__chips {
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    padding-bottom: 2px;
+  }
+
+  .baiter-friends--results .baiter-friends__chip {
+    flex: none;
+  }
+
   .baiter-friends__foot {
     position: sticky;
     bottom: 0;
@@ -346,6 +415,20 @@
 
 /* A phone upright: four tabs share the head's width. */
 @media (max-width: 620px) {
+  /* Room above the full-screen sheet for its title plate and close button. */
+  .baiter-window__backdrop {
+    padding-top: calc(var(--space-4) + env(safe-area-inset-top, 0px));
+  }
+
+  /* Start test stays in reach under a long army. */
+  .baiter__view--army > .baiter__foot {
+    position: sticky;
+    bottom: 0;
+    z-index: 1;
+    padding-bottom: var(--space-2);
+    background: var(--colour-surface-base);
+  }
+
   .baiter__tabs {
     display: flex;
     flex-wrap: nowrap;

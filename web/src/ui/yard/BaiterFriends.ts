@@ -57,10 +57,12 @@ export const leftText = (seconds: number): string => {
   return `${Math.max(1, Math.floor(span / 60))}m`;
 };
 
-/** "2:41": a test's length. */
+/** "2m 41s": a test's length (not to be read as a time of day). */
 export const lengthText = (seconds: number): string => {
   const whole = Math.max(0, Math.floor(seconds));
-  return `${Math.floor(whole / 60)}:${String(whole % 60).padStart(2, "0")}`;
+  const minutes = Math.floor(whole / 60);
+  const rest = whole % 60;
+  return minutes === 0 ? `${rest}s` : rest === 0 ? `${minutes}m` : `${minutes}m ${rest}s`;
 };
 
 export const RESULT_WORDS: Readonly<Record<FriendTestResult, string>> = {
@@ -118,12 +120,15 @@ export class BaiterFriends {
   private readonly now: () => number;
   private data: BaiterTestsResponse | null = null;
   private readonly picked = new Set<number>();
-  private filter: "all" | "friends" | "alliance" = "all";
+  /** Which people the Invite list shows; "invited" (phones only) lists the open invites instead. */
+  private filter: "all" | "friends" | "alliance" | "invited" = "all";
   private search = "";
   private testerFilter: number | null = null;
   private seen = readSeen();
   private readonly status: HTMLElement;
   private readonly resultsStatus: HTMLElement;
+  private footNote: HTMLElement | null = null;
+  private sendButton: HTMLButtonElement | null = null;
   private destroyed = false;
 
   constructor(options: BaiterFriendsOptions) {
@@ -205,7 +210,7 @@ export class BaiterFriends {
     chips.setAttribute("role", "group");
     chips.setAttribute("aria-label", "Show");
     const chip = (key: typeof this.filter, label: string) => {
-      const node = btn(label, this.filter === key ? "primary" : "outline", "baiter-friends__chip");
+      const node = btn(label, this.filter === key ? "primary" : "outline", `baiter-friends__chip baiter-friends__chip--${key}`);
       node.setAttribute("aria-pressed", String(this.filter === key));
       node.addEventListener("click", () => {
         this.filter = key;
@@ -213,7 +218,13 @@ export class BaiterFriends {
       });
       return node;
     };
-    chips.append(chip("all", `All ${data.candidates.length}`), chip("friends", `Friends ${friends}`), chip("alliance", `Alliance ${mates}`));
+    chips.append(
+      chip("all", `All ${data.candidates.length}`),
+      chip("friends", `Friends ${friends}`),
+      chip("alliance", `Alliance ${mates}`),
+      // A phone has no room for the open invites beside the list: they are a filter of their own.
+      chip("invited", `Invited ${data.invited.length}`),
+    );
 
     const box = make("label", "baiter-friends__search");
     box.append(gameIcon("find", { size: 24, decorative: true }));
@@ -231,44 +242,69 @@ export class BaiterFriends {
 
     const list = make("ul", "baiter-friends__list friends-list");
     list.setAttribute("aria-label", "Friends and alliance mates");
-    list.append(...this.candidateRows());
-    if (data.candidates.length === 0) {
-      list.append(make("li", "baiter-friends__empty", "No friends or alliance mates yet. Add friends in the Friends window."));
-    } else if (list.childElementCount === 0) {
-      list.append(make("li", "baiter-friends__empty", "No one here."));
+    if (this.filter === "invited") {
+      list.append(...this.openRows());
+      if (data.invited.length === 0) list.append(make("li", "baiter-friends__empty", "No open invites."));
+    } else {
+      list.append(...this.candidateRows());
+      if (data.candidates.length === 0) {
+        list.append(make("li", "baiter-friends__empty", "No friends or alliance mates yet. Add friends in the Friends window."));
+      } else if (list.childElementCount === 0) {
+        list.append(make("li", "baiter-friends__empty", "No one here."));
+      }
     }
-    pick.append(chips, box, list);
+    // The chips and the search stay at the top while the list scrolls on a phone.
+    const tools = make("div", "baiter-friends__tools");
+    tools.append(
+      make("p", "baiter__note baiter-friends__lead", "Invited players can test your main yard for 24 h with a free army. Nothing is lost."),
+      chips,
+      box,
+    );
+    pick.append(tools, list);
 
     const side = make("section", "baiter-friends__col baiter-friends__col--open");
     side.setAttribute("aria-label", "Invited");
     const head = make("h3", "baiter-friends__head");
     head.append(gameIcon("time", { size: 24, decorative: true }), `Invited (${data.invited.length})`);
     const open = make("ul", "baiter-friends__list friends-list");
-    for (const invite of data.invited) {
-      const cancel = btn("✕", "ghost", "baiter-friends__cancel");
-      cancel.setAttribute("aria-label", `Cancel ${invite.username}'s invite`);
-      cancel.title = "Cancel the invite";
-      cancel.addEventListener("click", () => void this.cancel(invite.userid, cancel));
-      open.append(
-        playerRow(invite, {
-          note: `${leftText(invite.expiresAt - this.now())} left · ${invite.tests} ${invite.tests === 1 ? "test" : "tests"}`,
-          actions: [cancel],
-        }),
-      );
-    }
+    open.append(...this.openRows());
     if (data.invited.length === 0) open.append(make("li", "baiter-friends__empty", "No open invites."));
     side.append(head, open);
 
     const foot = make("footer", "baiter-friends__foot");
-    const send = iconBtn("mail", `Send ${this.picked.size}`, "primary", "baiter-friends__send");
-    send.disabled = this.picked.size === 0;
+    const send = iconBtn("mail", "", "primary", "baiter-friends__send");
     send.addEventListener("click", () => void this.send(send));
-    foot.append(
-      make("span", "baiter-friends__foot-note", `${this.picked.size} picked · 24 h, any number of tests`),
-      this.status,
-      send,
-    );
+    this.sendButton = send;
+    this.footNote = make("span", "baiter-friends__foot-note");
+    foot.append(this.footNote, this.status, send);
     this.invite.replaceChildren(pick, side, foot);
+    this.renderPicked();
+  }
+
+  /** The foot's count and Send, after a tick: the list stays where it was scrolled. */
+  private renderPicked(): void {
+    const count = this.picked.size;
+    if (this.footNote) this.footNote.textContent = `${count} picked · 24 h, any number of tests`;
+    if (this.sendButton) {
+      this.sendButton.disabled = count === 0;
+      const label = this.sendButton.querySelector("span");
+      if (label) label.textContent = `Send ${count}`;
+    }
+  }
+
+  /** The open invites: time left, tests run, and a cancel. */
+  private openRows(): HTMLElement[] {
+    return (this.data?.invited ?? []).map((invite) => {
+      const cancel = btn("✕", "outline", "baiter-friends__cancel");
+      cancel.setAttribute("aria-label", `Cancel ${invite.username}'s invite`);
+      cancel.title = "Cancel the invite";
+      cancel.addEventListener("click", () => void this.cancel(invite.userid, cancel));
+      return playerRow(invite, {
+        note: `${leftText(invite.expiresAt - this.now())} left · ${invite.tests} ${invite.tests === 1 ? "test" : "tests"}`,
+        noteClass: "baiter-friends__open-note",
+        actions: [cancel],
+      });
+    });
   }
 
   private candidateRows(): HTMLElement[] {
@@ -285,24 +321,27 @@ export class BaiterFriends {
     const invited = this.data?.invited.some((row) => row.userid === one.userid) ?? false;
     const on = this.picked.has(one.userid);
     const marks: HTMLElement[] = [];
-    if (one.alliance) marks.push(gameIcon("alliance", { size: 16, label: "Alliance mate" }) as unknown as HTMLElement);
+    if (one.alliance) marks.push(figure("alliance", "Alliance mate", "Alliance", "baiter-friends__mate"));
     const actions: HTMLElement[] = [];
-    if (!invited) {
-      const tick = make("button", `baiter-friends__tick${on ? " baiter-friends__tick--on" : ""}`, on ? "✓" : "");
-      tick.type = "button";
-      tick.setAttribute("role", "checkbox");
-      tick.setAttribute("aria-checked", String(on));
-      tick.setAttribute("aria-label", `Invite ${one.username}`);
-      tick.addEventListener("click", () => {
-        if (this.picked.has(one.userid)) this.picked.delete(one.userid);
-        else if (this.picked.size < (this.data?.maxPerSend ?? 25)) this.picked.add(one.userid);
-        this.renderInvite();
-        this.invite.querySelector<HTMLElement>(`[data-userid="${one.userid}"] .baiter-friends__tick`)?.focus();
-      });
-      actions.push(tick);
-    }
+    const tick = make("button", "baiter-friends__tick");
+    tick.type = "button";
+    tick.setAttribute("role", "checkbox");
+    tick.setAttribute("aria-label", `Invite ${one.username}`);
+    if (!invited) actions.push(tick);
     const row = playerRow(one, { marks, ...(invited ? { note: "Invited" } : {}), actions });
-    if (on) row.classList.add("baiter-friends__row--on");
+    const show = (picked: boolean): void => {
+      tick.classList.toggle("baiter-friends__tick--on", picked);
+      tick.textContent = picked ? "✓" : "";
+      tick.setAttribute("aria-checked", String(picked));
+      row.classList.toggle("baiter-friends__row--on", picked);
+    };
+    show(on);
+    tick.addEventListener("click", () => {
+      if (this.picked.has(one.userid)) this.picked.delete(one.userid);
+      else if (this.picked.size < (this.data?.maxPerSend ?? 25)) this.picked.add(one.userid);
+      show(this.picked.has(one.userid));
+      this.renderPicked();
+    });
     return row;
   }
 
@@ -351,7 +390,7 @@ export class BaiterFriends {
       list.append(
         playerRow(invite, {
           marks: [
-            figure("housing", "Army size", formatAmount(invite.cap), "baiter-friends__cap"),
+            figure("housing", "Their Baiter's army size", `${formatAmount(invite.cap)} max`, "baiter-friends__cap"),
             figure("time", "Time left", `${leftText(invite.expiresAt - this.now())} left`, "baiter-friends__left"),
           ],
           actions: [test],
@@ -410,6 +449,7 @@ export class BaiterFriends {
   private resultRow(row: FriendTestRow): HTMLElement {
     const result = make("span", `baiter-friends__result baiter-friends__result--${row.result}`, RESULT_WORDS[row.result]);
     const damage = figure("yarddamage", "Damage", `${Math.floor(row.damage)}%`, "baiter-friends__damage");
+    const fresh = row.foughtAt > this.seen;
     const actions: HTMLElement[] = [];
     if (this.options.onWatch) {
       const watch = iconBtn("camera", "Watch", "outline", "baiter-friends__watch");
@@ -422,7 +462,8 @@ export class BaiterFriends {
       actions.push(watch);
     }
     if (this.options.onReport) {
-      const report = iconBtn("report", "Report", "ghost", "baiter-friends__report");
+      // Words only: the flag icon is the game's "report a player".
+      const report = btn("Report", "outline", "baiter-friends__report");
       report.setAttribute("aria-label", `${row.tester.name}'s test: the report`);
       report.addEventListener("click", () => void this.open(row, report, "report"));
       actions.push(report);
@@ -431,11 +472,11 @@ export class BaiterFriends {
       { userid: row.tester.userid, username: row.tester.name, pic: row.tester.pic, photo: row.tester.photo ?? null, level: row.tester.level ?? 0 },
       {
         note: `${agoText(this.now() - row.foughtAt)} · ${lengthText(row.seconds)}`,
-        marks: [result, damage],
+        marks: [...(fresh ? [make("span", "baiter-friends__new", "New")] : []), result, damage],
         actions,
       },
     );
-    if (row.foughtAt > this.seen) item.classList.add("baiter-friends__row--new");
+    if (fresh) item.classList.add("baiter-friends__row--new");
     return item;
   }
 
