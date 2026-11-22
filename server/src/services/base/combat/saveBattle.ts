@@ -11,6 +11,7 @@ import {
   FINALISE_REPLAY_DEADLINE_MS,
   ReplayTimeoutError,
   SAVE_REPLAY_DEADLINE_MS,
+  isReplayWorkerLoadError,
   replayAbandonedInWorker,
 } from "./replayRunner.js";
 
@@ -61,7 +62,8 @@ export const saveReplayDeadline = (input: Pick<AbandonedInput, "left">): number 
  * and where there is none (a Map Room 1 tribe) only a resent save can.
  *
  * @param handOff - What happens to the attack now, for the log line.
- * @throws {ClientSafeError} `attackResultPendingErr` when the replay timed out.
+ * @throws {ClientSafeError} `attackResultPendingErr` when the replay timed out,
+ *   or its worker failed to load.
  */
 export const replayBattleForSave = async (
   ctx: Context,
@@ -73,6 +75,20 @@ export const replayBattleForSave = async (
   try {
     return await replayAbandonedInWorker(input, saveReplayDeadline(input));
   } catch (err) {
+    // A worker that never loaded fought no battle either (22 Nov 2026): the
+    // save is left as a timed-out one is, for the finaliser to land.
+    if (isReplayWorkerLoadError(err)) {
+      logger.warn(`Attack replay for {username} on base {baseid} found no worker: ${handOff}`, {
+        event: "attack-replay-worker-load-failed",
+        userid: user.userid,
+        username: user.username,
+        baseid: base.baseid,
+        basesaveid: base.basesaveid,
+        error: err.reason,
+        ip: ctx.ip,
+      });
+      throw attackResultPendingErr();
+    }
     if (!(err instanceof ReplayTimeoutError)) throw err;
     logger.warn(`Attack replay for {username} on base {baseid} timed out: ${handOff}`, {
       event: "attack-replay-timeout",

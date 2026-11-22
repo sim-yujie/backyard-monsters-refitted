@@ -75,6 +75,8 @@ mock.module("../../../../services/base/attackSessionStore.js", () => ({
 }));
 
 const { baseModeAttack } = await import("./baseModeAttack.js");
+const { attackCheckpointKey } = await import("../../../../services/base/attackCheckpoint.js");
+const { landingDeferredKey } = await import("../../../../services/base/finaliseAttack.js");
 
 /** Empire points for exactly `level`. */
 const pointsFor = (level: number) => String(experiencePoints[level - 1]);
@@ -261,5 +263,42 @@ describe("an attack the server starts itself (a bot's revenge, issue #244)", () 
   test("a player's attack load keeps the rules: the same attack is refused", async () => {
     setup({ attacker: 20, owner: 12 }, null);
     await refused(NOT_NEIGHBOUR);
+  });
+});
+
+describe("a yard whose last attack could not land yet (22 Nov 2026)", () => {
+  const LANDING = "The last attack on this yard is still being worked out. Try again in a minute.";
+  /** The earlier attack's checkpoint, left on the row (basesaveid 700) after its replay worker failed to load. */
+  const leaveUnlanded = (attackid: number, marked: number) => {
+    const at = now() - 60;
+    store.set(
+      attackCheckpointKey(700),
+      JSON.stringify({
+        attackerid: 9999,
+        defenderid: OWNER,
+        attackid,
+        startedat: at - 600,
+        at,
+        tick: 40,
+        flinglog: { v: 1, seed: 1, events: [{ kind: "fling", t: 10, x: 0, y: 0, r: 100, monsters: { C1: 1 } }] },
+        sources: [],
+      })
+    );
+    store.set(landingDeferredKey(700), String(marked));
+  };
+
+  test("refused, nothing written: its first checkpoint would replace the old one", async () => {
+    leaveUnlanded(4242, 4242);
+    await refused(LANDING);
+  });
+
+  test("a mark for another attack than the checkpoint holds refuses nothing", async () => {
+    leaveUnlanded(4242, 1111);
+    await goesAhead();
+  });
+
+  test("the mark alone, its checkpoint gone (landed), refuses nothing", async () => {
+    store.set(landingDeferredKey(700), "4242");
+    await goesAhead();
   });
 });
