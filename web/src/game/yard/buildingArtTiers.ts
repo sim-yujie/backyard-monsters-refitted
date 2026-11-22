@@ -848,8 +848,8 @@ export const INFERNO_BUILDING_3D_ART: Readonly<Record<number, readonly TierArt[]
   // swell and fade, 32 cells over the body, all the time (`yardAnim.ts`). Damaged and destroyed are its own renders,
   // one rough pass each after Flash's. With the Classic look the Inferno draws Flash's store.
   12: [
-    { from: 1, top: ["top.i3d1@2x.webp", -43, -49], shadow: ["shadow.i3d1.jpg", -41, 1], lift: 0,
-      anim: { strip: ["anim.i3d1@2x.webp", -29, -16, 66, 68, 32], columns: 31, body: ["body.i3d1@2x.webp", -43, -49] },
+    { from: 1, top: ["top.i3d1@2x.webp", -43, -48], shadow: ["shadow.i3d1.jpg", -41, 1], lift: 0,
+      anim: { strip: ["anim.i3d1@2x.webp", -29, -16, 66, 68, 32], columns: 31, body: ["body.i3d1@2x.webp", -43, -48] },
       damaged: { top: ["top.i3d1.damaged@2x.webp", -50, -44], shadow: ["shadow.i3d1.damaged.jpg", -51, 0] },
       destroyed: { top: ["top.i3d1.destroyed@2x.webp", -54, -40], shadow: ["shadow.i3d1.destroyed.jpg", -56, 2] } },
   ],

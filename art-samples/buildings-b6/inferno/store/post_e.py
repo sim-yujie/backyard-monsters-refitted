@@ -12,6 +12,7 @@ renders of the standing store, all with the same noise seed: every glow low (L1-
 with a = (1 + sin t) / 2 and b = (1 + sin 2t) / 2, so cell 0 has both half way, as the still. Light adds, so the mix is
 what a render at those strengths would give (up to the display curve, which is small over so slight a change).
 """
+import os
 import subprocess
 import sys
 import tempfile
@@ -23,8 +24,10 @@ from scipy import ndimage
 
 HERE = Path(__file__).resolve().parent
 ROOT = HERE.parents[3]
-R = HERE / "e" / "render"
-OUT = ROOT / "shots" / "istore-e"
+# STORE_LETTERS=0: everything from e-plain/render, the renders without the words (all.sh under the same switch)
+PLAIN = os.environ.get("STORE_LETTERS", "1") == "0"
+R = HERE / ("e-plain" if PLAIN else "e") / "render"
+OUT = ROOT / "shots" / ("istore-e-plain" if os.environ.get("STORE_LETTERS", "1") == "0" else "istore-e")
 ART = ROOT / "server/public/assets/buildings"
 N = 32
 GLOW = 6                     # levels of 255 a glow must change a pixel by for it to count as lit
@@ -124,7 +127,7 @@ def sheets():
          (("", "standing"), ("-damaged", "damaged"), ("-destroyed", "destroyed"))]).save(OUT / "e-states.png")
     # with and without the words
     plain = HERE / "e-plain" / "render" / "L1-base.png"
-    if plain.exists():
+    if plain.exists() and not PLAIN:
         row([label(on_ground(full[""], 0.5), "E  with MATCH BOOK (as built into the game)"),
              label(on_ground(Image.open(plain).convert("RGBA"), 0.5), "E  without the words (STORE_LETTERS=0)")]
             ).save(OUT / "e-letters-vs-plain.png")

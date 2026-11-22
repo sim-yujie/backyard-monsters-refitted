@@ -1045,7 +1045,10 @@ def horn(name, base, lean):
         t = i / 12
         a = math.radians(100 * t)
         out = lean * 1.15 * (1 - math.cos(a))
-        pts.append((x + HORN_SIDE.x * out, y + HORN_SIDE.y * out, z + 0.1 + 2.3 * math.sin(a) * (0.55 + 0.45 * t)))
+        # (+ _tn * ...: the body's lean, a shear down toward +Y put in afterwards, would raise the left horn's tip and
+        # drop the right's; this takes it out again, so both stand exactly as tall)
+        pts.append((x + HORN_SIDE.x * out, y + HORN_SIDE.y * out,
+                    z + 0.1 + 2.3 * math.sin(a) * (0.55 + 0.45 * t) + _tn * HORN_SIDE.y * out))
     kit.tube(name, pts, 0.245, M["bone"], verts=14, r_end=0.03, smooth=True)
 
 
@@ -1308,4 +1311,21 @@ def family(o):
     return "other:" + n
 
 
-kit.run(build, lambda k: None, family=family)
+def horn_report():
+    """HORNS=1 with mode fit: each horn's seat and tip on screen (Flash px) and how tall it stands."""
+    bpy.context.view_layer.update()
+    for n in ("hornL", "hornR"):
+        pts = world_pts(named(n))
+        ys = [kit.scr(p)[1] for p in pts]
+        xs = [kit.scr(p)[0] for p in pts]
+        print("HORN %s screen x %.1f..%.1f y %.1f..%.1f tall %.2f wide %.2f" % (n, min(xs), max(xs), min(ys), max(ys),
+                                                                               max(ys) - min(ys), max(xs) - min(xs)))
+
+
+def build_all():
+    build()
+    if os.environ.get("HORNS"):
+        horn_report()
+
+
+kit.run(build_all, lambda k: None, family=family)
