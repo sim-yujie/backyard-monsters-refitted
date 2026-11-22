@@ -222,7 +222,11 @@ export class BaiterFriends {
       chip("all", `All ${data.candidates.length}`),
       // A phone has no room for the open invites beside the list: they are a filter of
       // their own, second so it is in sight without swiping the chips.
-      chip("invited", `Invited ${data.invited.length}`),
+      (() => {
+        const invited = chip("invited", `Invited ${data.invited.length}`);
+        invited.prepend(gameIcon("time", { size: 16, decorative: true }));
+        return invited;
+      })(),
       chip("friends", `Friends ${friends}`),
       chip("alliance", `Alliance ${mates}`),
     );
@@ -256,12 +260,10 @@ export class BaiterFriends {
     }
     // The chips and the search stay at the top while the list scrolls on a phone.
     const tools = make("div", "baiter-friends__tools");
-    tools.append(
-      make("p", "baiter__note baiter-friends__lead", "Invited players can test your main yard for 24 h with a free army. Nothing is lost."),
-      chips,
-      box,
-    );
-    pick.append(tools, list);
+    tools.append(chips, box);
+    // Under the pinned chips, so on a phone it scrolls away with the list rather than taking room.
+    const lead = make("p", "baiter__note baiter-friends__lead", "Invited players can test your main yard for 24 h with a free army. Nothing is lost.");
+    pick.append(tools, lead, list);
 
     const side = make("section", "baiter-friends__col baiter-friends__col--open");
     side.setAttribute("aria-label", "Invited");
