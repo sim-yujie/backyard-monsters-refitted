@@ -68,6 +68,12 @@ const fakeRedis = () => {
   return { redis, strings, lists, sets };
 };
 
+// Another player's id that stays in the history the deletion keeps. It must never
+// be one a new account can get: the user ids are a counter, so on a fresh database
+// (CI) a small number like 77 is reached by the test's own players, and the
+// reporter insert then failed on a duplicate (CI 21 Nov 2026). Above the counter's reach.
+const OTHER = 2_000_000_077;
+
 describe.skipIf(!dbName)("deleting a player's account (deleteAccount.ts)", () => {
   let orm: MikroORM;
   let store: ReturnType<typeof fakeRedis>;
@@ -257,14 +263,14 @@ describe.skipIf(!dbName)("deleting a player's account (deleteAccount.ts)", () =>
     const line = (userId: number, body: string) => JSON.stringify({ userId, displayName: "x", body, ts: 1 });
     store.lists.set("history:chat:mr2-global", [line(p, "mine"), line(q, "theirs"), line(p, "mine again")]);
     store.lists.set("bot-check:log", [JSON.stringify({ userid: p }), JSON.stringify({ userid: q })]);
-    store.sets.set(`chat-ignore:${q}`, new Set([String(p), "77"]));
+    store.sets.set(`chat-ignore:${q}`, new Set([String(p), String(OTHER)]));
     store.sets.set(`chat-ignore:${p}`, new Set([String(q)]));
-    store.sets.set("stats:active:2026-10-22", new Set([String(p), "77"]));
-    await sql(`INSERT INTO bym.app_error (source, fingerprint, message, userids) VALUES ('browser', 'zz-del-fp', 'x', ARRAY[?, 77]::int[])`, [p]);
+    store.sets.set("stats:active:2026-10-22", new Set([String(p), String(OTHER)]));
+    await sql(`INSERT INTO bym.app_error (source, fingerprint, message, userids) VALUES ('browser', 'zz-del-fp', 'x', ARRAY[?, ?]::int[])`, [p, OTHER]);
     await sql(
       `INSERT INTO bym.app_error_reporter (error_id, userid, username, ip)
-       SELECT id, u, n, '203.0.113.7' FROM bym.app_error, (VALUES (?::int, 'zz_del_p'), (77, 'other')) AS v (u, n) WHERE fingerprint = 'zz-del-fp'`,
-      [p]
+       SELECT id, u, n, '203.0.113.7' FROM bym.app_error, (VALUES (?::int, 'zz_del_p'), (?::int, 'other')) AS v (u, n) WHERE fingerprint = 'zz-del-fp'`,
+      [p, OTHER]
     );
 
     return { p, q, r, allianceId, pq, qr, pr, notice };
@@ -432,14 +438,14 @@ describe.skipIf(!dbName)("deleting a player's account (deleteAccount.ts)", () =>
     expect([...store.strings.keys()].sort()).toEqual(["attackLogs:999999:both", "sight:999999"]);
     expect(store.lists.get("history:chat:mr2-global")!.map((raw) => JSON.parse(raw).body)).toEqual(["theirs"]);
     expect(store.lists.get("bot-check:log")).toEqual([JSON.stringify({ userid: q })]);
-    expect([...store.sets.get(`chat-ignore:${q}`)!]).toEqual(["77"]);
+    expect([...store.sets.get(`chat-ignore:${q}`)!]).toEqual([String(OTHER)]);
     expect(store.sets.has(`chat-ignore:${p}`)).toBe(false);
-    expect([...store.sets.get("stats:active:2026-10-22")!]).toEqual(["77"]);
-    expect((await one(`SELECT userids FROM bym.app_error WHERE fingerprint = 'zz-del-fp'`))!.userids).toEqual([77]);
+    expect([...store.sets.get("stats:active:2026-10-22")!]).toEqual([String(OTHER)]);
+    expect((await one(`SELECT userids FROM bym.app_error WHERE fingerprint = 'zz-del-fp'`))!.userids).toEqual([OTHER]);
     const senders = await sql<{ userid: number }>(
       `SELECT r.userid FROM bym.app_error_reporter r JOIN bym.app_error e ON e.id = r.error_id WHERE e.fingerprint = 'zz-del-fp'`
     );
-    expect(senders.map((row) => Number(row.userid))).toEqual([77]);
+    expect(senders.map((row) => Number(row.userid))).toEqual([OTHER]);
   });
 
   test("a kept thread goes once the player on its other side is deleted too", async () => {
