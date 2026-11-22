@@ -26,12 +26,16 @@ export interface RepeatFeeBand {
   readonly putty: number;
 }
 
-/** The owner's table (20 Nov 2026, second version), lowest band first. */
+/**
+ * The owner's table, lowest band first: 20 Nov 2026 (second version) was
+ * 2M / 2.5M / 3M / 3.5M; the owner lowered every band by 1M on 22 Nov 2026
+ * (patch 8.2).
+ */
 export const REPEAT_FEE_BANDS: readonly RepeatFeeBand[] = [
-  { from: 25, to: 29, putty: 2_000_000 },
-  { from: 30, to: 34, putty: 2_500_000 },
-  { from: 35, to: 39, putty: 3_000_000 },
-  { from: 40, to: 44, putty: 3_500_000 },
+  { from: 25, to: 29, putty: 1_000_000 },
+  { from: 30, to: 34, putty: 1_500_000 },
+  { from: 35, to: 39, putty: 2_000_000 },
+  { from: 40, to: 44, putty: 2_500_000 },
 ];
 
 /**

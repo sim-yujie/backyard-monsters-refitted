@@ -197,9 +197,20 @@ mock.module("../../utils/logger.js", () => ({
 // real module one no mock replaces.
 const REAL_RUNNER = "./combat/replayRunner.ts?real";
 const realRunner = (await import(REAL_RUNNER)) as typeof import("./combat/replayRunner.js");
-mock.module("./combat/replayRunner.js", () => ({ ...realRunner }));
+/** A replay worker that fails to load (22 Nov 2026), or a replay that fails on its own. */
+let replayFails: "load" | "timeout" | "replay" | null = null;
+mock.module("./combat/replayRunner.js", () => ({
+  ...realRunner,
+  replayAbandonedInWorker: async (...args: Parameters<typeof realRunner.replayAbandonedInWorker>) => {
+    if (replayFails === "load") throw new realRunner.ReplayWorkerLoadError("SyntaxError: Unexpected keyword 'else'");
+    if (replayFails === "timeout") throw new realRunner.ReplayTimeoutError(20_000);
+    if (replayFails === "replay") throw new Error("Battle replay failed: a bad log");
+    return realRunner.replayAbandonedInWorker(...args);
+  },
+}));
 
 const {
+  attackLandingDeferred,
   finaliseAbandonedAttack,
   finaliseAttacksFor,
   finaliseBeforeLoad,
@@ -749,6 +760,16 @@ describe("the plan an abandoned camp attack leaves (issue #221)", () => {
     expect(upsert).not.toHaveBeenCalled();
   }, REPLAY_TIMEOUT_MS);
 
+  test("a camp already damaged before the attack keeps the old plan (patch 8.2)", async () => {
+    asKozuCamp();
+    // One building below full health before the attack began.
+    defender.buildinghealthdata = { "1": 1 };
+    await arm();
+
+    expect(await finaliseAbandonedAttack(BASESAVEID, "test")).toBe("finalised");
+    expect(upsert).not.toHaveBeenCalled();
+  }, REPLAY_TIMEOUT_MS);
+
   test("an attack on anything but a camp leaves no plan", async () => {
     await arm();
     expect(await finaliseAbandonedAttack(BASESAVEID, "test")).toBe("finalised");
@@ -849,6 +870,64 @@ describe("when finalisation runs", () => {
     await arm({ startedat: now() - attackWindowSeconds() });
     await finaliseExpiredOnBase(defender.baseid);
     expect(defender.attackid).toBe(0);
+  }, REPLAY_TIMEOUT_MS);
+});
+
+describe("a new attack over one that could not land yet (22 Nov 2026)", () => {
+  test("a worker that failed to load keeps the checkpoint and holds the row; a landing frees it", async () => {
+    await arm({ startedat: now() - attackWindowSeconds() });
+    replayFails = "load";
+    try {
+      // The next attacker's load: the finaliser fails, the load carries on.
+      await finaliseBeforeLoad(31337, "attack", defender.baseid, true);
+    } finally {
+      replayFails = null;
+    }
+    expect(store.has(attackCheckpointKey(BASESAVEID))).toBe(true);
+    expect(defender.attackid).toBe(ATTACK_ID);
+    expect(await attackLandingDeferred(BASESAVEID)).toBe(true);
+
+    await finaliseBeforeLoad(31337, "attack", defender.baseid, true);
+    expect(store.has(attackCheckpointKey(BASESAVEID))).toBe(false);
+    expect(defender.attackid).toBe(0);
+    expect(await attackLandingDeferred(BASESAVEID)).toBe(false);
+  }, REPLAY_TIMEOUT_MS);
+
+  test("a replay that fails on its own does not hold the row: the old rule stands", async () => {
+    await arm({ startedat: now() - attackWindowSeconds() });
+    replayFails = "load";
+    try {
+      await finaliseBeforeLoad(31337, "attack", defender.baseid, true);
+      expect(await attackLandingDeferred(BASESAVEID)).toBe(true);
+      replayFails = "replay";
+      await finaliseBeforeLoad(31337, "attack", defender.baseid, true);
+    } finally {
+      replayFails = null;
+    }
+    expect(store.has(attackCheckpointKey(BASESAVEID))).toBe(true);
+    expect(await attackLandingDeferred(BASESAVEID)).toBe(false);
+  }, REPLAY_TIMEOUT_MS);
+
+  test("a timed-out replay holds the row too, but not past the third deadline in a row", async () => {
+    await arm({ startedat: now() - attackWindowSeconds() });
+    replayFails = "timeout";
+    try {
+      await finaliseBeforeLoad(31337, "attack", defender.baseid, true);
+      expect(await attackLandingDeferred(BASESAVEID)).toBe(true);
+      await finaliseBeforeLoad(31337, "attack", defender.baseid, true);
+      expect(await attackLandingDeferred(BASESAVEID)).toBe(true);
+      // Workers failing to load in between neither count nor end it.
+      replayFails = "load";
+      await finaliseBeforeLoad(31337, "attack", defender.baseid, true);
+      expect(await attackLandingDeferred(BASESAVEID)).toBe(true);
+      replayFails = "timeout";
+      await finaliseBeforeLoad(31337, "attack", defender.baseid, true);
+    } finally {
+      replayFails = null;
+    }
+    // A replay that never finishes in time does not keep the yard from being attacked.
+    expect(store.has(attackCheckpointKey(BASESAVEID))).toBe(true);
+    expect(await attackLandingDeferred(BASESAVEID)).toBe(false);
   }, REPLAY_TIMEOUT_MS);
 });
 

@@ -285,6 +285,31 @@ describe("the plan a hand-played camp attack leaves (issue #221)", () => {
     });
   });
 
+  test("an untouched camp's plan is kept, and the answer says nothing about it (patch 8.2)", async () => {
+    upsert.mockClear();
+    Object.assign(defender, { wmid: 11, level: 35 });
+    attackerSave.mapversion = 2;
+    const ctx = ctxFor({ over: "1", tick: "3200", flinglog: JSON.stringify(LOG) });
+
+    await baseSave(ctx, async () => {});
+
+    expect(upsert).toHaveBeenCalledTimes(1);
+    expect((ctx.body as { repeatplan?: unknown }).repeatplan).toBeUndefined();
+  });
+
+  test("a camp already damaged before the attack keeps the old plan, and the answer says why (patch 8.2)", async () => {
+    upsert.mockClear();
+    // One building below full health before the attack began.
+    Object.assign(defender, { wmid: 11, level: 35, buildinghealthdata: { "1": 1 } });
+    attackerSave.mapversion = 2;
+    const ctx = ctxFor({ over: "1", tick: "3200", flinglog: JSON.stringify(LOG) });
+
+    await baseSave(ctx, async () => {});
+
+    expect(upsert).not.toHaveBeenCalled();
+    expect((ctx.body as { repeatplan?: unknown }).repeatplan).toBe("camp-damaged");
+  });
+
   test("a save that does not end it, or one off Map Room 2, keeps none", async () => {
     upsert.mockClear();
     Object.assign(defender, { wmid: 11, level: 35 });

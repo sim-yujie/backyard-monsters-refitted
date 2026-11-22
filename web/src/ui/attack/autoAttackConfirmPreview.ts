@@ -82,8 +82,8 @@ const answerOf = (overrides: Partial<AutoAttackPlanResponse> = {}): AutoAttackPl
   outOfRange: false,
   underAttack: false,
   damage: 41,
-  // Repeat attack's putty fee for a level 33 camp (owner, 20 Nov 2026).
-  fee: 2_500_000,
+  // Repeat attack's putty fee for a level 33 camp (owner, 22 Nov 2026).
+  fee: 1_500_000,
   ...overrides,
 });
 
@@ -166,7 +166,7 @@ const setups = (): Record<ConfirmState, Setup> => ({
     }),
   },
   // Not enough putty for the fee and the Catapult's putty shot together.
-  "short-fee": { answer: answerOf({ missing: [{ kind: "fee", need: 2_510_000, have: 1_300_000 }] }) },
+  "short-fee": { answer: answerOf({ missing: [{ kind: "fee", need: 1_510_000, have: 1_300_000 }] }) },
   "short-housing": { answer: answerOf({ noRoom: NO_ROOM }) },
   "short-housing-none": { answer: answerOf({ noRoom: { need: 1_840, free: [] } }) },
   "under-attack": { answer: answerOf({ underAttack: true }) },

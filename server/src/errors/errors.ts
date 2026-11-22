@@ -266,6 +266,22 @@ export const baseUnderAttackErr = () =>
     isClientFriendly: false,
   });
 
+/**
+ * A new attack on a yard whose last attack has not landed yet: the finaliser
+ * could not land it just now (its replay worker failed to load or ran past
+ * its deadline, `finaliseAttack.ts`, `finaliseRowlessAttack.ts`). Starting
+ * one would put the new attack's first checkpoint over the old one and lose
+ * it (22 Nov 2026), so the attack waits for that landing. `409`, as
+ * `baseUnderAttackErr`.
+ */
+export const lastAttackLandingErr = () =>
+  new ClientSafeError({
+    message: "The last attack on this yard is still being worked out. Try again in a minute.",
+    status: Status.CONFLICT,
+    data: { reason: "lastAttackLanding" },
+    isClientFriendly: false,
+  });
+
 export const baseProtectedErr = () =>
   new ClientSafeError({
     message: "This base is currently under damage protection and cannot be attacked.",
@@ -962,7 +978,8 @@ export type InfernoAttackRefusal =
   | "targetUnderAttack"
   | "outOfRange"
   | "ownerOnline"
-  | "kindNotReady";
+  | "kindNotReady"
+  | "lastAttackLanding";
 
 const INFERNO_ATTACK_REFUSAL_MESSAGES: Record<InfernoAttackRefusal, string> = {
   caveClosed: "Moloch's cave has not opened all the way yet.",
@@ -983,6 +1000,8 @@ const INFERNO_ATTACK_REFUSAL_MESSAGES: Record<InfernoAttackRefusal, string> = {
     "You can't attack this person because their level is too low compared to yours. You will receive better loot for attacking someone closer to your level.",
   ownerOnline: "This player is currently in their yard. Try attacking later when the coast is clear.",
   kindNotReady: "That kind of Inferno attack is not open yet.",
+  // `lastAttackLandingErr`'s rule: the last attack on that yard has not landed yet.
+  lastAttackLanding: "Your last attack there is still being worked out. Try again in a minute.",
 };
 
 /**

@@ -300,6 +300,12 @@ export const REPLAY_MISMATCH_SETTLES = "It will settle the attack from its own r
  */
 export const SERVER_RESULT_USED = "Your screen and the server disagreed, so the server's result was saved.";
 
+/**
+ * The saved line when the attack did not become the Repeat attack plan: the
+ * camp was already damaged before it (owner, 22 Nov 2026, patch 8.2).
+ */
+export const REPEAT_PLAN_NOT_SAVED = "Result saved. Repeat plan not saved: camp was already damaged.";
+
 /** Turns a failed save into what the panel says (§4.7). */
 export const describeSaveFailure = (caught: unknown): SaveFailure => {
   if (caught instanceof NetworkError) {
@@ -550,6 +556,8 @@ export const createEndPlugin = (deps: EndPluginDeps = {}): AttackPlugin => {
               },
             }
           : {}),
+        // A camp attack that did not become the Repeat attack plan (patch 8.2).
+        ...(response.repeatplan === "camp-damaged" ? { note: REPEAT_PLAN_NOT_SAVED } : {}),
         // A Descent fight the server's battle overruled: its outcome, not the screen's.
         ...(overruled
           ? {

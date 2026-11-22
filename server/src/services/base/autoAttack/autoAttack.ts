@@ -63,8 +63,8 @@ import {
  *
  * The putty fee (owner, 20 Nov 2026, superseding "free beyond the monsters
  * spent"): a heavy convenience fee by the camp's level (`repeatFee.ts`:
- * Lv 25-29 2M, 30-34 2.5M, 35-39 3M, 40-44 3.5M putty), burned before the
- * attack starts, in the same flush that starts it
+ * Lv 25-29 1M, 30-34 1.5M, 35-39 2M, 40-44 2.5M putty since 22 Nov 2026),
+ * burned before the attack starts, in the same flush that starts it
  * (`baseModeAttack`'s `beforeCommit`). The pool must hold the fee and the
  * Catapult's putty shots together, or the attack is refused with nothing
  * spent. Once started the fee is gone, won or lost; only an attack that

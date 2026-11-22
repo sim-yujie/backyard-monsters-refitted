@@ -99,7 +99,7 @@ import { countAttackLoot } from "../../../services/events/lootEvents.js";
 import { plunderPercent, withPlunderBonus } from "../../../services/events/weekendBoosts.js";
 import { attackLootPercent, mapByPercent } from "../../../services/alliance/allianceBonuses.js";
 import { RESOURCE_KEYS, type ResourceAmounts } from "../../../game-rules/combat/index.js";
-import { recordAttackPlan } from "../../../services/base/autoAttack/attackPlanStore.js";
+import { recordAttackPlan, type PlanRecord } from "../../../services/base/autoAttack/attackPlanStore.js";
 import { discardDefenceReplayLoad } from "../../../services/defences/defenceReplayLoad.js";
 import { recordDefenceReplay } from "../../../services/defences/recordDefenceReplay.js";
 import { recordAttackAchievements } from "../../../services/achievements/events.js";
@@ -846,9 +846,11 @@ const saveBase = async (
 
   // A Map Room 2 camp attack played by hand is the player's plan for the
   // camp's tribe and level from now on (issue #221): the log the server fought,
-  // to the tick it fought it to.
+  // to the tick it fought it to. Only from a camp untouched before the attack
+  // (patch 8.2); otherwise the old plan stays and the result screen says so.
+  let planRecord: PlanRecord = "none";
   if (battle && battleInput && saveData.over && userSave.mapversion === MapRoomVersion.V2) {
-    await recordAttackPlan(user.userid, baseSave, battleInput.log, battleInput.tick);
+    planRecord = await recordAttackPlan(user.userid, baseSave, battleInput.log, battleInput.tick, storedHealthData);
   }
 
   // A Map Room 2 Kozu Town Hall the battle brought down, and each biggest
@@ -876,6 +878,7 @@ const saveBase = async (
     ...(takeoverData && { takeover: takeoverData }),
     ...(takeoverGrant && { takeovergrant: takeoverGrant }),
     ...(banked && { lootcredited: banked }),
+    ...(planRecord === "camp-damaged" && { repeatplan: "camp-damaged" }),
   };
 
   ctx.status = Status.OK;
