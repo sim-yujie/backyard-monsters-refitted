@@ -36,7 +36,11 @@ const OLD_PHONE =
 const OTHER_PHONE =
   "Graphics: picture did not load: monsters/krallen_2_rev_65-repaint.png (@2x) (InvalidStateError: The source image could not be decoded.) " +
   "| gpu Mali-G57 MC2 | max texture 8192 | memory 4 GB | quality medium (default) | dpr 3 | screen 412x915 | Android 13 SM-A125F, Chrome 131";
+/** A loss not back within 10 s, as later clients send it; beta 8.1's at-once form is dropped (patch 8.2). */
 const IPHONE =
+  "Graphics: WebGL context lost: game canvas (after 412 s on the page, not restored in 10 s, tab visible) | gpu Apple GPU | max texture 4096 | memory unknown " +
+  "| quality medium (default) | dpr 3 | screen 375x667 | iPhone iOS 15.8, Safari 15";
+const IPHONE_AT_ONCE =
   "Graphics: WebGL context lost: game canvas (after 412 s on the page) | gpu Apple GPU | max texture 4096 | memory unknown " +
   "| quality medium (default) | dpr 3 | screen 375x667 | iPhone iOS 15.8, Safari 15";
 
@@ -61,6 +65,21 @@ describe("graphics entries in the browser error rows", () => {
     expect(phones?.[1]).not.toBe(iphone?.[1]);
     // No place or stack: shown as the game's own error, not a third party's.
     expect(isThirdPartyError(String(phones?.[3]), String(phones?.[4]))).toBe(false);
+  });
+
+  test("beta 8.1's lines later clients no longer send are not stored (patch 8.2)", async () => {
+    const { em, inserts } = rows();
+    const body = ClientErrorsSchema.parse({
+      errors: [
+        entry(IPHONE_AT_ONCE),
+        entry(IPHONE_AT_ONCE.replace("WebGL context lost", "WebGL context restored")),
+        entry(OLD_PHONE.replace("picture did not load", "picture over the texture limit, cut through a canvas")),
+        entry(OLD_PHONE.replace("picture did not load", "picture over the texture limit, could not be cut")),
+      ],
+      gameVersion: "2.0.0-beta.8.1",
+    });
+    expect(await acceptClientErrors(em, body, { userid: 2503, username: "yardtester", ip: "203.0.113.7" })).toBe(1);
+    expect(String(inserts[0]?.[2])).toContain("could not be cut");
   });
 
   test("another graphics card is a row of its own", async () => {
