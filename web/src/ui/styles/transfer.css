@@ -61,7 +61,8 @@
 
 /* Find and the map's tools make way for the tray; the zoom buttons stay on a
    desktop, raised over it. On a phone pinching zooms, so they all go. */
-.overlay__layer.xfer-on > .mr2-find-dock {
+.overlay__layer.xfer-on > .mr2-find-dock,
+.overlay__layer.xfer-on :is(.yard-dock, .yard-viewtools) {
   display: none;
 }
 
@@ -895,7 +896,9 @@
   position: absolute;
   left: 50%;
   bottom: calc(var(--space-2) + env(safe-area-inset-bottom, 0px));
-  z-index: 2;
+  /* Over everything else in the map's layer (its own layer: windows and
+     pop-ups still open above it). */
+  z-index: 40;
   display: flex;
   flex-direction: column;
   box-sizing: border-box;
