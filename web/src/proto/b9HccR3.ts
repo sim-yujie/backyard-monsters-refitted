@@ -35,6 +35,14 @@
  * - Send adds the preset to the END of the queue; when the queue or the goo
  *   runs out it adds what fits and says how many ("Added 82 of 140").
  * - Level 3 keeps two lists: the main yard's, and one shared by every outpost.
+ * - Round 6 (owner, 22 Nov): nothing in the Hatch tab moves when the level changes or when an
+ *   outpost is shown. The yard switcher is the same control at every level (greyed with a lock
+ *   below level 3), there is no extra home button in an outpost, the hatchery row keeps five
+ *   places, level 1's queue shows its three missing boxes locked, the Presets tab always wears
+ *   its list's icon.
+ * - Round 6 (owner, 22 Nov): round 5's quick-send rail is gone from the Hatch row; on a wide
+ *   screen its width goes to bigger hatcheries and bigger queue boxes across the whole row.
+ *   Presets are sent from the Presets tab only.
  */
 import { HCC_STACKS, type HatchYard, type QueueStack, academyLevels, priceOf, spaceOf } from "@/game/monsters/hatchPlan";
 import { monsterEntry } from "@/game/monsters/monsterCatalogue";
@@ -190,7 +198,6 @@ export class B9HccR3 {
   private readonly bench = el("div", "b9r2h-bench");
   private readonly tabs = el("div", "b9r3h-tabs");
   private readonly list = el("section", "b9r3h-presets");
-  private readonly rail = el("section", "b9r5h-rail");
   private readonly editHead = el("div", "b9r3h-edit");
   private readonly editBox = el("div", "b9r3h-set");
   private readonly yardsPage = el("section", "b9r2h-yards");
@@ -224,7 +231,6 @@ export class B9HccR3 {
     this.yardsPage.hidden = !(this.open.has("yards") && this.level >= 3);
     this.tabs.setAttribute("role", "tablist");
     this.list.setAttribute("aria-label", "Presets");
-    this.rail.setAttribute("aria-label", "Send a preset");
     if (this.open.has("housing")) root.classList.add("b9r2h-show-housing");
     if (this.open.has("sent")) queueMicrotask(() => this.send(0));
   }
@@ -255,7 +261,7 @@ export class B9HccR3 {
     const split = this.scroll.querySelector(".hatch__split");
     if (lines && !this.bench.isConnected) {
       lines.before(this.bench);
-      this.bench.append(lines, this.rail);
+      this.bench.append(lines);
     }
     if (split && !this.tabs.isConnected) {
       // The switch sits in the strip between the rack and the monsters; the tab's own
@@ -264,6 +270,7 @@ export class B9HccR3 {
       const message = split.querySelector(".hatch-message");
       if (message) this.tabs.after(message);
     }
+    this.lockMissingBoxes();
     const info = this.root.querySelector(".hatch-info");
     if (info && this.editBox.parentElement !== info) info.append(this.editBox);
     // Remote: Add wears the outpost's flag, so the last tap says where it goes.
@@ -277,9 +284,22 @@ export class B9HccR3 {
     this.renderStrip();
     this.renderTabs();
     this.renderPresets();
-    this.renderRail();
     this.renderEditor();
     this.renderYards();
+  }
+
+  /** Round 6: level 1's queue holds 7 stacks; the three it lacks show locked, so the box grid is the same at every level. */
+  private lockMissingBoxes(): void {
+    const slots = this.scroll.querySelector(".hatch-line--hcc > .hatch-line__slots");
+    if (!slots || slots.querySelector(".b9r6h-box--locked")) return;
+    const totals = slots.querySelector(":scope > .hatch-line__totals");
+    for (let at = this.stacks; at < 10; at += 1) {
+      const box = el("div", "b9r6h-box--locked");
+      box.title = "More queue stacks at HCC level 2";
+      box.setAttribute("aria-hidden", "true");
+      box.append(lockArt(16, "b9r6h-box__lock"));
+      slots.insertBefore(box, totals);
+    }
   }
 
   private yards(): YardRow[] {
@@ -312,42 +332,36 @@ export class B9HccR3 {
 
   /* ── The top strip: which yard, and its housing (as round 2's D) ──── */
 
-  private where(): HTMLElement {
+  private where(locked = false): HTMLElement {
     const { at, of } = this.place();
     const where = el("span", "b9r2h-where");
-    where.append(art(this.remote ? "outpost" : "townhall", 32, "b9r2h-where__icon"), el("span", "b9r2h-where__count", `${at + 1}/${of}`));
+    const icon = art(this.remote ? "outpost" : "townhall", 32, "b9r2h-where__icon");
+    // Locked: the lock stands where the count goes, so the control keeps its width.
+    where.append(icon, locked ? lockArt(20, "b9r2h-where__lock") : el("span", "b9r2h-where__count", `${at + 1}/${of}`));
     return where;
   }
 
   private renderStrip(): void {
-    const parts: Node[] = [];
-    if (this.level < 3) {
-      const locked = btn("b9r2h-yard b9r2h-yard--locked", "Run your outposts from here at HCC level 3");
-      locked.disabled = true;
-      locked.append(art("outpost", 32, "b9r2h-where__icon"), lockArt(16, "b9r2h-lock"), el("span", "b9r2h-lock__level", "3"));
-      parts.push(locked);
-    } else {
-      if (this.remote) {
-        const home = btn("b9r2h-yard b9r2h-yard--home", "Back to the main yard", art("townhall", 32, "b9r2h-where__icon"));
-        home.addEventListener("click", () => this.setRemote(null));
-        parts.push(home);
-      }
-      const yards = this.hccYards();
-      const { at } = this.place();
-      const stepper = el("div", "b9r2h-stepper");
-      const prev = btn("b9r2h-stepper__arrow", "Previous yard", arrow(-1));
-      prev.disabled = at <= 0;
-      prev.addEventListener("click", () => this.setRemote(yards[at - 1] ?? null));
-      const next = btn("b9r2h-stepper__arrow", "Next yard", arrow(1));
-      next.disabled = at >= yards.length - 1;
-      next.addEventListener("click", () => this.setRemote(yards[at + 1] ?? null));
-      const middle = btn("b9r2h-stepper__where", "All your yards with an HCC", this.where());
-      middle.addEventListener("click", () => this.toggleYards());
-      stepper.append(prev, middle, next);
-      parts.push(stepper);
-    }
-    parts.push(this.housing());
-    this.strip.replaceChildren(...parts);
+    // Round 6 (owner, 22 Nov): ONE yard switcher at every level and in every yard, the same size
+    // and place, so nothing jumps. Below level 3 it is greyed with a lock; in an outpost there is
+    // no extra home button (the left arrow and the yard list lead back to the main yard).
+    const locked = this.level < 3;
+    const yards = this.hccYards();
+    const { at } = this.place();
+    const stepper = el("div", `b9r2h-stepper${locked ? " b9r2h-stepper--locked" : ""}`);
+    const prev = btn("b9r2h-stepper__arrow", "Previous yard", arrow(-1));
+    prev.disabled = locked || at <= 0;
+    prev.addEventListener("click", () => this.setRemote(yards[at - 1] ?? null));
+    const next = btn("b9r2h-stepper__arrow", "Next yard", arrow(1));
+    next.disabled = locked || at >= yards.length - 1;
+    next.addEventListener("click", () => this.setRemote(yards[at + 1] ?? null));
+    const middle = btn("b9r2h-stepper__where", locked ? "Run your outposts from here at HCC level 3" : "All your yards with an HCC", this.where(locked));
+    if (locked) {
+      middle.disabled = true;
+      middle.title = "Run your outposts from here at HCC level 3";
+    } else middle.addEventListener("click", () => this.toggleYards());
+    stepper.append(prev, middle, next);
+    this.strip.replaceChildren(stepper, this.housing());
   }
 
   private housingNumbers(): { housed: number; room: number; coming: number } {
@@ -387,7 +401,6 @@ export class B9HccR3 {
     this.editing = null;
     this.renderTabs();
     this.renderPresets();
-    this.renderRail();
     this.renderEditor();
   }
 
@@ -428,11 +441,12 @@ export class B9HccR3 {
       return one;
     };
     // Level 3: the Presets tab wears the list it opens (the house, or the flag shared by all outposts).
-    const scope = this.level >= 3 ? [art(this.remote ? "outpost" : "townhall", 24, "b9r3h-tab__scope")] : [];
+    // Round 6: at every level, so the tab's words do not move with the level (below level 3 it is the main yard's list).
+    const scope = [art(this.remote ? "outpost" : "townhall", 24, "b9r3h-tab__scope")];
     group.append(tab("monsters", "Monsters"), tab("presets", "Presets", ...scope));
     // While a preset is built, its head takes the switch's place: the tab is no taller than Monsters.
     const parts: Node[] = [this.editing === null ? group : this.editHead];
-    // A Send from the quick-send rail, seen from the Monsters tab: what it did is said here.
+    // What the last Send did, seen from the Monsters tab (wide screens): said in this row.
     if (this.sent && this.editing === null && this.tab === "monsters" && this.sent.scope === this.scope()) {
       const note = this.said(this.sent);
       note.classList.add("b9r5h-note");
@@ -560,45 +574,6 @@ export class B9HccR3 {
     this.list.replaceChildren(...rows);
     this.list.dataset.scope = scope;
     for (const strip of this.list.querySelectorAll<HTMLElement>(".b9r3h-row__stacks")) strip.scrollLeft = kept.get(strip.dataset.slot ?? "") ?? 0;
-  }
-
-  /**
-   * The quick-send rail: on a wide screen the room beside the queue holds one small Send per
-   * preset, on either tab. It only sends; a preset is still made and changed in the Presets tab.
-   */
-  private renderRail(): void {
-    const scope = this.scope();
-    const chips: Node[] = [];
-    this.presets[scope].forEach((preset, at) => {
-      const chip = el("div", `b9r5h-quick${preset.length ? "" : " b9r5h-quick--empty"}`);
-      if (!preset.length) {
-        const make = btn("b9r5h-quick__body", `Make preset ${at + 1}`, this.badge(at), el("span", "b9r5h-quick__plus", "+"));
-        make.addEventListener("click", () => this.edit(at));
-        chip.append(make);
-        chips.push(chip);
-        return;
-      }
-      const body = btn("b9r5h-quick__body", `Preset ${at + 1}, ${totalOf(preset)} monsters: open the presets`, this.badge(at));
-      const faces = el("span", "b9r5h-quick__faces");
-      for (const [id, count] of preset) {
-        const one = el("span", "b9r3h-stack");
-        one.append(portrait(id, "b9r3h-stack__picture"), el("span", "b9r3h-stack__count", `×${count}`));
-        faces.append(one);
-      }
-      body.append(faces, el("span", "b9r5h-quick__total", `×${totalOf(preset)}`));
-      body.addEventListener("click", () => this.setTab("presets"));
-      const send = btn("btn btn--primary b9r3h-send b9r5h-quick__send", `Send preset ${at + 1} to the end of the queue`);
-      if (this.remote) send.append(art("outpost", 24, "b9r2h-addflag"));
-      // A very narrow chip (six presets on a tablet) is the button alone: its number and an explicit Send label.
-      send.append(el("span", "b9r5h-quick__n", `${at + 1} Send`), el("span", "b9r5h-quick__word", "Send"));
-      send.title = `Send preset ${at + 1}`;
-      send.addEventListener("click", () => this.send(at));
-      if (this.sent && this.sent.scope === scope && this.sent.slot === at) chip.classList.add("b9r5h-quick--sent");
-      chip.append(body, send);
-      chips.push(chip);
-    });
-    this.rail.className = `b9r5h-rail b9r5h-rail--${this.slots}`;
-    this.rail.replaceChildren(...chips);
   }
 
   /** Adds the preset to the end of the queue by the HCC's stacking rule, as far as stacks and goo go. */

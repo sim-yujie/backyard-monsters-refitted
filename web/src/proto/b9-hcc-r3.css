@@ -575,8 +575,9 @@
     margin: 6px 0 4px;
     gap: 6px;
   }
+  /* Round 6: the switch keeps its width whether or not the housing warning stands beside it. */
   .b9r3h-switch {
-    flex: 1 1 auto;
+    flex: 0 1 232px;
   }
   .b9r3h-warn {
     padding: 0 8px;
@@ -998,5 +999,153 @@
   }
   .b9r3h .hatch__split {
     flex-shrink: 0;
+  }
+}
+
+/* ── Round 6 (owner, 22 Nov): nothing moves between levels or yards ─── */
+/* One yard switcher at every level and in every yard, always the same width. Below level 3
+   it is greyed, with a lock where the count goes. */
+.b9r3h.b9r2h .b9r2h-stepper .b9r2h-stepper__where {
+  flex: none;
+  width: 84px;
+  min-width: 0;
+  padding: 0 4px;
+}
+.b9r3h.b9r2h .b9r2h-stepper .b9r2h-stepper__arrow {
+  flex: none;
+  width: 44px;
+}
+.b9r2h-stepper--locked {
+  border-color: var(--colour-border);
+  background: var(--colour-surface-sunken);
+}
+.b9r2h-stepper--locked .b9r2h-stepper__where {
+  cursor: default;
+}
+.b9r2h-stepper--locked .b9r2h-where__icon {
+  filter: grayscale(1);
+  opacity: 0.55;
+}
+.b9r2h-where__lock {
+  flex: none;
+  width: 22px;
+  height: 22px;
+}
+.b9r2h-stepper--locked button:disabled .b9r2h-arrow {
+  opacity: 0.3;
+}
+
+/* In an outpost the strip is laid out exactly as in the main yard (round 2 squeezed it for a home
+   button that is gone): same padding, same housing numbers. Only the colour says "outpost". */
+@media (max-width: 620px), (max-height: 500px) {
+  .b9r3h.b9r2h-remote .b9r2h-strip {
+    gap: 6px;
+    padding-inline: 10px;
+  }
+  .b9r3h.b9r2h-remote .b9r2h-housing__numbers {
+    font-size: 13px;
+  }
+  .b9r3h.b9r2h-remote .b9r2h-housing__icon {
+    width: 22px;
+    height: 22px;
+  }
+}
+@media (max-width: 620px) {
+  .b9r3h.b9r2h-opt-d.b9r2h-remote .b9r2h-housing__numbers {
+    display: flex;
+    width: auto;
+    gap: 3px;
+    letter-spacing: normal;
+    line-height: inherit;
+  }
+  .b9r3h.b9r2h-opt-d.b9r2h-remote .b9r2h-housing__now {
+    display: inline;
+  }
+  .b9r3h.b9r2h-opt-d.b9r2h-remote .b9r2h-housing__compact {
+    display: none;
+  }
+  .b9r3h.b9r2h-opt-d.b9r2h-remote .b9r2h-housing__coming {
+    grid-column: auto;
+    font-size: var(--text-sm);
+  }
+}
+
+/* Level 1's queue: the three stacks it lacks stand locked, so the box grid is the same at every level. */
+.b9r6h-box--locked {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 44px;
+  box-sizing: border-box;
+  border: 1px dashed var(--colour-border);
+  border-radius: var(--radius-md);
+  opacity: 0.7;
+}
+.b9r6h-box__lock {
+  width: 18px;
+  height: 18px;
+}
+
+/* An iPad: the hatchery row keeps five places (an outpost has two hatcheries), so the queue
+   beside it does not slide left in an outpost. */
+@media (min-width: 620.02px) {
+  .b9r3h.b9r2h:not(.b9r2h-inspect) .hatch-line--hcc > .hatch-line__now {
+    grid-auto-flow: row;
+    grid-template-columns: repeat(5, 52px);
+  }
+}
+
+/* A wide screen: no preset rail in the Hatch row any more; the hatcheries and the queue share the
+   whole row, both bigger. Presets are sent from the Presets tab. */
+@container hatch (min-width: 880px) {
+  .b9r3h .b9r2h-bench > .hatch-lines {
+    flex: 1 1 100%;
+  }
+  .b9r3h.b9r2h-opt-d .hatch-lines .hatch-line.hatch-line--hcc {
+    flex-wrap: nowrap;
+    gap: 28px;
+  }
+  .b9r3h.b9r2h:not(.b9r2h-inspect) .hatch-line--hcc > .hatch-line__now {
+    flex: 5 1 0;
+    min-width: 0;
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+    gap: 10px;
+  }
+  .b9r3h.b9r2h .hatch-line--hcc > .hatch-line__slots {
+    flex: 6 1 0;
+    min-width: 0;
+    grid-template-columns: repeat(5, minmax(0, 1fr)) 92px;
+    /* The row keeps round 5's height (two 50 px rows), so Add stays on a 720 px screen. */
+    grid-template-rows: 50px 50px;
+    grid-auto-rows: 50px;
+    gap: 6px 8px;
+  }
+  .b9r3h.b9r2h .hatch-line--hcc .hatch-now {
+    min-height: 106px;
+    border-radius: 16px;
+  }
+  .b9r3h.b9r2h .hatch-line--hcc .hatch-now__body {
+    gap: 6px;
+  }
+  .b9r3h.b9r2h .hatch-line--hcc .hatch-now__picture {
+    width: 58px;
+    height: 58px;
+  }
+  .b9r3h.b9r2h .hatch-line--hcc .hatch-now__state {
+    font-size: 14px;
+  }
+  .b9r3h.b9r2h .hatch-line--hcc .hatch-slot__picture {
+    width: 42px;
+    height: 42px;
+  }
+  .b9r3h.b9r2h .hatch-line--hcc .hatch-slot__count {
+    font-size: 12px;
+  }
+  .b9r3h.b9r2h .hatch-line--hcc .hatch-line__totals {
+    font-size: 15px;
+  }
+  .b9r6h-box__lock {
+    width: 22px;
+    height: 22px;
   }
 }
