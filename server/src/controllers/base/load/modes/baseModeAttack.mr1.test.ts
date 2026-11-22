@@ -74,7 +74,16 @@ mock.module("../../../../services/base/attackSessionStore.js", () => ({
   endAttackSession: async () => {},
 }));
 
+// A Map Room 1 tribe's own rules (range, respawn) are `mr1TribeAttack.test.ts`'s; here every tribe may be attacked.
+const realTribeAttack = await import("../../../../services/maproom/v1/mr1TribeAttack.ts?real");
+mock.module("../../../../services/maproom/v1/mr1TribeAttack.js", () => ({
+  ...realTribeAttack,
+  requireAttackableMR1Tribe: async () => {},
+}));
+
 const { baseModeAttack } = await import("./baseModeAttack.js");
+const { MR1_TRIBE_IDS } = await import("../../../../game-data/tribes/v1/index.js");
+const { rowlessCheckpointKey } = await import("../../../../services/base/rowlessCheckpoint.js");
 const { attackCheckpointKey } = await import("../../../../services/base/attackCheckpoint.js");
 const { landingDeferredKey } = await import("../../../../services/base/finaliseAttack.js");
 
@@ -284,7 +293,7 @@ describe("a yard whose last attack could not land yet (22 Nov 2026)", () => {
         sources: [],
       })
     );
-    store.set(landingDeferredKey(700), String(marked));
+    store.set(landingDeferredKey(700), `${marked}:0`);
   };
 
   test("refused, nothing written: its first checkpoint would replace the old one", async () => {
@@ -298,7 +307,35 @@ describe("a yard whose last attack could not land yet (22 Nov 2026)", () => {
   });
 
   test("the mark alone, its checkpoint gone (landed), refuses nothing", async () => {
-    store.set(landingDeferredKey(700), "4242");
+    store.set(landingDeferredKey(700), "4242:0");
     await goesAhead();
+  });
+});
+
+describe("a Map Room 1 tribe whose last attack could not land yet (22 Nov 2026)", () => {
+  test("refused while the attacker's checkpoint on it is still held, nothing written", async () => {
+    const tribe = [...MR1_TRIBE_IDS][1]!;
+    const at = now() - 60;
+    store.set(
+      rowlessCheckpointKey({ kind: "mr1", userid: ATTACKER, baseid: tribe }),
+      JSON.stringify({
+        flingerCapacity: 0,
+        checkpoint: JSON.stringify({
+          attackerid: ATTACKER,
+          defenderid: 0,
+          attackid: 4242,
+          startedat: at - 600,
+          at,
+          tick: 40,
+          flinglog: { v: 1, seed: 1, events: [{ kind: "fling", t: 10, x: 0, y: 0, r: 100, monsters: { C1: 1 } }] },
+          sources: [],
+        }),
+      })
+    );
+    const user = { userid: ATTACKER, username: "alice", save: saveOf(ATTACKER) } as unknown as User;
+    await expect(baseModeAttack({ user, baseid: tribe, mapversion: 1, attackerLevel: 10 })).rejects.toMatchObject({
+      message: "The last attack on this yard is still being worked out. Try again in a minute.",
+    });
+    expect(sessions.size).toBe(0);
   });
 });

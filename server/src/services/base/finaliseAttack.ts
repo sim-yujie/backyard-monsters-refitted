@@ -33,7 +33,7 @@ import { finaliseExpiredRowlessAttacks, finaliseRowlessAttacksOf } from "./final
 import { endAttackSession, readAttackSession } from "./attackSessionStore.js";
 import { buildingDataWithout, spendFlung, type SourceCell } from "./combat/abandonedAttack.js";
 import { battleReplayInput, foughtLoot } from "./combat/battle.js";
-import { isReplayDeferred, replayAbandonedInWorker } from "./combat/replayRunner.js";
+import { isReplayDeferred, isReplayWorkerLoadError, replayAbandonedInWorker } from "./combat/replayRunner.js";
 import { attackLootOf, bankAttackLoot } from "./combat/attackLoot.js";
 import { awardLootPoints } from "./combat/lootPoints.js";
 import { bombSpendOf, catapultLevelOf, chargeBombSpend } from "./combat/bombSpend.js";
@@ -190,18 +190,46 @@ const sourceCells = async (
  * mark names the checkpoint still held, a new attack on that row is refused
  * ({@link attackLandingDeferred}): its first checkpoint would replace this
  * one and lose the attack (22 Nov 2026). A replay that fails for any other
- * reason clears the mark, so a checkpoint that can never land does not keep
- * the yard from being attacked.
+ * reason clears the mark, and so does a third deadline in a row
+ * ({@link LANDING_DEFER_TIMEOUTS}): a checkpoint that can never land must
+ * not keep the yard from being attacked for the checkpoint's 7 days. Worker
+ * load failures are not counted; the server restarts itself on those
+ * (`replayWorkerWatch.ts`). The mark holds `attackid:deadlines`.
  */
 export const landingDeferredKey = (basesaveid: number): string => `attack-landing-deferred:${basesaveid}`;
 
+/** Deadlines in a row after which a row's attack no longer holds the row (the rowless rule's 3). */
+export const LANDING_DEFER_TIMEOUTS = 3;
+
+const parseDeferredMark = (marked: string | null): { attackid: number; timeouts: number } | null => {
+  if (!marked) return null;
+  const [attackid, timeouts = "0"] = marked.split(":");
+  const id = Number(attackid);
+  const count = Number(timeouts);
+  return Number.isSafeInteger(id) && Number.isSafeInteger(count) ? { attackid: id, timeouts: count } : null;
+};
+
 const noteLandingFailure = async (basesaveid: number, attackid: number, err: unknown): Promise<void> => {
+  const key = landingDeferredKey(basesaveid);
   try {
-    if (isReplayDeferred(err)) {
-      await redis.setex(landingDeferredKey(basesaveid), ATTACK_CHECKPOINT_TTL, String(attackid));
-    } else {
-      await redis.del(landingDeferredKey(basesaveid));
+    if (!isReplayDeferred(err)) {
+      await redis.del(key);
+      return;
     }
+    const held = parseDeferredMark(await redis.get(key));
+    const before = held?.attackid === attackid ? held.timeouts : 0;
+    const timeouts = isReplayWorkerLoadError(err) ? before : before + 1;
+    if (timeouts >= LANDING_DEFER_TIMEOUTS) {
+      await redis.del(key);
+      logger.warn("An attack's replay ran past its deadline again; its row may be attacked again", {
+        event: "attack-landing-defer-ended",
+        basesaveid,
+        attackid,
+        timeouts,
+      });
+      return;
+    }
+    await redis.setex(key, ATTACK_CHECKPOINT_TTL, `${attackid}:${timeouts}`);
   } catch (markErr) {
     logger.warn(`The landing mark of the attack on ${basesaveid} was not written: ${markErr}`);
   }
@@ -215,10 +243,10 @@ const noteLandingFailure = async (basesaveid: number, attackid: number, err: unk
  * @param basesaveid - The row about to be attacked.
  */
 export const attackLandingDeferred = async (basesaveid: number): Promise<boolean> => {
-  const marked = await redis.get(landingDeferredKey(basesaveid));
-  if (!marked) return false;
+  const held = parseDeferredMark(await redis.get(landingDeferredKey(basesaveid)));
+  if (!held) return false;
   const checkpoint = await readCheckpoint(basesaveid);
-  return checkpoint !== null && String(checkpoint.attackid) === marked;
+  return checkpoint !== null && checkpoint.attackid === held.attackid;
 };
 
 const finaliseLocked = async (basesaveid: number, trigger: string, options: LandOptions): Promise<Finalised> => {

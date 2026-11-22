@@ -151,6 +151,30 @@ describe("starting a Descent attack", () => {
     expect(store.size).toBe(0);
   });
 
+  test("refused while its last attack on that yard still holds a checkpoint the finaliser could not land (22 Nov 2026)", async () => {
+    const { rowlessCheckpointKey } = await import("../../services/base/rowlessCheckpoint.js");
+    row = progressRow(2);
+    const at = Math.floor(Date.now() / 1000) - 60;
+    store.set(
+      rowlessCheckpointKey({ kind: "descent", userid: ATTACKER, baseid: "203" }),
+      JSON.stringify({
+        flingerCapacity: 2500,
+        checkpoint: JSON.stringify({
+          attackerid: ATTACKER,
+          defenderid: 0,
+          attackid: 4242,
+          startedat: at - 600,
+          at,
+          tick: 40,
+          flinglog: { v: 1, seed: 1, events: [{ kind: "fling", t: 10, x: 0, y: 0, r: 100, monsters: { C1: 1 } }] },
+          sources: [],
+        }),
+      })
+    );
+    expect(await refusalOf({ kind: "descent", baseid: "203" })).toBe("lastAttackLanding");
+    expect(store.has(descentSessionKey(ATTACKER))).toBe(false);
+  });
+
   test("refused once the Descent is passed", async () => {
     row = { ...progressRow(13), descent_passed_at: new Date() };
     expect(await refusalOf({ kind: "descent", baseid: "213" })).toBe("descentPassed");
