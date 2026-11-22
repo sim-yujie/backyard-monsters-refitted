@@ -3,11 +3,11 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { BaseLoadResponse } from "@/api/types";
 import type { OutpostLabels } from "@/api/outpostLabels";
 import { outpostLabels, resetOutpostLabels } from "@/game/yard/outpostLabels";
-import { MAIN_YARD, outpostTarget, type OwnYardTarget } from "@/game/yard/ownYards";
+import { INFERNO_YARD, MAIN_YARD, outpostTarget, type OwnYardTarget } from "@/game/yard/ownYards";
 import type { YardStore, YardUiBinding } from "@/game/yard/YardStore";
 import { Notices } from "@/ui/maproom/Notices";
 import { YardDock } from "./YardDock";
-import { YardSwitcher } from "./YardSwitcher";
+import { resetYardArrival, YardSwitcher } from "./YardSwitcher";
 
 /**
  * The HUD's yard switcher (outposts WP5, #146): the open yard's title, the
@@ -65,6 +65,9 @@ describe("YardSwitcher", () => {
   const items = (): HTMLButtonElement[] => [
     ...switcher.element.querySelectorAll<HTMLButtonElement>(".yard-switcher__item"),
   ];
+  const arrows = (): HTMLButtonElement[] => [
+    ...switcher.element.querySelectorAll<HTMLButtonElement>(".yard-switcher__arrow"),
+  ];
 
   it("is hidden until an own yard is bound", () => {
     expect(switcher.element.hidden).toBe(true);
@@ -76,10 +79,10 @@ describe("YardSwitcher", () => {
 
   it("lists the main yard and each outpost, the open one marked", () => {
     switcher.bind(bindingFor(TWO, outpostTarget("2000242209", { col: 242, row: 209 })));
-    expect(button().textContent).toBe("2Outpost (242, 209)");
-    expect(button().getAttribute("aria-label")).toBe(
-      "Your yards: Outpost (242, 209), 2 outposts",
-    );
+    // No name on the HUD (beta 9): the flag and the place in the order, Main being 1.
+    expect(button().textContent).toBe("2/3");
+    expect(button().querySelector("img")!.getAttribute("src")).toContain("outpost-");
+    expect(button().getAttribute("aria-label")).toBe("Your yards: Outpost (242, 209), 2 of 3");
     button().click();
     // One line each: an unnamed outpost is its coordinates.
     expect(items().map((item) => item.textContent)).toEqual([
@@ -96,9 +99,10 @@ describe("YardSwitcher", () => {
 
   it("lists only the main yard for a player with no outposts", () => {
     switcher.bind(bindingFor([], MAIN_YARD));
-    // No badge for no outposts; the label is the yard's title.
-    expect(button().querySelector<HTMLElement>(".yard-switcher__count")!.hidden).toBe(true);
-    expect(button().querySelector(".yard-switcher__title")!.textContent).toBe("Main yard");
+    // The house and 1/1, and no arrows: there is nowhere to step.
+    expect(button().textContent).toBe("1/1");
+    expect(button().querySelector("img")!.getAttribute("src")).toContain("townhall-");
+    expect(arrows().map((arrow) => arrow.hidden)).toEqual([true, true]);
     button().click();
     expect(items().map((item) => item.textContent)).toEqual(["Main yard"]);
   });
@@ -165,6 +169,87 @@ describe("YardSwitcher", () => {
   });
 });
 
+describe("the capsule's arrows and the name on arrival (beta 9, design E)", () => {
+  let onSelect: ReturnType<typeof vi.fn<(target: OwnYardTarget) => void>>;
+  let switcher: YardSwitcher;
+
+  beforeEach(() => {
+    vi.useFakeTimers();
+    document.body.replaceChildren();
+    resetOutpostLabels();
+    resetYardArrival();
+    onSelect = vi.fn<(target: OwnYardTarget) => void>();
+    switcher = new YardSwitcher({ onSelect });
+    document.body.append(switcher.element);
+  });
+
+  afterEach(() => {
+    switcher.destroy();
+    vi.useRealTimers();
+  });
+
+  const prev = (): HTMLButtonElement => switcher.element.querySelector(".yard-switcher__arrow--prev")!;
+  const next = (): HTMLButtonElement => switcher.element.querySelector(".yard-switcher__arrow--next")!;
+  const flash = (): HTMLElement => switcher.element.querySelector(".yard-switcher__flash")!;
+  const LAST = outpostTarget("2000240210", { col: 240, row: 210 });
+
+  it("steps to the next yard in the list's order, and goes round at the ends", () => {
+    switcher.bind(bindingFor(TWO, MAIN_YARD));
+    expect(next().title).toBe("Next yard: Outpost (242, 209)");
+    next().click();
+    expect(onSelect).toHaveBeenLastCalledWith({ baseid: "2000242209", kind: "outpost", cell: { col: 242, row: 209 } });
+
+    switcher.bind(bindingFor(TWO, MAIN_YARD));
+    vi.advanceTimersByTime(3000);
+    prev().click();
+    expect(onSelect).toHaveBeenLastCalledWith(LAST);
+
+    switcher.bind(bindingFor(TWO, LAST));
+    vi.advanceTimersByTime(3000);
+    expect(next().title).toBe("Next yard: Main yard");
+    next().click();
+    expect(onSelect).toHaveBeenLastCalledWith(MAIN_YARD);
+  });
+
+  it("waits after a press, so a double tap steps once", () => {
+    switcher.bind(bindingFor(TWO, MAIN_YARD));
+    next().click();
+    next().click();
+    expect(onSelect).toHaveBeenCalledTimes(1);
+    expect(next().disabled).toBe(true);
+    // The yard did not go (the planner was open): the arrows wake again.
+    vi.advanceTimersByTime(3000);
+    expect(next().disabled).toBe(false);
+  });
+
+  it("shows the yard's name for about 1.5 s on arriving at another yard, then hides it", () => {
+    switcher.bind(bindingFor(TWO, MAIN_YARD));
+    // The game just opened: no arrival.
+    expect(flash().hidden).toBe(true);
+    switcher.bind(null);
+    switcher.bind(bindingFor(TWO, MAIN_YARD));
+    // Back from the map to the same yard: none either.
+    expect(flash().hidden).toBe(true);
+
+    switcher.bind(bindingFor(TWO, LAST));
+    expect(flash().hidden).toBe(false);
+    expect(flash().textContent).toBe("Outpost (240, 210)");
+    vi.advanceTimersByTime(1400);
+    expect(flash().hidden).toBe(false);
+    vi.advanceTimersByTime(200);
+    expect(flash().classList.contains("yard-switcher__flash--out")).toBe(true);
+    vi.advanceTimersByTime(500);
+    expect(flash().hidden).toBe(true);
+  });
+
+  it("from the Inferno shows no count; Next opens the main yard", () => {
+    switcher.bind(bindingFor(TWO, INFERNO_YARD));
+    expect(switcher.element.querySelector<HTMLElement>(".yard-switcher__count")!.hidden).toBe(true);
+    next().click();
+    expect(onSelect).toHaveBeenLastCalledWith(MAIN_YARD);
+  });
+});
+
 describe("outpost names and pins (beta 7)", () => {
   const THREE: BaseLoadResponse["outposts"] = [
     [439, 461, "101"],
@@ -208,8 +293,9 @@ describe("outpost names and pins (beta 7)", () => {
         pins: ["103", "101"],
       }),
     );
-    // The HUD title is the open outpost's name.
-    expect(q(".yard-switcher__title").textContent).toBe("Front line");
+    // Pinned first: the open outpost is second in the order; its name is the tooltip's.
+    expect(q(".yard-switcher__count").textContent).toBe("2/4");
+    expect(q(".yard-switcher__button").getAttribute("aria-label")).toBe("Your yards: Front line, 2 of 4");
     open();
     expect(names()).toEqual(["Main yard", "Front line", "439, 461", "Gold mine"]);
     expect(all(".yard-switcher__cell").map((one) => one.textContent)).toEqual([
@@ -274,7 +360,7 @@ describe("outpost names and pins (beta 7)", () => {
     await settle();
     expect(all(".yard-switcher__input")).toHaveLength(0);
     expect(names()).toEqual(["Main yard", "Home front", "438, 462", "436, 464"]);
-    expect(q(".yard-switcher__title").textContent).toBe("Home front");
+    expect(q(".yard-switcher__button").getAttribute("aria-label")).toBe("Your yards: Home front, 2 of 4");
     expect(switcher.open).toBe(true);
   });
 

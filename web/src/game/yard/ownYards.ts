@@ -196,6 +196,24 @@ export const ownYardsOf = (
 };
 
 /**
+ * The yard the switcher's arrows step to (beta 9, owner 22 Nov 2026, design
+ * E): the one after (1) or before (-1) the open one in the list's order,
+ * going round at the ends, so Next on the last outpost opens the main yard
+ * and Prev on the main yard opens the last outpost. Null when there is
+ * nowhere else to go (the main yard alone). From a yard the list does not
+ * hold (the Inferno), Next opens the main yard and Prev the last outpost.
+ */
+export const stepOwnYard = (
+  entries: readonly OwnYardEntry[],
+  direction: -1 | 1,
+): OwnYardEntry | null => {
+  const at = entries.findIndex((entry) => entry.current);
+  if (at < 0) return entries.length > 0 ? entries[direction === 1 ? 0 : entries.length - 1]! : null;
+  if (entries.length < 2) return null;
+  return entries[(at + direction + entries.length) % entries.length]!;
+};
+
+/**
  * The outposts in the yard list's order (beta 7): the pinned ones in the
  * order they were pinned, then the rest in the order given.
  */
