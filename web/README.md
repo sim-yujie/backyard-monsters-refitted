@@ -10,7 +10,7 @@ Editing the yard, opening other players' yards and combat come later.
 
 ## Getting started
 
-Bun 1.4.2 or newer.
+Bun 1.4.4 or newer.
 
 ```bash
 cd web

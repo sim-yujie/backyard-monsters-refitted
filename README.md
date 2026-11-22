@@ -25,7 +25,7 @@ Kixeye, which owns Backyard Monsters and its art.
 
 ## Running it on your own computer
 
-You need [Bun](https://bun.sh) 1.4.2 or newer and Docker.
+You need [Bun](https://bun.sh) 1.4.4 or newer and Docker.
 
 1. Start the database and Redis:
 
