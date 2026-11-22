@@ -1,4 +1,12 @@
-import { friendRefusal, GIFT_WISH_MAX, type FriendsApi, type Gift, type GiftResource, type ResourceAmounts } from "@/api/friends";
+import {
+  friendRefusal,
+  GENERAL_REFUSAL,
+  GIFT_WISH_MAX,
+  type FriendsApi,
+  type Gift,
+  type GiftResource,
+  type ResourceAmounts,
+} from "@/api/friends";
 import type { FriendsStore } from "@/game/friends/friendsStore";
 import { playerPool, type PlayerPool } from "@/game/friends/friendsView";
 import { formatAmount } from "@/ui/format";
@@ -129,6 +137,9 @@ export const GIFTS_TEXT = {
   wishesFailed: "Your wishes could not be saved. Try again.",
 } as const;
 
+/** How long a wishes save that never reached the server waits before it is sent once more (bug #58). */
+export const WISH_RETRY_MS = 1_500;
+
 export class GiftsTab implements FriendsTabView {
   readonly element: HTMLElement;
 
@@ -144,6 +155,8 @@ export class GiftsTab implements FriendsTabView {
   private savedWishes: GiftResource[] = [];
   /** Bumped by every wish save, so only the latest answer counts. */
   private wishSave = 0;
+  /** The line the last failed wishes save put up, cleared by the next one that saves. */
+  private wishError: string | null = null;
   private collectsLeft = 0;
   private loaded = false;
   private busy = false;
@@ -367,16 +380,32 @@ export class GiftsTab implements FriendsTabView {
     this.wishes = next;
     this.renderWishes();
     const save = ++this.wishSave;
+    const stale = (): boolean => this.destroyed || save !== this.wishSave;
     try {
-      const stored = await this.options.api.setWishes(next);
-      if (this.destroyed || save !== this.wishSave) return;
+      let stored: readonly GiftResource[];
+      try {
+        stored = await this.options.api.setWishes(next);
+      } catch (caught) {
+        // A save that never reached the server (a phone between networks)
+        // is sent once more by itself before anything is said (bug #58).
+        if (friendRefusal(caught).reason !== "network") throw caught;
+        await new Promise((resolve) => setTimeout(resolve, WISH_RETRY_MS));
+        if (stale()) return;
+        stored = await this.options.api.setWishes(next);
+      }
+      if (stale()) return;
       this.wishes = [...stored];
       this.savedWishes = [...stored];
-      if (this.status.text === GIFTS_TEXT.wishesFailed) this.status.set(null);
-    } catch {
-      if (this.destroyed || save !== this.wishSave) return;
+      if (this.wishError !== null && this.status.text === this.wishError) this.status.set(null);
+      this.wishError = null;
+    } catch (caught) {
+      if (stale()) return;
       this.wishes = [...this.savedWishes];
-      this.status.set(GIFTS_TEXT.wishesFailed, "error");
+      // The server's own words (a spam limit, a refusal) rather than one
+      // line for every failure (bug #58); with none, the wishes' own line.
+      const refusal = friendRefusal(caught);
+      this.wishError = refusal.message === GENERAL_REFUSAL ? GIFTS_TEXT.wishesFailed : refusal.message;
+      this.status.set(this.wishError, "error");
     }
     this.renderWishes();
   }
