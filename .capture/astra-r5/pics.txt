@@ -1,0 +1,20 @@
+l3-hatch-modern-1280x720|AFTER: Hatch tab (Monsters side), L3, six presets: quick-send rail right of the queue, Modern desktop 1280x720. (Before: that area right of the timer/Clear column was empty.)
+l2-hatch-modern-1280x720|Hatch tab, L2, four presets in the rail, Modern desktop
+l1-hatch-modern-1280x720|Hatch tab, L1 (7 queue boxes of 20), two presets in the rail, Modern desktop
+l3-hatch-sent-modern-1280x720|L3 after pressing the rail's Send on preset 1: note in the switch's row, Modern desktop
+l3-hatch-modern-1024x560|Hatch tab, L3, narrow rail (number + arrow buttons), tablet on its side 1024x560
+l2-hatch-modern-1024x560|Hatch tab, L2, tablet on its side 1024x560
+l3-presets-modern-1280x720|Presets tab, L3, six presets (preset 3 is long), rail still shown above, Modern desktop
+l3-edit-next-modern-1280x720|Building preset 1 in the box grid, another monster (Bolt) chosen: faint next box, Modern desktop
+l3-edit-ten-modern-1280x720|Building: all ten boxes full, "0 left", Modern desktop
+l3-presets-modern-390x844|Presets tab, L3, six presets, preset 3 long (strip fades on the right), Modern phone 390x844
+l3-presets-scrolled-modern-390x844|Same, preset 3's strip dragged sideways (fade on both sides), Modern phone
+l1-presets-modern-390x844|Presets tab, L1, two presets, Modern phone
+l3-edit-next-modern-390x844|Building preset 1 in the box grid, another monster chosen, Modern phone
+l3-edit-ten-modern-390x844|Building: ten boxes full, Modern phone
+l1-edit-modern-390x844|Building at L1: seven boxes, Modern phone
+l3-sent-locked-modern-390x844|Presets tab after Send of preset 5 (a locked monster skipped), Modern phone
+l3-edit-ten-modern-390x664|Building, phone with Safari bars 390x664
+l3-presets-modern-820x1180|Presets tab, iPad upright 820x1180 (no rail at this width)
+l3-hatch-classic-1280x720|Hatch tab with the rail, Classic look, desktop
+l3-edit-ten-classic-390x844|Building, ten boxes, Classic look, phone

@@ -34,7 +34,7 @@ const AFTER = {
   },
   "l3-sent-locked": async (page) => { await tap(page, ".b9r3h-row:nth-child(5) .b9r3h-send"); },
   "l3-hatch-sent": async (page) => { await tap(page, ".b9r5h-quick:nth-child(1) .b9r5h-quick__send"); },
-  "l3-presets-scrolled": async (page) => { await page.locator(".b9r3h-row:nth-child(3) .b9r3h-row__stacks").evaluate((n) => { n.scrollLeft = 150; }); await page.waitForTimeout(300); },
+  "l3-presets-scrolled": async (page) => { await page.locator(".b9r3h-row:nth-child(3) .b9r3h-row__stacks").evaluate((n) => { n.scrollLeft = 150; return n.scrollLeft; }).then((v) => console.log("scrolled to", v)); await page.waitForTimeout(300); },
 };
 const jobs = (process.argv[2] || Object.keys(ALL).join(",")).split(",");
 const looks = (process.argv[3] || "modern").split(",");

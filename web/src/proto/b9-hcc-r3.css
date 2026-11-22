@@ -228,16 +228,16 @@
 }
 /* More stacks off the edge: the strip fades out on that side. */
 .b9r5h-more-right {
-  -webkit-mask-image: linear-gradient(to right, #000 calc(100% - 34px), transparent);
-  mask-image: linear-gradient(to right, #000 calc(100% - 34px), transparent);
+  -webkit-mask-image: linear-gradient(to right, #000 calc(100% - 26px), #0003);
+  mask-image: linear-gradient(to right, #000 calc(100% - 26px), #0003);
 }
 .b9r5h-more-left {
-  -webkit-mask-image: linear-gradient(to right, transparent, #000 34px);
-  mask-image: linear-gradient(to right, transparent, #000 34px);
+  -webkit-mask-image: linear-gradient(to right, #0003, #000 26px);
+  mask-image: linear-gradient(to right, #0003, #000 26px);
 }
 .b9r5h-more-left.b9r5h-more-right {
-  -webkit-mask-image: linear-gradient(to right, transparent, #000 34px, #000 calc(100% - 34px), transparent);
-  mask-image: linear-gradient(to right, transparent, #000 34px, #000 calc(100% - 34px), transparent);
+  -webkit-mask-image: linear-gradient(to right, #0003, #000 26px, #000 calc(100% - 26px), #0003);
+  mask-image: linear-gradient(to right, #0003, #000 26px, #000 calc(100% - 26px), #0003);
 }
 .b9r3h-stack {
   position: relative;
@@ -713,7 +713,8 @@
   }
   .b9r3h-editing .b9r3h-edit {
     display: grid;
-    grid-template-columns: auto minmax(0, 1fr) 64px;
+    /* Classic's painted Done is wider than 64 px: the side column grows to hold it. */
+    grid-template-columns: auto minmax(0, 1fr) minmax(64px, auto);
     align-items: center;
     gap: 6px;
     padding: 4px 6px 6px;
@@ -751,6 +752,7 @@
   }
   .b9r3h-edit__side {
     grid-area: 2 / 3;
+    width: auto;
   }
 }
 @media (max-width: 620px), (max-height: 500px) {
@@ -762,17 +764,21 @@
     min-width: 40px;
     padding-left: 2px;
   }
+  /* Three stacks fit beside the widest cost without scrolling; a fourth makes the strip scroll. */
   .b9r3h-stack {
-    width: 38px;
-    height: 38px;
+    width: 34px;
+    height: 34px;
   }
   .b9r3h-stacks {
-    gap: 0 10px;
+    gap: 0 8px;
+  }
+  .b9r3h-row__stacks {
+    padding-right: 2px;
   }
   .b9r3h-stack + .b9r3h-stack::before {
-    left: -10px;
-    width: 10px;
-    font-size: 14px;
+    left: -8px;
+    width: 8px;
+    font-size: 13px;
   }
   .b9r3h-row__cost {
     font-size: 12px;
@@ -894,5 +900,103 @@
   }
   .b9r5h-quick__plus {
     padding-right: 4px;
+  }
+}
+
+/* Round 5 review: cues remain outside the masked, horizontally scrolling strip. */
+.b9r3h-row::before,
+.b9r3h-row::after {
+  grid-area: 1 / 2;
+  align-self: center;
+  z-index: 1;
+  width: 16px;
+  border-radius: 8px;
+  background: rgb(18 26 36 / 0.92);
+  color: var(--colour-accent);
+  font: 18px/22px var(--font-display);
+  text-align: center;
+  pointer-events: none;
+}
+.b9r3h-row:has(> .b9r5h-more-left)::before {
+  content: "‹";
+  justify-self: start;
+}
+.b9r3h-row:has(> .b9r5h-more-right)::after {
+  content: "›";
+  justify-self: end;
+}
+.b9r3h-row:has(> .b9r3h-said)::before,
+.b9r3h-row:has(> .b9r3h-said)::after {
+  content: none;
+}
+/* Primary painted buttons need space for their own caps, in both looks. */
+:root[data-skin] .panel .b9r3h .b9r3h-edit__done {
+  --skin-button-cap: 12px;
+  box-sizing: border-box;
+  min-width: 88px;
+  min-height: 44px;
+  padding: 0 6px;
+  font-size: 16px;
+  white-space: nowrap;
+}
+:root[data-skin] .panel .b9r3h .b9r5h-quick__send {
+  --skin-button-cap: 8px;
+}
+.b9r5h-quick__n {
+  font-size: 12px;
+}
+/* Keep the entire editable logical stack visibly tied to the count field. */
+.b9r3h button.b9r5h-box--last {
+  border: 2px solid var(--colour-accent);
+}
+.b9r3h .b9r5h-box {
+  box-sizing: border-box;
+}
+.b9r5h-box--next .hatch-slot__picture {
+  opacity: 0.65;
+}
+@media (max-width: 620px) {
+  .b9r3h-editing .b9r3h-edit {
+    grid-template-columns: auto minmax(0, 1fr) 88px;
+  }
+  .b9r3h-edit__sum {
+    gap: 6px;
+    padding-left: 0;
+    font-size: 12px;
+  }
+  /* The button's width must not squeeze the five queue boxes below 44px. */
+  .b9r5h-boxes {
+    grid-area: 2 / 1 / 3 / -1;
+    min-width: 0;
+    padding-right: 70px;
+    grid-template-columns: repeat(5, minmax(44px, 1fr));
+  }
+  .b9r3h-edit__side {
+    grid-area: 2 / 1 / 3 / -1;
+    justify-self: end;
+    width: 64px;
+  }
+  .b9r3h-row__body {
+    min-width: 44px;
+  }
+}
+/* Short desktop: expose the existing content scroll, keeping the window chrome fixed. */
+@media (min-width: 620.02px) and (max-height: 650px) {
+  .b9r3h .hatch__scroll {
+    min-height: 0;
+    overflow-y: scroll;
+    scrollbar-width: auto;
+    scrollbar-color: var(--colour-text-muted) var(--colour-surface-sunken);
+  }
+  .b9r3h .hatch__scroll::-webkit-scrollbar {
+    width: 10px;
+  }
+  .b9r3h .hatch__scroll::-webkit-scrollbar-thumb {
+    background: var(--colour-text-muted);
+    border: 2px solid var(--colour-surface-sunken);
+    border-radius: 8px;
+  }
+  .b9r3h .hatch__split {
+    flex-shrink: 0;
   }
 }

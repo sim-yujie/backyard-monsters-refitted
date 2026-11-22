@@ -537,6 +537,7 @@ export class B9HccR3 {
       // The stacks are NOT inside the button: a strip inside a button does not scroll in every browser.
       const faces = this.faces(preset, "b9r3h-row__stacks");
       faces.setAttribute("aria-label", `Preset ${at + 1}: ${preset.length} stacks in order`);
+      faces.dataset.slot = String(at);
       faces.addEventListener("click", () => this.edit(at));
       const cost = el("span", "b9r3h-row__cost");
       const goo = preset.reduce((sum, [id, count]) => sum + count * this.priceOf(id), 0);
@@ -551,8 +552,14 @@ export class B9HccR3 {
       if (sent) row.append(this.said(sent));
       rows.push(row);
     });
+    // The tab redraws as the hatcheries tick: a strip the player dragged sideways stays where it was put.
+    const kept = new Map<string, number>();
+    if (this.list.dataset.scope === scope) {
+      for (const strip of this.list.querySelectorAll<HTMLElement>(".b9r3h-row__stacks")) kept.set(strip.dataset.slot ?? "", strip.scrollLeft);
+    }
     this.list.replaceChildren(...rows);
     this.list.dataset.scope = scope;
+    for (const strip of this.list.querySelectorAll<HTMLElement>(".b9r3h-row__stacks")) strip.scrollLeft = kept.get(strip.dataset.slot ?? "") ?? 0;
   }
 
   /**
@@ -582,8 +589,8 @@ export class B9HccR3 {
       body.addEventListener("click", () => this.setTab("presets"));
       const send = btn("btn btn--primary b9r3h-send b9r5h-quick__send", `Send preset ${at + 1} to the end of the queue`);
       if (this.remote) send.append(art("outpost", 24, "b9r2h-addflag"));
-      // A very narrow chip (six presets on a tablet) is the button alone: its number and an arrow.
-      send.append(el("span", "b9r5h-quick__n", `${at + 1} ▸`), el("span", "b9r5h-quick__word", "Send"));
+      // A very narrow chip (six presets on a tablet) is the button alone: its number and an explicit Send label.
+      send.append(el("span", "b9r5h-quick__n", `${at + 1} Send`), el("span", "b9r5h-quick__word", "Send"));
       send.title = `Send preset ${at + 1}`;
       send.addEventListener("click", () => this.send(at));
       if (this.sent && this.sent.scope === scope && this.sent.slot === at) chip.classList.add("b9r5h-quick--sent");
