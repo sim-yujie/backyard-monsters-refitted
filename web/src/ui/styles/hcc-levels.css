@@ -1764,15 +1764,6 @@
   font-size: 16px;
   color: var(--colour-text);
 }
-/* "6 boxes left": the word only where there is room. */
-.hcc-edit__unit {
-  display: none;
-}
-@container hatch (min-width: 560px) {
-  .hcc-edit__unit {
-    display: inline;
-  }
-}
 /* Done is a 44 px target on a touch screen. */
 @media (pointer: coarse) {
   .hcc-on .hcc-edit__done,
@@ -1801,4 +1792,41 @@
 /* A phone on its side: the strip scrolls away with the bench (`HccBench` moves it into the scroll box). */
 .hatch__scroll > .hcc-strip {
   position: static;
+}
+/* The "more this way" cue sits at the top of the strip, clear of the count badges along its bottom. */
+.hcc-row::before,
+.hcc-row::after {
+  align-self: start;
+  margin-top: 4px;
+  font-size: 16px;
+  line-height: 18px;
+}
+
+/* ── neon review, round 2 ──────────────────────────────────────────── */
+/* The outpost run from home, named in the strip for as long as it is shown. */
+.hcc-housing__yard {
+  min-width: 0;
+  max-width: 45%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  padding: 0 8px;
+  border-radius: 999px;
+  background: var(--colour-accent);
+  color: #1a1206;
+  font-size: var(--text-sm);
+}
+.hcc-presets__full {
+  grid-column: 1 / -1;
+  margin: 0;
+  color: var(--colour-text-muted);
+  font-size: var(--text-sm);
+}
+/* Touch screens (iPads too): every control on the bench is a 44 px target. */
+@media (pointer: coarse) {
+  .hcc-on .hcc-edit__undo,
+  .hcc-on .hcc-edit__bin,
+  .hcc-on .hcc-stepper__arrow {
+    min-height: 44px;
+    min-width: 44px;
+  }
 }

@@ -117,6 +117,9 @@ const totalOf = (preset: readonly (readonly [string, number])[]): number => pres
 
 const nameOf = (id: string): string => monsterEntry(id)?.name ?? id;
 
+/** "Outpost (239, 207)" never breaks inside its coordinates. */
+const keepTogether = (title: string): string => title.replace(/\((\d+), (\d+)\)/, "($1,\u00a0$2)");
+
 export class HccBench {
   private yard: HatchYard | null = null;
   private tab: "monsters" | "presets" = "monsters";
@@ -357,6 +360,9 @@ export class HccBench {
       `Housing ${housed.toLocaleString("en-US")} of ${room.toLocaleString("en-US")}; after the queue ${(housed + coming).toLocaleString("en-US")}`,
     );
     const numbers = el("span", "hcc-housing__numbers");
+    const remote = this.host.remote();
+    const name = remote ? (this.yards().find((one) => one.baseid === remote)?.title ?? "") : "";
+    if (name) numbers.append(el("span", "hcc-housing__yard", name));
     numbers.append(
       art("housing", 24, "hcc-housing__icon"),
       el("span", "hcc-housing__now", `${housed.toLocaleString("en-US")}/${room.toLocaleString("en-US")}`),
@@ -522,6 +528,10 @@ export class HccBench {
   private renderPresets(): void {
     const list = this.listOf();
     const rows: Node[] = [];
+    const full = (this.yard?.shared.length ?? 0) >= hccLimits(this.level).stacks;
+    if (full && this.presets().some((preset) => preset.length > 0)) {
+      rows.push(el("p", "hcc-presets__full", "The queue is full: Send works again when a box is free."));
+    }
     this.presets().forEach((preset, at) => {
       const row = el("div", `hcc-row${preset.length ? "" : " hcc-row--empty"}`);
       if (!preset.length) {
@@ -548,6 +558,10 @@ export class HccBench {
       if (this.host.remote()) send.append(art("outpost", 24, "hcc-addflag"));
       send.append(el("span", "", "Send"));
       send.addEventListener("click", () => void this.send(at, send));
+      if (full) {
+        send.disabled = true;
+        send.title = "The queue is full: Send works again when a box is free";
+      }
       row.append(body, faces, cost, send);
       const sent = this.sent && this.sent.list === list && this.sent.slot === at ? this.sent : null;
       if (sent) row.append(this.said(sent.report));
@@ -687,7 +701,7 @@ export class HccBench {
     const sum = el("span", "hcc-edit__sum");
     const goo = preset.reduce((total, [id, count]) => total + count * this.priceOf(id), 0);
     const stacks = el("span", `hcc-edit__stacks${left === 0 ? " hcc-edit__stacks--full" : ""}`);
-    stacks.append(el("strong", "", String(left)), el("span", "hcc-edit__unit", " boxes"), el("span", "", " left"));
+    stacks.append(el("strong", "", String(left)), el("span", "", " boxes left"));
     stacks.title = `Boxes left of ${most}; each holds up to ${size} monsters.`;
     stacks.setAttribute("aria-label", `${left} of ${most} boxes left; up to ${size} monsters per box`);
     const monsters = el("span", "hcc-edit__total", `×${totalOf(preset)}`);
@@ -812,11 +826,11 @@ export class HccBench {
         const top = el("span", "hcc-yardcard__top");
         top.append(art(yard.kind === "main" ? "townhall" : "outpost", 32, "hcc-where__icon"), el("span", "hcc-yardcard__number", String(at + 1)));
         if (yard.pinned) top.append(art("pin", 16, "hcc-yardcard__pin"));
-        card.append(top, el("span", "hcc-yardcard__name", yard.title));
+        card.append(top, el("span", "hcc-yardcard__name", keepTogether(yard.title)));
         if (yard.queued !== null) {
           const queue = el("span", "hcc-yardcard__queue");
           queue.title = yard.queued ? `${yard.queued} monsters hatching or waiting` : "Nothing hatching";
-          queue.append(art("time", 16), el("span", "", yard.queued ? `×${yard.queued}` : "0"));
+          queue.append(el("span", "", yard.queued ? `${yard.queued.toLocaleString("en-US")} queued` : "Idle"));
           if (!yard.queued) card.classList.add("hcc-yardcard--idle");
           card.append(queue);
         }
@@ -828,7 +842,7 @@ export class HccBench {
       card.disabled = true;
       const top = el("span", "hcc-yardcard__top");
       top.append(art("outpost", 32, "hcc-where__icon"), lockArt(16, "hcc-lock"));
-      card.append(top, el("span", "hcc-yardcard__name", yard.title), el("span", "hcc-yardcard__why", "No HCC"));
+      card.append(top, el("span", "hcc-yardcard__name", keepTogether(yard.title)), el("span", "hcc-yardcard__why", "No HCC"));
       grid.append(card);
     }
     this.yardsPage.replaceChildren(head, grid);
