@@ -471,6 +471,15 @@
     flex-wrap: nowrap;
     overflow: hidden;
   }
+  /* The +N is information, not expendable overflow. Shrink only the
+     decorative portraits when Classic's painted Send ends take more room. */
+  .b9r3h-stacks > .b9r3h-stack {
+    flex-shrink: 1;
+    min-width: 32px;
+  }
+  .b9r3h-stacks__more {
+    white-space: nowrap;
+  }
 }
 @media (max-width: 620px) {
   .b9r3h-editing .b9r3h-tabs {
@@ -478,7 +487,7 @@
   }
   .b9r3h-editing .b9r3h-edit {
     display: grid;
-    grid-template-columns: auto minmax(0, 1fr) auto auto;
+    grid-template-columns: auto minmax(min-content, 1fr) auto auto;
     align-items: center;
     gap: 2px 4px;
     padding: 2px 4px 4px 6px;
@@ -486,6 +495,11 @@
   .b9r3h-edit__which {
     grid-column: 1;
     grid-row: 1;
+    gap: 2px;
+  }
+  .b9r3h-edit__scope {
+    width: 20px;
+    height: 20px;
   }
   .b9r3h-edit__sum {
     grid-column: 2;
@@ -499,10 +513,11 @@
     grid-row: 1;
   }
   .b9r3h .b9r3h-edit__done {
+    --skin-button2-cap: 14px;
     grid-column: 4;
     grid-row: 1;
     min-width: 58px;
-    padding: 0 8px;
+    padding: 0 4px;
   }
   .b9r3h-edit__bin {
     padding: 0 2px;
