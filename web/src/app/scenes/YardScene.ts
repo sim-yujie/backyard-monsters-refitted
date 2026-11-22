@@ -623,6 +623,8 @@ export class YardScene implements Scene {
    */
   private unmountPlugins: (() => void) | null = null;
   private readonly unregisterTargets: (() => void)[] = [];
+  /** Clears the way in to the Baiter's friend tabs from a notice (beta 9 #4). */
+  private clearBaiterOpener: (() => void) | null = null;
   private canvasWidth = 0;
   private canvasHeight = 0;
 
@@ -792,12 +794,12 @@ export class YardScene implements Scene {
       });
       this.dock.placeBesideMonsters(tutTarget(this.mail.button.element, TutTarget.DOCK_MAIL));
       // A friend-test notice opens the Baiter window's tab (beta 9 #4).
-      this.unregisterTargets.push(
-        setBaiterOpener((view) => {
-          if (this.store?.kind === "main" || view === "invitedMe") this.openBaiterView(view);
-          else this.notices.show("baiter-friend", "Tests of your yard are in your main yard's Baiter.", { level: "info", timeoutMs: 6_000 });
-        }),
-      );
+      // Its own undo: the canvas targets' list is cleared whenever the camera is set up again.
+      this.clearBaiterOpener?.();
+      this.clearBaiterOpener = setBaiterOpener((view) => {
+        if (this.store?.kind === "main" || view === "invitedMe") this.openBaiterView(view);
+        else this.notices.show("baiter-friend", "Tests of your yard are in your main yard's Baiter.", { level: "info", timeoutMs: 6_000 });
+      });
       this.bell = new NotificationDoor({
         container: context.overlay.content,
         onOpen: () => {
@@ -873,6 +875,8 @@ export class YardScene implements Scene {
 
   exit(): void {
     presence.setScreen(ELSEWHERE);
+    this.clearBaiterOpener?.();
+    this.clearBaiterOpener = null;
     this.releaseRaidSheets?.();
     this.stopSupportOffer?.();
     this.stopSupportOffer = null;
