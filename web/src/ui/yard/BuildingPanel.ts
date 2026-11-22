@@ -205,6 +205,9 @@ interface JobRefs {
   readonly fill: HTMLElement;
 }
 
+/** The side panel's class while the Baiter window stands over it (beta 9 #4). */
+export const UNDER_WINDOW = "building-panel--under-window";
+
 export class BuildingPanel {
   readonly element: HTMLElement;
   /** See {@link BuildingPanelOptions.yard}. */
@@ -1555,7 +1558,9 @@ export class BuildingPanel {
       // A friend's test of this yard, and the friends' invites (beta 9 #4, design A).
       friends: {
         onTest: (invite) => {
+          // The friend's army window stands alone: this panel goes with the Baiter window.
           this.closeBaiter();
+          this.close();
           yard.scene.openFriendTest?.(invite);
         },
         ...(yard.scene.watchBaiter ? { onWatch: (run: BaiterRun) => yard.scene.watchBaiter?.(run) } : {}),
@@ -1565,11 +1570,16 @@ export class BuildingPanel {
       },
       ...(view ? { view } : {}),
       onClose: () => {
-        if (this.baiter === opened) this.baiter = null;
+        if (this.baiter !== opened) return;
+        this.baiter = null;
+        this.element.classList.remove(UNDER_WINDOW);
       },
     });
     this.baiter = opened;
     opened.mount(yard.modal ?? this.element.ownerDocument.body);
+    // One window at a time: the side panel (and its close button) steps out of
+    // sight while the Baiter window is over it, and comes back when it shuts.
+    this.element.classList.add(UNDER_WINDOW);
     guideBus.emit("screen", { id: GuideScreen.BAITER, root: opened.element, header: null });
   }
 
@@ -1592,6 +1602,7 @@ export class BuildingPanel {
   private closeBaiter(): void {
     this.baiter?.destroy();
     this.baiter = null;
+    this.element.classList.remove(UNDER_WINDOW);
   }
 
   private dispose(): void {
