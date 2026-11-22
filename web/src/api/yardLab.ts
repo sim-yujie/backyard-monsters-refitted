@@ -1,6 +1,8 @@
 import { labAbility } from "@/game/monsters/monsterCatalogue";
+import type { MonsterRealm } from "@/game/monsters/realm";
 import {
   gateText,
+  labRealmOf,
   instantGate,
   researchGate,
   runningResearch,
@@ -130,8 +132,8 @@ const refuse = (
 ): YardRefusal => ({ reason, message, detail, local: true });
 
 /** A gate as the refusal the server would send for it. */
-const gateRefusal = (gate: LabGate): YardRefusal => {
-  const message = `${gateText(gate)}.`;
+const gateRefusal = (gate: LabGate, realm: MonsterRealm): YardRefusal => {
+  const message = `${gateText(gate, realm)}.`;
   switch (gate.reason) {
     case "labLevel":
       return refuse(gate.reason, message, { have: gate.have, need: gate.need });
@@ -155,7 +157,7 @@ export const labActions = (store: YardStore, api: LabApi = labApi): LabActions =
     const ability = labAbility(monster);
     if (!ability) return refuse("badRequest", "That monster has no Lab ability.", { monster });
     const refusal = gate(ability, reader);
-    return refusal ? gateRefusal(refusal) : null;
+    return refusal ? gateRefusal(refusal, labRealmOf(reader)) : null;
   };
   const running = (reader: LabContext) =>
     runningResearch(reader) ? null : refuse("notResearching", "The Monster Lab is not researching.");

@@ -80,6 +80,8 @@ const infernoBuildingName = (id: MonstersTabId): string | null => {
       return words.housing;
     case MonstersTabId.TRAIN:
       return words.academy;
+    case MonstersTabId.LAB:
+      return words.lab;
     default:
       return null;
   }

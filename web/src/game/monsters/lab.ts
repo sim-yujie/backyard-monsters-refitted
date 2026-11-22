@@ -1,11 +1,12 @@
 import type { AcademyData } from "@/api/types";
-import { splitCopyCount } from "@/game/combat/rules";
-import { timeCost } from "@/game/yard/buildingCosts";
+import { grokusRadius, kingWormzerRadius, splitCopyCount } from "@/game/combat/rules";
+import { timeCost, type YardKind } from "@/game/yard/buildingCosts";
 import { JobKind, LAB_TYPE } from "@/game/yard/jobs";
 import { NEED_MORE_SILOS_PHRASE, overCap } from "@/game/yard/storage";
 import type { Yard, YardBuilding } from "@/game/yard/yardModel";
 import { academyLevel } from "./housing";
 import {
+  INFERNO_LAB_ABILITIES,
   LAB_ABILITIES,
   labAbility,
   labStep,
@@ -14,6 +15,7 @@ import {
   type MonsterEntry,
   type PaidStep,
 } from "./monsterCatalogue";
+import { monsterRealmOf, monsterWords, type MonsterRealm } from "./realm";
 import type { TrainingContext } from "./training";
 
 /**
@@ -32,13 +34,28 @@ import type { TrainingContext } from "./training";
  *
  * Prices are the server's formulas, recomputed here for the label only: the
  * route charges its own figure (`server/src/services/yard/shiny.ts`).
+ *
+ * On the Inferno yard it is the Infernal Monster Lab (beta 9, owner, 21 Nov
+ * 2026): the same rules over the eight Inferno monsters
+ * (`INFERNO_LAB_ABILITIES`), paid in Sulfur; Balthazar has two ranks
+ * ({@link topRank}).
  */
 
 /** The top rank of every ability (`client/scripts/MONSTERLAB.as:77-188`). */
 export const MAX_RANK = 3;
 
-/** What the tab reads: the Train tab's context (the store's read side). */
-export type LabContext = TrainingContext;
+/** The top rank of `ability`: one per cost entry, 3 for all but Balthazar's 2. */
+export const topRank = (ability: LabAbility): number => Math.min(ability.costs.length, MAX_RANK);
+
+/** What the tab reads: the Train tab's context (the store's read side), and the yard's kind. */
+export type LabContext = TrainingContext & { readonly kind?: YardKind | null };
+
+/** The Lab's realm: the Inferno yard's researches the Inferno roster. */
+export const labRealmOf = (context: Pick<LabContext, "kind">): MonsterRealm => monsterRealmOf(context.kind);
+
+/** The abilities a `realm` yard's Lab researches. */
+export const labAbilitiesOf = (realm: MonsterRealm): readonly LabAbility[] =>
+  realm === "inferno" ? INFERNO_LAB_ABILITIES : LAB_ABILITIES;
 
 /** A research running now. */
 export interface RunningResearch {
@@ -75,7 +92,9 @@ export interface LabRow {
   readonly monster: MonsterEntry;
   /** Its rank now, 0..3. */
   readonly rank: number;
-  /** What the next rank costs, `[putty, seconds]`; null at rank 3. */
+  /** Its top rank: 3, or Balthazar's 2. */
+  readonly top: number;
+  /** What the next rank costs, `[putty, seconds]`; null at its top rank. */
   readonly step: PaidStep | null;
   /** The research running on it, if any. */
   readonly research: RunningResearch | null;
@@ -201,18 +220,20 @@ const unlocked = (context: LabContext, id: string): boolean =>
  */
 export const labRows = (context: LabContext): LabRow[] => {
   const research = runningResearch(context);
-  return [...LAB_ABILITIES]
+  return [...labAbilitiesOf(labRealmOf(context))]
     .sort((a, b) => a.order - b.order)
     .flatMap((ability) => {
       const monster = monsterEntry(ability.id);
       if (!monster) return [];
       const rank = powerupRank(context.save.academy, ability.id);
+      const top = topRank(ability);
       return [
         {
           ability,
           monster,
           rank,
-          step: rank < MAX_RANK ? (labStep(ability.id, rank + 1) ?? null) : null,
+          top,
+          step: rank < top ? (labStep(ability.id, rank + 1) ?? null) : null,
           research: research?.monster.id === ability.id ? research : null,
         },
       ];
@@ -227,7 +248,7 @@ export const labRows = (context: LabContext): LabRow[] => {
 export const monsterGate = (ability: LabAbility, context: LabContext): LabGate | null => {
   if (!unlocked(context, ability.id)) return { reason: "locked" };
   const rank = powerupRank(context.save.academy, ability.id);
-  if (rank >= MAX_RANK) return { reason: "maxRank" };
+  if (rank >= topRank(ability)) return { reason: "maxRank" };
   const next = rank + 1;
   const labLevel = labSlot(context)?.level ?? 0;
   if (next > labLevel) return { reason: "labLevel", have: labLevel, need: next };
@@ -307,11 +328,15 @@ export const cancelRefund = (
   return { refund, lost: price - refund };
 };
 
-/** A gate as its reason line: "Needs Lab level 2", "Needs Octo-ooze at level 3". */
-export const gateText = (gate: LabGate): string => {
+/**
+ * A gate as its reason line: "Needs Lab level 2", "Needs Octo-ooze at level 3";
+ * in a `realm`'s words (the Inferno's Strongbox and Sulfur).
+ */
+export const gateText = (gate: LabGate, realm: MonsterRealm = "surface"): string => {
+  const words = monsterWords(realm);
   switch (gate.reason) {
     case "noLab":
-      return "Build a Monster Lab";
+      return `Build ${realm === "inferno" ? "an" : "a"} ${words.lab}`;
     case "busy":
       return "The Lab is being built or upgraded";
     case "damaged":
@@ -319,7 +344,7 @@ export const gateText = (gate: LabGate): string => {
     case "labBusy":
       return "The Lab is already researching";
     case "locked":
-      return "Unlock it in the Monster Locker first";
+      return `Unlock it in the ${words.locker} first`;
     case "maxRank":
       return "Fully researched";
     case "labLevel":
@@ -329,7 +354,7 @@ export const gateText = (gate: LabGate): string => {
     case "shortfall":
       return gate.overCap
         ? NEED_MORE_SILOS_PHRASE
-        : `Need ${gate.need.toLocaleString("en-US")} more putty`;
+        : `Need ${gate.need.toLocaleString("en-US")} more ${words.putty}`;
     case "credits":
       return "Not enough Shiny";
   }
@@ -338,6 +363,8 @@ export const gateText = (gate: LabGate): string => {
 /* ── What an ability does ─────────────────────────────────────────────────── */
 
 const percent = (value: number): string => `${Math.round(value * 100)}%`;
+/** A percentage to one decimal where it has one: 1.5%. */
+const percentOne = (value: number): string => `${Math.round(value * 1000) / 10}%`;
 const times = (value: number): string => `${value}×`;
 
 /**
@@ -350,7 +377,15 @@ const times = (value: number): string => `${value}×`;
  * "Split" (owner, 6 Nov 2026) as its copies times each one's health share.
  */
 const EFFECTS: Readonly<
-  Record<string, { readonly label: string; readonly value: (v: number, rank: number) => string }>
+  Record<
+    string,
+    {
+      readonly label: string;
+      readonly value: (v: number, rank: number) => string;
+      /** What rank 0 gives, when it is not "none" (Balthazar strikes monsters 1×). */
+      readonly base?: string;
+    }
+  >
 > = {
   C3: { label: "Blink range", value: String },
   C4: { label: "Extra targets", value: String },
@@ -367,13 +402,28 @@ const EFFECTS: Readonly<
   C6: { label: "Damage reflected", value: percent },
   C10: { label: "Double-damage chance", value: percent },
   C17: { label: "Split", value: (v, rank) => `${splitCopyCount(rank)} × ${percent(v)} health` },
+  // The Infernal Lab's eight (beta 9, owner, 21 Nov 2026; `combat/rules/specialMoves.ts`).
+  IC1: { label: "Fury", value: (v) => `up to +${percent(v)} speed and damage` },
+  IC2: { label: "Regeneration", value: (v) => `${percentOne(v)} health a second` },
+  IC3: { label: "Dodge", value: (v) => `${percent(v)} of hits` },
+  IC4: { label: "Walls hit", value: (v) => `+${v} beside the one struck` },
+  IC5: { label: "Damage to monsters", value: times, base: "1×" },
+  IC6: {
+    label: "Shockwave",
+    value: (v, rank) => `${percent(v)} on buildings within ${grokusRadius(rank)}`,
+  },
+  IC7: { label: "Burn", value: (v) => `${percent(v)} of the hit a second, 4 s` },
+  IC8: {
+    label: "Quake splash",
+    value: (v, rank) => `${times(v)} its damage within ${kingWormzerRadius(rank)}`,
+  },
 };
 
-/** What one rank of an ability gives, "Blink range 300"; rank 0 is "none". */
+/** What one rank of an ability gives, "Blink range 300"; rank 0 is "none" (or the ability's own base). */
 export const effectAt = (ability: LabAbility, rank: number): string => {
   const effect = EFFECTS[ability.id] ?? { label: ability.effectLabel, value: String };
   const value = ability.effect[rank - 1];
-  return rank < 1 || value === undefined ? "none" : effect.value(value, rank);
+  return rank < 1 || value === undefined ? (effect.base ?? "none") : effect.value(value, rank);
 };
 
 /**
@@ -383,7 +433,7 @@ export const effectAt = (ability: LabAbility, rank: number): string => {
 export const effectLine = (ability: LabAbility, rank: number): string => {
   const label = EFFECTS[ability.id]?.label ?? ability.effectLabel;
   const now = effectAt(ability, rank);
-  return rank >= MAX_RANK
+  return rank >= topRank(ability)
     ? `${label}: ${now} (top rank)`
     : `${label}: ${now} → ${effectAt(ability, rank + 1)}`;
 };

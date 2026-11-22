@@ -73,6 +73,8 @@ export interface MonsterWords {
   readonly goo: string;
   /** The unlock and training resource: "putty", "Sulfur". */
   readonly putty: string;
+  /** The building that researches abilities: "Monster Lab", "Infernal Monster Lab" (beta 9). */
+  readonly lab: string;
 }
 
 const SURFACE_WORDS: MonsterWords = {
@@ -85,6 +87,7 @@ const SURFACE_WORDS: MonsterWords = {
   academy: "Monster Academy",
   goo: "goo",
   putty: "putty",
+  lab: "Monster Lab",
 };
 
 /** Flash's Inferno names (`english.json`; `store_exh_title` for the expansion). */
@@ -98,6 +101,7 @@ const INFERNO_WORDS: MonsterWords = {
   academy: "Infernal Academy",
   goo: "Magma",
   putty: "Sulfur",
+  lab: "Infernal Monster Lab",
 };
 
 /** The words for `realm`'s monster screens. */

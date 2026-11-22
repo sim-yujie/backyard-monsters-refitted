@@ -73,13 +73,14 @@ export const OUTPOST_MONSTERS_TABS: readonly MonstersTabDefinition[] = MONSTERS_
 /**
  * The tabs the Inferno yard offers (Inferno WP 2.4): Unlock (its Strongbox),
  * Hatch (its Incubators and its Incubator Control Centre, the Hatchery
- * Control Centre's type), Housing (its Compounds, the Housing Bunker type) and
- * Train (its Infernal Academy). The Inferno has no Monster Lab and no
- * Champion Cage or Chamber (`INFERNO_BUILDABLE_TYPES`). The words are Flash's Inferno ones: "Compound"
+ * Control Centre's type), Housing (its Compounds, the Housing Bunker type),
+ * Train (its Infernal Academy) and, since beta 9, Lab (its Infernal Monster
+ * Lab, the Monster Lab's type). The Inferno has no Champion Cage or Chamber
+ * (`INFERNO_BUILDABLE_TYPES`). The words are Flash's Inferno ones: "Compound"
  * on the strip for its housing (`mhi_title`).
  */
 export const INFERNO_MONSTERS_TABS: readonly MonstersTabDefinition[] = MONSTERS_TABS.filter(
-  (tab) => tab.id !== MonstersTabId.LAB && tab.id !== MonstersTabId.CHAMPION,
+  (tab) => tab.id !== MonstersTabId.CHAMPION,
 ).map((tab) => {
   if (tab.id === MonstersTabId.HATCH) return { ...tab, buildings: [MonsterBuilding.HATCHERY, MonsterBuilding.HCC] };
   if (tab.id === MonstersTabId.HOUSING) {

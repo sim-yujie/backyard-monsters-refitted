@@ -1,12 +1,12 @@
 import { LAB_KEYS, labActions, type LabActions } from "@/api/yardLab";
 import {
-  MAX_RANK,
   cancelRefund,
   effectLine,
   finishPrice,
   gateText,
   instantGate,
   instantPrice,
+  labRealmOf,
   labRows,
   labSlot,
   monsterGate,
@@ -29,6 +29,7 @@ import { monsterPicture } from "./LockerTab";
 import type { MonstersFocus, MonstersTab, MonstersTabContext } from "./monstersTab";
 import { studySeconds, weekendChip, withWeekendChip } from "@/ui/events/weekendUi";
 import { refusalText } from "@/ui/dom";
+import { monsterWords, type MonsterRealm } from "@/game/monsters/realm";
 
 /**
  * The Lab tab: the Monster Lab (`docs/design/yard-buildings.md` §6 "Lab tab").
@@ -115,6 +116,16 @@ export class LabTab implements MonstersTab {
     return this.context.binding.store;
   }
 
+  /** The Inferno yard's Lab is the Infernal Monster Lab, over the Inferno roster (beta 9). */
+  private get realm(): MonsterRealm {
+    return labRealmOf(this.store);
+  }
+
+  /** "Monster Lab", or "Infernal Monster Lab" on the Inferno yard. */
+  private get labName(): string {
+    return monsterWords(this.realm).lab;
+  }
+
   show(focus: MonstersFocus): void {
     // The Lab opens on what it is researching; a named monster wins.
     const wanted = focus.monster ?? runningResearch(this.store)?.monster.id;
@@ -199,10 +210,10 @@ export class LabTab implements MonstersTab {
     }
     const card = document.createElement("section");
     card.className = `train-slot train-slot--${slot.state.kind}`;
-    card.setAttribute("aria-label", "Monster Lab");
+    card.setAttribute("aria-label", this.labName);
     const head = document.createElement("div");
     head.className = "train-slot__head";
-    head.append(slotTitle(slot.level));
+    head.append(slotTitle(this.labName, slot.level));
     const state = document.createElement("span");
     state.className = "train-slot__state";
     state.textContent =
@@ -222,7 +233,7 @@ export class LabTab implements MonstersTab {
     const { monster, ability } = research;
     const card = document.createElement("section");
     card.className = "train-slot train-slot--training";
-    card.setAttribute("aria-label", `Monster Lab: researching ${ability.name} for ${monster.name}`);
+    card.setAttribute("aria-label", `${this.labName}: researching ${ability.name} for ${monster.name}`);
 
     const head = document.createElement("div");
     head.className = "train-slot__head";
@@ -234,7 +245,7 @@ export class LabTab implements MonstersTab {
     );
     const countdown = document.createElement("span");
     countdown.className = "train-slot__countdown";
-    head.append(slotTitle(slot.level), " ", what, " ", countdown);
+    head.append(slotTitle(this.labName, slot.level), " ", what, " ", countdown);
 
     const bar = document.createElement("div");
     bar.className = "monsters-bar train-slot__bar";
@@ -358,7 +369,7 @@ export class LabTab implements MonstersTab {
       name.append(row.monster.name, " ");
       const rank = document.createElement("span");
       rank.className = "train-row__level";
-      rank.textContent = `Rank ${row.rank}/${MAX_RANK}`;
+      rank.textContent = `Rank ${row.rank}/${row.top}`;
       name.append(rank);
 
       const state = document.createElement("span");
@@ -383,7 +394,7 @@ export class LabTab implements MonstersTab {
       if (gate && gate.reason !== "maxRank") {
         const why = document.createElement("span");
         why.className = "lab-row__gate";
-        why.textContent = gateText(gate);
+        why.textContent = gateText(gate, this.realm);
         button.append(" ", why);
       }
       item.append(button);
@@ -397,7 +408,7 @@ export class LabTab implements MonstersTab {
       this.detail.replaceChildren();
       return;
     }
-    const { ability, monster, rank, step, research } = row;
+    const { ability, monster, rank, top, step, research } = row;
     const store = this.store;
 
     const head = document.createElement("div");
@@ -410,7 +421,7 @@ export class LabTab implements MonstersTab {
     name.textContent = monster.name;
     const facts = document.createElement("p");
     facts.className = "locker-detail__facts";
-    facts.textContent = `${ability.name} · rank ${rank} of ${MAX_RANK}`;
+    facts.textContent = `${ability.name} · rank ${rank} of ${top}`;
     const stats = document.createElement("p");
     stats.className = "locker-detail__stats";
     stats.textContent = effectLine(ability, rank);
@@ -441,18 +452,18 @@ export class LabTab implements MonstersTab {
         withWeekendChip(` · ${duration(studySeconds(step[1]))}`, weekendChip("study")),
       );
       action.append(cost);
-      if (gate) action.append(gateLine(gate));
+      if (gate) action.append(gateLine(gate, this.realm));
       const buttons = document.createElement("div");
       buttons.className = "map-row map-row--wrap locker-detail__buttons";
       const start = plainButton(`Research rank ${rank + 1}`, () => void this.runStart(monster.id), "btn--primary");
       start.dataset["focusKey"] = "start";
       start.disabled = gate !== null;
-      if (gate) start.title = `${gateText(gate)}.`;
+      if (gate) start.title = `${gateText(gate, this.realm)}.`;
       this.plainButtons.push(start);
       used.add("instant");
       const instant = this.shinyButton("instant", "Instant", () => void this.runInstant(monster.id));
       instant.setPrice(instantPrice(step));
-      instant.setBlocked(lockedInstant ? `${gateText(lockedInstant)}.` : null);
+      instant.setBlocked(lockedInstant ? `${gateText(lockedInstant, this.realm)}.` : null);
       buttons.append(start, instant.element);
       action.append(buttons);
     }
@@ -560,11 +571,11 @@ export class LabTab implements MonstersTab {
 const nameOf = (id: string): string => monsterEntry(id)?.name ?? id;
 const abilityOf = (id: string): string => labAbility(id)?.name ?? "its ability";
 
-/** "Monster Lab · level 2" as the slot's heading. */
-const slotTitle = (level: number): HTMLElement => {
+/** "Monster Lab · level 2" (or the Infernal Monster Lab's) as the slot's heading. */
+const slotTitle = (name: string, level: number): HTMLElement => {
   const heading = document.createElement("h3");
   heading.className = "train-slot__title";
-  heading.textContent = "Monster Lab";
+  heading.textContent = name;
   if (level > 0) {
     const small = document.createElement("span");
     small.className = "train-slot__level";
@@ -575,12 +586,12 @@ const slotTitle = (level: number): HTMLElement => {
 };
 
 /** The one line that says why Research is disabled; a putty shortfall with its icon. */
-const gateLine = (gate: LabGate): HTMLElement => {
+const gateLine = (gate: LabGate, realm: MonsterRealm): HTMLElement => {
   const line = document.createElement("p");
   line.className = "monsters-gate";
   if (gate.reason === "shortfall" && !gate.overCap) {
     line.append("Need ", resourceAmount("r3", gate.need), " more");
-  } else line.textContent = gateText(gate);
+  } else line.textContent = gateText(gate, realm);
   return line;
 };
 
