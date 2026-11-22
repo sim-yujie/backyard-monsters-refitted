@@ -132,6 +132,7 @@ import { chatPlayerYard, reportChatMessage } from "./controllers/chat/routes.js"
 import { getModerationNotice, seeModerationNotice } from "./controllers/moderation/notice.js";
 import { getDefenceReplay, getDefences } from "./controllers/defences/routes.js";
 import { mountFriendsRoutes } from "./controllers/friends/routes.js";
+import { mountBaiterRoutes } from "./controllers/baiter/routes.js";
 import { mountEventsRoutes } from "./controllers/events/routes.js";
 import { mountSupportRoutes } from "./controllers/support/routes.js";
 import { adminOnly, moderationEffects, mountAdminRoutes } from "./controllers/admin/routes.js";
@@ -381,6 +382,12 @@ router.get("/api/:apiVersion/defences/:id/replay", apiVersion, verifyUserAuth, v
 * 📦 Friends: requests, the list, search, blocking (issue #368, `controllers/friends/routes.ts`)
 * ──────────────────────────────────────────────── */
 mountFriendsRoutes(router);
+
+/**  ────────────────────────────────────────────────
+* 📦 Friend tests of a yard: Baiter invites, tests, results (beta 9 #4,
+*    `controllers/baiter/routes.ts`)
+* ──────────────────────────────────────────────── */
+mountBaiterRoutes(router);
 
 /**  ────────────────────────────────────────────────
 * 📦 Leaderboards & Attack Logs

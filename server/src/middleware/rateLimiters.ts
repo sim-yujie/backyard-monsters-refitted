@@ -723,3 +723,47 @@ export const mailFindPlayerLimiter = RateLimit.middleware({
     ctx.body = { error: "Too many searches. Please slow down.", message: "Too many searches. Please slow down.", reason: "rateLimited" };
   },
 });
+
+const baiterTooMany = async (ctx: Context) => {
+  ctx.status = Status.TOO_MANY_REQUESTS;
+  ctx.body = { error: "Too many requests. Please slow down.", reason: "rateLimited" };
+};
+
+/**
+ * Rate limits for friend tests of a yard (beta 9 feature #4,
+ * `controllers/baiter/routes.ts`), per user, each counted on its own: the
+ * Baiter window's reads and a test replay's fetch, 60 a minute; invites and
+ * cancels, 30 a minute; starting a test, 20 a minute; and a finished test,
+ * which the server fights again in a worker, 10 a minute.
+ */
+export const baiterReadLimiter = RateLimit.middleware({
+  interval: { min: 1 },
+  max: 60,
+  prefixKey: "baiter-read",
+  keyGenerator: byUser("baiter-read"),
+  handler: baiterTooMany,
+});
+
+export const baiterInviteLimiter = RateLimit.middleware({
+  interval: { min: 1 },
+  max: 30,
+  prefixKey: "baiter-invite",
+  keyGenerator: byUser("baiter-invite"),
+  handler: baiterTooMany,
+});
+
+export const baiterStartLimiter = RateLimit.middleware({
+  interval: { min: 1 },
+  max: 20,
+  prefixKey: "baiter-start",
+  keyGenerator: byUser("baiter-start"),
+  handler: baiterTooMany,
+});
+
+export const baiterFinishLimiter = RateLimit.middleware({
+  interval: { min: 1 },
+  max: 10,
+  prefixKey: "baiter-finish",
+  keyGenerator: byUser("baiter-finish"),
+  handler: baiterTooMany,
+});
