@@ -15,6 +15,8 @@ import { holdBack, juicerDoor, type LifeHold, type YardLife, type YardPoint } fr
 import { YardGibletsLayer } from "./YardGibletsLayer";
 import { blendOf, isInfernoMonster, JUICER_SPOUT, JuicerBlend, planGiblets } from "./juicerShow";
 import type { JuicedNews } from "@/game/monsters/juiceNews";
+import type { FedNews } from "@/game/monsters/feedNews";
+import { FEED_BURST_HEIGHT, feedGiblets, MAX_FEED_WALKERS } from "./feedShow";
 import { flyerAltitude } from "@/game/attack/monsterSprites";
 import { playEffect } from "@/game/sound/sound";
 import { routeBetween } from "@/game/guide/MonsterWalkIn";
@@ -179,6 +181,8 @@ export class YardRenderer {
   /** Each Juicer at work, by building id, and what its arrivals carry. */
   private readonly blends = new Map<number, JuicerBlend>();
   private readonly juiceNews = new Map<number, JuicedNews>();
+  /** One of each monster's hatch cost, from the feeds heard: how much blood it bursts into. */
+  private readonly feedCosts = new Map<string, number>();
   /** Blend of monsters juiced but not walked there, added with the next arrival. */
   private readonly unwalked = new Map<number, number>();
   /** Juicers whose last arrival was an Inferno monster: their balls are magma (`_lastType` 8). */
@@ -253,6 +257,7 @@ export class YardRenderer {
   constructor() {
     this.buildings.onAllArtReady(() => this.openSheets());
     this.life.onJuiceArrive = (monster, juicer) => this.juiceArrived(monster, juicer);
+    this.life.onFeedArrive = (monster, at, altitude) => this.feedBurst(monster, at, altitude);
     this.isoDecals.eventMode = "none";
     this.upgradePreviewLayer.eventMode = "none";
     this.upgradePreviewLayer.addChild(this.upgradePreview.root);
@@ -1007,6 +1012,42 @@ export class YardRenderer {
     const blend = this.blendFor(juicer.id, news.level);
     if (walking === 0) blend.add(unwalked);
     else if (unwalked > 0) this.unwalked.set(juicer.id, (this.unwalked.get(juicer.id) ?? 0) + unwalked);
+  }
+
+  /* ── Feeding the champion (`feedShow.ts`) ─────────────────────────── */
+
+  /**
+   * Shows a feed the server has made (`feedNews.ts`): the eaten monsters walk
+   * (or fly) from their pens to the champion, each bursting into blood as it
+   * gets there. Drawing only; the champion is fed already. With the champion
+   * not drawn in its cage nothing shows; under reduced motion, or with no way
+   * there, the champion bursts one monster's worth where it stands.
+   */
+  feed(news: FedNews): void {
+    const yard = this.yard;
+    const spot = yard ? this.life.championSpot(news.champion) : null;
+    if (!yard || !spot) return;
+    for (const [monster, cost] of Object.entries(news.hatchCost)) this.feedCosts.set(monster, cost);
+    const route = (from: YardPoint, to: YardPoint) => routeBetween(yard, from, to);
+    let walking = 0;
+    let first: string | null = null;
+    for (const [monster, count] of Object.entries(news.monsters)) {
+      if (count <= 0) continue;
+      first ??= monster;
+      const room = Math.max(0, MAX_FEED_WALKERS - walking);
+      walking += this.life.feed(monster, Math.min(count, room), spot, route, flyerAltitude(monster));
+    }
+    if (walking === 0 && first !== null) {
+      const bounds = yard.bounds;
+      this.feedBurst(first, { x: spot.x - spot.y + bounds.originX, y: (spot.x + spot.y) / 2 + bounds.originY }, 0);
+    }
+  }
+
+  /** A monster got to the champion: its blood bursts where it stands (`CreepBase.as:1289-1291`). */
+  private feedBurst(monster: string, at: { x: number; y: number }, altitude: number): void {
+    const spout = { x: at.x, y: at.y - altitude };
+    const count = feedGiblets(this.feedCosts.get(monster) ?? 0);
+    this.giblets.throw(planGiblets(spout, count, this.giblets.inAir, Math.random, 0.8, 100, FEED_BURST_HEIGHT + altitude));
   }
 
   /** Juicers mid-blend, for tests and the browser checks. */

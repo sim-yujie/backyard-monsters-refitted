@@ -25,6 +25,8 @@ import { consumeAttackTarget, fromInfernoYard, type AttackTarget } from "@/game/
 import { targetLabel } from "@/game/attack/attackSave";
 import { BattleWallClock } from "@/game/attack/battleWallClock";
 import { baiterTarget, consumeBaiterRun, setBaiterRun, type BaiterRun } from "@/game/baiter/baiterSession";
+import { friendTarget, friendTitle, testerRunOf } from "@/game/baiter/friendTest";
+import { baiterRefusalOf, baiterTestsApi, BAITER_REFUSAL_TEXT } from "@/api/baiterTests";
 import {
   consumeWatchRun,
   isDefenceWatch,
@@ -241,7 +243,8 @@ export class AttackScene implements Scene {
     this.viewportHeight = context.height;
     if (this.practice) {
       this.run = consumeBaiterRun();
-      this.target = this.run ? baiterTarget(this.run) : null;
+      // A friend's test fights on THEIR yard as the server served it (beta 9 #4).
+      this.target = this.run ? (this.run.friend ? friendTarget(this.run, this.run.friend) : baiterTarget(this.run)) : null;
     } else if (this.watching) {
       this.watchRun = consumeWatchRun();
       // A defence fought under other rules is refused before anything is built (#362).
@@ -525,6 +528,8 @@ export class AttackScene implements Scene {
     // A Baiter test's clock waits for the first drop, as Flash's practice
     // did; its replay plays the recorded seed from the start (#22, WP5).
     const testReplay = this.run?.replay;
+    // A friend's test fights with the seed the server gave it, which the server fights again with.
+    const friendSeed = this.run?.friend?.role === "tester" ? this.run.friend.seed : undefined;
     const raidRun = this.raidRun;
     const session = new AttackSession({
       target: { ...target, load: response },
@@ -534,7 +539,7 @@ export class AttackScene implements Scene {
         : raidRun
           ? { seed: raidRun.fight.seed, raid: true, raidSpawnsUntil: raidSpawnsUntil(raidRun) }
           : this.practice
-            ? { clockFromFirstDrop: true }
+            ? { clockFromFirstDrop: true, ...(friendSeed !== undefined ? { seed: friendSeed } : {}) }
             : {}),
       // Dev only: `?descentYard=13` fights a practice under the Descent burn,
       // to see it before the Descent's own attacks exist (Inferno WP 1.21).
@@ -606,12 +611,32 @@ export class AttackScene implements Scene {
         ? {
             practice: this.run,
             runAgain: (run: BaiterRun) => {
-              setBaiterRun(run);
-              context.goTo(SceneName.BAITER);
+              const friend = run.friend;
+              if (friend?.role !== "tester") {
+                setBaiterRun(run);
+                context.goTo(SceneName.BAITER);
+                return;
+              }
+              // A friend's test spends its ticket: another needs a fresh one, and their yard as it is now.
+              baiterTestsApi.start(friend.inviter.userid).then(
+                (start) => {
+                  setBaiterRun(testerRunOf(start, run.army));
+                  context.goTo(SceneName.BAITER);
+                },
+                (error: unknown) =>
+                  this.notices.show("baiter-friend", BAITER_REFUSAL_TEXT[baiterRefusalOf(error)], { level: "error" }),
+              );
             },
-            goToYard: () => context.goTo(SceneName.YARD),
+            goToYard: () => {
+              // The owner watched a friend's test from the Results tab: back to it.
+              if (this.run?.friend?.role === "owner") setYardIntent({ kind: "baiter", view: "results" });
+              context.goTo(SceneName.YARD);
+            },
             changeArmy: () => {
-              setYardIntent({ kind: "baiter" });
+              const friend = this.run?.friend;
+              setYardIntent(
+                friend?.role === "tester" ? { kind: "baiterFriend", inviter: friend.inviter.userid } : { kind: "baiter" },
+              );
               context.goTo(SceneName.YARD);
             },
             watchTest: (run: BaiterRun) => {
@@ -738,9 +763,11 @@ export class AttackScene implements Scene {
     const title = document.createElement("span");
     title.className = "attack-strip__title";
     title.textContent = this.practice
-      ? this.run?.replay
-        ? "Test replay"
-        : "Test attack"
+      ? this.run?.friend
+        ? friendTitle(this.run.friend, Boolean(this.run.replay))
+        : this.run?.replay
+          ? "Test replay"
+          : "Test attack"
       : this.raiding
         ? this.raidRun
           ? isMolochRaid(this.raidRun.raid)
@@ -1166,8 +1193,10 @@ export class AttackScene implements Scene {
     const sent = Object.values(state.remaining).reduce((sum, count) => sum + count, 0);
     if (this.practice) {
       // An ended test has put its battle to rest (#308): nobody is left attacking on screen.
+      const friend = this.run?.friend;
+      const whose = friend?.role === "tester" ? `${friend.inviter.name}'s yard` : "your yard";
       status.textContent =
-        `Test on your yard · ${this.buildingCount} buildings · ${state.buildingsDestroyed} destroyed · ` +
+        `Test on ${whose} · ${this.buildingCount} buildings · ${state.buildingsDestroyed} destroyed · ` +
         (state.phase === "ended" ? "over" : `${state.creepsAlive} attacking`);
       return;
     }

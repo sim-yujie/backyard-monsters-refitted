@@ -23,6 +23,7 @@ import {
   championWalkerKey,
   CREATURE_TICK_HZ,
   EMPTY_LIFE,
+  feedTrip,
   freezeTrip,
   juiceTrip,
   MAX_TICKS_PER_FRAME,
@@ -123,6 +124,12 @@ export const MAX_JUICE_WALKERS = 40;
 /** A monster that reached the Juicer: its id and the Juicer's building id. */
 export type JuiceArrival = (monsterId: string, juicer: number) => void;
 
+/**
+ * A monster that reached the champion and is eaten: its id, where it stands
+ * (world px, on the ground) and how high it flies there (px, 0 on foot).
+ */
+export type FeedArrival = (monsterId: string, at: Point, altitude: number) => void;
+
 export class YardLifeLayer {
   private readonly textures: MonsterSheetTextures;
   private readonly random: Random;
@@ -149,6 +156,8 @@ export class YardLifeLayer {
   private juiceCount = 0;
   /** Hears each monster that gets into the Juicer. */
   onJuiceArrive: JuiceArrival | null = null;
+  /** Hears each monster that gets to the champion it feeds. */
+  onFeedArrive: FeedArrival | null = null;
   private creatureClock = 0;
   private workerClock = 0;
 
@@ -292,12 +301,38 @@ export class YardLifeLayer {
    * set off; with no way there, or under reduced motion, none do.
    */
   juice(monsterId: string, count: number, juicer: number, door: YardPoint, route: TripRoute, top: number): number {
+    return this.sendOut(monsterId, count, (walker, flies) => juiceTrip(walker, juicer, door, route, flies, top));
+  }
+
+  /**
+   * Walks `count` of `monsterId` from the pens to the champion at `spot` to be
+   * eaten (`MonsterBase.as` `changeModeFeed`), as {@link juice} walks them to
+   * the Juicer: the ones the feed just took out of the pens first, then new
+   * ones. Returns how many set off; none under reduced motion or with no way.
+   */
+  feed(monsterId: string, count: number, spot: YardPoint, route: TripRoute, top: number): number {
+    return this.sendOut(monsterId, count, (walker, flies) => feedTrip(walker, spot, route, flies, top));
+  }
+
+  /**
+   * Where champion `id` (`G1`..`G5`) stands in its cage now, in yard units, or
+   * null when it is not drawn pacing it (not in the cage, or on its way to or
+   * from the Chamber).
+   */
+  championSpot(id: string): YardPoint | null {
+    const cage = this.life.cage;
+    const walker = cage ? this.walkers.get(championWalkerKey(cage.id, id)) : undefined;
+    return walker && !walker.leaving && walker.trip === null ? { x: walker.x, y: walker.y } : null;
+  }
+
+  /** Sends penned monsters off with `start`, as {@link juice} and {@link feed} say. */
+  private sendOut(monsterId: string, count: number, start: (walker: Walker, flies: boolean) => boolean): number {
     if (this.reducedMotion || !this.bounds || count <= 0) return 0;
     const sheet = spriteFor(monsterId, 1) ?? null;
     const flies = sheet?.movement === "fly";
     let started = 0;
     const send = (walker: Walker): boolean => {
-      if (!juiceTrip(walker, juicer, door, route, flies, top)) return false;
+      if (!start(walker, flies)) return false;
       const key = `j:${this.juiceCount++}:${walker.key}`;
       const moved: Walker = { ...walker, key };
       this.walkers.set(key, moved);
@@ -453,7 +488,13 @@ export class YardLifeLayer {
   private dropGone(): void {
     for (const [key, walker] of this.walkers) {
       if (!walkerGone(walker)) continue;
-      if (walker.juice) this.onJuiceArrive?.(walker.monsterId, walker.juice.juicer);
+      if (walker.juice?.feed) {
+        const bounds = this.bounds;
+        if (bounds) {
+          const at = { x: walker.x - walker.y + bounds.originX, y: (walker.x + walker.y) / 2 + bounds.originY };
+          this.onFeedArrive?.(walker.monsterId, at, walker.juice.altitude);
+        }
+      } else if (walker.juice) this.onJuiceArrive?.(walker.monsterId, walker.juice.juicer);
       this.walkers.delete(key);
       const body = this.walkerBodies.get(key);
       if (body) this.release(body);

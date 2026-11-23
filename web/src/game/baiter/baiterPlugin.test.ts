@@ -589,4 +589,79 @@ describe("a Baiter test", () => {
       expect(modal.querySelector(".test-report__replay")).toBeNull();
     });
   });
+
+  describe("of a friend's yard (beta 9 #4)", () => {
+    const friendRun = (): BaiterRun => ({
+      ...runOf(),
+      friend: {
+        role: "tester",
+        inviter: { userid: 77, name: "PuttyPunk" },
+        token: "ticket-1234",
+        seed: 4242,
+        cap: 1_500,
+        expiresAt: 1_700_086_400,
+      },
+    });
+
+    const answer = (body: object, status = 200) => Promise.resolve(new Response(JSON.stringify(body), { status }));
+
+    it("sends its drops, seed, army and report with the ticket, asks for no Goals token, and says it was sent", async () => {
+      fetchSpy.mockImplementation((url: string) =>
+        /baiter\/test\/finish$/.test(url)
+          ? answer({ error: 0, id: 9, damage: 12, result: "held", reportKept: true })
+          : Promise.reject(new Error(`unexpected ${url}`)),
+      );
+      const run = friendRun();
+      const session = new AttackSession({ target: baiterTarget(run), seed: 4242 });
+      mount(run, session);
+      const bucket = bucketFor(session);
+      bucket.fillAll();
+      tapAt(canvas, OPEN);
+      playOut(session);
+      expect(session.state().phase).toBe("ended");
+
+      await vi.waitFor(() => expect(fetchSpy).toHaveBeenCalledTimes(1));
+      const [url, init] = fetchSpy.mock.calls[0] as [string, RequestInit];
+      expect(url).toMatch(/baiter\/test\/finish$/);
+      const body = JSON.parse(String(init.body));
+      expect(body.token).toBe("ticket-1234");
+      expect(body.flinglog).toMatchObject({ v: 1, seed: 4242 });
+      expect(body.flinglog.events.some((event: { kind: string }) => event.kind === "fling")).toBe(true);
+      expect(body.army.monsters).toEqual({ C1: { count: 20, level: 1 }, C4: { count: 5, level: 2 } });
+      expect(body.tick).toBe(session.battle()!.tick);
+      expect(body.report.result).toBeDefined();
+
+      const report = modal.querySelector(".test-report")!;
+      expect(report.querySelector(".panel__title")?.textContent ?? report.textContent).toContain("Test of PuttyPunk's yard");
+      await vi.waitFor(() =>
+        expect(report.querySelector(".test-report__sent")!.textContent).toBe(
+          "Sent to PuttyPunk: they can watch it in their Baiter's Results.",
+        ),
+      );
+      expect(report.textContent).not.toContain("your yard, its traps");
+      expect(report.textContent).not.toContain("Your yard held");
+    });
+
+    it("says why when the server turns the test away", async () => {
+      fetchSpy.mockImplementation(() => answer({ error: "That invite has ended.", reason: "noTicket" }, 409));
+      const run = friendRun();
+      const session = new AttackSession({ target: baiterTarget(run), seed: 4242 });
+      mount(run, session);
+      bucketFor(session).fillAll();
+      tapAt(canvas, OPEN);
+      playOut(session);
+      const note = () => modal.querySelector(".test-report__sent")!.textContent;
+      await vi.waitFor(() => expect(note()).toMatch(/^Not sent: /));
+    });
+
+    it("sends nothing when nothing was dropped", async () => {
+      const run = friendRun();
+      const session = new AttackSession({ target: baiterTarget(run), seed: 4242 });
+      mount(run, session);
+      session.retreat();
+      await Promise.resolve();
+      expect(fetchSpy).not.toHaveBeenCalled();
+      expect(modal.querySelector(".test-report__sent")!.textContent).toBe("Nothing was dropped, so nothing was sent to PuttyPunk.");
+    });
+  });
 });

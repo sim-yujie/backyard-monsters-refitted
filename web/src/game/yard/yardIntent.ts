@@ -1,3 +1,6 @@
+/** A Baiter window tab to open on (beta 9 #4). */
+export type BaiterView = "army" | "invite" | "invitedMe" | "results";
+
 /**
  * What the yard should open on arrival, asked for by another screen: the
  * Build window on one building's tile ("Build Flinger" on a Map Room 1 card)
@@ -15,7 +18,9 @@
 export type YardIntent =
   | { readonly kind: "build"; readonly type: number }
   | { readonly kind: "monsters"; readonly tab: string }
-  | { readonly kind: "baiter" }
+  | { readonly kind: "baiter"; readonly view?: BaiterView }
+  /** A friend's test army for `inviter`'s yard (beta 9 #4): "Change army" after a test of their yard. */
+  | { readonly kind: "baiterFriend"; readonly inviter: number }
   | { readonly kind: "defences" }
   /** A line to show on arrival: why a friend's yard did not open (#372). */
   | { readonly kind: "notice"; readonly text: string }

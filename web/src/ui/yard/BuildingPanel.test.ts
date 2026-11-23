@@ -619,6 +619,22 @@ describe("BuildingPanel: the Wild Monster Baiter (#126, #22, #308)", () => {
     expect(modal.querySelectorAll(".baiter")).toHaveLength(1);
   });
 
+  it("one window at a time: the side panel and its close button step out of sight under the test window (beta 9 #4)", () => {
+    const modal = document.body.appendChild(document.createElement("div"));
+    const { element, panel, store } = setup([HALL, building(2, 19, 3)], 2, { modal });
+    expect(element.classList.contains("building-panel--under-window")).toBe(false);
+    buttonNamed(element, "Test attack")!.click();
+    expect(element.classList.contains("building-panel--under-window")).toBe(true);
+    // Shut by its own close button: the side panel is back.
+    modal.querySelector<HTMLButtonElement>(".baiter-window .panel__titlebar button[aria-label='Close']")!.click();
+    expect(element.classList.contains("building-panel--under-window")).toBe(false);
+    // Shut by the panel moving on to another building: back too.
+    panel.openBaiter("results");
+    expect(element.classList.contains("building-panel--under-window")).toBe(true);
+    panel.show(store.building(1)!);
+    expect(element.classList.contains("building-panel--under-window")).toBe(false);
+  });
+
   it("closes the test window when another building is shown", () => {
     const { panel, store } = setup([HALL, building(2, 19, 3)], 2);
     buttonNamed(panel.element, "Test attack")!.click();

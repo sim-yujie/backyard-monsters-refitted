@@ -630,7 +630,10 @@ export interface Walker {
   trip: YardPoint[] | null;
   /** Going into the Chamber: gone once its trip is over ({@link walkerGone}). */
   leaving: boolean;
-  /** A monster on its way into the Monster Juicer ({@link juiceTrip}); absent otherwise. */
+  /**
+   * A monster on its way into the Monster Juicer ({@link juiceTrip}), or into
+   * the champion that eats it ({@link feedTrip}); absent otherwise.
+   */
   juice?: JuiceWalk;
 }
 
@@ -639,8 +642,13 @@ export interface Walker {
  * creep in juice mode (`CreepBase.as:369-382`, `:1270-1288`).
  */
 export interface JuiceWalk {
-  /** The Juicer's building id. */
+  /** The Juicer's building id; -1 on a feed. */
   readonly juicer: number;
+  /**
+   * Going to be eaten by the champion ({@link feedTrip}) rather than juiced: a
+   * flyer does not drop at the end, it bursts where it is.
+   */
+  readonly feed?: boolean;
   /** A flyer takes off first and drops into the Juicer at the end. */
   readonly flies: boolean;
   /** Its height above the ground now, world px. */
@@ -1014,7 +1022,7 @@ export const recageTrip = (walker: Walker, area: LifeArea, route: TripRoute | nu
 export const walkerGone = (walker: Walker): boolean =>
   walker.leaving &&
   walker.trip === null &&
-  (!walker.juice || !walker.juice.flies || (walker.juice.landing ?? 0) >= JUICE_DROP_TICKS);
+  (!walker.juice || !walker.juice.flies || walker.juice.feed === true || (walker.juice.landing ?? 0) >= JUICE_DROP_TICKS);
 
 /* ── Trips into the Monster Juicer ──────────────────────────────────────── */
 
@@ -1055,7 +1063,28 @@ export const juiceTrip = (
   return true;
 };
 
-/** One tick of a monster on its way into the Juicer. */
+/**
+ * Sends a penned monster to the champion `spot` to be eaten, along `route`
+ * from where it stands (`changeModeFeed`, `MonsterBase.as:770-775`: it
+ * waypoints to the champion's point, `CREATURES._guardian._tmpPoint`). A
+ * flyer climbs to `top` px first, as one going to the Juicer does
+ * (`CreepBase.as:261`), but bursts in the air where it gets there: Flash's
+ * drop is the Juicer's alone (`CreepBase.as:1272-1290`). Returns false,
+ * leaving it be, when there is no way.
+ */
+export const feedTrip = (
+  walker: Walker,
+  spot: YardPoint,
+  route: TripRoute,
+  flies: boolean,
+  top: number,
+): boolean => {
+  if (!startTrip(walker, route({ x: walker.x, y: walker.y }, spot), true)) return false;
+  walker.juice = { juicer: -1, feed: true, flies, altitude: 0, top, rise: 0, landing: null, dropFrom: 0 };
+  return true;
+};
+
+/** One tick of a monster on its way into the Juicer, or into the champion. */
 const stepJuice = (walker: Walker, juice: JuiceWalk): void => {
   if (walker.trip !== null) {
     if (juice.flies) {
@@ -1066,7 +1095,7 @@ const stepJuice = (walker: Walker, juice: JuiceWalk): void => {
       if (juice.altitude < JUICE_MIN_FLY_ALTITUDE) return;
     }
     stepTrip(walker);
-    if (walker.trip === null && juice.flies) {
+    if (walker.trip === null && juice.flies && !juice.feed) {
       juice.landing = 0;
       juice.dropFrom = juice.altitude;
     }

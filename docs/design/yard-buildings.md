@@ -1055,7 +1055,9 @@ finish-now and instant only with a snapshot of `academy`, `buildingdata`, `resou
   feed recipe with what the player holds ("15 Octo-ooze — you have 40"), and buttons **Feed**
   (monsters), **Feed · 26 shiny**, **Evolve now · 158 shiny** (`feedShiny × 2 × feeds left`, MH
   §7.4), **Heal · n shiny**, **Rename**. No **Juice** (owner 2026-10-28, below). The panel stays
-  open after each action.
+  open after each action. A monster feed is shown in the yard as in Flash (owner, Beta 9 grilling
+  2026-11-21): the eaten monsters walk from their pens to the champion and each bursts into the
+  Juicer's giblets there (`web/src/game/yard/feedShow.ts`); a Shiny feed shows nothing, as in Flash.
 - Routes: `champion/raise` `type` (the champion is in the cage at once, below); `champion/feed` `mode` = `monsters`|`shiny` (doubled price
   outside the feed window, MH §7.4); `champion/evolve`; `champion/heal`; `champion/rename` `name`
   (1–20 characters, filtered). `champion/juice` is refused (`409 juiceDisabled`) and

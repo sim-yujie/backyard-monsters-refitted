@@ -31,8 +31,12 @@ import { STANCE_TEXT, championName, monsterName } from "@/ui/attack/ArmyPanel";
 import { formatAmount } from "@/ui/format";
 import { monsterPicture } from "@/ui/monsters/LockerTab";
 import { Popup } from "@/ui/Popup";
+import { gameIcon } from "@/ui/gameIcon";
+import type { BaiterView } from "@/game/yard/yardIntent";
+import { BaiterFriends, leftText, type BaiterFriendsOptions, type FriendsView } from "./BaiterFriends";
 import { QuantityStepper } from "@/ui/QuantityStepper";
 import "@/ui/styles/baiter.css";
+import "@/ui/styles/baiterFriends.css";
 
 /**
  * The Wild Monster Baiter's test setup (issues #126 and #22,
@@ -74,6 +78,31 @@ export interface BaiterPanelOptions {
   readonly recent?: readonly RecordedTest[];
   /** The window was closed by the player: its close button or Escape. */
   readonly onClose?: () => void;
+  /**
+   * The friend tabs (beta 9 #4, design A): Invite, Invited me and Results
+   * beside the Army. Without it the window keeps its own Recent tests tab.
+   */
+  readonly friends?: Omit<BaiterFriendsOptions, "ownTests" | "onCounts">;
+  /** The tab to open on, with the friend tabs. */
+  readonly view?: BaiterView;
+  /**
+   * A friend's yard to test instead of the player's own (beta 9 #4): the
+   * army is capped by THEIR Baiter, and Start asks the server for their yard.
+   */
+  readonly host?: BaiterHost;
+}
+
+/** Whose yard a friend's test army is for. */
+export interface BaiterHost {
+  readonly inviter: number;
+  readonly name: string;
+  /** Their Baiter's cap, in housing space. */
+  readonly cap: number;
+  /** Unix seconds the invite ends. */
+  readonly expiresAt: number;
+  /** Starts the test with `army`; the words to show when it could not, or null. */
+  readonly start: (army: TestArmy) => Promise<string | null>;
+  readonly now?: () => number;
 }
 
 /** The last panel's army, for the next one this session. */
@@ -125,15 +154,20 @@ export class BaiterPanel {
   private testArmy: TestArmy;
   /** Set while {@link destroy} closes the window, which is not the player closing it. */
   private destroying = false;
+  private friends: BaiterFriends | null = null;
+  private readonly tabControls: HTMLButtonElement[] = [];
+  /** A friend's test is being started: the server is asked for their yard. */
+  private starting = false;
+  private readonly gate: HTMLElement;
 
   constructor(options: BaiterPanelOptions) {
     this.options = options;
-    this.cap = capOf(options.level);
+    this.cap = options.host ? options.host.cap : capOf(options.level);
     const save = options.save();
     this.testArmy = clampArmy(remembered ?? emptyArmy(save), this.cap);
 
     this.popup = new Popup({
-      title: "Baiter: test attack",
+      title: options.host ? `Test ${options.host.name}'s yard` : "Baiter: test attack",
       className: "baiter-window",
       // A stray tap beside the window must not close it.
       closeOnBackdrop: false,
@@ -146,11 +180,13 @@ export class BaiterPanel {
     this.body.className = "baiter";
     this.body.setAttribute("aria-label", "Defence test");
 
-    const lead = text(
-      "p",
-      "baiter__note",
-      "Make up any army and test it against your yard as it stands. Tests are free, and nothing is saved.",
-    );
+    const lead = options.host
+      ? hostLead(options.host)
+      : text(
+          "p",
+          "baiter__note",
+          "Make up any army and test it against your yard as it stands. Tests are free, and nothing is saved.",
+        );
 
     // Shortcuts.
     const shortcuts = document.createElement("div");
@@ -220,8 +256,10 @@ export class BaiterPanel {
     this.runButton.addEventListener("click", () => this.run());
     const actions = document.createElement("div");
     actions.className = "baiter__actions";
-    if (options.blocked) actions.append(text("p", "baiter__gate", options.blocked));
-    actions.append(this.clearButton, this.runButton);
+    this.gate = text("p", "baiter__gate", options.blocked ?? "");
+    this.gate.hidden = !options.blocked;
+    this.gate.setAttribute("role", "status");
+    actions.append(this.gate, this.clearButton, this.runButton);
 
     const foot = document.createElement("div");
     foot.className = "baiter__foot";
@@ -231,8 +269,47 @@ export class BaiterPanel {
     army.className = "baiter__view baiter__view--army";
     army.append(lead, top, list, foot);
 
-    const recent = options.recent ?? recentTests();
-    if (recent.length > 0) {
+    // The player's own tests: never a test they ran of a friend's yard.
+    const recent = (options.recent ?? recentTests()).filter((test) => !test.run.friend);
+    if (options.friends && !options.host) {
+      const own =
+        recent.length > 0
+          ? (() => {
+              const box = document.createElement("section");
+              box.className = "baiter-friends__own";
+              box.append(text("h3", "baiter-friends__head", "Your own tests this session"), this.recentList(recent));
+              return box;
+            })()
+          : null;
+      const friends = new BaiterFriends({
+        ...options.friends,
+        ownTests: own,
+        onCounts: (counts) => {
+          const [, , invitedMe, results] = this.tabControls;
+          if (invitedMe) invitedMe.textContent = counts.invitedMe > 0 ? `Invited me ${counts.invitedMe}` : "Invited me";
+          if (results) {
+            results.textContent = counts.results > 0 ? `Results ${counts.results}` : "Results";
+            results.classList.toggle("baiter__tab--fresh", counts.fresh > 0);
+          }
+        },
+      });
+      this.friends = friends;
+      const views: [string, HTMLElement][] = [
+        ["Army", army],
+        ["Invite", friends.invite],
+        ["Invited me", friends.invitedMe],
+        ["Results", friends.results],
+      ];
+      const order: readonly BaiterView[] = ["army", "invite", "invitedMe", "results"];
+      // The tabs in the window's fixed head, so they never scroll away on a phone.
+      this.popup.setHead(
+        this.tabs(views, Math.max(0, order.indexOf(options.view ?? "army")), (index) => {
+          if (order[index] === "results") friends.markSeen();
+        }),
+      );
+      this.body.append(...views.map(([, view]) => view));
+      void friends.load();
+    } else if (recent.length > 0) {
       const history = document.createElement("div");
       history.className = "baiter__view baiter__view--recent";
       history.append(
@@ -260,6 +337,12 @@ export class BaiterPanel {
     return this;
   }
 
+  /** Shows the friend tab `view` (beta 9 #4). */
+  show(view: FriendsView | "army"): void {
+    const index = (["army", "invite", "invitedMe", "results"] as const).indexOf(view);
+    this.tabControls[index]?.click();
+  }
+
   /** Closes the window without {@link BaiterPanelOptions.onClose}: its owner asked. */
   destroy(): void {
     this.destroying = true;
@@ -270,11 +353,16 @@ export class BaiterPanel {
   private closed(): void {
     for (const stepper of this.steppers.values()) stepper.destroy();
     this.steppers.clear();
+    this.friends?.destroy();
     if (!this.destroying) this.options.onClose?.();
   }
 
   /** The tab row over the army and the recent tests; the army is shown first. */
-  private tabs(views: ReadonlyArray<readonly [string, HTMLElement]>): HTMLElement {
+  private tabs(
+    views: ReadonlyArray<readonly [string, HTMLElement]>,
+    first = 0,
+    onSelect?: (index: number) => void,
+  ): HTMLElement {
     const row = document.createElement("div");
     row.className = "tab-row baiter__tabs";
     row.setAttribute("role", "tablist");
@@ -292,6 +380,7 @@ export class BaiterPanel {
         control.setAttribute("aria-selected", String(at === index));
         control.tabIndex = at === index ? 0 : -1;
       });
+      onSelect?.(index);
     };
     const key = Math.random().toString(36).slice(2, 9);
     views.forEach(([label, view], index) => {
@@ -304,6 +393,7 @@ export class BaiterPanel {
       tab.setAttribute("aria-controls", view.id);
       tab.addEventListener("click", () => select(index));
       controls.push(tab);
+      this.tabControls.push(tab);
       row.append(tab);
     });
     row.addEventListener("keydown", (event) => {
@@ -314,7 +404,7 @@ export class BaiterPanel {
       select(next);
       controls[next]?.focus();
     });
-    select(0);
+    select(first);
     return row;
   }
 
@@ -538,7 +628,7 @@ export class BaiterPanel {
 
     const empty = used === 0 && this.testArmy.champions.length === 0;
     this.clearButton.disabled = empty;
-    this.runButton.disabled = empty || this.options.blocked !== null;
+    this.runButton.disabled = empty || this.options.blocked !== null || this.starting;
     this.runButton.title = this.options.blocked ?? (empty ? "Pick some monsters or a champion first" : "");
   }
 
@@ -556,12 +646,43 @@ export class BaiterPanel {
   }
 
   private run(): void {
-    if (this.options.blocked) return;
+    if (this.options.blocked || this.starting) return;
     const army = clampArmy(this.testArmy, this.cap);
     if (armySize(army) === 0 && army.champions.length === 0) return;
-    this.options.onRun({ save: this.options.save(), army, baiterLevel: this.options.level });
+    const host = this.options.host;
+    if (!host) {
+      this.options.onRun({ save: this.options.save(), army, baiterLevel: this.options.level });
+      return;
+    }
+    // A friend's yard comes from the server, as it stands now.
+    this.starting = true;
+    this.runButton.textContent = "Starting…";
+    this.render();
+    void host.start(army).then((refusal) => {
+      this.starting = false;
+      this.runButton.textContent = "Start test";
+      this.gate.hidden = refusal === null;
+      this.gate.textContent = refusal ?? "";
+      this.render();
+    });
   }
 }
+
+/** The line over a friend's test army: whose yard, the cap, the time left (design A). */
+const hostLead = (host: BaiterHost): HTMLElement => {
+  const lead = document.createElement("p");
+  lead.className = "baiter__note baiter__host";
+  const now = host.now?.() ?? Math.floor(Date.now() / 1000);
+  const left = document.createElement("span");
+  left.className = "baiter__host-left";
+  left.append(gameIcon("time", { size: 16, decorative: true }), ` ${leftText(host.expiresAt - now)} left`);
+  lead.append(
+    gameIcon("friends", { size: 24, decorative: true }),
+    ` ${host.name} invited you to test their main yard. A free made-up army, up to their Baiter's ${formatAmount(host.cap)}. Nothing is lost or won. `,
+    left,
+  );
+  return lead;
+};
 
 /** Gives `picker` the options `from`..`to`, unless it already has them; its caption names them. */
 const fillNumbers = (picker: HTMLSelectElement, from: number, to: number): void => {
@@ -571,7 +692,7 @@ const fillNumbers = (picker: HTMLSelectElement, from: number, to: number): void 
   for (let value = from; value <= to; value += 1) picker.append(option(String(value), String(value)));
 };
 
-const text = (tag: "p" | "span", className: string, content: string): HTMLElement => {
+const text = (tag: "p" | "span" | "h3", className: string, content: string): HTMLElement => {
   const element = document.createElement(tag);
   element.className = className;
   element.textContent = content;

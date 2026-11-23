@@ -14,7 +14,7 @@ import { recordNotifications } from "../notifications/notifications.js";
 
 /** What a `friend` row carries: the event, and the other player. */
 export interface FriendNotice {
-  event: "request" | "accepted" | "gift" | "helpSpeedup" | "helpRepair";
+  event: "request" | "accepted" | "gift" | "helpSpeedup" | "helpRepair" | "baiterInvite" | "baiterTest";
   userid: number;
   username: string;
   [detail: string]: unknown;
