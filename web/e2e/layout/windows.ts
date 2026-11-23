@@ -1,5 +1,5 @@
 import type { Page } from "@playwright/test";
-import { openAchievements, openFriendsScreen, openMoveTray, openRepeatResult, openRepeatSheet, openShop, pressDock } from "./game";
+import { openAchievements, openBaiterPreview, openFriendsScreen, openMoveTray, openRepeatResult, openRepeatSheet, openShop, pressDock } from "./game";
 
 /**
  * Every window the layout check opens on the own yard.
@@ -204,6 +204,26 @@ export const WINDOWS: readonly WindowCase[] = [
     tabs: false,
     closeButton: null,
     open: (page) => openRepeatSheet(page, "working"),
+  },
+  {
+    // The Baiter window's friend tabs (beta 9 #4, design A) at their busiest:
+    // 17 people to invite, four open invites, three received, nine results.
+    // Title, the four tabs and close in sight, a row of each list at every size.
+    id: "baiter-friends",
+    label: "Baiter friend tabs",
+    panel: ".baiter-window",
+    items: ".friends-row",
+    tabs: true,
+    open: (page) => openBaiterPreview(page, "invite"),
+  },
+  {
+    // A friend's test army for their yard (beta 9 #4): Start test in reach.
+    id: "baiter-friend-test",
+    label: "Baiter, a friend's yard",
+    panel: ".baiter-window",
+    items: ".baiter__row",
+    tabs: false,
+    open: (page) => openBaiterPreview(page, "host"),
   },
   {
     // The world map's move tray (beta 9 #7) at its busiest: seven kinds, three

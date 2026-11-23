@@ -65,7 +65,8 @@ import { refusalText } from "@/ui/dom";
  *
  * The original closed the whole popup after every feed
  * (`CHAMPIONCAGEPOPUP.as:175-178`); this stays open and redraws from the
- * answer (§7.2). Shiny buttons are two-tap ({@link ShinyButton}) and live as
+ * answer (§7.2), while the yard behind it walks the eaten monsters into the
+ * champion (`game/yard/feedShow.ts`). Shiny buttons are two-tap ({@link ShinyButton}) and live as
  * long as the panel, so an armed one survives the redraws. {@link tick}
  * (once a second) moves the clocks and the healing health bar without
  * rebuilding anything a finger or the keyboard may be on.

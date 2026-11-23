@@ -638,3 +638,9 @@
   gap: 0.3em;
   font-variant-numeric: tabular-nums;
 }
+
+/* The Baiter window is open over the side panel (beta 9 #4): one window at a
+   time, so the panel and its close button step out of sight until it shuts. */
+.building-panel--under-window {
+  visibility: hidden;
+}

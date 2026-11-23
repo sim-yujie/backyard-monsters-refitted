@@ -29,6 +29,8 @@ export const playerKeys = (userid: number, email: string): string[] => [
   // Auto attack (`services/base/autoAttack/autoAttack.ts`).
   `auto-attack:${userid}`,
   `auto-attack-replay:${userid}`,
+  // Friend tests of a yard (`services/baiter/baiterRunStore.ts`).
+  `baiter-test-run:${userid}`,
   // Fair-play checks (`services/user/botChallenge.ts`, `services/user/botPatterns.ts`).
   `bot-check:challenge:${userid}`,
   `bot-check:wrong:${userid}`,

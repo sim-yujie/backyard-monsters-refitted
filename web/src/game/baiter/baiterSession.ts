@@ -16,6 +16,7 @@ import {
 import { academyLevel, housedCount } from "@/game/monsters/housing";
 import { LISTED_MONSTERS, housingSpace, maxTrainingLevel } from "@/game/monsters/monsterCatalogue";
 import { championEntry } from "@/game/yard/championCatalogue";
+import type { FriendRun } from "./friendTest";
 import type { TestReport } from "./testReport";
 
 /**
@@ -310,6 +311,11 @@ export interface BaiterRun {
   readonly baiterLevel: number;
   /** A finished test to play back rather than a new one (#22, WP5, `testHistory.ts`). */
   readonly replay?: TestReplay;
+  /**
+   * A friend's test (beta 9 #4): another player's yard under test, or the
+   * owner watching one; absent for a test of the player's own yard.
+   */
+  readonly friend?: FriendRun;
 }
 
 /**
