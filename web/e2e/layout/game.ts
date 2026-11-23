@@ -98,15 +98,17 @@ const DAMAGED_BUILDINGS = 3;
 
 /**
  * The yard comes back attacked (beta 9 play-test, 23 Nov 2026): a few
- * buildings below full health in the `/base/load` answer, so the post-attack
+ * buildings below full health in the yard's answers, so the post-attack
  * banner ("Your yard was attacked: 3 buildings damaged · Repair all") stands
  * at the top for every window the check opens, as it does for a player who
  * was raided. It sat on Build's tab row and caught its taps; a window it
  * covers fails as covered. Only the browser's copy is changed: no walls, no
- * Town Hall, nothing saved.
+ * Town Hall, nothing saved. `/bm/yard/state` answers carry the health too
+ * and would put it back, so they get the same damage.
  */
 const damageOwnYard = async (context: BrowserContext): Promise<void> => {
-  await context.route(/\/base\/load(\?|$)/, async (route) => {
+  const damaged = new Set<string>();
+  await context.route(/\/(base\/load|bm\/yard\/state)(\?|$)/, async (route) => {
     const response = await route.fetch();
     const text = await response.text();
     let body = text;
@@ -115,20 +117,21 @@ const damageOwnYard = async (context: BrowserContext): Promise<void> => {
         buildingdata?: Record<string, { t?: unknown; rE?: unknown } | null>;
         buildinghealthdata?: unknown;
       };
-      if (save.buildingdata && typeof save.buildingdata === "object") {
-        // An empty one comes as [] (the save's PHP shape), which would drop string keys.
+      if (damaged.size === 0 && save.buildingdata && typeof save.buildingdata === "object") {
+        for (const [key, building] of Object.entries(save.buildingdata)) {
+          if (damaged.size >= DAMAGED_BUILDINGS) break;
+          if (!building || typeof building.t !== "number" || building.t === 14 || building.t === 17) continue;
+          if (building.rE) continue;
+          damaged.add(key);
+        }
+      }
+      if (damaged.size > 0 && "buildinghealthdata" in save) {
+        // An empty one may come as [] (the save's PHP shape), which would drop string keys.
         const health: Record<string, number> =
           save.buildinghealthdata && !Array.isArray(save.buildinghealthdata) && typeof save.buildinghealthdata === "object"
             ? { ...(save.buildinghealthdata as Record<string, number>) }
             : {};
-        let damaged = 0;
-        for (const [key, building] of Object.entries(save.buildingdata)) {
-          if (damaged >= DAMAGED_BUILDINGS) break;
-          if (!building || typeof building.t !== "number" || building.t === 14 || building.t === 17) continue;
-          if (building.rE) continue;
-          health[key] = 1;
-          damaged += 1;
-        }
+        for (const key of damaged) health[key] = 1;
         save.buildinghealthdata = health;
         body = JSON.stringify(save);
       }

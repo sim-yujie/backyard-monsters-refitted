@@ -3,7 +3,7 @@ import { afterEach, describe, expect, it } from "vitest";
 import type { AttackSessionState } from "@/game/attack/AttackSession";
 import type { BaiterRun } from "@/game/baiter/baiterSession";
 import type { BaseLoadResponse } from "@/api/types";
-import { BaiterDock } from "./BaiterSummary";
+import { BaiterDock, baiterNote } from "./BaiterSummary";
 
 /** The Baiter scene's dock line: its running count, and what it says once the test is over (#308). */
 
@@ -43,6 +43,12 @@ describe("BaiterDock", () => {
     dock.update(stateOf("running"));
     expect(dock.element.querySelector<HTMLElement>(".baiter-dock__army")!.hidden).toBe(true);
     expect(dock.element.querySelector<HTMLElement>(".baiter__figures")!.hidden).toBe(false);
+  });
+
+  it("words the test's note for the notice, not the dock", () => {
+    expect(baiterNote(RUN)).toBe("Test attack: nothing is saved. Your yard, its traps and your resources stay as they are.");
+    expect(baiterNote(RUN, true)).toBe("Replay of a test, on your yard as it was then. Nothing is saved.");
+    expect(mount().element.textContent).not.toContain("nothing is saved");
   });
 
   it("counts what is attacking while the test runs", () => {

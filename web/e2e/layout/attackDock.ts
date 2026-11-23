@@ -33,7 +33,8 @@ export const openAttack = async (page: Page, kind: "attack" | "baiter" = "attack
   if (kind === "baiter") {
     const up = await page
       .locator(".attack-dock .baiter-dock")
-      .waitFor({ timeout: 90_000 })
+      // Attached: a phone's sheet starts closed, the line in it out of sight.
+      .waitFor({ state: "attached", timeout: 90_000 })
       .then(() => true)
       .catch(() => false);
     if (!up) return "the Baiter test's line never showed";

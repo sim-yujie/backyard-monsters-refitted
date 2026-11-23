@@ -10,16 +10,32 @@ import "@/ui/styles/baiter.css";
  */
 
 /**
- * The line at the top of the dock, above the army panel (#22, WP3): says
- * nothing is saved, and keeps count while it runs. The army itself, each row
- * at its level, is in the army panel below it.
- *
- * A thin bar like the attack strip and the status line, with no frame or
- * title plate of its own (beta 9 play-test, 23 Nov 2026): as a framed window
- * named "Test attack" it took about 190 px of the dock and left one army row
- * in sight; the strip above already names the test. Before the first drop it
- * says how many monsters there are and how to drop them; from then on that
- * line gives way to the running count.
+ * What the test is, in words: nothing is lost or saved, and who gets the
+ * replay. Shown once as the test opens, as a notice that goes by itself
+ * (`baiterPlugin.ts`), not in the dock, where it took the army's room.
+ */
+export const baiterNote = (run: BaiterRun, replay = false): string => {
+  const friend = run.friend;
+  return friend?.role === "tester"
+    ? replay
+      ? `Replay of your test of ${friend.inviter.name}'s yard. Nothing is saved.`
+      : `A test of ${friend.inviter.name}'s yard: nothing is lost or won by either of you. They get the replay.`
+    : friend?.role === "owner"
+      ? `${friend.tester}'s test of your yard, as it was then. Nothing was lost.`
+      : replay
+        ? "Replay of a test, on your yard as it was then. Nothing is saved."
+        : "Test attack: nothing is saved. Your yard, its traps and your resources stay as they are.";
+};
+
+/**
+ * The line at the top of the dock, above the army panel (#22, WP3): one
+ * line, a thin bar like the attack strip and the status line, with no frame
+ * or title plate (beta 9 play-test, 23 Nov 2026: as a framed window named
+ * "Test attack", with the note above, it took about 190 px of the dock and
+ * left one army row in sight; the strip above already names the test).
+ * Before the first drop it says how many monsters there are and how to drop
+ * them; from then on the running count takes its place. The army itself,
+ * each row at its level, is in the army panel below it.
  */
 export class BaiterDock {
   readonly element: HTMLElement;
@@ -31,20 +47,6 @@ export class BaiterDock {
     this.element = document.createElement("section");
     this.element.className = "baiter-dock";
     this.element.setAttribute("aria-label", replay ? "Test replay" : "Test attack");
-
-    const note = document.createElement("p");
-    note.className = "baiter__note baiter-dock__note";
-    const friend = run.friend;
-    note.textContent =
-      friend?.role === "tester"
-        ? replay
-          ? `Replay of your test of ${friend.inviter.name}'s yard. Nothing is saved.`
-          : `A test of ${friend.inviter.name}'s yard: nothing is lost or won by either of you. They get the replay.`
-        : friend?.role === "owner"
-          ? `${friend.tester}'s test of your yard, as it was then. Nothing was lost.`
-          : replay
-            ? "Replay of a test, on your yard as it was then. Nothing is saved."
-            : "Test attack: nothing is saved. Your yard, its traps and your resources stay as they are.";
 
     this.army = document.createElement("p");
     this.army.className = "baiter__note baiter-dock__army";
@@ -59,7 +61,7 @@ export class BaiterDock {
     this.progress.setAttribute("aria-live", "polite");
     this.progress.hidden = true;
 
-    this.element.append(note, this.army, this.progress);
+    this.element.append(this.army, this.progress);
   }
 
   /** Goes first in the dock, above the army panel. */

@@ -6,13 +6,18 @@ import { battlePlugin } from "@/game/attack/plugins/battle";
 import { testDropPlugin } from "@/game/attack/plugins/drop";
 import { maxHp, ticks } from "@/game/combat/rules";
 import { championEntry } from "@/game/yard/championCatalogue";
-import { BaiterDock } from "@/ui/attack/BaiterSummary";
+import { BaiterDock, baiterNote } from "@/ui/attack/BaiterSummary";
 import { TestReportPanel } from "@/ui/attack/TestReport";
 import { baiterRecorder, type BaiterRecorder } from "./baiterRecord";
 import { recordTest, replayOf } from "./testHistory";
 import { buildTestReport } from "./testReport";
 import { BAITER_REFUSAL_TEXT, baiterRefusalOf, baiterTestsApi, type BaiterTestsApi } from "@/api/baiterTests";
 import { armyBody, testerReport } from "./friendTest";
+
+
+/** The notice key and how long the test's note stays (it says what the test is, once). */
+const BAITER_NOTE = "baiter-note";
+const BAITER_NOTE_MS = 10_000;
 
 /**
  * The Baiter scene's own package (issue #126): a test plays like a real
@@ -90,6 +95,8 @@ export const createBaiterPlugin = (
   };
 
   const dock = new BaiterDock(run, replay !== null).mount(mounts.dock);
+  // What the test is, once, over the yard: the dock keeps its room for the army.
+  mounts.notices.show(BAITER_NOTE, baiterNote(run, replay !== null), { level: "info", timeoutMs: BAITER_NOTE_MS });
 
   // When each champion fell, read off the notifications (a quarter of a
   // second apart), which the battle's own counters do not keep.
