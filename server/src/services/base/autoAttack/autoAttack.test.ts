@@ -639,6 +639,48 @@ describe("autoAttackPlanFor", () => {
   });
 });
 
+/* ── Whether an attack would save a Repeat plan (patch 8.3, owner's B) ───── */
+
+describe("autoAttackPlanFor says whether the camp is fresh", () => {
+  test("a camp with no damaged building is fresh, plan or no plan", async () => {
+    camp.damage = 0;
+    camp.buildinghealthdata = {};
+    expect((await autoAttackPlanFor(user() as never, CAMP)).fresh).toBe(true);
+    planRow = null;
+    expect(await autoAttackPlanFor(user() as never, CAMP)).toMatchObject({ plan: null, fresh: true });
+  });
+
+  test("a damaged camp is not fresh", async () => {
+    planRow = null;
+    camp.damage = 12;
+    camp.buildinghealthdata = { "0": 120_000, "3": 40_000 };
+    expect(await autoAttackPlanFor(user() as never, CAMP)).toMatchObject({ damage: 12, fresh: false });
+  });
+
+  test("a camp scratched below 1% reads 0% but is not fresh", async () => {
+    planRow = null;
+    camp.damage = 0;
+    camp.buildinghealthdata = { "0": 360_000 };
+    expect(await autoAttackPlanFor(user() as never, CAMP)).toMatchObject({ damage: 0, fresh: false });
+  });
+
+  test("a camp past its 12 hours has regrown, so it is fresh again", async () => {
+    planRow = null;
+    camp.damage = 40;
+    camp.buildinghealthdata = { "0": 120_000 };
+    camp.savetime = now() - 13 * 60 * 60;
+    expect(await autoAttackPlanFor(user() as never, CAMP)).toMatchObject({ damage: 0, fresh: true });
+  });
+
+  test("a camp nobody has attacked yet has no row, and is fresh", async () => {
+    planRow = null;
+    // Known by its id alone: this world's id for the camp's cell, with no row behind it.
+    const { generateBaseId } = await import("../../../utils/generateBaseId.js");
+    const unattacked = generateBaseId(WORLD, 241, 208);
+    expect(await autoAttackPlanFor(user() as never, unattacked)).toMatchObject({ plan: null, damage: 0, fresh: true });
+  });
+});
+
 /* ── Smart Repeat attack (owner, 16 Nov 2026) ──────────────────────────── */
 
 /** Monster Housing at level 6 (540 each), so a yard can take monsters in. */

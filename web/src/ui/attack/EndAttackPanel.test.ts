@@ -182,6 +182,23 @@ describe("EndAttackPanel", () => {
     expect(onReturn).toHaveBeenCalledTimes(1);
   });
 
+  it("puts why no Repeat plan was saved on its own warning line under \"Result saved.\" (patch 8.3)", () => {
+    const { panel, query } = mountPanel();
+    const warn = "Repeat plan not saved: bombs alone won't save. Send monsters too on a full-health camp.";
+    panel.setSaved({ protectedUntil: 0, now: 1_000, warn });
+    const status = query(".attack-end__status");
+    expect(status.querySelector("span")!.textContent).toBe("Result saved.");
+    const line = query(".attack-end__status-warn");
+    expect(line.hidden).toBe(false);
+    expect(line.textContent).toBe(warn);
+    expect(line.querySelector("svg")).not.toBeNull();
+    expect(status.classList.contains("attack-end__status--warned")).toBe(true);
+    // A later save attempt's state hides it again.
+    panel.setSaving();
+    expect(line.hidden).toBe(true);
+    expect(status.classList.contains("attack-end__status--warned")).toBe(false);
+  });
+
   it("says nothing about protection when the response grants none", () => {
     const { panel, query } = mountPanel();
     panel.setSaved({ protectedUntil: 0, now: 1_000 });

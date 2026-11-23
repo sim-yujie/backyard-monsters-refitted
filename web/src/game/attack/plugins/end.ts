@@ -35,6 +35,7 @@ import { INFERNO_YARD, MAIN_YARD, outpostTarget } from "@/game/yard/ownYards";
 import { monsterName } from "@/ui/attack/ArmyPanel";
 import { EndAttackPanel, type SaveFailure, type SavedInfo } from "@/ui/attack/EndAttackPanel";
 import { EndTakeoverOffer } from "@/ui/attack/EndTakeoverOffer";
+import { planMissedText, type PlanMissedReason } from "@/ui/attack/autoAttackText";
 
 /**
  * Attack-scene plugin for the "end" work package (issue #32, WP6).
@@ -128,6 +129,8 @@ type SaveShown =
       /** A Descent fight the server's battle overruled: its outcome and the saved line's words. */
       readonly result?: NonNullable<SavedInfo["result"]>;
       readonly note?: string;
+      /** Why the attack saved no Repeat plan: a warning line under the saved line (patch 8.3). */
+      readonly warn?: string;
     }
   | { readonly kind: "failed"; readonly failure: SaveFailure }
   | { readonly kind: "pending"; readonly message: string }
@@ -145,6 +148,7 @@ const showOn = (panel: EndAttackPanel, shown: SaveShown): void => {
         credited: shown.credited,
         ...(shown.result ? { result: shown.result } : {}),
         ...(shown.note ? { note: shown.note } : {}),
+        ...(shown.warn ? { warn: shown.warn } : {}),
         ...(shown.inferno
           ? { result: shown.inferno.result, taken: shown.inferno.taken, backAt: shown.inferno.backAt }
           : {}),
@@ -299,12 +303,6 @@ export const REPLAY_MISMATCH_SETTLES = "It will settle the attack from its own r
  * (owner, 12 Nov 2026), so the panel shows the server's outcome too.
  */
 export const SERVER_RESULT_USED = "Your screen and the server disagreed, so the server's result was saved.";
-
-/**
- * The saved line when the attack did not become the Repeat attack plan: the
- * camp was already damaged before it (owner, 22 Nov 2026, patch 8.2).
- */
-export const REPEAT_PLAN_NOT_SAVED = "Result saved. Repeat plan not saved: camp was already damaged.";
 
 /** Turns a failed save into what the panel says (§4.7). */
 export const describeSaveFailure = (caught: unknown): SaveFailure => {
@@ -527,6 +525,24 @@ export const createEndPlugin = (deps: EndPluginDeps = {}): AttackPlugin => {
       stopDescentResult = playDescentResult(modal, target.descentYard!, descentLanded, () => goToOutpost(INFERNO_YARD));
     };
 
+    /**
+     * Why the attack saved no Repeat plan, or null: the server says the camp
+     * was already damaged (patch 8.2), or a Map Room 2 camp was bombed with no
+     * monster and no champion flung (the server keeps a plan from any fling,
+     * a champion's too: `planFromFought`). An attack that did nothing at all
+     * says nothing (patch 8.3, owner's B).
+     */
+    const planMissed = (response: BaseSaveResponse): string | null => {
+      const mr2Camp = target.kind === "wild" && !!target.cell && (target.mapversion ?? 2) === 2 && !infernoTribe && !descent;
+      let reason: PlanMissedReason | null = null;
+      if (response.repeatplan === "camp-damaged") reason = "camp-damaged";
+      else if (mr2Camp && session.hasActed()) {
+        const summary = summariseAttack(session);
+        if (summary.monstersSent === 0 && summary.champions.length === 0) reason = "no-monsters";
+      }
+      return reason ? planMissedText(reason, target.name, target.campLevel ?? null) : null;
+    };
+
     /** The panel's saved state for a response. A grant's outpost is not protected yet. */
     const savedFrom = (response: BaseSaveResponse): SaveShown => {
       playDescent(response);
@@ -536,6 +552,7 @@ export const createEndPlugin = (deps: EndPluginDeps = {}): AttackPlugin => {
       const descentLanding = descent ? descentLandingOf(response) : null;
       const overruled = descentLanding?.overruled === true ? descentLanding : null;
       const none = { r1: 0, r2: 0, r3: 0, r4: 0 };
+      const missed = planMissed(response);
       return {
         kind: "saved",
         protectedUntil: takeover?.grant ? null : protectedUntilOf(response),
@@ -556,8 +573,8 @@ export const createEndPlugin = (deps: EndPluginDeps = {}): AttackPlugin => {
               },
             }
           : {}),
-        // A camp attack that did not become the Repeat attack plan (patch 8.2).
-        ...(response.repeatplan === "camp-damaged" ? { note: REPEAT_PLAN_NOT_SAVED } : {}),
+        // A camp attack that did not become the Repeat attack plan (patch 8.2, 8.3).
+        ...(missed ? { warn: missed } : {}),
         // A Descent fight the server's battle overruled: its outcome, not the screen's.
         ...(overruled
           ? {

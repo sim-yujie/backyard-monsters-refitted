@@ -39,7 +39,7 @@ import {
   type OwnedChampion,
   type PlanShortfall,
 } from "./attackPlan.js";
-import { findAttackPlan, type StoredPlan } from "./attackPlanStore.js";
+import { findAttackPlan, isUntouchedCamp, type StoredPlan } from "./attackPlanStore.js";
 import { planFlingOnBuilding } from "./planCheck.js";
 import { repeatFeeFor } from "./repeatFee.js";
 import { movesKey, planMoves, type MovePlan, type YardMove } from "./movePlan.js";
@@ -264,6 +264,13 @@ export interface PlanAnswer {
   readonly underAttack: boolean;
   /** The camp's damage now; 0 once it has regenerated. */
   readonly damage: number;
+  /**
+   * No building of the camp is damaged, so a hand attack with monsters on it
+   * would save a Repeat plan (`recordAttackPlan`'s own test, patch 8.3). A
+   * camp scratched below 1% reads `damage` 0 but is not fresh; one that has
+   * regenerated is.
+   */
+  readonly fresh: boolean;
   /** Repeat attack's putty fee for this camp (`repeatFee.ts`), burned before it starts. */
   readonly fee: number;
 }
@@ -284,9 +291,10 @@ export const autoAttackPlanFor = async (user: User, baseid: string): Promise<Pla
   const stored = await findAttackPlan(user.userid, camp.key);
   const underAttack = camp.row !== null && !camp.expired && isAttackActive(camp.row);
   const damage = camp.row && !camp.expired ? (camp.row.damage ?? 0) : 0;
+  const fresh = !camp.row || camp.expired || isUntouchedCamp(camp.row.buildinghealthdata);
   const fee = feeOf(camp);
   const none = { moves: [], movesKey: null, noRoom: null, yards: {} };
-  if (!stored) return { baseid, plan: null, missing: [], ...none, outOfRange: false, underAttack, damage, fee };
+  if (!stored) return { baseid, plan: null, missing: [], ...none, outOfRange: false, underAttack, damage, fresh, fee };
 
   const { verdict } = await rangeCheckV2(user, { baseid, cell: camp.cell });
   const assessed = await assess(user, camp, stored, now, fee);
@@ -298,6 +306,7 @@ export const autoAttackPlanFor = async (user: User, baseid: string): Promise<Pla
     outOfRange: !verdict.ok,
     underAttack,
     damage,
+    fresh,
     fee,
   };
 };

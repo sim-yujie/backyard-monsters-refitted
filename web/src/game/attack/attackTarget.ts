@@ -146,6 +146,8 @@ export interface AttackTarget {
   readonly kind: AttackTargetKind;
   /** Where on the Map Room 2 world it is; a Map Room 1 target has no cell. */
   readonly cell?: OffsetCell;
+  /** A Map Room 2 camp's level: Attack over names the camp to attack instead (patch 8.3). */
+  readonly campLevel?: number;
   /** Owner username, or the tribe name of a wild monster camp. */
   readonly name: string;
   /** The defender's user id when a player owns it (not a wild camp); the friend warning reads it. */

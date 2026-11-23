@@ -5,6 +5,8 @@ import {
   agoText,
   autoAttackErrorText,
   movesLineText,
+  noPlanHint,
+  planMissedText,
   planSourceText,
   repeatRefusal,
   shortfallText,
@@ -88,5 +90,37 @@ describe("autoAttackText", () => {
     });
     expect(autoAttackErrorText(new ApiError("slow", { status: 429 })).message).toContain("ten auto-attacks");
     expect(autoAttackErrorText(new NetworkError("down", null)).message).toContain("Nothing was spent");
+  });
+});
+
+describe("why an attack would not save a Repeat plan (patch 8.3)", () => {
+  it("a fresh camp says how to save one, without a warning", () => {
+    expect(noPlanHint("Abunakki", 35, true)).toEqual({
+      text: "Attack a full-health camp with monsters to save a Repeat plan.",
+      warn: false,
+    });
+  });
+
+  it("a camp that is not fresh warns, and names the camp to pick", () => {
+    expect(noPlanHint("Abunakki", 35, false)).toEqual({
+      text: "Won't save a Repeat plan. Pick a full-health Lv 35 Abunakki camp.",
+      warn: true,
+    });
+  });
+
+  it("an older server sends no flag: the camp reads as fresh", () => {
+    expect(noPlanHint("Abunakki", 35, undefined)).toEqual(noPlanHint("Abunakki", 35, true));
+  });
+
+  it("the Attack over line, for bombs alone and for a damaged camp", () => {
+    expect(planMissedText("no-monsters", "Abunakki", 35)).toBe(
+      "Repeat plan not saved: bombs alone won't save. Send monsters too on a full-health camp.",
+    );
+    expect(planMissedText("camp-damaged", "Abunakki", 35)).toBe(
+      "Repeat plan not saved: camp was damaged (heals in 12 h). Attack a full-health Lv 35 Abunakki camp.",
+    );
+    expect(planMissedText("camp-damaged", "Abunakki", null)).toBe(
+      "Repeat plan not saved: camp was damaged (heals in 12 h). Attack a full-health Abunakki camp.",
+    );
   });
 });
