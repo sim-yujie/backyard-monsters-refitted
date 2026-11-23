@@ -1,6 +1,7 @@
 import { afterAll, beforeEach, describe, expect, mock, test } from "bun:test";
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
+import { RULES_VERSION } from "../../defences/rulesVersion.js";
 
 /**
  * Auto-attack (issue #221), run for real — the plan, the checks, the
@@ -805,7 +806,13 @@ describe("POST /worldmapv2/autoattack with moves (Smart Repeat attack, the route
   };
   /** Calls the controller as the router does, with the body the web client posts. */
   const post = async (body: Record<string, unknown>, meetsDiscordAgeCheck = true) => {
-    const ctx = { request: { body }, authUser: user(), meetsDiscordAgeCheck, status: 0, body: undefined as unknown };
+    const ctx = {
+      request: { body: { rules: RULES_VERSION, ...body } },
+      authUser: user(),
+      meetsDiscordAgeCheck,
+      status: 0,
+      body: undefined as unknown,
+    };
     await autoAttackRoute(ctx as never, async () => {});
     return ctx;
   };
@@ -817,6 +824,15 @@ describe("POST /worldmapv2/autoattack with moves (Smart Repeat attack, the route
     }
     throw new Error("expected a refusal");
   };
+
+  test("a page with older battle rules, or none, is refused with New version before anything moves (23 Nov 2026)", async () => {
+    split();
+    for (const rules of ["0ba3fde8701104af", undefined]) {
+      expect(await refusalOf({ baseid: FAR, moves: KEY, rules })).toMatchObject({ reason: "newVersion" });
+    }
+    expect(userSave.monsters.housed).toEqual({ C1: 60 });
+    expect(outpostRows[0]!.monsters.housed).toEqual({ C1: 200 });
+  });
 
   test("the key of the moves shown: the moves are made and the attack lands", async () => {
     split();

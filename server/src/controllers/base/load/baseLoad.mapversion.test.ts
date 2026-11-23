@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, mock, test } from "bun:test";
 import type { Context } from "koa";
+import { RULES_VERSION } from "../../../services/defences/rulesVersion.js";
 import { Save } from "../../../database/models/save.model.js";
 import { World } from "../../../database/models/world.model.js";
 import { WorldMapCell } from "../../../database/models/worldmapcell.model.js";
@@ -156,6 +157,7 @@ const load = async (baseid: string, mapversion?: number, extra: Row = {}): Promi
         baseid,
         ...(mapversion !== undefined && { mapversion: String(mapversion) }),
         attackData: JSON.stringify({ champions: [], monsters: [] }),
+        rules: RULES_VERSION,
         ...extra,
       },
     },
@@ -244,6 +246,36 @@ describe("an attack refused for range leaves no camp row (#165)", () => {
 
     expect(created.map((row) => row.baseid)).toEqual([near]);
     expect(created[0]!.worldid).toBe(WORLD);
+  });
+});
+
+/**
+ * The battle-rules stamp (owner's fix 1, Desk 8, 23 Nov 2026): an attack load
+ * from a page with other battle rules, or none, is refused before anything is
+ * read, minted or written; a page with this server's rules attacks as before.
+ */
+describe("an attack load from a page with older battle rules", () => {
+  const near = campId(243, 209);
+
+  for (const [what, rules] of [
+    ["older rules", "0ba3fde8701104af"],
+    ["no stamp (a page from before the fix)", undefined],
+  ] as const) {
+    test(`is refused with New version on ${what}, and nothing is written`, async () => {
+      const refusal = (await load(near, 2, { rules })) as Error & { data?: Row };
+
+      expect(refusal.data).toEqual({ reason: "newVersion" });
+      expect(refusal.message).toBe("New version — reload the page.");
+      expect(created).toEqual([]);
+      expect(sessionKeys).toEqual([]);
+      expect(reports).toEqual([]);
+      expect(flushes).toBe(0);
+    });
+  }
+
+  test("this server's rules attack as before", async () => {
+    expect(await load(near, 2, { rules: RULES_VERSION })).toBeNull();
+    expect(created.map((row) => row.baseid)).toEqual([near]);
   });
 });
 

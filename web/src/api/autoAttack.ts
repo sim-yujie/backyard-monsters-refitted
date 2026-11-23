@@ -1,4 +1,5 @@
 import { get, post } from "./http";
+import { RULES_STAMP, startStamped } from "./rulesStamp";
 import type { ApiEnvelope, BaseLoadResponse } from "./types";
 
 /**
@@ -155,7 +156,12 @@ export const getAutoAttackPlan = (baseid: string): Promise<AutoAttackPlanRespons
  * key, and otherwise refuses with `movesChanged`.
  */
 export const runAutoAttack = (baseid: string, movesKey?: string | null): Promise<AutoAttackResponse> =>
-  post<AutoAttackResponse>("/worldmapv2/autoattack", movesKey ? { baseid, moves: movesKey } : { baseid });
+  startStamped(
+    post<AutoAttackResponse>(
+      "/worldmapv2/autoattack",
+      movesKey ? { baseid, moves: movesKey, rules: RULES_STAMP } : { baseid, rules: RULES_STAMP },
+    ),
+  );
 
 /** `GET /worldmapv2/autoattackreplay`: the last auto-attack's battle. */
 export const getAutoAttackReplay = (): Promise<AutoAttackReplayResponse> =>

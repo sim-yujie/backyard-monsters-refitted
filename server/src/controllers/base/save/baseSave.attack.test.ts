@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, mock, setSystemTime, test } from "bun:test";
 import type { Context } from "koa";
+import { RULES_VERSION } from "../../../services/defences/rulesVersion.js";
 import { gzipSync } from "node:zlib";
 import type { BrainWeights, FrozenHabits } from "../../../game-rules/combat/index.js";
 
@@ -117,8 +118,9 @@ mock.module("../../../server.js", () => ({
   },
 }));
 
+const loggedInfo = mock((..._args: unknown[]) => {});
 mock.module("../../../utils/logger.js", () => ({
-  logger: { warn: mock(() => {}), error: mock(() => {}), info: mock(() => {}), debug: mock(() => {}) },
+  logger: { warn: mock(() => {}), error: mock(() => {}), info: loggedInfo, debug: mock(() => {}) },
 }));
 
 // The audit trail (issue #23, C7), kept here rather than on the stand-in rows.
@@ -138,6 +140,8 @@ mock.module("../../../scripts/anticheat/anticheat.js", () => ({
 
 /** The defence the attack load served, when a test gives the session one (issue #195). */
 let sessionForces: unknown;
+/** The session's rules when a test changes them; null for a session minted before it had any. */
+let sessionRules: string | null | undefined;
 /** The champions' brains the attack froze at launch, when a test gives the session some (issue #219). */
 let sessionBrains: Record<string, BrainWeights | FrozenHabits> | undefined;
 /** The champions' health the attack froze at launch, when a test gives the session some. */
@@ -151,6 +155,9 @@ mock.module("../../../services/base/attackSessionStore.js", () => ({
     attackerid: ATTACKER,
     attackid: ATTACK_ID,
     startedat: Math.floor(Date.now() / 1000),
+    // Started on a page with this server's battle rules (`rulesStamp.ts`),
+    // unless a test plays an attack started before sessions carried them.
+    ...(sessionRules !== null && { rules: sessionRules ?? RULES_VERSION }),
     ...(sessionEntry !== null && { entryHoused: sessionEntry ?? ENTRY }),
     defenderResources: { r1: 5000, r2: 0, r3: 0, r4: 0 },
     ...(sessionForces ? { defenderForces: sessionForces } : {}),
@@ -247,6 +254,8 @@ beforeEach(() => {
   sessionBrains = undefined;
   sessionHealth = undefined;
   sessionEntry = undefined;
+  sessionRules = undefined;
+  loggedInfo.mockClear();
   setMode("log");
   reports.length = 0;
   replays.length = 0;
@@ -1246,6 +1255,24 @@ describe("the battle is the server's (#23, C3)", () => {
     // The row still carries the attack, for the finaliser to land from its checkpoint.
     expect(defender.attackid).toBe(ATTACK_ID);
   });
+
+  for (const [what, rules] of [
+    ["before sessions carried rules (an 8.3 page)", null],
+    ["on older rules", "0ba3fde8701104af"],
+  ] as const) {
+    test(`reject: a save from an attack started ${what} is refused as ever, but not flagged (23 Nov 2026)`, async () => {
+      setMode("reject");
+      sessionRules = rules;
+      const caught = await baseSave(crafted(), async () => {}).catch((err: unknown) => err as { data?: { reason?: string } });
+
+      expect(caught?.data?.reason).toBe("replayMismatch");
+      expect(reports).toEqual([]);
+      expect(defender.damage).toBe(0);
+      expect(defender.attackid).toBe(ATTACK_ID);
+      const oldPage = loggedInfo.mock.calls.filter((call) => (call[1] as { event?: string })?.event === "attack-save-old-page");
+      expect(oldPage).toHaveLength(1);
+    });
+  }
 
   test("reject: an honest save lands as ever (C7)", async () => {
     setMode("reject");

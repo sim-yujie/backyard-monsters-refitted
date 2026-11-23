@@ -34,6 +34,7 @@ import type { JsonObject } from "../../../types/JsonObject.js";
 import type { TribeData } from "../../../types/TribeData.js";
 import { battleReplayInput, battleTick } from "../../base/combat/battle.js";
 import { recordBattleMismatches, replayBattleForSave } from "../../base/combat/saveBattle.js";
+import { startedOnOldPage, stampOf } from "../../base/combat/rulesStamp.js";
 import { creditableMR1Loot, mr1TribePool } from "./mr1TribeRules.js";
 import { withTribeGooBonus } from "../../base/tribeGooBonus.js";
 import { recordTribeDestroyed } from "../../goals/tribeCounter.js";
@@ -461,7 +462,8 @@ const tribeBattle = async (
     },
     battle,
     served.tribeData.buildingdata as JsonObject | undefined,
-    combatConfig.mode
+    combatConfig.mode,
+    { oldPage: startedOnOldPage(session.rules), pageRules: stampOf(ctx.request.body) }
   );
   return battle;
 };

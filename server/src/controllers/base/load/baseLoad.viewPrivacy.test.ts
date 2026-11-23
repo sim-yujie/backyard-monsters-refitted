@@ -1,5 +1,6 @@
 import { afterAll, beforeEach, describe, expect, mock, test } from "bun:test";
 import type { Context } from "koa";
+import { RULES_VERSION } from "../../../services/defences/rulesVersion.js";
 import { Save } from "../../../database/models/save.model.js";
 import { User } from "../../../database/models/user.model.js";
 import { devConfig } from "../../../config/GameConfig.js";
@@ -128,7 +129,9 @@ const viewer = () =>
   });
 
 const contextOf = (body: Row) =>
-  ({ authUser: viewer(), meetsDiscordAgeCheck: true, request: { body } }) as unknown as Context & { body: Row };
+  ({ authUser: viewer(), meetsDiscordAgeCheck: true, request: { body: { rules: RULES_VERSION, ...body } } }) as unknown as Context & {
+    body: Row;
+  };
 
 const fogWasOff = devConfig.disableFogOfWar;
 
