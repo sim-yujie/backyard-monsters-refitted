@@ -1179,13 +1179,27 @@ export class HatchTab implements MonstersTab {
     if (!monster) {
       const starting = preview?.starts.get(hatchery.id) ?? null;
       if (starting) {
+        // Built like a hatching card (picture and words in `__body`), so the
+        // HCC row stacks "Starts now" under the picture as it does the time;
+        // straight on the card it sat beside the picture and ran past the
+        // tile (owner, 23 Nov 2026).
         card.classList.add("hatch-now--preview");
         const entry = monsterEntry(starting);
-        if (entry) card.append(monsterPicture(entry, "small", "hatch-now__picture"));
+        const body = document.createElement("span");
+        body.className = "hatch-now__body";
+        if (entry) body.append(monsterPicture(entry, "small", "hatch-now__picture"));
+        const words = document.createElement("span");
+        words.className = "hatch-now__words";
         const text = document.createElement("span");
         text.className = "hatch-now__state";
-        text.textContent = "Starts now";
-        card.append(" ", text);
+        // "Starts now" is wider than a tile on the HCC's row (85 px of text in a
+        // 52-71 px tile on an iPad or phone): that row says "Now", as it says "Idle".
+        // Everywhere else the words are as before.
+        if (compact) stateWords(text, STARTING_TEXT);
+        else text.textContent = STARTING_TEXT[0];
+        words.append(text);
+        body.append(words);
+        card.append(" ", body);
       } else if (compact && state === "idle") {
         // Just its number on the HCC's row (owner, 15 Nov 2026): an idle card says nothing.
         card.title = `${where}: nothing hatching`;
@@ -2112,6 +2126,8 @@ const BUSY_TEXT: Partial<Record<HatcheryView["state"], StateWords>> = {
   building: ["Being built", "Building"],
 };
 const STALLED_INFERNO: StateWords = ["Needs room", "Full"];
+/** An idle hatchery that takes the chosen batch at once (the dashed card). */
+const STARTING_TEXT: StateWords = ["Starts now", "Now"];
 
 /** A card's state words: the long ones, and a phone's short ones beside them (hatch.css). */
 const stateWords = (node: HTMLElement, words: StateWords | undefined): void => {

@@ -213,6 +213,11 @@
   flex-direction: column;
   align-items: center;
   justify-content: center;
+  /* One column: the card's grid keeps a second, empty column for hatching's
+     words beside the picture, which pushed the picture left of the tile's
+     centre while its words were centred (owner, 23 Nov 2026). */
+  grid-template-columns: minmax(0, 1fr);
+  justify-items: center;
   gap: 0;
   width: auto;
   min-height: 48px;
@@ -1456,37 +1461,11 @@
   }
 }
 
-/* Match the editable tail to its quantity field; totals have a quieter treatment. */
-.hcc-count-mark {
-  position: absolute;
-  top: -3px;
-  right: -3px;
-  z-index: 1;
-  min-width: 16px;
-  border-radius: 8px;
-  background: var(--colour-accent);
-  color: var(--colour-text-inverse, #1b1b1b);
-  font-size: 12px;
-  line-height: 16px;
-  text-align: center;
-  pointer-events: none;
-}
+/* The preset totals on the monster cards have a quieter treatment. */
 .hcc-inpreset {
   background: var(--colour-surface-sunken);
   color: var(--colour-text);
   border: 1px solid var(--colour-border-strong);
-}
-.hcc-count-field {
-  position: relative;
-  display: flex;
-  flex: 1 1 44px;
-  min-width: 44px;
-}
-.hcc-on .hcc-count-field > input {
-  width: 100%;
-  min-width: 0;
-  box-sizing: border-box;
-  border-color: var(--colour-accent);
 }
 :root[data-skin] .panel .hatch.hcc-on .hcc-set .hatch-add__controls > * {
   min-width: 44px;

@@ -1072,6 +1072,15 @@ describe("HatchTab: with a Hatchery Control Centre", () => {
     expect(spokenText(nowCard(element, 10))).toBe("Hatchery 1 Pokey 9s");
     // The idle hatchery would take the Bolt chosen at once.
     expect(spokenText(nowCard(element, 11))).toBe("Hatchery 2 Starts now");
+    // Built like the hatching card: picture and words in one `__body`, which the
+    // HCC row stacks; loose on the card, "Starts now" sat beside the picture and
+    // ran out of the tile (owner, 23 Nov).
+    for (const id of [10, 11]) {
+      const card = nowCard(element, id);
+      expect(card.querySelector(".hatch-now__body > .hatch-now__picture")).toBeInstanceOf(HTMLElement);
+      expect(card.querySelector(".hatch-now__body > .hatch-now__words > .hatch-now__state")).toBeInstanceOf(HTMLElement);
+      expect(card.querySelector(":scope > .hatch-now__picture, :scope > .hatch-now__state")).toBeNull();
+    }
     // Word and number apart: the card shows "#2", the word only for a screen reader (owner, 15 Nov).
     const label = nowCard(element, 11).querySelector(".hatch-now__label")!;
     expect(label.querySelector(".hatch-now__label-word")?.textContent).toBe("Hatchery");
@@ -1267,10 +1276,82 @@ describe("the HCC's levels 2 and 3 (beta 9): switcher, presets", () => {
     const editor = element.querySelector<HTMLElement>(".hcc-set")!;
     click(editor, /^10 more$/);
     click(editor, /^5 more$/);
+    // The count waits for Add, as on the hatching panel (owner, 23 Nov 2026).
+    expect(element.querySelectorAll(".hcc-boxes .hcc-box:not(.hatch-slot--empty)")).toHaveLength(0);
+    click(editor, /^Add 15 /);
     click(element, /^Done/);
     await flush();
     expect(actions.presetSave).toHaveBeenCalledWith(0, [["C1", 15]]);
     expect(element.classList.contains("hcc-editing")).toBe(false);
+  });
+
+  it("the preset's Add stands under the count like hatching's, and keeps the order of the stacks", async () => {
+    const { element, actions } = setup(hccAt(2), { monster: "C1" });
+    click(element, /^Presets$/);
+    click(element, /^Make preset 1$/);
+    const editor = element.querySelector<HTMLElement>(".hcc-set")!;
+    const add = editor.querySelector<HTMLButtonElement>(":scope > .hatch-add__add")!;
+    expect(add.classList.contains("btn--primary")).toBe(true);
+    expect(add.textContent).toBe("Add");
+    expect(add.previousElementSibling?.classList.contains("hatch-add__controls")).toBe(true);
+    // Nothing chosen to add yet: Add waits.
+    expect(add.disabled).toBe(true);
+    const choose = (id: string) => element.querySelector<HTMLElement>(`.hatch-monster[data-monster="${id}"]`)!.click();
+    const set = (count: number) => {
+      const input = editor.querySelector<HTMLInputElement>(".hatch-add__count")!;
+      input.value = String(count);
+      input.dispatchEvent(new Event("change"));
+    };
+    set(30);
+    add.click();
+    choose("C3");
+    // A newly chosen monster starts from 0, as hatching does.
+    expect(editor.querySelector<HTMLInputElement>(".hatch-add__count")!.value).toBe("0");
+    set(40);
+    add.click();
+    choose("C1");
+    set(30);
+    // The same Add node all along: a redraw between press and release must not lose the click (#268).
+    expect(editor.querySelector(".hatch-add__add")).toBe(add);
+    add.click();
+    click(element, /^Done/);
+    await flush();
+    expect(actions.presetSave).toHaveBeenCalledWith(0, [["C1", 30], ["C3", 40], ["C1", 30]]);
+  });
+
+  it("Add tops up the last stack when it is the same monster, and Done without Add keeps the preset as it was", async () => {
+    const { element, actions } = setup(hccAt(2, { hccpresets: { home: [[["C3", 40], ["C1", 10]]] } }), { monster: "C1" });
+    click(element, /^Presets$/);
+    click(element, /^Preset 1, .*change it$/);
+    const editor = element.querySelector<HTMLElement>(".hcc-set")!;
+    click(editor, /^5 more$/);
+    click(editor, /^Add 5 /);
+    click(editor, /^5 more$/);
+    click(element, /^Done/);
+    await flush();
+    // The second 5 was never added.
+    expect(actions.presetSave).toHaveBeenCalledWith(0, [["C3", 40], ["C1", 15]]);
+  });
+
+  it("a count typed into the preset editor readies Add before the box loses focus", async () => {
+    const { element, actions } = setup(hccAt(2), { monster: "C1" });
+    click(element, /^Presets$/);
+    click(element, /^Make preset 1$/);
+    const editor = element.querySelector<HTMLElement>(".hcc-set")!;
+    const add = editor.querySelector<HTMLButtonElement>(".hatch-add__add")!;
+    const input = editor.querySelector<HTMLInputElement>(".hatch-add__count")!;
+    expect(add.disabled).toBe(true);
+    input.value = "7";
+    input.dispatchEvent(new Event("input"));
+    // Not drawn again while typing, and Add is ready (hatching does the same).
+    expect(editor.querySelector(".hatch-add__count")).toBe(input);
+    expect(add.disabled).toBe(false);
+    add.click();
+    // Add redraws the editor; the count box is the same one (a redraw while typing keeps it).
+    expect(editor.querySelector(".hatch-add__count")).toBe(input);
+    click(element, /^Done/);
+    await flush();
+    expect(actions.presetSave).toHaveBeenCalledWith(0, [["C1", 7]]);
   });
 
   it("Send sends the slot and says what went in", async () => {
