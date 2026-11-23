@@ -28,6 +28,12 @@ import { mountAdminMonsterMadnessRoutes } from "./monsterMadness.js";
 import { mountAdminWeekendRoutes } from "./weekend.js";
 import { mountAdminStarFigureRoutes } from "./starFigures.js";
 import { daysBetween, readDailyStats, statsOverview, type StatsDeps } from "../../services/stats/dailyStats.js";
+import {
+  MONSTER_PERIODS,
+  cachedChampionOwnership,
+  cachedMonsterStats,
+  type MonsterPeriod,
+} from "../../services/stats/monsterUsageStats.js";
 import { LOG_BASE, LOG_DIR, logger } from "../../utils/logger.js";
 import { getOrCreateChatToken } from "../../chat/chatChannels.js";
 import { publishModeration, publishModeratorsChanged } from "../../chat/chatControl.js";
@@ -212,6 +218,17 @@ export const mountAdminRoutes = (router: Router): void => {
   router.get(`${admin}/stats/overview`, apiVersion, adminOnly, async (ctx) => {
     const days = Math.min(MAX_DAYS, Math.max(1, intOf(ctx.query.days) ?? 30));
     ok(ctx, { ...(await statsOverview(statsDeps(), days)) });
+  });
+
+  // The Monsters tab (owner, 23 Nov 2026): which monsters players fling and
+  // which camps they attack, over 7 days, 30 days or all of it, and who owns
+  // which champion now. Both cached a few minutes (`monsterUsageStats.ts`).
+  router.get(`${admin}/stats/monsters`, apiVersion, adminOnly, async (ctx) => {
+    const asked = typeof ctx.query.period === "string" ? ctx.query.period : "30";
+    const period: MonsterPeriod = (MONSTER_PERIODS as readonly string[]).includes(asked) ? (asked as MonsterPeriod) : "30";
+    const em = postgres.em.fork();
+    const [stats, champions] = await Promise.all([cachedMonsterStats(em, period), cachedChampionOwnership(postgres.em.fork())]);
+    ok(ctx, { stats, champions });
   });
 
   router.get(`${admin}/stats/daily`, apiVersion, adminOnly, async (ctx) => {

@@ -32,6 +32,7 @@ import { battleReplayInput, battleTick, foughtLoot } from "../base/combat/battle
 import { garrisonsAfterBattle } from "../base/combat/bunkerGarrison.js";
 import { housedDefenders } from "../base/combat/defenderForces.js";
 import { recordBattleMismatches, replayBattleForSave } from "../base/combat/saveBattle.js";
+import { recordMonsterUsage } from "../stats/monsterUsage.js";
 import { isAttackActive } from "../base/isAttackActive.js";
 import { storedDamage } from "../base/storedDamage.js";
 import { createNeighbourData } from "../maproom/createNeighbourData.js";
@@ -269,6 +270,7 @@ export const writePlayerLanding = async (
     // Under the lock: the yard must still be this attack's. One another attack
     // has taken over since (or that has been cleared) lands nothing of this one.
     if (Number(target.attackid) !== attack.session.attackid) throw attackNotBoundErr("superseded");
+    const damageBefore = Number(target.damage) || 0;
 
     // The monsters that fought leave the attacker's Housing Bunkers, as caught
     // up now, capped by what they held at the start (`entryHoused`).
@@ -333,8 +335,29 @@ export const writePlayerLanding = async (
       total: purseAmounts(main.iresources),
       housedLost,
       target,
+      damageBefore,
     };
   });
+
+  // The dashboard's monster counts, after the commit and not waited on
+  // (`monsterUsage.ts`). With no battle the whole army is a worst case, not a
+  // count: stored as assumed, left out of the monster numbers.
+  const assumed = !battle && spendAll;
+  if (battle || assumed) {
+    void recordMonsterUsage({
+      session: attack.session,
+      arena: "inferno",
+      mode: "player",
+      baseType: BaseType.INFERNO,
+      defenderUserid: yard.userid ?? null,
+      battle,
+      flung: assumed ? committedArmy(attack) : null,
+      damageBefore: landed.damageBefore,
+      damageAfter: Number(landed.target.damage) || 0,
+      assumed,
+      now,
+    });
+  }
 
   // Spent: the lock is still held, so a copy of this save finds nothing.
   await endInfernoPlayerSession(yard.basesaveid, attack.session.attackid);

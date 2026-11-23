@@ -83,6 +83,7 @@ import { battleReplayInput, battleTick, foughtLoot } from "../../../services/bas
 import { awardLootPoints } from "../../../services/base/combat/lootPoints.js";
 import { buildingDataWithout } from "../../../services/base/combat/abandonedAttack.js";
 import { recordBattleMismatches, replayBattleForSave } from "../../../services/base/combat/saveBattle.js";
+import { recordMonsterUsage, rowFacts } from "../../../services/stats/monsterUsage.js";
 import { combatCellHeight } from "../../../services/base/combat/cellHeight.js";
 import { championsAfterAttack, championsAfterBattle, siegeAfterAttack } from "../../../services/base/combat/attackerRow.js";
 import { garrisonsAfterBattle } from "../../../services/base/combat/bunkerGarrison.js";
@@ -788,6 +789,21 @@ const saveBase = async (
     // The loot on both sides and `attackid = 0` commit together: a copy of
     // this save, or the finaliser, finds the attack closed from now on.
     await commitAttackLanding();
+
+    // The dashboard's monster counts, from the server's battle only, after
+    // the commit and not waited on: a write that fails is logged, and the
+    // attack stays landed (`monsterUsage.ts`).
+    const facts = battle && session ? rowFacts(baseSave, userSave.mapversion) : null;
+    if (facts && battle && session) {
+      void recordMonsterUsage({
+        ...facts,
+        session,
+        battle,
+        damageBefore,
+        damageAfter: Number(baseSave.damage) || 0,
+        now,
+      });
+    }
 
     // The attack is finished, so its session is spent. Dropping it now frees the
     // row immediately instead of leaving a key that authorises nothing until it
