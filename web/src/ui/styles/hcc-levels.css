@@ -1462,17 +1462,6 @@
   color: var(--colour-text);
   border: 1px solid var(--colour-border-strong);
 }
-.hcc-count-field {
-  position: relative;
-  display: flex;
-  flex: 1 1 44px;
-  min-width: 44px;
-}
-.hcc-on .hcc-count-field > input {
-  width: 100%;
-  min-width: 0;
-  box-sizing: border-box;
-}
 :root[data-skin] .panel .hatch.hcc-on .hcc-set .hatch-add__controls > * {
   min-width: 44px;
   min-height: 44px;

@@ -1333,6 +1333,27 @@ describe("the HCC's levels 2 and 3 (beta 9): switcher, presets", () => {
     expect(actions.presetSave).toHaveBeenCalledWith(0, [["C3", 40], ["C1", 15]]);
   });
 
+  it("a count typed into the preset editor readies Add before the box loses focus", async () => {
+    const { element, actions } = setup(hccAt(2), { monster: "C1" });
+    click(element, /^Presets$/);
+    click(element, /^Make preset 1$/);
+    const editor = element.querySelector<HTMLElement>(".hcc-set")!;
+    const add = editor.querySelector<HTMLButtonElement>(".hatch-add__add")!;
+    const input = editor.querySelector<HTMLInputElement>(".hatch-add__count")!;
+    expect(add.disabled).toBe(true);
+    input.value = "7";
+    input.dispatchEvent(new Event("input"));
+    // Not drawn again while typing, and Add is ready (hatching does the same).
+    expect(editor.querySelector(".hatch-add__count")).toBe(input);
+    expect(add.disabled).toBe(false);
+    add.click();
+    // Add redraws the editor; the count box is the same one (a redraw while typing keeps it).
+    expect(editor.querySelector(".hatch-add__count")).toBe(input);
+    click(element, /^Done/);
+    await flush();
+    expect(actions.presetSave).toHaveBeenCalledWith(0, [["C1", 7]]);
+  });
+
   it("Send sends the slot and says what went in", async () => {
     const { element, actions } = setup(hccAt(3, { hccpresets: { home: [[["C1", 30], ["C3", 40], ["C1", 30]]] } }));
     click(element, /^Presets$/);

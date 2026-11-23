@@ -141,6 +141,9 @@ export class HccBench {
    * (the blur redraws the editor between the press and the release, #268).
    */
   private readonly editAdd = btn("btn btn--primary hatch-add__add", "Add", el("span", "hatch-add__words", "Add"));
+  /** The count box, made once (see `renderEditor`); `typing` while its number is half typed. */
+  private readonly editCount = el("input", "field__input qty-stepper__count hatch-add__count");
+  private typing = false;
   /** How many of the chosen monster Add puts at the end of the preset, and which monster they are. */
   private pending = 0;
   private pendingFor: string | null = null;
@@ -157,6 +160,28 @@ export class HccBench {
     this.yardsPage.hidden = true;
     this.yardsPage.setAttribute("aria-label", "Your yards with a Hatchery Control Centre");
     this.editAdd.addEventListener("click", () => this.addPending());
+    const input = this.editCount;
+    input.type = "number";
+    input.min = "0";
+    input.inputMode = "numeric";
+    // A plain count straight in the row, as on the hatching panel, so it is sized as there:
+    // no badge or ring tying it to the last stack (neon, 23 Nov).
+    // While typing, only the count and Add change, as on the hatching panel: Add is ready
+    // before the box loses focus. The box shows the number as cut to the room on change.
+    input.addEventListener("input", () => {
+      const value = Number(input.value);
+      const chosen = this.host.chosen();
+      if (this.editing === null || !chosen || input.value === "" || !Number.isFinite(value)) return;
+      this.typing = true;
+      this.pendingFor = chosen;
+      this.pending = Math.max(0, Math.min(Math.floor(value), this.addableFor(this.editing.preset, chosen)));
+      this.drawEditAdd(this.host.ready(chosen), chosen, this.lastOf(this.editing.preset, chosen) !== null, this.editing.slot);
+    });
+    input.addEventListener("change", () => {
+      this.typing = false;
+      const chosen = this.host.chosen();
+      if (chosen) this.setPending(chosen, Number(input.value));
+    });
   }
 
   /** The HCC in use: the one whose queue the tab shows. */
@@ -677,6 +702,18 @@ export class HccBench {
     this.renderPresets();
   }
 
+  /** Add's state and words for the count now set (`pending`). */
+  private drawEditAdd(ready: boolean, chosen: string | null, topsUp: boolean, at: number): void {
+    const now = this.pending;
+    this.editAdd.disabled = !ready || now < 1;
+    this.editAdd.setAttribute(
+      "aria-label",
+      chosen && now > 0
+        ? `Add ${now} ${nameOf(chosen)} to ${topsUp ? "the last stack of" : "the end of"} preset ${at + 1}`
+        : `Add to preset ${at + 1}`,
+    );
+  }
+
   private renderEditor(): void {
     const editing = this.editing;
     this.editHead.hidden = editing === null;
@@ -809,35 +846,26 @@ export class HccBench {
       one.addEventListener("click", () => chosen && this.setPending(chosen, to));
       return one;
     };
-    const input = el("input", "field__input qty-stepper__count hatch-add__count");
-    input.type = "number";
-    input.min = "0";
+    // The count box stays put, as on the hatching panel: a redraw while typing (the queue
+    // ticking over) must not take the box, its focus or the half-typed number away.
+    const input = this.editCount;
     input.max = String(max);
-    input.inputMode = "numeric";
-    input.value = String(now);
     input.disabled = !ready;
     input.setAttribute("aria-label", `How many to add to preset ${at + 1}`);
-    input.addEventListener("change", () => chosen && this.setPending(chosen, Number(input.value)));
+    if (!(this.typing && document.activeElement === input)) input.value = String(now);
     const stack = step("btn--outline qty-stepper__fill hatch-add__fill", `${size} more`, `+${size}`, now + size, now >= max);
     stack.classList.remove("qty-stepper__step");
-    const countField = el("label", "hcc-count-field");
-    // A plain count, as on the hatching panel: no badge or ring tying it to the last stack (neon, 23 Nov).
-    countField.append(input);
-    controls.replaceChildren(
-      step("hatch-add__step hatch-add__step--minus", "One fewer", "−", now - 1, now <= 0),
-      countField,
+    // The buttons are drawn again around the count box, which is never taken out.
+    for (const child of [...controls.children]) if (child !== input) child.remove();
+    if (input.parentElement !== controls) controls.append(input);
+    input.before(step("hatch-add__step hatch-add__step--minus", "One fewer", "−", now - 1, now <= 0));
+    input.after(
       step("hatch-add__step hatch-add__step--plus", "One more", "+", now + 1, now >= max),
       step("qty-stepper__jump hatch-add__jump", "5 more", "+5", now + 5, now >= max),
       step("qty-stepper__jump hatch-add__jump", "10 more", "+10", now + 10, now >= max),
       stack,
     );
-    this.editAdd.disabled = !ready || now < 1;
-    this.editAdd.setAttribute(
-      "aria-label",
-      chosen && now > 0
-        ? `Add ${now} ${nameOf(chosen)} to ${mine ? "the last stack of" : "the end of"} preset ${at + 1}`
-        : `Add to preset ${at + 1}`,
-    );
+    this.drawEditAdd(ready, chosen, Boolean(mine), at);
     this.editBox.className = "hcc-set hatch-add";
     // Only put in place once: a moved Add under the pointer would lose its click.
     if (controls.parentElement !== this.editBox || this.editAdd.parentElement !== this.editBox) {
