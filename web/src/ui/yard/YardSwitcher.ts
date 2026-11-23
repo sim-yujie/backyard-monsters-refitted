@@ -13,16 +13,18 @@ import {
   seedOutpostLabels,
   setOutpostLabels,
 } from "@/game/yard/outpostLabels";
+import { classicLook } from "@/game/classicLook";
 import {
   outpostCountText,
-  outpostsOf,
   ownYardsOf,
+  stepOwnYard,
   yardTitle,
   type OwnYardEntry,
   type OwnYardTarget,
 } from "@/game/yard/ownYards";
 import type { YardUiBinding } from "@/game/yard/YardStore";
-import { gameIcon, iconAmount } from "@/ui/gameIcon";
+import { HOP_ART_LARGE_SIDES, hopArt } from "@/ui/friends/FriendHopButtons";
+import { gameIcon, gameIconUrl, iconAmount } from "@/ui/gameIcon";
 import { icon } from "@/ui/icons";
 import "@/ui/styles/yard-switcher.css";
 
@@ -55,6 +57,17 @@ import "@/ui/styles/yard-switcher.css";
  * own yard is bound. Since the HUD redesign (#171) it is one of the yard's
  * round buttons (`YardDock.ts`), above Map: a flag with the outpost count as
  * a badge, the open yard's title under it, and the list opening upwards.
+ *
+ * Beta 9 (owner 21-23 Nov 2026, design E, "one capsule"; the "main outpost"
+ * name was "very distracting and lengthy"): no name on the HUD. One capsule,
+ * `< house 1/12 >`: the arrows step through the player's own yards in the
+ * list's order (Main, the pinned outposts, then the rest) and go round at
+ * the ends ({@link stepOwnYard}); the middle shows a house on the main yard
+ * or a flag on an outpost, and where the open yard stands in that order,
+ * Main counting as 1. A tap on the middle opens the list, as the flag did.
+ * The yard's name shows over the capsule for about 1.5 s when the player
+ * arrives at another of their yards ({@link YARD_NAME_FLASH_MS}), then fades.
+ * With the main yard alone there is nowhere to step: no arrows.
  */
 
 export const YARD_SWITCHER_TEXT = {
@@ -65,7 +78,44 @@ export const YARD_SWITCHER_TEXT = {
   pinLimit: `Pinned ${OUTPOST_PINS_MAX} already. Unpin one first.`,
   failed: "Could not save. Try again.",
   pinned: (count: number): string => `${count} of ${OUTPOST_PINS_MAX} pinned`,
+  /** The heading's count: every yard, Main included, as the capsule's "/12" counts them (neon, round 1). */
+  yards: (count: number): string => (count === 1 ? "1 yard" : `${count} yards`),
+  yardsTitle: (count: number): string =>
+    `${count === 1 ? "1 yard" : `${count} yards`}: your main yard and ${outpostCountText(count - 1).toLowerCase()}`,
+  prev: "Previous yard",
+  next: "Next yard",
+  stepTitle: (words: string, title: string): string => `${words}: ${title}`,
+  /** The middle of the capsule: where the open yard stands, for a screen reader and the tooltip. */
+  where: (title: string, at: number, total: number): string =>
+    at > 0 ? `Your yards: ${title}, ${at} of ${total}` : `Your yards: ${title}`,
 } as const;
+
+/** How long the yard's name shows over the capsule on arrival, before it fades (owner, 22 Nov 2026: about 1.5 s). */
+export const YARD_NAME_FLASH_MS = 1500;
+
+/**
+ * The capsule's place in the order: "2/12", the open yard's place counting
+ * the main yard as 1. Empty for a yard the list does not hold (the Inferno).
+ */
+export const yardCountText = (entries: readonly OwnYardEntry[]): string => {
+  const at = entries.findIndex((entry) => entry.current);
+  return at < 0 ? "" : `${at + 1}/${entries.length}`;
+};
+
+/**
+ * The last own yard a switcher showed, as `kind:baseid`: the dock (and its
+ * switcher) is built again for every yard, so whether this is an arrival
+ * at another yard is kept here, outside any one switcher. Null before the
+ * first, which is no arrival (the game just opened).
+ */
+let lastYardKey: string | null = null;
+
+const yardKey = (target: OwnYardTarget): string => `${target.kind}:${target.baseid}`;
+
+/** For the tests: forget the last yard shown. */
+export const resetYardArrival = (): void => {
+  lastYardKey = null;
+};
 
 /** The server calls the list makes; the tests pass their own. */
 export interface YardSwitcherApi {
@@ -96,6 +146,10 @@ const make = <K extends keyof HTMLElementTagNameMap>(
  */
 const LIST_CEILING = ".chat-box__tab, .guide-help--float";
 const LIST_CEILING_GAP = 8;
+/** How long the arrows wait for the yard to go before they wake again. */
+const STEP_WAIT_MS = 2500;
+/** The name's fade, as `.yard-switcher__flash--out` runs it. */
+const FLASH_FADE_MS = 400;
 /** The list never gets shorter than this, even on a very short screen. */
 const LIST_MIN_HEIGHT = 120;
 
@@ -106,9 +160,18 @@ export class YardSwitcher {
   /** The button and the list, in one wrapper the list hangs from. */
   readonly element: HTMLElement;
 
+  /** The capsule's middle: a tap opens the list. */
   private readonly button: HTMLButtonElement;
-  private readonly title: HTMLElement;
+  private readonly prev: HTMLButtonElement;
+  private readonly next: HTMLButtonElement;
+  private readonly where: HTMLElement;
   private readonly count: HTMLElement;
+  /** The yard's name, shown for a moment on arrival. */
+  private readonly flash: HTMLElement;
+  private flashTimer: ReturnType<typeof setTimeout> | null = null;
+  /** An arrow was pressed and the yard is on its way: the arrows wait. */
+  private stepping = false;
+  private steppingTimer: ReturnType<typeof setTimeout> | null = null;
   private readonly list: HTMLElement;
   private readonly heading: HTMLElement;
   private readonly error: HTMLElement;
@@ -131,17 +194,27 @@ export class YardSwitcher {
     this.element = make("div", "yard-switcher");
     this.element.hidden = true;
 
-    this.button = make("button", "yard-dock__button yard-switcher__button");
+    const capsule = make("div", "yard-switcher__capsule");
+    tutTarget(capsule, TutTarget.YARD_SWITCHER);
+    this.prev = this.arrow(-1);
+    this.next = this.arrow(1);
+    this.button = make("button", "yard-switcher__button");
     this.button.type = "button";
-    tutTarget(this.button, TutTarget.YARD_SWITCHER);
     this.button.setAttribute("aria-haspopup", "true");
     this.button.setAttribute("aria-expanded", "false");
-    const disc = make("span", "yard-dock__disc");
-    this.count = make("span", "yard-dock__badge yard-switcher__count");
-    disc.append(icon("yards", 27), this.count);
-    this.title = make("span", "yard-dock__label yard-switcher__title");
-    this.button.append(disc, this.title);
+    this.where = make("span", "yard-switcher__where");
+    this.count = make("span", "yard-switcher__count");
+    // A small up-pointing caret: the middle opens the list (neon, round 1).
+    const caret = make("span", "yard-switcher__caret");
+    caret.setAttribute("aria-hidden", "true");
+    this.button.append(this.where, this.count, caret);
     this.button.addEventListener("click", () => this.toggle(this.list.hidden));
+    capsule.append(this.prev, this.button, this.next);
+
+    this.flash = make("div", "yard-dock__label yard-switcher__flash");
+    this.flash.setAttribute("role", "status");
+    this.flash.setAttribute("aria-live", "polite");
+    this.flash.hidden = true;
 
     this.list = make("div", "yard-switcher__list");
     this.list.setAttribute("role", "dialog");
@@ -154,9 +227,10 @@ export class YardSwitcher {
     this.rows = make("div", "yard-switcher__rows");
     this.rows.setAttribute("role", "list");
     this.rows.addEventListener("click", this.onRowClick);
+    this.rows.addEventListener("scroll", () => this.markScrolled(), { passive: true });
     this.list.append(this.heading, this.error, this.rows);
 
-    this.element.append(this.button, this.list);
+    this.element.append(this.flash, capsule, this.list);
     document.addEventListener("pointerdown", this.dismiss, true);
     document.addEventListener("keydown", this.dismiss, true);
     this.unsubscribe = onOutpostLabels(() => this.render());
@@ -179,9 +253,12 @@ export class YardSwitcher {
     this.toggle(false);
     if (binding) seedOutpostLabels(binding.store.save.outpostlabels);
     this.render();
+    if (binding) this.arrive(binding.store.target);
   }
 
   destroy(): void {
+    if (this.flashTimer !== null) clearTimeout(this.flashTimer);
+    if (this.steppingTimer !== null) clearTimeout(this.steppingTimer);
     document.removeEventListener("pointerdown", this.dismiss, true);
     document.removeEventListener("keydown", this.dismiss, true);
     this.unsubscribe();
@@ -193,31 +270,110 @@ export class YardSwitcher {
     this.element.hidden = !store;
     if (!store) return;
 
-    const title = yardTitle(store.target, outpostLabels());
-    const outposts = outpostsOf(store.save).length;
-    const countText = outpostCountText(outposts);
-    this.title.textContent = title;
-    this.button.title = `${title}. ${countText}. Switch to another of your yards.`;
-    this.count.textContent = String(outposts);
-    this.count.hidden = outposts <= 0;
-    this.button.setAttribute("aria-label", `Your yards: ${title}, ${countText}`);
+    const labels = outpostLabels();
+    const title = yardTitle(store.target, labels);
+    const entries = ownYardsOf(store.save, store.target, labels);
+    const at = entries.findIndex((entry) => entry.current) + 1;
+    const countText = outpostCountText(entries.length - 1);
+    const main = store.target.kind !== "outpost";
+    this.where.replaceChildren(
+      gameIcon(main ? "townhall" : classicLook() ? "outpostclassic" : "outpost", {
+        size: 32,
+        decorative: true,
+        className: "yard-switcher__icon",
+      }),
+    );
+    this.count.textContent = yardCountText(entries);
+    this.count.hidden = this.count.textContent === "";
+    // "120/250" takes a smaller size, so the capsule stays beside More on a phone.
+    this.count.classList.toggle("yard-switcher__count--long", this.count.textContent.length > 5);
+    const words = YARD_SWITCHER_TEXT.where(title, at, entries.length);
+    this.button.setAttribute("aria-label", words);
+    this.button.title = `${title}. ${countText}. Tap for the list of your yards.`;
+    this.element.classList.toggle("yard-switcher--alone", stepOwnYard(entries, 1) === null);
+    for (const [arrow, direction, words] of [
+      [this.prev, -1, YARD_SWITCHER_TEXT.prev],
+      [this.next, 1, YARD_SWITCHER_TEXT.next],
+    ] as const) {
+      const to = stepOwnYard(entries, direction);
+      arrow.hidden = to === null;
+      arrow.disabled = this.stepping;
+      arrow.title = to ? YARD_SWITCHER_TEXT.stepTitle(words, to.title) : words;
+    }
     if (this.open) this.renderList();
+  }
+
+  /** One of the capsule's arrows, painted as the friend arrows are (beta 8). */
+  private arrow(direction: -1 | 1): HTMLButtonElement {
+    const button = make("button", `yard-switcher__arrow yard-switcher__arrow--${direction === 1 ? "next" : "prev"}`);
+    button.type = "button";
+    button.setAttribute("aria-label", direction === 1 ? YARD_SWITCHER_TEXT.next : YARD_SWITCHER_TEXT.prev);
+    const name = hopArt(direction);
+    const art = gameIcon(name, { size: 32, decorative: true, className: "yard-switcher__arrow-art" });
+    const url64 = gameIconUrl(name, 64);
+    art.srcset = [
+      art.srcset,
+      ...HOP_ART_LARGE_SIDES.map((side) => `${url64.replace(/-64\.webp$/, `-${side}.webp`)} ${side}w`),
+    ].join(", ");
+    art.sizes = "32px";
+    button.append(art);
+    button.addEventListener("click", () => this.step(direction));
+    return button;
+  }
+
+  /**
+   * The yard after (1) or before (-1) the open one. The arrows wait until the
+   * yard goes; should it not (the planner is open), they wake again shortly.
+   */
+  private step(direction: -1 | 1): void {
+    if (this.stepping) return;
+    const to = stepOwnYard(this.entries, direction);
+    if (!to || to.current) return;
+    this.toggle(false);
+    this.stepping = true;
+    this.prev.disabled = true;
+    this.next.disabled = true;
+    this.steppingTimer = setTimeout(() => {
+      this.steppingTimer = null;
+      this.stepping = false;
+      this.render();
+    }, STEP_WAIT_MS);
+    this.onSelect(to.target);
+  }
+
+  /** The yard's name over the capsule for a moment, when this is another yard than the last one shown. */
+  private arrive(target: OwnYardTarget): void {
+    const key = yardKey(target);
+    const before = lastYardKey;
+    lastYardKey = key;
+    if (before === null || before === key) return;
+    this.flash.textContent = yardTitle(target, outpostLabels());
+    this.flash.hidden = false;
+    this.flash.classList.remove("yard-switcher__flash--out");
+    if (this.flashTimer !== null) clearTimeout(this.flashTimer);
+    this.flashTimer = setTimeout(() => {
+      this.flash.classList.add("yard-switcher__flash--out");
+      this.flashTimer = setTimeout(() => {
+        this.flashTimer = null;
+        this.flash.hidden = true;
+        this.flash.classList.remove("yard-switcher__flash--out");
+      }, FLASH_FADE_MS);
+    }, YARD_NAME_FLASH_MS);
   }
 
   /** The heading and every row; only while the list is open. */
   private renderList(): void {
     this.shown = this.entries;
-    const outposts = Math.max(0, this.shown.length - 1);
+    const yards = this.shown.length;
     const pinned = this.shown.filter((entry) => entry.pinned).length;
 
     const words = make("span", "yard-switcher__heading-words");
     words.textContent = YARD_SWITCHER_TEXT.heading;
     const counts = make("span", "yard-switcher__counts");
-    const flags = make("span", "yard-switcher__outposts");
-    flags.title = outpostCountText(outposts);
-    flags.setAttribute("aria-label", outpostCountText(outposts));
-    flags.append(icon("yards", 14), String(outposts));
-    counts.append(flags);
+    const total = make("span", "yard-switcher__outposts");
+    total.title = YARD_SWITCHER_TEXT.yardsTitle(yards);
+    total.textContent = YARD_SWITCHER_TEXT.yards(yards);
+    counts.append(total);
     if (pinned > 0) {
       counts.append(
         iconAmount("pin", `${pinned}/${OUTPOST_PINS_MAX}`, {
@@ -410,10 +566,19 @@ export class YardSwitcher {
     this.list.hidden = !open;
     this.button.setAttribute("aria-expanded", String(open));
     if (open) {
+      this.flash.hidden = true;
       this.showError(null);
       this.renderList();
       this.fitList();
+      // The open yard in view, for a player with many outposts (neon, round 1).
+      this.rows.querySelector<HTMLElement>('[aria-current="true"]')?.scrollIntoView?.({ block: "nearest" });
+      this.markScrolled();
     }
+  }
+
+  /** Scrolled down: the top rows fade under the heading, so rows above are plain (neon, round 2). */
+  private markScrolled(): void {
+    this.rows.classList.toggle("yard-switcher__rows--scrolled", this.rows.scrollTop > 0);
   }
 
   /**
