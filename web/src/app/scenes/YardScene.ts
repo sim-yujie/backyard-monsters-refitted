@@ -3438,6 +3438,7 @@ export class YardScene implements Scene {
       level: "info",
       actionLabel: "Kits",
       onAction: () => this.openKits(),
+      standing: true,
     });
   }
 

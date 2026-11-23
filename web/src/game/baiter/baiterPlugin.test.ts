@@ -509,7 +509,8 @@ describe("a Baiter test", () => {
       expect(fetchSpy).not.toHaveBeenCalled();
       expect(recentTests()).toHaveLength(1);
       // No controls: the dock names the replay and holds no army.
-      expect(dock.textContent).toContain("Test replay");
+      expect(dock.querySelector(".baiter-dock")?.getAttribute("aria-label")).toBe("Test replay");
+      expect(dock.textContent).toContain("Replay of a test");
       expect(dock.querySelector(".attack-army__row")).toBeNull();
     });
 

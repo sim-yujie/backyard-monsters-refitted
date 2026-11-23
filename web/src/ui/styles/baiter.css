@@ -680,6 +680,37 @@
 
 /* ── The practice attack's dock panel ─────────────────────────────────── */
 
+/* The test's line at the top of the dock (BaiterSummary.ts): a thin bar like
+   the attack strip and the status line (skin.css gives it the bar's plate),
+   no frame or title plate, so the army under it keeps the dock (beta 9
+   play-test, 23 Nov 2026: as a framed window it left one army row). */
+.baiter-dock {
+  display: flex;
+  flex: 0 0 auto;
+  flex-direction: column;
+  gap: var(--space-1);
+  margin: 0;
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--colour-border);
+  border-radius: var(--radius-md);
+  background: var(--colour-surface-raised);
+  -webkit-backdrop-filter: var(--blur-panel);
+  backdrop-filter: var(--blur-panel);
+  box-shadow: var(--shadow-panel);
+}
+
+.baiter-dock > p {
+  margin: 0;
+}
+
+.baiter-dock > [hidden] {
+  display: none;
+}
+
+.baiter-dock .baiter__figures {
+  font-size: var(--text-xs);
+}
+
 .baiter-dock__row {
   display: flex;
   justify-content: space-between;

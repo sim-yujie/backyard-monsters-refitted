@@ -86,10 +86,57 @@ export const openGame = async (
       // No storage: the game shows its login screen and boot reports it.
     }
   }, JSON.stringify(session));
+  await damageOwnYard(context);
   const page = await context.newPage();
   await page.goto("/");
   await waitForYard(page);
   return { context, page };
+};
+
+/** How many buildings come back damaged: enough for the post-attack banner. */
+const DAMAGED_BUILDINGS = 3;
+
+/**
+ * The yard comes back attacked (beta 9 play-test, 23 Nov 2026): a few
+ * buildings below full health in the `/base/load` answer, so the post-attack
+ * banner ("Your yard was attacked: 3 buildings damaged · Repair all") stands
+ * at the top for every window the check opens, as it does for a player who
+ * was raided. It sat on Build's tab row and caught its taps; a window it
+ * covers fails as covered. Only the browser's copy is changed: no walls, no
+ * Town Hall, nothing saved.
+ */
+const damageOwnYard = async (context: BrowserContext): Promise<void> => {
+  await context.route(/\/base\/load(\?|$)/, async (route) => {
+    const response = await route.fetch();
+    const text = await response.text();
+    let body = text;
+    try {
+      const save = JSON.parse(text) as {
+        buildingdata?: Record<string, { t?: unknown; rE?: unknown } | null>;
+        buildinghealthdata?: unknown;
+      };
+      if (save.buildingdata && typeof save.buildingdata === "object") {
+        // An empty one comes as [] (the save's PHP shape), which would drop string keys.
+        const health: Record<string, number> =
+          save.buildinghealthdata && !Array.isArray(save.buildinghealthdata) && typeof save.buildinghealthdata === "object"
+            ? { ...(save.buildinghealthdata as Record<string, number>) }
+            : {};
+        let damaged = 0;
+        for (const [key, building] of Object.entries(save.buildingdata)) {
+          if (damaged >= DAMAGED_BUILDINGS) break;
+          if (!building || typeof building.t !== "number" || building.t === 14 || building.t === 17) continue;
+          if (building.rE) continue;
+          health[key] = 1;
+          damaged += 1;
+        }
+        save.buildinghealthdata = health;
+        body = JSON.stringify(save);
+      }
+    } catch {
+      // Not JSON: passed on as it came.
+    }
+    await route.fulfill({ response, body });
+  });
 };
 
 /** Waits for the own yard: Build enabled. Throws plainly for the ways a boot can fail. */

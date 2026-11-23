@@ -5,7 +5,7 @@ import type { BaiterRun } from "@/game/baiter/baiterSession";
 import type { BaseLoadResponse } from "@/api/types";
 import { BaiterDock } from "./BaiterSummary";
 
-/** The Baiter scene's dock panel: its running count, and what it says once the test is over (#308). */
+/** The Baiter scene's dock line: its running count, and what it says once the test is over (#308). */
 
 const RUN: BaiterRun = {
   save: {} as BaseLoadResponse,
@@ -28,6 +28,22 @@ describe("BaiterDock", () => {
     docks.push(dock);
     return dock;
   };
+
+  it("is a line with no title plate, saying how to start until the first drop", () => {
+    const dock = mount();
+    expect(dock.element.querySelector(".panel__title, .panel__titlebar")).toBeNull();
+    expect(dock.element.querySelector(".baiter-dock__army")!.textContent).toBe("30 monsters. Tap the yard to drop them.");
+    dock.update({ phase: "running", creepsAlive: 0, creepsKilled: 0, damagePercent: 1 } as AttackSessionState);
+    expect(dock.element.querySelector<HTMLElement>(".baiter-dock__army")!.hidden).toBe(false);
+    expect(dock.element.querySelector<HTMLElement>(".baiter__figures")!.hidden).toBe(true);
+  });
+
+  it("puts the running count in place of the army line once something is dropped", () => {
+    const dock = mount();
+    dock.update(stateOf("running"));
+    expect(dock.element.querySelector<HTMLElement>(".baiter-dock__army")!.hidden).toBe(true);
+    expect(dock.element.querySelector<HTMLElement>(".baiter__figures")!.hidden).toBe(false);
+  });
 
   it("counts what is attacking while the test runs", () => {
     const dock = mount();
