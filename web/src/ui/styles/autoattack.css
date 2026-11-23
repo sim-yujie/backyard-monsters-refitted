@@ -40,9 +40,16 @@
   color: var(--colour-danger);
 }
 
+/* The sign hangs beside the words, so a second line starts under the first word (neon). */
+.auto-attack-action__line--warn {
+  display: flex;
+  gap: var(--space-1);
+  align-items: flex-start;
+}
+
 .auto-attack-action__warn-icon {
-  vertical-align: -2px;
-  margin-right: var(--space-1);
+  flex: none;
+  margin-top: 2px;
 }
 
 /* Smart Repeat attack (astra): the normal refusal path has the sheet's diagnostics too. */

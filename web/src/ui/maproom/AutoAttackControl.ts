@@ -149,6 +149,7 @@ export class AutoAttackControl implements CellPanelAction {
     this.missing.replaceChildren();
     this.missing.hidden = true;
     this.detail.classList.remove("auto-attack-action--refused", "auto-attack-action--warn");
+    this.line.classList.remove("auto-attack-action__line--warn");
     this.detail.querySelector(".auto-attack-action__history")?.remove();
     this.damageChip.hidden = true;
 
@@ -172,11 +173,12 @@ export class AutoAttackControl implements CellPanelAction {
       this.button.hidden = true;
       this.detail.hidden = false;
       const hint = noPlanHint(camp.tribe, camp.level, answer.fresh);
-      this.line.textContent = hint.text;
       if (hint.warn) {
+        // The sign hangs beside the words, as on Attack over (neon, 23 Nov 2026).
         this.detail.classList.add("auto-attack-action--warn");
-        this.line.prepend(icon("alert", 14, "map-icon auto-attack-action__warn-icon"));
-      }
+        this.line.classList.add("auto-attack-action__line--warn");
+        this.line.replaceChildren(icon("alert", 14, "map-icon auto-attack-action__warn-icon"), el("span", "", hint.text));
+      } else this.line.textContent = hint.text;
       return;
     }
 
