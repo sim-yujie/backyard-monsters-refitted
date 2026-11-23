@@ -83,6 +83,49 @@
   min-width: 0;
 }
 
+/* A window too narrow for the six tabs at their size (a 768px iPad upright,
+   where the window keeps clear of the Events column: the row slid, showing
+   "La" and no Champion; old-layout fix, beta 9): the phone's pinched tab
+   ends, and the "?" on the frame beside the title sign, so every tab is in
+   sight. Measured on the title bar, so it follows the window's own width;
+   a browser without container queries keeps the sliding row. */
+.monsters-screen .panel__titlebar {
+  container: monsters-title / inline-size;
+}
+
+@container monsters-title (max-width: 679.98px) {
+  :root[data-skin] .monsters-screen .monsters-tabs {
+    gap: 2px;
+  }
+
+  /* The phone's pinched plate ends (skin.css): the words keep their size. */
+  :root[data-skin] .monsters-screen .tab-row > .tabs__tab {
+    --skin-tab-cap: 6px;
+
+    padding-inline: 4px;
+  }
+
+  :root[data-skin] .monsters-screen:not(.siege-screen) .panel__titlebar > .guide-help {
+    position: absolute;
+    top: calc(-1 * var(--skin-title-lift) + 2px);
+    left: calc(50% + 74px);
+    z-index: 2;
+    width: 34px;
+    min-width: 0;
+    height: 34px;
+    min-height: 0;
+    margin: 0;
+    padding: 0;
+    border: 2px solid var(--colour-dome-rim);
+    border-radius: 50%;
+    background: radial-gradient(circle at 50% 35%, var(--colour-dome-top), var(--colour-dome-bottom));
+    color: #ffffff;
+    font-family: var(--font-display);
+    text-shadow: 0 1px 2px rgb(0 0 0 / 70%);
+    box-shadow: 0 2px 3px rgb(0 0 0 / 40%);
+  }
+}
+
 /* ── Header: housing (goo and putty are in the resource bar above) ──────── */
 
 .monsters-header {
@@ -535,6 +578,24 @@
   .locker__split {
     padding: var(--space-2) var(--space-3);
     overflow-y: auto;
+  }
+
+  /* The card in the little height there is (about 110px under the Lab's
+     and the academies' strip): the cost and the buttons (Start unlocking,
+     Train, Research, Instant) come first, then the monster, a smaller
+     portrait, and its words, which scroll. The monster picked is the lit
+     row beside it. Under the portrait they were below the fold (old-layout
+     fix, beta 9). */
+  .locker-detail__portrait {
+    width: 56px;
+    height: 56px;
+  }
+
+  .locker-detail__action {
+    order: -1;
+    flex-shrink: 0;
+    gap: var(--space-1);
+    padding: var(--space-2) var(--space-3);
   }
 }
 
