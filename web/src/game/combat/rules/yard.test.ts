@@ -169,10 +169,11 @@ describe("a building's anchor (issue #83)", () => {
     expect(yard.buildings[0]).toMatchObject({ x: 180, y: -480, cx: 180, cy: -480 });
   });
 
-  it("goes through the screen and back as `PATHING.FromISO(_mc)` does", () => {
-    // `GRID.ToISO(5, 0)` floors to (5, 2); `PATHING.FromISO` truncates to (4, 0).
+  it("stays on the saved X/Y off Flash's lattice, where the screen round trip did not (patch 8.3)", () => {
+    // `GRID.ToISO(5, 0)` floors to (5, 2) and `PATHING.FromISO` truncates that
+    // to (4, 0), a cell off the drawing; the engine keeps (5, 0) (bug #61).
     const yard = buildEngineYard({ buildingdata: { "1": { id: 1, t: 20, X: 5, Y: 0 } } });
-    expect(yard.buildings[0]).toMatchObject({ x: 5, y: 0, cx: 4, cy: 0 });
+    expect(yard.buildings[0]).toMatchObject({ x: 5, y: 0, cx: 5, cy: 0, sx: 5, sy: 2 });
   });
 
   it("puts a tower's scan point at the middle of its footprint", () => {

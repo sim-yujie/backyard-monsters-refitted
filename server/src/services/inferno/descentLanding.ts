@@ -18,6 +18,7 @@ import { recordAchievementEvents } from "../achievements/events.js";
 import { awardLootPoints } from "../base/combat/lootPoints.js";
 import { checkpointSession, parseFlingLog } from "../base/attackCheckpoint.js";
 import type { AbandonedOutcome } from "../base/combat/abandonedAttack.js";
+import { flungInLog, recordMonsterUsage } from "../stats/monsterUsage.js";
 import { replayAbandonedInWorker } from "../base/combat/replayRunner.js";
 import { endRowlessAttack, landRowlessOnce, type RowlessCheckpoint } from "../base/rowlessCheckpoint.js";
 import { recordQuestEvents } from "../quests/record.js";
@@ -279,6 +280,23 @@ const writeDescentLanding = async (
     em.persist(userSave);
     await em.flush();
     return { loot, update, infernobaseid, hatched };
+  });
+
+  // The dashboard's monster counts, after the landing and not waited on
+  // (`monsterUsage.ts`): the replay's, or with none the log's flings.
+  void recordMonsterUsage({
+    session: descent.session,
+    arena: "descent",
+    mode: "camp",
+    baseType: null,
+    tribe: "descent",
+    campLevel: index + 1,
+    battle,
+    flung: battle ? null : flungInLog(attacker.flinglog),
+    log: attacker.flinglog,
+    damageBefore: null,
+    damageAfter: battle?.damage ?? null,
+    now,
   });
 
   if (update.captured) {

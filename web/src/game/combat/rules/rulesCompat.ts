@@ -21,10 +21,16 @@
  * how the server learns between attacks; the engine reads a log's `h` as
  * before, so 7.10/7.11's 3cb9cc66416d5eda still plays the same.
  *
+ * Patch 8.3 (23 Nov 2026) empties it again: every building, not only a wall,
+ * now sits on the grid at its stored X/Y (bug #61), which moves a building
+ * off Flash's 10-unit lattice by a cell, and with it its routes, tower range
+ * and traps. No replay stamped with 3cb9cc66416d5eda or 8.1/8.2's
+ * 0ba3fde8701104af plays the same any more.
+ *
  * Add the version a change replaces only when that change moves no battle.
  * A change that moves any battle result must empty this list.
  */
-export const COMPATIBLE_RULES_VERSIONS: readonly string[] = ["3cb9cc66416d5eda"];
+export const COMPATIBLE_RULES_VERSIONS: readonly string[] = [];
 
 /**
  * Whether a battle stamped with the rules version `stamp` plays to its stored

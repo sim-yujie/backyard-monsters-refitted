@@ -79,6 +79,12 @@ export interface AutoAttackPlanResponse extends ApiEnvelope {
   /** The camp's damage now, whole. */
   readonly damage: number;
   /**
+   * The camp has no damaged building, so a hand attack with monsters would
+   * save a Repeat plan (patch 8.3). A camp scratched below 1% reads `damage`
+   * 0 but is not fresh. Absent from an older server: read as fresh.
+   */
+  readonly fresh?: boolean;
+  /**
    * Repeat attack's putty fee for this camp, burned before the attack starts
    * (owner, 20 Nov 2026). Absent from an older server.
    */

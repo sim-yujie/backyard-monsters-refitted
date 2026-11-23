@@ -41,7 +41,9 @@ import { tribeOfBase } from "../../goals/counters.js";
 import { addQuestEvents, questEvent } from "../../quests/state.js";
 import { catapultQuestEvents, lootQuestEvents } from "../../quests/hooks.js";
 import { recordQuestEvents } from "../../quests/record.js";
-import { removedCampStandIn } from "./practiceCamp.js";
+import { PRACTICE_CAMP_BASEID, removedCampStandIn } from "./practiceCamp.js";
+import { BaseType } from "../../../enums/Base.js";
+import { flungInLog, recordMonsterUsage, safely } from "../../stats/monsterUsage.js";
 import { countAttackLoot } from "../../events/lootEvents.js";
 import { plunderPercent, withPlunderBonus } from "../../events/weekendBoosts.js";
 import { recordAttackAchievements } from "../../achievements/events.js";
@@ -238,6 +240,9 @@ const writeTribeLanding = async (
   const ref = { kind: "mr1" as const, userid: user.userid, baseid };
 
   const wasDestroyed = Boolean(existingTribe.destroyed);
+  // For the dashboard's camp counts: the level the map showed (`wmstatus`), and the damage before.
+  const campLevel = safely(() => userSave.wmstatus.find((tribe) => tribe[0] === Number(baseid))?.[1] ?? null, null);
+  const damageBefore = existingTribe.damage ?? 0;
 
   // Marked landed before anything is written: whatever a crash after the
   // write leaves behind lands nothing more (`landRowlessOnce`).
@@ -308,6 +313,23 @@ const writeTribeLanding = async (
     postgres.em.persist(userSave);
     await postgres.em.flush();
     return { credit, credited, hatched };
+  });
+
+  // The dashboard's monster counts, after the landing and not waited on
+  // (`monsterUsage.ts`): the replay's, or with none the log's flings.
+  void recordMonsterUsage({
+    session,
+    arena: "mr1",
+    mode: "camp",
+    baseType: BaseType.TRIBE,
+    tribe: baseid === PRACTICE_CAMP_BASEID ? "practice" : (tribeOfBase(baseid) ?? null),
+    campLevel,
+    battle,
+    flung: battle ? null : flungInLog(attacker.flinglog),
+    log: attacker.flinglog,
+    damageBefore,
+    damageAfter: existingTribe.damage ?? 0,
+    now,
   });
 
   // Event loot (the monthly Krallen Hunt): the tribe's whole credit, before

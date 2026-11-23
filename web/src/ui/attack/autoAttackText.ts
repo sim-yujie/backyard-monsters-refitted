@@ -134,9 +134,43 @@ export const yardPlace = (label: YardLabel | undefined): string => (label ? `${l
 export const movesLineText = (moves: number): string =>
   moves === 1 ? "1 move needed" : `${moves} moves needed`;
 
-/** Why a camp has no Repeat attack yet. */
-export const noPlanText = (tribe: string, level: number): string =>
-  `Attack a ${tribe} camp of level ${level} by hand once, and you can repeat that attack here.`;
+/* ── Why an attack would not save a Repeat plan (patch 8.3, owner's B) ────
+ * A plan is saved only from a hand attack with monsters (or a champion) on
+ * a camp nobody damaged before it (owner, 22 Nov 2026, patch 8.2). The camp
+ * panel says so before the attack, from the server's `fresh` flag, and the
+ * Attack over box after it. Words from neon (23 Nov 2026): "Repeat plan"
+ * everywhere, two lines at most, "12 h", the way out named. */
+
+/** The camp panel's line when there is no plan; `warn` shows it with the warning sign and tint. */
+export interface NoPlanHint {
+  readonly text: string;
+  readonly warn: boolean;
+}
+
+/** The camp to try instead: "full-health Lv 35 Abunakki camp". */
+const freshCamp = (tribe: string, level: number | null): string =>
+  level ? `full-health Lv ${level} ${tribe} camp` : `full-health ${tribe} camp`;
+
+/**
+ * The camp panel's line when the player has no plan for the camp.
+ *
+ * @param fresh - The server's `fresh` flag: false when a building of the camp
+ *   is damaged, a scratch below 1% too. An older server sends none, and every
+ *   camp then reads as fresh, so nothing warns that should not.
+ */
+export const noPlanHint = (tribe: string, level: number, fresh: boolean | undefined): NoPlanHint =>
+  fresh === false
+    ? { text: `Won't save a Repeat plan. Pick a ${freshCamp(tribe, level)}.`, warn: true }
+    : { text: "Attack a full-health camp with monsters to save a Repeat plan.", warn: false };
+
+/** Why an attack on a Map Room 2 camp saved no Repeat plan. */
+export type PlanMissedReason = "camp-damaged" | "no-monsters";
+
+/** The Attack over box's warning line under "Result saved." when the attack saved no Repeat plan. */
+export const planMissedText = (reason: PlanMissedReason, tribe: string, level: number | null): string =>
+  reason === "no-monsters"
+    ? "Repeat plan not saved: bombs alone won't save. Send monsters too on a full-health camp."
+    : `Repeat plan not saved: camp was damaged (heals in 12 h). Attack a ${freshCamp(tribe, level)}.`;
 
 // Smart Repeat attack (astra): name the shortage without calling bombs or champions monsters.
 const missingHeadline = (missing: readonly PlanShortfall[], context: "sheet" | "panel" = "sheet"): string =>

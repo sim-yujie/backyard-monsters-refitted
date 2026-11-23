@@ -126,6 +126,16 @@ mock.module("@mikro-orm/core", () => ({
   }),
 }));
 
+/** The dashboard's monster count rows written (`monsterUsage.ts`). */
+const usage: Record<string, any>[] = [];
+mock.module("../../stats/monsterUsageStore.js", () => ({
+  insertUsageRow: async (row: Record<string, any>) => {
+    usage.push(row);
+  },
+}));
+/** Lets the landing's write, which it does not wait on, run. */
+const settle = () => new Promise((resolve) => setTimeout(resolve, 0));
+
 const { baseSave } = await import("../../../controllers/base/save/baseSave.js");
 const { attackCheckpoint } = await import("../../../controllers/base/attackCheckpoint.js");
 const { ROWLESS_CLOSE_ATTEMPTS, finaliseExpiredRowlessAttacks, finaliseRowlessAttacksOf } = await import(
@@ -240,6 +250,7 @@ afterEach(() => {
 });
 
 beforeEach(() => {
+  usage.length = 0;
   crashOn = null;
   flushFails = false;
   replayTimesOut = false;
@@ -1133,6 +1144,59 @@ describe("Map Room 1 tribe attack left without a save", () => {
     await checkpoint(SCRATCH, SCRATCH_TICK);
     expect(await finaliseRowlessAttacksOf(OTHER, "load")).toBe(0);
     expect(store.has(rowlessCheckpointKey(REF))).toBe(true);
+  });
+
+  describe("the dashboard's monster counts (owner, 23 Nov 2026)", () => {
+    test("the save that ends it counts the camp at the level the map showed, once", async () => {
+      startSession(ATTACKER, now(), ARMY);
+      userSave.monsters = { housed: { ...ARMY } };
+      userSave.wmstatus = [[2, 17, 0]];
+
+      expect(await run(finalSave())).toBeNull();
+      await run(finalSave());
+      expect(await finaliseRowlessAttacksOf(ATTACKER, "load")).toBe(0);
+      await settle();
+
+      expect(usage).toHaveLength(1);
+      expect(usage[0]).toMatchObject({
+        mode: "camp",
+        arena: "mr1",
+        tribe: "legionnaire",
+        campLevel: 17,
+        replayed: true,
+        flattened: true,
+        monsters: { C1: { l: 1, f: 60 } },
+      });
+    });
+
+    test("the finaliser counts an attack left without a save", async () => {
+      startSession(ATTACKER, now(), ARMY);
+      userSave.monsters = { housed: { ...ARMY } };
+      await checkpoint(WRECK, WRECK_TICK);
+
+      expect(await finaliseRowlessAttacksOf(ATTACKER, "load")).toBe(1);
+      await settle();
+
+      expect(usage).toHaveLength(1);
+      expect(usage[0]).toMatchObject({ arena: "mr1", tribe: "legionnaire", replayed: true });
+    });
+
+    test("one landed with no battle counts the log's monsters, marked as not replayed", async () => {
+      startSession(ATTACKER, now(), ARMY);
+      userSave.monsters = { housed: { ...ARMY } };
+      await checkpoint(SCRATCH, SCRATCH_TICK);
+      replayTimesOut = true;
+      for (let attempt = 0; attempt < ROWLESS_CLOSE_ATTEMPTS; attempt++) await finaliseRowlessAttacksOf(ATTACKER, "load");
+      await settle();
+      expect(usage).toHaveLength(0);
+
+      expect(await finaliseRowlessAttacksOf(ATTACKER, "load")).toBe(1);
+      await settle();
+
+      expect(usage).toHaveLength(1);
+      expect(usage[0]).toMatchObject({ replayed: false, monsters: { C1: { l: 1, f: 4 } } });
+      expect(usage[0]!.monsters.C1.x).toBeUndefined();
+    });
   });
 });
 

@@ -139,6 +139,16 @@ mock.module("@mikro-orm/core", () => ({
   }),
 }));
 
+/** The dashboard's monster count rows written (`monsterUsage.ts`). */
+const usage: Record<string, any>[] = [];
+mock.module("../stats/monsterUsageStore.js", () => ({
+  insertUsageRow: async (row: Record<string, any>) => {
+    usage.push(row);
+  },
+}));
+/** Lets the landing's write, which it does not wait on, run. */
+const settle = () => new Promise((resolve) => setTimeout(resolve, 0));
+
 const { baseSave } = await import("../../controllers/base/save/baseSave.js");
 const { attackCheckpoint } = await import("../../controllers/base/attackCheckpoint.js");
 const { finaliseRowlessAttacksOf } = await import("../base/finaliseRowlessAttack.js");
@@ -251,6 +261,7 @@ const PURSE = { r1: 3000, r2: 2000, r3: 1000, r4: 500 };
 const savedSwitch = process.env.INFERNO_ENABLED;
 
 beforeEach(() => {
+  usage.length = 0;
   crashOn = null;
   process.env.INFERNO_ENABLED = "on";
   (combatConfig as { mode: typeof MODE }).mode = "log";
@@ -927,5 +938,25 @@ describe("the hatch quest through the save that ends a Descent attack (patch 7.8
     // The same save sent again lands nothing, so counts nothing.
     expect((await run(save()))?.data?.reason).toBe("no-session");
     expect(hatchHave()).toBe(4);
+  });
+});
+
+describe("the dashboard's monster counts (owner, 23 Nov 2026)", () => {
+  test("a Descent attack is counted with its yard, 1 to 13, once", async () => {
+    startSession("203");
+    expect(await run(finalSave("203"))).toBeNull();
+    await run(finalSave("203"));
+    await settle();
+
+    expect(usage).toHaveLength(1);
+    expect(usage[0]).toMatchObject({
+      attackerUserid: ATTACKER,
+      mode: "camp",
+      arena: "descent",
+      tribe: "descent",
+      campLevel: 3,
+      replayed: true,
+    });
+    expect(usage[0]!.monsters.C1.f).toBeGreaterThan(0);
   });
 });

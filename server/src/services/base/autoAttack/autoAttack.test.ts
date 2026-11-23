@@ -296,6 +296,14 @@ mock.module("../combat/replayRunner.js", () => ({
   },
 }));
 
+/** The dashboard's monster count rows written (`monsterUsage.ts`). */
+const usage: Record<string, any>[] = [];
+mock.module("../../stats/monsterUsageStore.js", () => ({
+  insertUsageRow: async (row: Record<string, any>) => {
+    usage.push(row);
+  },
+}));
+
 const { runAutoAttack, autoAttackPlanFor, lastAutoAttackReplay, autoAttackLockKey } = await import("./autoAttack.js");
 // The route itself (`POST /worldmapv2/autoattack`, `app.routes.ts`), over the real service and the stand-ins above.
 const { autoAttack: autoAttackRoute } = await import("../../../controllers/maproom/v2/autoAttack.js");
@@ -419,6 +427,18 @@ describe("runAutoAttack lands the plan", () => {
     const result = await runAutoAttack(user() as never, CAMP);
     expect(result.report).toContain("etreat");
   }, REPLAY_TIMEOUT_MS);
+});
+
+describe("the dashboard's monster counts (owner, 23 Nov 2026)", () => {
+  test("a Repeat attack is counted once, with the camps, marked as a Repeat", async () => {
+    usage.length = 0;
+    userSave.resources = { r1: 0, r2: 1_000_000, r3: 2_000_000, r4: 0 };
+    await runAutoAttack(user() as never, CAMP);
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    expect(usage).toHaveLength(1);
+    expect(usage[0]).toMatchObject({ repeat: true, mode: "camp", arena: "mr2", attackerUserid: ATTACKER, monsters: { C1: { f: 150 } } });
+  });
 });
 
 describe("runAutoAttack refuses, writing nothing", () => {
@@ -595,6 +615,48 @@ describe("autoAttackPlanFor", () => {
   test("a regenerated camp reads as undamaged", async () => {
     camp.savetime = now() - 13 * 60 * 60;
     expect((await autoAttackPlanFor(user() as never, CAMP)).damage).toBe(0);
+  });
+});
+
+/* ── Whether an attack would save a Repeat plan (patch 8.3, owner's B) ───── */
+
+describe("autoAttackPlanFor says whether the camp is fresh", () => {
+  test("a camp with no damaged building is fresh, plan or no plan", async () => {
+    camp.damage = 0;
+    camp.buildinghealthdata = {};
+    expect((await autoAttackPlanFor(user() as never, CAMP)).fresh).toBe(true);
+    planRow = null;
+    expect(await autoAttackPlanFor(user() as never, CAMP)).toMatchObject({ plan: null, fresh: true });
+  });
+
+  test("a damaged camp is not fresh", async () => {
+    planRow = null;
+    camp.damage = 12;
+    camp.buildinghealthdata = { "0": 120_000, "3": 40_000 };
+    expect(await autoAttackPlanFor(user() as never, CAMP)).toMatchObject({ damage: 12, fresh: false });
+  });
+
+  test("a camp scratched below 1% reads 0% but is not fresh", async () => {
+    planRow = null;
+    camp.damage = 0;
+    camp.buildinghealthdata = { "0": 360_000 };
+    expect(await autoAttackPlanFor(user() as never, CAMP)).toMatchObject({ damage: 0, fresh: false });
+  });
+
+  test("a camp past its 12 hours has regrown, so it is fresh again", async () => {
+    planRow = null;
+    camp.damage = 40;
+    camp.buildinghealthdata = { "0": 120_000 };
+    camp.savetime = now() - 13 * 60 * 60;
+    expect(await autoAttackPlanFor(user() as never, CAMP)).toMatchObject({ damage: 0, fresh: true });
+  });
+
+  test("a camp nobody has attacked yet has no row, and is fresh", async () => {
+    planRow = null;
+    // Known by its id alone: this world's id for the camp's cell, with no row behind it.
+    const { generateBaseId } = await import("../../../utils/generateBaseId.js");
+    const unattacked = generateBaseId(WORLD, 241, 208);
+    expect(await autoAttackPlanFor(user() as never, unattacked)).toMatchObject({ plan: null, damage: 0, fresh: true });
   });
 });
 

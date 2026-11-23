@@ -38,6 +38,25 @@ export interface ChartOptions {
   week?: "sum" | "last" | "mean";
   /** False: the scale may start above zero (lines only). */
   zero?: boolean;
+  /**
+   * For points that are not days (a camp's levels): the axis label, the
+   * words after the number, and the number's own words. Each defaults to the
+   * day's.
+   */
+  axis?: (point: ChartPoint) => string;
+  when?: (point: ChartPoint) => string;
+  say?: (point: ChartPoint) => string;
+  /** The point the caption shows at rest; the last known one by default. Given, its bar stays marked. */
+  start?: number;
+  /** The widest a bar may be (18 px by default): wider for a chart of a few bars. */
+  barMax?: number;
+  /**
+   * The last point is still being counted (today): its words, "today so far".
+   * A line stops at the day before and reaches it with a dashed, fainter
+   * segment; a bar among others is drawn faint. Either is labelled, so a day
+   * half over never reads as a crash.
+   */
+  partial?: string;
 }
 
 export interface ChartLayout {
@@ -169,6 +188,22 @@ export const layoutChart = (
 export const tickLabel = (value: number): string =>
   value >= 1000 ? `${Number((value / 1000).toFixed(1))}K` : String(Number(value.toFixed(1)));
 
+/** The line through the first `count` points, a fresh "M" after every gap. */
+const linePath = (layout: Pick<ChartLayout, "xs" | "ys">, count: number): string => {
+  let path = "";
+  let pen = false;
+  for (let i = 0; i < count; i++) {
+    const y = layout.ys[i] ?? null;
+    if (y === null) {
+      pen = false;
+      continue;
+    }
+    path += `${pen ? " L" : path ? " M" : "M"} ${layout.xs[i]!.toFixed(1)} ${y.toFixed(1)}`;
+    pen = true;
+  }
+  return path;
+};
+
 /** A bar with rounded top corners, standing on the baseline. */
 const barPath = (x: number, top: number, width: number, bottom: number): string => {
   const r = Math.min(4, width / 2, bottom - top);
@@ -192,7 +227,13 @@ const draw = (
   options: ChartOptions,
 ): void => {
   const width = Math.max(240, Math.floor(host.clientWidth || 320));
+  const when = options.when ?? whenLabel;
   const layout = layoutChart(points, width, options.height ?? 168, options.zero ?? true);
+  const slot = points.length ? (layout.plot.right - layout.plot.left) / points.length : 0;
+  if (options.barMax) layout.barWidth = Math.max(1, Math.min(options.barMax, slot * 0.6));
+  // A few named points (a camp's levels) each get their own label under their bar, where it fits.
+  const everyLabel = Boolean(options.axis) && points.length <= 12 && slot >= 38;
+  if (everyLabel) layout.labelled = points.map((_, i) => i);
   const { plot } = layout;
   const root = svg("svg", {
     width,
@@ -201,7 +242,7 @@ const draw = (
     class: "chart-svg",
     role: "img",
     tabindex: 0,
-    "aria-label": `${options.unit}, ${points.length ? `${whenLabel(points[0]!)} to ${whenLabel(points[points.length - 1]!)}` : "no days yet"}. Arrow keys step through the days.`,
+    "aria-label": `${options.unit}, ${points.length ? `${when(points[0]!)} to ${when(points[points.length - 1]!)}` : "no days yet"}. Arrow keys step through ${options.when ? "them" : "the days"}.`,
   });
 
   for (const tick of layout.ticks) {
@@ -226,8 +267,13 @@ const draw = (
     root.append(label);
   }
   for (const i of layout.labelled) {
-    const anchor =
-      i === 0 && points.length > 1 ? "start" : i === points.length - 1 && i ? "end" : "middle";
+    const anchor = everyLabel
+      ? "middle"
+      : i === 0 && points.length > 1
+        ? "start"
+        : i === points.length - 1 && i
+          ? "end"
+          : "middle";
     const x = anchor === "start" ? plot.left : anchor === "end" ? plot.right : layout.xs[i]!;
     const label = svg("text", {
       x,
@@ -235,7 +281,7 @@ const draw = (
       "text-anchor": anchor,
       class: "tick",
     });
-    label.textContent = shortDay(points[i]!.day);
+    label.textContent = options.axis ? options.axis(points[i]!) : shortDay(points[i]!.day);
     root.append(label);
   }
   if (layout.leadingGap) {
@@ -251,6 +297,9 @@ const draw = (
   }
 
   const marks: SVGElement[] = [];
+  const last = points.length - 1;
+  /** A line whose last point is still counting, with a day before it to stop at. */
+  const partial = Boolean(options.partial) && options.kind === "line" && points.length >= 2;
   if (options.kind === "bar") {
     layout.ys.forEach((y, i) => {
       const bar = svg("path", {
@@ -258,13 +307,39 @@ const draw = (
           y === null || y >= plot.bottom
             ? ""
             : barPath(layout.xs[i]!, y, layout.barWidth, plot.bottom),
-        class: "mark bar",
+        class: options.partial && points.length >= 2 && i === last ? "mark bar partial" : "mark bar",
       });
       marks.push(bar);
       root.append(bar);
     });
+  } else if (partial) {
+    root.append(svg("path", { d: linePath(layout, last), class: "mark line" }));
+    let from = last - 1;
+    while (from >= 0 && layout.ys[from] === null) from--;
+    if (from >= 0 && layout.ys[last] !== null) {
+      root.append(
+        svg("path", {
+          d: `M ${layout.xs[from]!.toFixed(1)} ${layout.ys[from]!.toFixed(1)} L ${layout.xs[last]!.toFixed(1)} ${layout.ys[last]!.toFixed(1)}`,
+          class: "mark line partial",
+        }),
+      );
+    }
   } else {
     root.append(svg("path", { d: layout.path, class: "mark line" }));
+  }
+  if (options.partial && points.length && layout.ys[points.length - 1] !== null) {
+    const i = points.length - 1;
+    // A bar: above it. A line: to the left of its last point, level with it,
+    // clear of the dashed segment that comes down (or up) into it.
+    const bar = options.kind === "bar";
+    const note = svg("text", {
+      x: bar ? layout.xs[i]! : layout.xs[i]! - 14,
+      y: bar ? Math.max(plot.top + 10, layout.ys[i]! - 6) : Math.min(plot.bottom - 4, Math.max(plot.top + 10, layout.ys[i]! + 4)),
+      "text-anchor": bar ? "middle" : "end",
+      class: "partial-label",
+    });
+    note.textContent = (points[i]!.days ?? 1) > 1 ? "this week so far" : options.partial;
+    root.append(note);
   }
   const guide = svg("line", {
     y1: plot.top,
@@ -276,12 +351,14 @@ const draw = (
   root.append(guide, dot);
 
   const lastKnown = (() => {
+    if (options.start !== undefined && points[options.start]) return options.start;
     for (let i = points.length - 1; i >= 0; i--) if (points[i]!.value !== null) return i;
     return points.length - 1;
   })();
   let current = lastKnown;
 
-  const show = (i: number, active: boolean) => {
+  /** Shows point `i` in the caption; `active` marks its bar, `hover` also draws the guide line. */
+  const show = (i: number, active: boolean, hover = active) => {
     const point = points[i];
     if (!point) {
       caption.replaceChildren("No days yet");
@@ -292,21 +369,26 @@ const draw = (
       h(
         "strong",
         {},
-        point.value === null ? "Not counted" : `${count(point.value)} ${options.unit}`,
+        point.value === null
+          ? "Not counted"
+          : options.say
+            ? options.say(point)
+            : `${count(point.value)} ${options.unit}`,
       ),
-      h("span", {}, whenLabel(point)),
+      h("span", {}, when(point)),
     );
     marks.forEach((mark, j) => mark.classList.toggle("on", active && j === i));
     const x = layout.xs[i]!;
     const y = layout.ys[i] ?? null;
     guide.setAttribute("x1", String(x));
     guide.setAttribute("x2", String(x));
-    guide.setAttribute("visibility", active ? "visible" : "hidden");
+    guide.setAttribute("visibility", hover ? "visible" : "hidden");
     // A line keeps a dot on its newest value, and moves it to the day shown.
     if (options.kind === "line" && y !== null) {
       dot.setAttribute("cx", String(x));
       dot.setAttribute("cy", String(y));
       dot.setAttribute("visibility", "visible");
+      dot.classList.toggle("partial", partial && i === last);
     } else {
       dot.setAttribute("visibility", "hidden");
     }
@@ -320,10 +402,11 @@ const draw = (
   };
   root.addEventListener("pointermove", (event) => show(indexAt(event), true));
   root.addEventListener("pointerdown", (event) => show(indexAt(event), true));
+  const rest = options.start !== undefined;
   root.addEventListener("pointerleave", () => {
-    if (document.activeElement !== root) show(lastKnown, false);
+    if (document.activeElement !== root) show(lastKnown, rest, false);
   });
-  root.addEventListener("blur", () => show(lastKnown, false));
+  root.addEventListener("blur", () => show(lastKnown, rest, false));
   root.addEventListener("keydown", (event) => {
     const step = { ArrowLeft: -1, ArrowRight: 1, Home: -points.length, End: points.length }[
       event.key
@@ -334,7 +417,7 @@ const draw = (
   });
 
   host.replaceChildren(root);
-  show(lastKnown, false);
+  show(lastKnown, options.start !== undefined, false);
 };
 
 /**

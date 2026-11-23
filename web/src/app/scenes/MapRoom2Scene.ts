@@ -1311,6 +1311,8 @@ export class MapRoom2Scene implements Scene {
         name: targetName(payload),
         ...("uid" in payload && payload.uid > 0 ? { owner: payload.uid } : {}),
         ...this.allyOf(payload),
+        // The camp's level, for Attack over's Repeat-plan line (patch 8.3).
+        ...(kind === "wild" && "l" in payload && typeof payload.l === "number" ? { campLevel: payload.l } : {}),
         roster,
       },
       refusal: null,
