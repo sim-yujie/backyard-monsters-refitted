@@ -85,7 +85,7 @@ describe("a staircase of walls blocks (patch 7.9)", () => {
     expect(grid.wallAt(cellOf(385, 65))).toBe(2);
   });
 
-  it("anchors a wall on Flash's lattice where the round trip did, and other buildings as before", () => {
+  it("anchors a wall on Flash's lattice where the round trip did, and every other building on its X/Y too (patch 8.3)", () => {
     const yard = buildEngineYard({
       buildingdata: {
         "1": { id: 1, t: WALL, X: 380, Y: 60 },
@@ -96,7 +96,8 @@ describe("a staircase of walls blocks (patch 7.9)", () => {
     const [onLattice, negative, harvester] = yard.buildings;
     expect([onLattice!.cx, onLattice!.cy]).toEqual([380, 60]);
     expect([negative!.cx, negative!.cy]).toEqual([-125, 35]);
-    // A non-wall keeps the screen round trip anchor.
-    expect([harvester!.cx, harvester!.cy]).toEqual([384, 39]);
+    // Patch 8.3: a non-wall is anchored on its stored X/Y as well, not on the
+    // screen round trip's (384, 39).
+    expect([harvester!.cx, harvester!.cy]).toEqual([385, 40]);
   });
 });
