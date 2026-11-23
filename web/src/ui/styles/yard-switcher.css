@@ -164,7 +164,7 @@
 }
 
 .yard-switcher__button[aria-expanded="true"] .yard-switcher__caret {
-  top: 0;
+  top: 2px;
   transform: rotate(225deg);
 }
 
@@ -342,8 +342,8 @@
 /* Scrolled down (the list opens on the open yard): the top rows fade
    under the heading, so more above is plain (neon, round 2). */
 .yard-switcher__rows--scrolled {
-  -webkit-mask-image: linear-gradient(to bottom, transparent 0, #000 22px);
-  mask-image: linear-gradient(to bottom, transparent 0, #000 22px);
+  -webkit-mask-image: linear-gradient(to bottom, transparent 0, #000 14px);
+  mask-image: linear-gradient(to bottom, transparent 0, #000 14px);
 }
 
 .yard-switcher__row {
@@ -353,9 +353,16 @@
   gap: 4px;
   min-height: 36px;
   border-radius: var(--radius-sm);
+  /* A faint line between rows, so a row's name and its buttons are easy to
+     follow across (neon, round 3). */
+  border-bottom: 1px solid rgb(255 255 255 / 6%);
   /* Rows off screen skip layout and paint: smooth with 800 outposts. */
   content-visibility: auto;
   contain-intrinsic-size: auto 36px;
+}
+
+.yard-switcher__row:last-child {
+  border-bottom: 0;
 }
 
 .yard-switcher__row--pinned {
@@ -418,11 +425,11 @@
   padding: 0;
 }
 
-/* An unpinned pin is a light grey, clear on the dark list (neon, rounds 1
-   and 2); a pinned one is in full colour. */
+/* An unpinned pin is a soft grey: seen on the dark list, but plainly off
+   beside a pinned one in full colour (neon, rounds 1-3). */
 .yard-switcher__pin .game-icon {
-  filter: grayscale(1) brightness(1.9) drop-shadow(0 1px 1px rgb(0 0 0 / 60%));
-  opacity: 0.85;
+  filter: grayscale(1) brightness(1.25);
+  opacity: 0.6;
   transition:
     opacity 120ms ease,
     filter 120ms ease;
@@ -469,6 +476,11 @@
 
 /* Fingers need bigger targets than a mouse. */
 @media (pointer: coarse) {
+  /* Room between the rows' 44px buttons on a touch screen (neon, round 3). */
+  .yard-switcher__rows {
+    gap: 4px;
+  }
+
   .yard-switcher__row,
   .yard-switcher__item {
     min-height: 44px;
