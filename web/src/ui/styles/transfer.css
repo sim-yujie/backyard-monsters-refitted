@@ -961,6 +961,17 @@
   mask-image: linear-gradient(to right, #000 calc(100% - 36px), transparent);
 }
 
+/* Scrolled along: the left edge fades too, so chips off to the left read as more. */
+.xfer-chips.is-more-left {
+  -webkit-mask-image: linear-gradient(to right, transparent, #000 36px);
+  mask-image: linear-gradient(to right, transparent, #000 36px);
+}
+
+.xfer-chips.is-more-left.is-more-right {
+  -webkit-mask-image: linear-gradient(to right, transparent, #000 36px, #000 calc(100% - 36px), transparent);
+  mask-image: linear-gradient(to right, transparent, #000 36px, #000 calc(100% - 36px), transparent);
+}
+
 .xfer-chip {
   position: relative;
   display: flex;
@@ -1033,7 +1044,8 @@ button.xfer-chip:disabled {
   gap: 1px;
   min-width: 54px;
   margin: 0;
-  padding: 0 8px 0 9px;
+  /* Room on the right for the ▾ in the corner. */
+  padding: 0 18px 0 9px;
   border: 0;
   border-radius: 0 6px 6px 0;
   background: none;
@@ -1088,14 +1100,15 @@ button.xfer-chip:disabled {
 }
 
 .xfer-step:disabled {
-  opacity: 0.4;
+  opacity: 0.5;
   cursor: default;
 }
 
 /* As many as fit. */
 .xfer-step--max {
   width: auto;
-  padding-inline: 8px;
+  min-width: 44px;
+  padding-inline: 6px;
   font-size: 15px;
 }
 
@@ -1361,7 +1374,13 @@ button.xfer-chip:disabled {
 
   .xfer-chip__count {
     min-width: 40px;
-    padding: 0 6px;
+    padding: 0 16px 0 6px;
+  }
+
+  /* "Move 16 → Ridge": the target's name gets as much of the line as it can. */
+  .xfer-go {
+    padding-inline: 10px;
+    font-size: 16px;
   }
 }
 

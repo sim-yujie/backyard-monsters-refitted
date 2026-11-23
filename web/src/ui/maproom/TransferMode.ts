@@ -547,6 +547,8 @@ export class TransferMode {
 
     const free = Math.max(0, freeRoom(yard, sizeOf) - delta);
     const full = free < smallest;
+    // "Full" on a yard that takes: every target, and the anchor when bringing to it (as the tray says).
+    const fullShown = full && (!isAnchor || !out);
 
     if (size === "dot") {
       node.append(el("i", "xfer-plate__dot"));
@@ -578,8 +580,8 @@ export class TransferMode {
       if (!yard.attack && size === "full" && !node.classList.contains("is-nohousing")) {
         const room = el("span", "xfer-plate__room");
         room.append(roomBar(yard, sizeOf, delta));
-        const word = el("b", full && !isAnchor ? "xfer-plate__free is-full" : "xfer-plate__free");
-        const words = yard.capacity <= 0 ? MOVE_TEXT.noHousing : full && !isAnchor ? MOVE_TEXT.full : formatAmount(free);
+        const word = el("b", fullShown ? "xfer-plate__free is-full" : "xfer-plate__free");
+        const words = yard.capacity <= 0 ? MOVE_TEXT.noHousing : fullShown ? MOVE_TEXT.full : formatAmount(free);
         word.append(icon("housing", 16, "xfer-plate__house"), document.createTextNode(words));
         room.append(word);
         node.append(room);
@@ -868,6 +870,7 @@ export class TransferMode {
     // More chips than fit: the strip fades at its right edge until scrolled to the end.
     const fade = (): void => {
       chips.classList.toggle("is-more-right", chips.scrollLeft + chips.clientWidth < chips.scrollWidth - 4);
+      chips.classList.toggle("is-more-left", chips.scrollLeft > 4);
     };
     chips.addEventListener("scroll", fade, { passive: true });
     requestAnimationFrame(fade);
