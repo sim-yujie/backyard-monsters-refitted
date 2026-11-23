@@ -192,6 +192,8 @@ const deleteSteps = (u: number): DeleteStep[] => [
   { label: "alliance invites", table: "alliance_invite", where: `user_id = ?`, params: [u] },
   { label: "notifications", table: "notification", where: `userid = ?`, params: [u] },
   { label: "defence replays of attacks on them", table: "defence_replay", where: `defender_userid = ?`, params: [u] },
+  { label: "Baiter test invites (both ways)", table: "baiter_invite", where: `inviter_userid = ? OR tester_userid = ?`, params: [u, u] },
+  { label: "friend tests of their yard", table: "baiter_test", where: `inviter_userid = ?`, params: [u] },
   { label: "attack plans", table: "attack_plan", where: `userid = ?`, params: [u] },
   { label: "Map Room 1 neighbour lists", table: "maproom", where: `userid = ?`, params: [u] },
   { label: "inferno neighbour lists", table: "maproom_inferno", where: `userid = ?`, params: [u] },
@@ -264,6 +266,14 @@ const updateSteps = (u: number, username: string): UpdateStep[] => [
     set: `attacker_username = ?, attacker_pic_square = NULL`,
     setParams: [DELETED_PLAYER_NAME],
     where: `attacker_userid = ?`,
+    params: [u],
+  },
+  {
+    label: "friend tests they ran of other yards (name replaced)",
+    table: "baiter_test",
+    set: `tester_username = ?, tester_pic = NULL`,
+    setParams: [DELETED_PLAYER_NAME],
+    where: `tester_userid = ?`,
     params: [u],
   },
   {

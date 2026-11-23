@@ -111,6 +111,18 @@ if (import.meta.env.DEV || import.meta.env.VITE_LAYOUT_CHECK === "1") {
       return modal ? previewAutoAttackConfirm(modal, state) : null;
     };
   });
+  // The Baiter window's friend tabs and a friend's test army (beta 9 #4), at their busiest.
+  void import("@/ui/yard/baiterFriendsPreview").then(({ previewBaiterWindow, previewFriendTest }) => {
+    const modal = () => document.querySelector<HTMLElement>(".overlay__layer--modal");
+    (globalThis as Record<string, unknown>)["__baiterWindow"] = (view?: Parameters<typeof previewBaiterWindow>[1]) => {
+      const layer = modal();
+      return layer ? previewBaiterWindow(layer, view) : null;
+    };
+    (globalThis as Record<string, unknown>)["__baiterFriendTest"] = () => {
+      const layer = modal();
+      return layer ? previewFriendTest(layer) : null;
+    };
+  });
   // The world map's move tray and its List (beta 9 #7), with a fixed busy empire.
   void import("@/ui/maproom/transferPreview").then(({ previewTransferMode }) => {
     (globalThis as Record<string, unknown>)["__transferPreview"] = (state?: "tray" | "list") => {

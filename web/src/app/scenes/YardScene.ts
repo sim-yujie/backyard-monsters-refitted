@@ -115,7 +115,7 @@ import { presence } from "@/game/presence/presencePing";
 import { yardAttack } from "@/game/presence/yardAttack";
 import { UnderAttackLock } from "@/ui/yard/UnderAttackLock";
 import { withStoredDecorations } from "@/game/yard/decorStorage";
-import { consumeYardIntent, setYardIntent, type YardIntent } from "@/game/yard/yardIntent";
+import { consumeYardIntent, setYardIntent, type BaiterView, type YardIntent } from "@/game/yard/yardIntent";
 import { yardLifeOf } from "@/game/yard/yardLifeModel";
 import {
   YardChangeReason,
@@ -202,6 +202,10 @@ import { TROJAN_HORSE_TYPE, findTrojanHorse } from "@/game/trojan/trojanHorse";
 import { TrojanFlow } from "@/game/trojan/trojanFlow";
 import { TrojanLetter } from "@/ui/trojan/TrojanLetter";
 import { replayOf } from "@/game/baiter/testHistory";
+import type { BaiterRun } from "@/game/baiter/baiterSession";
+import { BAITER_REFUSAL_TEXT, baiterRefusalOf, baiterTestsApi, type ReceivedInvite } from "@/api/baiterTests";
+import { openFriendTestWindow, openInvitesWindow } from "@/ui/yard/BaiterInvitesWindow";
+import { setBaiterOpener } from "@/game/baiter/baiterOpener";
 import { guideBus, GuideScreen } from "@/game/guide/guideBus";
 import { registerCanvasTarget, tutTarget, TutTarget, type TargetRect } from "@/game/guide/targets";
 import { footprintBox } from "@/game/yard/YardGrid";
@@ -619,6 +623,8 @@ export class YardScene implements Scene {
    */
   private unmountPlugins: (() => void) | null = null;
   private readonly unregisterTargets: (() => void)[] = [];
+  /** Clears the way in to the Baiter's friend tabs from a notice (beta 9 #4). */
+  private clearBaiterOpener: (() => void) | null = null;
   private canvasWidth = 0;
   private canvasHeight = 0;
 
@@ -787,6 +793,13 @@ export class YardScene implements Scene {
         onAllianceJoined: () => void this.store?.refresh(),
       });
       this.dock.placeBesideMonsters(tutTarget(this.mail.button.element, TutTarget.DOCK_MAIL));
+      // A friend-test notice opens the Baiter window's tab (beta 9 #4).
+      // Its own undo: the canvas targets' list is cleared whenever the camera is set up again.
+      this.clearBaiterOpener?.();
+      this.clearBaiterOpener = setBaiterOpener((view) => {
+        if (this.store?.kind === "main" || view === "invitedMe") this.openBaiterView(view);
+        else this.notices.show("baiter-friend", "Tests of your yard are in your main yard's Baiter.", { level: "info", timeoutMs: 6_000 });
+      });
       this.bell = new NotificationDoor({
         container: context.overlay.content,
         onOpen: () => {
@@ -862,6 +875,8 @@ export class YardScene implements Scene {
 
   exit(): void {
     presence.setScreen(ELSEWHERE);
+    this.clearBaiterOpener?.();
+    this.clearBaiterOpener = null;
     this.releaseRaidSheets?.();
     this.stopSupportOffer?.();
     this.stopSupportOffer = null;
@@ -1229,6 +1244,11 @@ export class YardScene implements Scene {
       this.tellPresence();
       // What the screen the player came from asked for, on the own yard only.
       if (store) this.applyIntent(consumeYardIntent());
+      // Dev only: `?baiterView=invite` opens the Baiter window on a friend tab, for pictures and checks.
+      if (import.meta.env.DEV && store?.kind === "main") {
+        const view = new URLSearchParams(window.location.search).get("baiterView");
+        if (view === "army" || view === "invite" || view === "invitedMe" || view === "results") this.openBaiterView(view);
+      }
       if (store?.kind === "outpost") this.arriveAtOutpost(store, context);
       // A friend's help landing while the player is here refreshes the yard (#374).
       if (store?.kind === "main") this.watchHelps(store);
@@ -2415,14 +2435,55 @@ export class YardScene implements Scene {
     else if (intent.kind === "defences") {
       if (this.defences && !this.defences.button.element.hidden) void this.defences.open();
     } else if (intent.kind === "baiter") {
-      const baiter = this.yard?.buildings.find((one) => one.type === BAITER_TYPE);
-      if (!baiter) return;
-      this.focusBuilding(baiter.id);
-      this.panel?.openBaiter();
+      this.openBaiterView(intent.view);
+    } else if (intent.kind === "baiterFriend") {
+      // "Change army" after a test of a friend's yard: their invite, if it is still open.
+      baiterTestsApi.list().then(
+        (data) => {
+          const invite = data.invitedMe.find((one) => one.userid === intent.inviter);
+          if (invite) this.openFriendTest(invite);
+          else this.notices.show("baiter-friend", BAITER_REFUSAL_TEXT.noInvite, { level: "warning", timeoutMs: 6_000 });
+        },
+        (error: unknown) => this.notices.show("baiter-friend", BAITER_REFUSAL_TEXT[baiterRefusalOf(error)], { level: "error" }),
+      );
     } else {
       const tab = MONSTERS_TAB_ORDER.find((one) => one === intent.tab);
       if (tab) this.openMonsters(tab);
     }
+  }
+
+  /**
+   * Opens the Baiter window on `view` (beta 9 #4). A player with no Baiter of
+   * their own still reaches a friend's invite: Invited me opens on its own.
+   */
+  openBaiterView(view?: BaiterView): void {
+    const baiter = this.yard?.buildings.find((one) => one.type === BAITER_TYPE && one.level >= 1);
+    if (baiter) {
+      this.focusBuilding(baiter.id);
+      this.panel?.openBaiter(view);
+      return;
+    }
+    const modal = this.context?.overlay.modal;
+    if (view !== "invitedMe" || !modal || !this.store) return;
+    openInvitesWindow({ container: modal, ...this.friendTestOptions() });
+  }
+
+  /** The army window for a friend's yard (beta 9 #4). */
+  private openFriendTest(invite: ReceivedInvite): void {
+    const modal = this.context?.overlay.modal;
+    if (!modal || !this.store) return;
+    openFriendTestWindow(modal, invite, this.friendTestOptions());
+  }
+
+  private friendTestOptions() {
+    const store = this.store!;
+    return {
+      save: () => store.save,
+      onRun: (run: BaiterRun) => {
+        setBaiterRun(run);
+        this.context?.goTo(SceneName.BAITER);
+      },
+    };
   }
 
   /** The Build window's "Upgrade Town Hall": close it and open the hall's panel. */
@@ -3069,6 +3130,26 @@ export class YardScene implements Scene {
               this.context?.goTo(SceneName.BAITER_REPLAY);
             },
             onBack: () => report.close(),
+            backLabel: "Close",
+          }).mount(modal);
+        },
+        openFriendTest: (invite) => this.openFriendTest(invite),
+        showFriendReport: (report, run) => {
+          const modal = this.context?.overlay.modal;
+          if (!modal) return;
+          const panel: TestReportPanel = new TestReportPanel({
+            report,
+            savedNote: "A test: nothing was lost. Your yard is as it was.",
+            ...(run
+              ? {
+                  onReplay: () => {
+                    panel.close();
+                    setBaiterRun(run);
+                    this.context?.goTo(SceneName.BAITER_REPLAY);
+                  },
+                }
+              : {}),
+            onBack: () => panel.close(),
             backLabel: "Close",
           }).mount(modal);
         },

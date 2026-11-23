@@ -2,6 +2,7 @@ import type { TestReport } from "@/game/baiter/testReport";
 import { formatAmount } from "@/ui/format";
 import { Panel } from "@/ui/Panel";
 import "@/ui/styles/baiter.css";
+import "@/ui/styles/baiterFriends.css";
 
 /**
  * The report of a Baiter test (#22, WP4, `docs/design/baiter-simulator.md`
@@ -38,6 +39,10 @@ export interface TestReportOptions {
   readonly onReplay?: () => void;
   /** "Watch replay" unless named otherwise. */
   readonly replayLabel?: string;
+  /** The window's title: "Test report" unless given (a friend's yard: "Test of PuttyPunk's yard"). */
+  readonly title?: string;
+  /** The line under the summary, when it is not the player's own yard (a friend's test). */
+  readonly savedNote?: string;
 }
 
 const TABS: readonly [TestReportTab, string][] = [
@@ -123,6 +128,8 @@ export class TestReportPanel {
   private readonly views = new Map<TestReportTab, HTMLElement>();
   /** The bar that stands in for the window while a tower is shown. */
   private readonly peekBar: HTMLElement;
+  /** A line over the tabs: where a friend's test went (beta 9 #4). */
+  private readonly note: HTMLElement;
   private readonly peekText: HTMLElement;
   /** The row button that showed the tower, for focus on the way back. */
   private peekFrom: HTMLElement | null = null;
@@ -132,7 +139,7 @@ export class TestReportPanel {
   constructor(private readonly options: TestReportOptions) {
     this.element = element("div", "popup-backdrop test-report__backdrop");
 
-    this.panel = new Panel({ title: "Test report", closable: false, className: "test-report baiter-window" });
+    this.panel = new Panel({ title: options.title ?? "Test report", closable: false, className: "test-report baiter-window" });
     this.panel.element.setAttribute("role", "dialog");
     this.panel.element.setAttribute("aria-modal", "true");
 
@@ -174,7 +181,10 @@ export class TestReportPanel {
     if (onChangeArmy) actions.append(button("Change army", "btn btn--ghost test-report__change", onChangeArmy));
     actions.append(button(options.backLabel ?? "Back to yard", "btn btn--primary test-report__back", () => options.onBack()));
 
-    this.panel.setContent(tablist, ...this.views.values(), actions);
+    this.note = element("p", "test-report__sent");
+    this.note.hidden = true;
+    this.note.setAttribute("role", "status");
+    this.panel.setContent(this.note, tablist, ...this.views.values(), actions);
 
     this.peekBar = element("div", "test-report__peek");
     this.peekBar.hidden = true;
@@ -192,6 +202,13 @@ export class TestReportPanel {
 
     this.element.append(this.panel.element, this.peekBar);
     this.select("summary");
+  }
+
+  /** Shows `text` over the tabs, or hides the line for null. */
+  setNote(text: string | null, tone: "good" | "bad" | "info" = "info"): void {
+    this.note.hidden = text === null;
+    this.note.textContent = text ?? "";
+    this.note.className = `test-report__sent test-report__sent--${tone}`;
   }
 
   /** Whether a tower is being shown, with the window stepped aside. */
@@ -277,7 +294,7 @@ export class TestReportPanel {
     view.append(headline, facts);
     if (report.hint) view.append(element("p", "test-report__hint", report.hint));
     view.append(
-      element("p", "test-report__note", "Nothing was saved: your yard, its traps and your resources are as they were."),
+      element("p", "test-report__note", this.options.savedNote ?? "Nothing was saved: your yard, its traps and your resources are as they were."),
     );
     return view;
   }

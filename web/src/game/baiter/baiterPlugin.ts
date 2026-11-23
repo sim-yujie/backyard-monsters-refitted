@@ -11,6 +11,8 @@ import { TestReportPanel } from "@/ui/attack/TestReport";
 import { baiterRecorder, type BaiterRecorder } from "./baiterRecord";
 import { recordTest, replayOf } from "./testHistory";
 import { buildTestReport } from "./testReport";
+import { BAITER_REFUSAL_TEXT, baiterRefusalOf, baiterTestsApi, type BaiterTestsApi } from "@/api/baiterTests";
+import { armyBody, testerReport } from "./friendTest";
 
 /**
  * The Baiter scene's own package (issue #126): a test plays like a real
@@ -65,14 +67,19 @@ const showBeside = (mounts: AttackMounts, world: { x: number; y: number }, cover
 };
 
 /** The Baiter package, with the Goals run record as a parameter so tests can watch it. */
-export const createBaiterPlugin = (recorder: () => BaiterRecorder): AttackPlugin => (mounts) => {
+export const createBaiterPlugin = (
+  recorder: () => BaiterRecorder,
+  api: BaiterTestsApi = baiterTestsApi,
+): AttackPlugin => (mounts) => {
   const run = mounts.practice;
   if (!run) return;
   const { session } = mounts;
   const replay = run.replay ?? null;
   if (replay) session.playScript(replay.events, replay.endTick);
-  // A replay is not a new test: it asks for no Goals token.
-  const record = replay ? null : recorder();
+  // A replay is not a new test: it asks for no Goals token, and neither is a
+  // test of a friend's yard (their Baiter, not the player's).
+  const friend = run.friend ?? null;
+  const record = replay || friend ? null : recorder();
   // The test starts with the player's first drop, and so does its Goals
   // record: a test stopped before anything was dropped asks for nothing.
   let started = false;
@@ -127,12 +134,17 @@ export const createBaiterPlugin = (recorder: () => BaiterRecorder): AttackPlugin
         onReplay: () => mounts.watchTest?.(run),
         replayLabel: "Watch again",
         onBack: () => mounts.goToYard?.(),
+        ...(friend?.role === "owner"
+          ? { title: `Test by ${friend.tester}`, backLabel: "Back to Results", savedNote: "A test: nothing was lost. Your yard is as it was." }
+          : friend?.role === "tester"
+            ? { title: `Test of ${friend.inviter.name}'s yard`, savedNote: `A test: nothing was lost or won.` }
+            : {}),
       }).mount(mounts.modal);
       return;
     }
     record?.finish(state.endReason);
     const facts = summariseAttack(session);
-    const built = buildTestReport({
+    const builtOwn = buildTestReport({
       state: battle.state(),
       endReason: state.endReason,
       buildings,
@@ -147,6 +159,7 @@ export const createBaiterPlugin = (recorder: () => BaiterRecorder): AttackPlugin
         .filter((creep) => creep.champion && !creep.friendly && creep.hp > 0)
         .map((creep) => creep.monsterId),
     });
+    const built = friend?.role === "tester" ? testerReport(builtOwn) : builtOwn;
     // A test stopped before anything was dropped has nothing to watch.
     const recorded = started
       ? recordTest({ run, seed: session.seed, events: session.flingLog().events, endTick: battle.tick, report: built })
@@ -159,7 +172,35 @@ export const createBaiterPlugin = (recorder: () => BaiterRecorder): AttackPlugin
       onAgain: () => mounts.runAgain?.(run),
       onChangeArmy: () => mounts.changeArmy?.(),
       onBack: () => mounts.goToYard?.(),
+      ...(friend?.role === "tester"
+        ? {
+            title: `Test of ${friend.inviter.name}'s yard`,
+            savedNote: `Nothing was lost or won: ${friend.inviter.name}'s yard and both your armies are as they were.`,
+          }
+        : {}),
     }).mount(mounts.modal);
+    if (friend?.role === "tester") {
+      // The drops go back to the server, which fights them again on the yard it
+      // served and keeps the test for the inviter (beta 9 #4).
+      if (!started) {
+        report.setNote(`Nothing was dropped, so nothing was sent to ${friend.inviter.name}.`, "info");
+        return;
+      }
+      const panel = report;
+      panel.setNote(`Sending to ${friend.inviter.name}…`, "info");
+      api
+        .finish({
+          token: friend.token,
+          army: armyBody(run.army),
+          flinglog: session.flingLog(),
+          tick: battle.tick,
+          report: built,
+        })
+        .then(
+          () => panel.setNote(`Sent to ${friend.inviter.name}: they can watch it in their Baiter's Results.`, "good"),
+          (error: unknown) => panel.setNote(`Not sent: ${BAITER_REFUSAL_TEXT[baiterRefusalOf(error)]}`, "bad"),
+        );
+    }
   };
 
   // The blow that ended the test plays out in slow motion before the report
