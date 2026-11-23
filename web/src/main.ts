@@ -72,7 +72,7 @@ void app.start().catch((error: unknown) => {
 // The server says so too, refusing an attack start from a page whose battle
 // rules are older than its own (`api/rulesStamp.ts`): the same card then.
 const updatePrompt = new UpdatePrompt(host);
-onNewVersionRefusal(() => updatePrompt.show());
+onNewVersionRefusal(() => updatePrompt.show("attack"));
 const running = runningBundleName();
 if (running) {
   new UpdateCheck({ running, fetchPage: fetchLivePage, onNewVersion: () => updatePrompt.show() }).start();
