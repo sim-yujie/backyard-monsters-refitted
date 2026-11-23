@@ -1191,8 +1191,12 @@ button.xfer-chip:disabled {
 }
 
 /* The target is full: nothing more fits. */
-.xfer-status__item.is-full small {
+.xfer-status__item.is-full b {
   color: #ff9f93;
+}
+
+:root[data-skin="flash"] .xfer-status__item.is-full b {
+  color: #b3261a;
 }
 
 .xfer-status__item .game-icon {
@@ -1342,6 +1346,12 @@ button.xfer-chip:disabled {
 
   .xfer-all {
     min-width: 52px;
+  }
+
+  /* A stepper open: it needs the whole line (− n/most + Max ✓), so All steps
+     aside until it closes. */
+  .xfer-tray__row--chips:has(.xfer-chip.is-stepping) .xfer-all {
+    display: none;
   }
 
   .xfer-tray .btn .game-icon {

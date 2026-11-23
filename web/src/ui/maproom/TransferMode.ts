@@ -822,7 +822,9 @@ export class TransferMode {
       const rest = Math.max(0, room - roomOf(plan.moved, sizeOf));
       const full = rest < this.smallest();
       if (full) left.classList.add("is-full");
-      left.append(icon("housing", 24), el("b", "", formatAmount(rest)), el("small", "", full ? MOVE_TEXT.full : MOVE_TEXT.free));
+      // Nothing more fits: "Full", not a few rooms left that no monster can use.
+      if (full) left.append(icon("housing", 24), el("b", "", MOVE_TEXT.full));
+      else left.append(icon("housing", 24), el("b", "", formatAmount(rest)), el("small", "", MOVE_TEXT.free));
       status.append(left);
     }
 
