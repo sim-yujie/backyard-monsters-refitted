@@ -5759,3 +5759,267 @@ tbody th {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
+
+/* ---- Game activity: Monsters tab (`monsters.ts`, owner 23 Nov 2026, layout A) ---- */
+
+:root {
+  --cat-1: #2a78d6;
+  --cat-2: #eb6834;
+  --cat-3: #1baf7a;
+  --cat-4: #eda100;
+  --cat-5: #e87ba4;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --cat-1: #3987e5;
+    --cat-2: #d95926;
+    --cat-3: #199e70;
+    --cat-4: #c98500;
+    --cat-5: #d55181;
+  }
+}
+:root[data-theme="dark"] {
+  --cat-1: #3987e5;
+  --cat-2: #d95926;
+  --cat-3: #199e70;
+  --cat-4: #c98500;
+  --cat-5: #d55181;
+}
+
+.page-heading .counting-line { margin-top: 4px; color: var(--ink-2); font-size: 0.8125rem; }
+.page-heading h1 .mon-period { margin-left: auto; font-size: 0.875rem; letter-spacing: 0; }
+
+.mon-tab .num { font-variant-numeric: tabular-nums; }
+.mon-tab .activity-panel > * + * { margin-top: 16px; }
+.mon-tab .activity-head { flex-wrap: wrap; gap: 8px 12px; margin-bottom: 0; }
+.mon-tab .head-tools { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; margin-left: auto; }
+.mon-tab .head-tools .segmented { font-size: 0.875rem; }
+.mon-tab .mon-face { flex: none; border-radius: 8px; background: var(--surface-2); object-fit: cover; }
+
+.mon-tab .not-counted { display: flex; align-items: flex-start; gap: 8px; margin: 12px 0 0; color: var(--ink-2); }
+.mon-tab .nc-icon {
+  display: inline-grid;
+  place-items: center;
+  flex: none;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  border: 1.5px solid var(--ink-3);
+  color: var(--ink-3);
+  font: 700 11px/1 var(--font);
+}
+
+.mon-tab .toolbar-row { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 12px; }
+.mon-tab .toolbar-row .grow { flex: 1 1 160px; }
+.mon-tab .toolbar-row .input { max-width: 220px; }
+.mon-tab .segmented.small-seg .seg { min-height: 36px; padding: 0 10px; font-size: 0.8125rem; }
+.mon-tab .phone-only { display: none; }
+
+/* The ranked list */
+.mon-tab .mlist { border: 1px solid var(--line); border-radius: var(--radius-sm); overflow: hidden; }
+.mon-tab .mlist-head,
+.mon-tab .mrow-main {
+  display: grid;
+  grid-template-columns: 40px minmax(110px, 1fr) minmax(150px, 1.3fr) 76px 76px 84px 24px;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 12px;
+}
+.mon-tab .mlist-head {
+  background: var(--surface-2);
+  color: var(--ink-2);
+  font-size: 0.75rem;
+  font-weight: 650;
+  padding-top: 10px;
+  padding-bottom: 10px;
+}
+.mon-tab .mlist .r { text-align: right; }
+.mon-tab .mlist-head button {
+  justify-self: start;
+  text-align: left;
+  border: 0;
+  background: none;
+  padding: 0;
+  font: inherit;
+  color: inherit;
+  cursor: pointer;
+}
+.mon-tab .mlist-head button[aria-pressed="true"] { color: var(--accent-text); }
+.mon-tab .mlist-head button[aria-pressed="true"]::after { content: " ↓"; }
+.mon-tab .mrow { border-top: 1px solid var(--line); }
+.mon-tab .mrow-main {
+  width: 100%;
+  min-height: 52px;
+  border: 0;
+  background: none;
+  color: var(--ink);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.mon-tab .mrow-main:hover { background: var(--surface-2); }
+.mon-tab .mrow[data-open] .mrow-main { background: var(--accent-soft); }
+.mon-tab .mname { font-weight: 600; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.mon-tab .mname .badge { margin-left: 6px; font-size: 0.6875rem; padding: 1px 7px; }
+.mon-tab .mbar { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.mon-tab .mbar strong { flex: none; min-width: 58px; text-align: right; font-variant-numeric: tabular-nums; font-weight: 650; }
+.mon-tab .mbar .track { flex: 1; height: 8px; border-radius: 4px; background: var(--surface-2); overflow: hidden; }
+.mon-tab .mbar .fill { display: block; height: 100%; border-radius: 4px; background: var(--series); }
+.mon-tab .mix { display: flex; align-items: flex-end; gap: 2px; height: 26px; }
+.mon-tab .mix i { flex: 1; min-height: 2px; border-radius: 2px 2px 0 0; background: var(--series); opacity: 0.85; }
+.mon-tab .mix i.zero { background: var(--line-strong); opacity: 1; }
+.mon-tab .chev { color: var(--ink-3); transition: transform 150ms var(--ease); }
+.mon-tab .mrow[data-open] .chev { transform: rotate(90deg); }
+.mon-tab .flungv,
+.mon-tab .meta { display: none; }
+.mon-tab .mdrawer { padding: 4px 12px 14px 64px; background: var(--surface); }
+.mon-tab .mdrawer .table-wrap { max-height: none; }
+.mon-tab .mdrawer table { font-variant-numeric: tabular-nums; font-size: 0.8125rem; }
+.mon-tab .mdrawer th[scope="row"] { color: var(--ink-2); font-weight: 600; }
+.mon-tab .mdrawer td,
+.mon-tab .mdrawer thead th:not(:first-child) { text-align: right; }
+.mon-tab td.dim { color: var(--ink-3); }
+.mon-tab .levels-tall { display: none; }
+.mon-tab .levels-tall th,
+.mon-tab .levels-tall td { padding: 6px 8px; }
+.mon-tab .levels-tall table { table-layout: fixed; width: 100%; }
+.mon-tab .levels-tall col.c-lv { width: 40px; }
+.mon-tab .levels-tall col.c-num { width: 30%; }
+.mon-tab .drawer-note { margin-top: 8px; color: var(--ink-2); font-size: 0.8125rem; }
+.mon-tab .pinned-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 32px;
+  padding: 0 8px 0 4px;
+  border-radius: 999px;
+  background: var(--accent-soft);
+  color: var(--accent-text);
+  font: inherit;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  border: 0;
+  cursor: pointer;
+}
+.mon-tab .pinned-chip .mon-face { border-radius: 50%; }
+.mon-tab .trend-card .chart-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 12px; }
+.mon-tab .trend-card .chart-head .pinned-chip { margin-left: auto; }
+.mon-tab .empty-state {
+  padding: 20px;
+  border: 1px dashed var(--line-strong);
+  border-radius: var(--radius-sm);
+  color: var(--ink-2);
+  text-align: center;
+  font-size: 0.875rem;
+}
+
+/* Camps: one row of tribe pills */
+.mon-tab .pill-row { display: flex; flex-wrap: wrap; gap: 8px; }
+.mon-tab .tribe-pill {
+  flex: none;
+  display: inline-flex;
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: center;
+  min-height: var(--tap);
+  padding: 6px 10px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--line);
+  background: var(--surface);
+  color: var(--ink);
+  font: inherit;
+  font-size: 0.875rem;
+  font-weight: 600;
+  text-align: left;
+  white-space: nowrap;
+  cursor: pointer;
+}
+.mon-tab .tribe-pill small { color: var(--ink-2); font-weight: 500; font-size: 0.75rem; }
+.mon-tab .tribe-pill[aria-pressed="true"] { border-color: var(--accent); background: var(--accent-soft); color: var(--accent-text); }
+
+/* Champions */
+.mon-tab .snapshot { color: var(--ink-2); font-size: 0.8125rem; }
+.mon-tab .champ {
+  display: grid;
+  grid-template-columns: 168px minmax(200px, 1fr) minmax(180px, 0.8fr);
+  gap: 24px;
+  align-items: center;
+}
+.mon-tab .pie .slice { stroke: var(--surface); stroke-width: 2; }
+.mon-tab .pie .slice.cat-1 { fill: var(--cat-1); }
+.mon-tab .pie .slice.cat-2 { fill: var(--cat-2); }
+.mon-tab .pie .slice.cat-3 { fill: var(--cat-3); }
+.mon-tab .pie .slice.cat-4 { fill: var(--cat-4); }
+.mon-tab .pie .slice.cat-5 { fill: var(--cat-5); }
+.mon-tab .pie .pie-empty { fill: none; stroke: var(--surface-2); }
+.mon-tab .pie-total { fill: var(--ink); font-size: 20px; font-weight: 700; font-variant-numeric: tabular-nums; }
+.mon-tab .pie-sub { fill: var(--ink-2); font-size: 12px; }
+.mon-tab .legend { display: grid; gap: 6px; margin: 0; padding: 0; list-style: none; }
+.mon-tab .legend li {
+  display: grid;
+  grid-template-columns: 12px 28px 1fr auto 44px;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.875rem;
+}
+.mon-tab .legend .sw { width: 12px; height: 12px; border-radius: 3px; }
+.mon-tab .legend .n { font-variant-numeric: tabular-nums; font-weight: 650; text-align: right; }
+.mon-tab .legend .p { font-variant-numeric: tabular-nums; color: var(--ink-2); text-align: right; }
+.mon-tab .sw.cat-1 { background: var(--cat-1); }
+.mon-tab .sw.cat-2 { background: var(--cat-2); }
+.mon-tab .sw.cat-3 { background: var(--cat-3); }
+.mon-tab .sw.cat-4 { background: var(--cat-4); }
+.mon-tab .sw.cat-5 { background: var(--cat-5); }
+.mon-tab .nochamp { padding-left: 24px; border-left: 1px solid var(--line); }
+.mon-tab .nochamp strong { display: block; font-size: 2rem; font-weight: 700; line-height: 1.1; letter-spacing: -0.02em; font-variant-numeric: tabular-nums; }
+.mon-tab .nochamp span { display: block; color: var(--ink-2); font-size: 0.875rem; margin-top: 2px; }
+.mon-tab .nochamp .owns { margin-top: 12px; font-size: 0.8125rem; color: var(--ink-2); font-variant-numeric: tabular-nums; }
+
+@media (max-width: 760px) {
+  .page-heading h1 .mon-period,
+  .page-heading h1 .mon-period .segmented { width: 100%; display: flex; margin-left: 0; }
+  .page-heading h1 .mon-period .seg { flex: 1; white-space: normal; padding: 0 8px; line-height: 1.2; }
+  .mon-tab .mlist-head { display: none; }
+  .mon-tab .mrow-main {
+    grid-template-columns: 36px 1fr auto 20px;
+    grid-template-areas: "face name flung chev" "face bar bar chev" "face meta meta chev";
+    gap: 2px 10px;
+    padding: 10px 12px;
+  }
+  .mon-tab .mrow-main .mon-face { grid-area: face; align-self: start; }
+  .mon-tab .mrow-main .mname { grid-area: name; }
+  .mon-tab .mrow-main .mname .badge { display: none; }
+  .mon-tab .mrow-main .mbar { grid-area: bar; }
+  .mon-tab .mrow-main .mbar strong { display: none; }
+  .mon-tab .mrow-main .flungv { grid-area: flung; display: block; font-weight: 650; font-variant-numeric: tabular-nums; }
+  .mon-tab .mrow-main .c-share,
+  .mon-tab .mrow-main .c-players,
+  .mon-tab .mrow-main .mix { display: none; }
+  .mon-tab .mrow-main .meta { grid-area: meta; display: block; color: var(--ink-2); font-size: 0.8125rem; font-variant-numeric: tabular-nums; }
+  .mon-tab .mrow-main .chev { grid-area: chev; }
+  .mon-tab .mdrawer { padding: 4px 8px 12px; }
+  .mon-tab .levels-wide { display: none; }
+  .mon-tab .levels-tall { display: block; }
+  .mon-tab .levels-tall td,
+  .mon-tab .levels-tall thead th:not(:first-child) { text-align: right; }
+  .mon-tab .phone-only { display: flex; }
+  .mon-tab .toolbar-row .input { max-width: none; }
+  .mon-tab .toolbar-row .segmented { display: flex; width: 100%; }
+  .mon-tab .toolbar-row .seg { flex: 1; white-space: normal; padding: 0 8px; line-height: 1.2; }
+  .mon-tab .head-tools { margin-left: 0; width: 100%; }
+  .mon-tab .head-tools .segmented { display: flex; width: 100%; }
+  .mon-tab .head-tools .seg { flex: 1; white-space: normal; padding: 0 8px; line-height: 1.2; }
+  .mon-tab .trend-card .chart-head .pinned-chip { margin-left: 0; }
+  .mon-tab .pill-row {
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    scrollbar-width: thin;
+    padding-bottom: 4px;
+    padding-right: 32px;
+    -webkit-mask-image: linear-gradient(90deg, #000 85%, transparent);
+    mask-image: linear-gradient(90deg, #000 85%, transparent);
+  }
+  .mon-tab .champ { grid-template-columns: minmax(0, 1fr); justify-items: center; }
+  .mon-tab .champ .legend { width: 100%; }
+  .mon-tab .nochamp { width: 100%; padding: 16px 0 0; border-left: 0; border-top: 1px solid var(--line); }
+}

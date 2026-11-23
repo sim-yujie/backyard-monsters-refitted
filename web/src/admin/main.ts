@@ -43,6 +43,7 @@ import {
 import { QueueView } from "./queue";
 import { ShinyView } from "./shiny";
 import { MonsterMadnessView } from "./monsterMadness";
+import { MonstersView } from "./monsters";
 import { WeekendView } from "./weekend";
 import { applyTheme, readTheme, themePicker } from "./theme";
 import {
@@ -236,6 +237,8 @@ class Dashboard {
   private readonly weekend = new WeekendView({ say: (message) => this.say(message) });
   /** Monster Madness (owner-started only), above the weekend events. */
   private readonly monsterMadness = new MonsterMadnessView({ say: (message) => this.say(message) });
+  /** Game activity's Monsters tab (owner, 23 Nov 2026), loaded the first time it is opened. */
+  private readonly monsters = new MonstersView();
   private readonly errors = new ErrorsView(
     (message) => this.say(message),
     (totals) => {
@@ -383,6 +386,7 @@ class Dashboard {
       events: section("events"),
       players: section("players", rangeButtons),
       activity: section("activity"),
+      monsters: section("monsters", this.monsters.picker),
       health: section("health"),
     };
     replace(this.sections.moderation.body, this.queue.element);
@@ -398,6 +402,9 @@ class Dashboard {
     replace(this.sections.announcements.body, this.announcements.element);
     replace(this.sections.events.body, this.monsterMadness.element, this.weekend.element);
     replace(this.sections.health.body, this.errorsBox);
+    replace(this.sections.monsters.body, this.monsters.element);
+    // Since when monsters are counted, under the page's own line.
+    this.sections.monsters.element.querySelector(".page-heading .subnav")?.before(this.monsters.counting);
 
     this.home = h(
       "section",
@@ -493,6 +500,7 @@ class Dashboard {
       this.bugs.show(route.bug, route.view === "bugs" ? route.params : {}),
       this.moderation.refresh(),
       route.view === "attacks" ? this.attacks.show(route.params) : Promise.resolve(),
+      route.view === "monsters" ? this.monsters.show() : Promise.resolve(),
       this.flagged.refresh(),
       this.moderators.refresh(),
       this.modMail.refresh(),
@@ -511,6 +519,7 @@ class Dashboard {
     if (route.view === "bugs") void this.bugs.show(route.bug, route.params);
     if (route.view === "moderation") void this.queue.show(route.params);
     if (route.view === "attacks") void this.attacks.show(route.params);
+    if (route.view === "monsters") void this.monsters.show();
   }
 
   /**
@@ -578,6 +587,7 @@ class Dashboard {
       this.photos.refresh(),
       this.weekend.refresh(),
       this.monsterMadness.refresh(),
+      this.monsters.reload(),
     ]);
     this.refreshButton.classList.remove("is-busy");
     this.refreshButton.disabled = false;
