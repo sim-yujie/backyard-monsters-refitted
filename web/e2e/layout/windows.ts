@@ -236,24 +236,25 @@ export const WINDOWS: readonly WindowCase[] = [
     open: (page) => openBaiterPreview(page, "host"),
   },
   {
-    // The world map's move tray (beta 9 #7) at its busiest: seven kinds, three
-    // picked, five outposts ticked. The chips, the tools and Go in sight at
+    // The world map's move tray (beta 9 #7) at its busiest: Bring to an
+    // outpost from every yard, seven kinds, two at as many as fit, a stepper
+    // open (− n/most + Max ✓). The chips, All, the room and Go in sight at
     // every size. Opened from the build's preview (no outposts in a sandbox).
     id: "move-tray",
     label: "Move monsters tray",
     panel: ".xfer-tray",
     items: ".xfer-chip",
     tabs: false,
-    open: (page) => openMoveTray(page, "tray"),
+    open: (page) => openMoveTray(page, "in"),
   },
   {
-    // Its List of every outpost: search, the rows, Done.
-    id: "move-list",
-    label: "Move monsters list",
-    panel: ".xfer-list",
-    items: ".xfer-row",
+    // Move from the main yard to one outpost: Go names the target.
+    id: "move-tray-out",
+    label: "Move monsters tray, one target",
+    panel: ".xfer-tray",
+    items: ".xfer-chip",
     tabs: false,
-    open: (page) => openMoveTray(page, "list"),
+    open: (page) => openMoveTray(page, "out"),
   },
 ];
 

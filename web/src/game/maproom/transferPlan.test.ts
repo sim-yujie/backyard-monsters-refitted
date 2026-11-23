@@ -2,13 +2,16 @@ import { describe, expect, it } from "vitest";
 import {
   canTick,
   currentPlan,
-  everySource,
+  fillAll,
+  firstTicks,
+  fitPicks,
   freeRoom,
-  matchesSearch,
-  nearestWithRoom,
+  maxFor,
   pairsOf,
   planMove,
   rankTypes,
+  sourceOrder,
+  tapTicks,
   trayTypes,
   type ArmyYard,
   type MoveState,
@@ -44,7 +47,7 @@ const yards = [
 ];
 const byId = new Map(yards.map((y) => [y.baseid, y]));
 
-const state = (over: Partial<MoveState> = {}): MoveState => ({ mode: "out", anchor: "main", ticks: [], picks: {}, even: false, ...over });
+const state = (over: Partial<MoveState> = {}): MoveState => ({ mode: "out", anchor: "main", ticks: [], picks: {}, ...over });
 
 describe("transferPlan", () => {
   it("free room uses housing sizes", () => {
@@ -61,74 +64,93 @@ describe("transferPlan", () => {
     expect(canTick(MAIN, byId.get("a")!, "out", sizeOf, 7)).toBe(true);
   });
 
-  it("Near 5 skips the full, the attacked and the main yard", () => {
-    expect(nearestWithRoom(yards, MAIN, sizeOf, 7, distance)).toEqual(["a", "b", "e", "f", "g"]);
+  it("Bring to starts with every yard that can send ticked, the main yard first, then nearest; never one under attack", () => {
+    expect(firstTicks("in", yards, MAIN, sizeOf, distance)).toEqual(["a", "c", "f"]);
+    // To outpost f (x 6): the main yard first though it is the farthest, then a (x 1)... by distance from f.
+    const f = byId.get("f")!;
+    expect(firstTicks("in", yards, f, sizeOf, distance)).toEqual(["main", "c", "a"]);
+    // Move from starts with no target.
+    expect(firstTicks("out", yards, MAIN, sizeOf, distance)).toEqual([]);
   });
 
-  it("All home ticks every outpost with monsters that is not under attack", () => {
-    expect(everySource(yards, MAIN, sizeOf, distance)).toEqual(["a", "c", "f"]);
+  it("sources give in order: the main yard first, then the outposts nearest the target", () => {
+    const target = yard("t", 10, {}, 540);
+    const near = yard("near", 9, { C1: 5 });
+    const far = yard("far", 2, { C1: 5 });
+    const home = yard("home", 0, { C1: 5 }, 2160, { main: true });
+    expect(sourceOrder([far, near, home], target, distance).map((y) => y.baseid)).toEqual(["home", "near", "far"]);
+    const plan = planMove(sourceOrder([far, near, home], target, distance), [target], { C1: 8 }, sizeOf);
+    expect(plan.sub).toEqual({ home: { C1: 5 }, near: { C1: 3 } });
   });
 
-  it("fills targets in order, nearest first", () => {
-    const { plan } = currentPlan(state({ ticks: ["b", "a"], picks: { C1: "all" } }), byId, sizeOf, distance);
-    // a has 400 free (57 Pokeys), so all 60 cannot go to a: 57 to a, 3 to b.
-    expect(plan.add).toEqual({ a: { C1: 57 }, b: { C1: 3 } });
-    expect(plan.total).toBe(60);
+  it("Move from is one to one: a tap sets the target, another tap moves it, tapping it again clears it", () => {
+    expect(tapTicks("out", [], "a")).toEqual(["a"]);
+    expect(tapTicks("out", ["a"], "b")).toEqual(["b"]);
+    expect(tapTicks("out", ["b"], "b")).toEqual([]);
+    // Bring to: ticks and unticks each.
+    expect(tapTicks("in", ["a", "c"], "c")).toEqual(["a"]);
+    expect(tapTicks("in", ["a"], "f")).toEqual(["a", "f"]);
+    const { plan, dst } = currentPlan(state({ ticks: ["b"], picks: { C1: 10, C2: 5 } }), byId, sizeOf, distance);
+    expect(dst.map((y) => y.baseid)).toEqual(["b"]);
+    expect(pairsOf(plan, "out", "main")).toEqual([{ from: "main", to: "b", moved: { C1: 10, C2: 5 } }]);
   });
 
-  it("Even splits one by one round the targets", () => {
-    const { plan } = currentPlan(state({ ticks: ["a", "b", "e"], picks: { C1: 30 }, even: true }), byId, sizeOf, distance);
-    expect(plan.add).toEqual({ a: { C1: 10 }, b: { C1: 10 }, e: { C1: 10 } });
+  it("a pick never goes past what the ticked sources hold or the target's room", () => {
+    const held = (id: string): number => ({ C1: 100, C12: 4 })[id] ?? 0;
+    // 400 free: 3 D.A.V.E.s would need 480.
+    expect(maxFor("C12", {}, held, 400, sizeOf)).toBe(2);
+    // With 30 Pokeys (210) picked, 190 is left: one D.A.V.E.
+    expect(maxFor("C12", { C1: 30 }, held, 400, sizeOf)).toBe(1);
+    // The type's own pick does not count against it.
+    expect(maxFor("C1", { C1: 30 }, held, 400, sizeOf)).toBe(57);
+    // Held is the cap when there is room to spare, or no target yet.
+    expect(maxFor("C1", {}, held, 5_000, sizeOf)).toBe(100);
+    expect(maxFor("C12", {}, held, null, sizeOf)).toBe(4);
   });
 
-  it("leaves behind what does not fit and says so", () => {
-    const plan = planMove([MAIN], [byId.get("c")!], { C12: 4 }, false, sizeOf);
-    expect(plan.total).toBe(0);
-    expect(plan.left).toEqual({ C12: 4 });
+  it("picks are cut to the room in roster order: the later types lose first", () => {
+    const held = (id: string): number => ({ C1: 100, C2: 50, C12: 4 })[id] ?? 0;
+    // 200 room: 20 Pokeys (140), then 6 Octo-oozes (60), no D.A.V.E.
+    expect(fitPicks({ C12: 1, C2: 10, C1: 20 }, held, 200, sizeOf)).toEqual({ C1: 20, C2: 6 });
+    // Cut to what is held, and zeroes dropped.
+    expect(fitPicks({ C1: 500, C2: 0 }, held, null, sizeOf)).toEqual({ C1: 100 });
   });
 
-  it("brings home from many sources, nearest first, into the anchor's room", () => {
-    const home = yard("home", 0, { C1: 300 }, 2160, { main: true }); // 2100 used: 60 free
-    const sources = [yard("s1", 1, { C1: 5 }), yard("s2", 2, { C1: 10 })];
-    const plan = planMove(sources, [home], { C1: 15 }, false, sizeOf);
-    expect(plan.sub).toEqual({ s1: { C1: 5 }, s2: { C1: 3 } });
-    expect(plan.leftTotal).toBe(7);
+  it("All fills every type in roster order until the room is full", () => {
+    const held = (id: string): number => ({ C1: 10, C2: 50, C12: 4 })[id] ?? 0;
+    // 400 room: 10 Pokeys (70), 33 Octo-oozes (330), then nothing fits.
+    expect(fillAll(["C12", "C2", "C1"], held, 400, sizeOf)).toEqual({ C1: 10, C2: 33 });
+    // A smaller type still fills after a big one stops.
+    const big = (id: string): number => ({ C12: 3, C3: 9 })[id] ?? 0;
+    expect(fillAll(["C3", "C12"], big, 300, sizeOf)).toEqual({ C3: 9, C12: 1 });
+    // No target yet: everything held.
+    expect(fillAll(["C1", "C12"], held, null, sizeOf)).toEqual({ C1: 10, C12: 4 });
   });
 
-  it("a stepper number is cut to what the sources hold", () => {
-    const { picked } = currentPlan(state({ ticks: ["b"], picks: { C2: 999, C1: 2 } }), byId, sizeOf, distance);
-    expect(picked).toEqual({ C1: 2, C2: 30 });
-  });
-
-  it("the server gets one pair per route", () => {
-    const out = currentPlan(state({ ticks: ["a", "b"], picks: { C1: "all" } }), byId, sizeOf, distance);
-    expect(pairsOf(out.plan, "out", "main")).toEqual([
-      { from: "main", to: "a", moved: { C1: 57 } },
-      { from: "main", to: "b", moved: { C1: 3 } },
-    ]);
-    const back = currentPlan(state({ mode: "in", ticks: ["a", "f"], picks: { C1: "all", C2: "all" } }), byId, sizeOf, distance);
+  it("brings home from many sources into the anchor's room, and the server gets one pair per source", () => {
+    const back = currentPlan(state({ mode: "in", ticks: ["f", "a"], picks: { C1: 20, C2: 2 } }), byId, sizeOf, distance);
+    expect(back.held("C1")).toBe(20);
     expect(pairsOf(back.plan, "in", "main")).toEqual([
       { from: "a", to: "main", moved: { C1: 20 } },
       { from: "f", to: "main", moved: { C2: 2 } },
     ]);
   });
 
+  it("the plan never moves more than fits, even from a stale pick", () => {
+    const plan = planMove([MAIN], [byId.get("c")!], { C12: 4 }, sizeOf);
+    expect(plan.total).toBe(0);
+  });
+
   it("the tray offers the anchor's types (out) or every source's (in)", () => {
-    expect(trayTypes(state(), yards, sizeOf)).toEqual(["C1", "C2", "C12"]);
+    expect(trayTypes("out", "main", yards, sizeOf)).toEqual(["C1", "C2", "C12"]);
     // d is under attack: its Octo-oozes are not on offer, f's are.
-    expect(trayTypes(state({ mode: "in" }), yards, sizeOf)).toEqual(["C1", "C2", "C12"]);
+    expect(trayTypes("in", "main", yards, sizeOf)).toEqual(["C1", "C2", "C12"]);
   });
 
   it("plates rank moving, then picked, then biggest by room", () => {
     const c = byId.get("c")!;
     expect(rankTypes(c, sizeOf)).toEqual(["C12", "C1"]);
-    expect(rankTypes(c, sizeOf, { C1: "all" })).toEqual(["C1", "C12"]);
-  });
-
-  it("search matches names and coordinates", () => {
-    const y = yard("x", 240, {});
-    expect(matchesSearch("Lookout", { ...y, y: 209 }, "look")).toBe(true);
-    expect(matchesSearch("240, 209", { ...y, y: 209 }, "240,20")).toBe(true);
-    expect(matchesSearch("Ridge", { ...y, y: 209 }, "swamp")).toBe(false);
+    expect(rankTypes(c, sizeOf, { C1: 3 })).toEqual(["C1", "C12"]);
+    expect(rankTypes(c, sizeOf, { C1: 0 })).toEqual(["C12", "C1"]);
   });
 });

@@ -2,11 +2,11 @@ import type { ArmyYard } from "@/game/maproom/transferPlan";
 import { TransferMode } from "./TransferMode";
 
 /**
- * The layout check's way to the world map's move tray and its List window
- * (beta 9 #7, web/e2e/layout): the sandbox yard is not on Map Room 2 and has
- * no outposts, so this opens the real tray over the yard with a fixed, busy
- * empire (the main yard, 40 outposts, seven kinds of monster), every call
- * answered here. No plates: there is no map under it. Installed as
+ * The layout check's way to the world map's move tray (beta 9 #7,
+ * web/e2e/layout): the sandbox yard is not on Map Room 2 and has no outposts,
+ * so this opens the real tray over the yard with a fixed, busy empire (the
+ * main yard, 40 outposts, seven kinds of monster), every call answered here.
+ * No plates: there is no map under it. Installed as
  * `window.__transferPreview(state)` in a dev build or one built with
  * VITE_LAYOUT_CHECK=1, never in a release build.
  */
@@ -44,17 +44,14 @@ const empire = (): ArmyYard[] => {
 };
 
 /**
- * Opens the tray at its busiest (three kinds picked, five outposts ticked), or
- * with the List over it. Returns the function that takes it all down.
+ * Opens the tray at its busiest. `in`: Bring to an outpost, every yard
+ * ticked, two kinds at as many as fit and the third's stepper open. `out`:
+ * Move from the main yard to one outpost, two kinds picked. Returns the
+ * function that takes it all down.
  */
-export const previewTransferMode = async (
-  layer: HTMLElement,
-  modal: HTMLElement,
-  state: "tray" | "list" = "tray",
-): Promise<() => void> => {
+export const previewTransferMode = async (layer: HTMLElement, state: "in" | "out" = "in"): Promise<() => void> => {
   const mode = new TransferMode({
     layer,
-    modal,
     sizeOf: (id) => SIZE[id] ?? 10,
     distance: (a, b) => Math.max(Math.abs(a.x - b.x), Math.abs(a.y - b.y)),
     nameOf: (yard) => (yard.main ? "Main yard" : `${yard.x}, ${yard.y}`),
@@ -65,10 +62,25 @@ export const previewTransferMode = async (
     mark: () => undefined,
     onEnd: () => undefined,
   });
-  await mode.start("preview-main", "out");
-  const tray = layer.querySelector<HTMLElement>(".xfer-tray");
-  for (const nth of [0, 1, 3]) tray?.querySelectorAll<HTMLButtonElement>(".xfer-chip__face")[nth]?.click();
-  layer.querySelector<HTMLButtonElement>(".xfer-tray .xfer-quick")?.click();
-  if (state === "list") layer.querySelector<HTMLButtonElement>(".xfer-tray .xfer-listb")?.click();
+  const tap = (selector: string, nth = 0): void =>
+    layer.querySelectorAll<HTMLButtonElement>(`.xfer-tray ${selector}`)[nth]?.click();
+  if (state === "in") {
+    await mode.start("preview-out-0", "in");
+    for (const nth of [0, 1]) {
+      tap(".xfer-chip", nth);
+      tap(".xfer-step--max");
+      tap(".xfer-step--ok");
+    }
+    tap(".xfer-chip", 2);
+  } else {
+    await mode.start("preview-main", "out");
+    mode.tapCell(242, 200);
+    tap(".xfer-chip", 0);
+    for (let i = 0; i < 12; i++) tap(".xfer-step", 1);
+    tap(".xfer-step--ok");
+    tap(".xfer-chip", 3);
+    tap(".xfer-step--max");
+    tap(".xfer-step--ok");
+  }
   return () => mode.destroy();
 };

@@ -5,20 +5,19 @@ import {
   canTick,
   countOf,
   currentPlan,
-  everySource,
+  fillAll,
+  firstTicks,
+  fitPicks,
   freeRoom,
-  heldBy,
-  matchesSearch,
-  nearestWithRoom,
-  othersByDistance,
+  maxFor,
   pairsOf,
   rankTypes,
   roomOf,
+  tapTicks,
   trayTypes,
   usedRoom,
   type ArmyYard,
   type DistanceOf,
-  type MonsterPick,
   type MovePair,
   type MovePlan,
   type MoveMode,
@@ -28,24 +27,29 @@ import {
 import { formatAmount } from "@/ui/format";
 import { gameIcon, type GameIconName } from "@/ui/gameIcon";
 import { Panel } from "@/ui/Panel";
-import { Popup } from "@/ui/Popup";
 import "@/ui/styles/transfer.css";
 
 /**
  * Moving monsters from the world map (beta 9 #7, the owner's "B1 steel
- * plates", 22 Nov 2026). It replaces the old Move Monsters dialog.
+ * plates", 22 Nov 2026; made simpler after the owner's playtest, 23 Nov). It
+ * replaces the old Move Monsters dialog.
  *
  * The player taps one of their yards, then "Move monsters from here" or
  * "Bring monsters here" on its card. The map goes into move mode: every one
  * of the player's yards in sight wears a small plate with its two biggest
  * monster groups, a room bar and its free room, and a tray docks at the
- * bottom. Picking a monster type in the tray brings it to the front of every
- * plate; tapping a yard (its plate or its hex) ticks it as a target (or a
- * source when bringing), and the plates preview what each yard will get.
- * Hover (touch: press and hold) a plate to see the yard's whole army. A big
- * empire's outposts (200+) are also in the List window, nearest first, with a
- * search. Go sends one move to the server (free and instant, every pair
- * checked there), shows what happened, and the plates go.
+ * bottom with one chip per monster type, each at 0 of the most there is.
+ * - Bring to: every other yard with monsters starts ticked; tapping a yard
+ *   (its plate or its hex) unticks or reticks it. The main yard gives first,
+ *   then the outposts nearest.
+ * - Move from: tapping a yard makes it the one target; tapping another moves
+ *   the target there, tapping it again clears it.
+ * Tapping a chip opens its stepper (− n/max + Max ✓); a count never goes past
+ * what fits in the target's free room, and "All" fills every type in roster
+ * order until the room is full. The plates preview what each yard will get.
+ * Hover (touch: press and hold) a plate to see the yard's whole army. Go sends
+ * one move to the server (free and instant, every pair checked there), shows
+ * what happened, and the plates go.
  *
  * The scene owns the map: it says where each yard is on screen (`place`),
  * passes taps and hovers on the map's hexes in (`tapCell`, `hoverCell`), and
@@ -56,16 +60,11 @@ import "@/ui/styles/transfer.css";
 export const MOVE_TEXT = {
   titleOut: (name: string) => `Move from ${name}`,
   titleIn: (name: string) => `Bring to ${name}`,
-  near: "Near 5",
-  allHome: "All home",
   every: "All",
-  tickAll: "Tick all",
-  list: "List",
-  even: "Even",
-  inOrder: "In order",
+  max: "Max",
   pickFirst: "Pick monsters",
-  tickOut: "Tap outposts",
-  tickIn: "Tap yards to bring from",
+  tickOut: "Tap a yard",
+  tickIn: "Tap yards",
   move: (n: number) => `Move ${formatAmount(n)}`,
   bring: (n: number, home: boolean) => `Bring ${formatAmount(n)} ${home ? "home" : "here"}`,
   from: "From",
@@ -79,31 +78,21 @@ export const MOVE_TEXT = {
   attackLong: "Under attack: no moves until it ends",
   noneHere: "No monsters here",
   noneOut: "Your outposts are empty",
-  noRoom: (n: number) => `${formatAmount(n)} don't fit`,
-  stayOut: (n: number) => `${formatAmount(n)} stay out`,
-  listOut: "Yards with room",
-  listIn: "Yards with monsters",
-  search: "Find by name or x, y",
-  done: "Done",
   hex: (n: number) => `${n} hex`,
   loading: "Reading your yards...",
   failed: "Could not read your yards. Try again.",
   problem: "The move did not go through: ",
   noOutposts: "You need an outpost to move monsters.",
-  didNotFit: (n: number) => `${formatAmount(n)} did not fit`,
   fromMany: (n: number) => `from ${n} yards`,
   fromOne: (name: string) => `from ${name}`,
   home: "home",
   moved: (n: number) => `Moved ${formatAmount(n)}`,
   close: "Close move",
-  closeList: "Close list",
 } as const;
 
 export interface TransferModeOptions {
   /** The overlay's content layer: the plates and the tray go here. */
   readonly layer: HTMLElement;
-  /** The overlay's modal layer: the List window opens here. */
-  readonly modal: HTMLElement;
   /** Housing one monster of a type takes, at the player's Academy level. */
   readonly sizeOf: SizeOf;
   /** Hex steps between two yards. */
@@ -220,13 +209,6 @@ const roomBar = (yard: ArmyYard, sizeOf: SizeOf, delta: number, className = "xfe
 
 type Place = { x: number; y: number; hexWidth: number };
 
-const sameSet = (a: readonly string[], b: readonly string[]): boolean =>
-  a.length === b.length && a.every((id) => b.includes(id));
-
-/** The tray in three bands: narrow and tall screens (transfer.css, the same query). */
-const STACKED_QUERY = "(max-width: 900px) and (min-height: 501px)";
-const stackedTray = (): boolean => window.matchMedia?.(STACKED_QUERY).matches ?? false;
-
 export class TransferMode {
   private readonly options: TransferModeOptions;
   private yards: ArmyYard[] = [];
@@ -244,7 +226,10 @@ export class TransferMode {
   /** What the last move did, shown on the plates until move mode ends. */
   private result: { add: MovePlan["add"]; sub: MovePlan["sub"]; total: number } | null = null;
   private resultTimer: ReturnType<typeof setTimeout> | null = null;
-  private query = "";
+  /** The ticks last outlined on the map: the outlines change only when they do. */
+  private markedTicks: readonly string[] | null = null;
+  /** The stepper just opened: scroll its chip into sight once. */
+  private revealStep = false;
 
   /** The plates, under the HUD and the tray (first in the layer). */
   private readonly root: HTMLElement;
@@ -254,8 +239,6 @@ export class TransferMode {
   private readonly peekCard: HTMLElement;
   private readonly toast: HTMLElement;
   private tray: Panel | null = null;
-  private list: Popup | null = null;
-  private listBody: HTMLElement | null = null;
   /** The plate elements by yard, and the place each was put at. */
   private readonly plateOf = new Map<string, { node: HTMLElement; tag: HTMLElement | null; at: Place | null }>();
 
@@ -296,8 +279,7 @@ export class TransferMode {
    */
   async start(anchor: string, mode: MoveMode): Promise<void> {
     this.end(false);
-    // Split evenly by default, as in the owner's prototype: "Near 5" then fills five outposts alike.
-    this.state = { mode, anchor, ticks: [], picks: {}, even: true };
+    this.state = { mode, anchor, ticks: [], picks: {} };
     this.options.layer.classList.add("xfer-on");
     if (!this.root.isConnected) this.options.layer.prepend(this.root);
     this.showToast([el("span", "xfer-toast__line", MOVE_TEXT.loading)], false, 0);
@@ -311,13 +293,14 @@ export class TransferMode {
     }
     if (this.state?.anchor !== anchor) return;
     this.toast.hidden = true;
-    if (!this.byId.has(anchor) || this.yards.length < 2) {
+    const home = this.byId.get(anchor);
+    if (!home || this.yards.length < 2) {
       this.showToast([el("span", "xfer-toast__line", MOVE_TEXT.noOutposts)], true);
       this.end();
       return;
     }
-    // Bringing home: every type on offer starts picked, as a first-time player expects.
-    if (mode === "in") this.pickAll();
+    // Bringing: every yard that can send starts ticked; every count starts at 0.
+    this.state = { ...this.state, ticks: firstTicks(mode, this.yards, home, this.options.sizeOf, this.options.distance) };
     this.openTray();
     this.render();
   }
@@ -330,12 +313,10 @@ export class TransferMode {
     this.peek = null;
     this.busy = false;
     this.result = null;
-    this.query = "";
+    this.markedTicks = null;
+    this.revealStep = false;
     for (const timer of [this.peekTimer, this.holdTimer, this.resultTimer]) if (timer) clearTimeout(timer);
     this.peekTimer = this.holdTimer = this.resultTimer = null;
-    this.list?.close();
-    this.list = null;
-    this.listBody = null;
     const tray = this.tray;
     this.tray = null;
     tray?.close();
@@ -343,7 +324,7 @@ export class TransferMode {
     this.plateOf.clear();
     this.options.mark(null);
     this.peekCard.hidden = true;
-    this.options.layer.classList.remove("xfer-on", "xfer-listing");
+    this.options.layer.classList.remove("xfer-on");
     this.options.layer.style.removeProperty("--xfer-tray-height");
     this.root.remove();
     if (this.toast.hidden) this.over.remove();
@@ -396,17 +377,40 @@ export class TransferMode {
     return this.state ? this.byId.get(this.state.anchor) : undefined;
   }
 
+  /** The monster types in the tray (they depend only on the yards, the anchor and the mode). */
+  private types(): string[] {
+    const state = this.state;
+    return state ? trayTypes(state.mode, state.anchor, this.yards, this.options.sizeOf) : [];
+  }
+
   /** The smallest monster the move could send, which decides when a yard is full. */
   private smallest(): number {
-    const state = this.state;
-    if (!state) return 1;
-    const sizes = trayTypes(state, this.yards, this.options.sizeOf).map((id) => this.options.sizeOf(id));
+    const sizes = this.types().map((id) => this.options.sizeOf(id));
     return sizes.length ? Math.min(...sizes) : 1;
   }
 
+  /**
+   * Applies a change, then keeps the move honest: ticks only on yards that can
+   * still take part (`out`: one), and every count cut to what the ticked
+   * sources hold and what fits in the target's room.
+   */
   private update(change: Partial<MoveState>): void {
-    if (!this.state) return;
-    this.state = { ...this.state, ...change };
+    const state = this.state;
+    const anchor = this.anchor;
+    if (!state || !anchor) return;
+    const sizeOf = this.options.sizeOf;
+    const smallest = this.smallest();
+    const next = { ...state, ...change };
+    const ticks = next.ticks.filter((id) => {
+      const yard = this.byId.get(id);
+      return yard !== undefined && canTick(yard, anchor, next.mode, sizeOf, smallest);
+    });
+    const cut = next.mode === "out" ? ticks.slice(0, 1) : ticks;
+    // The same ticks keep the same list, so the map's outlines are not redrawn.
+    const same = cut.length === next.ticks.length && cut.every((id, i) => id === next.ticks[i]);
+    const kept = { ...next, ticks: same ? next.ticks : cut };
+    const { held, room } = currentPlan(kept, this.byId, sizeOf, this.options.distance);
+    this.state = { ...kept, picks: fitPicks(kept.picks, held, room, sizeOf) };
     this.render();
   }
 
@@ -416,33 +420,11 @@ export class TransferMode {
     const yard = this.byId.get(baseid);
     if (!state || !anchor || !yard || this.busy || this.result) return;
     this.stepping = null;
-    if (state.ticks.includes(baseid)) {
-      this.update({ ticks: state.ticks.filter((id) => id !== baseid) });
-      return;
-    }
-    if (!canTick(yard, anchor, state.mode, this.options.sizeOf, this.smallest())) {
+    if (!state.ticks.includes(baseid) && !canTick(yard, anchor, state.mode, this.options.sizeOf, this.smallest())) {
       this.flashPlate(baseid);
       return;
     }
-    this.update({ ticks: [...state.ticks, baseid] });
-  }
-
-  private pickAll(): void {
-    const state = this.state;
-    if (!state) return;
-    const picks: Record<string, MonsterPick> = {};
-    for (const id of trayTypes(state, this.yards, this.options.sizeOf)) picks[id] = "all";
-    this.state = { ...state, picks };
-  }
-
-  private togglePick(id: string): void {
-    const state = this.state;
-    if (!state) return;
-    const picks = { ...state.picks };
-    if (picks[id] !== undefined) delete picks[id];
-    else picks[id] = "all";
-    if (this.stepping === id) this.stepping = null;
-    this.update({ picks });
+    this.update({ ticks: tapTicks(state.mode, state.ticks, baseid) });
   }
 
   private plan() {
@@ -456,18 +438,21 @@ export class TransferMode {
   private render(): void {
     const state = this.state;
     if (!state) return;
-    this.options.mark([
-      ...this.yards
-        .filter((yard) => yard.baseid === state.anchor)
-        .map((yard) => ({ col: yard.x, row: yard.y, kind: "anchor" as const })),
-      ...state.ticks
-        .map((id) => this.byId.get(id))
-        .filter((yard): yard is ArmyYard => yard !== undefined)
-        .map((yard) => ({ col: yard.x, row: yard.y, kind: "on" as const })),
-    ]);
+    // The map's outlines change only with the ticks, not with every + on a chip.
+    if (this.markedTicks !== state.ticks) {
+      this.markedTicks = state.ticks;
+      this.options.mark([
+        ...this.yards
+          .filter((yard) => yard.baseid === state.anchor)
+          .map((yard) => ({ col: yard.x, row: yard.y, kind: "anchor" as const })),
+        ...state.ticks
+          .map((id) => this.byId.get(id))
+          .filter((yard): yard is ArmyYard => yard !== undefined)
+          .map((yard) => ({ col: yard.x, row: yard.y, kind: "on" as const })),
+      ]);
+    }
     this.renderTray();
     this.renderPlates(true);
-    if (this.list) this.renderList();
     if (this.peek) this.renderPeek();
   }
 
@@ -480,6 +465,7 @@ export class TransferMode {
     const state = this.state;
     if (!state) return;
     const now = this.plan();
+    const smallest = this.smallest();
     const seen = new Set<string>();
     for (const yard of this.yards) {
       const at = this.options.place(yard);
@@ -490,7 +476,7 @@ export class TransferMode {
       if (!known || rebuild || known.node.dataset["size"] !== size) {
         known?.node.remove();
         known?.tag?.remove();
-        const made = this.makePlate(yard, size, now?.plan ?? null);
+        const made = this.makePlate(yard, size, now?.plan ?? null, smallest);
         this.plates.append(made.node);
         if (made.tag) this.plates.append(made.tag);
         this.plateOf.set(yard.baseid, { ...made, at: null });
@@ -528,6 +514,7 @@ export class TransferMode {
     yard: ArmyYard,
     size: "full" | "slim" | "dot",
     plan: MovePlan | null,
+    smallest: number,
   ): { node: HTMLElement; tag: HTMLElement | null } {
     const state = this.state!;
     const anchor = this.anchor!;
@@ -543,7 +530,6 @@ export class TransferMode {
     const delta = this.result ? 0 : roomOf(gets, sizeOf) - roomOf(gives, sizeOf);
     // What the yard houses now, as the army card and the List show it; the tag says what comes or goes.
     const now = yard;
-    const smallest = this.smallest();
     const tickable = canTick(yard, anchor, state.mode, sizeOf, smallest);
 
     const node = button("xfer-plate", this.options.nameOf(yard));
@@ -551,7 +537,8 @@ export class TransferMode {
     node.dataset["baseid"] = yard.baseid;
     if (isAnchor) node.classList.add("is-anchor");
     if (ticked) node.classList.add("is-on");
-    if (ticked && countOf(moving) === 0 && !this.result) node.classList.add("is-idle");
+    // Ticked, but nothing moves to or from it while something else does.
+    if (ticked && countOf(moving) === 0 && (plan?.total ?? 0) > 0 && !this.result) node.classList.add("is-idle");
     if (yard.attack) node.classList.add("is-attack");
     if (!isAnchor && !ticked && !tickable) node.classList.add("is-dim");
     if (this.result && countOf(moving) > 0) node.classList.add("is-done");
@@ -582,7 +569,7 @@ export class TransferMode {
         const room = size === "full" ? 2 : 1;
         for (const id of types.slice(0, room)) {
           const count = monsterCount(id, now.housed[id] ?? 0);
-          if (state.picks[id] !== undefined) count.classList.add("is-picked");
+          if ((state.picks[id] ?? 0) > 0) count.classList.add("is-picked");
           top.append(count);
         }
         if (types.length > room) top.append(moreDots(types.length - room));
@@ -707,7 +694,7 @@ export class TransferMode {
     if (types.length === 0 && !gets) grid.append(el("span", "xfer-peek__none", MOVE_TEXT.noneHere));
     for (const id of types) {
       const cell = monsterCount(id, yard.housed[id] ?? 0, "xfer-mon xfer-mon--big");
-      if (state.picks[id] !== undefined) cell.classList.add("is-picked");
+      if ((state.picks[id] ?? 0) > 0) cell.classList.add("is-picked");
       const change = (gets?.[id] ?? 0) - (gives?.[id] ?? 0);
       if (change !== 0)
         cell.append(
@@ -798,135 +785,84 @@ export class TransferMode {
     const anchor = this.anchor;
     const current = this.plan();
     if (!tray || !state || !anchor || !current) return;
-    const { src, dst, plan } = current;
+    const { dst, held, room, plan } = current;
     const out = state.mode === "out";
-    // Narrow and tall (a phone or an iPad upright): three bands, Go on its own
-    // line. A phone on its side: two, as on a desktop (transfer.css).
-    const phone = stackedTray();
     const sizeOf = this.options.sizeOf;
 
     // Keep the chips' scroll where it was.
     const oldStrip = tray.body.querySelector<HTMLElement>(".xfer-chips");
     const scrollLeft = oldStrip?.scrollLeft ?? 0;
 
-    const types = trayTypes(state, this.yards, sizeOf);
-    const pool = out ? [anchor] : this.yards.filter((yard) => canTick(yard, anchor, "in", sizeOf, 1));
-
+    const types = this.types();
     const chips = el("div", "xfer-chips");
     chips.setAttribute("role", "group");
     if (types.length === 0) chips.append(el("span", "xfer-tray__none", out ? MOVE_TEXT.noneHere : MOVE_TEXT.noneOut));
-    for (const id of types) chips.append(this.chip(id, src, pool, plan, state));
+    for (const id of types) chips.append(this.chip(id, state, held, room));
 
-    const all = button("btn btn--outline xfer-all", "Pick every monster");
+    // "All": as many of every type as fit, in roster order.
+    const all = button("btn btn--outline xfer-all", "Pick as many as fit, every monster");
     all.append(el("span", "", MOVE_TEXT.every));
-    all.disabled = types.length === 0;
+    all.disabled = types.length === 0 || this.busy || this.result !== null;
     all.addEventListener("click", () => {
       this.stepping = null;
-      this.pickAll();
-      this.render();
+      const latest = this.plan();
+      if (!latest) return;
+      this.update({ picks: fillAll(this.types(), latest.held, latest.room, sizeOf) });
     });
 
     const rowA = el("div", "xfer-tray__row xfer-tray__row--chips");
     rowA.append(chips, all);
 
-    // Quick picks.
-    const quick = button("btn btn--outline xfer-quick");
-    if (out || !anchor.main) {
-      quick.append(outpostIcon(24), el("span", "", MOVE_TEXT.near));
-      quick.setAttribute("aria-label", out ? "Tick the 5 nearest outposts with room" : "Tick the 5 nearest yards with monsters");
-      const near = out
-        ? nearestWithRoom(this.yards, anchor, sizeOf, this.smallest(), this.options.distance)
-        : everySource(this.yards, anchor, sizeOf, this.options.distance).slice(0, 5);
-      quick.classList.toggle("is-active", near.length > 0 && sameSet(near, state.ticks));
-      quick.addEventListener("click", () => {
-        this.stepping = null;
-        const ticks = out
-          ? nearestWithRoom(this.yards, anchor, sizeOf, this.smallest(), this.options.distance)
-          : everySource(this.yards, anchor, sizeOf, this.options.distance).slice(0, 5);
-        this.update({ ticks });
-      });
-    } else {
-      quick.append(icon("townhall", 24), el("span", "", MOVE_TEXT.allHome));
-      quick.setAttribute("aria-label", "Bring every outpost's monsters home");
-      const every = everySource(this.yards, anchor, sizeOf, this.options.distance);
-      quick.classList.toggle("is-active", every.length > 0 && sameSet(every, state.ticks));
-      quick.addEventListener("click", () => {
-        this.stepping = null;
-        this.pickAll();
-        this.update({ ticks: everySource(this.yards, anchor, sizeOf, this.options.distance) });
-      });
-    }
-
-    const listButton = button("btn btn--outline xfer-listb", "List every yard you can pick");
-    const smallestNow = this.smallest();
-    const others = this.yards.filter(
-      (yard) => (out ? !(yard.main && anchor.main) : true) && (state.ticks.includes(yard.baseid) || canTick(yard, anchor, state.mode, sizeOf, smallestNow)),
-    ).length;
-    listButton.append(icon("find", 24), el("span", "", MOVE_TEXT.list), el("small", "xfer-listb__n", formatAmount(others)));
-    listButton.addEventListener("click", () => this.openList());
-
-    const controls = el("div", "xfer-tray__tools");
-    if (out) {
-      const split = button(
-        "btn btn--outline xfer-split",
-        state.even ? "Split evenly (tap for in order)" : "Fill in order (tap to split evenly)",
-      );
-      split.append(el("i", "xfer-split__ico"), el("span", "", state.even ? MOVE_TEXT.even : MOVE_TEXT.inOrder));
-      split.setAttribute("aria-pressed", String(state.even));
-      split.addEventListener("click", () => this.update({ even: !state.even }));
-      controls.append(split);
-    }
-    controls.append(quick, listButton);
-
-    // Status: yards ticked, and the room left on the side that takes.
-    // (How many yards is on Go itself.)
+    // Status: the room left at the target, counting down as monsters are picked.
     const status = el("div", "xfer-status");
-    const roomLeft = out
-      ? dst.reduce((sum, yard) => sum + freeRoom(yard, sizeOf), 0) - roomOf(plan.moved, sizeOf)
-      : freeRoom(anchor, sizeOf) - roomOf(plan.moved, sizeOf);
-    const room = el("span", "xfer-status__item");
-    room.title = out ? "Room left in the yards ticked" : `Room left at ${this.options.nameOf(anchor)}`;
-    room.append(icon("housing", 24), el("b", "", formatAmount(Math.max(0, roomLeft))), el("small", "", MOVE_TEXT.free));
-    status.append(room);
-    if (plan.leftTotal > 0)
-      status.append(el("span", "xfer-status__warn", out ? MOVE_TEXT.noRoom(plan.leftTotal) : MOVE_TEXT.stayOut(plan.leftTotal)));
+    const target = dst[0];
+    if (room !== null && target) {
+      const left = el("span", "xfer-status__item");
+      left.title = `Room left at ${this.options.nameOf(target)}`;
+      const rest = Math.max(0, room - roomOf(plan.moved, sizeOf));
+      const full = rest < this.smallest();
+      if (full) left.classList.add("is-full");
+      left.append(icon("housing", 24), el("b", "", formatAmount(rest)), el("small", "", full ? MOVE_TEXT.full : MOVE_TEXT.free));
+      status.append(left);
+    }
 
     // Go says the next step until there is something to move.
     const go = button("btn btn--primary xfer-go");
-    const picked = Object.keys(state.picks).length > 0;
     if (this.result) {
       // Done: what moved, until move mode ends a moment later.
       go.classList.add("is-done");
       go.append(el("i", "xfer-chip__check"), el("span", "", MOVE_TEXT.moved(this.result.total)));
-    } else if (plan.total > 0) {
+    } else if (plan.total > 0 && target) {
       if (out) {
         go.append(
           el("span", "", MOVE_TEXT.move(plan.total)),
           el("i", "xfer-go__arrow"),
-          el("b", "", formatAmount(Object.keys(plan.add).length)),
-          outpostIcon(24),
+          el("span", "xfer-go__name", this.options.nameOf(target)),
         );
       } else {
         go.append(el("span", "", MOVE_TEXT.bring(plan.total, anchor.main)));
       }
     } else {
       go.classList.add("is-waiting");
-      go.append(el("span", "", !picked ? MOVE_TEXT.pickFirst : out ? MOVE_TEXT.tickOut : MOVE_TEXT.tickIn));
+      const words = state.ticks.length === 0 ? (out ? MOVE_TEXT.tickOut : MOVE_TEXT.tickIn) : MOVE_TEXT.pickFirst;
+      go.append(el("span", "", words));
     }
     go.disabled = plan.total <= 0 || this.busy || this.result !== null;
     go.addEventListener("click", () => void this.go());
 
     const rowB = el("div", "xfer-tray__row xfer-tray__row--act");
-    if (phone) {
-      rowB.append(controls, status);
-      const rowC = el("div", "xfer-tray__row xfer-tray__row--go");
-      rowC.append(go);
-      tray.setContent(rowA, rowB, rowC);
-    } else {
-      rowB.append(controls, status, go);
-      tray.setContent(rowA, rowB);
-    }
+    rowB.append(status, go);
+    tray.setContent(rowA, rowB);
     chips.scrollLeft = scrollLeft;
+    // A stepper just opened: bring all of it into sight.
+    const open = this.revealStep ? chips.querySelector<HTMLElement>(".xfer-chip.is-stepping") : null;
+    this.revealStep = false;
+    if (open) {
+      const strip = chips.getBoundingClientRect();
+      const box = open.getBoundingClientRect();
+      if (box.right > strip.right) chips.scrollLeft += box.right - strip.right + 4;
+      else if (box.left < strip.left) chips.scrollLeft -= strip.left - box.left + 4;
+    }
     // More chips than fit: the strip fades at its right edge until scrolled to the end.
     const fade = (): void => {
       chips.classList.toggle("is-more-right", chips.scrollLeft + chips.clientWidth < chips.scrollWidth - 4);
@@ -941,70 +877,74 @@ export class TransferMode {
     });
   }
 
-  /** One monster type in the tray: its picture and count, and the stepper behind the count. */
-  private chip(id: string, src: readonly ArmyYard[], pool: readonly ArmyYard[], plan: MovePlan, state: MoveState): HTMLElement {
-    const sizeOf = this.options.sizeOf;
-    const pick = state.picks[id];
-    const picked = pick !== undefined;
-    const available = heldBy(state.mode === "out" ? src : state.ticks.length ? src : pool, id);
-    const chip = el("div", "xfer-chip");
-    chip.dataset["id"] = id;
-    if (picked) chip.classList.add("is-on");
+  /**
+   * One monster type in the tray: its picture and "picked/most". A tap
+   * anywhere on it opens its stepper: − n/most + Max ✓. The most is what the
+   * ticked yards hold; + and Max stop where the next one would not fit.
+   */
+  private chip(id: string, state: MoveState, held: (id: string) => number, room: number | null): HTMLElement {
+    const name = monsterName(id);
+    const most = held(id);
+    const now = Math.min(state.picks[id] ?? 0, most);
+    const set = (n: number): void => {
+      const latest = this.state;
+      if (!latest) return;
+      this.update({ picks: { ...latest.picks, [id]: Math.max(0, n) } });
+    };
 
-    const face = button("xfer-chip__face", `${monsterName(id)}: ${picked ? "picked, tap to drop" : "tap to pick all"}`);
-    face.setAttribute("aria-pressed", String(picked));
-    face.append(portrait(id, "xfer-chip__pic"));
-    if (picked) face.append(el("i", "xfer-chip__check"));
-    face.addEventListener("click", () => this.togglePick(id));
-
-    if (this.stepping === id) {
-      chip.classList.add("is-stepping");
-      const now = pick === "all" ? available : Math.min(Number(pick ?? 0), available);
-      const set = (n: number): void => {
-        const latest = this.state;
-        if (!latest) return;
-        this.update({ picks: { ...latest.picks, [id]: Math.max(0, Math.min(n, available)) } });
-      };
-      const less = button("xfer-step", `Fewer ${monsterName(id)}`);
+    if (this.stepping === id && most > 0) {
+      const chip = el("div", "xfer-chip is-stepping");
+      chip.dataset["id"] = id;
+      if (now > 0) chip.classList.add("is-on");
+      const cap = maxFor(id, state.picks, held, room, this.options.sizeOf);
+      const face = el("span", "xfer-chip__face");
+      face.title = name;
+      face.append(portrait(id, "xfer-chip__pic"));
+      const less = button("xfer-step", `Fewer ${name}`);
       less.textContent = "−";
       less.disabled = now <= 0;
       less.addEventListener("click", () => set(now - 1));
       const value = el("output", "xfer-step__n");
-      value.append(el("b", "", formatAmount(now)), el("small", "", `/${formatAmount(available)}`));
-      const more = button("xfer-step", `More ${monsterName(id)}`);
+      value.append(el("b", "", formatAmount(now)), el("small", "", `/${formatAmount(most)}`));
+      const more = button("xfer-step", `More ${name}`);
       more.textContent = "+";
-      more.disabled = now >= available;
+      more.disabled = now >= cap;
+      // Stopped by the room, not by the count: say so.
+      if (now >= cap && cap < most) more.title = MOVE_TEXT.full;
       more.addEventListener("click", () => set(now + 1));
+      const max = button("xfer-step xfer-step--max", `As many ${name} as fit`);
+      max.textContent = MOVE_TEXT.max;
+      max.disabled = now >= cap;
+      max.addEventListener("click", () => set(cap));
       const ok = button("xfer-step xfer-step--ok", "Done");
       ok.append(el("i", "xfer-chip__check"));
       ok.addEventListener("click", () => {
         this.stepping = null;
         this.render();
       });
-      chip.append(face, less, value, more, ok);
+      chip.append(face, less, value, more, max, ok);
       return chip;
     }
 
-    const count = button("xfer-chip__count", `How many ${monsterName(id)}`);
-    if (picked) {
-      // With yards ticked, the chip says how many really move (room can stop some).
-      const moving = state.ticks.length ? (plan.moved[id] ?? 0) : pick === "all" ? available : Math.min(Number(pick), available);
-      const n = el("b", moving === 0 && state.ticks.length ? "is-zero" : "", formatAmount(moving));
-      count.append(n, el("small", "", `/${formatAmount(available)}`), el("i", "xfer-chip__edit"));
-    } else {
-      count.append(el("b", "", formatAmount(available)));
-      const size = el("small", "xfer-chip__size");
-      size.append(icon("housing", 16), document.createTextNode(String(sizeOf(id))));
-      count.append(size);
-    }
-    count.addEventListener("click", () => {
-      const latest = this.state;
-      if (!latest) return;
-      if (latest.picks[id] === undefined) this.state = { ...latest, picks: { ...latest.picks, [id]: "all" } };
-      this.stepping = this.stepping === id ? null : id;
+    // Closed: the whole chip is one button.
+    const chip = button("xfer-chip", `${name}: ${formatAmount(now)} of ${formatAmount(most)}, tap to set how many`);
+    chip.dataset["id"] = id;
+    if (now > 0) chip.classList.add("is-on");
+    chip.disabled = most <= 0 || this.busy || this.result !== null;
+    const face = el("span", "xfer-chip__face");
+    face.append(portrait(id, "xfer-chip__pic"));
+    const count = el("span", "xfer-chip__count");
+    count.append(
+      el("b", now > 0 ? "" : "is-none", formatAmount(now)),
+      el("small", "", `/${formatAmount(most)}`),
+      el("i", "xfer-chip__edit"),
+    );
+    chip.append(face, count);
+    chip.addEventListener("click", () => {
+      this.stepping = id;
+      this.revealStep = true;
       this.render();
     });
-    chip.append(face, count);
     return chip;
   }
 
@@ -1019,7 +959,6 @@ export class TransferMode {
     const pairs = pairsOf(plan, state.mode, state.anchor);
     this.busy = true;
     this.stepping = null;
-    this.list?.close();
     this.render();
     try {
       const answer = await this.options.send(pairs);
@@ -1033,7 +972,7 @@ export class TransferMode {
       this.options.onMoved(pairs.flatMap((pair) => [pair.from, pair.to]));
       this.busy = false;
       this.result = { add: plan.add, sub: plan.sub, total: plan.total };
-      this.showResult(plan, src, dst, state.mode);
+      this.showResult(plan, src, dst);
       this.render();
       this.resultTimer = setTimeout(() => this.end(), RESULT_MS);
     } catch (caught) {
@@ -1046,27 +985,24 @@ export class TransferMode {
       } catch {
         // Keep what we had.
       }
-      this.render();
+      if (this.state !== state) return;
+      // A yard may have come under attack or filled up: the ticks and counts follow.
+      this.update({});
     }
   }
 
-  private showResult(plan: MovePlan, src: readonly ArmyYard[], dst: readonly ArmyYard[], mode: MoveMode): void {
+  private showResult(plan: MovePlan, src: readonly ArmyYard[], dst: readonly ArmyYard[]): void {
     const line = el("span", "xfer-toast__line");
     const types = Object.keys(plan.moved)
       .sort((a, b) => (plan.moved[b] ?? 0) - (plan.moved[a] ?? 0))
       .slice(0, 4);
     for (const id of types) line.append(portrait(id, "xfer-toast__pic"));
     line.append(el("b", "", formatAmount(plan.total)), el("i", "xfer-go__arrow"));
-    const targets = Object.keys(plan.add);
-    if (mode === "out" && targets.length > 1) line.append(el("b", "", formatAmount(targets.length)), outpostIcon(24));
-    else {
-      const to = this.byId.get(targets[0] ?? "") ?? dst[0];
-      line.append(el("span", "", to?.main ? MOVE_TEXT.home : to ? this.options.nameOf(to) : ""));
-    }
+    const to = dst[0];
+    line.append(el("span", "", to?.main ? MOVE_TEXT.home : to ? this.options.nameOf(to) : ""));
     const sources = Object.keys(plan.sub);
-    let sub: string =
-      sources.length > 1 ? MOVE_TEXT.fromMany(sources.length) : MOVE_TEXT.fromOne(src[0] ? this.options.nameOf(src[0]) : "");
-    if (plan.leftTotal > 0) sub += ` · ${MOVE_TEXT.didNotFit(plan.leftTotal)}`;
+    const from = this.byId.get(sources[0] ?? "") ?? src[0];
+    const sub = sources.length > 1 ? MOVE_TEXT.fromMany(sources.length) : MOVE_TEXT.fromOne(from ? this.options.nameOf(from) : "");
     this.showToast([line, el("small", "xfer-toast__sub", sub)], false, 4_500);
   }
 
@@ -1087,178 +1023,6 @@ export class TransferMode {
         toast.hidden = true;
         if (!this.state) this.over.remove();
       }, ms);
-  }
-
-  /* ── The List window (200+ outposts) ──────────────────────────────── */
-
-  private openList(): void {
-    const state = this.state;
-    const anchor = this.anchor;
-    if (!state || !anchor || this.list) return;
-    this.stepping = null;
-    this.query = "";
-    const popup = new Popup({
-      title: state.mode === "out" ? MOVE_TEXT.listOut : MOVE_TEXT.listIn,
-      className: "xfer-list",
-      onClose: () => {
-        this.list = null;
-        this.listBody = null;
-        this.options.layer.classList.remove("xfer-listing");
-        this.render();
-      },
-    });
-    popup.titlebar.querySelector("button")?.setAttribute("aria-label", MOVE_TEXT.closeList);
-
-    const head = el("div", "xfer-list__head");
-    const out = state.mode === "out";
-    const near = button("btn btn--outline xfer-quick");
-    if (out || !anchor.main) near.append(outpostIcon(24), el("span", "", MOVE_TEXT.near));
-    else near.append(icon("townhall", 24), el("span", "", MOVE_TEXT.allHome));
-    near.addEventListener("click", () => {
-      const sizeOf = this.options.sizeOf;
-      if (out) this.update({ ticks: nearestWithRoom(this.yards, anchor, sizeOf, this.smallest(), this.options.distance) });
-      else if (anchor.main) {
-        this.pickAll();
-        this.update({ ticks: everySource(this.yards, anchor, sizeOf, this.options.distance) });
-      } else this.update({ ticks: everySource(this.yards, anchor, sizeOf, this.options.distance).slice(0, 5) });
-    });
-    const all = button("btn btn--outline xfer-quick", out ? "Tick every yard with room" : "Tick every yard with monsters");
-    all.append(el("i", "xfer-chip__check"), el("span", "", MOVE_TEXT.tickAll));
-    all.addEventListener("click", () => {
-      const sizeOf = this.options.sizeOf;
-      const smallest = this.smallest();
-      const ticks = othersByDistance(this.yards, anchor, this.options.distance)
-        .filter((yard) => (out ? !yard.main : true) && canTick(yard, anchor, state.mode, sizeOf, smallest))
-        .map((yard) => yard.baseid);
-      this.update({ ticks });
-    });
-    const searchWrap = el("label", "xfer-list__search");
-    searchWrap.append(icon("find", 24));
-    const search = el("input", "xfer-list__input");
-    search.type = "search";
-    search.placeholder = MOVE_TEXT.search;
-    search.autocomplete = "off";
-    search.setAttribute("aria-label", MOVE_TEXT.search);
-    search.addEventListener("input", () => {
-      this.query = search.value;
-      this.renderList();
-    });
-    searchWrap.append(search);
-    head.append(near, all, searchWrap);
-    popup.setHead(head);
-
-    this.listBody = el("div", "xfer-list__rows");
-    const foot = el("div", "xfer-list__foot");
-    popup.setContent(this.listBody);
-    popup.element.append(foot);
-    this.list = popup;
-    // One window at a time: the tray steps out of sight behind the List.
-    this.options.layer.classList.add("xfer-listing");
-    popup.mount(this.options.modal);
-    this.renderList();
-  }
-
-  private renderList(): void {
-    const state = this.state;
-    const anchor = this.anchor;
-    const popup = this.list;
-    const body = this.listBody;
-    const current = this.plan();
-    if (!state || !anchor || !popup || !body || !current) return;
-    const { plan } = current;
-    const sizeOf = this.options.sizeOf;
-    const out = state.mode === "out";
-    const smallest = this.smallest();
-    const keep = popup.body.scrollTop;
-
-    const rows = othersByDistance(this.yards, anchor, this.options.distance).filter((yard) => {
-      if (out && yard.main && anchor.main) return false;
-      if (!matchesSearch(this.options.nameOf(yard), yard, this.query)) return false;
-      return state.ticks.includes(yard.baseid) || canTick(yard, anchor, state.mode, sizeOf, smallest);
-    });
-    popup.setTitle(`${out ? MOVE_TEXT.listOut : MOVE_TEXT.listIn} · ${formatAmount(rows.length)}`);
-
-    body.replaceChildren();
-    for (const yard of rows) {
-      const on = state.ticks.includes(yard.baseid);
-      const gets = plan.add[yard.baseid];
-      const gives = plan.sub[yard.baseid];
-      const moving = (out ? gets : gives) ?? {};
-      const delta = roomOf(gets, sizeOf) - roomOf(gives, sizeOf);
-      const row = button("xfer-row", `${this.options.nameOf(yard)}${on ? ", ticked" : ""}`);
-      row.setAttribute("aria-pressed", String(on));
-      if (on) row.classList.add("is-on");
-      if (on && countOf(moving) === 0) row.classList.add("is-idle");
-
-      const box = el("span", "xfer-row__box");
-      if (on) box.append(el("i", "xfer-chip__check"));
-      const name = el("span", "xfer-row__name");
-      name.append(el("b", "", this.options.nameOf(yard)));
-      const far = el("small", "", MOVE_TEXT.hex(this.options.distance(anchor, yard)));
-      if (yard.attack) far.append(icon("swords", 16));
-      name.append(far);
-
-      const mons = el("span", "xfer-row__mons");
-      const types = rankTypes(yard, sizeOf, state.picks, moving);
-      const shown = 2;
-      if (types.length === 0) mons.append(el("span", "xfer-row__empty", MOVE_TEXT.empty));
-      for (const id of types.slice(0, shown)) {
-        const count = monsterCount(id, yard.housed[id] ?? 0);
-        if (state.picks[id] !== undefined) count.classList.add("is-picked");
-        mons.append(count);
-      }
-      if (types.length > shown) mons.append(moreDots(types.length - shown));
-
-      const room = el("span", "xfer-row__room");
-      room.append(roomBar(yard, sizeOf, delta));
-      const free = Math.max(0, freeRoom(yard, sizeOf) - delta);
-      const word = el("b", free < smallest ? "is-full" : "");
-      word.append(icon("housing", 16), document.createTextNode(free < smallest ? MOVE_TEXT.full : formatAmount(free)));
-      room.append(word);
-
-      const preview = el("span", "xfer-row__tag");
-      const n = countOf(moving);
-      if (n > 0) {
-        const tag = el("span", `xfer-tag xfer-tag--inline ${out ? "xfer-tag--add" : "xfer-tag--sub"}`);
-        tag.append(el("b", "", `${out ? "+" : "−"}${formatAmount(n)}`), ...tagPictures(moving));
-        preview.append(tag);
-      }
-      row.append(box, name, mons, room, preview);
-      row.addEventListener("click", () => this.toggle(yard.baseid));
-      body.append(row);
-    }
-    if (rows.length === 0)
-      body.append(el("p", "xfer-list__none", this.query ? "No yard matches." : out ? "No yard has room." : "No yard has monsters."));
-    popup.body.scrollTop = keep;
-
-    const foot = popup.element.querySelector<HTMLElement>(".xfer-list__foot");
-    if (foot) {
-      foot.replaceChildren();
-      const status = el("span", "xfer-status__item");
-      status.append(el("b", "", formatAmount(state.ticks.length)), outpostIcon(24));
-      const total = el("span", "xfer-status__item");
-      if (plan.total > 0) total.append(...tagPictures(plan.moved), el("b", "", formatAmount(plan.total)));
-      const done = button("btn btn--primary xfer-done");
-      done.append(el("span", "", MOVE_TEXT.done));
-      done.addEventListener("click", () => popup.close());
-      foot.append(status, total, done);
-      // A phone on its side: the rows get the height; Done joins the search line.
-      const short = window.innerHeight <= 500;
-      foot.hidden = short;
-      const head = popup.element.querySelector<HTMLElement>(".xfer-list__head");
-      head?.querySelector(".xfer-done")?.remove();
-      if (short && head) {
-        head.querySelector(".xfer-list__count")?.remove();
-        const count = el("span", "xfer-status__item xfer-list__count");
-        count.append(el("b", "", formatAmount(state.ticks.length)), outpostIcon(24));
-        if (plan.total > 0) count.append(...tagPictures(plan.moved), el("b", "", formatAmount(plan.total)));
-        head.append(count);
-        const headDone = button("btn btn--primary xfer-done");
-        headDone.append(el("span", "", MOVE_TEXT.done));
-        headDone.addEventListener("click", () => popup.close());
-        head.append(headDone);
-      }
-    }
   }
 }
 

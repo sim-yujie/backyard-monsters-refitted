@@ -1,14 +1,17 @@
 /**
  * Moving monsters from the world map (beta 9 #7, owner's "B1 steel plates",
- * 22 Nov 2026). Pure: what the move tray offers and what a move would do —
- * which yards get or give how many of each monster — so the plates, the tray
- * and the list all read one plan, and the server gets exactly its pairs.
+ * 22 Nov 2026; made simpler after the owner's playtest, 23 Nov). Pure: what
+ * the move tray offers and what a move would do — which yards get or give how
+ * many of each monster — so the plates and the tray read one plan, and the
+ * server gets exactly its pairs.
  *
  * Two kinds of move, both anchored on the yard the player started from:
- * - `out`: the anchor sends to the yards ticked (one source, many targets),
- *   filled in order nearest first, or split evenly one by one.
- * - `in`: the yards ticked send to the anchor (many sources, one target),
- *   nearest first.
+ * - `out` ("Move from"): the anchor sends to ONE yard the player taps.
+ * - `in` ("Bring to"): every other yard with monsters starts ticked and sends
+ *   to the anchor; the main yard gives first, then the outposts nearest it.
+ *
+ * Every count starts at 0 and the player sets each one; a pick never goes past
+ * what the ticked sources hold or what fits in the target's free room.
  *
  * The server checks it all again (`server/src/services/monsters/transferBatch.ts`):
  * this only keeps the tray honest about what will fit.
@@ -30,19 +33,16 @@ export interface ArmyYard {
 
 export type MoveMode = "out" | "in";
 
-/** How many of a type: every one the sources hold, or a number the player set. */
-export type MonsterPick = "all" | number;
+/** How many of each monster type the player picked (a type left out is 0). */
+export type Picks = Readonly<Record<string, number>>;
 
 export interface MoveState {
   readonly mode: MoveMode;
   /** The yard the move started from. */
   readonly anchor: string;
-  /** The yards ticked, in the order ticked. */
+  /** `in`: the yards that send. `out`: the one target, or none yet. */
   readonly ticks: readonly string[];
-  /** Monster types picked. */
-  readonly picks: Readonly<Record<string, MonsterPick>>;
-  /** `out` with several targets: one by one round the targets (true) or each filled in turn. */
-  readonly even: boolean;
+  readonly picks: Picks;
 }
 
 /** What a move does. */
@@ -54,9 +54,6 @@ export interface MovePlan {
   /** Per type, moved in all. */
   readonly moved: Readonly<Record<string, number>>;
   readonly total: number;
-  /** Per type, picked but left behind for want of room. */
-  readonly left: Readonly<Record<string, number>>;
-  readonly leftTotal: number;
 }
 
 /** One pair for the server: `{ from, to, moved }`. */
@@ -102,6 +99,9 @@ const roomOfCounts = (counts: Readonly<Record<string, number>> | undefined, size
 
 export { sumCounts as countOf, roomOfCounts as roomOf };
 
+/** One monster's room, never below 1 (a type the Academy does not know yet still takes room). */
+const sizeOfOne = (sizeOf: SizeOf, id: string): number => Math.max(1, sizeOf(id));
+
 /**
  * Whether a yard has room for even one of the smallest monster the move
  * could send (`smallest`, the smallest size on offer).
@@ -116,6 +116,15 @@ export const othersByDistance = (yards: readonly ArmyYard[], anchor: ArmyYard, d
     .filter(({ yard }) => yard.baseid !== anchor.baseid)
     .sort((a, b) => a.d - b.d || a.index - b.index)
     .map(({ yard }) => yard);
+
+/**
+ * The order sources give in when bringing to `target`: the main yard first,
+ * then the outposts nearest the target (owner, 23 Nov 2026).
+ */
+export const sourceOrder = (sources: readonly ArmyYard[], target: ArmyYard, distance: DistanceOf): ArmyYard[] => {
+  const near = othersByDistance(sources, target, distance);
+  return [...near.filter((yard) => yard.main), ...near.filter((yard) => !yard.main)];
+};
 
 /**
  * Whether a yard can be ticked in this move. One end must be an outpost, so
@@ -135,7 +144,33 @@ export const canTick = (
   return mode === "out" ? !isFull(yard, sizeOf, smallest) : headcount(yard) > 0;
 };
 
-/** The sources and targets of a move: the anchor on one side, the ticks (nearest first) on the other. */
+/** The yards ticked when a move opens: `in`, every yard that can send (main first, then nearest); `out`, none. */
+export const firstTicks = (
+  mode: MoveMode,
+  yards: readonly ArmyYard[],
+  anchor: ArmyYard,
+  sizeOf: SizeOf,
+  distance: DistanceOf,
+): string[] =>
+  mode === "out"
+    ? []
+    : sourceOrder(
+        yards.filter((yard) => canTick(yard, anchor, "in", sizeOf, 1)),
+        anchor,
+        distance,
+      ).map((yard) => yard.baseid);
+
+/**
+ * The ticks after a tap on `baseid` (already checked as tickable, or ticked).
+ * `in`: ticks or unticks it. `out`: it becomes the one target, or, tapped
+ * again, the target is cleared.
+ */
+export const tapTicks = (mode: MoveMode, ticks: readonly string[], baseid: string): string[] => {
+  if (ticks.includes(baseid)) return ticks.filter((id) => id !== baseid);
+  return mode === "out" ? [baseid] : [...ticks, baseid];
+};
+
+/** The sources and target of a move: the anchor on one side, the ticks on the other. */
 export const endsOf = (
   state: MoveState,
   yards: ReadonlyMap<string, ArmyYard>,
@@ -146,8 +181,9 @@ export const endsOf = (
   const ticked = state.ticks
     .map((id) => yards.get(id))
     .filter((yard): yard is ArmyYard => yard !== undefined && yard.baseid !== anchor.baseid);
-  const near = othersByDistance(ticked, anchor, distance);
-  return state.mode === "out" ? { src: [anchor], dst: near } : { src: near, dst: [anchor] };
+  return state.mode === "out"
+    ? { src: [anchor], dst: ticked.slice(0, 1) }
+    : { src: sourceOrder(ticked, anchor, distance), dst: [anchor] };
 };
 
 /** How many of a type the given sources hold. */
@@ -155,14 +191,10 @@ export const heldBy = (sources: readonly ArmyYard[], id: string): number =>
   sources.reduce((sum, yard) => sum + (yard.housed[id] ?? 0), 0);
 
 /** The types the tray offers: the anchor's (out), or any tickable source's (in). */
-export const trayTypes = (
-  state: MoveState,
-  yards: readonly ArmyYard[],
-  sizeOf: SizeOf,
-): string[] => {
-  const anchor = yards.find((yard) => yard.baseid === state.anchor);
+export const trayTypes = (mode: MoveMode, anchorId: string, yards: readonly ArmyYard[], sizeOf: SizeOf): string[] => {
+  const anchor = yards.find((yard) => yard.baseid === anchorId);
   if (!anchor) return [];
-  if (state.mode === "out") return typesOf(anchor);
+  if (mode === "out") return typesOf(anchor);
   const pool = new Set<string>();
   for (const yard of yards) {
     if (!canTick(yard, anchor, "in", sizeOf, 1)) continue;
@@ -171,16 +203,53 @@ export const trayTypes = (
   return [...pool].sort(byRoster);
 };
 
-/** How many of each picked type the move asks for, cut to what the sources hold. */
-export const pickedCounts = (state: MoveState, sources: readonly ArmyYard[]): Record<string, number> => {
-  const counts: Record<string, number> = {};
-  for (const [id, pick] of Object.entries(state.picks)) {
-    const held = heldBy(sources, id);
-    const want = pick === "all" ? held : Math.max(0, Math.min(Math.floor(pick), held));
-    if (want > 0) counts[id] = want;
+/** The room the target has, or null when there is no target yet (`out`, before a tap): no cap. */
+export const roomFor = (dst: readonly ArmyYard[], sizeOf: SizeOf): number | null =>
+  dst[0] ? freeRoom(dst[0], sizeOf) : null;
+
+/**
+ * The picks cut to what the sources hold, then to the room, in roster order
+ * (C1, C2, ... then IC*): a later type loses first. Zeroes are dropped.
+ */
+export const fitPicks = (
+  picks: Picks,
+  held: (id: string) => number,
+  room: number | null,
+  sizeOf: SizeOf,
+): Record<string, number> => {
+  const fitted: Record<string, number> = {};
+  let left = room ?? Number.POSITIVE_INFINITY;
+  for (const id of Object.keys(picks).sort(byRoster)) {
+    const size = sizeOfOne(sizeOf, id);
+    const n = Math.max(0, Math.min(Math.floor(picks[id] ?? 0), held(id), Math.floor(left / size)));
+    if (n <= 0) continue;
+    fitted[id] = n;
+    left -= n * size;
   }
-  return counts;
+  return fitted;
 };
+
+/** The most of one type the player can pick, with the other picks as they are. */
+export const maxFor = (
+  id: string,
+  picks: Picks,
+  held: (id: string) => number,
+  room: number | null,
+  sizeOf: SizeOf,
+): number => {
+  const have = held(id);
+  if (room === null) return have;
+  const others = roomOfCounts({ ...picks, [id]: 0 }, sizeOf);
+  return Math.max(0, Math.min(have, Math.floor((room - others) / sizeOfOne(sizeOf, id))));
+};
+
+/** "All": every type filled to as many as fit, in roster order, until the room is full. */
+export const fillAll = (
+  types: readonly string[],
+  held: (id: string) => number,
+  room: number | null,
+  sizeOf: SizeOf,
+): Record<string, number> => fitPicks(Object.fromEntries(types.map((id) => [id, held(id)])), held, room, sizeOf);
 
 const bump = (into: Record<string, Record<string, number>>, yard: string, id: string, n: number): void => {
   const counts = (into[yard] ??= {});
@@ -188,90 +257,39 @@ const bump = (into: Record<string, Record<string, number>>, yard: string, id: st
 };
 
 /**
- * What the move does: types in roster order; `out` fills the targets nearest
- * first (or, `even`, one at a time round them), `in` takes from the sources
- * nearest first into the anchor's room.
+ * What the move does: types in roster order, taken from the sources in their
+ * order (main first, then nearest) into the one target's room.
  */
 export const planMove = (
   src: readonly ArmyYard[],
   dst: readonly ArmyYard[],
   picked: Readonly<Record<string, number>>,
-  even: boolean,
   sizeOf: SizeOf,
 ): MovePlan => {
   const add: Record<string, Record<string, number>> = {};
   const sub: Record<string, Record<string, number>> = {};
   const moved: Record<string, number> = {};
-  const left: Record<string, number> = {};
   let total = 0;
-  let leftTotal = 0;
-  if (src.length === 0 || dst.length === 0) return { add, sub, moved, total, left, leftTotal };
+  const to = dst[0];
+  if (src.length === 0 || !to) return { add, sub, moved, total };
 
-  const room = new Map(dst.map((yard) => [yard.baseid, freeRoom(yard, sizeOf)]));
-  const give = (from: ArmyYard, to: ArmyYard, id: string, n: number): void => {
-    bump(add, to.baseid, id, n);
-    bump(sub, from.baseid, id, n);
-    moved[id] = (moved[id] ?? 0) + n;
-    total += n;
-    room.set(to.baseid, (room.get(to.baseid) ?? 0) - n * sizeOf(id));
-  };
-
+  let room = freeRoom(to, sizeOf);
   for (const id of Object.keys(picked).sort(byRoster)) {
-    const size = Math.max(1, sizeOf(id));
+    const size = sizeOfOne(sizeOf, id);
     let want = picked[id] ?? 0;
-    if (want <= 0) continue;
-    if (src.length === 1) {
-      const from = src[0]!;
-      want = Math.min(want, from.housed[id] ?? 0);
-      if (even && dst.length > 1) {
-        // Round and round the targets, one each, until none has room or none is left.
-        let placed = true;
-        const given = new Map<string, number>();
-        while (want > 0 && placed) {
-          placed = false;
-          for (const to of dst) {
-            if (want <= 0) break;
-            if ((room.get(to.baseid) ?? 0) < size) continue;
-            given.set(to.baseid, (given.get(to.baseid) ?? 0) + 1);
-            room.set(to.baseid, (room.get(to.baseid) ?? 0) - size);
-            want -= 1;
-            placed = true;
-          }
-        }
-        for (const to of dst) {
-          const n = given.get(to.baseid) ?? 0;
-          if (n <= 0) continue;
-          // `give` takes the room again: hand it back first.
-          room.set(to.baseid, (room.get(to.baseid) ?? 0) + n * size);
-          give(from, to, id, n);
-        }
-      } else {
-        for (const to of dst) {
-          if (want <= 0) break;
-          const n = Math.min(want, Math.floor((room.get(to.baseid) ?? 0) / size));
-          if (n > 0) {
-            give(from, to, id, n);
-            want -= n;
-          }
-        }
-      }
-    } else {
-      const to = dst[0]!;
-      for (const from of src) {
-        if (want <= 0) break;
-        const n = Math.min(want, from.housed[id] ?? 0, Math.floor((room.get(to.baseid) ?? 0) / size));
-        if (n > 0) {
-          give(from, to, id, n);
-          want -= n;
-        }
-      }
-    }
-    if (want > 0) {
-      left[id] = want;
-      leftTotal += want;
+    for (const from of src) {
+      if (want <= 0) break;
+      const n = Math.min(want, from.housed[id] ?? 0, Math.floor(room / size));
+      if (n <= 0) continue;
+      bump(add, to.baseid, id, n);
+      bump(sub, from.baseid, id, n);
+      moved[id] = (moved[id] ?? 0) + n;
+      total += n;
+      room -= n * size;
+      want -= n;
     }
   }
-  return { add, sub, moved, total, left, leftTotal };
+  return { add, sub, moved, total };
 };
 
 /** The plan as the server's pairs: one per source and target. */
@@ -280,43 +298,18 @@ export const pairsOf = (plan: MovePlan, mode: MoveMode, anchor: string): MovePai
     ? Object.entries(plan.add).map(([to, moved]) => ({ from: anchor, to, moved }))
     : Object.entries(plan.sub).map(([from, moved]) => ({ from, to: anchor, moved }));
 
-/** The whole move from a state: its ends, the counts asked, and the plan. */
+/** The whole move from a state: its ends, what the sources hold, the target's room, and the plan. */
 export const currentPlan = (
   state: MoveState,
   yards: ReadonlyMap<string, ArmyYard>,
   sizeOf: SizeOf,
   distance: DistanceOf,
-): { src: ArmyYard[]; dst: ArmyYard[]; picked: Record<string, number>; plan: MovePlan } => {
+): { src: ArmyYard[]; dst: ArmyYard[]; held: (id: string) => number; room: number | null; plan: MovePlan } => {
   const ends = endsOf(state, yards, distance);
-  // `in` with nothing ticked yet: the counts read from every source that could be ticked.
-  const picked = pickedCounts(state, ends.src);
-  return { ...ends, picked, plan: planMove(ends.src, ends.dst, picked, state.even, sizeOf) };
+  const held = (id: string): number => heldBy(ends.src, id);
+  const room = roomFor(ends.dst, sizeOf);
+  return { ...ends, held, room, plan: planMove(ends.src, ends.dst, fitPicks(state.picks, held, room, sizeOf), sizeOf) };
 };
-
-/** The `n` nearest outposts with room (`out`), for "Near 5". */
-export const nearestWithRoom = (
-  yards: readonly ArmyYard[],
-  anchor: ArmyYard,
-  sizeOf: SizeOf,
-  smallest: number,
-  distance: DistanceOf,
-  n = 5,
-): string[] =>
-  othersByDistance(yards, anchor, distance)
-    .filter((yard) => !yard.main && canTick(yard, anchor, "out", sizeOf, smallest))
-    .slice(0, n)
-    .map((yard) => yard.baseid);
-
-/** Every yard with monsters that can send to the anchor (`in`): "All home". */
-export const everySource = (
-  yards: readonly ArmyYard[],
-  anchor: ArmyYard,
-  sizeOf: SizeOf,
-  distance: DistanceOf,
-): string[] =>
-  othersByDistance(yards, anchor, distance)
-    .filter((yard) => canTick(yard, anchor, "in", sizeOf, 1))
-    .map((yard) => yard.baseid);
 
 /**
  * A yard's types for its plate: the ones moving to or from it first, then the
@@ -325,46 +318,17 @@ export const everySource = (
 export const rankTypes = (
   yard: ArmyYard,
   sizeOf: SizeOf,
-  picks: Readonly<Record<string, MonsterPick>> = {},
+  picks: Picks = {},
   moving: Readonly<Record<string, number>> = {},
 ): string[] =>
   typesOf(yard).sort((a, b) => {
     const ma = moving[a] ?? 0;
     const mb = moving[b] ?? 0;
     if (ma !== mb) return mb - ma;
-    const pa = picks[a] !== undefined ? 1 : 0;
-    const pb = picks[b] !== undefined ? 1 : 0;
+    const pa = (picks[a] ?? 0) > 0 ? 1 : 0;
+    const pb = (picks[b] ?? 0) > 0 ? 1 : 0;
     if (pa !== pb) return pb - pa;
     const ra = (yard.housed[a] ?? 0) * sizeOf(a);
     const rb = (yard.housed[b] ?? 0) * sizeOf(b);
     return rb - ra || (yard.housed[b] ?? 0) - (yard.housed[a] ?? 0) || byRoster(a, b);
   });
-
-/** The type moving most to or from a yard, for its "+11 [icon]" tag. */
-export const topOf = (counts: Readonly<Record<string, number>>): string | null => {
-  let best: string | null = null;
-  for (const [id, n] of Object.entries(counts)) if (best === null || n > (counts[best] ?? 0)) best = id;
-  return best;
-};
-
-/** A yard after the plan: what it houses once the move lands. */
-export const afterPlan = (yard: ArmyYard, plan: MovePlan): ArmyYard => {
-  const add = plan.add[yard.baseid];
-  const sub = plan.sub[yard.baseid];
-  if (!add && !sub) return yard;
-  const housed: Record<string, number> = { ...yard.housed };
-  for (const [id, n] of Object.entries(add ?? {})) housed[id] = (housed[id] ?? 0) + n;
-  for (const [id, n] of Object.entries(sub ?? {})) {
-    housed[id] = (housed[id] ?? 0) - n;
-    if (housed[id]! <= 0) delete housed[id];
-  }
-  return { ...yard, housed };
-};
-
-/** Matches a yard against the list's search: its name or its coordinates ("240, 209" or "240,209"). */
-export const matchesSearch = (name: string, yard: ArmyYard, query: string): boolean => {
-  const q = query.trim().toLowerCase();
-  if (!q) return true;
-  const plain = q.replace(/\s+/g, "");
-  return name.toLowerCase().includes(q) || `${yard.x},${yard.y}`.includes(plain);
-};
