@@ -1193,8 +1193,10 @@ export class HatchTab implements MonstersTab {
         const text = document.createElement("span");
         text.className = "hatch-now__state";
         // "Starts now" is wider than a tile on the HCC's row (85 px of text in a
-        // 52-71 px tile on an iPad or phone): the row's short word, as "Idle" is.
-        stateWords(text, STARTING_TEXT);
+        // 52-71 px tile on an iPad or phone): that row says "Now", as it says "Idle".
+        // Everywhere else the words are as before.
+        if (compact) stateWords(text, STARTING_TEXT);
+        else text.textContent = STARTING_TEXT[0];
         words.append(text);
         body.append(words);
         card.append(" ", body);
