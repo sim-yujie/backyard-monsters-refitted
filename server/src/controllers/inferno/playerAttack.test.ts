@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, mock, test } from "bun:test";
 import type { Context } from "koa";
+import { RULES_VERSION } from "../../services/defences/rulesVersion.js";
 
 /**
  * Starting an attack on another player's Inferno yard (WP 3.2,
@@ -87,7 +88,7 @@ const { getCurrentDateTime } = await import("../../utils/getCurrentDateTime.js")
 const user = () => ({ userid: ATTACKER, alliance_id: null, username: "attacker", pic_square: "" }) as never;
 
 const start = async (body: unknown) => {
-  const ctx = { authUser: user(), request: { body } } as unknown as Context & { body: any };
+  const ctx = { authUser: user(), request: { body: { rules: RULES_VERSION, ...(body as object) } } } as unknown as Context & { body: any };
   await infernoAttackStart(ctx, async () => {});
   return ctx.body;
 };

@@ -108,7 +108,39 @@ describe("EndAttackPanel", () => {
     panel.setSaved({ credited: { r1: 10_000, r2: 0, r3: 800, r4: 0 } });
     const items = [...panel.element.querySelectorAll<HTMLElement>(".attack-end__loot-item")];
     expect(items.map(spokenText)).toEqual(["Twigs 10,000 gained", "Pebbles 0", "Putty 800 gained", "Goo 0"]);
-    expect(query(".attack-end__storage").hidden).toBe(false);
+    // The page's storage estimate held all 12,500: the storage is not blamed (bug report 66).
+    expect(query(".attack-end__storage").hidden).toBe(true);
+  });
+
+  it("does not blame a storage with room when the server banks less for another reason (bug report 66)", () => {
+    // An alliance loot weakness (Conquest's Bolt, -19%): the storage held it all.
+    const { panel, query } = mountPanel({
+      loot: { r1: 10_000, r2: 4_000, r3: 0, r4: 0 },
+      lootTaken: { r1: 10_000, r2: 4_000, r3: 0, r4: 0 },
+    });
+    panel.setSaved({ credited: { r1: 8_100, r2: 3_240, r3: 0, r4: 0 } });
+    const items = [...panel.element.querySelectorAll<HTMLElement>(".attack-end__loot-item")];
+    expect(items.map(spokenText)).toEqual(["Twigs 8,100 gained", "Pebbles 3,240 gained", "Putty 0", "Goo 0"]);
+    expect(items[0]?.title).toBe("Twigs: 8,100 gained");
+    expect(items[1]?.title).toBe("Pebbles: 3,240 gained");
+    expect(query(".attack-end__storage").hidden).toBe(true);
+    expect(query(".attack-end__storage").textContent).toBe("");
+  });
+
+  it("still blames the storage where it really was full, and only for that resource", () => {
+    // Twigs capped at 2,000 by the storage (the server cuts 19% first, then caps,
+    // so 10,125 still fills the 2,000 room); Pebbles fit but the alliance cut them.
+    const { panel, query } = mountPanel({
+      loot: { r1: 2_000, r2: 4_000, r3: 0, r4: 0 },
+      lootTaken: { r1: 12_500, r2: 4_000, r3: 0, r4: 0 },
+    });
+    panel.setSaved({ credited: { r1: 2_000, r2: 3_240, r3: 0, r4: 0 } });
+    const items = [...panel.element.querySelectorAll<HTMLElement>(".attack-end__loot-item")];
+    expect(items[0]?.title).toBe("Twigs: 2,000 gained of 12,500 taken; the rest did not fit in your storage");
+    expect(items[1]?.title).toBe("Pebbles: 3,240 gained");
+    const note = query(".attack-end__storage");
+    expect(note.hidden).toBe(false);
+    expect(note.textContent).toBe("Your storage was full, so some loot was lost.");
   });
 
   /** The panel's stats as label: value, one per line. */

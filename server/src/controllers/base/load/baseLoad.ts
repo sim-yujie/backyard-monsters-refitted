@@ -59,6 +59,7 @@ import { getAllianceData } from "../../../services/alliance/allianceData.js";
 import { cellRelationship, findRelationships } from "../../../services/alliance/relationships.js";
 import { INFERNO_CHAT_CHANNEL, countryChannelFor } from "../../../config/ChatConfig.js";
 import { finaliseBeforeLoad } from "../../../services/base/finaliseAttack.js";
+import { requirePageRules, stampOf } from "../../../services/base/combat/rulesStamp.js";
 import { infernoConfig } from "../../../config/InfernoConfig.js";
 import { quietLoginOn } from "../../../config/QuietLoginConfig.js";
 import { loginPromptFields } from "./loginPrompts.js";
@@ -118,11 +119,15 @@ export const baseLoad: KoaController = async (ctx) => {
   // The Flash Inferno's modes are gone: the Inferno loads through `/bm/inferno/*` (WP 7.1).
   if (INFERNO_MODES.has(type)) refuseOldInferno(ctx, user, `load ${type}`);
 
+  // An attack from a page with older battle rules is refused before anything
+  // below runs (owner's fix 1, 23 Nov 2026, `rulesStamp.ts`).
+  const attacking = type === BaseMode.ATTACK || type === BaseMode.WMATTACK;
+  if (attacking) requirePageRules(ctx, user, stampOf(ctx.request.body), `base/load:${type}`);
+
   // An attack the player left without saving is finished before anything
   // below reads a row it writes — the player's own save above all — so their
   // yard shows its monsters spent and its bombs paid for, and a new attack
   // cannot fling them again (issue #138, `finaliseAttack.ts`).
-  const attacking = type === BaseMode.ATTACK || type === BaseMode.WMATTACK;
   if (type === BaseMode.BUILD || ATTACK_MODES.has(type)) {
     await finaliseBeforeLoad(user.userid, type, baseid, attacking);
     // So is an Inferno player attack they left (`infernoPlayerFinalise.ts`).

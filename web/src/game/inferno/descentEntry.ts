@@ -6,6 +6,7 @@ import {
   type InfernoState,
 } from "@/api/inferno";
 import { NetworkError } from "@/api/http";
+import { isNewVersionRefusal } from "@/api/rulesStamp";
 import type { BaseLoadResponse } from "@/api/types";
 import { hasAnythingToSend, mainYardRoster } from "@/game/attack/attackEntry";
 import type { AttackRoster, AttackTarget } from "@/game/attack/attackTarget";
@@ -109,7 +110,10 @@ export const enterDescent = async (deps: DescentEntryDeps): Promise<Popup | null
     try {
       start = await api.start(baseid);
     } catch (caught) {
-      deps.notice(caught instanceof NetworkError ? DESCENT_START_OFFLINE : DESCENT_START_FAILED);
+      // "New version": the card with its Reload button says it (`rulesStamp.ts`).
+      if (!isNewVersionRefusal(caught)) {
+        deps.notice(caught instanceof NetworkError ? DESCENT_START_OFFLINE : DESCENT_START_FAILED);
+      }
       if (map) enableDescentAttack(map);
       return;
     }

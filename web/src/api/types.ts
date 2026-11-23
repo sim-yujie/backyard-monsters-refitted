@@ -179,6 +179,11 @@ export interface BaseLoadRequest {
    */
   attackData?: string;
   /**
+   * This page's battle rules version, on an attack load (`api/rulesStamp.ts`):
+   * the server refuses an attack from a page with other rules.
+   */
+  rules?: string;
+  /**
    * Which screen opens the own yard: the yard itself, or a map finding its
    * home cell. The server only logs it, beside Moloch's emergence (patch 7.12).
    */

@@ -15,6 +15,7 @@ import {
 import type { AttackCheckpoint } from "@/game/attack/attackCheckpoint";
 import type { AttackRoster, AttackTarget, AttackTargetKind } from "@/game/attack/attackTarget";
 import { ATTACK_CHAMPION_PROPS, ATTACK_MONSTER_PROPS } from "@/game/attack/attackStats";
+import { RULES_STAMP, startStamped } from "./rulesStamp";
 
 /**
  * Base / yard routes. Mounted at /base/... with no /api/:apiVersion prefix and
@@ -240,9 +241,11 @@ export const loadAttack = async (
     baseid,
     mapversion: options.mapversion ?? MAP_ROOM_VERSION,
     attackData: JSON.stringify(buildAttackData(roster)),
+    // This page's battle rules: an older page is refused with "New version" (`rulesStamp.ts`).
+    rules: RULES_STAMP,
   };
 
-  return loadBase(body);
+  return startStamped(loadBase(body));
 };
 
 /**
@@ -313,6 +316,8 @@ export const saveAttack = async (
     attackreport: payload.attackreport,
     attackersiege: json(payload.attackersiege),
     flinglog: json(payload.flinglog),
+    // The battle rules it was fought on, for the server's log (`rulesStamp.ts`).
+    rules: RULES_STAMP,
   };
 
   if (!options.keepalive) return post<BaseSaveResponse>(SAVE_PATH, fields, options);

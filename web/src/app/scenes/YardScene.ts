@@ -13,6 +13,7 @@ import {
   viewInfernoYard,
 } from "@/api/inferno";
 import { ApiError, NetworkError } from "@/api/http";
+import { isNewVersionRefusal } from "@/api/rulesStamp";
 import { ELSEWHERE } from "@/api/presence";
 import {
   BaseMode,
@@ -1371,6 +1372,12 @@ export class YardScene implements Scene {
       if (this.context !== context) return;
       if (caught instanceof ApiError && caught.isAuthFailure) {
         context.goTo(SceneName.LOGIN);
+        return;
+      }
+      // "New version": the card with its Reload button says it (`api/rulesStamp.ts`).
+      if (isNewVersionRefusal(caught)) {
+        this.attacking = false;
+        this.dock?.setAttack({ disabled: false, title });
         return;
       }
       this.notices.show(

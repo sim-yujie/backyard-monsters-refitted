@@ -1,4 +1,5 @@
 import { getCurrentDateTime } from "../../utils/getCurrentDateTime.js";
+import { RULES_VERSION } from "../defences/rulesVersion.js";
 import {
   MAX_RANK,
   championByType,
@@ -154,6 +155,15 @@ export interface AttackSession {
    * fights with it. Absent means no Declare War.
    */
   declareWar?: boolean;
+  /**
+   * The battle rules the server played when the attack started (its combat
+   * MANIFEST `version`, `services/defences/rulesVersion.ts`). Every attack
+   * start refuses a page whose rules are not these, so it is the page's too
+   * (`services/base/combat/rulesStamp.ts`). A save that disagrees with the
+   * replay is an old page's, not flagged, when this is absent (a session
+   * minted before it existed) or no longer plays.
+   */
+  rules?: string;
 }
 
 /** Monster id → academy level, as {@link AttackSession.attackerAcademy} keeps it. */
@@ -301,7 +311,8 @@ export const serialiseAttackSession = (session: AttackSession): string =>
   session.attackerAcademy ||
   session.attackerRanks ||
   session.declareWar !== undefined ||
-  session.attackerlevel !== undefined
+  session.attackerlevel !== undefined ||
+  session.rules !== undefined
     ? JSON.stringify(session)
     : `${session.attackerid}:${session.attackid}:${session.startedat}`;
 
@@ -359,6 +370,7 @@ export type AttackSessionFacts = Pick<
   | "attackerAcademy"
   | "attackerRanks"
   | "declareWar"
+  | "rules"
 >;
 
 /**
@@ -379,7 +391,7 @@ export const sessionFactsOf = (parsed: Record<string, unknown>): AttackSessionFa
     : undefined;
   const attackerAcademy = academyLevelsOf(parsed.attackerAcademy);
   const attackerRanks = academyRanksOf(parsed.attackerRanks);
-  const { attackerlevel, declareWar } = parsed;
+  const { attackerlevel, declareWar, rules } = parsed;
   return {
     ...(entryHoused && { entryHoused }),
     ...(defenderForces && { defenderForces }),
@@ -392,6 +404,7 @@ export const sessionFactsOf = (parsed: Record<string, unknown>): AttackSessionFa
     ...(attackerAcademy && { attackerAcademy }),
     ...(attackerRanks && { attackerRanks }),
     ...(typeof declareWar === "boolean" && { declareWar }),
+    ...(typeof rules === "string" && /^[0-9a-f]{16}$/.test(rules) && { rules }),
   };
 };
 
@@ -529,6 +542,7 @@ export const newAttackSession = (
   attackerid,
   attackid,
   startedat: getCurrentDateTime(),
+  rules: RULES_VERSION,
   ...(entryHoused && { entryHoused }),
   ...(defenderForces && { defenderForces }),
   ...(defenderResources && { defenderResources }),
