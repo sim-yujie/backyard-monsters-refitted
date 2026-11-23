@@ -133,6 +133,17 @@ export class HccBench {
   private readonly list = el("section", "hcc-presets");
   private readonly editHead = el("div", "hcc-edit");
   private readonly editBox = el("div", "hcc-set");
+  /** The stepper's row in the editor: its buttons are drawn again, the row stays. */
+  private readonly editControls = el("span", "qty-stepper hatch-add__controls");
+  /**
+   * Add, as on the hatching panel (owner, 23 Nov 2026): made once and never
+   * replaced, so typing a count and pressing Add straight after still adds
+   * (the blur redraws the editor between the press and the release, #268).
+   */
+  private readonly editAdd = btn("btn btn--primary hatch-add__add", "Add", el("span", "hatch-add__words", "Add"));
+  /** How many of the chosen monster Add puts at the end of the preset, and which monster they are. */
+  private pending = 0;
+  private pendingFor: string | null = null;
   private readonly yardsPage = el("section", "hcc-yards");
   private on = false;
 
@@ -145,6 +156,7 @@ export class HccBench {
     this.list.setAttribute("aria-label", "Presets");
     this.yardsPage.hidden = true;
     this.yardsPage.setAttribute("aria-label", "Your yards with a Hatchery Control Centre");
+    this.editAdd.addEventListener("click", () => this.addPending());
   }
 
   /** The HCC in use: the one whose queue the tab shows. */
@@ -228,7 +240,7 @@ export class HccBench {
     const info = this.root.querySelector(".hatch-info");
     if (info && this.editBox.parentElement !== info) info.append(this.editBox);
     // Run from home: Add wears the outpost's flag, so the last tap says where it goes.
-    const add = this.root.querySelector(".hatch-add__add");
+    const add = this.root.querySelector(".hatch-add:not(.hcc-set) .hatch-add__add");
     add?.querySelector(".hcc-addflag")?.remove();
     if (add && this.host.remote()) add.prepend(art("outpost", 24, "hcc-addflag"));
     this.renderStrip();
@@ -607,6 +619,7 @@ export class HccBench {
     const preset = (this.presets()[at] ?? []).map(([id, count]): [string, number] => [id, count]);
     this.tab = "presets";
     this.editing = { list, slot: at, preset, saved: JSON.stringify(preset) };
+    this.pending = 0;
     this.sent = null;
     // The last stack's monster is the one the count works on.
     const last = preset.at(-1);
@@ -630,20 +643,36 @@ export class HccBench {
     return Math.max(0, (boxes - boxesOf(others, size)) * size);
   }
 
-  /**
-   * Sets the count of `id` at the END of the preset: the last stack if it is this
-   * monster's, else a new stack after it. Earlier stacks are never touched, so the
-   * order the stacks were added in is the order they are sent in.
-   */
-  private setCount(id: string, count: number): void {
+  /** How many more of `id` fit at the end of the preset (topping up its last stack, or a new one). */
+  private addableFor(preset: Preset, id: string | null): number {
+    return Math.max(0, this.roomFor(preset, id) - (this.lastOf(preset, id)?.[1] ?? 0));
+  }
+
+  /** The count Add will put in; nothing changes in the preset until Add. */
+  private setPending(id: string, count: number): void {
     if (this.editing === null) return;
-    const preset = this.editing.preset;
-    const mine = this.lastOf(preset, id);
-    const next = Math.max(0, Math.min(Math.floor(count) || 0, this.roomFor(preset, id)));
-    if (mine) {
-      if (next === 0) preset.pop();
-      else mine[1] = next;
-    } else if (next > 0) preset.push([id, next]);
+    this.pendingFor = id;
+    this.pending = Math.max(0, Math.min(Math.floor(count) || 0, this.addableFor(this.editing.preset, id)));
+    this.renderEditor();
+  }
+
+  /**
+   * Add: the count goes at the END of the preset, as on the hatching panel: it tops up
+   * the last stack if that is this monster's, else starts a new stack after it. Earlier
+   * stacks are never touched, so the order the stacks were added in is the order they
+   * are sent in (30 Pokey > 40 Octo > 30 Pokey stays three stacks). The count stays for
+   * another Add, as hatching's does, cut to the room that is left.
+   */
+  private addPending(): void {
+    const editing = this.editing;
+    const chosen = this.host.chosen();
+    if (editing === null || chosen === null || !this.host.ready(chosen)) return;
+    const preset = editing.preset;
+    const count = Math.min(this.pendingFor === chosen ? this.pending : 0, this.addableFor(preset, chosen));
+    if (count < 1) return;
+    const mine = this.lastOf(preset, chosen);
+    if (mine) mine[1] += count;
+    else preset.push([chosen, count]);
     this.renderEditor();
     this.renderPresets();
   }
@@ -664,8 +693,14 @@ export class HccBench {
     const chosen = this.host.chosen();
     const ready = chosen !== null && this.host.ready(chosen);
     const mine = this.lastOf(preset, chosen);
-    const now = mine ? mine[1] : 0;
-    const max = this.roomFor(preset, chosen);
+    // The count is how many Add puts in: 0 for a newly chosen monster, as on the hatching panel.
+    if (this.pendingFor !== chosen) {
+      this.pendingFor = chosen;
+      this.pending = 0;
+    }
+    const max = this.addableFor(preset, chosen);
+    if (this.pending > max) this.pending = max;
+    const now = this.pending;
     const at = editing.slot;
 
     // The head: the slot's number (and whose list), then the preset as the queue's own box grid:
@@ -686,12 +721,11 @@ export class HccBench {
         box += 1;
         // The last stack's boxes are the ones the count works on; a tap chooses its monster.
         const one = last
-          ? btn(`hatch-slot hcc-box hcc-box--last${id === chosen ? " hcc-box--on" : ""}`, `Box ${box}, the last stack: ${name}, ${holds}. Change its count`)
+          ? btn(`hatch-slot hcc-box hcc-box--last${id === chosen ? " hcc-box--on" : ""}`, `Box ${box}, the last stack: ${name}, ${holds}. Choose it to add more`)
           : el("div", "hatch-slot hcc-box");
         if (!last) one.setAttribute("aria-label", `Box ${box}: ${name}, ${holds}`);
         one.setAttribute("role", "listitem");
         one.append(el("span", "hatch-slot__count", `×${holds}`), portrait(id, "hatch-slot__picture"));
-        if (last && id === chosen && rest <= size) one.append(el("span", "hcc-count-mark", "✎"));
         if (last) one.addEventListener("click", () => this.host.choose(id));
         boxes.append(one);
       }
@@ -767,12 +801,12 @@ export class HccBench {
       card?.append(total);
     }
 
-    // The count: the last stack's number when the chosen monster is its own, else 0 (a new stack).
-    const controls = el("span", "qty-stepper hatch-add__controls");
+    // The count Add puts at the end: topping up the last stack when the chosen monster is its own, else a new stack.
+    const controls = this.editControls;
     const step = (className: string, label: string, words: string, to: number, off: boolean): HTMLButtonElement => {
       const one = btn(`btn qty-stepper__step ${className}`, label, words);
       one.disabled = !ready || off;
-      one.addEventListener("click", () => chosen && this.setCount(chosen, to));
+      one.addEventListener("click", () => chosen && this.setPending(chosen, to));
       return one;
     };
     const input = el("input", "field__input qty-stepper__count hatch-add__count");
@@ -782,15 +816,15 @@ export class HccBench {
     input.inputMode = "numeric";
     input.value = String(now);
     input.disabled = !ready;
-    input.setAttribute("aria-label", mine ? `How many in the last stack of preset ${at + 1}` : `How many in a new stack at the end of preset ${at + 1}`);
-    input.addEventListener("change", () => chosen && this.setCount(chosen, Number(input.value)));
-    const stack = step("btn--outline qty-stepper__fill hatch-add__fill", "One more full stack", `+${size}`, now + size, now >= max);
+    input.setAttribute("aria-label", `How many to add to preset ${at + 1}`);
+    input.addEventListener("change", () => chosen && this.setPending(chosen, Number(input.value)));
+    const stack = step("btn--outline qty-stepper__fill hatch-add__fill", `${size} more`, `+${size}`, now + size, now >= max);
     stack.classList.remove("qty-stepper__step");
     const countField = el("label", "hcc-count-field");
-    const marker = el("span", "hcc-count-mark", mine ? "✎" : "+");
+    const marker = el("span", "hcc-count-mark", "+");
     marker.setAttribute("aria-hidden", "true");
     countField.append(marker, input);
-    controls.append(
+    controls.replaceChildren(
       step("hatch-add__step hatch-add__step--minus", "One fewer", "−", now - 1, now <= 0),
       countField,
       step("hatch-add__step hatch-add__step--plus", "One more", "+", now + 1, now >= max),
@@ -798,8 +832,18 @@ export class HccBench {
       step("qty-stepper__jump hatch-add__jump", "10 more", "+10", now + 10, now >= max),
       stack,
     );
+    this.editAdd.disabled = !ready || now < 1;
+    this.editAdd.setAttribute(
+      "aria-label",
+      chosen && now > 0
+        ? `Add ${now} ${nameOf(chosen)} to ${mine ? "the last stack of" : "the end of"} preset ${at + 1}`
+        : `Add to preset ${at + 1}`,
+    );
     this.editBox.className = "hcc-set hatch-add";
-    this.editBox.replaceChildren(controls);
+    // Only put in place once: a moved Add under the pointer would lose its click.
+    if (controls.parentElement !== this.editBox || this.editAdd.parentElement !== this.editBox) {
+      this.editBox.replaceChildren(controls, this.editAdd);
+    }
   }
 
   /** True while a preset is being built: the tab's Add belongs to the editor then. */
