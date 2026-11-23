@@ -323,7 +323,7 @@ export class MonstersView {
           : null,
       ),
       points.length
-        ? chart(points, { kind: points.length < 3 ? "bar" : "line", unit })
+        ? chart(points, { kind: points.length < 3 ? "bar" : "line", unit, ...(points.length < 3 && { barMax: 48 }) })
         : h("p", { class: "empty-state" }, "Nothing counted yet: the first attack after update 8.3 starts the chart."),
       points.length && points.length < 3 ? h("p", { class: "drawer-note" }, "The line starts once 3 days are counted; until then each day is a bar.") : null,
     );
@@ -465,7 +465,11 @@ export class MonstersView {
       ),
       h("span", { class: "chev", attrs: { "aria-hidden": "true" } }, "›"),
     );
-    const row = h("div", { class: "mrow", attrs: open ? { "data-open": "" } : {} }, main);
+    const row = h(
+      "div",
+      { class: "mrow", attrs: { ...(open ? { "data-open": "" } : {}), ...(monster.flung ? {} : { "data-zero": "" }) } },
+      main,
+    );
     if (open) {
       row.append(
         h(
@@ -506,7 +510,7 @@ export class MonstersView {
       h(
         "table",
         {},
-        h("colgroup", {}, h("col", { class: "c-lv" }), h("col", {}), h("col", { class: "c-num" }), h("col", { class: "c-num" })),
+        h("colgroup", {}, h("col", { class: "c-lv" }), h("col", { class: "c-flung" }), h("col", { class: "c-pct" }), h("col", {})),
         h("thead", {}, h("tr", {}, ...["Lv", "Flung", "% atk", "Players"].map((text) => h("th", { attrs: { scope: "col" } }, text)))),
         h(
           "tbody",
@@ -556,7 +560,7 @@ export class MonstersView {
           "button",
           {
             class: "tribe-pill",
-            attrs: { type: "button", "aria-pressed": String(tribe === pick) },
+            attrs: { type: "button", "aria-pressed": String(tribe === pick), ...(tribe.attacks ? {} : { "data-zero": "" }) },
             onClick: () => this.set(() => (this.tribe = tribe.key)),
           },
           tribe.name,
@@ -639,6 +643,7 @@ export class MonstersView {
             kind: "bar",
             unit: "attacks",
             start: peak,
+            barMax: 40,
             axis: (point) => `${tribe.where === "Descent" ? "Yard" : "Lv"} ${point.day}`,
             when: (point) => `${label} ${point.day}`,
             say: (point) => `${plural(point.value ?? 0, "attack")} · ${plural(players(point), "player")}`,

@@ -5820,7 +5820,7 @@ tbody th {
 .mon-tab .mlist-head,
 .mon-tab .mrow-main {
   display: grid;
-  grid-template-columns: 40px minmax(110px, 1fr) minmax(150px, 1.3fr) 76px 76px 84px 24px;
+  grid-template-columns: 40px minmax(110px, 1fr) minmax(150px, 1.3fr) 92px 84px 96px 24px;
   align-items: center;
   gap: 12px;
   padding: 8px 12px;
@@ -5835,6 +5835,7 @@ tbody th {
 }
 .mon-tab .mlist .r { text-align: right; }
 .mon-tab .mlist-head button {
+  white-space: nowrap;
   justify-self: start;
   text-align: left;
   border: 0;
@@ -5862,14 +5863,22 @@ tbody th {
 .mon-tab .mname { font-weight: 600; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .mon-tab .mname .badge { margin-left: 6px; font-size: 0.6875rem; padding: 1px 7px; }
 .mon-tab .mbar { display: flex; align-items: center; gap: 8px; min-width: 0; }
-.mon-tab .mbar strong { flex: none; min-width: 58px; text-align: right; font-variant-numeric: tabular-nums; font-weight: 650; }
+.mon-tab .mbar strong { flex: none; min-width: 7.5ch; text-align: right; font-variant-numeric: tabular-nums; font-weight: 650; }
 .mon-tab .mbar .track { flex: 1; height: 8px; border-radius: 4px; background: var(--surface-2); overflow: hidden; }
 .mon-tab .mbar .fill { display: block; height: 100%; border-radius: 4px; background: var(--series); }
 .mon-tab .mix { display: flex; align-items: flex-end; gap: 2px; height: 26px; }
 .mon-tab .mix i { flex: 1; min-height: 2px; border-radius: 2px 2px 0 0; background: var(--series); opacity: 0.85; }
 .mon-tab .mix i.zero { background: var(--line-strong); opacity: 1; }
 .mon-tab .chev { color: var(--ink-3); transition: transform 150ms var(--ease); }
-.mon-tab .mrow[data-open] .chev { transform: rotate(90deg); }
+.mon-tab .mrow[data-open] .chev { transform: rotate(90deg); color: var(--accent-text); }
+.mon-tab .mrow[data-open] .mbar .track { background: color-mix(in srgb, var(--ink) 14%, transparent); }
+.mon-tab .mrow[data-zero] .mrow-main { color: var(--ink-3); }
+.mon-tab .mrow[data-zero] .mon-face { opacity: 0.6; }
+.mon-tab .mbar .fill { min-width: 3px; }
+.mon-tab .mrow[data-zero] .mbar .fill { min-width: 0; }
+.mon-tab .mname .badge { background: var(--surface-2); border: 1px solid var(--line-strong); color: var(--ink-2); }
+.mon-tab .chart-svg .tick { fill: var(--ink-2); }
+.mon-tab .chart-svg:has(.bar.on) .bar:not(.on) { opacity: 0.55; }
 .mon-tab .flungv,
 .mon-tab .meta { display: none; }
 .mon-tab .mdrawer { padding: 4px 12px 14px 64px; background: var(--surface); }
@@ -5884,7 +5893,8 @@ tbody th {
 .mon-tab .levels-tall td { padding: 6px 8px; }
 .mon-tab .levels-tall table { table-layout: fixed; width: 100%; }
 .mon-tab .levels-tall col.c-lv { width: 40px; }
-.mon-tab .levels-tall col.c-num { width: 30%; }
+.mon-tab .levels-tall col.c-flung { width: 34%; }
+.mon-tab .levels-tall col.c-pct { width: 22%; }
 .mon-tab .drawer-note { margin-top: 8px; color: var(--ink-2); font-size: 0.8125rem; }
 .mon-tab .pinned-chip {
   display: inline-flex;
@@ -5914,9 +5924,10 @@ tbody th {
 }
 
 /* Camps: one row of tribe pills */
-.mon-tab .pill-row { display: flex; flex-wrap: wrap; gap: 8px; }
+.mon-tab .pill-row { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 8px; }
 .mon-tab .tribe-pill {
   flex: none;
+  min-width: 0;
   display: inline-flex;
   flex-direction: column;
   align-items: flex-start;
@@ -5936,6 +5947,8 @@ tbody th {
 }
 .mon-tab .tribe-pill small { color: var(--ink-2); font-weight: 500; font-size: 0.75rem; }
 .mon-tab .tribe-pill[aria-pressed="true"] { border-color: var(--accent); background: var(--accent-soft); color: var(--accent-text); }
+.mon-tab .tribe-pill[aria-pressed="true"] small { color: var(--accent-text); }
+.mon-tab .tribe-pill[data-zero]:not([aria-pressed="true"]) { opacity: 0.6; }
 
 /* Champions */
 .mon-tab .snapshot { color: var(--ink-2); font-size: 0.8125rem; }
@@ -5976,6 +5989,9 @@ tbody th {
 .mon-tab .nochamp .owns { margin-top: 12px; font-size: 0.8125rem; color: var(--ink-2); font-variant-numeric: tabular-nums; }
 
 @media (max-width: 760px) {
+  .mon-tab .segmented.small-seg .seg { min-height: var(--tap); }
+  .mon-tab .pinned-chip { min-height: var(--tap); padding: 0 12px 0 8px; }
+  .mon-tab .toolbar-row .grow { display: none; }
   .page-heading h1 .mon-period,
   .page-heading h1 .mon-period .segmented { width: 100%; display: flex; margin-left: 0; }
   .page-heading h1 .mon-period .seg { flex: 1; white-space: normal; padding: 0 8px; line-height: 1.2; }
@@ -6011,13 +6027,14 @@ tbody th {
   .mon-tab .head-tools .seg { flex: 1; white-space: normal; padding: 0 8px; line-height: 1.2; }
   .mon-tab .trend-card .chart-head .pinned-chip { margin-left: 0; }
   .mon-tab .pill-row {
+    display: flex;
     flex-wrap: nowrap;
     overflow-x: auto;
     scrollbar-width: thin;
     padding-bottom: 4px;
-    padding-right: 32px;
-    -webkit-mask-image: linear-gradient(90deg, #000 85%, transparent);
-    mask-image: linear-gradient(90deg, #000 85%, transparent);
+    padding-right: 40px;
+    -webkit-mask-image: linear-gradient(90deg, #000 calc(100% - 28px), transparent);
+    mask-image: linear-gradient(90deg, #000 calc(100% - 28px), transparent);
   }
   .mon-tab .champ { grid-template-columns: minmax(0, 1fr); justify-items: center; }
   .mon-tab .champ .legend { width: 100%; }

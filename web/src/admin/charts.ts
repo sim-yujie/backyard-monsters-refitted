@@ -46,8 +46,10 @@ export interface ChartOptions {
   axis?: (point: ChartPoint) => string;
   when?: (point: ChartPoint) => string;
   say?: (point: ChartPoint) => string;
-  /** The point the caption shows at rest; the last known one by default. */
+  /** The point the caption shows at rest; the last known one by default. Given, its bar stays marked. */
   start?: number;
+  /** The widest a bar may be (18 px by default): wider for a chart of a few bars. */
+  barMax?: number;
 }
 
 export interface ChartLayout {
@@ -204,6 +206,13 @@ const draw = (
   const width = Math.max(240, Math.floor(host.clientWidth || 320));
   const when = options.when ?? whenLabel;
   const layout = layoutChart(points, width, options.height ?? 168, options.zero ?? true);
+  if (options.barMax) {
+    const slot = points.length ? (layout.plot.right - layout.plot.left) / points.length : 0;
+    layout.barWidth = Math.max(1, Math.min(options.barMax, slot * 0.6));
+  }
+  // A few named points (a camp's levels) each get their own label, under their bar.
+  const everyLabel = Boolean(options.axis) && points.length <= 12;
+  if (everyLabel) layout.labelled = points.map((_, i) => i);
   const { plot } = layout;
   const root = svg("svg", {
     width,
@@ -237,8 +246,13 @@ const draw = (
     root.append(label);
   }
   for (const i of layout.labelled) {
-    const anchor =
-      i === 0 && points.length > 1 ? "start" : i === points.length - 1 && i ? "end" : "middle";
+    const anchor = everyLabel
+      ? "middle"
+      : i === 0 && points.length > 1
+        ? "start"
+        : i === points.length - 1 && i
+          ? "end"
+          : "middle";
     const x = anchor === "start" ? plot.left : anchor === "end" ? plot.right : layout.xs[i]!;
     const label = svg("text", {
       x,
@@ -293,7 +307,8 @@ const draw = (
   })();
   let current = lastKnown;
 
-  const show = (i: number, active: boolean) => {
+  /** Shows point `i` in the caption; `active` marks its bar, `hover` also draws the guide line. */
+  const show = (i: number, active: boolean, hover = active) => {
     const point = points[i];
     if (!point) {
       caption.replaceChildren("No days yet");
@@ -317,7 +332,7 @@ const draw = (
     const y = layout.ys[i] ?? null;
     guide.setAttribute("x1", String(x));
     guide.setAttribute("x2", String(x));
-    guide.setAttribute("visibility", active ? "visible" : "hidden");
+    guide.setAttribute("visibility", hover ? "visible" : "hidden");
     // A line keeps a dot on its newest value, and moves it to the day shown.
     if (options.kind === "line" && y !== null) {
       dot.setAttribute("cx", String(x));
@@ -336,10 +351,11 @@ const draw = (
   };
   root.addEventListener("pointermove", (event) => show(indexAt(event), true));
   root.addEventListener("pointerdown", (event) => show(indexAt(event), true));
+  const rest = options.start !== undefined;
   root.addEventListener("pointerleave", () => {
-    if (document.activeElement !== root) show(lastKnown, false);
+    if (document.activeElement !== root) show(lastKnown, rest, false);
   });
-  root.addEventListener("blur", () => show(lastKnown, false));
+  root.addEventListener("blur", () => show(lastKnown, rest, false));
   root.addEventListener("keydown", (event) => {
     const step = { ArrowLeft: -1, ArrowRight: 1, Home: -points.length, End: points.length }[
       event.key
@@ -350,7 +366,7 @@ const draw = (
   });
 
   host.replaceChildren(root);
-  show(lastKnown, false);
+  show(lastKnown, options.start !== undefined, false);
 };
 
 /**
