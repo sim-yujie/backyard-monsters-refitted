@@ -26,6 +26,18 @@ describe("UpdatePrompt", () => {
     );
   });
 
+  it("says why on a refused attack: Reload to attack, under the title", () => {
+    const host = document.createElement("div");
+    const prompt = new UpdatePrompt(host, vi.fn());
+    prompt.show();
+    const note = host.querySelector<HTMLElement>(".update-prompt__note")!;
+    expect(note.hidden).toBe(true);
+    prompt.show("attack");
+    expect(note.hidden).toBe(false);
+    expect(note.textContent).toBe("Reload to attack");
+    expect(host.querySelectorAll(".update-prompt")).toHaveLength(1);
+  });
+
   it("reloads the page when Reload is pressed", () => {
     const host = document.createElement("div");
     const reload = vi.fn();

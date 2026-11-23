@@ -27,6 +27,7 @@ import { battleReplayInput, battleTick } from "../base/combat/battle.js";
 import { championsAfterAttack, championsAfterBattle } from "../base/combat/attackerRow.js";
 import { championsAfterLessons } from "../base/combat/championBrain.js";
 import { recordBattleMismatches, replayBattleForSave } from "../base/combat/saveBattle.js";
+import { startedOnOldPage, stampOf } from "../base/combat/rulesStamp.js";
 import { creditableMR1Loot, mr1TribePool } from "../maproom/v1/mr1TribeRules.js";
 import {
   descentFightableLog,
@@ -417,7 +418,7 @@ const descentBattle = async (
     battle,
     yard.buildingdata as JsonObject | undefined,
     combatConfig.mode,
-    { refuse: false }
+    { refuse: false, oldPage: startedOnOldPage(session.rules), pageRules: stampOf(ctx.request.body) }
   );
   return battle;
 };

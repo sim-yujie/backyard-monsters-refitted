@@ -1,6 +1,7 @@
 import { afterAll, beforeAll, describe, expect, mock, test } from "bun:test";
 import { useBotFloor } from "../../testing/botFloor.js";
 import type { Context } from "koa";
+import { RULES_VERSION } from "../defences/rulesVersion.js";
 import { MikroORM, type EntityManager } from "@mikro-orm/postgresql";
 
 import ormConfig from "../../mikro-orm.config.js";
@@ -131,7 +132,7 @@ describe.skipIf(!enabled)("bots leak nothing to any client (issue #245)", () => 
   const NO_ARMY = JSON.stringify({ monsters: [], champions: [] });
 
   const load = (email: string, type: string, baseid: string) =>
-    call(routes.baseLoad, email, { type, userid: "0", baseid, mapversion: "1", ...(type === "attack" ? { attackData: NO_ARMY } : {}) });
+    call(routes.baseLoad, email, { type, userid: "0", baseid, mapversion: "1", ...(type === "attack" ? { attackData: NO_ARMY, rules: RULES_VERSION } : {}) });
 
   /** A player as sign-up makes one (`register.ts`), then their first yard load and a look at Map Room 1. */
   const signUp = async (name: string) => {

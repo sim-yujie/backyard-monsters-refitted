@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, mock, test } from "bun:test";
 import type { Context } from "koa";
+import { RULES_VERSION } from "../../services/defences/rulesVersion.js";
 
 /**
  * The Inferno map's Moloch tribes (WP 2.7) and starting an attack on one (WP
@@ -67,7 +68,7 @@ const getCurrentDateTime = await import("../../utils/getCurrentDateTime.js");
 const user = () => ({ userid: ATTACKER, alliance_id: null, username: "tester" }) as never;
 
 const contextFor = (body: unknown) =>
-  ({ authUser: user(), request: { body } }) as unknown as Context & { body: any };
+  ({ authUser: user(), request: { body: { rules: RULES_VERSION, ...(body as object) } } }) as unknown as Context & { body: any };
 
 const start = async (body: unknown) => {
   const ctx = contextFor(body);

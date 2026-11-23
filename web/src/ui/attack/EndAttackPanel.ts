@@ -431,12 +431,21 @@ export class EndAttackPanel {
    * tribe's stops at the purse's caps (`ATTACK.as:703-708`), and the
    * server's `taken` says what the battle took (WP 2.10).
    *
+   * A surface fight blames the storage only where the page's own storage
+   * estimate (`summary.loot`, `keptLoot`) is below the battle's take: the
+   * server also lowers what it banks for other reasons, such as an alliance's
+   * loot weakness, and a half-empty storage was said to be full (bug report
+   * 66, option C, owner 23 Nov). Such a shortfall shows just "X gained".
+   *
    * What was won shows green with a plus, "+1,500" (owner, 28 Oct).
    */
   private showLoot(kept: ResourceAmounts, takenByServer: ResourceAmounts | null = null): void {
     const whole = (value: number): string => Math.floor(value).toLocaleString("en-US");
-    const { lootTaken, inferno } = this.options.summary;
+    const { loot: estimate, lootTaken, inferno } = this.options.summary;
     const realm: ResourceRealm = inferno ? "inferno" : "surface";
+    // The Inferno path keeps its own rule: the purse's caps, by the server's `taken`.
+    const storageCapped = (key: (typeof RESOURCE_KEYS)[number]): boolean =>
+      inferno || Math.floor(estimate[key]) < Math.floor(lootTaken[key]);
     let spilled = false;
     this.loot.replaceChildren();
     for (const key of RESOURCE_KEYS) {
@@ -446,7 +455,7 @@ export class EndAttackPanel {
       const name = resourceName(key, realm);
       item.className = `attack-end__loot-item${amount > 0 ? "" : " attack-end__loot-item--none"}`;
       item.append(resourceAmount(key, amount, { realm, change: "gain", tooltip: false }));
-      const lost = Math.floor(taken) > Math.floor(amount);
+      const lost = Math.floor(taken) > Math.floor(amount) && storageCapped(key);
       item.title = lost
         ? `${name}: ${whole(amount)} gained of ${whole(taken)} taken; the rest did not fit in your storage`
         : `${name}: ${whole(amount)}${amount >= 1 ? " gained" : ""}`;

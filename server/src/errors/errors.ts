@@ -768,6 +768,22 @@ export const attackNotBoundErr = (reason: string) =>
   });
 
 /**
+ * An attack start from a game page whose battle rules are older than the
+ * server's (owner's fix 1, Desk 8, 23 Nov 2026; `services/base/combat/rulesStamp.ts`):
+ * its battle would not play the same as the server's replay, so it is refused
+ * before anything is spent. A page from before the fix sends no stamp and
+ * shows the message after "The attack could not start: "; a newer page knows
+ * the reason and shows its "New version" card with a Reload button.
+ */
+export const newVersionErr = () =>
+  new ClientSafeError({
+    message: "New version — reload the page.",
+    status: Status.CONFLICT,
+    data: { reason: "newVersion" },
+    isClientFriendly: true,
+  });
+
+/**
  * An attack save whose battle replay did not finish in time (issue #23, C5,
  * `services/base/combat/replayRunner.ts`). Nothing of the save was written:
  * the attack is left to the server's finaliser, which lands it from its last
