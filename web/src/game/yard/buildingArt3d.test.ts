@@ -729,6 +729,76 @@ describe("the 3D yard buildings", () => {
     expect(buildPicture(12, "main", true)).toEqual({ url: "/assets/buildingbuttons/12.jpg", modern: false });
   });
 
+  it("give the Inferno's Monster Lab look E in 3D, three levels on one footprint, its brew moving in 24 cells over a still body", () => {
+    const LAB = 116;
+    const root = "/assets/buildings/monsterlab/";
+    const folder = `${ASSETS}buildings/monsterlab/`;
+    const looks = INFERNO_BUILDING_3D_ART[LAB] ?? [];
+    expect(looks.map((look) => look.from)).toEqual([1, 2, 3]);
+    expect(LAB in INFERNO_PAINTED_BUILDING_ART).toBe(false);
+    const surface = tierArtFor(LAB, 1, "main")?.top ?? ["", 0, 0];
+    expect(surface[0]).toBe("top.3d1@2x.webp");
+    const bottom = (one: readonly [string, number, number]): number => one[2] + webpSize(folder + one[0])[1] / 2;
+    const centre = (one: readonly [string, number, number]): number => one[1] + webpSize(folder + one[0])[0] / 4;
+    for (const [i, look] of looks.entries()) {
+      const level = i + 1;
+      const art = resolveArt(LAB, level, ArtState.DEFAULT, "inferno");
+      expect(art?.name).toBe("Infernal Lab");
+      // The body under one strip of its moving parts; the still for the icons.
+      expect(art?.topIsAnim).toBe(false);
+      expect(art?.top.url).toBe(`${root}body.i3d${level}@2x.webp`);
+      expect(art?.still?.url).toBe(`${root}top.i3d${level}@2x.webp`);
+      expect(art?.shadow?.url).toBe(`${root}shadow.i3d${level}.jpg`);
+      expect(art?.anims.map(({ url, frames, columns, home }) => ({ url, frames, columns, home }))).toEqual([
+        { url: `${root}anim.i3d${level}@2x.webp`, frames: 24, columns: 15, home: true },
+      ]);
+      // Every file on disk; the strip as big as its cells, each an even number of game px (so it has a @1.5x copy).
+      const [strip, , , cellWidth, cellHeight, cells] = look.anim?.strip ?? ["", 0, 0, 0, 0, 0];
+      const rows = Math.ceil(cells / (look.anim?.columns ?? cells));
+      expect(webpSize(folder + strip)).toEqual([cellWidth * 2 * (look.anim?.columns ?? cells), cellHeight * 2 * rows]);
+      expect([cellWidth % 2, cellHeight % 2]).toEqual([0, 0]);
+      for (const file of [look.top[0], look.shadow?.[0], look.anim?.body?.[0], look.damaged?.top[0],
+        look.damaged?.shadow?.[0], look.destroyed?.top[0], look.destroyed?.shadow?.[0]]) {
+        expect(existsSync(folder + (file ?? "")), file).toBe(true);
+      }
+      // It stands where the surface's Modern Lab does, every level on the same feet: foot within 4 px, centred
+      // within 4 px.
+      expect(Math.abs(bottom(look.top) - bottom(surface))).toBeLessThanOrEqual(4);
+      expect(Math.abs(centre(look.top) - centre(surface))).toBeLessThanOrEqual(4);
+      // Its own damaged look per level, and one ruin for all three, standing still.
+      const damaged = resolveArt(LAB, level, ArtState.DAMAGED, "inferno");
+      expect(damaged?.top.url).toBe(`${root}top.i3d${level}.damaged@2x.webp`);
+      expect(damaged?.shadow?.url).toBe(`${root}shadow.i3d${level}.damaged.jpg`);
+      expect(damaged?.anims).toEqual([]);
+      const destroyed = resolveArt(LAB, level, ArtState.DESTROYED, "inferno");
+      expect(destroyed?.top.url).toBe(`${root}top.i3d1.destroyed@2x.webp`);
+      expect(destroyed?.shadow?.url).toBe(`${root}shadow.i3d1.destroyed.jpg`);
+      expect(destroyed?.anims).toEqual([]);
+    }
+    // Levels 2 and 3 are level 1 plus parts on the same feet (level 3's lava channel and grate reach 2 px past them).
+    expect(bottom(looks[1]!.top)).toBe(bottom(looks[0]!.top));
+    expect(bottom(looks[2]!.top) - bottom(looks[0]!.top)).toBeGreaterThanOrEqual(0);
+    expect(bottom(looks[2]!.top) - bottom(looks[0]!.top)).toBeLessThanOrEqual(4);
+    // It moves only while it researches, as the surface Lab; from cell 0, and back to it when idle (`home`).
+    expect(animPolicy(LAB)?.work).toBe(WorkKind.RESEARCH);
+    // The surface keeps its own 3D Lab and its strips; the Classic look is Flash's Lab in the Inferno too.
+    expect(resolveArt(LAB, 1, ArtState.DEFAULT)?.top.url).toBe(`${root}body.3d1@2x.webp`);
+    expect(resolveArt(LAB, 3, ArtState.DESTROYED)?.top.url).not.toContain("i3d");
+    setClassicLook(true);
+    expect(tierArtFor(LAB, 1, "inferno")).toBeNull();
+    const classic = resolveArt(LAB, 1, ArtState.DEFAULT, "inferno");
+    expect(classic?.top.url).toBe(resolveArt(LAB, 1, ArtState.DEFAULT)?.top.url);
+    expect(classic?.top.url).not.toContain("3d");
+  });
+
+  it("give the Inferno's Monster Lab a build-menu picture of its own with the Modern look", () => {
+    const modern = buildPicture(116, "inferno", false);
+    expect(modern.modern).toBe(true);
+    expect(modern.url).toMatch(/\/buildingbuttons\/modern\/116\.inferno\.[0-9a-f]{8}\.webp$/);
+    expect(existsSync(`${ASSETS}buildingbuttons/modern/${modern.url.split("/").at(-1)}`)).toBe(true);
+    expect(buildPicture(116, "main", false).url).not.toBe(modern.url);
+  });
+
   it("never show in an Inferno yard: the Inferno's own art there, even where it shares Flash's folder", () => {
     // (A type with an Inferno look of its own, 3D or painted, shows that one: the Resource Pod, 6, is painted.)
     for (const type of TYPES.filter((one) => !(one in INFERNO_BUILDING_3D_ART) && !(one in INFERNO_PAINTED_BUILDING_ART))) {

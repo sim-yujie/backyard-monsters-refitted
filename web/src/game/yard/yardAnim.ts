@@ -197,7 +197,8 @@ const POLICIES = new Map<number, AnimPolicy>([
   [52, every(2)],
   // `BFOUNDATION.as:1141` names type 54.
   [54, every(2, false)],
-  // Monster Lab: only while `_upgrading`, a research (`MONSTERLAB.as:210`).
+  // Monster Lab: only while `_upgrading`, a research (`MONSTERLAB.as:210`). The Inferno's 3D Lab (look E,
+  // `INFERNO_BUILDING_3D_ART`) runs its 24-cell loop the same way, but from cell 0 and back to it when idle (`home`).
   [116, whileWorking(WorkKind.RESEARCH, whenIdle(every(3)))],
   // Siege Factory and Siege Works: only while a weapon is unlocking (`SiegeBuilding.TickFast` while
   // `upgradingWeapon`), from cell 0, and back to cell 0 when it ends (`SiegeLab.as:111`, `SiegeFactory.as:142`).

@@ -284,6 +284,8 @@ export interface TribeAttackStart extends ApiEnvelope {
   readonly army: Readonly<Record<string, number>>;
   /** Infernal Academy levels by monster id. */
   readonly attackeracademy: Readonly<Record<string, number>>;
+  /** Infernal Lab ranks by monster id (beta 9), frozen with the levels; absent when none. */
+  readonly attackerranks?: unknown;
   /** The player's level, for the low-level loot bonus. */
   readonly attackerlevel?: number;
   /** What one fling may carry: a Housing Bunker's load (R11). */
@@ -295,7 +297,10 @@ export const startTribeAttack = (baseid: string): Promise<TribeAttackStart> =>
 
 /** The tribe start as the attack scene reads an attack load, an Inferno yard as the Descent's is. */
 export const tribeAttackLoad = (
-  start: Pick<TribeAttackStart, "base" | "attackid" | "defenderforces" | "attackeracademy" | "attackerlevel">,
+  start: Pick<
+    TribeAttackStart,
+    "base" | "attackid" | "defenderforces" | "attackeracademy" | "attackerranks" | "attackerlevel"
+  >,
 ): BaseLoadResponse =>
   ({
     ...start.base,
@@ -303,6 +308,8 @@ export const tribeAttackLoad = (
     attackid: start.attackid,
     defenderforces: start.defenderforces,
     attackeracademy: start.attackeracademy,
+    // The server froze the ranks with the academy: none sent means none researched.
+    ...(start.attackerranks === undefined ? {} : { attackerranks: start.attackerranks }),
     ...(start.attackerlevel === undefined ? {} : { attackerlevel: start.attackerlevel }),
   }) as BaseLoadResponse;
 
@@ -378,6 +385,8 @@ export interface PlayerAttackStart extends ApiEnvelope {
   readonly army: Readonly<Record<string, number>>;
   /** Infernal Academy levels by monster id. */
   readonly attackeracademy: Readonly<Record<string, number>>;
+  /** Infernal Lab ranks by monster id (beta 9), frozen with the levels; absent when none. */
+  readonly attackerranks?: unknown;
   readonly attackerlevel?: number;
   /** What one fling may carry: a Housing Bunker's load (R11). */
   readonly flingercapacity: number;

@@ -59,11 +59,11 @@ const inferno = (buildings: BuildingData[], resources: Resources, researchdata =
 const UNDER_HALL = (level: number) => building(1, 14, { l: level });
 
 describe("the Inferno build menu", () => {
-  it("offers the nineteen types the server builds, in Flash's tabs and order", () => {
+  it("offers the twenty types the server builds, in Flash's tabs and order", () => {
     expect([...INFERNO_MENU_TYPES].sort((a, b) => a - b)).toEqual([...INFERNO_BUILDABLE_TYPES]);
     expect(INFERNO_BUILD_CATALOGUE.map((tab) => tab.types)).toEqual([
       [1, 2, 3, 4, 6],
-      [12, 8, 26, 128, 13, 16, 10, 9],
+      [12, 8, 26, 128, 13, 16, 116, 10, 9],
       [21, 129, 130, 132, 24, 17],
       [],
     ]);

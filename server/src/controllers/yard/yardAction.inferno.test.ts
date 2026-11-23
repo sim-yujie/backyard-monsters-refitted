@@ -19,7 +19,7 @@ import { yardBankAction } from "./bank.js";
 import { yardBuildAction, yardCancelBuildAction, yardInstantBuildAction } from "./build.js";
 import { yardCancelFortifyAction, yardFortifyAction } from "./fortify.js";
 import { yardInstantUpgradeAction } from "./instantUpgrade.js";
-import { yardLabCancelAction } from "./lab.js";
+import { yardBunkerRemoveAction } from "./bunker.js";
 import { yardMoveAction } from "./move.js";
 import { yardRecycleAction } from "./recycle.js";
 import { yardRepairAction, yardRepairInstantAction } from "./repair.js";
@@ -252,7 +252,8 @@ describe("which yard a request acts on", () => {
   test("a route not checked for the Inferno refuses: 409 notInInferno, nothing written", async () => {
     const before = structuredClone(infernoSave());
     for (const [action, request] of [
-      [yardLabCancelAction, {}],
+      // The Monster Bunker's routes: the Inferno has none (its Housing Bunkers are its housing).
+      [yardBunkerRemoveAction, { bunker: 7, monster: "IC1", count: 1 }],
     ] as const) {
       const answer = await inInferno(action as YardAction<z.ZodType, unknown>, request);
       expect(answer.status).toBe(409);

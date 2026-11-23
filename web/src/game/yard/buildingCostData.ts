@@ -2323,12 +2323,12 @@ export const INFERNO_COST_ROWS: readonly CostRow[] = [
     [13500000,11000000,2000000,0,518400,[[14,1,7]]],
     [16000000,14000000,4000000,0,691200,[[14,1,9]]],
   ], [0,0,0,0,0,0]],
-  // 116 Monster Lab (special) — INFERNOYARDPROPS.as:5520
-  [116, "Monster Lab", "special", 2, [
+  // 116 Infernal Lab (special) — INFERNOYARDPROPS.as:5520
+  [116, "Infernal Lab", "special", 2, [
     [100000,100000,0,0,10800,[[14,1,5],[8,1,3],[26,1,2]]],
     [300000,300000,0,0,43200,[[14,1,6],[8,1,4],[26,1,3]]],
-    [600000,600000,0,0,86400,[[14,1,7],[8,1,4],[26,1,4]]],
-  ], [0,0,0,0,0,0]],
+    [600000,600000,0,0,86400,[[14,1,6],[8,1,4],[26,1,4]]],
+  ], [0,0,0,0,0,1,1]],
   // 117 Heavy Trap (trap) — INFERNOYARDPROPS.as:5576
   [117, "Heavy Trap", "trap", 3, [
     [50000,50000,50000,0,5,[[14,1,4]]],
@@ -2531,7 +2531,7 @@ export const INFERNO_TRAIT_ROWS: readonly OutpostTraitRow[] = [
   [113, true, [3400], [], []],
   [114, true, [10000], [], []],
   [115, true, [15000,22000,30000,48000,60000,72000], [], []],
-  [116, true, [9000,16000,24000,32000], [], []],
+  [116, false, [9000,16000,24000,32000], [], []],
   [117, true, [10], [], []],
   [118, true, [17640,34400,45000,58000,75500,90000], [], []],
   [119, true, [16000], [], []],
@@ -2552,4 +2552,4 @@ export const INFERNO_TRAIT_ROWS: readonly OutpostTraitRow[] = [
  * allowed at least one at some Under Hall level. Everything else in
  * {@link INFERNO_COST_ROWS} (the Under Hall, Flinger, Housing, …) is blocked.
  */
-export const INFERNO_BUILDABLE_TYPES: readonly number[] = [1, 2, 3, 4, 6, 8, 9, 10, 12, 13, 16, 17, 21, 24, 26, 128, 129, 130, 132];
+export const INFERNO_BUILDABLE_TYPES: readonly number[] = [1, 2, 3, 4, 6, 8, 9, 10, 12, 13, 16, 17, 21, 24, 26, 116, 128, 129, 130, 132];

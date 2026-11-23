@@ -3,7 +3,7 @@ import { LockMode, type EntityManager } from "@mikro-orm/core";
 import { Save } from "../../database/models/save.model.js";
 import type { User } from "../../database/models/user.model.js";
 import { infernoAttackRefusedErr, noInfernoYardErr } from "../../errors/errors.js";
-import type { DefenderForces } from "../../game-rules/combat/index.js";
+import { academyRanks, type DefenderForces } from "../../game-rules/combat/index.js";
 import { newAttackSession } from "../../services/base/attackSession.js";
 import { playerLevelOf } from "../../services/base/calculateBaseLevel.js";
 import { academyLevels } from "../../services/base/combat/abandonedAttack.js";
@@ -61,6 +61,8 @@ export interface InfernoTribeAttackStart {
   /** What the Inferno yard's Housing Bunkers hold: everything the attack can fling. */
   army: Counts;
   attackeracademy: Record<string, number>;
+  /** The Inferno yard's Infernal Lab ranks (beta 9), frozen with the levels; absent when none. */
+  attackerranks?: ReturnType<typeof academyRanks>;
   /** The player's level, for the low-level loot bonus (`ATTACK.Loot`). */
   attackerlevel: number;
   /** What one fling may carry. */
@@ -122,6 +124,8 @@ export const startInfernoTribeAttack = async (
 
   const defenderForces = await servedDefenderForces(yard, main, now);
   const attackerAcademy = academyLevels(inferno.academy);
+  // The Infernal Lab's ranks (beta 9), frozen with the levels: every replay fights at these.
+  const attackerRanks = academyRanks(inferno.academy);
   const attackerLevel = playerLevelOf(main);
 
   await startInfernoTribeSession(user.userid, {
@@ -136,7 +140,8 @@ export const startInfernoTribeAttack = async (
       undefined,
       defenderForces,
       undefined,
-      attackerAcademy
+      attackerAcademy,
+      attackerRanks
     ),
   });
 
@@ -150,6 +155,7 @@ export const startInfernoTribeAttack = async (
     armybaseid: inferno.baseid,
     army,
     attackeracademy: attackerAcademy,
+    ...(Object.keys(attackerRanks).length > 0 && { attackerranks: attackerRanks }),
     attackerlevel: attackerLevel,
     flingercapacity: flingerCapacity,
   };

@@ -2345,7 +2345,58 @@
    }
   ]
  },
+ "assets/buildings/monsterlab/anim.i3d1@2x.webp": {
+  "whole": false,
+  "frames": [],
+  "strips": [
+   {
+    "w": 130,
+    "h": 76,
+    "frames": 24,
+    "columns": 15
+   }
+  ]
+ },
+ "assets/buildings/monsterlab/anim.i3d2@2x.webp": {
+  "whole": false,
+  "frames": [],
+  "strips": [
+   {
+    "w": 130,
+    "h": 76,
+    "frames": 24,
+    "columns": 15
+   }
+  ]
+ },
+ "assets/buildings/monsterlab/anim.i3d3@2x.webp": {
+  "whole": false,
+  "frames": [],
+  "strips": [
+   {
+    "w": 130,
+    "h": 180,
+    "frames": 24,
+    "columns": 15
+   }
+  ]
+ },
  "assets/buildings/monsterlab/body.3d1@2x.webp": {
+  "whole": true,
+  "frames": [],
+  "strips": []
+ },
+ "assets/buildings/monsterlab/body.i3d1@2x.webp": {
+  "whole": true,
+  "frames": [],
+  "strips": []
+ },
+ "assets/buildings/monsterlab/body.i3d2@2x.webp": {
+  "whole": true,
+  "frames": [],
+  "strips": []
+ },
+ "assets/buildings/monsterlab/body.i3d3@2x.webp": {
   "whole": true,
   "frames": [],
   "strips": []
@@ -2361,6 +2412,41 @@
   "strips": []
  },
  "assets/buildings/monsterlab/top.3d1@2x.webp": {
+  "whole": true,
+  "frames": [],
+  "strips": []
+ },
+ "assets/buildings/monsterlab/top.i3d1.damaged@2x.webp": {
+  "whole": true,
+  "frames": [],
+  "strips": []
+ },
+ "assets/buildings/monsterlab/top.i3d1.destroyed@2x.webp": {
+  "whole": true,
+  "frames": [],
+  "strips": []
+ },
+ "assets/buildings/monsterlab/top.i3d1@2x.webp": {
+  "whole": true,
+  "frames": [],
+  "strips": []
+ },
+ "assets/buildings/monsterlab/top.i3d2.damaged@2x.webp": {
+  "whole": true,
+  "frames": [],
+  "strips": []
+ },
+ "assets/buildings/monsterlab/top.i3d2@2x.webp": {
+  "whole": true,
+  "frames": [],
+  "strips": []
+ },
+ "assets/buildings/monsterlab/top.i3d3.damaged@2x.webp": {
+  "whole": true,
+  "frames": [],
+  "strips": []
+ },
+ "assets/buildings/monsterlab/top.i3d3@2x.webp": {
   "whole": true,
   "frames": [],
   "strips": []

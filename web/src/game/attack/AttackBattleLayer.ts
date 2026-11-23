@@ -2239,6 +2239,14 @@ export class AttackBattleLayer {
     this.fx.number(event.tick, key, -1, event.amount, over, "defenderLoss", { thorns: true });
   }
 
+  /** A ranked Malphus dodged a hit (Lab "Dodge", beta 9): "Dodge" over it, where a number would be. */
+  private onDodge(event: Extract<BattleVisualEvent, { kind: "dodge" }>): void {
+    const view = this.views.get(event.creepId);
+    const ground = view ? { x: view.lastX, y: view.lastY } : groundWorld(event.ix, event.iy, this.origin);
+    const at = { x: ground.x, y: (view?.top ?? ground.y - BODY_HEIGHT) - 6 };
+    this.fx.word(event.tick, `creep:${event.creepId}`, event.creepId, "Dodge", at);
+  }
+
   /**
    * A creep lost health, shown on `tick`: tint it and float the number over
    * it. `tick` is the wound's own for one shown as it comes, and the landing's
@@ -2589,6 +2597,10 @@ export class AttackBattleLayer {
     }
     if (event.kind === "thorns") {
       this.onThorns(event);
+      return;
+    }
+    if (event.kind === "dodge") {
+      this.onDodge(event);
       return;
     }
     if (event.kind === "shot") {

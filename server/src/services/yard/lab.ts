@@ -7,6 +7,7 @@ import { levelOf } from "../yardplanner/costs.js";
 import { trainingLevel } from "./academy.js";
 import { isDamaged } from "./buildingJobs.js";
 import { fitCredit } from "./credit.js";
+import { inRealm, monsterRealmOf, type MonsterRealm } from "./locker.js";
 import { instantResearchPrice, timeCost } from "./shiny.js";
 import { yardBadRequestErr, yardRefusedErr } from "./yardErrors.js";
 
@@ -34,6 +35,14 @@ import { yardBadRequestErr, yardRefusedErr } from "./yardErrors.js";
  * Everything here is pure: it reads the caught-up save the yard action wrapper
  * hands it and returns what should change, or throws the refusal. The wrapper
  * charges the putty and the Shiny, clamps the refund and writes.
+ *
+ * **The Infernal Monster Lab** (beta 9, owner, 21 Nov 2026: "same rules as
+ * the surface Lab"): the same type, 116, built in the Inferno yard. There it
+ * researches the Inferno roster only (`INFERNO_LAB_ABILITIES`), from the
+ * Inferno row's own `academy` and Strongbox, and `r3` is Sulfur from the
+ * Inferno purse, as the Inferno's Academy (`academy.ts`). The surface Lab
+ * researches the surface roster only. Balthazar (IC5) has two ranks; every
+ * other ability three ({@link topRank}).
  */
 
 /** Monster Lab type id (`client/scripts/MONSTERLAB.as:34`). */
@@ -44,6 +53,8 @@ export const MAX_RANK = 3;
 
 /** The slice of a save the lab routes read. */
 export interface LabSave extends StorageCapSave {
+  /** `BaseType`: the Inferno yard's Lab researches the Inferno roster ({@link monsterRealmOf}). */
+  type?: string;
   buildingdata?: BuildingDataMap | null;
   buildinghealthdata?: BuildingHealthData | null;
   resources?: JsonObject | null;
@@ -139,15 +150,18 @@ export const labOf = (buildingdata: BuildingDataMap | null | undefined): LabBuil
 };
 
 /**
- * The lab ability of a monster a player may research, or `400 badRequest`:
- * not one of the fifteen with an ability (the four others and every Inferno
- * monster have none, MH §4.2).
+ * The lab ability of a monster a player may research in a `realm` yard's
+ * Lab, or `400 badRequest`: not one of that realm's monsters with an ability
+ * (on the surface the fifteen of MH §4.2; in the Inferno all eight).
  */
-export const researchableOrThrow = (monster: string): LabAbility => {
-  const ability = /^C\d+$/.test(monster) ? labAbility(monster) : undefined;
+export const researchableOrThrow = (monster: string, realm: MonsterRealm = "surface"): LabAbility => {
+  const ability = inRealm(monster, realm) ? labAbility(monster) : undefined;
   if (!ability) throw yardBadRequestErr("That monster has no Lab ability.", { monster });
   return ability;
 };
+
+/** The top rank of `ability`: one per cost entry, 3 for all but Balthazar's 2. */
+export const topRank = (ability: LabAbility): number => Math.min(ability.costs.length, MAX_RANK);
 
 /** The finished Lab, or `409 noLab`. */
 const builtLabOrThrow = (save: LabSave): LabBuilding => {
@@ -172,7 +186,7 @@ export const researchGate = (
   save: LabSave,
   monster: string
 ): { lab: LabBuilding; rank: number; step: PaidStep } => {
-  researchableOrThrow(monster);
+  const ability = researchableOrThrow(monster, monsterRealmOf(save));
   const lab = builtLabOrThrow(save);
   const { id, building } = lab;
 
@@ -194,7 +208,7 @@ export const researchGate = (
     throw yardRefusedErr("locked", "Unlock that monster in the Monster Locker first.", { monster });
   }
   const current = powerupRank(save.academy, monster);
-  if (current >= MAX_RANK) {
+  if (current >= topRank(ability)) {
     throw yardRefusedErr("maxRank", "That ability is fully researched.", { monster, rank: current });
   }
   const rank = current + 1;

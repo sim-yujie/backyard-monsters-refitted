@@ -59,7 +59,8 @@ export const TOWER_TIER_ART_LEVELS: Readonly<Record<number, readonly number[]>> 
  * does not (`INFERNO_BUILDING_3D_ART` in `web/src/game/yard/buildingArtTiers.ts`):
  * the Bone Cruncher's tiers from levels 3 and 7, where the main yard's Twig
  * Snapper (the same type) changes at 3, 6 and 10. They take in the Inferno's
- * Flash steps (1 and 3), so the Classic look draws right from them too.
+ * Flash steps (1 and 3), so the Classic look draws right from them too. The
+ * Monster Lab's three levels each have a 3D look of their own in the Inferno.
  */
 export const INFERNO_ART_LEVELS: Readonly<Record<number, readonly number[]>> = {
   1: [1, 3, 7],
@@ -69,6 +70,8 @@ export const INFERNO_ART_LEVELS: Readonly<Record<number, readonly number[]>> = {
   3: [1, 3, 7],
   // 4 Magma Pump: the same split (Flash has one look in play, its steps 1 and 3 the same picture)
   4: [1, 3, 7],
+  // 116 Monster Lab: the Infernal Lab's three 3D levels (Flash has one look for every level)
+  116: [1, 2, 3],
 };
 
 /**

@@ -4,6 +4,7 @@ import type { BaseLoadResponse, BuildingData, YardResponse } from "@/api/types";
 import type { YardApi } from "@/api/yard";
 import type { LabActions } from "@/api/yardLab";
 import { YardStore, type YardActionResult } from "@/game/yard/YardStore";
+import { INFERNO_YARD, type OwnYardTarget } from "@/game/yard/ownYards";
 import type { Notices } from "@/ui/maproom/Notices";
 import { spokenText } from "@/ui/resourceIcon";
 import { LabTab } from "./LabTab";
@@ -52,11 +53,12 @@ const loadOf = (extra: Partial<BaseLoadResponse> = {}): BaseLoadResponse =>
 
 const never = <R>() => new Promise<R>(() => undefined);
 
-const setup = (load: Partial<BaseLoadResponse> = {}) => {
+const setup = (load: Partial<BaseLoadResponse> = {}, target?: OwnYardTarget) => {
   const api = { state: vi.fn(() => never<YardResponse<null>>()) } as unknown as YardApi;
   const store = new YardStore({
     save: loadOf(load),
     api,
+    ...(target && { target }),
     clock: () => T0,
     timers: { set: () => 0, clear: () => undefined },
   });
@@ -118,10 +120,10 @@ describe("LabTab: slot and list", () => {
       "C12",
     ]);
     expect(spokenText(row(element, "C3"))).toBe(
-      "Bolt Rank 0/3 → 1: Putty 48,000 · 1d 0h Blink range: none → 150",
+      "Bolt Rank 0/3 Rank 1: Putty 48,000 · 1d 0h Blink range: none → 150",
     );
     expect(spokenText(row(element, "C8"))).toBe(
-      "Fang Rank 0/3 → 1: Putty 2,000,000 · 1d 12h Venom: none → 10% of its damage Needs Fang at level 2",
+      "Fang Rank 0/3 Rank 1: Putty 2,000,000 · 1d 12h Venom: none → 10% of its damage Needs Fang at level 2",
     );
     expect(row(element, "C12").textContent).toContain("Fully researched");
     expect(row(element, "C12").textContent).toContain("Rocket range: 220 (top rank)");
@@ -199,7 +201,7 @@ describe("LabTab: a running research", () => {
     // 23 of 24 hours done.
     expect(card.querySelector(".train-slot__bar")!.getAttribute("aria-valuenow")).toBe("96");
     expect(spokenText(card.querySelector(".shiny-button")!)).toMatch(/^Finish now.*20$/);
-    expect(spokenText(row(element, "C3"))).toMatch(/^Bolt Rank 0\/3 Researching → 1 · 1h 0m/);
+    expect(spokenText(row(element, "C3"))).toMatch(/^Bolt Rank 0\/3 Researching rank 1 · 1h 0m/);
     // It opens on the research, and nothing else can start.
     expect(row(element, "C3").getAttribute("aria-pressed")).toBe("true");
     row(element, "C4").click();
@@ -245,5 +247,51 @@ describe("LabTab: a running research", () => {
       buildingdata: { "1": building(1, 14, 7), "9": building(9, 116, 2, { cU: 600 }) },
     });
     expect(spokenText(slot(element))).toBe("Monster Lab · level 2 Upgrading");
+  });
+});
+
+/**
+ * The Infernal Monster Lab (beta 9, owner, 21 Nov 2026): the same tab on the
+ * Inferno yard, over the eight Inferno monsters, paid in Sulfur; Balthazar
+ * has two ranks.
+ */
+describe("LabTab: the Infernal Monster Lab", () => {
+  const inferno = (): Partial<BaseLoadResponse> =>
+    ({
+      type: "inferno",
+      buildingdata: { "1": building(1, 14, 6), "9": building(9, 116, 1) },
+      lockerdata: { IC1: { t: 2 }, IC5: { t: 2 }, IC8: { t: 2 } },
+      academy: { IC1: { level: 2 }, IC5: { level: 3, powerup: 1 }, IC8: { level: 1 } },
+    }) as unknown as Partial<BaseLoadResponse>;
+
+  it("lists the eight Inferno monsters under its own name", () => {
+    const { element } = setup(inferno(), INFERNO_YARD);
+    expect(spokenText(slot(element))).toBe("Infernal Lab · level 1 Idle");
+    expect(rows(element).map((one) => one.dataset["monster"])).toEqual([
+      "IC1",
+      "IC2",
+      "IC3",
+      "IC4",
+      "IC5",
+      "IC6",
+      "IC7",
+      "IC8",
+    ]);
+  });
+
+  it("gives Balthazar two ranks, 1x at rank 0", () => {
+    const { element } = setup(inferno(), INFERNO_YARD);
+    const balthazar = row(element, "IC5");
+    expect(balthazar.textContent).toContain("Rank 1/2");
+    expect(balthazar.textContent).toContain("Damage to monsters: 2× → 3×");
+    // Its rank 2 needs Lab level 2.
+    expect(balthazar.textContent).toContain("Needs Lab level 2");
+    expect(row(element, "IC1").textContent).toContain("Speed and damage: none → up to +5%");
+  });
+
+  it("says Strongbox for a locked monster and the level a rank needs", () => {
+    const { element } = setup(inferno(), INFERNO_YARD);
+    expect(row(element, "IC2").textContent).toContain("Unlock it in the Strongbox first");
+    expect(row(element, "IC8").textContent).toContain("Needs King Wormzer at level 2");
   });
 });

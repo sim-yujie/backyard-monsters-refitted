@@ -146,7 +146,6 @@ import {
   RAILGUN_TYPE,
   BALTHAZAR_ID,
   KING_WORMZER_ID,
-  KING_WORMZER_MULTIPLIER,
   SABNOX_ID,
   HOUSING_BUNKER_INTERCEPTORS,
   HOUSING_BUNKER_TARGETS,
@@ -304,6 +303,23 @@ import {
   venomShare,
   weakenShare,
   wormzerMultiplier,
+  GROKUS_ID,
+  MALPHUS_ID,
+  MOLOCH_RAID_RANKS,
+  SABNOX_BURN_SECONDS,
+  VALGOS_ID,
+  VALGOS_WALL_RADIUS,
+  ZAGNOID_ID,
+  balthazarMonsterMultiplier,
+  grokusRadius,
+  grokusSplashShare,
+  kingWormzerMultiplier,
+  kingWormzerRadius,
+  malphusDodgeChance,
+  sabnoxBurnShare,
+  spurtzFury,
+  valgosExtraWalls,
+  zagnoidHealShare,
 } from "./specialMoves.js";
 
 /** Half the grid, the cell of yard 0 (`PATHING`). */
@@ -1161,6 +1177,14 @@ export type BattleVisualEvent =
       readonly amount: number;
     }
   | {
+      /** A ranked Malphus dodged a hit (Lab "Dodge", beta 9): nothing landed. At its yard point. */
+      readonly kind: "dodge";
+      readonly tick: number;
+      readonly creepId: number;
+      readonly ix: number;
+      readonly iy: number;
+    }
+  | {
       /**
        * A ranked splash went off (issue #352): a Fink's, Wormzer's or Bandito's
        * swing, or a Project X's death blast, `moveId` the monster's id; or an
@@ -1512,6 +1536,14 @@ interface Creep {
   burnTick: number;
   /** The creep that lit the flame, or null; read only by the report (issue #22). */
   burnBy: Creep | null;
+  /** A ranked Sabnox's burn on it (Lab "Burn"): damage a second, 0 when it is not burning. */
+  sabnoxDps: number;
+  /** The burn's seconds left. */
+  sabnoxLeft: number;
+  /** Ticks since the burn's last second. */
+  sabnoxTick: number;
+  /** The Sabnox that lit it, or null; read only by the report. */
+  sabnoxBy: Creep | null;
   /** An enraged creep's speed and swing-rate multiplier; 1 when it is not enraged. */
   enrage: number;
   /** Its armour: what share of each hit it shrugs off; 0 for all but the enraged. */
@@ -1683,6 +1715,10 @@ const NO_ABILITIES = {
   burnDps: 0,
   burnTick: 0,
   burnBy: null,
+  sabnoxDps: 0,
+  sabnoxLeft: 0,
+  sabnoxTick: 0,
+  sabnoxBy: null,
   enrage: 1,
   armour: 0,
   enragedBy: -1,
@@ -2642,6 +2678,17 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
     rankOf(options.ranks, POKEY_ID) > 0 || rankOf(options.defenderRanks, POKEY_ID) > 0;
 
   /**
+   * A ranked Spurtz's fury (Lab "Fury", beta 9): what its speed, swing rate
+   * and blow are multiplied by, growing each whole second since it came onto
+   * the field. 1 for every other creep, and for a Spurtz Cannon's hatchlings,
+   * which are rank 0.
+   */
+  const furyOf = (creep: Creep): number =>
+    creep.rank > 0 && creep.monsterId === SPURTZ_ID && !creep.champion
+      ? spurtzFury(creep.rank, Math.trunc((tick - creep.born) / TICKS_PER_SECOND))
+      : 1;
+
+  /**
    * `BFOUNDATION.modifyHealth` (`:499-541`): fortification, then loot.
    *
    * The hit that brings a building down loots nothing of its own: the client
@@ -2777,6 +2824,18 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
     if (by && by.friendly && !creep.friendly) {
       creep.provokedBy = by.id;
       creep.looking = false;
+    }
+    // A ranked Malphus dodges any hit at its rank's chance (Lab "Dodge",
+    // beta 9); a burn's, venom's or the Descent's tick is no hit and lands.
+    if (
+      raw > 0 &&
+      blow !== "dot" &&
+      creep.rank > 0 &&
+      creep.monsterId === MALPHUS_ID &&
+      rng.float() < malphusDodgeChance(creep.rank)
+    ) {
+      visual.push({ kind: "dodge", tick, creepId: creep.id, ix: creep.ix, iy: creep.iy });
+      return 0;
     }
     // An enraged creep's armour, `1 - armor` off every hit (issue #222).
     // A putty boost is its own armour; the two combine as 1-(1-a)(1-b).
@@ -3606,8 +3665,11 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
       const count = Math.max(0, Math.floor(event.monsters[monsterId] ?? 0));
       const level = clampLevel(options.defenderLevels, monsterId);
       const at = (): Cart => dropPoint(event.x, event.y, radius);
+      // Moloch's raiders keep the strength they had before the Infernal Lab
+      // (owner, 21 Nov 2026): Balthazar at rank 2, King Wormzer at rank 3.
+      const rank = rankOf(MOLOCH_RAID_RANKS, monsterId);
       for (let spawned = 0; spawned < count; spawned += 1) {
-        spawnCreep(monsterId, level, at(), false, "attack", -1, strength);
+        spawnCreep(monsterId, level, at(), false, "attack", -1, strength, rank);
         creepsFlung += 1;
       }
     }
@@ -4773,6 +4835,8 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
     }
     // A swarming Pokey swings 10, 20 or 30% faster (Lab "Swarm", owner 2 Nov 2026).
     if (creep.swarming) boost *= 1 + swarmSpeedShare(creep.rank);
+    // A ranked Spurtz's fury: faster the longer it fights (Lab "Fury", beta 9).
+    boost *= furyOf(creep);
     return Math.trunc(boost === 1 ? creep.attackDelay : creep.attackDelay / boost);
   };
 
@@ -4814,7 +4878,9 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
     const looting = fireball ? 1 : lootOf(creep);
     // A ranked Crabatron's critical hit doubles the blow (Lab "Critical Hits").
     const crit = critRoll(creep);
-    const blow = crit ? creep.damage * multiplier * CRIT_MULTIPLIER : creep.damage * multiplier;
+    const fury = furyOf(creep);
+    const base = fury === 1 ? creep.damage * multiplier : creep.damage * multiplier * fury;
+    const blow = crit ? base * CRIT_MULTIPLIER : base;
     const dealt = damageBuilding(target, blow, creep, looting, true, crit ? "crit" : "hit");
     recordHit(creep, target.x, target.y, dealt, lastBlowMods);
     if (creep.rank > 0) onAttack(creep, creep.damage * multiplier, null, target);
@@ -4836,8 +4902,17 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
    * A blow's damage at a creep: triple for a hunter's melee blow
    * (`CreepBase.as:884-886`). A shot is fired without it (`:902-903`).
    */
-  const huntBlow = (creep: Creep): number =>
-    creep.hunts && creep.range <= 1 ? creep.damage * HUNT_DAMAGE_MULTIPLIER : creep.damage;
+  const huntBlow = (creep: Creep): number => {
+    // Balthazar's blow at a monster goes by its Lab rank, attacking or
+    // defending: 1x, 2x, 3x (Lab "Monster Hunter", beta 9; before, an
+    // attacking one hunted at Flash's 3x and a defending one struck 1x).
+    if (creep.monsterId === BALTHAZAR_ID && !creep.champion) {
+      return creep.damage * balthazarMonsterMultiplier(creep.rank);
+    }
+    const fury = furyOf(creep);
+    const blow = fury === 1 ? creep.damage : creep.damage * fury;
+    return creep.hunts && creep.range <= 1 ? blow * HUNT_DAMAGE_MULTIPLIER : blow;
+  };
 
   /** `CREATURES._creatureCount > 0 || CREATURES._hasLivingGuardian` (`CreepBase.as:851`). */
   const anyHuntable = (): boolean =>
@@ -4965,8 +5040,143 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
   const tickDescentBurn = (creep: Creep): boolean => {
     const age = tick - creep.born;
     if (age <= 0 || age % DESCENT_BURN_INTERVAL !== 0) return false;
-    damageCreep(creep, creep.maxHp * descentBurn);
+    damageCreep(creep, creep.maxHp * descentBurn, null, null, "dot");
     return creep.hp <= 0;
+  };
+
+  /**
+   * A ranked Sabnox's burn on a creep (Lab "Burn", beta 9): once a second,
+   * on the burn's own beat, its damage, through the creep's armour, a tick
+   * no Malphus dodges; it goes out after {@link SABNOX_BURN_SECONDS} of them.
+   * True when it killed.
+   */
+  const tickSabnoxBurn = (creep: Creep): boolean => {
+    creep.sabnoxTick += 1;
+    if (creep.sabnoxTick < TICKS_PER_SECOND) return false;
+    creep.sabnoxTick -= TICKS_PER_SECOND;
+    creep.sabnoxLeft -= 1;
+    const dps = creep.sabnoxDps;
+    const by = creep.sabnoxBy;
+    if (creep.sabnoxLeft <= 0) {
+      creep.sabnoxDps = 0;
+      creep.sabnoxBy = null;
+    }
+    damageCreep(creep, dps, null, by, "dot");
+    return creep.hp <= 0;
+  };
+
+  /**
+   * A ranked Zagnoid's regeneration (Lab "Regeneration", beta 9): once a
+   * second on the field it heals its rank's share of its full health, never
+   * past it.
+   */
+  const tickRegeneration = (creep: Creep): void => {
+    const age = tick - creep.born;
+    if (age <= 0 || age % TICKS_PER_SECOND !== 0 || creep.hp >= creep.maxHp) return;
+    creep.hp = Math.min(creep.maxHp, creep.hp + creep.maxHp * zagnoidHealShare(creep.rank));
+  };
+
+  /** A building's burn from a ranked Sabnox (Lab "Burn", beta 9), keyed by building id. */
+  interface BuildingBurn {
+    readonly building: EngineBuilding;
+    dps: number;
+    left: number;
+    beat: number;
+    by: Creep;
+  }
+  const buildingBurns = new Map<number, BuildingBurn>();
+
+  /**
+   * Sabnox's burn (Lab "Burn", beta 9) on what it hit: its rank's share of
+   * the blow, once a second for {@link SABNOX_BURN_SECONDS}. One burn per
+   * target: a new hit sets the strength to its own and the seconds back to
+   * four, on the beat the burn already keeps, so a fast striker never holds
+   * it off its first tick. A defender's Sabnox burns monsters only.
+   */
+  const ignite = (
+    sabnox: Creep,
+    damage: number,
+    foe: Creep | null,
+    building: EngineBuilding | null,
+  ): void => {
+    const dps = damage * sabnoxBurnShare(sabnox.rank);
+    if (dps <= 0) return;
+    if (foe) {
+      if (foe.hp <= 0 || foe.gone) return;
+      if (foe.sabnoxLeft <= 0) foe.sabnoxTick = 0;
+      foe.sabnoxDps = dps;
+      foe.sabnoxLeft = SABNOX_BURN_SECONDS;
+      foe.sabnoxBy = sabnox;
+      return;
+    }
+    if (!building || building.hp <= 0 || sabnox.friendly) return;
+    const burning = buildingBurns.get(building.id);
+    if (burning) {
+      burning.dps = dps;
+      burning.left = SABNOX_BURN_SECONDS;
+      burning.by = sabnox;
+    } else {
+      const left = SABNOX_BURN_SECONDS;
+      buildingBurns.set(building.id, { building, dps, left, beat: 0, by: sabnox });
+    }
+  };
+
+  /** Every burning building's second (see {@link ignite}), in the order they caught. */
+  const tickBuildingBurns = (): void => {
+    if (buildingBurns.size === 0) return;
+    for (const [id, burn] of buildingBurns) {
+      if (burn.building.hp <= 0) {
+        buildingBurns.delete(id);
+        continue;
+      }
+      burn.beat += 1;
+      if (burn.beat < TICKS_PER_SECOND) continue;
+      burn.beat -= TICKS_PER_SECOND;
+      burn.left -= 1;
+      if (burn.left <= 0) buildingBurns.delete(id);
+      damageBuilding(burn.building, burn.dps, burn.by, 1, true, "dot");
+    }
+  };
+
+  /**
+   * A ranked Valgos's blow on a wall (Lab "Wall Crusher", beta 9): the same
+   * blow on its rank's count more walls, the nearest standing ones within
+   * {@link VALGOS_WALL_RADIUS} of the wall struck. Attacking only.
+   */
+  const crushWalls = (valgos: Creep, damage: number, wall: EngineBuilding): void => {
+    if (valgos.friendly || wall.kind !== "wall") return;
+    const reach = VALGOS_WALL_RADIUS * VALGOS_WALL_RADIUS;
+    const near: { building: EngineBuilding; squared: number }[] = [];
+    for (const building of yard.buildings) {
+      if (building === wall || building.kind !== "wall" || building.hp <= 0) continue;
+      const squared = Math.trunc(distanceSquared(wall.cx, wall.cy, building.cx, building.cy));
+      if (squared < reach) near.push({ building, squared });
+    }
+    near.sort((one, other) => one.squared - other.squared || one.building.id - other.building.id);
+    for (const { building } of near.slice(0, valgosExtraWalls(valgos.rank))) {
+      damageBuilding(building, damage, valgos, lootOf(valgos), true);
+    }
+  };
+
+  /**
+   * A ranked Grokus's shockwave (Lab "Shockwave", beta 9): its rank's share
+   * of the blow, in full, on every other standing building within its rank's
+   * reach of it. Buildings only, attacking only (owner: "Grokus AOE hits
+   * nearby BUILDINGS").
+   */
+  const shockwave = (
+    grokus: Creep,
+    damage: number,
+    foe: Creep | null,
+    building: EngineBuilding | null,
+  ): void => {
+    if (grokus.friendly) return;
+    const radius = grokusRadius(grokus.rank);
+    const targets = splashTargets(grokus, radius, foe, building).filter(
+      (target) => target.building !== null,
+    );
+    dealSplash(grokus, damage * grokusSplashShare(grokus.rank), radius, radius, targets);
+    noteSplash(grokus, radius, targets.length);
   };
 
   /**
@@ -5087,6 +5297,12 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
       if (foe) poison(foe, creep);
     } else if (creep.monsterId === TERATORN_ID) {
       if (building) bounceFireball(creep, building, damage);
+    } else if (creep.monsterId === VALGOS_ID) {
+      if (building) crushWalls(creep, damage, building);
+    } else if (creep.monsterId === GROKUS_ID) {
+      shockwave(creep, damage, foe, building);
+    } else if (creep.monsterId === SABNOX_ID) {
+      ignite(creep, damage, foe, building);
     }
   };
 
@@ -5105,10 +5321,12 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
   };
 
   /**
-   * King Wormzer's splash on every hit, ranked or not ({@link KING_WORMZER_ID}):
-   * the buildings within {@link WORMZER_RADIUS}, the swing times
-   * {@link KING_WORMZER_MULTIPLIER}, once per target in a row. No monster is
-   * hurt, and a defender's splash finds no building.
+   * King Wormzer's splash ({@link KING_WORMZER_ID}), a Lab rank's gift since
+   * beta 9 (Lab "Quake Splash"): the buildings within its rank's reach, 60,
+   * 80, 100, the swing times x1, x2, x4, once per target in a row. Rank 0
+   * splashes nothing; rank 3 is the x4 within 100 every King Wormzer had
+   * before beta 9. No monster is hurt, and a defender's splash finds no
+   * building.
    */
   const kingWormzerSplash = (
     creep: Creep,
@@ -5116,14 +5334,16 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
     foe: Creep | null,
     building: EngineBuilding | null,
   ): void => {
+    if (creep.rank <= 0) return;
     const key = splashKey(foe, building);
     if (key === creep.lastSplash) return;
     creep.lastSplash = key;
-    const targets = splashTargets(creep, WORMZER_RADIUS, null, null).filter(
+    const radius = kingWormzerRadius(creep.rank);
+    const targets = splashTargets(creep, radius, null, null).filter(
       (target) => target.building !== null,
     );
-    dealSplash(creep, damage * KING_WORMZER_MULTIPLIER, WORMZER_RADIUS, 0, targets);
-    noteSplash(creep, WORMZER_RADIUS, targets.length);
+    dealSplash(creep, damage * kingWormzerMultiplier(creep.rank), radius, 0, targets);
+    noteSplash(creep, radius, targets.length);
   };
 
   /**
@@ -5473,6 +5693,9 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
     if (creep.puttySpeed !== 1) speed *= creep.puttySpeed;
     // The Monster Speed Buff (`HyperSpeed.k_moveSpeedModifier`).
     if (boosted(creep, "monsterSpeed")) speed *= MONSTER_SPEED_BUFF;
+    // A ranked Spurtz's fury (Lab "Fury", beta 9).
+    const fury = furyOf(creep);
+    if (fury !== 1) speed *= fury;
     const factor = BEHAVIOUR_SPEED[creep.behaviour];
     if (factor !== undefined) speed *= factor;
     // Mid-hop, Malphus goes three times as fast on the way up and twice on
@@ -6553,6 +6776,8 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
     if (creep.burnDps > 0 && tickBurn(creep)) return;
     if (descentBurning(creep) && tickDescentBurn(creep)) return;
     if (creep.venomStacks > 0 && tickVenom(creep)) return;
+    if (creep.sabnoxLeft > 0 && tickSabnoxBurn(creep)) return;
+    if (creep.rank > 0 && creep.monsterId === ZAGNOID_ID) tickRegeneration(creep);
     if (creep.rank > 0 && creep.monsterId === BRAIN_ID) tickCloak(creep);
     if (creep.champion) {
       tickAura(creep);
@@ -7985,6 +8210,7 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
     tickDecoy();
     tickBunkerDoors();
     tickVacuum();
+    tickBuildingBurns();
     if (swarmsPossible) markSwarms();
     for (const creep of creeps) {
       tickCreep(creep);
@@ -8096,7 +8322,7 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
       state: creep.attacking ? "attacking" : "walking",
       targetBuilding: creep.targetBuilding,
       targetCreep: creep.targetCreep,
-      burning: creep.burnDps > 0 || descentBurning(creep),
+      burning: creep.burnDps > 0 || creep.sabnoxLeft > 0 || descentBurning(creep),
       enraged: creep.enragedBy >= 0,
       puttied: creep.puttyUntil > 0,
       lootBoosted: creep.lootBuffedBy >= 0,

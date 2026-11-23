@@ -147,6 +147,8 @@ export const LABEL_FOE_STROKE_WIDTH = 4;
 export const LABEL_BONUS_COLOUR = 0xff9a1f;
 /** "(-X)": damage taken off, an Octo-ooze's weakening or Fomor's armour (owner, beta 6). */
 export const LABEL_REDUCED_COLOUR = 0xa8dcff;
+/** A word in place of a number ("Dodge", Lab "Dodge", beta 9): pale gold, read on lava and grass. */
+export const LABEL_WORD_COLOUR = 0xffe7a3;
 /** The modifier's size beside its number. */
 const LABEL_EXTRA_SHARE = 0.8;
 /** A crit's number pops this much larger, then settles over {@link CRIT_POP_TICKS}. */
@@ -625,6 +627,31 @@ export class CreepFx {
     label.size = 13;
     label.side = 0;
     this.showLabel(label, tick, key, follow, shown, at, kind, modded);
+    this.labelsByKey.set(key, [...siblings, label]);
+  }
+
+  /**
+   * A word over a creep in place of a number: "Dodge" when a ranked Malphus
+   * dodges a hit (Lab "Dodge", beta 9). It counts towards the target's
+   * number cap like a number and is never summed into one.
+   */
+  word(tick: number, key: string, follow: number, word: string, at: Point): void {
+    if (!this.numbers) return;
+    const siblings = (this.labelsByKey.get(key) ?? []).filter(
+      (label) => tick - label.bornTick < LABEL_WINDOW_TICKS,
+    );
+    if (siblings.length >= LABEL_PER_TARGET) return;
+    const label = this.acquireLabel();
+    if (!label) return;
+    label.shiftX = labelShift(siblings.length, word.length);
+    label.drift = 0;
+    label.size = 13;
+    label.side = 0;
+    this.showLabel(label, tick, key, follow, 0, at, "heal");
+    label.amount = 0;
+    label.modded = true;
+    label.text.text = word;
+    label.text.style.fill = LABEL_WORD_COLOUR;
     this.labelsByKey.set(key, [...siblings, label]);
   }
 

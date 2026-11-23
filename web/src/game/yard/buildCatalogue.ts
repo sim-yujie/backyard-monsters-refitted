@@ -132,7 +132,7 @@ export const OUTPOST_BUILDABLE_TYPES: ReadonlySet<number> = new Set(
 );
 
 /**
- * The Inferno yard's build menu (Inferno WP 1.19): the nineteen types the
+ * The Inferno yard's build menu (Inferno WP 1.19): the twenty types the
  * Inferno props table offers (`client/scripts/INFERNOYARDPROPS.as`, its
  * `group` 1 to 3 without `block`; the server's `INFERNO_BUILDABLE_TYPES`), in
  * that table's `order` within each tab. The Under Hall is the hall. The
@@ -142,13 +142,15 @@ export const OUTPOST_BUILDABLE_TYPES: ReadonlySet<number> = new Set(
  * Incubator Control Centre (16, owner 2 Nov 2026), after the Incubator as the
  * Hatchery Control Center follows the Hatchery in the main menu; and so is the
  * General Store (12, owner 20 Nov 2026, the Inferno's way into the Shop),
- * first, where Flash's `order` 2 puts it (and the main menu has it).
+ * first, where Flash's `order` 2 puts it (and the main menu has it); and so
+ * is the Infernal Monster Lab (116, owner 21 Nov 2026, beta 9), before the
+ * Yard Planner as the main menu has the Monster Lab.
  * Decorations are not built there, and the storage they come from is the main
  * yard's, so the tab is empty, as an outpost's.
  */
 export const INFERNO_BUILD_CATALOGUE: readonly BuildCategoryDefinition[] = [
   { id: BuildCategory.RESOURCES, label: "Resources", types: [1, 2, 3, 4, 6] },
-  { id: BuildCategory.BUILDINGS, label: "Buildings", types: [12, 8, 26, 128, 13, 16, 10, 9] },
+  { id: BuildCategory.BUILDINGS, label: "Buildings", types: [12, 8, 26, 128, 13, 16, 116, 10, 9] },
   { id: BuildCategory.DEFENSIVE, label: "Defensive", types: [21, 129, 130, 132, 24, 17] },
   { id: BuildCategory.DECORATIONS, label: "Decorations", types: [] },
 ];

@@ -178,7 +178,8 @@ describe("IC5 Balthazar hunts (`MonsterBase.findHuntingTargets`, `CreepBase.as:8
     expect(defenders.has(first!.creepTargetId)).toBe(true);
   });
 
-  it("goes for the champion in its cage before the building beside it, at triple damage", () => {
+  /** Balthazar's blows over a caged champion beside a harvester, at Lab `rank`. */
+  const huntAt = (rank: number) => {
     const { battle } = flung(
       {
         "1": { id: 1, t: 114, l: 1, X: -400, Y: -400 },
@@ -186,7 +187,7 @@ describe("IC5 Balthazar hunts (`MonsterBase.findHuntingTargets`, `CreepBase.as:8
       },
       { IC5: 1 },
       { x: -130, y: -130 },
-      { defenderChampions: [{ t: 1, l: 1, hp: 200_000 }] },
+      { defenderChampions: [{ t: 1, l: 1, hp: 200_000 }], ...(rank > 0 && { ranks: { IC5: rank } }) },
     );
     const hits: { buildingId: number; creepTargetId: number; amount: number }[] = [];
     let balthazar = -1;
@@ -199,15 +200,25 @@ describe("IC5 Balthazar hunts (`MonsterBase.findHuntingTargets`, `CreepBase.as:8
         amount: event.amount,
       });
     });
-    expect(hits.length).toBeGreaterThan(1);
-    // Its first blow lands in the cage, not on the harvester it was flung by.
-    expect(hits[0]).toEqual({ buildingId: -1, creepTargetId: -1, amount: damage * 3 });
-    // The champion comes out at it, and the blows at it out there are triple too.
-    const out = hits.filter((hit) => hit.creepTargetId >= 0);
-    expect(out.length).toBeGreaterThan(0);
-    for (const hit of out) expect(hit.amount).toBe(damage * 3);
-    expect(hits.some((hit) => hit.buildingId === 2)).toBe(false);
-  });
+    return hits;
+  };
+
+  // Beta 9 (owner, 21 Nov 2026): Flash's 3x against monsters is the Infernal
+  // Lab's top rank now; without a rank it strikes 1x, rank 1 2x, rank 2 3x.
+  for (const [rank, times] of [[0, 1], [1, 2], [2, 3]] as const) {
+    it(`goes for the champion in its cage before the building beside it, at ${times}x at rank ${rank}`, () => {
+      const hits = huntAt(rank);
+      expect(hits.length).toBeGreaterThan(1);
+      // Its first blow lands in the cage, not on the harvester it was flung by.
+      expect(hits[0]).toEqual({ buildingId: -1, creepTargetId: -1, amount: damage * times });
+      // The champion comes out at it, and the blows at it out there are the same.
+      const out = hits.filter((hit) => hit.creepTargetId >= 0);
+      expect(out.length).toBeGreaterThan(0);
+      for (const hit of out) expect(hit.amount).toBe(damage * times);
+      expect(hits.some((hit) => hit.buildingId === 2)).toBe(false);
+    });
+  }
+
 });
 
 describe("IC3 Malphus hops over walls (`CreepBase.as:1471-1478`, `:1505-1526`)", () => {

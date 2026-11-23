@@ -1,0 +1,15 @@
+Read the PNG files in this folder with your file/image viewing tool only. Do not run any shell command (it will be refused).
+You are the UX designer for Backyard Monsters Revamped, a browser remake of a Flash base-building game. Advice only; do not edit files.
+
+New feature: the Infernal Monster Lab, in the Inferno yard. Its window is the EXISTING surface Monster Lab window (the "Lab" tab of the Monsters screen), reused as-is with the 8 Inferno monsters, paid in Sulfur (the yellow crystal icon). Owner rule: "the Lab window = the surface Lab window's design with Inferno monsters", so a redesign is out of scope; small, targeted improvements are welcome.
+
+What the window shows (top to bottom): the tab strip; a Compound capacity bar; the Lab slot ("Infernal Monster Lab · level 3", here running a research: Sabnox Burn -> rank 1, countdown 2d 23h, Finish now (Shiny), Cancel); a status line after starting; left a scrollable list of the 8 monsters (name, "Rank x/3" (Balthazar /2), next rank cost + time, effect "now -> next", and a reason line when locked); right the selected monster's card (portrait, ability, effect, Research rank N / Instant, or the running state).
+
+Files in this folder (real in-game screenshots, research running = the busiest state):
+- r1-<size>-<look>-lab.png for sizes d1280 (1280x720), d1366, d1920, ipadL (1024x768 @2x), ipadP (768x1024 @2x), phoneP (390x844 @3x), phoneL (844x390 @3x); looks modern (steel) and classic (Flash parchment).
+- flow-before-d1280-modern.png: the building pop-up before opening the window (Open button).
+- flow-yard-d1280-modern.png: the Lab building in the yard.
+
+Please give:
+1. DESIGN ADVICE: 2-3 small directions that fit the game's existing windows (no redesign), each one sentence, and which you would pick.
+2. A UX critique ranked by severity (high / medium / low): clarity, reading order, tap targets >= 44 px, text size and contrast, fit without scrolling on each size, consistency with the game's other windows, what a first-time player would misread. Name the file and the exact element for each issue, and a concrete fix. Keep it under 500 words.
