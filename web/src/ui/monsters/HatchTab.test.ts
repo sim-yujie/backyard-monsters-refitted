@@ -1072,6 +1072,15 @@ describe("HatchTab: with a Hatchery Control Centre", () => {
     expect(spokenText(nowCard(element, 10))).toBe("Hatchery 1 Pokey 9s");
     // The idle hatchery would take the Bolt chosen at once.
     expect(spokenText(nowCard(element, 11))).toBe("Hatchery 2 Starts now");
+    // Built like the hatching card: picture and words in one `__body`, which the
+    // HCC row stacks; loose on the card, "Starts now" sat beside the picture and
+    // ran out of the tile (owner, 23 Nov).
+    for (const id of [10, 11]) {
+      const card = nowCard(element, id);
+      expect(card.querySelector(".hatch-now__body > .hatch-now__picture")).toBeInstanceOf(HTMLElement);
+      expect(card.querySelector(".hatch-now__body > .hatch-now__words > .hatch-now__state")).toBeInstanceOf(HTMLElement);
+      expect(card.querySelector(":scope > .hatch-now__picture, :scope > .hatch-now__state")).toBeNull();
+    }
     // Word and number apart: the card shows "#2", the word only for a screen reader (owner, 15 Nov).
     const label = nowCard(element, 11).querySelector(".hatch-now__label")!;
     expect(label.querySelector(".hatch-now__label-word")?.textContent).toBe("Hatchery");
