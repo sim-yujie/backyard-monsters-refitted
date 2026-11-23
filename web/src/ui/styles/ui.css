@@ -1959,13 +1959,38 @@ select option {
   flex: none;
 }
 
+.update-prompt__words {
+  display: flex;
+  flex-direction: column;
+  line-height: 1.15;
+}
+
 .update-prompt__title {
   white-space: nowrap;
+}
+
+/* "Reload to attack": the refused attack's line under the title. */
+.update-prompt__note {
+  font-size: var(--text-xs);
+  color: var(--colour-text-muted);
+  white-space: nowrap;
+}
+
+.update-prompt__note[hidden] {
+  display: none;
 }
 
 .update-prompt__reload,
 .update-prompt__close {
   flex: none;
+}
+
+@media (pointer: coarse) {
+  .update-prompt__reload,
+  .update-prompt__close {
+    min-width: 44px;
+    min-height: 44px;
+  }
 }
 
 /* "Graphics are off" (ui/GraphicsOffNotice.ts): the browser will not let the

@@ -83,6 +83,7 @@ import { battleReplayInput, battleTick, foughtLoot } from "../../../services/bas
 import { awardLootPoints } from "../../../services/base/combat/lootPoints.js";
 import { buildingDataWithout } from "../../../services/base/combat/abandonedAttack.js";
 import { recordBattleMismatches, replayBattleForSave } from "../../../services/base/combat/saveBattle.js";
+import { startedOnOldPage, stampOf } from "../../../services/base/combat/rulesStamp.js";
 import { recordMonsterUsage, rowFacts } from "../../../services/stats/monsterUsage.js";
 import { combatCellHeight } from "../../../services/base/combat/cellHeight.js";
 import { championsAfterAttack, championsAfterBattle, siegeAfterAttack } from "../../../services/base/combat/attackerRow.js";
@@ -356,7 +357,8 @@ const saveBase = async (
       },
       battle,
       baseSave.buildingdata,
-      combatConfig.mode
+      combatConfig.mode,
+      { oldPage: startedOnOldPage(session?.rules), pageRules: stampOf(body) }
     );
   }
 

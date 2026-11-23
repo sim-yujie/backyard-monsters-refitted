@@ -32,6 +32,7 @@ import { battleReplayInput, battleTick, foughtLoot } from "../base/combat/battle
 import { garrisonsAfterBattle } from "../base/combat/bunkerGarrison.js";
 import { housedDefenders } from "../base/combat/defenderForces.js";
 import { recordBattleMismatches, replayBattleForSave } from "../base/combat/saveBattle.js";
+import { startedOnOldPage, stampOf } from "../base/combat/rulesStamp.js";
 import { recordMonsterUsage, safely } from "../stats/monsterUsage.js";
 import { isAttackActive } from "../base/isAttackActive.js";
 import { storedDamage } from "../base/storedDamage.js";
@@ -521,7 +522,8 @@ const playerBattle = async (
     },
     battle,
     yard.buildingdata as JsonObject | undefined,
-    combatConfig.mode
+    combatConfig.mode,
+    { oldPage: startedOnOldPage(attack.session.rules), pageRules: stampOf(ctx.request.body) }
   );
   return battle;
 };

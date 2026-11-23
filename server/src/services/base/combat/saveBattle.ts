@@ -7,6 +7,7 @@ import { logger } from "../../../utils/logger.js";
 import { logReport } from "../reportManager.js";
 import type { AbandonedInput, AbandonedOutcome } from "./abandonedAttack.js";
 import { battleMismatches, type ClientBattle } from "./battle.js";
+import { stampForLog } from "./rulesStamp.js";
 import {
   FINALISE_REPLAY_DEADLINE_MS,
   ReplayTimeoutError,
@@ -123,6 +124,13 @@ export const replayBattleForSave = async (
  * warning and the same `Report` row, still "rejected", but no refusal; the
  * caller lands the server's own battle instead of the save's.
  *
+ * An attack started on an old game page (`oldPage`, from its session's rules:
+ * `rulesStamp.ts`, owner's fix 1, 23 Nov 2026) fought older battle rules than
+ * the replay, so its disagreement is no sign of tampering: the save is
+ * refused or overruled exactly as above, and the server's battle lands, but
+ * it is logged as an `attack-save-old-page` and writes no `Report` row, so
+ * the player is not flagged.
+ *
  * @param storedBuildingdata - The defender's `buildingdata` before the save.
  * @returns Whether the save was overruled: `reject` mode, with a field that
  *   is not log-only. Only ever true with `refuse: false`; otherwise it throws.
@@ -145,13 +153,43 @@ export const recordBattleMismatches = async (
   battle: AbandonedOutcome,
   storedBuildingdata: JsonObject | null | undefined,
   mode: CombatValidationMode,
-  { refuse = true }: { readonly refuse?: boolean } = {}
+  {
+    refuse = true,
+    oldPage = false,
+    pageRules,
+  }: {
+    readonly refuse?: boolean;
+    /** The attack was started on a page with older battle rules (`startedOnOldPage`). */
+    readonly oldPage?: boolean;
+    /** The stamp the save itself carried, for the log line only. */
+    readonly pageRules?: unknown;
+  } = {}
 ): Promise<boolean> => {
   if (mode === "off") return false;
   const fields = battleMismatches(client, battle, storedBuildingdata);
   if (fields.length === 0) return false;
   const refused = fields.filter((field) => !LOG_ONLY_FIELDS.has(field));
   const rejected = mode === "reject" && refused.length > 0;
+
+  if (oldPage) {
+    logger.info("Attack save {outcome} for {username} on base {baseid}: an old page's battle, landed from the replay", {
+      event: "attack-save-old-page",
+      outcome: rejected ? "rejected" : "logged",
+      mode,
+      userid: user.userid,
+      username: user.username,
+      baseid: base.baseid,
+      basesaveid: base.basesaveid,
+      rowless: base.rowless,
+      fields,
+      pageRules: stampForLog(pageRules),
+      sent: { damage: client.damage, destroyed: client.destroyed },
+      derived: { damage: battle.damage, destroyed: battle.destroyed, tick: battle.tick },
+      ip: ctx.ip,
+    });
+    if (rejected && refuse) throw attackReplayRejectedErr(refused);
+    return rejected;
+  }
 
   logger.warn("Attack save {outcome} for {username} on base {baseid}: disagrees with the replay on {fields}", {
     event: "attack-replay-mismatch",

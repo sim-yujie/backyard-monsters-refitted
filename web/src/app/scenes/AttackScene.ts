@@ -4,6 +4,7 @@ import { Container } from "pixi.js";
 import { logout } from "@/api/auth";
 import { loadAttackOn } from "@/api/base";
 import { ApiError, NetworkError } from "@/api/http";
+import { isNewVersionRefusal } from "@/api/rulesStamp";
 import type { BaseLoadResponse, Resources } from "@/api/types";
 import { clockReading, formatClock } from "@/game/attack/attackClock";
 import { withLoot } from "@/game/attack/attackerPool";
@@ -474,6 +475,12 @@ export class AttackScene implements Scene {
       if (this.context !== context) return;
       if (caught instanceof ApiError && caught.isAuthFailure) {
         context.goTo(SceneName.LOGIN);
+        return;
+      }
+      // "New version": nothing was spent; back to the map, where the card
+      // with its Reload button says it (`api/rulesStamp.ts`).
+      if (isNewVersionRefusal(caught)) {
+        context.goTo(SceneName.MAP);
         return;
       }
       this.notices.show(

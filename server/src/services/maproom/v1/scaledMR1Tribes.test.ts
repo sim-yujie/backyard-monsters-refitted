@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, mock, setSystemTime, test } from "bun:test";
 import { attackWindowSeconds } from "../../base/attackWindow.js";
 import type { Context } from "koa";
+import { RULES_VERSION } from "../../defences/rulesVersion.js";
 import { withTribeGooBonus } from "../../base/tribeGooBonus.js";
 
 /**
@@ -83,8 +84,9 @@ mock.module("../../../server.js", () => ({
 }));
 
 const warn = mock((..._args: unknown[]) => {});
+const loggedInfo = mock((..._args: unknown[]) => {});
 mock.module("../../../utils/logger.js", () => ({
-  logger: { warn, error: mock(() => {}), info: mock(() => {}), debug: mock(() => {}) },
+  logger: { warn, error: mock(() => {}), info: loggedInfo, debug: mock(() => {}) },
 }));
 
 // The audit trail (issue #23, C7), kept here rather than on the stand-in rows.
@@ -164,7 +166,7 @@ const now = () => Math.floor(Date.now() / 1000);
 const startSession = (attackerid = ATTACKER, startedat = now(), housed: Record<string, number> = { C1: 10 }) =>
   store.set(
     mr1TribeSessionKey(ATTACKER, TRIBE),
-    serialiseAttackSession({ attackerid, attackid: ATTACK_ID, startedat, entryHoused: { "5000": housed } })
+    serialiseAttackSession({ attackerid, attackid: ATTACK_ID, startedat, rules: RULES_VERSION, entryHoused: { "5000": housed } })
   );
 
 /**
@@ -403,7 +405,7 @@ describe("Map Room 1 tribe save of a camp gone since the attack began", () => {
   test("the practice camp, removed by a guide skip mid-attack, still lands the attack, gives nothing and stays gone", async () => {
     store.set(
       mr1TribeSessionKey(ATTACKER, CAMP),
-      serialiseAttackSession({ attackerid: ATTACKER, attackid: ATTACK_ID, startedat: now(), entryHoused: { "5000": ARMY } })
+      serialiseAttackSession({ attackerid: ATTACKER, attackid: ATTACK_ID, startedat: now(), rules: RULES_VERSION, entryHoused: { "5000": ARMY } })
     );
     const ctx = ctxFor({
       baseid: CAMP,
@@ -738,6 +740,23 @@ describe("Map Room 1 tribe save under COMBAT_SAVE_VALIDATION (#23, C7)", () => {
     expect((userSave.monsters as { housed: unknown }).housed).toEqual(ARMY);
     expect(maproom.tribedata[0]!.damage).toBeUndefined();
     expect(persisted).toEqual([]);
+  });
+
+  test("reject: a tribe attack started before sessions carried rules (an 8.3 page) is refused as ever, but not flagged (23 Nov 2026)", async () => {
+    setMode("reject");
+    loggedInfo.mockClear();
+    store.set(
+      mr1TribeSessionKey(ATTACKER, TRIBE),
+      serialiseAttackSession({ attackerid: ATTACKER, attackid: ATTACK_ID, startedat: now(), entryHoused: { "5000": ARMY } })
+    );
+    userSave.monsters = { housed: { ...ARMY } };
+
+    const caught = await run(ctxFor(craftedBody));
+    expect(caught?.data?.reason).toBe("replayMismatch");
+    expect(reports).toEqual([]);
+    expect(persisted).toEqual([]);
+    const oldPage = loggedInfo.mock.calls.filter((call) => (call[1] as { event?: string })?.event === "attack-save-old-page");
+    expect(oldPage).toHaveLength(1);
   });
 
   test("reject: the web client's honest final save lands", async () => {

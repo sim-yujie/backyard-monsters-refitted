@@ -13,6 +13,7 @@ import {
   type TribeAttackStart,
 } from "@/api/inferno";
 import { ApiError, NetworkError } from "@/api/http";
+import { isNewVersionRefusal } from "@/api/rulesStamp";
 import type { BaseLoadResponse } from "@/api/types";
 import type { AttackRoster, AttackTarget, RosterSource, ViewTarget } from "@/game/attack/attackTarget";
 import { HOUSING_BUNKER_TYPE } from "@/game/monsters/housing";
@@ -207,6 +208,11 @@ export const openInfernoMap = async (deps: TribeEntryDeps): Promise<InfernoMapSc
     try {
       start = await api.start(row.baseid);
     } catch (caught) {
+      // "New version": the card with its Reload button says it (`rulesStamp.ts`).
+      if (isNewVersionRefusal(caught)) {
+        screen.enableAttack();
+        return;
+      }
       if (caught instanceof NetworkError) {
         deps.notice(TRIBE_START_OFFLINE);
       } else {
@@ -258,6 +264,11 @@ export const openInfernoMap = async (deps: TribeEntryDeps): Promise<InfernoMapSc
     try {
       start = await api.startPlayer(row.baseid);
     } catch (caught) {
+      // "New version": the card says it.
+      if (isNewVersionRefusal(caught)) {
+        screen.enableAttack();
+        return;
+      }
       if (caught instanceof NetworkError) {
         deps.notice(TRIBE_START_OFFLINE);
       } else {
