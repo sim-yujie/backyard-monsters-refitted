@@ -572,6 +572,18 @@
     display: none;
   }
 
+  /* A Baiter test keeps its name ("Testing yardtester's yard") in the room
+     the strip has here, cut short if it must: after the test's note goes it
+     is the only word that nothing is lost (neon review, beta 9 play-test). */
+  .attack-strip--test .attack-strip__title {
+    display: block;
+    flex: 0 1 auto;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
   /* A live attack has no overflow menu to hold Bob's "?": it stays on the
      strip, in the room the menu button left. */
   .attack-strip--live > .guide-help:not([hidden]) {

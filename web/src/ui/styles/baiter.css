@@ -718,6 +718,11 @@
   font-size: var(--text-xs);
 }
 
+/* The note in a phone's sheet reads at full strength on the bar's plate. */
+.baiter-dock .baiter-dock__note {
+  color: var(--colour-text);
+}
+
 /* A short screen (a phone on its side, an iPad on its side with Safari's
    bars): the dock stops above the minimap or the screen's foot with room for
    about one army row, so the line goes and the army keeps the dock. The

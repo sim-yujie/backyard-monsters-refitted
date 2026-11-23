@@ -839,6 +839,15 @@
   display: none;
 }
 
+/* On a narrow tablet (768 wide) the notices keep clear of World chat's
+   button on the left and Events on the right, which a 460 px line touched
+   (neon review, beta 9 play-test). */
+@media (min-width: 620.02px) and (max-width: 900px) and (min-height: 500.02px) {
+  .overlay__layer > .yard-notices {
+    width: min(92vw, 460px, calc(100% - 2 * 176px));
+  }
+}
+
 /* Beside a building's side panel the notices keep to the yard left of it
    (from 1366 wide they already do): at 1024 wide they covered the panel's
    left edge, at 768 its name plate. A phone's panel is a sheet at the bottom. */

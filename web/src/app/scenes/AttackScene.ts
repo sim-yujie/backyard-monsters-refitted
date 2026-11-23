@@ -759,6 +759,9 @@ export class AttackScene implements Scene {
       : this.live
         ? "attack-strip attack-strip--live"
         : "attack-strip";
+    // A Baiter test or its replay: a phone on its side keeps the strip's name
+    // (attack.css), the only word there that this is a test.
+    if (this.practice) strip.classList.add("attack-strip--test");
 
     const title = document.createElement("span");
     title.className = "attack-strip__title";
