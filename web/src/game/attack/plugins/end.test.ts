@@ -168,9 +168,76 @@ describe("the end plugin", () => {
     mount(save);
     session.retreat();
     await flush();
-    expect(modal.querySelector(".attack-end__status")!.textContent).toBe(
-      "Result saved. Repeat plan not saved: camp was already damaged.",
+    const status = modal.querySelector(".attack-end__status")!;
+    expect(status.querySelector("span")!.textContent).toBe("Result saved.");
+    const warn = status.querySelector<HTMLElement>(".attack-end__status-warn")!;
+    expect(warn.hidden).toBe(false);
+    // No camp level on this target: the camp to try instead is named by its tribe.
+    expect(warn.textContent).toBe(
+      "Repeat plan not saved: camp was damaged (heals in 12 h). Attack a full-health Kozu camp.",
     );
+    expect(status.classList.contains("attack-end__status--warned")).toBe(true);
+  });
+
+  describe("why no Repeat plan was saved (patch 8.3)", () => {
+    const champion = { t: 1, hp: 100, l: 1, ft: 0, fd: 0, fb: 0, pl: 0, status: 0 };
+    const campOf = (): AttackTarget => ({
+      ...targetOf(),
+      campLevel: 35,
+      roster: { ...targetOf().roster, champions: [champion], catapultLevel: 4 },
+    });
+    const warnText = (): string | null => {
+      const warn = modal.querySelector<HTMLElement>(".attack-end__status-warn")!;
+      return warn.hidden ? null : warn.textContent;
+    };
+    const landed = async (response: Partial<BaseSaveResponse> = {}): Promise<void> => {
+      mount(vi.fn(async () => ({ error: 0, basesaveid: 1, ...response }) as BaseSaveResponse));
+      session.retreat();
+      await flush();
+    };
+
+    beforeEach(() => {
+      session = new AttackSession({ target: campOf(), seed: 1 });
+      session.start();
+    });
+
+    it("names the camp's level on a damaged camp", async () => {
+      act();
+      await landed({ repeatplan: "camp-damaged" });
+      expect(warnText()).toBe(
+        "Repeat plan not saved: camp was damaged (heals in 12 h). Attack a full-health Lv 35 Kozu camp.",
+      );
+    });
+
+    it("says bombs alone won't save on a camp bombed with nothing flung", async () => {
+      session.appendBomb({ x: -100, y: -100, id: "tw0" });
+      await landed();
+      expect(modal.querySelector(".attack-end__status span")!.textContent).toBe("Result saved.");
+      expect(warnText()).toBe("Repeat plan not saved: bombs alone won't save. Send monsters too on a full-health camp.");
+    });
+
+    it("says nothing when a monster was flung with the bombs", async () => {
+      session.appendBomb({ x: -100, y: -100, id: "tw0" });
+      act();
+      await landed();
+      expect(warnText()).toBeNull();
+      expect(modal.querySelector(".attack-end__status")!.textContent).toBe("Result saved.");
+    });
+
+    it("a champion-only attack is not bombs alone: the server keeps a plan from it", async () => {
+      session.appendBomb({ x: -100, y: -100, id: "tw0" });
+      session.appendFling({ x: -100, y: -100, monsters: {}, champion: { t: 1, l: 1 } });
+      await landed();
+      expect(warnText()).toBeNull();
+    });
+
+    it("a Map Room 1 tribe bombed alone says nothing: it keeps no Repeat plan", async () => {
+      session = new AttackSession({ target: { ...campOf(), baseid: "2", mapversion: 1 }, seed: 1 });
+      session.start();
+      session.appendBomb({ x: -100, y: -100, id: "tw0" });
+      await landed();
+      expect(warnText()).toBeNull();
+    });
   });
 
   it("puts the banked loot on the HUD once, as the panel shows the landed save (#168)", async () => {

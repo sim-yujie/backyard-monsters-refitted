@@ -31,6 +31,20 @@
   color: var(--colour-warning);
 }
 
+/* A camp that would not save a Repeat plan says so in the warning tint, with the damage chip's sign (patch 8.3). */
+.auto-attack-action--warn {
+  color: var(--colour-warning);
+}
+
+:root[data-skin="flash"] .auto-attack-action--warn {
+  color: var(--colour-danger);
+}
+
+.auto-attack-action__warn-icon {
+  vertical-align: -2px;
+  margin-right: var(--space-1);
+}
+
 /* Smart Repeat attack (astra): the normal refusal path has the sheet's diagnostics too. */
 .auto-attack-action__missing {
   margin-top: var(--space-2);

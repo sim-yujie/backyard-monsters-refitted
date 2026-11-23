@@ -600,7 +600,7 @@ describe("the camp panel's Repeat attack", () => {
     control.setCell(CELL, campCell());
     await settle();
     expect(control.button.hidden).toBe(true);
-    expect(control.detail.textContent).toContain("Attack a Kozu camp of level 35 by hand once");
+    expect(control.detail.textContent).toBe("Attack a full-health camp with monsters to save a Repeat plan.");
 
     control.setCell({ col: 1, row: 1 }, { uid: 9, b: 2, bid: "1", mine: 0 } as unknown as MapCell);
     expect(control.button.hidden).toBe(true);
