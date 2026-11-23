@@ -419,7 +419,7 @@ describe("outpost names and pins (beta 7)", () => {
     expect(names().slice(0, 3)).toEqual(["Main yard", "139, 219", "100, 200"]);
     // The heading counts every yard, Main included, as the capsule's "/801" does.
     expect(q(".yard-switcher__outposts").textContent).toBe("801 yards");
-    expect(q(".yard-switcher__outposts").title).toBe("801 yards: your main yard and 800 outposts");
+    expect(q(".yard-switcher__outposts").getAttribute("title")).toBe("801 yards: your main yard and 800 outposts");
     // "121/801" (Main, the pin, then 10000 on) takes the smaller size, so the capsule stays clear of More on a phone.
     switcher.bind(bindingFor(outposts, outpostTarget("10118"), { names: {}, pins: ["10799"] }));
     expect(q(".yard-switcher__count").textContent).toBe("121/801");
