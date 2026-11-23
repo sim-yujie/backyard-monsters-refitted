@@ -22,6 +22,14 @@ import { menuBadgeLabel, menuBadgeText } from "./YardMenu";
  * rows of `GRID_COLUMNS` above More and to its right, where the screen is
  * empty (owner, beta 6), each word under its bubble.
  *
+ * Wherever it opens, the fan first measures its room (`planFan`): from More
+ * up to the top bar's foot, and to the screen's sides. A column that would
+ * run up under the top bar (a 390x664 phone with Safari's bars, eight
+ * bubbles: Mail, Alliance and Reports could not be pressed) stands in rows
+ * instead, growing left from More, which sits on the right; rows that would
+ * reach the top bar (a phone on its side) get wider so there are fewer of
+ * them (old-layout fix, beta 9).
+ *
  * Behind a switch: `BUBBLE_MENU`, or `localStorage` `bymr.bubbleMenu` set to
  * "off" or "on" on this browser.
  */
@@ -44,6 +52,106 @@ export const GRID_QUERY = "(min-width: 620.02px) and (max-height: 500px)";
 
 /** Bubbles in one row of the sideways grid: as many as fit between More and the zoom rail. */
 export const GRID_COLUMNS = 3;
+
+/** Kept free between the fan and the top bar or the screen's side. */
+const FAN_GAP = 8;
+/** Extra room the column keeps under the top bar. */
+const COLUMN_GAP = 12;
+
+/** The fan's room, in px from the middle of More's disc. */
+export interface FanRoom {
+  /** Up to the top bar's foot. */
+  readonly up: number;
+  /** To the screen's left edge. */
+  readonly left: number;
+  /** To the screen's right edge. */
+  readonly right: number;
+  /**
+   * The dock's other buttons that stand higher than More's middle (Collect
+   * all's ring beside it): how far up they reach and their sides, in px from
+   * More's middle. The rows' first row keeps its words clear of them.
+   */
+  readonly obstacles?: readonly { readonly left: number; readonly right: number; readonly up: number }[];
+  /** A bubble's word under it, in px (More's own word). */
+  readonly label?: number;
+}
+
+/** The fan's sizes from bubble-menu.css, in px. */
+export interface FanSizes {
+  /** More's middle to the first bubble's middle, and bubble to bubble, in the column. */
+  readonly columnStart: number;
+  readonly columnStep: number;
+  /** More's middle to the first row's middle, and row to row, in the rows. */
+  readonly gridStart: number;
+  readonly gridStep: number;
+  /** One bubble's width in a row, its word under it. */
+  readonly pitch: number;
+  /** A bubble's disc. */
+  readonly disc: number;
+}
+
+/** How the fan stands: one column, or rows `columns` wide. */
+export interface FanPlan {
+  readonly grid: boolean;
+  readonly columns: number;
+  /** Which way each row runs from More: 1 right (a phone on its side), -1 left. */
+  readonly direction: 1 | -1;
+  /** Bubbles' widths the rows are moved by (towards the room) from starting over More. */
+  readonly offset: number;
+  /** More's middle to the first row's middle, in px, when the dock beside More needs more than `gridStart`. */
+  readonly lift?: number;
+}
+
+/** The shape without measuring: the column, or on a phone on its side rows of three running right. */
+export const defaultFanPlan = (sideways: boolean): FanPlan =>
+  sideways
+    ? { grid: true, columns: GRID_COLUMNS, direction: 1, offset: 0 }
+    : { grid: false, columns: 1, direction: -1, offset: 0 };
+
+/**
+ * How `count` bubbles stand in `room` (null when it cannot be measured: the
+ * default). Upright, the column when it fits under the top bar. Else rows:
+ * the fewest columns (three or more) whose rows stay under the top bar, the
+ * rows running right of More on a phone on its side (owner, beta 6) and left
+ * of it otherwise (More is on the right), moved back over More when a side
+ * is too narrow. When nothing fits, rows of three.
+ */
+export const planFan = (
+  count: number,
+  room: FanRoom | null,
+  sizes: FanSizes,
+  sideways: boolean,
+): FanPlan => {
+  const fallback = defaultFanPlan(sideways);
+  if (!room || count < 1 || !Object.values(sizes).every((size) => Number.isFinite(size) && size > 0))
+    return fallback;
+  const half = sizes.disc / 2;
+  // The column keeps a little more under the top bar than the rows: its top
+  // bubble touched the bar at 1024x768 (neon round 2).
+  if (!sideways && sizes.columnStart + (count - 1) * sizes.columnStep + half + COLUMN_GAP <= room.up)
+    return fallback;
+  const direction: 1 | -1 = sideways ? 1 : -1;
+  const label = room.label ?? 22;
+  const first = Math.min(GRID_COLUMNS, count);
+  for (let columns = first; columns <= count; columns += 1) {
+    const rows = Math.ceil(count / columns);
+    for (let back = 0; back < columns; back += 1) {
+      const offset = back === 0 ? 0 : -direction * back;
+      const places = Array.from({ length: columns }, (_, column) => direction * column + offset);
+      const left = (Math.min(...places) - 0.5) * sizes.pitch;
+      const right = (Math.max(...places) + 0.5) * sizes.pitch;
+      if (-left > room.left || right > room.right) continue;
+      // The first row's words stand clear of what of the dock is under the rows.
+      const under = (room.obstacles ?? []).filter((box) => box.right > left && box.left < right);
+      const floor = Math.max(0, ...under.map((box) => box.up));
+      const start = Math.max(sizes.gridStart, floor + FAN_GAP / 2 + label + FAN_GAP / 2 + half);
+      if (start + (rows - 1) * sizes.gridStep + half > room.up) continue;
+      const plan: FanPlan = { grid: true, columns, direction, offset };
+      return start > sizes.gridStart ? { ...plan, lift: Math.ceil(start) } : plan;
+    }
+  }
+  return { grid: true, columns: GRID_COLUMNS, direction, offset: 0 };
+};
 
 /** How long the mouse rests on More before the fan opens, and off it before it shuts. */
 const HOVER_OPEN_MS = 90;
@@ -96,7 +204,10 @@ export class BubbleMenu {
   private readonly media: MediaQueryList | null;
   private readonly scopeWatch: MutationObserver | null;
   private readonly fanWatch: MutationObserver | null;
-  private grid = false;
+  /** A phone on its side (`GRID_QUERY`). */
+  private sideways = false;
+  /** How the fan stands now: set as it opens, from its room. */
+  private plan: FanPlan = defaultFanPlan(false);
   private open = false;
   /** Opened by a press, not the mouse resting on it: stays open when the mouse leaves. */
   private pinned = false;
@@ -181,9 +292,9 @@ export class BubbleMenu {
     this.setGrid(this.media?.matches === true);
   }
 
-  /** Whether the bubbles stand in rows (a phone on its side) rather than one column. */
+  /** Whether the bubbles stand in rows (a phone on its side, or no room for the column). */
   get isGrid(): boolean {
-    return this.grid;
+    return this.plan.grid;
   }
 
   get isOpen(): boolean {
@@ -198,11 +309,10 @@ export class BubbleMenu {
   }
 
   /** Rows (a phone on its side) or one column; an open fan shuts as the phone turns. */
-  setGrid(grid: boolean): void {
-    if (grid !== this.grid) this.setOpen(false);
-    this.grid = grid;
-    this.element.classList.toggle("bubble-menu--grid", grid);
-    this.refresh();
+  setGrid(sideways: boolean): void {
+    if (sideways !== this.sideways) this.setOpen(false);
+    this.sideways = sideways;
+    this.usePlan(defaultFanPlan(sideways));
   }
 
   /** Opens or shuts the fan; `pinned` for a press, which the mouse leaving does not undo. */
@@ -217,6 +327,7 @@ export class BubbleMenu {
     if (this.foldTimer !== null) clearTimeout(this.foldTimer);
     this.foldTimer = null;
     if (shown) {
+      this.usePlan(planFan(this.visibleItems().length, this.measureRoom(), this.sizes(), this.sideways));
       this.fan.hidden = false;
       // Lay the bubbles out folded first, so they fly out of More.
       void this.fan.offsetWidth;
@@ -262,13 +373,64 @@ export class BubbleMenu {
     return this.items.filter((item) => !item.hidden);
   }
 
+  private usePlan(plan: FanPlan): void {
+    this.plan = plan;
+    this.element.classList.toggle("bubble-menu--grid", plan.grid);
+    if (plan.lift === undefined) this.element.style.removeProperty("--bubble-grid-lift");
+    else this.element.style.setProperty("--bubble-grid-lift", `${plan.lift}px`);
+    this.refresh();
+  }
+
+  /** From the middle of More's disc to the top bar's foot and the screen's sides; null unmeasured. */
+  private measureRoom(): FanRoom | null {
+    if (typeof window === "undefined") return null;
+    const disc = this.button.querySelector(".yard-dock__disc") ?? this.button;
+    const box = disc.getBoundingClientRect();
+    if (box.width < 1 || box.height < 1) return null;
+    const x = box.left + box.width / 2;
+    const y = box.top + box.height / 2;
+    const hud = document.querySelector(".hud")?.getBoundingClientRect();
+    const top = hud && hud.height > 0 ? Math.max(0, hud.bottom) : 0;
+    const obstacles = [...this.options.scope.querySelectorAll(".yard-dock__button, .yard-collect")]
+      .filter((element) => !this.element.contains(element))
+      .map((element) => element.getBoundingClientRect())
+      .filter((rect) => rect.width > 0 && rect.height > 0 && rect.top < y)
+      .map((rect) => ({ left: rect.left - x, right: rect.right - x, up: y - rect.top }));
+    const word = this.button.querySelector(".yard-dock__label")?.getBoundingClientRect().height ?? 0;
+    return {
+      up: y - top - FAN_GAP,
+      left: x - FAN_GAP,
+      right: window.innerWidth - x - FAN_GAP,
+      obstacles,
+      ...(word > 0 ? { label: word } : {}),
+    };
+  }
+
+  /** The fan's sizes as bubble-menu.css sets them for this screen. */
+  private sizes(): FanSizes {
+    const style = typeof getComputedStyle === "undefined" ? null : getComputedStyle(this.element);
+    const px = (name: string): number => Number.parseFloat(style?.getPropertyValue(name) ?? "");
+    return {
+      columnStart: px("--bubble-start"),
+      columnStep: px("--bubble-step"),
+      gridStart: px("--bubble-grid-start"),
+      gridStep: px("--bubble-grid-step"),
+      pitch: px("--bubble-pitch"),
+      disc: px("--bubble-disc"),
+    };
+  }
+
   /** Each shown bubble's place in the fan, More's total, and More itself only while it holds something. */
   private refresh(): void {
     const visible = this.visibleItems();
+    const { columns, direction, offset } = this.plan;
+    const across = Math.max(1, columns);
     visible.forEach((item, index) => {
+      const column = index % across;
       item.style.setProperty("--bubble-k", String(index + 1));
-      item.style.setProperty("--bubble-col", String(index % GRID_COLUMNS));
-      item.style.setProperty("--bubble-row", String(Math.floor(index / GRID_COLUMNS)));
+      item.style.setProperty("--bubble-col", String(column));
+      item.style.setProperty("--bubble-row", String(Math.floor(index / across)));
+      item.style.setProperty("--bubble-dx", String(direction * column + offset));
     });
     this.element.style.setProperty("--bubble-count", String(visible.length));
     this.element.hidden = visible.length === 0;

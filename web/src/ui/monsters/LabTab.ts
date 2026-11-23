@@ -26,7 +26,7 @@ import "@/ui/styles/train.css";
 import "@/ui/styles/lab.css";
 import { ShinyButton } from "@/ui/yard/ShinyButton";
 import { monsterPicture } from "./LockerTab";
-import type { MonstersFocus, MonstersTab, MonstersTabContext } from "./monstersTab";
+import { revealPicked, type MonstersFocus, type MonstersTab, type MonstersTabContext } from "./monstersTab";
 import { studySeconds, weekendChip, withWeekendChip } from "@/ui/events/weekendUi";
 import { refusalText } from "@/ui/dom";
 import { monsterWords, type MonsterRealm } from "@/game/monsters/realm";
@@ -131,25 +131,7 @@ export class LabTab implements MonstersTab {
     const wanted = focus.monster ?? runningResearch(this.store)?.monster.id;
     if (wanted && labAbility(wanted)) this.select(wanted, false);
     this.render();
-    this.revealSelected();
-  }
-
-  /**
-   * Scrolls the list, when it is its own scroller (desktop, tablet), so the
-   * selected row shows: the research running opens selected and may sit
-   * below the fold (neon review, beta 9). On a phone the page scrolls as a
-   * whole and is left where it is.
-   */
-  private revealSelected(): void {
-    const list = this.list;
-    if (list.scrollHeight <= list.clientHeight + 1) return;
-    const row = list.querySelector<HTMLElement>(`.lab-row[data-monster="${this.selected ?? ""}"]`);
-    const item = row?.closest("li") ?? row;
-    if (!item) return;
-    const top = item.offsetTop - list.offsetTop;
-    if (top < list.scrollTop || top + item.offsetHeight > list.scrollTop + list.clientHeight) {
-      list.scrollTop = Math.max(0, top + item.offsetHeight - list.clientHeight);
-    }
+    revealPicked(this.list);
   }
 
   update(change: YardChange): void {

@@ -4,7 +4,7 @@ import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { TUT_FOLD_ATTRIBUTE, TutTarget } from "@/game/guide/targets";
-import { BUBBLE_ITEMS, BUBBLE_MENU_KEY, BubbleMenu, bubbleMenuOn } from "./BubbleMenu";
+import { BUBBLE_ITEMS, BUBBLE_MENU_KEY, BubbleMenu, bubbleMenuOn, planFan, type FanSizes } from "./BubbleMenu";
 import { YardDock } from "./YardDock";
 
 /** The bubble menu (owner's idea, beta 6 desk sample). */
@@ -334,6 +334,63 @@ describe("the bubbles' column (bubble-menu.css)", () => {
   });
 
   it("keeps the sideways phone's rows running right from More (owner, beta 6)", () => {
-    expect(css).toMatch(/\.bubble-menu--grid\.bubble-menu--open \.bubble-menu__fan > \.yard-dock__button \{\s*transform: translate\(\s*calc\(var\(--bubble-col, 0\) \* var\(--bubble-pitch\)\),/);
+    expect(css).toMatch(/\.bubble-menu--grid\.bubble-menu--open \.bubble-menu__fan > \.yard-dock__button \{\s*transform: translate\(\s*calc\(var\(--bubble-dx, var\(--bubble-col, 0\)\) \* var\(--bubble-pitch\)\),/);
+  });
+});
+
+describe("planFan: the fan measures its room (old-layout fix, beta 9)", () => {
+  // bubble-menu.css on a phone held upright, and on one on its side.
+  const upright: FanSizes = { columnStart: 76, columnStep: 60, gridStart: 84, gridStep: 86, pitch: 88, disc: 52 };
+  const sideways: FanSizes = { ...upright, columnStart: 84, columnStep: 64 };
+  const places = (plan: ReturnType<typeof planFan>, count: number) =>
+    Array.from({ length: count }, (_, index) => [
+      plan.grid ? plan.direction * (index % plan.columns) + plan.offset : 0,
+      plan.grid ? Math.floor(index / plan.columns) : index,
+    ]);
+
+  it("keeps the owner's column where it fits (390x844: More's middle 658 px down, the bar 109)", () => {
+    expect(planFan(8, { up: 541, left: 235, right: 139 }, upright, false).grid).toBe(false);
+  });
+
+  it("stands eight bubbles in rows of three running left of More on a 390x664 phone", () => {
+    const plan = planFan(8, { up: 361, left: 235, right: 139 }, upright, false);
+    expect(plan).toEqual({ grid: true, columns: 3, direction: -1, offset: 0 });
+    expect(places(plan, 8)).toEqual([[0, 0], [-1, 0], [-2, 0], [0, 1], [-1, 1], [-2, 1], [0, 2], [-1, 2]]);
+  });
+
+  it("keeps a short fan in its column there: five bubbles fit", () => {
+    expect(planFan(5, { up: 361, left: 235, right: 139 }, upright, false).grid).toBe(false);
+  });
+
+  it("on a phone on its side keeps rows of three running right when they fit", () => {
+    expect(planFan(8, { up: 400, left: 546, right: 282 }, sideways, true)).toEqual({
+      grid: true,
+      columns: 3,
+      direction: 1,
+      offset: 0,
+    });
+  });
+
+  it("on a short phone on its side makes the rows wider, moved back over More where the right is narrow", () => {
+    // 844x390: More's middle 318 px down, the bar ends 59 px down.
+    const plan = planFan(8, { up: 251, left: 546, right: 282 }, sideways, true);
+    expect(plan).toEqual({ grid: true, columns: 4, direction: 1, offset: -1 });
+    expect(places(plan, 8).map(([dx]) => dx)).toEqual([-1, 0, 1, 2, -1, 0, 1, 2]);
+  });
+
+  it("lifts the first row so its words clear Collect all under it, and not for one off to the side", () => {
+    // 980x551: Collect all's ring left of More reaches 35 px above More's middle.
+    const room = { up: 379, left: 600, right: 300, label: 22, obstacles: [{ left: -150, right: -40, up: 35 }] };
+    const plan = planFan(8, room, { ...upright, disc: 56 }, false);
+    expect(plan).toMatchObject({ grid: true, columns: 3, direction: -1, offset: 0, lift: 93 });
+    // Upright phone: Collect all is right of More, the rows run left.
+    const phone = { up: 361, left: 235, right: 139, label: 22, obstacles: [{ left: 53, right: 133, up: 45 }] };
+    expect(planFan(8, phone, upright, false).lift).toBeUndefined();
+  });
+
+  it("falls back to its usual shape when it cannot measure (no layout, as in these tests)", () => {
+    expect(planFan(8, null, upright, false).grid).toBe(false);
+    expect(planFan(8, null, sideways, true)).toEqual({ grid: true, columns: 3, direction: 1, offset: 0 });
+    expect(planFan(8, { up: 300, left: 100, right: 100 }, { ...upright, pitch: Number.NaN }, false).grid).toBe(false);
   });
 });

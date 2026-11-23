@@ -10,7 +10,9 @@
  * k-1 steps straight up. The column has room for a sixth (Quests) under the
  * top bar at every size. They fly out one after the
  * other and fold back the other way round. On a phone on its side the
- * bubbles stand in rows instead (`--bubble-col`, `--bubble-row`).
+ * bubbles stand in rows instead (`--bubble-row`, and `--bubble-dx`: bubble
+ * widths across from More), and so do they wherever the column would run up
+ * under the top bar (BubbleMenu.ts `planFan` measures, old-layout fix, beta 9).
  *
  * With the fan on, the dock wears `yard-dock--bubbles` and has no phone Menu,
  * so this file also places the dock's buttons (the layout pass, beta 6): the
@@ -29,6 +31,14 @@
   --bubble-disc: 56px;
   --bubble-start: 84px;
   --bubble-step: 64px;
+  /* The rows (a phone on its side, or no room for the column): More's middle
+     to the first row's, row to row, and one bubble's width with its word.
+     The first row starts high enough that its words clear More's badge; the
+     script lifts it further (`--bubble-grid-lift`) when its words would sit
+     on Collect all beside More. */
+  --bubble-grid-start: 96px;
+  --bubble-grid-step: 96px;
+  --bubble-pitch: 88px;
 
   z-index: 1;
   display: flex;
@@ -198,9 +208,6 @@
   .bubble-menu {
     --bubble-anchor: 28px;
     --bubble-disc: 52px;
-    --bubble-start: 84px;
-    --bubble-step: 86px;
-    --bubble-pitch: 88px;
   }
 
   .yard-dock__right > .bubble-menu {
@@ -253,10 +260,17 @@
   transform-origin: 50% calc(var(--bubble-disc) / 2);
 }
 
+/* Classic's ribbon ends are wider than Modern's: in a row the neighbours'
+   ends touched ("Mail", "Defences", "Alerts"); shorter ends keep them apart. */
+:root[data-skin="flash"] .bubble-menu--grid .bubble-menu__fan .yard-dock__label {
+  border-width: 0 9px;
+  border-image-width: 0 9px;
+}
+
 .bubble-menu--grid.bubble-menu--open .bubble-menu__fan > .yard-dock__button {
   transform: translate(
-      calc(var(--bubble-col, 0) * var(--bubble-pitch)),
-      calc((var(--bubble-start) + var(--bubble-row, 0) * var(--bubble-step)) * -1)
+      calc(var(--bubble-dx, var(--bubble-col, 0)) * var(--bubble-pitch)),
+      calc((var(--bubble-grid-lift, var(--bubble-grid-start)) + var(--bubble-row, 0) * var(--bubble-grid-step)) * -1)
     )
     scale(1);
 }

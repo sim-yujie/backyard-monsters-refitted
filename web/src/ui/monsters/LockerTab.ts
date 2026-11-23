@@ -26,7 +26,7 @@ import { iconAmount } from "@/ui/gameIcon";
 import { resourceAmount } from "@/ui/resourceIcon";
 import { ShinyButton } from "@/ui/yard/ShinyButton";
 import { monsterStats, statGrid } from "./monsterNumbers";
-import { MonstersTabId, type MonstersFocus, type MonstersTab, type MonstersTabContext } from "./monstersTab";
+import { MonstersTabId, revealPicked, type MonstersFocus, type MonstersTab, type MonstersTabContext } from "./monstersTab";
 import { refusalText } from "@/ui/dom";
 
 /**
@@ -130,6 +130,7 @@ export class LockerTab implements MonstersTab {
       this.select(focus.monster, false);
     }
     this.render();
+    revealPicked(this.list);
   }
 
   update(change: YardChange): void {
