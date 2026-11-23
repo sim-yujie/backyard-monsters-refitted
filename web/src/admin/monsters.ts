@@ -323,7 +323,13 @@ export class MonstersView {
           : null,
       ),
       points.length
-        ? chart(points, { kind: points.length < 3 ? "bar" : "line", unit, ...(points.length < 3 && { barMax: 48 }) })
+        ? chart(points, {
+            kind: points.length < 3 ? "bar" : "line",
+            unit,
+            ...(points.length < 3 && { barMax: 48 }),
+            // Today is still counting: never read as a crash.
+            ...(stats.days[stats.days.length - 1] === stats.generatedAt.slice(0, 10) && { partial: "today so far" }),
+          })
         : h("p", { class: "empty-state" }, "Nothing counted yet: the first attack after update 8.3 starts the chart."),
       points.length && points.length < 3 ? h("p", { class: "drawer-note" }, "The line starts once 3 days are counted; until then each day is a bar.") : null,
     );

@@ -1452,6 +1452,26 @@ button {
   fill: var(--series-on);
 }
 
+.chart-svg .line.partial {
+  stroke-dasharray: 4 4;
+  opacity: 0.55;
+}
+
+.chart-svg .bar.partial {
+  opacity: 0.5;
+}
+
+.chart-svg .dot.partial {
+  fill: var(--surface);
+  stroke: var(--series);
+}
+
+.chart-svg .partial-label {
+  fill: var(--ink-2);
+  font-size: 11px;
+  font-style: italic;
+}
+
 .chart-svg .line {
   fill: none;
   stroke: var(--series);
