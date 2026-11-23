@@ -508,7 +508,7 @@ export const runAutoAttack = async (user: User, baseid: string, acceptedMoves?: 
 
     let landed;
     try {
-      landed = await landCheckpointedAttack(save.basesaveid, "auto-attack", { left: false, recordPlan: false });
+      landed = await landCheckpointedAttack(save.basesaveid, "auto-attack", { left: false, recordPlan: false, repeat: true });
     } catch (err) {
       // Past its deadline the replay wrote nothing; the checkpoint stays and
       // the attack lands on the player's next load or the sweep (issue #138).

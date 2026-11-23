@@ -316,6 +316,14 @@ mock.module("../combat/replayRunner.js", () => ({
   },
 }));
 
+/** The dashboard's monster count rows written (`monsterUsage.ts`). */
+const usage: Record<string, any>[] = [];
+mock.module("../../stats/monsterUsageStore.js", () => ({
+  insertUsageRow: async (row: Record<string, any>) => {
+    usage.push(row);
+  },
+}));
+
 const { runAutoAttack, autoAttackPlanFor, lastAutoAttackReplay, autoAttackLockKey } = await import("./autoAttack.js");
 // The route itself (`POST /worldmapv2/autoattack`, `app.routes.ts`), over the real service and the stand-ins above.
 const { autoAttack: autoAttackRoute } = await import("../../../controllers/maproom/v2/autoAttack.js");
@@ -440,6 +448,18 @@ describe("runAutoAttack lands the plan", () => {
     const result = await runAutoAttack(user() as never, CAMP);
     expect(result.report).toContain("etreat");
   }, REPLAY_TIMEOUT_MS);
+});
+
+describe("the dashboard's monster counts (owner, 23 Nov 2026)", () => {
+  test("a Repeat attack is counted once, with the camps, marked as a Repeat", async () => {
+    usage.length = 0;
+    userSave.resources = { r1: 0, r2: 1_000_000, r3: 2_000_000, r4: 0 };
+    await runAutoAttack(user() as never, CAMP);
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    expect(usage).toHaveLength(1);
+    expect(usage[0]).toMatchObject({ repeat: true, mode: "camp", arena: "mr2", attackerUserid: ATTACKER, monsters: { C1: { f: 150 } } });
+  });
 });
 
 describe("runAutoAttack refuses, writing nothing", () => {

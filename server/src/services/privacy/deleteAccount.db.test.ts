@@ -101,6 +101,7 @@ describe.skipIf(!dbName)("deleting a player's account (deleteAccount.ts)", () =>
     await sql(`DELETE FROM bym.thread WHERE userid IN (${list}) OR targetid IN (${list})`);
     await sql(`DELETE FROM bym.truce WHERE initiator_userid IN (${list}) OR recipient_userid IN (${list})`);
     await sql(`DELETE FROM bym.attack_logs WHERE attacker_userid IN (${list}) OR defender_userid IN (${list})`);
+    await sql(`DELETE FROM bym.monster_usage WHERE attacker_userid IN (${list}) OR defender_userid IN (${list})`);
     await sql(`DELETE FROM bym.chat_report WHERE reporter_id IN (${list}) OR reported_id IN (${list})`);
     await sql(`DELETE FROM bym.chat_log WHERE userid IN (${list})`);
     await sql(`DELETE FROM bym.chat_flag WHERE userid IN (${list})`);
@@ -164,7 +165,17 @@ describe.skipIf(!dbName)("deleting a player's account (deleteAccount.ts)", () =>
     return threadid;
   };
 
-  const attack = (attacker: number, defender: number) =>
+  const attack = async (attacker: number, defender: number) => {
+    // The dashboard's monster counts keep a row per attack too (`monsterUsage.ts`).
+    await sql(
+      `INSERT INTO bym.monster_usage (landed_at, day, attacker_userid, attack_started, attack_id, mode, arena, defender_userid, monsters)
+       VALUES (now(), current_date, ?, 1, ?, 'player', 'mr2', ?, '{"C1": {"l": 1, "f": 3}}')`,
+      [attacker, defender, defender]
+    );
+    return attackLog(attacker, defender);
+  };
+
+  const attackLog = (attacker: number, defender: number) =>
     sql(
       `INSERT INTO bym.attack_logs (attacker_userid, attacker_username, attacker_pic_square, defender_userid, defender_username, defender_pic_square, type, attackreport, attacktime)
        VALUES (?, (SELECT username FROM bym."user" WHERE userid = ?), 'pic', ?, (SELECT username FROM bym."user" WHERE userid = ?), 'pic', 'main', '{}', now())`,
@@ -327,6 +338,8 @@ describe.skipIf(!dbName)("deleting a player's account (deleteAccount.ts)", () =>
       "battle records where they defended (name replaced)": 1,
       "defence replays of attacks on them": 1,
       "defence replays where they attacked (name replaced)": 1,
+      "the dashboard's monster counts of their attacks": 1,
+      "the dashboard's monster counts of attacks on them (account number removed)": 1,
       "other bases last attacked by them (name replaced)": 1,
       "other players' block lists (id removed)": 1,
       [`mail threads kept for the other player (shown as "${DELETED_PLAYER_NAME}", truce cleared)`]: 1,
@@ -397,6 +410,16 @@ describe.skipIf(!dbName)("deleting a player's account (deleteAccount.ts)", () =>
       leader_name: "zz_del_q",
     });
     expect((await one(`SELECT alliance_role FROM bym."user" WHERE userid = ?`, [q]))!.alliance_role).toBe("leader");
+
+    // The monster counts: P's own attack gone, the one on P kept without P's number.
+    expect(
+      await sql(`SELECT attacker_userid, defender_userid FROM bym.monster_usage WHERE attacker_userid IN (?, ?, ?) ORDER BY attacker_userid`, [p, q, r])
+    ).toEqual(
+      [
+        { attacker_userid: q, defender_userid: r },
+        { attacker_userid: r, defender_userid: null },
+      ].sort((one, other) => one.attacker_userid - other.attacker_userid)
+    );
 
     // Battle records stay, with the name replaced; Q and R's own record is unchanged.
     const logs = await sql<{ attacker_username: string; defender_username: string; attacker_pic_square: string | null }>(

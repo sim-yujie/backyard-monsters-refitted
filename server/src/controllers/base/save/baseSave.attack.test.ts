@@ -173,6 +173,18 @@ mock.module("../../../services/base/combat/replayRunner.js", () => ({
   },
 }));
 
+/** The dashboard's monster count rows written (`monsterUsage.ts`). */
+const usage: Record<string, any>[] = [];
+let usageFails = false;
+mock.module("../../../services/stats/monsterUsageStore.js", () => ({
+  insertUsageRow: async (row: Record<string, any>) => {
+    if (usageFails) throw new Error("monster_usage is gone");
+    usage.push(row);
+  },
+}));
+/** Lets the landing's write, which it does not wait on, run. */
+const settle = () => new Promise((resolve) => setTimeout(resolve, 0));
+
 const { baseSave } = await import("./baseSave.js");
 const { combatConfig } = await import("../../../config/CombatConfig.js");
 /** The mode the suite runs in, put back after a test changes it (C7). */
@@ -228,6 +240,8 @@ afterEach(() => {
 });
 
 beforeEach(() => {
+  usage.length = 0;
+  usageFails = false;
   replayTimesOut = false;
   sessionForces = undefined;
   sessionBrains = undefined;
@@ -1760,5 +1774,71 @@ describe("the hatch quest through the save that ends the attack (patch 7.8)", ()
     );
 
     expect(hatchHave()).toBe(0);
+  });
+});
+
+describe("the dashboard's monster counts through the save (owner, 23 Nov 2026)", () => {
+  const body = () => ({ over: "1", tick: "3200", flinglog: JSON.stringify(LOG) });
+
+  test("an attack on a Map Room 2 camp: its tribe and level, each monster at its level, counted once", async () => {
+    Object.assign(defender, { wmid: 11, level: 35 });
+    attackerSave.mapversion = 2;
+    attackerSave.academy = { C4: { level: 4 } };
+
+    await baseSave(ctxFor(body()), async () => {});
+    // The same final save sent again lands nothing, and counts nothing.
+    await baseSave(ctxFor(body()), async () => {}).catch(() => {});
+    await settle();
+
+    expect(usage).toHaveLength(1);
+    expect(usage[0]).toMatchObject({
+      attackerUserid: ATTACKER,
+      attackId: ATTACK_ID,
+      mode: "camp",
+      arena: "mr2",
+      tribe: "kozu",
+      campLevel: 35,
+      defenderUserid: null,
+      repeat: false,
+      replayed: true,
+      assumed: false,
+      monsters: { C4: { f: 12 } },
+    });
+    expect(usage[0]!.monsters.C4.x).toBeGreaterThanOrEqual(0);
+  });
+
+  test("an attack on a player's yard names its owner", async () => {
+    Object.assign(defender, { type: "main", attacks: [] });
+    attackerSave.mapversion = 2;
+
+    await baseSave(ctxFor(body()), async () => {});
+    await settle();
+
+    expect(usage).toHaveLength(1);
+    expect(usage[0]).toMatchObject({ mode: "player", arena: "mr2", defenderUserid: DEFENDER_OWNER, baseType: "main", tribe: null });
+  });
+
+  test("a save that does not end the attack counts nothing", async () => {
+    await baseSave(ctxFor({ flinglog: JSON.stringify(LOG) }), async () => {});
+    await settle();
+    expect(usage).toHaveLength(0);
+  });
+
+  test("a replay past its deadline counts nothing: the finaliser counts it when it lands it", async () => {
+    replayTimesOut = true;
+    await baseSave(ctxFor(body()), async () => {}).catch(() => {});
+    await settle();
+    expect(usage).toHaveLength(0);
+  });
+
+  test("a count that fails to write costs the landing nothing", async () => {
+    usageFails = true;
+    const ctx = ctxFor(body());
+
+    await baseSave(ctx, async () => {});
+    await settle();
+
+    expect((ctx.body as { error?: unknown }).error).toBe(0);
+    expect(defender.attackid).toBe(0);
   });
 });

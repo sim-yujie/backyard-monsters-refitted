@@ -63,7 +63,13 @@ const replays: Record<string, any>[] = [];
 /** Messages the landing leaves in a mailbox (#187, #361). */
 const notices: Record<string, any>[] = [];
 
+/** The dashboard's monster count rows written (`monsterUsage.ts`), or the error the write throws. */
+const usage: Record<string, any>[] = [];
+let usageFails = false;
+
 const reset = () => {
+  usage.length = 0;
+  usageFails = false;
   store.clear();
   sets.clear();
   flush.mockClear();
@@ -208,6 +214,15 @@ mock.module("./combat/replayRunner.js", () => ({
     return realRunner.replayAbandonedInWorker(...args);
   },
 }));
+
+mock.module("../stats/monsterUsageStore.js", () => ({
+  insertUsageRow: async (row: Record<string, any>) => {
+    if (usageFails) throw new Error("monster_usage is gone");
+    usage.push(row);
+  },
+}));
+/** Lets the landing's write, which it does not wait on, run. */
+const settle = () => new Promise((resolve) => setTimeout(resolve, 0));
 
 const {
   attackLandingDeferred,
@@ -1241,5 +1256,89 @@ describe("the hatch quest when the server finishes the attack (patch 7.8)", () =
     // A second finalisation finds nothing and counts nothing.
     expect(await finaliseAbandonedAttack(BASESAVEID, "test")).toBe("none");
     expect(hatchHave()).toBe(4);
+  }, REPLAY_TIMEOUT_MS);
+});
+
+describe("the dashboard's monster counts (owner, 23 Nov 2026)", () => {
+  const asKozuCamp = () => Object.assign(defender, { wmid: 11, level: 35 });
+
+  test("an abandoned attack is counted once, from the finaliser's replay", async () => {
+    asKozuCamp();
+    userSave.mapversion = 2;
+    await arm();
+    const expected = replayed(TICK);
+
+    expect(await finaliseAbandonedAttack(BASESAVEID, "test")).toBe("finalised");
+    expect(await finaliseAbandonedAttack(BASESAVEID, "test")).toBe("none");
+    await settle();
+
+    expect(usage).toHaveLength(1);
+    const pokeys = expected.attackers!.find((row) => row.monsterId === "C1")!;
+    expect(usage[0]).toMatchObject({
+      attackerUserid: ATTACKER,
+      attackId: ATTACK_ID,
+      mode: "camp",
+      arena: "mr2",
+      tribe: "kozu",
+      campLevel: 35,
+      repeat: false,
+      defenderUserid: null,
+      monsters: { C1: { l: 3, f: 300, x: pokeys.lost } },
+      champions: [{ c: "G5", l: 5 }],
+      damageBefore: 0,
+      damageAfter: defender.damage,
+      replayed: true,
+      assumed: false,
+    });
+  }, REPLAY_TIMEOUT_MS);
+
+  test("a Repeat attack is marked as one", async () => {
+    asKozuCamp();
+    userSave.mapversion = 2;
+    await arm();
+
+    await landCheckpointedAttack(BASESAVEID, "auto-attack", { left: false, recordPlan: false, repeat: true });
+    await settle();
+
+    expect(usage).toHaveLength(1);
+    expect(usage[0]).toMatchObject({ repeat: true, mode: "camp" });
+  }, REPLAY_TIMEOUT_MS);
+
+  test("a replay past its deadline counts nothing; the pass that lands it counts it once", async () => {
+    await arm({ startedat: now() - attackWindowSeconds() });
+    replayFails = "timeout";
+    try {
+      await finaliseBeforeLoad(31337, "attack", defender.baseid, true);
+    } finally {
+      replayFails = null;
+    }
+    await settle();
+    expect(usage).toHaveLength(0);
+
+    expect(await finaliseAbandonedAttack(BASESAVEID, "test")).toBe("finalised");
+    await settle();
+    expect(usage).toHaveLength(1);
+  }, REPLAY_TIMEOUT_MS);
+
+  test("a count that fails to write costs the landing nothing", async () => {
+    usageFails = true;
+    await arm();
+
+    expect(await finaliseAbandonedAttack(BASESAVEID, "test")).toBe("finalised");
+    await settle();
+
+    expect(defender.attackid).toBe(0);
+    expect(store.has(attackCheckpointKey(BASESAVEID))).toBe(false);
+    expect(usage).toHaveLength(0);
+  }, REPLAY_TIMEOUT_MS);
+
+  test("an attack on a player's yard names its owner", async () => {
+    Object.assign(defender, { type: "main" });
+    await arm();
+
+    expect(await finaliseAbandonedAttack(BASESAVEID, "test")).toBe("finalised");
+    await settle();
+
+    expect(usage[0]).toMatchObject({ mode: "player", arena: "mr1", defenderUserid: DEFENDER_OWNER, baseType: "main" });
   }, REPLAY_TIMEOUT_MS);
 });

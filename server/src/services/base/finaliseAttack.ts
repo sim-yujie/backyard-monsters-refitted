@@ -19,6 +19,7 @@ import { advanceBuildingTimers } from "./advanceBuildingTimers.js";
 import { invalidateSightAfterLanding } from "../maproom/sight/sightService.js";
 import { syncAttackedYardLevels } from "../yard/derivedLevels.js";
 import { beginAttackLanding, commitAttackLanding, rollbackAttackLanding } from "./attackLanding.js";
+import { recordMonsterUsage, rowFacts } from "../stats/monsterUsage.js";
 import { ATTACK_CHECKPOINT_TTL, checkpointExpired, checkpointSession, type AttackCheckpoint } from "./attackCheckpoint.js";
 import {
   acquireFinalLock,
@@ -114,6 +115,11 @@ export interface LandOptions {
    * false for an auto-attack, which only ever repeats one.
    */
   readonly recordPlan?: boolean;
+  /**
+   * A Repeat attack (`autoAttack.ts`): the dashboard's monster counts mark it
+   * so (`monsterUsage.ts`). False (the default) for an attack played by hand.
+   */
+  readonly repeat?: boolean;
 }
 
 /** What landing an attack wrote, for an auto-attack's result (issue #221). */
@@ -477,6 +483,21 @@ const finaliseLocked = async (basesaveid: number, trigger: string, options: Land
   // The loot on both sides and `attackid = 0` together.
   await commitAttackLanding();
   await invalidateSightAfterLanding(defender, flingerBefore);
+
+  // The dashboard's monster counts, from this replay, after the commit and
+  // not waited on: a write that fails is logged, the attack stays landed.
+  const facts = rowFacts(defender, userSave.mapversion);
+  if (facts) {
+    void recordMonsterUsage({
+      ...facts,
+      repeat: options.repeat ?? false,
+      session,
+      battle: outcome,
+      damageBefore,
+      damageAfter: landedDamage,
+      now,
+    });
+  }
 
   // Event loot (the monthly Krallen Hunt), before the cap, once: still under
   // the final lock, and after the commit, so a counter that fails to write

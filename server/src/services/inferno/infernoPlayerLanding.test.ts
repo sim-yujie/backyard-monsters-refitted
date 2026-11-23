@@ -155,6 +155,16 @@ mock.module("../base/combat/replayRunner.js", () => ({
   },
 }));
 
+/** The dashboard's monster count rows written (`monsterUsage.ts`). */
+const usage: Record<string, any>[] = [];
+mock.module("../stats/monsterUsageStore.js", () => ({
+  insertUsageRow: async (row: Record<string, any>) => {
+    usage.push(row);
+  },
+}));
+/** Lets the landing's write, which it does not wait on, run. */
+const settle = () => new Promise((resolve) => setTimeout(resolve, 0));
+
 const { baseSave } = await import("../../controllers/base/save/baseSave.js");
 const { combatConfig } = await import("../../config/CombatConfig.js");
 const MODE = combatConfig.mode;
@@ -244,6 +254,7 @@ const run = async (ctx: Context): Promise<{ data?: { reason?: string } } | null>
 const savedSwitch = process.env.INFERNO_ENABLED;
 
 beforeEach(() => {
+  usage.length = 0;
   process.env.INFERNO_ENABLED = "on";
   (combatConfig as { mode: typeof MODE }).mode = "log";
   canned = null;
@@ -799,5 +810,62 @@ describe("an attack left without its final save (owner, 27 Oct)", () => {
     expect(await closeInfernoPlayerAttack(TARGET_SAVEID, "test")).toBe("stale");
     expect(transactions).toBe(0);
     expect(target.attackid).toBe(999);
+  });
+});
+
+describe("the dashboard's monster counts (owner, 23 Nov 2026)", () => {
+  test("the final save counts the server's battle, on a player", async () => {
+    startSession();
+    canned = { damage: 30, flung: { IC1: 6 }, buildinghealthdata: { "50": 400 }, bunkerGarrisons: { 50: { IC1: 3 }, 51: { IC1: 3 } } };
+    expect(await run(finalSave())).toBeNull();
+    await settle();
+
+    expect(usage).toHaveLength(1);
+    expect(usage[0]).toMatchObject({
+      attackerUserid: ATTACKER,
+      attackId: ATTACK_ID,
+      mode: "player",
+      arena: "inferno",
+      defenderUserid: DEFENDER,
+      monsters: { IC1: { f: 6 } },
+      damageAfter: 30,
+      replayed: true,
+      assumed: false,
+    });
+  });
+
+  test("a refresh that closes it from its checkpoint counts it once", async () => {
+    startSession();
+    await checkpoint(900);
+    canned = { damage: 30, flung: { IC1: 6 }, bunkerGarrisons: { 50: { IC1: 3 }, 51: { IC1: 3 } } };
+    expect(await closeInfernoPlayerAttacksOf(ATTACKER, "build")).toBe(1);
+    expect(await closeInfernoPlayerAttacksOf(ATTACKER, "build")).toBe(0);
+    await settle();
+
+    expect(usage).toHaveLength(1);
+    expect(usage[0]).toMatchObject({ replayed: true, assumed: false });
+  });
+
+  test("with no battle past the grace, the whole army is stored as assumed", async () => {
+    startSession(undefined, now() - 11);
+    expect(await closeInfernoPlayerAttacksOf(ATTACKER, "build")).toBe(1);
+    await settle();
+
+    expect(usage).toHaveLength(1);
+    expect(usage[0]).toMatchObject({ assumed: true, replayed: false, monsters: { IC1: { f: 10 } } });
+  });
+
+  test("an attack left inside the grace with nothing flung is not counted", async () => {
+    startSession();
+    expect(await closeInfernoPlayerAttacksOf(ATTACKER, "build")).toBe(1);
+    await settle();
+    expect(usage).toHaveLength(0);
+  });
+
+  test("nor is a final save inside the grace with no fling log, which spends nothing", async () => {
+    startSession();
+    expect(await run(finalSave({ flinglog: "" }))).toBeNull();
+    await settle();
+    expect(usage).toHaveLength(0);
   });
 });

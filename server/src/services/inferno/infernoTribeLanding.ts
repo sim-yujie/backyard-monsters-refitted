@@ -34,7 +34,14 @@ import { descentFightableLog, purseAmounts } from "./descent.js";
 import { requireInfernoEnabled } from "./infernoGate.js";
 import { syncInfernoCap } from "./infernoLoad.js";
 import { infernoTribeOf } from "./infernoTribeMap.js";
-import { infernoTribeRespawnAt, infernoTribeYardOf, underHallFallen } from "./infernoTribes.js";
+import {
+  currentInfernoTribes,
+  infernoTribeRespawnAt,
+  infernoTribeYardOf,
+  infernoYardLevel,
+  underHallFallen,
+} from "./infernoTribes.js";
+import { recordMonsterUsage } from "../stats/monsterUsage.js";
 import {
   acquireInfernoTribeFinalLock,
   readInfernoTribeSession,
@@ -176,6 +183,8 @@ const writeInfernoTribeLanding = async (
     em.transactional(async (tx) => {
       const main = await lockMain(tx, user);
       const inferno = await lockArmyYard(tx, user, main);
+      // The level the map showed this tribe at, for the dashboard's camp counts.
+      const campLevel = shownTribeLevel(inferno, baseid);
 
       // The monsters that fought leave the Housing Bunkers, as caught up now,
       // capped by what they held at the start (`entryHoused`). A yard someone
@@ -222,9 +231,27 @@ const writeInfernoTribeLanding = async (
       tx.persist(row);
 
       await tx.flush();
-      return { credited: funded.credited, total: purseAmounts(main.iresources), state };
+      return { credited: funded.credited, total: purseAmounts(main.iresources), state, campLevel };
     })
   );
+
+  // The dashboard's monster counts, after the commit and not waited on
+  // (`monsterUsage.ts`): the replay's, or with none what the log spent.
+  if (battle || flung) {
+    void recordMonsterUsage({
+      session: tribe.session,
+      arena: "inferno",
+      mode: "camp",
+      baseType: BaseType.INFERNO_TRIBE,
+      tribe: "moloch",
+      campLevel: landed.campLevel,
+      battle,
+      flung,
+      damageBefore: kept?.damage ?? 0,
+      damageAfter: landed.state.damage ?? 0,
+      now,
+    });
+  }
 
   // Spent: the lock is still held, so a copy of this save finds nothing, and
   // the attack's checkpoint goes with it, so the finaliser does not land it again.
@@ -277,6 +304,15 @@ export const landInfernoTribeFromCheckpoint = async (
   }
 
   return writeInfernoTribeLanding(user, tribe, served, battle, battle?.flung ?? flungOf(fightable.events), now);
+};
+
+/** The level the map shows a Moloch tribe at for this Inferno yard (`currentInfernoTribes`), or null. */
+const shownTribeLevel = (inferno: Save, baseid: string): number | null => {
+  try {
+    return currentInfernoTribes(infernoYardLevel(inferno)).find((slot) => slot.baseid === baseid)?.level ?? null;
+  } catch {
+    return null;
+  }
 };
 
 /** The attacker's main row, locked and read afresh: the purse lives on it. */

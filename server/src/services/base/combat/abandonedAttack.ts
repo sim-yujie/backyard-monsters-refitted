@@ -16,6 +16,7 @@ import {
   type CombatTargetKind,
   type DefenderForces,
   type FlingEvent,
+  type AttackerReport,
   type FlingLog,
   type ResourceAmounts,
   type Roster,
@@ -139,6 +140,12 @@ export interface AbandonedOutcome {
    * the ids of the buildings flattened before it was applied.
    */
   fallenBefore?: Record<string, number[]>;
+  /**
+   * Each attacking monster type and champion as the battle saw it: level,
+   * flung, born on the field, lost (`BattleState.attackers`). Read only by the
+   * dashboard's monster counts (`services/stats/monsterUsage.ts`).
+   */
+  attackers?: readonly AttackerReport[];
 }
 
 /** The web client's name for the kind of yard (`AttackTargetKind`). */
@@ -299,6 +306,7 @@ export const replayAbandonedAttack = (input: AbandonedInput): AbandonedOutcome =
     defenderChampions: state.defenderChampions.map((caged) => ({ t: caged.t, hp: caged.hp })),
     lessons: state.lessons ?? [],
     ...(watched.size > 0 && { fallenBefore }),
+    attackers: state.attackers,
   };
 };
 
