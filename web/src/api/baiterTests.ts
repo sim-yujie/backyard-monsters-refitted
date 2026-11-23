@@ -1,4 +1,5 @@
 import { ApiError, NetworkError, get, postJson } from "./http";
+import { RULES_STAMP, startStamped } from "./rulesStamp";
 import type { ApiEnvelope, BaseLoadResponse } from "./types";
 
 /**
@@ -138,7 +139,9 @@ export const baiterTestsApi: BaiterTestsApi = {
   cancel: async (userid) => {
     await postJson(`${base}/invite/cancel`, { userid });
   },
-  start: (inviter) => postJson<FriendTestStart>(`${base}/test/start`, { inviter }),
+  // The server fights a test again, so it refuses a page with older battle
+  // rules with "New version", as every attack start (patch 8.4, `rulesStamp.ts`).
+  start: (inviter) => startStamped(postJson<FriendTestStart>(`${base}/test/start`, { inviter, rules: RULES_STAMP })),
   finish: (body) => postJson<FriendTestFinish>(`${base}/test/finish`, { ...body }),
   replay: (id) => get<FriendTestReplay>(`${base}/tests/${encodeURIComponent(String(id))}`),
 };

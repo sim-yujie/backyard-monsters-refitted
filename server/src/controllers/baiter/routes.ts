@@ -14,6 +14,7 @@ import { postgres } from "../../server.js";
 import { servedDefenderForces } from "../../services/base/combat/defenderForces.js";
 import { FINALISE_REPLAY_DEADLINE_MS, replayAbandonedInWorker, reserveReplaySlot } from "../../services/base/combat/replayRunner.js";
 import { redisRunTickets } from "../../services/baiter/baiterRunStore.js";
+import { requirePageRules, stampOf } from "../../services/base/combat/rulesStamp.js";
 import {
   baiterRefusedErr,
   cancelAnswer,
@@ -73,8 +74,14 @@ export const mountBaiterRoutes = (router: Router): void => {
     ok((ctx, now) => inviteAnswer(postgres.em, ctx.authUser, ctx.request.body, now, deps)));
   router.post(`${api}/invite/cancel`, apiVersion, verifyUserAuth, verifyAccountStatus, baiterInviteLimiter, logRequest,
     ok((ctx, now) => cancelAnswer(postgres.em, ctx.authUser, ctx.request.body, now)));
+  // A test is fought again by the server for the inviter's Results, so a page
+  // with older battle rules is refused at the start, before the ticket, as
+  // every attack start is (patch 8.4, `rulesStamp.ts`). Nothing is spent either way.
   router.post(`${api}/test/start`, apiVersion, verifyUserAuth, verifyAccountStatus, baiterStartLimiter, logRequest,
-    ok((ctx, now) => startAnswer(postgres.em, ctx.authUser, ctx.request.body, now, deps)));
+    ok(async (ctx, now) => {
+      requirePageRules(ctx, ctx.authUser, stampOf(ctx.request.body), "baiter/test/start");
+      return startAnswer(postgres.em, ctx.authUser, ctx.request.body, now, deps);
+    }));
   router.post(`${api}/test/finish`, apiVersion, verifyUserAuth, verifyAccountStatus, baiterFinishLimiter, logRequest,
     ok((ctx, now) => finishAnswer(postgres.em, ctx.authUser, ctx.request.body, now, deps)));
 };

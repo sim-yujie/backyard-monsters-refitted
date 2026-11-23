@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import manifest from "@/game/combat/rules/MANIFEST.json";
 import { runAutoAttack } from "./autoAttack";
+import { baiterTestsApi } from "./baiterTests";
 import { ApiError } from "./http";
 import { startDescentAttack, startPlayerAttack, startTribeAttack } from "./inferno";
 import { isNewVersionRefusal, onNewVersionRefusal, RULES_STAMP, startStamped } from "./rulesStamp";
@@ -51,6 +52,21 @@ describe("the stamp", () => {
     await runAutoAttack("21970243208", "moves-key");
     expect(sent.map((call) => call.body.get("rules"))).toEqual(Array(5).fill(RULES_STAMP));
     expect(sent[4]!.body.get("moves")).toBe("moves-key");
+  });
+
+  it("goes with a friend's Baiter test start, which the server fights again (beta 9 #4)", async () => {
+    const bodies: unknown[] = [];
+    vi.stubGlobal(
+      "fetch",
+      vi.fn((_url: string, init: RequestInit) => {
+        bodies.push(JSON.parse(String(init.body)));
+        return Promise.resolve(
+          new Response(JSON.stringify({ error: 0 }), { status: 200, headers: { "Content-Type": "application/json" } }),
+        );
+      }),
+    );
+    await baiterTestsApi.start(2505);
+    expect(bodies).toEqual([{ inviter: 2505, rules: RULES_STAMP }]);
   });
 });
 

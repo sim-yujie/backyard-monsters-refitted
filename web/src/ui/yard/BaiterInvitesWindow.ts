@@ -1,5 +1,6 @@
 import type { ReceivedInvite } from "@/api/baiterTests";
 import { BAITER_REFUSAL_TEXT, baiterRefusalOf, baiterTestsApi, type BaiterTestsApi } from "@/api/baiterTests";
+import { isNewVersionRefusal } from "@/api/rulesStamp";
 import type { BaseLoadResponse } from "@/api/types";
 import type { BaiterRun } from "@/game/baiter/baiterSession";
 import { testerRunOf } from "@/game/baiter/friendTest";
@@ -51,6 +52,8 @@ export const openFriendTestWindow = (
           options.onRun(testerRunOf(start, army));
           return null;
         } catch (error) {
+          // "New version": the card with its Reload button says it (`api/rulesStamp.ts`).
+          if (isNewVersionRefusal(error)) return null;
           return BAITER_REFUSAL_TEXT[baiterRefusalOf(error)];
         }
       },
