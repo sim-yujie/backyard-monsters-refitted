@@ -32,7 +32,9 @@
   --bubble-start: 84px;
   --bubble-step: 64px;
   /* The rows (a phone on its side, or no room for the column): More's middle
-     to the first row's, row to row, and one bubble's width with its word. */
+     to the first row's, row to row, and one bubble's width with its word.
+     The script lifts the first row (`--bubble-grid-lift`) when its words
+     would sit on Collect all beside More. */
   --bubble-grid-start: 84px;
   --bubble-grid-step: 86px;
   --bubble-pitch: 88px;
@@ -260,7 +262,7 @@
 .bubble-menu--grid.bubble-menu--open .bubble-menu__fan > .yard-dock__button {
   transform: translate(
       calc(var(--bubble-dx, var(--bubble-col, 0)) * var(--bubble-pitch)),
-      calc((var(--bubble-grid-start) + var(--bubble-row, 0) * var(--bubble-grid-step)) * -1)
+      calc((var(--bubble-grid-lift, var(--bubble-grid-start)) + var(--bubble-row, 0) * var(--bubble-grid-step)) * -1)
     )
     scale(1);
 }

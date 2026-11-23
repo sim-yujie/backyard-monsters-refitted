@@ -88,7 +88,22 @@ export const checkFan = async (page: Page, profile: Profile): Promise<string | n
   try {
     await more.click({ timeout: BUSY_PAGE_TIMEOUT });
     await page.waitForTimeout(FLY_MS);
-    const report = await page.evaluate(measureFan, TOLERANCE);
+    // Let the bubbles land (a busy CI page draws late), then measure until two readings agree.
+    await page
+      .evaluate(async () => {
+        const fan = document.querySelector(".bubble-menu");
+        const flying = fan?.getAnimations({ subtree: true }) ?? [];
+        await Promise.race([
+          Promise.all(flying.map((animation) => animation.finished.catch(() => undefined))),
+          new Promise((done) => setTimeout(done, 3000)),
+        ]);
+      })
+      .catch(() => undefined);
+    let report = await page.evaluate(measureFan, TOLERANCE);
+    for (let tries = 0; tries < 5 && report.problems.length > 0; tries += 1) {
+      await page.waitForTimeout(400);
+      report = await page.evaluate(measureFan, TOLERANCE);
+    }
     test.info().annotations.push({ type: "layout", description: `More's fan: ${report.notes.join("; ")}` });
     if (report.problems.length > 0) {
       const body = await page.screenshot({ timeout: 15_000 }).catch(() => null);

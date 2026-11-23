@@ -378,6 +378,16 @@ describe("planFan: the fan measures its room (old-layout fix, beta 9)", () => {
     expect(places(plan, 8).map(([dx]) => dx)).toEqual([-1, 0, 1, 2, -1, 0, 1, 2]);
   });
 
+  it("lifts the first row so its words clear Collect all under it, and not for one off to the side", () => {
+    // 980x551: Collect all's ring left of More reaches 35 px above More's middle.
+    const room = { up: 379, left: 600, right: 300, label: 22, obstacles: [{ left: -150, right: -40, up: 35 }] };
+    const plan = planFan(8, room, { ...upright, disc: 56 }, false);
+    expect(plan).toMatchObject({ grid: true, columns: 3, direction: -1, offset: 0, lift: 93 });
+    // Upright phone: Collect all is right of More, the rows run left.
+    const phone = { up: 361, left: 235, right: 139, label: 22, obstacles: [{ left: 53, right: 133, up: 45 }] };
+    expect(planFan(8, phone, upright, false).lift).toBeUndefined();
+  });
+
   it("falls back to its usual shape when it cannot measure (no layout, as in these tests)", () => {
     expect(planFan(8, null, upright, false).grid).toBe(false);
     expect(planFan(8, null, sideways, true)).toEqual({ grid: true, columns: 3, direction: 1, offset: 0 });

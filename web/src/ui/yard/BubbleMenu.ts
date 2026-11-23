@@ -64,6 +64,14 @@ export interface FanRoom {
   readonly left: number;
   /** To the screen's right edge. */
   readonly right: number;
+  /**
+   * The dock's other buttons that stand higher than More's middle (Collect
+   * all's ring beside it): how far up they reach and their sides, in px from
+   * More's middle. The rows' first row keeps its words clear of them.
+   */
+  readonly obstacles?: readonly { readonly left: number; readonly right: number; readonly up: number }[];
+  /** A bubble's word under it, in px (More's own word). */
+  readonly label?: number;
 }
 
 /** The fan's sizes from bubble-menu.css, in px. */
@@ -88,6 +96,8 @@ export interface FanPlan {
   readonly direction: 1 | -1;
   /** Bubbles' widths the rows are moved by (towards the room) from starting over More. */
   readonly offset: number;
+  /** More's middle to the first row's middle, in px, when the dock beside More needs more than `gridStart`. */
+  readonly lift?: number;
 }
 
 /** The shape without measuring: the column, or on a phone on its side rows of three running right. */
@@ -116,17 +126,23 @@ export const planFan = (
   const half = sizes.disc / 2;
   if (!sideways && sizes.columnStart + (count - 1) * sizes.columnStep + half <= room.up) return fallback;
   const direction: 1 | -1 = sideways ? 1 : -1;
+  const label = room.label ?? 22;
   const first = Math.min(GRID_COLUMNS, count);
   for (let columns = first; columns <= count; columns += 1) {
     const rows = Math.ceil(count / columns);
-    if (sizes.gridStart + (rows - 1) * sizes.gridStep + half > room.up) continue;
     for (let back = 0; back < columns; back += 1) {
       const offset = back === 0 ? 0 : -direction * back;
       const places = Array.from({ length: columns }, (_, column) => direction * column + offset);
-      const leftmost = Math.min(...places);
-      const rightmost = Math.max(...places);
-      if ((0.5 - leftmost) * sizes.pitch <= room.left && (rightmost + 0.5) * sizes.pitch <= room.right)
-        return { grid: true, columns, direction, offset };
+      const left = (Math.min(...places) - 0.5) * sizes.pitch;
+      const right = (Math.max(...places) + 0.5) * sizes.pitch;
+      if (-left > room.left || right > room.right) continue;
+      // The first row's words stand clear of what of the dock is under the rows.
+      const under = (room.obstacles ?? []).filter((box) => box.right > left && box.left < right);
+      const floor = Math.max(0, ...under.map((box) => box.up));
+      const start = Math.max(sizes.gridStart, floor + FAN_GAP / 2 + label + FAN_GAP / 2 + half);
+      if (start + (rows - 1) * sizes.gridStep + half > room.up) continue;
+      const plan: FanPlan = { grid: true, columns, direction, offset };
+      return start > sizes.gridStart ? { ...plan, lift: Math.ceil(start) } : plan;
     }
   }
   return { grid: true, columns: GRID_COLUMNS, direction, offset: 0 };
@@ -355,6 +371,8 @@ export class BubbleMenu {
   private usePlan(plan: FanPlan): void {
     this.plan = plan;
     this.element.classList.toggle("bubble-menu--grid", plan.grid);
+    if (plan.lift === undefined) this.element.style.removeProperty("--bubble-grid-lift");
+    else this.element.style.setProperty("--bubble-grid-lift", `${plan.lift}px`);
     this.refresh();
   }
 
@@ -368,7 +386,19 @@ export class BubbleMenu {
     const y = box.top + box.height / 2;
     const hud = document.querySelector(".hud")?.getBoundingClientRect();
     const top = hud && hud.height > 0 ? Math.max(0, hud.bottom) : 0;
-    return { up: y - top - FAN_GAP, left: x - FAN_GAP, right: window.innerWidth - x - FAN_GAP };
+    const obstacles = [...this.options.scope.querySelectorAll(".yard-dock__button, .yard-collect")]
+      .filter((element) => !this.element.contains(element))
+      .map((element) => element.getBoundingClientRect())
+      .filter((rect) => rect.width > 0 && rect.height > 0 && rect.top < y)
+      .map((rect) => ({ left: rect.left - x, right: rect.right - x, up: y - rect.top }));
+    const word = this.button.querySelector(".yard-dock__label")?.getBoundingClientRect().height ?? 0;
+    return {
+      up: y - top - FAN_GAP,
+      left: x - FAN_GAP,
+      right: window.innerWidth - x - FAN_GAP,
+      obstacles,
+      ...(word > 0 ? { label: word } : {}),
+    };
   }
 
   /** The fan's sizes as bubble-menu.css sets them for this screen. */

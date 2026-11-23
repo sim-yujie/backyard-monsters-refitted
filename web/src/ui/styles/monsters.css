@@ -100,9 +100,9 @@
 
   /* The phone's pinched plate ends (skin.css): the words keep their size. */
   :root[data-skin] .monsters-screen .tab-row > .tabs__tab {
-    --skin-tab-cap: 6px;
+    --skin-tab-cap: 5px;
 
-    padding-inline: 4px;
+    padding-inline: 2px;
   }
 
   :root[data-skin] .monsters-screen:not(.siege-screen) .panel__titlebar > .guide-help {
@@ -541,6 +541,29 @@
   color: var(--colour-text);
 }
 
+/* ── Short screens ───────────────────────────────────────────────────────── */
+
+/* The card in the little height a short screen leaves it (about 110px on a
+   phone on its side, under the Lab's or the academies' strip; less than its
+   portrait and buttons on a 980x551 tablet): the cost and the buttons (Start
+   unlocking, Train, Research, Instant) come first, then the monster with a
+   smaller portrait and its words, which scroll. The monster picked is the
+   lit row beside it. Under the portrait they were below the fold
+   (old-layout fix, beta 9). */
+@media (max-height: 600px) {
+  .locker-detail__portrait {
+    width: 56px;
+    height: 56px;
+  }
+
+  .locker-detail__action {
+    order: -1;
+    flex-shrink: 0;
+    gap: var(--space-1);
+    padding: var(--space-2) var(--space-3);
+  }
+}
+
 /* ── Narrow screens ──────────────────────────────────────────────────────── */
 
 /* The card goes under the list. */
@@ -580,23 +603,6 @@
     overflow-y: auto;
   }
 
-  /* The card in the little height there is (about 110px under the Lab's
-     and the academies' strip): the cost and the buttons (Start unlocking,
-     Train, Research, Instant) come first, then the monster, a smaller
-     portrait, and its words, which scroll. The monster picked is the lit
-     row beside it. Under the portrait they were below the fold (old-layout
-     fix, beta 9). */
-  .locker-detail__portrait {
-    width: 56px;
-    height: 56px;
-  }
-
-  .locker-detail__action {
-    order: -1;
-    flex-shrink: 0;
-    gap: var(--space-1);
-    padding: var(--space-2) var(--space-3);
-  }
 }
 
 /* A phone: a bottom sheet over the lower part of the yard. */
