@@ -821,9 +821,8 @@ export class HccBench {
     const stack = step("btn--outline qty-stepper__fill hatch-add__fill", `${size} more`, `+${size}`, now + size, now >= max);
     stack.classList.remove("qty-stepper__step");
     const countField = el("label", "hcc-count-field");
-    const marker = el("span", "hcc-count-mark", "+");
-    marker.setAttribute("aria-hidden", "true");
-    countField.append(marker, input);
+    // A plain count, as on the hatching panel: no badge or ring tying it to the last stack (neon, 23 Nov).
+    countField.append(input);
     controls.replaceChildren(
       step("hatch-add__step hatch-add__step--minus", "One fewer", "−", now - 1, now <= 0),
       countField,
