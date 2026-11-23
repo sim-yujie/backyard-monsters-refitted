@@ -37,7 +37,7 @@
      script lifts it further (`--bubble-grid-lift`) when its words would sit
      on Collect all beside More. */
   --bubble-grid-start: 96px;
-  --bubble-grid-step: 86px;
+  --bubble-grid-step: 96px;
   --bubble-pitch: 88px;
 
   z-index: 1;

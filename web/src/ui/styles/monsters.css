@@ -558,6 +558,10 @@
    moves. Its heading goes under the portrait when the two do not fit side by
    side, so long numbers ("25,000 → 38,500") are not cut off. */
 @media (min-width: 760.02px) {
+  .locker__detail {
+    container: locker-card / inline-size;
+  }
+
   .locker-detail__head {
     flex-wrap: wrap;
   }
@@ -570,11 +574,37 @@
     position: sticky;
     bottom: 0;
     z-index: 1;
+    /* A soft edge over what scrolls behind it. */
+    box-shadow: 0 -6px 10px -6px rgb(0 0 0 / 45%);
     /* Opaque: the sunken tint over the window's own fill, so the numbers
        scrolling behind do not show through. */
     background:
       linear-gradient(var(--colour-surface-sunken), var(--colour-surface-sunken)),
       var(--colour-surface-base);
+  }
+}
+
+/* A narrow card (224px on a 768px iPad upright): a smaller portrait, so the
+   name and numbers stay beside it and in sight above the buttons (neon
+   round 2: the name sat half under them). */
+@container locker-card (max-width: 300px) {
+  .locker-detail__portrait {
+    width: 48px;
+    height: 48px;
+  }
+
+  .locker-detail__heading {
+    flex-basis: 120px;
+  }
+
+  /* A step smaller, so "25,000 → 38,500" fits beside the portrait. */
+  .monster-stats {
+    font-size: var(--text-xs);
+    column-gap: var(--space-2);
+  }
+
+  .monster-stats .res-amount > .res-icon {
+    height: 20px;
   }
 }
 

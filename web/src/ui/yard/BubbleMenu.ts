@@ -55,6 +55,8 @@ export const GRID_COLUMNS = 3;
 
 /** Kept free between the fan and the top bar or the screen's side. */
 const FAN_GAP = 8;
+/** Extra room the column keeps under the top bar. */
+const COLUMN_GAP = 12;
 
 /** The fan's room, in px from the middle of More's disc. */
 export interface FanRoom {
@@ -124,7 +126,10 @@ export const planFan = (
   if (!room || count < 1 || !Object.values(sizes).every((size) => Number.isFinite(size) && size > 0))
     return fallback;
   const half = sizes.disc / 2;
-  if (!sideways && sizes.columnStart + (count - 1) * sizes.columnStep + half <= room.up) return fallback;
+  // The column keeps a little more under the top bar than the rows: its top
+  // bubble touched the bar at 1024x768 (neon round 2).
+  if (!sideways && sizes.columnStart + (count - 1) * sizes.columnStep + half + COLUMN_GAP <= room.up)
+    return fallback;
   const direction: 1 | -1 = sideways ? 1 : -1;
   const label = room.label ?? 22;
   const first = Math.min(GRID_COLUMNS, count);
