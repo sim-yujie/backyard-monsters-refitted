@@ -145,6 +145,12 @@ export interface CellPanelAction {
   readonly detail: HTMLElement;
   /** Placed last among the chips, when present: a countdown, say. */
   readonly chip?: HTMLElement;
+  /**
+   * On a wild camp, placed where the damage chip goes (after the range chip)
+   * when the panel shows no damage chip of its own: Repeat attack's "Damaged"
+   * for a camp scratched below 1% (patch 8.3). The action shows or hides it.
+   */
+  readonly damageChip?: HTMLElement;
   setCell(cell: OffsetCell, payload: MapCell | undefined): void;
   tick(nowSeconds: number): void;
 }
@@ -474,7 +480,7 @@ export class CellPanel {
       `Wild monsters · ${where}`,
     );
     this.addReach(cell);
-    this.addDamage(payload.dm, payload.d === 1);
+    this.addDamage(payload.dm, payload.d === 1, true);
     this.addHeightChip(payload.i);
     this.addLandChip(payload.lf);
     this.setActions("attack", "Look inside");
@@ -666,9 +672,10 @@ export class CellPanel {
     this.addChip("range", reach.text, reach.inRange ? "accent" : "warning");
   }
 
-  private addDamage(damage: number, destroyed: boolean): void {
+  private addDamage(damage: number, destroyed: boolean, camp = false): void {
     if (destroyed) this.addChip("alert", "Destroyed", "danger");
     else if (damage > 0) this.addChip("alert", `Damaged ${damage}%`, "danger");
+    else if (camp) for (const action of this.extras) if (action.damageChip) this.chips.append(action.damageChip);
   }
 
   private addChip(

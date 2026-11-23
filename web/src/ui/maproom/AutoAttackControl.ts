@@ -1,7 +1,7 @@
 import type { AutoAttackPlanResponse } from "@/api/autoAttack";
 import { CellType, isFogCell, isWaterCell, type MapCell } from "@/api/types";
 import type { OffsetCell } from "@/game/HexGrid";
-import { movesLineText, noPlanText, planSourceText, repeatRefusal } from "@/ui/attack/autoAttackText";
+import { movesLineText, noPlanHint, planSourceText, repeatRefusal } from "@/ui/attack/autoAttackText";
 import { missingList, roomList } from "@/ui/attack/AutoAttackFlow";
 import { el, icon } from "@/ui/maproom1/icons";
 import type { CellPanelAction } from "./CellPanel";
@@ -17,8 +17,14 @@ import "@/ui/styles/autoattack.css";
  * its damage changes and shows only what the answer says. The button opens
  * the confirm sheet ({@link AutoAttackControlOptions.onRepeat}); nothing runs
  * from the panel itself. A camp the player has no plan for shows nothing but
- * a hint on how to get one.
+ * a hint on how to get one, or, when the server says the camp is not fresh,
+ * a warning that attacking it would not save a plan, with a "Damaged" chip
+ * when the camp's damage reads 0% (patch 8.3).
  */
+
+/** The chip's words, and its tooltip: the damage is real but rounds to 0%. */
+export const SCRATCH_CHIP_TEXT = "Damaged";
+export const SCRATCH_CHIP_TITLE = "Damaged below 1%";
 
 export interface AutoAttackControlOptions {
   /** `getAutoAttackPlan`. */
@@ -45,6 +51,8 @@ const campOf = (payload: MapCell | undefined): { baseid: string; tribe: string; 
 export class AutoAttackControl implements CellPanelAction {
   readonly button: HTMLButtonElement;
   readonly detail: HTMLElement;
+  /** "Damaged" for a camp scratched below 1%, where the panel's damage chip goes. */
+  readonly damageChip: HTMLElement;
 
   private readonly options: AutoAttackControlOptions;
   private readonly line: HTMLElement;
@@ -71,6 +79,11 @@ export class AutoAttackControl implements CellPanelAction {
     this.detail = document.createElement("div");
     this.detail.className = "auto-attack-action";
     this.detail.append(this.line, this.missing);
+
+    this.damageChip = el("span", "mr2-chip mr2-chip--danger auto-attack-scratch");
+    this.damageChip.title = SCRATCH_CHIP_TITLE;
+    this.damageChip.append(icon("alert", 16, "map-icon"), el("span", "", SCRATCH_CHIP_TEXT));
+    this.damageChip.hidden = true;
 
     this.render();
   }
@@ -110,6 +123,7 @@ export class AutoAttackControl implements CellPanelAction {
     this.request += 1;
     this.button.remove();
     this.detail.remove();
+    this.damageChip.remove();
   }
 
   private async fetch(): Promise<void> {
@@ -134,8 +148,10 @@ export class AutoAttackControl implements CellPanelAction {
     const camp = this.camp;
     this.missing.replaceChildren();
     this.missing.hidden = true;
-    this.detail.classList.remove("auto-attack-action--refused");
+    this.detail.classList.remove("auto-attack-action--refused", "auto-attack-action--warn");
+    this.line.classList.remove("auto-attack-action__line--warn");
     this.detail.querySelector(".auto-attack-action__history")?.remove();
+    this.damageChip.hidden = true;
 
     if (!camp || state.status === "none" || state.status === "failed") {
       this.button.hidden = true;
@@ -150,10 +166,19 @@ export class AutoAttackControl implements CellPanelAction {
     }
 
     const { answer } = state;
+    // A camp the server says is not fresh, though its damage rounds to 0%:
+    // the panel shows no damage chip of its own, so this one says it.
+    this.damageChip.hidden = !(answer.fresh === false && answer.damage <= 0);
     if (!answer.plan) {
       this.button.hidden = true;
       this.detail.hidden = false;
-      this.line.textContent = noPlanText(camp.tribe, camp.level);
+      const hint = noPlanHint(camp.tribe, camp.level, answer.fresh);
+      if (hint.warn) {
+        // The sign hangs beside the words, as on Attack over (neon, 23 Nov 2026).
+        this.detail.classList.add("auto-attack-action--warn");
+        this.line.classList.add("auto-attack-action__line--warn");
+        this.line.replaceChildren(icon("alert", 14, "map-icon auto-attack-action__warn-icon"), el("span", "", hint.text));
+      } else this.line.textContent = hint.text;
       return;
     }
 

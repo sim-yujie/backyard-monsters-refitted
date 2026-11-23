@@ -130,6 +130,16 @@ mock.module("@mikro-orm/core", () => ({
   }),
 }));
 
+/** The dashboard's monster count rows written (`monsterUsage.ts`). */
+const usage: Record<string, any>[] = [];
+mock.module("../stats/monsterUsageStore.js", () => ({
+  insertUsageRow: async (row: Record<string, any>) => {
+    usage.push(row);
+  },
+}));
+/** Lets the landing's write, which it does not wait on, run. */
+const settle = () => new Promise((resolve) => setTimeout(resolve, 0));
+
 const { baseSave } = await import("../../controllers/base/save/baseSave.js");
 const { attackCheckpoint } = await import("../../controllers/base/attackCheckpoint.js");
 const { finaliseRowlessAttacksOf } = await import("../base/finaliseRowlessAttack.js");
@@ -228,6 +238,7 @@ const hallOf = (baseid: string): string => {
 const savedSwitch = process.env.INFERNO_ENABLED;
 
 beforeEach(() => {
+  usage.length = 0;
   crashOn = null;
   process.env.INFERNO_ENABLED = "on";
   (combatConfig as { mode: typeof MODE }).mode = "log";
@@ -530,5 +541,41 @@ describe("a Moloch tribe attack left without a save", () => {
     expect(snapshot()).toEqual(after);
     expect(store.has(infernoTribeSessionKey(ATTACKER))).toBe(false);
     expect(store.has(rowlessCheckpointKey(REF))).toBe(false);
+  });
+});
+
+describe("the dashboard's monster counts (owner, 23 Nov 2026)", () => {
+  test("the final save counts a Moloch camp at the level the map shows it, once", async () => {
+    const { currentInfernoTribes, infernoYardLevel } = await import("./infernoTribes.js");
+    const shown = currentInfernoTribes(infernoYardLevel(inferno as never)).find((slot) => slot.baseid === "214")!.level;
+    startSession();
+    canned = { damage: 30, flung: { IC1: 6 }, attackloot: { r1: 0, r2: 0, r3: 0, r4: 0 } };
+    expect(await run(finalSave())).toBeNull();
+    await run(finalSave());
+    await settle();
+
+    expect(usage).toHaveLength(1);
+    expect(usage[0]).toMatchObject({
+      attackerUserid: ATTACKER,
+      mode: "camp",
+      arena: "inferno",
+      tribe: "moloch",
+      campLevel: shown,
+      monsters: { IC1: { f: 6 } },
+      damageAfter: 30,
+      replayed: true,
+    });
+  });
+
+  test("the finaliser counts one left without a save", async () => {
+    startSession();
+    sets.clear();
+    canned = { damage: 30, flung: { IC1: 6 }, attackloot: { r1: 0, r2: 0, r3: 0, r4: 0 } };
+    await sendCheckpoint("214", SCRATCH, 1_200, [INFERNO_BASEID]);
+    expect(await finaliseRowlessAttacksOf(ATTACKER, "load")).toBe(1);
+    await settle();
+
+    expect(usage).toHaveLength(1);
+    expect(usage[0]).toMatchObject({ tribe: "moloch", replayed: true });
   });
 });

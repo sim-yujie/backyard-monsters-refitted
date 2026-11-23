@@ -32,6 +32,11 @@
  * them no longer play the same. The owner (desk, 23 Nov 2026) chose to drop
  * them: replays from before beta 9 stop playing.
  *
+ * Patch 8.3 (23 Nov 2026) keeps it empty: every building, not only a wall,
+ * now sits on the grid at its stored X/Y (bug #61), which moves a building
+ * off Flash's 10-unit lattice by a cell, and with it its routes, tower range
+ * and traps. No replay stamped with an earlier version plays the same.
+ *
  * Add the version a change replaces only when that change moves no battle.
  * A change that moves any battle result must empty this list.
  */

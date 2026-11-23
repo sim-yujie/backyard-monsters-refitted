@@ -55,11 +55,12 @@ import type {
  * `_position` (`CreepBase.as:735-741`, `:1543`; `ChampionBase.as:428-429`,
  * `:662`), so those are circles on screen: {@link screenDistanceSquared}.
  *
- * Every building carries its stored `x`/`y` and `cx`/`cy`, the anchor as
- * `PATHING.FromISO(_mc)` sees it: the stored point after a round trip through
- * the screen, which can sit one unit off it because `GRID.ToISO` floors and
- * `PATHING.FromISO` truncates. A wall is the exception: it is anchored on its
- * stored X/Y (see {@link buildEngineYard}).
+ * Every building carries its stored `x`/`y` and `cx`/`cy`, the anchor the
+ * grid, tower range and traps use. Flash's anchor was `PATHING.FromISO(_mc)`:
+ * the stored point after a round trip through the screen, which can sit one
+ * unit off it because `GRID.ToISO` floors and `PATHING.FromISO` truncates.
+ * Here it is the stored X/Y itself, for walls since patch 7.9 and every
+ * building since 8.3 (see {@link buildEngineYard}).
  *
  * ## Fidelity notes
  *
@@ -441,8 +442,9 @@ export interface EngineBuilding {
   readonly x: number;
   readonly y: number;
   /**
-   * The anchor as the grid and range tests see it, `PATHING.FromISO(_mc)`;
-   * for a wall, its stored X/Y (the cells it is drawn on).
+   * The anchor as the grid and range tests see it: the stored X/Y, the cells
+   * the building is drawn on (walls since patch 7.9, every building since
+   * 8.3). Flash used `PATHING.FromISO(_mc)`, up to a cell off it.
    */
   readonly cx: number;
   readonly cy: number;
@@ -561,18 +563,20 @@ export const buildEngineYard = (input: EngineYardInput): EngineYard => {
     const level = rawLevel > 0 ? rawLevel : 1;
     const footprint = footprintOf(type, yardKind);
     const onScreen = screenOf(numberOf(data.X), numberOf(data.Y));
-    // A wall blocks the grid exactly where it is drawn: its stored X/Y, not the
-    // screen round trip Flash used. Where X - Y is an odd multiple of 5, the
-    // round trip lands one unit low, the 2x2 cell registration can drop a
-    // whole cell, and a one-cell slit opens inside the drawn wall that
-    // monsters walk through (patch 7.9, owner 18 Nov 2026;
-    // `wallStairLeak.test.ts`). A deliberate break from Flash: on its 10-unit
-    // drag lattice (X - Y a multiple of 10) both give the same point, but many
-    // tribe yards' walls (Map Room 1-3, Moloch) sit off that lattice and now
-    // block a cell from where Flash had them.
-    const anchor = blocksPathing(type)
-      ? { x: numberOf(data.X), y: numberOf(data.Y) }
-      : fromIso(onScreen.x, onScreen.y);
+    // Every building sits on the grid exactly where it is drawn: its stored
+    // X/Y, not the screen round trip Flash used. Where X - Y is an odd
+    // multiple of 5, the round trip lands one unit low and drops the whole
+    // footprint one cell up-left of the drawing. Patch 7.9 (owner, 18 Nov
+    // 2026; `wallStairLeak.test.ts`) moved walls onto their stored X/Y, which
+    // left such a building's target cells under the wall beside it: the route
+    // ended outside the wall and a melee monster hit the building through it
+    // (bug #61, player arC). Patch 8.3 (owner's fix A, 23 Nov 2026;
+    // `shiftedBuildingWall.test.ts`) anchors every building the same way. A
+    // deliberate break from Flash: on its 10-unit drag lattice (X - Y a
+    // multiple of 10) both give the same point, but off it a building's
+    // footprint, tower scan point and range now sit a cell from where Flash
+    // had them.
+    const anchor = { x: numberOf(data.X), y: numberOf(data.Y) };
     const ceiling = buildingMaxHp(type, level, yardKind);
     const reported = health[String(id)];
     const hp =

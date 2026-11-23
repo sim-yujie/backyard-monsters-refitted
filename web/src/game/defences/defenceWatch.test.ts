@@ -41,8 +41,8 @@ describe("the version check", () => {
     expect(watchRefusal(run("0123456789abcdef"))).toBe("update");
   });
 
-  it("refuses one fought under 7.7.2 or 7.8 rules, which the 7.9 wall fix replays differently", () => {
-    for (const stamp of ["b4f0c156a8d2afee", "b03bd4b8bac1386d"]) {
+  it("refuses one fought under 7.7.2 to 8.2 rules, which the 7.9 wall fix and 8.3's building anchors replay differently", () => {
+    for (const stamp of ["b4f0c156a8d2afee", "b03bd4b8bac1386d", "3cb9cc66416d5eda", "0ba3fde8701104af"]) {
       expect(defenceRefusal({ hasReplay: true, playable: true, rulesVersion: stamp }, "new")).toBe("update");
       expect(watchRefusal(run(stamp))).toBe("update");
     }

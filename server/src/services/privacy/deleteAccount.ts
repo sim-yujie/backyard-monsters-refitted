@@ -195,6 +195,7 @@ const deleteSteps = (u: number): DeleteStep[] => [
   { label: "Baiter test invites (both ways)", table: "baiter_invite", where: `inviter_userid = ? OR tester_userid = ?`, params: [u, u] },
   { label: "friend tests of their yard", table: "baiter_test", where: `inviter_userid = ?`, params: [u] },
   { label: "attack plans", table: "attack_plan", where: `userid = ?`, params: [u] },
+  { label: "the dashboard's monster counts of their attacks", table: "monster_usage", where: `attacker_userid = ?`, params: [u] },
   { label: "Map Room 1 neighbour lists", table: "maproom", where: `userid = ?`, params: [u] },
   { label: "inferno neighbour lists", table: "maproom_inferno", where: `userid = ?`, params: [u] },
   { label: "anti-cheat report", table: "report", where: `userid = ?`, params: [u] },
@@ -250,6 +251,14 @@ const updateSteps = (u: number, username: string): UpdateStep[] => [
     set: `attacker_username = ?, attacker_pic_square = NULL`,
     setParams: [DELETED_PLAYER_NAME],
     where: `attacker_userid = ?`,
+    params: [u],
+  },
+  {
+    label: "the dashboard's monster counts of attacks on them (account number removed)",
+    table: "monster_usage",
+    set: `defender_userid = NULL`,
+    setParams: [],
+    where: `defender_userid = ?`,
     params: [u],
   },
   {

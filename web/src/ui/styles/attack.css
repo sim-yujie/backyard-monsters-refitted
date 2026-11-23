@@ -1397,6 +1397,38 @@
   border-color: var(--colour-success, var(--colour-border));
 }
 
+/* Why no Repeat plan was saved (patch 8.3): its own line under "Result saved.", in the warning tint. */
+.attack-end__status-warn {
+  display: flex;
+  gap: var(--space-1);
+  align-items: flex-start;
+  margin: var(--space-1) 0 0;
+  color: var(--colour-warning);
+}
+
+.attack-end__status-warn[hidden] {
+  display: none;
+}
+
+/* A saved box with a warning line takes the warning's colour for its border (neon). */
+.attack-end__status--saved.attack-end__status--warned {
+  border-color: var(--colour-warning);
+}
+
+/* Classic's parchment: the amber is too soft beside the brown text; the damage chip's red reads (neon). */
+:root[data-skin="flash"] .attack-end__status-warn {
+  color: var(--colour-danger);
+}
+
+:root[data-skin="flash"] .attack-end__status--saved.attack-end__status--warned {
+  border-color: var(--colour-danger);
+}
+
+.attack-end__status-warn-icon {
+  flex: none;
+  margin-top: 2px;
+}
+
 .attack-end__status--failed {
   border-color: var(--colour-danger, var(--colour-border));
   color: var(--colour-danger, var(--colour-text));

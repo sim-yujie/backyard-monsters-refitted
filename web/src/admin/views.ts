@@ -51,6 +51,7 @@ export const VIEWS = [
   ["events", "Events", "announcements"],
   ["players", "Players", "activity"],
   ["activity", "Gameplay", "activity"],
+  ["monsters", "Monsters", "activity"],
   ["health", "Server health", "server"],
 ] as const satisfies readonly (readonly [string, string, PageId])[];
 

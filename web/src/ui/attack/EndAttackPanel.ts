@@ -5,6 +5,7 @@ import { championName } from "@/ui/attack/ArmyPanel";
 import { RESOURCE_KEYS, resourceAmount, resourceName, type ResourceRealm } from "@/ui/resourceIcon";
 import { Panel } from "@/ui/Panel";
 import { weekendChip } from "@/ui/events/weekendUi";
+import { icon } from "@/ui/maproom1/icons";
 
 /**
  * The one screen at the end of an attack (`docs/design/attack-flow.md` §F6):
@@ -68,6 +69,8 @@ export interface SavedInfo {
   readonly result?: { readonly title?: string; readonly outcome: string; readonly tone: OutcomeTone } | null;
   /** The saved line's words, when not just "Result saved." */
   readonly note?: string;
+  /** A warning line under it, with the warning sign and tint: why no Repeat plan was saved (patch 8.3). */
+  readonly warn?: string;
   /** Unix seconds when the target is back, for a Moloch tribe left wrecked (WP 2.10). */
   readonly backAt?: number | null;
   /** Unix seconds until which the defender is now protected, if the server said so. */
@@ -146,6 +149,7 @@ export class EndAttackPanel {
   private readonly storageNote: HTMLElement;
   private readonly status: HTMLElement;
   private readonly statusText: HTMLElement;
+  private readonly statusWarn: HTMLElement;
   private readonly protection: HTMLElement;
   private readonly returnButton: HTMLButtonElement;
   private readonly retryButton: HTMLButtonElement;
@@ -213,7 +217,10 @@ export class EndAttackPanel {
     this.status.setAttribute("aria-live", "polite");
     this.statusText = document.createElement("span");
     this.statusText.textContent = "Saving the result…";
-    this.status.append(this.statusText);
+    this.statusWarn = document.createElement("p");
+    this.statusWarn.className = "attack-end__status-warn";
+    this.statusWarn.hidden = true;
+    this.status.append(this.statusText, this.statusWarn);
 
     this.protection = document.createElement("p");
     this.protection.className = "u-muted attack-end__protection";
@@ -343,6 +350,11 @@ export class EndAttackPanel {
     }
     this.status_ = "saved";
     this.setStatus("saved", info.note ?? "Result saved.");
+    if (info.warn) {
+      this.statusWarn.replaceChildren(icon("alert", 16, "attack-end__status-warn-icon"), document.createTextNode(info.warn));
+      this.statusWarn.hidden = false;
+      this.status.classList.add("attack-end__status--warned");
+    }
     this.retryButton.hidden = true;
     this.leaveButton.hidden = true;
     this.hideLeave();
@@ -473,6 +485,7 @@ export class EndAttackPanel {
   private setStatus(kind: EndAttackSaveStatus, text: string): void {
     this.status.className = `attack-end__status attack-end__status--${kind}`;
     this.statusText.textContent = text;
+    this.statusWarn.hidden = true;
   }
 
   private askLeave(): void {
