@@ -206,12 +206,10 @@ const draw = (
   const width = Math.max(240, Math.floor(host.clientWidth || 320));
   const when = options.when ?? whenLabel;
   const layout = layoutChart(points, width, options.height ?? 168, options.zero ?? true);
-  if (options.barMax) {
-    const slot = points.length ? (layout.plot.right - layout.plot.left) / points.length : 0;
-    layout.barWidth = Math.max(1, Math.min(options.barMax, slot * 0.6));
-  }
-  // A few named points (a camp's levels) each get their own label, under their bar.
-  const everyLabel = Boolean(options.axis) && points.length <= 12;
+  const slot = points.length ? (layout.plot.right - layout.plot.left) / points.length : 0;
+  if (options.barMax) layout.barWidth = Math.max(1, Math.min(options.barMax, slot * 0.6));
+  // A few named points (a camp's levels) each get their own label under their bar, where it fits.
+  const everyLabel = Boolean(options.axis) && points.length <= 12 && slot >= 38;
   if (everyLabel) layout.labelled = points.map((_, i) => i);
   const { plot } = layout;
   const root = svg("svg", {
