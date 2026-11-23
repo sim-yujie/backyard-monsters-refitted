@@ -425,6 +425,19 @@ describe("outpost names and pins (beta 7)", () => {
     expect(q(".yard-switcher__count").textContent).toBe("121/801");
     expect(q(".yard-switcher__count").classList.contains("yard-switcher__count--long")).toBe(true);
   });
+
+  it("marks the rows as scrolled down, so the top ones fade under the heading", () => {
+    switcher.bind(bindingFor(THREE, MAIN_YARD, { names: {}, pins: [] }));
+    open();
+    const rows = q<HTMLElement>(".yard-switcher__rows");
+    expect(rows.classList.contains("yard-switcher__rows--scrolled")).toBe(false);
+    rows.scrollTop = 40;
+    rows.dispatchEvent(new Event("scroll"));
+    expect(rows.classList.contains("yard-switcher__rows--scrolled")).toBe(true);
+    rows.scrollTop = 0;
+    rows.dispatchEvent(new Event("scroll"));
+    expect(rows.classList.contains("yard-switcher__rows--scrolled")).toBe(false);
+  });
 });
 
 describe("the dock's switcher", () => {

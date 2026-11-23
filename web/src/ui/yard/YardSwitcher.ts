@@ -227,6 +227,7 @@ export class YardSwitcher {
     this.rows = make("div", "yard-switcher__rows");
     this.rows.setAttribute("role", "list");
     this.rows.addEventListener("click", this.onRowClick);
+    this.rows.addEventListener("scroll", () => this.markScrolled(), { passive: true });
     this.list.append(this.heading, this.error, this.rows);
 
     this.element.append(this.flash, capsule, this.list);
@@ -571,7 +572,13 @@ export class YardSwitcher {
       this.fitList();
       // The open yard in view, for a player with many outposts (neon, round 1).
       this.rows.querySelector<HTMLElement>('[aria-current="true"]')?.scrollIntoView?.({ block: "nearest" });
+      this.markScrolled();
     }
+  }
+
+  /** Scrolled down: the top rows fade under the heading, so rows above are plain (neon, round 2). */
+  private markScrolled(): void {
+    this.rows.classList.toggle("yard-switcher__rows--scrolled", this.rows.scrollTop > 0);
   }
 
   /**
