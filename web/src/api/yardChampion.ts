@@ -1,4 +1,7 @@
 import type { ChampionStance } from "@/game/combat/rules";
+import { announceFed } from "@/game/monsters/feedNews";
+import { academyLevel } from "@/game/monsters/housing";
+import { hatchCost } from "@/game/monsters/monsterCatalogue";
 import { championEntry } from "@/game/yard/championCatalogue";
 import {
   activeChampion,
@@ -236,8 +239,10 @@ export const championActions = (store: YardStore, api: ChampionApi = championApi
       },
       send: (_api, ...yard) => api.raise(type, ...yard),
     }),
-  feed: (mode) =>
-    store.run({
+  feed: async (mode) => {
+    // What one of each monster cost to hatch, read with the recipe, for the yard's blood burst.
+    const costs: Record<string, number> = {};
+    const result = await store.run({
       key: ChampionKey.feed(mode),
       check: (reader) => {
         const view = activeOrRefuse(reader);
@@ -252,6 +257,9 @@ export const championActions = (store: YardStore, api: ChampionApi = championApi
               need: short.need,
             });
           }
+          for (const row of view.recipe) {
+            costs[row.monster] = hatchCost(row.monster, academyLevel(reader.save.academy, row.monster)) ?? 0;
+          }
           return null;
         }
         return view.feedShiny === null
@@ -262,7 +270,16 @@ export const championActions = (store: YardStore, api: ChampionApi = championApi
           : null;
       },
       send: (_api, ...yard) => api.feed(mode, ...yard),
-    }),
+    });
+    // Drawing only: the yard walks the eaten monsters into the champion (`feedShow.ts`).
+    if (result.ok && result.report.mode === "monsters") {
+      const eaten = result.report.eaten ?? {};
+      if (Object.values(eaten).some((count) => count > 0)) {
+        announceFed({ champion: `G${result.report.champion.t}`, monsters: eaten, hatchCost: costs });
+      }
+    }
+    return result;
+  },
   evolve: () =>
     store.run({
       key: ChampionKey.evolve,

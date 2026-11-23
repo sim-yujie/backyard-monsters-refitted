@@ -79,6 +79,7 @@ import { quality } from "@/game/quality";
 import { currentScreenName } from "@/game/bugReport/screenCapture";
 import { finishedMonstersJobs } from "@/game/monsters/finishedJobs";
 import { onJuiced } from "@/game/monsters/juiceNews";
+import { onFed } from "@/game/monsters/feedNews";
 import { openInfernoMap } from "@/game/inferno/tribeEntry";
 import { backToInferno } from "@/game/inferno/tribeReturn";
 import {
@@ -487,6 +488,8 @@ export class YardScene implements Scene {
   private unsubscribeStore: (() => void) | null = null;
   /** Stops showing juices in the yard (`juiceNews.ts`). */
   private unsubscribeJuice: (() => void) | null = null;
+  /** Stops showing champion feeds in the yard (`feedNews.ts`). */
+  private unsubscribeFeed: (() => void) | null = null;
   /** Stops waiting for the yard to go quiet before Map Room 2's warm-up (`mr2Prewarm.ts`). */
   private stopMr2Prewarm: (() => void) | null = null;
   /** Lets the raid queue start again once this yard's pictures are in (beta 9); see `load`. */
@@ -3101,6 +3104,10 @@ export class YardScene implements Scene {
     this.unsubscribeJuice = onJuiced((news) => {
       if (this.store === store) this.renderer.juice(news);
     });
+    // A feed walks the eaten monsters into the champion, who bursts them: drawing only (`feedShow.ts`).
+    this.unsubscribeFeed = onFed((news) => {
+      if (this.store === store) this.renderer.feed(news);
+    });
     this.binding = {
       store,
       scene: {
@@ -3500,6 +3507,8 @@ export class YardScene implements Scene {
     this.unsubscribeStore = null;
     this.unsubscribeJuice?.();
     this.unsubscribeJuice = null;
+    this.unsubscribeFeed?.();
+    this.unsubscribeFeed = null;
     this.stopMr2Prewarm?.();
     this.stopMr2Prewarm = null;
     this.store?.destroy();
