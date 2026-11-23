@@ -535,6 +535,9 @@ export class MonstersView {
     const lines: Child[] = [
       `Not counted: attacks before ${stats.since ? dayLabel(stats.since) : "update 8.3"}, test accounts, and Map Room 3 (switched off). Champions are below; bombs are not monsters.`,
     ];
+    if (this.mode === "camps") {
+      lines.push(h("br"), "Camps are Map Room 1 and 2 wild monsters, Moloch tribes and the Descent's 13 yards; Repeat attacks included.");
+    }
     if (this.mode === "players" && stats.assumed > 0) {
       lines.push(h("br"), `${plural(stats.assumed, "Inferno attack")} counted as whole army, not shown.`);
     }

@@ -154,6 +154,7 @@ describe("the Monsters tab", () => {
     seg("On camps").click();
     expect(names()[0]).toBe("C9");
     expect(document.querySelector(".mon-tab .activity-panel .small")?.textContent).toContain("· Repeat attacks included");
+    expect(document.querySelector(".mon-tab .not-counted")?.textContent).toContain("Moloch tribes and the Descent's 13 yards");
     seg("Inferno").click();
     expect(document.querySelectorAll(".mrow")).toHaveLength(8);
     seg("All 26").click();

@@ -32,7 +32,7 @@ import { battleReplayInput, battleTick, foughtLoot } from "../base/combat/battle
 import { garrisonsAfterBattle } from "../base/combat/bunkerGarrison.js";
 import { housedDefenders } from "../base/combat/defenderForces.js";
 import { recordBattleMismatches, replayBattleForSave } from "../base/combat/saveBattle.js";
-import { recordMonsterUsage } from "../stats/monsterUsage.js";
+import { recordMonsterUsage, safely } from "../stats/monsterUsage.js";
 import { isAttackActive } from "../base/isAttackActive.js";
 import { storedDamage } from "../base/storedDamage.js";
 import { createNeighbourData } from "../maproom/createNeighbourData.js";
@@ -351,7 +351,7 @@ export const writePlayerLanding = async (
       baseType: BaseType.INFERNO,
       defenderUserid: yard.userid ?? null,
       battle,
-      flung: assumed ? committedArmy(attack) : null,
+      flung: assumed ? safely(() => committedArmy(attack), {}) : null,
       damageBefore: landed.damageBefore,
       damageAfter: Number(landed.target.damage) || 0,
       assumed,
