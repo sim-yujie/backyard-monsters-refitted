@@ -707,6 +707,13 @@
   display: none;
 }
 
+/* Before the first drop the bar holds only the note, and only in a phone's
+   sheet; once the count starts, the note goes. */
+.attack-dock:not(.attack-dock--sheet) .baiter-dock:not(.baiter-dock--started),
+.baiter-dock--started > .baiter-dock__note {
+  display: none;
+}
+
 .baiter-dock .baiter__figures {
   font-size: var(--text-xs);
 }

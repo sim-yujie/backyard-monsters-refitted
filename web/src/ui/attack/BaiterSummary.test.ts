@@ -29,26 +29,25 @@ describe("BaiterDock", () => {
     return dock;
   };
 
-  it("is a line with no title plate, saying how to start until the first drop", () => {
+  it("is a bar with no title plate, holding the note until the first drop", () => {
     const dock = mount();
     expect(dock.element.querySelector(".panel__title, .panel__titlebar")).toBeNull();
-    expect(dock.element.querySelector(".baiter-dock__army")!.textContent).toBe("30 monsters. Tap the yard to drop them.");
+    expect(dock.element.querySelector(".baiter-dock__note")!.textContent).toBe(baiterNote(RUN));
     dock.update({ phase: "running", creepsAlive: 0, creepsKilled: 0, damagePercent: 1 } as AttackSessionState);
-    expect(dock.element.querySelector<HTMLElement>(".baiter-dock__army")!.hidden).toBe(false);
+    expect(dock.element.classList.contains("baiter-dock--started")).toBe(false);
     expect(dock.element.querySelector<HTMLElement>(".baiter__figures")!.hidden).toBe(true);
   });
 
-  it("puts the running count in place of the army line once something is dropped", () => {
+  it("keeps the running count once something is dropped", () => {
     const dock = mount();
     dock.update(stateOf("running"));
-    expect(dock.element.querySelector<HTMLElement>(".baiter-dock__army")!.hidden).toBe(true);
+    expect(dock.element.classList.contains("baiter-dock--started")).toBe(true);
     expect(dock.element.querySelector<HTMLElement>(".baiter__figures")!.hidden).toBe(false);
   });
 
   it("words the test's note for the notice, not the dock", () => {
     expect(baiterNote(RUN)).toBe("Test attack: nothing is saved. Your yard, its traps and your resources stay as they are.");
     expect(baiterNote(RUN, true)).toBe("Replay of a test, on your yard as it was then. Nothing is saved.");
-    expect(mount().element.textContent).not.toContain("nothing is saved");
   });
 
   it("counts what is attacking while the test runs", () => {

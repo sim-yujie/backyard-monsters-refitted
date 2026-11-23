@@ -83,8 +83,8 @@ describe("DamageBanner", () => {
     expect(document.querySelector(".notice")?.classList.contains("notice--standing")).toBe(true);
     const css = readFileSync(resolve(dirname(fileURLToPath(import.meta.url)), "../styles/yard-hud.css"), "utf8")
       .replace(/\/\*[\s\S]*?\*\//g, "");
-    // Hidden at every size (outside any @media) under a middle window and under More's fan.
-    const rule = /\.overlay__layer:has\(> \.panel--centre:not\(\[hidden\]\)\) > \.yard-notices > \.notice--standing,\s*\.overlay__layer:has\(> \.yard-dock \.bubble-menu--open\) > \.yard-notices > \.notice--standing \{\s*display: none;\s*\}/;
+    // Hidden at every size (outside any @media) under a middle window, More's fan and a side panel.
+    const rule = /\.overlay__layer:has\(> \.panel--centre:not\(\[hidden\]\)\) > \.yard-notices > \.notice--standing,\s*\.overlay__layer:has\(> \.yard-dock \.bubble-menu--open\) > \.yard-notices > \.notice--standing,\s*\.overlay__layer:has\(> \.map-dock--right > \*\) > \.yard-notices > \.notice--standing \{\s*display: none;\s*\}/;
     const at = css.search(rule);
     expect(at).toBeGreaterThanOrEqual(0);
     expect(css.slice(0, at).lastIndexOf("@media")).toBeLessThan(css.slice(0, at).lastIndexOf("\n}\n"));

@@ -211,7 +211,6 @@ describe("a Baiter test", () => {
     // The dock's test line comes first, above the army; what the test is
     // shows once as a notice, not in the dock (beta 9 play-test).
     expect(dock.firstElementChild?.classList.contains("baiter-dock")).toBe(true);
-    expect(dock.textContent).not.toContain("nothing is saved");
     expect(notices.element.textContent).toContain("Test attack: nothing is saved");
     // Nothing comes in by itself: the clock waits for the first drop.
     expect(flings(session)).toHaveLength(0);

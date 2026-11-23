@@ -829,10 +829,13 @@
    window closes. Over the window it sat on Build's tab row and took a tap
    meant for Buildings, and on the Monsters Lab's header (beta 9 play-test,
    23 Nov 2026). Timed news (a claim) still shows over the window. It waits
-   too while More's fan is open: on a phone its bubbles fly up under it
-   (Goals could not be pressed at 390x664, layout check). */
+   too while More's fan is open (on a phone its bubbles fly up under it:
+   Goals could not be pressed at 390x664, layout check) and while a
+   building's side panel is open (at 768 wide, kept left of the panel, it sat
+   on World chat's button; the panel shows the building's own repair). */
 .overlay__layer:has(> .panel--centre:not([hidden])) > .yard-notices > .notice--standing,
-.overlay__layer:has(> .yard-dock .bubble-menu--open) > .yard-notices > .notice--standing {
+.overlay__layer:has(> .yard-dock .bubble-menu--open) > .yard-notices > .notice--standing,
+.overlay__layer:has(> .map-dock--right > *) > .yard-notices > .notice--standing {
   display: none;
 }
 

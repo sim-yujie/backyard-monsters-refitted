@@ -1,6 +1,5 @@
 import type { AttackSessionState } from "@/game/attack/AttackSession";
-import { picksOf, type BaiterRun } from "@/game/baiter/baiterSession";
-import { championEntry } from "@/game/yard/championCatalogue";
+import type { BaiterRun } from "@/game/baiter/baiterSession";
 import { formatAmount } from "@/ui/format";
 import "@/ui/styles/baiter.css";
 
@@ -28,18 +27,20 @@ export const baiterNote = (run: BaiterRun, replay = false): string => {
 };
 
 /**
- * The line at the top of the dock, above the army panel (#22, WP3): one
- * line, a thin bar like the attack strip and the status line, with no frame
- * or title plate (beta 9 play-test, 23 Nov 2026: as a framed window named
- * "Test attack", with the note above, it took about 190 px of the dock and
- * left one army row in sight; the strip above already names the test).
- * Before the first drop it says how many monsters there are and how to drop
- * them; from then on the running count takes its place. The army itself,
- * each row at its level, is in the army panel below it.
+ * The thin bar at the top of the dock, above the army panel (#22, WP3): the
+ * bar's plate like the attack strip and the status line, no frame or title
+ * plate (beta 9 play-test, 23 Nov 2026: as a framed window named "Test
+ * attack" with the note and "18 monsters. Tap the yard to drop them." it took
+ * about 190 px of the dock and left one army row in sight).
+ *
+ * Before the first drop it holds the test's note, shown only in a phone's
+ * sheet (baiter.css), where the strip has no room to name the test; wider
+ * screens have the strip's name and the note's notice, and no bar until then.
+ * From the first drop on it keeps the running count. On a short screen it
+ * never shows. The army itself, each row at its level, is in the panel below.
  */
 export class BaiterDock {
   readonly element: HTMLElement;
-  private readonly army: HTMLElement;
   private readonly progress: HTMLElement;
 
   /** `replay`: a finished test played back (#22, WP5), on the yard as it was then. */
@@ -48,20 +49,16 @@ export class BaiterDock {
     this.element.className = "baiter-dock";
     this.element.setAttribute("aria-label", replay ? "Test replay" : "Test attack");
 
-    this.army = document.createElement("p");
-    this.army.className = "baiter__note baiter-dock__army";
-    const sent = Object.values(picksOf(run.army)).reduce((sum, count) => sum + count, 0);
-    const champions = run.army.champions.map((champion) => championEntry(champion.t)?.name ?? "Champion");
-    this.army.textContent =
-      `${formatAmount(sent)} monsters` + (champions.length > 0 ? ` and ${champions.join(" and ")}` : "") +
-      (replay ? "." : ". Tap the yard to drop them.");
+    const note = document.createElement("p");
+    note.className = "baiter__note baiter-dock__note";
+    note.textContent = baiterNote(run, replay);
 
     this.progress = document.createElement("p");
     this.progress.className = "baiter__figures";
     this.progress.setAttribute("aria-live", "polite");
     this.progress.hidden = true;
 
-    this.element.append(this.army, this.progress);
+    this.element.append(note, this.progress);
   }
 
   /** Goes first in the dock, above the army panel. */
@@ -71,7 +68,7 @@ export class BaiterDock {
   }
 
   update(state: AttackSessionState): void {
-    // Nothing dropped yet: the army line stays, saying how to start.
+    // Nothing dropped yet: no count to keep.
     const started = state.phase === "ended" || state.creepsAlive > 0 || state.creepsKilled > 0;
     if (!started) return;
     // Once it is over the battle is put to rest (#308), so nothing is still attacking.
@@ -79,7 +76,7 @@ export class BaiterDock {
     this.progress.textContent =
       `${attacking} · ${formatAmount(state.creepsKilled)} beaten · ${Math.floor(state.damagePercent)}% damage`;
     this.progress.hidden = false;
-    this.army.hidden = true;
+    this.element.classList.add("baiter-dock--started");
   }
 
   destroy(): void {
