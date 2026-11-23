@@ -18,14 +18,27 @@ const MIN_BODY = 120;
 const TAP = 44;
 const TOLERANCE = 2;
 
-/** From the yard onto the attack screen; the reason when there is no way in, else null. */
-export const openAttack = async (page: Page): Promise<string | null> => {
+/**
+ * From the yard onto the attack screen (or, `"baiter"`, the Baiter's test
+ * scene: its test line above the army, beta 9 play-test); the reason when
+ * there is no way in, else null.
+ */
+export const openAttack = async (page: Page, kind: "attack" | "baiter" = "attack"): Promise<string | null> => {
   await closeAll(page);
-  const started = await page.evaluate(async () => {
+  const started = await page.evaluate(async (which) => {
     const open = (globalThis as Record<string, unknown>)["__attackDock"];
     if (typeof open !== "function") return false;
-    return Boolean(await (open as () => Promise<boolean>)());
-  });
+    return Boolean(await (open as (kind: string) => Promise<boolean>)(which));
+  }, kind);
+  if (kind === "baiter") {
+    const up = await page
+      .locator(".attack-dock .baiter-dock")
+      // Attached: a phone's sheet starts closed, the line in it out of sight.
+      .waitFor({ state: "attached", timeout: 90_000 })
+      .then(() => true)
+      .catch(() => false);
+    if (!up) return "the Baiter test's line never showed";
+  }
   if (!started) return "no __attackDock hook (not a VITE_LAYOUT_CHECK build)";
   const up = await page
     .locator(".attack-dock__tabs:not([hidden])")

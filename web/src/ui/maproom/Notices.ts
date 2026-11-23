@@ -16,6 +16,13 @@ export interface NoticeOptions {
   /** Label for a button on the notice, e.g. "Retry". */
   actionLabel?: string;
   onAction?: () => void;
+  /**
+   * A line about the yard itself that stays until acted on (the post-attack
+   * banner, an empty outpost's Kits hint), not news of something just done:
+   * it waits while a middle window is open and is back when it closes
+   * (`notice--standing`, yard-hud.css).
+   */
+  standing?: boolean;
 }
 
 interface LiveNotice {
@@ -46,6 +53,7 @@ export class Notices {
   show(key: string, message: string | Node, options: NoticeOptions = {}): void {
     const existing = this.live.get(key);
     if (existing) {
+      existing.element.classList.toggle("notice--standing", options.standing === true);
       existing.text.replaceChildren(message);
       this.resetTimer(key, existing, options.timeoutMs);
       return;
@@ -53,6 +61,7 @@ export class Notices {
 
     const element = document.createElement("div");
     element.className = `notice notice--${options.level ?? "error"}`;
+    if (options.standing) element.classList.add("notice--standing");
 
     const text = document.createElement("span");
     text.className = "notice__text";

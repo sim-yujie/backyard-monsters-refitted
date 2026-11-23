@@ -291,6 +291,17 @@ export const defineLayoutSuite = (profileIds: readonly string[]): void => {
           await checkAttackDock(page, profile);
           return null;
         });
+
+        // Then the Baiter's test (beta 9 play-test, 23 Nov 2026): its test
+        // line above the army left one army row in sight; the army window
+        // must still show a few rows under it.
+        const baiterDock: WindowCase = { ...attackDock, id: "baiter-dock", label: "Baiter test dock" };
+        await windowStep(page, profile, baiterDock, baiterDock.id, tally, async () => {
+          const noWayIn = await openAttack(page, "baiter");
+          if (noWayIn !== null) return noWayIn;
+          await checkAttackDock(page, profile);
+          return null;
+        });
       } finally {
         test.info().annotations.push({
           type: "summary",

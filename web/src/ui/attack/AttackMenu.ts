@@ -88,11 +88,14 @@ export class AttackMenu {
 
 /**
  * What the phone sheet's handle says when the dock has no tab row (a replay,
- * a defence replay): the name of the window it holds ("Replay"), or "Army"
+ * a defence replay): the name of the window it holds ("Replay"; a Baiter
+ * test's replay, its bar's name, "Test replay"), or "Army"
  * before any is mounted. A live attack's sheet has its tab row instead
  * (`DockTabs`, owner 18 Nov 2026), whose tabs name the windows.
  */
 export const sheetHandleLabel = (dock: HTMLElement): string => {
   const shown = dock.querySelector(".attack-army .panel__title") ?? dock.querySelector(".panel .panel__title");
-  return shown?.textContent?.trim() || "Army";
+  // A Baiter test's replay holds only the test's bar, which has no title plate: its name.
+  const bar = dock.querySelector(".baiter-dock")?.getAttribute("aria-label");
+  return shown?.textContent?.trim() || bar?.trim() || "Army";
 };

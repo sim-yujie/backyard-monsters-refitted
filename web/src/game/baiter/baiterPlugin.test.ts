@@ -208,9 +208,10 @@ describe("a Baiter test", () => {
     // The dock's tab row offers the Army only: no Catapult, no siege weapon.
     expect([...dock.querySelectorAll('[data-dock-tab]')].map((el) => el.getAttribute("data-dock-tab"))).toEqual(["army"]);
     expect(dock.querySelector<HTMLElement>(".attack-army__auto-load")!.hidden).toBe(true);
-    // The dock names the test first, above the army.
+    // The dock's test line comes first, above the army; what the test is
+    // shows once as a notice, not in the dock (beta 9 play-test).
     expect(dock.firstElementChild?.classList.contains("baiter-dock")).toBe(true);
-    expect(dock.textContent).toContain("Test attack: nothing is saved");
+    expect(notices.element.textContent).toContain("Test attack: nothing is saved");
     // Nothing comes in by itself: the clock waits for the first drop.
     expect(flings(session)).toHaveLength(0);
     expect(session.state().phase).toBe("loaded");
@@ -509,7 +510,8 @@ describe("a Baiter test", () => {
       expect(fetchSpy).not.toHaveBeenCalled();
       expect(recentTests()).toHaveLength(1);
       // No controls: the dock names the replay and holds no army.
-      expect(dock.textContent).toContain("Test replay");
+      expect(dock.querySelector(".baiter-dock")?.getAttribute("aria-label")).toBe("Test replay");
+      expect(notices.element.textContent).toContain("Replay of a test");
       expect(dock.querySelector(".attack-army__row")).toBeNull();
     });
 

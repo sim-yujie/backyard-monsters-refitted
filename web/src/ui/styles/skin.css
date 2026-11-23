@@ -654,6 +654,7 @@
   .inferno-card,
   .attack-tools__button,
   .attack-dock__end,
+  .baiter-dock,
   .attack-viewtools__fold,
   .test-report__peek
 ) {
@@ -785,8 +786,9 @@
   }
 
   /* Under the tab row the windows have no sign (the tab is their title);
-     the Baiter's test panel, first in its dock, keeps its sign's room. */
-  :root[data-skin] .attack-dock--tabs .attack-dock__body:has(> [data-dock-tab]:first-child) {
+     nor has the Baiter's test line, first in its dock (BaiterSummary.ts). */
+  :root[data-skin] .attack-dock--tabs .attack-dock__body:has(> [data-dock-tab]:first-child),
+  :root[data-skin] .attack-dock__body:has(> .baiter-dock:first-child) {
     padding-top: 0;
   }
 }
@@ -1228,7 +1230,8 @@
     padding-top: 16px;
   }
 
-  :root[data-skin] .attack-dock--sheet.attack-dock--tabs .attack-dock__body:has(> [data-dock-tab]:first-child) {
+  :root[data-skin] .attack-dock--sheet.attack-dock--tabs .attack-dock__body:has(> [data-dock-tab]:first-child),
+  :root[data-skin] .attack-dock--sheet .attack-dock__body:has(> .baiter-dock:first-child) {
     padding-top: 0;
   }
 

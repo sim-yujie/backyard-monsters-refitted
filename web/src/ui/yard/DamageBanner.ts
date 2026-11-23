@@ -59,6 +59,9 @@ export class DamageBanner {
       level: "warning",
       actionLabel: "Repair all",
       onAction: () => void this.repairAll(),
+      // It sat on Build's tab row and took a tap meant for Buildings (beta 9
+      // play-test, 23 Nov 2026): it waits while a window is open.
+      standing: true,
     });
     // Repair all is the notice's own action button (`Notices`), the one that is not Dismiss.
     const repairAll = this.text.closest(".notice")?.querySelector<HTMLElement>("button:not(.btn--icon)");
