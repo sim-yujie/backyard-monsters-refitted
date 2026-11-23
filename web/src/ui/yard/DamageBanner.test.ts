@@ -1,4 +1,7 @@
 // @vitest-environment jsdom
+import { readFileSync } from "node:fs";
+import { dirname, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { BaseLoadResponse, BuildingData } from "@/api/types";
 import type { RepairActions, RepairReport } from "@/api/yardRepair";
@@ -73,6 +76,18 @@ describe("DamageBanner", () => {
     banner = new DamageBanner(binding, actions);
     expect(text()).toBe("Your yard was attacked: 2 buildings damaged");
     expect(document.querySelector(".notice button.btn--ghost")?.textContent).toBe("Repair all");
+  });
+
+  it("is a standing line, so it waits while a window is open (beta 9 play-test)", () => {
+    banner = new DamageBanner(binding, actions);
+    expect(document.querySelector(".notice")?.classList.contains("notice--standing")).toBe(true);
+    const css = readFileSync(resolve(dirname(fileURLToPath(import.meta.url)), "../styles/yard-hud.css"), "utf8")
+      .replace(/\/\*[\s\S]*?\*\//g, "");
+    // Hidden at every size (outside any @media) under a middle window and under More's fan.
+    const rule = /\.overlay__layer:has\(> \.panel--centre:not\(\[hidden\]\)\) > \.yard-notices > \.notice--standing,\s*\.overlay__layer:has\(> \.yard-dock \.bubble-menu--open\) > \.yard-notices > \.notice--standing \{\s*display: none;\s*\}/;
+    const at = css.search(rule);
+    expect(at).toBeGreaterThanOrEqual(0);
+    expect(css.slice(0, at).lastIndexOf("@media")).toBeLessThan(css.slice(0, at).lastIndexOf("\n}\n"));
   });
 
   it("shows nothing for an undamaged yard, and appears when damage arrives", () => {
