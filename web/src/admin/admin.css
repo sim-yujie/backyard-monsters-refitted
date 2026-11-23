@@ -5820,7 +5820,7 @@ tbody th {
 .mon-tab .mlist-head,
 .mon-tab .mrow-main {
   display: grid;
-  grid-template-columns: 40px minmax(110px, 1fr) minmax(150px, 1.3fr) 92px 84px 96px 24px;
+  grid-template-columns: 40px minmax(110px, 1fr) minmax(150px, 1.3fr) 92px 84px 108px 24px;
   align-items: center;
   gap: 12px;
   padding: 8px 12px;
@@ -5866,15 +5866,16 @@ tbody th {
 .mon-tab .mbar strong { flex: none; min-width: 7.5ch; text-align: right; font-variant-numeric: tabular-nums; font-weight: 650; }
 .mon-tab .mbar .track { flex: 1; height: 8px; border-radius: 4px; background: var(--surface-2); overflow: hidden; }
 .mon-tab .mbar .fill { display: block; height: 100%; border-radius: 4px; background: var(--series); }
+.mon-tab .mlist-head > :nth-child(6),
+.mon-tab .mrow-main .mix { padding-left: 12px; }
 .mon-tab .mix { display: flex; align-items: flex-end; gap: 2px; height: 26px; }
 .mon-tab .mix i { flex: 1; min-height: 2px; border-radius: 2px 2px 0 0; background: var(--series); opacity: 0.85; }
 .mon-tab .mix i.zero { background: var(--line-strong); opacity: 1; }
 .mon-tab .chev { color: var(--ink-3); transition: transform 150ms var(--ease); }
 .mon-tab .mrow[data-open] .chev { transform: rotate(90deg); color: var(--accent-text); }
 .mon-tab .mrow[data-open] .mbar .track { background: color-mix(in srgb, var(--ink) 14%, transparent); }
-.mon-tab .mrow[data-zero] .mrow-main { color: var(--ink-3); }
-.mon-tab .mrow[data-zero] .mon-face { opacity: 0.6; }
-.mon-tab .mbar .fill { min-width: 3px; }
+.mon-tab .mrow[data-zero] .mrow-main { opacity: 0.58; }
+.mon-tab .mbar .fill { min-width: 8px; }
 .mon-tab .mrow[data-zero] .mbar .fill { min-width: 0; }
 .mon-tab .mname .badge { background: var(--surface-2); border: 1px solid var(--line-strong); color: var(--ink-2); }
 .mon-tab .chart-svg .tick { fill: var(--ink-2); }
