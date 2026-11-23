@@ -895,6 +895,13 @@
   mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 22 16'%3E%3Cpath d='M1 8h15M11 2l7 6-7 6' fill='none' stroke='%23000' stroke-width='3.4' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") center / contain no-repeat;
 }
 
+/* Before the room left when moving out: the room at the yard moved to. */
+.xfer-status__to {
+  width: 16px;
+  height: 12px;
+  color: var(--colour-text-muted);
+}
+
 /* ── The tray ───────────────────────────────────────────────────────────── */
 
 .panel.xfer-tray {

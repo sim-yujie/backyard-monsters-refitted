@@ -130,6 +130,8 @@ describe("TransferMode", () => {
     click(layer, ".xfer-all");
     expect(counts(layer)).toEqual(["60/60", "8/10"]);
     expect(layer.querySelector(".xfer-status")?.textContent).toContain("Full");
+    // Pressing All again would change nothing: it greys.
+    expect(layer.querySelector<HTMLButtonElement>(".xfer-all")!.disabled).toBe(true);
     click(layer, ".xfer-chip", 1);
     const [less, more, max] = [...layer.querySelectorAll<HTMLButtonElement>(".xfer-chip.is-stepping .xfer-step")];
     expect(less!.disabled).toBe(false);

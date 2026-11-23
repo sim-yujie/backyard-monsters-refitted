@@ -804,7 +804,11 @@ export class TransferMode {
     // "All": as many of every type as fit, in roster order.
     const all = button("btn btn--outline xfer-all", "Pick as many as fit, every monster");
     all.append(el("span", "", MOVE_TEXT.every));
-    all.disabled = types.length === 0 || this.busy || this.result !== null;
+    // Greyed when it would change nothing (the room is full, or every monster is already picked).
+    const filled = fillAll(types, held, room, sizeOf);
+    const same = Object.keys(filled).length === Object.keys(state.picks).length &&
+      Object.entries(filled).every(([id, n]) => state.picks[id] === n);
+    all.disabled = types.length === 0 || same || this.busy || this.result !== null;
     all.addEventListener("click", () => {
       this.stepping = null;
       const latest = this.plan();
@@ -821,6 +825,8 @@ export class TransferMode {
     if (room !== null && target) {
       const left = el("span", "xfer-status__item");
       left.title = `Room left at ${this.options.nameOf(target)}`;
+      // Moving out: an arrow says this is the room at the yard moved to, not here.
+      if (out) left.append(el("i", "xfer-go__arrow xfer-status__to"));
       const rest = Math.max(0, room - roomOf(plan.moved, sizeOf));
       const full = rest < this.smallest();
       if (full) left.classList.add("is-full");
@@ -873,6 +879,16 @@ export class TransferMode {
       chips.classList.toggle("is-more-left", chips.scrollLeft > 4);
     };
     chips.addEventListener("scroll", fade, { passive: true });
+    // A mouse wheel turns the strip sideways (a desktop mouse has no sideways wheel).
+    chips.addEventListener(
+      "wheel",
+      (event) => {
+        if (event.deltaX !== 0 || event.deltaY === 0 || chips.scrollWidth <= chips.clientWidth) return;
+        event.preventDefault();
+        chips.scrollLeft += event.deltaY;
+      },
+      { passive: false },
+    );
     requestAnimationFrame(fade);
     tray.element.classList.toggle("is-busy", this.busy);
     // The map's tools sit above the tray while it is up.
