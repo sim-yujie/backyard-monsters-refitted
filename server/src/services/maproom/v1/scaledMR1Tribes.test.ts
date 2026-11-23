@@ -84,8 +84,9 @@ mock.module("../../../server.js", () => ({
 }));
 
 const warn = mock((..._args: unknown[]) => {});
+const loggedInfo = mock((..._args: unknown[]) => {});
 mock.module("../../../utils/logger.js", () => ({
-  logger: { warn, error: mock(() => {}), info: mock(() => {}), debug: mock(() => {}) },
+  logger: { warn, error: mock(() => {}), info: loggedInfo, debug: mock(() => {}) },
 }));
 
 // The audit trail (issue #23, C7), kept here rather than on the stand-in rows.
@@ -739,6 +740,23 @@ describe("Map Room 1 tribe save under COMBAT_SAVE_VALIDATION (#23, C7)", () => {
     expect((userSave.monsters as { housed: unknown }).housed).toEqual(ARMY);
     expect(maproom.tribedata[0]!.damage).toBeUndefined();
     expect(persisted).toEqual([]);
+  });
+
+  test("reject: a tribe attack started before sessions carried rules (an 8.3 page) is refused as ever, but not flagged (23 Nov 2026)", async () => {
+    setMode("reject");
+    loggedInfo.mockClear();
+    store.set(
+      mr1TribeSessionKey(ATTACKER, TRIBE),
+      serialiseAttackSession({ attackerid: ATTACKER, attackid: ATTACK_ID, startedat: now(), entryHoused: { "5000": ARMY } })
+    );
+    userSave.monsters = { housed: { ...ARMY } };
+
+    const caught = await run(ctxFor(craftedBody));
+    expect(caught?.data?.reason).toBe("replayMismatch");
+    expect(reports).toEqual([]);
+    expect(persisted).toEqual([]);
+    const oldPage = loggedInfo.mock.calls.filter((call) => (call[1] as { event?: string })?.event === "attack-save-old-page");
+    expect(oldPage).toHaveLength(1);
   });
 
   test("reject: the web client's honest final save lands", async () => {

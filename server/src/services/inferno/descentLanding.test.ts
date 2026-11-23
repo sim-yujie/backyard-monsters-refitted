@@ -94,8 +94,9 @@ mock.module("../../server.js", () => ({
 }));
 
 const warn = mock((..._args: unknown[]) => {});
+const loggedInfo = mock((..._args: unknown[]) => {});
 mock.module("../../utils/logger.js", () => ({
-  logger: { warn, error: mock(() => {}), info: mock(() => {}), debug: mock(() => {}) },
+  logger: { warn, error: mock(() => {}), info: loggedInfo, debug: mock(() => {}) },
 }));
 
 /** The `Report` rows written, as their messages: the admins' Flagged list. */
@@ -193,7 +194,8 @@ const outcome = (part: Partial<AbandonedOutcome>): AbandonedOutcome => ({
 const now = () => Math.floor(Date.now() / 1000);
 
 /** The Descent attack the start mints, on `baseid`. */
-const startSession = (baseid = "201", attackerid = ATTACKER) =>
+/** `rules`: the session's battle rules; null for one minted before sessions carried any (an 8.3 page). */
+const startSession = (baseid = "201", attackerid = ATTACKER, rules: string | null = RULES_VERSION) =>
   store.set(
     descentSessionKey(ATTACKER),
     JSON.stringify({
@@ -203,7 +205,7 @@ const startSession = (baseid = "201", attackerid = ATTACKER) =>
         attackerid,
         attackid: ATTACK_ID,
         startedat: now(),
-        rules: RULES_VERSION,
+        ...(rules !== null && { rules }),
         entryHoused: { [MAIN_BASEID]: ARMY },
         defenderForces: FORCES as never,
         attackerAcademy: {},
@@ -880,6 +882,19 @@ describe("a Descent save the server's battle overrules (reject mode)", () => {
     expect(mismatchLines()).toEqual([]);
     expect(reports).toEqual([]);
     expect(ctx.body.descent).not.toHaveProperty("overruled");
+  });
+
+  test("an attack started on an 8.3 page is overruled the same, the server's battle lands, but unflagged (23 Nov 2026)", async () => {
+    loggedInfo.mockClear();
+    startSession("201", ATTACKER, null);
+    canned = { damage: 93.4, destroyed: 0, attackloot: { r1: 400, r2: 0, r3: 0, r4: 0 }, buildinghealthdata: { "0": 0, "1": 0 } };
+    const ctx = finalSave("201", { damage: "70", attackloot: JSON.stringify({ r1: 10, r2: 0, r3: 0, r4: 0 }) });
+
+    expect(await run(ctx)).toBeNull();
+    expect(ctx.body.descent).toMatchObject({ won: true, damage: 93, overruled: true });
+    expect(reports).toEqual([]);
+    const oldPage = loggedInfo.mock.calls.filter((call) => (call[1] as { event?: string })?.event === "attack-save-old-page");
+    expect(oldPage).toHaveLength(1);
   });
 
   test("in log mode a disagreeing save lands the server's battle as before, unmarked", async () => {
