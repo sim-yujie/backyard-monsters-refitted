@@ -26,7 +26,7 @@ import { resourceAmount } from "@/ui/resourceIcon";
 import "@/ui/styles/train.css";
 import { ShinyButton } from "@/ui/yard/ShinyButton";
 import { describe, monsterPicture } from "./LockerTab";
-import type { MonstersFocus, MonstersTab, MonstersTabContext } from "./monstersTab";
+import { revealPicked, type MonstersFocus, type MonstersTab, type MonstersTabContext } from "./monstersTab";
 import { studySeconds, weekendChip, withWeekendChip } from "@/ui/events/weekendUi";
 import { refusalText } from "@/ui/dom";
 
@@ -140,6 +140,7 @@ export class TrainTab implements MonstersTab {
       this.select(focus.monster, false);
     }
     this.render();
+    revealPicked(this.list);
   }
 
   update(change: YardChange): void {

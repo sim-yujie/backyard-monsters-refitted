@@ -93,6 +93,11 @@
   container: monsters-title / inline-size;
 }
 
+/* How far right of the middle the "?" stands when it is on the frame (below). */
+:root[data-skin="flash"] .monsters-screen .panel__titlebar > .guide-help {
+  --monsters-help-beside: 127px;
+}
+
 @container monsters-title (max-width: 679.98px) {
   :root[data-skin] .monsters-screen .monsters-tabs {
     gap: 2px;
@@ -108,7 +113,9 @@
   :root[data-skin] .monsters-screen:not(.siege-screen) .panel__titlebar > .guide-help {
     position: absolute;
     top: calc(-1 * var(--skin-title-lift) + 2px);
-    left: calc(50% + 74px);
+    /* Clear of the title sign, which is wider here than on a phone
+       (180px Modern, 233px Classic at 768px; the phone keeps its own). */
+    left: calc(50% + var(--monsters-help-beside, 100px));
     z-index: 2;
     width: 34px;
     min-width: 0;
@@ -541,6 +548,36 @@
   color: var(--colour-text);
 }
 
+/* ── A card short of room ────────────────────────────────────────────────── */
+
+/* Beside the list the card scrolls on its own. Where it holds more than it
+   shows (Train on a 768px iPad upright: the window keeps clear of the Events
+   column, the card is 224px wide and its Train buttons were 138px below the
+   fold; old-layout fix, beta 9), the cost and buttons stay at its foot while
+   the portrait and numbers scroll behind them; where it all fits nothing
+   moves. Its heading goes under the portrait when the two do not fit side by
+   side, so long numbers ("25,000 → 38,500") are not cut off. */
+@media (min-width: 760.02px) {
+  .locker-detail__head {
+    flex-wrap: wrap;
+  }
+
+  .locker-detail__heading {
+    flex: 1 1 180px;
+  }
+
+  .locker-detail__action {
+    position: sticky;
+    bottom: 0;
+    z-index: 1;
+    /* Opaque: the sunken tint over the window's own fill, so the numbers
+       scrolling behind do not show through. */
+    background:
+      linear-gradient(var(--colour-surface-sunken), var(--colour-surface-sunken)),
+      var(--colour-surface-base);
+  }
+}
+
 /* ── Short screens ───────────────────────────────────────────────────────── */
 
 /* The card in the little height a short screen leaves it (about 110px on a
@@ -549,8 +586,10 @@
    unlocking, Train, Research, Instant) come first, then the monster with a
    smaller portrait and its words, which scroll. The monster picked is the
    lit row beside it. Under the portrait they were below the fold
-   (old-layout fix, beta 9). */
-@media (max-height: 600px) {
+   (old-layout fix, beta 9). A phone held upright with Safari's bars
+   (390x664) had Train's buttons 170px below the fold under two academies:
+   there the card follows the list the same way. */
+@media (max-height: 600px), (max-width: 620px) and (max-height: 760px) {
   .locker-detail__portrait {
     width: 56px;
     height: 56px;

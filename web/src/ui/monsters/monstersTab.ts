@@ -146,3 +146,22 @@ export const TAB_FOR_BUILDING: Readonly<Record<number, MonstersTabId>> = {
 /** The tab a building opens, or null for a building that is not a monster building. */
 export const monstersTabFor = (type: number): MonstersTabId | null =>
   TAB_FOR_BUILDING[type] ?? null;
+
+/**
+ * Scrolls a tab's list, when it is its own scroller (desktop, tablet, a
+ * phone on its side), so the picked row (`aria-pressed`) shows: the monster
+ * picked may sit below the fold (neon review, beta 9), and on a short screen
+ * the lit row beside the card is what names the monster whose buttons show
+ * (old-layout fix, beta 9). On a phone held upright the page scrolls as a
+ * whole and is left where it is.
+ */
+export const revealPicked = (list: HTMLElement): void => {
+  if (list.scrollHeight <= list.clientHeight + 1) return;
+  const row = list.querySelector<HTMLElement>('[aria-pressed="true"]');
+  const item = row?.closest("li") ?? row;
+  if (!item) return;
+  const top = item.offsetTop - list.offsetTop;
+  if (top < list.scrollTop || top + item.offsetHeight > list.scrollTop + list.clientHeight) {
+    list.scrollTop = Math.max(0, top + item.offsetHeight - list.clientHeight);
+  }
+};
