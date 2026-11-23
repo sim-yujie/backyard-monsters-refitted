@@ -41,6 +41,18 @@ export interface CheckArgs {
    * sheet has Cancel; its working bar has none while the attack runs (null).
    */
   readonly closeSelector?: string | null;
+  /**
+   * Every tab in sight at once: a row that would slide sideways to show its
+   * last tabs is a fault (the Monsters window on a 768 px iPad showed "La"
+   * and no Champion; old-layout fix, beta 9).
+   */
+  readonly allTabs?: boolean;
+  /**
+   * Parts that must be wholly in sight without scrolling when the window
+   * shows them (the Lab's Research buttons on a phone on its side were below
+   * the fold; old-layout fix, beta 9).
+   */
+  readonly inSight?: string | null;
 }
 
 export interface CheckReport {
@@ -221,6 +233,13 @@ export const checkWindow = (args: CheckArgs): CheckReport => {
   for (const tab of tabs) {
     const box = visibleBox(tab);
     if (width(box) < 1) continue;
+    if (args.allTabs && width(box) + tol < width(boxOf(tab))) {
+      problems.push(
+        `tab "${(tab.textContent ?? "").trim().slice(0, 24)}" is hidden to the side ` +
+          `(${round(width(box))} of ${round(width(boxOf(tab)))} px show; the row slides)`,
+      );
+      continue;
+    }
     if (height(box) < height(boxOf(tab)) * 0.5) {
       // Tabs further down a list (the Champion's Modes) are out of sight
       // until the list scrolls; only a tab cut off otherwise is a fault.
@@ -230,6 +249,25 @@ export const checkWindow = (args: CheckArgs): CheckReport => {
   }
 
   if (scrolledTabs > 0) notes.push(`${scrolledTabs} tabs further down the list, not judged`);
+
+  // Parts that must be in sight as the window opens, without scrolling.
+  if (args.inSight) {
+    for (const part of [...panel.querySelectorAll(args.inSight)].filter(shown)) {
+      const full = boxOf(part);
+      if (height(full) < 1 || width(full) < 1) continue;
+      const box = visibleBox(part);
+      const name = `${describe(part)} "${(part.textContent ?? "").trim().replace(/\s+/g, " ").slice(0, 24)}"`;
+      if (height(box) + tol < height(full) || width(box) + tol < width(full)) {
+        problems.push(
+          `${name} is out of sight: ${round(height(box))} of ${round(height(full))} px show ` +
+            `(top ${round(full.top)}, bottom ${round(full.bottom)} on a ${vh} px screen)`,
+        );
+      } else {
+        const hit = hitInside(box, part);
+        if (hit !== true) problems.push(`${name} is covered by ${describe(hit)}`);
+      }
+    }
+  }
 
   // The list: the biggest box that scrolls, else the body.
   const body =

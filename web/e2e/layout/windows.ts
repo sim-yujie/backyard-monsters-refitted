@@ -32,6 +32,10 @@ export interface WindowCase {
    * Cancel), or null for none while it works (Repeat attack's bar).
    */
   readonly closeButton?: string | null;
+  /** Every tab in sight at once, the row never sliding (measure.ts `allTabs`). */
+  readonly allTabs?: boolean;
+  /** Parts wholly in sight on every tab, without scrolling (measure.ts `inSight`). */
+  readonly inSight?: string;
   readonly open: (page: Page) => Promise<boolean>;
 }
 
@@ -114,6 +118,12 @@ export const WINDOWS: readonly WindowCase[] = [
     panel: ".monsters-screen",
     items: null,
     tabs: true,
+    // Its six tabs all in sight (768 px iPad upright showed "La" and no
+    // Champion), and on Unlock, Train and Lab the picked monster's cost and
+    // buttons without scrolling (a phone on its side had Research below the
+    // fold). Old-layout fix, beta 9.
+    allTabs: true,
+    inSight: ".locker-detail__action",
     open: dock("monsters"),
   },
   {
