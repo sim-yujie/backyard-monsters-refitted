@@ -2,7 +2,7 @@ import { championByType, type AttackerReport, type FlingEvent } from "../../game
 import { logger } from "../../utils/logger.js";
 import { insertUsageRow } from "./monsterUsageStore.js";
 import { parseFlingLog } from "../base/attackCheckpoint.js";
-import type { AbandonedOutcome } from "../base/combat/abandonedAttack.js";
+import { flungOf, type AbandonedOutcome } from "../base/combat/abandonedAttack.js";
 import type { AttackSession } from "../base/attackSession.js";
 import { campKeyOf, TRIBE_NAMES } from "../base/autoAttack/attackPlan.js";
 import { BaseType } from "../../enums/Base.js";
@@ -217,6 +217,22 @@ export const rowFacts = (
     campLevel: camp ? (defender.level ?? null) : null,
   };
 };
+
+/**
+ * A figure for the row worked out at the landing's call site, never allowed
+ * to throw into the landing: on any error, `fallback`.
+ */
+export const safely = <T>(read: () => T, fallback: T): T => {
+  try {
+    return read();
+  } catch {
+    return fallback;
+  }
+};
+
+/** What the server spent from a fling log, by monster id; empty for a log it cannot read. */
+export const flungInLog = (log: unknown): Record<string, number> =>
+  safely(() => flungOf(parseFlingLog(log)?.events ?? []), {});
 
 /**
  * Records one landed attack for the dashboard. Call it after the landing has

@@ -17,8 +17,8 @@ import { logger } from "../../utils/logger.js";
 import { recordAchievementEvents } from "../achievements/events.js";
 import { awardLootPoints } from "../base/combat/lootPoints.js";
 import { checkpointSession, parseFlingLog } from "../base/attackCheckpoint.js";
-import { flungOf, type AbandonedOutcome } from "../base/combat/abandonedAttack.js";
-import { recordMonsterUsage } from "../stats/monsterUsage.js";
+import type { AbandonedOutcome } from "../base/combat/abandonedAttack.js";
+import { flungInLog, recordMonsterUsage } from "../stats/monsterUsage.js";
 import { replayAbandonedInWorker } from "../base/combat/replayRunner.js";
 import { endRowlessAttack, landRowlessOnce, type RowlessCheckpoint } from "../base/rowlessCheckpoint.js";
 import { recordQuestEvents } from "../quests/record.js";
@@ -292,7 +292,7 @@ const writeDescentLanding = async (
     tribe: "descent",
     campLevel: index + 1,
     battle,
-    flung: battle ? null : flungOf(parseFlingLog(attacker.flinglog)?.events ?? []),
+    flung: battle ? null : flungInLog(attacker.flinglog),
     log: attacker.flinglog,
     damageBefore: null,
     damageAfter: battle?.damage ?? null,
