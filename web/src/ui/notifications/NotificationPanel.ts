@@ -1,6 +1,7 @@
 import type { GameNotification } from "@/api/notifications";
 import { achievementLineText } from "@/game/achievements/unlockText";
-import { friendLineTab, friendLineText } from "@/game/friends/friendText";
+import { friendLineBaiter, friendLineTab, friendLineText } from "@/game/friends/friendText";
+import type { BaiterView } from "@/game/yard/yardIntent";
 import type { FriendsOpenTab } from "@/game/friends/friendsView";
 import { sentText } from "@/game/mail/mailbox";
 import { centreWindow, type CentreWindow } from "@/ui/centreWindow";
@@ -36,6 +37,8 @@ export interface NotificationPanelOptions {
   readonly onClose?: (hadFocus: boolean) => void;
   /** A friend's row that leads to a Friends tab was clicked (a gift: "gifts"). */
   readonly openFriends?: (tab: FriendsOpenTab) => void;
+  /** A friend-test row was clicked: an invite opens Invited me, a test of the yard Results (beta 9 #4). */
+  readonly openBaiter?: (view: BaiterView) => void;
   /** Unix seconds now, for "5 min ago". */
   readonly now?: () => number;
 }
@@ -203,9 +206,11 @@ export class NotificationPanel {
     row.title = words;
 
     const tab = notification.kind === "friend" ? friendLineTab(notification.jobs) : null;
+    const baiter = notification.kind === "friend" ? friendLineBaiter(notification.jobs) : null;
     const read = (): void => {
       if (!notification.read) this.options.onRead(notification.id);
-      if (tab) this.options.openFriends?.(tab);
+      if (baiter) this.options.openBaiter?.(baiter);
+      else if (tab) this.options.openFriends?.(tab);
     };
     // A building's button selects it and, bubbling up, marks the row read too.
     row.addEventListener("click", read);

@@ -40,11 +40,11 @@ let nextId = 1;
  * as it was.
  */
 export const recordTest = (test: Omit<RecordedTest, "id" | "at"> & { readonly at?: number }): RecordedTest => {
-  const { save, army, baiterLevel } = test.run;
+  const { save, army, baiterLevel, friend } = test.run;
   const recorded: RecordedTest = {
     ...test,
     id: nextId,
-    run: { save: structuredClone(save), army, baiterLevel },
+    run: { save: structuredClone(save), army, baiterLevel, ...(friend ? { friend } : {}) },
     events: test.events.map((event) => structuredClone(event)),
     at: test.at ?? Date.now(),
   };

@@ -1,3 +1,4 @@
+import { baiterOpener } from "@/game/baiter/baiterOpener";
 import { notificationsApi, type GameNotification, type NotificationsApi } from "@/api/notifications";
 import { onNotificationSettingsChanged } from "@/api/notificationSettings";
 import type { CompletedJob } from "@/api/types";
@@ -136,6 +137,12 @@ export class NotificationDoor {
         // The Friends screen docks where the list does.
         this.close();
         open(tab);
+      },
+      openBaiter: (view) => {
+        const open = baiterOpener();
+        if (!open) return;
+        this.close();
+        open(view);
       },
       ...(this.options.now ? { now: this.options.now } : {}),
     }).mount(this.options.container);

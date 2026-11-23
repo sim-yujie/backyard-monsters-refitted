@@ -31,9 +31,17 @@ export class BaiterDock {
 
     const note = document.createElement("p");
     note.className = "baiter__note";
-    note.textContent = replay
-      ? "Replay of a test, on your yard as it was then. Nothing is saved."
-      : "Test attack: nothing is saved. Your yard, its traps and your resources stay as they are.";
+    const friend = run.friend;
+    note.textContent =
+      friend?.role === "tester"
+        ? replay
+          ? `Replay of your test of ${friend.inviter.name}'s yard. Nothing is saved.`
+          : `A test of ${friend.inviter.name}'s yard: nothing is lost or won by either of you. They get the replay.`
+        : friend?.role === "owner"
+          ? `${friend.tester}'s test of your yard, as it was then. Nothing was lost.`
+          : replay
+            ? "Replay of a test, on your yard as it was then. Nothing is saved."
+            : "Test attack: nothing is saved. Your yard, its traps and your resources stay as they are.";
 
     const army = document.createElement("p");
     army.className = "baiter__note";

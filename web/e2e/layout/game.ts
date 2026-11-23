@@ -458,6 +458,25 @@ export const openRepeatSheet = async (page: Page, state: string): Promise<boolea
 };
 
 /**
+ * Opens the Baiter window's friend tabs (beta 9 #4) on `view`, or a friend's
+ * test army with `view` "host", from the build's preview with a busy list.
+ */
+export const openBaiterPreview = async (page: Page, view: string): Promise<boolean> => {
+  const opened = await page.evaluate((which) => {
+    const hooks = globalThis as Record<string, unknown>;
+    const open = which === "host" ? hooks["__baiterFriendTest"] : hooks["__baiterWindow"];
+    if (typeof open !== "function") return false;
+    const shut = which === "host" ? (open as () => unknown)() : (open as (view: string) => unknown)(which);
+    return typeof shut === "function";
+  }, view);
+  if (!opened) return false;
+  await page.locator(".overlay__layer .baiter-window").first().waitFor({ timeout: 10_000 });
+  // The list fills from the preview's answer.
+  if (view !== "host") await page.locator(".overlay__layer .baiter-window .friends-row").first().waitFor({ timeout: 10_000 }).catch(() => undefined);
+  return true;
+};
+
+/**
  * The world map's move tray (beta 9 #7), or its List window over it, from the
  * build's preview (`__transferPreview`, VITE_LAYOUT_CHECK): the sandbox yard
  * has no outposts. `closeAll` closes it with its close button.
