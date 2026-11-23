@@ -99,6 +99,7 @@ jobs:
       BOTS_TEST_DB: bym_ci
       BUG_REPORT_TEST_DB: bym_ci
       DASHBOARD_TEST_DB: bym_ci
+      ALLIANCE_TEST_DB: bym_ci
       DEFENCES_TEST_DB: bym_ci
       EVENTS_TEST_DB: bym_ci
       FRIENDS_TEST_DB: bym_ci
