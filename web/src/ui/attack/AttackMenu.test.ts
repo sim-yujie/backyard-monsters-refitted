@@ -64,6 +64,18 @@ describe("sheetHandleLabel", () => {
     return element;
   };
 
+  it("names a Baiter test's replay by its bar, which has no title plate", () => {
+    const dock = document.createElement("div");
+    const bar = document.createElement("section");
+    bar.className = "baiter-dock";
+    bar.setAttribute("aria-label", "Test replay");
+    dock.append(bar);
+    expect(sheetHandleLabel(dock)).toBe("Test replay");
+    // A live test: the army panel's name comes first.
+    dock.append(panel("attack-army", "Army"));
+    expect(sheetHandleLabel(dock)).toBe("Army");
+  });
+
   it("says Army when the sheet holds the army", () => {
     const dock = document.createElement("div");
     dock.append(panel("attack-army", "Army"));
