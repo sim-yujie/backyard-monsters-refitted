@@ -1540,7 +1540,6 @@ export class MapRoom2Scene implements Scene {
     if (anchorCell && this.camera.zoom < MOVE_MIN_ZOOM) this.jumpTo(anchorCell, MOVE_MIN_ZOOM, false);
     this.transfer ??= new TransferMode({
       layer: context.overlay.content,
-      modal: context.overlay.modal,
       sizeOf: (id) => (this.ownSave ? housingSpace(id, academyLevel(this.ownSave.academy, id)) ?? 1 : 1),
       distance: (a, b) => cellDistance({ col: a.x, row: a.y }, { col: b.x, row: b.y }),
       nameOf: (yard) => (yard.main ? MAIN_YARD_TITLE : outpostName(yard.baseid) || `${yard.x}, ${yard.y}`),

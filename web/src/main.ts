@@ -123,12 +123,11 @@ if (import.meta.env.DEV || import.meta.env.VITE_LAYOUT_CHECK === "1") {
       return layer ? previewFriendTest(layer) : null;
     };
   });
-  // The world map's move tray and its List (beta 9 #7), with a fixed busy empire.
+  // The world map's move tray (beta 9 #7), Bring to or Move from, with a fixed busy empire.
   void import("@/ui/maproom/transferPreview").then(({ previewTransferMode }) => {
-    (globalThis as Record<string, unknown>)["__transferPreview"] = (state?: "tray" | "list") => {
+    (globalThis as Record<string, unknown>)["__transferPreview"] = (state?: "in" | "out") => {
       const layer = document.querySelector<HTMLElement>(".overlay__layer:not(.overlay__layer--modal)");
-      const modal = document.querySelector<HTMLElement>(".overlay__layer--modal");
-      return layer && modal ? previewTransferMode(layer, modal, state) : null;
+      return layer ? previewTransferMode(layer, state) : null;
     };
   });
   // The attack screen's dock (owner, 18 Nov 2026): the real attack scene on the own yard.

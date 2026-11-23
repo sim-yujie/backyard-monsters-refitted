@@ -233,7 +233,6 @@ const WINDOW_CLASSES = [
   ".building-panel",
   ".auto-attack--result",
   ".xfer-tray",
-  ".xfer-list",
 ];
 
 const openWindows = (page: Page) =>
@@ -527,11 +526,11 @@ export const openBaiterPreview = async (page: Page, view: string): Promise<boole
 };
 
 /**
- * The world map's move tray (beta 9 #7), or its List window over it, from the
+ * The world map's move tray (beta 9 #7), Bring to or Move from, from the
  * build's preview (`__transferPreview`, VITE_LAYOUT_CHECK): the sandbox yard
  * has no outposts. `closeAll` closes it with its close button.
  */
-export const openMoveTray = async (page: Page, state: "tray" | "list"): Promise<boolean> => {
+export const openMoveTray = async (page: Page, state: "in" | "out"): Promise<boolean> => {
   const opened = await page.evaluate(async (which) => {
     const open = (globalThis as Record<string, unknown>)["__transferPreview"];
     if (typeof open !== "function") return false;
@@ -540,9 +539,9 @@ export const openMoveTray = async (page: Page, state: "tray" | "list"): Promise<
     return typeof shut === "function";
   }, state);
   if (!opened) return false;
-  await page.locator(state === "list" ? ".overlay__layer .xfer-list" : ".overlay__layer .xfer-tray").first().waitFor({ timeout: 10_000 });
+  await page.locator(".overlay__layer .xfer-tray").first().waitFor({ timeout: 10_000 });
   await page
-    .waitForFunction(() => [...document.querySelectorAll(".overlay__layer :is(.xfer-tray, .xfer-list) img")].every((image) => (image as HTMLImageElement).complete), null, {
+    .waitForFunction(() => [...document.querySelectorAll(".overlay__layer .xfer-tray img")].every((image) => (image as HTMLImageElement).complete), null, {
       timeout: 10_000,
     })
     .catch(() => undefined);
