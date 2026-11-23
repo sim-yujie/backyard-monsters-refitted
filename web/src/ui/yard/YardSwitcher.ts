@@ -78,6 +78,10 @@ export const YARD_SWITCHER_TEXT = {
   pinLimit: `Pinned ${OUTPOST_PINS_MAX} already. Unpin one first.`,
   failed: "Could not save. Try again.",
   pinned: (count: number): string => `${count} of ${OUTPOST_PINS_MAX} pinned`,
+  /** The heading's count: every yard, Main included, as the capsule's "/12" counts them (neon, round 1). */
+  yards: (count: number): string => (count === 1 ? "1 yard" : `${count} yards`),
+  yardsTitle: (count: number): string =>
+    `${count === 1 ? "1 yard" : `${count} yards`}: your main yard and ${outpostCountText(count - 1).toLowerCase()}`,
   prev: "Previous yard",
   next: "Next yard",
   stepTitle: (words: string, title: string): string => `${words}: ${title}`,
@@ -280,6 +284,8 @@ export class YardSwitcher {
     );
     this.count.textContent = yardCountText(entries);
     this.count.hidden = this.count.textContent === "";
+    // "120/250" takes a smaller size, so the capsule stays beside More on a phone.
+    this.count.classList.toggle("yard-switcher__count--long", this.count.textContent.length > 5);
     const words = YARD_SWITCHER_TEXT.where(title, at, entries.length);
     this.button.setAttribute("aria-label", words);
     this.button.title = `${title}. ${countText}. Tap for the list of your yards.`;
@@ -357,17 +363,16 @@ export class YardSwitcher {
   /** The heading and every row; only while the list is open. */
   private renderList(): void {
     this.shown = this.entries;
-    const outposts = Math.max(0, this.shown.length - 1);
+    const yards = this.shown.length;
     const pinned = this.shown.filter((entry) => entry.pinned).length;
 
     const words = make("span", "yard-switcher__heading-words");
     words.textContent = YARD_SWITCHER_TEXT.heading;
     const counts = make("span", "yard-switcher__counts");
-    const flags = make("span", "yard-switcher__outposts");
-    flags.title = outpostCountText(outposts);
-    flags.setAttribute("aria-label", outpostCountText(outposts));
-    flags.append(icon("yards", 14), String(outposts));
-    counts.append(flags);
+    const total = make("span", "yard-switcher__outposts");
+    total.title = YARD_SWITCHER_TEXT.yardsTitle(yards);
+    total.textContent = YARD_SWITCHER_TEXT.yards(yards);
+    counts.append(total);
     if (pinned > 0) {
       counts.append(
         iconAmount("pin", `${pinned}/${OUTPOST_PINS_MAX}`, {

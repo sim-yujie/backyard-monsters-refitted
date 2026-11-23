@@ -295,6 +295,7 @@ describe("outpost names and pins (beta 7)", () => {
     );
     // Pinned first: the open outpost is second in the order; its name is the tooltip's.
     expect(q(".yard-switcher__count").textContent).toBe("2/4");
+    expect(q(".yard-switcher__count").classList.contains("yard-switcher__count--long")).toBe(false);
     expect(q(".yard-switcher__button").getAttribute("aria-label")).toBe("Your yards: Front line, 2 of 4");
     open();
     expect(names()).toEqual(["Main yard", "Front line", "439, 461", "Gold mine"]);
@@ -416,7 +417,13 @@ describe("outpost names and pins (beta 7)", () => {
     open();
     expect(all(".yard-switcher__row")).toHaveLength(801);
     expect(names().slice(0, 3)).toEqual(["Main yard", "139, 219", "100, 200"]);
-    expect(q(".yard-switcher__outposts").textContent).toBe("800");
+    // The heading counts every yard, Main included, as the capsule's "/801" does.
+    expect(q(".yard-switcher__outposts").textContent).toBe("801 yards");
+    expect(q(".yard-switcher__outposts").title).toBe("801 yards: your main yard and 800 outposts");
+    // "121/801" (Main, the pin, then 10000 on) takes the smaller size, so the capsule stays clear of More on a phone.
+    switcher.bind(bindingFor(outposts, outpostTarget("10118"), { names: {}, pins: ["10799"] }));
+    expect(q(".yard-switcher__count").textContent).toBe("121/801");
+    expect(q(".yard-switcher__count").classList.contains("yard-switcher__count--long")).toBe(true);
   });
 });
 
