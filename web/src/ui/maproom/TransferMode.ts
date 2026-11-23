@@ -228,6 +228,12 @@ export class TransferMode {
   private resultTimer: ReturnType<typeof setTimeout> | null = null;
   /** The ticks last outlined on the map: the outlines change only when they do. */
   private markedTicks: readonly string[] | null = null;
+  /** What `memo()` worked out, and for which state and roster. */
+  private memoOf: {
+    state: MoveState;
+    yards: readonly ArmyYard[];
+    value: { types: string[]; smallest: number; plan: ReturnType<typeof currentPlan> };
+  } | null = null;
   /** The stepper just opened: scroll its chip into sight once. */
   private revealStep = false;
 
@@ -315,6 +321,7 @@ export class TransferMode {
     this.result = null;
     this.markedTicks = null;
     this.revealStep = false;
+    this.memoOf = null;
     for (const timer of [this.peekTimer, this.holdTimer, this.resultTimer]) if (timer) clearTimeout(timer);
     this.peekTimer = this.holdTimer = this.resultTimer = null;
     const tray = this.tray;
@@ -379,14 +386,32 @@ export class TransferMode {
 
   /** The monster types in the tray (they depend only on the yards, the anchor and the mode). */
   private types(): string[] {
-    const state = this.state;
-    return state ? trayTypes(state.mode, state.anchor, this.yards, this.options.sizeOf) : [];
+    return this.memo()?.types ?? [];
   }
 
   /** The smallest monster the move could send, which decides when a yard is full. */
   private smallest(): number {
-    const sizes = this.types().map((id) => this.options.sizeOf(id));
-    return sizes.length ? Math.min(...sizes) : 1;
+    return this.memo()?.smallest ?? 1;
+  }
+
+  /**
+   * The tray's types, the smallest size and the plan, worked out once per
+   * move state and roster: the camera moving (`place`) only reads them.
+   */
+  private memo(): { types: string[]; smallest: number; plan: ReturnType<typeof currentPlan> } | null {
+    const state = this.state;
+    if (!state) return null;
+    const known = this.memoOf;
+    if (known && known.state === state && known.yards === this.yards) return known.value;
+    const types = trayTypes(state.mode, state.anchor, this.yards, this.options.sizeOf);
+    const sizes = types.map((id) => this.options.sizeOf(id));
+    const value = {
+      types,
+      smallest: sizes.length ? Math.min(...sizes) : 1,
+      plan: currentPlan(state, this.byId, this.options.sizeOf, this.options.distance),
+    };
+    this.memoOf = { state, yards: this.yards, value };
+    return value;
   }
 
   /**
@@ -428,9 +453,7 @@ export class TransferMode {
   }
 
   private plan() {
-    const state = this.state;
-    if (!state) return null;
-    return currentPlan(state, this.byId, this.options.sizeOf, this.options.distance);
+    return this.memo()?.plan ?? null;
   }
 
   /* ── Rendering ────────────────────────────────────────────────────── */

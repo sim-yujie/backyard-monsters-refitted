@@ -204,6 +204,16 @@ describe("TransferMode", () => {
     ]);
   });
 
+  it("the camera moving only moves the plates: the plan is not worked out again", async () => {
+    const distance = vi.fn((a: ArmyYard, b: ArmyYard) => Math.max(Math.abs(a.x - b.x), Math.abs(a.y - b.y)));
+    const { layer } = make({ distance });
+    await mode!.start("main", "in");
+    distance.mockClear();
+    for (let i = 0; i < 5; i++) mode!.place();
+    expect(distance).not.toHaveBeenCalled();
+    expect(layer.querySelectorAll(".xfer-plate").length).toBe(4);
+  });
+
   it("a refused move says why, reads the yards again and stays open", async () => {
     const load = vi.fn(async () => yards());
     const { layer } = make({ load, send: async () => Promise.reject(new Error("there is not enough Monster Housing at the destination.")) });
