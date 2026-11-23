@@ -198,4 +198,38 @@ describe("the Monsters tab", () => {
     await new Promise((resolve) => setTimeout(resolve, 0));
     expect(asked.at(-1)).toContain("period=all");
   });
+
+  describe("today, still counting (lead, 23 Nov 2026)", () => {
+    const frame = () => new Promise((resolve) => setTimeout(resolve, 50));
+
+    it("the line stops at yesterday and reaches today dashed, labelled today so far", async () => {
+      answer = { stats: stats(["2026-11-22", "2026-11-23", "2026-11-24"]), champions };
+      await open();
+      await frame();
+      const svgEl = document.querySelector(".trend-card .chart-svg")!;
+      const solid = svgEl.querySelector(".line:not(.partial)")!.getAttribute("d")!;
+      expect(solid.match(/[ML]/g)).toHaveLength(2);
+      expect(svgEl.querySelector(".line.partial")).not.toBeNull();
+      expect(svgEl.querySelector(".partial-label")?.textContent).toBe("today so far");
+      // The caption for a day reads as before.
+      expect(document.querySelector(".trend-card .chart-caption")?.textContent).toBe("0 monsters flungTue 24 Nov");
+    });
+
+    it("a period that ended before today draws its line whole", async () => {
+      answer = { stats: stats(["2026-11-21", "2026-11-22", "2026-11-23"]), champions };
+      await open();
+      await frame();
+      expect(document.querySelector(".trend-card .line.partial")).toBeNull();
+      expect(document.querySelector(".trend-card .partial-label")).toBeNull();
+    });
+
+    it("day 1: the one bar stays solid, labelled today so far", async () => {
+      answer = { stats: stats(["2026-11-24"]), champions };
+      await open();
+      await frame();
+      expect(document.querySelector(".trend-card .bar")).not.toBeNull();
+      expect(document.querySelector(".trend-card .bar.partial")).toBeNull();
+      expect(document.querySelector(".trend-card .partial-label")?.textContent).toBe("today so far");
+    });
+  });
 });

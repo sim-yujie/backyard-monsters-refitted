@@ -50,6 +50,13 @@ export interface ChartOptions {
   start?: number;
   /** The widest a bar may be (18 px by default): wider for a chart of a few bars. */
   barMax?: number;
+  /**
+   * The last point is still being counted (today): its words, "today so far".
+   * A line stops at the day before and reaches it with a dashed, fainter
+   * segment; a bar among others is drawn faint. Either is labelled, so a day
+   * half over never reads as a crash.
+   */
+  partial?: string;
 }
 
 export interface ChartLayout {
@@ -181,6 +188,22 @@ export const layoutChart = (
 export const tickLabel = (value: number): string =>
   value >= 1000 ? `${Number((value / 1000).toFixed(1))}K` : String(Number(value.toFixed(1)));
 
+/** The line through the first `count` points, a fresh "M" after every gap. */
+const linePath = (layout: Pick<ChartLayout, "xs" | "ys">, count: number): string => {
+  let path = "";
+  let pen = false;
+  for (let i = 0; i < count; i++) {
+    const y = layout.ys[i] ?? null;
+    if (y === null) {
+      pen = false;
+      continue;
+    }
+    path += `${pen ? " L" : path ? " M" : "M"} ${layout.xs[i]!.toFixed(1)} ${y.toFixed(1)}`;
+    pen = true;
+  }
+  return path;
+};
+
 /** A bar with rounded top corners, standing on the baseline. */
 const barPath = (x: number, top: number, width: number, bottom: number): string => {
   const r = Math.min(4, width / 2, bottom - top);
@@ -274,6 +297,9 @@ const draw = (
   }
 
   const marks: SVGElement[] = [];
+  const last = points.length - 1;
+  /** A line whose last point is still counting, with a day before it to stop at. */
+  const partial = Boolean(options.partial) && options.kind === "line" && points.length >= 2;
   if (options.kind === "bar") {
     layout.ys.forEach((y, i) => {
       const bar = svg("path", {
@@ -281,13 +307,39 @@ const draw = (
           y === null || y >= plot.bottom
             ? ""
             : barPath(layout.xs[i]!, y, layout.barWidth, plot.bottom),
-        class: "mark bar",
+        class: options.partial && points.length >= 2 && i === last ? "mark bar partial" : "mark bar",
       });
       marks.push(bar);
       root.append(bar);
     });
+  } else if (partial) {
+    root.append(svg("path", { d: linePath(layout, last), class: "mark line" }));
+    let from = last - 1;
+    while (from >= 0 && layout.ys[from] === null) from--;
+    if (from >= 0 && layout.ys[last] !== null) {
+      root.append(
+        svg("path", {
+          d: `M ${layout.xs[from]!.toFixed(1)} ${layout.ys[from]!.toFixed(1)} L ${layout.xs[last]!.toFixed(1)} ${layout.ys[last]!.toFixed(1)}`,
+          class: "mark line partial",
+        }),
+      );
+    }
   } else {
     root.append(svg("path", { d: layout.path, class: "mark line" }));
+  }
+  if (options.partial && points.length && layout.ys[points.length - 1] !== null) {
+    const i = points.length - 1;
+    // A bar: above it. A line: to the left of its last point, level with it,
+    // clear of the dashed segment that comes down (or up) into it.
+    const bar = options.kind === "bar";
+    const note = svg("text", {
+      x: bar ? layout.xs[i]! : layout.xs[i]! - 14,
+      y: bar ? Math.max(plot.top + 10, layout.ys[i]! - 6) : Math.min(plot.bottom - 4, Math.max(plot.top + 10, layout.ys[i]! + 4)),
+      "text-anchor": bar ? "middle" : "end",
+      class: "partial-label",
+    });
+    note.textContent = (points[i]!.days ?? 1) > 1 ? "this week so far" : options.partial;
+    root.append(note);
   }
   const guide = svg("line", {
     y1: plot.top,
@@ -336,6 +388,7 @@ const draw = (
       dot.setAttribute("cx", String(x));
       dot.setAttribute("cy", String(y));
       dot.setAttribute("visibility", "visible");
+      dot.classList.toggle("partial", partial && i === last);
     } else {
       dot.setAttribute("visibility", "hidden");
     }
