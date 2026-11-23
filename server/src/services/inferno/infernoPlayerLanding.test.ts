@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, mock, test } from "bun:test";
 import type { Context } from "koa";
+import { RULES_VERSION } from "../defences/rulesVersion.js";
 
 import type { AbandonedInput, AbandonedOutcome } from "../base/combat/abandonedAttack.js";
 import { attackWindowSeconds } from "../base/attackWindow.js";
@@ -219,6 +220,7 @@ const startSession = (purse = { r1: 5_000, r2: 400, r3: 0, r4: 0 }, startedat = 
         attackerid: ATTACKER,
         attackid: ATTACK_ID,
         startedat,
+        rules: RULES_VERSION,
         entryHoused: { [INFERNO_BASEID]: { ...ARMY } },
         defenderForces: FORCES as never,
         defenderResources: purse,
@@ -640,7 +642,7 @@ describe("an attack left without its final save (owner, 27 Oct)", () => {
       await infernoAttackStart(
         {
           authUser: { userid: ATTACKER, username: "raider", alliance_id: null },
-          request: { body: { kind: "player", baseid: TARGET_BASEID } },
+          request: { body: { kind: "player", baseid: TARGET_BASEID, rules: RULES_VERSION } },
         } as never,
         async () => {}
       );

@@ -10,6 +10,8 @@ import {
   viewBase,
 } from "./base";
 import type { AttackData, BaseLoadResponse } from "./types";
+import { RULES_STAMP } from "./rulesStamp";
+import manifest from "@/game/combat/rules/MANIFEST.json";
 import type { AttackRoster } from "@/game/attack/attackTarget";
 import { currentSeason, setSeason } from "@/game/season";
 import { ATTACK_CHAMPION_PROPS, ATTACK_MONSTER_PROPS } from "@/game/attack/attackStats";
@@ -143,6 +145,21 @@ describe("loadAttack", () => {
     await loadAttack("1001", "outpost", sandboxRoster());
     expect(sent.map((call) => call.body.get("type"))).toEqual(["attack", "attack"]);
   });
+
+  it("carries this page's battle rules, the combat MANIFEST's version (owner's fix 1, 23 Nov 2026)", async () => {
+    stubFetch();
+    await loadAttack("1000", "main", sandboxRoster());
+    expect(sent[0]!.body.get("rules")).toBe(manifest.version);
+    expect(RULES_STAMP).toMatch(/^[0-9a-f]{16}$/);
+  });
+});
+
+describe("saveAttack's battle rules", () => {
+  it("carries the same stamp as the start", async () => {
+    stubFetch({ basesaveid: 9 });
+    await saveAttack({ baseid: "1000", basesaveid: 9, attackid: 1 });
+    expect(sent[0]!.body.get("rules")).toBe(RULES_STAMP);
+  });
 });
 
 describe("loadAttackOn (Map Room 1, #132)", () => {
@@ -231,7 +248,7 @@ describe("saveAttack", () => {
     await saveAttack({ baseid: "1000", basesaveid: 9, attackid: 1 });
 
     const call = sent[0]!;
-    expect([...call.body.keys()].sort()).toEqual(["attackid", "baseid", "basesaveid"]);
+    expect([...call.body.keys()].sort()).toEqual(["attackid", "baseid", "basesaveid", "rules"]);
   });
 
   it("sends over as 0 when the attack continues", async () => {
@@ -268,6 +285,7 @@ describe("saveAttack", () => {
       tick: "2400",
       left: "1",
       attackloot: '{"r1":5,"r2":0,"r3":0,"r4":0}',
+      rules: RULES_STAMP,
     });
   });
 });

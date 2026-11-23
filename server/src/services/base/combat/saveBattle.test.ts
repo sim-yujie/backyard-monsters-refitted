@@ -11,11 +11,12 @@ import type { AbandonedOutcome } from "./abandonedAttack.js";
 
 const warn = mock((..._args: unknown[]) => {});
 const error = mock((..._args: unknown[]) => {});
+const info = mock((..._args: unknown[]) => {});
 const reports: string[] = [];
 let reportFails = false;
 
 mock.module("../../../utils/logger.js", () => ({
-  logger: { warn, error, info: mock(() => {}), debug: mock(() => {}) },
+  logger: { warn, error, info, debug: mock(() => {}) },
 }));
 
 mock.module("../reportManager.js", () => ({
@@ -72,6 +73,7 @@ const mismatchLines = () =>
 beforeEach(() => {
   warn.mockClear();
   error.mockClear();
+  info.mockClear();
   reports.length = 0;
   reportFails = false;
 });
@@ -188,6 +190,68 @@ describe("recordBattleMismatches", () => {
     await recordBattleMismatches(ctx, user, base, crafted, battle, stored, "log");
     expect(mismatchLines()).toHaveLength(1);
     expect(error).toHaveBeenCalledTimes(1);
+  });
+});
+
+/**
+ * A save from an attack started on an old game page (owner's fix 1, Desk 8,
+ * 23 Nov 2026): its battle is refused or overruled exactly as any other, and
+ * the server's own lands, but the player is not flagged: no `Report` row, no
+ * `attack-replay-mismatch` warning, one `attack-save-old-page` line instead.
+ */
+describe("an old page's save", () => {
+  const oldPageLines = () =>
+    info.mock.calls.filter((call) => (call[1] as { event?: string })?.event === "attack-save-old-page");
+
+  test("reject: refused as before, but no Report row and no mismatch warning", async () => {
+    const caught = await recordBattleMismatches(ctx, user, base, crafted, battle, stored, "reject", {
+      oldPage: true,
+      pageRules: undefined,
+    }).then(
+      () => undefined,
+      (err: unknown) => err as { data?: { reason?: string } }
+    );
+
+    expect(caught?.data?.reason).toBe("replayMismatch");
+    expect(reports).toEqual([]);
+    expect(mismatchLines()).toEqual([]);
+    expect(oldPageLines()).toHaveLength(1);
+    expect(oldPageLines()[0]![1]).toMatchObject({
+      outcome: "rejected",
+      fields: ["damage", "attackloot"],
+      pageRules: null,
+      basesaveid: 9,
+    });
+  });
+
+  test("the Descent's overrule still lands the server's battle, unflagged", async () => {
+    const overruled = await recordBattleMismatches(ctx, user, base, crafted, battle, stored, "reject", {
+      refuse: false,
+      oldPage: true,
+      pageRules: "0ba3fde8701104af",
+    });
+
+    expect(overruled).toBe(true);
+    expect(reports).toEqual([]);
+    expect(oldPageLines()[0]![1]).toMatchObject({ outcome: "rejected", pageRules: "0ba3fde8701104af" });
+  });
+
+  test("log mode: logged as an old page, no Report row", async () => {
+    expect(await recordBattleMismatches(ctx, user, base, crafted, battle, stored, "log", { oldPage: true })).toBe(false);
+    expect(reports).toEqual([]);
+    expect(oldPageLines()[0]![1]).toMatchObject({ outcome: "logged", mode: "log" });
+  });
+
+  test("an honest save from an old page says nothing at all", async () => {
+    await recordBattleMismatches(ctx, user, base, honest, battle, stored, "reject", { oldPage: true });
+    expect(oldPageLines()).toEqual([]);
+    expect(reports).toEqual([]);
+  });
+
+  test("a current page's save is flagged as before", async () => {
+    await recordBattleMismatches(ctx, user, base, crafted, battle, stored, "log", { oldPage: false, pageRules: "x" });
+    expect(reports).toHaveLength(1);
+    expect(oldPageLines()).toEqual([]);
   });
 });
 

@@ -22,6 +22,7 @@ import { GraphicsOffError } from "@/app/graphicsOff";
 import { showGraphicsOffNotice } from "@/ui/GraphicsOffNotice";
 import { UpdateCheck, fetchLivePage, runningBundleName } from "@/app/updateCheck";
 import { UpdatePrompt } from "@/ui/UpdatePrompt";
+import { onNewVersionRefusal } from "@/api/rulesStamp";
 import { applySkin } from "@/ui/skin";
 import { applyFontChoice } from "@/ui/fontChoice";
 import { installGameUiSounds } from "@/game/sound/sound";
@@ -68,10 +69,13 @@ void app.start().catch((error: unknown) => {
 
 // "New version": a tab left open across a release learns the live page now
 // runs another build. A dev build serves /src/main.ts and has nothing to compare.
+// The server says so too, refusing an attack start from a page whose battle
+// rules are older than its own (`api/rulesStamp.ts`): the same card then.
+const updatePrompt = new UpdatePrompt(host);
+onNewVersionRefusal(() => updatePrompt.show());
 const running = runningBundleName();
 if (running) {
-  const prompt = new UpdatePrompt(host);
-  new UpdateCheck({ running, fetchPage: fetchLivePage, onNewVersion: () => prompt.show() }).start();
+  new UpdateCheck({ running, fetchPage: fetchLivePage, onNewVersion: () => updatePrompt.show() }).start();
 }
 
 // A handle for measuring in the browser: frame cost, renderer state, forced

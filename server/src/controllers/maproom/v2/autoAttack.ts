@@ -4,6 +4,7 @@ import type { User } from "../../../database/models/user.model.js";
 import { postgres } from "../../../server.js";
 import { Status } from "../../../enums/StatusCodes.js";
 import { discordAgeErr } from "../../../errors/errors.js";
+import { requirePageRules, stampOf } from "../../../services/base/combat/rulesStamp.js";
 import {
   autoAttackPlanFor,
   lastAutoAttackReplay,
@@ -45,6 +46,10 @@ export const autoAttackPlan: KoaController = async (ctx) => {
 export const autoAttack: KoaController = async (ctx) => {
   if (!ctx.meetsDiscordAgeCheck) throw discordAgeErr();
   const { baseid, moves } = RunAutoAttackSchema.parse(ctx.request.body);
+  // The server fights a Repeat attack itself, so an old page cannot change its
+  // result; it is refused all the same, as every attack start is, so Watch
+  // never plays the server's battle on older rules (owner's fix 1, 23 Nov 2026).
+  requirePageRules(ctx, ctx.authUser, stampOf(ctx.request.body), "worldmapv2/autoattack");
 
   ctx.status = Status.OK;
   ctx.body = { error: 0, ...(await runAutoAttack(ctx.authUser, baseid, moves)) };

@@ -1,5 +1,6 @@
 import { afterAll, afterEach, beforeEach, describe, expect, mock, spyOn, test } from "bun:test";
 import type { Context } from "koa";
+import { RULES_VERSION } from "../defences/rulesVersion.js";
 
 import type { InfernoProgress } from "../../database/models/infernoprogress.model.js";
 import type { AbandonedInput, AbandonedOutcome } from "../base/combat/abandonedAttack.js";
@@ -202,6 +203,7 @@ const startSession = (baseid = "201", attackerid = ATTACKER) =>
         attackerid,
         attackid: ATTACK_ID,
         startedat: now(),
+        rules: RULES_VERSION,
         entryHoused: { [MAIN_BASEID]: ARMY },
         defenderForces: FORCES as never,
         attackerAcademy: {},

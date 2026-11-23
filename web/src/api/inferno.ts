@@ -1,4 +1,5 @@
 import { ApiError, get, post } from "./http";
+import { RULES_STAMP, startStamped } from "./rulesStamp";
 import type { RaidView } from "./raid";
 import type { ApiEnvelope, BaseLoadResponse } from "./types";
 
@@ -151,7 +152,7 @@ export interface DescentAttackStart extends ApiEnvelope {
 }
 
 export const startDescentAttack = (baseid: string): Promise<DescentAttackStart> =>
-  post<DescentAttackStart>("/api/:apiVersion/bm/inferno/attack/start", { kind: "descent", baseid });
+  startStamped(post<DescentAttackStart>("/api/:apiVersion/bm/inferno/attack/start", { kind: "descent", baseid, rules: RULES_STAMP }));
 
 /**
  * The start answer as the attack scene reads an attack load: the yard with
@@ -291,7 +292,7 @@ export interface TribeAttackStart extends ApiEnvelope {
 }
 
 export const startTribeAttack = (baseid: string): Promise<TribeAttackStart> =>
-  post<TribeAttackStart>("/api/:apiVersion/bm/inferno/attack/start", { kind: "tribe", baseid });
+  startStamped(post<TribeAttackStart>("/api/:apiVersion/bm/inferno/attack/start", { kind: "tribe", baseid, rules: RULES_STAMP }));
 
 /** The tribe start as the attack scene reads an attack load, an Inferno yard as the Descent's is. */
 export const tribeAttackLoad = (
@@ -384,7 +385,7 @@ export interface PlayerAttackStart extends ApiEnvelope {
 }
 
 export const startPlayerAttack = (baseid: string): Promise<PlayerAttackStart> =>
-  post<PlayerAttackStart>("/api/:apiVersion/bm/inferno/attack/start", { kind: "player", baseid });
+  startStamped(post<PlayerAttackStart>("/api/:apiVersion/bm/inferno/attack/start", { kind: "player", baseid, rules: RULES_STAMP }));
 
 /**
  * The player start as the attack scene reads an attack load. It carries the

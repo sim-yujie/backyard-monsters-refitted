@@ -32,6 +32,7 @@ import type { KoaController } from "../../utils/KoaController.js";
 import { closeInfernoPlayerAttacksOf } from "../../services/inferno/infernoPlayerFinalise.js";
 import { finaliseRowlessAttacksOf } from "../../services/base/finaliseRowlessAttack.js";
 import { readRowlessCheckpoint, rowlessKindOf } from "../../services/base/rowlessCheckpoint.js";
+import { requirePageRules, stampOf } from "../../services/base/combat/rulesStamp.js";
 import { startInfernoPlayerAttack, type InfernoPlayerAttackStart } from "./playerAttack.js";
 import { startInfernoTribeAttack, type InfernoTribeAttackStart } from "./tribeAttack.js";
 
@@ -164,6 +165,9 @@ export const startDescentAttack = async (
 export const infernoAttackStart: KoaController = async (ctx) => {
   requireInfernoEnabled();
   const body = (ctx.request.body ?? {}) as { kind?: unknown; baseid?: unknown };
+  // A page with older battle rules is refused before anything is closed,
+  // read or spent (owner's fix 1, 23 Nov 2026, `rulesStamp.ts`).
+  requirePageRules(ctx, ctx.authUser, stampOf(body), `inferno:${String(body.kind)}`);
   const baseid = String(body.baseid ?? "");
   let start: DescentAttackStart | InfernoTribeAttackStart | InfernoPlayerAttackStart;
   // A player attack the caller left is closed first: a new attack never

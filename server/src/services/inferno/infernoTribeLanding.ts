@@ -25,6 +25,7 @@ import { endRowlessAttack, landRowlessOnce, type RowlessCheckpoint } from "../ba
 import { checkAttackBinding } from "../base/attackSession.js";
 import { battleReplayInput, battleTick } from "../base/combat/battle.js";
 import { recordBattleMismatches, replayBattleForSave } from "../base/combat/saveBattle.js";
+import { startedOnOldPage, stampOf } from "../base/combat/rulesStamp.js";
 import { isAttackActive } from "../base/isAttackActive.js";
 import { creditableMR1Loot, mr1TribePool } from "../maproom/v1/mr1TribeRules.js";
 import { countsOf, flungPerYard, subtractHoused, type Counts } from "../yard/attackRoster.js";
@@ -407,7 +408,8 @@ const tribeBattle = async (
     },
     battle,
     yard.buildingdata as JsonObject | undefined,
-    combatConfig.mode
+    combatConfig.mode,
+    { oldPage: startedOnOldPage(tribe.session.rules), pageRules: stampOf(ctx.request.body) }
   );
   return battle;
 };

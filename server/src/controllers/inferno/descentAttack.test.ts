@@ -1,5 +1,6 @@
 import { afterAll, afterEach, beforeEach, describe, expect, mock, test } from "bun:test";
 import type { Context } from "koa";
+import { RULES_VERSION } from "../../services/defences/rulesVersion.js";
 
 import type { InfernoProgress } from "../../database/models/infernoprogress.model.js";
 
@@ -79,7 +80,9 @@ const progressRow = (beaten: number, emergence = 5): Partial<InfernoProgress> =>
 });
 
 const contextFor = (body: unknown) =>
-  ({ authUser: { userid: ATTACKER, alliance_id: null }, request: { body } }) as unknown as Context & { body: any };
+  ({ authUser: { userid: ATTACKER, alliance_id: null }, request: { body: { rules: RULES_VERSION, ...(body as object) } } }) as unknown as Context & {
+    body: any;
+  };
 
 /** The refusal `reason` the route answered with, or "none". */
 const refusalOf = async (body: unknown): Promise<string> => {
@@ -120,6 +123,15 @@ describe("starting a Descent attack", () => {
     delete process.env.INFERNO_ENABLED;
     expect(await refusalOf({ kind: "descent", baseid: "201" })).toBe("infernoOff");
     expect(calls).toEqual([]);
+  });
+
+  test("refused with New version from a page with older battle rules, or none, before anything is read (23 Nov 2026)", async () => {
+    for (const kind of ["descent", "tribe", "player"]) {
+      expect(await refusalOf({ kind, baseid: "201", rules: "0ba3fde8701104af" })).toBe("newVersion");
+      expect(await refusalOf({ kind, baseid: "201", rules: undefined })).toBe("newVersion");
+    }
+    expect(calls).toEqual([]);
+    expect(store.size).toBe(0);
   });
 
   test("the player kind is not built yet; a tribe attack on a Descent yard is refused", async () => {

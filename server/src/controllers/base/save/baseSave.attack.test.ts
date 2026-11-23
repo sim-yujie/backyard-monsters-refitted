@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, mock, setSystemTime, test } from "bun:test";
 import type { Context } from "koa";
+import { RULES_VERSION } from "../../../services/defences/rulesVersion.js";
 import { gzipSync } from "node:zlib";
 import type { BrainWeights, FrozenHabits } from "../../../game-rules/combat/index.js";
 
@@ -151,6 +152,8 @@ mock.module("../../../services/base/attackSessionStore.js", () => ({
     attackerid: ATTACKER,
     attackid: ATTACK_ID,
     startedat: Math.floor(Date.now() / 1000),
+    // Started on a page with this server's battle rules (`rulesStamp.ts`).
+    rules: RULES_VERSION,
     ...(sessionEntry !== null && { entryHoused: sessionEntry ?? ENTRY }),
     defenderResources: { r1: 5000, r2: 0, r3: 0, r4: 0 },
     ...(sessionForces ? { defenderForces: sessionForces } : {}),

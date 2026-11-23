@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, mock, setSystemTime, test } from "bun:test";
 import { attackWindowSeconds } from "../../base/attackWindow.js";
 import type { Context } from "koa";
+import { RULES_VERSION } from "../../defences/rulesVersion.js";
 import { withTribeGooBonus } from "../../base/tribeGooBonus.js";
 
 /**
@@ -164,7 +165,7 @@ const now = () => Math.floor(Date.now() / 1000);
 const startSession = (attackerid = ATTACKER, startedat = now(), housed: Record<string, number> = { C1: 10 }) =>
   store.set(
     mr1TribeSessionKey(ATTACKER, TRIBE),
-    serialiseAttackSession({ attackerid, attackid: ATTACK_ID, startedat, entryHoused: { "5000": housed } })
+    serialiseAttackSession({ attackerid, attackid: ATTACK_ID, startedat, rules: RULES_VERSION, entryHoused: { "5000": housed } })
   );
 
 /**
@@ -403,7 +404,7 @@ describe("Map Room 1 tribe save of a camp gone since the attack began", () => {
   test("the practice camp, removed by a guide skip mid-attack, still lands the attack, gives nothing and stays gone", async () => {
     store.set(
       mr1TribeSessionKey(ATTACKER, CAMP),
-      serialiseAttackSession({ attackerid: ATTACKER, attackid: ATTACK_ID, startedat: now(), entryHoused: { "5000": ARMY } })
+      serialiseAttackSession({ attackerid: ATTACKER, attackid: ATTACK_ID, startedat: now(), rules: RULES_VERSION, entryHoused: { "5000": ARMY } })
     );
     const ctx = ctxFor({
       baseid: CAMP,
