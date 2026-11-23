@@ -352,6 +352,84 @@ export const fetchMe = (): Promise<Envelope<AdminMe>> => adminGet(`${ADMIN}/me`)
 export const fetchOverview = (days: number): Promise<Envelope<StatsOverview>> =>
   adminGet(`${ADMIN}/stats/overview`, { days });
 
+/** The Monsters tab's period (`server/src/services/stats/monsterUsageStats.ts`). */
+export type MonsterPeriod = "7" | "30" | "all";
+
+export interface MonsterLevelCount {
+  level: number;
+  flung: number;
+  attacks: number;
+  players: number;
+}
+
+export interface MonsterCount {
+  id: string;
+  name: string;
+  kind: "normal" | "inferno";
+  maxLevel: number;
+  flung: number;
+  /** Attacks it was flung in. */
+  attacks: number;
+  players: number;
+  levels: MonsterLevelCount[];
+  /** Flung each day, one per entry of `days`. */
+  daily: number[];
+}
+
+export interface MonsterSide {
+  attacks: number;
+  players: number;
+  flung: number;
+  daily: number[];
+  monsters: MonsterCount[];
+}
+
+export interface TribeCount {
+  key: string;
+  name: string;
+  where: "Map Room 1" | "Map Room 2" | "Inferno" | "Descent";
+  attacks: number;
+  players: number;
+  /** The levels its camps can really have, or null (the practice camp). */
+  range: [number, number] | null;
+  /** Map Room 2: the only levels its camps have. */
+  only?: number[];
+  levels: { level: number; attacks: number; players: number }[];
+}
+
+export interface MonsterStats {
+  generatedAt: string;
+  period: MonsterPeriod;
+  since: string | null;
+  daysCounted: number;
+  days: string[];
+  players: MonsterSide;
+  camps: MonsterSide & { tribes: TribeCount[] };
+  /** Inferno attacks landed as their whole army: left out of the counts. */
+  assumed: number;
+  /** Attacks landed with no battle: counted from their fling log. */
+  unreplayed: number;
+}
+
+export interface ChampionScope {
+  players: number;
+  none: number;
+  owned: { id: string; count: number }[];
+  /** Players owning exactly 1, 2, 3... */
+  byCount: number[];
+}
+
+export interface ChampionOwnership {
+  generatedAt: string;
+  active: ChampionScope;
+  every: ChampionScope;
+}
+
+export const fetchMonsterStats = (
+  period: MonsterPeriod,
+): Promise<Envelope<{ stats: MonsterStats; champions: ChampionOwnership }>> =>
+  adminGet(`${ADMIN}/stats/monsters`, { period });
+
 export const fetchHealth = (): Promise<Envelope<AdminHealthReport>> => adminGet(`${ADMIN}/health`);
 
 export const fetchBugReports = (

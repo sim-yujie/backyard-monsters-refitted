@@ -38,6 +38,16 @@ export interface ChartOptions {
   week?: "sum" | "last" | "mean";
   /** False: the scale may start above zero (lines only). */
   zero?: boolean;
+  /**
+   * For points that are not days (a camp's levels): the axis label, the
+   * words after the number, and the number's own words. Each defaults to the
+   * day's.
+   */
+  axis?: (point: ChartPoint) => string;
+  when?: (point: ChartPoint) => string;
+  say?: (point: ChartPoint) => string;
+  /** The point the caption shows at rest; the last known one by default. */
+  start?: number;
 }
 
 export interface ChartLayout {
@@ -192,6 +202,7 @@ const draw = (
   options: ChartOptions,
 ): void => {
   const width = Math.max(240, Math.floor(host.clientWidth || 320));
+  const when = options.when ?? whenLabel;
   const layout = layoutChart(points, width, options.height ?? 168, options.zero ?? true);
   const { plot } = layout;
   const root = svg("svg", {
@@ -201,7 +212,7 @@ const draw = (
     class: "chart-svg",
     role: "img",
     tabindex: 0,
-    "aria-label": `${options.unit}, ${points.length ? `${whenLabel(points[0]!)} to ${whenLabel(points[points.length - 1]!)}` : "no days yet"}. Arrow keys step through the days.`,
+    "aria-label": `${options.unit}, ${points.length ? `${when(points[0]!)} to ${when(points[points.length - 1]!)}` : "no days yet"}. Arrow keys step through ${options.when ? "them" : "the days"}.`,
   });
 
   for (const tick of layout.ticks) {
@@ -235,7 +246,7 @@ const draw = (
       "text-anchor": anchor,
       class: "tick",
     });
-    label.textContent = shortDay(points[i]!.day);
+    label.textContent = options.axis ? options.axis(points[i]!) : shortDay(points[i]!.day);
     root.append(label);
   }
   if (layout.leadingGap) {
@@ -276,6 +287,7 @@ const draw = (
   root.append(guide, dot);
 
   const lastKnown = (() => {
+    if (options.start !== undefined && points[options.start]) return options.start;
     for (let i = points.length - 1; i >= 0; i--) if (points[i]!.value !== null) return i;
     return points.length - 1;
   })();
@@ -292,9 +304,13 @@ const draw = (
       h(
         "strong",
         {},
-        point.value === null ? "Not counted" : `${count(point.value)} ${options.unit}`,
+        point.value === null
+          ? "Not counted"
+          : options.say
+            ? options.say(point)
+            : `${count(point.value)} ${options.unit}`,
       ),
-      h("span", {}, whenLabel(point)),
+      h("span", {}, when(point)),
     );
     marks.forEach((mark, j) => mark.classList.toggle("on", active && j === i));
     const x = layout.xs[i]!;
