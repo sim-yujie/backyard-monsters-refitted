@@ -213,6 +213,11 @@
   flex-direction: column;
   align-items: center;
   justify-content: center;
+  /* One column: the card's grid keeps a second, empty column for hatching's
+     words beside the picture, which pushed the picture left of the tile's
+     centre while its words were centred (owner, 23 Nov 2026). */
+  grid-template-columns: minmax(0, 1fr);
+  justify-items: center;
   gap: 0;
   width: auto;
   min-height: 48px;
