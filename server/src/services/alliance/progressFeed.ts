@@ -1,6 +1,7 @@
-import type { EntityManager } from "@mikro-orm/core";
+import type { EntityManager, PostgreSqlDriver } from "@mikro-orm/postgresql";
 
 import { Alliance } from "../../database/models/alliance.model.js";
+import type { AllianceMessageType } from "../../enums/Alliance.js";
 import { User } from "../../database/models/user.model.js";
 import { getCurrentDateTime } from "../../utils/getCurrentDateTime.js";
 import { logger } from "../../utils/logger.js";
@@ -14,12 +15,15 @@ const FLUSH_MS = 5_000;
 const TALLY_CHECK_MS = 60 * 60_000;
 
 /**
- * Starts the alliance progress machinery (`server.ts`): quest events feed the
- * weekly goals, the feed lines go out as shouts, and the territory tally runs
- * once a UTC day. Returns the stop function.
+ * The feed line hook (`setProgressFeed`): a goal, star or trade line goes out
+ * as a shout from its member, or from the leader for the tally's lines. It
+ * reads and writes through its own fork, never the request's entity manager,
+ * which a line said inside a transaction would find already committed
+ * ("Transaction is already committed": goal lines lost from beta 7 to 8.2).
  */
-export const startAllianceProgress = (em: EntityManager): (() => void) => {
-  setProgressFeed(async (allianceId, userid, type, body) => {
+export const progressFeedLine =
+  (em: EntityManager<PostgreSqlDriver>) =>
+  async (allianceId: number, userid: number, type: AllianceMessageType, body: string): Promise<void> => {
     const fork = em.fork();
     let author = userid ? await fork.findOne(User, { userid }) : null;
     if (!author) {
@@ -27,8 +31,16 @@ export const startAllianceProgress = (em: EntityManager): (() => void) => {
       const alliance = await fork.findOne(Alliance, { id: allianceId });
       author = alliance ? await fork.findOne(User, { userid: alliance.leader_userid }) : null;
     }
-    if (author) await announceShout({ allianceId, author, type, body });
-  });
+    if (author) await announceShout({ allianceId, author, type, body, em: fork });
+  };
+
+/**
+ * Starts the alliance progress machinery (`server.ts`): quest events feed the
+ * weekly goals, the feed lines go out as shouts, and the territory tally runs
+ * once a UTC day. Returns the stop function.
+ */
+export const startAllianceProgress = (em: EntityManager<PostgreSqlDriver>): (() => void) => {
+  setProgressFeed(progressFeedLine(em));
   setQuestEventListener(noteAllianceEvents);
 
   let flushing = false;

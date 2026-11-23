@@ -123,7 +123,26 @@ export const say = (allianceId: number, userid: number, type: AllianceMessageTyp
     logger.error(`Alliance feed line ${type} failed: ${err}`)
   );
 
-/** Pays the alliance for the goals an UPDATE just finished, and says so in the feed. */
+/**
+ * Feed lines said inside {@link countAfterCommit}'s work wait here and go out
+ * only once that work resolves. A line said inside an open transaction would
+ * be written through the request's entity manager after the transaction had
+ * committed ("Transaction is already committed"), and the goal line was lost
+ * (beta 7 to 8.2; patch 8.3). A rolled-back goal is never announced.
+ */
+const lineScope = new AsyncLocalStorage<(() => void)[]>();
+
+/** {@link say}, held until the surrounding {@link countAfterCommit} work commits; at once outside one. */
+const sayAfterCommit = (allianceId: number, userid: number, type: AllianceMessageType, body: object) => {
+  const held = lineScope.getStore();
+  if (held) held.push(() => void say(allianceId, userid, type, body));
+  else void say(allianceId, userid, type, body);
+};
+
+/**
+ * Pays the alliance for the goals an UPDATE just finished, and says so in the
+ * feed once the transaction commits (call it inside {@link countAfterCommit}).
+ */
 const payGoals = async (
   em: EntityManager,
   userid: number,
@@ -131,7 +150,7 @@ const payGoals = async (
 ) => {
   for (const goal of done) {
     await sql(em).execute(`UPDATE bym.alliance SET points = points + ? WHERE id = ?`, [goal.points, goal.alliance_id]);
-    void say(goal.alliance_id, userid, AllianceMessageType.GOAL_DONE, {
+    sayAfterCommit(goal.alliance_id, userid, AllianceMessageType.GOAL_DONE, {
       kind: goal.kind,
       tier: goal.tier,
       points: goal.points,
@@ -235,14 +254,19 @@ const commitScope = new AsyncLocalStorage<EventBatch>();
 
 /**
  * Runs `work` (an `em.transactional(...)` call) and queues the goal progress
- * noted during it only once it resolves; a throw drops it. Nested scopes hand
- * theirs to the outer scope, which decides.
+ * noted during it, and says the feed lines said during it, only once it
+ * resolves; a throw drops both. Nested scopes hand theirs to the outer scope,
+ * which decides.
  */
 export const countAfterCommit = async <T>(work: () => Promise<T>): Promise<T> => {
   const outer = commitScope.getStore();
+  const outerLines = lineScope.getStore();
   const staged: EventBatch = new Map();
-  const result = await commitScope.run(staged, work);
+  const lines: (() => void)[] = [];
+  const result = await lineScope.run(lines, () => commitScope.run(staged, work));
   for (const [userid, amounts] of staged) addToBatch(outer ?? pending, userid, amounts);
+  if (outerLines) outerLines.push(...lines);
+  else for (const line of lines) line();
   return result;
 };
 
@@ -359,7 +383,7 @@ export const flushAllianceEvents = async (em: EntityManager, now: number): Promi
   pending.clear();
   for (const [userid, amounts] of batch) {
     try {
-      await em.fork().transactional((tx) => addGoalProgress(tx, userid, amounts, now));
+      await countAfterCommit(() => em.fork().transactional((tx) => addGoalProgress(tx, userid, amounts, now)));
     } catch (err) {
       logger.error(`Alliance goal progress for user ${userid} failed: ${err}`);
     }
@@ -400,8 +424,8 @@ export const heldOutposts = async (em: EntityManager, allianceId: number): Promi
 };
 
 /** Adds a goal for this week (Leader and Officers; design v5 §8). */
-export const setGoal = async (em: EntityManager, userid: number, kind: string, tier: GoalTier, now: number) =>
-  em.transactional(async (tx) => {
+export const setGoal = async (em: EntityManager, userid: number, kind: string, tier: GoalTier, now: number) => {
+  const allianceId = await em.transactional(async (tx) => {
     const alliance = await lockLeadOrOfficer(tx, userid);
     const rules = goalMenuFor(alliance.type).find((g) => g.kind === kind);
     if (!rules || !GOAL_TIERS.includes(tier)) throw progressRefusedErr("noSuchGoal", "That goal is not on your menu.");
@@ -435,8 +459,11 @@ export const setGoal = async (em: EntityManager, userid: number, kind: string, t
       `INSERT INTO bym.alliance_goal (alliance_id, week, kind, tier, target, points, set_by) VALUES (?, ?::date, ?, ?, ?, ?, ?)`,
       [alliance.id, week, kind, tier, target, goalPoints(alliance.type, tier), userid]
     );
-    void say(alliance.id, userid, AllianceMessageType.GOAL_SET, { kind, tier });
+    return alliance.id;
   });
+  // Said once the goal has committed, as `lightStar` does (patch 8.3).
+  void say(allianceId, userid, AllianceMessageType.GOAL_SET, { kind, tier });
+};
 
 /**
  * Removes an unfinished goal of this week (Leader and Officers; owner, 15 Nov
@@ -563,7 +590,7 @@ export const runTerritoryTally = async (em: EntityManager, now: number): Promise
   );
   if (claimed.length === 0) return null;
   try {
-    return await em.fork().transactional(async (tx) => {
+    return await countAfterCommit(() => em.fork().transactional(async (tx) => {
       // The held-defence credits only matter for the day they were given.
       await sql(tx).execute(`DELETE FROM bym.alliance_defence_credit WHERE day < ?::date - 7`, [day]);
       const rows = await sql(tx).execute<{ alliance_id: number }[]>(
@@ -595,7 +622,7 @@ export const runTerritoryTally = async (em: EntityManager, now: number): Promise
         );
       }
       return rows.length;
-    });
+    }));
   } catch (err) {
     await sql(em.fork()).execute(`DELETE FROM bym.job_run WHERE job = ? AND period = ?`, [TERRITORY_JOB, day]);
     throw err;
