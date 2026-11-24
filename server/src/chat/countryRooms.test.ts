@@ -53,6 +53,8 @@ mock.module("./chatHistory.js", () => ({
     pushed.push({ channel, entry });
   },
   getHistory: async () => [],
+  MAX_HISTORY: 100,
+  newLineId: () => "testline",
 }));
 
 const { authorizeJoin, evict, joinChannel, postMessage } = await import("./chatRooms.js");
