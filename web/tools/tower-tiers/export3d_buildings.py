@@ -164,6 +164,8 @@ BUILDINGS = {
     "hatchery": dict(type=13, folder="hatchery", frame=(-58, -128), looks=[(1, "L1"), (2, "L2"), (3, "L3")],
                      moves="parts"),
     "housing": dict(type=15, folder="monsterhousing", frame=(-122, 0), looks=[(1, "")], moves=None),
+    # Levels 2 and 3 (beta 9) were made apart from this exporter, in a larger frame (-116, -216):
+    # art-samples/hcc-3d (export5.py, hccdmg5.py) on branch art/hcc-3d-levels, out/r6.
     "hcc": dict(type=16, folder="hatcherycontrolcenter", frame=(-56, -66), looks=[(1, "L1")], moves=None),
     "planner": dict(type=10, folder="yardplanner", frame=(-62, -34), looks=[(1, "L1")], moves=None),
     "juicer": dict(type=9, folder="monsterjuiceloosener", frame=(-50, -22), looks=[(1, "L1")], moves="parts",

@@ -452,7 +452,8 @@ export const TOWN_HALL_ART: readonly TierArt[] = [
  * the box its sack fills, its fill level as Flash's was. The Monster Lab's
  * three strips are its dome's brew and its two side doors' cogs, as Flash's
  * three, each the whole building round what moves, fading out over the body. The Monster Housing
- * and the Hatchery Control Center stand still, as Flash's did.
+ * and the Hatchery Control Center stand still, as Flash's did; the Control Center's levels 2 and 3 (this
+ * project's, beta 9) have 3D looks Flash never had.
  */
 export const BUILDING_3D_ART: Readonly<Record<number, readonly TierArt[]>> = {
   // 1 Twig Snapper: 3D, Flash's four looks (levels 1, 3, 6 and 10); its saw and gears turn
@@ -618,11 +619,19 @@ export const BUILDING_3D_ART: Readonly<Record<number, readonly TierArt[]>> = {
       damaged: { top: ["top.3d1.damaged@2x.webp", -105, 11], shadow: ["shadow.3d1.damaged.jpg", -105, 29] },
       destroyed: { top: ["top.3d1.destroyed@2x.webp", -105, 29], shadow: ["shadow.3d1.destroyed.jpg", -102, 35] } },
   ],
-  // 16 Hatchery Control Center: 3D, one look, still as Flash's
+  // 16 Hatchery Control Center: 3D, still as Flash's. Flash's one look is level 1; levels 2 and 3 (this project's,
+  // beta 9) have looks of their own, Flash has none (owner, 24 Nov 2026: direction C, level 3 with the big red dish;
+  // art-samples/hcc-3d out/r6 on branch art/hcc-3d-levels). Each level has its own wreck. Classic keeps Flash's.
   16: [
     { from: 1, top: ["top.3d1@2x.webp", -40, -57], shadow: ["shadow.3d1.jpg", -40, 21], lift: 0,
       damaged: { top: ["top.3d1.damaged@2x.webp", -53, -51], shadow: ["shadow.3d1.damaged.jpg", -40, 20] },
       destroyed: { top: ["top.3d1.destroyed@2x.webp", -56, -6], shadow: ["shadow.3d1.destroyed.jpg", -72, 36] } },
+    { from: 2, top: ["top.3d2@2x.webp", -47, -80], shadow: ["shadow.3d2.jpg", -43, 12], lift: 0,
+      damaged: { top: ["top.3d2.damaged@2x.webp", -53, -71], shadow: ["shadow.3d2.damaged.jpg", -44, 12] },
+      destroyed: { top: ["top.3d2.destroyed@2x.webp", -82, -32], shadow: ["shadow.3d2.destroyed.jpg", -79, 21] } },
+    { from: 3, top: ["top.3d3@2x.webp", -53, -126], shadow: ["shadow.3d3.jpg", -51, 8], lift: 0,
+      damaged: { top: ["top.3d3.damaged@2x.webp", -57, -106], shadow: ["shadow.3d3.damaged.jpg", -53, 8] },
+      destroyed: { top: ["top.3d3.destroyed@2x.webp", -89, -66], shadow: ["shadow.3d3.destroyed.jpg", -85, 22] } },
   ],
   // 17 Block: 3D, Flash's five looks, still
   17: [
