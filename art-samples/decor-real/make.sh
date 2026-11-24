@@ -50,3 +50,4 @@ bash build_pictures.sh
 # make_copies re-encodes unrelated buildings on this PC: revert everything except wonders/{paoay-church,
 # fort-santiago,magellans-cross,rizal-monument}*, props/windpump*, buildingbuttons/21[3-7]*.
 # Sheets: python3 sheet_real.py wonders classic|modern <out>; python3 sheet_real.py windpump <out>
+python3 wp_frames.py   # before/after frames for the owner sheet

@@ -37,9 +37,12 @@ def wonders(look, out):
         d.text((10, y + 6), label, font=font, fill=GOLD); y += 40
         ph = Image.open(os.path.join(HERE, "refs", photo)).convert("RGBA")
         s.alpha_composite(panel(ph, CW, CH, BG), (10, y))
-        for k, which in enumerate(("before", "after")):
-            im = Image.open(os.path.join(HERE, "sheets", which, f"{t}-{look}@2x.png")).convert("RGBA")
-            s.alpha_composite(panel(im, CW, CH), (10 + (k + 1) * (CW + 10), y))
+        ims = [Image.open(os.path.join(HERE, "sheets", w, f"{t}-{look}@2x.png")).convert("RGBA") for w in ("before", "after")]
+        k = min(min((CW - 30) / i.width, (CH - 30) / i.height) for i in ims)     # one scale per row: sizes compare
+        for j, im in enumerate(ims):
+            im = im.resize((int(im.width * k), int(im.height * k)), Image.LANCZOS)
+            p = Image.new("RGBA", (CW, CH), PANEL + (255,)); p.alpha_composite(im, ((CW - im.width) // 2, CH - 15 - im.height))
+            s.alpha_composite(p, (10 + (j + 1) * (CW + 10), y))
         y += CH + 6
     s.convert("RGB").save(out)
 
