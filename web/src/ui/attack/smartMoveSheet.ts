@@ -3,8 +3,7 @@ import { classicLook } from "@/game/classicLook";
 import { gameIcon } from "@/ui/gameIcon";
 import { Popup } from "@/ui/Popup";
 import { scrollHint } from "./AttackWindow";
-import { NO_ROOM_TEXT } from "./autoAttackText";
-import { campHead, movesPart, roomParts, shortageList, watchMoreRows } from "./repeatPrompt";
+import { campHead, moveCards, roomParts, shortageList, watchMoreRows } from "./repeatPrompt";
 import "@/ui/styles/smart-move.css";
 
 /**
@@ -36,7 +35,13 @@ export const SMART_MOVE_TEXT = {
   move: "Move & attack",
   moving: "Moving…",
   /** The note's heading when some monsters are short even counting every yard. */
-  short: "Saved army: not enough",
+  short: "Saved army: short",
+  /** The note's heading when the yards in range have no room for it. */
+  room: "No room in range",
+  /** The head's count of moves. */
+  moves: (count: number): string => (count === 1 ? "1 move" : `${count} moves`),
+  /** The room the monsters that would move in need. */
+  needed: (space: number): string => `${space.toLocaleString("en-US")} needed`,
 } as const;
 
 /** How the sheet ended: Skip, closed (the map), or moved (the caller has gone on into the battle). */
@@ -146,10 +151,23 @@ export class SmartMoveSheet {
     this.popup.close();
   }
 
+  /**
+   * The camp, with how many moves on the same line (neon, round 1: one row,
+   * so a phone on its side shows two cards), then the cards.
+   */
   private render(): void {
     const camp = this.offer.camp ?? { tribe: "Wild monster", level: 0, damage: 0 };
-    this.popup.setHead(campHead(camp, camp.damage));
-    this.popup.setContent(movesPart(this.offer.moves, this.offer.yards));
+    const count = el("span", "smart-move__count");
+    const words = SMART_MOVE_TEXT.moves(this.offer.moves.length);
+    count.title = `${words} first`;
+    count.append(
+      gameIcon(classicLook() ? "outpostclassic" : "outpost", { size: 24, decorative: true }),
+      el("span", "", words),
+    );
+    const head = el("div", "smart-move__head");
+    head.append(campHead(camp, camp.damage), count);
+    this.popup.setHead(head);
+    this.popup.setContent(moveCards(this.offer.moves, this.offer.yards));
   }
 
   private watch(): void {
@@ -211,13 +229,24 @@ export const smartMoveNote = (offer: SmartMoveResponse | null): HTMLElement | nu
   const room = offer.verdict === "housing" && offer.noRoom !== null;
   if (!short && !room) return null;
   const note = el("section", `smart-move-note smart-move-note--${short ? "short" : "room"}`);
-  const words = short ? SMART_MOVE_TEXT.short : NO_ROOM_TEXT;
+  const words = short ? SMART_MOVE_TEXT.short : SMART_MOVE_TEXT.room;
   note.setAttribute("aria-label", words);
   const heading = el("h3", "smart-move-note__heading");
   heading.append(
     gameIcon(classicLook() ? "outpostclassic" : "outpost", { size: 24, decorative: true }),
     el("span", "smart-move-note__words", words),
   );
-  note.append(heading, ...(short ? [shortageList(offer.missing)] : roomParts(offer.noRoom!, offer.yards)));
+  if (short) {
+    note.append(heading, shortageList(offer.missing));
+    return note;
+  }
+  // neon, round 1: the room needed on the heading's line, then a line per yard in range.
+  const noRoom = offer.noRoom!;
+  const need = el("span", "smart-move-note__need");
+  need.title = `Incoming monsters need ${noRoom.need.toLocaleString("en-US")} housing space`;
+  need.append(gameIcon("housing", { size: 24, decorative: true }), el("span", "", SMART_MOVE_TEXT.needed(noRoom.need)));
+  heading.append(need);
+  const [, list] = roomParts(noRoom, offer.yards);
+  note.append(heading, ...(list ? [list] : []));
   return note;
 };

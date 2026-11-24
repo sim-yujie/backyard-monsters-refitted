@@ -126,7 +126,8 @@ describe("Attack on a camp with smart moving", () => {
     });
     const two = await smartMoveBeforeAttack({ modal: room.modal, attack: camp(), calls: room.calls, isOn: () => true });
     const roomNote = (two as { note: HTMLElement }).note;
-    expect(roomNote.textContent).toContain("1,000 space needed");
+    expect(roomNote.textContent).toContain("1,000 needed");
+    expect(roomNote.textContent).toContain(SMART_MOVE_TEXT.room);
     expect(roomNote.querySelectorAll(".repeat-prompt__room-yard")).toHaveLength(1);
     expect(sheet(room.modal)).toBeNull();
   });

@@ -23,6 +23,63 @@
   gap: var(--space-2);
 }
 
+/* The camp and how many moves, on one line (neon, round 1). */
+.smart-move__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+.smart-move__head > .repeat-prompt__camp {
+  min-width: 0;
+}
+
+.smart-move__count {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: var(--space-1);
+  min-height: 28px;
+  padding: 0 var(--space-2) 0 2px;
+  border-radius: 999px;
+  background: var(--colour-surface-sunken);
+  color: var(--colour-text-strong);
+  font-size: var(--text-md);
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.smart-move__count .game-icon {
+  width: 24px;
+  height: 24px;
+}
+
+/* Every card's arrow and yard in range on one line down the list (neon, round 1). */
+@media (min-width: 621px) {
+  .smart-move .repeat-prompt__yard--to {
+    min-width: 7.5rem;
+  }
+}
+
+/* A phone upright: the way on top (from, arrow, to), the monsters the whole
+   card wide under it, so three kinds never wrap (neon, round 1). */
+@media (max-width: 620px) {
+  .smart-move .repeat-prompt__move {
+    grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+    grid-template-areas:
+      "from arrow to"
+      "cargo cargo cargo";
+  }
+
+  .smart-move .repeat-prompt__yard-words {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0;
+  }
+}
+
 /* "Move & attack" is the action; Skip a modest plate beside it. */
 .smart-move__actions {
   grid-template-columns: minmax(0, 1fr) minmax(0, 2fr);
@@ -78,6 +135,33 @@
     align-items: center;
     gap: var(--space-2);
   }
+
+  /* "Kozu camp", not "Kozu": the row has the room. */
+  .smart-move .repeat-prompt__camp-word {
+    display: inline;
+  }
+
+  /* Tighter cards, so two show between the camp and the buttons. */
+  .smart-move .repeat-prompt__moves {
+    gap: 4px;
+  }
+
+  .smart-move .repeat-prompt__move {
+    padding: 2px var(--space-2);
+  }
+
+  .smart-move .repeat-prompt__mini .attack-window__art {
+    width: 36px;
+    height: 28px;
+  }
+
+  .smart-move .attack-window__actions {
+    padding: var(--space-1) var(--space-4) var(--space-2);
+  }
+
+  :root[data-skin] .panel.smart-move .attack-window__actions > .btn {
+    min-height: 38px;
+  }
 }
 
 /* ── The note in the Attack window: the saved army cannot be gathered ───── */
@@ -88,9 +172,21 @@
   gap: 6px;
   margin-top: var(--space-2);
   padding: var(--space-2);
-  border: 1px solid var(--colour-warning);
+  /* Softer than a full warning line (neon, round 1). */
+  border: 1px solid color-mix(in srgb, var(--colour-warning) 55%, transparent);
   border-radius: var(--radius-md);
   background: var(--colour-surface-sunken);
+}
+
+/* "1,000 needed" on the heading's line, at its end. */
+.smart-move-note__need {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  margin-left: auto;
+  color: var(--colour-text-strong);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
 }
 
 .smart-move-note__heading {
@@ -138,14 +234,35 @@
   overflow-y: auto;
 }
 
+/* A phone on its side: the note is one line, the heading then each row
+   beside it, sliding sideways when they do not all fit (neon, round 1), so
+   the weapons and the monsters keep the height. */
 @media (max-height: 480px) {
   .smart-move-note {
+    flex-direction: row;
+    align-items: center;
+    gap: var(--space-2);
     margin-top: var(--space-1);
-    padding: 4px var(--space-2);
-    gap: 4px;
+    padding: 2px var(--space-2);
+  }
+
+  .smart-move-note__heading {
+    flex: none;
+    font-size: var(--text-sm);
   }
 
   .smart-move-note > :is(.repeat-prompt__shorts, .repeat-prompt__room) {
-    max-height: 44px;
+    flex: 1 1 auto;
+    flex-direction: row;
+    flex-wrap: nowrap;
+    min-width: 0;
+    max-height: none;
+    overflow-x: auto;
+    overflow-y: hidden;
+  }
+
+  .smart-move-note :is(.repeat-prompt__short, .repeat-prompt__room-yard) {
+    flex: none;
+    min-height: 32px;
   }
 }
