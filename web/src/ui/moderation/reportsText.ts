@@ -13,13 +13,13 @@ export const REPORTS_TEXT = {
   filters: {
     all: ["All", "Everything open"],
     reports: ["Reports", "Player reports"],
-    filter: ["Word filter", "Word-filter catches"],
+    filter: ["Auto-filter", "Lines the word filter and the chat filter caught"],
     closed: ["Closed", "Closed cases"],
   },
   empty: {
     all: "Players others report and lines the word filter catches show up here, one row per player.",
     reports: "When a player reports a chat line, the player who said it shows up here.",
-    filter: "Players whose lines only the word filter caught show up here.",
+    filter: "Players whose lines only the word filter or the chat filter caught show up here.",
     closed: "Decisions from the last 30 days show up here.",
   },
   nothing: "Nothing needs you",
@@ -47,20 +47,33 @@ export const REPORTS_TEXT = {
   wordFilter: "Word filter",
   muted: "Muted",
   banned: "Banned",
-  banNote: "Ban: admins only",
-  actions: { close: "Close", warn: "Warn", mute: "Mute" },
-  confirm: { close: "Confirm close", warn: "Confirm warn", mute: "Confirm mute" },
+  actions: { close: "Close", warn: "Warn", mute: "Mute", ban: "Ban" },
+  confirm: { close: "Confirm close", warn: "Confirm warn", mute: "Confirm mute", ban: "Confirm ban" },
   cancel: "Cancel",
   ask: {
     close: (name: string) => `Close for ${name}?`,
     warn: (name: string) => `Warn ${name}?`,
     mute: (name: string) => `Mute ${name}’s chat?`,
+    ban: (name: string) => `Ban ${name}?`,
   },
   explain: {
     close: "Nothing happens to the player and they are not told. The reports and catches are closed.",
     warn: "They see your reason in a pop-up in the game and in their mail.",
     mute: "They can still read chat but cannot write in it until it ends. They see your reason in a pop-up and in their mail.",
+    ban: "They are signed out at once and can’t play until it ends. They see your reason; the owner is told.",
   },
+  removeLines: "Also remove their chat lines from the last hour",
+  filterTags: { newLink: "New link", invite: "Invite link", watched: "Watched", hidden: "Hidden" },
+  watchedTag: (words: readonly string[]) => (words.length ? `Watched: ${words.join(", ")}` : "Watched"),
+  newBadge: (hours: number) => `New · ${hours}h`,
+  newBadgeTitle: (hours: number) => `Their yard is ${plural(hours, "hour")} old: a new player for the chat filter (under 3 days).`,
+  remove: "Remove",
+  removeAgain: "Tap again",
+  removeTitle: "Take this line out of chat for everyone, name and all",
+  removed: (by: string | null) => `Removed by ${by ?? "a moderator"}`,
+  othersSaw: (shown: string) => `others saw “${shown}”`,
+  onlyThey: (name: string) => `only ${name} saw it`,
+  saidTimes: (n: number) => `said ${n} times`,
   howLong: "How long",
   note: "Note",
   noteWho: "moderators and admins see this",
@@ -120,8 +133,8 @@ export const outcomeWords = (row: Pick<ModClosedRow, "outcome" | "hours">): stri
 export const logWords = (action: ModLogEntry["action"]): string =>
   ({ warn: "Warning", mute: "Muted", ban: "Banned", unmute: "Unmuted", unban: "Unbanned" })[action];
 
-/** "Slur" or "Swearing", as the dashboard says the word filter's catches. */
-export const severityWords = (severity: FlagSeverity): string => (severity === "slur" ? "Slur" : "Swearing");
+/** "Slur" or "Swearing", as the dashboard says the word filter's catches; "" for the chat filter's own flags. */
+export const severityWords = (severity: FlagSeverity): string => (severity === "slur" ? "Slur" : severity === "filter" ? "" : "Swearing");
 
 /** The room a line was said in: "Map Room 2", "Inferno", a country, "Alliance". */
 export const roomLabel = (channel: string): string => {
@@ -174,4 +187,8 @@ export const REFUSAL_FALLBACK: Readonly<Record<string, string>> = {
   changed: "Something new came in for this player. Look again before deciding.",
   nothingOpen: "Someone already closed this. Nothing is open for this player now.",
   longerMute: "This player's chat is already muted for longer. Warn or Close instead.",
+  longerBan: "This player is already banned for longer. An admin decides on it.",
+  self: "You can't act on yourself. An admin will.",
+  gameTeam: "That is a game team account. An admin decides on it.",
+  moderator: "That player is a moderator. An admin decides on moderators.",
 };

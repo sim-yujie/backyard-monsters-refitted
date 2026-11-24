@@ -1327,6 +1327,28 @@ export const removeModerator = (userid: number): Promise<Envelope<{ removed: num
   adminPost(`${ADMIN}/moderators/${userid}/remove`, {});
 
 /**
+ * The chat filter's watched words (owner, 24 Nov 2026; server
+ * `services/chat/watchWords.ts`): `always` anywhere, `near` (FB, Facebook)
+ * only next to a `context` word. `hits`: lines with the word in the last
+ * `days` days (null for context words, which are never counted alone).
+ */
+export type WatchKind = "always" | "near" | "context";
+
+export interface WatchWordView {
+  id: number;
+  word: string;
+  kind: WatchKind;
+  hits: number | null;
+}
+
+export const fetchWatchWords = (): Promise<Envelope<{ words: WatchWordView[]; days: number }>> => adminGet(`${ADMIN}/watchwords`);
+
+export const addWatchWord = (word: string, kind: WatchKind): Promise<Envelope<{ word: WatchWordView }>> =>
+  adminPost(`${ADMIN}/watchwords`, { word, kind });
+
+export const removeWatchWord = (id: number): Promise<Envelope<{ removed: number }>> => adminPost(`${ADMIN}/watchwords/${id}/remove`, {});
+
+/**
  * Moderators' bans and mutes (owner, 24 Nov 2026; server
  * `services/admin/modSteps.ts`), newest first, with what became of each.
  * Undo and Make permanent are the player steps (`moderatePlayer`).

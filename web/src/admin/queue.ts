@@ -212,6 +212,8 @@ export class QueueView {
         { class: "queue-pane" },
         h("label", { class: "search-wrap" }, icon("search", 18), this.search),
         this.filterBox,
+        // The chat filter's words are a tab of their own; most edits start from a catch seen here (24 Nov 2026).
+        h("a", { class: "queue-shortcut", attrs: { href: "#chatfilter" } }, "Edit watched words →"),
         this.listBox,
         h(
           "details",
@@ -222,6 +224,7 @@ export class QueueView {
             "p",
             { class: "hrow" },
             h("a", { attrs: { href: "#moderators" } }, "Moderators"),
+            h("a", { attrs: { href: "#chatfilter" } }, "Chat filter"),
             h("a", { attrs: { href: "#modmail" } }, "Moderator mail"),
             h("a", { attrs: { href: "#find" } }, "Find a player"),
           ),

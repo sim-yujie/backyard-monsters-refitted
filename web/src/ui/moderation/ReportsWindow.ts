@@ -14,7 +14,9 @@ import {
   type ModPlayer,
   type ModQueueRow,
   type ModReportsApi,
+  type FilterTag,
 } from "@/api/modReports";
+import { banFields, sendBan, type BanFields } from "./banForm";
 import { make } from "@/ui/friends/rows";
 import { gameIcon, type GameIconName } from "@/ui/gameIcon";
 import { Popup } from "@/ui/Popup";
@@ -44,7 +46,11 @@ import "./reports.css";
  * (search, filters All / Reports / Word filter / Closed); on the right the
  * opened player: each open line with who reported it and the chat around it,
  * their earlier warnings and mutes, and Close, Warn or Mute (1 hour, 1 day,
- * 3 days, 7 days) after a confirm step. Bans stay with admins.
+ * 3 days, 7 days) after a confirm step, or Ban (1, 3 or 7 days; owner 24 Nov
+ * 2026). The chat filter's lines (24 Nov 2026, desk pick "Reports A") carry
+ * their tags (New link, Invite link, Watched, Hidden) and the player's yard
+ * age ("New · 30h"); a line still in chat has a red Remove (two taps) that
+ * takes it out of every chat box; a repeated line is shown once.
  *
  * Every word a player wrote goes in as text, never as markup.
  */
@@ -57,8 +63,8 @@ export interface ReportsWindowOptions {
   readonly onChanged?: () => void;
 }
 
-/** The phone layout: one column, the list or the player (reports.css). */
-export const REPORTS_PHONE_QUERY = "(max-width: 620px)";
+/** The phone layout, upright or on its side: one column, the list or the player (reports.css). */
+export const REPORTS_PHONE_QUERY = "(max-width: 620px), (max-height: 500px)";
 
 /** Below this much room the window is one column (reports.css `@container mod-reports`). */
 export const REPORTS_TWO_COLUMNS = 720;
@@ -106,15 +112,20 @@ const plate = (words: string, kind: "primary" | "outline", run: () => void, pict
   return node;
 };
 
-/** The words with the word filter's catches marked. */
-export const markedWords = (text: string, words: readonly string[]): DocumentFragment => {
+/** A link as the chat filter reads one, for marking it in a line (`services/chat/chatFilter.ts`). */
+const LINK_MARK = String.raw`(?:https?:\/\/|www\.)\S+|\b[a-z0-9-]+(?:\.[a-z0-9-]+)+\/\S*`;
+
+/** The words with the word filter's catches (and, with `links`, the links) marked. */
+export const markedWords = (text: string, words: readonly string[], links = false): DocumentFragment => {
   const fragment = document.createDocumentFragment();
   const wanted = words.map((word) => word.trim()).filter(Boolean);
-  if (!wanted.length) {
+  if (!wanted.length && !links) {
     fragment.append(text);
     return fragment;
   }
-  const pattern = new RegExp(wanted.map((word) => word.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")).join("|"), "gi");
+  const parts = wanted.map((word) => word.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"));
+  if (links) parts.unshift(LINK_MARK);
+  const pattern = new RegExp(parts.join("|"), "gi");
   let at = 0;
   for (const match of text.matchAll(pattern)) {
     const start = match.index ?? 0;
@@ -186,7 +197,11 @@ export class ReportsWindow {
   private player: ModPlayer | null = null;
   private playerState: "loading" | "ready" | "failed" = "ready";
   private playerProblem = "";
-  private act: ModActKind | null = null;
+  private act: ModActKind | "ban" | null = null;
+  private banForm: BanFields | null = null;
+  /** The line whose Remove was tapped once and waits for the second tap. */
+  private armedRemove: string | null = null;
+  private armTimer: ReturnType<typeof setTimeout> | null = null;
   private hours = 24;
   private result: { text: string; problem: boolean } | null = null;
   private sending = false;
@@ -398,8 +413,19 @@ export class ReportsWindow {
     since.title = `Waiting since ${dateTime(row.oldestAt)}`;
     top.append(make("strong", "", row.username ?? `#${row.userid}`), since);
     const tags = make("span", "mod-reports__tags");
+    if (typeof row.newHours === "number") {
+      const young = badge(`${row.newHours}h`, "red", "time");
+      young.title = T.newBadgeTitle(row.newHours);
+      tags.append(young);
+    }
     if (row.reports > 0) tags.append(badge(T.playerReports, "blue", "report"));
-    if (row.filterOnlyLines > 0 || row.slurs > 0 || row.preview?.source === "filter") tags.append(badge(T.wordFilter, "amber", "find"));
+    const filterTags = row.filterTags ?? [];
+    if (filterTags.includes("newLink") || filterTags.includes("invite")) {
+      tags.append(badge(filterTags.includes("newLink") ? T.filterTags.newLink : T.filterTags.invite, "red", "pin"));
+    }
+    if (filterTags.includes("hidden")) tags.append(badge(T.filterTags.hidden, "", "shield"));
+    else if (filterTags.includes("watched")) tags.append(badge(T.filterTags.watched, "amber", "find"));
+    if (!filterTags.length && (row.filterOnlyLines > 0 || row.slurs > 0 || row.preview?.source === "filter")) tags.append(badge(T.wordFilter, "amber", "find"));
     if (row.slurs > 0) tags.append(badge("Slur", "red"));
     if (row.muted) tags.append(badge(T.muted, "", "time"));
     if (row.banned) tags.append(badge(T.banned, "red"));
@@ -462,6 +488,12 @@ export class ReportsWindow {
       title.append(muted);
     }
     if (player.banned) title.append(badge(T.banned, "red"));
+    if (typeof player.newHours === "number") {
+      const young = badge(T.newBadge(player.newHours), "red", "time");
+      young.classList.add("mod-reports__new");
+      young.title = T.newBadgeTitle(player.newHours);
+      title.append(young);
+    }
     const spread = make("div", "mod-reports__hspread");
     spread.append(title, make("span", "mod-reports__account", `#${player.userid}`));
     const open = player.open;
@@ -495,22 +527,26 @@ export class ReportsWindow {
     review.append(evidence);
 
     const parts: HTMLElement[] = [head, review];
-    if (open) {
-      if (this.act) {
-        review.prepend(this.confirmPane(player, this.act));
-        parts.push(this.confirmFoot(open, this.act));
-      } else {
-        parts.push(this.actionBar(open));
-      }
+    if (this.act && (open || this.act === "ban")) {
+      review.prepend(this.confirmPane(player, this.act));
+      parts.push(this.confirmFoot(open, this.act));
+    } else if (open || !player.banned) {
+      parts.push(this.actionBar(open, player));
     }
     this.detail.replaceChildren(...parts);
   }
 
   private lineBlock(line: ModLine, player: ModPlayer): HTMLElement {
-    const node = make("article", "mod-reports__line");
+    const node = make("article", line.removed ? "mod-reports__line is-removed" : "mod-reports__line");
+    const top = make("div", "mod-reports__line-top");
     const tags = make("div", "mod-reports__tags");
     if (line.report) tags.append(badge(T.playerReport, "blue", "report"));
-    if (line.filter) {
+    const filterTags = line.filter?.tags ?? [];
+    if (line.filter && filterTags.length) {
+      for (const tag of filterTags) tags.append(this.filterBadge(tag, line.filter.words));
+      const severity = severityWords(line.filter.severity);
+      if (severity) tags.append(badge(severity, line.filter.severity === "slur" ? "red" : "amber"));
+    } else if (line.filter) {
       tags.append(badge(T.wordFilter, "amber", "find"), badge(severityWords(line.filter.severity), line.filter.severity === "slur" ? "red" : "amber"));
     }
     if (line.report && !line.report.verified) {
@@ -518,12 +554,27 @@ export class ReportsWindow {
       noCopy.title = T.noCopyTitle;
       tags.append(noCopy);
     }
+    top.append(tags);
+    if (line.removed) {
+      const gone = make("span", "mod-reports__removed");
+      gone.append(icon("lost", true), `${T.removed(line.removed.byName)} · ${clock(line.removed.at)}`);
+      top.append(gone);
+    } else if (!line.filter?.hidden) {
+      top.append(this.removeButton(line, player));
+    }
     const quote = make("blockquote", "");
-    quote.append("“", markedWords(line.message, line.filter?.words ?? []), "”");
-    const where = [roomLabel(line.channel), `said ${dateTime(line.ts)}`, line.filter ? `players saw “${line.filter.shown}”` : null]
+    const links = filterTags.includes("newLink") || filterTags.includes("invite");
+    quote.append("“", markedWords(line.message, line.filter?.words ?? [], links), "”");
+    const copies = line.copies?.length ?? 0;
+    const seen = line.filter?.hidden
+      ? T.onlyThey(player.username)
+      : line.filter && line.filter.shown !== line.message
+        ? T.othersSaw(line.filter.shown)
+        : null;
+    const where = [roomLabel(line.channel), `said ${dateTime(line.ts)}`, copies ? T.saidTimes(copies + 1) : null, seen]
       .filter(Boolean)
       .join(" · ");
-    node.append(tags, quote, make("p", "mod-reports__small", where));
+    node.append(top, quote, make("p", "mod-reports__small", where));
     if (line.report) {
       const who = make("p", "mod-reports__reporters");
       who.append(icon("report", true), `Reported by ${plural(line.report.reporters.length, "player")}: ${line.report.reporters.join(", ")}`);
@@ -547,6 +598,59 @@ export class ReportsWindow {
     }
     node.append(context);
     return node;
+  }
+
+  private filterBadge(tag: FilterTag, words: readonly string[]): HTMLElement {
+    switch (tag) {
+      case "newLink":
+        return badge(T.filterTags.newLink, "red", "pin");
+      case "invite":
+        return badge(T.filterTags.invite, "red", "pin");
+      case "watched":
+        return badge(T.watchedTag(words), "amber", "find");
+      case "hidden":
+        return badge(T.filterTags.hidden, "", "shield");
+    }
+  }
+
+  /** Remove: the first tap arms it ("Tap again"), the second takes the line (and its repeats) out of chat. */
+  private removeButton(line: ModLine, player: ModPlayer): HTMLElement {
+    const key = `${line.channel}|${line.ts}`;
+    const armed = this.armedRemove === key;
+    const button = make("button", `btn btn--danger mod-reports__remove${armed ? " is-armed" : ""}`);
+    button.type = "button";
+    button.dataset["remove"] = key;
+    button.title = T.removeTitle;
+    button.append(make("span", "mod-reports__btn-word", armed ? T.removeAgain : T.remove));
+    button.addEventListener("click", () => {
+      if (this.armedRemove !== key) {
+        this.armedRemove = key;
+        if (this.armTimer) clearTimeout(this.armTimer);
+        this.armTimer = setTimeout(() => {
+          this.armedRemove = null;
+          if (!this.closed) this.renderDetail();
+        }, 4000);
+        this.renderDetail();
+        return;
+      }
+      this.armedRemove = null;
+      if (this.armTimer) clearTimeout(this.armTimer);
+      button.disabled = true;
+      const lines = [{ channel: line.channel, ts: line.ts, lineId: line.lineId ?? null }, ...(line.copies ?? [])];
+      void this.api.removeLines(player.userid, lines).then(
+        () => {
+          if (this.closed) return;
+          this.result = { text: lines.length > 1 ? `${lines.length} lines removed from chat for everyone.` : "Line removed from chat for everyone.", problem: false };
+          void this.openPlayer(player.userid, true);
+        },
+        (caught) => {
+          if (this.closed) return;
+          this.result = { text: failure(caught), problem: true };
+          this.renderDetail();
+        },
+      );
+    });
+    return button;
   }
 
   private historyBlock(player: ModPlayer): HTMLElement {
@@ -592,33 +696,49 @@ export class ReportsWindow {
     return item;
   }
 
-  private actionBar(open: ModQueueRow): HTMLElement {
+  private actionBar(open: ModQueueRow | null, player: ModPlayer): HTMLElement {
     const bar = make("div", "mod-reports__actions");
     const row = make("div", "mod-reports__action-row");
     const buttons = make("div", "mod-reports__action-buttons");
-    const start = (kind: ModActKind) => () => {
+    const start = (kind: ModActKind | "ban") => () => {
       this.act = kind;
       this.hours = 24;
       this.result = null;
       this.renderDetail();
-      this.reasonBox?.focus();
+      if (kind === "ban") this.banForm?.focus();
+      else this.reasonBox?.focus();
     };
-    const closeButton = plate(T.actions.close, "outline", start("close"));
-    const warnButton = plate(T.actions.warn, "primary", start("warn"));
-    const muteButton = plate(T.actions.mute, "primary", start("mute"), "time");
-    closeButton.dataset["act"] = "close";
-    warnButton.dataset["act"] = "warn";
-    muteButton.dataset["act"] = "mute";
-    buttons.append(closeButton, warnButton, muteButton);
-    row.append(buttons, make("p", "mod-reports__ban-note", T.banNote));
-    bar.append(make("p", "mod-reports__scope", scopeWords(open)), row);
+    if (open) {
+      const closeButton = plate(T.actions.close, "outline", start("close"));
+      const warnButton = plate(T.actions.warn, "primary", start("warn"));
+      const muteButton = plate(T.actions.mute, "primary", start("mute"), "time");
+      closeButton.dataset["act"] = "close";
+      warnButton.dataset["act"] = "warn";
+      muteButton.dataset["act"] = "mute";
+      buttons.append(closeButton, warnButton, muteButton);
+    }
+    if (!player.banned) {
+      const banButton = plate(T.actions.ban, "primary", start("ban"));
+      banButton.classList.replace("btn--primary", "btn--danger");
+      banButton.dataset["act"] = "ban";
+      buttons.append(banButton);
+    }
+    buttons.classList.toggle("mod-reports__action-buttons--four", buttons.childElementCount === 4);
+    row.append(buttons);
+    if (open) bar.append(make("p", "mod-reports__scope", scopeWords(open)));
+    bar.append(row);
     return bar;
   }
 
-  private confirmPane(player: ModPlayer, kind: ModActKind): HTMLElement {
+  private confirmPane(player: ModPlayer, kind: ModActKind | "ban"): HTMLElement {
     const form = make("form", "mod-reports__confirm");
     form.addEventListener("submit", (event) => event.preventDefault());
     form.append(make("h3", "", T.ask[kind](player.username)), make("p", "", T.explain[kind]));
+    if (kind === "ban") {
+      this.banForm = banFields(player.username);
+      form.append(this.banForm.element);
+      return form;
+    }
     if (kind === "mute") {
       const field = make("div", "mod-reports__field");
       const lengths = make("div", "mod-reports__lengths");
@@ -653,7 +773,7 @@ export class ReportsWindow {
     return form;
   }
 
-  private confirmFoot(open: ModQueueRow, kind: ModActKind): HTMLElement {
+  private confirmFoot(open: ModQueueRow | null, kind: ModActKind | "ban"): HTMLElement {
     const foot = make("div", "mod-reports__actions mod-reports__confirm-foot");
     const problem = make("p", "mod-reports__problem");
     problem.hidden = true;
@@ -665,10 +785,12 @@ export class ReportsWindow {
       this.renderDetail();
     });
     cancel.dataset["cancel"] = "";
-    const confirm = plate(T.confirm[kind], "primary", () => void this.confirm(kind, [cancel, confirm]));
+    const confirm = plate(T.confirm[kind], "primary", () => void (kind === "ban" ? this.confirmBan([cancel, confirm]) : this.confirm(kind, [cancel, confirm])));
+    if (kind === "ban") confirm.classList.replace("btn--primary", "btn--danger");
     confirm.dataset["confirm"] = "";
     buttons.append(cancel, confirm);
-    foot.append(make("p", "mod-reports__scope", scopeWords(open)), problem, buttons);
+    if (open) foot.append(make("p", "mod-reports__scope", scopeWords(open)));
+    foot.append(problem, buttons);
     return foot;
   }
 
@@ -721,6 +843,36 @@ export class ReportsWindow {
       }
       for (const button of buttons) button.disabled = false;
       this.showProblem(failure(caught));
+    } finally {
+      this.sending = false;
+    }
+  }
+
+  private async confirmBan(buttons: HTMLButtonElement[]): Promise<void> {
+    const player = this.player;
+    const form = this.banForm;
+    if (!player || !form || this.sending) return;
+    const body = form.read();
+    if (!body.reason) {
+      this.showProblem(T.needReason);
+      form.focus();
+      return;
+    }
+    this.sending = true;
+    for (const button of buttons) button.disabled = true;
+    try {
+      const done = await sendBan(this.api, player.userid, player.username, body);
+      if (this.closed) return;
+      if (!done.ok) {
+        for (const button of buttons) button.disabled = false;
+        this.showProblem(done.text);
+        return;
+      }
+      this.result = { text: done.text, problem: false };
+      this.act = null;
+      this.options.onChanged?.();
+      void this.loadList(false);
+      await this.openPlayer(player.userid, true);
     } finally {
       this.sending = false;
     }

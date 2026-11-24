@@ -79,6 +79,8 @@ const fakeApi = (over: Partial<ModReportsApi> = {}): ModReportsApi => ({
   player: vi.fn(() => Promise.resolve(player())),
   around: vi.fn(() => Promise.resolve([{ userid: 501, name: "Rude Player", text: "what a <b>darn</b> base", at: T0 + 60_000, flagged: "swear" as const }])),
   act: vi.fn(() => Promise.resolve({ ok: true as const, closed: { reports: 2, filterLines: 1, filterOnlyLines: 1 }, player: null })),
+  ban: vi.fn(() => Promise.resolve({ ok: true as const, until: new Date(T0 + 86_400_000).toISOString(), closed: { reports: 0, filterLines: 0 }, removedLines: 2 })),
+  removeLines: vi.fn(() => Promise.resolve({ removed: 1 })),
   ...over,
 });
 
@@ -124,7 +126,7 @@ describe("ReportsWindow", () => {
     await open(api);
     expect(api.list).toHaveBeenCalledWith("all");
     const chips = [...document.querySelectorAll<HTMLElement>(".mod-reports__filters .mod-reports__seg")];
-    expect(chips.map((chip) => chip.textContent)).toEqual(["All1", "Reports1", "Word filter0", "Closed4"]);
+    expect(chips.map((chip) => chip.textContent)).toEqual(["All1", "Reports1", "Auto-filter0", "Closed4"]);
     expect(q(".mod-reports__row").textContent).toContain("Rude Player");
     expect(api.player).toHaveBeenCalledWith(501);
     expect(q(".mod-reports__row").getAttribute("aria-current")).toBe("true");
@@ -151,13 +153,13 @@ describe("ReportsWindow", () => {
     await settle();
     expect(api.around).toHaveBeenCalledWith(40);
     expect(lines[0]!.querySelector(".mod-reports__snap-line.is-reported")).not.toBeNull();
-    expect(q(".mod-reports__ban-note").textContent).toBe("Ban: admins only");
+    expect(document.querySelector(".mod-reports__ban-note")).toBeNull();
   });
 
-  it("has Close, Warn and Mute only, and Mute offers 1 hour, 1 day, 3 days and 7 days", async () => {
+  it("has Close, Warn, Mute and Ban, and Mute offers 1 hour, 1 day, 3 days and 7 days", async () => {
     await open(fakeApi());
     const actions = [...document.querySelectorAll<HTMLButtonElement>(".mod-reports__action-buttons button")];
-    expect(actions.map((b) => b.textContent)).toEqual(["Close", "Warn", "Mute"]);
+    expect(actions.map((b) => b.textContent)).toEqual(["Close", "Warn", "Mute", "Ban"]);
     expect(document.body.textContent).not.toMatch(/Dismiss|Restrict/);
     button('[data-act="mute"]').click();
     const lengths = [...document.querySelectorAll<HTMLButtonElement>(".mod-reports__lengths button")];
@@ -193,7 +195,8 @@ describe("ReportsWindow", () => {
     expect(api.act).toHaveBeenCalledWith(501, body);
     expect(onChanged).toHaveBeenCalledOnce();
     expect(q(".mod-reports__result").textContent).toBe("Rude Player’s chat muted for 3 days. Closed 2 reports and 1 word-filter catch.");
-    expect(document.querySelector(".mod-reports__action-buttons")).toBeNull();
+    // Nothing open any more: only Ban stays.
+    expect([...document.querySelectorAll(".mod-reports__action-buttons button")].map((b) => b.textContent)).toEqual(["Ban"]);
   });
 
   it("warns with the friendly reason filled in, and closes with an optional note", async () => {
@@ -264,5 +267,126 @@ describe("ReportsWindow", () => {
     expect(q(".mod-reports__workspace").classList.contains("has-player")).toBe(true);
     button(".mod-reports__back").click();
     expect(q(".mod-reports__workspace").classList.contains("has-player")).toBe(false);
+  });
+});
+
+/** A new player the chat filter caught (owner, 24 Nov 2026, Reports option A). */
+const spammer = (over: Partial<ModPlayer> = {}): ModPlayer => ({
+  ...player(row({ userid: 610, username: "Spam Kid", reports: 0, uniqueReporters: 0, caseId: null, newHours: 30, filterTags: ["newLink", "invite", "watched", "hidden"] })),
+  userid: 610,
+  username: "Spam Kid",
+  newHours: 30,
+  log: [],
+  lines: [
+    {
+      ts: T0 + 120_000,
+      channel: "chat:country:PH",
+      message: "sali na t.me/abc",
+      report: null,
+      filter: { id: 51, severity: "filter", rule: "word", words: [], shown: "sali na [link removed]", tags: ["newLink", "invite"], hidden: false, yardAgeHours: 30 },
+      lineId: "line51",
+      removed: null,
+      copies: [{ channel: "chat:country:PH", ts: T0 + 60_000, lineId: "line50" }],
+    },
+    {
+      ts: T0 + 90_000,
+      channel: "chat:country:PH",
+      message: "Hi sino papasok sa private server",
+      report: null,
+      filter: { id: 52, severity: "filter", rule: "word", words: ["private server"], shown: "", tags: ["watched", "hidden"], hidden: true, yardAgeHours: 30 },
+      lineId: "line52",
+      removed: null,
+      copies: [],
+    },
+    {
+      ts: T0 + 30_000,
+      channel: "chat:country:PH",
+      message: "join fb group facebook.com/groups/1",
+      report: null,
+      filter: { id: 49, severity: "filter", rule: "word", words: ["fb"], shown: "join fb group [link removed]", tags: ["invite", "watched"], hidden: false, yardAgeHours: 30 },
+      lineId: "line49",
+      removed: { byName: "Mod A", at: new Date(T0 + 40_000).toISOString() },
+      copies: [],
+    },
+  ],
+  ...over,
+});
+
+describe("ReportsWindow: the chat filter's lines", () => {
+  const spamApi = (over: Partial<ModReportsApi> = {}) =>
+    fakeApi({ list: vi.fn(() => Promise.resolve(list([spammer().open!]))), player: vi.fn(() => Promise.resolve(spammer())), ...over });
+
+  it("tags each line, shows the yard age, what others saw, and groups a repeated line", async () => {
+    await open(spamApi());
+    expect(q(".mod-reports__row").textContent).toContain("30h");
+    expect(q(".mod-reports__row").textContent).toContain("New link");
+    expect(q(".mod-reports__row").textContent).toContain("Hidden");
+    expect(q(".mod-reports__head .mod-reports__new").textContent).toBe("New · 30h");
+    const lines = document.querySelectorAll(".mod-reports__line");
+    expect(lines).toHaveLength(3);
+    expect(lines[0]!.querySelector(".mod-reports__tags")!.textContent).toBe("New linkInvite link");
+    expect(lines[0]!.querySelector("blockquote mark")!.textContent).toBe("t.me/abc");
+    expect(lines[0]!.textContent).toContain("said 2 times");
+    expect(lines[0]!.textContent).toContain("others saw “sali na [link removed]”");
+    expect(lines[1]!.querySelector(".mod-reports__tags")!.textContent).toBe("Watched: private serverHidden");
+    expect(lines[1]!.textContent).toContain("only Spam Kid saw it");
+  });
+
+  it("has Remove on a line still in chat, none on a hidden or removed line", async () => {
+    await open(spamApi());
+    const lines = document.querySelectorAll(".mod-reports__line");
+    expect(lines[0]!.querySelector(".mod-reports__remove")).not.toBeNull();
+    expect(lines[1]!.querySelector(".mod-reports__remove")).toBeNull();
+    expect(lines[2]!.querySelector(".mod-reports__remove")).toBeNull();
+    expect(lines[2]!.classList.contains("is-removed")).toBe(true);
+    expect(lines[2]!.textContent).toContain("Removed by Mod A");
+  });
+
+  it("Remove takes two taps and removes the line with its repeats", async () => {
+    const api = spamApi();
+    await open(api);
+    button(".mod-reports__remove").click();
+    expect(api.removeLines).not.toHaveBeenCalled();
+    expect(q(".mod-reports__remove").textContent).toBe("Tap again");
+    button(".mod-reports__remove").click();
+    await settle();
+    expect(api.removeLines).toHaveBeenCalledWith(610, [
+      { channel: "chat:country:PH", ts: T0 + 120_000, lineId: "line51" },
+      { channel: "chat:country:PH", ts: T0 + 60_000, lineId: "line50" },
+    ]);
+    expect(q(".mod-reports__result").textContent).toBe("2 lines removed from chat for everyone.");
+  });
+
+  it("bans for 1, 3 or 7 days with a reason, removing the last hour's lines by default", async () => {
+    const onChanged = vi.fn();
+    const api = spamApi();
+    await open(api, onChanged);
+    button('[data-act="ban"]').click();
+    expect([...document.querySelectorAll<HTMLButtonElement>(".mod-reports__lengths button")].map((b) => b.textContent)).toEqual(["1 day", "3 days", "7 days"]);
+    button("[data-confirm]").click();
+    await settle();
+    expect(api.ban).not.toHaveBeenCalled();
+    expect(q(".mod-reports__problem").textContent).toBe("Write a reason: the player sees it.");
+    button('[data-days="3"]').click();
+    q<HTMLTextAreaElement>(".mod-reports__confirm textarea").value = "Advertising another server";
+    button("[data-confirm]").click();
+    await settle();
+    expect(api.ban).toHaveBeenCalledWith(610, { days: 3, reason: "Advertising another server", removeLines: true });
+    expect(onChanged).toHaveBeenCalledOnce();
+    expect(q(".mod-reports__result").textContent).toBe("Spam Kid banned for 3 days. 2 chat lines removed.");
+  });
+
+  it("a refused ban says why and keeps the form", async () => {
+    const api = spamApi({ ban: vi.fn(() => Promise.reject(new ApiError("That player is a moderator.", { status: 403, body: { reason: "moderator" } }))) });
+    await open(api);
+    button('[data-act="ban"]').click();
+    q<HTMLTextAreaElement>(".mod-reports__confirm textarea").value = "x";
+    q<HTMLInputElement>("[data-remove-lines]").checked = false;
+    button("[data-confirm]").click();
+    await settle();
+    expect(api.ban).toHaveBeenCalledWith(610, { days: 1, reason: "x", removeLines: false });
+    expect(q(".mod-reports__problem").hidden).toBe(false);
+    expect(q(".mod-reports__problem").textContent).toBe("That player is a moderator.");
+    expect(document.querySelector(".mod-reports__confirm")).not.toBeNull();
   });
 });

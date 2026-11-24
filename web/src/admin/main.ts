@@ -26,6 +26,7 @@ import { h, replace } from "./dom";
 import { ErrorsView } from "./errors";
 import { ModerationView } from "./moderation";
 import { ModeratorsView } from "./moderators";
+import { ChatFilterView } from "./chatFilter";
 import { ModStepsView } from "./modSteps";
 import { ModMailSection } from "./modmail";
 import { PhotosView } from "./photos";
@@ -183,6 +184,7 @@ class Dashboard {
   });
   private readonly moderators = new ModeratorsView({ say: (message) => this.say(message) });
   private readonly modSteps = new ModStepsView({ say: (message) => this.say(message) });
+  private readonly chatFilter = new ChatFilterView({ say: (message) => this.say(message) });
   private readonly attacks = new AttackLogSection({
     say: (message) => this.say(message),
     navigate: ({ player, side, range }) => {
@@ -383,6 +385,7 @@ class Dashboard {
       attacks: section("attacks"),
       flagged: section("flagged"),
       moderators: section("moderators"),
+      chatfilter: section("chatfilter"),
       modmail: section("modmail"),
       bugs: section("bugs"),
       shiny: section("shiny"),
@@ -401,6 +404,7 @@ class Dashboard {
     replace(this.sections.attacks.body, this.attacks.element);
     replace(this.sections.flagged.body, this.flagged.element);
     replace(this.sections.moderators.body, this.moderators.element, this.modSteps.element);
+    replace(this.sections.chatfilter.body, this.chatFilter.element);
     replace(this.sections.modmail.body, this.modMail.element);
     replace(this.sections.chat.body, this.chat.element);
     replace(this.sections.shiny.body, this.shiny.element);
@@ -509,6 +513,7 @@ class Dashboard {
       this.flagged.refresh(),
       this.moderators.refresh(),
       this.modSteps.refresh(),
+      this.chatFilter.refresh(),
       this.modMail.refresh(),
       this.shiny.refresh(),
       this.announcements.refresh(),
@@ -590,6 +595,7 @@ class Dashboard {
       this.flagged.refresh(),
       this.moderators.refresh(),
       this.modSteps.refresh(),
+      this.chatFilter.refresh(),
       this.modMail.refresh(),
       this.shiny.refresh(),
       this.photos.refresh(),

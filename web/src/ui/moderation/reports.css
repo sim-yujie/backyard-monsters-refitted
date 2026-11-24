@@ -876,3 +876,145 @@
     display: none;
   }
 }
+
+/* ── The chat filter (owner, 24 Nov 2026, desk pick "Reports A") ──────── */
+
+/* A line's tags on the left, its Remove (or who removed it) on the right. */
+.mod-reports__line-top {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.mod-reports__line-top > .mod-reports__tags {
+  min-width: 0;
+}
+
+/* Remove: the game's crimson plate with white words in both looks (neon r2). */
+:root[data-skin] .mod-reports-window .btn.mod-reports__remove {
+  flex: none;
+  min-height: 36px;
+  min-width: 96px;
+  padding: 0 14px;
+  font-size: var(--text-sm);
+  --skin-button-cap: 16px;
+  --skin-button2-cap: 14px;
+}
+
+.mod-reports__remove.is-armed {
+  outline: 2px solid #fff3c4;
+  outline-offset: 1px;
+}
+
+.mod-reports__removed {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: var(--text-xs);
+  color: var(--colour-text-muted);
+  white-space: nowrap;
+}
+
+.mod-reports__line.is-removed blockquote {
+  text-decoration: line-through;
+  opacity: 0.7;
+}
+
+/* "New · 30h" beside the name. */
+.mod-reports__head h2 .mod-reports__new {
+  font-size: var(--text-xs);
+}
+
+/* The ban's "also remove their lines" box: the whole line is the tap target. */
+.mod-reports__check {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 44px;
+  font-size: var(--text-sm);
+  cursor: pointer;
+}
+
+.mod-reports__check input {
+  flex: none;
+  width: 22px;
+  height: 22px;
+  margin: 0;
+  accent-color: var(--colour-danger, #c62828);
+}
+
+/* Close / Warn / Mute / Ban share the row. */
+.mod-reports__action-buttons--four {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.mod-reports__action-buttons:not(.mod-reports__action-buttons--four):has(> :only-child) {
+  grid-template-columns: minmax(0, 1fr);
+  max-width: 220px;
+}
+
+/* The ban sheet a name in chat opens: the Reports window's ban step, alone. */
+.panel.mod-reports-window.mod-ban-sheet {
+  width: min(100%, 460px);
+  max-width: min(460px, calc(100vw - 2 * var(--space-4)));
+  height: auto;
+  max-height: var(--mod-reports-room);
+}
+
+.mod-ban-sheet > .panel__body {
+  flex-direction: column;
+  overflow: auto;
+  padding: 2px var(--space-2) var(--space-2);
+}
+
+.mod-ban-sheet .mod-ban-sheet__pane {
+  border: 0;
+  background: none;
+  padding: 8px 6px 4px;
+}
+
+.mod-ban-sheet .mod-reports__actions {
+  padding: 8px 6px 4px;
+}
+
+/* A phone on its side (390 px tall): the opened player scrolls as one, head
+   and plates included, so its lines are never squeezed to a single row. */
+@media (max-height: 500px) {
+  .mod-reports__detail {
+    overflow-y: auto;
+    overscroll-behavior: contain;
+  }
+
+  .mod-reports__review {
+    flex: none;
+    overflow: visible;
+  }
+
+  .mod-reports__head {
+    padding-block: 6px 4px;
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr);
+    align-items: center;
+    column-gap: 10px;
+  }
+
+  .mod-reports__head > .mod-reports__summary {
+    grid-column: 1 / -1;
+  }
+
+  .mod-reports__workspace {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .mod-reports__workspace:not(.has-player) .mod-reports__detail,
+  .mod-reports__workspace.has-player .mod-reports__queue-pane {
+    display: none;
+  }
+
+  .mod-reports__back {
+    display: inline-block;
+    margin-bottom: 0;
+  }
+}

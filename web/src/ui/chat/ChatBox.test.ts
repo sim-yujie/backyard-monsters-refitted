@@ -14,6 +14,7 @@ import { FriendsStore } from "@/game/friends/friendsStore";
 import { fixtureApi, fixtureFriend, fixtureList, fixtureRequest } from "@/game/friends/friendsFixture";
 import { ADD_FRIEND_TEXT } from "@/ui/friends/AddFriendButton";
 import { openProfile } from "@/ui/profile/ProfileDialog";
+import { setModStatus } from "@/ui/moderation/modStatus";
 
 vi.mock("@/ui/profile/ProfileDialog", () => ({ openProfile: vi.fn() }));
 
@@ -437,5 +438,41 @@ describe("ChatBox", () => {
     expect(document.body.contains(box.element)).toBe(false);
     socket.hear({ type: "message", channel: CHANNEL, ...wire(77, "after", 3) });
     expect(box.element.querySelectorAll(".chat-line")).toHaveLength(0);
+  });
+});
+
+describe("ChatBox: the chat filter and moderators (24 Nov 2026)", () => {
+  it("marks the filter's [link removed] as the game's words, the rest as the player's text", () => {
+    mount([wire(77, "sali na [link removed] <b>x</b>", 1)]);
+    const cut = box.element.querySelector(".chat-line__cut")!;
+    expect(cut.textContent).toBe("[link removed]");
+    expect(box.element.querySelector(".chat-line__body b")).toBeNull();
+    expect(lineTexts()).toEqual(["[12] p77sali na [link removed] <b>x</b>"]);
+  });
+
+  it("a removed line vanishes from the open box, name and all", () => {
+    mount([{ ...wire(77, "spam", 1), id: "a1" }, wire(78, "fine", 2)]);
+    box.setOpen(true);
+    socket.hear({ type: "removed", channel: CHANNEL, id: "a1", userId: 77, ts: 1 });
+    expect(lineTexts()).toEqual(["[12] p78fine"]);
+  });
+
+  it("only a moderator's strip has Ban, never on the game team or another moderator", () => {
+    setModStatus({ moderator: false });
+    mount([wire(77, "spam", 1), { ...wire(79, "mod line", 2), mod: true }]);
+    box.setOpen(true);
+    nameButton("[12] p77").click();
+    expect(stripButton("Ban")).toBeUndefined();
+    setModStatus({ moderator: true, banDays: [1, 3, 7] });
+    nameButton("[12] p77").click();
+    nameButton("[12] p77").click();
+    expect(stripButton("Ban")).toBeDefined();
+    stripButton("Ban").click();
+    expect(document.querySelector(".mod-ban-sheet")).not.toBeNull();
+    expect([...document.querySelectorAll(".mod-ban-sheet .mod-reports__lengths button")].map((b) => b.textContent)).toEqual(["1 day", "3 days", "7 days"]);
+    expect(document.querySelector(".mod-ban-sheet h3")!.textContent).toBe("Ban p77?");
+    nameButton("[12] p79").click();
+    expect(stripButton("Ban")).toBeUndefined();
+    setModStatus({ moderator: false });
   });
 });

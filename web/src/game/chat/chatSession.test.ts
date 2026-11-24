@@ -151,6 +151,22 @@ describe("connecting", () => {
   });
 });
 
+describe("a line a moderator removed (chat filter)", () => {
+  it("vanishes, name and all, by its id; others with the same speaker stay", () => {
+    const session = joined([{ ...wire(77, "first", 1), id: "a1" }, { ...wire(77, "second", 2), id: "b2" }]);
+    latest().hear({ type: "removed", channel: CONFIG.channel, id: "a1", userId: 77, ts: 1 });
+    expect(session.current.entries.map((entry) => (entry.kind === "line" ? entry.body : ""))).toEqual(["second"]);
+  });
+
+  it("a line from before ids goes by speaker and stamp; another room's removal is ignored", () => {
+    const session = joined([wire(77, "old", 1), wire(78, "other", 1)]);
+    latest().hear({ type: "removed", channel: "chat:mr3-global", userId: 77, ts: 1 });
+    expect(session.current.entries).toHaveLength(2);
+    latest().hear({ type: "removed", channel: CONFIG.channel, id: "zz", userId: 77, ts: 1 });
+    expect(session.current.entries.map((entry) => (entry.kind === "line" ? entry.body : ""))).toEqual(["other"]);
+  });
+});
+
 describe("the message list", () => {
   it("starts from the room's history, oldest first, and marks the player's own lines", () => {
     const session = joined([wire(77, "first", 1), wire(2505, "mine", 2, ME.displayName)]);

@@ -6142,3 +6142,117 @@ tbody th {
   .mon-tab .champ .legend { width: 100%; }
   .mon-tab .nochamp { width: 100%; padding: 16px 0 0; border-left: 0; border-top: 1px solid var(--line); }
 }
+
+/* ---- Chat filter (chatFilter.ts, owner 24 Nov 2026) ---- */
+
+.chat-filter {
+  display: grid;
+  gap: 20px;
+  grid-template-columns: minmax(0, 1fr);
+  max-width: 44rem;
+}
+
+.watch-live {
+  justify-self: start;
+}
+
+.watch-card {
+  gap: 12px;
+}
+
+.watch-card__title {
+  font-size: 1rem;
+  font-weight: 650;
+}
+
+.watch-add {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  max-width: 28rem;
+}
+
+.watch-add .field-input {
+  flex: 1;
+  min-width: 0;
+}
+
+.watch-row {
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px 10px 16px;
+}
+
+.watch-row .button {
+  gap: 6px;
+}
+
+.watch-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+
+.watch-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  min-height: 36px;
+  padding: 0 4px 0 12px;
+  border-radius: 999px;
+  font-size: 0.875rem;
+  font-weight: 650;
+  background: var(--accent-soft);
+  color: var(--accent-text);
+}
+
+.watch-chip--context {
+  background: var(--warn-soft);
+  color: var(--warn-text);
+}
+
+.watch-chip__remove {
+  display: inline-grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+}
+
+.watch-chip__remove:hover {
+  background: color-mix(in oklab, currentColor 14%, transparent);
+}
+
+.watch-add--chip {
+  max-width: 13rem;
+}
+
+.watch-add--chip .field-input {
+  min-height: 36px;
+  border-style: dashed;
+}
+
+.watch-add--chip .button {
+  min-height: 36px;
+  border: 1px dashed currentColor;
+  border-radius: 999px;
+  white-space: nowrap;
+}
+
+.watch-next-to {
+  font-size: 0.875rem;
+  font-weight: 650;
+  color: var(--ink-2);
+}
+
+.queue-shortcut {
+  justify-self: start;
+  font-size: 0.875rem;
+  font-weight: 600;
+}

@@ -20,6 +20,8 @@ import { allianceOpener } from "@/game/alliance/allianceView";
 import { allianceTradeOn, TRADE_OFF_TITLE } from "@/game/alliance/tradeSwitch";
 import { icon } from "@/ui/icons";
 import { gameIcon, type GameIconName } from "@/ui/gameIcon";
+import { BanSheet } from "@/ui/moderation/banForm";
+import { isModerator } from "@/ui/moderation/modStatus";
 import { addFriendButton } from "@/ui/friends/AddFriendButton";
 import { playerPicture, showPlayerPicture } from "@/game/playerPicture";
 import type { FriendsApi } from "@/api/friends";
@@ -75,6 +77,7 @@ export const CHAT_STRIP_TEXT = {
   unmute: "Unmute",
   viewYard: "View yard",
   report: "Report",
+  ban: "Ban",
 } as const;
 
 /** The Alliance room's words: its tab, and an alert's map button (word and tooltip). */
@@ -136,6 +139,23 @@ export const globalRuleText = (hasCountryRoom: boolean): string =>
   hasCountryRoom
     ? "Global chat is in English. Use your country chat for your own language."
     : "Global chat is in English.";
+
+/** What the chat filter puts where it cut a link (`services/chat/chatFilter.ts` `LINK_REMOVED`). */
+export const LINK_REMOVED = "[link removed]";
+
+/** A line's words as text, the chat filter's "[link removed]" marked so it reads as the game's, not the player's. */
+export const bodyNodes = (text: string): Node[] =>
+  text.split(LINK_REMOVED).flatMap((part, at) => {
+    const nodes: Node[] = [];
+    if (at > 0) {
+      const cut = document.createElement("span");
+      cut.className = "chat-line__cut";
+      cut.textContent = LINK_REMOVED;
+      nodes.push(cut);
+    }
+    if (part) nodes.push(document.createTextNode(part));
+    return nodes;
+  });
 
 const REPORTED_TEXT = "Thanks. The moderators will take a look.";
 const REPORT_FAILED_TEXT = "That report could not be sent. Try again in a moment.";
@@ -460,7 +480,7 @@ export class ChatBox {
 
     const body = document.createElement("span");
     body.className = "chat-line__body";
-    body.textContent = entry.body;
+    body.append(...bodyNodes(entry.body));
 
     if (entry.gm) {
       const badge = document.createElement("span");
@@ -638,6 +658,12 @@ export class ChatBox {
             this.renderPlayer();
           }),
         );
+        // A moderator bans from a name too (owner, 24 Nov 2026); never the game team or another moderator.
+        if (isModerator() && !line.gm && !line.mod) {
+          const ban = this.iconButton(CHAT_STRIP_TEXT.ban, "fist", () => this.openBan(line));
+          ban.classList.add("chat-box__action--ban");
+          actions.append(ban);
+        }
       }
     }
 
@@ -674,6 +700,18 @@ export class ChatBox {
     button.append(gameIcon(picture, { size: 24, decorative: true }), word);
     button.addEventListener("click", onClick);
     return button;
+  }
+
+  private openBan(line: ChatLine): void {
+    new BanSheet({
+      userid: line.userId,
+      name: line.name,
+      onBanned: (text) => {
+        if (this.picked?.id !== line.id) return;
+        this.pickedNote = { text };
+        this.renderPlayer();
+      },
+    }).mount(modalLayer());
   }
 
   private toggleMute(line: ChatLine): void {

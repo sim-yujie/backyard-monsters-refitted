@@ -304,6 +304,16 @@ button.chat-line__name {
   color: var(--chat-mod);
 }
 
+/* The chat filter's "[link removed]" (24 Nov 2026): the game's words, not the player's. */
+.chat-line__cut {
+  color: #f29b9b;
+  font-style: italic;
+}
+
+:root[data-skin="flash"] .chat-line__cut {
+  color: #b3261e;
+}
+
 .chat-line__mod {
   display: inline-block;
   margin-right: 0.35em;
