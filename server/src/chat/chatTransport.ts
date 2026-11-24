@@ -42,13 +42,34 @@ export const fanOut = (channel: string, payload: string) => {
 
   if (!members) return;
 
+  const { except, body } = unwrapExcept(payload);
+
   for (const userId of members) {
+    if (userId === except) continue;
+
     const client = clients.get(userId);
 
     if (!client) continue;
 
-    client.ws.send(payload);
+    client.ws.send(body);
   }
+};
+
+/**
+ * Marks a payload as not for one member (the chat filter's sender, who was
+ * sent their own copy directly). The mark is taken off in {@link fanOut}
+ * before anything is sent, so no client ever sees it.
+ */
+const EXCEPT_MARK = "~except:";
+
+export const wrapExcept = (payload: string, userId: number): string => `${EXCEPT_MARK}${userId}~${payload}`;
+
+export const unwrapExcept = (payload: string): { except: number | null; body: string } => {
+  if (!payload.startsWith(EXCEPT_MARK)) return { except: null, body: payload };
+  const end = payload.indexOf("~", EXCEPT_MARK.length);
+  if (end < 0) return { except: null, body: payload };
+  const except = Number(payload.slice(EXCEPT_MARK.length, end));
+  return { except: Number.isSafeInteger(except) ? except : null, body: payload.slice(end + 1) };
 };
 
 /**
@@ -95,9 +116,10 @@ export const unsubscribeFromChannel = (channel: string) => {
  *
  * @param {string} channel - The Redis channel to publish to.
  * @param {string} payload - The serialised JSON message payload.
+ * @param {number} [except] - A member not to send it to (they were sent their own copy).
  */
-export const publishToChannel = (channel: string, payload: string) => {
+export const publishToChannel = (channel: string, payload: string, except?: number) => {
   redis
-    .publish(channel, payload)
+    .publish(channel, except === undefined ? payload : wrapExcept(payload, except))
     .catch((err) => logger.error(`Chat publish error on ${channel}: ${err}`));
 };

@@ -207,6 +207,8 @@ export const runRetentionCleanup = async (
     batchSize,
     pauseMs
   );
+  // A moderator's line removals (speaker, room, stamp; no words) go with the flags.
+  await deleteOldRows(em, "chat_line_removal", "id", "created_at", cutoff(now, config.chatReportDays), batchSize, pauseMs);
   // A case goes a year after its last report, with its lines and their copies of the room.
   const chatCases = await deleteOldRows(
     em,

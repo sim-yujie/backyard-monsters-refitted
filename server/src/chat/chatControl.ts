@@ -30,6 +30,7 @@ export type ChatControlMessage =
       until: number;
     }
   | { type: ChatControlType.Moderators }
+  | { type: ChatControlType.WatchWords }
   | { type: ChatControlType.Mail; userId: number };
 
 /**
@@ -110,4 +111,17 @@ export const publishMailNudge = async (userId: number) => {
   await redis
     .publish(CHAT_CONTROL_CHANNEL, JSON.stringify(message))
     .catch((err) => logger.error(`Chat control publish failed for mail to user ${userId}: ${err}`));
+};
+
+/**
+ * Tells the chat gateway the owner changed the chat filter's watched words
+ * (the dashboard's Chat filter tab), so the next line uses the new list. The
+ * gateway also reads it every minute, in case this message is lost.
+ */
+export const publishWatchWordsChanged = async () => {
+  const message: ChatControlMessage = { type: ChatControlType.WatchWords };
+
+  await redis
+    .publish(CHAT_CONTROL_CHANNEL, JSON.stringify(message))
+    .catch((err) => logger.error(`Chat control publish failed for the watched words: ${err}`));
 };

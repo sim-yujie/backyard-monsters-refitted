@@ -34,6 +34,8 @@ export type ChatClientMessage =
 
 /** One line as the server sends it, live or in a room's history. */
 export interface ChatLineWire {
+  /** The line's id (chat filter, 24 Nov 2026); absent on lines stored before ids. */
+  id?: string;
   userId: number;
   /** `[level] name`, the server's words. */
   displayName: string;
@@ -96,6 +98,8 @@ export type ChatServerMessage =
   | ({ type: "maintenance" } & MaintenanceNotice)
   /** Taken out of a room: left or was kicked from the alliance (beta 7). */
   | { type: "left"; channel: string }
+  /** A moderator removed a line: drop it, name and all (by `id`, or by speaker and stamp). */
+  | { type: "removed"; channel: string; id?: string; userId: number; ts: number }
   /** The answer to a presence ping sent on the socket (beta 9, `ChatSession.presence`). */
   | { type: "presence"; id: number; ok: boolean; answer?: unknown; reason?: string };
 

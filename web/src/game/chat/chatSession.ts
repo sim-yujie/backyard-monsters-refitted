@@ -41,6 +41,8 @@ import { onWorldChatChange, worldChatOn } from "./worldChatSetting";
 export interface ChatLine {
   readonly kind: "line";
   readonly id: number;
+  /** The server's id for the line, what a moderator's removal names; null on lines from before ids. */
+  readonly lineId: string | null;
   readonly userId: number;
   /** `[level] name`, as the server stamped the line. */
   readonly name: string;
@@ -675,6 +677,9 @@ export class ChatSession {
       case "left":
         if (this.roomOf(message.channel) === ALLIANCE_ROOM) this.dropAllianceRoom();
         return;
+      case "removed":
+        this.dropLine(this.roomOf(message.channel), message);
+        return;
       case "name_update":
         if (this.state.self && message.userId === this.state.self.userId) {
           this.update({ self: { userId: message.userId, name: message.displayName } });
@@ -746,6 +751,7 @@ export class ChatSession {
     return {
       kind: "line",
       id: this.nextId++,
+      lineId: typeof wire.id === "string" && wire.id ? wire.id : null,
       userId,
       name: String(wire.displayName ?? ""),
       pic: typeof wire.picSquare === "string" && wire.picSquare ? wire.picSquare : null,
@@ -836,6 +842,22 @@ export class ChatSession {
   private notice(text: string): void {
     const channel = this.state.channel;
     if (channel) this.append({ kind: "notice", id: this.nextId++, text }, channel);
+  }
+
+  /**
+   * A moderator removed a line (chat filter, owner 24 Nov 2026, option A): it
+   * vanishes, name and all, with no trace in the box.
+   */
+  private dropLine(channel: string, gone: { id?: string; userId: number; ts: number }): void {
+    const before = this.roomEntries.get(channel);
+    if (!before) return;
+    const id = typeof gone.id === "string" && gone.id ? gone.id : null;
+    const after = before.filter(
+      (entry) => entry.kind !== "line" || entry.userId !== Number(gone.userId) || (id !== null && entry.lineId !== null ? entry.lineId !== id : entry.ts !== Number(gone.ts)),
+    );
+    if (after.length === before.length) return;
+    this.roomEntries.set(channel, after);
+    this.show({});
   }
 
   private append(entry: ChatEntry, channel: string): void {

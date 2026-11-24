@@ -304,6 +304,16 @@ button.chat-line__name {
   color: var(--chat-mod);
 }
 
+/* The chat filter's "[link removed]" (24 Nov 2026): the game's words, not the player's. */
+.chat-line__cut {
+  color: #f29b9b;
+  font-style: italic;
+}
+
+:root[data-skin="flash"] .chat-line__cut {
+  color: #b3261e;
+}
+
 .chat-line__mod {
   display: inline-block;
   margin-right: 0.35em;
@@ -579,6 +589,38 @@ button.chat-line__name {
   display: inline-flex;
 }
 
+/* A moderator's Ban (24 Nov 2026): a small crimson plate on the name's row, left of the close. */
+.chat-box__player--ban .chat-box__player-name {
+  padding-right: 96px;
+}
+
+:root[data-skin] .chat-box__player .btn.chat-box__ban {
+  position: absolute;
+  top: 2px;
+  right: 40px;
+  min-height: 32px;
+  min-width: 60px;
+  padding: 0 4px;
+  font-size: var(--text-xs);
+  --skin-button-cap: 14px;
+  --skin-button2-cap: 12px;
+}
+
+/* The game's plate turned red, as Reports' Ban (reports.css). */
+:root[data-skin="scrap"] .chat-box__player .btn.chat-box__ban {
+  filter: hue-rotate(-24deg) saturate(1.35) brightness(0.95);
+}
+
+:root[data-skin="flash"] .chat-box__player .btn.chat-box__ban {
+  /* Classic's pill drawn in crimson: a hue turn of the yellow pill came out pink. */
+  --skin-button-stroke: #5c120c;
+  border: 2px solid #5c120c;
+  border-image: none;
+  border-radius: 999px;
+  background: linear-gradient(#ec5a48, #c0281d 55%, #9e1d14);
+  box-shadow: inset 0 2px 0 rgb(255 255 255 / 35%), inset 0 -2px 0 rgb(0 0 0 / 20%), 0 2px 2px rgb(60 20 0 / 35%);
+}
+
 .chat-box__player-close {
   position: absolute;
   display: inline-flex;
@@ -774,5 +816,31 @@ button.chat-line__name {
   .chat-line__give {
     min-height: 44px;
     min-width: 44px;
+  }
+}
+
+.chat-box__player--ban .chat-box__player-name {
+  min-height: 34px;
+}
+
+/* The close sits level with Ban. */
+.chat-box__player--ban .chat-box__player-close {
+  top: 7px;
+}
+
+@media (pointer: coarse) {
+  .chat-box__player--ban .chat-box__player-name {
+    min-height: 44px;
+  }
+
+  .chat-box__player--ban .chat-box__player-close {
+    top: calc(var(--space-2) + 10px);
+  }
+
+  :root[data-skin] .chat-box__player .btn.chat-box__ban {
+    top: var(--space-2);
+    right: 52px;
+    min-height: 44px;
+    min-width: 68px;
   }
 }

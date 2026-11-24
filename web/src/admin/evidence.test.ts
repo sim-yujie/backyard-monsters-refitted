@@ -102,17 +102,17 @@ describe("the words", () => {
   it("says what an action covers, with the both-line counted once", () => {
     // 3 lines: 2 reported (one also caught), 1 only caught; 4 reports.
     const scope = scopeOf({ messages: 3, reports: 4, filterOnlyLines: 1 });
-    expect(scopeWords(scope)).toBe("Applies to all 3 messages, closes 4 reports and 1 word-filter catch");
+    expect(scopeWords(scope)).toBe("Applies to all 3 messages, closes 4 reports and 1 filter catch");
     expect(scopeWords({ messages: 3, reports: 4, filterOnly: 0 })).toBe("Applies to all 3 messages, closes 4 reports");
-    expect(scopeWords({ messages: 1, reports: 0, filterOnly: 1 })).toBe("Applies to the 1 message, closes 1 word-filter catch");
-    expect(closesWords({ messages: 2, reports: 0, filterOnly: 2 })).toBe("2 word-filter catches");
+    expect(scopeWords({ messages: 1, reports: 0, filterOnly: 1 })).toBe("Applies to the 1 message, closes 1 filter catch");
+    expect(closesWords({ messages: 2, reports: 0, filterOnly: 2 })).toBe("2 filter catches");
   });
 
   it("gives a row its counts, each line once", () => {
     expect(rowWords({ messages: 3, reports: 4, uniqueReporters: 3, filterOnlyLines: 1 })).toBe(
-      "3 messages · 4 reports from 3 players · 1 word-filter catch",
+      "3 messages · 4 reports from 3 players · 1 filter catch",
     );
-    expect(rowWords({ messages: 2, reports: 0, uniqueReporters: 0, filterOnlyLines: 2 })).toBe("2 messages · 2 word-filter catches");
+    expect(rowWords({ messages: 2, reports: 0, uniqueReporters: 0, filterOnlyLines: 2 })).toBe("2 messages · 2 filter catches");
   });
 
   it("names the reporters", () => {

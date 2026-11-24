@@ -166,12 +166,12 @@ describe("the owner's first look", () => {
     expect(link.querySelector(".count")?.textContent).toContain("3");
     // The list's filters count players too, Closed from the last 30 days.
     const segs = [...document.querySelectorAll<HTMLButtonElement>("#view-moderation .filter-grid .seg")].map((b) => b.textContent);
-    expect(segs).toEqual(["All 3", "Player reports 2", "Word filter 1", "Closed 2"]);
+    expect(segs).toEqual(["All 3", "Player reports 2", "Auto-filter 1", "Closed 2"]);
     // A row counts each line once: 4 messages, 4 reports, 2 lines only the filter caught.
     const row = document.querySelector("#view-moderation a.q-row[data-player='42']")!;
-    expect(row.textContent).toContain("4 messages · 4 reports from 4 players · 2 word-filter catches");
+    expect(row.textContent).toContain("4 messages · 4 reports from 4 players · 2 filter catches");
     expect(row.textContent).toContain("Player reports");
-    expect(row.textContent).toContain("Word filter");
+    expect(row.textContent).toContain("Auto-filter");
   });
 
   it("has the six pages in the menu, each part a tab under its title, and the light or dark switch on top", async () => {
@@ -212,7 +212,7 @@ describe("the owner's first look", () => {
     await settle();
     const tabs = (view: string) =>
       [...document.querySelectorAll(`#view-${view} .subnav a .nav-state`)].map((s) => s.previousElementSibling?.textContent);
-    expect(tabs("photos")).toEqual(["Review", "Photo reports", "Find a player", "Attack log", "Flagged", "Moderators", "Moderator mail"]);
+    expect(tabs("photos")).toEqual(["Review", "Photo reports", "Find a player", "Attack log", "Flagged", "Moderators", "Chat filter", "Moderator mail"]);
     expect(tabs("events")).toEqual(["Announcements", "Events"]);
     // The tab and the heading count the players with open photo reports.
     expect(document.querySelector("#view-moderation .subnav a[href='#photos'] .count")?.textContent).toContain("2");

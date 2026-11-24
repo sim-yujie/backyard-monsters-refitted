@@ -21,6 +21,8 @@ const api = (moderator: boolean, open = 3): ModReportsApi =>
     player: vi.fn(),
     around: vi.fn(),
     act: vi.fn(),
+    ban: vi.fn(),
+    removeLines: vi.fn(),
   }) as unknown as ModReportsApi;
 
 const settle = () => new Promise((resolve) => setTimeout(resolve, 0));

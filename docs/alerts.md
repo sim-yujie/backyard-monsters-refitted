@@ -16,7 +16,7 @@ dashboard (a hidden page on the game page, `/admin`) shows the server's health.
 | Sudden jump in server errors | the game server, from the error store | `/admin#errors` |
 | Each new bug report (at most 10 an hour) | the game server, when it saves one | `/admin#bugs` |
 | Each moderator ban or mute (every one) | the game server, when a moderator does it | `/admin#moderators` (Undo there) |
-| Each chat-filter flag (at most 10 an hour, the rest summed up) | the chat filter, when it is built (`alertChatFlag`) | `/admin#moderation?player=<id>` |
+| Each chat-filter flag (at most 10 an hour, the rest summed up) | the chat server, when the chat filter stores a flag (`alertChatFlag`, `chat/chatWatch.ts`) | `/admin#moderation?player=<id>` |
 | Each player's chat report (at most 30 an hour, the rest summed up) | the game server, when it saves one | `/admin#moderation?player=<id>` |
 | A brand-new account (joined in the last hour) uploading a profile photo (at most 10 an hour) | the game server, when it saves the photo | `/admin#moderation?player=<id>` |
 | Daily summary of yesterday (not a problem; once a day) | the game server, just after 00:00 UTC (08:00 SGT) | `/admin#bugs`, or `#health` on a day without reports |
@@ -41,9 +41,12 @@ moderators and the chat:
   owner can Undo it or make a ban permanent (`/admin#moderators`, "Bans and
   mutes by moderators"). An admin's own steps in the game's Reports window
   are not said.
-- **A chat-filter flag**, with the player, the room, the line and why. The
-  chat filter is not built yet; it calls `alertChatFlag({ userid, username,
-  channel, text, why })`. The word filter that already exists does not call it.
+- **A chat-filter flag**, with the player, the room, the line (their own
+  words) and why ("group invite link cut; watched word: private server;
+  hidden from others (new player)"). Sent when the chat filter
+  (`services/chat/chatFilter.ts`) stores a flag, so the per-player limit (5
+  flags in 10 minutes) applies before the hourly cap. The word filter's
+  swear flags do not call it.
 - **A player's chat report**, with the reporter, the reported player, the
   room and the line (the chat server's own copy; the reporter's copy is
   marked as such when the line had already left the room).

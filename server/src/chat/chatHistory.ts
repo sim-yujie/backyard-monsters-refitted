@@ -4,7 +4,14 @@ import type { HistoryEntry } from "./chatProtocol.js";
 
 const HISTORY_KEY = (channel: string) => `history:${channel}`;
 
-const MAX_HISTORY = 100;
+/**
+ * A new chat line's id (chat filter, 24 Nov 2026): what a moderator's Remove
+ * names, and what the chat box drops when it hears the line was removed.
+ * Lines stored before ids keep none; those are named by speaker and stamp.
+ */
+export const newLineId = (): string => crypto.randomUUID().replace(/-/g, "").slice(0, 16);
+
+export const MAX_HISTORY = 100;
 const HISTORY_TTL_SECONDS = 2592000;
 
 /**

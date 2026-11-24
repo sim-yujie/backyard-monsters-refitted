@@ -24,6 +24,7 @@ import { initMaintenanceWatch } from "./chatMaintenance.js";
 import { applyMailNudge } from "./chatMail.js";
 import { handlePresence } from "./chatPresence.js";
 import { MODERATORS_REFRESH_MS, refreshChatModerators } from "./chatModerators.js";
+import { refreshWatchWords, WATCH_WORDS_REFRESH_MS } from "./chatWatchWords.js";
 import { clients, type SocketData } from "./chatState.js";
 import { initTransport, subscribeControl } from "./chatTransport.js";
 import { ChatControlType } from "../enums/Chat.js";
@@ -38,6 +39,8 @@ type ServerWebSocket<T> = import("bun").ServerWebSocket<T>;
 export const initGateway = () => {
   void refreshChatModerators();
   setInterval(() => void refreshChatModerators(), MODERATORS_REFRESH_MS).unref?.();
+  void refreshWatchWords();
+  setInterval(() => void refreshWatchWords(), WATCH_WORDS_REFRESH_MS).unref?.();
   initTransport(() => subscribeControl(handleControlMessage));
   initMaintenanceWatch();
 };
@@ -65,6 +68,11 @@ const handleControlMessage = (payload: string) => {
 
   if (message.type === ChatControlType.Moderators) {
     void refreshChatModerators();
+    return;
+  }
+
+  if (message.type === ChatControlType.WatchWords) {
+    void refreshWatchWords();
     return;
   }
 
@@ -136,7 +144,7 @@ const dispatch = async (ws: ServerWebSocket<SocketData>, data: string | Buffer) 
 
       joinChannel(client, resolved.key, resolved.info);
 
-      const history = await getChannelHistory(resolved.key, resolved.info);
+      const history = await getChannelHistory(resolved.key, resolved.info, client.userId);
 
       send(ws, { type: ServerMessageType.Joined, channel: resolved.key, history });
       return;

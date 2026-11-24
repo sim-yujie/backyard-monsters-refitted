@@ -443,11 +443,25 @@ export const markWords = (message: string, words: readonly string[]): Child[] =>
   return parts;
 };
 
-/** "Slur" or "Swearing", with an icon, so the colour is never the only sign. */
+/** "Slur" or "Swearing", with an icon, so the colour is never the only sign; "Chat filter" for the chat filter's own flags. */
 export const severityChip = (severity: FlagSeverity): HTMLElement =>
   severity === "slur"
     ? h("span", { class: "chip chip-bad chip-icon" }, icon("bad", 14), "Slur")
-    : h("span", { class: "chip chip-warn chip-icon" }, icon("warn", 14), "Swearing");
+    : severity === "filter"
+      ? h("span", { class: "chip chip-info chip-icon" }, icon("chat", 14), "Chat filter")
+      : h("span", { class: "chip chip-warn chip-icon" }, icon("warn", 14), "Swearing");
+
+const FILTER_TAG_WORDS: Readonly<Record<string, string>> = { newLink: "New link", invite: "Invite link", watched: "Watched", hidden: "Hidden" };
+
+/** The chat filter's reasons on a line (24 Nov 2026), as the game's Reports window tags them. */
+export const filterTagChips = (tags: readonly string[] | undefined, words: readonly string[]): HTMLElement[] =>
+  (tags ?? []).map((tag) =>
+    h(
+      "span",
+      { class: tag === "hidden" ? "chip chip-quiet" : tag === "watched" ? "chip chip-warn" : "chip chip-bad" },
+      tag === "watched" && words.length ? `Watched: ${words.join(", ")}` : (FILTER_TAG_WORDS[tag] ?? tag),
+    ),
+  );
 
 /** "Disguised" with what the filter read it as, for a word spelled to get past the filter. */
 export const disguisedChip = (words: readonly string[]): HTMLElement =>
@@ -500,7 +514,8 @@ export const flagRow = (
           "span",
           { class: "row-top" },
           h("strong", { class: "report-who" }, name),
-          severityChip(player.slurs > 0 ? "slur" : "swear"),
+          // A player whose open lines are all the chat filter's shows "Chat filter", not "Swearing".
+          severityChip(player.slurs > 0 ? "slur" : player.lines.length > 0 && player.lines.every((line) => line.severity === "filter") ? "filter" : "swear"),
           h("span", { class: "chip chip-quiet" }, plural(player.count, "line")),
           player.banned ? h("span", { class: "chip chip-bad" }, "Banned") : null,
           player.muted ? h("span", { class: "chip chip-warn" }, "Chat paused") : null,

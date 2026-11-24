@@ -141,7 +141,7 @@ import { mountEventsRoutes } from "./controllers/events/routes.js";
 import { mountSupportRoutes } from "./controllers/support/routes.js";
 import { adminOnly, moderationEffects, mountAdminRoutes } from "./controllers/admin/routes.js";
 import { mountModReportsRoutes } from "./controllers/moderator/routes.js";
-import { removeRecentChatLines } from "./services/chat/removeChatLines.js";
+import { removeChatLine, removeRecentChatLines } from "./services/chat/removeChatLines.js";
 import { mountAnnouncementRoutes } from "./controllers/announcements/routes.js";
 import { mountProfileRoutes } from "./controllers/profile/routes.js";
 import { mountOutpostLabelRoutes } from "./controllers/outposts/labelRoutes.js";
@@ -487,6 +487,7 @@ mountModReportsRoutes(router, {
   signedIn: [verifyUserAuth, modReportsLimiter],
   effects: moderationEffects,
   removeLines: (userid, since) => removeRecentChatLines(redis, userid, since),
+  removeLine: (channel, line) => removeChatLine(redis, channel, line),
 });
 
 /**  ────────────────────────────────────────────────

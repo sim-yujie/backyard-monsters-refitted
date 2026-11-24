@@ -41,6 +41,8 @@ export enum ServerMessageType {
   Left = "left",
   /** The answer to a {@link ClientMessageType.Presence} ping, under the ping's `id`. */
   Presence = "presence",
+  /** A moderator removed a line (chat filter, 24 Nov 2026): the chat box drops it, name and all. */
+  Removed = "removed",
 }
 
 export enum ErrorCode {
@@ -61,6 +63,8 @@ export enum AuthFailReason {
 }
 
 export interface HistoryEntry {
+  /** The line's id (`chatHistory.ts` `newLineId`); absent on lines stored before ids. */
+  id?: string;
   userId: number;
   displayName: string;
   picSquare: string | null;
@@ -112,7 +116,7 @@ export type ServerMessage =
   | { type: ServerMessageType.AuthOk; userId: number; displayName: string; presence?: true }
   | { type: ServerMessageType.AuthFail; reason: AuthFailReason }
   | { type: ServerMessageType.Joined; channel: string; history: HistoryEntry[] }
-  | { type: ServerMessageType.Message; channel: string; messageType: AllianceMessageType; userId: number; displayName: string; picSquare: string | null; photo?: number; allianceImage: number | null; body: string; ts: number; cell?: { x: number; y: number }; tradeRequest?: number; gm?: boolean; mod?: boolean }
+  | { type: ServerMessageType.Message; channel: string; id?: string; messageType: AllianceMessageType; userId: number; displayName: string; picSquare: string | null; photo?: number; allianceImage: number | null; body: string; ts: number; cell?: { x: number; y: number }; tradeRequest?: number; gm?: boolean; mod?: boolean }
   | { type: ServerMessageType.UserEnter; channel: string; userId: number; displayName: string }
   | { type: ServerMessageType.UserExit; channel: string; userId: number }
   | { type: ServerMessageType.NameUpdate; channel: string; userId: number; displayName: string }
@@ -125,6 +129,8 @@ export type ServerMessage =
   | { type: ServerMessageType.Mail }
   | ({ type: ServerMessageType.Maintenance } & MaintenanceNotice)
   | { type: ServerMessageType.Left; channel: string }
+  /** No words: the line is named by `id`, or by speaker and stamp for a line stored before ids. */
+  | { type: ServerMessageType.Removed; channel: string; id?: string; userId: number; ts: number }
   /** `answer`: what `POST /bm/presence` would have answered. `ok: false`: send that ping over HTTP instead. */
   | { type: ServerMessageType.Presence; id: number; ok: true; answer: Record<string, unknown> }
   | { type: ServerMessageType.Presence; id: number; ok: false; reason: "throttled" | "auth" | "version" | "error" };
