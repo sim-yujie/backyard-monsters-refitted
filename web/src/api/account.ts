@@ -5,6 +5,7 @@ import { countryOf, type CountrySettings } from "./country";
 import { privacyOf, type PrivacySettings } from "./privacy";
 import { notificationsOffOf, type NotificationCategoryId } from "./notificationSettings";
 import { hexShapeOf, type HexShape } from "@/game/maproom/rules/range";
+import { noteSmartMoving } from "@/game/attack/smartMoveSetting";
 import type { AccountResponse, ChangeUsernameResponse, SetAvatarResponse, SettingsResponse } from "./types";
 
 /**
@@ -41,6 +42,8 @@ export interface AccountInfo {
   readonly country: CountrySettings;
   /** The bell's notification categories turned off; none by default (owner 11 Nov 2026). */
   readonly notificationsOff: readonly NotificationCategoryId[];
+  /** Smart moving for hand attacks (beta 9): on by default. */
+  readonly smartMoving: boolean;
 }
 
 export const fetchAccount = async (): Promise<AccountInfo> => {
@@ -53,8 +56,19 @@ export const fetchAccount = async (): Promise<AccountInfo> => {
     privacy: privacyOf(response.settings),
     country: countryOf(response.settings),
     notificationsOff: notificationsOffOf(response.settings),
+    smartMoving: smartMovingOf(response.settings),
   };
 };
+
+/** Smart moving (beta 9) as the settings block has it, kept for the map's Attack. */
+const smartMovingOf = (settings: AccountResponse["settings"]): boolean => {
+  noteSmartMoving(settings?.smartMoving);
+  return settings?.smartMoving !== false;
+};
+
+/** Turns Smart moving on or off on the account; resolves with what the server now has. */
+export const setSmartMoving = async (on: boolean): Promise<boolean> =>
+  smartMovingOf((await postJson<SettingsResponse>(SETTINGS_PATH, { smartMoving: on })).settings);
 
 /** Renames the account and the session; resolves with when the next rename is allowed. */
 export const changeUsername = async (username: string): Promise<{ username: string; nextChangeAt: string }> => {
@@ -96,6 +110,8 @@ export const fetchMapTilt = async (): Promise<MapTiltSettings> =>
  */
 export const fetchMapSettings = async (): Promise<{ hexShape: HexShape; tilt: MapTiltSettings }> => {
   const settings = (await get<AccountResponse>(ACCOUNT_PATH)).settings;
+  // The map's Attack asks for smart moving only while the account has it on (beta 9).
+  noteSmartMoving(settings?.smartMoving);
   return { hexShape: hexShapeOf(settings?.mapHexShape), tilt: mapTiltOf(settings) };
 };
 

@@ -231,7 +231,7 @@ export const loadAttack = async (
   baseid: string,
   kind: AttackTargetKind,
   roster: AttackRoster,
-  options: { mapversion?: number } = {},
+  options: { mapversion?: number; smartMoves?: string } = {},
 ): Promise<BaseLoadResponse> => {
   const session = getSession();
 
@@ -243,6 +243,8 @@ export const loadAttack = async (
     attackData: JSON.stringify(buildAttackData(roster)),
     // This page's battle rules: an older page is refused with "New version" (`rulesStamp.ts`).
     rules: RULES_STAMP,
+    // Smart moving (beta 9): the moves "Move & attack" agreed to, made by this same request.
+    ...(options.smartMoves ? { smartmoves: options.smartMoves } : {}),
   };
 
   return startStamped(loadBase(body));

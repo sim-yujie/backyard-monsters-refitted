@@ -127,6 +127,8 @@ export interface AccountResponse extends ApiEnvelope {
     countryChannel?: string | null;
     /** The bell's notification categories turned off (`api/notificationSettings.ts`). */
     notificationsOff?: string[];
+    /** Smart moving for hand attacks (beta 9): on unless the player turned it off. */
+    smartMoving?: boolean;
   };
 }
 
@@ -140,7 +142,13 @@ export interface ChangeUsernameResponse extends ApiEnvelope {
 /** `POST /api/:apiVersion/player/settings`. */
 export interface SettingsResponse extends ApiEnvelope {
   error: number;
-  settings: { shinyLocked: boolean; mapTiltAllowed?: boolean; tiltedMap?: boolean; mapHexShape?: "flat" | "pointy" };
+  settings: {
+    shinyLocked: boolean;
+    mapTiltAllowed?: boolean;
+    tiltedMap?: boolean;
+    mapHexShape?: "flat" | "pointy";
+    smartMoving?: boolean;
+  };
 }
 
 /* ── Base / yard ────────────────────────────────────────────────────────── */
@@ -183,6 +191,12 @@ export interface BaseLoadRequest {
    * the server refuses an attack from a page with other rules.
    */
   rules?: string;
+  /**
+   * Smart moving (beta 9): on a `wmattack`, the key of the moves the player
+   * agreed to ("Move & attack"). The server makes exactly those moves before
+   * it starts the attack, or refuses with nothing moved (`smartMove.ts`).
+   */
+  smartmoves?: string;
   /**
    * Which screen opens the own yard: the yard itself, or a map finding its
    * home cell. The server only logs it, beside Moloch's emergence (patch 7.12).
@@ -819,6 +833,16 @@ export interface BaseLoadResponse extends ApiEnvelope {
    * (issue #201). The battle is fought at these, which the server replays.
    */
   attackeracademy?: unknown;
+  /**
+   * Smart moving (beta 9): the moves made before this attack started, and
+   * what each own yard in range houses now (the attack session's record), so
+   * the battle's army counts the monsters that moved in. Only on an attack
+   * load sent with `smartmoves`.
+   */
+  smartmoved?: {
+    readonly moves: readonly { readonly from: string; readonly to: string; readonly monsters: Readonly<Record<string, number>> }[];
+    readonly housed: Readonly<Record<string, Readonly<Record<string, number>>>>;
+  };
   /**
    * Attack modes only: the attacker's Monster Lab ranks, by monster id, frozen
    * with the academy (issue #352). Absent when nothing is researched.

@@ -35,6 +35,8 @@ import { AREA_ZONE_SIZE, DEFAULT_ZOOM, MIN_ZOOM, WORLD_HEIGHT, WORLD_WIDTH, ZONE
 import { mapRefreshSeconds, quality } from "@/game/quality";
 import {
   attackRefusal,
+  hasAnythingToSend,
+  NOTHING_IN_RANGE,
   cellDistance,
   outpostsToLoad,
   ownCellsIn,
@@ -51,6 +53,8 @@ import {
 import { visitFriend } from "@/game/friends/friendVisit";
 import { attackWithFriendWarning } from "@/game/friends/attackWarning";
 import { confirmAttackWindow } from "@/ui/attack/AttackWindow";
+import { smartMoveBeforeAttack } from "@/ui/attack/smartMoveFlow";
+import { smartMovingOn } from "@/game/attack/smartMoveSetting";
 import { storageCapOf } from "@/game/attack/attackerStorage";
 import { Camera } from "@/game/Camera";
 import { mapRoomGrid, setHexShape, type OffsetCell } from "@/game/HexGrid";
@@ -1308,7 +1312,17 @@ export class MapRoom2Scene implements Scene {
   private attackRefusalFor(payload: MapCell | undefined): string | null {
     const cell = this.selected;
     if (!cell) return "No cell is selected.";
-    return attackRefusal(payload, this.rosterFor(cell), Date.now() / 1000);
+    return this.smartMoveGate(payload, attackRefusal(payload, this.rosterFor(cell), Date.now() / 1000));
+  }
+
+  /**
+   * Smart moving (beta 9): a camp whose yards in range hold nothing may still
+   * have its saved army moved in, so with the setting on Attack stays open
+   * there and asks first (`smartMoveFlow.ts`); with nothing to move, the
+   * refusal is said on the tap instead.
+   */
+  private smartMoveGate(payload: MapCell | undefined, refusal: string | null): string | null {
+    return refusal === NOTHING_IN_RANGE && payload && targetKind(payload) === "wild" && smartMovingOn() ? null : refusal;
   }
 
   /**
@@ -1323,7 +1337,7 @@ export class MapRoom2Scene implements Scene {
     payload: MapCell | undefined,
   ): { attack: AttackTarget | null; refusal: string | null } {
     const roster = this.rosterFor(cell);
-    const refusal = attackRefusal(payload, roster, Date.now() / 1000);
+    const refusal = this.smartMoveGate(payload, attackRefusal(payload, roster, Date.now() / 1000));
     const kind = payload ? targetKind(payload) : null;
     if (refusal || !payload || !kind || !("bid" in payload)) {
       return { attack: null, refusal: refusal ?? "This cell cannot be attacked." };
@@ -1368,17 +1382,41 @@ export class MapRoom2Scene implements Scene {
       return;
     }
 
-    // Flash's PopupAttackA first: what the player can bring, then Attack or
-    // Cancel (owner, 9 Nov 2026). One at a time, however often Attack is hit.
+    // One at a time, however often Attack is hit.
     if (this.attackWindowOpen) return;
     this.attackWindowOpen = true;
-    void confirmAttackWindow(context.overlay.modal, attack).then((go) => {
+    void this.attackFlow(attack, context).finally(() => {
       this.attackWindowOpen = false;
-      if (!go || this.context !== context) return;
-      return attackWithFriendWarning(attack, context.overlay.modal, () => {
-        setAttackTarget(attack);
-        context.goTo(SceneName.ATTACK);
-      });
+    });
+  }
+
+  /**
+   * Smart moving first (beta 9, owner 24 Nov 2026, `smartMoveFlow.ts`): on a
+   * camp with a saved Repeat army that the yards in range lack, "Bring saved
+   * army?" before anything else, whose Move & attack goes straight into the
+   * battle. Then Flash's PopupAttackA: what the player can bring, then Attack
+   * or Cancel (owner, 9 Nov 2026).
+   */
+  private async attackFlow(attack: AttackTarget, context: SceneContext): Promise<void> {
+    const modal = context.overlay.modal;
+    const smart = await smartMoveBeforeAttack({ modal, attack });
+    if (this.context !== context || smart.kind === "closed") return;
+    if (smart.kind === "moved") {
+      setAttackTarget(smart.target);
+      context.goTo(SceneName.ATTACK);
+      return;
+    }
+    // Nothing moved in and nothing in range to send (the gate let it through
+    // for smart moving): said here, as the button would have.
+    if (!hasAnythingToSend(attack.roster)) {
+      this.ui?.notices.show("attack", NOTHING_IN_RANGE, { level: "info", timeoutMs: 4_000 });
+      return;
+    }
+    const go = await confirmAttackWindow(modal, attack, { note: smart.note });
+    if (!go || this.context !== context) return;
+    await attackWithFriendWarning(attack, modal, () => {
+      setAttackTarget(attack);
+      context.goTo(SceneName.ATTACK);
     });
   }
 

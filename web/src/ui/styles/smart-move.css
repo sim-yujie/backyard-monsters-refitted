@@ -1,0 +1,151 @@
+/*
+ * Smart moving for hand attacks (beta 9, `ui/attack/smartMoveSheet.ts`;
+ * neon's direction A, 24 Nov 2026): the "Bring saved army?" sheet before the
+ * Attack window, and the "can't gather" note at the top of the Attack window.
+ *
+ * The sheet is the Attack window's own frame (`.attack-window`: centred under
+ * the top bar, never taller than the screen, the body scrolling between the
+ * head and the buttons), a little wider so a move card stays on one line.
+ * The camp head and the move cards are Repeat attack's (repeat-prompt.css).
+ */
+
+.attack-window.smart-move {
+  width: min(92vw, 520px);
+}
+
+/* The camp under the title, a little smaller than in Repeat attack's sheet. */
+.smart-move > .panel__head .repeat-prompt__tribe {
+  width: 48px;
+  height: 48px;
+}
+
+.smart-move > .panel__body {
+  gap: var(--space-2);
+}
+
+/* "Move & attack" is the action; Skip a modest plate beside it. */
+.smart-move__actions {
+  grid-template-columns: minmax(0, 1fr) minmax(0, 2fr);
+}
+
+/* Why "Move & attack" did not go: above the buttons, in the warning colour. */
+.smart-move__error {
+  flex: none;
+  margin: 0;
+  padding: var(--space-2) var(--space-4) 0;
+  color: var(--colour-warning);
+  font-size: var(--text-sm);
+  font-weight: 700;
+  line-height: var(--leading-tight);
+  text-align: center;
+}
+
+.smart-move__error[hidden] {
+  display: none;
+}
+
+/* While the moves and the attack start, nothing else can be pressed. */
+.smart-move--busy .panel__titlebar > .btn--icon {
+  opacity: 0.5;
+  pointer-events: none;
+}
+
+.smart-move--busy .smart-move__go {
+  cursor: progress;
+}
+
+/* A phone on its side: the Attack window's two columns are not wanted here,
+   one list of moves under the camp, the card on one line. */
+@media (max-height: 480px) and (min-width: 600px) {
+  .attack-window.smart-move {
+    width: min(92vw, 600px);
+  }
+
+  .attack-window.smart-move > .panel__body {
+    flex-direction: column;
+    align-items: stretch;
+    gap: var(--space-1);
+  }
+
+  .smart-move > .panel__head .repeat-prompt__tribe {
+    width: 40px;
+    height: 40px;
+  }
+
+  .smart-move > .panel__head .repeat-prompt__camp-words {
+    flex-direction: row;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--space-2);
+  }
+}
+
+/* ── The note in the Attack window: the saved army cannot be gathered ───── */
+
+.smart-move-note {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: var(--space-2);
+  padding: var(--space-2);
+  border: 1px solid var(--colour-warning);
+  border-radius: var(--radius-md);
+  background: var(--colour-surface-sunken);
+}
+
+.smart-move-note__heading {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin: 0;
+  color: var(--colour-warning);
+  font-size: var(--text-md);
+  font-weight: 700;
+  line-height: var(--leading-tight);
+}
+
+.smart-move-note__heading .game-icon {
+  flex: none;
+  width: 24px;
+  height: 24px;
+}
+
+/* Its rows side by side, so a few short monsters take one line. */
+.smart-move-note .repeat-prompt__shorts {
+  flex-direction: row;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.smart-move-note :is(.repeat-prompt__short, .repeat-prompt__room-yard) {
+  min-height: 36px;
+  padding-block: 2px;
+  background: var(--colour-surface-raised);
+}
+
+.smart-move-note .repeat-prompt__short-art {
+  width: 32px;
+  height: 30px;
+}
+
+.smart-move-note .repeat-prompt__need {
+  font-size: var(--text-sm);
+}
+
+/* Never more than a few rows: what is left of the window is the Attack window's. */
+.smart-move-note > :is(.repeat-prompt__shorts, .repeat-prompt__room) {
+  max-height: 84px;
+  overflow-y: auto;
+}
+
+@media (max-height: 480px) {
+  .smart-move-note {
+    margin-top: var(--space-1);
+    padding: 4px var(--space-2);
+    gap: 4px;
+  }
+
+  .smart-move-note > :is(.repeat-prompt__shorts, .repeat-prompt__room) {
+    max-height: 44px;
+  }
+}
