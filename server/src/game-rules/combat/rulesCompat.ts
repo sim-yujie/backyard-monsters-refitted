@@ -27,6 +27,12 @@
  * and traps. No replay stamped with 3cb9cc66416d5eda or 8.1/8.2's
  * 0ba3fde8701104af plays the same any more.
  *
+ * The Krallen fix (owner, 24 Nov 2026) keeps it empty: she now hits a
+ * harvester she has drained until it falls, as Flash's `setWaypoints` kept
+ * her on it (`engine.ts`, `swing`), so every battle in which she drains a
+ * harvester before it falls plays differently, and 8.3/8.4's
+ * c8cfcc231fcacd03 replays with a Krallen no longer play the same.
+ *
  * Add the version a change replaces only when that change moves no battle.
  * A change that moves any battle result must empty this list.
  */
