@@ -1,5 +1,15 @@
 import type { Page } from "@playwright/test";
-import { openAchievements, openBaiterPreview, openFriendsScreen, openMoveTray, openRepeatResult, openRepeatSheet, openShop, pressDock } from "./game";
+import {
+  openAchievements,
+  openBaiterPreview,
+  openFriendsScreen,
+  openMoveTray,
+  openRepeatResult,
+  openRepeatSheet,
+  openShop,
+  openSmartMove,
+  pressDock,
+} from "./game";
 
 /**
  * Every window the layout check opens on the own yard.
@@ -204,6 +214,26 @@ export const WINDOWS: readonly WindowCase[] = [
     tabs: false,
     closeButton: ".auto-attack__cancel",
     open: (page) => openRepeatSheet(page, "short-housing"),
+  },
+  {
+    // Smart moving's "Bring saved army?" sheet (beta 9) at its busiest: eight
+    // moves under the camp, Skip and Move & attack in sight at every size.
+    id: "smart-move",
+    label: "Smart moving, 8 moves",
+    panel: ".smart-move",
+    items: ".repeat-prompt__move",
+    tabs: false,
+    open: (page) => openSmartMove(page, "moves8"),
+  },
+  {
+    // The Attack window with smart moving's "can't gather" note at its top:
+    // the monsters still in sight under it, Cancel and Attack too.
+    id: "smart-move-note",
+    label: "Attack window, smart moving short",
+    panel: ".attack-window",
+    items: ".attack-window__tile",
+    tabs: false,
+    open: (page) => openSmartMove(page, "short-note"),
   },
   {
     // The Attacking bar with every kind marching (owner, 20 Nov 2026).
