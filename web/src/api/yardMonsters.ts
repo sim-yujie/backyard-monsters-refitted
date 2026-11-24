@@ -64,7 +64,8 @@ export interface LockerShinyReport {
  * Starts unlocking `monster`: the full putty price now, one unlock at a time.
  * Refusals, in the server's order: 400 `badRequest` (not obtainable),
  * `alreadyUnlocked`, `unlockRunning {monster}`, `noLocker`,
- * `lockerLevel {have, need}`, `shortfall`.
+ * `lockerBusy {id}` (the Locker is being upgraded), `lockerLevel {have, need}`,
+ * `shortfall`.
  */
 export const lockerStart = (
   monster: string,
@@ -150,6 +151,8 @@ const gateRefusal = (gate: UnlockGate, realm: MonsterRealm): YardRefusal => {
   switch (gate.reason) {
     case "unlockRunning":
       return refuse(gate.reason, message, { monster: gate.monster });
+    case "lockerBusy":
+      return refuse(gate.reason, message, { id: gate.id });
     case "lockerLevel":
       return refuse(gate.reason, message, { have: gate.have, need: gate.need });
     case "shortfall":
