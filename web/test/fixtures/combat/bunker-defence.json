@@ -70,70 +70,70 @@
     "creepsKilled": 70,
     "championHp": null,
     "damagedBuildings": 2,
-    "rngDraws": 4739,
+    "rngDraws": 4755,
     "checkpoints": [
       {
         "tick": 800,
-        "digest": "5a1cd2cade6d8660"
+        "digest": "5938134a19e33184"
       },
       {
         "tick": 1600,
-        "digest": "b2e68152a4ef45d8"
+        "digest": "c5cb254bdbfebbfd"
       },
       {
         "tick": 2400,
-        "digest": "2a3cc23561f03a53"
+        "digest": "3d38847c8f196b6e"
       },
       {
         "tick": 3200,
-        "digest": "2f893b4225afb8c8"
+        "digest": "7fe5e31b32fab48d"
       },
       {
         "tick": 4000,
-        "digest": "f15696d4a7ef038a"
+        "digest": "bf2df2f10be47683"
       },
       {
         "tick": 4800,
-        "digest": "2fb1a565ae1c5583"
+        "digest": "8b11cccc71eb04be"
       },
       {
         "tick": 5600,
-        "digest": "07e966e62a4212d4"
+        "digest": "3d9983c72a8947c1"
       },
       {
         "tick": 6400,
-        "digest": "60322272be0d0378"
+        "digest": "7d78b5eb4ab3f39d"
       },
       {
         "tick": 7200,
-        "digest": "832b216b9dbc9529"
+        "digest": "452fdf5e8594cea0"
       },
       {
         "tick": 8000,
-        "digest": "fc882684048c317a"
+        "digest": "661a830120269593"
       },
       {
         "tick": 8800,
-        "digest": "8c002a6a49a41850"
+        "digest": "8ae0b223dcb89b95"
       },
       {
         "tick": 9600,
-        "digest": "230c4cd591e3eef3"
+        "digest": "ef0e2d9c8d70d20e"
       },
       {
         "tick": 10400,
-        "digest": "6d2f7cc32e0ee301"
+        "digest": "c40e72769e24e098"
       },
       {
         "tick": 11200,
-        "digest": "014db496d28580c4"
+        "digest": "d6f9b1d75ee5f2d1"
       },
       {
         "tick": 12000,
-        "digest": "ebd0595c1d58cab2"
+        "digest": "191943397a5e02cb"
       }
     ],
-    "digest": "2de3cd0499385cea",
+    "digest": "44b0cc812d0498e3",
     "bunkerLosses": {
       "83": {
         "C2": 3

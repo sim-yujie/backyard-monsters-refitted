@@ -69,8 +69,8 @@
     ]
   },
   "expected": {
-    "ticks": 3950,
-    "damage": 1.0900668561197193,
+    "ticks": 3820,
+    "damage": 1.2178655321385747,
     "destroyed": null,
     "attackloot": {
       "r1": 0,
@@ -85,12 +85,12 @@
       "r4": 0
     },
     "firedTraps": 0,
-    "destroyedBuildings": 2,
+    "destroyedBuildings": 3,
     "creepsFlung": 55,
     "creepsKilled": 55,
     "championHp": null,
     "damagedBuildings": 4,
-    "rngDraws": 39775,
+    "rngDraws": 39798,
     "checkpoints": [
       {
         "tick": 800,
@@ -102,14 +102,14 @@
       },
       {
         "tick": 2400,
-        "digest": "cb88857ce9845cee"
+        "digest": "be89340e9f97fc8c"
       },
       {
         "tick": 3200,
-        "digest": "40ca768b337e49bd"
+        "digest": "39ac03d247e56370"
       }
     ],
-    "digest": "5bad54817e80c9c3",
+    "digest": "e95512a713d71085",
     "bunkerLosses": {
       "83": {
         "C1": 10,
@@ -129,9 +129,7 @@
       "83": {},
       "84": {},
       "85": {},
-      "86": {
-        "C15": 2
-      }
+      "86": {}
     },
     "defenderChampionsHp": []
   }

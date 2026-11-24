@@ -219,9 +219,11 @@ describe("AttackSession academy levels (#201)", () => {
 
 describe("AttackSession on an outpost (#179)", () => {
   /**
-   * A level 1 Laser (range 160) and a Town Hall 200 away that three Pokeys
+   * A level 1 Laser (range 160) and a Town Hall 180 away that three Pokeys
    * attack: out of the laser's reach on flat ground, inside it on a cell of
    * height 250, which the load serves as `cellheight` (`BTOWER.as:80-85`).
+   * (200 away until beta 9, when the Pokeys stood out of range of the
+   * Laser's anchor, which it holds a target from, `BTOWER.as:234-249`.)
    */
   const laserShots = (cellheight?: number): number => {
     const session = new AttackSession({ target: targetOf({ kind: "outpost" }), seed: 1 });
@@ -229,7 +231,7 @@ describe("AttackSession on an outpost (#179)", () => {
       ...towerYard(),
       buildingdata: {
         "1": { id: 1, t: 23, l: 1, X: 0, Y: 0 },
-        "2": { id: 2, t: 14, l: 5, X: 200, Y: 0 },
+        "2": { id: 2, t: 14, l: 5, X: 180, Y: 0 },
       },
       ...(cellheight === undefined ? {} : { cellheight }),
     } as unknown as BaseLoadResponse);

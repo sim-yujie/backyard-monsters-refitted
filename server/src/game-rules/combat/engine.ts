@@ -242,8 +242,11 @@ import {
 } from "./yard.js";
 import type { Cart, EngineBuilding, EngineYard } from "./yard.js";
 import {
+  TOWER_HOLDS_FROM_ANCHOR,
+  screenPxBlastDistance,
   screenPxCreepsSquared,
   screenPxToCornerSquared,
+  towerHoldsFromAnchor,
   yardToAnchorSquared,
   yardToCentreSquared,
 } from "./reach.js";
@@ -2202,7 +2205,7 @@ const DEFEND_SEARCH = 400;
  */
 const DEFEND_SURFACE_SQUARED = 14400;
 
-/** The reach a creep fights another at: its range, and never less than `DEFENSE_RANGE_SQUARED`. */
+/** The reach a creep fights another at: its range, and never under 2,500 (owner, 29 Sep). */
 const creepReach = (range: number): number => Math.max(range * range, 2500);
 
 /**
@@ -2210,6 +2213,13 @@ const creepReach = (range: number): number => Math.max(range * range, 2500);
  * a defender that reaches an attacker sets it on (`CreepBase.as:1111`).
  */
 const CLOSE_FIGHT_SQUARED = 2500;
+
+/**
+ * An Eye-ra's blast hits the defender it fights within 30 screen px:
+ * `DEFENSE_RANGE_SQUARED`, 900 (`CreepBase.as:37`, `:808`). Until beta 9 it
+ * was the defenders' close-fight 2,500 (50 px).
+ */
+export const EYE_RA_FOE_SQUARED = 900;
 
 /**
  * An Eye-ra's blast on monsters reaches 90: on screen for an attacker's
@@ -5213,8 +5223,12 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
   /**
    * `AOEDamage.getAllTargets` (`AOEDamage.as:34-57`): every ground creep of
    * the other side and, for an attacker, every building, within `radius` of
-   * the striker, nearest first (`sortOn dist`; a tie goes creeps before
-   * buildings, then by id, which Flash leaves to the sort). A defender's
+   * the striker (a building in screen pixels to its drawn top corner, as
+   * `getBuildingsInRange` measures, `Targeting.as:151-173`, and its falloff
+   * from that distance; until beta 9 it was yard units, which reached 141 px
+   * across the screen but 71 up and down it), nearest first (`sortOn dist`;
+   * a tie goes creeps before buildings, then by id, which Flash leaves to the
+   * sort). A defender's
    * monsters never splash buildings (`:36-39`), and nor does a splash that
    * leaves them out with `buildings` false. `skipCreep` and `skipBuilding` are
    * the initial target when it is left out.
@@ -5235,9 +5249,8 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
     if (!striker.friendly && buildings) {
       for (const building of yard.buildings) {
         if (building === skipBuilding || !splashable(building)) continue;
-        const squared = Math.trunc(distanceSquared(striker.x, striker.y, building.cx, building.cy));
-        if (squared >= radius * radius) continue;
-        found.push({ creep: null, building, dist: Math.sqrt(squared) });
+        const dist = screenPxBlastDistance(striker.ix, striker.iy, building, radius);
+        if (dist !== undefined) found.push({ creep: null, building, dist });
       }
     }
     return found.sort((one, other) => {
@@ -5596,7 +5609,7 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
   /**
    * The rest of an attacking Eye-ra's blast (`CreepBase.as:804-827`): it hurts
    * monsters too. The defender it is on, if any, takes the whole blow within
-   * `DEFENSE_RANGE_SQUARED`; every other defending monster on the ground within
+   * {@link EYE_RA_FOE_SQUARED}; every other defending monster on the ground within
    * {@link EYE_RA_DEFENDER_RADIUS} a share falling to nothing at the edge; and
    * the yard's champion (not Krallen, `CHAMPIONCAGE.isBasicGuardian`) within
    * {@link EYE_RA_GUARDIAN_RADIUS} alike, flying or not. All measured on
@@ -5607,7 +5620,7 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
     const foe = creep.targetCreep >= 0 ? byCreepId.get(creep.targetCreep) : undefined;
     if (foe && foe.friendly && foe.hp > 0 && !foe.gone) {
       const squared = screenPxCreepsSquared(creep, foe);
-      const hit = squared < CLOSE_FIGHT_SQUARED && damageCreep(foe, creep.damage, null, creep) > 0;
+      const hit = squared < EYE_RA_FOE_SQUARED && damageCreep(foe, creep.damage, null, creep) > 0;
       if (hit) hurt += 1;
     }
     const monsterReach = EYE_RA_DEFENDER_RADIUS * EYE_RA_DEFENDER_RADIUS;
@@ -5860,9 +5873,10 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
 
   /**
    * One tick of a fight between two creeps: a swing inside the reach, else a
-   * step straight at the foe. `DEFENSE_RANGE_SQUARED` is 2,500, measured on
-   * screen like the range `canShootCreep` also accepts (`CreepBase.as:1543`,
-   * `:723-727`).
+   * step straight at the foe. The reach is never under 2,500 (50 px),
+   * measured on screen like the range `canShootCreep` also accepts
+   * (`CreepBase.as:1543`, `:723-727`): the owner's defender rule of 29 Sep
+   * (fidelity note 9); Flash's `DEFENSE_RANGE_SQUARED` is 900 (`:37`).
    */
   /**
    * `canShootCreep` for an attacker turned on a defender: a monster
@@ -6281,9 +6295,9 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
     if (!creep.friendly) {
       for (const building of yard.buildings) {
         if (building.hp <= 0 || UNTARGETABLE_TYPES.includes(building.type)) continue;
-        const squared = Math.trunc(screenPxToCornerSquared(creep.ix, creep.iy, building));
-        if (squared >= radius * radius) continue;
-        const dealt = linearAreaDamage(creep.damage, radius, inner, Math.sqrt(squared));
+        const dist = screenPxBlastDistance(creep.ix, creep.iy, building, radius);
+        if (dist === undefined) continue;
+        const dealt = linearAreaDamage(creep.damage, radius, inner, dist);
         if (dealt !== undefined) damageBuilding(building, dealt, creep, 1);
       }
     }
@@ -6919,14 +6933,24 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
     };
   };
 
-  /** The targets it holds that it may still shoot: alive, hittable and in range. */
+  /**
+   * The targets it holds that it may still shoot: alive, hittable and in
+   * range of the middle of its footprint, where it found them. A tower that
+   * holds from its anchor ({@link TOWER_HOLDS_FROM_ANCHOR}) also needs them in
+   * range of its anchor, as `targetInRange` measures (`BTOWER.as:234-249`,
+   * beta 9): a creep in front of it, found from the middle, is let go some 35
+   * px sooner than one behind it.
+   */
   const liveTargets = (tower: Tower, scan: TowerScan): Creep[] => {
     const live: Creep[] = [];
+    const building = tower.building;
+    const fromAnchor = TOWER_HOLDS_FROM_ANCHOR.has(building.type);
     for (const id of tower.targets) {
       const creep = byCreepId.get(id);
       if (!creep || creep.hp <= 0 || !creep.targetable) continue;
       if (!canHit(scan.flags, creep.flags)) continue;
-      if (yardToCentreSquared(creep.x, creep.y, tower.building) >= scan.reach) continue;
+      if (yardToCentreSquared(creep.x, creep.y, building) >= scan.reach) continue;
+      if (fromAnchor && !towerHoldsFromAnchor(creep, building, tower.range)) continue;
       live.push(creep);
     }
     return live;
