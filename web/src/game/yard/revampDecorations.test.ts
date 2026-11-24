@@ -29,7 +29,14 @@ const webpSize = (url: URL): [number, number] => {
 const onDisk = (url: string): URL => new URL(url.slice("/assets/".length), ASSETS);
 
 /** Where a picture's bottom edge stands below the origin, by footprint: 3/4 of it, as Flash's decorations. */
-const BOTTOM: Readonly<Record<number, number>> = { 30: 22, 40: 30, 70: 52 };
+const BOTTOM: Readonly<Record<number, number>> = { 30: 22, 40: 30 };
+
+/**
+ * The wonders (size 70) are cut to their square base, which is centred on the footprint's centre (35 below the
+ * origin) as the Eiffel Tower's is, so the base's front corner (the picture's bottom) stands a quarter of the
+ * base's width below that (owner, 24 Nov 2026: seated on the ground, and bigger). `width` is the @2x width.
+ */
+const bottomOf = (size: number, width: number): number => (size === 70 ? 35 + width / 8 : BOTTOM[size]!);
 
 /** The Cambodian Flag stands on Flash's own flagpole and shadow (both looks), as every Flash flag does. */
 const FLAG = 207;
@@ -85,7 +92,7 @@ describe("this project's own decorations (owner, 10 Nov 2026: the six autumn one
       expect(isDecoration(type), `${type}`).toBe(true);
       expect(kindOf(type), `${type}`).toBe("decoration");
       expect(rowOf(type)?.[3], `${type} in the Decorations tab`).toBe(4);
-      expect(size === 20 ? type === FLAG : size in BOTTOM, `${type} footprint ${size}`).toBe(true);
+      expect(size === 20 ? type === FLAG : size in BOTTOM || size === 70, `${type} footprint ${size}`).toBe(true);
       expect(footprintOf(type)).toEqual([size, size]);
       expect(sold.has(type), `${type} sold`).toBe(true);
     }
@@ -115,7 +122,9 @@ describe("this project's own decorations (owner, 10 Nov 2026: the six autumn one
         // Centred on the origin, its bottom 3/4 of the footprint down, like Flash's.
         const size = footprintOf(type)[0];
         expect(Math.abs(art!.top.x + width / 4)).toBeLessThanOrEqual(1);
-        expect(art!.top.y + height / 2, `${type} bottom`).toBe(BOTTOM[size]);
+        expect(Math.abs(art!.top.y + height / 2 - bottomOf(size, width)), `${type} bottom`).toBeLessThanOrEqual(1);
+        // A wonder's base fits its footprint's diamond (2 x 70 px wide at 1x).
+        if (size === 70) expect(width / 2, `${type} fits`).toBeLessThanOrEqual(2 * size);
       }
     });
   });
@@ -145,7 +154,9 @@ describe("this project's own decorations (owner, 10 Nov 2026: the six autumn one
         // The same bottom line as the Classic picture, centred on the origin: it stands on the same spot.
         const size = footprintOf(type)[0];
         expect(Math.abs(art!.top.x + width / 4), `${type} centred`).toBeLessThanOrEqual(1);
-        expect(art!.top.y + height / 2, `${type} bottom`).toBe(BOTTOM[size]);
+        expect(Math.abs(art!.top.y + height / 2 - bottomOf(size, width)), `${type} bottom`).toBeLessThanOrEqual(1);
+        // A wonder's base fits its footprint's diamond (2 x 70 px wide at 1x).
+        if (size === 70) expect(width / 2, `${type} fits`).toBeLessThanOrEqual(2 * size);
       }
     });
 
