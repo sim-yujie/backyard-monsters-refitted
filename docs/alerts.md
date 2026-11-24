@@ -87,7 +87,9 @@ Two exceptions, both the owner's choice:
 
 Because that is player-written text and names, the Privacy Policy lists
 Telegram among the outside services and says what it sees
-(`web/privacy.html`, section 3). Anything else new must follow the no-text
+(`web/privacy.html`, section 3; earlier notes also name
+`launch/legal/privacy-policy.md` as the info site's copy, which is not in
+this repository: if it still exists, it needs the same change). Anything else new must follow the no-text
 rule; more player text in Telegram needs the owner's say and a policy update.
 
 ## How it works

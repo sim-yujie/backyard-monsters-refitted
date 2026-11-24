@@ -11,8 +11,8 @@ import { logger } from "../../utils/logger.js";
  * already open, which keep showing the lines until they join the room again.
  */
 
-/** Every world room's history list (`chat/chatHistory.ts`); the same pattern account deletion scans. */
-export const CHAT_HISTORY_KEYS = "history:*";
+/** Every world and country room's history list (`chat/chatHistory.ts`: `history:` + a `chat:` channel). */
+export const CHAT_HISTORY_KEYS = "history:chat:*";
 
 /** How far back a moderator's ban removes lines: the last hour. */
 export const REMOVE_LINES_MS = 60 * 60 * 1000;

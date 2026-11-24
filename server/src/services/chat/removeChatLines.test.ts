@@ -42,7 +42,7 @@ describe("removing a banned player's recent chat lines", () => {
         "history:chat:mr2-global": [line(9, NOW - 10), line(4, NOW - 5), line(9, NOW - 7_200_000, "old"), line(9, NOW - 20)],
         "history:chat:country:ph": [line(9, NOW - 1000), line(9, NOW - 1000)],
       },
-      { "history:not-a-list": "x" },
+      { "history:chat:not-a-list": "x", "history:other": "x" },
     );
     expect(await removeRecentChatLines(redis, 9, since)).toBe(4);
     expect(lists["history:chat:mr2-global"]).toEqual([line(4, NOW - 5), line(9, NOW - 7_200_000, "old")]);
