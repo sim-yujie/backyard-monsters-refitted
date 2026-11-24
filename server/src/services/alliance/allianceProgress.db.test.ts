@@ -94,7 +94,7 @@ describe.skipIf(!enabled)("alliance progress", () => {
     expect(view.top_helpers[0]).toMatchObject({ userid: MEMBER, quests: 4 });
   });
 
-  test("a goal pays once when reached; members cannot set goals; the menu says who each tier is sized for", async () => {
+  test("a goal pays once when reached; members cannot set goals; the menu gives each tier's target and points", async () => {
     await expect(progress.setGoal(em(), MEMBER, "tribeDestroy", "easy", NOW)).rejects.toThrow("Leader and Officers");
     await progress.setGoal(em(), LEADER, "tribeDestroy", "easy", NOW);
     await expect(progress.setGoal(em(), LEADER, "tribeDestroy", "hard", NOW)).rejects.toThrow("already set");
@@ -110,11 +110,43 @@ describe.skipIf(!enabled)("alliance progress", () => {
     const today = await progress.progressView(em(), ALLIANCE, AllianceType.MIDAS, Math.floor(Date.now() / 1000));
     expect(today.today.points_today).toBe(15);
     const tribes = view.goal_menu.find((g) => g.kind === "tribeDestroy")!;
-    expect(tribes.tiers.map((t) => [t.target, t.points, t.players])).toEqual([
-      [200, 15, 3],
-      [550, 37, 8],
-      [1000, 70, 15],
+    expect(tribes.tiers.map((t) => [t.target, t.points])).toEqual([
+      [200, 15],
+      [2_750, 37],
+      [10_000, 70],
     ]);
+  });
+
+  test("a goal set before the 24 Nov raise keeps its stored target; only goals set after it use the new ones", async () => {
+    // Set this week at the 12 Nov Hard target (1,000 tribe yards), before the x10.
+    await sql(
+      `INSERT INTO bym.alliance_goal (alliance_id, week, kind, tier, target, points, set_by)
+       VALUES (?, ?::date, 'tribeDestroy', 'hard', 1000, 70, ?)`,
+      [ALLIANCE, progress.weekOf(NOW), LEADER]
+    );
+    await progress.addGoalProgress(em(), MEMBER, { tribeDestroy: 1_000 }, NOW);
+    expect(Number((await alliance()).points)).toBe(70);
+    const view = await progress.progressView(em(), ALLIANCE, AllianceType.MIDAS, NOW);
+    expect(view.goals[0]).toMatchObject({ kind: "tribeDestroy", tier: "hard", target: 1_000, progress: 1_000, done: true });
+    // The menu offers the new numbers for the next one.
+    const tribes = view.goal_menu.find((g) => g.kind === "tribeDestroy")!;
+    expect(tribes.tiers.find((t) => t.tier === "hard")!.target).toBe(10_000);
+    await progress.setGoal(em(), LEADER, "loot", "hard", NOW);
+    const [loot] = await sql<{ target: string }>(`SELECT target FROM bym.alliance_goal WHERE alliance_id = ? AND kind = 'loot'`, [ALLIANCE]);
+    expect(Number(loot!.target)).toBe(22_500_000_000);
+  });
+
+  test("one tribe yard on a Hard goal (10,000) still counts the member as helping", async () => {
+    await progress.setGoal(em(), LEADER, "tribeDestroy", "hard", NOW);
+    await progress.addGoalProgress(em(), MEMBER, { tribeDestroy: 1 }, NOW);
+    const view = await progress.progressView(em(), ALLIANCE, AllianceType.MIDAS, NOW);
+    expect(view.today.contributed).toBe(1);
+    expect(view.today.helped_ids).toEqual([MEMBER]);
+    expect(view.top_helpers[0]).toMatchObject({ userid: MEMBER, goal_share: 0 });
+    // Shares are per million of a goal: half the 10,000 is 50% of a goal.
+    await progress.addGoalProgress(em(), MEMBER, { tribeDestroy: 4_999 }, NOW);
+    const half = await progress.progressView(em(), ALLIANCE, AllianceType.MIDAS, NOW);
+    expect(half.top_helpers[0]).toMatchObject({ userid: MEMBER, goal_share: 50 });
   });
 
   test("an old Hatch monsters goal (off the menu since 12 Nov) is ignored: cannot be set, gains nothing, not shown, takes no slot", async () => {
@@ -314,7 +346,7 @@ describe.skipIf(!enabled)("alliance progress", () => {
     await outposts(90);
     expect(await progress.heldOutposts(em(), ALLIANCE)).toBe(90);
     await expect(progress.setGoal(em(), LEADER, "hold", "easy", NOW)).rejects.toThrow("already holds 90 outposts");
-    // Medium (240) is still to reach: allowed.
+    // Medium (1,200 since 24 Nov) is still to reach: allowed.
     await progress.setGoal(em(), LEADER, "hold", "medium", NOW);
     // Removed and set again, it still cannot drop to a target already met.
     const [goal] = await sql<{ id: number }>(`SELECT id FROM bym.alliance_goal WHERE alliance_id = ? AND kind = 'hold'`, [

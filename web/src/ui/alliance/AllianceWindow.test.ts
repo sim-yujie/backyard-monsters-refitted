@@ -691,9 +691,9 @@ describe("AllianceWindow: my alliance", () => {
       { id: 10, kind: "attackWin", name: "Win attacks on players", tier: "easy", target: 300, progress: 300, points: 15, done: true, removable: false },
     ] as const;
     const tiers = [
-      { tier: "easy", target: 450_000_000, points: 15, players: 3 },
-      { tier: "medium", target: 1_200_000_000, points: 37, players: 8 },
-      { tier: "hard", target: 2_250_000_000, points: 70, players: 15 },
+      { tier: "easy", target: 450_000_000, points: 15 },
+      { tier: "medium", target: 1_200_000_000, points: 37 },
+      { tier: "hard", target: 2_250_000_000, points: 70 },
     ] as const;
     const menu = [
       { kind: "loot", name: "Loot resources", only: null, used: true, tiers },
@@ -782,7 +782,8 @@ describe("AllianceWindow: my alliance", () => {
       expect(harvest.map((b) => b.textContent)).toEqual(["450M★15", "1.2B★37", "2.25B★70"]);
       expect(harvest[1]!.getAttribute("aria-label")).toBe("Harvest resources, Medium 1,200,000,000, 37 points");
       const cols = [...document.querySelectorAll(".goal-picker__col")].map((c) => c.textContent);
-      expect(cols).toEqual(["Easy~3", "Medium~8", "Hard~15"]);
+      // Only the tier word (owner, 25 Nov 2026: no player count).
+      expect(cols).toEqual(["Easy", "Medium", "Hard"]);
       document.querySelector<HTMLButtonElement>(".goal-picker__back")!.click();
       expect(document.querySelector(".goal-picker")).toBeNull();
       expect(document.querySelectorAll(".alliance-goal")).toHaveLength(4);
