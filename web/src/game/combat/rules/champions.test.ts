@@ -532,6 +532,34 @@ describe("Krallen (issue #222)", () => {
     expect(hasLootAura("G5", 5, false, false)).toBe(false);
   });
 
+  it("finishes a harvester she has drained before she picks another (`ChampionBase.as:704-716`, owner 24 Nov 2026)", () => {
+    // Two Twig Snappers holding little loot: her first hit drains either. In
+    // Flash the look a drained harvester sets off comes to nothing while she
+    // still holds it (`setWaypoints`), so she hits it until it falls.
+    const yard = yardOf({
+      "1": { id: 1, t: 1, l: 6, X: 100, Y: 100, st: 500 },
+      "2": { id: 2, t: 1, l: 6, X: 260, Y: 100, st: 500 },
+    });
+    const battle = createBattle(yard, { seed: 4 });
+    fling(battle, -60, {}, { t: 5, l: 5 });
+    const hpOf = (id: number) => yard.buildings.find((building) => building.id === id)!.hp;
+    // The health each building had when she turned away from it.
+    const left: Array<{ id: number; hp: number }> = [];
+    let on = -1;
+    for (let step = 0; step < 6000 && !battle.over(); step += 1) {
+      battle.step();
+      const krallen = battle.creeps().find((creep) => creep.monsterId === "G5");
+      if (!krallen || krallen.targetBuilding === on) continue;
+      if (on >= 0) left.push({ id: on, hp: hpOf(on) });
+      on = krallen.targetBuilding;
+    }
+    expect(left.length).toBeGreaterThan(0);
+    expect(yard.buildings.find((building) => building.id === left[0]!.id)!.looted).toBe(true);
+    // She left each harvester only once it had fallen, and felled both.
+    expect(left.every((one) => one.hp === 0)).toBe(true);
+    expect(yard.buildings.every((building) => building.hp === 0)).toBe(true);
+  });
+
   it("gives the monsters attacking her yard nothing while she defends it", () => {
     expect(hasLootAura("G5", 5, true, true)).toBe(false);
     expect(hasLootAura("G5", 5, false, true)).toBe(true);
