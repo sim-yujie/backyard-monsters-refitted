@@ -261,10 +261,11 @@
   overflow-y: auto;
 }
 
-/* A phone on its side: the note is one line, the heading then each row
-   beside it, sliding sideways when they do not all fit (neon, round 1), so
-   the weapons and the monsters keep the height. */
-@media (max-height: 480px) {
+/* A short screen (a phone on its side, an iPad on its side with Safari's
+   bars): the note is one line, the heading then each row beside it, sliding
+   sideways when they do not all fit (neon, round 1), so the weapons and the
+   monsters keep the height (layout check: 120 px of the list). */
+@media (max-height: 620px) {
   .smart-move-note {
     flex-direction: row;
     align-items: center;
@@ -293,11 +294,18 @@
     mask-image: linear-gradient(to right, #000 calc(100% - 20px), transparent);
   }
 
+  .smart-move-note :is(.repeat-prompt__short, .repeat-prompt__room-yard) {
+    flex: none;
+    min-height: 32px;
+  }
+
   /* Each yard and its free room a group of its own, a line between them. */
   .smart-move-note .repeat-prompt__room-yard + .repeat-prompt__room-yard {
     border-left: 1px solid var(--colour-border-subtle);
   }
+}
 
+@media (max-height: 480px) {
   /* The three Catapult shots on one row over the monsters' height, so none
      hides under the buttons while the note takes its line (neon, round 2). */
   .attack-window:has(.smart-move-note) .attack-window__grid.attack-window__weapons {
@@ -308,10 +316,5 @@
   .smart-move .attack-window__body--more-below {
     -webkit-mask-image: linear-gradient(to bottom, #000 calc(100% - 14px), transparent);
     mask-image: linear-gradient(to bottom, #000 calc(100% - 14px), transparent);
-  }
-
-  .smart-move-note :is(.repeat-prompt__short, .repeat-prompt__room-yard) {
-    flex: none;
-    min-height: 32px;
-  }
+  }}
 }
