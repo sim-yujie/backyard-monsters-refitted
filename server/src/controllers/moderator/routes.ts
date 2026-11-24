@@ -7,6 +7,7 @@ import { apiVersion } from "../../middleware/apiVersioning.js";
 import type { ModerationEffects } from "../../services/admin/moderation.js";
 import { alertModStep, type ModStepAlert } from "../../services/alerts/moderationAlerts.js";
 import { banAsModerator, MOD_BAN_DAYS, modStepAlertOf, parseModBan, type RemoveLines } from "../../services/moderator/modBan.js";
+import { parseRemoveLines, removeAsModerator, type RemoveLine } from "../../services/moderator/modLines.js";
 import {
   actAsModerator,
   countOpenReports,
@@ -37,6 +38,9 @@ import { logger } from "../../utils/logger.js";
  *   nothing open against the player. `removeLines: true` also takes their
  *   lines of the last hour out of the chat rooms. Answers
  *   `{ until, closed: { reports, filterLines }, removedLines }`.
+ * - `POST /api/:v/mod/players/:id/lines/remove` `{ lines: [{ channel, ts, lineId? }] }`:
+ *   the Reports window's Remove (chat filter, 24 Nov 2026; `modLines.ts`):
+ *   the lines leave every chat box and the rooms' history. Answers `{ removed }`.
  *
  * Every moderator's ban and mute is said on Telegram (`alertModStep`); an
  * admin's own steps here are not (the owner sees those on the dashboard).
@@ -55,6 +59,8 @@ export interface ModReportsRouteDeps {
   readonly effects: ModerationEffects;
   /** Takes a banned player's recent lines out of the chat rooms (`chat/removeChatLines.ts`). */
   readonly removeLines?: RemoveLines;
+  /** Takes one chat line out of its room and every open chat box (`chat/removeChatLines.ts` `removeChatLine`). */
+  readonly removeLine?: RemoveLine;
   /** Says a moderator's ban or mute on Telegram; tests pass a recorder. */
   readonly alert?: (step: ModStepAlert) => Promise<unknown>;
   readonly now?: () => Date;
@@ -181,6 +187,17 @@ export const mountModReportsRoutes = (router: Router, deps: ModReportsRouteDeps)
       return ok(ctx, { closed: done.closed, player: done.player });
     }
     refuse(ctx, refusalStatus(done.outcome), done.outcome);
+  });
+
+  router.post(`${base}/players/:id/lines/remove`, apiVersion, ...deps.signedIn, modOnly, async (ctx) => {
+    const id = intOf(ctx.params.id);
+    if (id === undefined || id < 1) return refuse(ctx, Status.NOT_FOUND, "noPlayer");
+    const parsed = parseRemoveLines(ctx.request.body);
+    if (!parsed.ok) return refuse(ctx, Status.BAD_REQUEST, "badRequest", parsed.message);
+    const removeLine = deps.removeLine ?? (async () => 0);
+    const done = await removeAsModerator(deps.em(), ctx.authUser.userid, id, parsed.value, removeLine);
+    if (done.outcome !== "done") return refuse(ctx, refusalStatus(done.outcome), done.outcome);
+    ok(ctx, { removed: done.removed });
   });
 
   router.post(`${base}/players/:id/ban`, apiVersion, ...deps.signedIn, modOnly, async (ctx) => {

@@ -12,9 +12,12 @@ import { Migration } from "@mikro-orm/migrations";
  *   `watched`, `hidden`, comma separated; null for a word-filter flag),
  *   `hidden` (nobody but the sender saw the line), `line_id` (the chat
  *   line's id, for Remove), `yard_age_h` (a new player's main yard age in
- *   hours when they said it; null for older players) and `removed_at` /
- *   `removed_by` (a moderator took the line out of chat). A flag the filter
+ *   hours when they said it; null for older players). A flag the filter
  *   alone raised has `severity` `filter`.
+ * - `bym.chat_line_removal`: a chat line a moderator removed (the Reports
+ *   window's Remove), named by speaker, room and stamp like a report, with
+ *   who removed it and when. The line leaves every chat box and the room's
+ *   history; `bym.chat_log`, flags and reports keep it as evidence.
  *
  * Only adds.
  */
@@ -41,12 +44,23 @@ export class AddChatFilter extends Migration {
     this.addSql(`ALTER TABLE "bym"."chat_flag" ADD COLUMN IF NOT EXISTS "hidden" boolean NOT NULL DEFAULT false;`);
     this.addSql(`ALTER TABLE "bym"."chat_flag" ADD COLUMN IF NOT EXISTS "line_id" varchar(24) NULL;`);
     this.addSql(`ALTER TABLE "bym"."chat_flag" ADD COLUMN IF NOT EXISTS "yard_age_h" integer NULL;`);
-    this.addSql(`ALTER TABLE "bym"."chat_flag" ADD COLUMN IF NOT EXISTS "removed_at" timestamptz NULL;`);
-    this.addSql(`ALTER TABLE "bym"."chat_flag" ADD COLUMN IF NOT EXISTS "removed_by" integer NULL;`);
+    this.addSql(`
+      CREATE TABLE IF NOT EXISTS "bym"."chat_line_removal" (
+        "id"         bigserial    PRIMARY KEY,
+        "userid"     integer      NOT NULL,
+        "channel"    varchar(64)  NOT NULL,
+        "message_ts" bigint       NOT NULL,
+        "line_id"    varchar(24)  NULL,
+        "removed_by" integer      NOT NULL,
+        "created_at" timestamptz  NOT NULL DEFAULT now(),
+        CONSTRAINT "chat_line_removal_once" UNIQUE ("userid", "channel", "message_ts")
+      );
+    `);
   }
 
   async down(): Promise<void> {
-    for (const column of ["tags", "hidden", "line_id", "yard_age_h", "removed_at", "removed_by"]) {
+    this.addSql(`DROP TABLE IF EXISTS "bym"."chat_line_removal";`);
+    for (const column of ["tags", "hidden", "line_id", "yard_age_h"]) {
       this.addSql(`ALTER TABLE "bym"."chat_flag" DROP COLUMN IF EXISTS "${column}";`);
     }
     this.addSql(`DROP TABLE IF EXISTS "bym"."chat_watch_word";`);

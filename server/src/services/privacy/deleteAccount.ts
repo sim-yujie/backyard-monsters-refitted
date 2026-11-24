@@ -189,6 +189,7 @@ const deleteSteps = (u: number): DeleteStep[] => [
   { label: "alliance chat messages", table: "alliance_message", where: `user_id = ?`, params: [u] },
   { label: "chat log lines", table: "chat_log", where: `userid = ?`, params: [u] },
   { label: "automatic chat flags", table: "chat_flag", where: `userid = ?`, params: [u] },
+  { label: "chat lines moderators removed", table: "chat_line_removal", where: `userid = ?`, params: [u] },
   { label: "alliance invites", table: "alliance_invite", where: `user_id = ?`, params: [u] },
   { label: "notifications", table: "notification", where: `userid = ?`, params: [u] },
   { label: "defence replays of attacks on them", table: "defence_replay", where: `defender_userid = ?`, params: [u] },

@@ -27,6 +27,14 @@ export interface FlagLine {
   at: string;
   /** When it was said (ms), as chat stamped it: the same line in a chat report has the same stamp. */
   ts: number;
+  /** The chat filter's reasons (`newLink`, `invite`, `watched`, `hidden`); empty for a word-filter flag. */
+  tags: string[];
+  /** Nobody but the speaker saw the line (a new player's watched word). */
+  hidden: boolean;
+  /** The chat line's id, for Remove; null for lines from before ids. */
+  lineId: string | null;
+  /** A new player's main yard age in hours when they said it; null for older players. */
+  yardAgeHours: number | null;
 }
 
 /** A flagged player: their open flags, counted, with the latest few lines. */
@@ -78,7 +86,24 @@ interface FlaggedRow {
   slurs: string | number;
   last_id: string | number;
   latest_at: Date | string;
-  lines: { id: string | number; channel: string; message: string; shown: string; words: string; severity: FlagSeverity; rule: FlagRule; created_at: string; message_ts: string | number }[] | string | null;
+  lines:
+    | {
+        id: string | number;
+        channel: string;
+        message: string;
+        shown: string;
+        words: string;
+        severity: FlagSeverity;
+        rule: FlagRule;
+        created_at: string;
+        message_ts: string | number;
+        tags?: string | null;
+        hidden?: boolean | null;
+        line_id?: string | null;
+        yard_age_h?: number | string | null;
+      }[]
+    | string
+    | null;
 }
 
 /**
@@ -104,7 +129,8 @@ export const listChatFlags = async (
      )
      SELECT o.userid, u.username, u.banned, u.mute_until, o.count, o.slurs, o.last_id, o.latest_at,
             (SELECT json_agg(x ORDER BY x.id DESC) FROM (
-               SELECT l.id, l.channel, l.message, l.shown, l.words, l.severity, l.rule, l.created_at, l.message_ts
+               SELECT l.id, l.channel, l.message, l.shown, l.words, l.severity, l.rule, l.created_at, l.message_ts,
+                      l.tags, l.hidden, l.line_id, l.yard_age_h
                  FROM bym.chat_flag l
                 WHERE l.userid = o.userid AND l.dismissed_at IS NULL
                 ORDER BY l.id DESC LIMIT ${shown}
@@ -140,6 +166,10 @@ export const listChatFlags = async (
           rule: line.rule === "disguised" ? "disguised" : "word",
           at: iso(line.created_at),
           ts: Number(line.message_ts),
+          tags: line.tags ? line.tags.split(",") : [],
+          hidden: line.hidden === true,
+          lineId: line.line_id ?? null,
+          yardAgeHours: line.yard_age_h === null || line.yard_age_h === undefined ? null : Number(line.yard_age_h),
         })),
       };
     }),

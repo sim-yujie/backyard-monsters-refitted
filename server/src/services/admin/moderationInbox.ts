@@ -594,7 +594,8 @@ const CLOSED_DECISIONS = `
     SELECT fl.userid, fl.dismissed_at, min(fl.dismissed_by) AS dismissed_by,
            json_agg(json_build_object('id', fl.id, 'channel', fl.channel, 'message', fl.message, 'shown', fl.shown,
              'words', fl.words, 'severity', fl.severity, 'rule', fl.rule, 'created_at', fl.created_at,
-             'message_ts', fl.message_ts) ORDER BY fl.id) AS flag_lines
+             'message_ts', fl.message_ts, 'tags', fl.tags, 'hidden', fl.hidden, 'line_id', fl.line_id,
+             'yard_age_h', fl.yard_age_h) ORDER BY fl.id) AS flag_lines
       FROM bym.chat_flag fl WHERE fl.dismissed_at IS NOT NULL AND fl.dismissed_at >= ?
      GROUP BY fl.userid, fl.dismissed_at
   )
@@ -616,6 +617,10 @@ const asFlagLines = (raw: unknown): FlagLine[] =>
       rule: string;
       created_at: string;
       message_ts: string | number;
+      tags?: string | null;
+      hidden?: boolean | null;
+      line_id?: string | null;
+      yard_age_h?: number | string | null;
     }[]
   ).map((line) => ({
     id: Number(line.id),
@@ -627,6 +632,10 @@ const asFlagLines = (raw: unknown): FlagLine[] =>
     rule: line.rule === "disguised" ? "disguised" : "word",
     at: iso(line.created_at),
     ts: Number(line.message_ts),
+    tags: line.tags ? line.tags.split(",") : [],
+    hidden: line.hidden === true,
+    lineId: line.line_id ?? null,
+    yardAgeHours: line.yard_age_h === null || line.yard_age_h === undefined ? null : Number(line.yard_age_h),
   }));
 
 const asStamps = (raw: unknown): number[] => (parsed(raw) as (string | number)[]).map(Number);
