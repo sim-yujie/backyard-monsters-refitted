@@ -19,7 +19,7 @@ export interface ChatFilterOptions {
 export const CHAT_FILTER_TEXT = {
   live: "Live · changes apply within 1 min",
   alwaysTitle: "Always watched",
-  alwaysLede: "A new player's line with one of these is hidden from everyone else; anyone else's posts and is flagged to moderators.",
+  alwaysLede: "A new player's line (yard under 3 days) with one of these is hidden from everyone else; older players' lines still post. Both are flagged to moderators.",
   nearTitle: "Only next to these words",
   nearLede: "“FB” alone is mostly nostalgia, so it only counts right beside a context word, either side.",
   nextTo: "next to",

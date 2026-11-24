@@ -20,6 +20,8 @@ export interface BanFields {
   /** What the moderator picked; the reason as typed (checked on send). */
   read(): ModBanBody;
   focus(): void;
+  /** Called with whether a reason is written, now and on every change (Confirm waits for one). */
+  onReason(listener: (written: boolean) => void): void;
 }
 
 /** The ban's lengths, reason and remove-lines box, in the Reports window's look. */
@@ -68,6 +70,10 @@ export const banFields = (name: string): BanFields => {
     element: form,
     read: () => ({ days, reason: reason.value.trim(), removeLines: box.checked }),
     focus: () => reason.focus(),
+    onReason: (listener) => {
+      listener(reason.value.trim().length > 0);
+      reason.addEventListener("input", () => listener(reason.value.trim().length > 0));
+    },
   };
 };
 
@@ -117,10 +123,11 @@ export class BanSheet {
     problem.setAttribute("role", "alert");
     const buttons = make("div", "mod-reports__confirm-buttons");
     const cancel = make("button", "btn btn--outline mod-reports__btn");
+    cancel.dataset["cancel"] = "";
     cancel.type = "button";
     cancel.append(make("span", "mod-reports__btn-word", T.cancel));
     cancel.addEventListener("click", () => this.close());
-    const confirm = make("button", "btn btn--danger mod-reports__btn");
+    const confirm = make("button", "btn btn--primary mod-reports__btn mod-reports__danger");
     confirm.type = "button";
     confirm.dataset["confirm"] = "";
     confirm.append(make("span", "mod-reports__btn-word", T.confirm.ban));
@@ -146,6 +153,7 @@ export class BanSheet {
         problem.textContent = done.text;
       });
     });
+    fields.onReason((written) => (confirm.disabled = !written));
     buttons.append(cancel, confirm);
     const foot = make("div", "mod-reports__actions mod-reports__confirm-foot");
     foot.append(problem, buttons);

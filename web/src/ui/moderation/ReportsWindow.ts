@@ -414,7 +414,7 @@ export class ReportsWindow {
     top.append(make("strong", "", row.username ?? `#${row.userid}`), since);
     const tags = make("span", "mod-reports__tags");
     if (typeof row.newHours === "number") {
-      const young = badge(`${row.newHours}h`, "red", "time");
+      const young = badge(T.newBadge(row.newHours), "red", "time");
       young.title = T.newBadgeTitle(row.newHours);
       tags.append(young);
     }
@@ -559,7 +559,9 @@ export class ReportsWindow {
       const gone = make("span", "mod-reports__removed");
       gone.append(icon("lost", true), `${T.removed(line.removed.byName)} · ${clock(line.removed.at)}`);
       top.append(gone);
-    } else if (!line.filter?.hidden) {
+    } else if (line.filter?.hidden) {
+      top.append(make("span", "mod-reports__removed", T.notInChat));
+    } else {
       top.append(this.removeButton(line, player));
     }
     const quote = make("blockquote", "");
@@ -617,11 +619,12 @@ export class ReportsWindow {
   private removeButton(line: ModLine, player: ModPlayer): HTMLElement {
     const key = `${line.channel}|${line.ts}`;
     const armed = this.armedRemove === key;
-    const button = make("button", `btn btn--danger mod-reports__remove${armed ? " is-armed" : ""}`);
+    const count = 1 + (line.copies?.length ?? 0);
+    const button = make("button", `btn btn--primary mod-reports__danger mod-reports__remove${armed ? " is-armed" : ""}`);
     button.type = "button";
     button.dataset["remove"] = key;
     button.title = T.removeTitle;
-    button.append(make("span", "mod-reports__btn-word", armed ? T.removeAgain : T.remove));
+    button.append(make("span", "mod-reports__btn-word", armed ? T.removeAgain : T.remove(count)));
     button.addEventListener("click", () => {
       if (this.armedRemove !== key) {
         this.armedRemove = key;
@@ -719,7 +722,7 @@ export class ReportsWindow {
     }
     if (!player.banned) {
       const banButton = plate(T.actions.ban, "primary", start("ban"));
-      banButton.classList.replace("btn--primary", "btn--danger");
+      banButton.classList.add("mod-reports__danger");
       banButton.dataset["act"] = "ban";
       buttons.append(banButton);
     }
@@ -786,7 +789,12 @@ export class ReportsWindow {
     });
     cancel.dataset["cancel"] = "";
     const confirm = plate(T.confirm[kind], "primary", () => void (kind === "ban" ? this.confirmBan([cancel, confirm]) : this.confirm(kind, [cancel, confirm])));
-    if (kind === "ban") confirm.classList.replace("btn--primary", "btn--danger");
+    if (kind === "ban") {
+      confirm.classList.add("mod-reports__danger");
+      // Disabled until the reason (which the player sees) is written.
+      this.banForm?.onReason((written) => (confirm.disabled = !written));
+      confirm.disabled = true;
+    }
     confirm.dataset["confirm"] = "";
     buttons.append(cancel, confirm);
     if (open) foot.append(make("p", "mod-reports__scope", scopeWords(open)));

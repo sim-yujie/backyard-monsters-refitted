@@ -312,6 +312,13 @@ const spammer = (over: Partial<ModPlayer> = {}): ModPlayer => ({
   ...over,
 });
 
+/** Types into the confirm step's reason box, as a player would (an input event). */
+const write = (text: string) => {
+  const box = q<HTMLTextAreaElement>(".mod-reports__confirm textarea");
+  box.value = text;
+  box.dispatchEvent(new Event("input"));
+};
+
 describe("ReportsWindow: the chat filter's lines", () => {
   const spamApi = (over: Partial<ModReportsApi> = {}) =>
     fakeApi({ list: vi.fn(() => Promise.resolve(list([spammer().open!]))), player: vi.fn(() => Promise.resolve(spammer())), ...over });
@@ -345,9 +352,11 @@ describe("ReportsWindow: the chat filter's lines", () => {
   it("Remove takes two taps and removes the line with its repeats", async () => {
     const api = spamApi();
     await open(api);
+    expect(q(".mod-reports__remove").textContent).toBe("Remove 2 lines");
     button(".mod-reports__remove").click();
     expect(api.removeLines).not.toHaveBeenCalled();
     expect(q(".mod-reports__remove").textContent).toBe("Tap again");
+    expect(document.querySelectorAll(".mod-reports__line")[1]!.textContent).toContain("Not in chat");
     button(".mod-reports__remove").click();
     await settle();
     expect(api.removeLines).toHaveBeenCalledWith(610, [
@@ -363,12 +372,11 @@ describe("ReportsWindow: the chat filter's lines", () => {
     await open(api, onChanged);
     button('[data-act="ban"]').click();
     expect([...document.querySelectorAll<HTMLButtonElement>(".mod-reports__lengths button")].map((b) => b.textContent)).toEqual(["1 day", "3 days", "7 days"]);
-    button("[data-confirm]").click();
-    await settle();
-    expect(api.ban).not.toHaveBeenCalled();
-    expect(q(".mod-reports__problem").textContent).toBe("Write a reason: the player sees it.");
+    // Confirm waits for the reason the player sees.
+    expect(button("[data-confirm]").disabled).toBe(true);
     button('[data-days="3"]').click();
-    q<HTMLTextAreaElement>(".mod-reports__confirm textarea").value = "Advertising another server";
+    write("Advertising another server");
+    expect(button("[data-confirm]").disabled).toBe(false);
     button("[data-confirm]").click();
     await settle();
     expect(api.ban).toHaveBeenCalledWith(610, { days: 3, reason: "Advertising another server", removeLines: true });
@@ -380,7 +388,7 @@ describe("ReportsWindow: the chat filter's lines", () => {
     const api = spamApi({ ban: vi.fn(() => Promise.reject(new ApiError("That player is a moderator.", { status: 403, body: { reason: "moderator" } }))) });
     await open(api);
     button('[data-act="ban"]').click();
-    q<HTMLTextAreaElement>(".mod-reports__confirm textarea").value = "x";
+    write("x");
     q<HTMLInputElement>("[data-remove-lines]").checked = false;
     button("[data-confirm]").click();
     await settle();

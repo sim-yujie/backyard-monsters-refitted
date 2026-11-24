@@ -597,18 +597,22 @@ button.chat-line__name {
 :root[data-skin] .chat-box__player .btn.chat-box__ban {
   position: absolute;
   top: 2px;
-  right: 34px;
-  min-height: 30px;
-  min-width: 56px;
-  padding: 0 12px;
-  border: 2px solid #7a1611;
-  background: linear-gradient(#d9443b, #b3261e);
-  color: #fff;
+  right: 40px;
+  min-height: 32px;
+  min-width: 60px;
+  padding: 0 4px;
   font-size: var(--text-xs);
-  font-weight: 700;
-  text-shadow: 0 1px 0 rgb(0 0 0 / 40%);
   --skin-button-cap: 14px;
   --skin-button2-cap: 12px;
+}
+
+/* The game's plate turned red, as Reports' Ban (reports.css). */
+:root[data-skin="scrap"] .chat-box__player .btn.chat-box__ban {
+  filter: hue-rotate(-24deg) saturate(1.35) brightness(0.95);
+}
+
+:root[data-skin="flash"] .chat-box__player .btn.chat-box__ban {
+  filter: hue-rotate(-42deg) saturate(1.5) brightness(0.92);
 }
 
 .chat-box__player-close {
@@ -820,7 +824,8 @@ button.chat-line__name {
 
   :root[data-skin] .chat-box__player .btn.chat-box__ban {
     top: var(--space-2);
+    right: 52px;
     min-height: 44px;
-    min-width: 64px;
+    min-width: 68px;
   }
 }

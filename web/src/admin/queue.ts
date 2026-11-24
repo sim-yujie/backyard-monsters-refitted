@@ -44,7 +44,7 @@ import {
 } from "./evidence";
 import { ago, count, dateTime, plural } from "./format";
 import { icon } from "./icons";
-import { BAN_LENGTHS, DEFAULT_WARNING, NO_COPY_TITLE, disguisedChip, entryRow, markWords, roomLabel, severityChip } from "./moderation";
+import { BAN_LENGTHS, DEFAULT_WARNING, NO_COPY_TITLE, disguisedChip, entryRow, filterTagChips, markWords, roomLabel, severityChip } from "./moderation";
 import { errorWords } from "./shiny";
 import type { ViewParams } from "./views";
 
@@ -719,8 +719,9 @@ export class QueueView {
         "div",
         { class: "hrow q-tags" },
         line.reported ? h("span", { class: "badge blue" }, icon("flag", 13), "Player report") : null,
-        flag ? h("span", { class: "badge amber" }, icon("warn", 13), "Word filter") : null,
+        flag && flag.severity !== "filter" ? h("span", { class: "badge amber" }, icon("warn", 13), "Word filter") : null,
         flag ? severityChip(flag.severity) : null,
+        ...(flag ? filterTagChips(flag.tags, flag.words) : []),
         flag?.rule === "disguised" ? disguisedChip(flag.words) : null,
         // A reported line the chat server kept no copy of: its words come from
         // the reporter's game. A line the word filter also caught needs no chip,

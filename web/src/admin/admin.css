@@ -6149,11 +6149,38 @@ tbody th {
   display: grid;
   gap: 20px;
   grid-template-columns: minmax(0, 1fr);
-  max-width: 44rem;
+  align-items: start;
 }
 
 .watch-live {
   justify-self: start;
+}
+
+/* Both cards side by side on a computer (neon r1: one column left half the page empty). */
+@media (min-width: 1024px) {
+  .chat-filter {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .watch-live {
+    grid-column: 1 / -1;
+  }
+}
+
+@media (pointer: coarse) {
+  .watch-chip {
+    min-height: 44px;
+  }
+
+  .watch-chip__remove {
+    width: 44px;
+    height: 44px;
+  }
+
+  .watch-add--chip .field-input,
+  .watch-add--chip .button {
+    min-height: 44px;
+  }
 }
 
 .watch-card {

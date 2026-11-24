@@ -1019,21 +1019,66 @@
   }
 }
 
-/* Remove and Ban: crimson plates with white words in both looks (neon r2:
-   Modern's salmon read web-like beside Classic's crisp crimson). */
-:root[data-skin] .mod-reports-window .btn.btn--danger {
-  background: linear-gradient(#d9443b, #b3261e);
-  border: 2px solid #7a1611;
-  color: #fff;
-  font-weight: 700;
-  text-shadow: 0 1px 0 rgb(0 0 0 / 40%);
-  box-shadow: inset 0 1px 0 rgb(255 255 255 / 28%), 0 2px 3px rgb(0 0 0 / 30%);
+/* Remove and Ban: the game's own plate, turned red (neon r1: flat red
+   rectangles clashed with the riveted Modern plates and Classic's pills). The
+   hue turn keeps the plate's art, rivets and stroke; white words stay white. */
+:root[data-skin="scrap"] .mod-reports-window .btn.mod-reports__danger {
+  filter: hue-rotate(-24deg) saturate(1.35) brightness(0.95);
 }
 
-:root[data-skin] .mod-reports-window .btn.btn--danger:hover:not(:disabled) {
-  filter: brightness(1.08);
+:root[data-skin="flash"] .mod-reports-window .btn.mod-reports__danger {
+  filter: hue-rotate(-42deg) saturate(1.5) brightness(0.92);
 }
 
-:root[data-skin] .mod-reports-window .btn.btn--danger:disabled {
-  filter: grayscale(0.5) brightness(0.85);
+:root[data-skin] .mod-reports-window .btn.mod-reports__danger:disabled {
+  filter: grayscale(0.85) brightness(0.8);
+  cursor: not-allowed;
+}
+
+/* A removed line's marks would muddy the strike-through. */
+.mod-reports__line.is-removed mark {
+  background: transparent;
+  color: inherit;
+}
+
+/* Touch screens: every plate and box at least 44 px tall. */
+@media (pointer: coarse) {
+  :root[data-skin] .mod-reports-window .btn.mod-reports__remove,
+  :root[data-skin] .mod-reports-window .btn.mod-reports__btn {
+    min-height: 44px;
+  }
+}
+
+/* The ban's three lengths stay on one row in a narrow pane. */
+@container mod-reports-detail (width < 480px) {
+  .mod-reports__lengths.mod-reports__lengths--days {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .mod-reports__lengths--days .mod-reports__seg {
+    min-width: 0;
+  }
+}
+
+/* A short screen (a phone on its side): the plates stay pinned at the foot
+   while the player and the ban form scroll above them (neon r1: they had
+   scrolled off the screen). */
+@media (max-height: 500px) {
+  .mod-reports__detail > .mod-reports__actions,
+  .mod-ban-sheet .mod-reports__actions {
+    position: sticky;
+    bottom: 0;
+    z-index: 1;
+    background: var(--colour-surface-sunken);
+    box-shadow: 0 -6px 10px -6px rgb(0 0 0 / 45%);
+  }
+
+  .mod-reports__confirm textarea {
+    min-height: 44px;
+  }
+
+  .mod-reports__confirm > p,
+  .mod-reports__field {
+    margin-bottom: 6px;
+  }
 }

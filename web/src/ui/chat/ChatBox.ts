@@ -675,7 +675,7 @@ export class ChatBox {
     if (canBan) {
       const ban = document.createElement("button");
       ban.type = "button";
-      ban.className = "btn btn--danger chat-box__ban";
+      ban.className = "btn btn--primary chat-box__ban";
       ban.textContent = CHAT_STRIP_TEXT.ban;
       ban.title = `Ban ${line.name} (moderators)`;
       ban.setAttribute("aria-label", CHAT_STRIP_TEXT.ban);

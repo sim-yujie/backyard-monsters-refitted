@@ -805,7 +805,8 @@ export const moderatePlayer = (
  * `services/admin/chatWatchAdmin.ts`): lines the word filter caught, one row
  * per player, with the player's own words.
  */
-export type FlagSeverity = "slur" | "swear";
+/** `filter`: the chat filter alone flagged it (a link or a watched word); its `tags` say why. */
+export type FlagSeverity = "slur" | "swear" | "filter";
 
 /** One flagged line. */
 /** How a flagged word was written: as listed, or disguised. */
@@ -825,6 +826,10 @@ export interface FlagLine {
   at: string;
   /** When it was said (ms), as chat stamped it: a report of the same line has the same stamp. */
   ts: number;
+  /** The chat filter's reasons (`newLink`, `invite`, `watched`, `hidden`); empty or absent for a word-filter flag. */
+  tags?: string[];
+  /** Nobody but the player saw the line. */
+  hidden?: boolean;
 }
 
 /** A flagged player: open flags counted, newest lines first. */
