@@ -169,7 +169,7 @@ describe("the owner's first look", () => {
     expect(segs).toEqual(["All 3", "Player reports 2", "Auto-filter 1", "Closed 2"]);
     // A row counts each line once: 4 messages, 4 reports, 2 lines only the filter caught.
     const row = document.querySelector("#view-moderation a.q-row[data-player='42']")!;
-    expect(row.textContent).toContain("4 messages · 4 reports from 4 players · 2 word-filter catches");
+    expect(row.textContent).toContain("4 messages · 4 reports from 4 players · 2 filter catches");
     expect(row.textContent).toContain("Player reports");
     expect(row.textContent).toContain("Auto-filter");
   });

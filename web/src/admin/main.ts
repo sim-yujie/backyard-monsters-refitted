@@ -204,7 +204,7 @@ class Dashboard {
     say: (message) => this.say(message),
     onViewChange: () => undefined,
   });
-  /** The Moderation list: player reports and word-filter catches, one row per player. */
+  /** The Moderation list: player reports and filter catches, one row per player. */
   private readonly queue = new QueueView({
     say: (message) => this.say(message),
     onCount: (counts) => {

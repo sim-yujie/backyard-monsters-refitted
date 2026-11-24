@@ -3,7 +3,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { ApiError } from "@/api/http";
 import type { ModActBody, ModList, ModPlayer, ModQueueRow, ModReportsApi } from "@/api/modReports";
 import { ReportsWindow } from "./ReportsWindow";
-import { closesWords, muteLength, outcomeWords, roomLabel, rowWords, scopeWords } from "./reportsText";
+import { ago, closesWords, lastSeenWords, muteLength, outcomeWords, roomLabel, rowWords, scopeWords } from "./reportsText";
 
 /** The moderators' Reports window (owner, 12 Nov 2026, option B). */
 
@@ -406,5 +406,15 @@ describe("ReportsWindow: the chat filter's lines", () => {
     expect(q(".mod-reports__problem").hidden).toBe(false);
     expect(q(".mod-reports__problem").textContent).toBe("That player is a moderator.");
     expect(document.querySelector(".mod-reports__confirm")).not.toBeNull();
+  });
+});
+
+describe("last seen", () => {
+  it("reads right for just now and for a time ago", () => {
+    const now = T0;
+    expect(lastSeenWords(ago(now - 10_000, now))).toBe("last seen now");
+    expect(lastSeenWords(ago(now - 60_000, now))).toBe("last seen 1m ago");
+    expect(lastSeenWords(ago(now - 3 * 3_600_000, now))).toBe("last seen 3h ago");
+    expect(lastSeenWords(ago(now - 4 * 86_400_000, now))).toBe("last seen 4d ago");
   });
 });

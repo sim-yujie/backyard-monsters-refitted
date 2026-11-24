@@ -217,7 +217,7 @@ describe("the list", () => {
     const segs = [...document.querySelectorAll(".filter-grid .seg")].map((s) => s.textContent);
     expect(segs).toEqual(["All 1", "Player reports 1", "Auto-filter 0", "Closed 1"]);
     const row = document.querySelector("a.q-row[data-player='42']")!;
-    expect(row.textContent).toContain("3 messages · 4 reports from 3 players · 1 word-filter catch");
+    expect(row.textContent).toContain("3 messages · 4 reports from 3 players · 1 filter catch");
   });
 
   it("shows Closed decisions with their outcome and reason", async () => {
@@ -292,7 +292,7 @@ describe("a player's record", () => {
     await mount({ player: "42" });
     const bar = document.querySelectorAll(".action-bar");
     expect(bar).toHaveLength(1);
-    expect(bar[0]!.textContent).toContain("Applies to all 3 messages, closes 4 reports and 1 word-filter catch");
+    expect(bar[0]!.textContent).toContain("Applies to all 3 messages, closes 4 reports and 1 filter catch");
     expect([...bar[0]!.querySelectorAll("button")].map((b) => b.textContent)).toEqual(["Dismiss", "Warn", "Restrict chat", "Ban"]);
     expect(document.body.textContent).not.toMatch(/suggest/i);
     expect(document.querySelector(".action-buttons .primary")).toBeNull();
@@ -314,7 +314,7 @@ describe("a player's record", () => {
     expect(moves.at(-1)).toMatchObject({ player: 42, act: "warn" });
     const pane = document.querySelector<HTMLFormElement>("form.confirm-pane")!;
     expect(pane.querySelector("h3")?.textContent).toBe("Warn Maze?");
-    expect(pane.querySelector(".scope")?.textContent).toBe("Applies to all 3 messages, closes 4 reports and 1 word-filter catch");
+    expect(pane.querySelector(".scope")?.textContent).toBe("Applies to all 3 messages, closes 4 reports and 1 filter catch");
     pane.requestSubmit();
     await settle();
     expect(pane.querySelector(".form-error")?.textContent).toBe("Write a reason: the player sees it.");
@@ -324,7 +324,7 @@ describe("a player's record", () => {
     await settle();
     expect(acted!.body).toEqual({ action: "warn", reason: "Keep chat friendly", caseId: 7, reports: 4, flagsUpTo: 905 });
     expect(said).toContain("Maze warned");
-    expect(document.querySelector(".inbox-result")?.textContent).toContain("Closed 4 reports and 1 word-filter catch");
+    expect(document.querySelector(".inbox-result")?.textContent).toContain("Closed 4 reports and 1 filter catch");
     expect(document.querySelector(".action-bar")).toBeNull();
   });
 

@@ -34,6 +34,7 @@ import {
   plural,
   roomLabel,
   rowWords,
+  lastSeenWords,
   scopeWords,
   severityWords,
 } from "./reportsText";
@@ -501,7 +502,7 @@ export class ReportsWindow {
     const open = player.open;
     const summary = [
       open ? `${rowWords(open)} · waiting since ${dateTime(open.oldestAt)}` : T.noOpen,
-      player.lastSeenAt ? `last seen ${ago(player.lastSeenAt, now)} ago` : null,
+      player.lastSeenAt ? lastSeenWords(ago(player.lastSeenAt, now)) : null,
     ]
       .filter(Boolean)
       .join(" · ");

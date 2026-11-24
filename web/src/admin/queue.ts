@@ -676,7 +676,7 @@ export class QueueView {
       out.push(...lines.map((line) => this.lineBlock(line, o.userid)));
       const counted = countEvidence(lines);
       if (o.flags && row.filterOnlyLines > counted.filterOnly) {
-        out.push(h("p", { class: "note" }, `The newest ${plural(counted.filterOnly, "word-filter catch", "word-filter catches")} are shown; acting closes all ${row.filterOnlyLines}.`));
+        out.push(h("p", { class: "note" }, `The newest ${plural(counted.filterOnly, "filter catch", "filter catches")} are shown; acting closes all ${row.filterOnlyLines}.`));
       }
     } else {
       out.push(

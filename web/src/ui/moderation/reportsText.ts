@@ -172,6 +172,9 @@ export const ago = (when: number | string | Date, now: number = Date.now()): str
   return `${Math.floor(hours / 24)}d`;
 };
 
+/** "last seen now", "last seen 5m ago": `ago`'s words, without "now ago". */
+export const lastSeenWords = (since: string): string => (since === "now" ? "last seen now" : `last seen ${since} ago`);
+
 /** A log entry's small line: "until 13 Nov 10:00 · by Owner · seen 11 Nov". */
 export const logMeta = (entry: ModLogEntry): string =>
   [
