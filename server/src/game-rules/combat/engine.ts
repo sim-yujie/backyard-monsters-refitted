@@ -1129,7 +1129,11 @@ export type BattleVisualEvent =
       /** The attacker's yard position that tick. */
       readonly ix: number;
       readonly iy: number;
-      /** The target's yard position: a creep's spot, or a building's anchor. */
+      /**
+       * The target's yard position: a creep's spot, or a building's anchor;
+       * for a monster's shot or Fomor's fireball at a building, its footprint
+       * point nearest the shooter.
+       */
       readonly targetIx: number;
       readonly targetIy: number;
       /** True when the creep fights from range (`range > 1`): a projectile, not a bite. */
@@ -4882,7 +4886,10 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
     const base = fury === 1 ? creep.damage * multiplier : creep.damage * multiplier * fury;
     const blow = crit ? base * CRIT_MULTIPLIER : base;
     const dealt = damageBuilding(target, blow, creep, looting, true, crit ? "crit" : "hit");
-    recordHit(creep, target.x, target.y, dealt, lastBlowMods);
+    // A shot or fireball is drawn to the footprint point nearest the shooter,
+    // where its reach is measured (`sightPointOf`); a blow, at the stored X/Y.
+    const aim = fireball ? sightPointOf(creep.ix, creep.iy, target) : target;
+    recordHit(creep, aim.x, aim.y, dealt, lastBlowMods);
     if (creep.rank > 0) onAttack(creep, creep.damage * multiplier, null, target);
     if (creep.monsterId === KING_WORMZER_ID) {
       kingWormzerSplash(creep, creep.damage * multiplier, null, target);
@@ -6118,9 +6125,20 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
     return distanceSquared(at.x, at.y, building.sx, building.sy);
   };
 
-  /** A following Fomor's reach to a building, yard units squared from its nearest tile. */
-  const reachToSquared = (creep: Creep, building: EngineBuilding): number =>
-    reachSquared(creep.ix, creep.iy, building);
+  /**
+   * How far a creep reaches a building, in yard units from its nearest tile
+   * ({@link buildingReachOf}): a ranged monster's or Fomor's range scaled to
+   * Flash's on screen, a melee champion's one cell. Every building reach goes
+   * through here, so `canShootBuilding` is always handed this.
+   */
+  const buildingReach = (creep: Creep): number =>
+    buildingReachOf(creep.monsterId, creep.champion, creep.range);
+
+  /** Whether a following Fomor reaches a building from where it stands (`Fomor.as:226-229`). */
+  const inBuildingReach = (creep: Creep, building: EngineBuilding): boolean => {
+    const reach = buildingReach(creep);
+    return reachSquared(creep.ix, creep.iy, building) < reach * reach;
+  };
 
   /** Whether a champion's aura is live: `inBattleState` (`MonsterBase.as:350-352`). */
   const inBattle = (creep: Creep): boolean =>
@@ -6480,7 +6498,7 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
    */
   const wallToShoot = (creep: Creep): EngineBuilding | null => {
     const wall = creep.wallInWay >= 0 ? buildingOf(creep.wallInWay) : null;
-    return wall && wall.hp > 0 && canShootBuilding(creep, wall, creep.range) ? wall : null;
+    return wall && wall.hp > 0 && canShootBuilding(creep, wall, buildingReach(creep)) ? wall : null;
   };
 
   /**
@@ -6492,7 +6510,8 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
     const aim = creep.targetBuilding >= 0 ? buildingOf(creep.targetBuilding) : null;
     if (
       !creep.atTarget &&
-      ((aim && aim.hp > 0 && canShootBuilding(creep, aim, creep.range)) || wallToShoot(creep))
+      ((aim && aim.hp > 0 && canShootBuilding(creep, aim, buildingReach(creep))) ||
+        wallToShoot(creep))
     ) {
       creep.atTarget = true;
       return;
@@ -6512,8 +6531,11 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
    */
   const supportThink = (creep: Creep): void => {
     const frame = creep.frame;
+    // `reach` is to the ally, screen pixels squared; a building is reached
+    // from `buildingReach` (`inBuildingReach`, `canShootBuilding`).
     const range = creep.range;
     const reach = range * range;
+    const toBuilding = buildingReach(creep);
     const stillSupporting = (): boolean => creep.support && creep.behaviour === "attack";
     if (frame % FOMOR_LOOK_FRAMES === 0 && !creep.attacking) {
       findBuffTargets(creep);
@@ -6533,7 +6555,7 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
       } else if (
         apartSquared(creep, ally) < reach &&
         allyAim &&
-        reachToSquared(creep, allyAim) < reach
+        inBuildingReach(creep, allyAim)
       ) {
         creep.atTarget = true;
       } else if (!creep.attacking && frame % FOMOR_IDLE_FRAMES === 0) {
@@ -6544,7 +6566,7 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
         creep.atTarget = false;
       } else if (creep.waypointIndex >= creep.waypoints.length && !creep.atTarget) {
         const aim = creep.targetBuilding >= 0 ? buildingOf(creep.targetBuilding) : null;
-        if ((aim && canShootBuilding(creep, aim, range)) || wallToShoot(creep)) {
+        if ((aim && canShootBuilding(creep, aim, toBuilding)) || wallToShoot(creep)) {
           creep.atTarget = true;
         } else if (aim) {
           headFor(creep, aim);
@@ -6553,7 +6575,7 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
     } else if (creep.hasHelpTarget) {
       const aim = creep.targetBuilding >= 0 ? buildingOf(creep.targetBuilding) : null;
       if (aim && aim.hp > 0) {
-        if (canShootBuilding(creep, aim, range)) {
+        if (canShootBuilding(creep, aim, toBuilding)) {
           creep.atTarget = true;
         } else {
           creep.atTarget = false;
@@ -6585,7 +6607,7 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
     if ((allyAim && allyAim.hp > 0) || (ownAim && ownAim.hp > 0)) {
       if (ally) creep.targetBuilding = ally.targetBuilding;
       const aim = creep.targetBuilding >= 0 ? buildingOf(creep.targetBuilding) : null;
-      if (aim && reachToSquared(creep, aim) < reach) {
+      if (aim && inBuildingReach(creep, aim)) {
         creep.attacking = true;
         swing(creep);
       } else if (aim) {
@@ -6842,13 +6864,13 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
     if (creep.rank > 0 && creep.monsterId === BOLT_ID && tickBlink(creep)) return;
 
     // A ranged creep or a champion stops as soon as its target is inside its
-    // reach, with no wall in the way on foot (`CreepBase.as:735-748`): its
-    // range from the nearest tile (patch 7.9), but a melee champion's
-    // one cell, `MELEE_BUILDING_REACH` (patch 7.10, `buildingReachOf`).
+    // reach, with no wall in the way on foot (`CreepBase.as:735-748`): from
+    // the nearest tile (patch 7.9), its range scaled by 1/√2 (pick C, 24 Nov
+    // 2026), but a melee champion's one cell, `MELEE_BUILDING_REACH`
+    // (patch 7.10). Both are `buildingReach`.
     if (!creep.atTarget && creep.range > 1) {
       const aim = creep.targetBuilding >= 0 ? buildingOf(creep.targetBuilding) : null;
-      const reach = buildingReachOf(creep.monsterId, creep.champion, creep.range);
-      if (aim && canShootBuilding(creep, aim, reach)) creep.atTarget = true;
+      if (aim && canShootBuilding(creep, aim, buildingReach(creep))) creep.atTarget = true;
     }
 
     if (creep.atTarget) {

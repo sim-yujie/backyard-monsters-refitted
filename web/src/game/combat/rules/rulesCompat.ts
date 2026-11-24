@@ -43,6 +43,11 @@
  * and traps. No replay stamped with 3cb9cc66416d5eda or 8.1/8.2's
  * 0ba3fde8701104af plays the same any more.
  *
+ * The ranged reach of the owner's pick C (24 Nov 2026) keeps it empty: a
+ * ranged monster or Fomor now reaches a building from its range times 1/√2
+ * (`RANGED_BUILDING_REACH_SCALE`), which moves every battle with one, so no
+ * replay stamped with beta 9's 0f7f60198e612d6b plays the same any more.
+ *
  * Add the version a change replaces only when that change moves no battle.
  * A change that moves any battle result must empty this list.
  */

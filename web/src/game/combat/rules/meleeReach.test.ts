@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { MELEE_BUILDING_REACH, buildingReachOf } from "./champions.js";
+import { MELEE_BUILDING_REACH, RANGED_BUILDING_REACH_SCALE, buildingReachOf } from "./champions.js";
 import { createBattle } from "./engine.js";
 import { championStat } from "./stats.js";
 import { buildEngineYard, reachSquared, reachesBuilding } from "./yard.js";
@@ -12,7 +12,8 @@ import { buildEngineYard, reachSquared, reachesBuilding } from "./yard.js";
  * champions' ranges, 35 to 90, were Flash's stomp reach in screen pixels to
  * the top corner. Gorgo, Drull, Korath and Krallen now hit a building only
  * from beside it: one cell, {@link MELEE_BUILDING_REACH}, from its nearest
- * tile. Fomor and the ranged monsters keep their range.
+ * tile. Fomor and the ranged monsters keep their range, scaled by 1/√2 since
+ * the owner's pick C (24 Nov 2026, `rangedReach.test.ts`).
  */
 
 /** arC's Town Hall: level 4, 130 x 130 yard units, footprint (-65..65, -65..65). */
@@ -43,23 +44,22 @@ const MELEE = [
 ] as const;
 
 describe("the melee champions' reach to a building (patch 7.10)", () => {
-  it("is one cell for Gorgo, Drull, Korath and Krallen at every level, the range for the rest", () => {
+  it("is one cell for Gorgo, Drull, Korath and Krallen at every level, the scaled range for the rest", () => {
     expect(MELEE_BUILDING_REACH).toBe(10);
     for (const [id, , top] of MELEE) {
       for (let level = 1; level <= top; level += 1) {
         expect(buildingReachOf(id, true, championStat(id, "range", level)), `${id} L${level}`).toBe(10);
       }
     }
-    // Fomor, ranged, keeps his range at every level.
+    // Fomor, ranged, keeps his range at every level, scaled by 1/√2 (pick C).
     for (let level = 1; level <= 6; level += 1) {
       const range = championStat("G3", "range", level);
-      expect(buildingReachOf("G3", true, range)).toBe(range);
+      expect(buildingReachOf("G3", true, range)).toBe(range * RANGED_BUILDING_REACH_SCALE);
     }
-    // A ranged monster keeps its range; so would a monster sharing an id.
-    expect(buildingReachOf("C14", false, 150)).toBe(150);
-    expect(buildingReachOf("C19", false, 200)).toBe(200);
-    expect(buildingReachOf("IC7", false, 240)).toBe(240);
-    expect(buildingReachOf("G1", false, 45)).toBe(45);
+    // A ranged monster keeps its range, scaled; so would a monster sharing an id.
+    for (const [id, range] of [["C14", 150], ["C19", 200], ["IC7", 240], ["G1", 45]] as const) {
+      expect(buildingReachOf(id, false, range), id).toBe(range * RANGED_BUILDING_REACH_SCALE);
+    }
   });
 
   it("reaches from one tile off every side and corner, never from three", () => {

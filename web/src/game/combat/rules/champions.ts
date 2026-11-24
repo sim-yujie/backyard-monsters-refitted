@@ -68,9 +68,30 @@ export const MELEE_BUILDING_REACH = 10;
  */
 export const MELEE_REACH_CHAMPIONS: readonly string[] = [GORGO_ID, DRULL_ID, KORATH_ID, KRALLEN_ID];
 
-/** A champion's or monster's reach to a building, given its stat range. */
+/**
+ * The share of its stat range from which a ranged monster or Fomor reaches a
+ * building, in yard units from the nearest tile: 1/√2 (owner's pick C,
+ * 24 Nov 2026, after D.A.V.E. was seen firing from much farther than in Flash).
+ *
+ * Flash measured `range` in screen pixels (`CreepBase.as:735-741`). Since
+ * patch 7.9 reach is yard units from the nearest tile (`reachSquared`), and a
+ * yard circle shows on screen as a 2:1 ellipse, √2 times as wide as the range
+ * in pixels. Scaled by 1/√2, a ranged monster beside a building fires from
+ * Flash's `range` pixels off the tiles again; head on it fires from half of
+ * that. Its range against monsters (`fight`) is screen pixels and unchanged.
+ */
+export const RANGED_BUILDING_REACH_SCALE = Math.SQRT1_2;
+
+/**
+ * A champion's or monster's reach to a building, given its stat range: one
+ * cell for a melee champion (patch 7.10), else its range scaled by
+ * {@link RANGED_BUILDING_REACH_SCALE}. Every building reach in the engine
+ * (`canShootBuilding` and Fomor's support reach) goes through here.
+ */
 export const buildingReachOf = (id: string, champion: boolean, range: number): number =>
-  champion && MELEE_REACH_CHAMPIONS.includes(id) ? MELEE_BUILDING_REACH : range;
+  champion && MELEE_REACH_CHAMPIONS.includes(id)
+    ? MELEE_BUILDING_REACH
+    : range * RANGED_BUILDING_REACH_SCALE;
 
 /* ── Korath (G4) ──────────────────────────────────────────────────────────── */
 
