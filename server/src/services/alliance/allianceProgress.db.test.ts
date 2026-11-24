@@ -136,6 +136,19 @@ describe.skipIf(!enabled)("alliance progress", () => {
     expect(Number(loot!.target)).toBe(22_500_000_000);
   });
 
+  test("one tribe yard on a Hard goal (10,000) still counts the member as helping", async () => {
+    await progress.setGoal(em(), LEADER, "tribeDestroy", "hard", NOW);
+    await progress.addGoalProgress(em(), MEMBER, { tribeDestroy: 1 }, NOW);
+    const view = await progress.progressView(em(), ALLIANCE, AllianceType.MIDAS, NOW);
+    expect(view.today.contributed).toBe(1);
+    expect(view.today.helped_ids).toEqual([MEMBER]);
+    expect(view.top_helpers[0]).toMatchObject({ userid: MEMBER, goal_share: 0 });
+    // Shares are per million of a goal: half the 10,000 is 50% of a goal.
+    await progress.addGoalProgress(em(), MEMBER, { tribeDestroy: 4_999 }, NOW);
+    const half = await progress.progressView(em(), ALLIANCE, AllianceType.MIDAS, NOW);
+    expect(half.top_helpers[0]).toMatchObject({ userid: MEMBER, goal_share: 50 });
+  });
+
   test("an old Hatch monsters goal (off the menu since 12 Nov) is ignored: cannot be set, gains nothing, not shown, takes no slot", async () => {
     const week = progress.weekOf(NOW);
     await sql(
