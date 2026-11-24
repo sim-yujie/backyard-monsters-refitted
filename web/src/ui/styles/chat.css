@@ -433,6 +433,12 @@ button.chat-line__name {
   overscroll-behavior: contain;
 }
 
+/* Only the room gives way: the tab (its × is the way back to a stepped-aside
+   corner), the notice, the input and a player's strip keep their height. */
+.chat-box--open > :is(.chat-box__tab, .chat-box__rule, .chat-box__status, .chat-box__form, .chat-box__player) {
+  flex: none;
+}
+
 /* A player's strip stands in the input's place and is about 80px taller (its
    buttons wrap to a second row since Profile joined them): with the strip up
    the room may give way further (Report landed under Main yard, profiles
@@ -442,9 +448,18 @@ button.chat-line__name {
 }
 
 /* And should a very short window still run the strip into the dock, the
-   strip is on top: none of its buttons is ever under a dock button. */
+   strip is on top: none of its buttons is ever under a dock button. Where
+   even a 48px room does not fit with the strip's two rows (a laptop 650px
+   tall, Classic), the box scrolls inside its frame rather than run the strip
+   out under it (the looks' frame rule sets overflow: visible, hence :root). */
 .chat-box--open:has(> .chat-box__player:not([hidden])) {
   z-index: 1;
+}
+
+:root .chat-box.chat-box--open:has(> .chat-box__player:not([hidden])) {
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
 }
 
 /* ── A short screen: the left corner steps aside for the open box ───── */
@@ -476,35 +491,70 @@ button.chat-line__name {
     visibility: hidden;
   }
 
-  /* With a player's strip up the room tabs and Global's notice step aside
-     (as on an upright phone, below), and a phone too short even for that
-     scrolls the box inside its frame (the looks' frame rule sets overflow:
-     visible, hence :root). */
-  .chat-box.chat-box--open:has(> .chat-box__player:not([hidden])) > :is(.chat-box__rooms, .chat-box__rule) {
+  /* Global's notice keeps to one line, its first sentence ("Global chat is
+     in English.") whole: two lines of it left the room two lines (neon). */
+  .chat-box--open .chat-box__rule {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  /* Folded, the last four lines ran down under the switcher and Map (on its
+     side they start about 40px below the lines; at 1024x560 a long line
+     reached them too). As on an upright phone (below), only the newest line
+     shows, on one line: the picture, the badge and the name keep their room
+     and the words end in "…" (a long name gives way only past 60%). */
+  .chat-box:not(.chat-box--open) .chat-line:not(:last-child) {
     display: none;
   }
 
-  :root .chat-box.chat-box--open:has(> .chat-box__player:not([hidden])) {
-    overflow-x: hidden;
-    overflow-y: auto;
-    overscroll-behavior: contain;
+  .chat-box:not(.chat-box--open) .chat-line {
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .chat-box:not(.chat-box--open) .chat-line:last-child:not(.chat-line--notice) {
+    display: flex;
+    align-items: center;
+  }
+
+  .chat-box:not(.chat-box--open) .chat-line > :is(.chat-line__pic, .chat-line__gm, .chat-line__mod) {
+    flex: none;
+  }
+
+  .chat-box:not(.chat-box--open) .chat-line > .chat-line__name {
+    flex: 0 1 auto;
+    min-width: 0;
+    max-width: 60%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .chat-box:not(.chat-box--open) .chat-line > .chat-line__body {
+    flex: 1 1 0;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+}
+
+/* A player's strip on a screen up to 720px tall (a laptop 650px tall, an
+   iPad 690px): two rows of named buttons ran the box past its frame, or left
+   the room one cut line (neon). As on an upright phone (below) the strip keeps
+   only the pictures in one row, and the room tabs and Global's notice step
+   aside while it is up (changing room closes the strip anyway). */
+@media (min-width: 621px) and (max-height: 720px) {
+  .chat-box.chat-box--open:has(> .chat-box__player:not([hidden])) > :is(.chat-box__rooms, .chat-box__rule) {
+    display: none;
   }
 
   .chat-box.chat-box--open:has(> .chat-box__player:not([hidden])) > .chat-box__lines {
     min-height: 32px;
   }
 
-  /* Global's notice keeps to one line, its first sentence ("Global chat is
-     in English.") whole: two lines of it left the room two lines (neon). */
-  .chat-box--open .chat-box__rule {
-    flex: none;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  }
-
-  /* A player's strip keeps only the pictures in one row, as on an upright
-     phone: two rows of named buttons left the room one cut line (neon). */
   .chat-box__action.chat-box__action--icon {
     min-width: 40px;
     min-height: 40px;
@@ -526,19 +576,6 @@ button.chat-line__name {
 @media (min-width: 621px) and (max-height: 500px) {
   .overlay__layer:has(> .chat-box--open) > .yard-dock > .events-door {
     visibility: hidden;
-  }
-
-  /* Folded, the last four lines ran down under the switcher and Map, which
-     start about 70px below the tab (neon). On its side, as upright, only the
-     newest line shows, on one line ending in "…". */
-  .chat-box:not(.chat-box--open) .chat-line:not(:last-child) {
-    display: none;
-  }
-
-  .chat-box:not(.chat-box--open) .chat-line {
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
   }
 }
 

@@ -108,16 +108,34 @@ describe("chat.css: the open box never runs under the left dock", () => {
   });
 });
 
-describe("chat.css: a phone on its side keeps the folded line and the open room readable", () => {
-  const side = media(chatCss, "(min-width: 621px) and (max-height: 500px)");
+describe("chat.css: a short screen keeps the folded line and the open room readable", () => {
+  const strip = media(chatCss, "(min-width: 621px) and (max-height: 720px)");
 
   it("folded, only the newest line shows, on one line (four ran under the switcher and Map)", () => {
-    expect(side).toMatch(/\.chat-box:not\(\.chat-box--open\) \.chat-line:not\(:last-child\)\s*\{\s*display:\s*none;/);
-    expect(side).toMatch(/\.chat-box:not\(\.chat-box--open\) \.chat-line\s*\{[^}]*white-space:\s*nowrap;/);
+    expect(short).toMatch(/\.chat-box:not\(\.chat-box--open\) \.chat-line:not\(:last-child\)\s*\{\s*display:\s*none;/);
+    // The name keeps its room; only the words end in "…".
+    expect(short).toMatch(/\.chat-box:not\(\.chat-box--open\) \.chat-line > \.chat-line__name\s*\{[^}]*max-width:\s*60%;/);
   });
 
-  it("open on a short screen, Global's notice keeps to one line and the strip's buttons to pictures", () => {
+  it("open on a short screen, Global's notice keeps to one line", () => {
     expect(short).toMatch(/\.chat-box--open \.chat-box__rule\s*\{[^}]*white-space:\s*nowrap;/);
-    expect(short).toMatch(/\.chat-box__action--icon \.chat-box__action-label\s*\{[^}]*clip-path:\s*inset\(50%\);/);
+  });
+
+  it("up to 720px tall a player's strip is one row of pictures and the room tabs step aside", () => {
+    expect(strip).toMatch(/\.chat-box__action--icon \.chat-box__action-label\s*\{[^}]*clip-path:\s*inset\(50%\);/);
+    expect(strip).toMatch(/:has\(> \.chat-box__player:not\(\[hidden\]\)\) > :is\(\.chat-box__rooms, \.chat-box__rule\)\s*\{\s*display:\s*none;/);
+  });
+});
+
+describe("chat.css: only the room gives way, and a strip never spills out of the frame", () => {
+  it("the tab (with its ×), notice, status, input and strip keep their height", () => {
+    expect(chatCss).toMatch(
+      /\.chat-box--open > :is\(\.chat-box__tab, \.chat-box__rule, \.chat-box__status, \.chat-box__form, \.chat-box__player\)\s*\{\s*flex:\s*none;/,
+    );
+  });
+
+  it("with a player's strip up the box scrolls inside its frame at every size", () => {
+    const strip = topRule(chatCss, ":root .chat-box.chat-box--open:has(> .chat-box__player:not([hidden]))");
+    expect(strip).toMatch(/overflow-y:\s*auto/);
   });
 });
