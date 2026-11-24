@@ -794,6 +794,56 @@ describe("Smart Repeat attack: moves into the yards in range", () => {
     expect(transactions).toBe(0);
   });
 
+  /**
+   * An outpost next to the camp whose two Housing were still building at its
+   * last write, and a third mid-upgrade from level 5 (450) to 6 (540)
+   * (patch, 24 Nov 2026): the main yard has 40 free, so the 100 Pokey
+   * (1,000) only fit once the finished Housing counts.
+   */
+  const closedOutpost = (secondsSinceWrite: number) => {
+    userSave.buildingdata = housing(1);
+    userSave.monsters.housed = { C1: 50 };
+    addOutpost(244, 208, 2, { C1: 200 });
+    addOutpost(242, 208, 2, {});
+    const near = outpostRows[1]!;
+    near.savetime = now() - secondsSinceWrite;
+    near.buildingdata = {
+      h0: { id: "h0", t: 15, l: 1, cB: 1800, prefab: 6 },
+      h1: { id: "h1", t: 15, l: 5, cU: 1800 },
+      h2: { id: "h2", t: 15, l: 1, cB: 1800, prefab: 6 },
+    };
+    return near;
+  };
+  const NEAR = "1000242208";
+
+  test("Housing that finished on a closed outpost counts: the moves go there and are made", async () => {
+    const near = closedOutpost(3600);
+    const stored = structuredClone(near.buildingdata);
+    const answer = await autoAttackPlanFor(user() as never, CAMP);
+    expect(answer.noRoom).toBeNull();
+    expect(answer.moves).toEqual([{ from: FAR, to: NEAR, monsters: { C1: 100 } }]);
+    // Counting it writes nothing on the outpost.
+    expect(near.buildingdata).toEqual(stored);
+
+    const result = await runAutoAttack(user() as never, CAMP, answer.movesKey!);
+    expect(result.moved).toEqual(answer.moves);
+    expect(mint).toHaveBeenCalledTimes(1);
+  });
+
+  test("Housing still building on an outpost does not count: no room in range", async () => {
+    closedOutpost(60);
+    const answer = await autoAttackPlanFor(user() as never, CAMP);
+    // Only the upgrading Housing counts, at its old level (450).
+    expect(answer.noRoom).toEqual({
+      need: 1_000,
+      free: expect.arrayContaining([
+        { baseid: HOME, free: 40 },
+        { baseid: NEAR, free: 450 },
+      ]),
+    });
+    expect(answer.moves).toEqual([]);
+  });
+
   test("a champion in the plan never moves; a champion not ready refuses before any move", async () => {
     split();
     expect(JSON.stringify((await autoAttackPlanFor(user() as never, CAMP)).moves)).not.toContain('"t"');

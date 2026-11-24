@@ -223,3 +223,32 @@ describe("transferMonsters, the hatch quest (patch 7.8)", () => {
     expect(hatchHave()).toBe(1);
   });
 });
+
+describe("transferMonsters, Housing finished while the outpost was closed (patch, 24 Nov 2026)", () => {
+  /** The outpost's only Housing was still building at its last write, `ago` seconds back, with 30 minutes to go. */
+  const closedOutpost = (ago: number): Row => {
+    const now = Math.floor(Date.now() / 1000);
+    return Object.assign(saves[1]!, {
+      savetime: now - ago,
+      monsters: { housed: {} },
+      buildingdata: { "1": { id: 1, t: 15, l: 1, cB: 1800, prefab: 6 } },
+    });
+  };
+
+  test("it counts once its time has passed, and the outpost's stored buildings are not changed", async () => {
+    const outpost = closedOutpost(3600);
+    const result = await run(movedBody());
+    expect(result.ok).toBe(true);
+    expect((outpost.monsters as { housed: unknown }).housed).toEqual({ C1: 5 });
+    expect(outpost.buildingdata).toEqual({ "1": { id: 1, t: 15, l: 1, cB: 1800, prefab: 6 } });
+  });
+
+  test("it does not count while still building: the transfer is refused", async () => {
+    const outpost = closedOutpost(60);
+    const result = await run(movedBody());
+    expect(result.ok).toBe(false);
+    expect(result.rule).toBe("capacity");
+    expect((outpost.monsters as { housed: unknown }).housed).toEqual({});
+    expect(flushed).toBe(0);
+  });
+});
