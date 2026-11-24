@@ -407,6 +407,15 @@
     justify-self: end;
   }
 
+  /* The account menu hangs from the critter's right edge here: the phone's
+     own-yard rule (yard-hud.css) hangs it from the left, for the critter in
+     the top-left corner, and in this corner it ran off the screen (bug
+     report #70, 24 Nov 2026). */
+  :root .hud.hud--corner.hud--no-readouts .account-menu__list {
+    left: auto;
+    right: 0;
+  }
+
   :root .hud.hud--corner.hud--no-readouts .account-menu__pill-text {
     display: none;
   }
