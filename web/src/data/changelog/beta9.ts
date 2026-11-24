@@ -2,12 +2,17 @@ import type { ChangelogRelease } from "./types";
 
 /**
  * v2.0.0-beta.9: pictures in web/public/whats-new/beta9-*.webp (960x540,
- * 16:9), all real in-game shots of the account yardtester in a test copy of
- * the database (its outposts given armies, its HCC raised to level 3 and an
- * Infernal Lab and the new decorations placed, only in that copy). Modern
- * look, except the tower tiers card, which shows the Classic look the plates
- * are for. No Patreon post yet: add `moreUrl` and `moreLabel` (both or
- * neither) once the beta 9 post is up.
+ * 16:9), all real in-game shots of the account yardtester in the Modern look,
+ * except the tower tiers card, which shows the Classic look the plates are
+ * for. Shot for these cards in a test copy of the database (its outposts
+ * given armies, two pinned and renamed, its HCC raised to level 3, its
+ * Inferno given a level 3 Infernal Lab and an outpost the new decorations,
+ * only in that copy): moves, HCC, Lab, arrows, tiers, feeding, decorations
+ * and the sign-in screen. The Baiter card is a crop of the shot taken when
+ * the friend tests were built (review desk b9-baitb-invite, 23 Nov, after
+ * the last change to that window), whose test copy had friends to invite.
+ * No Patreon post yet: add `moreUrl` and `moreLabel` (both or neither) once
+ * the beta 9 post is up.
  */
 export const BETA_9: ChangelogRelease = {
   version: "2.0.0-beta.9",
@@ -56,7 +61,7 @@ export const BETA_9: ChangelogRelease = {
     {
       image: "/whats-new/beta9-speed.webp",
       title: "Faster loading",
-      text: "On a slow phone connection the sign-in screen shows in 2.5 s instead of 7, and your yard's buildings load first.",
+      text: "In our slow-phone test the sign-in screen showed in 2.5 s instead of 7. Your yard's buildings now load first.",
     },
   ],
 };
