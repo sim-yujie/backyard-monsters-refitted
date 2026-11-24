@@ -42,6 +42,12 @@ export interface ChatClient {
   gm?: boolean;
   /** No lines accepted before this time (ms since the epoch); 0 or absent when not muted. */
   mutedUntil?: number;
+  /**
+   * When their main yard was made (ms), read at sign-in: the chat filter
+   * treats them as new while it is younger than three days. Null: no main
+   * yard (new); absent: not read (a test client), counted as not new.
+   */
+  yardCreatedAt?: number | null;
 }
 
 /**

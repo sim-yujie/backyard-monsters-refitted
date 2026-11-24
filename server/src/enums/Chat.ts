@@ -31,4 +31,6 @@ export enum ChatControlType {
   Moderators = "moderators",
   /** New mail for the player (`services/mail/mailNudge.ts`): tell their game to look. */
   Mail = "mail",
+  /** The owner changed the chat filter's watched words (`services/chat/watchWords.ts`): read them again. */
+  WatchWords = "watch_words",
 }

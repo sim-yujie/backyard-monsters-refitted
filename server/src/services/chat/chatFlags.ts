@@ -20,7 +20,8 @@ import { listedWord } from "./wordMatch.js";
  * log (`chatLog.ts`) still keeps every line, flagged or not.
  */
 
-export type FlagSeverity = "slur" | "swear";
+/** `filter`: the chat filter alone flagged it (a link or a watched word; `chatFilter.ts`), its `tags` say why. */
+export type FlagSeverity = "slur" | "swear" | "filter";
 
 /** How a flagging word was written: as listed, or disguised. */
 export type FlagRule = "word" | "disguised";
@@ -155,6 +156,14 @@ export interface ChatFlagInput {
   rule: FlagRule;
   /** When the line was said (ms), as chat stamps it. */
   ts: number;
+  /** The chat filter's reasons (`chatFilter.ts` `FilterTag`); absent for a word-filter flag. */
+  tags?: readonly string[];
+  /** Nobody but the sender saw the line. */
+  hidden?: boolean;
+  /** The chat line's id, for a moderator's Remove. */
+  lineId?: string;
+  /** A new player's main yard age in hours; absent for older players. */
+  yardAgeHours?: number | null;
 }
 
 /**
@@ -165,8 +174,8 @@ export interface ChatFlagInput {
  */
 export const recordChatFlag = async (em: EntityManager, flag: ChatFlagInput): Promise<void> => {
   await em.execute(
-    `INSERT INTO bym.chat_flag (userid, channel, message, shown, words, severity, rule, message_ts, created_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    `INSERT INTO bym.chat_flag (userid, channel, message, shown, words, severity, rule, message_ts, created_at, tags, hidden, line_id, yard_age_h)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     [
       flag.userid,
       flag.channel,
@@ -177,6 +186,10 @@ export const recordChatFlag = async (em: EntityManager, flag: ChatFlagInput): Pr
       flag.rule,
       flag.ts,
       new Date(flag.ts),
+      flag.tags && flag.tags.length > 0 ? flag.tags.join(",") : null,
+      flag.hidden === true,
+      flag.lineId ?? null,
+      flag.yardAgeHours ?? null,
     ],
   );
 };

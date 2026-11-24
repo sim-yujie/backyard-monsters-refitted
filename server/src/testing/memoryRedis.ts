@@ -171,6 +171,8 @@ export const memoryRedis = (strings: Map<string, string> = new Map(), { ages = t
         }
         case "HGET":
           return hashes.get(key)?.get(field) ?? null;
+        case "HGETALL":
+          return [...(hashes.get(key) ?? new Map<string, string>())].flat();
         case "HSET": {
           const hash = hashes.get(key) ?? new Map<string, string>();
           const pairs = args.slice(1);

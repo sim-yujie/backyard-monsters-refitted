@@ -12,7 +12,10 @@ import {
   allianceChannelKey,
   validateChannel,
 } from "./chatChannels.js";
-import { getHistory, pushMessage } from "./chatHistory.js";
+import { getHistory, MAX_HISTORY, newLineId, pushMessage } from "./chatHistory.js";
+import { keepOwnLine, mergeOwnLines, readOwnLines } from "./chatOwnLines.js";
+import { currentWatchList } from "./chatWatchWords.js";
+import { filterLine, NEW_PLAYER_MS, type FilterOutcome } from "../services/chat/chatFilter.js";
 import { watchLine } from "./chatWatch.js";
 import { markGameTeam, refuseIfMuted } from "./chatGameTeam.js";
 import { speakerPhoto, withCurrentPhotos } from "./chatPhotos.js";
@@ -173,11 +176,17 @@ export const leaveAllChannels = (client: ChatClient) => {
  *
  * @param {string} channel - The channel being joined.
  * @param {ChannelInfo} info - What kind of channel it is.
+ * @param {number} [userid] - Who is joining: their own filtered lines are shown to them with their words.
  * @returns {Promise<HistoryEntry[]>} Entries ordered oldest to newest.
  */
-export const getChannelHistory = async (channel: string, info: ChannelInfo): Promise<HistoryEntry[]> => {
+export const getChannelHistory = async (channel: string, info: ChannelInfo, userid?: number): Promise<HistoryEntry[]> => {
   // Every speaker's photo as it is now, whatever the line was stored with (`chatPhotos.ts`).
-  if (info.type !== ChannelType.Alliance) return markGameTeam(await withCurrentPhotos(await getHistory(channel)));
+  if (info.type !== ChannelType.Alliance) {
+    const history = await getHistory(channel);
+    // The joining player's own filtered lines, with their own words, for them alone (`chatOwnLines.ts`).
+    const own = userid === undefined ? [] : await readOwnLines(userid, channel).catch(() => []);
+    return markGameTeam(await withCurrentPhotos(mergeOwnLines(history, own, history.length >= MAX_HISTORY)));
+  }
 
   const em = postgres.orm.em.fork();
   return markGameTeam(await withCurrentPhotos(await getAllianceMessages(info.allianceId, em)));
@@ -216,15 +225,20 @@ export const postMessage = async (client: ChatClient, channel: string, body: str
   const said = body.slice(0, MAX_MSG_LEN).trim();
   // Players see the masked line; the dashboard keeps the player's own words (`chatWatch.ts`).
   const check = checkLine(filter, said);
-  const messageBody = check.shown;
+  const ownBody = check.shown;
 
-  if (!messageBody) return;
+  if (!ownBody) return;
 
   // Alliance lines are database writes, so they have an hourly limit too (issue #323).
   if (info.type === ChannelType.Alliance && !takeAllianceLine(client.userId, now)) {
     send(client.ws, { type: ServerMessageType.Error, code: ErrorCode.RateLimited });
     return;
   }
+
+  // The chat filter, in every public room; alliance chat stays private and unwatched (`chatFilter.ts`).
+  const filtered: FilterOutcome | null = info.type === ChannelType.Alliance ? null : filterLine(said, speakerOf(client, now), currentWatchList());
+  // What everyone else gets: the filter's cut line, masked like any other.
+  const othersBody = filtered && filtered.shown !== said ? checkLine(filter, filtered.shown).shown : ownBody;
 
   // The speaker's photo for others to see, absent for their critter (`chatPhotos.ts`).
   const photo = await speakerPhoto(client, now);
@@ -234,7 +248,7 @@ export const postMessage = async (client: ChatClient, channel: string, body: str
     picSquare: client.picSquare,
     ...(photo !== null && { photo }),
     allianceImage: null,
-    body: messageBody,
+    body: ownBody,
     messageType: AllianceMessageType.MESSAGE,
     ...(client.gm && { gm: true }),
     // Read from the list on each line, so a moderator added while their chat is open shows at once.
@@ -242,18 +256,22 @@ export const postMessage = async (client: ChatClient, channel: string, body: str
   };
 
   let entry: HistoryEntry;
+  const hidden = filtered?.hidden === true;
+  const changed = hidden || othersBody !== ownBody;
 
   if (info.type === ChannelType.Alliance) {
-    const record = { allianceId: info.allianceId, userId: client.userId, body: messageBody };
+    const record = { allianceId: info.allianceId, userId: client.userId, body: ownBody };
 
     const em = postgres.orm.em.fork();
     const stored = await addAllianceMessage(record, em);
 
     entry = { ...fields, displayName: client.username, ts: stored.created_at.getTime() };
   } else {
-    entry = { ...fields, displayName: client.displayName, ts: now };
+    entry = { id: newLineId(), ...fields, displayName: client.displayName, ts: now };
 
-    await pushMessage(channel, entry);
+    // A hidden line never enters the room; a cut one enters it cut. The sender's words stay theirs (`chatOwnLines.ts`).
+    if (!hidden) await pushMessage(channel, { ...entry, body: othersBody });
+    if (changed) await keepOwnLine(client.userId, channel, { entry, hidden });
   }
 
   const outgoing: ServerMessage = {
@@ -263,9 +281,40 @@ export const postMessage = async (client: ChatClient, channel: string, body: str
     userId: client.userId,
   };
 
-  publishToChannel(channel, JSON.stringify(outgoing));
+  if (!changed) {
+    publishToChannel(channel, JSON.stringify(outgoing));
+  } else {
+    // The sender gets their own words straight away; the room the cut line, or nothing.
+    send(client.ws, outgoing);
+    if (!hidden) publishToChannel(channel, JSON.stringify({ ...outgoing, body: othersBody }), client.userId);
+  }
 
-  watchLine({ userid: client.userId, channel, channelType: info.type, message: said, check, ts: entry.ts });
+  watchLine({
+    userid: client.userId,
+    username: client.username,
+    channel,
+    channelType: info.type,
+    message: said,
+    check,
+    ts: entry.ts,
+    ...(filtered && { filter: filtered, shown: hidden ? "" : othersBody, lineId: entry.id, yardAgeHours: yardAgeHours(client, now) }),
+  });
+};
+
+/** A moderator or game team account, for the filter: never new, never flagged. */
+const isStaff = (client: ChatClient): boolean => client.gm === true || isChatModerator(client.userId);
+
+/** Whether the filter treats the speaker as new: main yard younger than three days, read at sign-in. */
+const speakerOf = (client: ChatClient, now: number) => ({
+  staff: isStaff(client),
+  isNew: client.yardCreatedAt === null || (typeof client.yardCreatedAt === "number" && now - client.yardCreatedAt < NEW_PLAYER_MS),
+});
+
+/** A new player's main yard age in whole hours, for the Reports window ("New · 30h"); null for anyone else. */
+const yardAgeHours = (client: ChatClient, now: number): number | null => {
+  const speaker = speakerOf(client, now);
+  if (!speaker.isNew || speaker.staff) return null;
+  return typeof client.yardCreatedAt === "number" ? Math.max(0, Math.floor((now - client.yardCreatedAt) / 3_600_000)) : 0;
 };
 
 /**

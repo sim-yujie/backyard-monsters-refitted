@@ -24,7 +24,7 @@ type ServerWebSocket<T> = import("bun").ServerWebSocket<T>;
 type AuthMessage = Extract<ClientMessage, { type: ClientMessageType.Auth }>;
 
 type ChatIdentity = Pick<User, "username" | "pic_square"> & {
-  save?: Pick<Save, "points" | "basevalue"> | null;
+  save?: Pick<Save, "points" | "basevalue" | "createdAt"> | null;
 };
 
 const CHAT_FIELDS = [
@@ -33,7 +33,8 @@ const CHAT_FIELDS = [
   "banned",
   "pic_square",
   "save.points",
-  "save.basevalue"
+  "save.basevalue",
+  "save.createdAt",
 ] as const;
 
 /**
@@ -77,6 +78,16 @@ const readMutedUntil = async (userid: number): Promise<number> => {
   } catch {
     return 0;
   }
+};
+
+/**
+ * When the player's main yard was made (ms), for the chat filter's "new
+ * player" (`services/chat/chatFilter.ts`); null without a main yard, which
+ * counts as new.
+ */
+const yardCreatedAt = (user: ChatIdentity): number | null => {
+  const at = user.save?.createdAt ? new Date(user.save.createdAt).getTime() : NaN;
+  return Number.isFinite(at) ? at : null;
 };
 
 /**
@@ -130,6 +141,7 @@ export const authenticate = async (ws: ServerWebSocket<SocketData>, message: Aut
     lastMsgAt: 0,
     gm: isAdminUser(user.userid),
     mutedUntil,
+    yardCreatedAt: yardCreatedAt(user),
   };
 
   ws.data.userId = user.userid;
