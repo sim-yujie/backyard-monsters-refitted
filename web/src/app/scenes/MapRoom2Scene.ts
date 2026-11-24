@@ -292,6 +292,13 @@ export class MapRoom2Scene implements Scene {
 
   private home: OffsetCell | null = null;
   private selected: OffsetCell | null = null;
+  /**
+   * Camps the player has a saved Repeat plan for, as the cell panel's Repeat
+   * answers said (smart moving, beta 9): only these may open Attack with
+   * nothing in range, to offer to move the plan's army in.
+   */
+  private readonly plannedCamps = new Set<string>();
+
   /** The attack window is up (`ui/attack/AttackWindow.ts`): Attack again opens no second one. */
   private attackWindowOpen = false;
   /** The cell under the pointer, for the hover card (#176). */
@@ -508,7 +515,7 @@ export class MapRoom2Scene implements Scene {
         allianceOf: (id) => this.renderer.allianceNamed(id),
         myAlliance: () => this.renderer.myAllianceId,
         // Repeat attack on a wild camp (#221).
-        autoAttackPlan: (baseid) => getAutoAttackPlan(baseid),
+        autoAttackPlan: (baseid) => this.repeatPlanFor(baseid),
         onRepeatAttack: (cell, baseid, answer) => this.openAutoAttack(cell, baseid, answer),
       },
       SceneName.MAP_ROOM_2,
@@ -1317,12 +1324,41 @@ export class MapRoom2Scene implements Scene {
 
   /**
    * Smart moving (beta 9): a camp whose yards in range hold nothing may still
-   * have its saved army moved in, so with the setting on Attack stays open
-   * there and asks first (`smartMoveFlow.ts`); with nothing to move, the
-   * refusal is said on the tap instead.
+   * have its saved army moved in, so with the setting on and a saved plan for
+   * the camp (the cell panel's Repeat answer) Attack stays open there and
+   * asks first (`smartMoveFlow.ts`); with nothing to move, the refusal is said
+   * on the tap instead. Without a plan, Attack is refused as before (owner:
+   * "no plan, nothing new shows").
    */
   private smartMoveGate(payload: MapCell | undefined, refusal: string | null): string | null {
-    return refusal === NOTHING_IN_RANGE && payload && targetKind(payload) === "wild" && smartMovingOn() ? null : refusal;
+    const open =
+      refusal === NOTHING_IN_RANGE &&
+      payload &&
+      "bid" in payload &&
+      targetKind(payload) === "wild" &&
+      this.plannedCamps.has(payload.bid) &&
+      smartMovingOn();
+    return open ? null : refusal;
+  }
+
+  /**
+   * The cell panel's Repeat answer for a camp (#221), noting whether a plan
+   * is saved for it; a plan newly known opens the panel's Attack gate again.
+   */
+  private async repeatPlanFor(baseid: string): Promise<AutoAttackPlanResponse> {
+    const answer = await getAutoAttackPlan(baseid);
+    const had = this.plannedCamps.has(baseid);
+    if (answer.plan) this.plannedCamps.add(baseid);
+    else this.plannedCamps.delete(baseid);
+    if (had !== this.plannedCamps.has(baseid)) {
+      // After the panel has taken the answer: its Attack gate is drawn again.
+      setTimeout(() => {
+        const cell = this.selected;
+        const payload = cell ? this.store.getCell(cell.col, cell.row) : undefined;
+        if (payload && "bid" in payload && payload.bid === baseid) this.ui?.updateCell(payload);
+      }, 0);
+    }
+    return answer;
   }
 
   /**
@@ -1401,6 +1437,9 @@ export class MapRoom2Scene implements Scene {
     const modal = context.overlay.modal;
     const smart = await smartMoveBeforeAttack({ modal, attack });
     if (this.context !== context || smart.kind === "closed") return;
+    // The player picked another cell while the offer was on its way: this Attack is over.
+    const still = this.selected;
+    if (smart.kind === "window" && (!still || still.col !== attack.cell?.col || still.row !== attack.cell?.row)) return;
     if (smart.kind === "moved") {
       setAttackTarget(smart.target);
       context.goTo(SceneName.ATTACK);

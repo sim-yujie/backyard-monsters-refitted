@@ -261,24 +261,18 @@
   overflow-y: auto;
 }
 
-/* A short screen (a phone on its side, an iPad on its side with Safari's
-   bars): the note is one line, the heading then each row beside it, sliding
-   sideways when they do not all fit (neon, round 1), so the weapons and the
-   monsters keep the height (layout check: 120 px of the list). */
+/* A short screen (an iPad on its side with Safari's bars, a phone on its
+   side): the rows are one line under the heading, sliding sideways when they
+   do not all fit (neon, round 1), so the weapons and the monsters keep the
+   height (layout check: 120 px of the list). */
 @media (max-height: 620px) {
   .smart-move-note {
-    flex-direction: row;
-    align-items: center;
-    gap: var(--space-2);
+    gap: 4px;
     margin-top: var(--space-1);
-    padding: 2px var(--space-2);
+    padding: 4px var(--space-2);
   }
 
-  /* A line between the heading and the rows (neon, round 3). */
   .smart-move-note__heading {
-    flex: none;
-    padding-right: var(--space-2);
-    border-right: 1px solid var(--colour-border-subtle);
     font-size: var(--text-sm);
   }
 
@@ -309,6 +303,21 @@
 }
 
 @media (max-height: 480px) {
+  /* A phone on its side: the heading and the rows on one line. */
+  .smart-move-note {
+    flex-direction: row;
+    align-items: center;
+    gap: var(--space-2);
+    padding: 2px var(--space-2);
+  }
+
+  /* A line between the heading and the rows (neon, round 3). */
+  .smart-move-note__heading {
+    flex: none;
+    padding-right: var(--space-2);
+    border-right: 1px solid var(--colour-border-subtle);
+  }
+
   /* The three Catapult shots on one row over the monsters' height, so none
      hides under the buttons while the note takes its line (neon, round 2). */
   .attack-window:has(.smart-move-note) .attack-window__grid.attack-window__weapons {
