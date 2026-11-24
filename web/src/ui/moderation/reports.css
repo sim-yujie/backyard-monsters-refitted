@@ -1027,7 +1027,13 @@
 }
 
 :root[data-skin="flash"] .mod-reports-window .btn.mod-reports__danger {
-  filter: hue-rotate(-46deg) saturate(2.2) brightness(0.78);
+  /* Classic's pill drawn in crimson: a hue turn of the yellow pill came out pink. */
+  --skin-button-stroke: #5c120c;
+  border: 2px solid #5c120c;
+  border-image: none;
+  border-radius: 999px;
+  background: linear-gradient(#ec5a48, #c0281d 55%, #9e1d14);
+  box-shadow: inset 0 2px 0 rgb(255 255 255 / 35%), inset 0 -2px 0 rgb(0 0 0 / 20%), 0 2px 2px rgb(60 20 0 / 35%);
 }
 
 :root[data-skin] .mod-reports-window .btn.mod-reports__danger:disabled {
