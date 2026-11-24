@@ -58,6 +58,16 @@ const refusal = (run: () => unknown): [number, unknown, Record<string, unknown>]
   throw new Error("expected a refusal");
 };
 
+/** The message of what a call threw. */
+const messageOf = (run: () => unknown): string => {
+  try {
+    run();
+  } catch (err) {
+    return (err as Error).message;
+  }
+  throw new Error("expected a refusal");
+};
+
 describe("locker/start", () => {
   test("writes {t:1, s:now, e:now+time} and charges the full putty price", () => {
     const plan = planLockerStart(yard(), "C5", NOW);
@@ -111,10 +121,39 @@ describe("locker/start", () => {
   test("a locker below the monster's level is refused with have/need", () => {
     const [status, reason, data] = refusal(() => planLockerStart(yard(2), "C17", NOW));
     expect([status, reason, data.have, data.need]).toEqual([409, "lockerLevel", 2, 3]);
-    // A level-2 locker mid-upgrade still counts as 2.
+  });
+
+  test("a Locker being upgraded is lockerBusy, in plain words (owner, 24 Nov 2026)", () => {
     const upgrading = yard(2);
     upgrading.buildingdata!["1"] = { id: 1, t: LOCKER, x: 0, y: 0, l: 2, cU: 5000 };
+    const before = structuredClone(upgrading);
+
+    const [status, reason, data] = refusal(() => planLockerStart(upgrading, "C16", NOW));
+    expect([status, reason, data.id]).toEqual([409, "lockerBusy", 1]);
+    expect(messageOf(() => planLockerStart(upgrading, "C16", NOW))).toBe(
+      "The Monster Locker is being upgraded. Wait for it to finish before you unlock a monster."
+    );
+    // Before its level: a monster above the Locker's level gets the same answer.
+    expect(refusal(() => planLockerStart(upgrading, "C17", NOW)).slice(0, 2)).toEqual([409, "lockerBusy"]);
+    expect(upgrading).toEqual(before);
+
+    // Once the countdown is gone (the catch-up finished it), the same start goes through.
+    upgrading.buildingdata!["1"] = { id: 1, t: LOCKER, x: 0, y: 0, l: 3 };
     expect(planLockerStart(upgrading, "C16", NOW).report.monster).toBe("C16");
+  });
+
+  test("the Inferno's Strongbox being upgraded is lockerBusy in its own name", () => {
+    const strongbox = yard(2, { type: "inferno", lockerdata: { IC1: { t: 2 } } });
+    strongbox.buildingdata!["1"] = { id: 1, t: LOCKER, x: 0, y: 0, l: 2, cU: 5000 };
+    expect(refusal(() => planLockerStart(strongbox, "IC2", NOW)).slice(0, 2)).toEqual([409, "lockerBusy"]);
+    expect(messageOf(() => planLockerStart(strongbox, "IC2", NOW))).toStartWith("The Strongbox is being upgraded.");
+  });
+
+  test("an unlock already running keeps running while the Locker upgrades: cancel and finish still work", () => {
+    const both = yard(3, { lockerdata: { C1: { t: 2 }, C5: { t: 1, s: NOW - 60, e: NOW + 600 } } });
+    both.buildingdata!["1"] = { id: 1, t: LOCKER, x: 0, y: 0, l: 3, cU: 5000 };
+    expect(planLockerFinish(both, NOW).slices.lockerdata.C5).toEqual({ t: 2 });
+    expect(planLockerCancel(both).report.monster).toBe("C5");
   });
 
   test("the save it was handed is not changed", () => {
@@ -210,6 +249,9 @@ describe("locker/instant", () => {
     expect(refusal(() => planLockerInstant(yard(), "C1")).slice(0, 2)).toEqual([409, "alreadyUnlocked"]);
     expect(refusal(() => planLockerInstant(yard(1), "C5")).slice(0, 2)).toEqual([409, "lockerLevel"]);
     expect(refusal(() => planLockerInstant(yard(), "C18")).slice(0, 2)).toEqual([400, "badRequest"]);
+    const upgrading = yard(3);
+    upgrading.buildingdata!["1"] = { id: 1, t: LOCKER, x: 0, y: 0, l: 3, cU: 5000 };
+    expect(refusal(() => planLockerInstant(upgrading, "C5")).slice(0, 2)).toEqual([409, "lockerBusy"]);
   });
 });
 

@@ -170,4 +170,32 @@ describe("planInstantUpgrade: gates, in order", () => {
     expect(plan.report).toMatchObject({ from: 1, to: 2, credits: 35 });
     expect(plan.buildingdata["1"].cU).toBeUndefined();
   });
+
+  test("a Monster Locker unlocking a monster is refused as `unlocking` (patch 6.10)", () => {
+    const yard: InstantUpgradeSave = {
+      ...yardOf({ "4": { id: 4, t: 8, x: 0, y: 0, l: 1 } }, 4),
+      lockerdata: { C1: { t: 2 }, C2: { t: 1, s: NOW - 60, e: NOW + 3600 } },
+    };
+    expect(refusal(() => planInstantUpgrade(yard, 4, NOW))).toMatchObject({
+      status: 409,
+      reason: "unlocking",
+      data: { monster: "C2" },
+    });
+    // Once the unlock is done, the same Locker upgrades at once.
+    yard.lockerdata = { C1: { t: 2 }, C2: { t: 2 } };
+    expect(planInstantUpgrade(yard, 4, NOW).report).toMatchObject({ id: 4, from: 1, to: 2 });
+  });
+
+  test("the Inferno's Strongbox unlocking an Inferno monster is refused as `unlocking`", () => {
+    const yard: InstantUpgradeSave = {
+      type: "inferno",
+      ...yardOf({ "4": { id: 4, t: 8, x: 0, y: 0, l: 1 } }, 4),
+      lockerdata: { IC1: { t: 2 }, IC2: { t: 1, s: NOW - 60, e: NOW + 3600 } },
+    };
+    expect(refusal(() => planInstantUpgrade(yard, 4, NOW))).toMatchObject({
+      status: 409,
+      reason: "unlocking",
+      data: { monster: "IC2" },
+    });
+  });
 });
