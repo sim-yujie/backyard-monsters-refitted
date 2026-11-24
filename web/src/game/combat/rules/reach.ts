@@ -122,7 +122,7 @@ export const towerHoldsFromAnchor = (
 
 /**
  * The towers that hold from their anchor ({@link towerHoldsFromAnchor}): the
- * Sniper (20), Cannon (21), Laser (23), Aerial Defense (115), Railgun (118),
+ * Cannon (20), Sniper (21), Laser (23), Aerial Defense (115), Railgun (118),
  * Inferno Cannon (130) and Magma (132), which all reach `BTOWER.TickAttack`
  * (`BTOWER.as:181`, `BUILDING115.as:65`). The owner's pick A (Desk 8, 25 Nov
  * 2026) leaves out the Quake Tower and the Tesla (whose Flash classes also

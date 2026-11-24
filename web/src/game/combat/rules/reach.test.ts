@@ -263,7 +263,7 @@ describe("every reach rule against Flash, at eight bearings (reach audit, beta 9
   );
 
   it("holds from the anchor exactly the towers that reach BTOWER.TickAttack's test", () => {
-    // Sniper, Cannon, Laser, Aerial Defense, Railgun, Inferno Cannon, Magma.
+    // Cannon, Sniper, Laser, Aerial Defense, Railgun, Inferno Cannon, Magma.
     expect([...TOWER_HOLDS_FROM_ANCHOR].sort((a, b) => a - b)).toEqual([
       20, 21, 23, 115, 118, 130, 132,
     ]);
