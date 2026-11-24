@@ -26,8 +26,8 @@ python3 snap.py spec-refs.json snap-refs.png 3; python3 snap.py spec-refs2.json 
 python3 snap.py spec-cal.json snap-cal.png 0.6
 python3 snap.py spec-classic.json snap-classic.png 2.4; python3 snap.py spec-modern.json snap-modern.png 2.4
 python3 snap.py spec-wp.json snap-wp.png 4
-# --- block-outs and Codex (29 image calls in all: pilot 1, round 1 12 (+1 Fort Modern redo), round 2 at the
-#     design heights 12, round 3 Taj and Magellan bigger 4; rounds 1-2 kept in round1/ and round2/ (not used))
+# --- block-outs and Codex (31 image calls in all: pilot 1, round 1 12 (+1 Fort Modern redo), round 2 at the
+#     design heights 12, round 3 Taj and Magellan bigger 4, round 4 Taj taller with a smooth dome 2; rounds 1-2 kept in round1/ and round2/ (not used))
 # bash render.sh $W
 # for n in $W; do python3 prompts.py c-$n $n classic; python3 prompts.py m-$n $n modern
 #   bash $S/run_codex.sh c-$n refs/blockout-$n.png refs/design-$n.png refs/ref-flash-wonders-3x.png refs/ref-flash-all-3x.png
@@ -41,7 +41,7 @@ for n in $W; do
 done
 # tone trims (round-2/3 files) toward the approved versions: V/S of stats.py
 python3 tone.py sq/paoay-church.full.png 1.0 0.92; python3 tone.py sq/pyramids.full.png 1.0 0.88
-python3 tone.py sq/taj-mahal.full.png 1.12 0.88
+python3 tone.py sq/taj-mahal.full.png 1.08 0.92; python3 tone.py sqm/taj-mahal.full.png 0.96 1.0
 python3 tone.py sqm/fort-santiago.full.png 0.88 1.0; python3 tone.py sqm/paoay-church.full.png 0.93 0.93
 python3 tone.py sqm/pyramids.full.png 0.95 0.9; python3 tone.py sqm/magellans-cross.full.png 0.92 1.0
 for d in sq sqm; do python3 ../decor-seat/tidy.py $d $W; done

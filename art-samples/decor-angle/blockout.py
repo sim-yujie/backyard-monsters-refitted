@@ -402,7 +402,7 @@ BUILD = {"fort-santiago": fort_santiago, "paoay-church": paoay_church, "magellan
 # and figure groups (statues, the Sphinx) are scaled as a whole by their own factor about their foot.
 # (stretch, from height): the steps / plinth below 'from' keep their height
 HEIGHTS = {"fort-santiago": (1.6, 0), "paoay-church": (1.26, 0), "magellans-cross": (1.67, 0.8), "pyramids": (1.73, 0),
-           "taj-mahal": (1.5, 0.9), "rizal-monument": (2.22, 1.35)}
+           "taj-mahal": (1.75, 0.9), "rizal-monument": (2.22, 1.35)}
 FIG_SCALE = 2.0
 BUILD[NAME]()
 ZS, Z0 = HEIGHTS.get(NAME, (1.0, 0))

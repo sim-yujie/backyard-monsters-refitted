@@ -96,7 +96,7 @@ export const REVAMP_DECORATION_ROWS: readonly ArtRow[] = [
     [1, ["banaue-terraces@2x.png", -63, -20], null, null, ["banaue-terraces-shadow.jpg", -65, -1], null, null],
   ], [100], 70],
   [221, "Taj Mahal", "buildings/decorations/wonders/", [
-    [1, ["taj-mahal@2x.png", -52, -50], null, null, ["taj-mahal-shadow.jpg", -54, 5], null, null],
+    [1, ["taj-mahal@2x.png", -52, -59], null, null, ["taj-mahal-shadow.jpg", -54, 5], null, null],
   ], [100], 70],
   [222, "Pyramid and Sphinx", "buildings/decorations/wonders/", [
     [1, ["pyramids@2x.png", -67, -37], null, null, ["pyramids-shadow.jpg", -69, -2], null, null],
@@ -186,7 +186,7 @@ export const REVAMP_DECORATION_MODERN_ART: Readonly<Record<number, readonly Tier
   218: modern(["mayon-volcano.modern@2x.webp", -64, -39], ["mayon-volcano.modern-shadow.jpg", -66, -1]),
   219: modern(["chocolate-hills.modern@2x.webp", -63, -12], ["chocolate-hills.modern-shadow.jpg", -65, -1]),
   220: modern(["banaue-terraces.modern@2x.webp", -63, -20], ["banaue-terraces.modern-shadow.jpg", -65, -1]),
-  221: modern(["taj-mahal.modern@2x.webp", -52, -53], ["taj-mahal.modern-shadow.jpg", -54, 5]),
+  221: modern(["taj-mahal.modern@2x.webp", -52, -59], ["taj-mahal.modern-shadow.jpg", -54, 5]),
   222: modern(["pyramids.modern@2x.webp", -67, -37], ["pyramids.modern-shadow.jpg", -69, -2]),
   223: modern(["mango-tree.modern@2x.webp", -38, -48], ["mango-tree.modern-shadow.jpg", -22, 7]),
   224: modern(["coconut-palm.modern@2x.webp", -42, -62], ["coconut-palm.modern-shadow.jpg", -23, 3]),

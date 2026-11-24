@@ -145,7 +145,7 @@ export const MODERN_BUTTON_FILE: Readonly<Record<"main" | "inferno", Readonly<Re
     218: "218.main.bc7582f5.webp",
     219: "219.main.cac6b9a0.webp",
     220: "220.main.f0bc26db.webp",
-    221: "221.main.55de09d3.webp",
+    221: "221.main.76aca802.webp",
     222: "222.main.2f71d45d.webp",
     223: "223.main.95b73dae.webp",
     224: "224.main.9c0fb4fa.webp",
