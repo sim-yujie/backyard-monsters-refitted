@@ -66,6 +66,17 @@ describe("reportAnswer", () => {
     expect(executed[0]!.params).toEqual([2505, 77, CHANNEL, "the real words", 1_700_000_000_123, true]);
   });
 
+  test("a stored report is said on Telegram with the server's copy of the line; a repeat is not", async () => {
+    const said: { text: string; verified: boolean; channel: string }[] = [];
+    const alert = async (report: { text: string; verified: boolean; channel: string }) =>
+      void said.push({ text: report.text, verified: report.verified, channel: report.channel });
+    const channel = history([line(77, "the real words", 5)]);
+    await reportAnswer(fakeEm().em, REPORTER, { userid: 77, channel: CHANNEL, message: "made up", ts: 5 }, channel.read, alert);
+    await reportAnswer(fakeEm({ inserted: false }).em, REPORTER, { userid: 77, channel: CHANNEL, message: "x", ts: 5 }, channel.read, alert);
+    await Bun.sleep(10);
+    expect(said).toEqual([{ text: "the real words", verified: true, channel: CHANNEL }]);
+  });
+
   test("a report is still stored when filing it into a dashboard case fails", async () => {
     const em = {
       execute: async (sql: string) => {

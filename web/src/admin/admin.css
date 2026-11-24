@@ -2995,6 +2995,60 @@ tbody th {
   gap: 6px;
 }
 
+/* Moderators' bans and mutes, under the list (modSteps.ts). */
+.mod-steps {
+  display: grid;
+  gap: 12px;
+}
+
+.mod-steps > .button {
+  justify-self: start;
+}
+
+.mod-step-row {
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 12px 12px 16px;
+}
+
+.mod-step-row .row-title {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.mod-step-what {
+  color: var(--ink-2);
+  font-weight: 400;
+}
+
+.mod-step-reason {
+  overflow-wrap: anywhere;
+}
+
+.mod-step-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: flex-end;
+}
+
+.mod-step-actions .button {
+  gap: 6px;
+}
+
+@media (max-width: 640px) {
+  .mod-step-row {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .mod-step-actions {
+    justify-content: flex-start;
+  }
+}
+
 /* ---- Moderator mail ---- */
 
 .modmail {

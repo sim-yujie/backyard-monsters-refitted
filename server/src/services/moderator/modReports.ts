@@ -33,7 +33,8 @@ import { isMailModerator } from "../mail/modMail.js";
  *
  * What a moderator may do is narrower than the dashboard:
  * - Close (nothing happens to the player), Warn, or Mute chat for 1 hour,
- *   1 day, 3 days or 7 days ({@link MOD_MUTE_HOURS}). No ban, no other length.
+ *   1 day, 3 days or 7 days ({@link MOD_MUTE_HOURS}). A ban of 1, 3 or 7
+ *   days is its own step (`modBan.ts`, owner 24 Nov 2026), open from chat too.
  * - Never on a moderator, a game team account, or themselves: those players
  *   are left out of the lists and every step on them is refused. An admin
  *   decides on them on the dashboard.
@@ -406,7 +407,13 @@ export const parseModAction = (raw: unknown): Parsed<{ action: ModAction; seen: 
 };
 
 export type ModActionOutcome =
-  | { outcome: "done"; closed: { reports: number; filterLines: number; filterOnlyLines: number }; player: ModQueueRow | null }
+  | {
+      outcome: "done";
+      closed: { reports: number; filterLines: number; filterOnlyLines: number };
+      player: ModQueueRow | null;
+      /** The chat case closed with the step, or null (for the Telegram message; not sent to the game). */
+      caseId: number | null;
+    }
   | { outcome: TargetRefusal | "changed" | "nothingOpen" | "noPlayer" | "longerMute" };
 
 /**
@@ -462,5 +469,6 @@ export const actAsModerator = async (
     outcome: "done",
     closed: { reports: done.closed.reports, filterLines: done.closed.filterLines, filterOnlyLines: done.closed.filterOnlyLines },
     player: done.player ? queueRow(done.player) : null,
+    caseId: done.closed.caseId,
   };
 };

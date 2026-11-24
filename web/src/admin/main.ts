@@ -26,6 +26,7 @@ import { h, replace } from "./dom";
 import { ErrorsView } from "./errors";
 import { ModerationView } from "./moderation";
 import { ModeratorsView } from "./moderators";
+import { ModStepsView } from "./modSteps";
 import { ModMailSection } from "./modmail";
 import { PhotosView } from "./photos";
 import { homeSplitWords } from "./evidence";
@@ -181,6 +182,7 @@ class Dashboard {
     onChanged: () => void this.queue.refresh(),
   });
   private readonly moderators = new ModeratorsView({ say: (message) => this.say(message) });
+  private readonly modSteps = new ModStepsView({ say: (message) => this.say(message) });
   private readonly attacks = new AttackLogSection({
     say: (message) => this.say(message),
     navigate: ({ player, side, range }) => {
@@ -398,7 +400,7 @@ class Dashboard {
     replace(this.sections.bugs.body, this.bugs.element);
     replace(this.sections.attacks.body, this.attacks.element);
     replace(this.sections.flagged.body, this.flagged.element);
-    replace(this.sections.moderators.body, this.moderators.element);
+    replace(this.sections.moderators.body, this.moderators.element, this.modSteps.element);
     replace(this.sections.modmail.body, this.modMail.element);
     replace(this.sections.chat.body, this.chat.element);
     replace(this.sections.shiny.body, this.shiny.element);
@@ -506,6 +508,7 @@ class Dashboard {
       route.view === "monsters" ? this.monsters.show() : Promise.resolve(),
       this.flagged.refresh(),
       this.moderators.refresh(),
+      this.modSteps.refresh(),
       this.modMail.refresh(),
       this.shiny.refresh(),
       this.announcements.refresh(),
@@ -586,6 +589,7 @@ class Dashboard {
       this.attacks.refresh(),
       this.flagged.refresh(),
       this.moderators.refresh(),
+      this.modSteps.refresh(),
       this.modMail.refresh(),
       this.shiny.refresh(),
       this.photos.refresh(),

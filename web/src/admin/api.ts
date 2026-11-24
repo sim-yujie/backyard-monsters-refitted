@@ -1327,6 +1327,35 @@ export const removeModerator = (userid: number): Promise<Envelope<{ removed: num
   adminPost(`${ADMIN}/moderators/${userid}/remove`, {});
 
 /**
+ * Moderators' bans and mutes (owner, 24 Nov 2026; server
+ * `services/admin/modSteps.ts`), newest first, with what became of each.
+ * Undo and Make permanent are the player steps (`moderatePlayer`).
+ */
+export type ModStepState = "on" | "ended" | "undone" | "permanent" | "replaced";
+
+export interface ModStepView {
+  id: number;
+  userid: number;
+  username: string | null;
+  moderatorId: number;
+  moderatorName: string | null;
+  kind: "ban" | "mute";
+  reason: string;
+  /** A ban's days or a mute's hours. */
+  length: number;
+  until: string | null;
+  at: string;
+  state: ModStepState;
+  laterByName: string | null;
+  laterAt: string | null;
+}
+
+export const fetchModSteps = (
+  offset = 0,
+): Promise<Envelope<{ steps: ModStepView[]; nextOffset: number | null }>> =>
+  adminGet(`${ADMIN}/modsteps`, { offset: offset || undefined });
+
+/**
  * Moderator mail (owner, beta 7; server `services/mail/modMail.ts`): every
  * conversation a moderator is in, both sides, kept even when the players
  * delete the thread. Admin only; moderators never see it.
