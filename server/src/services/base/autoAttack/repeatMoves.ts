@@ -8,7 +8,7 @@ import { logger } from "../../../utils/logger.js";
 import { monsterStorage, planMonsterTransfer } from "../../monsters/transferRules.js";
 import { catchUpArmyRow, catchUpTransferYards } from "../../yard/armies.js";
 import { academyLevels } from "../../yard/catchUpMonsters.js";
-import { highestAcademyLevels, housingCapacity, housingExpansionActive } from "../../yard/housing.js";
+import { highestAcademyLevels, housingCapacityNow, housingExpansionActive } from "../../yard/housing.js";
 import { countsOf } from "../../yard/attackRoster.js";
 import { readAttackSession } from "../attackSessionStore.js";
 import { isAttackActive } from "../isAttackActive.js";
@@ -62,7 +62,8 @@ const repeatYardOf = async (row: Save, mainSave: Save, reaching: readonly string
     ...at,
     reaches: reaching.includes(row.baseid),
     housed: countsOf(catchUpArmyRow(row, mainSave, now).monsters?.housed),
-    capacity: housingCapacity(row, expansion),
+    // Housing that finished while the yard was closed counts (patch, 24 Nov 2026).
+    capacity: housingCapacityNow(row, expansion, now),
     busy: await isBusy(row),
   };
 };
