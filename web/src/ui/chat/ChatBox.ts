@@ -658,12 +658,6 @@ export class ChatBox {
             this.renderPlayer();
           }),
         );
-        // A moderator bans from a name too (owner, 24 Nov 2026); never the game team or another moderator.
-        if (isModerator() && !line.gm && !line.mod) {
-          const ban = this.iconButton(CHAT_STRIP_TEXT.ban, "fist", () => this.openBan(line));
-          ban.classList.add("chat-box__action--ban");
-          actions.append(ban);
-        }
       }
     }
 
@@ -674,7 +668,22 @@ export class ChatBox {
     close.append(icon("close", 14));
     close.addEventListener("click", () => this.pick(null));
 
-    this.player.replaceChildren(name, actions, close);
+    // A moderator bans from a name too (owner, 24 Nov 2026): a red plate on the name's row, apart
+    // from the player's own four pictures; never on the game team or another moderator.
+    const canBan = !note && this.state.channel !== ALLIANCE_ROOM && isModerator() && !line.gm && !line.mod;
+    this.player.classList.toggle("chat-box__player--ban", canBan);
+    if (canBan) {
+      const ban = document.createElement("button");
+      ban.type = "button";
+      ban.className = "btn btn--danger chat-box__ban";
+      ban.textContent = CHAT_STRIP_TEXT.ban;
+      ban.title = `Ban ${line.name} (moderators)`;
+      ban.setAttribute("aria-label", CHAT_STRIP_TEXT.ban);
+      ban.addEventListener("click", () => this.openBan(line));
+      this.player.replaceChildren(name, ban, actions, close);
+    } else {
+      this.player.replaceChildren(name, actions, close);
+    }
   }
 
   private button(label: string, onClick: () => void, variant?: string): HTMLButtonElement {

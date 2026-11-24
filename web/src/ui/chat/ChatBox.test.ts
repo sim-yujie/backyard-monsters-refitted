@@ -463,6 +463,7 @@ describe("ChatBox: the chat filter and moderators (24 Nov 2026)", () => {
     box.setOpen(true);
     nameButton("[12] p77").click();
     expect(stripButton("Ban")).toBeUndefined();
+    expect(strip().querySelectorAll(".chat-box__action--icon")).toHaveLength(4);
     setModStatus({ moderator: true, banDays: [1, 3, 7] });
     nameButton("[12] p77").click();
     nameButton("[12] p77").click();

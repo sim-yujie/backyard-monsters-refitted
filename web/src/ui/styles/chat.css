@@ -589,6 +589,28 @@ button.chat-line__name {
   display: inline-flex;
 }
 
+/* A moderator's Ban (24 Nov 2026): a small crimson plate on the name's row, left of the close. */
+.chat-box__player--ban .chat-box__player-name {
+  padding-right: 96px;
+}
+
+:root[data-skin] .chat-box__player .btn.chat-box__ban {
+  position: absolute;
+  top: 2px;
+  right: 34px;
+  min-height: 30px;
+  min-width: 56px;
+  padding: 0 12px;
+  border: 2px solid #7a1611;
+  background: linear-gradient(#d9443b, #b3261e);
+  color: #fff;
+  font-size: var(--text-xs);
+  font-weight: 700;
+  text-shadow: 0 1px 0 rgb(0 0 0 / 40%);
+  --skin-button-cap: 14px;
+  --skin-button2-cap: 12px;
+}
+
 .chat-box__player-close {
   position: absolute;
   display: inline-flex;
@@ -784,5 +806,21 @@ button.chat-line__name {
   .chat-line__give {
     min-height: 44px;
     min-width: 44px;
+  }
+}
+
+.chat-box__player--ban .chat-box__player-name {
+  min-height: 34px;
+}
+
+@media (pointer: coarse) {
+  .chat-box__player--ban .chat-box__player-name {
+    min-height: 44px;
+  }
+
+  :root[data-skin] .chat-box__player .btn.chat-box__ban {
+    top: var(--space-2);
+    min-height: 44px;
+    min-width: 64px;
   }
 }
