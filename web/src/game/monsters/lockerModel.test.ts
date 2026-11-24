@@ -135,12 +135,42 @@ describe("startGate: one reason, in the server's order", () => {
     }
   });
 
-  it("needs the monster's locker level, counting a locker mid-upgrade at its level", () => {
-    const context = contextOf({ buildings: [HALL, LOCKER(2, { cU: 600 })] });
-    expect(lockerLevel(context.yard)).toBe(2);
-    const gate = startGate(entry("C9"), context);
+  it("needs the monster's locker level", () => {
+    const gate = startGate(entry("C9"), contextOf({ buildings: [HALL, LOCKER(2)] }));
     expect(gate).toEqual({ reason: "lockerLevel", have: 2, need: 3 });
     expect(gateText(gate!)).toBe("Needs Monster Locker level 3");
+  });
+
+  it("refuses while the Locker is being upgraded, before its level (owner, 24 Nov 2026)", () => {
+    const context = contextOf({ buildings: [HALL, LOCKER(2, { cU: 600 })] });
+    // A locker mid-upgrade still counts at the level it has.
+    expect(lockerLevel(context.yard)).toBe(2);
+    for (const monster of ["C2", "C9"]) {
+      const gate = startGate(entry(monster), context);
+      expect(gate).toEqual({ reason: "lockerBusy", id: 2 });
+      expect(instantGate(entry(monster), context)).toEqual({ reason: "lockerBusy", id: 2 });
+    }
+    expect(gateText({ reason: "lockerBusy", id: 2 })).toBe("The Monster Locker is being upgraded");
+    expect(gateText({ reason: "lockerBusy", id: 2 }, "inferno")).toBe("The Strongbox is being upgraded");
+  });
+
+  it("lets the unlock go once the upgrade's time has passed, but not while it is frozen", () => {
+    const upgrading = contextOf({ buildings: [HALL, LOCKER(2, { cU: 600 })] });
+    const later = { ...upgrading, now: () => T0 + 601 };
+    expect(startGate(entry("C2"), later)).toBeNull();
+
+    // A damaged Locker's countdown does not run: still upgrading.
+    const frozen = contextOf({ buildings: [HALL, LOCKER(2, { cU: 600, rE: 1 })] });
+    expect(startGate(entry("C2"), { ...frozen, now: () => T0 + 601 })?.reason).toBe("lockerBusy");
+  });
+
+  it("an unlock already running shows as running, not as the Locker being upgraded", () => {
+    const context = contextOf({
+      buildings: [HALL, LOCKER(3, { cU: 600 })],
+      lockerdata: { C2: { t: 1, s: T0 - 60, e: T0 + 600 } },
+    });
+    expect(startGate(entry("C5"), context)).toEqual({ reason: "unlockRunning", monster: "C2" });
+    expect(runningUnlock(context)?.monster.id).toBe("C2");
   });
 
   it("names the putty short last", () => {
