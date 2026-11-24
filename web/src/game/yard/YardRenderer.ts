@@ -1,7 +1,7 @@
 import { Container, Graphics, Rectangle, Sprite, type Renderer, type Texture } from "pixi.js";
 import { YardBuildings } from "./YardBuildings";
 import { NO_WORK, readWork, type WorkSource } from "./buildingWork";
-import { flightEnds, flightTotals, planFlights, TOWN_HALL_TYPE, type BankSource } from "./collectFx";
+import { flightEnds, flightTotals, planFlights, TOWN_HALL_TYPE, type BankSource, type Flight } from "./collectFx";
 import { CollectFxLayer, type LandListener } from "./CollectFxLayer";
 import type { HarvestKey } from "./harvest";
 import { YardGround } from "./YardGround";
@@ -1101,9 +1101,8 @@ export class YardRenderer {
       [{ type: juicer.type, ...at(juicer), resource: "r4", amount }],
       at(hall),
     );
-    const flights = this.magmaLast.has(id)
-      ? planned.map((flight) => ({ ...flight, dot: "magma" as const }))
-      : planned;
+    const dot: Flight["dot"] = this.magmaLast.has(id) ? "magma" : "r4";
+    const flights = planned.map((flight) => ({ ...flight, dot }));
     if (flights.length > 0) this.collect.launch(flights, () => undefined);
   }
 
