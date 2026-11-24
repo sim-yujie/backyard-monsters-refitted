@@ -42,9 +42,10 @@ describe("Gorgo behind arC's Town Hall (patch 7.9)", () => {
     expect(screenDistanceSquared(front.x, front.y, anchorX, anchorY)).toBeGreaterThan(45 * 45);
   });
 
-  it("stops a Rezghul, ranged, the same 200 units off the tiles walking in from behind or in front", () => {
+  it("stops a Rezghul, ranged, the same 141 units off the tiles walking in from behind or in front", () => {
     // The melee champions walk up to the building since patch 7.10
-    // (meleeReach.test.ts); a ranged monster keeps patch 7.9's reach.
+    // (meleeReach.test.ts); a ranged monster keeps patch 7.9's nearest-tile
+    // reach, its range scaled by 1/√2 since pick C (rangedReach.test.ts).
     expect(monsterRange("C19", 1)).toBe(200);
     for (const [side, x, y] of [
       ["behind", -500, -500],
@@ -62,8 +63,8 @@ describe("Gorgo behind arC's Town Hall (patch 7.9)", () => {
           stoodOff = Math.sqrt(reachSquared(rezghul.ix, rezghul.iy, building));
         }
       }
-      expect(stoodOff, side).toBeLessThanOrEqual(200);
-      expect(stoodOff, side).toBeGreaterThan(195);
+      expect(stoodOff, side).toBeLessThanOrEqual(200 * Math.SQRT1_2);
+      expect(stoodOff, side).toBeGreaterThan(200 * Math.SQRT1_2 - 5);
     }
   });
 });

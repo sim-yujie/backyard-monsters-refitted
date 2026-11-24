@@ -2162,8 +2162,12 @@ export class AttackBattleLayer {
       view.swingTick = event.tick;
     }
     let target: Point | null = null;
+    const projectile = drawsProjectile(monsterId, event.ranged);
     if (event.buildingId >= 0) {
-      target = this.host.centreOf(event.buildingId);
+      // A shot lands on the footprint point nearest the shooter, where the
+      // engine measures its reach (`targetIx`/`targetIy`); a blow, at the middle.
+      const centre = this.host.centreOf(event.buildingId);
+      target = centre && projectile ? groundWorld(event.targetIx, event.targetIy, this.origin) : centre;
     } else if (event.creepTargetId >= 0) {
       const other = this.views.get(event.creepTargetId);
       const at = other ? { x: other.lastX, y: other.lastY } : groundWorld(event.targetIx, event.targetIy, this.origin);
@@ -2172,7 +2176,7 @@ export class AttackBattleLayer {
     }
     if (!target) target = groundWorld(event.targetIx, event.targetIy, this.origin);
 
-    if (drawsProjectile(monsterId, event.ranged)) {
+    if (projectile) {
       const altitude = event.flying ? flyerAltitude(monsterId) : 0;
       // Fomor, a tall flying champion, fires from its drawn mouth, not from a point above its ground spot.
       const from =
