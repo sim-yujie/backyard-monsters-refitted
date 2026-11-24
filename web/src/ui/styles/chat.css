@@ -416,7 +416,7 @@ button.chat-line__name {
    down behind Main yard and Map, which took the clicks meant for the input
    (bug report 4). The box itself ends above the left dock (its top sits 229px
    above the bottom, and 13px keeps a gap) and the room is the part that gives
-   way, down to 80px. The room used to subtract a fixed 150px for the rest of
+   way, down to 64px (three short lines). The room used to subtract a fixed 150px for the rest of
    the box; the room tabs and Global's "English here" line came later and ran
    the input under Main yard on an iPad (1024x768, 24 Nov). Whatever the tab,
    tabs, notice, input or a player's strip take, the room takes the rest. */
@@ -428,7 +428,7 @@ button.chat-line__name {
 
 .chat-box--open .chat-box__lines {
   flex: 0 1 260px;
-  min-height: 80px;
+  min-height: 64px;
   overflow-y: auto;
   overscroll-behavior: contain;
 }
@@ -449,16 +449,19 @@ button.chat-line__name {
 
 /* ── A short screen: the left corner steps aside for the open box ───── */
 
-/* A phone on its side (844x390) or a short iPad or laptop: under the 670px
-   that the box needs above the left dock (its top, about 200px of tab, tabs,
-   notice and input, an 80px room, the 242px reserve), the box ran over the
-   yard switcher, Map and Friends, and they were drawn over its lines and its
-   input (24 Nov). As the dock's buttons step aside for a sheet on a phone
-   (yard-hud.css, friends-button.css), the left corner (the switcher, Map,
-   Home) and the Friends button, or a friend's Prev and Next, step aside while
-   the box is open; closing it brings them back. The box then runs down to
-   the bottom edge. Hidden, not removed, so Friends keeps its place by Map. */
-@media (min-width: 621px) and (max-height: 670px) {
+/* A phone on its side (844x390) or a short iPad: where the box does not fit
+   above the left dock (its top, about 200px of tab, tabs, notice and input,
+   a 64px room and the 242px reserve: about 650px on an iPad, 635px on a
+   laptop), the box ran over the yard switcher, Map and Friends, and they were
+   drawn over its lines and its input (24 Nov). As the dock's buttons step
+   aside for a sheet on a phone (yard-hud.css, friends-button.css), the left
+   corner (the switcher, Map, Home) and the Friends button, or a friend's Prev
+   and Next, step aside while the box is open; closing it brings them back.
+   The box then runs down to the bottom edge. Hidden, not removed, so Friends
+   keeps its place by Map. A touch screen gets this from 670px down (an iPad
+   with Safari's bars); a laptop (a 1366x768 screen's browser is about 650px
+   tall) keeps its corner down to 635px, with a smaller room instead (neon). */
+@media (min-width: 621px) and (max-height: 635px), (pointer: coarse) and (min-width: 621px) and (max-height: 670px) {
   .chat-box--open {
     --chat-bottom-reserve: calc(var(--space-3) + env(safe-area-inset-bottom, 0px));
   }
@@ -490,6 +493,32 @@ button.chat-line__name {
   .chat-box.chat-box--open:has(> .chat-box__player:not([hidden])) > .chat-box__lines {
     min-height: 32px;
   }
+
+  /* Global's notice keeps to one line, its first sentence ("Global chat is
+     in English.") whole: two lines of it left the room two lines (neon). */
+  .chat-box--open .chat-box__rule {
+    flex: none;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  /* A player's strip keeps only the pictures in one row, as on an upright
+     phone: two rows of named buttons left the room one cut line (neon). */
+  .chat-box__action.chat-box__action--icon {
+    min-width: 40px;
+    min-height: 40px;
+    padding: 4px;
+  }
+
+  .chat-box__action--icon .chat-box__action-label {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
 }
 
 /* On its side the Events door hangs from the HUD at 226px from the left
@@ -497,6 +526,19 @@ button.chat-line__name {
 @media (min-width: 621px) and (max-height: 500px) {
   .overlay__layer:has(> .chat-box--open) > .yard-dock > .events-door {
     visibility: hidden;
+  }
+
+  /* Folded, the last four lines ran down under the switcher and Map, which
+     start about 70px below the tab (neon). On its side, as upright, only the
+     newest line shows, on one line ending in "…". */
+  .chat-box:not(.chat-box--open) .chat-line:not(:last-child) {
+    display: none;
+  }
+
+  .chat-box:not(.chat-box--open) .chat-line {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
 }
 

@@ -54,7 +54,8 @@ const topRule = (css: string, selector: string): string => {
   return found.map((match) => match[1]).join("\n");
 };
 
-const SHORT = "(min-width: 621px) and (max-height: 670px)";
+const SHORT =
+  "(min-width: 621px) and (max-height: 635px), (pointer: coarse) and (min-width: 621px) and (max-height: 670px)";
 const short = media(chatCss, SHORT);
 
 describe("chat.css: the open box never runs under the left dock", () => {
@@ -66,18 +67,22 @@ describe("chat.css: the open box never runs under the left dock", () => {
     const lines = topRule(chatCss, ".chat-box--open .chat-box__lines");
     // A real basis (never `1 1 0`, the Safari trap in the layout rules) that may shrink.
     expect(lines).toMatch(/flex:\s*0 1 260px/);
-    expect(lines).toMatch(/min-height:\s*80px/);
+    expect(lines).toMatch(/min-height:\s*64px/);
     expect(lines).toMatch(/overflow-y:\s*auto/);
     // No fixed guess at the rest of the box any more (it missed the room tabs and the notice).
     expect(chatCss).not.toMatch(/229px - 150px/);
   });
 
-  it("below 670px tall, the box's top + rest + an 80px room + the reserve do not fit, so the corner steps aside", () => {
-    // Measured 24 Nov at 1024x768: top 142px, everything but the room 203px (Global, with its notice).
-    const top = 142;
-    const rest = 203;
-    expect(top + rest + 80 + 229 + 13).toBeGreaterThan(660);
-    expect(top + rest + 80 + 229 + 13).toBeLessThanOrEqual(670);
+  it("the corner steps aside where the box's top + rest + a 64px room + the reserve do not fit", () => {
+    // Measured 24 Nov: an iPad (1024 wide) top 142px, all but the room 203px (Global, with its
+    // notice); a laptop (1366 wide, no touch) top 138px, the rest 191px.
+    const ipad = 142 + 203 + 64 + 229 + 13;
+    const laptop = 138 + 191 + 64 + 229 + 13;
+    expect(ipad).toBeGreaterThan(635);
+    expect(ipad).toBeLessThanOrEqual(670);
+    expect(laptop).toBeLessThanOrEqual(635);
+    // A 1366x768 laptop's browser (about 650px tall) keeps its corner.
+    expect(650).toBeGreaterThan(635);
     expect(short).not.toBe("");
   });
 
@@ -100,5 +105,19 @@ describe("chat.css: the open box never runs under the left dock", () => {
     const phone = media(chatCss, "(max-width: 620px)");
     expect(phone).toMatch(/max-height:\s*calc\(100dvh - var\(--chat-top\) - 270px\)/);
     expect(phone).not.toContain(".overlay__layer:has(> .chat-box--open)");
+  });
+});
+
+describe("chat.css: a phone on its side keeps the folded line and the open room readable", () => {
+  const side = media(chatCss, "(min-width: 621px) and (max-height: 500px)");
+
+  it("folded, only the newest line shows, on one line (four ran under the switcher and Map)", () => {
+    expect(side).toMatch(/\.chat-box:not\(\.chat-box--open\) \.chat-line:not\(:last-child\)\s*\{\s*display:\s*none;/);
+    expect(side).toMatch(/\.chat-box:not\(\.chat-box--open\) \.chat-line\s*\{[^}]*white-space:\s*nowrap;/);
+  });
+
+  it("open on a short screen, Global's notice keeps to one line and the strip's buttons to pictures", () => {
+    expect(short).toMatch(/\.chat-box--open \.chat-box__rule\s*\{[^}]*white-space:\s*nowrap;/);
+    expect(short).toMatch(/\.chat-box__action--icon \.chat-box__action-label\s*\{[^}]*clip-path:\s*inset\(50%\);/);
   });
 });
