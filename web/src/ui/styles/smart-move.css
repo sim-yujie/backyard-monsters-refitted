@@ -309,7 +309,7 @@
   /* The three Catapult shots on one row over the monsters' height, so none
      hides under the buttons while the note takes its line (neon, round 2). */
   .attack-window:has(.smart-move-note) .attack-window__grid.attack-window__weapons {
-    grid-template-columns: repeat(3, 56px);
+    grid-template-columns: repeat(3, 66px);
   }
 
   /* A shorter fade over the last card: its counts stay readable. */
