@@ -99,14 +99,14 @@ const TRAILING = /[.,!?;:'"’”)\]}>]+$/;
 /** The host of a link as written, lower case, without its scheme, `www.` or port. */
 export const hostOf = (link: string): string => {
   const rest = link.replace(/^[a-z]+:\/\//i, "");
-  const host = rest.split(/[\/?#:\s]/)[0] ?? "";
+  const host = rest.split(/[/?#:\s]/)[0] ?? "";
   return host.toLowerCase().replace(/^www\./, "").replace(/\.$/, "");
 };
 
 /** The path after the host, as written (`/groups/x`), or "". */
 const pathOf = (link: string): string => {
   const rest = link.replace(/^[a-z]+:\/\//i, "");
-  const at = rest.search(/[\/?#]/);
+  const at = rest.search(/[/?#]/);
   return at < 0 ? "" : rest.slice(at);
 };
 
@@ -115,9 +115,9 @@ const isHost = (host: string, domain: string): boolean => host === domain || hos
 /** Our own Discord invite, in either of Discord's spellings. */
 const isOwnDiscord = (host: string, path: string): boolean => {
   const code = isHost(host, "discord.gg")
-    ? path.split(/[\/?#]/)[1]
+    ? path.split(/[/?#]/)[1]
     : isHost(host, "discord.com") || isHost(host, "discordapp.com")
-      ? /^\/invite\/([^\/?#]+)/i.exec(path)?.[1]
+      ? /^\/invite\/([^/?#]+)/i.exec(path)?.[1]
       : undefined;
   return code === OWN_DISCORD_INVITE;
 };
