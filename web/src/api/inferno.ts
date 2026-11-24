@@ -149,6 +149,12 @@ export interface DescentAttackStart extends ApiEnvelope {
   readonly flingercapacity: number;
   /** The Inferno purse now: the Descent's running loot total. */
   readonly descentloot?: InfernoAmounts;
+  /**
+   * The attack's start, unix seconds: the server session's `startedat`, which
+   * its replay gives Krallen her Krallen Hunt loot aura by. Absent from an
+   * older server.
+   */
+  readonly currenttime?: number;
 }
 
 export const startDescentAttack = (baseid: string): Promise<DescentAttackStart> =>
@@ -170,6 +176,9 @@ export const descentAttackLoad = (start: DescentAttackStart): BaseLoadResponse =
     ...(start.attackerhealth === undefined ? {} : { attackerhealth: start.attackerhealth }),
     ...(start.attackeracademy === undefined ? {} : { attackeracademy: start.attackeracademy }),
     ...(start.attackerranks === undefined ? {} : { attackerranks: start.attackerranks }),
+    // The attack's start as the load's clock: Krallen's loot aura runs on the
+    // page when it ran then, as the server's replay decides (`krallenAuraRuns`).
+    ...(typeof start.currenttime === "number" ? { currenttime: start.currenttime } : {}),
   }) as BaseLoadResponse;
 
 /**

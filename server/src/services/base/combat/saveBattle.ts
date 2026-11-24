@@ -6,7 +6,7 @@ import type { JsonObject } from "../../../types/JsonObject.js";
 import { logger } from "../../../utils/logger.js";
 import { logReport } from "../reportManager.js";
 import type { AbandonedInput, AbandonedOutcome } from "./abandonedAttack.js";
-import { battleMismatches, type ClientBattle } from "./battle.js";
+import { battleMismatches, mismatchFigures, type ClientBattle } from "./battle.js";
 import { stampForLog } from "./rulesStamp.js";
 import {
   FINALISE_REPLAY_DEADLINE_MS,
@@ -191,6 +191,8 @@ export const recordBattleMismatches = async (
     return rejected;
   }
 
+  // Each side's loot and champions' health, so a remaining disagreement can be told apart.
+  const figures = mismatchFigures(client, battle);
   logger.warn("Attack save {outcome} for {username} on base {baseid}: disagrees with the replay on {fields}", {
     event: "attack-replay-mismatch",
     outcome: rejected ? "rejected" : "flagged",
@@ -201,8 +203,8 @@ export const recordBattleMismatches = async (
     basesaveid: base.basesaveid,
     rowless: base.rowless,
     fields,
-    sent: { damage: client.damage, destroyed: client.destroyed },
-    derived: { damage: battle.damage, destroyed: battle.destroyed, tick: battle.tick },
+    sent: { damage: client.damage, destroyed: client.destroyed, ...figures.sent },
+    derived: { damage: battle.damage, destroyed: battle.destroyed, tick: battle.tick, ...figures.derived },
     ip: ctx.ip,
   });
 
