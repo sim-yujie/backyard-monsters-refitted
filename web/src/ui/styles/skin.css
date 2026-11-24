@@ -830,15 +830,28 @@
 /* Classic's cream fill under words the glass drew light for dark steel: the
    champion's "Flies · ranged" line (white) and Housing's "monsters are
    waiting for room" heading (pale yellow) could hardly be read. The dark
-   ink of the other Classic windows: the strongest for the champion's line,
-   as it stood out in white, and the warning's brown for the heading, as its
-   icon has. */
+   inks of the other Classic windows: the secondary one for the champion's
+   line, a step above the level line over it and below the name (neon, 24
+   Nov 2026), and the warning's brown for the heading, as its icon has. */
 :root[data-skin="flash"] .panel .champion__nature {
-  color: var(--colour-text-strong);
+  color: var(--colour-text-secondary);
 }
 
 :root[data-skin="flash"] .panel .housing-waiting__title {
   color: var(--colour-warning);
+}
+
+/* Housing's "80 free" when room is tight: the warning's brown fill under
+   the glass's dark words (for its bright yellow); Classic's cream ink. */
+:root[data-skin="flash"] .panel .housing-space__free--tight {
+  color: var(--colour-text-inverse);
+}
+
+/* The Monsters window's bars (housing, a running research or training): the
+   empty track at the fill's 10% was a hairline on the cream cards; a deeper
+   tint shows the bar is there at 0% (neon, 24 Nov 2026). */
+:root[data-skin="flash"] .panel .monsters-bar {
+  background: rgb(90 55 20 / 24%);
 }
 
 /* A frozen champion's badge keeps its ice blue (on the window's fill its
