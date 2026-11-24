@@ -612,7 +612,7 @@ button.chat-line__name {
 }
 
 :root[data-skin="flash"] .chat-box__player .btn.chat-box__ban {
-  filter: hue-rotate(-42deg) saturate(1.5) brightness(0.92);
+  filter: hue-rotate(-46deg) saturate(2.2) brightness(0.78);
 }
 
 .chat-box__player-close {

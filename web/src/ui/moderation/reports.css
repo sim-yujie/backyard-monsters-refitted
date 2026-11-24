@@ -1027,7 +1027,7 @@
 }
 
 :root[data-skin="flash"] .mod-reports-window .btn.mod-reports__danger {
-  filter: hue-rotate(-42deg) saturate(1.5) brightness(0.92);
+  filter: hue-rotate(-46deg) saturate(2.2) brightness(0.78);
 }
 
 :root[data-skin] .mod-reports-window .btn.mod-reports__danger:disabled {
@@ -1069,8 +1069,28 @@
     position: sticky;
     bottom: 0;
     z-index: 1;
-    background: var(--colour-surface-sunken);
+    /* Solid: the window's own surfaces are see-through tints (neon r2). */
+    background: rgb(47 58 70);
     box-shadow: 0 -6px 10px -6px rgb(0 0 0 / 45%);
+  }
+
+  .mod-ban-sheet .mod-reports__actions {
+    background: rgb(60 72 86);
+  }
+
+  :root[data-skin="flash"] .mod-reports__detail > .mod-reports__actions {
+    background: rgb(233 211 171);
+    box-shadow: 0 -6px 10px -6px rgb(90 50 10 / 35%);
+  }
+
+  :root[data-skin="flash"] .mod-ban-sheet .mod-reports__actions {
+    background: rgb(240 224 190);
+    box-shadow: 0 -6px 10px -6px rgb(90 50 10 / 35%);
+  }
+
+  /* Room for the lines: the "Applies to ..." line goes; the plates say enough. */
+  .mod-reports__detail > .mod-reports__actions .mod-reports__scope {
+    display: none;
   }
 
   .mod-reports__confirm textarea {

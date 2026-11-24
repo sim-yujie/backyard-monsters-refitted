@@ -378,8 +378,9 @@ export const modPlayer = async (
         if (!same.filter) {
           same.filter = filter;
           same.lineId = line.lineId;
-          // No server copy of the reported words: the filter's record is one.
-          if (same.report && !same.report.verified) same.message = line.message;
+          // No server copy of the reported words, or the room only had the filter's cut
+          // copy: the filter's record of the player's own words is the one to read.
+          if (same.report && (!same.report.verified || line.shown !== line.message)) same.message = line.message;
         }
         continue;
       }
