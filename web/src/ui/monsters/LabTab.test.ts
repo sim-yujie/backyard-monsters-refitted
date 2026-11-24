@@ -173,14 +173,29 @@ describe("LabTab: Research and Instant", () => {
     expect(actions.instant).toHaveBeenCalledWith("C3");
   });
 
-  it("reports the outcome and stays put", async () => {
-    const { element } = setup();
+  it("still says why a start was refused", async () => {
+    const { element, actions } = setup();
+    actions.start.mockImplementationOnce(() =>
+      Promise.resolve({
+        ok: false as const,
+        refusal: { reason: "cost", message: "Not enough Putty.", detail: {} },
+      }) as never,
+    );
     buttonNamed(element, "Research rank 1")!.click();
     await Promise.resolve();
     await Promise.resolve();
     const status = element.querySelector<HTMLElement>(".monsters-status")!;
     expect(status.hidden).toBe(false);
-    expect(spokenText(status)).toBe("Researching Teleportation rank 1 for Bolt: Putty 48,000 spent.");
+    expect(spokenText(status)).toContain("Not enough Putty.");
+  });
+  it("adds no spent line under a started research: its running card says it", async () => {
+    const { element } = setup();
+    buttonNamed(element, "Research rank 1")!.click();
+    await Promise.resolve();
+    await Promise.resolve();
+    const status = element.querySelector<HTMLElement>(".monsters-status")!;
+    expect(status.hidden).toBe(true);
+    expect(spokenText(status)).toBe("");
   });
 });
 

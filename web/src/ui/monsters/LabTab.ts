@@ -513,13 +513,16 @@ export class LabTab implements MonstersTab {
 
   /* ── Actions ────────────────────────────────────────────────────────── */
 
+  /**
+   * A started research says nothing more: the running card above says what
+   * it researches and its countdown, and a "Putty 24,000 spent." line under
+   * it only repeated that while the research ran (neon, 23 Nov 2026). A
+   * refusal still says why.
+   */
   private async runStart(id: string): Promise<void> {
     const result = await this.actions.start(id);
-    this.report(result, (report) => [
-      `Researching ${abilityOf(report.monster)} rank ${report.rank} for ${nameOf(report.monster)}: `,
-      resourceAmount("r3", report.cost.r3),
-      " spent.",
-    ]);
+    if (result.ok) this.setStatus(null);
+    else this.report(result, () => []);
   }
 
   private async runInstant(id: string): Promise<void> {
