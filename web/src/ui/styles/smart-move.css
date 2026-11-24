@@ -274,8 +274,11 @@
     padding: 2px var(--space-2);
   }
 
+  /* A line between the heading and the rows (neon, round 3). */
   .smart-move-note__heading {
     flex: none;
+    padding-right: var(--space-2);
+    border-right: 1px solid var(--colour-border-subtle);
     font-size: var(--text-sm);
   }
 
@@ -286,12 +289,12 @@
     flex-wrap: nowrap;
     min-width: 0;
     max-height: none;
-    padding-right: 20px;
+    padding-right: 36px;
     overflow-x: auto;
     overflow-y: hidden;
-    /* The end fades out, so a row past the edge reads as more to slide to (neon, round 2). */
-    -webkit-mask-image: linear-gradient(to right, #000 calc(100% - 20px), transparent);
-    mask-image: linear-gradient(to right, #000 calc(100% - 20px), transparent);
+    /* The end fades out, so a row past the edge reads as more to slide to (neon, rounds 2 and 3). */
+    -webkit-mask-image: linear-gradient(to right, #000 calc(100% - 36px), transparent);
+    mask-image: linear-gradient(to right, #000 calc(100% - 36px), transparent);
   }
 
   .smart-move-note :is(.repeat-prompt__short, .repeat-prompt__room-yard) {
