@@ -91,3 +91,27 @@ describe("ownArmies", () => {
     expect(yards[1]!.capacity).toBe(675);
   });
 });
+
+describe("ownArmies, Housing finished while the outpost was closed (patch, 24 Nov 2026)", () => {
+  const now = () => Math.floor(Date.now() / 1000);
+  const closed = (ago: number) =>
+    Object.assign(saves[2]!, {
+      savetime: now() - ago,
+      buildingdata: {
+        "1": { id: 1, t: 15, l: 1, cB: 1800, prefab: 6 },
+        "2": { id: 2, t: 15, l: 5, cU: 1800 },
+      },
+    });
+
+  test("a build and an upgrade whose time has passed count, at the new level", async () => {
+    closed(3600);
+    const { yards } = await run();
+    expect(yards[2]!.capacity).toBe(540 + 540);
+  });
+
+  test("still running: the build does not count, the upgrade counts at its old level", async () => {
+    closed(60);
+    const { yards } = await run();
+    expect(yards[2]!.capacity).toBe(450);
+  });
+});
