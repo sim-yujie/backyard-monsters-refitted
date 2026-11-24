@@ -139,6 +139,18 @@ describe("moderators' bans and mutes", () => {
     answers["GET /admin/modsteps"] = [200, { error: 0, steps: [], nextOffset: null }];
     const { view } = await mount();
     expect(view.element.textContent).toContain("No bans or mutes by moderators yet.");
+    expect(view.element.textContent).not.toContain("Show older");
+  });
+
+  it("Show older only while there are older steps, and it adds them", async () => {
+    answers["GET /admin/modsteps"] = [200, { error: 0, steps: [banOn], nextOffset: 30 }];
+    const { view } = await mount();
+    const more = [...view.element.querySelectorAll("button")].find((b) => b.textContent === "Show older")!;
+    answers["GET /admin/modsteps"] = [200, { error: 0, steps: [undone], nextOffset: null }];
+    more.click();
+    await settle();
+    expect(rows(view)).toHaveLength(2);
+    expect(view.element.textContent).not.toContain("Show older");
   });
 
   it("words for lengths", () => {

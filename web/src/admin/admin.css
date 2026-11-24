@@ -3001,8 +3001,8 @@ tbody th {
   gap: 12px;
 }
 
-.mod-steps > .button {
-  justify-self: start;
+.mod-steps__more:empty {
+  display: none;
 }
 
 .mod-step-row {

@@ -41,7 +41,9 @@ const nameOf = (step: ModStepView): string => step.username ?? `#${step.userid}`
 export class ModStepsView {
   readonly element = h("div", { class: "group mod-steps" });
   private readonly list = h("div", { class: "mod-steps__list" }, h("div", { class: "skeleton" }));
-  private readonly more = h("button", { class: "button quiet", attrs: { type: "button", hidden: "" } }, "Show older");
+  private readonly more = h("button", { class: "button quiet", attrs: { type: "button" } }, "Show older");
+  /** Holds Show older while there are older steps (`.button` sets display, so `hidden` would not hide it). */
+  private readonly moreSlot = h("div", { class: "mod-steps__more" });
   private steps: ModStepView[] = [];
   private nextOffset: number | null = null;
   private busy = false;
@@ -57,7 +59,7 @@ export class ModStepsView {
         "Moderators can ban for 1, 3 or 7 days and mute for up to 7 days. Undo lifts one that is still on; Make permanent turns a ban into one for good.",
       ),
       this.list,
-      this.more,
+      this.moreSlot,
     );
   }
 
@@ -139,7 +141,8 @@ export class ModStepsView {
   }
 
   private render(): void {
-    this.more.hidden = this.nextOffset === null;
+    if (this.nextOffset === null) replace(this.moreSlot);
+    else replace(this.moreSlot, this.more);
     if (this.steps.length === 0) {
       replace(this.list, h("p", { class: "note" }, "No bans or mutes by moderators yet."));
       return;
