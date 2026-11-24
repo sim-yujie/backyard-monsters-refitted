@@ -1,0 +1,68 @@
+{
+ "windpump classic": {
+  "pic": "/home/yujiesim/Coding/backyard-monsters-refitted/worktrees/decor-wire/art-samples/decor-real/windpump/game/classic/windpump@2x.png",
+  "lines": [
+   [
+    21.941751600813518,
+    43.360203417645266,
+    40.99205703647459,
+    52.8853561354758,
+    "platform top (left face)"
+   ],
+   [
+    47.00794296352544,
+    52.8853561354758,
+    66.05824839918651,
+    43.360203417645266,
+    "platform top (right face)"
+   ],
+   [
+    21.941751600813518,
+    47.197664582245466,
+    40.99205703647459,
+    56.722817300075974,
+    "platform foot (left face)"
+   ],
+   [
+    47.00794296352544,
+    56.722817300075974,
+    66.05824839918651,
+    47.197664582245466,
+    "platform foot (right face)"
+   ]
+  ]
+ },
+ "windpump modern": {
+  "pic": "/home/yujiesim/Coding/backyard-monsters-refitted/worktrees/decor-wire/art-samples/decor-real/windpump/game/modern/windpump.modern@2x.webp",
+  "lines": [
+   [
+    21.941751600813518,
+    43.360203417645266,
+    40.99205703647459,
+    52.8853561354758,
+    "platform top (left face)"
+   ],
+   [
+    47.00794296352544,
+    52.8853561354758,
+    66.05824839918651,
+    43.360203417645266,
+    "platform top (right face)"
+   ],
+   [
+    21.941751600813518,
+    47.197664582245466,
+    40.99205703647459,
+    56.722817300075974,
+    "platform foot (left face)"
+   ],
+   [
+    47.00794296352544,
+    56.722817300075974,
+    66.05824839918651,
+    47.197664582245466,
+    "platform foot (right face)"
+   ]
+  ]
+ }
+}
