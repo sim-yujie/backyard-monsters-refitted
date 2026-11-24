@@ -823,6 +823,47 @@ describe("Smart Repeat attack: moves into the yards in range", () => {
     expect(answer.moves).toEqual([]);
   });
 
+  /**
+   * A resource-paid Regular Starter Kit on an outpost next to the camp, not
+   * opened since (patch, 24 Nov 2026). The main yard (1,280) holds 50 Pokey
+   * and has 780 free; the 100 more (1,000) fit only with the kit's Housing
+   * (a level 2 prefab, 260).
+   */
+  const kittedOutpost = async (ago: (kitSeconds: number, housingSeconds: number) => number) => {
+    const { kitBuildings, starterKit } = await import("../../yard/starterKit.js");
+    const { buildingdata, seconds } = kitBuildings(starterKit(1)!, "resources", {});
+    const housingSeconds = Number(Object.values(buildingdata).find((building) => Number(building.t) === 15)!.cB);
+    userSave.buildingdata = { ...housing(2), h9: { id: "h9", t: 15, l: 1 } };
+    userSave.monsters.housed = { C1: 50 };
+    addOutpost(244, 208, 2, { C1: 200 });
+    addOutpost(242, 208, 2, {});
+    const near = outpostRows[1]!;
+    near.savetime = now() - ago(seconds, housingSeconds);
+    near.buildingdata = buildingdata;
+    return near;
+  };
+
+  test("a Starter Kit past its last prefab's finish counts on the unopened outpost: moves are made", async () => {
+    const near = await kittedOutpost((kitSeconds) => kitSeconds + 60);
+    const answer = await autoAttackPlanFor(user() as never, CAMP);
+    expect(answer.noRoom).toBeNull();
+    const moved = answer.moves.reduce((sum, move) => sum + (move.monsters.C1 ?? 0), 0);
+    expect(moved).toBe(100);
+    expect(answer.moves.some((move) => move.to === NEAR)).toBe(true);
+    const result = await runAutoAttack(user() as never, CAMP, answer.movesKey!);
+    expect(result.moved).toEqual(answer.moves);
+    // The far outpost gave the 100.
+    expect(outpostRows[0]!.monsters.housed).toEqual({ C1: 100 });
+    expect(near.savetime).toBeLessThan(now() - 60);
+  });
+
+  test("a Starter Kit whose Housing is still building does not count: no room in range", async () => {
+    await kittedOutpost((_kitSeconds, housingSeconds) => housingSeconds - 60);
+    const answer = await autoAttackPlanFor(user() as never, CAMP);
+    expect(answer.noRoom).toMatchObject({ need: 1_000 });
+    expect(answer.moves).toEqual([]);
+  });
+
   test("a champion in the plan never moves; a champion not ready refuses before any move", async () => {
     split();
     expect(JSON.stringify((await autoAttackPlanFor(user() as never, CAMP)).moves)).not.toContain('"t"');
