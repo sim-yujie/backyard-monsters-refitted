@@ -142,6 +142,21 @@ describe("LockerTab: Start and Instant", () => {
     );
   });
 
+  it("while the Locker is being upgraded, Start and Instant say so and stay shut (owner, 24 Nov 2026)", () => {
+    const { element, actions } = setup({ buildingdata: {
+      "1": building(1, 14, 6),
+      "2": { ...building(2, 8, 2), cU: 3_600 },
+    } });
+    row(element, "C2").click();
+    expect(element.querySelector(".monsters-gate")!.textContent).toBe(
+      "The Monster Locker is being upgraded",
+    );
+    const start = buttonNamed(element, "Start unlocking")!;
+    expect(start.disabled).toBe(true);
+    start.click();
+    expect(actions.start).not.toHaveBeenCalled();
+  });
+
   it("spends Shiny on Instant only on the second tap", () => {
     const { element, actions } = setup();
     row(element, "C3").click();

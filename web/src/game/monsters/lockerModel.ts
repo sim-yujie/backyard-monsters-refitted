@@ -65,6 +65,8 @@ export type UnlockGate =
   | { readonly reason: "alreadyUnlocked" }
   | { readonly reason: "unlockRunning"; readonly monster: string }
   | { readonly reason: "noLocker" }
+  /** The Locker is being upgraded: no unlock starts until it is done (owner, 24 Nov 2026). */
+  | { readonly reason: "lockerBusy"; readonly id: number }
   | { readonly reason: "lockerLevel"; readonly have: number; readonly need: number }
   | {
       readonly reason: "shortfall";
@@ -99,6 +101,25 @@ export const lockerLevel = (yard: Yard): number => {
     if (building.type === LOCKER_TYPE) best = Math.max(best, building.level);
   }
   return best;
+};
+
+/**
+ * The id of the yard's Monster Locker while an upgrade (or fortify) countdown
+ * runs on it, or null: the server's `upgradingLocker`
+ * (`server/src/services/yard/locker.ts`). A countdown whose end has passed no
+ * longer counts, as the server's catch-up will have finished it; a frozen one
+ * (the Locker damaged) still does.
+ */
+export const upgradingLocker = (context: LockerContext): number | null => {
+  for (const building of context.yard.buildings) {
+    if (building.type !== LOCKER_TYPE) continue;
+    const countdown = building.countdown;
+    if (countdown?.kind !== "upgrade" && countdown?.kind !== "fortify") continue;
+    const job = context.jobs().find((one) => one.key === `${countdown.kind}:${building.id}`);
+    const endsAt = job ? job.endsAt : countdown.paused ? null : countdown.endsAt;
+    if (endsAt === null || endsAt > context.now()) return building.id;
+  }
+  return null;
 };
 
 /**
@@ -157,6 +178,8 @@ const commonGate = (monster: MonsterEntry, context: LockerContext): UnlockGate |
   if (running) return { reason: "unlockRunning", monster: running.monster.id };
   const have = lockerLevel(context.yard);
   if (have < 1) return { reason: "noLocker" };
+  const upgrading = upgradingLocker(context);
+  if (upgrading !== null) return { reason: "lockerBusy", id: upgrading };
   if (have < monster.level) return { reason: "lockerLevel", have, need: monster.level };
   return null;
 };
@@ -241,6 +264,8 @@ export const gateText = (gate: UnlockGate, realm: MonsterRealm = "surface"): str
       return "Another unlock is running";
     case "noLocker":
       return `Build a ${words.locker}`;
+    case "lockerBusy":
+      return `The ${words.locker} is being upgraded`;
     case "lockerLevel":
       return `Needs ${words.locker} level ${gate.need}`;
     case "shortfall":

@@ -10,6 +10,8 @@ import {
   yardLockerStartAction,
 } from "./locker.js";
 import { yardShopBuyAction } from "./shopBuy.js";
+import { yardInstantUpgradeAction } from "./instantUpgrade.js";
+import { yardUpgradeAction } from "./upgrade.js";
 import { runYardAction, type YardAction, type YardAnswer } from "./yardAction.js";
 
 /**
@@ -158,6 +160,89 @@ describe("finish and instant", () => {
       status: 409,
       body: { reason: "credits", credits: { have: 10, need: 200 } },
     });
+  });
+});
+
+describe("unlocking and upgrading never at once (owner, 24 Nov 2026)", () => {
+  /** The Locker mid-upgrade: `left` seconds of countdown stored `ago` seconds ago. */
+  const upgradingRow = (left: number, ago = 0, overrides: Row = {}): Row =>
+    rowOf({
+      savetime: getCurrentDateTime() - ago,
+      buildingdata: {
+        "0": { id: 0, t: 14, X: 0, Y: 0, l: 5 },
+        "1": { id: 1, t: 8, X: 100, Y: 100, l: 2, cU: left, cL: left },
+        "2": { id: 2, t: 6, X: 200, Y: 200, l: 10 },
+      },
+      ...overrides,
+    });
+
+  test("no unlock starts while the Locker upgrades; nothing is charged or written", async () => {
+    db.row = upgradingRow(5000);
+    const before = structuredClone(db.row);
+
+    for (const action of [yardLockerStartAction, yardLockerInstantAction]) {
+      const answer = await call(action, { monster: "C2" });
+      expect(answer).toMatchObject({ status: 409, body: { reason: "lockerBusy", id: 1 } });
+      expect(answer.body.error).toBe(
+        "The Monster Locker is being upgraded. Wait for it to finish before you unlock a monster."
+      );
+    }
+    expect(db.row).toEqual(before);
+  });
+
+  test("an upgrade still running after time passed (yard not opened) still refuses", async () => {
+    db.row = upgradingRow(5000, 1000);
+    const answer = await call(yardLockerStartAction, { monster: "C2" });
+    expect(answer).toMatchObject({ status: 409, body: { reason: "lockerBusy" } });
+  });
+
+  test("an upgrade whose time ran out while the yard was closed lets the unlock start", async () => {
+    db.row = upgradingRow(500, 1000);
+    const answer = await call(yardLockerStartAction, { monster: "C2" });
+
+    expect(answer.status).toBe(200);
+    expect(locker().C2).toMatchObject({ t: 1 });
+    const building = (db.row!.buildingdata as Record<string, Row>)["1"];
+    expect(building.l).toBe(3);
+    expect(building.cU ?? 0).toBe(0);
+  });
+
+  test("an upgrade attempt on an unlocking Locker is refused and the unlock runs on (patch 6.10)", async () => {
+    await call(yardLockerStartAction, { monster: "C2" });
+    const running = structuredClone(locker().C2);
+
+    for (const action of [yardUpgradeAction, yardInstantUpgradeAction]) {
+      const answer = await call(action, { id: 1 });
+      expect(answer).toMatchObject({ status: 409, body: { reason: "unlocking", monster: "C2" } });
+    }
+    expect(locker().C2).toEqual(running);
+    expect((db.row!.buildingdata as Record<string, Row>)["1"]).toEqual({ id: 1, t: 8, X: 100, Y: 100, l: 3 });
+    expect(db.row!.credits).toBe(1000);
+  });
+
+  test("a save with both running (from before this patch) can still cancel or finish its unlock", async () => {
+    const now = getCurrentDateTime();
+    db.row = upgradingRow(5000, 0, {
+      lockerdata: { C1: { t: 2 }, C2: { t: 1, s: now - 60, e: now + 3600 } },
+    });
+
+    expect(await call(yardLockerFinishAction, {})).toMatchObject({ status: 200, body: { report: { monster: "C2" } } });
+    expect(locker().C2).toEqual({ t: 2 });
+
+    db.row = upgradingRow(5000, 0, {
+      lockerdata: { C1: { t: 2 }, C2: { t: 1, s: now - 60, e: now + 3600 } },
+    });
+    expect(await call(yardLockerCancelAction, {})).toMatchObject({ status: 200, body: { report: { monster: "C2" } } });
+    expect(locker().C2).toBeUndefined();
+  });
+
+  test("a save with both running finishes its unlock on the clock", async () => {
+    const now = getCurrentDateTime();
+    db.row = upgradingRow(5000, 0, {
+      lockerdata: { C1: { t: 2 }, C2: { t: 1, s: now - 4000, e: now - 10 } },
+    });
+    // The catch-up before the cancel has already finished the unlock: nothing is left to cancel.
+    expect(await call(yardLockerCancelAction, {})).toMatchObject({ status: 409, body: { reason: "notUnlocking" } });
   });
 });
 

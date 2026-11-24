@@ -153,6 +153,21 @@ export const lockerLevel = (buildingdata: BuildingDataMap | null | undefined): n
 };
 
 /**
+ * The id of a Monster Locker with an upgrade (or fortify) countdown running,
+ * or null. No unlock may start on it then (owner, 24 Nov 2026: a Locker never
+ * unlocks and upgrades at once; the other order is `planOneUpgrade`'s
+ * `unlocking`, patch 6.10). The save is caught up, so an upgrade whose time
+ * has passed is already finished here.
+ */
+export const upgradingLocker = (buildingdata: BuildingDataMap | null | undefined): number | null => {
+  for (const [key, building] of Object.entries(buildingdata ?? {})) {
+    if (Number(building.t) !== LOCKER_TYPE) continue;
+    if (Number(building.cU) > 0 || Number(building.cF) > 0) return Number(building.id ?? key);
+  }
+  return null;
+};
+
+/**
  * The Overdrive's active period off `storedata.CLOD`, or null when none was
  * bought. `s` is written by the shop; an entry without one started `du`
  * before its end.
@@ -213,7 +228,9 @@ export const obtainableOrThrow = (monster: string, realm: MonsterRealm = "surfac
  * (`CREATURELOCKER.as:967-981`), plus the locker itself: `400 badRequest` not
  * obtainable; `409 alreadyUnlocked` already in `lockerdata`;
  * `409 unlockRunning {monster}` another unlock (or this one) is running;
- * `409 noLocker` no finished Monster Locker; `409 lockerLevel {have, need}`.
+ * `409 noLocker` no finished Monster Locker; `409 lockerBusy {id}` the Locker
+ * is being upgraded (owner, 24 Nov 2026; Flash allowed it);
+ * `409 lockerLevel {have, need}`.
  * Putty is the wrapper's `409 shortfall` (start only).
  */
 export const unlockGate = (save: LockerSave, monster: string): MonsterEntry => {
@@ -233,6 +250,15 @@ export const unlockGate = (save: LockerSave, monster: string): MonsterEntry => {
 
   const have = lockerLevel(save.buildingdata);
   if (have < 1) throw yardRefusedErr("noLocker", "Build a Monster Locker first.");
+  const upgrading = upgradingLocker(save.buildingdata);
+  if (upgrading !== null) {
+    const locker = realm === "inferno" ? "Strongbox" : "Monster Locker";
+    throw yardRefusedErr(
+      "lockerBusy",
+      `The ${locker} is being upgraded. Wait for it to finish before you unlock a monster.`,
+      { id: upgrading }
+    );
+  }
   if (have < entry.level) {
     throw yardRefusedErr("lockerLevel", `Needs Monster Locker level ${entry.level}.`, {
       have,
