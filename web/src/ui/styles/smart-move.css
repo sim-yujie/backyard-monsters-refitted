@@ -10,7 +10,8 @@
  */
 
 .attack-window.smart-move {
-  width: min(92vw, 520px);
+  /* Room for a move of three kinds on one line (neon, round 2). */
+  width: min(92vw, 560px);
 }
 
 /* The camp under the title, a little smaller than in Repeat attack's sheet. */
@@ -23,19 +24,7 @@
   gap: var(--space-2);
 }
 
-/* The camp and how many moves, on one line (neon, round 1). */
-.smart-move__head {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: var(--space-2);
-  min-width: 0;
-}
-
-.smart-move__head > .repeat-prompt__camp {
-  min-width: 0;
-}
-
+/* How many moves, a chip beside the camp's level and damage (neon, rounds 1 and 2). */
 .smart-move__count {
   display: inline-flex;
   flex: none;
@@ -206,11 +195,49 @@
   height: 24px;
 }
 
-/* Its rows side by side, so a few short monsters take one line. */
+/* Its rows side by side in even columns, so a few short monsters take one line. */
 .smart-move-note .repeat-prompt__shorts {
-  flex-direction: row;
-  flex-wrap: wrap;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(84px, 1fr));
   gap: 6px;
+}
+
+/* Every picture framed, in Classic too (neon, round 2). */
+.smart-move-note .repeat-prompt__short-art {
+  border-radius: var(--radius-sm);
+  background: var(--colour-surface-sunken);
+}
+
+/* A phone upright: the heading, "1,000 needed" and their icons on one line. */
+@media (max-width: 430px) {
+  .smart-move-note__heading {
+    gap: var(--space-1);
+    font-size: var(--text-sm);
+  }
+
+  .smart-move-note__heading .game-icon {
+    width: 18px;
+    height: 18px;
+  }
+
+  .smart-move .repeat-prompt__tribe {
+    width: 42px;
+    height: 42px;
+  }
+
+  .smart-move :is(.repeat-prompt__level, .repeat-prompt__damage, .smart-move__count) {
+    min-height: 24px;
+    font-size: var(--text-sm);
+  }
+
+  .smart-move .repeat-prompt__camp-facts {
+    gap: var(--space-1);
+  }
+
+  .smart-move :is(.repeat-prompt__damage, .smart-move__count) .game-icon {
+    width: 20px;
+    height: 20px;
+  }
 }
 
 .smart-move-note :is(.repeat-prompt__short, .repeat-prompt__room-yard) {
@@ -252,13 +279,35 @@
   }
 
   .smart-move-note > :is(.repeat-prompt__shorts, .repeat-prompt__room) {
+    display: flex;
     flex: 1 1 auto;
     flex-direction: row;
     flex-wrap: nowrap;
     min-width: 0;
     max-height: none;
+    padding-right: 20px;
     overflow-x: auto;
     overflow-y: hidden;
+    /* The end fades out, so a row past the edge reads as more to slide to (neon, round 2). */
+    -webkit-mask-image: linear-gradient(to right, #000 calc(100% - 20px), transparent);
+    mask-image: linear-gradient(to right, #000 calc(100% - 20px), transparent);
+  }
+
+  /* Each yard and its free room a group of its own, a line between them. */
+  .smart-move-note .repeat-prompt__room-yard + .repeat-prompt__room-yard {
+    border-left: 1px solid var(--colour-border-subtle);
+  }
+
+  /* The three Catapult shots on one row over the monsters' height, so none
+     hides under the buttons while the note takes its line (neon, round 2). */
+  .attack-window:has(.smart-move-note) .attack-window__grid.attack-window__weapons {
+    grid-template-columns: repeat(3, 56px);
+  }
+
+  /* A shorter fade over the last card: its counts stay readable. */
+  .smart-move .attack-window__body--more-below {
+    -webkit-mask-image: linear-gradient(to bottom, #000 calc(100% - 14px), transparent);
+    mask-image: linear-gradient(to bottom, #000 calc(100% - 14px), transparent);
   }
 
   .smart-move-note :is(.repeat-prompt__short, .repeat-prompt__room-yard) {

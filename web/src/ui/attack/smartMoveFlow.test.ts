@@ -118,7 +118,7 @@ describe("Attack on a camp with smart moving", () => {
     const note = (one as { note: HTMLElement }).note;
     expect(note.textContent).toContain(SMART_MOVE_TEXT.short);
     expect(note.querySelectorAll(".repeat-prompt__short")).toHaveLength(1);
-    expect(note.textContent).toContain("12 short");
+    expect(note.textContent).toContain("−12");
 
     const room = setup({
       offer: async () =>

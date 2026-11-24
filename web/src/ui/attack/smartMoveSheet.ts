@@ -152,8 +152,9 @@ export class SmartMoveSheet {
   }
 
   /**
-   * The camp, with how many moves on the same line (neon, round 1: one row,
-   * so a phone on its side shows two cards), then the cards.
+   * The camp, with how many moves beside its level and damage (neon, round
+   * 1: no heading row of its own, so a phone on its side shows more cards),
+   * then the cards.
    */
   private render(): void {
     const camp = this.offer.camp ?? { tribe: "Wild monster", level: 0, damage: 0 };
@@ -164,8 +165,9 @@ export class SmartMoveSheet {
       gameIcon(classicLook() ? "outpostclassic" : "outpost", { size: 24, decorative: true }),
       el("span", "", words),
     );
-    const head = el("div", "smart-move__head");
-    head.append(campHead(camp, camp.damage), count);
+    // Beside the level and the damage, so it wraps with them on a narrow phone (neon, round 2).
+    const head = campHead(camp, camp.damage);
+    (head.querySelector(".repeat-prompt__camp-facts") ?? head).append(count);
     this.popup.setHead(head);
     this.popup.setContent(moveCards(this.offer.moves, this.offer.yards));
   }
@@ -237,7 +239,13 @@ export const smartMoveNote = (offer: SmartMoveResponse | null): HTMLElement | nu
     el("span", "smart-move-note__words", words),
   );
   if (short) {
-    note.append(heading, shortageList(offer.missing));
+    // Under "Saved army: short" each row says only how many: "−12" (neon, round 2).
+    const list = shortageList(offer.missing);
+    list.querySelectorAll<HTMLElement>(".repeat-prompt__short--monster .repeat-prompt__short-words").forEach((words, index) => {
+      const item = offer.missing.filter((one) => one.kind === "monster")[index];
+      if (item?.kind === "monster") words.textContent = `−${(item.need - item.have).toLocaleString("en-US")}`;
+    });
+    note.append(heading, list);
     return note;
   }
   // neon, round 1: the room needed on the heading's line, then a line per yard in range.
