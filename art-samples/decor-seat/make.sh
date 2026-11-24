@@ -46,6 +46,11 @@ for d in sq sqm; do
   python3 tidy.py $d rizal-monument mayon-volcano paoay-church fort-santiago pyramids chocolate-hills banaue-terraces magellans-cross
   python3 tidy.py $d --bleed mayon-volcano banaue-terraces chocolate-hills
 done
+# Chocolate Hills came out candy (saturation 0.80 Classic, 0.87 Modern; the skill's line is ~0.80): trimmed
+python3 -c "from PIL import Image, ImageEnhance
+for d, k in (('sq', 0.92), ('sqm', 0.9)):
+    p = d + '/chocolate-hills.full.png'; im = Image.open(p).convert('RGBA'); a = im.getchannel('A')
+    rgb = ImageEnhance.Color(im.convert('RGB')).enhance(k); rgb.putalpha(a); rgb.save(p)"
 python3 measure.py sq/*.full.png sqm/*.full.png
 # --- game files: base widths at 1x (owner: Paoay, Fort, Magellan, Pyramid ~1.3x; Mayon, Banaue, Hills ~1.2x;
 #     Rizal and Taj as they were); the footprint diamond is 140 wide
