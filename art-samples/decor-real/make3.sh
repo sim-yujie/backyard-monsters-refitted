@@ -16,13 +16,18 @@ W="paoay-church fort-santiago magellans-cross rizal-monument"
 # bash render3.sh $W
 # bash codex3.sh m3-paoay-church      (pilot), then:
 # bash codex3.sh c3-paoay-church m3-fort-santiago c3-fort-santiago m3-magellans-cross c3-magellans-cross m3-rizal-monument c3-rizal-monument
-rm -rf classic3 modern3 sq3 sqm3 game3; mkdir -p classic3 modern3 sq3 sqm3 game3/classic game3/modern
+rm -rf classic3 modern3 sq3 sqm3 game3 rz; mkdir -p classic3 modern3 sq3 sqm3 game3/classic game3/modern rz
+# Rizal's bronze darker (dark brown-black like the real figures), masked to the block-out's bronze, before the cut
+python3 bronze.py c3-rizal-monument/rizal-monument-classic.png bo3/rizal-monument-magenta.png rz/c.png 0.62
+python3 bronze.py m3-rizal-monument/rizal-monument-modern.png bo3/rizal-monument-magenta.png rz/m.png 0.62
 for n in $W; do
-  python3 $S/cut_sheet.py c3-$n/$n-classic.png --cols 1 --rows 1 --out classic3 --names $n
-  python3 $S/cut_sheet.py m3-$n/$n-modern.png --cols 1 --rows 1 --out modern3 --names $n
+  C=c3-$n/$n-classic.png; M=m3-$n/$n-modern.png
+  [ $n = rizal-monument ] && C=rz/c.png && M=rz/m.png
+  python3 $S/cut_sheet.py $C --cols 1 --rows 1 --out classic3 --names $n
+  python3 $S/cut_sheet.py $M --cols 1 --rows 1 --out modern3 --names $n
 done
 # colour toward the photos (no Codex; medians measured on refs/*/front*.jpg): stone greyer (Codex warmed it toward
-# tan/pink), Magellan's roof dark red-brown not orange, Rizal's bronze dark not golden
+# tan/pink), Magellan's roof dark red-brown not orange
 python3 greyen.py modern3/paoay-church.full.png modern3/paoay-church.full.png 0.5 0.42
 python3 greyen.py classic3/paoay-church.full.png classic3/paoay-church.full.png 0.45 0.45
 python3 greyen.py modern3/fort-santiago.full.png modern3/fort-santiago.full.png 0.75 0.45
@@ -31,7 +36,6 @@ for l in classic3 modern3; do
   python3 recolor.py $l/magellans-cross.full.png $l/magellans-cross.full.png 0.44
   python3 greyen.py $l/magellans-cross.full.png $l/magellans-cross.full.png 0.6 0.32
   python3 greyen.py $l/rizal-monument.full.png $l/rizal-monument.full.png 0.4 0.32
-  python3 bronze.py $l/rizal-monument.full.png $l/rizal-monument.full.png 0.62
 done
 for n in $W; do
   python3 ../decor-seat/square.py classic3/$n.full.png sq3/$n.full.png
