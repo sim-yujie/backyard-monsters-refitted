@@ -75,16 +75,16 @@ export const REVAMP_DECORATION_ROWS: readonly ArtRow[] = [
   // Batch 2 (art/decor-wonders, `art-samples/decor-wonders`): nine wonders on the 70 spot of the Statue of
   // Liberty, Eiffel Tower and Big Ben, and ten plants.
   [214, "Rizal Monument", "buildings/decorations/wonders/", [
-    [1, ["rizal-monument@2x.png", -49, -80], null, null, ["rizal-monument-shadow.jpg", -51, 7], null, null],
+    [1, ["rizal-monument@2x.png", -49, -64], null, null, ["rizal-monument-shadow.jpg", -51, 7], null, null],
   ], [100], 70],
   [215, "Paoay Church", "buildings/decorations/wonders/", [
-    [1, ["paoay-church@2x.png", -68, -43], null, null, ["paoay-church-shadow.jpg", -70, -3], null, null],
+    [1, ["paoay-church@2x.png", -68, -20], null, null, ["paoay-church-shadow.jpg", -70, -3], null, null],
   ], [100], 70],
   [216, "Fort Santiago Gate", "buildings/decorations/wonders/", [
-    [1, ["fort-santiago@2x.png", -68, -30], null, null, ["fort-santiago-shadow.jpg", -70, -3], null, null],
+    [1, ["fort-santiago@2x.png", -68, -22], null, null, ["fort-santiago-shadow.jpg", -70, -3], null, null],
   ], [100], 70],
   [217, "Magellan's Cross", "buildings/decorations/wonders/", [
-    [1, ["magellans-cross@2x.png", -64, -42], null, null, ["magellans-cross-shadow.jpg", -66, -1], null, null],
+    [1, ["magellans-cross@2x.png", -64, -34], null, null, ["magellans-cross-shadow.jpg", -66, -1], null, null],
   ], [100], 70],
   [218, "Mayon Volcano", "buildings/decorations/wonders/", [
     [1, ["mayon-volcano@2x.png", -64, -39], null, null, ["mayon-volcano-shadow.jpg", -66, -1], null, null],
@@ -179,10 +179,10 @@ export const REVAMP_DECORATION_MODERN_ART: Readonly<Record<number, readonly Tier
   213: moving(["windpump.modern@2x.webp", -22, -40], ["windpump.modern-shadow.jpg", -17, 9],
     ["windpump-anim.modern@2x.webp", -25, -43, 36, 47, 48]),
   // Batch 2: the wonders and plants.
-  214: modern(["rizal-monument.modern@2x.webp", -49, -81], ["rizal-monument.modern-shadow.jpg", -51, 7]),
-  215: modern(["paoay-church.modern@2x.webp", -68, -43], ["paoay-church.modern-shadow.jpg", -70, -3]),
-  216: modern(["fort-santiago.modern@2x.webp", -68, -31], ["fort-santiago.modern-shadow.jpg", -70, -3]),
-  217: modern(["magellans-cross.modern@2x.webp", -64, -42], ["magellans-cross.modern-shadow.jpg", -66, -1]),
+  214: modern(["rizal-monument.modern@2x.webp", -49, -65], ["rizal-monument.modern-shadow.jpg", -51, 7]),
+  215: modern(["paoay-church.modern@2x.webp", -68, -21], ["paoay-church.modern-shadow.jpg", -70, -3]),
+  216: modern(["fort-santiago.modern@2x.webp", -68, -24], ["fort-santiago.modern-shadow.jpg", -70, -3]),
+  217: modern(["magellans-cross.modern@2x.webp", -64, -34], ["magellans-cross.modern-shadow.jpg", -66, -1]),
   218: modern(["mayon-volcano.modern@2x.webp", -64, -39], ["mayon-volcano.modern-shadow.jpg", -66, -1]),
   219: modern(["chocolate-hills.modern@2x.webp", -63, -12], ["chocolate-hills.modern-shadow.jpg", -65, -1]),
   220: modern(["banaue-terraces.modern@2x.webp", -63, -20], ["banaue-terraces.modern-shadow.jpg", -65, -1]),

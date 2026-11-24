@@ -214,243 +214,336 @@ GATE = (0.60, 0.59, 0.55)       # Fort Santiago: grey weathered adobe/stone
 
 
 def fort_santiago():
-    """Fort Santiago's main gate: a tall carved frontispiece is the hero; the fort walls are only short stubs.
-    The gate front faces the lower left (the left-front face, plane y = FY)."""
-    st = mat("stone", GATE); wl = mat("wall", (0.46, 0.45, 0.42)); sl = mat("slab", GREY)
-    wd = mat("wood", WOOD, 0.7); dk = mat("dark", DARK)
+    """Fort Santiago's main gate (refs/fort-santiago/): the pale carved frontispiece set into a LONG, dark, battered
+    curtain wall that runs out to both slab edges in the gate's own plane, its top level with the gate's lower
+    cornice. Proportions measured on refs/fort-santiago/front.jpg (1 px = 0.0101 units, total height 8.5).
+    The gate front faces the lower left (plane y = FY)."""
+    st = mat("stone", (0.66, 0.63, 0.57)); wl = mat("wall", (0.27, 0.25, 0.22)); sl = mat("slab", (0.52, 0.42, 0.36))
+    dk = mat("dark", DARK)
     slab(sl)
-    FY, BY = -2.6, -0.6           # front and back planes of the gatehouse
-    W = 3.3                        # half width of the lower tier
-    H1, H2, H3 = 4.0, 2.7, 1.05    # lower tier, upper tier, pediment heights
-    # wall stubs either side, set back a little, lower than the lower tier's cornice
+    FY = -2.0                      # the gate's front plane
+    K = 0.85                       # the whole gate scaled down a little so the long wall shows either side
+    W = 3.25                       # half width of the carved lower tier (before K)
+    H1, H2 = 4.25, 2.78            # lower tier to the top of its cornice; upper tier to the top of its cornice
+    WF0, WB = FY + 0.75, FY + 3.6  # (before K) the wall's face at its foot, the gate block's back
+    WH = 4.1                       # (before K) wall top: level with the lower cornice
+    before = set(o.name for o in scene.objects)
+    # the gate block: through the wall, front at FY
+    g = box(-W, W, FY, WB - 0.3, 0, H1 - 0.3, st, "gate")
+    # battered flanks either side of the lower tier: wedges from the wall face out, sloping from the ground up
     for s in (-1, 1):
-        x0, x1 = sorted((s * (W - 0.05), s * 4.85))
-        box(x0, x1, FY + 0.45, BY + 1.3, 0, 2.7, wl, "wall")
-        box(x0, x1, FY + 0.35, FY + 0.75, 2.7, 3.15, wl, "parapet")
-    for x in (-4.7, 4.7 - 0.0):
-        pass
-    # lower tier with the arched passage straight through
-    g = box(-W, W, FY, BY, 0, H1, st, "gate")
-    arch(g, "y", 0, 0, 2.0, 3.0, BY - FY + 0.2, FY, fill=None)
-    box(-1.0, 1.0, BY - 0.1, BY + 0.6, 0, 0.02, dk, "passage")       # dark floor glimpse through the passage
-    # base plinth and the lower cornice
-    box(-W - 0.12, W + 0.12, FY - 0.15, BY, 0, 0.45, st, "plinth")
-    box(-W - 0.2, W + 0.2, FY - 0.3, BY + 0.05, H1 - 0.35, H1, st, "cornice1")
-    # paired pilasters either side of the arch, and the outer niche bays
-    for px in (-2.85, -2.05, 1.25, 2.05):
-        box(px, px + 0.6, FY - 0.22, FY + 0.1, 0.45, H1 - 0.35, st, "pil")
-    for px in (-3.15, 2.55):                 # niches with carved figures at the far ends
-        pass
-    # arch moulding and the coat of arms above the arch
-    box(-0.75, 0.75, FY - 0.25, FY + 0.05, 3.0, 3.6, st, "arms")
-    # upper tier: narrower, a shallow carved front framing the relief panel of Saint James on horseback
-    U, D = 1.75, 0.8                      # half width, depth of the upper tier
-    up_ = box(-U, U, FY + 0.1, FY + 0.1 + D, H1, H1 + H2, st, "upper")
-    cut(up_, box(-1.15, 1.15, FY + 0.0, FY + 0.4, H1 + 0.3, H1 + H2 - 0.35, mat("cutter", (1, 0, 1))))
-    for px in (-U - 0.05, U - 0.45):
-        box(px, px + 0.5, FY - 0.12, FY + 0.3, H1, H1 + H2 - 0.2, st, "pil2")
-    box(-U - 0.15, U + 0.15, FY - 0.2, FY + 0.1 + D + 0.1, H1 + H2 - 0.25, H1 + H2, st, "cornice2")
-    # the rider relief inside the panel (a rough lump for Codex to sculpt): a rearing horse, rider with sword
-    ellip(0.0, FY + 0.32, H1 + 1.1, 0.62, 0.1, 0.3, st, "horse")
-    for hx in (-0.35, 0.4):
-        box(hx - 0.07, hx + 0.07, FY + 0.28, FY + 0.4, H1 + 0.35, H1 + 0.95, st, "leg")
-    ellip(-0.62, FY + 0.32, H1 + 1.5, 0.15, 0.09, 0.26, st, "hhead")
-    ellip(0.1, FY + 0.3, H1 + 1.65, 0.14, 0.09, 0.32, st, "rider")
-    box(0.15, 0.8, FY + 0.28, FY + 0.36, H1 + 1.85, H1 + 1.93, st, "sword")
-    # big scrolls (volutes) flanking the upper tier, from its top edge down to the lower cornice
+        prof = [(s * W, 0), (s * 4.25, 0), (s * W, 3.35)]
+        if s < 0: prof = list(reversed(prof))
+        prism_xz(prof, FY + 0.05, WF0 + 0.2, st, "flank")
+    # the arched passage: 1.92 wide, crown at 1.97 (a round arch), dark inside
+    arch(g, "y", 0, 0, 1.92, 1.97, WB - FY, FY, fill=None)
+    box(-0.96, 0.96, WB - 0.35, WB + 0.4, 0, 0.02, dk, "passage")
+    # the moulded arch frame (voussoirs) round the opening
+    fr = box(-1.32, 1.32, FY - 0.12, FY + 0.02, 0, 2.33, st, "archframe")
+    arch(fr, "y", 0, 0, 1.92, 1.97, 0.3, FY - 0.15, fill=None)
+    # plinth and the heavy lower cornice
+    box(-W - 0.1, W + 0.1, FY - 0.14, WF0, 0, 0.32, st, "plinth")
+    box(-W - 0.2, W + 0.2, FY - 0.3, WF0 + 0.1, H1 - 0.3, H1, st, "cornice1")
+    # paired pilasters either side of the arch, and the carved figure strips at the far ends
+    for x0, x1 in ((-2.5, -1.99), (-1.99, -1.39), (1.34, 1.95), (1.95, 2.56)):
+        box(x0, x1, FY - 0.2, FY + 0.05, 0.32, H1 - 0.3, st, "pil")
+    for x0, x1 in ((-3.16, -2.55), (2.56, 3.22)):
+        box(x0, x1, FY - 0.12, FY + 0.05, 0.32, H1 - 0.3, st, "figstrip")
+        ellip((x0 + x1) / 2, FY - 0.14, 1.5, 0.22, 0.08, 0.55, st, "figure")
+        ellip((x0 + x1) / 2, FY - 0.14, 3.3, 0.24, 0.08, 0.3, st, "trophy")
+    # the royal coat of arms (crowned shield) over the arch, and a smaller shield on each spandrel
+    box(-0.48, 0.48, FY - 0.24, FY + 0.05, 2.63, 3.65, st, "arms")
+    ellip(0, FY - 0.2, 3.8, 0.42, 0.1, 0.17, st, "crown")
+    for cx in (-1.0, 0.99):
+        box(cx - 0.29, cx + 0.29, FY - 0.18, FY + 0.05, 2.12, 2.95, st, "shield")
+        ellip(cx, FY - 0.15, 3.02, 0.26, 0.08, 0.1, st, "scrown")
+    # upper tier: narrower, the framed relief of Saint James on horseback, pilasters, a frieze, its cornice
+    U = 1.72
+    up_ = box(-U, U, FY + 0.1, FY + 0.95, H1, H1 + H2 - 0.25, st, "upper")
+    cut(up_, box(-0.93, 0.93, FY + 0.0, FY + 0.38, H1 + 0.1, H1 + 1.67, mat("cutter", (1, 0, 1))))
+    for x0, x1 in ((-U - 0.08, -1.32), (1.28, U + 0.08)):
+        box(x0, x1, FY - 0.12, FY + 0.3, H1, H1 + H2 - 0.25, st, "pil2")
+    box(-1.0, 1.0, FY - 0.08, FY + 0.12, H1 + 1.67, H1 + 1.82, st, "panelframe")
+    box(-U - 0.15, U + 0.15, FY - 0.2, FY + 1.05, H1 + H2 - 0.25, H1 + H2, st, "cornice2")
+    # the rider relief inside the panel (a rough lump for Codex to sculpt): a rearing horse, the rider, his sword
+    ellip(0.05, FY + 0.32, H1 + 0.8, 0.6, 0.1, 0.28, st, "horse")
+    for hx in (-0.3, 0.42):
+        box(hx - 0.07, hx + 0.07, FY + 0.28, FY + 0.4, H1 + 0.2, H1 + 0.7, st, "leg")
+    ellip(-0.55, FY + 0.32, H1 + 1.15, 0.14, 0.09, 0.24, st, "hhead")
+    ellip(0.12, FY + 0.3, H1 + 1.25, 0.13, 0.09, 0.3, st, "rider")
+    box(0.18, 0.75, FY + 0.28, FY + 0.36, H1 + 1.45, H1 + 1.52, st, "sword")
+    # big scrolls (volutes) and sloping wings from the upper tier's sides down to the lower cornice ends
     for s in (-1, 1):
-        x0 = s * U
-        prof = [(x0, H1)]
+        prof = [(s * U, H1)]
         for i in range(0, 9):
             t = i / 8
-            prof.append((x0 + s * 1.15 * (1 - t) ** 0.6, H1 + 2.1 * t ** 1.4))
+            prof.append((s * (U + 1.15 * (1 - t) ** 0.7), H1 + 2.0 * t ** 1.5))
         if s > 0: prof = list(reversed(prof))
-        prism_xz(prof, FY + 0.15, FY + 0.55, st, "scroll")
-        # pinnacles on the ends of the lower cornice
-        pinnacle(s * (W - 0.15), FY + 0.1, H1, 0.22, 1.1, st)
-    # pediment: a thin triangle with a pointed finial and two small ones
-    prism_xz([(-U - 0.1, H1 + H2), (U + 0.1, H1 + H2), (0, H1 + H2 + H3)], FY - 0.05, FY + 0.55, st, "pediment")
-    pinnacle(0, FY + 0.25, H1 + H2 + H3 - 0.1, 0.16, 0.75, st)
+        prism_xz(prof, FY + 0.1, FY + 0.6, st, "scroll")
+        pinnacle(s * 2.9, FY + 0.2, H1, 0.2, 0.86, st)            # tall finials on the lower cornice's ends
+        pinnacle(s * 1.5, FY + 0.15, H1 + H2, 0.14, 0.6, st)      # small ones on the upper cornice's corners
+    # pediment: a low triangle with slightly curved sides and a carved centre, a pointed finial on top
+    prof = [(-U - 0.05, H1 + H2), (U + 0.05, H1 + H2)]
+    for i in range(1, 8):
+        t = i / 8
+        prof.append(((U + 0.05) * (1 - t), H1 + H2 + 0.86 * (1 - (1 - t) ** 1.3)))
+    prof.append((0, H1 + H2 + 0.86))
+    for i in range(7, 0, -1):
+        t = i / 8
+        prof.append((-(U + 0.05) * (1 - t), H1 + H2 + 0.86 * (1 - (1 - t) ** 1.3)))
+    prism_xz(prof, FY - 0.05, FY + 0.6, st, "pediment")
+    ellip(0, FY - 0.08, H1 + H2 + 0.35, 0.3, 0.08, 0.22, st, "cartouche")
+    pinnacle(0, FY + 0.25, H1 + H2 + 0.78, 0.13, 0.62, st)
+    for o in scene.objects:                      # scale the gate about (0, FY, 0)
+        if o.type != "MESH" or o.name in before: continue
+        for v in o.data.vertices:
+            v.co = Vector((v.co.x * K, FY + (v.co.y - FY) * K, v.co.z * K))
+    # the curtain wall, both sides of the gate, out to the slab edges: a battered face, a flat walk on top
+    wf0, wf1, wb, wh = FY + 0.75 * K, FY + 1.1 * K, FY + 0.75 * K + 2.1, WH * K
     for s in (-1, 1):
-        pinnacle(s * (U - 0.05), FY + 0.1, H1 + H2, 0.15, 0.6, st)
+        x0, x1 = sorted((s * (W - 0.2) * K, s * 4.95))
+        prism_yz([(wf0, 0), (wb, 0), (wb, wh), (wf1, wh)], x0, x1, wl, "wall")
+        box(x0, x1, wf1, wf1 + 0.4, wh, wh + 0.28, wl, "parapet")
 
 
 def paoay_church():
-    """Paoay Church: grey-white coral stone, a huge wall of curved buttresses along the nave, a long red roof,
-    a pediment facade full of pinnacles, and the white bell tower standing APART on the church's left."""
-    st = mat("coral", CORAL); tw = mat("tower", (0.86, 0.85, 0.82)); sl = mat("slab", GREY)
-    rf = mat("roof", (0.70, 0.17, 0.20), 0.7); dk = mat("dark", DARK); wd = mat("wood", WOOD, 0.7)
+    """Paoay Church (refs/paoay-church/): a wide, low, near-triangular facade flanked by huge sloping corner
+    buttresses; a row of massive scroll-ended buttresses with finials along the nave's (visible) right side; a long
+    red roof below the gable; and the stocky square bell tower standing APART on the facade's LEFT (seen from the
+    front), level with the facade, 1.4x its height. Proportions from refs/paoay-church/front.jpg and
+    front-with-tower.jpg: facade 6.04 wide x 3.65 tall; tower 0.39 x the facade's width, gap 0.14 x."""
+    st = mat("coral", (0.78, 0.76, 0.71)); tw = mat("tower", (0.74, 0.72, 0.67)); sl = mat("slab", GREY)
+    rf = mat("roof", (0.62, 0.12, 0.16), 0.7); dk = mat("dark", DARK); wd = mat("wood", WOOD, 0.7)
     slab(sl)
-    # nave: long axis along +y, the facade on the left-front face
-    nx0, nx1, ny0, ny1, nh = -0.6, 3.0, -2.9, 4.8, 3.1
-    box(nx0, nx1, ny0, ny1, 0, nh, st, "nave")
+    fc = 1.53                                   # facade centre (x)
+    fy0 = -3.55                                 # facade front plane
+    HB, HC, HT = 1.61, 2.13, 3.12               # main cornice, top of the 2nd tier (gable base), gable apex
+    B1, B2, BG = 2.42, 2.05, 1.9                # half widths: lower tier, 2nd tier, gable base
+    nx0, nx1, ny1 = fc - B1 + 0.15, fc + B1 - 0.15, 3.9     # the nave (a little shorter than real, to fit)
+    eave, ridge = 1.75, 2.25                    # the ridge about level with the gable's base (aerial)
+    box(nx0, nx1, fy0 + 0.5, ny1, 0, eave, st, "nave")
     nc = (nx0 + nx1) / 2
-    prism_xz([(nx0 - 0.25, nh - 0.05), (nx1 + 0.25, nh - 0.05), (nc, nh + 1.55)], ny0 + 0.35, ny1 + 0.15, rf, "roof")
-    # facade, wider than the nave, with a stepped pediment, pilasters, a band and many pinnacles
-    fy0, fy1 = -3.45, -2.85
-    fx0, fx1 = nx0 - 0.45, nx1 + 0.45
-    fc = (fx0 + fx1) / 2
-    f = box(fx0, fx1, fy0, fy1, 0, 3.5, st, "facade")
-    prism_xz([(fx0 + 0.2, 3.5), (fx1 - 0.2, 3.5), (fc + 0.55, 5.25), (fc - 0.55, 5.25)], fy0 + 0.1, fy1, st, "gable")
-    # the steps along the gable's edges, each with a pinnacle
-    for k in range(1, 4):
-        t = k / 4
+    prism_xz([(nx0 - 0.2, eave - 0.05), (nx1 + 0.2, eave - 0.05), (nc, ridge)], fy0 + 0.6, ny1 + 0.15, rf, "roof")
+    # the facade: lower tier, 2nd tier, stepped gable, the small square belfry on the apex
+    f = box(fc - B1, fc + B1, fy0, fy0 + 0.75, 0, HB, st, "facade")
+    box(fc - B1 - 0.06, fc + B1 + 0.06, fy0 - 0.12, fy0 + 0.75, HB - 0.12, HB + 0.02, st, "cornice")
+    f2 = box(fc - B2, fc + B2, fy0 + 0.05, fy0 + 0.75, HB, HC, st, "tier2")
+    box(fc - B2 - 0.05, fc + B2 + 0.05, fy0 - 0.05, fy0 + 0.75, HC - 0.08, HC + 0.02, st, "band2")
+    # the gable: a broad triangle from the 2nd tier up to the apex, small finials stepping up both edges
+    prism_xz([(fc - BG, HC), (fc + BG, HC), (fc, HT)], fy0 + 0.1, fy0 + 0.72, st, "gable")
+    for t, h in ((0.22, 0.4), (0.45, 0.34), (0.68, 0.28)):
         for s in (-1, 1):
-            x = fc + s * ((fx1 - fx0) / 2 - 0.2 - t * ((fx1 - fx0) / 2 - 0.75))
-            z = 3.5 + t * 1.75
-            pinnacle(x, fy0 + 0.35, z - 0.1, 0.14, 0.6, st)
-    # little belfry niche on the apex
-    bel = box(fc - 0.4, fc + 0.4, fy0 + 0.15, fy0 + 0.75, 5.2, 6.0, st, "apex")
-    arch(bel, "y", fc, 5.35, 0.36, 0.55, 0.25, fy0 + 0.15, fill=dk)
-    pinnacle(fc, fy0 + 0.45, 6.0, 0.22, 0.6, st)
-    arch(f, "y", fc, 0, 1.1, 1.9, 0.3, fy0, fill=wd)
-    for wx in (fc - 1.2, fc + 1.2):
-        arch(f, "y", wx, 2.45, 0.38, 0.7, 0.2, fy0, fill=dk)
-    arch(f, "y", fc, 2.5, 0.4, 0.75, 0.2, fy0, fill=dk)
-    for px in (fx0, fx0 + 0.9, fc - 0.75, fc + 0.45, fx1 - 1.2, fx1 - 0.3):
-        box(px, px + 0.3, fy0 - 0.15, fy0 + 0.05, 0, 3.55, st, "pil")
-    box(fx0 - 0.08, fx1 + 0.08, fy0 - 0.2, fy0 + 0.1, 2.2, 2.38, st, "band")
-    box(fx0 - 0.08, fx1 + 0.08, fy0 - 0.2, fy0 + 0.1, 3.42, 3.6, st, "cornice")
-    for s in (fx0 + 0.15, fx1 - 0.15):
-        pinnacle(s, fy0 + 0.2, 3.6, 0.2, 0.9, st)
-    # the huge buttresses along the nave's right side: curved wedges, tall at the wall, each with a pinnacle
-    def buttress(y0, y1, depth=1.85, top=nh + 0.25):
-        prof = [(nx1 - 0.05, 0), (nx1 + depth, 0), (nx1 + depth, 0.45)]
+            pinnacle(fc + s * BG * (1 - t), fy0 + 0.35, HC + (HT - HC) * t - 0.08, 0.1, h, st)
+    for s in (-1, 1):                            # the bigger finials at the 2nd tier's outer corners
+        pinnacle(fc + s * (B2 + 0.05), fy0 + 0.3, HC, 0.16, 0.5, st)
+    bel = box(fc - 0.2, fc + 0.2, fy0 + 0.15, fy0 + 0.55, HT - 0.15, HT + 0.37, st, "belfry")
+    arch(bel, "y", fc, HT - 0.02, 0.18, 0.3, 0.12, fy0 + 0.15, fill=dk)
+    pyramid(fc, fy0 + 0.35, HT + 0.37, 0.24, 0.17, st)
+    # door, the three 2nd-tier windows, the gable niche
+    arch(f, "y", fc, 0, 0.66, 0.95, 0.25, fy0, fill=wd)
+    for wx in (fc - 0.97, fc, fc + 0.99):
+        arch(f2, "y", wx, HB + 0.08, 0.22, 0.4, 0.2, fy0 + 0.05, fill=dk)
+    # tall pilasters dividing the facade into bays
+    for ox in (-2.15, -1.45, -0.75, 0.6, 1.3, 2.0):
+        box(fc + ox, fc + ox + 0.15, fy0 - 0.1, fy0 + 0.05, 0, HB - 0.1, st, "pil")
+    for ox in (-1.9, -1.2, 1.05, 1.75):
+        box(fc + ox, fc + ox + 0.12, fy0 - 0.03, fy0 + 0.1, HB, HC - 0.08, st, "pil2")
+    # the huge corner buttresses flanking the facade: concave slopes from the ground up to the main cornice
+    def corner(s):
+        x1 = fc + s * B1
+        prof = [(x1, 0), (fc + s * 3.02, 0), (fc + s * 3.02, 0.22)]
         for i in range(1, 9):
-            t = i / 9
-            prof.append((nx1 + depth * (1 - t), 0.45 + (top - 0.45) * (t ** 1.7)))
+            t = i / 8
+            prof.append((fc + s * (3.02 - 0.6 * t ** 0.55), 0.22 + (HB - 0.22) * t))
+        prof.append((x1, HB))
+        if s < 0: prof = list(reversed(prof))
+        prism_xz(prof, fy0 + 0.02, fy0 + 1.3, st, "cbutt")
+    corner(-1); corner(1)
+    # the massive buttresses along the nave's right side: tall at the wall, sweeping down and out to a rounded
+    # scroll foot, a finial on top of each (refs: side-buttresses.jpg, buttress-closeup.jpg)
+    def buttress(y0, y1, depth=0.95, top=eave + 0.08):
+        prof = [(nx1 - 0.05, 0), (nx1 + depth, 0), (nx1 + depth, 0.35)]
+        for i in range(1, 9):
+            t = i / 8
+            prof.append((nx1 + depth * (1 - 0.82 * t ** 0.8), 0.35 + (top - 0.35) * t))
         prof.append((nx1 - 0.05, top))
         prism_xz(list(reversed(prof)), y0, y1, st, "buttress")
-        pinnacle(nx1 + 0.12, (y0 + y1) / 2, top, 0.2, 0.75, st)
-    for k in range(7):
-        y0 = fy0 + 0.05 + k * 1.2
-        buttress(y0, y0 + 0.5)
-    # the bell tower, apart on the church's left (toward the left corner): three tiers, a small dome
-    tx0, tx1, ty0, ty1 = -4.75, -2.95, -4.75, -2.95
-    tc = ((tx0 + tx1) / 2, (ty0 + ty1) / 2)
+        pinnacle(nx1 + 0.2, (y0 + y1) / 2, top, 0.15, 0.42, st)
+    yb = fy0 + 1.45
+    while yb + 0.42 < ny1 - 0.1:
+        buttress(yb, yb + 0.42)
+        yb += 0.82
+    # the bell tower, apart on the facade's LEFT, level with the facade: square, stepped storeys, a low dome
+    tx0, tx1 = -4.7, -2.34
+    ty0 = fy0 - 0.1
+    ty1 = ty0 + (tx1 - tx0)
+    tcx, tcy = (tx0 + tx1) / 2, (ty0 + ty1) / 2
     z = 0
-    for k, hh in enumerate((3.6, 2.4, 1.8)):
-        s = 0.17 * k
-        t = box(tx0 + s, tx1 - s, ty0 + s, ty1 - s, z, z + hh, tw, "tower")
+    for k, (hh, inset) in enumerate(((2.09, 0.0), (1.63, 0.16), (1.07, 0.3))):
+        t = box(tx0 + inset, tx1 - inset, ty0 + inset, ty1 - inset, z, z + hh, tw, "tower")
         if k == 0:
-            arch(t, "y", tc[0], 0, 0.55, 1.0, 0.25, ty0, fill=wd)
-            arch(t, "y", tc[0], 2.2, 0.32, 0.6, 0.15, ty0, fill=dk)
+            arch(t, "y", tcx, 0, 0.45, 0.85, 0.2, ty0, fill=wd)
+            arch(t, "y", tcx, 1.25, 0.22, 0.4, 0.12, ty0, fill=dk)
         else:
-            arch(t, "y", tc[0], z + 0.35, 0.55, 1.0, 0.25, ty0 + s, fill=dk)
-            arch(t, "x", tc[1], z + 0.35, 0.55, 1.0, 0.25, tx1 - s, fill=dk)
-        box(tx0 + s - 0.1, tx1 - s + 0.1, ty0 + s - 0.1, ty1 - s + 0.1, z + hh - 0.18, z + hh, tw, "ledge")
+            w = 0.36 if k == 1 else 0.42
+            arch(t, "y", tcx, z + 0.45, w, 0.62, 0.2, ty0 + inset, fill=dk)
+            arch(t, "x", tcy, z + 0.45, w, 0.62, 0.2, tx1 - inset, fill=dk)
+        box(tx0 + inset - 0.08, tx1 - inset + 0.08, ty0 + inset - 0.08, ty1 - inset + 0.08, z + hh - 0.14, z + hh, tw, "ledge")
         z += hh
-        if k in (0, 2):
-            for (x, y) in ((tx0 + s + 0.15, ty0 + s + 0.15), (tx1 - s - 0.15, ty0 + s + 0.15),
-                           (tx1 - s - 0.15, ty1 - s - 0.15), (tx0 + s + 0.15, ty1 - s - 0.15)):
-                pinnacle(x, y, z, 0.1, 0.45, tw)
-    cyl(tc[0], tc[1], z, z + 0.25, 0.62, tw, n=16)
-    sphere(tc[0], tc[1], z + 0.25, 0.62, tw, sz=0.95)
-    cyl(tc[0], tc[1], z + 0.8, z + 1.05, 0.08, tw, n=8)
+    i3 = 0.3
+    for (x, y) in ((tx0 + i3 + 0.1, ty0 + i3 + 0.1), (tx1 - i3 - 0.1, ty0 + i3 + 0.1),
+                   (tx1 - i3 - 0.1, ty1 - i3 - 0.1), (tx0 + i3 + 0.1, ty1 - i3 - 0.1)):
+        pinnacle(x, y, z, 0.09, 0.32, tw)
+    cyl(tcx, tcy, z, z + 0.12, 0.72, tw, n=16)
+    sphere(tcx, tcy, z + 0.12, 0.72, tw, sz=0.42)
+    cyl(tcx, tcy, z + 0.42, z + 0.52, 0.06, tw, n=8)
 
 
 def magellans_cross():
-    """Magellan's Cross kiosk: a squat white octagon with SOLID walls, one big round arch with an iron grille in
-    each face, a dark maroon tiled roof with wide eaves and a small cross on top; the tall wooden cross inside."""
-    wh = mat("white", (0.88, 0.87, 0.83)); sl = mat("slab", GREY); rf = mat("roof", (0.38, 0.13, 0.10), 0.7)
-    wd = mat("wood", (0.45, 0.28, 0.15), 0.7); ir = mat("iron", (0.06, 0.06, 0.06), 0.5, 0.6)
-    stp = mat("step", (0.62, 0.60, 0.56))
+    """Magellan's Cross kiosk (refs/magellans-cross/): an octagon of coursed pale coral-stone blocks with corner
+    pilasters, one big round arch in every face closed by black wrought-iron gates (the front pair open), a low
+    bell-cast roof of dark red-brown clay tiles with a small iron cross on top; inside, the tall dark wooden cross on
+    a tall stepped octagonal pedestal. Proportions from refs/magellans-cross/front.jpg: width / wall height 1.68,
+    roof rise ~0.5 x the wall, arches 0.66 x a face wide and 0.76 x the wall tall."""
+    wh = mat("coral", (0.80, 0.77, 0.70)); sl = mat("slab", GREY); rf = mat("roof", (0.40, 0.14, 0.10), 0.7)
+    wd = mat("wood", (0.24, 0.15, 0.09), 0.7); ir = mat("iron", (0.05, 0.05, 0.05), 0.5, 0.6)
+    stp = mat("step", (0.62, 0.60, 0.56)); ped = mat("pedestal", (0.62, 0.44, 0.36), 0.5)
     slab(sl)
     rot = 22.5 + 45            # a face toward the camera, so its neighbours run along the grid
     R = 4.25                   # corner radius of the octagon's walls
     apo = R * math.cos(math.radians(22.5))
-    cyl(0, 0, 0, 0.3, R + 0.35, stp, n=8, rot=rot, name="step")
-    z0, HW = 0.3, 4.2
+    cyl(0, 0, 0, 0.22, R + 0.3, stp, n=8, rot=rot, name="step")
+    z0, HW = 0.22, 4.67
     ring = cyl(0, 0, z0, z0 + HW, R, wh, n=8, rot=rot, name="ring")
-    cut(ring, cyl(0, 0, z0 - 0.1, z0 + HW + 0.1, R - 0.4, mat("cutter", (1, 0, 1)), n=8, rot=rot))
-    aw, ah = 1.95, 3.1         # each face is 2 R sin 22.5 = 3.25 wide: the arch leaves solid wall either side
+    cut(ring, cyl(0, 0, z0 - 0.1, z0 + HW + 0.1, R - 0.45, mat("cutter", (1, 0, 1)), n=8, rot=rot))
+    aw, ah = 2.15, 3.55
     for k in range(8):
         a = math.radians(k * 45 - 45)
         nx, ny = math.cos(a), math.sin(a)
         cm = mat("cutter", (1, 0, 1))
-        b = box(-aw / 2, aw / 2, -0.6, 0.6, -0.1, ah - aw / 2, cm)
-        top = hcyl(0, 0, ah - aw / 2, aw / 2, 1.2, "y", cm)
+        b = box(-aw / 2, aw / 2, -0.7, 0.7, -0.1, ah - aw / 2, cm)
+        top = hcyl(0, 0, ah - aw / 2, aw / 2, 1.4, "y", cm)
         mod = b.modifiers.new("u", "BOOLEAN"); mod.operation = "UNION"; mod.object = top; mod.solver = "EXACT"
         bpy.context.view_layer.objects.active = b; bpy.ops.object.modifier_apply(modifier=mod.name)
         bpy.data.objects.remove(top, do_unlink=True)
         b.rotation_euler = (0, 0, a - math.pi / 2)
-        b.location = (nx * (apo - 0.2), ny * (apo - 0.2), z0)
+        b.location = (nx * (apo - 0.22), ny * (apo - 0.22), z0)
         bpy.context.view_layer.update()
         bpy.ops.object.select_all(action="DESELECT"); b.select_set(True)
         bpy.context.view_layer.objects.active = b
         bpy.ops.object.transform_apply(location=True, rotation=True, scale=True)
         cut(ring, b)
-        # the iron grille: thin bars in the opening, a little inside the wall's outer face
         tx, ty = -ny, nx            # along the face
         d = apo - 0.3
-        for j in range(-3, 4):
-            u = j * aw / 8
-            hgt = ah - aw / 2 + math.sqrt(max(0.0, (aw / 2) ** 2 - u * u)) - 0.05
-            cx, cy = nx * d + tx * u, ny * d + ty * u
-            box(cx - 0.03, cx + 0.03, cy - 0.03, cy + 0.03, z0, z0 + hgt, ir, "bar")
-        for zz in (1.0, 2.2):
+        spring = ah - aw / 2
+        if k == 0:
+            # the entrance (toward the camera): gates folded open against the jambs, the black marker plate
+            # hung in the arch head (blank: no lettering)
+            for s in (-1, 1):
+                cx, cy = nx * (d - 0.25) + tx * s * (aw / 2 - 0.08), ny * (d - 0.25) + ty * s * (aw / 2 - 0.08)
+                for j in range(4):
+                    off = j * 0.14
+                    px_, py_ = cx - nx * off, cy - ny * off
+                    box(px_ - 0.025, px_ + 0.025, py_ - 0.025, py_ + 0.025, z0, z0 + spring, ir, "obar")
             cx, cy = nx * d, ny * d
-            bb = box(-aw / 2, aw / 2, -0.03, 0.03, zz - 0.03, zz + 0.03, ir, "rail")
+            pl = box(-0.42, 0.42, -0.03, 0.03, spring + 0.25, spring + 0.95, ir, "plaque")
+            pl.rotation_euler = (0, 0, a - math.pi / 2); pl.location = (cx, cy, z0)
+            continue
+        # the iron gates: vertical bars, a solid dark lower panel, a rail at the springing and a fan of radial
+        # bars in the arch head
+        for j in range(-4, 5):
+            u = j * aw / 10
+            cx, cy = nx * d + tx * u, ny * d + ty * u
+            box(cx - 0.025, cx + 0.025, cy - 0.025, cy + 0.025, z0, z0 + spring, ir, "bar")
+        cx, cy = nx * d, ny * d
+        for zz, hh in ((0.0, 0.85), (spring - 0.04, 0.08)):
+            bb = box(-aw / 2, aw / 2, -0.025, 0.025, zz, zz + hh, ir, "panel")
             bb.rotation_euler = (0, 0, a - math.pi / 2); bb.location = (cx, cy, z0)
-    # cornice round the wall top and a plinth band
-    cyl(0, 0, z0 + HW - 0.3, z0 + HW, R + 0.12, wh, n=8, rot=rot, name="cornice")
-    cyl(0, 0, z0, z0 + 0.35, R + 0.08, wh, n=8, rot=rot, name="plinth")
-    # ceiling (dark inside) and the roof: wide eaves, slightly bell-cast, up to a point
-    cyl(0, 0, z0 + HW - 0.1, z0 + HW, R - 0.3, mat("ceil", (0.35, 0.25, 0.18)), n=8, rot=rot)
+        for j in range(1, 8):
+            th = math.pi * j / 8
+            L = aw / 2 - 0.05
+            bb = box(-0.022, 0.022, -0.022, 0.022, 0, L, ir, "fan")
+            bb.rotation_euler = (0, th - math.pi / 2, a - math.pi / 2)
+            bb.rotation_euler = (0, th - math.pi / 2, a - math.pi / 2)
+            bb.location = (cx, cy, z0 + spring)
+    # corner pilasters, the frieze and cornice under the eaves, a plinth band
+    for k in range(8):
+        a = math.radians(k * 45 - 45 + 22.5)
+        cx, cy = math.cos(a) * (R - 0.02), math.sin(a) * (R - 0.02)
+        p = box(-0.2, 0.2, -0.2, 0.2, z0, z0 + HW - 0.5, wh, "pilaster")
+        p.rotation_euler = (0, 0, a); p.location = (cx, cy, 0)
+    cyl(0, 0, z0 + HW - 0.55, z0 + HW - 0.45, R + 0.1, wh, n=8, rot=rot, name="frieze")
+    cyl(0, 0, z0 + HW - 0.18, z0 + HW, R + 0.16, wh, n=8, rot=rot, name="cornice")
+    cyl(0, 0, z0, z0 + 0.3, R + 0.08, wh, n=8, rot=rot, name="plinth")
+    cyl(0, 0, z0 + HW - 0.1, z0 + HW, R - 0.4, mat("ceil", (0.45, 0.50, 0.55)), n=8, rot=rot)
+    # the roof: flared eaves, then a moderate pitch up to a small finial
     zr = z0 + HW
-    cyl(0, 0, zr, zr + 0.55, R + 0.6, rf, n=8, r2=R - 0.2, rot=rot, name="eave")
-    cyl(0, 0, zr + 0.55, zr + 3.6, R - 0.15, rf, n=8, r2=0.25, rot=rot, name="roof")
-    cyl(0, 0, zr + 3.6, zr + 3.8, 0.25, wh, n=8, rot=rot)
-    # the small iron cross on the apex
-    box(-0.05, 0.05, -0.05, 0.05, zr + 3.8, zr + 4.7, ir, "topcross")
-    box(-0.05, 0.05, -0.3, 0.3, zr + 4.35, zr + 4.43, ir, "topbar")
-    # the tall wooden cross inside on a low pedestal
-    cyl(0, 0, z0, z0 + 0.5, 0.6, wh, n=16)
-    box(-0.17, 0.17, -0.17, 0.17, z0 + 0.5, z0 + 3.9, wd, "cross")
-    box(-0.15, 0.15, -1.0, 1.0, z0 + 2.75, z0 + 3.05, wd, "crossbar")
+    cyl(0, 0, zr, zr + 0.35, R + 0.62, rf, n=8, r2=R - 0.05, rot=rot, name="eave")
+    cyl(0, 0, zr + 0.35, zr + 2.35, R - 0.05, rf, n=8, r2=0.25, rot=rot, name="roof")
+    cyl(0, 0, zr + 2.3, zr + 2.5, 0.22, rf, n=8, rot=rot, name="finial")
+    box(-0.04, 0.04, -0.04, 0.04, zr + 2.5, zr + 3.3, ir, "topcross")
+    box(-0.04, 0.04, -0.26, 0.26, zr + 2.98, zr + 3.05, ir, "topbar")
+    # inside: the tall stepped octagonal pedestal and the dark wooden cross reaching toward the ceiling
+    cyl(0, 0, z0, z0 + 0.3, 0.85, ped, n=8, rot=rot)
+    cyl(0, 0, z0 + 0.3, z0 + 0.45, 0.7, ped, n=8, rot=rot)
+    cyl(0, 0, z0 + 0.45, z0 + 1.25, 0.55, ped, n=8, rot=rot)
+    cyl(0, 0, z0 + 1.25, z0 + 1.45, 0.68, ped, n=8, rot=rot)
+    box(-0.12, 0.12, -0.12, 0.12, z0 + 1.45, z0 + 4.45, wd, "cross")
+    box(-0.11, 0.11, -0.85, 0.85, z0 + 3.55, z0 + 3.77, wd, "crossbar")
 
 
 def rizal_monument():
-    """Rizal Monument: a tall slim granite obelisk with three stars near its top, standing on a tapering stepped
-    granite base on a wide stepped platform; the bronze Rizal in front with bronze figure groups either side."""
-    gr = mat("granite", (0.56, 0.55, 0.52)); sl = mat("slab", GREY); bz = mat("bronze", BRONZE, 0.45, 0.6)
+    """Rizal Monument (refs/rizal-monument/): a slim grey granite obelisk with three gold stars in a triangle near the
+    top of its FRONT face, on a tall upper pedestal over a battered (tapering) granite base of big blocks, on a low
+    plinth and two wide steps. The bronze group stands on the pedestal: Rizal in front, centred on the front face, in
+    an overcoat holding a book; a seated mother with her child at the front's left corner; two seated boys reading a
+    book at its right corner. Front = the left-front face (y < 0). Proportions from refs/rizal-monument/front.jpg
+    (base 0.35 / obelisk 0.65 of the height; base 0.48 x the height wide; Rizal 0.245 x the height)."""
+    gr = mat("granite", (0.55, 0.54, 0.51)); sl = mat("slab", GREY); bz = mat("bronze", BRONZE, 0.45, 0.6)
+    gold = mat("gold", (0.85, 0.65, 0.2), 0.35, 0.9)
     slab(sl)
-    z = 0
-    for h, t in ((4.5, 0.3), (4.0, 0.3), (3.5, 0.3)):        # the wide platform steps
-        box(-h, h, -h, h, z, z + t, gr, "step"); z += t
-    for k in range(6):                                         # the tapering stepped base
-        h = 2.8 - k * 0.15
-        box(-h, h, -h, h, z, z + 0.48, gr, "tier"); z += 0.48
-    box(-1.95, 1.95, -1.95, 1.95, z, z + 1.0, gr, "pedestal"); z += 1.0
-    box(-2.12, 2.12, -2.12, 2.12, z, z + 0.18, gr, "pedcap"); z += 0.18
-    zt = z                                                     # the top the bronze group stands on
-    box(-1.05, 1.05, -1.05, 1.05, zt, zt + 0.9, gr, "plinth")
-    cyl(0, 0, zt + 0.9, zt + 13.2, 0.82 * math.sqrt(2), gr, n=4, r2=0.55 * math.sqrt(2), rot=45, name="obelisk")
-    pyramid(0, 0, zt + 13.2, 0.55, 0.75, gr)
-    S = 1.5
+    box(-4.75, 4.75, -4.75, 4.75, 0, 0.25, gr, "step")
+    box(-4.35, 4.35, -4.35, 4.35, 0.25, 0.5, gr, "step")
+    box(-3.97, 3.97, -3.97, 3.97, 0.5, 0.82, gr, "plinth")
+    S2 = math.sqrt(2)
+    cyl(0, 0, 0.82, 4.47, 3.76 * S2, gr, n=4, r2=2.9 * S2, rot=45, name="base")
+    box(-2.62, 2.62, -2.62, 2.62, 4.47, 4.72, gr, "ledge")
+    box(-2.3, 2.3, -2.3, 2.3, 4.72, 6.05, gr, "pedestal")
+    box(-2.45, 2.45, -2.45, 2.45, 6.05, 6.2, gr, "pedcap")
+    zt = 6.2
+    cyl(0, 0, zt, 15.67, 0.86 * S2, gr, n=4, r2=0.64 * S2, rot=45, name="obelisk")
+    pyramid(0, 0, 15.67, 0.66, 0.43, gr)
+    # the three stars, a triangle on the front face: one above, two below
+    def hw(z): return 0.86 - 0.22 * (z - zt) / (15.67 - zt)
+    for sx, sz in ((0.0, 15.3), (-0.37, 14.92), (0.37, 14.92)):
+        hcyl(sx, -hw(sz) - 0.02, sz, 0.12, 0.06, "y", gold, n=5)
+    # the bronze plaque on the base's front (blank)
+    box(-0.8, 0.8, -3.42, -3.36, 2.45, 3.05, bz, "plaque")
+    S = 1.73
 
-    def fig(ox, oy, oz, parts):
-        GROUP[0] = f"fig{ox}"; GROUPS[GROUP[0]] = ((ox, oy, oz), 1.0)
+    def fig(ox, oy, oz, s, parts):
+        GROUP[0] = f"fig{ox}{oy}"; GROUPS[GROUP[0]] = ((ox, oy, oz), 1.0)
         for kind, a in parts:
-            if kind == "c": cyl(ox + a[0] * S, oy + a[1] * S, oz + a[2] * S, oz + a[3] * S, a[4] * S, bz, n=16, r2=a[5] * S)
-            elif kind == "e": ellip(ox + a[0] * S, oy + a[1] * S, oz + a[2] * S, a[3] * S, a[4] * S, a[5] * S, bz)
-            else: box(ox + a[0] * S, ox + a[1] * S, oy + a[2] * S, oy + a[3] * S, oz + a[4] * S, oz + a[5] * S, bz)
+            if kind == "c": cyl(ox + a[0] * s, oy + a[1] * s, oz + a[2] * s, oz + a[3] * s, a[4] * s, bz, n=16, r2=a[5] * s)
+            elif kind == "e": ellip(ox + a[0] * s, oy + a[1] * s, oz + a[2] * s, a[3] * s, a[4] * s, a[5] * s, bz)
+            else: box(ox + a[0] * s, ox + a[1] * s, oy + a[2] * s, oy + a[3] * s, oz + a[4] * s, oz + a[5] * s, bz)
         GROUP[0] = None
-    # Rizal standing in an overcoat, holding a book, on the front diagonal (toward the camera)
-    fig(1.3, -1.3, zt, [("c", (-0.09, -0.09, 0, 0.9, 0.11, 0.11)), ("c", (0.09, 0.09, 0, 0.9, 0.11, 0.11)),
-                        ("c", (0, 0, 0.55, 1.75, 0.38, 0.27)), ("e", (0, 0, 1.75, 0.22, 0.34, 0.14)),
-                        ("c", (0, 0, 1.8, 1.95, 0.08, 0.08)), ("e", (0, 0, 2.07, 0.14, 0.13, 0.17)),
-                        ("b", (0.05, 0.3, -0.42, -0.3, 1.0, 1.35))])
-    # the figure groups either side: a mother with a child (left), a father with boys reading (right)
-    fig(-0.15, -1.6, zt, [("c", (0, 0, 0, 0.85, 0.5, 0.26)), ("e", (0, 0, 0.95, 0.2, 0.26, 0.16)),
-                          ("e", (0, 0, 1.17, 0.13, 0.12, 0.15)), ("e", (0.25, -0.1, 0.6, 0.17, 0.12, 0.22)),
-                          ("e", (0.25, -0.1, 0.88, 0.09, 0.09, 0.1))])
-    fig(1.6, 0.15, zt, [("c", (0, 0, 0, 0.85, 0.5, 0.26)), ("e", (0, 0, 0.95, 0.2, 0.26, 0.16)),
-                        ("e", (0, 0, 1.17, 0.13, 0.12, 0.15)), ("e", (-0.1, -0.3, 0.45, 0.16, 0.16, 0.25)),
-                        ("e", (-0.1, -0.3, 0.78, 0.09, 0.09, 0.1))])
-    # a bronze plaque on the base's front faces
-    box(-0.6, 0.6, -1.97, -1.93, zt - 0.85, zt - 0.3, bz, "plaque")
-    box(1.93, 1.97, -0.6, 0.6, zt - 0.85, zt - 0.3, bz, "plaque2")
+    # Rizal standing, facing the front (-y), in an overcoat, a book in his hand
+    fig(0, -1.45, zt, S, [("c", (-0.11, 0, 0, 0.9, 0.11, 0.11)), ("c", (0.11, 0, 0, 0.9, 0.11, 0.11)),
+                          ("c", (0, 0, 0.5, 1.72, 0.36, 0.26)), ("e", (0, 0, 1.72, 0.36, 0.22, 0.14)),
+                          ("c", (0, 0, 1.78, 1.95, 0.08, 0.08)), ("e", (0, 0, 2.07, 0.13, 0.14, 0.17)),
+                          ("b", (0.3, 0.42, -0.28, -0.04, 1.0, 1.32))])
+    # the mother seated with her child at the front's left corner (-x), turned a little outward
+    fig(-1.55, -1.5, zt, 1.5, [("c", (0, 0, 0, 0.55, 0.55, 0.42)), ("c", (0, 0.05, 0.5, 0.95, 0.3, 0.22)),
+                               ("e", (0, 0.05, 1.08, 0.12, 0.12, 0.15)), ("e", (0.12, -0.22, 0.72, 0.16, 0.12, 0.13)),
+                               ("e", (0.12, -0.25, 0.86, 0.08, 0.08, 0.08))])
+    # the two boys seated side by side reading one book at the front's right corner (+x)
+    fig(1.55, -1.5, zt, 1.5, [("c", (-0.18, 0, 0, 0.5, 0.32, 0.28)), ("c", (0.18, 0, 0, 0.5, 0.32, 0.28)),
+                              ("c", (-0.18, 0.03, 0.45, 0.82, 0.18, 0.15)), ("c", (0.18, 0.03, 0.45, 0.82, 0.18, 0.15)),
+                              ("e", (-0.18, 0.0, 0.93, 0.1, 0.1, 0.12)), ("e", (0.18, 0.0, 0.93, 0.1, 0.1, 0.12)),
+                              ("b", (-0.2, 0.2, -0.3, -0.24, 0.58, 0.68))])
+    # at the back, leaves and a pot (the country's natural resources)
+    fig(0, 1.45, zt, 1.5, [("c", (0, 0, 0, 0.45, 0.32, 0.38)), ("e", (0, 0, 0.95, 0.55, 0.3, 0.5))])
 
 
 HUB = [None]
