@@ -252,3 +252,39 @@ describe("transferMonsters, Housing finished while the outpost was closed (patch
     expect(flushed).toBe(0);
   });
 });
+
+describe("transferMonsters, a resource-paid Starter Kit on an unopened outpost (patch, 24 Nov 2026)", () => {
+  /**
+   * The Regular kit placed with resources `ago` seconds back, the outpost not
+   * opened since: its Housing is a prefab (level 2, 260) with its countdown.
+   */
+  const kitted = async (ago: (kitSeconds: number, housingSeconds: number) => number): Promise<Row> => {
+    const { kitBuildings, starterKit } = await import("../../../services/yard/starterKit.js");
+    const { buildingdata, seconds } = kitBuildings(starterKit(1)!, "resources", {});
+    const housing = Object.values(buildingdata).find((building) => Number(building.t) === 15)!;
+    expect(housing).toMatchObject({ prefab: 2 });
+    expect(Number(housing.cB)).toBeGreaterThan(0);
+    return Object.assign(saves[1]!, {
+      savetime: Math.floor(Date.now() / 1000) - ago(seconds, Number(housing.cB)),
+      monsters: { housed: {} },
+      buildingdata,
+    });
+  };
+
+  test("past the last prefab's finish, the kit's Housing takes the monsters", async () => {
+    const outpost = await kitted((kitSeconds) => kitSeconds + 60);
+    const stored = structuredClone(outpost.buildingdata);
+    const result = await run(movedBody());
+    expect(result.ok).toBe(true);
+    expect((outpost.monsters as { housed: unknown }).housed).toEqual({ C1: 5 });
+    expect(outpost.buildingdata).toEqual(stored);
+  });
+
+  test("before its Housing's countdown is done, the transfer is refused", async () => {
+    const outpost = await kitted((_kitSeconds, housingSeconds) => housingSeconds - 60);
+    const result = await run(movedBody());
+    expect(result.rule).toBe("capacity");
+    expect((outpost.monsters as { housed: unknown }).housed).toEqual({});
+    expect(flushed).toBe(0);
+  });
+});
