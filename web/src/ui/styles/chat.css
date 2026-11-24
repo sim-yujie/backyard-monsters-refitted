@@ -414,29 +414,99 @@ button.chat-line__name {
 
 /* On a short window (a laptop at 125%: 730px tall) a 260px room ran the box
    down behind Main yard and Map, which took the clicks meant for the input
-   (bug report 4). The room gives way instead: the left dock's top sits 229px
-   above the bottom, the box's tab, status, input and painted frame take up to
-   150px besides the lines, and 13px keeps a gap. */
+   (bug report 4). The box itself ends above the left dock (its top sits 229px
+   above the bottom, and 13px keeps a gap) and the room is the part that gives
+   way, down to 80px. The room used to subtract a fixed 150px for the rest of
+   the box; the room tabs and Global's "English here" line came later and ran
+   the input under Main yard on an iPad (1024x768, 24 Nov). Whatever the tab,
+   tabs, notice, input or a player's strip take, the room takes the rest. */
+.chat-box--open {
+  --chat-bottom-reserve: calc(229px + 13px);
+  max-height: calc(100vh - var(--chat-top) - var(--chat-bottom-reserve));
+  max-height: calc(100dvh - var(--chat-top) - var(--chat-bottom-reserve));
+}
+
 .chat-box--open .chat-box__lines {
-  height: clamp(80px, calc(100vh - var(--chat-top) - 229px - 150px - 13px), 260px);
-  height: clamp(80px, calc(100dvh - var(--chat-top) - 229px - 150px - 13px), 260px);
+  flex: 0 1 260px;
+  min-height: 80px;
   overflow-y: auto;
   overscroll-behavior: contain;
 }
 
-/* The 150px above counts the input's row. A player's strip stands in its
-   place and is 80px taller (its buttons wrap to a second row since Profile
-   joined them), so with the strip up the room gives up those 80px too:
-   Report landed under Main yard (profiles test, 7 Nov). */
+/* A player's strip stands in the input's place and is about 80px taller (its
+   buttons wrap to a second row since Profile joined them): with the strip up
+   the room may give way further (Report landed under Main yard, profiles
+   test, 7 Nov). */
 .chat-box--open:has(> .chat-box__player:not([hidden])) > .chat-box__lines {
-  height: clamp(48px, calc(100vh - var(--chat-top) - 229px - 230px - 13px), 260px);
-  height: clamp(48px, calc(100dvh - var(--chat-top) - 229px - 230px - 13px), 260px);
+  min-height: 48px;
 }
 
 /* And should a very short window still run the strip into the dock, the
    strip is on top: none of its buttons is ever under a dock button. */
 .chat-box--open:has(> .chat-box__player:not([hidden])) {
   z-index: 1;
+}
+
+/* ── A short screen: the left corner steps aside for the open box ───── */
+
+/* A phone on its side (844x390) or a short iPad or laptop: under the 670px
+   that the box needs above the left dock (its top, about 200px of tab, tabs,
+   notice and input, an 80px room, the 242px reserve), the box ran over the
+   yard switcher, Map and Friends, and they were drawn over its lines and its
+   input (24 Nov). As the dock's buttons step aside for a sheet on a phone
+   (yard-hud.css, friends-button.css), the left corner (the switcher, Map,
+   Home) and the Friends button, or a friend's Prev and Next, step aside while
+   the box is open; closing it brings them back. The box then runs down to
+   the bottom edge. Hidden, not removed, so Friends keeps its place by Map. */
+@media (min-width: 621px) and (max-height: 670px) {
+  .chat-box--open {
+    --chat-bottom-reserve: calc(var(--space-3) + env(safe-area-inset-bottom, 0px));
+  }
+
+  .chat-box--open .chat-box__lines {
+    min-height: 48px;
+  }
+
+  .overlay__layer:has(> .chat-box--open) > .yard-dock .yard-dock__left,
+  .overlay__layer:has(> .chat-box--open) > .friends-button,
+  .overlay__layer:has(> .chat-box--open) > .friend-hop {
+    visibility: hidden;
+  }
+
+  /* With a player's strip up the room tabs and Global's notice step aside
+     (as on an upright phone, below), and a phone too short even for that
+     scrolls the box inside its frame (the looks' frame rule sets overflow:
+     visible, hence :root). */
+  .chat-box.chat-box--open:has(> .chat-box__player:not([hidden])) > :is(.chat-box__rooms, .chat-box__rule) {
+    display: none;
+  }
+
+  :root .chat-box.chat-box--open:has(> .chat-box__player:not([hidden])) {
+    overflow-x: hidden;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+  }
+
+  .chat-box.chat-box--open:has(> .chat-box__player:not([hidden])) > .chat-box__lines {
+    min-height: 32px;
+  }
+}
+
+/* On its side the Events door hangs from the HUD at 226px from the left
+   (events.css), its sign over the open box's top edge: it steps aside too. */
+@media (min-width: 621px) and (max-height: 500px) {
+  .overlay__layer:has(> .chat-box--open) > .yard-dock > .events-door {
+    visibility: hidden;
+  }
+}
+
+/* A narrower phone on its side (an iPhone SE, 667x375): Collect all and More
+   sit within the box's 360px as well (Collect all starts about 428px from the
+   right edge), so they step aside with the corner. */
+@media (min-width: 621px) and (max-width: 820px) and (max-height: 500px) {
+  .overlay__layer:has(> .chat-box--open) > .yard-dock :is(.yard-collect, .yard-dock__button--more) {
+    visibility: hidden;
+  }
 }
 
 .chat-box--open .chat-line {
