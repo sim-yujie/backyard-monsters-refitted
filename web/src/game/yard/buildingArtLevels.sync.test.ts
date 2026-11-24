@@ -3,12 +3,14 @@ import {
   artLevelOf,
   BUILDING_ART_LEVELS,
   INFERNO_ART_LEVELS,
+  MODERN_BUILDING_ART_LEVELS,
   TOWER_TIER_ART_LEVELS,
 } from "../../../../server/src/game-data/buildingArtLevels";
 import { BUILDING_ART_ROWS } from "./buildingArtData";
 import { ArtState, resolveArt } from "./buildingArt";
 import { setClassicLook } from "@/game/classicLook";
 import {
+  BUILDING_3D_ART,
   INFERNO_BUILDING_3D_ART,
   INFERNO_TOWER_TIER_ART,
   MODERN_TOWERS,
@@ -95,6 +97,28 @@ describe("the server's art levels match the web art table", () => {
         setClassicLook(false);
       }
     }
+  });
+
+  it("names the 3D buildings whose looks split where Flash's art does not (the Control Center's levels 2 and 3)", () => {
+    const flashSteps = (type: number): number[] => [
+      ...new Set((BUILDING_ART_ROWS.find((row) => row[0] === type)?.[3] ?? []).map((level) => level[0])),
+    ];
+    const split = Object.fromEntries(
+      Object.entries(BUILDING_3D_ART)
+        .map(([type, looks]) => [Number(type), looks.map((look) => look.from)] as const)
+        .filter(([type, steps]) => steps.some((step) => !flashSteps(type).includes(step)))
+        .filter(([type]) => BUILDING_ART_ROWS.some((row) => row[0] === type)),
+    );
+    expect(MODERN_BUILDING_ART_LEVELS).toEqual(split);
+  });
+
+  it("sends an outpost's Control Center the level its 3D look needs, and the Inferno's one look level 1", () => {
+    for (let level = 1; level <= 3; level++) {
+      const drawn = resolveArt(16, level, ArtState.DEFAULT, "outpost")?.top.url;
+      expect(resolveArt(16, artLevelOf(16, level, true, "outpost"), ArtState.DEFAULT, "outpost")?.top.url).toBe(drawn);
+      expect(artLevelOf(16, level, true, "inferno")).toBe(1);
+    }
+    expect(artLevelOf(16, 3, false)).toBe(1);
   });
 
   it("needs no tiers for the new Town Hall: it has a picture at every Flash step", () => {

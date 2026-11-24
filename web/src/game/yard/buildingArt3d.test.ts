@@ -34,6 +34,13 @@ const FLASH_RUBBLE = [133, 134];
 const TRAPS = [24, 117];
 
 /**
+ * The looks Flash never had, by type: the Hatchery Control Center's levels 2 and 3 (this project's, beta 9; owner,
+ * 24 Nov 2026), drawn from Flash's level 1 picture there. Nothing of Flash's to fit them to, so they are tested on
+ * their own below.
+ */
+const BEYOND_FLASH: Record<number, number[]> = { 16: [2, 3] };
+
+/**
  * The looks whose model reaches past Flash's picture, `[left, top, right, bottom]` in px each edge may differ: the
  * Putty Squisher's first vial stands 8 px further right and its last wheel 12 px higher, the third Hatchery's front
  * foot 9 px lower, the second Academy's shoulder brackets 7 px higher (as approved, 1 Nov 2026). The second Locker's
@@ -150,7 +157,7 @@ describe("the 3D yard buildings", () => {
     expect(Object.keys(BUILDING_3D_ART).map(Number).filter((type) => type !== 150)).toEqual(TYPES);
     for (const type of TYPES) {
       expect(BUILDING_3D_ART[type]?.map((look) => look.from), `type ${type}`).toEqual(
-        flashPictures(type).map((look) => look[0]),
+        [...flashPictures(type).map((look) => look[0]), ...(BEYOND_FLASH[type] ?? [])],
       );
     }
   });
@@ -246,6 +253,7 @@ describe("the 3D yard buildings", () => {
     for (const type of TYPES) {
       const flashFolder = `${ASSETS}${BUILDING_ART_ROWS.find((row) => row[0] === type)?.[2] ?? ""}`;
       for (const look of BUILDING_3D_ART[type] ?? []) {
+        if (BEYOND_FLASH[type]?.includes(look.from)) continue;
         const flash = flashLooks(type).find((one) => one[0] === look.from);
         // Flash's building at rest is its top and its strips' first cells (the Hatchery's roof is all strip).
         const boxes: Box[] = [];
@@ -293,6 +301,36 @@ describe("the 3D yard buildings", () => {
     // The Classic look keeps Flash's.
     setClassicLook(true);
     expect(resolveArt(4, 10, ArtState.DESTROYED)?.top.url).toBe("/assets/buildings/goofactory.v2/top.destroyed.png");
+  });
+
+  it("give the Control Center's levels 2 and 3 their own looks, whole, damaged and wrecked, outposts too; Classic Flash's", () => {
+    const folder = "/assets/buildings/hatcherycontrolcenter/";
+    for (const kind of ["main", "outpost"] as const) {
+      for (const [level, n] of [[1, 1], [2, 2], [3, 3], [4, 3]] as const) {
+        const name = `${kind} level ${level}`;
+        expect(resolveArt(16, level, ArtState.DEFAULT, kind)?.top.url, name).toBe(`${folder}top.3d${n}@2x.webp`);
+        expect(resolveArt(16, level, ArtState.DEFAULT, kind)?.shadow?.url, name).toBe(`${folder}shadow.3d${n}.jpg`);
+        expect(resolveArt(16, level, ArtState.DAMAGED, kind)?.top.url, name).toBe(`${folder}top.3d${n}.damaged@2x.webp`);
+        expect(resolveArt(16, level, ArtState.DESTROYED, kind)?.top.url, name).toBe(`${folder}top.3d${n}.destroyed@2x.webp`);
+        expect(resolveArt(16, level, ArtState.DESTROYED, kind)?.shadow?.url, name).toBe(`${folder}shadow.3d${n}.destroyed.jpg`);
+      }
+    }
+    // Each is cut to what it draws and stands on the same foot as level 1: taller, never off to one side.
+    const feet = (BUILDING_3D_ART[16] ?? []).map((look) => {
+      const [file, x, y] = look.top;
+      const [width, height] = webpSize(`${ASSETS}buildings/hatcherycontrolcenter/${file}`);
+      return [x + width / 4, y + height / 2];
+    });
+    for (const [middle, foot] of feet) {
+      expect(Math.abs((middle ?? 0) - (feet[0]?.[0] ?? 0))).toBeLessThanOrEqual(4);
+      expect(Math.abs((foot ?? 0) - (feet[0]?.[1] ?? 0))).toBeLessThanOrEqual(4);
+    }
+    setClassicLook(true);
+    for (const level of [1, 2, 3]) {
+      expect(resolveArt(16, level, ArtState.DEFAULT)?.top.url).toBe(`${folder}top.1.png`);
+      expect(resolveArt(16, level, ArtState.DAMAGED)?.top.url).toBe(`${folder}top.1.damaged.png`);
+      expect(resolveArt(16, level, ArtState.DESTROYED)?.top.url).toBe(`${folder}top.1.destroyed.png`);
+    }
   });
 
   it("show the traps fired in 3D once they go off, and Flash's traps with the Classic look", () => {
