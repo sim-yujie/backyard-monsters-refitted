@@ -263,3 +263,45 @@ export const battleMismatches = (
   }
   return fields;
 };
+
+/** One side's figures in a mismatch log line ({@link mismatchFigures}). */
+export interface MismatchFigures {
+  /** The attack's loot, whole units. */
+  readonly loot: { r1: number; r2: number; r3: number; r4: number };
+  /** Each flung champion's health after the battle, by type; null where the save has none. */
+  readonly champions: Record<string, number | null>;
+  /** Each caged (defending) champion's health after the battle, by type; null where the save has none. */
+  readonly caged: Record<string, number | null>;
+}
+
+/**
+ * The save's and the battle's figures behind {@link battleMismatches}'
+ * `attackloot`, `attackerchampion` and `champion`, for the
+ * `attack-replay-mismatch` log line (descent-aura, 24 Nov 2026): with the
+ * numbers on both sides a remaining disagreement can be told apart (a loot
+ * aura moves the loot, a fight the champions' health).
+ */
+export const mismatchFigures = (
+  client: ClientBattle,
+  server: AbandonedOutcome
+): { sent: MismatchFigures; derived: MismatchFigures } => {
+  const sentChampions: Record<string, number | null> = {};
+  const derivedChampions: Record<string, number | null> = {};
+  for (const type of server.championsFlung) {
+    sentChampions[type] = championHpOf(client.attackerchampion, type) ?? null;
+    const hp = server.attackerchampion?.find((champion) => champion.t === type)?.hp;
+    derivedChampions[type] = hp === undefined ? null : Math.floor(hp);
+  }
+  const sentCaged: Record<string, number | null> = {};
+  const derivedCaged: Record<string, number | null> = {};
+  for (const caged of server.defenderChampions) {
+    sentCaged[caged.t] = championHpOf(client.champion, caged.t) ?? null;
+    derivedCaged[caged.t] = Math.floor(caged.hp);
+  }
+  const sent = wholeAmounts(client.attackloot);
+  const { r1, r2, r3, r4 } = server.attackloot;
+  return {
+    sent: { loot: { r1: sent.r1, r2: sent.r2, r3: sent.r3, r4: sent.r4 }, champions: sentChampions, caged: sentCaged },
+    derived: { loot: { r1, r2, r3, r4 }, champions: derivedChampions, caged: derivedCaged },
+  };
+};
