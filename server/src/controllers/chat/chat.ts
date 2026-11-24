@@ -10,7 +10,9 @@ import {
 } from "../../config/ChatConfig.js";
 import { User } from "../../database/models/user.model.js";
 import { Status } from "../../enums/StatusCodes.js";
-import { CHAT_REPORT_MAX_TEXT, recordChatReport } from "../../services/chat/chatReports.js";
+import { tellChatReport } from "../../services/alerts/alertFacts.js";
+import type { ChatReportAlert } from "../../services/alerts/moderationAlerts.js";
+import { CHAT_REPORT_MAX_TEXT, findReportedLine, recordChatReport } from "../../services/chat/chatReports.js";
 
 /**
  * The web client's chat box routes beside the WebSocket (issue #282), as
@@ -18,7 +20,8 @@ import { CHAT_REPORT_MAX_TEXT, recordChatReport } from "../../services/chat/chat
  * `routes.ts` binds them to Koa, `postgres.em` and the channel history.
  *
  * - `POST /bm/chat/report` `{ userid, channel, message, ts }` → `{ error: 0, stored, verified }`:
- *   reports one world chat line for moderation (`services/chat/chatReports.ts`).
+ *   reports one world chat line for moderation (`services/chat/chatReports.ts`);
+ *   a stored report is said on Telegram with the line (`tellChatReport`).
  * - `GET  /bm/chat/yard?userid=` → `{ error: 0, baseid, name }`: the main yard
  *   of a player seen in chat, for "View their yard".
  */
@@ -61,6 +64,8 @@ export const reportAnswer = async (
   user: User,
   rawBody: unknown,
   readHistory: HistoryReader,
+  /** Says the report on Telegram; tests pass a recorder. */
+  alert?: (report: ChatReportAlert) => Promise<unknown>,
 ): Promise<ChatAnswer> => {
   const parsed = ReportSchema.safeParse(rawBody ?? {});
   if (!parsed.success) return refused(Status.BAD_REQUEST, "That message could not be reported.", "badRequest");
@@ -75,6 +80,11 @@ export const reportAnswer = async (
 
   const history = await readHistory(channel);
   const result = await recordChatReport(em, { reporter: user.userid, reported: userid, channel, message, ts }, history);
+  if (result.stored) {
+    // The words the report kept: the room's own copy, else the reporter's.
+    const text = (findReportedLine(history, userid, ts)?.body ?? message).slice(0, CHAT_REPORT_MAX_TEXT);
+    void tellChatReport(em, { reporter: user.userid, reported: userid, channel, text, verified: result.verified }, alert);
+  }
 
   return { status: Status.OK, body: { error: 0, ...result } };
 };

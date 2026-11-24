@@ -141,11 +141,12 @@ import { mountEventsRoutes } from "./controllers/events/routes.js";
 import { mountSupportRoutes } from "./controllers/support/routes.js";
 import { adminOnly, moderationEffects, mountAdminRoutes } from "./controllers/admin/routes.js";
 import { mountModReportsRoutes } from "./controllers/moderator/routes.js";
+import { removeRecentChatLines } from "./services/chat/removeChatLines.js";
 import { mountAnnouncementRoutes } from "./controllers/announcements/routes.js";
 import { mountProfileRoutes } from "./controllers/profile/routes.js";
 import { mountOutpostLabelRoutes } from "./controllers/outposts/labelRoutes.js";
 import { sharedWordFilter } from "./services/chat/badWords.js";
-import { postgres } from "./server.js";
+import { postgres, redis } from "./server.js";
 import { clientErrors, guestClientErrors } from "./controllers/errors/clientErrors.js";
 import { clientTiming } from "./controllers/maproom/clientTiming.js";
 
@@ -485,6 +486,7 @@ mountModReportsRoutes(router, {
   em: () => postgres.em.fork(),
   signedIn: [verifyUserAuth, modReportsLimiter],
   effects: moderationEffects,
+  removeLines: (userid, since) => removeRecentChatLines(redis, userid, since),
 });
 
 /**  ────────────────────────────────────────────────

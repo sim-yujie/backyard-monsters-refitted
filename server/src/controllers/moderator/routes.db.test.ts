@@ -12,6 +12,8 @@ import { jsonBodyCompat } from "../../middleware/jsonBody.js";
 import { moderate, type ModerationEffects } from "../../services/admin/moderation.js";
 import { recordChatFlag } from "../../services/chat/chatFlags.js";
 import { recordChatReport } from "../../services/chat/chatReports.js";
+import { listModSteps } from "../../services/admin/modSteps.js";
+import type { ModStepAlert } from "../../services/alerts/moderationAlerts.js";
 import { mountModReportsRoutes } from "./routes.js";
 
 /**
@@ -56,6 +58,8 @@ describe.skipIf(!dbName)("the moderators' Reports routes on a real database", ()
   let server: Server;
   let base = "";
   const calls: string[] = [];
+  const alerts: ModStepAlert[] = [];
+  const removals: { userid: number; since: number }[] = [];
   const effects: ModerationEffects = {
     endSessions: async (user) => void calls.push(`endSessions ${user.userid}`),
     kickFromChat: async (userid) => void calls.push(`kick ${userid}`),
@@ -125,6 +129,13 @@ describe.skipIf(!dbName)("the moderators' Reports routes on a real database", ()
     await sql(`DELETE FROM bym.thread WHERE userid IN (${LIST}) OR targetid IN (${LIST})`);
     await sql(`UPDATE bym."user" SET banned = false, ban_until = NULL, ban_reason = NULL, mute_until = NULL WHERE userid IN (${LIST})`);
     calls.length = 0;
+    alerts.length = 0;
+    removals.length = 0;
+  };
+  /** The Telegram message is sent after the answer: wait for it. */
+  const alertsSettled = async (n: number) => {
+    for (let i = 0; i < 50 && alerts.length < n; i++) await Bun.sleep(10);
+    return alerts;
   };
 
   beforeAll(async () => {
@@ -143,7 +154,17 @@ describe.skipIf(!dbName)("the moderators' Reports routes on a real database", ()
     const version = getGameVersion();
     const app = new Koa();
     const router = new Router();
-    mountModReportsRoutes(router, { em: () => orm.em.fork(), signedIn: [fakeSignIn], effects, now: () => NOW });
+    mountModReportsRoutes(router, {
+      em: () => orm.em.fork(),
+      signedIn: [fakeSignIn],
+      effects,
+      removeLines: async (userid, since) => {
+        removals.push({ userid, since });
+        return 2;
+      },
+      alert: async (step) => void alerts.push(step),
+      now: () => NOW,
+    });
     app.use(bodyParser({ enableTypes: ["json"] }));
     app.use(jsonBodyCompat);
     app.use(async (ctx, next) => {
@@ -451,5 +472,139 @@ describe.skipIf(!dbName)("the moderators' Reports routes on a real database", ()
     const answer = await call("POST", `/api/v/mod/reports/players/${OFFENDER}/act`, MOD, { action: "warn", reason: "x", ...seen });
     expect(answer.status).toBe(409);
     expect(answer.body.reason).toBe("changed");
+  });
+
+  // ---- Moderator bans (owner, 24 Nov 2026) and the Telegram message for bans and mutes.
+
+  const ban = (as: number, target: number, body: Record<string, unknown>) => call("POST", `/api/v/mod/players/${target}/ban`, as, body);
+
+  test("a ban is for moderators and admins only", async () => {
+    const answer = await ban(PLAYER, OFFENDER, { days: 1, reason: "spam" });
+    expect(answer.status).toBe(403);
+    expect(answer.body.reason).toBe("notModerator");
+    const [user] = await sql(`SELECT banned FROM bym."user" WHERE userid = ?`, [OFFENDER]);
+    expect(user!.banned).toBe(false);
+  });
+
+  test("a moderator bans 1, 3 or 7 days with a reason, never longer or for good", async () => {
+    for (const body of [{ days: 2, reason: "x" }, { days: 30, reason: "x" }, { days: null, reason: "x" }, { days: 1, reason: "" }, { days: 1 }]) {
+      const answer = await ban(MOD, OFFENDER, body);
+      expect(answer.status).toBe(400);
+    }
+    expect(Number((await sql(`SELECT count(*) AS n FROM bym.moderation_action WHERE userid = ?`, [OFFENDER]))[0]!.n)).toBe(0);
+  });
+
+  test("a ban with nothing open (a name tapped in chat): banned, signed out, logged, said on Telegram", async () => {
+    const answer = await ban(MOD, OFFENDER, { days: 3, reason: "Advertising another server" });
+    expect(answer.status).toBe(200);
+    expect(answer.body).toMatchObject({ error: 0, until: new Date(NOW.getTime() + 3 * 86_400_000).toISOString(), removedLines: null });
+    const [user] = await sql(`SELECT banned, ban_until, ban_reason FROM bym."user" WHERE userid = ?`, [OFFENDER]);
+    expect(user).toMatchObject({ banned: true, ban_reason: "Advertising another server" });
+    expect(new Date(user!.ban_until).getTime()).toBe(NOW.getTime() + 3 * 86_400_000);
+    expect(await sql(`SELECT action, admin_id, reason FROM bym.moderation_action WHERE userid = ?`, [OFFENDER])).toEqual([
+      { action: "ban", admin_id: MOD, reason: "Advertising another server" },
+    ]);
+    expect(calls).toEqual([`endSessions ${OFFENDER}`, `kick ${OFFENDER}`]);
+    expect(removals).toEqual([]);
+    expect(await alertsSettled(1)).toEqual([
+      {
+        kind: "ban",
+        moderator: { userid: MOD, username: `modreptest_${MOD}` },
+        player: { userid: OFFENDER, username: `modreptest_${OFFENDER}` },
+        length: 3,
+        reason: "Advertising another server",
+        lines: [],
+        removedLines: null,
+      },
+    ]);
+  });
+
+  test("a ban from the Reports window closes what is open, removes the last hour's lines when asked, and the message has the reported lines", async () => {
+    await report(REPORTER_A, OFFENDER, 1);
+    await report(REPORTER_B, OFFENDER, 2);
+    const answer = await ban(MOD, OFFENDER, { days: 7, reason: "Spam", removeLines: true });
+    expect(answer.status).toBe(200);
+    expect(answer.body.closed).toEqual({ reports: 2, filterLines: 0 });
+    expect(answer.body.removedLines).toBe(2);
+    expect(removals).toEqual([{ userid: OFFENDER, since: NOW.getTime() - 3_600_000 }]);
+    const [closedCase] = await sql(`SELECT status, outcome, closed_by FROM bym.chat_case WHERE reported_id = ?`, [OFFENDER]);
+    expect(closedCase).toMatchObject({ status: "actioned", outcome: "ban", closed_by: MOD });
+    const [said] = await alertsSettled(1);
+    expect(said!.removedLines).toBe(2);
+    expect(said!.lines.map((line) => line.text)).toEqual(["rude line 2", "rude line 1"]);
+    // The chat log keeps the evidence.
+    expect((await listed()).players.map((p: { userid: number }) => p.userid)).not.toContain(OFFENDER);
+  });
+
+  test("a ban is never on a moderator, a game team account or the moderator", async () => {
+    for (const [target, reason] of [
+      [MOD, "self"],
+      [MOD2, "moderator"],
+      [ADMIN, "gameTeam"],
+    ] as const) {
+      const answer = await ban(MOD, target, { days: 1, reason: "x" });
+      expect(answer.status).toBe(403);
+      expect(answer.body.reason).toBe(reason);
+    }
+    expect(Number((await sql(`SELECT count(*) AS n FROM bym.moderation_action WHERE userid IN (${LIST})`))[0]!.n)).toBe(0);
+  });
+
+  test("a ban never shortens a longer or permanent one; a ban that ran out does not count", async () => {
+    await sql(`UPDATE bym."user" SET banned = true, ban_until = NULL, ban_reason = 'owner' WHERE userid = ?`, [OFFENDER]);
+    let answer = await ban(MOD, OFFENDER, { days: 7, reason: "x" });
+    expect(answer.status).toBe(409);
+    expect(answer.body.reason).toBe("longerBan");
+
+    await sql(`UPDATE bym."user" SET ban_until = ? WHERE userid = ?`, [new Date(NOW.getTime() + 30 * 86_400_000), OFFENDER]);
+    answer = await ban(MOD, OFFENDER, { days: 7, reason: "x" });
+    expect(answer.status).toBe(409);
+    const [kept] = await sql(`SELECT ban_reason FROM bym."user" WHERE userid = ?`, [OFFENDER]);
+    expect(kept!.ban_reason).toBe("owner");
+
+    await sql(`UPDATE bym."user" SET ban_until = ? WHERE userid = ?`, [new Date(NOW.getTime() - 1000), OFFENDER]);
+    answer = await ban(MOD, OFFENDER, { days: 1, reason: "again" });
+    expect(answer.status).toBe(200);
+    expect((await alertsSettled(1)).map((a) => a.reason)).toEqual(["again"]);
+  });
+
+  test("a moderator's mute is said on Telegram; an admin's steps are not", async () => {
+    await report(REPORTER_A, OFFENDER, 1);
+    const muted = await call("POST", `/api/v/mod/reports/players/${OFFENDER}/act`, MOD, {
+      action: "mute",
+      reason: "Insults",
+      hours: 24,
+      ...(await seenOf(OFFENDER)),
+    });
+    expect(muted.status).toBe(200);
+    const [said] = await alertsSettled(1);
+    expect(said).toMatchObject({ kind: "mute", length: 24, reason: "Insults", lines: [{ text: "rude line 1", channel: ROOM }] });
+
+    alerts.length = 0;
+    const byAdmin = await ban(ADMIN, SWEARER, { days: 1, reason: "x" });
+    expect(byAdmin.status).toBe(200);
+    await Bun.sleep(100);
+    expect(alerts).toEqual([]);
+  });
+
+  test("the dashboard lists moderators' bans and mutes with what became of them, never an admin's", async () => {
+    await ban(MOD, OFFENDER, { days: 1, reason: "spam" });
+    await ban(MOD2, SWEARER, { days: 3, reason: "slurs" });
+    await ban(ADMIN, PLAYER, { days: 1, reason: "admin's own" });
+    // The owner undoes the first and makes the second permanent.
+    await moderate(orm.em.fork(), OFFENDER, { kind: "unban", reason: "undo", length: null, chatReportId: null }, ADMIN, effects, NOW);
+    await moderate(orm.em.fork(), SWEARER, { kind: "ban", reason: "slurs", length: null, chatReportId: null }, ADMIN, effects, NOW);
+
+    const ours = (await listModSteps(orm.em.fork(), {}, NOW)).steps.filter((s) => ALL.includes(s.userid));
+    expect(ours.map((s) => [s.username, s.kind, s.length, s.state, s.moderatorName, s.laterByName])).toEqual([
+      [`modreptest_${SWEARER}`, "ban", 3, "permanent", `modreptest_${MOD2}`, `modreptest_${ADMIN}`],
+      [`modreptest_${OFFENDER}`, "ban", 1, "undone", `modreptest_${MOD}`, `modreptest_${ADMIN}`],
+    ]);
+
+    await ban(MOD, OFFENDER, { days: 7, reason: "back again" });
+    const later = (await listModSteps(orm.em.fork(), {}, NOW)).steps.filter((s) => s.userid === OFFENDER);
+    expect(later.map((s) => s.state)).toEqual(["on", "undone"]);
+    expect((await listModSteps(orm.em.fork(), {}, new Date(NOW.getTime() + 8 * 86_400_000))).steps.find((s) => s.userid === OFFENDER)!.state).toBe(
+      "ended",
+    );
   });
 });

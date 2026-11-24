@@ -65,6 +65,7 @@ import {
   type ModeratorEffects,
 } from "../../services/admin/chatModerators.js";
 import { listModConversations, parseModMailQuery, readModConversation } from "../../services/mail/modMail.js";
+import { listModSteps } from "../../services/admin/modSteps.js";
 import { actOnInboxPlayer, listClosed, listInbox, moderatePlayer, parseInboxAction } from "../../services/admin/moderationInbox.js";
 import {
   listChatReports,
@@ -138,6 +139,7 @@ const MODERATION_REFUSAL_WORDS = {
   gameTeam: "That is a game team account.",
   notBanned: "This player is not banned.",
   notMuted: "This player is not muted.",
+  longerBan: "This player is already banned for longer.",
 } as const;
 
 const MODERATOR_REFUSAL_WORDS = {
@@ -574,6 +576,13 @@ export const mountAdminRoutes = (router: Router): void => {
 
   router.get(`${admin}/moderators`, apiVersion, adminOnly, async (ctx) => {
     ok(ctx, { moderators: await listModerators(postgres.em.fork()) });
+  });
+
+  // Moderators' bans and mutes (services/admin/modSteps.ts), newest first.
+  // Undo and Make permanent are the player steps above (players/:id/unban|unmute|ban).
+  router.get(`${admin}/modsteps`, apiVersion, adminOnly, async (ctx) => {
+    const offset = intOf(ctx.query.offset);
+    ok(ctx, { ...(await listModSteps(postgres.em.fork(), { offset: offset !== undefined && offset > 0 ? offset : 0 })) });
   });
 
   router.post(`${admin}/moderators`, apiVersion, adminOnly, async (ctx) => {
