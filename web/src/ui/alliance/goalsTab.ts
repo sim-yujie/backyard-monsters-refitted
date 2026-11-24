@@ -237,18 +237,12 @@ export const goalPicker = (alliance: MyAlliance, host: GoalsHost, api: GoalsApi)
   const menu = alliance.goal_menu ?? [];
   const tiers = menu[0]?.tiers ?? [];
   if (tiers.length > 0) {
-    // Per tier, once: its word and who it is sized for (owner, 12 Nov: targets never scale with members).
+    // Per tier, once: only its word (owner, 25 Nov 2026: no player count).
     const cols = make("div", "goal-picker__cols");
     cols.append(make("span", "goal-picker__cols-gap"));
     for (const tier of tiers) {
       const col = make("span", `goal-picker__col goal-picker__col--${tier.tier}`);
       col.append(make("strong", "goal-picker__col-tier", tierWord(tier.tier)));
-      if (tier.players !== undefined) {
-        const players = make("span", "goal-picker__players");
-        players.title = `Sized for about ${tier.players} active players`;
-        players.append(gameIcon("friends", { size: 16, decorative: true }), make("span", "", `~${tier.players}`));
-        col.append(players);
-      }
       cols.append(col);
     }
     box.append(cols);

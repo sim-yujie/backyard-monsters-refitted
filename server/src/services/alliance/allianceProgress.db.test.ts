@@ -94,7 +94,7 @@ describe.skipIf(!enabled)("alliance progress", () => {
     expect(view.top_helpers[0]).toMatchObject({ userid: MEMBER, quests: 4 });
   });
 
-  test("a goal pays once when reached; members cannot set goals; the menu says who each tier is sized for", async () => {
+  test("a goal pays once when reached; members cannot set goals; the menu gives each tier's target and points", async () => {
     await expect(progress.setGoal(em(), MEMBER, "tribeDestroy", "easy", NOW)).rejects.toThrow("Leader and Officers");
     await progress.setGoal(em(), LEADER, "tribeDestroy", "easy", NOW);
     await expect(progress.setGoal(em(), LEADER, "tribeDestroy", "hard", NOW)).rejects.toThrow("already set");
@@ -110,10 +110,10 @@ describe.skipIf(!enabled)("alliance progress", () => {
     const today = await progress.progressView(em(), ALLIANCE, AllianceType.MIDAS, Math.floor(Date.now() / 1000));
     expect(today.today.points_today).toBe(15);
     const tribes = view.goal_menu.find((g) => g.kind === "tribeDestroy")!;
-    expect(tribes.tiers.map((t) => [t.target, t.points, t.players])).toEqual([
-      [200, 15, 3],
-      [2_750, 37, 8],
-      [10_000, 70, 15],
+    expect(tribes.tiers.map((t) => [t.target, t.points])).toEqual([
+      [200, 15],
+      [2_750, 37],
+      [10_000, 70],
     ]);
   });
 

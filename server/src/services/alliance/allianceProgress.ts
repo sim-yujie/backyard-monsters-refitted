@@ -5,7 +5,6 @@ import type { EntityManager as SqlEntityManager } from "@mikro-orm/postgresql";
 import {
   GOAL_MENU,
   GOAL_POINTS,
-  GOAL_TIER_PLAYERS,
   GOAL_TIERS,
   GOALS_PER_WEEK,
   TERRITORY_BADGE_TOP,
@@ -68,10 +67,6 @@ export const goalTarget = (type: AllianceType, rules: GoalRules, tier: GoalTier)
 
 /** What a goal pays for a type and tier. */
 export const goalPoints = (type: AllianceType, tier: GoalTier): number => GOAL_POINTS[tier] * (TYPE_SCALE[type] ?? 1);
-
-/** How many hardcore players a type's tier is sized for (the goal picker's label). */
-export const goalPlayers = (type: AllianceType, tier: GoalTier): number =>
-  GOAL_TIER_PLAYERS[tier] * (TYPE_SCALE[type] ?? 1);
 
 /**
  * Whether a stored goal's kind is still on the menu. A kind taken off it
@@ -785,7 +780,6 @@ export const progressView = async (em: EntityManager, allianceId: number, type: 
         tier,
         target: goalTarget(type, g, tier),
         points: goalPoints(type, tier),
-        players: goalPlayers(type, tier),
       })),
     })),
     goals_per_week: GOALS_PER_WEEK,

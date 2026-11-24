@@ -296,15 +296,6 @@ export type GoalTier = (typeof GOAL_TIERS)[number];
  */
 export const GOAL_POINTS: Record<GoalTier, number> = { easy: 15, medium: 37, hard: 70 };
 
-/**
- * How many hardcore Map Room 2 players each tier is sized for, Midas; scaled
- * by `TYPE_SCALE` like the targets (owner, 12 Nov 2026). Targets never scale
- * with the member count; the goal picker shows these instead. Sized for the
- * 12 Nov targets: Medium and Hard are 5x / 10x those since 24 Nov
- * (`GOAL_TIER_RAISE`); whether this label changes is still open.
- */
-export const GOAL_TIER_PLAYERS: Record<GoalTier, number> = { easy: 3, medium: 8, hard: 15 };
-
 /** Goals an alliance may set a week (owner). */
 export const GOALS_PER_WEEK = 5;
 

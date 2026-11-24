@@ -2,11 +2,11 @@ import { describe, expect, test } from "bun:test";
 
 import { GOAL_MENU, GOAL_POINTS, GOAL_TIER_RAISE, STEP_PRICES } from "../../config/AllianceConfig.js";
 import { AllianceType } from "../../enums/Alliance.js";
-import { goalAmounts, goalMenuFor, goalPlayers, goalPoints, goalTarget, isGoalOnMenu } from "./allianceProgress.js";
+import { goalAmounts, goalMenuFor, goalPoints, goalTarget, isGoalOnMenu } from "./allianceProgress.js";
 import { composeShout } from "./shoutText.js";
 import { AllianceMessageType } from "../../enums/Alliance.js";
 
-/** The goal rules of 12 Nov 2026 (owner): what counts, targets, points, sized-for labels. */
+/** The goal rules of 12 Nov 2026 (owner): what counts, targets, points. */
 describe("alliance goal rules", () => {
   test("Hatch monsters is off the menu (owner, 12 Nov 2026): hatching counts towards no goal, an old goal's shout says nothing", () => {
     expect(GOAL_MENU.some((g) => g.kind === "hatch")).toBe(false);
@@ -67,13 +67,6 @@ describe("alliance goal rules", () => {
     expect(goalPoints(AllianceType.FORTRESS, "easy")).toBe(60);
     expect(goalMenuFor(AllianceType.MIDAS).some((g) => g.kind === "harvest")).toBe(true);
     expect(goalMenuFor(AllianceType.CONQUEST).some((g) => g.kind === "harvest")).toBe(false);
-  });
-
-  test("each tier says who it is sized for: Midas 3/8/15, Conquest 6/16/30, Fortress 12/32/60", () => {
-    const players = (type: AllianceType) => (["easy", "medium", "hard"] as const).map((t) => goalPlayers(type, t));
-    expect(players(AllianceType.MIDAS)).toEqual([3, 8, 15]);
-    expect(players(AllianceType.CONQUEST)).toEqual([6, 16, 30]);
-    expect(players(AllianceType.FORTRESS)).toEqual([12, 32, 60]);
   });
 
   test("the whole Midas sky takes about 24 weeks of 5 Medium goals and 13 of 5 Hard (owner, 19 Nov 2026)", () => {
