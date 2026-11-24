@@ -1,0 +1,4 @@
+{"Eiffel Modern": {"pic": "server/public/assets/buildings/decorations/statue-eiffeltower/eiffel-tower.modern@2x.webp", "lines": [[30,233,106,270,"platform L"],[117,270,202,231,"platform R"]]},
+ "Map Room Modern": {"pic": "server/public/assets/buildings/maproom/top.3d1@2x.webp", "lines": [[4,156,105,200,"deck L"],[122,200,210,158,"deck R"]]},
+ "Eiffel Flash": {"pic": "server/public/assets/buildings/decorations/statue-eiffeltower/top.v2.png", "lines": [[10,116,52,136,"platform L"],[60,136,105,115,"platform R"]]}
+}
