@@ -10,7 +10,8 @@
 #   prompts.py    the Codex edit prompt (photo = parts/colours/carvings only)    codex_all.sh  the calls
 #   keylines.py   the new models' grid edges, measured with snap.py on any picture of them
 #   windpump.py   the windpump's game files: painted body + the decor-new wheel laid into the grid plane
-# Codex calls: 10 (pilot c-paoay-church, then codex_all.sh with the other 9).
+# Codex calls: 11 (pilot c-paoay-church, then codex_all.sh with the other 9; one redo of m-rizal-monument for its
+# obelisk-top edge came out worse (0.68/0.65) and is not used: m-rizal-monument-r2-unused).
 set -e
 cd "$(dirname "$0")"
 S=/home/yujiesim/Coding/backyard-monsters-refitted/.claude/skills/game-art/scripts
@@ -34,6 +35,7 @@ for n in $W; do
   python3 ../decor-seat/square.py classic/$n.full.png sq/$n.full.png
   python3 ../decor-seat/square.py modern/$n.full.png sqm/$n.full.png
 done
+python3 ../decor-angle/tone.py sq/paoay-church.full.png 0.9 1.0   # Classic Paoay V 55% -> 48%, like the other Classic wonders
 for d in sq sqm; do python3 ../decor-seat/tidy.py $d $W; done
 python3 ../decor-angle/fringe.py sq/*.full.png sqm/*.full.png
 for n in $W; do python3 keylines.py $n $PWD/sq/$n.full.png $PWD/sqm/$n.full.png --sheet $PWD/kl-$n.png; done
