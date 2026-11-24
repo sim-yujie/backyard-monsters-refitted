@@ -43,6 +43,13 @@ export const BaseLoadSchema = z.object({
    */
   screen: z.enum(["yard", "map"]).optional().catch(undefined),
 
+  /**
+   * Smart moving (beta 9, `services/base/autoAttack/smartMove.ts`): on a
+   * `wmattack`, the `movesKey` of the moves the player agreed to ("Move &
+   * attack"). Only compared with the server's own plan, never moved from.
+   */
+  smartmoves: z.string().min(1).max(4_000).optional(),
+
   // No `attackcost`: Map Room 3 took its attack cost from here, and a negative
   // one paid the attacker (security audit 2026-10-29, C1). A field sent anyway
   // is dropped by the parse.

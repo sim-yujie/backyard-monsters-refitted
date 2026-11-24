@@ -98,7 +98,7 @@ export const autoAttackReplayKey = (userid: number) => `auto-attack-replay:${use
 export const AUTO_ATTACK_REPLAY_TTL = 60 * 60;
 
 /** A camp to repeat a plan on. */
-interface Camp {
+export interface Camp {
   readonly baseid: string;
   readonly cell: CellCoords;
   readonly key: CampKey;
@@ -120,7 +120,7 @@ const feeOf = (camp: Camp): number => {
  * `notACamp` refusal: a Map Room 1 tribe, a player's yard or outpost, a Map
  * Room 3 structure, the Inferno, another world.
  */
-const campOf = async (userSave: Save, baseid: string, now: number): Promise<Camp> => {
+export const campOf = async (userSave: Save, baseid: string, now: number): Promise<Camp> => {
   const cell = cellCoordsFromBaseId(baseid);
   if (MR1_TRIBE_IDS.has(baseid) || !cell || !userSave.worldid) throw autoAttackRefusedErr("notACamp");
 

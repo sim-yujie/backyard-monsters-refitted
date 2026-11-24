@@ -87,6 +87,16 @@ export class User {
   map_flat: Opt<boolean> = false;
 
   /**
+   * The player switched "Smart moving" off (beta 9, owner 24 Nov 2026): a
+   * hand attack on a Map Room 2 camp they have a saved Repeat plan for no
+   * longer offers to move that plan's army in from their other yards first
+   * (`services/base/autoAttack/smartMove.ts`). On by default, for every
+   * device, so the column holds the opt-out.
+   */
+  @Property({ type: "boolean", default: false })
+  smart_moving_off: Opt<boolean> = false;
+
+  /**
    * The player's country, ISO 3166-1 alpha-2 (`PH`), or null when not set
    * (owner 3 Nov 2026). Chosen in Account settings or the one-time prompt
    * after login (`/player/settings`). Any country gives the player that

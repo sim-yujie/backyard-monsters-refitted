@@ -1013,3 +1013,199 @@ describe("Repeat attack's plan check (beta 9, owner's fix 2)", () => {
     expect(userSave.resources.r3).toBeLessThan(5_000_000);
   }, REPLAY_TIMEOUT_MS);
 });
+
+/**
+ * Smart moving for hand attacks (beta 9, owner's grilling of 24 Nov 2026,
+ * `smartMove.ts`): the offer on Attack, and the moves the hand attack load
+ * makes before it starts the attack, put back should it not start.
+ */
+const { smartMoveFor, startWithSmartMoves } = await import("./smartMove.js");
+
+describe("Smart moving for hand attacks", () => {
+  const FAR = "1000244208";
+  const KEY = `${FAR}>${HOME}:C1=90`;
+  /** The main yard reaches the camp and has room; an outpost out of reach holds the rest. */
+  const split = () => {
+    userSave.buildingdata = housing(3);
+    userSave.monsters.housed = { C1: 60 };
+    addOutpost(244, 208, 2, { C1: 200 });
+  };
+  const off = () => ({ ...user(), smart_moving_off: true });
+  /** A stand-in for the attack load's start, recording what the yard in range held when it ran. */
+  const starter = (refuse?: Error) => {
+    const seen: Record<string, number>[] = [];
+    const start = async () => {
+      seen.push({ ...userSave.monsters.housed });
+      if (refuse) throw refuse;
+      return { save: camp, started: true };
+    };
+    return { seen, start };
+  };
+
+  describe("the offer", () => {
+    test("the moves that gather the saved plan's army, their key and where each yard sits; nothing written", async () => {
+      split();
+      const answer = await smartMoveFor(user() as never, CAMP);
+      expect(answer).toMatchObject({
+        verdict: "moves",
+        camp: { tribe: expect.any(String), level: 35, damage: 12 },
+        monsters: { C1: 150 },
+        moves: [{ from: FAR, to: HOME, monsters: { C1: 90 } }],
+        movesKey: KEY,
+        missing: [],
+        noRoom: null,
+      });
+      expect(answer.yards).toEqual({ [FAR]: { main: false, x: 244, y: 208 }, [HOME]: { main: true, x: 241, y: 207 } });
+      expect(transactions).toBe(0);
+      expect(outpostRows[0]!.monsters.housed).toEqual({ C1: 200 });
+    });
+
+    test("monsters only: a champion not ready, no bombs' resources and no putty for a Repeat fee change nothing", async () => {
+      split();
+      userSave.champion = [{ t: 5, l: 5, hp: 0, status: 1 }];
+      userSave.resources = { r1: 0, r2: 0, r3: 0, r4: 0 };
+      expect(await smartMoveFor(user() as never, CAMP)).toMatchObject({ verdict: "moves", movesKey: KEY });
+    });
+
+    test("a damaged camp still gets the whole plan's army", async () => {
+      split();
+      camp.damage = 64;
+      expect(await smartMoveFor(user() as never, CAMP)).toMatchObject({ verdict: "moves", camp: { damage: 64 }, monsters: { C1: 150 } });
+    });
+
+    test("the army already in range: ready, nothing to offer", async () => {
+      expect(await smartMoveFor(user() as never, CAMP)).toMatchObject({ verdict: "ready", moves: [], movesKey: null });
+    });
+
+    test("no saved plan for the camp's tribe and level: none", async () => {
+      split();
+      planRow = null;
+      expect(await smartMoveFor(user() as never, CAMP)).toMatchObject({ verdict: "none", moves: [] });
+    });
+
+    test("the setting off: off, whatever the yards hold", async () => {
+      split();
+      expect(await smartMoveFor(off() as never, CAMP)).toMatchObject({ verdict: "off", camp: null, moves: [] });
+    });
+
+    test("no Flinger reaches the camp: outOfRange, nothing to move", async () => {
+      split();
+      inRange = false;
+      expect(await smartMoveFor(user() as never, CAMP)).toMatchObject({ verdict: "outOfRange", moves: [] });
+    });
+
+    test("not gatherable from every yard: short, each type with what the yards hold", async () => {
+      userSave.buildingdata = housing(3);
+      userSave.monsters.housed = { C1: 60 };
+      addOutpost(244, 208, 2, { C1: 50 });
+      expect(await smartMoveFor(user() as never, CAMP)).toMatchObject({
+        verdict: "short",
+        missing: [{ kind: "monster", id: "C1", need: 150, have: 110 }],
+        moves: [],
+      });
+    });
+
+    test("no room in range: housing, with the room each yard has", async () => {
+      userSave.buildingdata = housing(1);
+      userSave.monsters.housed = { C1: 50 };
+      addOutpost(244, 208, 2, { C1: 200 });
+      const answer = await smartMoveFor(user() as never, CAMP);
+      expect(answer).toMatchObject({ verdict: "housing", noRoom: { need: 1_000, free: [{ baseid: HOME, free: 40 }] } });
+      expect(answer.yards[HOME]).toEqual({ main: true, x: 241, y: 207 });
+    });
+
+    test("anything but a Map Room 2 camp on the player's world is refused (the web opens the Attack window)", async () => {
+      expect((await refusal(smartMoveFor(user() as never, HOME))).reason).toBe("notACamp");
+    });
+  });
+
+  describe("Move & attack", () => {
+    test("the moves are made, then the attack starts with the army in range", async () => {
+      split();
+      const { seen, start } = starter();
+      const result = await startWithSmartMoves(user() as never, CAMP, KEY, start);
+      expect(result.started).toBe(true);
+      expect(result.smartMoved.moves).toEqual([{ from: FAR, to: HOME, monsters: { C1: 90 } }]);
+      // The start saw the 60 the main yard had and the 90 that moved in.
+      expect(seen).toEqual([{ C1: 150 }]);
+      expect(outpostRows[0]!.monsters.housed).toEqual({ C1: 110 });
+      expect(transactions).toBe(1);
+      expect(store.has(autoAttackLockKey(ATTACKER))).toBe(false);
+    });
+
+    test("the attack does not start (any refusal): every monster goes back, and the refusal goes on", async () => {
+      split();
+      const { seen, start } = starter(new Error("New version — reload the page."));
+      await expect(startWithSmartMoves(user() as never, CAMP, KEY, start)).rejects.toThrow("New version");
+      expect(seen).toEqual([{ C1: 150 }]);
+      // The moves and their undo.
+      expect(transactions).toBe(2);
+      expect(outpostRows[0]!.monsters.housed).toEqual({ C1: 200 });
+      expect(userSave.monsters.housed).toEqual({ C1: 60 });
+      expect(store.has(autoAttackLockKey(ATTACKER))).toBe(false);
+    });
+
+    /** Refused before anything moves: no transaction, no start, every yard as it was. */
+    const refusedBeforeMoving = async (who: unknown, key: string, reason: string | RegExp) => {
+      const { seen, start } = starter();
+      const before = structuredClone({ main: userSave.monsters.housed, outposts: outpostRows.map((row) => row.monsters.housed) });
+      const refused = await refusal(startWithSmartMoves(who as never, CAMP, key, start));
+      if (typeof reason === "string") expect(refused.reason).toBe(reason);
+      else expect(String(refused.message)).toMatch(reason);
+      expect(seen).toEqual([]);
+      expect(transactions).toBe(0);
+      expect({ main: userSave.monsters.housed, outposts: outpostRows.map((row) => row.monsters.housed) }).toEqual(before);
+    };
+
+    test("never without the player's say-so: another key, or one the yards no longer match, is movesChanged", async () => {
+      split();
+      await refusedBeforeMoving(user(), `${FAR}>${HOME}:C1=80`, "movesChanged");
+      // A monster hatched in range since the offer: the plan now moves 89.
+      userSave.monsters.housed = { C1: 61 };
+      await refusedBeforeMoving(user(), KEY, "movesChanged");
+    });
+
+    test("the setting off: refused, nothing moves", async () => {
+      split();
+      await refusedBeforeMoving(off(), KEY, "smartMoveOff");
+    });
+
+    test("no saved plan: refused, nothing moves", async () => {
+      split();
+      planRow = null;
+      await refusedBeforeMoving(user(), KEY, "noPlan");
+    });
+
+    test("out of range: refused, nothing moves", async () => {
+      split();
+      inRange = false;
+      await refusedBeforeMoving(user(), KEY, "outOfRange");
+    });
+
+    test("a camp someone else is attacking: refused, nothing moves", async () => {
+      split();
+      camp.attackid = 77;
+      camp.attacks = [{ starttime: now() - 10 }];
+      await refusedBeforeMoving(user(), KEY, /under attack/);
+    });
+
+    test("a Repeat attack or another smart move already running: inFlight, its lock kept", async () => {
+      split();
+      store.set(autoAttackLockKey(ATTACKER), "1");
+      await refusedBeforeMoving(user(), KEY, "inFlight");
+      expect(store.has(autoAttackLockKey(ATTACKER))).toBe(true);
+    });
+
+    test("the army can no longer be gathered, or housed: missing / noRoom, nothing moves", async () => {
+      userSave.buildingdata = housing(3);
+      userSave.monsters.housed = { C1: 60 };
+      addOutpost(244, 208, 2, { C1: 50 });
+      await refusedBeforeMoving(user(), KEY, "missing");
+      reset();
+      userSave.buildingdata = housing(1);
+      userSave.monsters.housed = { C1: 50 };
+      addOutpost(244, 208, 2, { C1: 200 });
+      await refusedBeforeMoving(user(), KEY, "noRoom");
+    });
+  });
+});
