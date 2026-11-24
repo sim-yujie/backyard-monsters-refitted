@@ -153,7 +153,9 @@ export const snapList = (lines: readonly AroundLine[], them: number, line?: Pick
       mark.append(icon("report", true));
       words.append(mark);
     }
-    if (said.flagged) words.append(badge(severityWords(said.flagged), said.flagged === "slur" ? "red" : "amber"));
+    // The chat filter's own lines ("filter") carry no severity words: no empty pill.
+    const severity = said.flagged ? severityWords(said.flagged) : "";
+    if (severity) words.append(badge(severity, said.flagged === "slur" ? "red" : "amber"));
     words.append(said.text);
     item.append(time, make("strong", "mod-reports__snap-who", said.name ?? `#${said.userid}`), words);
     list.append(item);

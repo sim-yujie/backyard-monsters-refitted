@@ -366,6 +366,16 @@ describe("ReportsWindow: the chat filter's lines", () => {
     expect(q(".mod-reports__result").textContent).toBe("2 lines removed from chat for everyone.");
   });
 
+  it("the chat around a filter line shows no empty severity pill", async () => {
+    const api = spamApi({ around: vi.fn(() => Promise.resolve([{ userid: 610, name: "Spam Kid", text: "join na kayo [link removed]", at: T0 + 30_000, flagged: "filter" }])) });
+    await open(api);
+    document.querySelectorAll<HTMLButtonElement>(".mod-reports__line .mod-reports__link")[0]!.click();
+    await settle();
+    const snap = q(".mod-reports__snap");
+    expect(snap.textContent).toContain("join na kayo [link removed]");
+    expect([...snap.querySelectorAll(".mod-reports__badge")].filter((b) => !b.textContent?.trim())).toHaveLength(0);
+  });
+
   it("bans for 1, 3 or 7 days with a reason, removing the last hour's lines by default", async () => {
     const onChanged = vi.fn();
     const api = spamApi();

@@ -514,7 +514,8 @@ export const flagRow = (
           "span",
           { class: "row-top" },
           h("strong", { class: "report-who" }, name),
-          severityChip(player.slurs > 0 ? "slur" : "swear"),
+          // A player whose open lines are all the chat filter's shows "Chat filter", not "Swearing".
+          severityChip(player.slurs > 0 ? "slur" : player.lines.length > 0 && player.lines.every((line) => line.severity === "filter") ? "filter" : "swear"),
           h("span", { class: "chip chip-quiet" }, plural(player.count, "line")),
           player.banned ? h("span", { class: "chip chip-bad" }, "Banned") : null,
           player.muted ? h("span", { class: "chip chip-warn" }, "Chat paused") : null,
