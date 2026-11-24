@@ -823,9 +823,18 @@ button.chat-line__name {
   min-height: 34px;
 }
 
+/* The close sits level with Ban. */
+.chat-box__player--ban .chat-box__player-close {
+  top: 7px;
+}
+
 @media (pointer: coarse) {
   .chat-box__player--ban .chat-box__player-name {
     min-height: 44px;
+  }
+
+  .chat-box__player--ban .chat-box__player-close {
+    top: calc(var(--space-2) + 10px);
   }
 
   :root[data-skin] .chat-box__player .btn.chat-box__ban {

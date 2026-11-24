@@ -89,7 +89,7 @@ export const REPORTS_TEXT = {
 
 export const plural = (n: number, one: string, many = `${one}s`): string => `${n} ${n === 1 ? one : many}`;
 
-const catches = (n: number): string => plural(n, "word-filter catch", "word-filter catches");
+const catches = (n: number): string => plural(n, "filter catch", "filter catches");
 
 /** "3 reports and 1 word-filter catch", or "nothing open". */
 export const closesWords = (row: Pick<ModQueueRow, "reports" | "filterOnlyLines">): string =>

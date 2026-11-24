@@ -553,6 +553,15 @@ class Dashboard {
       else link.removeAttribute("aria-current");
     }
     this.setMenu(false);
+    // A phone's tab row scrolls sideways: bring the open tab into view (neon, 24 Nov 2026).
+    if (view !== "home") {
+      const tab = this.sections[view as SectionId].element.querySelector<HTMLElement>(".subnav [aria-current='page']");
+      try {
+        tab?.scrollIntoView?.({ inline: "center", block: "nearest" });
+      } catch {
+        // An old browser without the options: the row stays where it was.
+      }
+    }
     document.title = view === "home" ? "BYMR dashboard" : `${viewLabel(view)} · BYMR dashboard`;
     if (changed) window.scrollTo?.(0, this.scrolls.restore(view));
   }

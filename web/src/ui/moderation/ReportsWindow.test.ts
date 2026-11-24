@@ -103,8 +103,8 @@ afterEach(() => {
 
 describe("the Reports window's words", () => {
   it("says what a step covers and what closed, as the mock-up does", () => {
-    expect(rowWords(row())).toBe("2 messages · 2 reports from 2 players · 1 word-filter catch");
-    expect(scopeWords(row())).toBe("Applies to all 2 messages, closes 2 reports and 1 word-filter catch");
+    expect(rowWords(row())).toBe("2 messages · 2 reports from 2 players · 1 filter catch");
+    expect(scopeWords(row())).toBe("Applies to all 2 messages, closes 2 reports and 1 filter catch");
     expect(scopeWords(row({ messages: 1, reports: 1, filterOnlyLines: 0 }))).toBe("Applies to the 1 message, closes 1 report");
     expect(closesWords({ reports: 0, filterOnlyLines: 0 })).toBe("nothing open");
   });
@@ -194,7 +194,7 @@ describe("ReportsWindow", () => {
     const body: ModActBody = { action: "mute", reason: "Insults in chat", hours: 72, caseId: 7, reports: 2, flagsUpTo: 40 };
     expect(api.act).toHaveBeenCalledWith(501, body);
     expect(onChanged).toHaveBeenCalledOnce();
-    expect(q(".mod-reports__result").textContent).toBe("Rude Player’s chat muted for 3 days. Closed 2 reports and 1 word-filter catch.");
+    expect(q(".mod-reports__result").textContent).toBe("Rude Player’s chat muted for 3 days. Closed 2 reports and 1 filter catch.");
     // Nothing open any more: only Ban stays.
     expect([...document.querySelectorAll(".mod-reports__action-buttons button")].map((b) => b.textContent)).toEqual(["Ban"]);
   });

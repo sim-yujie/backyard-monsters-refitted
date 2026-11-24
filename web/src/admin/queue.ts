@@ -73,7 +73,7 @@ export type RecordTab = "reports" | "attacks" | "mail";
 export const FILTERS: readonly (readonly [QueueFilter, string])[] = [
   ["all", "All"],
   ["reports", "Player reports"],
-  ["filter", "Word filter"],
+  ["filter", "Auto-filter"],
   ["closed", "Closed"],
 ];
 
@@ -431,7 +431,7 @@ export class QueueView {
         "span",
         { class: "hrow q-tags" },
         reported ? h("span", { class: "badge blue" }, icon("flag", 13), "Player reports") : null,
-        caught ? h("span", { class: "badge amber" }, icon("warn", 13), "Word filter") : null,
+        caught ? h("span", { class: "badge amber" }, icon("warn", 13), "Auto-filter") : null,
         player.slurs ? h("span", { class: "badge red" }, "Slur") : null,
         player.banned ? h("span", { class: "badge red" }, "Banned") : null,
         player.muted ? h("span", { class: "badge" }, "Chat restricted") : null,

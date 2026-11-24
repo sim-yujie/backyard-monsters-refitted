@@ -1108,3 +1108,52 @@
     margin-bottom: 6px;
   }
 }
+
+/* The ban step shows the form alone (neon r2: a line's red Remove sat right above Confirm ban). */
+.mod-reports__review.is-banning > .mod-reports__evidence {
+  display: none;
+}
+
+/* The ban sheet: the form scrolls, its plates sit under it, never over it (neon r2). */
+.mod-ban-sheet > .panel__body {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.mod-ban-sheet .mod-ban-sheet__pane {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+.mod-ban-sheet .mod-reports__actions {
+  flex: none;
+}
+
+@media (max-height: 500px) {
+  .mod-ban-sheet .mod-reports__actions {
+    position: static;
+    box-shadow: 0 -6px 10px -6px rgb(0 0 0 / 45%);
+  }
+
+  /* A phone on its side: the player's sums go, so the first line's words show at once (neon r2). */
+  .mod-reports__head > .mod-reports__summary {
+    display: none;
+  }
+
+  .mod-reports__evidence {
+    padding-block: 6px;
+    gap: 8px;
+  }
+
+  .mod-reports__line blockquote {
+    margin: 2px 0;
+  }
+}
+
+/* The reason box's hint reads on Modern's dark steel. */
+:root[data-skin="scrap"] .mod-reports__confirm textarea::placeholder {
+  color: #9ba8b4;
+}

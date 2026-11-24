@@ -215,7 +215,7 @@ describe("the list", () => {
   it("counts players per filter and each player's lines once", async () => {
     await mount();
     const segs = [...document.querySelectorAll(".filter-grid .seg")].map((s) => s.textContent);
-    expect(segs).toEqual(["All 1", "Player reports 1", "Word filter 0", "Closed 1"]);
+    expect(segs).toEqual(["All 1", "Player reports 1", "Auto-filter 0", "Closed 1"]);
     const row = document.querySelector("a.q-row[data-player='42']")!;
     expect(row.textContent).toContain("3 messages · 4 reports from 3 players · 1 word-filter catch");
   });

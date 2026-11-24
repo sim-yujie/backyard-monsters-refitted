@@ -6167,22 +6167,6 @@ tbody th {
   }
 }
 
-@media (pointer: coarse) {
-  .watch-chip {
-    min-height: 44px;
-  }
-
-  .watch-chip__remove {
-    width: 44px;
-    height: 44px;
-  }
-
-  .watch-add--chip .field-input,
-  .watch-add--chip .button {
-    min-height: 44px;
-  }
-}
-
 .watch-card {
   gap: 12px;
 }
@@ -6283,3 +6267,21 @@ tbody th {
   font-size: 0.875rem;
   font-weight: 600;
 }
+
+/* Touch screens and narrow windows: the chips and their x at 44 px (neon r2). */
+@media (pointer: coarse), (max-width: 1024px) {
+  .watch-chip {
+    min-height: 44px;
+  }
+
+  .watch-chip__remove {
+    width: 40px;
+    height: 44px;
+  }
+
+  .watch-add--chip .field-input,
+  .watch-add--chip .button {
+    min-height: 44px;
+  }
+}
+

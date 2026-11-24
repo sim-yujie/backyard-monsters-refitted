@@ -528,6 +528,8 @@ export class ReportsWindow {
 
     const parts: HTMLElement[] = [head, review];
     if (this.act && (open || this.act === "ban")) {
+      // While banning, the lines (and their Remove) step aside so nothing red sits by Confirm (neon r2).
+      review.classList.toggle("is-banning", this.act === "ban");
       review.prepend(this.confirmPane(player, this.act));
       parts.push(this.confirmFoot(open, this.act));
     } else if (open || !player.banned) {
