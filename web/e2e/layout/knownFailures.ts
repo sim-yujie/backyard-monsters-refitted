@@ -26,6 +26,14 @@ export const KNOWN_FAILURES: Readonly<Record<string, string>> = {
     "More's fan opens under the open World chat, Goals cannot be pressed; fix/ipad-panels (chat steps aside)",
   "phone-upright-bars/goals+chat":
     "More's fan opens under the open World chat, Goals cannot be pressed; fix/ipad-panels (chat steps aside)",
+  // Found by the friend's-yard check (bug report #70, 24 Nov 2026). Not the
+  // bug #70 fault: the own yard's menu is the same box here. On a short
+  // landscape screen the menu has no height limit, so Log out ends 10-19px
+  // below the screen. No fix branch yet.
+  "odd-980/friend-account-menu":
+    "account menu 94..561 on a 551px screen (own yard the same); no fix branch yet",
+  "ipad-side-short/friend-account-menu":
+    "account menu 94..570 on a 560px screen (own yard the same); no fix branch yet",
 };
 
 export const knownFailure = (profileId: string, windowId: string): string | undefined =>
