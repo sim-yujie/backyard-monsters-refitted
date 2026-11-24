@@ -230,7 +230,11 @@ export type AttackWindowTarget = Pick<AttackTarget, "name" | "kind" | "roster">;
  * Opens the window over `container` (the overlay's modal layer) and resolves
  * true on Attack, false on Cancel, the close disc, Escape or the scrim.
  */
-export const confirmAttackWindow = (container: HTMLElement, target: AttackWindowTarget): Promise<boolean> =>
+export const confirmAttackWindow = (
+  container: HTMLElement,
+  target: AttackWindowTarget,
+  options: { readonly note?: HTMLElement | null } = {},
+): Promise<boolean> =>
   new Promise((resolve) => {
     let answered = false;
     let stopScrollHint = (): void => {};
@@ -249,7 +253,9 @@ export const confirmAttackWindow = (container: HTMLElement, target: AttackWindow
     });
     const model = attackWindowModel(target.roster);
 
-    popup.setHead(targetLine(target));
+    // Smart moving's "can't gather" note (beta 9, `smartMoveSheet.ts`) under the
+    // name line: in sight however the monsters scroll.
+    popup.setHead(targetLine(target), ...(options.note ? [options.note] : []));
     popup.setContent(weaponsSection(model), monstersSection(model));
 
     const cancel = document.createElement("button");

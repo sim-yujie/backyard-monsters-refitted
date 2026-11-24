@@ -233,6 +233,7 @@ const WINDOW_CLASSES = [
   ".building-panel",
   ".auto-attack--result",
   ".xfer-tray",
+  ".attack-window",
 ];
 
 const openWindows = (page: Page) =>
@@ -500,6 +501,29 @@ export const openRepeatSheet = async (page: Page, state: string): Promise<boolea
   // The portraits and icons size the tiles: wait for them.
   await page
     .waitForFunction(() => [...document.querySelectorAll(".overlay__layer .auto-attack img")].every((image) => (image as HTMLImageElement).complete), null, {
+      timeout: 10_000,
+    })
+    .catch(() => undefined);
+  return true;
+};
+
+/**
+ * Opens smart moving (beta 9) on `state` from the build's preview: the "Bring
+ * saved army?" sheet, or the Attack window with its "can't gather" note.
+ * Closed by `closeAll` the way it opened, as Repeat attack's sheet is.
+ */
+export const openSmartMove = async (page: Page, state: string): Promise<boolean> => {
+  const opened = await page.evaluate((which) => {
+    const open = (globalThis as Record<string, unknown>)["__smartMove"];
+    if (typeof open !== "function") return false;
+    const shut = (open as (state: string) => unknown)(which);
+    (globalThis as Record<string, unknown>)["__repeatSheetClose"] = shut;
+    return typeof shut === "function";
+  }, state);
+  if (!opened) return false;
+  await page.locator(".overlay__layer .attack-window").first().waitFor({ timeout: 10_000 });
+  await page
+    .waitForFunction(() => [...document.querySelectorAll(".overlay__layer .attack-window img")].every((image) => (image as HTMLImageElement).complete), null, {
       timeout: 10_000,
     })
     .catch(() => undefined);

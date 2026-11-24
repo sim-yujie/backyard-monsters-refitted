@@ -10,6 +10,7 @@ import {
   lastAutoAttackReplay,
   runAutoAttack,
 } from "../../../services/base/autoAttack/autoAttack.js";
+import { smartMoveFor } from "../../../services/base/autoAttack/smartMove.js";
 
 const AutoAttackSchema = z.object({
   /** The camp's base id, as the map carries it (`bid`). */
@@ -35,6 +36,22 @@ export const autoAttackPlan: KoaController = async (ctx) => {
 
   ctx.status = Status.OK;
   ctx.body = { error: 0, ...(await autoAttackPlanFor(user, baseid)) };
+};
+
+/**
+ * `POST /worldmapv2/smartmove { baseid }` (smart moving, beta 9): what the
+ * web offers when the player taps Attack on a camp: nothing (setting off, no
+ * saved plan, army already in range), the moves that bring the saved plan's
+ * army into range, or what cannot be gathered. Reads only; the moves are
+ * made by the attack load itself (`smartmoves`, `baseLoad.ts`).
+ */
+export const smartMove: KoaController = async (ctx) => {
+  const { baseid } = AutoAttackSchema.parse(ctx.request.body);
+  const user: User = ctx.authUser;
+  await postgres.em.populate(user, ["save"]);
+
+  ctx.status = Status.OK;
+  ctx.body = { error: 0, ...(await smartMoveFor(user, baseid)) };
 };
 
 /**

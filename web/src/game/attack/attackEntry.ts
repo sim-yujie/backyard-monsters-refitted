@@ -228,15 +228,7 @@ const rosterOf = (
   flingerLevel: number,
   ownSave: RosterSave | null,
 ): AttackRoster => {
-  const monsters: Record<string, number> = {};
-  for (const { m } of sources) {
-    const housed = m["housed"];
-    if (typeof housed !== "object" || housed === null) continue;
-    for (const [id, count] of Object.entries(housed as Record<string, unknown>)) {
-      if (typeof count !== "number" || count <= 0) continue;
-      monsters[id] = (monsters[id] ?? 0) + count;
-    }
-  }
+  const monsters = monstersOf(sources);
 
   const levels: Record<string, number> = {};
   for (const [id, entry] of Object.entries(ownSave?.academy ?? {})) {
@@ -261,6 +253,39 @@ const rosterOf = (
   };
 };
 
+/** Monsters per id summed over sources' `housed`, positive counts only. */
+const monstersOf = (sources: readonly RosterSource[]): Record<string, number> => {
+  const monsters: Record<string, number> = {};
+  for (const { m } of sources) {
+    const housed = m["housed"];
+    if (typeof housed !== "object" || housed === null) continue;
+    for (const [id, count] of Object.entries(housed as Record<string, unknown>)) {
+      if (typeof count !== "number" || count <= 0) continue;
+      monsters[id] = (monsters[id] ?? 0) + count;
+    }
+  }
+  return monsters;
+};
+
+/**
+ * The roster once smart moving has moved monsters into the yards in range
+ * (beta 9): each yard's housing as the attack load served it (`smartmoved`,
+ * the attack session's own record), so the battle can fling the monsters that
+ * just moved in and the attack save's `monsterupdate` counts them. A yard the
+ * served housing does not name keeps what the map had.
+ */
+export const rosterWithHousing = (
+  roster: AttackRoster,
+  housed: Readonly<Record<string, Readonly<Record<string, number>>>>,
+): AttackRoster => {
+  const byId = new Map(roster.sources.map((source) => [source.baseid, source]));
+  for (const [baseid, counts] of Object.entries(housed)) {
+    byId.set(baseid, { baseid, m: { ...(byId.get(baseid)?.m ?? {}), housed: { ...counts } } });
+  }
+  const sources = [...byId.values()].sort((a, b) => (a.baseid < b.baseid ? -1 : a.baseid > b.baseid ? 1 : 0));
+  return { ...roster, sources, monsters: monstersOf(sources) };
+};
+
 /** A champion that may be flung (`combat.md:750-751`). */
 export const isHealthyChampion = (champion: ChampionSaveEntry): boolean =>
   champion.hp > 0 && champion.status === 0;
@@ -269,6 +294,12 @@ export const isHealthyChampion = (champion: ChampionSaveEntry): boolean =>
 export const hasAnythingToSend = (roster: AttackRoster): boolean =>
   Object.values(roster.monsters).some((count) => count > 0) ||
   roster.champions.some(isHealthyChampion);
+
+/**
+ * Attack's refusal when the yards in range hold nothing to send. Smart moving
+ * (beta 9) may still bring a camp's saved army in, so the map asks it first.
+ */
+export const NOTHING_IN_RANGE = "You have no monsters or healthy champion in range.";
 
 /**
  * Why Attack is not offered on this cell, or null when it is.
@@ -294,6 +325,6 @@ export const attackRefusal = (
     if (payload.t !== undefined && payload.t > nowSeconds) return "You have a truce with this player.";
   }
   if (roster.flingerLevel === 0) return "None of your flingers can reach this cell.";
-  if (!hasAnythingToSend(roster)) return "You have no monsters or healthy champion in range.";
+  if (!hasAnythingToSend(roster)) return NOTHING_IN_RANGE;
   return null;
 };

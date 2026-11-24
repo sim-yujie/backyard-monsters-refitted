@@ -8,6 +8,7 @@ const api = vi.hoisted(() => ({
   fetchAccount: vi.fn(),
   changeUsername: vi.fn(),
   setShinyLocked: vi.fn(),
+  setSmartMoving: vi.fn(),
 }));
 vi.mock("@/api/account", () => api);
 const privacyApi = vi.hoisted(() => ({
@@ -50,6 +51,7 @@ const open = async (account: Record<string, unknown>) => {
     privacy: { hideOnline: false, friendRequests: true },
     country: { country: null, countryAsked: false, countryChannel: null },
     notificationsOff: [],
+    smartMoving: true,
     ...account,
   });
   const popup = openAccountSettings({ container: document.body });
@@ -207,6 +209,25 @@ describe("AccountSettings", () => {
     await settle();
     expect(box.checked).toBe(true);
     expect(document.querySelector("#settings-shiny-hint")!.textContent).toBe(SETTINGS_TEXT.shinyFailed);
+  });
+
+  it("shows Smart moving as the account has it, saves a flip and puts it back when the save fails", async () => {
+    api.setSmartMoving.mockResolvedValueOnce(false).mockRejectedValueOnce(new Error("down"));
+    await open({ smartMoving: true });
+    const box = document.querySelector<HTMLInputElement>("#settings-smart-moving")!;
+    expect(box.checked).toBe(true);
+    expect(document.querySelector("#settings-smart-moving-hint")!.textContent).toBe(SETTINGS_TEXT.smartMovingHint);
+    box.checked = false;
+    box.dispatchEvent(new Event("change"));
+    await settle();
+    expect(api.setSmartMoving).toHaveBeenLastCalledWith(false);
+    expect(box.checked).toBe(false);
+
+    box.checked = true;
+    box.dispatchEvent(new Event("change"));
+    await settle();
+    expect(box.checked).toBe(false);
+    expect(document.querySelector("#settings-smart-moving-hint")!.textContent).toBe(SETTINGS_TEXT.smartMovingFailed);
   });
 
   it("saves 'Show when I'm online' as hideOnline and puts it back when the save fails", async () => {

@@ -115,6 +115,13 @@ if (import.meta.env.DEV || import.meta.env.VITE_LAYOUT_CHECK === "1") {
       return modal ? previewAutoAttackConfirm(modal, state) : null;
     };
   });
+  // Smart moving's sheet and the Attack window's "can't gather" note (beta 9).
+  void import("@/ui/attack/smartMovePreview").then(({ previewSmartMove }) => {
+    (globalThis as Record<string, unknown>)["__smartMove"] = (state?: Parameters<typeof previewSmartMove>[1]) => {
+      const modal = document.querySelector<HTMLElement>(".overlay__layer--modal");
+      return modal ? previewSmartMove(modal, state) : null;
+    };
+  });
   // The Baiter window's friend tabs and a friend's test army (beta 9 #4), at their busiest.
   void import("@/ui/yard/baiterFriendsPreview").then(({ previewBaiterWindow, previewFriendTest }) => {
     const modal = () => document.querySelector<HTMLElement>(".overlay__layer--modal");

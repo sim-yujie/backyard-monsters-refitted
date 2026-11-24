@@ -305,6 +305,8 @@ export const NOT_REAL_ACTION_ROUTES: readonly string[] = [
   "POST /worldmapv2/sight",
   "POST /worldmapv2/takeoverquote",
   "POST /worldmapv2/autoattackplan",
+  // Smart moving's offer on Attack (beta 9): a read; the moves ride the attack load.
+  "POST /worldmapv2/smartmove",
   // The move tray reading every own yard's army (beta 9 #7): a read.
   "POST /worldmapv2/ownarmies",
   "POST /worldmapv2/setmapversion",
