@@ -226,8 +226,12 @@ circles.
 whose range circle covers it, keeping ground and air separate. Range and damage come from
 `stats[level-1]`, the values `BTOWER.Props()` reads (`client/scripts/BTOWER.as:91-113`). Damage per
 second is the game's own formula, `damage * (40 / rate)` (`BTOWER.as:144-148`). Range is squared
-distance from the footprint centre, matching `targetInRange()` (`BTOWER.as:234-249`), so a plain
-circle from the centre is exactly right. Ground versus air comes from the `_targetFlyerMode` map
+distance from the footprint centre, matching `FindTargets()` (`BTOWER.as:394`), so a plain circle
+from the centre is where a tower finds targets. (`targetInRange()`, `BTOWER.as:234-249`, measures
+from the anchor, the top corner, because its `.add` throws its result away: since beta 9 the
+engine's Sniper, Cannon, Laser, Aerial Defense, Railgun, Inferno Cannon and Magma stop shooting a
+target that is out of range of the anchor, so in front of a tower the circle reaches about 35 px
+further than the tower keeps firing.) Ground versus air comes from the `_targetFlyerMode` map
 (`BTOWER.as:25-35`) through `getOldStyleTargets()` (`Targeting.as:175-190`): type 115 is air only,
 types 21, 25 and 132 hit both, the rest are ground only.
 
