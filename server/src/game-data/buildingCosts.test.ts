@@ -55,12 +55,12 @@ describe("buildingCosts", () => {
     // 135 of the 140 entries in `_yardProps` carry a `costs` array; the five
     // without one are not buildable at any price. The Radio Tower (113) is
     // dropped on purpose (D15, `web/tools/gen-building-costs.mjs`). Then this
-    // project's own Observatory (150, the alliance pass) and its six autumn
-    // decorations, 201 to 206 (`revampDecorations.ts`).
-    expect(BUILDING_COST_ROWS.length).toBe(134 + 1 + 6);
-    expect(Object.keys(COSTS).length).toBe(134 + 1 + 6);
-    expect(BUILDING_COST_ROWS.slice(-7, -6).map(([type]) => type)).toEqual([150]);
-    expect(BUILDING_COST_ROWS.slice(-6).map(([type]) => type)).toEqual([201, 202, 203, 204, 205, 206]);
+    // project's own Observatory (150, the alliance pass) and its decorations,
+    // 201 to 232 (`revampDecorations.ts`: the six autumn ones, then 26 new).
+    expect(BUILDING_COST_ROWS.length).toBe(134 + 1 + 32);
+    expect(Object.keys(COSTS).length).toBe(134 + 1 + 32);
+    expect(BUILDING_COST_ROWS.slice(-33, -32).map(([type]) => type)).toEqual([150]);
+    expect(BUILDING_COST_ROWS.slice(-32).map(([type]) => type)).toEqual(Array.from({ length: 32 }, (_, i) => 201 + i));
   });
 
   test("rows are sorted by type and each type appears once", () => {

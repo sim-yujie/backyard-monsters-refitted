@@ -865,6 +865,110 @@ export const BUILDING_COST_ROWS: readonly CostRow[] = [
   [206, "bdg_autumnmaple", "decoration", 4, [
     [0,0,0,0,0,[]],
   ], [0]],
+  // 207 bdg_flagcambodia (decoration) — this project's own decoration (gen-building-costs.mjs)
+  [207, "bdg_flagcambodia", "decoration", 4, [
+    [0,0,0,0,0,[]],
+  ], [0]],
+  // 208 bdg_firepit (decoration) — this project's own decoration (gen-building-costs.mjs)
+  [208, "bdg_firepit", "decoration", 4, [
+    [0,0,0,0,0,[]],
+  ], [0]],
+  // 209 bdg_picnictable (decoration) — this project's own decoration (gen-building-costs.mjs)
+  [209, "bdg_picnictable", "decoration", 4, [
+    [0,0,0,0,0,[]],
+  ], [0]],
+  // 210 bdg_wishingwell (decoration) — this project's own decoration (gen-building-costs.mjs)
+  [210, "bdg_wishingwell", "decoration", 4, [
+    [0,0,0,0,0,[]],
+  ], [0]],
+  // 211 bdg_monstereggnest (decoration) — this project's own decoration (gen-building-costs.mjs)
+  [211, "bdg_monstereggnest", "decoration", 4, [
+    [0,0,0,0,0,[]],
+  ], [0]],
+  // 212 bdg_goocauldron (decoration) — this project's own decoration (gen-building-costs.mjs)
+  [212, "bdg_goocauldron", "decoration", 4, [
+    [0,0,0,0,0,[]],
+  ], [0]],
+  // 213 bdg_gardenwindmill (decoration) — this project's own decoration (gen-building-costs.mjs)
+  [213, "bdg_gardenwindmill", "decoration", 4, [
+    [0,0,0,0,0,[]],
+  ], [0]],
+  // 214 bdg_rizalmonument (decoration) — this project's own decoration (gen-building-costs.mjs)
+  [214, "bdg_rizalmonument", "decoration", 4, [
+    [0,0,0,0,0,[]],
+  ], [0]],
+  // 215 bdg_paoaychurch (decoration) — this project's own decoration (gen-building-costs.mjs)
+  [215, "bdg_paoaychurch", "decoration", 4, [
+    [0,0,0,0,0,[]],
+  ], [0]],
+  // 216 bdg_fortsantiago (decoration) — this project's own decoration (gen-building-costs.mjs)
+  [216, "bdg_fortsantiago", "decoration", 4, [
+    [0,0,0,0,0,[]],
+  ], [0]],
+  // 217 bdg_magellanscross (decoration) — this project's own decoration (gen-building-costs.mjs)
+  [217, "bdg_magellanscross", "decoration", 4, [
+    [0,0,0,0,0,[]],
+  ], [0]],
+  // 218 bdg_mayonvolcano (decoration) — this project's own decoration (gen-building-costs.mjs)
+  [218, "bdg_mayonvolcano", "decoration", 4, [
+    [0,0,0,0,0,[]],
+  ], [0]],
+  // 219 bdg_chocolatehills (decoration) — this project's own decoration (gen-building-costs.mjs)
+  [219, "bdg_chocolatehills", "decoration", 4, [
+    [0,0,0,0,0,[]],
+  ], [0]],
+  // 220 bdg_banaueterraces (decoration) — this project's own decoration (gen-building-costs.mjs)
+  [220, "bdg_banaueterraces", "decoration", 4, [
+    [0,0,0,0,0,[]],
+  ], [0]],
+  // 221 bdg_tajmahal (decoration) — this project's own decoration (gen-building-costs.mjs)
+  [221, "bdg_tajmahal", "decoration", 4, [
+    [0,0,0,0,0,[]],
+  ], [0]],
+  // 222 bdg_pyramids (decoration) — this project's own decoration (gen-building-costs.mjs)
+  [222, "bdg_pyramids", "decoration", 4, [
+    [0,0,0,0,0,[]],
+  ], [0]],
+  // 223 bdg_mangotree (decoration) — this project's own decoration (gen-building-costs.mjs)
+  [223, "bdg_mangotree", "decoration", 4, [
+    [0,0,0,0,0,[]],
+  ], [0]],
+  // 224 bdg_coconutpalm (decoration) — this project's own decoration (gen-building-costs.mjs)
+  [224, "bdg_coconutpalm", "decoration", 4, [
+    [0,0,0,0,0,[]],
+  ], [0]],
+  // 225 bdg_bananaplant (decoration) — this project's own decoration (gen-building-costs.mjs)
+  [225, "bdg_bananaplant", "decoration", 4, [
+    [0,0,0,0,0,[]],
+  ], [0]],
+  // 226 bdg_bambooclump (decoration) — this project's own decoration (gen-building-costs.mjs)
+  [226, "bdg_bambooclump", "decoration", 4, [
+    [0,0,0,0,0,[]],
+  ], [0]],
+  // 227 bdg_oaktree (decoration) — this project's own decoration (gen-building-costs.mjs)
+  [227, "bdg_oaktree", "decoration", 4, [
+    [0,0,0,0,0,[]],
+  ], [0]],
+  // 228 bdg_kalamansitree (decoration) — this project's own decoration (gen-building-costs.mjs)
+  [228, "bdg_kalamansitree", "decoration", 4, [
+    [0,0,0,0,0,[]],
+  ], [0]],
+  // 229 bdg_hibiscus (decoration) — this project's own decoration (gen-building-costs.mjs)
+  [229, "bdg_hibiscus", "decoration", 4, [
+    [0,0,0,0,0,[]],
+  ], [0]],
+  // 230 bdg_bougainvillea (decoration) — this project's own decoration (gen-building-costs.mjs)
+  [230, "bdg_bougainvillea", "decoration", 4, [
+    [0,0,0,0,0,[]],
+  ], [0]],
+  // 231 bdg_trimmedhedge (decoration) — this project's own decoration (gen-building-costs.mjs)
+  [231, "bdg_trimmedhedge", "decoration", 4, [
+    [0,0,0,0,0,[]],
+  ], [0]],
+  // 232 bdg_rosebush (decoration) — this project's own decoration (gen-building-costs.mjs)
+  [232, "bdg_rosebush", "decoration", 4, [
+    [0,0,0,0,0,[]],
+  ], [0]],
 ];
 
 /* ── Outposts ───────────────────────────────────────────────────────────────── */
