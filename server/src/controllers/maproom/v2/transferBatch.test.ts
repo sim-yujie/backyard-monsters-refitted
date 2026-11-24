@@ -204,3 +204,27 @@ describe("transferBatch", () => {
     expect(flushed).toBe(0);
   });
 });
+
+describe("transferBatch, Housing finished while the outpost was closed (patch, 24 Nov 2026)", () => {
+  /** Outpost B's only Housing was still building at its last write, `ago` seconds back, with 30 minutes to go. */
+  const closed = (ago: number) =>
+    Object.assign(saves[2]!, {
+      savetime: Math.floor(Date.now() / 1000) - ago,
+      buildingdata: { "1": { id: 1, t: 15, l: 1, cB: 1800, prefab: 6 } },
+    });
+
+  test("it counts once its time has passed, and the outpost's stored buildings are not changed", async () => {
+    closed(3600);
+    const result = await run(movesBody([{ from: MAIN, to: B, moved: { C1: 30 } }]));
+    expect(result.ok).toBe(true);
+    expect(housedOf(2)).toEqual({ C1: 30 });
+    expect(saves[2]!.buildingdata).toEqual({ "1": { id: 1, t: 15, l: 1, cB: 1800, prefab: 6 } });
+  });
+
+  test("it does not count while still building: the move is refused", async () => {
+    closed(60);
+    const result = await run(movesBody([{ from: MAIN, to: B, moved: { C1: 30 } }]));
+    expect(result.rule).toBe("capacity");
+    expect(flushed).toBe(0);
+  });
+});

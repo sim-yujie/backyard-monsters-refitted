@@ -7,17 +7,16 @@ import { Save } from "../../../database/models/save.model.js";
 import { WorldMapCell } from "../../../database/models/worldmapcell.model.js";
 import type { User } from "../../../database/models/user.model.js";
 import { Status } from "../../../enums/StatusCodes.js";
-import { BaseType } from "../../../enums/Base.js";
 import { monsterTransferRejectedErr, permissionErr } from "../../../errors/errors.js";
 import { getCurrentDateTime } from "../../../utils/getCurrentDateTime.js";
-import { deriveHousingCapacity, type TransferYard } from "../../../services/monsters/transferRules.js";
+import type { TransferYard } from "../../../services/monsters/transferRules.js";
 import { planBatchTransfer, readBatchPairs } from "../../../services/monsters/transferBatch.js";
 import { catchUpTransferYards } from "../../../services/yard/armies.js";
 import { recordUserQuestEvents } from "../../../services/quests/record.js";
 import { isAttackActive } from "../../../services/base/isAttackActive.js";
 import { readAttackSession } from "../../../services/base/attackSessionStore.js";
 import { jsonField } from "../../../schemas/jsonField.js";
-import { highestAcademyLevels, housingExpansionActive } from "../../../services/yard/housing.js";
+import { highestAcademyLevels, housingCapacityNow, housingExpansionActive } from "../../../services/yard/housing.js";
 
 /** `moves`: `[{ from, to, moved: { C1: 5 } }, ...]`, as JSON. */
 const TransferBatchSchema = z.object({
@@ -92,12 +91,8 @@ export const transferBatch: KoaController = async (ctx) => {
           baseid: save.baseid,
           type: save.type,
           stored: save.monsters,
-          capacity: deriveHousingCapacity({
-            buildingData: save.buildingdata,
-            healthData: save.buildinghealthdata,
-            housingExpansionActive: boosted || housingExpansionActive(save.storedata, now),
-            inferno: save.type === BaseType.INFERNO,
-          }),
+          // Housing that finished while the yard was closed counts (patch, 24 Nov 2026).
+          capacity: housingCapacityNow(save, boosted || housingExpansionActive(save.storedata, now), now),
         },
       ])
     );

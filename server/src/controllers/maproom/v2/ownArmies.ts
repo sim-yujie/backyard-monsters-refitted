@@ -7,8 +7,8 @@ import { Status } from "../../../enums/StatusCodes.js";
 import { BaseType } from "../../../enums/Base.js";
 import { getCurrentDateTime } from "../../../utils/getCurrentDateTime.js";
 import { catchUpArmyRow } from "../../../services/yard/armies.js";
-import { deriveHousingCapacity, housedCounts } from "../../../services/monsters/transferRules.js";
-import { housingExpansionActive } from "../../../services/yard/housing.js";
+import { housedCounts } from "../../../services/monsters/transferRules.js";
+import { housingCapacityNow, housingExpansionActive } from "../../../services/yard/housing.js";
 import { isAttackActive } from "../../../services/base/isAttackActive.js";
 
 /**
@@ -89,11 +89,8 @@ export const ownArmies: KoaController = async (ctx) => {
       x: cell.x,
       y: cell.y,
       housed: housedCounts(army.monsters),
-      capacity: deriveHousingCapacity({
-        buildingData: row.buildingdata,
-        healthData: row.buildinghealthdata,
-        housingExpansionActive: boosted || housingExpansionActive(row.storedata, now),
-      }),
+      // Housing that finished while the yard was closed counts (patch, 24 Nov 2026).
+      capacity: housingCapacityNow(row, boosted || housingExpansionActive(row.storedata, now), now),
       attack: isAttackActive(row),
     });
   }
