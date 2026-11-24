@@ -18,10 +18,8 @@ describe("REVAMP_DECORATIONS", () => {
     ]);
     expect(REVAMP_DECORATIONS.map((one) => one.type)).toEqual(Array.from({ length: 32 }, (_, i) => 201 + i));
     for (const one of REVAMP_DECORATIONS) expect(one.price, `${one.type}`).toBeGreaterThan(0);
-    // The nine wonders are Premium, at the Statue of Liberty's 500, on its 70 spot.
-    for (const one of REVAMP_DECORATIONS.filter((d) => d.type >= 214 && d.type <= 222)) {
-      expect([one.size, one.price]).toEqual([70, 500]);
-    }
+    // The nine wonders stand on the Statue of Liberty's 70 spot (prices are placeholders until the owner's card).
+    for (const one of REVAMP_DECORATIONS.filter((d) => d.type >= 214 && d.type <= 222)) expect(one.size).toBe(70);
     expect(revampDecoration(69)).toBeUndefined();
   });
 
