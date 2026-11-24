@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 
-import { GOAL_MENU, GOAL_POINTS, STEP_PRICES } from "../../config/AllianceConfig.js";
+import { GOAL_MENU, GOAL_POINTS, GOAL_TIER_RAISE, STEP_PRICES } from "../../config/AllianceConfig.js";
 import { AllianceType } from "../../enums/Alliance.js";
 import { goalAmounts, goalMenuFor, goalPlayers, goalPoints, goalTarget, isGoalOnMenu } from "./allianceProgress.js";
 import { composeShout } from "./shoutText.js";
@@ -38,26 +38,31 @@ describe("alliance goal rules", () => {
     expect(goalAmounts({ lootR1: 5, lootR4: 7, catapultHit: 2 })).toEqual({ loot: 12, catapultHit: 2 });
   });
 
-  test("Midas targets and points as the owner set them; Conquest x2, Fortress x4; no member-count scaling", () => {
+  test("Midas targets: Easy as set 12 Nov, Medium x5 and Hard x10 since 24 Nov (owner); Conquest x2, Fortress x4; no member-count scaling", () => {
     const targets = Object.fromEntries(GOAL_MENU.map((g) => [g.kind, g.targets]));
-    expect(targets).toMatchObject({
-      tribeDestroy: [200, 550, 1000],
-      takeover: [60, 160, 300],
-      hold: [90, 240, 450],
-      attackWin: [300, 800, 1500],
-      defenceWin: [30, 80, 150],
-      dailyQuests: [100, 280, 500],
-      loot: [450_000_000, 1_200_000_000, 2_250_000_000],
-      catapultHit: [900, 2400, 4500],
-      upgrade: [90, 240, 450],
-      harvest: [500_000_000, 1_300_000_000, 2_200_000_000],
-      kitRebuild: [6, 16, 30],
-      outpostDefended: [30, 80, 160],
+    expect(targets).toEqual({
+      tribeDestroy: [200, 2_750, 10_000],
+      takeover: [60, 800, 3_000],
+      hold: [90, 1_200, 4_500],
+      attackWin: [300, 4_000, 15_000],
+      defenceWin: [30, 400, 1_500],
+      dailyQuests: [100, 1_400, 5_000],
+      loot: [450_000_000, 6_000_000_000, 22_500_000_000],
+      catapultHit: [900, 12_000, 45_000],
+      upgrade: [90, 1_200, 4_500],
+      harvest: [500_000_000, 6_500_000_000, 22_000_000_000],
+      kitRebuild: [6, 80, 300],
+      outpostDefended: [30, 400, 1_600],
     });
+    expect(GOAL_TIER_RAISE).toEqual({ easy: 1, medium: 5, hard: 10 });
+    const loot = GOAL_MENU.find((g) => g.kind === "loot")!;
+    expect(goalTarget(AllianceType.CONQUEST, loot, "hard")).toBe(45_000_000_000);
+    expect(goalTarget(AllianceType.FORTRESS, loot, "hard")).toBe(90_000_000_000);
     expect(GOAL_POINTS).toEqual({ easy: 15, medium: 37, hard: 70 });
     const takeover = GOAL_MENU.find((g) => g.kind === "takeover")!;
-    expect(goalTarget(AllianceType.CONQUEST, takeover, "medium")).toBe(320);
-    expect(goalTarget(AllianceType.FORTRESS, takeover, "medium")).toBe(640);
+    expect(goalTarget(AllianceType.CONQUEST, takeover, "medium")).toBe(1_600);
+    expect(goalTarget(AllianceType.FORTRESS, takeover, "medium")).toBe(3_200);
+    expect(goalTarget(AllianceType.FORTRESS, takeover, "easy")).toBe(240);
     expect(goalPoints(AllianceType.CONQUEST, "hard")).toBe(140);
     expect(goalPoints(AllianceType.FORTRESS, "easy")).toBe(60);
     expect(goalMenuFor(AllianceType.MIDAS).some((g) => g.kind === "harvest")).toBe(true);

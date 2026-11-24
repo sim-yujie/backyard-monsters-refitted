@@ -112,9 +112,28 @@ describe.skipIf(!enabled)("alliance progress", () => {
     const tribes = view.goal_menu.find((g) => g.kind === "tribeDestroy")!;
     expect(tribes.tiers.map((t) => [t.target, t.points, t.players])).toEqual([
       [200, 15, 3],
-      [550, 37, 8],
-      [1000, 70, 15],
+      [2_750, 37, 8],
+      [10_000, 70, 15],
     ]);
+  });
+
+  test("a goal set before the 24 Nov raise keeps its stored target; only goals set after it use the new ones", async () => {
+    // Set this week at the 12 Nov Hard target (1,000 tribe yards), before the x10.
+    await sql(
+      `INSERT INTO bym.alliance_goal (alliance_id, week, kind, tier, target, points, set_by)
+       VALUES (?, ?::date, 'tribeDestroy', 'hard', 1000, 70, ?)`,
+      [ALLIANCE, progress.weekOf(NOW), LEADER]
+    );
+    await progress.addGoalProgress(em(), MEMBER, { tribeDestroy: 1_000 }, NOW);
+    expect(Number((await alliance()).points)).toBe(70);
+    const view = await progress.progressView(em(), ALLIANCE, AllianceType.MIDAS, NOW);
+    expect(view.goals[0]).toMatchObject({ kind: "tribeDestroy", tier: "hard", target: 1_000, progress: 1_000, done: true });
+    // The menu offers the new numbers for the next one.
+    const tribes = view.goal_menu.find((g) => g.kind === "tribeDestroy")!;
+    expect(tribes.tiers.find((t) => t.tier === "hard")!.target).toBe(10_000);
+    await progress.setGoal(em(), LEADER, "loot", "hard", NOW);
+    const [loot] = await sql<{ target: string }>(`SELECT target FROM bym.alliance_goal WHERE alliance_id = ? AND kind = 'loot'`, [ALLIANCE]);
+    expect(Number(loot!.target)).toBe(22_500_000_000);
   });
 
   test("an old Hatch monsters goal (off the menu since 12 Nov) is ignored: cannot be set, gains nothing, not shown, takes no slot", async () => {
@@ -314,7 +333,7 @@ describe.skipIf(!enabled)("alliance progress", () => {
     await outposts(90);
     expect(await progress.heldOutposts(em(), ALLIANCE)).toBe(90);
     await expect(progress.setGoal(em(), LEADER, "hold", "easy", NOW)).rejects.toThrow("already holds 90 outposts");
-    // Medium (240) is still to reach: allowed.
+    // Medium (1,200 since 24 Nov) is still to reach: allowed.
     await progress.setGoal(em(), LEADER, "hold", "medium", NOW);
     // Removed and set again, it still cannot drop to a target already met.
     const [goal] = await sql<{ id: number }>(`SELECT id FROM bym.alliance_goal WHERE alliance_id = ? AND kind = 'hold'`, [
