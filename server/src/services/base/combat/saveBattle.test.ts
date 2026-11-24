@@ -111,6 +111,24 @@ describe("recordBattleMismatches", () => {
     expect(reports).toEqual(["Attack save on base 1234 flagged (log): disagrees with the replay on damage, attackloot [save 9]"]);
   });
 
+  test("the warning carries each side's loot and champions' health, so a disagreement can be told apart (24 Nov 2026)", async () => {
+    const fought: AbandonedOutcome = {
+      ...battle,
+      attackloot: { r1: 56, r2: 0, r3: 0, r4: 0 },
+      championsFlung: [5],
+      attackerchampion: [{ t: 5, l: 1, hp: 18_400.6 } as never],
+      defenderChampions: [{ t: 3, hp: 900 }],
+    };
+    const save = { ...honest, attackerchampion: [{ t: 5, l: 1, hp: 18_400 }], champion: [{ t: 3, hp: 1200 }] };
+    await recordBattleMismatches(ctx, user, base, save, fought, stored, "log");
+
+    expect(mismatchLines()[0]![1]).toMatchObject({
+      fields: ["attackloot", "champion"],
+      sent: { damage: 12.5, loot: { r1: 40, r2: 0, r3: 0, r4: 0 }, champions: { "5": 18_400 }, caged: { "3": 1200 } },
+      derived: { damage: 12.5, loot: { r1: 56, r2: 0, r3: 0, r4: 0 }, champions: { "5": 18_400 }, caged: { "3": 900 } },
+    });
+  });
+
   test("reject: the same warning and row, then the save is refused", async () => {
     const caught = await recordBattleMismatches(ctx, user, base, crafted, battle, stored, "reject").then(
       () => undefined,

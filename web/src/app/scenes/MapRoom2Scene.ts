@@ -35,6 +35,8 @@ import { AREA_ZONE_SIZE, DEFAULT_ZOOM, MIN_ZOOM, WORLD_HEIGHT, WORLD_WIDTH, ZONE
 import { mapRefreshSeconds, quality } from "@/game/quality";
 import {
   attackRefusal,
+  hasAnythingToSend,
+  NOTHING_IN_RANGE,
   cellDistance,
   outpostsToLoad,
   ownCellsIn,
@@ -51,6 +53,8 @@ import {
 import { visitFriend } from "@/game/friends/friendVisit";
 import { attackWithFriendWarning } from "@/game/friends/attackWarning";
 import { confirmAttackWindow } from "@/ui/attack/AttackWindow";
+import { smartMoveBeforeAttack } from "@/ui/attack/smartMoveFlow";
+import { smartMovingOn } from "@/game/attack/smartMoveSetting";
 import { storageCapOf } from "@/game/attack/attackerStorage";
 import { Camera } from "@/game/Camera";
 import { mapRoomGrid, setHexShape, type OffsetCell } from "@/game/HexGrid";
@@ -288,6 +292,13 @@ export class MapRoom2Scene implements Scene {
 
   private home: OffsetCell | null = null;
   private selected: OffsetCell | null = null;
+  /**
+   * Camps the player has a saved Repeat plan for, as the cell panel's Repeat
+   * answers said (smart moving, beta 9): only these may open Attack with
+   * nothing in range, to offer to move the plan's army in.
+   */
+  private readonly plannedCamps = new Set<string>();
+
   /** The attack window is up (`ui/attack/AttackWindow.ts`): Attack again opens no second one. */
   private attackWindowOpen = false;
   /** The cell under the pointer, for the hover card (#176). */
@@ -504,7 +515,7 @@ export class MapRoom2Scene implements Scene {
         allianceOf: (id) => this.renderer.allianceNamed(id),
         myAlliance: () => this.renderer.myAllianceId,
         // Repeat attack on a wild camp (#221).
-        autoAttackPlan: (baseid) => getAutoAttackPlan(baseid),
+        autoAttackPlan: (baseid) => this.repeatPlanFor(baseid),
         onRepeatAttack: (cell, baseid, answer) => this.openAutoAttack(cell, baseid, answer),
       },
       SceneName.MAP_ROOM_2,
@@ -1308,7 +1319,46 @@ export class MapRoom2Scene implements Scene {
   private attackRefusalFor(payload: MapCell | undefined): string | null {
     const cell = this.selected;
     if (!cell) return "No cell is selected.";
-    return attackRefusal(payload, this.rosterFor(cell), Date.now() / 1000);
+    return this.smartMoveGate(payload, attackRefusal(payload, this.rosterFor(cell), Date.now() / 1000));
+  }
+
+  /**
+   * Smart moving (beta 9): a camp whose yards in range hold nothing may still
+   * have its saved army moved in, so with the setting on and a saved plan for
+   * the camp (the cell panel's Repeat answer) Attack stays open there and
+   * asks first (`smartMoveFlow.ts`); with nothing to move, the refusal is said
+   * on the tap instead. Without a plan, Attack is refused as before (owner:
+   * "no plan, nothing new shows").
+   */
+  private smartMoveGate(payload: MapCell | undefined, refusal: string | null): string | null {
+    const open =
+      refusal === NOTHING_IN_RANGE &&
+      payload &&
+      "bid" in payload &&
+      targetKind(payload) === "wild" &&
+      this.plannedCamps.has(payload.bid) &&
+      smartMovingOn();
+    return open ? null : refusal;
+  }
+
+  /**
+   * The cell panel's Repeat answer for a camp (#221), noting whether a plan
+   * is saved for it; a plan newly known opens the panel's Attack gate again.
+   */
+  private async repeatPlanFor(baseid: string): Promise<AutoAttackPlanResponse> {
+    const answer = await getAutoAttackPlan(baseid);
+    const had = this.plannedCamps.has(baseid);
+    if (answer.plan) this.plannedCamps.add(baseid);
+    else this.plannedCamps.delete(baseid);
+    if (had !== this.plannedCamps.has(baseid)) {
+      // After the panel has taken the answer: its Attack gate is drawn again.
+      setTimeout(() => {
+        const cell = this.selected;
+        const payload = cell ? this.store.getCell(cell.col, cell.row) : undefined;
+        if (payload && "bid" in payload && payload.bid === baseid) this.ui?.updateCell(payload);
+      }, 0);
+    }
+    return answer;
   }
 
   /**
@@ -1323,7 +1373,7 @@ export class MapRoom2Scene implements Scene {
     payload: MapCell | undefined,
   ): { attack: AttackTarget | null; refusal: string | null } {
     const roster = this.rosterFor(cell);
-    const refusal = attackRefusal(payload, roster, Date.now() / 1000);
+    const refusal = this.smartMoveGate(payload, attackRefusal(payload, roster, Date.now() / 1000));
     const kind = payload ? targetKind(payload) : null;
     if (refusal || !payload || !kind || !("bid" in payload)) {
       return { attack: null, refusal: refusal ?? "This cell cannot be attacked." };
@@ -1368,17 +1418,44 @@ export class MapRoom2Scene implements Scene {
       return;
     }
 
-    // Flash's PopupAttackA first: what the player can bring, then Attack or
-    // Cancel (owner, 9 Nov 2026). One at a time, however often Attack is hit.
+    // One at a time, however often Attack is hit.
     if (this.attackWindowOpen) return;
     this.attackWindowOpen = true;
-    void confirmAttackWindow(context.overlay.modal, attack).then((go) => {
+    void this.attackFlow(attack, context).finally(() => {
       this.attackWindowOpen = false;
-      if (!go || this.context !== context) return;
-      return attackWithFriendWarning(attack, context.overlay.modal, () => {
-        setAttackTarget(attack);
-        context.goTo(SceneName.ATTACK);
-      });
+    });
+  }
+
+  /**
+   * Smart moving first (beta 9, owner 24 Nov 2026, `smartMoveFlow.ts`): on a
+   * camp with a saved Repeat army that the yards in range lack, "Bring saved
+   * army?" before anything else, whose Move & attack goes straight into the
+   * battle. Then Flash's PopupAttackA: what the player can bring, then Attack
+   * or Cancel (owner, 9 Nov 2026).
+   */
+  private async attackFlow(attack: AttackTarget, context: SceneContext): Promise<void> {
+    const modal = context.overlay.modal;
+    const smart = await smartMoveBeforeAttack({ modal, attack });
+    if (this.context !== context || smart.kind === "closed") return;
+    // The player picked another cell while the offer was on its way: this Attack is over.
+    const still = this.selected;
+    if (smart.kind === "window" && (!still || still.col !== attack.cell?.col || still.row !== attack.cell?.row)) return;
+    if (smart.kind === "moved") {
+      setAttackTarget(smart.target);
+      context.goTo(SceneName.ATTACK);
+      return;
+    }
+    // Nothing moved in and nothing in range to send (the gate let it through
+    // for smart moving): said here, as the button would have.
+    if (!hasAnythingToSend(attack.roster)) {
+      this.ui?.notices.show("attack", NOTHING_IN_RANGE, { level: "info", timeoutMs: 4_000 });
+      return;
+    }
+    const go = await confirmAttackWindow(modal, attack, { note: smart.note });
+    if (!go || this.context !== context) return;
+    await attackWithFriendWarning(attack, modal, () => {
+      setAttackTarget(attack);
+      context.goTo(SceneName.ATTACK);
     });
   }
 

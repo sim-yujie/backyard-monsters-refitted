@@ -15,6 +15,10 @@ dashboard (a hidden page on the game page, `/admin`) shows the server's health.
 | The machine's health file stopped updating | the game server | `/admin#health` |
 | Sudden jump in server errors | the game server, from the error store | `/admin#errors` |
 | Each new bug report (at most 10 an hour) | the game server, when it saves one | `/admin#bugs` |
+| Each moderator ban or mute (every one) | the game server, when a moderator does it | `/admin#moderators` (Undo there) |
+| Each chat-filter flag (at most 10 an hour, the rest summed up) | the chat filter, when it is built (`alertChatFlag`) | `/admin#moderation?player=<id>` |
+| Each player's chat report (at most 30 an hour, the rest summed up) | the game server, when it saves one | `/admin#moderation?player=<id>` |
+| A brand-new account (joined in the last hour) uploading a profile photo (at most 10 an hour) | the game server, when it saves the photo | `/admin#moderation?player=<id>` |
 | Daily summary of yesterday (not a problem; once a day) | the game server, just after 00:00 UTC (08:00 SGT) | `/admin#bugs`, or `#health` on a day without reports |
 
 The daily summary (`services/alerts/dailySummary.ts`) has yesterday's new and
@@ -26,6 +30,33 @@ it is back, and two servers sharing one Redis send it once. A failed send is
 tried again 15 minutes later. `bun run alerts:summary [YYYY-MM-DD]` prints it
 without sending; add `--send` to send it.
 
+### Moderation messages (owner, 24 Nov 2026)
+
+`services/alerts/moderationAlerts.ts`. These let the owner watch the
+moderators and the chat:
+
+- **A moderator's ban or mute**, every one: who did it, to whom, how long,
+  the reason the player saw, up to 3 reported lines, how many of the
+  player's lines a ban took out of chat, and the dashboard link where the
+  owner can Undo it or make a ban permanent (`/admin#moderators`, "Bans and
+  mutes by moderators"). An admin's own steps in the game's Reports window
+  are not said.
+- **A chat-filter flag**, with the player, the room, the line and why. The
+  chat filter is not built yet; it calls `alertChatFlag({ userid, username,
+  channel, text, why })`. The word filter that already exists does not call it.
+- **A player's chat report**, with the reporter, the reported player, the
+  room and the line (the chat server's own copy; the reporter's copy is
+  marked as such when the line had already left the room).
+- **A new account's profile photo**: the username, how many minutes ago it
+  joined (its main yard's creation or its sign-up, whichever came first)
+  and a link. Never the photo, nor a link to it.
+
+Flags, reports and new-account photos are capped per clock hour (UTC): the
+last one sent says so, and when the hour ends one message says how many more
+there were ("BYMR chat filter: 14 more flags 14:00-15:00 UTC, not sent one
+by one."). The counts are the server's own, in memory: a restart starts
+them again, and a server stopped mid-hour does not send that hour's count.
+
 A problem is said once. If it is still there 12 hours later it is said again,
 and when it clears a "fixed" message says how long it lasted. A message that
 could not be sent is tried again a minute later (the outside check: 5 minutes
@@ -36,9 +67,9 @@ changes when they are off.
 
 ## Privacy
 
-Telegram is an outside service. The alerts carry no personal details: no
-player-written text, no usernames or account numbers, no emails, no device or
-browser details, and no error text. An alert says what kind of problem it is,
+Telegram is an outside service. The server-health alerts carry no personal
+details: no player-written text, no usernames or account numbers, no emails,
+no device or browser details, and no error text. An alert says what kind of problem it is,
 numbers (a disk's percent, a backup's age, error counts, a bug report's number
 and how many came this hour) and a link to the dashboard, which shows the rest
 after the owner signs in. The bug report alert is handed the report's number
@@ -46,13 +77,20 @@ only, never the report (`services/alerts/bugReportAlert.ts`). Database and
 Redis alerts include the connection error the server got (for example
 "connection refused"); that is about the server, not a player.
 
-The one exception is the daily summary: it carries the first 80 characters of
-each of the day's bug reports (the owner's choice, 2026-10-23), with no name,
-account number, email or device. Because that is player-written text, the
-Privacy Policy lists Telegram among the outside services (both copies:
-`web/privacy.html` and `launch/legal/privacy-policy.md`, which the site's
-`/privacy` page is built from). Anything else new must follow the no-text rule;
-more player text in Telegram needs the owner's say and a policy update.
+Two exceptions, both the owner's choice:
+
+- The daily summary carries the first 80 characters of each of the day's bug
+  reports (2026-10-23), with no name, account number, email or device.
+- The moderation messages (2026-11-24, above) carry usernames, the chat
+  lines that were reported or flagged, and the reasons moderators gave. They
+  never carry an email, an IP address or its hash, a device, or a photo.
+
+Because that is player-written text and names, the Privacy Policy lists
+Telegram among the outside services and says what it sees
+(`web/privacy.html`, section 3; earlier notes also name
+`launch/legal/privacy-policy.md` as the info site's copy, which is not in
+this repository: if it still exists, it needs the same change). Anything else new must follow the no-text
+rule; more player text in Telegram needs the owner's say and a policy update.
 
 ## How it works
 

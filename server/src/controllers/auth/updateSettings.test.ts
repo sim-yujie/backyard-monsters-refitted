@@ -137,3 +137,27 @@ describe("the bell's notification categories (owner 11 Nov 2026)", () => {
     await expect(call({ notifications: { alliance: false } }, account())).rejects.toThrow();
   });
 });
+
+/** Smart moving for hand attacks (beta 9, owner 24 Nov 2026): on by default, kept on the account. */
+describe("the Smart moving setting", () => {
+  test("is on for every account until the player turns it off", () => {
+    expect(settingsOf(account() as never).smartMoving).toBe(true);
+    expect(settingsOf({ ...account(), smart_moving_off: false } as never).smartMoving).toBe(true);
+  });
+
+  test("is stored on the account, echoed back, and turned on again", async () => {
+    const who: Row = { ...account(), smart_moving_off: false };
+    const answer = await call({ smartMoving: false }, who);
+    expect(who.smart_moving_off).toBe(true);
+    expect((answer.body.settings as Row).smartMoving).toBe(false);
+    await call({ smartMoving: true }, who);
+    expect(who.smart_moving_off).toBe(false);
+  });
+
+  test("is left alone by a save about something else, and refuses anything but a boolean", async () => {
+    const who: Row = { ...account(), smart_moving_off: true };
+    await call({ tiltedMap: false }, who);
+    expect(who.smart_moving_off).toBe(true);
+    await expect(call({ smartMoving: "off" }, account())).rejects.toThrow();
+  });
+});

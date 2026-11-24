@@ -28,6 +28,8 @@ import { decorActions } from "@/api/yardDecor";
 import { consumeViewTarget, setAttackTarget, setViewTarget, type ViewTarget } from "@/game/attack/attackTarget";
 import { attackWithFriendWarning } from "@/game/friends/attackWarning";
 import { confirmAttackWindow, showsAttackWindow } from "@/ui/attack/AttackWindow";
+import { smartMoveBeforeAttack } from "@/ui/attack/smartMoveFlow";
+import { hasAnythingToSend, NOTHING_IN_RANGE } from "@/game/attack/attackEntry";
 import { setPlayerPool } from "@/game/friends/friendsView";
 import { currentSeason } from "@/game/season";
 import {
@@ -1346,9 +1348,29 @@ export class YardScene implements Scene {
     this.attacking = true;
     this.dock?.setAttack({ disabled: true, title });
     let confirmed = false;
-    // The map's attack window first (`ui/attack/AttackWindow.ts`): what the
+    // Smart moving first (beta 9, `smartMoveFlow.ts`), as from the map: on a
+    // camp whose saved Repeat army the yards in range lack, "Bring saved
+    // army?", whose Move & attack goes straight into the battle.
+    const windowed = showsAttackWindow(attack);
+    const smart = windowed
+      ? await smartMoveBeforeAttack({ modal: context.overlay.modal, attack })
+      : ({ kind: "window", note: null } as const);
+    if (this.context !== context) return;
+    if (smart.kind === "moved") {
+      setAttackTarget(smart.target);
+      context.goTo(SceneName.ATTACK);
+      return;
+    }
+    // Nothing moved in and nothing in range to send (the map let Attack
+    // through for smart moving): said here, as the map would have.
+    if (smart.kind === "window" && windowed && !hasAnythingToSend(attack.roster)) {
+      this.notices.show("attack", NOTHING_IN_RANGE, { level: "info", timeoutMs: 4_000 });
+    }
+    // The map's attack window next (`ui/attack/AttackWindow.ts`): what the
     // player can bring, then Attack or Cancel, as from the map itself.
-    const go = !showsAttackWindow(attack) || (await confirmAttackWindow(context.overlay.modal, attack));
+    const go =
+      smart.kind === "window" &&
+      (!windowed || (hasAnythingToSend(attack.roster) && (await confirmAttackWindow(context.overlay.modal, attack, { note: smart.note }))));
     if (go && this.context === context) {
       await attackWithFriendWarning(attack, context.overlay.modal, () => {
         confirmed = true;

@@ -110,10 +110,11 @@ export interface BankSource {
 export interface Flight {
   readonly resource: HarvestKey;
   /**
-   * The ball's picture when it is not the resource's own: `magma`, the
-   * Juicer's ball for an Inferno monster (`BUILDING9.as:66`).
+   * The ball's picture when it is not the yard's own for the resource: the
+   * Juicer's, which follows the last monster in (`BUILDING9.as:66`): `r4`
+   * (goo) or `magma` for an Inferno monster.
    */
-  readonly dot?: "magma";
+  readonly dot?: "r4" | "magma";
   /** What its landing adds to the pool. */
   readonly share: number;
   readonly fromX: number;

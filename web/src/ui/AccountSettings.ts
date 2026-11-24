@@ -22,7 +22,7 @@ import type { AvatarPicker } from "@/ui/AvatarPicker";
 import { OwnProfileSection } from "@/ui/profile/OwnProfileSection";
 import type { ProfileApi } from "@/ui/profile/OwnProfileControls";
 import { SoundSliders } from "@/ui/SoundSliders";
-import { changeUsername, fetchAccount, setShinyLocked, type AccountInfo } from "@/api/account";
+import { changeUsername, fetchAccount, setShinyLocked, setSmartMoving, type AccountInfo } from "@/api/account";
 import {
   fetchBlocked,
   fetchMuted,
@@ -76,6 +76,10 @@ export const SETTINGS_TEXT = {
   shinyLabel: "Shiny Lock",
   shinyHint: "Hides your Shiny (the counter shows a lock) and stops you spending it. Your Shiny is kept.",
   shinyFailed: "Could not save the Shiny Lock setting. Try again.",
+  attacksTitle: "Attacks",
+  smartMovingLabel: "Smart moving",
+  smartMovingHint: "Offer to move your saved army in range before camp attacks.",
+  smartMovingFailed: "Could not save Smart moving. Try again.",
   privacyTitle: "Privacy",
   hideOnlineLabel: "Show when I'm online",
   hideOnlineHint: "When off, friends see no online dot or last-seen time.",
@@ -301,7 +305,7 @@ export const openAccountSettings = (options: AccountSettingsOptions): Popup => {
     (account) => {
       noteShinyLock(account.shinyLocked);
       status.remove();
-      panes.account.append(usernameSection(account, options), shinySection(account));
+      panes.account.append(usernameSection(account, options), shinySection(account), attacksSection(account.smartMoving));
       // Country last: its long list would push the switches out of sight.
       panes.social.append(chatSection(), privacySection(account.privacy), countrySection(account.country));
       panes.notifications.append(notificationSettingsSection(account.notificationsOff));
@@ -493,6 +497,31 @@ const countrySection = (stored: CountrySettings): HTMLElement => {
   return section;
 };
 
+/**
+ * Attacks: "Smart moving" (beta 9, owner 24 Nov 2026), on by default and kept
+ * on the account, so it holds on every device. While on, Attack on a Map Room
+ * 2 camp offers to move its saved Repeat army in from the player's other yards.
+ */
+const attacksSection = (on: boolean): HTMLElement => {
+  const section = document.createElement("div");
+  section.className = "account-settings__section";
+  const heading = document.createElement("h3");
+  heading.className = "account-settings__heading";
+  heading.textContent = SETTINGS_TEXT.attacksTitle;
+  section.append(
+    heading,
+    privacyToggle(
+      "settings-smart-moving",
+      SETTINGS_TEXT.smartMovingLabel,
+      SETTINGS_TEXT.smartMovingHint,
+      on,
+      setSmartMoving,
+      SETTINGS_TEXT.smartMovingFailed,
+    ),
+  );
+  return section;
+};
+
 /** One switch that saves as soon as it is flipped and goes back if the save fails. */
 const privacyToggle = (
   id: string,
@@ -500,6 +529,7 @@ const privacyToggle = (
   hintText: string,
   checked: boolean,
   save: (wanted: boolean) => Promise<boolean>,
+  failedText: string = SETTINGS_TEXT.privacyFailed,
 ): HTMLElement => {
   const section = document.createElement("div");
   section.className = "account-settings__section";
@@ -530,7 +560,7 @@ const privacyToggle = (
       },
       () => {
         box.checked = !wanted;
-        hint.textContent = SETTINGS_TEXT.privacyFailed;
+        hint.textContent = failedText;
         hint.classList.add("field__hint--error");
         box.disabled = false;
       },

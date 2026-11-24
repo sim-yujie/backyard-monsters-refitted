@@ -1,0 +1,332 @@
+/*
+ * Smart moving for hand attacks (beta 9, `ui/attack/smartMoveSheet.ts`;
+ * neon's direction A, 24 Nov 2026): the "Bring saved army?" sheet before the
+ * Attack window, and the "can't gather" note at the top of the Attack window.
+ *
+ * The sheet is the Attack window's own frame (`.attack-window`: centred under
+ * the top bar, never taller than the screen, the body scrolling between the
+ * head and the buttons), a little wider so a move card stays on one line.
+ * The camp head and the move cards are Repeat attack's (repeat-prompt.css).
+ */
+
+.attack-window.smart-move {
+  /* Room for a move of three kinds on one line (neon, round 2). */
+  width: min(92vw, 560px);
+}
+
+/* The camp under the title, a little smaller than in Repeat attack's sheet. */
+.smart-move > .panel__head .repeat-prompt__tribe {
+  width: 48px;
+  height: 48px;
+}
+
+.smart-move > .panel__body {
+  gap: var(--space-2);
+}
+
+/* How many moves, a chip beside the camp's level and damage (neon, rounds 1 and 2). */
+.smart-move__count {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: var(--space-1);
+  min-height: 28px;
+  padding: 0 var(--space-2) 0 2px;
+  border-radius: 999px;
+  background: var(--colour-surface-sunken);
+  color: var(--colour-text-strong);
+  font-size: var(--text-md);
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.smart-move__count .game-icon {
+  width: 24px;
+  height: 24px;
+}
+
+/* Every card's arrow and yard in range on one line down the list (neon, round 1). */
+@media (min-width: 621px) {
+  .smart-move .repeat-prompt__yard--to {
+    min-width: 7.5rem;
+  }
+}
+
+/* A phone upright: the way on top (from, arrow, to), the monsters the whole
+   card wide under it, so three kinds never wrap (neon, round 1). */
+@media (max-width: 620px) {
+  .smart-move .repeat-prompt__move {
+    grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+    grid-template-areas:
+      "from arrow to"
+      "cargo cargo cargo";
+  }
+
+  .smart-move .repeat-prompt__yard-words {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0;
+  }
+}
+
+/* "Move & attack" is the action; Skip a modest plate beside it. */
+.smart-move__actions {
+  grid-template-columns: minmax(0, 1fr) minmax(0, 2fr);
+}
+
+/* Why "Move & attack" did not go: above the buttons, in the warning colour. */
+.smart-move__error {
+  flex: none;
+  margin: 0;
+  padding: var(--space-2) var(--space-4) 0;
+  color: var(--colour-warning);
+  font-size: var(--text-sm);
+  font-weight: 700;
+  line-height: var(--leading-tight);
+  text-align: center;
+}
+
+.smart-move__error[hidden] {
+  display: none;
+}
+
+/* While the moves and the attack start, nothing else can be pressed. */
+.smart-move--busy .panel__titlebar > .btn--icon {
+  opacity: 0.5;
+  pointer-events: none;
+}
+
+.smart-move--busy .smart-move__go {
+  cursor: progress;
+}
+
+/* A phone on its side: the Attack window's two columns are not wanted here,
+   one list of moves under the camp, the card on one line. */
+@media (max-height: 480px) and (min-width: 600px) {
+  .attack-window.smart-move {
+    width: min(92vw, 600px);
+  }
+
+  .attack-window.smart-move > .panel__body {
+    flex-direction: column;
+    align-items: stretch;
+    gap: var(--space-1);
+  }
+
+  .smart-move > .panel__head .repeat-prompt__tribe {
+    width: 40px;
+    height: 40px;
+  }
+
+  .smart-move > .panel__head .repeat-prompt__camp-words {
+    flex-direction: row;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--space-2);
+  }
+
+  /* "Kozu camp", not "Kozu": the row has the room. */
+  .smart-move .repeat-prompt__camp-word {
+    display: inline;
+  }
+
+  /* Tighter cards, so two show between the camp and the buttons. */
+  .smart-move .repeat-prompt__moves {
+    gap: 4px;
+  }
+
+  .smart-move .repeat-prompt__move {
+    padding: 2px var(--space-2);
+  }
+
+  .smart-move .repeat-prompt__mini .attack-window__art {
+    width: 36px;
+    height: 28px;
+  }
+
+  .smart-move .attack-window__actions {
+    padding: var(--space-1) var(--space-4) var(--space-2);
+  }
+
+  :root[data-skin] .panel.smart-move .attack-window__actions > .btn {
+    min-height: 38px;
+  }
+}
+
+/* ── The note in the Attack window: the saved army cannot be gathered ───── */
+
+.smart-move-note {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: var(--space-2);
+  padding: var(--space-2);
+  /* Softer than a full warning line (neon, round 1). */
+  border: 1px solid color-mix(in srgb, var(--colour-warning) 55%, transparent);
+  border-radius: var(--radius-md);
+  background: var(--colour-surface-sunken);
+}
+
+/* "1,000 needed" on the heading's line, at its end. */
+.smart-move-note__need {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  margin-left: auto;
+  color: var(--colour-text-strong);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.smart-move-note__heading {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin: 0;
+  color: var(--colour-warning);
+  font-size: var(--text-md);
+  font-weight: 700;
+  line-height: var(--leading-tight);
+}
+
+.smart-move-note__heading .game-icon {
+  flex: none;
+  width: 24px;
+  height: 24px;
+}
+
+/* Its rows side by side in even columns, so a few short monsters take one line. */
+.smart-move-note .repeat-prompt__shorts {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(84px, 1fr));
+  gap: 6px;
+}
+
+/* Every picture framed, in Classic too (neon, round 2). */
+.smart-move-note .repeat-prompt__short-art {
+  border-radius: var(--radius-sm);
+  background: var(--colour-surface-sunken);
+}
+
+/* A phone upright: the heading, "1,000 needed" and their icons on one line. */
+@media (max-width: 430px) {
+  .smart-move-note__heading {
+    gap: var(--space-1);
+    font-size: var(--text-sm);
+  }
+
+  .smart-move-note__heading .game-icon {
+    width: 18px;
+    height: 18px;
+  }
+
+  .smart-move .repeat-prompt__tribe {
+    width: 42px;
+    height: 42px;
+  }
+
+  .smart-move :is(.repeat-prompt__level, .repeat-prompt__damage, .smart-move__count) {
+    min-height: 24px;
+    font-size: var(--text-sm);
+  }
+
+  .smart-move .repeat-prompt__camp-facts {
+    gap: var(--space-1);
+  }
+
+  .smart-move :is(.repeat-prompt__damage, .smart-move__count) .game-icon {
+    width: 20px;
+    height: 20px;
+  }
+}
+
+.smart-move-note :is(.repeat-prompt__short, .repeat-prompt__room-yard) {
+  min-height: 36px;
+  padding-block: 2px;
+  background: var(--colour-surface-raised);
+}
+
+.smart-move-note .repeat-prompt__short-art {
+  width: 32px;
+  height: 30px;
+}
+
+.smart-move-note .repeat-prompt__need {
+  font-size: var(--text-sm);
+}
+
+/* Never more than a few rows: what is left of the window is the Attack window's. */
+.smart-move-note > :is(.repeat-prompt__shorts, .repeat-prompt__room) {
+  max-height: 84px;
+  overflow-y: auto;
+}
+
+/* A short screen (an iPad on its side with Safari's bars, a phone on its
+   side): the rows are one line under the heading, sliding sideways when they
+   do not all fit (neon, round 1), so the weapons and the monsters keep the
+   height (layout check: 120 px of the list). */
+@media (max-height: 620px) {
+  .smart-move-note {
+    gap: 4px;
+    margin-top: var(--space-1);
+    padding: 4px var(--space-2);
+  }
+
+  .smart-move-note__heading {
+    font-size: var(--text-sm);
+  }
+
+  .smart-move-note > :is(.repeat-prompt__shorts, .repeat-prompt__room) {
+    display: flex;
+    flex: 1 1 auto;
+    flex-direction: row;
+    flex-wrap: nowrap;
+    min-width: 0;
+    max-height: none;
+    padding-right: 36px;
+    overflow-x: auto;
+    overflow-y: hidden;
+    /* The end fades out, so a row past the edge reads as more to slide to (neon, rounds 2 and 3). */
+    -webkit-mask-image: linear-gradient(to right, #000 calc(100% - 36px), transparent);
+    mask-image: linear-gradient(to right, #000 calc(100% - 36px), transparent);
+  }
+
+  .smart-move-note :is(.repeat-prompt__short, .repeat-prompt__room-yard) {
+    flex: none;
+    min-height: 32px;
+  }
+
+  /* Each yard and its free room a group of its own, a line between them. */
+  .smart-move-note .repeat-prompt__room-yard + .repeat-prompt__room-yard {
+    border-left: 1px solid var(--colour-border-subtle);
+  }
+}
+
+@media (max-height: 480px) {
+  /* A phone on its side: the heading and the rows on one line. */
+  .smart-move-note {
+    flex-direction: row;
+    align-items: center;
+    gap: var(--space-2);
+    padding: 2px var(--space-2);
+  }
+
+  /* A line between the heading and the rows (neon, round 3). */
+  .smart-move-note__heading {
+    flex: none;
+    padding-right: var(--space-2);
+    border-right: 1px solid var(--colour-border-subtle);
+  }
+
+  /* The three Catapult shots on one row over the monsters' height, so none
+     hides under the buttons while the note takes its line (neon, round 2). */
+  .attack-window:has(.smart-move-note) .attack-window__grid.attack-window__weapons {
+    grid-template-columns: repeat(3, 66px);
+  }
+
+  /* A shorter fade over the last card: its counts stay readable. */
+  .smart-move .attack-window__body--more-below {
+    -webkit-mask-image: linear-gradient(to bottom, #000 calc(100% - 14px), transparent);
+    mask-image: linear-gradient(to bottom, #000 calc(100% - 14px), transparent);
+  }}
+}

@@ -116,6 +116,26 @@ describe("CollectFxLayer", () => {
     layer.finish();
     expect(sound).not.toHaveBeenCalled();
   });
+  it("throws the Inferno's balls on an Inferno yard: bone, coal, sulfur, magma (#65)", () => {
+    const dot = vi.fn((_resource: string) => Texture.EMPTY);
+    const inferno = new CollectFxLayer({ art: { dot, shadow: Texture.EMPTY, destroy: vi.fn() }, inferno: () => true });
+    const flights = (["r1", "r2", "r3", "r4"] as const).flatMap((resource) =>
+      planFlights([{ type: 1, x: 0, y: 0, resource, amount: 1 }], { x: 600, y: 0 }, () => 0),
+    );
+    inferno.launch(flights, () => {});
+    expect(dot.mock.calls.map(([resource]) => resource)).toEqual(["bone", "coal", "sulfur", "magma"]);
+    dot.mockClear();
+    const surface = new CollectFxLayer({ art: { dot, shadow: Texture.EMPTY, destroy: vi.fn() }, inferno: () => false });
+    surface.launch(flights, () => {});
+    expect(dot.mock.calls.map(([resource]) => resource)).toEqual(["r1", "r2", "r3", "r4"]);
+  });
+  it("keeps the Juicer's own ball on any yard: goo stays goo", () => {
+    const dot = vi.fn((_resource: string) => Texture.EMPTY);
+    const layer = new CollectFxLayer({ art: { dot, shadow: Texture.EMPTY, destroy: vi.fn() }, inferno: () => true });
+    const [goo] = planFlights([{ type: 9, x: 0, y: 0, resource: "r4", amount: 1 }], { x: 600, y: 0 }, () => 0);
+    layer.launch([{ ...goo!, dot: "r4" }], () => {});
+    expect(dot).toHaveBeenCalledWith("r4");
+  });
   it("shows a flight's own ball when it has one: the Juicer's magma ball for an Inferno monster", () => {
     const magma = new Texture();
     const dot = vi.fn((resource: string) => (resource === "magma" ? magma : Texture.EMPTY));

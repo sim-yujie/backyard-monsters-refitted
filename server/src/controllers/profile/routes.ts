@@ -6,6 +6,8 @@ import { Status } from "../../enums/StatusCodes.js";
 import { apiVersion } from "../../middleware/apiVersioning.js";
 import { actOnPhoto, listPhotoCases, parsePhotoAction } from "../../services/admin/photoReports.js";
 import type { WordFilter } from "../../services/chat/badWords.js";
+import { tellNewPhoto } from "../../services/alerts/alertFacts.js";
+import type { NewPhotoAlert } from "../../services/alerts/moderationAlerts.js";
 import { processPhoto } from "../../services/profile/photo.js";
 import { checkBio, PROFILE_REFUSAL_WORDS, type ProfileRefusal } from "../../services/profile/profileRules.js";
 import { readPhoto, readProfile, removeOwnPhoto, reportPhoto, saveBio, savePhoto } from "../../services/profile/profiles.js";
@@ -46,6 +48,8 @@ export interface ProfileRouteDeps {
     readonly image: Middleware;
   };
   readonly filter: () => WordFilter;
+  /** Says a brand-new account's photo upload on Telegram; tests pass a recorder. */
+  readonly alertNewPhoto?: (upload: NewPhotoAlert) => Promise<unknown>;
   readonly now?: () => Date;
 }
 
@@ -110,6 +114,8 @@ export const mountProfileRoutes = (router: Router, deps: ProfileRouteDeps): void
       });
     }
     logger.info(`Profiles: ${ctx.authUser.userid} uploaded photo ${saved.version} (${processed.bytes.length} bytes)`);
+    // A brand-new account's photo is said on Telegram (name and link, never the photo).
+    void tellNewPhoto(deps.em(), ctx.authUser.userid, now(), deps.alertNewPhoto);
     ok(ctx, { profile: await readProfile(em, ctx.authUser.userid, ctx.authUser.userid, now()) });
   });
 
