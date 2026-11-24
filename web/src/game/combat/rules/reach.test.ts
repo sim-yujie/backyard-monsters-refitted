@@ -128,16 +128,30 @@ interface Row {
   readonly space: "screen px" | "yard";
   readonly anchor: string;
   readonly radius: number;
-  readonly ring: number;
   /** Why the engine differs from Flash, for a deliberate rule. */
   readonly deliberate?: string;
   readonly engine: (probe: Probe, building: EngineBuilding) => boolean;
   readonly flash: (probe: Probe, footprint: Footprint) => boolean;
-  readonly expected: Record<Footprint, { readonly engine: string; readonly flash: string }>;
+  /** For a rule beta 9 fixed: the engine's rule before, which must miss the table. */
+  readonly before?: (probe: Probe, building: EngineBuilding) => boolean;
+  /** The ring, chosen where the space and the anchor show, and the patterns there. */
+  readonly expected: Record<
+    Footprint,
+    {
+      readonly ring: number;
+      readonly engine: string;
+      readonly flash: string;
+      readonly before?: string;
+    }
+  >;
 }
 
 /** The middle of the screen as a creep, for the creep-against-creep rule. */
 const ORIGIN_CREEP: ReachPoint = { ix: 0, iy: 0, x: 0, y: 0 };
+
+/** Until beta 9: yard units from the striker's range point to the anchor. */
+const splashBefore = (probe: Probe, building: EngineBuilding): boolean =>
+  Math.trunc((probe.point.x - building.cx) ** 2 + (probe.point.y - building.cy) ** 2) < 100 * 100;
 
 const ROWS: readonly Row[] = [
   {
@@ -146,13 +160,13 @@ const ROWS: readonly Row[] = [
     space: "screen px",
     anchor: "drawn top corner",
     radius: 100,
-    ring: 90,
     engine: (probe, building) =>
       screenPxBlastDistance(probe.point.ix, probe.point.iy, building, 100) !== undefined,
     flash: (probe, footprint) => flashSplash(probe, footprint, 100),
+    before: splashBefore,
     expected: {
-      "70x70": { engine: "HHH...HH", flash: "HHH...HH" },
-      "Town Hall": { engine: "HH.....H", flash: "HH.....H" },
+      "70x70": { ring: 115, engine: "HH.....H", flash: "HH.....H", before: ".HH...HH" },
+      "Town Hall": { ring: 140, engine: "H.......", flash: "H.......", before: ".H.....H" },
     },
   },
   {
@@ -161,12 +175,11 @@ const ROWS: readonly Row[] = [
     space: "yard",
     anchor: "footprint middle",
     radius: 160,
-    ring: 100,
     engine: (probe, building) => towerAcquires(probe.point, building, 160),
     flash: (probe, footprint) => flashAcquire(probe, footprint, 160),
     expected: {
-      "70x70": { engine: "HHHHHHHH", flash: "HHHHHHHH" },
-      "Town Hall": { engine: "HHHHHHHH", flash: "HHHHHHHH" },
+      "70x70": { ring: 115, engine: ".HHH.HHH", flash: ".HHH.HHH" },
+      "Town Hall": { ring: 115, engine: ".HHH.HHH", flash: ".HHH.HHH" },
     },
   },
   {
@@ -175,13 +188,13 @@ const ROWS: readonly Row[] = [
     space: "yard",
     anchor: "anchor (and the footprint middle it found it from)",
     radius: 160,
-    ring: 100,
     engine: (probe, building) =>
       towerAcquires(probe.point, building, 160) && towerHoldsFromAnchor(probe.point, building, 160),
     flash: (probe, footprint) => flashHold(probe, footprint, 160),
+    before: (probe, building) => towerAcquires(probe.point, building, 160),
     expected: {
-      "70x70": { engine: "HHHH.HHH", flash: "HHHH.HHH" },
-      "Town Hall": { engine: "HHH...HH", flash: "HHH...HH" },
+      "70x70": { ring: 100, engine: "HHHH.HHH", flash: "HHHH.HHH", before: "HHHHHHHH" },
+      "Town Hall": { ring: 100, engine: "HHH...HH", flash: "HHH...HH", before: "HHHHHHHH" },
     },
   },
   {
@@ -190,7 +203,6 @@ const ROWS: readonly Row[] = [
     space: "yard",
     anchor: "anchor (and the footprint middle it found it from)",
     radius: 160,
-    ring: 150,
     deliberate:
       "the brief for the owner's pick A keeps a target only while it is in range of both " +
       "the middle (where the tower found it) and the anchor; Flash asks the anchor only, " +
@@ -199,8 +211,8 @@ const ROWS: readonly Row[] = [
       towerAcquires(probe.point, building, 160) && towerHoldsFromAnchor(probe.point, building, 160),
     flash: (probe, footprint) => flashHold(probe, footprint, 160),
     expected: {
-      "70x70": { engine: "..H...H.", flash: ".HH...HH" },
-      "Town Hall": { engine: "..H...H.", flash: "HHH...HH" },
+      "70x70": { ring: 150, engine: "..H...H.", flash: ".HH...HH" },
+      "Town Hall": { ring: 150, engine: "..H...H.", flash: "HHH...HH" },
     },
   },
   {
@@ -209,7 +221,6 @@ const ROWS: readonly Row[] = [
     space: "yard",
     anchor: "nearest tile",
     radius: 140,
-    ring: 140,
     deliberate:
       "owner's pick C (24 Nov 2026): range / sqrt 2 yard units from the nearest tile, the " +
       "same all round; Flash measured screen px to the top corner",
@@ -219,16 +230,21 @@ const ROWS: readonly Row[] = [
     },
     flash: (probe, footprint) => flashRanged(probe, footprint, 140),
     expected: {
-      "70x70": { engine: "..H...H.", flash: "HH.....H" },
-      "Town Hall": { engine: ".HHH.HHH", flash: "HH.....H" },
+      "70x70": { ring: 140, engine: "..H...H.", flash: "HH.....H" },
+      "Town Hall": { ring: 140, engine: ".HHH.HHH", flash: "HH.....H" },
     },
   },
 ];
 
-/** The creep-against-creep row: Eye-ra's blast on the defender it fights. */
-const EYE_RA_RINGS: readonly { readonly ring: number; readonly expected: string }[] = [
-  { ring: 29, expected: "HHHHHHHH" },
-  { ring: 31, expected: "........" },
+/** The creep-against-creep row: Eye-ra's blast on the defender it fights (50 px until beta 9). */
+const EYE_RA_RINGS: readonly {
+  readonly ring: number;
+  readonly expected: string;
+  readonly before: string;
+}[] = [
+  { ring: 29, expected: "HHHHHHHH", before: "HHHHHHHH" },
+  { ring: 31, expected: "........", before: "HHHHHHHH" },
+  { ring: 51, expected: "........", before: "........" },
 ];
 
 const pattern = (hit: (probe: Probe) => boolean, ring: number): string =>
@@ -238,27 +254,35 @@ describe("every reach rule against Flash, at eight bearings (reach audit, beta 9
   for (const row of ROWS) {
     for (const footprint of Object.keys(FOOTPRINTS) as Footprint[]) {
       const want = row.expected[footprint];
-      it(`${row.rule}: ${row.space} from the ${row.anchor}, ${row.radius}, ${row.ring} px round a ${footprint} (${row.flashAt})`, () => {
+      it(`${row.rule}: ${row.space} from the ${row.anchor}, ${row.radius}, ${want.ring} px round a ${footprint} (${row.flashAt})`, () => {
         const building = buildingOf(footprint);
-        const engine = pattern((probe) => row.engine(probe, building), row.ring);
-        const flash = pattern((probe) => row.flash(probe, footprint), row.ring);
+        const engine = pattern((probe) => row.engine(probe, building), want.ring);
+        const flash = pattern((probe) => row.flash(probe, footprint), want.ring);
         expect(engine).toBe(want.engine);
         expect(flash).toBe(want.flash);
         if (row.deliberate === undefined) expect(engine).toBe(flash);
         else expect(engine).not.toBe(flash);
+        if (row.before) {
+          const before = pattern((probe) => row.before!(probe, building), want.ring);
+          expect(before).toBe(want.before);
+          expect(before).not.toBe(engine);
+        }
       });
     }
   }
 
   it.each(EYE_RA_RINGS)(
     "Eye-ra's blast on the defender it fights: screen px between creeps, 30 (CreepBase.as:808), at $ring px",
-    ({ ring, expected }) => {
+    ({ ring, expected, before }) => {
       const engine = pattern(
         (probe) => screenPxCreepsSquared(probe.point, ORIGIN_CREEP) < EYE_RA_FOE_SQUARED,
         ring,
       );
       expect(engine).toBe(expected);
       expect(pattern(flashEyeraFoe, ring)).toBe(expected);
+      expect(
+        pattern((probe) => screenPxCreepsSquared(probe.point, ORIGIN_CREEP) < 2500, ring),
+      ).toBe(before);
     },
   );
 
