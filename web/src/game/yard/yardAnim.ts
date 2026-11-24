@@ -209,6 +209,11 @@ const POLICIES = new Map<number, AnimPolicy>([
   [140, every(1, false)],
   // Observatory (this project's own, alliances): stands still (owner 10 Nov: "Just make it still").
   [150, STATIC_FIXED],
+  // This project's new moving decorations (24 Nov 2026), played as Flash's flags and Tiki Torch are: the Cambodian
+  // Flag's cloth, the Fire Pit's flames and the Garden Windmill's wheel.
+  [207, every(2)],
+  [208, every(2)],
+  [213, every(2)],
   ...DECORATIONS.map((type): [number, AnimPolicy] => [type, every(2)]),
 ]);
 

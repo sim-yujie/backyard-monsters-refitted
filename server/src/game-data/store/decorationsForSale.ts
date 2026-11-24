@@ -29,6 +29,9 @@ import { storeItems } from "./storeItems.js";
  * 10 Nov 2026: the six autumn ones), first in their sub-tab so a player sees
  * them on its first page: 201, 205 and 206 under Plants, 202, 203 and 204
  * under Good, cheapest first. They have no store row; their price is their own.
+ * The new ones (207 up, owner 24 Nov 2026, not yet kept or priced by the
+ * owner) follow: plants after the autumn ones, the batch-1 props under Good,
+ * the Cambodian flag first under Flags, the nine wonders first under Premium.
  *
  * The web's display copy is `web/src/game/yard/decorShop.ts`
  * (`decorationsForSale.test.ts` keeps the two equal).
@@ -38,13 +41,17 @@ export const DECORATIONS_FOR_SALE: readonly number[] = [
   107, 74, 75, 76, 77, 78, 79, 81, 82, 83, 84, 85, 80, 73,
   // Plants (subgroup 1), this project's autumn ones first
   201, 205, 206,
+  228, 232, 229, 231, 230, 225, 226, 223, 224, 227,
   55, 66, 72, 91, 92, 94, 95, 93, 56, 90, 86, 88, 89, 87,
   // Good (subgroup 2), this project's autumn ones first
   202, 203, 204,
+  211, 212, 209, 208, 210, 213,
   57, 65, 63, 64, 71, 108, 109, 61, 62, 60, 102, 103, 68, 104, 105, 106,
-  // Flags (subgroup 3)
+  // Flags (subgroup 3), this project's Cambodian flag first
+  207,
   49, 50, 28, 29, 30, 31, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47, 48, 32,
-  // Premium (subgroup 4)
+  // Premium (subgroup 4), this project's wonders first
+  214, 215, 216, 217, 218, 219, 220, 221, 222,
   96, 97, 98, 99, 100, 101,
 ];
 

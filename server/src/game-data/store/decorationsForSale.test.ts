@@ -21,9 +21,9 @@ describe("DECORATIONS_FOR_SALE", () => {
     }
   });
 
-  test("and this project's six autumn ones at their own price, first under Plants and Good, with no store row", () => {
-    expect(DECORATIONS_FOR_SALE).toHaveLength(79);
-    expect(REVAMP_DECORATIONS.map((one) => [one.type, decorationPrice(one.type)])).toEqual([
+  test("and this project's own at their own price, first under their sub-tab, with no store row", () => {
+    expect(DECORATIONS_FOR_SALE).toHaveLength(73 + 32);
+    expect(REVAMP_DECORATIONS.slice(0, 6).map((one) => [one.type, decorationPrice(one.type)])).toEqual([
       [201, 25],
       [202, 30],
       [203, 35],
@@ -31,14 +31,20 @@ describe("DECORATIONS_FOR_SALE", () => {
       [205, 60],
       [206, 75],
     ]);
-    for (const { type } of REVAMP_DECORATIONS) {
+    for (const { type, price } of REVAMP_DECORATIONS) {
       expect(DECORATIONS_FOR_SALE).toContain(type);
+      expect(decorationPrice(type)).toBe(price);
       expect(footprintOf(type).decoration).toBe(true);
       expect(storeItems[`BUILDING${type}`]).toBeUndefined();
     }
-    // Plants start after the 14 Evil, Good after the 14 + 3 Plants.
+    // Plants start after the 14 Evil (the autumn three, then the ten new plants), Good after the 14 + 13 Plants
+    // (the autumn three, then the six new props), Flags after the 16 + 9 Good, Premium after the 23 + 1 Flags.
     expect(DECORATIONS_FOR_SALE.slice(14, 17)).toEqual([201, 205, 206]);
-    expect(DECORATIONS_FOR_SALE.slice(31, 34)).toEqual([202, 203, 204]);
+    expect(DECORATIONS_FOR_SALE.slice(17, 27)).toEqual([228, 232, 229, 231, 230, 225, 226, 223, 224, 227]);
+    expect(DECORATIONS_FOR_SALE.slice(41, 44)).toEqual([202, 203, 204]);
+    expect(DECORATIONS_FOR_SALE.slice(44, 50)).toEqual([211, 212, 209, 208, 210, 213]);
+    expect(DECORATIONS_FOR_SALE[66]).toBe(207);
+    expect(DECORATIONS_FOR_SALE.slice(90, 99)).toEqual([214, 215, 216, 217, 218, 219, 220, 221, 222]);
   });
 
   test("every BUILDING store row not sold is one Flash's tab hid (block) or priced 0", () => {

@@ -425,6 +425,35 @@ const REVAMP_DECORATIONS = [
   [204, "bdg_harvestwheelbarrow"],
   [205, "bdg_turkeytopiary"],
   [206, "bdg_autumnmaple"],
+  // New decorations (owner, 24 Nov 2026, not yet released: the owner keeps or drops each and sets the prices).
+  // Batch 1: the Cambodian flag and six yard props.
+  [207, "bdg_flagcambodia"],
+  [208, "bdg_firepit"],
+  [209, "bdg_picnictable"],
+  [210, "bdg_wishingwell"],
+  [211, "bdg_monstereggnest"],
+  [212, "bdg_goocauldron"],
+  [213, "bdg_gardenwindmill"],
+  // Batch 2: nine wonders (Premium) and ten plants.
+  [214, "bdg_rizalmonument"],
+  [215, "bdg_paoaychurch"],
+  [216, "bdg_fortsantiago"],
+  [217, "bdg_magellanscross"],
+  [218, "bdg_mayonvolcano"],
+  [219, "bdg_chocolatehills"],
+  [220, "bdg_banaueterraces"],
+  [221, "bdg_tajmahal"],
+  [222, "bdg_pyramids"],
+  [223, "bdg_mangotree"],
+  [224, "bdg_coconutpalm"],
+  [225, "bdg_bananaplant"],
+  [226, "bdg_bambooclump"],
+  [227, "bdg_oaktree"],
+  [228, "bdg_kalamansitree"],
+  [229, "bdg_hibiscus"],
+  [230, "bdg_bougainvillea"],
+  [231, "bdg_trimmedhedge"],
+  [232, "bdg_rosebush"],
 ];
 for (const [id, name] of REVAMP_DECORATIONS) {
   if (entries.some((one) => one.id === id)) throw new Error(`YARD_PROPS.as already has a type ${id}`);

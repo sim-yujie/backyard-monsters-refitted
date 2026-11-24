@@ -357,7 +357,7 @@ describe("BuildMenu", () => {
     expect(spokenText(meta())).toBe("You have Glimmers 450");
   });
 
-  it("with nothing stored, the Decorations tab sells Flash's 73 for event coins under its five sub-tabs", () => {
+  it("with nothing stored, the Decorations tab sells Flash's 73 and this project's 32 for event coins under its five sub-tabs", () => {
     const { menu } = setup([HALL], { eventcoins: 300 });
     menu.open(BuildCategory.DECORATIONS);
     expect(menu.element.querySelector(".build-menu__empty")).toBeNull();
@@ -380,8 +380,9 @@ describe("BuildMenu", () => {
       expect(button.getAttribute("aria-selected")).toBe("true");
       expect(menu.pickedType).toBe(Number(tileTypes(menu)[0]));
     }
-    expect(pages).toEqual(["Page 1 of 2", "Page 1 of 2", "Page 1 of 2", "Page 1 of 3", "Page 1 of 1"]);
-    expect(tileTypes(menu)).toEqual(["96", "97", "98", "99", "100", "101"]);
+    expect(pages).toEqual(["Page 1 of 2", "Page 1 of 3", "Page 1 of 3", "Page 1 of 3", "Page 1 of 2"]);
+    // Premium: this project's nine new wonders (24 Nov 2026) first, then Flash's six.
+    expect(tileTypes(menu)).toEqual(["214", "215", "216", "217", "218", "219", "220", "221", "222", "96"]);
     // The purse in the title bar, always in view (tester, 8 Nov: under the
     // tiles it was cut off at 1280x800 and below the fold on a phone).
     const meta = menu.element.querySelector(".build-menu__meta")!;
@@ -473,8 +474,8 @@ describe("BuildMenu", () => {
     menu.openKind(DecorKind.PREMIUM);
     expect(tileTypes(menu)[0]).toBe("121");
     menu.openKind(DecorKind.FLAGS);
-    // Stored first, then the ones for sale (the stored American Flag not again).
-    expect(tileTypes(menu).slice(0, 3)).toEqual(["28", "49", "50"]);
+    // Stored first, then the ones for sale (the new Cambodian Flag first; the stored American Flag not again).
+    expect(tileTypes(menu).slice(0, 4)).toEqual(["28", "207", "49", "50"]);
     expect(menu.element.querySelectorAll('.build-tile[data-type="28"]')).toHaveLength(1);
     expect(tile(menu, 28).querySelector(".build-tile__count")?.textContent).toBe("3 in storage");
     expect(info(menu).querySelector(".build-info__count")?.textContent).toBe("3 in storage");

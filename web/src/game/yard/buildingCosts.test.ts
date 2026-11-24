@@ -48,8 +48,8 @@ describe("the cost table", () => {
 
   it("holds one sorted row for each of the 134 priced types, then this project's own Observatory and decorations", () => {
     const types = BUILDING_COST_ROWS.map(([type]) => type);
-    expect(types.length).toBe(134 + 1 + 6);
-    expect(types.slice(-7)).toEqual([150, 201, 202, 203, 204, 205, 206]);
+    expect(types.length).toBe(134 + 1 + 32);
+    expect(types.slice(-33)).toEqual([150, ...Array.from({ length: 32 }, (_, i) => 201 + i)]);
     expect(new Set(types).size).toBe(types.length);
     expect(types).toEqual([...types].sort((a, b) => a - b));
   });

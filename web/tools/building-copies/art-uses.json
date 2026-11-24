@@ -571,12 +571,116 @@
   "frames": [],
   "strips": []
  },
+ "assets/buildings/decorations/plants/bamboo-clump.modern@2x.webp": {
+  "whole": true,
+  "frames": [],
+  "strips": []
+ },
+ "assets/buildings/decorations/plants/banana-plant.modern@2x.webp": {
+  "whole": true,
+  "frames": [],
+  "strips": []
+ },
+ "assets/buildings/decorations/plants/bougainvillea.modern@2x.webp": {
+  "whole": true,
+  "frames": [],
+  "strips": []
+ },
+ "assets/buildings/decorations/plants/coconut-palm.modern@2x.webp": {
+  "whole": true,
+  "frames": [],
+  "strips": []
+ },
+ "assets/buildings/decorations/plants/hibiscus-shrub.modern@2x.webp": {
+  "whole": true,
+  "frames": [],
+  "strips": []
+ },
+ "assets/buildings/decorations/plants/kalamansi-tree.modern@2x.webp": {
+  "whole": true,
+  "frames": [],
+  "strips": []
+ },
+ "assets/buildings/decorations/plants/mango-tree.modern@2x.webp": {
+  "whole": true,
+  "frames": [],
+  "strips": []
+ },
+ "assets/buildings/decorations/plants/oak-tree.modern@2x.webp": {
+  "whole": true,
+  "frames": [],
+  "strips": []
+ },
+ "assets/buildings/decorations/plants/rose-bush.modern@2x.webp": {
+  "whole": true,
+  "frames": [],
+  "strips": []
+ },
+ "assets/buildings/decorations/plants/trimmed-hedge.modern@2x.webp": {
+  "whole": true,
+  "frames": [],
+  "strips": []
+ },
  "assets/buildings/decorations/pond/pond.modern@2x.webp": {
   "whole": true,
   "frames": [],
   "strips": []
  },
  "assets/buildings/decorations/pool/pool.modern@2x.webp": {
+  "whole": true,
+  "frames": [],
+  "strips": []
+ },
+ "assets/buildings/decorations/props/egg-nest.modern@2x.webp": {
+  "whole": true,
+  "frames": [],
+  "strips": []
+ },
+ "assets/buildings/decorations/props/fire-pit-anim.modern@2x.webp": {
+  "whole": false,
+  "frames": [],
+  "strips": [
+   {
+    "w": 25,
+    "h": 38,
+    "frames": 25,
+    "columns": null
+   }
+  ]
+ },
+ "assets/buildings/decorations/props/fire-pit.modern@2x.webp": {
+  "whole": true,
+  "frames": [],
+  "strips": []
+ },
+ "assets/buildings/decorations/props/goo-cauldron.modern@2x.webp": {
+  "whole": true,
+  "frames": [],
+  "strips": []
+ },
+ "assets/buildings/decorations/props/picnic-table.modern@2x.webp": {
+  "whole": true,
+  "frames": [],
+  "strips": []
+ },
+ "assets/buildings/decorations/props/windpump-anim.modern@2x.webp": {
+  "whole": false,
+  "frames": [],
+  "strips": [
+   {
+    "w": 36,
+    "h": 47,
+    "frames": 48,
+    "columns": null
+   }
+  ]
+ },
+ "assets/buildings/decorations/props/windpump.modern@2x.webp": {
+  "whole": true,
+  "frames": [],
+  "strips": []
+ },
+ "assets/buildings/decorations/props/wishing-well.modern@2x.webp": {
   "whole": true,
   "frames": [],
   "strips": []
@@ -722,6 +826,51 @@
   "strips": []
  },
  "assets/buildings/decorations/wmitotem2/totem-l6.modern@2x.webp": {
+  "whole": true,
+  "frames": [],
+  "strips": []
+ },
+ "assets/buildings/decorations/wonders/banaue-terraces.modern@2x.webp": {
+  "whole": true,
+  "frames": [],
+  "strips": []
+ },
+ "assets/buildings/decorations/wonders/chocolate-hills.modern@2x.webp": {
+  "whole": true,
+  "frames": [],
+  "strips": []
+ },
+ "assets/buildings/decorations/wonders/fort-santiago.modern@2x.webp": {
+  "whole": true,
+  "frames": [],
+  "strips": []
+ },
+ "assets/buildings/decorations/wonders/magellans-cross.modern@2x.webp": {
+  "whole": true,
+  "frames": [],
+  "strips": []
+ },
+ "assets/buildings/decorations/wonders/mayon-volcano.modern@2x.webp": {
+  "whole": true,
+  "frames": [],
+  "strips": []
+ },
+ "assets/buildings/decorations/wonders/paoay-church.modern@2x.webp": {
+  "whole": true,
+  "frames": [],
+  "strips": []
+ },
+ "assets/buildings/decorations/wonders/pyramids.modern@2x.webp": {
+  "whole": true,
+  "frames": [],
+  "strips": []
+ },
+ "assets/buildings/decorations/wonders/rizal-monument.modern@2x.webp": {
+  "whole": true,
+  "frames": [],
+  "strips": []
+ },
+ "assets/buildings/decorations/wonders/taj-mahal.modern@2x.webp": {
   "whole": true,
   "frames": [],
   "strips": []
