@@ -2,8 +2,10 @@ import { BufferImageSource } from "pixi.js";
 import { mapRoomGrid } from "@/game/HexGrid";
 import { quality, type Quality } from "@/game/quality";
 import type { CellRange } from "../zones";
-import { buildRiverMask, type RiverMask, type WorldRect } from "./riverMask";
-import { riverPaths, type RiverCells } from "./riverPaths";
+import type { RiverMask, WorldRect } from "./riverMask";
+import type { RiverCells } from "./riverPaths";
+import { RiverBuilder } from "./riverBuilder";
+import { snapshotRiverCells } from "./riverPicture";
 
 /**
  * Map Room 2 rivers (look plan step 7), for the painted ground: the river shapes (`riverPaths.ts`)
@@ -14,12 +16,19 @@ import { riverPaths, type RiverCells } from "./riverPaths";
  * renderer asks for them: only with the painted look (`MR2_PAINTED_MAP`) on, so with it off the map
  * is exactly today's tiles; Classic is always Flash's map.
  *
- * Built for the cells on screen plus a margin, again only when the view leaves that, a zone arrives,
- * or the Quality changes; panning costs nothing.
+ * Built for the cells on screen plus a margin, again only when the view nears the edge of that, a
+ * zone arrives, or the Quality changes; panning costs nothing. The build runs in a Web Worker
+ * (`riverBuilder.ts`, on the main thread where there is none), off the frame.
  */
 
 /** Cells built past each side of the view, so a short pan does not rebuild. */
 const MARGIN = 6;
+
+/**
+ * With a worker, the next picture is asked for once the view comes within this many cells of the
+ * built one's edge, so it has usually landed before the view gets there.
+ */
+const PREFETCH = MARGIN / 2;
 
 /** Texels a cell, by Quality: the distance picture stays sharp with few (the GPU blends them). */
 const TEXELS_PER_CELL: Record<Quality, number> = { high: 40, medium: 32, low: 22 };
@@ -52,22 +61,28 @@ export class RiverLayer {
   private anyRiver = false;
   /** Pictures replaced by a bigger or smaller one, destroyed once the shader holds the new one. */
   private retired: BufferImageSource[] = [];
+  private readonly builder: RiverBuilder;
+  /** Bumped by every `invalidate` that counts, so a picture asked for before it lands as stale. */
+  private generation = 0;
+  private nextId = 1;
+  /** The picture asked for and not landed yet. */
+  private asked: { id: number; around: CellRange; level: Quality; generation: number } | null = null;
+  /** Pictures built so far, where they ran and how long they took (request to landing), for the speed check. */
+  readonly stats = { worker: 0, main: 0, lastMs: 0, maxMs: 0 };
+
+  constructor(builder: () => RiverBuilder = () => new RiverBuilder()) {
+    this.builder = builder();
+  }
 
   /**
    * A zone arrived (new rivers or heights): rebuilt on the next `update`. With `area` (the cells
-   * that changed), only when the built picture reaches them: a picture built elsewhere is rebuilt
-   * from the store's cells anyway once the view reaches past it.
+   * that changed), only when the built picture, or the one asked for, reaches them: a picture
+   * built elsewhere is rebuilt from the store's cells anyway once the view reaches past it.
    */
   invalidate(area?: CellRange): void {
-    const built = this.built;
-    if (
-      area &&
-      built &&
-      (area.maxCol < built.minCol || area.minCol > built.maxCol || area.maxRow < built.minRow || area.minRow > built.maxRow)
-    ) {
-      return;
-    }
+    if (area && !overlaps(area, this.built) && !overlaps(area, this.asked?.around ?? null)) return;
     this.stale = true;
+    this.generation += 1;
   }
 
   get uniforms(): RiverUniforms {
@@ -80,43 +95,35 @@ export class RiverLayer {
   }
 
   /**
-   * Shows the rivers round `range`, or hides them. Returns whether the picture changed (rebuilt,
-   * shown or hidden), so the renderer can redraw a tilted view and count the work.
+   * Shows the rivers round `range`, or hides them. Returns whether the picture changed (a new one
+   * landed, shown or hidden), so the renderer can redraw a tilted view and count the work.
+   *
+   * A new picture is built in a worker (`riverBuilder.ts`) when the view nears the edge of the
+   * built one, and shown on the frame it lands; the old one shows until then. Without a worker it
+   * is built here, at once, when the view leaves the built cells (as before the worker).
    */
   update(range: CellRange, shown: boolean, cells: RiverCells, level: Quality = quality()): boolean {
+    const was = this.on;
+    let landed = this.land();
     if (!shown) {
-      const was = this.on;
       this.on = false;
-      return was;
+      return landed || was;
     }
     const built = this.built;
-    if (
-      !this.stale &&
-      level === this.builtQuality &&
-      built &&
-      range.minCol >= built.minCol &&
-      range.maxCol <= built.maxCol &&
-      range.minRow >= built.minRow &&
-      range.maxRow <= built.maxRow
-    ) {
-      const was = this.on;
-      this.on = this.anyRiver;
-      return was !== this.on;
+    const covered =
+      !this.stale && level === this.builtQuality && built !== null && inside(range, built, 0);
+    if (!covered) {
+      // Without a worker this builds now and lands at once, as the old synchronous build did.
+      if (!this.builder.busy) {
+        this.ask(range, cells, level);
+        landed = this.land() || landed;
+      }
+    } else if (this.builder.usesWorker && !this.builder.busy && !inside(range, built, PREFETCH)) {
+      // Near the edge: the next picture is built ahead, so a pan rarely reaches past this one.
+      this.ask(range, cells, level);
     }
-    const around: CellRange = {
-      minCol: range.minCol - MARGIN,
-      maxCol: range.maxCol + MARGIN,
-      minRow: range.minRow - MARGIN,
-      maxRow: range.maxRow + MARGIN,
-    };
-    const mask = buildRiverMask(riverPaths(around, cells), worldRectOf(around), mapRoomGrid.cellWidth, TEXELS_PER_CELL[level]);
-    this.upload(mask);
-    this.built = around;
-    this.builtQuality = level;
-    this.stale = false;
-    this.anyRiver = mask.any;
-    this.on = mask.any;
-    return true;
+    this.on = this.built !== null && this.anyRiver;
+    return landed || was !== this.on;
   }
 
   /** Destroys the pictures the shader no longer holds (call after handing it the new one). */
@@ -126,8 +133,42 @@ export class RiverLayer {
   }
 
   destroy(): void {
+    this.builder.destroy();
+    this.asked = null;
     this.releaseRetired();
     this.source.destroy();
+  }
+
+  /** Asks for the picture round `range` (the view plus a margin) from the cells as they are now. */
+  private ask(range: CellRange, cells: RiverCells, level: Quality): void {
+    const around: CellRange = {
+      minCol: range.minCol - MARGIN,
+      maxCol: range.maxCol + MARGIN,
+      minRow: range.minRow - MARGIN,
+      maxRow: range.maxRow + MARGIN,
+    };
+    const id = this.nextId++;
+    const request = snapshotRiverCells(id, around, cells, mapRoomGrid, worldRectOf(around), TEXELS_PER_CELL[level]);
+    this.asked = { id, around, level, generation: this.generation };
+    if (!this.builder.request(request)) this.asked = null;
+  }
+
+  /** Takes the picture that landed, if any, as the one shown. Returns whether one did. */
+  private land(): boolean {
+    const asked = this.asked;
+    const landed = this.builder.take();
+    if (!landed || !asked || landed.id !== asked.id) return false;
+    this.asked = null;
+    this.upload(landed.mask);
+    this.built = asked.around;
+    this.builtQuality = asked.level;
+    // A zone that arrived while it was built makes it stale at once.
+    this.stale = asked.generation !== this.generation;
+    this.anyRiver = landed.mask.any;
+    this.stats[landed.servedBy] += 1;
+    this.stats.lastMs = landed.ms;
+    this.stats.maxMs = Math.max(this.stats.maxMs, landed.ms);
+    return true;
   }
 
   private upload(mask: RiverMask): void {
@@ -150,6 +191,17 @@ export class RiverLayer {
     this.rect.set([x0, y0, 1 / Math.max(1e-6, x1 - x0), 1 / Math.max(1e-6, y1 - y0)]);
   }
 }
+
+/** Whether `range` lies inside `outer` with at least `margin` cells to spare on every side. */
+const inside = (range: CellRange, outer: CellRange, margin: number): boolean =>
+  range.minCol - margin >= outer.minCol &&
+  range.maxCol + margin <= outer.maxCol &&
+  range.minRow - margin >= outer.minRow &&
+  range.maxRow + margin <= outer.maxRow;
+
+const overlaps = (area: CellRange, other: CellRange | null): boolean =>
+  other !== null &&
+  !(area.maxCol < other.minCol || area.minCol > other.maxCol || area.maxRow < other.minRow || area.minRow > other.maxRow);
 
 /** The world rectangle round a range of cells (a cell's width and height past its outer centres). */
 export const worldRectOf = (range: CellRange): WorldRect => {
