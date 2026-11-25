@@ -76,7 +76,7 @@ describe("ClusterLayout", () => {
       view({ obstacles: [hud] }),
     );
     const own = shown.find((s) => s.group === "you")!;
-    expect(own.y - own.hh).toBeGreaterThanOrEqual(68);
+    expect(own.y - own.hh).toBeGreaterThanOrEqual(63);
     const plaque = shown.find((s) => s.kind === "plaque")!;
     const hostile = shown.find((s) => s.group === "hostile")!;
     const apart = Math.abs(plaque.x - hostile.x) >= plaque.hw + hostile.hw || Math.abs(plaque.y - hostile.y) >= plaque.hh + hostile.hh;

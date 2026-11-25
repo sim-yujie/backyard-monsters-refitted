@@ -58,6 +58,9 @@ export interface ScreenToken {
 const GAP = 4;
 const EDGE = 4;
 const HUD_GAP = 8;
+/** A crest needs less: it stands on its outpost, and neon r2 saw crests above the kit bar dropped. */
+const CREST_HUD_GAP = 3;
+const hudGap = (s: ScreenToken): number => (s.kind === "crest" ? CREST_HUD_GAP : HUD_GAP);
 /** How far a plaque may step in from the screen's edge or off the HUD. */
 const PLAQUE_SHIFT = 60;
 /** How far a token may be pushed off its spot: a crest stays on its outpost. */
@@ -229,7 +232,7 @@ export class ClusterLayout {
       tryAt(inX(r.left - gap - s.hw - 1), inY(y0));
       tryAt(inX(r.right + gap + s.hw + 1), inY(y0));
     };
-    for (const r of view.obstacles) around(r, HUD_GAP);
+    for (const r of view.obstacles) around(r, hudGap(s));
     for (let i = 0; i < kept; i++) {
       const q = others[i]!;
       around({ left: q.x - q.hw, top: q.y - q.hh, right: q.x + q.hw, bottom: q.y + q.hh }, GAP);
@@ -293,8 +296,9 @@ const fits = (s: ScreenToken, view: LayoutView, others: readonly ScreenToken[], 
 };
 
 const underAny = (s: ScreenToken, rects: readonly ScreenRect[]): boolean => {
+  const gap = hudGap(s);
   for (const r of rects) {
-    if (s.x + s.hw > r.left - HUD_GAP && s.x - s.hw < r.right + HUD_GAP && s.y + s.hh > r.top - HUD_GAP && s.y - s.hh < r.bottom + HUD_GAP) {
+    if (s.x + s.hw > r.left - gap && s.x - s.hw < r.right + gap && s.y + s.hh > r.top - gap && s.y - s.hh < r.bottom + gap) {
       return true;
     }
   }

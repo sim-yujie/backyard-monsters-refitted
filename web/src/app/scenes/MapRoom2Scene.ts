@@ -890,11 +890,17 @@ export class MapRoom2Scene implements Scene {
     const pad = mapRoomGrid.colStep;
     const usableW = Math.max(100, this.viewportWidth - insets.left - insets.right);
     const usableH = Math.max(100, this.viewportHeight - insets.top - insets.bottom);
-    // The tilt squeezes rows towards the top of the screen: fit the height with room to spare.
+    // The tilt squeezes rows towards the top of the screen and widens them towards the bottom:
+    // fit with room to spare both ways (neon r2: a phone clipped hexes at the sides).
     const squash = this.tilt ? this.tilt.squash * 0.8 : 1;
-    const fit = Math.min(usableW / (box.maxX - box.minX + pad * 2), usableH / ((box.maxY - box.minY + pad * 2) * squash));
+    const widen = this.tilt ? 1.3 : 1;
+    const fit = Math.min(
+      usableW / ((box.maxX - box.minX + pad * 2) * widen),
+      usableH / ((box.maxY - box.minY + pad * 2) * squash),
+    );
     camera.settle();
-    camera.zoom = Math.min(DEFAULT_ZOOM, Math.max(fit, camera.zoom * 1.6), camera.maxZoom);
+    // The fit wins; a small step in at least, so a tap always moves.
+    camera.zoom = Math.min(DEFAULT_ZOOM, Math.max(fit, camera.zoom * 1.1), camera.maxZoom);
     camera.centreOn({ x: (box.minX + box.maxX) / 2, y: (box.minY + box.maxY) / 2 });
     camera.panByScreen((insets.left - insets.right) / 2, (insets.top - insets.bottom) / 2);
     camera.dirty = true;

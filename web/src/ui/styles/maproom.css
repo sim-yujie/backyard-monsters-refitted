@@ -625,6 +625,12 @@
   border-image-repeat: stretch;
 }
 
+/* The alliance sample wears the live plaque's blue ring. */
+.mr2-key__token[data-art="plaque-alliance"] .mr2-key__plaque {
+  border-radius: 999px;
+  box-shadow: 0 0 0 2px #4da3ff;
+}
+
 .mr2-key__plaque img {
   width: 20px;
   height: 20px;

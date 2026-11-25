@@ -59,9 +59,16 @@
 .mc--crest.mc--home {
   filter: drop-shadow(0 0 1.5px rgb(0 0 0 / 80%)) drop-shadow(0 2px 2px rgb(0 0 0 / 55%));
 }
-/* The crest whose outpost's panel is open (neon r1: which one is it?). */
-.mc--crest.mc--selected {
-  filter: drop-shadow(0 0 0 #ffd400) drop-shadow(0 0 2px #ffd400) drop-shadow(0 0 3px #ffd400);
+/* The crest whose outpost's panel is open (neon r1-r2: which one is it?): a yellow ring over it. */
+.mc--crest.mc--selected::after {
+  content: "";
+  position: absolute;
+  inset: -5px;
+  border: 3px solid #ffd400;
+  border-radius: 50%;
+  box-shadow:
+    0 0 0 2px rgb(26 26 26 / 75%),
+    inset 0 0 0 1.5px rgb(26 26 26 / 60%);
 }
 .mc--plaque .mc__pic {
   flex: 0 0 auto;
