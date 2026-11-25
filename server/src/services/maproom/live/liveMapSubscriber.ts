@@ -1,13 +1,14 @@
 import type { ChangeSet, EventSubscriber, FlushEventArgs, TransactionEventArgs } from "@mikro-orm/core";
 
 import { Alliance } from "../../../database/models/alliance.model.js";
+import { AttackLogs } from "../../../database/models/attacklogs.model.js";
 import { Save } from "../../../database/models/save.model.js";
 import { Truce } from "../../../database/models/truce.model.js";
 import { User } from "../../../database/models/user.model.js";
 import { WorldMapCell } from "../../../database/models/worldmapcell.model.js";
 import { MapRoomVersion } from "../../../enums/MapRoom.js";
 import { calculateBaseLevel } from "../../base/calculateBaseLevel.js";
-import { markAlliances, markCells, markSaveOwners, markSaves, markUsers } from "./liveMarks.js";
+import { markAlliances, markCells, markRelations, markSaveOwners, markSaves, markUsers } from "./liveMarks.js";
 
 /**
  * The live map's hook on every ORM write (beta 9, stage 1): a flush that
@@ -105,10 +106,6 @@ export const marksFor = (changeSet: ChangeSet<object>): Mark[] => {
     const id = entity.basesaveid;
     const marks: Mark[] = [];
     if (changed.some((field) => SAVE_MAP_FIELDS.has(field))) {
-      // `LIVE_MAP_TRACE=1` (a local check of how often a real session marks the map): which fields.
-      if (process.env.LIVE_MAP_TRACE === "1") {
-        console.log(`[live-map] save ${id}: ${changed.filter((field) => SAVE_MAP_FIELDS.has(field)).join(",")}`);
-      }
       marks.push(() => markSaves([id]));
     }
     if (changed.includes("points") || changed.includes("basevalue")) {
@@ -127,9 +124,17 @@ export const marksFor = (changeSet: ChangeSet<object>): Mark[] => {
   }
 
   if (entity instanceof Truce) {
-    // A truce's tick (`t`) shows on both players' cells, to each other.
-    const pair = [entity.initiator_userid, entity.recipient_userid];
-    return [() => markUsers(pair)];
+    // A truce's tick (`t`) shows on both players' cells, to each other only.
+    const pair: [number, number] = [entity.initiator_userid, entity.recipient_userid];
+    return [() => markRelations([pair])];
+  }
+
+  if (entity instanceof AttackLogs) {
+    // A new attack between two players: the defender's "attacked you" plate (`ak`) and both sides'
+    // hostile border (`ho`) on the other's cells, seen by those two only.
+    if (changeSet.type !== "create") return [];
+    const pair: [number, number] = [Number(entity.attacker_userid), Number(entity.defender_userid)];
+    return [() => markRelations([pair])];
   }
 
   if (entity instanceof Alliance) {

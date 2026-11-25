@@ -29,6 +29,11 @@ export interface LiveMarkSink {
   sightUsers(ids: readonly number[]): void;
   /** Every member of these alliances: their shared sight changed. */
   sightAlliances(ids: readonly number[]): void;
+  /**
+   * Pairs of players whose relation changed (a truce, a friendship, an attack between them): what
+   * only they see of each other's cells (`t`, `fr`, `fp`, `ak`, `ho`). Nothing public moves.
+   */
+  relations(pairs: readonly (readonly [number, number])[]): void;
 }
 
 let sink: LiveMarkSink | null = null;
@@ -87,6 +92,11 @@ export const markSightUsers = (ids: readonly number[]): void => {
 export const markSightAlliances = (ids: readonly number[]): void => {
   const real = ids.filter((id) => Number.isSafeInteger(id) && id > 0);
   if (real.length) safely((to) => to.sightAlliances(real));
+};
+
+export const markRelations = (pairs: readonly (readonly [number, number])[]): void => {
+  const real = pairs.filter(([a, b]) => a !== b && [a, b].every((id) => Number.isSafeInteger(id) && id > 0));
+  if (real.length) safely((to) => to.relations(real));
 };
 
 /** A cell row as code that is about to delete it holds it: the world loaded, a reference or its id. */

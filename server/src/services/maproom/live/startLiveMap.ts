@@ -4,9 +4,10 @@ import { getCurrentDateTime } from "../../../utils/getCurrentDateTime.js";
 import { onlinePlayers } from "../../user/online.js";
 import { startLiveOnline } from "./liveOnline.js";
 import { startLiveZones, type CellRow } from "./liveZones.js";
+import { buildOwnerCells, buildPublicCells, cellsOf } from "./liveCells.js";
 
 /**
- * Starts the live map's server side (beta 9, stage 1): the one-second zone
+ * Starts the live map's server side (beta 9, stages 1-2): the half-second zone
  * bundle every write marks into, and the online flag's check. Both only ever
  * read the database; their state is in Redis.
  */
@@ -15,6 +16,8 @@ export const startLiveMap = (): void => {
     redis,
     query: (sql, params) => postgres.em.fork().execute<CellRow[]>(sql, params),
     warn: (message) => logger.warn(message),
+    // Stage 2: each push carries its changed cells, built once here for every watcher.
+    cells: { publicCells: buildPublicCells, ownerCells: buildOwnerCells, cellsOf },
   });
   if (process.env.LIVE_MAP_ONLINE !== "off") {
     startLiveOnline({

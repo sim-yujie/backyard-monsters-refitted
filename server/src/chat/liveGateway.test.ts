@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 
 import {
   closeLive,
+  fanOutOwn,
   fanOutSight,
   fanOutZones,
   initLiveGateway,
@@ -10,7 +11,10 @@ import {
   resetLiveGateway,
   routeLive,
   type LiveIdentity,
+  type LogRead,
 } from "./liveGateway.js";
+import type { LiveSight } from "../services/maproom/live/liveFog.js";
+import type { CellsMessage } from "../services/maproom/live/liveZones.js";
 
 /** The live map's socket side (beta 9): sign-in, watched zones, pushes only to watchers. */
 
@@ -46,6 +50,9 @@ beforeEach(() => {
     authenticate: async (token) => identities[token] ?? null,
     versions: async (_world, ids) => ids.map((id) => versions.get(id) ?? 0),
     alliancesOf: async (ids) => new Map(ids.map((id) => [id, alliances.get(id) ?? null])),
+    // Stage 1's checks: no fog (every zone visible).
+    sight: async () => null,
+    shape: () => "flat",
     warn: () => {},
   });
 });
@@ -155,5 +162,172 @@ describe("live map gateway", () => {
     for (let i = 0; i < 5; i++) tabs.push(await signedIn("a"));
     expect(tabs[0]!.ws.closed).toBe(1000);
     expect(liveStats().sockets).toBe(4);
+  });
+});
+
+/**
+ * Stage 2: the cells themselves, cut to each watcher's fog of war on the server. Player 1 ("a")
+ * sees only the cell (15, 15) (a revealed cell), player 2 ("b") everything.
+ */
+describe("live map gateway: pushed cells and the fog (stage 2)", () => {
+  const ZONE = 10001; // cells 10..20 x 10..20
+  const FAR = 50005; // cells 50..60: nothing of player 1's sight reaches it
+  let sights: Map<number, LiveSight | null>;
+  let sightDelay = 0;
+  let log: LogRead = { entries: [], complete: true };
+  let logAsked: string[] = [];
+
+  const cell = (x: number, y: number, uid: number, extra: Record<string, unknown> = {}) =>
+    [x, y, { uid, b: 2, n: `p${uid}`, bid: `b${x}${y}`, l: 20, dm: 0, ...extra }] as [number, number, unknown];
+  const push = (message: Partial<CellsMessage>) => fanOutZones(JSON.stringify({ w: "w", z: { [ZONE]: 5 }, id: "100-0", ...message }));
+  const cellsOf = (frame: Record<string, unknown> | undefined) => ((frame?.c ?? []) as [number, number][]).map(([x, y]) => `${x},${y}`);
+
+  beforeEach(() => {
+    sights = new Map([
+      [1, { sv: "s1", sources: [], revealed: [{ x: 15, y: 15 }] }],
+      [2, null],
+    ]);
+    sightDelay = 0;
+    log = { entries: [], complete: true };
+    logAsked = [];
+    initLiveGateway({
+      authenticate: async (token) => identities[token] ?? null,
+      versions: async (_world, ids) => ids.map(() => 5),
+      alliancesOf: async (ids) => new Map(ids.map((id) => [id, null])),
+      sight: async (userId) => {
+        if (sightDelay) await Bun.sleep(sightDelay);
+        return sights.has(userId) ? sights.get(userId)! : { sv: "", sources: [], revealed: [] };
+      },
+      shape: () => "flat",
+      readLog: async (since) => {
+        logAsked.push(since);
+        return log;
+      },
+      warn: () => {},
+    });
+  });
+
+  const watching = async (token: string, zones: number[], since?: string) => {
+    const s = await signedIn(token);
+    await s.frame({ type: "live.watch", z: zones, ...(since && { since }) });
+    return s;
+  };
+
+  test("a zone the watcher's fog hides entirely is refused: never watched, no version", async () => {
+    const a = await watching("a", [ZONE, FAR]);
+    expect(a.sent.at(-1)).toEqual({ type: "live.zones", all: 1, z: [[ZONE, 5]] });
+    a.sent.length = 0;
+    fanOutZones(JSON.stringify({ w: "w", z: { [FAR]: 9 }, c: [cell(55, 55, 8, { atk: 1234 })] }));
+    expect(a.sent).toEqual([]);
+  });
+
+  test("a fogged watcher never receives a cell its getarea would hide, `atk` included", async () => {
+    const a = await watching("a", [ZONE]);
+    const b = await watching("b", [ZONE]);
+    a.sent.length = 0;
+    b.sent.length = 0;
+    push({ c: [cell(15, 15, 7, { atk: 1111 }), cell(16, 16, 8, { atk: 2222, n: "hidden" })] });
+    expect(cellsOf(a.sent[0])).toEqual(["15,15"]);
+    const text = JSON.stringify(a.sent);
+    expect(text).not.toContain("2222");
+    expect(text).not.toContain("hidden");
+    expect(text).toContain("1111");
+    // No fog for player 2: both.
+    expect(cellsOf(b.sent[0])).toEqual(["15,15", "16,16"]);
+  });
+
+  test("a change only to cells the watcher cannot see still moves its version, with no cells", async () => {
+    const a = await watching("a", [ZONE]);
+    a.sent.length = 0;
+    push({ c: [cell(16, 16, 8, { atk: 2222 })] });
+    expect(a.sent).toEqual([{ type: "live.cells", id: "100-0", z: [[ZONE, 5]], c: [] }]);
+  });
+
+  test("the player's own cell is left out when its full copy went on their own channel, else the zone is asked again", async () => {
+    const b = await watching("b", [ZONE]);
+    b.sent.length = 0;
+    push({ c: [cell(15, 15, 2), cell(16, 16, 8)], ow: [2] });
+    expect(cellsOf(b.sent[0])).toEqual(["16,16"]);
+    expect(b.sent[0]!.rz).toBeUndefined();
+    b.sent.length = 0;
+    push({ c: [cell(15, 15, 2), cell(16, 16, 8)] });
+    expect(cellsOf(b.sent[0])).toEqual(["16,16"]);
+    expect(b.sent[0]!.rz).toEqual([ZONE]);
+  });
+
+  test("the own channel reaches only that player's sockets, and never the public", async () => {
+    const a = await watching("a", [ZONE]);
+    const b = await watching("b", [ZONE]);
+    a.sent.length = 0;
+    b.sent.length = 0;
+    const own = [cell(15, 15, 2, { mine: 1, r: { r1: 5 }, m: { C1: 3 } })];
+    fanOutOwn(JSON.stringify({ u: 2, w: "w", c: own }));
+    expect(b.sent).toEqual([{ type: "live.own", c: JSON.parse(JSON.stringify(own)) }]);
+    expect(a.sent).toEqual([]);
+  });
+
+  test("'ask again' after a relation change names only zones the player watches and can see", async () => {
+    const a = await watching("a", [ZONE]);
+    a.sent.length = 0;
+    fanOutOwn(JSON.stringify({ u: 1, w: "w", rz: [ZONE, FAR, 20002] }));
+    expect(a.sent).toEqual([{ type: "live.redo", z: [ZONE] }]);
+  });
+
+  test("while a sight change is being read, pushes carry versions only; then the new sight cuts them", async () => {
+    const a = await watching("a", [ZONE]);
+    a.sent.length = 0;
+    sightDelay = 30;
+    sights.set(1, { sv: "s2", sources: [], revealed: [{ x: 16, y: 16 }] });
+    const reading = fanOutSight(JSON.stringify({ u: [1], a: [] }));
+    await Bun.sleep(5);
+    push({ c: [cell(15, 15, 7), cell(16, 16, 8)] });
+    await reading;
+    expect(a.sent).toEqual([{ type: "live.sight" }, { type: "live.zones", z: [[ZONE, 5]] }]);
+    a.sent.length = 0;
+    push({ c: [cell(15, 15, 7), cell(16, 16, 8)] });
+    expect(cellsOf(a.sent[0])).toEqual(["16,16"]);
+  });
+
+  test("a sign-in whose sight cannot be read sees nothing (fail closed)", async () => {
+    sights.set(1, { sv: "", sources: [], revealed: [] });
+    const a = await watching("a", [ZONE]);
+    expect(a.sent.at(-1)).toEqual({ type: "live.zones", all: 1, z: [] });
+  });
+
+  test("replay after a short break: each cell's latest copy since the last id, cut to the fog, before the versions", async () => {
+    log = {
+      complete: true,
+      entries: [
+        { id: "101-0", w: "w", z: { [ZONE]: 3 }, c: [cell(15, 15, 7, { dm: 10 }), cell(16, 16, 8, { atk: 2222 })] },
+        { id: "102-0", w: "other", z: { [ZONE]: 9 }, c: [cell(15, 15, 99)] },
+        { id: "103-0", w: "w", z: { [ZONE]: 4 }, c: [cell(15, 15, 7, { dm: 40 })] },
+      ],
+    };
+    const a = await watching("a", [ZONE], "100-0");
+    expect(logAsked).toEqual(["100-0"]);
+    const [replay, versions] = a.sent.slice(-2);
+    expect(replay).toEqual({ type: "live.cells", rp: 1, id: "103-0", z: [[ZONE, 4, 3]], c: [cell(15, 15, 7, { dm: 40 })] });
+    expect(JSON.stringify(replay)).not.toContain("2222");
+    expect(versions).toEqual({ type: "live.zones", all: 1, z: [[ZONE, 5]] });
+  });
+
+  test("a log that no longer reaches back sends no replay: the versions catch up alone", async () => {
+    log = { complete: false, entries: [] };
+    const a = await watching("a", [ZONE], "100-0");
+    expect(a.sent.filter((frame) => frame.type === "live.cells")).toEqual([]);
+    expect(a.sent.at(-1)).toEqual({ type: "live.zones", all: 1, z: [[ZONE, 5]] });
+  });
+
+  test("replay asks again a zone holding the player's own cell, or a push that came without cells", async () => {
+    log = {
+      complete: true,
+      entries: [
+        { id: "101-0", w: "w", z: { [ZONE]: 3 }, c: [cell(15, 15, 1)] },
+        { id: "102-0", w: "w", z: { [ZONE + 1]: 7 }, x: 1 },
+      ],
+    };
+    const a = await watching("a", [ZONE], "100-0");
+    const replay = a.sent.find((frame) => frame.type === "live.cells");
+    expect(replay).toMatchObject({ z: [[ZONE, 3, 3]], c: [], rz: [ZONE] });
   });
 });

@@ -8,6 +8,7 @@ const { User } = await import("../../../database/models/user.model.js");
 const { WorldMapCell } = await import("../../../database/models/worldmapcell.model.js");
 const { Alliance } = await import("../../../database/models/alliance.model.js");
 const { Truce } = await import("../../../database/models/truce.model.js");
+const { AttackLogs } = await import("../../../database/models/attacklogs.model.js");
 
 /** Which changes mark the map (beta 9 live map): the fields a cell shows, nothing else. */
 const got: string[] = [];
@@ -22,6 +23,7 @@ beforeEach(() => {
     alliances: (ids) => got.push(`alliances:${ids.join(",")}`),
     sightUsers: () => {},
     sightAlliances: () => {},
+    relations: (pairs) => got.push(`relations:${pairs.map((pair) => pair.join("/")).join(" ")}`),
   });
 });
 afterEach(() => setLiveMarkSink(null));
@@ -83,9 +85,18 @@ describe("marksFor", () => {
     expect(got).toEqual(["alliances:4"]);
   });
 
-  test("a truce made or answered marks both players' cells", () => {
+  test("a truce made or answered is a relation between the two players, nothing public", () => {
     const truce = Object.assign(new Truce(), { initiator_userid: 3, recipient_userid: 4 });
     run(changeSet(truce, "update", { status: 2 }));
-    expect(got).toEqual(["users:3,4"]);
+    expect(got).toEqual(["relations:3/4"]);
+  });
+
+  test("a new attack log is a relation between attacker and defender (`ak`, `ho`)", () => {
+    const log = Object.assign(new AttackLogs(), { attacker_userid: 5, defender_userid: 6 });
+    run(changeSet(log, "create", {}));
+    expect(got).toEqual(["relations:5/6"]);
+    got.length = 0;
+    run(changeSet(log, "update", { attacktime: 1 }));
+    expect(got).toEqual([]);
   });
 });
