@@ -3,6 +3,7 @@ import type { BuildingData, BuildingDataMap } from "../../types/BuildingData.js"
 import type { JsonObject } from "../../types/JsonObject.js";
 import { catchUpYard, type CatchUpSave } from "./catchUp.js";
 import { planHatcheryAdd, planHatcheryFinish, planHatcheryRemove, type HatcherySave } from "./hatchery.js";
+import { planPresetSend } from "./hccPresets.js";
 
 /**
  * Owner's bug, 25 Nov 2026 (diag-hcc): "When a player has a HCC and some of
@@ -173,5 +174,16 @@ describe("HCC and a hatchery under upgrade", () => {
     expect(hOf(plan.slices?.monsters, 1)[0]).toBe("C1");
     expect(hOf(plan.slices?.monsters, 2)[0]).toBe("");
     expect(hOf(plan.slices?.monsters, 3)[0]).toBe("C1");
+  });
+
+  test("sending an HCC preset (beta 9) gives the upgrading hatchery no monster either", () => {
+    const save = { ...yardOf(monstersOf([idle(), idle(), idle()])), hccpresets: { home: [[["C1", 5]]], out: [] } };
+    const plan = planPresetSend(save, undefined, 0, false, NOW);
+
+    expect(plan.report).toMatchObject({ added: 5, stoppedBy: null });
+    expect(hOf(plan.slices?.monsters, 1)[0]).toBe("C1");
+    expect(hOf(plan.slices?.monsters, 2)[0]).toBe("");
+    expect(hOf(plan.slices?.monsters, 3)[0]).toBe("C1");
+    expect(plan.slices?.monsters?.hcc).toEqual([["C1", 3, 1]]);
   });
 });
