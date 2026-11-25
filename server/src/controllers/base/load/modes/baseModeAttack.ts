@@ -17,6 +17,7 @@ import { cellCoordsFromBaseId } from "../../../../services/maproom/v2/rangeCheck
 import { generateBaseId } from "../../../../utils/generateBaseId.js";
 import { createAttackLog } from "../../../../services/base/createAttackLog.js";
 import { isAttackActive } from "../../../../services/base/isAttackActive.js";
+import { claimAttack, mintAttackId } from "../../../../services/base/claimAttack.js";
 import { raidFighting } from "../../../../services/raids/raidLock.js";
 import { baseNotFoundErr, baseUnderAttackErr, baseProtectedErr, userOnlineErr, truceActiveErr, mapRoom3ClosedErr, lastAttackLandingErr } from "../../../../errors/errors.js";
 import { attackLandingDeferred } from "../../../../services/base/finaliseAttack.js";
@@ -162,6 +163,8 @@ export const baseModeAttack = async ({
     throw lastAttackLandingErr();
   }
   const readSavetime = save?.savetime ?? 0;
+  // The attack id the checks below see, which the claim compares against.
+  const readAttackid = save?.attackid ?? 0;
   // What Map Room 1's level rule allowed, for the vengeance counters.
   let mr1Permission = AttackPermission.ATTACKABLE;
 
@@ -249,7 +252,9 @@ export const baseModeAttack = async ({
   beforeCommit?.(userSave);
 
   // Past this point the attack is committed: everything below writes.
-  if (save.attacks.length > 3) save.attacks = save.attacks.slice(-2);
+  // A player's yard or outpost keeps its list as it is until its claim below.
+  const keptAttacks = save.attacks.length > 3 ? save.attacks.slice(-2) : save.attacks;
+  if (save.type === BaseType.TRIBE) save.attacks = keptAttacks;
 
   // Track the details of the attack
   const attackDetails: AttackDetails = {
@@ -262,13 +267,22 @@ export const baseModeAttack = async ({
     seen: false,
   };
 
-  if (save.type != BaseType.TRIBE) save.attacks.push(attackDetails);
+  const attackid = mintAttackId(readAttackid);
+  if (save.type !== BaseType.TRIBE) {
+    // Claimed in one conditional write (`claimAttack.ts`): of two attacks
+    // started at the same moment, both past every check above, only one
+    // finds the row as it read it; the other is refused here, before
+    // anything else of it is changed (a Repeat attack's caller flushes the
+    // attacker's row to give its fee back).
+    const attacks = [...keptAttacks, attackDetails];
+    await claimAttack(save.basesaveid, readAttackid, attackid, attacks, getCurrentDateTime());
+    save.attacks = attacks;
+  }
+  save.attackid = attackid;
 
   if (save.type !== BaseType.TRIBE || mapversion !== MapRoomVersion.V1) {
     await damageProtection(userSave, BaseMode.ATTACK);
   }
-
-  save.attackid = Math.floor(Math.random() * 99999) + 1;
 
   if (mapversion !== MapRoomVersion.V1) {
     let attackCell: WorldMapCell | null = cell;

@@ -3,6 +3,7 @@ import { Save } from "../../../../database/models/save.model.js";
 import { User } from "../../../../database/models/user.model.js";
 import { WorldMapCell } from "../../../../database/models/worldmapcell.model.js";
 import type { AttackSession } from "../../../../services/base/attackSession.js";
+import { matchesWhere } from "../../../../testing/matchesWhere.js";
 
 /**
  * The attack load autobanks the defender before it snapshots the pool the
@@ -43,6 +44,7 @@ interface StandIn {
   transactional: (run: (tx: StandIn) => Promise<unknown>) => Promise<unknown>;
   create: (entity: unknown, data: Row) => Row;
   persist: () => void;
+  nativeUpdate: (entity: unknown, where: Row, data: Row) => Promise<number>;
   flush: () => Promise<void>;
   execute: (sql: string, params: unknown[]) => Promise<Row[]>;
 }
@@ -54,6 +56,12 @@ const em: StandIn = {
   transactional: async (run) => run(em),
   create: (_entity: unknown, data: Row) => data,
   persist: () => {},
+  // The attack load's claim (`claimAttack.ts`): one conditional write.
+  nativeUpdate: async (entity, where, data) => {
+    const hit = (tables.get(entity) ?? []).filter((row) => matchesWhere(row, where));
+    for (const row of hit) Object.assign(row, data);
+    return hit.length;
+  },
   flush: async () => {},
   // A player's main row by user id, to count a quest (the hatch quest, patch 7.8).
   execute: async (sql: string, params: unknown[]) => {
