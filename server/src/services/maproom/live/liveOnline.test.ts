@@ -9,9 +9,11 @@ const marked: number[] = [];
 beforeEach(() => {
   marked.length = 0;
   setLiveMarkSink({
-    baseids: () => {},
+    saves: () => {},
+    saveOwners: () => {},
+    homes: (ids) => marked.push(...ids),
     cells: () => {},
-    users: (ids) => marked.push(...ids),
+    users: () => {},
     alliances: () => {},
     sightUsers: () => {},
     sightAlliances: () => {},

@@ -13,8 +13,12 @@
 
 /** Where marks go: `liveZones.ts` bundles them for a second and publishes the zones. */
 export interface LiveMarkSink {
-  /** Cells by their yard's `baseid` (a save changed; its cell is looked up). */
-  baseids(ids: readonly string[]): void;
+  /** Cells by their yard's save (`basesaveid`, always loaded): the save changed; its cell is looked up. */
+  saves(ids: readonly number[]): void;
+  /** Every cell of the players owning these saves (their level changed). */
+  saveOwners(ids: readonly number[]): void;
+  /** Players' main yards only (their online flag changed). */
+  homes(ids: readonly number[]): void;
   /** Cells by position on one world (a `world_map_cell` row changed). */
   cells(world: string, coords: readonly (readonly [number, number])[]): void;
   /** Every cell a player owns (their name, picture, alliance or level changed). */
@@ -44,8 +48,21 @@ const safely = (mark: (to: LiveMarkSink) => void): void => {
   }
 };
 
-export const markBaseids = (ids: readonly string[]): void => {
-  if (ids.length) safely((to) => to.baseids(ids));
+const realIds = (ids: readonly number[]): number[] => ids.filter((id) => Number.isSafeInteger(id) && id > 0);
+
+export const markSaves = (ids: readonly number[]): void => {
+  const real = realIds(ids);
+  if (real.length) safely((to) => to.saves(real));
+};
+
+export const markSaveOwners = (ids: readonly number[]): void => {
+  const real = realIds(ids);
+  if (real.length) safely((to) => to.saveOwners(real));
+};
+
+export const markHomes = (ids: readonly number[]): void => {
+  const real = realIds(ids);
+  if (real.length) safely((to) => to.homes(real));
 };
 
 export const markCells = (world: string, coords: readonly (readonly [number, number])[]): void => {

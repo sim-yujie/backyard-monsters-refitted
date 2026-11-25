@@ -7,7 +7,7 @@ import { User } from "../../../database/models/user.model.js";
 import { WorldMapCell } from "../../../database/models/worldmapcell.model.js";
 import { MapRoomVersion } from "../../../enums/MapRoom.js";
 import { calculateBaseLevel } from "../../base/calculateBaseLevel.js";
-import { markAlliances, markBaseids, markCells, markUsers } from "./liveMarks.js";
+import { markAlliances, markCells, markSaveOwners, markSaves, markUsers } from "./liveMarks.js";
 
 /**
  * The live map's hook on every ORM write (beta 9, stage 1): a flush that
@@ -100,17 +100,16 @@ export const marksFor = (changeSet: ChangeSet<object>): Mark[] => {
 
   if (entity instanceof Save) {
     if (changeSet.type !== "update") return [];
+    // Keyed by the primary key, the one field a save loaded with `fields:` always has; its cell
+    // and owner are looked up when the bundle goes out.
+    const id = entity.basesaveid;
     const marks: Mark[] = [];
-    if (changed.some((field) => SAVE_MAP_FIELDS.has(field)) && entity.baseid && entity.baseid !== "0") {
-      const baseid = entity.baseid;
-      marks.push(() => markBaseids([baseid]));
-    }
+    if (changed.some((field) => SAVE_MAP_FIELDS.has(field))) marks.push(() => markSaves([id]));
     if (changed.includes("points") || changed.includes("basevalue")) {
       const before = changeSet.originalEntity as { points?: unknown; basevalue?: unknown } | undefined;
       const was = levelOf(before?.points, before?.basevalue);
-      const now = levelOf(entity.points, entity.basevalue);
-      const owner = Number(entity.saveuserid ?? entity.userid);
-      if (was !== now && Number.isSafeInteger(owner)) marks.push(() => markUsers([owner]));
+      const now = levelOf(entity.points ?? before?.points, entity.basevalue ?? before?.basevalue);
+      if (was === null || now === null || was !== now) marks.push(() => markSaveOwners([id]));
     }
     return marks;
   }

@@ -94,21 +94,25 @@ describe("LiveZoneWriter", () => {
 
   test("yards, players and alliances are looked up in one query each, with their neighbours' zones", async () => {
     const { writer, redis, queries } = writerWith((sql) =>
-      sql.includes("baseid IN") ? [{ world_id: "w1", x: 51, y: 55 }] : sql.includes("JOIN") ? [{ world_id: "w1", x: 300, y: 300 }] : [{ world_id: "w1", x: 15, y: 15 }],
+      sql.includes("s.basesaveid IN") && sql.includes("c.baseid = s.baseid")
+        ? [{ world_id: "w1", x: 51, y: 55 }]
+        : sql.includes("alliance_id IN")
+          ? [{ world_id: "w1", x: 300, y: 300 }]
+          : [{ world_id: "w1", x: 15, y: 15 }],
     );
-    writer.baseids(["b1", "b2"]);
+    writer.saves([11, 12]);
     writer.users([7, 7, 8]);
     writer.alliances([3]);
     await writer.flush();
     expect(queries).toHaveLength(3);
-    expect(queries[0]!.params).toEqual(["b1", "b2"]);
+    expect(queries[0]!.params).toEqual([11, 12]);
     expect(queries[1]!.params).toEqual([7, 8]);
     const z = (redis.published[0]!.message as { z: Record<string, number> }).z;
     // The yard (55,55) alone; the player's (15,15) and the alliance's (300,300) cells with their neighbours.
     expect(Object.keys(z).map(Number).sort()).toEqual(
       [zoneId(50, 50), zoneId(10, 10), zoneId(300, 300), zoneId(290, 290), zoneId(290, 300), zoneId(300, 290)].sort(),
     );
-    writer.baseids(["b3"]);
+    writer.saves([13]);
     await writer.flush();
     expect(Object.keys((redis.published.at(-1)!.message as { z: object }).z)).toEqual([String(zoneId(50, 50))]);
   });
@@ -133,7 +137,7 @@ describe("LiveZoneWriter", () => {
       },
       warn: (message) => warnings.push(message),
     });
-    writer.baseids(["b1"]);
+    writer.saves([1]);
     await writer.flush();
     expect(warnings).toHaveLength(1);
     fail = false;
@@ -146,5 +150,15 @@ describe("LiveZoneWriter", () => {
     const redis = fakeRedis();
     await redis.send("HINCRBY", [zoneVersionsKey("w"), "5", "1"]);
     expect(await readZoneVersions(redis, "w", [5, 6])).toEqual([1, 0]);
+  });
+});
+
+describe("LiveZoneWriter homes", () => {
+  test("an online flag marks the main yard alone, no neighbours", async () => {
+    const { writer, redis, queries } = writerWith(() => [{ world_id: "w1", x: 51, y: 55 }]);
+    writer.homes([4]);
+    await writer.flush();
+    expect(queries[0]!.sql).toContain("base_type = 2");
+    expect(Object.keys((redis.published[0]!.message as { z: object }).z)).toEqual([String(zoneId(50, 50))]);
   });
 });

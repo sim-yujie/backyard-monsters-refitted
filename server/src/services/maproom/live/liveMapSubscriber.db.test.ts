@@ -29,9 +29,11 @@ describe.skipIf(!dbName)("live map marks wait for the commit (beta 9)", () => {
     const row = await orm.em.fork().findOneOrFail(Save, { baseid: { $ne: "0" } }, { orderBy: { basesaveid: "asc" } });
     id = row.basesaveid;
     original = row.protected;
-    baseid = row.baseid;
+    baseid = String(row.basesaveid);
     setLiveMarkSink({
-      baseids: (ids) => marked.push(...ids),
+      saves: (ids) => marked.push(...ids.map(String)),
+      saveOwners: () => {},
+      homes: () => {},
       cells: () => {},
       users: () => {},
       alliances: () => {},

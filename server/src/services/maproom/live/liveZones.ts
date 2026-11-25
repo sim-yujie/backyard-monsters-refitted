@@ -86,7 +86,9 @@ export interface SightMessage {
 }
 
 export class LiveZoneWriter implements LiveMarkSink {
-  private baseidMarks = new Set<string>();
+  private saveMarks = new Set<number>();
+  private saveOwnerMarks = new Set<number>();
+  private homeMarks = new Set<number>();
   private userMarks = new Set<number>();
   private allianceMarks = new Set<number>();
   /** world -> "x,y" */
@@ -98,8 +100,16 @@ export class LiveZoneWriter implements LiveMarkSink {
 
   constructor(private readonly deps: LiveZoneDeps) {}
 
-  baseids(ids: readonly string[]): void {
-    for (const id of ids) this.baseidMarks.add(id);
+  saves(ids: readonly number[]): void {
+    for (const id of ids) this.saveMarks.add(id);
+  }
+
+  saveOwners(ids: readonly number[]): void {
+    for (const id of ids) this.saveOwnerMarks.add(id);
+  }
+
+  homes(ids: readonly number[]): void {
+    for (const id of ids) this.homeMarks.add(id);
   }
 
   cells(world: string, coords: readonly (readonly [number, number])[]): void {
@@ -146,13 +156,17 @@ export class LiveZoneWriter implements LiveMarkSink {
   }
 
   private async flushNow(): Promise<void> {
-    const baseids = [...this.baseidMarks];
+    const saves = [...this.saveMarks];
+    const saveOwners = [...this.saveOwnerMarks];
+    const homes = [...this.homeMarks];
     const users = [...this.userMarks];
     const alliances = [...this.allianceMarks];
     const cells = this.cellMarks;
     const sightUsers = [...this.sightUserMarks];
     const sightAlliances = [...this.sightAllianceMarks];
-    this.baseidMarks = new Set();
+    this.saveMarks = new Set();
+    this.saveOwnerMarks = new Set();
+    this.homeMarks = new Set();
     this.userMarks = new Set();
     this.allianceMarks = new Set();
     this.cellMarks = new Map();
@@ -172,7 +186,7 @@ export class LiveZoneWriter implements LiveMarkSink {
           add(world, x!, y!);
         }
       }
-      const { yards, owned } = await this.lookUp(baseids, users, alliances);
+      const { yards, owned } = await this.lookUp({ saves, saveOwners, homes, users, alliances });
       // A yard's own fields (shield, damage, an attack...) show on that cell alone.
       for (const row of yards) add(row.world_id, row.x, row.y);
       // A player's or an alliance's cells: their neighbours' `nb` counts follow who owns them.
@@ -189,40 +203,36 @@ export class LiveZoneWriter implements LiveMarkSink {
     }
   }
 
-  private async lookUp(
-    baseids: string[],
-    users: number[],
-    alliances: number[],
-  ): Promise<{ yards: CellRow[]; owned: CellRow[] }> {
+  /**
+   * The cells behind the bundle's marks, one query per kind: `yards` change alone (a save's own
+   * fields, an online flag), `owned` with their neighbours (who owns them changed).
+   */
+  private async lookUp(marks: {
+    saves: number[];
+    saveOwners: number[];
+    homes: number[];
+    users: number[];
+    alliances: number[];
+  }): Promise<{ yards: CellRow[]; owned: CellRow[] }> {
     const yards: CellRow[] = [];
-    const rows: CellRow[] = [];
-    const where = "c.map_version = 2";
-    if (baseids.length) {
-      yards.push(
-        ...(await this.deps.query(
-          `SELECT c.world_id, c.x, c.y FROM bym.world_map_cell c WHERE ${where} AND c.baseid IN (${placeholders(baseids.length)})`,
-          baseids,
-        )),
-      );
-    }
-    if (users.length) {
-      rows.push(
-        ...(await this.deps.query(
-          `SELECT c.world_id, c.x, c.y FROM bym.world_map_cell c WHERE ${where} AND c.uid IN (${placeholders(users.length)})`,
-          users,
-        )),
-      );
-    }
-    if (alliances.length) {
-      rows.push(
-        ...(await this.deps.query(
-          `SELECT c.world_id, c.x, c.y FROM bym.world_map_cell c JOIN bym."user" u ON u.userid = c.uid
-           WHERE ${where} AND u.alliance_id IN (${placeholders(alliances.length)})`,
-          alliances,
-        )),
-      );
-    }
-    return { yards, owned: rows };
+    const owned: CellRow[] = [];
+    const cell = "c.world_id, c.x, c.y";
+    const v2 = "c.map_version = 2";
+    const run = async (into: CellRow[], ids: unknown[], sql: (list: string) => string) => {
+      if (ids.length) into.push(...(await this.deps.query(sql(placeholders(ids.length)), ids)));
+    };
+    await run(yards, marks.saves, (list) =>
+      `SELECT ${cell} FROM bym.save s JOIN bym.world_map_cell c ON c.baseid = s.baseid AND ${v2} WHERE s.basesaveid IN (${list})`,
+    );
+    await run(yards, marks.homes, (list) => `SELECT ${cell} FROM bym.world_map_cell c WHERE ${v2} AND c.base_type = 2 AND c.uid IN (${list})`);
+    await run(owned, marks.saveOwners, (list) =>
+      `SELECT ${cell} FROM bym.world_map_cell c JOIN bym.save s ON c.uid = s.saveuserid WHERE ${v2} AND s.basesaveid IN (${list})`,
+    );
+    await run(owned, marks.users, (list) => `SELECT ${cell} FROM bym.world_map_cell c WHERE ${v2} AND c.uid IN (${list})`);
+    await run(owned, marks.alliances, (list) =>
+      `SELECT ${cell} FROM bym.world_map_cell c JOIN bym."user" u ON u.userid = c.uid WHERE ${v2} AND u.alliance_id IN (${list})`,
+    );
+    return { yards, owned };
   }
 
   private async publishZones(world: string, ids: number[]): Promise<void> {

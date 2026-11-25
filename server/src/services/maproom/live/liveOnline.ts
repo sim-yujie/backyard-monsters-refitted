@@ -1,4 +1,4 @@
-import { markUsers } from "./liveMarks.js";
+import { markHomes } from "./liveMarks.js";
 
 /**
  * The live map's online flag (beta 9, stage 1). A yard whose owner is online
@@ -65,7 +65,8 @@ export const checkOnline = async (deps: OnlineCheckDeps): Promise<number[]> => {
   const now = await deps.online(candidates, deps.now());
   const was = new Set(before.map(Number));
   const changed = candidates.filter((id) => now.has(id) !== was.has(id));
-  markUsers(changed);
+  // Only the main yard shows it (`lo`).
+  markHomes(changed);
 
   const cameOnline = [...now].filter((id) => !was.has(id)).map(String);
   const wentOffline = [...was].filter((id) => !now.has(id)).map(String);

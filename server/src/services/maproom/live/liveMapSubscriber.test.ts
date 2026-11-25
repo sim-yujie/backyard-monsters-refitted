@@ -14,7 +14,9 @@ const got: string[] = [];
 beforeEach(() => {
   got.length = 0;
   setLiveMarkSink({
-    baseids: (ids) => got.push(`base:${ids.join(",")}`),
+    saves: (ids) => got.push(`save:${ids.join(",")}`),
+    saveOwners: (ids) => got.push(`owner:${ids.join(",")}`),
+    homes: () => {},
     cells: (world, coords) => got.push(`cells:${world}:${coords.length}:${coords.map((c) => c.join("/")).join(" ")}`),
     users: (ids) => got.push(`users:${ids.join(",")}`),
     alliances: (ids) => got.push(`alliances:${ids.join(",")}`),
@@ -33,20 +35,21 @@ const run = (set: never) => {
 
 describe("marksFor", () => {
   test("a save's shield, damage or attack marks its yard; resources and monsters do not", () => {
-    const save = Object.assign(new Save(), { baseid: "123", saveuserid: 5, userid: 5 });
+    // Only the primary key loaded (a save read with `fields:`): still marked.
+    const save = Object.assign(new Save(), { basesaveid: 123 });
     run(changeSet(save, "update", { protected: 1 }));
     run(changeSet(save, "update", { resources: {}, monsters: {}, savetime: 1 }));
     run(changeSet(save, "update", { attacks: [] }));
-    expect(got).toEqual(["base:123", "base:123"]);
+    expect(got).toEqual(["save:123", "save:123"]);
   });
 
   test("points mark the owner's cells only when the level moves", () => {
-    const save = Object.assign(new Save(), { baseid: "123", saveuserid: 5, userid: 5, points: "100", basevalue: "0" });
+    const save = Object.assign(new Save(), { basesaveid: 123, points: "100", basevalue: "0" });
     run(changeSet(save, "update", { points: "100" }, { points: "100", basevalue: "0" }));
     expect(got).toEqual([]);
     save.points = "999999999";
     run(changeSet(save, "update", { points: "999999999" }, { points: "100", basevalue: "0" }));
-    expect(got).toEqual(["users:5"]);
+    expect(got).toEqual(["owner:123"]);
   });
 
   test("a cell row made, moved or removed marks the 3x3 around it (and where it was)", () => {
