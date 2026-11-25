@@ -10,9 +10,7 @@ export type ClusterArt =
   | "crest-hostile"
   | "plaque-alliance"
   | "plaque-other"
-  | "icon-other"
-  /** The generic blue/silver alliance shield, for an alliance with no picture of its own. */
-  | "shield-alliance";
+  | "icon-other";
 
 export const clusterArtUrl = (classic: boolean, name: ClusterArt): string =>
   artUrl(`/assets/worldmap/cluster/${classic ? "classic" : "modern"}/${name}@2x.webp`);

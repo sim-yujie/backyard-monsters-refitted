@@ -1,3 +1,4 @@
+import { shieldUrl } from "@/game/alliance/allianceRules";
 import type { AutoAttackPlanResponse } from "@/api/autoAttack";
 import type { Bookmark } from "@/api/bookmarks";
 import type { Friend } from "@/api/friends";
@@ -250,6 +251,12 @@ export class MapRoomUi {
 
   mount(container: HTMLElement, modal?: HTMLElement): this {
     this.container = container;
+    // The Map key's alliance plaque sample wears the player's own shield.
+    this.legend.setAllianceShield(() => {
+      const id = this.handlers.myAlliance?.() ?? null;
+      const alliance = id !== null ? this.handlers.allianceOf?.(id) : undefined;
+      return alliance ? shieldUrl(alliance.image, "medium") : null;
+    });
     this.modal = modal ?? null;
     container.append(this.hud.element);
     this.notices.mount(container);

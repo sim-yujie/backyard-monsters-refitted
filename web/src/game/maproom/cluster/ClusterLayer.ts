@@ -14,6 +14,7 @@ import {
   CAMPS_SHOWN_FROM,
   FAR_ZOOM,
   HIDE_BORDERS_UNDER_PLAQUES,
+  ZOOMED_OUT_BORDERS,
   LONE_CREST_TAP,
   STACK_ORDER,
   cellKey,
@@ -63,6 +64,8 @@ export interface Insets {
 export interface ClusterLayerDeps {
   /** The map's marker filter (`MapRenderer.markerFilter`). */
   filter: MarkerFilter;
+  /** Alliance and neutral borders as group outlines, or as usual (`MapRenderer.setGroupBorders`). */
+  groupBorders: (on: boolean) => void;
   /** Leaves out the relation borders of these cells (`MapRenderer.setQuietBorders`). */
   quietBorders: (keys: readonly number[]) => void;
   /** The loaded zones and a cell lookup (`ZoneStore`). */
@@ -164,6 +167,7 @@ export class ClusterLayer {
     this.layer.remove();
     this.deps.filter.setHidden([]);
     this.deps.quietBorders([]);
+    this.deps.groupBorders(false);
     this.deps.filter.setCampsShown(true);
   }
 
@@ -198,6 +202,7 @@ export class ClusterLayer {
         this.grouping = null;
         filter.setHidden([]);
         this.deps.quietBorders([]);
+        this.deps.groupBorders(false);
         this.show([]);
         this.laidZoom = Number.NaN;
       }
@@ -220,7 +225,8 @@ export class ClusterLayer {
       const unpacked = this.unpacked;
       this.grouping = groupCells(unpacked ? this.cells.filter((c) => !unpacked.has(c.key)) : this.cells, step);
       filter.setHidden(this.grouping.hidden);
-      this.deps.quietBorders(HIDE_BORDERS_UNDER_PLAQUES ? this.grouping.underPlaques : []);
+      this.deps.quietBorders(ZOOMED_OUT_BORDERS === "quiet" && HIDE_BORDERS_UNDER_PLAQUES ? this.grouping.underPlaques : []);
+      this.deps.groupBorders(ZOOMED_OUT_BORDERS === "group");
       this.stats.groupMs = performance.now() - started;
       this.stats.hiddenCells = this.grouping.hidden.length;
       this.laidZoom = Number.NaN;
@@ -291,7 +297,7 @@ export class ClusterLayer {
     if (this.shownCount === 0) return false;
     const hit = this.layout.hit(x, y, this.touch);
     if (!hit) return false;
-    if (hit.kind === "crest" && LONE_CREST_TAP === "info") {
+    if (hit.kind === "crest" && hit.count === 1 && LONE_CREST_TAP === "info") {
       const key = hit.token.cells[0]!;
       this.deps.openCell(key % WORLD_WIDTH, Math.floor(key / WORLD_WIDTH));
       return true;
@@ -455,15 +461,16 @@ export class ClusterLayer {
     el.style.marginTop = `${-hh}px`;
     if (token.kind === "crest") {
       pic.src = art(classic, `crest-${token.group as "home" | "you" | "hostile"}`);
-      count.textContent = "";
+      // A stack of overlapping same-side crests carries its count (CREST_STACK).
+      count.textContent = token.count > 1 ? countText(token.count) : "";
       return;
     }
     el.style.setProperty("--mc-plaque", `url("${art(classic, token.group === "alliance" ? "plaque-alliance" : "plaque-other")}")`);
     // The bar's painted ends (30% of the picture each side) keep their shape.
     el.style.setProperty("--mc-cap", `${(hh * 2 * 0.85).toFixed(1)}px`);
     const emblem = token.group === "alliance" ? this.emblemOf(token.token.aid) : null;
-    // The alliance's own shield (lead default 25 Nov); the generic blue one only when it has none.
-    pic.src = emblem ?? art(classic, token.group === "alliance" ? "shield-alliance" : "icon-other");
+    // The alliance's own shield: every alliance has one (owner 25 Nov); shield 1 until the roster lands.
+    pic.src = token.group === "alliance" ? (emblem ?? shieldUrl(1, "medium")) : art(classic, "icon-other");
     count.textContent = countText(token.count);
   }
 

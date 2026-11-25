@@ -300,6 +300,9 @@ export class MapRenderer {
    */
   readonly markerFilter = new MarkerFilter();
   private quietBorders: readonly number[] = [];
+  private groupBorders = false;
+  /** A border uniform changed: the painted picture must draw again. */
+  private bordersRestyled = false;
   private cellsChanged = 0;
 
   /** Goes up whenever what the cells show may have changed (a zone, the alliance, the kit filter, friends). */
@@ -332,6 +335,16 @@ export class MapRenderer {
    * The cells under a map pin clustering plaque draw no relation border (painted map and tile map
    * alike), so the empty outlines of merged outposts do not crowd the zoomed-out map.
    */
+  /**
+   * Alliance and neutral borders as one outline round each group of joined tiles (map pin
+   * clustering zoomed out): the painted borders' group sides, the tile map's chunk outlines.
+   */
+  setGroupBorders(on: boolean): void {
+    this.groupBorders = on;
+    this.markerFilter.setGroupBorders(on);
+    if (this.borders?.setGroupOutlines(on)) this.bordersRestyled = true;
+  }
+
   setQuietBorders(keys: readonly number[]): void {
     this.quietBorders = keys;
     this.markerFilter.setQuiet(keys);
@@ -615,7 +628,8 @@ export class MapRenderer {
     const texelsWritten = this.raster.flush();
     const groundWritten = this.painted?.flush() ?? false;
     const fogChanged = this.clouds?.flush() ?? false;
-    const bordersChanged = this.borders?.flush() ?? false;
+    const bordersChanged = (this.borders?.flush() ?? false) || this.bordersRestyled;
+    this.bordersRestyled = false;
     const nowPaint = performance.now();
     const waterStepped = this.painted?.animate(nowPaint, range) ?? false;
     // The player's Quality's ground program once compiled, and the sprite pieces round the view.
@@ -936,6 +950,7 @@ export class MapRenderer {
     this.root.addChildAt(this.borders.mesh, this.root.getChildIndex(above));
     for (const zone of this.store.loadedZoneRefs()) this.borders.applyZone(zone);
     this.borders.setQuiet(this.quietBorders);
+    this.borders.setGroupOutlines(this.groupBorders);
     // A border running into the fog goes under the cloud.
     if (programs.clouds && quality() === "high") loads.push(this.addPaintedFog(look, painted));
     // The rest of the programs once the art is in and has drawn (a few frames), or after a while

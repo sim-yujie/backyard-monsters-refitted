@@ -8,6 +8,7 @@ import {
   type PlayerRelation,
   RELATION_LOOK,
 } from "@/game/maproom/relationLook";
+import { shieldUrl } from "@/game/alliance/allianceRules";
 import { classicLook } from "@/game/classicLook";
 import { clusterArtUrl, type ClusterArt } from "@/game/maproom/cluster/clusterArt";
 import { gameIcon, type GameIconName } from "@/ui/gameIcon";
@@ -192,8 +193,8 @@ export const relationSwatch = (relation: PlayerRelation, size = 28): SVGSVGEleme
   return svg;
 };
 
-/** The plaques and crests shown when zoomed out, in the look in use. */
-const tokenList = (): HTMLElement => {
+/** The plaques and crests shown when zoomed out, in the look in use, with the player's own shield. */
+const tokenList = (shield: string | null): HTMLElement => {
   const classic = classicLook();
   const list = el("ul", "mr2-key__tokens");
   for (const token of LEGEND_TOKENS) {
@@ -208,7 +209,8 @@ const tokenList = (): HTMLElement => {
     } else {
       pic.style.setProperty("--mc-plaque", `url("${clusterArtUrl(classic, token.art)}")`);
       const img = document.createElement("img");
-      img.src = clusterArtUrl(classic, token.art === "plaque-alliance" ? "shield-alliance" : "icon-other");
+      // Every alliance has a shield (owner 25 Nov): the player's own, or the first one as a sample.
+      img.src = token.art === "plaque-alliance" ? (shield ?? shieldUrl(1, "medium")) : clusterArtUrl(classic, "icon-other");
       img.alt = "";
       pic.append(img, el("span", "mr2-key__plaque-n", String(token.count)));
     }
@@ -234,6 +236,13 @@ export class MapLegend {
   readonly element: HTMLElement;
   /** The zoomed-out plaques and crests, drawn again on each open in the look in use. */
   private tokens: HTMLElement;
+  /** The player's own alliance shield picture, or null (not in one, or not known yet). */
+  private allianceShield: () => string | null = () => null;
+
+  /** Where the key finds the player's own alliance shield, for its plaque sample. */
+  setAllianceShield(shield: () => string | null): void {
+    this.allianceShield = shield;
+  }
 
   constructor(options: { alliances?: boolean } = {}) {
     this.element = el("section", "mr2-float mr2-key");
@@ -257,7 +266,7 @@ export class MapLegend {
       list.append(row);
     }
     this.element.append(list);
-    this.tokens = tokenList();
+    this.tokens = tokenList(null);
     this.element.append(
       el("h3", "mr2-key__subtitle", MAP_LEGEND_TEXT.zoomedOut),
       this.tokens,
@@ -281,7 +290,7 @@ export class MapLegend {
   setOpen(open: boolean): void {
     if (open && this.element.hidden) {
       // The look may have changed since the card was made (neon r1: Classic showed Modern plaques).
-      const fresh = tokenList();
+      const fresh = tokenList(this.allianceShield());
       this.tokens.replaceWith(fresh);
       this.tokens = fresh;
     }

@@ -221,6 +221,15 @@ export class MarkerFilter {
     this.version++;
   }
 
+  /** Alliance and neutral borders as one outline round joined tiles (zoomed out, `ZOOMED_OUT_BORDERS`). */
+  groupBorders = false;
+
+  setGroupBorders(on: boolean): void {
+    if (on === this.groupBorders) return;
+    this.groupBorders = on;
+    this.version++;
+  }
+
   /** How many cells are hidden now. */
   get hiddenCount(): number {
     return this.hiddenKeys.length;

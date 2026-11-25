@@ -109,7 +109,21 @@ describe("ClusterLayout", () => {
     expect(shown.filter((s) => s.group === "other")).toHaveLength(1);
   });
 
-  it("never merges crests, and moves a crest no more than 10 px off its outpost", () => {
+  it("stacks overlapping crests of one side into one with a count, never own with hostile or the yard", () => {
+    const layout = new ClusterLayout();
+    const shown = layout.layOut(
+      [token("crest", "you", 300, 300), token("crest", "you", 306, 304), token("crest", "hostile", 303, 302), token("crest", "home", 300, 301), token("crest", "you", 600, 300)],
+      flat,
+      view(),
+    );
+    expect(shown.filter((s) => s.group === "you").map((s) => s.count).sort()).toEqual([1, 2]);
+    expect(shown.filter((s) => s.group === "hostile")).toHaveLength(1);
+    expect(shown.filter((s) => s.group === "home")).toHaveLength(1);
+    const stack = shown.find((s) => s.group === "you" && s.count === 2)!;
+    expect(stack.extra).toHaveLength(1);
+  });
+
+  it("does not stack own with hostile, and moves a crest no more than 10 px off its outpost", () => {
     const layout = new ClusterLayout();
     const shown = layout.layOut([token("crest", "hostile", 300, 300), token("crest", "you", 302, 301)], flat, view());
     expect(shown).toHaveLength(2);

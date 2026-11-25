@@ -10,12 +10,13 @@ import { WORLD_HEIGHT, WORLD_WIDTH } from "@/config";
  *    world grid whose squares are a power of two cells wide (so plaques do not swim while panning,
  *    and a zoom step changes them only when the square size changes);
  *  - every one of the viewer's own outposts gets a cyan crest and every hostile player's cell a red
- *    crest, never merged (below {@link LONE_CREST_ZOOM}; from there up to {@link CLUSTER_ZOOM} their
+ *    crest, merged on the world grid never; crests of one side that would overlap on the screen
+ *    stack into one with a count ({@link CREST_STACK}) (below {@link LONE_CREST_ZOOM}; from there up to {@link CLUSTER_ZOOM} their
  *    real markers show, as hexes are big enough to read them);
  *  - the viewer's main yard is a gold-trimmed home crest, never merged;
  *  - friends and pinned friends keep their own markers.
  * The cells a token stands for have their markers hidden (`MarkerPins`), so they cost nothing to
- * place, and (lead default) their relation borders go too. Wild monster camps go by layer below
+ * place; alliance and neutral borders follow {@link ZOOMED_OUT_BORDERS}. Wild monster camps go by layer below
  * {@link CAMPS_SHOWN_FROM} (`lod.ts`).
  */
 
@@ -34,6 +35,24 @@ export const CAMPS_SHOWN_FROM = 0.42;
  * Nov, for the owner: the empty outlines of merged outposts read as clutter, or as camps).
  */
 export const HIDE_BORDERS_UNDER_PLAQUES = true;
+
+/**
+ * How alliance and neutral borders are drawn below {@link CLUSTER_ZOOM} (owner 25 Nov: "hide
+ * internal lines, only show the border if the tiles are joined"):
+ *  - "group": one outer outline round each group of joined alliance (or neutral) tiles, no lines
+ *    between tiles inside it, and none round a lone tile (the owner's choice);
+ *  - "quiet": no borders under plaques (lead default before the owner answered,
+ *    {@link HIDE_BORDERS_UNDER_PLAQUES});
+ *  - "all": every tile's border, as at play zoom.
+ */
+export const ZOOMED_OUT_BORDERS: "group" | "quiet" | "all" = "group";
+
+/**
+ * Same-side crests that would overlap on the screen stack into one crest with a count, which a
+ * tap zooms in to (owner 25 Nov, option B; own never with hostile, never the main yard). False: they
+ * are only nudged apart, up to 10 px.
+ */
+export const CREST_STACK = true;
 
 /** Below this zoom every own and hostile outpost wears a crest; from it up, its real marker. */
 export const LONE_CREST_ZOOM = 0.36;

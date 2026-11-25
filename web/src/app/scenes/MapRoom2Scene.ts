@@ -849,6 +849,7 @@ export class MapRoom2Scene implements Scene {
     return new ClusterLayer({
       filter: renderer.markerFilter,
       quietBorders: (keys) => renderer.setQuietBorders(keys),
+      groupBorders: (on) => renderer.setGroupBorders(on),
       zones: () => this.store.loadedZoneRefs(),
       getCell: (col, row) => this.store.getCell(col, row),
       cellsVersion: () => renderer.cellsVersion,

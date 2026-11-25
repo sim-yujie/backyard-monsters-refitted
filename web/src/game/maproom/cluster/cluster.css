@@ -28,8 +28,30 @@
   height: 100%;
   object-fit: contain;
 }
+/* A stack of same-side crests: its count on a pill at the lower right (CREST_STACK). */
 .mc--crest .mc__n {
+  position: absolute;
+  right: -7px;
+  bottom: -5px;
+  min-width: 18px;
+  padding: 2px 4px;
+  border-radius: 999px;
+  box-sizing: border-box;
+  text-align: center;
+  font-size: 12px;
+  box-shadow: 0 0 0 1.5px #0b1018;
+}
+.mc--crest .mc__n:empty {
   display: none;
+}
+.mc--crest.mc--you .mc__n {
+  background: #0e8fa8;
+}
+.mc--crest.mc--hostile .mc__n {
+  background: #c81e1e;
+}
+.mc-layer--touch .mc--crest .mc__n {
+  font-size: 13px;
 }
 
 /* A plaque: the painted bar (its ends kept, its middle stretched), the shield, the count. */

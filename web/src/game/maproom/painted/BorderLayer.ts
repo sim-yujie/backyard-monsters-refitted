@@ -37,6 +37,7 @@ const rgb = (colour: number): Float32Array =>
 interface BorderUniforms {
   uQuality: number;
   uPulse: number;
+  uGroup: number;
 }
 
 /**
@@ -65,6 +66,7 @@ export class BorderLayer {
           uCellPoints: { value: shape.cellWidth, type: "f32" },
           uQuality: { value: QUALITY_LEVEL[quality()], type: "f32" },
           uPulse: { value: 0.5, type: "f32" },
+          uGroup: { value: 0, type: "f32" },
           uYou: { value: rgb(BORDER_COLOURS[BorderRelation.YOU]), type: "vec3<f32>" },
           uAlliance: { value: rgb(BORDER_COLOURS[BorderRelation.ALLIANCE]), type: "vec3<f32>" },
           uOther: { value: rgb(BORDER_COLOURS[BorderRelation.OTHER]), type: "vec3<f32>" },
@@ -123,6 +125,17 @@ export class BorderLayer {
 
   reset(): void {
     this.data.reset();
+  }
+
+  /**
+   * Alliance and neutral cells draw one outline round each group of joined tiles (map pin clustering
+   * zoomed out). Returns whether it changed (the picture must draw again).
+   */
+  setGroupOutlines(on: boolean): boolean {
+    const value = on ? 1 : 0;
+    if (this.uniforms.uGroup === value) return false;
+    this.uniforms.uGroup = value;
+    return true;
   }
 
   /** Cells under a map pin clustering plaque draw no border (`BorderData.setQuiet`). */

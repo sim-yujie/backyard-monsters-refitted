@@ -1,4 +1,4 @@
-import { FAR_ZOOM, STACK_ORDER, countText, type ClusterGroup, type WorldToken } from "./clusterRules";
+import { CREST_STACK, FAR_ZOOM, STACK_ORDER, countText, type ClusterGroup, type WorldToken } from "./clusterRules";
 
 /**
  * Where the cluster tokens stand on the screen (map pin clustering, `clusterRules.ts`). Runs when
@@ -105,6 +105,7 @@ export class ClusterLayout {
   readonly shown: ScreenToken[] = [];
   private readonly point = { x: 0, y: 0 };
   private readonly placedGrid = new Grid();
+  private readonly mergeGrid = new Grid();
   private readonly keptGrid = new Grid();
   /** Neighbour lists, reused. */
   private readonly near: number[] = [];
@@ -128,27 +129,43 @@ export class ClusterLayout {
     const list = this.shown;
     list.sort(byImportance);
 
-    // Plaques of one kind squeezed together by the tilt (the far rows) become one.
+    // Plaques of one kind squeezed together by the tilt (the far rows) become one; so do crests
+    // of one side that would overlap (owner 25 Nov, CREST_STACK: one crest with a count, never own
+    // with hostile, never the main yard). Leaders are found through a grid, so many crests stay cheap.
+    const leaders = this.mergeGrid;
+    leaders.reset(view.width, view.height, list.length);
+    const near = this.near;
     for (let i = 0; i < list.length; i++) {
-      const a = list[i]!;
-      if (a.kind !== "plaque" || a.merged) continue;
-      for (let j = i + 1; j < list.length; j++) {
-        const b = list[j]!;
-        if (b.kind !== "plaque" || b.merged || b.group !== a.group) continue;
-        if (Math.abs(a.x - b.x) >= a.hw + b.hw + GAP || Math.abs(a.y - b.y) >= a.hh + b.hh + GAP) continue;
-        const total = a.count + b.count;
-        a.x = (a.x * a.count + b.x * b.count) / total;
-        a.y = (a.y * a.count + b.y * b.count) / total;
-        a.count = total;
-        a.minX = Math.min(a.minX, b.minX);
-        a.minY = Math.min(a.minY, b.minY);
-        a.maxX = Math.max(a.maxX, b.maxX);
-        a.maxY = Math.max(a.maxY, b.maxY);
-        a.extra.push(b.token);
-        for (const more of b.extra) a.extra.push(more);
-        b.merged = true;
-        this.size(a, view);
+      const b = list[i]!;
+      const stacks = b.kind === "plaque" || (CREST_STACK && b.group !== "home");
+      if (!stacks) continue;
+      leaders.near(b.x, b.y, b.hw + MAX_HALF + GAP, near);
+      let into: ScreenToken | null = null;
+      for (const j of near) {
+        const a = list[j]!;
+        if (a.kind !== b.kind || a.group !== b.group) continue;
+        const pad = a.kind === "plaque" ? GAP : 0;
+        if (Math.abs(a.x - b.x) >= a.hw + b.hw + pad || Math.abs(a.y - b.y) >= a.hh + b.hh + pad) continue;
+        into = a;
+        break;
       }
+      if (!into) {
+        leaders.insert(i, b.x, b.y);
+        continue;
+      }
+      const a = into;
+      const total = a.count + b.count;
+      a.x = (a.x * a.count + b.x * b.count) / total;
+      a.y = (a.y * a.count + b.y * b.count) / total;
+      a.count = total;
+      a.minX = Math.min(a.minX, b.minX);
+      a.minY = Math.min(a.minY, b.minY);
+      a.maxX = Math.max(a.maxX, b.maxX);
+      a.maxY = Math.max(a.maxY, b.maxY);
+      a.extra.push(b.token);
+      for (const more of b.extra) a.extra.push(more);
+      b.merged = true;
+      this.size(a, view);
     }
     let n = 0;
     for (const s of list) if (!s.merged) list[n++] = s;
@@ -159,7 +176,6 @@ export class ClusterLayout {
     // Neighbours come from a grid of the tokens already placed, so thousands of crests stay cheap.
     const placed = this.placedGrid;
     placed.reset(view.width, view.height, list.length);
-    const near = this.near;
     for (let i = 0; i < list.length; i++) {
       const c = list[i]!;
       const ox = c.x;
