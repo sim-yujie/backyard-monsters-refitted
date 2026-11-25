@@ -7,7 +7,7 @@ import { sightNear, zoneCellKey, zoneVisibility } from "./zoneVisibility.js";
 /**
  * `zoneVisibility` must give exactly the answers `getarea` gave before it
  * (every cell tested against the whole sight with the shared `isVisible`),
- * on every cell of the world, for an owner-size sight (map-lag diagnosis,
+ * on every cell it checks (see `ciZones` and `SIGHT_FULL_WORLD`), for an owner-size sight (map-lag diagnosis,
  * 25 Nov 2026: 80 own outposts plus an alliance of 30 owning ~1,400, so
  * ~1,600 circles and ~1,600 always-visible cells), in both hex shapes.
  */
@@ -61,34 +61,70 @@ const ownerSizeSight = (seed: number): { sources: SightSource[]; revealed: Revea
 /** Every zone origin `getarea` accepts on the 10-cell grid the client asks on. */
 const ZONE = 10;
 
-const compareEveryCell = (sight: ReturnType<typeof ownerSizeSight>, shape: HexShape) => {
-  // The old answer, once per world cell: the whole sight, every cell.
-  const before = new Uint8Array(MAP_WIDTH * MAP_HEIGHT);
-  for (let x = 0; x < MAP_WIDTH; x++) {
-    for (let y = 0; y < MAP_HEIGHT; y++) {
-      before[x * MAP_HEIGHT + y] = isVisible({ x, y }, sight.sources, sight.revealed, shape) ? 1 : 0;
+/**
+ * Compares old and new on every cell of `zones` (each zone's 11 x 11 cover,
+ * the seam included). The old answer is worked out once per world cell, on
+ * first need: the whole sight against one cell, as `getarea` used to ask.
+ */
+const compareZones = (sight: ReturnType<typeof ownerSizeSight>, shape: HexShape, zones: readonly (readonly [number, number])[]) => {
+  const before = new Int8Array(MAP_WIDTH * MAP_HEIGHT).fill(-1);
+  const old = (x: number, y: number): boolean => {
+    const at = wrapTo(x, MAP_WIDTH) * MAP_HEIGHT + wrapTo(y, MAP_HEIGHT);
+    if (before[at] === -1) {
+      before[at] = isVisible({ x: wrapTo(x, MAP_WIDTH), y: wrapTo(y, MAP_HEIGHT) }, sight.sources, sight.revealed, shape) ? 1 : 0;
     }
-  }
+    return before[at] === 1;
+  };
 
   let checked = 0;
   let visible = 0;
   const mismatches: string[] = [];
-  for (let zx = 0; zx < MAP_WIDTH; zx += ZONE) {
-    for (let zy = 0; zy < MAP_HEIGHT; zy += ZONE) {
-      const after = zoneVisibility(sight, zx, zy, ZONE, ZONE, shape);
-      for (let x = zx; x <= zx + ZONE; x++) {
-        for (let y = zy; y <= zy + ZONE; y++) {
-          const old = before[wrapTo(x, MAP_WIDTH) * MAP_HEIGHT + wrapTo(y, MAP_HEIGHT)] === 1;
-          const now = after.get(zoneCellKey(x, y));
-          checked++;
-          if (now) visible++;
-          if (now !== old && mismatches.length < 10) mismatches.push(`zone ${zx},${zy} cell ${x},${y}: was ${old}, now ${now}`);
-        }
+  for (const [zx, zy] of zones) {
+    const after = zoneVisibility(sight, zx, zy, ZONE, ZONE, shape);
+    for (let x = zx; x <= zx + ZONE; x++) {
+      for (let y = zy; y <= zy + ZONE; y++) {
+        const was = old(x, y);
+        const now = after.get(zoneCellKey(x, y));
+        checked++;
+        if (now) visible++;
+        if (now !== was && mismatches.length < 10) mismatches.push(`zone ${zx},${zy} cell ${x},${y}: was ${was}, now ${now}`);
       }
     }
   }
   return { checked, visible, mismatches };
 };
+
+/** Every zone origin of the world (the client asks on a 10-cell grid). */
+const everyZone = (): Array<[number, number]> => {
+  const zones: Array<[number, number]> = [];
+  for (let zx = 0; zx < MAP_WIDTH; zx += ZONE) for (let zy = 0; zy < MAP_HEIGHT; zy += ZONE) zones.push([zx, zy]);
+  return zones;
+};
+
+/**
+ * The zones CI checks (the whole world takes minutes on a CI runner): every
+ * zone round the alliance's bases (where nearly all the sight is) with a
+ * margin, every zone along both seams (where the wrap-round circles sit),
+ * every zone holding an attacker's revealed cell, and 200 more at random.
+ */
+const ciZones = (sight: ReturnType<typeof ownerSizeSight>): Array<[number, number]> => {
+  const picked = new Map<string, [number, number]>();
+  const add = (zx: number, zy: number) => picked.set(`${zx},${zy}`, [zx, zy]);
+  for (let zx = 270; zx < 530; zx += ZONE) for (let zy = 270; zy < 530; zy += ZONE) add(zx, zy);
+  for (let z = 0; z < MAP_WIDTH; z += ZONE) {
+    for (const edge of [0, 10, 780, 790]) {
+      add(edge, z);
+      add(z, edge);
+    }
+  }
+  for (const cell of sight.revealed) add(Math.floor(cell.x / ZONE) * ZONE, Math.floor(cell.y / ZONE) * ZONE);
+  const random = seeded(777);
+  for (let i = 0; i < 200; i++) add(Math.floor(random() * 80) * ZONE, Math.floor(random() * 80) * ZONE);
+  return [...picked.values()];
+};
+
+/** `SIGHT_FULL_WORLD=1 bun test zoneVisibility` checks every zone of the world instead (~40 s per shape locally). */
+const FULL_WORLD = process.env.SIGHT_FULL_WORLD === "1";
 
 describe("zoneVisibility", () => {
   const sight = ownerSizeSight(12345);
@@ -100,17 +136,18 @@ describe("zoneVisibility", () => {
 
   for (const shape of ["pointy", "flat"] as const) {
     test(
-      `matches the whole-sight answer on every cell of the world (${shape})`,
+      `matches the whole-sight answer on every cell of ${FULL_WORLD ? "the world" : "the sight's area, both seams and sampled zones"} (${shape})`,
       () => {
-        const { checked, visible, mismatches } = compareEveryCell(sight, shape);
+        const zones = FULL_WORLD ? everyZone() : ciZones(sight);
+        const { checked, visible, mismatches } = compareZones(sight, shape, zones);
         expect(mismatches).toEqual([]);
-        // 6,400 zones of 11 x 11 cells, and the sight really lights part of it.
-        expect(checked).toBe((MAP_WIDTH / ZONE) * (MAP_HEIGHT / ZONE) * 121);
+        expect(checked).toBe(zones.length * 121);
+        if (FULL_WORLD) expect(zones.length).toBe((MAP_WIDTH / ZONE) * (MAP_HEIGHT / ZONE));
+        // The sight really lights part of what was checked, and not all of it.
         expect(visible).toBeGreaterThan(10_000);
         expect(visible).toBeLessThan(checked);
       },
-      // ~640,000 whole-sight checks, most of them on fogged cells that test every circle.
-      240_000,
+      FULL_WORLD ? 600_000 : 180_000,
     );
   }
 
