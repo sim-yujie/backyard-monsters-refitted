@@ -6,8 +6,8 @@ import { MikroORM } from "@mikro-orm/postgresql";
  * transaction commits, a savepoint's wait for the transaction around it, and a rollback drops them.
  *
  * Opt-in like the other database tests: runs only when LIVE_MAP_TEST_DB names a throwaway
- * database with the `bym` schema (never the shared `bym`). It changes one save's `protected` and
- * puts it back.
+ * database with the `bym` schema (never the shared `bym`). It makes one save of its own (user
+ * 998001) and deletes it after.
  */
 const dbName = process.env.LIVE_MAP_TEST_DB;
 
@@ -26,10 +26,14 @@ describe.skipIf(!dbName)("live map marks wait for the commit (beta 9)", () => {
   beforeAll(async () => {
     if (dbName === "bym") throw new Error("LIVE_MAP_TEST_DB must be a throwaway database, not bym");
     orm = await MikroORM.init({ ...ormConfig, dbName, debug: false, pool: { min: 0, max: 2 } });
-    const row = await orm.em.fork().findOneOrFail(Save, { baseid: { $ne: "0" } }, { orderBy: { basesaveid: "asc" } });
-    id = row.basesaveid;
-    original = row.protected;
-    baseid = String(row.basesaveid);
+    // Its own row (user 998_001), so an empty CI database works too; removed after.
+    const [row] = await orm.em.fork().execute<{ basesaveid: number }[]>(
+      `INSERT INTO bym.save (userid, saveuserid, createtime, name, credits, attacks, takeover_date, created_at, lastupdate_at, baseid, protected)
+       VALUES (998001, 998001, 0, 'zz_live', 0, '[]', now(), now(), now(), '998001', 0) RETURNING basesaveid`,
+    );
+    id = Number(row!.basesaveid);
+    original = 0;
+    baseid = String(id);
     setLiveMarkSink({
       saves: (ids) => marked.push(...ids.map(String)),
       saveOwners: () => {},
@@ -47,7 +51,7 @@ describe.skipIf(!dbName)("live map marks wait for the commit (beta 9)", () => {
   afterAll(async () => {
     setLiveMarkSink(null);
     if (!orm) return;
-    await orm.em.fork().nativeUpdate(Save, { basesaveid: id }, { protected: original });
+    await orm.em.fork().nativeDelete(Save, { basesaveid: id });
     await orm.close(true);
   });
 
