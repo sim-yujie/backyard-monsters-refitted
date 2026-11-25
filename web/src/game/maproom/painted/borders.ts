@@ -1,4 +1,5 @@
 import { BufferImageSource } from "pixi.js";
+import { DirtyRect, flushRegion } from "../regionUpload";
 import { WORLD_HEIGHT, WORLD_WIDTH } from "@/config";
 import { isPlayerCell, type MapCell, type PlayerCell } from "@/api/types";
 import { HexGrid } from "@/game/HexGrid";
@@ -101,7 +102,8 @@ export class BorderData {
   readonly bytes: Uint8Array;
   readonly source: BufferImageSource;
   private readonly owners: Int32Array;
-  private dirty = false;
+  /** The texels written since the last upload, so only they go up (`regionUpload.ts`). */
+  private readonly changes: DirtyRect;
 
   constructor(
     readonly kind: CellShapeKind,
@@ -110,6 +112,7 @@ export class BorderData {
   ) {
     this.bytes = new Uint8Array(width * height * 4);
     this.owners = new Int32Array(width * height);
+    this.changes = new DirtyRect(width, height);
     this.clear();
     this.source = new BufferImageSource({
       resource: this.bytes,
@@ -154,14 +157,18 @@ export class BorderData {
         const owner = ownerOf(cell);
         const relation = owner > 0 ? borderRelationOf(cell, viewer) : BorderRelation.NONE;
         const was = this.owners[index]!;
-        this.owners[index] = owner;
-        this.bytes[index * 4] = relation;
-        // A cell keeps or loses an owner: it and its ring may gain or lose sides.
-        if (owner !== 0 || was !== 0) touched.push(x, y);
+        if (this.bytes[index * 4] !== relation) {
+          this.bytes[index * 4] = relation;
+          this.changes.add(x, y, x, y);
+        }
+        // A cell gains, loses or changes its owner: it and its ring may gain or lose sides.
+        if (owner !== was) {
+          this.owners[index] = owner;
+          touched.push(x, y);
+        }
       }
     }
     for (let i = 0; i < touched.length; i += 2) this.refreshAround(touched[i]!, touched[i + 1]!);
-    this.dirty = true;
   }
 
   private refreshAround(col: number, row: number): void {
@@ -171,7 +178,11 @@ export class BorderData {
 
   private refreshSides(col: number, row: number): void {
     if (!this.inside(col, row)) return;
-    this.bytes[(row * this.width + col) * 4 + 1] = borderSides(col, row, this.kind, this.ownerAt);
+    const at = (row * this.width + col) * 4 + 1;
+    const sides = borderSides(col, row, this.kind, this.ownerAt);
+    if (this.bytes[at] === sides) return;
+    this.bytes[at] = sides;
+    this.changes.add(col, row, col, row);
   }
 
   /**
@@ -197,7 +208,7 @@ export class BorderData {
   reset(): void {
     this.clear();
     this.owners.fill(0);
-    this.dirty = true;
+    this.changes.addAll();
   }
 
   private clear(): void {
@@ -207,9 +218,8 @@ export class BorderData {
 
   /** Uploads pending writes; returns whether it did (a tilted view must then redraw). */
   flush(): boolean {
-    if (!this.dirty) return false;
-    this.dirty = false;
-    this.source.update();
+    if (this.changes.empty) return false;
+    flushRegion(this.source, this.changes.take());
     return true;
   }
 

@@ -246,3 +246,47 @@ describe("hit-testing with the markers on top", () => {
   it("picks the cell under a marker's foot with flat-top hexes", () => check("flat"));
   it("picks the cell under a marker's foot with pointy-top hexes", () => check("pointy"));
 });
+
+describe("chunks off the screen (map lag, 25 Nov 2026)", () => {
+  it("never culls a box holding a foot that would be placed", () => {
+    let seed = 3;
+    const rnd = () => ((seed = (seed * 1103515245 + 12345) % 2147483648) / 2147483648);
+    for (let round = 0; round < 400; round++) {
+      const camera = cameraAt(0.3 + rnd() * 1.5, { x: rnd() * 400 - 200, y: rnd() * 400 - 200 });
+      const project = uprightProjector(tilt, camera, 0.8);
+      const x0 = rnd() * 6000 - 3000;
+      const y0 = rnd() * 6000 - 3000;
+      const x1 = x0 + rnd() * 900;
+      const y1 = y0 + rnd() * 900;
+      if (project.boxShown!(x0, y0, x1, y1)) continue;
+      for (let k = 0; k < 40; k++) {
+        expect(project(x0 + rnd() * (x1 - x0), y0 + rnd() * (y1 - y0))).toBeNull();
+      }
+    }
+  });
+
+  it("hides a whole chunk's markers once it is off the screen and stands them again when it comes back", () => {
+    const pins = new MarkerPins();
+    const items = [sprite(100, 100), sprite(140, 120), sprite(180, 90)];
+    for (const item of items) pins.add({ x: item.position.x, y: item.position.y + 10 }, item);
+    let calls = 0;
+    const on = uprightProjector(tilt, cameraAt(1, { x: 0, y: 0 }));
+    const counted: Projector = Object.assign((x: number, y: number) => {
+      calls++;
+      return on(x, y);
+    }, { boxShown: on.boxShown! });
+    pins.place(counted, "on");
+    expect(items.every((item) => item.visible)).toBe(true);
+
+    // Far away: hidden, without asking about each foot.
+    const away = uprightProjector(tilt, cameraAt(1, { x: 5000, y: 0 }));
+    calls = 0;
+    pins.place(Object.assign((x: number, y: number) => (calls++, away(x, y)), { boxShown: away.boxShown! }), "away");
+    expect(calls).toBe(0);
+    expect(items.every((item) => !item.visible)).toBe(true);
+
+    pins.place(counted, "back");
+    expect(items.every((item) => item.visible)).toBe(true);
+    expect(calls).toBeGreaterThan(0);
+  });
+});

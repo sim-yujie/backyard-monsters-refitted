@@ -49,8 +49,9 @@ import "@/ui/styles/baiterFriends.css";
  * then a grid of cards, one per test monster (the 18 surface monsters,
  * unlocked ones first, locked ones tagged), each with its own level picker
  * and a stepper whose Fill takes as many as still fit; then the champions
- * (one ordinary champion plus Krallen, each at any level, power level and
- * Mode), Clear and **Start test**. Start hands the test to the Baiter scene;
+ * (one ordinary champion at any level, power level and Mode, plus Krallen at
+ * any level and power level: she has no Mode, owner 25 Nov 2026), Clear and
+ * **Start test**. Start hands the test to the Baiter scene;
  * nothing here talks to the server, and a test is free. On a phone the
  * window is a full-screen sheet and the grid scrolls.
  *
@@ -129,7 +130,8 @@ interface ChampionSlot {
   readonly details: HTMLElement;
   readonly level: HTMLSelectElement;
   readonly power: HTMLSelectElement;
-  readonly mode: HTMLSelectElement;
+  /** The Mode picker; none on Krallen's, who has no Mode (patch 8.7). */
+  readonly mode: HTMLSelectElement | null;
 }
 
 export class BaiterPanel {
@@ -551,11 +553,12 @@ export class BaiterPanel {
     const who = krallen ? championName(KRALLEN_TYPE) : "Champion";
     const level = select("baiter-champion__level", `${who}'s level`);
     const power = select("baiter-champion__power", `${who}'s power level`);
-    const mode = select("baiter-champion__mode", `${who}'s Mode`);
-    for (const one of CHAMPION_STANCES) {
+    // Krallen has no Mode (owner, 25 Nov 2026, patch 8.7): no picker on hers.
+    const mode = krallen ? null : select("baiter-champion__mode", `${who}'s Mode`);
+    for (const one of mode ? CHAMPION_STANCES : []) {
       const choice = option(one, STANCE_TEXT[one].label);
       choice.title = STANCE_TEXT[one].title;
-      mode.append(choice);
+      mode?.append(choice);
     }
     const change = (patch: (champion: TestChampion) => TestChampion): void => {
       const current = this.champion(krallen);
@@ -565,14 +568,14 @@ export class BaiterPanel {
     };
     level.addEventListener("change", () => change((one) => ({ ...one, l: Number(level.value) })));
     power.addEventListener("change", () => change((one) => ({ ...one, pl: Number(power.value) })));
-    mode.addEventListener("change", () => {
+    mode?.addEventListener("change", () => {
       const stance = mode.value;
       if (isChampionStance(stance)) change((one) => ({ ...one, s: stance }));
     });
 
     const details = document.createElement("div");
     details.className = "baiter-champion__details";
-    details.append(field("Level", level), field("Power", power), field("Mode", mode));
+    details.append(field("Level", level), field("Power", power), ...(mode ? [field("Mode", mode)] : []));
     element.append(details);
 
     this.slots.push({ krallen, pick, details, level, power, mode });
@@ -642,7 +645,7 @@ export class BaiterPanel {
     fillNumbers(slot.power, 0, championPowerLevels(champion.t));
     slot.level.value = String(champion.l);
     slot.power.value = String(champion.pl);
-    slot.mode.value = champion.s ?? DEFAULT_STANCE;
+    if (slot.mode) slot.mode.value = champion.s ?? DEFAULT_STANCE;
   }
 
   private run(): void {

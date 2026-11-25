@@ -212,6 +212,18 @@ describe("BaiterPanel", () => {
     expect(host.querySelectorAll<HTMLSelectElement>(".baiter-champion__power")[1]!.options).toHaveLength(3);
     choose(".baiter-champion__level", "5", 1);
     expect(panel.army.champions[1]).toEqual({ t: 5, l: 5, pl: 0 });
+    // Krallen has no Mode (owner, 25 Nov 2026, patch 8.7): no picker on her
+    // row, and her drop carries none; the ordinary champion keeps his.
+    expect(details()[1]!.querySelector(".baiter-champion__mode")).toBeNull();
+    expect([...details()[1]!.querySelectorAll(".baiter-champion__caption")].map((one) => one.textContent)).toEqual([
+      "Level",
+      "Power",
+    ]);
+    expect(host.querySelectorAll(".baiter-champion__mode")).toHaveLength(1);
+    expect(panel.army.champions).toEqual([
+      { t: 1, l: 4, pl: 3, s: "defensive" },
+      { t: 5, l: 5, pl: 0 },
+    ]);
 
     choose(".baiter-champion__type", "");
     expect(panel.army.champions.map((one) => one.t)).toEqual([5]);

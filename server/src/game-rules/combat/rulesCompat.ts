@@ -66,6 +66,29 @@
  * the ranged reach above, but beta 9's other changes move its battles, so
  * 8.5's 2b60802884bcf7e6 is not listed.
  *
+ * Patch 8.7 keeps it empty, though it moves no stored battle: Krallen has
+ * no Mode (owner, 25 Nov 2026, `hasMode`), so a new attack's log flings her
+ * in none and with no learned brain, while the engine still fights a log that
+ * has them as before. A replay stamped with beta 9's 54111bf01375377f would
+ * still play the same, but this list also lets a page on those rules start an
+ * attack (`rulesStamp.ts`), and such a page still flings Krallen in the Mode
+ * its picker offers: it must reload instead.
+ *
+ * Patch 8.6 keeps it empty and moves battles with an attacking Krallen
+ * (owner, 25 Nov 2026, `BattleOptions.flashKrallen`): she keeps her route
+ * on her walking look unless the new one is shorter, as Flash's
+ * `setWaypoints`, and turns only on a defender that reaches or hits her or
+ * hits beside her, not on one that is merely in her reach. Every other
+ * champion fights as before. The server replays an attack whose session was
+ * minted under older rules with both off, so it lands as it was fought.
+ * Under the same gate she also goes for a harvester that was empty when the
+ * yard loaded until a hit finds it empty (`EngineBuilding.emptyUnhit`), as
+ * Flash's `_looted` does; every other creep still reads it as looted.
+ *
+ * Patch 8.6 (main, merged back 25 Nov 2026) brings only the two Krallen
+ * changes above, but beta 9's other changes move its battles, so 8.6's
+ * cf287596a22ae2e0 is not listed.
+ *
  * Add the version a change replaces only when that change moves no battle.
  * A change that moves any battle result must empty this list.
  */

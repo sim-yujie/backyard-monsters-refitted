@@ -476,15 +476,43 @@ describe("YardAnswer.flingerBefore/flingerAfter (#329, #330 WP1)", () => {
 
     const ctx = await call(finishFlinger);
 
-    expect(ctx.flingerBefore).toBe(0);
-    expect(ctx.flingerAfter).toBe(4);
+    expect(ctx.flingerBefore?.level).toBe(0);
+    expect(ctx.flingerAfter?.level).toBe(4);
   });
 
   test("an action that never touches the Flinger reports the same level both times", async () => {
     const ctx = await call(state);
 
-    expect(ctx.flingerBefore).toBe(0);
-    expect(ctx.flingerAfter).toBe(0);
+    expect(ctx.flingerBefore).toEqual(ctx.flingerAfter!);
+    expect(ctx.flingerAfter?.level).toBe(0);
+  });
+
+  test("starting a Flinger upgrade keeps the level and reports when it will finish", async () => {
+    db.row = rowOf({ flinger: 3, buildingdata: { "9": { id: 9, t: 5, x: 0, y: 0, l: 3 } } });
+    const startUpgrade = defineYardAction({
+      schema: z.object({}),
+      run: () => ({
+        report: { ok: true },
+        slices: { buildingdata: { "9": { id: 9, t: 5, x: 0, y: 0, l: 3, cU: 600, cL: 600 } } },
+      }),
+    });
+
+    const ctx = await call(startUpgrade);
+
+    expect(ctx.flingerBefore).toEqual({ level: 3, changeAt: undefined });
+    expect(ctx.flingerAfter?.level).toBe(3);
+    expect(ctx.flingerAfter?.changeAt).toBe((db.row!.savetime as number) + 600);
+  });
+
+  test("an action beside a running Flinger upgrade reports the same finish both times", async () => {
+    // Saved 1,000 s ago with 5,000 s left: the catch-up plays it to 4,000 s
+    // left, and the finish reads the same before and after.
+    db.row = rowOf({ flinger: 3, buildingdata: { "9": { id: 9, t: 5, x: 0, y: 0, l: 3, cU: 5000, cL: 6000 } } });
+
+    const ctx = await call(state);
+
+    expect(ctx.flingerBefore?.changeAt).toBeDefined();
+    expect(ctx.flingerAfter).toEqual(ctx.flingerBefore!);
   });
 
   test("a refused action reports neither (undefined)", async () => {

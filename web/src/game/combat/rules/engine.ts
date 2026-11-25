@@ -444,6 +444,12 @@ const ownCellMiddle = (value: number, anchor: number, size: number): number => {
  *      reach, fights it until one of them dies, then goes back to buildings.
  *      Healers and Eye-ras do not. A ground attacker in melee cannot reach a
  *      flying defender. It walks straight at its foe, walls or no walls.
+ *      Krallen alone, since patch 8.6 (owner, 25 Nov 2026,
+ *      {@link BattleOptions.flashKrallen}), turns as Flash's did: only on a
+ *      defender that reaches or hits her, or strikes within 50 of her
+ *      (`CreepBase.as:1106-1110`, `:1176-1203`); one merely in her reach is
+ *      walked past. Flash's 50 counts the first five attackers by the
+ *      striker, nearest first, and so does this.
  *    - A bunker's defender chases attackers inside the bunker's range and no
  *      further, walks back in when none is left, and can be sent out again.
  *      A bunker keeps its healers in. Every defender that dies is counted
@@ -714,6 +720,16 @@ export interface BattleOptions {
   readonly descentYard?: number;
   /** Overrides {@link SHELL_BLASTS_WHERE_IT_LANDS} for this battle; absent, it holds. */
   readonly shellBlastsWhereItLands?: boolean;
+  /**
+   * Whether an attacking Krallen fights by Flash's two rules of patch 8.6
+   * (owner, 25 Nov 2026; fidelity note 9): she keeps her route on her walking
+   * look unless the new one is shorter, and turns only on a defender that
+   * reaches or hits her or hits beside her ({@link fightsAsFlashKrallen}).
+   * Absent or true, she does, as every page on these rules fights her. False
+   * is the rule before, for an attack started under older rules (the server's
+   * replay of its session, `battleReplayInput`), which plays as it was fought.
+   */
+  readonly flashKrallen?: boolean;
 }
 
 /**
@@ -2220,6 +2236,16 @@ const CLOSE_FIGHT_SQUARED = 2500;
 export const EYE_RA_FOE_SQUARED = 900;
 
 /**
+ * A defender's blow turns the attackers within this many yard units of it
+ * (`getCreepsInRange(50, ...)`, `CreepBase.as:1196`, `ChampionBase.as:939`):
+ * under Flash's rules only Krallen ({@link BattleOptions.flashKrallen}).
+ */
+export const KRALLEN_AGGRO_RADIUS = 50;
+
+/** How many of those, nearest first, the blow turns (`while (i < 5 ...)`). */
+const KRALLEN_AGGRO_COUNT = 5;
+
+/**
  * An Eye-ra's blast on monsters reaches 90: on screen for an attacker's
  * (`CreepBase.as:816`, 8,100 squared), in cartesian for a defender's
  * (`Targeting.getCreepsInRange(90, ...)`, `:1133`).
@@ -2411,6 +2437,15 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
     (options.defenderChampions?.length ?? 0) > 0 ||
     Object.keys(options.bunkers ?? {}).length > 0 ||
     yard.buildings.some((building) => isSpurtzCannon(building.type));
+  const flashKrallenRules = options.flashKrallen !== false;
+  /**
+   * An attacking Krallen fought by Flash's rules of patch 8.6
+   * ({@link BattleOptions.flashKrallen}). She has no Mode under them
+   * (`hasMode`), so this is Flash's Krallen; every other champion, and her
+   * under older rules, keeps the owner's rule of issue #195 and its walking look.
+   */
+  const fightsAsFlashKrallen = (creep: Creep): boolean =>
+    flashKrallenRules && creep.champion && !creep.friendly && creep.monsterId === KRALLEN_ID;
   let finished = false;
   let retreated = false;
   const raid = options.raid === true;
@@ -2751,7 +2786,12 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
     }
     building.hp -= dealt;
     if (building.hp > 0) {
-      if (byAttacker) takeLoot(building, dealt, lootMultiplier);
+      if (byAttacker) {
+        // Flash's `Loot` runs on the hit and marks an empty harvester looted
+        // (`BRESOURCE.as:121-125`): it is no longer unlooted to Krallen.
+        building.emptyUnhit = false;
+        takeLoot(building, dealt, lootMultiplier);
+      }
       return applied;
     }
     // The killing hit on storage still makes the pick it made before issue
@@ -4353,7 +4393,7 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
 
   /* ── Creeps ────────────────────────────────────────────────────────────── */
 
-  const targetContext = { bunkerInUse };
+  const targetContext = { bunkerInUse, flashKrallen: flashKrallenRules };
 
   const buildingOf = (id: number): EngineBuilding | null => {
     const at = yard.byId.get(id);
@@ -4427,7 +4467,11 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
       creep.targetBuilding = chosen.id;
       return true;
     }
-    routeTo(creep, chosen, (relook && !creep.champion) || held);
+    // A monster, and Krallen under Flash's rules (patch 8.6), keeps its route on
+    // the look while walking unless the new one is shorter and not cut by a
+    // wall (`ChampionBase.setWaypoints`, `:704-716`). Every other champion
+    // takes the new one, for its Mode.
+    routeTo(creep, chosen, (relook && (!creep.champion || fightsAsFlashKrallen(creep))) || held);
     return true;
   };
 
@@ -4923,7 +4967,7 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
       creep.champion &&
       creep.monsterId === KRALLEN_ID &&
       isLootable(target.type) &&
-      !unlootedForKrallen(target) &&
+      !unlootedForKrallen(target, fightsAsFlashKrallen(creep)) &&
       creep.waypoints.length - creep.waypointIndex > 0
     ) {
       findTarget(creep, false, true);
@@ -5940,6 +5984,8 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
     if (creep.blinkHops > 0 && (creep.atTarget || !blinks)) stopBlink(creep);
     if (creep.atTarget) {
       creep.attacking = true;
+      // A defender at Flash's Krallen turns her on it (`CreepBase.as:1106-1110`).
+      if (creep.friendly && !creep.explode && fightsAsFlashKrallen(foe)) foe.provokedBy = creep.id;
       if (creep.attackCooldown <= 0) {
         creep.attackCooldown += swingDelay(creep);
         // A defending Eye-ra's swing is its blast (`CreepBase.as:1122-1163`).
@@ -5949,6 +5995,7 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
         }
         const dealt = strikeCreep(creep, foe, creep);
         if (defended) recordHit(creep, foe.ix, foe.iy, dealt);
+        if (creep.friendly) pullKrallen(creep);
         if (creep.rank > 0) onAttack(creep, creep.damage, foe, null);
       } else {
         creep.attackCooldown -= 1;
@@ -5984,6 +6031,30 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
     moveCreep(creep);
   };
 
+  /**
+   * A defender's blow turns Flash's Krallen on it when she stands within
+   * {@link KRALLEN_AGGRO_RADIUS} of it, among the first
+   * {@link KRALLEN_AGGRO_COUNT} attackers on the ground there, nearest first
+   * (`CreepBase.as:1196-1203`, `ChampionBase.aggro`, `:939-950`). Only she is
+   * turned so: every other attacker already turns on a defender in its
+   * reach (issue #195), which takes in this one. Like a blow, it decides her
+   * foe only once she has none ({@link engage}).
+   */
+  const pullKrallen = (defender: Creep): void => {
+    if (!flashKrallenRules) return;
+    const hits = index.inRange(
+      KRALLEN_AGGRO_RADIUS,
+      defender.x,
+      defender.y,
+      TARGETS_ATTACKERS | TARGETS_GROUND,
+    );
+    const count = Math.min(hits.length, KRALLEN_AGGRO_COUNT);
+    for (let at = 0; at < count; at += 1) {
+      const other = (hits[at] as CreepHit<Creep>).creep;
+      if (!other.gone && fightsAsFlashKrallen(other)) other.provokedBy = defender.id;
+    }
+  };
+
   /** An attacker that can fight a defender at all (issue #195). */
   const fightsBack = (creep: Creep): boolean =>
     creep.behaviour === "attack" && !creep.explode && creep.damage > 0;
@@ -6014,7 +6085,10 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
       foe = usable(by) ? by : undefined;
     }
     creep.provokedBy = -1;
-    if (!usable(foe) && defendersOut > 0) {
+    // Krallen under Flash's rules turns only on a defender that reached or hit
+    // her, or hit beside her ({@link pullKrallen}); one merely in her reach
+    // leaves her on her building (`CreepBase.as:1106-1110`, `:1176-1203`).
+    if (!usable(foe) && defendersOut > 0 && !fightsAsFlashKrallen(creep)) {
       const reach = creepReach(creep.range);
       foe = index
         .inRange(2 * Math.sqrt(reach), creep.x, creep.y, creep.hitFlags)
@@ -8182,6 +8256,7 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
       if (creep.attackCooldown <= 0) {
         creep.attackCooldown += swingDelay(creep);
         recordHit(creep, foe.ix, foe.iy, strikeCreep(creep, foe, creep));
+        pullKrallen(creep);
       } else {
         creep.attackCooldown -= 1;
       }

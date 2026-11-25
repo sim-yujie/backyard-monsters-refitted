@@ -9,6 +9,7 @@ import { User } from "../../../database/models/user.model.js";
 import { MR1_TRIBES } from "../../../enums/Tribes.js";
 import { currentMR1Tribes } from "../../../services/maproom/v1/mr1TribeRules.js";
 import { generateBaseId } from "../../../utils/generateBaseId.js";
+import { matchesWhere } from "../../../testing/matchesWhere.js";
 
 /**
  * The attack load's Map Room is the attacker's own, not the request's
@@ -49,6 +50,12 @@ const em = {
     return data;
   },
   persist: () => {},
+  // The attack load's claim (`claimAttack.ts`): one conditional write.
+  nativeUpdate: async (entity: unknown, where: Row, data: Row) => {
+    const hit = (tables.get(entity) ?? []).filter((row) => matchesWhere(row, where));
+    for (const row of hit) Object.assign(row, data);
+    return hit.length;
+  },
   flush: async () => {
     flushes++;
   },

@@ -23,7 +23,7 @@ import { coinNotes, coinStore } from "../../services/events/eventCoins.js";
 import { catchUpYard, type CompletedJob } from "../../services/yard/catchUp.js";
 import { catchUpDamage } from "../../services/yard/catchUpDamage.js";
 import { creditResources } from "../../services/yard/credit.js";
-import { syncBaseValue, syncDerivedLevels } from "../../services/yard/derivedLevels.js";
+import { flingerClockOf, syncBaseValue, syncDerivedLevels, type FlingerClock } from "../../services/yard/derivedLevels.js";
 import { joinMapRoom2 } from "../../services/yard/mapRoom.js";
 import { moveMushroomsOffBuildings } from "../../services/yard/mushrooms.js";
 import { outpostCarryover, outpostProblems } from "../../services/yard/outpostYard.js";
@@ -697,14 +697,16 @@ export interface YardAnswer {
    */
   outpost?: string | null;
   /**
-   * The acted-on save's `flinger` just before the catch-up and the action
-   * ran, and once they and the transaction committed; set on a success only.
-   * `yardRoute` compares them to invalidate the Map Room 2 fog of war sight
-   * cache (issue #329, #330 WP1) — kept out of this module so it stays
-   * drivable without a server (the file comment).
+   * The acted-on save's Flinger level and countdown finish
+   * (`flingerClockOf`) just before the catch-up and the action ran, and once
+   * they and the transaction committed; set on a success only. `yardRoute`
+   * compares them to invalidate the Map Room 2 fog of war sight cache
+   * (issue #329, #330 WP1; a finish moved without a level change, map-lag
+   * fix) — kept out of this module so it stays drivable without a server
+   * (the file comment).
    */
-  flingerBefore?: number;
-  flingerAfter?: number;
+  flingerBefore?: FlingerClock;
+  flingerAfter?: FlingerClock;
 }
 
 /**
@@ -741,7 +743,7 @@ export const runYardAction = async <Schema extends z.ZodType, Report>(
     // move it; compared against the post-action value once the transaction
     // commits, to invalidate the Map Room 2 fog of war sight cache only when
     // it actually changed (issue #329, #330 WP1).
-    let flingerBefore: number | undefined;
+    let flingerBefore: FlingerClock | undefined;
 
     // Goal progress the action noted counts only once this commits.
     const answer = await countAfterCommit(() => em.transactional(async (tx) => {
@@ -753,8 +755,8 @@ export const runYardAction = async <Schema extends z.ZodType, Report>(
       const onMain = !yard.outpost && !yard.inferno;
 
       const save = yard.save;
-      flingerBefore = save.flinger;
       const now = getCurrentDateTime();
+      flingerBefore = flingerClockOf(save, now);
       // Outpost income up to now lands before the action decides (outposts
       // WP4): it can pay for it, and a rate the action changes (a harvester
       // upgrade on an outpost) only counts from here on. Never from the
@@ -805,6 +807,7 @@ export const runYardAction = async <Schema extends z.ZodType, Report>(
       return {
         save,
         now,
+        flingerAfter: flingerClockOf(save, now),
         completed,
         report,
         playerlevel: playerLevelOf(yard.main),
@@ -848,7 +851,7 @@ export const runYardAction = async <Schema extends z.ZodType, Report>(
       },
       outpost: answer.outpost,
       flingerBefore,
-      flingerAfter: answer.save.flinger,
+      flingerAfter: answer.flingerAfter,
     };
   } catch (err) {
     if (!(err instanceof ClientSafeError)) throw err;

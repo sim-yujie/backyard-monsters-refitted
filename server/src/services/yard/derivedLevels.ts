@@ -120,6 +120,62 @@ export const flingerLevelAt = (save: FlingerClockSave, now: number): number | un
 };
 
 /**
+ * The first whole second, `1..horizon` from `now`, at which the yard's
+ * Flinger level differs from `level` by its clock alone (an upgrade or build
+ * running out, with nobody writing the yard), or undefined if it still reads
+ * `level` at `now + horizon`. A Flinger's level only rises with time, so a
+ * halving search finds the moment.
+ *
+ * @param save - As {@link flingerLevelAt}.
+ * @param now - Unix seconds.
+ * @param level - `flingerLevelAt(save, now)`.
+ * @param horizon - Seconds ahead to look.
+ */
+export const secondsUntilFlingerLevelChanges = (
+  save: FlingerClockSave,
+  now: number,
+  level: number | undefined,
+  horizon: number,
+): number | undefined => {
+  if (flingerLevelAt(save, now + horizon) === level) return undefined;
+  let same = 0;
+  let changed = horizon;
+  while (changed - same > 1) {
+    const middle = Math.floor((same + changed) / 2);
+    if (flingerLevelAt(save, now + middle) === level) same = middle;
+    else changed = middle;
+  }
+  return changed;
+};
+
+/** How far ahead {@link flingerClockOf} looks: as far as a countdown is ever played forward (`advanceBuildingTimers`). */
+const FLINGER_CLOCK_HORIZON_SECONDS = 60 * 60 * 24 * 30;
+
+/**
+ * A yard's Flinger as the Map Room 2 sight sees it: its stored level and the
+ * moment (Unix seconds) its level next changes by its clock alone, undefined
+ * when nothing is counting down. A write that leaves `level` alone can still
+ * move `changeAt` (an upgrade started, sped up, helped, cancelled, a damaged
+ * Flinger repaired), which a cached alliance sight timed to the old moment
+ * must hear about (`sightService.ts`, `invalidateSightIfFlingerClockChanged`).
+ */
+export interface FlingerClock {
+  level: number | undefined;
+  changeAt: number | undefined;
+}
+
+/**
+ * The yard's {@link FlingerClock} as of `now`.
+ *
+ * @param save - The yard, as {@link flingerLevelAt} reads it.
+ * @param now - Unix seconds.
+ */
+export const flingerClockOf = (save: FlingerClockSave, now: number): FlingerClock => {
+  const changeIn = secondsUntilFlingerLevelChanges(save, now, flingerLevelAt(save, now), FLINGER_CLOCK_HORIZON_SECONDS);
+  return { level: save.flinger, changeAt: changeIn === undefined ? undefined : now + changeIn };
+};
+
+/**
  * Writes `flinger` and `catapult` onto the save from its buildings.
  *
  * Call it after `buildingdata` is final and before the flush. Assigning only

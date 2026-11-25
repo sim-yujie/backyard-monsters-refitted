@@ -89,11 +89,12 @@ export class TerrainRaster {
   }
 
   /** Uploads pending texel writes. Cheap and a no-op when nothing changed. */
-  flush(): void {
-    if (!this.dirty) return;
+  flush(): boolean {
+    if (!this.dirty) return false;
     this.dirty = false;
     this.context.putImageData(this.image, 0, 0);
     this.source.update();
+    return true;
   }
 
   destroy(): void {

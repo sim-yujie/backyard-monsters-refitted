@@ -6,6 +6,7 @@ import {
   frozenHabits,
   habitBookOf,
   hasHabits,
+  hasMode,
   isFrozenHabits,
   isZeroBrain,
   parseBrain,
@@ -204,9 +205,10 @@ export const healthOf = (champions: unknown): ChampionHealth | undefined => {
 
 /**
  * What to freeze for one champion type: for one with habits, its book `h`
- * with the version, if any habit is above 0; for one without (Krallen), its
- * old brain `b`, if any weight is. Null when there is nothing to freeze,
- * which is today's champion.
+ * with the version, if any habit is above 0. Krallen, with neither habits nor
+ * a Mode, freezes nothing since patch 8.7 (owner, 25 Nov 2026, `hasMode`): she
+ * fights as Flash's Krallen, so her old brain `b` is not fought with. Null
+ * when there is nothing to freeze, which is today's champion.
  *
  * @param t - The champion type.
  * @param habits - The stored `h`, or a frozen book.
@@ -221,6 +223,7 @@ const frozenMindOf = (
   // B's book (owner, 19 Nov): Active habits at their fixed weight, an old
   // save's weights migrated as the cage shows them.
   if (hasHabits(id)) return frozenHabits(habitBookOf(entry, id), id);
+  if (!hasMode(id)) return null;
   const parsed = parseBrain(brain);
   return isZeroBrain(parsed) ? null : parsed;
 };
@@ -230,9 +233,11 @@ const championTypeOf = (raw: unknown): number | null =>
 
 /**
  * The minds to freeze from the attacker's stored champions, by type: each
- * habit book with any habit (`h`), and Krallen's old brain (`b`) when it is
- * not zero, made safe; undefined when there are none. A champion with habits
- * never freezes its old `b`: its habits started fresh.
+ * habit book with any habit (`h`), made safe; undefined when there are none.
+ * A champion with habits never freezes its old `b`: its habits started fresh.
+ * Krallen freezes nothing since patch 8.7 (`frozenMindOf`); a session minted
+ * before still carries her old brain, and its replay fights with it
+ * (`frozenBrainsOf`).
  *
  * @param champions - The attacker's `champion` list as stored.
  */

@@ -1,5 +1,5 @@
 import { Container, Graphics, type Renderer } from "pixi.js";
-import { MAX_TEXT_OBJECTS, WATER_MAX_HEIGHT } from "@/config";
+import { AREA_ZONE_SIZE, MAX_TEXT_OBJECTS, WATER_MAX_HEIGHT, WORLD_HEIGHT, WORLD_WIDTH } from "@/config";
 import { mapRoomGrid, type OffsetCell } from "@/game/HexGrid";
 import { HOVER_COLOUR, KitFilter, SELECT_COLOUR, type CellFriend, type MapViewerContext } from "./cellVisuals";
 import {
@@ -35,9 +35,10 @@ import { MR2_PAINTED, MR2_PAINTED_ART, MR2_PAINTED_CODE, MR2_PAINTED_FAILED, mar
 import { classicLook } from "@/game/classicLook";
 import { onQualityChange, quality, type Quality } from "@/game/quality";
 import { FOG_COLOUR, setFogUnderCloud } from "./cellVisuals";
-import { isFogCell, type PlayerCell } from "@/api/types";
+import { isFogCell, type FogCell, type MapCell, type PlayerCell } from "@/api/types";
 import type { ZoneRecord, ZoneStore } from "./ZoneStore";
-import type { CellRange } from "./zones";
+import { zoneFor, type CellRange } from "./zones";
+import { setRegionRenderer } from "./regionUpload";
 import type { GroundData } from "./painted/GroundData";
 import type * as PaintedLookNamespace from "./painted/paintedLook";
 import {
@@ -163,8 +164,10 @@ export class MapRenderer {
   /** The painted fog (plan step 9): cloud over every cell outside the player's sight; with the painted look only. */
   private clouds: CloudLayer | null = null;
   /**
-   * Whether the last `draw` stepped the painted water, so a tilted view must redraw its picture
-   * (`TiltView.invalidate`): the step only changes a shader uniform, which Pixi's change lists miss.
+   * Whether the last `draw` changed the picture in a way Pixi's change lists miss: a painted
+   * animation stepped (a shader uniform) or new pixels went into a texture (the far raster, the
+   * ground's data). A tilted view must then redraw its picture (`TiltView.invalidate`), and the
+   * stage must be drawn (`MapRoom2Scene`'s render gate).
    */
   paintedStepped = false;
   private webGL2 = false;
@@ -389,21 +392,6 @@ export class MapRenderer {
     this.rebuildAll();
   }
 
-  /**
-   * The sight version changed (#331): what used to be drawn, chunk and raster
-   * alike, may no longer be owed to the viewer ("no memory" — leaving sight
-   * means fully dark again). Forgets the raster back to flat fog and rebuilds
-   * every chunk so its fog cloud/feather follows the new sight, as the zone
-   * cache the scene re-requests lands.
-   */
-  resetSight(): void {
-    this.raster.reset();
-    this.painted?.reset();
-    this.classicFog?.reset();
-    this.clouds?.invalidate();
-    this.borders?.reset();
-    this.rebuildAll();
-  }
 
   /**
    * Bakes the texture atlas. Nothing is drawn above the raster tier until this
@@ -418,6 +406,7 @@ export class MapRenderer {
     this.atlas?.destroy();
     this.atlas = new MapAtlas(renderer);
     this.renderer = renderer;
+    setRegionRenderer(renderer);
     this.webGL2 = (renderer as { context?: { webGLVersion?: number } }).context?.webGLVersion === 2;
     this.gl = this.webGL2 ? ((renderer as { gl?: WebGL2RenderingContext }).gl ?? null) : null;
     this.live.attach(renderer);
@@ -430,20 +419,91 @@ export class MapRenderer {
     this.lastRange = null;
   }
 
-  /** Feeds a freshly loaded zone into the raster and invalidates its chunk. */
-  applyZone(zone: ZoneRecord): void {
+  /**
+   * Feeds a freshly loaded zone into the raster and invalidates its chunk. `previous` is the
+   * record it replaced, if the zone was already loaded. The world-size layers note which of their
+   * texels changed and upload only those (`regionUpload.ts`); the clouds measure the fog again
+   * only where a cell turned to or from fog (`GroundData.fogChanges`).
+   */
+  applyZone(zone: ZoneRecord, previous?: ZoneRecord): void {
     if (this.destroyed) return;
     this.raster.applyZone(zone);
     this.painted?.applyZone(zone);
     this.classicFog?.applyZone(zone);
-    this.clouds?.invalidate();
     this.borders?.applyZone(zone);
     if (this.chunks.has(zone.id)) this.dirty.add(zone.id);
     this.live.zoneArrived(zone.id);
-    this.painted?.invalidateRivers();
+    // The rivers' picture (tens of ms to rebuild) only when this zone can change a river: one
+    // runs in it, or along its edge.
+    if (this.painted && this.touchesRivers(zone, previous)) this.painted.invalidateRivers(coverAround(zone, 2));
     // The range and the highlight stand on the cells, which now have their heights.
     this.range.invalidate();
     this.drawHighlight();
+  }
+
+  /**
+   * The store forgot these zones (the sight changed, `ZoneStore.applySight`): their cells go back
+   * to fog in every layer ("no memory", `fog-of-war.md` §6), except a cell a zone still held also
+   * covers (zones share their edge row and column), which keeps that zone's copy, as the chunks
+   * read it from the store. Their chunks and the ones round them are rebuilt, so the fog edge
+   * follows. Only the cells forgotten are touched and uploaded.
+   */
+  forgetZones(zones: readonly ZoneRecord[]): void {
+    if (this.destroyed || zones.length === 0) return;
+    for (const zone of zones) {
+      const data: ZoneRecord["data"] = {};
+      for (const [xKey, column] of Object.entries(zone.data)) {
+        const out: Record<string, MapCell> = {};
+        for (const yKey of Object.keys(column)) out[yKey] = this.store.getCell(Number(xKey), Number(yKey)) ?? FOG_CELL;
+        data[xKey] = out;
+      }
+      const forgotten: ZoneRecord = { ...zone, data };
+      this.raster.applyZone(forgotten);
+      this.painted?.applyZone(forgotten);
+      this.classicFog?.applyZone(forgotten);
+      this.borders?.applyZone(forgotten);
+      this.live.zoneArrived(zone.id);
+      for (let dx = -1; dx <= 1; dx++) {
+        for (let dy = -1; dy <= 1; dy++) {
+          const x = zone.originX + dx * AREA_ZONE_SIZE;
+          const y = zone.originY + dy * AREA_ZONE_SIZE;
+          if (x < 0 || y < 0 || x >= WORLD_WIDTH || y >= WORLD_HEIGHT) continue;
+          const id = zoneFor(x, y).id;
+          if (this.chunks.has(id)) this.dirty.add(id);
+        }
+      }
+      if (this.painted && this.touchesRivers(forgotten, zone)) this.painted.invalidateRivers(coverAround(zone, 2));
+    }
+    this.range.invalidate();
+    this.drawHighlight();
+  }
+
+  /**
+   * A zone was refetched and nothing the map draws changed (`ZoneStore.onZoneRefreshed`). Only a
+   * truce reads the clock (`MapChunk.build`), so a chunk holding one is rebuilt as before, on the
+   * minute's refresh.
+   */
+  refreshZone(zone: ZoneRecord): void {
+    if (this.destroyed || !this.chunks.has(zone.id)) return;
+    if (hasTruce(zone)) this.dirty.add(zone.id);
+  }
+
+  /**
+   * Whether a zone's arrival can change the rivers' picture (`riverPaths.ts`): a river path runs
+   * along the sides of cells marked `rv` and reads only the three cells round each of its
+   * corners. So a zone matters only when one of its cells, before or now, or one of the cells just
+   * round its edge carries a river.
+   */
+  private touchesRivers(zone: ZoneRecord, previous: ZoneRecord | undefined): boolean {
+    if (zoneHasRiver(zone) || (previous !== undefined && zoneHasRiver(previous))) return true;
+    const area = coverAround(zone, 1);
+    for (let col = area.minCol; col <= area.maxCol; col++) {
+      for (let row = area.minRow; row <= area.maxRow; row++) {
+        const inside = col > area.minCol && col < area.maxCol && row > area.minRow && row < area.maxRow;
+        if (!inside && this.riverCells.rvAt(col, row) !== 0) return true;
+      }
+    }
+    return false;
   }
 
   /** How far a cell is drawn from its spot on the grid (`ground.ts`), for picking and outlines. */
@@ -491,11 +551,13 @@ export class MapRenderer {
 
   /**
    * Brings the chunk set in line with the viewport. Returns true when it did
-   * work, which the scene uses for its frame-time readout.
+   * work, which the scene uses for its frame-time readout. The animations step at their full rate
+   * whether or not the map moves (owner, 25 Nov: gulls and cloud shadows stay smooth on a still map).
    */
   draw(range: CellRange, zoom: number): boolean {
-    this.raster.flush();
-    this.painted?.flush();
+    // New pixels in a texture Pixi's change lists do not see (the far raster, the ground's data).
+    const texelsWritten = this.raster.flush();
+    const groundWritten = this.painted?.flush() ?? false;
     const fogChanged = this.clouds?.flush() ?? false;
     const bordersChanged = this.borders?.flush() ?? false;
     const nowPaint = performance.now();
@@ -509,7 +571,15 @@ export class MapRenderer {
         : false;
     const pulseStepped = this.borders?.animate(nowPaint, range) ?? false;
     const cloudsStepped = this.clouds?.animate(nowPaint, range) ?? false;
-    this.paintedStepped = waterStepped || groundReady || pulseStepped || bordersChanged || cloudsStepped || fogChanged;
+    this.paintedStepped =
+      waterStepped ||
+      groundReady ||
+      pulseStepped ||
+      bordersChanged ||
+      cloudsStepped ||
+      fogChanged ||
+      texelsWritten ||
+      groundWritten;
     this.range.flush();
     const atlas = this.atlas;
     if (!atlas) return false;
@@ -522,7 +592,8 @@ export class MapRenderer {
       this.range.setZoom(zoom);
     }
 
-    this.live.update(range, zoom, nowPaint);
+    // Classic's water sheet (and the tile look's) is redrawn into a texture: a change the lists miss.
+    if (this.live.update(range, zoom, nowPaint)) this.paintedStepped = true;
     const tier = tierForZoom(zoom);
     const view = viewFor(tier, zoom, atlas);
     const nowMs = Date.now();
@@ -819,6 +890,7 @@ export class MapRenderer {
 
   destroy(): void {
     this.destroyed = true;
+    setRegionRenderer(null);
     this.stopQuality?.();
     this.stopQuality = null;
     this.classicFog = null;
@@ -1010,3 +1082,34 @@ const sameRange = (a: CellRange, b: CellRange | null): boolean =>
   a.maxCol === b.maxCol &&
   a.minRow === b.minRow &&
   a.maxRow === b.maxRow;
+
+/** The cells a zone's answer covers (`x..x+10`, `y..y+10`), widened by `margin` cells. */
+const coverAround = (zone: { originX: number; originY: number }, margin: number): CellRange => ({
+  minCol: zone.originX - margin,
+  maxCol: zone.originX + AREA_ZONE_SIZE + margin,
+  minRow: zone.originY - margin,
+  maxRow: zone.originY + AREA_ZONE_SIZE + margin,
+});
+
+/** Whether any cell of a zone's answer carries a river (`rv`). */
+const zoneHasRiver = (zone: ZoneRecord): boolean => {
+  for (const column of Object.values(zone.data)) {
+    for (const cell of Object.values(column)) {
+      if (!isFogCell(cell) && "rv" in cell && (cell.rv ?? 0) !== 0) return true;
+    }
+  }
+  return false;
+};
+
+/** Whether any cell of a zone's answer has a truce on it (`t`), which a chunk judges by the clock. */
+const hasTruce = (zone: ZoneRecord): boolean => {
+  for (const column of Object.values(zone.data)) {
+    for (const cell of Object.values(column)) {
+      if (!isFogCell(cell) && "t" in cell && typeof cell.t === "number" && cell.t > 0) return true;
+    }
+  }
+  return false;
+};
+
+/** What a forgotten cell reads as in the layers: fog, as the server answers outside sight. */
+const FOG_CELL: FogCell = { fog: 1 };
