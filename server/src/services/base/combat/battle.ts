@@ -12,6 +12,7 @@ import {
   type ReplayedLoot,
 } from "./attackLoot.js";
 import { fallenIn } from "./bunkerGarrison.js";
+import { stampPlays } from "./rulesStamp.js";
 
 /**
  * The battle an attack fought, as the server works it out (issue #23, C3).
@@ -93,6 +94,10 @@ export const battleReplayInput = ({
   const log = parseFlingLog(flinglog);
   if (!log) return null;
   const academy = foughtAcademy(session, attacker.academy);
+  // Krallen has no Mode in an attack started under these rules (patch 8.7,
+  // `hasMode`); one started under older rules, or with none recorded,
+  // replays with the Mode its log carries, as it was fought.
+  const modelessKrallen = stampPlays(session?.rules);
   const fighter: LootAttacker = {
     academy,
     champion: attacker.champion ?? null,
@@ -104,6 +109,7 @@ export const battleReplayInput = ({
     // Krallen's loot aura counts when it ran at the attack's start (owner,
     // 13 Nov 2026): a session without one gives her none.
     auraAt: session?.startedat ?? null,
+    modelessKrallen,
   };
   return {
     defender: {
@@ -124,7 +130,7 @@ export const battleReplayInput = ({
     // never the log's.
     log: session?.entryHoused
       ? fightableLog(log, fighter, session.entryHoused)
-      : withFrozenChampions(log, session?.championBrains, session?.championHealth),
+      : withFrozenChampions(log, session?.championBrains, session?.championHealth, modelessKrallen),
     tick,
     // The countdown the client was served (issue #201): Declare War is gone, but
     // a session started while it ran still carries it.
