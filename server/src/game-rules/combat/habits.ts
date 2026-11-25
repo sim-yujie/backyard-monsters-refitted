@@ -45,7 +45,7 @@ import {
   type BrainWeights,
   type ChampionLesson,
 } from "./brain.js";
-import { DRULL_ID, FOMOR_ID, GORGO_ID, KORATH_ID } from "./champions.js";
+import { DRULL_ID, FOMOR_ID, GORGO_ID, KORATH_ID, KRALLEN_ID } from "./champions.js";
 import { DEFAULT_STANCE, MONSTER_HABIT_KEYS, ZERO_WEIGHTS, stanceWeights } from "./stance.js";
 import type { ChampionStance, HabitKey, StanceWeights } from "./stance.js";
 import { championByType } from "./stats.js";
@@ -108,6 +108,31 @@ export const CHAMPION_HABITS: Readonly<Record<string, HabitRow>> = {
 /** Whether a champion type has habits at all; one without keeps the old brain. */
 export const hasHabits = (monsterId: string | undefined): boolean =>
   monsterId !== undefined && Object.prototype.hasOwnProperty.call(CHAMPION_HABITS, monsterId);
+
+/**
+ * Whether a champion type fights in a Mode (issue #220). Krallen has none
+ * (owner, 25 Nov 2026, patch 8.7): she always fights as Flash's Krallen did,
+ * unlooted buildings first, then the nearest (`Krallen.findTarget`). So the
+ * attack screen offers her no Mode, and a new attack's log carries neither a
+ * Mode ({@link flungStance}) nor a learned brain for her (the server freezes
+ * none, `attackSession.ts`), which the engine fights as the Flash champion.
+ * The engine itself is unchanged: a log written before this, with her Mode or
+ * brain on it, replays exactly as it was fought.
+ */
+export const hasMode = (monsterId: string | undefined): boolean =>
+  monsterId !== undefined && monsterId !== KRALLEN_ID;
+
+/**
+ * The Mode a new attack's log flings a champion type in: the one picked, or
+ * none for a champion without Modes ({@link hasMode}), whatever was sent.
+ *
+ * @param t - The champion type.
+ * @param stance - The Mode picked or sent, if any.
+ */
+export const flungStance = (
+  t: number,
+  stance: ChampionStance | undefined,
+): ChampionStance | undefined => (hasMode(championByType(t)) ? stance : undefined);
 
 /** A champion type's habits in a Mode; none for a type without habits. */
 export const habitsOf = (

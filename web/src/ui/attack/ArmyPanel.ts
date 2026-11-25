@@ -5,6 +5,7 @@ import {
   CHAMPION_PROPS,
   CHAMPION_STANCES,
   championByType,
+  hasMode,
   isChampionStance,
   monsterName,
   type ChampionStance,
@@ -162,8 +163,11 @@ interface ChampionRow {
   readonly note: HTMLElement;
   /** Shown only while this champion is on the field (issue #222). */
   readonly retreat: HTMLButtonElement | null;
-  /** Its Mode (issue #220); locked once it is on the field. */
-  readonly stance: HTMLSelectElement;
+  /**
+   * Its Mode (issue #220); locked once it is on the field. None for Krallen,
+   * who has no Mode (patch 8.7, `hasMode`).
+   */
+  readonly stance: HTMLSelectElement | null;
 }
 
 export class ArmyPanel {
@@ -437,8 +441,38 @@ export class ArmyPanel {
     note.id = `${this.radioName}-${t}-note`;
     input.setAttribute("aria-labelledby", `${label.id} ${note.id}`);
 
+    item.append(input, icon, label, note);
+
     // Its Mode (issue #220). The row is the radio's label, so a click on the
-    // picker must not reach it and pick or un-pick the champion.
+    // picker must not reach it and pick or un-pick the champion. Krallen has
+    // no Mode (owner, 25 Nov 2026): her row has no picker, and its empty
+    // third grid row takes no height.
+    const stance = hasMode(id) ? this.buildMode(t, item) : null;
+
+    // Flash's per-champion Retreat (issue #222): it calls this champion back
+    // with the health it has, and the attack goes on.
+    let retreat: HTMLButtonElement | null = null;
+    const onRetreat = this.onRetreatChampion;
+    if (onRetreat) {
+      retreat = document.createElement("button");
+      retreat.type = "button";
+      retreat.className = "btn btn--ghost attack-army__champion-retreat";
+      retreat.textContent = "Retreat";
+      retreat.title = `Call ${championName(t)} back off the field, keeping the health it has`;
+      retreat.hidden = true;
+      retreat.addEventListener("click", (event) => {
+        // The row is the radio's label; the button must not pick the champion.
+        event.preventDefault();
+        event.stopPropagation();
+        onRetreat(t);
+      });
+      item.append(retreat);
+    }
+    return { t, element: item, input, note, retreat, stance };
+  }
+
+  /** A champion's Mode picker, on its row's third line. */
+  private buildMode(t: number, item: HTMLElement): HTMLSelectElement {
     const mode = document.createElement("span");
     mode.className = "attack-army__mode";
     const modeLabel = document.createElement("span");
@@ -463,35 +497,14 @@ export class ArmyPanel {
       this.onStanceChange?.(t, stance.value);
     });
     mode.append(modeLabel, stance);
-
-    item.append(input, icon, label, note, mode);
-
-    // Flash's per-champion Retreat (issue #222): it calls this champion back
-    // with the health it has, and the attack goes on.
-    let retreat: HTMLButtonElement | null = null;
-    const onRetreat = this.onRetreatChampion;
-    if (onRetreat) {
-      retreat = document.createElement("button");
-      retreat.type = "button";
-      retreat.className = "btn btn--ghost attack-army__champion-retreat";
-      retreat.textContent = "Retreat";
-      retreat.title = `Call ${championName(t)} back off the field, keeping the health it has`;
-      retreat.hidden = true;
-      retreat.addEventListener("click", (event) => {
-        // The row is the radio's label; the button must not pick the champion.
-        event.preventDefault();
-        event.stopPropagation();
-        onRetreat(t);
-      });
-      item.append(retreat);
-    }
-    return { t, element: item, input, note, retreat, stance };
+    item.append(mode);
+    return stance;
   }
 
   private refreshRetreat(): void {
     const live = this.bucket.live();
     for (const row of this.champions) {
-      row.stance.disabled = !live || this.onField.includes(row.t);
+      if (row.stance) row.stance.disabled = !live || this.onField.includes(row.t);
       if (!row.retreat) continue;
       const out = this.onField.includes(row.t);
       // Nothing can be called back once the attack is over.
@@ -543,10 +556,12 @@ export class ArmyPanel {
           : "";
       champion.element.title = entry?.blocked === "oneChampion" ? ONE_CHAMPION_TITLE : "";
       // A champion on the field fights in the Mode it was flung in.
-      const stance = bucket.stance(champion.t);
-      champion.stance.value = stance;
-      champion.stance.title = STANCE_TEXT[stance].title;
-      champion.stance.disabled = !live || this.onField.includes(champion.t);
+      if (champion.stance) {
+        const stance = bucket.stance(champion.t);
+        champion.stance.value = stance;
+        champion.stance.title = STANCE_TEXT[stance].title;
+        champion.stance.disabled = !live || this.onField.includes(champion.t);
+      }
     }
     this.refreshRetreat();
 

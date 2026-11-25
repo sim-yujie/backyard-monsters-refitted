@@ -6,12 +6,14 @@ import { createBattle } from "./engine.js";
 import {
   CHAMPION_HABITS,
   FOMOR_JUDGE,
+  flungStance,
   HABIT_CAP,
   HYBRID_HABIT_CAP,
   habitCap,
   habitScore,
   habitsOf,
   hasHabits,
+  hasMode,
   learnHabits,
   type HabitBook,
   type HabitStats,
@@ -535,6 +537,22 @@ describe("Fomor's lesson counts only while it is in battle", () => {
       expect(back?.army).toBe(all?.army);
       expect(back?.ring).toBe(all?.ring);
       expect(full?.army).toBeGreaterThan(back?.army ?? 0);
+    }
+  });
+});
+
+describe("Krallen has no Mode (owner, 25 Nov 2026, patch 8.7)", () => {
+  it("every other champion has one", () => {
+    expect(hasMode(KRALLEN_ID)).toBe(false);
+    for (const id of [GORGO_ID, DRULL_ID, FOMOR_ID, KORATH_ID]) expect(hasMode(id)).toBe(true);
+    expect(hasMode(undefined)).toBe(false);
+  });
+
+  it("a new attack's log flings her in none, whatever was picked; the others in theirs", () => {
+    for (const stance of ["offensive", "defensive", "hybrid", undefined] as const) {
+      expect(flungStance(5, stance)).toBeUndefined();
+      expect(flungStance(3, stance)).toBe(stance);
+      expect(flungStance(1, stance)).toBe(stance);
     }
   });
 });

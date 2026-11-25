@@ -168,20 +168,21 @@ describe("champion routes", () => {
     expect(championOf(db.row)).toMatchObject({ nm: "Kong" });
   });
 
-  test("stance remembers a champion's Mode on its own entry, Krallen's too (#220)", async () => {
+  test("stance remembers a champion's Mode on its own entry (#220); Krallen has none (patch 8.7)", async () => {
     const now = getCurrentDateTime();
     const gorgo = { t: 1, hp: 40_000, l: 1, ft: now + HOUR, fd: 0, fb: 0, pl: 1, status: 0 };
     const krallen = { t: 5, hp: 50_000, l: 1, ft: now + HOUR, fd: 0, fb: 0, pl: 0, status: 0 };
     db.row = rowOf({ champion: [gorgo, krallen] });
 
-    const answer = await run(yardChampionStanceAction, { type: "5", stance: "defensive" });
-    expect(answer.status).toBe(200);
+    const refused = await run(yardChampionStanceAction, { type: "5", stance: "defensive" });
+    expect(refused.body).toMatchObject({ reason: "noMode" });
     const champions = db.row!.champion as Row[];
-    expect(champions[1]).toMatchObject({ t: 5, s: "defensive" });
+    expect(champions[1]!.s).toBeUndefined();
     expect(champions[0]!.s).toBeUndefined();
 
     expect((await run(yardChampionStanceAction, { type: "1", stance: "offensive" })).status).toBe(200);
     expect((db.row!.champion as Row[])[0]).toMatchObject({ t: 1, s: "offensive" });
+    expect((db.row!.champion as Row[])[1]!.s).toBeUndefined();
   });
 
   test("stance refuses a Mode it does not know, and a champion the player does not keep", async () => {

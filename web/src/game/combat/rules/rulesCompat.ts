@@ -35,6 +35,14 @@
  * (`RANGED_BUILDING_REACH_SCALE`). No replay stamped with 8.3/8.4's
  * c8cfcc231fcacd03 plays the same any more.
  *
+ * Patch 8.7 keeps it empty, though it moves no stored battle: Krallen has
+ * no Mode (owner, 25 Nov 2026, `hasMode`), so a new attack's log flings her
+ * in none and with no learned brain, while the engine still fights a log that
+ * has them as before. A replay stamped with 8.5's 2b60802884bcf7e6 would
+ * still play the same, but this list also lets a page on those rules start an
+ * attack (`rulesStamp.ts`), and such a page still flings Krallen in the Mode
+ * its picker offers: it must reload instead.
+ *
  * Add the version a change replaces only when that change moves no battle.
  * A change that moves any battle result must empty this list.
  */
