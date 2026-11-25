@@ -1,0 +1,6 @@
+You are the UX designer for Backyard Monsters Revamped. Round 3 (final) critique of the LIVE world map prototype (advice only, no code). Read the PNG files directly; do NOT run any shell commands.
+Your earlier rounds: directions-r0.md, critique-r1.md, critique-r2.md in this workspace. The contact sheets in r3/SHEETS/ have the same layout (columns A, B, C; file = question + size + look). Fixed since round 2:
+Q2 A: the Modern "Taken by X / Tap to update" button now really gets the brass-gold gradient (a skin rule was overriding it); the stale camp's chips now fade to 45% grey with the header and buttons while held.
+Q3: the "not live" icon is 20 px with heavier strokes.
+Q1 unchanged since round 2 (you had no HIGH/MEDIUM left for B). B (Q2/Q3) and C are kept only so the owner can compare all three.
+Give any remaining HIGH / MEDIUM issues for your recommended option per question (A for Q2 and Q3, B for Q1), concrete and short; LOW ones in one line each. Then one final line per question: the recommended option and one sentence why.

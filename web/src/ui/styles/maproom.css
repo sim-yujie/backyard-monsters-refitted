@@ -2051,25 +2051,25 @@
   gap: 10px;
   min-height: 52px;
   padding: 0 16px;
-  border: 2px solid #c98a3a;
+  border: 2px solid #c98a3a !important;
   border-radius: 14px;
-  background: #26313a;
-  color: #fff;
+  background: #26313a !important;
+  color: #fff !important;
   font-size: 16px;
   font-weight: 800;
   text-align: left;
 }
 
 .mr2-live-bar__icon {
-  color: #f5b82e;
+  color: #f5b82e !important;
 }
 
 .mr2-live-bar--attack .mr2-live-bar__icon {
-  color: #f05228;
+  color: #f05228 !important;
 }
 
 .mr2-live-bar--shield .mr2-live-bar__icon {
-  color: #38e09b;
+  color: #38e09b !important;
 }
 
 .mr2-live-bar__words {
@@ -2090,13 +2090,13 @@
   flex: none;
   font-size: 13px;
   font-weight: 700;
-  color: #f5c56b;
+  color: #f5c56b !important;
 }
 
 /* A, while the old cell is held: the old cell and its buttons fade and wait for the tap. */
-.mr2-cell--held :is(.mr2-cell__picture, .mr2-cell__titles),
+.mr2-cell--held :is(.mr2-cell__picture, .mr2-cell__titles, .mr2-cell__chips, .mr2-cell__flinger),
 .mr2-cell--held .mr2-cell__actions > :not(.mr2-live-bar),
-.mr2-cell--held .mr2-cell__repeat-body > :not(.mr2-cell__actions, .mr2-cell__chips) {
+.mr2-cell--held .mr2-cell__repeat-body > :not(.mr2-cell__actions) {
   opacity: 0.45;
   filter: grayscale(0.6);
   pointer-events: none;
@@ -2107,10 +2107,10 @@
   height: 52px;
   min-height: 52px;
   padding: 4px 14px;
-  border: 2px solid #5a3a0c;
-  background: linear-gradient(#c68d28, #8f5e16);
-  color: #fff6e0;
-  box-shadow: inset 0 1px 0 rgb(255 255 255 / 30%), 0 2px 0 rgb(0 0 0 / 35%);
+  border: 2px solid #5a3a0c !important;
+  background: linear-gradient(#c68d28, #8f5e16) !important;
+  color: #fff6e0 !important;
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 30%), 0 2px 0 rgb(0 0 0 / 35%) !important;
 }
 
 .mr2-live-bar--taken .mr2-live-bar__text {
@@ -2119,49 +2119,49 @@
 
 .mr2-live-bar--taken .mr2-live-bar__sub {
   font-size: 12px;
-  color: #ffe6a8;
+  color: #ffe6a8 !important;
 }
 
 .mr2-live-bar--taken .mr2-live-bar__icon {
-  color: #fff6e0;
+  color: #fff6e0 !important;
 }
 
 .mr2-live-bar__refresh {
   display: inline-flex;
   flex: none;
-  color: #fff6e0;
+  color: #fff6e0 !important;
 }
 
 :root[data-skin="flash"] .mr2-cell .mr2-live-bar.mr2-live-bar--taken {
-  border-color: #6b4310;
-  background: linear-gradient(#f5b82e, #cc8410);
-  color: #3a2108;
+  border-color: #6b4310 !important;
+  background: linear-gradient(#f5b82e, #cc8410) !important;
+  color: #3a2108 !important;
 }
 
 :root[data-skin="flash"] .mr2-live-bar--taken :is(.mr2-live-bar__icon, .mr2-live-bar__sub, .mr2-live-bar__refresh) {
-  color: #3a2108;
+  color: #3a2108 !important;
 }
 
 .mr2-live-bar--prompt .mr2-live-bar__sub {
   padding: 6px 14px;
   border-radius: 10px;
-  background: #c98a3a;
-  color: #1b1208;
+  background: #c98a3a !important;
+  color: #1b1208 !important;
 }
 
 :root[data-skin="flash"] .mr2-cell .mr2-live-bar {
-  border-color: #8a5a22;
-  background: #fff3d6;
-  color: #4b2b16;
+  border-color: #8a5a22 !important;
+  background: #fff3d6 !important;
+  color: #4b2b16 !important;
 }
 
 :root[data-skin="flash"] .mr2-live-bar__sub {
-  color: #9a5a12;
+  color: #9a5a12 !important;
 }
 
 :root[data-skin="flash"] .mr2-live-bar--prompt .mr2-live-bar__sub {
-  background: #4caf2a;
-  color: #fff;
+  background: #4caf2a !important;
+  color: #fff !important;
 }
 
 /* Q2 C: the rest of the panel is dimmed and frozen until Update. */

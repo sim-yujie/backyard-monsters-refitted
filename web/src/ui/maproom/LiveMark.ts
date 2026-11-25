@@ -182,8 +182,8 @@ export class LiveMark {
 // Placeholder icons (line art, not the painted set).
 // neon r1: not a slashed Wi-Fi (players read it as "my Wi-Fi is off"): radio arcs with an amber "!".
 const OFF_SVG =
-  '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M5.5 5.5a9 9 0 0 0 0 13"/><path d="M8.6 8.6a4.6 4.6 0 0 0 0 6.8"/><path d="M18.5 5.5a9 9 0 0 1 0 13" opacity=".45"/><path d="M15.4 8.6a4.6 4.6 0 0 1 0 6.8" opacity=".45"/><path d="M12 7.5v5.2" stroke-width="2.8"/><circle cx="12" cy="16.4" r="1.4" fill="currentColor" stroke="none"/></svg>';
+  '<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2.8" stroke-linecap="round"><path d="M5.5 5.5a9 9 0 0 0 0 13"/><path d="M8.6 8.6a4.6 4.6 0 0 0 0 6.8"/><path d="M18.5 5.5a9 9 0 0 1 0 13" opacity=".45"/><path d="M15.4 8.6a4.6 4.6 0 0 1 0 6.8" opacity=".45"/><path d="M12 7.5v5.2" stroke-width="3.2"/><circle cx="12" cy="16.4" r="1.4" fill="currentColor" stroke="none"/></svg>';
 const LIVE_SVG =
-  '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M5.5 5.5a9 9 0 0 0 0 13"/><path d="M8.6 8.6a4.6 4.6 0 0 0 0 6.8"/><path d="M18.5 5.5a9 9 0 0 1 0 13"/><path d="M15.4 8.6a4.6 4.6 0 0 1 0 6.8"/><circle cx="12" cy="12" r="2.2" fill="currentColor" stroke="none"/></svg>';
+  '<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M5.5 5.5a9 9 0 0 0 0 13"/><path d="M8.6 8.6a4.6 4.6 0 0 0 0 6.8"/><path d="M18.5 5.5a9 9 0 0 1 0 13"/><path d="M15.4 8.6a4.6 4.6 0 0 1 0 6.8"/><circle cx="12" cy="12" r="2.2" fill="currentColor" stroke="none"/></svg>';
 const RETRY_SVG =
   '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M20 12a8 8 0 1 1-2.6-5.9"/><path d="M20 4v5h-5"/></svg>';
