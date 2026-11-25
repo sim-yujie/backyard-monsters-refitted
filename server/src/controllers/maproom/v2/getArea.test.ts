@@ -114,6 +114,8 @@ mock.module("../../../services/maproom/v2/createCellData.js", () => ({
   // terrain/owner-card rendering is not this controller's fog logic and is
   // covered by its own tests elsewhere.
   createCellData: async (cell: Row, _worldid: string, _ctx: unknown, cellOwners?: Map<number, Row>) => {
+    // `empty`: a row whose owner is gone, for which the real builder returns nothing.
+    if (cell.empty) return undefined;
     if (typeof cell.baseid === "string") {
       const owner = cellOwners?.get(cell.uid as number);
       // `typed` rows also carry the cell type, as the real builder's do: the neighbour count reads it.
@@ -451,5 +453,14 @@ describe("getArea: the live map (beta 9)", () => {
       const ctx = { authUser: p, request: { body: { zones } }, state: {} } as unknown as Context;
       await expect(getAreas(ctx, async () => {})).rejects.toThrow();
     }
+  });
+
+  test("a stored row that gives no cell (its owner is gone) is drawn as generated ground, as before", async () => {
+    const p = viewer(1, { flinger: 1, homebase: ["1", "1"] });
+    // Owner 9 has no user row: the real builder returns nothing for it (the mock does too).
+    tables.set(User, []);
+    tables.set(WorldMapCell, [cellRow("orphan", 9, 3, 1, { empty: true })]);
+    const body = await run(p, { x: 0, y: 0 });
+    expect((body.data as Record<number, Record<number, unknown>>)[3]![1]).toEqual({ terrain: true, x: 3, y: 1 });
   });
 });

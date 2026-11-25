@@ -398,8 +398,9 @@ export const buildAreas = async (
         }
         const key = cellsKey(cellX, cellY);
         let payload = payloads.get(key);
-        if (payload === undefined && !visibleDbCells.some((cell) => cell.x === cellX && cell.y === cellY)) {
-          // A cell with no row: generated in memory, skipping the world for memory efficiency.
+        if (payload === undefined) {
+          // A cell with no row, or one whose row gave nothing (an owner gone): generated in memory,
+          // as `getarea` always did, skipping the world for memory efficiency.
           const terrainHeight = getTerrainHeight(noise, cellX, cellY);
           const inMemoryCell = new WorldMapCell(undefined, cellX, cellY, terrainHeight);
           payload = await createCellData(inMemoryCell, worldid, ctx);
