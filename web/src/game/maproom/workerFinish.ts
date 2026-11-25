@@ -34,8 +34,15 @@ export const hatchFinishOf = (payload: MapCell | undefined): number | undefined 
 export class WorkerFinishWatch {
   private readonly asked = new Map<string, Asked>();
 
-  /** `finishOf`: the time a cell is due to change by itself (a worker by default, or a hatch). */
-  constructor(private readonly finishOf: (payload: MapCell | undefined) => number | undefined = workerFinishOf) {}
+  /**
+   * `finishOf`: the time a cell is due to change by itself (a worker by default, or a hatch).
+   * `minGapSeconds`: never ask one cell again sooner than this (a paused hatchery's next hatch
+   * moves on with every answer, so without it the cell would be asked every countdown).
+   */
+  constructor(
+    private readonly finishOf: (payload: MapCell | undefined) => number | undefined = workerFinishOf,
+    private readonly minGapSeconds = 0,
+  ) {}
 
   /**
    * The cells among `cells` whose busy worker is due to be free by `now`
@@ -52,6 +59,7 @@ export class WorkerFinishWatch {
       }
       if (now < wf + FINISH_GRACE_SECONDS) continue;
       const last = this.asked.get(key);
+      if (last && this.minGapSeconds > 0 && now < last.at + this.minGapSeconds) continue;
       if (last && last.wf === wf) {
         if (last.tries >= MAX_TRIES || now < last.at + RETRY_SECONDS) continue;
         last.tries += 1;

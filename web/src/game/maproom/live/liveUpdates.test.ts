@@ -18,22 +18,23 @@ const zone = (cells: Record<string, MapCell>): ZoneRecord => {
   return { id: 0, originX: 0, originY: 0, data, fetchedAt: 0 };
 };
 
-const setup = () => {
-  const applied: [number, number][][] = [];
-  const delays: number[] = [];
+const setup = (hidden = false) => {
+  const applied: { pairs: [number, number][]; now: boolean }[] = [];
+  let pumps = 0;
   const rings: { col: number; row: number; kind: string; tier: string }[] = [];
   const shownUpdates: (MapCell | undefined)[] = [];
   const cells = new Map<string, MapCell>();
-  let pending: (() => void)[] = [];
   const live = new LiveUpdates({
     store: {
-      applyVersions: (pairs) => {
-        applied.push([...pairs] as [number, number][]);
+      applyVersions: (pairs, now = false) => {
+        applied.push({ pairs: [...pairs] as [number, number][], now });
         return pairs.length;
       },
       watchList: () => [],
       getCell: (x, y) => cells.get(`${x},${y}`),
-      pump: async () => {},
+      pumpLive: async () => {
+        pumps += 1;
+      },
     },
     rings: { add: (cell, kind, tier) => (rings.push({ ...cell, kind, tier }), true) },
     refreshSight: () => {},
@@ -41,30 +42,37 @@ const setup = () => {
     updateShown: (payload) => shownUpdates.push(payload),
     tierOf: () => "far",
     token: () => "t",
-    random: () => 0.5,
-    delay: (fn, ms) => {
-      delays.push(ms);
-      pending.push(fn);
-    },
+    hidden: () => hidden,
   });
-  const flush = () => {
-    const run = pending;
-    pending = [];
-    for (const fn of run) fn();
+  return {
+    live,
+    applied,
+    pumps: () => pumps,
+    rings,
+    shownUpdates,
+    cells,
+    versions: (live as unknown as { versions: (p: [number, number][], all: boolean) => void }).versions.bind(live),
   };
-  return { live, applied, delays, rings, shownUpdates, cells, flush, versions: (live as unknown as { versions: (p: [number, number][], all: boolean) => void }).versions.bind(live) };
 };
 
 describe("LiveUpdates", () => {
-  it("a push is applied after a short random wait; a watch answer at once", () => {
+  it("a push waits its random moment in the store; a watch answer is due at once", () => {
     const t = setup();
     t.versions([[1, 2]], false);
-    expect(t.applied).toEqual([]);
-    expect(t.delays).toEqual([200]);
-    t.flush();
-    expect(t.applied).toEqual([[[1, 2]]]);
     t.versions([[3, 4]], true);
-    expect(t.applied).toHaveLength(2);
+    expect(t.applied).toEqual([
+      { pairs: [[1, 2]], now: false },
+      { pairs: [[3, 4]], now: true },
+    ]);
+    expect(t.pumps()).toBe(2);
+  });
+
+  it("a hidden tab ignores pushes, but not the catch-up after it comes back", () => {
+    const t = setup(true);
+    t.versions([[1, 2]], false);
+    expect(t.applied).toEqual([]);
+    t.versions([[1, 2]], true);
+    expect(t.applied).toHaveLength(1);
   });
 
   it("a live answer rings each changed cell and updates the open panel's", () => {

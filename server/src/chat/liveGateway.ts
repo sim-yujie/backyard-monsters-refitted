@@ -32,7 +32,7 @@ type ServerWebSocket<T> = import("bun").ServerWebSocket<T>;
 export const MAX_WATCHED = 300;
 /** Most live sockets per player (tabs); the load check raises it. */
 export const maxSocketsPerPlayer = (): number => Number(process.env.LIVE_MAP_MAX_PER_USER) || 4;
-/** A watch sooner than this after the last one is answered with nothing (the map sends one per pan, debounced). */
+/** Watch answers (a read of every watched zone's version) are at most this often per socket; the list itself always applies. */
 export const MIN_WATCH_GAP_MS = 200;
 
 export interface LiveIdentity {
@@ -56,6 +56,8 @@ export interface LiveSocket extends LiveIdentity {
   ws: Pick<ServerWebSocket<SocketData>, "send" | "close">;
   zones: Set<number>;
   lastWatchAt: number;
+  /** A watch answer held back by {@link MIN_WATCH_GAP_MS}, sent when the gap is over. */
+  replyTimer?: ReturnType<typeof setTimeout> | null;
 }
 
 let deps: LiveGatewayDeps | null = null;
@@ -185,8 +187,6 @@ const signIn = async (ws: ServerWebSocket<SocketData>, text: string): Promise<vo
 
 const setWatch = async (socket: LiveSocket, raw: unknown, now: number = Date.now()): Promise<void> => {
   if (!deps || !Array.isArray(raw)) return;
-  if (now - socket.lastWatchAt < MIN_WATCH_GAP_MS) return;
-  socket.lastWatchAt = now;
   const next = new Set<number>();
   for (const value of raw) {
     if (next.size >= MAX_WATCHED) break;
@@ -196,7 +196,23 @@ const setWatch = async (socket: LiveSocket, raw: unknown, now: number = Date.now
   for (const zone of next) if (!socket.zones.has(zone)) watch(socket, zone);
   socket.zones = next;
 
-  const ids = [...next];
+  // The answer: at once, or (a second watch inside the gap) once the gap is over, for the list then.
+  const wait = socket.lastWatchAt + MIN_WATCH_GAP_MS - now;
+  if (wait > 0) {
+    socket.replyTimer ??= setTimeout(() => {
+      socket.replyTimer = null;
+      void answerWatch(socket, Date.now());
+    }, wait);
+    return;
+  }
+  await answerWatch(socket, now);
+};
+
+/** Sends every watched zone's version (`live.zones` with `all`). */
+const answerWatch = async (socket: LiveSocket, now: number): Promise<void> => {
+  if (!deps || !byUser.get(socket.userId)?.has(socket)) return;
+  socket.lastWatchAt = now;
+  const ids = [...socket.zones];
   let versions: number[] = [];
   try {
     versions = await deps.versions(socket.world, ids);
@@ -210,6 +226,8 @@ const setWatch = async (socket: LiveSocket, raw: unknown, now: number = Date.now
 
 /** Forgets a socket (closed, or replaced by a newer tab). */
 export const dropLive = (socket: LiveSocket): void => {
+  if (socket.replyTimer) clearTimeout(socket.replyTimer);
+  socket.replyTimer = null;
   for (const zone of socket.zones) unwatch(socket, zone);
   socket.zones.clear();
   removeFrom(byUser, socket.userId, socket);

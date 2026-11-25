@@ -349,7 +349,7 @@ export class MapRoom2Scene implements Scene {
   /** Own outposts' build ends already asked about (`workerFinish.ts`). */
   private readonly workerFinish = new WorkerFinishWatch();
   /** Own cells' next hatch (`nh`): asked again then, like a finished worker (live map, beta 9). */
-  private readonly hatchFinish = new WorkerFinishWatch(hatchFinishOf);
+  private readonly hatchFinish = new WorkerFinishWatch(hatchFinishOf, 30);
   /** The live map's connection and what it does (beta 9); null until the own yard says where. */
   private live: LiveUpdates | null = null;
   /**
@@ -919,6 +919,8 @@ export class MapRoom2Scene implements Scene {
       if (this.sincePump >= PUMP_INTERVAL_SECONDS) {
         this.sincePump = 0;
         void this.store.pump();
+        // The live map's re-asks of zones a push said changed (on screen, batched).
+        void this.store.pumpLive();
       }
 
       this.sinceStaleCheck += deltaSeconds;

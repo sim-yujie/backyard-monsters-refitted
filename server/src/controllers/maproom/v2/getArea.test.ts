@@ -126,7 +126,7 @@ mock.module("../../../services/maproom/v2/createCellData.js", () => ({
   },
 }));
 
-const { getArea } = await import("./getArea.js");
+const { getArea, getAreas } = await import("./getArea.js");
 
 /** A main save row, as `postgres.em.populate`'s real implementation would attach it. */
 const mainSaveRow = (userid: number, over: Partial<Row> = {}): Row => ({
@@ -423,8 +423,33 @@ describe("getArea: the live map (beta 9)", () => {
     expect((await run(p, { x: 0, y: 0 })).zv).toBe(0);
     await redis.send("HINCRBY", [`livemap:zv:${WORLD}`, "0", "3"]);
     expect((await run(p, { x: 0, y: 0 })).zv).toBe(3);
-    // A fully fogged zone too, so the map never asks it again and again.
+    // Never for a zone the viewer cannot see at all: its version would tell when something there changed.
     await redis.send("HINCRBY", [`livemap:zv:${WORLD}`, String(50 * 10000 + 50), "1"]);
-    expect((await run(p, { x: 500, y: 500 })).zv).toBe(1);
+    expect(await run(p, { x: 500, y: 500 })).not.toHaveProperty("zv");
+  });
+
+  test("getareas answers several zones in one call, the cell rows read once, each as getarea would", async () => {
+    const p = viewer(1, { flinger: 1, homebase: ["1", "1"] });
+    tables.set(User, [ownerRow(3, "near-owner", 100)]);
+    tables.set(WorldMapCell, [cellRow("near-base", 3, 3, 1)]);
+    const single = (await run(p, { x: 0, y: 0 })) as Row;
+    findCalls = [];
+    const ctx = { authUser: p, request: { body: { zones: "0,0;500,500;0,10" } }, state: {} } as unknown as Context;
+    await getAreas(ctx, async () => {});
+    const areas = (ctx.body as { areas: Row[] }).areas;
+    expect(areas.map((a) => [a.x, a.y])).toEqual([[0, 0], [500, 500], [0, 10]]);
+    expect(areas[0]!.data).toEqual(single.data);
+    expect(areas[1]).not.toHaveProperty("zv");
+    expect(findCalls.filter(({ entity }) => entity === WorldMapCell)).toHaveLength(1);
+    expect(findCalls.filter(({ entity, where }) => entity === User && "userid" in where)).toHaveLength(1);
+  });
+
+  test("getareas refuses more than ten zones, or none", async () => {
+    const p = viewer(1);
+    const many = Array.from({ length: 11 }, (_, i) => `${i * 10},0`).join(";");
+    for (const zones of [many, "", "x,1"]) {
+      const ctx = { authUser: p, request: { body: { zones } }, state: {} } as unknown as Context;
+      await expect(getAreas(ctx, async () => {})).rejects.toThrow();
+    }
   });
 });

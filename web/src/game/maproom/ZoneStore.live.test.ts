@@ -1,7 +1,8 @@
 import { describe, expect, it } from "vitest";
 import type { GetAreaResponse, MapCell } from "@/api/types";
-import { ZoneStore, expireCells, firstDue, type AreaFetcher } from "./ZoneStore";
-import { zoneFor } from "./zones";
+import { ApiError } from "@/api/http";
+import { LIVE_MIN_GAP_MS, ZoneStore, expireCells, firstDue, type AreaFetcher, type AreasFetcher } from "./ZoneStore";
+import { zoneFor, zonesForRange } from "./zones";
 
 /** The live map's side of the zone cache (beta 9): versions, live answers, time-only changes. */
 
@@ -18,17 +19,36 @@ const response = (x: number, y: number): GetAreaResponse => {
   return { error: 0, x, y, data, zv: versions.get(zoneFor(x, y).id) ?? 0 };
 };
 
+let clock = 1_000_000;
+
 const setup = () => {
   versions.clear();
   cells.clear();
+  clock = 1_000_000;
   const calls: [number, number][] = [];
+  const batches: [number, number][][] = [];
   const zones: { id: number; live: boolean | undefined }[] = [];
+  let busy = 0;
   const fetcher: AreaFetcher = (x, y) => {
     calls.push([x, y]);
     return Promise.resolve(response(x, y));
   };
-  const store = new ZoneStore({ fetcher, onZone: (zone, _previous, live) => zones.push({ id: zone.id, live }) });
-  return { store, calls, zones };
+  const areasFetcher: AreasFetcher = (list) => {
+    batches.push(list.map((zone) => [zone.x, zone.y]));
+    if (busy > 0) {
+      busy -= 1;
+      return Promise.reject(new ApiError("busy", { status: 503, body: { retry: 4 } }));
+    }
+    return Promise.resolve(list.map((zone) => response(zone.x, zone.y)));
+  };
+  const store = new ZoneStore({
+    fetcher,
+    areasFetcher,
+    now: () => clock,
+    random: () => 0,
+    onZone: (zone, _previous, live) => zones.push({ id: zone.id, live }),
+  });
+  return { store, calls, batches, zones, busyOnce: (n = 1) => (busy = n) };
 };
 
 const drain = async (store: ZoneStore) => {
@@ -36,71 +56,129 @@ const drain = async (store: ZoneStore) => {
 };
 
 const HOME = zoneFor(712, 347);
+const NEXT = zoneFor(721, 347);
+const VIEW = { minCol: 705, maxCol: 725, minRow: 345, maxRow: 349 };
 
 describe("ZoneStore live versions", () => {
-  it("keeps each answer's version and asks again only the zones whose version moved", async () => {
-    const { store, calls } = setup();
+  it("keeps each answer's version, and only a moved one is asked again, in one batch", async () => {
+    const { store, calls, batches } = setup();
     versions.set(HOME.id, 3);
-    store.ensureVisible({ minCol: 705, maxCol: 725, minRow: 345, maxRow: 349 });
+    store.ensureVisible(VIEW);
     await drain(store);
     expect(store.getZone(HOME.id)?.zv).toBe(3);
     calls.length = 0;
 
-    const other = zoneFor(721, 347).id;
-    expect(store.applyVersions([[HOME.id, 3], [other, 0]])).toBe(0);
-    expect(store.applyVersions([[HOME.id, 4]])).toBe(1);
+    expect(store.applyVersions([[HOME.id, 3], [NEXT.id, 0]])).toBe(0);
+    expect(store.applyVersions([[HOME.id, 4], [NEXT.id, 1]])).toBe(2);
     versions.set(HOME.id, 4);
-    await drain(store);
-    expect(calls).toEqual([[710, 340]]);
-  });
-
-  it("a zone not held is not fetched because of a push", async () => {
-    const { store, calls } = setup();
-    expect(store.applyVersions([[zoneFor(100, 100).id, 9]])).toBe(0);
-    await drain(store);
+    versions.set(NEXT.id, 1);
+    await store.pumpLive();
+    expect(batches).toEqual([[[710, 340], [720, 340]]]);
     expect(calls).toEqual([]);
+    expect(store.getZone(HOME.id)?.zv).toBe(4);
+    expect(store.liveWaiting).toBe(0);
   });
 
-  it("the pushed answer is flagged live; an answer read before the change is asked once more", async () => {
-    const { store, calls, zones } = setup();
+  it("a zone not held is not asked because of a push", async () => {
+    const { store, batches } = setup();
+    expect(store.applyVersions([[zoneFor(100, 100).id, 9]])).toBe(0);
+    await store.pumpLive();
+    expect(batches).toEqual([]);
+  });
+
+  it("waits its random moment before asking", async () => {
+    const { store, batches } = setup();
+    store.ensureVisible(VIEW);
+    await drain(store);
+    const late = new ZoneStore({ fetcher: () => Promise.resolve(response(710, 340)), areasFetcher: (l) => (batches.push(l.map((z) => [z.x, z.y])), Promise.resolve(l.map((z) => response(z.x, z.y)))), now: () => clock, random: () => 0.5 });
+    late.ensureVisible(VIEW);
+    await drain(late);
+    late.applyVersions([[HOME.id, 1]]);
+    await late.pumpLive();
+    expect(batches).toEqual([]);
+    clock += 750;
+    await late.pumpLive();
+    expect(batches).toHaveLength(1);
+  });
+
+  it("a zone off screen waits, and is asked once it comes into view", async () => {
+    const { store, batches } = setup();
+    store.ensureVisible(VIEW);
+    await drain(store);
+    store.ensureVisible({ minCol: 100, maxCol: 105, minRow: 100, maxRow: 105 });
+    store.applyVersions([[HOME.id, 1]]);
+    await store.pumpLive();
+    expect(batches).toEqual([]);
+    expect(store.liveWaiting).toBe(1);
+    store.ensureVisible(VIEW);
+    await store.pumpLive();
+    expect(batches).toEqual([[[710, 340]]]);
+  });
+
+  it("asks a zone at most once per 3 s, however often it changes", async () => {
+    const { store, batches } = setup();
+    store.ensureVisible(VIEW);
+    await drain(store);
+    store.applyVersions([[HOME.id, 1]]);
+    versions.set(HOME.id, 1);
+    await store.pumpLive();
+    store.applyVersions([[HOME.id, 2]]);
+    versions.set(HOME.id, 2);
+    await store.pumpLive();
+    expect(batches).toHaveLength(1);
+    clock += LIVE_MIN_GAP_MS;
+    await store.pumpLive();
+    expect(batches).toHaveLength(2);
+    expect(store.getZone(HOME.id)?.zv).toBe(2);
+  });
+
+  it("the pushed answer is flagged live; one read before the change is asked once more", async () => {
+    const { store, batches, zones } = setup();
     store.ensureVisible({ minCol: 710, maxCol: 712, minRow: 345, maxRow: 347 });
     await drain(store);
     expect(zones.at(-1)).toEqual({ id: HOME.id, live: false });
-    calls.length = 0;
 
-    // The server still answers 0 (the bump raced the read): one retry, then it stops.
+    // The server still answers 0 (the bump raced the read): one more ask after the gap, then it stops.
     cells.set("712,347", { i: 125 } as MapCell);
     store.applyVersions([[HOME.id, 1]]);
-    await drain(store);
-    expect(calls).toHaveLength(2);
+    await store.pumpLive();
     expect(zones.at(-1)).toEqual({ id: HOME.id, live: true });
+    clock += LIVE_MIN_GAP_MS;
+    await store.pumpLive();
+    clock += LIVE_MIN_GAP_MS;
+    await store.pumpLive();
+    expect(batches).toHaveLength(2);
+    expect(store.liveWaiting).toBe(0);
   });
 
-  it("a push for a zone in flight waits for that answer, then asks again if it is older", async () => {
-    let release: (() => void) | null = null;
-    const calls: number[] = [];
-    let held = true;
-    const fetcher: AreaFetcher = (x, y) => {
-      calls.push(x);
-      if (!held) return Promise.resolve(response(x, y));
-      held = false;
-      // Read now, before the change: the answer carries the old version.
-      const old = response(x, y);
-      return new Promise((resolve) => {
-        release = () => resolve(old);
-      });
-    };
-    versions.clear();
-    const store = new ZoneStore({ fetcher });
-    store.ensureVisible({ minCol: 710, maxCol: 712, minRow: 345, maxRow: 347 });
-    const first = store.pump();
-    store.applyVersions([[HOME.id, 2]]);
-    versions.set(HOME.id, 2);
-    release!();
-    await first;
+  it("busy: waits as long as the server says, then asks again", async () => {
+    const { store, batches, busyOnce } = setup();
+    store.ensureVisible(VIEW);
     await drain(store);
-    expect(calls).toHaveLength(2);
-    expect(store.getZone(HOME.id)?.zv).toBe(2);
+    busyOnce();
+    store.applyVersions([[HOME.id, 1]]);
+    versions.set(HOME.id, 1);
+    await store.pumpLive();
+    expect(store.liveWaiting).toBe(1);
+    clock += 3_000;
+    await store.pumpLive();
+    expect(batches).toHaveLength(1);
+    clock += 1_001;
+    await store.pumpLive();
+    expect(batches).toHaveLength(2);
+    expect(store.liveWaiting).toBe(0);
+  });
+
+  it("a batch holds at most 10 zones", async () => {
+    const { store, batches } = setup();
+    const wide = { minCol: 600, maxCol: 749, minRow: 300, maxRow: 309 };
+    store.ensureVisible(wide);
+    await drain(store);
+    const ids = zonesForRange(wide).map((zone) => zone.id);
+    expect(ids.length).toBeGreaterThan(10);
+    store.applyVersions(ids.map((id) => [id, 1] as [number, number]));
+    await store.pumpLive();
+    expect(batches[0]).toHaveLength(10);
   });
 
   it("the watch list puts own zones first and stops at the limit", async () => {

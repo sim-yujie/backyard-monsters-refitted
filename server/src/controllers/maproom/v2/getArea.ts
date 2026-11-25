@@ -42,6 +42,35 @@ const getAreaSchema = z.object({
   sendresources: z.coerce.number().optional().default(0),
 });
 
+/** The most zones one `/worldmapv2/getareas` asks for (live map, beta 9). */
+export const MAX_BATCH_ZONES = 10;
+
+/**
+ * `/worldmapv2/getareas`'s body: zone origins as `"x,y;x,y"` (a flat string, as
+ * every JSON body is flattened to, `jsonBodyCompat`), at most {@link MAX_BATCH_ZONES}.
+ */
+const getAreasSchema = z.object({
+  zones: z
+    .string()
+    .max(MAX_BATCH_ZONES * 8 + 16)
+    .transform((text, check) => {
+      const zones = text
+        .split(";")
+        .filter(Boolean)
+        .map((pair) => pair.split(",").map(Number));
+      const valid = zones.every(
+        ([zx, zy]) =>
+          Number.isInteger(zx) && Number.isInteger(zy) && zx! >= 0 && zy! >= 0 && zx! < MapRoom2.WIDTH && zy! < MapRoom2.HEIGHT,
+      );
+      if (!valid || zones.length === 0 || zones.length > MAX_BATCH_ZONES) {
+        check.addIssue({ code: "custom", message: "zones" });
+        return z.NEVER;
+      }
+      return zones.map(([zx, zy]) => ({ x: zx!, y: zy! }));
+    }),
+  sendresources: z.coerce.number().optional().default(0),
+});
+
 /**
  * Fields loaded off the requesting player's own save.
  */
@@ -147,11 +176,29 @@ const allVisible = (x: number, y: number, width: number, height: number): Map<st
   return visibility;
 };
 
-export const getArea: KoaController = async (ctx) => {
-  if (!devConfig.maproom) throw mapRoomDisabledErr();
-  
-  const { x, y, sendresources } = getAreaSchema.parse(ctx.request.body);
+/** One zone a request asks for: its origin as sent. */
+export interface AreaRequest {
+  x: number;
+  y: number;
+}
 
+const ZONE_SPAN = 10;
+const cellsKey = (x: number, y: number): string => `${x},${y}`;
+
+/**
+ * The `getarea` answers for one or more zones (live map, beta 9: the map
+ * re-asks the zones that changed in one call, `/worldmapv2/getareas`). Every
+ * lookup that does not depend on the zone runs once for the whole call — the
+ * viewer's save and sight, the cell rows (one query over every zone), their
+ * owners and the viewer's relations to them, the alliance roster and the
+ * neighbour counts — so asking for several zones together costs about what
+ * one zone did. One zone gives exactly the answer `getarea` always gave.
+ */
+export const buildAreas = async (
+  ctx: Parameters<KoaController>[0],
+  zones: readonly AreaRequest[],
+  sendresources: number,
+): Promise<Record<string, unknown>[]> => {
   const user: User = ctx.authUser;
 
   await postgres.em.populate(user, ["save"], { fields: OWN_SAVE_FIELDS });
@@ -162,24 +209,17 @@ export const getArea: KoaController = async (ctx) => {
   // Save that has never been placed on a Map Room 2 world (Town Hall 6 gate
   // on /worldmapv2/setmapversion). Neither is an error - see
   // emptyAreaResponse.ts.
-  if (!hasWorldPlacement(save)) {
-    ctx.status = Status.OK;
-    ctx.body = emptyAreaResponse(x, y);
-    return;
-  }
+  if (!hasWorldPlacement(save)) return zones.map((zone) => emptyAreaResponse(zone.x, zone.y));
 
   // hasWorldPlacement guarantees both `save` and `save.worldid` from here on.
   const placedSave = save!;
   const worldid = placedSave.worldid!;
 
-  const width = 10;
-  const height = 10;
-
-  const currentX = x;
-  const currentY = y;
+  const width = ZONE_SPAN;
+  const height = ZONE_SPAN;
 
   // The fog of war (issue #330, `docs/design/fog-of-war.md` §5.1): what P can
-  // see of this zone, before any `world_map_cell` row is touched. `sv` rides
+  // see of each zone, before any `world_map_cell` row is touched. `sv` rides
   // on every response below so the client can tell its cached zones apart
   // from a sight that has changed.
   const sight = await getPlayerSight(user);
@@ -190,63 +230,71 @@ export const getArea: KoaController = async (ctx) => {
   // (`fog-of-war.md` §5.1 step 3). Only the circles and cells that can reach
   // this zone are asked (`zoneVisibility.ts`): the same answer, without
   // testing every cell against a big alliance's whole sight.
-  const zoneVisibility = devConfig.disableFogOfWar
-    ? allVisible(currentX, currentY, width, height)
-    : visibilityOfZone(sight, currentX, currentY, width, height, mr2HexShape());
+  const visibilities = zones.map((zone) =>
+    devConfig.disableFogOfWar
+      ? allVisible(zone.x, zone.y, width, height)
+      : visibilityOfZone(sight, zone.x, zone.y, width, height, mr2HexShape()),
+  );
+  const fogged = visibilities.map((visibility) => ![...visibility.values()].some(Boolean));
 
   const credits = visibleCredits(user, placedSave.credits);
-  // The live map (beta 9): the zone's version, read before any row is, so a write landing in
-  // between makes the map ask once more rather than keep an old answer under a new version.
-  const zv = await readZoneVersion(redis, worldid, zoneId(Math.floor(x / 10) * 10, Math.floor(y / 10) * 10));
-  const extras = { zv, ...(sendresources === 1 ? { resources: placedSave.resources, credits } : {}) };
+  const extras = sendresources === 1 ? { resources: placedSave.resources, credits } : {};
+  // The live map (beta 9): each zone's version, read before any row is, so a write landing in
+  // between makes the map ask once more rather than keep an old answer under a new version. A zone
+  // the viewer cannot see at all gets none: its version would say when something there changed.
+  const versions = await Promise.all(
+    zones.map((zone, index) =>
+      fogged[index] ? Promise.resolve(undefined) : readZoneVersion(redis, worldid, zoneId(Math.floor(zone.x / 10) * 10, Math.floor(zone.y / 10) * 10)),
+    ),
+  );
 
-  // No sight source or revealed cell touches this zone at all: answer at
-  // once with every cell fogged, no `world_map_cell` query, no owner data.
-  if (![...zoneVisibility.values()].some(Boolean)) {
+  // No sight source or revealed cell touches a zone at all: every cell fogged,
+  // no `world_map_cell` query, no owner data.
+  const foggedAnswer = async (zone: AreaRequest): Promise<Record<string, unknown>> => {
     const cells: Record<number, Record<number, unknown>> = {};
-    for (let cellX = currentX; cellX <= currentX + width; cellX++) {
+    for (let cellX = zone.x; cellX <= zone.x + width; cellX++) {
       cells[cellX] = {};
-      for (let cellY = currentY; cellY <= currentY + height; cellY++) {
-        cells[cellX][cellY] = { fog: 1 };
-      }
+      for (let cellY = zone.y; cellY <= zone.y + height; cellY++) cells[cellX][cellY] = { fog: 1 };
     }
-
-    ctx.status = Status.OK;
-    ctx.body = {
+    return {
       error: 0,
-      x: currentX,
-      y: currentY,
+      x: zone.x,
+      y: zone.y,
       data: cells,
       alliancedata: await getAllianceRoster(user.alliance_id ? [user.alliance_id] : []),
       sv: sight.sv,
       myalliance: user.alliance_id ?? null,
       ...extras,
     };
-    return;
-  }
+  };
 
-  // First, get persistant cells which have been stored in the database.
+  const open = zones.filter((_, index) => !fogged[index]);
+  if (open.length === 0) return Promise.all(zones.map(foggedAnswer));
+
+  const rect = (zone: AreaRequest) => ({
+    x: { $gte: zone.x, $lte: zone.x + width },
+    y: { $gte: zone.y, $lte: zone.y + height },
+  });
+
+  // First, get persistant cells which have been stored in the database: one query for every zone.
   const dbCells = await postgres.em.find(
     WorldMapCell,
     {
       world: worldid,
       map_version: MapRoomVersion.V2,
-      x: {
-        $gte: currentX,
-        $lte: currentX + width,
-      },
-      y: {
-        $gte: currentY,
-        $lte: currentY + height,
-      },
+      ...(open.length === 1 ? rect(open[0]!) : { $or: open.map(rect) }),
     },
     { populate: ["save"], fields: CELL_SAVE_FIELDS }
   );
 
   // Hidden rows are dropped here, before owners, online status, truces and
   // invites are loaded, so nothing about them reaches the response or the
-  // logs (`fog-of-war.md` §5.1 step 4).
-  const visibleDbCells = dbCells.filter((cell) => zoneVisibility.get(cellKey(cell.x, cell.y)));
+  // logs (`fog-of-war.md` §5.1 step 4). A row visible from any asked zone counts.
+  const inZone = (cell: { x: number; y: number }, zone: AreaRequest) =>
+    cell.x >= zone.x && cell.x <= zone.x + width && cell.y >= zone.y && cell.y <= zone.y + height;
+  const visibleFrom = (cell: { x: number; y: number }, index: number) =>
+    !fogged[index] && inZone(cell, zones[index]!) && !!visibilities[index]!.get(cellKey(cell.x, cell.y));
+  const visibleDbCells = dbCells.filter((cell) => zones.some((_, index) => visibleFrom(cell, index)));
 
   // Batch load all unique cell owners in a single query
   const ownerIds = [...new Set(visibleDbCells.map(cell => cell.uid).filter(Boolean))] as number[];
@@ -323,57 +371,98 @@ export const getArea: KoaController = async (ctx) => {
 
   const alliancedata = await getAllianceRoster([...allianceIds]);
 
-  const cells: Record<number, Record<number, unknown>> = {};
+  // Each cell's payload, built once however many zones show it (zones share an edge).
+  const payloads = new Map<string, unknown>();
   for (const cell of visibleDbCells) {
-    if (!cells[cell.x]) cells[cell.x] = {};
-
-    cells[cell.x][cell.y] = await createCellData(cell, worldid, ctx, cellOwners);
+    payloads.set(cellsKey(cell.x, cell.y), await createCellData(cell, worldid, ctx, cellOwners));
   }
 
-  // Then, fill the remaining cells: fog where hidden, else generated in-memory.
+  // Every cell of every zone, so the neighbour counts below run once.
+  const everyCell: Record<number, Record<number, unknown>> = {};
   const noise = generateNoise(worldid);
-  for (let cellX = currentX; cellX <= currentX + width; cellX++) {
-    // Ensure the cellX object exists in the cells map to append the cellY object to it
-    if (!cells[cellX]) cells[cellX] = {};
-    for (let cellY = currentY; cellY <= currentY + height; cellY++) {
-      // The cell already exists, skip it
-      if (cells[cellX][cellY]) continue;
-
-      if (!zoneVisibility.get(cellKey(cellX, cellY))) {
-        cells[cellX][cellY] = { fog: 1 };
-        continue;
-      }
-
-      const terrainHeight = getTerrainHeight(noise, cellX, cellY);
-      // Create a cell in-memory, skip the world being defined for memory efficency
-      const inMemoryCell = new WorldMapCell(
-        undefined,
-        cellX,
-        cellY,
-        terrainHeight
-      );
-      cells[cellX][cellY] = await createCellData(inMemoryCell, worldid, ctx);
+  const answers: Record<string, unknown>[] = [];
+  for (const [index, zone] of zones.entries()) {
+    if (fogged[index]) {
+      answers.push(await foggedAnswer(zone));
+      continue;
     }
+    const visibility = visibilities[index]!;
+    const cells: Record<number, Record<number, unknown>> = {};
+    for (let cellX = zone.x; cellX <= zone.x + width; cellX++) {
+      cells[cellX] = {};
+      everyCell[cellX] ??= {};
+      for (let cellY = zone.y; cellY <= zone.y + height; cellY++) {
+        if (!visibility.get(cellKey(cellX, cellY))) {
+          cells[cellX][cellY] = { fog: 1 };
+          continue;
+        }
+        const key = cellsKey(cellX, cellY);
+        let payload = payloads.get(key);
+        if (payload === undefined && !visibleDbCells.some((cell) => cell.x === cellX && cell.y === cellY)) {
+          // A cell with no row: generated in memory, skipping the world for memory efficiency.
+          const terrainHeight = getTerrainHeight(noise, cellX, cellY);
+          const inMemoryCell = new WorldMapCell(undefined, cellX, cellY, terrainHeight);
+          payload = await createCellData(inMemoryCell, worldid, ctx);
+          payloads.set(key, payload);
+        }
+        cells[cellX][cellY] = payload;
+        if (payload) everyCell[cellX][cellY] = payload;
+      }
+    }
+    answers.push({
+      error: 0,
+      x: zone.x,
+      y: zone.y,
+      data: cells,
+      alliancedata,
+      sv: sight.sv,
+      // The viewer's own alliance id (issue #334: plates read gold for "you",
+      // green for "your alliance"); cheap, since `user` is already loaded for
+      // this request and carries it directly, unlike a cell owner's, which is a
+      // batched lookup (`CELL_OWNER_FIELDS`).
+      myalliance: user.alliance_id ?? null,
+      zv: versions[index] ?? 0,
+      ...extras,
+    });
   }
 
   // Map Room 2's neighbour defence bonus, switched on: each land cell's
   // friendly neighbours as `nb`, counted the way the attack load counts them
   // for the battle (`docs/mr2-neighbours.md`). Switched off, nothing is added.
-  await addNeighbourCounts(cells, worldid, (cx, cy) => getTerrainHeight(noise, cx, cy));
+  // The payloads are shared with the answers, so one count serves every zone.
+  await addNeighbourCounts(everyCell, worldid, (cx, cy) => getTerrainHeight(noise, cx, cy));
+
+  return answers;
+};
+
+/**
+ * Controller for generating cells on the World Map.
+ *
+ * Processes chunks of 10 x 10 cells (11 x 11 with the shared edge), retrieving
+ * persistent cells (homebases, outposts) from the database, while all other
+ * cells are generated in memory (`buildAreas`).
+ */
+export const getArea: KoaController = async (ctx) => {
+  if (!devConfig.maproom) throw mapRoomDisabledErr();
+
+  const { x, y, sendresources } = getAreaSchema.parse(ctx.request.body);
+  const [answer] = await buildAreas(ctx, [{ x, y }], sendresources);
 
   ctx.status = Status.OK;
-  ctx.body = {
-    error: 0,
-    x: currentX,
-    y: currentY,
-    data: cells,
-    alliancedata,
-    sv: sight.sv,
-    // The viewer's own alliance id (issue #334: plates read gold for "you",
-    // green for "your alliance"); cheap, since `user` is already loaded for
-    // this request and carries it directly, unlike a cell owner's, which is a
-    // batched lookup (`CELL_OWNER_FIELDS`).
-    myalliance: user.alliance_id ?? null,
-    ...extras,
-  };
+  ctx.body = answer;
+};
+
+/**
+ * `POST /worldmapv2/getareas` (live map, beta 9): several zones' `getarea`
+ * answers in one call, `{ error: 0, areas: [...] }` in the order asked. The map
+ * gathers the zones a live push says changed and asks for them together.
+ */
+export const getAreas: KoaController = async (ctx) => {
+  if (!devConfig.maproom) throw mapRoomDisabledErr();
+
+  const { zones, sendresources } = getAreasSchema.parse(ctx.request.body);
+  const areas = await buildAreas(ctx, zones, sendresources);
+
+  ctx.status = Status.OK;
+  ctx.body = { error: 0, areas };
 };

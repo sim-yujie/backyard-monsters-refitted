@@ -8,19 +8,17 @@ import { CHECK_MS, LiveLink, MAX_WATCH, type LiveLinkOptions } from "./liveLink"
 /**
  * The live map in Map Room 2 (beta 9, stage 1), between the connection
  * (`liveLink.ts`), the zone cache and what the player sees: pushed zone
- * versions become re-asks of only those zones, each spread over up to
- * {@link PUSH_JITTER_MS} so everyone watching a zone does not ask in the same
- * instant; an answer that came from a push rings its changed cells and, when
- * the open panel's cell is one, updates the panel at once.
+ * versions become re-asks of only those zones (`ZoneStore.applyVersions`,
+ * `pumpLive`: on screen only, spread out, batched); an answer that came from a
+ * push rings its changed cells and, when the open panel's cell is one,
+ * updates the panel at once. A hidden tab ignores pushes; the version check
+ * when it comes back catches up.
  */
-
-/** Pushed re-asks are spread over this much time (still well inside the owner's 1-2 s). */
-export const PUSH_JITTER_MS = 400;
 /** While the connection is down, visible zones older than this are asked again (owner: 3-5 min). */
 export const DOWN_REFRESH_SECONDS = 240;
 
 export interface LiveUpdatesOptions {
-  store: Pick<ZoneStore, "applyVersions" | "watchList" | "getCell" | "pump">;
+  store: Pick<ZoneStore, "applyVersions" | "watchList" | "getCell" | "pumpLive">;
   rings: Pick<CellRings, "add">;
   /** Ask `/worldmapv2/sight` again. */
   refreshSight: () => void;
@@ -31,20 +29,18 @@ export interface LiveUpdatesOptions {
   tierOf: (cell: OffsetCell, payload: MapCell | undefined) => RingTier;
   token: () => string | null;
   link?: Partial<Pick<LiveLinkOptions, "socket" | "timers">>;
-  random?: () => number;
-  delay?: (fn: () => void, ms: number) => void;
+  /** True while the tab is hidden (default: `document.hidden`). */
+  hidden?: () => boolean;
 }
 
 export class LiveUpdates {
   private link: LiveLink | null = null;
   private stopped = false;
   private sightTimer: ReturnType<typeof setInterval> | null = null;
-  private readonly random: () => number;
-  private readonly delay: (fn: () => void, ms: number) => void;
+  private readonly hidden: () => boolean;
 
   constructor(private readonly options: LiveUpdatesOptions) {
-    this.random = options.random ?? Math.random;
-    this.delay = options.delay ?? ((fn, ms) => void setTimeout(fn, ms));
+    this.hidden = options.hidden ?? (() => typeof document !== "undefined" && document.hidden);
   }
 
   /** True while connected: no timed re-asks then. */
@@ -103,14 +99,12 @@ export class LiveUpdates {
   }
 
   private versions(pairs: [number, number][], all: boolean): void {
-    // A watch's answer (the catch-up after a reconnect, the 5-minute check) asks at once;
-    // a push is spread out a little.
-    const apply = () => {
-      if (this.stopped) return;
-      if (this.options.store.applyVersions(pairs) > 0) void this.options.store.pump();
-    };
-    if (all) apply();
-    else this.delay(apply, Math.floor(this.random() * PUSH_JITTER_MS));
+    if (this.stopped) return;
+    // A hidden tab asks nothing (the old polling paused too); its focus check catches up.
+    if (!all && this.hidden()) return;
+    // A watch's answer (the catch-up after a reconnect, the 5-minute check) is due at once;
+    // a push waits a random moment.
+    if (this.options.store.applyVersions(pairs, all) > 0) void this.options.store.pumpLive();
   }
 }
 

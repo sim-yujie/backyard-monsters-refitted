@@ -108,6 +108,17 @@ describe("live map gateway", () => {
     expect(c.sent).toEqual([]);
   });
 
+  test("a second watch inside the gap still applies, and is answered once the gap is over", async () => {
+    const a = await signedIn("a");
+    await a.frame({ type: "live.watch", z: [1] });
+    await a.frame({ type: "live.watch", z: [2] });
+    a.sent.length = 0;
+    fanOutZones(JSON.stringify({ w: "w", z: { 1: 5, 2: 6 } }));
+    expect(a.sent).toEqual([{ type: "live.zones", z: [[2, 6]] }]);
+    await Bun.sleep(250);
+    expect(a.sent.at(-1)).toEqual({ type: "live.zones", all: 1, z: [[2, 0]] });
+  });
+
   test("a new watch replaces the old one; a closed socket gets nothing more", async () => {
     const a = await signedIn("a");
     await a.frame({ type: "live.watch", z: [1] });

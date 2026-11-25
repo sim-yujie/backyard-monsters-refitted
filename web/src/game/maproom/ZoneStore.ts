@@ -6,7 +6,7 @@ import {
   RESOURCE_SYNC_SECONDS,
   ZONE_STALE_JITTER,
 } from "@/config";
-import { getArea } from "@/api/maproom";
+import { getArea, getAreas } from "@/api/maproom";
 import { ApiError, NetworkError } from "@/api/http";
 import { isPlayerCell, type AreaCellGrid, type GetAreaResponse, type MapCell, type PlayerCell, type Resources } from "@/api/types";
 import { TokenBucket } from "./TokenBucket";
@@ -58,9 +58,26 @@ export type AreaFetcher = (
   options: { sendResources?: boolean },
 ) => Promise<GetAreaResponse>;
 
+/** Several zones in one call (`getareas`), answers in the order asked. */
+export type AreasFetcher = (zones: readonly { x: number; y: number }[]) => Promise<GetAreaResponse[]>;
+
+/**
+ * Live map re-asks (beta 9, owner's standard practice, 25 Nov 2026): a zone a push says changed
+ * is asked again only while it is on screen, at most once per {@link LIVE_MIN_GAP_MS}, after a
+ * random wait of up to {@link LIVE_JITTER_MS} (so everyone watching it does not ask at once),
+ * and every zone due together goes in one `getareas` call of at most {@link LIVE_BATCH} zones.
+ */
+export const LIVE_MIN_GAP_MS = 3_000;
+export const LIVE_JITTER_MS = 1_500;
+export const LIVE_BATCH = 10;
+
 export interface ZoneStoreOptions {
   /** Injected for tests; defaults to the real `getarea` call. */
   fetcher?: AreaFetcher;
+  /** Injected for tests; defaults to the real `getareas` call. */
+  areasFetcher?: AreasFetcher;
+  /** Injected for tests; 0..1. */
+  random?: () => number;
   /** Injected for tests; milliseconds since an epoch. */
   now?: () => number;
   maxConcurrent?: number;
@@ -217,11 +234,20 @@ export class ZoneStore {
    */
   private readonly liveWanted = new Map<number, number>();
   private readonly liveRetried = new Set<number>();
+  /** When each wanted zone may be asked (its random wait), ms. */
+  private readonly liveDueAt = new Map<number, number>();
+  /** When each zone was last asked because of a push, ms. */
+  private readonly liveAskedAt = new Map<number, number>();
+  /** The live batch in flight, and the server's "busy, retry after" pause. */
+  private liveInFlight = false;
+  private livePausedUntil = 0;
   /** Each cached zone's first time-only change (a shield or truce running out...), unix seconds. */
   private readonly nextDue = new Map<number, number>();
 
   private readonly bucket: TokenBucket;
   private readonly fetcher: AreaFetcher;
+  private readonly areasFetcher: AreasFetcher;
+  private readonly random: () => number;
   private readonly now: () => number;
   private readonly maxConcurrent: number;
   private readonly options: ZoneStoreOptions;
@@ -244,6 +270,8 @@ export class ZoneStore {
   constructor(options: ZoneStoreOptions = {}) {
     this.options = options;
     this.fetcher = options.fetcher ?? ((x, y, o) => getArea(x, y, o));
+    this.areasFetcher = options.areasFetcher ?? (async (zones) => (await getAreas(zones)).areas);
+    this.random = options.random ?? Math.random;
     this.now = options.now ?? Date.now;
     this.maxConcurrent = options.maxConcurrent ?? AREA_MAX_CONCURRENT;
     this.bucket = new TokenBucket({
@@ -429,8 +457,9 @@ export class ZoneStore {
    * the one it holds is asked again, at the front of the queue; nothing else is. Returns how many
    * were asked.
    */
-  applyVersions(pairs: readonly (readonly [number, number])[]): number {
-    let asked = 0;
+  applyVersions(pairs: readonly (readonly [number, number])[], now: boolean = false): number {
+    let wanted = 0;
+    const at = this.now();
     for (const [id, version] of pairs) {
       const zone = this.zones.get(id);
       const flying = this.inFlight.has(id);
@@ -438,13 +467,67 @@ export class ZoneStore {
       if (zone && !flying && (zone.zv ?? 0) === version) continue;
       this.liveWanted.set(id, Math.max(version, this.liveWanted.get(id) ?? version));
       this.liveRetried.delete(id);
-      // One in flight is checked against the wanted version when it lands (`apply`).
-      if (flying) continue;
-      this.enqueue(zoneFromId(id), true);
-      asked += 1;
+      if (!this.liveDueAt.has(id)) this.liveDueAt.set(id, at + (now ? 0 : Math.floor(this.random() * LIVE_JITTER_MS)));
+      wanted += 1;
     }
-    if (asked > 0) this.reprioritise();
-    return asked;
+    return wanted;
+  }
+
+  /** Zones a push said changed that have not been asked again yet (on screen or not). */
+  get liveWaiting(): number {
+    return this.liveWanted.size;
+  }
+
+  /**
+   * Asks again, in one `getareas` call, the changed zones that are due: on screen, their random
+   * wait over, not asked because of a push in the last {@link LIVE_MIN_GAP_MS}, not already in
+   * flight. One batch at a time; call it from the scene's pump. A zone off screen keeps waiting
+   * and is asked once it comes into view. "Busy" from the server pauses the batches for as long
+   * as it says, then they try again.
+   */
+  async pumpLive(): Promise<void> {
+    if (this.stopped || this.liveInFlight || this.liveWanted.size === 0) return;
+    const at = this.now();
+    if (at < this.livePausedUntil) return;
+    const due: ZoneRef[] = [];
+    for (const id of this.liveWanted.keys()) {
+      if (due.length >= LIVE_BATCH) break;
+      if (!this.visible.has(id) || this.inFlight.has(id)) continue;
+      if ((this.liveDueAt.get(id) ?? 0) > at) continue;
+      if (at - (this.liveAskedAt.get(id) ?? -Infinity) < LIVE_MIN_GAP_MS) continue;
+      due.push(zoneFromId(id));
+    }
+    if (due.length === 0) return;
+    this.liveInFlight = true;
+    for (const zone of due) {
+      this.inFlight.add(zone.id);
+      this.liveAskedAt.set(zone.id, at);
+      this.liveDueAt.delete(zone.id);
+      // A forced entry for the same zone is answered by this batch.
+      this.queue.delete(zone.id);
+    }
+    let answers: GetAreaResponse[] | undefined;
+    let failure: unknown;
+    try {
+      answers = await this.areasFetcher(due.map((zone) => ({ x: zone.originX, y: zone.originY })));
+    } catch (caught) {
+      failure = caught;
+    }
+    for (const zone of due) this.inFlight.delete(zone.id);
+    this.liveInFlight = false;
+    if (answers) {
+      due.forEach((zone, index) => {
+        const answer = answers![index];
+        if (answer) this.apply({ ...zone, priority: 0, forced: true }, answer);
+      });
+      return;
+    }
+    // Still wanted: asked again once due (and after the server's pause, if it was busy).
+    for (const zone of due) this.liveDueAt.set(zone.id, this.now());
+    const retry = busyRetrySeconds(failure);
+    if (retry !== null) this.livePausedUntil = this.now() + retry * 1000;
+    else if (failure instanceof ApiError && failure.isAuthFailure) this.handleFailure({ ...due[0]!, priority: 0, forced: true }, failure);
+    else this.livePausedUntil = this.now() + LIVE_MIN_GAP_MS;
   }
 
   /**
@@ -460,6 +543,8 @@ export class ZoneStore {
     }
     for (const zone of this.orderedVisible()) {
       if (out.size >= limit) break;
+      // A zone wholly in the fog is never watched: its changes are not the viewer's to know.
+      if (this.options.skipZone?.(zone)) continue;
       out.add(zone.id);
     }
     return [...out];
@@ -700,11 +785,13 @@ export class ZoneStore {
     const live = wanted !== undefined;
     this.liveWanted.delete(entry.id);
     if (wanted !== undefined && response.zv !== undefined && response.zv < wanted && !this.liveRetried.has(entry.id)) {
+      // Read before the change it was asked for: asked once more by the next live batch.
       this.liveRetried.add(entry.id);
       this.liveWanted.set(entry.id, wanted);
-      this.enqueue(entry, true);
+      this.liveDueAt.set(entry.id, this.now());
     } else {
       this.liveRetried.delete(entry.id);
+      this.liveDueAt.delete(entry.id);
     }
     const due = firstDue(response.data);
     if (due === undefined) this.nextDue.delete(entry.id);
@@ -749,6 +836,8 @@ export class ZoneStore {
     this.nextDue.delete(id);
     this.liveWanted.delete(id);
     this.liveRetried.delete(id);
+    this.liveDueAt.delete(id);
+    this.liveAskedAt.delete(id);
     this.drawnKeys.delete(id);
     this.ownZones.delete(id);
     this.placed.delete(id);
@@ -785,6 +874,13 @@ export class ZoneStore {
       this.pausedUntilMs = Number.POSITIVE_INFINITY;
       this.options.onError?.({ kind: "auth", message: "Your session has expired." });
       this.options.onAuthFailure?.();
+      return;
+    }
+
+    // The server is busy (`areaGate`): wait as long as it says, quietly, and ask again.
+    const busy = busyRetrySeconds(caught);
+    if (busy !== null) {
+      this.pausedUntilMs = this.now() + busy * 1000;
       return;
     }
 
@@ -883,4 +979,11 @@ export const expireCells = (data: AreaCellGrid, now: number): { changed: boolean
     }
   }
   return { changed, reask };
+};
+
+/** The seconds a "busy" answer (503 from `areaGate`) says to wait, or null for any other failure. */
+export const busyRetrySeconds = (caught: unknown): number | null => {
+  if (!(caught instanceof ApiError) || (caught.status !== 503 && caught.serverStatus !== 503)) return null;
+  const retry = Number((caught.body as { retry?: unknown } | undefined)?.retry);
+  return Number.isFinite(retry) && retry > 0 ? Math.min(retry, 30) : 3;
 };
