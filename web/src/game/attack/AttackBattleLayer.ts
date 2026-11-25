@@ -2164,10 +2164,11 @@ export class AttackBattleLayer {
     let target: Point | null = null;
     const projectile = drawsProjectile(monsterId, event.ranged);
     if (event.buildingId >= 0) {
-      // A shot lands on the footprint point nearest the shooter, where the
-      // engine measures its reach (`targetIx`/`targetIy`); a blow, at the middle.
-      const centre = this.host.centreOf(event.buildingId);
-      target = centre && projectile ? groundWorld(event.targetIx, event.targetIy, this.origin) : centre;
+      // A shot or a blow lands on the footprint's middle, under the picture, as
+      // Flash's FIREBALL did (`FIREBALL.as:107`). The footprint point nearest
+      // the shooter (`targetIx`/`targetIy`, where the engine measures reach) is
+      // open ground beside or in front of most buildings (live bug, 25 Nov 2026).
+      target = this.host.centreOf(event.buildingId);
     } else if (event.creepTargetId >= 0) {
       const other = this.views.get(event.creepTargetId);
       const at = other ? { x: other.lastX, y: other.lastY } : groundWorld(event.targetIx, event.targetIy, this.origin);
