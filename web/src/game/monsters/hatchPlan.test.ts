@@ -88,7 +88,7 @@ describe("readHatchYard", () => {
       [10, "stalled"],
       [11, "building"],
       [13, "damaged"],
-      [14, "idle"],
+      [14, "upgrading"], // diag-hcc: an empty upgrading hatchery says so (it takes no HCC work)
     ]);
     const [producing, stalled, built] = yard.hatcheries;
     expect(producing!.queue).toEqual([

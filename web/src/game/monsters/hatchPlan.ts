@@ -326,12 +326,12 @@ export const readHatchYard = (save: BaseLoadResponse, now: number): HatchYard =>
       ? "building"
       : damaged
         ? "damaged"
-        : !monster
-          ? "idle"
-          : stage === 2
-            ? "stalled"
-            : upgrading
-              ? "upgrading"
+        : upgrading
+          ? "upgrading"
+          : !monster
+            ? "idle"
+            : stage === 2
+              ? "stalled"
               : "producing";
     const endsAt = stage === 1 && works ? acceleratedEnd(from, countdown, overdrive) : null;
 
@@ -535,7 +535,7 @@ export const previewAdd = (
     if (hcc) {
       if (!yard.hcc?.works) continue;
       for (const one of copy.hatcheries) {
-        const took = one.monster === null && one.canTake ? startNext(one, copy.shared) : null;
+        const took = one.monster === null && one.works ? startNext(one, copy.shared) : null;
         if (took) starts.push({ hatchery: one.id, monster: took });
       }
     } else {
