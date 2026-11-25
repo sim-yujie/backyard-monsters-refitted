@@ -468,12 +468,12 @@ describe("ArmyPanel champion", () => {
     expect(panel.retreatFor(3)?.hidden).toBe(true);
   });
 
-  it("offers each champion a Mode: the one its save remembers, else Hybrid (#220)", () => {
+  it("offers each ordinary champion a Mode: the one its save remembers, else Hybrid (#220)", () => {
     const roster = sandboxRoster();
     const remembered = rosterOf({
       ...roster,
       champions: roster.champions.map((entry) =>
-        entry.t === 3 ? { ...entry, s: "defensive" } : { ...entry, s: "berserk" },
+        entry.t === 3 ? { ...entry, s: "defensive" } : entry,
       ),
     });
     const session = sessionWith(remembered);
@@ -485,8 +485,7 @@ describe("ArmyPanel champion", () => {
     panels.push(panel);
 
     const fomor = panel.stanceFor(3);
-    const krallen = panel.stanceFor(5);
-    if (!fomor || !krallen) throw new Error("two Mode pickers expected");
+    if (!fomor) throw new Error("a Mode picker expected");
     expect([...fomor.options].map((option) => option.textContent)).toEqual([
       "Offensive",
       "Hybrid",
@@ -503,20 +502,66 @@ describe("ArmyPanel champion", () => {
     expect(document.getElementById(by)?.textContent).toContain(championName(3));
     expect(document.getElementById(by)?.textContent).not.toContain("Mode");
     // A Mode the panel does not know is read as Hybrid.
-    expect(krallen.value).toBe("hybrid");
+    const unknown = rosterOf({
+      ...roster,
+      champions: roster.champions.map((entry) => (entry.t === 3 ? { ...entry, s: "berserk" } : entry)),
+    });
+    const other = new ArmyPanel(new Bucket(sessionWith(unknown), { storage: null, playerKey: "test" })).mount(
+      document.body,
+    );
+    panels.push(other);
+    expect(other.stanceFor(3)?.value).toBe("hybrid");
 
-    krallen.value = "offensive";
-    krallen.dispatchEvent(new Event("change"));
-    krallen.click();
-    expect(picked).toEqual([[5, "offensive"]]);
-    expect(bucket.stance(5)).toBe("offensive");
+    fomor.value = "offensive";
+    fomor.dispatchEvent(new Event("change"));
+    fomor.click();
+    expect(picked).toEqual([[3, "offensive"]]);
+    expect(bucket.stance(3)).toBe("offensive");
     // Using the picker does not pick the champion for the next drop.
     expect(bucket.champion()).toBeNull();
 
     // The pick rides with the champion into the fling.
-    bucket.pickChampion(5);
+    bucket.pickChampion(3);
     const event = session.appendFling({ x: 100, y: 100, ...bucket.composition() });
-    expect(event.champion).toMatchObject({ t: 5, s: "offensive" });
+    expect(event.champion).toMatchObject({ t: 3, s: "offensive" });
+  });
+
+  it("gives Krallen no Mode: no picker on her row, none in her fling, the other champion keeps his (patch 8.7)", () => {
+    const roster = sandboxRoster();
+    // Her save may still remember a Mode from before.
+    const remembered = rosterOf({
+      ...roster,
+      champions: roster.champions.map((entry) => (entry.t === 5 ? { ...entry, s: "offensive" } : entry)),
+    });
+    const session = sessionWith(remembered);
+    const bucket = new Bucket(session, { storage: null, playerKey: "test" });
+    const panel = new ArmyPanel(bucket).mount(document.body);
+    panels.push(panel);
+
+    const krallenRow = panel.element.querySelector<HTMLElement>('.attack-army__champion[data-t="5"]');
+    const fomorRow = panel.element.querySelector<HTMLElement>('.attack-army__champion[data-t="3"]');
+    expect(krallenRow).not.toBeNull();
+    expect(panel.stanceFor(5)).toBeNull();
+    expect(krallenRow?.querySelector(".attack-army__mode")).toBeNull();
+    expect(krallenRow?.querySelector("select")).toBeNull();
+    expect(fomorRow?.querySelector(".attack-army__mode-select")).not.toBeNull();
+    // Locking and unlocking the pickers passes her row by.
+    panel.setChampionsOnField([5]);
+    panel.setChampionsOnField([]);
+
+    // Fielded beside Fomor in Offensive: his Mode rides along, hers never does.
+    panel.stanceFor(3)!.value = "offensive";
+    panel.stanceFor(3)!.dispatchEvent(new Event("change"));
+    bucket.pickChampion(3);
+    bucket.pickChampion(5);
+    const { champion, second } = bucket.composition();
+    if (!champion || !second) throw new Error("both champions picked");
+    const fomorFling = session.appendFling({ x: 100, y: 100, monsters: {}, champion });
+    const krallenFling = session.appendFling({ x: 120, y: 100, monsters: {}, champion: second });
+    expect(fomorFling.champion).toMatchObject({ t: 3, s: "offensive" });
+    expect(krallenFling.champion?.t).toBe(5);
+    expect(krallenFling.champion).not.toHaveProperty("s");
+    expect(session.flingLog().events.at(-1)).not.toHaveProperty("champion.s");
   });
 
   it("locks a champion's Mode while it is on the field (#220)", () => {
@@ -525,7 +570,7 @@ describe("ArmyPanel champion", () => {
     expect(fomor?.disabled).toBe(false);
     panel.setChampionsOnField([3]);
     expect(fomor?.disabled).toBe(true);
-    expect(panel.stanceFor(5)?.disabled).toBe(false);
+    expect(panel.stanceFor(5)).toBeNull();
     panel.setChampionsOnField([]);
     expect(fomor?.disabled).toBe(false);
   });
@@ -583,14 +628,23 @@ describe("ArmyPanel champion", () => {
     expect(rule).toMatch(/"pick icon label"\s*"pick icon note"\s*"pick mode mode"/);
 
     const { panel } = mount();
-    const row = panel.element.querySelector(".attack-army__champion");
-    const children = [...(row?.children ?? [])].map((child) => child.className);
-    expect(children).toEqual([
+    const childrenOf = (t: number) =>
+      [...(panel.element.querySelector(`.attack-army__champion[data-t="${t}"]`)?.children ?? [])].map(
+        (child) => child.className,
+      );
+    expect(childrenOf(3)).toEqual([
       "attack-army__champion-pick",
       "attack-army__icon",
       "attack-army__label",
       "attack-army__note",
       "attack-army__mode",
+    ]);
+    // Krallen has no Mode (patch 8.7): her third grid line stays empty.
+    expect(childrenOf(5)).toEqual([
+      "attack-army__champion-pick",
+      "attack-army__icon",
+      "attack-army__label",
+      "attack-army__note",
     ]);
   });
 
