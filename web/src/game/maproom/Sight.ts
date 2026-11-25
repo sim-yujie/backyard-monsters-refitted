@@ -23,8 +23,17 @@ export type SightFetcher = () => Promise<SightResponse>;
 export interface SightOptions {
   /** Injected for tests; defaults to the real `/worldmapv2/sight` call. */
   fetcher?: SightFetcher;
-  /** Fired when a fetch lands a different `sv` than the one already held. */
-  onChange?: () => void;
+  /**
+   * Fired when a fetch lands a different `sv` than the one already held, with `keep`: whether a
+   * cached zone (by its origin and the `sv` it was cut to) still shows exactly what the new sight
+   * lets it, so only the others need forgetting (`ZoneStore.applySight`).
+   */
+  onChange?: (keep: (zone: SightZone) => boolean, sv: string) => void;
+}
+
+/** A cached zone as the sight change sees it: where it is and the sight it was cut to. */
+export interface SightZone extends ZoneRef {
+  sv?: string;
 }
 
 const EMPTY: SightResponse = { error: 0, sv: "", sources: [], revealed: [] };
@@ -58,7 +67,8 @@ export class Sight {
   }
 
   /**
-   * Fetches the whole sight fresh: on entering the map, and on Refresh.
+   * Fetches the whole sight fresh: on entering the map, and on Refresh. A fetch already on its
+   * way is shared rather than doubled (each zone landing with the new `sv` used to start its own).
    *
    * Never rejects: the map calls it without waiting (`void`), so a failed
    * `/worldmapv2/sight` (offline, a timeout, a server error) used to surface
@@ -66,15 +76,19 @@ export class Sight {
    * 2026). A failure keeps the sight already held; the next zone fetch's `sv`
    * or the next Refresh asks again.
    */
-  async refresh(): Promise<void> {
-    let response: SightResponse;
-    try {
-      response = await this.fetcher();
-    } catch {
-      return;
-    }
-    this.apply(response);
+  refresh(): Promise<void> {
+    this.pending ??= this.fetcher()
+      .then(
+        (response) => this.apply(response),
+        () => undefined,
+      )
+      .finally(() => {
+        this.pending = null;
+      });
+    return this.pending;
   }
+
+  private pending: Promise<void> | null = null;
 
   /**
    * Call with a `getarea` response's `sv`. Refetches the whole sight the
@@ -83,6 +97,10 @@ export class Sight {
    */
   async syncVersion(sv: string | undefined): Promise<void> {
     if (sv === undefined || sv === this.snapshot.sv) return;
+    if (this.pending) {
+      await this.pending;
+      if (sv === this.snapshot.sv) return;
+    }
     await this.refresh();
   }
 
@@ -154,11 +172,65 @@ export class Sight {
   private lookupShape: HexShape | null = null;
 
   private apply(response: SightResponse): void {
-    const changed = response.sv !== this.snapshot.sv;
+    const previous = this.snapshot;
+    if (response.sv === previous.sv) {
+      this.snapshot = response;
+      return;
+    }
     this.snapshot = response;
-    if (changed) this.options.onChange?.();
+    const onChange = this.options.onChange;
+    if (!onChange) return;
+    // The zones the change can reach: every zone a circle or revealed cell that came or went
+    // touches. Null (forget everything) on the first sight, or one the lookup cannot index.
+    const touched = previous === EMPTY ? null : changedZoneLookup(previous, response, hexShape());
+    onChange((zone) => {
+      // Cut to this very sight (a zone that landed after the change).
+      if (zone.sv !== undefined && zone.sv === response.sv) return true;
+      if (touched === null || zone.sv !== previous.sv) return false;
+      const index = gridZoneIndex(zone);
+      return index >= 0 && touched[index] === 0;
+    }, response.sv);
   }
 }
+
+/**
+ * The zones whose cells' visibility can differ between two sights (map lag, 25 Nov 2026): a cell
+ * is visible when any circle or revealed cell lights it, so its answer can only change where a
+ * circle or revealed cell that is in one sight and not the other reaches. Marks the zones those
+ * touch, exactly as `buildZoneLookup` marks a sight's zones (so it never misses one the per-cell
+ * rule would light), or null when it cannot index them.
+ */
+export const changedZoneLookup = (
+  before: Pick<SightResponse, "sources" | "revealed">,
+  after: Pick<SightResponse, "sources" | "revealed">,
+  shape: HexShape,
+): Uint8Array | null => {
+  const sourceKey = (source: SightSource) => `${source.x},${source.y},${source.reach}`;
+  const cellKey = (cell: RevealedSightCell) => `${cell.x},${cell.y}`;
+  return buildZoneLookup(
+    symmetricDifference(before.sources, after.sources, sourceKey),
+    symmetricDifference(before.revealed, after.revealed, cellKey),
+    shape,
+  );
+};
+
+/** The items one list holds more copies of than the other (by `key`), from both sides. */
+const symmetricDifference = <T>(a: readonly T[], b: readonly T[], key: (item: T) => string): T[] => {
+  const counts = new Map<string, { item: T; count: number }>();
+  for (const item of a) {
+    const entry = counts.get(key(item));
+    if (entry) entry.count += 1;
+    else counts.set(key(item), { item, count: 1 });
+  }
+  for (const item of b) {
+    const entry = counts.get(key(item));
+    if (entry) entry.count -= 1;
+    else counts.set(key(item), { item, count: -1 });
+  }
+  const out: T[] = [];
+  for (const { item, count } of counts.values()) if (count !== 0) out.push(item);
+  return out;
+};
 
 /**
  * A reach past this is not indexed (the scan answers instead). Real reaches

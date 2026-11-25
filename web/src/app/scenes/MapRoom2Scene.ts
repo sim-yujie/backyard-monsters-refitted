@@ -221,12 +221,15 @@ export class MapRoom2Scene implements Scene {
    * already noticed the sight changed.
    */
   private readonly sight = new Sight({
-    onChange: () => {
+    onChange: (keep, sv) => {
       // "No memory" (owner decision): what used to be drawn may no longer be
-      // owed to the viewer, so both caches are dropped and refilled from the
-      // current viewport rather than left to look stale until they expire.
-      this.store.dropAll();
-      this.renderer.resetSight();
+      // owed to the viewer, so every zone whose cells may have gained or lost
+      // sight is dropped, from both caches, and refilled from the current
+      // viewport rather than left to look stale until it expires. Zones the
+      // change cannot reach stay (map lag, 25 Nov 2026: one alliance mate's
+      // new outpost used to empty the whole map).
+      const dropped = this.store.applySight(keep, sv);
+      this.renderer.forgetZones(dropped);
       this.store.ensureVisible(this.range);
     },
   });
