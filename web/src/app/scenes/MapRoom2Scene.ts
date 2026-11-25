@@ -1,3 +1,4 @@
+import { ClusterLayer } from "@/game/maproom/cluster/ClusterLayer";
 import { guideBus, GuideScreen } from "@/game/guide/guideBus";
 import { logout } from "@/api/auth";
 import { loadOwnYard } from "@/api/base";
@@ -290,6 +291,8 @@ export class MapRoom2Scene implements Scene {
   /** How long standing the markers took last frame, in milliseconds (speed readout). */
   private markerMs = 0;
   private input: MapInput | null = null;
+  /** Map pin clustering (beta 9): plaques and crests when zoomed out. */
+  private cluster: ClusterLayer | null = null;
 
   /**
    * The current viewport size in CSS px. `SceneContext.width`/`height` are a
@@ -441,6 +444,7 @@ export class MapRoom2Scene implements Scene {
     this.camera.resize(context.width, context.height);
     this.camera.attach(context.canvas);
     this.setTilt(this.tiltStrength);
+    this.cluster = this.makeClusterLayer(context.canvas);
 
     this.ui = new MapRoomUi(
       {
@@ -606,6 +610,9 @@ export class MapRoom2Scene implements Scene {
       camera: this.camera,
       canvas: context.canvas,
       onHover: (cell) => this.handleHover(cell),
+      // A tap on a plaque or crest zooms in to it (map pin clustering); not in move mode, which
+      // ticks yards by tapping them.
+      onTap: (point) => !this.transfer?.active && (this.cluster?.tapAt(point.x, point.y) ?? false),
       // In move mode a tap on one of the player's yards ticks it (beta 9 #7).
       onSelect: (cell) => {
         if (this.transfer?.tapCell(cell.col, cell.row)) return;
@@ -639,7 +646,9 @@ export class MapRoom2Scene implements Scene {
         draws: () => this.tiltView?.draws ?? 0,
         stageDraws: () => this.stageDraws,
         resolution: () => this.tiltView?.textureResolution ?? 0,
-        markers: () => ({ count: this.renderer.markerCount, ms: this.markerMs }),
+        markers: () => ({ count: this.renderer.markerCount, ms: this.markerMs, drawn: this.renderer.drawnMarkerCount }),
+        // Map pin clustering's layer (its `stats`, `update` for timing).
+        cluster: this.cluster,
         // Markers upright (true) or warped flat with the ground (false, the "before").
         upright: (on: boolean) => {
           this.uprightMarkers = on;
@@ -695,6 +704,8 @@ export class MapRoom2Scene implements Scene {
     this.markerPicturesTimer = null;
     this.input?.detach();
     this.input = null;
+    this.cluster?.destroy();
+    this.cluster = null;
     this.camera.setPointerMap(null);
     this.camera.detach();
     this.tiltView?.destroy();
@@ -728,6 +739,7 @@ export class MapRoom2Scene implements Scene {
     this.viewportHeight = height;
     // A resized canvas is blank until drawn.
     this.stageMustDraw = true;
+    this.cluster?.hudChanged();
     this.camera.resize(width, height);
     if (this.tilt) this.setTilt(this.tiltStrength);
   }
@@ -826,6 +838,60 @@ export class MapRoom2Scene implements Scene {
     );
   }
 
+  /** Map pin clustering's layer (beta 9), fed from the map's own camera, tilt, zones and HUD. */
+  private makeClusterLayer(canvas: HTMLCanvasElement): ClusterLayer {
+    const renderer = this.renderer;
+    const camera = this.camera;
+    return new ClusterLayer({
+      filter: renderer.markerFilter,
+      zones: () => this.store.loadedZoneRefs(),
+      getCell: (col, row) => this.store.getCell(col, row),
+      cellsVersion: () => renderer.cellsVersion,
+      viewer: () => renderer.viewerContext,
+      camera: () => ({ zoom: camera.zoom, x: camera.position.x, y: camera.position.y }),
+      projectionKey: () => this.tilt,
+      project: (wx, wy, out) => {
+        const fx = (wx - camera.position.x) * camera.zoom;
+        const fy = (wy - camera.position.y) * camera.zoom;
+        if (this.tilt) return this.tilt.toScreenInto(fx, fy, out);
+        out.x = fx;
+        out.y = fy;
+        return true;
+      },
+      viewport: () => ({ width: this.viewportWidth, height: this.viewportHeight }),
+      obstacles: () => {
+        const box = canvas.getBoundingClientRect();
+        return (this.ui?.coverRects() ?? []).map((r) => ({
+          left: r.left - box.left,
+          top: r.top - box.top,
+          right: r.right - box.left,
+          bottom: r.bottom - box.top,
+        }));
+      },
+      zoomToFit: (box) => this.zoomToFit(box),
+      openCell: (col, row) => this.selectCell({ col, row }),
+      scaleAt: (y) => (this.tilt ? this.tilt.scaleAt(y) : 1),
+      squash: () => (this.tilt ? this.tilt.squash : 1),
+      canvas,
+    });
+  }
+
+  /**
+   * Zooms in so a box of map pixels fills the screen between the top bar and the dock, at least a
+   * good step in and never past play zoom (a tap on a plaque or crest).
+   */
+  private zoomToFit(box: { minX: number; minY: number; maxX: number; maxY: number }): void {
+    const camera = this.camera;
+    const pad = mapRoomGrid.colStep * 1.5;
+    const usableW = Math.max(100, this.viewportWidth - 40);
+    const usableH = Math.max(100, this.viewportHeight - 160);
+    const fit = Math.min(usableW / (box.maxX - box.minX + pad * 2), usableH / (box.maxY - box.minY + pad * 2));
+    camera.settle();
+    camera.zoom = Math.min(DEFAULT_ZOOM, Math.max(fit, camera.zoom * 1.6), camera.maxZoom);
+    camera.centreOn({ x: (box.minX + box.maxX) / 2, y: (box.minY + box.maxY) / 2 });
+    camera.dirty = true;
+  }
+
   /**
    * Stands the map's markers upright over the tilted picture, for the camera
    * as it is now. Re-placing happens only when the camera or the tilt moved
@@ -875,6 +941,8 @@ export class MapRoom2Scene implements Scene {
       this.transfer?.place();
     }
 
+    // Before the map draws, so the markers a plaque or crest stands for are left out this frame.
+    if (this.cluster?.update()) this.stageMustDraw = true;
     this.renderer.draw(this.range, this.camera.zoom);
     if (this.framesMarked < 2) this.markFrames();
     if (this.tilt && this.tiltView && this.context) {

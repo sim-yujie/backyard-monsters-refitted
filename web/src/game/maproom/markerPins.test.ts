@@ -4,7 +4,7 @@ import { afterEach, describe, expect, it } from "vitest";
 import { Camera } from "@/game/Camera";
 import { mapRoomGrid, setHexShape, type HexShape } from "@/game/HexGrid";
 import { pickCell } from "./ground";
-import { MarkerPins, markerFit, uprightPlacement, uprightProjector, type Projector } from "./markerPins";
+import { MarkerFilter, MarkerPins, markerFit, uprightPlacement, uprightProjector, type Projector } from "./markerPins";
 import { Tilt, TILT_PITCH_DEG } from "./tilt";
 
 /**
@@ -288,5 +288,61 @@ describe("chunks off the screen (map lag, 25 Nov 2026)", () => {
     pins.place(counted, "back");
     expect(items.every((item) => item.visible)).toBe(true);
     expect(calls).toBeGreaterThan(0);
+  });
+});
+
+describe("MarkerFilter (map pin clustering)", () => {
+  const pinned = (filter: MarkerFilter) => {
+    const pins = new MarkerPins();
+    const parent = new Container();
+    const own = new Sprite();
+    const camp = new Sprite();
+    const plain = new Sprite();
+    parent.addChild(own, camp, plain);
+    pins.add({ x: 100, y: 100, cell: 5 }, own);
+    pins.add({ x: 200, y: 100, cell: 6, camp: true }, camp);
+    pins.add({ x: 300, y: 100 }, plain);
+    pins.applyFilter(filter);
+    return { pins, own, camp, plain };
+  };
+
+  it("leaves out the hidden cells' markers and, when zoomed out, the camps' on the flat map", () => {
+    const filter = new MarkerFilter();
+    const { pins, own, camp, plain } = pinned(filter);
+    expect([own.visible, camp.visible, plain.visible]).toEqual([true, true, true]);
+    filter.setHidden([5]);
+    filter.setCampsShown(false);
+    pins.applyFilter(filter);
+    expect([own.visible, camp.visible, plain.visible]).toEqual([false, false, true]);
+    expect(pins.drawnCount).toBe(1);
+    // The previous set comes back.
+    filter.setHidden([]);
+    filter.setCampsShown(true);
+    pins.applyFilter(filter);
+    expect([own.visible, camp.visible, plain.visible]).toEqual([true, true, true]);
+  });
+
+  it("skips left-out markers on the tilted screen and brings them back", () => {
+    const filter = new MarkerFilter();
+    const { pins, own, camp, plain } = pinned(filter);
+    const project: Projector = (x, y) => ({ x, y, scale: 1 });
+    filter.setHidden([5]);
+    pins.applyFilter(filter);
+    pins.place(project, "a");
+    expect([own.visible, camp.visible, plain.visible]).toEqual([false, true, true]);
+    filter.setHidden([]);
+    pins.applyFilter(filter);
+    pins.place(project, "a");
+    expect(own.visible).toBe(true);
+  });
+
+  it("hides a marker added to a cell that is already left out", () => {
+    const filter = new MarkerFilter();
+    filter.setHidden([9]);
+    const pins = new MarkerPins();
+    pins.applyFilter(filter);
+    const late = new Sprite();
+    pins.add({ x: 1, y: 1, cell: 9 }, late, "text");
+    expect(late.visible).toBe(false);
   });
 });

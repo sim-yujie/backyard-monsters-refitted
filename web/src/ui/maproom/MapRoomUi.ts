@@ -599,6 +599,21 @@ export class MapRoomUi {
   }
 
   /** The bottom edge of the HUD: the map shows nothing above it. */
+  /**
+   * The HUD's boxes over the map in viewport pixels: the top bar and every button and field in the
+   * docks. Map pin clustering keeps its plaques and crests clear of them. Read about once a second.
+   */
+  coverRects(): DOMRect[] {
+    const out: DOMRect[] = [this.hud.element.getBoundingClientRect()];
+    if (!this.container) return out;
+    for (const el of this.container.querySelectorAll("button, input")) {
+      if (this.hud.element.contains(el)) continue;
+      const r = el.getBoundingClientRect();
+      if (r.width > 0 && r.height > 0) out.push(r);
+    }
+    return out;
+  }
+
   hudBottom(): number {
     return this.hud.element.getBoundingClientRect().bottom;
   }

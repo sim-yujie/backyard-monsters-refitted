@@ -42,7 +42,8 @@ import { tagStyle, type TagStyle } from "./painted/markerStyle";
 import { GROUND_ANCHOR_X, groundAnchorY, type GroundArt } from "./groundArt";
 import type { MapPicture } from "./mapPicture";
 import type { MapShields } from "./mapAlliances";
-import { MarkerPins } from "./markerPins";
+import { MarkerPins, type Foot } from "./markerPins";
+import { cellKey } from "./cluster/clusterRules";
 import { BORDER_RIM_COLOUR, PINNED_CENTRE_COLOUR, RELATION_LOOK, TILE_RIM_ALPHA } from "./relationLook";
 
 /**
@@ -347,10 +348,12 @@ export class MapChunk {
           }
         }
 
+        // Each cell's markers know their cell, so map pin clustering can leave them out.
+        const key = cellKey(col, row);
         if (appearance.marker === CellMarker.YARD || appearance.marker === CellMarker.OUTPOST) {
-          this.addPlayer(appearance, centre.x, centre.y);
+          this.addPlayer(appearance, centre.x, centre.y, key);
         } else {
-          this.addCamp(appearance, centre.x, centre.y);
+          this.addCamp(appearance, centre.x, centre.y, key);
         }
       }
     }
@@ -447,12 +450,12 @@ export class MapChunk {
    * A wild monster camp: its tent, its portrait, and its level on a badge.
    * Dims along with the rest of the map under the kit filter (#334).
    */
-  private addCamp(appearance: CellAppearance, x: number, y: number): void {
+  private addCamp(appearance: CellAppearance, x: number, y: number, cell: number): void {
     const destroyed = appearance.marker === CellMarker.CAMP_DESTROYED;
     if (appearance.marker !== CellMarker.CAMP && !destroyed) return;
     const alpha = appearance.dimmed ? DIMMED_ALPHA : 1;
     // Where the camp stands: the portrait's foot. Its tent, cross and badge go with it.
-    const foot = { x, y: y + AVATAR_BASE_Y };
+    const foot: Foot = { x, y: y + AVATAR_BASE_Y, cell, camp: true };
 
     const tent = place(
       new Sprite(destroyed ? this.atlas.tentDestroyed : this.atlas.tent),
@@ -510,7 +513,7 @@ export class MapChunk {
    * are pinned to the camp's foot, so they stand upright on the tilted map
    * with the portrait.
    */
-  private addHealthBar(health: number, foot: { x: number; y: number }, x: number, y: number, alpha: number): void {
+  private addHealthBar(health: number, foot: Foot, x: number, y: number, alpha: number): void {
     const scale = tagStyle(isFlatGround(), hexShape()).scale;
     const width = HEALTH_BAR_WIDTH * scale;
     const height = HEALTH_BAR_HEIGHT * scale;
@@ -548,7 +551,7 @@ export class MapChunk {
    */
   private addPortrait(
     appearance: CellAppearance,
-    foot: { x: number; y: number },
+    foot: Foot,
     destroyed: boolean,
     alpha: number,
   ): boolean {
@@ -582,12 +585,12 @@ export class MapChunk {
    * so they sit over the building but under the star and the plate (both in
    * later layers), and dim with the rest of the cell under the kit filter.
    */
-  private addPlayer(appearance: CellAppearance, x: number, y: number): void {
+  private addPlayer(appearance: CellAppearance, x: number, y: number, cell: number): void {
     const alpha = appearance.dimmed ? DIMMED_ALPHA : 1;
     const outpost = appearance.marker === CellMarker.OUTPOST;
     const footX = x;
     const footY = y + FOOT_Y;
-    const foot = { x: footX, y: footY };
+    const foot: Foot = { x: footX, y: footY, cell };
     const flashScale = BUILDING_HEIGHT / FLASH_TOWER_HEIGHT;
 
     const texture = this.buildings.textureFor(
@@ -713,7 +716,7 @@ export class MapChunk {
 
   /** The thin rectangle behind a name: white for others, the relation colour otherwise. */
   private addLabel(
-    foot: { x: number; y: number },
+    foot: Foot,
     x: number,
     y: number,
     textWidth: number,

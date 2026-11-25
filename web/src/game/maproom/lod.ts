@@ -1,5 +1,6 @@
 import { CELL_HEIGHT, CELL_WIDTH, LOD_BADGE_ZOOM, LOD_GLYPH_ZOOM, LOD_HEX_ZOOM, LOD_LABEL_ZOOM } from "@/config";
 import { mapRoomGrid } from "@/game/HexGrid";
+import { CAMPS_SHOWN_FROM } from "./cluster/clusterRules";
 import type { ChunkView } from "./MapChunk";
 import type { MapAtlas } from "./mapAtlas";
 
@@ -75,7 +76,9 @@ export const viewFor = (tier: LodTier, zoom: number, atlas: MapAtlas): ChunkView
         zoom < LOD_BADGE_ZOOM
         ? atlas.outlineBold
         : atlas.outlineFine,
-  details: zoom >= glyphZoom(),
+  // Wild monster camps: from the glyph zoom, and not below where map pin clustering starts
+  // (owner, 25 Nov 2026: no need to show them when zoomed out that far).
+  details: zoom >= glyphZoom() && zoom >= CAMPS_SHOWN_FROM,
   // A cell is about 62 screen pixels across at the badge threshold, so a
   // portrait is finally big enough to tell one creature from another. Below
   // it the tent glyph reads better than a 20 pixel monster would.
