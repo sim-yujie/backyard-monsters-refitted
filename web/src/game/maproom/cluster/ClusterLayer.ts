@@ -4,7 +4,6 @@ import { WORLD_HEIGHT, WORLD_WIDTH } from "@/config";
 import { shieldUrl } from "@/game/alliance/allianceRules";
 import { classicLook } from "@/game/classicLook";
 import { mapRoomGrid } from "@/game/HexGrid";
-import { gameIconUrl } from "@/ui/gameIcon";
 import { appearanceOf, type MapViewerContext } from "../cellVisuals";
 import { hexZoom } from "../lod";
 import type { MarkerFilter } from "../markerPins";
@@ -14,6 +13,7 @@ import { ClusterLayout, tokenSize, type Project, type ScreenRect, type ScreenTok
 import {
   CAMPS_SHOWN_FROM,
   FAR_ZOOM,
+  HIDE_BORDERS_UNDER_PLAQUES,
   LONE_CREST_TAP,
   STACK_ORDER,
   cellKey,
@@ -53,6 +53,8 @@ const PULSE_MAX = 150;
 export interface ClusterLayerDeps {
   /** The map's marker filter (`MapRenderer.markerFilter`). */
   filter: MarkerFilter;
+  /** Leaves out the relation borders of these cells (`MapRenderer.setQuietBorders`). */
+  quietBorders: (keys: readonly number[]) => void;
   /** The loaded zones and a cell lookup (`ZoneStore`). */
   zones: () => Iterable<ZoneRecord>;
   getCell: (col: number, row: number) => MapCell | undefined;
@@ -148,6 +150,7 @@ export class ClusterLayer {
   destroy(): void {
     this.layer.remove();
     this.deps.filter.setHidden([]);
+    this.deps.quietBorders([]);
     this.deps.filter.setCampsShown(true);
   }
 
@@ -176,6 +179,7 @@ export class ClusterLayer {
         this.step = null;
         this.grouping = null;
         filter.setHidden([]);
+        this.deps.quietBorders([]);
         this.show([]);
         this.laidZoom = Number.NaN;
       }
@@ -197,6 +201,7 @@ export class ClusterLayer {
       this.groupingDirty = false;
       this.grouping = groupCells(this.cells, step);
       filter.setHidden(this.grouping.hidden);
+      this.deps.quietBorders(HIDE_BORDERS_UNDER_PLAQUES ? this.grouping.underPlaques : []);
       this.stats.groupMs = performance.now() - started;
       this.stats.hiddenCells = this.grouping.hidden.length;
       this.laidZoom = Number.NaN;
@@ -372,7 +377,8 @@ export class ClusterLayer {
     // The bar's painted ends (30% of the picture each side) keep their shape.
     el.style.setProperty("--mc-cap", `${(hh * 2 * 0.85).toFixed(1)}px`);
     const emblem = token.group === "alliance" ? this.emblemOf(token.token.aid) : null;
-    pic.src = emblem ?? (token.group === "alliance" ? gameIconUrl("alliance", 64) : art(classic, "icon-other"));
+    // The alliance's own shield (lead default 25 Nov); the generic blue one only when it has none.
+    pic.src = emblem ?? art(classic, token.group === "alliance" ? "shield-alliance" : "icon-other");
     count.textContent = countText(token.count);
   }
 

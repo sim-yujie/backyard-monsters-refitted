@@ -42,7 +42,7 @@ import { tagStyle, type TagStyle } from "./painted/markerStyle";
 import { GROUND_ANCHOR_X, groundAnchorY, type GroundArt } from "./groundArt";
 import type { MapPicture } from "./mapPicture";
 import type { MapShields } from "./mapAlliances";
-import { MarkerPins, type Foot } from "./markerPins";
+import { MarkerPins, type Foot, type MarkerFilter } from "./markerPins";
 import { cellKey } from "./cluster/clusterRules";
 import { BORDER_RIM_COLOUR, PINNED_CENTRE_COLOUR, RELATION_LOOK, TILE_RIM_ALPHA } from "./relationLook";
 
@@ -226,6 +226,11 @@ export class MapChunk {
   /** This chunk's tiles, water and hairlines, which live in the shared ground layer. */
   private readonly groundSprites: Sprite[] = [];
   private readonly outlineSprites: Sprite[] = [];
+  /** Each player cell's relation border sprites and its cell, so a plaque can quiet them (clustering). */
+  private readonly borderSprites: Sprite[] = [];
+  private readonly borderCells: number[] = [];
+  private filter: MarkerFilter | null = null;
+  private filterVersion = -1;
   private shown = false;
   private outlinesShown = false;
   private readonly requests: LabelRequest[] = [];
@@ -335,16 +340,20 @@ export class MapChunk {
         if (appearance.relation !== null) {
           const look = RELATION_LOOK[appearance.relation];
           const alpha = appearance.dimmed ? DIMMED_ALPHA : 1;
+          const key = cellKey(col, row);
           const rim = place(new Sprite(this.atlas.relationRims[look.style]), centre.x, centre.y, BORDER_RIM_COLOUR);
           rim.alpha = TILE_RIM_ALPHA * alpha;
           this.addGround(rim, order + 0.3);
+          this.addBorder(rim, key);
           const border = place(new Sprite(this.atlas.relationBorders[look.style]), centre.x, centre.y, look.colour);
           border.alpha = alpha;
           this.addGround(border, order + 0.35);
+          this.addBorder(border, key);
           if (look.style === "triple") {
             const centre2 = place(new Sprite(this.atlas.pinnedCentre), centre.x, centre.y, PINNED_CENTRE_COLOUR);
             centre2.alpha = alpha;
             this.addGround(centre2, order + 0.36);
+            this.addBorder(centre2, key);
           }
         }
 
@@ -368,10 +377,33 @@ export class MapChunk {
     this.ground.addChild(sprite);
   }
 
+  private addBorder(sprite: Sprite, cell: number): void {
+    this.borderSprites.push(sprite);
+    this.borderCells.push(cell);
+  }
+
   /** The ground layer is shared, so this chunk's part of it is shown sprite by sprite. */
   private showGround(): void {
     for (const sprite of this.groundSprites) sprite.visible = this.shown;
     for (const sprite of this.outlineSprites) sprite.visible = this.shown && this.outlinesShown;
+    this.showBorders();
+  }
+
+  /** Relation borders: not under a map pin clustering plaque (`MarkerFilter.quiet`). */
+  private showBorders(): void {
+    const quiet = this.filter?.quiet;
+    for (let i = 0; i < this.borderSprites.length; i++) {
+      this.borderSprites[i]!.visible = this.shown && !(quiet !== undefined && quiet[this.borderCells[i]!] === 1);
+    }
+  }
+
+  /** Applies the clustering's filter to the markers and the border sprites; cheap while unchanged. */
+  applyFilter(filter: MarkerFilter): void {
+    this.pins.applyFilter(filter);
+    if (filter === this.filter && filter.version === this.filterVersion) return;
+    this.filter = filter;
+    this.filterVersion = filter.version;
+    if (this.borderSprites.length > 0) this.showBorders();
   }
 
   /** Adds the text this chunk is missing. A no-op once it is already there. */
@@ -425,6 +457,8 @@ export class MapChunk {
     for (const sprite of this.groundSprites) sprite.destroy();
     this.groundSprites.length = 0;
     this.outlineSprites.length = 0;
+    this.borderSprites.length = 0;
+    this.borderCells.length = 0;
     this.hasPortraits = false;
     this.pins.clear("body");
     this.clearPlates();

@@ -212,3 +212,19 @@ describe("name tags on the painted map", () => {
     expect(tagStyle(true, "flat").scale).toBeGreaterThan(1);
   });
 });
+
+describe("BorderData.setQuiet (map pin clustering)", () => {
+  it("marks the cells under a plaque in the blue channel and lets the previous set go", () => {
+    const data = new BorderData("pointy", 20, 20);
+    const b = (col: number, row: number) => data.bytes[(row * 20 + col) * 4 + 2];
+    data.setQuiet([3 * 20 + 2, 5 * 20 + 7]);
+    expect([b(2, 3), b(7, 5), b(1, 1)]).toEqual([255, 255, 0]);
+    expect(data.flush()).toBe(true);
+    data.setQuiet([5 * 20 + 7]);
+    expect([b(2, 3), b(7, 5)]).toEqual([0, 255]);
+  });
+
+  it("is read by the shader: a quiet cell draws no border", () => {
+    expect(BORDER_FRAGMENT).toContain("data.b > 0.5");
+  });
+});

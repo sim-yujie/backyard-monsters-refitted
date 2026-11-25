@@ -209,6 +209,18 @@ export class MarkerFilter {
     this.version++;
   }
 
+  /** One flag per world cell: 1 = under a plaque, so its relation border is not drawn either. */
+  readonly quiet = new Uint8Array(WORLD_WIDTH * WORLD_HEIGHT);
+  private quietKeys: number[] = [];
+
+  /** The cells whose relation borders are left out (the tile map's border sprites, `MapChunk`). */
+  setQuiet(keys: readonly number[]): void {
+    for (const key of this.quietKeys) this.quiet[key] = 0;
+    for (const key of keys) this.quiet[key] = 1;
+    this.quietKeys = keys.slice();
+    this.version++;
+  }
+
   /** How many cells are hidden now. */
   get hiddenCount(): number {
     return this.hiddenKeys.length;

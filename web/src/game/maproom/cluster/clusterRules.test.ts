@@ -103,6 +103,13 @@ describe("groupCells", () => {
     expect([plaque!.minX, plaque!.minY, plaque!.maxX, plaque!.maxY]).toEqual([0, 0, 200, 300]);
   });
 
+  it("lists the cells under plaques (their borders may go too), not the crests'", () => {
+    const cells = [cell(0, 0, "alliance"), cell(1, 0, "alliance"), cell(5, 5, "you"), cell(6, 6, "home")];
+    const { underPlaques, hidden } = groupCells(cells, step);
+    expect(underPlaques.sort()).toEqual([cellKey(0, 0), cellKey(1, 0)].sort());
+    expect(hidden).toHaveLength(4);
+  });
+
   it("leaves friends out entirely (they keep their own markers)", () => {
     const cells = [{ ...cell(0, 0, "other"), group: "friend" as unknown as ClusterGroup }];
     expect(groupCells(cells, step).tokens).toHaveLength(0);

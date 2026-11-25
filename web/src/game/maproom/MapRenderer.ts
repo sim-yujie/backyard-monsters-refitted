@@ -299,6 +299,7 @@ export class MapRenderer {
    * and the camps when zoomed out. Shared by every chunk.
    */
   readonly markerFilter = new MarkerFilter();
+  private quietBorders: readonly number[] = [];
   private cellsChanged = 0;
 
   /** Goes up whenever what the cells show may have changed (a zone, the alliance, the kit filter, friends). */
@@ -327,9 +328,19 @@ export class MapRenderer {
     return count;
   }
 
+  /**
+   * The cells under a map pin clustering plaque draw no relation border (painted map and tile map
+   * alike), so the empty outlines of merged outposts do not crowd the zoomed-out map.
+   */
+  setQuietBorders(keys: readonly number[]): void {
+    this.quietBorders = keys;
+    this.markerFilter.setQuiet(keys);
+    this.borders?.setQuiet(keys);
+  }
+
   /** Applies the marker filter to the chunks on screen; does nothing while it is unchanged. */
   private filterMarkers(): void {
-    for (const id of this.visibleIds) this.chunks.get(id)?.pins.applyFilter(this.markerFilter);
+    for (const id of this.visibleIds) this.chunks.get(id)?.applyFilter(this.markerFilter);
   }
 
   /** How many markers the chunks on screen carry, for the speed readout. */
@@ -347,9 +358,9 @@ export class MapRenderer {
       return;
     }
     for (const id of this.visibleIds) {
-      const pins = this.chunks.get(id)?.pins;
-      pins?.applyFilter(this.markerFilter);
-      pins?.place(this.projector, this.projectorKey);
+      const chunk = this.chunks.get(id);
+      chunk?.applyFilter(this.markerFilter);
+      chunk?.pins.place(this.projector, this.projectorKey);
     }
   }
 
@@ -924,6 +935,7 @@ export class MapRenderer {
     const above = this.world.parent === this.root ? this.world : this.range.container;
     this.root.addChildAt(this.borders.mesh, this.root.getChildIndex(above));
     for (const zone of this.store.loadedZoneRefs()) this.borders.applyZone(zone);
+    this.borders.setQuiet(this.quietBorders);
     // A border running into the fog goes under the cloud.
     if (programs.clouds && quality() === "high") loads.push(this.addPaintedFog(look, painted));
     // The rest of the programs once the art is in and has drawn (a few frames), or after a while

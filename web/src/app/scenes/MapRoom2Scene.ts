@@ -844,6 +844,7 @@ export class MapRoom2Scene implements Scene {
     const camera = this.camera;
     return new ClusterLayer({
       filter: renderer.markerFilter,
+      quietBorders: (keys) => renderer.setQuietBorders(keys),
       zones: () => this.store.loadedZoneRefs(),
       getCell: (col, row) => this.store.getCell(col, row),
       cellsVersion: () => renderer.cellsVersion,

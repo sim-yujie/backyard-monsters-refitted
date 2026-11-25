@@ -95,7 +95,8 @@ void main() {
   vec4 data = texelFetch(uData, cell, 0);
   int relation = int(data.r * 255.0 + 0.5);
   int mask = int(data.g * 255.0 + 0.5);
-  if (relation == 0 || mask == 0) discard;
+  // B: the cell is under a map pin clustering plaque when zoomed out (borders.ts setQuiet).
+  if (relation == 0 || mask == 0 || data.b > 0.5) discard;
 
   // World points from the cell's centre, and to the nearest border side.
   vec2 p = (h - centreOf(qr)) * uUnit;

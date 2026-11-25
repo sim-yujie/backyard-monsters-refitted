@@ -125,6 +125,11 @@ export class BorderLayer {
     this.data.reset();
   }
 
+  /** Cells under a map pin clustering plaque draw no border (`BorderData.setQuiet`). */
+  setQuiet(keys: readonly number[]): void {
+    this.data.setQuiet(keys);
+  }
+
   /** Uploads pending writes; returns whether the picture changed. */
   flush(): boolean {
     return this.data.flush();

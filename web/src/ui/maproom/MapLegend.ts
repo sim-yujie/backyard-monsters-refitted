@@ -10,7 +10,7 @@ import {
 } from "@/game/maproom/relationLook";
 import { classicLook } from "@/game/classicLook";
 import { clusterArtUrl, type ClusterArt } from "@/game/maproom/cluster/clusterArt";
-import { gameIcon, gameIconUrl, type GameIconName } from "@/ui/gameIcon";
+import { gameIcon, type GameIconName } from "@/ui/gameIcon";
 import { button, el } from "@/ui/maproom1/icons";
 
 /**
@@ -205,7 +205,7 @@ const tokenList = (): HTMLElement => {
     } else {
       pic.style.setProperty("--mc-plaque", `url("${clusterArtUrl(classic, token.art)}")`);
       const img = document.createElement("img");
-      img.src = token.art === "plaque-alliance" ? gameIconUrl("alliance", 48) : clusterArtUrl(classic, "icon-other");
+      img.src = clusterArtUrl(classic, token.art === "plaque-alliance" ? "shield-alliance" : "icon-other");
       img.alt = "";
       pic.append(img, el("span", "mr2-key__plaque-n", String(token.count)));
     }

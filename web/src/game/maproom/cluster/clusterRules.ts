@@ -22,10 +22,17 @@ import { WORLD_HEIGHT, WORLD_WIDTH } from "@/config";
 export const CLUSTER_ZOOM = 0.5;
 
 /**
- * Wild monster camps' markers (tents, portraits, health bars) are left out below this zoom.
- * Owner 25 Nov: hide them where the plaques start. (neon suggested 0.42; held for the owner.)
+ * Wild monster camps' markers (tents, portraits, health bars) are left out below this zoom. Lead
+ * default 25 Nov (neon): 0.42, so camp hunters still see them just below play zoom; the owner had
+ * asked for the plaque zoom ({@link CLUSTER_ZOOM}), a one-line change here.
  */
-export const CAMPS_SHOWN_FROM = CLUSTER_ZOOM;
+export const CAMPS_SHOWN_FROM = 0.42;
+
+/**
+ * Whether the relation borders of the cells a plaque stands for are left out too (lead default 25
+ * Nov, for the owner: the empty outlines of merged outposts read as clutter, or as camps).
+ */
+export const HIDE_BORDERS_UNDER_PLAQUES = true;
 
 /** Below this zoom every own and hostile outpost wears a crest; from it up, its real marker. */
 export const LONE_CREST_ZOOM = 0.36;
@@ -37,10 +44,11 @@ export const NEAR_ZOOM = 0.32;
 export const FAR_ZOOM = 0.18;
 
 /**
- * What tapping a lone own or hostile crest does when zoomed out. Owner 25 Nov: zoom in to it, like
- * a plaque. (neon suggested opening its info instead; held for the owner.)
+ * What tapping a lone own or hostile crest does when zoomed out. Lead default 25 Nov (neon): open
+ * that outpost's info, as at play zoom ("a count zooms in, a single target opens info"); the owner
+ * had asked for zooming in like a plaque, a one-line change here.
  */
-export const LONE_CREST_TAP: "zoom" | "info" = "zoom";
+export const LONE_CREST_TAP: "zoom" | "info" = "info";
 
 /** Who a cell belongs to, as the clustering sees it. */
 export type ClusterGroup = "home" | "you" | "hostile" | "alliance" | "other";
@@ -115,6 +123,8 @@ export interface Grouping {
   readonly tokens: WorldToken[];
   /** Cell keys whose markers a token stands for. */
   readonly hidden: number[];
+  /** Cell keys a plaque stands for (their borders may be left out too). */
+  readonly underPlaques: number[];
 }
 
 const newToken = (kind: WorldToken["kind"], group: ClusterGroup): WorldToken => ({
@@ -152,6 +162,7 @@ const SQUARES_ACROSS = WORLD_WIDTH + WORLD_HEIGHT;
 export const groupCells = (cells: readonly ClusterCell[], step: ClusterStep): Grouping => {
   const tokens: WorldToken[] = [];
   const hidden: number[] = [];
+  const underPlaques: number[] = [];
   const squares = new Map<number, WorldToken>();
   const size = step.plaqueCells;
   for (const cell of cells) {
@@ -174,8 +185,9 @@ export const groupCells = (cells: readonly ClusterCell[], step: ClusterStep): Gr
     token.wx /= token.cells.length;
     token.wy /= token.cells.length;
     for (const key of token.cells) hidden.push(key);
+    if (token.kind === "plaque") for (const key of token.cells) underPlaques.push(key);
   }
-  return { tokens, hidden };
+  return { tokens, hidden, underPlaques };
 };
 
 /** A plaque's or crest's count as written: 1-999 as is, then "1k", "12k". */
