@@ -165,6 +165,84 @@ export const fogDistances = (
 };
 
 /**
+ * `fogDistances` for just the cells a change can reach (map lag, 25 Nov 2026): `changed` is the box
+ * of cells that turned to or from fog. A cell's distance only depends on seen cells fewer than
+ * `FOG_DISTANCE_CAP` steps away, and one step moves at most one column and one row, so only cells
+ * within the cap of the box can change, and their walk needs only the seen cells within the cap
+ * of those. Walks that wider box, writes the inner one into `out` (which must already hold the
+ * distances from before the change), and returns the box of cells whose distance changed, or null
+ * when none did. Gives exactly what a fresh `fogDistances` would (`clouds.test.ts`), for a
+ * fraction of the whole world's walk.
+ */
+export const fogDistancesIn = (
+  shape: Pick<CellShape, "kind">,
+  data: Pick<GroundData, "bytes" | "width" | "height">,
+  out: Uint8Array,
+  changed: { x0: number; y0: number; x1: number; y1: number },
+): { x0: number; y0: number; x1: number; y1: number } | null => {
+  const { bytes, width, height } = data;
+  const cap = FOG_DISTANCE_CAP;
+  // The walk's box (two caps round the change) and the box written (one cap round it).
+  const wx0 = Math.max(0, changed.x0 - 2 * cap);
+  const wy0 = Math.max(0, changed.y0 - 2 * cap);
+  const wx1 = Math.min(width - 1, changed.x1 + 2 * cap);
+  const wy1 = Math.min(height - 1, changed.y1 + 2 * cap);
+  const ix0 = Math.max(0, changed.x0 - cap);
+  const iy0 = Math.max(0, changed.y0 - cap);
+  const ix1 = Math.min(width - 1, changed.x1 + cap);
+  const iy1 = Math.min(height - 1, changed.y1 + cap);
+  const w = wx1 - wx0 + 1;
+  const h = wy1 - wy0 + 1;
+  if (w <= 0 || h <= 0) return null;
+  const local = new Uint8Array(w * h).fill(cap);
+  const queue = new Int32Array(w * h);
+  let tail = 0;
+  for (let row = wy0; row <= wy1; row++) {
+    for (let col = wx0; col <= wx1; col++) {
+      if ((bytes[(row * width + col) * 4 + 3]! & 15) === Ground.FOG) continue;
+      const at = (row - wy0) * w + (col - wx0);
+      local[at] = 0;
+      queue[tail++] = at;
+    }
+  }
+  let head = 0;
+  while (head < tail) {
+    const at = queue[head++]!;
+    const next = local[at]! + 1;
+    if (next >= cap) continue;
+    const col = (at % w) + wx0;
+    const row = Math.floor(at / w) + wy0;
+    const [q, r] = axialOfCell(shape as CellShape, col, row);
+    for (let k = 1; k < NEIGHBOURS.length; k++) {
+      const [dq, dr] = NEIGHBOURS[k]!;
+      const [c, rr] = offsetOfAxial(shape as CellShape, q + dq, r + dr);
+      if (c < wx0 || rr < wy0 || c > wx1 || rr > wy1) continue;
+      const to = (rr - wy0) * w + (c - wx0);
+      if (local[to]! <= next) continue;
+      local[to] = next;
+      queue[tail++] = to;
+    }
+  }
+  let cx0 = Infinity;
+  let cy0 = Infinity;
+  let cx1 = -Infinity;
+  let cy1 = -Infinity;
+  for (let row = iy0; row <= iy1; row++) {
+    for (let col = ix0; col <= ix1; col++) {
+      const value = local[(row - wy0) * w + (col - wx0)]!;
+      const index = row * width + col;
+      if (out[index] === value) continue;
+      out[index] = value;
+      if (col < cx0) cx0 = col;
+      if (col > cx1) cx1 = col;
+      if (row < cy0) cy0 = row;
+      if (row > cy1) cy1 = row;
+    }
+  }
+  return cx1 < cx0 ? null : { x0: cx0, y0: cy0, x1: cx1, y1: cy1 };
+};
+
+/**
  * The smoothed distance into the fog round world point (x, y), in cells: the cells' distances
  * (`fogDistances`, read through `distanceAt`) weighed like `fogShare`. About 0.5 on the edge of
  * sight, rising about one per cell into the fog. The shader's `fogDepth`.

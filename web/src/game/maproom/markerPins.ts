@@ -29,8 +29,15 @@ export interface Placement {
   readonly scale: number;
 }
 
-/** A foot's place on the screen, or null when it is behind the camera (never drawn). */
-export type Projector = (footX: number, footY: number) => Placement | null;
+/**
+ * A foot's place on the screen, or null when it is behind the camera (never drawn). `boxShown`,
+ * when given, answers false only for a box of feet (map pixels) every one of which the projector
+ * would answer null for, so a chunk entirely off the screen is skipped whole (map lag, 25 Nov
+ * 2026: the tilted view's chunks reach well past the screen's lower corners).
+ */
+export type Projector = ((footX: number, footY: number) => Placement | null) & {
+  boxShown?: (x0: number, y0: number, x1: number, y1: number) => boolean;
+};
 
 /**
  * Smallest and largest scale a marker is drawn at on the tilted screen,
@@ -97,11 +104,56 @@ export const uprightPlacement = (
   return { x: screen.x, y: screen.y, scale };
 };
 
+/**
+ * Whether any foot in a box of map pixels could be placed (`uprightPlacement` not null). The tilt
+ * is a perspective of the flat map: with every corner in front of the camera the box comes out as
+ * the four-sided shape between its corners, and the tilt's scale anywhere in it lies between the
+ * corners' (it follows the screen's height), so the corners' screen box grown by the largest
+ * corner margin holds every foot's test. A corner behind the camera or past the scale limits
+ * answers true: the feet are then tested one by one, as before.
+ */
+export const uprightBoxShown = (
+  tilt: Tilt,
+  camera: { readonly zoom: number; readonly position: Point },
+  x0: number,
+  y0: number,
+  x1: number,
+  y1: number,
+  fit = 1,
+): boolean => {
+  let minX = Infinity;
+  let minY = Infinity;
+  let maxX = -Infinity;
+  let maxY = -Infinity;
+  let margin = 0;
+  for (const [x, y] of [
+    [x0, y0],
+    [x1, y0],
+    [x0, y1],
+    [x1, y1],
+  ] as const) {
+    const screen = tilt.toScreen({ x: (x - camera.position.x) * camera.zoom, y: (y - camera.position.y) * camera.zoom });
+    const local = tilt.scaleAt(screen.y);
+    if (!Number.isFinite(local) || local < MIN_TILT_SCALE || local > MAX_TILT_SCALE) return true;
+    if (!Number.isFinite(screen.x) || !Number.isFinite(screen.y)) return true;
+    minX = Math.min(minX, screen.x);
+    maxX = Math.max(maxX, screen.x);
+    minY = Math.min(minY, screen.y);
+    maxY = Math.max(maxY, screen.y);
+    margin = Math.max(margin, CULL_MARGIN * camera.zoom * local * fit);
+  }
+  return !(maxX < -margin || minX > tilt.width + margin || maxY < -margin || minY > tilt.height + margin);
+};
+
 /** A projector for {@link MarkerPins.place} from a tilt and the camera. */
-export const uprightProjector =
-  (tilt: Tilt, camera: { readonly zoom: number; readonly position: Point }, fit = 1): Projector =>
-  (footX, footY) =>
-    uprightPlacement(tilt, camera, { x: footX, y: footY }, fit);
+export const uprightProjector = (
+  tilt: Tilt,
+  camera: { readonly zoom: number; readonly position: Point },
+  fit = 1,
+): Projector =>
+  Object.assign((footX: number, footY: number) => uprightPlacement(tilt, camera, { x: footX, y: footY }, fit), {
+    boxShown: (x0: number, y0: number, x1: number, y1: number) => uprightBoxShown(tilt, camera, x0, y0, x1, y1, fit),
+  });
 
 /** One marker as the flat map draws it: its foot, and its offset and scale from there. */
 interface Pinned {
@@ -131,6 +183,13 @@ export class MarkerPins {
   private placedKey: string | null = null;
   /** A marker came or went since the last placement. */
   private changed = false;
+  /** Every marker is hidden because the whole chunk is off the screen (`Projector.boxShown`). */
+  private culled = false;
+  /** The box round every foot, map pixels. */
+  private footX0 = Infinity;
+  private footY0 = Infinity;
+  private footX1 = -Infinity;
+  private footY1 = -Infinity;
 
   /** How many markers are pinned, for tests and the speed readout. */
   get size(): number {
@@ -157,6 +216,10 @@ export class MarkerPins {
       scaleY: item.scale.y,
       visible: item.visible,
     });
+    this.footX0 = Math.min(this.footX0, foot.x);
+    this.footY0 = Math.min(this.footY0, foot.y);
+    this.footX1 = Math.max(this.footX1, foot.x);
+    this.footY1 = Math.max(this.footY1, foot.y);
     this.changed = true;
   }
 
@@ -171,6 +234,12 @@ export class MarkerPins {
       for (const pin of this.pins[name]) pin.item.visible = pin.visible;
       this.pins[name].length = 0;
     }
+    if (this.size === 0) {
+      this.footX0 = Infinity;
+      this.footY0 = Infinity;
+      this.footX1 = -Infinity;
+      this.footY1 = -Infinity;
+    }
   }
 
   /**
@@ -183,6 +252,7 @@ export class MarkerPins {
       if (this.placedKey === null) return;
       this.placedKey = null;
       this.changed = false;
+      this.culled = false;
       for (const pin of this.all()) {
         pin.item.position.set(pin.footX + pin.dx, pin.footY + pin.dy);
         pin.item.scale.set(pin.scaleX, pin.scaleY);
@@ -192,6 +262,14 @@ export class MarkerPins {
     }
     if (key === this.placedKey && !this.changed) return;
     this.placedKey = key;
+    // A chunk wholly off the screen: its markers are hidden once, then skipped while it stays off.
+    if (project.boxShown && this.size > 0 && !project.boxShown(this.footX0, this.footY0, this.footX1, this.footY1)) {
+      if (!this.culled || this.changed) for (const pin of this.all()) pin.item.visible = false;
+      this.culled = true;
+      this.changed = false;
+      return;
+    }
+    this.culled = false;
     this.changed = false;
     let lastX = Number.NaN;
     let lastY = Number.NaN;
