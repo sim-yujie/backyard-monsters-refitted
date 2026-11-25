@@ -231,3 +231,20 @@ describe("time-only changes", () => {
     expect(calls).toEqual([]);
   });
 });
+
+describe("a zone the sight forgot", () => {
+  it("is compared with what it showed when its live answer comes back (an attack that also moved the sight)", async () => {
+    const { store, zones } = setup();
+    store.ensureVisible(VIEW);
+    await drain(store);
+    store.applyVersions([[HOME.id, 1]], true);
+    store.applySight((zone) => zone.id !== HOME.id, "new-sight");
+    expect(store.getZone(HOME.id)).toBeUndefined();
+    cells.set("712,347", { i: 125 } as MapCell);
+    versions.set(HOME.id, 1);
+    store.ensureVisible(VIEW);
+    await drain(store);
+    const last = zones.filter((z) => z.id === HOME.id).at(-1);
+    expect(last).toEqual({ id: HOME.id, live: true });
+  });
+});

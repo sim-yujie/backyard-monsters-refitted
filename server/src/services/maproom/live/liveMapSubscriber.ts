@@ -104,7 +104,13 @@ export const marksFor = (changeSet: ChangeSet<object>): Mark[] => {
     // and owner are looked up when the bundle goes out.
     const id = entity.basesaveid;
     const marks: Mark[] = [];
-    if (changed.some((field) => SAVE_MAP_FIELDS.has(field))) marks.push(() => markSaves([id]));
+    if (changed.some((field) => SAVE_MAP_FIELDS.has(field))) {
+      // `LIVE_MAP_TRACE=1` (a local check of how often a real session marks the map): which fields.
+      if (process.env.LIVE_MAP_TRACE === "1") {
+        console.log(`[live-map] save ${id}: ${changed.filter((field) => SAVE_MAP_FIELDS.has(field)).join(",")}`);
+      }
+      marks.push(() => markSaves([id]));
+    }
     if (changed.includes("points") || changed.includes("basevalue")) {
       const before = changeSet.originalEntity as { points?: unknown; basevalue?: unknown } | undefined;
       const was = levelOf(before?.points, before?.basevalue);

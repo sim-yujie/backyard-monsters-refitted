@@ -70,6 +70,8 @@ export type AreasFetcher = (zones: readonly { x: number; y: number }[]) => Promi
 export const LIVE_MIN_GAP_MS = 3_000;
 export const LIVE_JITTER_MS = 1_500;
 export const LIVE_BATCH = 10;
+/** How long a zone the sight forgot is remembered, only to compare its next answer with. */
+export const GHOST_MS = 15_000;
 
 export interface ZoneStoreOptions {
   /** Injected for tests; defaults to the real `getarea` call. */
@@ -238,6 +240,12 @@ export class ZoneStore {
   private readonly liveDueAt = new Map<number, number>();
   /** When each zone was last asked because of a push, ms. */
   private readonly liveAskedAt = new Map<number, number>();
+  /**
+   * Zones the sight just forgot (`applySight`) with what they showed: an attack on the player's
+   * own outpost changes their sight in the same moment, and without this its answer would arrive
+   * as a first one, with nothing to ring. Kept {@link GHOST_MS}, never drawn.
+   */
+  private readonly ghosts = new Map<number, { record: ZoneRecord; live: boolean; at: number }>();
   /** The live batch in flight, and the server's "busy, retry after" pause. */
   private liveInFlight = false;
   private livePausedUntil = 0;
@@ -633,6 +641,8 @@ export class ZoneStore {
         continue;
       }
       dropped.push(zone);
+      // Live map: what it showed, only to tell what its next answer changed (never drawn again).
+      this.ghosts.set(id, { record: zone, live: this.liveWanted.has(id), at: this.now() });
       this.forget(id);
     }
     this.queue.clear();
@@ -789,7 +799,10 @@ export class ZoneStore {
     };
     // Live map: an answer the socket asked for, and one read before the change it was asked for.
     const wanted = this.liveWanted.get(entry.id);
-    const live = wanted !== undefined;
+    const ghost = this.ghosts.get(entry.id);
+    this.ghosts.delete(entry.id);
+    const recent = ghost && this.now() - ghost.at < GHOST_MS ? ghost : undefined;
+    const live = wanted !== undefined || recent?.live === true;
     this.liveWanted.delete(entry.id);
     if (wanted !== undefined && response.zv !== undefined && response.zv < wanted && !this.liveRetried.has(entry.id)) {
       // Read before the change it was asked for: asked once more by the next live batch.
@@ -804,6 +817,8 @@ export class ZoneStore {
     if (due === undefined) this.nextDue.delete(entry.id);
     else this.nextDue.set(entry.id, due);
     const previous = this.zones.get(entry.id);
+    // What the live ring compares with: the record replaced, or the one the sight just forgot.
+    const compared = previous ?? (live ? recent?.record : undefined);
     const key = drawnKey(response.data);
     const unchanged = previous !== undefined && this.drawnKeys.get(entry.id) === key;
     if (!previous) this.placed.set(entry.id, (this.placedCount += 1));
@@ -823,7 +838,7 @@ export class ZoneStore {
     // hitch per zone, every minute, while standing still.
     if (evicted.length > 0) this.options.onEvict?.(evicted);
     if (unchanged) this.options.onZoneRefreshed?.(record);
-    else this.options.onZone?.(record, previous, live);
+    else this.options.onZone?.(record, compared, live);
 
     if (response.resources) {
       this.options.onResources?.(response.resources, response.credits);
