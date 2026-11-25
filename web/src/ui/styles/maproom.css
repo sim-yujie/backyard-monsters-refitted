@@ -1076,7 +1076,9 @@
   text-align: left;
 }
 
-.mr2-cell .mr2-live-bar[hidden] {
+/* As heavy as the rule above, so `hidden` still hides it. */
+:root .mr2-cell .btn.mr2-live-bar[hidden],
+:root[data-skin] .mr2-cell .btn.mr2-live-bar[hidden] {
   display: none;
 }
 
