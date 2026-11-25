@@ -167,8 +167,9 @@ const MOVE_MIN_ZOOM = 0.72;
 const PUMP_INTERVAL_SECONDS = 0.25;
 
 /**
- * How long the camera must stay put before the map counts as still and its animations step at the
- * idle rate (`idleTime`, 10 a second); a drag, wheel, pinch or glide brings back the full rate.
+ * How long the camera must stay put before the map counts as still and the painted look's
+ * animations step at the idle rate (`idleTime`, 10 a second); a drag, wheel, pinch or glide brings
+ * back the full rate.
  */
 const STILL_AFTER_MS = 500;
 
@@ -884,7 +885,7 @@ export class MapRoom2Scene implements Scene {
       this.transfer?.place();
     }
 
-    // Still for a moment: the animations step at the idle rate, so a tilted map redraws less (item 6).
+    // Still for a moment: the painted look's animations step at the idle rate (item 6).
     this.renderer.draw(this.range, this.camera.zoom, started - this.movedAt >= STILL_AFTER_MS);
     if (this.framesMarked < 2) this.markFrames();
     if (this.tilt && this.tiltView && this.context) {
