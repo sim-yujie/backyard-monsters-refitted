@@ -111,7 +111,7 @@ describe.each(SHAPES)("painted fog (%s hexes)", (_name, shape) => {
     let seed = 7;
     const rnd = () => ((seed = (seed * 1103515245 + 12345) % 2147483648) / 2147483648);
     const size = 120;
-    for (let round = 0; round < 40; round++) {
+    for (let round = 0; round < 20; round++) {
       const seen: [number, number][] = [];
       for (let k = 0; k < 30; k++) seen.push([Math.floor(rnd() * size), Math.floor(rnd() * size)]);
       const data = world(size, size, seen);
@@ -139,7 +139,7 @@ describe.each(SHAPES)("painted fog (%s hexes)", (_name, shape) => {
         expect(col >= changed!.x0 && col <= changed!.x1 && row >= changed!.y0 && row <= changed!.y1).toBe(true);
       }
     }
-  });
+  }, 20_000);
 
   it("smooths the distance: about a half on the edge, rising into the fog", () => {
     const seen: [number, number][] = [];

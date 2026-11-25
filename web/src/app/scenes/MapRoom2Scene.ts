@@ -38,7 +38,6 @@ import {
   attackRefusal,
   cellDistance,
   outpostsToLoad,
-  ownCellsIn,
   rosterInRange,
   targetKind,
   targetName,
@@ -242,6 +241,8 @@ export class MapRoom2Scene implements Scene {
       this.checkZoneMarks();
     },
     onZoneRefreshed: (zone) => this.renderer.refreshZone(zone),
+    // Zones the cache's cap forgot (off screen, fetched longest ago) go from the picture too.
+    onEvict: (zones) => this.renderer.forgetZones(zones),
     onResources: (resources, credits) => this.syncPool(resources, credits),
     onAlliance: (id) => this.renderer.setMyAlliance(id),
     onAllianceRoster: (roster) => this.renderer.setAllianceRoster(roster),
@@ -1264,7 +1265,7 @@ export class MapRoom2Scene implements Scene {
    * same range rule over every owned cell and is the one that decides.
    */
   private rosterFor(cell: OffsetCell): AttackRoster {
-    return rosterInRange(cell, ownCellsIn(this.store.loadedZoneRefs()), this.ownSave);
+    return rosterInRange(cell, this.store.ownCells(), this.ownSave);
   }
 
   /**
@@ -1275,7 +1276,7 @@ export class MapRoom2Scene implements Scene {
    */
   private updateRange(): void {
     const sources = rangeSources(
-      ownCellsIn(this.store.loadedZoneRefs()),
+      this.store.ownCells(),
       this.home ? { cell: this.home, flinger: this.ownSave?.flinger } : null,
     );
     this.rangeSources = sources;
