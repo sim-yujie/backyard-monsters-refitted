@@ -11,8 +11,10 @@ import { isVisible, type RevealedCell, type SightSource } from "../../../game-ru
  * always-visible cells, map-lag diagnosis, 25 Nov 2026), most of it on zones
  * nothing reaches. One pass over the sight first keeps only what can reach
  * the zone; the shared rule then decides each cell exactly as before, so the
- * answer is the same (`zoneVisibility.test.ts` compares the two on every
- * cell of an owner-size world, both hex shapes).
+ * answer is the same (`zoneVisibility.test.ts` compares the two for an
+ * owner-size sight, both hex shapes: in CI on every cell of the sight's area,
+ * both seams and sampled zones; with `SIGHT_FULL_WORLD=1` on every cell of
+ * the world).
  *
  * Why the narrowing never drops a circle that reaches: one hex step moves at
  * most one column and one row, so a cell within `reach` steps of a circle's
