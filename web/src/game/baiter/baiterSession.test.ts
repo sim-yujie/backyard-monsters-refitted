@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { BaseLoadResponse } from "@/api/types";
+import { AttackSession } from "@/game/attack/AttackSession";
 import { championStatWithFood } from "@/game/combat/rules";
 import {
   BAITER_CAP,
@@ -46,6 +47,19 @@ const save = {
   monsters: { housed: { C1: 40, C12: 2, C200: 9 } },
   resources: { r1: 10, r2: 0, r3: 0, r4: 0 },
   attackerbrains: { 1: { tower: 1 } },
+} as unknown as BaseLoadResponse;
+
+/** A lone level 1 Cannon Tower: enough yard for a drop to land on. */
+const TOWER_YARD = {
+  error: 0,
+  id: 1,
+  baseid: "3510",
+  basesaveid: 1,
+  worldsize: [800, 800],
+  currenttime: 1_700_000_000,
+  buildingdata: { "1": { id: 1, t: 20, l: 1, X: 0, Y: 0 } },
+  buildinghealthdata: {},
+  resources: { r1: 1000, r2: 0, r3: 0, r4: 0 },
 } as unknown as BaseLoadResponse;
 
 /** An army of `counts`, each row at `levels[id]` or 1. */
@@ -166,8 +180,8 @@ describe("champions", () => {
     expect(championLevels(5)).toBe(5);
     expect(championPowerLevels(1)).toBe(3);
     expect(championPowerLevels(5)).toBe(2);
-    const army = withChampion(armyOf({}), { t: 5, l: 9, pl: 9, s: "offensive" });
-    expect(army.champions).toEqual([{ t: 5, l: 5, pl: 2, s: "offensive" }]);
+    const army = withChampion(armyOf({}), { t: 5, l: 9, pl: 9 });
+    expect(army.champions).toEqual([{ t: 5, l: 5, pl: 2 }]);
     expect(withChampion(armyOf({}), { t: 9, l: 1, pl: 0 }).champions).toEqual([]);
   });
 
@@ -180,6 +194,42 @@ describe("champions", () => {
     expect(withoutChampion(army, 5).champions.map((one) => one.t)).toEqual([4]);
     const clamped = clampArmy(armyOf({}, {}, [{ t: 1, l: 1, pl: 0 }, { t: 2, l: 1, pl: 0 }]), 600);
     expect(clamped.champions.map((one) => one.t)).toEqual([2]);
+  });
+
+  it("Krallen has no Mode: her pick, her roster entry and her drop carry none; Drull keeps his (patch 8.7)", () => {
+    const picked = withChampion(withChampion(armyOf({ C1: 5 }), { t: 2, l: 5, pl: 0, s: "offensive" }), {
+      t: 5,
+      l: 5,
+      pl: 0,
+      s: "offensive",
+    });
+    expect(picked.champions).toEqual([
+      { t: 2, l: 5, pl: 0, s: "offensive" },
+      { t: 5, l: 5, pl: 0 },
+    ]);
+    // An army remembered from before this patch, her Mode still on it, loses it too.
+    const remembered = armyOf({ C1: 5 }, {}, [
+      { t: 2, l: 5, pl: 0, s: "offensive" },
+      { t: 5, l: 5, pl: 0, s: "defensive" },
+    ]);
+    expect(clampArmy(remembered, 600).champions).toEqual(picked.champions);
+    expect(testChampionEntry({ t: 5, l: 5, pl: 0, s: "defensive" })).not.toHaveProperty("s");
+    // The own-yard target comes loaded: a lone Cannon Tower for the drop to land beside.
+    const target = baiterTarget({ save: TOWER_YARD, army: remembered, baiterLevel: 1 });
+    expect(target.roster.champions.map((one) => one.s)).toEqual(["offensive", undefined]);
+
+    // The drop itself: the test's attack flings her with no Mode, whatever was sent.
+    const session = new AttackSession({ target, seed: 1 });
+    session.start();
+    const drull = session.appendFling({ x: -100, y: -100, monsters: {}, champion: { t: 2, l: 5, s: "offensive" } });
+    const krallen = session.appendFling({ x: -100, y: -100, monsters: {}, champion: { t: 5, l: 5, s: "defensive" } });
+    expect(drull.champion).toMatchObject({ t: 2, s: "offensive" });
+    expect(krallen.champion).toMatchObject({ t: 5 });
+    expect(krallen.champion).not.toHaveProperty("s");
+    expect(session.flingLog().events.map((one) => (one.kind === "fling" ? one.champion?.s : null))).toEqual([
+      "offensive",
+      undefined,
+    ]);
   });
 
   it("are made up: full health, active and with no learned brain (Q6)", () => {
