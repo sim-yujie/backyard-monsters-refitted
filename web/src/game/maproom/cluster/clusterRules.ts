@@ -15,7 +15,8 @@ import { WORLD_HEIGHT, WORLD_WIDTH } from "@/config";
  *  - the viewer's main yard is a gold-trimmed home crest, never merged;
  *  - friends and pinned friends keep their own markers.
  * The cells a token stands for have their markers hidden (`MarkerPins`), so they cost nothing to
- * place. Wild monster camps go by layer below {@link CAMPS_SHOWN_FROM} (`lod.ts`).
+ * place, and (lead default) their relation borders go too. Wild monster camps go by layer below
+ * {@link CAMPS_SHOWN_FROM} (`lod.ts`).
  */
 
 /** Below this zoom tokens replace markers; at or above it the map is exactly as before. */

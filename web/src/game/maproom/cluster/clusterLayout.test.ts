@@ -50,6 +50,23 @@ describe("ClusterLayout", () => {
     expect(shown.map((s) => s.y)).toEqual([300]);
   });
 
+  it("steps a plaque in from the edge and out from under the HUD, but not a crest", () => {
+    const layout = new ClusterLayout();
+    const hud = { left: 0, top: 0, right: 800, bottom: 60 };
+    const shown = layout.layOut(
+      [token("plaque", "alliance", 790, 300, 12), token("plaque", "other", 400, 50, 4), token("crest", "you", 795, 400)],
+      flat,
+      view({ obstacles: [hud] }),
+    );
+    const edge = shown.find((s) => s.group === "alliance")!;
+    expect(edge.x + edge.hw).toBeLessThanOrEqual(796);
+    const under = shown.find((s) => s.group === "other")!;
+    expect(under.y - under.hh).toBeGreaterThanOrEqual(68);
+    expect(shown.find((s) => s.kind === "crest")).toBeUndefined();
+    // Too far in: left out.
+    expect(layout.layOut([token("plaque", "alliance", 400, -60, 3)], flat, view()).length).toBe(0);
+  });
+
   it("merges plaques of one kind that overlap on the screen, keeping the sum and the box", () => {
     const layout = new ClusterLayout();
     const a = token("plaque", "alliance", 300, 300, 4);
