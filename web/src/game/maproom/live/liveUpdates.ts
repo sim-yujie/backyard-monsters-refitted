@@ -3,7 +3,7 @@ import type { OffsetCell } from "@/game/HexGrid";
 import type { ZoneRecord, ZoneStore } from "../ZoneStore";
 import { zoneChanges } from "./cellChanges";
 import type { CellRings, RingTier } from "./CellRings";
-import { LiveLink, MAX_WATCH, type LiveLinkOptions } from "./liveLink";
+import { CHECK_MS, LiveLink, MAX_WATCH, type LiveLinkOptions } from "./liveLink";
 
 /**
  * The live map in Map Room 2 (beta 9, stage 1), between the connection
@@ -38,6 +38,7 @@ export interface LiveUpdatesOptions {
 export class LiveUpdates {
   private link: LiveLink | null = null;
   private stopped = false;
+  private sightTimer: ReturnType<typeof setInterval> | null = null;
   private readonly random: () => number;
   private readonly delay: (fn: () => void, ms: number) => void;
 
@@ -63,10 +64,17 @@ export class LiveUpdates {
       ...this.options.link,
     });
     this.link.start();
+    // What only the clock changes in the fog (an ally's Flinger upgrade finishing) is written nowhere,
+    // so nothing pushes it: the sight is asked again with each 5-minute version check.
+    this.sightTimer = setInterval(() => {
+      if (this.link?.up) this.options.refreshSight();
+    }, CHECK_MS);
   }
 
   stop(): void {
     this.stopped = true;
+    if (this.sightTimer) clearInterval(this.sightTimer);
+    this.sightTimer = null;
     this.link?.stop();
     this.link = null;
   }

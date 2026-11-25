@@ -284,9 +284,10 @@ export class CellPanel {
     this.liveBarText = el("span", "mr2-live-bar__text");
     const liveBarWords = el("span", "mr2-live-bar__words");
     liveBarWords.append(this.liveBarText, el("span", "mr2-live-bar__sub", "Tap to update"));
-    this.liveBar = button("btn mr2-live-bar");
+    // The game's own brass button in either look (neon r1: a plain gold bar read as a toast).
+    this.liveBar = button("btn btn--outline mr2-live-bar");
     this.liveBar.hidden = true;
-    this.liveBar.append(icon("pin", 20, "map-icon mr2-live-bar__icon"), liveBarWords, icon("respawn", 20, "map-icon mr2-live-bar__refresh"));
+    this.liveBar.append(liveBarWords, icon("respawn", 22, "map-icon mr2-live-bar__refresh"));
     this.liveBar.addEventListener("click", () => {
       this.held = null;
       this.update(this.latest);
@@ -478,6 +479,14 @@ export class CellPanel {
     const attacking = !!shown && isPlayerCell(shown) && (shown.atk ?? 0) > Date.now() / 1000;
     const label = this.attackButton.lastElementChild;
     if (label) label.textContent = attacking ? "Under attack" : "Attack";
+    // A lock rather than the sword while it cannot be pressed (neon r1: the sword invited a tap).
+    const glyph = this.attackButton.firstElementChild;
+    const wanted = attacking ? "lock" : "attack";
+    if (glyph && glyph.getAttribute("data-live-icon") !== wanted) {
+      const next = icon(wanted, 20, "map-icon");
+      next.setAttribute("data-live-icon", wanted);
+      glyph.replaceWith(next);
+    }
     this.attackButton.classList.toggle("mr2-cell__primary--busy", attacking);
     if (attacking) {
       this.attackButton.disabled = true;

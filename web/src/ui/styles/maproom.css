@@ -1068,13 +1068,7 @@
   /* Attack's height, set from the button it replaces (CellPanel.applyLive); 52px until measured. */
   height: 52px;
   min-height: 0;
-  padding: 2px 14px;
-  border: 2px solid #5a3a0c !important;
-  border-radius: 14px;
-  background: linear-gradient(#c68d28, #8f5e16) !important;
-  box-shadow: inset 0 1px 0 rgb(255 255 255 / 30%), 0 2px 0 rgb(0 0 0 / 35%) !important;
-  color: #fff6e0 !important;
-  font-weight: 800;
+  padding: 2px 16px;
   text-align: left;
 }
 
@@ -1082,10 +1076,8 @@
   display: none;
 }
 
-.mr2-live-bar .mr2-live-bar__icon,
 .mr2-live-bar .mr2-live-bar__refresh {
   flex: none;
-  color: #fff6e0 !important;
 }
 
 .mr2-live-bar__words {
@@ -1093,12 +1085,13 @@
   flex: 1 1 auto;
   flex-direction: column;
   min-width: 0;
-  line-height: 1.2;
+  line-height: 1.15;
 }
 
 .mr2-live-bar__text {
   overflow: hidden;
   font-size: 15px;
+  font-weight: 800;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -1106,24 +1099,24 @@
 .mr2-live-bar__sub {
   font-size: 12px;
   font-weight: 700;
-  color: #ffe6a8 !important;
+  opacity: 0.85;
 }
 
-:root[data-skin="flash"] .mr2-cell .mr2-live-bar {
-  border-color: #6b4310 !important;
-  background: linear-gradient(#f5b82e, #cc8410) !important;
-  color: #3a2108 !important;
-}
-
-:root[data-skin="flash"] .mr2-live-bar :is(.mr2-live-bar__icon, .mr2-live-bar__sub, .mr2-live-bar__refresh) {
-  color: #3a2108 !important;
-}
-
-/* The rest of the held panel's actions wait for the update. */
-.mr2-cell--held .mr2-cell__actions > :not(.mr2-live-bar) {
-  opacity: 0.45;
-  filter: grayscale(0.6);
+/* While the panel holds the old cell: its owner and the other actions wait for the update. */
+.mr2-cell--held .mr2-cell__actions > :not(.mr2-live-bar),
+.mr2-cell--held .mr2-cell__picture,
+.mr2-cell--held .mr2-cell__nameline {
+  opacity: 0.5;
   pointer-events: none;
+}
+
+/* Attack while someone else's attack runs: flat and quiet, so it never reads as pressable. */
+.mr2-cell .mr2-cell__primary--busy {
+  filter: saturate(0.4) brightness(0.85);
+}
+
+.mr2-cell .mr2-cell__primary--busy > * {
+  opacity: 0.75;
 }
 
 /* Take over (#82) sits under Attack, a second choice rather than a second

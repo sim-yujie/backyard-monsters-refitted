@@ -21,6 +21,10 @@
  * - `poll`: no sockets; every player re-asks each of its 20 zones once a
  *   minute (the map before the live map).
  *
+ * - `cost`: times `--samples` re-asks of zones the players can see, a few at a
+ *   time, and prints the database transactions one `getarea` costs; queries a
+ *   second = re-asks a second x that.
+ *
  * Prints the server's CPU and memory, push delay p50/p95 (mark -> socket,
  * including the one-second bundle), re-ask latency, getarea/s and the
  * database's transactions/s (each ORM query outside a transaction is one).
@@ -47,6 +51,12 @@ const API = args.api ?? "http://localhost:3751";
 const WS = args.ws ?? "ws://localhost:3752";
 const WORLD = args.world ?? "63349203-5b5a-474d-9537-6f1d888e327a";
 const FIRST_USER = 900001;
+/** The share of players that really send their re-asks (the rest only count them): a local server's
+ * 10-connection pool answers a few dozen `getarea` a second, and 6,000 players' re-asks would pile up
+ * in its memory (a first run grew it to 17 GB). */
+const REASK = Number(args.reask ?? 0);
+/** `getarea`s to time for the database's cost per answer (`--mode=cost`). */
+const COST_SAMPLES = Number(args.samples ?? 200);
 
 const dbName = process.env.DB_NAME;
 const redisUrl = process.env.REDIS_URL;
@@ -100,7 +110,7 @@ const players = Array.from({ length: SOCKETS }, (_, i) => {
   const userid = FIRST_USER + i;
   const email = `lt${i + 1}@load.test`;
   const token = JWT.sign({ user: { email, sessionType: "game" } }, secret, { expiresIn: "2h" });
-  return { userid, email, token, chatToken: crypto.randomUUID(), zones: viewOf() };
+  return { userid, email, token, chatToken: crypto.randomUUID(), zones: viewOf(), reasks: Math.random() < REASK };
 });
 for (let i = 0; i < players.length; i += 500) {
   await Promise.all(
@@ -112,6 +122,7 @@ for (let i = 0; i < players.length; i += 500) {
 }
 
 let getareas = 0;
+let wouldAsk = 0;
 let refused = 0;
 const reaskMs: number[] = [];
 const getarea = async (token: string, zone: number): Promise<void> => {
@@ -181,10 +192,34 @@ const connect = (player: (typeof players)[number], kind: "live" | "chat"): Promi
       for (const [zone] of message.z ?? []) {
         const at = markedAt.get(zone);
         if (at !== undefined) delays.push(now - at);
-        setTimeout(() => void getarea(player.token, zone), Math.random() * 400);
+        wouldAsk += 1;
+        if (player.reasks) setTimeout(() => void getarea(player.token, zone), Math.random() * 400);
       }
     };
   });
+
+if (MODE === "cost") {
+  // Zones the test players can see (their alliance's sight round yardtester's yard), and fogged ones.
+  const visible = [230019, 230020, 240019, 240020, 230021, 240021];
+  const fogged = [500050, 600060, 100010];
+  for (const [label, zones] of [["visible", visible], ["fogged", fogged]] as const) {
+    const before = await commits();
+    const done0 = getareas;
+    for (let i = 0; i < COST_SAMPLES; i += 5) {
+      await Promise.all(
+        Array.from({ length: 5 }, (_, k) => getarea(players[(i + k) % players.length]!.token, zones[(i + k) % zones.length]!)),
+      );
+    }
+    const n = getareas - done0;
+    report[`txPerGetarea_${label}`] = Number((((await commits()) - before) / Math.max(1, n)).toFixed(1));
+  }
+  report.getareaMs = { p50: pct(reaskMs, 50), p95: pct(reaskMs, 95) };
+  console.log(JSON.stringify(report, null, 1));
+  for (let i = 0; i < players.length; i += 500) {
+    await Promise.all(players.slice(i, i + 500).flatMap((p) => [redis.del(`user-token:game:${p.email}`), redis.del(`chat-token:${p.userid}`)]));
+  }
+  process.exit(0);
+}
 
 if (MODE === "live") {
   for (let i = 0; i < players.length; i += 250) await Promise.all(players.slice(i, i + 250).map((p) => connect(p, "live")));
@@ -238,7 +273,8 @@ if (MODE === "live") {
       while (carry >= 1) {
         carry -= 1;
         const player = players[Math.floor(cursor / 20) % SOCKETS]!;
-        void getarea(player.token, player.zones[cursor % 20]!);
+        wouldAsk += 1;
+        if (player.reasks) void getarea(player.token, player.zones[cursor % 20]!);
         cursor += 1;
       }
     }, 100),
@@ -266,6 +302,7 @@ report.rssEndMb = rssMb();
 report.zoneMarksPerSec = Math.round(marks / elapsed);
 report.liveFramesPerSec = Math.round(framesIn / elapsed);
 report.pushDelayMs = { p50: pct(delays, 50), p95: pct(delays, 95), n: delays.length };
+report.reasksPerSecAllPlayers = Math.round(wouldAsk / elapsed);
 report.getareaPerSec = Math.round(getareas / elapsed);
 report.getareaRefused = refused;
 report.getareaMs = { p50: pct(reaskMs, 50), p95: pct(reaskMs, 95) };

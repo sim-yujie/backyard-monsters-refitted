@@ -109,7 +109,7 @@ export class MapRenderer {
   /** Every chunk's badges, markers and plates, over every chunk's ground. */
   private readonly worldTop = new Container();
   private readonly highlight = new Graphics();
-  /** The live map's growing rings on cells that just changed (beta 9), on the ground under the markers. */
+  /** The live map's growing rings on cells that just changed (beta 9), over the selection outline. */
   readonly rings = new CellRings((col, row) => this.liftAt(col, row));
   /**
    * The upright marker layer for the tilted map (`markerPins.ts`): while the
@@ -255,13 +255,14 @@ export class MapRenderer {
     this.root.addChild(
       this.raster.sprite,
       this.ground,
-      // Under the chunks, so the tilt's marker swap (`setMarkerProjector`) puts everything back in order.
-      this.rings.graphics,
       this.world,
       this.range.container,
       this.worldTop,
       this.live.overlay,
       this.highlight,
+      // Over the selection's outline (neon r1: under it the ring vanished), and last, so the tilt's
+      // marker swap (`setMarkerProjector`) still puts every layer back in its order.
+      this.rings.graphics,
     );
     this.friendsKey = friendMarksKey();
     this.stopFriends = friendsStore.subscribe(() => {

@@ -30,14 +30,16 @@ interface Ring {
 
 export const RING_MS = 800;
 export const MAX_RINGS = 4;
+/** The ring's size at its start, as a share of the hex: clear of the selection outline. */
+const START_SCALE = 1.06;
 
 const COLOURS: Record<LiveChangeKind, number> = {
-  taken: 0xffd059,
-  attack: 0xff5a2b,
+  taken: 0xffd23f,
+  attack: 0xff5a1f,
   shield: 0xa8ecff,
-  shieldEnd: 0xf2f6ff,
-  attackEnd: 0xf2f6ff,
-  minor: 0xf2f6ff,
+  shieldEnd: 0xe8f4ff,
+  attackEnd: 0xe8f4ff,
+  minor: 0xe8f4ff,
 };
 
 const RANK: Record<RingTier, number> = { own: 0, selected: 1, range: 2, far: 3 };
@@ -83,7 +85,7 @@ export class CellRings {
       if (worst < 0 || this.rings[worst]!.rank <= rank) return false;
       this.rings.splice(worst, 1);
     }
-    this.rings.push({ col: cell.col, row: cell.row, start: now, colour: COLOURS[kind], width: rank <= 1 ? 4 : 3, rank });
+    this.rings.push({ col: cell.col, row: cell.row, start: now, colour: COLOURS[kind], width: rank <= 1 ? 4.5 : 3.5, rank });
     this.lastStep = -1;
     return true;
   }
@@ -111,12 +113,13 @@ export class CellRings {
       if (alpha <= 0.01) continue;
       const corners = liftCorners(mapRoomGrid.writeCellCorners(ring.col, ring.row, []), this.liftAt(ring.col, ring.row));
       const width = (ring.width + (phone ? 0.5 : 0)) / zoom;
-      const shape = scaleAbout(corners, 1 + 0.1 * easeOut(life));
-      if (!classic) {
-        // Modern: a soft glow under the line.
-        g.poly(shape);
-        g.stroke({ width: width * 2.5, color: ring.colour, alpha: alpha * 0.3 });
-      }
+      // Starts just outside the selection's outline and grows a tenth further (neon r1).
+      const shape = scaleAbout(corners, START_SCALE + 0.1 * easeOut(life));
+      // A soft glow, a dark casing so gold and pale hold on sunlit grass, then the line.
+      g.poly(shape);
+      g.stroke({ width: width * 2.6, color: ring.colour, alpha: alpha * (classic ? 0.25 : 0.3) });
+      g.poly(shape);
+      g.stroke({ width: width + 2 / zoom, color: 0x1a0e00, alpha: alpha * 0.55 });
       g.poly(shape);
       g.stroke({ width, color: ring.colour, alpha });
     }
