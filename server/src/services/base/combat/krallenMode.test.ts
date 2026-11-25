@@ -140,4 +140,28 @@ describe("an attack started under older rules replays exactly as it was fought",
     },
     REPLAY_TIMEOUT_MS
   );
+
+  // Patch 8.6 (owner, 25 Nov 2026): she keeps her route on her walking look
+  // and turns only on a defender that reaches or hits her, by Flash's rules
+  // (`BattleOptions.flashKrallen`), in an attack started under these rules only.
+  test("fights her by patch 8.6's Flash rules only when the session's rules are these", () => {
+    expect(inputOf(sent, sessionOf(RULES_VERSION)).flashKrallen).toBe(true);
+    expect(inputOf(sent, sessionOf(OLD_RULES)).flashKrallen).toBe(false);
+    expect(inputOf(sent, sessionOf(undefined)).flashKrallen).toBe(false);
+  });
+
+  test(
+    "an old attack's Krallen in Hybrid, with no weights, still fights by the rules before",
+    () => {
+      // Hybrid with no brain gives her no weights, as a new attack's Krallen
+      // has none: only the session's rules tell the two apart.
+      const hybrid = logOf({ t: 5, l: 5, s: "hybrid" });
+      const input = inputOf(hybrid, sessionOf(OLD_RULES));
+      const fought = replayAbandonedAttack(input);
+      const asNow = replayAbandonedAttack({ ...input, flashKrallen: true });
+      expect(replayAbandonedAttack({ ...input, flashKrallen: false })).toEqual(fought);
+      expect(asNow.buildinghealthdata).not.toEqual(fought.buildinghealthdata);
+    },
+    REPLAY_TIMEOUT_MS
+  );
 });

@@ -4,6 +4,7 @@ import { fileURLToPath } from "node:url";
 
 import { attackWindowSeconds } from "./attackWindow.js";
 import { withTribeGooBonus } from "./tribeGooBonus.js";
+import { RULES_VERSION } from "../defences/rulesVersion.js";
 
 /**
  * Finishing an attack its attacker left without a save (issue #138).
@@ -272,6 +273,8 @@ const ENTRY_HOUSED = { [HOME]: { C1: 200 }, [OUTPOST]: { C1: 150 } };
 
 /** What the attack load recorded, as the checkpoint keeps a copy of it. */
 const facts = (overrides: Record<string, unknown> = {}) => ({
+  // Minted under these rules, as `newAttackSession` mints every session now.
+  rules: RULES_VERSION,
   entryHoused: ENTRY_HOUSED,
   defenderResources: SERVED,
   attackerlevel: LEVEL,
@@ -303,6 +306,7 @@ const arm = async (overrides: Record<string, unknown> = {}) => {
       entryHoused: stored.entryHoused,
       defenderResources: stored.defenderResources,
       attackerlevel: stored.attackerlevel,
+      rules: stored.rules,
     })
   );
 };

@@ -1,3 +1,5 @@
+import { readFileSync } from "node:fs";
+import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 
 import {
@@ -10,7 +12,14 @@ import {
   linearAreaDamage,
   lootAuraBonus,
 } from "./champions.js";
-import { createBattle, type BattleVisualEvent, type CreepSnapshot } from "./engine.js";
+import {
+  KRALLEN_AGGRO_RADIUS,
+  bunkerGarrisons,
+  createBattle,
+  dropRadius,
+  type BattleVisualEvent,
+  type CreepSnapshot,
+} from "./engine.js";
 import { championStat, championStatWithFood } from "./stats.js";
 import { findChampionTarget } from "./targeting.js";
 import { buildEngineYard } from "./yard.js";
@@ -589,6 +598,202 @@ describe("Krallen (issue #222)", () => {
     expect(battle.creeps().some((creep) => creep.lootBoosted)).toBe(true);
     run(battle, 1500);
     expect(battle.creeps().some((creep) => creep.lootBoosted)).toBe(false);
+  });
+});
+
+describe("Krallen by Flash's rules (patch 8.6, owner 25 Nov 2026)", () => {
+  /**
+   * A real walled main yard (the krallen-flash diagnosis, drop 300,500): her
+   * nearest unlooted harvester is Putty#118, then on her walking look Putty#61
+   * by a shorter route, and under the old rule Twig#59 a moment later, which
+   * she hit with both Putty Squishers standing.
+   */
+  const walled = JSON.parse(
+    readFileSync(
+      fileURLToPath(new URL("../../../../test/fixtures/krallen-walled-yard.json", import.meta.url)),
+      "utf8",
+    ),
+  ) as { buildingdata: CombatBuildingDataMap; resources: { r1: number; r2: number; r3: number; r4: number } };
+
+  const walledRun = (flashKrallen?: boolean) => {
+    const yard = buildEngineYard({
+      buildingdata: walled.buildingdata,
+      buildinghealthdata: null,
+      resources: walled.resources,
+      kind: "main",
+      height: null,
+    });
+    const battle = createBattle(yard, {
+      seed: 12345,
+      bunkers: bunkerGarrisons(walled.buildingdata),
+      ...(flashKrallen === undefined ? {} : { flashKrallen }),
+    });
+    battle.apply({
+      kind: "fling",
+      t: 0,
+      x: 300,
+      y: 500,
+      r: dropRadius(0),
+      monsters: {},
+      champion: { t: 5, l: 5, pl: 1, hp: 62000 },
+    });
+    const order: number[] = [];
+    // The building she first swung at, and whether the one before it still stood.
+    let firstHit = -1;
+    for (let step = 0; step < 4000 && !battle.over(); step += 1) {
+      battle.step();
+      const krallen = battle.creeps().find((creep) => creep.monsterId === "G5" && !creep.friendly);
+      if (!krallen) break;
+      if (krallen.targetBuilding >= 0 && order[order.length - 1] !== krallen.targetBuilding) {
+        order.push(krallen.targetBuilding);
+      }
+      if (firstHit < 0 && krallen.state === "attacking" && krallen.targetBuilding >= 0) {
+        firstHit = krallen.targetBuilding;
+      }
+    }
+    return { order, firstHit };
+  };
+
+  it("keeps her route on her walking look unless the new one is shorter (`ChampionBase.as:704-716`)", () => {
+    // Putty#61 is reached by a shorter route than what she has left to #118,
+    // so she takes it, as Flash would; Twig#59 is not, so she keeps #61.
+    const now = walledRun();
+    expect(now.order.slice(0, 2)).toEqual([118, 61]);
+    expect(now.firstHit).toBe(61);
+    // Under the rule before (an attack started under older rules), she turned
+    // again to Twig#59 and hit it with Putty#61 standing.
+    const before = walledRun(false);
+    expect(before.order.slice(0, 3)).toEqual([118, 61, 59]);
+    expect(before.firstHit).toBe(59);
+  });
+
+  /**
+   * A bunker holding one Pokey, six Pokeys flung to its west, which its Pokey
+   * comes out for, and an attacking champion flung where it walks past that
+   * fight within its reach. `aimed` is every defender that had it as its foe.
+   */
+  const pastAFight = (champion: number, flashKrallen?: boolean) => {
+    const yard = yardOf({
+      "1": { id: 1, t: 22, l: 1, X: 0, Y: 0 },
+      "2": { id: 2, t: 1, l: 6, X: 300, Y: -100, st: 100000 },
+      "3": { id: 3, t: 1, l: 1, X: -200, Y: 150 },
+    });
+    const battle = createBattle(yard, {
+      seed: 3,
+      bunkers: { 1: { C1: 1 } },
+      ...(flashKrallen === undefined ? {} : { flashKrallen }),
+    });
+    battle.apply({ kind: "fling", t: 0, x: -150, y: 140, r: 0, monsters: { C1: 6 } });
+    battle.apply({ kind: "fling", t: 0, x: -100, y: 100, r: 0, monsters: {}, champion: { t: champion, l: 5 } });
+    const aimed = new Set<number>();
+    let fought = 0;
+    let foughtIdle = 0;
+    for (let step = 0; step < 1500 && !battle.over(); step += 1) {
+      battle.step();
+      const mine = battle.creeps().find((creep) => creep.champion && !creep.friendly);
+      if (!mine) break;
+      for (const other of battle.creeps()) if (other.friendly && other.targetCreep === mine.id) aimed.add(other.id);
+      if (mine.targetCreep < 0) continue;
+      fought += 1;
+      if (!aimed.has(mine.targetCreep)) foughtIdle += 1;
+    }
+    return { aimed: aimed.size, fought, foughtIdle };
+  };
+
+  it("walks past a defender in her reach that never goes for her", () => {
+    expect(pastAFight(5)).toEqual({ aimed: 0, fought: 0, foughtIdle: 0 });
+    // Under the rule before, any defender in her reach turned her (#195).
+    expect(pastAFight(5, false).foughtIdle).toBeGreaterThan(0);
+  });
+
+  it("leaves every other champion on the owner's rule: Gorgo still turns on one in his reach (#195)", () => {
+    const gorgo = pastAFight(1);
+    expect(gorgo.aimed).toBe(0);
+    expect(gorgo.foughtIdle).toBeGreaterThan(0);
+    expect(pastAFight(1, false)).toEqual(gorgo);
+  });
+
+  it("turns on a defender that goes for her (`CreepBase.as:1106-1110`, `:1176-1182`)", () => {
+    const yard = yardOf({
+      "1": { id: 1, t: 22, l: 1, X: 0, Y: 0 },
+      "2": { id: 2, t: 1, l: 1, X: 150, Y: 150 },
+    });
+    const battle = createBattle(yard, { seed: 5, bunkers: { 1: { C1: 1 } } });
+    fling(battle, 140, {}, { t: 5, l: 5 });
+    let aimedFirst = false;
+    let turned = false;
+    for (let step = 0; step < 900 && !battle.over() && !turned; step += 1) {
+      battle.step();
+      const krallen = championOf(battle, false);
+      const defender = battle.creeps().find((creep) => creep.friendly);
+      if (!krallen || !defender) continue;
+      if (defender.targetCreep === krallen.id) aimedFirst = true;
+      if (krallen.targetCreep === defender.id) turned = true;
+    }
+    expect(aimedFirst).toBe(true);
+    expect(turned).toBe(true);
+  });
+
+  it("turns on a defender that strikes beside her, within 50 (`CreepBase.as:1196-1203`)", () => {
+    // Three Octo-oozes walk with her to a harvester by the bunker; its Pokey
+    // goes for them, never her, and its blows land beside her.
+    const run = (flashKrallen?: boolean) => {
+      const yard = yardOf({
+        "1": { id: 1, t: 22, l: 1, X: 0, Y: 0 },
+        "2": { id: 2, t: 1, l: 6, X: 120, Y: 120, st: 100000 },
+      });
+      const battle = createBattle(yard, {
+        seed: 3,
+        bunkers: { 1: { C1: 1 } },
+        ...(flashKrallen === undefined ? {} : { flashKrallen }),
+      });
+      battle.apply({ kind: "fling", t: 0, x: 140, y: 140, r: 0, monsters: { C3: 3 }, champion: { t: 5, l: 5 } });
+      const aimed = new Set<number>();
+      for (let step = 0; step < 1500 && !battle.over(); step += 1) {
+        battle.step();
+        const krallen = championOf(battle, false);
+        if (!krallen) break;
+        for (const other of battle.creeps()) if (other.friendly && other.targetCreep === krallen.id) aimed.add(other.id);
+        if (krallen.targetCreep < 0) continue;
+        const defender = battle.creeps().find((creep) => creep.id === krallen.targetCreep)!;
+        return {
+          aimed: aimed.has(defender.id),
+          away: Math.hypot(krallen.ix - defender.ix, krallen.iy - defender.iy),
+          hurt: krallen.hp < krallen.maxHp,
+        };
+      }
+      return null;
+    };
+    const now = run();
+    expect(now).not.toBeNull();
+    expect(now!.aimed).toBe(false);
+    expect(now!.hurt).toBe(false);
+    expect(now!.away).toBeLessThan(KRALLEN_AGGRO_RADIUS);
+    // Under the rule before she turned on it from farther, in her reach.
+    expect(run(false)!.away).toBeGreaterThan(now!.away);
+  });
+
+  it("is never a defending Krallen's: both rules are an attacker's", () => {
+    // A caged Krallen is fought by `tickCageChampion`, which neither looks
+    // while walking nor engages; the same defence plays the same either way.
+    const play = (flashKrallen: boolean) => {
+      const yard = yardOf({
+        "1": { id: 1, t: 114, l: 1, X: 0, Y: 0 },
+        "2": { id: 2, t: 1, l: 6, X: 150, Y: 150, st: 100000 },
+        "3": { id: 3, t: 1, l: 6, X: 1400, Y: 1400 },
+      });
+      const battle = createBattle(yard, {
+        seed: 9,
+        defenderChampions: [{ t: 5, l: 5, hp: 62000 }],
+        flashKrallen,
+      });
+      fling(battle, 160, { C1: 8, C3: 4 });
+      run(battle, 2000);
+      return { checkpoint: battle.checkpoint(), dealt: battle.state().defenderChampions[0]!.damageDealt };
+    };
+    const now = play(true);
+    expect(now.dealt).toBeGreaterThan(0);
+    expect(now).toEqual(play(false));
   });
 });
 

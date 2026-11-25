@@ -74,6 +74,14 @@
  * attack (`rulesStamp.ts`), and such a page still flings Krallen in the Mode
  * its picker offers: it must reload instead.
  *
+ * Patch 8.6 keeps it empty and moves battles with an attacking Krallen
+ * (owner, 25 Nov 2026, `BattleOptions.flashKrallen`): she keeps her route
+ * on her walking look unless the new one is shorter, as Flash's
+ * `setWaypoints`, and turns only on a defender that reaches or hits her or
+ * hits beside her, not on one that is merely in her reach. Every other
+ * champion fights as before. The server replays an attack whose session was
+ * minted under older rules with both off, so it lands as it was fought.
+ *
  * Add the version a change replaces only when that change moves no battle.
  * A change that moves any battle result must empty this list.
  */

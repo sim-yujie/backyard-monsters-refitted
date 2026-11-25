@@ -5,6 +5,7 @@ import { derivedDestroyed, parseDefenderForces, type FlingLog } from "../../../g
 import { frozenBrainsOf, type AttackSession } from "../attackSession.js";
 import { replayAbandonedAttack } from "./abandonedAttack.js";
 import { battleMismatches, battleReplayInput, battleTick, type BattleDefender } from "./battle.js";
+import { RULES_VERSION } from "../../defences/rulesVersion.js";
 
 /**
  * The honest attack saves the real web client sent (issue #201), replayed as
@@ -128,6 +129,8 @@ const sessionOf = (one: HonestSave, fixture: Fixture): AttackSession => {
     attackerid: 2505,
     attackid: 4242,
     startedat: 0,
+    // Minted under these rules, as `newAttackSession` mints every session now.
+    rules: RULES_VERSION,
     entryHoused: { "3502": one.attacker.monsters },
     attackerResources: { r1: 0, r2: 0, r3: 0, r4: 0, ...one.attacker.resources },
     attackerlevel: fixture.playerLevel,
