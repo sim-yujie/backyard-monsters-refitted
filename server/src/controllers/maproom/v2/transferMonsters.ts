@@ -11,7 +11,6 @@ import { BaseType } from "../../../enums/Base.js";
 import { monsterTransferRejectedErr, permissionErr } from "../../../errors/errors.js";
 import { getCurrentDateTime } from "../../../utils/getCurrentDateTime.js";
 import {
-  deriveHousingCapacity,
   movedFromBlobs,
   planMonsterTransfer,
   type TransferYard,
@@ -22,7 +21,7 @@ import type { QuestEvents } from "../../../services/quests/state.js";
 import { isAttackActive } from "../../../services/base/isAttackActive.js";
 import { readAttackSession } from "../../../services/base/attackSessionStore.js";
 import { jsonField } from "../../../schemas/jsonField.js";
-import { highestAcademyLevels, housingExpansionActive } from "../../../services/yard/housing.js";
+import { highestAcademyLevels, housingCapacityNow, housingExpansionActive } from "../../../services/yard/housing.js";
 
 /**
  * `moved` is the counts to move (`{"C1": 5}`, the web client, #196);
@@ -182,15 +181,13 @@ const transferBetween = async (
   // server's production state.
   const hatched = catchUpTransferYards([fromBase, toBase], mainSave, now);
 
+  // Housing that finished while the yard was closed counts (patch, 24 Nov 2026).
   const capacityFor = (save: Save): number =>
-    deriveHousingCapacity({
-      buildingData: save.buildingdata,
-      healthData: save.buildinghealthdata,
-      housingExpansionActive:
-        housingExpansionActive(save.storedata, now) ||
-        housingExpansionActive(mainSave?.storedata, now),
-      inferno: save.type === BaseType.INFERNO,
-    });
+    housingCapacityNow(
+      save,
+      housingExpansionActive(save.storedata, now) || housingExpansionActive(mainSave?.storedata, now),
+      now
+    );
 
   const yardOf = (save: Save): TransferYard => ({
     baseid: save.baseid,

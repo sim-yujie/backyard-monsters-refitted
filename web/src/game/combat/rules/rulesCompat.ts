@@ -27,6 +27,14 @@
  * and traps. No replay stamped with 3cb9cc66416d5eda or 8.1/8.2's
  * 0ba3fde8701104af plays the same any more.
  *
+ * Patch 8.5 keeps it empty with two changes that move battles (owner,
+ * 24 Nov 2026). Krallen now hits a harvester she has drained until it
+ * falls, as Flash's `setWaypoints` kept her on it (`engine.ts`, `swing`).
+ * And the ranged reach of the owner's pick C: a ranged monster or Fomor
+ * now reaches a building from its range times 1/√2
+ * (`RANGED_BUILDING_REACH_SCALE`). No replay stamped with 8.3/8.4's
+ * c8cfcc231fcacd03 plays the same any more.
+ *
  * Add the version a change replaces only when that change moves no battle.
  * A change that moves any battle result must empty this list.
  */

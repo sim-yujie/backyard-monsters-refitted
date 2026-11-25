@@ -11,6 +11,7 @@ import {
   type Game,
 } from "./game";
 import { checkAttackDock, openAttack } from "./attackDock";
+import { checkFriendMenu, leaveFriendYard, openFriendYard } from "./friendYard";
 import { knownFailure } from "./knownFailures";
 import { checkWindow, pageFacts, type CheckArgs, type CheckReport } from "./measure";
 import { selectedProfiles, type Profile } from "./profiles";
@@ -257,7 +258,8 @@ export const defineLayoutSuite = (profileIds: readonly string[]): void => {
         await closeAll(page);
         await closeWorldChat(page);
 
-        // Last: a blind tap on the yard may leave a building picked up.
+        // Late: a blind tap on the yard may leave a building picked up (the
+        // friend's-yard step after it reloads the page anyway).
         const building: WindowCase = {
           id: "building",
           label: "Building side panel",
@@ -272,6 +274,30 @@ export const defineLayoutSuite = (profileIds: readonly string[]): void => {
             return "no building under the middle of the screen (the yard is a canvas; the tap is blind)";
           }
           await expectWindow(page, profile, building, "as opened");
+          return null;
+        });
+
+        // The account menu in a friend's yard (bug report #70, 24 Nov 2026),
+        // then back home for the steps after it.
+        const friendMenu: WindowCase = {
+          id: "friend-account-menu",
+          label: "Account menu in a friend's yard",
+          panel: ".account-menu__list",
+          items: null,
+          tabs: false,
+          open: async () => true,
+        };
+        await windowStep(page, profile, friendMenu, friendMenu.id, tally, async () => {
+          const noWayIn = await openFriendYard(page);
+          if (noWayIn !== null) {
+            await leaveFriendYard(page);
+            return noWayIn;
+          }
+          try {
+            await checkFriendMenu(page, profile);
+          } finally {
+            await leaveFriendYard(page);
+          }
           return null;
         });
 

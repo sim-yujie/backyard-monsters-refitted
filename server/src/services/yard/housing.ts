@@ -1,5 +1,6 @@
 import type { BuildingDataMap, BuildingHealthData } from "../../types/BuildingData.js";
 import type { JsonObject } from "../../types/JsonObject.js";
+import { advanceBuildingTimers } from "../base/advanceBuildingTimers.js";
 import {
   HOUSING_EXPANSION_ITEMS,
   deriveHousingCapacity,
@@ -55,6 +56,35 @@ export const housingCapacity = (
     inferno: yardKindOf(yard) === "inferno",
     minHealth,
   });
+
+/** A stored yard: its buildings and health as of its last write, and when that was. */
+export interface StoredHousingYard extends HousingYard {
+  savetime?: number | null;
+}
+
+/**
+ * What a stored yard can house at `now`, rather than as of its last write.
+ *
+ * A yard's countdowns are only advanced when the server writes it (a load, a
+ * yard action), so Housing whose build or upgrade finished since then, on an
+ * outpost nobody has opened, still reads as under construction or at its old
+ * level in the stored row. This plays the countdowns forward on a copy the
+ * way the yard's own catch-up would (`advanceBuildingTimers`: paused while
+ * damaged or repairing, an upgrade counting at its new level once done and at
+ * its old one until then), and measures that. The row is not changed.
+ *
+ * @param yard - Buildings, health and `savetime`.
+ * @param expansion - Whether EXH counts.
+ * @param now - Unix seconds.
+ */
+export const housingCapacityNow = (yard: StoredHousingYard, expansion: boolean, now: number): number => {
+  const savedAt = Number(yard.savetime);
+  const elapsed = Number.isFinite(savedAt) && savedAt > 0 ? now - savedAt : 0;
+  const buildingdata = yard.buildingdata
+    ? advanceBuildingTimers(yard.buildingdata, yard.buildinghealthdata, elapsed)
+    : yard.buildingdata;
+  return housingCapacity({ ...yard, buildingdata }, expansion);
+};
 
 /** Space a roster takes at the given academy levels (`HOUSING.as:79-85`). */
 export const housingUsedBy = (
