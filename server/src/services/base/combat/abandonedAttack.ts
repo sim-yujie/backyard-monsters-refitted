@@ -96,6 +96,12 @@ export interface AbandonedInput {
    * shared engine burns surface monsters (WP 1.21). Absent outside the Descent.
    */
   descentYard?: number;
+  /**
+   * Whether Krallen fights by patch 8.6's Flash rules (`BattleOptions.flashKrallen`):
+   * false for an attack whose session was minted under older rules, which
+   * replays as it was fought. Absent is true, the rules every page plays now.
+   */
+  flashKrallen?: boolean;
 }
 
 /** Everything the attack save would have carried, derived. */
@@ -227,6 +233,7 @@ export const replayAbandonedAttack = (input: AbandonedInput): AbandonedOutcome =
       ...(input.playerLevel !== undefined && { playerLevel: input.playerLevel }),
       ...battleDefence(input.defence),
       ...(input.descentYard !== undefined && { descentYard: input.descentYard }),
+      ...(input.flashKrallen === false && { flashKrallen: false }),
       // Each attacking champion's lesson for its brain (issue #219); reads only.
       learn: true,
     }
