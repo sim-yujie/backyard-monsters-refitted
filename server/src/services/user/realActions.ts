@@ -302,6 +302,8 @@ export const NOT_REAL_ACTION_ROUTES: readonly string[] = [
   "POST /api/:apiVersion/player/mail/findplayer",
   "POST /alliance/searchalliances",
   "POST /worldmapv2/getarea",
+  // The live map's re-asks of changed zones (beta 9): a read, often with nobody touching anything.
+  "POST /worldmapv2/getareas",
   "POST /worldmapv2/sight",
   "POST /worldmapv2/takeoverquote",
   "POST /worldmapv2/autoattackplan",
