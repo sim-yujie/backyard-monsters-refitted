@@ -222,8 +222,9 @@ const hatcheryBuilding = (save: HatcherySave, id: number): BuildingData | undefi
 /**
  * Why a hatchery cannot work right now, or null when it can: the original's
  * `_canFunction`, built and at least half health (`BUILDING13.as:262-267`).
- * An upgrade does not stop it taking work or finishing now; the countdown
- * pauses during one, which is the catch-up's business.
+ * An upgrade does not stop its own queue starting or Finish now; the countdown
+ * pauses during one, which is the catch-up's business. The HCC's hand-out
+ * skips an upgrading hatchery (`handOut`).
  */
 const hatcheryIdle = (save: HatcherySave, id: number): "busy" | "damaged" | null => {
   const building = hatcheryBuilding(save, id);
