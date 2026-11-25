@@ -25,6 +25,11 @@ export interface ZoneRecord extends ZoneRef {
   data: AreaCellGrid;
   /** Milliseconds since the epoch when the response was applied. */
   fetchedAt: number;
+  /**
+   * The sight version (`sv`) the data was cut to: the answer's own, or the sight it was found to
+   * still match when the sight changed (`ZoneStore.applySight`).
+   */
+  sv?: string;
 }
 
 /** What the store reports when a request fails. */
@@ -332,6 +337,30 @@ export class ZoneStore {
   }
 
   /**
+   * The player's sight changed (map lag, 25 Nov 2026): forgets only the cached zones `keep`
+   * refuses (those whose visible cells may differ under the new sight, `Sight` decides), and
+   * stamps the rest with the new `sv`, since they show exactly what it lets them. The "no memory"
+   * rule (`fog-of-war.md` §6) holds: a zone any of whose cells gained or lost sight is forgotten
+   * like `dropAll` forgets them all. The queue is emptied as there, for `skipZone`'s sake.
+   * Returns the forgotten records, for the renderer to forget too.
+   */
+  applySight(keep: (zone: ZoneRecord) => boolean, sv: string): ZoneRecord[] {
+    const dropped: ZoneRecord[] = [];
+    for (const [id, zone] of this.zones) {
+      if (keep(zone)) {
+        zone.sv = sv;
+        continue;
+      }
+      dropped.push(zone);
+      this.zones.delete(id);
+      this.drawnKeys.delete(id);
+    }
+    this.queue.clear();
+    this.revision += 1;
+    return dropped;
+  }
+
+  /**
    * Starts as many queued requests as the budget and concurrency allow.
    *
    * Call it from the scene's update loop. The returned promise settles when the
@@ -474,6 +503,7 @@ export class ZoneStore {
       originY: entry.originY,
       data: response.data,
       fetchedAt: this.now(),
+      ...(response.sv !== undefined && { sv: response.sv }),
     };
     const previous = this.zones.get(entry.id);
     const key = drawnKey(response.data);

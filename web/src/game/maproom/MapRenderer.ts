@@ -1,5 +1,5 @@
 import { Container, Graphics, type Renderer } from "pixi.js";
-import { AREA_ZONE_SIZE, MAX_TEXT_OBJECTS, WATER_MAX_HEIGHT } from "@/config";
+import { AREA_ZONE_SIZE, MAX_TEXT_OBJECTS, WATER_MAX_HEIGHT, WORLD_HEIGHT, WORLD_WIDTH } from "@/config";
 import { mapRoomGrid, type OffsetCell } from "@/game/HexGrid";
 import { HOVER_COLOUR, KitFilter, SELECT_COLOUR, type CellFriend, type MapViewerContext } from "./cellVisuals";
 import {
@@ -35,9 +35,9 @@ import { MR2_PAINTED, MR2_PAINTED_ART, MR2_PAINTED_CODE, MR2_PAINTED_FAILED, mar
 import { classicLook } from "@/game/classicLook";
 import { onQualityChange, quality, type Quality } from "@/game/quality";
 import { FOG_COLOUR, setFogUnderCloud } from "./cellVisuals";
-import { isFogCell, type PlayerCell } from "@/api/types";
+import { isFogCell, type FogCell, type MapCell, type PlayerCell } from "@/api/types";
 import type { ZoneRecord, ZoneStore } from "./ZoneStore";
-import type { CellRange } from "./zones";
+import { zoneFor, type CellRange } from "./zones";
 import { setRegionRenderer } from "./regionUpload";
 import type { GroundData } from "./painted/GroundData";
 import type * as PaintedLookNamespace from "./painted/paintedLook";
@@ -388,21 +388,6 @@ export class MapRenderer {
     this.rebuildAll();
   }
 
-  /**
-   * The sight version changed (#331): what used to be drawn, chunk and raster
-   * alike, may no longer be owed to the viewer ("no memory" — leaving sight
-   * means fully dark again). Forgets the raster back to flat fog and rebuilds
-   * every chunk so its fog cloud/feather follows the new sight, as the zone
-   * cache the scene re-requests lands.
-   */
-  resetSight(): void {
-    this.raster.reset();
-    this.painted?.reset();
-    this.classicFog?.reset();
-    this.clouds?.invalidate();
-    this.borders?.reset();
-    this.rebuildAll();
-  }
 
   /**
    * Bakes the texture atlas. Nothing is drawn above the raster tier until this
@@ -448,6 +433,43 @@ export class MapRenderer {
     // runs in it, or along its edge.
     if (this.painted && this.touchesRivers(zone, previous)) this.painted.invalidateRivers(coverAround(zone, 2));
     // The range and the highlight stand on the cells, which now have their heights.
+    this.range.invalidate();
+    this.drawHighlight();
+  }
+
+  /**
+   * The store forgot these zones (the sight changed, `ZoneStore.applySight`): their cells go back
+   * to fog in every layer ("no memory", `fog-of-war.md` §6), except a cell a zone still held also
+   * covers (zones share their edge row and column), which keeps that zone's copy, as the chunks
+   * read it from the store. Their chunks and the ones round them are rebuilt, so the fog edge
+   * follows. Only the cells forgotten are touched and uploaded.
+   */
+  forgetZones(zones: readonly ZoneRecord[]): void {
+    if (this.destroyed || zones.length === 0) return;
+    for (const zone of zones) {
+      const data: ZoneRecord["data"] = {};
+      for (const [xKey, column] of Object.entries(zone.data)) {
+        const out: Record<string, MapCell> = {};
+        for (const yKey of Object.keys(column)) out[yKey] = this.store.getCell(Number(xKey), Number(yKey)) ?? FOG_CELL;
+        data[xKey] = out;
+      }
+      const forgotten: ZoneRecord = { ...zone, data };
+      this.raster.applyZone(forgotten);
+      this.painted?.applyZone(forgotten);
+      this.classicFog?.applyZone(forgotten);
+      this.borders?.applyZone(forgotten);
+      this.live.zoneArrived(zone.id);
+      for (let dx = -1; dx <= 1; dx++) {
+        for (let dy = -1; dy <= 1; dy++) {
+          const x = zone.originX + dx * AREA_ZONE_SIZE;
+          const y = zone.originY + dy * AREA_ZONE_SIZE;
+          if (x < 0 || y < 0 || x >= WORLD_WIDTH || y >= WORLD_HEIGHT) continue;
+          const id = zoneFor(x, y).id;
+          if (this.chunks.has(id)) this.dirty.add(id);
+        }
+      }
+      if (this.painted && this.touchesRivers(forgotten, zone)) this.painted.invalidateRivers(coverAround(zone, 2));
+    }
     this.range.invalidate();
     this.drawHighlight();
   }
@@ -1046,3 +1068,6 @@ const hasTruce = (zone: ZoneRecord): boolean => {
   }
   return false;
 };
+
+/** What a forgotten cell reads as in the layers: fog, as the server answers outside sight. */
+const FOG_CELL: FogCell = { fog: 1 };
