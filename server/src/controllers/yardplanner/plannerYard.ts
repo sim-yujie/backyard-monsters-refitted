@@ -11,6 +11,7 @@ import { syncInfernoCap } from "../../services/inferno/infernoLoad.js";
 import { jobQuestEvents } from "../../services/quests/hooks.js";
 import { recordQuests } from "../../services/quests/state.js";
 import { catchUpYard } from "../../services/yard/catchUp.js";
+import { flingerClockOf, type FlingerClock } from "../../services/yard/derivedLevels.js";
 import { notInOutpostErr, notYourYardErr } from "../../services/yard/yardErrors.js";
 import { yardKindOf, type YardKind } from "../../services/yardplanner/costs.js";
 import { getCurrentDateTime } from "../../utils/getCurrentDateTime.js";
@@ -87,20 +88,21 @@ export const onPlannerYard = async <T>(
     // Compared once `run` and the flush are done, so a layout or upgrade
     // batch that moves the Flinger's level invalidates the Map Room 2 fog
     // of war sight cache (issue #329, #330 WP1).
-    const flingerBefore = save.flinger;
-    const result = run(save, getCurrentDateTime());
+    const now = getCurrentDateTime();
+    const flingerBefore = flingerClockOf(save, now);
+    const result = run(save, now);
     pruneFiredTraps(save);
     postgres.em.persist(save);
     await postgres.em.flush();
     emitLevelChange(user.userid, user.username, playerLevelOf(save));
-    await invalidateSightIfFlingerChanged(user, flingerBefore, save.flinger);
+    await invalidateSightIfFlingerClockChanged(user, flingerBefore, flingerClockOf(save, now));
     return result;
   }
 
   const result = await countAfterCommit(() => postgres.em.transactional(async (tx) => {
     const yard = await lockOwnYard(tx, user, baseid);
     const now = getCurrentDateTime();
-    const flingerBefore = yard.save.flinger;
+    const flingerBefore = flingerClockOf(yard.save, now);
     const completed = catchUpYard(yard.save, now);
     // Hatches the catch-up finished count for quests, as a yard action's do.
     if (!yard.inferno) recordQuests(yard.main, now, jobQuestEvents(completed));
@@ -110,28 +112,28 @@ export const onPlannerYard = async <T>(
     // action's does (`runYardAction`).
     if (yard.inferno) syncInfernoCap(yard.main, yard.inferno);
     await tx.flush();
-    return { batchResult, flingerBefore, flingerAfter: yard.save.flinger };
+    return { batchResult, flingerBefore, flingerAfter: flingerClockOf(yard.save, now) };
   }));
 
-  await invalidateSightIfFlingerChanged(user, result.flingerBefore, result.flingerAfter);
+  await invalidateSightIfFlingerClockChanged(user, result.flingerBefore, result.flingerAfter);
   return result.batchResult;
 };
 
 /**
- * {@link invalidateSightIfFlingerChanged} (`sightService.ts`), imported on
+ * {@link invalidateSightIfFlingerClockChanged} (`sightService.ts`), imported on
  * use: this module already pulls `lockOwnYard` from
  * `controllers/yard/yardAction.ts`, which is itself part of the import chain
  * `sightService.ts` would otherwise loop back through (`tips.ts` imports
  * `defineYardAction` from there) — the same reason
  * `services/yard/mapRoom.ts`'s `joinWorld` imports late too.
  */
-const invalidateSightIfFlingerChanged = async (
+const invalidateSightIfFlingerClockChanged = async (
   user: User,
-  before: number | undefined,
-  after: number | undefined
+  before: FlingerClock | undefined,
+  after: FlingerClock | undefined
 ): Promise<void> => {
   const sightService = await import("../../services/maproom/sight/sightService.js");
-  await sightService.invalidateSightIfFlingerChanged(user, before, after);
+  await sightService.invalidateSightIfFlingerClockChanged(user, before, after);
 };
 
 /**

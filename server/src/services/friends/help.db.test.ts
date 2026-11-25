@@ -169,6 +169,21 @@ describe.skipIf(!dbName)("the help engine on a real database (issue #373)", () =
     expect(await redis.get(`friend-helped:${OWNER}`)).toBe(String(T0));
   });
 
+  test("a speed-up on a Flinger drops the owner's cached sight; one on a cannon does not (map-lag fix)", async () => {
+    const FLINGER = 5;
+    const flinger = { id: 2, t: FLINGER, x: 2, y: 0, l: 3, cU: 10_000, cL: 10_000 };
+    await setYard(OWNER, { buildingdata: { "1": upgrading(1, 10_000), "2": flinger }, flinger: 3 });
+
+    // The drop reads the owner's alliance off the shared `postgres.em`.
+    postgres.em = em();
+    await redis.set(`sight:${OWNER}`, "{}");
+    await help(H1, 1, "speedup");
+    expect(await redis.get(`sight:${OWNER}`)).toBe("{}");
+
+    await help(H2, 2, "speedup");
+    expect(await redis.get(`sight:${OWNER}`)).toBeNull();
+  });
+
   test("the countdown is caught up first: 5% of the time left now, not at the last save", async () => {
     await setYard(OWNER, { buildingdata: { "1": upgrading(1, 10_000) }, savetime: T0 - 2000 });
     expect((await help(H1, 1, "speedup")).secondsSaved).toBe(400);

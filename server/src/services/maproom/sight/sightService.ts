@@ -6,6 +6,7 @@ import { WorldMapCell } from "../../../database/models/worldmapcell.model.js";
 import { postgres, redis } from "../../../server.js";
 import { logger } from "../../../utils/logger.js";
 import { flingerLevelsNow, flingerLevelsWithNextChange } from "../../yard/flingerLevelsNow.js";
+import type { FlingerClock } from "../../yard/derivedLevels.js";
 import type { RevealedCell, SightSource } from "../../../game-rules/maproom/sight.js";
 import { withExtraReach } from "../../../game-rules/maproom/range.js";
 import { allianceBonusesOfUser } from "../../alliance/allianceBonuses.js";
@@ -48,9 +49,12 @@ export const SIGHT_CACHE_TTL_SECONDS = 30;
  * Every change to what it holds already drops it at once: a member joining,
  * leaving or being removed (`membership.ts`, `allianceModeration.ts`), a
  * member winning, losing or moving a base or a Flinger level changing on a
- * write (`invalidateSight`), an account deleted (`deleteAccount.ts`). The one
- * change no write announces, a member's Flinger upgrade running out on its
- * clock, ends the entry early instead ({@link cachedAllianceSight}). Its
+ * write (`invalidateSight`), a member's Flinger finish moved by a write
+ * (an upgrade started, sped up, helped or cancelled:
+ * {@link invalidateSightIfFlingerClockChanged}), an account deleted
+ * (`deleteAccount.ts`). The one change no write announces, a member's
+ * Flinger upgrade running out on its clock, ends the entry early instead
+ * ({@link cachedAllianceSight}). Its
  * members' attackers are not in it (each player's own half, which keeps the
  * 30-second life: a past attacker moving drops nothing).
  */
@@ -364,6 +368,29 @@ export const invalidateSightIfFlingerChanged = async (
   after: number | undefined,
 ): Promise<void> => {
   if (before === after) return;
+  await invalidateSight(user);
+};
+
+/**
+ * {@link invalidateSight} when a write moved a yard's Flinger level or the
+ * moment its countdown runs out ({@link FlingerClock}). The alliance union
+ * runs out at the first member's Flinger finish it read
+ * ({@link cachedAllianceSight}); an upgrade started, sped up, helped or
+ * cancelled after that changes the moment without changing the level, so
+ * only this drops it in time. Call it once the write has committed.
+ *
+ * @param user - The yard's owner, loaded or just their id.
+ * @param before - `flingerClockOf` the yard before the write (undefined: the
+ *   write did not happen, nothing to drop).
+ * @param after - `flingerClockOf` the yard as written.
+ */
+export const invalidateSightIfFlingerClockChanged = async (
+  user: number | Pick<User, "userid" | "alliance_id">,
+  before: FlingerClock | undefined,
+  after: FlingerClock | undefined,
+): Promise<void> => {
+  if (!before || !after) return;
+  if (before.level === after.level && before.changeAt === after.changeAt) return;
   await invalidateSight(user);
 };
 

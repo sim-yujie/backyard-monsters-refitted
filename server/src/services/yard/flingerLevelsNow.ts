@@ -1,7 +1,7 @@
 import { Save } from "../../database/models/save.model.js";
 import { postgres } from "../../server.js";
 import { getCurrentDateTime } from "../../utils/getCurrentDateTime.js";
-import { flingerLevelAt, type FlingerClockSave } from "./derivedLevels.js";
+import { flingerLevelAt, secondsUntilFlingerLevelChanges } from "./derivedLevels.js";
 
 /**
  * Flinger level per `baseid`, as of now, for the Map Room 2 rules that measure
@@ -61,32 +61,9 @@ export const flingerLevelsWithNextChange = async (
     const level = flingerLevelAt(row, now);
     levels.set(row.baseid, level);
     if (horizon > 0) {
-      const changeIn = secondsUntilLevelChanges(row, now, level, horizon);
+      const changeIn = secondsUntilFlingerLevelChanges(row, now, level, horizon);
       if (changeIn !== undefined && (nextChangeIn === undefined || changeIn < nextChangeIn)) nextChangeIn = changeIn;
     }
   }
   return { levels, nextChangeIn };
-};
-
-/**
- * The first whole second, `1..horizon` from `now`, at which the yard's
- * Flinger level differs from `level` by its clock alone, or undefined if it
- * still reads `level` at `now + horizon`. A Flinger's level only rises with
- * time (an upgrade or build finishing), so a halving search finds the moment.
- */
-const secondsUntilLevelChanges = (
-  row: FlingerClockSave,
-  now: number,
-  level: number | undefined,
-  horizon: number,
-): number | undefined => {
-  if (flingerLevelAt(row, now + horizon) === level) return undefined;
-  let same = 0;
-  let changed = horizon;
-  while (changed - same > 1) {
-    const middle = Math.floor((same + changed) / 2);
-    if (flingerLevelAt(row, now + middle) === level) same = middle;
-    else changed = middle;
-  }
-  return changed;
 };

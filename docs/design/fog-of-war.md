@@ -186,7 +186,10 @@ map. **[suggested]** (fact)
   overlapped a drop is kept 30 seconds only. The own key stays at 30 seconds: a past attacker
   taking, losing or moving a base drops nothing, so it rides on that TTL.
 - Clear the cache at the moments the player would notice: P's flinger level changes
-  (`derivedLevels.ts` on save/catch-up), P wins or loses an outpost or moves (takeover, relocate,
+  (`derivedLevels.ts` on save/catch-up), or a yard write moves when P's Flinger upgrade finishes
+  without changing its level (an upgrade started, sped up, helped by a friend, cancelled, a
+  damaged Flinger repaired: `flingerClockOf`, `invalidateSightIfFlingerClockChanged`, so the
+  alliance key timed to the old finish is not left showing the old circle), P wins or loses an outpost or moves (takeover, relocate,
   leave/join world), P joins or leaves an alliance (`membership.ts`; also clears that alliance's
   key), Declare War starts, a new attack log names P as defender. An ally's own changes drop the
   alliance key the same way (`invalidateSight` drops the mover's alliance key too).
