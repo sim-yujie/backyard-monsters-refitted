@@ -17,6 +17,7 @@ import {
   battleDefence,
   flingCost,
   flungMind,
+  flungStance,
   healthOf,
   isChampionStance,
   isZeroBrain,
@@ -954,7 +955,8 @@ export class AttackSession {
     const entry = this.target.roster.champions.find((owned) => owned.t === champion.t);
     const pl = Number(entry?.pl);
     const fb = Number(entry?.fb);
-    const stance = isChampionStance(champion.s) ? champion.s : undefined;
+    // Krallen has no Mode (patch 8.7): her log carries none, whatever was picked.
+    const stance = flungStance(champion.t, isChampionStance(champion.s) ? champion.s : undefined);
     const mind = servedMind(this.response?.attackerbrains, champion.t, stance);
     const hp = servedHealth(this.response?.attackerhealth, champion.t);
     return {

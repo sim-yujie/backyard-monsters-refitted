@@ -42,7 +42,7 @@ const log = (b?: unknown): FlingLog =>
   }) as FlingLog;
 
 describe("brainsOf", () => {
-  test("freezes each champion's habit book with any habit, and Krallen's old brain, made safe, by type", () => {
+  test("freezes each champion's habit book with any habit, made safe, by type; never Krallen's old brain (patch 8.7)", () => {
     expect(
       brainsOf([
         // Gorgo's old brain is not frozen: its habits started fresh (champion modes round 2).
@@ -56,7 +56,9 @@ describe("brainsOf", () => {
         { t: 9, b: BRAIN },
         null,
       ])
-    ).toEqual({ "2": { v: 1, off: { gun: -50 } }, "5": { ...ZERO, tower: 200 } });
+    ).toEqual({ "2": { v: 1, off: { gun: -50 } } });
+    // Krallen has no Mode: she fights as Flash's Krallen, so her brain stays home.
+    expect(brainsOf([champion(5, { b: BRAIN })])).toBeUndefined();
     // A champion with B's learning freezes its Active habits, whatever `h` says.
     expect(
       brainsOf([champion(1, { h: { hyb: { tower: 150 } }, hl: { v: 1, hyb: { loot: { o: 8, d: -1 }, hall: { o: 8 } } } })])

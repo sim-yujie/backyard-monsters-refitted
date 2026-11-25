@@ -6,6 +6,7 @@ import {
   RESOURCE_KEYS,
   championStat,
   flungMind,
+  flungStance,
   lowLevelLootBonus,
   type BombStats,
   type BuildingHealthMap,
@@ -192,6 +193,13 @@ export interface LootAttacker {
    * Hunt's 3x mark, owner 13 Nov 2026). Absent, she fights with none.
    */
   auraAt?: number | null;
+  /**
+   * Whether the attack started under rules that give Krallen no Mode (patch
+   * 8.7, `hasMode`): her log then fights with none, whatever was sent
+   * (`withFrozenBrain`). False or absent, the log's Mode rides along as
+   * before, so an attack started earlier replays as it was fought.
+   */
+  modelessKrallen?: boolean;
 }
 
 const bombById: ReadonlyMap<string, BombStats> = new Map(BOMBS.map((bomb) => [bomb.id, bomb]));
@@ -303,7 +311,8 @@ export const fightableLog = (log: FlingLog, attacker: LootAttacker, entryHoused:
             ...(fb !== undefined && { fb: Math.max(0, Math.min(fb, stored.fb)) }),
             ...(s !== undefined && { s }),
           },
-          attacker.brains
+          attacker.brains,
+          attacker.modelessKrallen
         ),
         attacker.health
       );
@@ -328,12 +337,26 @@ type FlungChampion = NonNullable<Extract<FlingEvent, { kind: "fling" }>["champio
  * (champion modes round 2, `flungMind`), or its old brain (issue #219), or
  * none.
  *
+ * With `modelessKrallen` (an attack started under patch 8.7's rules), a
+ * champion without Modes, Krallen, is flung in none, whatever the log sent
+ * (`flungStance`); her session froze no brain for her (`brainsOf`), so she
+ * fights as Flash's Krallen.
+ *
  * @param champion - The champion as the log flings it.
  * @param brains - The session's `championBrains`, if any.
+ * @param modelessKrallen - Whether the attack's rules give Krallen no Mode.
  */
-export const withFrozenBrain = (champion: FlungChampion, brains: ChampionBrains | null | undefined): FlungChampion => {
+export const withFrozenBrain = (
+  champion: FlungChampion,
+  brains: ChampionBrains | null | undefined,
+  modelessKrallen = false
+): FlungChampion => {
   // Krallen's loot aura goes too: only `fightableLog` stamps it, from the save.
   const { b: _sent, hv: _version, h: _habits, aura: _aura, ...rest } = champion;
+  if (modelessKrallen && rest.s !== undefined && flungStance(rest.t, rest.s) === undefined) {
+    const { s: _mode, ...modeless } = rest;
+    return { ...modeless, ...flungMind(brains?.[String(champion.t)], champion.t, undefined) };
+  }
   return { ...rest, ...flungMind(brains?.[String(champion.t)], champion.t, champion.s) };
 };
 
@@ -360,16 +383,18 @@ export const withFrozenHealth = (champion: FlungChampion, health: ChampionHealth
  * @param log - The log as sent.
  * @param brains - The session's `championBrains`, if any.
  * @param health - The session's `championHealth`, if any.
+ * @param modelessKrallen - Whether the attack's rules give Krallen no Mode (`withFrozenBrain`).
  */
 export const withFrozenChampions = (
   log: FlingLog,
   brains: ChampionBrains | null | undefined,
-  health?: ChampionHealth | null
+  health?: ChampionHealth | null,
+  modelessKrallen = false
 ): FlingLog => ({
   ...log,
   events: log.events.map((event) =>
     event.kind === "fling" && event.champion
-      ? { ...event, champion: withFrozenHealth(withFrozenBrain(event.champion, brains), health) }
+      ? { ...event, champion: withFrozenHealth(withFrozenBrain(event.champion, brains, modelessKrallen), health) }
       : event
   ),
 });

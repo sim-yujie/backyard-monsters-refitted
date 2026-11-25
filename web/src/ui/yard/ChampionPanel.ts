@@ -15,7 +15,7 @@ import { buttonUrl, silhouetteUrl } from "@/game/yard/buildButtonArt";
 import type { YardKind } from "@/game/yard/buildingCosts";
 import { KRALLEN_ID } from "@/game/combat/rules/champions";
 import type { ChampionStance } from "@/game/combat/rules";
-import { brainSummary, championNature, learnedFromText, STANCE_NAMES, tendenciesText } from "@/game/yard/championBrain";
+import { championNature, STANCE_NAMES } from "@/game/yard/championBrain";
 import type { ChampionEntry } from "@/game/yard/championCatalogue";
 import {
   CHAMPION_CHAMBER_TYPE,
@@ -53,8 +53,8 @@ import { refusalText } from "@/ui/dom";
  * with **Raise** (free), or a note when that one is frozen in the Chamber.
  * Raising puts the champion in the cage straight away, as in the original
  * (owner 2026-10-28: no eggs, no juicing).
- * With a champion: its picture, name (**Rename**), level, how it fights (the
- * tendencies its learning brain picked up, #219), health with the
+ * With a champion: its picture, name (**Rename**), level, how it fights (its
+ * Modes, instincts and habits), health with the
  * time to full and **Heal** (Shiny), its evolution (feeds so far of the
  * level's count; the food bonus at the top level), its hunger in plain words
  * with the time to the next feeding or to starving, the feed recipe against
@@ -320,16 +320,18 @@ export class ChampionPanel {
     this.live = { health, healthFill, healthBar, hunger };
     this.drawHealth(view, now);
     this.drawHunger(view, now);
-    return [this.header(view), this.growthBlock(view), this.feedBlock(view), this.fightsBlock(view)];
+    const fights = this.fightsBlock(view);
+    return [this.header(view), this.growthBlock(view), this.feedBlock(view), ...(fights ? [fights] : [])];
   }
 
   /**
-   * How it fights: its Modes, instincts and habits (champion modes round 2);
-   * the old tendencies for a champion without habits (Krallen).
+   * How it fights: its Modes, instincts and habits (champion modes round 2).
+   * None for a champion without Modes: Krallen fights as Flash's Krallen
+   * (owner, 25 Nov 2026, patch 8.7), so nothing is shown or learned for her.
    */
-  private fightsBlock(view: ChampionView): HTMLElement {
+  private fightsBlock(view: ChampionView): HTMLElement | null {
     const entry = view.champion;
-    if (!showsModes(entry)) return brainBlock(view);
+    if (!showsModes(entry)) return null;
     if (this.modeTab?.t !== entry.t) this.modeTab = { t: entry.t, stance: savedStance(entry) };
     const draw = (): HTMLElement =>
       modesBlock({
@@ -831,37 +833,6 @@ export class ChampionPanel {
   }
 }
 
-/**
- * How it fights (issue #219): the tendencies its own attacks taught it, in
- * plain words, strongest first, or that it is still learning. There is no
- * reset: the owner wants what it learned to stay with it.
- */
-export const brainBlock = (view: ChampionView): HTMLElement => {
-  const block = document.createElement("div");
-  block.className = "champion__part champion__part--brain";
-  const summary = brainSummary(view.champion);
-  const list = document.createElement("ul");
-  list.className = "champion__tendencies";
-  list.setAttribute("aria-label", "What it has learned");
-  const words = summary.tendencies.length > 0 ? summary.tendencies : [tendenciesText(summary)];
-  for (const text of words) {
-    const item = document.createElement("li");
-    item.className = "champion__tendency";
-    item.classList.toggle("champion__tendency--learning", summary.tendencies.length === 0);
-    item.textContent = text;
-    list.append(item);
-  }
-  // The heading on the tendencies' own line, to keep the cage on one screen.
-  const row = document.createElement("div");
-  row.className = "champion__brain-row";
-  row.append(heading("How it fights"), list);
-  block.append(
-    row,
-    note(`${learnedFromText(summary)} Each attack teaches it by its Mode's goal.`),
-  );
-  return block;
-};
-
 /* ── Words ──────────────────────────────────────────────────────────── */
 
 /** What Krallen's card compares: his status, level and whether he is hurt or hungry. */
@@ -961,8 +932,6 @@ const shapeOf = (view: CageView): string => {
     champion.evolveShiny,
     champion.canFeedMonsters,
     champion.health >= champion.maxHealth,
-    tendenciesText(brainSummary(champion.champion)),
-    brainSummary(champion.champion).attacks,
     modesShape(champion.champion),
   ].join(":");
 };

@@ -8,7 +8,7 @@ import type { YardApi } from "@/api/yard";
 import type { ChampionActions } from "@/api/yardChampion";
 import { setClassicLook } from "@/game/classicLook";
 import { YardStore } from "@/game/yard/YardStore";
-import { brainBlock, ChampionPanel, feedGate, hungerText } from "./ChampionPanel";
+import { ChampionPanel, feedGate, hungerText } from "./ChampionPanel";
 import { cageView } from "@/game/yard/championModel";
 
 /**
@@ -206,38 +206,6 @@ describe("ChampionPanel: a fed champion", () => {
   });
 });
 
-describe("ChampionPanel: how it fights, the old brain (#219)", () => {
-  // Only a champion without habits (Krallen) keeps this block now.
-  const block = (champion: ChampionSaveEntry) => {
-    const cage = cageView(loadOf([champion]), T0);
-    if (cage.kind !== "active") throw new Error("no champion");
-    return brainBlock(cage.view);
-  };
-  const tendencies = (root: HTMLElement) =>
-    [...root.querySelectorAll(".champion__tendency")].map((one) => one.textContent);
-
-  it("says a champion with no brain yet is still learning", () => {
-    const element = block(gorgo());
-    expect(textOf(element, ".champion__heading")).toBe("How it fights");
-    expect(tendencies(element)).toEqual(["Still learning"]);
-    expect(element.querySelector(".champion__tendency--learning")).not.toBeNull();
-    expect(textOf(element, ".champion__note")).toContain("It learns from every attack it fights in.");
-  });
-
-  it("names what its attacks taught it, strongest first, and how many it learned from", () => {
-    const element = block(
-      gorgo({ b: { tower: 0, loot: 140, finish: 0, focus: 70, threat: 95 }, bs: { n: 18, hyb: 0.6 } }),
-    );
-    expect(tendencies(element)).toEqual(["Loves loot", "Cautious near towers", "Sticks with the pack"]);
-    expect(element.querySelector(".champion__tendency--learning")).toBeNull();
-    expect(textOf(element, ".champion__note")).toContain("Learned from 18 attacks.");
-  });
-
-  it("has no reset", () => {
-    expect(block(gorgo({ b: { loot: 140 }, bs: { n: 3 } })).querySelector("button")).toBeNull();
-  });
-});
-
 describe("ChampionPanel: Modes, instincts and habits (champion modes round 2)", () => {
   const tabs = (root: HTMLElement) => [...root.querySelectorAll<HTMLButtonElement>(".champion__mode-tab")];
   const rows = (root: HTMLElement, kind: "instinct" | "habit") =>
@@ -391,6 +359,28 @@ describe("ChampionPanel: Modes, instincts and habits (champion modes round 2)", 
     );
     const card = element.querySelector<HTMLElement>(".champion__part--special")!;
     expect(card.querySelector(".champion__mode-tab, .champion__trait, .champion__nature")).toBeNull();
+  });
+
+  it("shows nothing Krallen learned: she has no Mode (owner, 25 Nov 2026, patch 8.7)", () => {
+    // An old save still carries her learned brain; the card ignores it.
+    const krallen = gorgo({
+      t: 5,
+      l: 5,
+      hp: 30_000,
+      s: "offensive",
+      b: { tower: 0, loot: 140, finish: 0, focus: 70, threat: 95 },
+      bs: { n: 18, hyb: 0.6 },
+    });
+    const { element } = setup([gorgo(), krallen], [CAGE, { id: 4, t: 119, l: 1, X: 400, Y: 0 }]);
+    const card = element.querySelector<HTMLElement>(".champion__part--special")!;
+    expect(card.querySelector(".champion__part--brain, .champion__tendency")).toBeNull();
+    expect(card.textContent).not.toMatch(/How it fights|Mode|learn|Loves loot|Still learning/i);
+    // Her stats, health and Freeze stay.
+    expect(card.querySelector('[data-stat="buff"]')!.textContent).toBe("Storage +30% in attacks");
+    expect(card.textContent).toMatch(/Krallen's health/);
+    expect(buttonNamed(card, "Freeze")).not.toBeNull();
+    // Only Gorgo's card says how it fights.
+    expect([...element.querySelectorAll(".champion__heading")].filter((one) => one.textContent === "How it fights")).toHaveLength(1);
   });
 });
 
