@@ -255,6 +255,7 @@ export class ClusterLayer {
         touch: this.touch,
         zoom: cam.zoom,
         obstacles: this.obstacleRects,
+        avoid: this.unpacked ? this.unpackedRects(cam.zoom) : undefined,
       });
       this.show(shown, classic, cam.zoom);
       this.stats.layoutMs = performance.now() - started;
@@ -303,6 +304,19 @@ export class ClusterLayer {
     this.groupingDirty = true;
     this.pulse(hit);
     return true;
+  }
+
+  /** The unpacked outposts' boxes on the screen, so plaques step off them (neon r3). */
+  private unpackedRects(zoom: number): ScreenRect[] {
+    const out: ScreenRect[] = [];
+    const at = this.pulsePoint;
+    for (const key of this.unpacked ?? []) {
+      const spot = mapRoomGrid.cellToPixel(key % WORLD_WIDTH, Math.floor(key / WORLD_WIDTH));
+      if (!this.deps.project(spot.x, spot.y, at)) continue;
+      const half = (mapRoomGrid.cellWidth * zoom * this.deps.scaleAt(at.y)) / 3;
+      out.push({ left: at.x - half, top: at.y - half, right: at.x + half, bottom: at.y + half });
+    }
+    return out;
   }
 
   /** What the HUD's bars take off the top and bottom of the screen (neon r1: tapped hexes went under them). */

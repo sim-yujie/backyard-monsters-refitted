@@ -83,6 +83,15 @@ describe("ClusterLayout", () => {
     expect(apart).toBe(true);
   });
 
+  it("steps plaques, not crests, off the boxes to avoid (a tapped plaque's unpacked outposts)", () => {
+    const layout = new ClusterLayout();
+    const avoid = [{ left: 380, top: 280, right: 420, bottom: 320 }];
+    const shown = layout.layOut([token("plaque", "alliance", 400, 300, 2), token("crest", "you", 400, 450)], flat, view({ avoid }));
+    const plaque = shown.find((s) => s.kind === "plaque")!;
+    const clear = plaque.y - plaque.hh >= 320 || plaque.y + plaque.hh <= 280 || plaque.x - plaque.hw >= 420 || plaque.x + plaque.hw <= 380;
+    expect(clear).toBe(true);
+  });
+
   it("merges plaques of one kind that overlap on the screen, keeping the sum and the box", () => {
     const layout = new ClusterLayout();
     const a = token("plaque", "alliance", 300, 300, 4);

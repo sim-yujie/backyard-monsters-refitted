@@ -25,6 +25,8 @@ export interface LayoutView {
   zoom: number;
   /** The HUD's bars and buttons over the map, canvas pixels: no token goes under them. */
   obstacles: readonly ScreenRect[];
+  /** Boxes plaques keep off (a tapped plaque's unpacked outposts); crests ignore them. */
+  avoid?: readonly ScreenRect[] | undefined;
 }
 
 /** Projects a map point to the canvas into `out`; false when it is behind the camera. */
@@ -233,6 +235,7 @@ export class ClusterLayout {
       tryAt(inX(r.right + gap + s.hw + 1), inY(y0));
     };
     for (const r of view.obstacles) around(r, hudGap(s));
+    if (s.kind === "plaque" && view.avoid) for (const r of view.avoid) around(r, HUD_GAP);
     for (let i = 0; i < kept; i++) {
       const q = others[i]!;
       around({ left: q.x - q.hw, top: q.y - q.hh, right: q.x + q.hw, bottom: q.y + q.hh }, GAP);
@@ -288,6 +291,7 @@ export class ClusterLayout {
 const fits = (s: ScreenToken, view: LayoutView, others: readonly ScreenToken[], kept: number): boolean => {
   if (s.x - s.hw < EDGE || s.y - s.hh < EDGE || s.x + s.hw > view.width - EDGE || s.y + s.hh > view.height - EDGE) return false;
   if (underAny(s, view.obstacles)) return false;
+  if (s.kind === "plaque" && view.avoid && underAny(s, view.avoid)) return false;
   for (let i = 0; i < kept; i++) {
     const q = others[i]!;
     if (Math.abs(s.x - q.x) < s.hw + q.hw + GAP && Math.abs(s.y - q.y) < s.hh + q.hh + GAP) return false;
