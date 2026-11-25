@@ -30,6 +30,7 @@ import { DefenceReplay } from "./database/models/defencereplay.model.js";
 import { Friend } from "./database/models/friend.model.js";
 import { FriendRequest } from "./database/models/friendrequest.model.js";
 import { InfernoProgress } from "./database/models/infernoprogress.model.js";
+import { LiveMapSubscriber } from "./services/maproom/live/liveMapSubscriber.js";
 
 /**
  * List of entities to be used with MikroORM.
@@ -77,6 +78,8 @@ export default defineConfig({
   allowGlobalContext: false,
   entities,
   extensions: [Migrator],
+  // The live map (beta 9): a write that changes what a map cell shows marks its zone once it commits.
+  subscribers: [new LiveMapSubscriber()],
   debug: process.env.ENV !== Env.PROD,
   dbName: process.env.DB_NAME,
   port: Number(process.env.DB_PORT),

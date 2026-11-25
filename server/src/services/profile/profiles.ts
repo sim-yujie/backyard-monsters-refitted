@@ -13,6 +13,7 @@ import {
   type UploadRefusal,
 } from "./profileRules.js";
 import { visiblePhotoVersion, visiblePhotoWhere } from "./visiblePhoto.js";
+import { markUsers } from "../maproom/live/liveMarks.js";
 
 /**
  * Player profiles (beta 7, owner 6 Nov 2026, grill Q27-28): what a profile
@@ -279,6 +280,8 @@ export const savePhoto = async (
       WHERE reported_id = ? AND resolved_at IS NULL AND photo_version < ?`,
     [now, userid, saved.photo_version],
   );
+  // The live map (beta 9): their cells show the new photo.
+  markUsers([userid]);
   return { outcome: "saved", version: Number(saved.photo_version) };
 };
 
@@ -291,6 +294,7 @@ export const removeOwnPhoto = async (em: EntityManager, userid: number): Promise
     `UPDATE bym.player_profile SET photo = NULL, photo_hidden = false, updated_at = now() WHERE userid = ?`,
     [userid],
   );
+  markUsers([userid]);
 };
 
 export type ReportOutcome = "reported" | "already" | "noPhoto" | "self" | "notFound";
@@ -343,6 +347,7 @@ export const reportPhoto = async (
     [reported, version],
   );
   if (hidden[0]) logger.info(`Profiles: photo of ${reported} hidden after ${AUTO_HIDE_REPORTS} reports`);
+  if (hidden[0]) markUsers([reported]);
   return { outcome: "reported", hidden: true };
 };
 

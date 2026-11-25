@@ -83,6 +83,7 @@ import {
   isDefenceReplayTarget,
   keepDefenceReplayLoad,
 } from "../../../services/defences/defenceReplayLoad.js";
+import { noteLiveSeen } from "../../../services/maproom/live/liveOnline.js";
 
 type Stronghold = { level: number; cell?: { x: number; y: number } | null };
 
@@ -178,6 +179,7 @@ export const baseLoad: KoaController = async (ctx) => {
       gameWasClosed = await presenceLapsed(user.userid);
       baseSave = await baseModeBuild(user, baseid);
       redis.setex(`last-seen:main:${user.userid}`, 120, getCurrentDateTime().toString());
+      noteLiveSeen(redis, user.userid);
       // Played today, for the owner's dashboard (`services/stats/activity.ts`).
       noteActivePlayer(user.userid);
       // Seen in the last 30 days is what earns a Map Room 1 neighbour place (issue #235).

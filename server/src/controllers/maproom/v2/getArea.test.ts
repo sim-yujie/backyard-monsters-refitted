@@ -118,7 +118,9 @@ mock.module("../../../services/maproom/v2/createCellData.js", () => ({
       const owner = cellOwners?.get(cell.uid as number);
       // `typed` rows also carry the cell type, as the real builder's do: the neighbour count reads it.
       const typed = cell.typed ? { b: cell.base_type } : {};
-      return { uid: cell.uid, baseid: cell.baseid, username: owner?.username, alliance_id: owner?.alliance_id, ...typed };
+      // `attackEnd` stands for a save under attack: the real `userCell` sends `atk` then (live map).
+      const attack = cell.attackEnd ? { atk: cell.attackEnd } : {};
+      return { uid: cell.uid, baseid: cell.baseid, username: owner?.username, alliance_id: owner?.alliance_id, ...typed, ...attack };
     }
     return { terrain: true, x: cell.x, y: cell.y };
   },
@@ -398,5 +400,31 @@ describe("getArea: own cells' armies", () => {
     expect(findCalls.filter(({ where }) => JSON.stringify(where).includes("300"))).toEqual([]);
     const ownMonsters = ctx.state.ownMonsters as Map<number, Row>;
     expect([...ownMonsters.keys()].sort()).toEqual([100, 101, 102]);
+  });
+});
+
+describe("getArea: the live map (beta 9)", () => {
+  test("an attack on a cell the viewer cannot see never shows; one they can see does", async () => {
+    const p = viewer(1, { flinger: 1, homebase: ["1", "1"] });
+    tables.set(User, [ownerRow(3, "near-owner"), ownerRow(4, "far-owner")]);
+    tables.set(WorldMapCell, [
+      cellRow("near-base", 3, 3, 1, { attackEnd: 2_000_000_000 }),
+      cellRow("far-base", 4, 10, 10, { attackEnd: 2_000_000_000 }),
+    ]);
+    const body = await run(p, { x: 0, y: 0 });
+    const data = body.data as Record<number, Record<number, unknown>>;
+    expect(data[3]![1]).toMatchObject({ atk: 2_000_000_000 });
+    expect(data[10]![10]).toEqual({ fog: 1 });
+    expect(JSON.stringify(data).match(/atk/g)).toHaveLength(1);
+  });
+
+  test("every answer carries its zone's version, 0 before the zone ever changed", async () => {
+    const p = viewer(1, { flinger: 1, homebase: ["1", "1"] });
+    expect((await run(p, { x: 0, y: 0 })).zv).toBe(0);
+    await redis.send("HINCRBY", [`livemap:zv:${WORLD}`, "0", "3"]);
+    expect((await run(p, { x: 0, y: 0 })).zv).toBe(3);
+    // A fully fogged zone too, so the map never asks it again and again.
+    await redis.send("HINCRBY", [`livemap:zv:${WORLD}`, String(50 * 10000 + 50), "1"]);
+    expect((await run(p, { x: 500, y: 500 })).zv).toBe(1);
   });
 });

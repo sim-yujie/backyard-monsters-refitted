@@ -3,7 +3,7 @@ import { z } from "zod";
 import type { KoaController } from "../../../utils/KoaController.js";
 import { User } from "../../../database/models/user.model.js";
 import { WorldMapCell } from "../../../database/models/worldmapcell.model.js";
-import { postgres } from "../../../server.js";
+import { postgres, redis } from "../../../server.js";
 import { devConfig } from "../../../config/GameConfig.js";
 import { Status } from "../../../enums/StatusCodes.js";
 import { createCellData } from "../../../services/maproom/v2/createCellData.js";
@@ -28,6 +28,7 @@ import { loadAreaNeighbourCounts } from "../../../services/maproom/v2/neighbourD
 import { visiblePhotos } from "../../../services/profile/visiblePhoto.js";
 import { flingerLevelsNow } from "../../../services/yard/flingerLevelsNow.js";
 import { loadArmyOwner, monstersForMapMany } from "../../../services/yard/armies.js";
+import { readZoneVersion, zoneId } from "../../../services/maproom/live/liveZones.js";
 
 /** `x,y` as a `Map` key for a zone's per-cell visibility lookup. */
 const cellKey = zoneCellKey;
@@ -194,7 +195,10 @@ export const getArea: KoaController = async (ctx) => {
     : visibilityOfZone(sight, currentX, currentY, width, height, mr2HexShape());
 
   const credits = visibleCredits(user, placedSave.credits);
-  const extras = sendresources === 1 ? { resources: placedSave.resources, credits } : {};
+  // The live map (beta 9): the zone's version, read before any row is, so a write landing in
+  // between makes the map ask once more rather than keep an old answer under a new version.
+  const zv = await readZoneVersion(redis, worldid, zoneId(Math.floor(x / 10) * 10, Math.floor(y / 10) * 10));
+  const extras = { zv, ...(sendresources === 1 ? { resources: placedSave.resources, credits } : {}) };
 
   // No sight source or revealed cell touches this zone at all: answer at
   // once with every cell fogged, no `world_map_cell` query, no owner data.

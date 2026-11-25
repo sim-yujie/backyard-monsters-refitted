@@ -9,6 +9,7 @@ import { parseRaidScreen, recordRaidScreen } from "../../services/raids/raidStor
 import { hearPlannerWork } from "../../services/user/plannerWork.js";
 import { logger } from "../../utils/logger.js";
 import { noteActivePlayer } from "../../services/stats/activity.js";
+import { noteLiveSeen } from "../../services/maproom/live/liveOnline.js";
 
 /**
  * How long one ping keeps the player online, in seconds: the life every other
@@ -65,6 +66,7 @@ export const presence: KoaController = async (ctx) => {
 export const answerPing = async (user: User, body: unknown): Promise<Record<string, unknown>> => {
   const now = getCurrentDateTime();
   await redis.setex(`last-seen:main:${user.userid}`, PRESENCE_TTL_SECONDS, now.toString());
+  noteLiveSeen(redis, user.userid);
   // Played today, for the owner's dashboard: a game left open past midnight counts on both days.
   noteActivePlayer(user.userid);
 
@@ -100,6 +102,7 @@ export const stayProtected: KoaController = async (ctx) => {
   const user: User = ctx.authUser;
   const now = getCurrentDateTime();
   await redis.setex(`last-seen:main:${user.userid}`, PRESENCE_TTL_SECONDS, now.toString());
+  noteLiveSeen(redis, user.userid);
 
   const plan = (ctx.request.body as { plan?: unknown } | undefined)?.plan;
   if (plan !== undefined) {

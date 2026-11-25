@@ -2,6 +2,7 @@ import type { EntityManager } from "@mikro-orm/postgresql";
 
 import { friendRefusedErr, type FriendRefusal } from "../../errors/errors.js";
 import { FRIEND_LIMITS } from "./friendRules.js";
+import { markUsers } from "../maproom/live/liveMarks.js";
 
 /**
  * Pinned friends (beta 7, owner: "Allow pinning of friends in the friend list
@@ -54,6 +55,8 @@ export const setFriendPinned = async (
       me,
       friendUserid,
     ]);
+    // The live map (beta 9): the pinned friend's cells (`fp`).
+    markUsers([friendUserid]);
     return { pinned: pin, pinnedCount: pinnedCount + (pin ? 1 : -1) };
   });
 };
