@@ -10,6 +10,7 @@ import { MapRoomVersion } from "../../enums/MapRoom.js";
 const now = () => Math.floor(Date.now() / 1000);
 
 let rows: Record<string, any>[];
+let finds = 0;
 const persisted: unknown[] = [];
 const flushed = mock(async () => {});
 
@@ -24,19 +25,23 @@ const byWhere = (where: Record<string, any>) =>
 const em = {
   transactional: async (work: (tx: unknown) => unknown) => work(em),
   findOne: async (_entity: unknown, where: Record<string, any>) => byWhere(where),
-  // The yards' own reads, scoped to the attacker, and the flinger-level read (`flingerLevelsNow`), not scoped.
-  find: async (_entity: unknown, where: { baseid: { $in: string[] }; saveuserid?: number }) =>
-    rows.filter(
+  // The yards' own reads, scoped to the attacker, and the flinger-level read (`flingerLevelsNow`), not scoped;
+  // the map's batched army read (`monstersForMapMany`) by save id.
+  find: async (_entity: unknown, where: { baseid?: { $in: string[] }; basesaveid?: { $in: number[] }; saveuserid?: number }) => {
+    finds++;
+    return rows.filter(
       (row) =>
-        where.baseid.$in.includes(row.baseid) && (where.saveuserid === undefined || row.saveuserid === where.saveuserid)
-    ),
+        (where.basesaveid ? where.basesaveid.$in.includes(row.basesaveid) : where.baseid!.$in.includes(row.baseid)) &&
+        (where.saveuserid === undefined || row.saveuserid === where.saveuserid)
+    );
+  },
   persist: (row: unknown) => persisted.push(row),
   flush: flushed,
 };
 
 mock.module("../../server.js", () => ({ redis: {}, postgres: { em } }));
 
-const { armyQuestEvents, catchUpArmiesForAttack, catchUpTransferYards, monstersForMap, settleAttackArmies } =
+const { armyQuestEvents, catchUpArmiesForAttack, catchUpTransferYards, monstersForMap, monstersForMapMany, settleAttackArmies } =
   await import("./armies.js");
 const { catchUpYard } = await import("./catchUp.js");
 const { jobQuestEvents } = await import("../quests/hooks.js");
@@ -241,6 +246,23 @@ describe("monstersForMap", () => {
 
     // Level 6 Pokeys hatch in 5 s: 30 s → 6.
     expect(read?.housed).toEqual({ C1: 16 });
+  });
+
+  test("many cells in one query give each cell's own answer; the owner is read once; a gone row is left out", async () => {
+    nearOutpost.academy = {};
+    attackerMain.academy = { C1: { level: 6 } };
+    const at = now();
+    const one = [await monstersForMap(1, async () => attackerMain as never, at), await monstersForMap(2, async () => attackerMain as never, at)];
+
+    finds = 0;
+    let ownerReads = 0;
+    const many = await monstersForMapMany([1, 2, 2, 999], async () => (ownerReads++, attackerMain as never), at);
+
+    expect(finds).toBe(1);
+    expect(ownerReads).toBe(1); // only the outpost needs it; the main yard is its own owner
+    expect(many.get(1)).toEqual(one[0]);
+    expect(many.get(2)).toEqual(one[1]);
+    expect(many.has(999)).toBe(false);
   });
 });
 

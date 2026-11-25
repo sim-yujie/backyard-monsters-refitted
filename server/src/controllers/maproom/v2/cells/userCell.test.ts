@@ -305,3 +305,29 @@ describe("userCell Flinger level (Repeat attack range, 15 Nov 2026)", () => {
     expect(await userCell(withFlingers(new Map([["2000240208", 2]])), outpostWith(0, 0), owners)).not.toHaveProperty("f");
   });
 });
+
+// `getArea` reads every own cell's army up front in one query (map-lag fix, 25 Nov 2026).
+describe("userCell own army read up front", () => {
+  const ownCell = (basesaveid: number) =>
+    ({
+      ...outpostWith(0, 0),
+      uid: 2505,
+      save: { ...outpostWith(0, 0).save, basesaveid, monsters: { housed: { C1: 1 } } },
+    }) as unknown as Parameters<typeof userCell>[1];
+  const withArmies = (armies: Map<number, unknown>) =>
+    ({
+      authUser: { userid: 2505, save: { basesaveid: 1, points: "0", basevalue: "0" } },
+      state: { online: new Set(), truces: new Map(), ownMonsters: armies },
+    }) as unknown as Context;
+  const none = new Map() as unknown as Parameters<typeof userCell>[2];
+
+  test("an own cell's m is the army read up front", async () => {
+    const payload = await userCell(withArmies(new Map([[5, { housed: { C1: 9 } }]])), ownCell(5), none);
+    expect(payload).toMatchObject({ m: { housed: { C1: 9 } } });
+  });
+
+  test("a row the read did not find falls back to the stored army, as the one-cell read does", async () => {
+    const payload = await userCell(withArmies(new Map()), ownCell(5), none);
+    expect(payload).toMatchObject({ m: { housed: { C1: 1 } } });
+  });
+});
