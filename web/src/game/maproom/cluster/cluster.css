@@ -41,7 +41,7 @@
   border-style: solid;
   border-width: 0;
   border-image-source: var(--mc-plaque);
-  border-image-slice: 0 46% fill;
+  border-image-slice: 0 30% fill;
   border-image-width: 0 var(--mc-cap, 12px);
   border-image-repeat: stretch;
   padding: 0 6px 0 5px;

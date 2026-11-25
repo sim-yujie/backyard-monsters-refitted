@@ -1,6 +1,5 @@
 import "./cluster.css";
 import { CellType, isFogCell, isPlayerCell, type MapCell } from "@/api/types";
-import { artUrl } from "@/artUrl";
 import { WORLD_HEIGHT, WORLD_WIDTH } from "@/config";
 import { shieldUrl } from "@/game/alliance/allianceRules";
 import { classicLook } from "@/game/classicLook";
@@ -10,6 +9,7 @@ import { appearanceOf, type MapViewerContext } from "../cellVisuals";
 import { hexZoom } from "../lod";
 import type { MarkerFilter } from "../markerPins";
 import type { ZoneRecord } from "../ZoneStore";
+import { clusterArtUrl } from "./clusterArt";
 import { ClusterLayout, tokenSize, type Project, type ScreenRect, type ScreenToken } from "./clusterLayout";
 import {
   CAMPS_SHOWN_FROM,
@@ -80,9 +80,7 @@ export interface ClusterLayerDeps {
   canvas: HTMLElement;
 }
 
-/** The painted pictures, per look. */
-const art = (classic: boolean, name: string): string =>
-  artUrl(`/assets/maproom/cluster/${classic ? "classic" : "modern"}/${name}@2x.webp`);
+const art = clusterArtUrl;
 
 const RANK: Record<ClusterGroup, number> = Object.fromEntries(STACK_ORDER.map((g, i) => [g, i + 1])) as Record<ClusterGroup, number>;
 
@@ -366,13 +364,13 @@ export class ClusterLayer {
     el.style.marginLeft = `${-hw}px`;
     el.style.marginTop = `${-hh}px`;
     if (token.kind === "crest") {
-      pic.src = art(classic, `crest-${token.group}`);
+      pic.src = art(classic, `crest-${token.group as "home" | "you" | "hostile"}`);
       count.textContent = "";
       return;
     }
-    el.style.setProperty("--mc-plaque", `url("${art(classic, `plaque-${token.group}`)}")`);
-    // The bar's painted ends keep their shape: as wide as the bar is tall.
-    el.style.setProperty("--mc-cap", `${hh * 2}px`);
+    el.style.setProperty("--mc-plaque", `url("${art(classic, token.group === "alliance" ? "plaque-alliance" : "plaque-other")}")`);
+    // The bar's painted ends (30% of the picture each side) keep their shape.
+    el.style.setProperty("--mc-cap", `${(hh * 2 * 0.85).toFixed(1)}px`);
     const emblem = token.group === "alliance" ? this.emblemOf(token.token.aid) : null;
     pic.src = emblem ?? (token.group === "alliance" ? gameIconUrl("alliance", 64) : art(classic, "icon-other"));
     count.textContent = countText(token.count);

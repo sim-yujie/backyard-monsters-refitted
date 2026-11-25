@@ -8,7 +8,9 @@ import {
   type PlayerRelation,
   RELATION_LOOK,
 } from "@/game/maproom/relationLook";
-import { gameIcon, type GameIconName } from "@/ui/gameIcon";
+import { classicLook } from "@/game/classicLook";
+import { clusterArtUrl, type ClusterArt } from "@/game/maproom/cluster/clusterArt";
+import { gameIcon, gameIconUrl, type GameIconName } from "@/ui/gameIcon";
 import { button, el } from "@/ui/maproom1/icons";
 
 /**
@@ -47,7 +49,20 @@ export const MAP_LEGEND_TEXT = {
   button: "Key",
   title: "Map key",
   tooltip: "What the border colours mean",
+  zoomedOut: "Zoomed out",
 } as const;
+
+/**
+ * Map pin clustering's plaques and crests (beta 9), under the borders: each picture with a word or
+ * two, so a number on a shield is not read as a level (neon, 25 Nov 2026). Tapping one zooms in.
+ */
+export const LEGEND_TOKENS: readonly { art: ClusterArt; count?: number; label: string }[] = [
+  { art: "crest-home", label: "Your yard" },
+  { art: "crest-you", label: "Your outpost" },
+  { art: "crest-hostile", label: "Hostile" },
+  { art: "plaque-alliance", count: 12, label: "12 alliance outposts" },
+  { art: "plaque-other", count: 9, label: "9 other outposts" },
+];
 
 /**
  * The colour a border line shows on the map: the painted shader runs the middle of the line 40 per
@@ -174,6 +189,32 @@ export const relationSwatch = (relation: PlayerRelation, size = 28): SVGSVGEleme
   return svg;
 };
 
+/** The plaques and crests shown when zoomed out, in the look in use. */
+const tokenList = (): HTMLElement => {
+  const classic = classicLook();
+  const list = el("ul", "mr2-key__tokens");
+  for (const token of LEGEND_TOKENS) {
+    const row = el("li", "mr2-key__token");
+    row.dataset["art"] = token.art;
+    const pic = el("span", token.count === undefined ? "mr2-key__crest" : "mr2-key__plaque");
+    if (token.count === undefined) {
+      const img = document.createElement("img");
+      img.src = clusterArtUrl(classic, token.art);
+      img.alt = "";
+      pic.append(img);
+    } else {
+      pic.style.setProperty("--mc-plaque", `url("${clusterArtUrl(classic, token.art)}")`);
+      const img = document.createElement("img");
+      img.src = token.art === "plaque-alliance" ? gameIconUrl("alliance", 48) : clusterArtUrl(classic, "icon-other");
+      img.alt = "";
+      pic.append(img, el("span", "mr2-key__plaque-n", String(token.count)));
+    }
+    row.append(pic, el("span", "mr2-key__token-label", token.label));
+    list.append(row);
+  }
+  return list;
+};
+
 /** The button's picture: three small hexes in the key's colours. */
 const buttonPicture = (): HTMLElement => {
   const wrap = el("span", "mr2-key__icon");
@@ -211,6 +252,7 @@ export class MapLegend {
       list.append(row);
     }
     this.element.append(list);
+    this.element.append(el("h3", "mr2-key__subtitle", MAP_LEGEND_TEXT.zoomedOut), tokenList());
 
     this.toggle = button("mr2-tool mr2-key__toggle");
     this.toggle.append(buttonPicture(), el("span", "mr2-tool__label", MAP_LEGEND_TEXT.button));
