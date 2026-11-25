@@ -170,6 +170,26 @@ export const drawnKey = (data: AreaCellGrid): number => {
   return 4294967296 * (2097151 & h2) + (h1 >>> 0);
 };
 
+/** One cell a live push carries: `[x, y, payload]`, the payload as a zone answer holds it. */
+export type LiveCell = readonly [number, number, unknown];
+
+/**
+ * What only this player sees of a cell's owner (server `RELATION_FIELDS`): never in a push, kept
+ * from the map's own answers.
+ */
+export const RELATION_FIELDS = ["t", "ak", "fr", "fp", "ho"] as const;
+
+/** Every zone whose 11 x 11 answer holds cell `x, y`: its own, and the one before on a multiple of ten. */
+export const answersHolding = (x: number, y: number): number[] => {
+  const zx = Math.floor(x / AREA_ZONE_SIZE);
+  const zy = Math.floor(y / AREA_ZONE_SIZE);
+  const xs = x % AREA_ZONE_SIZE === 0 && zx > 0 ? [zx, zx - 1] : [zx];
+  const ys = y % AREA_ZONE_SIZE === 0 && zy > 0 ? [zy, zy - 1] : [zy];
+  const out: number[] = [];
+  for (const ix of xs) for (const iy of ys) out.push(ix * 10000 + iy);
+  return out;
+};
+
 /** Whether an answer holds one of the viewer's own cells. */
 const holdsOwnCell = (data: AreaCellGrid): boolean => {
   for (const column of Object.values(data)) {
@@ -569,6 +589,167 @@ export class ZoneStore {
     const out = new Map<number, number>();
     for (const zone of this.zones.values()) out.set(zone.id, zone.zv ?? 0);
     return out;
+  }
+
+  /**
+   * Live map, stage 2: changed cells pushed by the server, cut to the player's fog there, applied
+   * straight into the cache with no request (`zones`: `[id, version, firstVersion?]`). A zone takes
+   * them only when it holds the version just before (`firstVersion - 1`, or `version - 1`): one that
+   * missed a push, is not here yet or is in flight is asked again instead. A cell keeps what only
+   * this player sees of its owner (`t`, `ak`, `fr`, `fp`, `ho`) from the copy held for that owner;
+   * a cell whose new owner the map knows nothing about is applied and its zone asked again, as is
+   * every zone in `reask`. Returns how many zones were asked again.
+   */
+  applyLiveCells(
+    zones: readonly (readonly number[])[],
+    cells: readonly LiveCell[],
+    reask: readonly number[] = [],
+    roster?: unknown,
+  ): number {
+    const at = this.now();
+    let asked = 0;
+    const want = (id: number, version: number) => {
+      if (this.wantLive(id, version, at, true)) asked += 1;
+    };
+    const next = new Map<number, number>();
+    for (const [id, last, firstGiven] of zones) {
+      if (id === undefined || last === undefined) continue;
+      const first = firstGiven ?? last;
+      const zone = this.zones.get(id);
+      if (!zone || this.inFlight.has(id)) {
+        // Arriving, or just forgotten by a sight change (its answer is on its way): that answer is
+        // a live one (the ring), and one read before this change is asked once more.
+        want(id, last);
+        continue;
+      }
+      const held = zone.zv ?? 0;
+      if (held >= last) continue;
+      if (held < first - 1) want(id, last);
+      else next.set(id, last);
+    }
+    if (roster !== undefined) this.options.onAllianceRoster?.(parseAllianceRoster(roster as never));
+    const incomplete = new Set<number>();
+    const writes = this.writeCells(cells, (id) => next.has(id), (id) => incomplete.add(id));
+    for (const [id, version] of next) {
+      const zone = writes.get(id)?.record ?? this.zones.get(id)!;
+      zone.zv = version;
+    }
+    this.commitCells(writes);
+    for (const id of incomplete) want(id, next.get(id) ?? this.zones.get(id)?.zv ?? 0);
+    for (const id of reask) if (this.zones.has(id)) want(id, next.get(id) ?? this.zones.get(id)?.zv ?? 0);
+    return asked;
+  }
+
+  /** Live map, stage 2: the player's own cells in full, from their own channel (no versions). */
+  applyOwnCells(cells: readonly LiveCell[]): void {
+    const at = this.now();
+    const accepts = (id: number) => {
+      if (this.zones.has(id) && !this.inFlight.has(id)) return true;
+      // Arriving or just forgotten by a sight change: its answer rings as a live one.
+      this.wantLive(id, this.liveWanted.get(id) ?? 0, at, true);
+      return false;
+    };
+    this.commitCells(this.writeCells(cells, accepts, () => undefined));
+  }
+
+  /** Live map: asks these cached zones again (a relation to another player changed). Returns how many. */
+  reaskZones(ids: readonly number[]): number {
+    const at = this.now();
+    let asked = 0;
+    for (const id of ids) {
+      const zone = this.zones.get(id);
+      if (zone && this.wantLive(id, zone.zv ?? 0, at, false)) asked += 1;
+    }
+    return asked;
+  }
+
+  /** Puts a zone on the live re-ask list for `version` (`pumpLive` asks it). */
+  private wantLive(id: number, version: number, at: number, now: boolean): boolean {
+    if (!this.zones.has(id) && !this.inFlight.has(id) && !this.ghosts.has(id)) return false;
+    this.liveWanted.set(id, Math.max(version, this.liveWanted.get(id) ?? version));
+    this.liveRetried.delete(id);
+    if (!this.liveDueAt.has(id)) this.liveDueAt.set(id, at + (now ? 0 : Math.floor(this.random() * LIVE_JITTER_MS)));
+    return true;
+  }
+
+  /**
+   * Copies each zone record that holds one of `cells` (every zone whose 11 x 11 answer has it) and
+   * `accepts`, with the cells written in; the records in the cache are left as they were, for the
+   * ring to compare against. Calls `incomplete` for a zone whose cell is missing what only this
+   * player sees of a new owner.
+   */
+  private writeCells(
+    cells: readonly LiveCell[],
+    accepts: (id: number) => boolean,
+    incomplete: (id: number) => void,
+  ): Map<number, { previous: ZoneRecord; record: ZoneRecord }> {
+    const writes = new Map<number, { previous: ZoneRecord; record: ZoneRecord }>();
+    for (const [x, y, payload] of cells) {
+      if (payload === undefined || payload === null) continue;
+      for (const id of answersHolding(x, y)) {
+        if (!accepts(id)) continue;
+        const previous = this.zones.get(id);
+        if (!previous) continue;
+        let write = writes.get(id);
+        if (!write) writes.set(id, (write = { previous, record: { ...previous, data: { ...previous.data } } }));
+        const column = String(x);
+        const before = previous.data[column]?.[String(y)];
+        const { cell, known } = this.withRelations(before, payload as MapCell);
+        if (!known) incomplete(id);
+        write.record.data[column] = { ...write.record.data[column], [String(y)]: cell };
+      }
+    }
+    return writes;
+  }
+
+  /** Puts written records in the cache and tells the scene, as an answer from a push would. */
+  private commitCells(writes: Map<number, { previous: ZoneRecord; record: ZoneRecord }>): void {
+    for (const [id, { previous, record }] of writes) {
+      record.fetchedAt = this.now();
+      const key = drawnKey(record.data);
+      const unchanged = this.drawnKeys.get(id) === key;
+      this.zones.set(id, record);
+      this.drawnKeys.set(id, key);
+      if (holdsOwnCell(record.data)) this.ownZones.add(id);
+      else this.ownZones.delete(id);
+      const due = firstDue(record.data);
+      if (due === undefined) this.nextDue.delete(id);
+      else this.nextDue.set(id, due);
+      this.ownCache = null;
+      this.revision += 1;
+      if (this.stopped) continue;
+      if (unchanged) this.options.onZoneRefreshed?.(record);
+      else this.options.onZone?.(record, previous, true);
+    }
+  }
+
+  /**
+   * A pushed cell with what only this player sees of its owner, taken from the copy held for that
+   * owner (this cell's, or another cached cell of theirs). `known` is false when there is none.
+   */
+  private withRelations(before: MapCell | undefined, pushed: MapCell): { cell: MapCell; known: boolean } {
+    if (!isPlayerCell(pushed) || pushed.mine === 1) return { cell: pushed, known: true };
+    const source = before && isPlayerCell(before) && before.uid === pushed.uid ? before : this.cellOf(pushed.uid);
+    const cell = { ...pushed } as Record<string, unknown>;
+    if (!source) return { cell: pushed, known: false };
+    for (const field of RELATION_FIELDS) {
+      const value = (source as unknown as Record<string, unknown>)[field];
+      if (value === undefined) delete cell[field];
+      else cell[field] = value;
+    }
+    return { cell: cell as unknown as MapCell, known: true };
+  }
+
+  /** Any cached cell of this owner (not the player's own), for their relations. */
+  private cellOf(uid: number): PlayerCell | undefined {
+    for (const zone of this.zones.values()) {
+      for (const column of Object.values(zone.data)) {
+        for (const cell of Object.values(column)) {
+          if (cell && isPlayerCell(cell) && cell.uid === uid && cell.mine !== 1) return cell;
+        }
+      }
+    }
+    return undefined;
   }
 
   /**

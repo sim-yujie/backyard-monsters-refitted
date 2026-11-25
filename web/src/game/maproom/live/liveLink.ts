@@ -1,10 +1,14 @@
 /**
- * The live map's connection (beta 9, stage 1): one WebSocket to the chat
+ * The live map's connection (beta 9, stages 1-2): one WebSocket to the chat
  * server's port, signed in with the game's own token (`live.auth`), so it
- * works with World chat switched off. It tells the map which zones changed
- * (`live.zones`) and when the player's fog of war changed (`live.sight`);
- * the map then asks only those zones again (`ZoneStore.applyVersions`).
+ * works with World chat switched off. It brings the changed cells themselves
+ * (`live.cells`, cut by the server to the player's fog; `live.own`, the
+ * player's own cells in full), zones to ask again (`live.zones` versions,
+ * `live.redo`), and when the player's fog of war changed (`live.sight`).
  *
+ * - Catch-up: each push has an id; after a reconnect (or the tab coming back)
+ *   the watch carries the last one the map took (`since`), and the server
+ *   replays what it missed before the versions (`rp: 1`).
  * - Watch: the zones on screen (and the player's own), sent after a pan
  *   settles ({@link WATCH_DEBOUNCE_MS}) and only when the list changed.
  * - Version check: the same watch sent again every {@link CHECK_MS}; the
@@ -52,6 +56,15 @@ export interface LiveLinkOptions {
   watchList: () => number[];
   /** Zone versions: `all` for a watch's answer (every watched zone), else a push of changed ones. */
   onVersions: (pairs: [number, number][], all: boolean) => void;
+  /**
+   * Changed cells (stage 2). Returns false when the map did not take them (a hidden tab): the push's
+   * id is then not counted as seen, so the next catch-up replays it.
+   */
+  onCells?: (frame: LiveCellsFrame) => boolean;
+  /** The player's own cells in full. */
+  onOwn?: (cells: LiveCellsFrame["c"]) => void;
+  /** Zones to ask again (a relation to another player changed). */
+  onRedo?: (zones: number[]) => void;
   /** The player's sight changed: ask `/worldmapv2/sight` again. */
   onSight: () => void;
   /** The connection came up or went down. */
@@ -60,7 +73,31 @@ export interface LiveLinkOptions {
   timers?: LiveTimers;
 }
 
+/** A `live.cells` frame: zones `[id, version, firstVersion?]`, cells `[x, y, payload]`. */
+export interface LiveCellsFrame {
+  id?: string;
+  z: number[][];
+  c: [number, number, unknown][];
+  ad?: unknown;
+  rz?: number[];
+  rp?: 1;
+}
+
 const OPEN = 1;
+
+/** `a` after `b` as push ids (`<ms>-<seq>`)? */
+export const idAfter = (a: string, b: string | null): boolean => {
+  if (!b) return true;
+  const [am = 0, as = 0] = a.split("-").map(Number);
+  const [bm = 0, bs = 0] = b.split("-").map(Number);
+  return am > bm || (am === bm && as > bs);
+};
+
+const isPair = (value: unknown): value is number[] =>
+  Array.isArray(value) && value.length >= 2 && value.every((item) => typeof item === "number");
+
+const isCell = (value: unknown): value is [number, number, unknown] =>
+  Array.isArray(value) && value.length === 3 && typeof value[0] === "number" && typeof value[1] === "number";
 
 const browserSocket: LiveSocketFactory = (url) => new WebSocket(url) as unknown as LiveSocketLike;
 
@@ -84,6 +121,8 @@ export class LiveLink {
   private pingTimer: unknown = null;
   private checkTimer: unknown = null;
   private lastSent: number[] = [];
+  /** The last push id the map took; sent as `since` to catch up after a break. */
+  private lastId: string | null = null;
   private readonly open: LiveSocketFactory;
   private readonly timers: LiveTimers;
 
@@ -127,10 +166,15 @@ export class LiveLink {
     }, WATCH_DEBOUNCE_MS);
   }
 
-  /** A version check now (tab back in focus); a reconnect at once when down. */
+  /** The last push id taken (tests). */
+  get seenId(): string | null {
+    return this.lastId;
+  }
+
+  /** A version check now (tab back in focus: with a replay of what it skipped); a reconnect at once when down. */
   check(): void {
     if (this.signedIn) {
-      this.sendWatch(true);
+      this.sendWatch(true, true);
       return;
     }
     if (!this.stopped && this.retryTimer !== null) {
@@ -170,7 +214,7 @@ export class LiveLink {
   }
 
   private receive(raw: unknown): void {
-    let message: { type?: unknown; z?: unknown; all?: unknown };
+    let message: { type?: unknown; z?: unknown; all?: unknown; c?: unknown; id?: unknown; ad?: unknown; rz?: unknown; rp?: unknown };
     try {
       message = JSON.parse(String(raw));
     } catch {
@@ -181,7 +225,8 @@ export class LiveLink {
         this.retryMs = FIRST_RETRY_MS;
         this.setSignedIn(true);
         this.lastSent = [];
-        this.sendWatch(true);
+        // Back after a break: the server replays what this map missed since its last push.
+        this.sendWatch(true, true);
         this.pingTimer = this.timers.setInterval(() => this.send({ type: "live.ping" }), PING_MS);
         this.checkTimer = this.timers.setInterval(() => this.sendWatch(true), CHECK_MS);
         return;
@@ -194,17 +239,37 @@ export class LiveLink {
         this.options.onVersions(pairs, message.all === 1);
         return;
       }
+      case "live.cells": {
+        if (!Array.isArray(message.z) || !Array.isArray(message.c)) return;
+        const frame: LiveCellsFrame = {
+          z: message.z.filter(isPair),
+          c: message.c.filter(isCell),
+          ...(typeof message.id === "string" && { id: message.id }),
+          ...(message.ad !== undefined && { ad: message.ad }),
+          ...(Array.isArray(message.rz) && { rz: message.rz.filter((id): id is number => typeof id === "number") }),
+          ...(message.rp === 1 && { rp: 1 as const }),
+        };
+        const taken = this.options.onCells?.(frame) ?? false;
+        if (taken && frame.id && idAfter(frame.id, this.lastId)) this.lastId = frame.id;
+        return;
+      }
+      case "live.own":
+        if (Array.isArray(message.c)) this.options.onOwn?.(message.c.filter(isCell));
+        return;
+      case "live.redo":
+        if (Array.isArray(message.z)) this.options.onRedo?.(message.z.filter((id): id is number => typeof id === "number"));
+        return;
       case "live.sight":
         this.options.onSight();
         return;
     }
   }
 
-  private sendWatch(force: boolean): void {
+  private sendWatch(force: boolean, catchUp = false): void {
     const list = this.options.watchList().slice(0, MAX_WATCH);
     if (!force && sameList(list, this.lastSent)) return;
     this.lastSent = list;
-    this.send({ type: "live.watch", z: list });
+    this.send({ type: "live.watch", z: list, ...(catchUp && this.lastId && { since: this.lastId }) });
   }
 
   private send(message: unknown): void {

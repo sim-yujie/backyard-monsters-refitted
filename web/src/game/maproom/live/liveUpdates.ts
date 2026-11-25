@@ -3,22 +3,23 @@ import type { OffsetCell } from "@/game/HexGrid";
 import type { ZoneRecord, ZoneStore } from "../ZoneStore";
 import { zoneChanges } from "./cellChanges";
 import type { CellRings, RingTier } from "./CellRings";
-import { CHECK_MS, LiveLink, MAX_WATCH, type LiveLinkOptions } from "./liveLink";
+import { CHECK_MS, LiveLink, MAX_WATCH, type LiveCellsFrame, type LiveLinkOptions } from "./liveLink";
 
 /**
- * The live map in Map Room 2 (beta 9, stage 1), between the connection
- * (`liveLink.ts`), the zone cache and what the player sees: pushed zone
- * versions become re-asks of only those zones (`ZoneStore.applyVersions`,
- * `pumpLive`: on screen only, spread out, batched); an answer that came from a
- * push rings its changed cells and, when the open panel's cell is one,
- * updates the panel at once. A hidden tab ignores pushes; the version check
- * when it comes back catches up.
+ * The live map in Map Room 2 (beta 9, stages 1-2), between the connection
+ * (`liveLink.ts`), the zone cache and what the player sees: pushed cells go
+ * straight into the cache (`ZoneStore.applyLiveCells`); zones a push could not
+ * complete, and pushed versions without cells, become re-asks of only those
+ * zones (`pumpLive`: on screen only, spread out, batched). A pushed change
+ * rings its changed cells and, when the open panel's cell is one, updates
+ * the panel at once. A hidden tab ignores pushes; when it comes back it
+ * catches up from the server's log (and the version check).
  */
 /** While the connection is down, visible zones older than this are asked again (owner: 3-5 min). */
 export const DOWN_REFRESH_SECONDS = 240;
 
 export interface LiveUpdatesOptions {
-  store: Pick<ZoneStore, "applyVersions" | "watchList" | "getCell" | "pumpLive">;
+  store: Pick<ZoneStore, "applyVersions" | "watchList" | "getCell" | "pumpLive" | "applyLiveCells" | "applyOwnCells" | "reaskZones">;
   rings: Pick<CellRings, "add">;
   /** Ask `/worldmapv2/sight` again. */
   refreshSight: () => void;
@@ -56,6 +57,13 @@ export class LiveUpdates {
       token: this.options.token,
       watchList: () => this.options.store.watchList(MAX_WATCH),
       onVersions: (pairs, all) => this.versions(pairs, all),
+      onCells: (frame) => this.cells(frame),
+      onOwn: (cells) => {
+        if (!this.stopped && !this.hidden()) this.options.store.applyOwnCells(cells);
+      },
+      onRedo: (zones) => {
+        if (!this.stopped && this.options.store.reaskZones(zones) > 0) void this.options.store.pumpLive();
+      },
       onSight: this.options.refreshSight,
       ...this.options.link,
     });
@@ -96,6 +104,19 @@ export class LiveUpdates {
       this.options.rings.add(cell, change.kind, this.options.tierOf(cell, payload));
       if (shown && shown.col === change.col && shown.row === change.row) this.options.updateShown(payload);
     }
+  }
+
+  /**
+   * Pushed cells (stage 2): applied at once, no request; only zones that missed a push or hold a
+   * cell the map cannot complete are asked again. A hidden tab takes nothing (it draws nothing),
+   * and catches up from the server's log when it comes back. False when not taken.
+   */
+  private cells(frame: LiveCellsFrame): boolean {
+    if (this.stopped) return false;
+    if (!frame.rp && this.hidden()) return false;
+    const asked = this.options.store.applyLiveCells(frame.z, frame.c, frame.rz, frame.ad);
+    if (asked > 0) void this.options.store.pumpLive();
+    return true;
   }
 
   private versions(pairs: [number, number][], all: boolean): void {

@@ -1219,6 +1219,14 @@
   pointer-events: none;
 }
 
+/* Classic: half see-through on the cream panel only read as a paler green, still pressable (live
+   map stage 2); greyed as well, so the waiting buttons read "off" as they do on Modern's dark plate. */
+:root[data-skin="flash"] .mr2-cell--held .mr2-cell__actions > :not(.mr2-live-bar),
+:root[data-skin="flash"] .mr2-cell--held .mr2-cell__picture {
+  filter: grayscale(0.85) brightness(0.92);
+  opacity: 0.55;
+}
+
 /* Attack while someone else's attack runs: flat and quiet, so it never reads as pressable. */
 .mr2-cell .mr2-cell__primary--busy {
   filter: saturate(0.4) brightness(0.85);

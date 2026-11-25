@@ -35,6 +35,9 @@ const setup = (hidden = false) => {
       pumpLive: async () => {
         pumps += 1;
       },
+      applyLiveCells: () => 0,
+      applyOwnCells: () => {},
+      reaskZones: () => 0,
     },
     rings: { add: (cell, kind, tier) => (rings.push({ ...cell, kind, tier }), true) },
     refreshSight: () => {},
