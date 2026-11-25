@@ -27,6 +27,7 @@ import {
 } from "./attackLoot.js";
 import { replayAbandonedAttack } from "./abandonedAttack.js";
 import { battleReplayInput, battleTick, foughtLoot } from "./battle.js";
+import { RULES_VERSION } from "../../defences/rulesVersion.js";
 
 /**
  * Attack loot is capped by the server's own replay (issue #163). The golden
@@ -125,6 +126,8 @@ const sessionOf = (log: FlingLog, extra: Partial<AttackSession> = {}): AttackSes
   attackerid: 2505,
   attackid: 1,
   startedat: 0,
+  // Minted under these rules, as `newAttackSession` mints every session now.
+  rules: RULES_VERSION,
   entryHoused: entryOf(log),
   ...extra,
 });

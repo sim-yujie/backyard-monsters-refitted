@@ -469,6 +469,15 @@ export interface EngineBuilding {
   fired: boolean;
   /** Mutable: a harvester whose buffer is empty, which `targetGroup` 3 skips; never storage. */
   looted: boolean;
+  /**
+   * Mutable: a harvester that was empty when the yard loaded and that no
+   * attacker has hit since. Flash's `_looted` starts false
+   * (`BFOUNDATION.as:198`) and only a hit that finds the buffer empty sets it
+   * (`BRESOURCE.as:121-125`), so to Flash's Krallen (patch 8.6,
+   * `TargetContext.flashKrallen`) it is still unlooted. Every other creep
+   * reads {@link looted}, set at load, as before.
+   */
+  emptyUnhit: boolean;
   /** Mutable: the unbanked buffer still in a harvester. */
   stored: number;
   /** Mutable: a tower under a siege Jar is not a valid target (`BTOWER.as:251-253`). */
@@ -615,6 +624,7 @@ export const buildEngineYard = (input: EngineYardInput): EngineYard => {
       // group 3 creep (Brain, Bolt) drop it as stale every tick and re-path,
       // and each fresh route's unchecked first step walked it through the wall.
       looted: HARVESTER_TYPES.includes(type) && banked <= 0,
+      emptyUnhit: HARVESTER_TYPES.includes(type) && banked <= 0,
       stored: banked,
       jarred: false,
     });
