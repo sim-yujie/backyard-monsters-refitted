@@ -2,7 +2,7 @@ import { describe, expect, test } from "bun:test";
 import type { BuildingData, BuildingDataMap } from "../../types/BuildingData.js";
 import type { JsonObject } from "../../types/JsonObject.js";
 import { catchUpYard, type CatchUpSave } from "./catchUp.js";
-import { planHatcheryAdd, planHatcheryRemove, type HatcherySave } from "./hatchery.js";
+import { planHatcheryAdd, planHatcheryFinish, planHatcheryRemove, type HatcherySave } from "./hatchery.js";
 
 /**
  * Owner's bug, 25 Nov 2026 (diag-hcc): "When a player has a HCC and some of
@@ -13,8 +13,9 @@ import { planHatcheryAdd, planHatcheryRemove, type HatcherySave } from "./hatche
  * 1, 2 and 3. Hatchery 2 is upgrading (`cU` = seconds left, 2 hours).
  * Pokey (C1) at academy level 1: 15 s, 10 space, 250 goo.
  *
- * Tests marked BUG fail on main (v2.0.0-beta.8.6); revamp has the same code (by diff, not run). They state
- * what the owner asked for. The others pass and pin how things work today.
+ * Option A (patch 8.7): the HCC hands an upgrading hatchery nothing; a
+ * monster already inside when the upgrade starts waits there, paused, as in
+ * Flash. The first three failed on 8.6.
  */
 
 const NOW = 1_800_000_000;
@@ -66,30 +67,30 @@ const hOf = (monsters: JsonObject | null | undefined, id: number): unknown[] => 
 };
 
 describe("HCC and a hatchery under upgrade", () => {
-  test("BUG: adding to the HCC queue gives the upgrading hatchery no monster", () => {
+  test("adding to the HCC queue gives the upgrading hatchery no monster", () => {
     const save = yardOf(monstersOf([idle(), idle(), idle()]));
     const plan = planHatcheryAdd(save, "hcc", "C1", 5, NOW);
 
     expect(hOf(plan.slices?.monsters, 1)[0]).toBe("C1");
     expect(hOf(plan.slices?.monsters, 3)[0]).toBe("C1");
-    // Today hatchery 2 takes a Pokey too, which then sits there unhatched for
-    // the whole two-hour upgrade while 3 stay in the queue.
+    // On 8.6 hatchery 2 took a Pokey too, which then sat there unhatched for
+    // the whole two-hour upgrade.
     expect(hOf(plan.slices?.monsters, 2)[0]).toBe("");
     expect(plan.slices?.monsters?.hcc).toEqual([["C1", 3, 1]]);
   });
 
-  test("BUG: an hour later the monster is still stuck in the upgrading hatchery", () => {
+  test("an hour later nothing is stuck in the upgrading hatchery", () => {
     const save = yardOf(monstersOf([idle(), idle(), idle()]));
     const plan = planHatcheryAdd(save, "hcc", "C1", 30, NOW);
     save.monsters = plan.slices!.monsters!;
     catchUpYard(save, NOW + 3600);
 
-    // Hatcheries 1 and 3 work the whole queue. Today hatchery 2 keeps one Pokey frozen at 15 s, so 29.
+    // Hatcheries 1 and 3 work the whole queue (8.6 kept one Pokey frozen in hatchery 2: 29).
     expect((save.monsters!.housed as Record<string, number>).C1).toBe(30);
     expect(hOf(save.monsters, 2)).toEqual(["", 0, []]);
   });
 
-  test("BUG: cancelling the stuck monster does not hand the upgrading hatchery the next one", () => {
+  test("cancelling the paused monster does not hand the upgrading hatchery the next one", () => {
     const save = yardOf(monstersOf([idle(), ["C1", 15, [], 1], idle()], [["C1", 5, 1]]));
     const plan = planHatcheryRemove(save, 2, 0, 1, NOW);
 
@@ -97,7 +98,7 @@ describe("HCC and a hatchery under upgrade", () => {
     expect(hOf(plan.slices?.monsters, 2)[0]).toBe("");
   });
 
-  test("today (passes): the lazy catch-up itself never feeds an idle upgrading hatchery", () => {
+  test("the lazy catch-up itself never feeds an idle upgrading hatchery", () => {
     const save = yardOf(monstersOf([idle(), idle(), idle()], [["C1", 20, 1]]));
     catchUpYard(save, NOW + 60);
 
@@ -105,7 +106,7 @@ describe("HCC and a hatchery under upgrade", () => {
     expect((save.monsters!.housed as Record<string, number>).C1).toBe(8);
   });
 
-  test("today (passes): a monster already inside when the upgrade starts waits, frozen, then resumes", () => {
+  test("a monster already inside when the upgrade starts waits, frozen, then resumes", () => {
     // Hatchery 2 had 5 s left on a Pokey when its upgrade began; 100 s of upgrade left.
     const save = yardOf(monstersOf([idle(), ["C1", 5, [], 1], idle()]), { cU: 100 });
     catchUpYard(save, NOW + 99);
@@ -114,5 +115,63 @@ describe("HCC and a hatchery under upgrade", () => {
     catchUpYard(save, NOW + 105);
     expect((save.monsters!.housed as Record<string, number>).C1).toBe(1);
     expect(hOf(save.monsters, 2)).toEqual(["", 0, []]);
+  });
+
+  test("when the upgrade ends, the catch-up hands the upgraded hatchery work again", () => {
+    // Every hatchery but 2 broken down to 0 health, so only 2 can take the queue; 100 s of upgrade left.
+    const save = yardOf(monstersOf([idle(), idle(), idle()], [["C1", 3, 1]]), { cU: 100 });
+    save.buildinghealthdata = { "1": 0, "3": 0 };
+    catchUpYard(save, NOW + 99);
+    expect(hOf(save.monsters, 2)).toEqual(["", 0, []]);
+    expect(save.monsters!.hcc).toEqual([["C1", 3, 1]]);
+
+    // Upgrade done at NOW + 100: three Pokeys of 15 s each, one after another.
+    catchUpYard(save, NOW + 100 + 45);
+    expect((save.monsters!.housed as Record<string, number>).C1).toBe(3);
+    expect(save.monsters!.hcc).toEqual([]);
+  });
+
+  test("every hatchery upgrading: the HCC keeps the whole batch, paid, until one is done", () => {
+    const all = { cU: TWO_HOURS };
+    const save = yardOf(monstersOf([idle(), idle(), idle()]));
+    for (const id of ["1", "2", "3"]) Object.assign(save.buildingdata![id]!, all);
+    const plan = planHatcheryAdd(save, "hcc", "C1", 30, NOW);
+
+    expect(plan.report).toMatchObject({ added: 30, stoppedBy: null });
+    expect(plan.debit).toEqual({ r4: 30 * 250 });
+    for (const id of [1, 2, 3]) expect(hOf(plan.slices?.monsters, id)[0]).toBe("");
+    expect(plan.slices?.monsters?.hcc).toEqual([
+      ["C1", 20, 1],
+      ["C1", 10, 1],
+    ]);
+
+    // An hour on, still upgrading: nothing hatched, nothing lost.
+    save.monsters = plan.slices!.monsters!;
+    catchUpYard(save, NOW + 3600);
+    expect((save.monsters!.housed as Record<string, number>).C1 ?? 0).toBe(0);
+    expect(save.monsters!.hcc).toEqual([
+      ["C1", 20, 1],
+      ["C1", 10, 1],
+    ]);
+  });
+
+  test("Finish now on the HCC houses the paused monster but hands the upgrading hatchery nothing new", () => {
+    const save = yardOf(monstersOf([idle(), ["C1", 15, [], 1], idle()], [["C1", 60, 1]]));
+    const plan = planHatcheryFinish(save, "hcc", NOW);
+
+    expect(plan.report.housed).toEqual({ C1: 54 });
+    expect(hOf(plan.slices?.monsters, 2)).toEqual(["", 0, []]);
+    // 54 housed (540 space at 10 each); hatcheries 1 and 3 take the next two, 2 stays empty.
+    expect(hOf(plan.slices?.monsters, 1)[0]).toBe("C1");
+    expect(hOf(plan.slices?.monsters, 3)[0]).toBe("C1");
+  });
+
+  test("an outpost's HCC skips an upgrading hatchery too", () => {
+    const save = { ...yardOf(monstersOf([idle(), idle(), idle()])), type: "outpost" };
+    const plan = planHatcheryAdd(save, "hcc", "C1", 5, NOW);
+
+    expect(hOf(plan.slices?.monsters, 1)[0]).toBe("C1");
+    expect(hOf(plan.slices?.monsters, 2)[0]).toBe("");
+    expect(hOf(plan.slices?.monsters, 3)[0]).toBe("C1");
   });
 });

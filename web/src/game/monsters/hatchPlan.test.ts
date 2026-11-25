@@ -88,7 +88,7 @@ describe("readHatchYard", () => {
       [10, "stalled"],
       [11, "building"],
       [13, "damaged"],
-      [14, "upgrading"], // diag-hcc: an empty upgrading hatchery says so (it takes no HCC work)
+      [14, "upgrading"], // empty and upgrading: it takes no HCC work, so it says Upgrading, not Idle
     ]);
     const [producing, stalled, built] = yard.hatcheries;
     expect(producing!.queue).toEqual([
@@ -238,6 +238,35 @@ describe("previewAdd and queue room", () => {
       T0,
     );
     expect(queueRoom(empty, "hcc", "C1")).toBe(142);
+  });
+
+  it("hands nothing from the HCC to an upgrading hatchery; its monster inside stays paused", () => {
+    const save = saveOf({ monsters: monsters({ hid: [10, 11, 12], h: [["", 0, []], ["C3", 9, []], ["", 0, []]], hstage: [0, 1, 0] }) }, [
+      building(10, 13, 3),
+      building(11, 13, 3, { cU: 600 }),
+      building(12, 13, 3, { cU: 600 }),
+      building(20, 16, 1),
+    ]);
+    const yard = readHatchYard(save, T0);
+    expect(yard.hatcheries.map((one) => [one.id, one.state])).toEqual([
+      [10, "idle"],
+      [11, "upgrading"],
+      [12, "upgrading"],
+    ]);
+    const preview = previewAdd(yard, "hcc", "C1", 5)!;
+    expect(preview.starts).toEqual([{ hatchery: 10, monster: "C1" }]);
+    expect(preview).toMatchObject({ added: 5, started: 1, inNewStacks: 4 });
+
+    // Every hatchery upgrading: all go into the shared queue, none is lost.
+    const all = readHatchYard(
+      saveOf({ monsters: monsters({ hid: [10, 11] }) }, [
+        building(10, 13, 3, { cU: 600 }),
+        building(11, 13, 3, { cU: 600 }),
+        building(20, 16, 1),
+      ]),
+      T0,
+    );
+    expect(previewAdd(all, "hcc", "C1", 5)).toMatchObject({ added: 5, started: 0, starts: [], inNewStacks: 5 });
   });
 
   it("says how many go into each new stack, for the dashed slots", () => {
