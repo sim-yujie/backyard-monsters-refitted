@@ -2786,7 +2786,12 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
     }
     building.hp -= dealt;
     if (building.hp > 0) {
-      if (byAttacker) takeLoot(building, dealt, lootMultiplier);
+      if (byAttacker) {
+        // Flash's `Loot` runs on the hit and marks an empty harvester looted
+        // (`BRESOURCE.as:121-125`): it is no longer unlooted to Krallen.
+        building.emptyUnhit = false;
+        takeLoot(building, dealt, lootMultiplier);
+      }
       return applied;
     }
     // The killing hit on storage still makes the pick it made before issue
@@ -4388,7 +4393,7 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
 
   /* ── Creeps ────────────────────────────────────────────────────────────── */
 
-  const targetContext = { bunkerInUse };
+  const targetContext = { bunkerInUse, flashKrallen: flashKrallenRules };
 
   const buildingOf = (id: number): EngineBuilding | null => {
     const at = yard.byId.get(id);
@@ -4962,7 +4967,7 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
       creep.champion &&
       creep.monsterId === KRALLEN_ID &&
       isLootable(target.type) &&
-      !unlootedForKrallen(target) &&
+      !unlootedForKrallen(target, fightsAsFlashKrallen(creep)) &&
       creep.waypoints.length - creep.waypointIndex > 0
     ) {
       findTarget(creep, false, true);

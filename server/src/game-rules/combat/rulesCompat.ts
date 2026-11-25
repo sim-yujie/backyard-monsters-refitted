@@ -81,6 +81,9 @@
  * hits beside her, not on one that is merely in her reach. Every other
  * champion fights as before. The server replays an attack whose session was
  * minted under older rules with both off, so it lands as it was fought.
+ * Under the same gate she also goes for a harvester that was empty when the
+ * yard loaded until a hit finds it empty (`EngineBuilding.emptyUnhit`), as
+ * Flash's `_looted` does; every other creep still reads it as looted.
  *
  * Add the version a change replaces only when that change moves no battle.
  * A change that moves any battle result must empty this list.

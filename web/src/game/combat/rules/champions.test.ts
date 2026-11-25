@@ -773,6 +773,52 @@ describe("Krallen by Flash's rules (patch 8.6, owner 25 Nov 2026)", () => {
     expect(run(false)!.away).toBeGreaterThan(now!.away);
   });
 
+  it("goes for a harvester that was empty when the yard loaded until a hit finds it empty (`BFOUNDATION.as:198`)", () => {
+    // An empty Twig Snapper near her drop, a Storage Silo farther off. Flash's
+    // `_looted` is false at load, so she goes for the harvester, finds it
+    // empty, and wrecks it before she picks again; the rule before skipped it.
+    const play = (flashKrallen?: boolean) => {
+      const yard = yardOf({
+        "1": { id: 1, t: 1, l: 6, X: 100, Y: 100, st: 0 },
+        "2": { id: 2, t: 6, l: 1, X: 400, Y: 100 },
+      });
+      const battle = createBattle(yard, {
+        seed: 4,
+        ...(flashKrallen === undefined ? {} : { flashKrallen }),
+      });
+      fling(battle, -60, {}, { t: 5, l: 5 });
+      const order: number[] = [];
+      for (let step = 0; step < 3000 && !battle.over(); step += 1) {
+        battle.step();
+        const krallen = championOf(battle, false);
+        if (krallen && krallen.targetBuilding >= 0 && order[order.length - 1] !== krallen.targetBuilding) {
+          order.push(krallen.targetBuilding);
+        }
+      }
+      return { order, twig: yard.buildings.find((building) => building.id === 1)! };
+    };
+    const now = play();
+    expect(now.order[0]).toBe(1);
+    expect(now.twig.hp).toBe(0);
+    expect(now.twig.emptyUnhit).toBe(false);
+    expect(play(false).order[0]).toBe(2);
+  });
+
+  it("leaves a harvester empty at load looted to every other creep", () => {
+    const yard = yardOf({
+      "1": { id: 1, t: 1, l: 6, X: 100, Y: 100, st: 0 },
+      "2": { id: 2, t: 6, l: 1, X: 400, Y: 100 },
+    });
+    const twig = yard.buildings.find((building) => building.id === 1)!;
+    expect(twig.looted).toBe(true);
+    expect(twig.emptyUnhit).toBe(true);
+    const context = { bunkerInUse: () => false };
+    // Krallen under the rules before skips it for the Silo, and goes for it
+    // only under Flash's; a looter's group 3 still reads `looted`.
+    expect(findChampionTarget(yard, 0, 0, context, true)?.id).toBe(2);
+    expect(findChampionTarget(yard, 0, 0, { ...context, flashKrallen: true }, true)?.id).toBe(1);
+  });
+
   it("is never a defending Krallen's: both rules are an attacker's", () => {
     // A caged Krallen is fought by `tickCageChampion`, which neither looks
     // while walking nor engages; the same defence plays the same either way.
