@@ -35,6 +35,7 @@ interface StandIn {
   transactional: (run: (tx: StandIn) => Promise<unknown>) => Promise<unknown>;
   create: (entity: unknown, data: Row) => Row;
   persist: () => void;
+  nativeUpdate: (entity: unknown, where: Row, data: Row) => Promise<number>;
   flush: () => Promise<void>;
 }
 
@@ -44,6 +45,12 @@ const em: StandIn = {
   transactional: async (run) => run(em),
   create: (_entity, data) => data,
   persist: () => {},
+  // The attack load's claim (`claimAttack.ts`): one conditional write.
+  nativeUpdate: async (entity, where, data) => {
+    const hit = (tables.get(entity) ?? []).filter((row) => matchesWhere(row, where));
+    for (const row of hit) Object.assign(row, data);
+    return hit.length;
+  },
   flush: async () => {},
 };
 

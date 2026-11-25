@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { Container, Graphics } from "pixi.js";
 import { describe, expect, it } from "vitest";
-import { mapChanged } from "./TiltView";
+import { mapChanged, stageChanged } from "./TiltView";
 
 /**
  * Redraw on change (MR2 look plan step 4): the tilted picture is redrawn only
@@ -68,5 +68,23 @@ describe("mapChanged", () => {
     const { root, shape } = map();
     shape.rect(0, 0, 10, 10).fill(0xffffff);
     expect(mapChanged(root)).toBe(true);
+  });
+});
+
+describe("stageChanged (the map's render gate)", () => {
+  it("reads the render group a scene's container belongs to", () => {
+    const { root, child, shape } = map();
+    // The scene's container is not a render group itself: its stage's lists answer.
+    expect(stageChanged(child)).toBe(false);
+    shape.rect(0, 0, 10, 10).fill(0xffffff);
+    expect(stageChanged(child)).toBe(true);
+    drawn(root);
+    expect(stageChanged(child)).toBe(false);
+    child.position.set(5, 5);
+    expect(stageChanged(root)).toBe(true);
+  });
+
+  it("counts a container in no render group yet as changed", () => {
+    expect(stageChanged(new Container())).toBe(true);
   });
 });

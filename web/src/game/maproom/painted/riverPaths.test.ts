@@ -181,3 +181,40 @@ describe.each<HexShape>(["pointy", "flat"])("river shapes on %s-top hexes", (sha
     expect(spread(banks)).toBeGreaterThan(spread(water));
   });
 });
+
+/**
+ * `MapRenderer.applyZone` rebuilds the rivers only for a zone that has a river in it or along its
+ * edge (map lag, 25 Nov 2026). That rests on a path reading nothing but the cells round its own
+ * corners: a block of cells with no river in it or beside it can come out of the fog, change
+ * height or turn to water without moving any path.
+ */
+describe.each<HexShape>(["pointy", "flat"])("rivers ignore far cells on %s-top hexes", (shape) => {
+  it("draws the same paths whatever a block two cells clear of every river holds", () => {
+    setHexShape(shape);
+    let seed = 11;
+    const rnd = () => ((seed = (seed * 1103515245 + 12345) % 2147483648) / 2147483648);
+    for (let round = 0; round < 30; round++) {
+      const rv: Record<string, number> = {};
+      for (let k = 0; k < 12; k++) {
+        const col = 2 + Math.floor(rnd() * 12);
+        const row = 2 + Math.floor(rnd() * 26);
+        rv[key(col, row)] = 1 + Math.floor(rnd() * 63);
+      }
+      // The block: columns 18..28 (an 11-cell zone), its ring at 17 and 29 river-free.
+      const block = (col: number) => col >= 18 && col <= 28;
+      const before: RiverCells = {
+        rvAt: (col, row) => rv[key(col, row)] ?? 0,
+        isWater: (col) => col === 0,
+        isKnown: (col) => !block(col),
+        liftOf: (col, row) => ((col * 7 + row * 3) % 5) * 2,
+      };
+      const after: RiverCells = {
+        ...before,
+        isWater: (col, row) => col === 0 || (block(col) && (col + row) % 3 === 0),
+        isKnown: () => true,
+        liftOf: (col, row) => (block(col) ? 9 : ((col * 7 + row * 3) % 5) * 2),
+      };
+      expect(riverPaths(range(0, 32, 0, 32), after)).toEqual(riverPaths(range(0, 32, 0, 32), before));
+    }
+  });
+});

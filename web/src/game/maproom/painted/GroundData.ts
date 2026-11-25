@@ -2,6 +2,7 @@ import { BufferImageSource } from "pixi.js";
 import { WORLD_HEIGHT, WORLD_WIDTH } from "@/config";
 import type { ZoneRecord } from "../ZoneStore";
 import type { CellRange } from "../zones";
+import { DirtyRect, flushRegion } from "../regionUpload";
 import { Ground, encodeCell } from "./groundKinds";
 
 /** At most about this many cells are looked at when asking whether water is in sight. */
@@ -15,13 +16,21 @@ const WATER_PROBES = 4096;
 export class GroundData {
   readonly bytes: Uint8Array;
   readonly source: BufferImageSource;
-  private dirty = false;
+  /**
+   * The cells that turned to or from fog since the clouds last looked (`CloudLayer.flush` takes
+   * it), so the fog's distances are measured again only round them.
+   */
+  readonly fogChanges: DirtyRect;
+  /** The texels written since the last upload, so only they go up (`regionUpload.ts`). */
+  private readonly changes: DirtyRect;
 
   constructor(
     readonly width = WORLD_WIDTH,
     readonly height = WORLD_HEIGHT,
   ) {
     this.bytes = new Uint8Array(width * height * 4);
+    this.fogChanges = new DirtyRect(width, height);
+    this.changes = new DirtyRect(width, height);
     this.fillFog();
     this.source = new BufferImageSource({
       resource: this.bytes,
@@ -37,18 +46,26 @@ export class GroundData {
     });
   }
 
-  /** Writes one area response. */
+  /** Writes one area response, noting the texels that changed (and those that turned to or from fog). */
   applyZone(zone: ZoneRecord): void {
+    const bytes = this.bytes;
     for (const [xKey, column] of Object.entries(zone.data)) {
       const x = Number(xKey);
       if (!(x >= 0 && x < this.width)) continue;
       for (const [yKey, cell] of Object.entries(column)) {
         const y = Number(yKey);
         if (!(y >= 0 && y < this.height)) continue;
-        encodeCell(cell, this.bytes, (y * this.width + x) * 4);
+        const at = (y * this.width + x) * 4;
+        const b0 = bytes[at]!;
+        const b1 = bytes[at + 1]!;
+        const b2 = bytes[at + 2]!;
+        const b3 = bytes[at + 3]!;
+        encodeCell(cell, bytes, at);
+        if (b0 === bytes[at] && b1 === bytes[at + 1] && b2 === bytes[at + 2] && b3 === bytes[at + 3]) continue;
+        this.changes.add(x, y, x, y);
+        if (((b3 & 15) === Ground.FOG) !== ((bytes[at + 3]! & 15) === Ground.FOG)) this.fogChanges.add(x, y, x, y);
       }
     }
-    this.dirty = true;
   }
 
   /** The ground a cell has been given, for tests. */
@@ -80,14 +97,15 @@ export class GroundData {
   /** Back to fog everywhere (the player's sight changed; `TerrainRaster.reset`). */
   reset(): void {
     this.fillFog();
-    this.dirty = true;
+    this.changes.addAll();
+    this.fogChanges.addAll();
   }
 
-  /** Uploads pending writes; a no-op when nothing changed. */
-  flush(): void {
-    if (!this.dirty) return;
-    this.dirty = false;
-    this.source.update();
+  /** Uploads pending writes (only the box they touched); a no-op when nothing changed. */
+  flush(): boolean {
+    if (this.changes.empty) return false;
+    flushRegion(this.source, this.changes.take());
+    return true;
   }
 
   destroy(): void {

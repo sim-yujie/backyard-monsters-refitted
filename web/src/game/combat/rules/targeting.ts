@@ -276,6 +276,12 @@ export const isBunker = (type: number): boolean => BUNKER_TYPES.includes(type);
 export interface TargetContext {
   /** Whether a bunker still holds or has already sent out defenders. */
   bunkerInUse(building: EngineBuilding): boolean;
+  /**
+   * Krallen fought by Flash's rules (patch 8.6, `BattleOptions.flashKrallen`):
+   * a harvester empty at load that no attacker has hit is still unlooted to
+   * her ({@link EngineBuilding.emptyUnhit}).
+   */
+  readonly flashKrallen?: boolean;
 }
 
 /** The closest two buildings, which is what a creep asks a route for. */
@@ -446,10 +452,13 @@ const CHAMPION_CORE_TYPES: readonly number[] = [6, 14, 112];
 /**
  * Whether a lootable building is still worth looting to Krallen. Storage is a
  * `BSTORAGE`, which never sets `_looted` (only `BRESOURCE.Loot` does,
- * `BRESOURCE.as:121-125`), so only a harvester runs dry.
+ * `BRESOURCE.as:121-125`), so only a harvester runs dry. With `flash`
+ * (patch 8.6), a harvester empty at load counts as unlooted until an
+ * attacker's hit finds it empty, as Flash's `_looted` does.
  */
-export const unlootedForKrallen = (building: EngineBuilding): boolean =>
-  isLootable(building.type) && (STORAGE_TYPES.includes(building.type) || !building.looted);
+export const unlootedForKrallen = (building: EngineBuilding, flash = false): boolean =>
+  isLootable(building.type) &&
+  (STORAGE_TYPES.includes(building.type) || !building.looted || (flash && building.emptyUnhit));
 
 /**
  * The building a champion attacks (issue #222).
@@ -514,14 +523,15 @@ export const findChampionTarget = (
     building.hp > 0 && isBunker(building.type) && context.bunkerInUse(building);
 
   if (krallen) {
+    const flash = context.flashKrallen === true;
     for (const building of buildings) {
-      if (building.hp > 0 && unlootedForKrallen(building)) consider(building);
+      if (building.hp > 0 && unlootedForKrallen(building, flash)) consider(building);
     }
     if (!found) for (const building of buildings) if (towerUp(building)) consider(building);
     if (!found) {
       for (const building of buildings) if (bunkerUp(building)) consider(building);
       for (const building of buildings) {
-        if (building.hp > 0 && isLootable(building.type) && !unlootedForKrallen(building)) {
+        if (building.hp > 0 && isLootable(building.type) && !unlootedForKrallen(building, flash)) {
           consider(building);
         }
       }

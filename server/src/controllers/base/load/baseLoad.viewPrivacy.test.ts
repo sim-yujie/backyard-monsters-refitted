@@ -39,6 +39,12 @@ const em = {
   transactional: async (run: (tx: unknown) => Promise<unknown>) => run(em),
   create: (_entity: unknown, data: Row) => data,
   persist: () => {},
+  // The attack load's claim (`claimAttack.ts`): one conditional write.
+  nativeUpdate: async (entity: unknown, where: Row, data: Row) => {
+    const hit = (tables.get(entity) ?? []).filter((row) => matchesWhere(row, where));
+    for (const row of hit) Object.assign(row, data);
+    return hit.length;
+  },
   remove: () => {},
   flush: async () => {},
 };

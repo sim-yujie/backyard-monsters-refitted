@@ -12,7 +12,7 @@ import {
 } from "../../game-data/championCatalogue.js";
 import { Status } from "../../enums/StatusCodes.js";
 import { korathPowerOf } from "../../game-data/events/monsterMadness.js";
-import { championByType, forgetHabits, hasHabits, type ChampionStance } from "../../game-rules/combat/index.js";
+import { championByType, forgetHabits, hasHabits, hasMode, type ChampionStance } from "../../game-rules/combat/index.js";
 import { ClientSafeError } from "../../middleware/clientSafeError.js";
 import type { ChampionData } from "../../schemas/ChampionSchema.js";
 import type { BuildingData, BuildingDataMap, BuildingHealthData } from "../../types/BuildingData.js";
@@ -513,13 +513,16 @@ export const planChampionRename = (save: ChampionSave, raw: string) => {
 
 /**
  * `POST /bm/yard/champion/stance`: remember the Mode a champion attacks in
- * (issue #220), any champion the player keeps, caged, frozen or Krallen. The
- * army panel opens on it next time; the attack itself carries its own Mode in
- * the fling log, so this is a preference and nothing more.
+ * (issue #220), any champion the player keeps, caged or frozen. The army
+ * panel opens on it next time; the attack itself carries its own Mode in the
+ * fling log, so this is a preference and nothing more. Krallen has no Mode
+ * (owner, 25 Nov 2026, patch 8.7): nothing is kept for her.
  *
- * Refusals: `409 noChampion` when no champion of that type is kept.
+ * Refusals: `409 noMode` for Krallen; `409 noChampion` when no champion of
+ * that type is kept.
  */
 export const planChampionStance = (save: ChampionSave, type: number, stance: ChampionStance) => {
+  if (!hasMode(championByType(type))) throw yardRefusedErr("noMode", "That champion has no Mode.");
   const champions = readChampions(save.champion);
   const index = champions.findIndex(
     (one) => Math.trunc(numberOf(one.t)) === type && statusOf(one) !== CHAMPION_STATUS.JUICED,
