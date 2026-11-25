@@ -2089,6 +2089,7 @@ export class HatchTab implements MonstersTab {
 const IDLE_TEXT: Partial<Record<HatcheryView["state"], StateWords>> = {
   building: ["Being built", "Building"],
   damaged: ["Damaged"],
+  upgrading: ["Upgrading"],
   idle: ["Nothing hatching", "Idle"],
 };
 
