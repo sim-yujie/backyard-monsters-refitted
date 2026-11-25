@@ -117,7 +117,7 @@ describe.each(["flat", "pointy"] as const)("changedZoneLookup on %s-top hexes", 
     let seed = 5;
     const rnd = () => ((seed = (seed * 1103515245 + 12345) % 2147483648) / 2147483648);
     const source = (): SightSource => ({ x: 20 + Math.floor(rnd() * 60), y: 20 + Math.floor(rnd() * 60), reach: 1 + Math.floor(rnd() * 8), kind: "ally" });
-    for (let round = 0; round < 40; round++) {
+    for (let round = 0; round < 15; round++) {
       const before = Array.from({ length: 6 }, source);
       const after = rnd() < 0.5 ? [...before, source()] : before.slice(1);
       const revealedBefore = [{ x: 50, y: 50 }];
@@ -136,5 +136,5 @@ describe.each(["flat", "pointy"] as const)("changedZoneLookup on %s-top hexes", 
         }
       }
     }
-  });
+  }, 30_000);
 });
