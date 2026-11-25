@@ -103,6 +103,8 @@ export interface ReplayInput {
    * always on a main yard, whatever {@link kind} says.
    */
   readonly raid?: boolean;
+  /** False fights Krallen by the rules before patch 8.6's (`BattleOptions.flashKrallen`). */
+  readonly flashKrallen?: boolean;
 }
 
 /** What {@link replayRaid} is handed: the defender's side only (issue #226). */
@@ -220,6 +222,7 @@ export const replayAttack = (input: ReplayInput): ReplayOutcome => {
     ...(input.defenceBonus ? { defenceBonus: input.defenceBonus } : {}),
     ...(input.learn ? { learn: true } : {}),
     ...(input.raid ? { raid: input.raid } : {}),
+    ...(input.flashKrallen === false ? { flashKrallen: false } : {}),
   };
 
   const battle = createBattle(yard, options);

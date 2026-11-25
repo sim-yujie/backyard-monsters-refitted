@@ -23,6 +23,7 @@ import { frozenBrainsOf, type AttackSession } from "../attackSession.js";
 import { replayAbandonedAttack } from "./abandonedAttack.js";
 import { wholeAmounts } from "./attackLoot.js";
 import { battleMismatches, battleReplayInput, battleTick, type BattleDefender } from "./battle.js";
+import { RULES_VERSION } from "../../defences/rulesVersion.js";
 
 /**
  * The attack save's battle is the server's (issue #23, C3), and an honest save
@@ -130,6 +131,8 @@ const sessionOf = (log: FlingLog, one?: Fixture): AttackSession => {
     attackerid: 2505,
     attackid: 1,
     startedat: 0,
+    // Minted under these rules, as `newAttackSession` mints every session now.
+    rules: RULES_VERSION,
     entryHoused: { "2000241207": housed },
     ...(defenderForces && { defenderForces }),
     ...(championBrains && { championBrains }),

@@ -140,6 +140,9 @@ export const battleReplayInput = ({
     // The defence the attack load served (issue #195).
     ...(session?.defenderForces && { defence: session.defenderForces }),
     ...(descentYard !== undefined && { descentYard }),
+    // Krallen keeps her route and turns only on a defender that reaches or
+    // hits her (patch 8.6) only in an attack started under these rules.
+    flashKrallen: modelessKrallen,
   };
 };
 

@@ -202,6 +202,22 @@ describe("golden replays", () => {
     for (const one of champions) expect(one.championHp).toBeGreaterThan(0);
   });
 
+  // Patch 8.6 (owner, 25 Nov 2026): Krallen keeps her route on her walking
+  // look and turns only on a defender that reaches or hits her, as in Flash.
+  // An attack started under older rules is replayed with `flashKrallen` off
+  // and plays as it was fought: these are both Krallen fixtures' digests
+  // under 8.6's rules before that change.
+  it.each([
+    ["mixed-waves", "ace764b2df7d60a0"],
+    ["korath-and-krallen", "ba2e64367ed6247c"],
+  ])("%s replays to its old digest under older rules (flashKrallen off)", (name, digest) => {
+    const fixture = read<Fixture>(`${FIXTURE_DIR}${name}.json`);
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const old = replayAttack({ ...(inputOf(fixture) as any), flashKrallen: false });
+    expect(old.digest).toBe(digest);
+    expect(fixture.expected.digest).not.toBe(digest);
+  }, REPLAY_TIMEOUT_MS);
+
   it("does not mutate the yard it was handed", () => {
     const fixture = read<Fixture>(`${FIXTURE_DIR}empty-yard.json`);
     const input = inputOf(fixture);
