@@ -364,3 +364,39 @@ describe("getArea: the neighbour defence bonus (`nb`)", () => {
     expect(cellAt(body, 10, 9).nb).toBe(1);
   });
 });
+
+// The viewer's own cells' armies (`m`): one query for the zone, not one per
+// own cell (map-lag fix, 25 Nov 2026). `userCell` reads `ctx.state.ownMonsters`.
+describe("getArea: own cells' armies", () => {
+  test("reads every own cell's army in one query, and no one else's", async () => {
+    const p = viewer(1, { flinger: 2, homebase: ["1", "1"], basesaveid: 100 }); // reach 6
+    const yardRow = (basesaveid: number, type: string, userid: number): Row => ({
+      basesaveid,
+      type,
+      userid,
+      savetime: Math.floor(Date.now() / 1000),
+      monsters: { housed: { C1: basesaveid } },
+      buildingdata: {},
+      buildinghealthdata: {},
+    });
+    tables.set(Save, [yardRow(100, "main", 1), yardRow(101, "outpost", 1), yardRow(102, "outpost", 1), yardRow(300, "main", 3)]);
+    tables.set(User, [ownerRow(3, "neighbour")]);
+    tables.set(WorldMapCell, [
+      cellRow("home-1", 1, 1, 1, { save: { basesaveid: 100 } }),
+      cellRow("out-1", 1, 3, 2, { base_type: 3, save: { basesaveid: 101 } }),
+      cellRow("out-2", 1, 4, 4, { base_type: 3, save: { basesaveid: 102 } }),
+      cellRow("home-3", 3, 2, 3, { save: { basesaveid: 300 } }),
+    ]);
+
+    const ctx = await runCtx(p, { x: 0, y: 0 });
+
+    // (The outposts' worker read, `outpostWorkerSaves`, asks for the outposts by save id too.)
+    const armyReads = findCalls.filter(
+      ({ entity, where }) => entity === Save && JSON.stringify(where) === JSON.stringify({ basesaveid: { $in: [100, 101, 102] } }),
+    );
+    expect(armyReads).toHaveLength(1);
+    expect(findCalls.filter(({ where }) => JSON.stringify(where).includes("300"))).toEqual([]);
+    const ownMonsters = ctx.state.ownMonsters as Map<number, Row>;
+    expect([...ownMonsters.keys()].sort()).toEqual([100, 101, 102]);
+  });
+});

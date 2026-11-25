@@ -180,12 +180,18 @@ map. **[suggested]** (fact)
   sources near it costs microseconds.
 - Cache in Redis, per player: `sight:<uid>` = own sources + revealed attacker cells + `sv`; and per
   alliance: `sight:ally:<allianceId>` = members' own sources. TTL 30 seconds, and never past the end
-  of a running Declare War.
+  of a running Declare War. Since 25 Nov 2026 (map-lag fix) the alliance key lives 5 minutes
+  instead, because every change to it already drops it (below), and no longer than the moment the
+  first member's Flinger upgrade runs out on its clock (no write announces that); a rebuild that
+  overlapped a drop is kept 30 seconds only. The own key stays at 30 seconds: a past attacker
+  taking, losing or moving a base drops nothing, so it rides on that TTL.
 - Clear the cache at the moments the player would notice: P's flinger level changes
   (`derivedLevels.ts` on save/catch-up), P wins or loses an outpost or moves (takeover, relocate,
   leave/join world), P joins or leaves an alliance (`membership.ts`; also clears that alliance's
-  key), Declare War starts, a new attack log names P as defender. Changes on an ally ride on the
-  30-second TTL.
+  key), Declare War starts, a new attack log names P as defender. An ally's own changes drop the
+  alliance key the same way (`invalidateSight` drops the mover's alliance key too).
+- `getarea` tests only the circles and cells that can reach the zone (`zoneVisibility.ts`): one
+  pass over the sight, then the shared rule per cell, the same answer as testing the whole sight.
 - Building a cold entry: one query for P's save, one for outpost flinger levels, one for alliance
   members' saves on the same world, one `DISTINCT attacker_userid` on `attack_logs` (indexed), one
   `world_map_cell` lookup for those attackers' bases.
