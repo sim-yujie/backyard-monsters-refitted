@@ -79,8 +79,7 @@ import { BORDER_RIM_COLOUR, PINNED_CENTRE_COLOUR, RELATION_LOOK, TILE_RIM_ALPHA 
  * cells in front of it, and at a chunk's edge those belong to the next chunk.
  */
 
-/** The tile map's group outlines (map pin clustering zoomed out): over every tile, in world pixels. */
-const GROUP_OUTLINE_Z = 1e9;
+/** The tile map's group outlines (map pin clustering zoomed out), world pixels. */
 const GROUP_RIM_WIDTH = 7;
 const GROUP_LINE_WIDTH = 3.5;
 /** Scratch for `writeCellCorners`. */
@@ -414,9 +413,10 @@ export class MapChunk {
     const sides = groupSidesOf(col, row, mapRoomGrid.shape, (c, r) => borderRelationOf(store.getCell(c, r), viewer));
     if (sides === 0) return;
     if (!this.groupOutlines) {
+      // Over the ground, under the camps and players (the tile map is flat in Classic; on a tilted
+      // tile map the chunk's layers stand upright, so the outlines are not shown there).
       this.groupOutlines = new Graphics();
-      this.groupOutlines.zIndex = GROUP_OUTLINE_Z;
-      this.ground.addChild(this.groupOutlines);
+      this.container.addChildAt(this.groupOutlines, 0);
     }
     const corners = mapRoomGrid.writeCellCorners(col, row, CORNERS);
     const lift = centre.y - mapRoomGrid.cellToPixel(col, row).y;
@@ -449,7 +449,7 @@ export class MapChunk {
       const left = (quiet !== undefined && quiet[this.borderCells[i]!] === 1) || (group && this.borderGroupable[i]!);
       this.borderSprites[i]!.visible = this.shown && !left;
     }
-    if (this.groupOutlines) this.groupOutlines.visible = this.shown && group;
+    if (this.groupOutlines) this.groupOutlines.visible = this.shown && group && !this.pins.tilted;
   }
 
   /** Applies the clustering's filter to the markers and the border sprites; cheap while unchanged. */
