@@ -255,9 +255,10 @@ export class MapRenderer {
     this.root.addChild(
       this.raster.sprite,
       this.ground,
+      // Under the chunks, so the tilt's marker swap (`setMarkerProjector`) puts everything back in order.
+      this.rings.graphics,
       this.world,
       this.range.container,
-      this.rings.graphics,
       this.worldTop,
       this.live.overlay,
       this.highlight,

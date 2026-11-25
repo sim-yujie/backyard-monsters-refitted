@@ -462,6 +462,9 @@ export class CellPanel {
     this.liveBar.hidden = true;
     this.element.classList.remove("mr2-cell--held");
     if (this.held) {
+      // Exactly Attack's height in either look, so nothing below it moves.
+      const height = this.attackButton.hidden ? 0 : this.attackButton.offsetHeight;
+      if (height > 0) this.liveBar.style.height = `${height}px`;
       this.attackButton.hidden = true;
       this.openButton.hidden = true;
       this.attackNote.hidden = true;
