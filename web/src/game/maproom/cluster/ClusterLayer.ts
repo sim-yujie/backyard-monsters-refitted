@@ -179,6 +179,11 @@ export class ClusterLayer {
     const now = performance.now();
 
     filter.setCampsShown(cam.zoom >= CAMPS_SHOWN_FROM);
+    // The tapped plaque's cells stay unpacked until the player zooms back out.
+    if (this.unpacked && cam.zoom < this.unpackedZoom * 0.85) {
+      this.unpacked = null;
+      this.groupingDirty = true;
+    }
     if (this.pulseUntil !== 0) {
       if (now > this.pulseUntil) this.endPulse();
       else this.drawPulse();
@@ -212,7 +217,8 @@ export class ClusterLayer {
       const started = performance.now();
       this.step = step;
       this.groupingDirty = false;
-      this.grouping = groupCells(this.cells, step);
+      const unpacked = this.unpacked;
+      this.grouping = groupCells(unpacked ? this.cells.filter((c) => !unpacked.has(c.key)) : this.cells, step);
       filter.setHidden(this.grouping.hidden);
       this.deps.quietBorders(HIDE_BORDERS_UNDER_PLAQUES ? this.grouping.underPlaques : []);
       this.stats.groupMs = performance.now() - started;
@@ -257,6 +263,9 @@ export class ClusterLayer {
   }
 
   private selected = -1;
+  /** The cells of the plaque tapped last, shown as markers until the player zooms back out. */
+  private unpacked: Set<number> | null = null;
+  private unpackedZoom = 0;
 
   /** The cell whose panel is open (`cellKey`), or -1: its crest gets a ring (neon r1). */
   setSelected(key: number): void {
@@ -285,6 +294,13 @@ export class ClusterLayer {
       return true;
     }
     this.deps.zoomToFit(hit, this.insets());
+    // On a phone the fit can stay below the plaque zoom: the tapped plaque's own cells unpack, so
+    // its outposts show (neon r2/r3: they had merged into new small plaques over the glow).
+    const keys = new Set<number>(hit.token.cells);
+    for (const more of hit.extra) for (const key of more.cells) keys.add(key);
+    this.unpacked = keys;
+    this.unpackedZoom = this.deps.camera().zoom;
+    this.groupingDirty = true;
     this.pulse(hit);
     return true;
   }
