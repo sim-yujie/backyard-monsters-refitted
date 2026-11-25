@@ -91,12 +91,12 @@ const refusal = (run: () => unknown): [number, unknown, Record<string, unknown>]
 const hccQueue = (plan: { slices?: { monsters?: JsonObject } }) => plan.slices?.monsters?.hcc as unknown[];
 
 describe("the HCC's cost ladder (desk b9-num-hcc)", () => {
-  test("main yard: L1 as Flash's, L2 8M x3 / 2 days / Town Hall 6 + four level 3 Hatcheries, L3 16M x3 / 4 days / Town Hall 8", () => {
+  test("main yard: L1 as Flash's, L2 25M x3 / 2 days / Town Hall 6 + four level 3 Hatcheries, L3 75M x3 / 4 days / Town Hall 8", () => {
     const steps = costOf(HCC, "main")!.costs;
     expect(steps.length).toBe(3);
     expect(steps[0]).toEqual([4_000_000, 4_000_000, 4_000_000, 0, 90_000, [[14, 1, 3], [13, 3, 2]]]);
-    expect(steps[1]).toEqual([8_000_000, 8_000_000, 8_000_000, 0, 172_800, [[14, 1, 6], [13, 4, 3]]]);
-    expect(steps[2]).toEqual([16_000_000, 16_000_000, 16_000_000, 0, 345_600, [[14, 1, 8]]]);
+    expect(steps[1]).toEqual([25_000_000, 25_000_000, 25_000_000, 0, 172_800, [[14, 1, 6], [13, 4, 3]]]);
+    expect(steps[2]).toEqual([75_000_000, 75_000_000, 75_000_000, 0, 345_600, [[14, 1, 8]]]);
     // One HCC from Town Hall 3.
     expect(costOf(HCC, "main")!.quantity[3]).toBe(1);
     expect(costOf(HCC, "main")!.quantity[2]).toBe(0);
@@ -110,7 +110,7 @@ describe("the HCC's cost ladder (desk b9-num-hcc)", () => {
   });
 
   test("the upgrade route's rule: L2 needs Town Hall 6 and four level 3 Hatcheries, L3 Town Hall 8", () => {
-    const rich = { resources: { r1: 50_000_000, r2: 50_000_000, r3: 50_000_000, r4: 0 } };
+    const rich = { resources: { r1: 100_000_000, r2: 100_000_000, r3: 100_000_000, r4: 0 } };
     const four = {
       "7": { ...at(HATCHERY, 3), id: 7 },
       "8": { ...at(HATCHERY, 3), id: 8 },
