@@ -62,37 +62,6 @@
   border-top: 1px solid var(--colour-border);
 }
 
-/* How it fights: the learned brain's tendencies (issue #219), the heading on their line. */
-.champion__brain-row {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: var(--space-1) var(--space-3);
-}
-
-.champion__tendencies {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--space-1) var(--space-2);
-  margin: 0;
-  padding: 0;
-  list-style: none;
-}
-
-.champion__tendency {
-  padding: var(--space-1) var(--space-2);
-  border: 1px solid var(--colour-border);
-  border-radius: var(--radius-md);
-  background: var(--colour-surface-base);
-  font-size: var(--text-sm);
-  font-weight: 700;
-}
-
-.champion__tendency--learning {
-  font-weight: 400;
-  color: var(--colour-text-muted);
-}
-
 /*
  * How a champion with habits fights (champion modes round 2): Mode tabs, the
  * Mode's instincts ("always") beside its habits (0-3 pips), Forget under them.
