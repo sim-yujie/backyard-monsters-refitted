@@ -2,7 +2,7 @@ import type z from "zod";
 import type { Save } from "../../database/models/save.model.js";
 import type { User } from "../../database/models/user.model.js";
 import { postgres } from "../../server.js";
-import { invalidateSightIfFlingerChanged } from "../../services/maproom/sight/sightService.js";
+import { invalidateSightIfFlingerClockChanged } from "../../services/maproom/sight/sightService.js";
 import { isAttackActive } from "../../services/base/isAttackActive.js";
 import { settleKrallenHunts } from "../../services/events/krallenPenalty.js";
 import { sqlProgressStore, type KrallenPenaltyNotice } from "../../services/events/progressStore.js";
@@ -40,7 +40,7 @@ export const yardRoute =
     // `runYardAction` stays drivable without a server (its own file comment),
     // so the actual Redis invalidation happens here instead (issue #329,
     // #330 WP1).
-    await invalidateSightIfFlingerChanged(user, answer.flingerBefore, answer.flingerAfter);
+    await invalidateSightIfFlingerClockChanged(user, answer.flingerBefore, answer.flingerAfter);
 
     if (answer.outpost !== undefined) {
       const completed = (answer.body["completed"] ?? []) as CompletedJob[];

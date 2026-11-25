@@ -8,7 +8,7 @@ import { getCurrentDateTime } from "../../utils/getCurrentDateTime.js";
  * `yardRoute`'s own glue, over an in-memory stand-in for the row
  * (`yardAction.test.ts` drives `runYardAction` itself without a server; this
  * file is the thin Koa binding around it, so it is the one that actually
- * calls Redis — issue #329, #330 WP1's `invalidateSightIfFlingerChanged`).
+ * calls Redis — issue #329, #330 WP1's `invalidateSightIfFlingerClockChanged`).
  */
 
 type Row = Record<string, unknown>;
@@ -17,7 +17,7 @@ const BASESAVEID = 7;
 const USERID = 2503;
 
 let row: Row;
-/** Keys `invalidateSightIfFlingerChanged` dropped. */
+/** Keys `invalidateSightIfFlingerClockChanged` dropped. */
 const redisDel = mock(async (_key: string) => 0);
 
 const txEm = {
@@ -73,9 +73,9 @@ const rowOf = (overrides: Row = {}): Row => ({
   ...overrides,
 });
 
-const run = async (action: ReturnType<typeof defineYardAction>, body: Row = {}) => {
+const run = async (action: ReturnType<typeof defineYardAction>, body: Row = {}, user: Row = {}) => {
   const ctx = {
-    authUser: { userid: USERID, shiny_locked: false, save: { basesaveid: BASESAVEID } },
+    authUser: { userid: USERID, shiny_locked: false, save: { basesaveid: BASESAVEID }, ...user },
     request: { body },
   } as unknown as Context;
   await yardRoute(action)(ctx, async () => {});
@@ -101,6 +101,33 @@ describe("sight cache invalidation (#329, #330 WP1)", () => {
 
     expect(answer.status).toBe(200);
     expect(redisDel).toHaveBeenCalledWith(`sight:${USERID}`);
+  });
+
+  test("an action that moves a Flinger upgrade's finish drops own and alliance sight", async () => {
+    row = rowOf({ flinger: 3, buildingdata: { "9": { id: 9, t: 5, x: 0, y: 0, l: 3, cU: 5000, cL: 6000 } } });
+    // A speed-up: same level, the countdown cut to 60 s.
+    const speedUp = defineYardAction({
+      schema: z.object({}),
+      run: () => ({
+        report: { ok: true },
+        slices: { buildingdata: { "9": { id: 9, t: 5, x: 0, y: 0, l: 3, cU: 60, cL: 6000 } } },
+      }),
+    });
+
+    const answer = await run(speedUp, {}, { alliance_id: 31 });
+
+    expect(answer.status).toBe(200);
+    expect(redisDel).toHaveBeenCalledWith(`sight:${USERID}`);
+    expect(redisDel).toHaveBeenCalledWith("sight:ally:31", "sight:ally:31:build");
+  });
+
+  test("an action beside a running Flinger upgrade that leaves it alone does not invalidate", async () => {
+    row = rowOf({ flinger: 3, buildingdata: { "9": { id: 9, t: 5, x: 0, y: 0, l: 3, cU: 5000, cL: 6000 } } });
+    const noop = defineYardAction({ schema: z.object({}), run: () => ({ report: { ok: true } }) });
+
+    await run(noop);
+
+    expect(redisDel).not.toHaveBeenCalled();
   });
 
   test("an action that never touches the Flinger does not invalidate", async () => {
