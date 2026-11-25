@@ -5,7 +5,8 @@ import { timeArt } from "../openMarks";
 import type { CellRange } from "../zones";
 import { cellCentre, paintedCellShape, textureAspect, type CellShape } from "./cellShape";
 import { CLOUD_FRAGMENT, CLOUD_VERTEX } from "./cloudShader";
-import { cloudTime, fogDistances, fogInRange } from "./clouds";
+import { flushRegion } from "../regionUpload";
+import { cloudTime, fogDistances, fogDistancesIn, fogInRange } from "./clouds";
 import type { GroundData } from "./GroundData";
 
 /** Codex's seamless cloud tops (`web/tools/mr2-cloud-kit`), 1024 / 512 / 256 px by Quality. */
@@ -108,20 +109,35 @@ export class CloudLayer {
     return (this.shader.resources.cloudUniforms as { uniforms: CloudUniforms }).uniforms;
   }
 
-  /** The ground's data changed (a zone arrived, or the sight changed): the fog is measured again at the next `flush`. */
+  /**
+   * The whole fog is measured again at the next `flush` (the sight changed). A zone arriving needs
+   * no call: the ground's data notes the cells that turned to or from fog (`GroundData.fogChanges`).
+   */
   invalidate(): void {
     this.stale = true;
   }
 
   /**
-   * Measures each cell's distance into the fog again when the ground's data changed, and uploads it.
-   * Returns whether it did, so a tilted view knows to redraw.
+   * Measures each cell's distance into the fog again where the ground's fog changed (the whole
+   * world after `invalidate`, else only round the changed cells, `fogDistancesIn`), and uploads
+   * what changed. Returns whether anything did, so a tilted view knows to redraw.
    */
   flush(): boolean {
-    if (!this.stale) return false;
-    this.stale = false;
-    fogDistances(this.shape, this.data, this.distances);
-    this.distanceSource.update();
+    const changes = this.data.fogChanges;
+    if (!this.stale && changes.empty) return false;
+    const box = changes.take();
+    // A change over much of the world (many zones at once) is walked whole: cheaper than a box
+    // two fog caps wider than it.
+    const wide = box !== null && (box.x1 - box.x0 + 1) * (box.y1 - box.y0 + 1) > (this.data.width * this.data.height) / 16;
+    if (this.stale || box === null || wide) {
+      this.stale = false;
+      fogDistances(this.shape, this.data, this.distances);
+      flushRegion(this.distanceSource, null);
+      return true;
+    }
+    const changed = fogDistancesIn(this.shape, this.data, this.distances, box);
+    if (changed === null) return false;
+    flushRegion(this.distanceSource, changed);
     return true;
   }
 

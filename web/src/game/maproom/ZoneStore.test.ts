@@ -341,6 +341,57 @@ describe("ZoneStore", () => {
     });
   });
 
+  it("announces a refetch that changed nothing drawn as refreshed, but still stores it (map lag, 25 Nov 2026)", async () => {
+    let army = 1;
+    // The viewer's own outpost: its live army (`m`) and resources (`r`) differ on every answer.
+    const fetcher: AreaFetcher = (x, y) => {
+      const response = areaResponse(x, y);
+      (response.data[String(x + 1)] as Record<string, unknown>)[String(y + 1)] = {
+        uid: 7, b: 3, i: 120, mine: 1, m: { housed: { C1: army } }, r: { r1: army * 10 },
+      };
+      return Promise.resolve(response);
+    };
+    const onZone = vi.fn();
+    const onZoneRefreshed = vi.fn();
+    const store = new ZoneStore({ fetcher, now: time.now, onZone, onZoneRefreshed });
+    store.ensureVisible({ minCol: 710, maxCol: 712, minRow: 345, maxRow: 347 });
+    await drain(store);
+    expect(onZone).toHaveBeenCalledTimes(1);
+    expect(onZone.mock.calls[0]?.[1]).toBeUndefined();
+
+    army = 2;
+    time.advanceSeconds(3600);
+    store.refreshStale(60);
+    await drain(store);
+    expect(onZone).toHaveBeenCalledTimes(1);
+    expect(onZoneRefreshed).toHaveBeenCalledTimes(1);
+    expect(store.getCell(711, 341)).toMatchObject({ m: { housed: { C1: 2 } }, r: { r1: 20 } });
+    expect(store.getZone(zoneFor(711, 341).id)?.fetchedAt).toBe(time.now());
+  });
+
+  it("announces a refetch whose drawn cells changed, with the record it replaces", async () => {
+    let height = 120;
+    const fetcher: AreaFetcher = (x, y) => {
+      const response = areaResponse(x, y);
+      (response.data[String(x)] as Record<string, unknown>)[String(y)] = { i: height };
+      return Promise.resolve(response);
+    };
+    const onZone = vi.fn();
+    const onZoneRefreshed = vi.fn();
+    const store = new ZoneStore({ fetcher, now: time.now, onZone, onZoneRefreshed });
+    store.ensureVisible({ minCol: 710, maxCol: 712, minRow: 345, maxRow: 347 });
+    await drain(store);
+    const first = onZone.mock.calls[0]?.[0];
+
+    height = 150;
+    time.advanceSeconds(3600);
+    store.refreshStale(60);
+    await drain(store);
+    expect(onZoneRefreshed).not.toHaveBeenCalled();
+    expect(onZone).toHaveBeenCalledTimes(2);
+    expect(onZone.mock.calls[1]?.[1]).toBe(first);
+  });
+
   it("never queues a zone skipZone refuses (issue #331: zones outside sight go unrequested)", async () => {
     const fetcher = okFetcher();
     const fogged = zoneFor(720, 345).id;

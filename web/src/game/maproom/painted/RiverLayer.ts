@@ -53,8 +53,20 @@ export class RiverLayer {
   /** Pictures replaced by a bigger or smaller one, destroyed once the shader holds the new one. */
   private retired: BufferImageSource[] = [];
 
-  /** A zone arrived (new rivers or heights): rebuilt on the next `update`. */
-  invalidate(): void {
+  /**
+   * A zone arrived (new rivers or heights): rebuilt on the next `update`. With `area` (the cells
+   * that changed), only when the built picture reaches them: a picture built elsewhere is rebuilt
+   * from the store's cells anyway once the view reaches past it.
+   */
+  invalidate(area?: CellRange): void {
+    const built = this.built;
+    if (
+      area &&
+      built &&
+      (area.maxCol < built.minCol || area.minCol > built.maxCol || area.maxRow < built.minRow || area.minRow > built.maxRow)
+    ) {
+      return;
+    }
     this.stale = true;
   }
 

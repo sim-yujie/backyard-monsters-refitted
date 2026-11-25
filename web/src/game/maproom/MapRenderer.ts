@@ -1,5 +1,5 @@
 import { Container, Graphics, type Renderer } from "pixi.js";
-import { MAX_TEXT_OBJECTS, WATER_MAX_HEIGHT } from "@/config";
+import { AREA_ZONE_SIZE, MAX_TEXT_OBJECTS, WATER_MAX_HEIGHT } from "@/config";
 import { mapRoomGrid, type OffsetCell } from "@/game/HexGrid";
 import { HOVER_COLOUR, KitFilter, SELECT_COLOUR, type CellFriend, type MapViewerContext } from "./cellVisuals";
 import {
@@ -38,6 +38,7 @@ import { FOG_COLOUR, setFogUnderCloud } from "./cellVisuals";
 import { isFogCell, type PlayerCell } from "@/api/types";
 import type { ZoneRecord, ZoneStore } from "./ZoneStore";
 import type { CellRange } from "./zones";
+import { setRegionRenderer } from "./regionUpload";
 import type { GroundData } from "./painted/GroundData";
 import type * as PaintedLookNamespace from "./painted/paintedLook";
 import {
@@ -418,6 +419,7 @@ export class MapRenderer {
     this.atlas?.destroy();
     this.atlas = new MapAtlas(renderer);
     this.renderer = renderer;
+    setRegionRenderer(renderer);
     this.webGL2 = (renderer as { context?: { webGLVersion?: number } }).context?.webGLVersion === 2;
     this.gl = this.webGL2 ? ((renderer as { gl?: WebGL2RenderingContext }).gl ?? null) : null;
     this.live.attach(renderer);
@@ -430,20 +432,54 @@ export class MapRenderer {
     this.lastRange = null;
   }
 
-  /** Feeds a freshly loaded zone into the raster and invalidates its chunk. */
-  applyZone(zone: ZoneRecord): void {
+  /**
+   * Feeds a freshly loaded zone into the raster and invalidates its chunk. `previous` is the
+   * record it replaced, if the zone was already loaded. The world-size layers note which of their
+   * texels changed and upload only those (`regionUpload.ts`); the clouds measure the fog again
+   * only where a cell turned to or from fog (`GroundData.fogChanges`).
+   */
+  applyZone(zone: ZoneRecord, previous?: ZoneRecord): void {
     if (this.destroyed) return;
     this.raster.applyZone(zone);
     this.painted?.applyZone(zone);
     this.classicFog?.applyZone(zone);
-    this.clouds?.invalidate();
     this.borders?.applyZone(zone);
     if (this.chunks.has(zone.id)) this.dirty.add(zone.id);
     this.live.zoneArrived(zone.id);
-    this.painted?.invalidateRivers();
+    // The rivers' picture (tens of ms to rebuild) only when this zone can change a river: one
+    // runs in it, or along its edge.
+    if (this.painted && this.touchesRivers(zone, previous)) this.painted.invalidateRivers(coverAround(zone, 2));
     // The range and the highlight stand on the cells, which now have their heights.
     this.range.invalidate();
     this.drawHighlight();
+  }
+
+  /**
+   * A zone was refetched and nothing the map draws changed (`ZoneStore.onZoneRefreshed`). Only a
+   * truce reads the clock (`MapChunk.build`), so a chunk holding one is rebuilt as before, on the
+   * minute's refresh.
+   */
+  refreshZone(zone: ZoneRecord): void {
+    if (this.destroyed || !this.chunks.has(zone.id)) return;
+    if (hasTruce(zone)) this.dirty.add(zone.id);
+  }
+
+  /**
+   * Whether a zone's arrival can change the rivers' picture (`riverPaths.ts`): a river path runs
+   * along the sides of cells marked `rv` and reads only the three cells round each of its
+   * corners. So a zone matters only when one of its cells, before or now, or one of the cells just
+   * round its edge carries a river.
+   */
+  private touchesRivers(zone: ZoneRecord, previous: ZoneRecord | undefined): boolean {
+    if (zoneHasRiver(zone) || (previous !== undefined && zoneHasRiver(previous))) return true;
+    const area = coverAround(zone, 1);
+    for (let col = area.minCol; col <= area.maxCol; col++) {
+      for (let row = area.minRow; row <= area.maxRow; row++) {
+        const inside = col > area.minCol && col < area.maxCol && row > area.minRow && row < area.maxRow;
+        if (!inside && this.riverCells.rvAt(col, row) !== 0) return true;
+      }
+    }
+    return false;
   }
 
   /** How far a cell is drawn from its spot on the grid (`ground.ts`), for picking and outlines. */
@@ -819,6 +855,7 @@ export class MapRenderer {
 
   destroy(): void {
     this.destroyed = true;
+    setRegionRenderer(null);
     this.stopQuality?.();
     this.stopQuality = null;
     this.classicFog = null;
@@ -1010,3 +1047,31 @@ const sameRange = (a: CellRange, b: CellRange | null): boolean =>
   a.maxCol === b.maxCol &&
   a.minRow === b.minRow &&
   a.maxRow === b.maxRow;
+
+/** The cells a zone's answer covers (`x..x+10`, `y..y+10`), widened by `margin` cells. */
+const coverAround = (zone: { originX: number; originY: number }, margin: number): CellRange => ({
+  minCol: zone.originX - margin,
+  maxCol: zone.originX + AREA_ZONE_SIZE + margin,
+  minRow: zone.originY - margin,
+  maxRow: zone.originY + AREA_ZONE_SIZE + margin,
+});
+
+/** Whether any cell of a zone's answer carries a river (`rv`). */
+const zoneHasRiver = (zone: ZoneRecord): boolean => {
+  for (const column of Object.values(zone.data)) {
+    for (const cell of Object.values(column)) {
+      if (!isFogCell(cell) && "rv" in cell && (cell.rv ?? 0) !== 0) return true;
+    }
+  }
+  return false;
+};
+
+/** Whether any cell of a zone's answer has a truce on it (`t`), which a chunk judges by the clock. */
+const hasTruce = (zone: ZoneRecord): boolean => {
+  for (const column of Object.values(zone.data)) {
+    for (const cell of Object.values(column)) {
+      if (!isFogCell(cell) && "t" in cell && typeof cell.t === "number" && cell.t > 0) return true;
+    }
+  }
+  return false;
+};
