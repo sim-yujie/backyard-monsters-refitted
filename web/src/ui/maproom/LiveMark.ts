@@ -153,7 +153,7 @@ export class LiveMark {
     const state = this.state;
     this.element.hidden = state === "hidden";
     this.element.dataset.state = state;
-    const iconOnly = this.option === "B" || this.option === "C" ? isPhoneLayout() : false;
+    const iconOnly = this.option === "B" ? isPhoneLayout() : false;
     this.glyph.innerHTML = state === "back" ? LIVE_SVG : state === "retrying" ? RETRY_SVG : OFF_SVG;
     const words = state === "back" ? "Live" : state === "retrying" ? "Retrying…" : "Not live";
     this.text.textContent = words;
@@ -179,10 +179,11 @@ export class LiveMark {
   }
 }
 
-// Placeholder icons (line art, not the painted set): a signal with a slash, a turning arrow, a full signal.
+// Placeholder icons (line art, not the painted set).
+// neon r1: not a slashed Wi-Fi (players read it as "my Wi-Fi is off"): radio arcs with an amber "!".
 const OFF_SVG =
-  '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M2.5 9a14 14 0 0 1 19 0"/><path d="M6 12.6a9 9 0 0 1 12 0"/><path d="M9.4 16.1a4 4 0 0 1 5.2 0"/><circle cx="12" cy="19.6" r="1.2" fill="currentColor"/><path d="M4 3.5 20 20.5" stroke-width="2.6"/></svg>';
+  '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M5.5 5.5a9 9 0 0 0 0 13"/><path d="M8.6 8.6a4.6 4.6 0 0 0 0 6.8"/><path d="M18.5 5.5a9 9 0 0 1 0 13" opacity=".45"/><path d="M15.4 8.6a4.6 4.6 0 0 1 0 6.8" opacity=".45"/><path d="M12 7.5v5.2" stroke-width="2.8"/><circle cx="12" cy="16.4" r="1.4" fill="currentColor" stroke="none"/></svg>';
 const LIVE_SVG =
-  '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M2.5 9a14 14 0 0 1 19 0"/><path d="M6 12.6a9 9 0 0 1 12 0"/><path d="M9.4 16.1a4 4 0 0 1 5.2 0"/><circle cx="12" cy="19.6" r="1.2" fill="currentColor"/></svg>';
+  '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M5.5 5.5a9 9 0 0 0 0 13"/><path d="M8.6 8.6a4.6 4.6 0 0 0 0 6.8"/><path d="M18.5 5.5a9 9 0 0 1 0 13"/><path d="M15.4 8.6a4.6 4.6 0 0 1 0 6.8"/><circle cx="12" cy="12" r="2.2" fill="currentColor" stroke="none"/></svg>';
 const RETRY_SVG =
   '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M20 12a8 8 0 1 1-2.6-5.9"/><path d="M20 4v5h-5"/></svg>';

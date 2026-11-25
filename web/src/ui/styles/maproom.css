@@ -2012,7 +2012,25 @@
   animation: mr2-live-hl 600ms ease-out both;
 }
 
-:root[data-live-freeze="1"] .mr2-live-hl {
+:root[data-skin="flash"] .mr2-live-hl {
+  animation-name: mr2-live-hl-classic;
+}
+
+@keyframes mr2-live-hl-classic {
+  from {
+    box-shadow: 0 0 0 2px #e08a1e, 0 0 0 6px rgb(224 138 30 / 28%);
+  }
+  to {
+    box-shadow: 0 0 0 2px rgb(224 138 30 / 0%), 0 0 0 6px rgb(224 138 30 / 0%);
+  }
+}
+
+:root[data-skin="flash"][data-live-freeze="1"] .mr2-live-hl {
+  animation: none;
+  box-shadow: 0 0 0 2px #e08a1e, 0 0 0 6px rgb(224 138 30 / 28%);
+}
+
+:root[data-live-freeze="1"]:not([data-skin="flash"]) .mr2-live-hl {
   animation: none;
   box-shadow: 0 0 0 3px rgb(245 184 46 / 95%), 0 0 16px 3px rgb(245 184 46 / 55%);
 }
@@ -2022,20 +2040,7 @@
   transition: background-color 180ms ease-out, color 180ms ease-out, opacity 180ms ease-out;
 }
 
-.mr2-cell .mr2-cell__primary.mr2-cell__primary--blocked:disabled {
-  background: #505860;
-  border-color: #3a4148;
-  color: #cbd3da;
-  opacity: 1;
-  filter: none;
-  text-shadow: none;
-}
-
-:root[data-skin="flash"] .mr2-cell .mr2-cell__primary.mr2-cell__primary--blocked:disabled {
-  background: #b9ad98;
-  border-color: #8f826c;
-  color: #5a4a38;
-}
+/* The skin's own greyed plate (white outlined words) says it; only the words change. */
 
 /* Q2 A (taken) and C: the bar in Attack's slot. */
 .mr2-cell .mr2-live-bar {
@@ -2088,11 +2093,53 @@
   color: #f5c56b;
 }
 
-/* A, while the old cell is held: its other buttons wait for the tap too. */
+/* A, while the old cell is held: the old cell and its buttons fade and wait for the tap. */
+.mr2-cell--held :is(.mr2-cell__picture, .mr2-cell__titles),
 .mr2-cell--held .mr2-cell__actions > :not(.mr2-live-bar),
 .mr2-cell--held .mr2-cell__repeat-body > :not(.mr2-cell__actions, .mr2-cell__chips) {
-  opacity: 0.55;
+  opacity: 0.45;
+  filter: grayscale(0.6);
   pointer-events: none;
+}
+
+/* A's "Taken by X / Tap to update": a live button, the height of Attack (neon r1). */
+.mr2-cell .mr2-live-bar.mr2-live-bar--taken {
+  height: 52px;
+  min-height: 52px;
+  padding: 4px 14px;
+  border: 2px solid #5a3a0c;
+  background: linear-gradient(#c68d28, #8f5e16);
+  color: #fff6e0;
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 30%), 0 2px 0 rgb(0 0 0 / 35%);
+}
+
+.mr2-live-bar--taken .mr2-live-bar__text {
+  font-size: 15px;
+}
+
+.mr2-live-bar--taken .mr2-live-bar__sub {
+  font-size: 12px;
+  color: #ffe6a8;
+}
+
+.mr2-live-bar--taken .mr2-live-bar__icon {
+  color: #fff6e0;
+}
+
+.mr2-live-bar__refresh {
+  display: inline-flex;
+  flex: none;
+  color: #fff6e0;
+}
+
+:root[data-skin="flash"] .mr2-cell .mr2-live-bar.mr2-live-bar--taken {
+  border-color: #6b4310;
+  background: linear-gradient(#f5b82e, #cc8410);
+  color: #3a2108;
+}
+
+:root[data-skin="flash"] .mr2-live-bar--taken :is(.mr2-live-bar__icon, .mr2-live-bar__sub, .mr2-live-bar__refresh) {
+  color: #3a2108;
 }
 
 .mr2-live-bar--prompt .mr2-live-bar__sub {
@@ -2213,6 +2260,7 @@
 }
 
 .mr2-live-mark {
+  position: relative;
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -2232,6 +2280,13 @@
   cursor: pointer;
   animation: mr2-live-mark-in 220ms ease-out;
   pointer-events: auto;
+}
+
+/* A 44 px tap area round the 36 px chip on touch screens. */
+.mr2-live-mark::before {
+  content: "";
+  position: absolute;
+  inset: -4px -2px;
 }
 
 .mr2-live-mark[hidden] {
@@ -2254,17 +2309,22 @@
 }
 
 .mr2-live-mark[data-state="back"] {
-  border-color: #3cd070;
+  border-color: #4ce082;
 }
 
 .mr2-live-mark[data-state="back"] .mr2-live-mark__icon {
-  color: #3cd070;
+  color: #4ce082;
 }
 
 :root[data-skin="flash"] .mr2-live-mark {
   border-color: #c89a54;
-  background: rgb(75 43 22 / 96%);
+  background: linear-gradient(rgb(110 66 34 / 97%), rgb(75 43 22 / 97%));
   color: #fff5df;
+  box-shadow: inset 0 1px 0 rgb(255 230 180 / 35%), 0 2px 6px rgb(0 0 0 / 35%);
+}
+
+:root[data-skin="flash"] .mr2-live-mark[data-state="back"] {
+  border-color: #7ec882;
 }
 
 /* A: centred under the top bar (on a phone, under the tool row). */
@@ -2272,8 +2332,15 @@
   align-self: center;
 }
 
+/* Upright phone: under the tool row. A phone on its side: up in the band beside Find. */
 .mr2-live-mark[data-option="A"][data-phone="1"] {
   margin-top: 48px;
+}
+
+@media (max-height: 500px) {
+  .mr2-live-mark[data-option="A"][data-phone="1"] {
+    margin-top: -4px;
+  }
 }
 
 /* B: in the top bar's gap beside Map/Yard; an icon square in the phone's tool row. */
@@ -2301,8 +2368,9 @@
 .mr2-live-mark[data-option="C"][data-phone="1"] {
   top: 128px;
   left: 6px;
-  width: 44px;
-  height: 44px;
-  padding: 0;
-  border-radius: 22px;
+}
+
+.mr2-live-bar--prompt .mr2-live-bar__text {
+  white-space: normal;
+  font-size: 15px;
 }

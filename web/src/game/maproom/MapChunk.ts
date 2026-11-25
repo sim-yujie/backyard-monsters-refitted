@@ -822,14 +822,26 @@ const destroyChild = (child: Container): void => child.destroy();
 
 /** PROTOTYPE (proto/live-map-ux): an ember disc with two crossed blades, drawn (placeholder, not painted art). */
 const underAttackBadge = (radius: number): Graphics => {
+  // A dark iron shield with an ember rim and two steel swords crossed (neon r1: never a red disc with an X,
+  // which read as a close button).
   const g = new Graphics();
-  g.circle(0, 0, radius + 1.5).fill({ color: 0x2a0f05 });
-  g.circle(0, 0, radius).fill({ color: 0xe85426 });
-  const r = radius * 0.62;
+  const R = radius;
+  const shield = [-R, -R * 0.95, R, -R * 0.95, R, R * 0.15, 0, R * 1.2, -R, R * 0.15];
+  g.poly(shield.map((v) => v * 1.18)).fill({ color: 0x120a06 });
+  g.poly(shield).fill({ color: 0x2b1c16 }).stroke({ width: R * 0.16, color: 0xff8a2b });
+  const blade = R * 0.13;
   for (const sign of [1, -1]) {
-    g.moveTo(-r * sign, -r).lineTo(r * sign, r).stroke({ width: radius * 0.22, color: 0xffffff, cap: "round" });
+    const tipX = -0.62 * R * sign;
+    const tipY = -0.62 * R;
+    const hiltX = 0.42 * R * sign;
+    const hiltY = 0.42 * R;
+    g.moveTo(tipX, tipY).lineTo(hiltX, hiltY).stroke({ width: blade, color: 0xe6eef5, cap: "round" });
+    // crossguard, at right angles to the blade
+    const gx = 0.28 * R * sign;
+    const gy = 0.28 * R;
+    const off = 0.2 * R;
+    g.moveTo(gx - off, gy + off * sign).lineTo(gx + off, gy - off * sign).stroke({ width: blade * 0.9, color: 0xf2b640, cap: "round" });
+    g.circle(0.58 * R * sign, 0.58 * R, blade * 0.8).fill({ color: 0xf2b640 });
   }
-  g.moveTo(-r * 0.75, r * 0.35).lineTo(-r * 0.35, r * 0.75).stroke({ width: radius * 0.18, color: 0xffffff, cap: "round" });
-  g.moveTo(r * 0.75, r * 0.35).lineTo(r * 0.35, r * 0.75).stroke({ width: radius * 0.18, color: 0xffffff, cap: "round" });
   return g;
 };

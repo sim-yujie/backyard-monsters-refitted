@@ -292,7 +292,7 @@ export class CellPanel {
     this.liveBar.hidden = true;
     const liveBarWords = el("span", "mr2-live-bar__words");
     liveBarWords.append(this.liveBarText, this.liveBarSub);
-    this.liveBar.append(icon("pin", 20, "map-icon mr2-live-bar__icon"), liveBarWords);
+    this.liveBar.append(flagIcon(), liveBarWords, refreshIcon());
     this.liveBar.addEventListener("click", () => {
       this.held = null;
       this.lastLive = { kind: "minor", at: performance.now() };
@@ -509,7 +509,7 @@ export class CellPanel {
     if (recent && option !== "C") {
       const target =
         recent === "attack" || recent === "attackEnd"
-          ? this.chips.querySelector(".mr2-chip--attacked") ?? this.attackButton
+          ? this.attackButton
           : recent === "shield" || recent === "shieldEnd"
             ? this.chips.querySelector(".mr2-chip--shield") ?? this.attackButton
             : this.title.parentElement;
@@ -523,6 +523,8 @@ export class CellPanel {
         this.openButton.hidden = true;
         this.liveBar.hidden = false;
         this.liveBar.className = "btn mr2-live-bar mr2-live-bar--taken";
+        this.liveBar.replaceChildren(flagIcon(), this.liveBar.querySelector(".mr2-live-bar__words")!, refreshIcon());
+        this.liveBar.scrollIntoView({ block: "nearest" });
         this.liveBarText.textContent = `Taken by ${this.held.name}`;
         this.liveBarSub.textContent = "Tap to update";
         this.liveBar.querySelector(".mr2-live-bar__words")?.append(this.liveBarSub);
@@ -575,12 +577,18 @@ export class CellPanel {
     // C: the panel is veiled and frozen until Update.
     if (this.held) {
       this.element.classList.add("mr2-cell--veiled");
-      this.attackButton.disabled = true;
+      // The bar takes Attack's slot (neon r1: inserting it above pushed every button down).
+      this.attackButton.hidden = true;
+      this.openButton.hidden = true;
       this.liveBar.hidden = false;
       this.liveBar.className = `btn mr2-live-bar mr2-live-bar--prompt mr2-live-bar--${this.held.kind}`;
-      this.liveBar.firstElementChild?.replaceWith(
-        icon(this.held.kind === "taken" ? "pin" : this.held.kind === "attack" ? "attack" : "shield", 20, "map-icon mr2-live-bar__icon"),
+      this.liveBar.replaceChildren(
+        this.held.kind === "taken"
+          ? flagIcon()
+          : icon(this.held.kind === "attack" ? "attack" : "shield", 20, "map-icon mr2-live-bar__icon"),
+        this.liveBar.querySelector(".mr2-live-bar__words")!,
       );
+      this.liveBar.scrollIntoView({ block: "nearest" });
       this.liveBarText.textContent =
         this.held.kind === "taken" ? `Taken by ${this.held.name}` : this.held.kind === "attack" ? "Under attack" : "Shield up";
       this.liveBarSub.textContent = "Update";
@@ -721,12 +729,6 @@ export class CellPanel {
     if (outpost) this.addGroundChip(payload.i);
     // The land feature (`landFeatureRow.ts`): an outpost's, never a main yard's.
     if (outpost) this.addLandChip(payload.lf);
-    if (payload.atk === 1) {
-      // PROTOTYPE (proto/live-map-ux): someone is attacking it right now.
-      this.addChip("attack", "Under attack", "danger", "Someone is attacking this yard right now.").parentElement?.classList.add(
-        "mr2-chip--attacked",
-      );
-    }
     if (payload.p === 1) {
       // The end, when the server sends it (#187); a bare "Protected" otherwise.
       if (payload.pe !== undefined && payload.pe > Date.now() / 1000) {
@@ -987,3 +989,15 @@ export const liveChangeOf = (before: MapCell, after: MapCell): LiveChangeKind | 
   if ("dm" in before && "dm" in after && (before.dm !== after.dm || before.l !== after.l)) return "minor";
   return null;
 };
+
+/** PROTOTYPE placeholder icons (line art; the painted set has no flag or refresh yet). */
+const svgIcon = (className: string, body: string): HTMLElement => {
+  const span = el("span", className);
+  span.setAttribute("aria-hidden", "true");
+  span.innerHTML = `<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round">${body}</svg>`;
+  return span;
+};
+const flagIcon = (): HTMLElement =>
+  svgIcon("mr2-live-bar__icon", '<path d="M5 21V4"/><path d="M5 4h11l-2 4 2 4H5" fill="currentColor"/>');
+const refreshIcon = (): HTMLElement =>
+  svgIcon("mr2-live-bar__refresh", '<path d="M20 12a8 8 0 1 1-2.6-5.9"/><path d="M20 4v5h-5"/>');

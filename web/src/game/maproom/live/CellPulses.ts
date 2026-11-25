@@ -13,7 +13,7 @@ import { liveOptions, type LiveChangeKind, type LiveTier } from "./liveProto";
  * B: a colour-coded line just inside the hex (gold taken, orange attacked, green shield up, pale
  *    shield down), strength by how much the cell matters, 1.5 s per-cell cooldown, at most 6 at once
  *    (4 on a phone); the rest just snap.
- * C: a ring that grows 18 % out of the hex and fades (gold taken, orange attacked, pale otherwise),
+ * C: a ring that grows 10 % out of the hex and fades (gold taken, orange attacked, pale otherwise),
  *    at most 4 at once.
  *
  * Costs nothing when idle: `animate` returns false and draws nothing unless a pulse is running,
@@ -34,12 +34,17 @@ interface Pulse {
 }
 
 const COLOURS: Record<"B" | "C", Partial<Record<LiveChangeKind, number>>> = {
-  B: { taken: 0xf5b82e, attack: 0xf05228, shield: 0x38e09b, shieldEnd: 0xdceaf2 },
-  C: { taken: 0xffd059, attack: 0xff5a2b, shield: 0xf2f6ff, shieldEnd: 0xf2f6ff, attackEnd: 0xf2f6ff },
+  // neon r1: shield ice-blue (mint merged with the cyan/green borders), taken a warmer gold.
+  B: { taken: 0xffaa1d, attack: 0xf05228, shield: 0xa8ecff, shieldEnd: 0xdceaf2 },
+  C: { taken: 0xffd059, attack: 0xff5a2b, shield: 0xa8ecff, shieldEnd: 0xf2f6ff, attackEnd: 0xf2f6ff },
 };
 
 const RANK: Record<LiveTier, number> = { own: 0, selected: 1, range: 2, far: 3 };
 const COOLDOWN_MS = 1500;
+/** Classic's brighter peaks (neon r1: the Modern colours went muddy inside Classic's heavy frames). */
+const CLASSIC_COLOUR: Record<number, number> = { 0xf05228: 0xff5a26, 0xffaa1d: 0xffd23f };
+/** A's wash, coloured by what happened so it never reads as a selected cell. */
+const WASH: Partial<Record<LiveChangeKind, number>> = { taken: 0xffc23a, attack: 0xff6a2b, shield: 0xa8ecff };
 
 export class CellPulses {
   readonly graphics = new Graphics();
@@ -91,12 +96,12 @@ export class CellPulses {
 
     if (option === "A") {
       if (kind === "minor" || rank > 1) return false;
-      pulse = { duration: 350, hold: 0, colour: 0xfff4d0, peak: 0.85, width: 4, style: "wash" };
+      pulse = { duration: 350, hold: 0, colour: WASH[kind] ?? 0xfff4d0, peak: 0.85, width: 4, style: "wash" };
     } else if (option === "B") {
       const colour = COLOURS.B[kind];
       if (colour === undefined) return false;
       if (rank <= 1) pulse = { duration: 750, hold: 100, colour, peak: 0.9, width: 4, style: "inner" };
-      else if (rank === 2) pulse = { duration: 650, hold: 100, colour, peak: 0.8, width: 3.5, style: "inner" };
+      else if (rank === 2) pulse = { duration: 650, hold: 100, colour, peak: 0.8, width: 4, style: "inner" };
       else if (kind === "taken" || kind === "attack") {
         pulse = { duration: 400, hold: 60, colour: 0xfff1d6, peak: 0.4, width: 2.5, style: "inner" };
       }
@@ -157,22 +162,29 @@ export class CellPulses {
       const width = (pulse.width + (phone ? 0.5 : 0)) / zoom;
       if (pulse.style === "wash") {
         g.poly(corners);
-        g.fill({ color: pulse.colour, alpha: alpha * 0.55 });
-        g.poly(corners);
-        g.stroke({ width: (classic ? 3 : 4) / zoom, color: 0xffd35a, alpha });
+        g.fill({ color: pulse.colour, alpha: alpha * 0.3 });
+        g.poly(scaleAbout(corners, 0.93));
+        g.stroke({ width: (classic ? 4 : 4) / zoom, color: pulse.colour, alpha });
       } else if (pulse.style === "inner") {
-        const inner = scaleAbout(corners, 0.9);
+        const inner = scaleAbout(corners, classic ? 0.88 : 0.9);
+        const colour = classic ? (CLASSIC_COLOUR[pulse.colour] ?? pulse.colour) : pulse.colour;
+        g.poly(inner);
+        g.fill({ color: colour, alpha: alpha * (classic ? 0.14 : 0.12) });
         if (!classic) {
-          // Modern: a soft glow under a bright line.
+          // Modern: a soft glow, a dark edge so gold holds on sunlit grass, then the bright line.
           g.poly(inner);
-          g.fill({ color: pulse.colour, alpha: alpha * 0.18 });
+          g.stroke({ width: width * 3.2, color: colour, alpha: alpha * 0.35 });
           g.poly(inner);
-          g.stroke({ width: width * 3.2, color: pulse.colour, alpha: alpha * 0.4 });
+          g.stroke({ width: width + 2 / zoom, color: 0x281600, alpha: alpha * 0.55 });
         }
         g.poly(inner);
-        g.stroke({ width: classic ? (2.5 + (phone ? 0.5 : 0)) / zoom : width, color: pulse.colour, alpha });
+        g.stroke({ width: classic ? (phone ? 4 : 3.5) / zoom : width, color: colour, alpha });
+        if (pulse.colour === 0xa8ecff) {
+          g.poly(inner);
+          g.stroke({ width: 1 / zoom, color: 0xffffff, alpha });
+        }
       } else {
-        const grow = 1 + 0.18 * easeOut(life);
+        const grow = 1 + 0.1 * easeOut(life);
         const ring = scaleAbout(corners, grow);
         if (!classic) {
           g.poly(ring);
