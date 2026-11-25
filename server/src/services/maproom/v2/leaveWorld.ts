@@ -11,6 +11,7 @@ import { postgres } from "../../../server.js";
 import { getDefenderCoords } from "../v3/getDefenderCoords.js";
 import { voidInvitesFrom } from "../../mail/inviteRules.js";
 import { leaveAllianceForWorldChange, lockForWorldChange } from "../../alliance/membership.js";
+import { markCellRows, type CellRowLike } from "../live/liveMarks.js";
 
 /**
  * Removes a user from their current Map Room world, cleaning up all associated data atomically.
@@ -44,6 +45,9 @@ export const leaveWorld = async (user: User, save: Save) => {
 
   const { userid } = user;
   const worldid = save.worldid;
+
+  // The live map (beta 9): the cells this removes, read before they go, marked once it commits.
+  let leaving: CellRowLike[] = [];
 
   await postgres.em.transactional(async (em) => {
     await lockForWorldChange(em, userid);
@@ -104,6 +108,7 @@ export const leaveWorld = async (user: User, save: Save) => {
 
     // Invitations to move onto these outposts (#205) are void with them.
     await voidInvitesFrom(em, userid);
+    leaving = await em.find(WorldMapCell, { uid: userid, map_version: MapRoomVersion.V2 }, { fields: ["x", "y", "world"] });
     await em.nativeDelete(Save, { userid, type: BaseType.OUTPOST });
     await em.nativeDelete(WorldMapCell, { uid: userid });
 
@@ -129,4 +134,6 @@ export const leaveWorld = async (user: User, save: Save) => {
     em.persist(toPersist);
     await em.flush();
   });
+
+  markCellRows(leaving);
 };

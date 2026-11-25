@@ -62,6 +62,23 @@ export const getArea = async (
   return post<GetAreaResponse>(GET_AREA_PATH, { ...body });
 };
 
+const GET_AREAS_PATH = "/worldmapv2/getareas";
+
+/** `getareas`'s answer (live map, beta 9): each asked zone's `getarea` answer, in order. */
+export interface GetAreasResponse extends ApiEnvelope {
+  areas: GetAreaResponse[];
+}
+
+/**
+ * Several zones' `getarea` answers in one call (`POST /worldmapv2/getareas`,
+ * at most 10): the live map asks for the zones a push said changed together.
+ */
+export const getAreas = (zones: readonly { x: number; y: number }[]): Promise<GetAreasResponse> =>
+  post<GetAreasResponse>(GET_AREAS_PATH, {
+    zones: zones.map((zone) => `${clampCoordinate(zone.x, WORLD_WIDTH)},${clampCoordinate(zone.y, WORLD_HEIGHT)}`).join(";"),
+    sendresources: 0,
+  });
+
 const clampCoordinate = (value: number, size: number): number =>
   Math.min(Math.max(Math.trunc(value), 0), size - 1);
 

@@ -581,3 +581,51 @@ describe("the owner's alliance (beta 7)", () => {
     expect(open(player({ aid: 7 })).host.querySelector(".mr2-chip--alliance")).toBeNull();
   });
 });
+
+describe("the live map's panel changes (beta 9, owner's choice A)", () => {
+  it("a live answer showing the cell taken keeps the old cell and puts the bar in Attack's place", () => {
+    const { panel, host, options } = open(player());
+    panel.update(player({ uid: 9, n: "Thornback" }), true);
+    const bar = host.querySelector<HTMLButtonElement>(".mr2-live-bar")!;
+    expect(bar.hidden).toBe(false);
+    expect(text(host, ".mr2-live-bar__text")).toBe("Taken by Thornback");
+    expect(buttonNamed(host, "Attack")).toBeUndefined();
+    // Still the old owner on screen, through the once-a-second refresh too.
+    panel.update(player({ uid: 9, n: "Thornback" }));
+    expect(text(host, ".mr2-cell__title, h2")).toContain("Bramblefoot");
+    bar.click();
+    expect(bar.hidden).toBe(true);
+    expect(host.textContent).toContain("Thornback");
+    expect(options.onAttack).not.toHaveBeenCalled();
+  });
+
+  it("the same change from a plain refresh just shows the new cell", () => {
+    const { panel, host } = open(player());
+    panel.update(player({ uid: 9, n: "Thornback" }));
+    expect(host.querySelector<HTMLButtonElement>(".mr2-live-bar")!.hidden).toBe(true);
+    expect(host.textContent).toContain("Thornback");
+  });
+
+  it("an attack running turns Attack grey in place, saying so; Busy is not said twice", () => {
+    const { panel, host } = open(player());
+    panel.update(player({ atk: Math.floor(Date.now() / 1000) + 300, lo: 1 }), true);
+    const attack = shown(host, "button").find((node) => node.textContent?.includes("Under attack")) as HTMLButtonElement;
+    expect(attack).toBeDefined();
+    expect(attack.disabled).toBe(true);
+    expect(host.textContent).not.toContain("Busy");
+  });
+
+  it("Attack ignores a tap just after a live change, and works again after", async () => {
+    vi.useFakeTimers();
+    const { panel, host, options } = open(player());
+    panel.update(player({ p: 0, dm: 40 }), true);
+    panel.update(player({ p: 0, dm: 40, n: "Bramblefoot" }));
+    // A minor change does not hold Attack back.
+    buttonNamed(host, "Attack")!.click();
+    expect(options.onAttack).toHaveBeenCalledTimes(1);
+    panel.update(player({ p: 1, pe: Math.floor(Date.now() / 1000) + 600, dm: 40 }), true);
+    expect(buttonNamed(host, "Attack")!.disabled).toBe(true);
+    vi.advanceTimersByTime(900);
+    vi.useRealTimers();
+  });
+});

@@ -26,7 +26,10 @@ import { handlePresence } from "./chatPresence.js";
 import { MODERATORS_REFRESH_MS, refreshChatModerators } from "./chatModerators.js";
 import { refreshWatchWords, WATCH_WORDS_REFRESH_MS } from "./chatWatchWords.js";
 import { clients, type SocketData } from "./chatState.js";
-import { initTransport, subscribeControl } from "./chatTransport.js";
+import { initTransport, subscribeControl, subscribeLive } from "./chatTransport.js";
+import { closeLive, fanOutSight, fanOutZones, initLiveGateway, routeLive } from "./liveGateway.js";
+import { liveGatewayDeps } from "./liveGatewayDeps.js";
+import { LIVE_SIGHT_CHANNEL, LIVE_ZONES_CHANNEL } from "../services/maproom/live/liveZones.js";
 import { ChatControlType } from "../enums/Chat.js";
 
 type ServerWebSocket<T> = import("bun").ServerWebSocket<T>;
@@ -41,7 +44,13 @@ export const initGateway = () => {
   setInterval(() => void refreshChatModerators(), MODERATORS_REFRESH_MS).unref?.();
   void refreshWatchWords();
   setInterval(() => void refreshWatchWords(), WATCH_WORDS_REFRESH_MS).unref?.();
-  initTransport(() => subscribeControl(handleControlMessage));
+  // The live map's socket side (beta 9): its own sign-in and frames on this same port.
+  initLiveGateway(liveGatewayDeps());
+  initTransport(() => {
+    subscribeControl(handleControlMessage);
+    subscribeLive(LIVE_ZONES_CHANNEL, fanOutZones);
+    subscribeLive(LIVE_SIGHT_CHANNEL, (payload) => void fanOutSight(payload));
+  });
   initMaintenanceWatch();
 };
 
@@ -191,6 +200,14 @@ const dispatch = async (ws: ServerWebSocket<SocketData>, data: string | Buffer) 
  * @param {string | Buffer} data - The raw message data received from the client.
  */
 export const handleMessage = async (ws: ServerWebSocket<SocketData>, data: string | Buffer) => {
+  try {
+    // The live map's frames (`liveGateway.ts`), before chat's sign-in gate: its socket never signs in to chat.
+    if (await routeLive(ws, data)) return;
+  } catch (err) {
+    logger.error(`Live map frame failed for user ${ws.data.live?.userId}: ${err}`);
+    return;
+  }
+
   if (closeIfTooLargeBeforeLogin(ws, data)) return;
 
   try {
@@ -210,6 +227,7 @@ export const handleMessage = async (ws: ServerWebSocket<SocketData>, data: strin
  */
 export const handleClose = (ws: ServerWebSocket<SocketData>): void => {
   clearLoginDeadline(ws);
+  if (closeLive(ws)) return;
 
   const userId = ws.data.userId;
   if (userId === null) return;

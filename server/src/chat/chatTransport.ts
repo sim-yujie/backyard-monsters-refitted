@@ -100,6 +100,15 @@ export const subscribeControl = (listener: (message: string) => void) =>
   subscribe(CHAT_CONTROL_CHANNEL, listener);
 
 /**
+ * Subscribes to one of the live map's channels (`liveZones.ts`): every socket
+ * server takes every change and picks out its own watchers (`liveGateway.ts`).
+ *
+ * @param {string} channel - The channel to subscribe to.
+ * @param {(message: string) => void} listener - Called with each raw payload.
+ */
+export const subscribeLive = (channel: string, listener: (message: string) => void) => subscribe(channel, listener);
+
+/**
  * Drops a channel's subscription once no local client remains in it.
  *
  * @param {string} channel - The channel to unsubscribe from.

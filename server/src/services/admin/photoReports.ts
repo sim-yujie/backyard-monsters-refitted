@@ -1,6 +1,7 @@
 import type { EntityManager } from "@mikro-orm/postgresql";
 
 import { AUTO_HIDE_REPORTS } from "../profile/profileRules.js";
+import { markUsers } from "../maproom/live/liveMarks.js";
 
 /**
  * Reported profile photos on the owner's dashboard, beside the chat cases
@@ -258,6 +259,8 @@ export const actOnPhoto = async (
       );
     }
   });
+  // The live map (beta 9): a photo kept, removed or hidden shows on their cells.
+  markUsers([userid]);
 
   const view = await openCaseOf(em, userid);
   return view ? { outcome: "done", case: view } : { outcome: "notFound" };

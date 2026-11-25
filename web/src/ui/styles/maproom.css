@@ -1138,6 +1138,101 @@
   font-weight: 800;
 }
 
+/* The live map (beta 9; desk card live-panel, owner's choice A): when a live answer shows the open
+   cell taken, a bar takes Attack's place at Attack's size ("Taken by X / Tap to update") and the
+   panel keeps the old cell until it is tapped, so nothing jumps. */
+/* Over the skin's button rules (`skin.css` `.panel .btn--outline`, same weight otherwise). */
+:root .mr2-cell .btn.mr2-live-bar,
+:root[data-skin] .mr2-cell .btn.mr2-live-bar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  /* Attack's height, set from the button it replaces (CellPanel.applyLive); 52px until measured. */
+  height: 52px;
+  min-height: 0;
+  /* neon r2/r3: the second line clear of the bottom bevel; the plate's own end caps (skin.css
+     border-width) keep the words off the rivets / pill ends, this a little more. */
+  padding: 3px 10px 7px;
+  text-align: left;
+}
+
+/* As heavy as the rule above, so `hidden` still hides it. */
+:root .mr2-cell .btn.mr2-live-bar[hidden],
+:root[data-skin] .mr2-cell .btn.mr2-live-bar[hidden] {
+  display: none;
+}
+
+.mr2-live-bar .mr2-live-bar__refresh {
+  flex: none;
+}
+
+.mr2-live-bar__words {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+  line-height: 1.08;
+}
+
+.mr2-live-bar__text {
+  overflow: hidden;
+  font-size: 13.5px;
+  font-weight: 800;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.mr2-live-bar__sub {
+  font-size: 12px;
+  font-weight: 700;
+  opacity: 0.85;
+}
+
+/* Classic: the same plate as its Attack (neon r2/r3: the View yard plate is green, and a gold
+   background behind it showed square corners round the pill), words outlined as on Attack. */
+:root[data-skin="flash"] .mr2-cell .btn.mr2-live-bar {
+  padding-inline: 4px;
+  border-width: 0 var(--skin-button-cap);
+  border-image-source: var(--skin-button);
+  border-image-slice: 0 var(--skin-button-slice) fill;
+  border-image-width: 0 var(--skin-button-cap);
+  color: #fff;
+  text-shadow:
+    0 2px 0 var(--skin-button-stroke), 2px 0 0 var(--skin-button-stroke), -2px 0 0 var(--skin-button-stroke), 0 -2px 0 var(--skin-button-stroke),
+    1.5px 1.5px 0 var(--skin-button-stroke), -1.5px 1.5px 0 var(--skin-button-stroke), 1.5px -1.5px 0 var(--skin-button-stroke), -1.5px -1.5px 0 var(--skin-button-stroke);
+}
+
+:root[data-skin="flash"] .mr2-cell .mr2-live-bar .mr2-live-bar__sub {
+  opacity: 1;
+}
+
+:root[data-skin="flash"] .mr2-cell .mr2-live-bar .mr2-live-bar__refresh {
+  filter: drop-shadow(0 1px 0 var(--skin-button-stroke)) drop-shadow(0 0 1px var(--skin-button-stroke));
+}
+
+/* While the panel holds the old cell: its owner and the other actions wait for the update. */
+.mr2-cell--held .mr2-cell__actions > :not(.mr2-live-bar),
+.mr2-cell--held .mr2-cell__picture,
+.mr2-cell--held .mr2-cell__nameline {
+  opacity: 0.5;
+  pointer-events: none;
+}
+
+/* Attack while someone else's attack runs: flat and quiet, so it never reads as pressable. */
+.mr2-cell .mr2-cell__primary--busy {
+  filter: saturate(0.4) brightness(0.85);
+}
+
+.mr2-cell .mr2-cell__primary--busy > * {
+  opacity: 0.75;
+}
+
+/* The lock keeps a dark edge like the words beside it (neon r2: it washed out on Classic's highlight). */
+.mr2-cell .mr2-cell__primary--busy > svg {
+  filter: drop-shadow(0 1px 0 rgb(0 0 0 / 75%)) drop-shadow(0 0 1px rgb(0 0 0 / 60%));
+}
+
 /* Take over (#82) sits under Attack, a second choice rather than a second
    primary: it is often only there to say why not yet. */
 .mr2-cell .takeover-action__button {

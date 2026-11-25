@@ -17,6 +17,7 @@ import {
   sightVersionOf,
   type OwnBaseSave,
 } from "./sightBuilder.js";
+import { markSightAlliances, markSightUsers } from "../live/liveMarks.js";
 
 /**
  * The Map Room 2 fog of war sight service (issue #329,
@@ -311,8 +312,11 @@ export const getPlayerSight = async (user: User): Promise<PlayerSight> => {
  *
  * @param userid - The player whose sight changed.
  */
-export const invalidatePlayerSight = (userid: number): Promise<number> =>
-  redis.del(playerSightKey(userid));
+export const invalidatePlayerSight = (userid: number): Promise<number> => {
+  // The live map (beta 9): their open map asks `/sight` again (`chat/liveGateway.ts`).
+  markSightUsers([userid]);
+  return redis.del(playerSightKey(userid));
+};
 
 /**
  * Drops an alliance's cached unioned sight: a member joined or left
@@ -320,8 +324,10 @@ export const invalidatePlayerSight = (userid: number): Promise<number> =>
  *
  * @param allianceId - The alliance whose membership changed.
  */
-export const invalidateAllianceSight = (allianceId: number): Promise<number> =>
-  redis.del(allianceSightKey(allianceId), allianceSightBuildKey(allianceId));
+export const invalidateAllianceSight = (allianceId: number): Promise<number> => {
+  markSightAlliances([allianceId]);
+  return redis.del(allianceSightKey(allianceId), allianceSightBuildKey(allianceId));
+};
 
 /** A player's alliance, read fresh for a caller holding only their id. */
 const allianceIdOf = async (userid: number): Promise<Pick<User, "userid" | "alliance_id">> => {

@@ -13,6 +13,7 @@ import { announceShout } from "./allianceMessages.js";
 import { lockAlliance, lockMembership } from "./membership.js";
 import { AllianceAction, can } from "./permissions.js";
 import { assertNameAllowed } from "./textFilter.js";
+import { markAlliances } from "../maproom/live/liveMarks.js";
 
 type Em = EntityManager<PostgreSqlDriver>;
 
@@ -166,6 +167,8 @@ export const renameAlliance = async (user: User, alliance: Alliance, name: strin
   alliance.name = name;
   alliance.renamed_at = now;
   alliance.must_rename = false;
+  // The live map (beta 9): the new name on every member's cells.
+  markAlliances([alliance.id]);
 
   await announceShout({ allianceId: alliance.id, author: user, type: AllianceMessageType.RENAMED, body: name });
 };

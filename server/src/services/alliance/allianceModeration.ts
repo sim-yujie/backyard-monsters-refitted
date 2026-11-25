@@ -16,6 +16,7 @@ import { logger } from "../../utils/logger.js";
 import { lockAlliance } from "./membership.js";
 import { allianceFactorOf, noteFactorChange } from "./productionHistory.js";
 import { getCurrentDateTime } from "../../utils/getCurrentDateTime.js";
+import { markAlliances, markUsers } from "../maproom/live/liveMarks.js";
 
 /*
  * Alliance reports and admin actions (design v5 §13). A player reports an
@@ -205,6 +206,10 @@ export const adminAllianceAction = async (
   }
 
   if (!result) return { outcome: "noAlliance" };
+
+  // The live map (beta 9): a renamed alliance's members, or a disbanded one's former members.
+  if (action === "rename") markAlliances([allianceId]);
+  if (action === "disband") markUsers(result.members);
 
   if (action === "disband") {
     await Promise.all([
