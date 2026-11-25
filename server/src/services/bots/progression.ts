@@ -312,6 +312,9 @@ export const WALL_TIER: Readonly<Record<number, { min: number; max: number }>> =
 /** The salt of the tier draws' stream. */
 const TIER_SALT = 0x68e31da4;
 
+/** The Hatchery Control Center (`buildingCosts.ts`, type 16). */
+const HCC_TYPE = 16;
+
 /** The Wall Block (`buildingCosts.ts`, type 17). */
 const WALL_TYPE = 17;
 
@@ -693,6 +696,9 @@ export class Progression {
   /** The screen for an upgrade of the lowest building of `type`: maximum level, `re`. */
   private upgradeCandidate(type: number, hall = this.hall): Candidate | null {
     if (type === MAP_ROOM_TYPE) return null;
+    // Beta 9's Hatchery Control Center levels 2-3 (25M and 75M of each) are a player's saving, not a bot's:
+    // one such step would swallow a level's whole points and leave the walls unbuilt.
+    if (type === HCC_TYPE) return null;
     const list = this.byType.get(type);
     if (!list || list.length === 0) return null;
     let lowest = list[0]!;
