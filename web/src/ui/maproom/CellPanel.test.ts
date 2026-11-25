@@ -619,7 +619,7 @@ describe("the live map's panel changes (beta 9, owner's choice A)", () => {
     vi.useFakeTimers();
     const { panel, host, options } = open(player());
     panel.update(player({ p: 0, dm: 40 }), true);
-    panel.update(player({ p: 0, dm: 40, atk: undefined, n: "Bramblefoot" }));
+    panel.update(player({ p: 0, dm: 40, n: "Bramblefoot" }));
     // A minor change does not hold Attack back.
     buttonNamed(host, "Attack")!.click();
     expect(options.onAttack).toHaveBeenCalledTimes(1);

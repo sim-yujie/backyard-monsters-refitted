@@ -94,7 +94,7 @@ describe("LiveZoneWriter", () => {
 
   test("yards, players and alliances are looked up in one query each, with their neighbours' zones", async () => {
     const { writer, redis, queries } = writerWith((sql) =>
-      sql.includes("baseid IN") ? [{ world_id: "w1", x: 55, y: 55 }] : sql.includes("JOIN") ? [{ world_id: "w1", x: 300, y: 300 }] : [{ world_id: "w1", x: 15, y: 15 }],
+      sql.includes("baseid IN") ? [{ world_id: "w1", x: 51, y: 55 }] : sql.includes("JOIN") ? [{ world_id: "w1", x: 300, y: 300 }] : [{ world_id: "w1", x: 15, y: 15 }],
     );
     writer.baseids(["b1", "b2"]);
     writer.users([7, 7, 8]);
@@ -104,9 +104,13 @@ describe("LiveZoneWriter", () => {
     expect(queries[0]!.params).toEqual(["b1", "b2"]);
     expect(queries[1]!.params).toEqual([7, 8]);
     const z = (redis.published[0]!.message as { z: Record<string, number> }).z;
+    // The yard (55,55) alone; the player's (15,15) and the alliance's (300,300) cells with their neighbours.
     expect(Object.keys(z).map(Number).sort()).toEqual(
       [zoneId(50, 50), zoneId(10, 10), zoneId(300, 300), zoneId(290, 290), zoneId(290, 300), zoneId(300, 290)].sort(),
     );
+    writer.baseids(["b3"]);
+    await writer.flush();
+    expect(Object.keys((redis.published.at(-1)!.message as { z: object }).z)).toEqual([String(zoneId(50, 50))]);
   });
 
   test("sight nudges go on their own channel", async () => {
