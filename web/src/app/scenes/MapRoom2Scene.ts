@@ -167,13 +167,6 @@ const MOVE_MIN_ZOOM = 0.72;
 const PUMP_INTERVAL_SECONDS = 0.25;
 
 /**
- * How long the camera must stay put before the map counts as still and the painted look's
- * animations step at the idle rate (`idleTime`, 10 a second); a drag, wheel, pinch or glide brings
- * back the full rate.
- */
-const STILL_AFTER_MS = 500;
-
-/**
  * The longest the stage goes undrawn while nothing seems to have changed (the render gate's
  * safety net, as the tilted picture's `MAX_STILL_MS`): one extra draw a second on a still map.
  */
@@ -389,8 +382,6 @@ export class MapRoom2Scene implements Scene {
   private markerPicturesStarted = false;
   private markerPicturesTimer: ReturnType<typeof setTimeout> | null = null;
   private framesMarked = 0;
-  /** When the camera last moved (drag, wheel, pinch, glide or a jump), in performance.now() ms. */
-  private movedAt = 0;
   /** Something this frame changed what the stage shows in a way its change lists miss. */
   private stageMustDraw = true;
   private stageDrawnAt = 0;
@@ -868,7 +859,6 @@ export class MapRoom2Scene implements Scene {
 
     if (this.camera.dirty) {
       this.camera.dirty = false;
-      this.movedAt = started;
       this.stageMustDraw = true;
       this.applyCamera();
       this.range = this.visibleRange();
@@ -885,8 +875,7 @@ export class MapRoom2Scene implements Scene {
       this.transfer?.place();
     }
 
-    // Still for a moment: the painted look's animations step at the idle rate (item 6).
-    this.renderer.draw(this.range, this.camera.zoom, started - this.movedAt >= STILL_AFTER_MS);
+    this.renderer.draw(this.range, this.camera.zoom);
     if (this.framesMarked < 2) this.markFrames();
     if (this.tilt && this.tiltView && this.context) {
       if (this.renderer.paintedStepped) this.tiltView.invalidate();
