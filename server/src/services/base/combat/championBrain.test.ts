@@ -48,10 +48,10 @@ const logFlinging = (...champions: { t: number; s?: "offensive" | "hybrid" | "de
 });
 
 describe("championsAfterLessons", () => {
-  test("each champion that fought learns by the Mode the log flung it in", () => {
+  test("each champion with habits that fought learns by the Mode the log flung it in; Krallen learns nothing", () => {
     const stored = [
       champion(1, { hs: { n: 2, off: { n: 1, u: { main: 0.45 } } } }),
-      champion(5, { bs: { n: 2, def: 0.9 } }),
+      champion(5, { b: { tower: 30, loot: 140, finish: 0, focus: 70, threat: 95 }, bs: { n: 2, def: 0.9 } }),
     ];
     const lessons = [lesson(1, { credit: { ...lesson(1).credit, guard: 2, gun: -1 } }), lesson(5)];
     const after = championsAfterLessons(stored, lessons, logFlinging({ t: 1, s: "offensive" }, { t: 5, s: "defensive" }))!;
@@ -68,9 +68,11 @@ describe("championsAfterLessons", () => {
     expect(after[0]!.h).toEqual({});
     expect(after[0]!.hl!.off).toEqual({ guard: { o: 2 }, gun: { o: 2 }, aerial: { o: 1 } });
     expect(after[0]!.hs).toMatchObject({ n: 3, off: { n: 2 } });
-    // Krallen keeps today's brain (owner, 10 Nov): Defensive did worse, away from towers.
-    expect(after[1]!.b!.tower).toBeLessThan(0);
-    expect(after[1]!.bs).toMatchObject({ n: 3 });
+    // Krallen has no Mode (owner, 25 Nov 2026, patch 8.7): her lesson teaches
+    // her nothing, and the brain an older attack taught her stays as it was.
+    expect(after[1]).toBe(stored[1]!);
+    expect(after[1]!.b).toEqual({ tower: 30, loot: 140, finish: 0, focus: 70, threat: 95 });
+    expect(after[1]!.bs).toEqual({ n: 2, def: 0.9 });
     expect(after[1]).not.toHaveProperty("h");
   });
 
@@ -106,13 +108,14 @@ describe("championsAfterLessons", () => {
     expect(championsAfterLessons(null, [lesson(2)], logFlinging({ t: 2 }))).toBeNull();
   });
 
-  test("a stored brain or book past its bounds is made safe before it learns", () => {
+  test("a stored book past its bounds is made safe before it learns", () => {
     const stored = [
       champion(5, { b: { tower: 1e9, loot: Number.NaN } as never, bs: "junk" as never }),
       champion(1, { h: { hyb: { tower: 1e9, quake: 50, near: -40 } } as never, hs: "junk" as never }),
     ];
     const after = championsAfterLessons(stored, [lesson(5), lesson(1)], logFlinging({ t: 5 }, { t: 1 }))!;
-    expect(after[0]!.b).toEqual({ tower: 200, loot: 0, finish: 0, focus: 0, threat: 0 });
+    // Krallen learns nothing (patch 8.7), so her stored brain is not touched.
+    expect(after[0]).toBe(stored[0]!);
     // Migrated to B: the tower habit Active at Hybrid's 75; no quake on
     // Gorgo, and "Stays close" cannot go below 0.
     expect(after[1]!.h).toEqual({ hyb: { tower: 75 } });
