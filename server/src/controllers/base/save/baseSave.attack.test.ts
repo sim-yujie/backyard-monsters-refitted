@@ -806,12 +806,14 @@ describe("a fallen bunker's garrison through the save (issue #130)", () => {
 });
 
 describe("a fallen Housing's monsters through the save (issue #160)", () => {
-  // Three Pokeys dropped on a Housing bring it down, and never reach the far one;
-  // four would outlast the Cannon Tower, which shoots softer as it is dented (#264).
+  // Two Pokeys dropped on a Housing bring it down, and never reach the far one;
+  // more would outlast the Cannon Tower, which shoots softer as it is dented (#264).
+  // (Three until beta 9: since the reach audit the Cannon lets go of a Pokey in
+  // front of it that is out of range of its anchor, so three now outlast it.)
   const RAID = {
     v: 1,
     seed: 5,
-    events: [{ kind: "fling", t: 80, x: 440, y: 440, r: 200, monsters: { C1: 3 } }],
+    events: [{ kind: "fling", t: 80, x: 440, y: 440, r: 200, monsters: { C1: 2 } }],
   };
   const HOUSINGS = {
     "2": { id: 2, t: 15, l: 1, X: 420, Y: 420 },

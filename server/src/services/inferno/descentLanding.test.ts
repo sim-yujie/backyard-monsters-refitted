@@ -547,9 +547,12 @@ describe("the save that ends a Descent attack", () => {
   test("from yard 7 the server's replay burns surface monsters, as the client's fight does (WP 1.21)", async () => {
     row = progressRow(6);
     startSession("207");
-    // Twenty Crabatrons, which live long enough under the towers for the burn
-    // to show in the damage (7.29% burnt, 7.61% not); Pokeys die too fast to tell.
-    const CRABATRONS = { v: 1, seed: 7, events: [{ kind: "fling", t: 40, x: 300, y: 150, r: 100, monsters: { C10: 20 } }] };
+    // Fifteen Crabatrons, which live long enough under the towers for the burn
+    // to show in the damage (5.98% burnt, 6.11% not); Pokeys die too fast to tell.
+    // (Twenty until beta 9's reach audit: the towers now let go of a monster in
+    // front of them out of range of their anchor, so twenty live long enough to
+    // reach the same 7.65% burnt or not.)
+    const CRABATRONS = { v: 1, seed: 7, events: [{ kind: "fling", t: 40, x: 300, y: 150, r: 100, monsters: { C10: 15 } }] };
     const ctx = finalSave("207", { tick: "12000", flinglog: JSON.stringify(CRABATRONS) });
 
     expect(await run(ctx)).toBeNull();
