@@ -45,7 +45,7 @@ describe("MapLegend", () => {
       "Your outpost",
       "Hostile",
       "12 alliance outposts",
-      "9 other outposts",
+      "9 neutral outposts",
     ]);
     expect(legend.element.querySelector<HTMLImageElement>(".mr2-key__crest img")?.src).toContain("/assets/worldmap/cluster/");
   });

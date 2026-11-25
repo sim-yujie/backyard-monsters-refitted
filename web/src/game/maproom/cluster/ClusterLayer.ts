@@ -50,6 +50,16 @@ const PULSE_MS = 900;
 /** At most this many hexes glow after a tap. */
 const PULSE_MAX = 150;
 
+const SVG_NS = "http://www.w3.org/2000/svg";
+
+/** Canvas pixels the HUD takes off each side of the screen. */
+export interface Insets {
+  top: number;
+  bottom: number;
+  left: number;
+  right: number;
+}
+
 export interface ClusterLayerDeps {
   /** The map's marker filter (`MapRenderer.markerFilter`). */
   filter: MarkerFilter;
@@ -71,8 +81,11 @@ export interface ClusterLayerDeps {
   viewport: () => { width: number; height: number };
   /** The HUD's boxes over the map, canvas pixels (read rarely). */
   obstacles: () => ScreenRect[];
-  /** Zooms in so this box of map pixels fills the screen (a tap on a token). */
-  zoomToFit: (box: { minX: number; minY: number; maxX: number; maxY: number }) => void;
+  /**
+   * Zooms in so this box of map pixels fills the screen between the HUD's bars (`insets`, canvas
+   * pixels taken off each side): a tap on a plaque.
+   */
+  zoomToFit: (box: { minX: number; minY: number; maxX: number; maxY: number }, insets: Insets) => void;
   /** Opens a cell's own panel (a lone crest's tap, when `LONE_CREST_TAP` is "info"). */
   openCell: (col: number, row: number) => void;
   /** A hex's size on the screen at a canvas height, relative to the flat map (the tilt), and its squash. */
@@ -243,6 +256,15 @@ export class ClusterLayer {
     return filter.version !== before;
   }
 
+  private selected = -1;
+
+  /** The cell whose panel is open (`cellKey`), or -1: its crest gets a ring (neon r1). */
+  setSelected(key: number): void {
+    if (key === this.selected) return;
+    this.selected = key;
+    this.laidZoom = Number.NaN;
+  }
+
   /** The HUD moved or the screen changed: measured again at the next layout. */
   hudChanged(): void {
     this.obstaclesAt = -Infinity;
@@ -262,9 +284,24 @@ export class ClusterLayer {
       this.deps.openCell(key % WORLD_WIDTH, Math.floor(key / WORLD_WIDTH));
       return true;
     }
-    this.deps.zoomToFit(hit);
+    this.deps.zoomToFit(hit, this.insets());
     this.pulse(hit);
     return true;
+  }
+
+  /** What the HUD's bars take off the top and bottom of the screen (neon r1: tapped hexes went under them). */
+  private insets(): Insets {
+    this.obstacleRects = this.deps.obstacles();
+    this.obstaclesAt = performance.now();
+    const { height } = this.deps.viewport();
+    let top = 0;
+    let bottom = 0;
+    for (const r of this.obstacleRects) {
+      if (r.top < height * 0.3) top = Math.max(top, r.bottom);
+      if (r.bottom > height * 0.7) bottom = Math.max(bottom, height - r.top);
+    }
+    const margin = 24;
+    return { top: top + margin, bottom: bottom + margin, left: margin, right: margin };
   }
 
   /** Reads every player's cell from the loaded zones, once each (zones share their edges). */
@@ -339,6 +376,7 @@ export class ClusterLayer {
         shown.far = far;
         this.draw(shown, token, classic, zoom);
       }
+      shown.el.classList.toggle("mc--selected", token.kind === "crest" && token.token.cells[0] === this.selected);
     }
     this.shownCount = tokens.length;
     this.stats.tokens = tokens.length;
@@ -405,35 +443,47 @@ export class ClusterLayer {
   private pulseCells: number[] = [];
   private readonly pulsePoint = { x: 0, y: 0 };
 
-  /** The rings on the tapped token's hexes, following the map while they glow (faded by CSS). */
+  /**
+   * Outlines on the tapped token's hexes, following the map while they glow (neon r1: a yellow
+   * stroke with a dark halo, so it reads on sunlit grass; faded by CSS).
+   */
   private drawPulse(): void {
-    const rings = this.pulses.children;
-    if (rings.length !== this.pulseCells.length) {
-      const frag = document.createDocumentFragment();
+    let svg = this.pulses.firstElementChild as SVGSVGElement | null;
+    if (!svg) {
+      svg = document.createElementNS(SVG_NS, "svg");
+      svg.classList.add("mc-pulse");
       for (let i = 0; i < this.pulseCells.length; i++) {
-        const ring = document.createElement("div");
-        ring.className = "mc-pulse";
-        frag.append(ring);
+        const halo = document.createElementNS(SVG_NS, "polygon");
+        halo.classList.add("mc-pulse__halo");
+        const line = document.createElementNS(SVG_NS, "polygon");
+        line.classList.add("mc-pulse__line");
+        svg.append(halo, line);
       }
-      this.pulses.replaceChildren(frag);
+      this.pulses.append(svg);
     }
     const out = this.pulsePoint;
     const zoom = this.deps.camera().zoom;
     const squash = this.deps.squash();
+    const shapes = svg.children;
     this.pulseCells.forEach((key, i) => {
-      const ring = rings[i] as HTMLElement;
+      const halo = shapes[i * 2] as SVGPolygonElement;
+      const line = shapes[i * 2 + 1] as SVGPolygonElement;
       const spot = mapRoomGrid.cellToPixel(key % WORLD_WIDTH, Math.floor(key / WORLD_WIDTH));
       if (!this.deps.project(spot.x, spot.y, out)) {
-        ring.hidden = true;
+        halo.setAttribute("points", "");
+        line.setAttribute("points", "");
         return;
       }
-      ring.hidden = false;
       const scale = zoom * this.deps.scaleAt(out.y);
-      const w = mapRoomGrid.cellWidth * scale;
-      const h = mapRoomGrid.cellHeight * scale * squash;
-      ring.style.width = `${w.toFixed(1)}px`;
-      ring.style.height = `${h.toFixed(1)}px`;
-      ring.style.transform = `translate3d(${(out.x - w / 2).toFixed(1)}px,${(out.y - h / 2).toFixed(1)}px,0)`;
+      const hw = (mapRoomGrid.cellWidth * scale) / 2 - 2;
+      const hh = (mapRoomGrid.cellHeight * scale * squash) / 2 - 2;
+      const { x, y } = out;
+      const points =
+        `${x.toFixed(1)},${(y - hh).toFixed(1)} ${(x + hw).toFixed(1)},${(y - hh / 2).toFixed(1)} ` +
+        `${(x + hw).toFixed(1)},${(y + hh / 2).toFixed(1)} ${x.toFixed(1)},${(y + hh).toFixed(1)} ` +
+        `${(x - hw).toFixed(1)},${(y + hh / 2).toFixed(1)} ${(x - hw).toFixed(1)},${(y - hh / 2).toFixed(1)}`;
+      halo.setAttribute("points", points);
+      line.setAttribute("points", points);
     });
   }
 

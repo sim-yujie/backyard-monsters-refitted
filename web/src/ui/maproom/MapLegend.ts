@@ -61,8 +61,11 @@ export const LEGEND_TOKENS: readonly { art: ClusterArt; count?: number; label: s
   { art: "crest-you", label: "Your outpost" },
   { art: "crest-hostile", label: "Hostile" },
   { art: "plaque-alliance", count: 12, label: "12 alliance outposts" },
-  { art: "plaque-other", count: 9, label: "9 other outposts" },
+  { art: "plaque-other", count: 9, label: "9 neutral outposts" },
 ];
+
+/** Under the tokens: what a tap does. */
+export const LEGEND_TAP_HINT = "Tap a plaque to zoom in";
 
 /**
  * The colour a border line shows on the map: the painted shader runs the middle of the line 40 per
@@ -229,6 +232,8 @@ export class MapLegend {
   readonly toggle: HTMLButtonElement;
   /** The card it opens; goes just after {@link toggle}. */
   readonly element: HTMLElement;
+  /** The zoomed-out plaques and crests, drawn again on each open in the look in use. */
+  private tokens: HTMLElement;
 
   constructor(options: { alliances?: boolean } = {}) {
     this.element = el("section", "mr2-float mr2-key");
@@ -252,7 +257,12 @@ export class MapLegend {
       list.append(row);
     }
     this.element.append(list);
-    this.element.append(el("h3", "mr2-key__subtitle", MAP_LEGEND_TEXT.zoomedOut), tokenList());
+    this.tokens = tokenList();
+    this.element.append(
+      el("h3", "mr2-key__subtitle", MAP_LEGEND_TEXT.zoomedOut),
+      this.tokens,
+      el("p", "mr2-key__hint mr2-key__tap", LEGEND_TAP_HINT),
+    );
 
     this.toggle = button("mr2-tool mr2-key__toggle");
     this.toggle.append(buttonPicture(), el("span", "mr2-tool__label", MAP_LEGEND_TEXT.button));
@@ -269,6 +279,12 @@ export class MapLegend {
   }
 
   setOpen(open: boolean): void {
+    if (open && this.element.hidden) {
+      // The look may have changed since the card was made (neon r1: Classic showed Modern plaques).
+      const fresh = tokenList();
+      this.tokens.replaceWith(fresh);
+      this.tokens = fresh;
+    }
     this.element.hidden = !open;
     this.toggle.setAttribute("aria-expanded", String(open));
   }

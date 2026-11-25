@@ -61,7 +61,9 @@ const HUD_GAP = 8;
 /** How far a plaque may step in from the screen's edge or off the HUD. */
 const PLAQUE_SHIFT = 60;
 /** How far a token may be pushed off its spot: a crest stays on its outpost. */
-const MAX_PUSH = { crest: 10, plaque: 28 } as const;
+const MAX_PUSH = { crest: 10, plaque: 48 } as const;
+/** A crest cut by the edge or touching the HUD may step in this far (neon r1: none may vanish). */
+const CREST_SHIFT = 12;
 /** Smallest tap target on a touch screen, CSS pixels. */
 export const TOUCH_TARGET = 44;
 
@@ -76,13 +78,13 @@ export const tokenSize = (
   if (kind === "plaque") {
     // Shield, then the count: a plaque widens with its digits.
     const digits = countText(count).length;
-    const h = touch ? 28 : 24;
-    return { hw: (h + 6 + digits * (touch ? 9 : 8) + 8) / 2, hh: h / 2 };
+    const h = touch ? 30 : 26;
+    return { hw: (h + 8 + digits * (touch ? 10 : 9) + 10) / 2, hh: h / 2 };
   }
   const far = zoom <= FAR_ZOOM;
-  const base = touch ? (far ? 30 : 38) : far ? 24 : 32;
-  // The main yard anchors the map: a fifth bigger.
-  const w = group === "home" ? Math.round(base * 1.2) : base;
+  const base = touch ? (far ? 34 : 40) : far ? 26 : 32;
+  // The main yard anchors the map: a third bigger (neon r1).
+  const w = group === "home" ? Math.round(base * 1.35) : base;
   return { hw: w / 2, hh: (w * 1.12) / 2 };
 };
 
@@ -172,13 +174,16 @@ export class ClusterLayout {
       }
     }
 
-    // The whole token on the screen, clear of the HUD. A plaque stands for an area, so one cut by
-    // the edge or under a button steps inside (up to PLAQUE_SHIFT px; on a phone most plaques' middles
-    // fall near an edge); a crest stays on its outpost and is left out instead.
+    // The whole token on the screen, clear of the HUD. One cut by the edge or under a button steps
+    // inside: a plaque (it stands for an area) up to PLAQUE_SHIFT px, as on a phone most plaques'
+    // middles fall near an edge; a crest only CREST_SHIFT px, so it stays on its outpost (neon r1: a
+    // crest left out showed a bare hex). The list runs crests first (most important), so a plaque
+    // keeps clear of every token already kept (list[0..n)), and no crest covers a count.
     n = 0;
     for (const s of list) {
-      if (!fits(s, view) && !(s.kind === "plaque" && this.shiftIn(s, view))) continue;
-      list[n++] = s;
+      const crest = s.kind === "crest";
+      const keep = fits(s, view, list, crest ? 0 : n) || this.shiftIn(s, view, list, crest ? 0 : n, crest ? CREST_SHIFT : PLAQUE_SHIFT);
+      if (keep) list[n++] = s;
     }
     list.length = n;
     return list;
@@ -194,32 +199,40 @@ export class ClusterLayout {
     return null;
   }
 
-  /** Moves a plaque the least way that puts it whole on the screen and clear of the HUD; false if too far. */
-  private shiftIn(s: ScreenToken, view: LayoutView): boolean {
+  /**
+   * Moves a token the least way that puts it whole on the screen, clear of the HUD and of the first
+   * `kept` tokens of `others`; false when that is further than `limit`.
+   */
+  private shiftIn(s: ScreenToken, view: LayoutView, others: readonly ScreenToken[], kept: number, limit: number): boolean {
     const x0 = s.x;
     const y0 = s.y;
     const inX = (x: number): number => Math.min(Math.max(x, EDGE + s.hw), view.width - EDGE - s.hw);
     const inY = (y: number): number => Math.min(Math.max(y, EDGE + s.hh), view.height - EDGE - s.hh);
-    let bestX = inX(x0);
-    let bestY = inY(y0);
+    let bestX = x0;
+    let bestY = y0;
     let best = Infinity;
     const tryAt = (x: number, y: number): void => {
       const d = Math.hypot(x - x0, y - y0);
-      if (d >= best || d > PLAQUE_SHIFT) return;
+      if (d >= best || d > limit) return;
       s.x = x;
       s.y = y;
-      if (!fits(s, view)) return;
+      if (!fits(s, view, others, kept)) return;
       best = d;
       bestX = x;
       bestY = y;
     };
-    tryAt(bestX, bestY);
-    // Off each button it sits under: below, above, left of or right of it.
-    for (const r of view.obstacles) {
-      tryAt(inX(x0), inY(r.bottom + HUD_GAP + s.hh + 1));
-      tryAt(inX(x0), inY(r.top - HUD_GAP - s.hh - 1));
-      tryAt(inX(r.left - HUD_GAP - s.hw - 1), inY(y0));
-      tryAt(inX(r.right + HUD_GAP + s.hw + 1), inY(y0));
+    tryAt(inX(x0), inY(y0));
+    // Off each box it sits under: below, above, left of or right of it.
+    const around = (r: ScreenRect, gap: number): void => {
+      tryAt(inX(x0), inY(r.bottom + gap + s.hh + 1));
+      tryAt(inX(x0), inY(r.top - gap - s.hh - 1));
+      tryAt(inX(r.left - gap - s.hw - 1), inY(y0));
+      tryAt(inX(r.right + gap + s.hw + 1), inY(y0));
+    };
+    for (const r of view.obstacles) around(r, HUD_GAP);
+    for (let i = 0; i < kept; i++) {
+      const q = others[i]!;
+      around({ left: q.x - q.hw, top: q.y - q.hh, right: q.x + q.hw, bottom: q.y + q.hh }, GAP);
     }
     s.x = bestX;
     s.y = bestY;
@@ -268,13 +281,16 @@ export class ClusterLayout {
   }
 }
 
-/** Whether a token is whole on the screen and clear of the HUD. */
-const fits = (s: ScreenToken, view: LayoutView): boolean =>
-  s.x - s.hw >= EDGE &&
-  s.y - s.hh >= EDGE &&
-  s.x + s.hw <= view.width - EDGE &&
-  s.y + s.hh <= view.height - EDGE &&
-  !underAny(s, view.obstacles);
+/** Whether a token is whole on the screen, clear of the HUD and of the first `kept` of `others`. */
+const fits = (s: ScreenToken, view: LayoutView, others: readonly ScreenToken[], kept: number): boolean => {
+  if (s.x - s.hw < EDGE || s.y - s.hh < EDGE || s.x + s.hw > view.width - EDGE || s.y + s.hh > view.height - EDGE) return false;
+  if (underAny(s, view.obstacles)) return false;
+  for (let i = 0; i < kept; i++) {
+    const q = others[i]!;
+    if (Math.abs(s.x - q.x) < s.hw + q.hw + GAP && Math.abs(s.y - q.y) < s.hh + q.hh + GAP) return false;
+  }
+  return true;
+};
 
 const underAny = (s: ScreenToken, rects: readonly ScreenRect[]): boolean => {
   for (const r of rects) {

@@ -67,6 +67,22 @@ describe("ClusterLayout", () => {
     expect(layout.layOut([token("plaque", "alliance", 400, -60, 3)], flat, view()).length).toBe(0);
   });
 
+  it("keeps a crest that touches the HUD by stepping it in a little, never covering a plaque's count", () => {
+    const layout = new ClusterLayout();
+    const hud = { left: 0, top: 0, right: 800, bottom: 60 };
+    const shown = layout.layOut(
+      [token("crest", "you", 400, 80), token("plaque", "alliance", 780, 300, 7), token("crest", "hostile", 770, 300)],
+      flat,
+      view({ obstacles: [hud] }),
+    );
+    const own = shown.find((s) => s.group === "you")!;
+    expect(own.y - own.hh).toBeGreaterThanOrEqual(68);
+    const plaque = shown.find((s) => s.kind === "plaque")!;
+    const hostile = shown.find((s) => s.group === "hostile")!;
+    const apart = Math.abs(plaque.x - hostile.x) >= plaque.hw + hostile.hw || Math.abs(plaque.y - hostile.y) >= plaque.hh + hostile.hh;
+    expect(apart).toBe(true);
+  });
+
   it("merges plaques of one kind that overlap on the screen, keeping the sum and the box", () => {
     const layout = new ClusterLayout();
     const a = token("plaque", "alliance", 300, 300, 4);

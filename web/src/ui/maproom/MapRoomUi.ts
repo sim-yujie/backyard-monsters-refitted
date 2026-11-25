@@ -606,7 +606,8 @@ export class MapRoomUi {
   coverRects(): DOMRect[] {
     const out: DOMRect[] = [this.hud.element.getBoundingClientRect()];
     if (!this.container) return out;
-    for (const el of this.container.querySelectorAll("button, input")) {
+    // Buttons and fields, and the bars that hold them (the kit filter row's gaps are bar too).
+    for (const el of this.container.querySelectorAll("button, input, .mr2-toolrow, .mr2-kit-filter")) {
       if (this.hud.element.contains(el)) continue;
       const r = el.getBoundingClientRect();
       if (r.width > 0 && r.height > 0) out.push(r);

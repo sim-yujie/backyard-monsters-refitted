@@ -601,8 +601,8 @@
 
 .mr2-key__crest {
   display: flex;
-  width: 26px;
-  height: 29px;
+  width: 28px;
+  height: 31px;
 }
 
 .mr2-key__crest img {
@@ -626,8 +626,12 @@
 }
 
 .mr2-key__plaque img {
-  width: 18px;
-  height: 18px;
+  width: 20px;
+  height: 20px;
+}
+
+.mr2-key__tap {
+  margin: var(--space-2) 0 0;
 }
 
 .mr2-key__token-label {
