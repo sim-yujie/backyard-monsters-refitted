@@ -25,20 +25,3 @@ export const stepAt = (nowMs: number, every: number): number => Math.floor(tickA
  */
 export const steppedSeconds = (nowMs: number, startMs: number, every: number): number =>
   ((stepAt(nowMs, every) - stepAt(startMs, every)) * every) / TICKS_PER_SECOND;
-
-/**
- * While the painted map stands still, its animations step only on every third tick: 10 steps a
- * second, so a tilted map redraws its whole picture, and a flat one its stage, at most 10 times a
- * second rather than 30 (the gulls and cloud shadows step 30 times a second while it moves). Classic
- * (no painted look) keeps the full rate: its water sheet steps every tick. The water, the border pulse and the
- * fog already step every 3 or 6 ticks, so they look exactly the same.
- */
-export const IDLE_STEP_TICKS = 3;
-
-/**
- * `nowMs` rounded down to the start of its idle step, the time the animations see while the map
- * stands still: it changes 10 times a second, and a timer stepping every 3 or 6 ticks reads the
- * same step from it as from `nowMs`.
- */
-export const idleTime = (nowMs: number): number =>
-  (stepAt(nowMs, IDLE_STEP_TICKS) * IDLE_STEP_TICKS * 1000) / TICKS_PER_SECOND;

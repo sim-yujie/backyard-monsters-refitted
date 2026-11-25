@@ -9,7 +9,6 @@ import {
   chunksForRange,
 } from "./chunks";
 import type { RangeSource } from "./attackRange";
-import { idleTime } from "./animationClock";
 import { TextPool } from "./LabelLayer";
 import { LodTier, sameView, tierForZoom, viewFor } from "./lod";
 import { MapAtlas } from "./mapAtlas";
@@ -544,18 +543,16 @@ export class MapRenderer {
 
   /**
    * Brings the chunk set in line with the viewport. Returns true when it did
-   * work, which the scene uses for its frame-time readout. `still`: the camera has not moved for a
-   * moment, so the painted look's animations step at the idle rate (`idleTime`, 10 a second). Not
-   * without the painted look (Classic, or its switch off): its water sheet steps 30 times a second,
-   * and slowing it would change how the water looks.
+   * work, which the scene uses for its frame-time readout. The animations step at their full rate
+   * whether or not the map moves (owner, 25 Nov: gulls and cloud shadows stay smooth on a still map).
    */
-  draw(range: CellRange, zoom: number, still = false): boolean {
+  draw(range: CellRange, zoom: number): boolean {
     // New pixels in a texture Pixi's change lists do not see (the far raster, the ground's data).
     const texelsWritten = this.raster.flush();
     const groundWritten = this.painted?.flush() ?? false;
     const fogChanged = this.clouds?.flush() ?? false;
     const bordersChanged = this.borders?.flush() ?? false;
-    const nowPaint = still && this.painted !== null ? idleTime(performance.now()) : performance.now();
+    const nowPaint = performance.now();
     const waterStepped = this.painted?.animate(nowPaint, range) ?? false;
     // The player's Quality's ground program once compiled, and the sprite pieces round the view.
     // A cell's width in drawn pixels, as the shader's fades see it (zoom is CSS pixels per world
