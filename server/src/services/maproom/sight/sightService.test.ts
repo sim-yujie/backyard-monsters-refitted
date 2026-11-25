@@ -42,7 +42,9 @@ const em = {
 mock.module("../../../server.js", () => ({ postgres: { em }, redis }));
 
 const {
+  ALLIANCE_SIGHT_CACHE_TTL_SECONDS,
   SIGHT_CACHE_TTL_SECONDS,
+  allianceSightBuildKey,
   allianceSightKey,
   getPlayerSight,
   invalidateAllianceSight,
@@ -505,5 +507,68 @@ describe("getPlayerSight: alliance extra reach (Conquest's full Teratorn)", () =
     const q = user(1, { alliance_id: 9 });
     allianceRows = [{ type: AllianceType.CONQUEST, stars: { teratorn: 9 } }];
     expect((await getPlayerSight(q)).sources).toContainEqual({ x: 101, y: 101, reach: 6, kind: "own" });
+  });
+});
+
+describe("the alliance union's long life (map-lag fix, 25 Nov 2026)", () => {
+  const nowSeconds = () => Math.floor(Date.now() / 1000);
+  const allianceOf = (mate: Row) => {
+    tables.set(User, [
+      { userid: 1, alliance_id: 9 },
+      { userid: 2, alliance_id: 9 },
+    ]);
+    tables.set(Save, [mate]);
+  };
+
+  test("lives for the long TTL while no member's Flinger is about to change, the own half still 30 s", async () => {
+    allianceOf(mainSaveRow(2, { baseid: "home-2" }));
+
+    await getPlayerSight(user(1, { alliance_id: 9 }));
+
+    expect(ALLIANCE_SIGHT_CACHE_TTL_SECONDS).toBeGreaterThan(SIGHT_CACHE_TTL_SECONDS);
+    expect(await redis.ttl(allianceSightKey(9))).toBe(ALLIANCE_SIGHT_CACHE_TTL_SECONDS);
+    expect(await redis.ttl(playerSightKey(1))).toBe(SIGHT_CACHE_TTL_SECONDS);
+  });
+
+  test("runs out when a member's Flinger upgrade finishes on its clock, which no write announces", async () => {
+    // Saved 10 s ago with 130 s left: done 120 s from now.
+    allianceOf(
+      mainSaveRow(2, {
+        baseid: "home-2",
+        savetime: nowSeconds() - 10,
+        buildingdata: { "9": { id: 9, t: 5, l: 2, X: 0, Y: 0, cU: 130, cL: 32_400 } },
+        buildinghealthdata: {},
+      }),
+    );
+
+    await getPlayerSight(user(1, { alliance_id: 9 }));
+
+    const ttl = await redis.ttl(allianceSightKey(9));
+    expect(ttl).toBeGreaterThanOrEqual(119);
+    expect(ttl).toBeLessThanOrEqual(121);
+  });
+
+  test("a rebuild that overlapped a drop is kept for the short TTL only", async () => {
+    allianceOf(mainSaveRow(2, { baseid: "home-2" }));
+    const find = em.find;
+    // A mate takes an outpost while the union is being read.
+    em.find = async (entity: unknown, where: Row) => {
+      if (entity === User) await invalidateAllianceSight(9);
+      return find(entity, where);
+    };
+    try {
+      await getPlayerSight(user(1, { alliance_id: 9 }));
+    } finally {
+      em.find = find;
+    }
+
+    expect(await redis.ttl(allianceSightKey(9))).toBe(SIGHT_CACHE_TTL_SECONDS);
+  });
+
+  test("invalidateAllianceSight drops a running rebuild's mark with the union", async () => {
+    await redis.set(allianceSightBuildKey(9), "a rebuild", "EX", 60);
+    await invalidateAllianceSight(9);
+
+    expect(await redis.get(allianceSightBuildKey(9))).toBeNull();
   });
 });

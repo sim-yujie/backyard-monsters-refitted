@@ -1,7 +1,7 @@
 import { Save } from "../../database/models/save.model.js";
 import { postgres } from "../../server.js";
 import { getCurrentDateTime } from "../../utils/getCurrentDateTime.js";
-import { flingerLevelAt } from "./derivedLevels.js";
+import { flingerLevelAt, secondsUntilFlingerLevelChanges } from "./derivedLevels.js";
 
 /**
  * Flinger level per `baseid`, as of now, for the Map Room 2 rules that measure
@@ -23,9 +23,27 @@ import { flingerLevelAt } from "./derivedLevels.js";
  */
 export const flingerLevelsNow = async (
   baseids: readonly (string | null | undefined)[],
-): Promise<Map<string, number | undefined>> => {
+): Promise<Map<string, number | undefined>> => (await flingerLevelsWithNextChange(baseids, 0)).levels;
+
+/**
+ * {@link flingerLevelsNow}, plus how many seconds from now the first of these
+ * yards' Flinger levels will change by its clock alone (an upgrade or build
+ * running out, with nobody writing the yard), looking no further than
+ * `horizon` seconds ahead. Undefined when none changes within the horizon.
+ *
+ * A cache of something built from these levels (the alliance's sight,
+ * `sightService.ts`) uses it to run out no later than that moment: nothing
+ * else drops the cache then, because nothing is written.
+ *
+ * @param baseids - As {@link flingerLevelsNow}.
+ * @param horizon - Seconds ahead to look; 0 skips the look ahead.
+ */
+export const flingerLevelsWithNextChange = async (
+  baseids: readonly (string | null | undefined)[],
+  horizon: number,
+): Promise<{ levels: Map<string, number | undefined>; nextChangeIn: number | undefined }> => {
   const unique = [...new Set(baseids.filter((baseid): baseid is string => Boolean(baseid)))];
-  if (!unique.length) return new Map();
+  if (!unique.length) return { levels: new Map(), nextChangeIn: undefined };
 
   const rows = await postgres.em.find(
     Save,
@@ -37,5 +55,15 @@ export const flingerLevelsNow = async (
   );
 
   const now = getCurrentDateTime();
-  return new Map(rows.map((row) => [row.baseid, flingerLevelAt(row, now)]));
+  const levels = new Map<string, number | undefined>();
+  let nextChangeIn: number | undefined;
+  for (const row of rows) {
+    const level = flingerLevelAt(row, now);
+    levels.set(row.baseid, level);
+    if (horizon > 0) {
+      const changeIn = secondsUntilFlingerLevelChanges(row, now, level, horizon);
+      if (changeIn !== undefined && (nextChangeIn === undefined || changeIn < nextChangeIn)) nextChangeIn = changeIn;
+    }
+  }
+  return { levels, nextChangeIn };
 };

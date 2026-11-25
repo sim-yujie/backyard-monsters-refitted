@@ -26,6 +26,8 @@ import {
 } from "../../services/friends/helpRules.js";
 import { raidFighting } from "../../services/raids/raidLock.js";
 import { catchUpDamage } from "../../services/yard/catchUpDamage.js";
+import { flingerClockOf, type FlingerClock } from "../../services/yard/derivedLevels.js";
+import { logger } from "../../utils/logger.js";
 import { creditResources } from "../../services/yard/credit.js";
 import { notMainYardErr, yardRaidInProgressErr, yardRefusedErr } from "../../services/yard/yardErrors.js";
 import type { BuildingData } from "../../types/BuildingData.js";
@@ -98,6 +100,9 @@ interface HelpDone {
   helpsLeft: number;
   building: BuildingData;
   helperName: string;
+  /** The owner's Flinger before and after, for the sight cache; not sent. */
+  ownerFlingerBefore: FlingerClock;
+  ownerFlingerAfter: FlingerClock;
 }
 
 /**
@@ -139,6 +144,10 @@ export const helpAnswer = async (em: EntityManager, user: User, body: unknown, n
     if (isAttackActive(mine)) throw helperUnderAttackErr();
     if (raidFighting(mine, now)) throw yardRaidInProgressErr();
 
+    // The owner's Flinger before the help: a speed-up or a repair can move
+    // when its upgrade finishes without changing its level, which the
+    // cached alliance sight was timed to (`invalidateSightIfFlingerClockChanged`).
+    const ownerFlingerBefore = flingerClockOf(theirs, now);
     for (const save of [mine, theirs]) {
       const completed = await catchUpLockedRow(tx, save, now);
       await recordAchievements(tx, save, now, builtEvents(completed));
@@ -203,8 +212,12 @@ export const helpAnswer = async (em: EntityManager, user: User, body: unknown, n
       // Sent back for the visit's panel: masked as the visit's load was (`viewMask.ts`).
       building: maskBuilding(theirs.buildingdata![key]!, "main"),
       helperName: mySide.username,
+      ownerFlingerBefore,
+      ownerFlingerAfter: flingerClockOf(theirs, now),
     };
   }));
+
+  await dropOwnerSight(owner, done.ownerFlingerBefore, done.ownerFlingerAfter);
 
   await notifyFriend(
     em,
@@ -217,6 +230,22 @@ export const helpAnswer = async (em: EntityManager, user: User, body: unknown, n
   // The owner's open yard reads itself again on their next presence ping (#374).
   await markHelped(owner, now);
 
-  const { helperName: _name, ...answer } = done;
+  const { helperName: _name, ownerFlingerBefore: _before, ownerFlingerAfter: _after, ...answer } = done;
   return { error: 0, ...answer };
+};
+
+/**
+ * Drops the helped owner's cached Map Room 2 sight (own and alliance) when
+ * the help moved their Flinger's level or finish (`sightService.ts`). After
+ * the commit; never throws, since the help already stands, and a cache left
+ * in place still runs out by itself. Imported on use, as `plannerYard.ts`
+ * does, to stay off `sightService.ts`'s import chain.
+ */
+const dropOwnerSight = async (owner: number, before: FlingerClock, after: FlingerClock): Promise<void> => {
+  try {
+    const sightService = await import("../../services/maproom/sight/sightService.js");
+    await sightService.invalidateSightIfFlingerClockChanged(owner, before, after);
+  } catch (error) {
+    logger.warn("Sight of {userid} not dropped after a friend's help", { userid: owner, error });
+  }
 };

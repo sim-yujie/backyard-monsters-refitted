@@ -22,24 +22,15 @@ import { getAllianceRoster } from "../../../services/alliance/allianceData.js";
 import { visibleCredits } from "../../../services/user/shinyLock.js";
 import { emptyAreaResponse, hasWorldPlacement } from "../../../services/maproom/v2/emptyAreaResponse.js";
 import { getPlayerSight } from "../../../services/maproom/sight/sightService.js";
-import { isVisible } from "../../../game-rules/maproom/sight.js";
+import { zoneCellKey, zoneVisibility as visibilityOfZone } from "../../../services/maproom/sight/zoneVisibility.js";
 import { mr2HexShape, mr2NeighbourBonusMode } from "../../../config/MapRoom2Config.js";
 import { loadAreaNeighbourCounts } from "../../../services/maproom/v2/neighbourDefence.js";
 import { visiblePhotos } from "../../../services/profile/visiblePhoto.js";
 import { flingerLevelsNow } from "../../../services/yard/flingerLevelsNow.js";
-
-/**
- * Wraps a zone coordinate to the world's `0..size-1`: `getarea`'s 11×11 block
- * can run past the world edge (`x+10` etc.), unwrapped, same as today. Only
- * the fog of war's visibility test needs the wrapped form, so a cell near
- * the seam compares correctly against `revealed`'s exact coordinates
- * (`fog-of-war.md` §5.1 step 3); the hex-ring sight circles already wrap on
- * their own (`game-rules/maproom/range.ts`'s `hexDistance`).
- */
-const wrap = (n: number, size: number): number => ((n % size) + size) % size;
+import { loadArmyOwner, monstersForMapMany } from "../../../services/yard/armies.js";
 
 /** `x,y` as a `Map` key for a zone's per-cell visibility lookup. */
-const cellKey = (x: number, y: number): string => `${x},${y}`;
+const cellKey = zoneCellKey;
 
 /**
  * Schema for validating the request body when getting area data.
@@ -146,6 +137,15 @@ const addNeighbourCounts = async (
   }
 };
 
+/** Every cell of the zone visible: the fog of war switched off (`devConfig.disableFogOfWar`). */
+const allVisible = (x: number, y: number, width: number, height: number): Map<string, boolean> => {
+  const visibility = new Map<string, boolean>();
+  for (let cellX = x; cellX <= x + width; cellX++) {
+    for (let cellY = y; cellY <= y + height; cellY++) visibility.set(cellKey(cellX, cellY), true);
+  }
+  return visibility;
+};
+
 export const getArea: KoaController = async (ctx) => {
   if (!devConfig.maproom) throw mapRoomDisabledErr();
   
@@ -183,15 +183,15 @@ export const getArea: KoaController = async (ctx) => {
   // from a sight that has changed.
   const sight = await getPlayerSight(user);
 
-  const zoneVisibility = new Map<string, boolean>();
-  const shape = mr2HexShape();
-  for (let cellX = currentX; cellX <= currentX + width; cellX++) {
-    for (let cellY = currentY; cellY <= currentY + height; cellY++) {
-      const wrapped = { x: wrap(cellX, MapRoom2.WIDTH), y: wrap(cellY, MapRoom2.HEIGHT) };
-      const visible = devConfig.disableFogOfWar || isVisible(wrapped, sight.sources, sight.revealed, shape);
-      zoneVisibility.set(cellKey(cellX, cellY), visible);
-    }
-  }
+  // `getarea`'s 11×11 block can run past the world edge (`x+10` etc.),
+  // unwrapped; each cell is tested at its wrapped coordinates, so one near
+  // the seam compares correctly against `revealed`'s exact coordinates
+  // (`fog-of-war.md` §5.1 step 3). Only the circles and cells that can reach
+  // this zone are asked (`zoneVisibility.ts`): the same answer, without
+  // testing every cell against a big alliance's whole sight.
+  const zoneVisibility = devConfig.disableFogOfWar
+    ? allVisible(currentX, currentY, width, height)
+    : visibilityOfZone(sight, currentX, currentY, width, height, mr2HexShape());
 
   const credits = visibleCredits(user, placedSave.credits);
   const extras = sendresources === 1 ? { resources: placedSave.resources, credits } : {};
@@ -260,7 +260,14 @@ export const getArea: KoaController = async (ctx) => {
   // The player's own yard and outposts here, for their Flinger level as of now (`f`).
   const ownBaseids = visibleDbCells.filter((cell) => cell.uid === user.userid).map((cell) => cell.baseid);
 
-  const [ownersList, online, truces, pendingInvites, workers, attackers, friendMarks, attacked, photos, flingers] = await Promise.all([
+  // ... and for their armies as of now (`m`), all in one query (`monstersForMapMany`).
+  const ownSaveIds = visibleDbCells
+    .filter((cell) => cell.uid === user.userid && cell.save?.basesaveid)
+    .map((cell) => cell.save!.basesaveid);
+  const viewerMainId = user.save?.basesaveid;
+  const viewerMain = () => (viewerMainId ? loadArmyOwner(viewerMainId) : Promise.resolve(null));
+
+  const [ownersList, online, truces, pendingInvites, workers, attackers, friendMarks, attacked, photos, flingers, ownMonsters] = await Promise.all([
     postgres.em.find(User, { userid: { $in: ownerIds } }, {
       populate: ["save"],
       fields: CELL_OWNER_FIELDS,
@@ -284,6 +291,7 @@ export const getArea: KoaController = async (ctx) => {
     // a build or upgrade that ran out since the yard was last written counts now,
     // so the map's range, its Attack button and the server agree.
     flingerLevelsNow(ownBaseids),
+    monstersForMapMany(ownSaveIds, viewerMain, getCurrentDateTime()),
   ]);
 
   const cellOwners = new Map(ownersList.map((u) => [u.userid, u]));
@@ -299,6 +307,7 @@ export const getArea: KoaController = async (ctx) => {
   ctx.state.attacked = attacked;
   ctx.state.photos = photos;
   ctx.state.flingers = flingers;
+  ctx.state.ownMonsters = ownMonsters;
 
   const allianceIds = new Set<number>();
 
