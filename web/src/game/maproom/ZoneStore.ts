@@ -1,5 +1,6 @@
 import {
   AREA_BURST,
+  AREA_ZONE_SIZE,
   AREA_MAX_CONCURRENT,
   AREA_REFILL_PER_SECOND,
   RESOURCE_SYNC_SECONDS,
@@ -7,10 +8,12 @@ import {
 } from "@/config";
 import { getArea } from "@/api/maproom";
 import { ApiError, NetworkError } from "@/api/http";
-import type { AreaCellGrid, GetAreaResponse, MapCell, Resources } from "@/api/types";
+import { isPlayerCell, type AreaCellGrid, type GetAreaResponse, type MapCell, type PlayerCell, type Resources } from "@/api/types";
 import { TokenBucket } from "./TokenBucket";
 import { parseAllianceRoster, type MapAlliance } from "./mapAlliances";
 import {
+  ZONE_COLUMNS,
+  ZONE_ROWS,
   rangeCentre,
   zoneFor,
   zoneFromId,
@@ -25,6 +28,18 @@ export interface ZoneRecord extends ZoneRef {
   data: AreaCellGrid;
   /** Milliseconds since the epoch when the response was applied. */
   fetchedAt: number;
+  /**
+   * The sight version (`sv`) the data was cut to: the answer's own, or the sight it was found to
+   * still match when the sight changed (`ZoneStore.applySight`).
+   */
+  sv?: string;
+}
+
+/** One of the viewer's own cells (`mine`) in the cache, with where it is (`attackEntry.OwnCell`). */
+export interface StoredOwnCell {
+  readonly col: number;
+  readonly row: number;
+  readonly cell: PlayerCell;
 }
 
 /** What the store reports when a request fails. */
@@ -47,8 +62,20 @@ export interface ZoneStoreOptions {
   /** Injected for tests; milliseconds since an epoch. */
   now?: () => number;
   maxConcurrent?: number;
-  /** Fired once per applied response, so the renderer can invalidate. */
-  onZone?: (zone: ZoneRecord) => void;
+  /**
+   * Fired once per applied response whose drawn cells changed (a zone's first
+   * answer always), so the renderer can invalidate. `previous` is the record
+   * it replaces, if the zone was cached.
+   */
+  onZone?: (zone: ZoneRecord, previous: ZoneRecord | undefined) => void;
+  /**
+   * Fired instead of `onZone` when a refetched zone came back with the same
+   * drawn cells as the record it replaces (`drawnKey`): the map's picture
+   * needs no work, only what reads the clock (a truce running out) might.
+   * The new record is stored either way, so the owner's live army and
+   * resources (`m`, `r`) are always the latest.
+   */
+  onZoneRefreshed?: (zone: ZoneRecord) => void;
   /** Fired when a response carried the caller's own resources. */
   onResources?: (resources: Resources, credits: number | undefined) => void;
   /** Fired when a response carried the viewer's own alliance id (#334). */
@@ -78,6 +105,13 @@ export interface ZoneStoreOptions {
    * zones the server would answer as nothing but `{ fog: 1 }`.
    */
   skipZone?: (zone: ZoneRef) => boolean;
+  /**
+   * How many zones the cache keeps before forgetting the longest-unfetched ones (default
+   * `MAX_CACHED_ZONES`). Never a zone on screen or holding the viewer's own cells.
+   */
+  maxZones?: number;
+  /** Fired with the zones the cap just forgot, so the renderer forgets them too. */
+  onEvict?: (zones: ZoneRecord[]) => void;
 }
 
 interface QueueEntry extends ZoneRef {
@@ -85,6 +119,43 @@ interface QueueEntry extends ZoneRef {
   /** A forced entry survives a viewport change; a speculative one does not. */
   forced: boolean;
 }
+
+/**
+ * The keys of a cell the map never draws: the viewer's own cells carry their
+ * live resources (`r`) and army (`m`), which the server works out afresh on
+ * every answer, so they differ on nearly every refetch while nothing on the
+ * map does. Read by the panels and the attack screen from the store instead.
+ */
+const UNDRAWN_KEYS = new Set(["r", "m"]);
+
+/**
+ * A fingerprint of what the map draws from a zone's cells: the answer's JSON
+ * without the undrawn keys, hashed (53-bit, cyrb53) so a few hundred cached
+ * zones do not keep a second copy of their text.
+ */
+export const drawnKey = (data: AreaCellGrid): number => {
+  const text = JSON.stringify(data, (key, value: unknown) =>
+    UNDRAWN_KEYS.has(key) && typeof value === "object" && value !== null ? undefined : value,
+  );
+  let h1 = 0xdeadbeef;
+  let h2 = 0x41c6ce57;
+  for (let i = 0; i < text.length; i++) {
+    const ch = text.charCodeAt(i);
+    h1 = Math.imul(h1 ^ ch, 2654435761);
+    h2 = Math.imul(h2 ^ ch, 1597334677);
+  }
+  h1 = Math.imul(h1 ^ (h1 >>> 16), 2246822507) ^ Math.imul(h2 ^ (h2 >>> 13), 3266489909);
+  h2 = Math.imul(h2 ^ (h2 >>> 16), 2246822507) ^ Math.imul(h1 ^ (h1 >>> 13), 3266489909);
+  return 4294967296 * (2097151 & h2) + (h1 >>> 0);
+};
+
+/** Whether an answer holds one of the viewer's own cells. */
+const holdsOwnCell = (data: AreaCellGrid): boolean => {
+  for (const column of Object.values(data)) {
+    for (const cell of Object.values(column)) if (isPlayerCell(cell) && cell.mine === 1) return true;
+  }
+  return false;
+};
 
 /** Backoff after a failure, in milliseconds, by consecutive failure count. */
 const BACKOFF_MS = [1_000, 2_000, 5_000, 10_000, 15_000];
@@ -99,6 +170,14 @@ const RATE_LIMIT_BACKOFF_MS = 15_000;
  * whole world and then spend an hour draining it at a cell size of two pixels.
  */
 export const QUEUE_DEPTH = 64;
+
+/**
+ * How many zones the cache holds before it forgets the ones fetched longest ago (map lag, 25 Nov
+ * 2026: it never forgot any, so a long browse grew it, and everything that walks it, without
+ * end). About fifteen screenfuls at the usual zoom. A soft cap: zones on screen (zoomed far out,
+ * more than this) and zones holding the viewer's own cells are never forgotten.
+ */
+export const MAX_CACHED_ZONES = 300;
 
 /**
  * Loads, caches and refreshes Map Room 2 zones.
@@ -118,6 +197,15 @@ export class ZoneStore {
   revision = 0;
 
   private readonly zones = new Map<number, ZoneRecord>();
+  /** Each cached zone's `drawnKey`, to tell a refetch that changed nothing drawn. */
+  private readonly drawnKeys = new Map<number, number>();
+  /** The cached zones holding one of the viewer's own cells (`mine`), for `ownCells`. */
+  private readonly ownZones = new Set<number>();
+  /** When each cached zone first went into `zones` (its place in the map's order), for `ownCells`. */
+  private readonly placed = new Map<number, number>();
+  private placedCount = 0;
+  /** `ownCells`' answer, until the cache next changes. */
+  private ownCache: StoredOwnCell[] | null = null;
   private readonly queue = new Map<number, QueueEntry>();
   private readonly inFlight = new Set<number>();
 
@@ -174,6 +262,65 @@ export class ZoneStore {
   /** Every cached zone, for the minimap's coverage shading. */
   loadedZoneRefs(): Iterable<ZoneRecord> {
     return this.zones.values();
+  }
+
+  /**
+   * Every cell marked `mine` in the cache, once each: exactly `attackEntry.ownCellsIn` over every
+   * cached zone (a cell on a shared zone edge is read from the copy fetched last), worked out from
+   * the zones that hold one and kept until the cache changes (map lag, 25 Nov 2026: the map's
+   * once-a-second range update walked every cell of every cached zone).
+   */
+  ownCells(): readonly StoredOwnCell[] {
+    if (this.ownCache) return this.ownCache;
+    const found = new Map<string, StoredOwnCell>();
+    for (const id of this.ownZones) {
+      const zone = this.zones.get(id);
+      if (!zone) continue;
+      for (const [xKey, column] of Object.entries(zone.data)) {
+        for (const [yKey, cell] of Object.entries(column)) {
+          if (!isPlayerCell(cell) || cell.mine !== 1) continue;
+          const key = `${xKey},${yKey}`;
+          if (found.has(key)) continue;
+          const latest = this.latestCopy(Number(xKey), Number(yKey), xKey, yKey);
+          if (latest && isPlayerCell(latest) && latest.mine === 1) {
+            found.set(key, { col: Number(xKey), row: Number(yKey), cell: latest });
+          }
+        }
+      }
+    }
+    this.ownCache = [...found.values()];
+    return this.ownCache;
+  }
+
+  /**
+   * The copy of a cell from the cached zone that fetched it last (zones share their edge row and
+   * column, so up to four hold it); on a tie, the one later in the cache's order, as
+   * `ownCellsIn` reads them.
+   */
+  private latestCopy(x: number, y: number, xKey: string, yKey: string): MapCell | undefined {
+    let best: MapCell | undefined;
+    let bestAt = -Infinity;
+    let bestPlace = -Infinity;
+    // A cell on a multiple of the zone size also sits on the edge of the zone before (`zones.ts`).
+    const xs = x % AREA_ZONE_SIZE === 0 ? [x, x - AREA_ZONE_SIZE] : [x];
+    const ys = y % AREA_ZONE_SIZE === 0 ? [y, y - AREA_ZONE_SIZE] : [y];
+    for (const zx of xs) {
+      for (const zy of ys) {
+        if (zx < 0 || zy < 0) continue;
+        const ref = zoneFor(zx, zy);
+        if (ref.originX / AREA_ZONE_SIZE >= ZONE_COLUMNS || ref.originY / AREA_ZONE_SIZE >= ZONE_ROWS) continue;
+        const zone = this.zones.get(ref.id);
+        const cell = zone?.data[xKey]?.[yKey];
+        if (!zone || cell === undefined) continue;
+        const place = this.placed.get(ref.id) ?? 0;
+        if (zone.fetchedAt > bestAt || (zone.fetchedAt === bestAt && place > bestPlace)) {
+          best = cell;
+          bestAt = zone.fetchedAt;
+          bestPlace = place;
+        }
+      }
+    }
+    return best;
   }
 
   get pendingRequests(): number {
@@ -283,8 +430,35 @@ export class ZoneStore {
    */
   dropAll(): void {
     this.zones.clear();
+    this.drawnKeys.clear();
+    this.ownZones.clear();
+    this.placed.clear();
+    this.ownCache = null;
     this.queue.clear();
     this.revision += 1;
+  }
+
+  /**
+   * The player's sight changed (map lag, 25 Nov 2026): forgets only the cached zones `keep`
+   * refuses (those whose visible cells may differ under the new sight, `Sight` decides), and
+   * stamps the rest with the new `sv`, since they show exactly what it lets them. The "no memory"
+   * rule (`fog-of-war.md` §6) holds: a zone any of whose cells gained or lost sight is forgotten
+   * like `dropAll` forgets them all. The queue is emptied as there, for `skipZone`'s sake.
+   * Returns the forgotten records, for the renderer to forget too.
+   */
+  applySight(keep: (zone: ZoneRecord) => boolean, sv: string): ZoneRecord[] {
+    const dropped: ZoneRecord[] = [];
+    for (const [id, zone] of this.zones) {
+      if (keep(zone)) {
+        zone.sv = sv;
+        continue;
+      }
+      dropped.push(zone);
+      this.forget(id);
+    }
+    this.queue.clear();
+    this.revision += 1;
+    return dropped;
   }
 
   /**
@@ -430,14 +604,29 @@ export class ZoneStore {
       originY: entry.originY,
       data: response.data,
       fetchedAt: this.now(),
+      ...(response.sv !== undefined && { sv: response.sv }),
     };
+    const previous = this.zones.get(entry.id);
+    const key = drawnKey(response.data);
+    const unchanged = previous !== undefined && this.drawnKeys.get(entry.id) === key;
+    if (!previous) this.placed.set(entry.id, (this.placedCount += 1));
     this.zones.set(entry.id, record);
+    this.drawnKeys.set(entry.id, key);
+    if (holdsOwnCell(response.data)) this.ownZones.add(entry.id);
+    else this.ownZones.delete(entry.id);
+    this.ownCache = null;
     this.revision += 1;
+    const evicted = previous ? [] : this.evictBeyondCap();
     // A zone that lands after the map closed only fills the cache: the scene's
     // callbacks would draw on a renderer that is already destroyed (live error
     // "reading 'clear'" in drawHighlight, 9-10 Nov).
     if (this.stopped) return;
-    this.options.onZone?.(record);
+    // The minute's refresh of a zone that did not change (map lag, 25 Nov
+    // 2026): applying it again cost the whole picture's rework, a 10-80 ms
+    // hitch per zone, every minute, while standing still.
+    if (evicted.length > 0) this.options.onEvict?.(evicted);
+    if (unchanged) this.options.onZoneRefreshed?.(record);
+    else this.options.onZone?.(record, previous);
 
     if (response.resources) {
       this.options.onResources?.(response.resources, response.credits);
@@ -449,6 +638,36 @@ export class ZoneStore {
       this.options.onAllianceRoster?.(parseAllianceRoster(response.alliancedata));
     }
     this.options.onSightVersion?.(response.sv);
+  }
+
+  /** Takes one zone out of the cache and everything kept about it. */
+  private forget(id: number): void {
+    this.zones.delete(id);
+    this.drawnKeys.delete(id);
+    this.ownZones.delete(id);
+    this.placed.delete(id);
+    this.ownCache = null;
+  }
+
+  /**
+   * Forgets the zones fetched longest ago while the cache holds more than its cap
+   * (`MAX_CACHED_ZONES`), never one on screen or holding the viewer's own cells. Returns them.
+   */
+  private evictBeyondCap(): ZoneRecord[] {
+    const cap = this.options.maxZones ?? MAX_CACHED_ZONES;
+    const evicted: ZoneRecord[] = [];
+    while (this.zones.size > cap) {
+      let oldest: ZoneRecord | undefined;
+      for (const zone of this.zones.values()) {
+        if (this.visible.has(zone.id) || this.ownZones.has(zone.id)) continue;
+        if (!oldest || zone.fetchedAt < oldest.fetchedAt) oldest = zone;
+      }
+      if (!oldest) break;
+      this.forget(oldest.id);
+      evicted.push(oldest);
+    }
+    if (evicted.length > 0) this.revision += 1;
+    return evicted;
   }
 
   private handleFailure(entry: QueueEntry, caught: unknown): void {

@@ -16,6 +16,12 @@ export interface SceneContext {
   readonly height: number;
   /** Asks the manager to switch to another scene after the current frame. */
   goTo(scene: string): void;
+  /**
+   * Lets the scene say, each frame after its `update`, whether the stage needs drawing (null: on
+   * every frame, the default). Only the map uses it, to draw only when something changed. Cleared
+   * when the scene exits.
+   */
+  setRenderGate?(gate: (() => boolean) | null): void;
 }
 
 /**
@@ -47,6 +53,8 @@ export class SceneManager {
   private current: Scene | null = null;
   private pending: string | null = null;
   private switching = false;
+  /** The scene on show's say on whether the stage needs drawing this frame (`setRenderGate`). */
+  private renderGate: (() => boolean) | null = null;
 
   constructor(
     private readonly stage: Container,
@@ -87,6 +95,20 @@ export class SceneManager {
     this.current?.update?.(deltaSeconds);
   }
 
+  /**
+   * Whether the stage needs drawing this frame: yes, unless the scene on show has a render gate
+   * that says no. Always yes while scenes switch, and if the gate throws.
+   */
+  wantsRender(): boolean {
+    const gate = this.renderGate;
+    if (!gate || this.switching || this.pending) return true;
+    try {
+      return gate();
+    } catch {
+      return true;
+    }
+  }
+
   resize(width: number, height: number): void {
     this.width = width;
     this.height = height;
@@ -100,6 +122,7 @@ export class SceneManager {
 
   private exitCurrent(): void {
     this.current?.exit?.();
+    this.renderGate = null;
     this.current = null;
     this.currentName = null;
     this.stage.removeChildren();
@@ -140,6 +163,9 @@ export class SceneManager {
         width: this.width,
         height: this.height,
         goTo: (next) => this.goTo(next),
+        setRenderGate: (gate) => {
+          if (this.current === scene) this.renderGate = gate;
+        },
       });
 
       // A scene may be swapped out while its enter() is still awaiting.

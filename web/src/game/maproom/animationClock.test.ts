@@ -42,4 +42,11 @@ describe("the map's shared animation clock (still-map redraws, MR2 step 10)", ()
       expect(water.size).toBe(level === "high" ? 50 : 25);
     }
   });
+
+  it("steps the gulls and cloud shadows 30 times a second, moving or still (owner, 25 Nov: no idle rate)", () => {
+    const steps = new Set<number>();
+    for (let ms = 0; ms < 1000; ms += 1) steps.add(stepAt(ms, 1));
+    expect(steps.size).toBe(TICKS_PER_SECOND);
+    expect(TICKS_PER_SECOND).toBe(30);
+  });
 });

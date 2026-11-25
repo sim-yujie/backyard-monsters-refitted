@@ -56,4 +56,52 @@ describe("SceneManager", () => {
     await Promise.resolve();
     expect(scenes.activeScene).toBe("away");
   });
+
+  it("draws every frame unless the scene on show has a render gate, which goes when it exits", async () => {
+    let wanted = false;
+    const gated: Scene = {
+      enter: (context) => context.setRenderGate?.(() => wanted),
+    };
+    const scenes = manager()
+      .register("map", () => gated)
+      .register("yard", () => ({}));
+    await scenes.start("yard");
+    expect(scenes.wantsRender()).toBe(true);
+    scenes.goTo("map");
+    // A switch is coming: drawn.
+    expect(scenes.wantsRender()).toBe(true);
+    scenes.tick(0.016);
+    await Promise.resolve();
+    expect(scenes.activeScene).toBe("map");
+    expect(scenes.wantsRender()).toBe(false);
+    wanted = true;
+    expect(scenes.wantsRender()).toBe(true);
+    wanted = false;
+    scenes.goTo("yard");
+    scenes.tick(0.016);
+    await Promise.resolve();
+    expect(scenes.activeScene).toBe("yard");
+    expect(scenes.wantsRender()).toBe(true);
+  });
+
+  it("draws when the gate throws, and ignores a gate set by a scene no longer on show", async () => {
+    let late: ((gate: (() => boolean) | null) => void) | undefined;
+    const scenes = manager()
+      .register("map", () => ({
+        enter: (context) => {
+          context.setRenderGate?.(() => {
+            throw new Error("broken");
+          });
+          late = context.setRenderGate;
+        },
+      }))
+      .register("yard", () => ({}));
+    await scenes.start("map");
+    expect(scenes.wantsRender()).toBe(true);
+    scenes.goTo("yard");
+    scenes.tick(0.016);
+    await Promise.resolve();
+    late?.(() => false);
+    expect(scenes.wantsRender()).toBe(true);
+  });
 });
