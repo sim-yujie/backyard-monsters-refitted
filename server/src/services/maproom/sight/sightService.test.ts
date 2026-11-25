@@ -44,7 +44,7 @@ mock.module("../../../server.js", () => ({ postgres: { em }, redis }));
 const {
   ALLIANCE_SIGHT_CACHE_TTL_SECONDS,
   SIGHT_CACHE_TTL_SECONDS,
-  allianceSightGenerationKey,
+  allianceSightBuildKey,
   allianceSightKey,
   getPlayerSight,
   invalidateAllianceSight,
@@ -565,12 +565,10 @@ describe("the alliance union's long life (map-lag fix, 25 Nov 2026)", () => {
     expect(await redis.ttl(allianceSightKey(9))).toBe(SIGHT_CACHE_TTL_SECONDS);
   });
 
-  test("invalidateAllianceSight moves the alliance's generation each time", async () => {
-    await invalidateAllianceSight(9);
-    const first = await redis.get(allianceSightGenerationKey(9));
+  test("invalidateAllianceSight drops a running rebuild's mark with the union", async () => {
+    await redis.set(allianceSightBuildKey(9), "a rebuild", "EX", 60);
     await invalidateAllianceSight(9);
 
-    expect(first).not.toBeNull();
-    expect(await redis.get(allianceSightGenerationKey(9))).not.toBe(first);
+    expect(await redis.get(allianceSightBuildKey(9))).toBeNull();
   });
 });

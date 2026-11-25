@@ -57,14 +57,15 @@ export const SIGHT_CACHE_TTL_SECONDS = 30;
 export const ALLIANCE_SIGHT_CACHE_TTL_SECONDS = 300;
 
 /**
- * Bumped each time the alliance union is dropped, so a rebuild that started
- * before the drop (and so read the members as they were) does not store its
- * stale answer for the union's long life ({@link cachedAllianceSight}).
+ * Set by a rebuild of the alliance union before it reads, and dropped with
+ * the union, so a rebuild that overlapped a drop (and so may have read the
+ * members as they were) does not store its stale answer for the union's long
+ * life ({@link cachedAllianceSight}).
  */
-export const allianceSightGenerationKey = (allianceId: number): string => `sight:ally:${allianceId}:gen`;
+export const allianceSightBuildKey = (allianceId: number): string => `sight:ally:${allianceId}:build`;
 
-/** How long a generation counter outlives its last bump: well past any rebuild. */
-const GENERATION_TTL_SECONDS = 3600;
+/** How long a rebuild's mark lasts: well past any rebuild. */
+const BUILD_MARK_TTL_SECONDS = 60;
 
 /**
  * A sight circle, tagged with whose it is (`fog-of-war.md` §5.2, §7): the
@@ -230,7 +231,7 @@ const cachedOwnSight = async (user: User): Promise<CachedHalf> => {
 /**
  * The alliance union, cached for {@link ALLIANCE_SIGHT_CACHE_TTL_SECONDS}, or
  * only until the first member's Flinger upgrade runs out, when sooner. A
- * rebuild that overlapped a drop (the generation moved while it read) is kept
+ * rebuild that overlapped a drop (its mark was dropped while it read) is kept
  * for the short {@link SIGHT_CACHE_TTL_SECONDS} only, as before the long life.
  */
 const cachedAllianceSight = async (allianceId: number, worldid: string): Promise<CachedHalf> => {
@@ -238,15 +239,15 @@ const cachedAllianceSight = async (allianceId: number, worldid: string): Promise
   const cached = await readCached(key);
   if (cached) return cached;
 
-  const generationKey = allianceSightGenerationKey(allianceId);
-  const generationBefore = await redis.get(generationKey);
+  const buildKey = allianceSightBuildKey(allianceId);
+  const mark = `${process.pid}:${Date.now()}:${Math.random()}`;
+  await redis.set(buildKey, mark, "EX", BUILD_MARK_TTL_SECONDS);
   const { half, nextChangeIn } = await loadAllianceSight(allianceId, worldid);
-  const generationAfter = await redis.get(generationKey);
+  const overlapped = (await redis.get(buildKey)) !== mark;
 
-  const ttl =
-    generationBefore !== generationAfter
-      ? SIGHT_CACHE_TTL_SECONDS
-      : Math.max(1, Math.min(ALLIANCE_SIGHT_CACHE_TTL_SECONDS, nextChangeIn ?? ALLIANCE_SIGHT_CACHE_TTL_SECONDS));
+  const ttl = overlapped
+    ? SIGHT_CACHE_TTL_SECONDS
+    : Math.max(1, Math.min(ALLIANCE_SIGHT_CACHE_TTL_SECONDS, nextChangeIn ?? ALLIANCE_SIGHT_CACHE_TTL_SECONDS));
   await redis.setex(key, ttl, JSON.stringify(half));
   return half;
 };
@@ -315,12 +316,8 @@ export const invalidatePlayerSight = (userid: number): Promise<number> =>
  *
  * @param allianceId - The alliance whose membership changed.
  */
-export const invalidateAllianceSight = async (allianceId: number): Promise<number> => {
-  const generationKey = allianceSightGenerationKey(allianceId);
-  await redis.incr(generationKey);
-  await redis.expire(generationKey, GENERATION_TTL_SECONDS);
-  return redis.del(allianceSightKey(allianceId));
-};
+export const invalidateAllianceSight = (allianceId: number): Promise<number> =>
+  redis.del(allianceSightKey(allianceId), allianceSightBuildKey(allianceId));
 
 /** A player's alliance, read fresh for a caller holding only their id. */
 const allianceIdOf = async (userid: number): Promise<Pick<User, "userid" | "alliance_id">> => {
