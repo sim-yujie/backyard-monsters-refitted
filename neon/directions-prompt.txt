@@ -1,0 +1,21 @@
+You are the UX designer for Backyard Monsters Revamped (a browser remake of the old Flash game; desktop, iPad and phone; two looks: Modern = steel/wood painted HUD, Classic = Flash refreshed). Give DESIGN DIRECTIONS only (no code).
+
+The pictures in the r0/ folder of this workspace are the real world map today, logged in as a test player:
+- d1280-modern-map.png / d1280-modern-panel.png: desktop 1280x720, Modern look, map alone and with a cell's info panel open (right side panel: Attack, View yard, Message, Truce...).
+- d1280-classic-map.png / d1280-classic-panel.png: same in Classic look.
+- p390-modern-*.png / p390-classic-*.png: phone 390x844 at 3x; on a phone the info panel is a bottom sheet.
+The map is a hex map. Each cell is a wild monster camp (tribe icon + level number), a player's main yard or outpost (building + name plate; a shield icon on the plate = damage protection), or water. Own cells have a cyan border.
+
+NEW FEATURE (beta 9): LIVE map. When anything on a cell changes (owner changes / a camp or outpost is taken, a shield appears or ends, someone starts attacking it = "busy", level or damage changes), every player looking at that part of the map gets it pushed within 1-2 s over a live connection. Today the map silently re-asks every 60 s.
+Scale target: 4,000-40,000 daily players. In a busy zone that means SEVERAL CHANGES PER SECOND on screen at once. The map now renders on demand: motion must be cheap (a short effect that stops; nothing running per frame when nothing changes; no permanent animation).
+
+Three UX questions. For EACH, give 2-3 distinct directions (name them A/B/C), each with: what the player sees (exact look: shape, colour, size, duration, easing; Modern vs Classic differences), when it shows / does not show, how it scales to 10+ changes in a few seconds, phone vs desktop differences, and cost. Then say which one you recommend and why, in one or two sentences.
+
+Q1 "Cell changed": how a cell shows it just changed. Options to consider: a short flash/pulse on the hex, an expanding ring, a brief glow on the plate only, or nothing at all (the cell just updates). Must stay calm when many cells change at once. Should own cells / cells in the player's range / the selected cell get anything different? Should different change kinds (taken, shield, busy) look different?
+
+Q2 "Open info panel when its cell changes": the player has a cell's info panel open (picture d1280-modern-panel.png) and someone else starts attacking it, takes it (it becomes someone else's outpost), or a shield appears. What does the panel do? Options to consider: update in place with the changed line highlighted, a banner at the top of the panel ("Taken by X" / "Under attack" / "Shield up"), disable the Attack button with a reason, close the panel, keep the panel but ask before swapping content. The player might be about to press Attack at that very moment, so avoid buttons jumping under the finger.
+
+Q3 "Connection lost": a small mark that the map is not live right now (the game then falls back to re-asking every 3-5 minutes). Where does it sit on desktop and phone (top bar, near the minimap, a notice chip at top centre like the existing "You are offline" notice), when does it show (only after a few seconds down, to avoid flicker on short drops), what it says (icons over words: short text, an icon), whether it can be tapped (retry), how it goes away (a brief "Live again" or silently).
+
+House rules: short in-game text, icons over words, tap targets >= 44 px on touch, Modern and Classic both, nothing that flickers. Answer in plain text with headings Q1, Q2, Q3.
+Read the PNG files directly with your file viewer; do NOT run any shell commands.

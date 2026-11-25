@@ -23,6 +23,7 @@ import { BuildingAvatars } from "./buildingAvatars";
 import { cellLift, liftCorners, setFlatGround } from "./ground";
 import { GroundArt } from "./groundArt";
 import { LiveMap } from "./live/LiveMap";
+import { CellPulses } from "./live/CellPulses";
 import { CONSTRUCTION_BADGE_URL, IDLE_HELPER_URL, MapPicture } from "./mapPicture";
 import { AllianceRoster, MapShields, type MapAlliance } from "./mapAlliances";
 import { friendMarkOf, friendMarksKey } from "@/game/friends/friendMarks";
@@ -107,6 +108,8 @@ export class MapRenderer {
   /** Every chunk's badges, markers and plates, over every chunk's ground. */
   private readonly worldTop = new Container();
   private readonly highlight = new Graphics();
+  /** PROTOTYPE (proto/live-map-ux): Q1's "cell changed" pulses, on the ground under the highlight. */
+  readonly pulses = new CellPulses((col, row) => this.liftAt(col, row));
   /**
    * The upright marker layer for the tilted map (`markerPins.ts`): while the
    * tilt is on, `world` and `worldTop` leave `root` (so they are not drawn
@@ -251,6 +254,7 @@ export class MapRenderer {
       this.ground,
       this.world,
       this.range.container,
+      this.pulses.graphics,
       this.worldTop,
       this.live.overlay,
       this.highlight,
@@ -509,7 +513,9 @@ export class MapRenderer {
         : false;
     const pulseStepped = this.borders?.animate(nowPaint, range) ?? false;
     const cloudsStepped = this.clouds?.animate(nowPaint, range) ?? false;
-    this.paintedStepped = waterStepped || groundReady || pulseStepped || bordersChanged || cloudsStepped || fogChanged;
+    const livePulses = this.pulses.animate(nowPaint, zoom);
+    this.paintedStepped =
+      waterStepped || groundReady || pulseStepped || bordersChanged || cloudsStepped || fogChanged || livePulses;
     this.range.flush();
     const atlas = this.atlas;
     if (!atlas) return false;

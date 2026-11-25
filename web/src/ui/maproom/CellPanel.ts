@@ -18,6 +18,7 @@ import { friendMarkOf, type FriendMark } from "@/game/friends/friendMarks";
 import { friendBadge } from "@/ui/friends/friendBadge";
 import { shieldUrl } from "@/game/alliance/allianceRules";
 import type { MapAlliance } from "@/game/maproom/mapAlliances";
+import { liveOptions, type LiveChangeKind } from "@/game/maproom/live/liveProto";
 
 /** The alliance chip's tooltip (beta 7). */
 export const CELL_ALLIANCE_TEXT = {
@@ -214,6 +215,22 @@ export class CellPanel {
   private payload: MapCell | undefined;
   private rangeOn = false;
   private closed = false;
+  /**
+   * PROTOTYPE (proto/live-map-ux), Q2: what the open panel does when its cell changes under it.
+   * `latest` is the newest payload seen (the panel may be holding an older one on screen);
+   * `held` is the payload kept on screen until the player taps to update (A on a takeover, C).
+   */
+  private latest: MapCell | undefined;
+  private held: { payload: MapCell | undefined; kind: LiveChangeKind; name: string } | null = null;
+  private strip: { kind: LiveChangeKind; name: string; until: number | null } | null = null;
+  private lastLive: { kind: LiveChangeKind; at: number } | null = null;
+  private guardUntil = 0;
+  private guardTimer: ReturnType<typeof setTimeout> | null = null;
+  private readonly liveBar: HTMLButtonElement;
+  private readonly liveBarText: HTMLElement;
+  private readonly liveBarSub: HTMLElement;
+  private readonly liveStrip: HTMLElement;
+  private readonly liveStripText: HTMLElement;
   /** Countdown chips, refreshed once a second by `tick`. */
   private countdowns: { node: HTMLElement; label: string; expiresAt: number }[] = [];
 
@@ -265,8 +282,28 @@ export class CellPanel {
     this.attackButton = button("btn btn--primary mr2-cell__primary");
     this.attackButton.append(icon("attack", 20, "map-icon"), el("span", "", "Attack"));
     this.attackButton.addEventListener("click", () => {
-      if (!this.attackButton.disabled) options.onAttack();
+      // PROTOTYPE: a tap that lands in the first 800 ms after the cell changed does nothing.
+      if (!this.attackButton.disabled && performance.now() >= this.guardUntil) options.onAttack();
     });
+    // PROTOTYPE (Q2 A and C): the bar that takes Attack's place while the panel holds the old cell.
+    this.liveBarText = el("span", "mr2-live-bar__text");
+    this.liveBarSub = el("span", "mr2-live-bar__sub");
+    this.liveBar = button("btn mr2-live-bar");
+    this.liveBar.hidden = true;
+    const liveBarWords = el("span", "mr2-live-bar__words");
+    liveBarWords.append(this.liveBarText, this.liveBarSub);
+    this.liveBar.append(icon("pin", 20, "map-icon mr2-live-bar__icon"), liveBarWords);
+    this.liveBar.addEventListener("click", () => {
+      this.held = null;
+      this.lastLive = { kind: "minor", at: performance.now() };
+      this.update(this.latest);
+    });
+    // PROTOTYPE (Q2 B): the strip laid over the panel's top edge.
+    this.liveStripText = el("span", "mr2-live-strip__text");
+    this.liveStrip = el("div", "mr2-live-strip");
+    this.liveStrip.hidden = true;
+    this.liveStrip.setAttribute("role", "status");
+    this.liveStrip.append(this.liveStripText);
     this.attackNote = el("p", "mr2-cell__note");
 
     this.openButton = button("btn btn--primary mr2-cell__primary");
@@ -342,7 +379,7 @@ export class CellPanel {
     this.friendRow.hidden = true;
 
     const actions = el("div", "mr2-cell__actions");
-    actions.append(this.attackButton, this.openButton);
+    actions.append(this.liveBar, this.attackButton, this.openButton);
     for (const action of this.extras) actions.append(action.button);
     actions.append(this.secondary, this.social, this.friendRow, this.inviteRow, this.moves);
 
@@ -356,6 +393,7 @@ export class CellPanel {
     this.more.append(summary, this.facts);
 
     this.element.append(
+      this.liveStrip,
       grip,
       head,
       this.chips,
@@ -386,14 +424,28 @@ export class CellPanel {
   show(cell: OffsetCell, payload: MapCell | undefined): void {
     const moved = this.cell?.col !== cell.col || this.cell?.row !== cell.row;
     this.cell = cell;
-    if (moved) this.more.open = false;
+    if (moved) {
+      this.more.open = false;
+      // PROTOTYPE: a different cell starts with no live state.
+      this.latest = undefined;
+      this.held = null;
+      this.strip = null;
+      this.lastLive = null;
+      this.guardUntil = 0;
+    }
     this.update(payload);
   }
 
   /** Re-renders with fresh payload, keeping the panel where it is. */
-  update(payload: MapCell | undefined): void {
+  update(incoming: MapCell | undefined): void {
     const cell = this.cell;
     if (!cell) return;
+    // PROTOTYPE (Q2): what changed since the last payload, and what the chosen option does about it.
+    const previous = this.latest;
+    this.latest = incoming;
+    const change = previous && incoming ? liveChangeOf(previous, incoming) : null;
+    if (change && previous) this.noteLive(change, previous, incoming);
+    const payload = this.held ? this.held.payload : incoming;
     this.payload = payload;
     this.element.classList.toggle(
       "mr2-cell--repeat",
@@ -403,6 +455,139 @@ export class CellPanel {
     for (const action of this.extras) action.setCell(cell, payload);
     this.render(cell, payload);
     for (const action of this.extras) if (action.chip) this.chips.append(action.chip);
+    this.applyLive(incoming);
+  }
+
+  /* ── PROTOTYPE (proto/live-map-ux): Q2 ─────────────────────────────── */
+
+  private noteLive(kind: LiveChangeKind, previous: MapCell, next: MapCell | undefined): void {
+    const now = performance.now();
+    const option = liveOptions().q2;
+    const name = next && isPlayerCell(next) ? (next.mine === 1 ? "you" : next.n) : "wild monsters";
+    this.lastLive = { kind, at: now };
+    if (kind === "minor") return;
+    if (option === "A") {
+      if (kind === "taken") this.held = { payload: this.held?.payload ?? previous, kind, name };
+      this.guard(now);
+    } else if (option === "B") {
+      this.strip = { kind, name, until: kind === "taken" ? now + 3500 : null };
+      if (kind === "attackEnd" || kind === "shieldEnd") this.strip = null;
+    } else if (kind === "taken" || kind === "attack" || kind === "shield") {
+      this.held = { payload: this.held?.payload ?? previous, kind, name };
+    }
+  }
+
+  /** Attack ignores taps for 800 ms after a change (Q2 A), and comes back when that ends. */
+  private guard(now: number): void {
+    this.guardUntil = now + 800;
+    if (this.guardTimer) clearTimeout(this.guardTimer);
+    this.guardTimer = setTimeout(() => {
+      this.guardTimer = null;
+      if (!this.closed) this.update(this.latest);
+    }, 820);
+  }
+
+  private applyLive(latest: MapCell | undefined): void {
+    const option = liveOptions().q2;
+    const now = performance.now();
+    const shown = this.payload;
+    const attacking = !!shown && isPlayerCell(shown) && shown.atk === 1;
+    const shielded = !!shown && isPlayerCell(shown) && shown.p === 1;
+    this.liveBar.hidden = true;
+    this.liveStrip.hidden = true;
+    this.element.classList.remove("mr2-cell--veiled", "mr2-cell--held");
+    for (const node of this.element.querySelectorAll(".mr2-live-hl")) node.classList.remove("mr2-live-hl");
+
+    // Someone attacking it right now blocks Attack in every option (the server would refuse it).
+    if (attacking && !this.attackButton.hidden) {
+      this.attackButton.disabled = true;
+      this.attackButton.title = "Someone is attacking this yard right now.";
+    }
+
+    // The changed line gets a short warm wash.
+    const recent = this.lastLive && now - this.lastLive.at < 900 ? this.lastLive.kind : null;
+    if (recent && option !== "C") {
+      const target =
+        recent === "attack" || recent === "attackEnd"
+          ? this.chips.querySelector(".mr2-chip--attacked") ?? this.attackButton
+          : recent === "shield" || recent === "shieldEnd"
+            ? this.chips.querySelector(".mr2-chip--shield") ?? this.attackButton
+            : this.title.parentElement;
+      target?.classList.add("mr2-live-hl");
+    }
+
+    if (option === "A") {
+      if (this.held) {
+        // The old cell stays; Attack's slot says what happened and updates on a tap.
+        this.attackButton.hidden = true;
+        this.openButton.hidden = true;
+        this.liveBar.hidden = false;
+        this.liveBar.className = "btn mr2-live-bar mr2-live-bar--taken";
+        this.liveBarText.textContent = `Taken by ${this.held.name}`;
+        this.liveBarSub.textContent = "Tap to update";
+        this.liveBar.querySelector(".mr2-live-bar__words")?.append(this.liveBarSub);
+        this.element.classList.add("mr2-cell--held");
+        return;
+      }
+      if (!this.attackButton.hidden) {
+        const label = this.attackButton.lastElementChild as HTMLElement;
+        const reason = attacking ? "Under attack" : shielded ? "Shield up" : null;
+        label.textContent = reason ?? "Attack";
+        this.attackButton.firstElementChild?.replaceWith(
+          icon(attacking ? "attack" : shielded ? "shield" : "attack", 20, "map-icon"),
+        );
+        this.attackButton.classList.toggle("mr2-cell__primary--blocked", reason !== null);
+        if (reason) this.attackNote.hidden = true;
+        if (now < this.guardUntil) this.attackButton.disabled = true;
+      }
+      return;
+    }
+
+    if (option === "B") {
+      const strip = this.strip;
+      if (!strip) return;
+      const holds =
+        strip.kind === "taken"
+          ? strip.until !== null && (now < strip.until || frozen())
+          : strip.kind === "attack"
+            ? attacking
+            : strip.kind === "shield"
+              ? shielded
+              : false;
+      if (!holds) {
+        this.strip = null;
+        return;
+      }
+      this.liveStrip.hidden = false;
+      this.liveStrip.dataset.kind = strip.kind;
+      this.liveStripText.replaceChildren(
+        icon(strip.kind === "taken" ? "pin" : strip.kind === "attack" ? "attack" : "shield", 16, "map-icon"),
+        strip.kind === "taken" ? `Taken by ${strip.name}` : strip.kind === "attack" ? "Under attack" : "Shield up",
+      );
+      if (strip.until !== null && !frozen()) {
+        setTimeout(() => {
+          if (!this.closed) this.update(this.latest);
+        }, Math.max(50, strip.until - now + 20));
+      }
+      return;
+    }
+
+    // C: the panel is veiled and frozen until Update.
+    if (this.held) {
+      this.element.classList.add("mr2-cell--veiled");
+      this.attackButton.disabled = true;
+      this.liveBar.hidden = false;
+      this.liveBar.className = `btn mr2-live-bar mr2-live-bar--prompt mr2-live-bar--${this.held.kind}`;
+      this.liveBar.firstElementChild?.replaceWith(
+        icon(this.held.kind === "taken" ? "pin" : this.held.kind === "attack" ? "attack" : "shield", 20, "map-icon mr2-live-bar__icon"),
+      );
+      this.liveBarText.textContent =
+        this.held.kind === "taken" ? `Taken by ${this.held.name}` : this.held.kind === "attack" ? "Under attack" : "Shield up";
+      this.liveBarSub.textContent = "Update";
+      // C's Update is a pill of its own at the right.
+      this.liveBar.append(this.liveBarSub);
+    }
+    void latest;
   }
 
   /** Keeps the flinger line's switch in step with "My range" (#177). */
@@ -536,6 +721,12 @@ export class CellPanel {
     if (outpost) this.addGroundChip(payload.i);
     // The land feature (`landFeatureRow.ts`): an outpost's, never a main yard's.
     if (outpost) this.addLandChip(payload.lf);
+    if (payload.atk === 1) {
+      // PROTOTYPE (proto/live-map-ux): someone is attacking it right now.
+      this.addChip("attack", "Under attack", "danger", "Someone is attacking this yard right now.").parentElement?.classList.add(
+        "mr2-chip--attacked",
+      );
+    }
     if (payload.p === 1) {
       // The end, when the server sends it (#187); a bare "Protected" otherwise.
       if (payload.pe !== undefined && payload.pe > Date.now() / 1000) {
@@ -543,11 +734,12 @@ export class CellPanel {
       } else {
         this.addChip("shield", "Protected", "info", "Under damage protection.");
       }
+      this.chips.lastElementChild?.classList.add("mr2-chip--shield");
     }
     if (payload.t !== undefined && payload.t > Date.now() / 1000) {
       this.addCountdown("truce", "Truce", payload.t);
     }
-    if (payload.lo !== 0) {
+    if (payload.lo !== 0 && payload.atk !== 1) {
       this.addChip(
         "clock",
         "Busy",
@@ -776,3 +968,22 @@ const formatCountdown = (seconds: number): string => {
 };
 
 const hexToCss = (colour: number): string => `#${colour.toString(16).padStart(6, "0")}`;
+
+/** PROTOTYPE: stills hold every timed live effect (`__liveDemo.freeze`). */
+const frozen = (): boolean => document.documentElement.dataset["liveFreeze"] === "1";
+
+/** PROTOTYPE (proto/live-map-ux): what a live push changed on the open cell, or null for nothing. */
+export const liveChangeOf = (before: MapCell, after: MapCell): LiveChangeKind | null => {
+  const beforePlayer = isPlayerCell(before);
+  const afterPlayer = isPlayerCell(after);
+  if (beforePlayer !== afterPlayer) return "taken";
+  if (beforePlayer && afterPlayer) {
+    if (before.uid !== after.uid) return "taken";
+    if ((before.atk ?? 0) !== (after.atk ?? 0)) return after.atk === 1 ? "attack" : "attackEnd";
+    if (before.p !== after.p) return after.p === 1 ? "shield" : "shieldEnd";
+    if (before.dm !== after.dm || before.l !== after.l || before.lo !== after.lo) return "minor";
+    return null;
+  }
+  if ("dm" in before && "dm" in after && (before.dm !== after.dm || before.l !== after.l)) return "minor";
+  return null;
+};

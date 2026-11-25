@@ -1074,6 +1074,8 @@ export interface PlayerCell {
   lo: number;
   /** 1 while damage protection is active. */
   p: number;
+  /** PROTOTYPE (proto/live-map-ux): 1 while someone is attacking this cell right now (a live push would set it). */
+  atk?: 1;
   /** When damage protection ends, unix seconds; sent while it runs (#187). */
   pe?: number;
   /** Truce expiry, unix seconds. Absent on the caller's own cell. */

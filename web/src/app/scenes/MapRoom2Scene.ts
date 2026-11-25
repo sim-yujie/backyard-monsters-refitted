@@ -140,6 +140,8 @@ import { outpostName } from "@/game/yard/outpostLabels";
 import { formatSpan } from "@/ui/attack/EndAttackPanel";
 import { previewEndTakeover, type EndTakeoverPreviewOptions } from "@/ui/attack/endTakeoverPreview";
 import { devStats } from "../devDetails";
+import { LiveDemo } from "@/game/maproom/live/LiveDemo";
+import { LiveMark } from "@/ui/maproom/LiveMark";
 import { connectMr2TimingReport } from "../mr2TimingReport";
 import type { Scene, SceneContext } from "../SceneManager";
 import { SceneName } from "../sceneName";
@@ -278,6 +280,9 @@ export class MapRoom2Scene implements Scene {
   /** How long standing the markers took last frame, in milliseconds (speed readout). */
   private markerMs = 0;
   private input: MapInput | null = null;
+  /** PROTOTYPE (proto/live-map-ux, dev only): the fake live pushes and Q3's "not live" mark. */
+  private liveDemo: LiveDemo | null = null;
+  private liveMark: LiveMark | null = null;
 
   /**
    * The current viewport size in CSS px. `SceneContext.width`/`height` are a
@@ -620,6 +625,38 @@ export class MapRoom2Scene implements Scene {
         this.setTilt(strength);
         return strength;
       };
+      // PROTOTYPE (proto/live-map-ux): `__liveDemo` fakes the live map's pushes (see LiveDemo.ts).
+      this.liveMark = new LiveMark(
+        () => this.ui?.liveMarkHosts() ?? null,
+        () => undefined,
+      );
+      this.liveMark.place();
+      this.liveDemo = new LiveDemo({
+        store: this.store,
+        renderer: this.renderer,
+        range: () => this.range,
+        selected: () => this.selected,
+        select: (cell) => this.jumpTo(cell),
+        deselect: () => this.clearSelection(),
+        view: (cell, zoom) => this.jumpTo(cell, zoom, false),
+        inRange: (cell) => reachTo(cell, this.rangeSources).inRange,
+        changed: (cells) => {
+          const shown = this.ui?.shownCell;
+          if (shown && cells.some((cell) => cell.col === shown.col && cell.row === shown.row)) {
+            this.ui?.updateCell(this.store.getCell(shown.col, shown.row));
+          }
+          this.camera.dirty = true;
+        },
+        setConnection: (down, instant) => this.liveMark?.setDown(down, instant),
+        showBack: () => this.liveMark?.showBack(),
+        optionsChanged: () => {
+          this.liveMark?.place();
+          this.renderer.pulses.clear();
+          const shown = this.ui?.shownCell;
+          if (shown) this.ui?.updateCell(this.store.getCell(shown.col, shown.row));
+        },
+      });
+      (globalThis as Record<string, unknown>)["__liveDemo"] = this.liveDemo.api();
       // The end panel's takeover offer, without finishing a real attack (#82).
       (globalThis as Record<string, unknown>)["__takeoverPreview"] = {
         endPanel: (options: EndTakeoverPreviewOptions) => previewEndTakeover(context.overlay.modal, options),
@@ -675,6 +712,11 @@ export class MapRoom2Scene implements Scene {
     window.removeEventListener("online", this.handleOnline);
     window.removeEventListener("offline", this.handleOffline);
     if (import.meta.env.DEV) delete (globalThis as Record<string, unknown>)["__takeoverPreview"];
+    if (import.meta.env.DEV) delete (globalThis as Record<string, unknown>)["__liveDemo"];
+    this.liveDemo?.destroy();
+    this.liveDemo = null;
+    this.liveMark?.destroy();
+    this.liveMark = null;
 
     this.transfer?.destroy();
     this.transfer = null;
@@ -693,6 +735,7 @@ export class MapRoom2Scene implements Scene {
     this.viewportHeight = height;
     this.camera.resize(width, height);
     if (this.tilt) this.setTilt(this.tiltStrength);
+    this.liveMark?.place();
   }
 
   /**

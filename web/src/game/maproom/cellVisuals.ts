@@ -52,6 +52,8 @@ export interface CellAppearance {
   own: boolean;
   /** Damage protection: the glass dome over the building (#338). */
   protected: boolean;
+  /** PROTOTYPE (proto/live-map-ux): someone is attacking it right now (crossed-swords badge). */
+  underAttack: boolean;
   /** An active truce: a small green tick (#338), no dome. */
   truce: boolean;
   /**
@@ -372,6 +374,7 @@ export const loadingAppearance = (): CellAppearance => ({
   plate: "",
   own: false,
   protected: false,
+  underAttack: false,
   truce: false,
   idleWorker: false,
   underConstruction: false,
@@ -464,6 +467,7 @@ export const fogAppearance = (coord?: { x: number; y: number }, sight?: SightLoo
     plate: "",
     own: false,
     protected: false,
+    underAttack: false,
   truce: false,
   idleWorker: false,
   underConstruction: false,
@@ -522,6 +526,7 @@ export const appearanceOf = (
     plate: "",
     own: false,
     protected: false,
+    underAttack: false,
   truce: false,
   idleWorker: false,
   underConstruction: false,
@@ -561,6 +566,7 @@ export const appearanceOf = (
       plate: cell.n,
       own,
       protected: cell.p === 1,
+      underAttack: cell.atk === 1,
       truce: truceActive,
       idleWorker: classicLook() && own && outpost && cell.wi === 1,
       underConstruction: !classicLook() && own && outpost && cell.wb === 1,

@@ -16,6 +16,7 @@ import { addFriendButton } from "@/ui/friends/AddFriendButton";
 import { Hud } from "@/ui/Hud";
 import { ZoomControl } from "@/ui/ZoomControl";
 import { CellPanel, type OwnFlinger, type OwnMoves } from "./CellPanel";
+import type { LiveMarkHosts } from "./LiveMark";
 import { FindControl } from "./FindControl";
 import { HoverCard, type HoverCardContent } from "./HoverCard";
 import { Minimap } from "./Minimap";
@@ -271,6 +272,12 @@ export class MapRoomUi {
     bottomRight.append(tools);
     this.tools = tools;
     return this;
+  }
+
+  /** PROTOTYPE (proto/live-map-ux): where Q3's "not live" mark can sit. */
+  liveMarkHosts(): LiveMarkHosts | null {
+    if (!this.container) return null;
+    return { notices: this.notices.element, hud: this.hud.element, tools: this.tools, layer: this.container };
   }
 
   /** Puts a tool button at the head of the tool row: the Mail button (#193). */

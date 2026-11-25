@@ -162,6 +162,28 @@ export class ZoneStore {
     return zone?.data[String(x)]?.[String(y)];
   }
 
+  /**
+   * PROTOTYPE (proto/live-map-ux): cells the live-map demo changed by hand, kept over any zone that
+   * is fetched again so the 60 s re-ask does not undo them. Never filled outside the dev demo.
+   */
+  private readonly demoCells = new Map<string, { x: number; y: number; cell: MapCell }>();
+
+  /** PROTOTYPE: replaces one cell as a live push would; returns its zone, or undefined while unloaded. */
+  patchCell(x: number, y: number, cell: MapCell): ZoneRecord | undefined {
+    this.demoCells.set(`${x},${y}`, { x, y, cell });
+    const zone = this.zones.get(zoneFor(x, y).id);
+    if (!zone) return undefined;
+    const column = (zone.data[String(x)] ??= {});
+    column[String(y)] = cell;
+    this.revision += 1;
+    return zone;
+  }
+
+  /** PROTOTYPE: forgets the demo's changes (the next fetch shows the real cells). */
+  clearPatches(): void {
+    this.demoCells.clear();
+  }
+
   /** The cached record for a zone, for staleness displays. */
   getZone(id: number): ZoneRecord | undefined {
     return this.zones.get(id);
@@ -432,6 +454,9 @@ export class ZoneStore {
       fetchedAt: this.now(),
     };
     this.zones.set(entry.id, record);
+    for (const { x, y, cell } of this.demoCells.values()) {
+      if (zoneFor(x, y).id === entry.id) (record.data[String(x)] ??= {})[String(y)] = cell;
+    }
     this.revision += 1;
     // A zone that lands after the map closed only fills the cache: the scene's
     // callbacks would draw on a renderer that is already destroyed (live error

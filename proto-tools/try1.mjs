@@ -1,0 +1,11 @@
+import { openMap, demo, SHOTS } from "./lib.mjs";
+const [skin, w, h, q1] = process.argv.slice(2);
+const { browser, page } = await openMap({ skin, W: +w, H: +h, query: `&live1=${q1}` });
+console.log(await demo(page, () => JSON.stringify(__liveDemo.cells().length)));
+console.log(await demo(page, () => __liveDemo.storm({ count: 14, seconds: 1.2, seed: 3 })));
+await page.waitForTimeout(1100);
+await demo(page, () => __liveDemo.stop());
+await page.waitForTimeout(800);
+await page.screenshot({ path: `${SHOTS}/try-${skin}-${q1}.png` });
+console.log(await demo(page, () => __liveDemo.pulses()));
+await browser.close();

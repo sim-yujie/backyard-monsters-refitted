@@ -1,4 +1,4 @@
-import { Container, NineSliceSprite, Sprite, Texture } from "pixi.js";
+import { Container, Graphics, NineSliceSprite, Sprite, Texture } from "pixi.js";
 import { isFogCell } from "@/api/types";
 import { CELL_HEIGHT, CELL_WIDTH, WATER_MAX_HEIGHT } from "@/config";
 import { hexShape, mapRoomGrid } from "@/game/HexGrid";
@@ -654,6 +654,15 @@ export class MapChunk {
       }
     }
 
+    if (appearance.underAttack) {
+      // PROTOTYPE (proto/live-map-ux): placeholder crossed-swords badge while someone attacks it.
+      const swords = underAttackBadge(BUILDING_HEIGHT * 0.2);
+      swords.position.set(footX + BUILDING_HEIGHT * 0.36, footY - BUILDING_HEIGHT * 0.86);
+      swords.alpha = alpha;
+      this.bases.addChild(swords);
+      this.pins.add(foot, swords);
+    }
+
     if (appearance.invitePending) {
       // Flash's open envelope, at the tower's upper left (the tick sits upper right, the worker lower right).
       const envelope = new Sprite(this.atlas.inviteEnvelope);
@@ -810,3 +819,17 @@ const icon = (texture: Texture, x: number, y: number, radius: number, tint: numb
 
 /** Sprites share the atlas, so a child is destroyed without its texture. */
 const destroyChild = (child: Container): void => child.destroy();
+
+/** PROTOTYPE (proto/live-map-ux): an ember disc with two crossed blades, drawn (placeholder, not painted art). */
+const underAttackBadge = (radius: number): Graphics => {
+  const g = new Graphics();
+  g.circle(0, 0, radius + 1.5).fill({ color: 0x2a0f05 });
+  g.circle(0, 0, radius).fill({ color: 0xe85426 });
+  const r = radius * 0.62;
+  for (const sign of [1, -1]) {
+    g.moveTo(-r * sign, -r).lineTo(r * sign, r).stroke({ width: radius * 0.22, color: 0xffffff, cap: "round" });
+  }
+  g.moveTo(-r * 0.75, r * 0.35).lineTo(-r * 0.35, r * 0.75).stroke({ width: radius * 0.18, color: 0xffffff, cap: "round" });
+  g.moveTo(r * 0.75, r * 0.35).lineTo(r * 0.35, r * 0.75).stroke({ width: radius * 0.18, color: 0xffffff, cap: "round" });
+  return g;
+};

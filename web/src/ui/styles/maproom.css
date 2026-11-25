@@ -1990,3 +1990,319 @@
     white-space: nowrap;
   }
 }
+
+/* ── PROTOTYPE (proto/live-map-ux): live map UX round, never merged ───────── */
+
+.mr2-cell {
+  position: relative;
+}
+
+/* Q2: the changed line's short warm wash. */
+@keyframes mr2-live-hl {
+  from {
+    box-shadow: 0 0 0 3px rgb(245 184 46 / 95%), 0 0 16px 3px rgb(245 184 46 / 55%);
+  }
+  to {
+    box-shadow: 0 0 0 3px rgb(245 184 46 / 0%), 0 0 16px 3px rgb(245 184 46 / 0%);
+  }
+}
+
+.mr2-live-hl {
+  border-radius: 12px;
+  animation: mr2-live-hl 600ms ease-out both;
+}
+
+:root[data-live-freeze="1"] .mr2-live-hl {
+  animation: none;
+  box-shadow: 0 0 0 3px rgb(245 184 46 / 95%), 0 0 16px 3px rgb(245 184 46 / 55%);
+}
+
+/* Q2 A: Attack turns into a still grey plate saying why, in the same place. */
+.mr2-cell .mr2-cell__primary {
+  transition: background-color 180ms ease-out, color 180ms ease-out, opacity 180ms ease-out;
+}
+
+.mr2-cell .mr2-cell__primary.mr2-cell__primary--blocked:disabled {
+  background: #505860;
+  border-color: #3a4148;
+  color: #cbd3da;
+  opacity: 1;
+  filter: none;
+  text-shadow: none;
+}
+
+:root[data-skin="flash"] .mr2-cell .mr2-cell__primary.mr2-cell__primary--blocked:disabled {
+  background: #b9ad98;
+  border-color: #8f826c;
+  color: #5a4a38;
+}
+
+/* Q2 A (taken) and C: the bar in Attack's slot. */
+.mr2-cell .mr2-live-bar {
+  position: relative;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 52px;
+  padding: 0 16px;
+  border: 2px solid #c98a3a;
+  border-radius: 14px;
+  background: #26313a;
+  color: #fff;
+  font-size: 16px;
+  font-weight: 800;
+  text-align: left;
+}
+
+.mr2-live-bar__icon {
+  color: #f5b82e;
+}
+
+.mr2-live-bar--attack .mr2-live-bar__icon {
+  color: #f05228;
+}
+
+.mr2-live-bar--shield .mr2-live-bar__icon {
+  color: #38e09b;
+}
+
+.mr2-live-bar__words {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  min-width: 0;
+  line-height: 1.2;
+}
+
+.mr2-live-bar__text {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.mr2-live-bar__sub {
+  flex: none;
+  font-size: 13px;
+  font-weight: 700;
+  color: #f5c56b;
+}
+
+/* A, while the old cell is held: its other buttons wait for the tap too. */
+.mr2-cell--held .mr2-cell__actions > :not(.mr2-live-bar),
+.mr2-cell--held .mr2-cell__repeat-body > :not(.mr2-cell__actions, .mr2-cell__chips) {
+  opacity: 0.55;
+  pointer-events: none;
+}
+
+.mr2-live-bar--prompt .mr2-live-bar__sub {
+  padding: 6px 14px;
+  border-radius: 10px;
+  background: #c98a3a;
+  color: #1b1208;
+}
+
+:root[data-skin="flash"] .mr2-cell .mr2-live-bar {
+  border-color: #8a5a22;
+  background: #fff3d6;
+  color: #4b2b16;
+}
+
+:root[data-skin="flash"] .mr2-live-bar__sub {
+  color: #9a5a12;
+}
+
+:root[data-skin="flash"] .mr2-live-bar--prompt .mr2-live-bar__sub {
+  background: #4caf2a;
+  color: #fff;
+}
+
+/* Q2 C: the rest of the panel is dimmed and frozen until Update. */
+.mr2-cell--veiled :is(.mr2-cell__picture, .mr2-cell__titles, .mr2-cell__chips, .mr2-cell__flinger, .mr2-cell__note, .mr2-cell__more),
+.mr2-cell--veiled .mr2-cell__actions > :not(.mr2-live-bar),
+.mr2-cell--veiled .mr2-cell__repeat-body > :not(.mr2-cell__actions) {
+  opacity: 0.4;
+  pointer-events: none;
+  filter: saturate(0.5);
+}
+
+/* Q2 B: a strip laid over the panel's top edge (no content moves). */
+@keyframes mr2-live-strip-in {
+  from {
+    transform: translateY(-100%);
+    opacity: 0;
+  }
+}
+
+.mr2-live-strip {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 4;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 32px;
+  padding: 0 64px 0 16px;
+  border-top: 2px solid #f5b82e;
+  border-radius: inherit;
+  border-bottom-left-radius: 0;
+  border-bottom-right-radius: 0;
+  background: rgb(30 40 48 / 94%);
+  color: #fff;
+  font-size: 14px;
+  font-weight: 800;
+  animation: mr2-live-strip-in 200ms ease-out;
+  pointer-events: none;
+}
+
+.mr2-live-strip__text {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.mr2-live-strip[data-kind="taken"] .map-icon {
+  color: #f5b82e;
+}
+
+.mr2-live-strip[data-kind="attack"] {
+  border-top-color: #f05228;
+}
+
+.mr2-live-strip[data-kind="attack"] .map-icon {
+  color: #ff7a4d;
+}
+
+.mr2-live-strip[data-kind="shield"] {
+  border-top-color: #38e09b;
+}
+
+.mr2-live-strip[data-kind="shield"] .map-icon {
+  color: #38e09b;
+}
+
+:root[data-skin="flash"] .mr2-live-strip {
+  background: rgb(122 26 18 / 94%);
+  border-top-color: #f2c14e;
+  color: #fff5df;
+}
+
+:root[data-skin="flash"] .mr2-live-strip[data-kind="shield"] {
+  background: rgb(26 92 60 / 94%);
+}
+
+.mr2-cell__close {
+  position: relative;
+  z-index: 5;
+}
+
+/* Q3: the "not live" mark. */
+@keyframes mr2-live-mark-in {
+  from {
+    transform: translateY(-6px);
+    opacity: 0;
+  }
+}
+
+@keyframes mr2-live-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.mr2-live-mark {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  height: 36px;
+  min-width: 44px;
+  padding: 0 12px;
+  border: 1.5px solid #c98a3a;
+  border-radius: 18px;
+  background: rgb(42 54 64 / 94%);
+  color: #fff;
+  font: inherit;
+  font-size: 14px;
+  font-weight: 800;
+  white-space: nowrap;
+  box-shadow: 0 2px 8px rgb(0 0 0 / 35%);
+  cursor: pointer;
+  animation: mr2-live-mark-in 220ms ease-out;
+  pointer-events: auto;
+}
+
+.mr2-live-mark[hidden] {
+  display: none;
+}
+
+.mr2-live-mark__icon,
+.mr2-live-mark__retry {
+  display: inline-flex;
+  color: #f5a623;
+}
+
+.mr2-live-mark__retry {
+  margin-left: 2px;
+  color: #e8d2a8;
+}
+
+.mr2-live-mark[data-state="retrying"] .mr2-live-mark__icon {
+  animation: mr2-live-spin 450ms ease-in-out;
+}
+
+.mr2-live-mark[data-state="back"] {
+  border-color: #3cd070;
+}
+
+.mr2-live-mark[data-state="back"] .mr2-live-mark__icon {
+  color: #3cd070;
+}
+
+:root[data-skin="flash"] .mr2-live-mark {
+  border-color: #c89a54;
+  background: rgb(75 43 22 / 96%);
+  color: #fff5df;
+}
+
+/* A: centred under the top bar (on a phone, under the tool row). */
+.mr2-live-mark[data-option="A"] {
+  align-self: center;
+}
+
+.mr2-live-mark[data-option="A"][data-phone="1"] {
+  margin-top: 48px;
+}
+
+/* B: in the top bar's gap beside Map/Yard; an icon square in the phone's tool row. */
+.mr2-live-mark[data-option="B"][data-phone="0"] {
+  height: 32px;
+  margin-right: 12px;
+  align-self: center;
+}
+
+.mr2-live-mark[data-option="B"][data-phone="1"] {
+  width: 44px;
+  height: 44px;
+  padding: 0;
+  border-radius: 12px;
+}
+
+/* C: beside Bob's "?" (under it on a phone). */
+.mr2-live-mark[data-option="C"] {
+  position: absolute;
+  top: 70px;
+  left: 58px;
+  z-index: 6;
+}
+
+.mr2-live-mark[data-option="C"][data-phone="1"] {
+  top: 128px;
+  left: 6px;
+  width: 44px;
+  height: 44px;
+  padding: 0;
+  border-radius: 22px;
+}
