@@ -27,9 +27,10 @@ export const steppedSeconds = (nowMs: number, startMs: number, every: number): n
   ((stepAt(nowMs, every) - stepAt(startMs, every)) * every) / TICKS_PER_SECOND;
 
 /**
- * While the map stands still, the animations step only on every third tick: 10 steps a second, so
- * a still tilted map redraws its whole picture at most 10 times a second rather than 30 (the gulls
- * and cloud shadows step 30 times a second while it moves). The water, the border pulse and the
+ * While the painted map stands still, its animations step only on every third tick: 10 steps a
+ * second, so a tilted map redraws its whole picture, and a flat one its stage, at most 10 times a
+ * second rather than 30 (the gulls and cloud shadows step 30 times a second while it moves). Classic
+ * (no painted look) keeps the full rate: its water sheet steps every tick. The water, the border pulse and the
  * fog already step every 3 or 6 ticks, so they look exactly the same.
  */
 export const IDLE_STEP_TICKS = 3;

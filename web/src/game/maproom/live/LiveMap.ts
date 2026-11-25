@@ -143,35 +143,41 @@ export class LiveMap {
 
   /**
    * Once a frame, with what the renderer is showing. nowMs is the frame's time, the same one the
-   * painted layers step on, so their steps and these land on the same frame.
+   * painted layers step on, so their steps and these land on the same frame. Returns whether the
+   * water sheet was redrawn: new pixels in a texture, which Pixi's change lists do not see, so the
+   * renderer must say the picture changed (its sprites and clouds moving, the lists do see).
    */
-  update(range: CellRange, zoom: number, nowMs: number = performance.now()): void {
+  update(range: CellRange, zoom: number, nowMs: number = performance.now()): boolean {
     const started = performance.now();
     this.lastZoom = zoom;
-    this.step(range, zoom, nowMs);
+    const sheetDrawn = this.step(range, zoom, nowMs);
     this.costMs += (performance.now() - started - this.costMs) * 0.05;
+    return sheetDrawn;
   }
 
-  private step(range: CellRange, zoom: number, nowMs: number): void {
+  private step(range: CellRange, zoom: number, nowMs: number): boolean {
     // Never backwards: the renderer hands a still map's time rounded down (`idleTime`).
     const dt = this.lastMs === 0 ? 0 : Math.max(0, Math.min((nowMs - this.lastMs) / 1000, 0.1));
     this.lastMs = Math.max(this.lastMs, nowMs);
-    if (!this.active || !this.renderer || (typeof document !== "undefined" && document.hidden)) return;
+    if (!this.active || !this.renderer || (typeof document !== "undefined" && document.hidden)) return false;
 
     this.redrawStale();
     this.clock += dt;
     // On whole ticks of the shared clock (30 a second on High, every other tick on Medium): a still
     // tilted map then redraws once for this and the painted water, pulse and fog together.
-    if (!Number.isFinite(this.plan.stepSeconds)) return;
+    if (!Number.isFinite(this.plan.stepSeconds)) return false;
     const step = stepAt(nowMs, Math.max(1, Math.round(this.plan.stepSeconds * TICKS_PER_SECOND)));
-    if (step === this.lastStep) return;
+    if (step === this.lastStep) return false;
     this.lastStep = step;
 
     // Below the hex zoom the renderer shows its one-texel-a-cell raster, and no chunk is on screen.
     const visible = zoom < hexZoom() ? [] : [...this.chunks.values()].filter((chunk) => chunk.visible);
-    if (this.sheet && visible.length > 0) this.sheet.render(this.renderer, this.clock);
+    const sheet = this.sheet;
+    const sheetDrawn = sheet !== null && visible.length > 0;
+    if (sheetDrawn) sheet.render(this.renderer, this.clock);
     for (const layer of this.layers) layer.step?.(this.clock, visible, zoom);
     this.sky?.step(this.clock, viewOf(range), zoom);
+    return sheetDrawn;
   }
 
   destroy(): void {
