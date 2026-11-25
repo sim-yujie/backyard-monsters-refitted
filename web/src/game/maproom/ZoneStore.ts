@@ -33,6 +33,8 @@ export interface ZoneRecord extends ZoneRef {
    * still match when the sight changed (`ZoneStore.applySight`).
    */
   sv?: string;
+  /** The zone's version when the server read it (`zv`, live map, beta 9); 0 before it ever changed. */
+  zv?: number;
 }
 
 /** One of the viewer's own cells (`mine`) in the cache, with where it is (`attackEntry.OwnCell`). */
@@ -67,7 +69,7 @@ export interface ZoneStoreOptions {
    * answer always), so the renderer can invalidate. `previous` is the record
    * it replaces, if the zone was cached.
    */
-  onZone?: (zone: ZoneRecord, previous: ZoneRecord | undefined) => void;
+  onZone?: (zone: ZoneRecord, previous: ZoneRecord | undefined, live?: boolean) => void;
   /**
    * Fired instead of `onZone` when a refetched zone came back with the same
    * drawn cells as the record it replaces (`drawnKey`): the map's picture
@@ -208,6 +210,15 @@ export class ZoneStore {
   private ownCache: StoredOwnCell[] | null = null;
   private readonly queue = new Map<number, QueueEntry>();
   private readonly inFlight = new Set<number>();
+  /**
+   * Live map (beta 9): zones the live socket said moved past the version cached, with that
+   * version. Their next answer is "live" (the ring, the panel), and one that comes back older
+   * (it was read before the change) is asked once more.
+   */
+  private readonly liveWanted = new Map<number, number>();
+  private readonly liveRetried = new Set<number>();
+  /** Each cached zone's first time-only change (a shield or truce running out...), unix seconds. */
+  private readonly nextDue = new Map<number, number>();
 
   private readonly bucket: TokenBucket;
   private readonly fetcher: AreaFetcher;
@@ -411,6 +422,83 @@ export class ZoneStore {
     this.reprioritise();
   }
 
+  /* ── Live map (beta 9) ───────────────────────────────────────────────── */
+
+  /**
+   * The live socket's zone versions: every cached (or arriving) zone whose version differs from
+   * the one it holds is asked again, at the front of the queue; nothing else is. Returns how many
+   * were asked.
+   */
+  applyVersions(pairs: readonly (readonly [number, number])[]): number {
+    let asked = 0;
+    for (const [id, version] of pairs) {
+      const zone = this.zones.get(id);
+      const flying = this.inFlight.has(id);
+      if (!zone && !flying) continue;
+      if (zone && !flying && (zone.zv ?? 0) === version) continue;
+      this.liveWanted.set(id, Math.max(version, this.liveWanted.get(id) ?? version));
+      this.liveRetried.delete(id);
+      // One in flight is checked against the wanted version when it lands (`apply`).
+      if (flying) continue;
+      this.enqueue(zoneFromId(id), true);
+      asked += 1;
+    }
+    if (asked > 0) this.reprioritise();
+    return asked;
+  }
+
+  /**
+   * The zones worth watching on the live socket, at most `limit`: those holding the viewer's own
+   * cells first (the attack roster reads them wherever they are), then the visible ones nearest
+   * the centre.
+   */
+  watchList(limit: number): number[] {
+    const out = new Set<number>();
+    for (const id of this.ownZones) {
+      if (out.size >= limit) break;
+      out.add(id);
+    }
+    for (const zone of this.orderedVisible()) {
+      if (out.size >= limit) break;
+      out.add(zone.id);
+    }
+    return [...out];
+  }
+
+  /** Every cached zone and the version it holds, for a version check after a reconnect. */
+  heldVersions(): Map<number, number> {
+    const out = new Map<number, number>();
+    for (const zone of this.zones.values()) out.set(zone.id, zone.zv ?? 0);
+    return out;
+  }
+
+  /**
+   * Once a second (live map, beta 9): applies the time-only changes that are due, without asking
+   * the server: a shield (`pe`) or a camp's damage (`rg`) runs out, a truce (`t`) ends. A running
+   * attack's end (`atk`) asks the zone again, as the yard's lock may have gone with it. A zone
+   * whose cells changed is handed to `onZone` again, as a fresh answer would be.
+   */
+  expireDue(nowSeconds: number): void {
+    for (const [id, due] of this.nextDue) {
+      if (due > nowSeconds) continue;
+      const zone = this.zones.get(id);
+      if (!zone) {
+        this.nextDue.delete(id);
+        continue;
+      }
+      const { changed, reask } = expireCells(zone.data, nowSeconds);
+      const next = firstDue(zone.data);
+      if (next === undefined) this.nextDue.delete(id);
+      else this.nextDue.set(id, next);
+      if (reask) this.enqueue(zoneFromId(id), true);
+      if (!changed) continue;
+      this.drawnKeys.set(id, drawnKey(zone.data));
+      this.ownCache = null;
+      this.revision += 1;
+      if (!this.stopped) this.options.onZone?.(zone, zone, false);
+    }
+  }
+
   /** Clears the backoff so the next pump tries again immediately. */
   resume(): void {
     this.pausedUntilMs = 0;
@@ -605,7 +693,22 @@ export class ZoneStore {
       data: response.data,
       fetchedAt: this.now(),
       ...(response.sv !== undefined && { sv: response.sv }),
+      ...(response.zv !== undefined && { zv: response.zv }),
     };
+    // Live map: an answer the socket asked for, and one read before the change it was asked for.
+    const wanted = this.liveWanted.get(entry.id);
+    const live = wanted !== undefined;
+    this.liveWanted.delete(entry.id);
+    if (wanted !== undefined && response.zv !== undefined && response.zv < wanted && !this.liveRetried.has(entry.id)) {
+      this.liveRetried.add(entry.id);
+      this.liveWanted.set(entry.id, wanted);
+      this.enqueue(entry, true);
+    } else {
+      this.liveRetried.delete(entry.id);
+    }
+    const due = firstDue(response.data);
+    if (due === undefined) this.nextDue.delete(entry.id);
+    else this.nextDue.set(entry.id, due);
     const previous = this.zones.get(entry.id);
     const key = drawnKey(response.data);
     const unchanged = previous !== undefined && this.drawnKeys.get(entry.id) === key;
@@ -626,7 +729,7 @@ export class ZoneStore {
     // hitch per zone, every minute, while standing still.
     if (evicted.length > 0) this.options.onEvict?.(evicted);
     if (unchanged) this.options.onZoneRefreshed?.(record);
-    else this.options.onZone?.(record, previous);
+    else this.options.onZone?.(record, previous, live);
 
     if (response.resources) {
       this.options.onResources?.(response.resources, response.credits);
@@ -643,6 +746,9 @@ export class ZoneStore {
   /** Takes one zone out of the cache and everything kept about it. */
   private forget(id: number): void {
     this.zones.delete(id);
+    this.nextDue.delete(id);
+    this.liveWanted.delete(id);
+    this.liveRetried.delete(id);
     this.drawnKeys.delete(id);
     this.ownZones.delete(id);
     this.placed.delete(id);
@@ -725,3 +831,56 @@ export class ZoneStore {
     return value;
   }
 }
+
+/** A cell's time-only changes still to come (live map, beta 9), unix seconds. */
+const dueTimes = (cell: MapCell): number[] => {
+  const out: number[] = [];
+  const timed = cell as { pe?: unknown; atk?: unknown; t?: unknown; rg?: unknown };
+  for (const value of [timed.pe, timed.atk, timed.t, timed.rg]) if (typeof value === "number" && value > 0) out.push(value);
+  return out;
+};
+
+/** The first time-only change among a zone's cells, or undefined when none is coming. */
+export const firstDue = (data: AreaCellGrid): number | undefined => {
+  let first = Infinity;
+  for (const column of Object.values(data)) {
+    for (const cell of Object.values(column)) for (const at of dueTimes(cell)) first = Math.min(first, at);
+  }
+  return Number.isFinite(first) ? first : undefined;
+};
+
+/**
+ * Applies a zone's time-only changes due by `now`, in place: a shield ends (`p` 0), a camp grows
+ * back (`dm`, `d` 0), a truce ends. `reask`: a running attack ended, which only the server can say
+ * the rest of (the yard's lock).
+ */
+export const expireCells = (data: AreaCellGrid, now: number): { changed: boolean; reask: boolean } => {
+  let changed = false;
+  let reask = false;
+  for (const column of Object.values(data)) {
+    for (const cell of Object.values(column)) {
+      const timed = cell as { p?: number; pe?: number; atk?: number; t?: number; rg?: number; dm?: number; d?: number };
+      if (typeof timed.pe === "number" && timed.pe <= now) {
+        timed.p = 0;
+        delete timed.pe;
+        changed = true;
+      }
+      if (typeof timed.atk === "number" && timed.atk <= now) {
+        delete timed.atk;
+        changed = true;
+        reask = true;
+      }
+      if (typeof timed.t === "number" && timed.t <= now) {
+        delete timed.t;
+        changed = true;
+      }
+      if (typeof timed.rg === "number" && timed.rg <= now) {
+        timed.dm = 0;
+        timed.d = 0;
+        delete timed.rg;
+        changed = true;
+      }
+    }
+  }
+  return { changed, reask };
+};

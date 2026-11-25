@@ -1058,6 +1058,73 @@
   font-weight: 800;
 }
 
+/* The live map (beta 9; desk card live-panel, owner's choice A): when a live answer shows the open
+   cell taken, a bar takes Attack's place at Attack's size ("Taken by X / Tap to update") and the
+   panel keeps the old cell until it is tapped, so nothing jumps. */
+.mr2-cell .mr2-live-bar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  height: 52px;
+  min-height: 52px;
+  padding: 4px 14px;
+  border: 2px solid #5a3a0c !important;
+  border-radius: 14px;
+  background: linear-gradient(#c68d28, #8f5e16) !important;
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 30%), 0 2px 0 rgb(0 0 0 / 35%) !important;
+  color: #fff6e0 !important;
+  font-weight: 800;
+  text-align: left;
+}
+
+.mr2-cell .mr2-live-bar[hidden] {
+  display: none;
+}
+
+.mr2-live-bar .mr2-live-bar__icon,
+.mr2-live-bar .mr2-live-bar__refresh {
+  flex: none;
+  color: #fff6e0 !important;
+}
+
+.mr2-live-bar__words {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  min-width: 0;
+  line-height: 1.2;
+}
+
+.mr2-live-bar__text {
+  overflow: hidden;
+  font-size: 15px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.mr2-live-bar__sub {
+  font-size: 12px;
+  font-weight: 700;
+  color: #ffe6a8 !important;
+}
+
+:root[data-skin="flash"] .mr2-cell .mr2-live-bar {
+  border-color: #6b4310 !important;
+  background: linear-gradient(#f5b82e, #cc8410) !important;
+  color: #3a2108 !important;
+}
+
+:root[data-skin="flash"] .mr2-live-bar :is(.mr2-live-bar__icon, .mr2-live-bar__sub, .mr2-live-bar__refresh) {
+  color: #3a2108 !important;
+}
+
+/* The rest of the held panel's actions wait for the update. */
+.mr2-cell--held .mr2-cell__actions > :not(.mr2-live-bar) {
+  opacity: 0.45;
+  filter: grayscale(0.6);
+  pointer-events: none;
+}
+
 /* Take over (#82) sits under Attack, a second choice rather than a second
    primary: it is often only there to say why not yet. */
 .mr2-cell .takeover-action__button {

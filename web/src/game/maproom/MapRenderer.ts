@@ -23,6 +23,7 @@ import { BuildingAvatars } from "./buildingAvatars";
 import { cellLift, liftCorners, setFlatGround } from "./ground";
 import { GroundArt } from "./groundArt";
 import { LiveMap } from "./live/LiveMap";
+import { CellRings } from "./live/CellRings";
 import { CONSTRUCTION_BADGE_URL, IDLE_HELPER_URL, MapPicture } from "./mapPicture";
 import { AllianceRoster, MapShields, type MapAlliance } from "./mapAlliances";
 import { friendMarkOf, friendMarksKey } from "@/game/friends/friendMarks";
@@ -108,6 +109,8 @@ export class MapRenderer {
   /** Every chunk's badges, markers and plates, over every chunk's ground. */
   private readonly worldTop = new Container();
   private readonly highlight = new Graphics();
+  /** The live map's growing rings on cells that just changed (beta 9), on the ground under the markers. */
+  readonly rings = new CellRings((col, row) => this.liftAt(col, row));
   /**
    * The upright marker layer for the tilted map (`markerPins.ts`): while the
    * tilt is on, `world` and `worldTop` leave `root` (so they are not drawn
@@ -254,6 +257,7 @@ export class MapRenderer {
       this.ground,
       this.world,
       this.range.container,
+      this.rings.graphics,
       this.worldTop,
       this.live.overlay,
       this.highlight,
@@ -594,6 +598,7 @@ export class MapRenderer {
 
     // Classic's water sheet (and the tile look's) is redrawn into a texture: a change the lists miss.
     if (this.live.update(range, zoom, nowPaint)) this.paintedStepped = true;
+    if (this.rings.animate(nowPaint, zoom)) this.paintedStepped = true;
     const tier = tierForZoom(zoom);
     const view = viewFor(tier, zoom, atlas);
     const nowMs = Date.now();

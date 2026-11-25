@@ -470,7 +470,8 @@ export class MapRoomUi {
     this.cellPanel.show(cell, payload);
   }
 
-  updateCell(payload: MapCell | undefined): void {
+  /** `live`: the payload is the live map's answer to a change (beta 9, `CellPanel.update`). */
+  updateCell(payload: MapCell | undefined, live = false): void {
     const card = this.yardCard;
     if (card) {
       // Still loading again (a move just invalidated it): keep the card as it is.
@@ -486,7 +487,7 @@ export class MapRoomUi {
       this.showCell(shown, payload);
       return;
     }
-    this.cellPanel?.update(payload);
+    this.cellPanel?.update(payload, live);
   }
 
   tickCell(nowSeconds: number): void {

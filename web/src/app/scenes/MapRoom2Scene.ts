@@ -17,7 +17,10 @@ import {
 } from "@/api/maproom";
 import { takePrimedOwnYard } from "@/game/maproom/mapRoute";
 import { mateAllianceOf } from "@/game/maproom/mapAlliances";
-import { WorkerFinishWatch } from "@/game/maproom/workerFinish";
+import { WorkerFinishWatch, hatchFinishOf } from "@/game/maproom/workerFinish";
+import { DOWN_REFRESH_SECONDS, LiveUpdates, ringTier } from "@/game/maproom/live/liveUpdates";
+import { chatSocketUrl } from "@/api/chat";
+import { getAuthToken } from "@/api/http";
 import { getAutoAttackPlan, type AutoAttackPlanResponse } from "@/api/autoAttack";
 import { setWatchRun } from "@/game/autoAttack/watchRun";
 import { openDefence } from "@/game/defences/openDefence";
@@ -243,9 +246,11 @@ export class MapRoom2Scene implements Scene {
   private readonly store = new ZoneStore({
     // Each getarea call is timed for the open's summary (`openMarks.ts`).
     fetcher: (x, y, options) => timeArea(() => getArea(x, y, options)),
-    onZone: (zone, previous) => {
+    onZone: (zone, previous, live) => {
       this.renderer.applyZone(zone, previous);
       this.checkZoneMarks();
+      // The live map (beta 9): a pushed answer rings its changed cells and updates the open panel.
+      this.live?.zoneArrived(zone, previous, live === true);
     },
     onZoneRefreshed: (zone) => this.renderer.refreshZone(zone),
     // Zones the cache's cap forgot (off screen, fetched longest ago) go from the picture too.
@@ -343,6 +348,10 @@ export class MapRoom2Scene implements Scene {
   private clockOffset = 0;
   /** Own outposts' build ends already asked about (`workerFinish.ts`). */
   private readonly workerFinish = new WorkerFinishWatch();
+  /** Own cells' next hatch (`nh`): asked again then, like a finished worker (live map, beta 9). */
+  private readonly hatchFinish = new WorkerFinishWatch(hatchFinishOf);
+  /** The live map's connection and what it does (beta 9); null until the own yard says where. */
+  private live: LiveUpdates | null = null;
   /**
    * Where the map should open instead of the home cell: the target of the
    * attack just finished, or the outpost just taken over (`mapFocus.ts`).
@@ -659,6 +668,14 @@ export class MapRoom2Scene implements Scene {
       (globalThis as Record<string, unknown>)["__takeoverPreview"] = {
         endPanel: (options: EndTakeoverPreviewOptions) => previewEndTakeover(context.overlay.modal, options),
       };
+      // The live map's test hooks (beta 9): open a cell, hold the rings for stills, read the link.
+      (globalThis as Record<string, unknown>)["__liveMap"] = {
+        select: (col: number, row: number, zoom?: number) => this.jumpTo({ col, row }, zoom),
+        view: (col: number, row: number, zoom?: number) => this.jumpTo({ col, row }, zoom, false),
+        freezeRings: (fraction: number | null) => this.renderer.rings.freeze(fraction),
+        rings: () => this.renderer.rings.active,
+        up: () => this.live?.up ?? false,
+      };
     }
 
     window.addEventListener("focus", this.handleFocus);
@@ -710,6 +727,7 @@ export class MapRoom2Scene implements Scene {
     window.removeEventListener("online", this.handleOnline);
     window.removeEventListener("offline", this.handleOffline);
     if (import.meta.env.DEV) delete (globalThis as Record<string, unknown>)["__takeoverPreview"];
+    if (import.meta.env.DEV) delete (globalThis as Record<string, unknown>)["__liveMap"];
 
     this.transfer?.destroy();
     this.transfer = null;
@@ -720,6 +738,8 @@ export class MapRoom2Scene implements Scene {
     this.renderer.destroy();
     // Nothing new is fetched for a map nobody is looking at.
     this.store.stop();
+    this.live?.stop();
+    this.live = null;
     this.context = null;
   }
 
@@ -865,6 +885,7 @@ export class MapRoom2Scene implements Scene {
       if (this.ready) {
         this.store.ensureVisible(this.range);
         this.checkZoneMarks();
+        this.live?.viewChanged();
       }
       this.ui?.setViewport(this.range);
       this.ui?.setViewShape(this.tiltViewCells());
@@ -903,8 +924,9 @@ export class MapRoom2Scene implements Scene {
       this.sinceStaleCheck += deltaSeconds;
       if (this.sinceStaleCheck >= STALE_CHECK_INTERVAL_SECONDS) {
         this.sinceStaleCheck = 0;
-        // Every minute; every 3 on the Low Quality setting.
-        this.store.refreshStale(mapRefreshSeconds(ZONE_STALE_SECONDS));
+        // The live map (beta 9, owner 25 Nov 2026): no timed re-asks while its connection is up;
+        // only while it is down, visible zones older than 4 minutes are asked again.
+        if (!this.live?.up) this.store.refreshStale(Math.max(DOWN_REFRESH_SECONDS, mapRefreshSeconds(ZONE_STALE_SECONDS)));
       }
     }
 
@@ -914,6 +936,8 @@ export class MapRoom2Scene implements Scene {
       this.refreshUi();
       this.tickIncome();
       this.askFinishedWorkers();
+      // Shields, truces and camps' damage that ran out by now, without asking (live map).
+      this.store.expireDue(Date.now() / 1000 + this.clockOffset);
     }
 
     // Exponential moving average: one slow frame should show, but not dominate.
@@ -934,6 +958,7 @@ export class MapRoom2Scene implements Scene {
       noteInfo("ownYard", primed ? "primed" : "fetched");
       const base = primed ?? (await timeSpan("own-yard", () => loadOwnYard({ screen: "map" })));
       this.ownSave = base;
+      this.startLive(base.chatservers?.[0]);
       // The alliance's extra reach (and prices) from this load, not the last yard visit.
       setCurrentAllianceBonuses(base.alliancedata);
       // The player's outpost names (beta 7) for the outpost buttons and the move picker.
@@ -1108,6 +1133,30 @@ export class MapRoom2Scene implements Scene {
       now,
     );
     for (const cell of due) this.store.invalidateCell(cell.col, cell.row);
+    // The next hatch on the home yard or an outpost (`nh`), so its army stays right (live map).
+    const own = outpostsOf(this.ownSave).map((outpost) => outpost.cell);
+    if (this.home) own.push(this.home);
+    for (const cell of this.hatchFinish.due(own, (col, row) => this.store.getCell(col, row), now)) {
+      this.store.invalidateCell(cell.col, cell.row);
+    }
+  }
+
+  /**
+   * The live map (beta 9): connects to the chat server's port with the game's own token, so
+   * cells change on screen within a second or two of the write, without timed re-asks.
+   */
+  private startLive(server: string | undefined): void {
+    if (!server || this.live || !this.context) return;
+    this.live = new LiveUpdates({
+      store: this.store,
+      rings: this.renderer.rings,
+      refreshSight: () => void this.sight.refresh(),
+      shownCell: () => this.ui?.shownCell ?? null,
+      updateShown: (payload) => this.ui?.updateCell(payload, true),
+      tierOf: (cell, payload) => ringTier(cell, payload, this.selected, (at) => reachTo(at, this.rangeSources).inRange),
+      token: getAuthToken,
+    });
+    this.live.start(chatSocketUrl(server, location.protocol === "https:"));
   }
 
   /** Once a second: the pool with the next whole tick of outpost income, when one passed (#207). */
@@ -1805,7 +1854,12 @@ export class MapRoom2Scene implements Scene {
   private readonly handleFocus = (): void => {
     if (document.visibilityState === "hidden") return;
     this.store.resume();
-    this.store.refreshVisible();
+    // Live (beta 9): a version check asks only what changed; down, everything visible as before.
+    if (this.live?.up) this.live.check();
+    else {
+      this.live?.check();
+      this.store.refreshVisible();
+    }
     void this.store.pump();
   };
 
@@ -1817,6 +1871,7 @@ export class MapRoom2Scene implements Scene {
 
   private readonly handleOnline = (): void => {
     this.ui?.notices.clear("network");
+    this.live?.check();
     this.store.resume();
     void this.store.pump();
   };

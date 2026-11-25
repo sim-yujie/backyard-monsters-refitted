@@ -1015,6 +1015,8 @@ export interface WildMonsterCell {
   dm: number;
   /** 1 once damage >= 90. */
   d: number;
+  /** When a damaged camp grows back whole, unix seconds (live map, beta 9); the map clears `dm`/`d` then. */
+  rg?: number;
   /** The cell's land feature (`landFeatures.ts`), with the server's land switch on; absent on open ground. */
   lf?: number;
   /**
@@ -1076,6 +1078,13 @@ export interface PlayerCell {
   p: number;
   /** When damage protection ends, unix seconds; sent while it runs (#187). */
   pe?: number;
+  /**
+   * While someone is attacking this yard or outpost: when that attack's window closes, unix
+   * seconds (live map, beta 9). The open panel says "Under attack"; the map asks again then.
+   */
+  atk?: number;
+  /** When the next monster hatches on one of the caller's own cells, unix seconds (live map, beta 9). */
+  nh?: number;
   /** Truce expiry, unix seconds. Absent on the caller's own cell. */
   t?: number;
   /** 1 when this base's owner has ever attacked the caller. */
@@ -1153,6 +1162,11 @@ export interface GetAreaResponse extends ApiEnvelope {
    * its cached zones need refetching without comparing the two lists itself.
    */
   sv?: string;
+  /**
+   * The zone's version when it was read (live map, beta 9): the live socket says when it moves,
+   * and the map asks again only the zones whose version it no longer holds.
+   */
+  zv?: number;
 }
 
 /**
