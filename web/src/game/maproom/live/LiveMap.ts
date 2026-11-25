@@ -153,8 +153,9 @@ export class LiveMap {
   }
 
   private step(range: CellRange, zoom: number, nowMs: number): void {
-    const dt = this.lastMs === 0 ? 0 : Math.min((nowMs - this.lastMs) / 1000, 0.1);
-    this.lastMs = nowMs;
+    // Never backwards: the renderer hands a still map's time rounded down (`idleTime`).
+    const dt = this.lastMs === 0 ? 0 : Math.max(0, Math.min((nowMs - this.lastMs) / 1000, 0.1));
+    this.lastMs = Math.max(this.lastMs, nowMs);
     if (!this.active || !this.renderer || (typeof document !== "undefined" && document.hidden)) return;
 
     this.redrawStale();

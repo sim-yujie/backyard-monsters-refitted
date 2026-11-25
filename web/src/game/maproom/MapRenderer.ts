@@ -9,6 +9,7 @@ import {
   chunksForRange,
 } from "./chunks";
 import type { RangeSource } from "./attackRange";
+import { idleTime } from "./animationClock";
 import { TextPool } from "./LabelLayer";
 import { LodTier, sameView, tierForZoom, viewFor } from "./lod";
 import { MapAtlas } from "./mapAtlas";
@@ -541,14 +542,15 @@ export class MapRenderer {
 
   /**
    * Brings the chunk set in line with the viewport. Returns true when it did
-   * work, which the scene uses for its frame-time readout.
+   * work, which the scene uses for its frame-time readout. `still`: the camera has not moved for a
+   * moment, so the animations step at the idle rate (`idleTime`, 10 a second).
    */
-  draw(range: CellRange, zoom: number): boolean {
+  draw(range: CellRange, zoom: number, still = false): boolean {
     this.raster.flush();
     this.painted?.flush();
     const fogChanged = this.clouds?.flush() ?? false;
     const bordersChanged = this.borders?.flush() ?? false;
-    const nowPaint = performance.now();
+    const nowPaint = still ? idleTime(performance.now()) : performance.now();
     const waterStepped = this.painted?.animate(nowPaint, range) ?? false;
     // The player's Quality's ground program once compiled, and the sprite pieces round the view.
     // A cell's width in drawn pixels, as the shader's fades see it (zoom is CSS pixels per world
