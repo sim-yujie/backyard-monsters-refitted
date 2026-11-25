@@ -34,12 +34,12 @@ export const MAX_RINGS = 4;
 const START_SCALE = 1.06;
 
 const COLOURS: Record<LiveChangeKind, number> = {
-  taken: 0xffd23f,
+  taken: 0xffba1a,
   attack: 0xff5a1f,
   shield: 0xa8ecff,
-  shieldEnd: 0xe8f4ff,
-  attackEnd: 0xe8f4ff,
-  minor: 0xe8f4ff,
+  shieldEnd: 0xdceeff,
+  attackEnd: 0xdceeff,
+  minor: 0xdceeff,
 };
 
 const RANK: Record<RingTier, number> = { own: 0, selected: 1, range: 2, far: 3 };
@@ -85,7 +85,7 @@ export class CellRings {
       if (worst < 0 || this.rings[worst]!.rank <= rank) return false;
       this.rings.splice(worst, 1);
     }
-    this.rings.push({ col: cell.col, row: cell.row, start: now, colour: COLOURS[kind], width: rank <= 1 ? 4.5 : 3.5, rank });
+    this.rings.push({ col: cell.col, row: cell.row, start: now, colour: COLOURS[kind], width: rank <= 1 ? 4.5 : 4, rank });
     this.lastStep = -1;
     return true;
   }
@@ -109,7 +109,7 @@ export class CellRings {
     const phone = isPhoneLayout();
     for (const ring of this.rings) {
       const life = this.frozen ?? Math.min(1, (now - ring.start) / RING_MS);
-      const alpha = 0.8 * (1 - easeOut(life));
+      const alpha = 0.92 * (1 - easeOut(life));
       if (alpha <= 0.01) continue;
       const corners = liftCorners(mapRoomGrid.writeCellCorners(ring.col, ring.row, []), this.liftAt(ring.col, ring.row));
       const width = (ring.width + (phone ? 0.5 : 0)) / zoom;
@@ -119,7 +119,7 @@ export class CellRings {
       g.poly(shape);
       g.stroke({ width: width * 2.6, color: ring.colour, alpha: alpha * (classic ? 0.25 : 0.3) });
       g.poly(shape);
-      g.stroke({ width: width + 2 / zoom, color: 0x1a0e00, alpha: alpha * 0.55 });
+      g.stroke({ width: width + 3 / zoom, color: 0x1a0e00, alpha: Math.min(1, alpha * 0.85) });
       g.poly(shape);
       g.stroke({ width, color: ring.colour, alpha });
     }

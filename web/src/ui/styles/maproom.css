@@ -1068,7 +1068,8 @@
   /* Attack's height, set from the button it replaces (CellPanel.applyLive); 52px until measured. */
   height: 52px;
   min-height: 0;
-  padding: 2px 16px;
+  /* neon r2: the second line clear of the bottom bevel, both clear of the rivets / pill ends. */
+  padding: 3px 22px 6px;
   text-align: left;
 }
 
@@ -1084,22 +1085,38 @@
   display: flex;
   flex: 1 1 auto;
   flex-direction: column;
+  gap: 1px;
   min-width: 0;
-  line-height: 1.15;
+  line-height: 1.08;
 }
 
 .mr2-live-bar__text {
   overflow: hidden;
-  font-size: 15px;
+  font-size: 13.5px;
   font-weight: 800;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
 .mr2-live-bar__sub {
-  font-size: 12px;
+  font-size: 11.5px;
   font-weight: 700;
   opacity: 0.85;
+}
+
+/* Classic: gold like its Attack and the gold ring, dark words (neon r2: the View yard green read as
+   a routine action, and white words washed out on its highlight). */
+:root[data-skin="flash"] .mr2-cell .mr2-live-bar {
+  padding-inline: 20px;
+  border-color: #7a4a0a !important;
+  background: linear-gradient(#f9cf4c, #d98c0b) !important;
+  color: #261504 !important;
+  text-shadow: none !important;
+}
+
+:root[data-skin="flash"] .mr2-cell .mr2-live-bar :is(.mr2-live-bar__text, .mr2-live-bar__sub, .mr2-live-bar__refresh) {
+  color: #261504 !important;
+  text-shadow: none !important;
 }
 
 /* While the panel holds the old cell: its owner and the other actions wait for the update. */
@@ -1117,6 +1134,11 @@
 
 .mr2-cell .mr2-cell__primary--busy > * {
   opacity: 0.75;
+}
+
+/* The lock keeps a dark edge like the words beside it (neon r2: it washed out on Classic's highlight). */
+.mr2-cell .mr2-cell__primary--busy > svg {
+  filter: drop-shadow(0 1px 0 rgb(0 0 0 / 75%)) drop-shadow(0 0 1px rgb(0 0 0 / 60%));
 }
 
 /* Take over (#82) sits under Attack, a second choice rather than a second
