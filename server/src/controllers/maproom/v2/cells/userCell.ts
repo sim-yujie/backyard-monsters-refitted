@@ -182,6 +182,11 @@ const ownMonsters = async (
   const mainId = currentUser.save?.basesaveid;
   if (!basesaveid) return cellSave.monsters;
 
+  // `getArea` reads every own cell's army in one query up front
+  // (`monstersForMapMany`); a row it did not find falls back to the blob, as below.
+  const preloaded = ctx.state.ownMonsters;
+  if (preloaded instanceof Map) return preloaded.get(basesaveid) ?? cellSave.monsters;
+
   const owner = (): Promise<ArmyOwner> => {
     ctx.state.armyOwner ??= mainId ? loadArmyOwner(mainId) : Promise.resolve(null);
     return ctx.state.armyOwner as Promise<ArmyOwner>;

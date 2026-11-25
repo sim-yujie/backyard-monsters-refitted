@@ -5,7 +5,8 @@ import { User } from "../../../database/models/user.model.js";
 import { WorldMapCell } from "../../../database/models/worldmapcell.model.js";
 import { postgres, redis } from "../../../server.js";
 import { logger } from "../../../utils/logger.js";
-import { flingerLevelsNow } from "../../yard/flingerLevelsNow.js";
+import { flingerLevelsNow, flingerLevelsWithNextChange } from "../../yard/flingerLevelsNow.js";
+import type { FlingerClock } from "../../yard/derivedLevels.js";
 import type { RevealedCell, SightSource } from "../../../game-rules/maproom/sight.js";
 import { withExtraReach } from "../../../game-rules/maproom/range.js";
 import { allianceBonusesOfUser } from "../../alliance/allianceBonuses.js";
@@ -40,6 +41,35 @@ export const allianceSightKey = (allianceId: number): string => `sight:ally:${al
 
 /** The cache's normal life (`fog-of-war.md` §9): never longer than this, and never past Declare War's end. */
 export const SIGHT_CACHE_TTL_SECONDS = 30;
+
+/**
+ * The alliance union's life (map-lag fix, 25 Nov 2026). Rebuilding it reads
+ * every member's yard and outposts: 250-390 ms for 30 members owning ~1,400
+ * outposts, every 30 seconds while anyone in the alliance has the map open.
+ * Every change to what it holds already drops it at once: a member joining,
+ * leaving or being removed (`membership.ts`, `allianceModeration.ts`), a
+ * member winning, losing or moving a base or a Flinger level changing on a
+ * write (`invalidateSight`), a member's Flinger finish moved by a write
+ * (an upgrade started, sped up, helped or cancelled:
+ * {@link invalidateSightIfFlingerClockChanged}), an account deleted
+ * (`deleteAccount.ts`). The one change no write announces, a member's
+ * Flinger upgrade running out on its clock, ends the entry early instead
+ * ({@link cachedAllianceSight}). Its
+ * members' attackers are not in it (each player's own half, which keeps the
+ * 30-second life: a past attacker moving drops nothing).
+ */
+export const ALLIANCE_SIGHT_CACHE_TTL_SECONDS = 300;
+
+/**
+ * Set by a rebuild of the alliance union before it reads, and dropped with
+ * the union, so a rebuild that overlapped a drop (and so may have read the
+ * members as they were) does not store its stale answer for the union's long
+ * life ({@link cachedAllianceSight}).
+ */
+export const allianceSightBuildKey = (allianceId: number): string => `sight:ally:${allianceId}:build`;
+
+/** How long a rebuild's mark lasts: well past any rebuild. */
+const BUILD_MARK_TTL_SECONDS = 60;
 
 /**
  * A sight circle, tagged with whose it is (`fog-of-war.md` §5.2, §7): the
@@ -149,10 +179,13 @@ const loadOwnSight = async (user: User): Promise<CachedHalf> => {
  * @param allianceId - The alliance.
  * @param worldid - Only members on this world contribute (`fog-of-war.md` §8).
  */
-const loadAllianceSight = async (allianceId: number, worldid: string): Promise<CachedHalf> => {
+const loadAllianceSight = async (
+  allianceId: number,
+  worldid: string,
+): Promise<{ half: CachedHalf; nextChangeIn: number | undefined }> => {
   const members = await postgres.em.find(User, { alliance_id: allianceId }, { fields: ["userid"] });
   const memberIds = members.map(({ userid }) => userid);
-  if (!memberIds.length) return EMPTY_HALF;
+  if (!memberIds.length) return { half: EMPTY_HALF, nextChangeIn: undefined };
 
   const saves = await postgres.em.find(
     Save,
@@ -160,7 +193,10 @@ const loadAllianceSight = async (allianceId: number, worldid: string): Promise<C
     { fields: SIGHT_SAVE_FIELDS },
   );
 
-  const flingerLevels = await flingerLevelsNow(flingerBaseids(saves));
+  const { levels: flingerLevels, nextChangeIn } = await flingerLevelsWithNextChange(
+    flingerBaseids(saves),
+    ALLIANCE_SIGHT_CACHE_TTL_SECONDS,
+  );
 
   const sources: SightSource[] = [];
   const revealed: RevealedCell[] = [];
@@ -171,7 +207,7 @@ const loadAllianceSight = async (allianceId: number, worldid: string): Promise<C
     revealed.push(...ownRevealedCells(baseSave));
   }
 
-  return { sources, revealed };
+  return { half: { sources, revealed }, nextChangeIn };
 };
 
 /** Reads a cached half, or null on a miss or a value Redis can no longer parse. */
@@ -196,20 +232,35 @@ const cachedOwnSight = async (user: User): Promise<CachedHalf> => {
   return fresh;
 };
 
+/**
+ * The alliance union, cached for {@link ALLIANCE_SIGHT_CACHE_TTL_SECONDS}, or
+ * only until the first member's Flinger upgrade runs out, when sooner. A
+ * rebuild that overlapped a drop (its mark was dropped while it read) is kept
+ * for the short {@link SIGHT_CACHE_TTL_SECONDS} only, as before the long life.
+ */
 const cachedAllianceSight = async (allianceId: number, worldid: string): Promise<CachedHalf> => {
   const key = allianceSightKey(allianceId);
   const cached = await readCached(key);
   if (cached) return cached;
 
-  const fresh = await loadAllianceSight(allianceId, worldid);
-  await redis.setex(key, SIGHT_CACHE_TTL_SECONDS, JSON.stringify(fresh));
-  return fresh;
+  const buildKey = allianceSightBuildKey(allianceId);
+  const mark = `${process.pid}:${Date.now()}:${Math.random()}`;
+  await redis.set(buildKey, mark, "EX", BUILD_MARK_TTL_SECONDS);
+  const { half, nextChangeIn } = await loadAllianceSight(allianceId, worldid);
+  const overlapped = (await redis.get(buildKey)) !== mark;
+
+  const ttl = overlapped
+    ? SIGHT_CACHE_TTL_SECONDS
+    : Math.max(1, Math.min(ALLIANCE_SIGHT_CACHE_TTL_SECONDS, nextChangeIn ?? ALLIANCE_SIGHT_CACHE_TTL_SECONDS));
+  await redis.setex(key, ttl, JSON.stringify(half));
+  return half;
 };
 
 /**
  * A player's complete sight: their own circles and cells, their alliance's
- * union of the same, and every attacker's base — cached in Redis, 30 seconds
- * at most (`fog-of-war.md` §9).
+ * union of the same, and every attacker's base — cached in Redis, the own
+ * half 30 seconds at most, the alliance union until a change drops it
+ * (`fog-of-war.md` §9, {@link ALLIANCE_SIGHT_CACHE_TTL_SECONDS}).
  *
  * A player with no save yet, or a save never placed on a Map Room 2 world,
  * sees nothing: an empty sight, not an error (`emptyAreaResponse.ts` already
@@ -270,7 +321,7 @@ export const invalidatePlayerSight = (userid: number): Promise<number> =>
  * @param allianceId - The alliance whose membership changed.
  */
 export const invalidateAllianceSight = (allianceId: number): Promise<number> =>
-  redis.del(allianceSightKey(allianceId));
+  redis.del(allianceSightKey(allianceId), allianceSightBuildKey(allianceId));
 
 /** A player's alliance, read fresh for a caller holding only their id. */
 const allianceIdOf = async (userid: number): Promise<Pick<User, "userid" | "alliance_id">> => {
@@ -317,6 +368,29 @@ export const invalidateSightIfFlingerChanged = async (
   after: number | undefined,
 ): Promise<void> => {
   if (before === after) return;
+  await invalidateSight(user);
+};
+
+/**
+ * {@link invalidateSight} when a write moved a yard's Flinger level or the
+ * moment its countdown runs out ({@link FlingerClock}). The alliance union
+ * runs out at the first member's Flinger finish it read
+ * ({@link cachedAllianceSight}); an upgrade started, sped up, helped or
+ * cancelled after that changes the moment without changing the level, so
+ * only this drops it in time. Call it once the write has committed.
+ *
+ * @param user - The yard's owner, loaded or just their id.
+ * @param before - `flingerClockOf` the yard before the write (undefined: the
+ *   write did not happen, nothing to drop).
+ * @param after - `flingerClockOf` the yard as written.
+ */
+export const invalidateSightIfFlingerClockChanged = async (
+  user: number | Pick<User, "userid" | "alliance_id">,
+  before: FlingerClock | undefined,
+  after: FlingerClock | undefined,
+): Promise<void> => {
+  if (!before || !after) return;
+  if (before.level === after.level && before.changeAt === after.changeAt) return;
   await invalidateSight(user);
 };
 

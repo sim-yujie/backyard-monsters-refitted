@@ -5,6 +5,7 @@ import {
   CATAPULT_TYPE,
   FLINGER_TYPE,
   derivedLevels,
+  flingerClockOf,
   flingerLevelAt,
   syncAttackedYardLevels,
   syncBaseValue,
@@ -221,5 +222,38 @@ describe("syncAttackedYardLevels", () => {
     const save = { type: "tribe", flinger: 1, catapult: 0, buildingdata: yard() };
     expect(syncAttackedYardLevels(save)).toBe(false);
     expect(save).toMatchObject({ flinger: 1, catapult: 0 });
+  });
+});
+
+describe("flingerClockOf (map-lag fix)", () => {
+  const NOW = 1_000_000;
+  const flinger = (extra: Partial<BuildingData> = {}): BuildingDataMap => ({
+    ...yard(),
+    "1": building(1, FLINGER_TYPE, { l: 3, ...extra }),
+  });
+
+  test("no countdown: the level, and no finish", () => {
+    expect(flingerClockOf({ flinger: 3, buildingdata: flinger(), savetime: NOW - 100 }, NOW)).toEqual({ level: 3, changeAt: undefined });
+  });
+
+  test("a running upgrade finishes when its countdown, played from the save, runs out", () => {
+    const save = { flinger: 3, buildingdata: flinger({ cU: 500, cL: 97_200 }), savetime: NOW - 100 };
+    expect(flingerClockOf(save, NOW)).toEqual({ level: 3, changeAt: NOW + 400 });
+    // The same yard caught up to now reads the same finish.
+    const caughtUp = { flinger: 3, buildingdata: flinger({ cU: 400, cL: 97_200 }), savetime: NOW };
+    expect(flingerClockOf(caughtUp, NOW)).toEqual(flingerClockOf(save, NOW));
+  });
+
+  test("a speed-up moves the finish and not the level", () => {
+    const before = flingerClockOf({ flinger: 3, buildingdata: flinger({ cU: 5000, cL: 97_200 }), savetime: NOW }, NOW);
+    const after = flingerClockOf({ flinger: 3, buildingdata: flinger({ cU: 60, cL: 97_200 }), savetime: NOW }, NOW);
+    expect(after.level).toBe(before.level);
+    expect(after.changeAt).toBe(NOW + 60);
+    expect(before.changeAt).toBe(NOW + 5000);
+  });
+
+  test("a damaged Flinger's paused upgrade has no finish", () => {
+    const save = { flinger: 3, buildingdata: flinger({ cU: 500, cL: 97_200 }), buildinghealthdata: { "1": 50 }, savetime: NOW };
+    expect(flingerClockOf(save, NOW).changeAt).toBeUndefined();
   });
 });

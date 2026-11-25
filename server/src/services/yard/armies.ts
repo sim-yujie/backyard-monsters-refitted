@@ -286,6 +286,35 @@ export const monstersForMap = async (
   return catchUpArmyRow(row, owner, now).monsters;
 };
 
+/**
+ * {@link monstersForMap} for many of the viewer's own cells at once: one
+ * query for every row instead of one per cell (a zone holding a dozen own
+ * outposts asked a dozen times, one after another; map-lag fix, 25 Nov 2026).
+ * The same rows, fields and catch-up, so each answer is what
+ * {@link monstersForMap} gives for that cell. A row that is gone is left out
+ * of the map (the caller falls back to the stored blob, as for `undefined`).
+ *
+ * @param basesaveids - The cells' saves.
+ * @param ownerSave - The viewer's main save, read only if some row is an outpost.
+ * @param now - Server seconds.
+ */
+export const monstersForMapMany = async (
+  basesaveids: readonly number[],
+  ownerSave: () => Promise<ArmyOwner>,
+  now: number
+): Promise<Map<number, JsonObject | null | undefined>> => {
+  const unique = [...new Set(basesaveids)];
+  const answers = new Map<number, JsonObject | null | undefined>();
+  if (!unique.length) return answers;
+  const rows = await postgres.em.find(Save, { basesaveid: { $in: unique } }, { fields: ARMY_FIELDS });
+  let viewerMain: Promise<ArmyOwner> | undefined;
+  for (const row of rows) {
+    const owner = row.type === BaseType.MAIN ? row : await (viewerMain ??= ownerSave());
+    answers.set(row.basesaveid, catchUpArmyRow(row, owner, now).monsters);
+  }
+  return answers;
+};
+
 /** The viewer's main save's academy and buffs, for {@link monstersForMap}. */
 export const loadArmyOwner = (basesaveid: number): Promise<ArmyOwner> =>
   postgres.em.findOne(Save, { basesaveid }, { fields: ["academy", "storedata"] });
