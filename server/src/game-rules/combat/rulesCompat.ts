@@ -85,6 +85,10 @@
  * yard loaded until a hit finds it empty (`EngineBuilding.emptyUnhit`), as
  * Flash's `_looted` does; every other creep still reads it as looted.
  *
+ * Patch 8.6 (main, merged back 25 Nov 2026) brings only the two Krallen
+ * changes above, but beta 9's other changes move its battles, so 8.6's
+ * cf287596a22ae2e0 is not listed.
+ *
  * Add the version a change replaces only when that change moves no battle.
  * A change that moves any battle result must empty this list.
  */
