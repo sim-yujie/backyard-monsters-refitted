@@ -241,6 +241,13 @@ import {
   towerScanPoint,
 } from "./yard.js";
 import type { Cart, EngineBuilding, EngineYard } from "./yard.js";
+import {
+  screenPxBlastDistance,
+  screenPxCreepsSquared,
+  screenPxToCornerSquared,
+  towerHolds,
+  yardToAnchorSquared,
+} from "./reach.js";
 import type { PathGrid } from "./grid.js";
 import type { Rng } from "./rng.js";
 import type { ChampionScoring, CreepHit, CreepIndex } from "./targeting.js";
@@ -2196,7 +2203,7 @@ const DEFEND_SEARCH = 400;
  */
 const DEFEND_SURFACE_SQUARED = 14400;
 
-/** The reach a creep fights another at: its range, and never less than `DEFENSE_RANGE_SQUARED`. */
+/** The reach a creep fights another at: its range, and never under 2,500 (owner, 29 Sep). */
 const creepReach = (range: number): number => Math.max(range * range, 2500);
 
 /**
@@ -2204,6 +2211,13 @@ const creepReach = (range: number): number => Math.max(range * range, 2500);
  * a defender that reaches an attacker sets it on (`CreepBase.as:1111`).
  */
 const CLOSE_FIGHT_SQUARED = 2500;
+
+/**
+ * An Eye-ra's blast hits the defender it fights within 30 screen px:
+ * `DEFENSE_RANGE_SQUARED`, 900 (`CreepBase.as:37`, `:808`). Until beta 9 it
+ * was the defenders' close-fight 2,500 (50 px).
+ */
+export const EYE_RA_FOE_SQUARED = 900;
 
 /**
  * An Eye-ra's blast on monsters reaches 90: on screen for an attacker's
@@ -4433,7 +4447,7 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
       if (other.behaviour !== "defend" && other.behaviour !== "bunker") continue;
       listed += 1;
       if (!other.targetable || !canHit(creep.hitFlags, other.flags)) continue;
-      const squared = screenDistanceSquared(creep.ix, creep.iy, other.ix, other.iy);
+      const squared = screenPxCreepsSquared(creep, other);
       if (squared < nearest) {
         nearest = squared;
         foe = other;
@@ -4747,8 +4761,7 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
       }
       creep.waypoints = [{ x: chosen.x, y: chosen.y }];
       // Under 170 screen px from `_position` (`ChampionBase.as:662`).
-      const at = screenPointOf(creep.ix, creep.iy);
-      creep.atTarget = distanceSquared(at.x, at.y, chosen.sx, chosen.sy) < 170 * 170;
+      creep.atTarget = screenPxToCornerSquared(creep.ix, creep.iy, chosen) < 170 * 170;
       return;
     }
     const route = grid.path(
@@ -5208,8 +5221,12 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
   /**
    * `AOEDamage.getAllTargets` (`AOEDamage.as:34-57`): every ground creep of
    * the other side and, for an attacker, every building, within `radius` of
-   * the striker, nearest first (`sortOn dist`; a tie goes creeps before
-   * buildings, then by id, which Flash leaves to the sort). A defender's
+   * the striker (a building in screen pixels to its drawn top corner, as
+   * `getBuildingsInRange` measures, `Targeting.as:151-173`, and its falloff
+   * from that distance; until beta 9 it was yard units, which reached 141 px
+   * across the screen but 71 up and down it), nearest first (`sortOn dist`;
+   * a tie goes creeps before buildings, then by id, which Flash leaves to the
+   * sort). A defender's
    * monsters never splash buildings (`:36-39`), and nor does a splash that
    * leaves them out with `buildings` false. `skipCreep` and `skipBuilding` are
    * the initial target when it is left out.
@@ -5230,9 +5247,8 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
     if (!striker.friendly && buildings) {
       for (const building of yard.buildings) {
         if (building === skipBuilding || !splashable(building)) continue;
-        const squared = Math.trunc(distanceSquared(striker.x, striker.y, building.cx, building.cy));
-        if (squared >= radius * radius) continue;
-        found.push({ creep: null, building, dist: Math.sqrt(squared) });
+        const dist = screenPxBlastDistance(striker.ix, striker.iy, building, radius);
+        if (dist !== undefined) found.push({ creep: null, building, dist });
       }
     }
     return found.sort((one, other) => {
@@ -5483,7 +5499,7 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
       if (building === aim || building.hp <= 0) continue;
       if (building.kind === "decoration" || building.kind === "enemy") continue;
       if (building.kind === "trap") continue;
-      const squared = distanceSquared(originX, originY, building.cx, building.cy);
+      const squared = yardToAnchorSquared(originX, originY, building);
       if (squared >= buildingReach) continue;
       const share = (boosted * (buildingReach - squared)) / buildingReach;
       struck.push([building, damageBuilding(building, Math.trunc(share), creep)]);
@@ -5494,7 +5510,7 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
     const foe = creep.targetCreep >= 0 ? byCreepId.get(creep.targetCreep) : undefined;
     for (const other of creeps) {
       if (!other.friendly || other.gone || other.hp <= 0) continue;
-      const squared = screenDistanceSquared(creep.ix, creep.iy, other.ix, other.iy);
+      const squared = screenPxCreepsSquared(creep, other);
       if (squared >= creepCircle) continue;
       const share = (boosted * (creepCircle - squared)) / creepCircle;
       damageCreep(other, other === foe ? boosted : Math.trunc(share), null, creep);
@@ -5570,7 +5586,7 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
       if (building.hp <= 0 || building.kind === "decoration" || building.kind === "enemy") continue;
       // `tmpPointB.add(tmpPointC)` at `CreepBase.as:797` discards its result, so
       // the `_middle` offset the client meant to apply never reaches the test.
-      const squared = distanceSquared(originX, originY, building.cx, building.cy);
+      const squared = yardToAnchorSquared(originX, originY, building);
       if (squared >= 3600) continue;
       const dealt = damageBuilding(
         building,
@@ -5591,7 +5607,7 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
   /**
    * The rest of an attacking Eye-ra's blast (`CreepBase.as:804-827`): it hurts
    * monsters too. The defender it is on, if any, takes the whole blow within
-   * `DEFENSE_RANGE_SQUARED`; every other defending monster on the ground within
+   * {@link EYE_RA_FOE_SQUARED}; every other defending monster on the ground within
    * {@link EYE_RA_DEFENDER_RADIUS} a share falling to nothing at the edge; and
    * the yard's champion (not Krallen, `CHAMPIONCAGE.isBasicGuardian`) within
    * {@link EYE_RA_GUARDIAN_RADIUS} alike, flying or not. All measured on
@@ -5601,15 +5617,15 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
     let hurt = 0;
     const foe = creep.targetCreep >= 0 ? byCreepId.get(creep.targetCreep) : undefined;
     if (foe && foe.friendly && foe.hp > 0 && !foe.gone) {
-      const squared = screenDistanceSquared(creep.ix, creep.iy, foe.ix, foe.iy);
-      const hit = squared < CLOSE_FIGHT_SQUARED && damageCreep(foe, creep.damage, null, creep) > 0;
+      const squared = screenPxCreepsSquared(creep, foe);
+      const hit = squared < EYE_RA_FOE_SQUARED && damageCreep(foe, creep.damage, null, creep) > 0;
       if (hit) hurt += 1;
     }
     const monsterReach = EYE_RA_DEFENDER_RADIUS * EYE_RA_DEFENDER_RADIUS;
     const guardianReach = EYE_RA_GUARDIAN_RADIUS * EYE_RA_GUARDIAN_RADIUS;
     for (const other of creeps) {
       if (!other.friendly || other.gone || other.hp <= 0) continue;
-      const squared = screenDistanceSquared(creep.ix, creep.iy, other.ix, other.iy);
+      const squared = screenPxCreepsSquared(creep, other);
       let dealt = 0;
       if (other.champion) {
         if (other.monsterId === KRALLEN_ID || squared >= guardianReach) continue;
@@ -5802,7 +5818,7 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
       creep.targetCreep = found.id;
       target = found;
       if (creep.burrows) {
-        const squared = screenDistanceSquared(creep.ix, creep.iy, found.ix, found.iy);
+        const squared = screenPxCreepsSquared(creep, found);
         creep.surfaceChase = squared < DEFEND_SURFACE_SQUARED;
       }
     }
@@ -5855,9 +5871,10 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
 
   /**
    * One tick of a fight between two creeps: a swing inside the reach, else a
-   * step straight at the foe. `DEFENSE_RANGE_SQUARED` is 2,500, measured on
-   * screen like the range `canShootCreep` also accepts (`CreepBase.as:1543`,
-   * `:723-727`).
+   * step straight at the foe. The reach is never under 2,500 (50 px),
+   * measured on screen like the range `canShootCreep` also accepts
+   * (`CreepBase.as:1543`, `:723-727`): the owner's defender rule of 29 Sep
+   * (fidelity note 9); Flash's `DEFENSE_RANGE_SQUARED` is 900 (`:37`).
    */
   /**
    * `canShootCreep` for an attacker turned on a defender: a monster
@@ -5897,7 +5914,7 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
   };
 
   const fight = (creep: Creep, foe: Creep): void => {
-    const squared = screenDistanceSquared(creep.ix, creep.iy, foe.ix, foe.iy);
+    const squared = screenPxCreepsSquared(creep, foe);
     // A defending Korath reaches a flyer from twice his range (`ChampionBase.as:876`).
     const range =
       creep.friendly && foe.flying && creep.champion && creep.monsterId === KORATH_ID
@@ -5990,7 +6007,7 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
       foe = index
         .inRange(2 * Math.sqrt(reach), creep.x, creep.y, creep.hitFlags)
         .find(({ creep: other }) => {
-          const squared = screenDistanceSquared(creep.ix, creep.iy, other.ix, other.iy);
+          const squared = screenPxCreepsSquared(creep, other);
           return squared < reach;
         })
         ?.creep;
@@ -6056,7 +6073,7 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
     const frame = tick - creep.born;
     let target = creep.targetCreep >= 0 ? byCreepId.get(creep.targetCreep) : undefined;
     if (target && target.hp > 0) {
-      const squared = screenDistanceSquared(creep.ix, creep.iy, target.ix, target.iy);
+      const squared = screenPxCreepsSquared(creep, target);
       const reach = creep.range * creep.range;
       if (target.hp >= target.maxHp && frame % 100 === 0) {
         creep.atTarget = false;
@@ -6114,16 +6131,6 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
   };
 
   /* ── Champion abilities (issue #222) ───────────────────────────────────── */
-
-  /** `_tmpPoint` to `_tmpPoint`, on screen, squared: `GLOBAL.QuickDistance`'s space for creeps. */
-  const apartSquared = (one: Creep, other: Creep): number =>
-    screenDistanceSquared(one.ix, one.iy, other.ix, other.iy);
-
-  /** A creep's `_tmpPoint` to a building's `_position`, on screen, squared. */
-  const toBuildingSquared = (creep: Creep, building: EngineBuilding): number => {
-    const at = screenPointOf(creep.ix, creep.iy);
-    return distanceSquared(at.x, at.y, building.sx, building.sy);
-  };
 
   /**
    * How far a creep reaches a building, in yard units from its nearest tile
@@ -6222,7 +6229,7 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
     if (krallen.behaviour !== "attack" || krallen.frame % LOOT_AURA_FRAMES !== 0) return;
     const radius = krallenAuraRadius(krallen.level);
     const reach = radius * radius;
-    const near = (other: Creep): boolean => apartSquared(krallen, other) < reach;
+    const near = (other: Creep): boolean => screenPxCreepsSquared(krallen, other) < reach;
     for (const other of creeps) {
       if (other === krallen || other.friendly || other.gone || other.hp <= 0) continue;
       if (!near(other) || other.lootBuffedBy >= 0) continue;
@@ -6286,9 +6293,9 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
     if (!creep.friendly) {
       for (const building of yard.buildings) {
         if (building.hp <= 0 || UNTARGETABLE_TYPES.includes(building.type)) continue;
-        const squared = Math.trunc(toBuildingSquared(creep, building));
-        if (squared >= radius * radius) continue;
-        const dealt = linearAreaDamage(creep.damage, radius, inner, Math.sqrt(squared));
+        const dist = screenPxBlastDistance(creep.ix, creep.iy, building, radius);
+        if (dist === undefined) continue;
+        const dealt = linearAreaDamage(creep.damage, radius, inner, dist);
         if (dealt !== undefined) damageBuilding(building, dealt, creep, 1);
       }
     }
@@ -6553,7 +6560,7 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
         findBuffTargets(creep);
         if (!stillSupporting()) return;
       } else if (
-        apartSquared(creep, ally) < reach &&
+        screenPxCreepsSquared(creep, ally) < reach &&
         allyAim &&
         inBuildingReach(creep, allyAim)
       ) {
@@ -6561,7 +6568,10 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
       } else if (!creep.attacking && frame % FOMOR_IDLE_FRAMES === 0) {
         findBuffTargets(creep);
         if (!stillSupporting()) return;
-      } else if (creep.attacking && apartSquared(creep, ally) > reach * FOMOR_DRIFT * FOMOR_DRIFT) {
+      } else if (
+        creep.attacking &&
+        screenPxCreepsSquared(creep, ally) > reach * FOMOR_DRIFT * FOMOR_DRIFT
+      ) {
         creep.attacking = false;
         creep.atTarget = false;
       } else if (creep.waypointIndex >= creep.waypoints.length && !creep.atTarget) {
@@ -6921,14 +6931,18 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
     };
   };
 
-  /** The targets it holds that it may still shoot: alive, hittable and in range. */
+  /**
+   * The targets it holds that it may still shoot: alive, hittable and in
+   * range of the middle of its footprint, where it found them
+   * ({@link towerHolds}; deliberately not Flash's anchor, owner's pick B).
+   */
   const liveTargets = (tower: Tower, scan: TowerScan): Creep[] => {
     const live: Creep[] = [];
     for (const id of tower.targets) {
       const creep = byCreepId.get(id);
       if (!creep || creep.hp <= 0 || !creep.targetable) continue;
       if (!canHit(scan.flags, creep.flags)) continue;
-      if (distanceSquared(scan.x, scan.y, creep.x, creep.y) >= scan.reach) continue;
+      if (!towerHolds(creep, tower.building, tower.range)) continue;
       live.push(creep);
     }
     return live;
@@ -8049,7 +8063,7 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
   /** `interceptTarget`: on to a new foe, swinging at once if already in range (`:482-485`). */
   const takeFoe = (creep: Creep, foe: Creep): void => {
     creep.targetCreep = foe.id;
-    const squared = screenDistanceSquared(creep.ix, creep.iy, foe.ix, foe.iy);
+    const squared = screenPxCreepsSquared(creep, foe);
     if (squared < creep.range * creep.range) creep.atTarget = true;
   };
 
@@ -8127,7 +8141,7 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
       lookForFoe(creep);
       foe = liveFoe(creep);
     } else {
-      const squared = screenDistanceSquared(creep.ix, creep.iy, foe.ix, foe.iy);
+      const squared = screenPxCreepsSquared(creep, foe);
       const range = creep.range;
       const reach = range * KORATH_DEFEND_FLYER_REACH;
       if (squared < range * range) {

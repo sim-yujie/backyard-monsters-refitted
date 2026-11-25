@@ -48,6 +48,13 @@
  * (`RANGED_BUILDING_REACH_SCALE`), which moves every battle with one, so no
  * replay stamped with beta 9's 0f7f60198e612d6b plays the same any more.
  *
+ * Beta 9's reach audit (owner's pick A, Desk 8, 25 Nov 2026; towers left
+ * as they are, pick B, 25 Nov) keeps it empty: a splash measures buildings in
+ * screen pixels to their drawn top corner, and an Eye-ra's blast hits the
+ * defender it fights within 30 px, not 50 (`reach.ts`). That moves every
+ * battle with a splash on buildings or an Eye-ra fighting, so no replay
+ * stamped with fed8c884206301e4 plays the same any more.
+ *
  * Add the version a change replaces only when that change moves no battle.
  * A change that moves any battle result must empty this list.
  */

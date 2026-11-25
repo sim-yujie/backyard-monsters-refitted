@@ -182,6 +182,17 @@ describe("Fink's extra targets", () => {
   });
 });
 
+/**
+ * A splash measures a building in screen pixels from the striker's
+ * `_tmpPoint` to the building's drawn top corner (`getBuildingsInRange`,
+ * `Targeting.as:151-173`; beta 9, the reach audit): written out here apart
+ * from the engine's `reach.ts`.
+ */
+const onScreen = (x: number, y: number): { x: number; y: number } => ({
+  x: x - y,
+  y: (x + y) * 0.5,
+});
+
 describe("Wormzer's splash damage", () => {
   const swing = monsterStat("C13", "damage", 1);
 
@@ -192,9 +203,9 @@ describe("Wormzer's splash damage", () => {
   it.each([1, 2, 3])("splashes within 100 for the swing times rank %i, falling off", (rank) => {
     const { yard, battle } = fightFirstSwing("C13", rank);
     const worm = battle.creeps().find((creep) => creep.monsterId === "C13")!;
-    const at = rangePointOf(worm.ix, worm.iy);
+    const at = onScreen(worm.ix, worm.iy);
     const expected = yard.buildings.map((building, index) => {
-      const squared = Math.trunc((at.x - building.cx) ** 2 + (at.y - building.cy) ** 2);
+      const squared = Math.trunc((at.x - building.sx) ** 2 + (at.y - building.sy) ** 2);
       const splash = linearAreaDamage(swing * wormzerMultiplier(rank), 100, 0, Math.sqrt(squared));
       return (index === 0 ? swing : 0) + (splash ?? 0);
     });
@@ -254,10 +265,10 @@ describe("Project X's death blast", () => {
 
   it.each([1, 2, 3])("blasts 60 round it for its damage times %i, falling off", (rank) => {
     const { yard, death } = fall(rank);
-    const at = rangePointOf(death.ix, death.iy);
+    const at = onScreen(death.ix, death.iy);
     const blast = monsterStat("C11", "damage", 1) * projectXMultiplier(rank);
     const expected = yard.buildings.map((building) => {
-      const squared = Math.trunc((at.x - building.cx) ** 2 + (at.y - building.cy) ** 2);
+      const squared = Math.trunc((at.x - building.sx) ** 2 + (at.y - building.sy) ** 2);
       return linearAreaDamage(blast, 60, 0, Math.sqrt(squared)) ?? 0;
     });
     expect(lossOf(yard)).toEqual(expected);
