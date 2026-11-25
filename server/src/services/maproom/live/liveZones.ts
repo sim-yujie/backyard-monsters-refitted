@@ -7,15 +7,15 @@ import { setLiveMarkSink, type LiveMarkSink } from "./liveMarks.js";
  * A zone is the 10 x 10 block the map asks `getarea` for (`zoneId` below is
  * the client's `zoneX * 10000 + zoneY`). Each has a version in Redis,
  * `livemap:zv:<world>` field `<zoneId>`, shared by every server machine. A
- * mark (`liveMarks.ts`) puts its cells in this process's one-second bundle;
- * once a second the bundle's yards, players and alliances are looked up to
+ * mark (`liveMarks.ts`) puts its cells in this process's half-second bundle;
+ * every half second the bundle's yards, players and alliances are looked up to
  * cells (one query each), every zone whose `getarea` answer holds one of
  * those cells gets its version raised, and one message per world goes out on
  * {@link LIVE_ZONES_CHANNEL}. The socket side (`chat/liveGateway.ts`) passes
  * each zone on to the sockets watching it; the map re-asks only those zones.
  *
- * The bundle is the only state kept in this process, and only for a second:
- * a restart loses at most that second's marks (the map's 5-minute version
+ * The bundle is the only state kept in this process, and only for half a
+ * second: a restart loses at most those marks (the map's 5-minute version
  * check does not see those; the next change to the zone does).
  */
 
@@ -23,8 +23,12 @@ export const LIVE_ZONES_CHANNEL = "livemap:zones";
 export const LIVE_SIGHT_CHANNEL = "livemap:sight";
 export const zoneVersionsKey = (world: string): string => `livemap:zv:${world}`;
 
-/** How long marks are gathered before their zones are published, ms (owner: ~1 s is fine). */
-export const BUNDLE_MS = 1000;
+/**
+ * How long marks are gathered before their zones are published, ms. Half a second (lead, 25 Nov
+ * 2026): with the map's 0-1.5 s random wait before it asks, a change is on screen within 2 s for
+ * 95 in 100; more pushes on Redis are cheap, the wait is what spreads the database's load.
+ */
+export const BUNDLE_MS = 500;
 
 export const ZONE_SIZE = 10;
 

@@ -17,7 +17,7 @@ type ServerWebSocket<T> = import("bun").ServerWebSocket<T>;
  *   5-minute version check. Answered with `live.zones` holding every one of
  *   those zones' versions.
  * - `live.zones {z: [[zoneId, version], ...]}` pushed whenever zones the
- *   socket watches change (`liveZones.ts` publishes once a second), one frame
+ *   socket watches change (`liveZones.ts` publishes every half second), one frame
  *   per socket per bundle.
  * - `live.sight` pushed when the player's fog of war changed: the map asks
  *   `/worldmapv2/sight` again.
