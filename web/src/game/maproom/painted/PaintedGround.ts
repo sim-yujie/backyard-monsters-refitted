@@ -521,8 +521,8 @@ export class PaintedGround {
     this.placements.invalidate();
   }
 
-  flush(): void {
-    this.data.flush();
+  flush(): boolean {
+    return this.data.flush();
   }
 
   destroy(): void {

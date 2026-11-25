@@ -118,7 +118,7 @@ import {
   type TiltStrength,
 } from "@/game/maproom/tilt";
 import { cachedTiltChoice, loadTiltChoiceOnce, saveTiltChoice } from "@/game/maproom/tiltSetting";
-import { TiltView } from "@/game/maproom/TiltView";
+import { stageChanged, TiltView } from "@/game/maproom/TiltView";
 import { markerFit, uprightProjector } from "@/game/maproom/markerPins";
 import { Sight } from "@/game/maproom/Sight";
 import { ZoneStore, type ZoneError } from "@/game/maproom/ZoneStore";
@@ -171,6 +171,12 @@ const PUMP_INTERVAL_SECONDS = 0.25;
  * idle rate (`idleTime`, 10 a second); a drag, wheel, pinch or glide brings back the full rate.
  */
 const STILL_AFTER_MS = 500;
+
+/**
+ * The longest the stage goes undrawn while nothing seems to have changed (the render gate's
+ * safety net, as the tilted picture's `MAX_STILL_MS`): one extra draw a second on a still map.
+ */
+const STAGE_MAX_STILL_MS = 1000;
 
 /** On a first open, the longest the portraits and town halls wait for the first zones. */
 const MARKER_PICTURES_WAIT_MS = 4_000;
@@ -384,6 +390,27 @@ export class MapRoom2Scene implements Scene {
   private framesMarked = 0;
   /** When the camera last moved (drag, wheel, pinch, glide or a jump), in performance.now() ms. */
   private movedAt = 0;
+  /** Something this frame changed what the stage shows in a way its change lists miss. */
+  private stageMustDraw = true;
+  private stageDrawnAt = 0;
+  /**
+   * Whether the stage needs drawing this frame (App asks after `update`, `setRenderGate`): only
+   * when something changed (the camera, the tilted picture, a painted animation step, anything
+   * Pixi's change lists hold), or a second has passed. Otherwise the canvas keeps the last frame.
+   */
+  private readonly renderGate = (): boolean => {
+    const now = performance.now();
+    const stage = this.context?.stage;
+    const draw = this.stageMustDraw || !stage || stageChanged(stage) || now - this.stageDrawnAt >= STAGE_MAX_STILL_MS;
+    if (draw) {
+      this.stageMustDraw = false;
+      this.stageDrawnAt = now;
+      this.stageDraws += 1;
+    }
+    return draw;
+  };
+  /** How many frames drew the stage, for the speed check (`__bymrMr2TiltDebug`). */
+  private stageDraws = 0;
   /** When the "Preparing map" demo's made-up progress began (`?prepbar-demo=1`, this open), or null without it. */
   private prepareDemoFrom: number | null = null;
   private zoneMarksDone = false;
@@ -610,6 +637,7 @@ export class MapRoom2Scene implements Scene {
       blocked: () => this.ui?.preparingShown ?? false,
     });
     this.input.attach();
+    context.setRenderGate?.(this.renderGate);
 
     if (import.meta.env.DEV) {
       // The camera and the tilted picture's redraw count, for samples and the speed check.
@@ -617,6 +645,7 @@ export class MapRoom2Scene implements Scene {
         camera: this.camera,
         renderer: this.renderer,
         draws: () => this.tiltView?.draws ?? 0,
+        stageDraws: () => this.stageDraws,
         resolution: () => this.tiltView?.textureResolution ?? 0,
         markers: () => ({ count: this.renderer.markerCount, ms: this.markerMs }),
         // Markers upright (true) or warped flat with the ground (false, the "before").
@@ -705,6 +734,8 @@ export class MapRoom2Scene implements Scene {
   resize(width: number, height: number): void {
     this.viewportWidth = width;
     this.viewportHeight = height;
+    // A resized canvas is blank until drawn.
+    this.stageMustDraw = true;
     this.camera.resize(width, height);
     if (this.tilt) this.setTilt(this.tiltStrength);
   }
@@ -837,6 +868,7 @@ export class MapRoom2Scene implements Scene {
     if (this.camera.dirty) {
       this.camera.dirty = false;
       this.movedAt = started;
+      this.stageMustDraw = true;
       this.applyCamera();
       this.range = this.visibleRange();
       if (this.ready) {
@@ -857,8 +889,12 @@ export class MapRoom2Scene implements Scene {
     if (this.framesMarked < 2) this.markFrames();
     if (this.tilt && this.tiltView && this.context) {
       if (this.renderer.paintedStepped) this.tiltView.invalidate();
-      this.tiltView.render(this.context.renderer, this.renderer.root, this.tilt, this.camera.zoom, this.camera.position);
+      const drew = this.tiltView.render(this.context.renderer, this.renderer.root, this.tilt, this.camera.zoom, this.camera.position);
+      // The new picture is in the mesh's texture, which the stage's change lists do not see.
+      if (drew) this.stageMustDraw = true;
       this.standMarkers();
+    } else if (this.renderer.paintedStepped) {
+      this.stageMustDraw = true;
     }
     this.ui?.drawMinimap();
     // The "Preparing map" loading screen while the painted look compiles (owner, 8 Nov 2026; mostly Firefox).
