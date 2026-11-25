@@ -104,9 +104,12 @@ export interface HatcheryView {
   readonly queue: QueueStack[];
   /** Stacks its own queue may hold: `1 + level`. */
   readonly stackLimit: number;
-  /** Built and at least half health: it takes work (the server's `hatcheryIdle`). */
+  /** Built and at least half health (the server's `hatcheryIdle`): its own queue starts and Finish now reaches it. */
   readonly canTake: boolean;
-  /** It counts down now: it takes work and is not upgrading (the catch-up's rule). */
+  /**
+   * It counts down now and the HCC hands it work: it can take work and is not
+   * upgrading (the catch-up's rule, and the server's `handOut` since 8.7).
+   */
   readonly works: boolean;
   readonly state: HatcheryState;
   /** When the monster in production is done, server clock; null when nothing counts down. */
@@ -289,7 +292,9 @@ export const readHatchYard = (save: BaseLoadResponse, now: number): HatchYard =>
       : damaged
         ? "damaged"
         : !monster
-          ? "idle"
+          ? upgrading
+            ? "upgrading" // empty: the HCC hands it nothing until the upgrade ends
+            : "idle"
           : stage === 2
             ? "stalled"
             : upgrading
@@ -492,7 +497,7 @@ export const previewAdd = (
     if (hcc) {
       if (!yard.hcc?.works) continue;
       for (const one of copy.hatcheries) {
-        const took = one.monster === null && one.canTake ? startNext(one, copy.shared) : null;
+        const took = one.monster === null && one.works ? startNext(one, copy.shared) : null;
         if (took) starts.push({ hatchery: one.id, monster: took });
       }
     } else {
