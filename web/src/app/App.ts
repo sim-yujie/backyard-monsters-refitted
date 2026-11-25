@@ -1,4 +1,4 @@
-import { Application, Container } from "pixi.js";
+import { Application, Container, UPDATE_PRIORITY } from "pixi.js";
 import { createOverlay, type Overlay } from "@/ui/overlay";
 import {
   captureScreen,
@@ -343,6 +343,17 @@ export class App {
     // the next frame (`guardedTick.ts`).
     const tick = guardTick((deltaSeconds) => this.scenes?.tick(deltaSeconds));
     this.pixi.ticker.add((ticker) => tick.run(ticker.deltaMS / 1000));
+    // Pixi draws the stage on every frame; the map scene may say there is nothing new to draw
+    // (`SceneContext.setRenderGate`), and the canvas then keeps showing the last frame. Every other
+    // scene still draws on every frame. Same place in the frame as Pixi's own: after the scene.
+    this.pixi.ticker.remove(this.pixi.render, this.pixi);
+    this.pixi.ticker.add(
+      () => {
+        if (this.scenes?.wantsRender() ?? true) this.pixi.render();
+      },
+      undefined,
+      UPDATE_PRIORITY.LOW,
+    );
 
     // A ban from the game team signs the player out at once, saying why and
     // until when (the chat connection carries it, `game/chat/chatSession.ts`).

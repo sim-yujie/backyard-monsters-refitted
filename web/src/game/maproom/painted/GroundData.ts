@@ -102,9 +102,10 @@ export class GroundData {
   }
 
   /** Uploads pending writes (only the box they touched); a no-op when nothing changed. */
-  flush(): void {
-    if (this.changes.empty) return;
+  flush(): boolean {
+    if (this.changes.empty) return false;
     flushRegion(this.source, this.changes.take());
+    return true;
   }
 
   destroy(): void {

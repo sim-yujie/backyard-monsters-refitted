@@ -165,8 +165,10 @@ export class MapRenderer {
   /** The painted fog (plan step 9): cloud over every cell outside the player's sight; with the painted look only. */
   private clouds: CloudLayer | null = null;
   /**
-   * Whether the last `draw` stepped the painted water, so a tilted view must redraw its picture
-   * (`TiltView.invalidate`): the step only changes a shader uniform, which Pixi's change lists miss.
+   * Whether the last `draw` changed the picture in a way Pixi's change lists miss: a painted
+   * animation stepped (a shader uniform) or new pixels went into a texture (the far raster, the
+   * ground's data). A tilted view must then redraw its picture (`TiltView.invalidate`), and the
+   * stage must be drawn (`MapRoom2Scene`'s render gate).
    */
   paintedStepped = false;
   private webGL2 = false;
@@ -546,8 +548,9 @@ export class MapRenderer {
    * moment, so the animations step at the idle rate (`idleTime`, 10 a second).
    */
   draw(range: CellRange, zoom: number, still = false): boolean {
-    this.raster.flush();
-    this.painted?.flush();
+    // New pixels in a texture Pixi's change lists do not see (the far raster, the ground's data).
+    const texelsWritten = this.raster.flush();
+    const groundWritten = this.painted?.flush() ?? false;
     const fogChanged = this.clouds?.flush() ?? false;
     const bordersChanged = this.borders?.flush() ?? false;
     const nowPaint = still ? idleTime(performance.now()) : performance.now();
@@ -561,7 +564,15 @@ export class MapRenderer {
         : false;
     const pulseStepped = this.borders?.animate(nowPaint, range) ?? false;
     const cloudsStepped = this.clouds?.animate(nowPaint, range) ?? false;
-    this.paintedStepped = waterStepped || groundReady || pulseStepped || bordersChanged || cloudsStepped || fogChanged;
+    this.paintedStepped =
+      waterStepped ||
+      groundReady ||
+      pulseStepped ||
+      bordersChanged ||
+      cloudsStepped ||
+      fogChanged ||
+      texelsWritten ||
+      groundWritten;
     this.range.flush();
     const atlas = this.atlas;
     if (!atlas) return false;

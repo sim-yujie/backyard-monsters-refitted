@@ -178,6 +178,17 @@ export const mapChanged = (root: Container): boolean => {
   return !group || groupChanged(group);
 };
 
+/**
+ * Whether anything drawn with `container` changed since the stage was last drawn: the lists of
+ * the render group it is (the stage, once drawn) or belongs to. For the map's render gate
+ * (`MapRoom2Scene`): a frame with nothing changed need not draw the stage.
+ */
+export const stageChanged = (container: Container): boolean => {
+  const own = container as unknown as { renderGroup?: ChangeLists | null; parentRenderGroup?: ChangeLists | null };
+  const group = own.renderGroup ?? own.parentRenderGroup;
+  return !group || groupChanged(group);
+};
+
 const groupChanged = (group: ChangeLists): boolean => {
   if (group.structureDidChange !== false) return true;
   if (!group.childrenRenderablesToUpdate || group.childrenRenderablesToUpdate.index > 0) return true;
