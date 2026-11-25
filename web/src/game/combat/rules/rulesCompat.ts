@@ -62,6 +62,10 @@
  * c8cfcc231fcacd03 (on beta 9, 286adaed33a75b03) replays with a Krallen no
  * longer play the same.
  *
+ * Patch 8.5 (main, merged back 25 Nov 2026) brings only the Krallen fix and
+ * the ranged reach above, but beta 9's other changes move its battles, so
+ * 8.5's 2b60802884bcf7e6 is not listed.
+ *
  * Add the version a change replaces only when that change moves no battle.
  * A change that moves any battle result must empty this list.
  */
