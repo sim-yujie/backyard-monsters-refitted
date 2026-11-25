@@ -104,6 +104,11 @@ export class ClusterLayout {
   /** The tokens on screen after the last `layOut`, most important first. */
   readonly shown: ScreenToken[] = [];
   private readonly point = { x: 0, y: 0 };
+  private readonly placedGrid = new Grid();
+  private readonly keptGrid = new Grid();
+  /** Neighbour lists, reused. */
+  private readonly near: number[] = [];
+  private readonly shiftNear: number[] = [];
 
   layOut(tokens: readonly WorldToken[], project: Project, view: LayoutView): readonly ScreenToken[] {
     this.used = 0;
@@ -151,13 +156,18 @@ export class ClusterLayout {
 
     // Less important tokens step aside for more important ones, a little: a crest stays on its
     // outpost (10 px at most), a plaque may drift further (it stands for an area).
-    for (let i = 1; i < list.length; i++) {
+    // Neighbours come from a grid of the tokens already placed, so thousands of crests stay cheap.
+    const placed = this.placedGrid;
+    placed.reset(view.width, view.height, list.length);
+    const near = this.near;
+    for (let i = 0; i < list.length; i++) {
       const c = list[i]!;
       const ox = c.x;
       const oy = c.y;
-      for (let pass = 0; pass < 3; pass++) {
+      for (let pass = 0; i > 0 && pass < 3; pass++) {
         let moved = false;
-        for (let j = 0; j < i; j++) {
+        placed.near(c.x, c.y, c.hw + MAX_HALF + GAP, near);
+        for (const j of near) {
           const q = list[j]!;
           const overX = c.hw + q.hw + GAP - Math.abs(c.x - q.x);
           const overY = c.hh + q.hh + GAP - Math.abs(c.y - q.y);
@@ -177,6 +187,7 @@ export class ClusterLayout {
         c.x = ox + (dx / d) * cap;
         c.y = oy + (dy / d) * cap;
       }
+      placed.insert(i, c.x, c.y);
     }
 
     // The whole token on the screen, clear of the HUD. One cut by the edge or under a button steps
@@ -184,11 +195,24 @@ export class ClusterLayout {
     // middles fall near an edge; a crest only CREST_SHIFT px, so it stays on its outpost (neon r1: a
     // crest left out showed a bare hex). The list runs crests first (most important), so a plaque
     // keeps clear of every token already kept (list[0..n)), and no crest covers a count.
+    const kept = this.keptGrid;
+    kept.reset(view.width, view.height, list.length);
     n = 0;
     for (const s of list) {
       const crest = s.kind === "crest";
-      const keep = fits(s, view, list, crest ? 0 : n) || this.shiftIn(s, view, list, crest ? 0 : n, crest ? CREST_SHIFT : PLAQUE_SHIFT);
-      if (keep) list[n++] = s;
+      const others = crest ? null : kept;
+      let keep = fits(s, view, list, others, near) || this.shiftIn(s, view, list, others, crest ? CREST_SHIFT : PLAQUE_SHIFT);
+      // A plaque whose middle is on the screen is never dropped, or its outposts (markers and
+      // borders left out) would vanish: it stays, kept inside the edges, even if crowded.
+      if (!keep && !crest && s.x >= 0 && s.y >= 0 && s.x <= view.width && s.y <= view.height) {
+        s.x = Math.min(Math.max(s.x, EDGE + s.hw), view.width - EDGE - s.hw);
+        s.y = Math.min(Math.max(s.y, EDGE + s.hh), view.height - EDGE - s.hh);
+        keep = true;
+      }
+      if (keep) {
+        kept.insert(n, s.x, s.y);
+        list[n++] = s;
+      }
     }
     list.length = n;
     return list;
@@ -208,7 +232,8 @@ export class ClusterLayout {
    * Moves a token the least way that puts it whole on the screen, clear of the HUD and of the first
    * `kept` tokens of `others`; false when that is further than `limit`.
    */
-  private shiftIn(s: ScreenToken, view: LayoutView, others: readonly ScreenToken[], kept: number, limit: number): boolean {
+  private shiftIn(s: ScreenToken, view: LayoutView, list: readonly ScreenToken[], kept: Grid | null, limit: number): boolean {
+    const near = this.shiftNear;
     const x0 = s.x;
     const y0 = s.y;
     const inX = (x: number): number => Math.min(Math.max(x, EDGE + s.hw), view.width - EDGE - s.hw);
@@ -221,7 +246,7 @@ export class ClusterLayout {
       if (d >= best || d > limit) return;
       s.x = x;
       s.y = y;
-      if (!fits(s, view, others, kept)) return;
+      if (!fits(s, view, list, kept, this.near)) return;
       best = d;
       bestX = x;
       bestY = y;
@@ -236,9 +261,12 @@ export class ClusterLayout {
     };
     for (const r of view.obstacles) around(r, hudGap(s));
     if (s.kind === "plaque" && view.avoid) for (const r of view.avoid) around(r, HUD_GAP);
-    for (let i = 0; i < kept; i++) {
-      const q = others[i]!;
-      around({ left: q.x - q.hw, top: q.y - q.hh, right: q.x + q.hw, bottom: q.y + q.hh }, GAP);
+    if (kept) {
+      kept.near(x0, y0, limit + s.hw + MAX_HALF + GAP, near);
+      for (const i of near) {
+        const q = list[i]!;
+        around({ left: q.x - q.hw, top: q.y - q.hh, right: q.x + q.hw, bottom: q.y + q.hh }, GAP);
+      }
     }
     s.x = bestX;
     s.y = bestY;
@@ -287,17 +315,73 @@ export class ClusterLayout {
   }
 }
 
-/** Whether a token is whole on the screen, clear of the HUD and of the first `kept` of `others`. */
-const fits = (s: ScreenToken, view: LayoutView, others: readonly ScreenToken[], kept: number): boolean => {
+/** Whether a token is whole on the screen, clear of the HUD and of the tokens in `kept` (indices into `list`). */
+const fits = (s: ScreenToken, view: LayoutView, list: readonly ScreenToken[], kept: Grid | null, near: number[]): boolean => {
   if (s.x - s.hw < EDGE || s.y - s.hh < EDGE || s.x + s.hw > view.width - EDGE || s.y + s.hh > view.height - EDGE) return false;
   if (underAny(s, view.obstacles)) return false;
   if (s.kind === "plaque" && view.avoid && underAny(s, view.avoid)) return false;
-  for (let i = 0; i < kept; i++) {
-    const q = others[i]!;
+  if (!kept) return true;
+  kept.near(s.x, s.y, s.hw + MAX_HALF + GAP, near);
+  for (const i of near) {
+    const q = list[i]!;
     if (Math.abs(s.x - q.x) < s.hw + q.hw + GAP && Math.abs(s.y - q.y) < s.hh + q.hh + GAP) return false;
   }
   return true;
 };
+
+/** Half the widest token can be (a 4-digit touch plaque), for how far to look for neighbours. */
+const MAX_HALF = 60;
+
+/**
+ * A grid of token middles on the screen (indices into the layout's list), so a token's neighbours
+ * are found without looking at every other token. Reused between layouts.
+ */
+class Grid {
+  private head = new Int32Array(0);
+  private next = new Int32Array(0);
+  private cols = 0;
+  private rows = 0;
+  private static readonly SIZE = 96;
+  /** Tokens up to this far off the screen are kept (the layout's projection margin and more). */
+  private static readonly OFF = 192;
+
+  reset(width: number, height: number, capacity: number): void {
+    this.cols = Math.ceil((width + Grid.OFF * 2) / Grid.SIZE) + 1;
+    this.rows = Math.ceil((height + Grid.OFF * 2) / Grid.SIZE) + 1;
+    const cells = this.cols * this.rows;
+    if (this.head.length < cells) this.head = new Int32Array(cells);
+    this.head.fill(-1, 0, cells);
+    if (this.next.length < capacity) this.next = new Int32Array(Math.max(capacity, this.next.length * 2));
+  }
+
+  private col(x: number): number {
+    return Math.min(this.cols - 1, Math.max(0, Math.floor((x + Grid.OFF) / Grid.SIZE)));
+  }
+
+  private row(y: number): number {
+    return Math.min(this.rows - 1, Math.max(0, Math.floor((y + Grid.OFF) / Grid.SIZE)));
+  }
+
+  insert(index: number, x: number, y: number): void {
+    const cell = this.row(y) * this.cols + this.col(x);
+    this.next[index] = this.head[cell]!;
+    this.head[cell] = index;
+  }
+
+  /** The indices with a middle within `reach` (a box) of this point, into `out`. */
+  near(x: number, y: number, reach: number, out: number[]): void {
+    out.length = 0;
+    const c0 = this.col(x - reach);
+    const c1 = this.col(x + reach);
+    const r0 = this.row(y - reach);
+    const r1 = this.row(y + reach);
+    for (let r = r0; r <= r1; r++) {
+      for (let c = c0; c <= c1; c++) {
+        for (let i = this.head[r * this.cols + c]!; i !== -1; i = this.next[i]!) out.push(i);
+      }
+    }
+  }
+}
 
 const underAny = (s: ScreenToken, rects: readonly ScreenRect[]): boolean => {
   const gap = hudGap(s);

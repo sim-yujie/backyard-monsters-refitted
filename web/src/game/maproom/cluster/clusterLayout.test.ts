@@ -63,8 +63,11 @@ describe("ClusterLayout", () => {
     const under = shown.find((s) => s.group === "other")!;
     expect(under.y - under.hh).toBeGreaterThanOrEqual(68);
     expect(shown.find((s) => s.kind === "crest")).toBeUndefined();
-    // Too far in: left out.
+    // Too far in, its middle off the screen: left out.
     expect(layout.layOut([token("plaque", "alliance", 400, -60, 3)], flat, view()).length).toBe(0);
+    // Its middle on the screen but boxed in by the HUD: kept (its outposts must not vanish).
+    const boxed = layout.layOut([token("plaque", "alliance", 400, 300, 3)], flat, view({ obstacles: [{ left: 0, top: 200, right: 800, bottom: 400 }] }));
+    expect(boxed).toHaveLength(1);
   });
 
   it("keeps a crest that touches the HUD by stepping it in a little, never covering a plaque's count", () => {

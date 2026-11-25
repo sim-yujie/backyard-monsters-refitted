@@ -843,6 +843,9 @@ export class MapRoom2Scene implements Scene {
   private makeClusterLayer(canvas: HTMLCanvasElement): ClusterLayer {
     const renderer = this.renderer;
     const camera = this.camera;
+    // Filled in place every frame: the layer asks each frame and must not allocate.
+    const cam = { zoom: 0, x: 0, y: 0 };
+    const view = { width: 0, height: 0 };
     return new ClusterLayer({
       filter: renderer.markerFilter,
       quietBorders: (keys) => renderer.setQuietBorders(keys),
@@ -850,7 +853,12 @@ export class MapRoom2Scene implements Scene {
       getCell: (col, row) => this.store.getCell(col, row),
       cellsVersion: () => renderer.cellsVersion,
       viewer: () => renderer.viewerContext,
-      camera: () => ({ zoom: camera.zoom, x: camera.position.x, y: camera.position.y }),
+      camera: () => {
+        cam.zoom = camera.zoom;
+        cam.x = camera.position.x;
+        cam.y = camera.position.y;
+        return cam;
+      },
       projectionKey: () => this.tilt,
       project: (wx, wy, out) => {
         const fx = (wx - camera.position.x) * camera.zoom;
@@ -860,7 +868,11 @@ export class MapRoom2Scene implements Scene {
         out.y = fy;
         return true;
       },
-      viewport: () => ({ width: this.viewportWidth, height: this.viewportHeight }),
+      viewport: () => {
+        view.width = this.viewportWidth;
+        view.height = this.viewportHeight;
+        return view;
+      },
       obstacles: () => {
         const box = canvas.getBoundingClientRect();
         return (this.ui?.coverRects() ?? []).map((r) => ({

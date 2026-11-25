@@ -522,6 +522,11 @@
   width: max-content;
   min-width: 13rem;
   max-width: calc(100vw - 24px);
+  /* With the zoomed-out tokens it is taller: on a short screen it scrolls instead of leaving it. */
+  max-height: calc(100vh - 150px);
+  max-height: calc(100dvh - 150px);
+  overflow-y: auto;
+  overscroll-behavior: contain;
   padding: var(--space-3) var(--space-4);
 }
 

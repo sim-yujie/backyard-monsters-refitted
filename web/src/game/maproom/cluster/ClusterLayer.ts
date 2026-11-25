@@ -191,7 +191,7 @@ export class ClusterLayer {
 
     const cellPx = mapRoomGrid.colStep * cam.zoom;
     const phone = width <= 620 || height <= 500;
-    const step = stepFor(cam.zoom, cellPx, phone, cam.zoom >= hexZoom());
+    const step = stepFor(cam.zoom, cellPx, phone, cam.zoom >= hexZoom(), this.step);
     if (!step) {
       if (this.step !== null || this.shownCount > 0) {
         this.step = null;
@@ -267,6 +267,8 @@ export class ClusterLayer {
   /** The cells of the plaque tapped last, shown as markers until the player zooms back out. */
   private unpacked: Set<number> | null = null;
   private unpackedZoom = 0;
+  /** Their map points (x, y pairs), worked out once at the tap. */
+  private unpackedXY = new Float64Array(0);
 
   /** The cell whose panel is open (`cellKey`), or -1: its crest gets a ring (neon r1). */
   setSelected(key: number): void {
@@ -300,22 +302,37 @@ export class ClusterLayer {
     const keys = new Set<number>(hit.token.cells);
     for (const more of hit.extra) for (const key of more.cells) keys.add(key);
     this.unpacked = keys;
+    this.unpackedXY = new Float64Array(keys.size * 2);
+    let i = 0;
+    for (const key of keys) {
+      const spot = mapRoomGrid.cellToPixel(key % WORLD_WIDTH, Math.floor(key / WORLD_WIDTH));
+      this.unpackedXY[i++] = spot.x;
+      this.unpackedXY[i++] = spot.y;
+    }
     this.unpackedZoom = this.deps.camera().zoom;
     this.groupingDirty = true;
     this.pulse(hit);
     return true;
   }
 
-  /** The unpacked outposts' boxes on the screen, so plaques step off them (neon r3). */
+  /** The unpacked outposts' boxes on the screen, so plaques step off them (neon r3); reused objects. */
+  private readonly avoidRects: ScreenRect[] = [];
   private unpackedRects(zoom: number): ScreenRect[] {
-    const out: ScreenRect[] = [];
+    const out = this.avoidRects;
     const at = this.pulsePoint;
-    for (const key of this.unpacked ?? []) {
-      const spot = mapRoomGrid.cellToPixel(key % WORLD_WIDTH, Math.floor(key / WORLD_WIDTH));
-      if (!this.deps.project(spot.x, spot.y, at)) continue;
+    let n = 0;
+    const xy = this.unpackedXY;
+    for (let i = 0; i < xy.length; i += 2) {
+      if (!this.deps.project(xy[i]!, xy[i + 1]!, at)) continue;
       const half = (mapRoomGrid.cellWidth * zoom * this.deps.scaleAt(at.y)) / 3;
-      out.push({ left: at.x - half, top: at.y - half, right: at.x + half, bottom: at.y + half });
+      const r = (out[n] ??= { left: 0, top: 0, right: 0, bottom: 0 });
+      n++;
+      r.left = at.x - half;
+      r.top = at.y - half;
+      r.right = at.x + half;
+      r.bottom = at.y + half;
     }
+    out.length = n;
     return out;
   }
 

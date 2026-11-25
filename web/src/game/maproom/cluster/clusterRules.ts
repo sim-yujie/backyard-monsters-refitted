@@ -107,12 +107,22 @@ const PLAQUE_TARGET_PX = { phone: 170, desk: 190 } as const;
  * phone layout, and `markersDrawn` whether the map draws markers at this zoom at all (not on the
  * far raster): where it does not, even a lone cell gets a plaque, or it would vanish.
  */
-export const stepFor = (zoom: number, cellPx: number, phone: boolean, markersDrawn: boolean): ClusterStep | null => {
+export const stepFor = (
+  zoom: number,
+  cellPx: number,
+  phone: boolean,
+  markersDrawn: boolean,
+  /** The step in use: handed back when nothing changed, so a frame allocates nothing. */
+  previous: ClusterStep | null = null,
+): ClusterStep | null => {
   if (zoom >= CLUSTER_ZOOM || !(cellPx > 0)) return null;
   const near = zoom >= NEAR_ZOOM;
   const target = (phone ? PLAQUE_TARGET_PX.phone : PLAQUE_TARGET_PX.desk) * (near ? 0.6 : 1);
   const plaqueCells = 2 ** Math.max(1, Math.ceil(Math.log2(target / cellPx)));
-  return { plaqueCells, plaqueMin: !markersDrawn ? 1 : near ? 3 : 2, crests: zoom < LONE_CREST_ZOOM };
+  const plaqueMin = !markersDrawn ? 1 : near ? 3 : 2;
+  const crests = zoom < LONE_CREST_ZOOM;
+  if (previous && previous.plaqueCells === plaqueCells && previous.plaqueMin === plaqueMin && previous.crests === crests) return previous;
+  return { plaqueCells, plaqueMin, crests };
 };
 
 export const sameStep = (a: ClusterStep | null, b: ClusterStep | null): boolean =>
