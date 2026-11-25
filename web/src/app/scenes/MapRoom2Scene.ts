@@ -165,6 +165,13 @@ const MOVE_MIN_ZOOM = 0.72;
 
 /** How often the request queue is drained. Faster than this just burns budget. */
 const PUMP_INTERVAL_SECONDS = 0.25;
+
+/**
+ * How long the camera must stay put before the map counts as still and its animations step at the
+ * idle rate (`idleTime`, 10 a second); a drag, wheel, pinch or glide brings back the full rate.
+ */
+const STILL_AFTER_MS = 500;
+
 /** On a first open, the longest the portraits and town halls wait for the first zones. */
 const MARKER_PICTURES_WAIT_MS = 4_000;
 /** How often visible zones are checked for staleness. */
@@ -375,6 +382,8 @@ export class MapRoom2Scene implements Scene {
   private markerPicturesStarted = false;
   private markerPicturesTimer: ReturnType<typeof setTimeout> | null = null;
   private framesMarked = 0;
+  /** When the camera last moved (drag, wheel, pinch, glide or a jump), in performance.now() ms. */
+  private movedAt = 0;
   /** When the "Preparing map" demo's made-up progress began (`?prepbar-demo=1`, this open), or null without it. */
   private prepareDemoFrom: number | null = null;
   private zoneMarksDone = false;
@@ -827,6 +836,7 @@ export class MapRoom2Scene implements Scene {
 
     if (this.camera.dirty) {
       this.camera.dirty = false;
+      this.movedAt = started;
       this.applyCamera();
       this.range = this.visibleRange();
       if (this.ready) {
@@ -842,7 +852,8 @@ export class MapRoom2Scene implements Scene {
       this.transfer?.place();
     }
 
-    this.renderer.draw(this.range, this.camera.zoom);
+    // Still for a moment: the animations step at the idle rate, so a tilted map redraws less (item 6).
+    this.renderer.draw(this.range, this.camera.zoom, started - this.movedAt >= STILL_AFTER_MS);
     if (this.framesMarked < 2) this.markFrames();
     if (this.tilt && this.tiltView && this.context) {
       if (this.renderer.paintedStepped) this.tiltView.invalidate();
