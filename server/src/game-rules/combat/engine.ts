@@ -4375,8 +4375,13 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
    * `relook` is the look a monster takes every {@link RETARGET_TICKS} while it
    * still has a target: its new route is only taken under `setWaypoints`'
    * rule ({@link routeTo}).
+   *
+   * `held` is a champion's look while it still holds its target (Krallen's
+   * from a harvester she has drained, {@link swing}): its route, too, is
+   * taken only under that rule, and her habits and lesson do not count it as
+   * a look, since it nearly always comes to nothing.
    */
-  const findTarget = (creep: Creep, relook = false): boolean => {
+  const findTarget = (creep: Creep, relook = false, held = false): boolean => {
     let chosen: EngineBuilding | null;
     if (creep.champion) {
       // A champion's own lists (`ChampionBase.findTarget`, `Krallen.findTarget`, issue #222).
@@ -4384,12 +4389,12 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
       // habits takes every CURIOUS_EVERYth look by its instincts alone
       // (`habits.ts`), counted, never drawn.
       let weights = creep.weights;
-      if (creep.habitsOn) {
+      if (creep.habitsOn && !held) {
         creep.looks += 1;
         if (creep.looks % CURIOUS_EVERY === 0) weights = creep.instinctWeights;
       }
       const scoring = weights ? stanceScoring(creep, weights) : undefined;
-      const lesson = lessons.size > 0 ? lessons.get(creep.id) : undefined;
+      const lesson = lessons.size > 0 && !held ? lessons.get(creep.id) : undefined;
       chosen = lesson
         ? findAndLearn(creep, lesson, scoring)
         : findChampionTarget(
@@ -4422,7 +4427,7 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
       creep.targetBuilding = chosen.id;
       return true;
     }
-    routeTo(creep, chosen, relook && !creep.champion);
+    routeTo(creep, chosen, (relook && !creep.champion) || held);
     return true;
   };
 
@@ -4907,14 +4912,21 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
     if (creep.monsterId === KING_WORMZER_ID) {
       kingWormzerSplash(creep, creep.damage * multiplier, null, target);
     }
-    // Krallen moves on from a harvester she has drained (`ChampionBase.as:836-840`).
+    // Krallen looks again from a harvester she has drained (`ChampionBase.as:836-840`),
+    // but without `loseTarget`, so she still holds it, and `setWaypoints`
+    // (`:704-716`) takes the new route only when it has fewer waypoints than
+    // she has left to walk. Standing at the harvester with none left, no route
+    // is shorter: she keeps hitting it until it falls (`:791-797`), and only
+    // then picks again. Moving on at once (owner, 24 Nov 2026) left a trail of
+    // half-hit harvesters wherever they held little loot.
     if (
       creep.champion &&
       creep.monsterId === KRALLEN_ID &&
       isLootable(target.type) &&
-      !unlootedForKrallen(target)
+      !unlootedForKrallen(target) &&
+      creep.waypoints.length - creep.waypointIndex > 0
     ) {
-      findTarget(creep);
+      findTarget(creep, false, true);
     }
   };
 
