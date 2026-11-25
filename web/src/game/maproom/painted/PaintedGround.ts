@@ -286,9 +286,9 @@ export class PaintedGround {
     this.uniforms.uFog.set(rgb(colour));
   }
 
-  /** A zone arrived: the rivers are rebuilt on the next `updateRivers`. */
-  invalidateRivers(): void {
-    this.rivers.invalidate();
+  /** A zone arrived: the rivers are rebuilt on the next `updateRivers` (if their picture reaches `area`). */
+  invalidateRivers(area?: CellRange): void {
+    this.rivers.invalidate(area);
   }
 
   /**

@@ -10,6 +10,7 @@ import {
   FOG_DISTANCE_CAP,
   fogDepth,
   fogDistances,
+  fogDistancesIn,
   fogInRange,
   fogShare,
   surelyClear,
@@ -104,6 +105,40 @@ describe.each(SHAPES)("painted fog (%s hexes)", (_name, shape) => {
     expect(at(39, 39)).toBe(FOG_DISTANCE_CAP);
     // Nothing reads further than the cap.
     expect(Math.max(...out)).toBe(FOG_DISTANCE_CAP);
+  });
+
+  it("re-measures only round a change and gives exactly what a fresh full walk gives (map lag, 25 Nov 2026)", () => {
+    let seed = 7;
+    const rnd = () => ((seed = (seed * 1103515245 + 12345) % 2147483648) / 2147483648);
+    const size = 120;
+    for (let round = 0; round < 40; round++) {
+      const seen: [number, number][] = [];
+      for (let k = 0; k < 30; k++) seen.push([Math.floor(rnd() * size), Math.floor(rnd() * size)]);
+      const data = world(size, size, seen);
+      const out = new Uint8Array(size * size);
+      fogDistances(shape, data, out);
+      // A zone-sized box turns partly to and from fog (a zone arriving, or a sight change).
+      const x0 = Math.floor(rnd() * (size - 11));
+      const y0 = Math.floor(rnd() * (size - 11));
+      for (let col = x0; col <= x0 + 10; col++) {
+        for (let row = y0; row <= y0 + 10; row++) {
+          if (rnd() < 0.4) data.bytes[(row * size + col) * 4 + 3] = rnd() < 0.5 ? Ground.FOG : Ground.MEADOW;
+        }
+      }
+      const before = out.slice();
+      const changed = fogDistancesIn(shape, data, out, { x0, y0, x1: x0 + 10, y1: y0 + 10 });
+      const fresh = new Uint8Array(size * size);
+      fogDistances(shape, data, fresh);
+      expect(out).toEqual(fresh);
+      // The box it reports holds every cell that changed.
+      for (let index = 0; index < out.length; index++) {
+        if (before[index] === out[index]) continue;
+        const col = index % size;
+        const row = Math.floor(index / size);
+        expect(changed).not.toBeNull();
+        expect(col >= changed!.x0 && col <= changed!.x1 && row >= changed!.y0 && row <= changed!.y1).toBe(true);
+      }
+    }
   });
 
   it("smooths the distance: about a half on the edge, rising into the fog", () => {

@@ -234,10 +234,11 @@ export class MapRoom2Scene implements Scene {
   private readonly store = new ZoneStore({
     // Each getarea call is timed for the open's summary (`openMarks.ts`).
     fetcher: (x, y, options) => timeArea(() => getArea(x, y, options)),
-    onZone: (zone) => {
-      this.renderer.applyZone(zone);
+    onZone: (zone, previous) => {
+      this.renderer.applyZone(zone, previous);
       this.checkZoneMarks();
     },
+    onZoneRefreshed: (zone) => this.renderer.refreshZone(zone),
     onResources: (resources, credits) => this.syncPool(resources, credits),
     onAlliance: (id) => this.renderer.setMyAlliance(id),
     onAllianceRoster: (roster) => this.renderer.setAllianceRoster(roster),

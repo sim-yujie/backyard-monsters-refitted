@@ -47,8 +47,20 @@ export interface ZoneStoreOptions {
   /** Injected for tests; milliseconds since an epoch. */
   now?: () => number;
   maxConcurrent?: number;
-  /** Fired once per applied response, so the renderer can invalidate. */
-  onZone?: (zone: ZoneRecord) => void;
+  /**
+   * Fired once per applied response whose drawn cells changed (a zone's first
+   * answer always), so the renderer can invalidate. `previous` is the record
+   * it replaces, if the zone was cached.
+   */
+  onZone?: (zone: ZoneRecord, previous: ZoneRecord | undefined) => void;
+  /**
+   * Fired instead of `onZone` when a refetched zone came back with the same
+   * drawn cells as the record it replaces (`drawnKey`): the map's picture
+   * needs no work, only what reads the clock (a truce running out) might.
+   * The new record is stored either way, so the owner's live army and
+   * resources (`m`, `r`) are always the latest.
+   */
+  onZoneRefreshed?: (zone: ZoneRecord) => void;
   /** Fired when a response carried the caller's own resources. */
   onResources?: (resources: Resources, credits: number | undefined) => void;
   /** Fired when a response carried the viewer's own alliance id (#334). */
@@ -86,6 +98,35 @@ interface QueueEntry extends ZoneRef {
   forced: boolean;
 }
 
+/**
+ * The keys of a cell the map never draws: the viewer's own cells carry their
+ * live resources (`r`) and army (`m`), which the server works out afresh on
+ * every answer, so they differ on nearly every refetch while nothing on the
+ * map does. Read by the panels and the attack screen from the store instead.
+ */
+const UNDRAWN_KEYS = new Set(["r", "m"]);
+
+/**
+ * A fingerprint of what the map draws from a zone's cells: the answer's JSON
+ * without the undrawn keys, hashed (53-bit, cyrb53) so a few hundred cached
+ * zones do not keep a second copy of their text.
+ */
+export const drawnKey = (data: AreaCellGrid): number => {
+  const text = JSON.stringify(data, (key, value: unknown) =>
+    UNDRAWN_KEYS.has(key) && typeof value === "object" && value !== null ? undefined : value,
+  );
+  let h1 = 0xdeadbeef;
+  let h2 = 0x41c6ce57;
+  for (let i = 0; i < text.length; i++) {
+    const ch = text.charCodeAt(i);
+    h1 = Math.imul(h1 ^ ch, 2654435761);
+    h2 = Math.imul(h2 ^ ch, 1597334677);
+  }
+  h1 = Math.imul(h1 ^ (h1 >>> 16), 2246822507) ^ Math.imul(h2 ^ (h2 >>> 13), 3266489909);
+  h2 = Math.imul(h2 ^ (h2 >>> 16), 2246822507) ^ Math.imul(h1 ^ (h1 >>> 13), 3266489909);
+  return 4294967296 * (2097151 & h2) + (h1 >>> 0);
+};
+
 /** Backoff after a failure, in milliseconds, by consecutive failure count. */
 const BACKOFF_MS = [1_000, 2_000, 5_000, 10_000, 15_000];
 /** How long to stand down after the server itself said 429. */
@@ -118,6 +159,8 @@ export class ZoneStore {
   revision = 0;
 
   private readonly zones = new Map<number, ZoneRecord>();
+  /** Each cached zone's `drawnKey`, to tell a refetch that changed nothing drawn. */
+  private readonly drawnKeys = new Map<number, number>();
   private readonly queue = new Map<number, QueueEntry>();
   private readonly inFlight = new Set<number>();
 
@@ -283,6 +326,7 @@ export class ZoneStore {
    */
   dropAll(): void {
     this.zones.clear();
+    this.drawnKeys.clear();
     this.queue.clear();
     this.revision += 1;
   }
@@ -431,13 +475,21 @@ export class ZoneStore {
       data: response.data,
       fetchedAt: this.now(),
     };
+    const previous = this.zones.get(entry.id);
+    const key = drawnKey(response.data);
+    const unchanged = previous !== undefined && this.drawnKeys.get(entry.id) === key;
     this.zones.set(entry.id, record);
+    this.drawnKeys.set(entry.id, key);
     this.revision += 1;
     // A zone that lands after the map closed only fills the cache: the scene's
     // callbacks would draw on a renderer that is already destroyed (live error
     // "reading 'clear'" in drawHighlight, 9-10 Nov).
     if (this.stopped) return;
-    this.options.onZone?.(record);
+    // The minute's refresh of a zone that did not change (map lag, 25 Nov
+    // 2026): applying it again cost the whole picture's rework, a 10-80 ms
+    // hitch per zone, every minute, while standing still.
+    if (unchanged) this.options.onZoneRefreshed?.(record);
+    else this.options.onZone?.(record, previous);
 
     if (response.resources) {
       this.options.onResources?.(response.resources, response.credits);
