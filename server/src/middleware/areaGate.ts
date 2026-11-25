@@ -34,7 +34,7 @@ export const AREA_GATE_DEFAULTS: AreaGateOptions = {
   maxWaiting: Number(process.env.AREA_MAX_WAITING) || 30,
   maxWaitMs: 4_000,
   retryMin: 2,
-  retryMax: 6,
+  retryMax: 8,
 };
 
 export interface AreaGate {

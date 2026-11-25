@@ -80,7 +80,9 @@ export default defineConfig({
   extensions: [Migrator],
   // The live map (beta 9): a write that changes what a map cell shows marks its zone once it commits.
   subscribers: [new LiveMapSubscriber()],
-  debug: process.env.ENV !== Env.PROD,
+  // Every query is logged outside production; `ORM_DEBUG=off` stops it for a load check, where
+  // writing the log costs more than the queries.
+  debug: process.env.ENV !== Env.PROD && process.env.ORM_DEBUG !== "off",
   dbName: process.env.DB_NAME,
   port: Number(process.env.DB_PORT),
   host: process.env.DB_HOST,

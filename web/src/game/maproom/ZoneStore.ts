@@ -241,6 +241,8 @@ export class ZoneStore {
   /** The live batch in flight, and the server's "busy, retry after" pause. */
   private liveInFlight = false;
   private livePausedUntil = 0;
+  /** "Busy" answers in a row: each doubles the server's wait, up to 30 s (a crowd backs off). */
+  private busyInARow = 0;
   /** Each cached zone's first time-only change (a shield or truce running out...), unix seconds. */
   private readonly nextDue = new Map<number, number>();
 
@@ -516,6 +518,7 @@ export class ZoneStore {
     for (const zone of due) this.inFlight.delete(zone.id);
     this.liveInFlight = false;
     if (answers) {
+      this.busyInARow = 0;
       due.forEach((zone, index) => {
         const answer = answers![index];
         if (answer) this.apply({ ...zone, priority: 0, forced: true }, answer);
@@ -525,7 +528,10 @@ export class ZoneStore {
     // Still wanted: asked again once due (and after the server's pause, if it was busy).
     for (const zone of due) this.liveDueAt.set(zone.id, this.now());
     const retry = busyRetrySeconds(failure);
-    if (retry !== null) this.livePausedUntil = this.now() + retry * 1000;
+    if (retry !== null) {
+      this.livePausedUntil = this.now() + Math.min(30, retry * 2 ** this.busyInARow) * 1000;
+      this.busyInARow += 1;
+    }
     else if (failure instanceof ApiError && failure.isAuthFailure) this.handleFailure({ ...due[0]!, priority: 0, forced: true }, failure);
     else this.livePausedUntil = this.now() + LIVE_MIN_GAP_MS;
   }
@@ -762,6 +768,7 @@ export class ZoneStore {
     if (response) {
       this.apply(entry, response);
       this.consecutiveFailures = 0;
+      this.busyInARow = 0;
       // A slot just came free: start the next queued zone now rather than at
       // the scene's next pump tick (up to 250 ms later on every request).
       if (this.options.pumpOnSettle !== false && !this.stopped) void this.pump();
@@ -880,7 +887,8 @@ export class ZoneStore {
     // The server is busy (`areaGate`): wait as long as it says, quietly, and ask again.
     const busy = busyRetrySeconds(caught);
     if (busy !== null) {
-      this.pausedUntilMs = this.now() + busy * 1000;
+      this.pausedUntilMs = this.now() + Math.min(30, busy * 2 ** this.busyInARow) * 1000;
+      this.busyInARow += 1;
       return;
     }
 

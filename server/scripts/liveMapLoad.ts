@@ -110,7 +110,20 @@ const players = Array.from({ length: SOCKETS }, (_, i) => {
   const userid = FIRST_USER + i;
   const email = `lt${i + 1}@load.test`;
   const token = JWT.sign({ user: { email, sessionType: "game" } }, secret, { expiresIn: "2h" });
-  return { userid, email, token, chatToken: crypto.randomUUID(), zones: viewOf(), reasks: Math.random() < REASK };
+  return {
+    userid,
+    email,
+    token,
+    chatToken: crypto.randomUUID(),
+    zones: viewOf(),
+    reasks: Math.random() < REASK,
+    // The map's live re-asks (`ZoneStore.pumpLive`): zone -> when it may be asked, and when it was marked.
+    wanted: new Map<number, { dueAt: number; markedAt: number | undefined }>(),
+    askedAt: new Map<number, number>(),
+    pausedUntil: 0,
+    busyInARow: 0,
+    busy: false,
+  };
 });
 for (let i = 0; i < players.length; i += 500) {
   await Promise.all(
@@ -124,6 +137,48 @@ for (let i = 0; i < players.length; i += 500) {
 let getareas = 0;
 let wouldAsk = 0;
 let refused = 0;
+let busyAnswers = 0;
+let batchCalls = 0;
+let zonesAnswered = 0;
+const changeToScreen: number[] = [];
+/** One `getareas` call as the map makes it; answers 503 "busy" honoured. */
+const getareas_ = async (player: (typeof players)[number], zones: number[]): Promise<void> => {
+  const started = performance.now();
+  player.busy = true;
+  try {
+    const response = await fetch(`${API}/worldmapv2/getareas`, {
+      method: "POST",
+      headers: { "content-type": "application/json", authorization: `Bearer ${player.token}` },
+      body: JSON.stringify({ zones: zones.map((zone) => `${Math.floor(zone / 10000) * 10},${(zone % 10000) * 10}`).join(";") }),
+    });
+    const body = (await response.json()) as { retry?: number };
+    batchCalls += 1;
+    if (response.status === 503) {
+      busyAnswers += 1;
+      // As the map: the server's wait, doubled for each busy answer in a row, at most 30 s.
+      player.pausedUntil = performance.now() + Math.min(30, (body.retry ?? 3) * 2 ** player.busyInARow) * 1000;
+      player.busyInARow += 1;
+      return;
+    }
+    if (response.status !== 200) {
+      refused += 1;
+      return;
+    }
+    player.busyInARow = 0;
+    const now = performance.now();
+    for (const zone of zones) {
+      const want = player.wanted.get(zone);
+      if (want?.markedAt !== undefined) changeToScreen.push(now - want.markedAt);
+      player.wanted.delete(zone);
+      zonesAnswered += 1;
+    }
+  } catch {
+    refused += 1;
+  } finally {
+    player.busy = false;
+    reaskMs.push(performance.now() - started);
+  }
+};
 const reaskMs: number[] = [];
 const getarea = async (token: string, zone: number): Promise<void> => {
   const x = Math.floor(zone / 10000) * 10;
@@ -137,6 +192,7 @@ const getarea = async (token: string, zone: number): Promise<void> => {
     });
     await response.arrayBuffer();
     if (response.status === 429) refused += 1;
+    else if (response.status === 503) busyAnswers += 1;
     else getareas += 1;
   } catch {
     refused += 1;
@@ -193,7 +249,8 @@ const connect = (player: (typeof players)[number], kind: "live" | "chat"): Promi
         const at = markedAt.get(zone);
         if (at !== undefined) delays.push(now - at);
         wouldAsk += 1;
-        if (player.reasks) setTimeout(() => void getarea(player.token, zone), Math.random() * 400);
+        // As the map: wait a random 0-1.5 s, then the zone joins this player's next batch.
+        if (player.reasks && !player.wanted.has(zone)) player.wanted.set(zone, { dueAt: now + Math.random() * 1500, markedAt: at });
       }
     };
   });
@@ -247,6 +304,24 @@ const startAt = performance.now();
 let marks = 0;
 const timers: ReturnType<typeof setInterval>[] = [];
 if (MODE === "live") {
+  // Each player's map pumps its live re-asks four times a second (`pumpLive`).
+  timers.push(
+    setInterval(() => {
+      const now = performance.now();
+      for (const player of players) {
+        if (!player.wanted.size || player.busy || now < player.pausedUntil) continue;
+        const due: number[] = [];
+        for (const [zone, want] of player.wanted) {
+          if (due.length >= 10) break;
+          if (want.dueAt > now || now - (player.askedAt.get(zone) ?? -Infinity) < 3000) continue;
+          due.push(zone);
+        }
+        if (!due.length) continue;
+        for (const zone of due) player.askedAt.set(zone, now);
+        void getareas_(player, due);
+      }
+    }, 250),
+  );
   // `BUMPS` random zones a second, in 10 slices.
   timers.push(
     setInterval(() => {
@@ -303,6 +378,11 @@ report.zoneMarksPerSec = Math.round(marks / elapsed);
 report.liveFramesPerSec = Math.round(framesIn / elapsed);
 report.pushDelayMs = { p50: pct(delays, 50), p95: pct(delays, 95), n: delays.length };
 report.reasksPerSecAllPlayers = Math.round(wouldAsk / elapsed);
+report.getareasCallsPerSec = Math.round(batchCalls / elapsed);
+report.zonesAnsweredPerSec = Math.round(zonesAnswered / elapsed);
+report.busyAnswersPerSec = Math.round(busyAnswers / elapsed);
+report.changeToScreenMs = { p50: pct(changeToScreen, 50), p95: pct(changeToScreen, 95), n: changeToScreen.length };
+report.stillWaitingZones = players.reduce((sum, p) => sum + p.wanted.size, 0);
 report.getareaPerSec = Math.round(getareas / elapsed);
 report.getareaRefused = refused;
 report.getareaMs = { p50: pct(reaskMs, 50), p95: pct(reaskMs, 95) };

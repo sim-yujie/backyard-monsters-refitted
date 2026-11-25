@@ -286,9 +286,10 @@ if (devCheckEnabled()) {
 /**  ────────────────────────────────────────────────
 * 📦 Map Room 2
 * ──────────────────────────────────────────────── */
-router.post("/worldmapv2/getarea", verifyUserAuth, verifyAccountStatus, getAreaLimiter, logRequest, areaGate(), getArea);
-// Several zones in one call: the live map's re-asks (beta 9). Same budget as getarea, and the same back-pressure.
-router.post("/worldmapv2/getareas", verifyUserAuth, verifyAccountStatus, getAreaLimiter, logRequest, areaGate(), getAreas);
+router.post("/worldmapv2/getarea", areaGate(), verifyUserAuth, verifyAccountStatus, getAreaLimiter, logRequest, getArea);
+// Several zones in one call: the live map's re-asks (beta 9). Same budget as getarea, and the same back-pressure,
+// which comes first so a "busy" answer costs no sign-in query.
+router.post("/worldmapv2/getareas", areaGate(), verifyUserAuth, verifyAccountStatus, getAreaLimiter, logRequest, getAreas);
 router.post("/worldmapv2/sight", verifyUserAuth, verifyAccountStatus, sightLimiter, logRequest, getSight);
 router.get("/worldmapv2/terrain", verifyApiConsumer, terrainLimiter, logRequest, getTerrain);
 router.get("/worldmapv2/snapshot", verifyApiConsumer, snapshotLimiter, logRequest, getSnapshot);
