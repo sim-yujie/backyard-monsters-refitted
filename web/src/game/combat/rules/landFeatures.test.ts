@@ -195,16 +195,12 @@ describe("switched on", () => {
     expect(forest.digest).not.toBe(plain.digest);
     // One battle is chaotic enough to land either side of plain ground by a
     // point or so (patch 7.9's reach did that to the fixture's own seed), so
-    // the land is judged on an average: of six until beta 9's tower hold
-    // (reach audit) tipped rocks over plain on those six, of twelve since.
-    const seeds = [
-      read(`${FIXTURES}mixed-waves.json`).log.seed as number,
-      ...Array.from({ length: 11 }, (_, index) => index + 1),
-    ];
+    // the land is judged on the average of six.
+    const seeds = [read(`${FIXTURES}mixed-waves.json`).log.seed as number, 1, 2, 3, 4, 5];
     const average = (extra: Partial<BattleOptions> = {}) =>
       seeds.reduce((sum, seed) => sum + mixedWaves(extra, seed).damage, 0) / seeds.length;
     const onPlain = average();
     expect(average(battleDefence({ ...FORCES, land: LandFeature.MARSH }))).toBeGreaterThan(onPlain);
     expect(average(battleDefence({ ...FORCES, land: LandFeature.ROCKS }))).toBeLessThan(onPlain);
-  }, 240_000);
+  }, 120_000);
 });

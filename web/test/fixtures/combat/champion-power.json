@@ -63,7 +63,7 @@
     "destroyedBuildings": 22,
     "creepsFlung": 60,
     "creepsKilled": 60,
-    "championHp": 128280.36430262975,
+    "championHp": 128189.36430262975,
     "damagedBuildings": 22,
     "rngDraws": 1139,
     "checkpoints": [
@@ -97,17 +97,17 @@
       },
       {
         "tick": 6400,
-        "digest": "ed1e63f8aebbabc6"
+        "digest": "79ae7cdfadb05f2d"
       },
       {
         "tick": 7200,
-        "digest": "8c07ffb9d68fdcab"
+        "digest": "afc2760bd7d12ea9"
       },
       {
         "tick": 8000,
-        "digest": "02252945e66b7b3b"
+        "digest": "daa8ffbff3db55b5"
       }
     ],
-    "digest": "f571962f4264fa31"
+    "digest": "603879c541246e9f"
   }
 }

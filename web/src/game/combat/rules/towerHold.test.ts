@@ -1,18 +1,22 @@
 import { describe, expect, it } from "vitest";
 
 import { createBattle } from "./engine.js";
-import { towerAcquires, towerHoldsFromAnchor } from "./reach.js";
+import { towerAcquires, towerHolds } from "./reach.js";
 import { LASER_TYPE } from "./stats.js";
 import { buildEngineYard } from "./yard.js";
 
 /**
- * A tower holds a target from its anchor (beta 9, the reach audit, owner's
- * pick A): it finds a creep from the middle of its footprint (`FindTargets`,
- * `BTOWER.as:394`) but, before each shot, `targetInRange` asks whether one is
- * in range of its anchor (`BTOWER.as:234-249`). A creep in front of it, in
- * range of the middle but not of the anchor, is found every round and never
- * shot. Until beta 9 the engine asked the middle only.
+ * A tower holds a target from the middle of its footprint, where it found it
+ * (`towerHolds`), deliberately not from its anchor as Flash's `targetInRange`
+ * ends up measuring (`BTOWER.as:234-249`, whose `.add` at `:238` is thrown
+ * away). The reach audit proposed Flash's anchor; the owner kept towers as they
+ * are (pick B, reach-merge, 25 Nov 2026). So a creep in front of a tower, in
+ * range of its middle but not of its anchor, is shot.
  */
+
+/** Flash's hold, written out apart from the engine: yard units to the anchor, `GRID.FromISO` rounding up. */
+const flashHolds = (at: { ix: number; iy: number }, anchor: { cx: number; cy: number }, range: number) =>
+  (Math.ceil(at.ix) - anchor.cx) ** 2 + (Math.ceil(at.iy) - anchor.cy) ** 2 < range * range;
 
 const RESOURCES = { r1: 100000, r2: 100000, r3: 100000, r4: 100000 };
 
@@ -33,20 +37,22 @@ const laserOn = (hallX: number) => {
   return { battle, laser, creep, shots: battle.state().towers[0]?.shots ?? 0 };
 };
 
-describe("a tower keeps shooting only a target in range of its anchor", () => {
-  it("never shoots a Brain in front of it, in range of its middle but not its anchor", () => {
+describe("a tower keeps shooting a target in range of its middle, not only of its anchor", () => {
+  it("shoots a Brain in front of it, in range of its middle but not its anchor (where Flash would not)", () => {
     const { laser, creep, shots } = laserOn(120);
     const at = { ix: creep.ix, iy: creep.iy, x: Math.trunc(creep.ix), y: Math.trunc(creep.iy) };
     expect(towerAcquires(at, laser, 160)).toBe(true);
-    expect(towerHoldsFromAnchor(at, laser, 160)).toBe(false);
-    expect(shots).toBe(0);
+    expect(towerHolds(at, laser, 160)).toBe(true);
+    expect(flashHolds(at, laser, 160)).toBe(false);
+    expect(shots).toBeGreaterThan(0);
   });
 
   it("shoots one a little nearer, in range of both", () => {
     const { laser, creep, shots } = laserOn(90);
     const at = { ix: creep.ix, iy: creep.iy, x: Math.trunc(creep.ix), y: Math.trunc(creep.iy) };
     expect(towerAcquires(at, laser, 160)).toBe(true);
-    expect(towerHoldsFromAnchor(at, laser, 160)).toBe(true);
+    expect(towerHolds(at, laser, 160)).toBe(true);
+    expect(flashHolds(at, laser, 160)).toBe(true);
     expect(shots).toBeGreaterThan(0);
   });
 });

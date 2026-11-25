@@ -8,11 +8,12 @@
  * not a screen circle (a screen pixel is 0.71 yard units straight across and
  * 1.41 straight down), and the corner is half a footprint from the middle,
  * so a rule measured in the wrong space or from the wrong point reaches
- * further on some sides than on others. Three such slips (splash on
- * buildings, a tower's hold on its target, Eye-ra's blast on the monster it
- * fights) went unnoticed for weeks; `reach.test.ts` keeps a table of every
- * rule here against Flash, and `rawDistance.test.ts` stops new unnamed
- * distance sums in `engine.ts`.
+ * further on some sides than on others. Two such slips (splash on buildings,
+ * Eye-ra's blast on the monster it fights) went unnoticed for weeks, and a
+ * third difference, a tower's hold on its target, is kept on purpose
+ * ({@link towerHolds}); `reach.test.ts` keeps a table of every rule here
+ * against Flash, and `rawDistance.test.ts` stops new unnamed distance sums in
+ * `engine.ts`.
  *
  * Spaces: `screenPx` is screen pixels; `yard` is yard units. Anchors:
  * `Corner` is a building's drawn top corner (`_position`, `sx`/`sy`);
@@ -106,29 +107,21 @@ export const towerAcquires = (
 ): boolean => Math.trunc(yardToCentreSquared(creep.x, creep.y, building)) < range * range;
 
 /**
- * Whether a tower that holds from its anchor ({@link TOWER_HOLDS_FROM_ANCHOR})
- * may go on shooting a creep it found: `targetInRange` (`BTOWER.as:234-249`)
- * measures from `GRID.FromISO(_mc)`, the anchor, because its
- * `.add(width / 2, height / 2)` throws its result away, to
- * `GRID.FromISO(_tmpPoint)`, which rounds up (`GRID.as:141-145`). Out of that
- * range the tower finds again and does not shoot this round.
+ * Whether a tower may go on shooting a creep it found: within `range` yard
+ * units of the middle of its footprint, where it found it
+ * ({@link towerAcquires}).
+ *
+ * Deliberately not Flash. Flash's `targetInRange` (`BTOWER.as:234-249`)
+ * means to measure from the middle too, but `Point.add` returns a new point
+ * and the result of `_loc2_.add(...)` at `BTOWER.as:238` is thrown away, so
+ * it measures from `GRID.FromISO(_mc)`, the anchor: a creep in front of a
+ * tower, in range of the middle but not of the anchor, is found every round
+ * and never shot. The owner kept towers as they are (pick B, reach-merge,
+ * 25 Nov 2026), so here the hold is measured from the middle and that creep
+ * is shot. `reach.test.ts` keeps the difference in its table.
  */
-export const towerHoldsFromAnchor = (
-  creep: ReachPoint,
+export const towerHolds = (
+  creep: { readonly x: number; readonly y: number },
   building: EngineBuilding,
   range: number,
-): boolean =>
-  yardToAnchorSquared(Math.ceil(creep.ix), Math.ceil(creep.iy), building) < range * range;
-
-/**
- * The towers that hold from their anchor ({@link towerHoldsFromAnchor}): the
- * Cannon (20), Sniper (21), Laser (23), Aerial Defense (115), Railgun (118),
- * Inferno Cannon (130) and Magma (132), which all reach `BTOWER.TickAttack`
- * (`BTOWER.as:181`, `BUILDING115.as:65`). The owner's pick A (Desk 8, 25 Nov
- * 2026) leaves out the Quake Tower and the Tesla (whose Flash classes also
- * fall through to it, `INFERNOQUAKETOWER.as:123`, `BUILDING25.as`) and the
- * Spurtz Cannon (its own `TickAttack`, `SpurtzCannon.as:109`).
- */
-export const TOWER_HOLDS_FROM_ANCHOR: ReadonlySet<number> = new Set([
-  20, 21, 23, 115, 118, 130, 132,
-]);
+): boolean => yardToCentreSquared(creep.x, creep.y, building) < range * range;

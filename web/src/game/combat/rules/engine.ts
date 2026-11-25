@@ -242,13 +242,11 @@ import {
 } from "./yard.js";
 import type { Cart, EngineBuilding, EngineYard } from "./yard.js";
 import {
-  TOWER_HOLDS_FROM_ANCHOR,
   screenPxBlastDistance,
   screenPxCreepsSquared,
   screenPxToCornerSquared,
-  towerHoldsFromAnchor,
+  towerHolds,
   yardToAnchorSquared,
-  yardToCentreSquared,
 } from "./reach.js";
 import type { PathGrid } from "./grid.js";
 import type { Rng } from "./rng.js";
@@ -6935,22 +6933,16 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
 
   /**
    * The targets it holds that it may still shoot: alive, hittable and in
-   * range of the middle of its footprint, where it found them. A tower that
-   * holds from its anchor ({@link TOWER_HOLDS_FROM_ANCHOR}) also needs them in
-   * range of its anchor, as `targetInRange` measures (`BTOWER.as:234-249`,
-   * beta 9): a creep in front of it, found from the middle, is let go some 35
-   * px sooner than one behind it.
+   * range of the middle of its footprint, where it found them
+   * ({@link towerHolds}; deliberately not Flash's anchor, owner's pick B).
    */
   const liveTargets = (tower: Tower, scan: TowerScan): Creep[] => {
     const live: Creep[] = [];
-    const building = tower.building;
-    const fromAnchor = TOWER_HOLDS_FROM_ANCHOR.has(building.type);
     for (const id of tower.targets) {
       const creep = byCreepId.get(id);
       if (!creep || creep.hp <= 0 || !creep.targetable) continue;
       if (!canHit(scan.flags, creep.flags)) continue;
-      if (yardToCentreSquared(creep.x, creep.y, building) >= scan.reach) continue;
-      if (fromAnchor && !towerHoldsFromAnchor(creep, building, tower.range)) continue;
+      if (!towerHolds(creep, tower.building, tower.range)) continue;
       live.push(creep);
     }
     return live;

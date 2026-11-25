@@ -45,27 +45,27 @@
   },
   "expected": {
     "ticks": 19200,
-    "damage": 51.21802979778899,
+    "damage": 58.72168470851061,
     "destroyed": null,
     "attackloot": {
-      "r1": 16110520,
-      "r2": 16131040,
-      "r3": 16133200,
-      "r4": 8109800
+      "r1": 24124920,
+      "r2": 24140040,
+      "r3": 24141120,
+      "r4": 12123120
     },
     "defenderLoss": {
-      "r1": 16122320,
-      "r2": 16145120,
-      "r3": 16147520,
-      "r4": 8121520
+      "r1": 24138320,
+      "r2": 24155120,
+      "r3": 24156320,
+      "r4": 12136320
     },
     "firedTraps": 0,
-    "destroyedBuildings": 204,
+    "destroyedBuildings": 206,
     "creepsFlung": 64,
-    "creepsKilled": 40,
+    "creepsKilled": 38,
     "championHp": null,
-    "damagedBuildings": 208,
-    "rngDraws": 83990,
+    "damagedBuildings": 210,
+    "rngDraws": 89539,
     "checkpoints": [
       {
         "tick": 800,
@@ -141,29 +141,29 @@
       },
       {
         "tick": 15200,
-        "digest": "442c9c3d280d90a7"
+        "digest": "0e2b13b7f6f4ec15"
       },
       {
         "tick": 16000,
-        "digest": "ab0d8292b4a118bc"
+        "digest": "699785158385ab8f"
       },
       {
         "tick": 16800,
-        "digest": "d1c84c0d13f3ffb3"
+        "digest": "61dd07b7e4b678d1"
       },
       {
         "tick": 17600,
-        "digest": "0567b8d0201c7c5e"
+        "digest": "c2898a77bbb5a761"
       },
       {
         "tick": 18400,
-        "digest": "e3d9cc18c97d1b36"
+        "digest": "d18241fab110bcd4"
       },
       {
         "tick": 19200,
-        "digest": "3769f0f740183ced"
+        "digest": "fa958d6ef25e02d4"
       }
     ],
-    "digest": "3769f0f740183ced"
+    "digest": "fa958d6ef25e02d4"
   }
 }

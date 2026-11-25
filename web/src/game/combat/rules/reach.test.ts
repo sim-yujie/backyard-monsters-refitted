@@ -3,11 +3,10 @@ import { describe, expect, it } from "vitest";
 import { buildingReachOf } from "./champions.js";
 import { EYE_RA_FOE_SQUARED } from "./engine.js";
 import {
-  TOWER_HOLDS_FROM_ANCHOR,
   screenPxBlastDistance,
   screenPxCreepsSquared,
   towerAcquires,
-  towerHoldsFromAnchor,
+  towerHolds,
   type ReachPoint,
 } from "./reach.js";
 import type { EngineBuilding } from "./yard.js";
@@ -186,29 +185,30 @@ const ROWS: readonly Row[] = [
     rule: "tower keeps shooting a target it found (range 160)",
     flashAt: "BTOWER.as:234-249",
     space: "yard",
-    anchor: "anchor (and the footprint middle it found it from)",
+    anchor: "footprint middle",
     radius: 160,
-    engine: (probe, building) =>
-      towerAcquires(probe.point, building, 160) && towerHoldsFromAnchor(probe.point, building, 160),
+    deliberate:
+      "owner's pick B (reach-merge, 25 Nov 2026): towers stay as they are, holding from the " +
+      "middle where they found the target; Flash means to as well, but the result of " +
+      "`_loc2_.add(...)` at BTOWER.as:238 is thrown away, so it holds from the anchor and " +
+      "never shoots a creep in front of the tower that is out of the anchor's range",
+    engine: (probe, building) => towerHolds(probe.point, building, 160),
     flash: (probe, footprint) => flashHold(probe, footprint, 160),
-    before: (probe, building) => towerAcquires(probe.point, building, 160),
     expected: {
-      "70x70": { ring: 100, engine: "HHHH.HHH", flash: "HHHH.HHH", before: "HHHHHHHH" },
-      "Town Hall": { ring: 100, engine: "HHH...HH", flash: "HHH...HH", before: "HHHHHHHH" },
+      "70x70": { ring: 100, engine: "HHHHHHHH", flash: "HHHH.HHH" },
+      "Town Hall": { ring: 100, engine: "HHHHHHHH", flash: "HHH...HH" },
     },
   },
   {
     rule: "tower keeps shooting a target it found, further out (range 160)",
     flashAt: "BTOWER.as:234-249",
     space: "yard",
-    anchor: "anchor (and the footprint middle it found it from)",
+    anchor: "footprint middle",
     radius: 160,
     deliberate:
-      "the brief for the owner's pick A keeps a target only while it is in range of both " +
-      "the middle (where the tower found it) and the anchor; Flash asks the anchor only, " +
-      "so behind a tower it holds a target that walks out of the middle's range",
-    engine: (probe, building) =>
-      towerAcquires(probe.point, building, 160) && towerHoldsFromAnchor(probe.point, building, 160),
+      "owner's pick B, as above: behind a tower Flash's anchor holds a target the middle " +
+      "has already let go of",
+    engine: (probe, building) => towerHolds(probe.point, building, 160),
     flash: (probe, footprint) => flashHold(probe, footprint, 160),
     expected: {
       "70x70": { ring: 150, engine: "..H...H.", flash: ".HH...HH" },
@@ -285,11 +285,4 @@ describe("every reach rule against Flash, at eight bearings (reach audit, beta 9
       ).toBe(before);
     },
   );
-
-  it("holds from the anchor exactly the towers that reach BTOWER.TickAttack's test", () => {
-    // Cannon, Sniper, Laser, Aerial Defense, Railgun, Inferno Cannon, Magma.
-    expect([...TOWER_HOLDS_FROM_ANCHOR].sort((a, b) => a - b)).toEqual([
-      20, 21, 23, 115, 118, 130, 132,
-    ]);
-  });
 });

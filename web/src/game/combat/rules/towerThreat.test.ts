@@ -73,10 +73,7 @@ const BESIDE: Layout = { hall: { X: 120, Y: 0 }, fling: { x: 40, y: 200 }, prey:
 const STANDS: readonly Layout[] = [
   { hall: { X: 0, Y: 100 }, fling: { x: 40, y: 260 }, prey: "C12" },
   { hall: { X: 80, Y: 40 }, fling: { x: 60, y: 200 }, prey: "C12" },
-  // Not X 120 since beta 9: the Brain stood 144 from the Laser's middle but
-  // 172 from its anchor, and below level 6 a Laser lets go of a target out
-  // of range of its anchor (`targetInRange`, `BTOWER.as:234-249`).
-  { hall: { X: 90, Y: 0 }, fling: { x: 40, y: 200 }, prey: "C12" },
+  { hall: { X: 120, Y: 0 }, fling: { x: 40, y: 200 }, prey: "C12" },
 ];
 
 const towerAt = (type: number, level: number, hp: number, hall: Layout["hall"]) =>
