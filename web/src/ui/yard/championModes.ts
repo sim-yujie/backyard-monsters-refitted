@@ -24,8 +24,8 @@ import {
  * "Last attack · Learned" or "Faded" in place of its badge (owner's pick B,
  * desk 19 Nov 2026, from astra's pips prototype; no pips any more).
  *
- * Krallen has no habits (owner, 10 Nov): the cage keeps the old block for any
- * champion without them.
+ * Krallen has no habits (owner, 10 Nov) and no Mode (owner, 25 Nov 2026,
+ * patch 8.7): her card shows no Modes and nothing she has learned.
  */
 
 /** The tabs' order, as the attack screen's Mode picker lists them. */
@@ -72,7 +72,7 @@ export const placeholderIcon = (icon: TraitIcon): HTMLElement => {
   return frame;
 };
 
-/** Whether the cage shows a champion's Modes, or the old block (Krallen). */
+/** Whether the cage shows a champion's Modes: not Krallen's, who has none. */
 export const showsModes = (entry: { readonly t: number }): boolean => hasHabits(championByType(entry.t));
 
 /** The Mode the cage opens on: the one it last attacked in, else Hybrid. */
