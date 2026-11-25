@@ -1,3 +1,5 @@
+import { ClusterLayer } from "@/game/maproom/cluster/ClusterLayer";
+import { cellKey } from "@/game/maproom/cluster/clusterRules";
 import { guideBus, GuideScreen } from "@/game/guide/guideBus";
 import { logout } from "@/api/auth";
 import { loadOwnYard } from "@/api/base";
@@ -290,6 +292,8 @@ export class MapRoom2Scene implements Scene {
   /** How long standing the markers took last frame, in milliseconds (speed readout). */
   private markerMs = 0;
   private input: MapInput | null = null;
+  /** Map pin clustering (beta 9): plaques and crests when zoomed out. */
+  private cluster: ClusterLayer | null = null;
 
   /**
    * The current viewport size in CSS px. `SceneContext.width`/`height` are a
@@ -441,6 +445,7 @@ export class MapRoom2Scene implements Scene {
     this.camera.resize(context.width, context.height);
     this.camera.attach(context.canvas);
     this.setTilt(this.tiltStrength);
+    this.cluster = this.makeClusterLayer(context.canvas);
 
     this.ui = new MapRoomUi(
       {
@@ -606,6 +611,9 @@ export class MapRoom2Scene implements Scene {
       camera: this.camera,
       canvas: context.canvas,
       onHover: (cell) => this.handleHover(cell),
+      // A tap on a plaque or crest zooms in to it (map pin clustering); not in move mode, which
+      // ticks yards by tapping them.
+      onTap: (point) => !this.transfer?.active && (this.cluster?.tapAt(point.x, point.y) ?? false),
       // In move mode a tap on one of the player's yards ticks it (beta 9 #7).
       onSelect: (cell) => {
         if (this.transfer?.tapCell(cell.col, cell.row)) return;
@@ -639,7 +647,9 @@ export class MapRoom2Scene implements Scene {
         draws: () => this.tiltView?.draws ?? 0,
         stageDraws: () => this.stageDraws,
         resolution: () => this.tiltView?.textureResolution ?? 0,
-        markers: () => ({ count: this.renderer.markerCount, ms: this.markerMs }),
+        markers: () => ({ count: this.renderer.markerCount, ms: this.markerMs, drawn: this.renderer.drawnMarkerCount }),
+        // Map pin clustering's layer (its `stats`, `update` for timing).
+        cluster: this.cluster,
         // Markers upright (true) or warped flat with the ground (false, the "before").
         upright: (on: boolean) => {
           this.uprightMarkers = on;
@@ -695,6 +705,8 @@ export class MapRoom2Scene implements Scene {
     this.markerPicturesTimer = null;
     this.input?.detach();
     this.input = null;
+    this.cluster?.destroy();
+    this.cluster = null;
     this.camera.setPointerMap(null);
     this.camera.detach();
     this.tiltView?.destroy();
@@ -728,6 +740,7 @@ export class MapRoom2Scene implements Scene {
     this.viewportHeight = height;
     // A resized canvas is blank until drawn.
     this.stageMustDraw = true;
+    this.cluster?.hudChanged();
     this.camera.resize(width, height);
     if (this.tilt) this.setTilt(this.tiltStrength);
   }
@@ -826,6 +839,86 @@ export class MapRoom2Scene implements Scene {
     );
   }
 
+  /** Map pin clustering's layer (beta 9), fed from the map's own camera, tilt, zones and HUD. */
+  private makeClusterLayer(canvas: HTMLCanvasElement): ClusterLayer {
+    const renderer = this.renderer;
+    const camera = this.camera;
+    // Filled in place every frame: the layer asks each frame and must not allocate.
+    const cam = { zoom: 0, x: 0, y: 0 };
+    const view = { width: 0, height: 0 };
+    return new ClusterLayer({
+      filter: renderer.markerFilter,
+      quietBorders: (keys) => renderer.setQuietBorders(keys),
+      groupBorders: (on) => renderer.setGroupBorders(on),
+      zones: () => this.store.loadedZoneRefs(),
+      getCell: (col, row) => this.store.getCell(col, row),
+      cellsVersion: () => renderer.cellsVersion,
+      viewer: () => renderer.viewerContext,
+      camera: () => {
+        cam.zoom = camera.zoom;
+        cam.x = camera.position.x;
+        cam.y = camera.position.y;
+        return cam;
+      },
+      projectionKey: () => this.tilt,
+      project: (wx, wy, out) => {
+        const fx = (wx - camera.position.x) * camera.zoom;
+        const fy = (wy - camera.position.y) * camera.zoom;
+        if (this.tilt) return this.tilt.toScreenInto(fx, fy, out);
+        out.x = fx;
+        out.y = fy;
+        return true;
+      },
+      viewport: () => {
+        view.width = this.viewportWidth;
+        view.height = this.viewportHeight;
+        return view;
+      },
+      obstacles: () => {
+        const box = canvas.getBoundingClientRect();
+        return (this.ui?.coverRects() ?? []).map((r) => ({
+          left: r.left - box.left,
+          top: r.top - box.top,
+          right: r.right - box.left,
+          bottom: r.bottom - box.top,
+        }));
+      },
+      zoomToFit: (box, insets) => this.zoomToFit(box, insets),
+      openCell: (col, row) => this.selectCell({ col, row }),
+      scaleAt: (y) => (this.tilt ? this.tilt.scaleAt(y) : 1),
+      squash: () => (this.tilt ? this.tilt.squash : 1),
+      canvas,
+    });
+  }
+
+  /**
+   * Zooms in so a box of map pixels fills the screen between the HUD's bars, at least a good step
+   * in and never past play zoom (a tap on a plaque), with the box in the middle of that space.
+   */
+  private zoomToFit(
+    box: { minX: number; minY: number; maxX: number; maxY: number },
+    insets: { top: number; bottom: number; left: number; right: number },
+  ): void {
+    const camera = this.camera;
+    const pad = mapRoomGrid.colStep;
+    const usableW = Math.max(100, this.viewportWidth - insets.left - insets.right);
+    const usableH = Math.max(100, this.viewportHeight - insets.top - insets.bottom);
+    // The tilt squeezes rows towards the top of the screen and widens them towards the bottom:
+    // fit with room to spare both ways (neon r2: a phone clipped hexes at the sides).
+    const squash = this.tilt ? this.tilt.squash * 0.8 : 1;
+    const widen = this.tilt ? 1.3 : 1;
+    const fit = Math.min(
+      usableW / ((box.maxX - box.minX + pad * 2) * widen),
+      usableH / ((box.maxY - box.minY + pad * 2) * squash),
+    );
+    camera.settle();
+    // The fit wins; a small step in at least, so a tap always moves.
+    camera.zoom = Math.min(DEFAULT_ZOOM, Math.max(fit, camera.zoom * 1.1), camera.maxZoom);
+    camera.centreOn({ x: (box.minX + box.maxX) / 2, y: (box.minY + box.maxY) / 2 });
+    camera.panByScreen((insets.left - insets.right) / 2, (insets.top - insets.bottom) / 2);
+    camera.dirty = true;
+  }
+
   /**
    * Stands the map's markers upright over the tilted picture, for the camera
    * as it is now. Re-placing happens only when the camera or the tilt moved
@@ -875,6 +968,8 @@ export class MapRoom2Scene implements Scene {
       this.transfer?.place();
     }
 
+    // Before the map draws, so the markers a plaque or crest stands for are left out this frame.
+    if (this.cluster?.update()) this.stageMustDraw = true;
     this.renderer.draw(this.range, this.camera.zoom);
     if (this.framesMarked < 2) this.markFrames();
     if (this.tilt && this.tiltView && this.context) {
@@ -1257,6 +1352,7 @@ export class MapRoom2Scene implements Scene {
 
   private selectCell(cell: OffsetCell): void {
     this.selected = cell;
+    this.cluster?.setSelected(cellKey(cell.col, cell.row));
     this.renderer.setSelected(cell);
     this.updateBookmarkTarget();
     this.ui?.showCell(cell, this.store.getCell(cell.col, cell.row));
@@ -1294,6 +1390,7 @@ export class MapRoom2Scene implements Scene {
 
   private clearSelection(): void {
     this.selected = null;
+    this.cluster?.setSelected(-1);
     this.renderer.setSelected(null);
     this.ui?.closeCell();
     this.updateBookmarkTarget();

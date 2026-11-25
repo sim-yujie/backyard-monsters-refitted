@@ -89,6 +89,17 @@ export class Tilt {
     return { x: this.cx + x / d, y: this.cy + (this.c * y) / d };
   }
 
+  /** {@link toScreen} into `out`, without making a point; false for a point behind the camera. */
+  toScreenInto(flatX: number, flatY: number, out: { x: number; y: number }): boolean {
+    const x = flatX - this.cx;
+    const y = flatY - this.cy;
+    const d = 1 - this.k * this.c * y;
+    if (!(d > 0)) return false;
+    out.x = this.cx + x / d;
+    out.y = this.cy + (this.c * y) / d;
+    return true;
+  }
+
   /** The flat-screen point seen at a real screen point (undoes the tilt). */
   toFlat(screen: Point): Point {
     const u = screen.x - this.cx;

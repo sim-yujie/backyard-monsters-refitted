@@ -1,3 +1,4 @@
+import { shieldUrl } from "@/game/alliance/allianceRules";
 import type { AutoAttackPlanResponse } from "@/api/autoAttack";
 import type { Bookmark } from "@/api/bookmarks";
 import type { Friend } from "@/api/friends";
@@ -250,6 +251,12 @@ export class MapRoomUi {
 
   mount(container: HTMLElement, modal?: HTMLElement): this {
     this.container = container;
+    // The Map key's alliance plaque sample wears the player's own shield.
+    this.legend.setAllianceShield(() => {
+      const id = this.handlers.myAlliance?.() ?? null;
+      const alliance = id !== null ? this.handlers.allianceOf?.(id) : undefined;
+      return alliance ? shieldUrl(alliance.image, "medium") : null;
+    });
     this.modal = modal ?? null;
     container.append(this.hud.element);
     this.notices.mount(container);
@@ -599,6 +606,22 @@ export class MapRoomUi {
   }
 
   /** The bottom edge of the HUD: the map shows nothing above it. */
+  /**
+   * The HUD's boxes over the map in viewport pixels: the top bar and every button and field in the
+   * docks. Map pin clustering keeps its plaques and crests clear of them. Read about once a second.
+   */
+  coverRects(): DOMRect[] {
+    const out: DOMRect[] = [this.hud.element.getBoundingClientRect()];
+    if (!this.container) return out;
+    // Buttons and fields, and the bars that hold them (the kit filter row's gaps are bar too).
+    for (const el of this.container.querySelectorAll("button, input, .mr2-toolrow, .mr2-kit-filter")) {
+      if (this.hud.element.contains(el)) continue;
+      const r = el.getBoundingClientRect();
+      if (r.width > 0 && r.height > 0) out.push(r);
+    }
+    return out;
+  }
+
   hudBottom(): number {
     return this.hud.element.getBoundingClientRect().bottom;
   }

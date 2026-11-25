@@ -25,6 +25,11 @@ export interface MapInputOptions {
   canvas: HTMLCanvasElement;
   onHover: (cell: OffsetCell | null) => void;
   onSelect: (cell: OffsetCell) => void;
+  /**
+   * A tap (not a drag) at this canvas point, asked before `onSelect`: true when it was handled
+   * (a map pin clustering plaque or crest under it), and the cell is then not selected.
+   */
+  onTap?: (point: { x: number; y: number }) => boolean;
   /** Double click: zoom in centred on that cell. */
   onZoomToCell: (cell: OffsetCell) => void;
   /** Keyboard `+` and `-`; the argument is +1 or -1. */
@@ -111,6 +116,14 @@ export class MapInput {
 
     const travelled = Math.hypot(event.clientX - this.pressX, event.clientY - this.pressY);
     if (travelled > DRAG_SLOP) return;
+
+    if (this.options.onTap) {
+      const rect = this.options.canvas.getBoundingClientRect();
+      if (this.options.onTap({ x: event.clientX - rect.left, y: event.clientY - rect.top })) {
+        this.tapClick.opened(event);
+        return;
+      }
+    }
 
     const cell = this.cellAt(event);
     if (!cell) return;

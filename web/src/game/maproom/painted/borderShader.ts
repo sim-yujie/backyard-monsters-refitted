@@ -30,6 +30,7 @@ uniform vec2 uWorldCells;   // the world's size in cells
 uniform float uCellPoints;  // a cell's width, world points
 uniform float uQuality;     // 2 High, 1 Medium, 0 Low
 uniform float uPulse;       // 0..1, the slow pulse (0 off High)
+uniform float uGroup;       // 1: alliance and neutral cells draw their group sides (map pin clustering)
 uniform vec3 uYou;
 uniform vec3 uAlliance;
 uniform vec3 uOther;
@@ -95,6 +96,12 @@ void main() {
   vec4 data = texelFetch(uData, cell, 0);
   int relation = int(data.r * 255.0 + 0.5);
   int mask = int(data.g * 255.0 + 0.5);
+  // B (borders.ts), map pin clustering zoomed out: bit 7 = under a plaque, no border ("quiet");
+  // bits 0-5 = the group sides, drawn instead of the owner's for alliance and neutral cells while
+  // uGroup is on (one outline round joined tiles, none round a lone one).
+  int b = int(data.b * 255.0 + 0.5);
+  if ((b & 128) != 0) discard;
+  if (uGroup > 0.5 && (relation == 2 || relation == 3)) mask = b & 63;
   if (relation == 0 || mask == 0) discard;
 
   // World points from the cell's centre, and to the nearest border side.

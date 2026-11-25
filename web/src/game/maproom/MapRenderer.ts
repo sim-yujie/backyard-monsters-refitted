@@ -13,7 +13,7 @@ import { TextPool } from "./LabelLayer";
 import { LodTier, sameView, tierForZoom, viewFor } from "./lod";
 import { MapAtlas } from "./mapAtlas";
 import { MapChunk, TextLevel, type ChunkView } from "./MapChunk";
-import type { Projector } from "./markerPins";
+import { MarkerFilter, type Projector } from "./markerPins";
 import type { BorderLayer } from "./painted/BorderLayer";
 import type { CloudLayer } from "./painted/CloudLayer";
 import type { PaintedGround } from "./painted/PaintedGround";
@@ -294,6 +294,68 @@ export class MapRenderer {
     this.placeMarkers();
   }
 
+  /**
+   * The markers map pin clustering leaves out (`cluster/`): the cells a plaque or crest stands for,
+   * and the camps when zoomed out. Shared by every chunk.
+   */
+  readonly markerFilter = new MarkerFilter();
+  private quietBorders: readonly number[] = [];
+  private groupBorders = false;
+  /** A border uniform changed: the painted picture must draw again. */
+  private bordersRestyled = false;
+  private cellsChanged = 0;
+
+  /** Goes up whenever what the cells show may have changed (a zone, the alliance, the kit filter, friends). */
+  get cellsVersion(): number {
+    return this.cellsChanged;
+  }
+
+  /** Who is looking, for working out each cell's relation as the chunks do. */
+  get viewerContext(): MapViewerContext {
+    return {
+      myAlliance: this.myAlliance,
+      kitFilter: this.kitFilter,
+      sight: this.sight,
+      friendMark: this.friendMark,
+      allianceOf: this.allianceOf,
+    };
+  }
+
+  /** Markers really drawn on screen (not left out, not hidden by a layer), for the speed readout. */
+  get drawnMarkerCount(): number {
+    let count = 0;
+    for (const id of this.visibleIds) {
+      const chunk = this.chunks.get(id);
+      if (chunk?.container.visible) count += chunk.pins.drawnCount;
+    }
+    return count;
+  }
+
+  /**
+   * The cells under a map pin clustering plaque draw no relation border (painted map and tile map
+   * alike), so the empty outlines of merged outposts do not crowd the zoomed-out map.
+   */
+  /**
+   * Alliance and neutral borders as one outline round each group of joined tiles (map pin
+   * clustering zoomed out): the painted borders' group sides, the tile map's chunk outlines.
+   */
+  setGroupBorders(on: boolean): void {
+    this.groupBorders = on;
+    this.markerFilter.setGroupBorders(on);
+    if (this.borders?.setGroupOutlines(on)) this.bordersRestyled = true;
+  }
+
+  setQuietBorders(keys: readonly number[]): void {
+    this.quietBorders = keys;
+    this.markerFilter.setQuiet(keys);
+    this.borders?.setQuiet(keys);
+  }
+
+  /** Applies the marker filter to the chunks on screen; does nothing while it is unchanged. */
+  private filterMarkers(): void {
+    for (const id of this.visibleIds) this.chunks.get(id)?.applyFilter(this.markerFilter);
+  }
+
   /** How many markers the chunks on screen carry, for the speed readout. */
   get markerCount(): number {
     let count = 0;
@@ -308,7 +370,11 @@ export class MapRenderer {
       for (const chunk of this.chunks.values()) if (chunk.pins.tilted) chunk.pins.place(null, "");
       return;
     }
-    for (const id of this.visibleIds) this.chunks.get(id)?.pins.place(this.projector, this.projectorKey);
+    for (const id of this.visibleIds) {
+      const chunk = this.chunks.get(id);
+      chunk?.applyFilter(this.markerFilter);
+      chunk?.pins.place(this.projector, this.projectorKey);
+    }
   }
 
   /** How long the last chunk build took, in milliseconds. */
@@ -359,6 +425,7 @@ export class MapRenderer {
   }
 
   private rebuildAll(): void {
+    this.cellsChanged++;
     for (const id of this.chunks.keys()) this.dirty.add(id);
   }
 
@@ -427,6 +494,7 @@ export class MapRenderer {
    */
   applyZone(zone: ZoneRecord, previous?: ZoneRecord): void {
     if (this.destroyed) return;
+    this.cellsChanged++;
     this.raster.applyZone(zone);
     this.painted?.applyZone(zone);
     this.classicFog?.applyZone(zone);
@@ -450,6 +518,7 @@ export class MapRenderer {
    */
   forgetZones(zones: readonly ZoneRecord[]): void {
     if (this.destroyed || zones.length === 0) return;
+    this.cellsChanged++;
     for (const zone of zones) {
       const data: ZoneRecord["data"] = {};
       for (const [xKey, column] of Object.entries(zone.data)) {
@@ -559,7 +628,8 @@ export class MapRenderer {
     const texelsWritten = this.raster.flush();
     const groundWritten = this.painted?.flush() ?? false;
     const fogChanged = this.clouds?.flush() ?? false;
-    const bordersChanged = this.borders?.flush() ?? false;
+    const bordersChanged = (this.borders?.flush() ?? false) || this.bordersRestyled;
+    this.bordersRestyled = false;
     const nowPaint = performance.now();
     const waterStepped = this.painted?.animate(nowPaint, range) ?? false;
     // The player's Quality's ground program once compiled, and the sprite pieces round the view.
@@ -629,6 +699,7 @@ export class MapRenderer {
       sameRange(range, this.lastRange)
     ) {
       this.residency.keep(this.visibleIds, nowMs);
+      this.filterMarkers();
       this.sweep(nowMs);
       return riversWork;
     }
@@ -637,6 +708,7 @@ export class MapRenderer {
     this.lastView = view;
     this.lastRange = { ...range };
     this.reconcile(range, view, atlas, nowMs);
+    this.filterMarkers();
     this.sweep(nowMs);
     return true;
   }
@@ -877,6 +949,8 @@ export class MapRenderer {
     const above = this.world.parent === this.root ? this.world : this.range.container;
     this.root.addChildAt(this.borders.mesh, this.root.getChildIndex(above));
     for (const zone of this.store.loadedZoneRefs()) this.borders.applyZone(zone);
+    this.borders.setQuiet(this.quietBorders);
+    this.borders.setGroupOutlines(this.groupBorders);
     // A border running into the fog goes under the cloud.
     if (programs.clouds && quality() === "high") loads.push(this.addPaintedFog(look, painted));
     // The rest of the programs once the art is in and has drawn (a few frames), or after a while

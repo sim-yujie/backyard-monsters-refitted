@@ -8,6 +8,9 @@ import {
   type PlayerRelation,
   RELATION_LOOK,
 } from "@/game/maproom/relationLook";
+import { shieldUrl } from "@/game/alliance/allianceRules";
+import { classicLook } from "@/game/classicLook";
+import { clusterArtUrl, type ClusterArt } from "@/game/maproom/cluster/clusterArt";
 import { gameIcon, type GameIconName } from "@/ui/gameIcon";
 import { button, el } from "@/ui/maproom1/icons";
 
@@ -47,7 +50,23 @@ export const MAP_LEGEND_TEXT = {
   button: "Key",
   title: "Map key",
   tooltip: "What the border colours mean",
+  zoomedOut: "Zoomed out",
 } as const;
+
+/**
+ * Map pin clustering's plaques and crests (beta 9), under the borders: each picture with a word or
+ * two, so a number on a shield is not read as a level (neon, 25 Nov 2026). Tapping one zooms in.
+ */
+export const LEGEND_TOKENS: readonly { art: ClusterArt; count?: number; label: string }[] = [
+  { art: "crest-home", label: "Your yard" },
+  { art: "crest-you", label: "Your outpost" },
+  { art: "crest-hostile", label: "Hostile" },
+  { art: "plaque-alliance", count: 12, label: "12 alliance outposts" },
+  { art: "plaque-other", count: 9, label: "9 neutral outposts" },
+];
+
+/** Under the tokens: what a tap does. */
+export const LEGEND_TAP_HINT = "Tap a plaque to zoom in";
 
 /**
  * The colour a border line shows on the map: the painted shader runs the middle of the line 40 per
@@ -174,6 +193,33 @@ export const relationSwatch = (relation: PlayerRelation, size = 28): SVGSVGEleme
   return svg;
 };
 
+/** The plaques and crests shown when zoomed out, in the look in use, with the player's own shield. */
+const tokenList = (shield: string | null): HTMLElement => {
+  const classic = classicLook();
+  const list = el("ul", "mr2-key__tokens");
+  for (const token of LEGEND_TOKENS) {
+    const row = el("li", "mr2-key__token");
+    row.dataset["art"] = token.art;
+    const pic = el("span", token.count === undefined ? "mr2-key__crest" : "mr2-key__plaque");
+    if (token.count === undefined) {
+      const img = document.createElement("img");
+      img.src = clusterArtUrl(classic, token.art);
+      img.alt = "";
+      pic.append(img);
+    } else {
+      pic.style.setProperty("--mc-plaque", `url("${clusterArtUrl(classic, token.art)}")`);
+      const img = document.createElement("img");
+      // Every alliance has a shield (owner 25 Nov): the player's own, or the first one as a sample.
+      img.src = token.art === "plaque-alliance" ? (shield ?? shieldUrl(1, "medium")) : clusterArtUrl(classic, "icon-other");
+      img.alt = "";
+      pic.append(img, el("span", "mr2-key__plaque-n", String(token.count)));
+    }
+    row.append(pic, el("span", "mr2-key__token-label", token.label));
+    list.append(row);
+  }
+  return list;
+};
+
 /** The button's picture: three small hexes in the key's colours. */
 const buttonPicture = (): HTMLElement => {
   const wrap = el("span", "mr2-key__icon");
@@ -188,6 +234,15 @@ export class MapLegend {
   readonly toggle: HTMLButtonElement;
   /** The card it opens; goes just after {@link toggle}. */
   readonly element: HTMLElement;
+  /** The zoomed-out plaques and crests, drawn again on each open in the look in use. */
+  private tokens: HTMLElement;
+  /** The player's own alliance shield picture, or null (not in one, or not known yet). */
+  private allianceShield: () => string | null = () => null;
+
+  /** Where the key finds the player's own alliance shield, for its plaque sample. */
+  setAllianceShield(shield: () => string | null): void {
+    this.allianceShield = shield;
+  }
 
   constructor(options: { alliances?: boolean } = {}) {
     this.element = el("section", "mr2-float mr2-key");
@@ -211,6 +266,12 @@ export class MapLegend {
       list.append(row);
     }
     this.element.append(list);
+    this.tokens = tokenList(null);
+    this.element.append(
+      el("h3", "mr2-key__subtitle", MAP_LEGEND_TEXT.zoomedOut),
+      this.tokens,
+      el("p", "mr2-key__hint mr2-key__tap", LEGEND_TAP_HINT),
+    );
 
     this.toggle = button("mr2-tool mr2-key__toggle");
     this.toggle.append(buttonPicture(), el("span", "mr2-tool__label", MAP_LEGEND_TEXT.button));
@@ -227,6 +288,12 @@ export class MapLegend {
   }
 
   setOpen(open: boolean): void {
+    if (open && this.element.hidden) {
+      // The look may have changed since the card was made (neon r1: Classic showed Modern plaques).
+      const fresh = tokenList(this.allianceShield());
+      this.tokens.replaceWith(fresh);
+      this.tokens = fresh;
+    }
     this.element.hidden = !open;
     this.toggle.setAttribute("aria-expanded", String(open));
   }

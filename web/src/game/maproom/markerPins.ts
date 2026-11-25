@@ -1,5 +1,5 @@
 import type { Container } from "pixi.js";
-import { CELL_HEIGHT, CELL_WIDTH } from "@/config";
+import { CELL_HEIGHT, CELL_WIDTH, WORLD_HEIGHT, WORLD_WIDTH } from "@/config";
 import type { Point } from "@/game/HexGrid";
 import type { Tilt } from "./tilt";
 
@@ -166,6 +166,79 @@ interface Pinned {
   readonly scaleY: number;
   /** Whether it was shown when added; a marker hidden behind the camera comes back to this. */
   readonly visible: boolean;
+  /** Its cell (`cellKey`), or -1 when not told: the clustering may stand in for it. */
+  readonly cell: number;
+  /** A wild monster camp's marker: left out when zoomed out (`MarkerFilter.campsShown`). */
+  readonly camp: boolean;
+}
+
+/**
+ * Where a cell's markers stand, and which cell that is (map pin clustering, beta 9): a chunk makes
+ * one per cell and pins every marker of the cell to it, text added later included.
+ */
+export interface Foot extends Point {
+  /** `cellKey(col, row)`. */
+  readonly cell?: number;
+  /** The cell is a wild monster camp. */
+  readonly camp?: boolean;
+}
+
+/**
+ * Which markers are left out (map pin clustering, `cluster/clusterRules.ts`): the cells a plaque
+ * or crest stands for, and every camp's when zoomed out. One object shared by every chunk;
+ * `version` goes up on every change, so a chunk looks again only then.
+ */
+export class MarkerFilter {
+  /** One flag per world cell (`cellKey`): 1 = a token stands for it. */
+  readonly hidden = new Uint8Array(WORLD_WIDTH * WORLD_HEIGHT);
+  private hiddenKeys: number[] = [];
+  campsShown = true;
+  version = 0;
+
+  /** Hides exactly these cells' markers (the previous set comes back). */
+  setHidden(keys: readonly number[]): void {
+    for (const key of this.hiddenKeys) this.hidden[key] = 0;
+    for (const key of keys) this.hidden[key] = 1;
+    this.hiddenKeys = keys.slice();
+    this.version++;
+  }
+
+  setCampsShown(shown: boolean): void {
+    if (shown === this.campsShown) return;
+    this.campsShown = shown;
+    this.version++;
+  }
+
+  /** One flag per world cell: 1 = under a plaque, so its relation border is not drawn either. */
+  readonly quiet = new Uint8Array(WORLD_WIDTH * WORLD_HEIGHT);
+  private quietKeys: number[] = [];
+
+  /** The cells whose relation borders are left out (the tile map's border sprites, `MapChunk`). */
+  setQuiet(keys: readonly number[]): void {
+    for (const key of this.quietKeys) this.quiet[key] = 0;
+    for (const key of keys) this.quiet[key] = 1;
+    this.quietKeys = keys.slice();
+    this.version++;
+  }
+
+  /** Alliance and neutral borders as one outline round joined tiles (zoomed out, `ZOOMED_OUT_BORDERS`). */
+  groupBorders = false;
+
+  setGroupBorders(on: boolean): void {
+    if (on === this.groupBorders) return;
+    this.groupBorders = on;
+    this.version++;
+  }
+
+  /** How many cells are hidden now. */
+  get hiddenCount(): number {
+    return this.hiddenKeys.length;
+  }
+
+  /** Whether a marker is left out. */
+  leaves(cell: number, camp: boolean): boolean {
+    return (camp && !this.campsShown) || (cell >= 0 && this.hidden[cell] === 1);
+  }
 }
 
 /** Which markers come and go together: a chunk's sprites, or its text (laid out and handed back on its own). */
@@ -190,6 +263,9 @@ export class MarkerPins {
   private footY0 = Infinity;
   private footX1 = -Infinity;
   private footY1 = -Infinity;
+  /** The markers left out (clustering), shared by every chunk, and its version last applied. */
+  private filter: MarkerFilter | null = null;
+  private filterVersion = -1;
 
   /** How many markers are pinned, for tests and the speed readout. */
   get size(): number {
@@ -205,7 +281,7 @@ export class MarkerPins {
    * Pins a marker to a foot on the map, as it stands now: its position and
    * scale are taken as the flat map's, relative to the foot.
    */
-  add(foot: Point, item: Container, group: PinGroup = "body"): void {
+  add(foot: Foot, item: Container, group: PinGroup = "body"): void {
     this.pins[group].push({
       item,
       footX: foot.x,
@@ -215,7 +291,10 @@ export class MarkerPins {
       scaleX: item.scale.x,
       scaleY: item.scale.y,
       visible: item.visible,
+      cell: foot.cell ?? -1,
+      camp: foot.camp ?? false,
     });
+    if (this.filter?.leaves(foot.cell ?? -1, foot.camp ?? false)) item.visible = false;
     this.footX0 = Math.min(this.footX0, foot.x);
     this.footY0 = Math.min(this.footY0, foot.y);
     this.footX1 = Math.max(this.footX1, foot.x);
@@ -243,6 +322,33 @@ export class MarkerPins {
   }
 
   /**
+   * Leaves out the markers a filter names (map pin clustering). Cheap to call every frame: it does
+   * something only when the filter changed. On the tilted screen the next `place` applies it.
+   */
+  applyFilter(filter: MarkerFilter | null): void {
+    const version = filter?.version ?? -1;
+    if (filter === this.filter && version === this.filterVersion) return;
+    this.filter = filter;
+    this.filterVersion = version;
+    if (this.placedKey !== null) {
+      this.changed = true;
+      return;
+    }
+    for (const pin of this.all()) pin.item.visible = pin.visible && !this.leftOut(pin);
+  }
+
+  private leftOut(pin: Pinned): boolean {
+    return this.filter !== null && this.filter.leaves(pin.cell, pin.camp);
+  }
+
+  /** How many markers are drawn: shown, not left out, in a shown layer (speed readout). */
+  get drawnCount(): number {
+    let count = 0;
+    for (const pin of this.all()) if (pin.item.visible && pin.item.parent?.visible !== false) count++;
+    return count;
+  }
+
+  /**
    * Stands every marker upright on the tilted screen, or puts them back on
    * the flat map when `project` is null. `key` names the view (camera and
    * tilt): the same key and no new markers means nothing to do.
@@ -256,7 +362,7 @@ export class MarkerPins {
       for (const pin of this.all()) {
         pin.item.position.set(pin.footX + pin.dx, pin.footY + pin.dy);
         pin.item.scale.set(pin.scaleX, pin.scaleY);
-        pin.item.visible = pin.visible;
+        pin.item.visible = pin.visible && !this.leftOut(pin);
       }
       return;
     }
@@ -274,7 +380,13 @@ export class MarkerPins {
     let lastX = Number.NaN;
     let lastY = Number.NaN;
     let at: Placement | null = null;
+    const filter = this.filter;
     for (const pin of this.all()) {
+      // Left out (a plaque or crest stands for it, or a camp when zoomed out): not placed at all.
+      if (filter !== null && filter.leaves(pin.cell, pin.camp)) {
+        if (pin.item.visible) pin.item.visible = false;
+        continue;
+      }
       // A cell's markers are added one after another on the same foot.
       if (pin.footX !== lastX || pin.footY !== lastY) {
         lastX = pin.footX;
