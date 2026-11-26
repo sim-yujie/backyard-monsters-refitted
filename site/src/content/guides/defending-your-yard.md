@@ -51,5 +51,3 @@ In the Baiter's **Invite** tab you can also invite **friends and alliance mates*
 You'll get an attack report in your mail. Damaged buildings stop working until you repair them: tap a building to repair it, or use **Repair all** on the banner.
 
 Tip: in a player's mail thread you can propose a **truce**. While it lasts, neither of you can attack the other.
-
-Next: [Attacking and the Map Room](/guides/attacking-and-the-map-room/).

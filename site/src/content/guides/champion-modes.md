@@ -46,5 +46,3 @@ In the attack screen, every champion in your army list has a **Mode** box. Pick 
 - Your champion **learns** from its own attacks, and leans toward what worked in its Mode.
 - Modes are for attacking. A champion defending your yard fights as always.
 - **Krallen has no Mode:** she always fights as in Flash.
-
-Next: [Hatchery Control Centre levels 2 and 3](/guides/hatchery-control-centre/).

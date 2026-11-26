@@ -10,9 +10,9 @@ The **Hatchery Control Centre** (HCC) runs all your Hatcheries from one queue. I
 
 ## 1. Upgrade the HCC
 
-Click your HCC on the yard, then **Upgrade**.
+Tap your HCC on the yard, then **Upgrade**. The cost is the same amount of Twigs, Pebbles and Putty, each.
 
-| Level | Cost (each of Twigs, Pebbles, Putty) | Time | Needs |
+| Level | Cost (each) | Time | Needs |
 | --- | --- | --- | --- |
 | 1 | 4M | 25 hours | Town Hall 3, three level 2 Hatcheries |
 | 2 | 25M | 2 days | Town Hall 6, four level 3 Hatcheries |
@@ -20,8 +20,8 @@ Click your HCC on the yard, then **Upgrade**.
 
 | Level | Queue | Presets | Outposts |
 | --- | --- | --- | --- |
-| 1 | 7 stacks of 20 | 2 | |
-| 2 | 10 stacks of 20 | 4 | |
+| 1 | 7 stacks of 20 | 2 | — |
+| 2 | 10 stacks of 20 | 4 | — |
 | 3 | 10 stacks of 30 | 6 | Runs them from home |
 
 ## 2. Save a preset
@@ -45,8 +45,6 @@ With your main yard's HCC at level 3, the Hatch tab can run your outposts' hatch
 ## Good to know
 
 - Only outposts with **their own HCC** can be run from home.
-- An outpost's HCC goes to **level 2**: 1M each of Twigs, Pebbles and Putty, 2 days, and two level 3 Hatcheries.
+- An outpost's HCC goes to **level 2** (10 stacks of 20): 1M each of Twigs, Pebbles and Putty, 2 days, and two level 3 Hatcheries.
 - All your outposts share **one preset list**.
 - The Inferno's Incubator Control Centre stays at level 1, with no presets.
-
-Next: [Move monsters between your yards](/guides/move-monsters/).

@@ -55,5 +55,3 @@ Buildings damaged in an attack stop working until they are repaired. Tap a damag
 ## Plan your layout
 
 Tap **Layout** to open the **Yard Planner**. It lets you rearrange your whole yard and save layouts to come back to later. To raise many walls at once, see [Upgrade many walls at once](/guides/upgrade-many-walls/).
-
-Next: [Monsters and the Hatchery](/guides/monsters-and-the-hatchery/).

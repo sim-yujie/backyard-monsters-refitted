@@ -42,5 +42,3 @@ The panel shows the cost. A red line means you can't afford them all: pick fewer
 - Higher levels need a higher **Town Hall**.
 - Walls already at that level are skipped, and cost nothing.
 - **Cancel** or **Esc** stops picking.
-
-Next: [Champion Modes](/guides/champion-modes/).

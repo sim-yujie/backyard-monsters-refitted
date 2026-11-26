@@ -55,5 +55,3 @@ Each monster has a favourite target. Mix them so every part of an enemy yard get
 | Bolt | Running ahead of the pack | Harvesters, Town Halls and Silos |
 | Eye-ra | Blowing up next to walls | Walls |
 | Ichi | Shrugging off damage from towers and traps | Defensive towers |
-
-Next: [Defending your yard](/guides/defending-your-yard/).
