@@ -42,12 +42,15 @@ const FIGHT_COLD: Record<string, number[]> = {
   inferno: fightsOf(bench, "inferno"),
   finalise: fightsOf(bench, "save"),
 };
+// Warm: only the bench's FIRST pass over the 70 different jobs (a warm worker that has not seen
+// these exact battles before), not the 29 repeats of the same battles, which flatter the JIT.
+const firstPass = { rows: benchWarm.rows.slice(0, new Set(benchWarm.rows.map((r: any) => r.label + r.kind)).size) };
 const FIGHT_WARM: Record<string, number[]> = {
-  repeat: fightsOf(benchWarm, "repeat"),
-  save: fightsOf(benchWarm, "save"),
-  raid: fightsOf(benchWarm, "raid"),
-  inferno: fightsOf(benchWarm, "inferno"),
-  finalise: fightsOf(benchWarm, "save"),
+  repeat: fightsOf(firstPass, "repeat"),
+  save: fightsOf(firstPass, "save"),
+  raid: fightsOf(firstPass, "raid"),
+  inferno: fightsOf(firstPass, "inferno"),
+  finalise: fightsOf(firstPass, "save"),
 };
 const STARTUP = startupsOf(bench);
 
@@ -71,6 +74,8 @@ export interface Fix {
   fifo: boolean;
   /** Warm worker pool: no start-up, warm JIT fight times. */
   warm: boolean;
+  /** With `warm`: the pool's size. Jobs beyond it queue for a worker (FIFO) and still count in `running`. */
+  poolSize?: number;
   /** The Repeat reserves only around its replay(s), not its database work. */
   narrow: boolean;
   /** The Repeat's own worker does not count twice (reserved + running). */
@@ -172,20 +177,25 @@ export const simulate = (sc: Scenario, fix: Fix) => {
   const fightScale = Number(process.env.FIGHT_SCALE ?? 1);
   const fightMs = (kind: Kind) => (fix.warm ? 0 : pick(STARTUP)) + fightScale * pick((fix.warm ? FIGHT_WARM : FIGHT_COLD)[kind]!);
 
+  const poolQueue: (() => void)[] = [];
   const startWorker = (kind: Kind, onDone: () => void) => {
     running++;
     holders.push(kind);
     const cpu = fightMs(kind) * sc.cpuScale;
     stats.workerCpuMs += cpu;
-    workers.push({
+    const go = () => workers.push({
       left: cpu,
       kind,
       onDone: () => {
         running--;
         holders.splice(holders.indexOf(kind), 1);
+        const next = poolQueue.shift();
+        if (next) next();
         onDone();
       },
     });
+    if (fix.warm && fix.poolSize && workers.length >= fix.poolSize) poolQueue.push(go);
+    else go();
   };
 
   const fifoQueue: Waiter[] = [];
@@ -410,12 +420,14 @@ export const simulate = (sc: Scenario, fix: Fix) => {
 
 export const FIXES: Record<string, Fix> = {
   today: { name: "today (cap 1, poll, 5 s)", cap: 1, waitMs: 5_000, fifo: false, warm: false, narrow: false, noDoubleCount: false, niced: false },
-  a_warm: { name: "a. warm worker pool", cap: 1, waitMs: 5_000, fifo: false, warm: true, narrow: false, noDoubleCount: false, niced: false },
+  a_warm: { name: "a. warm pool of 1 (cap 1)", cap: 1, waitMs: 5_000, fifo: false, warm: true, poolSize: 1, narrow: false, noDoubleCount: false, niced: false },
+  a_warm2: { name: "a+c. warm pool of 2, niced, cap 2", cap: 2, waitMs: 5_000, fifo: false, warm: true, poolSize: 2, narrow: false, noDoubleCount: true, niced: true },
   b_queue20: { name: "b. FIFO queue, 20 s", cap: 1, waitMs: 20_000, fifo: true, warm: false, narrow: false, noDoubleCount: false, niced: false },
   b_queue30: { name: "b. FIFO queue, 30 s", cap: 1, waitMs: 30_000, fifo: true, warm: false, narrow: false, noDoubleCount: false, niced: false },
   c_cap2: { name: "c. cap 2, niced, no double count", cap: 2, waitMs: 5_000, fifo: false, warm: false, narrow: false, noDoubleCount: true, niced: true },
   d_narrow: { name: "d. slot only around the replay", cap: 1, waitMs: 5_000, fifo: false, warm: false, narrow: true, noDoubleCount: false, niced: false },
-  combo: { name: "d + a + b(20 s)", cap: 1, waitMs: 20_000, fifo: true, warm: true, narrow: true, noDoubleCount: false, niced: false },
+  combo: { name: "d + a(pool 1) + b(20 s)", cap: 1, waitMs: 20_000, fifo: true, warm: true, poolSize: 1, narrow: true, noDoubleCount: false, niced: false },
+  combo2: { name: "d + a(pool 2, niced) + b(20 s)", cap: 2, waitMs: 20_000, fifo: true, warm: true, poolSize: 2, narrow: true, noDoubleCount: true, niced: true },
 };
 
 // Daily players -> the peak hour. Assumptions (replace with live numbers): at the peak ~15% of
@@ -454,7 +466,7 @@ if (import.meta.main) {
       const r = simulate(sc, FIXES[key]!);
       out.push({ scenario: sc, fix: FIXES[key], result: r });
       console.log(
-        `${FIXES[key]!.name.padEnd(36)} repeats ${String(r.repeatsAsked).padStart(6)}  busy ${String(r.repeatBusyPct).padStart(6)}%  wait p50/p95 ${r.repeatWaitP50}/${r.repeatWaitP95} ms  answer p50/p95 ${r.repeatAnswerP50}/${r.repeatAnswerP95} ms  raid busy ${r.raidBusyPct}%  battle CPU ${(r.workerCpuShare * 100).toFixed(1)}% of box  causes ${JSON.stringify(r.busyCauses)}`
+        `${FIXES[key]!.name.padEnd(36)} repeats ${String(r.repeatsAsked).padStart(6)}  busy ${String(r.repeatBusyPct).padStart(6)}%  wait p50/p95 ${r.repeatWaitP50}/${r.repeatWaitP95} ms  answer p50/p95 ${r.repeatAnswerP50}/${r.repeatAnswerP95} ms  raid busy ${r.raidBusyPct}%  save p95 ${r.saveP95} ms  battle CPU ${(r.workerCpuShare * 100).toFixed(1)}% of box  max workers ${r.maxWorkers}  causes ${JSON.stringify(r.busyCauses)}`
       );
     }
   }

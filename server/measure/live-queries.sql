@@ -15,12 +15,14 @@ select to_char(date_bin('5 minutes', landed_at, timestamptz '2026-01-01') at tim
 -- 9-13 C12 for Repeat plans and 30 C14 + 2 champions for a player attack).
 select repeat, mode, count(*) as landings, percentile_cont(0.5) within group (order by flung) as flung_p50, percentile_cont(0.95) within group (order by flung) as flung_p95, max(flung) as flung_max from (select repeat, mode, coalesce((select sum((v ->> 'f')::int) from jsonb_each(monsters) as e(k, v)), 0) as flung from bym.monster_usage where landed_at > now() - interval '4 days') as t group by 1, 2 order by 1, 2
 
--- Q4. Attack starts per hour (SGT) by target type, last 4 days (attack_logs is written at every
--- attack load, Repeat included).
+-- Q4. Attacks on PLAYER yards started per hour (SGT), last 4 days. attack_logs is written by the
+-- attack load only for player-owned yards (checked: 50+ Repeat attacks on camps in the helper's
+-- copy wrote no row), so camps and Repeat attacks are NOT in it; use Q1 for those.
 select to_char(date_trunc('hour', attacktime at time zone 'Asia/Singapore'), 'MM-DD HH24') as hour_sgt, type, count(*) as starts from bym.attack_logs where attacktime > now() - interval '4 days' group by 1, 2 order by 1, 2
 
 -- Q5. Daily players and daily attacks/raids, last 14 days.
 select day, active_players, attacks, tribe_raids, server_errors from bym.daily_stat order by day desc limit 14
 
--- Q6. The heaviest Repeat players in the peak hour of the last 4 days (who chains Repeats, how fast).
-select attacker_userid, count(*) as repeats, round(extract(epoch from max(landed_at) - min(landed_at)) / greatest(count(*) - 1, 1)) as seconds_between from bym.monster_usage where repeat and landed_at > now() - interval '4 days' group by 1 order by 2 desc limit 15
+-- Q6. How fast players chain Repeats: per player and hour, Repeats and the median gap between two
+-- of their Repeats (the simulation assumes a press every 7-20 s after the answer). Busiest 20.
+select u.username, to_char(date_trunc('hour', g.landed_at at time zone 'Asia/Singapore'), 'MM-DD HH24') as hour_sgt, count(*) as repeats, round(percentile_cont(0.5) within group (order by g.gap)) as median_gap_s from (select attacker_userid, landed_at, extract(epoch from landed_at - lag(landed_at) over (partition by attacker_userid order by landed_at)) as gap from bym.monster_usage where repeat and landed_at > now() - interval '4 days') as g join bym.user as u on u.userid = g.attacker_userid where g.gap is not null and g.gap < 600 group by 1, 2 order by 3 desc limit 20

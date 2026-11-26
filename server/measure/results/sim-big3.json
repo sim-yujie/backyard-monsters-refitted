@@ -71,28 +71,186 @@
    "infernoPerHour": 3
   },
   "fix": {
-   "name": "a. warm worker pool",
+   "name": "a. warm pool of 1 (cap 1)",
    "cap": 1,
    "waitMs": 5000,
    "fifo": false,
    "warm": true,
+   "poolSize": 1,
    "narrow": false,
    "noDoubleCount": false,
    "niced": false
   },
   "result": {
-   "repeatsAsked": 1285,
+   "repeatsAsked": 1279,
    "repeatBusyPct": 0,
    "repeatBusy": 0,
    "repeatWaitP50": 0,
-   "repeatWaitP95": 500,
-   "repeatAnswerP50": 483,
-   "repeatAnswerP95": 998,
+   "repeatWaitP95": 800,
+   "repeatAnswerP50": 573,
+   "repeatAnswerP95": 1471,
+   "raidBusyPct": 0,
+   "saves": 88,
+   "saveP95": 924,
+   "workerCoreSecondsPerHour": 341,
+   "workerCpuShare": 0.095,
+   "maxWorkers": 1,
+   "busyCauses": {
+    "repeatHeld": 0,
+    "saveRunning": 0,
+    "raidHeld": 0,
+    "finaliseRunning": 0,
+    "other": 0
+   }
+  }
+ },
+ {
+  "scenario": {
+   "cpuScale": 2,
+   "dbScale": 2,
+   "mainLoad": 0.5,
+   "thinkMs": [
+    7000,
+    20000
+   ],
+   "seconds": 1800,
+   "seed": 1,
+   "label": "400-daily background, 10 players farming at once",
+   "dau": 400,
+   "farmers": 10,
+   "handAttackers": 9,
+   "raidsPerHour": 30,
+   "finalisePerHour": 23,
+   "infernoPerHour": 3
+  },
+  "fix": {
+   "name": "a+c. warm pool of 2, niced, cap 2",
+   "cap": 2,
+   "waitMs": 5000,
+   "fifo": false,
+   "warm": true,
+   "poolSize": 2,
+   "narrow": false,
+   "noDoubleCount": true,
+   "niced": true
+  },
+  "result": {
+   "repeatsAsked": 1291,
+   "repeatBusyPct": 0,
+   "repeatBusy": 0,
+   "repeatWaitP50": 0,
+   "repeatWaitP95": 0,
+   "repeatAnswerP50": 502,
+   "repeatAnswerP95": 1059,
    "raidBusyPct": 0,
    "saves": 91,
-   "saveP95": 800,
-   "workerCoreSecondsPerHour": 213,
-   "workerCpuShare": 0.059,
+   "saveP95": 968,
+   "workerCoreSecondsPerHour": 335,
+   "workerCpuShare": 0.093,
+   "maxWorkers": 2,
+   "busyCauses": {
+    "repeatHeld": 0,
+    "saveRunning": 0,
+    "raidHeld": 0,
+    "finaliseRunning": 0,
+    "other": 0
+   }
+  }
+ },
+ {
+  "scenario": {
+   "cpuScale": 2,
+   "dbScale": 2,
+   "mainLoad": 0.5,
+   "thinkMs": [
+    7000,
+    20000
+   ],
+   "seconds": 1800,
+   "seed": 1,
+   "label": "400-daily background, 10 players farming at once",
+   "dau": 400,
+   "farmers": 10,
+   "handAttackers": 9,
+   "raidsPerHour": 30,
+   "finalisePerHour": 23,
+   "infernoPerHour": 3
+  },
+  "fix": {
+   "name": "b. FIFO queue, 20 s",
+   "cap": 1,
+   "waitMs": 20000,
+   "fifo": true,
+   "warm": false,
+   "narrow": false,
+   "noDoubleCount": false,
+   "niced": false
+  },
+  "result": {
+   "repeatsAsked": 1221,
+   "repeatBusyPct": 0,
+   "repeatBusy": 0,
+   "repeatWaitP50": 99,
+   "repeatWaitP95": 1741,
+   "repeatAnswerP50": 1161,
+   "repeatAnswerP95": 2694,
+   "raidBusyPct": 0,
+   "saves": 88,
+   "saveP95": 1655,
+   "workerCoreSecondsPerHour": 786,
+   "workerCpuShare": 0.218,
+   "maxWorkers": 2,
+   "busyCauses": {
+    "repeatHeld": 0,
+    "saveRunning": 0,
+    "raidHeld": 0,
+    "finaliseRunning": 0,
+    "other": 0
+   }
+  }
+ },
+ {
+  "scenario": {
+   "cpuScale": 2,
+   "dbScale": 2,
+   "mainLoad": 0.5,
+   "thinkMs": [
+    7000,
+    20000
+   ],
+   "seconds": 1800,
+   "seed": 1,
+   "label": "400-daily background, 10 players farming at once",
+   "dau": 400,
+   "farmers": 10,
+   "handAttackers": 9,
+   "raidsPerHour": 30,
+   "finalisePerHour": 23,
+   "infernoPerHour": 3
+  },
+  "fix": {
+   "name": "b. FIFO queue, 30 s",
+   "cap": 1,
+   "waitMs": 30000,
+   "fifo": true,
+   "warm": false,
+   "narrow": false,
+   "noDoubleCount": false,
+   "niced": false
+  },
+  "result": {
+   "repeatsAsked": 1221,
+   "repeatBusyPct": 0,
+   "repeatBusy": 0,
+   "repeatWaitP50": 99,
+   "repeatWaitP95": 1741,
+   "repeatAnswerP50": 1161,
+   "repeatAnswerP95": 2694,
+   "raidBusyPct": 0,
+   "saves": 88,
+   "saveP95": 1655,
+   "workerCoreSecondsPerHour": 786,
+   "workerCpuShare": 0.218,
    "maxWorkers": 2,
    "busyCauses": {
     "repeatHeld": 0,
@@ -227,29 +385,83 @@
    "infernoPerHour": 3
   },
   "fix": {
-   "name": "d + a + b(20 s)",
+   "name": "d + a(pool 1) + b(20 s)",
    "cap": 1,
    "waitMs": 20000,
    "fifo": true,
    "warm": true,
+   "poolSize": 1,
    "narrow": true,
    "noDoubleCount": false,
    "niced": false
   },
   "result": {
-   "repeatsAsked": 1305,
+   "repeatsAsked": 1278,
    "repeatBusyPct": 0,
    "repeatBusy": 0,
    "repeatWaitP50": 0,
-   "repeatWaitP95": 94,
-   "repeatAnswerP50": 443,
-   "repeatAnswerP95": 774,
+   "repeatWaitP95": 262,
+   "repeatAnswerP50": 528,
+   "repeatAnswerP95": 1094,
    "raidBusyPct": 0,
-   "saves": 89,
-   "saveP95": 663,
-   "workerCoreSecondsPerHour": 208,
-   "workerCpuShare": 0.058,
-   "maxWorkers": 3,
+   "saves": 85,
+   "saveP95": 845,
+   "workerCoreSecondsPerHour": 335,
+   "workerCpuShare": 0.093,
+   "maxWorkers": 1,
+   "busyCauses": {
+    "repeatHeld": 0,
+    "saveRunning": 0,
+    "raidHeld": 0,
+    "finaliseRunning": 0,
+    "other": 0
+   }
+  }
+ },
+ {
+  "scenario": {
+   "cpuScale": 2,
+   "dbScale": 2,
+   "mainLoad": 0.5,
+   "thinkMs": [
+    7000,
+    20000
+   ],
+   "seconds": 1800,
+   "seed": 1,
+   "label": "400-daily background, 10 players farming at once",
+   "dau": 400,
+   "farmers": 10,
+   "handAttackers": 9,
+   "raidsPerHour": 30,
+   "finalisePerHour": 23,
+   "infernoPerHour": 3
+  },
+  "fix": {
+   "name": "d + a(pool 2, niced) + b(20 s)",
+   "cap": 2,
+   "waitMs": 20000,
+   "fifo": true,
+   "warm": true,
+   "poolSize": 2,
+   "narrow": true,
+   "noDoubleCount": true,
+   "niced": true
+  },
+  "result": {
+   "repeatsAsked": 1291,
+   "repeatBusyPct": 0,
+   "repeatBusy": 0,
+   "repeatWaitP50": 0,
+   "repeatWaitP95": 0,
+   "repeatAnswerP50": 505,
+   "repeatAnswerP95": 1071,
+   "raidBusyPct": 0,
+   "saves": 88,
+   "saveP95": 905,
+   "workerCoreSecondsPerHour": 344,
+   "workerCpuShare": 0.095,
+   "maxWorkers": 2,
    "busyCauses": {
     "repeatHeld": 0,
     "saveRunning": 0,
@@ -331,28 +543,186 @@
    "infernoPerHour": 3
   },
   "fix": {
-   "name": "a. warm worker pool",
+   "name": "a. warm pool of 1 (cap 1)",
    "cap": 1,
    "waitMs": 5000,
    "fifo": false,
    "warm": true,
+   "poolSize": 1,
    "narrow": false,
    "noDoubleCount": false,
    "niced": false
   },
   "result": {
-   "repeatsAsked": 2533,
+   "repeatsAsked": 2474,
+   "repeatBusyPct": 0.24,
+   "repeatBusy": 6,
+   "repeatWaitP50": 200,
+   "repeatWaitP95": 1950,
+   "repeatAnswerP50": 814,
+   "repeatAnswerP95": 2605,
+   "raidBusyPct": 0,
+   "saves": 86,
+   "saveP95": 946,
+   "workerCoreSecondsPerHour": 608,
+   "workerCpuShare": 0.169,
+   "maxWorkers": 1,
+   "busyCauses": {
+    "repeatHeld": 6,
+    "saveRunning": 0,
+    "raidHeld": 0,
+    "finaliseRunning": 0,
+    "other": 0
+   }
+  }
+ },
+ {
+  "scenario": {
+   "cpuScale": 2,
+   "dbScale": 2,
+   "mainLoad": 0.5,
+   "thinkMs": [
+    7000,
+    20000
+   ],
+   "seconds": 1800,
+   "seed": 1,
+   "label": "400-daily background, 20 players farming at once",
+   "dau": 400,
+   "farmers": 20,
+   "handAttackers": 9,
+   "raidsPerHour": 30,
+   "finalisePerHour": 23,
+   "infernoPerHour": 3
+  },
+  "fix": {
+   "name": "a+c. warm pool of 2, niced, cap 2",
+   "cap": 2,
+   "waitMs": 5000,
+   "fifo": false,
+   "warm": true,
+   "poolSize": 2,
+   "narrow": false,
+   "noDoubleCount": true,
+   "niced": true
+  },
+  "result": {
+   "repeatsAsked": 2566,
    "repeatBusyPct": 0,
    "repeatBusy": 0,
-   "repeatWaitP50": 50,
-   "repeatWaitP95": 1050,
-   "repeatAnswerP50": 570,
-   "repeatAnswerP95": 1534,
+   "repeatWaitP50": 0,
+   "repeatWaitP95": 350,
+   "repeatAnswerP50": 550,
+   "repeatAnswerP95": 1132,
    "raidBusyPct": 0,
-   "saves": 87,
-   "saveP95": 637,
-   "workerCoreSecondsPerHour": 380,
-   "workerCpuShare": 0.106,
+   "saves": 86,
+   "saveP95": 924,
+   "workerCoreSecondsPerHour": 638,
+   "workerCpuShare": 0.177,
+   "maxWorkers": 2,
+   "busyCauses": {
+    "repeatHeld": 0,
+    "saveRunning": 0,
+    "raidHeld": 0,
+    "finaliseRunning": 0,
+    "other": 0
+   }
+  }
+ },
+ {
+  "scenario": {
+   "cpuScale": 2,
+   "dbScale": 2,
+   "mainLoad": 0.5,
+   "thinkMs": [
+    7000,
+    20000
+   ],
+   "seconds": 1800,
+   "seed": 1,
+   "label": "400-daily background, 20 players farming at once",
+   "dau": 400,
+   "farmers": 20,
+   "handAttackers": 9,
+   "raidsPerHour": 30,
+   "finalisePerHour": 23,
+   "infernoPerHour": 3
+  },
+  "fix": {
+   "name": "b. FIFO queue, 20 s",
+   "cap": 1,
+   "waitMs": 20000,
+   "fifo": true,
+   "warm": false,
+   "narrow": false,
+   "noDoubleCount": false,
+   "niced": false
+  },
+  "result": {
+   "repeatsAsked": 2071,
+   "repeatBusyPct": 0,
+   "repeatBusy": 0,
+   "repeatWaitP50": 2625,
+   "repeatWaitP95": 6341,
+   "repeatAnswerP50": 3483,
+   "repeatAnswerP95": 7223,
+   "raidBusyPct": 0,
+   "saves": 91,
+   "saveP95": 1797,
+   "workerCoreSecondsPerHour": 1274,
+   "workerCpuShare": 0.354,
+   "maxWorkers": 3,
+   "busyCauses": {
+    "repeatHeld": 0,
+    "saveRunning": 0,
+    "raidHeld": 0,
+    "finaliseRunning": 0,
+    "other": 0
+   }
+  }
+ },
+ {
+  "scenario": {
+   "cpuScale": 2,
+   "dbScale": 2,
+   "mainLoad": 0.5,
+   "thinkMs": [
+    7000,
+    20000
+   ],
+   "seconds": 1800,
+   "seed": 1,
+   "label": "400-daily background, 20 players farming at once",
+   "dau": 400,
+   "farmers": 20,
+   "handAttackers": 9,
+   "raidsPerHour": 30,
+   "finalisePerHour": 23,
+   "infernoPerHour": 3
+  },
+  "fix": {
+   "name": "b. FIFO queue, 30 s",
+   "cap": 1,
+   "waitMs": 30000,
+   "fifo": true,
+   "warm": false,
+   "narrow": false,
+   "noDoubleCount": false,
+   "niced": false
+  },
+  "result": {
+   "repeatsAsked": 2071,
+   "repeatBusyPct": 0,
+   "repeatBusy": 0,
+   "repeatWaitP50": 2625,
+   "repeatWaitP95": 6341,
+   "repeatAnswerP50": 3483,
+   "repeatAnswerP95": 7223,
+   "raidBusyPct": 0,
+   "saves": 91,
+   "saveP95": 1797,
+   "workerCoreSecondsPerHour": 1274,
+   "workerCpuShare": 0.354,
    "maxWorkers": 3,
    "busyCauses": {
     "repeatHeld": 0,
@@ -487,29 +857,83 @@
    "infernoPerHour": 3
   },
   "fix": {
-   "name": "d + a + b(20 s)",
+   "name": "d + a(pool 1) + b(20 s)",
    "cap": 1,
    "waitMs": 20000,
    "fifo": true,
    "warm": true,
+   "poolSize": 1,
    "narrow": true,
    "noDoubleCount": false,
    "niced": false
   },
   "result": {
-   "repeatsAsked": 2579,
+   "repeatsAsked": 2547,
    "repeatBusyPct": 0,
    "repeatBusy": 0,
    "repeatWaitP50": 0,
-   "repeatWaitP95": 196,
-   "repeatAnswerP50": 464,
-   "repeatAnswerP95": 830,
+   "repeatWaitP95": 515,
+   "repeatAnswerP50": 581,
+   "repeatAnswerP95": 1308,
    "raidBusyPct": 0,
    "saves": 87,
-   "saveP95": 733,
-   "workerCoreSecondsPerHour": 397,
-   "workerCpuShare": 0.11,
-   "maxWorkers": 4,
+   "saveP95": 984,
+   "workerCoreSecondsPerHour": 620,
+   "workerCpuShare": 0.172,
+   "maxWorkers": 1,
+   "busyCauses": {
+    "repeatHeld": 0,
+    "saveRunning": 0,
+    "raidHeld": 0,
+    "finaliseRunning": 0,
+    "other": 0
+   }
+  }
+ },
+ {
+  "scenario": {
+   "cpuScale": 2,
+   "dbScale": 2,
+   "mainLoad": 0.5,
+   "thinkMs": [
+    7000,
+    20000
+   ],
+   "seconds": 1800,
+   "seed": 1,
+   "label": "400-daily background, 20 players farming at once",
+   "dau": 400,
+   "farmers": 20,
+   "handAttackers": 9,
+   "raidsPerHour": 30,
+   "finalisePerHour": 23,
+   "infernoPerHour": 3
+  },
+  "fix": {
+   "name": "d + a(pool 2, niced) + b(20 s)",
+   "cap": 2,
+   "waitMs": 20000,
+   "fifo": true,
+   "warm": true,
+   "poolSize": 2,
+   "narrow": true,
+   "noDoubleCount": true,
+   "niced": true
+  },
+  "result": {
+   "repeatsAsked": 2562,
+   "repeatBusyPct": 0,
+   "repeatBusy": 0,
+   "repeatWaitP50": 0,
+   "repeatWaitP95": 14,
+   "repeatAnswerP50": 516,
+   "repeatAnswerP95": 1098,
+   "raidBusyPct": 0,
+   "saves": 88,
+   "saveP95": 843,
+   "workerCoreSecondsPerHour": 620,
+   "workerCpuShare": 0.172,
+   "maxWorkers": 2,
    "busyCauses": {
     "repeatHeld": 0,
     "saveRunning": 0,
@@ -591,33 +1015,191 @@
    "infernoPerHour": 3
   },
   "fix": {
-   "name": "a. warm worker pool",
+   "name": "a. warm pool of 1 (cap 1)",
    "cap": 1,
    "waitMs": 5000,
    "fifo": false,
    "warm": true,
+   "poolSize": 1,
    "narrow": false,
    "noDoubleCount": false,
    "niced": false
   },
   "result": {
-   "repeatsAsked": 3682,
-   "repeatBusyPct": 0.68,
-   "repeatBusy": 25,
-   "repeatWaitP50": 300,
-   "repeatWaitP95": 2350,
-   "repeatAnswerP50": 792,
-   "repeatAnswerP95": 2858,
+   "repeatsAsked": 3541,
+   "repeatBusyPct": 4.69,
+   "repeatBusy": 166,
+   "repeatWaitP50": 700,
+   "repeatWaitP95": 3600,
+   "repeatAnswerP50": 1261,
+   "repeatAnswerP95": 4209,
+   "raidBusyPct": 10.53,
+   "saves": 84,
+   "saveP95": 905,
+   "workerCoreSecondsPerHour": 808,
+   "workerCpuShare": 0.224,
+   "maxWorkers": 1,
+   "busyCauses": {
+    "repeatHeld": 163,
+    "saveRunning": 1,
+    "raidHeld": 1,
+    "finaliseRunning": 1,
+    "other": 0
+   }
+  }
+ },
+ {
+  "scenario": {
+   "cpuScale": 2,
+   "dbScale": 2,
+   "mainLoad": 0.5,
+   "thinkMs": [
+    7000,
+    20000
+   ],
+   "seconds": 1800,
+   "seed": 1,
+   "label": "400-daily background, 30 players farming at once",
+   "dau": 400,
+   "farmers": 30,
+   "handAttackers": 9,
+   "raidsPerHour": 30,
+   "finalisePerHour": 23,
+   "infernoPerHour": 3
+  },
+  "fix": {
+   "name": "a+c. warm pool of 2, niced, cap 2",
+   "cap": 2,
+   "waitMs": 5000,
+   "fifo": false,
+   "warm": true,
+   "poolSize": 2,
+   "narrow": false,
+   "noDoubleCount": true,
+   "niced": true
+  },
+  "result": {
+   "repeatsAsked": 3777,
+   "repeatBusyPct": 0,
+   "repeatBusy": 0,
+   "repeatWaitP50": 0,
+   "repeatWaitP95": 650,
+   "repeatAnswerP50": 584,
+   "repeatAnswerP95": 1331,
    "raidBusyPct": 0,
-   "saves": 86,
-   "saveP95": 652,
-   "workerCoreSecondsPerHour": 533,
-   "workerCpuShare": 0.148,
+   "saves": 90,
+   "saveP95": 892,
+   "workerCoreSecondsPerHour": 897,
+   "workerCpuShare": 0.249,
    "maxWorkers": 2,
    "busyCauses": {
-    "repeatHeld": 22,
-    "saveRunning": 1,
-    "raidHeld": 2,
+    "repeatHeld": 0,
+    "saveRunning": 0,
+    "raidHeld": 0,
+    "finaliseRunning": 0,
+    "other": 0
+   }
+  }
+ },
+ {
+  "scenario": {
+   "cpuScale": 2,
+   "dbScale": 2,
+   "mainLoad": 0.5,
+   "thinkMs": [
+    7000,
+    20000
+   ],
+   "seconds": 1800,
+   "seed": 1,
+   "label": "400-daily background, 30 players farming at once",
+   "dau": 400,
+   "farmers": 30,
+   "handAttackers": 9,
+   "raidsPerHour": 30,
+   "finalisePerHour": 23,
+   "infernoPerHour": 3
+  },
+  "fix": {
+   "name": "b. FIFO queue, 20 s",
+   "cap": 1,
+   "waitMs": 20000,
+   "fifo": true,
+   "warm": false,
+   "narrow": false,
+   "noDoubleCount": false,
+   "niced": false
+  },
+  "result": {
+   "repeatsAsked": 2093,
+   "repeatBusyPct": 0,
+   "repeatBusy": 0,
+   "repeatWaitP50": 11656,
+   "repeatWaitP95": 15279,
+   "repeatAnswerP50": 12560,
+   "repeatAnswerP95": 16254,
+   "raidBusyPct": 0,
+   "saves": 89,
+   "saveP95": 1506,
+   "workerCoreSecondsPerHour": 1308,
+   "workerCpuShare": 0.363,
+   "maxWorkers": 2,
+   "busyCauses": {
+    "repeatHeld": 0,
+    "saveRunning": 0,
+    "raidHeld": 0,
+    "finaliseRunning": 0,
+    "other": 0
+   }
+  }
+ },
+ {
+  "scenario": {
+   "cpuScale": 2,
+   "dbScale": 2,
+   "mainLoad": 0.5,
+   "thinkMs": [
+    7000,
+    20000
+   ],
+   "seconds": 1800,
+   "seed": 1,
+   "label": "400-daily background, 30 players farming at once",
+   "dau": 400,
+   "farmers": 30,
+   "handAttackers": 9,
+   "raidsPerHour": 30,
+   "finalisePerHour": 23,
+   "infernoPerHour": 3
+  },
+  "fix": {
+   "name": "b. FIFO queue, 30 s",
+   "cap": 1,
+   "waitMs": 30000,
+   "fifo": true,
+   "warm": false,
+   "narrow": false,
+   "noDoubleCount": false,
+   "niced": false
+  },
+  "result": {
+   "repeatsAsked": 2093,
+   "repeatBusyPct": 0,
+   "repeatBusy": 0,
+   "repeatWaitP50": 11656,
+   "repeatWaitP95": 15279,
+   "repeatAnswerP50": 12560,
+   "repeatAnswerP95": 16254,
+   "raidBusyPct": 0,
+   "saves": 89,
+   "saveP95": 1506,
+   "workerCoreSecondsPerHour": 1308,
+   "workerCpuShare": 0.363,
+   "maxWorkers": 2,
+   "busyCauses": {
+    "repeatHeld": 0,
+    "saveRunning": 0,
+    "raidHeld": 0,
     "finaliseRunning": 0,
     "other": 0
    }
@@ -747,29 +1329,83 @@
    "infernoPerHour": 3
   },
   "fix": {
-   "name": "d + a + b(20 s)",
+   "name": "d + a(pool 1) + b(20 s)",
    "cap": 1,
    "waitMs": 20000,
    "fifo": true,
    "warm": true,
+   "poolSize": 1,
    "narrow": true,
    "noDoubleCount": false,
    "niced": false
   },
   "result": {
-   "repeatsAsked": 3871,
+   "repeatsAsked": 3774,
    "repeatBusyPct": 0,
    "repeatBusy": 0,
    "repeatWaitP50": 0,
-   "repeatWaitP95": 250,
-   "repeatAnswerP50": 475,
-   "repeatAnswerP95": 857,
+   "repeatWaitP95": 664,
+   "repeatAnswerP50": 673,
+   "repeatAnswerP95": 1604,
    "raidBusyPct": 0,
-   "saves": 87,
-   "saveP95": 755,
-   "workerCoreSecondsPerHour": 559,
-   "workerCpuShare": 0.155,
-   "maxWorkers": 6,
+   "saves": 86,
+   "saveP95": 1001,
+   "workerCoreSecondsPerHour": 887,
+   "workerCpuShare": 0.246,
+   "maxWorkers": 1,
+   "busyCauses": {
+    "repeatHeld": 0,
+    "saveRunning": 0,
+    "raidHeld": 0,
+    "finaliseRunning": 0,
+    "other": 0
+   }
+  }
+ },
+ {
+  "scenario": {
+   "cpuScale": 2,
+   "dbScale": 2,
+   "mainLoad": 0.5,
+   "thinkMs": [
+    7000,
+    20000
+   ],
+   "seconds": 1800,
+   "seed": 1,
+   "label": "400-daily background, 30 players farming at once",
+   "dau": 400,
+   "farmers": 30,
+   "handAttackers": 9,
+   "raidsPerHour": 30,
+   "finalisePerHour": 23,
+   "infernoPerHour": 3
+  },
+  "fix": {
+   "name": "d + a(pool 2, niced) + b(20 s)",
+   "cap": 2,
+   "waitMs": 20000,
+   "fifo": true,
+   "warm": true,
+   "poolSize": 2,
+   "narrow": true,
+   "noDoubleCount": true,
+   "niced": true
+  },
+  "result": {
+   "repeatsAsked": 3813,
+   "repeatBusyPct": 0,
+   "repeatBusy": 0,
+   "repeatWaitP50": 0,
+   "repeatWaitP95": 139,
+   "repeatAnswerP50": 543,
+   "repeatAnswerP95": 1144,
+   "raidBusyPct": 0,
+   "saves": 88,
+   "saveP95": 1010,
+   "workerCoreSecondsPerHour": 893,
+   "workerCpuShare": 0.248,
+   "maxWorkers": 2,
    "busyCauses": {
     "repeatHeld": 0,
     "saveRunning": 0,
