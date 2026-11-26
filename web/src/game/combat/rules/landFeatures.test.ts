@@ -174,8 +174,10 @@ describe("switched on", () => {
     for (const side of [plain, forest, marsh]) run(side.battle, 600);
     const swings = lost(plain.yard) / 60;
     expect(swings).toBeGreaterThan(0);
-    expect(lost(forest.yard)).toBeCloseTo((swings * 60) / 1.2, 6);
-    expect(lost(marsh.yard)).toBeCloseTo((swings * 60) / 0.9, 6);
+    // Health stays whole, as Flash's `SecNum` keeps it: each swing takes its
+    // share rounded (60 / 0.9 = 66.7 takes 67).
+    expect(lost(forest.yard)).toBe(swings * Math.round(60 / 1.2));
+    expect(lost(marsh.yard)).toBe(swings * Math.round(60 / 0.9));
   });
 
   it("shortens a forest tower's reach after the height: int(int(h x r / 125) x 0.9)", () => {

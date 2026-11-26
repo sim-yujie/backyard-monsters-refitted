@@ -179,8 +179,9 @@ const hatcheryBuilding = (save: HatcherySave, id: number): BuildingData | undefi
 /**
  * Why a hatchery cannot work right now, or null when it can: the original's
  * `_canFunction`, built and at least half health (`BUILDING13.as:262-267`).
- * An upgrade does not stop it taking work or finishing now; the countdown
- * pauses during one, which is the catch-up's business.
+ * An upgrade does not stop its own queue starting or Finish now; the countdown
+ * pauses during one, which is the catch-up's business. The HCC's hand-out
+ * skips an upgrading hatchery (`handOut`).
  */
 const hatcheryIdle = (save: HatcherySave, id: number): "busy" | "damaged" | null => {
   const building = hatcheryBuilding(save, id);
@@ -244,9 +245,16 @@ const startNext = (
 const clear = (hatchery: HatcheryModel) =>
   Object.assign(hatchery, { monster: "", countdown: 0, stage: 0, paidLevel: 0 });
 
+/** True while a hatchery's upgrade is running (`cU` seconds left). */
+const upgrading = (save: HatcherySave, id: number): boolean =>
+  numberOf(hatcheryBuilding(save, id)?.cU) > 0;
+
 /**
  * The HCC's hand-out: every idle hatchery that can work takes the head of the
- * shared queue, in service order (`BUILDING16.as:107-134`).
+ * shared queue, in service order (`BUILDING16.as:107-134`). Unlike Flash, a
+ * hatchery being upgraded takes nothing (owner, 25 Nov 2026): Flash handed it
+ * one monster that then sat paused, hidden under "Upgrading", until the
+ * upgrade ended.
  */
 const handOut = (
   save: HatcherySave,
@@ -256,7 +264,7 @@ const handOut = (
 ) => {
   if (!hccWorks(save)) return;
   for (const hatchery of model.hatcheries) {
-    if (hatchery.monster === "" && hatcheryIdle(save, hatchery.id) === null) {
+    if (hatchery.monster === "" && hatcheryIdle(save, hatchery.id) === null && !upgrading(save, hatchery.id)) {
       startNext(hatchery, model.hcc, levels, rush);
     }
   }

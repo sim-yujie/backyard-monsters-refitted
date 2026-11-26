@@ -63,7 +63,7 @@
     "destroyedBuildings": 22,
     "creepsFlung": 40,
     "creepsKilled": 37,
-    "championHp": 44890.36471753202,
+    "championHp": 44895,
     "damagedBuildings": 23,
     "rngDraws": 2431,
     "checkpoints": [
@@ -85,37 +85,37 @@
       },
       {
         "tick": 4000,
-        "digest": "174463f5189a6c77"
+        "digest": "381bcd7056094286"
       },
       {
         "tick": 4800,
-        "digest": "2ef8e336ccdd481c"
+        "digest": "fc0ed752d72a4ac8"
       },
       {
         "tick": 5600,
-        "digest": "fcd8c42c9b1d8a0e"
+        "digest": "b168410fb557946d"
       },
       {
         "tick": 6400,
-        "digest": "dafec03d44d73c8f"
+        "digest": "36c586d97c72a2c7"
       },
       {
         "tick": 7200,
-        "digest": "cdb50cf4a69f1276"
+        "digest": "8dd76cfafad5f574"
       },
       {
         "tick": 8000,
-        "digest": "6fee09b5a6c5dcc3"
+        "digest": "84c1668f169e1639"
       },
       {
         "tick": 8800,
-        "digest": "f899f25b6aa9744d"
+        "digest": "2bf221999e512f4f"
       },
       {
         "tick": 9600,
-        "digest": "d6ffab636e376579"
+        "digest": "a3a2e2a837044c22"
       }
     ],
-    "digest": "fb4f893d5708a583"
+    "digest": "139cd1b7205803f9"
   }
 }

@@ -282,7 +282,7 @@ describe("the Decoy in a fight", () => {
    * Pokeys by the cage, so the Gorgo comes out to fight them; else one Pokey
    * hits the Town Hall out of the champions' sight, and neither comes out.
    */
-  const cagedBattle = (decoy: boolean, near: boolean) => {
+  const cagedBattle = (decoy: boolean, near: boolean, extra: Partial<BattleOptions> = {}) => {
     const battle = createBattle(
       buildEngineYard({
         buildingdata: {
@@ -299,6 +299,7 @@ describe("the Decoy in a fight", () => {
           { t: 5, l: 2, hp: 6000, pl: 1 },
           { t: 1, l: 2, hp: 5000, pl: 1 },
         ],
+        ...extra,
       },
     );
     const pokeys: AttackEvent = near
@@ -334,6 +335,25 @@ describe("the Decoy in a fight", () => {
     const { battle: plain } = cagedBattle(false, false);
     plain.runTo(plan.explodesAt);
     expect(plain.state().defenderChampions.map((one) => one.hp)).toEqual([6000, 5000]);
+  });
+
+  /**
+   * Whole health (player report, Reii, 25 Nov 2026): Flash keeps a champion's
+   * health in a `SecNum`, whose `Set` rounds it (`com/cc/utils/SecNum.as:27`),
+   * in its cage as on the field. The defender's Monster Defensive Buff takes
+   * 30% off the blast, which leaves a fraction. An attack started under older
+   * rules (`wholeHealth` off) keeps the fraction, as it was fought.
+   */
+  it("rounds the blast on the caged champion to whole health; older rules keep the fraction", () => {
+    const buffs = { defender: { monsterArmour: true } } as const;
+    const whole = cagedBattle(true, false, { buffs });
+    const before = cagedBattle(true, false, { buffs, wholeHealth: false });
+    whole.battle.runTo(plan.explodesAt);
+    before.battle.runTo(plan.explodesAt);
+    const gorgo = whole.battle.state().defenderChampions[1]!.hp;
+    const fraction = before.battle.state().defenderChampions[1]!.hp;
+    expect(Number.isInteger(fraction)).toBe(false);
+    expect(gorgo).toBe(Math.round(fraction));
   });
 
   it("never pulls the basic champion out fighting either; only the blast reaches it", () => {

@@ -1084,6 +1084,36 @@ describe("each monster's own projectile", () => {
     layer.destroy();
   });
 
+  // Live bug 25 Nov 2026 (owner): Fomor's and the Teratorn's shots burst in the air
+  // beside a building. Flash's FIREBALL flies to the footprint's middle
+  // (`FIREBALL.as:107`, `_mc.y + _footprint[0].height / 2`), not to its near edge.
+  it("lands a Teratorn's shot at a building on the footprint's middle, as Flash's FIREBALL", async () => {
+    const { session, layer } = battleOf({ C14: 1 });
+    session.appendFling({ x: -100, y: -100, monsters: { C14: 1 } });
+    await flush();
+    const fired = playUntil(session, 10, layer, () =>
+      layer.creepEffects.shots.some((shot) => shot.buildingId >= 0),
+    );
+    expect(fired).toBe(true);
+    const shot = layer.creepEffects.shots.find((s) => s.buildingId >= 0)!;
+    // `hostOf().centreOf` is the footprint's middle in this test.
+    expect(shot.to).toEqual({ x: 400, y: 400 });
+    layer.destroy();
+  });
+
+  it("lands Fomor's bolt at a building on the footprint's middle", async () => {
+    const { session, layer } = battleOf({ C1: 1 });
+    session.appendFling({ x: -80, y: -80, monsters: {}, champion: { t: 3, l: 1 } });
+    await flush();
+    const fired = playUntil(session, 6, layer, () =>
+      layer.creepEffects.shots.some((shot) => shot.buildingId >= 0),
+    );
+    expect(fired).toBe(true);
+    const shot = layer.creepEffects.shots.find((s) => s.buildingId >= 0)!;
+    expect(shot.to).toEqual({ x: 400, y: 400 });
+    layer.destroy();
+  });
+
   for (const [id, style] of [
     ["C16", "vorg"],
     ["C15", "zafreeti"],
