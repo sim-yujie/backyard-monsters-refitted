@@ -23,6 +23,7 @@ import {
   terrainLimiter,
   takeoverQuoteLimiter,
   autoAttackLimiter,
+  autoAttackQueueLimiter,
   autoAttackPlanLimiter,
   ownArmiesLimiter,
   defencesLimiter,
@@ -101,7 +102,7 @@ import { getAlliances } from "./controllers/maproom/v2/bulk/getAlliances.js";
 import { takeoverCell } from "./controllers/maproom/v2/takeoverCell.js";
 import { declineTakeover } from "./controllers/maproom/v2/declineTakeover.js";
 import { takeoverQuote } from "./controllers/maproom/v2/takeoverQuote.js";
-import { autoAttack, autoAttackPlan, autoAttackReplay, smartMove } from "./controllers/maproom/v2/autoAttack.js";
+import { autoAttack, autoAttackPlan, autoAttackQueue, autoAttackReplay, smartMove } from "./controllers/maproom/v2/autoAttack.js";
 import { transferMonsters } from "./controllers/maproom/v2/transferMonsters.js";
 import { transferBatch } from "./controllers/maproom/v2/transferBatch.js";
 import { ownArmies } from "./controllers/maproom/v2/ownArmies.js";
@@ -304,6 +305,8 @@ router.post("/worldmapv2/autoattackplan", verifyUserAuth, verifyAccountStatus, a
 router.post("/worldmapv2/smartmove", verifyUserAuth, verifyAccountStatus, autoAttackPlanLimiter, logRequest, smartMove);
 router.post("/worldmapv2/autoattack", verifyUserAuth, verifyAccountStatus, autoAttackLimiter, logRequest, autoAttack);
 router.get("/worldmapv2/autoattackreplay", verifyUserAuth, verifyAccountStatus, autoAttackPlanLimiter, autoAttackReplay);
+// Patch 9.1: the player's place in the battle line while their Repeat attack waits.
+router.get("/worldmapv2/autoattackqueue", verifyUserAuth, autoAttackQueueLimiter, autoAttackQueue);
 router.post("/worldmapv2/transferassets", verifyUserAuth, verifyAccountStatus, logRequest, transferMonsters);
 // The world map's move tray (beta 9 #7): every own yard's army, and one move of several pairs.
 router.post("/worldmapv2/ownarmies", verifyUserAuth, verifyAccountStatus, ownArmiesLimiter, logRequest, ownArmies);

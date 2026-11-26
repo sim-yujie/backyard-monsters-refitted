@@ -163,6 +163,19 @@ export const runAutoAttack = (baseid: string, movesKey?: string | null): Promise
     ),
   );
 
+/** The player's place in the battle line (patch 9.1). */
+export interface AutoAttackQueueResponse extends ApiEnvelope {
+  /** 1 = next; null when their Repeat attack is not waiting. */
+  readonly place: number | null;
+}
+
+/**
+ * `GET /worldmapv2/autoattackqueue`: where the player's Repeat attack waits
+ * in the server's battle line, asked while it is out (the working bar).
+ */
+export const getAutoAttackQueue = (): Promise<AutoAttackQueueResponse> =>
+  get<AutoAttackQueueResponse>("/worldmapv2/autoattackqueue");
+
 /** `GET /worldmapv2/autoattackreplay`: the last auto-attack's battle. */
 export const getAutoAttackReplay = (): Promise<AutoAttackReplayResponse> =>
   get<AutoAttackReplayResponse>("/worldmapv2/autoattackreplay");

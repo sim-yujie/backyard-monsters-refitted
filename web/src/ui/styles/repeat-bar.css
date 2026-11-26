@@ -201,6 +201,21 @@
 
 /* ── Stopped, and reduced motion ────────────────────────────────────────── */
 
+/* Halted in the server's battle line: the army stands dimmed (neon round 1). */
+.repeat-bar--waiting .repeat-bar__troop,
+.repeat-bar--waiting .repeat-bar__road::after {
+  opacity: 0.65;
+  filter: saturate(0.6);
+}
+
+/* Classic's dark wood track: a lighter dim, or the army vanishes (neon round 2). */
+:root[data-skin="flash"] .repeat-bar--waiting .repeat-bar__troop {
+  opacity: 0.75;
+  filter: saturate(0.45) brightness(1.1) drop-shadow(0 0 3px rgb(255 240 210 / 30%));
+}
+
+.repeat-bar--waiting,
+.repeat-bar--waiting *,
 .repeat-bar--stopped,
 .repeat-bar--stopped * {
   animation-play-state: paused;

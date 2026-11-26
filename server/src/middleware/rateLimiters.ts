@@ -338,6 +338,22 @@ export const ownArmiesLimiter = RateLimit.middleware({
 });
 
 /**
+ * Rate limit for the Repeat attack's place in the battle line (patch 9.1) -
+ * 90 a minute per user: the working bar asks about once a second, and only
+ * while a Repeat attack is out.
+ */
+export const autoAttackQueueLimiter = RateLimit.middleware({
+  interval: { min: 1 },
+  max: 90,
+  prefixKey: "autoattackqueue",
+  keyGenerator: byUser("autoattackqueue"),
+  handler: async (ctx: Context) => {
+    ctx.status = Status.TOO_MANY_REQUESTS;
+    ctx.body = { error: "Too many requests. Please slow down." };
+  },
+});
+
+/**
  * Rate limit for the auto-attack plan and its replay - 120 a minute per user:
  * the map asks for a camp's plan each time its panel opens.
  */

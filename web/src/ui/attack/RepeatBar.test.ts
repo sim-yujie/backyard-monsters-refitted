@@ -97,9 +97,10 @@ const deferred = <T>() => {
   return { promise, resolve, reject };
 };
 
-const calls = (run: AutoAttackCalls["run"]): AutoAttackCalls => ({
+const calls = (run: AutoAttackCalls["run"], queue?: AutoAttackCalls["queue"]): AutoAttackCalls => ({
   plan: vi.fn(async () => ANSWER),
   run: vi.fn(run),
+  ...(queue && { queue: vi.fn(queue) }),
   replay: vi.fn(async () => ({ error: 0, replay: null })),
   quote: vi.fn(async () => ({ error: 0, baseid: BASEID, eligible: false, reason: "notFound", now: 0 }) as never),
   takeOver: vi.fn(async () => ({})),
@@ -109,7 +110,7 @@ const button = (root: ParentNode, label: string) =>
   [...root.querySelectorAll("button")].find((one) => one.textContent === label) as HTMLButtonElement | undefined;
 
 /** The flow on the map's Repeat attack, its confirm sheet open, Attack now pressed. */
-const pressAttack = async (run: AutoAttackCalls["run"]) => {
+const pressAttack = async (run: AutoAttackCalls["run"], queue?: AutoAttackCalls["queue"]) => {
   const modal = document.createElement("div");
   const timers = fakeTimers();
   const onAttacked = vi.fn();
@@ -118,7 +119,7 @@ const pressAttack = async (run: AutoAttackCalls["run"]) => {
     modal,
     onWatch: vi.fn(),
     onAttacked,
-    calls: calls(run),
+    calls: calls(run, queue),
     progressBar: true,
     barTimers: timers,
     barReducedMotion: false,
@@ -212,6 +213,93 @@ describe("the bar's timing on Repeat attack", () => {
     await timers.advance(10_000);
     expect(modal.children).toHaveLength(0);
     expect(onAttacked).toHaveBeenCalledTimes(1);
+  });
+
+  it("in the server's battle line: the army halts, the hourglass and the place show, then it marches on (patch 9.1)", async () => {
+    const answer = deferred<AutoAttackResponse>();
+    let place: number | null = 3;
+    const queue = vi.fn(async () => ({ error: 0, place }));
+    const { modal, timers, bar, value } = await pressAttack(() => answer.promise, queue);
+    const line = () => modal.querySelector<HTMLElement>(".auto-attack__line-words")!;
+    const note = () => modal.querySelector<HTMLElement>(".auto-attack__line-note")!;
+    const glass = () => modal.querySelector<HTMLImageElement>(".auto-attack__line-icon")!;
+    // Nothing asked at first: almost every Repeat is answered before then.
+    await timers.advance(1000);
+    expect(queue).not.toHaveBeenCalled();
+    expect(glass().hidden).toBe(true);
+    await timers.advance(300);
+    expect(queue).toHaveBeenCalledTimes(1);
+    expect(line().textContent).toBe("Waiting in line · #3");
+    expect(note().hidden).toBe(false);
+    expect(note().textContent).toBe("Nothing spent yet · starts by itself");
+    expect(glass().hidden).toBe(false);
+    expect(glass().getAttribute("src")).toContain("hourglass.png");
+    expect(bar()!.classList.contains("repeat-bar--waiting")).toBe(true);
+    // The army halts where it was.
+    const halted = value();
+    await timers.advance(3000);
+    expect(value()).toBe(halted);
+    place = 1;
+    await timers.advance(1000);
+    expect(line().textContent).toBe("Waiting in line · #1");
+    // The turn comes: the army marches on, from where it halted.
+    place = null;
+    await timers.advance(1000);
+    expect(line().textContent).toBe("Attacking…");
+    expect(glass().hidden).toBe(true);
+    expect(note().hidden).toBe(true);
+    expect(bar()!.classList.contains("repeat-bar--waiting")).toBe(false);
+    await timers.advance(200);
+    expect(value()).toBeGreaterThan(halted);
+    const asked = queue.mock.calls.length;
+    // After a wait, the march from the turn is short (2 s at most), never a jump.
+    answer.resolve(RESULT);
+    const resolvedAt = timers.at();
+    await timers.advance(50);
+    expect(bar()!.classList.contains("repeat-bar--full")).toBe(false);
+    await timers.advance(2000);
+    expect(bar()!.classList.contains("repeat-bar--full")).toBe(true);
+    expect(timers.at() - resolvedAt).toBeLessThanOrEqual(2100);
+    // No more asking once the answer is in.
+    await timers.advance(3000);
+    expect(queue.mock.calls.length).toBe(asked);
+    expect(modal.textContent).toContain("Attack result");
+  });
+
+  it("the answer arrives while the bar still shows a place: it marches on and lands", async () => {
+    const answer = deferred<AutoAttackResponse>();
+    const { modal, timers, bar } = await pressAttack(() => answer.promise, async () => ({ error: 0, place: 2 }));
+    await timers.advance(1300);
+    expect(bar()!.classList.contains("repeat-bar--waiting")).toBe(true);
+    answer.resolve(RESULT);
+    await timers.advance(50);
+    expect(modal.querySelector(".auto-attack__line-words")!.textContent).toBe("Attacking…");
+    await timers.advance(5000);
+    expect(bar()?.classList.contains("repeat-bar--full") ?? true).toBe(true);
+    await timers.advance(REPEAT_BAR_FULL_HOLD_MS);
+    expect(modal.textContent).toContain("Attack result");
+  });
+
+  it("turned away after waiting in line: the bar stops and the busy refusal shows", async () => {
+    const answer = deferred<AutoAttackResponse>();
+    const { modal, timers } = await pressAttack(() => answer.promise, async () => ({ error: 0, place: 4 }));
+    await timers.advance(1300);
+    expect(modal.querySelector(".auto-attack__line-words")!.textContent).toBe("Waiting in line · #4");
+    answer.reject(new Error("The server is busy working out other attacks. Try again in a moment."));
+    await timers.advance(50);
+    expect(modal.querySelector(".repeat-bar")).toBeNull();
+    expect(modal.textContent).toContain("The server is busy");
+  });
+
+  it("a failed ask for the place changes nothing", async () => {
+    const { modal, timers } = await pressAttack(
+      () => new Promise(() => undefined),
+      async () => {
+        throw new Error("offline");
+      },
+    );
+    await timers.advance(4000);
+    expect(modal.querySelector(".auto-attack__line-words")!.textContent).toBe("Attacking…");
   });
 
   it("a flow that asks for no bar keeps the plain line", async () => {

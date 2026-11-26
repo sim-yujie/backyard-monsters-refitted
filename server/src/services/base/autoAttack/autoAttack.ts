@@ -27,7 +27,14 @@ import { isAttackActive } from "../isAttackActive.js";
 import { mapSaveData } from "../mapSaveData.js";
 import { academyLevels } from "../combat/abandonedAttack.js";
 import { catapultLevelOf } from "../combat/bombSpend.js";
-import { ReplayTimeoutError, reserveReplaySlot } from "../combat/replayRunner.js";
+import {
+  REPEAT_QUEUE_WAIT_MS,
+  ReplayTimeoutError,
+  isReplayDeferred,
+  noteReplayBusy,
+  replayAbandonedInWorker,
+  reserveReplaySlot,
+} from "../combat/replayRunner.js";
 import {
   TRIBE_NAMES,
   campKeyOf,
@@ -90,7 +97,11 @@ import {
 
 /** The per-player lock: one auto-attack in progress at a time. */
 export const autoAttackLockKey = (userid: number) => `auto-attack:${userid}`;
-/** Longer than an auto-attack can take: the slot wait plus the finaliser's deadline. */
+/**
+ * Longer than an auto-attack can take: the line's 15 s, the plan check's
+ * 10 s and the landing's 20 s (deadlines counted from the ask, queue time
+ * included), plus its database work.
+ */
 export const AUTO_ATTACK_LOCK_SECONDS = 60;
 
 /** Where the last auto-attack's battle is kept for Watch. */
@@ -342,6 +353,13 @@ export interface AutoAttackResult {
   readonly fee: number;
 }
 
+/**
+ * How long the plan check's battle may take, queue time included. With the
+ * line's {@link REPEAT_QUEUE_WAIT_MS} and the landing's 20 s it stays inside
+ * the {@link AUTO_ATTACK_LOCK_SECONDS} lock.
+ */
+export const PLAN_CHECK_DEADLINE_MS = 10_000;
+
 /** A 32-bit seed for the new battle; a plan's is never reused. */
 const mintSeed = (): number => crypto.getRandomValues(new Uint32Array(1))[0] ?? 0;
 
@@ -360,13 +378,20 @@ const mintSeed = (): number => crypto.getRandomValues(new Uint32Array(1))[0] ?? 
  * @param user - The player, as the request authenticated them.
  * @param baseid - The camp.
  * @param acceptedMoves - The `movesKey` of the moves the player agreed to, if any.
+ * @param signal - Aborted when the player has gone (the request closed): a
+ *   place in the battle line is given up.
  * @throws {ClientSafeError} `autoAttackRefusedErr` for every refusal, before
  *   anything is written (`movesChanged` when the moves needed are not the
  *   ones agreed to); `baseUnderAttackErr` when someone else is attacking
  *   the camp; `attackResultPendingErr` when the replay ran past its deadline
  *   (the attack then lands from its checkpoint).
  */
-export const runAutoAttack = async (user: User, baseid: string, acceptedMoves?: string): Promise<AutoAttackResult> => {
+export const runAutoAttack = async (
+  user: User,
+  baseid: string,
+  acceptedMoves?: string,
+  signal?: AbortSignal
+): Promise<AutoAttackResult> => {
   const userid = user.userid;
   const locked = await redis.set(autoAttackLockKey(userid), "1", "EX", String(AUTO_ATTACK_LOCK_SECONDS), "NX");
   if (locked !== "OK") throw autoAttackRefusedErr("inFlight");
@@ -403,7 +428,11 @@ export const runAutoAttack = async (user: User, baseid: string, acceptedMoves?: 
     // Moves the player has not agreed to are never made: the web asks again.
     if (part.movesKey !== null && part.movesKey !== acceptedMoves) throw autoAttackRefusedErr("movesChanged");
 
-    release = await reserveReplaySlot();
+    // The line for the battle workers (patch 9.1, `replayGate.ts`): a Repeat
+    // waits its turn, its place shown on the working bar
+    // (`autoAttackQueuePlace`), and is turned away "busy" only past the
+    // line's limits. Inside, it holds no worker: only its battles do.
+    release = await reserveReplaySlot(REPEAT_QUEUE_WAIT_MS, { kind: "repeat", who: userid, ...(signal && { signal }) });
     if (!release) throw autoAttackRefusedErr("busy");
 
     // The plan against the camp's fresh layout (beta 9, `planCheck.ts`): a
@@ -412,13 +441,24 @@ export const runAutoAttack = async (user: User, baseid: string, acceptedMoves?: 
     // the attack will, so a fling into a building its own monsters flattened
     // passes here as it did by hand.
     const seed = mintSeed();
-    const clash = await planFlingOnBuilding(
-      stored.plan,
-      camp.key,
-      { academy: userSave.academy, champion: userSave.champion as OwnedChampion[] | null, storedata: userSave.storedata },
-      seed,
-      now
-    );
+    let clash: Awaited<ReturnType<typeof planFlingOnBuilding>>;
+    try {
+      clash = await planFlingOnBuilding(
+        stored.plan,
+        camp.key,
+        { academy: userSave.academy, champion: userSave.champion as OwnedChampion[] | null, storedata: userSave.storedata },
+        seed,
+        now,
+        (input) => replayAbandonedInWorker(input, PLAN_CHECK_DEADLINE_MS)
+      );
+    } catch (err) {
+      // Nothing is spent yet: a check the workers could not fight in time is "busy".
+      if (isReplayDeferred(err)) {
+        noteReplayBusy("repeat");
+        throw autoAttackRefusedErr("busy");
+      }
+      throw err;
+    }
     if (clash) {
       logger.info("Repeat attack by {username} refused: plan for {wmid}/{level} flings on a building", {
         event: "auto-attack-plan-on-building",
