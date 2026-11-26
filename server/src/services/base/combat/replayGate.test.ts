@@ -106,6 +106,13 @@ describe("the line", () => {
     expect(gate.waiting).toBe(0);
   });
 
+  test("a refusal after the door (the plan check ran out of time) is counted and logged too", () => {
+    const { gate, logs } = gateOf();
+    gate.refusedInside("repeat");
+    expect(gate.totals.refused).toBe(1);
+    expect(logs.at(-1)).toMatchObject({ kind: "repeat", outcome: "refused", why: "battle" });
+  });
+
   test("a newcomer never jumps the line, even when a worker is free at that moment", async () => {
     const { gate, free } = gateOf({ free: { now: false } });
     const order: string[] = [];

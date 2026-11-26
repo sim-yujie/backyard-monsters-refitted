@@ -242,6 +242,9 @@ export const reserveReplaySlot = (
 ): Promise<(() => void) | null> =>
   gate.enter({ kind, waitMs, ...(who !== undefined && { who }), ...(signal && { signal }) });
 
+/** Counts and logs a "busy" refusal after the door (`ReplayGate.refusedInside`). */
+export const noteReplayBusy = (kind: GateKind): void => gate.refusedInside(kind);
+
 /** The player's place in line (1 = next), or null when they are not waiting. */
 export const replayQueuePlace = (who: number): number | null => gate.place(who);
 

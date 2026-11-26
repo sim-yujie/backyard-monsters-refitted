@@ -32,8 +32,12 @@ export type GateOutcome = "served" | "refused" | "gone";
 export interface GateLog {
   readonly kind: GateKind;
   readonly outcome: GateOutcome;
-  /** `full`: the line was at its limit on arrival; `timeout`: waited `waitMs`. */
-  readonly why?: "full" | "timeout";
+  /**
+   * `full`: the line was at its limit on arrival; `timeout`: waited `waitMs`;
+   * `battle`: let in, then turned away busy before anything was spent
+   * because its first battle could not be fought in time (Repeat's plan check).
+   */
+  readonly why?: "full" | "timeout" | "battle";
   readonly waitedMs: number;
   /** The place on arrival (1 = next); 0 when turned away on arrival. */
   readonly place: number;
@@ -166,6 +170,16 @@ export class ReplayGate {
       // Someone may go in already (the head, when this one made no difference).
       this.pump();
     });
+  }
+
+  /**
+   * One let in that was turned away busy afterwards, before anything was
+   * spent (Repeat's plan check ran past its deadline): counted and logged as
+   * a refusal like the line's own.
+   */
+  refusedInside(kind: GateKind): void {
+    this.counts.refused++;
+    this.write({ kind, outcome: "refused", why: "battle", waitedMs: 0, place: 0 });
   }
 
   /** Lets in whoever can go now: call when a worker or a turn frees up. */

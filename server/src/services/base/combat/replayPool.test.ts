@@ -237,7 +237,14 @@ describe("the real worker", () => {
   test.skipIf(process.platform !== "linux")(
     "fights at a lower priority (nice +10) and leaves this thread's alone",
     async () => {
-      const niceOf = (task: string) => Number(readFileSync(`/proc/self/task/${task}/stat`, "utf8").split(") ")[1]!.split(" ")[16]);
+      // A thread may end between the listing and the read: it is skipped.
+      const niceOf = (task: string) => {
+        try {
+          return Number(readFileSync(`/proc/self/task/${task}/stat`, "utf8").split(") ")[1]!.split(" ")[16]);
+        } catch {
+          return null;
+        }
+      };
       const pool = poolOf({ workerUrl: REAL_WORKER });
       pool.warm();
       await pool.run(battle(10, 300, 5), LONG);

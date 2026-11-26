@@ -31,6 +31,7 @@ import {
   REPEAT_QUEUE_WAIT_MS,
   ReplayTimeoutError,
   isReplayDeferred,
+  noteReplayBusy,
   replayAbandonedInWorker,
   reserveReplaySlot,
 } from "../combat/replayRunner.js";
@@ -452,7 +453,10 @@ export const runAutoAttack = async (
       );
     } catch (err) {
       // Nothing is spent yet: a check the workers could not fight in time is "busy".
-      if (isReplayDeferred(err)) throw autoAttackRefusedErr("busy");
+      if (isReplayDeferred(err)) {
+        noteReplayBusy("repeat");
+        throw autoAttackRefusedErr("busy");
+      }
       throw err;
     }
     if (clash) {
