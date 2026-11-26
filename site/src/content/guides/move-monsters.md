@@ -24,7 +24,7 @@ Each of your yards shows a **label** with its biggest monster groups and its fre
 
 ## 3. Pick the monsters
 
-The tray at the bottom has one box per monster type. Tap a box, then **−**, **+** or **Max**. **All** fills the free room with every type in turn. Then tap **Bring … here** or **Move …**.
+The tray at the bottom has one box per monster type. Tap a box, then **−**, **+** or **Max**. **All** fills the free room with every type in turn. Then tap the orange **Bring** or **Move** button.
 
 ![Bring to Goo Spring: three yards send monsters, the target shows Full, and the tray has 19 monsters picked](/images/guides/move-map.webp)
 
