@@ -281,7 +281,6 @@ export class YardRenderer {
       this.jobBars.root,
       this.jobBars.helperRoot,
       this.hatchMarks.root,
-      this.helpMarks.front,
       this.helpMarks.root,
       this.buildings.labels,
     );
@@ -291,6 +290,7 @@ export class YardRenderer {
   attach(renderer: Renderer): void {
     this.atlas ??= yardArtAtlas(renderer);
     this.pixi = renderer;
+    this.buildings.useRenderer(renderer);
     this.life.useRenderer(renderer);
     if (!this.mushroomArt) this.loadMushroomArt();
     // The yard follows the season from here on (`game/season.ts`).
@@ -491,6 +491,8 @@ export class YardRenderer {
         );
         this.helpMarks.reposition();
       }
+      // The buildings a visitor can speed up, lit amber; a no-op once none are and none were.
+      this.buildings.setHelpLit(this.helpMarks.active ? this.helpMarks.lit : NO_HELP_LIT);
       this.shakeMushrooms();
       this.popMushrooms(deltaSeconds);
       if (this.turkeysOn) this.turkeys.update(deltaSeconds);
@@ -638,7 +640,6 @@ export class YardRenderer {
       this.jobBars.root,
       this.jobBars.helperRoot,
       this.hatchMarks.root,
-      this.helpMarks.front,
       this.helpMarks.root,
       this.buildings.labels,
     ]) {
@@ -1661,6 +1662,9 @@ export class YardRenderer {
  * mushroom glyph (owner's call, 20 Oct 2026). `PUMPKIN_BASE` is where its
  * bottom sits, as a fraction of its height; scaling keeps it on the ground.
  */
+/** No building lit for a visitor: what `setHelpLit` is handed off a visit. */
+const NO_HELP_LIT: ReadonlyMap<number, number> = new Map();
+
 /** A world rectangle every building is inside: the yard picture culls nothing. */
 const EVERYWHERE: Rect = { x: -1e7, y: -1e7, width: 2e7, height: 2e7 };
 

@@ -12,7 +12,13 @@ import type { Corners } from "./planner/marquee";
  * now,
  *
  * - a pulsing amber **ring on the ground**, around the building's footprint
- *   (`ground`, under the buildings, so it rings the building's foot);
+ *   (`ground`, under the buildings, so it rings the building's foot). Only
+ *   on the ground, all of it: a wall, tower or monster in front hides its
+ *   part of the ring as it would hide the grass (owner's pick F, 26 Nov
+ *   2026; the front-half copy over the buildings from 15 Nov is gone);
+ * - the building itself **lit amber** with a soft amber glow round it
+ *   (`lit`, drawn by `YardBuildings.setHelpLit`), so a building behind a
+ *   wall still reads as one to help;
  * - a big amber **wrench** disc with the painted tools in it, bobbing gently,
  *   where a job bar would stand (`root`, over the buildings);
  * - under the wrench, a small green **tag** with what a speed-up would take
@@ -109,6 +115,8 @@ export interface HelpMarksBox {
 export type MarkCorners = (id: number) => Corners | null;
 
 interface MarkView {
+  /** The building it stands over. */
+  readonly id: number;
   /** Placed at the anchor; scaled against the zoom. */
   readonly badge: Container;
   /** The disc and its tag, moved by the bob. */
@@ -116,8 +124,8 @@ interface MarkView {
   readonly tag: Text | null;
   /** The ground ring, at the footprint's middle; none for a repair only. */
   readonly ring: Graphics | null;
-  /** The ring's front edge, over the buildings; none for a repair only. */
-  readonly edge: Graphics | null;
+  /** How lit the building is drawn (`lit`): 1 standing, flaring and fading as it leaves; 0 for a repair only. */
+  glow: number;
   readonly kind: HelpMarkKind;
   saving: number | null;
 }
@@ -151,14 +159,8 @@ export const EXIT_SECONDS: Readonly<Record<HelpMarkExit, number>> = { pop: 0.9, 
 export class YardHelpMarks {
   /** The wrenches and their tags: over the buildings. */
   readonly root = new Container();
-  /** The rings: under the buildings, over the ground. */
+  /** The rings: under the buildings, over the ground, and nowhere else. */
   readonly ground = new Container();
-  /**
-   * The rings' front edge again, over the buildings and walls and under the
-   * wrenches, so a walled or crowded building's ring still shows (lead's
-   * check, 15 Nov 2026: walls and a champion hid one).
-   */
-  readonly front = new Container();
 
   private marks: readonly HelpMark[] = [];
   private zoom = 1;
@@ -180,7 +182,6 @@ export class YardHelpMarks {
   ) {
     this.root.eventMode = "none";
     this.ground.eventMode = "none";
-    this.front.eventMode = "none";
     this.reducedMotion = options.reducedMotion ?? false;
   }
 
@@ -302,6 +303,19 @@ export class YardHelpMarks {
     this.rebuild();
   }
 
+  /**
+   * How lit each building is drawn, by id, for `YardBuildings.setHelpLit`:
+   * every big wrench's building, held ones too, at 1; one whose wrench is
+   * leaving flares with its pop and fades with it. A repair's building is
+   * not lit: it has no ring either.
+   */
+  get lit(): Map<number, number> {
+    const out = new Map<number, number>();
+    for (const [id, view] of this.views) if (view.glow > 0) out.set(id, view.glow);
+    for (const { view } of this.leaving) if (view.glow > 0 && !out.has(view.id)) out.set(view.id, view.glow);
+    return out;
+  }
+
   /** Advances the pulse and the bob; called every frame while any mark is drawn. */
   update(deltaSeconds: number): void {
     this.playLeaving(Math.max(0, deltaSeconds));
@@ -312,7 +326,6 @@ export class YardHelpMarks {
     for (const view of this.views.values()) {
       if (!view.ring) continue;
       view.ring.alpha = pulse;
-      if (view.edge) view.edge.alpha = pulse;
       view.bob.y = bob;
     }
   }
@@ -344,11 +357,9 @@ export class YardHelpMarks {
       }
       if (!view.ring) continue;
       view.ring.visible = corners !== null;
-      if (view.edge) view.edge.visible = corners !== null;
       if (corners) {
         const middle = middleOf(corners);
         view.ring.position.set(middle.x, middle.y);
-        view.edge?.position.set(middle.x, middle.y);
       }
     }
   }
@@ -408,7 +419,6 @@ export class YardHelpMarks {
     this.clear();
     this.root.destroy({ children: true });
     this.ground.destroy({ children: true });
-    this.front.destroy({ children: true });
   }
 
   /** The marks handed over, plus each held wrench the scene no longer hands over. */
@@ -442,7 +452,7 @@ export class YardHelpMarks {
 
       if (mark.kind !== "speedup") {
         bob.addChild(...smallWrench(mark.kind === "spent"));
-        this.views.set(mark.id, { badge, bob, tag: null, ring: null, edge: null, kind: mark.kind, saving: null });
+        this.views.set(mark.id, { id: mark.id, badge, bob, tag: null, ring: null, glow: 0, kind: mark.kind, saving: null });
         continue;
       }
 
@@ -487,10 +497,7 @@ export class YardHelpMarks {
       const ring = new Graphics();
       drawRing(ring, corners);
       this.ground.addChild(ring);
-      const edge = new Graphics();
-      drawFrontEdge(edge, corners);
-      this.front.addChild(edge);
-      this.views.set(mark.id, { badge, bob, tag, ring, edge, kind: mark.kind, saving: mark.saving });
+      this.views.set(mark.id, { id: mark.id, badge, bob, tag, ring, glow: 1, kind: mark.kind, saving: mark.saving });
     }
     this.update(0);
     this.reposition();
@@ -507,7 +514,6 @@ export class YardHelpMarks {
 const dropView = (view: MarkView): void => {
   view.badge.destroy({ children: true });
   view.ring?.destroy();
-  view.edge?.destroy();
 };
 
 /**
@@ -545,16 +551,16 @@ const easeOut = (t: number): number => 1 - (1 - t) * (1 - t);
  * One frame of a wrench's exit, `age` seconds in, `t` from 0 to 1 over the exit's length.
  * - pop (0.9 s): the disc swells to 1.3x in the first 0.12 s, then pops
  *   (shrinks and fades) by 0.3 s while a cream ring bursts out of it; the
- *   ground ring flares to full and fades by 0.3 s; the tag rises 26 px off
+ *   ground ring flares to full and fades by 0.3 s, the building's light
+ *   flares to 1.6 and fades by 0.45 s; the tag rises 26 px off
  *   the building and fades over the last 0.25 s.
- * - fade (0.3 s): everything fades.
+ * - fade (0.3 s): everything fades, the building's light too.
  */
 const paintExit = (leaving: LeavingView, t: number, age: number): void => {
   const { view, exit, tagBox, overlay } = leaving;
   const disc = view.bob;
   const ring = (alpha: number): void => {
     if (view.ring) view.ring.alpha = alpha;
-    if (view.edge) view.edge.alpha = alpha;
   };
   if (exit === "pop") {
     const swell = 0.12;
@@ -571,6 +577,8 @@ const paintExit = (leaving: LeavingView, t: number, age: number): void => {
       }
     }
     ring(age < 0.08 ? 1 : Math.max(0, 1 - (age - 0.08) / 0.22));
+    // The building's light flares with the pop, then fades out a little after the ring.
+    if (view.ring) view.glow = age < 0.1 ? 1 + 0.6 * (age / 0.1) : Math.max(0, 1.6 * (1 - (age - 0.1) / 0.35));
     if (tagBox) {
       tagBox.y = disc.y + WRENCH_RISE - 26 * easeOut(Math.min(1, age / 0.5));
       const fadeFrom = EXIT_SECONDS.pop - 0.25;
@@ -582,6 +590,7 @@ const paintExit = (leaving: LeavingView, t: number, age: number): void => {
   disc.alpha = 1 - t;
   if (tagBox) tagBox.alpha = 1 - t;
   ring(1 - t);
+  if (view.ring) view.glow = 1 - t;
 };
 
 /**
@@ -674,26 +683,4 @@ const drawRing = (ring: Graphics, corners: Corners | null): void => {
     .stroke({ width: 11, color: RING_DARK, alpha: 0.85 })
     .ellipse(0, 0, rx, ry)
     .stroke({ width: 6, color: RING_EDGE, alpha: 1 });
-};
-
-/**
- * The ring's front half again (the arc nearest the viewer), dark band and
- * bright edge, for the layer over the buildings: it is the part a wall or a
- * monster in front would hide, and it stands in front of the building's foot.
- */
-const drawFrontEdge = (edge: Graphics, corners: Corners | null): void => {
-  edge.clear();
-  if (!corners) return;
-  const { rx, ry } = ringRadii(corners);
-  const arc = (): Graphics => {
-    const steps = 32;
-    edge.moveTo(rx, 0);
-    for (let i = 1; i <= steps; i += 1) {
-      const t = (Math.PI * i) / steps;
-      edge.lineTo(rx * Math.cos(t), ry * Math.sin(t));
-    }
-    return edge;
-  };
-  arc().stroke({ width: 9, color: RING_DARK, alpha: 0.8, cap: "round" });
-  arc().stroke({ width: 4.5, color: RING_EDGE, alpha: 1, cap: "round" });
 };

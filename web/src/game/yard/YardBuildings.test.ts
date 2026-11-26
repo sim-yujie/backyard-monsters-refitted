@@ -1,12 +1,13 @@
 // @vitest-environment jsdom
 // jsdom: a colour-matrix filter asks for a canvas when it is made.
 import { describe, expect, it, vi } from "vitest";
-import { Assets, Sprite, Texture, type ColorMatrixFilter } from "pixi.js";
+import { Assets, RenderTexture, Sprite, Texture, type ColorMatrixFilter, type Renderer } from "pixi.js";
 import { creepZIndex } from "@/game/attack/AttackBattleLayer";
 import type { BaseLoadResponse } from "@/api/types";
 import type { YardArtAtlas } from "./yardAtlas";
 import { HIGHLIGHT_MATRIX, UPGRADE_FADE_ALPHA, YardBuildings } from "./YardBuildings";
 import { readWork } from "./buildingWork";
+import { litTint } from "./helpGlow";
 import { rowOf } from "./buildingCosts";
 import { artFor, readYard } from "./yardModel";
 import { RETRY_DELAYS_MS, versionedArt } from "./retryLoad";
@@ -502,6 +503,81 @@ describe("YardBuildings.setFaded (the upgrade preview, beta 8)", () => {
       buildings.setFaded(2);
       buildings.show(readYard(fortifiedSniper()), fakeAtlas());
       expect(buildings.fadedId).toBeNull();
+      buildings.destroy();
+    } finally {
+      load.mockRestore();
+    }
+  });
+});
+
+describe("YardBuildings.setHelpLit (a friend's visit, owner's pick F, 26 Nov 2026)", () => {
+  const everywhere = { x: -10_000, y: -10_000, width: 20_000, height: 20_000 };
+  const lit = litTint(0xffffff, 1);
+  const tinted = (buildings: YardBuildings): number =>
+    buildings.tops.children.filter((child) => child instanceof Sprite && child.tint === lit).length;
+  const settle = async (buildings: YardBuildings): Promise<void> => {
+    for (let i = 0; i < 5; i += 1) {
+      for (let j = 0; j < 5; j += 1) await Promise.resolve();
+      buildings.draw(everywhere);
+    }
+  };
+  const fakeRenderer = () => ({ generateTexture: vi.fn(() => RenderTexture.create({ width: 4, height: 4 })) });
+
+  it("tints a building and its strip amber with a glow behind and a lift over it, and puts it back", async () => {
+    const load = vi.spyOn(Assets, "load").mockImplementation((() => Promise.resolve(Texture.WHITE)) as typeof Assets.load);
+    try {
+      const buildings = new YardBuildings();
+      const renderer = fakeRenderer();
+      buildings.useRenderer(renderer as unknown as Renderer);
+      buildings.show(readYard(yardResponse()), fakeAtlas());
+      await settle(buildings);
+      const before = buildings.tops.children.length;
+
+      buildings.setHelpLit(new Map([[2, 1]]));
+      expect(buildings.helpLitOf(2)).toBe(1);
+      expect(buildings.helpLitOf(1)).toBe(0);
+      // The sniper's top and its gun strip; the trap is left alone.
+      expect(tinted(buildings)).toBe(2);
+      // One glow baked: behind the building, and laid over it adding light.
+      expect(renderer.generateTexture).toHaveBeenCalledTimes(1);
+      expect(buildings.tops.children.length).toBe(before + 2);
+      expect(buildings.tops.children.filter((child) => child.blendMode === "add")).toHaveLength(1);
+      // No filter is left on any building: the light costs no pass a frame.
+      expect(buildings.tops.children.some((child) => (child.filters as unknown[] | null)?.length)).toBe(false);
+
+      // The yard is shown again after a help: lit again next frame, from the same baked glow.
+      buildings.show(readYard(yardResponse()), fakeAtlas());
+      await settle(buildings);
+      expect(buildings.helpLitOf(2)).toBe(0);
+      buildings.setHelpLit(new Map([[2, 1]]));
+      expect(tinted(buildings)).toBe(2);
+      expect(renderer.generateTexture).toHaveBeenCalledTimes(1);
+
+      // Helped, or the visit left: back to how it was.
+      buildings.setHelpLit(new Map());
+      expect(tinted(buildings)).toBe(0);
+      expect(buildings.tops.children.length).toBe(before);
+      buildings.destroy();
+    } finally {
+      load.mockRestore();
+    }
+  });
+
+  it("lights a picture that arrives after the building was lit", async () => {
+    let arrive: (texture: Texture) => void = () => {};
+    const load = vi.spyOn(Assets, "load").mockImplementation(((url: string) =>
+      url.includes("sniper") && /body|top/.test(url)
+        ? new Promise<Texture>((resolve) => (arrive = resolve))
+        : Promise.resolve(Texture.WHITE)) as typeof Assets.load);
+    try {
+      const buildings = new YardBuildings();
+      buildings.show(readYard(yardResponse()), fakeAtlas());
+      await settle(buildings);
+      buildings.setHelpLit(new Map([[2, 1]]));
+      const early = tinted(buildings);
+      arrive(Texture.WHITE);
+      await settle(buildings);
+      expect(tinted(buildings)).toBe(early + 1);
       buildings.destroy();
     } finally {
       load.mockRestore();

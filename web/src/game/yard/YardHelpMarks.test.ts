@@ -167,13 +167,38 @@ describe("YardHelpMarks", () => {
     expect(marks.discs[0]).toMatchObject({ y: 50 - 32, visible: true });
   });
 
-  it("draws each ring's front edge over the buildings, none for a repair", () => {
+  it("draws each ring on the ground only, none for a repair (owner's pick F, 26 Nov 2026)", () => {
     const marks = new YardHelpMarks(anchor, corners);
     marks.set([speedup(1), repair(2)]);
     expect(marks.ground.children).toHaveLength(1);
-    expect(marks.front.children).toHaveLength(1);
+    expect(marks).not.toHaveProperty("front");
     marks.set([]);
-    expect(marks.front.children).toHaveLength(0);
+    expect(marks.ground.children).toHaveLength(0);
+  });
+
+  it("lights each big wrench's building, not a repair's, and lets it go with the wrench", () => {
+    const marks = new YardHelpMarks(anchor, corners);
+    marks.set([speedup(1), repair(2), spent(3)]);
+    expect(marks.lit).toEqual(new Map([[1, 1]]));
+    marks.set([]);
+    expect(marks.lit).toEqual(new Map());
+  });
+
+  it("keeps a held building lit, flares it with the pop and fades it out", () => {
+    const marks = new YardHelpMarks(anchor, corners);
+    marks.set([speedup(1), speedup(2)]);
+    marks.hold([1, 2]);
+    // The help landed: the scene hands over neither, both still lit while held.
+    marks.set([]);
+    expect(marks.lit).toEqual(new Map([[1, 1], [2, 1]]));
+    marks.leave(1, "pop");
+    marks.update(0.08);
+    expect(marks.lit.get(1)!).toBeGreaterThan(1);
+    expect(marks.lit.get(2)).toBe(1);
+    marks.update(0.5);
+    expect(marks.lit.has(1)).toBe(false);
+    marks.releaseHeld();
+    expect(marks.lit).toEqual(new Map());
   });
 
   it("names the world box its big wrenches take: highest anchor to lowest ring; a repair is left out", () => {
@@ -195,7 +220,7 @@ describe("YardHelpMarks", () => {
     expect(marks.drawnSpent).toEqual([2]);
     expect(discFill(marks, 0)).toBe(0x9aa1a8);
     expect(marks.ground.children).toHaveLength(0);
-    expect(marks.front.children).toHaveLength(0);
+    expect(marks.lit).toEqual(new Map());
     expect(marks.tags).toEqual(new Map([[2, null]]));
     expect(marks.discs).toEqual([]);
     expect(marks.worldBox()).toBeNull();
