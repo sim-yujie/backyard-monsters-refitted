@@ -9,12 +9,14 @@ import { RedisClient } from "bun";
  * own channel, relations kept from their own answer as the map keeps them) must equal the
  * viewer's own `getarea` answer, cell for cell.
  *
- * Opt-in like the other database tests: runs only when LIVE_MAP_TEST_DB names a throwaway copy
- * made from `inferno_mon` (yardtester 2503 and agenttester 2505 side by side, yardtester attacked
- * agenttester), never the shared `bym`, with REDIS_URL on the helper's own Redis slot. Reads only
- * (and the sight cache in that slot).
+ * Opt-in, and only on a developer PC: runs when LIVE_MAP_EQUIV_DB names a throwaway copy made from
+ * `inferno_mon` (yardtester 2503 and agenttester 2505 side by side, yardtester attacked
+ * agenttester), never the shared `bym`, with REDIS_URL on the helper's own Redis slot. CI's empty
+ * test database has none of those players, so CI skips it. Reads only (and the sight cache in
+ * that slot). Run: LIVE_MAP_EQUIV_DB=<copy> DB_NAME=<copy> REDIS_URL=redis://localhost:6379/<n>
+ * bun test src/services/maproom/live/liveCells.db.test.ts
  */
-const dbName = process.env.LIVE_MAP_TEST_DB;
+const dbName = process.env.LIVE_MAP_EQUIV_DB;
 const redisUrl = process.env.REDIS_URL ?? "";
 
 const postgres: { orm?: MikroORM; em?: unknown } = {};
@@ -45,7 +47,7 @@ describe.skipIf(!dbName)("live map pushes equal getarea, per viewer (stage 2)", 
   const seen = { own: 0, other: 0, hidden: 0, ground: 0 };
 
   beforeAll(async () => {
-    if (dbName === "bym") throw new Error("LIVE_MAP_TEST_DB must be a throwaway database, not bym");
+    if (dbName === "bym") throw new Error("LIVE_MAP_EQUIV_DB must be a throwaway database, not bym");
     if (!/\/(1[0-9]|[2-9])$/.test(redisUrl)) throw new Error("REDIS_URL must name the helper's own Redis slot");
     orm = await MikroORM.init({ ...ormConfig, dbName, debug: false, pool: { min: 0, max: 4 } });
     postgres.orm = orm;
