@@ -234,27 +234,90 @@ const cachedOwnSight = async (user: User): Promise<CachedHalf> => {
 };
 
 /**
- * The alliance union, cached for {@link ALLIANCE_SIGHT_CACHE_TTL_SECONDS}, or
- * only until the first member's Flinger upgrade runs out, when sooner. A
- * rebuild that overlapped a drop (its mark was dropped while it read) is kept
- * for the short {@link SIGHT_CACHE_TTL_SECONDS} only, as before the long life.
+ * A copy of the alliance union kept past its life, to serve while one process rebuilds it (beta 9
+ * live map, stage 2: a full alliance's rebuild costs ~45 ms, and before this every reader that
+ * found the union gone rebuilt it at once, in parallel, each overwriting the others).
  */
-const cachedAllianceSight = async (allianceId: number, worldid: string): Promise<CachedHalf> => {
+export const allianceSightOldKey = (allianceId: number): string => `sight:ally:${allianceId}:old`;
+/** The rebuild lock: only its holder rebuilds the union (SET NX). */
+export const allianceSightLockKey = (allianceId: number): string => `sight:ally:${allianceId}:lock`;
+/** The old copy is never served when older than this. */
+export const ALLIANCE_SIGHT_OLD_TTL_SECONDS = 600;
+/** A rebuild lock left by a process that died runs out after this. */
+const REBUILD_LOCK_TTL_SECONDS = 10;
+/**
+ * The union's shortest life, even when a member's Flinger finishes sooner: with one finish a
+ * second away it used to be rebuilt every second. A circle grown by a Flinger finish shows up to
+ * this late on the map.
+ */
+export const ALLIANCE_SIGHT_MIN_TTL_SECONDS = 15;
+/** How long a reader with no old copy waits for the lock holder's rebuild before building its own. */
+const REBUILD_WAIT_MS = 2_000;
+const REBUILD_POLL_MS = 20;
+
+/** How a caller takes a union being rebuilt elsewhere. */
+export interface SightReadOptions {
+  /**
+   * Wait for the rebuild rather than take the old copy (the live map's socket, which cuts every
+   * push to the sight it reads: an old union there would show cells a mate's leaving just hid).
+   */
+  waitForRebuild?: boolean;
+}
+
+/**
+ * The alliance union, cached for {@link ALLIANCE_SIGHT_CACHE_TTL_SECONDS}, or
+ * only until the first member's Flinger upgrade runs out, when sooner (but at
+ * least {@link ALLIANCE_SIGHT_MIN_TTL_SECONDS}). A rebuild that overlapped a
+ * drop (its mark was dropped while it read) is kept for the short
+ * {@link SIGHT_CACHE_TTL_SECONDS} only, as before the long life, and never
+ * over a newer rebuild's copy.
+ *
+ * One process rebuilds at a time (a Redis SET NX lock); while it does, the
+ * others serve the old copy ({@link allianceSightOldKey}), or wait for the
+ * rebuild when they have none (or `waitForRebuild`), and rebuild themselves
+ * only if it never comes.
+ */
+const cachedAllianceSight = async (allianceId: number, worldid: string, options: SightReadOptions = {}): Promise<CachedHalf> => {
   const key = allianceSightKey(allianceId);
   const cached = await readCached(key);
   if (cached) return cached;
 
-  const buildKey = allianceSightBuildKey(allianceId);
-  const mark = `${process.pid}:${Date.now()}:${Math.random()}`;
-  await redis.set(buildKey, mark, "EX", BUILD_MARK_TTL_SECONDS);
-  const { half, nextChangeIn } = await loadAllianceSight(allianceId, worldid);
-  const overlapped = (await redis.get(buildKey)) !== mark;
+  const lockKey = allianceSightLockKey(allianceId);
+  const token = `${process.pid}:${Date.now()}:${Math.random()}`;
+  const locked = (await redis.set(lockKey, token, "EX", String(REBUILD_LOCK_TTL_SECONDS), "NX")) !== null;
+  if (!locked) {
+    if (!options.waitForRebuild) {
+      const old = await readCached(allianceSightOldKey(allianceId));
+      if (old) return old;
+    }
+    for (let waited = 0; waited < REBUILD_WAIT_MS; waited += REBUILD_POLL_MS) {
+      await Bun.sleep(REBUILD_POLL_MS);
+      const built = await readCached(key);
+      if (built) return built;
+    }
+  }
 
-  const ttl = overlapped
-    ? SIGHT_CACHE_TTL_SECONDS
-    : Math.max(1, Math.min(ALLIANCE_SIGHT_CACHE_TTL_SECONDS, nextChangeIn ?? ALLIANCE_SIGHT_CACHE_TTL_SECONDS));
-  await redis.setex(key, ttl, JSON.stringify(half));
-  return half;
+  try {
+    const buildKey = allianceSightBuildKey(allianceId);
+    const mark = `${process.pid}:${Date.now()}:${Math.random()}`;
+    await redis.set(buildKey, mark, "EX", BUILD_MARK_TTL_SECONDS);
+    const { half, nextChangeIn } = await loadAllianceSight(allianceId, worldid);
+    const overlapped = (await redis.get(buildKey)) !== mark;
+
+    const text = JSON.stringify(half);
+    if (overlapped) {
+      // Read across a drop: short, and only where no newer rebuild has written already.
+      await redis.set(key, text, "EX", String(SIGHT_CACHE_TTL_SECONDS), "NX");
+    } else {
+      const life = Math.min(ALLIANCE_SIGHT_CACHE_TTL_SECONDS, nextChangeIn ?? ALLIANCE_SIGHT_CACHE_TTL_SECONDS);
+      await redis.setex(key, Math.max(ALLIANCE_SIGHT_MIN_TTL_SECONDS, Math.ceil(life)), text);
+      await redis.setex(allianceSightOldKey(allianceId), ALLIANCE_SIGHT_OLD_TTL_SECONDS, text);
+    }
+    return half;
+  } finally {
+    // Released only if still ours (it may have run out and been taken; a drop also frees it).
+    if (locked && (await redis.get(lockKey)) === token) await redis.del(lockKey);
+  }
 };
 
 /**
@@ -270,7 +333,7 @@ const cachedAllianceSight = async (allianceId: number, worldid: string): Promise
  * @param user - The player. `user.save` is populated here if it is not
  *   already (`user.alliance_id` is a plain column, always loaded).
  */
-export const getPlayerSight = async (user: User): Promise<PlayerSight> => {
+export const getPlayerSight = async (user: User, options: SightReadOptions = {}): Promise<PlayerSight> => {
   await postgres.em.populate(user, ["save"], {
     fields: ["save.basesaveid", ...SIGHT_SAVE_FIELDS.map((field) => `save.${field}` as const)],
   });
@@ -280,7 +343,7 @@ export const getPlayerSight = async (user: User): Promise<PlayerSight> => {
 
   const own = await cachedOwnSight(user);
   const ally = user.alliance_id
-    ? await cachedAllianceSight(user.alliance_id, save.worldid)
+    ? await cachedAllianceSight(user.alliance_id, save.worldid, options)
     : EMPTY_HALF;
 
   // Conquest's full Teratorn (+1 attack reach) widens every circle by the
@@ -326,7 +389,9 @@ export const invalidatePlayerSight = (userid: number): Promise<number> => {
  */
 export const invalidateAllianceSight = (allianceId: number): Promise<number> => {
   markSightAlliances([allianceId]);
-  return redis.del(allianceSightKey(allianceId), allianceSightBuildKey(allianceId));
+  // The old copy stays (served while the next rebuild runs); a running rebuild's lock goes, so the
+  // next reader rebuilds from the new membership at once instead of waiting for the old one.
+  return redis.del(allianceSightKey(allianceId), allianceSightBuildKey(allianceId), allianceSightLockKey(allianceId));
 };
 
 /** A player's alliance, read fresh for a caller holding only their id. */

@@ -17,6 +17,8 @@ beforeEach(() => {
     alliances: () => {},
     sightUsers: () => {},
     sightAlliances: () => {},
+    relations: () => {},
+    revealsOf: () => {},
   });
 });
 afterEach(() => setLiveMarkSink(null));

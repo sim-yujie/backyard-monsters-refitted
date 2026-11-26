@@ -8,6 +8,7 @@ const { User } = await import("../../../database/models/user.model.js");
 const { WorldMapCell } = await import("../../../database/models/worldmapcell.model.js");
 const { Alliance } = await import("../../../database/models/alliance.model.js");
 const { Truce } = await import("../../../database/models/truce.model.js");
+const { AttackLogs } = await import("../../../database/models/attacklogs.model.js");
 
 /** Which changes mark the map (beta 9 live map): the fields a cell shows, nothing else. */
 const got: string[] = [];
@@ -22,6 +23,8 @@ beforeEach(() => {
     alliances: (ids) => got.push(`alliances:${ids.join(",")}`),
     sightUsers: () => {},
     sightAlliances: () => {},
+    relations: (pairs) => got.push(`relations:${pairs.map((pair) => pair.join("/")).join(" ")}`),
+    revealsOf: (ids) => got.push(`reveals:${ids.join(",")}`),
   });
 });
 afterEach(() => setLiveMarkSink(null));
@@ -62,6 +65,21 @@ describe("marksFor", () => {
     expect(got[0]).toContain("50/60");
   });
 
+  test("a base that comes, moves or changes hands marks its owners' reveals (their defenders' fog); a cell's other fields do not", () => {
+    const cell = Object.assign(new WorldMapCell(undefined as never, 0, 0, 0), { x: 10, y: 20, uid: 5, map_version: 2, world: { uuid: "w1" } });
+    run(changeSet(cell, "create", { uid: 5 }));
+    expect(got).toContain("reveals:5");
+    got.length = 0;
+    run(changeSet(cell, "update", { uid: 5 }, { x: 10, y: 20, uid: 4 }));
+    expect(got).toContain("reveals:5,4");
+    got.length = 0;
+    run(changeSet(cell, "update", { x: 10 }, { x: 50, y: 60, uid: 5 }));
+    expect(got).toContain("reveals:5,5");
+    got.length = 0;
+    run(changeSet(cell, "update", { terrainHeight: 120 }, { x: 10, y: 20, uid: 5 }));
+    expect(got.filter((line) => line.startsWith("reveals"))).toEqual([]);
+  });
+
   test("Map Room 1 cells never mark", () => {
     const cell = Object.assign(new WorldMapCell(undefined as never, 0, 0, 0), { x: 10, y: 20, map_version: 1, world: { uuid: "w1" } });
     run(changeSet(cell, "create", {}));
@@ -83,9 +101,18 @@ describe("marksFor", () => {
     expect(got).toEqual(["alliances:4"]);
   });
 
-  test("a truce made or answered marks both players' cells", () => {
+  test("a truce made or answered is a relation between the two players, nothing public", () => {
     const truce = Object.assign(new Truce(), { initiator_userid: 3, recipient_userid: 4 });
     run(changeSet(truce, "update", { status: 2 }));
-    expect(got).toEqual(["users:3,4"]);
+    expect(got).toEqual(["relations:3/4"]);
+  });
+
+  test("a new attack log is a relation between attacker and defender (`ak`, `ho`)", () => {
+    const log = Object.assign(new AttackLogs(), { attacker_userid: 5, defender_userid: 6 });
+    run(changeSet(log, "create", {}));
+    expect(got).toEqual(["relations:5/6"]);
+    got.length = 0;
+    run(changeSet(log, "update", { attacktime: 1 }));
+    expect(got).toEqual([]);
   });
 });

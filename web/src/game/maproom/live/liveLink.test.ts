@@ -160,3 +160,74 @@ describe("LiveLink", () => {
     link.stop();
   });
 });
+
+describe("LiveLink cells and catch-up (stage 2)", () => {
+  const withCells = (take: () => boolean) => {
+    const frames: unknown[] = [];
+    const own: unknown[] = [];
+    const redo: number[][] = [];
+    const link = new LiveLink({
+      url: "ws://x",
+      token: () => "tok",
+      watchList: () => watch,
+      onVersions: () => {},
+      onCells: (frame) => (frames.push(frame), take()),
+      onOwn: (cells) => own.push(cells),
+      onRedo: (zones) => redo.push(zones),
+      onSight: () => {},
+      socket: () => {
+        const socket = new FakeSocket();
+        sockets.push(socket);
+        return socket;
+      },
+      timers: { setTimeout, clearTimeout, setInterval, clearInterval },
+    });
+    return { link, frames, own, redo };
+  };
+
+  it("hands on pushed cells, own cells and the players whose relation changed", () => {
+    const { link, frames, own, redo } = withCells(() => true);
+    const socket = signIn(link);
+    socket.hear({ type: "live.cells", id: "5-0", z: [[1, 4]], c: [[12, 13, { uid: 3 }]], ad: [{ alliance_id: 2 }], rz: [1] });
+    socket.hear({ type: "live.own", c: [[12, 13, { uid: 1, mine: 1 }]] });
+    socket.hear({ type: "live.redo", u: [7, 8] });
+    expect(frames).toEqual([{ id: "5-0", z: [[1, 4]], c: [[12, 13, { uid: 3 }]], ad: [{ alliance_id: 2 }], rz: [1] }]);
+    expect(own).toEqual([[[12, 13, { uid: 1, mine: 1 }]]]);
+    expect(redo).toEqual([[7, 8]]);
+    expect(link.seenId).toBe("5-0");
+  });
+
+  it("after a reconnect the first watch asks for what was missed since the last push taken", () => {
+    const { link } = withCells(() => true);
+    const first = signIn(link);
+    first.hear({ type: "live.cells", id: "7-0", z: [[1, 4]], c: [] });
+    first.hear({ type: "live.cells", id: "6-3", z: [[1, 3]], c: [] });
+    first.drop();
+    vi.advanceTimersByTime(FIRST_RETRY_MS);
+    const second = sockets.at(-1)!;
+    second.opened();
+    second.hear({ type: "live.ok" });
+    expect(second.sent[1]).toEqual({ type: "live.watch", z: [1, 2], since: "7-0" });
+  });
+
+  it("a push the map did not take (hidden tab) is not counted: coming back replays it", () => {
+    const { link } = withCells(() => false);
+    const socket = signIn(link);
+    socket.hear({ type: "live.cells", id: "9-0", z: [[1, 4]], c: [] });
+    expect(link.seenId).toBeNull();
+    socket.sent.length = 0;
+    link.check();
+    expect(socket.sent).toEqual([{ type: "live.watch", z: [1, 2] }]);
+  });
+
+  it("the tab coming back replays from the last push; the 5-minute check does not", () => {
+    const { link } = withCells(() => true);
+    const socket = signIn(link);
+    socket.hear({ type: "live.cells", id: "9-0", z: [[1, 4]], c: [] });
+    socket.sent.length = 0;
+    vi.advanceTimersByTime(CHECK_MS);
+    expect(socket.sent.at(-1)).toEqual({ type: "live.watch", z: [1, 2] });
+    link.check();
+    expect(socket.sent.at(-1)).toEqual({ type: "live.watch", z: [1, 2], since: "9-0" });
+  });
+});

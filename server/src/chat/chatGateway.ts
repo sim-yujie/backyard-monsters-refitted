@@ -27,9 +27,9 @@ import { MODERATORS_REFRESH_MS, refreshChatModerators } from "./chatModerators.j
 import { refreshWatchWords, WATCH_WORDS_REFRESH_MS } from "./chatWatchWords.js";
 import { clients, type SocketData } from "./chatState.js";
 import { initTransport, subscribeControl, subscribeLive } from "./chatTransport.js";
-import { closeLive, fanOutSight, fanOutZones, initLiveGateway, routeLive } from "./liveGateway.js";
+import { closeLive, fanOutOwn, fanOutSight, fanOutZones, initLiveGateway, routeLive } from "./liveGateway.js";
 import { liveGatewayDeps } from "./liveGatewayDeps.js";
-import { LIVE_SIGHT_CHANNEL, LIVE_ZONES_CHANNEL } from "../services/maproom/live/liveZones.js";
+import { LIVE_OWN_CHANNEL, LIVE_SIGHT_CHANNEL, LIVE_ZONES_CHANNEL } from "../services/maproom/live/liveZones.js";
 import { ChatControlType } from "../enums/Chat.js";
 
 type ServerWebSocket<T> = import("bun").ServerWebSocket<T>;
@@ -50,6 +50,7 @@ export const initGateway = () => {
     subscribeControl(handleControlMessage);
     subscribeLive(LIVE_ZONES_CHANNEL, fanOutZones);
     subscribeLive(LIVE_SIGHT_CHANNEL, (payload) => void fanOutSight(payload));
+    subscribeLive(LIVE_OWN_CHANNEL, fanOutOwn);
   });
   initMaintenanceWatch();
 };

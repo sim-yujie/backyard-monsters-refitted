@@ -1,13 +1,14 @@
 import type { ChangeSet, EventSubscriber, FlushEventArgs, TransactionEventArgs } from "@mikro-orm/core";
 
 import { Alliance } from "../../../database/models/alliance.model.js";
+import { AttackLogs } from "../../../database/models/attacklogs.model.js";
 import { Save } from "../../../database/models/save.model.js";
 import { Truce } from "../../../database/models/truce.model.js";
 import { User } from "../../../database/models/user.model.js";
 import { WorldMapCell } from "../../../database/models/worldmapcell.model.js";
 import { MapRoomVersion } from "../../../enums/MapRoom.js";
 import { calculateBaseLevel } from "../../base/calculateBaseLevel.js";
-import { markAlliances, markCells, markSaveOwners, markSaves, markUsers } from "./liveMarks.js";
+import { markAlliances, markCells, markRelations, markRevealsOf, markSaveOwners, markSaves, markUsers } from "./liveMarks.js";
 
 /**
  * The live map's hook on every ORM write (beta 9, stage 1): a flush that
@@ -91,11 +92,16 @@ export const marksFor = (changeSet: ChangeSet<object>): Mark[] => {
     const world = worldOf(cell);
     if (!world) return [];
     const coords = around(cell.x, cell.y);
-    const before = changeSet.originalEntity as { x?: number; y?: number } | undefined;
-    if (before && typeof before.x === "number" && typeof before.y === "number" && (before.x !== cell.x || before.y !== cell.y)) {
-      coords.push(...around(before.x, before.y));
+    const before = changeSet.originalEntity as { x?: number; y?: number; uid?: number } | undefined;
+    const moved = !!before && typeof before.x === "number" && typeof before.y === "number" && (before.x !== cell.x || before.y !== cell.y);
+    if (moved) coords.push(...around(before!.x!, before!.y!));
+    const marks: Mark[] = [() => markCells(world, coords)];
+    // A base that came, went, moved or changed hands: revealed in the fog of whoever its owners attacked.
+    if (changeSet.type !== "update" || moved || changed.includes("uid")) {
+      const owners = [cell.uid, before?.uid].filter((uid): uid is number => typeof uid === "number");
+      marks.push(() => markRevealsOf(owners));
     }
-    return [() => markCells(world, coords)];
+    return marks;
   }
 
   if (entity instanceof Save) {
@@ -105,10 +111,6 @@ export const marksFor = (changeSet: ChangeSet<object>): Mark[] => {
     const id = entity.basesaveid;
     const marks: Mark[] = [];
     if (changed.some((field) => SAVE_MAP_FIELDS.has(field))) {
-      // `LIVE_MAP_TRACE=1` (a local check of how often a real session marks the map): which fields.
-      if (process.env.LIVE_MAP_TRACE === "1") {
-        console.log(`[live-map] save ${id}: ${changed.filter((field) => SAVE_MAP_FIELDS.has(field)).join(",")}`);
-      }
       marks.push(() => markSaves([id]));
     }
     if (changed.includes("points") || changed.includes("basevalue")) {
@@ -127,9 +129,17 @@ export const marksFor = (changeSet: ChangeSet<object>): Mark[] => {
   }
 
   if (entity instanceof Truce) {
-    // A truce's tick (`t`) shows on both players' cells, to each other.
-    const pair = [entity.initiator_userid, entity.recipient_userid];
-    return [() => markUsers(pair)];
+    // A truce's tick (`t`) shows on both players' cells, to each other only.
+    const pair: [number, number] = [entity.initiator_userid, entity.recipient_userid];
+    return [() => markRelations([pair])];
+  }
+
+  if (entity instanceof AttackLogs) {
+    // A new attack between two players: the defender's "attacked you" plate (`ak`) and both sides'
+    // hostile border (`ho`) on the other's cells, seen by those two only.
+    if (changeSet.type !== "create") return [];
+    const pair: [number, number] = [Number(entity.attacker_userid), Number(entity.defender_userid)];
+    return [() => markRelations([pair])];
   }
 
   if (entity instanceof Alliance) {
