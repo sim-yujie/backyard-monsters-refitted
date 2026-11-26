@@ -6,6 +6,8 @@ import { calculateBaseLevel } from "../../../../services/base/calculateBaseLevel
 import { getCurrentDateTime } from "../../../../utils/getCurrentDateTime.js";
 import { MapRoomCell } from "../../../../enums/MapRoom.js";
 import { isAttackActive } from "../../../../services/base/isAttackActive.js";
+import { attackEndsAt } from "../../../../services/base/attackWindow.js";
+import { nextHatchAt } from "../../../../services/yard/nextHatch.js";
 import { TAKEOVER_DAMAGE } from "../../../../services/maproom/v2/takeoverRules.js";
 import { isHostile } from "../../../../services/maproom/v2/hostiles.js";
 import { loadArmyOwner, monstersForMap, type ArmyOwner } from "../../../../services/yard/armies.js";
@@ -80,6 +82,10 @@ export const userCell = async (ctx: Context, cell: Cell, cellOwners: Map<number,
   // The online rule of #271, read for every owner by `getArea` (#275).
   const online = homeCell && onlineNow.has(cell.uid);
   const isUnderAttack = homeCell && isAttackActive(cellSave);
+  // The live map (beta 9): while anyone attacks a yard or outpost, when that attack's window
+  // closes (`atk`), so the open panel can say "Under attack" and the map can drop it on time
+  // without asking again. Only ever on a cell the viewer can see (`getArea` builds no others).
+  const attackEnd = isAttackActive(cellSave) ? attackEndsAt(cellSave.attacks.at(-1)!) : undefined;
 
   let locked = cellSave.locked;
   if (online || isUnderAttack) locked = 1;
@@ -142,6 +148,7 @@ export const userCell = async (ctx: Context, cell: Cell, cellOwners: Map<number,
         ho: 1,
       }),
     p: isProtected ? 1 : 0,
+    ...(attackEnd !== undefined && { atk: attackEnd }),
     // When damage protection ends, unix seconds (#187): Flash sent only `p`,
     // and the map could only say "protected" with no end. Sent while it runs.
     ...(isProtected && { pe: cellSave.protected }),
@@ -153,6 +160,8 @@ export const userCell = async (ctx: Context, cell: Cell, cellOwners: Map<number,
     // (PopupInfoMine.as:361, PopupMonstersA.as:72). Omitting them makes MapRoomCell.Setup
     // fall back to its zeroed defaults (MapRoomCell.as:375-395, :410-420).
     ...(mine && { r: cellSave.resources, m: monsters || {} }),
+    // The live map (beta 9): when the next monster hatches here; the owner's map asks again then.
+    ...(mine && nextHatchField(monsters, currentTime)),
     l: baseLevel,
     d: damage >= TAKEOVER_DAMAGE ? 1 : 0,
     lo: locked,
@@ -193,4 +202,10 @@ const ownMonsters = async (
   };
 
   return (await monstersForMap(basesaveid, owner, now)) ?? cellSave.monsters;
+};
+
+/** `nh` for an own cell whose hatcheries are counting down; nothing otherwise. */
+const nextHatchField = (monsters: unknown, now: number): { nh: number } | undefined => {
+  const at = nextHatchAt(monsters as Parameters<typeof nextHatchAt>[0], now);
+  return at === undefined ? undefined : { nh: at };
 };

@@ -6,6 +6,7 @@ import { MapRoomVersion } from "../../enums/MapRoom.js";
 import { AllianceRole } from "../../enums/Alliance.js";
 import { Save } from "../../database/models/save.model.js";
 import { WorldMapCell } from "../../database/models/worldmapcell.model.js";
+import { markCellRows, type CellRowLike } from "../maproom/live/liveMarks.js";
 import { getDefenderCoords } from "../maproom/v3/getDefenderCoords.js";
 import {
   allianceSightKey,
@@ -539,6 +540,8 @@ export const deleteAccount = async (
   const before = sqlOf(em.fork());
   const basesaveids = await saveIds(before, u);
   const others = await opponents(before, u);
+  // The live map (beta 9): their cells, marked once the rows are gone.
+  const cells = (await before(`SELECT x, y, world_id AS world FROM bym.world_map_cell WHERE uid = ? AND map_version = 2`, [u])) as CellRowLike[];
 
   const allianceText = await em.fork().transactional(async (tx) => {
     const sql = sqlOf(tx);
@@ -606,6 +609,7 @@ export const deleteAccount = async (
 
     return alliance.text;
   });
+  markCellRows(cells);
 
   // Redis, once the database has let go of the account.
   const footprint = await redisFootprint(redis, account, basesaveids, others);

@@ -92,7 +92,8 @@ import { presence, stayProtected } from "./controllers/maproom/presence.js";
 import { raidDevDue, raidDevTrojan, raidEngage, raidFinish, raidFrequency, raidPrepare, raidStart, raidTrojan } from "./controllers/raid/raid.js";
 import { botCheck, botCheckAnswer, botCheckForce, devCheckEnabled } from "./controllers/maproom/botCheck.js";
 
-import { getArea } from "./controllers/maproom/v2/getArea.js";
+import { getArea, getAreas } from "./controllers/maproom/v2/getArea.js";
+import { areaGate } from "./middleware/areaGate.js";
 import { getSight } from "./controllers/maproom/v2/getSight.js";
 import { getSnapshot } from "./controllers/maproom/v2/bulk/getSnapshot.js";
 import { getTerrain } from "./controllers/maproom/v2/bulk/getTerrain.js";
@@ -285,7 +286,10 @@ if (devCheckEnabled()) {
 /**  ────────────────────────────────────────────────
 * 📦 Map Room 2
 * ──────────────────────────────────────────────── */
-router.post("/worldmapv2/getarea", verifyUserAuth, verifyAccountStatus, getAreaLimiter, logRequest, getArea);
+router.post("/worldmapv2/getarea", areaGate(), verifyUserAuth, verifyAccountStatus, getAreaLimiter, logRequest, getArea);
+// Several zones in one call: the live map's re-asks (beta 9). Same budget as getarea, and the same back-pressure,
+// which comes first so a "busy" answer costs no sign-in query.
+router.post("/worldmapv2/getareas", areaGate(), verifyUserAuth, verifyAccountStatus, getAreaLimiter, logRequest, getAreas);
 router.post("/worldmapv2/sight", verifyUserAuth, verifyAccountStatus, sightLimiter, logRequest, getSight);
 router.get("/worldmapv2/terrain", verifyApiConsumer, terrainLimiter, logRequest, getTerrain);
 router.get("/worldmapv2/snapshot", verifyApiConsumer, snapshotLimiter, logRequest, getSnapshot);

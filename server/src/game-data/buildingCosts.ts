@@ -246,8 +246,8 @@ export const BUILDING_COST_ROWS: readonly CostRow[] = [
   // 16 Hatchery Control Center (special) — YARD_PROPS.as:1676, levels 2-3 beta 9
   [16, "Hatchery Control Center", "special", 2, [
     [4000000,4000000,4000000,0,90000,[[14,1,3],[13,3,2]]],
-    [8000000,8000000,8000000,0,172800,[[14,1,6],[13,4,3]]],
-    [16000000,16000000,16000000,0,345600,[[14,1,8]]],
+    [25000000,25000000,25000000,0,172800,[[14,1,6],[13,4,3]]],
+    [75000000,75000000,75000000,0,345600,[[14,1,8]]],
   ], [0,0,0,1,1,1,1,1,1,1,1]],
   // 17 Block (wall) — YARD_PROPS.as:1722, upgrades need no hall (beta 8)
   [17, "Block", "wall", 3, [

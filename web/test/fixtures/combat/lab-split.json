@@ -78,11 +78,11 @@
     "checkpoints": [
       {
         "tick": 800,
-        "digest": "99c46c481aa25726"
+        "digest": "cc23da0c47395f2e"
       },
       {
         "tick": 1600,
-        "digest": "2d7d6a413d3361d3"
+        "digest": "d590abdd0568ea3b"
       },
       {
         "tick": 2400,

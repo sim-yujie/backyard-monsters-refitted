@@ -752,7 +752,7 @@ for (const [table, hall, file] of [
  *
  * Flash's HCC had one level (`YARD_PROPS.as:1676`, `OUTPOST_YARD_PROPS.as:1206`).
  * Beta 9 adds two on the main yard and one on an outpost (desk card
- * b9-num-hcc, 21 Nov): level 2 costs 8M Twigs, Pebbles and Putty and 2 days,
+ * b9-num-hcc, 21 Nov): level 2 costs 8M Twigs, Pebbles and Putty and 2 days (raised to 25M, and level 3 to 75M, 25 Nov),
  * needing Town Hall 6 and four Hatcheries at level 3; level 3 costs 16M of each
  * and 4 days, needing Town Hall 8. An outpost's HCC goes to level 2 for 1M of
  * each and 2 days, needing two Hatcheries at level 3 (and the core, as every
@@ -767,8 +767,8 @@ for (const [table, file, steps] of [
     entries,
     "YARD_PROPS.as",
     [
-      { r1: 8000000, r2: 8000000, r3: 8000000, r4: 0, time: 2 * 86400, re: [[14, 1, 6], [13, 4, 3]] },
-      { r1: 16000000, r2: 16000000, r3: 16000000, r4: 0, time: 4 * 86400, re: [[14, 1, 8]] },
+      { r1: 25000000, r2: 25000000, r3: 25000000, r4: 0, time: 2 * 86400, re: [[14, 1, 6], [13, 4, 3]] },
+      { r1: 75000000, r2: 75000000, r3: 75000000, r4: 0, time: 4 * 86400, re: [[14, 1, 8]] },
     ],
   ],
   [

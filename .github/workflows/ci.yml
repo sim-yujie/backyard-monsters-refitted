@@ -105,6 +105,7 @@ jobs:
       FRIENDS_TEST_DB: bym_ci
       HEALTH_TEST_DB: bym_ci
       INFERNO_TEST_DB: bym_ci
+      LIVE_MAP_TEST_DB: bym_ci
       NEIGHBOURS_TEST_DB: bym_ci
       NOTICES_TEST_DB: bym_ci
       NOTIF_TEST_DB: bym_ci

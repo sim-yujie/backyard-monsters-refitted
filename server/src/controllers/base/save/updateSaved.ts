@@ -16,6 +16,7 @@ import { extractTownHall } from "../../../utils/extractTownHall.js";
 import { mapSaveData } from "../../../services/base/mapSaveData.js";
 import { getAllianceData } from "../../../services/alliance/allianceData.js";
 import { visibleCredits } from "../../../services/user/shinyLock.js";
+import { noteLiveSeen } from "../../../services/maproom/live/liveOnline.js";
 
 const UpdateSavedSchema = z.object({
   type: z.string(),
@@ -49,6 +50,7 @@ export const updateSaved: KoaController = async (ctx) => {
     case BaseMode.BUILD:
       baseSave = await baseModeBuild(user, baseid);
       redis.setex(`last-seen:main:${user.userid}`, 120, getCurrentDateTime().toString());
+      noteLiveSeen(redis, user.userid);
       break;
 
     default:

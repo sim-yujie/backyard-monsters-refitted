@@ -111,6 +111,7 @@ import { addQuestEvents, type QuestEvents } from "../../../services/quests/state
 import { INFERNO_SAVE_TYPES, refuseOldInferno } from "../../../services/inferno/infernoGate.js";
 import { infernoConfig } from "../../../config/InfernoConfig.js";
 import { isPlayerYard, noteOutpostDefended } from "../../../services/alliance/allianceProgress.js";
+import { noteLiveSeen } from "../../../services/maproom/live/liveOnline.js";
 
 /**
  * Controller responsible for saving the user's base data.
@@ -779,6 +780,7 @@ const saveBase = async (
 
   if (!isAttack) {
     await redis.setex(`last-seen:main:${user.userid}`, 120, getCurrentDateTime().toString());
+    noteLiveSeen(redis, user.userid);
   }
 
   postgres.em.persist(baseSave);

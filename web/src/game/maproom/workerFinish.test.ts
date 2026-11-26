@@ -54,3 +54,16 @@ describe("the outpost's build finishing on the map", () => {
     expect(watch.due([OUTPOST], cells(undefined), FINISH + 60)).toEqual([]);
   });
 });
+
+describe("WorkerFinishWatch with a gap (own hatches, live map)", () => {
+  it("never asks one cell again inside the gap, even as its time moves on", () => {
+    const watch = new WorkerFinishWatch((payload) => (payload as { nh?: number } | undefined)?.nh, 30);
+    const cell = { col: 1, row: 1 };
+    let nh = 100;
+    const at = () => ({ nh }) as never;
+    expect(watch.due([cell], at, 102)).toHaveLength(1);
+    nh = 110;
+    expect(watch.due([cell], at, 112)).toHaveLength(0);
+    expect(watch.due([cell], at, 133)).toHaveLength(1);
+  });
+});

@@ -331,3 +331,37 @@ describe("userCell own army read up front", () => {
     expect(payload).toMatchObject({ m: { housed: { C1: 1 } } });
   });
 });
+
+describe("userCell attack running (live map, beta 9)", () => {
+  const attacked = (starttime: number, base_type = 3) =>
+    ({
+      uid: OWNER,
+      base_type,
+      baseid: "2000240209",
+      terrainHeight: 100,
+      save: { damage: 0, protected: 0, locked: 0, empirevalue: 0, flinger: 0, catapult: 0, attackid: 9, attacks: [{ starttime }] },
+    }) as unknown as Parameters<typeof userCell>[1];
+
+  test("a yard or outpost under attack says when the attack's window closes", async () => {
+    const start = now() - 30;
+    const outpost = await userCell(ctx, attacked(start), owners);
+    expect(typeof (outpost as { atk?: number }).atk).toBe("number");
+    expect((outpost as { atk: number }).atk).toBeGreaterThan(now());
+    expect(await userCell(ctx, attacked(start, 1), owners)).toHaveProperty("atk");
+  });
+
+  test("no attack, or one whose window has closed, sends nothing", async () => {
+    expect(await userCell(ctx, outpostWith(0, 0), owners)).not.toHaveProperty("atk");
+    expect(await userCell(ctx, attacked(now() - 24 * 3600), owners)).not.toHaveProperty("atk");
+  });
+});
+
+describe("userCell next hatch (live map, beta 9)", () => {
+  test("an own cell whose hatchery counts down says when the next monster hatches; nobody else's does", async () => {
+    const own = { ...ctx, authUser: { userid: OWNER, save: { points: "0", basevalue: "0" } }, state: { ...ctx.state, ownMonsters: new Map([[5, { h: [["C1", 50, []]], hstage: [1] }]]) } } as unknown as Context;
+    const cell = { ...outpostWith(0, 0), save: { ...(outpostWith(0, 0) as { save: object }).save, basesaveid: 5 } } as unknown as Parameters<typeof userCell>[1];
+    const mine = (await userCell(own, cell, owners)) as { nh?: number };
+    expect(mine.nh).toBe(now() + 50);
+    expect(await userCell(ctx, cell, owners)).not.toHaveProperty("nh");
+  });
+});

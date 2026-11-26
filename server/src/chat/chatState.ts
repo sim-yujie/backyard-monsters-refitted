@@ -14,6 +14,8 @@ export interface SocketData {
   loginDeadline?: ReturnType<typeof setTimeout> | null;
   /** When this socket's last presence ping was taken, ms (`chatPresence.ts`). */
   lastPresenceAt?: number;
+  /** Set once the socket signed in as the live map, not chat (`liveGateway.ts`, beta 9). */
+  live?: import("./liveGateway.js").LiveSocket;
 }
 
 /**

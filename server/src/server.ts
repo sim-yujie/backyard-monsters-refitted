@@ -29,6 +29,7 @@ import { Env } from "./enums/Env.js";
 import { initAnticheat } from "./scripts/anticheat/anticheat.js";
 import { initialize as initVersionManifest } from "./config/VersionManifestConfig.js";
 import { startChatServer } from "./chat/chatServer.js";
+import { startLiveMap } from "./services/maproom/live/startLiveMap.js";
 import { publishMailNudge } from "./chat/chatControl.js";
 import { setMailNudge } from "./services/mail/mailNudge.js";
 import { exitOnRedisReconnect } from "./utils/redisReconnectGuard.js";
@@ -99,6 +100,9 @@ redis.onclose = (err) => logger.error(`Redis disconnected: ${err.message}`);
   await startMaintenanceRefresh(() => postgres.em.fork());
 
   startChatServer();
+  // The live map (beta 9): zone versions bumped by every write a map cell shows, published once a
+  // second (`services/maproom/live/liveZones.ts`), and the online flag's check every 15 s.
+  startLiveMap();
 
   app.use(clientIp());
   // A server error logged during a request keeps who sent it (`utils/errorCapture.ts`).

@@ -7,6 +7,7 @@ import { askAgainAt, blockedIdsOf, FRIEND_LIMITS, lapseCutoff, secondsOf, utcDay
 import { friendView, requestView, type FriendView, type RequestView } from "./friendViews.js";
 import { recordNewFriendship } from "../quests/record.js";
 import { recordFriendsHeld } from "../achievements/daily.js";
+import { markUsers } from "../maproom/live/liveMarks.js";
 
 /**
  * Friendship itself (`docs/design/friends.md` §3.1, §3.6 and §6.2, issue
@@ -112,6 +113,8 @@ const makeFriends = async (tx: EntityManager, a: number, b: number, now: number)
     [a, b, since, b, a, since]
   );
   await recountFriends(tx, a, b);
+  // The live map (beta 9): each now sees the other's friend mark (`fr`).
+  markUsers([a, b]);
 };
 
 /** Ends the friendship both ways; true when there was one. */
@@ -121,6 +124,7 @@ const unfriend = async (tx: EntityManager, a: number, b: number): Promise<boolea
     [a, b, b, a]
   );
   if (gone.length > 0) await recountFriends(tx, a, b);
+  if (gone.length > 0) markUsers([a, b]);
   return gone.length > 0;
 };
 

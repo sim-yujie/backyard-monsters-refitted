@@ -114,17 +114,21 @@ mock.module("../../../services/maproom/v2/createCellData.js", () => ({
   // terrain/owner-card rendering is not this controller's fog logic and is
   // covered by its own tests elsewhere.
   createCellData: async (cell: Row, _worldid: string, _ctx: unknown, cellOwners?: Map<number, Row>) => {
+    // `empty`: a row whose owner is gone, for which the real builder returns nothing.
+    if (cell.empty) return undefined;
     if (typeof cell.baseid === "string") {
       const owner = cellOwners?.get(cell.uid as number);
       // `typed` rows also carry the cell type, as the real builder's do: the neighbour count reads it.
       const typed = cell.typed ? { b: cell.base_type } : {};
-      return { uid: cell.uid, baseid: cell.baseid, username: owner?.username, alliance_id: owner?.alliance_id, ...typed };
+      // `attackEnd` stands for a save under attack: the real `userCell` sends `atk` then (live map).
+      const attack = cell.attackEnd ? { atk: cell.attackEnd } : {};
+      return { uid: cell.uid, baseid: cell.baseid, username: owner?.username, alliance_id: owner?.alliance_id, ...typed, ...attack };
     }
     return { terrain: true, x: cell.x, y: cell.y };
   },
 }));
 
-const { getArea } = await import("./getArea.js");
+const { getArea, getAreas } = await import("./getArea.js");
 
 /** A main save row, as `postgres.em.populate`'s real implementation would attach it. */
 const mainSaveRow = (userid: number, over: Partial<Row> = {}): Row => ({
@@ -398,5 +402,65 @@ describe("getArea: own cells' armies", () => {
     expect(findCalls.filter(({ where }) => JSON.stringify(where).includes("300"))).toEqual([]);
     const ownMonsters = ctx.state.ownMonsters as Map<number, Row>;
     expect([...ownMonsters.keys()].sort()).toEqual([100, 101, 102]);
+  });
+});
+
+describe("getArea: the live map (beta 9)", () => {
+  test("an attack on a cell the viewer cannot see never shows; one they can see does", async () => {
+    const p = viewer(1, { flinger: 1, homebase: ["1", "1"] });
+    tables.set(User, [ownerRow(3, "near-owner"), ownerRow(4, "far-owner")]);
+    tables.set(WorldMapCell, [
+      cellRow("near-base", 3, 3, 1, { attackEnd: 2_000_000_000 }),
+      cellRow("far-base", 4, 10, 10, { attackEnd: 2_000_000_000 }),
+    ]);
+    const body = await run(p, { x: 0, y: 0 });
+    const data = body.data as Record<number, Record<number, unknown>>;
+    expect(data[3]![1]).toMatchObject({ atk: 2_000_000_000 });
+    expect(data[10]![10]).toEqual({ fog: 1 });
+    expect(JSON.stringify(data).match(/atk/g)).toHaveLength(1);
+  });
+
+  test("every answer carries its zone's version, 0 before the zone ever changed", async () => {
+    const p = viewer(1, { flinger: 1, homebase: ["1", "1"] });
+    expect((await run(p, { x: 0, y: 0 })).zv).toBe(0);
+    await redis.send("HINCRBY", [`livemap:zv:${WORLD}`, "0", "3"]);
+    expect((await run(p, { x: 0, y: 0 })).zv).toBe(3);
+    // Never for a zone the viewer cannot see at all: its version would tell when something there changed.
+    await redis.send("HINCRBY", [`livemap:zv:${WORLD}`, String(50 * 10000 + 50), "1"]);
+    expect(await run(p, { x: 500, y: 500 })).not.toHaveProperty("zv");
+  });
+
+  test("getareas answers several zones in one call, the cell rows read once, each as getarea would", async () => {
+    const p = viewer(1, { flinger: 1, homebase: ["1", "1"] });
+    tables.set(User, [ownerRow(3, "near-owner", 100)]);
+    tables.set(WorldMapCell, [cellRow("near-base", 3, 3, 1)]);
+    const single = (await run(p, { x: 0, y: 0 })) as Row;
+    findCalls = [];
+    const ctx = { authUser: p, request: { body: { zones: "0,0;500,500;0,10" } }, state: {} } as unknown as Context;
+    await getAreas(ctx, async () => {});
+    const areas = (ctx.body as { areas: Row[] }).areas;
+    expect(areas.map((a) => [a.x, a.y])).toEqual([[0, 0], [500, 500], [0, 10]]);
+    expect(areas[0]!.data).toEqual(single.data);
+    expect(areas[1]).not.toHaveProperty("zv");
+    expect(findCalls.filter(({ entity }) => entity === WorldMapCell)).toHaveLength(1);
+    expect(findCalls.filter(({ entity, where }) => entity === User && "userid" in where)).toHaveLength(1);
+  });
+
+  test("getareas refuses more than ten zones, or none", async () => {
+    const p = viewer(1);
+    const many = Array.from({ length: 11 }, (_, i) => `${i * 10},0`).join(";");
+    for (const zones of [many, "", "x,1"]) {
+      const ctx = { authUser: p, request: { body: { zones } }, state: {} } as unknown as Context;
+      await expect(getAreas(ctx, async () => {})).rejects.toThrow();
+    }
+  });
+
+  test("a stored row that gives no cell (its owner is gone) is drawn as generated ground, as before", async () => {
+    const p = viewer(1, { flinger: 1, homebase: ["1", "1"] });
+    // Owner 9 has no user row: the real builder returns nothing for it (the mock does too).
+    tables.set(User, []);
+    tables.set(WorldMapCell, [cellRow("orphan", 9, 3, 1, { empty: true })]);
+    const body = await run(p, { x: 0, y: 0 });
+    expect((body.data as Record<number, Record<number, unknown>>)[3]![1]).toEqual({ terrain: true, x: 3, y: 1 });
   });
 });

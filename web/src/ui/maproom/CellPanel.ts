@@ -18,6 +18,7 @@ import { friendMarkOf, type FriendMark } from "@/game/friends/friendMarks";
 import { friendBadge } from "@/ui/friends/friendBadge";
 import { shieldUrl } from "@/game/alliance/allianceRules";
 import type { MapAlliance } from "@/game/maproom/mapAlliances";
+import { changeOf } from "@/game/maproom/live/cellChanges";
 
 /** The alliance chip's tooltip (beta 7). */
 export const CELL_ALLIANCE_TEXT = {
@@ -214,6 +215,18 @@ export class CellPanel {
   private payload: MapCell | undefined;
   private rangeOn = false;
   private closed = false;
+  /**
+   * The live map (beta 9; owner's choice A on the desk card live-panel, 25 Nov 2026): the newest
+   * payload seen for this cell, and, once a live answer showed it taken, the payload the panel
+   * keeps on screen until the player taps the bar that took Attack's place.
+   */
+  private latest: MapCell | undefined;
+  private held: { payload: MapCell | undefined; name: string } | null = null;
+  /** Attack ignores taps until then (ms, `performance.now`), just after a live change. */
+  private guardUntil = 0;
+  private guardTimer: ReturnType<typeof setTimeout> | null = null;
+  private readonly liveBar: HTMLButtonElement;
+  private readonly liveBarText: HTMLElement;
   /** Countdown chips, refreshed once a second by `tick`. */
   private countdowns: { node: HTMLElement; label: string; expiresAt: number }[] = [];
 
@@ -265,7 +278,19 @@ export class CellPanel {
     this.attackButton = button("btn btn--primary mr2-cell__primary");
     this.attackButton.append(icon("attack", 20, "map-icon"), el("span", "", "Attack"));
     this.attackButton.addEventListener("click", () => {
-      if (!this.attackButton.disabled) options.onAttack();
+      if (!this.attackButton.disabled && performance.now() >= this.guardUntil) options.onAttack();
+    });
+    // Live map: the bar that takes Attack's place, same size, while the panel holds the old cell.
+    this.liveBarText = el("span", "mr2-live-bar__text");
+    const liveBarWords = el("span", "mr2-live-bar__words");
+    liveBarWords.append(this.liveBarText, el("span", "mr2-live-bar__sub", "Tap to update"));
+    // The game's own brass button in either look (neon r1: a plain gold bar read as a toast).
+    this.liveBar = button("btn btn--outline mr2-live-bar");
+    this.liveBar.hidden = true;
+    this.liveBar.append(liveBarWords, icon("respawn", 22, "map-icon mr2-live-bar__refresh"));
+    this.liveBar.addEventListener("click", () => {
+      this.held = null;
+      this.update(this.latest);
     });
     this.attackNote = el("p", "mr2-cell__note");
 
@@ -342,7 +367,7 @@ export class CellPanel {
     this.friendRow.hidden = true;
 
     const actions = el("div", "mr2-cell__actions");
-    actions.append(this.attackButton, this.openButton);
+    actions.append(this.liveBar, this.attackButton, this.openButton);
     for (const action of this.extras) actions.append(action.button);
     actions.append(this.secondary, this.social, this.friendRow, this.inviteRow, this.moves);
 
@@ -386,14 +411,31 @@ export class CellPanel {
   show(cell: OffsetCell, payload: MapCell | undefined): void {
     const moved = this.cell?.col !== cell.col || this.cell?.row !== cell.row;
     this.cell = cell;
-    if (moved) this.more.open = false;
+    if (moved) {
+      this.more.open = false;
+      // A different cell starts with no live state.
+      this.latest = undefined;
+      this.held = null;
+      this.guardUntil = 0;
+    }
     this.update(payload);
   }
 
-  /** Re-renders with fresh payload, keeping the panel where it is. */
-  update(payload: MapCell | undefined): void {
+  /**
+   * Re-renders with fresh payload, keeping the panel where it is. `live`: the payload came from
+   * the live map's answer to a change; taken, the panel keeps the old cell and says so in
+   * Attack's place until tapped, and any change holds Attack back for a moment so a tap meant
+   * for the old cell does not land on the new one.
+   */
+  update(incoming: MapCell | undefined, live = false): void {
     const cell = this.cell;
     if (!cell) return;
+    const previous = this.latest;
+    this.latest = incoming;
+    const change = live ? changeOf(previous, incoming) : null;
+    if (change === "taken" && !this.held) this.held = { payload: previous, name: takenBy(incoming) };
+    if (change && change !== "minor") this.guard();
+    const payload = this.held ? this.held.payload : incoming;
     this.payload = payload;
     this.element.classList.toggle(
       "mr2-cell--repeat",
@@ -403,6 +445,56 @@ export class CellPanel {
     for (const action of this.extras) action.setCell(cell, payload);
     this.render(cell, payload);
     for (const action of this.extras) if (action.chip) this.chips.append(action.chip);
+    this.applyLive(payload);
+  }
+
+  /** Attack ignores taps for {@link LIVE_GUARD_MS} after a live change, and comes back by itself. */
+  private guard(): void {
+    this.guardUntil = performance.now() + LIVE_GUARD_MS;
+    if (this.guardTimer) clearTimeout(this.guardTimer);
+    this.guardTimer = setTimeout(() => {
+      this.guardTimer = null;
+      if (!this.closed) this.update(this.latest);
+    }, LIVE_GUARD_MS + 20);
+  }
+
+  /** The live map's changes to the actions row: the taken bar, or Attack saying "Under attack". */
+  private applyLive(shown: MapCell | undefined): void {
+    this.liveBar.hidden = true;
+    this.element.classList.remove("mr2-cell--held");
+    if (this.held) {
+      // Exactly Attack's height in either look, so nothing below it moves.
+      const height = this.attackButton.hidden ? 0 : this.attackButton.offsetHeight;
+      if (height > 0) this.liveBar.style.height = `${height}px`;
+      this.attackButton.hidden = true;
+      this.openButton.hidden = true;
+      this.attackNote.hidden = true;
+      this.liveBar.hidden = false;
+      this.liveBarText.textContent = this.held.name ? `Taken by ${this.held.name}` : "This cell changed";
+      this.liveBar.setAttribute("aria-label", `${this.liveBarText.textContent}. Tap to update.`);
+      this.element.classList.add("mr2-cell--held");
+      return;
+    }
+    if (this.attackButton.hidden) return;
+    const attacking = !!shown && isPlayerCell(shown) && (shown.atk ?? 0) > Date.now() / 1000;
+    const label = this.attackButton.lastElementChild;
+    if (label) label.textContent = attacking ? "Under attack" : "Attack";
+    // A lock rather than the sword while it cannot be pressed (neon r1: the sword invited a tap).
+    const glyph = this.attackButton.firstElementChild;
+    const wanted = attacking ? "lock" : "attack";
+    if (glyph && glyph.getAttribute("data-live-icon") !== wanted) {
+      const next = icon(wanted, 20, "map-icon");
+      next.setAttribute("data-live-icon", wanted);
+      glyph.replaceWith(next);
+    }
+    this.attackButton.classList.toggle("mr2-cell__primary--busy", attacking);
+    if (attacking) {
+      this.attackButton.disabled = true;
+      this.attackButton.title = UNDER_ATTACK;
+      this.attackButton.setAttribute("aria-label", `Attack. ${UNDER_ATTACK}`);
+      this.attackNote.hidden = true;
+    }
+    if (performance.now() < this.guardUntil) this.attackButton.disabled = true;
   }
 
   /** Keeps the flinger line's switch in step with "My range" (#177). */
@@ -431,6 +523,8 @@ export class CellPanel {
   close(): void {
     if (this.closed) return;
     this.closed = true;
+    if (this.guardTimer) clearTimeout(this.guardTimer);
+    this.guardTimer = null;
     this.element.remove();
     this.options.onClose();
   }
@@ -547,7 +641,8 @@ export class CellPanel {
     if (payload.t !== undefined && payload.t > Date.now() / 1000) {
       this.addCountdown("truce", "Truce", payload.t);
     }
-    if (payload.lo !== 0) {
+    // Under attack is said on the Attack button itself (live map, beta 9).
+    if (payload.lo !== 0 && !((payload.atk ?? 0) > Date.now() / 1000)) {
       this.addChip(
         "clock",
         "Busy",
@@ -776,3 +871,15 @@ const formatCountdown = (seconds: number): string => {
 };
 
 const hexToCss = (colour: number): string => `#${colour.toString(16).padStart(6, "0")}`;
+
+/** How long Attack ignores taps after the cell changed under it (live map, beta 9). */
+export const LIVE_GUARD_MS = 800;
+
+/** Said on a disabled Attack while someone else's attack runs. */
+export const UNDER_ATTACK = "Someone is attacking this yard right now.";
+
+/** Who a live answer says took the cell: "you", the new owner, or nothing for a cell left empty. */
+const takenBy = (cell: MapCell | undefined): string => {
+  if (!cell || !isPlayerCell(cell)) return "";
+  return cell.mine === 1 ? "you" : cell.n;
+};

@@ -111,11 +111,11 @@
     "checkpoints": [
       {
         "tick": 800,
-        "digest": "d14d173547ec4f0b"
+        "digest": "758a4a7091befc7e"
       },
       {
         "tick": 1600,
-        "digest": "4eae15ebc0e96d99"
+        "digest": "a7320adabc7428f0"
       },
       {
         "tick": 2400,
@@ -123,11 +123,11 @@
       },
       {
         "tick": 3200,
-        "digest": "453d5ed437f521da"
+        "digest": "4d8074c9f99313ff"
       },
       {
         "tick": 4000,
-        "digest": "a7856f58a925fce2"
+        "digest": "c24486596fc96883"
       },
       {
         "tick": 4800,
