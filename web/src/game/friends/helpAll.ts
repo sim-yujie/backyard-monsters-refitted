@@ -1,15 +1,16 @@
-import type { HelpBlock, ResourceAmounts } from "@/api/friends";
+import { HELP_ALL_MAX_TARGETS, type HelpBlock, type ResourceAmounts } from "@/api/friends";
 import { formatShort } from "@/ui/format";
 import { helpRefusalText, isHelpOpen, rewardText, savedText, tagSeconds, type HelpTarget } from "./helpModel";
 
 /**
  * Help all on a friend's yard (beta 8, owner 15 Nov 2026): every help the
- * visitor can still give, one after another, each one help to the server
- * (patch 7.6's rule: no daily cap; the first 5 helps a UTC day pay the
- * reward; 5 friends a job). The scene gives each help (`helpOne`), which
- * keeps the block, the marks and the yard current; this runs them in order,
- * adds up what the server answered, and stops when a refusal is about the
- * whole visit rather than one building.
+ * visitor can still give (patch 7.6's rule: no daily cap; the first 5 helps
+ * a UTC day pay the reward; 5 friends a job). Since 26 Nov 2026 they go to
+ * the server in one request (`POST /bm/friends/help/all`), which gives them
+ * in order by the single help's rules; the scene lands each answer as one
+ * help's (`helpMany`), which keeps the block, the marks and the yard current.
+ * This adds up what the server answered, and stops when a refusal is about
+ * the whole visit rather than one building.
  */
 
 /**
@@ -44,12 +45,19 @@ export interface HelpAllSummary {
 export interface HelpAllOptions {
   /** The block as it stands now: a help no longer open in it is passed over. */
   readonly block: () => HelpBlock | null;
-  /** Gives one help and keeps the screen current; never throws. */
-  readonly helpOne: (target: HelpTarget) => Promise<HelpOutcome>;
-  /** False once the visit is over (the player left): stops before the next help. */
+  /**
+   * Gives the helps in one request and lands each on the screen, in order;
+   * never throws. One outcome per help the server reached, ending at a stop;
+   * a request refused as a whole is one stopping outcome. Fewer outcomes than
+   * helps (a stop, or the visit over) ends Help all there.
+   */
+  readonly helpMany: (targets: readonly HelpTarget[]) => Promise<readonly HelpOutcome[]>;
+  /** False once the visit is over (the player left): stops before the next request. */
   readonly goOn?: () => boolean;
   /** After each help, for a "2 of 3" on the bar. */
   readonly onStep?: (done: number, total: number) => void;
+  /** Helps per request: the server's most ({@link HELP_ALL_MAX_TARGETS}); more go in turns. */
+  readonly perRequest?: number;
 }
 
 const addReward = (sum: Record<string, number>, reward: ResourceAmounts): void => {
@@ -58,7 +66,7 @@ const addReward = (sum: Record<string, number>, reward: ResourceAmounts): void =
   }
 };
 
-/** Gives every help in `targets`, one after another; see the file's comment. */
+/** Gives every help in `targets`, in as few requests as the server takes; see the file's comment. */
 export const runHelpAll = async (targets: readonly HelpTarget[], options: HelpAllOptions): Promise<HelpAllSummary> => {
   let helped = 0;
   let secondsSaved = 0;
@@ -66,27 +74,37 @@ export const runHelpAll = async (targets: readonly HelpTarget[], options: HelpAl
   let stoppedBy: string | null = null;
   const reward: Record<string, number> = {};
   let done = 0;
-  for (const target of targets) {
+  const perRequest = Math.max(1, Math.floor(options.perRequest ?? HELP_ALL_MAX_TARGETS));
+  run: for (let at = 0; at < targets.length; at += perRequest) {
     if (options.goOn && !options.goOn()) break;
-    if (!isHelpOpen(options.block(), target)) {
+    const turn = targets.slice(at, at + perRequest);
+    const block = options.block();
+    const open = turn.filter((target) => isHelpOpen(block, target));
+    const outcomes = open.length > 0 ? await options.helpMany(open) : [];
+    let next = 0;
+    for (const target of turn) {
+      if (!open.includes(target)) {
+        done += 1;
+        continue;
+      }
+      const outcome = outcomes[next++];
+      // Not reached: the server stopped before it, or the visit is over.
+      if (!outcome) break run;
       done += 1;
-      continue;
-    }
-    const outcome = await options.helpOne(target);
-    done += 1;
-    if (outcome.ok) {
-      helped += 1;
-      // Each help as its tag read, so the total is the tags' sum.
-      secondsSaved += tagSeconds(outcome.secondsSaved);
-      addReward(reward, outcome.reward);
-    } else if (stopsHelpAll(outcome.reason)) {
-      stoppedBy = outcome.text;
+      if (outcome.ok) {
+        helped += 1;
+        // Each help as its tag read, so the total is the tags' sum.
+        secondsSaved += tagSeconds(outcome.secondsSaved);
+        addReward(reward, outcome.reward);
+      } else if (stopsHelpAll(outcome.reason)) {
+        stoppedBy = outcome.text;
+        options.onStep?.(done, targets.length);
+        break run;
+      } else {
+        skipped += 1;
+      }
       options.onStep?.(done, targets.length);
-      break;
-    } else {
-      skipped += 1;
     }
-    options.onStep?.(done, targets.length);
   }
   return { helped, secondsSaved, reward, skipped, stoppedBy };
 };

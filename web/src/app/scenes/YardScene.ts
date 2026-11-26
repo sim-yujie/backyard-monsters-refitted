@@ -34,6 +34,8 @@ import { setPlayerPool } from "@/game/friends/friendsView";
 import { currentSeason } from "@/game/season";
 import {
   friendRefusal,
+  type FriendRefusal,
+  type HelpResult,
   friendsApi,
   type Friend,
   type FriendsApi,
@@ -2193,8 +2195,9 @@ export class YardScene implements Scene {
    * One help (#374): the server decides and answers with the building as it
    * now is, the reward and the rewarded helps left today. A refusal stands
    * on the building from then on, unless it is about the whole visit. The
-   * help panel and Help all both give theirs here. Null when the visit is
-   * over (left, or signed out).
+   * help panel gives its help here; Help all gives its helps in one request
+   * (`giveHelps`) and lands each the same way. Null when the visit is over
+   * (left, or signed out).
    */
   private async giveHelp(
     building: YardBuilding,
@@ -2207,34 +2210,9 @@ export class YardScene implements Scene {
     try {
       const result = await this.friends.help(friend, building.id, kind);
       if (this.context !== context || !this.helpBlock) return null;
-      this.helpBlock = afterHelp(this.helpBlock, building.id, kind, result.rewardsLeft);
-      if (result.building) this.patchVisitBuilding(building, result.building);
-      // The reward lands in the visitor's own pool (#374), kept in the hidden readouts for the way home.
-      const pool = this.visitorPool;
-      const fx = this.helpFx;
-      if (pool) {
-        const resources: Resources = { ...pool.resources };
-        for (const key of ["r1", "r2", "r3", "r4"] as const) {
-          const add = result.reward[key] ?? 0;
-          if (add <= 0) continue;
-          resources[key] = (resources[key] ?? 0) + add;
-          // Help all's effect delivers it in its own time; held in the same task, so the readout never jumps.
-          if (fx) this.hud?.hold(key, add);
-        }
-        this.visitorPool = { ...pool, resources };
-        this.hud?.setResources(resources, pool.credits, fx ? { float: false } : {});
-      }
-      // No readouts to float it on: one help's reward shows as Help all's does.
-      if (!fx) this.showVisitReward(result.reward);
-      this.showHelpBlock();
-      // The friends bar's wrench follows.
-      friendsStore.nudge();
-      return {
-        ok: true,
-        secondsSaved: result.secondsSaved ?? 0,
-        reward: result.reward,
-        text: thanksText(kind, result, target.name, building.name),
-      };
+      const outcome = this.helpLanded(building, kind, result, target.name);
+      this.helpShown();
+      return outcome;
     } catch (caught) {
       if (this.context !== context || !this.helpBlock) return null;
       if (caught instanceof ApiError && caught.isAuthFailure) {
@@ -2242,23 +2220,139 @@ export class YardScene implements Scene {
         return null;
       }
       // A reason the client does not know says the server's own words (`friendRefusal`, bug report #50).
-      const refusal = friendRefusal(caught);
-      const known = refusal.reason !== "unknown" && refusal.reason !== "network";
-      const text = known ? helpRefusalText(refusal.reason, refusal) : refusal.message;
-      if (known && refusalStays(refusal.reason)) {
-        this.helpBlock = afterRefusal(this.helpBlock, building.id, kind, refusal.reason, refusal);
-      }
-      this.showHelpBlock();
-      return { ok: false, reason: refusal.reason, text };
+      const outcome = this.helpRefused(building, kind, friendRefusal(caught));
+      this.helpShown();
+      return outcome;
     }
   }
 
   /**
+   * Help all's helps in one request (`POST /bm/friends/help/all`; owner,
+   * 26 Nov 2026), each landed or refused on the screen in order as one help
+   * is (`helpLanded`, `helpRefused`), and Help all's effect told of each.
+   * Answers one outcome per help the server reached; a refused request is one
+   * stopping outcome on the first. Empty when the visit is over.
+   */
+  private async giveHelps(steps: readonly HelpTarget[], fx: HelpAllFx | null): Promise<HelpOutcome[]> {
+    const target = this.target;
+    const friend = target?.friend;
+    const context = this.context;
+    const buildings = new Map<number, YardBuilding>();
+    for (const step of steps) {
+      const building = this.yard?.buildings.find((one) => one.id === step.id);
+      if (building) buildings.set(step.id, building);
+    }
+    const first = steps[0];
+    if (!target || friend === undefined || !this.helpBlock || !context || !first) return [];
+    const play = (id: number, outcome: HelpOutcome): HelpOutcome => {
+      if (this.helpFx === fx && fx) {
+        if (outcome.ok) fx.helped({ id, secondsSaved: outcome.secondsSaved, reward: outcome.reward });
+        else fx.missed(id);
+      }
+      return outcome;
+    };
+    // A building the yard no longer has is passed over here, as one help would be.
+    const gone = (id: number): HelpOutcome => play(id, { ok: false, reason: "nothingToHelp", text: helpRefusalText("nothingToHelp") });
+    const sent = steps.filter((step) => buildings.has(step.id));
+    if (sent.length === 0) return steps.map((step) => gone(step.id));
+    try {
+      const answer = await this.friends.helpAll(
+        friend,
+        sent.map((step) => ({ buildingId: step.id, kind: step.kind })),
+      );
+      if (this.context !== context || !this.helpBlock) return [];
+      const outcomes: HelpOutcome[] = [];
+      let next = 0;
+      for (const step of steps) {
+        const building = buildings.get(step.id);
+        if (!building) {
+          outcomes.push(gone(step.id));
+          continue;
+        }
+        const item = answer.helps[next++];
+        // Past the server's stop (or an answer that left this one out): not reached.
+        if (!item || item.buildingId !== step.id || item.kind !== step.kind) break;
+        const outcome = item.ok
+          ? this.helpLanded(building, step.kind, item.result, target.name)
+          : this.helpRefused(building, step.kind, item.refusal);
+        outcomes.push(play(step.id, outcome));
+      }
+      this.helpShown();
+      return outcomes;
+    } catch (caught) {
+      if (this.context !== context || !this.helpBlock) return [];
+      if (caught instanceof ApiError && caught.isAuthFailure) {
+        context.goTo(SceneName.LOGIN);
+        return [];
+      }
+      // Refused as a whole (not friends, under attack, `tooNew`, the spam limit): as the first help's refusal was.
+      const head = sent[0]!;
+      const outcome = this.helpRefused(buildings.get(head.id)!, head.kind, friendRefusal(caught));
+      this.helpShown();
+      return [play(head.id, outcome)];
+    }
+  }
+
+  /**
+   * A help the server took: the block, the building, and the reward in the
+   * visitor's own pool. The caller redraws once (`helpShown`).
+   */
+  private helpLanded(
+    building: YardBuilding,
+    kind: HelpKind,
+    result: HelpResult,
+    owner: string,
+  ): HelpOutcome & { readonly text: string } {
+    if (this.helpBlock) this.helpBlock = afterHelp(this.helpBlock, building.id, kind, result.rewardsLeft);
+    if (result.building) this.patchVisitBuilding(building, result.building);
+    // The reward lands in the visitor's own pool (#374), kept in the hidden readouts for the way home.
+    const pool = this.visitorPool;
+    const fx = this.helpFx;
+    if (pool) {
+      const resources: Resources = { ...pool.resources };
+      for (const key of ["r1", "r2", "r3", "r4"] as const) {
+        const add = result.reward[key] ?? 0;
+        if (add <= 0) continue;
+        resources[key] = (resources[key] ?? 0) + add;
+        // Help all's effect delivers it in its own time; held in the same task, so the readout never jumps.
+        if (fx) this.hud?.hold(key, add);
+      }
+      this.visitorPool = { ...pool, resources };
+      this.hud?.setResources(resources, pool.credits, fx ? { float: false } : {});
+    }
+    // No readouts to float it on: one help's reward shows as Help all's does.
+    if (!fx) this.showVisitReward(result.reward);
+    return {
+      ok: true,
+      secondsSaved: result.secondsSaved ?? 0,
+      reward: result.reward,
+      text: thanksText(kind, result, owner, building.name),
+    };
+  }
+
+  /** A help the server refused: it stands on the building, unless it is about the whole visit. The caller redraws once. */
+  private helpRefused(building: YardBuilding, kind: HelpKind, refusal: FriendRefusal): HelpOutcome & { readonly text: string } {
+    const known = refusal.reason !== "unknown" && refusal.reason !== "network";
+    const text = known ? helpRefusalText(refusal.reason, refusal) : refusal.message;
+    if (known && refusalStays(refusal.reason) && this.helpBlock) {
+      this.helpBlock = afterRefusal(this.helpBlock, building.id, kind, refusal.reason, refusal);
+    }
+    return { ok: false, reason: refusal.reason, text };
+  }
+
+  /** After a help or a Help all lands: the marks, the bar's count and the panel redrawn; the friends bar's wrench follows. */
+  private helpShown(): void {
+    this.showHelpBlock();
+    friendsStore.nudge();
+  }
+
+  /**
    * Help all (beta 8, owner 15 Nov 2026): every speed-up the visitor can
-   * still give, one after another (`runHelpAll`), each one help to the
-   * server; the marks and the count follow each. Resolves with the short
-   * line the bar shows after; a stop's reason also goes up as a notice, as
-   * the bar has no room for a sentence on a phone.
+   * still give (`runHelpAll`), all in one request since 26 Nov 2026
+   * (`giveHelps`); the marks and the count follow each as the effect plays
+   * it. Resolves with the short line the bar shows after; a stop's reason
+   * also goes up as a notice, as the bar has no room for a sentence on a
+   * phone.
    */
   private async helpAll(): Promise<HelpAllLine> {
     const context = this.context;
@@ -2274,17 +2368,7 @@ export class YardScene implements Scene {
       goOn: () => this.context === context && this.helpBlock !== null,
       // An effect counts the bar on as it plays each help, not as each lands.
       onStep: (done, total) => (fx ? undefined : this.helpAllBar?.setProgress(done, total)),
-      helpOne: async (step: HelpTarget): Promise<HelpOutcome> => {
-        const building = this.yard?.buildings.find((one) => one.id === step.id);
-        if (!building) return { ok: false, reason: "nothingToHelp", text: helpRefusalText("nothingToHelp") };
-        // Signed out or left mid-way: stop.
-        const outcome = (await this.giveHelp(building, step.kind)) ?? { ok: false, reason: "gone", text: "" };
-        if (this.helpFx === fx && fx) {
-          if (outcome.ok) fx.helped({ id: step.id, secondsSaved: outcome.secondsSaved, reward: outcome.reward });
-          else fx.missed(step.id);
-        }
-        return outcome;
-      },
+      helpMany: (steps) => this.giveHelps(steps, fx),
     });
     const full = helpAllResultText(summary);
     if (summary.stoppedBy && this.context === context) {
