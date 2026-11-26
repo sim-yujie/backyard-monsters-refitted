@@ -102,6 +102,11 @@ export interface AbandonedInput {
    * replays as it was fought. Absent is true, the rules every page plays now.
    */
   flashKrallen?: boolean;
+  /**
+   * Whether a monster's health stays whole, as Flash's does (`BattleOptions.wholeHealth`):
+   * false for an attack whose session was minted under older rules. Absent is true.
+   */
+  wholeHealth?: boolean;
 }
 
 /** Everything the attack save would have carried, derived. */
@@ -234,6 +239,7 @@ export const replayAbandonedAttack = (input: AbandonedInput): AbandonedOutcome =
       ...battleDefence(input.defence),
       ...(input.descentYard !== undefined && { descentYard: input.descentYard }),
       ...(input.flashKrallen === false && { flashKrallen: false }),
+      ...(input.wholeHealth === false && { wholeHealth: false }),
       // Each attacking champion's lesson for its brain (issue #219); reads only.
       learn: true,
     }
