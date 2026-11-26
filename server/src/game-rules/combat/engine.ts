@@ -707,6 +707,18 @@ export interface BattleOptions {
    * replay of its session, `battleReplayInput`), which plays as it was fought.
    */
   readonly flashKrallen?: boolean;
+  /**
+   * Whether health stays whole, as Flash's does: `setHealth` keeps it in a
+   * `SecNum`, whose `Set` rounds it (`com/cc/utils/SecNum.as:27`), for a
+   * monster, a champion (on the field or in its cage) and a building alike,
+   * so 0.4 falls to 0 and 0.5 stands on 1. Without it a trap's fall-off left
+   * a fraction, and the Quake Tower's `int(health)` clamp then left a monster
+   * it should have killed alive on less than 1 health (player report, Reii,
+   * 25 Nov 2026). Absent or true, it
+   * stays whole; false is the rule before, for an attack started under older
+   * rules (the server's replay of its session), which plays as it was fought.
+   */
+  readonly wholeHealth?: boolean;
 }
 
 /**
@@ -2389,6 +2401,13 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
     yard.buildings.some((building) => isSpurtzCannon(building.type));
   const flashKrallenRules = options.flashKrallen !== false;
   /**
+   * Health after a change (a creep's, a building's, a caged champion's),
+   * whole by Flash's rule (`BattleOptions.wholeHealth`).
+   */
+  const wholeHealthRules = options.wholeHealth !== false;
+  const healthAfter = (hp: number): number =>
+    wholeHealthRules ? Math.sign(hp) * Math.round(Math.abs(hp)) : hp;
+  /**
    * An attacking Krallen fought by Flash's rules of patch 8.6
    * ({@link BattleOptions.flashKrallen}). She has no Mode under them
    * (`hasMode`), so this is Flash's Krallen; every other champion, and her
@@ -2723,7 +2742,9 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
       if (lesson) lesson.dealt += applied;
       if (!creep.friendly) judgeForFomor(creep, applied);
     }
-    building.hp -= dealt;
+    // Whole health, as Flash's `SecNum` keeps it (`BattleOptions.wholeHealth`):
+    // a building left on 0.4 falls, one left on 0.5 stands on 1.
+    building.hp = healthAfter(building.hp - dealt);
     if (building.hp > 0) {
       if (byAttacker) {
         // Flash's `Loot` runs on the hit and marks an empty harvester looted
@@ -2850,7 +2871,7 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
         ...(blow === "thorns" ? { thorns: true } : {}),
       });
     }
-    creep.hp -= raw;
+    creep.hp = healthAfter(creep.hp - raw);
     const killed = creep.hp <= 0;
     if (killed) {
       creep.hp = 0;
@@ -3202,7 +3223,7 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
     zombie.attackDelay /= speed;
     zombie.damage *= damage;
     zombie.maxHp *= health;
-    zombie.hp = zombie.maxHp;
+    zombie.hp = healthAfter(zombie.maxHp);
     zombie.disposable = true;
     zombie.zombie = true;
     visual.push({ kind: "rise", tick, creepId: zombie.id, ix: zombie.ix, iy: zombie.iy });
@@ -3387,7 +3408,7 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
     const hp =
       startHealth !== undefined && Number.isFinite(startHealth) && startHealth >= 1
         ? Math.min(Math.floor(startHealth), health)
-        : health;
+        : healthAfter(health);
     // A `fly` rung puts the champion in the air exactly as it does a monster:
     // altitude 108 and the flying defence flag (`ChampionBase.as:181-188`), so
     // walls never stop it and only air-capable towers can shoot it.
@@ -3837,12 +3858,12 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
   /**
    * The blast on a champion in its cage: off its health where it stands, the
    * Monster Defensive Buff taken off as on the field. It comes out later with
-   * what is left. One brought to nothing dies in there: its pen goes, so it
-   * never comes out.
+   * what is left, kept whole (`BattleOptions.wholeHealth`). One brought to
+   * nothing dies in there: its pen goes, so it never comes out.
    */
   const damageCaged = (slot: CageSlot, raw: number): void => {
     const dealt = buffOn(defenderBuffs.monsterArmour, tick) ? raw * (1 - MONSTER_ARMOUR_BUFF) : raw;
-    const hp = Math.max(0, slot.report.hp - dealt);
+    const hp = Math.max(0, healthAfter(slot.report.hp - dealt));
     slot.report.hp = hp;
     if (slot.champion) slot.champion.hp = hp;
     if (hp <= 0) slot.pen = null;
@@ -5968,7 +5989,7 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
     const size = Math.abs(healer.damage) * (target.champion ? 0.1 : 1);
     const healed = Math.min(size, target.maxHp - target.hp);
     if (healed <= 0) return;
-    target.hp += healed;
+    target.hp = healthAfter(target.hp + healed);
     if (target.champion) {
       championHp = target.hp;
       championsHp[target.monsterId] = target.hp;

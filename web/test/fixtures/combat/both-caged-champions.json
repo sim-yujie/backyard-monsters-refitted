@@ -87,82 +87,82 @@
     "checkpoints": [
       {
         "tick": 800,
-        "digest": "5a822a69bb87cda3"
+        "digest": "9c8da54584c76607"
       },
       {
         "tick": 1600,
-        "digest": "cb3d49e5aa40184b"
+        "digest": "030a711cccab1a92"
       },
       {
         "tick": 2400,
-        "digest": "3a6c8056194fc4dc"
+        "digest": "6c90a423ea1b2179"
       },
       {
         "tick": 3200,
-        "digest": "1af852f13bb0dc2b"
+        "digest": "781f35a4cc6be706"
       },
       {
         "tick": 4000,
-        "digest": "aa000e5ec2df8158"
+        "digest": "efca25771a9b58f9"
       },
       {
         "tick": 4800,
-        "digest": "a6a2ce8f9b526e41"
+        "digest": "f09aaa6e05ab9d68"
       },
       {
         "tick": 5600,
-        "digest": "b9b53958a55428ba"
+        "digest": "4c4c3e554059f4ff"
       },
       {
         "tick": 6400,
-        "digest": "e1ae68cc9e6b7a06"
+        "digest": "3888f881486ad7d3"
       },
       {
         "tick": 7200,
-        "digest": "068d1075f4c27b07"
+        "digest": "eecbc590318fd50a"
       },
       {
         "tick": 8000,
-        "digest": "a54fc76ea29678e8"
+        "digest": "a6efc927f511a969"
       },
       {
         "tick": 8800,
-        "digest": "d49024e48ac7ad1e"
+        "digest": "d359d1099c08017b"
       },
       {
         "tick": 9600,
-        "digest": "dc75471fdb931a51"
+        "digest": "f069e95e23823818"
       },
       {
         "tick": 10400,
-        "digest": "58368e4d97afdf7f"
+        "digest": "b6a38d1806b9c9d2"
       },
       {
         "tick": 11200,
-        "digest": "f9a3da6855edc64a"
+        "digest": "5b5c3d45064e552f"
       },
       {
         "tick": 12000,
-        "digest": "6564b606fe93eec0"
+        "digest": "27970a8f02b240d1"
       },
       {
         "tick": 12800,
-        "digest": "fff11d1cb2772ed6"
+        "digest": "eb316cb1423cfa83"
       },
       {
         "tick": 13600,
-        "digest": "50fe96d7b4d34a29"
+        "digest": "e6c96dc6ea3bd3e0"
       },
       {
         "tick": 14400,
-        "digest": "c07e954543467057"
+        "digest": "827c1ec0a70d30fa"
       }
     ],
-    "digest": "c07e954543467057",
+    "digest": "827c1ec0a70d30fa",
     "bunkerLosses": {},
     "bunkerGarrisons": {},
     "defenderChampionsHp": [
-      59136.200000000186,
+      59133,
       33000
     ]
   }
