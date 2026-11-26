@@ -73,6 +73,7 @@ describe("REAL_ACTION_ROUTES", () => {
     ["POST", "/api/:apiVersion/bm/inferno/transfer"],
     ["POST", "/api/:apiVersion/player/requesttruce"],
     ["POST", "/api/:apiVersion/bm/friends/help"],
+    ["POST", "/api/:apiVersion/bm/friends/help/all"],
     ["POST", "/api/:apiVersion/bm/friends/gifts/collect"],
   ])("%s %s is a real action (3 Nov)", (method, route) => {
     expect(isRealActionRequest(ctxOf(method), route)).toBe(true);
