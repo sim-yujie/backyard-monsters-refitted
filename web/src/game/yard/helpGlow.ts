@@ -39,7 +39,8 @@ export interface HelpLook {
  * that matches the wrench and reads on dark, gold and small buildings alike,
  * and only a breath of added light, so dark towers keep their blacks. Round 2
  * found Classic's gentler light too faint to tell a building apart, so both
- * looks now share it, Classic a touch under Modern.
+ * looks now share it; round 3 gave Classic's pale wood and cream a little
+ * more glow.
  */
 const MODERN_LOOK: HelpLook = {
   tint: 0xffe2b4,
@@ -57,7 +58,7 @@ const MODERN_LOOK: HelpLook = {
 
 const CLASSIC_LOOK: HelpLook = {
   ...MODERN_LOOK,
-  glowAlpha: 0.52,
+  glowAlpha: 0.57,
   liftAlpha: 0.08,
 };
 

@@ -90,9 +90,10 @@ const PULSE_LOW = 0.75;
  * The ring's size against the ellipse through the footprint's corners: a
  * little inside it, so it sits on the building's own tile and neighbouring
  * rings neither stack in open ground nor reach under the next building
- * (1.25 before neon's reviews, 26 Nov 2026).
+ * (1.25 before neon's three reviews, 26 Nov 2026; under 0.8 a walled
+ * tower's ring would vanish under its own base).
  */
-const RING_SPREAD = 0.95;
+const RING_SPREAD = 0.85;
 
 /** The mock-up's amber, a cream rim and a dark wrench (until the painted tools come). */
 const AMBER = 0xf2a51a;
