@@ -4,6 +4,8 @@
  * Every daily limit turns over at 00:00 UTC (Q2).
  */
 
+import { seenStepOf, type SeenStep } from "../user/seenStep.js";
+
 export const FRIEND_LIMITS = {
   /** Friends a player can have (owner decision 2). */
   maxFriends: 100,
@@ -35,29 +37,19 @@ export const lapsesAt = (createdAt: number): number => createdAt + FRIEND_LIMITS
 /** When a sender declined at `declinedAt` may ask that player again, unix seconds. */
 export const askAgainAt = (declinedAt: number): number => declinedAt + FRIEND_LIMITS.declineWaitDays * DAY_SECONDS;
 
-/** How a friend's presence shows to their friends (Q12): coarse on purpose. */
-export type OnlineStatus = "online" | "today" | "week" | "away";
+/**
+ * How a friend's presence shows to their friends (Q12): coarse on purpose.
+ * The five "last seen" steps (beta 9, `services/user/seenStep.ts`).
+ */
+export type OnlineStatus = SeenStep;
 
 /**
- * A friend's presence as their friends see it (§6.2, Q12): `null` when they
- * hide it; `online` when the server counts them online (`onlinePlayers`, the
- * same dot the maps show); otherwise how long ago they last opened their yard
- * (`last_seen_at`, never sent itself): within a day, within a week, or longer.
- *
- * @param {boolean} hidden - The friend turned "Show when I'm online" off
- * @param {boolean} online - The server counts them online now
- * @param {number | null} lastSeen - Their `last_seen_at`, unix seconds, or null
- * @param {number} now - Unix seconds
+ * A friend's presence as their friends see it (§6.2, Q12; beta 9 "last
+ * seen"): online, today, this week, 1-4 weeks or over a month; a friend who
+ * hides it shows only the last two ({@link seenStepOf}). `last_seen_at` is
+ * never sent itself.
  */
-export const onlineStatusOf = (hidden: boolean, online: boolean, lastSeen: number | null, now: number): OnlineStatus | null => {
-  if (hidden) return null;
-  if (online) return "online";
-  if (lastSeen === null) return "away";
-  const ago = now - lastSeen;
-  if (ago < DAY_SECONDS) return "today";
-  if (ago < 7 * DAY_SECONDS) return "week";
-  return "away";
-};
+export const onlineStatusOf = seenStepOf;
 
 /** Unix seconds of a timestamp column as `pg` hands it back (a Date, or text for some drivers). */
 export const secondsOf = (value: Date | string | number | null | undefined): number | null => {

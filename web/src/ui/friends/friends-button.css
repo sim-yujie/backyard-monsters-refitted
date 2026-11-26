@@ -228,15 +228,10 @@
   height: 20px;
 }
 
-.friends-window__group > .friends-window__dot {
-  width: 10px;
-  height: 10px;
-  margin-inline: 5px;
-}
-
-/* "Everyone else": neither online nor in need of help, so a grey dot. */
-.friends-window__dot--off {
-  background: var(--colour-text-muted);
+/* Classic: the head's online dot in the deeper green of the rows' "Online" (neon, 26 Nov). */
+:root[data-skin="flash"] .friends-window__dot {
+  background: #166534;
+  box-shadow: none;
 }
 
 .friends-window__group-count {
@@ -293,15 +288,6 @@
   object-fit: cover;
 }
 
-.friends-window__face-dot {
-  position: absolute;
-  right: -2px;
-  bottom: -2px;
-  width: 12px;
-  height: 12px;
-  box-sizing: border-box;
-  border: 2px solid var(--colour-surface-base);
-}
 
 /* A friend pinned to the top of the list (beta 7): a gold frame on the face,
    and the pin on its top corner says why (tester, 9 Nov). */
@@ -326,7 +312,17 @@
     0 0 5px 1px rgb(201 138 18 / 50%);
 }
 
+/* The name, and last seen under it (beta 9). */
+.friends-window__who {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  min-width: 0;
+}
+
 .friends-window__name {
+  max-width: 100%;
   min-width: 0;
   overflow: hidden;
   color: var(--colour-text-strong);
@@ -337,6 +333,13 @@
 
 .friends-window__level {
   font-variant-numeric: tabular-nums;
+}
+
+/* Desktop and iPad: the level chip steps up with last seen to 13px (neon, 26 Nov). */
+@media (min-width: 621px) and (min-height: 501px) {
+  .friends-window__level {
+    font-size: var(--text-sm);
+  }
 }
 
 .friends-window__marks {
@@ -439,6 +442,11 @@
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+
+/* "Others": the phone's short words for "Everyone else" (shown in the phone block below). */
+.friends-window__group-short {
+  display: none;
 }
 
 .friends-window__empty {
@@ -554,5 +562,9 @@
 @media (max-height: 500px), (max-width: 480px) {
   .friends-window__back > .friends-window__group-words {
     display: none;
+  }
+
+  .friends-window__back > .friends-window__group-short {
+    display: inline;
   }
 }

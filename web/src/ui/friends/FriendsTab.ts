@@ -1,7 +1,8 @@
 import { friendRefusal, type Friend, type FriendsApi } from "@/api/friends";
-import { canHelp, friendCountText, onlineText } from "@/game/friends/friendText";
+import { canHelp, friendCountText } from "@/game/friends/friendText";
 import type { FriendsSnapshot, FriendsStore } from "@/game/friends/friendsStore";
 import { gameIcon, iconAmount } from "@/ui/gameIcon";
+import { seenDims, seenMark } from "@/ui/seenMark";
 import { blockButton } from "./BlockButton";
 import { giftAllButton, setGiftAllDone } from "./GiftAll";
 import { button, make, playerRow, section, StatusLine, type FriendsTabView, type RowBadge } from "./rows";
@@ -111,16 +112,16 @@ export const friendMatches = (friend: Friend, query: string, filters: ReadonlySe
   return true;
 };
 
-const ONLINE_ORDER: Readonly<Record<string, number>> = { online: 0, today: 1, week: 2, away: 3 };
+const ONLINE_ORDER: Readonly<Record<string, number>> = { online: 0, today: 1, week: 2, weeks: 3, month: 4 };
 
 /**
  * Pinned first, in the order they were pinned; then online first (then seen
- * today, this week, away, hidden), then highest level, then by name.
+ * today, this week, 1-4 weeks, over a month, hidden), then highest level, then by name.
  */
 export const friendOrder = (one: Friend, other: Friend): number =>
   Number(other.pinnedAt !== null) - Number(one.pinnedAt !== null) ||
   (one.pinnedAt ?? 0) - (other.pinnedAt ?? 0) ||
-  (ONLINE_ORDER[one.online ?? ""] ?? 4) - (ONLINE_ORDER[other.online ?? ""] ?? 4) ||
+  (ONLINE_ORDER[one.online ?? ""] ?? 5) - (ONLINE_ORDER[other.online ?? ""] ?? 5) ||
   other.level - one.level ||
   one.username.localeCompare(other.username);
 
@@ -278,8 +279,7 @@ export class FriendsTab implements FriendsTabView {
   }
 
   private row(friend: Friend): HTMLLIElement {
-    const online = friend.online === "online";
-    const seen = online ? "" : onlineText(friend.online);
+    const seen = seenMark(friend.online);
     const busy = this.busy.has(friend.userid);
     if (this.confirming === friend.userid) {
       const yes = button(FRIENDS_TEXT.removeYes, () => void this.remove(friend), "danger");
@@ -337,12 +337,12 @@ export class FriendsTab implements FriendsTabView {
     const badges: RowBadge[] = [];
     if (canHelp(friend)) badges.push("wrench");
     if (!friend.giftSentToday) badges.push("gift");
+    // Last seen (beta 9) on the level line, after the level: the one place it shows, online included.
     const row = playerRow(friend, {
-      online,
-      ...(seen && { note: seen, noteClass: "friends-online" }),
       actions,
       badges,
-      marks: worldMark(friend),
+      marks: [...(seen ? [seenDivider(), seen] : []), ...worldMark(friend)],
+      dimFace: seenDims(friend.online),
     });
     row.classList.toggle("friends-row--open", opened);
     row.classList.toggle("friends-row--pinned", friend.pinnedAt !== null);
@@ -408,3 +408,10 @@ export class FriendsTab implements FriendsTabView {
     }
   }
 }
+
+/** A thin rule between "Level 40" and last seen, so "Today" does not read as part of the level (neon, 26 Nov). */
+const seenDivider = (): HTMLElement => {
+  const rule = make("span", "friends-row__divider");
+  rule.setAttribute("aria-hidden", "true");
+  return rule;
+};

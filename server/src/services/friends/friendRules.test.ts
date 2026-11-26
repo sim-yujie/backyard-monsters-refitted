@@ -43,14 +43,18 @@ describe("friends rules", () => {
     expect(askAgainAt(T0)).toBe(T0 + 7 * DAY);
   });
 
-  test("online status: hidden, online, today, week, away", () => {
+  test("online status: the five last-seen steps; hidden shows only 1-4 weeks and over a month", () => {
     expect(onlineStatusOf(true, true, T0, T0)).toBeNull();
     expect(onlineStatusOf(false, true, null, T0)).toBe("online");
     expect(onlineStatusOf(false, false, T0 - DAY + 1, T0)).toBe("today");
     expect(onlineStatusOf(false, false, T0 - DAY, T0)).toBe("week");
     expect(onlineStatusOf(false, false, T0 - 7 * DAY + 1, T0)).toBe("week");
-    expect(onlineStatusOf(false, false, T0 - 7 * DAY, T0)).toBe("away");
-    expect(onlineStatusOf(false, false, null, T0)).toBe("away");
+    expect(onlineStatusOf(false, false, T0 - 7 * DAY, T0)).toBe("weeks");
+    expect(onlineStatusOf(false, false, T0 - 40 * DAY, T0)).toBe("month");
+    expect(onlineStatusOf(false, false, null, T0)).toBe("month");
+    expect(onlineStatusOf(true, false, T0 - 3 * DAY, T0)).toBeNull();
+    expect(onlineStatusOf(true, false, T0 - 10 * DAY, T0)).toBe("weeks");
+    expect(onlineStatusOf(true, false, T0 - 40 * DAY, T0)).toBe("month");
   });
 
   test("small readers: timestamps, block lists and LIKE text", () => {
