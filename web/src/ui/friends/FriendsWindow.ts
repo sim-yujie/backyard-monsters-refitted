@@ -9,7 +9,7 @@ import { gameIcon } from "@/ui/gameIcon";
 import { onlineDot } from "@/ui/onlineDot";
 import { Popup } from "@/ui/Popup";
 import { scrollFade } from "@/ui/scrollFade";
-import { seenDims, seenFaceMark, seenLook, seenMark } from "@/ui/seenMark";
+import { seenDims, seenMark } from "@/ui/seenMark";
 import { giftAllButton, openGiftAll, setGiftAllDone } from "./GiftAll";
 import { openGiftPicker } from "./GiftPicker";
 import { make } from "./rows";
@@ -252,14 +252,15 @@ export class FriendsWindow {
   }
 
   /**
-   * A group's heading ("[wrench] 3 Can use help"), its rows and, when some
+   * A group's heading ("Can use help (3)"), its rows and, when some
    * are left out, Show all. A group shown whole has its heading in the head.
    */
   private section(section: FriendsSection): HTMLElement[] {
     const nodes: HTMLElement[] = [];
     if (!this.focus) {
       const heading = make("h3", `friends-window__group friends-window__group--${section.name}`);
-      heading.append(groupPicture(section.name), ...groupWords(section.name, section.total));
+      // "Online (2)": words then the count, no dot (neon, 26 Nov: the rows say who is online).
+      heading.append(make("span", "friends-window__group-words", GROUP_WORDS[section.name]), make("span", "friends-window__group-count", `(${formatAmount(section.total)})`));
       nodes.push(heading);
     }
     nodes.push(...section.friends.map((friend) => this.row(friend)));
@@ -318,11 +319,7 @@ export class FriendsWindow {
     img.decoding = "async";
     img.loading = "lazy";
     face.append(img);
-    const look = seenLook();
-    const faceMark = seenFaceMark(friend.online, look);
-    if (faceMark) face.append(faceMark);
-    else if (friend.online === "online") face.append(onlineDot("friends-window__face-dot"));
-    img.classList.toggle("seen-dim", seenDims(friend.online, look));
+    img.classList.toggle("seen-dim", seenDims(friend.online));
     // The gold frame says "pinned" with a pin on its corner and in the tooltip (tester, 9 Nov).
     if (friend.pinnedAt !== null) {
       face.title = FRIENDS_WINDOW_TEXT.pinned;
@@ -330,10 +327,10 @@ export class FriendsWindow {
     }
     const name = make("span", "friends-window__name", friend.username);
     name.title = friend.username;
-    // Last seen (beta 9) under the name; online stays the dot on the face.
+    // Last seen (beta 9) under the name, online included: the one place it shows on all three lists.
     const who = make("span", "friends-window__who");
     who.append(name);
-    const seen = seenMark(friend.online, look, { onlineOnFace: true });
+    const seen = seenMark(friend.online);
     if (seen) who.append(seen);
     const marks = make("span", "friends-window__marks");
     if (canHelp(friend)) marks.append(gameIcon("tools", { size: 24, label: FRIENDS_WINDOW_TEXT.canHelp, className: "friends-window__mark" }));
@@ -403,7 +400,7 @@ const GROUP_WORDS: Record<keyof FriendGroups, string> = {
   rest: FRIENDS_WINDOW_TEXT.restGroup,
 };
 
-/** A group's picture: the wrench, the green dot, the grey dot. */
+/** A group's picture on its Back button in the head: the wrench, the green dot, the grey dot. */
 const groupPicture = (name: keyof FriendGroups): HTMLElement =>
   name === "help"
     ? gameIcon("tools", { size: 24, decorative: true })

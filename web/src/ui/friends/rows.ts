@@ -54,7 +54,7 @@ const BADGE_TEXT: Readonly<Record<RowBadge, { readonly icon: string; readonly ti
 
 /**
  * One player's row: critter, name (with the green dot when `online`),
- * "Level 12", an optional line under them ("Seen today"), and the actions.
+ * "Level 12" (with last seen after it on the Friends tab), an optional line under them, and the actions.
  * `badges` puts the bar's wrench and gift marks on the critter. `data-userid`
  * lets a test find it.
  */
@@ -68,8 +68,6 @@ export const playerRow = (
     readonly badges?: readonly RowBadge[];
     /** Small marks on the level line, after the level (a friend's other world, last seen). */
     readonly marks?: readonly HTMLElement[];
-    /** A mark on the face's corner (last seen, beta 9). */
-    readonly faceMark?: HTMLElement | null;
     /** Fade the face (last seen over a month). */
     readonly dimFace?: boolean;
   } = {},
@@ -89,7 +87,6 @@ export const playerRow = (
   faceBox.setAttribute("aria-label", `${player.username}: profile`);
   faceBox.addEventListener("click", () => void openProfile({ container: modalLayer(), userid: player.userid }));
   faceBox.append(face);
-  if (options.faceMark) faceBox.append(options.faceMark);
   if (options.dimFace) face.classList.add("seen-dim");
   for (const kind of options.badges ?? []) {
     const { icon, title } = BADGE_TEXT[kind];

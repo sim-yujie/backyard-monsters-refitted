@@ -113,17 +113,16 @@ describe("the window", () => {
       friend(4, { username: "Di", level: 1 }),
     ]);
     const headings = [...document.querySelectorAll(".friends-window__group")].map((h) => h.textContent);
-    expect(headings).toEqual(["1Can use help", "1Online", "2Everyone else"]);
+    expect(headings).toEqual(["Can use help(1)", "Online(1)", "Everyone else(2)"]);
     expect(names()).toEqual(["Ann", "Bo", "Cy", "Di"]);
-    expect(document.querySelector(".friends-window__group--help img.game-icon--tools")).not.toBeNull();
-    // Every heading leads with its picture, so the three line up (tester, 9 Nov).
-    expect(document.querySelector(".friends-window__group--rest > .friends-window__dot--off:first-child")).not.toBeNull();
+    // Plain words and a count, no dots, so the three line up (neon, 26 Nov; the rows carry last seen).
+    expect(document.querySelector(".friends-window__group .online-dot, .friends-window__group img")).toBeNull();
   });
 
   it("leaves out an empty group", async () => {
     await setup([friend(1, { username: "Cy" })]);
     expect([...document.querySelectorAll(".friends-window__group")].map((h) => h.textContent)).toEqual([
-      "1Everyone else",
+      "Everyone else(1)",
     ]);
   });
 
@@ -150,7 +149,9 @@ describe("the window", () => {
     ]);
     const [ann, bo] = items();
     expect(ann!.querySelector(".friends-window__level")!.textContent).toBe("Lv 12");
-    expect(ann!.querySelector(".online-dot")).not.toBeNull();
+    // Online sits under the name like every other step, not on the face (one place on all three lists).
+    expect(ann!.querySelector(".friends-window__who .seen--online .online-dot")).not.toBeNull();
+    expect(ann!.querySelector(".friends-window__face .online-dot")).toBeNull();
     const marks = [...ann!.querySelectorAll<HTMLImageElement>(".friends-window__mark")];
     expect(marks.map((m) => m.dataset["icon"])).toEqual(["tools", "gift"]);
     expect(marks.map((m) => m.getAttribute("aria-label"))).toEqual(["Can use your help today", "No gift sent today"]);
@@ -385,7 +386,7 @@ describe("a long list: 90 can use help, 20 online, 150 in all (lead, 9 Nov)", ()
 
   it("opens on three short groups: 15 rows, each heading with its count and a Show all", async () => {
     await setup(big());
-    expect(headings()).toEqual(["90Can use help", "20Online", "40Everyone else"]);
+    expect(headings()).toEqual(["Can use help(90)", "Online(20)", "Everyone else(40)"]);
     expect(items()).toHaveLength(3 * GROUP_PREVIEW);
     expect(more().map((button) => [button.textContent, button.dataset["group"]])).toEqual([
       ["Show all 90", "help"],
@@ -436,7 +437,7 @@ describe("a long list: 90 can use help, 20 online, 150 in all (lead, 9 Nov)", ()
     expect(items()).toHaveLength(21);
     for (const one of [...list.filter((f) => f.username.startsWith("Online")), friend(5)]) store.removeFriend(one.userid);
     expect(back()).toBeNull();
-    expect(headings()).toEqual(["90Can use help", "40Everyone else"]);
+    expect(headings()).toEqual(["Can use help(90)", "Everyone else(40)"]);
   });
 
   it("makes one list request however many friends there are", async () => {

@@ -1,12 +1,12 @@
-/* "Last seen" marks on list rows (beta 9, `seenMark.ts`). Phase 1 samples:
-   looks a, b and c from neon's design advice. Colours: Modern on dark steel,
-   Classic (`data-skin="flash"`) on parchment. */
+/* "Last seen" marks on list rows (beta 9, `seenMark.ts`; the owner's pick,
+   neon's Direction 1): quiet words for Online / Today / This wk, painted
+   hourglass pills for 1-4w and 1mo+. Colours: Modern on dark steel, Classic
+   (`data-skin="flash"`) on parchment. */
 
 .seen {
   --seen-today: #b8c4ce;
   --seen-week: #8c9aa6;
   --seen-weeks: #f2b441;
-  --seen-month: #f08a6e;
   --seen-month-fill: #7a2e2e;
   --seen-month-ink: #ffd6d6;
   --seen-weeks-fill: rgb(0 0 0 / 28%);
@@ -27,7 +27,6 @@
   --seen-today: #6b5a45;
   --seen-week: #8a7962;
   --seen-weeks: #8a4f00;
-  --seen-month: #a63429;
   --seen-month-fill: #a63429;
   --seen-month-ink: #fff6e5;
   --seen-weeks-fill: #f5e2b8;
@@ -40,11 +39,12 @@
 }
 
 .seen__dot {
-  width: 9px;
-  height: 9px;
+  width: 8px;
+  height: 8px;
   box-shadow: 0 0 0 1.5px rgb(0 0 0 / 45%);
 }
 
+/* Classic: a deeper green with a cream rim, so it shows on parchment. */
 :root[data-skin="flash"] .seen__dot {
   background: #248a45;
   box-shadow: 0 0 0 1.5px #fff6e5;
@@ -66,62 +66,52 @@
   color: var(--seen-week);
 }
 
-.seen--weeks {
-  color: var(--seen-weeks);
-}
-
+/* The two inactive steps as pills, the hourglass inside. */
+.seen--weeks,
 .seen--month {
-  color: var(--seen-month);
-}
-
-/* Look a: the two inactive steps as pills, the hourglass inside. */
-.seen--a.seen--weeks,
-.seen--a.seen--month {
   padding: 1px 6px 1px 2px;
   border: 1.5px solid currentColor;
   border-radius: 999px;
 }
 
-.seen--a.seen--weeks {
+.seen--weeks {
+  color: var(--seen-weeks);
   background: var(--seen-weeks-fill);
 }
 
-.seen--a.seen--month {
+.seen--month {
   border-color: var(--seen-month-fill);
   background: var(--seen-month-fill);
   color: var(--seen-month-ink);
 }
 
-/* Look b: words only beside the face's mark; over a month a touch heavier. */
-.seen--b.seen--month {
-  font-weight: 800;
-}
-
-/* Look b's corner mark on the face. */
-.seen-face {
-  position: absolute;
-  right: -4px;
-  bottom: -4px;
-  pointer-events: auto;
-}
-
-img.seen-face {
-  width: 18px;
-  height: 18px;
-  filter: drop-shadow(0 1px 1px rgb(0 0 0 / 70%));
-}
-
-.seen-face--online {
-  right: -2px;
-  bottom: -2px;
-  width: 12px;
-  height: 12px;
-  box-sizing: border-box;
-  border: 2px solid var(--colour-surface-base);
-}
-
-/* An over-a-month face fades (looks a and b). */
+/* An over-a-month face fades. */
 .seen-dim {
   opacity: 0.6;
   filter: grayscale(0.7);
+}
+
+/* Desktop and iPad (not the phone layout, `phoneLayout.ts`): one step up to
+   13px, the hourglass 18px, the dot 9px (neon, 26 Nov). Phones keep the
+   scaled 12px. */
+@media (min-width: 621px) and (min-height: 501px) {
+  .seen {
+    gap: 4px;
+    font-size: var(--text-sm);
+  }
+
+  .seen__icon {
+    width: 18px;
+    height: 18px;
+  }
+
+  .seen__dot {
+    width: 9px;
+    height: 9px;
+  }
+
+  .seen--weeks,
+  .seen--month {
+    padding: 1px 7px 1px 2px;
+  }
 }

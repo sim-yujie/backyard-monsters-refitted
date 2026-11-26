@@ -2,7 +2,7 @@ import { friendRefusal, type Friend, type FriendsApi } from "@/api/friends";
 import { canHelp, friendCountText } from "@/game/friends/friendText";
 import type { FriendsSnapshot, FriendsStore } from "@/game/friends/friendsStore";
 import { gameIcon, iconAmount } from "@/ui/gameIcon";
-import { seenDims, seenFaceMark, seenLook, seenMark } from "@/ui/seenMark";
+import { seenDims, seenMark } from "@/ui/seenMark";
 import { blockButton } from "./BlockButton";
 import { giftAllButton, setGiftAllDone } from "./GiftAll";
 import { button, make, playerRow, section, StatusLine, type FriendsTabView, type RowBadge } from "./rows";
@@ -279,8 +279,7 @@ export class FriendsTab implements FriendsTabView {
   }
 
   private row(friend: Friend): HTMLLIElement {
-    const look = seenLook();
-    const seen = seenMark(friend.online, look);
+    const seen = seenMark(friend.online);
     const busy = this.busy.has(friend.userid);
     if (this.confirming === friend.userid) {
       const yes = button(FRIENDS_TEXT.removeYes, () => void this.remove(friend), "danger");
@@ -338,13 +337,12 @@ export class FriendsTab implements FriendsTabView {
     const badges: RowBadge[] = [];
     if (canHelp(friend)) badges.push("wrench");
     if (!friend.giftSentToday) badges.push("gift");
-    // Last seen (beta 9) on the level line, after the level; look b puts online and the hourglass on the face.
+    // Last seen (beta 9) on the level line, after the level: the one place it shows, online included.
     const row = playerRow(friend, {
       actions,
       badges,
       marks: [...(seen ? [seen] : []), ...worldMark(friend)],
-      faceMark: seenFaceMark(friend.online, look),
-      dimFace: seenDims(friend.online, look),
+      dimFace: seenDims(friend.online),
     });
     row.classList.toggle("friends-row--open", opened);
     row.classList.toggle("friends-row--pinned", friend.pinnedAt !== null);

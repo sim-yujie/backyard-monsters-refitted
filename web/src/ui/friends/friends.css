@@ -292,6 +292,13 @@
   color: var(--colour-text-muted);
 }
 
+/* Desktop and iPad: "Level 40" and last seen at 13px (neon, 26 Nov). */
+@media (min-width: 621px) and (min-height: 501px) {
+  .friends-row__meta {
+    font-size: var(--text-sm);
+  }
+}
+
 /* A friend in another Map Room 2 world (beta 7): "[map] World 3". */
 .friends-row__world {
   display: inline-flex;

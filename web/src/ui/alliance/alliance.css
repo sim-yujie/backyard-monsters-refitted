@@ -343,15 +343,6 @@
   color: var(--colour-info);
 }
 
-.alliance__online {
-  flex: none;
-}
-
-.alliance__online--off {
-  width: 8px;
-  height: 8px;
-}
-
 /* Last seen (beta 9): a fixed slot left of the level, so levels and marks
    each line up down a 60-member list; under the level on a phone. */
 .alliance__side {
@@ -364,15 +355,18 @@
 .alliance__seen {
   display: flex;
   justify-content: flex-end;
-  width: 84px;
+  /* The widest mark, the 13px "1mo+" pill, is about 85px (neon, 26 Nov). */
+  width: 96px;
 }
 
-.alliance__face-box {
-  position: relative;
-  flex: none;
-  display: flex;
+/* Desktop and iPad: the level and the role step up with last seen to 13px,
+   so the right-hand column stays balanced (neon, 26 Nov). */
+@media (min-width: 621px) and (min-height: 501px) {
+  .alliance__item .alliance__level,
+  .alliance__item .alliance__role {
+    font-size: var(--text-sm);
+  }
 }
-
 
 .alliance__pager {
   display: flex;

@@ -223,18 +223,7 @@
   margin-top: 0;
 }
 
-.friends-window__group > .game-icon {
-  width: 20px;
-  height: 20px;
-}
-
-.friends-window__group > .friends-window__dot {
-  width: 10px;
-  height: 10px;
-  margin-inline: 5px;
-}
-
-/* "Everyone else": neither online nor in need of help, so a grey dot. */
+/* The Back button's "Everyone else": neither online nor in need of help, so a grey dot. */
 .friends-window__dot--off {
   background: var(--colour-text-muted);
 }
@@ -293,15 +282,6 @@
   object-fit: cover;
 }
 
-.friends-window__face-dot {
-  position: absolute;
-  right: -2px;
-  bottom: -2px;
-  width: 12px;
-  height: 12px;
-  box-sizing: border-box;
-  border: 2px solid var(--colour-surface-base);
-}
 
 /* A friend pinned to the top of the list (beta 7): a gold frame on the face,
    and the pin on its top corner says why (tester, 9 Nov). */
@@ -347,6 +327,13 @@
 
 .friends-window__level {
   font-variant-numeric: tabular-nums;
+}
+
+/* Desktop and iPad: the level chip steps up with last seen to 13px (neon, 26 Nov). */
+@media (min-width: 621px) and (min-height: 501px) {
+  .friends-window__level {
+    font-size: var(--text-sm);
+  }
 }
 
 .friends-window__marks {
