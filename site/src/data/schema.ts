@@ -31,7 +31,6 @@ export const organization: Thing = {
   name: SITE.name,
   url: abs("/"),
   logo: abs("/apple-touch-icon.png"),
-  email: SITE.bugEmail,
   description: "An unofficial fan project that runs Backyard Monsters Revamped. Not affiliated with Kixeye.",
 };
 

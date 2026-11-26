@@ -137,13 +137,12 @@ const roster = [
   ["C16", "Vorg"],
 ] as const;
 
-// The FAQ answers are plain text; the game's address, the bug email and the
-// Discord invite in them become links.
+// The FAQ answers are plain text; the game's address and the Discord invite in
+// them become links.
 const gameHost = new URL(SITE.gameUrl).host;
 const discordText = SITE.discordUrl.replace(/^https?:\/\//, "");
 const linkTargets = new Map([
   [gameHost, SITE.gameUrl],
-  [SITE.bugEmail, `mailto:${SITE.bugEmail}`],
   ...(discordText ? ([[discordText, SITE.discordUrl]] as const) : []),
 ]);
 const linkable = new RegExp(`(${[...linkTargets.keys()].map((t) => t.replace(/[.]/g, "\\.")).join("|")})`);
@@ -313,8 +312,7 @@ const motes = Array.from({ length: 18 }, (_, i) => ({
           <h2 id="beta-title" class="beta__title">This is an open beta</h2>
           <p>
             The game is live and free to play, but it is still being built. Things may break, but
-            <strong>we plan to keep your progress</strong> after the beta. A serious exploit or lost data could force a rollback to an earlier save; if that ever happens, we will announce it. Play for fun, and tell us what you find at
-            <a href={`mailto:${SITE.bugEmail}`}>{SITE.bugEmail}</a>.
+            <strong>we plan to keep your progress</strong> after the beta. A serious exploit or lost data could force a rollback to an earlier save; if that ever happens, we will announce it. Play for fun{SITE.discordUrl && <>, and tell us what you find on <a href={SITE.discordUrl} rel="noopener noreferrer">our Discord</a></>}.
           </p>
         </div>
       </div>
