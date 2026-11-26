@@ -118,7 +118,7 @@ describe("sight cache invalidation (#329, #330 WP1)", () => {
 
     expect(answer.status).toBe(200);
     expect(redisDel).toHaveBeenCalledWith(`sight:${USERID}`);
-    expect(redisDel).toHaveBeenCalledWith("sight:ally:31", "sight:ally:31:build");
+    expect(redisDel).toHaveBeenCalledWith("sight:ally:31", "sight:ally:31:build", "sight:ally:31:lock");
   });
 
   test("an action beside a running Flinger upgrade that leaves it alone does not invalidate", async () => {

@@ -29,7 +29,9 @@ type ServerWebSocket<T> = import("bun").ServerWebSocket<T>;
  *   player's fog hides are left out; their own cells come on `live.own`
  *   instead, or the zone is named in `rz` (ask it again).
  * - `live.zones {z: [[zoneId, version]...]}`: a change without its cells (too
- *   big a bundle, or this socket's sight is being re-read): ask those zones.
+ *   big a bundle, or this socket's sight could not be read): ask those zones.
+ *   While a sight is being re-read (after a change to it), the socket's pushes
+ *   wait for it and are then cut to the new sight.
  * - `live.own {c}`: the player's own cells in full (army, resources, next
  *   hatch...), on their own sockets only. `live.redo {z}`: ask these zones
  *   again (a relation to another player changed: truce, friends, an attack).
@@ -103,6 +105,8 @@ export interface LiveSocket extends LiveIdentity {
   sightWanted: number;
   /** Each zone's mask under `sight`, worked out when first needed. */
   masks: Map<number, ZoneMask>;
+  /** Pushes waiting for the sight being re-read ({@link holdPush}). */
+  held?: { push: PreparedPush; z: [number, number][] }[] | null;
 }
 
 const NO_SIGHT: LiveSight = { sv: "", sources: [], revealed: [] };
@@ -208,6 +212,7 @@ const loadSight = (socket: LiveSocket): Promise<void> => {
       deps?.warn(`Live map sight not read for ${socket.userId}: ${error}`);
     } finally {
       socket.sightLoad = null;
+      releaseHeld(socket);
     }
   })();
   return socket.sightLoad;
@@ -447,33 +452,83 @@ export const fanOutZones = (payload: string): void => {
     }
   }
   if (!perSocket.size) return;
-  const cells = message.x ? undefined : message.c;
-  const zoneCells = cells ? cellsByZone(Object.keys(message.z).map(Number), cells) : new Map<number, number[]>();
-  const cellText = cells?.map((cell) => JSON.stringify(cell));
-  const head = `{"type":"live.cells"${message.id ? `,"id":${JSON.stringify(message.id)}` : ""}`;
-  const adText = message.ad?.length ? `,"ad":${JSON.stringify(message.ad)}` : "";
-  const owners = new Set(message.ow ?? []);
-  const frames = new Map<string, string>();
-  const none = new Set<number>();
+  const push = preparePush(message);
   for (const [socket, z] of perSocket) {
-    if (!cells || socket.sightStale) {
-      // No cells (too many, not built) or a sight being re-read: the versions alone, ask again.
-      const shown = z.filter(([zone]) => maskOf(socket, zone) !== 0);
-      if (shown.length) send(socket, { type: "live.zones", z: shown });
+    if (socket.sightStale) {
+      // Its sight is being re-read (tens of ms): the push waits for it, then is cut to the new one.
+      holdPush(socket, push, z);
       continue;
     }
-    const part = cut(socket, z, cells, zoneCells, owners.has(socket.userId), none);
-    if (!part.z.length) continue;
-    const key = `${JSON.stringify(part.z)}|${part.cells.join(",")}|${part.rz.join(",")}`;
-    let frame = frames.get(key);
-    if (frame === undefined) {
-      frame =
-        `${head},"z":${JSON.stringify(part.z)},"c":[${part.cells.map((index) => cellText![index]).join(",")}]` +
-        `${part.cells.length ? adText : ""}${part.rz.length ? `,"rz":${JSON.stringify(part.rz)}` : ""}}`;
-      frames.set(key, frame);
-    }
-    socket.ws.send(frame);
+    deliver(socket, push, z);
   }
+};
+
+/** A push's parts shared by every socket it goes to, and the frames already built for them. */
+interface PreparedPush {
+  cells?: PushedCell[];
+  zoneCells: Map<number, number[]>;
+  cellText?: string[];
+  head: string;
+  adText: string;
+  owners: Set<number>;
+  frames: Map<string, string>;
+}
+
+const NO_ZONES = new Set<number>();
+
+const preparePush = (message: CellsMessage): PreparedPush => {
+  const cells = message.x ? undefined : message.c;
+  return {
+    ...(cells && { cells, cellText: cells.map((cell) => JSON.stringify(cell)) }),
+    zoneCells: cells ? cellsByZone(Object.keys(message.z).map(Number), cells) : new Map<number, number[]>(),
+    head: `{"type":"live.cells"${message.id ? `,"id":${JSON.stringify(message.id)}` : ""}`,
+    adText: message.ad?.length ? `,"ad":${JSON.stringify(message.ad)}` : "",
+    owners: new Set(message.ow ?? []),
+    frames: new Map(),
+  };
+};
+
+/** Sends one socket its part of a push (`z`: the watched zones it changed). */
+const deliver = (socket: LiveSocket, push: PreparedPush, z: [number, number][]): void => {
+  if (!push.cells || socket.sightStale) {
+    // No cells (too many, not built) or a sight that could not be read: the versions alone, ask again.
+    const shown = z.filter(([zone]) => maskOf(socket, zone) !== 0);
+    if (shown.length) send(socket, { type: "live.zones", z: shown });
+    return;
+  }
+  const part = cut(socket, z, push.cells, push.zoneCells, push.owners.has(socket.userId), NO_ZONES);
+  if (!part.z.length) return;
+  const key = `${JSON.stringify(part.z)}|${part.cells.join(",")}|${part.rz.join(",")}`;
+  let frame = push.frames.get(key);
+  if (frame === undefined) {
+    frame =
+      `${push.head},"z":${JSON.stringify(part.z)},"c":[${part.cells.map((index) => push.cellText![index]).join(",")}]` +
+      `${part.cells.length ? push.adText : ""}${part.rz.length ? `,"rz":${JSON.stringify(part.rz)}` : ""}}`;
+    push.frames.set(key, frame);
+  }
+  socket.ws.send(frame);
+};
+
+/** Most pushes held for one socket while its sight is re-read; past it, the oldest go as versions only. */
+export const MAX_HELD_PUSHES = 50;
+
+/** Keeps a push for a socket whose sight is being re-read; `loadSight` sends them when it is done. */
+const holdPush = (socket: LiveSocket, push: PreparedPush, z: [number, number][]): void => {
+  const held = (socket.held ??= []);
+  held.push({ push, z });
+  if (held.length > MAX_HELD_PUSHES) {
+    const oldest = held.shift()!;
+    const shown = oldest.z.filter(([zone]) => maskOf(socket, zone) !== 0);
+    if (shown.length) send(socket, { type: "live.zones", z: shown });
+  }
+};
+
+/** The held pushes, in order, cut to the sight now read (or as versions, if it could not be). */
+const releaseHeld = (socket: LiveSocket): void => {
+  const held = socket.held;
+  socket.held = null;
+  if (!held || !byUser.get(socket.userId)?.has(socket)) return;
+  for (const { push, z } of held) deliver(socket, push, z.filter(([zone]) => socket.zones.has(zone)));
 };
 
 /**
@@ -558,7 +613,7 @@ export const fanOutSight = async (payload: string): Promise<void> => {
     return;
   }
   const users = (message.u ?? []).filter((id) => byUser.has(id));
-  // Until their sight is read again, their pushes carry no cells (`sightStale`).
+  // Until their sight is read again, their pushes wait for it (`sightStale`, `holdPush`).
   for (const id of users) for (const socket of byUser.get(id) ?? []) sightChanged(socket);
   for (const id of message.a ?? []) for (const socket of byAlliance.get(id) ?? []) sightChanged(socket);
   // A player whose sight changed may have joined or left an alliance: re-read theirs.

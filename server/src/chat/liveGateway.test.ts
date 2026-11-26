@@ -273,19 +273,44 @@ describe("live map gateway: pushed cells and the fog (stage 2)", () => {
     expect(a.sent).toEqual([{ type: "live.redo", z: [ZONE] }]);
   });
 
-  test("while a sight change is being read, pushes carry versions only; then the new sight cuts them", async () => {
+  test("a push that comes while a sight change is being read waits for it, then is cut to the new sight", async () => {
     const a = await watching("a", [ZONE]);
     a.sent.length = 0;
     sightDelay = 30;
     sights.set(1, { sv: "s2", sources: [], revealed: [{ x: 16, y: 16 }] });
     const reading = fanOutSight(JSON.stringify({ u: [1], a: [] }));
     await Bun.sleep(5);
-    push({ c: [cell(15, 15, 7), cell(16, 16, 8)] });
+    push({ c: [cell(15, 15, 7, { atk: 1111 }), cell(16, 16, 8)] });
+    // Nothing yet but the nudge: not the old sight's cut, and no "ask again".
+    expect(a.sent).toEqual([{ type: "live.sight" }]);
+    await reading;
+    expect(a.sent).toHaveLength(2);
+    expect(cellsOf(a.sent[1])).toEqual(["16,16"]);
+    expect(JSON.stringify(a.sent)).not.toContain("1111");
+  });
+
+  test("a sight that cannot be read sends the held pushes as versions only (the map asks getarea)", async () => {
+    const a = await watching("a", [ZONE]);
+    a.sent.length = 0;
+    sightDelay = 20;
+    sights.delete(1);
+    const broken = new Error("db down");
+    initLiveGateway({
+      authenticate: async (token) => identities[token] ?? null,
+      versions: async (_world, ids) => ids.map(() => 5),
+      alliancesOf: async (ids) => new Map(ids.map((id) => [id, null])),
+      sight: async () => {
+        await Bun.sleep(20);
+        throw broken;
+      },
+      shape: () => "flat",
+      warn: () => {},
+    });
+    const reading = fanOutSight(JSON.stringify({ u: [1], a: [] }));
+    await Bun.sleep(5);
+    push({ c: [cell(15, 15, 7, { atk: 1111 })] });
     await reading;
     expect(a.sent).toEqual([{ type: "live.sight" }, { type: "live.zones", z: [[ZONE, 5]] }]);
-    a.sent.length = 0;
-    push({ c: [cell(15, 15, 7), cell(16, 16, 8)] });
-    expect(cellsOf(a.sent[0])).toEqual(["16,16"]);
   });
 
   test("a sign-in whose sight cannot be read sees nothing (fail closed)", async () => {
