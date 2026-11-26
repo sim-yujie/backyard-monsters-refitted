@@ -27,7 +27,7 @@ import type { Rect } from "./YardGrid";
 import { spriteBox, unionRect } from "./yardSnapshot";
 import { artFor, BuildingCondition, type Yard, type YardBuilding } from "./yardModel";
 import { classicTowerTier, tierPlateImage, tierPlateScale, tierPlateSpot } from "./classicTierPlates";
-import { bakeHelpGlow, glowAlpha, HELP_LOOK, liftAlpha, litTint, type BakedGlow, type GlowSource } from "./helpGlow";
+import { bakeHelpGlow, glowAlpha, helpLook, liftAlpha, litTint, type BakedGlow, type GlowSource } from "./helpGlow";
 
 /**
  * The building sprites: one per building, built once and never rebuilt.
@@ -1207,7 +1207,7 @@ export class YardBuildings {
    * again; the glow is baked once a building, a few a frame.
    */
   setHelpLit(given: ReadonlyMap<number, number>): void {
-    const lit = import.meta.env.DEV && HELP_LOOK.off ? NONE_LIT : given;
+    const lit = import.meta.env.DEV && helpLook().off ? NONE_LIT : given;
     if (lit.size === 0 && this.helpLit.size === 0) {
       if (this.glowCache.size > 0) this.dropGlowCache();
       return;
@@ -1305,9 +1305,10 @@ export class YardBuildings {
       fresh = true;
     }
     const amount = this.helpLit.get(view.building.id) ?? 0;
+    const look = helpLook();
     const glow = new Sprite(baked.texture);
     glow.position.set(baked.x, baked.y);
-    glow.tint = HELP_LOOK.glowColor;
+    glow.tint = look.glowColor;
     glow.alpha = glowAlpha(amount);
     glow.eventMode = "none";
     const behind = view.fort?.back ?? view.top;
@@ -1316,11 +1317,11 @@ export class YardBuildings {
     if (sorted) glow.zIndex = view.top.zIndex - 6;
     this.tops.addChildAt(glow, Math.max(0, this.tops.getChildIndex(behind)));
     view.helpGlow = glow;
-    if (HELP_LOOK.liftAlpha > 0) {
+    if (look.liftAlpha > 0) {
       // Over the building and its strips, under its fortification's front.
       const lift = new Sprite(baked.texture);
       lift.position.set(baked.x, baked.y);
-      lift.tint = HELP_LOOK.liftColor;
+      lift.tint = look.liftColor;
       lift.blendMode = "add";
       lift.alpha = liftAlpha(amount);
       lift.eventMode = "none";

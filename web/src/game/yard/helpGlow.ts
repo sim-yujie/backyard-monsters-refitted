@@ -1,3 +1,4 @@
+import { classicLook } from "@/game/classicLook";
 import { BlurFilter, ColorMatrixFilter, Container, Rectangle, Sprite, type ColorMatrix, type Renderer, type Texture } from "pixi.js";
 
 /**
@@ -12,16 +13,19 @@ import { BlurFilter, ColorMatrixFilter, Container, Rectangle, Sprite, type Color
  * tinted amber.
  */
 
-/** How a lit building looks; one object so a check can try values (`window.__helpLook`, dev only). */
+/** How a lit building looks, in each look; one shape so a check can try values (`window.__helpLook`, dev only). */
 export interface HelpLook {
   /** The warm tint at full light, multiplied into the art: red kept, green and blue taken down a little. */
   tint: number;
   /** The glow behind the building: its amber and how strong it stands at full light. */
   glowColor: number;
   glowAlpha: number;
-  /** The same glow laid over the building, adding light (0 for none): the "lit" in neon's "gentler amber". */
+  /** The same glow laid over the building, adding a little light (0 for none). */
   liftColor: number;
   liftAlpha: number;
+  /** Help all's pop: how strong the glow and the lift flare at the peak. */
+  flareGlowAlpha: number;
+  flareLiftAlpha: number;
   /** How far the glow spreads past the building, world pixels, the blur that softens it, and the outline's swell. */
   pad: number;
   blur: number;
@@ -30,23 +34,49 @@ export interface HelpLook {
   off: boolean;
 }
 
-export const HELP_LOOK: HelpLook = {
+/**
+ * Modern's light, after neon's review (26 Nov 2026): a tight deep-amber rim
+ * glow that matches the wrench, and only a breath of added light, so dark
+ * towers keep their blacks. Classic's paler art washes out sooner: its light
+ * is a fifth gentler.
+ */
+const MODERN_LOOK: HelpLook = {
   tint: 0xffe2b4,
-  glowColor: 0xffa526,
-  glowAlpha: 0.75,
+  glowColor: 0xff9e1b,
+  glowAlpha: 0.44,
   liftColor: 0xffb347,
-  liftAlpha: 0.22,
-  pad: 18,
-  blur: 7,
-  swell: 1.06,
+  liftAlpha: 0.07,
+  flareGlowAlpha: 0.9,
+  flareLiftAlpha: 0.3,
+  pad: 14,
+  blur: 5,
+  swell: 1.05,
   off: false,
 };
 
+const CLASSIC_LOOK: HelpLook = {
+  ...MODERN_LOOK,
+  tint: 0xffe6be,
+  glowAlpha: 0.36,
+  liftAlpha: 0.05,
+};
+
+/** Dev only: values a check sets over both looks. */
+const devLook: Partial<HelpLook> = {};
 if (import.meta.env.DEV && typeof window !== "undefined") {
   const w = window as unknown as { __helpLook?: Partial<HelpLook> };
-  Object.assign(HELP_LOOK, w.__helpLook ?? {});
-  w.__helpLook = HELP_LOOK;
+  Object.assign(devLook, w.__helpLook ?? {});
+  w.__helpLook = devLook;
 }
+
+/** The light for the look in use now. */
+export const helpLook = (): HelpLook => {
+  const look = classicLook() ? CLASSIC_LOOK : MODERN_LOOK;
+  return import.meta.env.DEV ? { ...look, ...devLook } : look;
+};
+
+/** Help all's pop takes a building's light up to this, then down to nothing (`YardHelpMarks`). */
+export const HELP_FLARE = 2;
 
 /** The glow is soft: half the pixels are plenty. */
 const GLOW_RESOLUTION = 0.5;
@@ -71,13 +101,25 @@ export const multiplyColor = (a: number, b: number): number => {
 
 /** A building's tint lit by `amount` (0 to 1 and over), over the tint it already has (a damage step). */
 export const litTint = (base: number, amount: number): number =>
-  amount <= 0 ? base : multiplyColor(base, mixColor(0xffffff, HELP_LOOK.tint, amount));
+  amount <= 0 ? base : multiplyColor(base, mixColor(0xffffff, helpLook().tint, amount));
+
+/** An alpha at `amount`: `rest` times it up to 1, then on to `flare` at {@link HELP_FLARE}. */
+const lightAlpha = (amount: number, rest: number, flare: number): number => {
+  const alpha = amount <= 1 ? rest * amount : rest + ((flare - rest) * (amount - 1)) / (HELP_FLARE - 1);
+  return Math.max(0, Math.min(1, alpha));
+};
 
 /** The lift's alpha at `amount`. */
-export const liftAlpha = (amount: number): number => Math.max(0, Math.min(1, HELP_LOOK.liftAlpha * amount));
+export const liftAlpha = (amount: number): number => {
+  const look = helpLook();
+  return lightAlpha(amount, look.liftAlpha, look.flareLiftAlpha);
+};
 
-/** The glow's alpha at `amount`: full at 1, brighter for Help all's flare. */
-export const glowAlpha = (amount: number): number => Math.max(0, Math.min(1, HELP_LOOK.glowAlpha * amount));
+/** The glow's alpha at `amount`. */
+export const glowAlpha = (amount: number): number => {
+  const look = helpLook();
+  return lightAlpha(amount, look.glowAlpha, look.flareGlowAlpha);
+};
 
 /** What the glow is baked from: the sprites of one building as they stand. */
 export interface GlowSource {
@@ -115,11 +157,13 @@ let filters: [ColorMatrixFilter, BlurFilter] | null = null;
  */
 export const bakeHelpGlow = (renderer: Renderer, sources: readonly GlowSource[]): BakedGlow | null => {
   if (sources.length === 0) return null;
+  const look = helpLook();
   if (!filters) {
     const white = new ColorMatrixFilter();
     white.matrix = SILHOUETTE;
-    filters = [white, new BlurFilter({ strength: HELP_LOOK.blur, quality: 3 })];
+    filters = [white, new BlurFilter({ strength: look.blur, quality: 3 })];
   }
+  filters[1].strength = look.blur;
   const holder = new Container();
   const inner = new Container();
   holder.addChild(inner);
@@ -148,10 +192,10 @@ export const bakeHelpGlow = (renderer: Renderer, sources: readonly GlowSource[])
   const midY = (top + bottom) / 2;
   inner.pivot.set(midX, midY);
   inner.position.set(midX, midY);
-  inner.scale.set(HELP_LOOK.swell);
+  inner.scale.set(look.swell);
   inner.filters = filters;
-  const padX = HELP_LOOK.pad + ((right - left) * (HELP_LOOK.swell - 1)) / 2;
-  const padY = HELP_LOOK.pad + ((bottom - top) * (HELP_LOOK.swell - 1)) / 2;
+  const padX = look.pad + ((right - left) * (look.swell - 1)) / 2;
+  const padY = look.pad + ((bottom - top) * (look.swell - 1)) / 2;
   const frame = new Rectangle(left - padX, top - padY, right - left + 2 * padX, bottom - top + 2 * padY);
   const texture = renderer.generateTexture({ target: holder, frame, resolution: GLOW_RESOLUTION, antialias: false });
   inner.filters = null;

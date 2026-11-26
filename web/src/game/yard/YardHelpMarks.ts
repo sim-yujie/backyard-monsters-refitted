@@ -1,6 +1,7 @@
 import { Container, Graphics, Text } from "pixi.js";
 import { savingTag, type HelpMark, type HelpMarkKind } from "@/game/friends/helpModel";
 import { paintIcon } from "./yardIcons";
+import { HELP_FLARE } from "./helpGlow";
 import { jobBarScale } from "./YardJobBars";
 import type { MarkAnchor } from "./YardHatchMarks";
 import type { Corners } from "./planner/marquee";
@@ -85,8 +86,12 @@ const scaleOf = (kind: HelpMarkKind, zoom: number): number =>
 /** One pulse of the ring, seconds, and its faintest. */
 const PULSE_PERIOD = 1.6;
 const PULSE_LOW = 0.75;
-/** The ring stands this much wider than the footprint, so it shows round the building's foot. */
-const RING_SPREAD = 1.25;
+/**
+ * The ring stands this much wider than the footprint, so it shows round the
+ * building's foot; kept close (1.25 before neon's review, 26 Nov 2026) so
+ * neighbouring rings do not stack in open ground or reach the next building.
+ */
+const RING_SPREAD = 1.1;
 
 /** The mock-up's amber, a cream rim and a dark wrench (until the painted tools come). */
 const AMBER = 0xf2a51a;
@@ -547,12 +552,16 @@ const readyToLeave = (view: MarkView, exit: HelpMarkExit): Pick<LeavingView, "ta
 
 const easeOut = (t: number): number => 1 - (1 - t) * (1 - t);
 
+/** Help all's pop: the building's light rises to its flare in this long, then fades in this long (seconds). */
+const FLARE_RISE = 0.13;
+const FLARE_FADE = 0.4;
+
 /**
  * One frame of a wrench's exit, `age` seconds in, `t` from 0 to 1 over the exit's length.
  * - pop (0.9 s): the disc swells to 1.3x in the first 0.12 s, then pops
  *   (shrinks and fades) by 0.3 s while a cream ring bursts out of it; the
  *   ground ring flares to full and fades by 0.3 s, the building's light
- *   flares to 1.6 and fades by 0.45 s; the tag rises 26 px off
+ *   flares to {@link HELP_FLARE} by 0.13 s and eases out by 0.53 s; the tag rises 26 px off
  *   the building and fades over the last 0.25 s.
  * - fade (0.3 s): everything fades, the building's light too.
  */
@@ -577,8 +586,13 @@ const paintExit = (leaving: LeavingView, t: number, age: number): void => {
       }
     }
     ring(age < 0.08 ? 1 : Math.max(0, 1 - (age - 0.08) / 0.22));
-    // The building's light flares with the pop, then fades out a little after the ring.
-    if (view.ring) view.glow = age < 0.1 ? 1 + 0.6 * (age / 0.1) : Math.max(0, 1.6 * (1 - (age - 0.1) / 0.35));
+    // The building's light flares with the pop, then eases out while the tag rises (neon, 26 Nov 2026).
+    if (view.ring) {
+      view.glow =
+        age < FLARE_RISE
+          ? 1 + (HELP_FLARE - 1) * easeOut(age / FLARE_RISE)
+          : HELP_FLARE * (1 - easeOut(Math.min(1, (age - FLARE_RISE) / FLARE_FADE)));
+    }
     if (tagBox) {
       tagBox.y = disc.y + WRENCH_RISE - 26 * easeOut(Math.min(1, age / 0.5));
       const fadeFrom = EXIT_SECONDS.pop - 0.25;
@@ -651,7 +665,7 @@ const middleOf = (corners: Corners): { x: number; y: number } => {
 /**
  * The ground ring around a footprint, drawn about the footprint's middle: an
  * ellipse through the diamond's corners, widened by {@link RING_SPREAD}, with
- * an amber glow inside, a soft halo and a bright edge.
+ * an amber glow inside and a bright edge over a dark band.
  */
 /** The ring's two radii about the footprint's middle. */
 const ringRadii = (corners: Corners): { rx: number; ry: number } => {
@@ -675,12 +689,10 @@ const drawRing = (ring: Graphics, corners: Corners | null): void => {
     .fill({ color: RING_EDGE, alpha: 0.2 })
     .ellipse(0, 0, rx * 0.42, ry * 0.42)
     .fill({ color: RING_EDGE, alpha: 0.2 })
-    // A wide soft halo round the edge.
-    .ellipse(0, 0, rx + 4, ry + 4)
-    .stroke({ width: 16, color: AMBER, alpha: 0.4 })
-    // A dark band under the edge, so it reads on grass, then the bright edge itself.
+    // A dark band under the edge, so it reads on grass, then the bright edge itself:
+    // thinner and softer than before (neon, 26 Nov 2026), the lit building is the main sign now.
     .ellipse(0, 0, rx, ry)
-    .stroke({ width: 11, color: RING_DARK, alpha: 0.85 })
+    .stroke({ width: 8, color: RING_DARK, alpha: 0.6 })
     .ellipse(0, 0, rx, ry)
-    .stroke({ width: 6, color: RING_EDGE, alpha: 1 });
+    .stroke({ width: 4, color: RING_EDGE, alpha: 0.9 });
 };
