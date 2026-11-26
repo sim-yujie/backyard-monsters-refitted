@@ -19,7 +19,7 @@ import { CHECK_MS, LiveLink, MAX_WATCH, type LiveCellsFrame, type LiveLinkOption
 export const DOWN_REFRESH_SECONDS = 240;
 
 export interface LiveUpdatesOptions {
-  store: Pick<ZoneStore, "applyVersions" | "watchList" | "getCell" | "pumpLive" | "applyLiveCells" | "applyOwnCells" | "reaskZones">;
+  store: Pick<ZoneStore, "applyVersions" | "watchList" | "getCell" | "pumpLive" | "applyLiveCells" | "applyOwnCells" | "reaskOwners">;
   rings: Pick<CellRings, "add">;
   /** Ask `/worldmapv2/sight` again. */
   refreshSight: () => void;
@@ -61,8 +61,8 @@ export class LiveUpdates {
       onOwn: (cells) => {
         if (!this.stopped && !this.hidden()) this.options.store.applyOwnCells(cells);
       },
-      onRedo: (zones) => {
-        if (!this.stopped && this.options.store.reaskZones(zones) > 0) void this.options.store.pumpLive();
+      onRedo: (owners) => {
+        if (!this.stopped && this.options.store.reaskOwners(owners) > 0) void this.options.store.pumpLive();
       },
       onSight: this.options.refreshSight,
       ...this.options.link,

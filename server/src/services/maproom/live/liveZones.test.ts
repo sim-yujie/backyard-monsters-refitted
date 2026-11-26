@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test";
 
 import {
+  channelPrefix,
   coveringZones,
   LIVE_OWN_CHANNEL,
   LIVE_PRESENT_KEY,
@@ -210,7 +211,7 @@ describe("LiveZoneWriter cells (stage 2)", () => {
         },
         ownerCells: async (uid, _world, coords) =>
           coords.filter(([x]) => (x === 15 ? 7 : 8) === uid).map(([x, y]) => [x, y, player(uid, { mine: 1, r: { r1: 5 }, m: { C1: 2 } })]),
-        cellsOf: async () => [],
+        defendersOf: async () => [],
         ...builder,
       },
     });
@@ -286,19 +287,39 @@ describe("LiveZoneWriter cells (stage 2)", () => {
     expect(warnings[0]).toContain("db down");
   });
 
-  test("a relation change tells only the two players (with a map open) to ask the zones holding the other's cells", async () => {
-    const { writer, redis } = withCells({
-      cellsOf: async (uids) =>
-        [
-          { uid: 7, world_id: "w1", x: 15, y: 15 },
-          { uid: 8, world_id: "w1", x: 55, y: 55 },
-        ].filter((row) => uids.includes(row.uid)),
-    });
+  test("a relation change tells only the two players (with a map open) who the other is; nothing public moves", async () => {
+    const { writer, redis } = withCells();
     redis.zsets.set(LIVE_PRESENT_KEY, new Map([["7", NOW]]));
     writer.relations([[7, 8]]);
     await writer.flush();
-    // Player 8 has no map open: only 7 hears, about 8's zone. Nothing public moves.
-    expect(redis.published).toEqual([{ channel: LIVE_OWN_CHANNEL, message: { u: 7, w: "w1", rz: [zoneId(50, 50)] } }]);
+    // Player 8 has no map open: only 7 hears.
+    expect(redis.published).toEqual([{ channel: LIVE_OWN_CHANNEL, message: { u: 7, ro: [8] } }]);
     expect(pushes(redis)).toEqual([]);
+  });
+
+  test("an attacker's cells moving nudges the sight of the players they attacked who have a map open", async () => {
+    const asked: number[][] = [];
+    const { writer, redis } = withCells({
+      defendersOf: async (ids) => {
+        asked.push([...ids]);
+        return [21, 22];
+      },
+    });
+    redis.zsets.set(LIVE_PRESENT_KEY, new Map([["21", NOW]]));
+    writer.revealsOf([7]);
+    await writer.flush();
+    expect(asked).toEqual([[7]]);
+    expect(redis.published).toEqual([{ channel: LIVE_SIGHT_CHANNEL, message: { u: [21], a: [] } }]);
+  });
+});
+
+describe("the live map's channel prefix", () => {
+  test("one per Redis database, none on database 0 (the live game), or as set", () => {
+    expect(channelPrefix({ REDIS_URL: "redis://localhost:6379" })).toBe("");
+    expect(channelPrefix({ REDIS_URL: "redis://localhost:6379/0" })).toBe("");
+    expect(channelPrefix({ REDIS_URL: "redis://localhost:6379/12" })).toBe("db12:");
+    expect(channelPrefix({ REDIS_URL: "redis://user:pw@host:6379/3" })).toBe("db3:");
+    expect(channelPrefix({ REDIS_URL: "redis://localhost:6379/12", LIVE_MAP_CHANNEL_PREFIX: "lm2:" })).toBe("lm2:");
+    expect(channelPrefix({ REDIS_URL: "redis://localhost:6379/12", LIVE_MAP_CHANNEL_PREFIX: "" })).toBe("");
   });
 });

@@ -44,6 +44,7 @@ describe.skipIf(!dbName)("live map marks wait for the commit (beta 9)", () => {
       sightUsers: () => {},
       sightAlliances: () => {},
       relations: () => {},
+      revealsOf: () => {},
     });
   });
   beforeEach(() => {

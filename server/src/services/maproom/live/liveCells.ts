@@ -137,13 +137,13 @@ export const buildOwnerCells = (
     return cells.filter(([, , payload]) => (payload as { mine?: unknown } | undefined)?.mine === 1);
   });
 
-/** The zones holding a player's cells on a world (for "ask these again", a relation changed). */
-export const cellsOf = (userids: readonly number[]): Promise<{ uid: number; world_id: string; x: number; y: number }[]> =>
-  RequestContext.create(postgres.orm.em, async () =>
-    userids.length
-      ? postgres.em.execute(
-          `SELECT c.uid, c.world_id, c.x, c.y FROM bym.world_map_cell c WHERE c.map_version = 2 AND c.uid IN (${userids.map(() => "?").join(", ")})`,
-          [...userids],
-        )
-      : [],
-  );
+/** The players these players have ever attacked (whose fog reveals their bases). */
+export const defendersOf = (userids: readonly number[]): Promise<number[]> =>
+  RequestContext.create(postgres.orm.em, async () => {
+    if (!userids.length) return [];
+    const rows = await postgres.em.execute<{ id: number | string }[]>(
+      `SELECT DISTINCT defender_userid AS id FROM bym.attack_logs WHERE attacker_userid IN (${userids.map(() => "?").join(", ")})`,
+      [...userids],
+    );
+    return rows.map((row) => Number(row.id));
+  });

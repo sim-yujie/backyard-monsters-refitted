@@ -155,11 +155,15 @@ describe("ZoneStore live cells (stage 2)", () => {
     expect(store.getZone(HOME.id)?.zv).toBe(2);
   });
 
-  it("'ask again' for a relation change asks held zones only", async () => {
+  it("a relation change asks again every held zone holding that player's cells, on screen or not", async () => {
     versions.clear();
     cells.clear();
-    const { store } = await setup();
-    expect(store.reaskZones([HOME.id, zoneFor(100, 100).id])).toBe(1);
+    cells.set("715,345", player(9));
+    const { store, batches } = await setup();
+    expect(store.reaskOwners([9, 10])).toBe(1);
+    expect(store.reaskOwners([10])).toBe(0);
+    await store.pumpLive();
+    expect(batches).toEqual([[[710, 340]]]);
   });
 });
 

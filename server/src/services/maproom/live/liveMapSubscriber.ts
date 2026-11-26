@@ -8,7 +8,7 @@ import { User } from "../../../database/models/user.model.js";
 import { WorldMapCell } from "../../../database/models/worldmapcell.model.js";
 import { MapRoomVersion } from "../../../enums/MapRoom.js";
 import { calculateBaseLevel } from "../../base/calculateBaseLevel.js";
-import { markAlliances, markCells, markRelations, markSaveOwners, markSaves, markUsers } from "./liveMarks.js";
+import { markAlliances, markCells, markRelations, markRevealsOf, markSaveOwners, markSaves, markUsers } from "./liveMarks.js";
 
 /**
  * The live map's hook on every ORM write (beta 9, stage 1): a flush that
@@ -92,11 +92,16 @@ export const marksFor = (changeSet: ChangeSet<object>): Mark[] => {
     const world = worldOf(cell);
     if (!world) return [];
     const coords = around(cell.x, cell.y);
-    const before = changeSet.originalEntity as { x?: number; y?: number } | undefined;
-    if (before && typeof before.x === "number" && typeof before.y === "number" && (before.x !== cell.x || before.y !== cell.y)) {
-      coords.push(...around(before.x, before.y));
+    const before = changeSet.originalEntity as { x?: number; y?: number; uid?: number } | undefined;
+    const moved = !!before && typeof before.x === "number" && typeof before.y === "number" && (before.x !== cell.x || before.y !== cell.y);
+    if (moved) coords.push(...around(before!.x!, before!.y!));
+    const marks: Mark[] = [() => markCells(world, coords)];
+    // A base that came, went, moved or changed hands: revealed in the fog of whoever its owners attacked.
+    if (changeSet.type !== "update" || moved || changed.includes("uid")) {
+      const owners = [cell.uid, before?.uid].filter((uid): uid is number => typeof uid === "number");
+      marks.push(() => markRevealsOf(owners));
     }
-    return [() => markCells(world, coords)];
+    return marks;
   }
 
   if (entity instanceof Save) {

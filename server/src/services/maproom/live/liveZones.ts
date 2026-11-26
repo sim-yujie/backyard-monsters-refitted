@@ -21,11 +21,19 @@ import type { PublicCells, PushedCell, RosterEntry } from "./liveCells.js";
  */
 
 /**
- * Put before the live map's Redis channel names (`LIVE_MAP_CHANNEL_PREFIX`, default none). Redis
- * pub/sub ignores the database number, so test servers sharing one Redis set their own prefix and
- * do not hear each other's pushes; the live game leaves it empty.
+ * Put before the live map's Redis channel names. Redis pub/sub ignores the database number, so
+ * servers sharing one Redis on different databases (local test servers, each on its own slot, often
+ * on copies of the same game database with the same world ids) would hear, and draw, each other's
+ * pushes. `LIVE_MAP_CHANNEL_PREFIX` when set; otherwise `db<n>:` for a REDIS_URL on database n > 0,
+ * and nothing on database 0 (the live game). Every process of one game shares its REDIS_URL, so
+ * they always agree.
  */
-const CHANNEL_PREFIX = process.env.LIVE_MAP_CHANNEL_PREFIX ?? "";
+export const channelPrefix = (env: Record<string, string | undefined> = process.env): string => {
+  if (env.LIVE_MAP_CHANNEL_PREFIX !== undefined) return env.LIVE_MAP_CHANNEL_PREFIX;
+  const db = /\/(\d+)\/?$/.exec(env.REDIS_URL ?? "")?.[1];
+  return db && Number(db) > 0 ? `db${Number(db)}:` : "";
+};
+const CHANNEL_PREFIX = channelPrefix();
 export const LIVE_ZONES_CHANNEL = `${CHANNEL_PREFIX}livemap:zones`;
 export const LIVE_SIGHT_CHANNEL = `${CHANNEL_PREFIX}livemap:sight`;
 /** A player's own channel (stage 2): their own cells' full payloads, and "ask these zones again". */
@@ -123,12 +131,12 @@ export interface CellsMessage extends ZonesMessage {
   x?: 1;
 }
 
-/** A player's own channel: their own cells in full (`c`), or zones to ask again (`rz`). */
+/** A player's own channel: their own cells in full (`c`), or the players whose relation to them changed (`ro`). */
 export interface OwnMessage {
   u: number;
-  w: string;
+  w?: string;
   c?: PushedCell[];
-  rz?: number[];
+  ro?: number[];
 }
 
 /** The sight nudge: players and alliances whose fog of war changed. */
@@ -141,8 +149,8 @@ export interface SightMessage {
 export interface LiveCellBuilder {
   publicCells(world: string, coords: readonly (readonly [number, number])[]): Promise<PublicCells>;
   ownerCells(userid: number, world: string, coords: readonly (readonly [number, number])[]): Promise<PushedCell[]>;
-  /** Every cell of these players (a relation changed: the other side asks those zones again). */
-  cellsOf(userids: readonly number[]): Promise<(CellRow & { uid: number })[]>;
+  /** The players these players have ever attacked (their bases are revealed in those players' fog). */
+  defendersOf(userids: readonly number[]): Promise<number[]>;
 }
 
 export class LiveZoneWriter implements LiveMarkSink {
@@ -157,6 +165,8 @@ export class LiveZoneWriter implements LiveMarkSink {
   private sightAllianceMarks = new Set<number>();
   /** "a,b": a relation between two players changed (truce, friends, an attack). */
   private relationMarks = new Set<string>();
+  /** Players whose cells moved, came or went: their past defenders' fog may have changed. */
+  private revealMarks = new Set<number>();
   private timer: ReturnType<typeof setInterval> | null = null;
   private flushing: Promise<void> | null = null;
 
@@ -200,6 +210,10 @@ export class LiveZoneWriter implements LiveMarkSink {
     for (const [a, b] of pairs) if (a !== b) this.relationMarks.add(`${a},${b}`);
   }
 
+  revealsOf(ids: readonly number[]): void {
+    for (const id of ids) this.revealMarks.add(id);
+  }
+
   /** Publishes every BUNDLE_MS until `stop`. */
   start(): void {
     if (this.timer) return;
@@ -235,6 +249,7 @@ export class LiveZoneWriter implements LiveMarkSink {
     const sightUsers = [...this.sightUserMarks];
     const sightAlliances = [...this.sightAllianceMarks];
     const relations = [...this.relationMarks].map((pair) => pair.split(",").map(Number) as [number, number]);
+    const reveals = [...this.revealMarks];
     this.saveMarks = new Set();
     this.saveOwnerMarks = new Set();
     this.homeMarks = new Set();
@@ -244,8 +259,16 @@ export class LiveZoneWriter implements LiveMarkSink {
     this.sightUserMarks = new Set();
     this.sightAllianceMarks = new Set();
     this.relationMarks = new Set();
+    this.revealMarks = new Set();
 
     try {
+      // An attacker's base is revealed in the fog of everyone they attacked, for ever: when their
+      // cells move, come or go, those players with a map open read their sight again (getarea's
+      // own copy runs out in 30 s; a socket keeps its sight until told).
+      if (reveals.length && this.deps.cells) {
+        const present = await this.presentAmong(await this.deps.cells.defendersOf(reveals));
+        for (const id of present) if (!sightUsers.includes(id)) sightUsers.push(id);
+      }
       // The sight nudge first: a gateway re-reads those players' fog before it masks the cells
       // below with it (a change that took sight away must not be shown under the old sight).
       if (sightUsers.length || sightAlliances.length) {
@@ -396,50 +419,29 @@ export class LiveZoneWriter implements LiveMarkSink {
 
   /**
    * A relation between two players changed (a truce, a friendship, an attack): only they see it
-   * (`t`, `fr`, `fp`, `ak`, `ho`), so each of them with a map open is told to ask again the zones
-   * holding the other's cells. Nothing public changes.
+   * (`t`, `fr`, `fp`, `ak`, `ho`), so each of them with a map open is told who the other is; their
+   * map asks again every cached zone holding the other's cells (on screen now, or once back on
+   * screen). Nothing public changes.
    */
   private async publishRelations(pairs: [number, number][]): Promise<void> {
     const everyone = [...new Set(pairs.flat())];
     const present = new Set(await this.presentAmong(everyone));
-    if (!present.size || !this.deps.cells) return;
-    const others = new Set<number>();
-    for (const [a, b] of pairs) {
-      if (present.has(a)) others.add(b);
-      if (present.has(b)) others.add(a);
-    }
-    const rows = await this.deps.cells.cellsOf([...others]);
-    /** uid -> world -> zones */
-    const zonesOf = new Map<number, Map<string, Set<number>>>();
-    for (const row of rows) {
-      const uid = Number(row.uid);
-      let worlds = zonesOf.get(uid);
-      if (!worlds) zonesOf.set(uid, (worlds = new Map()));
-      let set = worlds.get(row.world_id);
-      if (!set) worlds.set(row.world_id, (set = new Set()));
-      for (const id of coveringZones(row.x, row.y)) set.add(id);
-    }
-    /** viewer -> world -> zones */
-    const told = new Map<number, Map<string, Set<number>>>();
+    if (!present.size) return;
+    /** viewer -> the other players */
+    const told = new Map<number, Set<number>>();
     const tell = (viewer: number, other: number) => {
       if (!present.has(viewer)) return;
-      for (const [world, ids] of zonesOf.get(other) ?? []) {
-        let worlds = told.get(viewer);
-        if (!worlds) told.set(viewer, (worlds = new Map()));
-        let set = worlds.get(world);
-        if (!set) worlds.set(world, (set = new Set()));
-        for (const id of ids) set.add(id);
-      }
+      let set = told.get(viewer);
+      if (!set) told.set(viewer, (set = new Set()));
+      set.add(other);
     };
     for (const [a, b] of pairs) {
       tell(a, b);
       tell(b, a);
     }
-    for (const [viewer, worlds] of told) {
-      for (const [world, ids] of worlds) {
-        const message: OwnMessage = { u: viewer, w: world, rz: [...ids] };
-        await this.deps.redis.publish(LIVE_OWN_CHANNEL, JSON.stringify(message));
-      }
+    for (const [viewer, others] of told) {
+      const message: OwnMessage = { u: viewer, ro: [...others] };
+      await this.deps.redis.publish(LIVE_OWN_CHANNEL, JSON.stringify(message));
     }
   }
 }

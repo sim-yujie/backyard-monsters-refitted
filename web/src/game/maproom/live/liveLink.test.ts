@@ -185,15 +185,15 @@ describe("LiveLink cells and catch-up (stage 2)", () => {
     return { link, frames, own, redo };
   };
 
-  it("hands on pushed cells, own cells and zones to ask again", () => {
+  it("hands on pushed cells, own cells and the players whose relation changed", () => {
     const { link, frames, own, redo } = withCells(() => true);
     const socket = signIn(link);
     socket.hear({ type: "live.cells", id: "5-0", z: [[1, 4]], c: [[12, 13, { uid: 3 }]], ad: [{ alliance_id: 2 }], rz: [1] });
     socket.hear({ type: "live.own", c: [[12, 13, { uid: 1, mine: 1 }]] });
-    socket.hear({ type: "live.redo", z: [1, 2] });
+    socket.hear({ type: "live.redo", u: [7, 8] });
     expect(frames).toEqual([{ id: "5-0", z: [[1, 4]], c: [[12, 13, { uid: 3 }]], ad: [{ alliance_id: 2 }], rz: [1] }]);
     expect(own).toEqual([[[12, 13, { uid: 1, mine: 1 }]]]);
-    expect(redo).toEqual([[1, 2]]);
+    expect(redo).toEqual([[7, 8]]);
     expect(link.seenId).toBe("5-0");
   });
 

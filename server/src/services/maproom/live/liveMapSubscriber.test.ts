@@ -24,6 +24,7 @@ beforeEach(() => {
     sightUsers: () => {},
     sightAlliances: () => {},
     relations: (pairs) => got.push(`relations:${pairs.map((pair) => pair.join("/")).join(" ")}`),
+    revealsOf: (ids) => got.push(`reveals:${ids.join(",")}`),
   });
 });
 afterEach(() => setLiveMarkSink(null));
@@ -62,6 +63,21 @@ describe("marksFor", () => {
     run(changeSet(cell, "update", { x: 10 }, { x: 50, y: 60 }));
     expect(got[0]).toStartWith("cells:w1:18:");
     expect(got[0]).toContain("50/60");
+  });
+
+  test("a base that comes, moves or changes hands marks its owners' reveals (their defenders' fog); a cell's other fields do not", () => {
+    const cell = Object.assign(new WorldMapCell(undefined as never, 0, 0, 0), { x: 10, y: 20, uid: 5, map_version: 2, world: { uuid: "w1" } });
+    run(changeSet(cell, "create", { uid: 5 }));
+    expect(got).toContain("reveals:5");
+    got.length = 0;
+    run(changeSet(cell, "update", { uid: 5 }, { x: 10, y: 20, uid: 4 }));
+    expect(got).toContain("reveals:5,4");
+    got.length = 0;
+    run(changeSet(cell, "update", { x: 10 }, { x: 50, y: 60, uid: 5 }));
+    expect(got).toContain("reveals:5,5");
+    got.length = 0;
+    run(changeSet(cell, "update", { terrainHeight: 120 }, { x: 10, y: 20, uid: 5 }));
+    expect(got.filter((line) => line.startsWith("reveals"))).toEqual([]);
   });
 
   test("Map Room 1 cells never mark", () => {

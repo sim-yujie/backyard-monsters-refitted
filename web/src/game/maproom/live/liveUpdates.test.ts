@@ -37,7 +37,7 @@ const setup = (hidden = false) => {
       },
       applyLiveCells: () => 0,
       applyOwnCells: () => {},
-      reaskZones: () => 0,
+      reaskOwners: () => 0,
     },
     rings: { add: (cell, kind, tier) => (rings.push({ ...cell, kind, tier }), true) },
     refreshSight: () => {},

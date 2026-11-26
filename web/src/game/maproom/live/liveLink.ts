@@ -3,8 +3,9 @@
  * server's port, signed in with the game's own token (`live.auth`), so it
  * works with World chat switched off. It brings the changed cells themselves
  * (`live.cells`, cut by the server to the player's fog; `live.own`, the
- * player's own cells in full), zones to ask again (`live.zones` versions,
- * `live.redo`), and when the player's fog of war changed (`live.sight`).
+ * player's own cells in full), zones to ask again (`live.zones` versions;
+ * `live.redo`, the players whose relation to this one changed), and when the
+ * player's fog of war changed (`live.sight`).
  *
  * - Catch-up: each push has an id; after a reconnect (or the tab coming back)
  *   the watch carries the last one the map took (`since`), and the server
@@ -63,8 +64,8 @@ export interface LiveLinkOptions {
   onCells?: (frame: LiveCellsFrame) => boolean;
   /** The player's own cells in full. */
   onOwn?: (cells: LiveCellsFrame["c"]) => void;
-  /** Zones to ask again (a relation to another player changed). */
-  onRedo?: (zones: number[]) => void;
+  /** Players whose relation to this one changed: ask again the zones holding their cells. */
+  onRedo?: (owners: number[]) => void;
   /** The player's sight changed: ask `/worldmapv2/sight` again. */
   onSight: () => void;
   /** The connection came up or went down. */
@@ -214,7 +215,7 @@ export class LiveLink {
   }
 
   private receive(raw: unknown): void {
-    let message: { type?: unknown; z?: unknown; all?: unknown; c?: unknown; id?: unknown; ad?: unknown; rz?: unknown; rp?: unknown };
+    let message: { type?: unknown; z?: unknown; u?: unknown; all?: unknown; c?: unknown; id?: unknown; ad?: unknown; rz?: unknown; rp?: unknown };
     try {
       message = JSON.parse(String(raw));
     } catch {
@@ -257,7 +258,7 @@ export class LiveLink {
         if (Array.isArray(message.c)) this.options.onOwn?.(message.c.filter(isCell));
         return;
       case "live.redo":
-        if (Array.isArray(message.z)) this.options.onRedo?.(message.z.filter((id): id is number => typeof id === "number"));
+        if (Array.isArray(message.u)) this.options.onRedo?.(message.u.filter((id): id is number => typeof id === "number"));
         return;
       case "live.sight":
         this.options.onSight();

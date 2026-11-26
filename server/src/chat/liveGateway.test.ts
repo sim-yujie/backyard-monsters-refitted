@@ -266,11 +266,14 @@ describe("live map gateway: pushed cells and the fog (stage 2)", () => {
     expect(a.sent).toEqual([]);
   });
 
-  test("'ask again' after a relation change names only zones the player watches and can see", async () => {
+  test("a relation change names the other player to this player's sockets only", async () => {
     const a = await watching("a", [ZONE]);
+    const b = await watching("b", [ZONE]);
     a.sent.length = 0;
-    fanOutOwn(JSON.stringify({ u: 1, w: "w", rz: [ZONE, FAR, 20002] }));
-    expect(a.sent).toEqual([{ type: "live.redo", z: [ZONE] }]);
+    b.sent.length = 0;
+    fanOutOwn(JSON.stringify({ u: 1, ro: [2] }));
+    expect(a.sent).toEqual([{ type: "live.redo", u: [2] }]);
+    expect(b.sent).toEqual([]);
   });
 
   test("a push that comes while a sight change is being read waits for it, then is cut to the new sight", async () => {
@@ -289,19 +292,20 @@ describe("live map gateway: pushed cells and the fog (stage 2)", () => {
     expect(JSON.stringify(a.sent)).not.toContain("1111");
   });
 
-  test("a sight that cannot be read sends the held pushes as versions only (the map asks getarea)", async () => {
+  test("a sight that cannot be read sends the held pushes, and later ones, as versions only, then is read again", async () => {
     const a = await watching("a", [ZONE]);
     a.sent.length = 0;
-    sightDelay = 20;
-    sights.delete(1);
-    const broken = new Error("db down");
+    let fail = true;
+    let reads = 0;
     initLiveGateway({
       authenticate: async (token) => identities[token] ?? null,
       versions: async (_world, ids) => ids.map(() => 5),
       alliancesOf: async (ids) => new Map(ids.map((id) => [id, null])),
       sight: async () => {
+        reads += 1;
         await Bun.sleep(20);
-        throw broken;
+        if (fail) throw new Error("db down");
+        return { sv: "s3", sources: [], revealed: [{ x: 15, y: 15 }] };
       },
       shape: () => "flat",
       warn: () => {},
@@ -311,6 +315,29 @@ describe("live map gateway: pushed cells and the fog (stage 2)", () => {
     push({ c: [cell(15, 15, 7, { atk: 1111 })] });
     await reading;
     expect(a.sent).toEqual([{ type: "live.sight" }, { type: "live.zones", z: [[ZONE, 5]] }]);
+    // Not held for ever: a push after the failure goes out at once, as versions.
+    push({ c: [cell(15, 15, 7, { atk: 1111 })] });
+    expect(a.sent.at(-1)).toEqual({ type: "live.zones", z: [[ZONE, 5]] });
+    // ... and the sight is tried again after a few seconds.
+    fail = false;
+    const before = reads;
+    await Bun.sleep(5_300);
+    expect(reads).toBe(before + 1);
+    push({ c: [cell(15, 15, 7, { atk: 1111 })] });
+    expect(cellsOf(a.sent.at(-1))).toEqual(["15,15"]);
+  }, 10_000);
+
+  test("a sight change heard while the sign-in reads the sight makes it read again", async () => {
+    sightDelay = 30;
+    const signing = signedIn("a");
+    await Bun.sleep(10);
+    sights.set(1, { sv: "s2", sources: [], revealed: [{ x: 16, y: 16 }] });
+    await fanOutSight(JSON.stringify({ u: [1], a: [] }));
+    const a = await signing;
+    await a.frame({ type: "live.watch", z: [ZONE] });
+    a.sent.length = 0;
+    push({ c: [cell(15, 15, 7), cell(16, 16, 8)] });
+    expect(cellsOf(a.sent[0])).toEqual(["16,16"]);
   });
 
   test("a sign-in whose sight cannot be read sees nothing (fail closed)", async () => {

@@ -34,6 +34,8 @@ export interface LiveMarkSink {
    * only they see of each other's cells (`t`, `fr`, `fp`, `ak`, `ho`). Nothing public moves.
    */
   relations(pairs: readonly (readonly [number, number])[]): void;
+  /** Players whose cells moved, came or went: the fog of everyone they ever attacked shows them. */
+  revealsOf(ids: readonly number[]): void;
 }
 
 let sink: LiveMarkSink | null = null;
@@ -97,6 +99,11 @@ export const markSightAlliances = (ids: readonly number[]): void => {
 export const markRelations = (pairs: readonly (readonly [number, number])[]): void => {
   const real = pairs.filter(([a, b]) => a !== b && [a, b].every((id) => Number.isSafeInteger(id) && id > 0));
   if (real.length) safely((to) => to.relations(real));
+};
+
+export const markRevealsOf = (ids: readonly number[]): void => {
+  const real = realIds(ids);
+  if (real.length) safely((to) => to.revealsOf(real));
 };
 
 /** A cell row as code that is about to delete it holds it: the world loaded, a reference or its id. */

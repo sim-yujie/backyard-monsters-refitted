@@ -33,8 +33,9 @@ type ServerWebSocket<T> = import("bun").ServerWebSocket<T>;
  *   While a sight is being re-read (after a change to it), the socket's pushes
  *   wait for it and are then cut to the new sight.
  * - `live.own {c}`: the player's own cells in full (army, resources, next
- *   hatch...), on their own sockets only. `live.redo {z}`: ask these zones
- *   again (a relation to another player changed: truce, friends, an attack).
+ *   hatch...), on their own sockets only. `live.redo {u}`: ask again the
+ *   zones holding these players' cells (a relation to them changed: truce,
+ *   friends, an attack).
  * - `live.sight` pushed when the player's fog of war changed: the map asks
  *   `/worldmapv2/sight` again (and the server re-reads it here too).
  * - `live.ping`: keeps the socket inside the server's idle timeout.
@@ -105,6 +106,9 @@ export interface LiveSocket extends LiveIdentity {
   sightWanted: number;
   /** Each zone's mask under `sight`, worked out when first needed. */
   masks: Map<number, ZoneMask>;
+  /** The last read failed: pushes go out as versions only until a retry works. */
+  sightFailed?: boolean;
+  sightRetry?: ReturnType<typeof setTimeout> | null;
   /** Pushes waiting for the sight being re-read ({@link holdPush}). */
   held?: { push: PreparedPush; z: [number, number][] }[] | null;
 }
@@ -190,9 +194,15 @@ const maskOf = (socket: LiveSocket, zone: number): ZoneMask => {
 };
 
 /** Reads the socket's sight again (sign-in, a sight change, a watch long after the last read). */
+/** How long after a failed sight read it is tried again. */
+export const SIGHT_RETRY_MS = 5_000;
+
 const loadSight = (socket: LiveSocket): Promise<void> => {
   if (socket.sightLoad) return socket.sightLoad;
   socket.sightStale = true;
+  socket.sightFailed = false;
+  if (socket.sightRetry) clearTimeout(socket.sightRetry);
+  socket.sightRetry = null;
   socket.sightLoad = (async () => {
     try {
       // Read again while a change came in during the read: the answer may predate it.
@@ -207,9 +217,17 @@ const loadSight = (socket: LiveSocket): Promise<void> => {
           return;
         }
       }
+      throw new Error("sight kept changing while it was read");
     } catch (error) {
-      // Kept stale: pushes go out without cells (the map asks `getarea`, which reads the fog itself).
+      // Stale until a retry works: pushes go out without cells (the map asks `getarea`, which
+      // reads the fog itself).
+      socket.sightFailed = true;
       deps?.warn(`Live map sight not read for ${socket.userId}: ${error}`);
+      socket.sightRetry = setTimeout(() => {
+        socket.sightRetry = null;
+        if (byUser.get(socket.userId)?.has(socket)) void loadSight(socket);
+      }, SIGHT_RETRY_MS);
+      socket.sightRetry.unref?.();
     } finally {
       socket.sightLoad = null;
       releaseHeld(socket);
@@ -273,19 +291,6 @@ const signIn = async (ws: ServerWebSocket<SocketData>, text: string): Promise<vo
     ws.close(1008, "Sign-in refused");
     return;
   }
-  // Until the sight is read the player sees nothing through this socket (fail closed).
-  const socket: LiveSocket = {
-    ...identity,
-    ws,
-    zones: new Set(),
-    lastWatchAt: 0,
-    sight: NO_SIGHT,
-    sightAt: 0,
-    sightStale: true,
-    sightWanted: 0,
-    masks: new Map(),
-  };
-  await loadSight(socket);
   // The socket may have closed while the sign-in was checked.
   if (ws.readyState !== undefined && ws.readyState > 1) return;
   const mine = byUser.get(identity.userId);
@@ -297,11 +302,26 @@ const signIn = async (ws: ServerWebSocket<SocketData>, text: string): Promise<vo
       oldest.ws.close(1000, "Opened elsewhere");
     }
   }
+  // Until the sight is read the player sees nothing through this socket (fail closed). Registered
+  // first, so a sight change heard during the read makes it read again.
+  const socket: LiveSocket = {
+    ...identity,
+    ws,
+    zones: new Set(),
+    lastWatchAt: 0,
+    sight: NO_SIGHT,
+    sightAt: 0,
+    sightStale: true,
+    sightWanted: 0,
+    masks: new Map(),
+  };
   ws.data.live = socket;
   if (ws.data.loginDeadline) clearTimeout(ws.data.loginDeadline);
   ws.data.loginDeadline = null;
   addTo(byUser, socket.userId, socket);
   if (socket.allianceId) addTo(byAlliance, socket.allianceId, socket);
+  await loadSight(socket);
+  if (!byUser.get(socket.userId)?.has(socket)) return;
   void deps.present?.([socket.userId], Date.now()).catch(() => undefined);
   send(socket, { type: "live.ok" });
 };
@@ -354,6 +374,9 @@ const answerWatch = async (socket: LiveSocket, now: number): Promise<void> => {
 
 /** Forgets a socket (closed, or replaced by a newer tab). */
 export const dropLive = (socket: LiveSocket): void => {
+  if (socket.sightRetry) clearTimeout(socket.sightRetry);
+  socket.sightRetry = null;
+  socket.held = null;
   if (socket.replyTimer) clearTimeout(socket.replyTimer);
   socket.replyTimer = null;
   for (const zone of socket.zones) unwatch(socket, zone);
@@ -454,7 +477,7 @@ export const fanOutZones = (payload: string): void => {
   if (!perSocket.size) return;
   const push = preparePush(message);
   for (const [socket, z] of perSocket) {
-    if (socket.sightStale) {
+    if (socket.sightStale && !socket.sightFailed) {
       // Its sight is being re-read (tens of ms): the push waits for it, then is cut to the new one.
       holdPush(socket, push, z);
       continue;
@@ -585,9 +608,10 @@ const replay = async (socket: LiveSocket, since: string): Promise<void> => {
 };
 
 /**
- * A `livemap:own` message: a player's own cells in full (`live.own`), or the zones holding another
- * player's cells to ask again after a relation changed (`live.redo`, only zones the player watches
- * and can see, so it says nothing about where anyone's hidden cells are).
+ * A `livemap:own` message: a player's own cells in full (`live.own`), or the players whose relation
+ * to them changed (`live.redo {u}`: the map asks again every cached zone holding those players'
+ * cells; it only names players the player already knows, the other side of their own truce,
+ * friendship or attack).
  */
 export const fanOutOwn = (payload: string): void => {
   let message: OwnMessage;
@@ -597,10 +621,8 @@ export const fanOutOwn = (payload: string): void => {
     return;
   }
   for (const socket of byUser.get(message.u) ?? []) {
-    if (socket.world !== message.w) continue;
-    if (message.c?.length) send(socket, { type: "live.own", c: message.c });
-    const redo = (message.rz ?? []).filter((zone) => socket.zones.has(zone) && maskOf(socket, zone) !== 0);
-    if (redo.length) send(socket, { type: "live.redo", z: redo });
+    if (message.c?.length && socket.world === message.w) send(socket, { type: "live.own", c: message.c });
+    if (message.ro?.length) send(socket, { type: "live.redo", u: message.ro });
   }
 };
 

@@ -652,13 +652,20 @@ export class ZoneStore {
     this.commitCells(this.writeCells(cells, accepts, () => undefined));
   }
 
-  /** Live map: asks these cached zones again (a relation to another player changed). Returns how many. */
-  reaskZones(ids: readonly number[]): number {
+  /**
+   * Live map: the player's relation to these players changed (a truce, friends, an attack): every
+   * cached zone holding one of their cells is asked again, now if on screen, else once it is.
+   * Returns how many.
+   */
+  reaskOwners(owners: readonly number[]): number {
+    const wanted = new Set(owners);
     const at = this.now();
     let asked = 0;
-    for (const id of ids) {
-      const zone = this.zones.get(id);
-      if (zone && this.wantLive(id, zone.zv ?? 0, at, false)) asked += 1;
+    for (const zone of this.zones.values()) {
+      const holds = Object.values(zone.data).some((column) =>
+        Object.values(column).some((cell) => cell && isPlayerCell(cell) && wanted.has(cell.uid)),
+      );
+      if (holds && this.wantLive(zone.id, zone.zv ?? 0, at, false)) asked += 1;
     }
     return asked;
   }
