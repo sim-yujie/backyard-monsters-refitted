@@ -3,7 +3,7 @@ title: Resources and buildings
 description: The four resources, the harvesters that make them, and how building and upgrading works.
 order: 2
 icon: /images/monsters/C12.webp
-updated: 2026-11-04
+updated: 2026-11-27
 ---
 
 ## The four resources
@@ -34,7 +34,7 @@ You can only hold so much of each resource. Build and upgrade **Storage Silos** 
 ## Building and upgrading
 
 - Tap **Build** to see every building you can add, sorted into tabs: **Resources**, **Buildings**, **Defensive** and **Decorations**.
-- **Decorations** has five sub-tabs, like the original game. They cost **Shiny**.
+- **Decorations** has five sub-tabs, like the original game. They cost **Glimmers**, a coin you earn in events, quests and weekend check-ins.
 - A greyed-out building tells you what it needs, usually a bigger Town Hall.
 - Tap any building in your yard to **Upgrade** it. Upgrades make it stronger or faster.
 - Every job needs a free **worker**. More workers mean more jobs at once.
@@ -55,5 +55,3 @@ Buildings damaged in an attack stop working until they are repaired. Tap a damag
 ## Plan your layout
 
 Tap **Layout** to open the **Yard Planner**. It lets you rearrange your whole yard and save layouts to come back to later. To raise many walls at once, see [Upgrade many walls at once](/guides/upgrade-many-walls/).
-
-Next: [Monsters and the Hatchery](/guides/monsters-and-the-hatchery/).

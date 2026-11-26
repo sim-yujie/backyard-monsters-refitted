@@ -158,10 +158,14 @@ const costs = [
       <h2 id="other-title">Other ways to help</h2>
       <ul class="prose">
         <li>Play, and tell your friends about the game.</li>
-        <li>
-          Remember it is a beta: when something looks wrong, let us know by email at
-          <a href={`mailto:${SITE.bugEmail}`}>{SITE.bugEmail}</a>. Say what you were doing and what went wrong.
-        </li>
+        {
+          SITE.discordUrl && (
+            <li>
+              Remember it is a beta: when something looks wrong, report it on
+              <a href={SITE.discordUrl} rel="noopener noreferrer">our Discord</a>. Say what you were doing and what went wrong.
+            </li>
+          )
+        }
         {SITE.discordUrl && <li>Join the community on Discord.</li>}
       </ul>
       {

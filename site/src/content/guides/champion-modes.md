@@ -3,14 +3,14 @@ title: Champion Modes
 description: "Offensive, Hybrid or Defensive: choose what your champion goes for when it attacks."
 order: 8
 icon: /images/guides/champion-modes-card.webp
-updated: 2026-10-29
+updated: 2026-11-27
 ---
 
 ## Pick a Mode before you attack
 
 In the attack screen, every champion in your army list has a **Mode** box. Pick one. Your champion keeps it for the next attack.
 
-![The army list in the attack screen: each champion has a Mode box, here with Krallen ticked](/images/guides/champion-modes-pick.webp)
+<img class="narrow" src="/images/guides/champion-modes-pick.webp" alt="The army list in the attack screen: Fomor and Drull, each with a Mode box set to Hybrid" width="519" height="280" loading="lazy">
 
 ## The three Modes
 
@@ -45,3 +45,4 @@ In the attack screen, every champion in your army list has a **Mode** box. Pick 
 - <img class="icon icon--small" src="/images/guides/icon-health.webp" alt="Health"> <img class="icon icon--small" src="/images/guides/icon-damage.webp" alt="Damage"> <img class="icon icon--small" src="/images/guides/icon-speed.webp" alt="Speed"> A Mode never changes health, damage or speed. Only **what** it attacks.
 - Your champion **learns** from its own attacks, and leans toward what worked in its Mode.
 - Modes are for attacking. A champion defending your yard fights as always.
+- **Krallen has no Mode:** she always fights as in Flash.

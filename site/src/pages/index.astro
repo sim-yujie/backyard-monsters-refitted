@@ -12,8 +12,8 @@ const changelog = (await getCollection("changelog", ({ data }) => !data.draft)).
   (a, b) => b.data.date.getTime() - a.data.date.getTime(),
 );
 const latest = changelog.slice(0, 2);
-// The beta.4 changelog entry, for the "full list" link in its section.
-const beta4Log = changelog.find((entry) => entry.id.includes("beta-4"));
+// The beta 9 changelog entry, for the "full list" link in its section.
+const beta9Log = changelog.find((entry) => entry.id.includes("beta-9"));
 
 const fmt = new Intl.DateTimeFormat("en-GB", { day: "numeric", month: "long", year: "numeric", timeZone: "UTC" });
 
@@ -86,58 +86,40 @@ const whatsNew = [
   },
 ];
 
-// "New in beta.4". Pictures are the painted What's new cards from the game
-// (web/public/whats-new/beta4-*.webp); `img` names a pair in
-// public/images/beta4/ (<name>.webp at 768 x 432, <name>-384.webp).
-const halloweenPrizes = [
-  ["10 pumpkins", "10 Shiny"],
-  ["25 pumpkins", "25,000 of each resource"],
-  ["50 pumpkins", "2 Mini-Pumpkins and 20 Shiny"],
-  ["100 pumpkins", "a D.A.V.E. Pumpkin and 30 Shiny"],
-];
-
-const beta4 = [
+// "New in beta 9": the three features with their own guide. Pictures are
+// real in-game screenshots (yardtester), the same crops as the guide cards
+// in public/images/guides/ (720 x 360).
+const beta9 = [
   {
-    title: "Events and daily treats",
-    text: "The new Events button shows what's on now and what's coming next. Log in each day of Halloween for 14 days of treats, free speed-ups included.",
-    img: "events",
-    alt: "Bob opening a wooden advent calendar full of treats",
-    badge: "14 days",
+    title: "Hatchery Control Centre 2 and 3",
+    text: "A longer queue, presets you send with one tap, and at level 3, your outposts' hatcheries run from home.",
+    img: "/images/guides/hcc-card.webp",
+    alt: "The Hatch tab running the outpost North Gate from home, with two presets and a Send button",
+    guide: "/guides/hatchery-control-centre/",
   },
   {
-    title: "Friends list upgrade",
-    text: "Find friends fast with search and filters, and see at a glance who you can help or send a gift to.",
-    img: "friends",
-    alt: "Two cheerful Pokeys high-fiving, one holding a gift",
+    title: "Move monsters on the map",
+    text: "Bring monsters to a yard or send them out, right on Map Room 2. Free and instant.",
+    img: "/images/guides/move-card.webp",
+    alt: "Map Room 2: your yards with their monster plates while monsters are brought to one outpost",
+    guide: "/guides/move-monsters/",
   },
   {
-    title: "Tidier on phones",
-    text: "One Menu button holds everything, friends tuck away behind their own button, and the battle screen stays clear.",
-    img: "phone",
-    alt: "A Pokey sweeping up buttons beside a phone showing a yard",
-  },
-  {
-    title: "Special moves tuned",
-    text: "Bandito's whirlwind spins through enemy monsters, Teratorn's fireball bounces on to walls, and defending Bolts blink too. Fang's venom bites once a second again.",
-    img: "special-moves",
-    alt: "A Bandito spinning a green whirlwind while a Teratorn breathes fire at a fence",
-  },
-  {
-    title: "Monsters on the move",
-    text: "Crabatron scuttles, Fang creeps, Eye-ra slithers, and lots more: 15 monsters now walk and attack with brand-new animations.",
-    img: "animations",
-    alt: "Eye-ra, Fang and Crabatron racing across the grass",
-    badge: "15 monsters",
+    title: "Infernal Lab",
+    text: "A new Inferno building: one ability for each of the 8 Inferno monsters, paid in Sulfur.",
+    img: "/images/guides/lab-card.webp",
+    alt: "The Infernal Lab's list of Inferno monsters with their ranks, and Balthazar's Research rank 1 button",
+    guide: "/guides/infernal-lab/",
   },
 ];
 
-const beta4More = [
-  "Map Room 1 shows online players with a green dot.",
-  "Battles on Map Room 1 show as a shield (they attacked you) and a sword (you attacked them).",
-  "Map Room 1 remembers how you sorted the list, with a highest/lowest-first button.",
-  "On Map Room 2 on phones, Mail, My range and Filter sit beside \"Find a place\".",
-  "What's new cards like these pop up in the game after an update.",
-  "A new Thank-you page on this website for everyone who supports the game.",
+const beta9More = [
+  "Map Room 2 updates live, and zoomed out, yards merge into plaques you tap to zoom in.",
+  "Your Wild Monster Baiter can invite friends and alliance mates to test your yard.",
+  "Last seen on the friends list and the alliance Members tab.",
+  "Yard arrows step through your main yard and outposts.",
+  "Classic towers show I, II or III tier plates.",
+  "26 new decorations, and faster sign-in.",
 ];
 
 const roster = [
@@ -155,13 +137,12 @@ const roster = [
   ["C16", "Vorg"],
 ] as const;
 
-// The FAQ answers are plain text; the game's address, the bug email and the
-// Discord invite in them become links.
+// The FAQ answers are plain text; the game's address and the Discord invite in
+// them become links.
 const gameHost = new URL(SITE.gameUrl).host;
 const discordText = SITE.discordUrl.replace(/^https?:\/\//, "");
 const linkTargets = new Map([
   [gameHost, SITE.gameUrl],
-  [SITE.bugEmail, `mailto:${SITE.bugEmail}`],
   ...(discordText ? ([[discordText, SITE.discordUrl]] as const) : []),
 ]);
 const linkable = new RegExp(`(${[...linkTargets.keys()].map((t) => t.replace(/[.]/g, "\\.")).join("|")})`);
@@ -331,82 +312,41 @@ const motes = Array.from({ length: 18 }, (_, i) => ({
           <h2 id="beta-title" class="beta__title">This is an open beta</h2>
           <p>
             The game is live and free to play, but it is still being built. Things may break, but
-            <strong>we plan to keep your progress</strong> after the beta. A serious exploit or lost data could force a rollback to an earlier save; if that ever happens, we will announce it. Play for fun, and tell us what you find at
-            <a href={`mailto:${SITE.bugEmail}`}>{SITE.bugEmail}</a>.
+            <strong>we plan to keep your progress</strong> after the beta. A serious exploit or lost data could force a rollback to an earlier save; if that ever happens, we will announce it. Play for fun{SITE.discordUrl && <>, and tell us what you find on <a href={SITE.discordUrl} rel="noopener noreferrer">our Discord</a></>}.
           </p>
         </div>
       </div>
     </div>
   </section>
 
-  <section id="beta-4" class="section beta4" aria-labelledby="beta4-title">
+  <section id="beta-9" class="section update" aria-labelledby="update-title">
     <div class="wrap">
       <div class="section__head reveal">
-        <span class="eyebrow">Update 2.0.0-beta.4</span>
-        <h2 id="beta4-title">New in beta 4</h2>
-        <p>Halloween comes to the backyard, with a pumpkin hunt, daily treats and monsters on the move.</p>
+        <span class="eyebrow">Beta 9 update</span>
+        <h2 id="update-title">New in beta 9</h2>
+        <p>A bigger Hatchery Control Centre, monsters you move on the map, and a lab for the Inferno.</p>
       </div>
-      <div class="beta4__grid">
-        <article class="spotlight reveal reveal--pop">
-          <div class="spotlight__art">
-            <img
-              src="/images/beta4/halloween.webp"
-              srcset="/images/beta4/halloween-384.webp 384w, /images/beta4/halloween.webp 768w"
-              sizes="(max-width: 760px) 100vw, 560px"
-              alt="Bob in a witch's hat beside a glowing jack-o'-lantern on a moonlit night"
-              width="768"
-              height="432"
-              loading="lazy"
-              decoding="async"
-            />
-            <span class="pill pill--beta change__badge">From 28 Oct</span>
-          </div>
-          <div class="spotlight__body">
-            <h3>Halloween is here!</h3>
-            <p>
-              From 28 October your yard goes spooky for two whole weeks, with pumpkins where the mushrooms used to grow.
-              Tap a pumpkin to send a worker to pick it, and collect enough for prizes:
-            </p>
-            <ul class="spotlight__list">
-              {
-                halloweenPrizes.map(([need, prize]) => (
-                  <li>
-                    <strong>{need}:</strong> {prize}
-                  </li>
-                ))
-              }
-            </ul>
-          </div>
-        </article>
+      <div class="update__grid">
         {
-          beta4.map((b, i) => (
-            <article class:list={["change reveal reveal--pop", { "change--wide": i < 2 }]} style={`--i:${i % 3}`}>
-              <div class="change__art change__art--wide">
-                <img
-                  src={`/images/beta4/${b.img}.webp`}
-                  srcset={`/images/beta4/${b.img}-384.webp 384w, /images/beta4/${b.img}.webp 768w`}
-                  sizes="(max-width: 560px) 100vw, (max-width: 1020px) 50vw, 380px"
-                  alt={b.alt}
-                  width="768"
-                  height="432"
-                  loading="lazy"
-                  decoding="async"
-                />
-                {b.badge && <span class="pill pill--beta change__badge">{b.badge}</span>}
+          beta9.map((b, i) => (
+            <a class="change update__card reveal reveal--pop" href={b.guide} style={`--i:${i}`}>
+              <div class="change__art update__art">
+                <img src={b.img} alt={b.alt} width="720" height="360" loading="lazy" decoding="async" />
               </div>
               <div class="change__body">
                 <h3>{b.title}</h3>
                 <p>{b.text}</p>
+                <span class="update__go">Read the guide</span>
               </div>
-            </article>
+            </a>
           ))
         }
-        <div class="beta4__more reveal" style="--i:1">
+        <div class="update__more reveal" style="--i:1">
           <h3>Also in this update</h3>
           <ul>
-            {beta4More.map((item) => <li>{item}</li>)}
+            {beta9More.map((item) => <li>{item}</li>)}
           </ul>
-          {beta4Log && <a href={`/changelog/#${beta4Log.id}`}>See every change in beta 4</a>}
+          {beta9Log && <a href={`/changelog/#${beta9Log.id}`}>See every change in beta 9</a>}
         </div>
       </div>
     </div>
@@ -1301,82 +1241,46 @@ const motes = Array.from({ length: 18 }, (_, i) => ({
     }
   }
 
-  /* ── New in beta 4 ───────────────────────────────────────────────────── */
+  /* ── New in beta 9 ───────────────────────────────────────────────────── */
 
-  /* Six tracks: the first two cards take half a row each, the other three a third. */
-  .beta4__grid {
+  .update__grid {
     display: grid;
-    grid-template-columns: repeat(6, minmax(0, 1fr));
+    grid-template-columns: repeat(3, minmax(0, 1fr));
     gap: 20px;
   }
 
-  .beta4__grid > .change {
-    grid-column: span 2;
+  .update__card {
+    color: var(--text);
+    text-decoration: none;
   }
 
-  .beta4__grid > .change--wide {
-    grid-column: span 3;
-  }
-
-  .spotlight {
-    grid-column: 1 / -1;
-    display: grid;
-    grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr);
-    background:
-      radial-gradient(500px 260px at 100% 0%, rgb(255 140 40 / 16%), transparent 70%),
-      var(--panel);
-    border: 1px solid var(--accent-line);
-    border-radius: var(--radius-lg);
-    overflow: hidden;
-  }
-
-  .spotlight__art {
-    position: relative;
-    aspect-ratio: 16 / 9;
-    background: linear-gradient(180deg, #241a3a, #3a2550);
-  }
-
-  .spotlight__art img {
-    width: 100%;
-    height: 100%;
-    object-fit: cover;
-  }
-
-  .spotlight__body {
-    padding: clamp(22px, 3vw, 36px);
-    align-self: center;
-  }
-
-  .spotlight__body h3 {
-    font-size: clamp(1.5rem, 2.6vw, 2rem);
-  }
-
-  .spotlight__body p {
-    color: var(--text-secondary);
-    font-size: 1.08rem;
-  }
-
-  .spotlight__list {
-    margin: 0;
-    padding-left: 1.2em;
-    display: grid;
-    gap: 6px;
-    color: var(--text-secondary);
-  }
-
-  .spotlight__list strong {
+  .update__card:hover {
     color: var(--text);
   }
 
-  .spotlight__list li::marker {
+  .update__card .update__art {
+    aspect-ratio: 2 / 1;
+  }
+
+  .update__card .change__body {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+  }
+
+  .update__go {
+    display: inline-block;
+    margin-top: auto;
+    padding-top: 10px;
+    font-family: var(--font-display);
     color: var(--accent);
   }
 
-  .change__art--wide {
-    aspect-ratio: 16 / 9;
+  .update__go::after {
+    content: " \2192";
   }
 
-  .beta4__more {
+  .update__more {
     grid-column: 1 / -1;
     padding: clamp(22px, 3vw, 30px);
     background: var(--panel);
@@ -1384,7 +1288,7 @@ const motes = Array.from({ length: 18 }, (_, i) => ({
     border-radius: var(--radius-lg);
   }
 
-  .beta4__more ul {
+  .update__more ul {
     margin: 0 0 16px;
     padding-left: 1.2em;
     display: grid;
@@ -1393,34 +1297,12 @@ const motes = Array.from({ length: 18 }, (_, i) => ({
     color: var(--text-secondary);
   }
 
-  /* Two columns: the first card spans the row, the other four pair up. */
-  @media (max-width: 1020px) {
-    .beta4__grid {
-      grid-template-columns: repeat(2, minmax(0, 1fr));
-    }
-
-    .beta4__grid > .change,
-    .beta4__grid > .change--wide {
-      grid-column: span 1;
-    }
-
-    .beta4__grid > .spotlight + .change {
-      grid-column: 1 / -1;
-    }
-  }
-
-  @media (max-width: 760px) {
-    .spotlight {
-      grid-template-columns: 1fr;
-    }
-  }
-
-  @media (max-width: 560px) {
-    .beta4__grid {
+  @media (max-width: 900px) {
+    .update__grid {
       grid-template-columns: 1fr;
     }
 
-    .beta4__more ul {
+    .update__more ul {
       grid-template-columns: 1fr;
     }
   }
