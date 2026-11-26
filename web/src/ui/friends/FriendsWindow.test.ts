@@ -115,8 +115,10 @@ describe("the window", () => {
     const headings = [...document.querySelectorAll(".friends-window__group")].map((h) => h.textContent);
     expect(headings).toEqual(["Can use help(1)", "Online(1)", "Everyone else(2)"]);
     expect(names()).toEqual(["Ann", "Bo", "Cy", "Di"]);
-    // Plain words and a count, no dots, so the three line up (neon, 26 Nov; the rows carry last seen).
-    expect(document.querySelector(".friends-window__group .online-dot, .friends-window__group img")).toBeNull();
+    // Words and a count, no dots (neon, 26 Nov; the rows carry last seen); help keeps its painted wrench.
+    expect(document.querySelector(".friends-window__group .online-dot")).toBeNull();
+    expect(document.querySelector(".friends-window__group--help img.game-icon--tools")).not.toBeNull();
+    expect(document.querySelector(".friends-window__group--online img, .friends-window__group--rest img")).toBeNull();
   });
 
   it("leaves out an empty group", async () => {

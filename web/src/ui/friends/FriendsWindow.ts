@@ -254,7 +254,7 @@ export class FriendsWindow {
   }
 
   /**
-   * A group's heading ("Can use help (3)"), its rows and, when some
+   * A group's heading ("[wrench] Can use help (3)", "Online (2)"), its rows and, when some
    * are left out, Show all. A group shown whole has its heading in the head.
    */
   private section(section: FriendsSection): HTMLElement[] {
@@ -262,6 +262,8 @@ export class FriendsWindow {
     if (!this.focus) {
       const heading = make("h3", `friends-window__group friends-window__group--${section.name}`);
       // "Online (2)": words then the count, no dot (neon, 26 Nov: the rows say who is online).
+      // "Can use help" keeps its painted wrench (tester, 9 Nov; icons over words).
+      if (section.name === "help") heading.append(gameIcon("tools", { size: 24, decorative: true }));
       heading.append(make("span", "friends-window__group-words", GROUP_WORDS[section.name]), make("span", "friends-window__group-count", `(${formatAmount(section.total)})`));
       nodes.push(heading);
     }

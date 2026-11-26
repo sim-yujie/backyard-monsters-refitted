@@ -223,6 +223,11 @@
   margin-top: 0;
 }
 
+.friends-window__group > .game-icon {
+  width: 20px;
+  height: 20px;
+}
+
 /* Classic: the head's online dot in the deeper green of the rows' "Online" (neon, 26 Nov). */
 :root[data-skin="flash"] .friends-window__dot {
   background: #166534;
