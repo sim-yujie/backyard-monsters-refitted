@@ -50,7 +50,7 @@ Once your Town Hall reaches **level 6**, you can upgrade your Map Room to **Map 
 - Forests, rocks and marsh change a cell's defence and income. A cell next to your own cells defends a little better.
 - Beat a wild camp or a player's outpost and you can **take it over** as your own outpost.
 - **Find** jumps to your yard, your outposts or any spot on the map.
-- **Repeat attack** fights a beaten wild camp again with your saved plan, for a putty fee.
+- **Repeat attack** on a wild camp repeats your last attack played yourself on a camp of the same tribe and level, for a Putty fee.
 - Move monsters between your yards on the map: see [Move monsters between your yards](/guides/move-monsters/).
 
 ## Tips for your first raids

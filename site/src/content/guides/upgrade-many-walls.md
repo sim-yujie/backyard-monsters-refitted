@@ -39,6 +39,5 @@ The panel shows the cost. A red line means you can't afford them all: pick fewer
 <img class="narrow" src="/images/guides/walls-upgrade.webp" alt="The Upgrade walls panel: Level 3 chosen in orange, Select all, Affordable and Clear, 173 walls picked, the cost, then Upgrade 173" width="720" height="848" loading="lazy">
 
 - Every wall is done **at once**. No builder, no waiting.
-- Higher levels need a higher **Town Hall**.
 - Walls already at that level are skipped, and cost nothing.
 - **Cancel** or **Esc** stops picking.
