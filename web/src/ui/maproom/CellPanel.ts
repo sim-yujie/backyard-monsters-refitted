@@ -281,13 +281,12 @@ export class CellPanel {
       if (!this.attackButton.disabled && performance.now() >= this.guardUntil) options.onAttack();
     });
     // Live map: the bar that takes Attack's place, same size, while the panel holds the old cell.
+    // One line, "⟳ Taken · Update" (owner's pick B, desk card taken-bar, 26 Nov: "too wordy").
     this.liveBarText = el("span", "mr2-live-bar__text");
-    const liveBarWords = el("span", "mr2-live-bar__words");
-    liveBarWords.append(this.liveBarText, el("span", "mr2-live-bar__sub", "Tap to update"));
     // The game's own brass button in either look (neon r1: a plain gold bar read as a toast).
     this.liveBar = button("btn btn--outline mr2-live-bar");
     this.liveBar.hidden = true;
-    this.liveBar.append(liveBarWords, icon("respawn", 22, "map-icon mr2-live-bar__refresh"));
+    this.liveBar.append(icon("respawn", 22, "map-icon mr2-live-bar__refresh"), this.liveBarText);
     this.liveBar.addEventListener("click", () => {
       this.held = null;
       this.update(this.latest);
@@ -470,8 +469,13 @@ export class CellPanel {
       this.openButton.hidden = true;
       this.attackNote.hidden = true;
       this.liveBar.hidden = false;
-      this.liveBarText.textContent = this.held.name ? `Taken by ${this.held.name}` : "This cell changed";
-      this.liveBar.setAttribute("aria-label", `${this.liveBarText.textContent}. Tap to update.`);
+      const { name } = this.held;
+      this.liveBarText.textContent = takenBarWords(name);
+      // Screen readers keep the whole sentence, whatever the bar shows.
+      const said = name ? `Taken by ${name}` : "This cell changed";
+      this.liveBar.setAttribute("aria-label", `${said}. Tap to update.`);
+      // The bar leaves the name out; a mouse can still read it.
+      this.liveBar.title = said;
       this.element.classList.add("mr2-cell--held");
       return;
     }
@@ -877,6 +881,10 @@ export const LIVE_GUARD_MS = 800;
 
 /** Said on a disabled Attack while someone else's attack runs. */
 export const UNDER_ATTACK = "Someone is attacking this yard right now.";
+
+/** The taken bar's one line: `name` is the new owner, "you", or "" for a cell left empty. */
+const takenBarWords = (name: string): string =>
+  `${name === "you" ? "Now yours" : name ? "Taken" : "Changed"} · Update`;
 
 /** Who a live answer says took the cell: "you", the new owner, or nothing for a cell left empty. */
 const takenBy = (cell: MapCell | undefined): string => {
