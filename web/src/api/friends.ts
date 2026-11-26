@@ -3,6 +3,7 @@ import { photoVersionOf, type PhotoVersion } from "@/game/playerPicture";
 import { formatCountdown } from "@/ui/format";
 import { getSession } from "./auth";
 import { ApiError, get, NetworkError, postJson } from "./http";
+import { seenStepFrom, type SeenStep } from "./seen";
 import type { ApiEnvelope, BaseLoadResponse } from "./types";
 
 /**
@@ -79,9 +80,10 @@ export const PIN_MAX = 10;
 
 /**
  * How recently a friend was last in their yard, coarse on purpose (§6.2,
- * Q12): null when they hide it.
+ * Q12; beta 9 "last seen", `api/seen.ts`): online, today, week, weeks (1-4
+ * weeks) or month (over a month); null when they hide it and are still active.
  */
-export type FriendOnline = "online" | "today" | "week" | "away" | null;
+export type FriendOnline = SeenStep | null;
 
 /** A resource a gift can be: Twigs, Pebbles, Putty or Goo. */
 export type GiftResource = "r1" | "r2" | "r3" | "r4";
@@ -514,7 +516,6 @@ const record = (value: unknown): Record<string, unknown> =>
   typeof value === "object" && value !== null ? (value as Record<string, unknown>) : {};
 const list = (value: unknown): Record<string, unknown>[] => (Array.isArray(value) ? value.map(record) : []);
 
-const ONLINE: ReadonlySet<string> = new Set(["online", "today", "week", "away"]);
 const RELATIONS: ReadonlySet<string> = new Set(["self", "friend", "requested", "asked", "none"]);
 const GIFT_RESOURCES: ReadonlySet<string> = new Set(["r1", "r2", "r3", "r4"]);
 
@@ -591,7 +592,7 @@ export const friendOf = (raw: Record<string, unknown>): Friend => {
     pic: picOf(raw["pic"]),
     photo: photoVersionOf(raw["photo"]),
     level: count(raw["level"]),
-    online: typeof raw["online"] === "string" && ONLINE.has(raw["online"]) ? (raw["online"] as FriendOnline) : null,
+    online: seenStepFrom(raw["online"]),
     since: toSeconds(raw["since"]),
     giftSentToday: raw["giftSentToday"] === true,
     canGiftFrom: toSeconds(raw["canGiftFrom"]),

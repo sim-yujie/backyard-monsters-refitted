@@ -9,17 +9,41 @@ import { formatAmount, formatCountdown } from "@/ui/format";
  * §3, issue #370). All plain English, like the other panels.
  */
 
-/** "Online", "Seen today", "Seen this week", "Away"; empty when hidden. */
+/**
+ * The five "last seen" steps in words (owner, 25 Nov 2026: Online, Today,
+ * This week, 1-4 weeks, Over a month); empty when hidden. Shared by the
+ * friends lists and the alliance Members tab.
+ */
 export const onlineText = (online: FriendOnline): string => {
   switch (online) {
     case "online":
       return "Online";
     case "today":
-      return "Seen today";
+      return "Today";
     case "week":
-      return "Seen this week";
-    case "away":
-      return "Away";
+      return "This week";
+    case "weeks":
+      return "1-4 weeks";
+    case "month":
+      return "Over a month";
+    default:
+      return "";
+  }
+};
+
+/** The longer hover and screen-reader words: "Last seen 1-4 weeks ago"; empty when hidden. */
+export const seenTitle = (online: FriendOnline): string => {
+  switch (online) {
+    case "online":
+      return "Online now";
+    case "today":
+      return "Last seen today";
+    case "week":
+      return "Last seen this week";
+    case "weeks":
+      return "Last seen 1-4 weeks ago";
+    case "month":
+      return "Last seen over a month ago";
     default:
       return "";
   }

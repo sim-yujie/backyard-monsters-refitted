@@ -1,15 +1,19 @@
 import { describe, expect, it } from "vitest";
-import { friendCountText, friendLineText, friendNoticeText, levelLabel, onlineText, waitingText } from "./friendText";
+import { friendCountText, friendLineText, friendNoticeText, levelLabel, onlineText, seenTitle, waitingText } from "./friendText";
 
 /** How the friends screens and the bell word things (issue #370). */
 
 describe("friend words", () => {
   it("says how recently a friend was about, and nothing when hidden", () => {
     expect(onlineText("online")).toBe("Online");
-    expect(onlineText("today")).toBe("Seen today");
-    expect(onlineText("week")).toBe("Seen this week");
-    expect(onlineText("away")).toBe("Away");
+    expect(onlineText("today")).toBe("Today");
+    expect(onlineText("week")).toBe("This week");
+    expect(onlineText("weeks")).toBe("1-4 weeks");
+    expect(onlineText("month")).toBe("Over a month");
     expect(onlineText(null)).toBe("");
+    expect(seenTitle("weeks")).toBe("Last seen 1-4 weeks ago");
+    expect(seenTitle("month")).toBe("Last seen over a month ago");
+    expect(seenTitle(null)).toBe("");
   });
 
   it("counts friends, levels and what waits", () => {

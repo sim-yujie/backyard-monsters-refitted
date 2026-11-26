@@ -352,6 +352,28 @@
   height: 8px;
 }
 
+/* Last seen (beta 9): a fixed slot left of the level, so levels and marks
+   each line up down a 60-member list; under the level on a phone. */
+.alliance__side {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.alliance__seen {
+  display: flex;
+  justify-content: flex-end;
+  width: 84px;
+}
+
+.alliance__face-box {
+  position: relative;
+  flex: none;
+  display: flex;
+}
+
+
 .alliance__pager {
   display: flex;
   align-items: center;
@@ -3354,5 +3376,23 @@
 @media (pointer: coarse) {
   :root[data-skin] .panel .alliance__tab.tabs__tab:not([aria-selected="true"]) {
     min-height: 44px;
+  }
+}
+
+/* Last seen on a phone (beta 9): under the level. */
+@media (max-width: 480px) {
+  .alliance__side {
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 3px;
+  }
+
+  .alliance__seen {
+    order: 1;
+    width: auto;
+  }
+
+  .alliance__seen:empty {
+    display: none;
   }
 }

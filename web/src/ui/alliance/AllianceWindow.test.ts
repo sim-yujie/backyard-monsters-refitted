@@ -873,7 +873,7 @@ describe("AllianceWindow: my alliance", () => {
   it("lists members Leader first, and gives the Leader rank buttons with a confirm", async () => {
     const api = fakeApi({
       mine: vi.fn(() => ok({ alliance: mine(), rejoinAt: null })),
-      members: vi.fn(() => ok({ members: [member(3, "member", { online: true }), member(1, "leader"), member(2, "officer")] })),
+      members: vi.fn(() => ok({ members: [member(3, "member", { online: true, seen: "online" }), member(1, "leader"), member(2, "officer", { seen: "weeks" })] })),
     });
     const view = await open(api);
     view.showTab("members");
@@ -882,8 +882,10 @@ describe("AllianceWindow: my alliance", () => {
     expect(names).toEqual(["Player 1", "Player 2", "Player 3"]);
     // The viewer's own row has no buttons.
     expect(document.querySelector<HTMLButtonElement>("[data-userid='1'] .alliance__row")!.disabled).toBe(true);
-    // Only the online member wears the dot.
-    expect(document.querySelectorAll(".alliance__online.online-dot")).toHaveLength(1);
+    // Last seen (beta 9): only the online member wears the dot; the 1-4 weeks member its own mark.
+    expect(document.querySelectorAll(".alliance__seen .online-dot")).toHaveLength(1);
+    expect(document.querySelector("[data-userid='3'] .alliance__seen")?.textContent).toBe("Online");
+    expect(document.querySelector("[data-userid='2'] .alliance__seen")?.textContent).toBe("1-4w");
 
     document.querySelector<HTMLButtonElement>("[data-userid='3'] .alliance__row")!.click();
     buttonNamed(ALLIANCE_TEXT.action.promote)!.click();

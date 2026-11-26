@@ -66,8 +66,12 @@ export const playerRow = (
     readonly noteClass?: string;
     readonly actions?: readonly HTMLElement[];
     readonly badges?: readonly RowBadge[];
-    /** Small marks on the level line, after the level (a friend's other world). */
+    /** Small marks on the level line, after the level (a friend's other world, last seen). */
     readonly marks?: readonly HTMLElement[];
+    /** A mark on the face's corner (last seen, beta 9). */
+    readonly faceMark?: HTMLElement | null;
+    /** Fade the face (last seen over a month). */
+    readonly dimFace?: boolean;
   } = {},
 ): HTMLLIElement => {
   const row = make("li", "friends-row");
@@ -85,6 +89,8 @@ export const playerRow = (
   faceBox.setAttribute("aria-label", `${player.username}: profile`);
   faceBox.addEventListener("click", () => void openProfile({ container: modalLayer(), userid: player.userid }));
   faceBox.append(face);
+  if (options.faceMark) faceBox.append(options.faceMark);
+  if (options.dimFace) face.classList.add("seen-dim");
   for (const kind of options.badges ?? []) {
     const { icon, title } = BADGE_TEXT[kind];
     const badge = make("span", `friends-row__badge friends-row__badge--${kind}`, icon);

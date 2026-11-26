@@ -14,7 +14,7 @@ const setup = (options: { list?: Parameters<typeof fixtureApi>[0]; hooks?: boole
   const { api, calls } = fixtureApi({
     list: fixtureList(
       [
-        fixtureFriend(1, { username: "Ann", level: 3, online: "away" }),
+        fixtureFriend(1, { username: "Ann", level: 3, online: "month" }),
         fixtureFriend(2, { username: "Bob", level: 9, online: "online" }),
         fixtureFriend(3, { username: "Cat", level: 12, online: null }),
       ],
@@ -60,10 +60,11 @@ describe("FriendsTab", () => {
     expect(names(tab.element)).toEqual(["Bob", "Ann", "Cat"]);
     const bob = tab.element.querySelector('[data-userid="2"]');
     expect(bob?.textContent).toContain("Level 9");
-    expect(bob?.querySelector(".friends-row__top .online-dot")?.getAttribute("aria-label")).toBe("Online");
-    expect(bob?.textContent).not.toContain("Online");
-    // A friend who hides it shows no line at all.
-    expect(tab.element.querySelector('[data-userid="3"] .friends-online')).toBeNull();
+    // Last seen (beta 9) on the level line: the dot and "Online", the full words as the title.
+    expect(bob?.querySelector(".friends-row__meta .seen--online .online-dot")).not.toBeNull();
+    expect(bob?.querySelector(".friends-row__meta .seen--online")?.getAttribute("title")).toBe("Online now");
+    // A friend who hides it shows no mark at all.
+    expect(tab.element.querySelector('[data-userid="3"] .seen')).toBeNull();
   });
 
   it("orders by online, then level, then name", () => {
@@ -186,7 +187,7 @@ describe("FriendsTab", () => {
         list: fixtureList([
           fixtureFriend(1, { username: "Annie", online: "online", help: { speedup: true, repair: false } }),
           fixtureFriend(2, { username: "Bob", online: "online", giftSentToday: true }),
-          fixtureFriend(3, { username: "Joanna", online: "away" }),
+          fixtureFriend(3, { username: "Joanna", online: "month" }),
         ]),
       },
     });

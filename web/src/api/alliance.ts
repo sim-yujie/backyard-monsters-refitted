@@ -1,5 +1,6 @@
 import { ApiError, get, NetworkError, post, type FormBody } from "./http";
 import type { ApiEnvelope } from "./types";
+import { seenStepFrom, type SeenStep } from "./seen";
 import type { AllianceProgressFields } from "@/api/allianceProgress";
 
 /**
@@ -94,6 +95,8 @@ export interface AllianceMember {
   readonly level: number;
   readonly points: number;
   readonly online: boolean;
+  /** "Last seen" (beta 9, `api/seen.ts`); null when the member hides it and is still active. */
+  readonly seen?: SeenStep | null;
   readonly role: AllianceRole | null;
   readonly is_leader?: boolean;
 }
@@ -255,6 +258,7 @@ export const membersOf = (rows: unknown): AllianceMember[] =>
     ? rows.map((row: AllianceMember & { status?: { online?: unknown } }) => ({
         ...row,
         online: Boolean(row.online ?? row.status?.online),
+        seen: seenStepFrom(row.seen),
       }))
     : [];
 

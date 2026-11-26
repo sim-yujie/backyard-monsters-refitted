@@ -9,6 +9,7 @@ import { gameIcon } from "@/ui/gameIcon";
 import { onlineDot } from "@/ui/onlineDot";
 import { Popup } from "@/ui/Popup";
 import { scrollFade } from "@/ui/scrollFade";
+import { seenDims, seenFaceMark, seenLook, seenMark } from "@/ui/seenMark";
 import { giftAllButton, openGiftAll, setGiftAllDone } from "./GiftAll";
 import { openGiftPicker } from "./GiftPicker";
 import { make } from "./rows";
@@ -317,7 +318,11 @@ export class FriendsWindow {
     img.decoding = "async";
     img.loading = "lazy";
     face.append(img);
-    if (friend.online === "online") face.append(onlineDot("friends-window__face-dot"));
+    const look = seenLook();
+    const faceMark = seenFaceMark(friend.online, look);
+    if (faceMark) face.append(faceMark);
+    else if (friend.online === "online") face.append(onlineDot("friends-window__face-dot"));
+    img.classList.toggle("seen-dim", seenDims(friend.online, look));
     // The gold frame says "pinned" with a pin on its corner and in the tooltip (tester, 9 Nov).
     if (friend.pinnedAt !== null) {
       face.title = FRIENDS_WINDOW_TEXT.pinned;
@@ -325,10 +330,15 @@ export class FriendsWindow {
     }
     const name = make("span", "friends-window__name", friend.username);
     name.title = friend.username;
+    // Last seen (beta 9) under the name; online stays the dot on the face.
+    const who = make("span", "friends-window__who");
+    who.append(name);
+    const seen = seenMark(friend.online, look, { onlineOnFace: true });
+    if (seen) who.append(seen);
     const marks = make("span", "friends-window__marks");
     if (canHelp(friend)) marks.append(gameIcon("tools", { size: 24, label: FRIENDS_WINDOW_TEXT.canHelp, className: "friends-window__mark" }));
     if (!friend.giftSentToday) marks.append(gameIcon("gift", { size: 24, label: FRIENDS_WINDOW_TEXT.giftDue, className: "friends-window__mark" }));
-    row.append(face, name, make("span", "chip friends-window__level", FRIENDS_WINDOW_TEXT.level(friend.level)), marks);
+    row.append(face, who, make("span", "chip friends-window__level", FRIENDS_WINDOW_TEXT.level(friend.level)), marks);
     row.addEventListener("click", () => {
       this.opened = opened ? null : friend.userid;
       this.render();
