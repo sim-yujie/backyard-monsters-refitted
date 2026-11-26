@@ -64,7 +64,7 @@
   },
   "expected": {
     "ticks": 12200,
-    "damage": 4.704206843307006,
+    "damage": 3.426220083118423,
     "destroyed": null,
     "attackloot": {
       "r1": 0,
@@ -79,75 +79,75 @@
       "r4": 0
     },
     "firedTraps": 0,
-    "destroyedBuildings": 16,
+    "destroyedBuildings": 13,
     "creepsFlung": 90,
     "creepsKilled": 91,
     "championHp": 0,
-    "damagedBuildings": 19,
-    "rngDraws": 6793,
+    "damagedBuildings": 16,
+    "rngDraws": 6980,
     "checkpoints": [
       {
         "tick": 800,
-        "digest": "6cc7fbdb084ac38d"
+        "digest": "2325513c05ed2fe6"
       },
       {
         "tick": 1600,
-        "digest": "a83549d006a60992"
+        "digest": "1f81cd92d29760a8"
       },
       {
         "tick": 2400,
-        "digest": "c5235dfbe46a1479"
+        "digest": "bd9c3b1bce3236a9"
       },
       {
         "tick": 3200,
-        "digest": "123c4b95f4ee94df"
+        "digest": "0b177a8f30f04731"
       },
       {
         "tick": 4000,
-        "digest": "2726639527164483"
+        "digest": "515fb83afc73026c"
       },
       {
         "tick": 4800,
-        "digest": "efee75b7a8787c95"
+        "digest": "20c2ccd7896e0361"
       },
       {
         "tick": 5600,
-        "digest": "4152241cbcdc70d2"
+        "digest": "ccba1f90cc2bdb7a"
       },
       {
         "tick": 6400,
-        "digest": "e22f33d79316e1ad"
+        "digest": "cb31b364aeaac7a6"
       },
       {
         "tick": 7200,
-        "digest": "60528996d1c5587c"
+        "digest": "126af3b9fad41093"
       },
       {
         "tick": 8000,
-        "digest": "fa6ecdcd791db0b3"
+        "digest": "1edafb0a03edf7bc"
       },
       {
         "tick": 8800,
-        "digest": "1f50886f4dd17145"
+        "digest": "4651764c07c948ce"
       },
       {
         "tick": 9600,
-        "digest": "ab2c00cc3206d972"
+        "digest": "502aafa752f6d2b1"
       },
       {
         "tick": 10400,
-        "digest": "b2d63cce78a4c034"
+        "digest": "360e9fe1e699fbfb"
       },
       {
         "tick": 11200,
-        "digest": "23bee203fd446841"
+        "digest": "7cbf85e02192d98a"
       },
       {
         "tick": 12000,
-        "digest": "41acb6054d385f2b"
+        "digest": "1615ff32a081dc84"
       }
     ],
-    "digest": "6ce49ed9d17d7a57",
+    "digest": "c21ddf26eb3b6e30",
     "bunkerLosses": {
       "83": {
         "C1": 8

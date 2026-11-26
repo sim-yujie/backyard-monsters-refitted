@@ -38,3 +38,23 @@ describe("championsAfterDefence", () => {
     expect(championsAfterDefence(undefined, [{ t: 1, hp: 1 }])).toBeUndefined();
   });
 });
+
+/**
+ * Follow-up to Reii's report (25 Nov 2026): a caged champion the battle
+ * leaves on under 1 health (0.5) is saved as 0, exactly as one that died: it
+ * sits out the next defence, then heals back from 0 like any hurt champion.
+ * Not stuck; in Flash its health is whole, so 0.5 would have been 1.
+ */
+describe("a caged champion left on under 1 health", () => {
+  test("is saved as 0, sits out the next defence, and heals back from 0", async () => {
+    const { cagedChampions } = await import("../../../game-rules/combat/defence.js");
+    const { championsHealedTo } = await import("../../yard/catchUpChampions.js");
+    const after = championsAfterDefence(stored, [{ t: 1, hp: 0.5 }]);
+    expect(after?.[0]?.hp).toBe(0);
+    expect(cagedChampions(after)).toEqual([]);
+    // An hour of heals later it has health again and defends.
+    const healed = championsHealedTo(after, 1_000_000, 1_000_000 + 3600);
+    expect(healed[0]?.hp).toBeGreaterThan(0);
+    expect(cagedChampions(healed)).toHaveLength(1);
+  });
+});

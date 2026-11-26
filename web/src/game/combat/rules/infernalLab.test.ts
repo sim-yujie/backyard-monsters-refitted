@@ -164,9 +164,13 @@ describe("IC2 Zagnoid: Regeneration", () => {
   it.each([1, 2, 3])("heals its rank's share of full health a second at rank %i", (rank) => {
     const heals = healthUnderFire(rank);
     expect(heals.length).toBeGreaterThan(0);
-    const full = monsterStat("IC2", "health", 1);
-    for (const heal of heals) expect(heal).toBeLessThanOrEqual(full * zagnoidHealShare(rank) + 1e-9);
-    expect(Math.max(...heals)).toBeCloseTo(full * zagnoidHealShare(rank), 6);
+    // Health stays whole (`BattleOptions.wholeHealth`): 1.5% of 1500 is 22.5, healed as 23.
+    const share = Math.round(monsterStat("IC2", "health", 1) * zagnoidHealShare(rank));
+    for (const heal of heals) {
+      expect(Number.isInteger(heal)).toBe(true);
+      expect(heal).toBeLessThanOrEqual(share);
+    }
+    expect(Math.max(...heals)).toBe(share);
   });
 });
 
