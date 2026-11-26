@@ -90,6 +90,7 @@
   display: flex;
   flex-direction: column;
   justify-content: center;
+  row-gap: 4px;
   min-height: 52px;
   margin: 0;
   text-align: center;
@@ -109,7 +110,7 @@
    halted army never reads as a hang (neon round 1), and the place. */
 .auto-attack__line-icon {
   width: auto;
-  height: 28px;
+  height: 24px;
   flex: 0 0 auto;
   filter: drop-shadow(0 1px 2px rgb(0 0 0 / 55%));
   animation: auto-attack-hourglass 1.6s ease-in-out infinite;
@@ -147,14 +148,22 @@
 }
 
 .auto-attack__line-note {
-  margin: 2px 0 0;
-  font-size: 12px;
+  margin: 0;
+  font-size: var(--text-sm);
+  font-weight: 500;
   color: var(--colour-text-muted);
 }
 
 /* The working sheet blocks the map behind it: a darker scrim than a menu's. */
 .attack-end__backdrop.auto-attack__backdrop--bar {
   background: rgb(0 0 0 / 65%);
+}
+
+/* A phone upright: the camp drawer's buttons sit right under the sheet. */
+@media (max-width: 500px) {
+  .attack-end__backdrop.auto-attack__backdrop--bar {
+    background: rgb(0 0 0 / 75%);
+  }
 }
 
 /* A phone: a compact sheet in the middle of the screen, not the whole screen
