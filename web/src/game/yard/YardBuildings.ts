@@ -1,4 +1,4 @@
-import { ColorMatrixFilter, Container, Sprite, Text, Texture } from "pixi.js";
+import { ColorMatrixFilter, Container, Sprite, Text, Texture, type Renderer } from "pixi.js";
 import { ArtState, resolveArt, type ResolvedArt, type ResolvedImage } from "./buildingArt";
 import { fortArtFor, type FortArt } from "./fortArt";
 import type { YardKind } from "./buildingCostData";
@@ -27,6 +27,7 @@ import type { Rect } from "./YardGrid";
 import { spriteBox, unionRect } from "./yardSnapshot";
 import { artFor, BuildingCondition, type Yard, type YardBuilding } from "./yardModel";
 import { classicTowerTier, tierPlateImage, tierPlateScale, tierPlateSpot } from "./classicTierPlates";
+import { bakeHelpGlow, glowAlpha, helpLook, liftAlpha, litTint, type BakedGlow, type GlowSource } from "./helpGlow";
 
 /**
  * The building sprites: one per building, built once and never rebuilt.
@@ -199,6 +200,10 @@ interface BuildingView {
   swapShadowResolved: boolean;
   /** True once a swap has taken the animation layers off: a ruin does not turn. */
   animsSuppressed: boolean;
+  /** The amber glow behind a building a visitor can speed up (`setHelpLit`), once baked; null otherwise. */
+  helpGlow: Sprite | null;
+  /** The same glow over the building, adding light (`HelpLook.liftAlpha`); null with none. */
+  helpLift: Sprite | null;
   /**
    * The server-clock second this building's strips stop: never for one that
    * runs regardless, or the end of its work — a harvester filling, a hatchery
@@ -243,6 +248,12 @@ export const HIGHLIGHT_MATRIX = [
   0, 0, 0, 1, 0,
 ] as const;
 
+/** How many help glows are baked in one frame at most, so a visit opening does not stall a phone. */
+const GLOW_BAKES_PER_FRAME = 3;
+/** How many baked glows are kept before all are let go. */
+const GLOW_CACHE_MAX = 96;
+const NONE_LIT: ReadonlyMap<number, number> = new Map();
+
 export class YardBuildings {
   /** Beneath every building. Add to the scene before `tops`. */
   readonly shadows = new Container();
@@ -281,6 +292,12 @@ export class YardBuildings {
   private readonly guests = new Set<Container>();
   /** The tier plates' scale at the camera's zoom (`setZoom`). */
   private plateScale = 1;
+  /** How lit each building a visitor can speed up is drawn, by id (`setHelpLit`). */
+  private readonly helpLit = new Map<number, number>();
+  /** The glows baked so far, by building, place and picture: kept while a visit redraws the yard. */
+  private readonly glowCache = new Map<string, BakedGlow>();
+  /** The renderer the glows are baked with (`useRenderer`); no glow without one. */
+  private glowRenderer: Renderer | null = null;
 
   constructor() {
     this.textures = new YardTextures(() => {
@@ -430,6 +447,8 @@ export class YardBuildings {
         swapResolved: true,
         swapShadowResolved: true,
         animsSuppressed: false,
+        helpGlow: null,
+        helpLift: null,
         workUntil: workUntil(building.type, building.id, work),
         restOnIdle: anims[0]?.policy.restOnIdle === true || anims[0]?.anim.home === true,
       };
@@ -531,6 +550,8 @@ export class YardBuildings {
         view.fort.front.visible = shown && view.fort.frontResolved;
       }
       if (view.plate) this.placePlate(view, view.plate, on);
+      if (view.helpGlow) view.helpGlow.visible = on;
+      if (view.helpLift) view.helpLift.visible = on;
 
       if (view.anims.length === 0) continue;
       for (const layer of view.anims) layer.sprite.visible = animsOn && layer.resolved;
@@ -715,7 +736,7 @@ export class YardBuildings {
     if (view.damageStep === step) return;
     view.damageStep = step;
 
-    const tint = DAMAGE_TINTS[step] ?? 0xffffff;
+    const tint = this.tintOf(view);
     if (view.resolved) view.top.tint = tint;
     for (const layer of view.anims) layer.sprite.tint = tint;
     if (view.fort) {
@@ -881,6 +902,8 @@ export class YardBuildings {
         view.fort.back.zIndex = base - 4;
         view.fort.front.zIndex = base + 4;
       }
+      if (view.helpGlow) view.helpGlow.zIndex = base - 6;
+      if (view.helpLift) view.helpLift.zIndex = base + 3;
     }
     this.tops.sortableChildren = true;
     this.tops.sortChildren();
@@ -896,12 +919,15 @@ export class YardBuildings {
     this.views = [];
     this.byId.clear();
     this.highlighted.clear();
+    // The glow sprites went with the tops; their baked pictures stay in `glowCache` for the redraw.
+    this.helpLit.clear();
     this.faded = null;
     this.labelCount = 0;
   }
 
   destroy(): void {
     this.clear();
+    this.dropGlowCache();
     this.guests.clear();
     this.highlightFilter?.destroy();
     this.highlightFilter = null;
@@ -975,7 +1001,7 @@ export class YardBuildings {
         const texture = this.textures.get(art.top);
         if (texture) {
           applyArt(view.top, texture, view.building, art.top);
-          view.top.tint = DAMAGE_TINTS[view.damageStep] ?? 0xffffff;
+          view.top.tint = this.tintOf(view);
           view.top.alpha = this.alphaOf(view);
           view.resolved = true;
 
@@ -1065,7 +1091,7 @@ export class YardBuildings {
       const texture = this.textures.get(swap.top);
       if (texture) {
         applyArt(view.top, texture, view.building, swap.top);
-        view.top.tint = DAMAGE_TINTS[view.damageStep] ?? 0xffffff;
+        view.top.tint = this.tintOf(view);
         view.top.alpha = this.alphaOf(view);
         view.resolved = true;
         view.swapResolved = true;
@@ -1161,7 +1187,159 @@ export class YardBuildings {
     const view = this.byId.get(id);
     if (!view || !view.resolved) return;
     view.top.blendMode = on ? "add" : "normal";
-    view.top.tint = on ? 0xffffff : (DAMAGE_TINTS[view.damageStep] ?? 0xffffff);
+    view.top.tint = on ? 0xffffff : this.tintOf(view);
+  }
+
+  /* ── Lit, for a friend's visit (owner's pick F, 26 Nov 2026) ───────── */
+
+  /** The renderer the help glows are baked with; without one a building is only tinted. */
+  useRenderer(renderer: Renderer): void {
+    this.glowRenderer = renderer;
+  }
+
+  /**
+   * Draws each building in `lit` warm amber with a soft amber glow behind it,
+   * as lit as its number says (1 standing; Help all's pop flares it past 1
+   * and fades it to 0), and puts every other building back. Called every
+   * frame on a visit with `YardHelpMarks.lit`; a building whose light has
+   * not changed costs a map lookup. The tint is the sprites' own (`helpGlow.ts`),
+   * so it stays on through a picture arriving late or the yard being drawn
+   * again; the glow is baked once a building, a few a frame.
+   */
+  setHelpLit(given: ReadonlyMap<number, number>): void {
+    const lit = import.meta.env.DEV && helpLook().off ? NONE_LIT : given;
+    if (lit.size === 0 && this.helpLit.size === 0) {
+      if (this.glowCache.size > 0) this.dropGlowCache();
+      return;
+    }
+    for (const id of [...this.helpLit.keys()]) {
+      if (lit.has(id)) continue;
+      this.helpLit.delete(id);
+      const view = this.byId.get(id);
+      if (view) this.applyHelpLit(view);
+    }
+    let bakes = GLOW_BAKES_PER_FRAME;
+    for (const [id, amount] of lit) {
+      const view = this.byId.get(id);
+      if (!view) continue;
+      if (this.helpLit.get(id) !== amount) {
+        this.helpLit.set(id, amount);
+        this.applyHelpLit(view);
+      }
+      // Baked once the picture and its strips are in, so the glow has the building's whole outline.
+      if (!view.helpGlow && view.resolved && !view.animsPending && bakes > 0 && this.placeGlow(view)) bakes -= 1;
+    }
+  }
+
+  /** How lit a building is drawn now, 0 for not at all. For checks. */
+  helpLitOf(id: number): number {
+    return this.helpLit.get(id) ?? 0;
+  }
+
+  /** The tint a building is drawn with: its damage step's, warmed while a visitor can help it. */
+  private tintOf(view: BuildingView): number {
+    return litTint(DAMAGE_TINTS[view.damageStep] ?? 0xffffff, this.helpLit.get(view.building.id) ?? 0);
+  }
+
+  /** Puts a building's help light on its sprites: the tint, and the glow's strength or its going. */
+  private applyHelpLit(view: BuildingView): void {
+    const amount = this.helpLit.get(view.building.id) ?? 0;
+    const tint = this.tintOf(view);
+    if (view.resolved) view.top.tint = tint;
+    for (const layer of view.anims) layer.sprite.tint = tint;
+    if (view.fort) {
+      view.fort.back.tint = tint;
+      view.fort.front.tint = tint;
+    }
+    if (amount <= 0) {
+      view.helpGlow?.destroy();
+      view.helpGlow = null;
+      view.helpLift?.destroy();
+      view.helpLift = null;
+      return;
+    }
+    if (view.helpGlow) view.helpGlow.alpha = glowAlpha(amount);
+    if (view.helpLift) view.helpLift.alpha = liftAlpha(amount);
+  }
+
+  /**
+   * Bakes (or finds) a building's glow and stands it straight behind the
+   * building, behind its fortification too. Returns whether it baked one.
+   */
+  private placeGlow(view: BuildingView): boolean {
+    const renderer = this.glowRenderer;
+    if (!renderer || view.hidden) return false;
+    const sources: GlowSource[] = [];
+    const add = (sprite: Sprite): void => {
+      if (sprite.texture === Texture.EMPTY) return;
+      sources.push({
+        texture: sprite.texture,
+        x: sprite.x,
+        y: sprite.y,
+        scaleX: sprite.scale.x,
+        scaleY: sprite.scale.y,
+        anchorX: sprite.anchor.x,
+        anchorY: sprite.anchor.y,
+      });
+    };
+    const parts: string[] = [];
+    if (!view.topIsAnim || !view.anims[0]?.resolved) {
+      add(view.top);
+      parts.push(String(view.top.texture.uid));
+    }
+    // A strip's cell changes every frame: it is known by its sheet, and the glow keeps the cell it was baked from.
+    for (const layer of view.anims) {
+      if (!layer.resolved) continue;
+      add(layer.sprite);
+      parts.push(layer.anim.url);
+    }
+    if (sources.length === 0) return false;
+    const key = `${view.building.id}@${view.top.x},${view.top.y}:${parts.join(",")}`;
+    let baked = this.glowCache.get(key) ?? null;
+    let fresh = false;
+    if (!baked) {
+      baked = bakeHelpGlow(renderer, sources);
+      if (!baked) return false;
+      if (this.glowCache.size >= GLOW_CACHE_MAX) this.dropGlowCache();
+      this.glowCache.set(key, baked);
+      fresh = true;
+    }
+    const amount = this.helpLit.get(view.building.id) ?? 0;
+    const look = helpLook();
+    const glow = new Sprite(baked.texture);
+    glow.position.set(baked.x, baked.y);
+    glow.tint = look.glowColor;
+    glow.alpha = glowAlpha(amount);
+    glow.eventMode = "none";
+    const behind = view.fort?.back ?? view.top;
+    // Sorted by key only once something has asked for it (`resortByDepth`); a key set before that would switch it on.
+    const sorted = this.tops.sortableChildren;
+    if (sorted) glow.zIndex = view.top.zIndex - 6;
+    this.tops.addChildAt(glow, Math.max(0, this.tops.getChildIndex(behind)));
+    view.helpGlow = glow;
+    if (look.liftAlpha > 0) {
+      // Over the building and its strips, under its fortification's front.
+      const lift = new Sprite(baked.texture);
+      lift.position.set(baked.x, baked.y);
+      lift.tint = look.liftColor;
+      lift.blendMode = "add";
+      lift.alpha = liftAlpha(amount);
+      lift.eventMode = "none";
+      if (sorted) lift.zIndex = view.top.zIndex + 3;
+      const last = view.anims[view.anims.length - 1]?.sprite ?? view.top;
+      this.tops.addChildAt(lift, this.tops.getChildIndex(last) + 1);
+      view.helpLift = lift;
+    }
+    return fresh;
+  }
+
+  /** Lets every baked glow go: the visit is over, or too many have piled up. */
+  private dropGlowCache(): void {
+    const live = new Set(this.views.map((view) => view.helpGlow?.texture));
+    for (const baked of this.glowCache.values()) {
+      if (!live.has(baked.texture)) baked.texture.destroy(true);
+    }
+    this.glowCache.clear();
   }
 
   /* ── Highlight, for an armed drop (#88) ─────────────────────────────── */
