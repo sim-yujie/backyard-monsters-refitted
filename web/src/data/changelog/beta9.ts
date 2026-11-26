@@ -11,12 +11,12 @@ import type { ChangelogRelease } from "./types";
  * and the sign-in screen. The Baiter card is a crop of the shot taken when
  * the friend tests were built (review desk b9-baitb-invite, 23 Nov, after
  * the last change to that window), whose test copy had friends to invite.
- * No Patreon post yet: add `moreUrl` and `moreLabel` (both or neither) once
- * the beta 9 post is up.
  */
 export const BETA_9: ChangelogRelease = {
   version: "2.0.0-beta.9",
   title: "Beta 9",
+  moreUrl: "https://www.patreon.com/TheMonsterLab/posts/beta-9-is-live-176417632",
+  moreLabel: "Full details on Patreon",
   cards: [
     {
       image: "/whats-new/beta9-move.webp",
@@ -25,7 +25,7 @@ export const BETA_9: ChangelogRelease = {
     },
     {
       image: "/whats-new/beta9-hcc.webp",
-      title: "Hatchery Control Center 2 and 3",
+      title: "Hatchery Control Centre 2 and 3",
       text: "Up to 10 stacks of 30 and 6 presets you send with one tap. At level 3, run your outposts' hatcheries from home.",
     },
     {
