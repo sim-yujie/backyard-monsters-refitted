@@ -6,7 +6,6 @@ import { verifyUserAuth, verifyAccountStatus } from "./middleware/auth.js";
 import { verifyApiConsumer } from "./middleware/apiConsumer.js";
 import {
   changeUsernameLimiter,
-  debugDataLimiter,
   getAreaLimiter,
   attackLogsLimiter,
   sightLimiter,
@@ -24,7 +23,9 @@ import {
   terrainLimiter,
   takeoverQuoteLimiter,
   autoAttackLimiter,
+  autoAttackQueueLimiter,
   autoAttackPlanLimiter,
+  ownArmiesLimiter,
   defencesLimiter,
   leaderboardLimiter,
   botCheckReadLimiter,
@@ -52,10 +53,10 @@ import {
 } from "./middleware/rateLimiters.js";
 import { Status } from "./enums/StatusCodes.js";
 
-import { init } from "./controllers/init.js";
 import { supportedLangs } from "./controllers/supportedLangs.js";
 
 import { login } from "./controllers/auth/login.js";
+import { maintenanceStatus } from "./controllers/auth/maintenanceStatus.js";
 import { logout } from "./controllers/auth/logout.js";
 import { register } from "./controllers/auth/register.js";
 import { signUpOptions } from "./controllers/auth/signUpOptions.js";
@@ -92,7 +93,8 @@ import { presence, stayProtected } from "./controllers/maproom/presence.js";
 import { raidDevDue, raidDevTrojan, raidEngage, raidFinish, raidFrequency, raidPrepare, raidStart, raidTrojan } from "./controllers/raid/raid.js";
 import { botCheck, botCheckAnswer, botCheckForce, devCheckEnabled } from "./controllers/maproom/botCheck.js";
 
-import { getArea } from "./controllers/maproom/v2/getArea.js";
+import { getArea, getAreas } from "./controllers/maproom/v2/getArea.js";
+import { areaGate } from "./middleware/areaGate.js";
 import { getSight } from "./controllers/maproom/v2/getSight.js";
 import { getSnapshot } from "./controllers/maproom/v2/bulk/getSnapshot.js";
 import { getTerrain } from "./controllers/maproom/v2/bulk/getTerrain.js";
@@ -100,8 +102,10 @@ import { getAlliances } from "./controllers/maproom/v2/bulk/getAlliances.js";
 import { takeoverCell } from "./controllers/maproom/v2/takeoverCell.js";
 import { declineTakeover } from "./controllers/maproom/v2/declineTakeover.js";
 import { takeoverQuote } from "./controllers/maproom/v2/takeoverQuote.js";
-import { autoAttack, autoAttackPlan, autoAttackReplay } from "./controllers/maproom/v2/autoAttack.js";
+import { autoAttack, autoAttackPlan, autoAttackQueue, autoAttackReplay, smartMove } from "./controllers/maproom/v2/autoAttack.js";
 import { transferMonsters } from "./controllers/maproom/v2/transferMonsters.js";
+import { transferBatch } from "./controllers/maproom/v2/transferBatch.js";
+import { ownArmies } from "./controllers/maproom/v2/ownArmies.js";
 import { saveBookmarks } from "./controllers/maproom/v2/saveBookmarks.js";
 
 
@@ -134,15 +138,17 @@ import { chatPlayerYard, reportChatMessage } from "./controllers/chat/routes.js"
 import { getModerationNotice, seeModerationNotice } from "./controllers/moderation/notice.js";
 import { getDefenceReplay, getDefences } from "./controllers/defences/routes.js";
 import { mountFriendsRoutes } from "./controllers/friends/routes.js";
+import { mountBaiterRoutes } from "./controllers/baiter/routes.js";
 import { mountEventsRoutes } from "./controllers/events/routes.js";
 import { mountSupportRoutes } from "./controllers/support/routes.js";
 import { adminOnly, moderationEffects, mountAdminRoutes } from "./controllers/admin/routes.js";
 import { mountModReportsRoutes } from "./controllers/moderator/routes.js";
+import { removeChatLine, removeRecentChatLines } from "./services/chat/removeChatLines.js";
 import { mountAnnouncementRoutes } from "./controllers/announcements/routes.js";
 import { mountProfileRoutes } from "./controllers/profile/routes.js";
 import { mountOutpostLabelRoutes } from "./controllers/outposts/labelRoutes.js";
 import { sharedWordFilter } from "./services/chat/badWords.js";
-import { postgres } from "./server.js";
+import { postgres, redis } from "./server.js";
 import { clientErrors, guestClientErrors } from "./controllers/errors/clientErrors.js";
 import { clientTiming } from "./controllers/maproom/clientTiming.js";
 
@@ -152,7 +158,6 @@ import { getEmpireBoard } from "./controllers/leaderboards/getEmpireBoard.js";
 import { getAttackLogs } from "./controllers/attacklogs/getAttackLogs.js";
 
 import { wildMonsterInvasion } from "./controllers/events/wildMonsterInvasion.js";
-import { recordDebugData } from "./controllers/debug/recordDebugData.js";
 
 import { createAlliance } from "./controllers/alliance/createAlliance.js";
 import { editAlliance } from "./controllers/alliance/editAlliance.js";
@@ -196,7 +201,6 @@ const router = new Router();
 /**  ────────────────────────────────────────────────
 * 📦 General
 * ──────────────────────────────────────────────── */
-router.post("/init", logRequest, init);
 router.get("/connection", (ctx) => (ctx.status = Status.OK));
 
 /**  ────────────────────────────────────────────────
@@ -209,6 +213,8 @@ router.get("/api/:apiVersion/player/signupoptions", apiVersion, signUpOptions);
 router.post("/api/:apiVersion/player/forgotPassword", apiVersion, forgotPasswordIpLimiter, forgotPasswordEmailLimiter, forgotPassword);
 router.post("/api/:apiVersion/player/reset-password", resetPasswordLimiter, resetPassword);
 router.get("/api/:apiVersion/supportedLangs", apiVersion, logRequest, supportedLangs);
+// The maintenance switch, for the sign-in screen and a game without chat (`controllers/auth/maintenanceStatus.ts`).
+router.get("/api/:apiVersion/maintenance", apiVersion, maintenanceStatus);
 router.get("/api/:apiVersion/player/account", apiVersion, verifyUserAuth, getAccount);
 router.post("/api/:apiVersion/player/changeusername", apiVersion, verifyUserAuth, changeUsernameLimiter, logRequest, changeUsername);
 router.post("/api/:apiVersion/player/settings", apiVersion, verifyUserAuth, logRequest, updateSettings);
@@ -281,7 +287,10 @@ if (devCheckEnabled()) {
 /**  ────────────────────────────────────────────────
 * 📦 Map Room 2
 * ──────────────────────────────────────────────── */
-router.post("/worldmapv2/getarea", verifyUserAuth, verifyAccountStatus, getAreaLimiter, logRequest, getArea);
+router.post("/worldmapv2/getarea", areaGate(), verifyUserAuth, verifyAccountStatus, getAreaLimiter, logRequest, getArea);
+// Several zones in one call: the live map's re-asks (beta 9). Same budget as getarea, and the same back-pressure,
+// which comes first so a "busy" answer costs no sign-in query.
+router.post("/worldmapv2/getareas", areaGate(), verifyUserAuth, verifyAccountStatus, getAreaLimiter, logRequest, getAreas);
 router.post("/worldmapv2/sight", verifyUserAuth, verifyAccountStatus, sightLimiter, logRequest, getSight);
 router.get("/worldmapv2/terrain", verifyApiConsumer, terrainLimiter, logRequest, getTerrain);
 router.get("/worldmapv2/snapshot", verifyApiConsumer, snapshotLimiter, logRequest, getSnapshot);
@@ -293,9 +302,15 @@ router.post("/worldmapv2/declinetakeover", verifyUserAuth, verifyAccountStatus, 
 router.post("/worldmapv2/randommove", verifyUserAuth, verifyAccountStatus, logRequest, randomMove);
 // Auto-attack on a wild monster camp (#221): the plan, the attack, and its replay for Watch.
 router.post("/worldmapv2/autoattackplan", verifyUserAuth, verifyAccountStatus, autoAttackPlanLimiter, logRequest, autoAttackPlan);
+router.post("/worldmapv2/smartmove", verifyUserAuth, verifyAccountStatus, autoAttackPlanLimiter, logRequest, smartMove);
 router.post("/worldmapv2/autoattack", verifyUserAuth, verifyAccountStatus, autoAttackLimiter, logRequest, autoAttack);
 router.get("/worldmapv2/autoattackreplay", verifyUserAuth, verifyAccountStatus, autoAttackPlanLimiter, autoAttackReplay);
+// Patch 9.1: the player's place in the battle line while their Repeat attack waits.
+router.get("/worldmapv2/autoattackqueue", verifyUserAuth, autoAttackQueueLimiter, autoAttackQueue);
 router.post("/worldmapv2/transferassets", verifyUserAuth, verifyAccountStatus, logRequest, transferMonsters);
+// The world map's move tray (beta 9 #7): every own yard's army, and one move of several pairs.
+router.post("/worldmapv2/ownarmies", verifyUserAuth, verifyAccountStatus, ownArmiesLimiter, logRequest, ownArmies);
+router.post("/worldmapv2/transferbatch", verifyUserAuth, verifyAccountStatus, logRequest, transferBatch);
 router.post("/api/:apiVersion/player/savebookmarks", apiVersion, verifyUserAuth, verifyAccountStatus, logRequest, saveBookmarks);
 
 /**  ────────────────────────────────────────────────
@@ -387,6 +402,12 @@ router.get("/api/:apiVersion/defences/:id/replay", apiVersion, verifyUserAuth, v
 mountFriendsRoutes(router);
 
 /**  ────────────────────────────────────────────────
+* 📦 Friend tests of a yard: Baiter invites, tests, results (beta 9 #4,
+*    `controllers/baiter/routes.ts`)
+* ──────────────────────────────────────────────── */
+mountBaiterRoutes(router);
+
+/**  ────────────────────────────────────────────────
 * 📦 Leaderboards & Attack Logs
 * ──────────────────────────────────────────────── */
 router.get("/api/:apiVersion/worlds", publicReadLimiter, getAvailableWorlds);
@@ -472,6 +493,8 @@ mountModReportsRoutes(router, {
   em: () => postgres.em.fork(),
   signedIn: [verifyUserAuth, modReportsLimiter],
   effects: moderationEffects,
+  removeLines: (userid, since) => removeRecentChatLines(redis, userid, since),
+  removeLine: (channel, line) => removeChatLine(redis, channel, line),
 });
 
 /**  ────────────────────────────────────────────────
@@ -511,10 +534,5 @@ mountOutpostLabelRoutes(router, {
   limiter: outpostLabelLimiter,
   filter: sharedWordFilter,
 });
-
-/**  ────────────────────────────────────────────────
-* 📦 Debug
-* ──────────────────────────────────────────────── */
-router.post("/api/:apiVersion/player/recorddebugdata", apiVersion, debugDataLimiter, recordDebugData);
 
 export default router;

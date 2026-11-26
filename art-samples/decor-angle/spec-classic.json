@@ -1,0 +1,7 @@
+{"Paoay": {"pic": "server/public/assets/buildings/decorations/wonders/paoay-church@2x.png", "lines": [[33,115,110,141,"facade cornice"],[34,168,112,199,"facade foot"],[165,47,200,56,"tower top L"],[204,56,233,47,"tower top R"],[163,83,200,92,"tower mid L"],[204,92,235,82,"tower mid R"],[115,138,167,112,"roof eave R"],[84,72,166,110,"roof ridge"]]},
+ "Fort Santiago": {"pic": "server/public/assets/buildings/decorations/wonders/fort-santiago@2x.png", "lines": [[18,64,118,88,"gate cornice"],[162,93,250,66,"wall top R"],[160,178,255,132,"wall foot R"],[120,44,142,38,"gate top R"]]},
+ "Magellan": {"pic": "server/public/assets/buildings/decorations/wonders/magellans-cross@2x.png", "lines": [[85,108,150,108,"eave front"],[152,107,212,96,"eave R"],[40,95,82,107,"eave L"],[25,192,105,226,"step top L"],[135,228,235,195,"step top R"]]},
+ "Pyramid": {"pic": "server/public/assets/buildings/decorations/wonders/pyramids@2x.png", "lines": [[86,78,165,80,"course L face"],[130,150,246,128,"foot front"],[100,48,170,48,"course upper"],[155,6,80,78,"ridge L"]]},
+ "Rizal": {"pic": "server/public/assets/buildings/decorations/wonders/rizal-monument@2x.png", "lines": [[14,280,91,313,"step L"],[107,313,191,278,"step R"],[34,262,95,291,"tier2 L"],[109,291,173,266,"tier2 R"]]},
+ "Taj": {"pic": "server/public/assets/buildings/decorations/wonders/taj-mahal@2x.png", "lines": [[6,180,97,210,"platform L"],[106,210,200,182,"platform R"],[40,116,97,135,"cornice L"],[103,135,168,116,"cornice R"]]}
+}

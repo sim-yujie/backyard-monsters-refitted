@@ -212,6 +212,18 @@ describe("BaiterPanel", () => {
     expect(host.querySelectorAll<HTMLSelectElement>(".baiter-champion__power")[1]!.options).toHaveLength(3);
     choose(".baiter-champion__level", "5", 1);
     expect(panel.army.champions[1]).toEqual({ t: 5, l: 5, pl: 0 });
+    // Krallen has no Mode (owner, 25 Nov 2026, patch 8.7): no picker on her
+    // row, and her drop carries none; the ordinary champion keeps his.
+    expect(details()[1]!.querySelector(".baiter-champion__mode")).toBeNull();
+    expect([...details()[1]!.querySelectorAll(".baiter-champion__caption")].map((one) => one.textContent)).toEqual([
+      "Level",
+      "Power",
+    ]);
+    expect(host.querySelectorAll(".baiter-champion__mode")).toHaveLength(1);
+    expect(panel.army.champions).toEqual([
+      { t: 1, l: 4, pl: 3, s: "defensive" },
+      { t: 5, l: 5, pl: 0 },
+    ]);
 
     choose(".baiter-champion__type", "");
     expect(panel.army.champions.map((one) => one.t)).toEqual([5]);
@@ -344,6 +356,61 @@ describe("BaiterPanel", () => {
       open();
       expect(host.querySelector(".baiter__tabs")).toBeNull();
       expect(host.querySelector<HTMLElement>(".baiter__view--army")!.hidden).toBe(false);
+    });
+  });
+
+  describe("for friends (beta 9 #4, design A)", () => {
+    it("with the friend tabs: Army, Invite, Invited me and Results, in the window's fixed head", async () => {
+      const api = {
+        list: vi.fn(async () => ({
+          error: 0,
+          now: 1,
+          baiterLevel: 3,
+          cap: 1_200,
+          inviteSeconds: 86_400,
+          keepSeconds: 604_800,
+          maxPerSend: 25,
+          candidates: [],
+          invited: [],
+          invitedMe: [{ userid: 9, username: "VorgLord", pic: null, level: 30, expiresAt: 99_999, cap: 900 }],
+          results: [],
+        })),
+      };
+      open({ level: 3, friends: { onTest: vi.fn(), api: api as never }, view: "invitedMe" });
+      await vi.waitFor(() => expect(api.list).toHaveBeenCalledTimes(1));
+      const head = host.querySelector(".panel__head, .panel__header") ?? host;
+      const tabs = [...head.querySelectorAll<HTMLButtonElement>(".baiter__tab")];
+      await vi.waitFor(() => expect(tabs.map((tab) => tab.textContent)).toEqual(["Army", "Invite", "Invited me 1", "Results"]));
+      expect(tabs[2]!.getAttribute("aria-selected")).toBe("true");
+      expect(host.querySelector<HTMLElement>(".baiter-friends--received")!.hidden).toBe(false);
+      expect(host.querySelector<HTMLElement>(".baiter__view--army")!.hidden).toBe(true);
+    });
+
+    it("a friend's yard: titled for them, capped by THEIR Baiter, and Start asks for their yard", async () => {
+      let answer: (words: string | null) => void = () => {};
+      const start = vi.fn((_army: unknown) => new Promise<string | null>((resolve) => (answer = resolve)));
+      const { options } = open({
+        level: 7,
+        host: { inviter: 21, name: "VorgLord", cap: 600, expiresAt: 1_000 + 2 * 3_600, start, now: () => 1_000 },
+      });
+      expect(host.querySelector(".panel__title")!.textContent).toBe("Test VorgLord's yard");
+      expect(host.querySelector(".baiter__host")!.textContent).toContain("VorgLord invited you to test their main yard.");
+      expect(host.querySelector(".baiter__host")!.textContent).toContain("2h left");
+      expect(host.querySelector(".baiter__tabs")).toBeNull();
+      shortcut("All level 1");
+      fillRow("Pokey");
+      expect(figures()).toBe("Army size 600 / 600");
+      run().click();
+      expect(start).toHaveBeenCalledTimes(1);
+      expect(start.mock.calls[0]![0]).toMatchObject({ monsters: { C1: { count: 60, level: 1 } } });
+      expect(options.onRun).not.toHaveBeenCalled();
+      expect(run().disabled).toBe(true);
+      expect(run().textContent).toBe("Starting…");
+      answer("That invite has ended.");
+      await vi.waitFor(() => expect(run().textContent).toBe("Start test"));
+      expect(host.querySelector<HTMLElement>(".baiter__gate")!.hidden).toBe(false);
+      expect(host.querySelector(".baiter__gate")!.textContent).toBe("That invite has ended.");
+      expect(run().disabled).toBe(false);
     });
   });
 });

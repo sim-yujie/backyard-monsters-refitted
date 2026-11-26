@@ -160,6 +160,10 @@ const POLICIES = new Map<number, AnimPolicy>([
   // Juicer: runs only while blending, and starts on cell 0
   // (`BUILDING9.as:206`, and `BFOUNDATION.as:1141` names type 9 explicitly).
   [9, STATIC_FIXED],
+  // General Store: Flash's and the main yard's 3D stand still (no strip). The Inferno's 3D store (look E,
+  // `INFERNO_BUILDING_3D_ART`) has a 32-cell loop of its lava's glow, 10 a second, all the time, each store from a
+  // cell of its own.
+  [12, every(4)],
   // Hatchery: only with a monster in production, back to cell 0 when not
   // (`BUILDING13.as:34-47`).
   [13, { ...whileWorking(WorkKind.HATCH, whenIdle(every(2, false))), restOnIdle: true }],
@@ -193,7 +197,8 @@ const POLICIES = new Map<number, AnimPolicy>([
   [52, every(2)],
   // `BFOUNDATION.as:1141` names type 54.
   [54, every(2, false)],
-  // Monster Lab: only while `_upgrading`, a research (`MONSTERLAB.as:210`).
+  // Monster Lab: only while `_upgrading`, a research (`MONSTERLAB.as:210`). The Inferno's 3D Lab (look E,
+  // `INFERNO_BUILDING_3D_ART`) runs its 24-cell loop the same way, but from cell 0 and back to it when idle (`home`).
   [116, whileWorking(WorkKind.RESEARCH, whenIdle(every(3)))],
   // Siege Factory and Siege Works: only while a weapon is unlocking (`SiegeBuilding.TickFast` while
   // `upgradingWeapon`), from cell 0, and back to cell 0 when it ends (`SiegeLab.as:111`, `SiegeFactory.as:142`).
@@ -204,6 +209,11 @@ const POLICIES = new Map<number, AnimPolicy>([
   [140, every(1, false)],
   // Observatory (this project's own, alliances): stands still (owner 10 Nov: "Just make it still").
   [150, STATIC_FIXED],
+  // This project's new moving decorations (24 Nov 2026), played as Flash's flags and Tiki Torch are: the Cambodian
+  // Flag's cloth, the Fire Pit's flames and the Garden Windmill's wheel.
+  [207, every(2)],
+  [208, every(2)],
+  [213, every(2)],
   ...DECORATIONS.map((type): [number, AnimPolicy] => [type, every(2)]),
 ]);
 

@@ -17,13 +17,14 @@ import { onLevelChange } from "./levelChangeBus.js";
 import { leaveAllChannels } from "./chatRooms.js";
 import { clients, type ChatClient, type SocketData } from "./chatState.js";
 import { publishToChannel } from "./chatTransport.js";
+import { refusedForMaintenance, tellOnSignIn } from "./chatMaintenance.js";
 
 type ServerWebSocket<T> = import("bun").ServerWebSocket<T>;
 
 type AuthMessage = Extract<ClientMessage, { type: ClientMessageType.Auth }>;
 
 type ChatIdentity = Pick<User, "username" | "pic_square"> & {
-  save?: Pick<Save, "points" | "basevalue"> | null;
+  save?: Pick<Save, "points" | "basevalue" | "createdAt"> | null;
 };
 
 const CHAT_FIELDS = [
@@ -32,7 +33,8 @@ const CHAT_FIELDS = [
   "banned",
   "pic_square",
   "save.points",
-  "save.basevalue"
+  "save.basevalue",
+  "save.createdAt",
 ] as const;
 
 /**
@@ -79,6 +81,16 @@ const readMutedUntil = async (userid: number): Promise<number> => {
 };
 
 /**
+ * When the player's main yard was made (ms), for the chat filter's "new
+ * player" (`services/chat/chatFilter.ts`); null without a main yard, which
+ * counts as new.
+ */
+const yardCreatedAt = (user: ChatIdentity): number | null => {
+  const at = user.save?.createdAt ? new Date(user.save.createdAt).getTime() : NaN;
+  return Number.isFinite(at) ? at : null;
+};
+
+/**
  * Authenticates a connection and registers it as a {@link ChatClient}.
  *
  * The token is checked against the one issued during base load, then the account
@@ -113,6 +125,9 @@ export const authenticate = async (ws: ServerWebSocket<SocketData>, message: Aut
     return;
   }
 
+  // Past the maintenance countdown only the owner gets in (`chatMaintenance.ts`).
+  if (refusedForMaintenance(ws, user.userid)) return;
+
   const displayName = getDisplayName(user);
   const mutedUntil = await readMutedUntil(user.userid);
 
@@ -126,6 +141,7 @@ export const authenticate = async (ws: ServerWebSocket<SocketData>, message: Aut
     lastMsgAt: 0,
     gm: isAdminUser(user.userid),
     mutedUntil,
+    yardCreatedAt: yardCreatedAt(user),
   };
 
   ws.data.userId = user.userid;
@@ -140,7 +156,8 @@ export const authenticate = async (ws: ServerWebSocket<SocketData>, message: Aut
 
   clients.set(user.userid, client);
 
-  send(ws, { type: ServerMessageType.AuthOk, userId: user.userid, displayName });
+  send(ws, { type: ServerMessageType.AuthOk, userId: user.userid, displayName, presence: true });
+  tellOnSignIn(client);
 };
 
 /**

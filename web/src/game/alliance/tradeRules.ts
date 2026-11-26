@@ -1,4 +1,4 @@
-import { TRADE_KEYS, type TradeAmounts, type TradeKey, type TradeRequest, type TradeStorage } from "@/api/allianceTrade";
+import { type TradeKey, type TradeRequest, type TradeStorage } from "@/api/allianceTrade";
 
 /**
  * The trade sums the tab shows (design v5 §12a, §12b; swaps only, owner 16
@@ -70,14 +70,4 @@ export const acceptBlock = (
   if (roomOf(mine, request.give) < request.gets) return "full";
   if (request.storage && roomOf(request.storage, request.want) < request.gets) return "mateFull";
   return null;
-};
-
-/** Only the resources with something in them. */
-export const nonZero = (amounts: Partial<TradeAmounts>): Partial<TradeAmounts> => {
-  const out: Partial<Record<TradeKey, number>> = {};
-  for (const key of TRADE_KEYS) {
-    const value = Math.floor(Number(amounts[key] ?? 0));
-    if (value > 0) out[key] = value;
-  }
-  return out;
 };

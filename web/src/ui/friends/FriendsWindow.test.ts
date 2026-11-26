@@ -113,17 +113,18 @@ describe("the window", () => {
       friend(4, { username: "Di", level: 1 }),
     ]);
     const headings = [...document.querySelectorAll(".friends-window__group")].map((h) => h.textContent);
-    expect(headings).toEqual(["1Can use help", "1Online", "2Everyone else"]);
+    expect(headings).toEqual(["Can use help(1)", "Online(1)", "Everyone else(2)"]);
     expect(names()).toEqual(["Ann", "Bo", "Cy", "Di"]);
+    // Words and a count, no dots (neon, 26 Nov; the rows carry last seen); help keeps its painted wrench.
+    expect(document.querySelector(".friends-window__group .online-dot")).toBeNull();
     expect(document.querySelector(".friends-window__group--help img.game-icon--tools")).not.toBeNull();
-    // Every heading leads with its picture, so the three line up (tester, 9 Nov).
-    expect(document.querySelector(".friends-window__group--rest > .friends-window__dot--off:first-child")).not.toBeNull();
+    expect(document.querySelector(".friends-window__group--online img, .friends-window__group--rest img")).toBeNull();
   });
 
   it("leaves out an empty group", async () => {
     await setup([friend(1, { username: "Cy" })]);
     expect([...document.querySelectorAll(".friends-window__group")].map((h) => h.textContent)).toEqual([
-      "1Everyone else",
+      "Everyone else(1)",
     ]);
   });
 
@@ -150,7 +151,9 @@ describe("the window", () => {
     ]);
     const [ann, bo] = items();
     expect(ann!.querySelector(".friends-window__level")!.textContent).toBe("Lv 12");
-    expect(ann!.querySelector(".online-dot")).not.toBeNull();
+    // Online sits under the name like every other step, not on the face (one place on all three lists).
+    expect(ann!.querySelector(".friends-window__who .seen--online .online-dot")).not.toBeNull();
+    expect(ann!.querySelector(".friends-window__face .online-dot")).toBeNull();
     const marks = [...ann!.querySelectorAll<HTMLImageElement>(".friends-window__mark")];
     expect(marks.map((m) => m.dataset["icon"])).toEqual(["tools", "gift"]);
     expect(marks.map((m) => m.getAttribute("aria-label"))).toEqual(["Can use your help today", "No gift sent today"]);
@@ -385,7 +388,7 @@ describe("a long list: 90 can use help, 20 online, 150 in all (lead, 9 Nov)", ()
 
   it("opens on three short groups: 15 rows, each heading with its count and a Show all", async () => {
     await setup(big());
-    expect(headings()).toEqual(["90Can use help", "20Online", "40Everyone else"]);
+    expect(headings()).toEqual(["Can use help(90)", "Online(20)", "Everyone else(40)"]);
     expect(items()).toHaveLength(3 * GROUP_PREVIEW);
     expect(more().map((button) => [button.textContent, button.dataset["group"]])).toEqual([
       ["Show all 90", "help"],
@@ -395,6 +398,14 @@ describe("a long list: 90 can use help, 20 online, 150 in all (lead, 9 Nov)", ()
     // Each Show all sits right under its group's last row, before the next heading.
     expect(more()[0]!.nextElementSibling?.classList.contains("friends-window__group--online")).toBe(true);
     expect(document.querySelector(".friends-window__count--total")!.textContent).toBe("150");
+  });
+
+  it("the way back from Everyone else has no grey dot, and short words for a phone", async () => {
+    await setup(big());
+    more().find((button) => button.dataset["group"] === "rest")!.click();
+    expect(back()!.querySelector(".online-dot")).toBeNull();
+    expect(back()!.querySelector(".friends-window__group-short")!.textContent).toBe("Others");
+    expect(back()!.getAttribute("aria-label")).toContain("Everyone else");
   });
 
   it("Show all lists that group whole, with the way back in the head, and Visit under a row", async () => {
@@ -436,7 +447,7 @@ describe("a long list: 90 can use help, 20 online, 150 in all (lead, 9 Nov)", ()
     expect(items()).toHaveLength(21);
     for (const one of [...list.filter((f) => f.username.startsWith("Online")), friend(5)]) store.removeFriend(one.userid);
     expect(back()).toBeNull();
-    expect(headings()).toEqual(["90Can use help", "40Everyone else"]);
+    expect(headings()).toEqual(["Can use help(90)", "Everyone else(40)"]);
   });
 
   it("makes one list request however many friends there are", async () => {

@@ -1,4 +1,4 @@
-import { actionKey, type YardActionResult, type YardStore } from "@/game/yard/YardStore";
+import { actionKey, startReadOr, type YardActionResult, type YardStore } from "@/game/yard/YardStore";
 import type { EventReward, GrantedReward } from "./events";
 import { post } from "./http";
 import type { YardResponse } from "./types";
@@ -130,8 +130,26 @@ export interface QuestsActions {
 }
 
 /** The routes through the store's one-at-a-time queue, which merges each answer. */
-export const questsActions = (store: Pick<YardStore, "run">, api: QuestsApi = questsApi): QuestsActions => ({
-  state: () => store.run({ key: QuestsKey.STATE, send: () => api.state() }),
+/** A `quests/state` report, as the yard's first `state` call may carry it (`startReadOr`). */
+export const isQuestsReport = (report: unknown): report is QuestsReport => {
+  const quests = (report as QuestsReport | null)?.quests;
+  return typeof quests === "object" && quests !== null && typeof quests.login === "object";
+};
+
+export const questsActions = (
+  store: Pick<YardStore, "run"> & Partial<Pick<YardStore, "startRead" | "kind">>,
+  api: QuestsApi = questsApi,
+): QuestsActions => ({
+  // The first read rides the yard's first `state` call when it can (beta 9).
+  state: () =>
+    startReadOr(
+      store,
+      "quests",
+      isQuestsReport,
+      () => store.run({ key: QuestsKey.STATE, send: () => api.state() }),
+      // An unchanged view (item 6) comes back with the server's clock, the one thing that moved.
+      (kept, same) => (typeof same.now === "number" ? { ...kept, quests: { ...kept.quests, now: same.now } } : kept),
+    ),
   claimLogin: () => store.run({ key: QuestsKey.LOGIN, send: () => api.claimLogin() }),
   claim: (period, slot) => store.run({ key: QuestsKey.claim(period, slot), send: () => api.claim(period, slot) }),
   claimBonus: (period) => store.run({ key: QuestsKey.bonus(period), send: () => api.claimBonus(period) }),

@@ -1,5 +1,4 @@
 import { LOCKER_KEYS, lockerActions, type LockerActions } from "@/api/yardMonsters";
-import type { YardRefusal } from "@/api/yard";
 import { academyLevel } from "@/game/monsters/housingSummary";
 import { monsterPortrait, showPortrait } from "@/game/portraits";
 import {
@@ -27,7 +26,8 @@ import { iconAmount } from "@/ui/gameIcon";
 import { resourceAmount } from "@/ui/resourceIcon";
 import { ShinyButton } from "@/ui/yard/ShinyButton";
 import { monsterStats, statGrid } from "./monsterNumbers";
-import { MonstersTabId, type MonstersFocus, type MonstersTab, type MonstersTabContext } from "./monstersTab";
+import { MonstersTabId, revealPicked, type MonstersFocus, type MonstersTab, type MonstersTabContext } from "./monstersTab";
+import { refusalText } from "@/ui/dom";
 
 /**
  * The Unlock tab: the Monster Locker (`docs/design/yard-buildings.md` §4.3).
@@ -130,6 +130,7 @@ export class LockerTab implements MonstersTab {
       this.select(focus.monster, false);
     }
     this.render();
+    revealPicked(this.list);
   }
 
   update(change: YardChange): void {
@@ -623,7 +624,3 @@ const plainButton = (label: string, onClick: () => void, variant?: string): HTML
   return button;
 };
 
-const refusalText = (refusal: YardRefusal): string =>
-  refusal.reason === "network"
-    ? "Could not reach the server. Try again."
-    : refusal.message || "That did not work.";

@@ -28,10 +28,14 @@ import { decorActions } from "@/api/yardDecor";
 import { consumeViewTarget, setAttackTarget, setViewTarget, type ViewTarget } from "@/game/attack/attackTarget";
 import { attackWithFriendWarning } from "@/game/friends/attackWarning";
 import { confirmAttackWindow, showsAttackWindow } from "@/ui/attack/AttackWindow";
+import { smartMoveBeforeAttack } from "@/ui/attack/smartMoveFlow";
+import { hasAnythingToSend, NOTHING_IN_RANGE } from "@/game/attack/attackEntry";
 import { setPlayerPool } from "@/game/friends/friendsView";
 import { currentSeason } from "@/game/season";
 import {
   friendRefusal,
+  type FriendRefusal,
+  type HelpResult,
   friendsApi,
   type Friend,
   type FriendsApi,
@@ -80,6 +84,7 @@ import { quality } from "@/game/quality";
 import { currentScreenName } from "@/game/bugReport/screenCapture";
 import { finishedMonstersJobs } from "@/game/monsters/finishedJobs";
 import { onJuiced } from "@/game/monsters/juiceNews";
+import { onFed } from "@/game/monsters/feedNews";
 import { openInfernoMap } from "@/game/inferno/tribeEntry";
 import { backToInferno } from "@/game/inferno/tribeReturn";
 import {
@@ -116,7 +121,7 @@ import { presence } from "@/game/presence/presencePing";
 import { yardAttack } from "@/game/presence/yardAttack";
 import { UnderAttackLock } from "@/ui/yard/UnderAttackLock";
 import { withStoredDecorations } from "@/game/yard/decorStorage";
-import { consumeYardIntent, setYardIntent, type YardIntent } from "@/game/yard/yardIntent";
+import { consumeYardIntent, setYardIntent, type BaiterView, type YardIntent } from "@/game/yard/yardIntent";
 import { yardLifeOf } from "@/game/yard/yardLifeModel";
 import {
   YardChangeReason,
@@ -197,10 +202,16 @@ import { BAITER_TYPE, setBaiterRun } from "@/game/baiter/baiterSession";
 import { trojanApi } from "@/api/trojan";
 import { setRaidRun } from "@/game/raid/raidSession";
 import { warmTrojanSheets } from "@/game/raid/raidSheets";
+import { raidSheetQueue } from "@/game/attack/sheetQueue";
+import { freeAttackArt, UNUSED_MS, type TextureCollector } from "@/game/attack/attackArt";
 import { TROJAN_HORSE_TYPE, findTrojanHorse } from "@/game/trojan/trojanHorse";
 import { TrojanFlow } from "@/game/trojan/trojanFlow";
 import { TrojanLetter } from "@/ui/trojan/TrojanLetter";
 import { replayOf } from "@/game/baiter/testHistory";
+import type { BaiterRun } from "@/game/baiter/baiterSession";
+import { BAITER_REFUSAL_TEXT, baiterRefusalOf, baiterTestsApi, type ReceivedInvite } from "@/api/baiterTests";
+import { openFriendTestWindow, openInvitesWindow } from "@/ui/yard/BaiterInvitesWindow";
+import { setBaiterOpener } from "@/game/baiter/baiterOpener";
 import { guideBus, GuideScreen } from "@/game/guide/guideBus";
 import { registerCanvasTarget, tutTarget, TutTarget, type TargetRect } from "@/game/guide/targets";
 import { footprintBox } from "@/game/yard/YardGrid";
@@ -482,8 +493,12 @@ export class YardScene implements Scene {
   private unsubscribeStore: (() => void) | null = null;
   /** Stops showing juices in the yard (`juiceNews.ts`). */
   private unsubscribeJuice: (() => void) | null = null;
+  /** Stops showing champion feeds in the yard (`feedNews.ts`). */
+  private unsubscribeFeed: (() => void) | null = null;
   /** Stops waiting for the yard to go quiet before Map Room 2's warm-up (`mr2Prewarm.ts`). */
   private stopMr2Prewarm: (() => void) | null = null;
+  /** Lets the raid queue start again once this yard's pictures are in (beta 9); see `load`. */
+  private releaseRaidSheets: (() => void) | null = null;
   /** What the panel and the HUD are handed on the own yard. */
   private binding: YardUiBinding | null = null;
   /** The tab came back while the planner was open; refresh once it closes. */
@@ -616,6 +631,8 @@ export class YardScene implements Scene {
    */
   private unmountPlugins: (() => void) | null = null;
   private readonly unregisterTargets: (() => void)[] = [];
+  /** Clears the way in to the Baiter's friend tabs from a notice (beta 9 #4). */
+  private clearBaiterOpener: (() => void) | null = null;
   private canvasWidth = 0;
   private canvasHeight = 0;
 
@@ -784,6 +801,13 @@ export class YardScene implements Scene {
         onAllianceJoined: () => void this.store?.refresh(),
       });
       this.dock.placeBesideMonsters(tutTarget(this.mail.button.element, TutTarget.DOCK_MAIL));
+      // A friend-test notice opens the Baiter window's tab (beta 9 #4).
+      // Its own undo: the canvas targets' list is cleared whenever the camera is set up again.
+      this.clearBaiterOpener?.();
+      this.clearBaiterOpener = setBaiterOpener((view) => {
+        if (this.store?.kind === "main" || view === "invitedMe") this.openBaiterView(view);
+        else this.notices.show("baiter-friend", "Tests of your yard are in your main yard's Baiter.", { level: "info", timeoutMs: 6_000 });
+      });
       this.bell = new NotificationDoor({
         container: context.overlay.content,
         onOpen: () => {
@@ -859,6 +883,9 @@ export class YardScene implements Scene {
 
   exit(): void {
     presence.setScreen(ELSEWHERE);
+    this.clearBaiterOpener?.();
+    this.clearBaiterOpener = null;
+    this.releaseRaidSheets?.();
     this.stopSupportOffer?.();
     this.stopSupportOffer = null;
     this.tribeBar?.close();
@@ -1151,6 +1178,26 @@ export class YardScene implements Scene {
       // Safe mode's mark, before the yard's art starts loading (patch 7.11).
       noteYardLoading();
       this.renderer.show(yard);
+      // Buildings first (beta 9): a raid's or the Trojan Horse's sheets warmed
+      // here wait until this yard's pictures are in, as its monsters' do.
+      if (!this.releaseRaidSheets) {
+        const release = raidSheetQueue.hold();
+        this.releaseRaidSheets = release;
+        void this.renderer.artIn.then(release);
+      }
+      // The last attack's pictures come off the graphics card once this yard's own are in
+      // (`attackArt.ts`, beta 9): Pixi's collector took 60-95 s, 45-55 MB on a phone meanwhile.
+      void this.renderer.artIn.then(() => {
+        // A moment later, so the yard has drawn (and so kept) what it uses.
+        // Asked again while no frame is being drawn (a hidden tab), for up to a minute.
+        let tries = 0;
+        const free = (): void => {
+          if (this.context !== context) return;
+          const result = freeAttackArt((context.renderer as { gc?: TextureCollector }).gc);
+          if (result === "wait" && ++tries < 240) setTimeout(free, 250);
+        };
+        setTimeout(free, UNUSED_MS + 500);
+      });
       // What lives on the yard (#158). A visit's load carries the defender's
       // monsters, champion and workers, which Flash drew there too (#159).
       this.renderer.setLife(yardLifeOf(response, yard, store ? "own" : "visit"));
@@ -1205,6 +1252,11 @@ export class YardScene implements Scene {
       this.tellPresence();
       // What the screen the player came from asked for, on the own yard only.
       if (store) this.applyIntent(consumeYardIntent());
+      // Dev only: `?baiterView=invite` opens the Baiter window on a friend tab, for pictures and checks.
+      if (import.meta.env.DEV && store?.kind === "main") {
+        const view = new URLSearchParams(window.location.search).get("baiterView");
+        if (view === "army" || view === "invite" || view === "invitedMe" || view === "results") this.openBaiterView(view);
+      }
       if (store?.kind === "outpost") this.arriveAtOutpost(store, context);
       // A friend's help landing while the player is here refreshes the yard (#374).
       if (store?.kind === "main") this.watchHelps(store);
@@ -1298,9 +1350,29 @@ export class YardScene implements Scene {
     this.attacking = true;
     this.dock?.setAttack({ disabled: true, title });
     let confirmed = false;
-    // The map's attack window first (`ui/attack/AttackWindow.ts`): what the
+    // Smart moving first (beta 9, `smartMoveFlow.ts`), as from the map: on a
+    // camp whose saved Repeat army the yards in range lack, "Bring saved
+    // army?", whose Move & attack goes straight into the battle.
+    const windowed = showsAttackWindow(attack);
+    const smart = windowed
+      ? await smartMoveBeforeAttack({ modal: context.overlay.modal, attack })
+      : ({ kind: "window", note: null } as const);
+    if (this.context !== context) return;
+    if (smart.kind === "moved") {
+      setAttackTarget(smart.target);
+      context.goTo(SceneName.ATTACK);
+      return;
+    }
+    // Nothing moved in and nothing in range to send (the map let Attack
+    // through for smart moving): said here, as the map would have.
+    if (smart.kind === "window" && windowed && !hasAnythingToSend(attack.roster)) {
+      this.notices.show("attack", NOTHING_IN_RANGE, { level: "info", timeoutMs: 4_000 });
+    }
+    // The map's attack window next (`ui/attack/AttackWindow.ts`): what the
     // player can bring, then Attack or Cancel, as from the map itself.
-    const go = !showsAttackWindow(attack) || (await confirmAttackWindow(context.overlay.modal, attack));
+    const go =
+      smart.kind === "window" &&
+      (!windowed || (hasAnythingToSend(attack.roster) && (await confirmAttackWindow(context.overlay.modal, attack, { note: smart.note }))));
     if (go && this.context === context) {
       await attackWithFriendWarning(attack, context.overlay.modal, () => {
         confirmed = true;
@@ -2123,8 +2195,9 @@ export class YardScene implements Scene {
    * One help (#374): the server decides and answers with the building as it
    * now is, the reward and the rewarded helps left today. A refusal stands
    * on the building from then on, unless it is about the whole visit. The
-   * help panel and Help all both give theirs here. Null when the visit is
-   * over (left, or signed out).
+   * help panel gives its help here; Help all gives its helps in one request
+   * (`giveHelps`) and lands each the same way. Null when the visit is over
+   * (left, or signed out).
    */
   private async giveHelp(
     building: YardBuilding,
@@ -2137,34 +2210,9 @@ export class YardScene implements Scene {
     try {
       const result = await this.friends.help(friend, building.id, kind);
       if (this.context !== context || !this.helpBlock) return null;
-      this.helpBlock = afterHelp(this.helpBlock, building.id, kind, result.rewardsLeft);
-      if (result.building) this.patchVisitBuilding(building, result.building);
-      // The reward lands in the visitor's own pool (#374), kept in the hidden readouts for the way home.
-      const pool = this.visitorPool;
-      const fx = this.helpFx;
-      if (pool) {
-        const resources: Resources = { ...pool.resources };
-        for (const key of ["r1", "r2", "r3", "r4"] as const) {
-          const add = result.reward[key] ?? 0;
-          if (add <= 0) continue;
-          resources[key] = (resources[key] ?? 0) + add;
-          // Help all's effect delivers it in its own time; held in the same task, so the readout never jumps.
-          if (fx) this.hud?.hold(key, add);
-        }
-        this.visitorPool = { ...pool, resources };
-        this.hud?.setResources(resources, pool.credits, fx ? { float: false } : {});
-      }
-      // No readouts to float it on: one help's reward shows as Help all's does.
-      if (!fx) this.showVisitReward(result.reward);
-      this.showHelpBlock();
-      // The friends bar's wrench follows.
-      friendsStore.nudge();
-      return {
-        ok: true,
-        secondsSaved: result.secondsSaved ?? 0,
-        reward: result.reward,
-        text: thanksText(kind, result, target.name, building.name),
-      };
+      const outcome = this.helpLanded(building, kind, result, target.name);
+      this.helpShown();
+      return outcome;
     } catch (caught) {
       if (this.context !== context || !this.helpBlock) return null;
       if (caught instanceof ApiError && caught.isAuthFailure) {
@@ -2172,23 +2220,140 @@ export class YardScene implements Scene {
         return null;
       }
       // A reason the client does not know says the server's own words (`friendRefusal`, bug report #50).
-      const refusal = friendRefusal(caught);
-      const known = refusal.reason !== "unknown" && refusal.reason !== "network";
-      const text = known ? helpRefusalText(refusal.reason, refusal) : refusal.message;
-      if (known && refusalStays(refusal.reason)) {
-        this.helpBlock = afterRefusal(this.helpBlock, building.id, kind, refusal.reason, refusal);
-      }
+      const outcome = this.helpRefused(building, kind, friendRefusal(caught));
       this.showHelpBlock();
-      return { ok: false, reason: refusal.reason, text };
+      return outcome;
     }
   }
 
   /**
+   * Help all's helps in one request (`POST /bm/friends/help/all`; owner,
+   * 26 Nov 2026), each landed or refused on the screen in order as one help
+   * is (`helpLanded`, `helpRefused`), and Help all's effect told of each.
+   * Answers one outcome per help the server reached; a refused request is one
+   * stopping outcome on the first. Empty when the visit is over.
+   */
+  private async giveHelps(steps: readonly HelpTarget[], fx: HelpAllFx | null): Promise<HelpOutcome[]> {
+    const target = this.target;
+    const friend = target?.friend;
+    const context = this.context;
+    const buildings = new Map<number, YardBuilding>();
+    for (const step of steps) {
+      const building = this.yard?.buildings.find((one) => one.id === step.id);
+      if (building) buildings.set(step.id, building);
+    }
+    const first = steps[0];
+    if (!target || friend === undefined || !this.helpBlock || !context || !first) return [];
+    const play = (id: number, outcome: HelpOutcome): HelpOutcome => {
+      if (this.helpFx === fx && fx) {
+        if (outcome.ok) fx.helped({ id, secondsSaved: outcome.secondsSaved, reward: outcome.reward });
+        else fx.missed(id);
+      }
+      return outcome;
+    };
+    // A building the yard no longer has is passed over here, as one help would be.
+    const gone = (id: number): HelpOutcome => play(id, { ok: false, reason: "nothingToHelp", text: helpRefusalText("nothingToHelp") });
+    const sent = steps.filter((step) => buildings.has(step.id));
+    if (sent.length === 0) return steps.map((step) => gone(step.id));
+    try {
+      const answer = await this.friends.helpAll(
+        friend,
+        sent.map((step) => ({ buildingId: step.id, kind: step.kind })),
+      );
+      if (this.context !== context || !this.helpBlock) return [];
+      const outcomes: HelpOutcome[] = [];
+      let next = 0;
+      for (const step of steps) {
+        const building = buildings.get(step.id);
+        if (!building) {
+          outcomes.push(gone(step.id));
+          continue;
+        }
+        const item = answer.helps[next++];
+        // Past the server's stop (or an answer that left this one out): not reached.
+        if (!item || item.buildingId !== step.id || item.kind !== step.kind) break;
+        const outcome = item.ok
+          ? this.helpLanded(building, step.kind, item.result, target.name)
+          : this.helpRefused(building, step.kind, item.refusal);
+        outcomes.push(play(step.id, outcome));
+      }
+      if (outcomes.some((outcome) => outcome.ok)) this.helpShown();
+      else this.showHelpBlock();
+      return outcomes;
+    } catch (caught) {
+      if (this.context !== context || !this.helpBlock) return [];
+      if (caught instanceof ApiError && caught.isAuthFailure) {
+        context.goTo(SceneName.LOGIN);
+        return [];
+      }
+      // Refused as a whole (not friends, under attack, `tooNew`, the spam limit): as the first help's refusal was.
+      const head = sent[0]!;
+      const outcome = this.helpRefused(buildings.get(head.id)!, head.kind, friendRefusal(caught));
+      this.showHelpBlock();
+      return [play(head.id, outcome)];
+    }
+  }
+
+  /**
+   * A help the server took: the block, the building, and the reward in the
+   * visitor's own pool. The caller redraws once (`helpShown`).
+   */
+  private helpLanded(
+    building: YardBuilding,
+    kind: HelpKind,
+    result: HelpResult,
+    owner: string,
+  ): HelpOutcome & { readonly text: string } {
+    if (this.helpBlock) this.helpBlock = afterHelp(this.helpBlock, building.id, kind, result.rewardsLeft);
+    if (result.building) this.patchVisitBuilding(building, result.building);
+    // The reward lands in the visitor's own pool (#374), kept in the hidden readouts for the way home.
+    const pool = this.visitorPool;
+    const fx = this.helpFx;
+    if (pool) {
+      const resources: Resources = { ...pool.resources };
+      for (const key of ["r1", "r2", "r3", "r4"] as const) {
+        const add = result.reward[key] ?? 0;
+        if (add <= 0) continue;
+        resources[key] = (resources[key] ?? 0) + add;
+        // Help all's effect delivers it in its own time; held in the same task, so the readout never jumps.
+        if (fx) this.hud?.hold(key, add);
+      }
+      this.visitorPool = { ...pool, resources };
+      this.hud?.setResources(resources, pool.credits, fx ? { float: false } : {});
+    }
+    // No readouts to float it on: one help's reward shows as Help all's does.
+    if (!fx) this.showVisitReward(result.reward);
+    return {
+      ok: true,
+      secondsSaved: result.secondsSaved ?? 0,
+      reward: result.reward,
+      text: thanksText(kind, result, owner, building.name),
+    };
+  }
+
+  /** A help the server refused: it stands on the building, unless it is about the whole visit. The caller redraws once. */
+  private helpRefused(building: YardBuilding, kind: HelpKind, refusal: FriendRefusal): HelpOutcome & { readonly text: string } {
+    const known = refusal.reason !== "unknown" && refusal.reason !== "network";
+    const text = known ? helpRefusalText(refusal.reason, refusal) : refusal.message;
+    if (known && refusalStays(refusal.reason) && this.helpBlock) {
+      this.helpBlock = afterRefusal(this.helpBlock, building.id, kind, refusal.reason, refusal);
+    }
+    return { ok: false, reason: refusal.reason, text };
+  }
+
+  /** After a help lands: the marks, the bar's count and the panel redrawn; the friends bar's wrench follows (a refusal only redraws). */
+  private helpShown(): void {
+    this.showHelpBlock();
+    friendsStore.nudge();
+  }
+
+  /**
    * Help all (beta 8, owner 15 Nov 2026): every speed-up the visitor can
-   * still give, one after another (`runHelpAll`), each one help to the
-   * server; the marks and the count follow each. Resolves with the short
-   * line the bar shows after; a stop's reason also goes up as a notice, as
-   * the bar has no room for a sentence on a phone.
+   * still give (`runHelpAll`), all in one request since 26 Nov 2026
+   * (`giveHelps`); the marks and the count follow each as the effect plays
+   * it. Resolves with the short line the bar shows after; a stop's reason
+   * also goes up as a notice, as the bar has no room for a sentence on a
+   * phone.
    */
   private async helpAll(): Promise<HelpAllLine> {
     const context = this.context;
@@ -2204,17 +2369,7 @@ export class YardScene implements Scene {
       goOn: () => this.context === context && this.helpBlock !== null,
       // An effect counts the bar on as it plays each help, not as each lands.
       onStep: (done, total) => (fx ? undefined : this.helpAllBar?.setProgress(done, total)),
-      helpOne: async (step: HelpTarget): Promise<HelpOutcome> => {
-        const building = this.yard?.buildings.find((one) => one.id === step.id);
-        if (!building) return { ok: false, reason: "nothingToHelp", text: helpRefusalText("nothingToHelp") };
-        // Signed out or left mid-way: stop.
-        const outcome = (await this.giveHelp(building, step.kind)) ?? { ok: false, reason: "gone", text: "" };
-        if (this.helpFx === fx && fx) {
-          if (outcome.ok) fx.helped({ id: step.id, secondsSaved: outcome.secondsSaved, reward: outcome.reward });
-          else fx.missed(step.id);
-        }
-        return outcome;
-      },
+      helpMany: (steps) => this.giveHelps(steps, fx),
     });
     const full = helpAllResultText(summary);
     if (summary.stoppedBy && this.context === context) {
@@ -2397,14 +2552,55 @@ export class YardScene implements Scene {
     else if (intent.kind === "defences") {
       if (this.defences && !this.defences.button.element.hidden) void this.defences.open();
     } else if (intent.kind === "baiter") {
-      const baiter = this.yard?.buildings.find((one) => one.type === BAITER_TYPE);
-      if (!baiter) return;
-      this.focusBuilding(baiter.id);
-      this.panel?.openBaiter();
+      this.openBaiterView(intent.view);
+    } else if (intent.kind === "baiterFriend") {
+      // "Change army" after a test of a friend's yard: their invite, if it is still open.
+      baiterTestsApi.list().then(
+        (data) => {
+          const invite = data.invitedMe.find((one) => one.userid === intent.inviter);
+          if (invite) this.openFriendTest(invite);
+          else this.notices.show("baiter-friend", BAITER_REFUSAL_TEXT.noInvite, { level: "warning", timeoutMs: 6_000 });
+        },
+        (error: unknown) => this.notices.show("baiter-friend", BAITER_REFUSAL_TEXT[baiterRefusalOf(error)], { level: "error" }),
+      );
     } else {
       const tab = MONSTERS_TAB_ORDER.find((one) => one === intent.tab);
       if (tab) this.openMonsters(tab);
     }
+  }
+
+  /**
+   * Opens the Baiter window on `view` (beta 9 #4). A player with no Baiter of
+   * their own still reaches a friend's invite: Invited me opens on its own.
+   */
+  openBaiterView(view?: BaiterView): void {
+    const baiter = this.yard?.buildings.find((one) => one.type === BAITER_TYPE && one.level >= 1);
+    if (baiter) {
+      this.focusBuilding(baiter.id);
+      this.panel?.openBaiter(view);
+      return;
+    }
+    const modal = this.context?.overlay.modal;
+    if (view !== "invitedMe" || !modal || !this.store) return;
+    openInvitesWindow({ container: modal, ...this.friendTestOptions() });
+  }
+
+  /** The army window for a friend's yard (beta 9 #4). */
+  private openFriendTest(invite: ReceivedInvite): void {
+    const modal = this.context?.overlay.modal;
+    if (!modal || !this.store) return;
+    openFriendTestWindow(modal, invite, this.friendTestOptions());
+  }
+
+  private friendTestOptions() {
+    const store = this.store!;
+    return {
+      save: () => store.save,
+      onRun: (run: BaiterRun) => {
+        setBaiterRun(run);
+        this.context?.goTo(SceneName.BAITER);
+      },
+    };
   }
 
   /** The Build window's "Upgrade Town Hall": close it and open the hall's panel. */
@@ -3022,6 +3218,10 @@ export class YardScene implements Scene {
     this.unsubscribeJuice = onJuiced((news) => {
       if (this.store === store) this.renderer.juice(news);
     });
+    // A feed walks the eaten monsters into the champion, who bursts them: drawing only (`feedShow.ts`).
+    this.unsubscribeFeed = onFed((news) => {
+      if (this.store === store) this.renderer.feed(news);
+    });
     this.binding = {
       store,
       scene: {
@@ -3051,6 +3251,26 @@ export class YardScene implements Scene {
               this.context?.goTo(SceneName.BAITER_REPLAY);
             },
             onBack: () => report.close(),
+            backLabel: "Close",
+          }).mount(modal);
+        },
+        openFriendTest: (invite) => this.openFriendTest(invite),
+        showFriendReport: (report, run) => {
+          const modal = this.context?.overlay.modal;
+          if (!modal) return;
+          const panel: TestReportPanel = new TestReportPanel({
+            report,
+            savedNote: "A test: nothing was lost. Your yard is as it was.",
+            ...(run
+              ? {
+                  onReplay: () => {
+                    panel.close();
+                    setBaiterRun(run);
+                    this.context?.goTo(SceneName.BAITER_REPLAY);
+                  },
+                }
+              : {}),
+            onBack: () => panel.close(),
             backLabel: "Close",
           }).mount(modal);
         },
@@ -3332,6 +3552,7 @@ export class YardScene implements Scene {
       level: "info",
       actionLabel: "Kits",
       onAction: () => this.openKits(),
+      standing: true,
     });
   }
 
@@ -3401,6 +3622,8 @@ export class YardScene implements Scene {
     this.unsubscribeStore = null;
     this.unsubscribeJuice?.();
     this.unsubscribeJuice = null;
+    this.unsubscribeFeed?.();
+    this.unsubscribeFeed = null;
     this.stopMr2Prewarm?.();
     this.stopMr2Prewarm = null;
     this.store?.destroy();

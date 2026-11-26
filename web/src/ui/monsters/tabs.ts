@@ -8,7 +8,6 @@ import { TrainTab } from "./TrainTab";
 import {
   MonsterBuilding,
   MonstersTabId,
-  type MonstersTab,
   type MonstersTabDefinition,
 } from "./monstersTab";
 
@@ -17,23 +16,6 @@ import {
  * contract). A work package that builds a tab replaces its placeholder's
  * `create` here — one line — and leaves `MonstersScreen.ts` alone.
  */
-
-/** A tab whose work package has not landed: says what is coming and nothing else. */
-export const placeholderTab = (text: string): MonstersTab => {
-  const element = document.createElement("div");
-  element.className = "monsters-placeholder";
-  const paragraph = document.createElement("p");
-  paragraph.className = "monsters-placeholder__text";
-  paragraph.textContent = text;
-  element.append(paragraph);
-  return {
-    element,
-    show: () => undefined,
-    update: () => undefined,
-    tick: () => undefined,
-    destroy: () => element.remove(),
-  };
-};
 
 export const MONSTERS_TABS: readonly MonstersTabDefinition[] = [
   {
@@ -91,13 +73,14 @@ export const OUTPOST_MONSTERS_TABS: readonly MonstersTabDefinition[] = MONSTERS_
 /**
  * The tabs the Inferno yard offers (Inferno WP 2.4): Unlock (its Strongbox),
  * Hatch (its Incubators and its Incubator Control Centre, the Hatchery
- * Control Centre's type), Housing (its Compounds, the Housing Bunker type) and
- * Train (its Infernal Academy). The Inferno has no Monster Lab and no
- * Champion Cage or Chamber (`INFERNO_BUILDABLE_TYPES`). The words are Flash's Inferno ones: "Compound"
+ * Control Centre's type), Housing (its Compounds, the Housing Bunker type),
+ * Train (its Infernal Academy) and, since beta 9, Lab (its Infernal Monster
+ * Lab, the Monster Lab's type). The Inferno has no Champion Cage or Chamber
+ * (`INFERNO_BUILDABLE_TYPES`). The words are Flash's Inferno ones: "Compound"
  * on the strip for its housing (`mhi_title`).
  */
 export const INFERNO_MONSTERS_TABS: readonly MonstersTabDefinition[] = MONSTERS_TABS.filter(
-  (tab) => tab.id !== MonstersTabId.LAB && tab.id !== MonstersTabId.CHAMPION,
+  (tab) => tab.id !== MonstersTabId.CHAMPION,
 ).map((tab) => {
   if (tab.id === MonstersTabId.HATCH) return { ...tab, buildings: [MonsterBuilding.HATCHERY, MonsterBuilding.HCC] };
   if (tab.id === MonstersTabId.HOUSING) {

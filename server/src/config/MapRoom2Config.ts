@@ -1,4 +1,4 @@
-import { isSwitchOn } from "./BotConfig.js";
+import { isSwitchOn } from "./envValues.js";
 import { MapRoom2 } from "../enums/MapRoom.js";
 import { type HexShape, hexShapeOf } from "../game-rules/maproom/range.js";
 

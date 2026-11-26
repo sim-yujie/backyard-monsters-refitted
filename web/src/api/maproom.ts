@@ -62,6 +62,23 @@ export const getArea = async (
   return post<GetAreaResponse>(GET_AREA_PATH, { ...body });
 };
 
+const GET_AREAS_PATH = "/worldmapv2/getareas";
+
+/** `getareas`'s answer (live map, beta 9): each asked zone's `getarea` answer, in order. */
+export interface GetAreasResponse extends ApiEnvelope {
+  areas: GetAreaResponse[];
+}
+
+/**
+ * Several zones' `getarea` answers in one call (`POST /worldmapv2/getareas`,
+ * at most 10): the live map asks for the zones a push said changed together.
+ */
+export const getAreas = (zones: readonly { x: number; y: number }[]): Promise<GetAreasResponse> =>
+  post<GetAreasResponse>(GET_AREAS_PATH, {
+    zones: zones.map((zone) => `${clampCoordinate(zone.x, WORLD_WIDTH)},${clampCoordinate(zone.y, WORLD_HEIGHT)}`).join(";"),
+    sendresources: 0,
+  });
+
 const clampCoordinate = (value: number, size: number): number =>
   Math.min(Math.max(Math.trunc(value), 0), size - 1);
 
@@ -81,18 +98,6 @@ export const getSight = (): Promise<SightResponse> => post<SightResponse>(SIGHT_
  */
 export const cellAt = (response: GetAreaResponse, x: number, y: number): MapCell | undefined =>
   response.data[String(x)]?.[String(y)];
-
-/** Walks every cell in an area response with its coordinates. */
-export function* iterateCells(
-  response: GetAreaResponse,
-): Generator<{ x: number; y: number; cell: MapCell }> {
-  for (const [xKey, column] of Object.entries(response.data)) {
-    const x = Number(xKey);
-    for (const [yKey, cell] of Object.entries(column)) {
-      yield { x, y: Number(yKey), cell };
-    }
-  }
-}
 
 /* ── Takeover (issue #82) ─────────────────────────────────────────────── */
 
@@ -193,6 +198,42 @@ export interface RandomMoveResponse extends ApiEnvelope {
  */
 export const moveToRandomSpot = (): Promise<RandomMoveResponse> =>
   post<RandomMoveResponse>("/worldmapv2/randommove", {});
+
+/** One of the player's yards for the world map's move tray (`POST /worldmapv2/ownarmies`, beta 9 #7). */
+export interface OwnArmyYard {
+  baseid: string;
+  main: boolean;
+  x: number;
+  y: number;
+  housed: Record<string, number>;
+  /** Room from the yard's own Housing, as the server measures a move. */
+  capacity: number;
+  /** An attack is running there. */
+  attack: boolean;
+}
+
+export interface OwnArmiesResponse extends ApiEnvelope {
+  yards?: OwnArmyYard[];
+}
+
+/** Every one of the player's yards on the main yard's world, with its army and room. */
+export const getOwnArmies = (): Promise<OwnArmiesResponse> => post<OwnArmiesResponse>("/worldmapv2/ownarmies", {});
+
+export interface TransferBatchResponse extends ApiEnvelope {
+  moved?: number;
+  yards?: { baseid: string; housed: Record<string, number>; capacity: number }[];
+}
+
+/**
+ * One move from the world map's tray: several pairs of the player's yards at
+ * once (`POST /worldmapv2/transferbatch`). Free and instant. The server checks
+ * every pair (ownership, one world, no attack running, what each source
+ * houses, each target's room) and refuses the whole move if one fails.
+ */
+export const transferBatch = (
+  moves: readonly { from: string; to: string; moved: Readonly<Record<string, number>> }[],
+): Promise<TransferBatchResponse> =>
+  post<TransferBatchResponse>("/worldmapv2/transferbatch", { moves: JSON.stringify(moves) });
 
 /**
  * Moves monsters between two of the player's yards

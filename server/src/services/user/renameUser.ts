@@ -8,6 +8,7 @@ import { postgres } from "../../server.js";
 import { invalidateWorldsCache } from "../maproom/knownWorlds.js";
 import { usernameUniqueErr } from "../../errors/errors.js";
 import { usernameMatch } from "./usernameLookup.js";
+import { markUsers } from "../maproom/live/liveMarks.js";
 
 /** How long a player must wait between username changes. */
 export const USERNAME_CHANGE_COOLDOWN_MONTHS = 6;
@@ -85,6 +86,8 @@ export const renameUser = async (user: User, username: string): Promise<Date> =>
 
   user.username = username;
   user.username_changed_at = changedAt;
+  // The live map (beta 9): the new name on every plate of theirs.
+  markUsers([user.userid]);
 
   if (worldsRenamed > 0) await invalidateWorldsCache();
 

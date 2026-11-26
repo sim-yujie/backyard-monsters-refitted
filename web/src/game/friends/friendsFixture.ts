@@ -159,6 +159,7 @@ export const fixtureApi = (
     collect: answer("collect", { collected: 0, resources: {}, collectsLeft: 10, giftsWaiting: 0 }),
     deleteGifts: answer("deleteGifts", { deleted: 0, collectsLeft: 10, giftsWaiting: 0 }),
     help: answer("help", { reward: {}, rewardsLeft: 5, building: null }),
+    helpAll: answer("helpAll", { helps: [], rewardsLeft: 5 }),
     loadHelpYard: answer("loadHelpYard", { error: 0 } as Awaited<ReturnType<FriendsApi["loadHelpYard"]>>),
     setPrivacy: answer("setPrivacy", { hideOnline: false, friendRequests: true }),
     blocked: answer("blocked", []),

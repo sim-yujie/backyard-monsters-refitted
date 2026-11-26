@@ -129,6 +129,7 @@ export const CONFIRM_STATES = [
   "big-bombs",
   "big-moves",
   "working5",
+  "queued",
 ] as const;
 
 export type ConfirmState = (typeof CONFIRM_STATES)[number];
@@ -140,6 +141,8 @@ interface Setup {
   readonly progressBar?: boolean;
   /** Press the sheet's main button once it shows. */
   readonly press?: boolean;
+  /** The place in the server's battle line (patch 9.1). */
+  readonly queue?: AutoAttackCalls["queue"];
 }
 
 const setups = (): Record<ConfirmState, Setup> => ({
@@ -202,6 +205,9 @@ const setups = (): Record<ConfirmState, Setup> => ({
     progressBar: true,
     press: true,
   },
+  // Waiting in the server's battle line (patch 9.1) at its busiest: the
+  // last place the line allows (20) under the ten-marcher army.
+  queued: { answer: answerOf(), run: never, progressBar: true, press: true, queue: async () => ({ error: 0, place: 20 }) },
 });
 
 /** Opens the sheet in `state` in `modal`; returns a function that closes it. */
@@ -213,6 +219,7 @@ export const previewAutoAttackConfirm = (modal: HTMLElement, state: ConfirmState
     replay: refuse,
     quote: refuse,
     takeOver: refuse,
+    ...(setup.queue && { queue: setup.queue }),
   };
   const flow = new AutoAttackFlow({ baseid: CAMP, modal, onWatch: () => {}, calls, progressBar: setup.progressBar ?? false });
   void flow.start(setup.answer).then(() => {

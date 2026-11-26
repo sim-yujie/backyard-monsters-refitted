@@ -425,6 +425,35 @@ const REVAMP_DECORATIONS = [
   [204, "bdg_harvestwheelbarrow"],
   [205, "bdg_turkeytopiary"],
   [206, "bdg_autumnmaple"],
+  // New decorations (owner, 24 Nov 2026, not yet released: the owner keeps or drops each and sets the prices).
+  // Batch 1: the Cambodian flag and six yard props.
+  [207, "bdg_flagcambodia"],
+  [208, "bdg_firepit"],
+  [209, "bdg_picnictable"],
+  [210, "bdg_wishingwell"],
+  [211, "bdg_monstereggnest"],
+  [212, "bdg_goocauldron"],
+  [213, "bdg_gardenwindmill"],
+  // Batch 2: nine wonders (Premium) and ten plants.
+  [214, "bdg_rizalmonument"],
+  [215, "bdg_paoaychurch"],
+  [216, "bdg_fortsantiago"],
+  [217, "bdg_magellanscross"],
+  [218, "bdg_mayonvolcano"],
+  [219, "bdg_chocolatehills"],
+  [220, "bdg_banaueterraces"],
+  [221, "bdg_tajmahal"],
+  [222, "bdg_pyramids"],
+  [223, "bdg_mangotree"],
+  [224, "bdg_coconutpalm"],
+  [225, "bdg_bananaplant"],
+  [226, "bdg_bambooclump"],
+  [227, "bdg_oaktree"],
+  [228, "bdg_kalamansitree"],
+  [229, "bdg_hibiscus"],
+  [230, "bdg_bougainvillea"],
+  [231, "bdg_trimmedhedge"],
+  [232, "bdg_rosebush"],
 ];
 for (const [id, name] of REVAMP_DECORATIONS) {
   if (entries.some((one) => one.id === id)) throw new Error(`YARD_PROPS.as already has a type ${id}`);
@@ -647,6 +676,31 @@ const INFERNO_CONTROL_CENTRE = 16;
   ];
 }
 
+/**
+ * The Monster Lab (116) is buildable in the Inferno as the Infernal Monster
+ * Lab: owner, 21 Nov 2026 (beta 9 grilling rounds 4-5: "same rules as the
+ * surface Lab"; numbers card b9-num-lab, 21 Nov: OK). Flash has an unused,
+ * `block`ed Inferno row for it (`INFERNOYARDPROPS.as:5520`), kept as it is:
+ * 100,000 / 300,000 / 600,000 Bone and Coal, 3 h / 12 h / 1 day, each level
+ * needing the Strongbox (8) and the Academy (26) at Flash's levels. Two
+ * changes: one from Under Hall 5 (Flash's `quantity` is all 0), and level 3
+ * needs Under Hall 6, the Inferno's top, where Flash's row says 7.
+ */
+const INFERNO_MONSTER_LAB = 116;
+{
+  const lab = infernos.find((one) => one.id === INFERNO_MONSTER_LAB);
+  if (!lab) throw new Error(`INFERNOYARDPROPS.as: no Monster Lab (${INFERNO_MONSTER_LAB}) entry`);
+  if (lab.steps.length !== 3) {
+    throw new Error(`INFERNOYARDPROPS.as:${lab.line}: the Monster Lab has ${lab.steps.length} steps, not 3`);
+  }
+  lab.blocked = false;
+  lab.name = "Infernal Lab";
+  lab.quantity = [0, 0, 0, 0, 0, 1, 1];
+  for (const one of lab.steps) {
+    one.re = one.re.map(([type, count, level]) => (type === UNDER_HALL ? [type, count, Math.min(level, 6)] : [type, count, level]));
+  }
+}
+
 {
   const hall = infernos.find((one) => one.id === UNDER_HALL);
   if (!hall) throw new Error(`INFERNOYARDPROPS.as: no Under Hall (${UNDER_HALL}) entry`);
@@ -694,6 +748,41 @@ for (const [table, hall, file] of [
   block.anyHall = true;
 }
 
+/* ── Hatchery Control Center levels 2 and 3 (owner, 21-22 Nov 2026, beta 9) ───
+ *
+ * Flash's HCC had one level (`YARD_PROPS.as:1676`, `OUTPOST_YARD_PROPS.as:1206`).
+ * Beta 9 adds two on the main yard and one on an outpost (desk card
+ * b9-num-hcc, 21 Nov): level 2 costs 8M Twigs, Pebbles and Putty and 2 days (raised to 25M, and level 3 to 75M, 25 Nov),
+ * needing Town Hall 6 and four Hatcheries at level 3; level 3 costs 16M of each
+ * and 4 days, needing Town Hall 8. An outpost's HCC goes to level 2 for 1M of
+ * each and 2 days, needing two Hatcheries at level 3 (and the core, as every
+ * outpost step). What a level brings is the server's (`services/yard/hatchery.ts`:
+ * the queue's stacks and their size, presets, running outposts from home). The
+ * building looks the same at every level, and its health stays Flash's. The
+ * Inferno's Incubator Control Centre keeps its one level (owner, 22 Nov).
+ */
+const HCC = 16;
+for (const [table, file, steps] of [
+  [
+    entries,
+    "YARD_PROPS.as",
+    [
+      { r1: 25000000, r2: 25000000, r3: 25000000, r4: 0, time: 2 * 86400, re: [[14, 1, 6], [13, 4, 3]] },
+      { r1: 75000000, r2: 75000000, r3: 75000000, r4: 0, time: 4 * 86400, re: [[14, 1, 8]] },
+    ],
+  ],
+  [
+    outposts,
+    "OUTPOST_YARD_PROPS.as",
+    [{ r1: 1000000, r2: 1000000, r3: 1000000, r4: 0, time: 2 * 86400, re: [[112, 1, 1], [13, 2, 3]] }],
+  ],
+]) {
+  const centre = table.find((one) => one.id === HCC);
+  if (!centre || centre.steps.length !== 1) throw new Error(`${file}: the Hatchery Control Center no longer has one step`);
+  centre.steps.push(...steps);
+  centre.hccLevels = centre.steps.length === 3 ? "levels 2-3 beta 9" : "level 2 beta 9";
+}
+
 /* ── Emit ─────────────────────────────────────────────────────────────────── */
 
 const re = (list) => `[${list.map((one) => `[${one.join(",")}]`).join(",")}]`;
@@ -718,7 +807,8 @@ const costRows = (list, file) =>
         `  // ${entry.id} ${entry.name}${entry.kind ? ` (${entry.kind})` : ""} ` +
         `— ${entry.source ?? `${file}:${entry.line}`}${entry.mr2 ? `, Map Room 2 override ${entry.mr2}` : ""}` +
         `${entry.capped ? `, capped at level ${entry.capped} (D16)` : ""}` +
-        `${entry.anyHall ? ", upgrades need no hall (beta 8)" : ""}\n` +
+        `${entry.anyHall ? ", upgrades need no hall (beta 8)" : ""}` +
+        `${entry.hccLevels ? `, ${entry.hccLevels}` : ""}\n` +
         `  [${entry.id}, ${JSON.stringify(entry.name)}, ${JSON.stringify(entry.kind)}, ` +
         `${entry.group}, [\n` +
         entry.steps.map((one) => `    ${step(one)},`).join("\n") +

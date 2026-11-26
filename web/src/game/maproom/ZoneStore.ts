@@ -6,7 +6,7 @@ import {
   RESOURCE_SYNC_SECONDS,
   ZONE_STALE_JITTER,
 } from "@/config";
-import { getArea } from "@/api/maproom";
+import { getArea, getAreas } from "@/api/maproom";
 import { ApiError, NetworkError } from "@/api/http";
 import { isPlayerCell, type AreaCellGrid, type GetAreaResponse, type MapCell, type PlayerCell, type Resources } from "@/api/types";
 import { TokenBucket } from "./TokenBucket";
@@ -33,6 +33,8 @@ export interface ZoneRecord extends ZoneRef {
    * still match when the sight changed (`ZoneStore.applySight`).
    */
   sv?: string;
+  /** The zone's version when the server read it (`zv`, live map, beta 9); 0 before it ever changed. */
+  zv?: number;
 }
 
 /** One of the viewer's own cells (`mine`) in the cache, with where it is (`attackEntry.OwnCell`). */
@@ -56,9 +58,28 @@ export type AreaFetcher = (
   options: { sendResources?: boolean },
 ) => Promise<GetAreaResponse>;
 
+/** Several zones in one call (`getareas`), answers in the order asked. */
+export type AreasFetcher = (zones: readonly { x: number; y: number }[]) => Promise<GetAreaResponse[]>;
+
+/**
+ * Live map re-asks (beta 9, owner's standard practice, 25 Nov 2026): a zone a push says changed
+ * is asked again only while it is on screen, at most once per {@link LIVE_MIN_GAP_MS}, after a
+ * random wait of up to {@link LIVE_JITTER_MS} (so everyone watching it does not ask at once),
+ * and every zone due together goes in one `getareas` call of at most {@link LIVE_BATCH} zones.
+ */
+export const LIVE_MIN_GAP_MS = 3_000;
+export const LIVE_JITTER_MS = 1_500;
+export const LIVE_BATCH = 10;
+/** How long a zone the sight forgot is remembered, only to compare its next answer with. */
+export const GHOST_MS = 15_000;
+
 export interface ZoneStoreOptions {
   /** Injected for tests; defaults to the real `getarea` call. */
   fetcher?: AreaFetcher;
+  /** Injected for tests; defaults to the real `getareas` call. */
+  areasFetcher?: AreasFetcher;
+  /** Injected for tests; 0..1. */
+  random?: () => number;
   /** Injected for tests; milliseconds since an epoch. */
   now?: () => number;
   maxConcurrent?: number;
@@ -67,7 +88,7 @@ export interface ZoneStoreOptions {
    * answer always), so the renderer can invalidate. `previous` is the record
    * it replaces, if the zone was cached.
    */
-  onZone?: (zone: ZoneRecord, previous: ZoneRecord | undefined) => void;
+  onZone?: (zone: ZoneRecord, previous: ZoneRecord | undefined, live?: boolean) => void;
   /**
    * Fired instead of `onZone` when a refetched zone came back with the same
    * drawn cells as the record it replaces (`drawnKey`): the map's picture
@@ -149,6 +170,26 @@ export const drawnKey = (data: AreaCellGrid): number => {
   return 4294967296 * (2097151 & h2) + (h1 >>> 0);
 };
 
+/** One cell a live push carries: `[x, y, payload]`, the payload as a zone answer holds it. */
+export type LiveCell = readonly [number, number, unknown];
+
+/**
+ * What only this player sees of a cell's owner (server `RELATION_FIELDS`): never in a push, kept
+ * from the map's own answers.
+ */
+export const RELATION_FIELDS = ["t", "ak", "fr", "fp", "ho"] as const;
+
+/** Every zone whose 11 x 11 answer holds cell `x, y`: its own, and the one before on a multiple of ten. */
+export const answersHolding = (x: number, y: number): number[] => {
+  const zx = Math.floor(x / AREA_ZONE_SIZE);
+  const zy = Math.floor(y / AREA_ZONE_SIZE);
+  const xs = x % AREA_ZONE_SIZE === 0 && zx > 0 ? [zx, zx - 1] : [zx];
+  const ys = y % AREA_ZONE_SIZE === 0 && zy > 0 ? [zy, zy - 1] : [zy];
+  const out: number[] = [];
+  for (const ix of xs) for (const iy of ys) out.push(ix * 10000 + iy);
+  return out;
+};
+
 /** Whether an answer holds one of the viewer's own cells. */
 const holdsOwnCell = (data: AreaCellGrid): boolean => {
   for (const column of Object.values(data)) {
@@ -208,9 +249,35 @@ export class ZoneStore {
   private ownCache: StoredOwnCell[] | null = null;
   private readonly queue = new Map<number, QueueEntry>();
   private readonly inFlight = new Set<number>();
+  /**
+   * Live map (beta 9): zones the live socket said moved past the version cached, with that
+   * version. Their next answer is "live" (the ring, the panel), and one that comes back older
+   * (it was read before the change) is asked once more.
+   */
+  private readonly liveWanted = new Map<number, number>();
+  private readonly liveRetried = new Set<number>();
+  /** When each wanted zone may be asked (its random wait), ms. */
+  private readonly liveDueAt = new Map<number, number>();
+  /** When each zone was last asked because of a push, ms. */
+  private readonly liveAskedAt = new Map<number, number>();
+  /**
+   * Zones the sight just forgot (`applySight`) with what they showed: an attack on the player's
+   * own outpost changes their sight in the same moment, and without this its answer would arrive
+   * as a first one, with nothing to ring. Kept {@link GHOST_MS}, never drawn.
+   */
+  private readonly ghosts = new Map<number, { record: ZoneRecord; live: boolean; at: number }>();
+  /** The live batch in flight, and the server's "busy, retry after" pause. */
+  private liveInFlight = false;
+  private livePausedUntil = 0;
+  /** "Busy" answers in a row: each doubles the server's wait, up to 30 s (a crowd backs off). */
+  private busyInARow = 0;
+  /** Each cached zone's first time-only change (a shield or truce running out...), unix seconds. */
+  private readonly nextDue = new Map<number, number>();
 
   private readonly bucket: TokenBucket;
   private readonly fetcher: AreaFetcher;
+  private readonly areasFetcher: AreasFetcher;
+  private readonly random: () => number;
   private readonly now: () => number;
   private readonly maxConcurrent: number;
   private readonly options: ZoneStoreOptions;
@@ -233,6 +300,8 @@ export class ZoneStore {
   constructor(options: ZoneStoreOptions = {}) {
     this.options = options;
     this.fetcher = options.fetcher ?? ((x, y, o) => getArea(x, y, o));
+    this.areasFetcher = options.areasFetcher ?? (async (zones) => (await getAreas(zones)).areas);
+    this.random = options.random ?? Math.random;
     this.now = options.now ?? Date.now;
     this.maxConcurrent = options.maxConcurrent ?? AREA_MAX_CONCURRENT;
     this.bucket = new TokenBucket({
@@ -411,6 +480,312 @@ export class ZoneStore {
     this.reprioritise();
   }
 
+  /* ── Live map (beta 9) ───────────────────────────────────────────────── */
+
+  /**
+   * The live socket's zone versions: every cached (or arriving) zone whose version differs from
+   * the one it holds is asked again, at the front of the queue; nothing else is. Returns how many
+   * were asked.
+   */
+  applyVersions(pairs: readonly (readonly [number, number])[], now: boolean = false): number {
+    let wanted = 0;
+    const at = this.now();
+    for (const [id, version] of pairs) {
+      const zone = this.zones.get(id);
+      const flying = this.inFlight.has(id);
+      if (!zone && !flying) continue;
+      if (zone && !flying && (zone.zv ?? 0) === version) continue;
+      this.liveWanted.set(id, Math.max(version, this.liveWanted.get(id) ?? version));
+      this.liveRetried.delete(id);
+      if (!this.liveDueAt.has(id)) this.liveDueAt.set(id, at + (now ? 0 : Math.floor(this.random() * LIVE_JITTER_MS)));
+      wanted += 1;
+    }
+    return wanted;
+  }
+
+  /** Zones a push said changed that have not been asked again yet (on screen or not). */
+  get liveWaiting(): number {
+    return this.liveWanted.size;
+  }
+
+  /**
+   * Asks again, in one `getareas` call, the changed zones that are due: on screen, their random
+   * wait over, not asked because of a push in the last {@link LIVE_MIN_GAP_MS}, not already in
+   * flight. One batch at a time; call it from the scene's pump. A zone off screen keeps waiting
+   * and is asked once it comes into view. "Busy" from the server pauses the batches for as long
+   * as it says, then they try again.
+   */
+  async pumpLive(): Promise<void> {
+    if (this.stopped || this.liveInFlight || this.liveWanted.size === 0) return;
+    const at = this.now();
+    if (at < this.livePausedUntil) return;
+    const due: ZoneRef[] = [];
+    for (const id of this.liveWanted.keys()) {
+      if (due.length >= LIVE_BATCH) break;
+      if (!this.visible.has(id) || this.inFlight.has(id)) continue;
+      if ((this.liveDueAt.get(id) ?? 0) > at) continue;
+      if (at - (this.liveAskedAt.get(id) ?? -Infinity) < LIVE_MIN_GAP_MS) continue;
+      due.push(zoneFromId(id));
+    }
+    if (due.length === 0) return;
+    this.liveInFlight = true;
+    for (const zone of due) {
+      this.inFlight.add(zone.id);
+      this.liveAskedAt.set(zone.id, at);
+      this.liveDueAt.delete(zone.id);
+      // A forced entry for the same zone is answered by this batch.
+      this.queue.delete(zone.id);
+    }
+    let answers: GetAreaResponse[] | undefined;
+    let failure: unknown;
+    try {
+      answers = await this.areasFetcher(due.map((zone) => ({ x: zone.originX, y: zone.originY })));
+    } catch (caught) {
+      failure = caught;
+    }
+    for (const zone of due) this.inFlight.delete(zone.id);
+    this.liveInFlight = false;
+    if (answers) {
+      this.busyInARow = 0;
+      due.forEach((zone, index) => {
+        const answer = answers![index];
+        if (answer) this.apply({ ...zone, priority: 0, forced: true }, answer);
+      });
+      return;
+    }
+    // Still wanted: asked again once due (and after the server's pause, if it was busy).
+    for (const zone of due) this.liveDueAt.set(zone.id, this.now());
+    const retry = busyRetrySeconds(failure);
+    if (retry !== null) {
+      this.livePausedUntil = this.now() + Math.min(30, retry * 2 ** this.busyInARow) * 1000;
+      this.busyInARow += 1;
+    }
+    else if (failure instanceof ApiError && failure.isAuthFailure) this.handleFailure({ ...due[0]!, priority: 0, forced: true }, failure);
+    else this.livePausedUntil = this.now() + LIVE_MIN_GAP_MS;
+  }
+
+  /**
+   * The zones worth watching on the live socket, at most `limit`: those holding the viewer's own
+   * cells first (the attack roster reads them wherever they are), then the visible ones nearest
+   * the centre.
+   */
+  watchList(limit: number): number[] {
+    const out = new Set<number>();
+    for (const id of this.ownZones) {
+      if (out.size >= limit) break;
+      out.add(id);
+    }
+    for (const zone of this.orderedVisible()) {
+      if (out.size >= limit) break;
+      // A zone wholly in the fog is never watched: its changes are not the viewer's to know.
+      if (this.options.skipZone?.(zone)) continue;
+      out.add(zone.id);
+    }
+    return [...out];
+  }
+
+  /** Every cached zone and the version it holds, for a version check after a reconnect. */
+  heldVersions(): Map<number, number> {
+    const out = new Map<number, number>();
+    for (const zone of this.zones.values()) out.set(zone.id, zone.zv ?? 0);
+    return out;
+  }
+
+  /**
+   * Live map, stage 2: changed cells pushed by the server, cut to the player's fog there, applied
+   * straight into the cache with no request (`zones`: `[id, version, firstVersion?]`). A zone takes
+   * them only when it holds the version just before (`firstVersion - 1`, or `version - 1`): one that
+   * missed a push, is not here yet or is in flight is asked again instead. A cell keeps what only
+   * this player sees of its owner (`t`, `ak`, `fr`, `fp`, `ho`) from the copy held for that owner;
+   * a cell whose new owner the map knows nothing about is applied and its zone asked again, as is
+   * every zone in `reask`. Returns how many zones were asked again.
+   */
+  applyLiveCells(
+    zones: readonly (readonly number[])[],
+    cells: readonly LiveCell[],
+    reask: readonly number[] = [],
+    roster?: unknown,
+  ): number {
+    const at = this.now();
+    let asked = 0;
+    const want = (id: number, version: number) => {
+      if (this.wantLive(id, version, at, true)) asked += 1;
+    };
+    const next = new Map<number, number>();
+    for (const [id, last, firstGiven] of zones) {
+      if (id === undefined || last === undefined) continue;
+      const first = firstGiven ?? last;
+      const zone = this.zones.get(id);
+      if (!zone || this.inFlight.has(id)) {
+        // Arriving, or just forgotten by a sight change (its answer is on its way): that answer is
+        // a live one (the ring), and one read before this change is asked once more.
+        want(id, last);
+        continue;
+      }
+      const held = zone.zv ?? 0;
+      if (held >= last) continue;
+      if (held < first - 1) want(id, last);
+      else next.set(id, last);
+    }
+    if (roster !== undefined) this.options.onAllianceRoster?.(parseAllianceRoster(roster as never));
+    const incomplete = new Set<number>();
+    const writes = this.writeCells(cells, (id) => next.has(id), (id) => incomplete.add(id));
+    for (const [id, version] of next) {
+      const zone = writes.get(id)?.record ?? this.zones.get(id)!;
+      zone.zv = version;
+    }
+    this.commitCells(writes);
+    for (const id of incomplete) want(id, next.get(id) ?? this.zones.get(id)?.zv ?? 0);
+    for (const id of reask) if (this.zones.has(id)) want(id, next.get(id) ?? this.zones.get(id)?.zv ?? 0);
+    return asked;
+  }
+
+  /** Live map, stage 2: the player's own cells in full, from their own channel (no versions). */
+  applyOwnCells(cells: readonly LiveCell[]): void {
+    const at = this.now();
+    const accepts = (id: number) => {
+      if (this.zones.has(id) && !this.inFlight.has(id)) return true;
+      // Arriving or just forgotten by a sight change: its answer rings as a live one.
+      this.wantLive(id, this.liveWanted.get(id) ?? 0, at, true);
+      return false;
+    };
+    this.commitCells(this.writeCells(cells, accepts, () => undefined));
+  }
+
+  /**
+   * Live map: the player's relation to these players changed (a truce, friends, an attack): every
+   * cached zone holding one of their cells is asked again, now if on screen, else once it is.
+   * Returns how many.
+   */
+  reaskOwners(owners: readonly number[]): number {
+    const wanted = new Set(owners);
+    const at = this.now();
+    let asked = 0;
+    for (const zone of this.zones.values()) {
+      const holds = Object.values(zone.data).some((column) =>
+        Object.values(column).some((cell) => cell && isPlayerCell(cell) && wanted.has(cell.uid)),
+      );
+      if (holds && this.wantLive(zone.id, zone.zv ?? 0, at, false)) asked += 1;
+    }
+    return asked;
+  }
+
+  /** Puts a zone on the live re-ask list for `version` (`pumpLive` asks it). */
+  private wantLive(id: number, version: number, at: number, now: boolean): boolean {
+    if (!this.zones.has(id) && !this.inFlight.has(id) && !this.ghosts.has(id)) return false;
+    this.liveWanted.set(id, Math.max(version, this.liveWanted.get(id) ?? version));
+    this.liveRetried.delete(id);
+    if (!this.liveDueAt.has(id)) this.liveDueAt.set(id, at + (now ? 0 : Math.floor(this.random() * LIVE_JITTER_MS)));
+    return true;
+  }
+
+  /**
+   * Copies each zone record that holds one of `cells` (every zone whose 11 x 11 answer has it) and
+   * `accepts`, with the cells written in; the records in the cache are left as they were, for the
+   * ring to compare against. Calls `incomplete` for a zone whose cell is missing what only this
+   * player sees of a new owner.
+   */
+  private writeCells(
+    cells: readonly LiveCell[],
+    accepts: (id: number) => boolean,
+    incomplete: (id: number) => void,
+  ): Map<number, { previous: ZoneRecord; record: ZoneRecord }> {
+    const writes = new Map<number, { previous: ZoneRecord; record: ZoneRecord }>();
+    for (const [x, y, payload] of cells) {
+      if (payload === undefined || payload === null) continue;
+      for (const id of answersHolding(x, y)) {
+        if (!accepts(id)) continue;
+        const previous = this.zones.get(id);
+        if (!previous) continue;
+        let write = writes.get(id);
+        if (!write) writes.set(id, (write = { previous, record: { ...previous, data: { ...previous.data } } }));
+        const column = String(x);
+        const before = previous.data[column]?.[String(y)];
+        const { cell, known } = this.withRelations(before, payload as MapCell);
+        if (!known) incomplete(id);
+        write.record.data[column] = { ...write.record.data[column], [String(y)]: cell };
+      }
+    }
+    return writes;
+  }
+
+  /** Puts written records in the cache and tells the scene, as an answer from a push would. */
+  private commitCells(writes: Map<number, { previous: ZoneRecord; record: ZoneRecord }>): void {
+    for (const [id, { previous, record }] of writes) {
+      record.fetchedAt = this.now();
+      const key = drawnKey(record.data);
+      const unchanged = this.drawnKeys.get(id) === key;
+      this.zones.set(id, record);
+      this.drawnKeys.set(id, key);
+      if (holdsOwnCell(record.data)) this.ownZones.add(id);
+      else this.ownZones.delete(id);
+      const due = firstDue(record.data);
+      if (due === undefined) this.nextDue.delete(id);
+      else this.nextDue.set(id, due);
+      this.ownCache = null;
+      this.revision += 1;
+      if (this.stopped) continue;
+      if (unchanged) this.options.onZoneRefreshed?.(record);
+      else this.options.onZone?.(record, previous, true);
+    }
+  }
+
+  /**
+   * A pushed cell with what only this player sees of its owner, taken from the copy held for that
+   * owner (this cell's, or another cached cell of theirs). `known` is false when there is none.
+   */
+  private withRelations(before: MapCell | undefined, pushed: MapCell): { cell: MapCell; known: boolean } {
+    if (!isPlayerCell(pushed) || pushed.mine === 1) return { cell: pushed, known: true };
+    const source = before && isPlayerCell(before) && before.uid === pushed.uid ? before : this.cellOf(pushed.uid);
+    const cell = { ...pushed } as Record<string, unknown>;
+    if (!source) return { cell: pushed, known: false };
+    for (const field of RELATION_FIELDS) {
+      const value = (source as unknown as Record<string, unknown>)[field];
+      if (value === undefined) delete cell[field];
+      else cell[field] = value;
+    }
+    return { cell: cell as unknown as MapCell, known: true };
+  }
+
+  /** Any cached cell of this owner (not the player's own), for their relations. */
+  private cellOf(uid: number): PlayerCell | undefined {
+    for (const zone of this.zones.values()) {
+      for (const column of Object.values(zone.data)) {
+        for (const cell of Object.values(column)) {
+          if (cell && isPlayerCell(cell) && cell.uid === uid && cell.mine !== 1) return cell;
+        }
+      }
+    }
+    return undefined;
+  }
+
+  /**
+   * Once a second (live map, beta 9): applies the time-only changes that are due, without asking
+   * the server: a shield (`pe`) or a camp's damage (`rg`) runs out, a truce (`t`) ends. A running
+   * attack's end (`atk`) asks the zone again, as the yard's lock may have gone with it. A zone
+   * whose cells changed is handed to `onZone` again, as a fresh answer would be.
+   */
+  expireDue(nowSeconds: number): void {
+    for (const [id, due] of this.nextDue) {
+      if (due > nowSeconds) continue;
+      const zone = this.zones.get(id);
+      if (!zone) {
+        this.nextDue.delete(id);
+        continue;
+      }
+      const { changed, reask } = expireCells(zone.data, nowSeconds);
+      const next = firstDue(zone.data);
+      if (next === undefined) this.nextDue.delete(id);
+      else this.nextDue.set(id, next);
+      if (reask) this.enqueue(zoneFromId(id), true);
+      if (!changed) continue;
+      this.drawnKeys.set(id, drawnKey(zone.data));
+      this.ownCache = null;
+      this.revision += 1;
+      if (!this.stopped) this.options.onZone?.(zone, zone, false);
+    }
+  }
+
   /** Clears the backoff so the next pump tries again immediately. */
   resume(): void {
     this.pausedUntilMs = 0;
@@ -454,6 +829,8 @@ export class ZoneStore {
         continue;
       }
       dropped.push(zone);
+      // Live map: what it showed, only to tell what its next answer changed (never drawn again).
+      this.ghosts.set(id, { record: zone, live: this.liveWanted.has(id), at: this.now() });
       this.forget(id);
     }
     this.queue.clear();
@@ -589,6 +966,7 @@ export class ZoneStore {
     if (response) {
       this.apply(entry, response);
       this.consecutiveFailures = 0;
+      this.busyInARow = 0;
       // A slot just came free: start the next queued zone now rather than at
       // the scene's next pump tick (up to 250 ms later on every request).
       if (this.options.pumpOnSettle !== false && !this.stopped) void this.pump();
@@ -605,8 +983,30 @@ export class ZoneStore {
       data: response.data,
       fetchedAt: this.now(),
       ...(response.sv !== undefined && { sv: response.sv }),
+      ...(response.zv !== undefined && { zv: response.zv }),
     };
+    // Live map: an answer the socket asked for, and one read before the change it was asked for.
+    const wanted = this.liveWanted.get(entry.id);
+    const ghost = this.ghosts.get(entry.id);
+    this.ghosts.delete(entry.id);
+    const recent = ghost && this.now() - ghost.at < GHOST_MS ? ghost : undefined;
+    const live = wanted !== undefined || recent?.live === true;
+    this.liveWanted.delete(entry.id);
+    if (wanted !== undefined && response.zv !== undefined && response.zv < wanted && !this.liveRetried.has(entry.id)) {
+      // Read before the change it was asked for: asked once more by the next live batch.
+      this.liveRetried.add(entry.id);
+      this.liveWanted.set(entry.id, wanted);
+      this.liveDueAt.set(entry.id, this.now());
+    } else {
+      this.liveRetried.delete(entry.id);
+      this.liveDueAt.delete(entry.id);
+    }
+    const due = firstDue(response.data);
+    if (due === undefined) this.nextDue.delete(entry.id);
+    else this.nextDue.set(entry.id, due);
     const previous = this.zones.get(entry.id);
+    // What the live ring compares with: the record replaced, or the one the sight just forgot.
+    const compared = previous ?? (live ? recent?.record : undefined);
     const key = drawnKey(response.data);
     const unchanged = previous !== undefined && this.drawnKeys.get(entry.id) === key;
     if (!previous) this.placed.set(entry.id, (this.placedCount += 1));
@@ -626,7 +1026,7 @@ export class ZoneStore {
     // hitch per zone, every minute, while standing still.
     if (evicted.length > 0) this.options.onEvict?.(evicted);
     if (unchanged) this.options.onZoneRefreshed?.(record);
-    else this.options.onZone?.(record, previous);
+    else this.options.onZone?.(record, compared, live);
 
     if (response.resources) {
       this.options.onResources?.(response.resources, response.credits);
@@ -643,6 +1043,11 @@ export class ZoneStore {
   /** Takes one zone out of the cache and everything kept about it. */
   private forget(id: number): void {
     this.zones.delete(id);
+    this.nextDue.delete(id);
+    this.liveWanted.delete(id);
+    this.liveRetried.delete(id);
+    this.liveDueAt.delete(id);
+    this.liveAskedAt.delete(id);
     this.drawnKeys.delete(id);
     this.ownZones.delete(id);
     this.placed.delete(id);
@@ -679,6 +1084,14 @@ export class ZoneStore {
       this.pausedUntilMs = Number.POSITIVE_INFINITY;
       this.options.onError?.({ kind: "auth", message: "Your session has expired." });
       this.options.onAuthFailure?.();
+      return;
+    }
+
+    // The server is busy (`areaGate`): wait as long as it says, quietly, and ask again.
+    const busy = busyRetrySeconds(caught);
+    if (busy !== null) {
+      this.pausedUntilMs = this.now() + Math.min(30, busy * 2 ** this.busyInARow) * 1000;
+      this.busyInARow += 1;
       return;
     }
 
@@ -725,3 +1138,63 @@ export class ZoneStore {
     return value;
   }
 }
+
+/** A cell's time-only changes still to come (live map, beta 9), unix seconds. */
+const dueTimes = (cell: MapCell): number[] => {
+  const out: number[] = [];
+  const timed = cell as { pe?: unknown; atk?: unknown; t?: unknown; rg?: unknown };
+  for (const value of [timed.pe, timed.atk, timed.t, timed.rg]) if (typeof value === "number" && value > 0) out.push(value);
+  return out;
+};
+
+/** The first time-only change among a zone's cells, or undefined when none is coming. */
+export const firstDue = (data: AreaCellGrid): number | undefined => {
+  let first = Infinity;
+  for (const column of Object.values(data)) {
+    for (const cell of Object.values(column)) for (const at of dueTimes(cell)) first = Math.min(first, at);
+  }
+  return Number.isFinite(first) ? first : undefined;
+};
+
+/**
+ * Applies a zone's time-only changes due by `now`, in place: a shield ends (`p` 0), a camp grows
+ * back (`dm`, `d` 0), a truce ends. `reask`: a running attack ended, which only the server can say
+ * the rest of (the yard's lock).
+ */
+export const expireCells = (data: AreaCellGrid, now: number): { changed: boolean; reask: boolean } => {
+  let changed = false;
+  let reask = false;
+  for (const column of Object.values(data)) {
+    for (const cell of Object.values(column)) {
+      const timed = cell as { p?: number; pe?: number; atk?: number; t?: number; rg?: number; dm?: number; d?: number };
+      if (typeof timed.pe === "number" && timed.pe <= now) {
+        timed.p = 0;
+        delete timed.pe;
+        changed = true;
+      }
+      if (typeof timed.atk === "number" && timed.atk <= now) {
+        delete timed.atk;
+        changed = true;
+        reask = true;
+      }
+      if (typeof timed.t === "number" && timed.t <= now) {
+        delete timed.t;
+        changed = true;
+      }
+      if (typeof timed.rg === "number" && timed.rg <= now) {
+        timed.dm = 0;
+        timed.d = 0;
+        delete timed.rg;
+        changed = true;
+      }
+    }
+  }
+  return { changed, reask };
+};
+
+/** The seconds a "busy" answer (503 from `areaGate`) says to wait, or null for any other failure. */
+export const busyRetrySeconds = (caught: unknown): number | null => {
+  if (!(caught instanceof ApiError) || (caught.status !== 503 && caught.serverStatus !== 503)) return null;
+  const retry = Number((caught.body as { retry?: unknown } | undefined)?.retry);
+  return Number.isFinite(retry) && retry > 0 ? Math.min(retry, 30) : 3;
+};

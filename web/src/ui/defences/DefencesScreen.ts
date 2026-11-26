@@ -7,6 +7,7 @@ import { centreWindow, type CentreWindow } from "@/ui/centreWindow";
 import { Panel } from "@/ui/Panel";
 import { RESOURCE_KEYS, resourceAmount } from "@/ui/resourceIcon";
 import "@/ui/styles/defences.css";
+import { el } from "@/ui/dom";
 
 /**
  * The Defences screen (issue #363, `docs/design/defence-replays.md` §8, owner
@@ -51,13 +52,6 @@ export const housedText = (lost: number): string => {
   const count = Math.max(0, Math.floor(lost));
   if (count === 0) return "";
   return count === 1 ? "1 housed monster lost" : `${count} housed monsters lost`;
-};
-
-const el = <K extends keyof HTMLElementTagNameMap>(tag: K, className: string, text?: string): HTMLElementTagNameMap[K] => {
-  const element = document.createElement(tag);
-  element.className = className;
-  if (text !== undefined) element.textContent = text;
-  return element;
 };
 
 export class DefencesScreen {

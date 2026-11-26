@@ -2,8 +2,9 @@
 
 ## Reporting a vulnerability
 
-Please do not open a public issue. Email **simyujie@gmail.com** privately
-instead, with:
+Please do not open a public issue or post it in a public channel. Join our
+Discord (https://discord.gg/wthryBRZHz) and message a moderator directly,
+with:
 
 - what the problem is and what someone could do with it,
 - the steps to reproduce it (the request, page or endpoint involved),

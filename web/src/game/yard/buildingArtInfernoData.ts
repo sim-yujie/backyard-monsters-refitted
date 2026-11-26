@@ -112,6 +112,10 @@ export const INFERNO_ART_ROWS: readonly ArtRow[] = [
   [115, "Aerial Defense Tower", "buildings/flaktower/", [
     [1,["top.3.png",-39,6],["top.3.damaged.png",-39,5],["top.3.destroyed.png",-36,13],["shadow.3.jpg",-43,14],["shadow.3.jpg",-40,24],["shadow.3.destroyed.jpg",-33,26],[["anim.3.png",-32,-23,62,52,32]],[["anim.3.damaged.png",-29,-17,62,53,32]]],
   ], [15000,22000,30000,48000,60000,72000], 200],
+  // 116 Infernal Lab (special) — INFERNO_RENAMED, after INFERNOYARDPROPS.as:5542
+  [116, "Infernal Lab", "buildings/monsterlab/", [
+    [1,["top.1.v2.png",-74,-96],["top.1.damaged.png",-73,-80],["top.1.destroyed.png",-80,-10],["shadow.1.jpg",-73,-6],["shadow.1.jpg",-72,-6],["shadow.1.destroyed.jpg",-77,2],[["anim.1.png",-28,-30,54,48,32],["anim.2.png",-66,26,33,31,5],["anim.3.png",32,26,33,31,5]]],
+  ], [9000,16000,24000,32000], 200],
   // 118 Railgun (tower) — INFERNOYARDPROPS.as:5727
   [118, "Railgun", "buildings/railguntower/", [
     [1,["top.3.png",-39,7],["top.3.damaged.png",-39,7],["top.3.destroyed.png",-34,-5],["shadow.3.jpg",-40,20],["shadow.3.jpg",-40,20],["shadow.3.destroyed.jpg",-36,23],[["anim.3.loaded.png",-49,-9,96,56,32]],[["anim.3.damaged.png",-49,-9,97,56,32]]],

@@ -1,4 +1,5 @@
 import type { AllianceMessageType } from "../enums/Alliance.js";
+import type { MaintenanceNotice } from "../services/admin/maintenance.js";
 
 export enum ClientMessageType {
   Auth = "auth",
@@ -10,6 +11,8 @@ export enum ClientMessageType {
   Unignore = "unignore",
   UpdateName = "updatename",
   Ping = "ping",
+  /** The game's presence ping (beta 9, `chatPresence.ts`): `POST /bm/presence` over this socket. */
+  Presence = "presence",
 }
 
 export enum ServerMessageType {
@@ -28,8 +31,18 @@ export enum ServerMessageType {
   Notice = "notice",
   /** New mail arrived for this player: the game fetches it (`/player/mailstatus`) to show. */
   Mail = "mail",
+  /**
+   * The maintenance switch (`services/admin/maintenance.ts`): on with the time
+   * left to the cut-off, or off. At the cut-off a non-owner gets it with no
+   * time left and the connection closes after it.
+   */
+  Maintenance = "maintenance",
   /** The player was taken out of a room (left or was kicked from their alliance): the client drops its tab. */
   Left = "left",
+  /** The answer to a {@link ClientMessageType.Presence} ping, under the ping's `id`. */
+  Presence = "presence",
+  /** A moderator removed a line (chat filter, 24 Nov 2026): the chat box drops it, name and all. */
+  Removed = "removed",
 }
 
 export enum ErrorCode {
@@ -50,6 +63,8 @@ export enum AuthFailReason {
 }
 
 export interface HistoryEntry {
+  /** The line's id (`chatHistory.ts` `newLineId`); absent on lines stored before ids. */
+  id?: string;
   userId: number;
   displayName: string;
   picSquare: string | null;
@@ -83,13 +98,25 @@ export type ClientMessage =
   | { type: ClientMessageType.Ignore; targetId: string }
   | { type: ClientMessageType.Unignore; targetId: string }
   | { type: ClientMessageType.UpdateName }
-  | { type: ClientMessageType.Ping };
+  | { type: ClientMessageType.Ping }
+  | {
+      type: ClientMessageType.Presence;
+      /** The client's number for this ping; the answer carries it back. */
+      id: number;
+      /** The game session's bearer token, checked as `verifyUserAuth` checks it. */
+      token: string;
+      /** The API version the client would put in the route's path. */
+      apiVersion?: string;
+      /** What `POST /bm/presence` takes as its body: `{ where, planner }`. */
+      screen?: unknown;
+    };
 
 export type ServerMessage =
-  | { type: ServerMessageType.AuthOk; userId: number; displayName: string }
+  /** `presence`: this server answers presence pings on the socket (beta 9); an older one leaves it out. */
+  | { type: ServerMessageType.AuthOk; userId: number; displayName: string; presence?: true }
   | { type: ServerMessageType.AuthFail; reason: AuthFailReason }
   | { type: ServerMessageType.Joined; channel: string; history: HistoryEntry[] }
-  | { type: ServerMessageType.Message; channel: string; messageType: AllianceMessageType; userId: number; displayName: string; picSquare: string | null; photo?: number; allianceImage: number | null; body: string; ts: number; cell?: { x: number; y: number }; tradeRequest?: number; gm?: boolean; mod?: boolean }
+  | { type: ServerMessageType.Message; channel: string; id?: string; messageType: AllianceMessageType; userId: number; displayName: string; picSquare: string | null; photo?: number; allianceImage: number | null; body: string; ts: number; cell?: { x: number; y: number }; tradeRequest?: number; gm?: boolean; mod?: boolean }
   | { type: ServerMessageType.UserEnter; channel: string; userId: number; displayName: string }
   | { type: ServerMessageType.UserExit; channel: string; userId: number }
   | { type: ServerMessageType.NameUpdate; channel: string; userId: number; displayName: string }
@@ -100,7 +127,13 @@ export type ServerMessage =
   | { type: ServerMessageType.Kicked; reason: "banned"; until: number | null; text: string; banReason: string }
   | { type: ServerMessageType.Notice }
   | { type: ServerMessageType.Mail }
-  | { type: ServerMessageType.Left; channel: string };
+  | ({ type: ServerMessageType.Maintenance } & MaintenanceNotice)
+  | { type: ServerMessageType.Left; channel: string }
+  /** No words: the line is named by `id`, or by speaker and stamp for a line stored before ids. */
+  | { type: ServerMessageType.Removed; channel: string; id?: string; userId: number; ts: number }
+  /** `answer`: what `POST /bm/presence` would have answered. `ok: false`: send that ping over HTTP instead. */
+  | { type: ServerMessageType.Presence; id: number; ok: true; answer: Record<string, unknown> }
+  | { type: ServerMessageType.Presence; id: number; ok: false; reason: "throttled" | "auth" | "version" | "error" };
 
 interface Sender { send(data: string): void; }
 

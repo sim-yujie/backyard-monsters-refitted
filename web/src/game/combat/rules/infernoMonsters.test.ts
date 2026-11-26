@@ -19,8 +19,13 @@ const yardOf = (buildings: CombatBuildingDataMap) =>
 
 type Battle = ReturnType<typeof createBattle>;
 
-const flung = (buildings: CombatBuildingDataMap, monsters: Record<string, number>, at = 110) => {
-  const battle = createBattle(yardOf(buildings), { seed: 7 });
+const flung = (
+  buildings: CombatBuildingDataMap,
+  monsters: Record<string, number>,
+  at = 110,
+  ranks?: Record<string, number>,
+) => {
+  const battle = createBattle(yardOf(buildings), { seed: 7, ...(ranks && { ranks }) });
   battle.apply({ kind: "fling", t: 0, x: at, y: at, r: 0, monsters });
   return battle;
 };
@@ -97,27 +102,48 @@ describe("IC7 Sabnox's magma fireball (`Sabnox.as:12-20`)", () => {
   });
 });
 
-describe("IC8 King Wormzer's splash (`KingWormzer.as:13-27`)", () => {
+describe("IC8 King Wormzer's splash (`KingWormzer.as:13-27`, Infernal Lab since beta 9)", () => {
   // Two level 9 harvesters side by side, 85,000 health each: it strikes one,
-  // and the splash reaches the other.
+  // and a ranked splash reaches the other (60 apart, inside every rank's reach).
   const pair: CombatBuildingDataMap = {
     "1": { id: 1, t: 1, l: 9, X: 100, Y: 100 },
     "2": { id: 2, t: 1, l: 9, X: 160, Y: 100 },
   };
 
-  it("splashes the buildings round it for four times the swing, unranked", () => {
+  it("splashes nothing at rank 0 (beta 9's live nerf: Flash splashed x4)", () => {
     const battle = flung(pair, { IC8: 1 });
     const { hits } = watch(battle, 120);
     const struck = hits[0]?.buildingId;
     expect(struck).toBeDefined();
     const other = struck === 1 ? 2 : 1;
-    // The other harvester was never struck, yet it is hurt.
-    expect(hits.some((hit) => hit.buildingId === other)).toBe(false);
-    expect(battle.state().health[String(other)]).toBeLessThan(maxHp(1, 9));
+    // Untouched: the state lists no health for it.
+    expect(battle.state().health[String(other)] ?? maxHp(1, 9)).toBe(maxHp(1, 9));
+  });
+
+  it("splashes the buildings round it once ranked, more with each rank", () => {
+    // Touching, so even rank 1's 60 px reaches the other one's middle.
+    const close: CombatBuildingDataMap = {
+      "1": { id: 1, t: 1, l: 9, X: 100, Y: 100 },
+      "2": { id: 2, t: 1, l: 9, X: 140, Y: 100 },
+    };
+    const hurt = (rank: number): number => {
+      const battle = flung(close, { IC8: 1 }, 110, { IC8: rank });
+      const { hits } = watch(battle, 120);
+      const struck = hits[0]?.buildingId;
+      expect(struck).toBeDefined();
+      const other = struck === 1 ? 2 : 1;
+      // The other harvester was never struck, yet it is hurt.
+      expect(hits.some((hit) => hit.buildingId === other)).toBe(false);
+      return maxHp(1, 9) - (battle.state().health[String(other)] ?? maxHp(1, 9));
+    };
+    const [one, two, three] = [hurt(1), hurt(2), hurt(3)];
+    expect(one).toBeGreaterThan(0);
+    expect(two).toBeGreaterThan(one);
+    expect(three).toBeGreaterThan(two);
   });
 
   it("splashes once per target in a row, not on every swing", () => {
-    const battle = flung(pair, { IC8: 1 });
+    const battle = flung(pair, { IC8: 1 }, 110, { IC8: 3 });
     let splashes = 0;
     let swings = 0;
     for (let step = 0; step < 400 && !battle.over(); step += 1) {
@@ -133,3 +159,4 @@ describe("IC8 King Wormzer's splash (`KingWormzer.as:13-27`)", () => {
     expect(splashes).toBe(1);
   });
 });
+

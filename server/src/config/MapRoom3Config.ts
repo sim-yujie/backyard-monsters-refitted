@@ -1,12 +1,4 @@
 import { EnumYardType } from "../enums/EnumYardType.js";
-import type { SaveData } from "../types/EntityData.js";
-import { strongholds } from "../game-data/tribes/v3/strongholds.js";
-import { resources } from "../game-data/tribes/v3/resources.js";
-import { defenders } from "../game-data/tribes/v3/defenders.js";
-import { kozu } from "../game-data/tribes/v3/outposts/kozu.js";
-import { legionnaire } from "../game-data/tribes/v3/outposts/legionnaire.js";
-import { abunakki } from "../game-data/tribes/v3/outposts/abunakki.js";
-import { dreadnaught } from "../game-data/tribes/v3/outposts/dreadnaught.js";
 
 /**
  * The seed for cell generation. Changing this will produce a different cell layout.
@@ -122,20 +114,8 @@ export const STRONGHOLD_BONUSES: Record<number, number> = {
   50: 30,
 };
 
-/** Save data templates per structure type and level. */
-export const STRUCTURE_SAVES: Record<number, Record<number, SaveData>> = {
-  [EnumYardType.STRONGHOLD]: strongholds,
-  [EnumYardType.RESOURCE]: resources,
-  [EnumYardType.FORTIFICATION]: defenders,
-};
-
-/** Save data templates for tribe outposts, keyed by tribe index then level. */
-export const OUTPOST_SAVES: Record<number, Record<number, SaveData>> = {
-  0: legionnaire,
-  1: kozu,
-  2: abunakki,
-  3: dreadnaught,
-};
+// The tribe yard templates (STRUCTURE_SAVES, OUTPOST_SAVES) load on first use:
+// services/maproom/v3/mr3TribeSaves.ts.
 
 /** Time in milliseconds before a destroyed tribe outpost regenerates. (3 days) */
 export const TRIBE_REGEN_TIME = 3 * 24 * 60 * 60 * 1000;

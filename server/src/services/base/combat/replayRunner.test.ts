@@ -14,6 +14,7 @@ import {
   onReplayWorkersBroken,
   replayAbandonedInWorker,
   replayLoad,
+  replayQueuePlace,
   reserveReplaySlot,
   type ReplayWorkersBroken,
 } from "./replayRunner.js";
@@ -122,38 +123,56 @@ describe("replays in a worker (#23, C5)", () => {
   );
 });
 
-describe("the auto-attack slots (issue #221)", () => {
-  test("are taken up to the cap, then turn the next one away once it has waited", async () => {
-    const one = await reserveReplaySlot(0, 2);
-    const two = await reserveReplaySlot(0, 2);
-    expect(one).not.toBeNull();
-    expect(two).not.toBeNull();
-    expect(replayLoad().reserved).toBe(2);
+describe("the line for attacks started at will (patch 9.1)", () => {
+  test(
+    "goes straight in while a worker is free; otherwise waits with a place, and goes in when a battle ends",
+    async () => {
+      const straight = await reserveReplaySlot(0, { who: 41 });
+      expect(straight).not.toBeNull();
+      straight!();
+      // Both workers fighting: the next one waits in line.
+      const battles = [replayAbandonedInWorker(abandonedInput()), replayAbandonedInWorker(abandonedInput())];
+      expect(replayLoad().fighting).toBe(2);
+      const waiting = reserveReplaySlot(REPLAY_TIMEOUT_MS, { kind: "repeat", who: 42 });
+      expect(replayQueuePlace(42)).toBe(1);
+      expect(replayQueuePlace(43)).toBeNull();
+      await Promise.all(battles);
+      const turn = await waiting;
+      expect(turn).not.toBeNull();
+      expect(replayQueuePlace(42)).toBeNull();
+      expect(replayLoad().admitted).toBe(1);
+      turn!();
+      turn!();
+      expect(replayLoad().admitted).toBe(0);
+    },
+    REPLAY_TIMEOUT_MS
+  );
 
-    const started = performance.now();
-    expect(await reserveReplaySlot(120, 2)).toBeNull();
-    expect(performance.now() - started).toBeGreaterThanOrEqual(100);
+  test(
+    "turns one away busy once it has waited its time, and counts it",
+    async () => {
+      const refusedBefore = replayLoad().totals.refused;
+      const battles = [replayAbandonedInWorker(abandonedInput()), replayAbandonedInWorker(abandonedInput())];
+      const started = performance.now();
+      expect(await reserveReplaySlot(60, { kind: "repeat", who: 44 })).toBeNull();
+      expect(performance.now() - started).toBeGreaterThanOrEqual(50);
+      expect(replayLoad().totals.refused).toBe(refusedBefore + 1);
+      await Promise.all(battles);
+    },
+    REPLAY_TIMEOUT_MS
+  );
 
-    one!();
-    one!();
-    expect(replayLoad().reserved).toBe(1);
-    const three = await reserveReplaySlot(0, 2);
-    expect(three).not.toBeNull();
-    two!();
-    three!();
-    expect(replayLoad().reserved).toBe(0);
-  });
-
-  test("count the replays already running: a slot waits for a worker to finish", async () => {
-    const replay = replayAbandonedInWorker(abandonedInput());
-    expect(replayLoad().running).toBe(1);
-    const waiting = reserveReplaySlot(REPLAY_TIMEOUT_MS, 1);
-    await replay;
-    const slot = await waiting;
-    expect(slot).not.toBeNull();
-    expect(replayLoad().running).toBe(0);
-    slot!();
-  }, REPLAY_TIMEOUT_MS);
+  test(
+    "warm workers are reused: two battles in a row start one worker per seat at most",
+    async () => {
+      await replayAbandonedInWorker(abandonedInput());
+      const before = replayLoad().spawned;
+      await replayAbandonedInWorker(abandonedInput());
+      await replayAbandonedInWorker(abandonedInput());
+      expect(replayLoad().spawned).toBe(before);
+    },
+    REPLAY_TIMEOUT_MS
+  );
 });
 
 /**
@@ -183,7 +202,7 @@ describe("a replay worker that fails to load (22 Nov 2026)", () => {
     expect(isReplayWorkerLoadError(caught)).toBe(true);
     expect(isReplayDeferred(caught)).toBe(true);
     expect(String((caught as Error).message)).toContain("SyntaxError");
-    expect(replayLoad().running).toBe(0);
+    expect(replayLoad().fighting).toBe(0);
   });
 
   test("one that loaded and then died is the replay's own failure, not a load failure", async () => {

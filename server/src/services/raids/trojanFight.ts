@@ -7,7 +7,7 @@ import { logger } from "../../utils/logger.js";
 import { catchUpLockedRow } from "../../controllers/yard/yardAction.js";
 import { calculateEmpirePoints } from "../base/calculateEmpirePoints.js";
 import { isAttackActive } from "../base/isAttackActive.js";
-import { ReplayTimeoutError, fightRaidInWorker, reserveReplaySlot } from "../base/combat/replayRunner.js";
+import { ReplayTimeoutError, fightRaidInWorker, AUTO_ATTACK_SLOT_WAIT_MS, reserveReplaySlot } from "../base/combat/replayRunner.js";
 import { ATTACK_ONLINE_SECONDS, isPresent, readPresenceMarks } from "../user/online.js";
 import { fightSecondsOf, type RaidFightInput, type RaidFightOutcome } from "./raidFight.js";
 import {
@@ -134,7 +134,7 @@ export const springTrojanHorse = async (em: EntityManager, user: User, now: numb
   const marks = await readPresenceMarks(user.userid, now);
   if (!isPresent(marks, now, ATTACK_ONLINE_SECONDS)) throw raidRefusedErr("offline");
 
-  const release = await reserveReplaySlot();
+  const release = await reserveReplaySlot(AUTO_ATTACK_SLOT_WAIT_MS, { kind: "trojan" });
   if (!release) throw raidRefusedErr("busy");
   let start: RaidStart;
   try {

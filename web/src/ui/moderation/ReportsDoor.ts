@@ -1,6 +1,7 @@
 import { modReportsApi, type ModReportsApi } from "@/api/modReports";
 import { make } from "@/ui/friends/rows";
 import { ReportsWindow } from "./ReportsWindow";
+import { setModStatus } from "./modStatus";
 import { artUrl } from "../../artUrl";
 
 /**
@@ -84,6 +85,7 @@ export class ReportsDoor {
     try {
       const status = await this.api.status();
       if (this.destroyed) return;
+      setModStatus(status);
       this.button.hidden = !status.moderator;
       this.setCount(status.moderator ? status.open : 0);
       if (!status.moderator) this.close();

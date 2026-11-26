@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { PresenceScreen } from "@/api/presence";
-import { PRESENCE_INTERVAL_MS, PresencePing } from "./presencePing";
+import { PRESENCE_INTERVAL_MS, PresencePing, pingVia, type PresenceRoutes } from "./presencePing";
 
 /**
  * The presence ping (#242): every 30 seconds while a screen holds it and the
@@ -237,5 +237,43 @@ describe("PresencePing", () => {
       expect(bodies.at(-1)).toEqual({ where: "other", planner: false });
       release();
     });
+  });
+});
+
+describe("pingVia (beta 9: the chat socket first, HTTP as the fallback)", () => {
+  const YARD: PresenceScreen = { where: "yard", planner: false };
+  const routes = (socket: PresenceRoutes["socket"], token: string | null = "bearer") => {
+    const http = vi.fn((_screen: PresenceScreen) => Promise.resolve({ error: 0, via: "http" }));
+    return { http, routes: { socket: vi.fn(socket), http, token: () => token } };
+  };
+
+  it("goes on the socket when it takes it, with the token, the API version and the screen; no request", async () => {
+    const { http, routes: r } = routes(() => Promise.resolve({ error: 0, via: "socket" }));
+    await expect(pingVia(r, YARD)).resolves.toEqual({ error: 0, via: "socket" });
+    expect(r.socket).toHaveBeenCalledWith({
+      token: "bearer",
+      apiVersion: expect.any(String),
+      screen: { where: "yard", planner: false },
+    });
+    expect(http).not.toHaveBeenCalled();
+  });
+
+  it("goes over HTTP when the socket cannot take it (chat off or down, an older server)", async () => {
+    const { http, routes: r } = routes(() => null);
+    await expect(pingVia(r, YARD)).resolves.toEqual({ error: 0, via: "http" });
+    expect(http).toHaveBeenCalledWith(YARD);
+  });
+
+  it("goes over HTTP when the socket refuses it, times out or drops", async () => {
+    const { http, routes: r } = routes(() => Promise.reject(new Error("timeout")));
+    await expect(pingVia(r, YARD)).resolves.toEqual({ error: 0, via: "http" });
+    expect(http).toHaveBeenCalledTimes(1);
+  });
+
+  it("never tries the socket without a session token", async () => {
+    const { http, routes: r } = routes(() => Promise.resolve({}), null);
+    await pingVia(r, YARD);
+    expect(r.socket).not.toHaveBeenCalled();
+    expect(http).toHaveBeenCalledTimes(1);
   });
 });

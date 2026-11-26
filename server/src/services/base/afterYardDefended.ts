@@ -1,12 +1,9 @@
 import type { EntityManager } from "@mikro-orm/postgresql";
 
-import { seededYardsOn } from "../../config/BotConfig.js";
 import type { Save } from "../../database/models/save.model.js";
 import { BaseType } from "../../enums/Base.js";
 import { MapRoomVersion } from "../../enums/MapRoom.js";
-import { logger } from "../../utils/logger.js";
-import { scheduleAfterBotDefence, type BotDefenceInput } from "../bots/afterAttack.js";
-import { isBot, isSeededPlayer } from "../bots/isBot.js";
+import { isBot } from "../bots/isBot.js";
 import { noticeYardAttack, type ResourceAmounts } from "../maproom/v2/outpostNotices.js";
 
 export interface YardDefence {
@@ -26,28 +23,22 @@ export interface YardDefence {
 /**
  * Runs once a Map Room 1 or Map Room 2 main yard's defence has landed, from
  * both landings: the attacker's final save (`baseSave.ts`) and the server
- * finishing it from a checkpoint (`finaliseAttack.ts`, which a bot's revenge
- * lands through too). Issue #241, `docs/design/bot-neighbours.md` §4.5 and
- * §4.8; Map Room 2 by issue #361, `docs/design/defence-replays.md` §8.
+ * finishing it from a checkpoint (`finaliseAttack.ts`). Issue #241; Map Room 2
+ * by issue #361, `docs/design/defence-replays.md` §8.
  *
- * - A real defender is sent the defence notice, whoever attacked: a real
- *   player or a bot's revenge get the same words, so the notice can never
- *   tell a bot (decision 3). Its next own-yard load shows it in "While you
- *   were away" (`takeOutpostNotices`).
- * - A bot defender attacked by a real player books its repair and maybe a
- *   revenge (`scheduleAfterBotDefence`). It gets no notice: nobody reads a
- *   bot's mailbox.
- * - A seeded Map Room 2 dev player (issue #233, `seededPlayers.ts`) is told
- *   as a real defender is and, outside production, books its repair too,
- *   never a revenge. `db:seed:mr2` leaves their saves on `mapversion` 1 (the
- *   column's default) though they sit on a Map Room 2 world, so they come
- *   through here.
- * - On Map Room 2 a real defender gets the very same notice, carrying the
- *   defence replay the landing recorded for its Watch button; nothing else
- *   happens there: bot jobs (repair, revenge) stay Map Room 1 only.
+ * A real defender is sent the defence notice, carrying on Map Room 2 the
+ * defence replay the landing recorded for its Watch button. Its next own-yard
+ * load shows it in "While you were away" (`takeOutpostNotices`). A seeded Map
+ * Room 2 dev player (`seededPlayers.ts`) is told as a real defender is;
+ * `db:seed:mr2` leaves their saves on `mapversion` 1 (the column's default)
+ * though they sit on a Map Room 2 world, so they come through here.
  *
- * Nothing it learns reaches the attacker's response: it returns nothing, and a
- * failure to book bot jobs is logged, never thrown into the landing.
+ * A retired bot's yard gets nothing: nobody reads its mailbox. Until beta 9 an
+ * attack on a bot also booked its repair and maybe a revenge for the bot
+ * sweep, which was removed with the rest of the bot system (bots
+ * decommissioned, owner 12 + 13 Nov 2026).
+ *
+ * Nothing it learns reaches the attacker's response: it returns nothing.
  */
 export const afterYardDefended = async (em: EntityManager, defence: YardDefence): Promise<void> => {
   const { yard, attacker } = defence;
@@ -55,33 +46,5 @@ export const afterYardDefended = async (em: EntityManager, defence: YardDefence)
   if (yard.mapversion !== MapRoomVersion.V1 && yard.mapversion !== MapRoomVersion.V2) return;
   if (!yard.saveuserid || yard.saveuserid === attacker.userid) return;
 
-  if (yard.mapversion === MapRoomVersion.V2) {
-    if (!(await isBot(yard.saveuserid, em))) await noticeYardAttack(em, defence);
-    return;
-  }
-
-  if (!(await isBot(yard.saveuserid, em))) {
-    await noticeYardAttack(em, defence);
-    if (seededYardsOn(process.env) && (await isSeededPlayer(yard.saveuserid, em))) {
-      await bookBotJobs(em, { bot: yard.saveuserid, attacker: attacker.userid, at: new Date(defence.now * 1000), revenge: false });
-    }
-    return;
-  }
-  if (await isBot(attacker.userid, em)) return;
-
-  await bookBotJobs(em, { bot: yard.saveuserid, attacker: attacker.userid, at: new Date(defence.now * 1000) });
-};
-
-/** `scheduleAfterBotDefence`, a failure logged and never thrown into the landing. */
-const bookBotJobs = async (em: EntityManager, input: BotDefenceInput): Promise<void> => {
-  try {
-    await scheduleAfterBotDefence(em, input);
-  } catch (error) {
-    logger.error("Could not book bot {bot}'s jobs after an attack", {
-      event: "bot-after-attack-failed",
-      bot: input.bot,
-      attackerid: input.attacker,
-      error: error instanceof Error ? error.message : String(error),
-    });
-  }
+  if (!(await isBot(yard.saveuserid, em))) await noticeYardAttack(em, defence);
 };

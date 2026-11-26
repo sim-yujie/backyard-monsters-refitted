@@ -268,14 +268,14 @@ describe("two concurrent loads place exactly one horse", () => {
 
 describe("bots never get a horse", () => {
   test("the bot catch-up path never reaches placeTrojanHorse or catchUpLockedYard", () => {
-    const sources = ["../bots/sweep.ts", "../bots/factory.ts", "../bots/seededPlayers.ts"].map((path) =>
+    const sources = ["../bots/factory.ts", "../bots/seededPlayers.ts"].map((path) =>
       readFileSync(new URL(path, import.meta.url), "utf8")
     );
 
     for (const source of sources) {
       expect(source).not.toContain("trojanHorse");
-      // `catchUpLockedYard` is mentioned in a comment (sweep.ts) explaining why
-      // bots DON'T go through it; only an actual call would reach the horse.
+      // Only an actual call would reach the horse; a comment may name
+      // `catchUpLockedYard` (the bot sweep that once did was removed in beta 9).
       expect(source).not.toContain("catchUpLockedYard(");
     }
   });

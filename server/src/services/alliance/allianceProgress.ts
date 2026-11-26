@@ -5,7 +5,6 @@ import type { EntityManager as SqlEntityManager } from "@mikro-orm/postgresql";
 import {
   GOAL_MENU,
   GOAL_POINTS,
-  GOAL_TIER_PLAYERS,
   GOAL_TIERS,
   GOALS_PER_WEEK,
   TERRITORY_BADGE_TOP,
@@ -68,10 +67,6 @@ export const goalTarget = (type: AllianceType, rules: GoalRules, tier: GoalTier)
 
 /** What a goal pays for a type and tier. */
 export const goalPoints = (type: AllianceType, tier: GoalTier): number => GOAL_POINTS[tier] * (TYPE_SCALE[type] ?? 1);
-
-/** How many hardcore players a type's tier is sized for (the goal picker's label). */
-export const goalPlayers = (type: AllianceType, tier: GoalTier): number =>
-  GOAL_TIER_PLAYERS[tier] * (TYPE_SCALE[type] ?? 1);
 
 /**
  * Whether a stored goal's kind is still on the menu. A kind taken off it
@@ -158,10 +153,13 @@ const payGoals = async (
   }
 };
 
+/** A whole goal in `alliance_contribution.goal_helps` units (per million; migration 20261208). */
+const HELP_UNITS_PER_GOAL = 1_000_000;
+
 /**
  * Adds a member's progress to their alliance's goals of this week, and their
- * share (per mille of each target) to their help tally. A goal reached pays
- * its points once.
+ * share (per million of each target, at least 1 for any progress) to their
+ * help tally. A goal reached pays its points once.
  */
 export const addGoalProgress = async (
   em: EntityManager,
@@ -197,7 +195,11 @@ export const addGoalProgress = async (
     );
     for (const row of rows) {
       // A take-back (negative) takes the member's share back off their tally too.
-      const share = Math.round((Math.min(Math.abs(amount), Number(row.target)) * 1000) / Math.max(1, Number(row.target)));
+      // Per million, not per mille: one tribe yard of a 10,000 Hard goal (24 Nov
+      // 2026) is 100, where per mille it rounded to 0 and the member did not
+      // count as helping. Divided first, so 90B x 1M never passes 2^53.
+      const target = Math.max(1, Number(row.target));
+      const share = Math.max(1, Math.round((Math.min(Math.abs(amount), target) / target) * HELP_UNITS_PER_GOAL));
       helps += amount < 0 ? -share : share;
       if (row.done) done.push(row);
     }
@@ -734,7 +736,7 @@ export const progressView = async (em: EntityManager, allianceId: number, type: 
     held = Number(row?.n ?? 0);
   }
   const helpers = await sql(em).execute<{ userid: number; username: string; quests: number; helps: number }[]>(
-    `SELECT c.userid, u.username, SUM(c.quest_points)::int AS quests, SUM(c.goal_helps)::int AS helps
+    `SELECT c.userid, u.username, SUM(c.quest_points)::int AS quests, SUM(c.goal_helps)::bigint AS helps
        FROM bym.alliance_contribution c JOIN bym."user" u ON u.userid = c.userid AND u.alliance_id = c.alliance_id
       WHERE c.alliance_id = ? AND c.day >= ?::date
       GROUP BY c.userid, u.username
@@ -778,7 +780,6 @@ export const progressView = async (em: EntityManager, allianceId: number, type: 
         tier,
         target: goalTarget(type, g, tier),
         points: goalPoints(type, tier),
-        players: goalPlayers(type, tier),
       })),
     })),
     goals_per_week: GOALS_PER_WEEK,
@@ -787,7 +788,7 @@ export const progressView = async (em: EntityManager, allianceId: number, type: 
       username: h.username,
       quests: Number(h.quests),
       // Share of goals moved, in percent of one goal.
-      goal_share: Math.round(Number(h.helps) / 10),
+      goal_share: Math.round((Number(h.helps) * 100) / HELP_UNITS_PER_GOAL),
     })),
   };
 };

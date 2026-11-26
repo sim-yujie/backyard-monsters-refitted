@@ -9,6 +9,7 @@ import {
   KRALLEN_MAX_POWER_LEVEL,
   championByType,
   championStatWithFood,
+  flungStance,
   isChampionStance,
   type ChampionStance,
   type FlingEvent,
@@ -16,6 +17,7 @@ import {
 import { academyLevel, housedCount } from "@/game/monsters/housing";
 import { LISTED_MONSTERS, housingSpace, maxTrainingLevel } from "@/game/monsters/monsterCatalogue";
 import { championEntry } from "@/game/yard/championCatalogue";
+import type { FriendRun } from "./friendTest";
 import type { TestReport } from "./testReport";
 
 /**
@@ -64,7 +66,10 @@ export interface TestRow {
   readonly level: number;
 }
 
-/** One made-up champion in a test army: type, evolution level, power level, Mode. */
+/**
+ * One made-up champion in a test army: type, evolution level, power level,
+ * Mode. Krallen has no Mode (owner, 25 Nov 2026, patch 8.7): hers is never kept.
+ */
 export interface TestChampion {
   readonly t: number;
   readonly l: number;
@@ -170,7 +175,11 @@ export const championLevels = (t: number): number => championEntry(t)?.levels ??
 export const championPowerLevels = (t: number): number =>
   t === KRALLEN_TYPE ? KRALLEN_MAX_POWER_LEVEL : CHAMPION_MAX_POWER_LEVEL;
 
-/** A champion pick made whole: its level and power level in range; null for an unknown type. */
+/**
+ * A champion pick made whole: its level and power level in range, and its
+ * Mode only for a champion that has Modes (`flungStance`: not Krallen, so a
+ * remembered or sent army drops one picked for her); null for an unknown type.
+ */
 const clampChampion = (champion: TestChampion): TestChampion | null => {
   const levels = championLevels(champion.t);
   if (levels <= 0 || !championByType(champion.t)) return null;
@@ -178,8 +187,14 @@ const clampChampion = (champion: TestChampion): TestChampion | null => {
     t: champion.t,
     l: Math.min(Math.max(Math.floor(champion.l) || 1, 1), levels),
     pl: Math.min(Math.max(Math.floor(champion.pl) || 0, 0), championPowerLevels(champion.t)),
-    ...(isChampionStance(champion.s) ? { s: champion.s } : {}),
+    ...withStance(champion.t, champion.s),
   };
+};
+
+/** `{ s }` for a champion type with Modes and a real Mode picked; nothing for Krallen. */
+const withStance = (t: number, s: unknown): { s?: ChampionStance } => {
+  const stance = flungStance(t, isChampionStance(s) ? s : undefined);
+  return stance ? { s: stance } : {};
 };
 
 /**
@@ -269,7 +284,7 @@ export const testChampionEntry = (champion: TestChampion): ChampionSaveEntry => 
     ft: 0,
     fd: 0,
     fb,
-    ...(champion.s ? { s: champion.s } : {}),
+    ...withStance(champion.t, champion.s),
   };
 };
 
@@ -310,6 +325,11 @@ export interface BaiterRun {
   readonly baiterLevel: number;
   /** A finished test to play back rather than a new one (#22, WP5, `testHistory.ts`). */
   readonly replay?: TestReplay;
+  /**
+   * A friend's test (beta 9 #4): another player's yard under test, or the
+   * owner watching one; absent for a test of the player's own yard.
+   */
+  readonly friend?: FriendRun;
 }
 
 /**

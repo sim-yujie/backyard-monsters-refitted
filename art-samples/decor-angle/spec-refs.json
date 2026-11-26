@@ -1,0 +1,6 @@
+{"Liberty Flash": {"pic": "server/public/assets/buildings/decorations/statue-liberty/top.v2.png", "lines": [[4,128,34,141,"top L"],[40,142,64,130,"top R"],[6,150,36,165,"bottom L"],[42,166,66,152,"bottom R"]]},
+ "Liberty Modern": {"pic": "server/public/assets/buildings/decorations/statue-liberty/statue-liberty.modern@2x.webp", "lines": [[8,264,60,281,"top L"],[72,280,122,260,"top R"],[8,306,58,335,"bottom L"],[72,336,124,308,"bottom R"]]},
+ "Big Ben Flash": {"pic": "server/public/assets/buildings/decorations/statue-bigben/top.v2.png", "lines": [[8,31,28,40,"clock top L"],[33,40,53,30,"clock top R"]]},
+ "Big Ben Modern": {"pic": "server/public/assets/buildings/decorations/statue-bigben/big-ben.modern@2x.webp", "lines": [[12,68,55,80,"clock top L"],[60,80,105,66,"clock top R"],[30,48,55,60,"belfry base L"],[60,60,90,48,"belfry base R"]]},
+ "Map Room Flash": {"pic": "server/public/assets/buildings/maproom/top.1.png", "lines": [[4,76,40,90,"deck L"],[60,90,95,74,"deck R"]]}
+}

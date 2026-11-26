@@ -43,6 +43,7 @@ const msMap = z
   .refine((map) => Object.keys(map).length <= L.mapKeysMax, { message: `at most ${L.mapKeysMax} keys` });
 
 /** Any text without control characters (a graphics card's name may not be plain ASCII). */
+// oxlint-disable-next-line no-control-regex -- matching them is the point
 const NO_CONTROL = /^[^\x00-\x1f\x7f]*$/;
 
 const infoValue = z.union([z.string().max(L.infoTextMax).regex(NO_CONTROL), z.number().finite(), z.boolean(), z.null()]);

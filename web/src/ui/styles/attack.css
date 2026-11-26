@@ -273,6 +273,18 @@
   max-width: min(60vw, 520px);
 }
 
+/* Beside the dock's column the notices keep to the battlefield left of it
+   (from 1366 wide they already do): on a phone on its side the Baiter test's
+   note ran under the Army window (beta 9 play-test). A phone held upright
+   has the dock as a sheet at the bottom. */
+@media (min-width: 620.02px) {
+  .overlay__layer:has(> .attack-dock:not(.attack-dock--sheet):not([hidden])) > .map-dock--top-centre {
+    --notice-room: calc(100% - 340px - 2 * var(--space-4) - var(--space-3));
+    width: min(92vw, 460px, var(--notice-room));
+    left: min(50%, calc(100% - 340px - var(--space-4) - var(--space-3) - min(92vw, 460px, var(--notice-room)) / 2));
+  }
+}
+
 /* ── A live attack: the screen cleaned up (owner, beta 7, grill item 35) ──
    No HUD above the strip (AttackScene creates none), so the strip takes the
    top edge and the Army panel follows it up; no Map / Yard / Log out menu,
@@ -558,6 +570,18 @@
   .attack-strip__title,
   .attack-strip > .guide-help {
     display: none;
+  }
+
+  /* A Baiter test keeps its name ("Testing yardtester's yard") in the room
+     the strip has here, cut short if it must: after the test's note goes it
+     is the only word that nothing is lost (neon review, beta 9 play-test). */
+  .attack-strip--test .attack-strip__title {
+    display: block;
+    flex: 0 1 auto;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
 
   /* A live attack has no overflow menu to hold Bob's "?": it stays on the

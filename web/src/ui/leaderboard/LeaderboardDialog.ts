@@ -6,6 +6,7 @@ import { gameIcon, iconAmount, type GameIconName } from "@/ui/gameIcon";
 import { Popup } from "@/ui/Popup";
 import { scrollFade } from "@/ui/scrollFade";
 import "./leaderboard.css";
+import { el } from "@/ui/dom";
 
 /**
  * The leaderboard (beta.4): every player ranked by empire points. Since beta 8
@@ -20,17 +21,6 @@ import "./leaderboard.css";
 
 export const LOAD_FAILED = "Could not load the leaderboard. Try again in a moment.";
 export const EMPTY = "Nobody is on the board yet.";
-
-const el = <K extends keyof HTMLElementTagNameMap>(
-  tag: K,
-  className: string,
-  text?: string,
-): HTMLElementTagNameMap[K] => {
-  const element = document.createElement(tag);
-  element.className = className;
-  if (text !== undefined) element.textContent = text;
-  return element;
-};
 
 /** "1 outpost", "3 outposts". */
 export const outpostText = (count: number): string => `${formatAmount(count)} ${count === 1 ? "outpost" : "outposts"}`;

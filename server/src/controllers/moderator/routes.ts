@@ -5,15 +5,20 @@ import type { Context, Middleware, Next } from "koa";
 import { Status } from "../../enums/StatusCodes.js";
 import { apiVersion } from "../../middleware/apiVersioning.js";
 import type { ModerationEffects } from "../../services/admin/moderation.js";
+import { alertModStep, type ModStepAlert } from "../../services/alerts/moderationAlerts.js";
+import { banAsModerator, MOD_BAN_DAYS, modStepAlertOf, parseModBan, type RemoveLines } from "../../services/moderator/modBan.js";
+import { parseRemoveLines, removeAsModerator, type RemoveLine } from "../../services/moderator/modLines.js";
 import {
   actAsModerator,
   countOpenReports,
   listModReports,
   modLineAround,
+  MOD_MUTE_HOURS,
   modPlayer,
   modRoleOf,
   parseModAction,
   type ModFilter,
+  type ModRole,
 } from "../../services/moderator/modReports.js";
 import { logger } from "../../utils/logger.js";
 
@@ -28,6 +33,17 @@ import { logger } from "../../utils/logger.js";
  * - `GET  /api/:v/mod/reports/players/:id`: one player's open lines, log and decisions.
  * - `GET  /api/:v/mod/reports/lines/:id/around`: the chat around one open word-filter line.
  * - `POST /api/:v/mod/reports/players/:id/act`: Close, Warn or Mute (1h, 1d, 3d, 7d).
+ * - `POST /api/:v/mod/players/:id/ban` `{ days: 1|3|7, reason, removeLines? }`:
+ *   a ban, from the Reports window or a name in chat (`modBan.ts`); needs
+ *   nothing open against the player. `removeLines: true` also takes their
+ *   lines of the last hour out of the chat rooms. Answers
+ *   `{ until, closed: { reports, filterLines }, removedLines }`.
+ * - `POST /api/:v/mod/players/:id/lines/remove` `{ lines: [{ channel, ts, lineId? }] }`:
+ *   the Reports window's Remove (chat filter, 24 Nov 2026; `modLines.ts`):
+ *   the lines leave every chat box and the rooms' history. Answers `{ removed }`.
+ *
+ * Every moderator's ban and mute is said on Telegram (`alertModStep`); an
+ * admin's own steps here are not (the owner sees those on the dashboard).
  *
  * Everything but `status` is for moderators and admins only: anyone else
  * gets 403 `notModerator`, whatever their game claims. Moderators, game team
@@ -41,6 +57,12 @@ export interface ModReportsRouteDeps {
   readonly signedIn: readonly Middleware[];
   /** What a warning or mute does outside the database (the dashboard's own). */
   readonly effects: ModerationEffects;
+  /** Takes a banned player's recent lines out of the chat rooms (`chat/removeChatLines.ts`). */
+  readonly removeLines?: RemoveLines;
+  /** Takes one chat line out of its room and every open chat box (`chat/removeChatLines.ts` `removeChatLine`). */
+  readonly removeLine?: RemoveLine;
+  /** Says a moderator's ban or mute on Telegram; tests pass a recorder. */
+  readonly alert?: (step: ModStepAlert) => Promise<unknown>;
   readonly now?: () => Date;
 }
 
@@ -55,6 +77,7 @@ export const MOD_REFUSAL_WORDS = {
   nothingOpen: "Someone already closed this. Nothing is open for this player now.",
   noPlayer: "This player's account is gone.",
   longerMute: "This player's chat is already muted for longer. Warn or Close instead.",
+  longerBan: "This player is already banned for longer. An admin decides on it.",
 } as const;
 
 export type ModRefusal = keyof typeof MOD_REFUSAL_WORDS;
@@ -90,14 +113,35 @@ export const mountModReportsRoutes = (router: Router, deps: ModReportsRouteDeps)
       logger.warn(`Moderator: refused user ${ctx.authUser.userid} on ${ctx.method} ${ctx.path}`);
       return refuse(ctx, Status.FORBIDDEN, "notModerator");
     }
+    ctx.state.modRole = role satisfies ModRole;
     await next();
   };
+
+  /** Tells the owner about a moderator's ban or mute (not an admin's); never fails the step. */
+  const tellOwner = (ctx: Context, step: Parameters<typeof modStepAlertOf>[1]): void => {
+    if (ctx.state.modRole !== "moderator") return;
+    void (async () => {
+      try {
+        const facts = await modStepAlertOf(deps.em(), step);
+        await (deps.alert ?? alertModStep)(facts);
+      } catch (err) {
+        logger.warn(`Moderator: the Telegram message for the ${step.kind} of user ${step.userid} failed: ${err}`);
+      }
+    })();
+  };
+
+  const refusalStatus = (outcome: string): number =>
+    outcome === "self" || outcome === "gameTeam" || outcome === "moderator"
+      ? Status.FORBIDDEN
+      : outcome === "noPlayer"
+        ? Status.NOT_FOUND
+        : Status.CONFLICT;
 
   router.get(`${base}/status`, apiVersion, ...deps.signedIn, async (ctx) => {
     const em = deps.em();
     const role = await modRoleOf(em, ctx.authUser.userid);
     if (!role) return ok(ctx, { moderator: 0 });
-    ok(ctx, { moderator: 1, open: await countOpenReports(em, now()) });
+    ok(ctx, { moderator: 1, open: await countOpenReports(em, now()), muteHours: MOD_MUTE_HOURS, banDays: MOD_BAN_DAYS });
   });
 
   router.get(`${base}/reports`, apiVersion, ...deps.signedIn, modOnly, async (ctx) => {
@@ -126,14 +170,53 @@ export const mountModReportsRoutes = (router: Router, deps: ModReportsRouteDeps)
     if (id === undefined || id < 1) return refuse(ctx, Status.NOT_FOUND, "notShown");
     const parsed = parseModAction(ctx.request.body);
     if (!parsed.ok) return refuse(ctx, Status.BAD_REQUEST, "badRequest", parsed.message);
-    const done = await actAsModerator(deps.em(), ctx.authUser.userid, id, parsed.value.action, parsed.value.seen, deps.effects, now());
-    if (done.outcome === "done") return ok(ctx, { closed: done.closed, player: done.player });
-    const status =
-      done.outcome === "self" || done.outcome === "gameTeam" || done.outcome === "moderator"
-        ? Status.FORBIDDEN
-        : done.outcome === "noPlayer"
-          ? Status.NOT_FOUND
-          : Status.CONFLICT;
-    refuse(ctx, status, done.outcome);
+    const { action, seen } = parsed.value;
+    const done = await actAsModerator(deps.em(), ctx.authUser.userid, id, action, seen, deps.effects, now());
+    if (done.outcome === "done") {
+      if (action.kind === "mute") {
+        tellOwner(ctx, {
+          kind: "mute",
+          actor: ctx.authUser.userid,
+          userid: id,
+          length: action.hours,
+          reason: action.reason,
+          caseId: done.caseId,
+          removedLines: null,
+        });
+      }
+      return ok(ctx, { closed: done.closed, player: done.player });
+    }
+    refuse(ctx, refusalStatus(done.outcome), done.outcome);
+  });
+
+  router.post(`${base}/players/:id/lines/remove`, apiVersion, ...deps.signedIn, modOnly, async (ctx) => {
+    const id = intOf(ctx.params.id);
+    if (id === undefined || id < 1) return refuse(ctx, Status.NOT_FOUND, "noPlayer");
+    const parsed = parseRemoveLines(ctx.request.body);
+    if (!parsed.ok) return refuse(ctx, Status.BAD_REQUEST, "badRequest", parsed.message);
+    const removeLine = deps.removeLine ?? (async () => 0);
+    const done = await removeAsModerator(deps.em(), ctx.authUser.userid, id, parsed.value, removeLine);
+    if (done.outcome !== "done") return refuse(ctx, refusalStatus(done.outcome), done.outcome);
+    ok(ctx, { removed: done.removed });
+  });
+
+  router.post(`${base}/players/:id/ban`, apiVersion, ...deps.signedIn, modOnly, async (ctx) => {
+    const id = intOf(ctx.params.id);
+    if (id === undefined || id < 1) return refuse(ctx, Status.NOT_FOUND, "noPlayer");
+    const parsed = parseModBan(ctx.request.body);
+    if (!parsed.ok) return refuse(ctx, Status.BAD_REQUEST, "badRequest", parsed.message);
+    const request = parsed.value;
+    const done = await banAsModerator(deps.em(), ctx.authUser.userid, id, request, deps.effects, deps.removeLines ?? null, now());
+    if (done.outcome !== "done") return refuse(ctx, refusalStatus(done.outcome), done.outcome);
+    tellOwner(ctx, {
+      kind: "ban",
+      actor: ctx.authUser.userid,
+      userid: id,
+      length: request.days,
+      reason: request.reason,
+      caseId: done.caseId,
+      removedLines: request.removeLines ? done.removedLines : null,
+    });
+    ok(ctx, { until: done.until.toISOString(), closed: done.closed, removedLines: done.removedLines });
   });
 };

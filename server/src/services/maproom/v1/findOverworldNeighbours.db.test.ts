@@ -107,7 +107,7 @@ describe.skipIf(!dbName)("findOverworldNeighbours on a real database (issue #236
         em,
         { userid: player },
         { points: pointsFor(20), basevalue: "0" },
-        { now: NOW, fill: false }
+        { now: NOW }
       );
 
       expect(neighbours.map((n) => n.userid).sort()).toEqual([active, lowEdge, highEdge].sort());
@@ -115,54 +115,20 @@ describe.skipIf(!dbName)("findOverworldNeighbours on a real database (issue #236
     });
   });
 
-  test("bots fill the rest from active bots within 7 levels, from the floor up; retired bots never appear", async () => {
+  test("no bot ever appears, active or retired, however empty the list (bot fill removed in beta 9)", async () => {
     await rolledBack(async (em) => {
       const player = await addPlayer(em, { level: 20, seen: NOW });
       const real = await addPlayer(em, { level: 21, seen: daysAgo(3) });
+      for (const [level, state] of [[25, "active"], [27, "active"], [20, "retired"]] as const) {
+        await makeBot(em, await addPlayer(em, { level, seen: null }), level, state);
+      }
 
-      // The floor is 25 (owner 3 Nov 2026): a level 20 player's bots come from 25-27.
-      const inRange = await addPlayer(em, { level: 25, seen: null });
-      await makeBot(em, inRange, 25);
-      const belowFloor = await addPlayer(em, { level: 22, seen: null });
-      await makeBot(em, belowFloor, 22);
-      const alsoInRange = await addPlayer(em, { level: 27, seen: daysAgo(1) });
-      await makeBot(em, alsoInRange, 27);
-      const retired = await addPlayer(em, { level: 20, seen: null });
-      await makeBot(em, retired, 20, "retired");
-      const tooHigh = await addPlayer(em, { level: 35, seen: null });
-      await makeBot(em, tooHigh, 35);
-      const offMapRoom1 = await addPlayer(em, { level: 20, seen: null, mapversion: 2 });
-      await makeBot(em, offMapRoom1, 20);
-
-      const neighbours = await findOverworldNeighbours(
-        em,
-        { userid: player },
-        { points: pointsFor(20), basevalue: "0" },
-        { now: NOW, fill: true }
-      );
-
-      expect(neighbours.map((n) => n.userid).sort()).toEqual([real, inRange, alsoInRange].sort());
-      expect(neighbours.map((n) => n.userid)).not.toContain(belowFloor);
-    });
-  });
-
-  test("a player under level 15 is shown no bots, only real players (owner 3 Nov 2026)", async () => {
-    await rolledBack(async (em) => {
-      const player = await addPlayer(em, { level: 10, seen: NOW });
-      const real = await addPlayer(em, { level: 11, seen: daysAgo(1) });
-      for (const level of [10, 25, 26]) await makeBot(em, await addPlayer(em, { level, seen: null }), level);
-
-      const neighbours = await findOverworldNeighbours(
-        em,
-        { userid: player },
-        { points: pointsFor(10), basevalue: "0" },
-        { now: NOW, fill: true }
-      );
+      const neighbours = await findOverworldNeighbours(em, { userid: player }, { points: pointsFor(20), basevalue: "0" }, { now: NOW });
       expect(neighbours.map((n) => n.userid)).toEqual([real]);
     });
   });
 
-  test("at most 25, real players first: a full list of real players leaves no room for bots", async () => {
+  test("at most 25, the most recently seen real players", async () => {
     await rolledBack(async (em) => {
       const player = await addPlayer(em, { level: 10, seen: NOW });
       const reals: number[] = [];
@@ -174,7 +140,7 @@ describe.skipIf(!dbName)("findOverworldNeighbours on a real database (issue #236
         em,
         { userid: player },
         { points: pointsFor(10), basevalue: "0" },
-        { now: NOW, fill: true }
+        { now: NOW }
       );
 
       expect(neighbours).toHaveLength(NEIGHBOUR_LIMIT);

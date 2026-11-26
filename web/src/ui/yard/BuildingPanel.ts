@@ -11,6 +11,8 @@ import { recycleAction, recycleKey, type RecycleReport } from "@/api/yardRecycle
 import { repairActions } from "@/api/yardRepair";
 import type { BaiterRun } from "@/game/baiter/baiterSession";
 import type { RecordedTest } from "@/game/baiter/testHistory";
+import type { TestReport } from "@/game/baiter/testReport";
+import type { BaiterView } from "@/game/yard/yardIntent";
 import { artFolder, resolveArt } from "@/game/yard/buildingArt";
 import { maxLevel, OUTPOST_CORE_TYPE, WALL_TYPES, type YardKind } from "@/game/yard/buildingCosts";
 import { housingBuildings, housingTypeOf } from "@/game/monsters/housing";
@@ -202,6 +204,9 @@ interface JobRefs {
   readonly bar: HTMLElement;
   readonly fill: HTMLElement;
 }
+
+/** The side panel's class while the Baiter window stands over it (beta 9 #4). */
+export const UNDER_WINDOW = "building-panel--under-window";
 
 export class BuildingPanel {
   readonly element: HTMLElement;
@@ -1535,7 +1540,7 @@ export class BuildingPanel {
    * Opens the Baiter's practice-attack window over the yard (#126, #308): a
    * large window on the overlay's modal layer, the yard dimmed behind it.
    */
-  private openBaiterWindow(blocked: string | null): void {
+  private openBaiterWindow(blocked: string | null, view?: BaiterView): void {
     const building = this.building;
     const yard = this.yard;
     if (this.baiter || !building || !yard) return;
@@ -1550,28 +1555,54 @@ export class BuildingPanel {
       ...(yard.scene.showBaiterReport
         ? { onReport: (test: RecordedTest) => yard.scene.showBaiterReport?.(test) }
         : {}),
+      // A friend's test of this yard, and the friends' invites (beta 9 #4, design A).
+      friends: {
+        onTest: (invite) => {
+          // The friend's army window stands alone: this panel goes with the Baiter window.
+          this.closeBaiter();
+          this.close();
+          yard.scene.openFriendTest?.(invite);
+        },
+        ...(yard.scene.watchBaiter ? { onWatch: (run: BaiterRun) => yard.scene.watchBaiter?.(run) } : {}),
+        ...(yard.scene.showFriendReport
+          ? { onReport: (report: TestReport, run: BaiterRun | null) => yard.scene.showFriendReport?.(report, run) }
+          : {}),
+      },
+      ...(view ? { view } : {}),
       onClose: () => {
-        if (this.baiter === opened) this.baiter = null;
+        if (this.baiter !== opened) return;
+        this.baiter = null;
+        this.element.classList.remove(UNDER_WINDOW);
       },
     });
     this.baiter = opened;
     opened.mount(yard.modal ?? this.element.ownerDocument.body);
+    // One window at a time: the side panel (and its close button) steps out of
+    // sight while the Baiter window is over it, and comes back when it shuts.
+    this.element.classList.add(UNDER_WINDOW);
     guideBus.emit("screen", { id: GuideScreen.BAITER, root: opened.element, header: null });
   }
 
-  /** Opens the Baiter's test window when this Baiter may open it (a test's "Change army", #22 WP4). */
-  openBaiter(): void {
+  /** Opens the Baiter's test window when this Baiter may open it (a test's "Change army", #22 WP4), on `view`. */
+  openBaiter(view?: BaiterView): void {
     const building = this.building;
     const yard = this.yard;
-    if (this.baiter || !building || !yard) return;
+    if (!building || !yard) return;
+    if (this.baiter) {
+      if (view) this.baiter.show(view);
+      return;
+    }
     const model = panelModel(building, yard.store);
-    if (model.open !== "baiter" || model.openBlocked) return;
-    this.openBaiterWindow(null);
+    if (model.open !== "baiter") return;
+    // A damaged or busy Baiter still shows its friends' tabs; only Start waits.
+    if (model.openBlocked && (!view || view === "army")) return;
+    this.openBaiterWindow(model.openBlocked, view);
   }
 
   private closeBaiter(): void {
     this.baiter?.destroy();
     this.baiter = null;
+    this.element.classList.remove(UNDER_WINDOW);
   }
 
   private dispose(): void {

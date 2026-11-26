@@ -1,3 +1,5 @@
+import { ClusterLayer } from "@/game/maproom/cluster/ClusterLayer";
+import { cellKey } from "@/game/maproom/cluster/clusterRules";
 import { guideBus, GuideScreen } from "@/game/guide/guideBus";
 import { logout } from "@/api/auth";
 import { loadOwnYard } from "@/api/base";
@@ -6,19 +8,21 @@ import { worldChat } from "@/game/chat/chatSession";
 import { mailApi } from "@/api/mail";
 import { INVITE_SUBJECT, INVITE_WITHDRAW_TEXT } from "@/game/mail/invite";
 import {
-  cellAt,
   declineTakeover,
   getArea,
+  getOwnArmies,
   getTakeoverQuote,
   moveMainYard,
   takeOverCell,
-  transferMonsters,
-  zoneOrigin,
+  transferBatch,
   type TakeoverPayment,
 } from "@/api/maproom";
 import { takePrimedOwnYard } from "@/game/maproom/mapRoute";
 import { mateAllianceOf } from "@/game/maproom/mapAlliances";
-import { WorkerFinishWatch } from "@/game/maproom/workerFinish";
+import { WorkerFinishWatch, hatchFinishOf } from "@/game/maproom/workerFinish";
+import { DOWN_REFRESH_SECONDS, LiveUpdates, ringTier } from "@/game/maproom/live/liveUpdates";
+import { chatSocketUrl } from "@/api/chat";
+import { getAuthToken } from "@/api/http";
 import { getAutoAttackPlan, type AutoAttackPlanResponse } from "@/api/autoAttack";
 import { setWatchRun } from "@/game/autoAttack/watchRun";
 import { openDefence } from "@/game/defences/openDefence";
@@ -36,6 +40,8 @@ import { AREA_ZONE_SIZE, DEFAULT_ZOOM, MIN_ZOOM, WORLD_HEIGHT, WORLD_WIDTH, ZONE
 import { mapRefreshSeconds, quality } from "@/game/quality";
 import {
   attackRefusal,
+  hasAnythingToSend,
+  NOTHING_IN_RANGE,
   cellDistance,
   outpostsToLoad,
   rosterInRange,
@@ -51,6 +57,8 @@ import {
 import { visitFriend } from "@/game/friends/friendVisit";
 import { attackWithFriendWarning } from "@/game/friends/attackWarning";
 import { confirmAttackWindow } from "@/ui/attack/AttackWindow";
+import { smartMoveBeforeAttack } from "@/ui/attack/smartMoveFlow";
+import { smartMovingOn } from "@/game/attack/smartMoveSetting";
 import { storageCapOf } from "@/game/attack/attackerStorage";
 import { Camera } from "@/game/Camera";
 import { mapRoomGrid, setHexShape, type OffsetCell } from "@/game/HexGrid";
@@ -91,13 +99,8 @@ import {
   type MapView,
 } from "@/game/maproom/mapFocus";
 import { panClearOfPanel } from "@/game/maproom/keepClear";
-import {
-  TRANSFER_TEXT,
-  housedOf,
-  relocateAffordable,
-  spaceOf,
-  type TransferYard,
-} from "@/game/maproom/moveYards";
+import { housedOf, relocateAffordable } from "@/game/maproom/moveYards";
+import type { ArmyYard } from "@/game/maproom/transferPlan";
 import { academyLevel } from "@/game/monsters/housing";
 import { housingSpace } from "@/game/monsters/monsterCatalogue";
 import { takenOverResources, type TakeoverCandidate } from "@/game/maproom/takeover";
@@ -129,7 +132,6 @@ import { IncomePrediction, overdriveEndOf } from "@/game/yard/outpostIncome";
 import { seedOutpostLabels } from "@/game/yard/outpostLabels";
 import {
   MAIN_YARD_TITLE,
-  namedOutpostTitle,
   outpostsOf,
   outpostTarget,
   setOwnYardTarget,
@@ -137,7 +139,8 @@ import {
 import { hoverContentFor } from "@/ui/maproom/HoverCard";
 import { MapRoomUi } from "@/ui/maproom/MapRoomUi";
 import { RelocateDialog } from "@/ui/maproom/RelocateDialog";
-import { TransferDialog, type TransferChoice } from "@/ui/maproom/TransferDialog";
+import { TransferMode } from "@/ui/maproom/TransferMode";
+import { outpostName } from "@/game/yard/outpostLabels";
 import { formatSpan } from "@/ui/attack/EndAttackPanel";
 import { previewEndTakeover, type EndTakeoverPreviewOptions } from "@/ui/attack/endTakeoverPreview";
 import { devStats } from "../devDetails";
@@ -162,6 +165,8 @@ import { SceneName } from "../sceneName";
  * same ratio, so the two agree.
  */
 const ZOOM_STEP = 1.5;
+/** Move mode needs hexes wide enough for the plates: below this zoom it comes in to the usual one (beta 9 #7). */
+const MOVE_MIN_ZOOM = 0.72;
 
 /** How often the request queue is drained. Faster than this just burns budget. */
 const PUMP_INTERVAL_SECONDS = 0.25;
@@ -243,9 +248,11 @@ export class MapRoom2Scene implements Scene {
   private readonly store = new ZoneStore({
     // Each getarea call is timed for the open's summary (`openMarks.ts`).
     fetcher: (x, y, options) => timeArea(() => getArea(x, y, options)),
-    onZone: (zone, previous) => {
+    onZone: (zone, previous, live) => {
       this.renderer.applyZone(zone, previous);
       this.checkZoneMarks();
+      // The live map (beta 9): a pushed answer rings its changed cells and updates the open panel.
+      this.live?.zoneArrived(zone, previous, live === true);
     },
     onZoneRefreshed: (zone) => this.renderer.refreshZone(zone),
     // Zones the cache's cap forgot (off screen, fetched longest ago) go from the picture too.
@@ -268,6 +275,8 @@ export class MapRoom2Scene implements Scene {
 
   private context: SceneContext | null = null;
   private ui: MapRoomUi | null = null;
+  /** Move mode (beta 9 #7), made on first use. */
+  private transfer: TransferMode | null = null;
 
   /**
    * The tilted camera (`tilt.ts`, MR2 look plan step 4): the account's side
@@ -288,6 +297,8 @@ export class MapRoom2Scene implements Scene {
   /** How long standing the markers took last frame, in milliseconds (speed readout). */
   private markerMs = 0;
   private input: MapInput | null = null;
+  /** Map pin clustering (beta 9): plaques and crests when zoomed out. */
+  private cluster: ClusterLayer | null = null;
 
   /**
    * The current viewport size in CSS px. `SceneContext.width`/`height` are a
@@ -302,6 +313,13 @@ export class MapRoom2Scene implements Scene {
 
   private home: OffsetCell | null = null;
   private selected: OffsetCell | null = null;
+  /**
+   * Camps the player has a saved Repeat plan for, as the cell panel's Repeat
+   * answers said (smart moving, beta 9): only these may open Attack with
+   * nothing in range, to offer to move the plan's army in.
+   */
+  private readonly plannedCamps = new Set<string>();
+
   /** The attack window is up (`ui/attack/AttackWindow.ts`): Attack again opens no second one. */
   private attackWindowOpen = false;
   /** The cell under the pointer, for the hover card (#176). */
@@ -334,6 +352,10 @@ export class MapRoom2Scene implements Scene {
   private clockOffset = 0;
   /** Own outposts' build ends already asked about (`workerFinish.ts`). */
   private readonly workerFinish = new WorkerFinishWatch();
+  /** Own cells' next hatch (`nh`): asked again then, like a finished worker (live map, beta 9). */
+  private readonly hatchFinish = new WorkerFinishWatch(hatchFinishOf, 30);
+  /** The live map's connection and what it does (beta 9); null until the own yard says where. */
+  private live: LiveUpdates | null = null;
   /**
    * Where the map should open instead of the home cell: the target of the
    * attack just finished, or the outpost just taken over (`mapFocus.ts`).
@@ -432,6 +454,7 @@ export class MapRoom2Scene implements Scene {
     this.camera.resize(context.width, context.height);
     this.camera.attach(context.canvas);
     this.setTilt(this.tiltStrength);
+    this.cluster = this.makeClusterLayer(context.canvas);
 
     this.ui = new MapRoomUi(
       {
@@ -515,12 +538,12 @@ export class MapRoom2Scene implements Scene {
           monsters: this.ownSave !== null && outpostsOf(this.ownSave).length > 0,
           relocate: payload.b === CellType.OUTPOST,
         }),
-        onMoveMonsters: (_cell, payload) => this.openTransfer(payload.bid),
+        onMoveMonsters: (_cell, payload) => this.startMove(payload.bid, "out"),
         // The own yard's info card (beta 7, owner's design B).
         yardCard: {
           sizeOf: (id) => (this.ownSave ? housingSpace(id, academyLevel(this.ownSave.academy, id)) ?? 1 : 1),
           cellsFromHome: (cell) => (this.home ? cellDistance(this.home, cell) : null),
-          onBringMonsters: (_cell, payload) => this.bringMonsters(payload.bid),
+          onBringMonsters: (_cell, payload) => this.startMove(payload.bid, "in"),
         },
         onRelocate: (cell, payload) => this.openRelocate(cell, payload),
         onMessage: (payload) => void this.mail?.openCompose({ userid: payload.uid, name: payload.n }),
@@ -539,7 +562,7 @@ export class MapRoom2Scene implements Scene {
         allianceOf: (id) => this.renderer.allianceNamed(id),
         myAlliance: () => this.renderer.myAllianceId,
         // Repeat attack on a wild camp (#221).
-        autoAttackPlan: (baseid) => getAutoAttackPlan(baseid),
+        autoAttackPlan: (baseid) => this.repeatPlanFor(baseid),
         onRepeatAttack: (cell, baseid, answer) => this.openAutoAttack(cell, baseid, answer),
       },
       SceneName.MAP_ROOM_2,
@@ -597,10 +620,26 @@ export class MapRoom2Scene implements Scene {
       camera: this.camera,
       canvas: context.canvas,
       onHover: (cell) => this.handleHover(cell),
-      onSelect: (cell) => this.selectCell(cell),
-      onZoomToCell: (cell) => this.zoomToCell(cell),
+      // A tap on a plaque or crest zooms in to it (map pin clustering); not in move mode, which
+      // ticks yards by tapping them.
+      onTap: (point) => !this.transfer?.active && (this.cluster?.tapAt(point.x, point.y) ?? false),
+      // In move mode a tap on one of the player's yards ticks it (beta 9 #7).
+      onSelect: (cell) => {
+        if (this.transfer?.tapCell(cell.col, cell.row)) return;
+        this.selectCell(cell);
+      },
+      onZoomToCell: (cell) => {
+        if (this.transfer?.tapCell(cell.col, cell.row)) return;
+        this.zoomToCell(cell);
+      },
       onZoomStep: (direction) => this.zoomTo(this.camera.zoom * Math.pow(ZOOM_STEP, direction)),
-      onCancel: () => this.clearSelection(),
+      onCancel: () => {
+        if (this.transfer?.active) {
+          this.transfer.end();
+          return;
+        }
+        this.clearSelection();
+      },
       liftOf: this.renderer.liftAt,
       screenToFlat: () => this.tiltToFlat,
       // The "Preparing map" screen is up: the map waits (its pointer events stop at the screen).
@@ -617,7 +656,9 @@ export class MapRoom2Scene implements Scene {
         draws: () => this.tiltView?.draws ?? 0,
         stageDraws: () => this.stageDraws,
         resolution: () => this.tiltView?.textureResolution ?? 0,
-        markers: () => ({ count: this.renderer.markerCount, ms: this.markerMs }),
+        markers: () => ({ count: this.renderer.markerCount, ms: this.markerMs, drawn: this.renderer.drawnMarkerCount }),
+        // Map pin clustering's layer (its `stats`, `update` for timing).
+        cluster: this.cluster,
         // Markers upright (true) or warped flat with the ground (false, the "before").
         upright: (on: boolean) => {
           this.uprightMarkers = on;
@@ -636,6 +677,14 @@ export class MapRoom2Scene implements Scene {
       // The end panel's takeover offer, without finishing a real attack (#82).
       (globalThis as Record<string, unknown>)["__takeoverPreview"] = {
         endPanel: (options: EndTakeoverPreviewOptions) => previewEndTakeover(context.overlay.modal, options),
+      };
+      // The live map's test hooks (beta 9): open a cell, hold the rings for stills, read the link.
+      (globalThis as Record<string, unknown>)["__liveMap"] = {
+        select: (col: number, row: number, zoom?: number) => this.jumpTo({ col, row }, zoom),
+        view: (col: number, row: number, zoom?: number) => this.jumpTo({ col, row }, zoom, false),
+        freezeRings: (fraction: number | null) => this.renderer.rings.freeze(fraction),
+        rings: () => this.renderer.rings.active,
+        up: () => this.live?.up ?? false,
       };
     }
 
@@ -673,6 +722,8 @@ export class MapRoom2Scene implements Scene {
     this.markerPicturesTimer = null;
     this.input?.detach();
     this.input = null;
+    this.cluster?.destroy();
+    this.cluster = null;
     this.camera.setPointerMap(null);
     this.camera.detach();
     this.tiltView?.destroy();
@@ -688,7 +739,10 @@ export class MapRoom2Scene implements Scene {
     window.removeEventListener("online", this.handleOnline);
     window.removeEventListener("offline", this.handleOffline);
     if (import.meta.env.DEV) delete (globalThis as Record<string, unknown>)["__takeoverPreview"];
+    if (import.meta.env.DEV) delete (globalThis as Record<string, unknown>)["__liveMap"];
 
+    this.transfer?.destroy();
+    this.transfer = null;
     this.mail?.destroy();
     this.mail = null;
     this.ui?.destroy();
@@ -696,6 +750,8 @@ export class MapRoom2Scene implements Scene {
     this.renderer.destroy();
     // Nothing new is fetched for a map nobody is looking at.
     this.store.stop();
+    this.live?.stop();
+    this.live = null;
     this.context = null;
   }
 
@@ -704,6 +760,7 @@ export class MapRoom2Scene implements Scene {
     this.viewportHeight = height;
     // A resized canvas is blank until drawn.
     this.stageMustDraw = true;
+    this.cluster?.hudChanged();
     this.camera.resize(width, height);
     if (this.tilt) this.setTilt(this.tiltStrength);
   }
@@ -802,6 +859,86 @@ export class MapRoom2Scene implements Scene {
     );
   }
 
+  /** Map pin clustering's layer (beta 9), fed from the map's own camera, tilt, zones and HUD. */
+  private makeClusterLayer(canvas: HTMLCanvasElement): ClusterLayer {
+    const renderer = this.renderer;
+    const camera = this.camera;
+    // Filled in place every frame: the layer asks each frame and must not allocate.
+    const cam = { zoom: 0, x: 0, y: 0 };
+    const view = { width: 0, height: 0 };
+    return new ClusterLayer({
+      filter: renderer.markerFilter,
+      quietBorders: (keys) => renderer.setQuietBorders(keys),
+      groupBorders: (on) => renderer.setGroupBorders(on),
+      zones: () => this.store.loadedZoneRefs(),
+      getCell: (col, row) => this.store.getCell(col, row),
+      cellsVersion: () => renderer.cellsVersion,
+      viewer: () => renderer.viewerContext,
+      camera: () => {
+        cam.zoom = camera.zoom;
+        cam.x = camera.position.x;
+        cam.y = camera.position.y;
+        return cam;
+      },
+      projectionKey: () => this.tilt,
+      project: (wx, wy, out) => {
+        const fx = (wx - camera.position.x) * camera.zoom;
+        const fy = (wy - camera.position.y) * camera.zoom;
+        if (this.tilt) return this.tilt.toScreenInto(fx, fy, out);
+        out.x = fx;
+        out.y = fy;
+        return true;
+      },
+      viewport: () => {
+        view.width = this.viewportWidth;
+        view.height = this.viewportHeight;
+        return view;
+      },
+      obstacles: () => {
+        const box = canvas.getBoundingClientRect();
+        return (this.ui?.coverRects() ?? []).map((r) => ({
+          left: r.left - box.left,
+          top: r.top - box.top,
+          right: r.right - box.left,
+          bottom: r.bottom - box.top,
+        }));
+      },
+      zoomToFit: (box, insets) => this.zoomToFit(box, insets),
+      openCell: (col, row) => this.selectCell({ col, row }),
+      scaleAt: (y) => (this.tilt ? this.tilt.scaleAt(y) : 1),
+      squash: () => (this.tilt ? this.tilt.squash : 1),
+      canvas,
+    });
+  }
+
+  /**
+   * Zooms in so a box of map pixels fills the screen between the HUD's bars, at least a good step
+   * in and never past play zoom (a tap on a plaque), with the box in the middle of that space.
+   */
+  private zoomToFit(
+    box: { minX: number; minY: number; maxX: number; maxY: number },
+    insets: { top: number; bottom: number; left: number; right: number },
+  ): void {
+    const camera = this.camera;
+    const pad = mapRoomGrid.colStep;
+    const usableW = Math.max(100, this.viewportWidth - insets.left - insets.right);
+    const usableH = Math.max(100, this.viewportHeight - insets.top - insets.bottom);
+    // The tilt squeezes rows towards the top of the screen and widens them towards the bottom:
+    // fit with room to spare both ways (neon r2: a phone clipped hexes at the sides).
+    const squash = this.tilt ? this.tilt.squash * 0.8 : 1;
+    const widen = this.tilt ? 1.3 : 1;
+    const fit = Math.min(
+      usableW / ((box.maxX - box.minX + pad * 2) * widen),
+      usableH / ((box.maxY - box.minY + pad * 2) * squash),
+    );
+    camera.settle();
+    // The fit wins; a small step in at least, so a tap always moves.
+    camera.zoom = Math.min(DEFAULT_ZOOM, Math.max(fit, camera.zoom * 1.1), camera.maxZoom);
+    camera.centreOn({ x: (box.minX + box.maxX) / 2, y: (box.minY + box.maxY) / 2 });
+    camera.panByScreen((insets.left - insets.right) / 2, (insets.top - insets.bottom) / 2);
+    camera.dirty = true;
+  }
+
   /**
    * Stands the map's markers upright over the tilted picture, for the camera
    * as it is now. Re-placing happens only when the camera or the tilt moved
@@ -841,14 +978,19 @@ export class MapRoom2Scene implements Scene {
       if (this.ready) {
         this.store.ensureVisible(this.range);
         this.checkZoneMarks();
+        this.live?.viewChanged();
       }
       this.ui?.setViewport(this.range);
       this.ui?.setViewShape(this.tiltViewCells());
       this.ui?.setZoom(this.camera.zoom);
       // The card follows its cell as the map moves under a still pointer.
       this.showHoverCard();
+      // Move mode's plates follow their yards (beta 9 #7).
+      this.transfer?.place();
     }
 
+    // Before the map draws, so the markers a plaque or crest stands for are left out this frame.
+    if (this.cluster?.update()) this.stageMustDraw = true;
     this.renderer.draw(this.range, this.camera.zoom);
     if (this.framesMarked < 2) this.markFrames();
     if (this.tilt && this.tiltView && this.context) {
@@ -872,13 +1014,16 @@ export class MapRoom2Scene implements Scene {
       if (this.sincePump >= PUMP_INTERVAL_SECONDS) {
         this.sincePump = 0;
         void this.store.pump();
+        // The live map's re-asks of zones a push said changed (on screen, batched).
+        void this.store.pumpLive();
       }
 
       this.sinceStaleCheck += deltaSeconds;
       if (this.sinceStaleCheck >= STALE_CHECK_INTERVAL_SECONDS) {
         this.sinceStaleCheck = 0;
-        // Every minute; every 3 on the Low Quality setting.
-        this.store.refreshStale(mapRefreshSeconds(ZONE_STALE_SECONDS));
+        // The live map (beta 9, owner 25 Nov 2026): no timed re-asks while its connection is up;
+        // only while it is down, visible zones older than 4 minutes are asked again.
+        if (!this.live?.up) this.store.refreshStale(Math.max(DOWN_REFRESH_SECONDS, mapRefreshSeconds(ZONE_STALE_SECONDS)));
       }
     }
 
@@ -888,6 +1033,8 @@ export class MapRoom2Scene implements Scene {
       this.refreshUi();
       this.tickIncome();
       this.askFinishedWorkers();
+      // Shields, truces and camps' damage that ran out by now, without asking (live map).
+      this.store.expireDue(Date.now() / 1000 + this.clockOffset);
     }
 
     // Exponential moving average: one slow frame should show, but not dominate.
@@ -908,6 +1055,7 @@ export class MapRoom2Scene implements Scene {
       noteInfo("ownYard", primed ? "primed" : "fetched");
       const base = primed ?? (await timeSpan("own-yard", () => loadOwnYard({ screen: "map" })));
       this.ownSave = base;
+      this.startLive(base.chatservers?.[0]);
       // The alliance's extra reach (and prices) from this load, not the last yard visit.
       setCurrentAllianceBonuses(base.alliancedata);
       // The player's outpost names (beta 7) for the outpost buttons and the move picker.
@@ -1082,6 +1230,30 @@ export class MapRoom2Scene implements Scene {
       now,
     );
     for (const cell of due) this.store.invalidateCell(cell.col, cell.row);
+    // The next hatch on the home yard or an outpost (`nh`), so its army stays right (live map).
+    const own = outpostsOf(this.ownSave).map((outpost) => outpost.cell);
+    if (this.home) own.push(this.home);
+    for (const cell of this.hatchFinish.due(own, (col, row) => this.store.getCell(col, row), now)) {
+      this.store.invalidateCell(cell.col, cell.row);
+    }
+  }
+
+  /**
+   * The live map (beta 9): connects to the chat server's port with the game's own token, so
+   * cells change on screen within a second or two of the write, without timed re-asks.
+   */
+  private startLive(server: string | undefined): void {
+    if (!server || this.live || !this.context) return;
+    this.live = new LiveUpdates({
+      store: this.store,
+      rings: this.renderer.rings,
+      refreshSight: () => void this.sight.refresh(),
+      shownCell: () => this.ui?.shownCell ?? null,
+      updateShown: (payload) => this.ui?.updateCell(payload, true),
+      tierOf: (cell, payload) => ringTier(cell, payload, this.selected, (at) => reachTo(at, this.rangeSources).inRange),
+      token: getAuthToken,
+    });
+    this.live.start(chatSocketUrl(server, location.protocol === "https:"));
   }
 
   /** Once a second: the pool with the next whole tick of outpost income, when one passed (#207). */
@@ -1195,6 +1367,12 @@ export class MapRoom2Scene implements Scene {
   private handleHover(cell: OffsetCell | null): void {
     this.renderer.setHovered(cell);
     this.hovered = cell;
+    if (this.transfer?.active) {
+      // Move mode: a yard's whole army instead of the map's hover card.
+      this.ui?.hideHover();
+      this.transfer.hoverCell(cell);
+      return;
+    }
     this.showHoverCard();
   }
 
@@ -1206,6 +1384,10 @@ export class MapRoom2Scene implements Scene {
     const ui = this.ui;
     const cell = this.hovered;
     if (!ui) return;
+    if (this.transfer?.active) {
+      ui.hideHover();
+      return;
+    }
     const content =
       cell && this.canHover && !this.camera.isInteracting
         ? hoverContentFor(this.store.getCell(cell.col, cell.row), reachTo(cell, this.rangeSources))
@@ -1221,6 +1403,7 @@ export class MapRoom2Scene implements Scene {
 
   private selectCell(cell: OffsetCell): void {
     this.selected = cell;
+    this.cluster?.setSelected(cellKey(cell.col, cell.row));
     this.renderer.setSelected(cell);
     this.updateBookmarkTarget();
     this.ui?.showCell(cell, this.store.getCell(cell.col, cell.row));
@@ -1258,6 +1441,7 @@ export class MapRoom2Scene implements Scene {
 
   private clearSelection(): void {
     this.selected = null;
+    this.cluster?.setSelected(-1);
     this.renderer.setSelected(null);
     this.ui?.closeCell();
     this.updateBookmarkTarget();
@@ -1325,7 +1509,46 @@ export class MapRoom2Scene implements Scene {
   private attackRefusalFor(payload: MapCell | undefined): string | null {
     const cell = this.selected;
     if (!cell) return "No cell is selected.";
-    return attackRefusal(payload, this.rosterFor(cell), Date.now() / 1000);
+    return this.smartMoveGate(payload, attackRefusal(payload, this.rosterFor(cell), Date.now() / 1000));
+  }
+
+  /**
+   * Smart moving (beta 9): a camp whose yards in range hold nothing may still
+   * have its saved army moved in, so with the setting on and a saved plan for
+   * the camp (the cell panel's Repeat answer) Attack stays open there and
+   * asks first (`smartMoveFlow.ts`); with nothing to move, the refusal is said
+   * on the tap instead. Without a plan, Attack is refused as before (owner:
+   * "no plan, nothing new shows").
+   */
+  private smartMoveGate(payload: MapCell | undefined, refusal: string | null): string | null {
+    const open =
+      refusal === NOTHING_IN_RANGE &&
+      payload &&
+      "bid" in payload &&
+      targetKind(payload) === "wild" &&
+      this.plannedCamps.has(payload.bid) &&
+      smartMovingOn();
+    return open ? null : refusal;
+  }
+
+  /**
+   * The cell panel's Repeat answer for a camp (#221), noting whether a plan
+   * is saved for it; a plan newly known opens the panel's Attack gate again.
+   */
+  private async repeatPlanFor(baseid: string): Promise<AutoAttackPlanResponse> {
+    const answer = await getAutoAttackPlan(baseid);
+    const had = this.plannedCamps.has(baseid);
+    if (answer.plan) this.plannedCamps.add(baseid);
+    else this.plannedCamps.delete(baseid);
+    if (had !== this.plannedCamps.has(baseid)) {
+      // After the panel has taken the answer: its Attack gate is drawn again.
+      setTimeout(() => {
+        const cell = this.selected;
+        const payload = cell ? this.store.getCell(cell.col, cell.row) : undefined;
+        if (payload && "bid" in payload && payload.bid === baseid) this.ui?.updateCell(payload);
+      }, 0);
+    }
+    return answer;
   }
 
   /**
@@ -1340,7 +1563,7 @@ export class MapRoom2Scene implements Scene {
     payload: MapCell | undefined,
   ): { attack: AttackTarget | null; refusal: string | null } {
     const roster = this.rosterFor(cell);
-    const refusal = attackRefusal(payload, roster, Date.now() / 1000);
+    const refusal = this.smartMoveGate(payload, attackRefusal(payload, roster, Date.now() / 1000));
     const kind = payload ? targetKind(payload) : null;
     if (refusal || !payload || !kind || !("bid" in payload)) {
       return { attack: null, refusal: refusal ?? "This cell cannot be attacked." };
@@ -1385,17 +1608,44 @@ export class MapRoom2Scene implements Scene {
       return;
     }
 
-    // Flash's PopupAttackA first: what the player can bring, then Attack or
-    // Cancel (owner, 9 Nov 2026). One at a time, however often Attack is hit.
+    // One at a time, however often Attack is hit.
     if (this.attackWindowOpen) return;
     this.attackWindowOpen = true;
-    void confirmAttackWindow(context.overlay.modal, attack).then((go) => {
+    void this.attackFlow(attack, context).finally(() => {
       this.attackWindowOpen = false;
-      if (!go || this.context !== context) return;
-      return attackWithFriendWarning(attack, context.overlay.modal, () => {
-        setAttackTarget(attack);
-        context.goTo(SceneName.ATTACK);
-      });
+    });
+  }
+
+  /**
+   * Smart moving first (beta 9, owner 24 Nov 2026, `smartMoveFlow.ts`): on a
+   * camp with a saved Repeat army that the yards in range lack, "Bring saved
+   * army?" before anything else, whose Move & attack goes straight into the
+   * battle. Then Flash's PopupAttackA: what the player can bring, then Attack
+   * or Cancel (owner, 9 Nov 2026).
+   */
+  private async attackFlow(attack: AttackTarget, context: SceneContext): Promise<void> {
+    const modal = context.overlay.modal;
+    const smart = await smartMoveBeforeAttack({ modal, attack });
+    if (this.context !== context || smart.kind === "closed") return;
+    // The player picked another cell while the offer was on its way: this Attack is over.
+    const still = this.selected;
+    if (smart.kind === "window" && (!still || still.col !== attack.cell?.col || still.row !== attack.cell?.row)) return;
+    if (smart.kind === "moved") {
+      setAttackTarget(smart.target);
+      context.goTo(SceneName.ATTACK);
+      return;
+    }
+    // Nothing moved in and nothing in range to send (the gate let it through
+    // for smart moving): said here, as the button would have.
+    if (!hasAnythingToSend(attack.roster)) {
+      this.ui?.notices.show("attack", NOTHING_IN_RANGE, { level: "info", timeoutMs: 4_000 });
+      return;
+    }
+    const go = await confirmAttackWindow(modal, attack, { note: smart.note });
+    if (!go || this.context !== context) return;
+    await attackWithFriendWarning(attack, modal, () => {
+      setAttackTarget(attack);
+      context.goTo(SceneName.ATTACK);
     });
   }
 
@@ -1536,86 +1786,90 @@ export class MapRoom2Scene implements Scene {
 
   /* ── Moving between own yards (outposts WP7, #186) ──────────────────── */
 
-  /** The player's yards, main yard first, with where each is. */
-  private ownYards(): { choice: TransferChoice; cell: OffsetCell }[] {
+  /**
+   * Move mode (beta 9 #7, the owner's "B1 steel plates", 22 Nov 2026): from a
+   * yard card's "Move monsters from here" / "Bring monsters here", every one of
+   * the player's yards wears a plate and a tray docks at the bottom
+   * (`ui/maproom/TransferMode.ts`). Replaces the old Move Monsters dialog.
+   */
+  private startMove(anchor: string, mode: "out" | "in"): void {
     const save = this.ownSave;
-    if (!save) return [];
-    const yards: { choice: TransferChoice; cell: OffsetCell }[] = [];
-    if (this.home) {
-      yards.push({
-        choice: { baseid: String(save.baseid), label: MAIN_YARD_TITLE, main: true },
-        cell: this.home,
-      });
-    }
-    for (const outpost of outpostsOf(save)) {
-      yards.push({
-        choice: { baseid: outpost.baseid, label: namedOutpostTitle(outpost.baseid, outpost.cell), main: false },
-        cell: outpost.cell,
-      });
-    }
-    return yards;
-  }
-
-  /**
-   * One cell as the server has it now, fetched afresh rather than read from the
-   * zone cache: a transfer sends both yards' whole rosters, so they must be
-   * current (Flash waited for any pending zone request, `MapRoom.as:889-893`).
-   */
-  private async freshCell(cell: OffsetCell) {
-    const area = await getArea(zoneOrigin(cell.col), zoneOrigin(cell.row));
-    return cellAt(area, cell.col, cell.row);
-  }
-
-  /**
-   * "Bring monsters here" (the yard info card): the transfer dialog with this
-   * yard as the target, from the main yard when this is an outpost, else from
-   * the first outpost (one end must be an outpost, `transferRules.ts`).
-   */
-  private bringMonsters(to: string): void {
-    const yards = this.ownYards().map(({ choice }) => choice);
-    const target = yards.find((yard) => yard.baseid === to);
-    const from = yards.find((yard) => yard.baseid !== to && !(target?.main && yard.main));
-    if (!target || !from) {
-      this.ui?.notices.show("transfer", TRANSFER_TEXT.noOutposts, { level: "info", timeoutMs: 4_000 });
+    if (!save || outpostsOf(save).length === 0) {
+      this.ui?.notices.show("transfer", "You need an outpost to move monsters.", { level: "info", timeoutMs: 4_000 });
       return;
     }
-    this.openTransfer(from.baseid, to);
+    const context = this.context;
+    if (!context) return;
+    this.clearSelection();
+    this.ui?.hideHover();
+    // Plates need a hex wide enough to read: zoomed far out, come in to the usual zoom.
+    const anchorCell = anchor === String(save.baseid) ? this.home : outpostsOf(save).find((o) => o.baseid === anchor)?.cell;
+    if (anchorCell && this.camera.zoom < MOVE_MIN_ZOOM) this.jumpTo(anchorCell, MOVE_MIN_ZOOM, false);
+    this.transfer ??= new TransferMode({
+      layer: context.overlay.content,
+      sizeOf: (id) => (this.ownSave ? housingSpace(id, academyLevel(this.ownSave.academy, id)) ?? 1 : 1),
+      distance: (a, b) => cellDistance({ col: a.x, row: a.y }, { col: b.x, row: b.y }),
+      nameOf: (yard) => (yard.main ? MAIN_YARD_TITLE : outpostName(yard.baseid) || `${yard.x}, ${yard.y}`),
+      place: (yard) => this.placeOfYard(yard),
+      load: async () => {
+        const answer = await getOwnArmies();
+        return answer.yards ?? [];
+      },
+      send: async (pairs) => {
+        const answer = await transferBatch(pairs);
+        return { yards: answer.yards ?? [] };
+      },
+      onMoved: (baseids) => {
+        const cells = new Map<string, OffsetCell>();
+        if (this.home && this.ownSave) cells.set(String(this.ownSave.baseid), this.home);
+        if (this.ownSave) for (const outpost of outpostsOf(this.ownSave)) cells.set(outpost.baseid, outpost.cell);
+        for (const id of baseids) {
+          const cell = cells.get(id);
+          if (cell) this.store.invalidateCell(cell.col, cell.row);
+        }
+        void this.store.pump();
+      },
+      mark: (marks) =>
+        this.renderer.setMarks(marks ? marks.map((mark) => ({ cell: { col: mark.col, row: mark.row }, kind: mark.kind })) : null),
+      onEnd: () => {
+        this.renderer.setMarks(null);
+        this.showHoverCard();
+      },
+    });
+    void this.transfer.start(anchor, mode).then(() => {
+      if (anchorCell && this.transfer?.active) this.centreForMove(anchorCell);
+    });
   }
 
-  /** "Move monsters" from one of the player's yards, to `to` when given. */
-  private openTransfer(from: string, to?: string): void {
-    const save = this.ownSave;
-    const yards = this.ownYards();
-    if (!save || yards.length < 2) {
-      this.ui?.notices.show("transfer", TRANSFER_TEXT.noOutposts, { level: "info", timeoutMs: 4_000 });
+  /** Puts the yard a move started from in the middle of the map left between the top bar and the tray. */
+  private centreForMove(cell: OffsetCell): void {
+    const ui = this.ui;
+    const trayTop = this.transfer?.trayTop();
+    if (!ui || trayTop === null || trayTop === undefined) return;
+    const now = this.worldToCanvas(this.cellPoint(cell));
+    const dx = this.viewportWidth / 2 - now.x;
+    const dy = (ui.hudBottom() + trayTop) / 2 - now.y;
+    if (Math.abs(dx) < 4 && Math.abs(dy) < 4) return;
+    this.camera.settle();
+    if (this.tilt) {
+      const from = this.tilt.toFlat(now);
+      const to = this.tilt.toFlat({ x: now.x + dx, y: now.y + dy });
+      this.camera.panByScreen(to.x - from.x, to.y - from.y);
       return;
     }
-    const cells = new Map(yards.map(({ choice, cell }) => [choice.baseid, cell]));
-    this.ui?.openDialog(
-      new TransferDialog({
-        yards: yards.map(({ choice }) => choice),
-        from,
-        ...(to === undefined ? {} : { to }),
-        load: async (baseid): Promise<TransferYard> => {
-          const cell = cells.get(baseid);
-          const payload = cell ? await this.freshCell(cell) : undefined;
-          return { baseid, housed: housedOf(payload), space: spaceOf(payload) };
-        },
-        sizeOf: (id) => housingSpace(id, academyLevel(save.academy, id)) ?? 1,
-        send: (fromId, toId, moved) => transferMonsters(fromId, toId, moved),
-        onMoved: (fromId, toId, message) => {
-          for (const id of [fromId, toId]) {
-            const cell = cells.get(id);
-            if (cell) this.store.invalidateCell(cell.col, cell.row);
-          }
-          void this.store.pump();
-          // A fresh line for each move (#191): the same words written over the
-          // last move's line change nothing on screen and are not announced.
-          this.ui?.notices.clear("transfer");
-          this.ui?.notices.show("transfer", message, { level: "info", timeoutMs: 8_000 });
-        },
-      }),
-    );
+    this.camera.panByScreen(dx, dy);
+  }
+
+  /** Where a yard is drawn on screen now and how wide its hex is, or null when out of sight. */
+  private placeOfYard(yard: ArmyYard): { x: number; y: number; hexWidth: number } | null {
+    const cell = { col: yard.x, row: yard.y };
+    const point = this.worldToCanvas(this.cellPoint(cell));
+    const scale = this.camera.zoom * (this.tilt ? this.tilt.scaleAt(point.y) : 1);
+    const hexWidth = mapRoomGrid.cellWidth * scale;
+    const margin = hexWidth;
+    if (point.x < -margin || point.y < -margin || point.x > this.viewportWidth + margin || point.y > this.viewportHeight + margin)
+      return null;
+    return { x: point.x, y: point.y, hexWidth };
   }
 
   /**
@@ -1699,7 +1953,12 @@ export class MapRoom2Scene implements Scene {
   private readonly handleFocus = (): void => {
     if (document.visibilityState === "hidden") return;
     this.store.resume();
-    this.store.refreshVisible();
+    // Live (beta 9): a version check asks only what changed; down, everything visible as before.
+    if (this.live?.up) this.live.check();
+    else {
+      this.live?.check();
+      this.store.refreshVisible();
+    }
     void this.store.pump();
   };
 
@@ -1711,6 +1970,7 @@ export class MapRoom2Scene implements Scene {
 
   private readonly handleOnline = (): void => {
     this.ui?.notices.clear("network");
+    this.live?.check();
     this.store.resume();
     void this.store.pump();
   };

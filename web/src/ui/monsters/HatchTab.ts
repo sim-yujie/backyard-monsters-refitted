@@ -1,15 +1,22 @@
 import {
   HATCHERY_KEYS,
+  HatcheryKey,
   hatcheryActions,
+  hatcheryApi,
+  hccOutposts,
   type HatcheryActions,
+  type HccOutpostRow,
+  type HccPresetSendReport,
+  type HccPresetStack,
 } from "@/api/yardHatchery";
-import type { YardRefusal } from "@/api/yard";
+import { yardApi } from "@/api/yard";
+import type { BaseLoadResponse } from "@/api/types";
 import { monsterStat } from "@/game/combat/rules";
 import {
   activeOverdrive,
   fillLimits,
   HATCHERY_TYPE,
-  HCC_STACKS,
+  hccLimits,
   hatcheryNumbers,
   hatchMonsters,
   housedSpace,
@@ -41,7 +48,9 @@ import { buttonUrl } from "@/game/yard/buildButtonArt";
 import { ArtState, resolveArt } from "@/game/yard/buildingArt";
 import { maxLevel, quantityOf, townHallLevel, type YardKind } from "@/game/yard/buildingCosts";
 import { NEED_MORE_SILOS, overCap } from "@/game/yard/storage";
-import { YardChangeReason, type YardActionResult, type YardChange } from "@/game/yard/YardStore";
+import { YardChangeReason, YardStore, type YardActionResult, type YardChange } from "@/game/yard/YardStore";
+import { outpostTarget, withCell } from "@/game/yard/ownYards";
+import { HccBench } from "./HccBench";
 import { formatAmount, formatCountdown, formatShortPrice } from "@/ui/format";
 import { holdPress } from "@/ui/holdPress";
 import { QuantityStepper } from "@/ui/QuantityStepper";
@@ -65,6 +74,7 @@ import {
   type MonstersTabContext,
 } from "./monstersTab";
 import { weekendChip } from "@/ui/events/weekendUi";
+import { refusalText } from "@/ui/dom";
 
 /** Hatch Rush's "−30%" chip after a hatch time, or nothing. */
 const hatchRushChip = (): (Node | string)[] => {
@@ -300,6 +310,24 @@ export class HatchTab implements MonstersTab {
   private settling: number | null = null;
   /** When the player last scrolled the box by hand (`performance.now()`), so a late check leaves it be. */
   private scrolledAt = Number.NEGATIVE_INFINITY;
+  /**
+   * The HCC's levels 2 and 3 (beta 9, `HccBench`): the yard switcher, the
+   * housing strip and the presets, on a surface yard with a finished HCC.
+   */
+  private bench: HccBench | null = null;
+  /**
+   * An outpost run from the main yard's level 3 HCC: its own store (its
+   * buildings and queue; the pool is the main yard's) and actions that say
+   * `remote`. Null while the tab shows the yard the player is in.
+   */
+  private remote: { baseid: string; store: YardStore; actions: HatcheryActions; unsubscribe: () => void } | null = null;
+  /** An outpost being opened from home: its `baseid`, until its state comes. */
+  private opening: string | null = null;
+  /** The level 3 HCC's list of outposts, once asked for; null before. */
+  private outpostRows: readonly HccOutpostRow[] | null = null;
+  private askingOutposts = false;
+  /** The monsters as last drawn, for the bench's "can it hatch now". */
+  private monsterRows: readonly HatchMonster[] = [];
 
   constructor(context: MonstersTabContext, actions?: HatcheryActions) {
     this.context = context;
@@ -421,8 +449,14 @@ export class HatchTab implements MonstersTab {
     this.element.append(this.tabsRow, this.scroll, this.status);
   }
 
-  private get store() {
-    return this.context.binding.store;
+  /** The store the tab shows: the yard's own, or an outpost run from home (level 3). */
+  private get store(): YardStore {
+    return this.remote?.store ?? this.context.binding.store;
+  }
+
+  /** The hatchery requests for {@link store}. */
+  private get act(): HatcheryActions {
+    return this.remote?.actions ?? this.actions;
   }
 
   /** The Inferno yard's Incubators hatch the Inferno monsters (WP 2.4). */
@@ -479,6 +513,7 @@ export class HatchTab implements MonstersTab {
   }
 
   tick(): void {
+    this.remote?.store.tick();
     const now = this.store.now();
     for (const clock of this.clocks) {
       clock.node.textContent = `${duration(clock.endsAt - now)}${clock.suffix ?? ""}`;
@@ -515,10 +550,128 @@ export class HatchTab implements MonstersTab {
     this.statusTimer = null;
     this.taking = null;
     this.markYard(null);
+    this.bench?.destroy();
+    this.bench = null;
+    this.dropRemote();
     this.stepper.destroy();
     for (const button of this.shiny.values()) button.destroy();
     this.shiny.clear();
     this.element.remove();
+  }
+
+  /* ── The HCC's levels 2 and 3 (beta 9) ─────────────────────────────── */
+
+  /** The bench on a surface yard with a finished HCC; off everywhere else (the Inferno is unchanged). */
+  private drawBench(yard: HatchYard): void {
+    if (!yard.hcc || this.store.kind === "inferno") {
+      this.bench?.detach();
+      return;
+    }
+    this.bench ??= new HccBench(this.element, this.scroll, {
+      save: () => this.store.save,
+      homeSave: () => this.context.binding.store.save,
+      homeYard: () => readHatchYard(this.context.binding.store.save, this.context.binding.store.now()),
+      kind: () => this.store.kind,
+      remote: () => this.remote?.baseid ?? null,
+      goRemote: (baseid) => void this.goRemote(baseid),
+      outposts: () => this.outpostRows,
+      refreshOutposts: () => void this.askOutposts(true),
+      chosen: () => this.selected,
+      ready: (id) => this.monsterRows.some((row) => row.monster.id === id && row.state.kind === "ready"),
+      choose: (id) => this.select(id),
+      savePreset: (slot, stacks) => this.savePreset(slot, stacks),
+      sendPreset: (slot) => this.sendPreset(slot),
+      redraw: () => this.render(),
+    });
+    // The main yard's level 3 runs its outposts: the switcher needs to know which have an HCC.
+    if (this.outpostRows === null && this.context.binding.store.kind === "main" && (readHatchYard(this.context.binding.store.save, 0).hcc?.level ?? 0) >= 3) {
+      void this.askOutposts(false);
+    }
+    this.bench.afterDraw(yard);
+  }
+
+  /** The level 3 HCC's outpost list, through the main yard's store (once, or again when `again`). */
+  private async askOutposts(again: boolean): Promise<void> {
+    if (this.askingOutposts || (!again && this.outpostRows !== null)) return;
+    this.askingOutposts = true;
+    const home = this.context.binding.store;
+    const result = await home.run({ key: HatcheryKey.OUTPOSTS, send: () => hccOutposts() });
+    this.askingOutposts = false;
+    this.outpostRows = result.ok ? result.report.yards : (this.outpostRows ?? []);
+    this.render();
+  }
+
+  /**
+   * Runs an outpost from home (level 3), or with null comes back to the main
+   * yard. The outpost's state comes from the server first; the tab then shows
+   * its hatcheries and queue, and every request names it with `remote`.
+   */
+  private async goRemote(baseid: string | null): Promise<void> {
+    if (baseid === null) {
+      this.dropRemote();
+      this.render();
+      return;
+    }
+    if (this.remote?.baseid === baseid || this.opening === baseid) return;
+    const home = this.context.binding.store;
+    this.opening = baseid;
+    let state: Awaited<ReturnType<typeof yardApi.state>> | null = null;
+    try {
+      state = await yardApi.state(baseid);
+    } catch {
+      state = null;
+    }
+    if (this.opening !== baseid) return;
+    this.opening = null;
+    if (!state || state.error !== 0) {
+      this.setStatus({ tone: "bad", content: ["That outpost could not be opened. Try again."] });
+      return;
+    }
+    const save = { ...home.save, ...state, type: "outpost", baseid } as unknown as BaseLoadResponse;
+    const store = new YardStore({ save, target: withCell(outpostTarget(baseid), home.save) });
+    const unsubscribe = store.subscribe((change) => {
+      // The pool is the main yard's: what a request here spent shows there too.
+      if (change.reason === YardChangeReason.ACTION) {
+        const now = store.save;
+        home.mergeWrite({
+          ...(now.resources ? { resources: now.resources } : {}),
+          ...(typeof now.credits === "number" ? { credits: now.credits } : {}),
+          ...(now.hccpresets ? { hccpresets: now.hccpresets } : {}),
+        });
+      }
+      this.update(change);
+    });
+    this.dropRemote();
+    this.remote = { baseid, store, actions: hatcheryActions(store, hatcheryApi, { remote: true }), unsubscribe };
+    this.target = "hcc";
+    // The outpost's name stands in the strip while it is run from home (neon round 2: a floating note covered the switcher).
+    this.setStatus(null);
+    this.render();
+  }
+
+  private dropRemote(): void {
+    this.opening = null;
+    if (!this.remote) return;
+    this.remote.unsubscribe();
+    this.remote.store.destroy();
+    this.remote = null;
+  }
+
+  /** Saves a preset; a refusal is said on the tab. */
+  private async savePreset(slot: number, stacks: readonly HccPresetStack[]): Promise<boolean> {
+    const result = await this.act.presetSave(slot, stacks);
+    if (!result.ok) this.setStatus({ tone: "bad", content: [refusalText(result.refusal)] });
+    return result.ok;
+  }
+
+  /** Sends a preset; a refusal is said on the tab, a send that did something is drawn by the bench. */
+  private async sendPreset(slot: number): Promise<HccPresetSendReport | null> {
+    const result = await this.act.presetSend(slot);
+    if (!result.ok) {
+      this.setStatus({ tone: "bad", content: [refusalText(result.refusal)] });
+      return null;
+    }
+    return result.report;
   }
 
   /* ── Drawing ────────────────────────────────────────────────────────── */
@@ -605,6 +758,7 @@ export class HatchTab implements MonstersTab {
     }
 
     const monsters = hatchMonsters(store.save, this.realm);
+    this.monsterRows = monsters;
     if (!this.selected || !monsters.some((row) => row.monster.id === this.selected)) {
       this.selected =
         monsters.find((row) => row.state.kind === "ready")?.monster.id ?? monsters[0]?.monster.id ?? null;
@@ -622,6 +776,7 @@ export class HatchTab implements MonstersTab {
     }
     this.drawCount(document.activeElement !== this.stepper.input);
     this.markYard(yard.hcc || yard.hatcheries.length === 0 ? null : this.target);
+    this.drawBench(yard);
   }
 
   /**
@@ -968,7 +1123,7 @@ export class HatchTab implements MonstersTab {
     slots.setAttribute("role", "group");
     slots.setAttribute("aria-label", "Waiting");
     yard.shared.forEach((stack, at) => slots.append(this.stackSlot("hcc", stack, at + 1, preview)));
-    let free = HCC_STACKS - yard.shared.length;
+    let free = hccLimits(yard.hcc?.level ?? 1).stacks - yard.shared.length;
     for (const count of preview?.fresh ?? []) {
       if (free <= 0) break;
       slots.append(previewSlot(preview!.monster, count));
@@ -1024,13 +1179,27 @@ export class HatchTab implements MonstersTab {
     if (!monster) {
       const starting = preview?.starts.get(hatchery.id) ?? null;
       if (starting) {
+        // Built like a hatching card (picture and words in `__body`), so the
+        // HCC row stacks "Starts now" under the picture as it does the time;
+        // straight on the card it sat beside the picture and ran past the
+        // tile (owner, 23 Nov 2026).
         card.classList.add("hatch-now--preview");
         const entry = monsterEntry(starting);
-        if (entry) card.append(monsterPicture(entry, "small", "hatch-now__picture"));
+        const body = document.createElement("span");
+        body.className = "hatch-now__body";
+        if (entry) body.append(monsterPicture(entry, "small", "hatch-now__picture"));
+        const words = document.createElement("span");
+        words.className = "hatch-now__words";
         const text = document.createElement("span");
         text.className = "hatch-now__state";
-        text.textContent = "Starts now";
-        card.append(" ", text);
+        // "Starts now" is wider than a tile on the HCC's row (85 px of text in a
+        // 52-71 px tile on an iPad or phone): that row says "Now", as it says "Idle".
+        // Everywhere else the words are as before.
+        if (compact) stateWords(text, STARTING_TEXT);
+        else text.textContent = STARTING_TEXT[0];
+        words.append(text);
+        body.append(words);
+        card.append(" ", body);
       } else if (compact && state === "idle") {
         // Just its number on the HCC's row (owner, 15 Nov 2026): an idle card says nothing.
         card.title = `${where}: nothing hatching`;
@@ -1768,7 +1937,7 @@ export class HatchTab implements MonstersTab {
       });
       return;
     }
-    const result = await this.actions.add(target, monster, count);
+    const result = await this.act.add(target, monster, count);
     // A full add says nothing: the queue already shows the new monsters (owner,
     // 19 Nov: the "Added 2 Pokeys" pill covered the hatcheries). Only a short add
     // still says how many went in and why the rest did not.
@@ -1787,7 +1956,7 @@ export class HatchTab implements MonstersTab {
   }
 
   private async runRemove(target: HatchTarget, slot: number, count: number | "all"): Promise<void> {
-    const result = await this.actions.remove(target, slot, count);
+    const result = await this.act.remove(target, slot, count);
     this.report(result, (report) => [
       `${slot === 0 ? "Cancelled" : "Took out"} ${formatAmount(report.removed)} ${plural(nameOf(report.monster), report.removed)}`,
       ...(report.refund.r4 > 0 ? [": ", resourceAmount("r4", report.refund.r4), " back."] : ["."]),
@@ -1858,7 +2027,7 @@ export class HatchTab implements MonstersTab {
   }
 
   private async runClear(target: HatchTarget): Promise<void> {
-    const result = await this.actions.clear(target);
+    const result = await this.act.clear(target);
     this.report(result, (report) => {
       const taken = Object.values(report.removed).reduce((total, n) => total + n, 0);
       return [
@@ -1871,7 +2040,7 @@ export class HatchTab implements MonstersTab {
   private async runFinish(): Promise<void> {
     const target = this.target;
     if (target === null) return;
-    const result = await this.actions.finish(target);
+    const result = await this.act.finish(target);
     this.report(result, (report) => {
       const housed = Object.entries(report.housed)
         .map(([id, n]) => `${formatAmount(n)} ${plural(nameOf(id), n)}`)
@@ -1886,7 +2055,7 @@ export class HatchTab implements MonstersTab {
 
   private async runOverdrive(item: OverdriveItem): Promise<void> {
     const power = overdrivesOf(this.realm).find((one) => one.item === item)?.power ?? 0;
-    const result = await this.actions.overdrive(item);
+    const result = await this.act.overdrive(item);
     this.report(result, () => [
       `Overdrive on: every ${this.words.hatchery.toLowerCase()} works ${power} times as fast for an hour.`,
     ]);
@@ -1958,6 +2127,8 @@ const BUSY_TEXT: Partial<Record<HatcheryView["state"], StateWords>> = {
   building: ["Being built", "Building"],
 };
 const STALLED_INFERNO: StateWords = ["Needs room", "Full"];
+/** An idle hatchery that takes the chosen batch at once (the dashed card). */
+const STARTING_TEXT: StateWords = ["Starts now", "Now"];
 
 /** A card's state words: the long ones, and a phone's short ones beside them (hatch.css). */
 const stateWords = (node: HTMLElement, words: StateWords | undefined): void => {
@@ -2130,7 +2301,3 @@ export const lineSentence = (
   }
 };
 
-const refusalText = (refusal: YardRefusal): string =>
-  refusal.reason === "network"
-    ? "Could not reach the server. Try again."
-    : refusal.message || "That did not work.";

@@ -61,6 +61,8 @@ export const PROFILES: readonly Profile[] = [
   profile("ipad-side-bars", "iPad on its side, Safari bars", 1180, 690, ipad),
   profile("ipad-side-short", "iPad on its side, short", 1024, 560, ipad),
   profile("ipad-upright", "iPad upright", 820, 1180, ipad),
+  // A 9.7-10.2 inch iPad upright: the Monsters tabs slid out of sight here (beta 9).
+  profile("ipad-small-upright", "Small iPad upright", 768, 1024, ipad),
   profile("ipad-split", "iPad Split View", 694, 768, ipad),
   profile("ipad-pro-side", "iPad Pro 12.9 on its side", 1366, 1024, ipad),
   // Odd sizes: the player's screenshot was 2000x1161 (about 1000x580 at 2x).

@@ -41,6 +41,8 @@ const mapOwnerState = (user: User, userSave: Save) => ({
   buildingresources: userSave.buildingresources,
   rewards: userSave.rewards,
   homebase: userSave.homebase,
+  // The HCC's presets (beta 9): the owner's alone, from the main row in every yard.
+  ...(userSave.hccpresets != null && { hccpresets: userSave.hccpresets }),
 });
 
 /**

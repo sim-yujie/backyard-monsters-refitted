@@ -3,6 +3,7 @@ import { BETA_5 } from "./beta5";
 import { BETA_6 } from "./beta6";
 import { BETA_7 } from "./beta7";
 import { BETA_8 } from "./beta8";
+import { BETA_9 } from "./beta9";
 import type { ChangelogRelease } from "./types";
 
 export type { ChangelogCard, ChangelogRelease } from "./types";
@@ -13,7 +14,7 @@ export type { ChangelogCard, ChangelogRelease } from "./types";
  * web/public/whats-new/, and add it at the top of this list. The first entry
  * is the one that pops up once for every player after the update.
  */
-export const CHANGELOG: readonly ChangelogRelease[] = [BETA_8, BETA_7, BETA_6, BETA_5, BETA_4];
+export const CHANGELOG: readonly ChangelogRelease[] = [BETA_9, BETA_8, BETA_7, BETA_6, BETA_5, BETA_4];
 
 /** The newest release, the one that pops up. */
 export const LATEST_RELEASE: ChangelogRelease | undefined = CHANGELOG[0];

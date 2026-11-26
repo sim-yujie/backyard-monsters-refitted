@@ -5,6 +5,7 @@ import { reportContext, type ReportContext } from "@/game/bugReport/reportContex
 import { captureScreen, PictureError, preparePicture } from "@/game/bugReport/screenCapture";
 import { Popup } from "@/ui/Popup";
 import "./bug-report.css";
+import { el } from "@/ui/dom";
 
 /**
  * The "Report a bug" form, from the Account menu (signed in) or the login
@@ -37,13 +38,6 @@ export interface BugReportOptions {
   readonly picture?: (file: File) => Promise<string>;
   readonly onClose?: () => void;
 }
-
-const el = <K extends keyof HTMLElementTagNameMap>(tag: K, className: string, text?: string): HTMLElementTagNameMap[K] => {
-  const element = document.createElement(tag);
-  element.className = className;
-  if (text !== undefined) element.textContent = text;
-  return element;
-};
 
 const button = (className: string, text: string): HTMLButtonElement => {
   const element = el("button", `btn ${className}`, text);

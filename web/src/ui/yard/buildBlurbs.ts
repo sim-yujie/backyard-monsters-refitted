@@ -67,6 +67,8 @@ export const INFERNO_BUILD_BLURBS: Readonly<Record<number, string>> = {
   21: "Long-range tower great for picking off monsters one by one.",
   24: "Invisible to the enemy until it is too late: it deals large damage to a small area when a monster steps on it.",
   26: "Monsters need an education too! Your Inferno monsters learn here how to thicken their skins and raise more hell.",
+  // Flash's Inferno never offered it (owner, 21 Nov 2026, beta 9): the Infernal Monster Lab.
+  116: "Research secret abilities for your Inferno monsters.",
   128: "Provides your monsters with a place to heal and hang out in between battles.",
   129: "Creates an earthquake that does damage to all monsters in a certain area.",
   130: "Short-range tower with exploding shells that do splash damage.",

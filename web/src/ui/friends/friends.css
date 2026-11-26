@@ -292,6 +292,39 @@
   color: var(--colour-text-muted);
 }
 
+/* Last seen's line (beta 9): as tall as a pill on every row, with room
+   above the buttons, and a thin rule after the level (neon, 26 Nov). */
+.friends-row__meta:has(> .seen) {
+  min-height: 24px;
+  margin-bottom: 4px;
+}
+
+/* A friend in another world as well: the world wraps under the line rather
+   than being cut off on a narrow row (a phone on its side). */
+.friends-row__meta:has(> .seen):has(> .friends-row__world) {
+  flex-wrap: wrap;
+}
+
+.friends-row__divider {
+  flex: none;
+  width: 1px;
+  height: 11px;
+  /* 8px each side rather than the line's 12px, so "Level 40 | 1mo+" fits a phone on its side. */
+  margin-inline: -4px;
+  background: #607285;
+}
+
+:root[data-skin="flash"] .friends-row__divider {
+  background: #b59f7e;
+}
+
+/* Desktop and iPad: "Level 40" and last seen at 13px (neon, 26 Nov). */
+@media (min-width: 621px) and (min-height: 501px) {
+  .friends-row__meta {
+    font-size: var(--text-sm);
+  }
+}
+
 /* A friend in another Map Room 2 world (beta 7): "[map] World 3". */
 .friends-row__world {
   display: inline-flex;

@@ -8,6 +8,7 @@ import "@/ui/styles/building-panel.css";
 import "@/ui/styles/attack.css";
 import "@/ui/styles/monsters.css";
 import "@/ui/styles/hatch.css";
+import "@/ui/styles/hcc-levels.css";
 import "@/ui/styles/harvest.css";
 import "@/ui/styles/repair.css";
 import "@/ui/styles/recycle.css";
@@ -16,11 +17,13 @@ import "@/ui/styles/moveyards.css";
 import "@/ui/styles/skin.css";
 
 import { App } from "@/app/App";
+import { preloadGameScenes } from "@/app/gameLoader";
+import { installChunkErrorReload } from "@/app/chunkReload";
 import { installErrorLog } from "@/game/bugReport/errorLog";
 import { installErrorReporter, reportCaughtError } from "@/game/bugReport/errorReporter";
 import { GraphicsOffError } from "@/app/graphicsOff";
 import { showGraphicsOffNotice } from "@/ui/GraphicsOffNotice";
-import { UpdateCheck, fetchLivePage, runningBundleName } from "@/app/updateCheck";
+import { UpdateCheck, bundleNameIn, fetchLivePage, runningBundleName } from "@/app/updateCheck";
 import { UpdatePrompt } from "@/ui/UpdatePrompt";
 import { onNewVersionRefusal } from "@/api/rulesStamp";
 import { applySkin } from "@/ui/skin";
@@ -33,6 +36,12 @@ import { bootSafeMode } from "@/game/safeMode";
 // owner's dashboard's copy of uncaught errors (the Privacy Policy says so).
 installErrorLog();
 installErrorReporter();
+
+// The game past the sign-in screen is a script piece of its own (beta 9 speed
+// work): its download starts now, beside the boot screen's last pieces, so the
+// sign-in screen no longer waits for it and it is in hand by the time the
+// player has signed in or a stored session has been checked (`gameLoader.ts`).
+preloadGameScenes();
 
 // Quality, before anything asks for it (patch 7.11): `?quality=low` in the
 // address is the player's way out of a game that closes on their phone; then
@@ -74,6 +83,12 @@ void app.start().catch((error: unknown) => {
 const updatePrompt = new UpdatePrompt(host);
 onNewVersionRefusal(() => updatePrompt.show("attack"));
 const running = runningBundleName();
+// A tab older than the live release that asks for a piece the release no
+// longer has reloads once, onto the new release (`chunkReload.ts`).
+installChunkErrorReload({
+  running,
+  liveBundle: async () => bundleNameIn(await fetchLivePage()),
+});
 if (running) {
   new UpdateCheck({ running, fetchPage: fetchLivePage, onNewVersion: () => updatePrompt.show() }).start();
 }
@@ -100,9 +115,36 @@ if (import.meta.env.DEV || import.meta.env.VITE_LAYOUT_CHECK === "1") {
       return modal ? previewAutoAttackConfirm(modal, state) : null;
     };
   });
+  // Smart moving's sheet and the Attack window's "can't gather" note (beta 9).
+  void import("@/ui/attack/smartMovePreview").then(({ previewSmartMove }) => {
+    (globalThis as Record<string, unknown>)["__smartMove"] = (state?: Parameters<typeof previewSmartMove>[1]) => {
+      const modal = document.querySelector<HTMLElement>(".overlay__layer--modal");
+      return modal ? previewSmartMove(modal, state) : null;
+    };
+  });
+  // The Baiter window's friend tabs and a friend's test army (beta 9 #4), at their busiest.
+  void import("@/ui/yard/baiterFriendsPreview").then(({ previewBaiterWindow, previewFriendTest }) => {
+    const modal = () => document.querySelector<HTMLElement>(".overlay__layer--modal");
+    (globalThis as Record<string, unknown>)["__baiterWindow"] = (view?: Parameters<typeof previewBaiterWindow>[1]) => {
+      const layer = modal();
+      return layer ? previewBaiterWindow(layer, view) : null;
+    };
+    (globalThis as Record<string, unknown>)["__baiterFriendTest"] = () => {
+      const layer = modal();
+      return layer ? previewFriendTest(layer) : null;
+    };
+  });
+  // The world map's move tray (beta 9 #7), Bring to or Move from, with a fixed busy empire.
+  void import("@/ui/maproom/transferPreview").then(({ previewTransferMode }) => {
+    (globalThis as Record<string, unknown>)["__transferPreview"] = (state?: "in" | "out") => {
+      const layer = document.querySelector<HTMLElement>(".overlay__layer:not(.overlay__layer--modal)");
+      return layer ? previewTransferMode(layer, state) : null;
+    };
+  });
   // The attack screen's dock (owner, 18 Nov 2026): the real attack scene on the own yard.
   void import("@/game/attack/attackDockPreview").then(({ previewAttackDock }) => {
-    (globalThis as Record<string, unknown>)["__attackDock"] = () => previewAttackDock((scene) => app.goTo(scene));
+    (globalThis as Record<string, unknown>)["__attackDock"] = (kind?: "attack" | "baiter") =>
+      previewAttackDock((scene) => app.goTo(scene), kind);
   });
 }
 

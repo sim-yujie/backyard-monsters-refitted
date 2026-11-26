@@ -1,4 +1,5 @@
 import type { PrepareState } from "@/game/maproom/prepareProgress";
+import { el } from "@/ui/dom";
 
 /**
  * Map Room 2's "Preparing map" loading screen (owner chose design A on the Review Desk, 8 Nov 2026;
@@ -20,13 +21,6 @@ export const HOLD_MS = 600;
 
 /** The painted map picture on the card (reused from the What's new pop-up, beta 6; no new art). */
 export const LOADING_ART_URL = `${import.meta.env.BASE_URL}whats-new/beta6-map.webp`;
-
-const el = <K extends keyof HTMLElementTagNameMap>(tag: K, className: string, text?: string): HTMLElementTagNameMap[K] => {
-  const element = document.createElement(tag);
-  element.className = className;
-  if (text !== undefined) element.textContent = text;
-  return element;
-};
 
 export class PreparingMap {
   readonly element: HTMLDivElement;

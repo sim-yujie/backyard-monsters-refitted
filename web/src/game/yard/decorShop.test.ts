@@ -27,7 +27,7 @@ describe("Flash's Decorations sub-tabs", () => {
     const flash = flashDecorations();
     const all = DECOR_KINDS.flatMap((kind) => kind.types);
     expect(new Set(all).size).toBe(all.length);
-    expect(all).toHaveLength(84 + 6);
+    expect(all).toHaveLength(84 + 32);
     expect(flash.size).toBe(84);
     // This project's six autumn ones (owner, 10 Nov 2026): Plants and Good.
     expect(DECOR_KINDS[1]?.types.slice(0, 3)).toEqual([201, 205, 206]);
@@ -41,10 +41,10 @@ describe("Flash's Decorations sub-tabs", () => {
     }
   });
 
-  it("sell 14 Evil, 14 + 3 Plants, 16 + 3 Good, 23 Flags and 6 Premium, the shop's order sub-tab by sub-tab", () => {
+  it("sell 14 Evil, 14 + 13 Plants, 16 + 9 Good, 23 + 1 Flags and 6 + 9 Premium, the shop's order sub-tab by sub-tab", () => {
     const sold = new Set(DECORATIONS_FOR_SALE.map(([type]) => type));
     const counts = DECOR_KINDS.map((kind) => kind.types.filter((type) => sold.has(type)).length);
-    expect(counts).toEqual([14, 17, 19, 23, 6]);
+    expect(counts).toEqual([14, 27, 25, 24, 15]);
     expect(DECOR_KINDS.flatMap((kind) => kind.types.filter((type) => sold.has(type)))).toEqual(
       DECORATIONS_FOR_SALE.map(([type]) => type),
     );
@@ -78,6 +78,16 @@ describe("this project's autumn decorations (owner, 10 Nov 2026)", () => {
     expect(decorKindOf(204)).toBe(DecorKind.GOOD);
     expect(decorOrder(201)).toBeLessThan(decorOrder(55));
     expect(decorOrder(202)).toBeLessThan(decorOrder(57));
+  });
+
+  it("are followed by the new ones (24 Nov 2026), first in their sub-tab after the autumn ones", () => {
+    const prices = new Map(DECORATIONS_FOR_SALE);
+    expect(DECOR_KINDS[1]?.types.slice(3, 13)).toEqual([228, 232, 229, 231, 230, 225, 226, 223, 224, 227]);
+    expect(DECOR_KINDS[2]?.types.slice(3, 9)).toEqual([211, 212, 209, 208, 210, 213]);
+    expect(DECOR_KINDS[3]?.types[0]).toBe(207);
+    expect(DECOR_KINDS[4]?.types.slice(0, 9)).toEqual([214, 215, 216, 217, 218, 219, 220, 221, 222]);
+    // Placeholder prices until the owner's price card: only that each has one.
+    for (let type = 207; type <= 232; type++) expect(prices.get(type), `${type}`).toBeGreaterThan(0);
   });
 
   it("lead the sub-tab an announcement's Shop opens on", () => {

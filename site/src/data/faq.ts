@@ -4,8 +4,8 @@ import { SITE } from "../config";
  * The home page's "Questions" section. The same list fills the visible
  * answers and the FAQPage data search engines read, so edit it only here.
  * Keep answers short and plain: the answer first, then one helpful detail.
- * Answers are plain text; an email address or game link in them is turned
- * into a link on the page.
+ * Answers are plain text; the game's address or the Discord invite in them is
+ * turned into a link on the page. Never put an email address here.
  */
 export const faq: { q: string; a: string }[] = [
   {
@@ -22,7 +22,7 @@ export const faq: { q: string; a: string }[] = [
   },
   {
     q: "Do I need Flash or a download?",
-    a: "No. The game runs in a modern web browser on your computer. There is no Flash and nothing to download.",
+    a: "No. The game runs in a modern web browser on your computer, phone or tablet. There is no Flash and nothing to download.",
   },
   {
     q: "Is this the official game? Is it made by Kixeye?",
@@ -44,10 +44,12 @@ export const faq: { q: string; a: string }[] = [
     q: "Who makes it?",
     a: "Backyard Monsters Revamped is built and run by one fan. The game server is based on Backyard Monsters Refitted, whose team restored the original game and wrote its server.",
   },
-  {
-    q: "Where do I report bugs?",
-    a: `Email ${SITE.bugEmail} with what happened and, if you can, a screenshot.${
-      SITE.discordUrl ? ` You can also tell us on the Discord at ${SITE.discordUrl.replace(/^https?:\/\//, "")}.` : ""
-    }`,
-  },
+  ...(SITE.discordUrl
+    ? [
+        {
+          q: "Where do I report bugs?",
+          a: `Report bugs on our Discord at ${SITE.discordUrl.replace(/^https?:\/\//, "")}. Say what happened and, if you can, add a screenshot.`,
+        },
+      ]
+    : []),
 ];

@@ -120,7 +120,7 @@ def compose(job: dict) -> Image.Image:
 def main() -> None:
     sheet_path = sys.argv[sys.argv.index("--sheet") + 1] if "--sheet" in sys.argv else None
     found = subprocess.run(
-        ["bun", "tools/build-pictures/jobs.ts"], cwd=WEB, capture_output=True, text=True, check=True, shell=sys.platform == "win32"
+        ["bun", "tools/build-pictures/jobs.ts"], cwd=WEB, capture_output=True, text=True, check=True
     )
     jobs = json.loads(found.stdout)
     OUT.mkdir(parents=True, exist_ok=True)

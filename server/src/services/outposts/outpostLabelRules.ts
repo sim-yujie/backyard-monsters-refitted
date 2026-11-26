@@ -13,6 +13,7 @@ export const OUTPOST_NAME_MAX = 24;
 export const OUTPOST_PINS_MAX = 20;
 
 /** Control characters, zero-width and direction marks. */
+// oxlint-disable-next-line no-control-regex -- matching them is the point
 const CONTROL_CHARACTERS = new RegExp("[\\u0000-\\u001f\\u007f\\u200b-\\u200f\\u2028-\\u202e\\u2066-\\u2069\\ufeff]", "g");
 
 export type OutpostNameRefusal = "tooLong" | "badWords";

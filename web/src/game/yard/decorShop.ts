@@ -21,17 +21,23 @@ export const DECORATIONS_FOR_SALE: readonly (readonly [type: number, price: numb
   [83, 15], [84, 15], [85, 15], [80, 25], [73, 50],
   // Plants: the autumn Leaf Pile and Rake, Turkey Topiary and Autumn Maple Tree first
   [201, 25], [205, 60], [206, 75],
+  // ... then the new plants (207 up: owner 24 Nov 2026, placeholder prices, `server/src/game-data/revampDecorations.ts`)
+  [228, 25], [232, 25], [229, 35], [231, 40], [230, 50], [225, 60], [226, 60], [223, 70], [224, 75], [227, 75],
   [55, 5], [66, 5], [72, 5], [91, 10], [92, 10], [94, 10], [95, 10], [93, 15], [56, 20], [90, 10],
   [86, 25], [88, 25], [89, 25], [87, 50],
   // Good: the autumn Apple Barrel, Pie on a Tree Stump and Harvest Barrow first
   [202, 30], [203, 35], [204, 50],
+  // ... then the new yard props
+  [211, 30], [212, 35], [209, 40], [208, 50], [210, 60], [213, 75],
   [57, 20], [65, 20], [63, 20], [64, 20], [71, 25], [108, 25], [109, 50], [61, 25], [62, 25],
   [60, 35], [102, 200], [103, 200], [68, 250], [104, 250], [105, 250], [106, 250],
-  // Flags
+  // Flags: the new Cambodian Flag first
+  [207, 150],
   [49, 125], [50, 125], [28, 150], [29, 150], [30, 150], [31, 150], [33, 150], [34, 150],
   [35, 150], [36, 150], [37, 150], [38, 150], [39, 150], [40, 150], [41, 150], [42, 150],
   [43, 150], [44, 150], [45, 150], [46, 150], [47, 150], [48, 150], [32, 150],
-  // Premium
+  // Premium: the nine new wonders first
+  [214, 500], [215, 500], [216, 500], [217, 500], [218, 500], [219, 500], [220, 500], [221, 500], [222, 500],
   [96, 225], [97, 250], [98, 250], [99, 500], [100, 500], [101, 500],
 ];
 
@@ -65,7 +71,7 @@ export interface DecorKindDefinition {
 /**
  * Which sub-tab each decoration is under in Flash: every one of the 84
  * decoration types (`isDecoration`) has a `subgroup`, 0 to 4. This project's
- * own go under Plants and Good.
+ * own go under Plants and Good (the new ones of 24 Nov 2026 also under Flags and Premium).
  */
 /**
  * The sub-tab whose first tiles are this project's own seasonal decorations
@@ -82,24 +88,24 @@ export const DECOR_KINDS: readonly DecorKindDefinition[] = [
     id: DecorKind.PLANTS,
     label: "Plants",
     // Blocked: 67 Rock, 59 Childrens Jax, 69 Scarecrow. This project's autumn ones first.
-    types: [201, 205, 206, 55, 66, 72, 67, 59, 91, 92, 94, 95, 93, 56, 69, 90, 86, 88, 89, 87],
+    types: [201, 205, 206, 228, 232, 229, 231, 230, 225, 226, 223, 224, 227, 55, 66, 72, 67, 59, 91, 92, 94, 95, 93, 56, 69, 90, 86, 88, 89, 87],
   },
   {
     id: DecorKind.GOOD,
     label: "Good",
     // Blocked: 70 Sun Dial, 58 Camping Tent. This project's autumn ones first.
-    types: [202, 203, 204, 70, 57, 58, 65, 63, 64, 71, 108, 109, 61, 62, 60, 102, 103, 68, 104, 105, 106],
+    types: [202, 203, 204, 211, 212, 209, 208, 210, 213, 70, 57, 58, 65, 63, 64, 71, 108, 109, 61, 62, 60, 102, 103, 68, 104, 105, 106],
   },
   {
     id: DecorKind.FLAGS,
     label: "Flags",
-    types: [49, 50, 28, 29, 30, 31, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47, 48, 32],
+    types: [207, 49, 50, 28, 29, 30, 31, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47, 48, 32],
   },
   {
     id: DecorKind.PREMIUM,
     label: "Premium",
     // Blocked: 120 Big Gulp, 121 and 131 the totems, 110 and 111 the pumpkins, 135 the trophy.
-    types: [120, 96, 97, 121, 98, 131, 99, 100, 101, 110, 135, 111],
+    types: [214, 215, 216, 217, 218, 219, 220, 221, 222, 120, 96, 97, 121, 98, 131, 99, 100, 101, 110, 135, 111],
   },
 ];
 

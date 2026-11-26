@@ -148,9 +148,11 @@ const attackerRow = (extra: Row = {}): Row => ({
   ...extra,
 });
 
+let smartMovingOff = false;
+
 const attackerUser = () => {
   const save = tables.get(Save)!.find((row) => row.userid === ATTACKER);
-  return { userid: ATTACKER, username: "agenttester", save, blockedUsers: [] };
+  return { userid: ATTACKER, username: "agenttester", save, blockedUsers: [], smart_moving_off: smartMovingOff };
 };
 
 const load = async (baseid: string, mapversion?: number, extra: Row = {}): Promise<unknown> => {
@@ -178,6 +180,7 @@ const load = async (baseid: string, mapversion?: number, extra: Row = {}): Promi
 };
 
 beforeEach(() => {
+  smartMovingOff = false;
   created = [];
   flushes = 0;
   reports = [];
@@ -283,6 +286,41 @@ describe("an attack load from a page with older battle rules", () => {
   test("this server's rules attack as before", async () => {
     expect(await load(near, 2, { rules: RULES_VERSION })).toBeNull();
     expect(created.map((row) => row.baseid)).toEqual([near]);
+  });
+});
+
+/**
+ * Smart moving (beta 9, `smartMove.ts`): "Move & attack" sends the moves' key
+ * with the attack load. Its refusals come before any move; the moves and
+ * their undo have their own tests (`autoAttack.test.ts`).
+ */
+describe("an attack load with smart moves", () => {
+  const near = campId(243, 209);
+  const KEY = "1000244208>2291380241207:C1=90";
+
+  test("from a page with older battle rules: New version before anything moves or is written", async () => {
+    const refusal = (await load(near, 2, { rules: "0ba3fde8701104af", smartmoves: KEY })) as Error & { data?: Row };
+    expect(refusal.data).toEqual({ reason: "newVersion" });
+    expect(created).toEqual([]);
+    expect(sessionKeys).toEqual([]);
+    expect(flushes).toBe(0);
+  });
+
+  test("with the account's Smart moving off: refused, nothing moved or written", async () => {
+    smartMovingOff = true;
+    const refusal = (await load(near, 2, { smartmoves: KEY })) as Error & { data?: Row };
+    expect(refusal.data).toEqual({ reason: "smartMoveOff" });
+    expect(created).toEqual([]);
+    expect(sessionKeys).toEqual([]);
+    expect(flushes).toBe(0);
+  });
+
+  test("the key is a short string or nothing", () => {
+    const body = { type: "wmattack", userid: "1", baseid: near };
+    expect(BaseLoadSchema.parse({ ...body, smartmoves: KEY }).smartmoves).toBe(KEY);
+    expect(BaseLoadSchema.parse(body).smartmoves).toBeUndefined();
+    expect(() => BaseLoadSchema.parse({ ...body, smartmoves: "" })).toThrow();
+    expect(() => BaseLoadSchema.parse({ ...body, smartmoves: "x".repeat(4_001) })).toThrow();
   });
 });
 

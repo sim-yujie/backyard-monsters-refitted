@@ -1,3 +1,4 @@
+import type { MaintenanceNotice } from "./maintenance";
 import { get, post } from "./http";
 import type { ApiEnvelope } from "./types";
 
@@ -33,6 +34,8 @@ export type ChatClientMessage =
 
 /** One line as the server sends it, live or in a room's history. */
 export interface ChatLineWire {
+  /** The line's id (chat filter, 24 Nov 2026); absent on lines stored before ids. */
+  id?: string;
   userId: number;
   /** `[level] name`, the server's words. */
   displayName: string;
@@ -73,7 +76,8 @@ export type ChatErrorCode =
 
 /** What the server sends on the socket; anything else is ignored. */
 export type ChatServerMessage =
-  | { type: "auth_ok"; userId: number; displayName: string }
+  /** `presence`: the server answers presence pings on this socket (beta 9); absent on an older one. */
+  | { type: "auth_ok"; userId: number; displayName: string; presence?: boolean }
   | { type: "auth_fail"; reason: "invalid_token" | "user_not_found" }
   | { type: "joined"; channel: string; history: ChatLineWire[] }
   | ({ type: "message"; channel: string } & ChatLineWire)
@@ -90,8 +94,14 @@ export type ChatServerMessage =
   | { type: "notice" }
   /** New mail for this player: the game asks `/player/mailstatus` what came (owner, beta 7). */
   | { type: "mail" }
+  /** The maintenance switch: on with the time left, or off (`app/maintenanceWatch.ts`). */
+  | ({ type: "maintenance" } & MaintenanceNotice)
   /** Taken out of a room: left or was kicked from the alliance (beta 7). */
-  | { type: "left"; channel: string };
+  | { type: "left"; channel: string }
+  /** A moderator removed a line: drop it, name and all (by `id`, or by speaker and stamp). */
+  | { type: "removed"; channel: string; id?: string; userId: number; ts: number }
+  /** The answer to a presence ping sent on the socket (beta 9, `ChatSession.presence`). */
+  | { type: "presence"; id: number; ok: boolean; answer?: unknown; reason?: string };
 
 /** Everything needed to reach world chat, from the owner's yard load. */
 export interface ChatConfig {

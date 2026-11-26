@@ -4,7 +4,7 @@ import { HexGrid } from "@/game/HexGrid";
 import type { ZoneRecord } from "../ZoneStore";
 import { PULSE_STEP_TICKS, pulseAt } from "./BorderLayer";
 import { BORDER_FRAGMENT } from "./borderShader";
-import { BorderData, BorderRelation, borderDistance, borderRelationOf, borderSides, sideEnds } from "./borders";
+import { BorderData, BorderRelation, groupSidesOf, borderDistance, borderRelationOf, borderSides, sideEnds } from "./borders";
 import { cellCentre, flatTopShape, pointyTopShape, type CellShape } from "./cellShape";
 import { PAINTED_TAG_COLOUR, PAINTED_TAG_TEXT, TILE_TAG_STYLE, tagStyle } from "./markerStyle";
 
@@ -210,5 +210,39 @@ describe("name tags on the painted map", () => {
     // Bigger on the tall pointy-top cell than on the flat one, which has less room.
     expect(pointy.scale).toBeGreaterThan(tagStyle(true, "flat").scale);
     expect(tagStyle(true, "flat").scale).toBeGreaterThan(1);
+  });
+});
+
+describe("BorderData.setQuiet (map pin clustering)", () => {
+  it("marks the cells under a plaque in the blue channel and lets the previous set go", () => {
+    const data = new BorderData("pointy", 20, 20);
+    const b = (col: number, row: number) => data.bytes[(row * 20 + col) * 4 + 2];
+    data.setQuiet([3 * 20 + 2, 5 * 20 + 7]);
+    expect([b(2, 3), b(7, 5), b(1, 1)]).toEqual([128, 128, 0]);
+    expect(data.flush()).toBe(true);
+    data.setQuiet([5 * 20 + 7]);
+    expect([b(2, 3), b(7, 5)]).toEqual([0, 128]);
+  });
+
+  it("is read by the shader: a quiet cell draws no border, and group sides replace the owner's", () => {
+    expect(BORDER_FRAGMENT).toContain("(b & 128) != 0");
+    expect(BORDER_FRAGMENT).toContain("mask = b & 63");
+  });
+});
+
+describe("groupSidesOf (map pin clustering: one outline round joined tiles)", () => {
+  const grid = (cells: Record<string, BorderRelation>) => (c: number, r: number) => cells[`${c},${r}`] ?? BorderRelation.NONE;
+  it("draws only the outer sides of joined alliance tiles and nothing round a lone one", () => {
+    const [a, b] = HexGrid.neighbours(5, 5, "pointy");
+    const cells: Record<string, BorderRelation> = { "5,5": BorderRelation.ALLIANCE, [`${a!.col},${a!.row}`]: BorderRelation.ALLIANCE, "20,20": BorderRelation.ALLIANCE };
+    const sides = groupSidesOf(5, 5, "pointy", grid(cells));
+    expect(sides & 1).toBe(0); // towards the joined neighbour: no line
+    expect(sides & 2).toBe(2); // towards an empty cell: the outline
+    expect(groupSidesOf(20, 20, "pointy", grid(cells))).toBe(0); // lone
+    void b;
+  });
+
+  it("leaves other relations alone", () => {
+    expect(groupSidesOf(5, 5, "pointy", () => BorderRelation.YOU)).toBe(0);
   });
 });

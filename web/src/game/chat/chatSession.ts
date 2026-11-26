@@ -41,6 +41,8 @@ import { onWorldChatChange, worldChatOn } from "./worldChatSetting";
 export interface ChatLine {
   readonly kind: "line";
   readonly id: number;
+  /** The server's id for the line, what a moderator's removal names; null on lines from before ids. */
+  readonly lineId: string | null;
   readonly userId: number;
   /** `[level] name`, as the server stamped the line. */
   readonly name: string;
@@ -161,6 +163,25 @@ const browserSocket: ChatSocketFactory = (url) => {
 export const MAX_ENTRIES = 100;
 /** The longest line the server keeps (`chatRooms.ts` `MAX_MSG_LEN`). */
 export const MAX_LINE_LENGTH = 200;
+/** How long a presence ping on the socket waits for its answer before it goes over HTTP instead. */
+export const PRESENCE_TIMEOUT_MS = 8_000;
+
+/** What a presence ping on the socket carries (`ChatSession.presence`). */
+export interface PresenceFrame {
+  /** The game session's bearer token: the server checks it as the HTTP route does. */
+  readonly token: string;
+  /** The API version the route's path would name. */
+  readonly apiVersion: string;
+  /** The route's body, `{ where, planner }`. */
+  readonly screen: unknown;
+}
+
+/** The longest session token sent on the socket, well inside the server's 4 KB frame cap. */
+export const PRESENCE_MAX_TOKEN = 3_000;
+
+/** Why a presence ping on the socket did not count; the caller sends it over HTTP. */
+export class PresenceRefused extends Error {}
+
 /** The server drops a socket that says nothing for 120 s; a ping well inside that. */
 export const PING_INTERVAL_MS = 45_000;
 /** The first retry's wait; each after doubles, up to {@link MAX_RETRY_MS}. */
@@ -252,6 +273,7 @@ export class ChatSession {
   private listeners = new Set<(state: ChatState) => void>();
   private teamListeners = new Set<(event: TeamEvent) => void>();
   private mailListeners = new Set<() => void>();
+  private maintenanceListeners = new Set<(notice: unknown) => void>();
   private retryTimer: ReturnType<typeof setTimeout> | null = null;
   private pingTimer: ReturnType<typeof setInterval> | null = null;
   /**
@@ -270,6 +292,14 @@ export class ChatSession {
   private roomEntries = new Map<string, readonly ChatEntry[]>();
   /** Rooms the server said "joined" for on this socket. */
   private joined = new Set<string>();
+  /** The server said at sign-in that it answers presence pings here (beta 9). */
+  private presenceReady = false;
+  private presenceId = 0;
+  /** Presence pings sent and not yet answered, by id. */
+  private presencePending = new Map<
+    number,
+    { resolve: (answer: unknown) => void; reject: (error: Error) => void; timer: ReturnType<typeof setTimeout> }
+  >();
   /** The Alliance room's real name on the server (`chat:alliance:<id>`), once it said "joined". */
   private allianceKey: string | null = null;
   private state: ChatState = {
@@ -307,6 +337,17 @@ export class ChatSession {
     this.mailListeners.add(listener);
     return () => {
       this.mailListeners.delete(listener);
+    };
+  }
+
+  /**
+   * The maintenance switch's news (`app/maintenanceWatch.ts`), as the server
+   * sent it: on with the time left, or off. Checked by the listener.
+   */
+  onMaintenance(listener: (notice: unknown) => void): () => void {
+    this.maintenanceListeners.add(listener);
+    return () => {
+      this.maintenanceListeners.delete(listener);
     };
   }
 
@@ -409,6 +450,33 @@ export class ChatSession {
     const unread = new Set(this.state.unread);
     unread.delete(channel);
     this.show({ channel, unread });
+  }
+
+  /**
+   * The game's presence ping on this socket (beta 9, speed-ups item 10):
+   * `POST /bm/presence` without a request of its own, as the server's
+   * `chat/chatPresence.ts` answers it. Null, and nothing sent, unless the
+   * socket is signed in to a server that said it takes them: World chat
+   * switched off, the socket down, reconnecting, signed out, taken over
+   * elsewhere, or a server from before beta 9. Rejects ({@link
+   * PresenceRefused}) when the server refuses it, no answer comes within
+   * {@link PRESENCE_TIMEOUT_MS}, or the socket drops first. Every null or
+   * rejection means: send this ping over HTTP.
+   */
+  presence(frame: PresenceFrame): Promise<unknown> | null {
+    if (!this.socket || !this.presenceReady) return null;
+    // The server closes a socket whose frame passes 4 KB (`CHAT_SOCKET_LIMITS`);
+    // a ping that large (it never is: ~0.3 KB) goes over HTTP instead.
+    if (frame.token.length > PRESENCE_MAX_TOKEN) return null;
+    const id = ++this.presenceId;
+    return new Promise<unknown>((resolve, reject) => {
+      const timer = setTimeout(() => {
+        this.presencePending.delete(id);
+        reject(new PresenceRefused("timeout"));
+      }, PRESENCE_TIMEOUT_MS);
+      this.presencePending.set(id, { resolve, reject, timer });
+      this.sendRaw({ type: "presence", id, token: frame.token, apiVersion: frame.apiVersion, screen: frame.screen });
+    });
   }
 
   /** Connects again after another connection took over (the box's "Reconnect"). */
@@ -520,6 +588,12 @@ export class ChatSession {
 
   /** Lets go of the socket and the timers without touching the state. */
   private drop(): void {
+    this.presenceReady = false;
+    for (const [id, waiting] of this.presencePending) {
+      clearTimeout(waiting.timer);
+      waiting.reject(new PresenceRefused("closed"));
+      this.presencePending.delete(id);
+    }
     this.joined.clear();
     this.allianceKey = null;
     if (this.retryTimer !== null) clearTimeout(this.retryTimer);
@@ -565,6 +639,7 @@ export class ChatSession {
     switch (message.type) {
       case "auth_ok": {
         this.update({ self: { userId: message.userId, name: message.displayName } });
+        this.presenceReady = message.presence === true;
         for (const room of this.state.rooms) this.sendRaw({ type: "join", channel: room.channel });
         for (const [userId, muted] of this.pendingMutes) this.sendMute(userId, muted);
         this.sendRaw({ type: "getignore" });
@@ -601,6 +676,9 @@ export class ChatSession {
       }
       case "left":
         if (this.roomOf(message.channel) === ALLIANCE_ROOM) this.dropAllianceRoom();
+        return;
+      case "removed":
+        this.dropLine(this.roomOf(message.channel), message);
         return;
       case "name_update":
         if (this.state.self && message.userId === this.state.self.userId) {
@@ -651,6 +729,18 @@ export class ChatSession {
       case "mail":
         for (const listener of [...this.mailListeners]) listener();
         return;
+      case "maintenance":
+        for (const listener of [...this.maintenanceListeners]) listener(message);
+        return;
+      case "presence": {
+        const waiting = this.presencePending.get(Number(message.id));
+        if (!waiting) return;
+        this.presencePending.delete(Number(message.id));
+        clearTimeout(waiting.timer);
+        if (message.ok === true && message.answer && typeof message.answer === "object") waiting.resolve(message.answer);
+        else waiting.reject(new PresenceRefused(String(message.reason ?? "refused")));
+        return;
+      }
       default:
         return;
     }
@@ -661,6 +751,7 @@ export class ChatSession {
     return {
       kind: "line",
       id: this.nextId++,
+      lineId: typeof wire.id === "string" && wire.id ? wire.id : null,
       userId,
       name: String(wire.displayName ?? ""),
       pic: typeof wire.picSquare === "string" && wire.picSquare ? wire.picSquare : null,
@@ -751,6 +842,22 @@ export class ChatSession {
   private notice(text: string): void {
     const channel = this.state.channel;
     if (channel) this.append({ kind: "notice", id: this.nextId++, text }, channel);
+  }
+
+  /**
+   * A moderator removed a line (chat filter, owner 24 Nov 2026, option A): it
+   * vanishes, name and all, with no trace in the box.
+   */
+  private dropLine(channel: string, gone: { id?: string; userId: number; ts: number }): void {
+    const before = this.roomEntries.get(channel);
+    if (!before) return;
+    const id = typeof gone.id === "string" && gone.id ? gone.id : null;
+    const after = before.filter(
+      (entry) => entry.kind !== "line" || entry.userId !== Number(gone.userId) || (id !== null && entry.lineId !== null ? entry.lineId !== id : entry.ts !== Number(gone.ts)),
+    );
+    if (after.length === before.length) return;
+    this.roomEntries.set(channel, after);
+    this.show({});
   }
 
   private append(entry: ChatEntry, channel: string): void {

@@ -13,7 +13,7 @@ import { TextPool } from "./LabelLayer";
 import { LodTier, sameView, tierForZoom, viewFor } from "./lod";
 import { MapAtlas } from "./mapAtlas";
 import { MapChunk, TextLevel, type ChunkView } from "./MapChunk";
-import type { Projector } from "./markerPins";
+import { MarkerFilter, type Projector } from "./markerPins";
 import type { BorderLayer } from "./painted/BorderLayer";
 import type { CloudLayer } from "./painted/CloudLayer";
 import type { PaintedGround } from "./painted/PaintedGround";
@@ -23,6 +23,7 @@ import { BuildingAvatars } from "./buildingAvatars";
 import { cellLift, liftCorners, setFlatGround } from "./ground";
 import { GroundArt } from "./groundArt";
 import { LiveMap } from "./live/LiveMap";
+import { CellRings } from "./live/CellRings";
 import { CONSTRUCTION_BADGE_URL, IDLE_HELPER_URL, MapPicture } from "./mapPicture";
 import { AllianceRoster, MapShields, type MapAlliance } from "./mapAlliances";
 import { friendMarkOf, friendMarksKey } from "@/game/friends/friendMarks";
@@ -108,6 +109,8 @@ export class MapRenderer {
   /** Every chunk's badges, markers and plates, over every chunk's ground. */
   private readonly worldTop = new Container();
   private readonly highlight = new Graphics();
+  /** The live map's growing rings on cells that just changed (beta 9), over the selection outline. */
+  readonly rings = new CellRings((col, row) => this.liftAt(col, row));
   /**
    * The upright marker layer for the tilted map (`markerPins.ts`): while the
    * tilt is on, `world` and `worldTop` leave `root` (so they are not drawn
@@ -220,6 +223,8 @@ export class MapRenderer {
 
   private hovered: OffsetCell | null = null;
   private selected: OffsetCell | null = null;
+  /** Move mode's outlines (beta 9 #7): the yard the move started from, and the yards ticked. */
+  private marks: readonly MapMark[] = [];
 
   /** The viewer's own alliance id (#334), or null; drives the "your alliance" plate colour. */
   private myAlliance: number | null = null;
@@ -255,6 +260,9 @@ export class MapRenderer {
       this.worldTop,
       this.live.overlay,
       this.highlight,
+      // Over the selection's outline (neon r1: under it the ring vanished), and last, so the tilt's
+      // marker swap (`setMarkerProjector`) still puts every layer back in its order.
+      this.rings.graphics,
     );
     this.friendsKey = friendMarksKey();
     this.stopFriends = friendsStore.subscribe(() => {
@@ -292,6 +300,68 @@ export class MapRenderer {
     this.placeMarkers();
   }
 
+  /**
+   * The markers map pin clustering leaves out (`cluster/`): the cells a plaque or crest stands for,
+   * and the camps when zoomed out. Shared by every chunk.
+   */
+  readonly markerFilter = new MarkerFilter();
+  private quietBorders: readonly number[] = [];
+  private groupBorders = false;
+  /** A border uniform changed: the painted picture must draw again. */
+  private bordersRestyled = false;
+  private cellsChanged = 0;
+
+  /** Goes up whenever what the cells show may have changed (a zone, the alliance, the kit filter, friends). */
+  get cellsVersion(): number {
+    return this.cellsChanged;
+  }
+
+  /** Who is looking, for working out each cell's relation as the chunks do. */
+  get viewerContext(): MapViewerContext {
+    return {
+      myAlliance: this.myAlliance,
+      kitFilter: this.kitFilter,
+      sight: this.sight,
+      friendMark: this.friendMark,
+      allianceOf: this.allianceOf,
+    };
+  }
+
+  /** Markers really drawn on screen (not left out, not hidden by a layer), for the speed readout. */
+  get drawnMarkerCount(): number {
+    let count = 0;
+    for (const id of this.visibleIds) {
+      const chunk = this.chunks.get(id);
+      if (chunk?.container.visible) count += chunk.pins.drawnCount;
+    }
+    return count;
+  }
+
+  /**
+   * The cells under a map pin clustering plaque draw no relation border (painted map and tile map
+   * alike), so the empty outlines of merged outposts do not crowd the zoomed-out map.
+   */
+  /**
+   * Alliance and neutral borders as one outline round each group of joined tiles (map pin
+   * clustering zoomed out): the painted borders' group sides, the tile map's chunk outlines.
+   */
+  setGroupBorders(on: boolean): void {
+    this.groupBorders = on;
+    this.markerFilter.setGroupBorders(on);
+    if (this.borders?.setGroupOutlines(on)) this.bordersRestyled = true;
+  }
+
+  setQuietBorders(keys: readonly number[]): void {
+    this.quietBorders = keys;
+    this.markerFilter.setQuiet(keys);
+    this.borders?.setQuiet(keys);
+  }
+
+  /** Applies the marker filter to the chunks on screen; does nothing while it is unchanged. */
+  private filterMarkers(): void {
+    for (const id of this.visibleIds) this.chunks.get(id)?.applyFilter(this.markerFilter);
+  }
+
   /** How many markers the chunks on screen carry, for the speed readout. */
   get markerCount(): number {
     let count = 0;
@@ -306,7 +376,11 @@ export class MapRenderer {
       for (const chunk of this.chunks.values()) if (chunk.pins.tilted) chunk.pins.place(null, "");
       return;
     }
-    for (const id of this.visibleIds) this.chunks.get(id)?.pins.place(this.projector, this.projectorKey);
+    for (const id of this.visibleIds) {
+      const chunk = this.chunks.get(id);
+      chunk?.applyFilter(this.markerFilter);
+      chunk?.pins.place(this.projector, this.projectorKey);
+    }
   }
 
   /** How long the last chunk build took, in milliseconds. */
@@ -357,6 +431,7 @@ export class MapRenderer {
   }
 
   private rebuildAll(): void {
+    this.cellsChanged++;
     for (const id of this.chunks.keys()) this.dirty.add(id);
   }
 
@@ -425,6 +500,7 @@ export class MapRenderer {
    */
   applyZone(zone: ZoneRecord, previous?: ZoneRecord): void {
     if (this.destroyed) return;
+    this.cellsChanged++;
     this.raster.applyZone(zone);
     this.painted?.applyZone(zone);
     this.classicFog?.applyZone(zone);
@@ -448,6 +524,7 @@ export class MapRenderer {
    */
   forgetZones(zones: readonly ZoneRecord[]): void {
     if (this.destroyed || zones.length === 0) return;
+    this.cellsChanged++;
     for (const zone of zones) {
       const data: ZoneRecord["data"] = {};
       for (const [xKey, column] of Object.entries(zone.data)) {
@@ -535,6 +612,12 @@ export class MapRenderer {
     this.range.show(sources);
   }
 
+  /** Outlines the move tray's yards (beta 9 #7): gold for the yard it started from, orange for each ticked. */
+  setMarks(marks: readonly MapMark[] | null): void {
+    this.marks = marks ?? [];
+    this.drawHighlight();
+  }
+
   setSelected(cell: OffsetCell | null): void {
     if (same(this.selected, cell)) return;
     this.selected = cell;
@@ -551,7 +634,8 @@ export class MapRenderer {
     const texelsWritten = this.raster.flush();
     const groundWritten = this.painted?.flush() ?? false;
     const fogChanged = this.clouds?.flush() ?? false;
-    const bordersChanged = this.borders?.flush() ?? false;
+    const bordersChanged = (this.borders?.flush() ?? false) || this.bordersRestyled;
+    this.bordersRestyled = false;
     const nowPaint = performance.now();
     const waterStepped = this.painted?.animate(nowPaint, range) ?? false;
     // The player's Quality's ground program once compiled, and the sprite pieces round the view.
@@ -586,6 +670,7 @@ export class MapRenderer {
 
     // Classic's water sheet (and the tile look's) is redrawn into a texture: a change the lists miss.
     if (this.live.update(range, zoom, nowPaint)) this.paintedStepped = true;
+    if (this.rings.animate(nowPaint, zoom)) this.paintedStepped = true;
     const tier = tierForZoom(zoom);
     const view = viewFor(tier, zoom, atlas);
     const nowMs = Date.now();
@@ -621,6 +706,7 @@ export class MapRenderer {
       sameRange(range, this.lastRange)
     ) {
       this.residency.keep(this.visibleIds, nowMs);
+      this.filterMarkers();
       this.sweep(nowMs);
       return riversWork;
     }
@@ -629,6 +715,7 @@ export class MapRenderer {
     this.lastView = view;
     this.lastRange = { ...range };
     this.reconcile(range, view, atlas, nowMs);
+    this.filterMarkers();
     this.sweep(nowMs);
     return true;
   }
@@ -869,6 +956,8 @@ export class MapRenderer {
     const above = this.world.parent === this.root ? this.world : this.range.container;
     this.root.addChildAt(this.borders.mesh, this.root.getChildIndex(above));
     for (const zone of this.store.loadedZoneRefs()) this.borders.applyZone(zone);
+    this.borders.setQuiet(this.quietBorders);
+    this.borders.setGroupOutlines(this.groupBorders);
     // A border running into the fog goes under the cloud.
     if (programs.clouds && quality() === "high") loads.push(this.addPaintedFog(look, painted));
     // The rest of the programs once the art is in and has drawn (a few frames), or after a while
@@ -1021,6 +1110,18 @@ export class MapRenderer {
     this.highlight.clear();
     const zoom = this.lastZoom || 1;
 
+    for (const mark of this.marks) {
+      const corners = this.liftedCorners(mark.cell);
+      const colour = MARK_COLOURS[mark.kind];
+      this.highlight.poly(corners);
+      this.highlight.fill({ color: colour, alpha: mark.kind === "anchor" ? 0.16 : 0.2 });
+      // A dark rim under the bright one, so it reads on sand, grass and water alike.
+      this.highlight.poly(corners);
+      this.highlight.stroke({ width: 7 / zoom, color: 0x1a0c02, alpha: 0.55 });
+      this.highlight.poly(corners);
+      this.highlight.stroke({ width: 3.5 / zoom, color: colour });
+    }
+
     if (this.selected) {
       const corners = this.liftedCorners(this.selected);
       this.highlight.poly(corners);
@@ -1043,6 +1144,15 @@ export class MapRenderer {
     return liftCorners(mapRoomGrid.writeCellCorners(cell.col, cell.row, []), this.liftAt(cell.col, cell.row));
   }
 }
+
+/** One of move mode's outlined cells. */
+export interface MapMark {
+  readonly cell: OffsetCell;
+  readonly kind: "anchor" | "on";
+}
+
+/** Gold for the yard the move started from, the tray's orange for a ticked yard. */
+const MARK_COLOURS: Readonly<Record<MapMark["kind"], number>> = { anchor: 0xf0b938, on: 0xff6d1f };
 
 const same = (a: OffsetCell | null, b: OffsetCell | null): boolean =>
   a === b || (a !== null && b !== null && a.col === b.col && a.row === b.row);

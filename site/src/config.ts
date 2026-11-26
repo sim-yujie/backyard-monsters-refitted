@@ -25,11 +25,6 @@ export const SITE = {
    */
   kofiUrl: "https://ko-fi.com/themonsterlab",
   /**
-   * Where players email bug reports. Shown as plain text with a mailto link on
-   * the Support page and the home page's beta notice.
-   */
-  bugEmail: "simyujie@gmail.com",
-  /**
    * The muted, looping gameplay clip on the home page (files under public/).
    * To swap in another clip, drop the MP4 (H.264, about 1280x720, a few MB)
    * and a still from it into public/video/ and change these two paths.

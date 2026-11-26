@@ -24,10 +24,6 @@ export const realPlayerSql = (alias = "u"): string =>
    AND ${alias}.username NOT ILIKE 'zz\\_%'
    AND lower(${alias}.email) !~ '(\\.invalid|\\.example|@example\\.(com|net|org))$'`;
 
-/** Whether one username and email belong to a test account (the second half of {@link realPlayerSql}). */
-export const isTestAccount = (username: string, email: string): boolean =>
-  /^zz_/i.test(username) || /(\.invalid|\.example|@example\.(com|net|org))$/.test(email.toLowerCase());
-
 /** Rows looked up per statement when filtering a list of account numbers. */
 const CHUNK = 5000;
 

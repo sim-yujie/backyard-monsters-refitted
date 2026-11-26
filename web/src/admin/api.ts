@@ -805,7 +805,8 @@ export const moderatePlayer = (
  * `services/admin/chatWatchAdmin.ts`): lines the word filter caught, one row
  * per player, with the player's own words.
  */
-export type FlagSeverity = "slur" | "swear";
+/** `filter`: the chat filter alone flagged it (a link or a watched word); its `tags` say why. */
+export type FlagSeverity = "slur" | "swear" | "filter";
 
 /** One flagged line. */
 /** How a flagged word was written: as listed, or disguised. */
@@ -825,6 +826,10 @@ export interface FlagLine {
   at: string;
   /** When it was said (ms), as chat stamped it: a report of the same line has the same stamp. */
   ts: number;
+  /** The chat filter's reasons (`newLink`, `invite`, `watched`, `hidden`); empty or absent for a word-filter flag. */
+  tags?: string[];
+  /** Nobody but the player saw the line. */
+  hidden?: boolean;
 }
 
 /** A flagged player: open flags counted, newest lines first. */
@@ -1247,6 +1252,34 @@ export const fetchWeekend = (): Promise<Envelope<WeekendPanelView>> => adminGet(
 export const changeWeekend = (change: WeekendChange): Promise<Envelope<WeekendPanelView>> =>
   adminPost(`${ADMIN}/weekend`, change as unknown as JsonBody);
 
+/* ── Maintenance switch (`server/src/controllers/admin/maintenance.ts`) ── */
+
+export interface MaintenancePanelView {
+  /** Server clock (ms) when answered. */
+  now: number;
+  on: boolean;
+  message: string;
+  /** ms; null for none. */
+  backAt: number | null;
+  startedAt: number | null;
+  cutoffAt: number | null;
+  /** Until players are signed out; 0 once they are (or when off). */
+  remainingMs: number;
+  cutOff: boolean;
+  updatedAt: string | null;
+  updatedBy: number | null;
+  limits: { minutes: number[]; defaultMinutes: number; defaultMessage: string; messageMax: number };
+}
+
+export type MaintenanceChange =
+  | { action: "on"; message?: string; backAt?: string | null; minutes?: number }
+  | { action: "off" };
+
+export const fetchMaintenancePanel = (): Promise<Envelope<MaintenancePanelView>> => adminGet(`${ADMIN}/maintenance`);
+
+export const changeMaintenance = (change: MaintenanceChange): Promise<Envelope<MaintenancePanelView>> =>
+  adminPost(`${ADMIN}/maintenance`, change as unknown as JsonBody);
+
 /* ── Monster Madness (`server/src/controllers/admin/monsterMadness.ts`) ── */
 
 /** One run, unix seconds; a stopped run ends when it was stopped. */
@@ -1297,6 +1330,57 @@ export const addModerator = (player: string): Promise<Envelope<{ moderator: Mode
 
 export const removeModerator = (userid: number): Promise<Envelope<{ removed: number }>> =>
   adminPost(`${ADMIN}/moderators/${userid}/remove`, {});
+
+/**
+ * The chat filter's watched words (owner, 24 Nov 2026; server
+ * `services/chat/watchWords.ts`): `always` anywhere, `near` (FB, Facebook)
+ * only next to a `context` word. `hits`: lines with the word in the last
+ * `days` days (null for context words, which are never counted alone).
+ */
+export type WatchKind = "always" | "near" | "context";
+
+export interface WatchWordView {
+  id: number;
+  word: string;
+  kind: WatchKind;
+  hits: number | null;
+}
+
+export const fetchWatchWords = (): Promise<Envelope<{ words: WatchWordView[]; days: number }>> => adminGet(`${ADMIN}/watchwords`);
+
+export const addWatchWord = (word: string, kind: WatchKind): Promise<Envelope<{ word: WatchWordView }>> =>
+  adminPost(`${ADMIN}/watchwords`, { word, kind });
+
+export const removeWatchWord = (id: number): Promise<Envelope<{ removed: number }>> => adminPost(`${ADMIN}/watchwords/${id}/remove`, {});
+
+/**
+ * Moderators' bans and mutes (owner, 24 Nov 2026; server
+ * `services/admin/modSteps.ts`), newest first, with what became of each.
+ * Undo and Make permanent are the player steps (`moderatePlayer`).
+ */
+export type ModStepState = "on" | "ended" | "undone" | "permanent" | "replaced";
+
+export interface ModStepView {
+  id: number;
+  userid: number;
+  username: string | null;
+  moderatorId: number;
+  moderatorName: string | null;
+  kind: "ban" | "mute";
+  reason: string;
+  /** A ban's days or a mute's hours. */
+  length: number;
+  until: string | null;
+  at: string;
+  state: ModStepState;
+  laterByName: string | null;
+  laterAt: string | null;
+}
+
+export const fetchModSteps = (
+  offset = 0,
+): Promise<Envelope<{ steps: ModStepView[]; nextOffset: number | null }>> =>
+  adminGet(`${ADMIN}/modsteps`, { offset: offset || undefined });
 
 /**
  * Moderator mail (owner, beta 7; server `services/mail/modMail.ts`): every

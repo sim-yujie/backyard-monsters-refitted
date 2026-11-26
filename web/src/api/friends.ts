@@ -3,6 +3,7 @@ import { photoVersionOf, type PhotoVersion } from "@/game/playerPicture";
 import { formatCountdown } from "@/ui/format";
 import { getSession } from "./auth";
 import { ApiError, get, NetworkError, postJson } from "./http";
+import { seenStepFrom, type SeenStep } from "./seen";
 import type { ApiEnvelope, BaseLoadResponse } from "./types";
 
 /**
@@ -32,6 +33,8 @@ import type { ApiEnvelope, BaseLoadResponse } from "./types";
  *   `POST /bm/friends/gifts/all { fallback?, userids? }`: Gift all, its
  *   confirm step's plan and the send (owner, 13 Nov 2026).
  * - `POST /bm/friends/help { userid, buildingId, kind }` (WP6/WP7).
+ * - `POST /bm/friends/help/all { userid, targets: [{ buildingId, kind }] }`:
+ *   Help all, every help in one request (owner, 26 Nov 2026).
  * - `POST /base/load` with `type: "help"`: a friend's main yard to help in (WP2/WP5).
  * - `POST /player/settings { hideOnline?, friendRequests? }`,
  *   `GET /player/blocked`, `POST /player/block|unblock { userid }` (WP9).
@@ -60,6 +63,7 @@ const GIFT_COST_PATH = "/api/:apiVersion/bm/friends/gift/cost";
 const GIFT_ALL_PLAN_PATH = "/api/:apiVersion/bm/friends/gifts/all/plan";
 const GIFT_ALL_PATH = "/api/:apiVersion/bm/friends/gifts/all";
 const HELP_PATH = "/api/:apiVersion/bm/friends/help";
+const HELP_ALL_PATH = "/api/:apiVersion/bm/friends/help/all";
 const LOAD_PATH = "/base/load";
 const SETTINGS_PATH = "/api/:apiVersion/player/settings";
 const BLOCKED_PATH = "/api/:apiVersion/player/blocked";
@@ -79,9 +83,10 @@ export const PIN_MAX = 10;
 
 /**
  * How recently a friend was last in their yard, coarse on purpose (§6.2,
- * Q12): null when they hide it.
+ * Q12; beta 9 "last seen", `api/seen.ts`): online, today, week, weeks (1-4
+ * weeks) or month (over a month); null when they hide it and are still active.
  */
-export type FriendOnline = "online" | "today" | "week" | "away" | null;
+export type FriendOnline = SeenStep | null;
 
 /** A resource a gift can be: Twigs, Pebbles, Putty or Goo. */
 export type GiftResource = "r1" | "r2" | "r3" | "r4";
@@ -293,6 +298,24 @@ export interface HelpResult {
   readonly rewardsLeft: number;
   /** The friend's building after the help, as the server wrote it. */
   readonly building: Record<string, unknown> | null;
+}
+
+/** The most helps one Help all request may ask for (the server's `HELP_ALL_MAX_TARGETS`); more go in turns. */
+export const HELP_ALL_MAX_TARGETS = 10;
+
+/**
+ * One target's outcome in a Help all answer (`POST /bm/friends/help/all`):
+ * what one help would have answered, or its refusal, in words.
+ */
+export type HelpAllItem =
+  | { readonly buildingId: number; readonly kind: HelpKind; readonly ok: true; readonly result: HelpResult }
+  | { readonly buildingId: number; readonly kind: HelpKind; readonly ok: false; readonly refusal: FriendRefusal };
+
+/** `POST /bm/friends/help/all`: one outcome per target the server reached, in order; none after a stop. */
+export interface HelpAllAnswer {
+  readonly helps: readonly HelpAllItem[];
+  /** Helps today that still pay a reward, after these. */
+  readonly rewardsLeft: number;
 }
 
 /** Per building of a help-mode load: `true`, or the refusal reason why not. */
@@ -514,7 +537,6 @@ const record = (value: unknown): Record<string, unknown> =>
   typeof value === "object" && value !== null ? (value as Record<string, unknown>) : {};
 const list = (value: unknown): Record<string, unknown>[] => (Array.isArray(value) ? value.map(record) : []);
 
-const ONLINE: ReadonlySet<string> = new Set(["online", "today", "week", "away"]);
 const RELATIONS: ReadonlySet<string> = new Set(["self", "friend", "requested", "asked", "none"]);
 const GIFT_RESOURCES: ReadonlySet<string> = new Set(["r1", "r2", "r3", "r4"]);
 
@@ -538,6 +560,37 @@ const giftResourceOf = (value: unknown): GiftResource | null =>
   typeof value === "string" && GIFT_RESOURCES.has(value) ? (value as GiftResource) : null;
 
 /** A Gift all answer; an entry with no known resource is dropped. */
+/** One help's answer, read: the same for `POST /bm/friends/help` and each of Help all's. */
+export const helpResultOf = (answer: Record<string, unknown>): HelpResult => {
+  const seconds = Number(answer["secondsSaved"]);
+  return {
+    ...(Number.isFinite(seconds) && seconds > 0 && { secondsSaved: Math.floor(seconds) }),
+    ...(answer["healed"] === true && { healed: true }),
+    reward: amounts(answer["reward"]),
+    rewardsLeft: count(answer["rewardsLeft"]),
+    building: typeof answer["building"] === "object" && answer["building"] !== null ? record(answer["building"]) : null,
+  };
+};
+
+/** A refusal reason Help all sent for one building, in words, as `friendRefusal` reads a refused call's. */
+const refusalOfReason = (reason: unknown): FriendRefusal =>
+  isReason(reason)
+    ? { reason, message: reason === "tooNew" ? tooNewText() : REFUSAL_TEXT[reason] }
+    : { reason: "unknown", message: GENERAL_REFUSAL };
+
+/** `POST /bm/friends/help/all`'s answer, read; an entry with no building id is dropped. */
+export const helpAllOf = (answer: Record<string, unknown>): HelpAllAnswer => ({
+  helps: list(answer["helps"]).flatMap((raw): HelpAllItem[] => {
+    const buildingId = Number(raw["buildingId"]);
+    if (!Number.isInteger(buildingId) || buildingId < 0) return [];
+    const kind: HelpKind = raw["kind"] === "repair" ? "repair" : "speedup";
+    return raw["ok"] === true
+      ? [{ buildingId, kind, ok: true, result: helpResultOf(raw) }]
+      : [{ buildingId, kind, ok: false, refusal: refusalOfReason(raw["reason"]) }];
+  }),
+  rewardsLeft: count(answer["rewardsLeft"]),
+});
+
 export const giftAllOf = (raw: Record<string, unknown>): GiftAllResult => ({
   fallback: giftResourceOf(raw["fallback"]) ?? "r1",
   noWish: count(raw["noWish"]),
@@ -591,7 +644,7 @@ export const friendOf = (raw: Record<string, unknown>): Friend => {
     pic: picOf(raw["pic"]),
     photo: photoVersionOf(raw["photo"]),
     level: count(raw["level"]),
-    online: typeof raw["online"] === "string" && ONLINE.has(raw["online"]) ? (raw["online"] as FriendOnline) : null,
+    online: seenStepFrom(raw["online"]),
     since: toSeconds(raw["since"]),
     giftSentToday: raw["giftSentToday"] === true,
     canGiftFrom: toSeconds(raw["canGiftFrom"]),
@@ -693,6 +746,8 @@ export interface FriendsApi {
   /** Deletes one waiting gift, or every one waiting with `"all"`; gives nothing. */
   deleteGifts(giftid: number | "all"): Promise<GiftDelete>;
   help(userid: number, buildingId: number, kind: HelpKind): Promise<HelpResult>;
+  /** Help all: every help in `targets`, in order, in one request (at most {@link HELP_ALL_MAX_TARGETS}). */
+  helpAll(userid: number, targets: readonly { buildingId: number; kind: HelpKind }[]): Promise<HelpAllAnswer>;
   /** A friend's main yard, loaded to help in (`type: "help"`). */
   loadHelpYard(baseid: string): Promise<HelpYardResponse>;
   /** Changes either privacy setting; both as stored. */
@@ -796,15 +851,14 @@ export const friendsApi: FriendsApi = {
     };
   },
   async help(userid, buildingId, kind) {
-    const answer = await postJson<Answer>(HELP_PATH, { userid, buildingId, kind });
-    const seconds = Number(answer["secondsSaved"]);
-    return {
-      ...(Number.isFinite(seconds) && seconds > 0 && { secondsSaved: Math.floor(seconds) }),
-      ...(answer["healed"] === true && { healed: true }),
-      reward: amounts(answer["reward"]),
-      rewardsLeft: count(answer["rewardsLeft"]),
-      building: typeof answer["building"] === "object" && answer["building"] !== null ? record(answer["building"]) : null,
-    };
+    return helpResultOf(await postJson<Answer>(HELP_PATH, { userid, buildingId, kind }));
+  },
+  async helpAll(userid, targets) {
+    const answer = await postJson<Answer>(HELP_ALL_PATH, {
+      userid,
+      targets: targets.map(({ buildingId, kind }) => ({ buildingId, kind })),
+    });
+    return helpAllOf(answer);
   },
   async loadHelpYard(baseid) {
     const session = getSession();

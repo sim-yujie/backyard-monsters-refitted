@@ -1,5 +1,4 @@
 import { ACADEMY_KEYS, academyActions, type AcademyActions } from "@/api/yardAcademy";
-import type { YardRefusal } from "@/api/yard";
 import { monsterEntry } from "@/game/monsters/monsterCatalogue";
 import {
   academyFor,
@@ -27,8 +26,9 @@ import { resourceAmount } from "@/ui/resourceIcon";
 import "@/ui/styles/train.css";
 import { ShinyButton } from "@/ui/yard/ShinyButton";
 import { describe, monsterPicture } from "./LockerTab";
-import type { MonstersFocus, MonstersTab, MonstersTabContext } from "./monstersTab";
+import { revealPicked, type MonstersFocus, type MonstersTab, type MonstersTabContext } from "./monstersTab";
 import { studySeconds, weekendChip, withWeekendChip } from "@/ui/events/weekendUi";
+import { refusalText } from "@/ui/dom";
 
 /**
  * The Train tab: the Monster Academy (`docs/design/yard-buildings.md` §6
@@ -140,6 +140,7 @@ export class TrainTab implements MonstersTab {
       this.select(focus.monster, false);
     }
     this.render();
+    revealPicked(this.list);
   }
 
   update(change: YardChange): void {
@@ -619,7 +620,3 @@ const plainButton = (label: string, onClick: () => void, variant?: string): HTML
   return button;
 };
 
-const refusalText = (refusal: YardRefusal): string =>
-  refusal.reason === "network"
-    ? "Could not reach the server. Try again."
-    : refusal.message || "That did not work.";

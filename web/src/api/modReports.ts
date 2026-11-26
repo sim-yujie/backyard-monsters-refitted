@@ -51,7 +51,14 @@ export interface ModQueueRow {
   readonly oldestAt: string;
   readonly latestAt: string;
   readonly preview: ModPreview | null;
+  /** Their main yard's age in hours while they are a new player (under three days): "New · 30h". Absent from older servers. */
+  readonly newHours?: number | null;
+  /** The chat filter's reasons on their open lines, each once. */
+  readonly filterTags?: readonly FilterTag[];
 }
+
+/** Why the chat filter flagged a line (`services/chat/chatFilter.ts`). */
+export type FilterTag = "newLink" | "invite" | "watched" | "hidden";
 
 /** A decision in the Closed list. */
 export interface ModClosedRow {
@@ -110,7 +117,18 @@ export interface ModLine {
     readonly rule: "word" | "disguised";
     readonly words: string[];
     readonly shown: string;
+    /** The chat filter's reasons; empty for a word-filter flag. */
+    readonly tags?: readonly FilterTag[];
+    /** Nobody but the player saw it. */
+    readonly hidden?: boolean;
+    readonly yardAgeHours?: number | null;
   } | null;
+  /** The chat line's id, for Remove. */
+  readonly lineId?: string | null;
+  /** A moderator removed it from chat. */
+  readonly removed?: { readonly byName: string | null; readonly at: string } | null;
+  /** The same words said again, grouped under this line: each copy, for Remove. */
+  readonly copies?: readonly { readonly channel: string; readonly ts: number; readonly lineId: string | null }[];
 }
 
 export interface ModLogEntry {
@@ -133,6 +151,8 @@ export interface ModPlayer {
   readonly lines: ModLine[];
   readonly log: ModLogEntry[];
   readonly decisions: ModClosedRow[];
+  /** Their main yard's age in hours while they are a new player. */
+  readonly newHours?: number | null;
 }
 
 export interface ModActBody {
@@ -155,6 +175,32 @@ export interface ModActResult extends ApiEnvelope {
 export interface ModStatus {
   readonly moderator: boolean;
   readonly open: number;
+  /** Ban lengths a moderator may pick, in days (1, 3, 7). */
+  readonly banDays?: readonly number[];
+}
+
+/** A moderator's ban (`POST /mod/players/:id/ban`): 1, 3 or 7 days, a reason the player sees. */
+export interface ModBanBody {
+  readonly days: number;
+  readonly reason: string;
+  /** Also take their chat lines of the last hour out of the rooms. */
+  readonly removeLines: boolean;
+}
+
+export interface ModBanResult extends ApiEnvelope {
+  readonly until: string;
+  readonly closed: { readonly reports: number; readonly filterLines: number };
+  readonly removedLines: number | null;
+}
+
+/** Ban lengths when the server does not say. */
+export const MOD_BAN_DAYS: readonly number[] = [1, 3, 7];
+
+/** A line to remove: its room and stamp, and its id when known. */
+export interface ModRemoveLine {
+  readonly channel: string;
+  readonly ts: number;
+  readonly lineId: string | null;
 }
 
 /** The routes, so a test can stand in for the server. */
@@ -164,6 +210,8 @@ export interface ModReportsApi {
   player(userid: number): Promise<ModPlayer>;
   around(flagId: number): Promise<AroundLine[]>;
   act(userid: number, body: ModActBody): Promise<ModActResult>;
+  ban(userid: number, body: ModBanBody): Promise<ModBanResult>;
+  removeLines(userid: number, lines: readonly ModRemoveLine[]): Promise<{ removed: number }>;
 }
 
 /** Why the server refused, from its `reason` (e.g. `changed`, `moderator`), or null. */
@@ -175,8 +223,9 @@ export const refusalReason = (caught: unknown): string | null => {
 
 export const modReportsApi: ModReportsApi = {
   async status() {
-    const answer = await get<ApiEnvelope & { moderator?: number; open?: number }>("/api/:apiVersion/mod/status");
-    return { moderator: Number(answer.moderator) === 1, open: Number(answer.open ?? 0) || 0 };
+    const answer = await get<ApiEnvelope & { moderator?: number; open?: number; banDays?: unknown }>("/api/:apiVersion/mod/status");
+    const banDays = Array.isArray(answer.banDays) ? answer.banDays.map(Number).filter((d) => Number.isInteger(d) && d > 0) : [];
+    return { moderator: Number(answer.moderator) === 1, open: Number(answer.open ?? 0) || 0, ...(banDays.length ? { banDays } : {}) };
   },
   list: (filter, offset) =>
     get<ModList>("/api/:apiVersion/mod/reports", { filter, ...(offset ? { offset } : {}) }),
@@ -188,4 +237,11 @@ export const modReportsApi: ModReportsApi = {
   },
   act: (userid, body) =>
     postJson<ModActResult>(`/api/:apiVersion/mod/reports/players/${userid}/act`, { ...body }),
+  ban: (userid, body) => postJson<ModBanResult>(`/api/:apiVersion/mod/players/${userid}/ban`, { ...body }),
+  async removeLines(userid, lines) {
+    const answer = await postJson<ApiEnvelope & { removed?: number }>(`/api/:apiVersion/mod/players/${userid}/lines/remove`, {
+      lines: lines.map((line) => ({ channel: line.channel, ts: line.ts, ...(line.lineId ? { lineId: line.lineId } : {}) })),
+    });
+    return { removed: Number(answer.removed ?? 0) || 0 };
+  },
 };

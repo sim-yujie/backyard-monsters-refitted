@@ -74,7 +74,7 @@ export const SILO_TYPE = 6;
  * The harvester types and the audit's buffer bound live with the rest of the
  * production arithmetic, which the yard catch-up shares (`production.ts`).
  */
-export { bufferCeiling, HARVESTER_TYPES } from "./production.js";
+export { bufferCeiling } from "./production.js";
 
 /** The type whose cost ladder prices this one. */
 export const pricingType = (type: number): number =>

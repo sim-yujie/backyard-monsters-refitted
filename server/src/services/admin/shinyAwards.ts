@@ -23,8 +23,6 @@ import { REPORT_SUBJECT, TEAM_MESSAGE, TEAM_NOTICE, writeTeamMessage } from "./s
 
 /** The most one award may give. */
 export const MAX_SHINY_AWARD = 10_000;
-/** Above this the dashboard asks the owner to confirm first (the page's own check). */
-export const CONFIRM_SHINY_ABOVE = 500;
 /** The longest reason, which goes into the player's mail. */
 export const MAX_AWARD_REASON = 200;
 

@@ -7,6 +7,7 @@ import { Status } from "../../enums/StatusCodes.js";
 import { apiVersion } from "../../middleware/apiVersioning.js";
 import { verifyUserAuth } from "../../middleware/auth.js";
 import { postgres, redis } from "../../server.js";
+import { addWatchWord, HIT_DAYS, parseWatchWord, readHits, readWatchWords, removeWatchWord } from "../../services/chat/watchWords.js";
 import { makeAdminGuard } from "../../services/admin/adminGuard.js";
 import {
   getBugReport,
@@ -26,6 +27,7 @@ import { getCurrentDateTime } from "../../utils/getCurrentDateTime.js";
 import { adminHealthReport } from "../../services/health/adminHealth.js";
 import { mountAdminMonsterMadnessRoutes } from "./monsterMadness.js";
 import { mountAdminWeekendRoutes } from "./weekend.js";
+import { mountAdminMaintenanceRoutes } from "./maintenance.js";
 import { mountAdminStarFigureRoutes } from "./starFigures.js";
 import { daysBetween, readDailyStats, statsOverview, type StatsDeps } from "../../services/stats/dailyStats.js";
 import {
@@ -36,7 +38,7 @@ import {
 } from "../../services/stats/monsterUsageStats.js";
 import { LOG_BASE, LOG_DIR, logger } from "../../utils/logger.js";
 import { getOrCreateChatToken } from "../../chat/chatChannels.js";
-import { publishModeration, publishModeratorsChanged } from "../../chat/chatControl.js";
+import { publishModeration, publishModeratorsChanged, publishWatchWordsChanged } from "../../chat/chatControl.js";
 import {
   CHANNELS,
   GLOBAL_CHAT_CHANNEL,
@@ -64,6 +66,7 @@ import {
   type ModeratorEffects,
 } from "../../services/admin/chatModerators.js";
 import { listModConversations, parseModMailQuery, readModConversation } from "../../services/mail/modMail.js";
+import { listModSteps } from "../../services/admin/modSteps.js";
 import { actOnInboxPlayer, listClosed, listInbox, moderatePlayer, parseInboxAction } from "../../services/admin/moderationInbox.js";
 import {
   listChatReports,
@@ -137,6 +140,7 @@ const MODERATION_REFUSAL_WORDS = {
   gameTeam: "That is a game team account.",
   notBanned: "This player is not banned.",
   notMuted: "This player is not muted.",
+  longerBan: "This player is already banned for longer.",
 } as const;
 
 const MODERATOR_REFUSAL_WORDS = {
@@ -209,6 +213,9 @@ export const mountAdminRoutes = (router: Router): void => {
 
   // Weekend events: rotation, swaps, skips, percentages, run now (`weekend.ts`).
   mountAdminWeekendRoutes(router, admin, adminOnly, () => postgres.em.fork());
+
+  // Maintenance switch: only the owner signs in, countdown for the rest (`maintenance.ts`).
+  mountAdminMaintenanceRoutes(router, admin, adminOnly, () => postgres.em.fork());
 
   // The in-game constellation star editor (`starFigures.ts`).
   mountAdminStarFigureRoutes(router, admin, adminOnly, () => postgres.em.fork());
@@ -572,6 +579,13 @@ export const mountAdminRoutes = (router: Router): void => {
     ok(ctx, { moderators: await listModerators(postgres.em.fork()) });
   });
 
+  // Moderators' bans and mutes (services/admin/modSteps.ts), newest first.
+  // Undo and Make permanent are the player steps above (players/:id/unban|unmute|ban).
+  router.get(`${admin}/modsteps`, apiVersion, adminOnly, async (ctx) => {
+    const offset = intOf(ctx.query.offset);
+    ok(ctx, { ...(await listModSteps(postgres.em.fork(), { offset: offset !== undefined && offset > 0 ? offset : 0 })) });
+  });
+
   router.post(`${admin}/moderators`, apiVersion, adminOnly, async (ctx) => {
     const request = parseModeratorAdd(ctx.request.body);
     if (!request.ok) return refuse(ctx, Status.BAD_REQUEST, request.message, "badRequest");
@@ -579,6 +593,31 @@ export const mountAdminRoutes = (router: Router): void => {
     if (done.outcome === "noPlayer") return refuse(ctx, Status.BAD_REQUEST, MODERATOR_REFUSAL_WORDS.noPlayer, "noPlayer");
     if (done.outcome !== "added") return refuse(ctx, Status.CONFLICT, MODERATOR_REFUSAL_WORDS[done.outcome], done.outcome);
     ok(ctx, { moderator: done.moderator });
+  });
+
+  // The chat filter's watched words (services/chat/watchWords.ts; owner 24 Nov
+  // 2026): the Chat filter tab lists them with their hits in the last 7 days,
+  // adds and removes them; the chat server picks a change up at once.
+  router.get(`${admin}/watchwords`, apiVersion, adminOnly, async (ctx) => {
+    const [words, hits] = await Promise.all([readWatchWords(postgres.em.fork()), readHits(redis, Date.now()).catch(() => ({}))]);
+    ok(ctx, { words: words.map((word) => ({ ...word, hits: word.kind === "context" ? null : ((hits as Record<string, number>)[word.word] ?? 0) })), days: HIT_DAYS });
+  });
+
+  router.post(`${admin}/watchwords`, apiVersion, adminOnly, async (ctx) => {
+    const request = parseWatchWord(ctx.request.body);
+    if (!request.ok) return refuse(ctx, Status.BAD_REQUEST, request.message, "badRequest");
+    const done = await addWatchWord(postgres.em.fork(), request.value, ctx.authUser.userid);
+    if (done.outcome === "already") return refuse(ctx, Status.CONFLICT, "That word is already on the list.", "already");
+    await publishWatchWordsChanged();
+    ok(ctx, { word: { ...done.row, hits: done.row.kind === "context" ? null : 0 } });
+  });
+
+  router.post(`${admin}/watchwords/:id/remove`, apiVersion, adminOnly, async (ctx) => {
+    const id = intOf(ctx.params.id);
+    const removed = id !== undefined && id > 0 && (await removeWatchWord(postgres.em.fork(), id, ctx.authUser.userid));
+    if (!removed) return refuse(ctx, Status.CONFLICT, "That word is no longer on the list.", "gone");
+    await publishWatchWordsChanged();
+    ok(ctx, { removed: id });
   });
 
   router.post(`${admin}/moderators/:id/remove`, apiVersion, adminOnly, async (ctx) => {

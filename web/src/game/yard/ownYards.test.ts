@@ -16,6 +16,7 @@ import {
   ownYardsOf,
   sameYard,
   setOwnYardTarget,
+  stepOwnYard,
   withCell,
   yardTitle,
 } from "./ownYards";
@@ -117,6 +118,36 @@ describe("the yard switcher's list", () => {
   it("fills an outpost's cell in from the list", () => {
     expect(withCell(outpostTarget("2000240210"), save).cell).toEqual({ col: 240, row: 210 });
     expect(withCell(MAIN_YARD, save)).toBe(MAIN_YARD);
+  });
+});
+
+describe("the switcher's arrows (beta 9, design E)", () => {
+  const save = listing([[1, 1, "11"], [2, 2, "22"], [3, 3, "33"]]);
+  const labels = { names: {}, pins: ["33"] };
+  const titleOf = (current: Parameters<typeof ownYardsOf>[1], direction: -1 | 1): string | undefined =>
+    stepOwnYard(ownYardsOf(save, current, labels), direction)?.title;
+
+  it("steps through Main, the pinned outposts, then the rest", () => {
+    expect(titleOf(MAIN_YARD, 1)).toBe("Outpost (3, 3)");
+    expect(titleOf(outpostTarget("33"), 1)).toBe("Outpost (1, 1)");
+    expect(titleOf(outpostTarget("11"), 1)).toBe("Outpost (2, 2)");
+    expect(titleOf(outpostTarget("11"), -1)).toBe("Outpost (3, 3)");
+  });
+
+  it("goes round at both ends", () => {
+    expect(titleOf(outpostTarget("22"), 1)).toBe("Main yard");
+    expect(titleOf(MAIN_YARD, -1)).toBe("Outpost (2, 2)");
+  });
+
+  it("has nowhere to go from the main yard alone", () => {
+    expect(stepOwnYard(ownYardsOf(listing([]), MAIN_YARD), 1)).toBeNull();
+    expect(stepOwnYard(ownYardsOf(listing([]), MAIN_YARD), -1)).toBeNull();
+  });
+
+  it("from the Inferno, Next opens the main yard and Prev the last outpost", () => {
+    expect(titleOf(INFERNO_YARD, 1)).toBe("Main yard");
+    expect(titleOf(INFERNO_YARD, -1)).toBe("Outpost (2, 2)");
+    expect(stepOwnYard(ownYardsOf(listing([]), INFERNO_YARD), -1)?.title).toBe("Main yard");
   });
 });
 

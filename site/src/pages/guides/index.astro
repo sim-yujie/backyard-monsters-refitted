@@ -101,15 +101,6 @@ const guides = (await getCollection("guides", ({ data }) => !data.draft)).sort((
       grid-template-columns: 1fr;
     }
 
-    .guide-card {
-      flex-direction: row;
-    }
-
-    .guide-card img {
-      width: 34%;
-      aspect-ratio: auto;
-    }
-
     .guide-card__body {
       padding: 14px 16px;
     }

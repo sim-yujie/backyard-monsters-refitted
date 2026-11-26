@@ -6,7 +6,7 @@ import { User } from "../../database/models/user.model.js";
 import { BaseType } from "../../enums/Base.js";
 import { AttackPermission } from "../../enums/MapRoom.js";
 import { infernoAttackRefusedErr, noInfernoYardErr } from "../../errors/errors.js";
-import type { DefenderForces } from "../../game-rules/combat/index.js";
+import { academyRanks, type DefenderForces } from "../../game-rules/combat/index.js";
 import { newAttackSession } from "../../services/base/attackSession.js";
 import { playerLevelOf } from "../../services/base/calculateBaseLevel.js";
 import { academyLevels } from "../../services/base/combat/abandonedAttack.js";
@@ -71,6 +71,8 @@ export interface InfernoPlayerAttackStart {
   armybaseid: string;
   army: Counts;
   attackeracademy: Record<string, number>;
+  /** The Inferno yard's Infernal Lab ranks (beta 9), frozen with the levels; absent when none. */
+  attackerranks?: ReturnType<typeof academyRanks>;
   attackerlevel: number;
   flingercapacity: number;
 }
@@ -155,6 +157,8 @@ export const startInfernoPlayerAttack = async (
   if (Object.keys(army).length === 0 || flingerCapacity <= 0) throw infernoAttackRefusedErr("noMonsters");
 
   const attackerAcademy = academyLevels(inferno.academy);
+  // The Infernal Lab's ranks (beta 9), frozen with the levels: every replay fights at these.
+  const attackerRanks = academyRanks(inferno.academy);
   const attackerLevel = playerLevelOf(main);
   const purse = purseAmounts(target.main.iresources);
 
@@ -202,7 +206,8 @@ export const startInfernoPlayerAttack = async (
         undefined,
         defenderForces,
         undefined,
-        attackerAcademy
+        attackerAcademy,
+        attackerRanks
       ),
     });
     if (!started) throw infernoAttackRefusedErr("targetUnderAttack", { attacker: lastAttacker });
@@ -237,6 +242,7 @@ export const startInfernoPlayerAttack = async (
     armybaseid: inferno.baseid,
     army,
     attackeracademy: attackerAcademy,
+    ...(Object.keys(attackerRanks).length > 0 && { attackerranks: attackerRanks }),
     attackerlevel: attackerLevel,
     flingercapacity: flingerCapacity,
   };

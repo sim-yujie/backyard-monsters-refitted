@@ -780,12 +780,15 @@ export const BALTHAZAR_ID = "IC5";
 export const SABNOX_ID = "IC7";
 
 /**
- * IC8 King Wormzer's splash (`KingWormzer.as:13-27`): every hit sets off
- * `AOEDamageOnAttackOncePerTarget(100, BUILDINGS | GROUND, 4)`, the swing times
- * {@link KING_WORMZER_MULTIPLIER} over the buildings within 100 of it, a
+ * IC8 King Wormzer's splash (`KingWormzer.as:13-27`): in Flash every hit sets
+ * off `AOEDamageOnAttackOncePerTarget(100, BUILDINGS | GROUND, 4)`, the swing
+ * times {@link KING_WORMZER_MULTIPLIER} over the buildings within 100 of it, a
  * straight fall to a fifth at the edge, once per target in a row, with no Lab
- * rank needed. Its flags name no side, so no monster is hurt (this client's
- * change, kept from the original game); a defender's splash leaves its own
+ * rank needed. Since beta 9 the splash is the Infernal Lab's gift instead
+ * (`specialMoves.ts`, `kingWormzerMultiplier`): none at rank 0, x1 / x2 / x4
+ * within 60 / 80 / 100 at ranks 1-3, rank 3 being this figure (Flash's).
+ * Its flags name no side, so no monster is hurt (this client's change, kept
+ * from the original game); a defender's splash leaves its own
  * buildings alone (`AOEDamage.as:36-39`), so only an attacker's lands. Map
  * Room 3 turns it off, and the engine is never in Map Room 3.
  */

@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
-import { ApiError } from "@/api/http";
+import { ApiError, setAuthToken } from "@/api/http";
+import { clearPartCache } from "./startReadCache";
 import type { BaseLoadResponse, BuildingDataMap, YardResponse, YardState } from "@/api/types";
 import type { YardApi } from "@/api/yard";
 import { housingSummary } from "@/game/monsters/housing";
@@ -7,6 +8,7 @@ import { housingSpace } from "@/game/monsters/monsterCatalogue";
 import {
   YardChangeReason,
   YardStore,
+  startReadOr,
   type YardActionResult,
   type YardChange,
 } from "./YardStore";
@@ -719,6 +721,168 @@ describe("lifecycle", () => {
     storeWith(loadWith({ caps: { r1: 1, r2: 1, r3: 1, r4: 1 } }), withCaps).store.start();
     await flush();
     expect(withCaps.state).not.toHaveBeenCalled();
+  });
+
+  it("sends the first state call with no parts, as before, when no package asks to ride it", async () => {
+    const api = stubApi();
+    const { store } = storeWith(loadWith(), api);
+    store.start();
+    await flush();
+    expect(api.state).toHaveBeenCalledWith();
+  });
+
+  it("carries the packages' start-up reads in the first state call, one request (beta 9)", async () => {
+    const goals = { goals: [{ id: "G1" }] };
+    const quests = { quests: { login: { day: 1 } } };
+    const api = stubApi({ state: vi.fn(() => Promise.resolve(answer(T0, {}, { goals, quests }))) });
+    const { store } = storeWith(loadWith(), api);
+    store.start();
+    // The packages mount in the same task as start().
+    const goalsRead = store.startRead("goals");
+    const questsRead = store.startRead("quests");
+    expect(api.state).not.toHaveBeenCalled();
+    await flush();
+    expect(api.state).toHaveBeenCalledTimes(1);
+    expect(api.state).toHaveBeenCalledWith(undefined, "goals,quests", undefined);
+    await expect(goalsRead).resolves.toEqual(goals);
+    await expect(questsRead).resolves.toEqual(quests);
+    // The answer is merged like any refresh: the caps arrive.
+    expect(store.caps).not.toBeNull();
+  });
+
+  it("takes no start-up read once the first state call has gone", async () => {
+    const { store } = storeWith(loadWith(), stubApi());
+    store.start();
+    await flush();
+    expect(store.startRead("goals")).toBeNull();
+    // Nor before start(), nor when the load carried the caps (no first state call).
+    const early = storeWith(loadWith(), stubApi()).store;
+    expect(early.startRead("goals")).toBeNull();
+    const withCaps = storeWith(loadWith({ caps: { r1: 1, r2: 1, r3: 1, r4: 1 } }), stubApi()).store;
+    withCaps.start();
+    expect(withCaps.startRead("goals")).toBeNull();
+  });
+
+  it("an older server's answer (report null) or a failed call leaves the read to its own route", async () => {
+    const api = stubApi();
+    const { store } = storeWith(loadWith(), api);
+    store.start();
+    const read = store.startRead("goals");
+    await flush();
+    await expect(read).resolves.toBeUndefined();
+
+    const failing = stubApi({ state: vi.fn(() => Promise.reject(new Error("offline"))) });
+    const second = storeWith(loadWith(), failing).store;
+    second.start();
+    const lost = second.startRead("quests");
+    await flush();
+    await expect(lost).resolves.toBeUndefined();
+  });
+
+  it("startReadOr uses the carried report, and falls back to the route's own call without one", async () => {
+    const isReport = (report: unknown): report is { goals: unknown[] } =>
+      typeof report === "object" && report !== null && Array.isArray((report as { goals?: unknown }).goals);
+    const own = vi.fn(() => Promise.resolve({ ok: true as const, report: { goals: ["own"] }, completed: [] }));
+
+    const api = stubApi({ state: vi.fn(() => Promise.resolve(answer(T0, {}, { goals: { goals: ["carried"] } }))) });
+    const { store } = storeWith(loadWith(), api);
+    store.start();
+    const carried = startReadOr(store, "goals", isReport, own);
+    await flush();
+    await expect(carried).resolves.toEqual({ ok: true, report: { goals: ["carried"] }, completed: [] });
+    expect(own).not.toHaveBeenCalled();
+
+    // An older server answers report null: the route's own call goes out.
+    const old = storeWith(loadWith(), stubApi()).store;
+    old.start();
+    const fallback = startReadOr(old, "goals", isReport, own);
+    await flush();
+    await expect(fallback).resolves.toEqual({ ok: true, report: { goals: ["own"] }, completed: [] });
+    // Later reads (the panel opening) never wait for a state call.
+    await startReadOr(old, "goals", isReport, own);
+    expect(own).toHaveBeenCalledTimes(2);
+  });
+
+  it("keeps a start-up view with its stamp and, unchanged, takes it back instead of a download (item 6)", async () => {
+    clearPartCache();
+    setAuthToken("session-1");
+    try {
+      const isReport = (report: unknown): report is { goals: unknown[] } =>
+        typeof report === "object" && report !== null && Array.isArray((report as { goals?: unknown }).goals);
+      const own = vi.fn(() => Promise.resolve({ ok: true as const, report: { goals: ["own"] }, completed: [] }));
+
+      // First open: nothing kept, no stamp sent; the view comes with its stamp.
+      const first = stubApi({ state: vi.fn(() => Promise.resolve(answer(T0, {}, { goals: { goals: ["v1"], stamp: "s1" } }))) });
+      const a = storeWith(loadWith(), first).store;
+      a.start();
+      const read1 = startReadOr(a, "goals", isReport, own);
+      await flush();
+      expect(first.state).toHaveBeenCalledWith(undefined, "goals", undefined);
+      await expect(read1).resolves.toMatchObject({ ok: true, report: { goals: ["v1"] } });
+
+      // Back home: the stamp rides the call, the server says same, the kept view is used.
+      const second = stubApi({ state: vi.fn(() => Promise.resolve(answer(T0, {}, { goals: { same: true, stamp: "s1" } }))) });
+      const b = storeWith(loadWith(), second).store;
+      b.start();
+      const read2 = startReadOr(b, "goals", isReport, own);
+      await flush();
+      expect(second.state).toHaveBeenCalledWith(undefined, "goals", "goals:s1");
+      await expect(read2).resolves.toMatchObject({ ok: true, report: { goals: ["v1"] } });
+
+      // Changed on the server: the new view and stamp replace the kept one.
+      const third = stubApi({ state: vi.fn(() => Promise.resolve(answer(T0, {}, { goals: { goals: ["v2"], stamp: "s2" } }))) });
+      const c = storeWith(loadWith(), third).store;
+      c.start();
+      const read3 = startReadOr(c, "goals", isReport, own);
+      await flush();
+      await expect(read3).resolves.toMatchObject({ ok: true, report: { goals: ["v2"] } });
+
+      // A "same" for a stamp no longer kept falls back to the route's own call.
+      const odd = stubApi({ state: vi.fn(() => Promise.resolve(answer(T0, {}, { goals: { same: true, stamp: "s1" } }))) });
+      const d = storeWith(loadWith(), odd).store;
+      d.start();
+      const read4 = startReadOr(d, "goals", isReport, own);
+      await flush();
+      expect(odd.state).toHaveBeenCalledWith(undefined, "goals", "goals:s2");
+      await expect(read4).resolves.toMatchObject({ report: { goals: ["own"] } });
+      expect(own).toHaveBeenCalledTimes(1);
+
+      // Another sign-in starts with nothing kept.
+      setAuthToken("session-2");
+      const fresh = stubApi();
+      const e = storeWith(loadWith(), fresh).store;
+      e.start();
+      void startReadOr(e, "goals", isReport, own);
+      await flush();
+      expect(fresh.state).toHaveBeenCalledWith(undefined, "goals", undefined);
+    } finally {
+      setAuthToken(null);
+      clearPartCache();
+    }
+  });
+
+  it("revives a kept view with the same-answer's fresh fields (the quest view's clock)", async () => {
+    clearPartCache();
+    setAuthToken("session-1");
+    try {
+      type Q = { quests: { now: number; day: number } };
+      const isQ = (report: unknown): report is Q => typeof (report as Q | null)?.quests === "object";
+      const revive = (kept: Q, same: { now?: number }): Q => ({ ...kept, quests: { ...kept.quests, now: same.now ?? kept.quests.now } });
+      const own = vi.fn();
+      const a = storeWith(loadWith(), stubApi({ state: vi.fn(() => Promise.resolve(answer(T0, {}, { quests: { quests: { now: 100, day: 3 }, stamp: "q" } }))) })).store;
+      a.start();
+      void startReadOr(a, "quests", isQ, own, revive);
+      await flush();
+      const b = storeWith(loadWith(), stubApi({ state: vi.fn(() => Promise.resolve(answer(T0, {}, { quests: { same: true, stamp: "q", now: 160 } }))) })).store;
+      b.start();
+      const read = startReadOr(b, "quests", isQ, own, revive);
+      await flush();
+      await expect(read).resolves.toMatchObject({ report: { quests: { now: 160, day: 3 } } });
+      expect(own).not.toHaveBeenCalled();
+    } finally {
+      setAuthToken(null);
+      clearPartCache();
+    }
   });
 
   it("announces what the load finished while the player was away, once, at start (#135)", async () => {

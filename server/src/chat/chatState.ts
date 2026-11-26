@@ -12,6 +12,10 @@ export interface SocketData {
   lastMsgAt: number;
   /** Closes the connection if it has not logged in in time (`chatLimits.ts`). */
   loginDeadline?: ReturnType<typeof setTimeout> | null;
+  /** When this socket's last presence ping was taken, ms (`chatPresence.ts`). */
+  lastPresenceAt?: number;
+  /** Set once the socket signed in as the live map, not chat (`liveGateway.ts`, beta 9). */
+  live?: import("./liveGateway.js").LiveSocket;
 }
 
 /**
@@ -40,6 +44,12 @@ export interface ChatClient {
   gm?: boolean;
   /** No lines accepted before this time (ms since the epoch); 0 or absent when not muted. */
   mutedUntil?: number;
+  /**
+   * When their main yard was made (ms), read at sign-in: the chat filter
+   * treats them as new while it is younger than three days. Null: no main
+   * yard (new); absent: not read (a test client), counted as not new.
+   */
+  yardCreatedAt?: number | null;
 }
 
 /**

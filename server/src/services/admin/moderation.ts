@@ -29,8 +29,6 @@ import { readPace, type QuestPace } from "../quests/state.js";
 
 export type ModerationKind = "warn" | "mute" | "unmute" | "ban" | "unban";
 
-export const MODERATION_KINDS: readonly ModerationKind[] = ["warn", "mute", "unmute", "ban", "unban"];
-
 /** The longest reason the owner can type. */
 export const MAX_MODERATION_REASON = 300;
 /** A timed ban is 1 to this many days. */
@@ -53,9 +51,10 @@ export interface ModerationRequest {
   /** The chat report it was done from, if any. */
   readonly chatReportId: number | null;
   /**
-   * A mute that never shortens one already on (a moderator's step): the
-   * player stays muted until the later of the two. Read under the row lock,
-   * so an admin's longer mute landing at the same moment is kept.
+   * A moderator's step, which never shortens what is already on. A mute: the
+   * player stays muted until the later of the two. A ban: refused as
+   * `longerBan` while a longer or permanent ban is on. Read under the row
+   * lock, so an admin's longer step landing at the same moment is kept.
    */
   readonly neverShorten?: boolean;
 }
@@ -124,7 +123,7 @@ export interface ModerationEffects {
 
 export type ModerationOutcome =
   | { outcome: "done"; until: Date | null; /** The step's row in the moderation log. */ actionId: number }
-  | { outcome: "noPlayer" | "gameTeam" | "notBanned" | "notMuted" };
+  | { outcome: "noPlayer" | "gameTeam" | "notBanned" | "notMuted" | "longerBan" };
 
 interface TargetRow {
   userid: number;
@@ -161,14 +160,22 @@ export const moderate = async (
 
     let until: Date | null = null;
     switch (request.kind) {
-      case "ban":
+      case "ban": {
         until = request.length === null ? null : new Date(now.getTime() + request.length * DAY_MS);
+        if (request.neverShorten && target.banned) {
+          // A ban that has run out still reads banned until the next sign-in: it no longer counts.
+          const current = asDate(target.ban_until);
+          if (current === null || current > now) {
+            if (current === null || until === null || current > until) return { outcome: "longerBan" };
+          }
+        }
         await tx.execute(`UPDATE bym."user" SET banned = true, ban_until = ?, ban_reason = ? WHERE userid = ?`, [
           until,
           request.reason,
           userid,
         ]);
         break;
+      }
       case "unban":
         if (!target.banned) return { outcome: "notBanned" };
         await tx.execute(`UPDATE bym."user" SET banned = false, ban_until = NULL, ban_reason = NULL WHERE userid = ?`, [

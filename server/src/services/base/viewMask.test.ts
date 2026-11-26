@@ -6,7 +6,7 @@ import { BaseType } from "../../enums/Base.js";
 import { maxHp } from "../../game-rules/combat/index.js";
 import { artLevelOf } from "../../game-data/buildingArtLevels.js";
 import { buildSaveData } from "./mapSaveData.js";
-import { maskedHp } from "./viewMask.js";
+import { maskBuilding, maskedHp } from "./viewMask.js";
 import { previewHelp } from "../friends/helpRules.js";
 
 /**
@@ -171,6 +171,17 @@ describe("who still gets the whole yard", () => {
     const camp = Object.assign(yardOf(BaseType.TRIBE), { userid: 0, saveuserid: 0 });
 
     expect(asViewer(camp).buildingdata).toEqual(BUILDINGS);
+  });
+});
+
+describe("the Hatchery Control Center's 3D levels", () => {
+  test("a viewer gets the level its Modern look shows, in the main yard and an outpost; the Inferno's one look reads 1", () => {
+    for (const level of [1, 2, 3]) {
+      expect(maskBuilding({ t: 16, l: level } as never, "main").l).toBe(level);
+      expect(maskBuilding({ t: 16, l: level } as never, "outpost").l).toBe(level);
+      expect(maskBuilding({ t: 16, l: level } as never, "inferno").l).toBe(1);
+    }
+    expect(artLevelOf(16, 3, false)).toBe(1);
   });
 });
 

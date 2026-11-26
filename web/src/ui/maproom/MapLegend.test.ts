@@ -36,6 +36,20 @@ describe("MapLegend", () => {
     expect(words).toEqual(["Yours", "Friend", "Pinned friend", "Alliance", "Hostile", "Neutral"]);
   });
 
+  it("explains the zoomed-out plaques and crests with their painted pictures (map pin clustering)", () => {
+    const legend = make();
+    const tokens = [...legend.element.querySelectorAll<HTMLElement>(".mr2-key__token")];
+    expect(tokens.map((t) => t.dataset["art"])).toEqual(["crest-home", "crest-you", "crest-hostile", "plaque-alliance", "plaque-other"]);
+    expect(tokens.map((t) => t.querySelector(".mr2-key__token-label")?.textContent)).toEqual([
+      "Your yard",
+      "Your outpost",
+      "Hostile",
+      "12 alliance outposts",
+      "9 neutral outposts",
+    ]);
+    expect(legend.element.querySelector<HTMLImageElement>(".mr2-key__crest img")?.src).toContain("/assets/worldmap/cluster/");
+  });
+
   it("leaves the Alliance row out when alliances are switched off", () => {
     expect(rows(make({ alliances: false }))).toEqual(["you", "friend", "pinned", "hostile", "other"]);
   });

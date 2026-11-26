@@ -1,4 +1,4 @@
-import { isSwitchOn } from "./BotConfig.js";
+import { isSwitchOn } from "./envValues.js";
 
 /**
  * The Inferno's switch.

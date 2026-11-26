@@ -136,7 +136,7 @@ describe.skipIf(!dbName)("the friends core on a real database (issue #368)", () 
         pic: null,
         photo: null,
         level: 1,
-        online: "away",
+        online: "month",
         since: T0 + 60,
         giftSentToday: false,
         canGiftFrom: null,
@@ -400,25 +400,39 @@ describe.skipIf(!dbName)("the friends core on a real database (issue #368)", () 
     ]);
   });
 
-  test("online status: hidden is null; online, today, week and away otherwise; last_seen_at never sent", async () => {
+  test("last seen: online, today, this week, 1-4 weeks, over a month; hidden shows only the last two; last_seen_at never sent", async () => {
     for (const other of [B, C, D]) {
       const sent = (await ask(A, other)) as any;
       await answer(other, sent.request.requestid, true);
     }
     const now = Math.floor(Date.now() / 1000);
+    const seen = (userid: number, days: number) =>
+      sql(`UPDATE bym."user" SET last_seen_at = ? WHERE userid = ?`, [new Date((now - days * DAY) * 1000), userid]);
     await redis.setex(lastSeenKey(B), 120, String(now));
     await redis.setex(lastActionKey(B), 600, String(now));
-    await sql(`UPDATE bym."user" SET last_seen_at = ? WHERE userid = ?`, [new Date((now - 3 * DAY) * 1000), C]);
+    await seen(C, 3);
     await sql(`UPDATE bym."user" SET last_seen_at = ? WHERE userid = ?`, [new Date((now - 3600) * 1000), D]);
     let body = await list_(A, now);
     const online = () => Object.fromEntries(body.friends.map((f: any) => [f.userid, f.online]));
     expect(online()).toEqual({ [B]: "online", [C]: "week", [D]: "today" });
     expect(JSON.stringify(body)).not.toContain("last_seen");
 
-    await sql(`UPDATE bym."user" SET last_seen_at = ? WHERE userid = ?`, [new Date((now - 30 * DAY) * 1000), D]);
-    await sql(`UPDATE bym."user" SET hide_online = true WHERE userid = ?`, [B]);
+    await seen(C, 10);
+    await seen(D, 30);
     body = await list_(A, now);
-    expect(online()).toEqual({ [B]: null, [C]: "week", [D]: "away" });
+    expect(online()).toEqual({ [B]: "online", [C]: "weeks", [D]: "month" });
+
+    // Hidden: nothing while active (online, or seen 3 days ago), then only 1-4 weeks and over a month.
+    await sql(`UPDATE bym."user" SET hide_online = true WHERE userid IN (?, ?, ?)`, [B, C, D]);
+    await seen(B, 40);
+    await seen(C, 3);
+    await seen(D, 10);
+    body = await list_(A, now);
+    expect(online()).toEqual({ [B]: null, [C]: null, [D]: "weeks" });
+    await seen(C, 40);
+    body = await list_(A, now);
+    expect(online()).toEqual({ [B]: null, [C]: "month", [D]: "weeks" });
+    expect(JSON.stringify(body)).not.toContain("last_seen");
   });
 
   test("the privacy settings: echoed, and requests off refuses with requestsOff", async () => {
@@ -426,12 +440,12 @@ describe.skipIf(!dbName)("the friends core on a real database (issue #368)", () 
     const user = await (postgres.em as ReturnType<typeof em>).findOneOrFail(User, { userid: B });
     const ctx = { authUser: user, request: { body: { friendRequests: false, hideOnline: true } } } as unknown as Context;
     await updateSettings(ctx);
-    expect(ctx.body).toEqual({ error: 0, settings: { shinyLocked: false, hideOnline: true, friendRequests: false, mapTiltAllowed: false, tiltedMap: true, mapHexShape: "flat", country: null, countryAsked: false, countryChannel: null, notificationsOff: [] } });
+    expect(ctx.body).toEqual({ error: 0, settings: { shinyLocked: false, hideOnline: true, friendRequests: false, mapTiltAllowed: false, tiltedMap: true, mapHexShape: "flat", country: null, countryAsked: false, countryChannel: null, notificationsOff: [], smartMoving: true } });
     expect(await reasonOf(ask(A, B))).toBe("requestsOff");
 
     const back = { authUser: user, request: { body: { friendRequests: true } } } as unknown as Context;
     await updateSettings(back);
-    expect(back.body).toEqual({ error: 0, settings: { shinyLocked: false, hideOnline: true, friendRequests: true, mapTiltAllowed: false, tiltedMap: true, mapHexShape: "flat", country: null, countryAsked: false, countryChannel: null, notificationsOff: [] } });
+    expect(back.body).toEqual({ error: 0, settings: { shinyLocked: false, hideOnline: true, friendRequests: true, mapTiltAllowed: false, tiltedMap: true, mapHexShape: "flat", country: null, countryAsked: false, countryChannel: null, notificationsOff: [], smartMoving: true } });
     expect(((await ask(A, B)) as any).request.status).toBe("pending");
   });
 });

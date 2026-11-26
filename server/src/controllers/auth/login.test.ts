@@ -77,6 +77,7 @@ mock.module("../../utils/logger.js", () => ({
 
 const { login } = await import("./login.js");
 const { clearAllLoginFailures } = await import("../../services/auth/loginBackoff.js");
+const { setMaintenance, MAINTENANCE_OFF } = await import("../../services/admin/maintenance.js");
 
 const PASSWORD = "hunter22!";
 const HASH = await bcrypt.hash(PASSWORD, 4);
@@ -407,5 +408,99 @@ describe("account-wide sign-in pause (security audit 2026-10-29, L2)", () => {
     kept.set(ACCOUNT, { value: "60", ttl: -1 });
     await run("not-the-password", EMAIL, "192.0.2.1");
     expect(kept.get(ACCOUNT)).toEqual({ value: "61", ttl: 60 * 60 });
+  });
+});
+
+describe("login and the maintenance switch (owner, 22 Nov 2026)", () => {
+  const OWNER = 7;
+  let savedAdmins: string | undefined;
+
+  const turnOn = () =>
+    setMaintenance({
+      on: true,
+      message: "Moving the server.",
+      backAt: Date.parse("2026-11-22T15:30:00Z"),
+      startedAt: Date.now(),
+      cutoffAt: Date.now() + 5 * 60_000,
+    });
+
+  /** A sign-in with a saved token only, as the game's start does. */
+  const runToken = async (token: string) => {
+    const ctx = {
+      request: { body: { token, sessionType: "game" } },
+      ip: "127.0.0.1",
+      get: () => "test",
+    } as unknown as Context & { body: Row };
+    try {
+      await login(ctx, async () => {});
+      return { status: ctx.status, data: undefined as Row | undefined, message: undefined as string | undefined };
+    } catch (caught) {
+      const error = caught as { status?: number; message: string; data?: Row };
+      return { status: error.status, data: error.data, message: error.message };
+    }
+  };
+
+  const savedToken = () => {
+    const token = JWT.sign(
+      { user: { email: "player@example.com", discordId: null, sessionType: "game" } },
+      process.env.SECRET_KEY!
+    );
+    kept.set("user-token:game:player@example.com", { value: token, ttl: -1 });
+    return token;
+  };
+
+  beforeEach(() => {
+    savedAdmins = process.env.ADMIN_USER_IDS;
+    process.env.ADMIN_USER_IDS = "999";
+  });
+
+  afterEach(() => {
+    setMaintenance(MAINTENANCE_OFF);
+    if (savedAdmins === undefined) delete process.env.ADMIN_USER_IDS;
+    else process.env.ADMIN_USER_IDS = savedAdmins;
+  });
+
+  test("off: players sign in as before", async () => {
+    expect((await run()).status).toBe(200);
+  });
+
+  test("on: a player is refused with a password, saying why and when it is back", async () => {
+    turnOn();
+    const result = await run();
+    expect(result.status).toBe(403);
+    expect(result.body).toBeUndefined();
+    expect(result.message).toContain("Moving the server.");
+  });
+
+  test("on: a player is refused with a saved token too, with the reason for the game to word", async () => {
+    const token = savedToken();
+    expect((await runToken(token)).status).toBe(200);
+    turnOn();
+    const result = await runToken(savedToken());
+    expect(result.status).toBe(403);
+    expect(result.data).toMatchObject({
+      reason: "maintenance",
+      maintenanceMessage: "Moving the server.",
+      backAt: "2026-11-22T15:30:00.000Z",
+    });
+  });
+
+  test("on: the owner still signs in, with a password or a saved token", async () => {
+    process.env.ADMIN_USER_IDS = String(OWNER);
+    turnOn();
+    expect((await run()).status).toBe(200);
+    expect((await runToken(savedToken())).status).toBe(200);
+  });
+
+  test("on, even before the countdown ends: refused from the moment it is on", async () => {
+    setMaintenance({ on: true, message: "Soon.", backAt: null, startedAt: Date.now(), cutoffAt: Date.now() + 15 * 60_000 });
+    expect((await run()).status).toBe(403);
+  });
+
+  test("off again: players sign in at once", async () => {
+    turnOn();
+    expect((await run()).status).toBe(403);
+    setMaintenance(MAINTENANCE_OFF);
+    expect((await run()).status).toBe(200);
   });
 });

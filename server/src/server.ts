@@ -1,4 +1,5 @@
 import { startWeekendSettingsRefresh } from "./services/events/weekendSettings.js";
+import { startMaintenanceRefresh } from "./services/admin/maintenance.js";
 import { startMonsterMadnessRefresh } from "./services/events/monsterMadnessRuns.js";
 import { getCurrentDateTime } from "./utils/getCurrentDateTime.js";
 import { ensureWelcomeLaunch } from "./services/events/mr2Welcome.js";
@@ -28,6 +29,7 @@ import { Env } from "./enums/Env.js";
 import { initAnticheat } from "./scripts/anticheat/anticheat.js";
 import { initialize as initVersionManifest } from "./config/VersionManifestConfig.js";
 import { startChatServer } from "./chat/chatServer.js";
+import { startLiveMap } from "./services/maproom/live/startLiveMap.js";
 import { publishMailNudge } from "./chat/chatControl.js";
 import { setMailNudge } from "./services/mail/mailNudge.js";
 import { exitOnRedisReconnect } from "./utils/redisReconnectGuard.js";
@@ -36,6 +38,7 @@ import { combatConfig, combatModeWasUnrecognised } from "./config/CombatConfig.j
 import { ownerSaveConfig, ownerSaveModeWasUnrecognised } from "./config/OwnerSaveConfig.js";
 import { startAttackFinaliser } from "./services/base/finaliseAttack.js";
 import { startReplayWorkerWatch } from "./services/base/combat/replayWorkerWatch.js";
+import { warmReplayPool } from "./services/base/combat/replayRunner.js";
 import { startInfernoPlayerFinaliser } from "./services/inferno/infernoPlayerFinalise.js";
 import { startRetentionSweep } from "./services/privacy/retention.js";
 import { startAllianceProgress } from "./services/alliance/progressFeed.js";
@@ -44,8 +47,6 @@ import { startDailySummary } from "./services/alerts/dailySummary.js";
 import { trackResponseTimes } from "./services/health/responseTimes.js";
 import { turnstileSecretKey } from "./services/auth/turnstile.js";
 import { requiresDiscordVerification } from "./config/AccountConfig.js";
-import { botConfig } from "./config/BotConfig.js";
-import { PRESENCE_TTL_SECONDS } from "./controllers/maproom/presence.js";
 import { clientIp } from "./middleware/clientIp.js";
 import { trustedProxies } from "./config/ProxyConfig.js";
 import { startupRefusals } from "./config/StartupSafety.js";
@@ -94,7 +95,15 @@ redis.onclose = (err) => logger.error(`Redis disconnected: ${err.message}`);
 
   await redis.connect();
 
+  // The maintenance switch (`services/admin/maintenance.ts`), read before the
+  // first request or chat connection so a restart during maintenance never
+  // lets anyone in; then every few seconds.
+  await startMaintenanceRefresh(() => postgres.em.fork());
+
   startChatServer();
+  // The live map (beta 9): zone versions bumped by every write a map cell shows, published once a
+  // second (`services/maproom/live/liveZones.ts`), and the online flag's check every 15 s.
+  startLiveMap();
 
   app.use(clientIp());
   // A server error logged during a request keeps who sent it (`utils/errorCapture.ts`).
@@ -157,6 +166,9 @@ redis.onclose = (err) => logger.error(`Redis disconnected: ${err.message}`);
   // 22 Nov 2026) alert the owner and restart the server
   // (`services/base/combat/replayWorkerWatch.ts`).
   startReplayWorkerWatch();
+  // The warm battle workers (patch 9.1, `replayPool.ts`): started now, so the
+  // first battle does not pay for loading the engine.
+  warmReplayPool();
 
   // Finishes attacks whose window closed without a save (issue #138).
   // `ATTACK_FINALISER_SWEEP=off` leaves the sweep to another server sharing
@@ -211,28 +223,9 @@ redis.onclose = (err) => logger.error(`Redis disconnected: ${err.message}`);
       }),
   });
 
-  // The bot sweep (issue #240): grows, repairs and rebalances Map Room 1 bots.
-  // Off unless BOTS_BRAIN=on, and then not even loaded, so a server without
-  // bots runs exactly as before; a failure to start it never stops the server.
-  // Bots are retired (owner, 12 Nov 2026, BOTS_RETIRED): never on production;
-  // elsewhere it tends only the seeded Map Room 2 dev players.
-  if (botConfig().brain) {
-    try {
-      const { startBotSweep } = await import("./services/bots/sweep.js");
-      // Revenge attacks (issue #244) run only while BOTS_REVENGE is on too.
-      const { runRevengeAttack, seenRecently } = await import("./services/bots/revengeRun.js");
-      startBotSweep({
-        em: postgres.em,
-        markOnline: async (userid, now) => {
-          await redis.setex(`last-seen:main:${userid}`, PRESENCE_TTL_SECONDS, String(now));
-        },
-        revenge: { isOnline: seenRecently, attack: (input) => runRevengeAttack(input) },
-      });
-      logger.info(`Bot sweep (BOTS_BRAIN): on; revenge (BOTS_REVENGE): ${botConfig().revenge ? "on" : "off"}`);
-    } catch (err) {
-      logger.error(`Bot sweep could not start: ${err}`);
-    }
-  }
+  // The Map Room 1 bot sweep (grow, repair, revenge) was removed in beta 9:
+  // bots are decommissioned (owner, 12 + 13 Nov 2026). Their accounts stay,
+  // and isBot still keeps them out (services/bots/isBot.ts).
 
   // Say which economy audit mode is live, once, at boot: `log` and `reject`
   // behave very differently for a player and the variable is read only here

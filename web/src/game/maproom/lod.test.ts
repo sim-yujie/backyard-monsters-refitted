@@ -1,7 +1,9 @@
 import { afterEach, describe, expect, it } from "vitest";
 import { LOD_BADGE_ZOOM, LOD_GLYPH_ZOOM, LOD_HEX_ZOOM, LOD_LABEL_ZOOM, MAX_ZOOM, MIN_ZOOM } from "@/config";
 import { mapRoomGrid, setHexShape } from "@/game/HexGrid";
-import { glyphZoom, hexZoom, lodScale, LodTier, tierForZoom } from "./lod";
+import { glyphZoom, hexZoom, lodScale, LodTier, tierForZoom, viewFor } from "./lod";
+import { CAMPS_SHOWN_FROM } from "./cluster/clusterRules";
+import type { MapAtlas } from "./mapAtlas";
 
 describe("tierForZoom", () => {
   it("uses the raster below the hex threshold and shapes at it", () => {
@@ -52,5 +54,14 @@ describe("lodScale (MR2_HEX_SHAPE)", () => {
       expect(tierForZoom(hexZoom())).toBe(LodTier.SHAPES);
       expect(tierForZoom(LOD_BADGE_ZOOM)).toBe(LodTier.BADGES);
     }
+  });
+});
+
+describe("viewFor: wild monster camps when zoomed out (map pin clustering)", () => {
+  const atlas = { outlineBold: {}, outlineFine: {} } as unknown as MapAtlas;
+  it("leaves camps out below where plaques start, and shows them from there", () => {
+    expect(viewFor(tierForZoom(CAMPS_SHOWN_FROM - 0.01), CAMPS_SHOWN_FROM - 0.01, atlas).details).toBe(false);
+    expect(viewFor(tierForZoom(CAMPS_SHOWN_FROM), CAMPS_SHOWN_FROM, atlas).details).toBe(true);
+    expect(viewFor(tierForZoom(0.6), 0.6, atlas).details).toBe(true);
   });
 });

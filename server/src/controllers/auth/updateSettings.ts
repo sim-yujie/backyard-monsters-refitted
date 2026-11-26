@@ -30,6 +30,8 @@ export const settingsOf = (user: User) => ({
   countryChannel: countryChannelFor(user.country),
   // The bell's categories turned off (owner 11 Nov 2026); empty, all on, by default.
   notificationsOff: [...mutedSetOf(user.notifications_off)],
+  // Smart moving for hand attacks (beta 9, owner 24 Nov 2026): on by default.
+  smartMoving: !user.smart_moving_off,
 });
 
 /**
@@ -47,13 +49,14 @@ export const settingsOf = (user: User) => ({
  */
 export const updateSettings: KoaController = async (ctx) => {
   const user: User = ctx.authUser;
-  const { shinyLocked, hideOnline, friendRequests, tiltedMap, country, countryAsked, notifications } =
+  const { shinyLocked, hideOnline, friendRequests, tiltedMap, country, countryAsked, notifications, smartMoving } =
     UpdateSettingsSchema.parse(ctx.request.body);
 
   if (shinyLocked !== undefined) user.shiny_locked = shinyLocked;
   if (hideOnline !== undefined) user.hide_online = hideOnline;
   if (friendRequests !== undefined) user.friend_requests_off = !friendRequests;
   if (tiltedMap !== undefined) user.map_flat = !tiltedMap;
+  if (smartMoving !== undefined) user.smart_moving_off = !smartMoving;
   if (countryAsked) user.country_asked = true;
   if (notifications) user.notifications_off = mutedAfter(user.notifications_off, notifications);
 

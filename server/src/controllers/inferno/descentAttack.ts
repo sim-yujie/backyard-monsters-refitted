@@ -80,6 +80,15 @@ export interface DescentAttackStart {
   flingercapacity: number;
   /** The Inferno purse now: the Descent's running loot total. */
   descentloot: ReturnType<typeof purseAmounts>;
+  /**
+   * The attack's start, unix seconds: the session's own `startedat`, which
+   * the replay gives Krallen her Krallen Hunt loot aura by (`battleReplayInput`
+   * `auraAt`). The page reads it as an attack load's `currenttime`, so it
+   * gives her the aura exactly when the replay does (descent-aura, 24 Nov
+   * 2026: without it the page fought without the aura, and 66 saves
+   * disagreed with the replay).
+   */
+  currenttime: number;
 }
 
 /**
@@ -124,23 +133,20 @@ export const startDescentAttack = async (
   const attackerRanks = academyRanks(userSave.academy);
   const flingerCapacity = descentFlingerCapacity(flingerLevelOf(userSave.buildingdata));
 
-  await startDescentSession(user.userid, {
-    baseid: yard.baseid,
-    flingerCapacity,
-    session: newAttackSession(
-      user.userid,
-      yard.attackid,
-      armies.entryHoused,
-      undefined,
-      undefined,
-      poolAmounts(userSave.resources),
-      defenderForces,
-      championBrains,
-      attackerAcademy,
-      attackerRanks,
-      championHealth
-    ),
-  });
+  const session = newAttackSession(
+    user.userid,
+    yard.attackid,
+    armies.entryHoused,
+    undefined,
+    undefined,
+    poolAmounts(userSave.resources),
+    defenderForces,
+    championBrains,
+    attackerAcademy,
+    attackerRanks,
+    championHealth
+  );
+  await startDescentSession(user.userid, { baseid: yard.baseid, flingerCapacity, session });
 
   return {
     kind: "descent",
@@ -158,6 +164,8 @@ export const startDescentAttack = async (
     ...(Object.keys(attackerRanks).length > 0 && { attackerranks: attackerRanks }),
     flingercapacity: flingerCapacity,
     descentloot: purseAmounts(userSave.iresources),
+    // The session's clock, not `now`: the awaits above can cross a second.
+    currenttime: session.startedat,
   };
 };
 

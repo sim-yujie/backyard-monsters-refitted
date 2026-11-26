@@ -1,5 +1,5 @@
 import { AllianceMessageType, AllianceStance, AllianceType } from "../enums/Alliance.js";
-import { isSwitchOn } from "./BotConfig.js";
+import { isSwitchOn } from "./envValues.js";
 
 /*
  * Every alliance number lives in this file so balance can be tuned in one
@@ -140,19 +140,6 @@ export const ALLIANCE_STATS = [
 ] as const;
 export type AllianceStat = (typeof ALLIANCE_STATS)[number];
 
-/**
- * Stats a battle reads. Health, tower and trap damage are frozen into the
- * attack load's defence (`allianceDefenceOf` in `allianceBonuses.ts`, the
- * shared rules' `DefenderForces.alliance`); `reach` is the map's attack range.
- */
-export const BATTLE_STATS: readonly AllianceStat[] = [
-  "buildingHealth",
-  "outpostHealth",
-  "towerDamage",
-  "trapDamage",
-  "reach",
-];
-
 /** One stat a constellation moves: its value with no stars, and what each star adds. */
 export interface ConstellationEffect {
   stat: AllianceStat;
@@ -178,9 +165,6 @@ export interface ConstellationRules {
  * 2026: one at a time, not two; design v5 §9 had 5 steps of 2).
  */
 export const CONSTELLATION_STEPS = 10;
-
-/** Stars each step lights. */
-export const STARS_PER_STEP = 1;
 
 /**
  * Point price of stars 1-10 for Midas; Conquest pays 2x and Fortress 4x (by
@@ -306,16 +290,11 @@ export type GoalTier = (typeof GOAL_TIERS)[number];
  * Goals are the only source of points (owner, 12 Nov 2026: daily quests no
  * longer pay). Aim: 8 hardcore players finishing 5 Medium goals a week light
  * the whole sky (4,320 Midas) in about 24 weeks; 5 Hard goals a week, the
- * most a week can pay, take about 13.
+ * most a week can pay, take about 13. (That aim was set against the 12 Nov
+ * targets; since 24 Nov Medium and Hard ask 5x / 10x as much for the same
+ * points, `GOAL_TIER_RAISE`.)
  */
 export const GOAL_POINTS: Record<GoalTier, number> = { easy: 15, medium: 37, hard: 70 };
-
-/**
- * How many hardcore Map Room 2 players each tier is sized for, Midas; scaled
- * by `TYPE_SCALE` like the targets (owner, 12 Nov 2026). Targets never scale
- * with the member count; the goal picker shows these instead.
- */
-export const GOAL_TIER_PLAYERS: Record<GoalTier, number> = { easy: 3, medium: 8, hard: 15 };
 
 /** Goals an alliance may set a week (owner). */
 export const GOALS_PER_WEEK = 5;
@@ -331,8 +310,10 @@ export interface GoalRules {
 }
 
 /**
- * The weekly goal menu. Midas targets are sized for 3 / 8 / 15 hardcore Map
- * Room 2 players a week (owner, 12 Nov 2026); never scaled by member count.
+ * The weekly goal menu's Midas targets as the owner set them on 12 Nov 2026,
+ * easy / medium / hard, sized then for 3 / 8 / 15 hardcore Map Room 2 players
+ * a week; never scaled by member count. `GOAL_MENU` raises Medium and Hard by
+ * `GOAL_TIER_RAISE`.
  * Each kind's progress comes from `services/alliance/allianceProgress.ts`:
  * quest events for most, direct hooks for takeovers, daily quests, harvests,
  * kits and outposts defended; "hold" is the members' outposts at the week's
@@ -341,7 +322,7 @@ export interface GoalRules {
  * "Hatch monsters" is gone (owner, 12 Nov 2026): a stored goal of a kind no
  * longer on the menu gains nothing, is not shown and takes no weekly slot.
  */
-export const GOAL_MENU: GoalRules[] = [
+const GOAL_MENU_12_NOV: GoalRules[] = [
   { kind: "tribeDestroy", name: "Destroy tribe yards", targets: [200, 550, 1000] },
   { kind: "takeover", name: "Take over outposts", targets: [60, 160, 300] },
   { kind: "hold", name: "Hold outposts at the end of the week", targets: [90, 240, 450] },
@@ -355,6 +336,20 @@ export const GOAL_MENU: GoalRules[] = [
   { kind: "kitRebuild", name: "Rebuild outposts with Starter Kits", targets: [6, 16, 30], only: AllianceType.CONQUEST },
   { kind: "outpostDefended", name: "Outposts attacked but not taken", targets: [30, 80, 160], only: AllianceType.FORTRESS },
 ];
+
+/**
+ * How much harder each tier is than the 12 Nov targets (owner, 24 Nov 2026,
+ * from beta 9: "Hard x 10, medium x 5"; Easy and the points unchanged). An
+ * alliance need not finish a Hard goal: "its fine if they cant finish".
+ * Goals already set keep the target stored with them (`bym.alliance_goal`).
+ */
+export const GOAL_TIER_RAISE: Record<GoalTier, number> = { easy: 1, medium: 5, hard: 10 };
+
+/** The weekly goal menu: Midas targets, the 12 Nov ones raised by `GOAL_TIER_RAISE`. */
+export const GOAL_MENU: GoalRules[] = GOAL_MENU_12_NOV.map((g) => ({
+  ...g,
+  targets: g.targets.map((t, i) => t * GOAL_TIER_RAISE[GOAL_TIERS[i]!]) as [number, number, number],
+}));
 
 /** Monthly territory badge: the top N of each type's board last month (design v5 §11). */
 export const TERRITORY_BADGE_TOP = 3;

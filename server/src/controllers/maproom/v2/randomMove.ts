@@ -15,6 +15,7 @@ import { voidInvitesFrom } from "../../../services/mail/inviteRules.js";
 import { findFreeCell } from "../../../services/maproom/v2/findFreeCell.js";
 import { invalidateWorldsCache } from "../../../services/maproom/knownWorlds.js";
 import { invalidateSight } from "../../../services/maproom/sight/sightService.js";
+import { markCellRows, type CellRowLike } from "../../../services/maproom/live/liveMarks.js";
 import {
   randomMoveAvailableAt,
   randomMoveRefusal,
@@ -60,6 +61,9 @@ export const randomMove: KoaController = async (ctx) => {
   await catchUpLockedYard(postgres.em, userSave);
 
   const attacking = await isPlayerAttacking(currentUser.userid);
+
+  // The live map (beta 9): outposts this removes around the ORM, marked once it commits.
+  let removed: CellRowLike[] = [];
 
   const outcome = await postgres.em.transactional(async (em) => {
     const save = await em.findOne(
@@ -143,6 +147,7 @@ export const randomMove: KoaController = async (ctx) => {
       await em.nativeDelete(Save, { basesaveid: { $in: outposts.map((outpost) => outpost.basesaveid) } });
     if (outpostCells.length > 0)
       await em.nativeDelete(WorldMapCell, { cellid: { $in: outpostCells.map((cell) => cell.cellid) } });
+    removed = outpostCells;
 
     homeCell.x = target.x;
     homeCell.y = target.y;
@@ -163,6 +168,7 @@ export const randomMove: KoaController = async (ctx) => {
 
     return { coords: [target.x, target.y], outpostsLost, randommoveat: now };
   });
+  markCellRows(removed);
 
   // A new home cell and no outposts: the caller's sight (and their alliance's
   // union) is built from what is gone, as after `joinOrCreateWorld`.

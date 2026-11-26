@@ -13,5 +13,3 @@ declare module "koa" {
     meetsDiscordAgeCheck: boolean;
   }
 }
-
-export {};

@@ -14,7 +14,7 @@ import { recordNotifications } from "../notifications/notifications.js";
 
 /** What a `friend` row carries: the event, and the other player. */
 export interface FriendNotice {
-  event: "request" | "accepted" | "gift" | "helpSpeedup" | "helpRepair";
+  event: "request" | "accepted" | "gift" | "helpSpeedup" | "helpRepair" | "baiterInvite" | "baiterTest";
   userid: number;
   username: string;
   [detail: string]: unknown;
@@ -26,16 +26,25 @@ export interface FriendNotice {
  * line, so a failure is logged. Run it after the friends transaction has
  * committed, never inside it.
  */
-export const notifyFriend = async (
+export const notifyFriend = (em: EntityManager, userid: number, notice: FriendNotice, now: Date = new Date()): Promise<void> =>
+  notifyFriendOfAll(em, userid, [notice], now);
+
+/**
+ * Writes one `friend` row per notice for a player, as {@link notifyFriend}
+ * would one by one, in one insert and one prune (Help all's helps in one
+ * friend's yard). Never throws.
+ */
+export const notifyFriendOfAll = async (
   em: EntityManager,
   userid: number,
-  notice: FriendNotice,
+  notices: readonly FriendNotice[],
   now: Date = new Date(),
 ): Promise<void> => {
+  if (notices.length === 0) return;
   try {
     // As every write: a player who turned "Friends and gifts" off gets it
     // stored already read, never shown (`notificationCategories.ts`).
-    await recordNotifications(em.fork(), userid, null, "friend", [[notice]], now);
+    await recordNotifications(em.fork(), userid, null, "friend", notices.map((notice) => [notice]), now);
   } catch (err) {
     logger.warn("Friend notification for user {userid} failed: {error}", {
       userid,

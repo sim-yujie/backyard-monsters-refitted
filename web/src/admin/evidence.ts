@@ -114,9 +114,9 @@ export const scopeOf = (row: Pick<InboxPlayer, "messages" | "reports" | "filterO
   filterOnly: row.filterOnlyLines,
 });
 
-const catches = (n: number): string => plural(n, "word-filter catch", "word-filter catches");
+const catches = (n: number): string => plural(n, "filter catch", "filter catches");
 
-/** "4 reports and 1 word-filter catch": what closing closes. */
+/** "4 reports and 1 filter catch": what closing closes. */
 export const closesWords = (scope: Scope): string => {
   const parts = [scope.reports ? plural(scope.reports, "report") : null, scope.filterOnly ? catches(scope.filterOnly) : null].filter(
     (p): p is string => p !== null,
@@ -130,7 +130,7 @@ export const scopeWords = (scope: Scope): string => {
   return `${lines}, closes ${closesWords(scope)}`;
 };
 
-/** A queue row's counts: "3 messages · 4 reports from 3 players · 1 word-filter catch". */
+/** A queue row's counts: "3 messages · 4 reports from 3 players · 1 filter catch". */
 export const rowWords = (row: Pick<InboxPlayer, "messages" | "reports" | "uniqueReporters" | "filterOnlyLines">): string =>
   [
     plural(row.messages, "message"),

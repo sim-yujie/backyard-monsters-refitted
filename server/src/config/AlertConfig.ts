@@ -1,4 +1,4 @@
-import { positiveNumber } from "./BotConfig.js";
+import { positiveNumber } from "./envValues.js";
 
 /**
  * Telegram alerts to the owner (`services/alerts/`, docs/alerts.md).
@@ -62,8 +62,24 @@ export const alertConfig = (env: Record<string, string | undefined> = process.en
 };
 
 /** The dashboard sections alerts link to; the admin page answers to each `#name`. */
-export type DashboardSection = "health" | "errors" | "bugs" | "backups";
+export type DashboardSection = "health" | "errors" | "bugs" | "backups" | "moderators" | "moderation";
 
 /** The link to one dashboard section, or null when there is no dashboard address. */
 export const dashboardLink = (section: DashboardSection, config: AlertConfig = alertConfig()): string | null =>
   config.dashboardUrl ? `${config.dashboardUrl}#${section}` : null;
+
+/** The link to one player in the dashboard's moderation inbox (its `player` view), or null. */
+export const dashboardPlayerLink = (userid: number, config: AlertConfig = alertConfig()): string | null =>
+  config.dashboardUrl ? `${config.dashboardUrl}#moderation?player=${userid}` : null;
+
+/** At most this many chat-filter messages an hour; the rest are counted and summed up when the hour ends. */
+export const CHAT_FLAG_ALERTS_PER_HOUR = 10;
+
+/** At most this many chat report messages an hour (a flood of reports would hit Telegram's own limit). */
+export const CHAT_REPORT_ALERTS_PER_HOUR = 30;
+
+/** At most this many new-account photo messages an hour. */
+export const NEW_PHOTO_ALERTS_PER_HOUR = 10;
+
+/** An account this young (since it joined) uploading a profile photo is said on Telegram. */
+export const NEW_ACCOUNT_PHOTO_MS = 60 * 60 * 1000;

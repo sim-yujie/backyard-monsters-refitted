@@ -153,3 +153,101 @@ export const splitCopyHealthShare = (rank: number): number =>
 export const SPLIT_COPY_DAMAGE_SHARE = 0.5;
 /** How big a copy is drawn beside the original. Drawing only; the battle never reads it. */
 export const SPLIT_COPY_SCALE = 0.7;
+
+/*
+ * The Infernal Monster Lab (beta 9, owner, 21 Nov 2026; grilling rounds 4-6
+ * and the numbers card b9-numbers, "all OK, Spurtz middle ladder"). Flash's
+ * Inferno had no Lab. The same rules as the surface Lab: rank 0 is the plain
+ * monster, attacking and defending alike, except that two Inferno monsters
+ * are weaker at rank 0 than they were before beta 9 (Balthazar against
+ * monsters, King Wormzer's splash) and win it back through the Lab.
+ *
+ * Valgos, Grokus and King Wormzer act on buildings, so their abilities
+ * matter only attacking: a defender's splash leaves its own yard alone.
+ * Hatchlings a Spurtz Cannon fires stay rank 0. Moloch's emergence raids
+ * keep their strength: their Balthazar fights at rank 2 and their King
+ * Wormzer at rank 3 ({@link MOLOCH_RAID_RANKS}).
+ */
+
+/** The Lab rank Moloch's raiders fight at (owner, 21 Nov 2026): what they had before beta 9. */
+export const MOLOCH_RAID_RANKS: MonsterRanks = { IC5: 2, IC8: 3 };
+
+/** Rank 1 to 3's entry of a ladder; 0 at rank 0 (or anything outside). */
+const atRank = (ladder: readonly [number, number, number], rank: number): number =>
+  rank >= 1 ? (ladder[Math.min(Math.floor(rank), 3) - 1] ?? 0) : 0;
+
+/**
+ * IC1 Spurtz: "Fury", the middle ladder (owner, 21 Nov 2026): for every
+ * whole second since it came onto the field it moves, swings and hits
+ * harder by this share more, up to {@link spurtzFuryMost}: ranks 1-2 on the
+ * low ladder (0.25% and 0.4% a second, up to 5% and 8%), rank 3 on the
+ * strong one (1% a second, up to 20%).
+ */
+export const spurtzFuryPerSecond = (rank: number): number => atRank([0.0025, 0.004, 0.01], rank);
+/** The most Spurtz's fury adds: 5%, 8%, 20% (the Lab screen's figure). */
+export const spurtzFuryMost = (rank: number): number => atRank([0.05, 0.08, 0.2], rank);
+/** What Spurtz's speed, swing rate and blow are multiplied by after `seconds` on the field. */
+export const spurtzFury = (rank: number, seconds: number): number =>
+  1 + Math.min(spurtzFuryPerSecond(rank) * Math.max(0, Math.floor(seconds)), spurtzFuryMost(rank));
+
+/** IC2 Zagnoid: "Regeneration": once a second it heals 1%, 1.5%, 2% of its full health. */
+export const ZAGNOID_ID = "IC2";
+export const zagnoidHealShare = (rank: number): number => atRank([0.01, 0.015, 0.02], rank);
+
+/**
+ * IC3 Malphus: "Dodge" (owner: "dodges every kind of hit"): a tower's
+ * shot, a monster's or champion's blow, a trap, a splash, a reflected
+ * blow: each misses it at this chance, 10%, 20%, 30%. A burn, venom or the
+ * Descent's heat ticking on it is not a hit and never misses.
+ */
+export const MALPHUS_ID = "IC3";
+export const malphusDodgeChance = (rank: number): number => atRank([0.1, 0.2, 0.3], rank);
+
+/**
+ * IC4 Valgos: "Wall Crusher": each blow it lands on a wall lands on this
+ * many more walls too, the nearest within {@link VALGOS_WALL_RADIUS} of the
+ * one struck: 1, 2, 3.
+ */
+export const VALGOS_ID = "IC4";
+export const VALGOS_WALL_RADIUS = 60;
+export const valgosExtraWalls = (rank: number): number => atRank([1, 2, 3], rank);
+
+/**
+ * IC5 Balthazar: "Monster Hunter": its blow at a monster or a champion is
+ * multiplied by this, attacking or defending: 1x without a rank (beta 9's
+ * live nerf: attacking it struck 3x before), 2x at rank 1, 3x at rank 2,
+ * its top. Its blow at a building is unchanged.
+ */
+export const balthazarMonsterMultiplier = (rank: number): number => atRank([2, 3, 3], rank) || 1;
+
+/**
+ * IC6 Grokus: "Shockwave" (owner: "Grokus AOE hits nearby BUILDINGS"):
+ * each blow it lands also deals this share of it, in full, to every other
+ * building within {@link grokusRadius} of it: 30%, 45%, 60% within 60, 70,
+ * 80 px.
+ */
+export const GROKUS_ID = "IC6";
+export const grokusSplashShare = (rank: number): number => atRank([0.3, 0.45, 0.6], rank);
+export const grokusRadius = (rank: number): number => atRank([60, 70, 80], rank);
+
+/**
+ * IC7 Sabnox: "Burn": what it hits, a building or a monster, burns for
+ * {@link SABNOX_BURN_SECONDS}, losing this share of the blow once a second:
+ * 10%, 20%, 30%. One burn per target: a new hit sets the burn's strength to
+ * its own and starts the four seconds again, on the burn's own beat; burns
+ * never stack.
+ */
+export const sabnoxBurnShare = (rank: number): number => atRank([0.1, 0.2, 0.3], rank);
+export const SABNOX_BURN_SECONDS = 4;
+
+/**
+ * IC8 King Wormzer: "Quake Splash": each blow splashes the buildings round
+ * it, the blow times this, falling to a fifth at the edge, once per target
+ * in a row: x1, x2, x4 within 60, 80, 100 px. Rank 3 is exactly the splash
+ * every King Wormzer had before beta 9 (x4 within 100, Flash's
+ * `KING_WORMZER_MULTIPLIER`; owner, 23 Nov 2026: "rank 3 do x4"), so
+ * Moloch's raiders, fixed at rank 3, keep it. Without a rank there is no
+ * splash (beta 9's live nerf).
+ */
+export const kingWormzerMultiplier = (rank: number): number => atRank([1, 2, 4], rank);
+export const kingWormzerRadius = (rank: number): number => atRank([60, 80, 100], rank);

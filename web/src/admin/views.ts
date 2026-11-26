@@ -43,6 +43,7 @@ export const VIEWS = [
   ["attacks", "Attack log", "moderation"],
   ["flagged", "Flagged", "moderation"],
   ["moderators", "Moderators", "moderation"],
+  ["chatfilter", "Chat filter", "moderation"],
   ["modmail", "Moderator mail", "moderation"],
   ["bugs", "Bug reports", "support"],
   ["shiny", "Give Shiny", "support"],

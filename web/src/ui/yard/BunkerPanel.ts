@@ -1,4 +1,3 @@
-import type { YardRefusal } from "@/api/yard";
 import { BunkerKey, bunkerActions, type BunkerActions } from "@/api/yardBunker";
 import {
   bunkerState,
@@ -19,6 +18,7 @@ import { QuantityStepper } from "@/ui/QuantityStepper";
 import { resourceAmount } from "@/ui/resourceIcon";
 import "@/ui/styles/bunker.css";
 import { ShinyButton } from "./ShinyButton";
+import { refusalText } from "@/ui/dom";
 
 /**
  * The Monster Bunker's controls, in the Monsters screen's Housing tab
@@ -621,7 +621,3 @@ const namesOf = (counts: Readonly<Record<string, number>>): string => {
   return parts.length <= 1 ? (parts[0] ?? "nothing") : `${parts.slice(0, -1).join(", ")} and ${parts.at(-1)}`;
 };
 
-const refusalText = (refusal: YardRefusal): string =>
-  refusal.reason === "network"
-    ? "Could not reach the server. Try again."
-    : refusal.message || "That did not work.";

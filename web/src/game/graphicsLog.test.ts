@@ -1,10 +1,10 @@
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import type { Renderer } from "pixi.js";
 import {
   errorWords,
   GraphicsLogThrottle,
   graphicsMessage,
-  HANDLED_SESSION_KEY,
+  CONTEXT_RESTORE_WAIT_MS,
   LOAD_MAX,
   pictureName,
   readGpuName,
@@ -83,7 +83,7 @@ describe("the throttle", () => {
     const throttle = new GraphicsLogThrottle(8, 20, () => storage());
     expect(throttle.allow("sheet-failed", "monsters/a@2x.png")).toBe(true);
     expect(throttle.allow("sheet-failed", "monsters/a@2x.png")).toBe(false);
-    expect(throttle.allow("sheet-over-limit", "monsters/a@2x.png")).toBe(true);
+    expect(throttle.allow("sheet-cut-failed", "monsters/a@2x.png")).toBe(true);
     expect(throttle.allow("sheet-failed", "monsters/b@2x.png")).toBe(true);
     expect(throttle.allow("context-lost", "game canvas")).toBe(true);
     expect(throttle.allow("context-lost", "game canvas")).toBe(false);
@@ -106,23 +106,6 @@ describe("the throttle", () => {
     expect(second.allow("sheet-failed", "b0")).toBe(true);
     expect(second.allow("sheet-failed", "b1")).toBe(true);
     expect(second.allow("sheet-failed", "b2")).toBe(false);
-  });
-
-  it("gives a handled over-limit picture its own small budget, so it never crowds out real failures", () => {
-    const store = storage();
-    const throttle = new GraphicsLogThrottle(2, 20, () => store);
-    // A 4096 phone's yard: three turret strips cut through a canvas.
-    expect(throttle.allow("sheet-over-limit", "railguntower/turret.t1.webp (@2x)")).toBe(true);
-    expect(throttle.allow("sheet-over-limit", "flaktower/turret.t1.webp (@2x)")).toBe(false);
-    expect(throttle.allow("sheet-over-limit", "imagmatower/turret.t1.webp (@2x)")).toBe(false);
-    expect(throttle.allow("context-lost", "game canvas")).toBe(true);
-    expect(throttle.allow("sheet-failed", "monsters/a.png (@2x)")).toBe(true);
-    expect(store.getItem(SESSION_KEY)).toBe("2");
-    expect(store.getItem(HANDLED_SESSION_KEY)).toBe("1");
-    // Reloads: three handled ones a tab session in all.
-    for (let load = 0; load < 4; load += 1) new GraphicsLogThrottle(2, 20, () => store).allow("sheet-over-limit", "railguntower/turret.t1.webp (@2x)");
-    expect(store.getItem(HANDLED_SESSION_KEY)).toBe("3");
-    expect(new GraphicsLogThrottle(2, 20, () => store).allow("sheet-cut-failed", "railguntower/turret.t1.webp (@2x)")).toBe(true);
   });
 
   it("still caps a page load with site data blocked", () => {
@@ -178,22 +161,75 @@ describe("watchGraphics", () => {
     expect(readGpuName(fakeGl("WebKit WebGL", null))).toBe("WebKit WebGL");
   });
 
-  it("sends a lost and a restored context, with the time on the page, and stops when asked", () => {
+  /** A canvas watched with timers the test runs, and what was sent. */
+  const watched = (hidden: () => boolean | null = () => false) => {
+    vi.useFakeTimers();
     resetGraphicsLog(new GraphicsLogThrottle(8, 20, () => storage()));
     const canvas = new EventTarget();
     const sent: string[] = [];
     const renderer = { gl: fakeGl("WebKit WebGL", "Adreno (TM) 506") } as unknown as Renderer;
-    const stop = watchGraphics(renderer, canvas, (kind, subject, detail) =>
-      reportGraphicsProblem(kind, subject, detail, (m) => void sent.push(m), () => OLD_PHONE),
+    const stop = watchGraphics(
+      renderer,
+      canvas,
+      (kind, subject, detail) => reportGraphicsProblem(kind, subject, detail, (m) => void sent.push(m), () => OLD_PHONE),
+      { set: (run, ms) => setTimeout(run, ms), clear: (timer) => clearTimeout(timer as ReturnType<typeof setTimeout>), hidden },
     );
+    return { canvas, sent, stop };
+  };
+
+  afterEach(() => vi.useRealTimers());
+
+  it("sends nothing for a context restored within the wait, nor a restored entry", () => {
+    const { canvas, sent, stop } = watched();
+    canvas.dispatchEvent(new Event("webglcontextlost"));
+    vi.advanceTimersByTime(CONTEXT_RESTORE_WAIT_MS - 1);
+    canvas.dispatchEvent(new Event("webglcontextrestored"));
+    vi.advanceTimersByTime(CONTEXT_RESTORE_WAIT_MS * 2);
+    stop();
+    expect(sent).toEqual([]);
+  });
+
+  it("sends a context still lost after the wait, once, with the time on the page and the tab's state", () => {
+    const { canvas, sent, stop } = watched();
     canvas.dispatchEvent(new Event("webglcontextlost"));
     canvas.dispatchEvent(new Event("webglcontextlost"));
+    vi.advanceTimersByTime(CONTEXT_RESTORE_WAIT_MS - 1);
+    expect(sent).toHaveLength(0);
+    vi.advanceTimersByTime(1);
+    // Restored late: nothing more.
     canvas.dispatchEvent(new Event("webglcontextrestored"));
     stop();
-    canvas.dispatchEvent(new Event("webglcontextrestored"));
-    expect(sent).toHaveLength(2);
-    expect(sent[0]).toMatch(/^Graphics: WebGL context lost: game canvas \(after \d+ s on the page\) \| gpu Mali-G52 MC2 \|/);
-    expect(sent[1]).toMatch(/^Graphics: WebGL context restored: game canvas \(after \d+ s on the page\) \|/);
+    expect(sent).toHaveLength(1);
+    expect(sent[0]).toMatch(
+      /^Graphics: WebGL context lost: game canvas \(after \d+ s on the page, not restored in 10 s, tab visible\) \| gpu Mali-G52 MC2 \|/,
+    );
+  });
+
+  it("says whether the tab was hidden when the context went, or went to the background while it waited", () => {
+    let hidden = true;
+    const first = watched(() => hidden);
+    first.canvas.dispatchEvent(new Event("webglcontextlost"));
+    vi.advanceTimersByTime(CONTEXT_RESTORE_WAIT_MS);
+    first.stop();
+    expect(first.sent[0]).toContain("not restored in 10 s, tab hidden)");
+
+    hidden = false;
+    const second = watched(() => hidden);
+    second.canvas.dispatchEvent(new Event("webglcontextlost"));
+    hidden = true;
+    vi.advanceTimersByTime(CONTEXT_RESTORE_WAIT_MS);
+    second.stop();
+    expect(second.sent[0]).toContain("tab hidden later)");
+  });
+
+  it("sends nothing once stopped, even for a loss still waiting", () => {
+    const { canvas, sent, stop } = watched();
+    canvas.dispatchEvent(new Event("webglcontextlost"));
+    stop();
+    vi.advanceTimersByTime(CONTEXT_RESTORE_WAIT_MS * 2);
+    canvas.dispatchEvent(new Event("webglcontextlost"));
+    vi.advanceTimersByTime(CONTEXT_RESTORE_WAIT_MS * 2);
+    expect(sent).toEqual([]);
   });
 
   it("names the graphics card in the entries", () => {

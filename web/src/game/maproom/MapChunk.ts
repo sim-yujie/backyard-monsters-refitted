@@ -1,4 +1,4 @@
-import { Container, NineSliceSprite, Sprite, Texture } from "pixi.js";
+import { Container, Graphics, NineSliceSprite, Sprite, Texture } from "pixi.js";
 import { isFogCell } from "@/api/types";
 import { CELL_HEIGHT, CELL_WIDTH, WATER_MAX_HEIGHT } from "@/config";
 import { hexShape, mapRoomGrid } from "@/game/HexGrid";
@@ -42,7 +42,10 @@ import { tagStyle, type TagStyle } from "./painted/markerStyle";
 import { GROUND_ANCHOR_X, groundAnchorY, type GroundArt } from "./groundArt";
 import type { MapPicture } from "./mapPicture";
 import type { MapShields } from "./mapAlliances";
-import { MarkerPins } from "./markerPins";
+import { MarkerPins, type Foot, type MarkerFilter } from "./markerPins";
+import { cellKey } from "./cluster/clusterRules";
+import { NEIGHBOUR_EDGES } from "./attackRange";
+import { borderRelationOf, groupSidesOf } from "./painted/borders";
 import { BORDER_RIM_COLOUR, PINNED_CENTRE_COLOUR, RELATION_LOOK, TILE_RIM_ALPHA } from "./relationLook";
 
 /**
@@ -75,6 +78,12 @@ import { BORDER_RIM_COLOUR, PINNED_CENTRE_COLOUR, RELATION_LOOK, TILE_RIM_ALPHA 
  * chunk's container, because a cell's cliff must go under the faces of the
  * cells in front of it, and at a chunk's edge those belong to the next chunk.
  */
+
+/** The tile map's group outlines (map pin clustering zoomed out), world pixels. */
+const GROUP_RIM_WIDTH = 7;
+const GROUP_LINE_WIDTH = 3.5;
+/** Scratch for `writeCellCorners`. */
+const CORNERS: number[] = new Array<number>(12);
 
 /** Detail a chunk has been asked to carry. */
 export const TextLevel = {
@@ -225,6 +234,15 @@ export class MapChunk {
   /** This chunk's tiles, water and hairlines, which live in the shared ground layer. */
   private readonly groundSprites: Sprite[] = [];
   private readonly outlineSprites: Sprite[] = [];
+  /** Each player cell's relation border sprites and its cell, so a plaque can quiet them (clustering). */
+  private readonly borderSprites: Sprite[] = [];
+  private readonly borderCells: number[] = [];
+  /** Per border sprite: an alliance or neutral cell's (drawn as group outlines when zoomed out). */
+  private readonly borderGroupable: boolean[] = [];
+  /** Alliance and neutral group outlines for the zoomed-out map (tile map; map pin clustering). */
+  private groupOutlines: Graphics | null = null;
+  private filter: MarkerFilter | null = null;
+  private filterVersion = -1;
   private shown = false;
   private outlinesShown = false;
   private readonly requests: LabelRequest[] = [];
@@ -334,23 +352,31 @@ export class MapChunk {
         if (appearance.relation !== null) {
           const look = RELATION_LOOK[appearance.relation];
           const alpha = appearance.dimmed ? DIMMED_ALPHA : 1;
+          const key = cellKey(col, row);
+          const groupable = appearance.relation === "alliance" || appearance.relation === "other";
+          if (groupable) this.addGroupSides(store, context, col, row, centre, look.colour);
           const rim = place(new Sprite(this.atlas.relationRims[look.style]), centre.x, centre.y, BORDER_RIM_COLOUR);
           rim.alpha = TILE_RIM_ALPHA * alpha;
           this.addGround(rim, order + 0.3);
+          this.addBorder(rim, key, groupable);
           const border = place(new Sprite(this.atlas.relationBorders[look.style]), centre.x, centre.y, look.colour);
           border.alpha = alpha;
           this.addGround(border, order + 0.35);
+          this.addBorder(border, key, groupable);
           if (look.style === "triple") {
             const centre2 = place(new Sprite(this.atlas.pinnedCentre), centre.x, centre.y, PINNED_CENTRE_COLOUR);
             centre2.alpha = alpha;
             this.addGround(centre2, order + 0.36);
+            this.addBorder(centre2, key, groupable);
           }
         }
 
+        // Each cell's markers know their cell, so map pin clustering can leave them out.
+        const key = cellKey(col, row);
         if (appearance.marker === CellMarker.YARD || appearance.marker === CellMarker.OUTPOST) {
-          this.addPlayer(appearance, centre.x, centre.y);
+          this.addPlayer(appearance, centre.x, centre.y, key);
         } else {
-          this.addCamp(appearance, centre.x, centre.y);
+          this.addCamp(appearance, centre.x, centre.y, key);
         }
       }
     }
@@ -365,10 +391,74 @@ export class MapChunk {
     this.ground.addChild(sprite);
   }
 
+  private addBorder(sprite: Sprite, cell: number, groupable: boolean): void {
+    this.borderSprites.push(sprite);
+    this.borderCells.push(cell);
+    this.borderGroupable.push(groupable);
+  }
+
+  /**
+   * An alliance or neutral cell's group sides (`groupSidesOf`): the sides towards a cell of another
+   * relation, none for a lone cell, drawn into the chunk's outline picture (zoomed out only).
+   */
+  private addGroupSides(
+    store: ZoneStore,
+    context: MapViewerContext,
+    col: number,
+    row: number,
+    centre: { x: number; y: number },
+    colour: number,
+  ): void {
+    const viewer = { myAlliance: context.myAlliance, friendMark: context.friendMark };
+    const sides = groupSidesOf(col, row, mapRoomGrid.shape, (c, r) => borderRelationOf(store.getCell(c, r), viewer));
+    if (sides === 0) return;
+    if (!this.groupOutlines) {
+      // Over the ground, under the camps and players (the tile map is flat in Classic; on a tilted
+      // tile map the chunk's layers stand upright, so the outlines are not shown there).
+      this.groupOutlines = new Graphics();
+      this.container.addChildAt(this.groupOutlines, 0);
+    }
+    const corners = mapRoomGrid.writeCellCorners(col, row, CORNERS);
+    const lift = centre.y - mapRoomGrid.cellToPixel(col, row).y;
+    const g = this.groupOutlines;
+    for (const width of [GROUP_RIM_WIDTH, GROUP_LINE_WIDTH]) {
+      for (let k = 0; k < 6; k++) {
+        if ((sides & (1 << k)) === 0) continue;
+        const [a, b] = NEIGHBOUR_EDGES[k]!;
+        g.moveTo(corners[a * 2]!, corners[a * 2 + 1]! + lift).lineTo(corners[b * 2]!, corners[b * 2 + 1]! + lift);
+      }
+      g.stroke({ width, color: width === GROUP_RIM_WIDTH ? BORDER_RIM_COLOUR : colour, cap: "round", join: "round" });
+    }
+  }
+
   /** The ground layer is shared, so this chunk's part of it is shown sprite by sprite. */
   private showGround(): void {
     for (const sprite of this.groundSprites) sprite.visible = this.shown;
     for (const sprite of this.outlineSprites) sprite.visible = this.shown && this.outlinesShown;
+    this.showBorders();
+  }
+
+  /**
+   * Relation borders: not under a map pin clustering plaque (`MarkerFilter.quiet`), and when zoomed
+   * out with group outlines on, an alliance or neutral cell's own border gives way to its group's.
+   */
+  private showBorders(): void {
+    const quiet = this.filter?.quiet;
+    const group = this.filter?.groupBorders ?? false;
+    for (let i = 0; i < this.borderSprites.length; i++) {
+      const left = (quiet !== undefined && quiet[this.borderCells[i]!] === 1) || (group && this.borderGroupable[i]!);
+      this.borderSprites[i]!.visible = this.shown && !left;
+    }
+    if (this.groupOutlines) this.groupOutlines.visible = this.shown && group && !this.pins.tilted;
+  }
+
+  /** Applies the clustering's filter to the markers and the border sprites; cheap while unchanged. */
+  applyFilter(filter: MarkerFilter): void {
+    this.pins.applyFilter(filter);
+    if (filter === this.filter && filter.version === this.filterVersion) return;
+    this.filter = filter;
+    this.filterVersion = filter.version;
+    if (this.borderSprites.length > 0) this.showBorders();
   }
 
   /** Adds the text this chunk is missing. A no-op once it is already there. */
@@ -422,6 +512,11 @@ export class MapChunk {
     for (const sprite of this.groundSprites) sprite.destroy();
     this.groundSprites.length = 0;
     this.outlineSprites.length = 0;
+    this.borderSprites.length = 0;
+    this.borderCells.length = 0;
+    this.borderGroupable.length = 0;
+    this.groupOutlines?.destroy();
+    this.groupOutlines = null;
     this.hasPortraits = false;
     this.pins.clear("body");
     this.clearPlates();
@@ -447,12 +542,12 @@ export class MapChunk {
    * A wild monster camp: its tent, its portrait, and its level on a badge.
    * Dims along with the rest of the map under the kit filter (#334).
    */
-  private addCamp(appearance: CellAppearance, x: number, y: number): void {
+  private addCamp(appearance: CellAppearance, x: number, y: number, cell: number): void {
     const destroyed = appearance.marker === CellMarker.CAMP_DESTROYED;
     if (appearance.marker !== CellMarker.CAMP && !destroyed) return;
     const alpha = appearance.dimmed ? DIMMED_ALPHA : 1;
     // Where the camp stands: the portrait's foot. Its tent, cross and badge go with it.
-    const foot = { x, y: y + AVATAR_BASE_Y };
+    const foot: Foot = { x, y: y + AVATAR_BASE_Y, cell, camp: true };
 
     const tent = place(
       new Sprite(destroyed ? this.atlas.tentDestroyed : this.atlas.tent),
@@ -510,7 +605,7 @@ export class MapChunk {
    * are pinned to the camp's foot, so they stand upright on the tilted map
    * with the portrait.
    */
-  private addHealthBar(health: number, foot: { x: number; y: number }, x: number, y: number, alpha: number): void {
+  private addHealthBar(health: number, foot: Foot, x: number, y: number, alpha: number): void {
     const scale = tagStyle(isFlatGround(), hexShape()).scale;
     const width = HEALTH_BAR_WIDTH * scale;
     const height = HEALTH_BAR_HEIGHT * scale;
@@ -548,7 +643,7 @@ export class MapChunk {
    */
   private addPortrait(
     appearance: CellAppearance,
-    foot: { x: number; y: number },
+    foot: Foot,
     destroyed: boolean,
     alpha: number,
   ): boolean {
@@ -582,12 +677,12 @@ export class MapChunk {
    * so they sit over the building but under the star and the plate (both in
    * later layers), and dim with the rest of the cell under the kit filter.
    */
-  private addPlayer(appearance: CellAppearance, x: number, y: number): void {
+  private addPlayer(appearance: CellAppearance, x: number, y: number, cell: number): void {
     const alpha = appearance.dimmed ? DIMMED_ALPHA : 1;
     const outpost = appearance.marker === CellMarker.OUTPOST;
     const footX = x;
     const footY = y + FOOT_Y;
-    const foot = { x: footX, y: footY };
+    const foot: Foot = { x: footX, y: footY, cell };
     const flashScale = BUILDING_HEIGHT / FLASH_TOWER_HEIGHT;
 
     const texture = this.buildings.textureFor(
@@ -713,7 +808,7 @@ export class MapChunk {
 
   /** The thin rectangle behind a name: white for others, the relation colour otherwise. */
   private addLabel(
-    foot: { x: number; y: number },
+    foot: Foot,
     x: number,
     y: number,
     textWidth: number,

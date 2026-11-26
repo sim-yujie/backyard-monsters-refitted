@@ -11,6 +11,7 @@ import {
   type Game,
 } from "./game";
 import { checkAttackDock, openAttack } from "./attackDock";
+import { checkFan } from "./fan";
 import { checkFriendMenu, leaveFriendYard, openFriendYard } from "./friendYard";
 import { knownFailure } from "./knownFailures";
 import { checkWindow, pageFacts, type CheckArgs, type CheckReport } from "./measure";
@@ -85,6 +86,8 @@ const expectWindow = async (
     minListFull: settings.minListFull,
     tolerance: TOLERANCE,
     ...(win.closeButton === undefined ? {} : { closeSelector: win.closeButton }),
+    ...(win.allTabs ? { allTabs: true } : {}),
+    ...(win.inSight ? { inSight: win.inSight } : {}),
   });
   const box = report.panel
     ? `${report.panel.width}x${report.panel.height} at ${report.panel.left},${report.panel.top}`
@@ -258,6 +261,19 @@ export const defineLayoutSuite = (profileIds: readonly string[]): void => {
         await closeAll(page);
         await closeWorldChat(page);
 
+        // More's fan at its busiest (fan.ts): every bubble under the top bar.
+        const fan: WindowCase = {
+          id: "more-fan",
+          label: "More's fan",
+          panel: ".bubble-menu",
+          items: null,
+          optional: true,
+          why: "the bubble menu is off or More is hidden",
+          tabs: false,
+          open: async () => true,
+        };
+        await windowStep(page, profile, fan, fan.id, tally, () => checkFan(page, profile));
+
         // Late: a blind tap on the yard may leave a building picked up (the
         // friend's-yard step after it reloads the page anyway).
         const building: WindowCase = {
@@ -313,6 +329,17 @@ export const defineLayoutSuite = (profileIds: readonly string[]): void => {
         };
         await windowStep(page, profile, attackDock, attackDock.id, tally, async () => {
           const noWayIn = await openAttack(page);
+          if (noWayIn !== null) return noWayIn;
+          await checkAttackDock(page, profile);
+          return null;
+        });
+
+        // Then the Baiter's test (beta 9 play-test, 23 Nov 2026): its test
+        // line above the army left one army row in sight; the army window
+        // must still show a few rows under it.
+        const baiterDock: WindowCase = { ...attackDock, id: "baiter-dock", label: "Baiter test dock" };
+        await windowStep(page, profile, baiterDock, baiterDock.id, tally, async () => {
+          const noWayIn = await openAttack(page, "baiter");
           if (noWayIn !== null) return noWayIn;
           await checkAttackDock(page, profile);
           return null;

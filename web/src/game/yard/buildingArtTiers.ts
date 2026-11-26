@@ -171,6 +171,14 @@ export interface TierTurret {
    */
   readonly columns?: number;
   /**
+   * Cells in a row of a strip that is one run of headings only wrapped into
+   * rows, so that no side of the file passes 4096 px at @2x, the texture limit
+   * of many phones (`web/tools/tower-tiers/repack_grid.py`, the `.g8` files):
+   * cell `i` is at column `i % grid`, row `floor(i / grid)`, and unlike
+   * `columns`' rows the rows are not looks of their own.
+   */
+  readonly grid?: number;
+  /**
    * Where each cell's barrel points on screen and where its muzzle is, for
    * the 3D towers (`turretAim.ts`): the tower shows the cell that points
    * along its shot, and the shot leaves from its muzzle. Without it the
@@ -322,25 +330,25 @@ export const TOWER_TIER_ART: Readonly<Record<number, readonly TierArt[]>> = {
   // 115 Aerial Defense Tower: 3D, 32 headings
   115: [
     { from: 1, top: ["top.t1@2x.webp", -39, -4], shadow: ["shadow.t1.jpg", -36, 26], lift: 0,
-      turret: { body: ["body.t1@2x.webp", -39, -1], strip: ["turret.t1@2x.webp", -33, -27, 66, 52, 32], pivot: [0, 16.39],
+      turret: { body: ["body.t1@2x.webp", -39, -1], strip: ["turret.t1.g8@2x.webp", -33, -27, 66, 52, 32], grid: 8, pivot: [0, 16.39],
         aim: TURRET_AIM["115.t1"] } },
     { from: 4, top: ["top.t2@2x.webp", -39, -9], shadow: ["shadow.t2.jpg", -35, 25], lift: 6,
-      turret: { body: ["body.t2@2x.webp", -39, -6], strip: ["turret.t2@2x.webp", -33, -32, 66, 51, 32], pivot: [0, 10.87],
+      turret: { body: ["body.t2@2x.webp", -39, -6], strip: ["turret.t2.g8@2x.webp", -33, -32, 66, 51, 32], grid: 8, pivot: [0, 10.87],
         aim: TURRET_AIM["115.t2"] } },
     { from: 7, top: ["top.t3@2x.webp", -39, -23], shadow: ["shadow.t3.jpg", -35, 20], lift: 19,
-      turret: { body: ["body.t3@2x.webp", -39, -19], strip: ["turret.t3@2x.webp", -33, -46, 66, 52, 32], pivot: [0, -2.45],
+      turret: { body: ["body.t3@2x.webp", -39, -19], strip: ["turret.t3.g8@2x.webp", -33, -46, 66, 52, 32], grid: 8, pivot: [0, -2.45],
         aim: TURRET_AIM["115.t3"] } },
   ],
   // 118 Railgun: 3D, 32 headings
   118: [
     { from: 1, top: ["top.t1@2x.webp", -41, -2], shadow: ["shadow.t1.jpg", -33, 30], lift: 0,
-      turret: { body: ["body.t1@2x.webp", -41, 11], strip: ["turret.t1@2x.webp", -48, -12, 96, 54, 32], pivot: [0, 23.86],
+      turret: { body: ["body.t1@2x.webp", -41, 11], strip: ["turret.t1.g8@2x.webp", -48, -12, 96, 54, 32], grid: 8, pivot: [0, 23.86],
         aim: TURRET_AIM["118.t1"] } },
     { from: 4, top: ["top.t2@2x.webp", -41, -7], shadow: ["shadow.t2.jpg", -33, 27], lift: 5,
-      turret: { body: ["body.t2@2x.webp", -41, 6], strip: ["turret.t2@2x.webp", -48, -17, 96, 54, 32], pivot: [0, 18.99],
+      turret: { body: ["body.t2@2x.webp", -41, 6], strip: ["turret.t2.g8@2x.webp", -48, -17, 96, 54, 32], grid: 8, pivot: [0, 18.99],
         aim: TURRET_AIM["118.t2"] } },
     { from: 7, top: ["top.t3@2x.webp", -34, -22], shadow: ["shadow.t3.jpg", -33, 23], lift: 20,
-      turret: { body: ["body.t3@2x.webp", -34, -7], strip: ["turret.t3@2x.webp", -48, -33, 96, 55, 32], pivot: [0, 3.4],
+      turret: { body: ["body.t3@2x.webp", -34, -7], strip: ["turret.t3.g8@2x.webp", -48, -33, 96, 55, 32], grid: 8, pivot: [0, 3.4],
         aim: TURRET_AIM["118.t3"] } },
   ],
   // 129 Quake Tower: 3D, one look for all its levels as Flash's (new art, branch art/quake-3d). Each cell of its strike
@@ -355,13 +363,13 @@ export const TOWER_TIER_ART: Readonly<Record<number, readonly TierArt[]>> = {
   // 132 Magma Tower: 3D, the Volcanic look (owner, 29 Oct 2026); six levels, so 1-2, 3-4 and 5-6
   132: [
     { from: 1, top: ["top.t1@2x.webp", -48, -44], shadow: ["shadow.1.v2.jpg", -31, 10], lift: 0,
-      turret: { body: ["body.t1@2x.webp", -48, -26], strip: ["turret.t1@2x.webp", -31, -59, 66, 45, 32], pivot: [2, -20.34],
+      turret: { body: ["body.t1@2x.webp", -48, -26], strip: ["turret.t1.g8@2x.webp", -31, -59, 66, 45, 32], grid: 8, pivot: [2, -20.34],
         aim: TURRET_AIM["132.t1"] } },
     { from: 3, top: ["top.t2@2x.webp", -48, -52], shadow: ["shadow.1.v2.jpg", -31, 10], lift: 8,
-      turret: { body: ["body.t2@2x.webp", -48, -34], strip: ["turret.t2@2x.webp", -31, -67, 66, 45, 32], pivot: [2, -28.46],
+      turret: { body: ["body.t2@2x.webp", -48, -34], strip: ["turret.t2.g8@2x.webp", -31, -67, 66, 45, 32], grid: 8, pivot: [2, -28.46],
         aim: TURRET_AIM["132.t2"] } },
     { from: 5, top: ["top.t3@2x.webp", -48, -60], shadow: ["shadow.1.v2.jpg", -31, 10], lift: 16,
-      turret: { body: ["body.t3@2x.webp", -48, -44], strip: ["turret.t3@2x.webp", -31, -75, 66, 45, 32], pivot: [2, -36.58],
+      turret: { body: ["body.t3@2x.webp", -48, -44], strip: ["turret.t3.g8@2x.webp", -31, -75, 66, 45, 32], grid: 8, pivot: [2, -36.58],
         aim: TURRET_AIM["132.t3"] } },
   ],
   // 136 Spurtz Cannon: 3D, one look for its five levels
@@ -381,13 +389,13 @@ export const TOWER_TIER_ART: Readonly<Record<number, readonly TierArt[]>> = {
 /** The Inferno's Blast Tower: 3D, worn, Brimstone, Forged Steel (owner, 29 Oct 2026). */
 const BLAST_TOWER_TIERS: readonly TierArt[] = [
   { from: 1, top: ["top.t1@2x.webp", -47, -45], shadow: ["shadow.1.v2.jpg", -48, 11], lift: 0,
-    turret: { body: ["body.t1@2x.webp", -47, -30], strip: ["turret.t1@2x.webp", -33, -54, 66, 46, 32], pivot: [0, -20.83],
+    turret: { body: ["body.t1@2x.webp", -47, -30], strip: ["turret.t1.g8@2x.webp", -33, -54, 66, 46, 32], grid: 8, pivot: [0, -20.83],
       aim: TURRET_AIM["i20.t1"] } },
   { from: 4, top: ["top.t2@2x.webp", -48, -53], shadow: ["shadow.1.v2.jpg", -48, 11], lift: 8,
-    turret: { body: ["body.t2@2x.webp", -48, -40], strip: ["turret.t2@2x.webp", -33, -62, 66, 46, 32], pivot: [0, -28.95],
+    turret: { body: ["body.t2@2x.webp", -48, -40], strip: ["turret.t2.g8@2x.webp", -33, -62, 66, 46, 32], grid: 8, pivot: [0, -28.95],
       aim: TURRET_AIM["i20.t2"] } },
   { from: 7, top: ["top.t3@2x.webp", -47, -61], shadow: ["shadow.1.v2.jpg", -48, 11], lift: 16,
-    turret: { body: ["body.t3@2x.webp", -47, -56], strip: ["turret.t3@2x.webp", -33, -70, 66, 46, 32], pivot: [0, -37.07],
+    turret: { body: ["body.t3@2x.webp", -47, -56], strip: ["turret.t3.g8@2x.webp", -33, -70, 66, 46, 32], grid: 8, pivot: [0, -37.07],
       aim: TURRET_AIM["i20.t3"] } },
 ];
 
@@ -403,13 +411,13 @@ export const INFERNO_TOWER_TIER_ART: Readonly<Record<number, readonly TierArt[]>
   // 21 Sharpshooter: 3D, worn, Brimstone, Forged Steel
   21: [
     { from: 1, top: ["top.t1@2x.webp", -37, -78], shadow: ["shadow.1.v2.jpg", -50, 12], lift: 0,
-      turret: { body: ["body.t1@2x.webp", -37, -56], strip: ["turret.t1@2x.webp", -36, -83, 68, 45, 32], pivot: [-2, -51.44],
+      turret: { body: ["body.t1@2x.webp", -37, -56], strip: ["turret.t1.g8@2x.webp", -36, -83, 68, 45, 32], grid: 8, pivot: [-2, -51.44],
         aim: TURRET_AIM["i21.t1"] } },
     { from: 4, top: ["top.t2@2x.webp", -51, -86], shadow: ["shadow.1.v2.jpg", -50, 12], lift: 8,
-      turret: { body: ["body.t2@2x.webp", -51, -64], strip: ["turret.t2@2x.webp", -36, -91, 68, 45, 32], pivot: [-2, -59.56],
+      turret: { body: ["body.t2@2x.webp", -51, -64], strip: ["turret.t2.g8@2x.webp", -36, -91, 68, 45, 32], grid: 8, pivot: [-2, -59.56],
         aim: TURRET_AIM["i21.t2"] } },
     { from: 7, top: ["top.t3@2x.webp", -50, -94], shadow: ["shadow.1.v2.jpg", -50, 12], lift: 16,
-      turret: { body: ["body.t3@2x.webp", -50, -72], strip: ["turret.t3@2x.webp", -36, -99, 68, 45, 32], pivot: [-2, -67.68],
+      turret: { body: ["body.t3@2x.webp", -50, -72], strip: ["turret.t3.g8@2x.webp", -36, -99, 68, 45, 32], grid: 8, pivot: [-2, -67.68],
         aim: TURRET_AIM["i21.t3"] } },
   ],
 };
@@ -444,7 +452,8 @@ export const TOWN_HALL_ART: readonly TierArt[] = [
  * the box its sack fills, its fill level as Flash's was. The Monster Lab's
  * three strips are its dome's brew and its two side doors' cogs, as Flash's
  * three, each the whole building round what moves, fading out over the body. The Monster Housing
- * and the Hatchery Control Center stand still, as Flash's did.
+ * and the Hatchery Control Center stand still, as Flash's did; the Control Center's levels 2 and 3 (this
+ * project's, beta 9) have 3D looks Flash never had.
  */
 export const BUILDING_3D_ART: Readonly<Record<number, readonly TierArt[]>> = {
   // 1 Twig Snapper: 3D, Flash's four looks (levels 1, 3, 6 and 10); its saw and gears turn
@@ -610,11 +619,19 @@ export const BUILDING_3D_ART: Readonly<Record<number, readonly TierArt[]>> = {
       damaged: { top: ["top.3d1.damaged@2x.webp", -105, 11], shadow: ["shadow.3d1.damaged.jpg", -105, 29] },
       destroyed: { top: ["top.3d1.destroyed@2x.webp", -105, 29], shadow: ["shadow.3d1.destroyed.jpg", -102, 35] } },
   ],
-  // 16 Hatchery Control Center: 3D, one look, still as Flash's
+  // 16 Hatchery Control Center: 3D, still as Flash's. Flash's one look is level 1; levels 2 and 3 (this project's,
+  // beta 9) have looks of their own, Flash has none (owner, 24 Nov 2026: direction C, level 3 with the big red dish;
+  // art-samples/hcc-3d out/r6 on branch art/hcc-3d-levels). Each level has its own wreck. Classic keeps Flash's.
   16: [
     { from: 1, top: ["top.3d1@2x.webp", -40, -57], shadow: ["shadow.3d1.jpg", -40, 21], lift: 0,
       damaged: { top: ["top.3d1.damaged@2x.webp", -53, -51], shadow: ["shadow.3d1.damaged.jpg", -40, 20] },
       destroyed: { top: ["top.3d1.destroyed@2x.webp", -56, -6], shadow: ["shadow.3d1.destroyed.jpg", -72, 36] } },
+    { from: 2, top: ["top.3d2@2x.webp", -47, -80], shadow: ["shadow.3d2.jpg", -43, 12], lift: 0,
+      damaged: { top: ["top.3d2.damaged@2x.webp", -53, -71], shadow: ["shadow.3d2.damaged.jpg", -44, 12] },
+      destroyed: { top: ["top.3d2.destroyed@2x.webp", -82, -32], shadow: ["shadow.3d2.destroyed.jpg", -79, 21] } },
+    { from: 3, top: ["top.3d3@2x.webp", -53, -126], shadow: ["shadow.3d3.jpg", -51, 8], lift: 0,
+      damaged: { top: ["top.3d3.damaged@2x.webp", -57, -106], shadow: ["shadow.3d3.damaged.jpg", -53, 8] },
+      destroyed: { top: ["top.3d3.destroyed@2x.webp", -89, -66], shadow: ["shadow.3d3.destroyed.jpg", -85, 22] } },
   ],
   // 17 Block: 3D, Flash's five looks, still
   17: [
@@ -749,7 +766,12 @@ export const BUILDING_3D_ART: Readonly<Record<number, readonly TierArt[]>> = {
  * Incubator (13, `buildings/ihatchery/`), from art/incubator-3d (owner, 15
  * Nov 2026), exported by `export3d_buildings.py incubator`; and its Academy
  * (26, `buildings/iacademy/`), from art/iacademy-3d (17 Nov 2026), exported
- * by `export3d_buildings.py iacademy`.
+ * by `export3d_buildings.py iacademy`; and its General Store (12, in the
+ * surface store's folder, which the Inferno's row shares), look E from
+ * art/inferno-store-r2 (owner, 22 Nov 2026), exported by
+ * `export3d_buildings.py istore`; and its Monster Lab (116, the Infernal
+ * Monster Lab, in the surface Lab's folder, which the Inferno shares), look E
+ * from art/infernal-lab-3d, exported by `export3d_buildings.py ilab`.
  */
 export const INFERNO_BUILDING_3D_ART: Readonly<Record<number, readonly TierArt[]>> = {
   // 1 Bone Cruncher: 3D (owner, 6 Nov 2026: "3d bone crusher has been approved"), the clean-room model's three tiers,
@@ -829,6 +851,19 @@ export const INFERNO_BUILDING_3D_ART: Readonly<Record<number, readonly TierArt[]
       anim: { strip: ["anim.3d1@2x.webp", -57, -41, 115, 127, 30], columns: 17, whole: true, home: true },
       destroyed: { top: ["top.3d1@2x.webp", -57, -38], shadow: ["shadow.3d1.jpg", -61, 31] } },
   ],
+  // 12 General Store: 3D (owner on the Review Desk, 22 Nov 2026: look E, "Bone and Brimstone"), the surface Store's
+  // own model (the die on its tacks, the stick roof, the Match Book cover, the strap) in the Inferno's materials: a
+  // cracked basalt die with lava pips, bone slats, an iron cover with the words branded in, two horns on the strap
+  // (art/inferno-store-r2, `export3d_buildings.py istore`). It replaces the painted lava forge shop of patch 8.1. In
+  // the surface store's folder as `*.i3d1*`, beside the surface's `*.3d1*`. Its lava pips and the magma in its cracks
+  // swell and fade, 32 cells over the body, all the time (`yardAnim.ts`). Damaged and destroyed are its own renders,
+  // one rough pass each after Flash's. With the Classic look the Inferno draws Flash's store.
+  12: [
+    { from: 1, top: ["top.i3d1@2x.webp", -43, -48], shadow: ["shadow.i3d1.jpg", -41, 1], lift: 0,
+      anim: { strip: ["anim.i3d1@2x.webp", -29, -16, 66, 68, 32], columns: 31, body: ["body.i3d1@2x.webp", -43, -48] },
+      damaged: { top: ["top.i3d1.damaged@2x.webp", -50, -44], shadow: ["shadow.i3d1.damaged.jpg", -51, 0] },
+      destroyed: { top: ["top.i3d1.destroyed@2x.webp", -54, -40], shadow: ["shadow.i3d1.destroyed.jpg", -56, 2] } },
+  ],
   // 13 Incubator: 3D (owner, 15 Nov 2026, round 3 approved as is), the clean-room model, one look for its three levels
   // as Flash's. Its moving parts over a still body, in Flash's 50 cells: the brood churns in the porthole and the
   // feed hose pumps, twice a loop, and green smoke puffs from the vent once (laid into the cells by its post.py). It
@@ -875,6 +910,32 @@ export const INFERNO_BUILDING_3D_ART: Readonly<Record<number, readonly TierArt[]
       damaged: { top: ["top.3d3.damaged@2x.webp", -20, -24], shadow: ["shadow.3d3.damaged.jpg", -20, -3] },
       destroyed: { top: ["top.3d3.destroyed@2x.webp", -20, -3], shadow: ["shadow.3d3.destroyed.jpg", -17, 7] } },
   ],
+  // 116 Monster Lab, the Infernal Monster Lab: 3D (the owner's pick, round 2's look E, "Bone and Brimstone"), the
+  // surface Lab's own shape in the Inferno's materials: a basalt lower tier with magma in its joints, bone columns, iron
+  // decks, a dome of green brew, three iron bells with horns (art/infernal-lab-3d, `export3d_buildings.py ilab`). Three
+  // levels, each the level below plus parts (2: brew canisters, copper coils and outward horns; 3: a brazier crown, brew
+  // flasks and a lava channel), standing where the surface's Modern Lab does. In the surface Lab's folder as
+  // `*.i3d<n>*`, beside the surface's `*.3d1*`. Its brew swirls and its lava and magma drift and pulse, 24 cells over
+  // the body, while it researches (`yardAnim.ts`, the surface Lab's rate), from cell 0 and back to it when the research
+  // ends (`home`). Each level has its own damaged look; the destroyed one is level 1's ruin for all three. With the
+  // Classic look the Inferno draws Flash's Lab.
+  116: [
+    { from: 1, top: ["top.i3d1@2x.webp", -74, -89], shadow: ["shadow.i3d1.jpg", -74, 5], lift: 0,
+      anim: { strip: ["anim.i3d1@2x.webp", -65, -23, 130, 76, 24], columns: 15, body: ["body.i3d1@2x.webp", -74, -89],
+        home: true },
+      damaged: { top: ["top.i3d1.damaged@2x.webp", -74, -82], shadow: ["shadow.i3d1.damaged.jpg", -74, 5] },
+      destroyed: { top: ["top.i3d1.destroyed@2x.webp", -74, -18], shadow: ["shadow.i3d1.destroyed.jpg", -74, 21] } },
+    { from: 2, top: ["top.i3d2@2x.webp", -74, -89], shadow: ["shadow.i3d2.jpg", -74, 5], lift: 0,
+      anim: { strip: ["anim.i3d2@2x.webp", -65, -23, 130, 76, 24], columns: 15, body: ["body.i3d2@2x.webp", -74, -89],
+        home: true },
+      damaged: { top: ["top.i3d2.damaged@2x.webp", -74, -82], shadow: ["shadow.i3d2.damaged.jpg", -74, 5] },
+      destroyed: { top: ["top.i3d1.destroyed@2x.webp", -74, -18], shadow: ["shadow.i3d1.destroyed.jpg", -74, 21] } },
+    { from: 3, top: ["top.i3d3@2x.webp", -74, -118], shadow: ["shadow.i3d3.jpg", -74, 6], lift: 0,
+      anim: { strip: ["anim.i3d3@2x.webp", -65, -115, 130, 180, 24], columns: 15,
+        body: ["body.i3d3@2x.webp", -74, -118], home: true },
+      damaged: { top: ["top.i3d3.damaged@2x.webp", -74, -104], shadow: ["shadow.i3d3.damaged.jpg", -74, 6] },
+      destroyed: { top: ["top.i3d1.destroyed@2x.webp", -74, -18], shadow: ["shadow.i3d1.destroyed.jpg", -74, 21] } },
+  ],
 };
 
 /**
@@ -902,17 +963,6 @@ export const INFERNO_PAINTED_BUILDING_ART: Readonly<Record<number, readonly Tier
     { from: 1, top: ["top.c1@2x.webp", -45, -53], shadow: ["shadow.1.v2.jpg", -48, 17], lift: 0,
       damaged: { top: ["top.c1.damaged@2x.webp", -48, -49], shadow: ["shadow.1.damaged.v2.jpg", -47, 17] },
       destroyed: { top: ["top.c1.destroyed@2x.webp", -53, -15], shadow: ["shadow.1.destroyed.v2.jpg", -54, 12] } },
-  ],
-  // 12 General Store: painted, the Inferno's own shop (owner, 20 Nov 2026, patch 8.1), an original Codex design (Codex
-  // declined a recolour of the surface store), round 3 shop C of `web/tools/store-inferno/` (lava forge shop, painted at
-  // the game's 2:1 camera after the owner found round 2's angle wrong), its 80 x 40 base diamond where Flash's store
-  // stands, in the surface store's folder, with its own shadow (a little darker since the ruin pass, `.v2`). Damaged
-  // and destroyed are its own too (make_ruin.py, one Codex picture of both, fitted onto the shop), as the painted Resource
-  // Pod's and Housing Bunker's are. With the Classic look the Inferno draws Flash's store.
-  12: [
-    { from: 1, top: ["top.ishop3C@2x.webp", -52, -52], shadow: ["shadow.ishop3C.v2.jpg", -35, 25], lift: 0,
-      damaged: { top: ["top.ishop3C.damaged@2x.webp", -52, -62], shadow: ["shadow.ishop3C.damaged.v2.jpg", -35, 22] },
-      destroyed: { top: ["top.ishop3C.destroyed@2x.webp", -48, -3], shadow: ["shadow.ishop3C.destroyed.v2.jpg", -39, 39] } },
   ],
   // 14 Under Hall: painted, Flash's three looks and three of its own (4 to 6, animated), each damaged and destroyed in paint too
   14: [

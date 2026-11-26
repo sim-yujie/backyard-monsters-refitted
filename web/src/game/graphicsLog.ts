@@ -1,6 +1,6 @@
 import type { Renderer } from "pixi.js";
 import { reportCaughtError } from "@/game/bugReport/errorReporter";
-import { deviceMemoryGb, deviceTextureLimit, quality, qualityChoice, type Quality } from "@/game/quality";
+import { deviceMemoryGb, deviceTextureLimit, quality, qualityChoice, readRendererName, type Quality } from "@/game/quality";
 
 /**
  * Graphics problems, sent to the owner's dashboard with the game's other
@@ -8,27 +8,26 @@ import { deviceMemoryGb, deviceTextureLimit, quality, qualityChoice, type Qualit
  * there is real data on which phones and which pictures go wrong (owner,
  * 17 Nov 2026: old phones drew some monsters as green squares).
  *
- * What is sent: the WebGL context lost or restored, a picture (monster
- * sheet, building art) that did not load or decode, and a picture still over
- * the graphics card's texture limit, cut through a canvas or not cuttable at
- * all. Each entry is one line of text, with the device's graphics details
+ * What is sent: the WebGL context lost and not back within
+ * {@link CONTEXT_RESTORE_WAIT_MS} (a loss Pixi recovers from at once is not
+ * sent), a picture (monster sheet, building art) that did not load or decode,
+ * and a picture over the graphics card's texture limit that could not even be
+ * cut through a canvas. A picture over the limit that was cut is handled and
+ * not sent (owner, 19 Nov 2026: it was most of the flood). Each entry is one line of text, with the device's graphics details
  * ({@link GraphicsDevice}) after it. Pixi uploads pictures without asking
  * WebGL for errors, so an upload error on its own is not seen; on a phone it
  * usually ends in a lost context, which is.
  *
  * Kept small: one entry per kind per picture per page load, at most
  * {@link LOAD_MAX} a page load and {@link SESSION_MAX} a browser tab
- * session (a handled over-limit picture has its own, smaller budget,
- * {@link HANDLED_LOAD_MAX}), on top of the error reporter's own batch caps.
+ * session, on top of the error reporter's own batch caps.
  */
 
-export type GraphicsProblem = "context-lost" | "context-restored" | "sheet-failed" | "sheet-over-limit" | "sheet-cut-failed";
+export type GraphicsProblem = "context-lost" | "sheet-failed" | "sheet-cut-failed";
 
 const PROBLEM_WORDS: Record<GraphicsProblem, string> = {
   "context-lost": "WebGL context lost",
-  "context-restored": "WebGL context restored",
   "sheet-failed": "picture did not load",
-  "sheet-over-limit": "picture over the texture limit, cut through a canvas",
   "sheet-cut-failed": "picture over the texture limit, could not be cut",
 };
 
@@ -39,14 +38,12 @@ export const SESSION_MAX = 20;
 /** Where the tab's count is kept (`sessionStorage`). */
 export const SESSION_KEY = "bymr.graphicsLog.sent";
 /**
- * A picture over the limit that was cut through a canvas is handled, and a
- * 4096 phone meets several at every yard (the 3D towers' turret strips), so
- * these have a budget of their own and never use up the one for real
- * failures: one a page load, three a tab session.
+ * How long a lost WebGL context has to come back before it is sent. Pixi asks
+ * the browser for it back at once, and on the live game it was back within
+ * 2 s nearly every time, with only a short blank; one that stays lost longer
+ * is a game the player sees go dark.
  */
-export const HANDLED_LOAD_MAX = 1;
-export const HANDLED_SESSION_MAX = 3;
-export const HANDLED_SESSION_KEY = "bymr.graphicsLog.handled";
+export const CONTEXT_RESTORE_WAIT_MS = 10_000;
 
 const SUBJECT_MAX = 80;
 const DETAIL_MAX = 100;
@@ -155,20 +152,7 @@ export const shortAgent = (ua: string): string => {
 let gpuName: string | null = null;
 
 /** The graphics card's name WebGL gives, unmasked where the browser allows; null with nothing to read. */
-export const readGpuName = (gl: WebGLRenderingContext): string | null => {
-  try {
-    // Firefox already gives the real (rounded) name here, and warns about the
-    // debug extension; Chrome and Safari give "WebKit WebGL" without it.
-    const plain = gl.getParameter(gl.RENDERER) as unknown;
-    if (typeof plain === "string" && plain !== "" && !/^WebKit WebGL$/i.test(plain)) return plain;
-    const info = gl.getExtension("WEBGL_debug_renderer_info");
-    const unmasked = info ? (gl.getParameter(info.UNMASKED_RENDERER_WEBGL) as unknown) : null;
-    if (typeof unmasked === "string" && unmasked !== "") return unmasked;
-    return typeof plain === "string" && plain !== "" ? plain : null;
-  } catch {
-    return null;
-  }
-};
+export const readGpuName = readRendererName;
 
 /** This device's graphics details, as they are now. */
 export const graphicsDevice = (): GraphicsDevice => {
@@ -224,36 +208,29 @@ const sessionStore = (): Storage | null => {
 
 /** Lets through one entry per kind per picture, at most `loadMax` a page load and `sessionMax` a tab session. */
 export class GraphicsLogThrottle {
-  /** Kinds and pictures let through this page load, by budget. */
-  private readonly seen = { shared: new Set<string>(), handled: new Set<string>() };
+  /** Kinds and pictures let through this page load. */
+  private readonly seen = new Set<string>();
 
   constructor(
     private readonly loadMax = LOAD_MAX,
     private readonly sessionMax = SESSION_MAX,
     private readonly store: () => Storage | null = sessionStore,
-    private readonly handledLoadMax = HANDLED_LOAD_MAX,
-    private readonly handledSessionMax = HANDLED_SESSION_MAX,
   ) {}
 
   allow(kind: GraphicsProblem, subject: string): boolean {
-    const handled = kind === "sheet-over-limit";
-    const seen = handled ? this.seen.handled : this.seen.shared;
-    const loadMax = handled ? this.handledLoadMax : this.loadMax;
-    const sessionMax = handled ? this.handledSessionMax : this.sessionMax;
-    const sessionKey = handled ? HANDLED_SESSION_KEY : SESSION_KEY;
     const key = `${kind}\n${subject}`;
-    if (seen.has(key) || seen.size >= loadMax) return false;
+    if (this.seen.has(key) || this.seen.size >= this.loadMax) return false;
     const store = this.store();
     let sent = 0;
     try {
-      sent = Number(store?.getItem(sessionKey) ?? 0) || 0;
+      sent = Number(store?.getItem(SESSION_KEY) ?? 0) || 0;
     } catch {
       sent = 0;
     }
-    if (sent >= sessionMax) return false;
-    seen.add(key);
+    if (sent >= this.sessionMax) return false;
+    this.seen.add(key);
     try {
-      store?.setItem(sessionKey, String(sent + 1));
+      store?.setItem(SESSION_KEY, String(sent + 1));
     } catch {
       // Site data blocked: the page load's own cap still holds.
     }
@@ -296,21 +273,69 @@ export const reportGraphicsProblem = (
 const timeOnPage = (): string =>
   `after ${Math.round((typeof performance === "undefined" ? 0 : performance.now()) / 1000)} s on the page`;
 
+/** Whether the game's tab is in the background (another tab, the phone's home screen), or null where there is no page. */
+const tabHidden = (): boolean | null =>
+  typeof document === "undefined" ? null : document.visibilityState === "hidden";
+
+/** The tab's state in an entry's words: `tab hidden`, `tab visible`, or `tab hidden later` for one that went to the background while it waited. */
+const tabWords = (atLoss: boolean | null, atSend: boolean | null): string => {
+  if (atLoss === null && atSend === null) return "tab unknown";
+  if (atLoss) return "tab hidden";
+  return atSend ? "tab hidden later" : "tab visible";
+};
+
+/** Timers for {@link watchGraphics}, swapped in tests. */
+export interface GraphicsWatchTimers {
+  readonly set: (run: () => void, ms: number) => unknown;
+  readonly clear: (timer: unknown) => void;
+  /** Whether the tab is hidden now (null: no page to ask). */
+  readonly hidden: () => boolean | null;
+}
+
+const defaultTimers: GraphicsWatchTimers = {
+  set: (run, ms) => setTimeout(run, ms),
+  clear: (timer) => clearTimeout(timer as ReturnType<typeof setTimeout>),
+  hidden: tabHidden,
+};
+
 /**
  * Watches the game's renderer (the one canvas the yard, the fights and the
  * map are all drawn on, `app/App.ts`): reads the graphics card's name for
- * the entries, and sends a lost (and restored) context; WebGPU's lost device
- * too. Returns the function that stops watching.
+ * the entries, and sends a lost WebGL context that is not restored within
+ * {@link CONTEXT_RESTORE_WAIT_MS}, saying whether the tab was hidden (a
+ * phone drops a background tab's context to save memory). A context back in
+ * time sends nothing, and nor does one back later: the entry already said
+ * it was gone for that long. A page closed while it waits sends nothing.
+ * WebGPU's lost device is sent at once, as it never comes back. Returns the
+ * function that stops watching.
  */
 export const watchGraphics = (
   renderer: Renderer,
   canvas: EventTarget | null = renderer.canvas as unknown as EventTarget,
   report: (kind: GraphicsProblem, subject: string, detail: string) => unknown = reportGraphicsProblem,
+  timers: GraphicsWatchTimers = defaultTimers,
 ): (() => void) => {
   const gl = (renderer as { gl?: WebGLRenderingContext }).gl;
   if (gl) gpuName = readGpuName(gl);
-  const onLost = (): void => void report("context-lost", "game canvas", timeOnPage());
-  const onRestored = (): void => void report("context-restored", "game canvas", timeOnPage());
+  let waiting: unknown = null;
+  const onLost = (): void => {
+    if (waiting !== null) return;
+    const lostAt = timeOnPage();
+    const hiddenAtLoss = timers.hidden();
+    waiting = timers.set(() => {
+      waiting = null;
+      report(
+        "context-lost",
+        "game canvas",
+        `${lostAt}, not restored in ${Math.round(CONTEXT_RESTORE_WAIT_MS / 1000)} s, ${tabWords(hiddenAtLoss, timers.hidden())}`,
+      );
+    }, CONTEXT_RESTORE_WAIT_MS);
+  };
+  const onRestored = (): void => {
+    if (waiting === null) return;
+    timers.clear(waiting);
+    waiting = null;
+  };
   canvas?.addEventListener("webglcontextlost", onLost);
   canvas?.addEventListener("webglcontextrestored", onRestored);
   let watching = true;
@@ -320,6 +345,8 @@ export const watchGraphics = (
   });
   return () => {
     watching = false;
+    if (waiting !== null) timers.clear(waiting);
+    waiting = null;
     canvas?.removeEventListener("webglcontextlost", onLost);
     canvas?.removeEventListener("webglcontextrestored", onRestored);
   };

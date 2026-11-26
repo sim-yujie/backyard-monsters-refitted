@@ -10,6 +10,7 @@ import { isListedIn, monsterRealmOf, monsterWords } from "@/game/monsters/realm"
 import {
   actionKey,
   type YardActionResult,
+  type YardArgs,
   type YardStore,
   type YardStoreReader,
 } from "@/game/yard/YardStore";
@@ -91,10 +92,11 @@ export const hatcheryAdd = (
   monster: string,
   count: number,
   baseid?: string,
+  remote?: boolean,
 ): Promise<YardResponse<HatcheryAddReport>> =>
   post<YardResponse<HatcheryAddReport>>(
     `${HATCHERY_PATH}/add`,
-    yardBody({ hatchery: String(hatchery), monster, count: String(count) }, baseid),
+    yardBody({ hatchery: String(hatchery), monster, count: String(count), ...remoteField(remote) }, baseid),
   );
 
 /**
@@ -107,10 +109,11 @@ export const hatcheryRemove = (
   slot: number,
   count: number | "all",
   baseid?: string,
+  remote?: boolean,
 ): Promise<YardResponse<HatcheryRemoveReport>> =>
   post<YardResponse<HatcheryRemoveReport>>(
     `${HATCHERY_PATH}/remove`,
-    yardBody({ hatchery: String(hatchery), slot: String(slot), count: String(count) }, baseid),
+    yardBody({ hatchery: String(hatchery), slot: String(slot), count: String(count), ...remoteField(remote) }, baseid),
   );
 
 /**
@@ -121,10 +124,11 @@ export const hatcheryRemove = (
 export const hatcheryClear = (
   hatchery: HatchTarget,
   baseid?: string,
+  remote?: boolean,
 ): Promise<YardResponse<HatcheryClearReport>> =>
   post<YardResponse<HatcheryClearReport>>(
     `${HATCHERY_PATH}/clear`,
-    yardBody({ hatchery: String(hatchery) }, baseid),
+    yardBody({ hatchery: String(hatchery), ...remoteField(remote) }, baseid),
   );
 
 /**
@@ -134,11 +138,89 @@ export const hatcheryClear = (
 export const hatcheryFinish = (
   hatchery: HatchTarget,
   baseid?: string,
+  remote?: boolean,
 ): Promise<YardResponse<HatcheryFinishReport>> =>
   post<YardResponse<HatcheryFinishReport>>(
     `${HATCHERY_PATH}/finish`,
-    yardBody({ hatchery: String(hatchery) }, baseid),
+    yardBody({ hatchery: String(hatchery), ...remoteField(remote) }, baseid),
   );
+
+/** One preset stack on the wire: a monster and how many. */
+export type HccPresetStack = [id: string, count: number];
+
+/** `report` of `hatchery/preset/save` (beta 9). */
+export interface HccPresetSaveReport {
+  list: "home" | "out";
+  slot: number;
+  /** As saved: two stacks of one monster side by side joined. */
+  preset: HccPresetStack[];
+}
+
+/** `report` of `hatchery/preset/send` (beta 9): partial by design, as an add. */
+export interface HccPresetSendReport {
+  list: "home" | "out";
+  slot: number;
+  added: number;
+  requested: number;
+  stoppedBy: null | "queue" | "goo";
+  /** Monsters left out because they are locked, in preset order. */
+  skipped: string[];
+  cost: { r4: number };
+}
+
+/** One outpost on the level 3 HCC's yard list (beta 9). */
+export interface HccOutpostRow {
+  baseid: string;
+  /** Its HCC's level, 0 for none. */
+  hcc: number;
+  /** Monsters in its queue and hatcheries, as last saved. */
+  queued: number;
+}
+
+/** `report` of `hatchery/outposts` (beta 9). */
+export interface HccOutpostsReport {
+  yards: HccOutpostRow[];
+}
+
+/**
+ * Saves the HCC preset in `slot` (beta 9): `stacks` in the order they are
+ * sent, `[]` to empty it. The list is the yard's own (the main yard's, or the
+ * one every outpost shares). Refusals: `noHcc`, `presetLocked { slot, slots }`,
+ * `badRequest`, and `remote`'s `hccLevel`, `noOutpostHcc`.
+ */
+export const hccPresetSave = (
+  slot: number,
+  stacks: readonly HccPresetStack[],
+  baseid?: string,
+  remote?: boolean,
+): Promise<YardResponse<HccPresetSaveReport>> =>
+  post<YardResponse<HccPresetSaveReport>>(
+    `${HATCHERY_PATH}/preset/save`,
+    yardBody(
+      {
+        slot: String(slot),
+        stacks: JSON.stringify(stacks),
+        ...remoteField(remote),
+      },
+      baseid,
+    ),
+  );
+
+/** Adds the preset in `slot` to the end of the HCC's queue (beta 9). Refusals: as save, and `emptyPreset`. */
+export const hccPresetSend = (
+  slot: number,
+  baseid?: string,
+  remote?: boolean,
+): Promise<YardResponse<HccPresetSendReport>> =>
+  post<YardResponse<HccPresetSendReport>>(
+    `${HATCHERY_PATH}/preset/send`,
+    yardBody({ slot: String(slot), ...remoteField(remote) }, baseid),
+  );
+
+/** The main yard's outposts as its level 3 HCC runs them (beta 9). Refusal: `hccLevel`. */
+export const hccOutposts = (): Promise<YardResponse<HccOutpostsReport>> =>
+  post<YardResponse<HccOutpostsReport>>(`${HATCHERY_PATH}/outposts`, yardBody({}));
+
 
 /** Every call above, so the actions can be handed a stand-in under test. */
 export interface HatcheryApi {
@@ -146,6 +228,8 @@ export interface HatcheryApi {
   remove: typeof hatcheryRemove;
   clear: typeof hatcheryClear;
   finish: typeof hatcheryFinish;
+  presetSave?: typeof hccPresetSave;
+  presetSend?: typeof hccPresetSend;
 }
 
 export const hatcheryApi: HatcheryApi = {
@@ -153,7 +237,12 @@ export const hatcheryApi: HatcheryApi = {
   remove: hatcheryRemove,
   clear: hatcheryClear,
   finish: hatcheryFinish,
+  presetSave: hccPresetSave,
+  presetSend: hccPresetSend,
 };
+
+/** `remote=1` when the main yard's level 3 HCC runs an outpost from home (beta 9). */
+const remoteField = (remote: boolean | undefined): { remote?: string } => (remote ? { remote: "1" } : {});
 
 /** The queue keys, for `store.isRunning`. */
 export const HatcheryKey = {
@@ -161,6 +250,9 @@ export const HatcheryKey = {
   REMOVE: actionKey("hatchery", "remove"),
   CLEAR: actionKey("hatchery", "clear"),
   FINISH: actionKey("hatchery", "finish"),
+  PRESET_SAVE: actionKey("hatchery", "preset/save"),
+  PRESET_SEND: actionKey("hatchery", "preset/send"),
+  OUTPOSTS: actionKey("hatchery", "outposts"),
 } as const;
 
 /** Every hatchery key, the overdrive buys included, for disabling the tab's buttons while one runs. */
@@ -180,6 +272,10 @@ export interface HatcheryActions {
   /** Clear all: every waiting stack of the target's queue. */
   clear(target: HatchTarget): Promise<YardActionResult<HatcheryClearReport>>;
   finish(target: HatchTarget): Promise<YardActionResult<HatcheryFinishReport>>;
+  /** Saves an HCC preset (beta 9). */
+  presetSave(slot: number, stacks: readonly HccPresetStack[]): Promise<YardActionResult<HccPresetSaveReport>>;
+  /** Sends an HCC preset to the end of the queue (beta 9). */
+  presetSend(slot: number): Promise<YardActionResult<HccPresetSendReport>>;
   /** Buys a Hatchery Overdrive through the store's shop route. */
   overdrive(item: OverdriveItem): Promise<YardActionResult<ShopBuyReport>>;
 }
@@ -215,33 +311,56 @@ const addRefusal = (reader: YardStoreReader, monster: string, count: number): Ya
 export const hatcheryActions = (
   store: YardStore,
   api: HatcheryApi = hatcheryApi,
-): HatcheryActions => ({
-  add: (target, monster, count) =>
-    store.run({
-      key: HatcheryKey.ADD,
-      check: (reader) => addRefusal(reader, monster, count),
-      send: (_api, ...yard) => api.add(target, monster, count, ...yard),
-    }),
-  remove: (target, slot, count) =>
-    store.run({
-      key: HatcheryKey.REMOVE,
-      send: (_api, ...yard) => api.remove(target, slot, count, ...yard),
-    }),
-  clear: (target) =>
-    store.run({ key: HatcheryKey.CLEAR, send: (_api, ...yard) => api.clear(target, ...yard) }),
-  finish: (target) =>
-    store.run({ key: HatcheryKey.FINISH, send: (_api, ...yard) => api.finish(target, ...yard) }),
-  overdrive: (item) => {
-    const running = activeOverdrive(store.save.storedata, store.now());
-    if (running) {
-      return Promise.resolve({
-        ok: false,
-        refusal: refuse("alreadyActive", "A Hatchery Overdrive is already running.", {
-          item: running.item,
-          endsAt: running.endsAt,
-        }),
-      });
-    }
-    return store.buy(item);
-  },
-});
+  options: { readonly remote?: boolean } = {},
+): HatcheryActions => {
+  // `remote` rides only on an outpost's store run from the main yard's level 3 HCC.
+  const remote = (yard: YardArgs): yard is [baseid: string] => options.remote === true && yard[0] !== undefined;
+  return {
+    add: (target, monster, count) =>
+      store.run({
+        key: HatcheryKey.ADD,
+        check: (reader) => addRefusal(reader, monster, count),
+        send: (_api, ...yard) =>
+          remote(yard) ? api.add(target, monster, count, yard[0], true) : api.add(target, monster, count, ...yard),
+      }),
+    remove: (target, slot, count) =>
+      store.run({
+        key: HatcheryKey.REMOVE,
+        send: (_api, ...yard) =>
+          remote(yard) ? api.remove(target, slot, count, yard[0], true) : api.remove(target, slot, count, ...yard),
+      }),
+    clear: (target) =>
+      store.run({
+        key: HatcheryKey.CLEAR,
+        send: (_api, ...yard) => (remote(yard) ? api.clear(target, yard[0], true) : api.clear(target, ...yard)),
+      }),
+    finish: (target) =>
+      store.run({
+        key: HatcheryKey.FINISH,
+        send: (_api, ...yard) => (remote(yard) ? api.finish(target, yard[0], true) : api.finish(target, ...yard)),
+      }),
+    presetSave: (slot, stacks) =>
+      store.run({
+        key: HatcheryKey.PRESET_SAVE,
+        send: (_api, ...yard) => (api.presetSave ?? hccPresetSave)(slot, stacks, yard[0], remote(yard)),
+      }),
+    presetSend: (slot) =>
+      store.run({
+        key: HatcheryKey.PRESET_SEND,
+        send: (_api, ...yard) => (api.presetSend ?? hccPresetSend)(slot, yard[0], remote(yard)),
+      }),
+    overdrive: (item) => {
+      const running = activeOverdrive(store.save.storedata, store.now());
+      if (running) {
+        return Promise.resolve({
+          ok: false,
+          refusal: refuse("alreadyActive", "A Hatchery Overdrive is already running.", {
+            item: running.item,
+            endsAt: running.endsAt,
+          }),
+        });
+      }
+      return store.buy(item);
+    },
+  };
+};

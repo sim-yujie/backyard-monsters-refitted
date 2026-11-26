@@ -65,6 +65,3 @@ export const setControlLocked = (
   if (place === "lead") control.prepend(badge);
   else control.append(badge);
 };
-
-/** Whether a control is locked (for the tests and the layouts panel). */
-export const isLocked = (control: Element): boolean => control.classList.contains("is-locked");

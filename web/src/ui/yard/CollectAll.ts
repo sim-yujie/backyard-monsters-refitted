@@ -41,9 +41,6 @@ const TICK_MS = 1_000;
 /** The notice key both the button and a tap on a harvester use, so one replaces the other. */
 export const BANK_NOTICE = "yard-bank";
 
-/** "Collect all · 12.4K". */
-export const collectAllLabel = (total: number): string => `Collect all · ${formatCompact(total)}`;
-
 /** The tooltip: every resource waiting, in full. */
 export const collectAllTitle = (amounts: Readonly<Record<HarvestKey, number>>): string =>
   [

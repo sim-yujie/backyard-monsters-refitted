@@ -753,12 +753,108 @@ export const LAB_ABILITIES: readonly LabAbility[] = [
   },
 ];
 
+/**
+ * The Infernal Monster Lab's abilities (beta 9, owner, 21 Nov 2026), one per
+ * Inferno monster, researched in the Inferno yard's Lab for Sulfur. Balthazar
+ * (IC5) has two ranks; the others three.
+ */
+export const INFERNO_LAB_ABILITIES: readonly LabAbility[] = [
+  // IC1 Spurtz — revamp (beta 9, owner, 21 Nov 2026)
+  {
+    id: "IC1",
+    order: 1,
+    name: "Fury",
+    effectLabel: "Most Speed and Damage",
+    description: "Spurtz gets faster and hits harder every second it fights.",
+    upgradeDescription: "Spurtz builds up its fury faster and further.",
+    costs: [[25000, 86400], [37500, 86400], [56250, 86400]],
+    effect: [0.05, 0.08, 0.2],
+  },
+  // IC2 Zagnoid — revamp (beta 9, owner, 21 Nov 2026)
+  {
+    id: "IC2",
+    order: 2,
+    name: "Regeneration",
+    effectLabel: "Health Healed per Second",
+    description: "Zagnoid heals a little of its health every second.",
+    upgradeDescription: "Zagnoid heals faster.",
+    costs: [[50000, 86400], [75000, 86400], [112500, 86400]],
+    effect: [0.01, 0.015, 0.02],
+  },
+  // IC3 Malphus — revamp (beta 9, owner, 21 Nov 2026)
+  {
+    id: "IC3",
+    order: 3,
+    name: "Dodge",
+    effectLabel: "Dodge Chance",
+    description: "Malphus has a chance to dodge any hit: towers, monsters, traps and splashes.",
+    upgradeDescription: "Malphus dodges more often.",
+    costs: [[400000, 108000], [600000, 108000], [900000, 108000]],
+    effect: [0.1, 0.2, 0.3],
+  },
+  // IC4 Valgos — revamp (beta 9, owner, 21 Nov 2026)
+  {
+    id: "IC4",
+    order: 4,
+    name: "Wall Crusher",
+    effectLabel: "Extra Walls Hit",
+    description: "Each blow Valgos lands on a wall also hits other walls next to it.",
+    upgradeDescription: "Valgos hits more walls at once.",
+    costs: [[800000, 108000], [1200000, 108000], [1800000, 108000]],
+    effect: [1, 2, 3],
+  },
+  // IC5 Balthazar — revamp (beta 9, owner, 21 Nov 2026)
+  {
+    id: "IC5",
+    order: 5,
+    name: "Monster Hunter",
+    effectLabel: "Damage to Monsters",
+    description: "Balthazar hits monsters harder.",
+    upgradeDescription: "Balthazar hits monsters even harder.",
+    costs: [[2000000, 172800], [3000000, 172800]],
+    effect: [2, 3],
+  },
+  // IC6 Grokus — revamp (beta 9, owner, 21 Nov 2026)
+  {
+    id: "IC6",
+    order: 6,
+    name: "Shockwave",
+    effectLabel: "Splash on Buildings",
+    description: "Grokus's blows shake the buildings around its target too.",
+    upgradeDescription: "A bigger, stronger shockwave.",
+    costs: [[3000000, 216000], [4500000, 216000], [6750000, 216000]],
+    effect: [0.3, 0.45, 0.6],
+  },
+  // IC7 Sabnox — revamp (beta 9, owner, 21 Nov 2026)
+  {
+    id: "IC7",
+    order: 7,
+    name: "Burn",
+    effectLabel: "Burn per Second",
+    description: "Sabnox sets what it hits on fire for 4 seconds. A new hit restarts the fire; fires do not stack.",
+    upgradeDescription: "Sabnox's fire burns hotter.",
+    costs: [[4500000, 259200], [6750000, 259200], [10125000, 259200]],
+    effect: [0.1, 0.2, 0.3],
+  },
+  // IC8 King Wormzer — revamp (beta 9, owner, 21 Nov 2026)
+  {
+    id: "IC8",
+    order: 8,
+    name: "Quake Splash",
+    effectLabel: "Splash Damage",
+    description: "King Wormzer's blows splash the buildings around it.",
+    upgradeDescription: "A wider, stronger splash.",
+    costs: [[6000000, 345600], [9000000, 345600], [13500000, 345600]],
+    effect: [1, 2, 4],
+  },
+];
+
 const MONSTERS_BY_ID: ReadonlyMap<string, MonsterEntry> = new Map(
   [...MONSTER_CATALOGUE, ...INFERNO_MONSTER_CATALOGUE].map((entry) => [entry.id, entry]),
 );
 
 const ABILITIES_BY_ID: ReadonlyMap<string, LabAbility> = new Map(
-  LAB_ABILITIES.map((ability) => [ability.id, ability]),
+  [...LAB_ABILITIES, ...INFERNO_LAB_ABILITIES].map((ability) => [ability.id, ability]),
 );
 
 /**

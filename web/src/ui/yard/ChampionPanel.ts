@@ -41,6 +41,7 @@ import { resourceAmount } from "@/ui/resourceIcon";
 import "@/ui/styles/champion.css";
 import { modesBlock, modesShape, savedStance, showsModes } from "./championModes";
 import { ShinyButton } from "./ShinyButton";
+import { refusalText } from "@/ui/dom";
 
 /**
  * The Champion Cage's controls, in the Monsters screen's Champion tab
@@ -64,7 +65,8 @@ import { ShinyButton } from "./ShinyButton";
  *
  * The original closed the whole popup after every feed
  * (`CHAMPIONCAGEPOPUP.as:175-178`); this stays open and redraws from the
- * answer (§7.2). Shiny buttons are two-tap ({@link ShinyButton}) and live as
+ * answer (§7.2), while the yard behind it walks the eaten monsters into the
+ * champion (`game/yard/feedShow.ts`). Shiny buttons are two-tap ({@link ShinyButton}) and live as
  * long as the panel, so an armed one survives the redraws. {@link tick}
  * (once a second) moves the clocks and the healing health bar without
  * rebuilding anything a finger or the keyboard may be on.
@@ -982,11 +984,6 @@ const fedText = (report: ChampionFeedReport): (Node | string)[] => {
 };
 
 const bad = (refusal: YardRefusal): Status => ({ tone: "bad", content: [refusalText(refusal)] });
-
-const refusalText = (refusal: YardRefusal): string =>
-  refusal.reason === "network"
-    ? "Could not reach the server. Try again."
-    : refusal.message || "That did not work.";
 
 const heading = (text: string): HTMLElement => {
   const element = document.createElement("h4");

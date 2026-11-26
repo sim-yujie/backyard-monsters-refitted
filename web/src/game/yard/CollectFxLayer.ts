@@ -37,6 +37,21 @@ import type { HarvestKey } from "./harvest";
  */
 export type PackageDot = HarvestKey | "bone" | "coal" | "sulfur" | "magma";
 
+/** The Inferno's ball for each resource: frames 5-8, `_type + 4` (`BRESOURCE.as:299,451`). */
+const INFERNO_DOTS: Readonly<Record<HarvestKey, PackageDot>> = {
+  r1: "bone",
+  r2: "coal",
+  r3: "sulfur",
+  r4: "magma",
+};
+
+/**
+ * A bank's ball for a resource: its own on the surface, the Inferno's on an
+ * Inferno yard or outpost, as Flash banked `_type + 4` there (bug #65).
+ */
+export const bankDot = (resource: HarvestKey, inferno: boolean): PackageDot =>
+  inferno ? INFERNO_DOTS[resource] : resource;
+
 /** The ball of each resource, and the shadow they share. */
 export interface CollectFxArt {
   dot(resource: PackageDot): Texture;
@@ -266,10 +281,11 @@ export class CollectFxLayer {
    */
   launch(flights: readonly Flight[], onLand: LandListener): number {
     const group = ++this.groups;
+    const inferno = this.inferno();
     for (const flight of flights) {
       const dot = this.freeDots.pop() ?? this.makeSprite(this.dots);
       const shadow = this.freeShadows.pop() ?? this.makeSprite(this.shadows);
-      dot.texture = this.art.dot(flight.dot ?? flight.resource);
+      dot.texture = this.art.dot(flight.dot ?? bankDot(flight.resource, inferno));
       shadow.texture = this.art.shadow;
       dot.visible = false;
       shadow.visible = false;

@@ -59,7 +59,8 @@ describe("tabs stay fixed at the top", () => {
   });
 
   it("scrolls each Baiter tab under its row on a phone and a short screen, not the whole sheet", () => {
-    const small = media(css("styles/baiter.css"), "(max-width: 620px), (max-height: 500px)");
+    // Up to 640 px tall (beta 9 #4): a small tablet or zoomed page scrolls each tab as one too.
+    const small = media(css("styles/baiter.css"), "(max-width: 620px), (max-height: 640px)");
     expect(small).toMatch(/\.baiter-window \.panel__body:has\(\.baiter\) \{\s*overflow: hidden;/);
     expect(small).toMatch(/\.baiter__view \{[^}]*overflow-y: auto;/);
     expect(css("styles/baiter.css")).not.toMatch(/\.baiter-window \.panel__body:has\(\.baiter\) \{\s*overflow-y: auto;/);

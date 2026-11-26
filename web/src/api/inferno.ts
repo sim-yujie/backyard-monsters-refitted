@@ -149,6 +149,12 @@ export interface DescentAttackStart extends ApiEnvelope {
   readonly flingercapacity: number;
   /** The Inferno purse now: the Descent's running loot total. */
   readonly descentloot?: InfernoAmounts;
+  /**
+   * The attack's start, unix seconds: the server session's `startedat`, which
+   * its replay gives Krallen her Krallen Hunt loot aura by. Absent from an
+   * older server.
+   */
+  readonly currenttime?: number;
 }
 
 export const startDescentAttack = (baseid: string): Promise<DescentAttackStart> =>
@@ -170,6 +176,9 @@ export const descentAttackLoad = (start: DescentAttackStart): BaseLoadResponse =
     ...(start.attackerhealth === undefined ? {} : { attackerhealth: start.attackerhealth }),
     ...(start.attackeracademy === undefined ? {} : { attackeracademy: start.attackeracademy }),
     ...(start.attackerranks === undefined ? {} : { attackerranks: start.attackerranks }),
+    // The attack's start as the load's clock: Krallen's loot aura runs on the
+    // page when it ran then, as the server's replay decides (`krallenAuraRuns`).
+    ...(typeof start.currenttime === "number" ? { currenttime: start.currenttime } : {}),
   }) as BaseLoadResponse;
 
 /**
@@ -285,6 +294,8 @@ export interface TribeAttackStart extends ApiEnvelope {
   readonly army: Readonly<Record<string, number>>;
   /** Infernal Academy levels by monster id. */
   readonly attackeracademy: Readonly<Record<string, number>>;
+  /** Infernal Lab ranks by monster id (beta 9), frozen with the levels; absent when none. */
+  readonly attackerranks?: unknown;
   /** The player's level, for the low-level loot bonus. */
   readonly attackerlevel?: number;
   /** What one fling may carry: a Housing Bunker's load (R11). */
@@ -296,7 +307,10 @@ export const startTribeAttack = (baseid: string): Promise<TribeAttackStart> =>
 
 /** The tribe start as the attack scene reads an attack load, an Inferno yard as the Descent's is. */
 export const tribeAttackLoad = (
-  start: Pick<TribeAttackStart, "base" | "attackid" | "defenderforces" | "attackeracademy" | "attackerlevel">,
+  start: Pick<
+    TribeAttackStart,
+    "base" | "attackid" | "defenderforces" | "attackeracademy" | "attackerranks" | "attackerlevel"
+  >,
 ): BaseLoadResponse =>
   ({
     ...start.base,
@@ -304,6 +318,8 @@ export const tribeAttackLoad = (
     attackid: start.attackid,
     defenderforces: start.defenderforces,
     attackeracademy: start.attackeracademy,
+    // The server froze the ranks with the academy: none sent means none researched.
+    ...(start.attackerranks === undefined ? {} : { attackerranks: start.attackerranks }),
     ...(start.attackerlevel === undefined ? {} : { attackerlevel: start.attackerlevel }),
   }) as BaseLoadResponse;
 
@@ -379,6 +395,8 @@ export interface PlayerAttackStart extends ApiEnvelope {
   readonly army: Readonly<Record<string, number>>;
   /** Infernal Academy levels by monster id. */
   readonly attackeracademy: Readonly<Record<string, number>>;
+  /** Infernal Lab ranks by monster id (beta 9), frozen with the levels; absent when none. */
+  readonly attackerranks?: unknown;
   readonly attackerlevel?: number;
   /** What one fling may carry: a Housing Bunker's load (R11). */
   readonly flingercapacity: number;

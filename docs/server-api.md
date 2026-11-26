@@ -162,9 +162,8 @@ All thrown errors that controllers want to surface use `ClientSafeError`
   `${CDN_URL}/versionManifest.json`, e.g. producing strings like `"v1.6.1-beta"`). If the
   manifest was loaded (`USE_VERSION_MANAGEMENT=enabled`) and the segment doesn't match either
   the desktop or Android version, the request is rejected with `400`. When version management
-  is disabled (the default/dev case), any value in the URL segment is accepted. `POST /init`
-  performs the same check itself via a zod schema before the client even starts talking to
-  numbered endpoints.
+  is disabled (the default/dev case), any value in the URL segment is accepted. (The Flash
+  client's `POST /init`, which made the same check, was removed in beta 9.)
 - **`setMapVersion`** (`controllers/maproom/setMapVersion.ts`, routed at both
   `/worldmapv2/setmapversion` and `/worldmapv3/setmapversion`): this is an ordinary
   authenticated controller, not middleware, that switches **which Map Room a player's save is
@@ -1225,7 +1224,7 @@ a raid being fought (and a warning when the game had been closed).
 
 | Method | Path | Middleware | Request fields | Response | Description |
 |---|---|---|---|---|---|
-| POST | `/api/:apiVersion/bugreport` | apiVersion, verifyUserAuth, bugReportLimiter (10/h per user; no logRequest, the body carries pictures) | JSON: `message` (3-2000 chars, required), `gameVersion`, `screen`, `device` (`"phone"`/`"computer"`), `userAgent`, `screenSize`, `errors` (array of strings; last 20 kept, 1000 chars each), `screenshot` (`data:image/jpeg\|png\|webp;base64,...`, at most 1.5 MB decoded), `picture` (same, at most 3 MB) | `200 { error: 0, id, message }`; `400` `invalidBugReport` naming the `field`; `429` `bugReportLimit` (5 in 24 h per account) | The web client's "Report a bug" form (`controllers/bugReports/submitBugReport.ts`). Saved in `bym.bug_report`, then emailed in the background to `BUG_REPORT_EMAIL` (default simyujie@gmail.com) with the pictures attached and Reply-To the account's email; a failed email leaves the row with `emailed_at` null. With `DEV_SANDBOX=true` the email goes to the server log. Metadata fields are clipped, never refused; pictures are checked by their first bytes. |
+| POST | `/api/:apiVersion/bugreport` | apiVersion, verifyUserAuth, bugReportLimiter (10/h per user; no logRequest, the body carries pictures) | JSON: `message` (3-2000 chars, required), `gameVersion`, `screen`, `device` (`"phone"`/`"computer"`), `userAgent`, `screenSize`, `errors` (array of strings; last 20 kept, 1000 chars each), `screenshot` (`data:image/jpeg\|png\|webp;base64,...`, at most 1.5 MB decoded), `picture` (same, at most 3 MB) | `200 { error: 0, id, message }`; `400` `invalidBugReport` naming the `field`; `429` `bugReportLimit` (5 in 24 h per account) | The web client's "Report a bug" form (`controllers/bugReports/submitBugReport.ts`). Saved in `bym.bug_report`, then emailed in the background to `BUG_REPORT_EMAIL` with the pictures attached and Reply-To the account's email; a failed email, or no `BUG_REPORT_EMAIL` set (then nothing is emailed), leaves the row with `emailed_at` null. With `DEV_SANDBOX=true` the email goes to the server log. Metadata fields are clipped, never refused; pictures are checked by their first bytes. |
 | POST | `/api/:apiVersion/bugreport/guest` | apiVersion, bugReportLimiter (10/h per IP) | As above, plus `email` (required, for the reply) and `turnstileToken` | As above; `400 botCheckFailed`, `503 botCheckUnavailable`; `429 bugReportLimit` is 5 in 24 h per IP (kept only as a keyed hash) | The login screen's form, signed out. The Turnstile token is checked (when `TURNSTILE_SECRET_KEY` is set) before anything is counted or saved. |
 
 ### Browser errors and the owner's dashboard
@@ -1813,17 +1812,10 @@ and starts the clock. It runs under the main row's lock in the owner's build loa
 outpost), in every yard action before `run` (so `state` pays), and in an attack load before the
 loot snapshot (see the attack section); nothing is added to `completed`.
 
-### Debug
-
-| Method | Path | Middleware | Request fields | Response | Description |
-|---|---|---|---|---|---|
-| POST | `/api/:apiVersion/player/recorddebugdata` | apiVersion, debugDataLimiter (120/min/IP) — **no auth** | `{ key, saveid, value }` (all required strings, cast not zod-validated) | `{ error: 0 }`; `debugClientErr()` (404) if any field is falsy/missing | Client-side telemetry/error sink — purely logs to the server log (`key === "err"` exactly logs at error level, anything else at info level), nothing is persisted to the DB. |
-
 ### Misc
 
 | Method | Path | Middleware | Description |
 |---|---|---|---|
-| POST | `/init` | logRequest | Validates `apiVersion` against the version manifest via a zod schema (`InitSchema`); `500 {error, versionMismatch:true}` on mismatch, else `200 {debugMode: devConfig.debugMode}`. The very first call a client makes. |
 | GET | `/connection` | none | Heartbeat: `200`, no body. Polled by every connected client roughly every 30 seconds — treat a failure here as "server unreachable," not a game-logic error. |
 
 ---

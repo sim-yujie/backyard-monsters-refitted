@@ -5,8 +5,6 @@ import type { User } from "../../../database/models/user.model.js";
 import { BaseType } from "../../../enums/Base.js";
 import { MapRoomVersion } from "../../../enums/MapRoom.js";
 import { experiencePoints } from "../../../game-data/stats/experiencePoints.js";
-import { botConfig } from "../../../config/BotConfig.js";
-import { botLevelWindow, findBotCandidates, pickBotNeighbours, showsBots } from "../../bots/botNeighbours.js";
 import { calculateBaseLevel } from "../../base/calculateBaseLevel.js";
 import { shuffle } from "../../../utils/shuffle.js";
 import { createNeighbourData } from "../createNeighbourData.js";
@@ -118,11 +116,9 @@ const findRealNeighbours = async (
 export interface FindNeighboursOptions {
   /** The current time; now by default. */
   now?: Date;
-  /** Whether bots fill the empty places; the `BOTS_FILL` switch by default. */
-  fill?: boolean;
-  /** A source of numbers in [0, 1) for the bot picks and the order; `Math.random` by default. */
+  /** A source of numbers in [0, 1) for the order; `Math.random` by default. */
   random?: () => number;
-  /** Players and bots to leave out: those dropped today by the attack cap (issue #247). */
+  /** Players to leave out: those dropped today by the attack cap (issue #247). */
   exclude?: number[];
 }
 
@@ -130,24 +126,15 @@ export interface FindNeighboursOptions {
  * Find MR1 overworld neighbours for a user and return data suitable for caching
  * (issue #236, `docs/design/bot-neighbours.md` §4.3).
  *
- * Up to 25 players within 7 levels either way. Real players seen in the last
- * 30 days take places first; with `BOTS_FILL` on, bots fill the rest (bots
- * attackable now first, spread across the levels). A player under level 15
- * is shown no bots at all, only real players (`showsBots`, owner 3 Nov
- * 2026). No bot stands below the level floor (`BOTS_FLOOR_LEVEL`, 25 by
- * default), so a player from 15 up but below it gets the nearest bots,
- * levels 25-27 (`botLevelWindow`). With it off the list holds
- * real players only, and bots never appear. Since the owner retired the bots
- * (12 Nov 2026) `botConfig().fill` is always off (`BOTS_RETIRED`), so every
- * list is real players only; `options.fill` stays for the tests.
- *
- * Bot entries are built exactly as real ones, and the list is shuffled, so
- * nothing in it (fields or order) tells which entries are bots.
+ * Up to 25 real players within 7 levels either way, seen in the last 30 days,
+ * shuffled. Bots used to fill the empty places (`BOTS_FILL`); they were
+ * retired (owner, 12 Nov 2026) and their code removed in beta 9, so the list
+ * is real players only.
  *
  * @param {EntityManager} em - The entity manager to read with
  * @param {User} user - The authenticated user to find neighbours for
  * @param {Save} save - The user's main save, with at least `points` and `basevalue`
- * @param {FindNeighboursOptions} options - Time, switch and randomness, for tests
+ * @param {FindNeighboursOptions} options - Time and randomness, for tests
  * @returns {Promise<NeighbourData[]>} - Array of neighbour data suitable for caching
  */
 export const findOverworldNeighbours = async (
@@ -157,7 +144,6 @@ export const findOverworldNeighbours = async (
   options: FindNeighboursOptions = {}
 ): Promise<NeighbourData[]> => {
   const now = options.now ?? new Date();
-  const fill = options.fill ?? botConfig().fill;
   const random = options.random ?? Math.random;
   const exclude = options.exclude ?? [];
 
@@ -174,27 +160,6 @@ export const findOverworldNeighbours = async (
       calculateBaseLevel(row.points, row.basevalue)
     )
   );
-
-  const empty = NEIGHBOUR_LIMIT - neighbours.length;
-
-  if (fill && empty > 0 && showsBots(level)) {
-    const taken = new Set([...neighbours.map((neighbour) => neighbour.userid), ...exclude]);
-    const candidates = await findBotCandidates(
-      em,
-      user.userid,
-      botLevelWindow(levels),
-      Math.floor(now.getTime() / 1000)
-    );
-    const bots = pickBotNeighbours(
-      candidates.filter((bot) => !taken.has(bot.userid)),
-      empty,
-      random
-    );
-
-    for (const bot of bots) {
-      neighbours.push(createNeighbourData(bot, bot, calculateBaseLevel(bot.points, bot.basevalue)));
-    }
-  }
 
   return shuffle(neighbours, random);
 };

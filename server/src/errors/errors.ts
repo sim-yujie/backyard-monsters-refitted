@@ -157,22 +157,6 @@ export const unknownAvatarErr = () =>
     isClientFriendly: true,
   });
 
-export const debugClientErr = () =>
-  new ClientSafeError({
-    message: "Sorry, it appears this cannot be found.",
-    status: Status.NOT_FOUND,
-    data: {},
-    isClientFriendly: true,
-  });
-
-export const saveFailureErr = () =>
-  new ClientSafeError({
-    message: "We encountered an error while saving",
-    status: Status.INTERNAL_SERVER_ERROR,
-    data: {},
-    isClientFriendly: true,
-  });
-
 /**
  * A save for a base whose row is no longer there (`services/base/missingBase.ts`):
  * a camp that regrew, an outpost moved or taken, an owner deleted. Expected,
@@ -228,6 +212,19 @@ export const userBannedErr = (ban: { until: Date | null; reason: string | null }
     message: text,
     status: Status.FORBIDDEN,
     data: { reason: "banned", until: ban.until?.toISOString() ?? null, banReason: ban.reason },
+    isClientFriendly: true,
+  });
+
+/**
+ * The maintenance switch is on (`services/admin/maintenance.ts`): a sign-in,
+ * or past the countdown any request, from anyone but the owner. The game
+ * words it in the player's own time from `data` (`web/src/app/maintenance.ts`).
+ */
+export const maintenanceErr = (notice: { message: string; backAt: string | null }) =>
+  new ClientSafeError({
+    message: `Maintenance: ${notice.message}${notice.backAt ? ` Back at ${notice.backAt.slice(11, 16)} UTC.` : ""}`,
+    status: Status.FORBIDDEN,
+    data: { reason: "maintenance", maintenanceMessage: notice.message, backAt: notice.backAt },
     isClientFriendly: true,
   });
 
@@ -310,14 +307,6 @@ export const userOnlineErr = () =>
   new ClientSafeError({
     message: "This player is currently online and cannot be attacked. Please try again later.",
     status: Status.CONFLICT,
-    data: {},
-    isClientFriendly: false,
-  });
-
-export const takeoverCellErr = () =>
-  new ClientSafeError({
-    message: "The server attempted to take over this cell but failed unexpectedly. Please try again.",
-    status: Status.INTERNAL_SERVER_ERROR,
     data: {},
     isClientFriendly: false,
   });
@@ -667,38 +656,6 @@ export const cannotPromoteErr = () =>
   new ClientSafeError({
     message: "You cannot promote members.",
     status: Status.FORBIDDEN,
-    data: {},
-    isClientFriendly: true,
-  });
-
-export const joinMapVersionErr = () =>
-  new ClientSafeError({
-    message: "That Alliance is on a different Map Room version.",
-    status: Status.FORBIDDEN,
-    data: {},
-    isClientFriendly: true,
-  });
-
-export const inviteMapVersionErr = (username: string) =>
-  new ClientSafeError({
-    message: `${username} is too far away to join your Alliance. They are on a different Map Room version.`,
-    status: Status.FORBIDDEN,
-    data: {},
-    isClientFriendly: true,
-  });
-
-export const notEnoughShinyErr = () =>
-  new ClientSafeError({
-    message: "You do not have enough Shiny for that.",
-    status: Status.CONFLICT,
-    data: {},
-    isClientFriendly: true,
-  });
-
-export const notEnoughResourcesErr = () =>
-  new ClientSafeError({
-    message: "You do not have enough resources for that.",
-    status: Status.CONFLICT,
     data: {},
     isClientFriendly: true,
   });
@@ -1201,7 +1158,9 @@ export type AutoAttackRefusal =
   | "busy"
   | "failed"
   | "noRoom"
-  | "movesChanged";
+  | "movesChanged"
+  | "planOnBuilding"
+  | "smartMoveOff";
 
 const AUTO_ATTACK_REFUSAL_MESSAGES: Record<AutoAttackRefusal, string> = {
   notMapRoom2: "Auto-attack is for Map Room 2 only.",
@@ -1214,6 +1173,8 @@ const AUTO_ATTACK_REFUSAL_MESSAGES: Record<AutoAttackRefusal, string> = {
   failed: "The auto-attack could not be worked out. Nothing was spent.",
   noRoom: "Not enough Monster Housing in range.",
   movesChanged: "Your yards changed since you looked. Check the moves again.",
+  planOnBuilding: "Attack once by hand on a fresh camp to record a new plan.",
+  smartMoveOff: "Smart moving is off in Settings.",
 };
 
 /**
@@ -1223,6 +1184,10 @@ const AUTO_ATTACK_REFUSAL_MESSAGES: Record<AutoAttackRefusal, string> = {
  * could be gathered but the yards in range cannot house them; carries
  * `noRoom` and `yards`) and `movesChanged` (the moves needed are not the ones
  * the player agreed to; the client asks for the plan again). `busy` is a 503: the server's replay workers are full.
+ * `planOnBuilding` (beta 9): a fling of the saved plan would land on a building
+ * of the camp's fresh layout (`autoAttack/planCheck.ts`); nothing is spent.
+ * `smartMoveOff` (smart moving, beta 9): a hand attack asked for moves while
+ * the account's "Smart moving" setting is off (`autoAttack/smartMove.ts`).
  *
  * @param {AutoAttackRefusal} reason - Which rule refused it.
  * @param {object} [details] - Anything the refusal carries, such as `missing`.

@@ -1,4 +1,4 @@
-import { afterAll, afterEach, beforeEach, describe, expect, mock, test } from "bun:test";
+import { afterAll, afterEach, beforeEach, describe, expect, mock, setSystemTime, test } from "bun:test";
 import type { Context } from "koa";
 import { RULES_VERSION } from "../../services/defences/rulesVersion.js";
 
@@ -54,11 +54,14 @@ afterAll(() => {
   standIn = false;
 });
 const armies: unknown[] = [];
+/** Seconds the clock moves on while the armies catch up, as a slow catch-up crosses a second. */
+let catchUpTakes = 0;
 mock.module("../../services/yard/armies.js", () => ({
   ...realArmies,
   catchUpArmiesForAttack: async (input: Parameters<typeof realArmies.catchUpArmiesForAttack>[0]) => {
     if (!standIn) return realArmies.catchUpArmiesForAttack(input);
     calls.push("armies");
+    if (catchUpTakes > 0) setSystemTime(new Date(Date.now() + catchUpTakes * 1000));
     armies.push(input);
     return { defender: input.defender, entryHoused: { [MAIN_BASEID]: { C1: 40 } } };
   },
@@ -114,6 +117,8 @@ beforeEach(() => {
 });
 
 afterEach(() => {
+  catchUpTakes = 0;
+  setSystemTime();
   if (saved === undefined) delete process.env.INFERNO_ENABLED;
   else process.env.INFERNO_ENABLED = saved;
 });
@@ -222,6 +227,23 @@ describe("starting a Descent attack", () => {
     expect(ctx.body.base.baseid).toBe("203");
     expect(Object.keys(ctx.body.base.buildingdata)).toEqual(Object.keys(descentYardOf(2).buildingdata as object));
     expect(ctx.body.defenderforces).toEqual(descent!.session.defenderForces);
+  });
+
+  test("the answer's clock is the session's start, which the replay gives Krallen her loot aura by (24 Nov 2026)", async () => {
+    // The armies' catch-up takes 3 s: the start's `now` is then 3 s behind
+    // the session's `startedat`, and only the latter is the replay's clock.
+    const before = Math.floor(Date.now() / 1000);
+    setSystemTime(new Date(before * 1000));
+    catchUpTakes = 3;
+    row = progressRow(2);
+    const ctx = contextFor({ kind: "descent", baseid: "203" });
+    await infernoAttackStart(ctx, async () => {});
+
+    const descent = parseDescentSession(store.get(descentSessionKey(ATTACKER)));
+    expect(descent!.session.startedat).toBe(before + 3);
+    expect(ctx.body.currenttime).toBe(descent!.session.startedat);
+    // Inside the yard too it is absent: the page reads the answer's own.
+    expect(ctx.body.base.currenttime).toBeUndefined();
   });
 
   test("from yard 206 its housed monsters defend from its Housing Bunker", async () => {

@@ -86,10 +86,60 @@ export const openGame = async (
       // No storage: the game shows its login screen and boot reports it.
     }
   }, JSON.stringify(session));
+  await damageOwnYard(context);
   const page = await context.newPage();
   await page.goto("/");
   await waitForYard(page);
   return { context, page };
+};
+
+/** How many buildings come back damaged: enough for the post-attack banner. */
+const DAMAGED_BUILDINGS = 3;
+
+/**
+ * The yard comes back attacked (beta 9 play-test, 23 Nov 2026): a few
+ * buildings below full health in the yard's answers, so the post-attack
+ * banner ("Your yard was attacked: 3 buildings damaged · Repair all") stands
+ * at the top for every window the check opens, as it does for a player who
+ * was raided. It sat on Build's tab row and caught its taps; a window it
+ * covers fails as covered. Only the browser's copy is changed: no walls, no
+ * Town Hall, nothing saved. `/bm/yard/state` answers carry the health too
+ * and would put it back, so they get the same damage.
+ */
+const damageOwnYard = async (context: BrowserContext): Promise<void> => {
+  const damaged = new Set<string>();
+  await context.route(/\/(base\/load|bm\/yard\/state)(\?|$)/, async (route) => {
+    const response = await route.fetch();
+    const text = await response.text();
+    let body = text;
+    try {
+      const save = JSON.parse(text) as {
+        buildingdata?: Record<string, { t?: unknown; rE?: unknown } | null>;
+        buildinghealthdata?: unknown;
+      };
+      if (damaged.size === 0 && save.buildingdata && typeof save.buildingdata === "object") {
+        for (const [key, building] of Object.entries(save.buildingdata)) {
+          if (damaged.size >= DAMAGED_BUILDINGS) break;
+          if (!building || typeof building.t !== "number" || building.t === 14 || building.t === 17) continue;
+          if (building.rE) continue;
+          damaged.add(key);
+        }
+      }
+      if (damaged.size > 0 && "buildinghealthdata" in save) {
+        // An empty one may come as [] (the save's PHP shape), which would drop string keys.
+        const health: Record<string, number> =
+          save.buildinghealthdata && !Array.isArray(save.buildinghealthdata) && typeof save.buildinghealthdata === "object"
+            ? { ...(save.buildinghealthdata as Record<string, number>) }
+            : {};
+        for (const key of damaged) health[key] = 1;
+        save.buildinghealthdata = health;
+        body = JSON.stringify(save);
+      }
+    } catch {
+      // Not JSON: passed on as it came.
+    }
+    await route.fulfill({ response, body });
+  });
 };
 
 /** Waits for the own yard: Build enabled. Throws plainly for the ways a boot can fail. */
@@ -182,6 +232,8 @@ const WINDOW_CLASSES = [
   ".alliance-window",
   ".building-panel",
   ".auto-attack--result",
+  ".xfer-tray",
+  ".attack-window",
 ];
 
 const openWindows = (page: Page) =>
@@ -199,6 +251,10 @@ export const closeAll = async (page: Page): Promise<void> => {
       const shut = (globalThis as Record<string, unknown>)["__repeatSheetClose"];
       (globalThis as Record<string, unknown>)["__repeatSheetClose"] = null;
       if (typeof shut === "function") (shut as () => void)();
+      // The move tray's preview (beta 9 #7) likewise.
+      const tray = (globalThis as Record<string, unknown>)["__transferPreviewClose"];
+      (globalThis as Record<string, unknown>)["__transferPreviewClose"] = null;
+      if (typeof tray === "function") (tray as () => void)();
     })
     .catch(() => undefined);
   // The Repeat attack's result covers the dock's More bubble on a phone
@@ -445,6 +501,71 @@ export const openRepeatSheet = async (page: Page, state: string): Promise<boolea
   // The portraits and icons size the tiles: wait for them.
   await page
     .waitForFunction(() => [...document.querySelectorAll(".overlay__layer .auto-attack img")].every((image) => (image as HTMLImageElement).complete), null, {
+      timeout: 10_000,
+    })
+    .catch(() => undefined);
+  return true;
+};
+
+/**
+ * Opens smart moving (beta 9) on `state` from the build's preview: the "Bring
+ * saved army?" sheet, or the Attack window with its "can't gather" note.
+ * Closed by `closeAll` the way it opened, as Repeat attack's sheet is.
+ */
+export const openSmartMove = async (page: Page, state: string): Promise<boolean> => {
+  const opened = await page.evaluate((which) => {
+    const open = (globalThis as Record<string, unknown>)["__smartMove"];
+    if (typeof open !== "function") return false;
+    const shut = (open as (state: string) => unknown)(which);
+    (globalThis as Record<string, unknown>)["__repeatSheetClose"] = shut;
+    return typeof shut === "function";
+  }, state);
+  if (!opened) return false;
+  await page.locator(".overlay__layer .attack-window").first().waitFor({ timeout: 10_000 });
+  await page
+    .waitForFunction(() => [...document.querySelectorAll(".overlay__layer .attack-window img")].every((image) => (image as HTMLImageElement).complete), null, {
+      timeout: 10_000,
+    })
+    .catch(() => undefined);
+  return true;
+};
+
+/**
+ * Opens the Baiter window's friend tabs (beta 9 #4) on `view`, or a friend's
+ * test army with `view` "host", from the build's preview with a busy list.
+ */
+export const openBaiterPreview = async (page: Page, view: string): Promise<boolean> => {
+  const opened = await page.evaluate((which) => {
+    const hooks = globalThis as Record<string, unknown>;
+    const open = which === "host" ? hooks["__baiterFriendTest"] : hooks["__baiterWindow"];
+    if (typeof open !== "function") return false;
+    const shut = which === "host" ? (open as () => unknown)() : (open as (view: string) => unknown)(which);
+    return typeof shut === "function";
+  }, view);
+  if (!opened) return false;
+  await page.locator(".overlay__layer .baiter-window").first().waitFor({ timeout: 10_000 });
+  // The list fills from the preview's answer.
+  if (view !== "host") await page.locator(".overlay__layer .baiter-window .friends-row").first().waitFor({ timeout: 10_000 }).catch(() => undefined);
+  return true;
+};
+
+/**
+ * The world map's move tray (beta 9 #7), Bring to or Move from, from the
+ * build's preview (`__transferPreview`, VITE_LAYOUT_CHECK): the sandbox yard
+ * has no outposts. `closeAll` closes it with its close button.
+ */
+export const openMoveTray = async (page: Page, state: "in" | "out"): Promise<boolean> => {
+  const opened = await page.evaluate(async (which) => {
+    const open = (globalThis as Record<string, unknown>)["__transferPreview"];
+    if (typeof open !== "function") return false;
+    const shut = await (open as (state: string) => Promise<() => void> | null)(which);
+    (globalThis as Record<string, unknown>)["__transferPreviewClose"] = shut;
+    return typeof shut === "function";
+  }, state);
+  if (!opened) return false;
+  await page.locator(".overlay__layer .xfer-tray").first().waitFor({ timeout: 10_000 });
+  await page
+    .waitForFunction(() => [...document.querySelectorAll(".overlay__layer .xfer-tray img")].every((image) => (image as HTMLImageElement).complete), null, {
       timeout: 10_000,
     })
     .catch(() => undefined);

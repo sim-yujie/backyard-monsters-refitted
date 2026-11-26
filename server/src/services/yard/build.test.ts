@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { COSTS } from "../../game-data/buildingCosts.js";
+import { COSTS, INFERNO_COSTS } from "../../game-data/buildingCosts.js";
 import { ClientSafeError } from "../../middleware/clientSafeError.js";
 import { storageCap } from "../base/economy/resourceBudget.js";
 import {
@@ -566,5 +566,75 @@ describe("build in the Inferno yard: the General Store", () => {
     const [status, data] = refusedWith(() => planBuild(save, { type: STORE, x: 250, y: -350 }, NOW));
     expect(status).toBe(409);
     expect(data).toMatchObject({ reason: "townHall", townHall: { have: 0, need: 1 } });
+  });
+});
+
+/**
+ * The Infernal Monster Lab (beta 9, owner, 21 Nov 2026; numbers card
+ * b9-num-lab: OK): Flash's blocked Inferno row (`INFERNOYARDPROPS.as:5520`),
+ * 100,000 Bone and 100,000 Coal and 3 hours for level 1, which needs Under
+ * Hall 5, the Strongbox at 3 and the Academy at 2; one per yard from Under
+ * Hall 5. Its levels 2 and 3 are `upgrade.test.ts`'s and `COSTS`' (below).
+ */
+describe("build in the Inferno yard: the Infernal Monster Lab", () => {
+  const LAB = 116;
+  const STRONGBOX = 8;
+  const ACADEMY = 26;
+
+  /** An Inferno yard with its Under Hall at `underHall`, a Strongbox at `box` and an Academy at `academy`. */
+  const inferno = (underHall: number, box = 4, academy = 4): BuildSave => {
+    const save = yard({ type: "inferno" });
+    save.buildingdata!["1"] = { id: 1, t: HALL, X: -65, Y: -65, l: underHall } as never;
+    save.buildingdata!["2"] = { id: 2, t: STRONGBOX, X: 200, Y: 200, l: box } as never;
+    save.buildingdata!["3"] = { id: 3, t: ACADEMY, X: -400, Y: -400, l: academy } as never;
+    return save;
+  };
+
+  test("is in the Inferno's build menu", () => {
+    expect(buildableTypesOf("inferno").has(LAB)).toBe(true);
+  });
+
+  test("Under Hall 5: it starts, 3 hours, 100,000 Bone and 100,000 Coal", () => {
+    const outcome = planBuild(inferno(5), { type: LAB, x: 250, y: -350 }, NOW);
+    expect(outcome.report).toMatchObject({
+      t: LAB,
+      seconds: 10_800,
+      cost: { r1: 100_000, r2: 100_000, r3: 0, r4: 0 },
+    });
+  });
+
+  test("Under Hall 4: none allowed yet", () => {
+    const [status, data] = refusedWith(() => planBuild(inferno(4), { type: LAB, x: 250, y: -350 }, NOW));
+    expect(status).toBe(409);
+    expect(data).toMatchObject({ reason: "townHall", townHall: { have: 4, need: 5 } });
+  });
+
+  test("needs the Strongbox at 3 and the Academy at 2", () => {
+    const [, low] = refusedWith(() => planBuild(inferno(5, 2, 2), { type: LAB, x: 250, y: -350 }, NOW));
+    expect(low).toMatchObject({ reason: "requirements", requirements: [[STRONGBOX, 1, 3]] });
+    const [, noAcademy] = refusedWith(() => planBuild(inferno(5, 3, 1), { type: LAB, x: 250, y: -350 }, NOW));
+    expect(noAcademy).toMatchObject({ reason: "requirements", requirements: [[ACADEMY, 1, 2]] });
+  });
+
+  test("only one", () => {
+    const save = inferno(6);
+    save.buildingdata!["20"] = { id: 20, t: LAB, X: 250, Y: -350, l: 1 } as never;
+    const [status, data] = refusedWith(() => planBuild(save, { type: LAB, x: -250, y: 350 }, NOW));
+    expect(status).toBe(409);
+    expect(data).toMatchObject({ reason: "limit", limit: { have: 1, allowed: 1 } });
+  });
+
+  test("levels 2 and 3: 300,000 / 600,000 Bone and Coal, 12 h / 1 day; level 3 needs Under Hall 6, the Inferno's top", () => {
+    const steps = INFERNO_COSTS[LAB]!.costs;
+    expect(steps.map(([r1, r2, r3, r4, time]) => [r1, r2, r3, r4, time])).toEqual([
+      [100_000, 100_000, 0, 0, 10_800],
+      [300_000, 300_000, 0, 0, 43_200],
+      [600_000, 600_000, 0, 0, 86_400],
+    ]);
+    expect(steps.map((one) => one[5])).toEqual([
+      [[HALL, 1, 5], [STRONGBOX, 1, 3], [ACADEMY, 1, 2]],
+      [[HALL, 1, 6], [STRONGBOX, 1, 4], [ACADEMY, 1, 3]],
+      [[HALL, 1, 6], [STRONGBOX, 1, 4], [ACADEMY, 1, 4]],
+    ]);
   });
 });

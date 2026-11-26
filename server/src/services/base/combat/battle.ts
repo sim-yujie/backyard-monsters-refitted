@@ -60,13 +60,28 @@ export interface BattleAttacker extends LootAttacker {
 }
 
 /**
- * The older rules versions that already fight Krallen by patch 8.6's rules
- * (no Mode, Flash's route and turns): 8.6's own, `cf287596a22ae2e0`. A rule
- * gate must not read "these rules or not" once a later change moves the
- * version again: an attack started on 8.6 and landed after whole health went
- * live keeps its 8.6 Krallen, without whole health (player report, Reii).
+ * The older rules versions that already keep health whole, as Flash's does
+ * (player report, Reii, 25 Nov 2026): patch 8.7's, `92ea2dbbfe06531c`, and
+ * beta 9's with it, `723a6cab98c42278`. Both fight Krallen by patch 8.6's
+ * rules too. An attack started on 8.7 and landed after beta 9 went live, or
+ * on beta 9 before main's 8.7 was merged back, keeps both.
  */
-const KRALLEN_RULES_SINCE_8_6: readonly string[] = ["cf287596a22ae2e0"];
+const WHOLE_HEALTH_RULES_SINCE_8_7: readonly string[] = ["92ea2dbbfe06531c", "723a6cab98c42278"];
+
+/**
+ * The older rules versions that already fight Krallen by patch 8.6's rules
+ * (no Mode, Flash's route and turns): 8.6's own, `cf287596a22ae2e0`, and
+ * beta 9's with them, `22d6196bc811ac42`, and every version that keeps
+ * health whole ({@link WHOLE_HEALTH_RULES_SINCE_8_7}). A rule gate must not
+ * read "these rules or not" once a later change moves the version again: an
+ * attack started on 8.6 and landed after whole health went live keeps its
+ * 8.6 Krallen, without whole health (player report, Reii).
+ */
+const KRALLEN_RULES_SINCE_8_6: readonly string[] = [
+  "cf287596a22ae2e0",
+  "22d6196bc811ac42",
+  ...WHOLE_HEALTH_RULES_SINCE_8_7,
+];
 
 /**
  * What the replay of an attack is handed, as plain data, or null when there
@@ -107,8 +122,10 @@ export const battleReplayInput = ({
   // `hasMode`); one started under older rules, or with none recorded,
   // replays with the Mode its log carries, as it was fought.
   const rulesNow = stampPlays(session?.rules);
-  const modelessKrallen =
-    rulesNow || (typeof session?.rules === "string" && KRALLEN_RULES_SINCE_8_6.includes(session.rules));
+  const stampIn = (versions: readonly string[]): boolean =>
+    typeof session?.rules === "string" && versions.includes(session.rules);
+  const modelessKrallen = rulesNow || stampIn(KRALLEN_RULES_SINCE_8_6);
+  const wholeHealth = rulesNow || stampIn(WHOLE_HEALTH_RULES_SINCE_8_7);
   const fighter: LootAttacker = {
     academy,
     champion: attacker.champion ?? null,
@@ -155,8 +172,9 @@ export const battleReplayInput = ({
     // hits her (patch 8.6) only in an attack started under these rules.
     flashKrallen: modelessKrallen,
     // A monster's health stays whole, as Flash's does (player report, Reii,
-    // 25 Nov 2026), only in an attack started under these rules.
-    wholeHealth: rulesNow,
+    // 25 Nov 2026), only in an attack started under these rules or ones that
+    // already kept it.
+    wholeHealth,
   };
 };
 
@@ -285,4 +303,46 @@ export const battleMismatches = (
     fields.push("champion");
   }
   return fields;
+};
+
+/** One side's figures in a mismatch log line ({@link mismatchFigures}). */
+export interface MismatchFigures {
+  /** The attack's loot, whole units. */
+  readonly loot: { r1: number; r2: number; r3: number; r4: number };
+  /** Each flung champion's health after the battle, by type; null where the save has none. */
+  readonly champions: Record<string, number | null>;
+  /** Each caged (defending) champion's health after the battle, by type; null where the save has none. */
+  readonly caged: Record<string, number | null>;
+}
+
+/**
+ * The save's and the battle's figures behind {@link battleMismatches}'
+ * `attackloot`, `attackerchampion` and `champion`, for the
+ * `attack-replay-mismatch` log line (descent-aura, 24 Nov 2026): with the
+ * numbers on both sides a remaining disagreement can be told apart (a loot
+ * aura moves the loot, a fight the champions' health).
+ */
+export const mismatchFigures = (
+  client: ClientBattle,
+  server: AbandonedOutcome
+): { sent: MismatchFigures; derived: MismatchFigures } => {
+  const sentChampions: Record<string, number | null> = {};
+  const derivedChampions: Record<string, number | null> = {};
+  for (const type of server.championsFlung) {
+    sentChampions[type] = championHpOf(client.attackerchampion, type) ?? null;
+    const hp = server.attackerchampion?.find((champion) => champion.t === type)?.hp;
+    derivedChampions[type] = hp === undefined ? null : Math.floor(hp);
+  }
+  const sentCaged: Record<string, number | null> = {};
+  const derivedCaged: Record<string, number | null> = {};
+  for (const caged of server.defenderChampions) {
+    sentCaged[caged.t] = championHpOf(client.champion, caged.t) ?? null;
+    derivedCaged[caged.t] = Math.floor(caged.hp);
+  }
+  const sent = wholeAmounts(client.attackloot);
+  const { r1, r2, r3, r4 } = server.attackloot;
+  return {
+    sent: { loot: { r1: sent.r1, r2: sent.r2, r3: sent.r3, r4: sent.r4 }, champions: sentChampions, caged: sentCaged },
+    derived: { loot: { r1, r2, r3, r4 }, champions: derivedChampions, caged: derivedCaged },
+  };
 };

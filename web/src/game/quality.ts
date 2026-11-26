@@ -20,6 +20,10 @@
  * graphics memory with the High sheets and drew monsters as green squares.
  * Medium by default plays the music as High does (`musicHeld`).
  *
+ * A PC drawing without a graphics card (software rendering: SwiftShader,
+ * llvmpipe, Microsoft Basic Render Driver; owner, beta 9) starts on Low:
+ * its processor draws every frame, and the lightest sheets help most.
+ *
  * Phones and tablets (patch 7.11): iOS closed the tab on iPhones, which
  * loaded every yard monster at `@4x`. A touch device (`touchDevice.ts`) that
  * never chose starts on Medium too, and one whose player chose High still
@@ -95,6 +99,8 @@ export interface DeviceHints {
   readonly textureLimit: number | null;
   /** Whether it is a phone or a tablet (`isTouchDevice`). */
   readonly touch?: boolean;
+  /** Whether WebGL draws in software, with no graphics card (`isSoftwareRenderer`). */
+  readonly software?: boolean;
 }
 
 /** At or under this much memory (GB) a device starts on Medium. */
@@ -104,6 +110,7 @@ export const LOW_TEXTURE_LIMIT = 4096;
 
 /**
  * The Quality a player who never chose starts on (owner, 17 Nov 2026):
+ * Low where WebGL draws in software, with no graphics card (beta 9);
  * Medium on a device with 4 GB of memory or less, or a graphics card that
  * holds 4096 px a side or less, or on any phone or tablet (patch 7.11:
  * iPhones report neither, and iOS closed the tab on the High sheets); High
@@ -111,11 +118,13 @@ export const LOW_TEXTURE_LIMIT = 4096;
  * same player on a desktop later still gets High.
  */
 export const defaultQuality = (hints: DeviceHints): Quality =>
-  hints.touch === true ||
-  (hints.memoryGb !== null && hints.memoryGb <= LOW_MEMORY_GB) ||
-  (hints.textureLimit !== null && hints.textureLimit <= LOW_TEXTURE_LIMIT)
-    ? "medium"
-    : "high";
+  hints.software === true
+    ? "low"
+    : hints.touch === true ||
+        (hints.memoryGb !== null && hints.memoryGb <= LOW_MEMORY_GB) ||
+        (hints.textureLimit !== null && hints.textureLimit <= LOW_TEXTURE_LIMIT)
+      ? "medium"
+      : "high";
 
 /** `navigator.deviceMemory`, or null where the browser does not say. */
 export const deviceMemoryGb = (nav: unknown = typeof navigator === "undefined" ? undefined : navigator): number | null => {
@@ -128,46 +137,92 @@ export const deviceMemoryGb = (nav: unknown = typeof navigator === "undefined" ?
 };
 
 /**
- * The graphics card's texture limit, asked of a throwaway WebGL context
- * (WebGL 2, else 1, as `app/graphicsOff.ts` does), let go at once so it does
- * not hold one of the browser's few WebGL slots. Null with no WebGL.
+ * The graphics card's name WebGL gives, unmasked where the browser allows;
+ * null with nothing to read.
  */
-export const probeTextureLimit = (
-  makeCanvas: () => HTMLCanvasElement | null = () => (typeof document === "undefined" ? null : document.createElement("canvas")),
-): number | null => {
+export const readRendererName = (gl: WebGLRenderingContext): string | null => {
   try {
-    const canvas = makeCanvas();
-    if (!canvas) return null;
-    const gl =
-      (canvas.getContext("webgl2") as WebGL2RenderingContext | null) ??
-      (canvas.getContext("webgl") as WebGLRenderingContext | null);
-    if (!gl) return null;
-    const size: unknown = gl.getParameter(gl.MAX_TEXTURE_SIZE);
-    gl.getExtension("WEBGL_lose_context")?.loseContext();
-    return typeof size === "number" && Number.isFinite(size) && size > 0 ? size : null;
+    // Firefox already gives the real (rounded) name here, and warns about the
+    // debug extension; Chrome and Safari give "WebKit WebGL" without it.
+    const plain = gl.getParameter(gl.RENDERER) as unknown;
+    if (typeof plain === "string" && plain !== "" && !/^WebKit WebGL$/i.test(plain)) return plain;
+    const info = gl.getExtension("WEBGL_debug_renderer_info");
+    const unmasked = info ? (gl.getParameter(info.UNMASKED_RENDERER_WEBGL) as unknown) : null;
+    if (typeof unmasked === "string" && unmasked !== "") return unmasked;
+    return typeof plain === "string" && plain !== "" ? plain : null;
   } catch {
     return null;
   }
 };
 
 /**
- * This device's hints. The texture limit is the renderer's when it has
- * already said (`gpuTextureLimit`), else a throwaway context's, kept as the
- * device's limit so the first sheets fetched step down too (`sheetForDevice`).
- * A device that already reports little memory is not probed. A phone or
- * tablet still is: it is on Medium either way, but an old one's small limit
- * must be known before its first sheets are picked.
+ * Whether a renderer's name is a software one, drawing on the processor with
+ * no graphics card: Chrome's SwiftShader, Mesa's llvmpipe, softpipe and
+ * lavapipe, Windows' Microsoft Basic Render Driver, Apple's Software Renderer
+ * ("ANGLE (Google, Vulkan 1.3.0 (SwiftShader Device (Subzero)), SwiftShader
+ * driver)", "ANGLE (Microsoft, Microsoft Basic Render Driver Direct3D11 ...)").
  */
-const readDeviceHints = (): DeviceHints => {
+export const isSoftwareRenderer = (name: string | null): boolean =>
+  name !== null && /swiftshader|llvmpipe|softpipe|lavapipe|basic render|software/i.test(name);
+
+/** What a throwaway WebGL context says: its texture limit and renderer name, null where it does not say. */
+export interface GraphicsProbe {
+  readonly textureLimit: number | null;
+  readonly renderer: string | null;
+}
+
+/**
+ * Asks a throwaway WebGL context (WebGL 2, else 1, as `app/graphicsOff.ts`
+ * does) for the graphics card's texture limit and name, and lets it go at
+ * once so it does not hold one of the browser's few WebGL slots. Nulls with
+ * no WebGL.
+ */
+export const probeGraphics = (
+  makeCanvas: () => HTMLCanvasElement | null = () => (typeof document === "undefined" ? null : document.createElement("canvas")),
+): GraphicsProbe => {
+  const none: GraphicsProbe = { textureLimit: null, renderer: null };
+  try {
+    const canvas = makeCanvas();
+    if (!canvas) return none;
+    const gl =
+      (canvas.getContext("webgl2") as WebGL2RenderingContext | null) ??
+      (canvas.getContext("webgl") as WebGLRenderingContext | null);
+    if (!gl) return none;
+    const size: unknown = gl.getParameter(gl.MAX_TEXTURE_SIZE);
+    const renderer = readRendererName(gl);
+    gl.getExtension("WEBGL_lose_context")?.loseContext();
+    return { textureLimit: typeof size === "number" && Number.isFinite(size) && size > 0 ? size : null, renderer };
+  } catch {
+    return none;
+  }
+};
+
+/** The graphics card's texture limit, from a throwaway context ({@link probeGraphics}). Null with no WebGL. */
+export const probeTextureLimit = (makeCanvas?: () => HTMLCanvasElement | null): number | null =>
+  probeGraphics(makeCanvas).textureLimit;
+
+/**
+ * This device's hints. One throwaway context (`probeGraphics`) names the
+ * renderer, so a PC with no graphics card is known, low on memory or not (a
+ * phone or tablet low on memory is not probed, as before). The texture limit is the renderer's when it has already said
+ * (`gpuTextureLimit`), else the throwaway context's, kept as the device's
+ * limit so the first sheets fetched step down too (`sheetForDevice`): a phone
+ * or tablet is on Medium either way, but an old one's small limit must be
+ * known before its first sheets are picked.
+ */
+export const readDeviceHints = (probe: () => GraphicsProbe = probeGraphics): DeviceHints => {
   const memoryGb = deviceMemoryGb();
   const touch = isTouchDevice();
-  if (memoryGb !== null && memoryGb <= LOW_MEMORY_GB) return { memoryGb, textureLimit: deviceTextureLimit(), touch };
+  // A phone or tablet low on memory is on Medium already and draws on its own
+  // graphics chip: it is spared the throwaway context, as before beta 9.
+  if (touch && memoryGb !== null && memoryGb <= LOW_MEMORY_GB) return { memoryGb, textureLimit: deviceTextureLimit(), touch };
+  const probed = probe();
   let limit = deviceTextureLimit();
-  if (limit === null) {
-    limit = probeTextureLimit();
-    if (limit !== null) setDeviceTextureLimit(limit);
+  if (limit === null && probed.textureLimit !== null) {
+    limit = probed.textureLimit;
+    setDeviceTextureLimit(limit);
   }
-  return { memoryGb, textureLimit: limit, touch };
+  return { memoryGb, textureLimit: limit, touch, software: isSoftwareRenderer(probed.renderer) };
 };
 
 /** The device's default, decided once a page load (`readDeviceHints` probes at most once). */
@@ -267,10 +322,25 @@ export const sheetForDevice = (
   size: { readonly width: number; readonly height: number },
   limit: number | null = deviceTextureLimit(),
   level: Quality = quality(),
+  touch: boolean = isTouchDevice(),
 ): string => {
   const chosen = sheetAtQuality(file, level);
   const copies = sheetCopies(file);
-  if (!copies || limit === null) return chosen;
+  if (!copies) return chosen;
+  const fitted = limit === null ? chosen : fittedCopy(file, copies, chosen, size, limit);
+  // A sheet too heavy for a small device at its `@2x` (beta 9): its 1x copy instead.
+  const small = touch || (limit !== null && limit <= LOW_TEXTURE_LIMIT);
+  return small && fitted === copies.medium && SMALL_DEVICE_1X_SHEETS.has(file) ? copies.low : fitted;
+};
+
+/** The biggest copy, from `chosen` down, that fits a card holding `limit` px a side; else the 1x. */
+const fittedCopy = (
+  file: string,
+  copies: { readonly medium: string; readonly low: string },
+  chosen: string,
+  size: { readonly width: number; readonly height: number },
+  limit: number,
+): string => {
   const ladder = [file, copies.medium, copies.low];
   for (const copy of ladder.slice(ladder.indexOf(chosen))) {
     const scale = sheetResolution(copy);
@@ -278,6 +348,25 @@ export const sheetForDevice = (
   }
   return copies.low;
 };
+
+/**
+ * Painted sheets a phone, a tablet or a card that holds 4096 px or less draws
+ * from their 1x copy even where the `@2x` would fit (beta 9, owner 21 Nov
+ * 2026, card b9-speed-picks): Fomor level 6's `@2x` is 3968 x 1470, about
+ * 30 MB of graphics memory with its mipmaps for one monster, and its 1x copy
+ * (375 KB) looks the same at a phone's zoom. The owner added the four
+ * heaviest `@2x` sheets (pick "merge-plus4"), each a quarter of the memory as
+ * its 1x copy (sizes without mipmaps): Korath 3 (4096 x 3672, 57 MB), Korath 2
+ * (3808 x 2754, 40 MB), Drull 3 (3648 x 2550, 36 MB) and Gorgo 3
+ * (3296 x 2640, 33 MB). By the painted file's name.
+ */
+export const SMALL_DEVICE_1X_SHEETS: ReadonlySet<string> = new Set([
+  "monsters/fly_6-repaint@4x.png",
+  "monsters/korath_3-repaint@4x.png",
+  "monsters/korath_2-repaint@4x.png",
+  "monsters/dragon_3-repaint@4x.png",
+  "monsters/ape_3-repaint@4x.png",
+]);
 
 /** Whether the yard tune is the lighter copy (Medium and Low). */
 export const lightMusic = (level: Quality = quality()): boolean => level !== "high";

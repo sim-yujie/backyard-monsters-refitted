@@ -75,12 +75,15 @@ import { cancelRaidOnYardLoad, presenceLapsed } from "../../../services/raids/ra
 import { settleRaidOnYardLoad } from "../../../services/raids/raidFlow.js";
 import type { RaidResult } from "../../../services/raids/raidLanding.js";
 import { readSchedule } from "../../../services/raids/raidSchedule.js";
+import { startWithSmartMoves, type SmartMoved } from "../../../services/base/autoAttack/smartMove.js";
+import { readAttackSession } from "../../../services/base/attackSessionStore.js";
 import { activeEventKinds } from "../../../services/yard/season.js";
 import {
   defenceReplayLoadOf,
   isDefenceReplayTarget,
   keepDefenceReplayLoad,
 } from "../../../services/defences/defenceReplayLoad.js";
+import { noteLiveSeen } from "../../../services/maproom/live/liveOnline.js";
 
 type Stronghold = { level: number; cell?: { x: number; y: number } | null };
 
@@ -114,7 +117,9 @@ const ownCoinsOnLoad = async (
 
 export const baseLoad: KoaController = async (ctx) => {
   const user: User = ctx.authUser;
-  const { baseid, type, mapversion: requestedVersion, attackData, screen } = BaseLoadSchema.parse(ctx.request.body);
+  const { baseid, type, mapversion: requestedVersion, attackData, screen, smartmoves } = BaseLoadSchema.parse(
+    ctx.request.body
+  );
 
   // The Flash Inferno's modes are gone: the Inferno loads through `/bm/inferno/*` (WP 7.1).
   if (INFERNO_MODES.has(type)) refuseOldInferno(ctx, user, `load ${type}`);
@@ -160,6 +165,8 @@ export const baseLoad: KoaController = async (ctx) => {
   let attackerRanks: AcademyRanks | undefined;
   /** No presence mark before this load: the game had been closed (#226, `raidStore.ts`). */
   let gameWasClosed = false;
+  /** Smart moving (beta 9): the moves made before this attack started. */
+  let smartMoved: SmartMoved | undefined;
 
   // The attacker's level for the engine's low-level loot bonus, served to the
   // client and kept in the attack session for the loot replay, so both run
@@ -172,6 +179,7 @@ export const baseLoad: KoaController = async (ctx) => {
       gameWasClosed = await presenceLapsed(user.userid);
       baseSave = await baseModeBuild(user, baseid);
       redis.setex(`last-seen:main:${user.userid}`, 120, getCurrentDateTime().toString());
+      noteLiveSeen(redis, user.userid);
       // Played today, for the owner's dashboard (`services/stats/activity.ts`).
       noteActivePlayer(user.userid);
       // Seen in the last 30 days is what earns a Map Room 1 neighbour place (issue #235).
@@ -205,18 +213,19 @@ export const baseLoad: KoaController = async (ctx) => {
       baseSave = await baseModeView(baseid, mapversion, user.save!.worldid, user);
       break;
 
-    case BaseMode.WMATTACK:
+    case BaseMode.WMATTACK: {
       if (!ctx.meetsDiscordAgeCheck && !MR1_TRIBE_IDS.has(baseid)) throw discordAgeErr();
       
       await validateAttack(user, attackData, mapversion);
-      ({ save: baseSave, defenderForces, championBrains, championHealth, attackerAcademy, attackerRanks } =
-        await baseModeAttack({
-        user,
-        baseid,
-        mapversion,
-        attackerLevel,
-      }));
+      const start = () => baseModeAttack({ user, baseid, mapversion, attackerLevel });
+      // Smart moving (beta 9): the saved plan's army moves into the yards in
+      // range first, in this same request, and goes back should the attack
+      // not start (`smartMove.ts`).
+      const started = smartmoves === undefined ? await start() : await startWithSmartMoves(user, baseid, smartmoves, start);
+      ({ save: baseSave, defenderForces, championBrains, championHealth, attackerAcademy, attackerRanks } = started);
+      smartMoved = (started as { smartMoved?: SmartMoved }).smartMoved;
       break;
+    }
 
     default:
       throw new Error(`Base type not handled, type: ${type}.`);
@@ -602,6 +611,15 @@ export const baseLoad: KoaController = async (ctx) => {
     chatservers: [process.env.CHAT_WS_HOST!],
     ...(type === BaseMode.HELP && { help: await helpBlockFor(user.userid, baseSave) }),
     ...(attackerLevel !== undefined && { attackerlevel: attackerLevel }),
+    // Smart moving (beta 9): what moved, and what each yard in range houses
+    // now, as the attack session recorded it, so the battle's army counts
+    // the monsters that just moved in.
+    ...(smartMoved && {
+      smartmoved: {
+        moves: smartMoved.moves,
+        housed: (await readAttackSession(baseSave.basesaveid))?.entryHoused ?? {},
+      },
+    }),
     // The player's own level for the yard HUD (#192): their main save's, on
     // an outpost too, as the map shows it (`userCell.ts`).
     ...(isOwner &&

@@ -1,4 +1,3 @@
-import type { YardRefusal } from "@/api/yard";
 import { JUICE_KEY, juiceActions, type JuiceActions } from "@/api/yardJuice";
 import { housedRows, type HousedRow } from "@/game/monsters/housing";
 import { juicePreview, juicerProblemText, juicerStatus, type JuicerStatus } from "@/game/monsters/juice";
@@ -8,6 +7,7 @@ import { formatAmount } from "@/ui/format";
 import { QuantityStepper } from "@/ui/QuantityStepper";
 import { resourceAmount } from "@/ui/resourceIcon";
 import { monsterPicture } from "./LockerTab";
+import { refusalText } from "@/ui/dom";
 
 /**
  * The Housing tab's Monster Juicer section (`docs/design/yard-buildings.md`
@@ -334,11 +334,6 @@ const button = (label: string, onClick: () => void, variant?: string): HTMLButto
   element.addEventListener("click", onClick);
   return element;
 };
-
-const refusalText = (refusal: YardRefusal): string =>
-  refusal.reason === "network"
-    ? "Could not reach the server. Try again."
-    : refusal.message || "That did not work.";
 
 /** Magma for the Inferno purse, with the Inferno's icon on the main yard. */
 const magmaAmount = (amount: number): HTMLElement => resourceAmount("r4", formatAmount(amount), { realm: "inferno" });

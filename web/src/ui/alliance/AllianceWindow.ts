@@ -72,6 +72,7 @@ import {
 } from "./allianceProgressUi";
 import { confirmRemoveGoal, goalsLine, goalsTab, goalsTabIcon, type GoalsHost } from "./goalsTab";
 import { onlineDot } from "@/ui/onlineDot";
+import { seenDims, seenMark } from "@/ui/seenMark";
 import { Popup } from "@/ui/Popup";
 import { StarEditor } from "@/ui/alliance/StarEditor";
 import { make } from "@/ui/friends/rows";
@@ -1839,13 +1840,17 @@ export class AllianceWindow {
     const role = member.role ?? "member";
     const words = make("span", "alliance__row-words");
     words.append(make("strong", "alliance__row-name", member.display_name), make("span", `alliance__role alliance__role--${role}`, ROLE_WORD[role]));
-    row.append(
-      this.face(member.pic_square, member.user_id, member.photo),
-      words,
-      make("span", "alliance__level", ALLIANCE_TEXT.level(member.level)),
-      // Offline: an empty spot of the dot's size, so the levels line up (and no "Online" label).
-      member.online ? onlineDot("alliance__online", false) : make("span", "alliance__online alliance__online--off"),
-    );
+    // Last seen (beta 9): one slot of fixed width beside the level (under it on a phone), so the levels line up.
+    // Your own row shows no step: you are here (and the server's online needs a real action first).
+    const step = member.user_id === this.myId() ? null : (member.seen ?? null);
+    const face = this.face(member.pic_square, member.user_id, member.photo);
+    face.classList.toggle("seen-dim", seenDims(step));
+    const slot = make("span", "alliance__seen");
+    const seen = seenMark(step);
+    if (seen) slot.append(seen);
+    const side = make("span", "alliance__side");
+    side.append(slot, make("span", "alliance__level", ALLIANCE_TEXT.level(member.level)));
+    row.append(face, words, side);
     row.addEventListener("click", () => {
       this.openMember = opened ? null : member.user_id;
       this.confirming = null;

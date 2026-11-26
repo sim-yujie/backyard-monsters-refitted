@@ -26,6 +26,8 @@ import { h, replace } from "./dom";
 import { ErrorsView } from "./errors";
 import { ModerationView } from "./moderation";
 import { ModeratorsView } from "./moderators";
+import { ChatFilterView } from "./chatFilter";
+import { ModStepsView } from "./modSteps";
 import { ModMailSection } from "./modmail";
 import { PhotosView } from "./photos";
 import { homeSplitWords } from "./evidence";
@@ -43,6 +45,7 @@ import {
 import { QueueView } from "./queue";
 import { ShinyView } from "./shiny";
 import { MonsterMadnessView } from "./monsterMadness";
+import { MaintenanceView } from "./maintenance";
 import { MonstersView } from "./monsters";
 import { WeekendView } from "./weekend";
 import { applyTheme, readTheme, themePicker } from "./theme";
@@ -180,6 +183,8 @@ class Dashboard {
     onChanged: () => void this.queue.refresh(),
   });
   private readonly moderators = new ModeratorsView({ say: (message) => this.say(message) });
+  private readonly modSteps = new ModStepsView({ say: (message) => this.say(message) });
+  private readonly chatFilter = new ChatFilterView({ say: (message) => this.say(message) });
   private readonly attacks = new AttackLogSection({
     say: (message) => this.say(message),
     navigate: ({ player, side, range }) => {
@@ -199,7 +204,7 @@ class Dashboard {
     say: (message) => this.say(message),
     onViewChange: () => undefined,
   });
-  /** The Moderation list: player reports and word-filter catches, one row per player. */
+  /** The Moderation list: player reports and filter catches, one row per player. */
   private readonly queue = new QueueView({
     say: (message) => this.say(message),
     onCount: (counts) => {
@@ -237,6 +242,8 @@ class Dashboard {
   private readonly weekend = new WeekendView({ say: (message) => this.say(message) });
   /** Monster Madness (owner-started only), above the weekend events. */
   private readonly monsterMadness = new MonsterMadnessView({ say: (message) => this.say(message) });
+  /** The maintenance switch (owner, 22 Nov 2026), at the top of Server health. */
+  private readonly maintenance = new MaintenanceView({ say: (message) => this.say(message) });
   /** Game activity's Monsters tab (owner, 23 Nov 2026), loaded the first time it is opened. */
   private readonly monsters = new MonstersView();
   private readonly errors = new ErrorsView(
@@ -378,6 +385,7 @@ class Dashboard {
       attacks: section("attacks"),
       flagged: section("flagged"),
       moderators: section("moderators"),
+      chatfilter: section("chatfilter"),
       modmail: section("modmail"),
       bugs: section("bugs"),
       shiny: section("shiny"),
@@ -395,13 +403,14 @@ class Dashboard {
     replace(this.sections.bugs.body, this.bugs.element);
     replace(this.sections.attacks.body, this.attacks.element);
     replace(this.sections.flagged.body, this.flagged.element);
-    replace(this.sections.moderators.body, this.moderators.element);
+    replace(this.sections.moderators.body, this.moderators.element, this.modSteps.element);
+    replace(this.sections.chatfilter.body, this.chatFilter.element);
     replace(this.sections.modmail.body, this.modMail.element);
     replace(this.sections.chat.body, this.chat.element);
     replace(this.sections.shiny.body, this.shiny.element);
     replace(this.sections.announcements.body, this.announcements.element);
     replace(this.sections.events.body, this.monsterMadness.element, this.weekend.element);
-    replace(this.sections.health.body, this.errorsBox);
+    replace(this.sections.health.body, this.maintenance.element, this.errorsBox);
     replace(this.sections.monsters.body, this.monsters.element);
     // Since when monsters are counted, under the page's own line.
     this.sections.monsters.element.querySelector(".page-heading .subnav")?.before(this.monsters.counting);
@@ -503,12 +512,15 @@ class Dashboard {
       route.view === "monsters" ? this.monsters.show() : Promise.resolve(),
       this.flagged.refresh(),
       this.moderators.refresh(),
+      this.modSteps.refresh(),
+      this.chatFilter.refresh(),
       this.modMail.refresh(),
       this.shiny.refresh(),
       this.announcements.refresh(),
       this.photos.refresh(),
       this.weekend.refresh(),
       this.monsterMadness.refresh(),
+      this.maintenance.refresh(),
     ]);
   }
 
@@ -541,6 +553,15 @@ class Dashboard {
       else link.removeAttribute("aria-current");
     }
     this.setMenu(false);
+    // A phone's tab row scrolls sideways: bring the open tab into view (neon, 24 Nov 2026).
+    if (view !== "home") {
+      const tab = this.sections[view as SectionId].element.querySelector<HTMLElement>(".subnav [aria-current='page']");
+      try {
+        tab?.scrollIntoView?.({ inline: "center", block: "nearest" });
+      } catch {
+        // An old browser without the options: the row stays where it was.
+      }
+    }
     document.title = view === "home" ? "BYMR dashboard" : `${viewLabel(view)} · BYMR dashboard`;
     if (changed) window.scrollTo?.(0, this.scrolls.restore(view));
   }
@@ -582,11 +603,14 @@ class Dashboard {
       this.attacks.refresh(),
       this.flagged.refresh(),
       this.moderators.refresh(),
+      this.modSteps.refresh(),
+      this.chatFilter.refresh(),
       this.modMail.refresh(),
       this.shiny.refresh(),
       this.photos.refresh(),
       this.weekend.refresh(),
       this.monsterMadness.refresh(),
+      this.maintenance.refresh(),
       this.monsters.reload(),
     ]);
     this.refreshButton.classList.remove("is-busy");
@@ -696,7 +720,7 @@ class Dashboard {
   /** Server health's cards, from the last report and error totals; the error list stays below. */
   private renderServer(): void {
     if (!this.report) return;
-    replace(this.sections.health.body, ...renderHealth(this.report, this.errorReading), this.errorsBox);
+    replace(this.sections.health.body, this.maintenance.element, ...renderHealth(this.report, this.errorReading), this.errorsBox);
   }
 
   /**

@@ -63,7 +63,7 @@ mock.module("../../utils/logger.js", () => ({
 
 const { submitBugReportController, submitGuestBugReportController } = await import("./submitBugReport.js");
 const { submitBugReport, hashIp } = await import("../../services/bugReports/bugReports.js");
-const { BUG_REPORTS_PER_DAY, DEFAULT_BUG_REPORT_EMAIL } = await import("../../config/BugReportConfig.js");
+const { BUG_REPORTS_PER_DAY } = await import("../../config/BugReportConfig.js");
 
 const JPEG = Buffer.from([0xff, 0xd8, 0xff, 0xe0, 0x00, 0x10, 0x4a, 0x46, 0x49, 0x46, 0x00, 0x01]);
 const PNG = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0x00, 0x00, 0x00, 0x0d]);
@@ -121,7 +121,7 @@ beforeEach(() => {
   // Off, so the email goes to the (fake) mail server rather than the log.
   process.env.DEV_SANDBOX = "false";
   delete process.env.TURNSTILE_SECRET_KEY;
-  delete process.env.BUG_REPORT_EMAIL;
+  process.env.BUG_REPORT_EMAIL = "bugs@example.org";
 });
 
 afterEach(() => {
@@ -163,7 +163,7 @@ describe("a signed-in report", () => {
     await settle();
     expect(mails).toHaveLength(1);
     const [mail] = mails;
-    expect(mail.to).toBe(DEFAULT_BUG_REPORT_EMAIL);
+    expect(mail.to).toBe("bugs@example.org");
     expect(mail.replyTo).toBe("tester@example.com");
     expect(mail.subject).toBe("Bug report #1: The hatchery button does nothing.");
     expect(mail.text).toContain("Player: Tester (user 42)");
@@ -175,11 +175,19 @@ describe("a signed-in report", () => {
     expect(rows[0].emailed_at).toBeInstanceOf(Date);
   });
 
-  test("goes to BUG_REPORT_EMAIL when it is set", async () => {
-    process.env.BUG_REPORT_EMAIL = "bugs@example.org";
-    await signedIn(report());
-    await settle();
-    expect(mails[0].to).toBe("bugs@example.org");
+  test("with no BUG_REPORT_EMAIL, is saved and sent to Telegram but not emailed", async () => {
+    for (const unset of [undefined, "  "]) {
+      if (unset === undefined) delete process.env.BUG_REPORT_EMAIL;
+      else process.env.BUG_REPORT_EMAIL = unset;
+      const notify = mock(async (_id: number) => {});
+      const before = rows.length;
+      const result = await submitBugReport(em as any, { ...rowOf(), userid: 50 + before }, null, { notify });
+      expect(await result.emailed).toBe(false);
+      expect(rows).toHaveLength(before + 1);
+      expect(rows[before].emailed_at).toBeNull();
+      expect(notify).toHaveBeenCalledWith(result.id);
+    }
+    expect(mails).toHaveLength(0);
   });
 
   test("stays saved when the email fails, and is not marked emailed", async () => {

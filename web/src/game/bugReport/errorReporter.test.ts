@@ -1,6 +1,8 @@
 // @vitest-environment jsdom
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { ClientErrorBatch, ClientErrorSendResult } from "@/api/clientErrors";
+import { ApiError, SERVER_TROUBLE_TEXT } from "@/api/http";
+import { GAME_VERSION } from "@/data/gameVersion";
 import { BATCH_MAX, BATCHES_MAX, FIRST_SEND_DELAY_MS, SEND_GAP_MS, installErrorReporter, isNoise, reportCaughtError } from "./errorReporter";
 
 /** The game's own error sender, for the owner's dashboard. */
@@ -55,6 +57,23 @@ describe("the error sender", () => {
       expect.objectContaining({ kind: "rejection", message: "Error: load failed", place: "", count: 1 }),
     ]);
     expect(sent[0]!.batch.errors[0]!.stack).toContain("TypeError");
+  });
+
+  it("names the full game version, patch number included, not the changelog's release", async () => {
+    vi.useFakeTimers();
+    const target = new EventTarget() as unknown as Window;
+    const sent: ClientErrorBatch[] = [];
+    stop = installErrorReporter(target, {
+      send: async (batch) => {
+        sent.push(batch);
+        return "sent";
+      },
+      signedIn: () => true,
+    });
+    target.dispatchEvent(new ErrorEvent("error", { message: "boom", filename: "https://play.test/a.js", lineno: 1, colno: 1 }));
+    await vi.advanceTimersByTimeAsync(FIRST_SEND_DELAY_MS);
+    expect(sent).toHaveLength(1);
+    expect(sent[0]!.gameVersion).toBe(GAME_VERSION);
   });
 
   it("skips extensions, other sites' scripts and ResizeObserver warnings", async () => {
@@ -112,6 +131,13 @@ describe("the error sender", () => {
 });
 
 describe("errors the game caught itself", () => {
+  it("names a failed request's address in the report, not in what the player read (beta 9)", async () => {
+    const { sent } = setUp("sent", false);
+    reportCaughtError(new ApiError(SERVER_TROUBLE_TEXT, { status: 500, url: "http://play.test/worldmapv2/autoattack" }));
+    await vi.advanceTimersByTimeAsync(FIRST_SEND_DELAY_MS);
+    expect(sent[0]!.batch.errors[0]!.message).toBe(`ApiError: ${SERVER_TROUBLE_TEXT} (http://play.test/worldmapv2/autoattack)`);
+  });
+
   it("sends one the game hands over (graphics off), counted like any other", async () => {
     const { sent } = setUp("sent", false);
     const error = new Error("Graphics off: WebGL is disabled due to your security policy (No available renderer)");

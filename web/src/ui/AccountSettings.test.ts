@@ -8,6 +8,7 @@ const api = vi.hoisted(() => ({
   fetchAccount: vi.fn(),
   changeUsername: vi.fn(),
   setShinyLocked: vi.fn(),
+  setSmartMoving: vi.fn(),
 }));
 vi.mock("@/api/account", () => api);
 const privacyApi = vi.hoisted(() => ({
@@ -50,6 +51,7 @@ const open = async (account: Record<string, unknown>) => {
     privacy: { hideOnline: false, friendRequests: true },
     country: { country: null, countryAsked: false, countryChannel: null },
     notificationsOff: [],
+    smartMoving: true,
     ...account,
   });
   const popup = openAccountSettings({ container: document.body });
@@ -207,6 +209,25 @@ describe("AccountSettings", () => {
     await settle();
     expect(box.checked).toBe(true);
     expect(document.querySelector("#settings-shiny-hint")!.textContent).toBe(SETTINGS_TEXT.shinyFailed);
+  });
+
+  it("shows Smart moving as the account has it, saves a flip and puts it back when the save fails", async () => {
+    api.setSmartMoving.mockResolvedValueOnce(false).mockRejectedValueOnce(new Error("down"));
+    await open({ smartMoving: true });
+    const box = document.querySelector<HTMLInputElement>("#settings-smart-moving")!;
+    expect(box.checked).toBe(true);
+    expect(document.querySelector("#settings-smart-moving-hint")!.textContent).toBe(SETTINGS_TEXT.smartMovingHint);
+    box.checked = false;
+    box.dispatchEvent(new Event("change"));
+    await settle();
+    expect(api.setSmartMoving).toHaveBeenLastCalledWith(false);
+    expect(box.checked).toBe(false);
+
+    box.checked = true;
+    box.dispatchEvent(new Event("change"));
+    await settle();
+    expect(box.checked).toBe(false);
+    expect(document.querySelector("#settings-smart-moving-hint")!.textContent).toBe(SETTINGS_TEXT.smartMovingFailed);
   });
 
   it("saves 'Show when I'm online' as hideOnline and puts it back when the save fails", async () => {
@@ -458,6 +479,25 @@ describe("AccountSettings", () => {
       select.value = "medium";
       select.dispatchEvent(new Event("change"));
       expect(hint.textContent).toContain(SETTINGS_TEXT.downloadHint.medium);
+    } finally {
+      setDeviceDefaultQuality(null);
+      localStorage.clear();
+    }
+  });
+
+  it("on a Low this device chose (no graphics card), says so and not that the music is off; picking Low does (beta 9)", async () => {
+    localStorage.clear();
+    setDeviceDefaultQuality("low");
+    try {
+      await open({});
+      const select = document.querySelector<HTMLSelectElement>("#settings-quality")!;
+      expect(select.value).toBe("low");
+      const hint = document.querySelector("#settings-quality-hint")!;
+      expect(hint.textContent).toBe(SETTINGS_TEXT.downloadHintDeviceLow);
+      select.value = "low";
+      select.dispatchEvent(new Event("change"));
+      expect(localStorage.getItem("bymr.quality")).toBe("low");
+      expect(hint.textContent).toContain(SETTINGS_TEXT.downloadHint.low);
     } finally {
       setDeviceDefaultQuality(null);
       localStorage.clear();

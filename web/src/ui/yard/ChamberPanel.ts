@@ -23,6 +23,7 @@ import { formatAmount, formatCountdown } from "@/ui/format";
 import { gameIcon } from "@/ui/gameIcon";
 import "@/ui/styles/champion.css";
 import { FREEZE_SHORT, actHint, actTile } from "./ChampionPanel";
+import { refusalText } from "@/ui/dom";
 
 /**
  * The Champion Chamber's window, under the cage's in the Monsters screen's
@@ -328,7 +329,3 @@ const note = (text: string): HTMLElement => {
   return element;
 };
 
-const refusalText = (refusal: YardRefusal): string =>
-  refusal.reason === "network"
-    ? "Could not reach the server. Try again."
-    : refusal.message || "That did not work.";

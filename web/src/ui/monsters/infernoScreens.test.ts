@@ -87,6 +87,8 @@ const hatcheryActions = (): HatcheryActions => ({
   remove: vi.fn(() => never<never>()),
   clear: vi.fn(() => never<never>()),
   finish: vi.fn(() => never<never>()),
+  presetSave: vi.fn(() => never<never>()),
+  presetSend: vi.fn(() => never<never>()),
   overdrive: vi.fn((item: string) => ok({ item, credits: 30, q: 1, endsAt: T0 + 3600 })),
 });
 
@@ -99,15 +101,17 @@ afterEach(() => {
 });
 
 describe("Inferno monster screens: the tab strip", () => {
-  it("offers Unlock, Hatch, Compound and Train, and no Lab", () => {
+  it("offers Unlock, Hatch, Compound, Train and, since beta 9, the Infernal Lab", () => {
     const tabs = monstersTabsFor("inferno");
     expect(tabs.map((tab) => tab.id)).toEqual([
       MonstersTabId.UNLOCK,
       MonstersTabId.HATCH,
       MonstersTabId.HOUSING,
       MonstersTabId.TRAIN,
+      MonstersTabId.LAB,
     ]);
-    expect(tabs.map((tab) => tab.label)).toEqual(["Unlock", "Hatch", "Compound", "Train"]);
+    expect(tabs.map((tab) => tab.label)).toEqual(["Unlock", "Hatch", "Compound", "Train", "Lab"]);
+    expect(tabs.find((tab) => tab.id === MonstersTabId.LAB)?.buildings).toEqual([116]);
     expect(tabs.find((tab) => tab.id === MonstersTabId.HOUSING)?.buildings).toEqual([128]);
     // Its Incubators and, once built, its Incubator Control Centre (the HCC type, owner 2 Nov 2026).
     expect(tabs.find((tab) => tab.id === MonstersTabId.HATCH)?.buildings).toEqual([13, 16]);

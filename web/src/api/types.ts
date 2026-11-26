@@ -127,6 +127,8 @@ export interface AccountResponse extends ApiEnvelope {
     countryChannel?: string | null;
     /** The bell's notification categories turned off (`api/notificationSettings.ts`). */
     notificationsOff?: string[];
+    /** Smart moving for hand attacks (beta 9): on unless the player turned it off. */
+    smartMoving?: boolean;
   };
 }
 
@@ -140,7 +142,13 @@ export interface ChangeUsernameResponse extends ApiEnvelope {
 /** `POST /api/:apiVersion/player/settings`. */
 export interface SettingsResponse extends ApiEnvelope {
   error: number;
-  settings: { shinyLocked: boolean; mapTiltAllowed?: boolean; tiltedMap?: boolean; mapHexShape?: "flat" | "pointy" };
+  settings: {
+    shinyLocked: boolean;
+    mapTiltAllowed?: boolean;
+    tiltedMap?: boolean;
+    mapHexShape?: "flat" | "pointy";
+    smartMoving?: boolean;
+  };
 }
 
 /* ── Base / yard ────────────────────────────────────────────────────────── */
@@ -183,6 +191,12 @@ export interface BaseLoadRequest {
    * the server refuses an attack from a page with other rules.
    */
   rules?: string;
+  /**
+   * Smart moving (beta 9): on a `wmattack`, the key of the moves the player
+   * agreed to ("Move & attack"). The server makes exactly those moves before
+   * it starts the attack, or refuses with nothing moved (`smartMove.ts`).
+   */
+  smartmoves?: string;
   /**
    * Which screen opens the own yard: the yard itself, or a map finding its
    * home cell. The server only logs it, beside Moloch's emergence (patch 7.12).
@@ -820,6 +834,16 @@ export interface BaseLoadResponse extends ApiEnvelope {
    */
   attackeracademy?: unknown;
   /**
+   * Smart moving (beta 9): the moves made before this attack started, and
+   * what each own yard in range houses now (the attack session's record), so
+   * the battle's army counts the monsters that moved in. Only on an attack
+   * load sent with `smartmoves`.
+   */
+  smartmoved?: {
+    readonly moves: readonly { readonly from: string; readonly to: string; readonly monsters: Readonly<Record<string, number>> }[];
+    readonly housed: Readonly<Record<string, Readonly<Record<string, number>>>>;
+  };
+  /**
    * Attack modes only: the attacker's Monster Lab ranks, by monster id, frozen
    * with the academy (issue #352). Absent when nothing is researched.
    */
@@ -843,6 +867,13 @@ export interface BaseLoadResponse extends ApiEnvelope {
    * answer that carried `questsClaimable`; the load itself does not send it.
    */
   questsClaimable?: number;
+  /**
+   * The Hatchery Control Centre's presets (beta 9), the owner's only, from the
+   * main save in every own yard: `home` the main yard's list, `out` the one
+   * every outpost shares; each preset `[monster, count]` stacks in the order
+   * they are sent (`game/monsters/hccPresets.ts`). Absent until one is saved.
+   */
+  hccpresets?: HccPresetsWire | null;
   /**
    * The owner's loads: how to reach world chat (#282, `game/chat/chatSession.ts`).
    * `chatservers` is every load's, the chat WebSocket's `host:port`;
@@ -984,6 +1015,8 @@ export interface WildMonsterCell {
   dm: number;
   /** 1 once damage >= 90. */
   d: number;
+  /** When a damaged camp grows back whole, unix seconds (live map, beta 9); the map clears `dm`/`d` then. */
+  rg?: number;
   /** The cell's land feature (`landFeatures.ts`), with the server's land switch on; absent on open ground. */
   lf?: number;
   /**
@@ -1045,6 +1078,13 @@ export interface PlayerCell {
   p: number;
   /** When damage protection ends, unix seconds; sent while it runs (#187). */
   pe?: number;
+  /**
+   * While someone is attacking this yard or outpost: when that attack's window closes, unix
+   * seconds (live map, beta 9). The open panel says "Under attack"; the map asks again then.
+   */
+  atk?: number;
+  /** When the next monster hatches on one of the caller's own cells, unix seconds (live map, beta 9). */
+  nh?: number;
   /** Truce expiry, unix seconds. Absent on the caller's own cell. */
   t?: number;
   /** 1 when this base's owner has ever attacked the caller. */
@@ -1122,6 +1162,11 @@ export interface GetAreaResponse extends ApiEnvelope {
    * its cached zones need refetching without comparing the two lists itself.
    */
   sv?: string;
+  /**
+   * The zone's version when it was read (live map, beta 9): the live socket says when it moves,
+   * and the map asks again only the zones whose version it no longer holds.
+   */
+  zv?: number;
 }
 
 /**
@@ -1535,7 +1580,15 @@ export type YardResponse<Report> = ApiEnvelope &
     eventcoins?: number;
     /** What this action paid in event coins, for the "+15" moment. */
     coinsGained?: CoinGain[];
+    /** The HCC's presets (beta 9), once the player has saved one. */
+    hccpresets?: HccPresetsWire | null;
   };
+
+/** `hccpresets` on the wire: each list's presets by slot, each `[monster, count][]`. */
+export interface HccPresetsWire {
+  home?: [string, number][][];
+  out?: [string, number][][];
+}
 
 /** One event coin payment (`server/src/services/events/eventCoins.ts`). */
 export interface CoinGain {

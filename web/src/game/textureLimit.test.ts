@@ -4,6 +4,10 @@ import { setDeviceDefaultQuality, setDeviceTextureLimit } from "@/game/quality";
 import { resetGraphicsLog } from "@/game/graphicsLog";
 import { cellTexture, gpuTextureLimit, overLimit } from "./textureLimit";
 
+/** What went to the owner's dashboard. */
+const reported = vi.hoisted(() => [] as unknown[]);
+vi.mock("@/game/bugReport/errorReporter", () => ({ reportCaughtError: (error: unknown) => void reported.push(error) }));
+
 /**
  * A picture wider or taller than the graphics card holds is refused by WebGL
  * and drawn as a black box, so its cells are copied out through a canvas.
@@ -43,6 +47,7 @@ beforeEach(() => {
   // not ask a throwaway WebGL canvas (one more canvas than the test counts).
   setDeviceDefaultQuality("high");
   resetGraphicsLog();
+  reported.length = 0;
 });
 
 afterEach(() => {
@@ -83,13 +88,17 @@ describe("textureLimit", () => {
     expect(canvases[0]!.height).toBe(102);
     expect(canvases[0]!.drawn[0]!.slice(1)).toEqual([128, 0, 128, 102, 0, 0, 128, 102]);
     made.texture.destroy(true);
+    // Handled, so not sent to the dashboard (owner, 19 Nov 2026: most of the flood).
+    expect(reported).toEqual([]);
   });
 
-  it("falls back to framing where no canvas can be had", () => {
+  it("falls back to framing where no canvas can be had, and tells the dashboard", () => {
     const strip = railgunStrip();
     const made = cellTexture(strip, { x: 0, y: 0, width: 64, height: 51 }, 4096);
     expect(made.owned).toBe(false);
     expect(made.texture.source).toBe(strip);
+    expect(reported).toHaveLength(1);
+    expect(String(reported[0])).toMatch(/^Graphics: picture over the texture limit, could not be cut.*\(6144x110 px, limit 4096\)/);
   });
 
   it("reads the renderer's limit and remembers it for the whole game", () => {

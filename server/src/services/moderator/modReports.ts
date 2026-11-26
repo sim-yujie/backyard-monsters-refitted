@@ -25,6 +25,7 @@ import {
   type InboxSource,
 } from "../admin/moderationInbox.js";
 import { isMailModerator } from "../mail/modMail.js";
+import { newHoursOf, removalOf, removalsOf, type Removal } from "./modLines.js";
 
 /**
  * The game's Reports window for moderators (owner, 12 Nov 2026, Review Desk
@@ -33,7 +34,8 @@ import { isMailModerator } from "../mail/modMail.js";
  *
  * What a moderator may do is narrower than the dashboard:
  * - Close (nothing happens to the player), Warn, or Mute chat for 1 hour,
- *   1 day, 3 days or 7 days ({@link MOD_MUTE_HOURS}). No ban, no other length.
+ *   1 day, 3 days or 7 days ({@link MOD_MUTE_HOURS}). A ban of 1, 3 or 7
+ *   days is its own step (`modBan.ts`, owner 24 Nov 2026), open from chat too.
  * - Never on a moderator, a game team account, or themselves: those players
  *   are left out of the lists and every step on them is refused. An admin
  *   decides on them on the dashboard.
@@ -95,9 +97,13 @@ export interface ModQueueRow {
   oldestAt: string;
   latestAt: string;
   preview: { text: string; source: "report" | "filter" } | null;
+  /** Their main yard's age in hours while they are a new player (under three days), else null: "New · 30h". */
+  newHours: number | null;
+  /** The chat filter's reasons on their open lines, each once (`newLink`, `invite`, `watched`, `hidden`). */
+  filterTags: string[];
 }
 
-const queueRow = (row: InboxPlayer): ModQueueRow => ({
+const queueRow = (row: InboxPlayer, newHours: number | null = null, filterTags: string[] = []): ModQueueRow => ({
   userid: row.userid,
   username: row.username,
   muted: row.muted,
@@ -113,7 +119,35 @@ const queueRow = (row: InboxPlayer): ModQueueRow => ({
   oldestAt: row.oldestAt,
   latestAt: row.latestAt,
   preview: row.preview,
+  newHours,
+  filterTags,
 });
+
+const TAG_ORDER = ["newLink", "invite", "watched", "hidden"];
+
+/** The chat filter's reasons on each player's open lines. */
+const openFilterTags = async (em: EntityManager, userids: readonly number[]): Promise<Map<number, string[]>> => {
+  if (userids.length === 0) return new Map();
+  const rows = await em.execute<{ userid: number | string; tags: string | null }[]>(
+    `SELECT userid, string_agg(tags, ',') AS tags FROM bym.chat_flag
+      WHERE dismissed_at IS NULL AND tags IS NOT NULL AND userid IN (${userids.map(() => "?").join(", ")})
+      GROUP BY userid`,
+    [...userids],
+  );
+  return new Map(
+    rows.map((row) => {
+      const seen = new Set((row.tags ?? "").split(",").filter(Boolean));
+      return [Number(row.userid), TAG_ORDER.filter((tag) => seen.has(tag))];
+    }),
+  );
+};
+
+/** Queue rows with each player's yard age and filter tags. */
+const queueRows = async (em: EntityManager, rows: readonly InboxPlayer[], now: Date): Promise<ModQueueRow[]> => {
+  const ids = rows.map((row) => row.userid);
+  const [hours, tags] = await Promise.all([newHoursOf(em, ids, now), openFilterTags(em, ids)]);
+  return rows.map((row) => queueRow(row, hours.get(row.userid) ?? null, tags.get(row.userid) ?? []));
+};
 
 /** One decision in the Closed list. */
 export interface ModClosedRow {
@@ -186,7 +220,7 @@ export const listModReports = async (
   );
   return {
     filter,
-    players: closedWanted ? [] : open.players.map(queueRow),
+    players: closedWanted ? [] : await queueRows(em, open.players, now),
     closed: closedWanted ? closed.decisions.map(closedRow) : [],
     nextOffset: closedWanted ? closed.nextOffset : open.nextOffset,
     counts: { ...open.counts, closed: closed.count },
@@ -237,9 +271,24 @@ export interface ModLine {
     severity: FlagSeverity;
     rule: FlagRule;
     words: string[];
-    /** What other players saw. */
+    /** What other players saw ("" when the line was hidden). */
     shown: string;
+    /** The chat filter's reasons (`newLink`, `invite`, `watched`, `hidden`); empty for a word-filter flag. */
+    tags: string[];
+    /** Nobody but the player saw it. */
+    hidden: boolean;
+    /** Their main yard's age in hours when they said it, while new; else null. */
+    yardAgeHours: number | null;
   } | null;
+  /** The chat line's id, for Remove; null for lines from before ids or not known. */
+  lineId: string | null;
+  /** A moderator removed it from chat: who and when. */
+  removed: Removal | null;
+  /**
+   * The same words said again by the player (a spammer repeating a line),
+   * grouped under this one: each copy's room, stamp and id, for Remove.
+   */
+  copies: { channel: string; ts: number; lineId: string | null }[];
 }
 
 /** One step in the player's moderation log. */
@@ -265,6 +314,8 @@ export interface ModPlayerView {
   log: ModLogEntry[];
   /** Their decisions in the last 30 days, newest first. */
   decisions: ModClosedRow[];
+  /** Their main yard's age in hours while they are a new player, else null. */
+  newHours: number | null;
 }
 
 /**
@@ -303,25 +354,41 @@ export const modPlayer = async (
           around: aroundOf(message.snapshot),
         },
         filter: null,
+        lineId: null,
+        removed: null,
+        copies: [],
       });
     }
   }
   if (row?.filterLines) {
     const [flagged] = (await listChatFlags(em, { userid, lines: FLAG_LINES_MAX }, now)).players;
     for (const line of flagged?.lines ?? []) {
-      const filter = { id: line.id, severity: line.severity, rule: line.rule, words: line.words, shown: line.shown };
+      const filter = {
+        id: line.id,
+        severity: line.severity,
+        rule: line.rule,
+        words: line.words,
+        shown: line.shown,
+        tags: line.tags,
+        hidden: line.hidden,
+        yardAgeHours: line.yardAgeHours,
+      };
       const same = byTs.get(line.ts);
       if (same) {
         if (!same.filter) {
           same.filter = filter;
-          // No server copy of the reported words: the filter's record is one.
-          if (same.report && !same.report.verified) same.message = line.message;
+          same.lineId = line.lineId;
+          // No server copy of the reported words, or the room only had the filter's cut
+          // copy: the filter's record of the player's own words is the one to read.
+          if (same.report && (!same.report.verified || line.shown !== line.message)) same.message = line.message;
         }
         continue;
       }
-      byTs.set(line.ts, { ts: line.ts, channel: line.channel, message: line.message, report: null, filter });
+      byTs.set(line.ts, { ts: line.ts, channel: line.channel, message: line.message, report: null, filter, lineId: line.lineId, removed: null, copies: [] });
     }
   }
+  const removals = await removalsOf(em, userid);
+  for (const line of byTs.values()) line.removed = removalOf(removals, line.channel, line.ts);
 
   return {
     userid,
@@ -329,8 +396,8 @@ export const modPlayer = async (
     lastSeenAt: player.lastSeenAt,
     muteUntil: player.muteUntil,
     banned: player.banned,
-    open: row ? queueRow(row) : null,
-    lines: [...byTs.values()].sort((a, b) => b.ts - a.ts),
+    open: row ? (await queueRows(em, [row], now))[0]! : null,
+    lines: groupRepeats([...byTs.values()].sort((a, b) => b.ts - a.ts)),
     log: player.log
       .filter((entry) => entry.action !== "unban" && entry.action !== "unmute")
       .map((entry) => ({
@@ -342,7 +409,31 @@ export const modPlayer = async (
         at: entry.at,
       })),
     decisions,
+    newHours: (await newHoursOf(em, [userid], now)).get(userid) ?? null,
   };
+};
+
+/**
+ * Groups a player's filter lines with the same words (owner: "the same line
+ * repeated by one new player is grouped"): the newest stays, the others
+ * become its copies. Reported lines are never grouped: each report is its own.
+ *
+ * @param {ModLine[]} lines - Newest first.
+ */
+export const groupRepeats = (lines: readonly ModLine[]): ModLine[] => {
+  const out: ModLine[] = [];
+  const first = new Map<string, ModLine>();
+  for (const line of lines) {
+    const key = line.report || !line.filter ? null : `${line.removed ? "r" : "o"}|${line.message}`;
+    const kept = key === null ? undefined : first.get(key);
+    if (kept) {
+      kept.copies.push({ channel: line.channel, ts: line.ts, lineId: line.lineId });
+      continue;
+    }
+    if (key !== null) first.set(key, line);
+    out.push(line);
+  }
+  return out;
 };
 
 export type AroundOutcome = { outcome: "done"; lines: AroundLine[] } | { outcome: "notOpen" };
@@ -406,7 +497,13 @@ export const parseModAction = (raw: unknown): Parsed<{ action: ModAction; seen: 
 };
 
 export type ModActionOutcome =
-  | { outcome: "done"; closed: { reports: number; filterLines: number; filterOnlyLines: number }; player: ModQueueRow | null }
+  | {
+      outcome: "done";
+      closed: { reports: number; filterLines: number; filterOnlyLines: number };
+      player: ModQueueRow | null;
+      /** The chat case closed with the step, or null (for the Telegram message; not sent to the game). */
+      caseId: number | null;
+    }
   | { outcome: TargetRefusal | "changed" | "nothingOpen" | "noPlayer" | "longerMute" };
 
 /**
@@ -461,6 +558,7 @@ export const actAsModerator = async (
   return {
     outcome: "done",
     closed: { reports: done.closed.reports, filterLines: done.closed.filterLines, filterOnlyLines: done.closed.filterOnlyLines },
-    player: done.player ? queueRow(done.player) : null,
+    player: done.player ? (await queueRows(em, [done.player], now))[0]! : null,
+    caseId: done.closed.caseId,
   };
 };

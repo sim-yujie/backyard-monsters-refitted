@@ -1,6 +1,7 @@
-import { getAuthToken } from "@/api/http";
+import { getAuthToken, requestUrlOf } from "@/api/http";
 import { sendClientErrors, type ClientErrorItem, type ClientErrorSendResult } from "@/api/clientErrors";
-import { LATEST_RELEASE } from "@/data/changelog";
+import { GAME_VERSION } from "@/data/gameVersion";
+import { describeValue } from "./errorLog";
 import { currentScreenName } from "./screenCapture";
 
 /**
@@ -50,7 +51,9 @@ export interface ErrorReporterDeps {
 const defaultDeps: ErrorReporterDeps = {
   send: sendClientErrors,
   signedIn: () => getAuthToken() !== null,
-  context: () => ({ gameVersion: LATEST_RELEASE?.version ?? "", screen: currentScreenName() }),
+  // The full version, patch number included (`data/gameVersion.ts`): the changelog's names only the
+  // release whose "What's new" cards pop up, so every patch's errors read as that release.
+  context: () => ({ gameVersion: GAME_VERSION, screen: currentScreenName() }),
   now: () => Date.now(),
   setTimer: (run, ms) => setTimeout(run, ms),
   clearTimer: (timer) => clearTimeout(timer as ReturnType<typeof setTimeout>),
@@ -63,13 +66,9 @@ const stackOf = (value: unknown): string =>
   value instanceof Error && value.stack ? value.stack.split("\n").slice(0, STACK_LINES).join("\n") : "";
 
 const messageOf = (value: unknown): string => {
-  if (value instanceof Error) return `${value.name}: ${value.message}`;
-  if (typeof value === "string") return value;
-  try {
-    return JSON.stringify(value) ?? String(value);
-  } catch {
-    return String(value);
-  }
+  // A failed request's address is kept out of its message (players read that), but the report names it.
+  const url = value instanceof Error ? requestUrlOf(value) : "";
+  return `${describeValue(value)}${url ? ` (${url})` : ""}`;
 };
 
 /** Whether an error is someone else's (an extension, another site) or a harmless browser warning. */

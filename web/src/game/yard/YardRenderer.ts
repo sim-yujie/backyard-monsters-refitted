@@ -1,7 +1,7 @@
 import { Container, Graphics, Rectangle, Sprite, type Renderer, type Texture } from "pixi.js";
 import { YardBuildings } from "./YardBuildings";
 import { NO_WORK, readWork, type WorkSource } from "./buildingWork";
-import { flightEnds, flightTotals, planFlights, TOWN_HALL_TYPE, type BankSource } from "./collectFx";
+import { flightEnds, flightTotals, planFlights, TOWN_HALL_TYPE, type BankSource, type Flight } from "./collectFx";
 import { CollectFxLayer, type LandListener } from "./CollectFxLayer";
 import type { HarvestKey } from "./harvest";
 import { YardGround } from "./YardGround";
@@ -15,12 +15,15 @@ import { holdBack, juicerDoor, type LifeHold, type YardLife, type YardPoint } fr
 import { YardGibletsLayer } from "./YardGibletsLayer";
 import { blendOf, isInfernoMonster, JUICER_SPOUT, JuicerBlend, planGiblets } from "./juicerShow";
 import type { JuicedNews } from "@/game/monsters/juiceNews";
+import type { FedNews } from "@/game/monsters/feedNews";
+import { FEED_BURST_HEIGHT, feedGiblets, MAX_FEED_WALKERS } from "./feedShow";
 import { flyerAltitude } from "@/game/attack/monsterSprites";
 import { playEffect } from "@/game/sound/sound";
 import { routeBetween } from "@/game/guide/MonsterWalkIn";
 import { yardArtAtlas, type YardArtAtlas } from "./yardAtlas";
 import { MonsterSheetTextures, prefersReducedMotion } from "@/game/attack/AttackBattleLayer";
 import { loadYardSheet } from "@/game/attack/sheetQueue";
+import { yardArtGate } from "./yardArtGate";
 import { currentSeason, onSeasonChange, type Season } from "@/game/season";
 import { onGroundChange } from "./groundChoice";
 import { classicLook } from "@/game/classicLook";
@@ -143,17 +146,23 @@ export class YardRenderer {
   /** Opens {@link sheetsAllowed}; see there. */
   private allowSheets: () => void = () => {};
   /**
-   * Settles once the first yard shown has every building's picture, or after
-   * {@link SHEET_HOLD_MS} at most. The creatures' sheets wait for it: a
-   * painted monster sheet is up to 10 MB, three of them came to 24 MB on a
-   * full yard, and fetched alongside the building pictures they held those
-   * back for seconds on a slow link. Once open it stays open. Past it they
-   * load two at a time (`yardSheetQueue`, patch 7.11).
+   * Settles once the first yard shown has every picture in or known missing,
+   * its shadows and strips as well as its tops (beta 9), or once no building
+   * picture has arrived for {@link SHEET_STALL_MS}, or after
+   * {@link SHEET_HOLD_MAX_MS} at most. The creatures' sheets wait for it, and
+   * the page's music for the first one (`yardArtGate.ts`): a painted monster
+   * sheet is up to 10 MB, and fetched alongside the building pictures they
+   * held those back for half a minute on Slow 4G (beta 9 measurements; the
+   * old fixed 4 s wait opened long before the pictures were in). Once open it
+   * stays open. Past it they load two at a time (`yardSheetQueue`, patch 7.11).
    */
   private readonly sheetsAllowed = new Promise<void>((resolve) => {
     this.allowSheets = resolve;
   });
+  private sheetsOpen = false;
   private sheetHold: ReturnType<typeof setTimeout> | null = null;
+  private sheetStall: ReturnType<typeof setTimeout> | null = null;
+  private unwatchSheetArt: (() => void) | null = null;
   /** What lives on the yard (#158, #159): scenery, never in the battle. */
   private readonly life = new YardLifeLayer({
     reducedMotion: prefersReducedMotion(),
@@ -172,6 +181,8 @@ export class YardRenderer {
   /** Each Juicer at work, by building id, and what its arrivals carry. */
   private readonly blends = new Map<number, JuicerBlend>();
   private readonly juiceNews = new Map<number, JuicedNews>();
+  /** One of each monster's hatch cost, from the feeds heard: how much blood it bursts into. */
+  private readonly feedCosts = new Map<string, number>();
   /** Blend of monsters juiced but not walked there, added with the next arrival. */
   private readonly unwalked = new Map<number, number>();
   /** Juicers whose last arrival was an Inferno monster: their balls are magma (`_lastType` 8). */
@@ -244,8 +255,9 @@ export class YardRenderer {
   private zoomWatcher: ((zoom: number) => void) | null = null;
 
   constructor() {
-    this.buildings.onArtReady(() => this.openSheets());
+    this.buildings.onAllArtReady(() => this.openSheets());
     this.life.onJuiceArrive = (monster, juicer) => this.juiceArrived(monster, juicer);
+    this.life.onFeedArrive = (monster, at, altitude) => this.feedBurst(monster, at, altitude);
     this.isoDecals.eventMode = "none";
     this.upgradePreviewLayer.eventMode = "none";
     this.upgradePreviewLayer.addChild(this.upgradePreview.root);
@@ -269,7 +281,6 @@ export class YardRenderer {
       this.jobBars.root,
       this.jobBars.helperRoot,
       this.hatchMarks.root,
-      this.helpMarks.front,
       this.helpMarks.root,
       this.buildings.labels,
     );
@@ -279,6 +290,7 @@ export class YardRenderer {
   attach(renderer: Renderer): void {
     this.atlas ??= yardArtAtlas(renderer);
     this.pixi = renderer;
+    this.buildings.useRenderer(renderer);
     this.life.useRenderer(renderer);
     if (!this.mushroomArt) this.loadMushroomArt();
     // The yard follows the season from here on (`game/season.ts`).
@@ -319,7 +331,8 @@ export class YardRenderer {
     }
     if (season === "thanksgiving") {
       // The mushrooms stay until the turkeys arrive, and for good if they never do.
-      void this.turkeys.load().then((ready) => {
+      // Behind the buildings' pictures, like the monsters (beta 9).
+      void this.sheetsAllowed.then(() => (this.destroyed ? false : this.turkeys.load())).then((ready) => {
         if (ready && !this.destroyed && this.season === "thanksgiving") this.replaceFinds();
       });
     } else if (this.turkeys.count > 0) {
@@ -405,7 +418,7 @@ export class YardRenderer {
       yard.kind === "inferno" ? "lava" : "grass",
     );
     void this.ground.loadTiles();
-    this.sheetHold ??= setTimeout(() => this.openSheets(), SHEET_HOLD_MS);
+    this.holdSheets();
 
     // The creatures outlive a redraw: out of the containers the yard is about
     // to empty, and back in once it has refilled them.
@@ -478,6 +491,8 @@ export class YardRenderer {
         );
         this.helpMarks.reposition();
       }
+      // The buildings a visitor can speed up, lit amber; a no-op once none are and none were.
+      this.buildings.setHelpLit(this.helpMarks.active ? this.helpMarks.lit : NO_HELP_LIT);
       this.shakeMushrooms();
       this.popMushrooms(deltaSeconds);
       if (this.turkeysOn) this.turkeys.update(deltaSeconds);
@@ -625,7 +640,6 @@ export class YardRenderer {
       this.jobBars.root,
       this.jobBars.helperRoot,
       this.hatchMarks.root,
-      this.helpMarks.front,
       this.helpMarks.root,
       this.buildings.labels,
     ]) {
@@ -712,6 +726,7 @@ export class YardRenderer {
    */
   setZoom(zoom: number): void {
     this.zoomLevel = zoom;
+    this.buildings.setZoom(zoom);
     this.blueprint.setZoom(zoom);
     this.jobBars.setZoom(zoom);
     this.upgradePreview.setZoom(zoom);
@@ -1000,6 +1015,42 @@ export class YardRenderer {
     else if (unwalked > 0) this.unwalked.set(juicer.id, (this.unwalked.get(juicer.id) ?? 0) + unwalked);
   }
 
+  /* ── Feeding the champion (`feedShow.ts`) ─────────────────────────── */
+
+  /**
+   * Shows a feed the server has made (`feedNews.ts`): the eaten monsters walk
+   * (or fly) from their pens to the champion, each bursting into blood as it
+   * gets there. Drawing only; the champion is fed already. With the champion
+   * not drawn in its cage nothing shows; under reduced motion, or with no way
+   * there, the champion bursts one monster's worth where it stands.
+   */
+  feed(news: FedNews): void {
+    const yard = this.yard;
+    const spot = yard ? this.life.championSpot(news.champion) : null;
+    if (!yard || !spot) return;
+    for (const [monster, cost] of Object.entries(news.hatchCost)) this.feedCosts.set(monster, cost);
+    const route = (from: YardPoint, to: YardPoint) => routeBetween(yard, from, to);
+    let walking = 0;
+    let first: string | null = null;
+    for (const [monster, count] of Object.entries(news.monsters)) {
+      if (count <= 0) continue;
+      first ??= monster;
+      const room = Math.max(0, MAX_FEED_WALKERS - walking);
+      walking += this.life.feed(monster, Math.min(count, room), spot, route, flyerAltitude(monster));
+    }
+    if (walking === 0 && first !== null) {
+      const bounds = yard.bounds;
+      this.feedBurst(first, { x: spot.x - spot.y + bounds.originX, y: (spot.x + spot.y) / 2 + bounds.originY }, 0);
+    }
+  }
+
+  /** A monster got to the champion: its blood bursts where it stands (`CreepBase.as:1289-1291`). */
+  private feedBurst(monster: string, at: { x: number; y: number }, altitude: number): void {
+    const spout = { x: at.x, y: at.y - altitude };
+    const count = feedGiblets(this.feedCosts.get(monster) ?? 0);
+    this.giblets.throw(planGiblets(spout, count, this.giblets.inAir, Math.random, 0.8, 100, FEED_BURST_HEIGHT + altitude));
+  }
+
   /** Juicers mid-blend, for tests and the browser checks. */
   get juicersBlending(): number {
     let count = 0;
@@ -1051,9 +1102,8 @@ export class YardRenderer {
       [{ type: juicer.type, ...at(juicer), resource: "r4", amount }],
       at(hall),
     );
-    const flights = this.magmaLast.has(id)
-      ? planned.map((flight) => ({ ...flight, dot: "magma" as const }))
-      : planned;
+    const dot: Flight["dot"] = this.magmaLast.has(id) ? "magma" : "r4";
+    const flights = planned.map((flight) => ({ ...flight, dot }));
     if (flights.length > 0) this.collect.launch(flights, () => undefined);
   }
 
@@ -1323,10 +1373,42 @@ export class YardRenderer {
     if (sprite && mushroom) sprite.position.set(mushroom.worldX, mushroom.worldY);
   }
 
-  /** Lets the creatures' sheets load; see {@link sheetsAllowed}. */
+  /**
+   * Settles once this yard's pictures are in, or the wait for them gave up
+   * ({@link sheetsAllowed}): for what else should not share the line with
+   * them, such as a raid's sheets warmed on the yard.
+   */
+  get artIn(): Promise<void> {
+    return this.sheetsAllowed;
+  }
+
+  /** Starts the waits that open {@link sheetsAllowed} if the pictures never all come. */
+  private holdSheets(): void {
+    if (this.sheetsOpen) return;
+    this.sheetHold ??= setTimeout(() => this.openSheets(), SHEET_HOLD_MAX_MS);
+    this.unwatchSheetArt ??= this.buildings.art.watch(() => this.restartSheetStall());
+    this.restartSheetStall();
+  }
+
+  /** A building picture arrived (or failed): the stall wait starts again. */
+  private restartSheetStall(): void {
+    if (this.sheetsOpen) return;
+    if (this.sheetStall !== null) clearTimeout(this.sheetStall);
+    this.sheetStall = setTimeout(() => this.openSheets(), SHEET_STALL_MS);
+  }
+
+  /** Lets the creatures' sheets load, and the page's music; see {@link sheetsAllowed}. */
   private openSheets(): void {
     this.allowSheets();
+    yardArtGate.open();
+    if (this.sheetsOpen) return;
+    this.sheetsOpen = true;
     if (this.sheetHold !== null) clearTimeout(this.sheetHold);
+    if (this.sheetStall !== null) clearTimeout(this.sheetStall);
+    this.sheetHold = null;
+    this.sheetStall = null;
+    this.unwatchSheetArt?.();
+    this.unwatchSheetArt = null;
   }
 
   destroy(): void {
@@ -1580,6 +1662,9 @@ export class YardRenderer {
  * mushroom glyph (owner's call, 20 Oct 2026). `PUMPKIN_BASE` is where its
  * bottom sits, as a fraction of its height; scaling keeps it on the ground.
  */
+/** No building lit for a visitor: what `setHelpLit` is handed off a visit. */
+const NO_HELP_LIT: ReadonlyMap<number, number> = new Map();
+
 /** A world rectangle every building is inside: the yard picture culls nothing. */
 const EVERYWHERE: Rect = { x: -1e7, y: -1e7, width: 2e7, height: 2e7 };
 
@@ -1590,9 +1675,17 @@ const PUMPKIN_SCALE = 1.3;
 /**
  * The longest the creatures' sheets wait for the building pictures, in
  * milliseconds: a building picture that never answers must not keep the
- * yard empty of monsters.
+ * yard empty of monsters. On Slow 4G a Modern yard's pictures took about
+ * 45 s before beta 9.
  */
-const SHEET_HOLD_MS = 4000;
+const SHEET_HOLD_MAX_MS = 60_000;
+
+/**
+ * How long the sheets wait with no building picture arriving before they
+ * stop waiting: a picture still coming moves at least this often on any line
+ * the yard can be played on.
+ */
+const SHEET_STALL_MS = 10_000;
 
 /** How far a hatchery's number is raised over a job bar and its time, world pixels at zoom 1. */
 const JOB_BAR_CLEARANCE = BAR_HEIGHT + 22;

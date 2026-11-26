@@ -1,13 +1,13 @@
 import type { EntityManager } from "@mikro-orm/postgresql";
 
 import { friendRefusedErr } from "../../errors/errors.js";
-import { bookFriendDecline } from "../bots/friendDecline.js";
 import { notifyFriend, type FriendNotice } from "./friendNotifications.js";
 import { dropWaitingGifts } from "./gifts.js";
 import { askAgainAt, blockedIdsOf, FRIEND_LIMITS, lapseCutoff, secondsOf, utcDayStart } from "./friendRules.js";
 import { friendView, requestView, type FriendView, type RequestView } from "./friendViews.js";
 import { recordNewFriendship } from "../quests/record.js";
 import { recordFriendsHeld } from "../achievements/daily.js";
+import { markRelations } from "../maproom/live/liveMarks.js";
 
 /**
  * Friendship itself (`docs/design/friends.md` §3.1, §3.6 and §6.2, issue
@@ -113,6 +113,8 @@ const makeFriends = async (tx: EntityManager, a: number, b: number, now: number)
     [a, b, since, b, a, since]
   );
   await recountFriends(tx, a, b);
+  // The live map (beta 9): each now sees the other's friend mark (`fr`), and only they do.
+  markRelations([[a, b]]);
 };
 
 /** Ends the friendship both ways; true when there was one. */
@@ -122,6 +124,7 @@ const unfriend = async (tx: EntityManager, a: number, b: number): Promise<boolea
     [a, b, b, a]
   );
   if (gone.length > 0) await recountFriends(tx, a, b);
+  if (gone.length > 0) markRelations([[a, b]]);
   return gone.length > 0;
 };
 
@@ -150,8 +153,9 @@ export interface RequestOutcome {
  * waiting), `dailyCap` (30 sent today) and `declinedRecently` (with `from`,
  * when asking is possible again).
  *
- * A request to an account covered by the §6.2 rule is stored and answered
- * like any other, and its decline booked (`bookFriendDecline`).
+ * A request to an account covered by the §6.2 rule (a retired bot) is stored
+ * like any other and never answered, so it lapses as one to a player who
+ * stopped playing.
  *
  * @param {number} now - Unix seconds
  */
@@ -215,7 +219,6 @@ export const sendFriendRequest = async (
       [me, other, dateOf(now)]
     );
     const id = Number(row!.id);
-    await bookFriendDecline(tx, { id, from_userid: me, to_userid: other }, now);
     const notice: FriendNotice = { event: "request", userid: me, username: mine.username };
     return { requestid: id, accepted: false, notices: [{ userid: other, notice }] };
   });

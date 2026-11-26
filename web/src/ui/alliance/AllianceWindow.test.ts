@@ -691,9 +691,9 @@ describe("AllianceWindow: my alliance", () => {
       { id: 10, kind: "attackWin", name: "Win attacks on players", tier: "easy", target: 300, progress: 300, points: 15, done: true, removable: false },
     ] as const;
     const tiers = [
-      { tier: "easy", target: 450_000_000, points: 15, players: 3 },
-      { tier: "medium", target: 1_200_000_000, points: 37, players: 8 },
-      { tier: "hard", target: 2_250_000_000, points: 70, players: 15 },
+      { tier: "easy", target: 450_000_000, points: 15 },
+      { tier: "medium", target: 1_200_000_000, points: 37 },
+      { tier: "hard", target: 2_250_000_000, points: 70 },
     ] as const;
     const menu = [
       { kind: "loot", name: "Loot resources", only: null, used: true, tiers },
@@ -782,7 +782,8 @@ describe("AllianceWindow: my alliance", () => {
       expect(harvest.map((b) => b.textContent)).toEqual(["450M★15", "1.2B★37", "2.25B★70"]);
       expect(harvest[1]!.getAttribute("aria-label")).toBe("Harvest resources, Medium 1,200,000,000, 37 points");
       const cols = [...document.querySelectorAll(".goal-picker__col")].map((c) => c.textContent);
-      expect(cols).toEqual(["Easy~3", "Medium~8", "Hard~15"]);
+      // Only the tier word (owner, 25 Nov 2026: no player count).
+      expect(cols).toEqual(["Easy", "Medium", "Hard"]);
       document.querySelector<HTMLButtonElement>(".goal-picker__back")!.click();
       expect(document.querySelector(".goal-picker")).toBeNull();
       expect(document.querySelectorAll(".alliance-goal")).toHaveLength(4);
@@ -872,7 +873,7 @@ describe("AllianceWindow: my alliance", () => {
   it("lists members Leader first, and gives the Leader rank buttons with a confirm", async () => {
     const api = fakeApi({
       mine: vi.fn(() => ok({ alliance: mine(), rejoinAt: null })),
-      members: vi.fn(() => ok({ members: [member(3, "member", { online: true }), member(1, "leader"), member(2, "officer")] })),
+      members: vi.fn(() => ok({ members: [member(3, "member", { online: true, seen: "online" }), member(1, "leader"), member(2, "officer", { seen: "weeks" })] })),
     });
     const view = await open(api);
     view.showTab("members");
@@ -881,8 +882,10 @@ describe("AllianceWindow: my alliance", () => {
     expect(names).toEqual(["Player 1", "Player 2", "Player 3"]);
     // The viewer's own row has no buttons.
     expect(document.querySelector<HTMLButtonElement>("[data-userid='1'] .alliance__row")!.disabled).toBe(true);
-    // Only the online member wears the dot.
-    expect(document.querySelectorAll(".alliance__online.online-dot")).toHaveLength(1);
+    // Last seen (beta 9): only the online member wears the dot; the 1-4 weeks member its own mark.
+    expect(document.querySelectorAll(".alliance__seen .online-dot")).toHaveLength(1);
+    expect(document.querySelector("[data-userid='3'] .alliance__seen")?.textContent).toBe("Online");
+    expect(document.querySelector("[data-userid='2'] .alliance__seen")?.textContent).toBe("1-4w");
 
     document.querySelector<HTMLButtonElement>("[data-userid='3'] .alliance__row")!.click();
     buttonNamed(ALLIANCE_TEXT.action.promote)!.click();

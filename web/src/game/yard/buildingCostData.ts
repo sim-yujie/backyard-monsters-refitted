@@ -243,9 +243,11 @@ export const BUILDING_COST_ROWS: readonly CostRow[] = [
     [552960,552960,0,0,72000,[[14,1,6],[8,1,1]]],
     [2211840,2211840,0,0,144000,[[14,1,6],[8,1,1]]],
   ], [0,1,1,2,2,3,3,3,4,4,4]],
-  // 16 Hatchery Control Center (special) — YARD_PROPS.as:1676
+  // 16 Hatchery Control Center (special) — YARD_PROPS.as:1676, levels 2-3 beta 9
   [16, "Hatchery Control Center", "special", 2, [
     [4000000,4000000,4000000,0,90000,[[14,1,3],[13,3,2]]],
+    [25000000,25000000,25000000,0,172800,[[14,1,6],[13,4,3]]],
+    [75000000,75000000,75000000,0,345600,[[14,1,8]]],
   ], [0,0,0,1,1,1,1,1,1,1,1]],
   // 17 Block (wall) — YARD_PROPS.as:1722, upgrades need no hall (beta 8)
   [17, "Block", "wall", 3, [
@@ -863,6 +865,110 @@ export const BUILDING_COST_ROWS: readonly CostRow[] = [
   [206, "bdg_autumnmaple", "decoration", 4, [
     [0,0,0,0,0,[]],
   ], [0]],
+  // 207 bdg_flagcambodia (decoration) — this project's own decoration (gen-building-costs.mjs)
+  [207, "bdg_flagcambodia", "decoration", 4, [
+    [0,0,0,0,0,[]],
+  ], [0]],
+  // 208 bdg_firepit (decoration) — this project's own decoration (gen-building-costs.mjs)
+  [208, "bdg_firepit", "decoration", 4, [
+    [0,0,0,0,0,[]],
+  ], [0]],
+  // 209 bdg_picnictable (decoration) — this project's own decoration (gen-building-costs.mjs)
+  [209, "bdg_picnictable", "decoration", 4, [
+    [0,0,0,0,0,[]],
+  ], [0]],
+  // 210 bdg_wishingwell (decoration) — this project's own decoration (gen-building-costs.mjs)
+  [210, "bdg_wishingwell", "decoration", 4, [
+    [0,0,0,0,0,[]],
+  ], [0]],
+  // 211 bdg_monstereggnest (decoration) — this project's own decoration (gen-building-costs.mjs)
+  [211, "bdg_monstereggnest", "decoration", 4, [
+    [0,0,0,0,0,[]],
+  ], [0]],
+  // 212 bdg_goocauldron (decoration) — this project's own decoration (gen-building-costs.mjs)
+  [212, "bdg_goocauldron", "decoration", 4, [
+    [0,0,0,0,0,[]],
+  ], [0]],
+  // 213 bdg_gardenwindmill (decoration) — this project's own decoration (gen-building-costs.mjs)
+  [213, "bdg_gardenwindmill", "decoration", 4, [
+    [0,0,0,0,0,[]],
+  ], [0]],
+  // 214 bdg_rizalmonument (decoration) — this project's own decoration (gen-building-costs.mjs)
+  [214, "bdg_rizalmonument", "decoration", 4, [
+    [0,0,0,0,0,[]],
+  ], [0]],
+  // 215 bdg_paoaychurch (decoration) — this project's own decoration (gen-building-costs.mjs)
+  [215, "bdg_paoaychurch", "decoration", 4, [
+    [0,0,0,0,0,[]],
+  ], [0]],
+  // 216 bdg_fortsantiago (decoration) — this project's own decoration (gen-building-costs.mjs)
+  [216, "bdg_fortsantiago", "decoration", 4, [
+    [0,0,0,0,0,[]],
+  ], [0]],
+  // 217 bdg_magellanscross (decoration) — this project's own decoration (gen-building-costs.mjs)
+  [217, "bdg_magellanscross", "decoration", 4, [
+    [0,0,0,0,0,[]],
+  ], [0]],
+  // 218 bdg_mayonvolcano (decoration) — this project's own decoration (gen-building-costs.mjs)
+  [218, "bdg_mayonvolcano", "decoration", 4, [
+    [0,0,0,0,0,[]],
+  ], [0]],
+  // 219 bdg_chocolatehills (decoration) — this project's own decoration (gen-building-costs.mjs)
+  [219, "bdg_chocolatehills", "decoration", 4, [
+    [0,0,0,0,0,[]],
+  ], [0]],
+  // 220 bdg_banaueterraces (decoration) — this project's own decoration (gen-building-costs.mjs)
+  [220, "bdg_banaueterraces", "decoration", 4, [
+    [0,0,0,0,0,[]],
+  ], [0]],
+  // 221 bdg_tajmahal (decoration) — this project's own decoration (gen-building-costs.mjs)
+  [221, "bdg_tajmahal", "decoration", 4, [
+    [0,0,0,0,0,[]],
+  ], [0]],
+  // 222 bdg_pyramids (decoration) — this project's own decoration (gen-building-costs.mjs)
+  [222, "bdg_pyramids", "decoration", 4, [
+    [0,0,0,0,0,[]],
+  ], [0]],
+  // 223 bdg_mangotree (decoration) — this project's own decoration (gen-building-costs.mjs)
+  [223, "bdg_mangotree", "decoration", 4, [
+    [0,0,0,0,0,[]],
+  ], [0]],
+  // 224 bdg_coconutpalm (decoration) — this project's own decoration (gen-building-costs.mjs)
+  [224, "bdg_coconutpalm", "decoration", 4, [
+    [0,0,0,0,0,[]],
+  ], [0]],
+  // 225 bdg_bananaplant (decoration) — this project's own decoration (gen-building-costs.mjs)
+  [225, "bdg_bananaplant", "decoration", 4, [
+    [0,0,0,0,0,[]],
+  ], [0]],
+  // 226 bdg_bambooclump (decoration) — this project's own decoration (gen-building-costs.mjs)
+  [226, "bdg_bambooclump", "decoration", 4, [
+    [0,0,0,0,0,[]],
+  ], [0]],
+  // 227 bdg_oaktree (decoration) — this project's own decoration (gen-building-costs.mjs)
+  [227, "bdg_oaktree", "decoration", 4, [
+    [0,0,0,0,0,[]],
+  ], [0]],
+  // 228 bdg_kalamansitree (decoration) — this project's own decoration (gen-building-costs.mjs)
+  [228, "bdg_kalamansitree", "decoration", 4, [
+    [0,0,0,0,0,[]],
+  ], [0]],
+  // 229 bdg_hibiscus (decoration) — this project's own decoration (gen-building-costs.mjs)
+  [229, "bdg_hibiscus", "decoration", 4, [
+    [0,0,0,0,0,[]],
+  ], [0]],
+  // 230 bdg_bougainvillea (decoration) — this project's own decoration (gen-building-costs.mjs)
+  [230, "bdg_bougainvillea", "decoration", 4, [
+    [0,0,0,0,0,[]],
+  ], [0]],
+  // 231 bdg_trimmedhedge (decoration) — this project's own decoration (gen-building-costs.mjs)
+  [231, "bdg_trimmedhedge", "decoration", 4, [
+    [0,0,0,0,0,[]],
+  ], [0]],
+  // 232 bdg_rosebush (decoration) — this project's own decoration (gen-building-costs.mjs)
+  [232, "bdg_rosebush", "decoration", 4, [
+    [0,0,0,0,0,[]],
+  ], [0]],
 ];
 
 /* ── Outposts ───────────────────────────────────────────────────────────────── */
@@ -1007,9 +1113,10 @@ export const OUTPOST_COST_ROWS: readonly CostRow[] = [
     [552960,552960,0,0,72000,[[112,1,1]]],
     [2211840,2211840,0,0,144000,[[112,1,1]]],
   ], [0,1]],
-  // 16 Hatchery Control Center (special) — OUTPOST_YARD_PROPS.as:1206
+  // 16 Hatchery Control Center (special) — OUTPOST_YARD_PROPS.as:1206, level 2 beta 9
   [16, "Hatchery Control Center", "special", 2, [
     [500000,500000,500000,0,90000,[[112,1,1],[13,2,1]]],
+    [1000000,1000000,1000000,0,172800,[[112,1,1],[13,2,3]]],
   ], [0,1]],
   // 17 Block (wall) — OUTPOST_YARD_PROPS.as:1251
   [17, "Block", "wall", 3, [
@@ -2320,12 +2427,12 @@ export const INFERNO_COST_ROWS: readonly CostRow[] = [
     [13500000,11000000,2000000,0,518400,[[14,1,7]]],
     [16000000,14000000,4000000,0,691200,[[14,1,9]]],
   ], [0,0,0,0,0,0]],
-  // 116 Monster Lab (special) — INFERNOYARDPROPS.as:5520
-  [116, "Monster Lab", "special", 2, [
+  // 116 Infernal Lab (special) — INFERNOYARDPROPS.as:5520
+  [116, "Infernal Lab", "special", 2, [
     [100000,100000,0,0,10800,[[14,1,5],[8,1,3],[26,1,2]]],
     [300000,300000,0,0,43200,[[14,1,6],[8,1,4],[26,1,3]]],
-    [600000,600000,0,0,86400,[[14,1,7],[8,1,4],[26,1,4]]],
-  ], [0,0,0,0,0,0]],
+    [600000,600000,0,0,86400,[[14,1,6],[8,1,4],[26,1,4]]],
+  ], [0,0,0,0,0,1,1]],
   // 117 Heavy Trap (trap) — INFERNOYARDPROPS.as:5576
   [117, "Heavy Trap", "trap", 3, [
     [50000,50000,50000,0,5,[[14,1,4]]],
@@ -2528,7 +2635,7 @@ export const INFERNO_TRAIT_ROWS: readonly OutpostTraitRow[] = [
   [113, true, [3400], [], []],
   [114, true, [10000], [], []],
   [115, true, [15000,22000,30000,48000,60000,72000], [], []],
-  [116, true, [9000,16000,24000,32000], [], []],
+  [116, false, [9000,16000,24000,32000], [], []],
   [117, true, [10], [], []],
   [118, true, [17640,34400,45000,58000,75500,90000], [], []],
   [119, true, [16000], [], []],
@@ -2549,4 +2656,4 @@ export const INFERNO_TRAIT_ROWS: readonly OutpostTraitRow[] = [
  * allowed at least one at some Under Hall level. Everything else in
  * {@link INFERNO_COST_ROWS} (the Under Hall, Flinger, Housing, …) is blocked.
  */
-export const INFERNO_BUILDABLE_TYPES: readonly number[] = [1, 2, 3, 4, 6, 8, 9, 10, 12, 13, 16, 17, 21, 24, 26, 128, 129, 130, 132];
+export const INFERNO_BUILDABLE_TYPES: readonly number[] = [1, 2, 3, 4, 6, 8, 9, 10, 12, 13, 16, 17, 21, 24, 26, 116, 128, 129, 130, 132];

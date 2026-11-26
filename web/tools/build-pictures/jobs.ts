@@ -17,7 +17,7 @@ import { catalogueFor } from "@/game/yard/buildCatalogue";
 import type { YardKind } from "@/game/yard/buildingCostData";
 import { maxLevel } from "@/game/yard/buildingCosts";
 import { DECORATION_MODERN_ART } from "@/game/yard/decorationModernArt";
-import { REVAMP_DECORATION_ROWS } from "@/game/yard/revampDecorations";
+import { isRevampDecoration, REVAMP_DECORATION_ROWS } from "@/game/yard/revampDecorations";
 
 /** The level whose look the menu shows: the one a new building has, as Flash's buttons did. */
 export const PICTURE_LEVEL = 1;
@@ -56,7 +56,7 @@ for (const kind of ["main", "inferno"] as const satisfies readonly YardKind[]) {
     const art = resolveArt(type, level, ArtState.DEFAULT, kind);
     if (!art) continue;
     const whole = art.still ?? art.top;
-    const over = !art.still && type in DECORATION_MODERN_ART ? art.anims : [];
+    const over = !art.still && (type in DECORATION_MODERN_ART || isRevampDecoration(type)) ? art.anims : [];
     jobs.push({
       kind,
       type,

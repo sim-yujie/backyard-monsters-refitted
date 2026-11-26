@@ -1,0 +1,113 @@
+/* "Last seen" marks on list rows (beta 9, `seenMark.ts`; the owner's pick,
+   neon's Direction 1): quiet words for Online / Today / This wk, painted
+   hourglass pills for 1-4w and 1mo+. Colours: Modern on dark steel, Classic
+   (`data-skin="flash"`) on parchment. */
+
+.seen {
+  /* Both quiet steps at 4.5:1 or better on the friends window's slate (neon, 26 Nov). */
+  --seen-online: #7ae89a;
+  --seen-today: #d4dfe9;
+  --seen-week: #b3c2d1;
+  --seen-weeks: #f2b441;
+  --seen-month-fill: #7a2e2e;
+  --seen-month-ink: #ffd6d6;
+  --seen-weeks-fill: rgb(0 0 0 / 28%);
+
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  max-width: 100%;
+  font-size: var(--text-xs);
+  font-weight: 700;
+  line-height: 1.1;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+
+:root[data-skin="flash"] .seen {
+  --seen-online: #166534;
+  --seen-today: #52402b;
+  --seen-week: #63503a;
+  --seen-weeks: #8a4f00;
+  --seen-month-fill: #a63429;
+  --seen-month-ink: #fff6e5;
+  --seen-weeks-fill: #f5e2b8;
+}
+
+.seen__icon {
+  flex: none;
+  width: 16px;
+  height: 16px;
+}
+
+/* One plain dot on all three lists, in the word's green (Classic: a deeper
+   green that shows on parchment). */
+.seen__dot {
+  width: 8px;
+  height: 8px;
+  background: var(--seen-online);
+  box-shadow: none;
+}
+
+.seen--online {
+  color: var(--seen-online);
+}
+
+.seen--today {
+  color: var(--seen-today);
+}
+
+.seen--week {
+  color: var(--seen-week);
+}
+
+/* The two inactive steps as pills, the hourglass inside. */
+.seen--weeks,
+.seen--month {
+  padding: 1px 6px 1px 2px;
+  border: 1.5px solid currentColor;
+  border-radius: 999px;
+}
+
+.seen--weeks {
+  color: var(--seen-weeks);
+  background: var(--seen-weeks-fill);
+}
+
+.seen--month {
+  border-color: var(--seen-month-fill);
+  background: var(--seen-month-fill);
+  color: var(--seen-month-ink);
+}
+
+/* An over-a-month face fades. */
+.seen-dim {
+  opacity: 0.6;
+  filter: grayscale(0.7);
+}
+
+/* Desktop and iPad (not the phone layout, `phoneLayout.ts`): one step up to
+   13px, the hourglass 18px, the dot 9px (neon, 26 Nov). Phones keep the
+   scaled 12px. */
+@media (min-width: 621px) and (min-height: 501px) {
+  .seen {
+    gap: 4px;
+    font-size: var(--text-sm);
+  }
+
+  .seen__icon {
+    width: 18px;
+    height: 18px;
+  }
+
+  .seen__dot {
+    width: 9px;
+    height: 9px;
+  }
+
+  .seen--weeks,
+  .seen--month {
+    padding: 1px 7px 1px 2px;
+  }
+}

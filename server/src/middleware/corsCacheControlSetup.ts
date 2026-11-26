@@ -17,6 +17,14 @@ const PICTURE_MAX_AGE = 7 * 24 * 3600;
 
 const PICTURE = /\.(png|jpe?g|gif|webp|svg)$/i;
 
+/**
+ * Sounds and music are kept a week too (beta 9, owner 21 Nov 2026, card
+ * b9-speed-picks): the yard tune is about 1 MB, and an hour meant fetching
+ * it again on most visits. Like an unversioned picture, a changed sound shows
+ * within the week, or at once under a new name.
+ */
+const SOUND = /\.(mp3|ogg|wav|m4a)$/i;
+
 const NO_STORE = "no-cache, no-store, must-revalidate";
 
 /**
@@ -33,7 +41,7 @@ const PICTURE_CACHE_CONTROL = `public, max-age=${PICTURE_MAX_AGE}`;
 const cacheStaticAssets = process.env.ENV !== Env.LOCAL;
 
 /**
- * The Cache-Control for a request: a week for a picture in public/, an hour
+ * The Cache-Control for a request: a week for a picture or a sound in public/, an hour
  * for any other file there, checked every time on a local server, and nothing
  * kept for the API.
  *
@@ -44,7 +52,7 @@ const cacheStaticAssets = process.env.ENV !== Env.LOCAL;
 export const cacheControlFor = (path: string, cacheable = cacheStaticAssets): string => {
   if (!isStaticPath(path)) return NO_STORE;
   if (!cacheable) return REVALIDATE;
-  return PICTURE.test(path) ? PICTURE_CACHE_CONTROL : STATIC_CACHE_CONTROL;
+  return PICTURE.test(path) || SOUND.test(path) ? PICTURE_CACHE_CONTROL : STATIC_CACHE_CONTROL;
 };
 
 /**

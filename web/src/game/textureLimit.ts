@@ -82,17 +82,17 @@ export const overLimit = (
 ): boolean => limit !== null && (source.pixelWidth > limit || source.pixelHeight > limit);
 
 /**
- * Tells the owner's dashboard a picture is over the card's limit
- * (`graphicsLog.ts`, once per picture a page load): cut through a canvas
- * (`cut` true), or not even that, so it is drawn as a black box.
+ * Tells the owner's dashboard a picture over the card's limit could not even
+ * be cut through a canvas, so it is drawn as a black box (`graphicsLog.ts`,
+ * once per picture a page load). A picture that was cut is handled and is
+ * not sent: on a 4096 phone it was most of the browser errors, and harmless.
  */
-export const reportOverLimit = (
+export const reportCutFailed = (
   source: Pick<TextureSource, "pixelWidth" | "pixelHeight" | "label">,
   limit: number | null,
-  cut: boolean,
 ): void => {
   reportGraphicsProblem(
-    cut ? "sheet-over-limit" : "sheet-cut-failed",
+    "sheet-cut-failed",
     pictureName(source.label),
     `${source.pixelWidth}x${source.pixelHeight} px, limit ${limit ?? "unknown"}`,
   );
@@ -111,8 +111,8 @@ export const cellTexture = (
 ): { texture: Texture; owned: boolean } => {
   if (overLimit(source, limit)) {
     const copy = copyCell(source, rect);
-    reportOverLimit(source, limit, copy !== null);
     if (copy) return { texture: copy, owned: true };
+    reportCutFailed(source, limit);
   }
   return {
     texture: new Texture({ source, frame: new Rectangle(rect.x, rect.y, rect.width, rect.height) }),

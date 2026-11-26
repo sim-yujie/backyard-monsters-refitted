@@ -13,9 +13,10 @@ import type { KoaController } from "../../../../utils/KoaController.js";
  * goes dark while the fog is on.
  *
  * `/worldmapv2/terrain` is unaffected: it carries no base data, so it is not
- * the "whole-world base data" this shutoff covers. `worldSnapshot.ts`
- * (the builder this controller used to call) is left in place, in case the
- * owner ever wants a per-caller, sight-scoped feed back.
+ * the "whole-world base data" this shutoff covers. `worldSnapshot.ts`, the
+ * builder this controller used to call, was kept for a while in case a
+ * per-caller, sight-scoped feed came back, and removed as dead code in beta 9
+ * (git history has it).
  *
  * Status
  *   404   always — `bulkFeedDisabledErr()`

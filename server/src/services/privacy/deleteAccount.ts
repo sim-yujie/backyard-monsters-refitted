@@ -6,6 +6,7 @@ import { MapRoomVersion } from "../../enums/MapRoom.js";
 import { AllianceRole } from "../../enums/Alliance.js";
 import { Save } from "../../database/models/save.model.js";
 import { WorldMapCell } from "../../database/models/worldmapcell.model.js";
+import { markCellRows, type CellRowLike } from "../maproom/live/liveMarks.js";
 import { getDefenderCoords } from "../maproom/v3/getDefenderCoords.js";
 import {
   allianceSightKey,
@@ -136,7 +137,7 @@ export const findAccount = async (em: EntityManager, who: string): Promise<Accou
   if (!account) throw new AccountDeletionRefused(`No account matches "${text}"`);
 
   const [bot] = await sql(`SELECT 1 FROM bym.bot WHERE userid = ?`, [account.userid]);
-  if (bot) throw new AccountDeletionRefused(`User id ${account.userid} is a bot: use src/scripts/bots.ts instead`);
+  if (bot) throw new AccountDeletionRefused(`User id ${account.userid} is a (retired) bot account, which this script does not delete`);
 
   return { ...account, userid: Number(account.userid), alliance_id: account.alliance_id === null ? null : Number(account.alliance_id) };
 };
@@ -189,9 +190,12 @@ const deleteSteps = (u: number): DeleteStep[] => [
   { label: "alliance chat messages", table: "alliance_message", where: `user_id = ?`, params: [u] },
   { label: "chat log lines", table: "chat_log", where: `userid = ?`, params: [u] },
   { label: "automatic chat flags", table: "chat_flag", where: `userid = ?`, params: [u] },
+  { label: "chat lines moderators removed", table: "chat_line_removal", where: `userid = ?`, params: [u] },
   { label: "alliance invites", table: "alliance_invite", where: `user_id = ?`, params: [u] },
   { label: "notifications", table: "notification", where: `userid = ?`, params: [u] },
   { label: "defence replays of attacks on them", table: "defence_replay", where: `defender_userid = ?`, params: [u] },
+  { label: "Baiter test invites (both ways)", table: "baiter_invite", where: `inviter_userid = ? OR tester_userid = ?`, params: [u, u] },
+  { label: "friend tests of their yard", table: "baiter_test", where: `inviter_userid = ?`, params: [u] },
   { label: "attack plans", table: "attack_plan", where: `userid = ?`, params: [u] },
   { label: "the dashboard's monster counts of their attacks", table: "monster_usage", where: `attacker_userid = ?`, params: [u] },
   { label: "Map Room 1 neighbour lists", table: "maproom", where: `userid = ?`, params: [u] },
@@ -273,6 +277,14 @@ const updateSteps = (u: number, username: string): UpdateStep[] => [
     set: `attacker_username = ?, attacker_pic_square = NULL`,
     setParams: [DELETED_PLAYER_NAME],
     where: `attacker_userid = ?`,
+    params: [u],
+  },
+  {
+    label: "friend tests they ran of other yards (name replaced)",
+    table: "baiter_test",
+    set: `tester_username = ?, tester_pic = NULL`,
+    setParams: [DELETED_PLAYER_NAME],
+    where: `tester_userid = ?`,
     params: [u],
   },
   {
@@ -528,6 +540,8 @@ export const deleteAccount = async (
   const before = sqlOf(em.fork());
   const basesaveids = await saveIds(before, u);
   const others = await opponents(before, u);
+  // The live map (beta 9): their cells, marked once the rows are gone.
+  const cells = (await before(`SELECT x, y, world_id AS world FROM bym.world_map_cell WHERE uid = ? AND map_version = 2`, [u])) as CellRowLike[];
 
   const allianceText = await em.fork().transactional(async (tx) => {
     const sql = sqlOf(tx);
@@ -595,6 +609,7 @@ export const deleteAccount = async (
 
     return alliance.text;
   });
+  markCellRows(cells);
 
   // Redis, once the database has let go of the account.
   const footprint = await redisFootprint(redis, account, basesaveids, others);

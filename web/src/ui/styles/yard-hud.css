@@ -823,6 +823,50 @@
   z-index: calc(var(--z-hud) + 2);
 }
 
+/* A standing line (the post-attack banner's Repair all, an empty outpost's
+   Kits hint; `standing` in Notices.ts) is about the yard, not the window: it
+   waits while a middle window is open, at every size, and is back when the
+   window closes. Over the window it sat on Build's tab row and took a tap
+   meant for Buildings, and on the Monsters Lab's header (beta 9 play-test,
+   23 Nov 2026). Timed news (a claim) still shows over the window. It waits
+   too while More's fan is open (on a phone its bubbles fly up under it:
+   Goals could not be pressed at 390x664, layout check) and while a
+   building's side panel is open (at 768 wide, kept left of the panel, it sat
+   on World chat's button; the panel shows the building's own repair). */
+.overlay__layer:has(> .panel--centre:not([hidden])) > .yard-notices > .notice--standing,
+.overlay__layer:has(> .yard-dock .bubble-menu--open) > .yard-notices > .notice--standing,
+.overlay__layer:has(> .map-dock--right > *) > .yard-notices > .notice--standing {
+  display: none;
+}
+
+/* On a narrow tablet (768 wide) the notices keep clear of World chat's
+   button on the left and Events on the right, which a 460 px line touched
+   (neon review, beta 9 play-test). */
+@media (min-width: 620.02px) and (max-width: 900px) and (min-height: 500.02px) {
+  .overlay__layer > .yard-notices {
+    width: min(92vw, 460px, calc(100% - 2 * 176px));
+  }
+}
+
+/* Beside a building's side panel the notices keep to the yard left of it
+   (from 1366 wide they already do): at 1024 wide they covered the panel's
+   left edge, at 768 its name plate. A phone's panel is a sheet at the bottom. */
+@media (min-width: 620.02px) and (min-height: 500.02px) {
+  .overlay__layer:has(> .map-dock--right > *) > .yard-notices {
+    --notice-dock-width: 300px;
+    --notice-room: calc(100% - var(--notice-dock-width) - 2 * var(--space-4) - var(--space-3));
+    width: min(92vw, 460px, var(--notice-room));
+    left: min(
+      50%,
+      calc(100% - var(--notice-dock-width) - var(--space-4) - var(--space-3) - min(92vw, 460px, var(--notice-room)) / 2)
+    );
+  }
+
+  .overlay__layer:has(> .map-dock--right > .building-panel--housing) > .yard-notices {
+    --notice-dock-width: min(468px, calc(100vw - 2 * var(--space-4)));
+  }
+}
+
 /* A building's panel docks on the right edge where the rail is. */
 .overlay__layer:has(> .map-dock--right > *) > .yard-viewtools--rail {
   display: none;

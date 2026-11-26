@@ -1,5 +1,15 @@
 import type { Page } from "@playwright/test";
-import { openAchievements, openFriendsScreen, openRepeatResult, openRepeatSheet, openShop, pressDock } from "./game";
+import {
+  openAchievements,
+  openBaiterPreview,
+  openFriendsScreen,
+  openMoveTray,
+  openRepeatResult,
+  openRepeatSheet,
+  openShop,
+  openSmartMove,
+  pressDock,
+} from "./game";
 
 /**
  * Every window the layout check opens on the own yard.
@@ -32,6 +42,10 @@ export interface WindowCase {
    * Cancel), or null for none while it works (Repeat attack's bar).
    */
   readonly closeButton?: string | null;
+  /** Every tab in sight at once, the row never sliding (measure.ts `allTabs`). */
+  readonly allTabs?: boolean;
+  /** Parts wholly in sight on every tab, without scrolling (measure.ts `inSight`). */
+  readonly inSight?: string;
   readonly open: (page: Page) => Promise<boolean>;
 }
 
@@ -114,6 +128,12 @@ export const WINDOWS: readonly WindowCase[] = [
     panel: ".monsters-screen",
     items: null,
     tabs: true,
+    // Its six tabs all in sight (768 px iPad upright showed "La" and no
+    // Champion), and on Unlock, Train and Lab the picked monster's cost and
+    // buttons without scrolling (a phone on its side had Research below the
+    // fold). Old-layout fix, beta 9.
+    allTabs: true,
+    inSight: ".locker-detail__action",
     open: dock("monsters"),
   },
   {
@@ -196,6 +216,26 @@ export const WINDOWS: readonly WindowCase[] = [
     open: (page) => openRepeatSheet(page, "short-housing"),
   },
   {
+    // Smart moving's "Bring saved army?" sheet (beta 9) at its busiest: eight
+    // moves under the camp, Skip and Move & attack in sight at every size.
+    id: "smart-move",
+    label: "Smart moving, 8 moves",
+    panel: ".smart-move",
+    items: ".repeat-prompt__move",
+    tabs: false,
+    open: (page) => openSmartMove(page, "moves8"),
+  },
+  {
+    // The Attack window with smart moving's "can't gather" note at its top:
+    // the monsters still in sight under it, Cancel and Attack too.
+    id: "smart-move-note",
+    label: "Attack window, smart moving short",
+    panel: ".attack-window",
+    items: ".attack-window__tile",
+    tabs: false,
+    open: (page) => openSmartMove(page, "short-note"),
+  },
+  {
     // The Attacking bar with every kind marching (owner, 20 Nov 2026).
     id: "repeat-bar",
     label: "Repeat attack, Attacking bar",
@@ -204,6 +244,62 @@ export const WINDOWS: readonly WindowCase[] = [
     tabs: false,
     closeButton: null,
     open: (page) => openRepeatSheet(page, "working"),
+  },
+  {
+    // Waiting in the server's battle line (patch 9.1) at its busiest: the
+    // marching army halted, the hourglass and "#20 in line" under it.
+    id: "repeat-queue",
+    label: "Repeat attack, in the battle line",
+    panel: ".auto-attack--bar",
+    items: ".auto-attack__working--line",
+    tabs: false,
+    closeButton: null,
+    open: async (page) => {
+      if (!(await openRepeatSheet(page, "queued"))) return false;
+      await page.locator(".overlay__layer .auto-attack__working--line").waitFor({ timeout: 10_000 });
+      return true;
+    },
+  },
+  {
+    // The Baiter window's friend tabs (beta 9 #4, design A) at their busiest:
+    // 17 people to invite, four open invites, three received, nine results.
+    // Title, the four tabs and close in sight, a row of each list at every size.
+    id: "baiter-friends",
+    label: "Baiter friend tabs",
+    panel: ".baiter-window",
+    items: ".friends-row",
+    tabs: true,
+    open: (page) => openBaiterPreview(page, "invite"),
+  },
+  {
+    // A friend's test army for their yard (beta 9 #4): Start test in reach.
+    id: "baiter-friend-test",
+    label: "Baiter, a friend's yard",
+    panel: ".baiter-window",
+    items: ".baiter__row",
+    tabs: false,
+    open: (page) => openBaiterPreview(page, "host"),
+  },
+  {
+    // The world map's move tray (beta 9 #7) at its busiest: Bring to an
+    // outpost from every yard, seven kinds, two at as many as fit, a stepper
+    // open (− n/most + Max ✓). The chips, All, the room and Go in sight at
+    // every size. Opened from the build's preview (no outposts in a sandbox).
+    id: "move-tray",
+    label: "Move monsters tray",
+    panel: ".xfer-tray",
+    items: ".xfer-chip",
+    tabs: false,
+    open: (page) => openMoveTray(page, "in"),
+  },
+  {
+    // Move from the main yard to one outpost: Go names the target.
+    id: "move-tray-out",
+    label: "Move monsters tray, one target",
+    panel: ".xfer-tray",
+    items: ".xfer-chip",
+    tabs: false,
+    open: (page) => openMoveTray(page, "out"),
   },
 ];
 

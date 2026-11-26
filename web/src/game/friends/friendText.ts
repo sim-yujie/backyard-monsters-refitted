@@ -1,5 +1,6 @@
 import type { Friend, FriendOnline } from "@/api/friends";
 import type { FriendsOpenTab } from "@/game/friends/friendsView";
+import type { BaiterView } from "@/game/yard/yardIntent";
 import { buildingName } from "@/game/yard/buildingArt";
 import { formatAmount, formatCountdown } from "@/ui/format";
 
@@ -8,17 +9,41 @@ import { formatAmount, formatCountdown } from "@/ui/format";
  * §3, issue #370). All plain English, like the other panels.
  */
 
-/** "Online", "Seen today", "Seen this week", "Away"; empty when hidden. */
+/**
+ * The five "last seen" steps in words (owner, 25 Nov 2026: Online, Today,
+ * This week, 1-4 weeks, Over a month); empty when hidden. Shared by the
+ * friends lists and the alliance Members tab.
+ */
 export const onlineText = (online: FriendOnline): string => {
   switch (online) {
     case "online":
       return "Online";
     case "today":
-      return "Seen today";
+      return "Today";
     case "week":
-      return "Seen this week";
-    case "away":
-      return "Away";
+      return "This week";
+    case "weeks":
+      return "1-4 weeks";
+    case "month":
+      return "Over a month";
+    default:
+      return "";
+  }
+};
+
+/** The longer hover and screen-reader words: "Last seen 1-4 weeks ago"; empty when hidden. */
+export const seenTitle = (online: FriendOnline): string => {
+  switch (online) {
+    case "online":
+      return "Online now";
+    case "today":
+      return "Last seen today";
+    case "week":
+      return "Last seen this week";
+    case "weeks":
+      return "Last seen 1-4 weeks ago";
+    case "month":
+      return "Last seen over a month ago";
     default:
       return "";
   }
@@ -95,6 +120,13 @@ export const friendNoticeText = (notice: FriendNotice): string => {
       const building = buildingOf(notice);
       return building === "a building" ? `${name} repaired a building in your yard.` : `${name} repaired your ${building}.`;
     }
+    // Friend tests of a yard (beta 9 #4).
+    case "baiterInvite":
+      return `${name} invited you to test their yard (24 h).`;
+    case "baiterTest": {
+      const damage = Math.max(0, Math.floor(Number(notice.damage) || 0));
+      return `${name} tested your yard: ${damage}% damage. Watch it in your Baiter.`;
+    }
     default:
       return name === "Someone" ? "News from your friends." : `News from ${name}.`;
   }
@@ -108,5 +140,13 @@ export const friendLineText = (jobs: readonly unknown[]): string => {
 };
 
 /** The Friends tab a `friend` row opens when clicked: "gifts" for a gift, else none. */
+/** The Baiter window tab a friend-test notice leads to, or null for any other notice (beta 9 #4). */
+export const friendLineBaiter = (jobs: readonly unknown[]): BaiterView | null => {
+  const events = jobs.map((job) => (typeof job === "object" && job !== null ? (job as FriendNotice).event : null));
+  if (events.includes("baiterTest")) return "results";
+  if (events.includes("baiterInvite")) return "invitedMe";
+  return null;
+};
+
 export const friendLineTab = (jobs: readonly unknown[]): FriendsOpenTab | null =>
   jobs.some((job) => typeof job === "object" && job !== null && (job as FriendNotice).event === "gift") ? "gifts" : null;

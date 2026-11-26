@@ -1,0 +1,3527 @@
+{
+ "assets/buildings/academy/anim.3d1@2x.webp": {
+  "whole": false,
+  "frames": [],
+  "strips": [
+   {
+    "w": 40,
+    "h": 24,
+    "frames": 21,
+    "columns": null
+   }
+  ]
+ },
+ "assets/buildings/academy/anim.3d2@2x.webp": {
+  "whole": false,
+  "frames": [],
+  "strips": [
+   {
+    "w": 40,
+    "h": 24,
+    "frames": 21,
+    "columns": null
+   }
+  ]
+ },
+ "assets/buildings/academy/anim.3d3@2x.webp": {
+  "whole": false,
+  "frames": [],
+  "strips": [
+   {
+    "w": 38,
+    "h": 23,
+    "frames": 21,
+    "columns": null
+   }
+  ]
+ },
+ "assets/buildings/academy/anim.3d4@2x.webp": {
+  "whole": false,
+  "frames": [],
+  "strips": [
+   {
+    "w": 38,
+    "h": 23,
+    "frames": 21,
+    "columns": null
+   }
+  ]
+ },
+ "assets/buildings/academy/body.3d1@2x.webp": {
+  "whole": true,
+  "frames": [],
+  "strips": []
+ },
+ "assets/buildings/academy/body.3d2@2x.webp": {
+  "whole": true,
+  "frames": [],
+  "strips": []
+ },
+ "assets/buildings/academy/body.3d3@2x.webp": {
+  "whole": true,
+  "frames": [],
+  "strips": []
+ },
+ "assets/buildings/academy/body.3d4@2x.webp": {
+  "whole": true,
+  "frames": [],
+  "strips": []
+ },
+ "assets/buildings/academy/top.3d1.damaged@2x.webp": {
+  "whole": true,
+  "frames": [],
+  "strips": []
+ },
+ "assets/buildings/academy/top.3d1.destroyed@2x.webp": {
+  "whole": true,
+  "frames": [],
+  "strips": []
+ },
+ "assets/buildings/academy/top.3d1@2x.webp": {
+  "whole": true,
+  "frames": [],
+  "strips": []
+ },
+ "assets/buildings/academy/top.3d2.damaged@2x.webp": {
+  "whole": true,
+  "frames": [],
+  "strips": []
+ },
+ "assets/buildings/academy/top.3d2.destroyed@2x.webp": {
+  "whole": true,
+  "frames": [],
+  "strips": []
+ },
+ "assets/buildings/academy/top.3d2@2x.webp": {
+  "whole": true,
+  "frames": [],
+  "strips": []
+ },
+ "assets/buildings/academy/top.3d3.damaged@2x.webp": {
+  "whole": true,
+  "frames": [],
+  "strips": []
+ },
+ "assets/buildings/academy/top.3d3.destroyed@2x.webp": {
+  "whole": true,
+  "frames": [],
+  "strips": []
+ },
+ "assets/buildings/academy/top.3d3@2x.webp": {
+  "whole": true,
+  "frames": [],
+  "strips": []
+ },
+ "assets/buildings/academy/top.3d4.damaged@2x.webp": {
+  "whole": true,
+  "frames": [],
+  "strips": []
+ },
+ "assets/buildings/academy/top.3d4.destroyed@2x.webp": {
+  "whole": true,
+  "frames": [],
+  "strips": []
+ },
+ "assets/buildings/academy/top.3d4@2x.webp": {
+  "whole": true,
+  "frames": [],
+  "strips": []
+ },
+ "assets/buildings/blackspurtztower/body.t1@2x.webp": {
+  "whole": true,
+  "frames": [],
+  "strips": []
+ },
+ "assets/buildings/blackspurtztower/top.t1@2x.webp": {
+  "whole": true,
+  "frames": [],
+  "strips": []
+ },
+ "assets/buildings/blackspurtztower/turret.t1@2x.webp": {
+  "whole": false,
+  "frames": [],
+  "strips": [
+   {
+    "w": 57,
+    "h": 46,
+    "frames": 32,
+    "columns": null
+   }
+  ]
+ },
+ "assets/buildings/boobytrap/top.3d1.destroyed@2x.webp": {
+  "whole": true,
+  "frames": [],
+  "strips": []
+ },
+ "assets/buildings/boobytrap/top.3d1@2x.webp": {
+  "whole": true,
+  "frames": [],
+  "strips": []
+ },
+ "assets/buildings/bunker/anim.t1@2x.webp": {
+  "whole": false,
+  "frames": [
+   {
+    "w": 84,
+    "h": 86
+   }
+  ],
+  "strips": [
+   {
+    "w": 84,
+    "h": 86,
+    "frames": 15,
+    "columns": null
+   }
+  ]
+ },
+ "assets/buildings/bunker/anim.t2@2x.webp": {
+  "whole": false,
+  "frames": [
+   {
+    "w": 88,
+    "h": 99
+   }
+  ],
+  "strips": [
+   {
+    "w": 88,
+    "h": 99,
+    "frames": 15,
+    "columns": null
+   }
+  ]
+ },
+ "assets/buildings/bunker/anim.t3@2x.webp": {
+  "whole": false,
+  "frames": [
+   {
+    "w": 90,
+    "h": 110
+   }
+  ],
+  "strips": [
+   {
+    "w": 90,
+    "h": 110,
+    "frames": 15,
+    "columns": null
+   }
+  ]
+ },
+ "assets/buildings/bunker/top.t1@2x.webp": {
+  "whole": true,
+  "frames": [],
+  "strips": []
+ },
+ "assets/buildings/bunker/top.t2@2x.webp": {
+  "whole": true,
+  "frames": [],
+  "strips": []
+ },
+ "assets/buildings/bunker/top.t3@2x.webp": {
+  "whole": true,
+  "frames": [],
+  "strips": []
+ },
+ "assets/buildings/cannontower/body.t1@2x.webp": {
+  "whole": true,
+  "frames": [],
+  "strips": []
+ },
+ "assets/buildings/cannontower/body.t2@2x.webp": {
+  "whole": true,
+  "frames": [],
+  "strips": []
+ },
+ "assets/buildings/cannontower/body.t3@2x.webp": {
+  "whole": true,
+  "frames": [],
+  "strips": []
+ },
+ "assets/buildings/cannontower/top.t1@2x.webp": {
+  "whole": true,
+  "frames": [],
+  "strips": []
+ },
+ "assets/buildings/cannontower/top.t2@2x.webp": {
+  "whole": true,
+  "frames": [],
+  "strips": []
+ },
+ "assets/buildings/cannontower/top.t3@2x.webp": {
+  "whole": true,
+  "frames": [],
+  "strips": []
+ },
+ "assets/buildings/cannontower/turret.t1@2x.webp": {
+  "whole": false,
+  "frames": [],
+  "strips": [
+   {
+    "w": 64,
+    "h": 51,
+    "frames": 32,
+    "columns": null
+   }
+  ]
+ },
+ "assets/buildings/cannontower/turret.t2@2x.webp": {
+  "whole": false,
+  "frames": [],
+  "strips": [
+   {
+    "w": 64,
+    "h": 51,
+    "frames": 32,
+    "columns": null
+   }
+  ]
+ },
+ "assets/buildings/cannontower/turret.t3@2x.webp": {
+  "whole": false,
+  "frames": [],
+  "strips": [
+   {
+    "w": 62,
+    "h": 48,
+    "frames": 32,
+    "columns": null
+   }
+  ]
+ },
+ "assets/buildings/catapult/top.3d1.damaged@2x.webp": {
+  "whole": true,
+  "frames": [],
+  "strips": []
+ },
+ "assets/buildings/catapult/top.3d1@2x.webp": {
+  "whole": true,
+  "frames": [],
+  "strips": []
+ },
+ "assets/buildings/catapult/top.3d2.damaged@2x.webp": {
+  "whole": true,
+  "frames": [],
+  "strips": []
+ },
+ "assets/buildings/catapult/top.3d2@2x.webp": {
+  "whole": true,
+  "frames": [],
+  "strips": []
+ },
+ "assets/buildings/catapult/top.3d3.damaged@2x.webp": {
+  "whole": true,
+  "frames": [],
+  "strips": []
+ },
+ "assets/buildings/catapult/top.3d3.destroyed@2x.webp": {
+  "whole": true,
+  "frames": [],
+  "strips": []
+ },
+ "assets/buildings/catapult/top.3d3@2x.webp": {
+  "whole": true,
+  "frames": [],
+  "strips": []
+ },
+ "assets/buildings/champchamber/top.3d1.damaged@2x.webp": {
+  "whole": true,
+  "frames": [],
+  "strips": []
+ },
+ "assets/buildings/champchamber/top.3d1.destroyed@2x.webp": {
+  "whole": true,
+  "frames": [],
+  "strips": []
+ },
+ "assets/buildings/champchamber/top.3d1@2x.webp": {
+  "whole": true,
+  "frames": [],
+  "strips": []
+ },
+ "assets/buildings/decorations/acorn/acorn.modern@2x.webp": {
+  "whole": true,
+  "frames": [],
+  "strips": []
+ },
+ "assets/buildings/decorations/autumn/apple-barrel.modern@2x.webp": {
+  "whole": true,
+  "frames": [],
+  "strips": []
+ },
+ "assets/buildings/decorations/autumn/autumn-maple.modern@2x.webp": {
+  "whole": true,
+  "frames": [],
+  "strips": []
+ },
+ "assets/buildings/decorations/autumn/harvest-wheelbarrow.modern@2x.webp": {
+  "whole": true,
+  "frames": [],
+  "strips": []
+ },
+ "assets/buildings/decorations/autumn/leaf-pile-rake.modern@2x.webp": {
+  "whole": true,
+  "frames": [],
+  "strips": []
+ },
+ "assets/buildings/decorations/autumn/pie-stump.modern@2x.webp": {
+  "whole": true,
+  "frames": [],
+  "strips": []
+ },
+ "assets/buildings/decorations/autumn/turkey-topiary.modern@2x.webp": {
+  "whole": true,
+  "frames": [],
+  "strips": []
+ },
+ "assets/buildings/decorations/beehive/beehive.modern@2x.webp": {
+  "whole": true,
+  "frames": [],
+  "strips": []
+ },
+ "assets/buildings/decorations/biggulp/big-gulp.modern@2x.webp": {
+  "whole": true,
+  "frames": [],
+  "strips": []
+ },
+ "assets/buildings/decorations/birdhouse/bird-house.modern@2x.webp": {
+  "whole": true,
+  "frames": [],
+  "strips": []
+ },
+ "assets/buildings/decorations/blackberrybush/blackberry-bush.modern@2x.webp": {
+  "whole": true,
+  "frames": [],
+  "strips": []
+ },
+ "assets/buildings/decorations/bonsaitree/bonsai-tree.modern@2x.webp": {
+  "whole": true,
+  "frames": [],
+  "strips": []
+ },
+ "assets/buildings/decorations/cactus/cactus.modern@2x.webp": {
+  "whole": true,
+  "frames": [],
+  "strips": []
+ },
+ "assets/buildings/decorations/campingtent/camping-tent.modern@2x.webp": {
+  "whole": true,
+  "frames": [],
+  "strips": []
+ },
+ "assets/buildings/decorations/childrensjax/jax.modern@2x.webp": {
+  "whole": true,
+  "frames": [],
+  "strips": []
+ },
+ "assets/buildings/decorations/dave_trophy/dave-trophy.modern@2x.webp": {
+  "whole": true,
+  "frames": [],
+  "strips": []
+ },
+ "assets/buildings/decorations/flags/flagpole.modern@2x.webp": {
+  "whole": true,
+  "frames": [],
+  "strips": []
+ },
+ "assets/buildings/decorations/flowers/pink-flowers.modern@2x.webp": {
+  "whole": true,
+  "frames": [],
+  "strips": []
+ },
+ "assets/buildings/decorations/flowers/purple-flowers.modern@2x.webp": {
+  "whole": true,
+  "frames": [],
+  "strips": []
+ },
+ "assets/buildings/decorations/flowers/red-flowers.modern@2x.webp": {
+  "whole": true,
+  "frames": [],
+  "strips": []
+ },
+ "assets/buildings/decorations/flowers/white-flowers.modern@2x.webp": {
+  "whole": true,
+  "frames": [],
+  "strips": []
+ },
+ "assets/buildings/decorations/flowers/yellow-flowers.modern@2x.webp": {
+  "whole": true,
+  "frames": [],
+  "strips": []
+ },
+ "assets/buildings/decorations/flytrap/flytrap.modern@2x.webp": {
+  "whole": true,
+  "frames": [],
+  "strips": []
+ },
+ "assets/buildings/decorations/fountain/fountain-stone.modern@2x.webp": {
+  "whole": true,
+  "frames": [],
+  "strips": []
+ },
+ "assets/buildings/decorations/gnomes/gnome-blue.modern@2x.webp": {
+  "whole": true,
+  "frames": [],
+  "strips": []
+ },
+ "assets/buildings/decorations/gnomes/gnome-green.modern@2x.webp": {
+  "whole": true,
+  "frames": [],
+  "strips": []
+ },
+ "assets/buildings/decorations/gnomes/gnome-red.modern@2x.webp": {
+  "whole": true,
+  "frames": [],
+  "strips": []
+ },
+ "assets/buildings/decorations/graveyardtombstone/tombstone.modern@2x.webp": {
+  "whole": true,
+  "frames": [],
+  "strips": []
+ },
+ "assets/buildings/decorations/hammock/hammock.modern@2x.webp": {
+  "whole": true,
+  "frames": [],
+  "strips": []
+ },
+ "assets/buildings/decorations/headsonsticks/bandito.modern@2x.webp": {
+  "whole": true,
+  "frames": [],
+  "strips": []
+ },
+ "assets/buildings/decorations/headsonsticks/bolt.modern@2x.webp": {
+  "whole": true,
+  "frames": [],
+  "strips": []
+ },
+ "assets/buildings/decorations/headsonsticks/brain.modern@2x.webp": {
+  "whole": true,
+  "frames": [],
+  "strips": []
+ },
+ "assets/buildings/decorations/headsonsticks/crabatron.modern@2x.webp": {
+  "whole": true,
+  "frames": [],
+  "strips": []
+ },
+ "assets/buildings/decorations/headsonsticks/dave-head.modern@2x.webp": {
+  "whole": true,
+  "frames": [],
+  "strips": []
+ },
+ "assets/buildings/decorations/headsonsticks/eyera.modern@2x.webp": {
+  "whole": true,
+  "frames": [],
+  "strips": []
+ },
+ "assets/buildings/decorations/headsonsticks/fang.modern@2x.webp": {
+  "whole": true,
+  "frames": [],
+  "strips": []
+ },
+ "assets/buildings/decorations/headsonsticks/fink.modern@2x.webp": {
+  "whole": true,
+  "frames": [],
+  "strips": []
+ },
+ "assets/buildings/decorations/headsonsticks/ichi.modern@2x.webp": {
+  "whole": true,
+  "frames": [],
+  "strips": []
+ },
+ "assets/buildings/decorations/headsonsticks/octo.modern@2x.webp": {
+  "whole": true,
+  "frames": [],
+  "strips": []
+ },
+ "assets/buildings/decorations/headsonsticks/pokey.modern@2x.webp": {
+  "whole": true,
+  "frames": [],
+  "strips": []
+ },
+ "assets/buildings/decorations/headsonsticks/projectx.modern@2x.webp": {
+  "whole": true,
+  "frames": [],
+  "strips": []
+ },
+ "assets/buildings/decorations/headsonsticks/skull.modern@2x.webp": {
+  "whole": true,
+  "frames": [],
+  "strips": []
+ },
+ "assets/buildings/decorations/japaneseteagarden/tea-garden.modern@2x.webp": {
+  "whole": true,
+  "frames": [],
+  "strips": []
+ },
+ "assets/buildings/decorations/lawnchair/lawn-chair.modern@2x.webp": {
+  "whole": true,
+  "frames": [],
+  "strips": []
+ },
+ "assets/buildings/decorations/outhouse/outhouse.modern@2x.webp": {
+  "whole": true,
+  "frames": [],
+  "strips": []
+ },
+ "assets/buildings/decorations/pinecone/pinecone.modern@2x.webp": {
+  "whole": true,
+  "frames": [],
+  "strips": []
+ },
+ "assets/buildings/decorations/plants/bamboo-clump.modern@2x.webp": {
+  "whole": true,
+  "frames": [],
+  "strips": []
+ },
+ "assets/buildings/decorations/plants/banana-plant.modern@2x.webp": {
+  "whole": true,
+  "frames": [],
+  "strips": []
+ },
+ "assets/buildings/decorations/plants/bougainvillea.modern@2x.webp": {
+  "whole": true,
+  "frames": [],
+  "strips": []
+ },
+ "assets/buildings/decorations/plants/coconut-palm.modern@2x.webp": {
+  "whole": true,
+  "frames": [],
+  "strips": []
+ },
+ "assets/buildings/decorations/plants/hibiscus-shrub.modern@2x.webp": {
+  "whole": true,
+  "frames": [],
+  "strips": []
+ },
+ "assets/buildings/decorations/plants/kalamansi-tree.modern@2x.webp": {
+  "whole": true,
+  "frames": [],
+  "strips": []
+ },
+ "assets/buildings/decorations/plants/mango-tree.modern@2x.webp": {
+  "whole": true,
+  "frames": [],
+  "strips": []
+ },
+ "assets/buildings/decorations/plants/oak-tree.modern@2x.webp": {
+  "whole": true,
+  "frames": [],
+  "strips": []
+ },
+ "assets/buildings/decorations/plants/rose-bush.modern@2x.webp": {
+  "whole": true,
+  "frames": [],
+  "strips": []
+ },
+ "assets/buildings/decorations/plants/trimmed-hedge.modern@2x.webp": {
+  "whole": true,
+  "frames": [],
+  "strips": []
+ },
+ "assets/buildings/decorations/pond/pond.modern@2x.webp": {
+  "whole": true,
+  "frames": [],
+  "strips": []
+ },
+ "assets/buildings/decorations/pool/pool.modern@2x.webp": {
+  "whole": true,
+  "frames": [],
+  "strips": []
+ },
+ "assets/buildings/decorations/props/egg-nest.modern@2x.webp": {
+  "whole": true,
+  "frames": [],
+  "strips": []
+ },
+ "assets/buildings/decorations/props/fire-pit-anim.modern@2x.webp": {
+  "whole": false,
+  "frames": [],
+  "strips": [
+   {
+    "w": 25,
+    "h": 38,
+    "frames": 25,
+    "columns": null
+   }
+  ]
+ },
+ "assets/buildings/decorations/props/fire-pit.modern@2x.webp": {
+  "whole": true,
+  "frames": [],
+  "strips": []
+ },
+ "assets/buildings/decorations/props/goo-cauldron.modern@2x.webp": {
+  "whole": true,
+  "frames": [],
+  "strips": []
+ },
+ "assets/buildings/decorations/props/picnic-table.modern@2x.webp": {
+  "whole": true,
+  "frames": [],
+  "strips": []
+ },
+ "assets/buildings/decorations/props/windpump-anim.modern@2x.webp": {
+  "whole": false,
+  "frames": [],
+  "strips": [
+   {
+    "w": 36,
+    "h": 47,
+    "frames": 48,
+    "columns": null
+   }
+  ]
+ },
+ "assets/buildings/decorations/props/windpump.modern@2x.webp": {
+  "whole": true,
+  "frames": [],
+  "strips": []
+ },
+ "assets/buildings/decorations/props/wishing-well.modern@2x.webp": {
+  "whole": true,
+  "frames": [],
+  "strips": []
+ },
+ "assets/buildings/decorations/pumpkins/dave-pumpkin.modern@2x.webp": {
+  "whole": true,
+  "frames": [],
+  "strips": []
+ },
+ "assets/buildings/decorations/pumpkins/mini-pumpkin.modern@2x.webp": {
+  "whole": true,
+  "frames": [],
+  "strips": []
+ },
+ "assets/buildings/decorations/rock/rock.modern@2x.webp": {
+  "whole": true,
+  "frames": [],
+  "strips": []
+ },
+ "assets/buildings/decorations/rubikscube/cube-solved.modern@2x.webp": {
+  "whole": true,
+  "frames": [],
+  "strips": []
+ },
+ "assets/buildings/decorations/rubikscube/cube-unsolved.modern@2x.webp": {
+  "whole": true,
+  "frames": [],
+  "strips": []
+ },
+ "assets/buildings/decorations/scaleelectriccartoyset/raceway.modern@2x.webp": {
+  "whole": true,
+  "frames": [],
+  "strips": []
+ },
+ "assets/buildings/decorations/scarecrow/scarecrow.modern@2x.webp": {
+  "whole": true,
+  "frames": [],
+  "strips": []
+ },
+ "assets/buildings/decorations/statue-baseball/baseball-trophy.modern@2x.webp": {
+  "whole": true,
+  "frames": [],
+  "strips": []
+ },
+ "assets/buildings/decorations/statue-bigben/big-ben.modern@2x.webp": {
+  "whole": true,
+  "frames": [],
+  "strips": []
+ },
+ "assets/buildings/decorations/statue-eiffeltower/eiffel-tower.modern@2x.webp": {
+  "whole": true,
+  "frames": [],
+  "strips": []
+ },
+ "assets/buildings/decorations/statue-football/football-trophy.modern@2x.webp": {
+  "whole": true,
+  "frames": [],
+  "strips": []
+ },
+ "assets/buildings/decorations/statue-liberty/statue-liberty.modern@2x.webp": {
+  "whole": true,
+  "frames": [],
+  "strips": []
+ },
+ "assets/buildings/decorations/statue-soccer/soccer-trophy.modern@2x.webp": {
+  "whole": true,
+  "frames": [],
+  "strips": []
+ },
+ "assets/buildings/decorations/sundial/sundial.modern@2x.webp": {
+  "whole": true,
+  "frames": [],
+  "strips": []
+ },
+ "assets/buildings/decorations/thorns/thorns.modern@2x.webp": {
+  "whole": true,
+  "frames": [],
+  "strips": []
+ },
+ "assets/buildings/decorations/tikitorch/tiki-torch.modern@2x.webp": {
+  "whole": true,
+  "frames": [],
+  "strips": []
+ },
+ "assets/buildings/decorations/walnut/walnut.modern@2x.webp": {
+  "whole": true,
+  "frames": [],
+  "strips": []
+ },
+ "assets/buildings/decorations/wmitotem/totem-l1.modern@2x.webp": {
+  "whole": true,
+  "frames": [],
+  "strips": []
+ },
+ "assets/buildings/decorations/wmitotem/totem-l2.modern@2x.webp": {
+  "whole": true,
+  "frames": [],
+  "strips": []
+ },
+ "assets/buildings/decorations/wmitotem/totem-l3.modern@2x.webp": {
+  "whole": true,
+  "frames": [],
+  "strips": []
+ },
+ "assets/buildings/decorations/wmitotem/totem-l4.modern@2x.webp": {
+  "whole": true,
+  "frames": [],
+  "strips": []
+ },
+ "assets/buildings/decorations/wmitotem/totem-l5.modern@2x.webp": {
+  "whole": true,
+  "frames": [],
+  "strips": []
+ },
+ "assets/buildings/decorations/wmitotem/totem-l6.modern@2x.webp": {
+  "whole": true,
+  "frames": [],
+  "strips": []
+ },
+ "assets/buildings/decorations/wmitotem2/totem-l1.modern@2x.webp": {
+  "whole": true,
+  "frames": [],
+  "strips": []
+ },
+ "assets/buildings/decorations/wmitotem2/totem-l2.modern@2x.webp": {
+  "whole": true,
+  "frames": [],
+  "strips": []
+ },
+ "assets/buildings/decorations/wmitotem2/totem-l3.modern@2x.webp": {
+  "whole": true,
+  "frames": [],
+  "strips": []
+ },
+ "assets/buildings/decorations/wmitotem2/totem-l4.modern@2x.webp": {
+  "whole": true,
+  "frames": [],
+  "strips": []
+ },
+ "assets/buildings/decorations/wmitotem2/totem-l5.modern@2x.webp": {
+  "whole": true,
+  "frames": [],
+  "strips": []
+ },
+ "assets/buildings/decorations/wmitotem2/totem-l6.modern@2x.webp": {
+  "whole": true,
+  "frames": [],
+  "strips": []
+ },
+ "assets/buildings/decorations/wonders/banaue-terraces.modern@2x.webp": {
+  "whole": true,
+  "frames": [],
+  "strips": []
+ },
+ "assets/buildings/decorations/wonders/chocolate-hills.modern@2x.webp": {
+  "whole": true,
+  "frames": [],
+  "strips": []
+ },
+ "assets/buildings/decorations/wonders/fort-santiago.modern@2x.webp": {
+  "whole": true,
+  "frames": [],
+  "strips": []
+ },
+ "assets/buildings/decorations/wonders/magellans-cross.modern@2x.webp": {
+  "whole": true,
+  "frames": [],
+  "strips": []
+ },
+ "assets/buildings/decorations/wonders/mayon-volcano.modern@2x.webp": {
+  "whole": true,
+  "frames": [],
+  "strips": []
+ },
+ "assets/buildings/decorations/wonders/paoay-church.modern@2x.webp": {
+  "whole": true,
+  "frames": [],
+  "strips": []
+ },
+ "assets/buildings/decorations/wonders/pyramids.modern@2x.webp": {
+  "whole": true,
+  "frames": [],
+  "strips": []
+ },
+ "assets/buildings/decorations/wonders/rizal-monument.modern@2x.webp": {
+  "whole": true,
+  "frames": [],
+  "strips": []
+ },
+ "assets/buildings/decorations/wonders/taj-mahal.modern@2x.webp": {
+  "whole": true,
+  "frames": [],
+  "strips": []
+ },
+ "assets/buildings/decorations/zengarden/zen-garden.modern@2x.webp": {
+  "whole": true,
+  "frames": [],
+  "strips": []
+ },
+ "assets/buildings/flaktower/body.t1@2x.webp": {
+  "whole": true,
+  "frames": [],
+  "strips": []
+ },
+ "assets/buildings/flaktower/body.t2@2x.webp": {
+  "whole": true,
+  "frames": [],
+  "strips": []
+ },
+ "assets/buildings/flaktower/body.t3@2x.webp": {
+  "whole": true,
+  "frames": [],
+  "strips": []
+ },
+ "assets/buildings/flaktower/top.t1@2x.webp": {
+  "whole": true,
+  "frames": [],
+  "strips": []
+ },
+ "assets/buildings/flaktower/top.t2@2x.webp": {
+  "whole": true,
+  "frames": [],
+  "strips": []
+ },
+ "assets/buildings/flaktower/top.t3@2x.webp": {
+  "whole": true,
+  "frames": [],
+  "strips": []
+ },
+ "assets/buildings/flaktower/turret.t1.g8@2x.webp": {
+  "whole": false,
+  "frames": [],
+  "strips": [
+   {
+    "w": 66,
+    "h": 52,
+    "frames": 32,
+    "columns": 8
+   }
+  ]
+ },
+ "assets/buildings/flaktower/turret.t2.g8@2x.webp": {
+  "whole": false,
+  "frames": [],
+  "strips": [
+   {
+    "w": 66,
+    "h": 51,
+    "frames": 32,
+    "columns": 8
+   }
+  ]
+ },
+ "assets/buildings/flaktower/turret.t3.g8@2x.webp": {
+  "whole": false,
+  "frames": [],
+  "strips": [
+   {
+    "w": 66,
+    "h": 52,
+    "frames": 32,
+    "columns": 8
+   }
+  ]
+ },
+ "assets/buildings/flinger/top.3d1.damaged@2x.webp": {
+  "whole": true,
+  "frames": [],
+  "strips": []
+ },
+ "assets/buildings/flinger/top.3d1@2x.webp": {
+  "whole": true,
+  "frames": [],
+  "strips": []
+ },
+ "assets/buildings/flinger/top.3d2.damaged@2x.webp": {
+  "whole": true,
+  "frames": [],
+  "strips": []
+ },
+ "assets/buildings/flinger/top.3d2@2x.webp": {
+  "whole": true,
+  "frames": [],
+  "strips": []
+ },
+ "assets/buildings/flinger/top.3d3.damaged@2x.webp": {
+  "whole": true,
+  "frames": [],
+  "strips": []
+ },
+ "assets/buildings/flinger/top.3d3@2x.webp": {
+  "whole": true,
+  "frames": [],
+  "strips": []
+ },
+ "assets/buildings/flinger/top.3d4.damaged@2x.webp": {
+  "whole": true,
+  "frames": [],
+  "strips": []
+ },
+ "assets/buildings/flinger/top.3d4.destroyed@2x.webp": {
+  "whole": true,
+  "frames": [],
+  "strips": []
+ },
+ "assets/buildings/flinger/top.3d4@2x.webp": {
+  "whole": true,
+  "frames": [],
+  "strips": []
+ },
+ "assets/buildings/fortifications/fort130_B1.modern@2x.webp": {
+  "whole": true,
+  "frames": [],
+  "strips": []
+ },
+ "assets/buildings/fortifications/fort130_B2.modern@2x.webp": {
+  "whole": true,
+  "frames": [],
+  "strips": []
+ },
+ "assets/buildings/fortifications/fort130_B3.modern@2x.webp": {
+  "whole": true,
+  "frames": [],
+  "strips": []
+ },
+ "assets/buildings/fortifications/fort130_B4.modern@2x.webp": {
+  "whole": true,
+  "frames": [],
+  "strips": []
+ },
+ "assets/buildings/fortifications/fort130_F1.modern@2x.webp": {
+  "whole": true,
+  "frames": [],
+  "strips": []
+ },
+ "assets/buildings/fortifications/fort130_F2.modern@2x.webp": {
+  "whole": true,
+  "frames": [],
+  "strips": []
+ },
+ "assets/buildings/fortifications/fort130_F3.modern@2x.webp": {
+  "whole": true,
+  "frames": [],
+  "strips": []
+ },
+ "assets/buildings/fortifications/fort130_F4.modern@2x.webp": {
+  "whole": true,
+  "frames": [],
+  "strips": []
+ },
+ "assets/buildings/fortifications/fort70_B1.modern@2x.webp": {
+  "whole": true,
+  "frames": [],
+  "strips": []
+ },
+ "assets/buildings/fortifications/fort70_B2.modern@2x.webp": {
+  "whole": true,
+  "frames": [],
+  "strips": []
+ },
+ "assets/buildings/fortifications/fort70_B3.modern@2x.webp": {
+  "whole": true,
+  "frames": [],
+  "strips": []
+ },
+ "assets/buildings/fortifications/fort70_B4.modern@2x.webp": {
+  "whole": true,
+  "frames": [],
+  "strips": []
+ },
+ "assets/buildings/fortifications/fort70_F1.modern@2x.webp": {
+  "whole": true,
+  "frames": [],
+  "strips": []
+ },
+ "assets/buildings/fortifications/fort70_F2.modern@2x.webp": {
+  "whole": true,
+  "frames": [],
+  "strips": []
+ },
+ "assets/buildings/fortifications/fort70_F3.modern@2x.webp": {
+  "whole": true,
+  "frames": [],
+  "strips": []
+ },
+ "assets/buildings/fortifications/fort70_F4.modern@2x.webp": {
+  "whole": true,
+  "frames": [],
+  "strips": []
+ },
+ "assets/buildings/generalstore/anim.i3d1@2x.webp": {
+  "whole": false,
+  "frames": [],
+  "strips": [
+   {
+    "w": 66,
+    "h": 68,
+    "frames": 32,
+    "columns": 31
+   }
+  ]
+ },
+ "assets/buildings/generalstore/body.i3d1@2x.webp": {
+  "whole": true,
+  "frames": [],
+  "strips": []
+ },
+ "assets/buildings/generalstore/top.3d1@2x.webp": {
+  "whole": true,
+  "frames": [],
+  "strips": []
+ },
+ "assets/buildings/generalstore/top.i3d1.damaged@2x.webp": {
+  "whole": true,
+  "frames": [],
+  "strips": []
+ },
+ "assets/buildings/generalstore/top.i3d1.destroyed@2x.webp": {
+  "whole": true,
+  "frames": [],
+  "strips": []
+ },
+ "assets/buildings/generalstore/top.i3d1@2x.webp": {
+  "whole": true,
+  "frames": [],
+  "strips": []
+ },
+ "assets/buildings/goofactory.v2/anim.3d10@2x.webp": {
+  "whole": false,
+  "frames": [],
+  "strips": [
+   {
+    "w": 42,
+    "h": 47,
+    "frames": 26,
+    "columns": null
+   }
+  ]
+ },
+ "assets/buildings/goofactory.v2/anim.3d1@2x.webp": {
+  "whole": false,
+  "frames": [],
+  "strips": [
+   {
+    "w": 18,
+    "h": 42,
+    "frames": 26,
+    "columns": null
+   }
+  ]
+ },
+ "assets/buildings/goofactory.v2/anim.3d3@2x.webp": {
+  "whole": false,
+  "frames": [],
+  "strips": [
+   {
+    "w": 19,
+    "h": 43,
+    "frames": 26,
+    "columns": null
+   }
+  ]
+ },
+ "assets/buildings/goofactory.v2/anim.3d6@2x.webp": {
+  "whole": false,
+  "frames": [],
+  "strips": [
+   {
+    "w": 42,
+    "h": 47,
+    "frames": 26,
+    "columns": null
+   }
+  ]
+ },
+ "assets/buildings/goofactory.v2/body.3d10@2x.webp": {
+  "whole": true,
+  "frames": [],
+  "strips": []
+ },
+ "assets/buildings/goofactory.v2/body.3d1@2x.webp": {
+  "whole": true,
+  "frames": [],
+  "strips": []
+ },
+ "assets/buildings/goofactory.v2/body.3d3@2x.webp": {
+  "whole": true,
+  "frames": [],
+  "strips": []
+ },
+ "assets/buildings/goofactory.v2/body.3d6@2x.webp": {
+  "whole": true,
+  "frames": [],
+  "strips": []
+ },
+ "assets/buildings/goofactory.v2/top.3d1.damaged@2x.webp": {
+  "whole": true,
+  "frames": [],
+  "strips": []
+ },
+ "assets/buildings/goofactory.v2/top.3d10.damaged@2x.webp": {
+  "whole": true,
+  "frames": [],
+  "strips": []
+ },
+ "assets/buildings/goofactory.v2/top.3d10@2x.webp": {
+  "whole": true,
+  "frames": [],
+  "strips": []
+ },
+ "assets/buildings/goofactory.v2/top.3d1@2x.webp": {
+  "whole": true,
+  "frames": [],
+  "strips": []
+ },
+ "assets/buildings/goofactory.v2/top.3d3.damaged@2x.webp": {
+  "whole": true,
+  "frames": [],
+  "strips": []
+ },
+ "assets/buildings/goofactory.v2/top.3d3.destroyed@2x.webp": {
+  "whole": true,
+  "frames": [],
+  "strips": []
+ },
+ "assets/buildings/goofactory.v2/top.3d3@2x.webp": {
+  "whole": true,
+  "frames": [],
+  "strips": []
+ },
+ "assets/buildings/goofactory.v2/top.3d6.damaged@2x.webp": {
+  "whole": true,
+  "frames": [],
+  "strips": []
+ },
+ "assets/buildings/goofactory.v2/top.3d6@2x.webp": {
+  "whole": true,
+  "frames": [],
+  "strips": []
+ },
+ "assets/buildings/hatchery/anim.3d1@2x.webp": {
+  "whole": false,
+  "frames": [],
+  "strips": [
+   {
+    "w": 93,
+    "h": 76,
+    "frames": 31,
+    "columns": 22
+   }
+  ]
+ },
+ "assets/buildings/hatchery/anim.3d2@2x.webp": {
+  "whole": false,
+  "frames": [],
+  "strips": [
+   {
+    "w": 75,
+    "h": 87,
+    "frames": 31,
+    "columns": 27
+   }
+  ]
+ },
+ "assets/buildings/hatchery/anim.3d3@2x.webp": {
+  "whole": false,
+  "frames": [],
+  "strips": [
+   {
+    "w": 82,
+    "h": 92,
+    "frames": 31,
+    "columns": 24
+   }
+  ]
+ },
+ "assets/buildings/hatchery/body.3d1@2x.webp": {
+  "whole": true,
+  "frames": [],
+  "strips": []
+ },
+ "assets/buildings/hatchery/body.3d2@2x.webp": {
+  "whole": true,
+  "frames": [],
+  "strips": []
+ },
+ "assets/buildings/hatchery/body.3d3@2x.webp": {
+  "whole": true,
+  "frames": [],
+  "strips": []
+ },
+ "assets/buildings/hatchery/top.3d1.damaged@2x.webp": {
+  "whole": true,
+  "frames": [],
+  "strips": []
+ },
+ "assets/buildings/hatchery/top.3d1@2x.webp": {
+  "whole": true,
+  "frames": [],
+  "strips": []
+ },
+ "assets/buildings/hatchery/top.3d2.damaged@2x.webp": {
+  "whole": true,
+  "frames": [],
+  "strips": []
+ },
+ "assets/buildings/hatchery/top.3d2.destroyed@2x.webp": {
+  "whole": true,
+  "frames": [],
+  "strips": []
+ },
+ "assets/buildings/hatchery/top.3d2@2x.webp": {
+  "whole": true,
+  "frames": [],
+  "strips": []
+ },
+ "assets/buildings/hatchery/top.3d3.damaged@2x.webp": {
+  "whole": true,
+  "frames": [],
+  "strips": []
+ },
+ "assets/buildings/hatchery/top.3d3@2x.webp": {
+  "whole": true,
+  "frames": [],
+  "strips": []
+ },
+ "assets/buildings/hatcherycontrolcenter/anim.i3d1@2x.webp": {
+  "whole": false,
+  "frames": [
+   {
+    "w": 133,
+    "h": 160
+   }
+  ],
+  "strips": [
+   {
+    "w": 133,
+    "h": 160,
+    "frames": 96,
+    "columns": 15
+   }
+  ]
+ },
+ "assets/buildings/hatcherycontrolcenter/top.3d1.damaged@2x.webp": {
+  "whole": true,
+  "frames": [],
+  "strips": []
+ },
+ "assets/buildings/hatcherycontrolcenter/top.3d1.destroyed@2x.webp": {
+  "whole": true,
+  "frames": [],
+  "strips": []
+ },
+ "assets/buildings/hatcherycontrolcenter/top.3d1@2x.webp": {
+  "whole": true,
+  "frames": [],
+  "strips": []
+ },
+ "assets/buildings/hatcherycontrolcenter/top.3d2.damaged@2x.webp": {
+  "whole": true,
+  "frames": [],
+  "strips": []
+ },
+ "assets/buildings/hatcherycontrolcenter/top.3d2.destroyed@2x.webp": {
+  "whole": true,
+  "frames": [],
+  "strips": []
+ },
+ "assets/buildings/hatcherycontrolcenter/top.3d2@2x.webp": {
+  "whole": true,
+  "frames": [],
+  "strips": []
+ },
+ "assets/buildings/hatcherycontrolcenter/top.3d3.damaged@2x.webp": {
+  "whole": true,
+  "frames": [],
+  "strips": []
+ },
+ "assets/buildings/hatcherycontrolcenter/top.3d3.destroyed@2x.webp": {
+  "whole": true,
+  "frames": [],
+  "strips": []
+ },
+ "assets/buildings/hatcherycontrolcenter/top.3d3@2x.webp": {
+  "whole": true,
+  "frames": [],
+  "strips": []
+ },
+ "assets/buildings/hatcherycontrolcenter/top.i3d1@2x.webp": {
+  "whole": true,
+  "frames": [],
+  "strips": []
+ },
+ "assets/buildings/heavytrap/top.3d1.destroyed@2x.webp": {
+  "whole": true,
+  "frames": [],
+  "strips": []
+ },
+ "assets/buildings/heavytrap/top.3d1@2x.webp": {
+  "whole": true,
+  "frames": [],
+  "strips": []
+ },
+ "assets/buildings/iacademy/anim.3d1@2x.webp": {
+  "whole": false,
+  "frames": [],
+  "strips": [
+   {
+    "w": 64,
+    "h": 68,
+    "frames": 44,
+    "columns": 32
+   }
+  ]
+ },
+ "assets/buildings/iacademy/anim.3d2@2x.webp": {
+  "whole": false,
+  "frames": [],
+  "strips": [
+   {
+    "w": 86,
+    "h": 85,
+    "frames": 47,
+    "columns": 23
+   }
+  ]
+ },
+ "assets/buildings/iacademy/body.3d1@2x.webp": {
+  "whole": true,
+  "frames": [],
+  "strips": []
+ },
+ "assets/buildings/iacademy/body.3d2@2x.webp": {
+  "whole": true,
+  "frames": [],
+  "strips": []
+ },
+ "assets/buildings/iacademy/top.3d1.damaged@2x.webp": {
+  "whole": true,
+  "frames": [],
+  "strips": []
+ },
+ "assets/buildings/iacademy/top.3d1@2x.webp": {
+  "whole": true,
+  "frames": [],
+  "strips": []
+ },
+ "assets/buildings/iacademy/top.3d2.damaged@2x.webp": {
+  "whole": true,
+  "frames": [],
+  "strips": []
+ },
+ "assets/buildings/iacademy/top.3d2@2x.webp": {
+  "whole": true,
+  "frames": [],
+  "strips": []
+ },
+ "assets/buildings/iacademy/top.c1.destroyed@2x.webp": {
+  "whole": true,
+  "frames": [],
+  "strips": []
+ },
+ "assets/buildings/iacademy/top.c2.destroyed@2x.webp": {
+  "whole": true,
+  "frames": [],
+  "strips": []
+ },
+ "assets/buildings/iboneharvester/anim.3d1@2x.webp": {
+  "whole": false,
+  "frames": [],
+  "strips": [
+   {
+    "w": 67,
+    "h": 67,
+    "frames": 36,
+    "columns": 30
+   }
+  ]
+ },
+ "assets/buildings/iboneharvester/anim.3d3@2x.webp": {
+  "whole": false,
+  "frames": [],
+  "strips": [
+   {
+    "w": 62,
+    "h": 85,
+    "frames": 36,
+    "columns": 33
+   }
+  ]
+ },
+ "assets/buildings/iboneharvester/anim.3d7@2x.webp": {
+  "whole": false,
+  "frames": [],
+  "strips": [
+   {
+    "w": 80,
+    "h": 85,
+    "frames": 36,
+    "columns": 25
+   }
+  ]
+ },
+ "assets/buildings/iboneharvester/body.3d1@2x.webp": {
+  "whole": true,
+  "frames": [],
+  "strips": []
+ },
+ "assets/buildings/iboneharvester/body.3d3@2x.webp": {
+  "whole": true,
+  "frames": [],
+  "strips": []
+ },
+ "assets/buildings/iboneharvester/body.3d7@2x.webp": {
+  "whole": true,
+  "frames": [],
+  "strips": []
+ },
+ "assets/buildings/iboneharvester/top.3d1@2x.webp": {
+  "whole": true,
+  "frames": [],
+  "strips": []
+ },
+ "assets/buildings/iboneharvester/top.3d3@2x.webp": {
+  "whole": true,
+  "frames": [],
+  "strips": []
+ },
+ "assets/buildings/iboneharvester/top.3d7@2x.webp": {
+  "whole": true,
+  "frames": [],
+  "strips": []
+ },
+ "assets/buildings/icannontower/body.t1@2x.webp": {
+  "whole": true,
+  "frames": [],
+  "strips": []
+ },
+ "assets/buildings/icannontower/body.t2@2x.webp": {
+  "whole": true,
+  "frames": [],
+  "strips": []
+ },
+ "assets/buildings/icannontower/body.t3@2x.webp": {
+  "whole": true,
+  "frames": [],
+  "strips": []
+ },
+ "assets/buildings/icannontower/top.t1@2x.webp": {
+  "whole": true,
+  "frames": [],
+  "strips": []
+ },
+ "assets/buildings/icannontower/top.t2@2x.webp": {
+  "whole": true,
+  "frames": [],
+  "strips": []
+ },
+ "assets/buildings/icannontower/top.t3@2x.webp": {
+  "whole": true,
+  "frames": [],
+  "strips": []
+ },
+ "assets/buildings/icannontower/turret.t1.g8@2x.webp": {
+  "whole": false,
+  "frames": [],
+  "strips": [
+   {
+    "w": 66,
+    "h": 46,
+    "frames": 32,
+    "columns": 8
+   }
+  ]
+ },
+ "assets/buildings/icannontower/turret.t2.g8@2x.webp": {
+  "whole": false,
+  "frames": [],
+  "strips": [
+   {
+    "w": 66,
+    "h": 46,
+    "frames": 32,
+    "columns": 8
+   }
+  ]
+ },
+ "assets/buildings/icannontower/turret.t3.g8@2x.webp": {
+  "whole": false,
+  "frames": [],
+  "strips": [
+   {
+    "w": 66,
+    "h": 46,
+    "frames": 32,
+    "columns": 8
+   }
+  ]
+ },
+ "assets/buildings/icoalproducer/anim.3d1@2x.webp": {
+  "whole": false,
+  "frames": [],
+  "strips": [
+   {
+    "w": 62,
+    "h": 94,
+    "frames": 47,
+    "columns": 33
+   }
+  ]
+ },
+ "assets/buildings/icoalproducer/anim.3d3@2x.webp": {
+  "whole": false,
+  "frames": [],
+  "strips": [
+   {
+    "w": 68,
+    "h": 101,
+    "frames": 45,
+    "columns": 30
+   }
+  ]
+ },
+ "assets/buildings/icoalproducer/anim.3d7@2x.webp": {
+  "whole": false,
+  "frames": [],
+  "strips": [
+   {
+    "w": 69,
+    "h": 102,
+    "frames": 45,
+    "columns": 29
+   }
+  ]
+ },
+ "assets/buildings/icoalproducer/body.3d1@2x.webp": {
+  "whole": true,
+  "frames": [],
+  "strips": []
+ },
+ "assets/buildings/icoalproducer/body.3d3@2x.webp": {
+  "whole": true,
+  "frames": [],
+  "strips": []
+ },
+ "assets/buildings/icoalproducer/body.3d7@2x.webp": {
+  "whole": true,
+  "frames": [],
+  "strips": []
+ },
+ "assets/buildings/icoalproducer/top.3d1.damaged@2x.webp": {
+  "whole": true,
+  "frames": [],
+  "strips": []
+ },
+ "assets/buildings/icoalproducer/top.3d1@2x.webp": {
+  "whole": true,
+  "frames": [],
+  "strips": []
+ },
+ "assets/buildings/icoalproducer/top.3d3.damaged@2x.webp": {
+  "whole": true,
+  "frames": [],
+  "strips": []
+ },
+ "assets/buildings/icoalproducer/top.3d3@2x.webp": {
+  "whole": true,
+  "frames": [],
+  "strips": []
+ },
+ "assets/buildings/icoalproducer/top.3d7.damaged@2x.webp": {
+  "whole": true,
+  "frames": [],
+  "strips": []
+ },
+ "assets/buildings/icoalproducer/top.3d7@2x.webp": {
+  "whole": true,
+  "frames": [],
+  "strips": []
+ },
+ "assets/buildings/ihatchery/anim.3d1@2x.webp": {
+  "whole": false,
+  "frames": [],
+  "strips": [
+   {
+    "w": 84,
+    "h": 87,
+    "frames": 50,
+    "columns": 24
+   }
+  ]
+ },
+ "assets/buildings/ihatchery/body.3d1@2x.webp": {
+  "whole": true,
+  "frames": [],
+  "strips": []
+ },
+ "assets/buildings/ihatchery/top.3d1.damaged@2x.webp": {
+  "whole": true,
+  "frames": [],
+  "strips": []
+ },
+ "assets/buildings/ihatchery/top.3d1@2x.webp": {
+  "whole": true,
+  "frames": [],
+  "strips": []
+ },
+ "assets/buildings/imagmaproducer/anim.3d1@2x.webp": {
+  "whole": false,
+  "frames": [],
+  "strips": [
+   {
+    "w": 61,
+    "h": 110,
+    "frames": 49,
+    "columns": 33
+   }
+  ]
+ },
+ "assets/buildings/imagmaproducer/anim.3d3@2x.webp": {
+  "whole": false,
+  "frames": [],
+  "strips": [
+   {
+    "w": 64,
+    "h": 109,
+    "frames": 49,
+    "columns": 32
+   }
+  ]
+ },
+ "assets/buildings/imagmaproducer/anim.3d7@2x.webp": {
+  "whole": false,
+  "frames": [],
+  "strips": [
+   {
+    "w": 68,
+    "h": 121,
+    "frames": 49,
+    "columns": 30
+   }
+  ]
+ },
+ "assets/buildings/imagmaproducer/body.3d1@2x.webp": {
+  "whole": true,
+  "frames": [],
+  "strips": []
+ },
+ "assets/buildings/imagmaproducer/body.3d3@2x.webp": {
+  "whole": true,
+  "frames": [],
+  "strips": []
+ },
+ "assets/buildings/imagmaproducer/body.3d7@2x.webp": {
+  "whole": true,
+  "frames": [],
+  "strips": []
+ },
+ "assets/buildings/imagmaproducer/top.3d1.damaged@2x.webp": {
+  "whole": true,
+  "frames": [],
+  "strips": []
+ },
+ "assets/buildings/imagmaproducer/top.3d1@2x.webp": {
+  "whole": true,
+  "frames": [],
+  "strips": []
+ },
+ "assets/buildings/imagmaproducer/top.3d3.damaged@2x.webp": {
+  "whole": true,
+  "frames": [],
+  "strips": []
+ },
+ "assets/buildings/imagmaproducer/top.3d3@2x.webp": {
+  "whole": true,
+  "frames": [],
+  "strips": []
+ },
+ "assets/buildings/imagmaproducer/top.3d7.damaged@2x.webp": {
+  "whole": true,
+  "frames": [],
+  "strips": []
+ },
+ "assets/buildings/imagmaproducer/top.3d7@2x.webp": {
+  "whole": true,
+  "frames": [],
+  "strips": []
+ },
+ "assets/buildings/imagmatower/body.t1@2x.webp": {
+  "whole": true,
+  "frames": [],
+  "strips": []
+ },
+ "assets/buildings/imagmatower/body.t2@2x.webp": {
+  "whole": true,
+  "frames": [],
+  "strips": []
+ },
+ "assets/buildings/imagmatower/body.t3@2x.webp": {
+  "whole": true,
+  "frames": [],
+  "strips": []
+ },
+ "assets/buildings/imagmatower/top.t1@2x.webp": {
+  "whole": true,
+  "frames": [],
+  "strips": []
+ },
+ "assets/buildings/imagmatower/top.t2@2x.webp": {
+  "whole": true,
+  "frames": [],
+  "strips": []
+ },
+ "assets/buildings/imagmatower/top.t3@2x.webp": {
+  "whole": true,
+  "frames": [],
+  "strips": []
+ },
+ "assets/buildings/imagmatower/turret.t1.g8@2x.webp": {
+  "whole": false,
+  "frames": [],
+  "strips": [
+   {
+    "w": 66,
+    "h": 45,
+    "frames": 32,
+    "columns": 8
+   }
+  ]
+ },
+ "assets/buildings/imagmatower/turret.t2.g8@2x.webp": {
+  "whole": false,
+  "frames": [],
+  "strips": [
+   {
+    "w": 66,
+    "h": 45,
+    "frames": 32,
+    "columns": 8
+   }
+  ]
+ },
+ "assets/buildings/imagmatower/turret.t3.g8@2x.webp": {
+  "whole": false,
+  "frames": [],
+  "strips": [
+   {
+    "w": 66,
+    "h": 45,
+    "frames": 32,
+    "columns": 8
+   }
+  ]
+ },
+ "assets/buildings/imonsterlab/anim.3d1@2x.webp": {
+  "whole": false,
+  "frames": [
+   {
+    "w": 115,
+    "h": 127
+   }
+  ],
+  "strips": [
+   {
+    "w": 115,
+    "h": 127,
+    "frames": 30,
+    "columns": 17
+   }
+  ]
+ },
+ "assets/buildings/imonsterlab/top.3d1@2x.webp": {
+  "whole": true,
+  "frames": [],
+  "strips": []
+ },
+ "assets/buildings/iportal/top.c1@2x.webp": {
+  "whole": true,
+  "frames": [],
+  "strips": []
+ },
+ "assets/buildings/iportal/top.c2@2x.webp": {
+  "whole": true,
+  "frames": [],
+  "strips": []
+ },
+ "assets/buildings/iportal/top.c3@2x.webp": {
+  "whole": true,
+  "frames": [],
+  "strips": []
+ },
+ "assets/buildings/iportal/top.c4@2x.webp": {
+  "whole": true,
+  "frames": [],
+  "strips": []
+ },
+ "assets/buildings/iportal/top.c5@2x.webp": {
+  "whole": true,
+  "frames": [],
+  "strips": []
+ },
+ "assets/buildings/iquaketower/anim.t1@2x.webp": {
+  "whole": false,
+  "frames": [
+   {
+    "w": 80,
+    "h": 129
+   }
+  ],
+  "strips": [
+   {
+    "w": 80,
+    "h": 129,
+    "frames": 33,
+    "columns": 25
+   }
+  ]
+ },
+ "assets/buildings/iquaketower/top.t1.damaged@2x.webp": {
+  "whole": true,
+  "frames": [],
+  "strips": []
+ },
+ "assets/buildings/iquaketower/top.t1.destroyed@2x.webp": {
+  "whole": true,
+  "frames": [],
+  "strips": []
+ },
+ "assets/buildings/iquaketower/top.t1@2x.webp": {
+  "whole": true,
+  "frames": [],
+  "strips": []
+ },
+ "assets/buildings/isnipertower/body.t1@2x.webp": {
+  "whole": true,
+  "frames": [],
+  "strips": []
+ },
+ "assets/buildings/isnipertower/body.t2@2x.webp": {
+  "whole": true,
+  "frames": [],
+  "strips": []
+ },
+ "assets/buildings/isnipertower/body.t3@2x.webp": {
+  "whole": true,
+  "frames": [],
+  "strips": []
+ },
+ "assets/buildings/isnipertower/top.t1@2x.webp": {
+  "whole": true,
+  "frames": [],
+  "strips": []
+ },
+ "assets/buildings/isnipertower/top.t2@2x.webp": {
+  "whole": true,
+  "frames": [],
+  "strips": []
+ },
+ "assets/buildings/isnipertower/top.t3@2x.webp": {
+  "whole": true,
+  "frames": [],
+  "strips": []
+ },
+ "assets/buildings/isnipertower/turret.t1.g8@2x.webp": {
+  "whole": false,
+  "frames": [],
+  "strips": [
+   {
+    "w": 68,
+    "h": 45,
+    "frames": 32,
+    "columns": 8
+   }
+  ]
+ },
+ "assets/buildings/isnipertower/turret.t2.g8@2x.webp": {
+  "whole": false,
+  "frames": [],
+  "strips": [
+   {
+    "w": 68,
+    "h": 45,
+    "frames": 32,
+    "columns": 8
+   }
+  ]
+ },
+ "assets/buildings/isnipertower/turret.t3.g8@2x.webp": {
+  "whole": false,
+  "frames": [],
+  "strips": [
+   {
+    "w": 68,
+    "h": 45,
+    "frames": 32,
+    "columns": 8
+   }
+  ]
+ },
+ "assets/buildings/istoragesilo/top.c1.damaged@2x.webp": {
+  "whole": true,
+  "frames": [],
+  "strips": []
+ },
+ "assets/buildings/istoragesilo/top.c1.destroyed@2x.webp": {
+  "whole": true,
+  "frames": [],
+  "strips": []
+ },
+ "assets/buildings/istoragesilo/top.c1@2x.webp": {
+  "whole": true,
+  "frames": [],
+  "strips": []
+ },
+ "assets/buildings/isulpherproducer/anim.3d1@2x.webp": {
+  "whole": false,
+  "frames": [],
+  "strips": [
+   {
+    "w": 52,
+    "h": 92,
+    "frames": 51,
+    "columns": 39
+   }
+  ]
+ },
+ "assets/buildings/isulpherproducer/anim.3d3@2x.webp": {
+  "whole": false,
+  "frames": [],
+  "strips": [
+   {
+    "w": 50,
+    "h": 119,
+    "frames": 45,
+    "columns": 40
+   }
+  ]
+ },
+ "assets/buildings/isulpherproducer/anim.3d7@2x.webp": {
+  "whole": false,
+  "frames": [],
+  "strips": [
+   {
+    "w": 50,
+    "h": 119,
+    "frames": 45,
+    "columns": 40
+   }
+  ]
+ },
+ "assets/buildings/isulpherproducer/body.3d1@2x.webp": {
+  "whole": true,
+  "frames": [],
+  "strips": []
+ },
+ "assets/buildings/isulpherproducer/body.3d3@2x.webp": {
+  "whole": true,
+  "frames": [],
+  "strips": []
+ },
+ "assets/buildings/isulpherproducer/body.3d7@2x.webp": {
+  "whole": true,
+  "frames": [],
+  "strips": []
+ },
+ "assets/buildings/isulpherproducer/top.3d1.damaged@2x.webp": {
+  "whole": true,
+  "frames": [],
+  "strips": []
+ },
+ "assets/buildings/isulpherproducer/top.3d1@2x.webp": {
+  "whole": true,
+  "frames": [],
+  "strips": []
+ },
+ "assets/buildings/isulpherproducer/top.3d3.damaged@2x.webp": {
+  "whole": true,
+  "frames": [],
+  "strips": []
+ },
+ "assets/buildings/isulpherproducer/top.3d3@2x.webp": {
+  "whole": true,
+  "frames": [],
+  "strips": []
+ },
+ "assets/buildings/isulpherproducer/top.3d7.damaged@2x.webp": {
+  "whole": true,
+  "frames": [],
+  "strips": []
+ },
+ "assets/buildings/isulpherproducer/top.3d7@2x.webp": {
+  "whole": true,
+  "frames": [],
+  "strips": []
+ },
+ "assets/buildings/itownhall/anim.c4@2x.webp": {
+  "whole": false,
+  "frames": [],
+  "strips": [
+   {
+    "w": 78,
+    "h": 193,
+    "frames": 48,
+    "columns": 8
+   }
+  ]
+ },
+ "assets/buildings/itownhall/anim.c5@2x.webp": {
+  "whole": false,
+  "frames": [],
+  "strips": [
+   {
+    "w": 78,
+    "h": 218,
+    "frames": 48,
+    "columns": 8
+   }
+  ]
+ },
+ "assets/buildings/itownhall/anim.c6@2x.webp": {
+  "whole": false,
+  "frames": [],
+  "strips": [
+   {
+    "w": 78,
+    "h": 235,
+    "frames": 48,
+    "columns": 8
+   }
+  ]
+ },
+ "assets/buildings/itownhall/body.c4@2x.webp": {
+  "whole": true,
+  "frames": [],
+  "strips": []
+ },
+ "assets/buildings/itownhall/body.c5@2x.webp": {
+  "whole": true,
+  "frames": [],
+  "strips": []
+ },
+ "assets/buildings/itownhall/body.c6@2x.webp": {
+  "whole": true,
+  "frames": [],
+  "strips": []
+ },
+ "assets/buildings/itownhall/top.c1.damaged@2x.webp": {
+  "whole": true,
+  "frames": [],
+  "strips": []
+ },
+ "assets/buildings/itownhall/top.c1.destroyed@2x.webp": {
+  "whole": true,
+  "frames": [],
+  "strips": []
+ },
+ "assets/buildings/itownhall/top.c1@2x.webp": {
+  "whole": true,
+  "frames": [],
+  "strips": []
+ },
+ "assets/buildings/itownhall/top.c2.damaged@2x.webp": {
+  "whole": true,
+  "frames": [],
+  "strips": []
+ },
+ "assets/buildings/itownhall/top.c2.destroyed@2x.webp": {
+  "whole": true,
+  "frames": [],
+  "strips": []
+ },
+ "assets/buildings/itownhall/top.c2@2x.webp": {
+  "whole": true,
+  "frames": [],
+  "strips": []
+ },
+ "assets/buildings/itownhall/top.c3.damaged@2x.webp": {
+  "whole": true,
+  "frames": [],
+  "strips": []
+ },
+ "assets/buildings/itownhall/top.c3.destroyed@2x.webp": {
+  "whole": true,
+  "frames": [],
+  "strips": []
+ },
+ "assets/buildings/itownhall/top.c3@2x.webp": {
+  "whole": true,
+  "frames": [],
+  "strips": []
+ },
+ "assets/buildings/itownhall/top.c4.damaged@2x.webp": {
+  "whole": true,
+  "frames": [],
+  "strips": []
+ },
+ "assets/buildings/itownhall/top.c4.destroyed@2x.webp": {
+  "whole": true,
+  "frames": [],
+  "strips": []
+ },
+ "assets/buildings/itownhall/top.c4@2x.webp": {
+  "whole": true,
+  "frames": [],
+  "strips": []
+ },
+ "assets/buildings/itownhall/top.c5.damaged@2x.webp": {
+  "whole": true,
+  "frames": [],
+  "strips": []
+ },
+ "assets/buildings/itownhall/top.c5.destroyed@2x.webp": {
+  "whole": true,
+  "frames": [],
+  "strips": []
+ },
+ "assets/buildings/itownhall/top.c5@2x.webp": {
+  "whole": true,
+  "frames": [],
+  "strips": []
+ },
+ "assets/buildings/itownhall/top.c6.damaged@2x.webp": {
+  "whole": true,
+  "frames": [],
+  "strips": []
+ },
+ "assets/buildings/itownhall/top.c6.destroyed@2x.webp": {
+  "whole": true,
+  "frames": [],
+  "strips": []
+ },
+ "assets/buildings/itownhall/top.c6@2x.webp": {
+  "whole": true,
+  "frames": [],
+  "strips": []
+ },
+ "assets/buildings/iwalls/top.3d1.damaged@2x.webp": {
+  "whole": true,
+  "frames": [],
+  "strips": []
+ },
+ "assets/buildings/iwalls/top.3d1.destroyed@2x.webp": {
+  "whole": true,
+  "frames": [],
+  "strips": []
+ },
+ "assets/buildings/iwalls/top.3d1@2x.webp": {
+  "whole": true,
+  "frames": [],
+  "strips": []
+ },
+ "assets/buildings/iwalls/top.3d2.damaged@2x.webp": {
+  "whole": true,
+  "frames": [],
+  "strips": []
+ },
+ "assets/buildings/iwalls/top.3d2.destroyed@2x.webp": {
+  "whole": true,
+  "frames": [],
+  "strips": []
+ },
+ "assets/buildings/iwalls/top.3d2@2x.webp": {
+  "whole": true,
+  "frames": [],
+  "strips": []
+ },
+ "assets/buildings/iwalls/top.3d3.damaged@2x.webp": {
+  "whole": true,
+  "frames": [],
+  "strips": []
+ },
+ "assets/buildings/iwalls/top.3d3.destroyed@2x.webp": {
+  "whole": true,
+  "frames": [],
+  "strips": []
+ },
+ "assets/buildings/iwalls/top.3d3@2x.webp": {
+  "whole": true,
+  "frames": [],
+  "strips": []
+ },
+ "assets/buildings/lasertower/body.t1@2x.webp": {
+  "whole": true,
+  "frames": [],
+  "strips": []
+ },
+ "assets/buildings/lasertower/body.t2@2x.webp": {
+  "whole": true,
+  "frames": [],
+  "strips": []
+ },
+ "assets/buildings/lasertower/body.t3@2x.webp": {
+  "whole": true,
+  "frames": [],
+  "strips": []
+ },
+ "assets/buildings/lasertower/top.t1@2x.webp": {
+  "whole": true,
+  "frames": [],
+  "strips": []
+ },
+ "assets/buildings/lasertower/top.t2@2x.webp": {
+  "whole": true,
+  "frames": [],
+  "strips": []
+ },
+ "assets/buildings/lasertower/top.t3@2x.webp": {
+  "whole": true,
+  "frames": [],
+  "strips": []
+ },
+ "assets/buildings/lasertower/turret.t1@2x.webp": {
+  "whole": false,
+  "frames": [],
+  "strips": [
+   {
+    "w": 34,
+    "h": 35,
+    "frames": 160,
+    "columns": 32
+   }
+  ]
+ },
+ "assets/buildings/lasertower/turret.t2@2x.webp": {
+  "whole": false,
+  "frames": [],
+  "strips": [
+   {
+    "w": 34,
+    "h": 34,
+    "frames": 160,
+    "columns": 32
+   }
+  ]
+ },
+ "assets/buildings/lasertower/turret.t3@2x.webp": {
+  "whole": false,
+  "frames": [],
+  "strips": [
+   {
+    "w": 34,
+    "h": 34,
+    "frames": 160,
+    "columns": 32
+   }
+  ]
+ },
+ "assets/buildings/lightningtower/anim.t1@2x.webp": {
+  "whole": false,
+  "frames": [],
+  "strips": [
+   {
+    "w": 13,
+    "h": 52,
+    "frames": 55,
+    "columns": null
+   }
+  ]
+ },
+ "assets/buildings/lightningtower/anim.t2@2x.webp": {
+  "whole": false,
+  "frames": [],
+  "strips": [
+   {
+    "w": 13,
+    "h": 73,
+    "frames": 55,
+    "columns": null
+   }
+  ]
+ },
+ "assets/buildings/lightningtower/anim.t3@2x.webp": {
+  "whole": false,
+  "frames": [],
+  "strips": [
+   {
+    "w": 13,
+    "h": 93,
+    "frames": 55,
+    "columns": null
+   }
+  ]
+ },
+ "assets/buildings/lightningtower/top.t1@2x.webp": {
+  "whole": true,
+  "frames": [],
+  "strips": []
+ },
+ "assets/buildings/lightningtower/top.t2@2x.webp": {
+  "whole": true,
+  "frames": [],
+  "strips": []
+ },
+ "assets/buildings/lightningtower/top.t3@2x.webp": {
+  "whole": true,
+  "frames": [],
+  "strips": []
+ },
+ "assets/buildings/maproom/top.3d1.damaged@2x.webp": {
+  "whole": true,
+  "frames": [],
+  "strips": []
+ },
+ "assets/buildings/maproom/top.3d1.destroyed@2x.webp": {
+  "whole": true,
+  "frames": [],
+  "strips": []
+ },
+ "assets/buildings/maproom/top.3d1@2x.webp": {
+  "whole": true,
+  "frames": [],
+  "strips": []
+ },
+ "assets/buildings/monsterbaiter/anim.3d1@2x.webp": {
+  "whole": false,
+  "frames": [],
+  "strips": [
+   {
+    "w": 66,
+    "h": 72,
+    "frames": 41,
+    "columns": 31
+   }
+  ]
+ },
+ "assets/buildings/monsterbaiter/body.3d1@2x.webp": {
+  "whole": true,
+  "frames": [],
+  "strips": []
+ },
+ "assets/buildings/monsterbaiter/top.3d1.damaged@2x.webp": {
+  "whole": true,
+  "frames": [],
+  "strips": []
+ },
+ "assets/buildings/monsterbaiter/top.3d1.destroyed@2x.webp": {
+  "whole": true,
+  "frames": [],
+  "strips": []
+ },
+ "assets/buildings/monsterbaiter/top.3d1@2x.webp": {
+  "whole": true,
+  "frames": [],
+  "strips": []
+ },
+ "assets/buildings/monstercage/top.3d1.damaged@2x.webp": {
+  "whole": true,
+  "frames": [],
+  "strips": []
+ },
+ "assets/buildings/monstercage/top.3d1.destroyed@2x.webp": {
+  "whole": true,
+  "frames": [],
+  "strips": []
+ },
+ "assets/buildings/monstercage/top.3d1@2x.webp": {
+  "whole": true,
+  "frames": [],
+  "strips": []
+ },
+ "assets/buildings/monsterhousing/top.3d1.damaged@2x.webp": {
+  "whole": true,
+  "frames": [],
+  "strips": []
+ },
+ "assets/buildings/monsterhousing/top.3d1.destroyed@2x.webp": {
+  "whole": true,
+  "frames": [],
+  "strips": []
+ },
+ "assets/buildings/monsterhousing/top.3d1@2x.webp": {
+  "whole": true,
+  "frames": [],
+  "strips": []
+ },
+ "assets/buildings/monsterjuiceloosener/anim.3d1@2x.webp": {
+  "whole": false,
+  "frames": [],
+  "strips": [
+   {
+    "w": 84,
+    "h": 68,
+    "frames": 51,
+    "columns": 24
+   }
+  ]
+ },
+ "assets/buildings/monsterjuiceloosener/body.3d1@2x.webp": {
+  "whole": true,
+  "frames": [],
+  "strips": []
+ },
+ "assets/buildings/monsterjuiceloosener/top.3d1.damaged@2x.webp": {
+  "whole": true,
+  "frames": [],
+  "strips": []
+ },
+ "assets/buildings/monsterjuiceloosener/top.3d1.destroyed@2x.webp": {
+  "whole": true,
+  "frames": [],
+  "strips": []
+ },
+ "assets/buildings/monsterjuiceloosener/top.3d1@2x.webp": {
+  "whole": true,
+  "frames": [],
+  "strips": []
+ },
+ "assets/buildings/monsterlab/anim.3d1.dome@2x.webp": {
+  "whole": false,
+  "frames": [],
+  "strips": [
+   {
+    "w": 48,
+    "h": 40,
+    "frames": 32,
+    "columns": null
+   }
+  ]
+ },
+ "assets/buildings/monsterlab/anim.3d1.doorL@2x.webp": {
+  "whole": false,
+  "frames": [],
+  "strips": [
+   {
+    "w": 34,
+    "h": 35,
+    "frames": 5,
+    "columns": null
+   }
+  ]
+ },
+ "assets/buildings/monsterlab/anim.3d1.doorR@2x.webp": {
+  "whole": false,
+  "frames": [],
+  "strips": [
+   {
+    "w": 27,
+    "h": 33,
+    "frames": 5,
+    "columns": null
+   }
+  ]
+ },
+ "assets/buildings/monsterlab/anim.i3d1@2x.webp": {
+  "whole": false,
+  "frames": [],
+  "strips": [
+   {
+    "w": 130,
+    "h": 76,
+    "frames": 24,
+    "columns": 15
+   }
+  ]
+ },
+ "assets/buildings/monsterlab/anim.i3d2@2x.webp": {
+  "whole": false,
+  "frames": [],
+  "strips": [
+   {
+    "w": 130,
+    "h": 76,
+    "frames": 24,
+    "columns": 15
+   }
+  ]
+ },
+ "assets/buildings/monsterlab/anim.i3d3@2x.webp": {
+  "whole": false,
+  "frames": [],
+  "strips": [
+   {
+    "w": 130,
+    "h": 180,
+    "frames": 24,
+    "columns": 15
+   }
+  ]
+ },
+ "assets/buildings/monsterlab/body.3d1@2x.webp": {
+  "whole": true,
+  "frames": [],
+  "strips": []
+ },
+ "assets/buildings/monsterlab/body.i3d1@2x.webp": {
+  "whole": true,
+  "frames": [],
+  "strips": []
+ },
+ "assets/buildings/monsterlab/body.i3d2@2x.webp": {
+  "whole": true,
+  "frames": [],
+  "strips": []
+ },
+ "assets/buildings/monsterlab/body.i3d3@2x.webp": {
+  "whole": true,
+  "frames": [],
+  "strips": []
+ },
+ "assets/buildings/monsterlab/top.3d1.damaged@2x.webp": {
+  "whole": true,
+  "frames": [],
+  "strips": []
+ },
+ "assets/buildings/monsterlab/top.3d1.destroyed@2x.webp": {
+  "whole": true,
+  "frames": [],
+  "strips": []
+ },
+ "assets/buildings/monsterlab/top.3d1@2x.webp": {
+  "whole": true,
+  "frames": [],
+  "strips": []
+ },
+ "assets/buildings/monsterlab/top.i3d1.damaged@2x.webp": {
+  "whole": true,
+  "frames": [],
+  "strips": []
+ },
+ "assets/buildings/monsterlab/top.i3d1.destroyed@2x.webp": {
+  "whole": true,
+  "frames": [],
+  "strips": []
+ },
+ "assets/buildings/monsterlab/top.i3d1@2x.webp": {
+  "whole": true,
+  "frames": [],
+  "strips": []
+ },
+ "assets/buildings/monsterlab/top.i3d2.damaged@2x.webp": {
+  "whole": true,
+  "frames": [],
+  "strips": []
+ },
+ "assets/buildings/monsterlab/top.i3d2@2x.webp": {
+  "whole": true,
+  "frames": [],
+  "strips": []
+ },
+ "assets/buildings/monsterlab/top.i3d3.damaged@2x.webp": {
+  "whole": true,
+  "frames": [],
+  "strips": []
+ },
+ "assets/buildings/monsterlab/top.i3d3@2x.webp": {
+  "whole": true,
+  "frames": [],
+  "strips": []
+ },
+ "assets/buildings/monsterlocker/anim.3d1@2x.webp": {
+  "whole": false,
+  "frames": [],
+  "strips": [
+   {
+    "w": 20,
+    "h": 20,
+    "frames": 21,
+    "columns": null
+   }
+  ]
+ },
+ "assets/buildings/monsterlocker/anim.3d2@2x.webp": {
+  "whole": false,
+  "frames": [],
+  "strips": [
+   {
+    "w": 61,
+    "h": 67,
+    "frames": 20,
+    "columns": null
+   }
+  ]
+ },
+ "assets/buildings/monsterlocker/anim.3d3@2x.webp": {
+  "whole": false,
+  "frames": [],
+  "strips": [
+   {
+    "w": 90,
+    "h": 80,
+    "frames": 20,
+    "columns": null
+   }
+  ]
+ },
+ "assets/buildings/monsterlocker/anim.3d4@2x.webp": {
+  "whole": false,
+  "frames": [],
+  "strips": [
+   {
+    "w": 95,
+    "h": 96,
+    "frames": 21,
+    "columns": null
+   }
+  ]
+ },
+ "assets/buildings/monsterlocker/body.3d1@2x.webp": {
+  "whole": true,
+  "frames": [],
+  "strips": []
+ },
+ "assets/buildings/monsterlocker/body.3d2@2x.webp": {
+  "whole": true,
+  "frames": [],
+  "strips": []
+ },
+ "assets/buildings/monsterlocker/body.3d3@2x.webp": {
+  "whole": true,
+  "frames": [],
+  "strips": []
+ },
+ "assets/buildings/monsterlocker/body.3d4@2x.webp": {
+  "whole": true,
+  "frames": [],
+  "strips": []
+ },
+ "assets/buildings/monsterlocker/top.3d1.damaged@2x.webp": {
+  "whole": true,
+  "frames": [],
+  "strips": []
+ },
+ "assets/buildings/monsterlocker/top.3d1@2x.webp": {
+  "whole": true,
+  "frames": [],
+  "strips": []
+ },
+ "assets/buildings/monsterlocker/top.3d2.damaged@2x.webp": {
+  "whole": true,
+  "frames": [],
+  "strips": []
+ },
+ "assets/buildings/monsterlocker/top.3d2.destroyed@2x.webp": {
+  "whole": true,
+  "frames": [],
+  "strips": []
+ },
+ "assets/buildings/monsterlocker/top.3d2@2x.webp": {
+  "whole": true,
+  "frames": [],
+  "strips": []
+ },
+ "assets/buildings/monsterlocker/top.3d3.damaged@2x.webp": {
+  "whole": true,
+  "frames": [],
+  "strips": []
+ },
+ "assets/buildings/monsterlocker/top.3d3@2x.webp": {
+  "whole": true,
+  "frames": [],
+  "strips": []
+ },
+ "assets/buildings/monsterlocker/top.3d4.damaged@2x.webp": {
+  "whole": true,
+  "frames": [],
+  "strips": []
+ },
+ "assets/buildings/monsterlocker/top.3d4@2x.webp": {
+  "whole": true,
+  "frames": [],
+  "strips": []
+ },
+ "assets/buildings/observatory/anim.3d1@2x.webp": {
+  "whole": false,
+  "frames": [],
+  "strips": [
+   {
+    "w": 92,
+    "h": 117,
+    "frames": 48,
+    "columns": 22
+   }
+  ]
+ },
+ "assets/buildings/observatory/body.3d1@2x.webp": {
+  "whole": true,
+  "frames": [],
+  "strips": []
+ },
+ "assets/buildings/observatory/top.3d1.damaged@2x.webp": {
+  "whole": true,
+  "frames": [],
+  "strips": []
+ },
+ "assets/buildings/observatory/top.3d1.destroyed@2x.webp": {
+  "whole": true,
+  "frames": [],
+  "strips": []
+ },
+ "assets/buildings/observatory/top.3d1@2x.webp": {
+  "whole": true,
+  "frames": [],
+  "strips": []
+ },
+ "assets/buildings/observatory/top.c1.damaged@2x.webp": {
+  "whole": true,
+  "frames": [],
+  "strips": []
+ },
+ "assets/buildings/observatory/top.c1.destroyed@2x.webp": {
+  "whole": true,
+  "frames": [],
+  "strips": []
+ },
+ "assets/buildings/observatory/top.c1@2x.webp": {
+  "whole": true,
+  "frames": [],
+  "strips": []
+ },
+ "assets/buildings/pebbleshiner.v2/anim.3d10@2x.webp": {
+  "whole": false,
+  "frames": [],
+  "strips": [
+   {
+    "w": 63,
+    "h": 71,
+    "frames": 24,
+    "columns": null
+   }
+  ]
+ },
+ "assets/buildings/pebbleshiner.v2/anim.3d1@2x.webp": {
+  "whole": false,
+  "frames": [],
+  "strips": [
+   {
+    "w": 55,
+    "h": 27,
+    "frames": 26,
+    "columns": null
+   }
+  ]
+ },
+ "assets/buildings/pebbleshiner.v2/anim.3d3@2x.webp": {
+  "whole": false,
+  "frames": [],
+  "strips": [
+   {
+    "w": 57,
+    "h": 30,
+    "frames": 26,
+    "columns": null
+   }
+  ]
+ },
+ "assets/buildings/pebbleshiner.v2/anim.3d6@2x.webp": {
+  "whole": false,
+  "frames": [],
+  "strips": [
+   {
+    "w": 57,
+    "h": 38,
+    "frames": 26,
+    "columns": null
+   }
+  ]
+ },
+ "assets/buildings/pebbleshiner.v2/body.3d10@2x.webp": {
+  "whole": true,
+  "frames": [],
+  "strips": []
+ },
+ "assets/buildings/pebbleshiner.v2/body.3d1@2x.webp": {
+  "whole": true,
+  "frames": [],
+  "strips": []
+ },
+ "assets/buildings/pebbleshiner.v2/body.3d3@2x.webp": {
+  "whole": true,
+  "frames": [],
+  "strips": []
+ },
+ "assets/buildings/pebbleshiner.v2/body.3d6@2x.webp": {
+  "whole": true,
+  "frames": [],
+  "strips": []
+ },
+ "assets/buildings/pebbleshiner.v2/top.3d1.damaged@2x.webp": {
+  "whole": true,
+  "frames": [],
+  "strips": []
+ },
+ "assets/buildings/pebbleshiner.v2/top.3d10.damaged@2x.webp": {
+  "whole": true,
+  "frames": [],
+  "strips": []
+ },
+ "assets/buildings/pebbleshiner.v2/top.3d10@2x.webp": {
+  "whole": true,
+  "frames": [],
+  "strips": []
+ },
+ "assets/buildings/pebbleshiner.v2/top.3d1@2x.webp": {
+  "whole": true,
+  "frames": [],
+  "strips": []
+ },
+ "assets/buildings/pebbleshiner.v2/top.3d3.damaged@2x.webp": {
+  "whole": true,
+  "frames": [],
+  "strips": []
+ },
+ "assets/buildings/pebbleshiner.v2/top.3d3.destroyed@2x.webp": {
+  "whole": true,
+  "frames": [],
+  "strips": []
+ },
+ "assets/buildings/pebbleshiner.v2/top.3d3@2x.webp": {
+  "whole": true,
+  "frames": [],
+  "strips": []
+ },
+ "assets/buildings/pebbleshiner.v2/top.3d6.damaged@2x.webp": {
+  "whole": true,
+  "frames": [],
+  "strips": []
+ },
+ "assets/buildings/pebbleshiner.v2/top.3d6@2x.webp": {
+  "whole": true,
+  "frames": [],
+  "strips": []
+ },
+ "assets/buildings/puttysquisher.v2/anim.3d10@2x.webp": {
+  "whole": false,
+  "frames": [],
+  "strips": [
+   {
+    "w": 39,
+    "h": 59,
+    "frames": 25,
+    "columns": null
+   }
+  ]
+ },
+ "assets/buildings/puttysquisher.v2/anim.3d1@2x.webp": {
+  "whole": false,
+  "frames": [],
+  "strips": [
+   {
+    "w": 24,
+    "h": 16,
+    "frames": 26,
+    "columns": null
+   }
+  ]
+ },
+ "assets/buildings/puttysquisher.v2/anim.3d3@2x.webp": {
+  "whole": false,
+  "frames": [],
+  "strips": [
+   {
+    "w": 22,
+    "h": 16,
+    "frames": 26,
+    "columns": null
+   }
+  ]
+ },
+ "assets/buildings/puttysquisher.v2/anim.3d6@2x.webp": {
+  "whole": false,
+  "frames": [],
+  "strips": [
+   {
+    "w": 22,
+    "h": 16,
+    "frames": 26,
+    "columns": null
+   }
+  ]
+ },
+ "assets/buildings/puttysquisher.v2/body.3d10@2x.webp": {
+  "whole": true,
+  "frames": [],
+  "strips": []
+ },
+ "assets/buildings/puttysquisher.v2/body.3d1@2x.webp": {
+  "whole": true,
+  "frames": [],
+  "strips": []
+ },
+ "assets/buildings/puttysquisher.v2/body.3d3@2x.webp": {
+  "whole": true,
+  "frames": [],
+  "strips": []
+ },
+ "assets/buildings/puttysquisher.v2/body.3d6@2x.webp": {
+  "whole": true,
+  "frames": [],
+  "strips": []
+ },
+ "assets/buildings/puttysquisher.v2/top.3d1.damaged@2x.webp": {
+  "whole": true,
+  "frames": [],
+  "strips": []
+ },
+ "assets/buildings/puttysquisher.v2/top.3d10.damaged@2x.webp": {
+  "whole": true,
+  "frames": [],
+  "strips": []
+ },
+ "assets/buildings/puttysquisher.v2/top.3d10@2x.webp": {
+  "whole": true,
+  "frames": [],
+  "strips": []
+ },
+ "assets/buildings/puttysquisher.v2/top.3d1@2x.webp": {
+  "whole": true,
+  "frames": [],
+  "strips": []
+ },
+ "assets/buildings/puttysquisher.v2/top.3d3.damaged@2x.webp": {
+  "whole": true,
+  "frames": [],
+  "strips": []
+ },
+ "assets/buildings/puttysquisher.v2/top.3d3.destroyed@2x.webp": {
+  "whole": true,
+  "frames": [],
+  "strips": []
+ },
+ "assets/buildings/puttysquisher.v2/top.3d3@2x.webp": {
+  "whole": true,
+  "frames": [],
+  "strips": []
+ },
+ "assets/buildings/puttysquisher.v2/top.3d6.damaged@2x.webp": {
+  "whole": true,
+  "frames": [],
+  "strips": []
+ },
+ "assets/buildings/puttysquisher.v2/top.3d6@2x.webp": {
+  "whole": true,
+  "frames": [],
+  "strips": []
+ },
+ "assets/buildings/railguntower/body.t1@2x.webp": {
+  "whole": true,
+  "frames": [],
+  "strips": []
+ },
+ "assets/buildings/railguntower/body.t2@2x.webp": {
+  "whole": true,
+  "frames": [],
+  "strips": []
+ },
+ "assets/buildings/railguntower/body.t3@2x.webp": {
+  "whole": true,
+  "frames": [],
+  "strips": []
+ },
+ "assets/buildings/railguntower/top.t1@2x.webp": {
+  "whole": true,
+  "frames": [],
+  "strips": []
+ },
+ "assets/buildings/railguntower/top.t2@2x.webp": {
+  "whole": true,
+  "frames": [],
+  "strips": []
+ },
+ "assets/buildings/railguntower/top.t3@2x.webp": {
+  "whole": true,
+  "frames": [],
+  "strips": []
+ },
+ "assets/buildings/railguntower/turret.t1.g8@2x.webp": {
+  "whole": false,
+  "frames": [],
+  "strips": [
+   {
+    "w": 96,
+    "h": 54,
+    "frames": 32,
+    "columns": 8
+   }
+  ]
+ },
+ "assets/buildings/railguntower/turret.t2.g8@2x.webp": {
+  "whole": false,
+  "frames": [],
+  "strips": [
+   {
+    "w": 96,
+    "h": 54,
+    "frames": 32,
+    "columns": 8
+   }
+  ]
+ },
+ "assets/buildings/railguntower/turret.t3.g8@2x.webp": {
+  "whole": false,
+  "frames": [],
+  "strips": [
+   {
+    "w": 96,
+    "h": 55,
+    "frames": 32,
+    "columns": 8
+   }
+  ]
+ },
+ "assets/buildings/siegefactory/anim.3d1@2x.webp": {
+  "whole": false,
+  "frames": [],
+  "strips": [
+   {
+    "w": 124,
+    "h": 75,
+    "frames": 36,
+    "columns": 16
+   }
+  ]
+ },
+ "assets/buildings/siegefactory/body.3d1@2x.webp": {
+  "whole": true,
+  "frames": [],
+  "strips": []
+ },
+ "assets/buildings/siegefactory/top.3d1.damaged@2x.webp": {
+  "whole": true,
+  "frames": [],
+  "strips": []
+ },
+ "assets/buildings/siegefactory/top.3d1@2x.webp": {
+  "whole": true,
+  "frames": [],
+  "strips": []
+ },
+ "assets/buildings/siegelab/anim.3d1@2x.webp": {
+  "whole": false,
+  "frames": [],
+  "strips": [
+   {
+    "w": 96,
+    "h": 143,
+    "frames": 60,
+    "columns": 21
+   }
+  ]
+ },
+ "assets/buildings/siegelab/body.3d1@2x.webp": {
+  "whole": true,
+  "frames": [],
+  "strips": []
+ },
+ "assets/buildings/siegelab/top.3d1.damaged@2x.webp": {
+  "whole": true,
+  "frames": [],
+  "strips": []
+ },
+ "assets/buildings/siegelab/top.3d1@2x.webp": {
+  "whole": true,
+  "frames": [],
+  "strips": []
+ },
+ "assets/buildings/snipertower/body.t1@2x.webp": {
+  "whole": true,
+  "frames": [],
+  "strips": []
+ },
+ "assets/buildings/snipertower/body.t2@2x.webp": {
+  "whole": true,
+  "frames": [],
+  "strips": []
+ },
+ "assets/buildings/snipertower/body.t3@2x.webp": {
+  "whole": true,
+  "frames": [],
+  "strips": []
+ },
+ "assets/buildings/snipertower/top.t1@2x.webp": {
+  "whole": true,
+  "frames": [],
+  "strips": []
+ },
+ "assets/buildings/snipertower/top.t2@2x.webp": {
+  "whole": true,
+  "frames": [],
+  "strips": []
+ },
+ "assets/buildings/snipertower/top.t3@2x.webp": {
+  "whole": true,
+  "frames": [],
+  "strips": []
+ },
+ "assets/buildings/snipertower/turret.t1@2x.webp": {
+  "whole": false,
+  "frames": [],
+  "strips": [
+   {
+    "w": 54,
+    "h": 40,
+    "frames": 32,
+    "columns": null
+   }
+  ]
+ },
+ "assets/buildings/snipertower/turret.t2@2x.webp": {
+  "whole": false,
+  "frames": [],
+  "strips": [
+   {
+    "w": 54,
+    "h": 40,
+    "frames": 32,
+    "columns": null
+   }
+  ]
+ },
+ "assets/buildings/snipertower/turret.t3@2x.webp": {
+  "whole": false,
+  "frames": [],
+  "strips": [
+   {
+    "w": 54,
+    "h": 40,
+    "frames": 32,
+    "columns": null
+   }
+  ]
+ },
+ "assets/buildings/spurtztower/body.t1@2x.webp": {
+  "whole": true,
+  "frames": [],
+  "strips": []
+ },
+ "assets/buildings/spurtztower/top.t1@2x.webp": {
+  "whole": true,
+  "frames": [],
+  "strips": []
+ },
+ "assets/buildings/spurtztower/turret.t1@2x.webp": {
+  "whole": false,
+  "frames": [],
+  "strips": [
+   {
+    "w": 57,
+    "h": 46,
+    "frames": 32,
+    "columns": null
+   }
+  ]
+ },
+ "assets/buildings/storagesilo/anim.3d1@2x.webp": {
+  "whole": false,
+  "frames": [],
+  "strips": [
+   {
+    "w": 66,
+    "h": 70,
+    "frames": 26,
+    "columns": null
+   }
+  ]
+ },
+ "assets/buildings/storagesilo/body.3d1@2x.webp": {
+  "whole": true,
+  "frames": [],
+  "strips": []
+ },
+ "assets/buildings/storagesilo/top.3d1.damaged@2x.webp": {
+  "whole": true,
+  "frames": [],
+  "strips": []
+ },
+ "assets/buildings/storagesilo/top.3d1.destroyed@2x.webp": {
+  "whole": true,
+  "frames": [],
+  "strips": []
+ },
+ "assets/buildings/storagesilo/top.3d1@2x.webp": {
+  "whole": true,
+  "frames": [],
+  "strips": []
+ },
+ "assets/buildings/townhall/top.new10@2x.webp": {
+  "whole": true,
+  "frames": [],
+  "strips": []
+ },
+ "assets/buildings/townhall/top.new1@2x.webp": {
+  "whole": true,
+  "frames": [],
+  "strips": []
+ },
+ "assets/buildings/townhall/top.new2@2x.webp": {
+  "whole": true,
+  "frames": [],
+  "strips": []
+ },
+ "assets/buildings/townhall/top.new3@2x.webp": {
+  "whole": true,
+  "frames": [],
+  "strips": []
+ },
+ "assets/buildings/townhall/top.new4@2x.webp": {
+  "whole": true,
+  "frames": [],
+  "strips": []
+ },
+ "assets/buildings/townhall/top.new5@2x.webp": {
+  "whole": true,
+  "frames": [],
+  "strips": []
+ },
+ "assets/buildings/townhall/top.new6@2x.webp": {
+  "whole": true,
+  "frames": [],
+  "strips": []
+ },
+ "assets/buildings/townhall/top.new7@2x.webp": {
+  "whole": true,
+  "frames": [],
+  "strips": []
+ },
+ "assets/buildings/townhall/top.new8@2x.webp": {
+  "whole": true,
+  "frames": [],
+  "strips": []
+ },
+ "assets/buildings/townhall/top.new9@2x.webp": {
+  "whole": true,
+  "frames": [],
+  "strips": []
+ },
+ "assets/buildings/twigsnapper.v2/anim.3d10@2x.webp": {
+  "whole": false,
+  "frames": [],
+  "strips": [
+   {
+    "w": 32,
+    "h": 32,
+    "frames": 34,
+    "columns": null
+   }
+  ]
+ },
+ "assets/buildings/twigsnapper.v2/anim.3d1@2x.webp": {
+  "whole": false,
+  "frames": [],
+  "strips": [
+   {
+    "w": 20,
+    "h": 29,
+    "frames": 34,
+    "columns": null
+   }
+  ]
+ },
+ "assets/buildings/twigsnapper.v2/anim.3d3@2x.webp": {
+  "whole": false,
+  "frames": [],
+  "strips": [
+   {
+    "w": 20,
+    "h": 29,
+    "frames": 34,
+    "columns": null
+   }
+  ]
+ },
+ "assets/buildings/twigsnapper.v2/anim.3d6@2x.webp": {
+  "whole": false,
+  "frames": [],
+  "strips": [
+   {
+    "w": 32,
+    "h": 32,
+    "frames": 34,
+    "columns": null
+   }
+  ]
+ },
+ "assets/buildings/twigsnapper.v2/body.3d10@2x.webp": {
+  "whole": true,
+  "frames": [],
+  "strips": []
+ },
+ "assets/buildings/twigsnapper.v2/body.3d1@2x.webp": {
+  "whole": true,
+  "frames": [],
+  "strips": []
+ },
+ "assets/buildings/twigsnapper.v2/body.3d3@2x.webp": {
+  "whole": true,
+  "frames": [],
+  "strips": []
+ },
+ "assets/buildings/twigsnapper.v2/body.3d6@2x.webp": {
+  "whole": true,
+  "frames": [],
+  "strips": []
+ },
+ "assets/buildings/twigsnapper.v2/top.3d1.damaged@2x.webp": {
+  "whole": true,
+  "frames": [],
+  "strips": []
+ },
+ "assets/buildings/twigsnapper.v2/top.3d10.damaged@2x.webp": {
+  "whole": true,
+  "frames": [],
+  "strips": []
+ },
+ "assets/buildings/twigsnapper.v2/top.3d10@2x.webp": {
+  "whole": true,
+  "frames": [],
+  "strips": []
+ },
+ "assets/buildings/twigsnapper.v2/top.3d1@2x.webp": {
+  "whole": true,
+  "frames": [],
+  "strips": []
+ },
+ "assets/buildings/twigsnapper.v2/top.3d3.damaged@2x.webp": {
+  "whole": true,
+  "frames": [],
+  "strips": []
+ },
+ "assets/buildings/twigsnapper.v2/top.3d3.destroyed@2x.webp": {
+  "whole": true,
+  "frames": [],
+  "strips": []
+ },
+ "assets/buildings/twigsnapper.v2/top.3d3@2x.webp": {
+  "whole": true,
+  "frames": [],
+  "strips": []
+ },
+ "assets/buildings/twigsnapper.v2/top.3d6.damaged@2x.webp": {
+  "whole": true,
+  "frames": [],
+  "strips": []
+ },
+ "assets/buildings/twigsnapper.v2/top.3d6@2x.webp": {
+  "whole": true,
+  "frames": [],
+  "strips": []
+ },
+ "assets/buildings/walls/stone/top.3d1.damaged@2x.webp": {
+  "whole": true,
+  "frames": [],
+  "strips": []
+ },
+ "assets/buildings/walls/stone/top.3d1.destroyed@2x.webp": {
+  "whole": true,
+  "frames": [],
+  "strips": []
+ },
+ "assets/buildings/walls/stone/top.3d1@2x.webp": {
+  "whole": true,
+  "frames": [],
+  "strips": []
+ },
+ "assets/buildings/walls/top.3d1.damaged@2x.webp": {
+  "whole": true,
+  "frames": [],
+  "strips": []
+ },
+ "assets/buildings/walls/top.3d1.destroyed@2x.webp": {
+  "whole": true,
+  "frames": [],
+  "strips": []
+ },
+ "assets/buildings/walls/top.3d1@2x.webp": {
+  "whole": true,
+  "frames": [],
+  "strips": []
+ },
+ "assets/buildings/walls/top.3d2.damaged@2x.webp": {
+  "whole": true,
+  "frames": [],
+  "strips": []
+ },
+ "assets/buildings/walls/top.3d2.destroyed@2x.webp": {
+  "whole": true,
+  "frames": [],
+  "strips": []
+ },
+ "assets/buildings/walls/top.3d2@2x.webp": {
+  "whole": true,
+  "frames": [],
+  "strips": []
+ },
+ "assets/buildings/walls/top.3d3.damaged@2x.webp": {
+  "whole": true,
+  "frames": [],
+  "strips": []
+ },
+ "assets/buildings/walls/top.3d3.destroyed@2x.webp": {
+  "whole": true,
+  "frames": [],
+  "strips": []
+ },
+ "assets/buildings/walls/top.3d3@2x.webp": {
+  "whole": true,
+  "frames": [],
+  "strips": []
+ },
+ "assets/buildings/walls/top.3d4.damaged@2x.webp": {
+  "whole": true,
+  "frames": [],
+  "strips": []
+ },
+ "assets/buildings/walls/top.3d4.destroyed@2x.webp": {
+  "whole": true,
+  "frames": [],
+  "strips": []
+ },
+ "assets/buildings/walls/top.3d4@2x.webp": {
+  "whole": true,
+  "frames": [],
+  "strips": []
+ },
+ "assets/buildings/walls/top.3d5.damaged@2x.webp": {
+  "whole": true,
+  "frames": [],
+  "strips": []
+ },
+ "assets/buildings/walls/top.3d5.destroyed@2x.webp": {
+  "whole": true,
+  "frames": [],
+  "strips": []
+ },
+ "assets/buildings/walls/top.3d5@2x.webp": {
+  "whole": true,
+  "frames": [],
+  "strips": []
+ },
+ "assets/buildings/yardplanner/top.3d1.damaged@2x.webp": {
+  "whole": true,
+  "frames": [],
+  "strips": []
+ },
+ "assets/buildings/yardplanner/top.3d1.destroyed@2x.webp": {
+  "whole": true,
+  "frames": [],
+  "strips": []
+ },
+ "assets/buildings/yardplanner/top.3d1@2x.webp": {
+  "whole": true,
+  "frames": [],
+  "strips": []
+ }
+}

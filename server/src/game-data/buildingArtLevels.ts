@@ -59,7 +59,8 @@ export const TOWER_TIER_ART_LEVELS: Readonly<Record<number, readonly number[]>> 
  * does not (`INFERNO_BUILDING_3D_ART` in `web/src/game/yard/buildingArtTiers.ts`):
  * the Bone Cruncher's tiers from levels 3 and 7, where the main yard's Twig
  * Snapper (the same type) changes at 3, 6 and 10. They take in the Inferno's
- * Flash steps (1 and 3), so the Classic look draws right from them too.
+ * Flash steps (1 and 3), so the Classic look draws right from them too. The
+ * Monster Lab's three levels each have a 3D look of their own in the Inferno.
  */
 export const INFERNO_ART_LEVELS: Readonly<Record<number, readonly number[]>> = {
   1: [1, 3, 7],
@@ -69,14 +70,29 @@ export const INFERNO_ART_LEVELS: Readonly<Record<number, readonly number[]>> = {
   3: [1, 3, 7],
   // 4 Magma Pump: the same split (Flash has one look in play, its steps 1 and 3 the same picture)
   4: [1, 3, 7],
+  // 116 Monster Lab: the Infernal Lab's three 3D levels (Flash has one look for every level)
+  116: [1, 2, 3],
+};
+
+/**
+ * The 3D buildings whose Modern look changes at levels where Flash's art does
+ * not (`BUILDING_3D_ART` in `web/src/game/yard/buildingArtTiers.ts`), in the
+ * main yard and outposts: the Hatchery Control Center's levels 2 and 3 (this
+ * project's, beta 9), which Flash drew with its level 1 picture. The Classic
+ * look still draws level 1 from them. The Inferno's type 16 is another
+ * building with one look, so an Inferno yard does not read this table.
+ */
+export const MODERN_BUILDING_ART_LEVELS: Readonly<Record<number, readonly number[]>> = {
+  16: [1, 2, 3],
 };
 
 /**
  * The level whose picture a building at `level` shows: the highest art level
  * at or below it, and 1 for a type with one picture. A level of 0 or less (a
  * foundation still being built) is kept as it is; it says nothing.
- * `towerTiers` adds the tower tiers (`TOWER_TIER_ART_LEVELS`) and, in an
- * Inferno yard (`kind`), the Inferno's own 3D tiers (`INFERNO_ART_LEVELS`), on
+ * `towerTiers` adds the tower tiers (`TOWER_TIER_ART_LEVELS`), the 3D
+ * buildings' own steps outside the Inferno (`MODERN_BUILDING_ART_LEVELS`) and,
+ * in an Inferno yard (`kind`), the Inferno's own 3D tiers (`INFERNO_ART_LEVELS`), on
  * unless a caller asks for the Flash steps alone.
  */
 export const artLevelOf = (
@@ -88,7 +104,9 @@ export const artLevelOf = (
   if (!(level > 0)) return level;
   let chosen = 1;
   const inferno = towerTiers && kind === "inferno" ? INFERNO_ART_LEVELS[type] : undefined;
-  const steps = inferno ?? (towerTiers ? TOWER_TIER_ART_LEVELS[type] : undefined) ?? BUILDING_ART_LEVELS[type] ?? [];
+  const modern = towerTiers && kind !== "inferno" ? MODERN_BUILDING_ART_LEVELS[type] : undefined;
+  const steps =
+    inferno ?? (towerTiers ? TOWER_TIER_ART_LEVELS[type] : undefined) ?? modern ?? BUILDING_ART_LEVELS[type] ?? [];
   for (const step of steps) {
     if (step > level) break;
     chosen = step;

@@ -85,7 +85,7 @@ export const baseModeView = async (baseid: string, mapversion: MapRoomVersion = 
 
   // Opening the yard is the one place allowed to write, so it reclaims the row and
   // regenerates the camp. Read-only paths share the same rule via isWildMonsterExpired
-  // but only report the camp as fresh - see wildMonsterCell and worldSnapshot.
+  // but only report the camp as fresh - see wildMonsterCell.
   // Never under an attack: its save would find no row (`campInPlay.ts`).
   if (
     mapversion !== MapRoomVersion.V3 &&

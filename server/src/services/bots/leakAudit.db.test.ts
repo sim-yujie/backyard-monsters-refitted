@@ -218,14 +218,28 @@ describe.skipIf(!enabled)("bots leak nothing to any client (issue #245)", () => 
       viewer.userid,
       rival.userid,
     ]);
-    // Their lists as a search with bots on built them while bots were live.
+    // Their lists as a search with bots on built them while bots were live: the
+    // real-player search, and the bot's entry made the way the bot fill made it
+    // (removed in beta 9; a list cached before then can still hold one).
     const { findOverworldNeighbours } = await import("../maproom/v1/findOverworldNeighbours.js");
+    const { createNeighbourData } = await import("../maproom/createNeighbourData.js");
+    const { calculateBaseLevel } = await import("../base/calculateBaseLevel.js");
+    const [botRow] = await sql<{ userid: number; baseid: string; points: string; basevalue: string; lastupdate_at: Date; username: string; pic_square: string | null }>(
+      `SELECT s.userid, s.baseid, s.points, s.basevalue, s.lastupdate_at, u.username, u.pic_square
+         FROM bym.save s JOIN bym."user" u ON u.userid = s.userid WHERE s.userid = ? AND s.type = 'main'`,
+      [bot.userid]
+    );
+    const botEntry = createNeighbourData(
+      { userid: Number(botRow!.userid), baseid: botRow!.baseid, lastupdateAt: new Date(botRow!.lastupdate_at) },
+      botRow!,
+      calculateBaseLevel(botRow!.points, botRow!.basevalue)
+    );
     for (const player of [viewer, rival]) {
       const [save] = await sql<{ points: string; basevalue: string }>(
         `SELECT points, basevalue FROM bym.save WHERE userid = ? AND type = 'main'`,
         [player.userid]
       );
-      const list = await findOverworldNeighbours(db.em.fork(), player, save!, { fill: true });
+      const list = [...(await findOverworldNeighbours(db.em.fork(), player, save!)), botEntry];
       await sql(
         `INSERT INTO bym.maproom (userid, neighbors, neighbors_last_calculated, neighbors_level, created_at, lastupdate_at)
          VALUES (?, ?::jsonb, now(), 15, now(), now())

@@ -43,9 +43,13 @@ mock.module("../../../server.js", () => ({ postgres: { em }, redis }));
 
 const {
   ALLIANCE_SIGHT_CACHE_TTL_SECONDS,
+  ALLIANCE_SIGHT_MIN_TTL_SECONDS,
+  ALLIANCE_SIGHT_OLD_TTL_SECONDS,
   SIGHT_CACHE_TTL_SECONDS,
   allianceSightBuildKey,
   allianceSightKey,
+  allianceSightLockKey,
+  allianceSightOldKey,
   getPlayerSight,
   invalidateAllianceSight,
   invalidatePlayerSight,
@@ -570,5 +574,117 @@ describe("the alliance union's long life (map-lag fix, 25 Nov 2026)", () => {
     await invalidateAllianceSight(9);
 
     expect(await redis.get(allianceSightBuildKey(9))).toBeNull();
+  });
+});
+
+describe("the alliance union's rebuild lock (live map stage 2, 26 Nov 2026)", () => {
+  const nowSeconds = () => Math.floor(Date.now() / 1000);
+  /** Alliance 9: players 1 and 2, player 2's yard at (102, 102). */
+  const alliance = (mate: Row = mainSaveRow(2, { baseid: "home-2" })) => {
+    tables.set(User, [
+      { userid: 1, alliance_id: 9 },
+      { userid: 2, alliance_id: 9 },
+    ]);
+    tables.set(Save, [mate]);
+  };
+  /** How many union rebuilds ran (each reads the members once). */
+  const rebuilds = () => findCalls.filter((call) => call.entity === User && call.where.alliance_id === 9).length;
+  /** Makes each union rebuild take `ms`, so readers overlap it. */
+  const slowRebuilds = (ms: number) => {
+    const find = em.find;
+    em.find = async (entity: unknown, where: Row) => {
+      if (entity === User && where.alliance_id === 9) await Bun.sleep(ms);
+      return find(entity, where);
+    };
+    return () => {
+      em.find = find;
+    };
+  };
+
+  test("readers that find the union gone while one rebuilds it serve the old copy; one rebuild runs", async () => {
+    alliance();
+    await getPlayerSight(user(1, { alliance_id: 9 }));
+    expect(await redis.ttl(allianceSightOldKey(9))).toBe(ALLIANCE_SIGHT_OLD_TTL_SECONDS);
+    // A mate's yard moves: the union is dropped, the old copy stays.
+    tables.set(Save, [mainSaveRow(2, { baseid: "home-2", homebase: ["150", "150"] })]);
+    await invalidateAllianceSight(9);
+    findCalls = [];
+
+    const restore = slowRebuilds(60);
+    try {
+      const readers = await Promise.all(
+        Array.from({ length: 5 }, (_, i) => getPlayerSight(user(10 + i, { alliance_id: 9 }))),
+      );
+      expect(rebuilds()).toBe(1);
+      // Four got the old union (yard still at 102), and nobody waited for the new one.
+      const old = readers.filter((sight) => sight.revealed.some((cell) => cell.x === 102 && cell.y === 102));
+      expect(old.length).toBe(4);
+    } finally {
+      restore();
+    }
+    // The new union is in place, and the lock is gone.
+    expect(JSON.parse(strings.get(allianceSightKey(9))!).revealed).toContainEqual({ x: 150, y: 150 });
+    expect(await redis.get(allianceSightLockKey(9))).toBeNull();
+  });
+
+  test("with no old copy, the other readers wait for the one rebuild instead of running their own", async () => {
+    alliance();
+    const restore = slowRebuilds(60);
+    try {
+      const readers = await Promise.all(Array.from({ length: 4 }, (_, i) => getPlayerSight(user(10 + i, { alliance_id: 9 }))));
+      expect(rebuilds()).toBe(1);
+      for (const sight of readers) expect(sight.revealed).toContainEqual({ x: 102, y: 102 });
+    } finally {
+      restore();
+    }
+  });
+
+  test("waitForRebuild (the live socket) never takes the old copy", async () => {
+    alliance();
+    await getPlayerSight(user(1, { alliance_id: 9 }));
+    tables.set(Save, [mainSaveRow(2, { baseid: "home-2", homebase: ["150", "150"] })]);
+    await invalidateAllianceSight(9);
+    const restore = slowRebuilds(60);
+    try {
+      const [first, waiting] = await Promise.all([
+        getPlayerSight(user(10, { alliance_id: 9 })),
+        Bun.sleep(5).then(() => getPlayerSight(user(11, { alliance_id: 9 }), { waitForRebuild: true })),
+      ]);
+      expect(first.revealed).toContainEqual({ x: 150, y: 150 });
+      expect(waiting.revealed).toContainEqual({ x: 150, y: 150 });
+      expect(waiting.revealed).not.toContainEqual({ x: 102, y: 102 });
+    } finally {
+      restore();
+    }
+  });
+
+  test("a lock left by a dead process does not stop the union for good", async () => {
+    alliance();
+    await redis.set(allianceSightLockKey(9), "someone else", "EX", 10);
+    const sight = await getPlayerSight(user(1, { alliance_id: 9 }));
+    // No old copy: waited for a rebuild that never came, then built it itself.
+    expect(sight.revealed).toContainEqual({ x: 102, y: 102 });
+    // Somebody else's lock is not released by this reader.
+    expect(await redis.get(allianceSightLockKey(9))).toBe("someone else");
+  });
+
+  test("a Flinger finishing seconds away no longer makes the union live for a second", async () => {
+    // Saved 10 s ago with 13 s left: done in 3 s.
+    alliance(
+      mainSaveRow(2, {
+        baseid: "home-2",
+        savetime: nowSeconds() - 10,
+        buildingdata: { "9": { id: 9, t: 5, l: 2, X: 0, Y: 0, cU: 13, cL: 32_400 } },
+        buildinghealthdata: {},
+      }),
+    );
+    await getPlayerSight(user(1, { alliance_id: 9 }));
+    expect(await redis.ttl(allianceSightKey(9))).toBe(ALLIANCE_SIGHT_MIN_TTL_SECONDS);
+  });
+
+  test("a drop frees a running rebuild's lock, so the next reader rebuilds from the new members", async () => {
+    await redis.set(allianceSightLockKey(9), "a rebuild", "EX", 10);
+    await invalidateAllianceSight(9);
+    expect(await redis.get(allianceSightLockKey(9))).toBeNull();
   });
 });

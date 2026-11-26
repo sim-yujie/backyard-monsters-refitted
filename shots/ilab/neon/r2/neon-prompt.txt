@@ -1,0 +1,9 @@
+Read the PNG files in this folder with your file/image viewing tool only. Do not run any shell command (it will be refused).
+
+Round 2 of your UX review of the Infernal Lab window in Backyard Monsters Revamped (browser remake of a Flash game). Owner rule: the window is the EXISTING surface Monster Lab window reused with the 8 Inferno monsters, paid in Sulfur; no redesign. The Monsters screen chrome (tab strip, Compound bar, frame, HUD) and the research slot's buttons are shared by every Monsters tab on both yards and are out of scope for this feature.
+
+Fixed since round 1: the building is now called "Infernal Lab" so the pop-up title fits (flow-before-d1280-modern.png); effect labels no longer repeat the ability name (e.g. Sabnox "Burn" ability, "Fire: none -> 10% of the hit a second for 4 s"); list rows say "Rank 1:" instead of "-> 1:"; the list scrolls to the selected (researching) monster when the tab opens on desktop/tablet.
+
+Files: r2-<size>-<look>-lab.png (sizes d1280, d1366, d1920, ipadL 1024x768, ipadP 768x1024, phoneP 390x844, phoneL 844x390; looks modern and classic), research running.
+
+Give a UX critique ranked high / medium / low, ONLY for issues inside the Lab tab's own content (Lab slot text, list rows, selected monster card, wording), naming the file and element and a concrete fix. Say "no high or medium issues" if there are none. Under 300 words.

@@ -5,7 +5,7 @@ import { calculateTribeLevel } from "../../../../services/maproom/v2/calculateTr
 import { MapRoomCell } from "../../../../enums/MapRoom.js";
 import { generateBaseId } from "../../../../utils/generateBaseId.js";
 import { getCurrentDateTime } from "../../../../utils/getCurrentDateTime.js";
-import { isWildMonsterExpired } from "../../../../services/maproom/wildMonsterExpiry.js";
+import { isWildMonsterExpired, WILD_MONSTER_EXPIRATION } from "../../../../services/maproom/wildMonsterExpiry.js";
 
 export type WildMonsterCellFields =
   | "*"
@@ -40,5 +40,10 @@ export const wildMonsterCell = async (cell: Cell, worldId: string) => {
     l: level,
     dm: expired ? 0 : cell?.save?.damage || 0,
     d: expired ? 0 : cell?.save?.destroyed || 0,
+    // The live map (beta 9): when a damaged camp grows back, so the map shows it whole then
+    // without asking again (the row itself is only rewritten when the camp is next opened).
+    ...(!expired && cell?.save?.wmid && (cell.save.damage || cell.save.destroyed) && {
+      rg: Number(cell.save.savetime ?? 0) + WILD_MONSTER_EXPIRATION,
+    }),
   };
 };

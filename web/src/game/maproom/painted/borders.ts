@@ -21,6 +21,10 @@ import { cellCentre, locateCell, type CellShape, type CellShapeKind } from "./ce
  * This file keeps the facts the border shader (`borderShader.ts`) reads, one texel per cell:
  *   R  relation code (`BorderRelation`), 0 = no border at all
  *   G  which of the cell's six sides are borders, bit k = the side towards `HexGrid.neighbours`[k]
+ *   B  map pin clustering, zoomed out: bits 0-5 the cell's GROUP sides (an alliance or neutral cell's
+ *      sides towards a cell of another relation, none for a lone cell: one outline round each group
+ *      of joined tiles, `groupSidesOf`), bit 7 set while a plaque stands for the cell and its border is
+ *      left out ("quiet")
  *   A  always 255: the texture is uploaded unpremultiplied, but a zero alpha would still let a
  *      driver or a later Pixi default wipe the colour bytes.
  * and `borderDistance`, the TypeScript twin of the shader's distance sum, for the tests.
@@ -72,6 +76,32 @@ export const borderRelationOf = (cell: MapCell | undefined, viewer: BorderViewer
   const { myAlliance, friendMark } = typeof viewer === "object" && viewer !== null ? viewer : { myAlliance: viewer, friendMark: undefined };
   const friend = cell.mine === 1 ? "none" : friendMark?.(cell);
   return RELATION_CODE[relationOf(cell, myAlliance, friend)];
+};
+
+/** B's bit for "a plaque stands for this cell: no border" (`BorderData.setQuiet`). */
+export const QUIET_BIT = 128;
+
+/**
+ * A cell's group sides (map pin clustering zoomed out, owner 25 Nov 2026: "only show the border if
+ * the tiles are joined"): for an alliance or neutral cell, bit k is set when the cell across side k
+ * has another relation, so joined tiles share one outer outline; a cell with no neighbour of its
+ * relation is lone and gets none. Other relations: none (they keep their own borders).
+ */
+export const groupSidesOf = (
+  col: number,
+  row: number,
+  kind: CellShapeKind,
+  relationAt: (col: number, row: number) => BorderRelation,
+): number => {
+  const own = relationAt(col, row);
+  if (own !== BorderRelation.ALLIANCE && own !== BorderRelation.OTHER) return 0;
+  let sides = 0;
+  let joined = false;
+  HexGrid.neighbours(col, row, kind).forEach((next, side) => {
+    if (relationAt(next.col, next.row) === own) joined = true;
+    else sides |= 1 << side;
+  });
+  return joined ? sides : 0;
 };
 
 /**
@@ -160,6 +190,8 @@ export class BorderData {
         if (this.bytes[index * 4] !== relation) {
           this.bytes[index * 4] = relation;
           this.changes.add(x, y, x, y);
+          // Its group's outline and its neighbours' change with it.
+          if (owner === was) touched.push(x, y);
         }
         // A cell gains, loses or changes its owner: it and its ring may gain or lose sides.
         if (owner !== was) {
@@ -173,7 +205,22 @@ export class BorderData {
 
   private refreshAround(col: number, row: number): void {
     this.refreshSides(col, row);
-    for (const next of HexGrid.neighbours(col, row, this.kind)) this.refreshSides(next.col, next.row);
+    this.refreshGroup(col, row);
+    for (const next of HexGrid.neighbours(col, row, this.kind)) {
+      this.refreshSides(next.col, next.row);
+      this.refreshGroup(next.col, next.row);
+    }
+  }
+
+  /** The group sides of a cell (B bits 0-5), kept beside its quiet bit. */
+  private refreshGroup(col: number, row: number): void {
+    if (!this.inside(col, row)) return;
+    const at = (row * this.width + col) * 4 + 2;
+    const sides = groupSidesOf(col, row, this.kind, (c, r) => this.relationAt(c, r));
+    const value = (this.bytes[at]! & QUIET_BIT) | sides;
+    if (this.bytes[at] === value) return;
+    this.bytes[at] = value;
+    this.changes.add(col, row, col, row);
   }
 
   private refreshSides(col: number, row: number): void {
@@ -202,6 +249,29 @@ export class BorderData {
       }
     }
     return false;
+  }
+
+  private quietKeys: number[] = [];
+
+  /**
+   * The cells a map pin clustering plaque stands for draw no border (`cellKey` = row * width +
+   * col); the previous set's borders come back. Only on a zoom step or a change of cells.
+   */
+  setQuiet(keys: readonly number[]): void {
+    for (const key of this.quietKeys) this.setB(key, 0);
+    for (const key of keys) this.setB(key, 1);
+    this.quietKeys = keys.slice();
+  }
+
+  private setB(key: number, quiet: number): void {
+    const at = key * 4 + 2;
+    if (key < 0 || at >= this.bytes.length) return;
+    const value = quiet ? this.bytes[at]! | QUIET_BIT : this.bytes[at]! & ~QUIET_BIT;
+    if (this.bytes[at] === value) return;
+    this.bytes[at] = value;
+    const col = key % this.width;
+    const row = (key - col) / this.width;
+    this.changes.add(col, row, col, row);
   }
 
   /** No owners anywhere (the player's sight changed). */
