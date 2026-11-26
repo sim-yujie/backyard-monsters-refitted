@@ -195,7 +195,7 @@ describe("YardHelpMarks", () => {
     marks.update(0.08);
     expect(marks.lit.get(1)!).toBeGreaterThan(1);
     expect(marks.lit.get(2)).toBe(1);
-    marks.update(0.5);
+    marks.update(0.65);
     expect(marks.lit.has(1)).toBe(false);
     marks.releaseHeld();
     expect(marks.lit).toEqual(new Map());

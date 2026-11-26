@@ -35,30 +35,30 @@ export interface HelpLook {
 }
 
 /**
- * Modern's light, after neon's review (26 Nov 2026): a tight deep-amber rim
- * glow that matches the wrench, and only a breath of added light, so dark
- * towers keep their blacks. Classic's paler art washes out sooner: its light
- * is a fifth gentler.
+ * The light, after neon's two reviews (26 Nov 2026): a crisp amber rim glow
+ * that matches the wrench and reads on dark, gold and small buildings alike,
+ * and only a breath of added light, so dark towers keep their blacks. Round 2
+ * found Classic's gentler light too faint to tell a building apart, so both
+ * looks now share it, Classic a touch under Modern.
  */
 const MODERN_LOOK: HelpLook = {
   tint: 0xffe2b4,
-  glowColor: 0xff9e1b,
-  glowAlpha: 0.44,
+  glowColor: 0xffad29,
+  glowAlpha: 0.54,
   liftColor: 0xffb347,
-  liftAlpha: 0.07,
+  liftAlpha: 0.085,
   flareGlowAlpha: 0.9,
   flareLiftAlpha: 0.3,
   pad: 14,
-  blur: 5,
-  swell: 1.05,
+  blur: 5.5,
+  swell: 1.06,
   off: false,
 };
 
 const CLASSIC_LOOK: HelpLook = {
   ...MODERN_LOOK,
-  tint: 0xffe6be,
-  glowAlpha: 0.36,
-  liftAlpha: 0.05,
+  glowAlpha: 0.52,
+  liftAlpha: 0.08,
 };
 
 /** Dev only: values a check sets over both looks. */

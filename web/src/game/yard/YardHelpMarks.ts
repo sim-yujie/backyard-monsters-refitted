@@ -87,11 +87,12 @@ const scaleOf = (kind: HelpMarkKind, zoom: number): number =>
 const PULSE_PERIOD = 1.6;
 const PULSE_LOW = 0.75;
 /**
- * The ring stands this much wider than the footprint, so it shows round the
- * building's foot; kept close (1.25 before neon's review, 26 Nov 2026) so
- * neighbouring rings do not stack in open ground or reach the next building.
+ * The ring's size against the ellipse through the footprint's corners: a
+ * little inside it, so it sits on the building's own tile and neighbouring
+ * rings neither stack in open ground nor reach under the next building
+ * (1.25 before neon's reviews, 26 Nov 2026).
  */
-const RING_SPREAD = 1.1;
+const RING_SPREAD = 0.95;
 
 /** The mock-up's amber, a cream rim and a dark wrench (until the painted tools come). */
 const AMBER = 0xf2a51a;
@@ -552,16 +553,17 @@ const readyToLeave = (view: MarkView, exit: HelpMarkExit): Pick<LeavingView, "ta
 
 const easeOut = (t: number): number => 1 - (1 - t) * (1 - t);
 
-/** Help all's pop: the building's light rises to its flare in this long, then fades in this long (seconds). */
+/** Help all's pop: the building's light rises to its flare in this long, holds, then fades in step with the tag (seconds). */
 const FLARE_RISE = 0.13;
-const FLARE_FADE = 0.4;
+const FLARE_HOLD = 0.05;
+const FLARE_FADE = 0.5;
 
 /**
  * One frame of a wrench's exit, `age` seconds in, `t` from 0 to 1 over the exit's length.
  * - pop (0.9 s): the disc swells to 1.3x in the first 0.12 s, then pops
  *   (shrinks and fades) by 0.3 s while a cream ring bursts out of it; the
  *   ground ring flares to full and fades by 0.3 s, the building's light
- *   flares to {@link HELP_FLARE} by 0.13 s and eases out by 0.53 s; the tag rises 26 px off
+ *   flares to {@link HELP_FLARE} by 0.13 s, holds, and eases out by 0.68 s; the tag rises 26 px off
  *   the building and fades over the last 0.25 s.
  * - fade (0.3 s): everything fades, the building's light too.
  */
@@ -588,10 +590,13 @@ const paintExit = (leaving: LeavingView, t: number, age: number): void => {
     ring(age < 0.08 ? 1 : Math.max(0, 1 - (age - 0.08) / 0.22));
     // The building's light flares with the pop, then eases out while the tag rises (neon, 26 Nov 2026).
     if (view.ring) {
+      const fadeFrom = FLARE_RISE + FLARE_HOLD;
       view.glow =
         age < FLARE_RISE
           ? 1 + (HELP_FLARE - 1) * easeOut(age / FLARE_RISE)
-          : HELP_FLARE * (1 - easeOut(Math.min(1, (age - FLARE_RISE) / FLARE_FADE)));
+          : age < fadeFrom
+            ? HELP_FLARE
+            : HELP_FLARE * (1 - easeOut(Math.min(1, (age - fadeFrom) / FLARE_FADE)));
     }
     if (tagBox) {
       tagBox.y = disc.y + WRENCH_RISE - 26 * easeOut(Math.min(1, age / 0.5));
@@ -682,17 +687,17 @@ const drawRing = (ring: Graphics, corners: Corners | null): void => {
   if (!corners) return;
   const { rx, ry } = ringRadii(corners);
   ring
-    // A warm glow over the ground inside, strongest in the middle.
+    // A soft warm pool over the ground, about 0.17 in the middle down to 0.06 at the edge.
     .ellipse(0, 0, rx, ry)
-    .fill({ color: AMBER, alpha: 0.3 })
+    .fill({ color: AMBER, alpha: 0.06 })
     .ellipse(0, 0, rx * 0.72, ry * 0.72)
-    .fill({ color: RING_EDGE, alpha: 0.2 })
+    .fill({ color: RING_EDGE, alpha: 0.06 })
     .ellipse(0, 0, rx * 0.42, ry * 0.42)
-    .fill({ color: RING_EDGE, alpha: 0.2 })
-    // A dark band under the edge, so it reads on grass, then the bright edge itself:
-    // thinner and softer than before (neon, 26 Nov 2026), the lit building is the main sign now.
+    .fill({ color: RING_EDGE, alpha: 0.06 })
+    // A light dark band under the edge, so it reads on grass, then a thin bright edge:
+    // softer than before (neon, 26 Nov 2026), the lit building is the main sign now.
     .ellipse(0, 0, rx, ry)
-    .stroke({ width: 8, color: RING_DARK, alpha: 0.6 })
+    .stroke({ width: 5.5, color: RING_DARK, alpha: 0.38 })
     .ellipse(0, 0, rx, ry)
-    .stroke({ width: 4, color: RING_EDGE, alpha: 0.9 });
+    .stroke({ width: 3, color: RING_EDGE, alpha: 0.8 });
 };
