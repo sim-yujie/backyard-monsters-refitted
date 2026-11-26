@@ -85,9 +85,31 @@
 }
 
 .auto-attack__working {
+  /* One fixed-height row, so swapping to the place in line (patch 9.1)
+     never moves the sheet. */
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-1);
+  min-height: 28px;
   margin: 0;
   font-size: var(--text-sm);
   text-align: center;
+}
+
+/* In the server's battle line: the painted hourglass and "#3 in line". */
+.auto-attack__line-icon {
+  width: auto;
+  height: 26px;
+  flex: 0 0 auto;
+}
+
+.auto-attack__line-icon[hidden] {
+  display: none;
+}
+
+.auto-attack__working--line {
+  font-variant-numeric: tabular-nums;
 }
 
 /* A phone: a compact sheet in the middle of the screen, not the whole screen

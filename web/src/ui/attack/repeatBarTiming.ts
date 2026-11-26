@@ -71,5 +71,11 @@ export const atLeast = async <T>(
   return result;
 };
 
+/**
+ * After a wait in the server's battle line (patch 9.1) of this long or more,
+ * the march from the turn to full takes at most this long.
+ */
+export const REPEAT_BAR_AFTER_LINE_MS = 2000;
+
 /** How long the full bar stays up before the result: long enough to see the army reach the tribe. */
 export const REPEAT_BAR_FULL_HOLD_MS = 600;

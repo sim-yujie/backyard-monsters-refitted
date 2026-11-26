@@ -1,8 +1,10 @@
 import {
   getAutoAttackPlan,
+  getAutoAttackQueue,
   getAutoAttackReplay,
   runAutoAttack,
   type AutoAttackPlanResponse,
+  type AutoAttackQueueResponse,
   type AutoAttackReplayResponse,
   type AutoAttackResponse,
   type PlanShortfall,
@@ -34,7 +36,9 @@ import {
 import { armyParts, campHead, movesPart, roomParts, shortageList, watchMoreRows } from "./repeatPrompt";
 import { resultView } from "./autoAttackResultView";
 import { RepeatBar } from "./RepeatBar";
-import { REAL_TIMERS, REPEAT_BAR_MIN_MS, atLeast, type BarTimers } from "./repeatBarTiming";
+import { REAL_TIMERS, type BarTimers } from "./repeatBarTiming";
+import { watchQueuePlace } from "./repeatQueue";
+import { artUrl } from "@/artUrl";
 import "@/ui/styles/autoattack.css";
 
 /**
@@ -58,6 +62,8 @@ export interface AutoAttackCalls {
   /** `movesKey`: the moves the player agreed to (Smart Repeat attack). */
   readonly run: (baseid: string, movesKey?: string | null) => Promise<AutoAttackResponse>;
   readonly replay: () => Promise<AutoAttackReplayResponse>;
+  /** The player's place in the server's battle line while a Repeat is out (patch 9.1). */
+  readonly queue?: () => Promise<AutoAttackQueueResponse>;
   readonly quote: (baseid: string) => Promise<TakeoverQuoteResponse>;
   readonly takeOver: (baseid: string, payment: TakeoverPayment) => Promise<unknown>;
 }
@@ -66,6 +72,7 @@ const CALLS: AutoAttackCalls = {
   plan: getAutoAttackPlan,
   run: runAutoAttack,
   replay: getAutoAttackReplay,
+  queue: getAutoAttackQueue,
   quote: getTakeoverQuote,
   takeOver: takeOverCell,
 };
@@ -227,6 +234,37 @@ const columnsOf = (army: HTMLElement, side: HTMLElement, banner: HTMLElement | n
   if (banner) columns.append(banner);
   columns.append(army, side);
   return columns;
+};
+
+/** The hourglass beside the place in the battle line: painted, as the game's icons are (patch 9.1). */
+export const QUEUE_ICON = artUrl("/assets/popups/hourglass.png");
+
+/** The words under the working bar: "Attacking…", or the hourglass and the place in line. */
+export const queueWords = (place: number | null): string => (place === null ? "Attacking…" : `#${place} in line`);
+
+/** The line under the working bar, which swaps to the place in line and back without moving the sheet. */
+const workingLine = (): { element: HTMLElement; show: (place: number | null) => void } => {
+  const element = document.createElement("p");
+  element.className = "u-muted auto-attack__working";
+  element.setAttribute("aria-live", "polite");
+  const glass = document.createElement("img");
+  glass.className = "auto-attack__line-icon";
+  glass.alt = "";
+  glass.draggable = false;
+  glass.src = QUEUE_ICON;
+  glass.hidden = true;
+  const words = document.createElement("span");
+  words.className = "auto-attack__line-words";
+  words.textContent = queueWords(null);
+  element.append(glass, words);
+  return {
+    element,
+    show: (place) => {
+      glass.hidden = place === null;
+      element.classList.toggle("auto-attack__working--line", place !== null);
+      words.textContent = queueWords(place);
+    },
+  };
 };
 
 /** The `reason` of the server's refusal, if it is one. */
@@ -455,10 +493,16 @@ export class AutoAttackFlow {
 
   /**
    * Repeat attack with the working bar: it runs at least
-   * {@link REPEAT_BAR_MIN_MS}; once the answer is in and that time has passed
+   * `REPEAT_BAR_MIN_MS`; once the answer is in and that time has passed
    * it jumps to full, holds a moment, and the result shows. An error stops it
    * at once. The map hears of the landed attack when the bar lands, so the
    * camp behind the sheet does not change before the bar is done.
+   *
+   * While the Repeat waits in the server's battle line (patch 9.1), the army
+   * halts and the line under the bar shows an hourglass and the place
+   * ("#3 in line"); when the turn comes it marches on (neon's direction A,
+   * 26 Nov 2026). There is no Leave button: a wait is short and bounded, and
+   * a leave that crossed the turn could not stop the attack.
    */
   private async runWithBar(): Promise<void> {
     const timers = this.options.barTimers ?? REAL_TIMERS;
@@ -468,12 +512,25 @@ export class AutoAttackFlow {
       ...(this.options.barReducedMotion === undefined ? {} : { reducedMotion: this.options.barReducedMotion }),
     });
     this.bar = bar;
-    const words = paragraph("Attacking…", "u-muted auto-attack__working");
-    words.setAttribute("aria-live", "polite");
-    this.show("Repeat attack", "auto-attack--running auto-attack--bar", [bar.element, words], []);
+    const line = workingLine();
+    this.show("Repeat attack", "auto-attack--running auto-attack--bar", [bar.element, line.element], []);
     bar.start();
+    const ask = this.calls.queue;
+    const stopWatching = ask
+      ? watchQueuePlace(ask, (place) => {
+          if (this.closed) return;
+          if (place === null) bar.resume();
+          else bar.hold();
+          line.show(place);
+        }, timers)
+      : () => {};
     try {
-      const result = await atLeast(this.calls.run(this.options.baseid, this.movesKey), REPEAT_BAR_MIN_MS, timers, bar.started);
+      const result = await this.calls.run(this.options.baseid, this.movesKey);
+      stopWatching();
+      // The answer came before the next ask saw the turn: march on now.
+      bar.resume();
+      line.show(null);
+      for (let left = bar.remainingMs(); left > 0; left = bar.remainingMs()) await timers.wait(left);
       // Before the closed check: a landed attack is always reported.
       this.options.onAttacked?.(result);
       if (this.closed) return;
@@ -481,9 +538,11 @@ export class AutoAttackFlow {
       await timers.wait(bar.holdMs);
       if (!this.closed) this.result(result);
     } catch (caught) {
+      stopWatching();
       bar.stop();
       if (!this.closed) this.failed(caught);
     } finally {
+      stopWatching();
       bar.destroy();
       if (this.bar === bar) this.bar = null;
       this.busy = false;

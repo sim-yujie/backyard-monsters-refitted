@@ -145,9 +145,10 @@ export const REPLAY_WORKER_MAX_JOBS = 1_000;
 
 /**
  * A worker whose heap is past this after a battle is replaced. A warm worker
- * sits at ~40-90 MB after the biggest battles of the diagnosis's job set.
+ * stayed at 3-48 MB over 1,400 battles of the diagnosis's real jobs, with no
+ * growth (measured 26 Nov 2026), so this is about 5x the most seen.
  */
-export const REPLAY_WORKER_MAX_HEAP_BYTES = 384 * 1024 * 1024;
+export const REPLAY_WORKER_MAX_HEAP_BYTES = 256 * 1024 * 1024;
 
 /** How long a Repeat attack waits in line before it is turned away "busy". */
 export const REPEAT_QUEUE_WAIT_MS = 15_000;

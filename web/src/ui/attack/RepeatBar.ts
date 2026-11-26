@@ -6,7 +6,14 @@ import { championName } from "@/ui/attack/ArmyPanel";
 import { tribePictureUrl } from "@/game/maproom/tribeAvatars";
 import { championPortrait, monsterPortrait, showPortrait, type Portrait } from "@/game/portraits";
 import { formatCompact } from "@/ui/format";
-import { REAL_TIMERS, REPEAT_BAR_FULL_HOLD_MS, REPEAT_BAR_MIN_MS, waitingProgress, type BarTimers } from "./repeatBarTiming";
+import {
+  REAL_TIMERS,
+  REPEAT_BAR_AFTER_LINE_MS,
+  REPEAT_BAR_FULL_HOLD_MS,
+  REPEAT_BAR_MIN_MS,
+  waitingProgress,
+  type BarTimers,
+} from "./repeatBarTiming";
 import "@/ui/styles/repeat-bar.css";
 
 /**
@@ -18,6 +25,12 @@ import "@/ui/styles/repeat-bar.css";
  * The frame is the window style's own bar plate (skin.css `--skin-bar`):
  * steel in Modern, Flash brown in Classic. `--repeat-progress` (0 to 1) on
  * the element drives it; the CSS does the rest.
+ *
+ * In the server's battle line (patch 9.1) the army halts where it is
+ * ({@link RepeatBar.hold}) and marches on when the turn comes
+ * ({@link RepeatBar.resume}); time in line does not count towards the bar's
+ * minimum, and after a wait of {@link REPEAT_BAR_AFTER_LINE_MS} or more the
+ * march from there is at most that long (neon, 26 Nov 2026).
  */
 
 /** From this many marchers, two staggered ranks. */
@@ -88,12 +101,16 @@ export class RepeatBar {
   /** How long the full bar stays up before the result. */
   readonly holdMs = REPEAT_BAR_FULL_HOLD_MS;
   private readonly timers: BarTimers;
-  private readonly minMs: number;
+  private minMs: number;
   private startedAt = 0;
   private progress = 0;
   private frame: number | null = null;
   private tick: ReturnType<typeof setInterval> | null = null;
   private state: "idle" | "running" | "full" | "stopped" = "idle";
+  /** When the army halted in the line, or null while it marches. */
+  private heldAt: number | null = null;
+  /** Time spent in the line so far. */
+  private heldMs = 0;
 
   constructor(options: RepeatBarOptions) {
     this.timers = options.timers ?? REAL_TIMERS;
@@ -135,9 +152,48 @@ export class RepeatBar {
     return this.startedAt;
   }
 
+  /** In the battle line: the army halts where it is. */
+  hold(): void {
+    if (this.state !== "running" || this.heldAt !== null) return;
+    this.heldAt = this.timers.now();
+    this.halt();
+    this.element.classList.add("repeat-bar--waiting");
+  }
+
+  /** The turn came: the army marches on from where it halted. */
+  resume(): void {
+    if (this.heldAt === null) return;
+    const now = this.timers.now();
+    const held = now - this.heldAt;
+    this.heldAt = null;
+    this.heldMs += held;
+    this.element.classList.remove("repeat-bar--waiting");
+    // The clock skips the time in line, so the army does not jump ahead.
+    this.startedAt += held;
+    if (this.heldMs >= REPEAT_BAR_AFTER_LINE_MS) {
+      // After a real wait the march is short; the bar never goes backwards.
+      const marched = now - this.startedAt;
+      this.minMs = Math.min(this.minMs, marched + REPEAT_BAR_AFTER_LINE_MS);
+    }
+    if (this.state === "running") this.loop();
+  }
+
+  /** Halted in the line. */
+  get waiting(): boolean {
+    return this.heldAt !== null;
+  }
+
+  /** How long the bar must still run before it may jump to full (0: may now). */
+  remainingMs(): number {
+    if (this.heldAt !== null) return this.minMs;
+    return Math.max(0, this.minMs - (this.timers.now() - this.startedAt));
+  }
+
   /** The answer is in and the minimum time passed: jump to full. */
   complete(): void {
     if (this.state === "full") return;
+    this.heldAt = null;
+    this.element.classList.remove("repeat-bar--waiting");
     this.halt();
     this.state = "full";
     this.paint(1);
@@ -160,7 +216,7 @@ export class RepeatBar {
 
   /** Moves the bar to where it should be now. Called each frame; the tests call it by hand. */
   update(): void {
-    if (this.state !== "running") return;
+    if (this.state !== "running" || this.heldAt !== null) return;
     this.paint(waitingProgress(this.timers.now() - this.startedAt, this.minMs));
   }
 

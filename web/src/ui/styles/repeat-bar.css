@@ -201,6 +201,8 @@
 
 /* ── Stopped, and reduced motion ────────────────────────────────────────── */
 
+.repeat-bar--waiting,
+.repeat-bar--waiting *,
 .repeat-bar--stopped,
 .repeat-bar--stopped * {
   animation-play-state: paused;
