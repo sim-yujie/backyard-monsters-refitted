@@ -105,6 +105,8 @@ export interface ReplayInput {
   readonly raid?: boolean;
   /** False fights Krallen by the rules before patch 8.6's (`BattleOptions.flashKrallen`). */
   readonly flashKrallen?: boolean;
+  /** False keeps the fractions of health the rules before kept (`BattleOptions.wholeHealth`). */
+  readonly wholeHealth?: boolean;
 }
 
 /** What {@link replayRaid} is handed: the defender's side only (issue #226). */
@@ -223,6 +225,7 @@ export const replayAttack = (input: ReplayInput): ReplayOutcome => {
     ...(input.learn ? { learn: true } : {}),
     ...(input.raid ? { raid: input.raid } : {}),
     ...(input.flashKrallen === false ? { flashKrallen: false } : {}),
+    ...(input.wholeHealth === false ? { wholeHealth: false } : {}),
   };
 
   const battle = createBattle(yard, options);

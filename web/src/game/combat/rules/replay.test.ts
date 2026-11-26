@@ -213,9 +213,41 @@ describe("golden replays", () => {
   ])("%s replays to its old digest under older rules (flashKrallen off)", (name, digest) => {
     const fixture = read<Fixture>(`${FIXTURE_DIR}${name}.json`);
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const old = replayAttack({ ...(inputOf(fixture) as any), flashKrallen: false });
+    const old = replayAttack({ ...(inputOf(fixture) as any), flashKrallen: false, wholeHealth: false });
     expect(old.digest).toBe(digest);
     expect(fixture.expected.digest).not.toBe(digest);
+  }, REPLAY_TIMEOUT_MS);
+
+  // Whole health (player report, Reii, 25 Nov 2026): Flash keeps a monster's
+  // health whole (`SecNum.Set` rounds it). An attack started under older rules
+  // is replayed with `wholeHealth` off and plays as it was fought: these are
+  // every fixture's digests under patch 8.6's rules.
+  it.each([
+    ["both-caged-champions", "c07e954543467057"],
+    ["bunker-defence", "2de3cd0499385cea"],
+    ["burrow-rush", "53831507368691ad"],
+    ["caged-champion", "3ed24369a24d4933"],
+    ["caged-korath", "d2e32fb103b3d28f"],
+    ["champion-and-bunkers", "4219b7c8ebcf4bf2"],
+    ["champion-brain", "1380f0c9edcb5603"],
+    ["champion-defensive", "fb4f893d5708a583"],
+    ["champion-offensive", "6599382b177c1975"],
+    ["champion-power", "603879c541246e9f"],
+    ["empty-yard", "0541193f927361a1"],
+    ["fomor-both-sides", "6ce49ed9d17d7a57"],
+    ["korath-and-krallen", "6f9a4e725bdd0bf4"],
+    ["lab-abilities", "51688836711f72f8"],
+    ["lab-split", "b5eda6f428b9952a"],
+    ["maze", "fa958d6ef25e02d4"],
+    ["mixed-waves", "d4e63b47f6788fd5"],
+    ["outpost-core", "6713db87c1fb3e35"],
+    ["pokey-rush", "08c500fd34fe817f"],
+    ["raid-east", "5bad54817e80c9c3"],
+  ])("%s replays to its 8.6 digest with wholeHealth off", (name, digest) => {
+    const fixture = read<Fixture>(`${FIXTURE_DIR}${name}.json`);
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const old = replayAttack({ ...(inputOf(fixture) as any), wholeHealth: false });
+    expect(old.digest).toBe(digest);
   }, REPLAY_TIMEOUT_MS);
 
   it("does not mutate the yard it was handed", () => {

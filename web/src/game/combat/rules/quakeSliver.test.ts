@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { createBattle } from "./engine.js";
+import { type BattleOptions, createBattle } from "./engine.js";
 import { buildEngineYard } from "./yard.js";
 
 /**
@@ -28,8 +28,9 @@ const yard = () =>
   });
 
 describe("a quake bigger than a monster's health kills it (Flash keeps health whole)", () => {
-  it("leaves no Zagnoid alive on a sliver under 1 health", () => {
-    const battle = createBattle(yard(), { seed: 7 });
+  /** The fight: how many ticks the Zagnoid stood on a sliver, and the end state. */
+  const fight = (options: Partial<BattleOptions> = {}) => {
+    const battle = createBattle(yard(), { seed: 7, ...options });
     battle.apply({ kind: "fling", t: 0, x: 110, y: 110, r: 0, monsters: { IC2: 1 } });
     // The trap takes 829.12 of its 1500; the quake's first blow is 783.
     let took = 0;
@@ -45,9 +46,20 @@ describe("a quake bigger than a monster's health kills it (Flash keeps health wh
       const alive = battle.state().creepsAlive > 0;
       if (alive && took > 1500 - 1) sliverTicks += 1;
     }
+    return { quaked, took, sliverTicks, alive: battle.state().creepsAlive };
+  };
+
+  it("leaves no Zagnoid alive on a sliver under 1 health", () => {
+    const { quaked, took, sliverTicks, alive } = fight();
     expect(quaked).toBeGreaterThan(0);
     expect(took).toBeGreaterThan(0);
     expect(sliverTicks).toBe(0);
-    expect(battle.state().creepsAlive).toBe(0);
+    expect(alive).toBe(0);
+  });
+
+  it("an attack started under older rules (wholeHealth off) replays as fought: the sliver lives", () => {
+    const { quaked, sliverTicks } = fight({ wholeHealth: false });
+    expect(quaked).toBeGreaterThan(0);
+    expect(sliverTicks).toBeGreaterThan(0);
   });
 });

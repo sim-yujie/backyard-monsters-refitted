@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { createBattle } from "./engine.js";
+import { type BattleOptions, createBattle } from "./engine.js";
 import { buildEngineYard } from "./yard.js";
 
 /**
@@ -47,8 +47,8 @@ const finish = (battle: ReturnType<typeof createBattle>): void => {
 
 describe("a building the attack leaves on under 1 health", () => {
   /** A Town Hall on 11 health takes one 10.5 hit, then the attacker retreats. */
-  const sliver = () => {
-    const battle = createBattle(yardOf({ "1": 11 }), { seed: 1 });
+  const sliver = (options: Partial<BattleOptions> = {}) => {
+    const battle = createBattle(yardOf({ "1": 11 }), { seed: 1, ...options });
     battle.apply({ kind: "fling", t: 0, x: 80, y: 80, r: 0, monsters: { C2: 1 } });
     const hit = untilFirstHit(battle);
     battle.apply({ kind: "retreat", t: battle.tick });
@@ -60,20 +60,48 @@ describe("a building the attack leaves on under 1 health", () => {
     expect(sliver().hit).toBe(HIT);
   });
 
-  it("today: is saved as 0 health, yet the attack never counts it destroyed", () => {
+  it("Flash: rounds 0.5 to 1, so it is saved standing on 1", () => {
     const { state } = sliver();
-    // `healthMap` truncates 0.5 to 0: the owner's yard draws it as rubble and
-    // repairs it from 0, and Flash's load reads 0 as destroyed
-    // (`BFOUNDATION.as:3141-3144`) ...
-    expect(state.health["1"]).toBe(0);
-    // ... but no fall: not in the destroyed list, so no "destroyed" line,
-    // no building-destroyed count, no fall loot.
+    expect(state.health["1"]).toBe(1);
     expect(state.destroyedIds).not.toContain(1);
   });
 
-  it("Flash: rounds 0.5 to 1, so it is saved standing on 1 (fails today)", () => {
-    const { state } = sliver();
-    expect(state.health["1"]).toBe(1);
+  it("under older rules (wholeHealth off) it was saved as 0, yet never counted destroyed", () => {
+    // An attack started before whole health replays as it was fought:
+    // `healthMap` truncated 0.5 to 0, drawn as rubble, with no fall.
+    const { state } = sliver({ wholeHealth: false });
+    expect(state.health["1"]).toBe(0);
+    expect(state.destroyedIds).not.toContain(1);
+  });
+
+  /**
+   * Fortification 3 and a 5% defence bonus: 15 x 0.6 / 1.05 = 8.57 a hit, so
+   * a Town Hall on 9 is left on 0.43, which Flash rounds to 0: it falls.
+   */
+  const fallen = (options: Partial<BattleOptions> = {}) => {
+    const yard = buildEngineYard({
+      buildingdata: { "1": { id: 1, t: TOWN_HALL, l: 1, X: 0, Y: 0, fort: 3 } },
+      buildinghealthdata: { "1": 9 },
+      resources: { r1: 100000, r2: 0, r3: 0, r4: 0 },
+    });
+    const battle = createBattle(yard, { seed: 1, defenceBonus: { hp: 0.05 }, ...options });
+    battle.apply({ kind: "fling", t: 0, x: 80, y: 80, r: 0, monsters: { C2: 1 } });
+    const hit = untilFirstHit(battle);
+    battle.apply({ kind: "retreat", t: battle.tick });
+    finish(battle);
+    return { hit, state: battle.state() };
+  };
+
+  it("Flash: rounds 0.4 to 0, so it falls and counts as destroyed", () => {
+    const { hit, state } = fallen();
+    expect(hit).toBeCloseTo((15 * 0.6) / 1.05, 9);
+    expect(state.health["1"]).toBe(0);
+    expect(state.destroyedIds).toContain(1);
+  });
+
+  it("under older rules (wholeHealth off) the same hit left it standing on 0.43", () => {
+    const { state } = fallen({ wholeHealth: false });
+    expect(state.destroyedIds).not.toContain(1);
   });
 
   it("next attack: a building stored on 0 is already down; no monster can hit it", () => {
@@ -99,7 +127,9 @@ describe("a defending champion stored on under 1 health", () => {
       resources: { r1: 100000, r2: 0, r3: 0, r4: 0 },
     });
 
-  it("today: `cagedHealth` floors it to 0, so it never comes out and is reported on 0", () => {
+  // Only an old save can hold 0.5 now: a battle keeps a caged champion's
+  // health whole. `cagedHealth` floors it to 0, as before.
+  it("an old save's 0.5: `cagedHealth` floors it to 0, so it never comes out and is reported on 0", () => {
     const battle = createBattle(cageYard(), {
       seed: 3,
       defenderChampions: [{ t: 1, l: 2, hp: 0.5, pl: 0 }],
