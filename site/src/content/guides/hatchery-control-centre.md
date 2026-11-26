@@ -12,11 +12,17 @@ The **Hatchery Control Centre** (HCC) runs all your Hatcheries from one queue. I
 
 Click your HCC on the yard, then **Upgrade**.
 
-| Level | Cost (Twigs, Pebbles and Putty, each) | Time | Needs | Queue | Presets |
-| --- | --- | --- | --- | --- | --- |
-| 1 | 4M | 25 hours | Town Hall 3, three level 2 Hatcheries | 7 stacks of 20 | 2 |
-| 2 | 25M | 2 days | Town Hall 6, four level 3 Hatcheries | 10 stacks of 20 | 4 |
-| 3 | 75M | 4 days | Town Hall 8 | 10 stacks of 30 | 6 |
+| Level | Cost (each of Twigs, Pebbles, Putty) | Time | Needs |
+| --- | --- | --- | --- |
+| 1 | 4M | 25 hours | Town Hall 3, three level 2 Hatcheries |
+| 2 | 25M | 2 days | Town Hall 6, four level 3 Hatcheries |
+| 3 | 75M | 4 days | Town Hall 8 |
+
+| Level | Queue | Presets | Outposts |
+| --- | --- | --- | --- |
+| 1 | 7 stacks of 20 | 2 | |
+| 2 | 10 stacks of 20 | 4 | |
+| 3 | 10 stacks of 30 | 6 | Runs them from home |
 
 ## 2. Save a preset
 

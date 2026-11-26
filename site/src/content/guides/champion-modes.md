@@ -10,7 +10,7 @@ updated: 2026-11-27
 
 In the attack screen, every champion in your army list has a **Mode** box. Pick one. Your champion keeps it for the next attack.
 
-![The army list in the attack screen: each champion has a Mode box](/images/guides/champion-modes-pick.webp)
+<img class="narrow" src="/images/guides/champion-modes-pick.webp" alt="The army list in the attack screen: Fomor and Drull, each with a Mode box set to Hybrid" width="519" height="280" loading="lazy">
 
 ## The three Modes
 
