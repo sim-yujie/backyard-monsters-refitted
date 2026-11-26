@@ -84,8 +84,9 @@ const payloadsAt = async (
   world: string,
   coords: readonly [number, number][],
   rows: readonly MapCell[],
+  ownOnly = false,
 ): Promise<{ cells: PushedCell[]; alliances: Set<number> }> => {
-  const { payloads, alliances } = await rowPayloads(ctx, world, rows);
+  const { payloads, alliances } = await rowPayloads(ctx, world, rows, { ownOnly });
   const noise = generateNoise(world);
   const grid: Record<number, Record<number, unknown>> = {};
   const cells: PushedCell[] = [];
@@ -128,10 +129,10 @@ export const buildOwnerCells = (
     if (!wanted.length) return [];
     const rows = await loadRows(world, wanted, userid);
     if (!rows.length) return [];
-    const user = await postgres.em.findOne(User, { userid }, { populate: ["save"], fields: ["userid", "alliance_id", ...OWN_SAVE_FIELDS] });
+    const user = await postgres.em.findOne(User, { userid }, { populate: ["save"], fields: ["userid", "username", "pic_square", "alliance_id", ...OWN_SAVE_FIELDS] });
     if (!user) return [];
     const owned = rows.map((row) => [row.x, row.y] as [number, number]);
-    const { cells } = await payloadsAt(cellContext(user as unknown as User), world, owned, rows);
+    const { cells } = await payloadsAt(cellContext(user as unknown as User), world, owned, rows, true);
     // Only cells that really are theirs (a row whose owner was gone builds as ground).
     return cells.filter(([, , payload]) => (payload as { mine?: unknown } | undefined)?.mine === 1);
   });

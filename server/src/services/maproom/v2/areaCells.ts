@@ -119,9 +119,15 @@ export const rowPayloads = async (
   ctx: CellContext,
   worldid: string,
   rows: readonly MapCell[],
+  { ownOnly = false }: { ownOnly?: boolean } = {},
 ): Promise<{ payloads: Map<string, unknown>; alliances: Set<number> }> => {
   const user = ctx.authUser;
   const stranger = user.userid === STRANGER.userid;
+  // Only the viewer's own rows (the live map's own channel): what is about another owner (who is
+  // online, truces, attackers, friends, hostiles, the owners themselves) changes nothing on them
+  // (`userCell` reads the viewer for `mine`, and every relation is off on it), so it is not read.
+  const others = !ownOnly;
+  if (ownOnly && rows.some((cell) => cell.uid !== user.userid)) throw new Error("ownOnly: a row is not the viewer's");
   const now = getCurrentDateTime();
 
   // Batch load all unique cell owners in a single query
@@ -145,22 +151,24 @@ export const rowPayloads = async (
 
   const [ownersList, online, truces, pendingInvites, workers, attackers, friendMarks, attacked, photos, flingers, ownMonsters] =
     await Promise.all([
-      ownerIds.length
+      others && ownerIds.length
         ? postgres.em.find(User, { userid: { $in: ownerIds } }, { populate: ["save"], fields: CELL_OWNER_FIELDS })
         : none([] as User[]),
       // The online rule of #271, in the attack load's window: the lock shows
       // only on a player who really cannot be attacked (#275).
-      onlinePlayers(ownerIds, now),
-      stranger ? none(new Map()) : getTruces(user.userid, ownerIds),
+      others ? onlinePlayers(ownerIds, now) : none(new Set<number>()),
+      stranger || !others ? none(new Map()) : getTruces(user.userid, ownerIds),
       stranger ? none(new Map()) : pendingInvitesOn(postgres.em, user.userid, ownOutposts, now),
       stranger ? none({ idle: new Set<number>(), busy: new Map<number, number | null>() }) : outpostWorkerSaves(postgres.em, ownOutpostSaveIds, now),
       // Who has ever attacked the viewer: the red "attacked you" plate (`ak`).
-      stranger ? none(new Set<number>()) : attackersAmong(postgres.em, user.userid, ownerIds),
+      stranger || !others ? none(new Set<number>()) : attackersAmong(postgres.em, user.userid, ownerIds),
       // Friends among them: the `fr` flag (friends WP2, #369), and the pinned ones' `fp` (beta 7).
-      stranger ? none({ friends: new Set<number>(), pinned: new Set<number>() }) : friendMarksAmong(postgres.em, user.userid, ownerIds),
+      stranger || !others
+        ? none({ friends: new Set<number>(), pinned: new Set<number>() })
+        : friendMarksAmong(postgres.em, user.userid, ownerIds),
       // Anyone with an attack between them and the viewer, either way: the hostile border's `ho`
       // (owner, 8 Nov 2026; `hostiles.ts`), switched off by a running truce in `userCell`.
-      stranger ? none(new Set<number>()) : attackedBetween(postgres.em, user.userid, ownerIds),
+      stranger || !others ? none(new Set<number>()) : attackedBetween(postgres.em, user.userid, ownerIds),
       // Their uploaded photos others may see (owner, 13 Nov 2026), one query for the area: `photo`.
       visiblePhotos(postgres.em, ownerIds),
       // Each own Flinger's level as the range check reads it (`validateRange.ts`):

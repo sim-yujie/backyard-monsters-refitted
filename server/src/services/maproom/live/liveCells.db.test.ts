@@ -35,6 +35,9 @@ const { mr2HexShape } = await import("../../../config/MapRoom2Config.js");
 const PRIVATE_FIELDS = ["r", "m", "nh", "f", "c", "wi", "wb", "wf", "t", "ak", "fp", "ho"];
 
 const plain = (value: unknown): Record<string, unknown> => JSON.parse(JSON.stringify(value ?? null));
+/** As `plain`, without the army's "caught up at" stamp (the clock's second, not a field the map draws). */
+const plainArmy = (value: unknown): Record<string, unknown> =>
+  JSON.parse(JSON.stringify(value ?? null, (key, inner) => (key === "saved" ? undefined : inner)));
 
 describe.skipIf(!dbName)("live map pushes equal getarea, per viewer (stage 2)", () => {
   let orm: MikroORM;
@@ -90,7 +93,7 @@ describe.skipIf(!dbName)("live map pushes equal getarea, per viewer (stage 2)", 
         }
         if (cell.uid === viewer && typeof cell.b === "number" && cell.b >= 2) {
           // The viewer's own cell: its own-channel copy, in full.
-          expect(plain(own.get(`${cx},${cy}`))).toEqual(expected);
+          expect(plainArmy(own.get(`${cx},${cy}`))).toEqual(plainArmy(expected));
           seen.own += 1;
           continue;
         }
