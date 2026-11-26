@@ -217,8 +217,8 @@ needs your value:
 - `MAIL_FROM`: for example `Backyard Monsters Refitted <no-reply@yourgame.com>`;
 - `TURNSTILE_SECRET_KEY`: the secret key from step 5.
 
-Optional: `BUG_REPORT_EMAIL` is where in-game bug reports are emailed (it
-has a default; set it only to send them somewhere else).
+Optional: `BUG_REPORT_EMAIL` is where in-game bug reports are emailed. Left
+empty, no email is sent; reports still appear on the dashboard.
 
 For the owner's dashboard at `/admin`: `ADMIN_USER_IDS` is your own account
 number (several separated by commas). Left empty, the dashboard does not open

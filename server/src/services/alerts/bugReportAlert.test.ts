@@ -89,23 +89,35 @@ describe("bug report alerts", () => {
   });
 
   test("saving a report sends its alert, and a failing alert does not stop the save", async () => {
-    const store: BugReportStore = { countSince: async () => 0, insert: async () => 55, markEmailed: async () => {} };
-    const notified: number[] = [];
-    const saved = await submitBugReport({} as EntityManager, row(), null, {
-      store,
-      send: async () => {},
-      notify: async (id) => notified.push(id),
-    });
-    expect(saved.id).toBe(55);
-    expect(notified).toEqual([55]);
-    const again = await submitBugReport({} as EntityManager, row(), null, {
-      store,
-      send: async () => {},
-      notify: async () => {
-        throw new Error("telegram down");
-      },
-    });
-    expect(again.id).toBe(55);
-    expect(await again.emailed).toBe(true);
+    const savedTo = process.env.BUG_REPORT_EMAIL;
+    process.env.BUG_REPORT_EMAIL = "bugs@example.org";
+    try {
+      await saveAndAlert();
+    } finally {
+      if (savedTo === undefined) delete process.env.BUG_REPORT_EMAIL;
+      else process.env.BUG_REPORT_EMAIL = savedTo;
+    }
   });
 });
+
+/** Two saves through `submitBugReport`: the alert goes out, and a throwing alert changes nothing. */
+const saveAndAlert = async () => {
+  const store: BugReportStore = { countSince: async () => 0, insert: async () => 55, markEmailed: async () => {} };
+  const notified: number[] = [];
+  const saved = await submitBugReport({} as EntityManager, row(), null, {
+    store,
+    send: async () => {},
+    notify: async (id) => notified.push(id),
+  });
+  expect(saved.id).toBe(55);
+  expect(notified).toEqual([55]);
+  const again = await submitBugReport({} as EntityManager, row(), null, {
+    store,
+    send: async () => {},
+    notify: async () => {
+      throw new Error("telegram down");
+    },
+  });
+  expect(again.id).toBe(55);
+  expect(await again.emailed).toBe(true);
+};

@@ -12,7 +12,9 @@ import { imageExtension, type BugReportImage } from "./bugReportImage.js";
 /**
  * Bug reports sent from the game (`controllers/bugReports`): each is saved in
  * `bym.bug_report` (migration `20261021_CreateBugReportTable.ts`) and then
- * emailed to `BUG_REPORT_EMAIL`, with its pictures attached.
+ * emailed to `BUG_REPORT_EMAIL`, with its pictures attached. With no
+ * `BUG_REPORT_EMAIL` set, nothing is emailed; the report is still saved, shown
+ * on the dashboard and, when alerts are set up, sent to Telegram.
  *
  * - **Saved first.** The email goes after the row is written and without the
  *   player waiting for it; a failed email is logged and leaves `emailed_at`
@@ -129,11 +131,13 @@ const oneLine = (text: string, max: number): string => {
  * @param {number} id - The report's row id.
  * @param {BugReportRow} row - The report.
  * @param {string | null} replyEmail - Where a reply goes: the account's email, or the one typed.
+ * @param {string} to - Who receives it (`BUG_REPORT_EMAIL`).
  */
 export const bugReportMail = (
   id: number,
   row: BugReportRow,
   replyEmail: string | null,
+  to: string,
   env: Record<string, string | undefined> = process.env
 ): BugReportMail => {
   const who = row.userid !== null ? `${row.username ?? "(no name)"} (user ${row.userid})` : "Signed out";
@@ -165,7 +169,7 @@ export const bugReportMail = (
   ];
   return {
     from: env.MAIL_FROM?.trim() || DEFAULT_MAIL_FROM,
-    to: bugReportEmail(env),
+    to,
     ...(replyEmail && { replyTo: replyEmail }),
     subject: `Bug report #${id}: ${oneLine(row.message, 60)}`,
     text: lines.join("\n"),
@@ -198,14 +202,15 @@ export interface SubmitBugReportDeps {
 
 export interface SubmittedBugReport {
   readonly id: number;
-  /** Settles once the email is sent (true) or has failed (false); never rejects. */
+  /** Settles once the email is sent (true), or has failed or has no recipient (false); never rejects. */
   readonly emailed: Promise<boolean>;
 }
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
 /**
- * Checks the daily cap, saves the report, then emails it in the background.
+ * Checks the daily cap, saves the report, then emails it in the background
+ * (only when `BUG_REPORT_EMAIL` is set).
  *
  * @param {EntityManager} em - A fork that outlives the request (the email's write comes later).
  * @param {BugReportRow} row - The checked report.
@@ -228,8 +233,13 @@ export const submitBugReport = async (
   void notify(id).catch(() => {});
 
   const emailed = (async () => {
+    const to = bugReportEmail();
+    if (to === null) {
+      logger.info(`BugReport: report ${id} saved; not emailed (BUG_REPORT_EMAIL is not set).`);
+      return false;
+    }
     try {
-      await send(bugReportMail(id, row, replyEmail));
+      await send(bugReportMail(id, row, replyEmail, to));
     } catch (err) {
       logger.error(`BugReport: email for report ${id} failed (the report is saved): ${err}`);
       return false;
