@@ -388,6 +388,8 @@ p {
 
 .prose {
   max-width: 720px;
+  /* A grid item: without this a wide table pushes the page past a phone's width. */
+  min-width: 0;
 }
 
 .prose h2 {
