@@ -1168,52 +1168,12 @@
   flex: none;
 }
 
-/* Version A carries the name: a size smaller than Attack, so a 12-letter name fits the desktop
-   side panel too. */
-:root .mr2-cell .btn.mr2-live-bar--a,
-:root[data-skin] .mr2-cell .btn.mr2-live-bar--a {
-  gap: 8px;
-  padding-inline: 10px;
-  font-size: 15px;
-}
-
-/* A long name ends in "..." on one line, never wraps or pushes the arrow out. */
+/* One line, never wraps or pushes past the plate. */
 .mr2-live-bar__text {
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-}
-
-/* Version C: whoever took the cell, as a small framed picture before "Taken". */
-.mr2-live-bar__face {
-  flex: none;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 34px;
-  height: 34px;
-  box-sizing: border-box;
-  border: 2px solid rgb(0 0 0 / 0.45);
-  border-radius: 9px;
-  background: rgb(255 255 255 / 0.55);
-  overflow: hidden;
-}
-
-.mr2-live-bar__face[hidden] {
-  display: none;
-}
-
-.mr2-live-bar__face img {
-  width: 30px;
-  height: 30px;
-  object-fit: contain;
-}
-
-.mr2-live-bar__face img.is-photo {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
 }
 
 /* Classic: the same plate as its Attack (neon r2/r3: the View yard plate is green, and a gold

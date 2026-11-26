@@ -588,7 +588,9 @@ describe("the live map's panel changes (beta 9, owner's choice A)", () => {
     panel.update(player({ uid: 9, n: "Thornback" }), true);
     const bar = host.querySelector<HTMLButtonElement>(".mr2-live-bar")!;
     expect(bar.hidden).toBe(false);
-    expect(text(host, ".mr2-live-bar__text")).toBe("Taken by Thornback");
+    expect(text(host, ".mr2-live-bar__text")).toBe("Taken · Update");
+    // The bar leaves the name out; screen readers still get the whole sentence.
+    expect(bar.getAttribute("aria-label")).toBe("Taken by Thornback. Tap to update.");
     expect(buttonNamed(host, "Attack")).toBeUndefined();
     // Still the old owner on screen, through the once-a-second refresh too.
     panel.update(player({ uid: 9, n: "Thornback" }));
@@ -597,6 +599,13 @@ describe("the live map's panel changes (beta 9, owner's choice A)", () => {
     expect(bar.hidden).toBe(true);
     expect(host.textContent).toContain("Thornback");
     expect(options.onAttack).not.toHaveBeenCalled();
+  });
+
+  it("taken by the player themself, the bar says so in as few words", () => {
+    const { panel, host } = open(player());
+    panel.update(player({ uid: 5, mine: 1, n: "agenttester" }), true);
+    expect(text(host, ".mr2-live-bar__text")).toBe("Now yours · Update");
+    expect(host.querySelector(".mr2-live-bar")!.getAttribute("aria-label")).toBe("Taken by you. Tap to update.");
   });
 
   it("the same change from a plain refresh just shows the new cell", () => {
