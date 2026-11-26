@@ -197,6 +197,7 @@ export const REAL_ACTION_ROUTES: readonly RealActionRoute[] = [
   { method: "POST", path: "/api/:apiVersion/player/sendmessage", when: isTruceMail },
   // Friends: help in their yard, and gifts.
   { method: "POST", path: "/api/:apiVersion/bm/friends/help" },
+  { method: "POST", path: "/api/:apiVersion/bm/friends/help/all" },
   { method: "POST", path: "/api/:apiVersion/bm/friends/gift" },
   { method: "POST", path: "/api/:apiVersion/bm/friends/gifts/all" },
   { method: "POST", path: "/api/:apiVersion/bm/friends/gifts/collect" },

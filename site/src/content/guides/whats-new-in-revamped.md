@@ -3,10 +3,10 @@ title: What's new in Revamped
 description: The features you won't find in the original Backyard Monsters, and where to find them.
 order: 6
 icon: /images/guides/new-card.webp
-updated: 2026-11-06
+updated: 2026-11-27
 ---
 
-The first sections are new in **beta 6**. Everything from "New in beta 5" down, except the last section, came with beta 5.
+The first sections are new in **beta 6**. Everything from "New in beta 5" down, except the last section, came with beta 5. For beta 7, 8 and 9, see the [changelog](/changelog/) and the guides to the [Hatchery Control Centre](/guides/hatchery-control-centre/), [moving monsters](/guides/move-monsters/) and the [Infernal Lab](/guides/infernal-lab/).
 
 ## A new Map Room 2
 
@@ -51,9 +51,9 @@ Four new upgrades in the **Monster Lab**:
 
 ![The Monster Lab window showing the new Pokey ability](/images/guides/new6-lab.webp)
 
-## Decorations for Shiny
+## Decorations
 
-The original game's decorations are on sale again: **Build ▸ Decorations**, in Flash's five sub-tabs.
+The original game's decorations are on sale again: **Build ▸ Decorations**, in Flash's five sub-tabs. Since beta 7 they cost **Glimmers**.
 
 ![The Decorations tab in the Build menu](/images/guides/new6-decorations.webp)
 

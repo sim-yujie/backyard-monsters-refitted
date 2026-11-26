@@ -451,3 +451,60 @@ describe("giftAllOf (owner, 13 Nov 2026)", () => {
     });
   });
 });
+
+describe("helpAll (owner, 26 Nov 2026)", () => {
+  it("sends every help in one POST and reads each outcome as one help's answer, or its refusal in words", async () => {
+    stubFetch({
+      error: 0,
+      rewardsLeft: 3,
+      helps: [
+        { buildingId: 4, kind: "speedup", ok: true, secondsSaved: 500, reward: { r1: 25, r2: "25" }, rewardsLeft: 4, building: { id: 4, cU: 9500 } },
+        { buildingId: 7, kind: "speedup", ok: false, reason: "helpersFull" },
+        { buildingId: 9, kind: "repair", ok: true, healed: true, reward: {}, rewardsLeft: 3, building: null },
+        { buildingId: 2, kind: "speedup", ok: false, reason: "whatever" },
+        { kind: "speedup", ok: true },
+      ],
+    });
+    const answer = await friendsApi.helpAll(12, [
+      { buildingId: 4, kind: "speedup" },
+      { buildingId: 7, kind: "speedup" },
+      { buildingId: 9, kind: "repair" },
+      { buildingId: 2, kind: "speedup" },
+    ]);
+    expect(calls.map((call) => [call.url.replace(/^.*\/api\/[^/]+/, ""), call.method, call.json])).toEqual([
+      [
+        "/bm/friends/help/all",
+        "POST",
+        {
+          userid: 12,
+          targets: [
+            { buildingId: 4, kind: "speedup" },
+            { buildingId: 7, kind: "speedup" },
+            { buildingId: 9, kind: "repair" },
+            { buildingId: 2, kind: "speedup" },
+          ],
+        },
+      ],
+    ]);
+    expect(answer).toEqual({
+      rewardsLeft: 3,
+      helps: [
+        {
+          buildingId: 4,
+          kind: "speedup",
+          ok: true,
+          result: { secondsSaved: 500, reward: { r1: 25, r2: 25 }, rewardsLeft: 4, building: { id: 4, cU: 9500 } },
+        },
+        { buildingId: 7, kind: "speedup", ok: false, refusal: { reason: "helpersFull", message: REFUSAL_TEXT.helpersFull } },
+        { buildingId: 9, kind: "repair", ok: true, result: { healed: true, reward: {}, rewardsLeft: 3, building: null } },
+        { buildingId: 2, kind: "speedup", ok: false, refusal: { reason: "unknown", message: GENERAL_REFUSAL } },
+      ],
+    });
+  });
+
+  it("a request refused as a whole throws, read as any friends refusal", async () => {
+    stubFetch(refusal("underAttack"), 409);
+    const caught = await friendsApi.helpAll(12, [{ buildingId: 4, kind: "speedup" }]).catch((error: unknown) => error);
+    expect(friendRefusal(caught)).toEqual({ reason: "underAttack", message: REFUSAL_TEXT.underAttack });
+  });
+});

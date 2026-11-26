@@ -37,7 +37,7 @@ MUST = {
   "A slim GREY GRANITE OBELISK with a small pyramid tip. Near the top of its FRONT face (the face toward the lower left) EXACTLY THREE GOLD STARS arranged in a triangle: one above, two side by side below (photo 3). No other stars anywhere.",
   "Under the bronze group a plain grey granite UPPER PEDESTAL with a moulded cap. (On the real one the name is carved there: leave it BLANK, no letters.)",
   "The BASE: a tall, sloping (tapering) granite base of big rough-faced blocks in courses, a moulded ledge on top, a dark bronze PLAQUE on its front (BLANK, no letters), on a low plinth and two wide granite steps.",
-  "The DARK BRONZE sculpture: JOSE RIZAL standing at the front centre facing out, in a long buttoned overcoat, holding a book at his side, upright and dignified (photo 6). At the front's LEFT corner a seated MOTHER holding her child (photo 4); at the RIGHT corner TWO SEATED BOYS reading one book together (photo 5); leaves and a pot behind the obelisk.",
+  "The DARK BRONZE sculpture: JOSE RIZAL standing at the front centre facing out, in a long buttoned overcoat, holding a book at his side, upright and dignified (photo 6). At the front's LEFT corner a seated MOTHER holding her child (photo 4); against the obelisk's RIGHT-hand face TWO SEATED BOYS reading one book together as ONE compact group (photo 5); nothing behind the obelisk (owner 26 Nov: one figure group on each side of Rizal).",
   "Figures realistic and respectful in proportion; faces simple at this size, never cartoonish or exaggerated.",
   "Granite is a light warm grey; the bronze dark brown-black with soft highlights.",
  ],

@@ -3,10 +3,12 @@ title: Upgrade many walls at once
 description: Press Upgrade walls, pick the walls you want, and raise them all in one go, with no waiting.
 order: 7
 icon: /images/guides/walls-card.webp
-updated: 2026-11-04
+updated: 2026-11-27
 ---
 
 ## 1. Press Upgrade walls
+
+> **Needs a built Yard Planner** in that yard (main yard or Inferno). Without one, upgrade one wall at a time from its pop-up: it finishes at once, with no worker.
 
 Two ways in:
 
@@ -37,8 +39,5 @@ The panel shows the cost. A red line means you can't afford them all: pick fewer
 <img class="narrow" src="/images/guides/walls-upgrade.webp" alt="The Upgrade walls panel: Level 3 chosen in orange, Select all, Affordable and Clear, 173 walls picked, the cost, then Upgrade 173" width="720" height="848" loading="lazy">
 
 - Every wall is done **at once**. No builder, no waiting.
-- Higher levels need a higher **Town Hall**.
 - Walls already at that level are skipped, and cost nothing.
 - **Cancel** or **Esc** stops picking.
-
-Next: [Champion Modes](/guides/champion-modes/).
