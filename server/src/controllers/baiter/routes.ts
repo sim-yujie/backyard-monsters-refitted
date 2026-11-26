@@ -12,7 +12,7 @@ import {
 } from "../../middleware/rateLimiters.js";
 import { postgres } from "../../server.js";
 import { servedDefenderForces } from "../../services/base/combat/defenderForces.js";
-import { FINALISE_REPLAY_DEADLINE_MS, replayAbandonedInWorker, reserveReplaySlot } from "../../services/base/combat/replayRunner.js";
+import { FINALISE_REPLAY_DEADLINE_MS, replayAbandonedInWorker, AUTO_ATTACK_SLOT_WAIT_MS, reserveReplaySlot } from "../../services/base/combat/replayRunner.js";
 import { redisRunTickets } from "../../services/baiter/baiterRunStore.js";
 import { requirePageRules, stampOf } from "../../services/base/combat/rulesStamp.js";
 import {
@@ -41,7 +41,7 @@ const deps: BaiterDeps = {
   tickets: redisRunTickets,
   forces: (save, now) => servedDefenderForces(save, null, now),
   fight: async (input) => {
-    const release = await reserveReplaySlot();
+    const release = await reserveReplaySlot(AUTO_ATTACK_SLOT_WAIT_MS, { kind: "baiter" });
     if (!release) throw baiterRefusedErr("busy");
     try {
       return await replayAbandonedInWorker(input, FINALISE_REPLAY_DEADLINE_MS);

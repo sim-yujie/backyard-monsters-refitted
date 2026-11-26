@@ -38,6 +38,7 @@ import { combatConfig, combatModeWasUnrecognised } from "./config/CombatConfig.j
 import { ownerSaveConfig, ownerSaveModeWasUnrecognised } from "./config/OwnerSaveConfig.js";
 import { startAttackFinaliser } from "./services/base/finaliseAttack.js";
 import { startReplayWorkerWatch } from "./services/base/combat/replayWorkerWatch.js";
+import { warmReplayPool } from "./services/base/combat/replayRunner.js";
 import { startInfernoPlayerFinaliser } from "./services/inferno/infernoPlayerFinalise.js";
 import { startRetentionSweep } from "./services/privacy/retention.js";
 import { startAllianceProgress } from "./services/alliance/progressFeed.js";
@@ -165,6 +166,9 @@ redis.onclose = (err) => logger.error(`Redis disconnected: ${err.message}`);
   // 22 Nov 2026) alert the owner and restart the server
   // (`services/base/combat/replayWorkerWatch.ts`).
   startReplayWorkerWatch();
+  // The warm battle workers (patch 9.1, `replayPool.ts`): started now, so the
+  // first battle does not pay for loading the engine.
+  warmReplayPool();
 
   // Finishes attacks whose window closed without a save (issue #138).
   // `ATTACK_FINALISER_SWEEP=off` leaves the sweep to another server sharing

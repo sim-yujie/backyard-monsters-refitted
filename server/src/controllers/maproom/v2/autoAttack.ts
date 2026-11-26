@@ -11,6 +11,7 @@ import {
   runAutoAttack,
 } from "../../../services/base/autoAttack/autoAttack.js";
 import { smartMoveFor } from "../../../services/base/autoAttack/smartMove.js";
+import { replayQueuePlace } from "../../../services/base/combat/replayRunner.js";
 
 const AutoAttackSchema = z.object({
   /** The camp's base id, as the map carries it (`bid`). */
@@ -68,8 +69,33 @@ export const autoAttack: KoaController = async (ctx) => {
   // never plays the server's battle on older rules (owner's fix 1, 23 Nov 2026).
   requirePageRules(ctx, ctx.authUser, stampOf(ctx.request.body), "worldmapv2/autoattack");
 
+  // A player who closes the game while in the battle line gives up their place.
+  const gone = new AbortController();
+  const onClose = () => {
+    if (!ctx.res.writableEnded) gone.abort();
+  };
+  // (A test's bare context has no response stream.)
+  const res = ctx.res as typeof ctx.res | undefined;
+  res?.once?.("close", onClose);
+  try {
+    const result = await runAutoAttack(ctx.authUser, baseid, moves, gone.signal);
+    ctx.status = Status.OK;
+    ctx.body = { error: 0, ...result };
+  } finally {
+    res?.off?.("close", onClose);
+  }
+};
+
+/**
+ * `GET /worldmapv2/autoattackqueue` (patch 9.1): the player's place in the
+ * battle line while their Repeat attack waits (1 = next), or null. The
+ * working bar asks about once a second while the Repeat is out; it reads
+ * memory only.
+ */
+export const autoAttackQueue: KoaController = async (ctx) => {
+  const user: User = ctx.authUser;
   ctx.status = Status.OK;
-  ctx.body = { error: 0, ...(await runAutoAttack(ctx.authUser, baseid, moves)) };
+  ctx.body = { error: 0, place: replayQueuePlace(user.userid) };
 };
 
 /**

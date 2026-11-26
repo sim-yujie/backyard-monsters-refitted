@@ -23,6 +23,7 @@ import {
   FINALISE_REPLAY_DEADLINE_MS,
   ReplayTimeoutError,
   fightRaidInWorker,
+  AUTO_ATTACK_SLOT_WAIT_MS,
   reserveReplaySlot,
 } from "../base/combat/replayRunner.js";
 import type { CompletedJob } from "../yard/catchUp.js";
@@ -480,7 +481,7 @@ export const startRaid = async (em: EntityManager, user: User, raidId: unknown, 
 
   // The slot before the yard is touched: a server too busy to fight says so
   // at once, as an auto-attack's does (`reserveReplaySlot`).
-  const release = await reserveReplaySlot();
+  const release = await reserveReplaySlot(AUTO_ATTACK_SLOT_WAIT_MS, { kind: "raid" });
   if (!release) throw raidRefusedErr("busy");
   let start: RaidStart;
   try {

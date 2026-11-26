@@ -1,37 +1,43 @@
-import { availableParallelism } from "node:os";
 import type { AbandonedInput, AbandonedOutcome } from "./abandonedAttack.js";
 import type { RaidFightInput, RaidFightOutcome } from "../../raids/raidFight.js";
+import { logger } from "../../../utils/logger.js";
+import { ReplayPool } from "./replayPool.js";
+import { ReplayGate, type GateKind, type GateLog } from "./replayGate.js";
+import { ReplayTimeoutError, ReplayWorkerLoadError } from "./replayErrors.js";
+
+export { ReplayTimeoutError, ReplayWorkerLoadError } from "./replayErrors.js";
 
 /**
- * Runs a battle replay in a Bun worker, with a deadline (issue #23, C5;
- * `docs/design/server-combat.md` §3.5).
+ * Runs battle replays off the request thread (issue #23, C5;
+ * `docs/design/server-combat.md` §3.5), on a pool of warm workers since patch
+ * 9.1 (owner's option A on card repeat-busy-91, 26 Nov 2026).
  *
- * The engine is synchronous and takes from a few hundred milliseconds to a
- * couple of seconds of CPU for a full attack. Run inline, an attack save's
- * loot replay or the finaliser's replay held the event loop for all of it, and
- * every other request on the server waited. Each replay now runs in a worker
- * of its own: the request awaits it and the loop stays free.
+ * The engine is synchronous and takes from tens of milliseconds to a couple
+ * of seconds of CPU for a full attack. Run inline, it held the event loop and
+ * every other request waited, so each replay runs in a worker and the
+ * request awaits it.
  *
- * - **Deadline.** A replay that has not answered in time is terminated and the
- *   promise rejects with {@link ReplayTimeoutError}. The attack save gives up
- *   on landing the attack and leaves it to the finaliser
+ * - **A warm pool** (`replayPool.ts`): {@link REPLAY_POOL_SIZE} workers (2),
+ *   loaded once and reused, each at a lower CPU priority; more battles wait
+ *   in one first-come queue. A worker that runs past a deadline, crashes,
+ *   never loads, or grows too big is replaced, so a stuck replay still cannot
+ *   hold up the next one.
+ * - **Deadline.** Counted from the ask, queue time included. A replay not
+ *   answered in time rejects with {@link ReplayTimeoutError}. The attack save
+ *   gives up on landing the attack and leaves it to the finaliser
  *   (`attackResultPendingErr`); the finaliser, which has no one waiting on it,
  *   leaves the checkpoint for its next pass.
  * - **Single flight.** Both callers run their replay holding the attack's final
  *   lock (`attack-final:<basesaveid>`, `attackCheckpointStore.ts`), so there is
  *   never more than one replay per base in flight; this module adds no lock of
  *   its own.
- * - **One worker a job.** A worker is started for the job and terminated when
- *   it answers or times out, so a stuck replay cannot hold up the next one and
- *   a crashed one takes nothing else down. Starting one costs its module load,
- *   a few tens of milliseconds next to the replay itself.
- * - **A cap for auto-attacks (issue #221).** An auto-attack is a replay a
- *   player can ask for every few seconds, so it first takes one of
- *   {@link REPLAY_WORKER_CAP} slots, which it shares with every replay running
- *   ({@link reserveReplaySlot}), and is turned away when none frees up in
- *   time. Saves and the finaliser never wait: a player watching their own
- *   attack end comes before anyone's repeat. A slot covers the auto-attack's
- *   own worker too, so the cap errs on the side of fewer.
+ * - **The door for attacks a player starts at will** (`replayGate.ts`):
+ *   Repeat attack (issue #221), a raid start, a Trojan Horse and a baiter test
+ *   first wait their turn in line ({@link reserveReplaySlot}); past the
+ *   line's limits they are turned away "busy". Inside, they hold no worker:
+ *   their battles queue like a save's. Saves and the finaliser never wait at
+ *   the door: a player watching their own attack end comes before anyone's
+ *   repeat.
  */
 
 /** How long an attack save waits for its replay. */
@@ -61,29 +67,6 @@ export interface ReplayWorkerReady {
 
 /** Every message a replay worker sends. */
 export type ReplayWorkerMessage = ReplayWorkerReady | ReplayReply;
-
-/** The replay did not answer before its deadline, and was stopped. */
-export class ReplayTimeoutError extends Error {
-  constructor(readonly deadlineMs: number) {
-    super(`The battle replay did not finish within ${deadlineMs} ms`);
-    this.name = "ReplayTimeoutError";
-  }
-}
-
-/**
- * The worker failed before it could take the job: its modules did not load,
- * so no battle was fought. On 22 Nov 2026 Bun 1.4.2's transpiler broke after
- * ~12,000 workers on the live server and every replay died like this
- * ("SyntaxError: Unexpected keyword 'else'"). It says nothing about the
- * attack, so a finaliser never counts it as a failed replay: the attack waits
- * for its next pass ({@link isReplayWorkerLoadError}).
- */
-export class ReplayWorkerLoadError extends Error {
-  constructor(readonly reason: string) {
-    super(`Battle replay worker failed to load: ${reason}`);
-    this.name = "ReplayWorkerLoadError";
-  }
-}
 
 /** Whether `err` is a worker that never loaded ({@link ReplayWorkerLoadError}), not a replay that failed. */
 export const isReplayWorkerLoadError = (err: unknown): err is ReplayWorkerLoadError =>
@@ -143,87 +126,143 @@ const noteWorkerLoadFailure = (reason: string, now = Date.now()): void => {
   brokenHandler({ failures: loadFailures.length, lastError: reason });
 };
 
-/** How many replays may run at once before an auto-attack has to wait: a core is left for the server. */
-export const REPLAY_WORKER_CAP = Math.max(1, availableParallelism() - 1);
 
-/** How long an auto-attack waits for a slot before it is turned away. */
-export const AUTO_ATTACK_SLOT_WAIT_MS = 5_000;
-
-const SLOT_POLL_MS = 50;
-
-/** Replay workers alive now, and auto-attack slots held. */
-let running = 0;
-let reserved = 0;
-
-/** What the cap counts, for the tests and the log line. */
-export const replayLoad = (): { running: number; reserved: number } => ({ running, reserved });
-
-/**
- * Takes an auto-attack slot: waits while the replays running and the slots
- * held fill the cap, up to `waitMs`.
- *
- * @returns The release, to call once the auto-attack has landed (idempotent),
- *   or null when no slot freed up in time.
- */
-export const reserveReplaySlot = async (
-  waitMs = AUTO_ATTACK_SLOT_WAIT_MS,
-  cap = REPLAY_WORKER_CAP
-): Promise<(() => void) | null> => {
-  const deadline = Date.now() + waitMs;
-  while (running + reserved >= cap) {
-    if (Date.now() >= deadline) return null;
-    await new Promise((resolve) => setTimeout(resolve, SLOT_POLL_MS));
-  }
-  reserved++;
-  let released = false;
-  return () => {
-    if (released) return;
-    released = true;
-    reserved--;
-  };
+const envNumber = (name: string, fallback: number): number => {
+  const value = Number(process.env[name]);
+  return Number.isFinite(value) && value > 0 ? value : fallback;
 };
 
-const run = (job: ReplayJob, deadlineMs: number, workerUrl: URL = WORKER_URL): Promise<ReplayReply & { ok: true }> =>
-  new Promise((resolve, reject) => {
-    const worker = new Worker(workerUrl);
-    running++;
-    let settled = false;
-    /** Whether the worker said it loaded ({@link ReplayWorkerReady}). */
-    let loaded = false;
-    const finish = (settle: () => void): void => {
-      if (settled) return;
-      settled = true;
-      running--;
-      clearTimeout(timer);
-      worker.terminate();
-      settle();
-    };
-    const timer = setTimeout(() => finish(() => reject(new ReplayTimeoutError(deadlineMs))), deadlineMs);
-    worker.onmessage = (event: MessageEvent<ReplayWorkerMessage>) => {
-      const message = event.data;
-      if (!loaded) {
-        loaded = true;
-        noteWorkerLoaded();
-      }
-      if ("ready" in message) return;
-      finish(() => (message.ok ? resolve(message) : reject(new Error(`Battle replay failed: ${message.error}`))));
-    };
-    worker.onerror = (event: ErrorEvent) => {
-      const reason = String(event.message ?? "unknown error");
-      if (loaded) {
-        finish(() => reject(new Error(`Battle replay worker failed: ${reason}`)));
-        return;
-      }
-      // Before the worker said it loaded: its modules never ran, so no battle was fought.
-      finish(() => reject(new ReplayWorkerLoadError(reason)));
-      noteWorkerLoadFailure(reason);
-    };
-    worker.postMessage(job);
+/**
+ * Battles fought at once (owner: "2 at once", on the live box's 2 cores;
+ * `REPLAY_POOL_SIZE` for a bigger box). Each worker runs at a lower CPU
+ * priority (`replayWorker.ts`), so both fighting still leaves the server's
+ * requests their CPU.
+ */
+export const REPLAY_POOL_SIZE = Math.floor(envNumber("REPLAY_POOL_SIZE", 2));
+
+/** Battles a worker fights before it is replaced: bounds a slow leak, and ~1 new worker a day at today's load. */
+export const REPLAY_WORKER_MAX_JOBS = 1_000;
+
+/**
+ * A worker whose heap is past this after a battle is replaced. A warm worker
+ * sits at ~40-90 MB after the biggest battles of the diagnosis's job set.
+ */
+export const REPLAY_WORKER_MAX_HEAP_BYTES = 384 * 1024 * 1024;
+
+/** How long a Repeat attack waits in line before it is turned away "busy". */
+export const REPEAT_QUEUE_WAIT_MS = 15_000;
+
+/** How long a raid start, a Trojan Horse or a baiter test waits in line (as before 9.1). */
+export const AUTO_ATTACK_SLOT_WAIT_MS = 5_000;
+
+/** Attacks started at will that may be inside at once (their database work and battles). */
+export const REPLAY_GATE_MAX_ADMITTED = 6;
+
+/** The longest the line gets; one more is turned away at once. */
+export const REPLAY_GATE_MAX_WAITING = 20;
+
+const logReplaced = (why: string, detail: string): void => {
+  logger.warn("Battle replay worker replaced ({why}: {detail})", { event: "replay-worker-replaced", why, detail });
+};
+
+const pool = new ReplayPool({
+  workerUrl: WORKER_URL,
+  size: REPLAY_POOL_SIZE,
+  maxJobs: REPLAY_WORKER_MAX_JOBS,
+  maxHeapBytes: REPLAY_WORKER_MAX_HEAP_BYTES,
+  onLoadFailure: (reason) => noteWorkerLoadFailure(reason),
+  onLoaded: noteWorkerLoaded,
+  onReplaced: logReplaced,
+  onFree: () => gate.pump(),
+});
+
+const logGate = (line: GateLog): void => {
+  const words =
+    line.outcome === "served"
+      ? "Battle queue: {kind} waited {waitedMs} ms from place {place}"
+      : line.outcome === "gone"
+        ? "Battle queue: {kind} left the line after {waitedMs} ms"
+        : "Battle queue: {kind} turned away busy ({why}) after {waitedMs} ms";
+  logger.info(words, {
+    event: "replay-queue",
+    ...line,
+    fighting: pool.fighting,
+    queued: pool.queued,
   });
+};
+
+const gate = new ReplayGate({
+  maxAdmitted: REPLAY_GATE_MAX_ADMITTED,
+  maxWaiting: REPLAY_GATE_MAX_WAITING,
+  workerFree: () => pool.hasFreeSeat,
+  log: logGate,
+});
+
+/** Starts the battle workers now and keeps them warm (`server.ts`, at boot). */
+export const warmReplayPool = (): void => pool.warm();
+
+/** What the pool and the door hold now, for the tests and the health page. */
+export const replayLoad = () => ({
+  fighting: pool.fighting,
+  queued: pool.queued,
+  alive: pool.alive,
+  spawned: pool.spawned,
+  replaced: { ...pool.replaced },
+  waiting: gate.waiting,
+  admitted: gate.admitted,
+  totals: gate.totals,
+});
+
+export interface SlotOptions {
+  /** For the log line. */
+  readonly kind?: GateKind;
+  /** The player, so their place in line can be read ({@link replayQueuePlace}). */
+  readonly who?: number;
+  /** The player left: give up the place. */
+  readonly signal?: AbortSignal;
+}
+
+/**
+ * Waits for a turn at the door (`replayGate.ts`) for an attack a player
+ * starts at will, up to `waitMs`.
+ *
+ * @returns The release, to call once the attack is done (idempotent), or
+ *   null when turned away (line full, waited too long, or the player left).
+ */
+export const reserveReplaySlot = (
+  waitMs = AUTO_ATTACK_SLOT_WAIT_MS,
+  { kind = "test", who, signal }: SlotOptions = {}
+): Promise<(() => void) | null> =>
+  gate.enter({ kind, waitMs, ...(who !== undefined && { who }), ...(signal && { signal }) });
+
+/** The player's place in line (1 = next), or null when they are not waiting. */
+export const replayQueuePlace = (who: number): number | null => gate.place(who);
+
+/**
+ * Runs one job: on the warm pool, or for a test's own worker module on a
+ * pool of one made for the job and closed after it.
+ */
+const run = async (job: ReplayJob, deadlineMs: number, workerUrl: URL): Promise<ReplayReply & { ok: true }> => {
+  if (workerUrl.href === WORKER_URL.href) return pool.run(job, deadlineMs);
+  const own = new ReplayPool({
+    workerUrl,
+    size: 1,
+    maxJobs: 1,
+    maxHeapBytes: REPLAY_WORKER_MAX_HEAP_BYTES,
+    onLoadFailure: (reason) => noteWorkerLoadFailure(reason),
+    onLoaded: noteWorkerLoaded,
+  });
+  try {
+    return await own.run(job, deadlineMs);
+  } finally {
+    own.close();
+  }
+};
 
 /**
  * An abandoned attack's replay (`replayAbandonedAttack`), in a worker.
  *
+ * @param deadlineMs - From now, queue time included.
  * @param workerUrl - The worker module; tests pass one that fails to load.
  * @throws {ReplayTimeoutError} Past the deadline.
  * @throws {ReplayWorkerLoadError} The worker never loaded.
@@ -248,7 +287,7 @@ export const fightRaidInWorker = async (
   input: RaidFightInput,
   deadlineMs = FINALISE_REPLAY_DEADLINE_MS
 ): Promise<RaidFightOutcome> => {
-  const reply = await run({ kind: "raid", input }, deadlineMs);
+  const reply = await run({ kind: "raid", input }, deadlineMs, WORKER_URL);
   if (reply.kind !== "raid") throw new Error("Battle replay answered the wrong job");
   return reply.result;
 };
