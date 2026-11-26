@@ -1164,8 +1164,10 @@
   display: none;
 }
 
+/* Turned to go clockwise, "reload" (neon review r1: the anticlockwise arrow read as "undo"). */
 .mr2-live-bar .mr2-live-bar__refresh {
   flex: none;
+  transform: scaleX(-1);
 }
 
 /* One line, never wraps or pushes past the plate. */
@@ -1195,9 +1197,12 @@
 }
 
 /* While the panel holds the old cell: its owner and the other actions wait for the update. */
+/* (neon review r1: the old cell's line and chips greyed too, so the bar is the one live thing.) */
 .mr2-cell--held .mr2-cell__actions > :not(.mr2-live-bar),
 .mr2-cell--held .mr2-cell__picture,
-.mr2-cell--held .mr2-cell__nameline {
+.mr2-cell--held .mr2-cell__nameline,
+.mr2-cell--held .mr2-cell__subtitle,
+.mr2-cell--held .mr2-cell__chips {
   opacity: 0.5;
   pointer-events: none;
 }
@@ -1205,7 +1210,8 @@
 /* Classic: half see-through on the cream panel only read as a paler green, still pressable (live
    map stage 2); greyed as well, so the waiting buttons read "off" as they do on Modern's dark plate. */
 :root[data-skin="flash"] .mr2-cell--held .mr2-cell__actions > :not(.mr2-live-bar),
-:root[data-skin="flash"] .mr2-cell--held .mr2-cell__picture {
+:root[data-skin="flash"] .mr2-cell--held .mr2-cell__picture,
+:root[data-skin="flash"] .mr2-cell--held .mr2-cell__chips {
   filter: grayscale(0.85) brightness(0.92);
   opacity: 0.55;
 }
