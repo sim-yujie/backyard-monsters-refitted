@@ -60,13 +60,28 @@ export interface BattleAttacker extends LootAttacker {
 }
 
 /**
+ * The older rules versions that already keep health whole, as Flash's does
+ * (player report, Reii, 25 Nov 2026): patch 8.7's, `92ea2dbbfe06531c`, and
+ * beta 9's with it, `723a6cab98c42278`. Both fight Krallen by patch 8.6's
+ * rules too. An attack started on 8.7 and landed after beta 9 went live, or
+ * on beta 9 before main's 8.7 was merged back, keeps both.
+ */
+const WHOLE_HEALTH_RULES_SINCE_8_7: readonly string[] = ["92ea2dbbfe06531c", "723a6cab98c42278"];
+
+/**
  * The older rules versions that already fight Krallen by patch 8.6's rules
  * (no Mode, Flash's route and turns): 8.6's own, `cf287596a22ae2e0`, and
- * beta 9's with them, `22d6196bc811ac42`. A rule gate must not read "these
- * rules or not" once a later change moves the version again: an attack started on 8.6 and landed after whole health went
- * live keeps its 8.6 Krallen, without whole health (player report, Reii).
+ * beta 9's with them, `22d6196bc811ac42`, and every version that keeps
+ * health whole ({@link WHOLE_HEALTH_RULES_SINCE_8_7}). A rule gate must not
+ * read "these rules or not" once a later change moves the version again: an
+ * attack started on 8.6 and landed after whole health went live keeps its
+ * 8.6 Krallen, without whole health (player report, Reii).
  */
-const KRALLEN_RULES_SINCE_8_6: readonly string[] = ["cf287596a22ae2e0", "22d6196bc811ac42"];
+const KRALLEN_RULES_SINCE_8_6: readonly string[] = [
+  "cf287596a22ae2e0",
+  "22d6196bc811ac42",
+  ...WHOLE_HEALTH_RULES_SINCE_8_7,
+];
 
 /**
  * What the replay of an attack is handed, as plain data, or null when there
@@ -107,8 +122,10 @@ export const battleReplayInput = ({
   // `hasMode`); one started under older rules, or with none recorded,
   // replays with the Mode its log carries, as it was fought.
   const rulesNow = stampPlays(session?.rules);
-  const modelessKrallen =
-    rulesNow || (typeof session?.rules === "string" && KRALLEN_RULES_SINCE_8_6.includes(session.rules));
+  const stampIn = (versions: readonly string[]): boolean =>
+    typeof session?.rules === "string" && versions.includes(session.rules);
+  const modelessKrallen = rulesNow || stampIn(KRALLEN_RULES_SINCE_8_6);
+  const wholeHealth = rulesNow || stampIn(WHOLE_HEALTH_RULES_SINCE_8_7);
   const fighter: LootAttacker = {
     academy,
     champion: attacker.champion ?? null,
@@ -155,8 +172,9 @@ export const battleReplayInput = ({
     // hits her (patch 8.6) only in an attack started under these rules.
     flashKrallen: modelessKrallen,
     // A monster's health stays whole, as Flash's does (player report, Reii,
-    // 25 Nov 2026), only in an attack started under these rules.
-    wholeHealth: rulesNow,
+    // 25 Nov 2026), only in an attack started under these rules or ones that
+    // already kept it.
+    wholeHealth,
   };
 };
 

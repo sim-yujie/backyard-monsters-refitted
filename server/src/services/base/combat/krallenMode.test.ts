@@ -170,6 +170,18 @@ describe("an attack started under older rules replays exactly as it was fought",
     expect(input.wholeHealth).toBe(false);
   });
 
+  test("an attack started on 8.7's rules keeps its 8.6 Krallen and whole health", () => {
+    const input = inputOf(sent, sessionOf("92ea2dbbfe06531c"));
+    expect(input.flashKrallen).toBe(true);
+    expect(input.wholeHealth).toBe(true);
+  });
+
+  test("an attack started on beta 9's rules before 8.7 was merged back keeps both too", () => {
+    const input = inputOf(sent, sessionOf("723a6cab98c42278"));
+    expect(input.flashKrallen).toBe(true);
+    expect(input.wholeHealth).toBe(true);
+  });
+
   test(
     "an old attack's Krallen in Hybrid, with no weights, still fights by the rules before",
     () => {
