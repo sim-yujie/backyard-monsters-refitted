@@ -52,7 +52,7 @@ import { dropOwnerSight, giveOneHelp, helpNoticeOf, helpRecordOf, openHelpVisit,
  * dropped if their Flinger moved, a `friend` bell line per help (one insert),
  * and the helped mark.
  *
- * The cost to the server is the same for 1 help or 50: one lock pair, one
+ * The cost to the server is the same for 1 help or 10: one lock pair, one
  * catch-up, a fixed number of reads, one insert of rows, one flush.
  */
 

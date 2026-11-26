@@ -33,10 +33,10 @@ export const HELP_RULES = {
  * It bounds the work of one request, not the rules (5 friends a job, each once,
  * and only the first 5 helps a day pay, hold however many are asked). Every
  * speed-up is of a build, upgrade or fortify countdown, each holding one of at
- * most `WORKER_CAP` (5) workers, so a real yard has at most 5 to speed up; 50
+ * most `WORKER_CAP` (5) workers, so a real yard has at most 5 to speed up; 10
  * leaves room for old saves and repairs. The web sends more in turns.
  */
-export const HELP_ALL_MAX_TARGETS = 50;
+export const HELP_ALL_MAX_TARGETS = 10;
 
 /**
  * Kept only for pre-7.6 clients: the `helpsLeft` every help answer still

@@ -301,7 +301,7 @@ export interface HelpResult {
 }
 
 /** The most helps one Help all request may ask for (the server's `HELP_ALL_MAX_TARGETS`); more go in turns. */
-export const HELP_ALL_MAX_TARGETS = 50;
+export const HELP_ALL_MAX_TARGETS = 10;
 
 /**
  * One target's outcome in a Help all answer (`POST /bm/friends/help/all`):

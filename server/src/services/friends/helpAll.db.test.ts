@@ -317,7 +317,9 @@ describe.skipIf(!dbName)("Help all as one request on a real database", () => {
 
   test("a request with no targets, too many, or a bad kind is refused before anything is read", async () => {
     expect(await reasonOf(helpAll(H1, []))).toMatch(/status/);
-    expect(await reasonOf(helpAll(H1, speedups(...Array.from({ length: HELP_ALL_MAX_TARGETS + 1 }, (_, i) => i + 1))))).toMatch(/status/);
+    // More than 10 (lead, 26 Nov 2026: a yard has at most 5 speed-ups).
+    expect(HELP_ALL_MAX_TARGETS).toBe(10);
+    expect(await reasonOf(helpAll(H1, speedups(...Array.from({ length: 11 }, (_, i) => i + 1))))).toMatch(/status/);
     expect(await reasonOf(helpAll(H1, [{ buildingId: 1, kind: "build" as Kind }]))).toMatch(/status/);
     // As a JSON string, as a form body sends it.
     await setYard(OWNER, { buildingdata: { "1": upgrading(1, 10_000) } });

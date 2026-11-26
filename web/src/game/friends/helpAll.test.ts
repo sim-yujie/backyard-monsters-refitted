@@ -174,6 +174,14 @@ describe("runHelpAll", () => {
     expect(gone).toMatchObject({ helped: 0, skipped: 0, stoppedBy: null });
   });
 
+  it("sends at most the server's 10 a request", async () => {
+    const ids = Array.from({ length: 12 }, (_, i) => i + 1);
+    const yard = scene({}, ids);
+    const summary = await runHelpAll(targets(ids), { block: yard.block, helpMany: yard.helpMany });
+    expect(yard.requests.map((sent) => sent.length)).toEqual([10, 2]);
+    expect(summary.helped).toBe(12);
+  });
+
   it("asks nothing when nothing is open", async () => {
     let asked = 0;
     const summary = await runHelpAll(targets([1, 2]), {
