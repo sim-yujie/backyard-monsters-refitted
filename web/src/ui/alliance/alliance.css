@@ -368,6 +368,19 @@
   }
 }
 
+/* Beside the level (not stacked): room between "Today" and "Lv", and a
+   level column of one width, so both columns run straight down the list. */
+@media (min-width: 481px) {
+  .alliance__item .alliance__side {
+    gap: var(--space-4);
+  }
+
+  .alliance__item .alliance__level {
+    min-width: 48px;
+    text-align: right;
+  }
+}
+
 .alliance__pager {
   display: flex;
   align-items: center;
@@ -3381,12 +3394,12 @@
     gap: 3px;
   }
 
+  /* Kept when empty (your own row, a hidden player), so every row is as
+     tall and the levels stay on one line (neon, 26 Nov). */
   .alliance__seen {
     order: 1;
     width: auto;
-  }
-
-  .alliance__seen:empty {
-    display: none;
+    min-height: 21px;
+    align-items: center;
   }
 }

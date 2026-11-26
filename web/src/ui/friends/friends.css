@@ -292,6 +292,24 @@
   color: var(--colour-text-muted);
 }
 
+/* Last seen's line (beta 9): as tall as a pill on every row, with room
+   above the buttons, and a thin rule after the level (neon, 26 Nov). */
+.friends-row__meta:has(> .seen) {
+  min-height: 24px;
+  margin-bottom: 4px;
+}
+
+.friends-row__divider {
+  flex: none;
+  width: 1px;
+  height: 11px;
+  background: rgb(255 255 255 / 20%);
+}
+
+:root[data-skin="flash"] .friends-row__divider {
+  background: rgb(60 40 20 / 22%);
+}
+
 /* Desktop and iPad: "Level 40" and last seen at 13px (neon, 26 Nov). */
 @media (min-width: 621px) and (min-height: 501px) {
   .friends-row__meta {

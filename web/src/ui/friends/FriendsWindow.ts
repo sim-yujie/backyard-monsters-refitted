@@ -59,6 +59,8 @@ export const FRIENDS_WINDOW_TEXT = {
   helpGroup: "Can use help",
   onlineGroup: "Online",
   restGroup: "Everyone else",
+  /** "Everyone else" on a phone's Back button, where the long words do not fit. */
+  restShort: "Others",
   level: (level: number): string => `Lv ${level}`,
   pinned: "Pinned to the top",
   canHelp: "Can use your help today",
@@ -280,7 +282,10 @@ export class FriendsWindow {
     back.type = "button";
     back.title = FRIENDS_WINDOW_TEXT.back;
     back.setAttribute("aria-label", `${FRIENDS_WINDOW_TEXT.back} (${formatAmount(total)} ${GROUP_WORDS[name]})`);
-    back.append(make("span", "friends-window__back-arrow", "\u2039"), groupPicture(name), ...groupWords(name, total));
+    const picture = groupPicture(name);
+    back.append(make("span", "friends-window__back-arrow", "\u2039"), ...(picture ? [picture] : []), ...groupWords(name, total));
+    // "Everyone else" has no picture (no grey dot, neon 26 Nov), so a phone, which drops the long words, says "Others".
+    if (name === "rest") back.append(make("span", "friends-window__group-short", FRIENDS_WINDOW_TEXT.restShort));
     back.addEventListener("click", () => this.showGroup(null));
     return back;
   }
@@ -400,29 +405,19 @@ const GROUP_WORDS: Record<keyof FriendGroups, string> = {
   rest: FRIENDS_WINDOW_TEXT.restGroup,
 };
 
-/** A group's picture on its Back button in the head: the wrench, the green dot, the grey dot. */
-const groupPicture = (name: keyof FriendGroups): HTMLElement =>
+/** A group's picture on its Back button in the head: the wrench, the green dot; none for "Everyone else". */
+const groupPicture = (name: keyof FriendGroups): HTMLElement | null =>
   name === "help"
     ? gameIcon("tools", { size: 24, decorative: true })
     : name === "online"
       ? onlineDot("friends-window__dot", true)
-      : offlineDot();
+      : null;
 
 /** A group's count and words: "90", "Can use help". */
 const groupWords = (name: keyof FriendGroups, total: number): HTMLElement[] => [
   make("span", "friends-window__group-count", formatAmount(total)),
   make("span", "friends-window__group-words", GROUP_WORDS[name]),
 ];
-
-/**
- * The grey dot by "Everyone else": the friends who are neither online nor in
- * need of help, so its heading lines up with the other two (tester, 9 Nov).
- */
-const offlineDot = (): HTMLElement => {
-  const dot = make("span", "online-dot friends-window__dot friends-window__dot--off");
-  dot.setAttribute("aria-hidden", "true");
-  return dot;
-};
 
 /** "[picture] 34": a count in the head, its words in the tooltip and for a screen reader. */
 const count = (picture: HTMLElement, value: number, words: string, name: string): HTMLElement => {

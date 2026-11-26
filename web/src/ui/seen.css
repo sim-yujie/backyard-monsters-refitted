@@ -4,8 +4,10 @@
    (`data-skin="flash"`) on parchment. */
 
 .seen {
-  --seen-today: #b8c4ce;
-  --seen-week: #8c9aa6;
+  /* Both quiet steps at 4.5:1 or better on the friends window's slate (neon, 26 Nov). */
+  --seen-online: #7ae89a;
+  --seen-today: #d4dfe9;
+  --seen-week: #b3c2d1;
   --seen-weeks: #f2b441;
   --seen-month-fill: #7a2e2e;
   --seen-month-ink: #ffd6d6;
@@ -24,8 +26,9 @@
 }
 
 :root[data-skin="flash"] .seen {
-  --seen-today: #6b5a45;
-  --seen-week: #8a7962;
+  --seen-online: #166534;
+  --seen-today: #5c4932;
+  --seen-week: #6e5b43;
   --seen-weeks: #8a4f00;
   --seen-month-fill: #a63429;
   --seen-month-ink: #fff6e5;
@@ -38,24 +41,17 @@
   height: 16px;
 }
 
+/* One plain dot on all three lists, in the word's green (Classic: a deeper
+   green that shows on parchment). */
 .seen__dot {
   width: 8px;
   height: 8px;
-  box-shadow: 0 0 0 1.5px rgb(0 0 0 / 45%);
-}
-
-/* Classic: a deeper green with a cream rim, so it shows on parchment. */
-:root[data-skin="flash"] .seen__dot {
-  background: #248a45;
-  box-shadow: 0 0 0 1.5px #fff6e5;
+  background: var(--seen-online);
+  box-shadow: none;
 }
 
 .seen--online {
-  color: var(--colour-online);
-}
-
-:root[data-skin="flash"] .seen--online {
-  color: #248a45;
+  color: var(--seen-online);
 }
 
 .seen--today {

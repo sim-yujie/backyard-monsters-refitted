@@ -398,6 +398,14 @@ describe("a long list: 90 can use help, 20 online, 150 in all (lead, 9 Nov)", ()
     expect(document.querySelector(".friends-window__count--total")!.textContent).toBe("150");
   });
 
+  it("the way back from Everyone else has no grey dot, and short words for a phone", async () => {
+    await setup(big());
+    more().find((button) => button.dataset["group"] === "rest")!.click();
+    expect(back()!.querySelector(".online-dot")).toBeNull();
+    expect(back()!.querySelector(".friends-window__group-short")!.textContent).toBe("Others");
+    expect(back()!.getAttribute("aria-label")).toContain("Everyone else");
+  });
+
   it("Show all lists that group whole, with the way back in the head, and Visit under a row", async () => {
     const onVisit = vi.fn();
     await setup(big(), { onVisit });

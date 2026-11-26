@@ -341,7 +341,7 @@ export class FriendsTab implements FriendsTabView {
     const row = playerRow(friend, {
       actions,
       badges,
-      marks: [...(seen ? [seen] : []), ...worldMark(friend)],
+      marks: [...(seen ? [seenDivider(), seen] : []), ...worldMark(friend)],
       dimFace: seenDims(friend.online),
     });
     row.classList.toggle("friends-row--open", opened);
@@ -408,3 +408,10 @@ export class FriendsTab implements FriendsTabView {
     }
   }
 }
+
+/** A thin rule between "Level 40" and last seen, so "Today" does not read as part of the level (neon, 26 Nov). */
+const seenDivider = (): HTMLElement => {
+  const rule = make("span", "friends-row__divider");
+  rule.setAttribute("aria-hidden", "true");
+  return rule;
+};

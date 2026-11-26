@@ -223,9 +223,9 @@
   margin-top: 0;
 }
 
-/* The Back button's "Everyone else": neither online nor in need of help, so a grey dot. */
-.friends-window__dot--off {
-  background: var(--colour-text-muted);
+/* Classic: the head's online dot in the deeper green of the rows' "Online" (neon, 26 Nov). */
+:root[data-skin="flash"] .friends-window__dot {
+  background: #166534;
 }
 
 .friends-window__group-count {
@@ -438,6 +438,11 @@
   text-overflow: ellipsis;
 }
 
+/* "Others": the phone's short words for "Everyone else" (shown in the phone block below). */
+.friends-window__group-short {
+  display: none;
+}
+
 .friends-window__empty {
   margin: var(--space-4) var(--space-2);
   color: var(--colour-text-muted);
@@ -551,5 +556,9 @@
 @media (max-height: 500px), (max-width: 480px) {
   .friends-window__back > .friends-window__group-words {
     display: none;
+  }
+
+  .friends-window__back > .friends-window__group-short {
+    display: inline;
   }
 }
