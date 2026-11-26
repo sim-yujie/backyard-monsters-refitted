@@ -32,9 +32,9 @@ Ranks 1, 2 and 3 need the monster at level 2, 3 and 4, and ranks 2 and 3 need La
 
 ## The 8 abilities
 
-| Monster | Ability | Rank 1/2/3 |
+| Monster | Ability | Ranks |
 | --- | --- | --- |
-| Spurtz | **Fury:** faster and harder-hitting every second it fights, up to | +5/+8/+20% |
+| Spurtz | **Fury:** faster and harder-hitting every second it fights, up to | +5/8/20% |
 | Zagnoid | **Regeneration:** heals part of its health every second | 1/1.5/2% |
 | Malphus | **Dodge:** hits miss it (burns and poison still land) | 10/20/30% |
 | Valgos | **Wall Crusher:** a blow on a wall also hits more walls nearby. Attacking only | 1/2/3 walls |

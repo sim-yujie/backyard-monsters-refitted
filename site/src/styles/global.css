@@ -539,6 +539,14 @@ p {
   vertical-align: top;
 }
 
+@media (max-width: 520px) {
+  .prose th,
+  .prose td {
+    padding: 8px 7px;
+    font-size: 0.9rem;
+  }
+}
+
 .prose th {
   font-family: var(--font-display);
   font-weight: 400;
