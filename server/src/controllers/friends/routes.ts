@@ -33,6 +33,7 @@ import {
 import { helpBlock } from "../../services/friends/helpFacts.js";
 import { setHelpBlockFor } from "../../services/friends/helpHook.js";
 import { helpAnswer } from "./help.js";
+import { helpAllAnswer } from "./helpAll.js";
 import { collectGiftsAnswer, deleteGiftsAnswer, giftCostAnswer, giftsAnswer, sendGiftAnswer, wishesAnswer } from "./gift.js";
 import { giftAllAnswer } from "./giftAll.js";
 
@@ -76,6 +77,9 @@ export const mountFriendsRoutes = (router: Router): void => {
     route((ctx, now) => suggestionsAnswer(postgres.em, ctx.authUser, now)));
   router.post(`${api}/bm/friends/help`, apiVersion, verifyUserAuth, verifyAccountStatus, friendActionLimiter, logRequest,
     route((ctx, now) => helpAnswer(postgres.em, ctx.authUser, ctx.request.body, now)));
+  // Help all (owner, 26 Nov 2026): every help on a friend's yard in one request, counted once by the limiter.
+  router.post(`${api}/bm/friends/help/all`, apiVersion, verifyUserAuth, verifyAccountStatus, friendActionLimiter, logRequest,
+    route((ctx, now) => helpAllAnswer(postgres.em, ctx.authUser, ctx.request.body, now)));
   router.post(`${api}/bm/friends/gift`, apiVersion, verifyUserAuth, verifyAccountStatus, friendActionLimiter, logRequest,
     route((ctx, now) => sendGiftAnswer(postgres.em, ctx.authUser, ctx.request.body, now)));
   router.get(`${api}/bm/friends/gift/cost`, apiVersion, verifyUserAuth, verifyAccountStatus, friendsReadLimiter,

@@ -113,12 +113,13 @@ export interface HelpRecord {
   now: number;
 }
 
-/** Writes one help. */
-export const recordHelp = (tx: EntityManager, record: HelpRecord) =>
-  tx.execute(
+/** Writes the helps, one row each in the order given, in one insert (Help all writes all of its at once). */
+export const recordHelps = async (tx: EntityManager, records: readonly HelpRecord[]): Promise<void> => {
+  if (records.length === 0) return;
+  await tx.execute(
     `INSERT INTO bym.friend_help (helper_userid, owner_userid, baseid, building_id, kind, seconds_saved, reward, help_day, created_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?::jsonb, ?::date, ?)`,
-    [
+     VALUES ${records.map(() => "(?, ?, ?, ?, ?, ?, ?::jsonb, ?::date, ?)").join(", ")}`,
+    records.flatMap((record) => [
       record.helper,
       record.owner,
       record.baseid,
@@ -128,8 +129,9 @@ export const recordHelp = (tx: EntityManager, record: HelpRecord) =>
       JSON.stringify(record.reward),
       helpDayOf(record.now),
       new Date(record.now * 1000),
-    ]
+    ])
   );
+};
 
 /** What help-mode `/base/load` adds to the yard (§6.2), WP2's `HelpBlock`. */
 export interface HelpBlock {

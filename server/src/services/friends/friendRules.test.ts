@@ -101,6 +101,7 @@ describe("friends migration and routes", () => {
       ["get", "/player/muted`"],
       ["post", "/player/unmute`"],
       ["post", "/bm/friends/help`"],
+      ["post", "/bm/friends/help/all`"],
     ]) {
       const line = `router.${method}(\`\${api}${path}`;
       expect([line, routes.includes(line)]).toEqual([line, true]);
