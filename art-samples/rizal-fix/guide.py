@@ -7,7 +7,7 @@ import colorsys, json, os, sys
 from PIL import Image, ImageChops, ImageFilter
 look, lay = sys.argv[1], sys.argv[2]
 A = "../../server/public/assets/buildings/decorations/wonders/"
-G = {"classic": A + "rizal-monument@2x.png", "modern": A + "rizal-monument.modern@2x.webp"}
+G = {"classic": "before/rizal-monument@2x.png", "modern": "before/rizal-monument.modern@2x.webp"}   # the 24 Nov pictures (the game files change)
 F, CAN = 4, 1024
 sx, sy, tx, ty = json.load(open("fit.json"))[look]
 g = Image.open(G[look]).convert("RGBA"); W, H = g.size

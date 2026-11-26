@@ -1,0 +1,19 @@
+Generate an image using your image generation tool (one image only, do not make variations or extra files).
+
+A small EDIT of a game picture of the Rizal Monument (Rizal Park, Manila), in our game's crisp, clean "Modern" look.
+Image 1, guide2-modern-Bface.png, is the picture to edit (1024x1024 on flat magenta). Most of it is already in the
+Modern look. But one area was pasted in from the game's OTHER, older look (soft, grainy, brownish): the lower part of
+the obelisk below the point where its colour turns brownish, the pedestal's top surface to the right of the obelisk,
+and the TWO SEATED BOYS reading one book together, sitting against the obelisk's right-hand face.
+Image 2, current-modern.png, shows the Modern look of the stone and the bronze (the mother, Rizal).
+
+Repaint ONLY that pasted area in the Modern look so it matches the rest of image 1 exactly:
+- The obelisk continues straight down as clean light warm-grey stone exactly like the obelisk above it (lit front face,
+  shaded right-hand face, one straight vertical edge between them), down to the pedestal's flat top.
+- The pedestal's top surface clean light stone like the rest of the pedestal top.
+- The two boys: KEEP THEM EXACTLY WHERE THEY ARE, the same size, pose and outline (two boys shoulder to shoulder,
+  heads bent over one open book), only re-rendered in the Modern look: dark brown-black bronze with soft warm
+  highlights like Rizal and the mother in image 1. Do not move them, do not make them bigger or smaller.
+Keep EVERYTHING else exactly as it is, pixel for pixel: Rizal, the mother and child, the obelisk above, the stars, the
+pedestal sides, the base, the steps, the object's outline and the magenta background. No text. Output one 1024x1024
+image. Save the final PNG as rizal-modern-Bface.png in the current working directory.

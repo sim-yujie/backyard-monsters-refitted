@@ -6,7 +6,7 @@ import json, sys
 from PIL import Image, ImageChops, ImageDraw, ImageFilter, ImageStat
 look, src, dst = sys.argv[1:4]
 A = "../../server/public/assets/buildings/decorations/wonders/"
-G = {"classic": A + "rizal-monument@2x.png", "modern": A + "rizal-monument.modern@2x.webp"}
+G = {"classic": "before/rizal-monument@2x.png", "modern": "before/rizal-monument.modern@2x.webp"}   # the 24 Nov pictures (the game files change)
 cur = Image.open(G[look]).convert("RGBA"); W, H = cur.size
 meta = json.load(open(f"guide/{look}.json")); F, ox, oy = meta["F"], meta["ox"], meta["oy"]
 ZONE = [(98, 70), (131, 70), (148, 116), (148, 130), (113, 143), (94, 143), (88, 135), (89, 118), (91, 104), (97, 99)]

@@ -7,7 +7,7 @@ from PIL import Image, ImageChops
 
 def cnt(m): return m.histogram()[255]
 A = "../../server/public/assets/buildings/decorations/wonders/"
-G = {"classic": A + "rizal-monument@2x.png", "modern": A + "rizal-monument.modern@2x.webp"}
+G = {"classic": "before/rizal-monument@2x.png", "modern": "before/rizal-monument.modern@2x.webp"}   # the 24 Nov pictures (the game files change)
 bo = Image.open("bo/old-ns.png").convert("RGBA")
 x0, y0, x1, y1 = bo.getchannel("A").point(lambda v: 255 if v > 128 else 0).getbbox()
 out = {}

@@ -4,7 +4,7 @@ IoU of alpha + of the bronze masks. Overwrites fit.json's entries; whole-picture
 import colorsys, json, shutil, os
 from PIL import Image, ImageChops
 A = "../../server/public/assets/buildings/decorations/wonders/"
-G = {"classic": A + "rizal-monument@2x.png", "modern": A + "rizal-monument.modern@2x.webp"}
+G = {"classic": "before/rizal-monument@2x.png", "modern": "before/rizal-monument.modern@2x.webp"}   # the 24 Nov pictures (the game files change)
 if not os.path.exists("fit-whole.json"): shutil.copy("fit.json", "fit-whole.json")
 fw = json.load(open("fit-whole.json"))
 Y0, Y1 = 60, 150
