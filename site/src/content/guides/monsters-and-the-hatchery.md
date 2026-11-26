@@ -3,7 +3,7 @@ title: Monsters and the Hatchery
 description: How to unlock, hatch, house and train the monsters in your army.
 order: 3
 icon: /images/monsters/C1.webp
-updated: 2026-10-11
+updated: 2026-11-27
 ---
 
 ## Your first monster: the Pokey
@@ -21,6 +21,7 @@ A **Hatchery** turns goo into monsters.
 - Pick a monster and how many you want. You can queue several and come back later.
 - Each monster costs goo, so keep your Goo Factories busy.
 - More Hatcheries let you hatch more at once.
+- A **Hatchery Control Centre** runs them all from one queue: see [Hatchery Control Centre levels 2 and 3](/guides/hatchery-control-centre/).
 
 ![The Hatch screen: five Hatcheries busy with Banditos, and painted portraits of every monster to pick from](/images/shots/hatchery.webp)
 

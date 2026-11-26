@@ -3,10 +3,12 @@ title: Upgrade many walls at once
 description: Press Upgrade walls, pick the walls you want, and raise them all in one go, with no waiting.
 order: 7
 icon: /images/guides/walls-card.webp
-updated: 2026-11-04
+updated: 2026-11-27
 ---
 
 ## 1. Press Upgrade walls
+
+> **Needs a built Yard Planner** in that yard (main yard or Inferno). Without one, upgrade one wall at a time from its pop-up: it finishes at once, with no worker.
 
 Two ways in:
 

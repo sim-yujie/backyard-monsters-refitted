@@ -3,7 +3,7 @@ title: Attacking and the Map Room
 description: Find a target, fling your monsters in and bring home the loot.
 order: 5
 icon: /images/monsters/C7.webp
-updated: 2026-11-04
+updated: 2026-11-27
 ---
 
 ## What you need
@@ -17,7 +17,7 @@ updated: 2026-11-04
 Tap **Map** to open your Map Room. In Map Room 1 you'll find two kinds of target:
 
 - **Wild monster tribes.** The Legionnaires, Kozu, Abunakki and Dreadnauts are always there to raid. A flattened tribe is back in 10 minutes.
-- **Neighbours.** Other players near you. Protected yards can't be attacked.
+- **Neighbours.** The yards on your neighbour list. Anyone who attacks you joins it. Protected yards can't be attacked, and you can't attack players more than 7 levels below you.
 
 ![Map Room 1: neighbours and wild tribe camps on a painted map](/images/shots/map.webp)
 
@@ -50,6 +50,8 @@ Once your Town Hall reaches **level 6**, you can upgrade your Map Room to **Map 
 - Forests, rocks and marsh change a cell's defence and income. A cell next to your own cells defends a little better.
 - Beat a wild camp or a player's outpost and you can **take it over** as your own outpost.
 - **Find** jumps to your yard, your outposts or any spot on the map.
+- **Repeat attack** fights a beaten wild camp again with your saved plan, for a putty fee.
+- Move monsters between your yards on the map: see [Move monsters between your yards](/guides/move-monsters/).
 
 ## Tips for your first raids
 

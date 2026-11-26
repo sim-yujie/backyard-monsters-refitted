@@ -22,7 +22,7 @@ export const faq: { q: string; a: string }[] = [
   },
   {
     q: "Do I need Flash or a download?",
-    a: "No. The game runs in a modern web browser on your computer. There is no Flash and nothing to download.",
+    a: "No. The game runs in a modern web browser on your computer, phone or tablet. There is no Flash and nothing to download.",
   },
   {
     q: "Is this the official game? Is it made by Kixeye?",

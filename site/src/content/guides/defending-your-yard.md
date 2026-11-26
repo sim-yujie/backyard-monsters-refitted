@@ -3,7 +3,7 @@ title: Defending your yard
 description: Towers, walls, traps and protection, and how to test your defences before anyone else does.
 order: 4
 icon: /images/monsters/C10.webp
-updated: 2026-10-11
+updated: 2026-11-27
 ---
 
 ## Why defence matters
@@ -43,6 +43,8 @@ When your yard is **protected**, other players can't attack it.
 ## Test your defences with the Baiter
 
 The **Wild Monster Baiter** lets you make up any army and send it at your own yard, so you can see how your defences hold. Nothing is lost, so try as many times as you like.
+
+In the Baiter's **Invite** tab you can also invite **friends and alliance mates** to test your yard for 24 hours, with a free army. Their replays and reports show in **Results**.
 
 ## After an attack
 
