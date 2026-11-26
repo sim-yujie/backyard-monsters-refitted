@@ -27,8 +27,8 @@
 
 :root[data-skin="flash"] .seen {
   --seen-online: #166534;
-  --seen-today: #5c4932;
-  --seen-week: #6e5b43;
+  --seen-today: #52402b;
+  --seen-week: #63503a;
   --seen-weeks: #8a4f00;
   --seen-month-fill: #a63429;
   --seen-month-ink: #fff6e5;

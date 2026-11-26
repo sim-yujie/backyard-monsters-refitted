@@ -303,11 +303,11 @@
   flex: none;
   width: 1px;
   height: 11px;
-  background: rgb(255 255 255 / 20%);
+  background: #607285;
 }
 
 :root[data-skin="flash"] .friends-row__divider {
-  background: rgb(60 40 20 / 22%);
+  background: #b59f7e;
 }
 
 /* Desktop and iPad: "Level 40" and last seen at 13px (neon, 26 Nov). */

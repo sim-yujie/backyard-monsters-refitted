@@ -226,6 +226,7 @@
 /* Classic: the head's online dot in the deeper green of the rows' "Online" (neon, 26 Nov). */
 :root[data-skin="flash"] .friends-window__dot {
   background: #166534;
+  box-shadow: none;
 }
 
 .friends-window__group-count {
