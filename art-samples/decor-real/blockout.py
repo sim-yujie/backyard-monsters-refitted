@@ -13,6 +13,7 @@ World axes: the camera looks from (+x, -y) toward (-x, +y). The slab's FRONT cor
 Prints the slab corners' pixel positions (to check the 2:1 seat) as JSON on a line starting with CORNERS.
 """
 import json
+import os
 import math
 import sys
 
@@ -497,7 +498,7 @@ def rizal_monument():
     top of its FRONT face, on a tall upper pedestal over a battered (tapering) granite base of big blocks, on a low
     plinth and two wide steps. The bronze group stands on the pedestal: Rizal in front, centred on the front face, in
     an overcoat holding a book; a seated mother with her child at the front's left corner; two seated boys reading a
-    book at its right corner. Front = the left-front face (y < 0). Proportions from refs/rizal-monument/front.jpg
+    book on the obelisk's right face (RIZAL_LAYOUT below; was the front's right corner with leaves and a pot behind). Front = the left-front face (y < 0). Proportions from refs/rizal-monument/front.jpg
     (base 0.35 / obelisk 0.65 of the height; base 0.48 x the height wide; Rizal 0.245 x the height)."""
     gr = mat("granite", (0.55, 0.54, 0.51)); sl = mat("slab", GREY); bz = mat("bronze", BRONZE, 0.45, 0.6)
     gold = mat("gold", (0.85, 0.65, 0.2), 0.35, 0.9)
@@ -537,13 +538,35 @@ def rizal_monument():
     fig(-1.55, -1.5, zt, 1.5, [("c", (0, 0, 0, 0.55, 0.55, 0.42)), ("c", (0, 0.05, 0.5, 0.95, 0.3, 0.22)),
                                ("e", (0, 0.05, 1.08, 0.12, 0.12, 0.15)), ("e", (0.12, -0.22, 0.72, 0.16, 0.12, 0.13)),
                                ("e", (0.12, -0.25, 0.86, 0.08, 0.08, 0.08))])
-    # the two boys seated side by side reading one book at the front's right corner (+x)
-    fig(1.55, -1.5, zt, 1.5, [("c", (-0.18, 0, 0, 0.5, 0.32, 0.28)), ("c", (0.18, 0, 0, 0.5, 0.32, 0.28)),
-                              ("c", (-0.18, 0.03, 0.45, 0.82, 0.18, 0.15)), ("c", (0.18, 0.03, 0.45, 0.82, 0.18, 0.15)),
-                              ("e", (-0.18, 0.0, 0.93, 0.1, 0.1, 0.12)), ("e", (0.18, 0.0, 0.93, 0.1, 0.1, 0.12)),
-                              ("b", (-0.2, 0.2, -0.3, -0.24, 0.58, 0.68))])
-    # at the back, leaves and a pot (the country's natural resources)
-    fig(0, 1.45, zt, 1.5, [("c", (0, 0, 0, 0.45, 0.32, 0.38)), ("e", (0, 0, 0.95, 0.55, 0.3, 0.5))])
+    # The right-hand group. Owner 26 Nov 2026 ("The figures are supposed to be one on each side. The current one has
+    # 3 on one side"): the two boys plus the leaves and pot behind them read as three figures on the right. Layouts
+    # (env RIZAL_LAYOUT; art-samples/rizal-fix/): "old" = as 24 Nov; "A" = ONE seated boy reading on the obelisk's
+    # right (+x) face; "B" = the two boys as one tight group at the right corner; "Bface" = the two boys on the obelisk's right
+    # (+x) face like the real monument. A, B and Bface drop the leaves and pot (at the back, they read as a figure).
+    lay = os.environ.get("RIZAL_LAYOUT", "Bface")   # the layout in the game since 26 Nov
+    if lay == "old":
+        fig(1.55, -1.5, zt, 1.5, [("c", (-0.18, 0, 0, 0.5, 0.32, 0.28)), ("c", (0.18, 0, 0, 0.5, 0.32, 0.28)),
+                                  ("c", (-0.18, 0.03, 0.45, 0.82, 0.18, 0.15)), ("c", (0.18, 0.03, 0.45, 0.82, 0.18, 0.15)),
+                                  ("e", (-0.18, 0.0, 0.93, 0.1, 0.1, 0.12)), ("e", (0.18, 0.0, 0.93, 0.1, 0.1, 0.12)),
+                                  ("b", (-0.2, 0.2, -0.3, -0.24, 0.58, 0.68))])
+        # at the back, leaves and a pot (the country's natural resources)
+        fig(0, 1.45, zt, 1.5, [("c", (0, 0, 0, 0.45, 0.32, 0.38)), ("e", (0, 0, 0.95, 0.55, 0.3, 0.5))])
+    elif lay == "A":
+        # ONE boy seated on the obelisk's right face, facing out (+x), bent over an open book on his lap
+        fig(1.6, -0.35, zt, 1.5, [("c", (0, 0, 0, 0.5, 0.42, 0.34)), ("c", (-0.04, 0, 0.45, 0.88, 0.22, 0.17)),
+                                  ("e", (0.02, 0, 1.0, 0.11, 0.11, 0.13)),
+                                  ("b", (0.26, 0.36, -0.22, 0.22, 0.56, 0.66))])
+    elif lay == "B":
+        # the two boys shoulder to shoulder over one book: one compact mass, no wider than the mother's group
+        fig(1.55, -1.5, zt, 1.5, [("c", (-0.13, 0, 0, 0.5, 0.3, 0.26)), ("c", (0.13, 0, 0, 0.5, 0.3, 0.26)),
+                                  ("c", (-0.13, 0.03, 0.45, 0.82, 0.17, 0.14)), ("c", (0.13, 0.03, 0.45, 0.82, 0.17, 0.14)),
+                                  ("e", (-0.13, 0.0, 0.93, 0.1, 0.1, 0.12)), ("e", (0.13, 0.0, 0.93, 0.1, 0.1, 0.12)),
+                                  ("b", (-0.2, 0.2, -0.3, -0.24, 0.58, 0.68))])
+    else:  # Bface: the two boys side by side on the right face, facing out (+x), reading one book
+        fig(1.6, -0.35, zt, 1.5, [("c", (0, -0.18, 0, 0.5, 0.32, 0.28)), ("c", (0, 0.18, 0, 0.5, 0.32, 0.28)),
+                                  ("c", (-0.03, -0.18, 0.45, 0.82, 0.18, 0.15)), ("c", (-0.03, 0.18, 0.45, 0.82, 0.18, 0.15)),
+                                  ("e", (0, -0.18, 0.93, 0.1, 0.1, 0.12)), ("e", (0, 0.18, 0.93, 0.1, 0.1, 0.12)),
+                                  ("b", (0.24, 0.3, -0.2, 0.2, 0.58, 0.68))])
 
 
 HUB = [None]
@@ -681,4 +704,7 @@ corners["centre"] = px((0, 0, 0))
 if HUB[0]: corners["hub"] = px(HUB[0]); corners["hub3"] = list(HUB[0])
 corners["span"] = span
 print("CORNERS " + json.dumps(corners))
+if os.environ.get("NOSLAB"):   # rizal-fix: the same framing without the slab, to register the block-out to game art
+    for o in scene.objects:
+        if o.name.startswith("slab"): o.hide_render = True
 bpy.ops.render.render(write_still=True)
