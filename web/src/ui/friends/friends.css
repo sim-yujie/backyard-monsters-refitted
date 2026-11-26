@@ -299,10 +299,18 @@
   margin-bottom: 4px;
 }
 
+/* A friend in another world as well: the world wraps under the line rather
+   than being cut off on a narrow row (a phone on its side). */
+.friends-row__meta:has(> .seen):has(> .friends-row__world) {
+  flex-wrap: wrap;
+}
+
 .friends-row__divider {
   flex: none;
   width: 1px;
   height: 11px;
+  /* 8px each side rather than the line's 12px, so "Level 40 | 1mo+" fits a phone on its side. */
+  margin-inline: -4px;
   background: #607285;
 }
 
