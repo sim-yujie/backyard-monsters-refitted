@@ -150,7 +150,6 @@
 .auto-attack__line-note {
   margin: 0;
   font-size: var(--text-sm);
-  font-weight: 500;
   color: var(--colour-text-muted);
 }
 

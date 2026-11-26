@@ -156,8 +156,14 @@ export const REPEAT_QUEUE_WAIT_MS = 15_000;
 /** How long a raid start, a Trojan Horse or a baiter test waits in line (as before 9.1). */
 export const AUTO_ATTACK_SLOT_WAIT_MS = 5_000;
 
-/** Attacks started at will that may be inside at once (their database work and battles). */
-export const REPLAY_GATE_MAX_ADMITTED = 6;
+/**
+ * Attacks started at will that may be inside at once (their database work and
+ * battles). It bounds the database work they pile on, not the CPU: on 2
+ * pinned cores, 6 served 200 players farming at once with no refusal; at 400
+ * the line filled while the battles used a third of the cores
+ * (`REPLAY_GATE_MAX_ADMITTED` raises it on a box with database to spare).
+ */
+export const REPLAY_GATE_MAX_ADMITTED = Math.floor(envNumber("REPLAY_GATE_MAX_ADMITTED", 6));
 
 /** The longest the line gets; one more is turned away at once. */
 export const REPLAY_GATE_MAX_WAITING = 20;
