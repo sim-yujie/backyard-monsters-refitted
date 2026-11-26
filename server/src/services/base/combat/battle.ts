@@ -60,6 +60,15 @@ export interface BattleAttacker extends LootAttacker {
 }
 
 /**
+ * The older rules versions that already fight Krallen by patch 8.6's rules
+ * (no Mode, Flash's route and turns): 8.6's own, `cf287596a22ae2e0`. A rule
+ * gate must not read "these rules or not" once a later change moves the
+ * version again: an attack started on 8.6 and landed after whole health went
+ * live keeps its 8.6 Krallen, without whole health (player report, Reii).
+ */
+const KRALLEN_RULES_SINCE_8_6: readonly string[] = ["cf287596a22ae2e0"];
+
+/**
  * What the replay of an attack is handed, as plain data, or null when there
  * is no usable fling log to replay.
  *
@@ -73,15 +82,6 @@ export interface BattleAttacker extends LootAttacker {
  * @param left - Whether the report says the attacker left (`AbandonedInput.left`):
  *   always for the finaliser; for a save, when its `left` says so.
  */
-/**
- * The older rules versions that already fight Krallen by patch 8.6's rules
- * (no Mode, Flash's route and turns): 8.6's own, `cf287596a22ae2e0`. A rule
- * gate must not read "these rules or not" once a later change moves the
- * version again: an attack started on 8.6 and landed after whole health went
- * live keeps its 8.6 Krallen, without whole health (player report, Reii).
- */
-const KRALLEN_RULES_SINCE_8_6: readonly string[] = ["cf287596a22ae2e0"];
-
 export const battleReplayInput = ({
   flinglog,
   session,
