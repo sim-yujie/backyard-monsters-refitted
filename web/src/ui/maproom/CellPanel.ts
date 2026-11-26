@@ -227,6 +227,8 @@ export class CellPanel {
   private guardTimer: ReturnType<typeof setTimeout> | null = null;
   private readonly liveBar: HTMLButtonElement;
   private readonly liveBarText: HTMLElement;
+  /** The new owner's small picture on the taken bar (sample version C only). */
+  private readonly liveBarFace: HTMLElement;
   /** Countdown chips, refreshed once a second by `tick`. */
   private countdowns: { node: HTMLElement; label: string; expiresAt: number }[] = [];
 
@@ -281,13 +283,16 @@ export class CellPanel {
       if (!this.attackButton.disabled && performance.now() >= this.guardUntil) options.onAttack();
     });
     // Live map: the bar that takes Attack's place, same size, while the panel holds the old cell.
+    // Sample round (owner, 26 Nov: "too wordy"): one line, in one of three versions.
     this.liveBarText = el("span", "mr2-live-bar__text");
-    const liveBarWords = el("span", "mr2-live-bar__words");
-    liveBarWords.append(this.liveBarText, el("span", "mr2-live-bar__sub", "Tap to update"));
+    this.liveBarFace = el("span", "mr2-live-bar__face");
+    this.liveBarFace.hidden = true;
     // The game's own brass button in either look (neon r1: a plain gold bar read as a toast).
-    this.liveBar = button("btn btn--outline mr2-live-bar");
+    this.liveBar = button(`btn btn--outline mr2-live-bar mr2-live-bar--${TAKEN_BAR_VERSION}`);
     this.liveBar.hidden = true;
-    this.liveBar.append(liveBarWords, icon("respawn", 22, "map-icon mr2-live-bar__refresh"));
+    const refresh = icon("respawn", 22, "map-icon mr2-live-bar__refresh");
+    if (TAKEN_BAR_VERSION === "b") this.liveBar.append(refresh, this.liveBarText);
+    else this.liveBar.append(this.liveBarFace, this.liveBarText, refresh);
     this.liveBar.addEventListener("click", () => {
       this.held = null;
       this.update(this.latest);
@@ -470,8 +475,12 @@ export class CellPanel {
       this.openButton.hidden = true;
       this.attackNote.hidden = true;
       this.liveBar.hidden = false;
-      this.liveBarText.textContent = this.held.name ? `Taken by ${this.held.name}` : "This cell changed";
-      this.liveBar.setAttribute("aria-label", `${this.liveBarText.textContent}. Tap to update.`);
+      const { name } = this.held;
+      this.liveBarText.textContent = takenBarWords(TAKEN_BAR_VERSION, name);
+      this.liveBarText.title = name && name !== "you" ? `Taken by ${name}` : "";
+      this.showTakerFace(TAKEN_BAR_VERSION === "c" && name ? this.latest : undefined);
+      // Screen readers keep the whole sentence, whatever the bar shows.
+      this.liveBar.setAttribute("aria-label", `${name ? `Taken by ${name}` : "This cell changed"}. Tap to update.`);
       this.element.classList.add("mr2-cell--held");
       return;
     }
@@ -495,6 +504,15 @@ export class CellPanel {
       this.attackNote.hidden = true;
     }
     if (performance.now() < this.guardUntil) this.attackButton.disabled = true;
+  }
+
+  /** The taken bar's picture of whoever took the cell (version C), or none. */
+  private showTakerFace(taker: MapCell | undefined): void {
+    this.liveBarFace.replaceChildren();
+    this.liveBarFace.hidden = !taker || !isPlayerCell(taker);
+    if (!taker || !isPlayerCell(taker)) return;
+    const shown = playerPicture(taker.uid, taker.pic_square, taker.photo, "small");
+    this.liveBarFace.append(showPlayerPicture(image(shown.src), shown));
   }
 
   /** Keeps the flinger line's switch in step with "My range" (#177). */
@@ -877,6 +895,32 @@ export const LIVE_GUARD_MS = 800;
 
 /** Said on a disabled Attack while someone else's attack runs. */
 export const UNDER_ATTACK = "Someone is attacking this yard right now.";
+
+/**
+ * The taken bar's version for the owner's sample round (26 Nov 2026; one is kept, the rest go):
+ * a = "Taken by <name>" + refresh, b = refresh + "Taken · Update", c = taker's picture + "Taken" +
+ * refresh. Picked with `?takenbar=a|b|c` (remembered) for the sample shots.
+ */
+type TakenBarVersion = "a" | "b" | "c";
+const TAKEN_BAR_VERSION: TakenBarVersion = (() => {
+  const ok = (v: string | null | undefined): v is TakenBarVersion => v === "a" || v === "b" || v === "c";
+  try {
+    const asked = new URLSearchParams(globalThis.location?.search ?? "").get("takenbar");
+    if (ok(asked)) localStorage.setItem("bymr.takenBar", asked);
+    const kept = localStorage.getItem("bymr.takenBar");
+    if (ok(kept)) return kept;
+  } catch {
+    // No storage: the first version.
+  }
+  return "a";
+})();
+
+/** The taken bar's one line: `name` is the new owner, "you", or "" for a cell left empty. */
+const takenBarWords = (version: TakenBarVersion, name: string): string => {
+  if (version === "a") return name === "you" ? "Taken by you" : name ? `Taken by ${name}` : "Cell changed";
+  if (version === "b") return `${name === "you" ? "Now yours" : name ? "Taken" : "Changed"} · Update`;
+  return name === "you" ? "Now yours" : name ? "Taken" : "Changed";
+};
 
 /** Who a live answer says took the cell: "you", the new owner, or nothing for a cell left empty. */
 const takenBy = (cell: MapCell | undefined): string => {

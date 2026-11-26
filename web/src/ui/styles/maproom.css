@@ -1139,21 +1139,23 @@
 }
 
 /* The live map (beta 9; desk card live-panel, owner's choice A): when a live answer shows the open
-   cell taken, a bar takes Attack's place at Attack's size ("Taken by X / Tap to update") and the
-   panel keeps the old cell until it is tapped, so nothing jumps. */
+   cell taken, a bar takes Attack's place at Attack's size and the panel keeps the old cell until
+   it is tapped, so nothing jumps. One centred line like Attack (owner, 26 Nov: "too wordy"). */
 /* Over the skin's button rules (`skin.css` `.panel .btn--outline`, same weight otherwise). */
 :root .mr2-cell .btn.mr2-live-bar,
 :root[data-skin] .mr2-cell .btn.mr2-live-bar {
   display: flex;
   align-items: center;
+  justify-content: center;
   gap: 10px;
   /* Attack's height, set from the button it replaces (CellPanel.applyLive); 52px until measured. */
   height: 52px;
   min-height: 0;
-  /* neon r2/r3: the second line clear of the bottom bevel; the plate's own end caps (skin.css
+  /* Clear of the bottom bevel as Attack's own label is; the plate's end caps (skin.css
      border-width) keep the words off the rivets / pill ends, this a little more. */
-  padding: 3px 10px 7px;
-  text-align: left;
+  padding: 0 14px 2px;
+  font-size: 16px;
+  font-weight: 800;
 }
 
 /* As heavy as the rule above, so `hidden` still hides it. */
@@ -1166,27 +1168,43 @@
   flex: none;
 }
 
-.mr2-live-bar__words {
-  display: flex;
-  flex: 1 1 auto;
-  flex-direction: column;
-  gap: 2px;
-  min-width: 0;
-  line-height: 1.08;
-}
-
+/* A long name ends in "..." on one line, never wraps or pushes the arrow out. */
 .mr2-live-bar__text {
+  min-width: 0;
   overflow: hidden;
-  font-size: 13.5px;
-  font-weight: 800;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.mr2-live-bar__sub {
-  font-size: 12px;
-  font-weight: 700;
-  opacity: 0.85;
+/* Version C: whoever took the cell, as a small framed picture before "Taken". */
+.mr2-live-bar__face {
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  box-sizing: border-box;
+  border: 2px solid rgb(0 0 0 / 0.45);
+  border-radius: 9px;
+  background: rgb(255 255 255 / 0.55);
+  overflow: hidden;
+}
+
+.mr2-live-bar__face[hidden] {
+  display: none;
+}
+
+.mr2-live-bar__face img {
+  width: 30px;
+  height: 30px;
+  object-fit: contain;
+}
+
+.mr2-live-bar__face img.is-photo {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
 }
 
 /* Classic: the same plate as its Attack (neon r2/r3: the View yard plate is green, and a gold
@@ -1201,10 +1219,6 @@
   text-shadow:
     0 2px 0 var(--skin-button-stroke), 2px 0 0 var(--skin-button-stroke), -2px 0 0 var(--skin-button-stroke), 0 -2px 0 var(--skin-button-stroke),
     1.5px 1.5px 0 var(--skin-button-stroke), -1.5px 1.5px 0 var(--skin-button-stroke), 1.5px -1.5px 0 var(--skin-button-stroke), -1.5px -1.5px 0 var(--skin-button-stroke);
-}
-
-:root[data-skin="flash"] .mr2-cell .mr2-live-bar .mr2-live-bar__sub {
-  opacity: 1;
 }
 
 :root[data-skin="flash"] .mr2-cell .mr2-live-bar .mr2-live-bar__refresh {
