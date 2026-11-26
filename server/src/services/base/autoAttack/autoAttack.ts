@@ -403,7 +403,12 @@ export const runAutoAttack = async (user: User, baseid: string, acceptedMoves?: 
     // Moves the player has not agreed to are never made: the web asks again.
     if (part.movesKey !== null && part.movesKey !== acceptedMoves) throw autoAttackRefusedErr("movesChanged");
 
+    const blT0 = performance.now();
+    const blMarks: Record<string, number> = {};
+    const blMark = (name: string) => (blMarks[name] = +(performance.now() - blT0).toFixed(1));
+    (globalThis as any).__blMarks = blMarks;
     release = await reserveReplaySlot();
+    blMark("slot");
     if (!release) throw autoAttackRefusedErr("busy");
 
     // The plan against the camp's fresh layout (beta 9, `planCheck.ts`): a
@@ -419,6 +424,7 @@ export const runAutoAttack = async (user: User, baseid: string, acceptedMoves?: 
       seed,
       now
     );
+    blMark("planCheck");
     if (clash) {
       logger.info("Repeat attack by {username} refused: plan for {wmid}/{level} flings on a building", {
         event: "auto-attack-plan-on-building",
@@ -515,6 +521,7 @@ export const runAutoAttack = async (user: User, baseid: string, acceptedMoves?: 
       defenderforces: defenderForces,
     };
 
+    blMark("attackLoadAndCheckpoint");
     let landed;
     try {
       landed = await landCheckpointedAttack(save.basesaveid, "auto-attack", { left: false, recordPlan: false, repeat: true });
@@ -532,6 +539,7 @@ export const runAutoAttack = async (user: User, baseid: string, acceptedMoves?: 
       throw autoAttackRefusedErr("failed");
     }
     const { outcome, damageBefore, damageAfter, credited, overflow, bombs, fought } = landed.landed;
+    blMark("landing");
 
     await keepReplay(userid, {
       baseid,
@@ -568,6 +576,8 @@ export const runAutoAttack = async (user: User, baseid: string, acceptedMoves?: 
       fee,
     };
 
+    blMark("keepReplay");
+    console.log("BLMEASURE " + JSON.stringify({ ev: "repeat-marks", ...blMarks }));
     logger.info("Auto-attack by {username} on camp {baseid}: {damageBefore}% to {damageAfter}%", {
       event: "auto-attack",
       userid,

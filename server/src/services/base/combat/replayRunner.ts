@@ -170,21 +170,30 @@ export const reserveReplaySlot = async (
   cap = REPLAY_WORKER_CAP
 ): Promise<(() => void) | null> => {
   const deadline = Date.now() + waitMs;
+  const askedAt = performance.now();
   while (running + reserved >= cap) {
-    if (Date.now() >= deadline) return null;
+    if (Date.now() >= deadline) {
+      console.log("BLMEASURE " + JSON.stringify({ ev: "slot-refused", waited: performance.now() - askedAt, running, reserved }));
+      return null;
+    }
     await new Promise((resolve) => setTimeout(resolve, SLOT_POLL_MS));
   }
   reserved++;
+  const heldAt = performance.now();
+  const waited = heldAt - askedAt;
   let released = false;
   return () => {
     if (released) return;
     released = true;
     reserved--;
+    console.log("BLMEASURE " + JSON.stringify({ ev: "slot-held", waited, held: performance.now() - heldAt }));
   };
 };
 
 const run = (job: ReplayJob, deadlineMs: number, workerUrl: URL = WORKER_URL): Promise<ReplayReply & { ok: true }> =>
   new Promise((resolve, reject) => {
+    const spawnAt = performance.now();
+    let readyAt = 0;
     const worker = new Worker(workerUrl);
     running++;
     let settled = false;
@@ -194,6 +203,7 @@ const run = (job: ReplayJob, deadlineMs: number, workerUrl: URL = WORKER_URL): P
       if (settled) return;
       settled = true;
       running--;
+      console.log("BLMEASURE " + JSON.stringify({ ev: "replay", kind: job.kind, startup: readyAt ? readyAt - spawnAt : null, afterReady: readyAt ? performance.now() - readyAt : null, total: performance.now() - spawnAt, runningAfter: running, reserved }));
       clearTimeout(timer);
       worker.terminate();
       settle();
@@ -202,6 +212,7 @@ const run = (job: ReplayJob, deadlineMs: number, workerUrl: URL = WORKER_URL): P
     worker.onmessage = (event: MessageEvent<ReplayWorkerMessage>) => {
       const message = event.data;
       if (!loaded) {
+        readyAt = performance.now();
         loaded = true;
         noteWorkerLoaded();
       }
