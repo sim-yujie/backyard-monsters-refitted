@@ -5165,12 +5165,14 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
   /**
    * A ranked Zagnoid's regeneration (Lab "Regeneration", beta 9): once a
    * second on the field it heals its rank's share of its full health, never
-   * past it.
+   * past it, kept whole (`BattleOptions.wholeHealth`).
    */
   const tickRegeneration = (creep: Creep): void => {
     const age = tick - creep.born;
     if (age <= 0 || age % TICKS_PER_SECOND !== 0 || creep.hp >= creep.maxHp) return;
-    creep.hp = Math.min(creep.maxHp, creep.hp + creep.maxHp * zagnoidHealShare(creep.rank));
+    creep.hp = healthAfter(
+      Math.min(creep.maxHp, creep.hp + creep.maxHp * zagnoidHealShare(creep.rank)),
+    );
   };
 
   /** A building's burn from a ranked Sabnox (Lab "Burn", beta 9), keyed by building id. */
