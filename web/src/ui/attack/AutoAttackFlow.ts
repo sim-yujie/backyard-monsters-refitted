@@ -239,14 +239,22 @@ const columnsOf = (army: HTMLElement, side: HTMLElement, banner: HTMLElement | n
 /** The hourglass beside the place in the battle line: painted, as the game's icons are (patch 9.1). */
 export const QUEUE_ICON = artUrl("/assets/popups/hourglass.png");
 
-/** The words under the working bar: "Attacking…", or the hourglass and the place in line. */
-export const queueWords = (place: number | null): string => (place === null ? "Attacking…" : `#${place} in line`);
+/** The words under the working bar: "Attacking…", or the place in line (neon round 1, 26 Nov 2026). */
+export const queueWords = (place: number | null): string => (place === null ? "Attacking…" : `Waiting in line · #${place}`);
 
-/** The line under the working bar, which swaps to the place in line and back without moving the sheet. */
+/** Under the place: that nothing is taken yet and the attack needs no tap. */
+export const QUEUE_NOTE = "Nothing spent yet · starts by itself";
+
+/**
+ * The line under the working bar, which swaps to the place in line and back.
+ * It always keeps room for two rows, so the sheet never moves.
+ */
 const workingLine = (): { element: HTMLElement; show: (place: number | null) => void } => {
-  const element = document.createElement("p");
-  element.className = "u-muted auto-attack__working";
+  const element = document.createElement("div");
+  element.className = "auto-attack__working";
   element.setAttribute("aria-live", "polite");
+  const row = document.createElement("p");
+  row.className = "auto-attack__line u-muted";
   const glass = document.createElement("img");
   glass.className = "auto-attack__line-icon";
   glass.alt = "";
@@ -256,12 +264,20 @@ const workingLine = (): { element: HTMLElement; show: (place: number | null) => 
   const words = document.createElement("span");
   words.className = "auto-attack__line-words";
   words.textContent = queueWords(null);
-  element.append(glass, words);
+  row.append(glass, words);
+  const note = document.createElement("p");
+  note.className = "auto-attack__line-note";
+  note.textContent = QUEUE_NOTE;
+  note.hidden = true;
+  element.append(row, note);
   return {
     element,
     show: (place) => {
-      glass.hidden = place === null;
-      element.classList.toggle("auto-attack__working--line", place !== null);
+      const waiting = place !== null;
+      glass.hidden = !waiting;
+      note.hidden = !waiting;
+      row.classList.toggle("u-muted", !waiting);
+      element.classList.toggle("auto-attack__working--line", waiting);
       words.textContent = queueWords(place);
     },
   };

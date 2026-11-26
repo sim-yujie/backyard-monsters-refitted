@@ -85,31 +85,76 @@
 }
 
 .auto-attack__working {
-  /* One fixed-height row, so swapping to the place in line (patch 9.1)
-     never moves the sheet. */
+  /* Room for two rows always, so swapping to the place in line (patch 9.1)
+     and back never moves the sheet. */
   display: flex;
-  align-items: center;
+  flex-direction: column;
   justify-content: center;
-  gap: var(--space-1);
-  min-height: 28px;
+  min-height: 52px;
   margin: 0;
-  font-size: var(--text-sm);
   text-align: center;
 }
 
-/* In the server's battle line: the painted hourglass and "#3 in line". */
-.auto-attack__line-icon {
-  width: auto;
-  height: 26px;
-  flex: 0 0 auto;
+.auto-attack__line {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  min-height: 28px;
+  margin: 0;
+  font-size: var(--text-sm);
 }
 
-.auto-attack__line-icon[hidden] {
+/* In the server's battle line: the painted hourglass, gently breathing so the
+   halted army never reads as a hang (neon round 1), and the place. */
+.auto-attack__line-icon {
+  width: auto;
+  height: 28px;
+  flex: 0 0 auto;
+  filter: drop-shadow(0 1px 2px rgb(0 0 0 / 55%));
+  animation: auto-attack-hourglass 1.6s ease-in-out infinite;
+}
+
+.auto-attack__line-icon[hidden],
+.auto-attack__line-note[hidden] {
   display: none;
 }
 
-.auto-attack__working--line {
+@keyframes auto-attack-hourglass {
+  0%,
+  100% {
+    opacity: 0.75;
+    transform: scale(0.96);
+  }
+
+  50% {
+    opacity: 1;
+    transform: scale(1.04);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .auto-attack__line-icon {
+    animation: none;
+  }
+}
+
+.auto-attack__working--line .auto-attack__line {
+  font-size: var(--text-md);
+  font-weight: 700;
+  color: var(--colour-text);
   font-variant-numeric: tabular-nums;
+}
+
+.auto-attack__line-note {
+  margin: 2px 0 0;
+  font-size: 12px;
+  color: var(--colour-text-muted);
+}
+
+/* The working sheet blocks the map behind it: a darker scrim than a menu's. */
+.attack-end__backdrop.auto-attack__backdrop--bar {
+  background: rgb(0 0 0 / 65%);
 }
 
 /* A phone: a compact sheet in the middle of the screen, not the whole screen

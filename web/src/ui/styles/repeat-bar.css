@@ -201,6 +201,13 @@
 
 /* ── Stopped, and reduced motion ────────────────────────────────────────── */
 
+/* Halted in the server's battle line: the army stands dimmed (neon round 1). */
+.repeat-bar--waiting .repeat-bar__troop,
+.repeat-bar--waiting .repeat-bar__road::after {
+  opacity: 0.55;
+  filter: saturate(0.6);
+}
+
 .repeat-bar--waiting,
 .repeat-bar--waiting *,
 .repeat-bar--stopped,

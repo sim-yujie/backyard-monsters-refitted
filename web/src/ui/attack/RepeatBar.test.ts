@@ -220,15 +220,18 @@ describe("the bar's timing on Repeat attack", () => {
     let place: number | null = 3;
     const queue = vi.fn(async () => ({ error: 0, place }));
     const { modal, timers, bar, value } = await pressAttack(() => answer.promise, queue);
-    const line = () => modal.querySelector<HTMLElement>(".auto-attack__working")!;
-    const glass = () => line().querySelector<HTMLImageElement>(".auto-attack__line-icon")!;
+    const line = () => modal.querySelector<HTMLElement>(".auto-attack__line-words")!;
+    const note = () => modal.querySelector<HTMLElement>(".auto-attack__line-note")!;
+    const glass = () => modal.querySelector<HTMLImageElement>(".auto-attack__line-icon")!;
     // Nothing asked at first: almost every Repeat is answered before then.
     await timers.advance(1000);
     expect(queue).not.toHaveBeenCalled();
     expect(glass().hidden).toBe(true);
     await timers.advance(300);
     expect(queue).toHaveBeenCalledTimes(1);
-    expect(line().textContent).toBe("#3 in line");
+    expect(line().textContent).toBe("Waiting in line · #3");
+    expect(note().hidden).toBe(false);
+    expect(note().textContent).toBe("Nothing spent yet · starts by itself");
     expect(glass().hidden).toBe(false);
     expect(glass().getAttribute("src")).toContain("hourglass.png");
     expect(bar()!.classList.contains("repeat-bar--waiting")).toBe(true);
@@ -238,12 +241,13 @@ describe("the bar's timing on Repeat attack", () => {
     expect(value()).toBe(halted);
     place = 1;
     await timers.advance(1000);
-    expect(line().textContent).toBe("#1 in line");
+    expect(line().textContent).toBe("Waiting in line · #1");
     // The turn comes: the army marches on, from where it halted.
     place = null;
     await timers.advance(1000);
     expect(line().textContent).toBe("Attacking…");
     expect(glass().hidden).toBe(true);
+    expect(note().hidden).toBe(true);
     expect(bar()!.classList.contains("repeat-bar--waiting")).toBe(false);
     await timers.advance(200);
     expect(value()).toBeGreaterThan(halted);
@@ -269,7 +273,7 @@ describe("the bar's timing on Repeat attack", () => {
     expect(bar()!.classList.contains("repeat-bar--waiting")).toBe(true);
     answer.resolve(RESULT);
     await timers.advance(50);
-    expect(modal.querySelector(".auto-attack__working")!.textContent).toBe("Attacking…");
+    expect(modal.querySelector(".auto-attack__line-words")!.textContent).toBe("Attacking…");
     await timers.advance(5000);
     expect(bar()?.classList.contains("repeat-bar--full") ?? true).toBe(true);
     await timers.advance(REPEAT_BAR_FULL_HOLD_MS);
@@ -280,7 +284,7 @@ describe("the bar's timing on Repeat attack", () => {
     const answer = deferred<AutoAttackResponse>();
     const { modal, timers } = await pressAttack(() => answer.promise, async () => ({ error: 0, place: 4 }));
     await timers.advance(1300);
-    expect(modal.querySelector(".auto-attack__working")!.textContent).toBe("#4 in line");
+    expect(modal.querySelector(".auto-attack__line-words")!.textContent).toBe("Waiting in line · #4");
     answer.reject(new Error("The server is busy working out other attacks. Try again in a moment."));
     await timers.advance(50);
     expect(modal.querySelector(".repeat-bar")).toBeNull();
@@ -295,7 +299,7 @@ describe("the bar's timing on Repeat attack", () => {
       },
     );
     await timers.advance(4000);
-    expect(modal.querySelector(".auto-attack__working")!.textContent).toBe("Attacking…");
+    expect(modal.querySelector(".auto-attack__line-words")!.textContent).toBe("Attacking…");
   });
 
   it("a flow that asks for no bar keeps the plain line", async () => {

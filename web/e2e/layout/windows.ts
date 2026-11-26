@@ -246,6 +246,21 @@ export const WINDOWS: readonly WindowCase[] = [
     open: (page) => openRepeatSheet(page, "working"),
   },
   {
+    // Waiting in the server's battle line (patch 9.1) at its busiest: the
+    // marching army halted, the hourglass and "#20 in line" under it.
+    id: "repeat-queue",
+    label: "Repeat attack, in the battle line",
+    panel: ".auto-attack--bar",
+    items: ".auto-attack__working--line",
+    tabs: false,
+    closeButton: null,
+    open: async (page) => {
+      if (!(await openRepeatSheet(page, "queued"))) return false;
+      await page.locator(".overlay__layer .auto-attack__working--line").waitFor({ timeout: 10_000 });
+      return true;
+    },
+  },
+  {
     // The Baiter window's friend tabs (beta 9 #4, design A) at their busiest:
     // 17 people to invite, four open invites, three received, nine results.
     // Title, the four tabs and close in sight, a row of each list at every size.
