@@ -15,10 +15,14 @@ import { helpRefusalText, isHelpOpen, rewardText, savedText, tagSeconds, type He
 
 /**
  * Refusals about one building only: Help all marks it and goes on with the
- * next. Every other refusal (not friends, under attack, a block or a ban,
- * `tooNew`, the rate limit, a network failure) stops it.
+ * next. `repairedToday` is one too: once a repair lands, the block offers no
+ * other repair in the yard, so the run passed them over. Every other refusal
+ * (not friends, under attack, a block or a ban, `tooNew`, the rate limit, a
+ * network failure) stops it. The server's Help all passes over the same
+ * four (`controllers/friends/helpAll.ts`), so it never goes on past a help
+ * the web stopped at.
  */
-export const BUILDING_REFUSALS: ReadonlySet<string> = new Set(["alreadyHelped", "helpersFull", "nothingToHelp"]);
+export const BUILDING_REFUSALS: ReadonlySet<string> = new Set(["alreadyHelped", "helpersFull", "nothingToHelp", "repairedToday"]);
 
 /** Whether a refusal ends Help all. */
 export const stopsHelpAll = (reason: string): boolean => !BUILDING_REFUSALS.has(reason);

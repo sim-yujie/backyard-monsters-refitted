@@ -96,21 +96,24 @@ describe("runHelpAll", () => {
     });
     expect(refused).toMatchObject({ helped: 0, skipped: 0, stoppedBy: "They are under attack right now." });
 
-    // The server stopped after the first (one repair a yard a day): the third was never reached.
+    // The answer ends early (the server stopped, or the visit ended): the third was never reached.
     const steps: string[] = [];
-    const yard = scene({ 2: { ok: false, reason: "repairedToday", text: "You already repaired a building here today." } });
     const summary = await runHelpAll(targets([1, 2, 3]), {
-      block: yard.block,
-      helpMany: yard.helpMany,
+      block: () => blockOf([1, 2, 3]),
+      helpMany: async () => [
+        { ok: true, secondsSaved: 60, reward: reward(10) },
+        { ok: false, reason: "network", text: "Could not reach the server. Try again." },
+      ],
       onStep: (done, total) => steps.push(`${done}/${total}`),
     });
     expect(summary.helped).toBe(1);
-    expect(summary.stoppedBy).toBe("You already repaired a building here today.");
+    expect(summary.stoppedBy).toBe("Could not reach the server. Try again.");
     expect(steps).toEqual(["1/3", "2/3"]);
-    for (const reason of ["notFriends", "cannotSend", "tooNew", "rateLimited", "network", "unknown", "repairedToday"]) {
+    for (const reason of ["notFriends", "cannotSend", "tooNew", "rateLimited", "network", "unknown", "underAttack"]) {
       expect(stopsHelpAll(reason)).toBe(true);
     }
-    for (const reason of ["alreadyHelped", "helpersFull", "nothingToHelp"]) expect(stopsHelpAll(reason)).toBe(false);
+    // A repair after one landed today is passed over, as the block stopped offering it.
+    for (const reason of ["alreadyHelped", "helpersFull", "nothingToHelp", "repairedToday"]) expect(stopsHelpAll(reason)).toBe(false);
   });
 
   it("the spam limit stops it with the help words, and leaves the buildings open for later (bug report #50)", async () => {

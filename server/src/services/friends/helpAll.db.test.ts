@@ -241,7 +241,7 @@ describe.skipIf(!dbName)("Help all as one request on a real database", () => {
     expect(await helpRows(H1)).toHaveLength(7);
   });
 
-  test("a refusal about one building passes it over; repairedToday stops there, as the web's Help all did", async () => {
+  test("a refusal about one building passes it over, repairedToday too, as the web's Help all did", async () => {
     const full = { ...upgrading(2, 100_000), hl: HELPERS.slice(1, 6) };
     await setYard(OWNER, {
       buildingdata: { "1": upgrading(1, 100_000), "2": full, "3": upgrading(3, 100_000), "10": hurt(10), "11": hurt(11), "4": upgrading(4, 100_000) },
@@ -253,15 +253,16 @@ describe.skipIf(!dbName)("Help all as one request on a real database", () => {
     expect(passed.helps.map((item: any) => item.ok || item.reason)).toEqual(["alreadyHelped", "helpersFull", "nothingToHelp", true]);
     expect(await helpRows(H1)).toHaveLength(2);
 
-    const stopped = await helpAll(H1, [
+    // One repair a yard a day: the second is passed over, and the speed-up after it still lands.
+    const repairs = await helpAll(H1, [
       { buildingId: 10, kind: "repair" },
       { buildingId: 11, kind: "repair" },
       { buildingId: 4, kind: "speedup" },
     ]);
-    expect(stopped.helps.map((item: any) => item.ok || item.reason)).toEqual([true, "repairedToday"]);
-    expect((await yardOf(OWNER)).buildingdata["4"].hl).toBeUndefined();
+    expect(repairs.helps.map((item: any) => item.ok || item.reason)).toEqual([true, "repairedToday", true]);
+    expect((await yardOf(OWNER)).buildingdata["4"].hl).toEqual([H1]);
     expect((await yardOf(OWNER)).buildinghealthdata).toEqual({ "11": 10 });
-    expect(await helpRows(H1)).toHaveLength(3);
+    expect(await helpRows(H1)).toHaveLength(4);
 
     // The same building twice in one request: the second is already helped.
     const twice = await helpAll(H2, speedups(3, 3));

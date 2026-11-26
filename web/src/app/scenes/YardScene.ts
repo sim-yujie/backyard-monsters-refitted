@@ -2221,7 +2221,7 @@ export class YardScene implements Scene {
       }
       // A reason the client does not know says the server's own words (`friendRefusal`, bug report #50).
       const outcome = this.helpRefused(building, kind, friendRefusal(caught));
-      this.helpShown();
+      this.showHelpBlock();
       return outcome;
     }
   }
@@ -2277,7 +2277,8 @@ export class YardScene implements Scene {
           : this.helpRefused(building, step.kind, item.refusal);
         outcomes.push(play(step.id, outcome));
       }
-      this.helpShown();
+      if (outcomes.some((outcome) => outcome.ok)) this.helpShown();
+      else this.showHelpBlock();
       return outcomes;
     } catch (caught) {
       if (this.context !== context || !this.helpBlock) return [];
@@ -2288,7 +2289,7 @@ export class YardScene implements Scene {
       // Refused as a whole (not friends, under attack, `tooNew`, the spam limit): as the first help's refusal was.
       const head = sent[0]!;
       const outcome = this.helpRefused(buildings.get(head.id)!, head.kind, friendRefusal(caught));
-      this.helpShown();
+      this.showHelpBlock();
       return [play(head.id, outcome)];
     }
   }
@@ -2340,7 +2341,7 @@ export class YardScene implements Scene {
     return { ok: false, reason: refusal.reason, text };
   }
 
-  /** After a help or a Help all lands: the marks, the bar's count and the panel redrawn; the friends bar's wrench follows. */
+  /** After a help lands: the marks, the bar's count and the panel redrawn; the friends bar's wrench follows (a refusal only redraws). */
   private helpShown(): void {
     this.showHelpBlock();
     friendsStore.nudge();

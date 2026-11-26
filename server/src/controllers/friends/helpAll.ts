@@ -35,8 +35,11 @@ import { dropOwnerSight, giveOneHelp, helpNoticeOf, helpRecordOf, openHelpVisit,
  * (`giveOneHelp`): 5 friends a job, each once; one repair a friend's yard a
  * UTC day; the reward only for the first 5 helps of the helper's UTC day,
  * counted across the request. A refusal about one building (`alreadyHelped`,
- * `helpersFull`, `nothingToHelp`) passes it over; any other (`repairedToday`)
- * stops there, as the web's one-by-one Help all stopped. One `friend_help`
+ * `helpersFull`, `nothingToHelp`, `repairedToday`) passes it over, as the
+ * web's one-by-one Help all did (a repair after one landed was no longer
+ * offered); none other can come up once the visit is open, and any would
+ * stop there. The web passes over the same four (`BUILDING_REFUSALS`), so
+ * the two never part ways. One `friend_help`
  * row per help, written in one insert; one flush. When no help went through,
  * everything rolls back, as a refused single help does.
  *
@@ -75,8 +78,13 @@ export const HelpAllSchema = z
   })
   .strict();
 
-/** Refusals about one building: Help all passes it over and goes on (the web's `BUILDING_REFUSALS`). */
-const PASSED_OVER: ReadonlySet<FriendRefusal> = new Set<FriendRefusal>(["alreadyHelped", "helpersFull", "nothingToHelp"]);
+/** Refusals about one building: Help all passes it over and goes on (the web's `BUILDING_REFUSALS`, the same four). */
+const PASSED_OVER: ReadonlySet<FriendRefusal> = new Set<FriendRefusal>([
+  "alreadyHelped",
+  "helpersFull",
+  "nothingToHelp",
+  "repairedToday",
+]);
 
 /** One target's outcome, as the route answers it. */
 export type HelpAllOutcome =
