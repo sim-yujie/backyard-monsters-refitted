@@ -163,7 +163,9 @@ describe("switched on", () => {
     run(tough.battle, 1500);
     const swings = lost(plain.yard) / 60;
     expect(swings).toBeGreaterThan(0);
-    expect(lost(tough.yard)).toBeCloseTo((swings * 60) / 1.05, 6);
+    // Health stays whole, as Flash's `SecNum` keeps it: each swing takes its
+    // share rounded (60 / 1.05 = 57.1 takes 57).
+    expect(lost(tough.yard)).toBe(swings * Math.round(60 / 1.05));
     // Its health ceiling stays where it was: only the damage shrinks.
     expect(tough.yard.buildings[0]!.maxHp).toBe(plain.yard.buildings[0]!.maxHp);
   });

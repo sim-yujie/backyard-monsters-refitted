@@ -150,6 +150,20 @@ describe("an attack started under older rules replays exactly as it was fought",
     expect(inputOf(sent, sessionOf(undefined)).flashKrallen).toBe(false);
   });
 
+  // Whole health (player report, Reii, 25 Nov 2026): a monster's health stays
+  // whole, as Flash's does, only in an attack started under these rules.
+  test("keeps monsters' health whole only when the session's rules are these", () => {
+    expect(inputOf(sent, sessionOf(RULES_VERSION)).wholeHealth).toBe(true);
+    expect(inputOf(sent, sessionOf(OLD_RULES)).wholeHealth).toBe(false);
+    expect(inputOf(sent, sessionOf(undefined)).wholeHealth).toBe(false);
+  });
+
+  test("an attack started on 8.6's rules keeps its 8.6 Krallen, without whole health", () => {
+    const input = inputOf(sent, sessionOf("cf287596a22ae2e0"));
+    expect(input.flashKrallen).toBe(true);
+    expect(input.wholeHealth).toBe(false);
+  });
+
   test(
     "an old attack's Krallen in Hybrid, with no weights, still fights by the rules before",
     () => {

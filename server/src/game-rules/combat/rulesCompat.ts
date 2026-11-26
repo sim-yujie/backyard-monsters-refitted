@@ -54,6 +54,15 @@
  * yard loaded until a hit finds it empty (`EngineBuilding.emptyUnhit`), as
  * Flash's `_looted` does; every other creep still reads it as looted.
  *
+ * Patch 8.7's whole-health fix keeps it empty and moves battles (player
+ * report, Reii, 25 Nov 2026; owner's pick A+, `BattleOptions.wholeHealth`):
+ * the health of a monster, a champion (in its cage too) and a building stays
+ * whole, as Flash's `SecNum` keeps it, so a Quake Tower's quake bigger than a
+ * monster's health kills it instead of leaving it under 1, and a building
+ * left on 0.4 falls while one on 0.5 stands on 1. No replay stamped with
+ * 8.6's cf287596a22ae2e0 plays the same any more. The server replays an
+ * attack whose session was minted under older rules with it off.
+ *
  * Add the version a change replaces only when that change moves no battle.
  * A change that moves any battle result must empty this list.
  */

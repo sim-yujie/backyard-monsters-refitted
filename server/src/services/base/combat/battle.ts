@@ -73,6 +73,15 @@ export interface BattleAttacker extends LootAttacker {
  * @param left - Whether the report says the attacker left (`AbandonedInput.left`):
  *   always for the finaliser; for a save, when its `left` says so.
  */
+/**
+ * The older rules versions that already fight Krallen by patch 8.6's rules
+ * (no Mode, Flash's route and turns): 8.6's own, `cf287596a22ae2e0`. A rule
+ * gate must not read "these rules or not" once a later change moves the
+ * version again: an attack started on 8.6 and landed after whole health went
+ * live keeps its 8.6 Krallen, without whole health (player report, Reii).
+ */
+const KRALLEN_RULES_SINCE_8_6: readonly string[] = ["cf287596a22ae2e0"];
+
 export const battleReplayInput = ({
   flinglog,
   session,
@@ -97,7 +106,9 @@ export const battleReplayInput = ({
   // Krallen has no Mode in an attack started under these rules (patch 8.7,
   // `hasMode`); one started under older rules, or with none recorded,
   // replays with the Mode its log carries, as it was fought.
-  const modelessKrallen = stampPlays(session?.rules);
+  const rulesNow = stampPlays(session?.rules);
+  const modelessKrallen =
+    rulesNow || (typeof session?.rules === "string" && KRALLEN_RULES_SINCE_8_6.includes(session.rules));
   const fighter: LootAttacker = {
     academy,
     champion: attacker.champion ?? null,
@@ -143,6 +154,9 @@ export const battleReplayInput = ({
     // Krallen keeps her route and turns only on a defender that reaches or
     // hits her (patch 8.6) only in an attack started under these rules.
     flashKrallen: modelessKrallen,
+    // A monster's health stays whole, as Flash's does (player report, Reii,
+    // 25 Nov 2026), only in an attack started under these rules.
+    wholeHealth: rulesNow,
   };
 };
 
