@@ -1,0 +1,21 @@
+
+== 400-daily background, 10 players farming at once: farmers 10, hand attackers 9, raids/h 30, sweep/h 23, inferno/h 3, cpu x4, db x4
+today (cap 1, poll, 5 s)             repeats   1209  busy   0.41%  wait p50/p95 150/2100 ms  answer p50/p95 1329/3211 ms  raid busy 0%  battle CPU 16.1% of box  causes {"repeatHeld":4,"saveRunning":0,"raidHeld":1,"finaliseRunning":0,"other":0}
+a. warm worker pool                  repeats   1279  busy      0%  wait p50/p95 0/1000 ms  answer p50/p95 835/1808 ms  raid busy 0%  battle CPU 4.0% of box  causes {"repeatHeld":0,"saveRunning":0,"raidHeld":0,"finaliseRunning":0,"other":0}
+c. cap 2, niced, no double count     repeats   1241  busy      0%  wait p50/p95 0/400 ms  answer p50/p95 1111/1691 ms  raid busy 0%  battle CPU 16.3% of box  causes {"repeatHeld":0,"saveRunning":0,"raidHeld":0,"finaliseRunning":0,"other":0}
+d. slot only around the replay       repeats   1245  busy      0%  wait p50/p95 0/500 ms  answer p50/p95 1132/1730 ms  raid busy 0%  battle CPU 16.4% of box  causes {"repeatHeld":0,"saveRunning":0,"raidHeld":0,"finaliseRunning":0,"other":0}
+d + a + b(20 s)                      repeats   1274  busy      0%  wait p50/p95 0/41 ms  answer p50/p95 705/1147 ms  raid busy 0%  battle CPU 4.0% of box  causes {"repeatHeld":0,"saveRunning":0,"raidHeld":0,"finaliseRunning":0,"other":0}
+
+== 400-daily background, 20 players farming at once: farmers 20, hand attackers 9, raids/h 30, sweep/h 23, inferno/h 3, cpu x4, db x4
+today (cap 1, poll, 5 s)             repeats   2152  busy  15.66%  wait p50/p95 1300/4350 ms  answer p50/p95 2426/5490 ms  raid busy 12.5%  battle CPU 23.2% of box  causes {"repeatHeld":322,"saveRunning":10,"raidHeld":3,"finaliseRunning":1,"other":0}
+a. warm worker pool                  repeats   2391  busy   0.84%  wait p50/p95 400/2850 ms  answer p50/p95 1171/3545 ms  raid busy 0%  battle CPU 6.8% of box  causes {"repeatHeld":19,"saveRunning":0,"raidHeld":1,"finaliseRunning":0,"other":0}
+c. cap 2, niced, no double count     repeats   2425  busy   0.04%  wait p50/p95 0/1450 ms  answer p50/p95 1265/2582 ms  raid busy 0%  battle CPU 30.0% of box  causes {"repeatHeld":1,"saveRunning":0,"raidHeld":0,"finaliseRunning":0,"other":0}
+d. slot only around the replay       repeats   2420  busy      0%  wait p50/p95 0/750 ms  answer p50/p95 1286/2139 ms  raid busy 0%  battle CPU 30.1% of box  causes {"repeatHeld":0,"saveRunning":0,"raidHeld":0,"finaliseRunning":0,"other":0}
+d + a + b(20 s)                      repeats   2558  busy      0%  wait p50/p95 0/83 ms  answer p50/p95 715/1145 ms  raid busy 0%  battle CPU 7.1% of box  causes {"repeatHeld":0,"saveRunning":0,"raidHeld":0,"finaliseRunning":0,"other":0}
+
+== 400-daily background, 30 players farming at once: farmers 30, hand attackers 9, raids/h 30, sweep/h 23, inferno/h 3, cpu x4, db x4
+today (cap 1, poll, 5 s)             repeats   3122  busy   37.7%  wait p50/p95 1800/4550 ms  answer p50/p95 2833/5669 ms  raid busy 50%  battle CPU 24.1% of box  causes {"repeatHeld":1130,"saveRunning":24,"raidHeld":14,"finaliseRunning":7,"other":0}
+a. warm worker pool                  repeats   3340  busy  12.92%  wait p50/p95 1150/4250 ms  answer p50/p95 1911/5031 ms  raid busy 20%  battle CPU 8.2% of box  causes {"repeatHeld":418,"saveRunning":4,"raidHeld":9,"finaliseRunning":0,"other":0}
+c. cap 2, niced, no double count     repeats   3432  busy   2.33%  wait p50/p95 550/3250 ms  answer p50/p95 1726/4347 ms  raid busy 0%  battle CPU 40.4% of box  causes {"repeatHeld":79,"saveRunning":0,"raidHeld":0,"finaliseRunning":1,"other":0}
+d. slot only around the replay       repeats   3554  busy      0%  wait p50/p95 200/1050 ms  answer p50/p95 1509/2774 ms  raid busy 0%  battle CPU 43.4% of box  causes {"repeatHeld":0,"saveRunning":0,"raidHeld":0,"finaliseRunning":0,"other":0}
+d + a + b(20 s)                      repeats   3787  busy      0%  wait p50/p95 0/138 ms  answer p50/p95 728/1159 ms  raid busy 0%  battle CPU 10.3% of box  causes {"repeatHeld":0,"saveRunning":0,"raidHeld":0,"finaliseRunning":0,"other":0}

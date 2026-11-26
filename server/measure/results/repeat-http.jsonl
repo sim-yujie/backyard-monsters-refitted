@@ -1,0 +1,4 @@
+{"at":1795657917105,"baseid":"22913802229198","key":"31/32","ms":59.6,"status":200,"error":"This camp is out of your Flingers' range.","reason":"outOfRange"}
+{"at":1795657923639,"baseid":"22913802229202","key":"31/36","ms":32,"status":200,"error":"This camp is out of your Flingers' range.","reason":"outOfRange"}
+{"at":1795657930382,"baseid":"22913802239208","key":"31/32","ms":111.8,"status":200,"error":"Attack once by hand on a fresh camp to record a new plan.","reason":"planOnBuilding"}
+{"at":1795657937203,"baseid":"22913802237209","key":"21/31","ms":320.3,"status":200,"error":null,"reason":null,"damage":100}

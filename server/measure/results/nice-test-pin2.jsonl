@@ -1,0 +1,6 @@
+{"workers":0,"nice":0,"info":[],"requestWorkMs":0.54,"latencyP50":0.77,"latencyP95":1.25,"latencyP99":1.39,"fights":0,"fightP50":null}
+{"workers":1,"nice":0,"info":[{"ready":true,"tid":3173430,"applied":0,"how":"none"}],"requestWorkMs":0.52,"latencyP50":0.79,"latencyP95":1.63,"latencyP99":3.83,"fights":273,"fightP50":43.8}
+{"workers":1,"nice":10,"info":[{"ready":true,"tid":3173750,"applied":10,"how":"os.setPriority(tid)"}],"requestWorkMs":0.56,"latencyP50":0.78,"latencyP95":1.32,"latencyP99":3.05,"fights":271,"fightP50":44.7}
+{"workers":2,"nice":0,"info":[{"ready":true,"tid":3174223,"applied":0,"how":"none"},{"ready":true,"tid":3174220,"applied":0,"how":"none"}],"requestWorkMs":0.57,"latencyP50":0.74,"latencyP95":3.99,"latencyP99":5.05,"fights":497,"fightP50":45.1}
+{"workers":2,"nice":10,"info":[{"ready":true,"tid":3174469,"applied":10,"how":"os.setPriority(tid)"},{"ready":true,"tid":3174468,"applied":10,"how":"os.setPriority(tid)"}],"requestWorkMs":0.54,"latencyP50":0.75,"latencyP95":1.38,"latencyP99":4.76,"fights":504,"fightP50":43.8}
+{"workers":2,"nice":19,"info":[{"ready":true,"tid":3174758,"applied":19,"how":"os.setPriority(tid)"},{"ready":true,"tid":3174757,"applied":19,"how":"os.setPriority(tid)"}],"requestWorkMs":0.56,"latencyP50":0.73,"latencyP95":1.04,"latencyP99":3.37,"fights":497,"fightP50":46.4}

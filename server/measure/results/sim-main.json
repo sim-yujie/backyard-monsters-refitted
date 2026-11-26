@@ -1,0 +1,1458 @@
+[
+ {
+  "scenario": {
+   "cpuScale": 2,
+   "dbScale": 2,
+   "mainLoad": 0.5,
+   "thinkMs": [
+    7000,
+    20000
+   ],
+   "seconds": 3600,
+   "seed": 1,
+   "label": "400 daily",
+   "dau": 400,
+   "farmers": 12,
+   "handAttackers": 9,
+   "raidsPerHour": 30,
+   "finalisePerHour": 23,
+   "infernoPerHour": 3
+  },
+  "fix": {
+   "name": "today (cap 1, poll, 5 s)",
+   "cap": 1,
+   "waitMs": 5000,
+   "fifo": false,
+   "warm": false,
+   "narrow": false,
+   "noDoubleCount": false,
+   "niced": false
+  },
+  "result": {
+   "repeatsAsked": 3031,
+   "repeatBusyPct": 0,
+   "repeatBusy": 0,
+   "repeatWaitP50": 0,
+   "repeatWaitP95": 700,
+   "repeatAnswerP50": 588,
+   "repeatAnswerP95": 1274,
+   "raidBusyPct": 0,
+   "saves": 181,
+   "saveP95": 550,
+   "workerCoreSecondsPerHour": 702,
+   "workerCpuShare": 0.097,
+   "maxWorkers": 2,
+   "busyCauses": {
+    "repeatHeld": 0,
+    "saveRunning": 0,
+    "raidHeld": 0,
+    "finaliseRunning": 0,
+    "other": 0
+   }
+  }
+ },
+ {
+  "scenario": {
+   "cpuScale": 2,
+   "dbScale": 2,
+   "mainLoad": 0.5,
+   "thinkMs": [
+    7000,
+    20000
+   ],
+   "seconds": 3600,
+   "seed": 1,
+   "label": "400 daily",
+   "dau": 400,
+   "farmers": 12,
+   "handAttackers": 9,
+   "raidsPerHour": 30,
+   "finalisePerHour": 23,
+   "infernoPerHour": 3
+  },
+  "fix": {
+   "name": "a. warm worker pool",
+   "cap": 1,
+   "waitMs": 5000,
+   "fifo": false,
+   "warm": true,
+   "narrow": false,
+   "noDoubleCount": false,
+   "niced": false
+  },
+  "result": {
+   "repeatsAsked": 3120,
+   "repeatBusyPct": 0,
+   "repeatBusy": 0,
+   "repeatWaitP50": 0,
+   "repeatWaitP95": 350,
+   "repeatAnswerP50": 394,
+   "repeatAnswerP95": 743,
+   "raidBusyPct": 0,
+   "saves": 182,
+   "saveP95": 234,
+   "workerCoreSecondsPerHour": 172,
+   "workerCpuShare": 0.024,
+   "maxWorkers": 2,
+   "busyCauses": {
+    "repeatHeld": 0,
+    "saveRunning": 0,
+    "raidHeld": 0,
+    "finaliseRunning": 0,
+    "other": 0
+   }
+  }
+ },
+ {
+  "scenario": {
+   "cpuScale": 2,
+   "dbScale": 2,
+   "mainLoad": 0.5,
+   "thinkMs": [
+    7000,
+    20000
+   ],
+   "seconds": 3600,
+   "seed": 1,
+   "label": "400 daily",
+   "dau": 400,
+   "farmers": 12,
+   "handAttackers": 9,
+   "raidsPerHour": 30,
+   "finalisePerHour": 23,
+   "infernoPerHour": 3
+  },
+  "fix": {
+   "name": "b. FIFO queue, 20 s",
+   "cap": 1,
+   "waitMs": 20000,
+   "fifo": true,
+   "warm": false,
+   "narrow": false,
+   "noDoubleCount": false,
+   "niced": false
+  },
+  "result": {
+   "repeatsAsked": 3044,
+   "repeatBusyPct": 0,
+   "repeatBusy": 0,
+   "repeatWaitP50": 0,
+   "repeatWaitP95": 670,
+   "repeatAnswerP50": 593,
+   "repeatAnswerP95": 1266,
+   "raidBusyPct": 0,
+   "saves": 181,
+   "saveP95": 596,
+   "workerCoreSecondsPerHour": 714,
+   "workerCpuShare": 0.099,
+   "maxWorkers": 2,
+   "busyCauses": {
+    "repeatHeld": 0,
+    "saveRunning": 0,
+    "raidHeld": 0,
+    "finaliseRunning": 0,
+    "other": 0
+   }
+  }
+ },
+ {
+  "scenario": {
+   "cpuScale": 2,
+   "dbScale": 2,
+   "mainLoad": 0.5,
+   "thinkMs": [
+    7000,
+    20000
+   ],
+   "seconds": 3600,
+   "seed": 1,
+   "label": "400 daily",
+   "dau": 400,
+   "farmers": 12,
+   "handAttackers": 9,
+   "raidsPerHour": 30,
+   "finalisePerHour": 23,
+   "infernoPerHour": 3
+  },
+  "fix": {
+   "name": "b. FIFO queue, 30 s",
+   "cap": 1,
+   "waitMs": 30000,
+   "fifo": true,
+   "warm": false,
+   "narrow": false,
+   "noDoubleCount": false,
+   "niced": false
+  },
+  "result": {
+   "repeatsAsked": 3044,
+   "repeatBusyPct": 0,
+   "repeatBusy": 0,
+   "repeatWaitP50": 0,
+   "repeatWaitP95": 670,
+   "repeatAnswerP50": 593,
+   "repeatAnswerP95": 1266,
+   "raidBusyPct": 0,
+   "saves": 181,
+   "saveP95": 596,
+   "workerCoreSecondsPerHour": 714,
+   "workerCpuShare": 0.099,
+   "maxWorkers": 2,
+   "busyCauses": {
+    "repeatHeld": 0,
+    "saveRunning": 0,
+    "raidHeld": 0,
+    "finaliseRunning": 0,
+    "other": 0
+   }
+  }
+ },
+ {
+  "scenario": {
+   "cpuScale": 2,
+   "dbScale": 2,
+   "mainLoad": 0.5,
+   "thinkMs": [
+    7000,
+    20000
+   ],
+   "seconds": 3600,
+   "seed": 1,
+   "label": "400 daily",
+   "dau": 400,
+   "farmers": 12,
+   "handAttackers": 9,
+   "raidsPerHour": 30,
+   "finalisePerHour": 23,
+   "infernoPerHour": 3
+  },
+  "fix": {
+   "name": "c. cap 2, niced, no double count",
+   "cap": 2,
+   "waitMs": 5000,
+   "fifo": false,
+   "warm": false,
+   "narrow": false,
+   "noDoubleCount": true,
+   "niced": true
+  },
+  "result": {
+   "repeatsAsked": 3068,
+   "repeatBusyPct": 0,
+   "repeatBusy": 0,
+   "repeatWaitP50": 0,
+   "repeatWaitP95": 50,
+   "repeatAnswerP50": 534,
+   "repeatAnswerP95": 797,
+   "raidBusyPct": 0,
+   "saves": 180,
+   "saveP95": 568,
+   "workerCoreSecondsPerHour": 710,
+   "workerCpuShare": 0.099,
+   "maxWorkers": 3,
+   "busyCauses": {
+    "repeatHeld": 0,
+    "saveRunning": 0,
+    "raidHeld": 0,
+    "finaliseRunning": 0,
+    "other": 0
+   }
+  }
+ },
+ {
+  "scenario": {
+   "cpuScale": 2,
+   "dbScale": 2,
+   "mainLoad": 0.5,
+   "thinkMs": [
+    7000,
+    20000
+   ],
+   "seconds": 3600,
+   "seed": 1,
+   "label": "400 daily",
+   "dau": 400,
+   "farmers": 12,
+   "handAttackers": 9,
+   "raidsPerHour": 30,
+   "finalisePerHour": 23,
+   "infernoPerHour": 3
+  },
+  "fix": {
+   "name": "d. slot only around the replay",
+   "cap": 1,
+   "waitMs": 5000,
+   "fifo": false,
+   "warm": false,
+   "narrow": true,
+   "noDoubleCount": false,
+   "niced": false
+  },
+  "result": {
+   "repeatsAsked": 3068,
+   "repeatBusyPct": 0,
+   "repeatBusy": 0,
+   "repeatWaitP50": 0,
+   "repeatWaitP95": 200,
+   "repeatAnswerP50": 545,
+   "repeatAnswerP95": 833,
+   "raidBusyPct": 0,
+   "saves": 181,
+   "saveP95": 542,
+   "workerCoreSecondsPerHour": 703,
+   "workerCpuShare": 0.098,
+   "maxWorkers": 4,
+   "busyCauses": {
+    "repeatHeld": 0,
+    "saveRunning": 0,
+    "raidHeld": 0,
+    "finaliseRunning": 0,
+    "other": 0
+   }
+  }
+ },
+ {
+  "scenario": {
+   "cpuScale": 2,
+   "dbScale": 2,
+   "mainLoad": 0.5,
+   "thinkMs": [
+    7000,
+    20000
+   ],
+   "seconds": 3600,
+   "seed": 1,
+   "label": "400 daily",
+   "dau": 400,
+   "farmers": 12,
+   "handAttackers": 9,
+   "raidsPerHour": 30,
+   "finalisePerHour": 23,
+   "infernoPerHour": 3
+  },
+  "fix": {
+   "name": "d + a + b(20 s)",
+   "cap": 1,
+   "waitMs": 20000,
+   "fifo": true,
+   "warm": true,
+   "narrow": true,
+   "noDoubleCount": false,
+   "niced": false
+  },
+  "result": {
+   "repeatsAsked": 3126,
+   "repeatBusyPct": 0,
+   "repeatBusy": 0,
+   "repeatWaitP50": 0,
+   "repeatWaitP95": 0,
+   "repeatAnswerP50": 359,
+   "repeatAnswerP95": 570,
+   "raidBusyPct": 0,
+   "saves": 179,
+   "saveP95": 211,
+   "workerCoreSecondsPerHour": 171,
+   "workerCpuShare": 0.024,
+   "maxWorkers": 3,
+   "busyCauses": {
+    "repeatHeld": 0,
+    "saveRunning": 0,
+    "raidHeld": 0,
+    "finaliseRunning": 0,
+    "other": 0
+   }
+  }
+ },
+ {
+  "scenario": {
+   "cpuScale": 2,
+   "dbScale": 2,
+   "mainLoad": 0.5,
+   "thinkMs": [
+    7000,
+    20000
+   ],
+   "seconds": 3600,
+   "seed": 1,
+   "label": "400 daily, busy evening (2x farmers)",
+   "dau": 400,
+   "farmers": 24,
+   "handAttackers": 9,
+   "raidsPerHour": 30,
+   "finalisePerHour": 23,
+   "infernoPerHour": 3
+  },
+  "fix": {
+   "name": "today (cap 1, poll, 5 s)",
+   "cap": 1,
+   "waitMs": 5000,
+   "fifo": false,
+   "warm": false,
+   "narrow": false,
+   "noDoubleCount": false,
+   "niced": false
+  },
+  "result": {
+   "repeatsAsked": 5869,
+   "repeatBusyPct": 0.24,
+   "repeatBusy": 14,
+   "repeatWaitP50": 300,
+   "repeatWaitP95": 2250,
+   "repeatAnswerP50": 838,
+   "repeatAnswerP95": 2771,
+   "raidBusyPct": 0,
+   "saves": 182,
+   "saveP95": 578,
+   "workerCoreSecondsPerHour": 1296,
+   "workerCpuShare": 0.18,
+   "maxWorkers": 2,
+   "busyCauses": {
+    "repeatHeld": 13,
+    "saveRunning": 1,
+    "raidHeld": 0,
+    "finaliseRunning": 0,
+    "other": 0
+   }
+  }
+ },
+ {
+  "scenario": {
+   "cpuScale": 2,
+   "dbScale": 2,
+   "mainLoad": 0.5,
+   "thinkMs": [
+    7000,
+    20000
+   ],
+   "seconds": 3600,
+   "seed": 1,
+   "label": "400 daily, busy evening (2x farmers)",
+   "dau": 400,
+   "farmers": 24,
+   "handAttackers": 9,
+   "raidsPerHour": 30,
+   "finalisePerHour": 23,
+   "infernoPerHour": 3
+  },
+  "fix": {
+   "name": "a. warm worker pool",
+   "cap": 1,
+   "waitMs": 5000,
+   "fifo": false,
+   "warm": true,
+   "narrow": false,
+   "noDoubleCount": false,
+   "niced": false
+  },
+  "result": {
+   "repeatsAsked": 6144,
+   "repeatBusyPct": 0,
+   "repeatBusy": 0,
+   "repeatWaitP50": 0,
+   "repeatWaitP95": 750,
+   "repeatAnswerP50": 460,
+   "repeatAnswerP95": 1121,
+   "raidBusyPct": 0,
+   "saves": 182,
+   "saveP95": 227,
+   "workerCoreSecondsPerHour": 300,
+   "workerCpuShare": 0.042,
+   "maxWorkers": 2,
+   "busyCauses": {
+    "repeatHeld": 0,
+    "saveRunning": 0,
+    "raidHeld": 0,
+    "finaliseRunning": 0,
+    "other": 0
+   }
+  }
+ },
+ {
+  "scenario": {
+   "cpuScale": 2,
+   "dbScale": 2,
+   "mainLoad": 0.5,
+   "thinkMs": [
+    7000,
+    20000
+   ],
+   "seconds": 3600,
+   "seed": 1,
+   "label": "400 daily, busy evening (2x farmers)",
+   "dau": 400,
+   "farmers": 24,
+   "handAttackers": 9,
+   "raidsPerHour": 30,
+   "finalisePerHour": 23,
+   "infernoPerHour": 3
+  },
+  "fix": {
+   "name": "b. FIFO queue, 20 s",
+   "cap": 1,
+   "waitMs": 20000,
+   "fifo": true,
+   "warm": false,
+   "narrow": false,
+   "noDoubleCount": false,
+   "niced": false
+  },
+  "result": {
+   "repeatsAsked": 5937,
+   "repeatBusyPct": 0,
+   "repeatBusy": 0,
+   "repeatWaitP50": 347,
+   "repeatWaitP95": 1598,
+   "repeatAnswerP50": 883,
+   "repeatAnswerP95": 2140,
+   "raidBusyPct": 0,
+   "saves": 179,
+   "saveP95": 601,
+   "workerCoreSecondsPerHour": 1300,
+   "workerCpuShare": 0.181,
+   "maxWorkers": 2,
+   "busyCauses": {
+    "repeatHeld": 0,
+    "saveRunning": 0,
+    "raidHeld": 0,
+    "finaliseRunning": 0,
+    "other": 0
+   }
+  }
+ },
+ {
+  "scenario": {
+   "cpuScale": 2,
+   "dbScale": 2,
+   "mainLoad": 0.5,
+   "thinkMs": [
+    7000,
+    20000
+   ],
+   "seconds": 3600,
+   "seed": 1,
+   "label": "400 daily, busy evening (2x farmers)",
+   "dau": 400,
+   "farmers": 24,
+   "handAttackers": 9,
+   "raidsPerHour": 30,
+   "finalisePerHour": 23,
+   "infernoPerHour": 3
+  },
+  "fix": {
+   "name": "b. FIFO queue, 30 s",
+   "cap": 1,
+   "waitMs": 30000,
+   "fifo": true,
+   "warm": false,
+   "narrow": false,
+   "noDoubleCount": false,
+   "niced": false
+  },
+  "result": {
+   "repeatsAsked": 5937,
+   "repeatBusyPct": 0,
+   "repeatBusy": 0,
+   "repeatWaitP50": 347,
+   "repeatWaitP95": 1598,
+   "repeatAnswerP50": 883,
+   "repeatAnswerP95": 2140,
+   "raidBusyPct": 0,
+   "saves": 179,
+   "saveP95": 601,
+   "workerCoreSecondsPerHour": 1300,
+   "workerCpuShare": 0.181,
+   "maxWorkers": 2,
+   "busyCauses": {
+    "repeatHeld": 0,
+    "saveRunning": 0,
+    "raidHeld": 0,
+    "finaliseRunning": 0,
+    "other": 0
+   }
+  }
+ },
+ {
+  "scenario": {
+   "cpuScale": 2,
+   "dbScale": 2,
+   "mainLoad": 0.5,
+   "thinkMs": [
+    7000,
+    20000
+   ],
+   "seconds": 3600,
+   "seed": 1,
+   "label": "400 daily, busy evening (2x farmers)",
+   "dau": 400,
+   "farmers": 24,
+   "handAttackers": 9,
+   "raidsPerHour": 30,
+   "finalisePerHour": 23,
+   "infernoPerHour": 3
+  },
+  "fix": {
+   "name": "c. cap 2, niced, no double count",
+   "cap": 2,
+   "waitMs": 5000,
+   "fifo": false,
+   "warm": false,
+   "narrow": false,
+   "noDoubleCount": true,
+   "niced": true
+  },
+  "result": {
+   "repeatsAsked": 6119,
+   "repeatBusyPct": 0,
+   "repeatBusy": 0,
+   "repeatWaitP50": 0,
+   "repeatWaitP95": 350,
+   "repeatAnswerP50": 569,
+   "repeatAnswerP95": 964,
+   "raidBusyPct": 0,
+   "saves": 180,
+   "saveP95": 704,
+   "workerCoreSecondsPerHour": 1339,
+   "workerCpuShare": 0.186,
+   "maxWorkers": 3,
+   "busyCauses": {
+    "repeatHeld": 0,
+    "saveRunning": 0,
+    "raidHeld": 0,
+    "finaliseRunning": 0,
+    "other": 0
+   }
+  }
+ },
+ {
+  "scenario": {
+   "cpuScale": 2,
+   "dbScale": 2,
+   "mainLoad": 0.5,
+   "thinkMs": [
+    7000,
+    20000
+   ],
+   "seconds": 3600,
+   "seed": 1,
+   "label": "400 daily, busy evening (2x farmers)",
+   "dau": 400,
+   "farmers": 24,
+   "handAttackers": 9,
+   "raidsPerHour": 30,
+   "finalisePerHour": 23,
+   "infernoPerHour": 3
+  },
+  "fix": {
+   "name": "d. slot only around the replay",
+   "cap": 1,
+   "waitMs": 5000,
+   "fifo": false,
+   "warm": false,
+   "narrow": true,
+   "noDoubleCount": false,
+   "niced": false
+  },
+  "result": {
+   "repeatsAsked": 6134,
+   "repeatBusyPct": 0,
+   "repeatBusy": 0,
+   "repeatWaitP50": 0,
+   "repeatWaitP95": 300,
+   "repeatAnswerP50": 590,
+   "repeatAnswerP95": 930,
+   "raidBusyPct": 0,
+   "saves": 180,
+   "saveP95": 599,
+   "workerCoreSecondsPerHour": 1355,
+   "workerCpuShare": 0.188,
+   "maxWorkers": 5,
+   "busyCauses": {
+    "repeatHeld": 0,
+    "saveRunning": 0,
+    "raidHeld": 0,
+    "finaliseRunning": 0,
+    "other": 0
+   }
+  }
+ },
+ {
+  "scenario": {
+   "cpuScale": 2,
+   "dbScale": 2,
+   "mainLoad": 0.5,
+   "thinkMs": [
+    7000,
+    20000
+   ],
+   "seconds": 3600,
+   "seed": 1,
+   "label": "400 daily, busy evening (2x farmers)",
+   "dau": 400,
+   "farmers": 24,
+   "handAttackers": 9,
+   "raidsPerHour": 30,
+   "finalisePerHour": 23,
+   "infernoPerHour": 3
+  },
+  "fix": {
+   "name": "d + a + b(20 s)",
+   "cap": 1,
+   "waitMs": 20000,
+   "fifo": true,
+   "warm": true,
+   "narrow": true,
+   "noDoubleCount": false,
+   "niced": false
+  },
+  "result": {
+   "repeatsAsked": 6222,
+   "repeatBusyPct": 0,
+   "repeatBusy": 0,
+   "repeatWaitP50": 0,
+   "repeatWaitP95": 26,
+   "repeatAnswerP50": 355,
+   "repeatAnswerP95": 569,
+   "raidBusyPct": 0,
+   "saves": 182,
+   "saveP95": 229,
+   "workerCoreSecondsPerHour": 307,
+   "workerCpuShare": 0.043,
+   "maxWorkers": 3,
+   "busyCauses": {
+    "repeatHeld": 0,
+    "saveRunning": 0,
+    "raidHeld": 0,
+    "finaliseRunning": 0,
+    "other": 0
+   }
+  }
+ },
+ {
+  "scenario": {
+   "cpuScale": 2,
+   "dbScale": 2,
+   "mainLoad": 0.5,
+   "thinkMs": [
+    7000,
+    20000
+   ],
+   "seconds": 3600,
+   "seed": 1,
+   "label": "4000 daily",
+   "dau": 4000,
+   "farmers": 120,
+   "handAttackers": 90,
+   "raidsPerHour": 300,
+   "finalisePerHour": 225,
+   "infernoPerHour": 30
+  },
+  "fix": {
+   "name": "today (cap 1, poll, 5 s)",
+   "cap": 1,
+   "waitMs": 5000,
+   "fifo": false,
+   "warm": false,
+   "narrow": false,
+   "noDoubleCount": false,
+   "niced": false
+  },
+  "result": {
+   "repeatsAsked": 23995,
+   "repeatBusyPct": 70.67,
+   "repeatBusy": 16942,
+   "repeatWaitP50": 2550,
+   "repeatWaitP95": 4800,
+   "repeatAnswerP50": 3096,
+   "repeatAnswerP95": 5333,
+   "raidBusyPct": 71.96,
+   "saves": 1792,
+   "saveP95": 649,
+   "workerCoreSecondsPerHour": 2195,
+   "workerCpuShare": 0.305,
+   "maxWorkers": 5,
+   "busyCauses": {
+    "repeatHeld": 15150,
+    "saveRunning": 1418,
+    "raidHeld": 223,
+    "finaliseRunning": 151,
+    "other": 0
+   }
+  }
+ },
+ {
+  "scenario": {
+   "cpuScale": 2,
+   "dbScale": 2,
+   "mainLoad": 0.5,
+   "thinkMs": [
+    7000,
+    20000
+   ],
+   "seconds": 3600,
+   "seed": 1,
+   "label": "4000 daily",
+   "dau": 4000,
+   "farmers": 120,
+   "handAttackers": 90,
+   "raidsPerHour": 300,
+   "finalisePerHour": 225,
+   "infernoPerHour": 30
+  },
+  "fix": {
+   "name": "a. warm worker pool",
+   "cap": 1,
+   "waitMs": 5000,
+   "fifo": false,
+   "warm": true,
+   "narrow": false,
+   "noDoubleCount": false,
+   "niced": false
+  },
+  "result": {
+   "repeatsAsked": 24739,
+   "repeatBusyPct": 52.29,
+   "repeatBusy": 12921,
+   "repeatWaitP50": 2300,
+   "repeatWaitP95": 4700,
+   "repeatAnswerP50": 2673,
+   "repeatAnswerP95": 5094,
+   "raidBusyPct": 53.22,
+   "saves": 1801,
+   "saveP95": 254,
+   "workerCoreSecondsPerHour": 805,
+   "workerCpuShare": 0.112,
+   "maxWorkers": 4,
+   "busyCauses": {
+    "repeatHeld": 12431,
+    "saveRunning": 290,
+    "raidHeld": 177,
+    "finaliseRunning": 23,
+    "other": 0
+   }
+  }
+ },
+ {
+  "scenario": {
+   "cpuScale": 2,
+   "dbScale": 2,
+   "mainLoad": 0.5,
+   "thinkMs": [
+    7000,
+    20000
+   ],
+   "seconds": 3600,
+   "seed": 1,
+   "label": "4000 daily",
+   "dau": 4000,
+   "farmers": 120,
+   "handAttackers": 90,
+   "raidsPerHour": 300,
+   "finalisePerHour": 225,
+   "infernoPerHour": 30
+  },
+  "fix": {
+   "name": "b. FIFO queue, 20 s",
+   "cap": 1,
+   "waitMs": 20000,
+   "fifo": true,
+   "warm": false,
+   "narrow": false,
+   "noDoubleCount": false,
+   "niced": false
+  },
+  "result": {
+   "repeatsAsked": 12905,
+   "repeatBusyPct": 45.83,
+   "repeatBusy": 5882,
+   "repeatWaitP50": 19730,
+   "repeatWaitP95": 19980,
+   "repeatAnswerP50": 20252,
+   "repeatAnswerP95": 20617,
+   "raidBusyPct": 49.27,
+   "saves": 1793,
+   "saveP95": 660,
+   "workerCoreSecondsPerHour": 2215,
+   "workerCpuShare": 0.308,
+   "maxWorkers": 5,
+   "busyCauses": {
+    "repeatHeld": 4807,
+    "saveRunning": 786,
+    "raidHeld": 162,
+    "finaliseRunning": 103,
+    "other": 24
+   }
+  }
+ },
+ {
+  "scenario": {
+   "cpuScale": 2,
+   "dbScale": 2,
+   "mainLoad": 0.5,
+   "thinkMs": [
+    7000,
+    20000
+   ],
+   "seconds": 3600,
+   "seed": 1,
+   "label": "4000 daily",
+   "dau": 4000,
+   "farmers": 120,
+   "handAttackers": 90,
+   "raidsPerHour": 300,
+   "finalisePerHour": 225,
+   "infernoPerHour": 30
+  },
+  "fix": {
+   "name": "b. FIFO queue, 30 s",
+   "cap": 1,
+   "waitMs": 30000,
+   "fifo": true,
+   "warm": false,
+   "narrow": false,
+   "noDoubleCount": false,
+   "niced": false
+  },
+  "result": {
+   "repeatsAsked": 10012,
+   "repeatBusyPct": 30.55,
+   "repeatBusy": 3034,
+   "repeatWaitP50": 29504,
+   "repeatWaitP95": 29965,
+   "repeatAnswerP50": 30029,
+   "repeatAnswerP95": 30569,
+   "raidBusyPct": 33.33,
+   "saves": 1790,
+   "saveP95": 674,
+   "workerCoreSecondsPerHour": 2222,
+   "workerCpuShare": 0.309,
+   "maxWorkers": 5,
+   "busyCauses": {
+    "repeatHeld": 2358,
+    "saveRunning": 530,
+    "raidHeld": 97,
+    "finaliseRunning": 48,
+    "other": 1
+   }
+  }
+ },
+ {
+  "scenario": {
+   "cpuScale": 2,
+   "dbScale": 2,
+   "mainLoad": 0.5,
+   "thinkMs": [
+    7000,
+    20000
+   ],
+   "seconds": 3600,
+   "seed": 1,
+   "label": "4000 daily",
+   "dau": 4000,
+   "farmers": 120,
+   "handAttackers": 90,
+   "raidsPerHour": 300,
+   "finalisePerHour": 225,
+   "infernoPerHour": 30
+  },
+  "fix": {
+   "name": "c. cap 2, niced, no double count",
+   "cap": 2,
+   "waitMs": 5000,
+   "fifo": false,
+   "warm": false,
+   "narrow": false,
+   "noDoubleCount": true,
+   "niced": true
+  },
+  "result": {
+   "repeatsAsked": 24867,
+   "repeatBusyPct": 45.98,
+   "repeatBusy": 11425,
+   "repeatWaitP50": 2150,
+   "repeatWaitP95": 4700,
+   "repeatAnswerP50": 2751,
+   "repeatAnswerP95": 5291,
+   "raidBusyPct": 44.62,
+   "saves": 1804,
+   "saveP95": 891,
+   "workerCoreSecondsPerHour": 3562,
+   "workerCpuShare": 0.495,
+   "maxWorkers": 7,
+   "busyCauses": {
+    "repeatHeld": 10059,
+    "saveRunning": 934,
+    "raidHeld": 261,
+    "finaliseRunning": 171,
+    "other": 0
+   }
+  }
+ },
+ {
+  "scenario": {
+   "cpuScale": 2,
+   "dbScale": 2,
+   "mainLoad": 0.5,
+   "thinkMs": [
+    7000,
+    20000
+   ],
+   "seconds": 3600,
+   "seed": 1,
+   "label": "4000 daily",
+   "dau": 4000,
+   "farmers": 120,
+   "handAttackers": 90,
+   "raidsPerHour": 300,
+   "finalisePerHour": 225,
+   "infernoPerHour": 30
+  },
+  "fix": {
+   "name": "d. slot only around the replay",
+   "cap": 1,
+   "waitMs": 5000,
+   "fifo": false,
+   "warm": false,
+   "narrow": true,
+   "noDoubleCount": false,
+   "niced": false
+  },
+  "result": {
+   "repeatsAsked": 23598,
+   "repeatBusyPct": 4.34,
+   "repeatBusy": 1023,
+   "repeatWaitP50": 1750,
+   "repeatWaitP95": 4150,
+   "repeatAnswerP50": 4718,
+   "repeatAnswerP95": 7775,
+   "raidBusyPct": 4.5,
+   "saves": 1783,
+   "saveP95": 3827,
+   "workerCoreSecondsPerHour": 5477,
+   "workerCpuShare": 0.761,
+   "maxWorkers": 48,
+   "busyCauses": {
+    "repeatHeld": 67,
+    "saveRunning": 169,
+    "raidHeld": 705,
+    "finaliseRunning": 82,
+    "other": 0
+   }
+  }
+ },
+ {
+  "scenario": {
+   "cpuScale": 2,
+   "dbScale": 2,
+   "mainLoad": 0.5,
+   "thinkMs": [
+    7000,
+    20000
+   ],
+   "seconds": 3600,
+   "seed": 1,
+   "label": "4000 daily",
+   "dau": 4000,
+   "farmers": 120,
+   "handAttackers": 90,
+   "raidsPerHour": 300,
+   "finalisePerHour": 225,
+   "infernoPerHour": 30
+  },
+  "fix": {
+   "name": "d + a + b(20 s)",
+   "cap": 1,
+   "waitMs": 20000,
+   "fifo": true,
+   "warm": true,
+   "narrow": true,
+   "noDoubleCount": false,
+   "niced": false
+  },
+  "result": {
+   "repeatsAsked": 31016,
+   "repeatBusyPct": 0,
+   "repeatBusy": 0,
+   "repeatWaitP50": 0,
+   "repeatWaitP95": 165,
+   "repeatAnswerP50": 393,
+   "repeatAnswerP95": 641,
+   "raidBusyPct": 0,
+   "saves": 1801,
+   "saveP95": 269,
+   "workerCoreSecondsPerHour": 1678,
+   "workerCpuShare": 0.233,
+   "maxWorkers": 11,
+   "busyCauses": {
+    "repeatHeld": 0,
+    "saveRunning": 0,
+    "raidHeld": 0,
+    "finaliseRunning": 0,
+    "other": 0
+   }
+  }
+ },
+ {
+  "scenario": {
+   "cpuScale": 2,
+   "dbScale": 2,
+   "mainLoad": 0.5,
+   "thinkMs": [
+    7000,
+    20000
+   ],
+   "seconds": 900,
+   "seed": 1,
+   "label": "40000 daily",
+   "dau": 40000,
+   "farmers": 1200,
+   "handAttackers": 900,
+   "raidsPerHour": 3000,
+   "finalisePerHour": 2250,
+   "infernoPerHour": 300
+  },
+  "fix": {
+   "name": "today (cap 1, poll, 5 s)",
+   "cap": 1,
+   "waitMs": 5000,
+   "fifo": false,
+   "warm": false,
+   "narrow": false,
+   "noDoubleCount": false,
+   "niced": false
+  },
+  "result": {
+   "repeatsAsked": 58070,
+   "repeatBusyPct": 99.68,
+   "repeatBusy": 57532,
+   "repeatWaitP50": 4400,
+   "repeatWaitP95": 5000,
+   "repeatAnswerP50": 4957,
+   "repeatAnswerP95": 5650,
+   "raidBusyPct": 99.24,
+   "saves": 3522,
+   "saveP95": 81264,
+   "workerCoreSecondsPerHour": 1392,
+   "workerCpuShare": 0.773,
+   "maxWorkers": 332,
+   "busyCauses": {
+    "repeatHeld": 5129,
+    "saveRunning": 30534,
+    "raidHeld": 101,
+    "finaliseRunning": 21768,
+    "other": 0
+   }
+  }
+ },
+ {
+  "scenario": {
+   "cpuScale": 2,
+   "dbScale": 2,
+   "mainLoad": 0.5,
+   "thinkMs": [
+    7000,
+    20000
+   ],
+   "seconds": 900,
+   "seed": 1,
+   "label": "40000 daily",
+   "dau": 40000,
+   "farmers": 1200,
+   "handAttackers": 900,
+   "raidsPerHour": 3000,
+   "finalisePerHour": 2250,
+   "infernoPerHour": 300
+  },
+  "fix": {
+   "name": "a. warm worker pool",
+   "cap": 1,
+   "waitMs": 5000,
+   "fifo": false,
+   "warm": true,
+   "narrow": false,
+   "noDoubleCount": false,
+   "niced": false
+  },
+  "result": {
+   "repeatsAsked": 58192,
+   "repeatBusyPct": 96.01,
+   "repeatBusy": 55562,
+   "repeatWaitP50": 4450,
+   "repeatWaitP95": 5000,
+   "repeatAnswerP50": 4824,
+   "repeatAnswerP95": 5396,
+   "raidBusyPct": 96.05,
+   "saves": 4194,
+   "saveP95": 418,
+   "workerCoreSecondsPerHour": 669,
+   "workerCpuShare": 0.372,
+   "maxWorkers": 18,
+   "busyCauses": {
+    "repeatHeld": 40356,
+    "saveRunning": 12773,
+    "raidHeld": 583,
+    "finaliseRunning": 1850,
+    "other": 0
+   }
+  }
+ },
+ {
+  "scenario": {
+   "cpuScale": 2,
+   "dbScale": 2,
+   "mainLoad": 0.5,
+   "thinkMs": [
+    7000,
+    20000
+   ],
+   "seconds": 900,
+   "seed": 1,
+   "label": "40000 daily",
+   "dau": 40000,
+   "farmers": 1200,
+   "handAttackers": 900,
+   "raidsPerHour": 3000,
+   "finalisePerHour": 2250,
+   "infernoPerHour": 300
+  },
+  "fix": {
+   "name": "b. FIFO queue, 20 s",
+   "cap": 1,
+   "waitMs": 20000,
+   "fifo": true,
+   "warm": false,
+   "narrow": false,
+   "noDoubleCount": false,
+   "niced": false
+  },
+  "result": {
+   "repeatsAsked": 32407,
+   "repeatBusyPct": 99.41,
+   "repeatBusy": 31508,
+   "repeatWaitP50": 19973,
+   "repeatWaitP95": 19997,
+   "repeatAnswerP50": 20453,
+   "repeatAnswerP95": 20776,
+   "raidBusyPct": 95.98,
+   "saves": 3480,
+   "saveP95": 82982,
+   "workerCoreSecondsPerHour": 1379,
+   "workerCpuShare": 0.766,
+   "maxWorkers": 372,
+   "busyCauses": {
+    "repeatHeld": 2574,
+    "saveRunning": 21035,
+    "raidHeld": 28,
+    "finaliseRunning": 7861,
+    "other": 10
+   }
+  }
+ },
+ {
+  "scenario": {
+   "cpuScale": 2,
+   "dbScale": 2,
+   "mainLoad": 0.5,
+   "thinkMs": [
+    7000,
+    20000
+   ],
+   "seconds": 900,
+   "seed": 1,
+   "label": "40000 daily",
+   "dau": 40000,
+   "farmers": 1200,
+   "handAttackers": 900,
+   "raidsPerHour": 3000,
+   "finalisePerHour": 2250,
+   "infernoPerHour": 300
+  },
+  "fix": {
+   "name": "b. FIFO queue, 30 s",
+   "cap": 1,
+   "waitMs": 30000,
+   "fifo": true,
+   "warm": false,
+   "narrow": false,
+   "noDoubleCount": false,
+   "niced": false
+  },
+  "result": {
+   "repeatsAsked": 25131,
+   "repeatBusyPct": 99.28,
+   "repeatBusy": 24104,
+   "repeatWaitP50": 29886,
+   "repeatWaitP95": 29997,
+   "repeatAnswerP50": 30349,
+   "repeatAnswerP95": 30780,
+   "raidBusyPct": 95.91,
+   "saves": 3502,
+   "saveP95": 87367,
+   "workerCoreSecondsPerHour": 1391,
+   "workerCpuShare": 0.773,
+   "maxWorkers": 387,
+   "busyCauses": {
+    "repeatHeld": 1870,
+    "saveRunning": 16557,
+    "raidHeld": 34,
+    "finaliseRunning": 5641,
+    "other": 2
+   }
+  }
+ },
+ {
+  "scenario": {
+   "cpuScale": 2,
+   "dbScale": 2,
+   "mainLoad": 0.5,
+   "thinkMs": [
+    7000,
+    20000
+   ],
+   "seconds": 900,
+   "seed": 1,
+   "label": "40000 daily",
+   "dau": 40000,
+   "farmers": 1200,
+   "handAttackers": 900,
+   "raidsPerHour": 3000,
+   "finalisePerHour": 2250,
+   "infernoPerHour": 300
+  },
+  "fix": {
+   "name": "c. cap 2, niced, no double count",
+   "cap": 2,
+   "waitMs": 5000,
+   "fifo": false,
+   "warm": false,
+   "narrow": false,
+   "noDoubleCount": true,
+   "niced": true
+  },
+  "result": {
+   "repeatsAsked": 58115,
+   "repeatBusyPct": 99.37,
+   "repeatBusy": 57412,
+   "repeatWaitP50": 4350,
+   "repeatWaitP95": 4950,
+   "repeatAnswerP50": 4982,
+   "repeatAnswerP95": 5663,
+   "raidBusyPct": 97.96,
+   "saves": 3339,
+   "saveP95": 108015,
+   "workerCoreSecondsPerHour": 1353,
+   "workerCpuShare": 0.751,
+   "maxWorkers": 445,
+   "busyCauses": {
+    "repeatHeld": 5375,
+    "saveRunning": 43537,
+    "raidHeld": 162,
+    "finaliseRunning": 8338,
+    "other": 0
+   }
+  }
+ },
+ {
+  "scenario": {
+   "cpuScale": 2,
+   "dbScale": 2,
+   "mainLoad": 0.5,
+   "thinkMs": [
+    7000,
+    20000
+   ],
+   "seconds": 900,
+   "seed": 1,
+   "label": "40000 daily",
+   "dau": 40000,
+   "farmers": 1200,
+   "handAttackers": 900,
+   "raidsPerHour": 3000,
+   "finalisePerHour": 2250,
+   "infernoPerHour": 300
+  },
+  "fix": {
+   "name": "d. slot only around the replay",
+   "cap": 1,
+   "waitMs": 5000,
+   "fifo": false,
+   "warm": false,
+   "narrow": true,
+   "noDoubleCount": false,
+   "niced": false
+  },
+  "result": {
+   "repeatsAsked": 57986,
+   "repeatBusyPct": 98.92,
+   "repeatBusy": 57011,
+   "repeatWaitP50": 2000,
+   "repeatWaitP95": 4700,
+   "repeatAnswerP50": 9790,
+   "repeatAnswerP95": 19027,
+   "raidBusyPct": 97.52,
+   "saves": 3559,
+   "saveP95": 76490,
+   "workerCoreSecondsPerHour": 1484,
+   "workerCpuShare": 0.824,
+   "maxWorkers": 341,
+   "busyCauses": {
+    "repeatHeld": 67,
+    "saveRunning": 35666,
+    "raidHeld": 4770,
+    "finaliseRunning": 16508,
+    "other": 0
+   }
+  }
+ },
+ {
+  "scenario": {
+   "cpuScale": 2,
+   "dbScale": 2,
+   "mainLoad": 0.5,
+   "thinkMs": [
+    7000,
+    20000
+   ],
+   "seconds": 900,
+   "seed": 1,
+   "label": "40000 daily",
+   "dau": 40000,
+   "farmers": 1200,
+   "handAttackers": 900,
+   "raidsPerHour": 3000,
+   "finalisePerHour": 2250,
+   "infernoPerHour": 300
+  },
+  "fix": {
+   "name": "d + a + b(20 s)",
+   "cap": 1,
+   "waitMs": 20000,
+   "fifo": true,
+   "warm": true,
+   "narrow": true,
+   "noDoubleCount": false,
+   "niced": false
+  },
+  "result": {
+   "repeatsAsked": 32472,
+   "repeatBusyPct": 49.12,
+   "repeatBusy": 15588,
+   "repeatWaitP50": 19164,
+   "repeatWaitP95": 19941,
+   "repeatAnswerP50": 20512,
+   "repeatAnswerP95": 22779,
+   "raidBusyPct": 44.66,
+   "saves": 4174,
+   "saveP95": 3662,
+   "workerCoreSecondsPerHour": 1363,
+   "workerCpuShare": 0.757,
+   "maxWorkers": 342,
+   "busyCauses": {
+    "repeatHeld": 1183,
+    "saveRunning": 3825,
+    "raidHeld": 9334,
+    "finaliseRunning": 1230,
+    "other": 16
+   }
+  }
+ }
+]

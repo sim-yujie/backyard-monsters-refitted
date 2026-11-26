@@ -1,0 +1,7 @@
+{"mode":"fresh","rate":3,"seconds":30,"size":1,"nice":0,"jobs":100,"answerP50":125,"answerP95":521,"answerMax":690,"maxInFlight":5,"mainLagP95":2,"mainLagP99":4.8,"spawned":100}
+{"mode":"pool","rate":3,"seconds":30,"size":1,"nice":0,"jobs":80,"answerP50":41,"answerP95":112,"answerMax":139,"maxInFlight":2,"mainLagP95":0.2,"mainLagP99":1.8,"spawned":1}
+{"mode":"fresh","rate":6,"seconds":30,"size":1,"nice":0,"jobs":193,"answerP50":95026,"answerP95":205510,"answerMax":218178,"maxInFlight":140,"mainLagP95":1.9,"mainLagP99":5.3,"spawned":193}
+{"mode":"pool","rate":6,"seconds":30,"size":1,"nice":0,"jobs":168,"answerP50":84,"answerP95":243,"answerMax":376,"maxInFlight":5,"mainLagP95":2.2,"mainLagP99":4,"spawned":1}
+{"mode":"pool","rate":8,"seconds":25,"size":1,"nice":0,"jobs":211,"answerP50":99,"answerP95":656,"answerMax":980,"maxInFlight":9,"mainLagP95":2.2,"mainLagP99":3.8,"spawned":1}
+{"mode":"pool","rate":8,"seconds":25,"size":2,"nice":0,"jobs":206,"answerP50":74,"answerP95":213,"answerMax":550,"maxInFlight":5,"mainLagP95":2.9,"mainLagP99":5.1,"spawned":2}
+{"mode":"pool","rate":8,"seconds":25,"size":2,"nice":10,"jobs":226,"answerP50":79,"answerP95":221,"answerMax":450,"maxInFlight":5,"mainLagP95":2.1,"mainLagP99":4,"spawned":2}
