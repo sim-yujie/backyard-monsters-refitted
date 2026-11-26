@@ -98,6 +98,11 @@
  * beta 9's 22d6196bc811ac42 plays the same any more. The server replays an
  * attack whose session was minted under older rules with it off.
  *
+ * Patch 8.7 (main, merged back 26 Nov 2026) brings only whole health, the
+ * HCC's upgrading-hatchery fix and ranged shots drawn to a building's middle,
+ * but beta 9's other changes move its battles, so 8.7's 92ea2dbbfe06531c is
+ * not listed.
+ *
  * Add the version a change replaces only when that change moves no battle.
  * A change that moves any battle result must empty this list.
  */
