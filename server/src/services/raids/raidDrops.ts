@@ -208,7 +208,24 @@ export interface StagedRaidInput {
   readonly strength?: number;
   /** One champion, landing with the last group on the first side. */
   readonly champion?: RaidChampion;
+  /**
+   * Ticks after the last group lands that every raider still on the yard
+   * leaves ({@link retreatEvent}); absent or 0, they stay until they fall or
+   * run out of things to attack.
+   */
+  readonly retreatAfterTicks?: number;
 }
+
+/** The wave that sends every raider still on the yard home at tick `t` (`RaidEvent.retreat`). */
+export const retreatEvent = (t: number): RaidEvent => ({
+  kind: "raid",
+  t: Math.max(0, Math.floor(t)),
+  x: 0,
+  y: 0,
+  r: 0,
+  monsters: {},
+  retreat: true,
+});
 
 /**
  * A whole army landing from several sides in timed groups. Each type is
@@ -216,7 +233,8 @@ export interface StagedRaidInput {
  * ({@link splitRoster}). Group `d` on side `s` of `S` lands at
  * `d x gap + s x gap / S`: the sides take turns inside each gap, so groups
  * come round the yard one after another. The champion lands with the last
- * group of the first side. Events come back in tick order.
+ * group of the first side, and a retreat wave ends it all
+ * `retreatAfterTicks` after the last group. Events come back in tick order.
  */
 export const stagedRaidEvents = (input: StagedRaidInput): RaidEvent[] => {
   const sides = input.bearings.length > 0 ? input.bearings : [0];
@@ -238,8 +256,11 @@ export const stagedRaidEvents = (input: StagedRaidInput): RaidEvent[] => {
     });
   });
   // Stable: ties keep side, then drop, order.
-  return groups
+  const events = groups
     .map((group, at) => ({ group, at }))
     .sort((one, other) => one.group.t - other.group.t || one.at - other.at)
     .flatMap(({ group }) => dropGroupEvents(group));
+  const retreat = Math.floor(input.retreatAfterTicks ?? 0);
+  if (retreat > 0) events.push(retreatEvent(raidSpawnsUntilOf(events) + retreat));
+  return events;
 };

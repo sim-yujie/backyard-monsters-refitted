@@ -34,6 +34,7 @@ describe("the threat table", () => {
       zafreetiShare: 0,
       championLevel: 0,
       championPower: 0,
+      retreatSeconds: 0,
       strength: 1,
     });
   });

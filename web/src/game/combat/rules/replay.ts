@@ -116,18 +116,27 @@ export interface ReplayInput {
 }
 
 /**
- * The tick a raid log's last wave lands on (`BattleOptions.raidSpawnsUntil`),
- * 0 for one whose waves all land at once. The server's fight, its replay and
- * the client's playback all read it from the log, so they end on one tick
+ * The tick a raid log's last wave that lands a monster or champion comes on
+ * (`BattleOptions.raidSpawnsUntil`), 0 for one whose waves all land at once.
+ * The server's fight, its replay and the client's playback all read it from
+ * the log, so they end on one tick
  * (beta 10's timed drops, `docs/design/wild-raids.md` "Beta 10 threat").
  */
 export const raidSpawnsUntilOf = (
-  events: readonly { readonly kind: string; readonly t: number }[],
+  events: readonly {
+    readonly kind: string;
+    readonly t: number;
+    readonly monsters?: Readonly<Record<string, number>>;
+    readonly champion?: unknown;
+  }[],
 ): number => {
   let last = 0;
   for (const event of events) {
     if (event.kind !== "raid" || !Number.isFinite(event.t)) continue;
-    last = Math.max(last, Math.floor(event.t));
+    // Only a wave that lands something: a retreat wave lands nobody.
+    const lands = event.champion !== undefined
+      || Object.values(event.monsters ?? {}).some((count) => count > 0);
+    if (lands) last = Math.max(last, Math.floor(event.t));
   }
   return last;
 };

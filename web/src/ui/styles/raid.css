@@ -67,10 +67,74 @@
   line-height: var(--leading-normal);
 }
 
+/* Beta 10: threat, sides and the countdown as one row of pills (neon's direction 1). */
+.raid-alert__stats {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-1) var(--space-2);
+}
+
+.raid-alert__pill {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  min-height: 2.75rem;
+  padding: 0 var(--space-2);
+  border: 1px solid var(--colour-border);
+  border-radius: var(--radius-pill);
+  background: var(--colour-surface-sunken);
+  color: var(--colour-text);
+  font: inherit;
+  font-weight: 800;
+  line-height: 1;
+  white-space: nowrap;
+}
+
 .raid-alert__eta {
   color: var(--colour-warning);
-  font-weight: 800;
   font-variant-numeric: tabular-nums;
+}
+
+button.raid-alert__threat {
+  cursor: pointer;
+}
+
+.raid-alert__threat--warn {
+  border-color: var(--colour-warning-line, var(--colour-warning));
+  color: var(--colour-warning);
+}
+
+.raid-alert__threat--danger,
+.raid-alert__threat--extreme {
+  border: 2px solid var(--colour-danger);
+  color: var(--colour-danger);
+}
+
+.raid-alert__threat--extreme {
+  animation: raid-threat-pulse 1.6s ease-in-out infinite;
+}
+
+@keyframes raid-threat-pulse {
+  50% {
+    box-shadow: 0 0 0.6rem var(--colour-danger);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .raid-alert__threat--extreme {
+    animation: none;
+  }
+}
+
+.raid-alert__hint {
+  color: var(--colour-text-secondary);
+  font-size: var(--text-sm);
+  line-height: var(--leading-normal);
+}
+
+.raid-alert__hint[hidden] {
+  display: none;
 }
 
 .raid-alert__monsters {
@@ -91,6 +155,25 @@
   border-radius: var(--radius-md);
   background: var(--colour-surface-sunken);
   text-align: center;
+}
+
+/* A champion leads the card row, framed in gold (beta 10). */
+.raid-alert__monsters--champion {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.raid-alert__champion {
+  border: 2px solid var(--colour-medal-gold);
+  box-shadow: inset 0 0 0.5rem var(--colour-medal-gold);
+}
+
+.raid-alert__champion .raid-alert__count {
+  color: var(--colour-medal-gold);
+  font-weight: 800;
+}
+
+.raid-alert__name {
+  overflow-wrap: anywhere;
 }
 
 .raid-alert__portrait {
@@ -314,5 +397,9 @@
   .raid-alert__portrait {
     width: 2.5rem;
     height: 2.5rem;
+  }
+
+  .raid-alert__pill {
+    min-height: 2.25rem;
   }
 }

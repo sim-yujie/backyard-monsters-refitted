@@ -202,6 +202,7 @@ export const planRaid = (input: RaidPlanInput): RaidPlan | null => {
         swarm: tribe === Tribe.KOZU,
         strength: step.strength,
         ...(champion ? { champion } : {}),
+        retreatAfterTicks: dropTicks(step.retreatSeconds),
       }),
     },
     threat,

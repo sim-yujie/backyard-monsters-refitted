@@ -137,6 +137,20 @@ describe("fightRaid: beta 10 raids", () => {
     expect(outcome.ticks).toBe(replayed.ticks);
   });
 
+  test("the retreat wave sends every raider home and ends the raid then", () => {
+    const events: RaidEvent[] = [
+      { kind: "raid", t: 0, x: 900, y: 0, r: 60, monsters: { C10: 40 } },
+      { kind: "raid", t: 800, x: 0, y: 0, r: 0, monsters: {}, retreat: true },
+    ];
+    const input = { buildingdata: BUILDINGDATA, resources: SANDBOX.resources, log: { v: 1 as const, seed: 4, events } };
+    const outcome = fightRaid(input);
+    expect(outcome.creepsFlung).toBe(40);
+    expect(outcome.creepsKilled).toBeLessThan(40);
+    expect(outcome.ticks).toBeGreaterThanOrEqual(800);
+    expect(outcome.ticks).toBeLessThanOrEqual(802);
+    expect(outcome.digest).toBe(replayRaid(input).digest);
+  });
+
   test("a top-threat raid fights the same on the server as in its replay", () => {
     for (const seed of [1, 2]) {
       const plan = planRaid({ buildingdata: BUILDINGDATA, resources: SANDBOX.resources, level: 30, preference: 0, seed, threat: 12 });

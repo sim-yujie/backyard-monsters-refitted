@@ -18,7 +18,10 @@ import {
 import { raidCountdownText, type RaidBusy, type RaidStage, type RaidYardView } from "@/game/raid/raidYardFlow";
 import { TROJAN_TRIBE } from "@/game/trojan/trojanHorse";
 import { versionedArt } from "@/game/yard/retryLoad";
+import { CHAMPION_PROPS, championByType } from "@/game/combat/rules";
+import { championPortrait, showPortrait } from "@/game/portraits";
 import { alarmPulse } from "@/ui/alarmPulse";
+import { gameIcon } from "@/ui/gameIcon";
 import { formatAmount } from "@/ui/format";
 import { Popup } from "@/ui/Popup";
 import { RESOURCE_KEYS, resourceAmount } from "@/ui/resourceIcon";
@@ -99,6 +102,41 @@ export interface RaidAlertActions {
  * Neither Escape nor the scrim closes it (D6): the player must answer. Its
  * border pulses with the alarm glow while it is up.
  */
+/** What the alert shows of a raid: its tribe and army, and beta 10's threat, sides and champion. */
+export interface RaidAlertRaid {
+  readonly id: string;
+  readonly tribe: string;
+  readonly monsters: Readonly<Record<string, number>>;
+  readonly threat?: number;
+  readonly sides?: number;
+  readonly champion?: { readonly t: number; readonly l: number };
+}
+
+/** The threat pill's tier: amber up to 7, red from 8 (a champion comes), pulsing red from 15. */
+export const threatTier = (threat: number): "warn" | "danger" | "extreme" =>
+  threat >= 15 ? "extreme" : threat >= 8 ? "danger" : "warn";
+
+/** What the threat pill's hint says (beta 10, `docs/design/wild-raids.md` "Beta 10 threat"). */
+export const THREAT_HINT = "+1 Threat after a 90%+ defence, −1 after a loss.";
+
+/** A champion's name from the stat table, or `G<t>`. */
+const championName = (t: number): string => {
+  const id = championByType(t);
+  return (id && CHAMPION_PROPS[id]?.name) || `G${t}`;
+};
+
+/**
+ * The WILD MONSTER ALERT (`AIATTACKPOPUP.as`): the tribe, up to three of its
+ * monster types, the time left, and "Engage now" or "Prepare defences".
+ * Neither Escape nor the scrim closes it (D6): the player must answer. Its
+ * border pulses with the alarm glow while it is up.
+ *
+ * Beta 10 (owner 27 Nov 2026; neon's direction 1): the ETA line is a row of
+ * pills, "[fist] Threat 7", "[swords] 3 sides" and "[time] 4:25", the first
+ * two only when there is something to say (threat 1+, 2+ sides); the threat
+ * pill opens a one-line hint. A raid with a champion leads its card row with
+ * the champion's card, framed in gold, "Lv N" under its name.
+ */
 export class RaidAlert {
   readonly popup: Popup;
   private readonly eta: HTMLElement;
@@ -106,7 +144,7 @@ export class RaidAlert {
   private readonly prepare: HTMLButtonElement;
   readonly raidId: string;
 
-  constructor(raid: { readonly id: string; readonly tribe: string; readonly monsters: Readonly<Record<string, number>> }, actions: RaidAlertActions) {
+  constructor(raid: RaidAlertRaid, actions: RaidAlertActions) {
     this.raidId = raid.id;
     this.popup = new Popup({ title: ALERT_TITLE, className: "raid-alert", dismissable: false });
     alarmPulse(this.popup);
@@ -115,15 +153,58 @@ export class RaidAlert {
     const words = element("div", "raid-alert__words");
     words.append(
       element("p", "raid-alert__tribe", tribeTitle(raid.tribe)),
-      element("p", "raid-alert__lead", `${raiderCount(raid.monsters)} wild monsters are coming for your yard!`),
+      element("p", "raid-alert__lead", `${raiderCount(raid.monsters) + (raid.champion ? 1 : 0)} wild monsters are coming for your yard!`),
     );
-    this.eta = element("p", "raid-alert__eta");
+
+    const stats = element("div", "raid-alert__stats");
+    const threat = raid.threat ?? 0;
+    let hint: HTMLElement | null = null;
+    if (threat > 0) {
+      const pill = element("button", `raid-alert__pill raid-alert__threat raid-alert__threat--${threatTier(threat)}`);
+      pill.type = "button";
+      pill.append(gameIcon("fist", { size: 24, decorative: true }), element("span", "", `Threat ${threat}`));
+      pill.title = THREAT_HINT;
+      hint = element("p", "raid-alert__hint", THREAT_HINT);
+      hint.hidden = true;
+      hint.id = `raid-threat-hint-${raid.id}`;
+      pill.setAttribute("aria-expanded", "false");
+      pill.setAttribute("aria-controls", hint.id);
+      const shown = hint;
+      pill.addEventListener("click", () => {
+        shown.hidden = !shown.hidden;
+        pill.setAttribute("aria-expanded", String(!shown.hidden));
+      });
+      stats.append(pill);
+    }
+    if ((raid.sides ?? 1) > 1) {
+      const sides = element("span", "raid-alert__pill raid-alert__sides");
+      sides.append(gameIcon("swords", { size: 24, decorative: true }), element("span", "", `${raid.sides} sides`));
+      sides.title = `They come in from ${raid.sides} sides.`;
+      stats.append(sides);
+    }
+    const eta = element("span", "raid-alert__pill raid-alert__eta");
+    eta.append(gameIcon("time", { size: 24, label: "Time left" }));
+    this.eta = element("span", "raid-alert__eta-time");
     this.eta.setAttribute("role", "timer");
-    words.append(this.eta);
+    eta.append(this.eta);
+    stats.append(eta);
+    words.append(stats);
+    if (hint) words.append(hint);
     head.append(splash(raid.tribe, "raid-alert__splash"), words);
 
     const list = element("ul", "raid-alert__monsters");
     list.setAttribute("aria-label", "Monsters in the attack");
+    if (raid.champion) {
+      list.classList.add("raid-alert__monsters--champion");
+      const { t, l } = raid.champion;
+      const item = element("li", "raid-alert__monster raid-alert__champion");
+      const picture = element("img", "raid-alert__portrait");
+      picture.alt = "";
+      showPortrait(picture, championPortrait(`G${t}`, l, "card"));
+      item.append(picture, element("span", "raid-alert__name", championName(t)), element("span", "raid-alert__count", `Lv ${l}`));
+      item.title = `Champion ${championName(t)}, level ${l}, leads the raid.`;
+      list.append(item);
+    }
     for (const monster of alertMonsters(raid.monsters)) {
       const item = element("li", "raid-alert__monster");
       const picture = element("img", "raid-alert__portrait");
@@ -150,7 +231,7 @@ export class RaidAlert {
   }
 
   update(secondsLeft: number, busy: RaidBusy): void {
-    this.eta.textContent = `ETA: ${raidCountdownText(secondsLeft)}`;
+    this.eta.textContent = raidCountdownText(secondsLeft);
     this.engage.disabled = busy !== null;
     this.prepare.disabled = busy !== null;
     this.engage.textContent = busy === "engage" ? "Engaging…" : "Engage now";

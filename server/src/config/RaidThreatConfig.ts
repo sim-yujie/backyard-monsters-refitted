@@ -31,6 +31,10 @@
  *   none. `championPower` is its power level (0 to 3), which unlocks its
  *   abilities as a player's champion's does. It leaves the yard
  *   {@link RAID_CHAMPION_LEAVE_SECONDS} after it lands if it is still standing.
+ * - `retreatSeconds`: every raider still on the yard leaves this long after
+ *   the last group lands; 0 never (the raid before beta 10). Measured: Vorgs
+ *   and Zafreetis can heal a raider fighting a defender for the whole
+ *   10-minute cap, which the player must watch.
  * - `strength`: the raiders' health and damage multiplier. 1 everywhere: the
  *   monsters fight at plain stats (the defender's own Academy levels, D9).
  *   Kept as a column in case the owner wants the steps to toughen them too.
@@ -44,6 +48,7 @@ export interface RaidThreatStep {
   readonly zafreetiShare: number;
   readonly championLevel: number;
   readonly championPower: number;
+  readonly retreatSeconds: number;
   readonly strength: number;
 }
 
@@ -65,6 +70,8 @@ const step = (
   zafreetiShare,
   championLevel,
   championPower,
+  // PLACEHOLDER: threat 0 is the raid before beta 10, with no time limit.
+  retreatSeconds: size > 1 ? 180 : 0,
   strength: 1,
 });
 

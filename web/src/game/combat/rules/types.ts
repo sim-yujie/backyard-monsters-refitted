@@ -601,6 +601,14 @@ export interface RaidEvent {
    * {@link strength} does not touch it.
    */
   readonly champion?: RaidChampion;
+  /**
+   * Every raider still on the yard leaves now, as an attacker's Retreat
+   * sends its army home (beta 10's time limit: healers can keep a raider
+   * fighting a defender for the whole 10-minute cap). Set on a wave of no
+   * monsters; it does not hold the raid open ({@link raidSpawnsUntilOf}
+   * reads only waves that land something).
+   */
+  readonly retreat?: true;
 }
 
 /** A wild champion in a raid wave ({@link RaidEvent.champion}). */

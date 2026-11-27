@@ -3738,6 +3738,13 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
    * ({@link RaidEvent.strength}, absent 1).
    */
   const raidWave = (event: RaidEvent): void => {
+    if (event.retreat === true) {
+      // The raid's time is up (beta 10): every raider still here leaves.
+      retreated = true;
+      for (const creep of creeps) {
+        if (!creep.friendly) creep.gone = true;
+      }
+    }
     const radius = Math.max(0, event.r);
     const strength = event.strength ?? 1;
     for (const monsterId of Object.keys(event.monsters).sort()) {

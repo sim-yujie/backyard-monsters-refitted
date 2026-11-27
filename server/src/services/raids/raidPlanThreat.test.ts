@@ -114,9 +114,22 @@ describe("planRaid at a threat", () => {
     for (const seed of SEEDS) {
       const planned = plan(seed, 6);
       const step = RAID_THREAT_STEPS[6]!;
-      const times = new Set(planned.log.events.map((event) => event.t));
+      const times = new Set(planned.log.events.filter((event) => !event.retreat).map((event) => event.t));
       expect(times.size).toBe(step.sides * step.drops);
       expect(raidSpawnsUntilOf(planned.log.events)).toBeGreaterThan(0);
+    }
+  });
+
+  test("every raider left leaves the table's seconds after the last group (none at threat 0)", () => {
+    for (const seed of SEEDS) {
+      expect(plan(seed, 0).log.events.some((event) => event.retreat)).toBe(false);
+      for (const threat of [1, 6, RAID_THREAT_MAX]) {
+        const events = plan(seed, threat).log.events;
+        const retreats = events.filter((event) => event.retreat);
+        expect(retreats).toHaveLength(1);
+        expect(retreats[0]!.t).toBe(raidSpawnsUntilOf(events) + RAID_THREAT_STEPS[threat]!.retreatSeconds * 80);
+        expect(events.at(-1)).toBe(retreats[0]!);
+      }
     }
   });
 

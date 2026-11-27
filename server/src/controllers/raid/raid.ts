@@ -86,8 +86,13 @@ export const raidFrequency: KoaController = async (ctx) => {
 export const raidDevDue: KoaController = async (ctx) => {
   if (!devCheckEnabled()) throw raidRefusedErr("badRequest");
   const user: User = ctx.authUser;
+  // Beta 10: a test may set the threat the raid comes at.
+  const threat = Number((ctx.request.body as { threat?: unknown } | undefined)?.threat);
   ctx.status = Status.OK;
-  ctx.body = { error: 0, ...(await makeRaidDue(postgres.em, user, getCurrentDateTime())) };
+  ctx.body = {
+    error: 0,
+    ...(await makeRaidDue(postgres.em, user, getCurrentDateTime(), Number.isFinite(threat) ? threat : undefined)),
+  };
 };
 
 /** DEV only: `app.routes.ts` mounts it on a local server alone, and it refuses anywhere else as well. */

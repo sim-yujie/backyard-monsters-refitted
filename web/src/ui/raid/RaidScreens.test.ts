@@ -60,7 +60,11 @@ describe("RaidYardUi", () => {
     expect(alert.textContent).toContain("Kozu Tribe");
     expect(alert.textContent).toContain("18 wild monsters");
     expect(alert.querySelectorAll(".raid-alert__monster")).toHaveLength(3);
-    expect(alert.querySelector(".raid-alert__eta")!.textContent).toBe("ETA: 4:59");
+    expect(alert.querySelector(".raid-alert__eta")!.textContent).toBe("4:59");
+    // A raid before beta 10, or at threat 0 from one side, shows no threat or sides pill.
+    expect(alert.querySelector(".raid-alert__threat")).toBeNull();
+    expect(alert.querySelector(".raid-alert__sides")).toBeNull();
+    expect(alert.querySelector(".raid-alert__champion")).toBeNull();
     expect(alert.querySelector(".panel__close")).toBeNull();
 
     document.body.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
@@ -70,6 +74,31 @@ describe("RaidYardUi", () => {
     buttonNamed(alert, "Prepare defences").click();
     expect(t.actions.onEngage).toHaveBeenCalledTimes(1);
     expect(t.actions.onPrepare).toHaveBeenCalledTimes(1);
+    t.view.destroy();
+  });
+
+  it("shows the threat, the sides and a champion leading the cards (beta 10)", () => {
+    const t = ui();
+    t.view.render(
+      { kind: "alert", raid: raid({ threat: 12, sides: 4, champion: { t: 4, l: 3 } }), secondsLeft: 299 },
+      null,
+    );
+    const alert = t.modal.querySelector(".raid-alert")!;
+    const threat = alert.querySelector<HTMLButtonElement>(".raid-alert__threat")!;
+    expect(threat.textContent).toBe("Threat 12");
+    expect(threat.classList.contains("raid-alert__threat--danger")).toBe(true);
+    expect(alert.querySelector(".raid-alert__sides")!.textContent).toBe("4 sides");
+    const hint = alert.querySelector<HTMLElement>(".raid-alert__hint")!;
+    expect(hint.hidden).toBe(true);
+    threat.click();
+    expect(hint.hidden).toBe(false);
+    expect(threat.getAttribute("aria-expanded")).toBe("true");
+    const cards = alert.querySelectorAll(".raid-alert__monster");
+    expect(cards).toHaveLength(4);
+    expect(cards[0]!.classList.contains("raid-alert__champion")).toBe(true);
+    expect(cards[0]!.textContent).toBe("KorathLv 3");
+    // The champion is one more raider.
+    expect(alert.textContent).toContain("19 wild monsters");
     t.view.destroy();
   });
 

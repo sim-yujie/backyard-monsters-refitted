@@ -34,6 +34,7 @@ import { fightSecondsOf, type RaidFightInput, type RaidFightOutcome } from "./ra
 import { landRaid, landedResult, type RaidResult } from "./raidLanding.js";
 import { raidFighting, readFightLock } from "./raidLock.js";
 import { planRaid, type RaidPlan } from "./raidPlan.js";
+import { clampThreat } from "./raidThreat.js";
 import {
   RAID_MIN_GAP_SECONDS,
   SESSIONS_BETWEEN_RAIDS,
@@ -837,7 +838,12 @@ export const setRaidPreference = (
  * player level 9 or more and the ping must say "yard, Planner closed". The
  * minimum gap since the last raid is waived too.
  */
-export const makeRaidDue = (em: EntityManager, user: User, now: number): Promise<{ nextAttack: number }> =>
+export const makeRaidDue = (
+  em: EntityManager,
+  user: User,
+  now: number,
+  threat?: number
+): Promise<{ nextAttack: number }> =>
   em.transactional(async (tx) => {
     const locked = await lockMain(tx, user);
     const { lastOpenedAt: _lastOpenedAt, ...schedule } = readSchedule(locked.aiattacks);
@@ -846,6 +852,7 @@ export const makeRaidDue = (em: EntityManager, user: User, now: number): Promise
       lastattack: Math.min(schedule.lastattack, now - RAID_MIN_GAP_SECONDS),
       sessionsSinceLastAttack: Math.max(schedule.sessionsSinceLastAttack, SESSIONS_BETWEEN_RAIDS),
       nextAttack: now,
+      ...(threat !== undefined ? { threat: clampThreat(threat) } : {}),
     });
     await tx.flush();
     return { nextAttack: now };
