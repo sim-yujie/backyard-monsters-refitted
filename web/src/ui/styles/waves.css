@@ -539,6 +539,22 @@
   filter: drop-shadow(0 0 3px rgb(245 197 66 / 80%)) grayscale(0.4);
 }
 
+/* Before the 30 main waves are won the bonus marks stay quiet, so the next
+   totem wave leads the eye (neon r1); they light up gold after. */
+.wave-track:not(.wave-track--bonus-open) .wave-track__mark--bonus .wave-track__wave {
+  background: rgb(255 255 255 / 12%);
+  color: var(--colour-text-muted, #9aa8b8);
+}
+
+:root[data-skin="flash"] .wave-track:not(.wave-track--bonus-open) .wave-track__mark--bonus .wave-track__wave {
+  background: rgb(110 86 60 / 18%);
+  color: #6e563c;
+}
+
+.wave-track:not(.wave-track--bonus-open) .wave-track__mark--bonus .wave-track__totem {
+  filter: grayscale(1) brightness(1.3) drop-shadow(0 1px 1px #000);
+}
+
 .wave-track__count {
   flex: none;
   margin-left: 12px;
@@ -798,31 +814,42 @@
   gap: 6px;
 }
 
-/* Each prize on a dark inset, so it reads as a reward, not a price. */
+/* "Win": one small word before the prizes, so they read as what a win pays. */
+.wave-card__win {
+  color: var(--colour-text-muted, #c9d4e0);
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+:root[data-skin="flash"] .panel .wave-card__win {
+  color: #6b4c30;
+}
+
+/* Each prize flat and lower than Start, so it reads as a reward, not a button (neon r1). */
 .wave-card__chip {
   display: inline-flex;
   align-items: center;
   gap: 4px;
-  min-height: 40px;
+  height: 34px;
   box-sizing: border-box;
-  padding: 2px 10px 2px 6px;
-  border-radius: 10px;
-  background: rgb(0 0 0 / 34%);
-  box-shadow: inset 0 2px 4px rgb(0 0 0 / 45%), 0 1px 0 rgb(255 255 255 / 12%);
+  padding: 0 10px 0 6px;
+  border-radius: 8px;
+  background: rgb(15 24 36 / 45%);
   color: #fff;
   font-weight: 700;
-  text-shadow: 0 1px 2px rgb(0 0 0 / 80%);
   white-space: nowrap;
 }
 
 :root[data-skin="flash"] .panel .wave-card__chip {
-  background: linear-gradient(#5a3418, #3e220c);
-  box-shadow: inset 0 1px 0 rgb(255 220 160 / 25%), 0 1px 2px rgb(0 0 0 / 40%);
+  background: rgb(74 45 20 / 14%);
+  color: #3b220d;
 }
 
 .wave-card__chip-totem {
-  width: 22px;
-  height: 30px;
+  width: 20px;
+  height: 28px;
   object-fit: contain;
 }
 
@@ -862,13 +889,23 @@
   }
 }
 
-/* Every wave won: the totem at its top level and one line. */
+/* Every wave won: the totem at its top level and one line, on a flat pill. */
 .wave-card__done {
   display: flex;
+  align-self: flex-start;
   align-items: center;
   gap: 8px;
+  min-height: 38px;
+  box-sizing: border-box;
   margin: 0;
+  padding: 4px 14px 4px 8px;
+  border-radius: 8px;
+  background: rgb(15 24 36 / 45%);
   font-weight: 700;
+}
+
+:root[data-skin="flash"] .panel .wave-card__done {
+  background: rgb(74 45 20 / 14%);
 }
 
 .wave-card__done-totem {
@@ -877,9 +914,20 @@
   object-fit: contain;
 }
 
-/* The card says what it is in its banner and the track: the sentence goes. */
-.events-card--wave .events-card__text {
+/* The card says what it is in its banner and the track: the sentence goes
+   once the player has fought a wave; before, it says what a wave is. */
+.events-card--wave:not(:has(.wave-card--fresh)) .events-card__text {
   display: none;
+}
+
+/* A line under the invasion, so the next card does not run into it (neon r1). */
+.events-card--wave {
+  padding-bottom: 14px;
+  border-bottom: 1px solid rgb(255 255 255 / 12%);
+}
+
+:root[data-skin="flash"] .events-card--wave {
+  border-bottom-color: rgb(92 58 28 / 20%);
 }
 
 /* The banner kept low and its words to the left; the countdown rides on its
@@ -889,7 +937,7 @@
 }
 
 .events-card--wave .events-card__banner {
-  max-height: 92px;
+  max-height: 76px;
 }
 
 .events-card--wave .events-card__banner-image {
@@ -916,9 +964,9 @@
 
 .events-card--wave:has(.events-card__banner-image) .events-card__countdown {
   position: absolute;
-  top: calc(var(--events-card-pad, 12px) + 6px);
+  top: calc(var(--events-card-pad, 12px) + 4px);
   right: calc(var(--events-card-pad, 12px) + 6px);
-  padding: 2px 10px;
+  padding: 2px 8px;
   border-radius: var(--radius-pill);
   background: rgb(0 0 0 / 72%);
   color: #ffd76a;
@@ -944,15 +992,11 @@
     position: static;
     padding: 0;
     background: none;
-    color: inherit;
+    color: var(--events-hot-text);
   }
 
   .wave-card .wave-track {
     margin: 10px 6px 20px;
-  }
-
-  .wave-card__chip {
-    min-height: 36px;
   }
 
   .wave-card__start {
@@ -960,12 +1004,39 @@
   }
 }
 
-/* Upright phones: Start takes the row's room beside the prize. */
+/* Upright phones: Start takes the row's room beside the prize, and the
+   countdown sits small in the banner's corner, clear of the title. */
 @media (max-width: 620px) {
   .wave-card__start {
     flex: 1 1 auto;
     min-width: 0;
     padding-inline: 10px;
+  }
+
+  .events-card--wave:has(.events-card__banner-image) .events-card__countdown {
+    top: calc(var(--events-card-pad, 12px) + 3px);
+    right: calc(var(--events-card-pad, 12px) + 4px);
+    padding: 1px 7px;
+    font-size: 11px;
+  }
+}
+
+@media (max-width: 420px) {
+  .wave-card__go {
+    gap: 6px;
+  }
+
+  .wave-card__prize {
+    gap: 4px;
+  }
+
+  .wave-card__chip {
+    padding: 0 8px 0 4px;
+  }
+
+  .wave-card__start {
+    padding-inline: 8px;
+    font-size: 14px;
   }
 }
 

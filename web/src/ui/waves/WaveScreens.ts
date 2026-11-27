@@ -25,14 +25,15 @@ export const TOTEM_WAVES: readonly number[] = [1, 10, 20, 30, 31, 32];
  * marks. Shared by the result pop-up and the Events card.
  */
 export const waveTrack = (beaten: number, waves: number, totemType: number | null, firstBonusWave = waves - 1): HTMLElement => {
-  const track = el("div", "wave-track");
+  const main = Math.max(1, firstBonusWave - 1);
+  // The bonus marks light up gold once the 30 main waves are won (neon r1: muted before).
+  const track = el("div", `wave-track${beaten >= main ? " wave-track--bonus-open" : ""}`);
   track.setAttribute("role", "img");
   track.setAttribute("aria-label", `${beaten} of ${waves} waves beaten`);
   const bar = el("div", "wave-track__bar");
   const fill = el("div", "wave-track__fill");
   // The main waves fill 76% of the bar and each bonus wave its own step, so
   // the marks at 30, 31 and 32 stand apart.
-  const main = Math.max(1, firstBonusWave - 1);
   const bonusStep = waves > main ? 24 / (waves - main) : 0;
   const at = (wave: number): number => (waves > main ? (Math.min(wave, main) / main) * 76 + Math.max(0, wave - main) * bonusStep : (wave / main) * 100);
   fill.style.width = `${Math.min(100, at(beaten))}%`;
@@ -47,7 +48,7 @@ export const waveTrack = (beaten: number, waves: number, totemType: number | nul
     bar.append(mark);
   }
   // "7/30 won", then "Bonus 1/2".
-  const count = beaten <= main ? `${beaten}/${main} won` : `Bonus ${beaten - main}/${waves - main}`;
+  const count = beaten >= waves ? `${waves}/${waves} won` : beaten <= main ? `${beaten}/${main} won` : `Bonus ${beaten - main}/${waves - main}`;
   track.append(bar, el("span", "wave-track__count", count));
   return track;
 };

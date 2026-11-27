@@ -24,7 +24,8 @@ import { waveTrack } from "./WaveScreens";
 /** The card's body for the feed's state; `onStart` calls the wave. */
 export const waveCardBody = (feed: WaveFeedState & { status: WaveStatus }, onStart: () => void): HTMLElement => {
   const { status, busy, blocked } = feed;
-  const body = el("div", "wave-card");
+  // Before the first wave the card keeps the event's one sentence (what a wave is); after, it goes.
+  const body = el("div", `wave-card${status.beaten === 0 && status.lost === 0 ? " wave-card--fresh" : ""}`);
   body.append(waveTrack(status.beaten, status.waves, status.totemType, status.firstBonusWave));
   if (status.next === null) {
     const done = el("p", "wave-card__done");
@@ -36,6 +37,8 @@ export const waveCardBody = (feed: WaveFeedState & { status: WaveStatus }, onSta
   const row = el("div", "wave-card__go");
   const prize = el("div", "wave-card__prize");
   prize.title = "Prize for winning it";
+  // One short word, so the totem's "Lv 2" reads as a prize, not a level needed (neon r1).
+  prize.append(el("span", "wave-card__win", "Win"));
   if (status.prize && status.prize.glimmers > 0) {
     const coins = coinAmount(`+${status.prize.glimmers}`, { size: 24 });
     coins.classList.add("wave-card__chip");

@@ -145,7 +145,7 @@ describe("the Events card", () => {
   it("shows the totem's next level on a totem wave, and names a bonus wave as the pop-ups do", () => {
     const body = waveCardBody(feed({ beaten: 30, next: 31, prize: { glimmers: 40, totemLevel: 5 } }), vi.fn());
     expect(body.querySelector(".wave-card__chip--totem")?.textContent).toContain("Lv 5");
-    expect(body.querySelector(".wave-card__start")?.textContent).toContain("Start bonus wave 1");
+    expect(body.querySelector(".wave-card__start")?.textContent).toContain("Start bonus 1");
   });
 
   it("is busy while the wave is called, and waits while a wild raid is on", () => {
