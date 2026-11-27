@@ -11,6 +11,7 @@ import {
 } from "./base";
 import type { AttackData, BaseLoadResponse } from "./types";
 import { RULES_STAMP } from "./rulesStamp";
+import { ATTACK_STATS_STAMP } from "@/game/attack/attackStatsVersion";
 import manifest from "@/game/combat/rules/MANIFEST.json";
 import type { AttackRoster } from "@/game/attack/attackTarget";
 import { currentSeason, setSeason } from "@/game/season";
@@ -151,6 +152,13 @@ describe("loadAttack", () => {
     await loadAttack("1000", "main", sandboxRoster());
     expect(sent[0]!.body.get("rules")).toBe(manifest.version);
     expect(RULES_STAMP).toMatch(/^[0-9a-f]{16}$/);
+  });
+
+  it("carries this page's attack-stats stamp beside it (beta 10)", async () => {
+    stubFetch();
+    await loadAttack("1000", "main", sandboxRoster());
+    expect(sent[0]!.body.get("stats")).toBe(ATTACK_STATS_STAMP);
+    expect(ATTACK_STATS_STAMP).toMatch(/^[0-9a-f]{16}$/);
   });
 });
 
