@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, mock, test } from "bun:test";
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, mock, test } from "bun:test";
 
 /**
  * The attack gate and old pages (beta 10, owner's pick B+, 27 Nov 2026): a
@@ -11,8 +11,15 @@ import { afterEach, beforeEach, describe, expect, mock, test } from "bun:test";
  * table as `buildAttackData` sends it, which is also the kept snapshot.
  */
 
-// The gate does nothing on a local server: play a deployed one.
-process.env.ENV = "test";
+// The gate does nothing on a local server: play a deployed one, for this file only.
+const envBefore = process.env.ENV;
+beforeAll(() => {
+  process.env.ENV = "test";
+});
+afterAll(() => {
+  if (envBefore === undefined) delete process.env.ENV;
+  else process.env.ENV = envBefore;
+});
 
 const banned: string[] = [];
 const logAttackViolation = mock(async (user: { banned?: boolean }, message: string) => {

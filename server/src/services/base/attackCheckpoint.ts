@@ -281,6 +281,8 @@ export const newCheckpoint = (
   // The rules the attack started under, which its replay is gated on
   // (Krallen's Mode, patch 8.7, `battle.ts`).
   ...(session.rules !== undefined && { rules: session.rules }),
+  // And the attack-stat table it started under (beta 10, `baseSave.ts`).
+  ...(session.stats !== undefined && { stats: session.stats }),
 });
 
 export const serialiseCheckpoint = (checkpoint: AttackCheckpoint): string =>
@@ -340,6 +342,7 @@ export const checkpointSession = (checkpoint: AttackCheckpoint): AttackSession =
   ...(checkpoint.attackerRanks && { attackerRanks: checkpoint.attackerRanks }),
   ...(checkpoint.declareWar !== undefined && { declareWar: checkpoint.declareWar }),
   ...(checkpoint.rules !== undefined && { rules: checkpoint.rules }),
+  ...(checkpoint.stats !== undefined && { stats: checkpoint.stats }),
 });
 
 /**

@@ -295,8 +295,10 @@ answers `/connection` again.
 **Caddy reads its Caddyfile only when it starts.** `up -d --build` does not
 restart Caddy, and copying new code replaces the file under the running
 container, which keeps the old one. After a release that changes
-`deploy/Caddyfile`, run once: `deploy/prod.sh up -d --force-recreate caddy`
-(a second or two without HTTPS).
+`deploy/Caddyfile`, run once: `deploy/prod.sh up -d --no-deps --force-recreate caddy`
+(a second or two without HTTPS; `--no-deps` leaves the game server, database
+and Redis running). Do it after the code is copied and before the game server
+is restarted, so that restart is already held.
 
 ### Updating without GitHub (how bymrevamped.com is run now)
 
