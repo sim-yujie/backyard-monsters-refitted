@@ -78,4 +78,10 @@ describe("runRaidAftermath", () => {
     expect(order).toEqual(["wave"]);
     expect(api.frequency).not.toHaveBeenCalled();
   });
+
+  it("a wave's late answer without its wave part shows nothing", async () => {
+    const { shown, order } = view("more");
+    await runRaidAftermath({ api: { frequency: vi.fn() }, view: shown }, { ...result(true), tribe: "wave" });
+    expect(order).toEqual([]);
+  });
 });

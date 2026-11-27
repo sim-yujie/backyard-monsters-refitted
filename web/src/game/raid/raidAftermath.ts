@@ -36,8 +36,10 @@ export interface RaidAftermathOptions {
 export const runRaidAftermath = async (options: RaidAftermathOptions, result: RaidResult): Promise<void> => {
   const { api, view } = options;
   // A wave event's wave has its own result and is no recurring raid to tune.
-  if (result.wave) {
-    await view.wave(result);
+  // A late answer kept without its wave part (`landedResult`) shows nothing;
+  // the yard's wave bar has the new count.
+  if (result.wave || result.tribe === "wave") {
+    if (result.wave) await view.wave(result);
     return;
   }
   await view.result(result);

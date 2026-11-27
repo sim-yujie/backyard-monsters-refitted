@@ -269,6 +269,8 @@ export const createRaidPlugin =
             banner.textContent = waveLine ?? DONT_PANIC;
             finishing = false;
             button.disabled = false;
+            // The fight ended meanwhile: land it the usual way.
+            if (session.state().phase === "ended") void finish();
             return;
           }
           leave();

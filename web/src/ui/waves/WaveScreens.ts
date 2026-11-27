@@ -81,6 +81,11 @@ export const waveResultPopup = (result: RaidResult, actions: WaveResultActions, 
       parts.push(el("p", "wave-result__note", `Yard left: ${Math.round(result.health * 100)}% (need more than 10%, and every monster beaten).`));
     }
   }
+  if (result.housedLost > 0) {
+    parts.push(
+      el("p", "wave-result__note", `${result.housedLost} housed ${result.housedLost === 1 ? "monster was" : "monsters were"} lost with a fallen Housing.`),
+    );
+  }
   const actionsRow = el("div", "wave-result__actions");
   const later = el("button", "btn wave-result__later", "Later");
   later.type = "button";
