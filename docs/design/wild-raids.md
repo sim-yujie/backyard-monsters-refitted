@@ -800,13 +800,19 @@ different rule and the owner's to confirm).
 - **Wire:** `RaidView` gains `threat`, `sides` and `champion`; the result gains `threat` and
   `nextThreat` (`docs/server-api.md`).
 
-### 11.3 The alert (neon's direction 1)
+### 11.3 The alert (neon's direction 1, three critique rounds)
 
-The ETA line became a row of pills: "[fist] Threat 12" (amber up to 7, red from 8, pulsing red
-from 15; tapping it opens one line: "+1 Threat after a 90%+ defence, −1 after a loss."),
-"[swords] 4 sides" (only for 2+), "[time] 4:25". Threat 0 shows neither extra pill, so the first
-raids look as before. A champion leads the card row in a gold-framed card ("Korath", "Lv 3"); on an
-upright phone it becomes a banner over the three monster cards.
+Under the tribe's header a centred row of pills: "[claw] Threat 12 (?)" (amber up to 7, red from
+8, pulsing red from 15; tapping it floats one line under the row, "+1 Threat after a 90%+
+defence, −1 after a loss.", without moving the window), "[swords] 4 sides" (only for 2+) and
+"[hourglass] 4:25". Threat 0 shows neither extra pill, so the first raids look as before. A
+champion leads the card row in a gold-framed card with a "CHAMPION" tag on its top edge and its
+level as a dark chip with gold text ("Lv 3"); on an upright phone it becomes a banner over the
+three monster cards. "+N more" under the cards counts the raiders the cards leave out, so the
+cards add up to the headline. "Prepare defences" is a bordered button at every size. On a phone
+on its side the pills sit beside the tribe picture and "+N more" beside the answers, so both
+buttons stay on a 390 px tall screen. The result popup is unchanged (the finish answers
+`threat`/`nextThreat` for a later use).
 
 ### 11.4 Two rules found while measuring (owner to confirm)
 

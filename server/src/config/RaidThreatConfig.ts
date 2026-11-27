@@ -61,6 +61,7 @@ const step = (
   zafreetiShare: number,
   championLevel: number,
   championPower: number,
+  retreatSeconds: number,
 ): RaidThreatStep => ({
   size,
   sides,
@@ -70,35 +71,34 @@ const step = (
   zafreetiShare,
   championLevel,
   championPower,
-  // PLACEHOLDER: threat 0 is the raid before beta 10, with no time limit.
-  retreatSeconds: size > 1 ? 180 : 0,
+  retreatSeconds,
   strength: 1,
 });
 
 /** One row per threat, 0 up; the last row is the cap. PLACEHOLDERS (see above). */
 export const RAID_THREAT_STEPS: readonly RaidThreatStep[] = [
-  //    size  sides drops gap  vorg  zaf   champ pow
-  step(1.0, 1, 1, 0, 0, 0, 0, 0), //  0: today's Flash raid
-  step(1.1, 1, 1, 0, 0, 0, 0, 0), //  1
-  step(1.2, 1, 2, 10, 0, 0, 0, 0), //  2: lands in two groups
-  step(1.3, 2, 2, 10, 0, 0, 0, 0), //  3: two sides
-  step(1.4, 2, 2, 10, 0.05, 0, 0, 0), //  4: Vorgs
-  step(1.5, 2, 3, 10, 0.05, 0.05, 0, 0), //  5: Zafreetis
-  step(1.6, 3, 3, 12, 0.05, 0.05, 0, 0), //  6: three sides
-  step(1.7, 3, 3, 12, 0.08, 0.08, 0, 0), //  7
-  step(1.8, 3, 3, 12, 0.08, 0.08, 1, 0), //  8: a champion
-  step(1.9, 3, 4, 12, 0.1, 0.1, 2, 0), //  9
-  step(2.0, 4, 4, 15, 0.1, 0.1, 2, 1), // 10: four sides
-  step(2.1, 4, 4, 15, 0.1, 0.1, 3, 1), // 11
-  step(2.2, 4, 4, 15, 0.12, 0.12, 3, 1), // 12
-  step(2.3, 4, 4, 15, 0.12, 0.12, 4, 2), // 13
-  step(2.4, 4, 5, 15, 0.12, 0.12, 4, 2), // 14
-  step(2.5, 4, 5, 15, 0.15, 0.15, 5, 2), // 15
-  step(2.6, 4, 5, 15, 0.15, 0.15, 5, 3), // 16
-  step(2.7, 4, 5, 15, 0.15, 0.15, 6, 3), // 17
-  step(2.8, 4, 5, 15, 0.15, 0.15, 6, 3), // 18
-  step(2.9, 4, 5, 15, 0.15, 0.15, 6, 3), // 19
-  step(3.0, 4, 5, 15, 0.15, 0.15, 6, 3), // 20: the cap
+  //    size sides drops gap vorg zaf champ pow retreat
+  step(1.0, 1, 1, 0, 0, 0, 0, 0, 0), //  0: today's Flash raid, no time limit
+  step(1.1, 1, 1, 0, 0, 0, 0, 0, 180), //  1
+  step(1.2, 1, 2, 10, 0, 0, 0, 0, 180), //  2: lands in two groups
+  step(1.3, 2, 2, 10, 0, 0, 0, 0, 180), //  3: two sides
+  step(1.4, 2, 2, 10, 0.05, 0, 0, 0, 180), //  4: Vorgs
+  step(1.5, 2, 3, 10, 0.05, 0.05, 0, 0, 180), //  5: Zafreetis
+  step(1.6, 3, 3, 12, 0.05, 0.05, 0, 0, 180), //  6: three sides
+  step(1.7, 3, 3, 12, 0.08, 0.08, 0, 0, 180), //  7
+  step(1.8, 3, 3, 12, 0.08, 0.08, 1, 0, 180), //  8: a champion
+  step(1.9, 3, 4, 12, 0.1, 0.1, 2, 0, 180), //  9
+  step(2.0, 4, 4, 15, 0.1, 0.1, 2, 1, 180), // 10: four sides
+  step(2.1, 4, 4, 15, 0.1, 0.1, 3, 1, 180), // 11
+  step(2.2, 4, 4, 15, 0.12, 0.12, 3, 1, 180), // 12
+  step(2.3, 4, 4, 15, 0.12, 0.12, 4, 2, 180), // 13
+  step(2.4, 4, 5, 15, 0.12, 0.12, 4, 2, 180), // 14
+  step(2.5, 4, 5, 15, 0.15, 0.15, 5, 2, 180), // 15
+  step(2.6, 4, 5, 15, 0.15, 0.15, 5, 3, 180), // 16
+  step(2.7, 4, 5, 15, 0.15, 0.15, 6, 3, 180), // 17
+  step(2.8, 4, 5, 15, 0.15, 0.15, 6, 3, 180), // 18
+  step(2.9, 4, 5, 15, 0.15, 0.15, 6, 3, 180), // 19
+  step(3.0, 4, 5, 15, 0.15, 0.15, 6, 3, 180), // 20: the cap
 ];
 
 /** The highest threat; a good defence at the cap keeps it there. */

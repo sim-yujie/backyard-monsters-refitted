@@ -131,11 +131,13 @@ const championName = (t: number): string => {
  * Neither Escape nor the scrim closes it (D6): the player must answer. Its
  * border pulses with the alarm glow while it is up.
  *
- * Beta 10 (owner 27 Nov 2026; neon's direction 1): the ETA line is a row of
- * pills, "[fist] Threat 7", "[swords] 3 sides" and "[time] 4:25", the first
- * two only when there is something to say (threat 1+, 2+ sides); the threat
- * pill opens a one-line hint. A raid with a champion leads its card row with
- * the champion's card, framed in gold, "Lv N" under its name.
+ * Beta 10 (owner 27 Nov 2026; neon's direction 1 and three critique
+ * rounds): under the header a row of pills, "[claw] Threat 7 (?)",
+ * "[swords] 3 sides" and "[hourglass] 4:25", the first two only when there is
+ * something to say (threat 1+, 2+ sides); the threat pill floats a one-line
+ * hint under the row. A raid with a champion leads its card row with the
+ * champion's card, framed in gold with a CHAMPION tag and an "Lv N" chip;
+ * "+N more" under the cards counts the raiders they leave out.
  */
 export class RaidAlert {
   readonly popup: Popup;

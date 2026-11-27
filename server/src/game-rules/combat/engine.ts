@@ -553,7 +553,11 @@ const ownCellMiddle = (value: number, anchor: number, size: number): number => {
  *    hunting; a raider with nothing left to attack retreats and is gone (note
  *    7), so the two agree. A spawn off the pathing grid has no route, so the
  *    raider walks straight at its target until a look from on the grid
- *    routes it.
+ *    routes it. Beta 10 (owner 27 Nov 2026, `wild-raids.md` §11): a
+ *    threat-raised wild raid lands in timed groups from up to four sides,
+ *    held open the same way (`raidSpawnsUntilOf`); a wave may bring a wild
+ *    champion ({@link RaidEvent.champion}, which may leave after a set time)
+ *    and a last wave with `retreat` sends every raider still here home.
  * 18. **The Spurtz Cannon (issue #313, `SpurtzCannon.as`).** Its burst, the
  *    shells' flight and the hatching are Flash's, and its shells, unlike
  *    note 1, are in the air until they land. Where it is not Flash: a shell
