@@ -105,8 +105,14 @@
  *
  * Add the version a change replaces only when that change moves no battle.
  * A change that moves any battle result must empty this list.
+ *
+ * Beta 10's frost tribe (Krampus, a wild champion, and its frost aura,
+ * `wildChampions.ts`) changes no battle without Krampus in it: a chill of 1
+ * and an unchilled tower leave every number as it was, and no log could
+ * bring a Krampus on before. So beta 9's 15bf255b01aafabc still plays the
+ * same.
  */
-export const COMPATIBLE_RULES_VERSIONS: readonly string[] = [];
+export const COMPATIBLE_RULES_VERSIONS: readonly string[] = ["15bf255b01aafabc"];
 
 /**
  * Whether a battle stamped with the rules version `stamp` plays to its stored

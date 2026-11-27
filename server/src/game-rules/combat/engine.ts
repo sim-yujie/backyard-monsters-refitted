@@ -15,6 +15,10 @@ import {
   KORATH_FIREBALL_DIVISOR,
   KORATH_ID,
   KRALLEN_ID,
+  KRAMPUS_AURA_INTERVAL,
+  KRAMPUS_ID,
+  krampusAuraRadius,
+  krampusSlowPercent,
   LOOT_AURA_FRAMES,
   QUAKE_END_FRAME,
   QUAKE_FRAME_CYCLE,
@@ -122,6 +126,7 @@ import {
   capacity,
   championAttackDelay,
   championByType,
+  isWildChampion,
   championMode,
   championStat,
   championStatWithFood,
@@ -718,6 +723,13 @@ export interface BattleOptions {
    * any fight outside the Descent, which then burns nothing.
    */
   readonly descentYard?: number;
+  /**
+   * Obey a fling log's wild champion (Krampus, `wildChampions.ts`). Only a
+   * test or a dev practice fight sets it: no player owns one, the server's
+   * audit refuses one, and without this the engine does not bring one on.
+   * The game's own armies bring theirs through a raid wave instead.
+   */
+  readonly wildChampions?: boolean;
   /** Overrides {@link SHELL_BLASTS_WHERE_IT_LANDS} for this battle; absent, it holds. */
   readonly shellBlastsWhereItLands?: boolean;
   /**
@@ -1036,6 +1048,8 @@ export interface CreepSnapshot {
   readonly puttied?: boolean;
   /** Inside Krallen's loot aura. */
   readonly lootBoosted?: boolean;
+  /** Inside Krampus's frost aura: slower (beta 10). Absent when not. */
+  readonly chilled?: boolean;
   /** Korath standing in his quake. */
   readonly quaking?: boolean;
   /** Its Monster Lab rank, 1 to 3; absent at rank 0 (issue #352). */
@@ -1430,6 +1444,8 @@ export interface Battle {
    * Ooze"), by building id, ascending. Drawing only. A fresh copy per call.
    */
   weakenedTowers(): readonly number[];
+  /** Ids of the towers Krampus's frost aura is slowing now, ascending (beta 10). */
+  chilledTowers(): readonly number[];
   /**
    * The defender's champions in their cage right now (issues #260, #310), in
    * the order {@link BattleOptions.defenderChampions} gave them: before they
@@ -1595,6 +1611,10 @@ interface Creep {
   puttyArmour: number;
   /** The tick the putty boost ends on; 0 when there is none. */
   puttyUntil: number;
+  /** Krampus's frost aura: speed and swing-rate multiplier, 1 when it is not in it (beta 10). */
+  chill: number;
+  /** The Krampus whose aura chills it, by creep id, or -1. */
+  chilledBy: number;
   /** What Krallen's aura adds to its looting property; 0 when it is not in it. */
   lootBonus: number;
   /** The Krallen whose aura it is in, by creep id, or -1. */
@@ -1733,6 +1753,8 @@ interface Aura {
   counter: number;
   /** The creeps it holds, in the order it took them. */
   members: Creep[];
+  /** The towers Krampus's frost aura holds (beta 10); absent for every other aura. */
+  towers?: Tower[];
 }
 
 /** What every creep starts with for issue #222's abilities. */
@@ -1764,6 +1786,8 @@ const NO_ABILITIES = {
   puttySpeed: 1,
   puttyArmour: 0,
   puttyUntil: 0,
+  chill: 1,
+  chilledBy: -1,
   lootBonus: 0,
   lootBuffedBy: -1,
   aura: null,
@@ -1834,6 +1858,12 @@ interface Tower {
   targets: number[];
   /** Its `_frameNumber`, counted every tick from the start of the battle. */
   frame: number;
+  /** Krampus's frost aura: the share of ticks it loses, whole percent; 0 when not chilled. */
+  chill: number;
+  /** Its chilled ticks' count, in percent: it acts once this reaches 100. */
+  chillCount: number;
+  /** The Krampus whose aura chills it, by creep id, or -1. */
+  chilledBy: number;
   /**
    * Its `_fireStage`. The Aerial Defense's: 1 while it reloads, 2 while it
    * fires a salvo. The Tesla's: 0 idle, 1 charging, 2 zapping, 3 winding down.
@@ -2530,6 +2560,9 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
       fireTick: stats.rate ?? 0,
       targets: [],
       frame: 0,
+      chill: 0,
+      chillCount: 0,
+      chilledBy: -1,
       // `BUILDING115.as:34`, `BUILDING25.as:32`.
       stage: building.type === AERIAL_DEFENSE_TYPE ? 1 : 0,
       shotsFired: 0,
@@ -3448,6 +3481,7 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
     if (id === FOMOR_ID || hasLootAura(id, creep.level, creep.friendly, lootAura)) {
       creep.aura = { counter: 0, members: [] };
     }
+    if (id === KRAMPUS_ID) creep.aura = { counter: 0, members: [], towers: [] };
     creep.hitFlags = championReach(id, creep.level, creep.power, creep.hitFlags);
   };
 
@@ -3710,7 +3744,11 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
         creepsFlung += 1;
       }
     }
-    if (event.champion) {
+    // A wild champion (Krampus) is never a player's: a fling log naming one is not obeyed.
+    if (
+      event.champion &&
+      (options.wildChampions === true || !isWildChampion(championByType(event.champion.t)))
+    ) {
       // Its level plus its food bonus's `bonus*` ladders; its power level
       // gates its abilities (issue #202).
       spawnChampion(
@@ -4914,6 +4952,8 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
    */
   const swingDelay = (creep: Creep): number => {
     let boost = creep.enrage * creep.puttySpeed;
+    // Krampus's frost aura (beta 10): a chilled creep swings slower.
+    if (creep.chill !== 1) boost *= creep.chill;
     // The Monster Speed Buff divides the delay too (`HyperSpeed.as`, `DivisionModifier`).
     if (boosted(creep, "monsterSpeed")) boost *= MONSTER_SPEED_BUFF;
     // A ranked Bandito spins faster: 1, 1.5, 2 x (`BanditoAOEDamageSpin.as:23`, issue #352).
@@ -5793,6 +5833,8 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
     if (creep.enrage !== 1) speed *= creep.enrage;
     // A putty bomb's boost, on top of Fomor's (`ResourceBomb.as:170-185`).
     if (creep.puttySpeed !== 1) speed *= creep.puttySpeed;
+    // Krampus's frost aura (beta 10).
+    if (creep.chill !== 1) speed *= creep.chill;
     // The Monster Speed Buff (`HyperSpeed.k_moveSpeedModifier`).
     if (boosted(creep, "monsterSpeed")) speed *= MONSTER_SPEED_BUFF;
     // A ranked Spurtz's fury (Lab "Fury", beta 9).
@@ -6311,7 +6353,12 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
   };
 
   /** Lets go of every creep an aura holds that `kept` does not name. */
-  const letGo = (owner: Creep, aura: Aura, kept: ReadonlySet<Creep>): void => {
+  const letGo = (
+    owner: Creep,
+    aura: Aura,
+    kept: ReadonlySet<Creep>,
+    keptTowers: ReadonlySet<Tower> = new Set(),
+  ): void => {
     aura.members = aura.members.filter((member) => {
       if (kept.has(member)) return true;
       if (member.enragedBy === owner.id) {
@@ -6323,8 +6370,90 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
         member.lootBonus = 0;
         member.lootBuffedBy = -1;
       }
+      if (member.chilledBy === owner.id) {
+        member.chill = 1;
+        member.chilledBy = -1;
+      }
       return false;
     });
+    if (aura.towers) letGoTowers(owner, aura, keptTowers);
+  };
+
+  /** Krampus off the field: everything its aura holds goes free, once. */
+  const releaseFrost = (krampus: Creep, aura: Aura): void => {
+    if (aura.members.length > 0 || (aura.towers?.length ?? 0) > 0) letGo(krampus, aura, new Set());
+  };
+
+  /** Lets go of every tower Krampus's aura holds that `kept` does not name. */
+  const letGoTowers = (owner: Creep, aura: Aura, kept: ReadonlySet<Tower>): void => {
+    aura.towers = (aura.towers ?? []).filter((tower) => {
+      if (kept.has(tower)) return true;
+      if (tower.chilledBy === owner.id) {
+        tower.chill = 0;
+        tower.chillCount = 0;
+        tower.chilledBy = -1;
+      }
+      return false;
+    });
+  };
+
+  /**
+   * Krampus's frost aura (beta 10, owner 27 Nov 2026: "frost aura slows
+   * nearby towers AND monsters"). Every {@link KRAMPUS_AURA_INTERVAL} ticks,
+   * while Krampus fights, every creep of the OTHER side within its radius is
+   * chilled (moves and swings {@link krampusSlowPercent} slower) and, when
+   * Krampus attacks a yard, so is every standing tower whose scan point is
+   * inside it (acts on that share fewer ticks); whatever it chilled that is no
+   * longer inside is let go, and all of it when Krampus falls or leaves. One
+   * chill at a time: a creep or tower already chilled by another Krampus is
+   * left as it is. Deterministic: whole ticks, no random draws.
+   */
+  const tickFrostAura = (krampus: Creep, aura: Aura): void => {
+    aura.counter += 1;
+    if (aura.counter < KRAMPUS_AURA_INTERVAL) return;
+    aura.counter = 0;
+    const kept = new Set<Creep>();
+    const keptTowers = new Set<Tower>();
+    if (inBattle(krampus)) {
+      const radius = krampusAuraRadius(krampus.level);
+      const percent = krampusSlowPercent(krampus.level);
+      const side = krampus.friendly ? TARGETS_ATTACKERS : TARGETS_DEFENDERS;
+      const flags = side | TARGETS_GROUND | TARGETS_FLYING | TARGETS_INVISIBLE;
+      for (const { creep: other } of index.inRange(
+        radius,
+        krampus.x,
+        krampus.y,
+        flags,
+        krampus.id,
+      )) {
+        if (other.gone || other.friendly === krampus.friendly) continue;
+        if (other.chilledBy >= 0 && other.chilledBy !== krampus.id) continue;
+        kept.add(other);
+        if (other.chilledBy === krampus.id) continue;
+        other.chill = (100 - percent) / 100;
+        other.chilledBy = krampus.id;
+        aura.members.push(other);
+      }
+      // The yard's towers are the defenders': only an attacking Krampus chills them.
+      if (!krampus.friendly) {
+        const reach = radius * radius;
+        for (const tower of towers) {
+          if (tower.building.hp <= 0) continue;
+          if (tower.chilledBy >= 0 && tower.chilledBy !== krampus.id) continue;
+          const at = towerScanPoint(tower.building);
+          const dx = at.x - krampus.x;
+          const dy = at.y - krampus.y;
+          if (dx * dx + dy * dy > reach) continue;
+          keptTowers.add(tower);
+          if (tower.chilledBy === krampus.id) continue;
+          tower.chill = percent;
+          tower.chillCount = 0;
+          tower.chilledBy = krampus.id;
+          (aura.towers ??= []).push(tower);
+        }
+      }
+    }
+    letGo(krampus, aura, kept, keptTowers);
   };
 
   /**
@@ -6354,6 +6483,7 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
     const aura = creep.aura;
     if (!aura) return;
     if (creep.monsterId === FOMOR_ID) tickEnrage(creep, aura);
+    else if (creep.monsterId === KRAMPUS_ID) tickFrostAura(creep, aura);
     else tickLootAura(creep, aura);
   };
 
@@ -6907,7 +7037,12 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
   };
 
   const tickCreep = (creep: Creep): void => {
-    if (creep.hp <= 0 || creep.gone) return;
+    if (creep.hp <= 0 || creep.gone) {
+      // Krampus's frost thaws as soon as it falls or leaves (beta 10); Flash's
+      // own auras keep their old behaviour.
+      if (creep.monsterId === KRAMPUS_ID && creep.aura) releaseFrost(creep, creep.aura);
+      return;
+    }
     if (creep.behaviour === "retreat") {
       creep.gone = true;
       return;
@@ -7071,6 +7206,12 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
 
   const tickTower = (tower: Tower): void => {
     const building = tower.building;
+    // Krampus's frost aura (beta 10): a chilled tower sits out its share of ticks.
+    if (tower.chill > 0) {
+      tower.chillCount += 100 - tower.chill;
+      if (tower.chillCount < 100) return;
+      tower.chillCount -= 100;
+    }
     tower.frame += 1;
     // A Spurtz Cannon culls and finishes its burst even once it has fallen (issue #313).
     if (tower.gun) {
@@ -8472,6 +8613,7 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
       enraged: creep.enragedBy >= 0,
       puttied: creep.puttyUntil > 0,
       lootBoosted: creep.lootBuffedBy >= 0,
+      ...(creep.chilledBy >= 0 ? { chilled: true } : {}),
       quaking: creep.quaking,
       ...(creep.rank > 0 ? { rank: creep.rank } : {}),
       ...(creep.invisible && !creep.burrows ? { invisible: true } : {}),
@@ -8486,6 +8628,12 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
       ...(creep.splitCopy ? { splitCopy: true } : {}),
       ...(creep.zombie ? { zombie: true } : {}),
     }));
+
+  const chilledTowers = (): number[] =>
+    towers
+      .filter((tower) => tower.chilledBy >= 0 && tower.building.hp > 0)
+      .map((tower) => tower.building.id)
+      .sort((one, other) => one - other);
 
   const weakenedTowers = (): number[] =>
     towers
@@ -8690,6 +8838,7 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
     siege: siegeSnapshot,
     bunkerPools,
     weakenedTowers,
+    chilledTowers,
     cagedChampions,
   };
 };

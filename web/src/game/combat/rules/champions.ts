@@ -292,3 +292,32 @@ export const lootAuraBonus = (level: number): number => {
 
 /** The aura looks around every 50 of her frames (`ProximityLootBuff.as:42`). */
 export const LOOT_AURA_FRAMES = 50;
+
+/* ── Krampus's frost aura (beta 10, frost tribe) ─────────────────────────── */
+
+/** Krampus, the frost tribe's champion: wild (`wildChampions.ts`), an enemy this Christmas. */
+export const KRAMPUS_ID = "G6";
+
+/**
+ * The frost aura looks around every 30 ticks, as Fomor's enrage does
+ * (`ENRAGE_INTERVAL`): everything of the other side inside its radius is
+ * chilled, and everything it chilled that is no longer inside is let go.
+ */
+export const KRAMPUS_AURA_INTERVAL = 30;
+
+/**
+ * Owner, 27 Nov 2026: "frost aura slows nearby towers AND monsters". The slow
+ * at Krampus's level, as a share: a chilled monster moves and swings that
+ * much slower, a chilled tower acts on that share fewer ticks (it reloads,
+ * winds up and fires slower). Its `buffs` ladder (`wildChampions.ts`):
+ * PROPOSED 15% at level 1 up to 40% at level 6.
+ */
+export const krampusAuraSlow = (level: number): number => championStat(KRAMPUS_ID, "buffs", level);
+
+/** The aura's radius, in the engine's range space (`buffRadius`): PROPOSED 200 to 300. */
+export const krampusAuraRadius = (level: number): number =>
+  championStat(KRAMPUS_ID, "buffRadius", level);
+
+/** The slow in whole percent, 0-90, for the towers' tick count (integers: same everywhere). */
+export const krampusSlowPercent = (level: number): number =>
+  Math.max(0, Math.min(90, Math.round(krampusAuraSlow(level) * 100)));
