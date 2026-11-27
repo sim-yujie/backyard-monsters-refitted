@@ -21,7 +21,7 @@ export const WAVE_EVENTS: readonly WaveEventDefinition[] = [
   {
     key: "wmi1",
     title: "Wild Monster Invasion",
-    text: "Wild monsters attack in 30 waves. Call each wave when ready, hold your yard, and grow your Victory Totem.",
+    text: "Wild monsters attack in 30 waves, then 2 bonus waves. Call each wave when ready, hold your yard, grow your Victory Totem.",
     days: 7,
     waves: WMI1_WAVES,
     prizes: flashWavePrizes(),
@@ -33,7 +33,7 @@ export const WAVE_EVENTS: readonly WaveEventDefinition[] = [
   {
     key: "wmi2",
     title: "Wild Monster Invasion 2",
-    text: "Inferno monsters attack in 30 waves. Call each wave when ready, hold your yard, and grow your Inferno Totem.",
+    text: "Inferno monsters attack in 30 waves, then 2 bonus waves. Call each wave when ready, hold your yard, grow your Inferno Totem.",
     days: 7,
     waves: WMI2_WAVES,
     prizes: flashWavePrizes(),

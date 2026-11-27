@@ -67,7 +67,8 @@ export class WaveHud {
     this.pill.setAttribute("aria-controls", this.tray.id);
     this.element.append(this.pill, this.tray);
     const saved = readClosed();
-    this.open = saved === null ? !isPhoneLayout() : !saved;
+    // Open by default only on a computer; on a phone or iPad it sits at the top and starts closed.
+    this.open = saved === null ? !opensDown() : !saved;
     // On a phone the open tray covers part of the top; a tap anywhere else closes it.
     this.outside = (event: PointerEvent) => {
       if (this.open && isPhoneLayout() && !this.element.contains(event.target as Node)) this.setOpen(false);

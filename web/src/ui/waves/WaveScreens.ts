@@ -28,11 +28,11 @@ export const waveTrack = (beaten: number, waves: number, totemType: number | nul
   track.setAttribute("aria-label", `${beaten} of ${waves} waves beaten`);
   const bar = el("div", "wave-track__bar");
   const fill = el("div", "wave-track__fill");
-  // The main waves fill 84% of the bar and each bonus wave its own step, so
+  // The main waves fill 76% of the bar and each bonus wave its own step, so
   // the marks at 30, 31 and 32 stand apart.
   const main = Math.max(1, firstBonusWave - 1);
-  const bonusStep = waves > main ? 16 / (waves - main) : 0;
-  const at = (wave: number): number => (waves > main ? (Math.min(wave, main) / main) * 84 + Math.max(0, wave - main) * bonusStep : (wave / main) * 100);
+  const bonusStep = waves > main ? 24 / (waves - main) : 0;
+  const at = (wave: number): number => (waves > main ? (Math.min(wave, main) / main) * 76 + Math.max(0, wave - main) * bonusStep : (wave / main) * 100);
   fill.style.width = `${Math.min(100, at(beaten))}%`;
   bar.append(fill);
   for (const [index, wave] of TOTEM_WAVES.filter((one) => one <= waves).entries()) {
@@ -102,8 +102,8 @@ export const waveResultPopup = (result: RaidResult, actions: WaveResultActions, 
   return popup;
 };
 
-/** The totem's moment: its new picture and where it is. */
-export const totemPopup = (totem: NonNullable<WaveResult["totem"]>, onClose: () => void): Popup => {
+/** The totem's moment: its new picture, the wave that raised it, and where it is. */
+export const totemPopup = (totem: NonNullable<WaveResult["totem"]>, onClose: () => void, wave?: string): Popup => {
   const popup = new Popup({ title: totem.level === 1 ? "Totem won!" : "Totem upgraded!", className: "wave-totem", onClose });
   const stage = el("div", "wave-totem__stage");
   stage.append(totemImage(totem.type, totem.level, "wave-totem__art"));
@@ -113,6 +113,7 @@ export const totemPopup = (totem: NonNullable<WaveResult["totem"]>, onClose: () 
   popup.setContent(
     stage,
     el("p", "wave-totem__name", totemName(totem.level)),
+    ...(wave ? [el("p", "wave-totem__milestone", `${wave} prize`)] : []),
     el("p", "wave-totem__where", totem.placed ? "Upgraded on your yard." : "Stored in Build ▸ Decorations."),
     ok,
   );
@@ -154,7 +155,8 @@ export const showWaveResult = async (host: HTMLElement, result: RaidResult, acti
   });
   const totem = result.wave?.totem;
   if (totem && result.wave?.beaten) {
-    await new Promise<void>((resolve) => totemPopup(totem, resolve).mount(host));
+    const wave = result.wave ? waveName(result.wave.wave, result.wave.firstBonusWave) : undefined;
+    await new Promise<void>((resolve) => totemPopup(totem, resolve, wave).mount(host));
   }
   if (next) actions.onNext?.();
 };
@@ -174,7 +176,9 @@ export const waveIntroPopup = (status: WaveStatus, onStart: () => void, onClose:
   band.append(picture);
   const parts: HTMLElement[] = [band];
   if (status.text) parts.push(el("p", "wave-intro__text", status.text));
-  parts.push(el("p", "wave-result__note", "No loot lost · Auto-repairs · Glimmers every wave"));
+  const facts = el("ul", "wave-intro__facts");
+  for (const fact of ["No loot lost", "Auto-repairs", "Glimmers every wave", "2 bonus waves"]) facts.append(el("li", "wave-intro__fact", fact));
+  parts.push(facts);
   if (status.totemType !== null) parts.push(waveTrack(status.beaten, status.waves, status.totemType, status.firstBonusWave));
   const row = el("div", "wave-result__actions");
   const later = el("button", "btn wave-result__later", "Later");

@@ -9,6 +9,7 @@ import { TRAP_BANNER, TRAP_BANNER_MS } from "@/game/trojan/trojanText";
 import { waveStripLine } from "@/game/waves/waveText";
 import { surrenderWave, waveName, type WaveSurrenderResponse } from "@/api/waves";
 import { confirmSurrender } from "@/ui/waves/WaveScreens";
+import { gameIcon } from "@/ui/gameIcon";
 import "@/ui/styles/raid.css";
 import { finishRaidFight, type RaidFinish } from "./raidFinish";
 import { raidEvents, setRaidNote, setRaidResult } from "./raidSession";
@@ -238,7 +239,14 @@ export const createRaidPlugin =
       const button = document.createElement("button");
       button.type = "button";
       button.className = "btn btn--danger wave-surrender-button";
-      button.textContent = "Surrender";
+      button.setAttribute("aria-label", "Surrender");
+      button.title = "Surrender";
+      // The painted flag; the word goes on a phone, where the strip has one row.
+      button.append(gameIcon("retreat", { size: 24, decorative: true, className: "wave-surrender-button__icon" }));
+      const word = document.createElement("span");
+      word.className = "wave-surrender-button__word";
+      word.textContent = "Surrender";
+      button.append(word);
       button.addEventListener("click", () => {
         if (finishing || gone) return;
         button.disabled = true;

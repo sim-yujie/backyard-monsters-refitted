@@ -464,18 +464,80 @@
 }
 
 @media (max-height: 450px) {
-  .events-card--wave .events-card__banner,
-  .events-card--wave .events-card__text {
+  .events-card--wave .events-card__banner {
     display: none;
   }
 }
 
 @media (max-width: 480px) {
-  .wave-track__mark--bonus .wave-track__wave {
-    display: none;
-  }
 
   .wave-result__actions .btn {
     min-width: 120px;
   }
+}
+
+.wave-surrender-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 44px;
+}
+
+.wave-surrender-button__icon {
+  width: 24px;
+  height: 24px;
+}
+
+@media (max-width: 480px) {
+  .wave-surrender-button {
+    padding-inline: 10px;
+  }
+
+  .wave-surrender-button__word {
+    display: none;
+  }
+}
+
+/* ── Round 2 fixes (neon) ───────────────────────────────────────────────── */
+
+/* Wave numbers in their own row under the bar, in the window's text colour. */
+.wave-track {
+  margin-bottom: 24px;
+}
+
+.wave-track__wave {
+  top: 22px;
+  color: var(--colour-text);
+  text-shadow: none;
+}
+
+.wave-hud__prize {
+  color: #fff;
+  text-shadow: 0 1px 2px rgb(0 0 0 / 80%);
+}
+
+.wave-intro__facts {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 6px;
+  margin: 10px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.wave-intro__fact {
+  padding: 2px 10px;
+  border-radius: var(--radius-pill);
+  background: rgb(0 0 0 / 18%);
+  font-size: var(--text-sm);
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.wave-totem__milestone {
+  margin: 2px 0 0;
+  font-size: var(--text-sm);
+  text-align: center;
+  opacity: 0.85;
 }
