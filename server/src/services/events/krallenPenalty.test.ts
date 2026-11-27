@@ -173,7 +173,7 @@ describe("lowerKrallen", () => {
 
 describe("the hunt card's minimum", () => {
   const scheduled = { event: MARCH, window: { startsAt: MARCH_START, endsAt: MARCH_END }, status: "active" as const };
-  const player = (krallenLevel: number) => ({ townHall: 9, tutorialDone: true, krallenLevel });
+  const player = (krallenLevel: number) => ({ townHall: 9, tutorialDone: true, krallenLevel, mapRoom2: true });
 
   test("half her start goal with a Krallen at the start, none without", () => {
     expect(eventView(scheduled, NO_PROGRESS, MARCH_START, player(2)).krallen).toMatchObject({ startLevel: 2, minimum: 75e6 });

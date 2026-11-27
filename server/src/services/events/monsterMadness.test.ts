@@ -10,6 +10,7 @@ import {
   monsterMadnessRun,
 } from "../../game-data/events/monsterMadness.js";
 import { CHAMPION_STATUS, planChampionRaise, type ChampionSave } from "../yard/champion.js";
+import { eventPlayerOf, lockedReason } from "./eventPlayer.js";
 import { planGrant } from "./grant.js";
 import { grantKorathPower } from "./korathPower.js";
 import { liveEvents } from "./liveEvents.js";
@@ -36,7 +37,7 @@ const START = 1_900_000_000;
 const RUN = { startsAt: START, endsAt: START + 4 * DAY };
 const IN = START + DAY;
 const NO_FORCE: ReadonlySet<string> = new Set();
-const READY = { buildingdata: {}, tutorialstage: 205 };
+const READY = { buildingdata: {}, tutorialstage: 205, mr2upgraded: true, mapversion: 2 };
 const em = {} as never;
 const CAGE = { "3": { id: 3, t: 114, x: 0, y: 0, l: 1 } };
 
@@ -128,6 +129,17 @@ describe("takeover points", () => {
     expect(await count(store, IN, { tutorialstage: 10 })).toEqual([]);
     expect(await count(store, IN, READY, "9", 0)).toEqual([]);
     expect(store.rows.size).toBe(0);
+  });
+
+  test("nothing for a player on Map Room 1, who is told to move to Map Room 2", async () => {
+    const store = memoryProgressStore();
+    const mapRoom1 = { buildingdata: {}, tutorialstage: 205, mr2upgraded: false, mapversion: 1 };
+    expect(await count(store, IN, mapRoom1)).toEqual([]);
+    expect(store.rows.size).toBe(0);
+    expect(lockedReason(RUN_EVENT, eventPlayerOf(mapRoom1 as never, false))).toBe("Upgrade your Map Room to level 2 to take part.");
+    expect(lockedReason(RUN_EVENT, eventPlayerOf(READY as never, false))).toBeNull();
+    // Upgraded but its flag not caught up yet still counts as Map Room 2.
+    expect(lockedReason(RUN_EVENT, eventPlayerOf({ ...mapRoom1, mapversion: 2 } as never, false))).toBeNull();
   });
 
   test("a store that throws is logged, not thrown", async () => {
