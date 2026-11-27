@@ -78,3 +78,16 @@ export const skinFile = (file: string, skin: MonsterSkin): string => {
   const slash = file.lastIndexOf("/");
   return `${file.slice(0, slash + 1)}${skin}/${file.slice(slash + 1)}`;
 };
+
+/**
+ * A dev build's `?skin=frost` (the attacking side) and `?defenderSkin=frost`
+ * (the yard's side): any fight drawn in a skin, to see the frost tribe before
+ * its waves and camps exist. Nothing for anything else.
+ */
+export const devSkins = (search: string): { skins?: BattleSkins } => {
+  const params = new URLSearchParams(search);
+  const attackers = params.get("skin") === "frost" ? "frost" : undefined;
+  const defenders = params.get("defenderSkin") === "frost" ? "frost" : undefined;
+  if (!attackers && !defenders) return {};
+  return { skins: { ...(attackers ? { attackers } : {}), ...(defenders ? { defenders } : {}) } };
+};

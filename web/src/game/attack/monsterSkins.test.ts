@@ -4,7 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { setClassicLook } from "@/game/classicLook";
 import { setQuality } from "@/game/quality";
 import { MONSTER_SPRITES } from "./monsterSpriteData";
-import { creepSkin, FROST_MONSTERS, hasSkin, skinFile, skinnedSheet } from "./monsterSkins";
+import { creepSkin, devSkins, FROST_MONSTERS, hasSkin, skinFile, skinnedSheet } from "./monsterSkins";
 import { REPAINTED_SHEETS, sheetStandInUrl, sheetUrl, spriteFor } from "./monsterSprites";
 
 const ASSETS = fileURLToPath(new URL("../../../../server/public/assets/", import.meta.url));
@@ -87,5 +87,13 @@ describe("monster skins (frost tribe)", () => {
       }
       expect(skinnedSheet(sheet, "frost").key).toBe(`${id}~frost`);
     }
+  });
+});
+
+describe("devSkins", () => {
+  it("reads ?skin=frost and ?defenderSkin=frost, and nothing else", () => {
+    expect(devSkins("?skin=frost")).toEqual({ skins: { attackers: "frost" } });
+    expect(devSkins("?defenderSkin=frost&skin=frost")).toEqual({ skins: { attackers: "frost", defenders: "frost" } });
+    expect(devSkins("?skin=gold")).toEqual({});
   });
 });
