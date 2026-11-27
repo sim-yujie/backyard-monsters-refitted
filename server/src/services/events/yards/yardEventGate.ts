@@ -10,6 +10,7 @@ import {
   eventYardOrder,
   isCopyYardId,
 } from "../../../game-data/tribes/events/index.js";
+import { Env } from "../../../enums/Env.js";
 import { eventYardRefusedErr } from "../../../errors/errors.js";
 import type { JsonObject } from "../../../types/JsonObject.js";
 import type { SaveData } from "../../../types/EntityData.js";
@@ -49,8 +50,8 @@ const sqlWavesBeaten: WavesBeaten = async (em, userid, runId) => {
 };
 
 /** Local only: `BRUKWAR_NO_WAVES=1` opens every Brukkarg yard without waves (never on production). */
-const noWaves = (env: NodeJS.ProcessEnv = process.env): boolean =>
-  env.NODE_ENV !== "production" && env.BRUKWAR_NO_WAVES === "1";
+export const noWaves = (env: NodeJS.ProcessEnv = process.env): boolean =>
+  env.ENV !== Env.PROD && env.BRUKWAR_NO_WAVES === "1";
 
 let wavesBeatenOf: WavesBeaten = async (em, userid, runId) => (noWaves() ? 1_000 : sqlWavesBeaten(em, userid, runId));
 

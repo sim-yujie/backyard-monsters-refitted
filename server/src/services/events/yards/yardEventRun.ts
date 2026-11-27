@@ -22,10 +22,15 @@ import { logger } from "../../../utils/logger.js";
  *    words, days and banners of {@link YARD_EVENTS}. Its dashboard box then
  *    lists them, `liveWaveEvent(now)` covers them and its Events page entry
  *    (`waveRunEvents`) shows them.
- * 2. Replace this file's store with: `liveYardEventRun = (now) => { const
- *    live = liveWaveEvent(now); return live && isYardEventKey(live.run.event)
- *    ? toYardRun(live.run) : null }`, `yardEventRunEvents = () => []`, and
- *    drop {@link startYardEventRefresh} from `server.ts`.
+ * 2. Replace this file's store with wave-events' runs, ENDED ONES TOO:
+ *    `yardEventRuns = () => waveRuns().filter((run) => isYardEventKey(run.event))`
+ *    (the same `{ event, startsAt, endsAt }` shape), so that
+ *    {@link liveYardEventRun} AND {@link yardRunIdAt} read them. The landing
+ *    and the rowless finaliser find an attack's run with `yardRunIdAt` from
+ *    its start time, also after the run ended: an empty list there makes
+ *    every event yard save fail (`eventYardGone`) and the finaliser drop the
+ *    attack. Then `yardEventRunEvents = () => []` (wave-events' own Events
+ *    entry shows the run) and drop {@link startYardEventRefresh} from `server.ts`.
  * 3. `brukwarWavesBeaten` (`yardEventGate.ts`) reads
  *    `waveProgressStore().read(em, userid, runId).beaten`.
  * The run id is the same here and there: `<key>-<startsAt>`, so the players'
