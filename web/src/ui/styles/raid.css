@@ -281,6 +281,7 @@ button.raid-alert__threat {
 .raid-alert__actions,
 .raid-result__actions {
   display: flex;
+  align-items: stretch;
   flex-wrap: wrap;
   justify-content: flex-end;
   gap: var(--space-2);
@@ -569,6 +570,12 @@ button.raid-alert__threat {
 
   .raid-alert__actions {
     grid-area: actions;
+    align-items: stretch;
+  }
+
+  /* Clear room for the CHAMPION tag under the pill row (neon r3). */
+  .raid-alert__monsters--champion {
+    margin-top: var(--space-2);
   }
 
   .raid-alert__monster {
