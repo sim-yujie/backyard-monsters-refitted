@@ -266,6 +266,27 @@ button.raid-alert__threat {
   object-fit: cover;
 }
 
+/* The champion's portrait, cropped to its creature (`championCrop`) on a
+   soft gold glow, so it reads as a card like the monsters' painted ones. */
+.raid-alert__art {
+  position: relative;
+  display: block;
+  overflow: hidden;
+  background:
+    radial-gradient(circle at 50% 62%, rgba(255, 214, 106, 0.38), rgba(255, 214, 106, 0) 68%),
+    var(--colour-surface-base);
+}
+
+.raid-alert__art-picture {
+  position: absolute;
+  left: var(--crop-x, 0%);
+  top: var(--crop-y, 0%);
+  width: var(--crop-size, 100%);
+  max-width: none;
+  height: auto;
+  aspect-ratio: 1;
+}
+
 .raid-alert__name {
   font-size: var(--text-sm);
   font-weight: 700;

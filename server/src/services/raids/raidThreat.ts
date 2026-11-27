@@ -1,4 +1,4 @@
-import { RAID_THREAT_MAX, RAID_THREAT_STEPS, type RaidThreatStep } from "../../config/RaidThreatConfig.js";
+import { RAID_THREAT_MAX, RAID_THREAT_START_CAP, RAID_THREAT_STEPS, type RaidThreatStep } from "../../config/RaidThreatConfig.js";
 
 /**
  * A player's raid threat (beta 10, owner 27 Nov 2026,
@@ -13,7 +13,7 @@ import { RAID_THREAT_MAX, RAID_THREAT_STEPS, type RaidThreatStep } from "../../c
  *
  * It lives in `aiattacks.threat`. A schedule from before beta 10 has none;
  * its threat starts at the number of 90%+ wild defences among the raids it
- * keeps in `recent` (the newest 10), read once by `readSchedule` and written
+ * keeps in `recent` (the newest 10), at most 6, read once by `readSchedule` and written
  * back with the schedule's next write (no schema migration, design §8.1).
  */
 
@@ -40,10 +40,14 @@ export interface ThreatRecord {
 
 /**
  * The threat a schedule from before beta 10 starts at: its 90%+ wild
- * defences among `recent` (`defended`, or for an older record `shiny > 0`).
+ * defences among `recent` (`defended`, or for an older record `shiny > 0`),
+ * at most {@link RAID_THREAT_START_CAP}.
  */
 export const startThreat = (recent: readonly ThreatRecord[]): number =>
-  clampThreat(recent.filter((record) => threatCounts(record.tribe) && (record.defended ?? record.shiny > 0)).length);
+  Math.min(
+    RAID_THREAT_START_CAP,
+    clampThreat(recent.filter((record) => threatCounts(record.tribe) && (record.defended ?? record.shiny > 0)).length),
+  );
 
 /** The threat after a wild raid landed: one up for a good defence, one down for a poor one. */
 export const threatAfter = (threat: number, defended: boolean): number =>

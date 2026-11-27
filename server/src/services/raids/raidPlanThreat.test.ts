@@ -134,13 +134,18 @@ describe("planRaid at a threat", () => {
   });
 
   test("Vorgs and Zafreetis come once their share is above 0", () => {
+    // Vorgs from 6, Zafreetis from 8 (owner, 27 Nov 2026).
+    const vorgsFrom = RAID_THREAT_STEPS.findIndex((step) => step.vorgShare > 0);
+    const zafreetisFrom = RAID_THREAT_STEPS.findIndex((step) => step.zafreetiShare > 0);
+    expect([vorgsFrom, zafreetisFrom]).toEqual([6, 8]);
     for (const seed of SEEDS) {
-      const low = plan(seed, 3).army;
+      const low = plan(seed, vorgsFrom - 1).army;
       expect(low[RAID_VORG]).toBeUndefined();
       expect(low[RAID_ZAFREETI]).toBeUndefined();
-      const vorgs = plan(seed, 4).army;
+      const vorgs = plan(seed, vorgsFrom).army;
       expect(vorgs[RAID_VORG]).toBeGreaterThanOrEqual(1);
-      const both = plan(seed, 5).army;
+      expect(vorgs[RAID_ZAFREETI]).toBeUndefined();
+      const both = plan(seed, zafreetisFrom).army;
       expect(both[RAID_VORG]).toBeGreaterThanOrEqual(1);
       expect(both[RAID_ZAFREETI]).toBeGreaterThanOrEqual(1);
     }

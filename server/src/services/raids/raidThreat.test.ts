@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { RAID_THREAT_MAX, RAID_THREAT_STEPS } from "../../config/RaidThreatConfig.js";
+import { RAID_THREAT_MAX, RAID_THREAT_START_CAP, RAID_THREAT_STEPS } from "../../config/RaidThreatConfig.js";
 import { MOLOCH_TRIBE } from "../inferno/emergenceRaid.js";
 import {
   readSchedule,
@@ -55,6 +55,28 @@ describe("the threat table", () => {
       last = step;
     }
     expect(RAID_THREAT_MAX).toBe(RAID_THREAT_STEPS.length - 1);
+  });
+
+  test("the owner's steps (desk b10-numbers, 27 Nov 2026)", () => {
+    const at = (threat: number) => RAID_THREAT_STEPS[threat]!;
+    expect(RAID_THREAT_MAX).toBe(20);
+    // +10% monsters on every odd step, x2.0 at 19 and the top.
+    for (let threat = 0; threat <= RAID_THREAT_MAX; threat += 1) {
+      expect(at(threat).size).toBeCloseTo(1 + 0.1 * Math.ceil(threat / 2), 9);
+    }
+    expect(at(19).size).toBe(2);
+    // Timed drops: 2 from 2, 4 from 14, 5 from 18.
+    expect([0, 1, 2, 13, 14, 17, 18, 20].map((threat) => at(threat).drops)).toEqual([1, 1, 2, 2, 4, 4, 5, 5]);
+    // Sides: 2 from 4, 3 from 8, 4 from 12.
+    expect([3, 4, 7, 8, 11, 12, 20].map((threat) => at(threat).sides)).toEqual([1, 2, 2, 3, 3, 4, 4]);
+    // Vorgs (5%) from 6, Zafreetis (2%) from 8.
+    expect([5, 6, 20].map((threat) => at(threat).vorgShare)).toEqual([0, 0.05, 0.05]);
+    expect([7, 8, 20].map((threat) => at(threat).zafreetiShare)).toEqual([0, 0.02, 0.02]);
+    // One champion from 10 at level 1, rising to 6 at 19.
+    expect(RAID_THREAT_STEPS.map((step) => step.championLevel)).toEqual([0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 2, 2, 3, 3, 4, 4, 5, 5, 6, 6]);
+    expect(RAID_THREAT_STEPS.every((step) => step.championPower === 0)).toBe(true);
+    // Raiders go home 3 minutes after the last group from threat 1.
+    expect(RAID_THREAT_STEPS.slice(1).every((step) => step.retreatSeconds === 180)).toBe(true);
   });
 
   test("a threat past the table reads its last row", () => {
@@ -122,8 +144,17 @@ describe("the launch threat", () => {
     expect(readSchedule({ threat: "4", recent }).threat).toBe(4);
   });
 
-  test("ten good defences start at ten (recent keeps ten)", () => {
+  test("ten good defences start at the launch cap, 6, and a good defence still raises it", () => {
     const recent = Array.from({ length: 12 }, (_, at) => record({ id: `r${at}`, defended: true }));
-    expect(readSchedule({ recent }).threat).toBe(Math.min(10, RAID_THREAT_MAX));
+    expect(RAID_THREAT_START_CAP).toBe(6);
+    const schedule = readSchedule({ recent });
+    expect(schedule.threat).toBe(6);
+    expect(recordRaidFinished(schedule, record({ defended: true, shiny: 10 })).threat).toBe(7);
+  });
+
+  test("six good defences start at 6, five at 5", () => {
+    const good = (count: number) => Array.from({ length: count }, (_, at) => record({ id: `g${at}`, defended: true }));
+    expect(startThreat(good(6))).toBe(6);
+    expect(startThreat(good(5))).toBe(5);
   });
 });

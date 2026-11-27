@@ -19,7 +19,7 @@ import { raidCountdownText, type RaidBusy, type RaidStage, type RaidYardView } f
 import { TROJAN_TRIBE } from "@/game/trojan/trojanHorse";
 import { versionedArt } from "@/game/yard/retryLoad";
 import { CHAMPION_PROPS, championByType } from "@/game/combat/rules";
-import { championPortrait, showPortrait } from "@/game/portraits";
+import { championCrop, championPortrait, showPortrait } from "@/game/portraits";
 import { alarmPulse } from "@/ui/alarmPulse";
 import { gameIcon } from "@/ui/gameIcon";
 import { formatAmount } from "@/ui/format";
@@ -112,7 +112,7 @@ export interface RaidAlertRaid {
   readonly champion?: { readonly t: number; readonly l: number };
 }
 
-/** The threat pill's tier: amber up to 7, red from 8 (a champion comes), pulsing red from 15. */
+/** The threat pill's tier: amber up to 7, red from 8 (3 sides and Zafreetis; the champion from 10), pulsing red from 15. */
 export const threatTier = (threat: number): "warn" | "danger" | "extreme" =>
   threat >= 15 ? "extreme" : threat >= 8 ? "danger" : "warn";
 
@@ -123,6 +123,29 @@ export const THREAT_HINT = "+1 Threat after a 90%+ defence, −1 after a loss.";
 const championName = (t: number): string => {
   const id = championByType(t);
   return (id && CHAMPION_PROPS[id]?.name) || `G${t}`;
+};
+
+/**
+ * The champion's portrait for its card: the Champion Cage's picture
+ * (painted, or the original with the Classic look on), cropped to the
+ * creature. The whole frame left a level-1 Fomor a speck that read as a
+ * battle sprite (owner, 27 Nov 2026).
+ */
+const championArt = (t: number, level: number): HTMLElement => {
+  const id = `G${t}`;
+  const box = element("span", "raid-alert__portrait raid-alert__art");
+  const picture = element("img", "raid-alert__art-picture");
+  picture.alt = "";
+  picture.decoding = "async";
+  showPortrait(picture, championPortrait(id, level, "card"));
+  const crop = championCrop(id, level);
+  if (crop) {
+    box.style.setProperty("--crop-size", `${crop.size}%`);
+    box.style.setProperty("--crop-x", `${crop.x}%`);
+    box.style.setProperty("--crop-y", `${crop.y}%`);
+  }
+  box.append(picture);
+  return box;
 };
 
 /**
@@ -210,12 +233,9 @@ export class RaidAlert {
       list.classList.add("raid-alert__monsters--champion");
       const { t, l } = raid.champion;
       const item = element("li", "raid-alert__monster raid-alert__champion");
-      const picture = element("img", "raid-alert__portrait");
-      picture.alt = "";
-      showPortrait(picture, championPortrait(`G${t}`, l, "card"));
       item.append(
         element("span", "raid-alert__tag", "Champion"),
-        picture,
+        championArt(t, l),
         element("span", "raid-alert__name", championName(t)),
         element("span", "raid-alert__count raid-alert__level", `Lv ${l}`),
       );

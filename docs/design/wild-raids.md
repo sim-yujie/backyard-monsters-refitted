@@ -762,9 +762,9 @@ of monsters, directions, drop sequence, throw some vorgs and zafreetis and maybe
 | T1 | **A threat level per player.** A wild raid defended at 90%+ raises the next raid's threat by one; a lost raid steps it back one; a cancelled raid (quit = cancel, D5) leaves it. The Trojan Horse and Moloch's raids never move it. |
 | T2 | **Higher threat, bigger raid:** more monsters, more sides (1 to 4 entry directions), groups that land over time, Vorgs and Zafreetis mixed in, and from a high step ONE random champion (Gorgo, Drull, Fomor or Korath) at a level matched to the threat. |
 | T3 | **Reward stays flat:** 10 Shiny for a 90%+ defence (D4). Theft stays Flash's (D3). The more / same / less choice stays (frequency and x1.3 / x1 / x0.5 size, D2). |
-| T4 | **Launch:** a player's threat starts at the number of 90%+ defences among their kept raids (`recent`, the newest 10; `defended`, or for an older record `shiny > 0`; Trojan and Moloch records not counted). |
+| T4 | **Launch:** a player's threat starts at the number of 90%+ defences among their kept raids (`recent`, the newest 10; `defended`, or for an older record `shiny > 0`; Trojan and Moloch records not counted), **at most 6** (`RAID_THREAT_START_CAP`, owner 27 Nov). |
 | T5 | **The alert shows the threat** ("Threat 7"), short, icons over words. |
-| T6 | **The numbers are not final.** One table, `server/src/config/RaidThreatConfig.ts`, holds every step; a numbers helper proposes it and the owner approves it on the Review Desk. |
+| T6 | **The numbers.** One table, `server/src/config/RaidThreatConfig.ts`, holds every step. The owner approved the steps on the Review Desk (card b10-numbers, 27 Nov; 11.6). |
 
 **Replaced October decisions:** "plain monster stats, no strength scaling" (Q8, §5.4) is now
 threat scaling (bigger armies; the table has a `strength` column, 1 at every step, so the
@@ -814,15 +814,15 @@ on its side the pills sit beside the tribe picture and "+N more" beside the answ
 buttons stay on a 390 px tall screen. The result popup is unchanged (the finish answers
 `threat`/`nextThreat` for a later use).
 
-### 11.4 Two rules found while measuring (owner to confirm)
+### 11.4 Two rules found while measuring (owner approved, 27 Nov)
 
 - **Retreat timer.** Vorgs and Zafreetis can heal a raider fighting a bunker defender or the caged
   champion for good, so a threat 5+ raid on yardtester's yard often ran to the 10-minute cap that
-  the player must watch. Each step 1+ now ends with a retreat wave `retreatSeconds` (placeholder
-  180) after the last group lands; threat 0 has none (D10 is unchanged there).
+  the player must watch. Each step 1+ now ends with a retreat wave `retreatSeconds` (
+  180, 3 minutes) after the last group lands; threat 0 has none (D10 is unchanged there).
 - **Champion leave.** A lone champion the towers cannot reach (a Fomor sniping from out of range)
-  also kept raids to the cap; a wild champion leaves `RAID_CHAMPION_LEAVE_SECONDS` (placeholder
-  120) after it lands.
+  also kept raids to the cap; a wild champion leaves `RAID_CHAMPION_LEAVE_SECONDS` (120, 2
+  minutes) after it lands.
 
 ### 11.5 Server cost (measured 27 Nov 2026)
 
@@ -848,3 +848,30 @@ player per day), every raid at that threat:
 Every fight is far inside the 20 s replay deadline. Open raids in Redis stay small (at 40,000 daily
 players about 330 open at the busiest moment, ~2.5 MB). Not measured: the cost on the player's own
 device of drawing 400 raiders and healers (the client plays the same fight).
+
+### 11.6 The owner's steps (Review Desk b10-numbers, 27 Nov 2026)
+
+| Threat | New at this step |
+|---|---|
+| 0 | today's raid (no threat pill) |
+| 1, 3, 5 ... 19 | +10% monsters each (x2.0 at 19) |
+| 2 | 2 timed drops |
+| 4 | 2 sides |
+| 6 | Vorgs (5%); the launch start is capped here |
+| 8 | 3 sides + Zafreetis (2%) |
+| 10 | one champion, level 1 |
+| 11-19 | the champion's level rises to 6: 2 at 11, 3 at 13, 4 at 15, 5 at 17, 6 at 19 |
+| 12 | 4 sides |
+| 14 / 18 | 4 / 5 drops |
+| 20 | the top |
+
+Built from those lines only: the drops stay 2 from 2 to 13 (no 3), the healer shares stay 5% and 2%,
+and the champion's power is 0 at every step. The numbers report's fuller table
+(`agent-handoffs/reports/beta10-numbers.md` §7) also had 3 drops at 9, healers rising to 10% / 5%
+and powers 1-3 from 12; the owner's card did not name them, so they are left out (threat 16 adds
+nothing over 15). The gaps between groups are the report's (10 s, 12 s from 8, 15 s from 12), and
+the Vorg and Zafreeti shares are of the tribe's army, added on top of it.
+
+The alert's champion card shows the Champion Cage's picture (painted, or the original with the
+Classic look), cropped to the creature (`championCrop`, `web/src/game/portraits.ts`): the whole
+frame left a level-1 Fomor a speck that read as a battle sprite.
