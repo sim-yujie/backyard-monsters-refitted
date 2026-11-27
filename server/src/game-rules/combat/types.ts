@@ -591,6 +591,37 @@ export interface RaidEvent {
    * (`docs/design/trojan-horse.md` §4, `BUILDING27.as:54-64`).
    */
   readonly strength?: number;
+  /**
+   * A wild champion that lands with the wave (beta 10, owner 27 Nov 2026,
+   * `docs/design/wild-raids.md` "Beta 10 threat"): its type (1 Gorgo, 2
+   * Drull, 3 Fomor, 4 Korath), level (1 to 6) and power level (`pl`, 0 to 3,
+   * which gates its abilities as an attacker's does). It comes out at full
+   * health (or `hp`), as a Hybrid with no learned brain, after the wave's
+   * monsters, so a wave without one draws as before. The wave's
+   * {@link strength} does not touch it.
+   */
+  readonly champion?: RaidChampion;
+}
+
+/** A wild champion in a raid wave ({@link RaidEvent.champion}). */
+export interface RaidChampion {
+  /** Champion type, 1 to 4 (`championByType`). */
+  readonly t: number;
+  /** Level, 1 to 6. */
+  readonly l: number;
+  /** Power level, 0 to 3; absent 0. */
+  readonly pl?: number;
+  /** Food-bonus rank, 0 to 3, adding its `bonus*` stats; absent 0. */
+  readonly fb?: number;
+  /** The health it comes out with, at most its full health; absent full. */
+  readonly hp?: number;
+  /**
+   * Ticks after it lands that it leaves the yard if still standing, as a
+   * champion called back does; absent, it stays until it falls or has
+   * nothing left to attack. A lone champion the towers cannot reach would
+   * otherwise keep a raid going to its 10-minute cap.
+   */
+  readonly leave?: number;
 }
 
 /** The complete record of a raid, which the server builds (issue #226). */

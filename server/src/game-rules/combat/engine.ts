@@ -3752,6 +3752,39 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
         creepsFlung += 1;
       }
     }
+    // A wild champion (beta 10): after the monsters, so a wave without one
+    // draws as before; Hybrid with no brain, full health unless `hp`. It counts
+    // as flung, so a wave of only a champion still ends the raid when it goes.
+    if (event.champion) {
+      const champion = spawnChampion(
+        event.champion.t,
+        Math.max(1, Math.min(6, Math.floor(event.champion.l) || 1)),
+        dropPoint(event.x, event.y, radius),
+        Math.max(0, Math.min(3, Math.floor(event.champion.pl ?? 0))),
+        Math.max(0, Math.min(3, Math.floor(event.champion.fb ?? 0))),
+        undefined,
+        undefined,
+        event.champion.hp,
+      );
+      if (champion) {
+        creepsFlung += 1;
+        const leave = event.champion.leave;
+        if (leave !== undefined && Number.isFinite(leave) && leave >= 0) {
+          wildChampionsLeave.push({ creep: champion, at: tick + Math.floor(leave) });
+        }
+      }
+    }
+  };
+
+  /** Wild champions that leave at a tick (`RaidChampion.leave`). */
+  const wildChampionsLeave: { readonly creep: Creep; readonly at: number }[] = [];
+
+  /** A wild champion whose time is up leaves, as one called back does. */
+  const tickWildChampions = (): void => {
+    for (const leaving of wildChampionsLeave) {
+      const creep = leaving.creep;
+      if (tick >= leaving.at && !creep.gone && creep.hp > 0) creep.gone = true;
+    }
   };
 
   /**
@@ -8365,6 +8398,7 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
     tickLeaving();
     landRaiseOrbs();
     tickTowerShells();
+    if (wildChampionsLeave.length > 0) tickWildChampions();
 
     if (creeps.length > 0) {
       let write = 0;
