@@ -34,6 +34,7 @@ import { fightSecondsOf, type RaidFightInput, type RaidFightOutcome } from "./ra
 import { landRaid, landedResult, type RaidResult } from "./raidLanding.js";
 import { raidFighting, readFightLock } from "./raidLock.js";
 import { planRaid, type RaidPlan } from "./raidPlan.js";
+import { clampThreat } from "./raidThreat.js";
 import {
   RAID_MIN_GAP_SECONDS,
   SESSIONS_BETWEEN_RAIDS,
@@ -95,6 +96,12 @@ export interface RaidView {
   /** In the fight: when it started, and the earliest finish the server takes. */
   readonly startedAt?: number;
   readonly finishFrom?: number;
+  /** The threat it comes at (beta 10); absent for a raid that has none (Trojan, Moloch, older). */
+  readonly threat?: number;
+  /** How many sides it lands from (beta 10); absent 1. */
+  readonly sides?: number;
+  /** The wild champion it brings (beta 10): type 1-4 and level. */
+  readonly champion?: { readonly t: number; readonly l: number };
 }
 
 /** What `/raid/start` answers: everything the client needs to play the fight the server fought. */
@@ -121,17 +128,24 @@ export interface RaidStart {
 /** The open raid's plan, as the warning stored it. */
 const planOf = (raid: OpenRaid): RaidPlan => raid.plan as RaidPlan;
 
-export const raidView = (raid: OpenRaid): RaidView => ({
-  id: raid.id,
-  phase: raid.phase,
-  tribe: raid.tribe,
-  monsters: planOf(raid).army,
-  attackAt: raid.attackAt,
-  warned: raid.warned,
-  ...(raid.phase === "fighting" && raid.startedAt !== undefined
-    ? { startedAt: raid.startedAt, finishFrom: earliestFinish(raid.startedAt, raid.fightSeconds ?? 0) }
-    : {}),
-});
+export const raidView = (raid: OpenRaid): RaidView => {
+  // An open raid from before beta 10 has none of the threat's fields.
+  const plan = planOf(raid) as Partial<RaidPlan>;
+  return {
+    id: raid.id,
+    phase: raid.phase,
+    tribe: raid.tribe,
+    monsters: plan.army ?? {},
+    attackAt: raid.attackAt,
+    warned: raid.warned,
+    ...(raid.phase === "fighting" && raid.startedAt !== undefined
+      ? { startedAt: raid.startedAt, finishFrom: earliestFinish(raid.startedAt, raid.fightSeconds ?? 0) }
+      : {}),
+    ...(typeof plan.threat === "number" ? { threat: plan.threat } : {}),
+    ...(Array.isArray(plan.sides) && plan.sides.length > 1 ? { sides: plan.sides.length } : {}),
+    ...(plan.champion ? { champion: { t: plan.champion.t, l: plan.champion.l } } : {}),
+  };
+};
 
 /**
  * Columns the due rule's gates read before the yard's buildings: the
@@ -273,6 +287,7 @@ export const raidOnPing = async (
     preference: readSchedule(save.aiattacks).attackPreference,
     seed,
     camps: await raidCampsOf(em, save, now),
+    threat: readSchedule(save.aiattacks).threat,
   });
   if (!plan) return undefined;
 
@@ -305,6 +320,9 @@ export const raidOnPing = async (
     seed,
     bearing: plan.bearing,
     army: JSON.stringify(plan.army),
+    threat: plan.threat,
+    sides: JSON.stringify(plan.sides ?? [plan.bearing]),
+    champion: plan.champion ? JSON.stringify(plan.champion) : undefined,
   });
   return raidView(raid);
 };
@@ -671,7 +689,17 @@ const settleRaid = async (
 
       const outcome = raid.outcome as RaidFightOutcome;
       completed = await catchUpLockedRow(tx, locked, now);
-      const landed = landRaid(locked, { id: raid.id, tribe: raid.tribe, startedAt: raid.startedAt ?? now, outcome }, now);
+      const landed = landRaid(
+        locked,
+        {
+          id: raid.id,
+          tribe: raid.tribe,
+          startedAt: raid.startedAt ?? now,
+          outcome,
+          ...(typeof (planOf(raid) as Partial<RaidPlan>).threat === "number" ? { threat: planOf(raid).threat } : {}),
+        },
+        now
+      );
       // Quests: a wild monster raid held off (the raid's own good defence, the
       // one that pays Shiny; not the Trojan Horse or Moloch) is a held defence
       // for the weekly Fighting quest, on the locked main row.
@@ -728,6 +756,8 @@ const settleRaid = async (
     stolen: JSON.stringify(result.stolen),
     shiny: result.shiny,
     damaged: result.damaged.length,
+    threat: result.threat,
+    nextThreat: result.nextThreat,
   });
   return settled;
 };
@@ -808,7 +838,12 @@ export const setRaidPreference = (
  * player level 9 or more and the ping must say "yard, Planner closed". The
  * minimum gap since the last raid is waived too.
  */
-export const makeRaidDue = (em: EntityManager, user: User, now: number): Promise<{ nextAttack: number }> =>
+export const makeRaidDue = (
+  em: EntityManager,
+  user: User,
+  now: number,
+  threat?: number
+): Promise<{ nextAttack: number }> =>
   em.transactional(async (tx) => {
     const locked = await lockMain(tx, user);
     const { lastOpenedAt: _lastOpenedAt, ...schedule } = readSchedule(locked.aiattacks);
@@ -817,6 +852,7 @@ export const makeRaidDue = (em: EntityManager, user: User, now: number): Promise
       lastattack: Math.min(schedule.lastattack, now - RAID_MIN_GAP_SECONDS),
       sessionsSinceLastAttack: Math.max(schedule.sessionsSinceLastAttack, SESSIONS_BETWEEN_RAIDS),
       nextAttack: now,
+      ...(threat !== undefined ? { threat: clampThreat(threat) } : {}),
     });
     await tx.flush();
     return { nextAttack: now };

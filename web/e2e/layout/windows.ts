@@ -5,6 +5,7 @@ import {
   openChampionAbilities,
   openFriendsScreen,
   openMoveTray,
+  openRaidAlert,
   openRepeatResult,
   openRepeatSheet,
   openShop,
@@ -314,6 +315,20 @@ export const WINDOWS: readonly WindowCase[] = [
     items: ".xfer-chip",
     tabs: false,
     open: (page) => openMoveTray(page, "out"),
+  },
+  {
+    // The wild monster alert (beta 10) at its busiest: Threat 14, 4 sides and
+    // the clock, a champion card leading three monster cards, "+N more". It
+    // has no close (the player must answer): Prepare defences is its way
+    // out. The pills, the champion and both answers in sight at every size.
+    id: "raid-alert",
+    label: "Wild monster alert, threat 14 with a champion",
+    panel: ".raid-alert",
+    items: ".raid-alert__monster",
+    tabs: false,
+    closeButton: ".raid-alert__prepare",
+    inSight: ".raid-alert__stats, .raid-alert__champion, .raid-alert__actions > .btn",
+    open: openRaidAlert,
   },
 ];
 
