@@ -77,7 +77,7 @@ export const YARD_EVENTS: readonly YardEventDefinition[] = [
   {
     key: "carnage",
     title: "Creature Carnage",
-    text: "The Brukkarg tribe has built 10 yards. Wreck each Town Hall to win Glimmers and the Carnage trophy.",
+    text: "The Brukkarg tribe has built 10 yards. Wreck them one by one to win Glimmers and the Carnage trophy.",
     days: 7,
     townHall: { min: 2, max: 4 },
     prizes: carnagePrizes(),
