@@ -14,7 +14,7 @@ mock.module("../../server.js", () => ({
   },
 }));
 
-const { surfaceArmyLevels, withInfernoLevels } = await import("./surfaceLevels.js");
+const { surfaceAcademy, surfaceArmyLevels, withInfernoLevels } = await import("./surfaceLevels.js");
 
 const MAIN = { C6: { level: 4, powerup: 2 }, C2: { level: 3 } };
 const INFERNO = { IC2: { level: 3, powerup: 1 }, IC1: { level: 2 }, C6: { level: 6 } };
@@ -60,5 +60,16 @@ describe("surfaceArmyLevels: an attack start's levels", () => {
     infernoAcademy = INFERNO;
     const levels = await surfaceArmyLevels(attacker, { "1001": { C6: 10 }, "2002": { IC1: 4 } });
     expect(levels.IC1).toBe(2);
+  });
+});
+
+describe("surfaceAcademy: the academy Repeat's plan check reads", () => {
+  test("lays each Inferno monster's Inferno level over the main academy when the plan flings one", async () => {
+    lookups.length = 0;
+    infernoAcademy = INFERNO;
+    const attacker = { academy: MAIN, baseid_inferno: 7001 } as never;
+    expect(await surfaceAcademy(attacker, true)).toEqual({ ...MAIN, IC2: { level: 3 }, IC1: { level: 2 } });
+    expect(await surfaceAcademy(attacker, false)).toBe(MAIN);
+    expect(lookups).toEqual([{ baseid: "7001" }]);
   });
 });

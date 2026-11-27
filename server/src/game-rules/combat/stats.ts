@@ -1022,16 +1022,16 @@ export const FLASH_SPURTZ_HATCH: SpurtzHatchRule = {
 
 /**
  * Hatching on a player's main yard (beta 10, owner's pick B for the Brukkarg
- * War prize cannons, desk b10-numbers, 27 Nov 2026). Two Black Diamond Spurtz
- * Cannons made a main yard all but unbeatable for a ground army, and most of
- * that was the Spurtz they hatch, not their shells
- * (`agent-handoffs/reports/beta10-numbers.md` §6). Each cannon keeps at
- * most 2 hatched Spurtz on the field at once (option B', numbers-apply's
- * runs, 20 seeds: a D.A.V.E. army on two Black Diamond L5 cannons goes from
- * 27% to 86% on a camp yard). This is the one place the
- * owner's pick lives; a battle may override it with
- * `BattleOptions.spurtzHatch`. Tribe, event, Inferno and outpost yards keep
- * {@link FLASH_SPURTZ_HATCH}.
+ * War prize cannons, desk b10-numbers, 27 Nov 2026): each cannon keeps at
+ * most 2 hatched Spurtz on the field at once. Two Black Diamond Spurtz
+ * Cannons made a main yard all but unbeatable for a ground army
+ * (`agent-handoffs/reports/beta10-numbers.md` §6). The cap frees a D.A.V.E.
+ * army (27% -> 86% on a camp yard, 20 seeds), but an Ichi, Crabatron or
+ * Project X army stays near 10%: the shells alone hold those at 12-21%, so
+ * for them the shells, not the brood, are the wall. Raids on a main yard
+ * hatch by it too. This is the one place the owner's pick lives; a battle may
+ * override it with `BattleOptions.spurtzHatch`. Tribe, event, Inferno and
+ * outpost yards keep {@link FLASH_SPURTZ_HATCH}.
  */
 export const MAIN_YARD_SPURTZ_HATCH: SpurtzHatchRule = {
   chance: SPURTZ_HATCH_CHANCE,

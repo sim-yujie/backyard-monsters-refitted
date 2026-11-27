@@ -49,9 +49,35 @@ const bringsInferno = (entryHoused: EntryHoused | undefined): boolean =>
 export const surfaceArmyLevels = async (
   attacker: Pick<Save, "academy" | "baseid_inferno">,
   entryHoused: EntryHoused | undefined
-): Promise<Record<string, number>> => {
+): Promise<Record<string, number>> =>
+  bringsInferno(entryHoused)
+    ? withInfernoLevels(attacker.academy, await infernoAcademyOf(attacker))
+    : academyLevels(attacker.academy);
+
+/** The attacker's Inferno yard's `academy`, or null when they have none. */
+const infernoAcademyOf = async (attacker: Pick<Save, "baseid_inferno">): Promise<JsonObject | null> => {
   const infernoId = Number(attacker.baseid_inferno);
-  if (!(infernoId > 0) || !bringsInferno(entryHoused)) return academyLevels(attacker.academy);
+  if (!(infernoId > 0)) return null;
   const inferno = await postgres.em.findOne(Save, { baseid: String(infernoId) }, { fields: ["academy"] });
-  return withInfernoLevels(attacker.academy, inferno?.academy);
+  return (inferno?.academy as JsonObject | null | undefined) ?? null;
+};
+
+/**
+ * The main yard's `academy` with each Inferno monster's Inferno level laid
+ * over it, `{ id: { level } }`, for a check that reads an academy blob before
+ * the attack load freezes the levels (Repeat's plan check, `planCheck.ts`).
+ * Read only when `bringsInferno` says the plan flings one.
+ *
+ * @param attacker - The attacker's main yard.
+ * @param bringsInferno - Whether the army can fling an Inferno monster.
+ */
+export const surfaceAcademy = async (
+  attacker: Pick<Save, "academy" | "baseid_inferno">,
+  bringsInferno: boolean
+): Promise<JsonObject | null | undefined> => {
+  if (!bringsInferno) return attacker.academy as JsonObject | null | undefined;
+  const levels = withInfernoLevels(attacker.academy, await infernoAcademyOf(attacker));
+  const academy: JsonObject = { ...((attacker.academy as JsonObject | null | undefined) ?? {}) };
+  for (const [id, level] of Object.entries(levels)) if (isInfernoMonster(id)) academy[id] = { level };
+  return academy;
 };

@@ -24,12 +24,12 @@
     "siege.ts": "37711bb07325f33bf0c0007205931668fdc5c9bad6d162ed0f7acff958c0521d",
     "specialMoves.ts": "feae0fe43e4544c5126856e6e8086473d8129eef85f4a8b70b68010ac28135c3",
     "stance.ts": "dfd5d648a7936cb63e767845359f1c592ce36bdb88b9e85d7e974f31a804facd",
-    "stats.ts": "5cdc8289a76e62c2c66c88c011e7481c0827c7bddb45e55c27fe030565a25198",
+    "stats.ts": "a3c6b8995514e2213251a7695db875df2646de45dcecd950ef82d4e33622de1a",
     "targeting.ts": "b54aefcd04de6a18b9f5f6e3736b2593a0e844c932d267f9e7b6eedd94a60895",
     "types.ts": "866c0af3c034f7c85aea2b3e5bef7bab24edbe4fba0c1dc57950a50496c0e1f2",
     "vacuum.ts": "4009567f942acbfbb4ed22f9934e3c2b38dc69a9fa2a9cfcb8145d43193be999",
     "yard.ts": "0fe2d22ab8e0be8c248702a08ac21ec2e46508b52742b785eac8acbdc57a2b71"
   },
   "count": 29,
-  "version": "f88f5dfd11c16c7d"
+  "version": "18be9165d223d659"
 }

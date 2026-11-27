@@ -48,6 +48,8 @@ import {
 } from "./attackPlan.js";
 import { findAttackPlan, isUntouchedCamp, type StoredPlan } from "./attackPlanStore.js";
 import { planFlingOnBuilding } from "./planCheck.js";
+import { surfaceAcademy } from "../../inferno/surfaceLevels.js";
+import { isInfernoMonster } from "../../../game-data/monsterCatalogue.js";
 import { repeatFeeFor } from "./repeatFee.js";
 import { movesKey, planMoves, type MovePlan, type YardMove } from "./movePlan.js";
 import {
@@ -58,6 +60,13 @@ import {
   undoRepeatMoves,
   type YardLabel,
 } from "./repeatMoves.js";
+
+
+/** Whether a plan flings an Inferno monster, whose level is its Inferno Academy's (beta 10). */
+const planFlingsInferno = (plan: { readonly events: readonly { kind: string; monsters?: Record<string, number> }[] }): boolean =>
+  plan.events.some(
+    (event) => event.kind === "fling" && Object.entries(event.monsters ?? {}).some(([id, n]) => isInfernoMonster(id) && n > 0)
+  );
 
 /**
  * Auto-attack (issue #221): the player's last hand-played attack on a Map
@@ -446,7 +455,12 @@ export const runAutoAttack = async (
       clash = await planFlingOnBuilding(
         stored.plan,
         camp.key,
-        { academy: userSave.academy, champion: userSave.champion as OwnedChampion[] | null, storedata: userSave.storedata },
+        {
+          // An Inferno monster fights at its Inferno level, as the attack below will (beta 10).
+          academy: await surfaceAcademy(userSave, planFlingsInferno(stored.plan)),
+          champion: userSave.champion as OwnedChampion[] | null,
+          storedata: userSave.storedata,
+        },
         seed,
         now,
         (input) => replayAbandonedInWorker(input, PLAN_CHECK_DEADLINE_MS)

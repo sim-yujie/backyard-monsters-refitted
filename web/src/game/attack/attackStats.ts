@@ -4,8 +4,9 @@
  * Copied verbatim from the server's own tables,
  * `server/src/game-data/stats/monsterStats.ts` (`props`) and
  * `server/src/game-data/stats/championStats.ts` (`t`, `props`), by a one-off
- * Bun script that imports those files and re-emits them; regenerate the same
- * way whenever either changes.
+ * Bun script that imports those files and re-emits them; the monster half is
+ * re-emitted by `npm run gen:attack-stats` (`tools/gen-attack-stats.mjs`)
+ * whenever `monsterStats.ts` changes.
  *
  * Why a second copy exists beside `web/src/game/combat/rules/combatStatsData.ts`:
  * the attack gate compares *every* key of the server's `props` block against
