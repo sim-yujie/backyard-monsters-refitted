@@ -166,6 +166,7 @@ def main():
 
     # Champions: per concept L1 / L3 / L6 (+ action), Modern big, Classic small; and a card overview.
     champ_cells = {}
+    champ_parts = {}
     for path, key, title, idea in CHAMPS:
         # Same square frame for every level, so the creature grows (as the real G<n>-L<l> art).
         # The Codex sheet's L6 reaches above its cell line, so take the top row to y 450 and
@@ -185,6 +186,7 @@ def main():
             sq.append(frame.resize((512, 512), Image.LANCZOS))
         act = full.crop((768, 470, 1536, 1024))
         champ_cells[key] = act
+        champ_parts[key] = (parts, boxes)
         for lvl, img in zip((1, 3, 6), sq):
             img.resize((352, 352), Image.LANCZOS).save(OUT / "modern" / f"champ-{key}-L{lvl}.webp", quality=90)
             cl = img.resize((150, 150), Image.LANCZOS).filter(ImageFilter.GaussianBlur(0.35))
@@ -207,26 +209,76 @@ def main():
         s.paste(ground, (24, 1076)); s.paste(sq[2].resize((400, 400), Image.LANCZOS), (440, 1076))
         s.crop((0, 0, W, 1490)).save(SHEETS / f"champion-{key}.png")
 
-    W = 24 + 3 * (520 + 16)
-    s = Image.new("RGB", (W, 1290), BG); d = ImageDraw.Draw(s)
-    label(d, (24, 16), "Frost champion: which one?", 40, bold=True)
-    label(d, (24, 66), "Level 1, 3 and 6 of one design that grows. Enemy only this Christmas.", 24, DIM)
+    # Card-ready champion sheet: one concept per row, a growth strip (L1, L3, L6 at one scale on
+    # one ground line, cropped tight) and its power.
+    H = 420  # strip height for the tallest level
+    rows = []
     for n, (path, key, title, idea) in enumerate(CHAMPS):
-        x = 24 + n * (520 + 16)
-        label(d, (x, 110), f"{'ABC'[n]}  {title}", 30, ICE, bold=True)
-        words, line, yy = idea.split(), "", 150
-        for w in words:
-            if d.textlength(line + " " + w, font=font(22)) > 510:
-                label(d, (x, yy), line.strip(), 22, DIM); yy += 28; line = ""
-            line += " " + w
-        label(d, (x, yy), line.strip(), 22, DIM)
-        l6 = Image.open(OUT / "modern" / f"champ-{key}-L6.webp").convert("RGB").resize((520, 520), Image.LANCZOS)
-        s.paste(l6, (x, 220))
-        for m, lvl in enumerate((1, 3)):
-            img = Image.open(OUT / "modern" / f"champ-{key}-L{lvl}.webp").convert("RGB").resize((256, 256), Image.LANCZOS)
-            s.paste(img, (x + m * 264, 750))
-        s.paste(champ_cells[key].resize((360, 260), Image.LANCZOS), (x + 80, 1014))
+        parts, boxes = champ_parts[key]
+        h6 = boxes[2][3] - boxes[2][1]
+        k = H / (h6 * 1.04)
+        tiles = []
+        for pt, (x0, y0, x1, y1) in zip(parts, boxes):
+            pad = 18
+            t = pt.crop((max(0, x0 - pad), max(0, y1 - int(h6 * 1.04)), min(pt.width, x1 + pad), min(pt.height, y1 + 4)))
+            tiles.append(t.resize((int(t.width * k), int(t.height * k)), Image.LANCZOS))
+        rows.append((title, idea, tiles))
+    W = 1900
+    s = Image.new("RGB", (W, 120 + 3 * (H + 130)), BG); d = ImageDraw.Draw(s)
+    label(d, (24, 16), "Frost champion: which one?", 40, bold=True)
+    label(d, (24, 68), "Each row: level 1, 3 and 6 of one design that grows (one scale), then its power. Enemy only this Christmas.", 24, DIM)
+    for r, (title, idea, tiles) in enumerate(rows):
+        y = 120 + r * (H + 130)
+        label(d, (24, y), f"{'ABC'[r]}  {title}", 32, ICE, bold=True)
+        label(d, (24 + d.textlength(f"{'ABC'[r]}  {title}", font=font(32, True)) + 24, y + 6), idea, 24, DIM)
+        x = 24
+        for lvl, t in zip((1, 3, 6), tiles):
+            s.paste(t, (x, y + 50 + H - t.height))
+            label(d, (x, y + 56 + H), f"Level {lvl}", 22, DIM)
+            x += t.width + 10
+        key = CHAMPS[r][1]
+        a = champ_cells[key]
+        aw = int(H * a.width / a.height)
+        if x + 20 + aw > W - 24:
+            aw = W - 44 - x
+        s.paste(a.resize((aw, int(aw * a.height / a.width)), Image.LANCZOS), (x + 20, y + 50 + H - int(aw * a.height / a.width)))
+        label(d, (x + 20, y + 56 + H), "Its power", 22, DIM)
     s.save(SHEETS / "card-champion.png")
+
+    # Champions beside real ones at the real card size (176 px, the Modern G<n>-L6 files).
+    reals = ["G1", "G2", "G4"]
+    s = Image.new("RGB", (24 + 6 * (176 + 16), 280), BG); d = ImageDraw.Draw(s)
+    label(d, (24, 12), "Level 6 at real size (176 px): 3 real champions, then the 3 frost concepts", 22, DIM)
+    gnd = (200, 198, 190)
+    for n, g in enumerate(reals):
+        im = Image.open(REPO / f"web/public/portraits/{g}-L6.webp").convert("RGBA")
+        t = Image.new("RGB", (176, 176), gnd); t.paste(im, (0, 0), im)
+        s.paste(t, (24 + n * 192, 50)); label(d, (24 + n * 192, 232), {"G1": "Gorgo", "G2": "Drull", "G4": "Korath"}[g], 20, INK)
+    for n, (path, key, title, idea) in enumerate(CHAMPS):
+        t = Image.open(OUT / "modern" / f"champ-{key}-L6.webp").convert("RGB").resize((176, 176), Image.LANCZOS)
+        s.paste(t, (24 + (n + 3) * 192, 50)); label(d, (24 + (n + 3) * 192, 232), title.split()[-1], 20, ICE)
+    s.save(SHEETS / "champion-vs-real-176.png")
+
+    # Frost strength: light (kept colour) vs strong (all ice), for 4 monsters.
+    strong = dict(zip(["C1", "C8", "C5", "C9"], cells("f3/frost-set3-strong.png")))
+    for i, c in strong.items():
+        c.save(OUT / "big" / f"{i}-frost-strong.png")
+    tw, th = 600, 400
+    s = Image.new("RGB", (24 + 3 * (tw + 16), 130 + 4 * (th + 150)), BG); d = ImageDraw.Draw(s)
+    label(d, (24, 16), "How much frost?", 40, bold=True)
+    label(d, (24, 68), "Original · LIGHT frost (keeps its colour) · STRONG frost (all ice). Small pictures: 96 px and 32 px (battle size).", 24, DIM)
+    for r, i in enumerate(strong):
+        y = 130 + r * (th + 150)
+        trio = [original_modern(i).resize((768, 512), Image.LANCZOS), frost[i], strong[i]]
+        for c, (img, name) in enumerate(zip(trio, ["Original", "Light", "Strong"])):
+            x = 24 + c * (tw + 16)
+            s.paste(img.resize((tw, th), Image.LANCZOS), (x, y))
+            label(d, (x, y + th + 8), f"{name} · {NAMES[i]}" if c == 0 else name, 24, ICE if c else INK, bold=c > 0)
+            ic = square_icon(img, 32)
+            s.paste(ic, (x + tw - 40, y + th + 8))
+            s.paste(square_icon(img, 96), (x + tw - 96 - 100, y + th + 8 + 40 - 40))
+    s.save(SHEETS / "card-frost-strength.png")
+
     print("done", sorted(p.name for p in SHEETS.iterdir()))
 
 
