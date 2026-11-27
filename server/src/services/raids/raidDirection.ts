@@ -177,15 +177,23 @@ export const raidSolutions = (tribe: Tribe, yard: EngineYard, rng: Rng): RaidSol
  * [DESC, DESC(, ASC)])`, then the last. The sort is stable, so on a full tie
  * the later bearing wins.
  */
-export const pickRaidSolution = (tribe: Tribe, solutions: readonly RaidSolution[]): RaidSolution | null => {
-  const ranked = [...solutions].sort(
-    (one, other) =>
-      other.damageTaken - one.damageTaken ||
-      other.distanceToTarget - one.distanceToTarget ||
-      (tribe === Tribe.ABUNAKKI ? one.resourcesGained - other.resourcesGained : 0),
-  );
-  return ranked[ranked.length - 1] ?? null;
-};
+export const pickRaidSolution = (tribe: Tribe, solutions: readonly RaidSolution[]): RaidSolution | null =>
+  rankRaidSolutions(tribe, solutions)[0] ?? null;
+
+/**
+ * Every way in, best first: Flash's sort reversed, so the first is
+ * {@link pickRaidSolution}'s pick and the next are the next least-defended
+ * ways (beta 10's extra sides, `raidDrops.ts` `pickSideBearings`).
+ */
+export const rankRaidSolutions = (tribe: Tribe, solutions: readonly RaidSolution[]): RaidSolution[] =>
+  [...solutions]
+    .sort(
+      (one, other) =>
+        other.damageTaken - one.damageTaken ||
+        other.distanceToTarget - one.distanceToTarget ||
+        (tribe === Tribe.ABUNAKKI ? one.resourcesGained - other.resourcesGained : 0),
+    )
+    .reverse();
 
 /** The way in a raid takes, or null when the yard has nothing a raid could head for. */
 export const chooseRaidDirection = (tribe: Tribe, yard: EngineYard, rng: Rng): RaidSolution | null =>
