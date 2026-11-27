@@ -708,18 +708,8 @@
   outline-color: #5c3317;
 }
 
-/* A phone on its side: the count of unlocked abilities beside the switch's row. */
+/* A phone on its side: the list keeps every pixel; the description stays one line. */
 @media (max-height: 500px) {
-  .crystal-abilities__head {
-    display: flex;
-    justify-content: flex-end;
-  }
-
-  .crystal-abilities__held,
-  .crystal-abilities__how {
-    display: none;
-  }
-
   .crystal-abilities__inspector {
     white-space: nowrap;
     overflow: hidden;
