@@ -1,4 +1,6 @@
 import { afterEach, beforeEach, describe, expect, mock, test } from "bun:test";
+import { RULES_VERSION } from "../../../services/defences/rulesVersion.js";
+import { ATTACK_STATS_VERSION } from "../../../game-data/stats/attackStatsVersion.js";
 import type { Context } from "koa";
 import type { OwnerSaveMode } from "../../../config/OwnerSaveConfig.js";
 
@@ -55,6 +57,9 @@ mock.module("../../../services/base/attackSessionStore.js", () => ({
     attackerid: ATTACKER,
     attackid: ATTACK_ID,
     startedat: Math.floor(Date.now() / 1000),
+    // Started on a current page, so the save reaches the anticheat (beta 10).
+    rules: RULES_VERSION,
+    stats: ATTACK_STATS_VERSION,
   }),
   endAttackSession: async () => {},
 }));
