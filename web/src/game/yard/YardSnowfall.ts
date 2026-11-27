@@ -16,14 +16,14 @@ import type { Rect } from "./YardGrid";
  * on screen at any zoom. So panning or zooming never piles snow up or thins
  * it out, and flakes off screen cost nothing.
  *
- * How many: {@link flakeCount}: about one flake per 9,000 screen pixels on
- * High (about 115 on a 1366 x 768 window, 37 on a 390 x 844 phone), half on
+ * How many: {@link flakeCount}: about one flake per 7,500 screen pixels on
+ * High (about 140 on a 1366 x 768 window, 44 on a 390 x 844 phone), half on
  * Medium, none on Low; never more than {@link MAX_FLAKES}. With reduced motion
  * asked for (the system setting) there is none either.
  */
 
 /** Screen pixels per flake on High; Medium has half as many flakes. */
-const PIXELS_PER_FLAKE = 9_000;
+const PIXELS_PER_FLAKE = 7_500;
 /** The most flakes on any screen. */
 export const MAX_FLAKES = 160;
 
@@ -123,7 +123,8 @@ export class YardSnowfall {
         u: this.random(),
         v: this.random(),
         fall: 22 + depth * 46,
-        size: 3 + depth * 5,
+        // Most flakes small; the nearest few big enough to read over bright snow (neon, 27 Nov 2026).
+        size: 3 + depth * depth * 7,
         swayBy: 6 + this.random() * 14,
         swayRate: 0.6 + this.random() * 1.1,
         phase: this.random() * Math.PI * 2,

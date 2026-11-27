@@ -5,12 +5,12 @@ import { flakeCount, MAX_FLAKES, YardSnowfall } from "./YardSnowfall";
 
 /** The Christmas snowfall (owner, 27 Nov 2026): off on Low, half on Medium, a fixed pool for the screen. */
 describe("flakeCount", () => {
-  it("is about one flake per 9,000 screen px on High, half on Medium, none on Low", () => {
-    expect(flakeCount(1366, 768, "high")).toBe(117);
-    expect(flakeCount(1366, 768, "medium")).toBe(59);
+  it("is about one flake per 7,500 screen px on High, half on Medium, none on Low", () => {
+    expect(flakeCount(1366, 768, "high")).toBe(140);
+    expect(flakeCount(1366, 768, "medium")).toBe(70);
     expect(flakeCount(1366, 768, "low")).toBe(0);
-    expect(flakeCount(390, 844, "high")).toBe(37);
-    expect(flakeCount(390, 844, "medium")).toBe(19);
+    expect(flakeCount(390, 844, "high")).toBe(44);
+    expect(flakeCount(390, 844, "medium")).toBe(22);
     expect(flakeCount(390, 844, "low")).toBe(0);
   });
 
