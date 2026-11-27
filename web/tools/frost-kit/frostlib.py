@@ -43,7 +43,9 @@ def frost_rgba(arr, scale=1.0, lift=0.92, tint=0.22, crust=0.75):
     ice = ramp(l2)
     # a faint trace of the original hue in the shadows (owner: "a hint of the original colour left")
     orig = rgb
-    t = (tint * (1.0 - l2))[..., None]
+    # ...but never green: a green trace on ice reads as mould, not frost (Brain's veins, Teratorn, Vorg)
+    green = np.clip((rgb[..., 1] - np.maximum(rgb[..., 0], rgb[..., 2])) / 30.0, 0, 1)
+    t = (tint * (1.0 - l2) * (1.0 - green))[..., None]
     ice = ice * (1 - t) + (orig * 0.55 + ice * 0.45) * t
     # hoarfrost crust on top edges: body pixels with see-through pixels a few px above them
     body = (a > 0.55).astype(np.float32) * (1 - shadow)
