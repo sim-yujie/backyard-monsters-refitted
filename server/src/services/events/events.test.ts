@@ -1,6 +1,9 @@
 import { describe, expect, test } from "bun:test";
 
 import {
+  CHRISTMAS_2026_CALENDAR,
+  CHRISTMAS_2026_LADDER,
+  CHRISTMAS_DECOR,
   EVENTS,
   HALLOWEEN_2026_CALENDAR,
   THANKSGIVING_2026_CALENDAR,
@@ -83,6 +86,27 @@ describe("the event list", () => {
     // Reachable in the event: at most one turkey an hour, 24 a day, over its 14 days.
     const days = (Date.parse(thanksgiving.endsAt) - Date.parse(thanksgiving.startsAt)) / 86_400_000;
     expect(THANKSGIVING_2026_LADDER.at(-1)!.need).toBeLessThanOrEqual(days * 24);
+  });
+
+  test("Christmas 2026 (proposal): 7 Dec to 4 Jan UTC, a 14-day calendar paced like Halloween's, 400 Glimmers", () => {
+    const christmas = EVENTS.find((event) => event.id === "christmas-2026")!;
+    expect(christmas).toMatchObject({ kind: "christmas", startsAt: "2026-12-07T00:00:00Z", endsAt: "2027-01-04T00:00:00Z" });
+    expect(CHRISTMAS_2026_CALENDAR).toHaveLength(14);
+    // The window is longer than the calendar, so a late starter can still claim every day.
+    const days = (Date.parse(christmas.endsAt) - Date.parse(christmas.startsAt)) / 86_400_000;
+    expect(days).toBeGreaterThan(CHRISTMAS_2026_CALENDAR.length);
+    const kinds = (calendar: typeof HALLOWEEN_2026_CALENDAR) => calendar.map((day) => day.rewards.map((one) => one.kind));
+    expect(kinds(CHRISTMAS_2026_CALENDAR)).toEqual(kinds(HALLOWEEN_2026_CALENDAR));
+    expect(CHRISTMAS_2026_CALENDAR[6]!.rewards).toContainEqual({ kind: "decoration", type: CHRISTMAS_DECOR.small, count: 1 });
+    expect(CHRISTMAS_2026_CALENDAR[13]!.rewards).toContainEqual({ kind: "decoration", type: CHRISTMAS_DECOR.mid, count: 1 });
+    // The owner's big-event target: 15 a day over the calendar plus 20/35/55/80 over the ladder.
+    const glimmers = [...christmas.calendar!, ...christmas.ladder!.tiers]
+      .flatMap((one) => one.rewards)
+      .reduce((sum, one) => sum + (one.kind === "eventCoins" ? one.amount : 0), 0);
+    expect(glimmers).toBe(400);
+    // Every tier reachable: at most one present an hour over its days.
+    expect(CHRISTMAS_2026_LADDER.at(-1)!.need).toBeLessThanOrEqual(days * 24);
+    expect(christmas.ladder!.tiers).toHaveLength(4);
   });
 
   test("Krallen Hunt: monthly from 15 Nov 2026, the 15th to the 1st, never during Halloween", () => {

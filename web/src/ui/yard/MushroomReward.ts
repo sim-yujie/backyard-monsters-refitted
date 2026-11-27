@@ -2,10 +2,12 @@ import type { Season } from "@/game/season";
 import { Popup } from "@/ui/Popup";
 import { resourceAmount } from "@/ui/resourceIcon";
 import { artUrl } from "../../artUrl";
+import { GOLDEN_PRESENT_ART } from "@/game/yard/presentArt";
 
 /**
  * The golden mushroom popup (`docs/design/yard-buildings.md` §5.6), or at
- * Halloween the jack-o'-lantern one, at Thanksgiving the golden turkey: the
+ * Halloween the jack-o'-lantern one, at Thanksgiving the golden turkey, at
+ * Christmas the golden present: the
  * original's `popup_mushroomshiny` with its title, its line and the
  * `goldmushroom.png` picture (`client/scripts/MUSHROOMS.as:246-250`; strings
  * `pop_goldenmushroom_title` and `pop_goldenmushroom_desc`). The Shiny is
@@ -34,6 +36,9 @@ export const JACK_O_LANTERN_TITLE = "Your worker found a jack-o'-lantern!";
 export const GOLDEN_TURKEY_ART = artUrl("/assets/specialevent/thanksgiving/golden-turkey.png");
 export const GOLDEN_TURKEY_TITLE = "A golden turkey!";
 
+/** The Christmas dress: a golden present (`game/yard/presentArt.ts`, placeholder art). Short title, as the turkey's. */
+export const GOLDEN_PRESENT_TITLE = "A golden present!";
+
 /** What the popup says in each season: picture, title, and the line around the Shiny. */
 const DRESS: Readonly<Record<Season, { art: string; title: string; before: string; after: string }>> = {
   normal: {
@@ -53,6 +58,12 @@ const DRESS: Readonly<Record<Season, { art: string; title: string; before: strin
     title: GOLDEN_TURKEY_TITLE,
     before: "You've caught a shining golden turkey worth ",
     after: ". More turkeys wander in while Thanksgiving lasts.",
+  },
+  christmas: {
+    art: GOLDEN_PRESENT_ART,
+    title: GOLDEN_PRESENT_TITLE,
+    before: "You've found a golden present worth ",
+    after: ". More presents turn up while Christmas lasts.",
   },
 };
 

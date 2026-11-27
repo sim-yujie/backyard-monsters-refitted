@@ -97,14 +97,15 @@ export const GOLDEN_ODDS = 4;
 /**
  * During Thanksgiving's turkey hunt (`season.ts`) a turkey is golden one time
  * in this many, so the hunt's many picks cannot be farmed for Shiny (owner,
- * 19 Nov 2026; was one in four). Pumpkins and ordinary mushrooms keep
+ * 19 Nov 2026; was one in four). Christmas's presents, as many again, keep
+ * the same odds (proposal, 27 Nov 2026). Pumpkins and ordinary mushrooms keep
  * {@link GOLDEN_ODDS}.
  */
 export const GOLDEN_TURKEY_ODDS = 10;
 
 /** The golden odds for a pick while `hunt` (a `YardHunt` field, or null) is on. */
-export const goldenOdds = (hunt: "pumpkins" | "turkeys" | null | undefined): number =>
-  hunt === "turkeys" ? GOLDEN_TURKEY_ODDS : GOLDEN_ODDS;
+export const goldenOdds = (hunt: "pumpkins" | "turkeys" | "presents" | null | undefined): number =>
+  hunt === "turkeys" || hunt === "presents" ? GOLDEN_TURKEY_ODDS : GOLDEN_ODDS;
 
 /** A random number in `[0, 1)`, like `Math.random`. */
 export type Random = () => number;
@@ -359,7 +360,7 @@ export interface MushroomPickReport {
   /** Where it stood, yard units. */
   x: number;
   y: number;
-  /** One in four; one in ten for a turkey in the turkey hunt ({@link goldenOdds}). */
+  /** One in four; one in ten for a turkey or a present in their hunts ({@link goldenOdds}). */
   golden: boolean;
   /** Shiny it gave: 0, 3 or 8. */
   shiny: number;
@@ -370,6 +371,8 @@ export interface MushroomPickReport {
   pumpkins?: number;
   /** The same during the Thanksgiving turkey hunt: the player's turkey count. */
   turkeys?: number;
+  /** The same during the Christmas present hunt: the player's present count. */
+  presents?: number;
 }
 
 /**

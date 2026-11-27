@@ -1,11 +1,13 @@
 // @vitest-environment jsdom
 import { describe, expect, it } from "vitest";
 import { spokenText } from "@/ui/resourceIcon";
+import { GOLDEN_PRESENT_ART } from "@/game/yard/presentArt";
 import {
   GOLDEN_MUSHROOM_ART,
   GOLDEN_TITLE,
   GOLDEN_TURKEY_ART,
   GOLDEN_TURKEY_TITLE,
+  GOLDEN_PRESENT_TITLE,
   JACK_O_LANTERN_ART,
   JACK_O_LANTERN_TITLE,
   showGoldenMushroom,
@@ -55,6 +57,19 @@ describe("showGoldenMushroom", () => {
     expect(GOLDEN_TURKEY_TITLE.length).toBeLessThanOrEqual(24);
     expect(layer.querySelector("img")?.getAttribute("src")).toBe(GOLDEN_TURKEY_ART);
     expect(spokenText(layer.querySelector(".mushroom-reward__text")!)).toMatch(/golden turkey worth Shiny 8\./);
+    popup.close();
+  });
+
+  it("at Christmas the golden find is a golden present", () => {
+    const layer = document.createElement("div");
+    document.body.append(layer);
+
+    const popup = showGoldenMushroom(layer, 3, "christmas");
+
+    expect(layer.querySelector(".panel__title")?.textContent).toBe(GOLDEN_PRESENT_TITLE);
+    expect(GOLDEN_PRESENT_TITLE.length).toBeLessThanOrEqual(24);
+    expect(layer.querySelector("img")?.getAttribute("src")).toBe(GOLDEN_PRESENT_ART);
+    expect(spokenText(layer.querySelector(".mushroom-reward__text")!)).toMatch(/golden present worth Shiny 3\./);
     popup.close();
   });
 });

@@ -181,6 +181,36 @@
     linear-gradient(135deg, #3b1f4f, #160d1f);
 }
 
+/* Christmas: a snowy night behind the painted props; keep the snow line in a short band. */
+.events-card__banner--christmas {
+  background: linear-gradient(180deg, #101c3a, #344e78);
+}
+
+.events-card__banner--christmas .events-card__banner-image {
+  object-position: center 80%;
+}
+
+/* Christmas: the present beside "Presents found", so the count reads as presents. */
+.events-card--christmas .events-ladder .events-section__title {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.events-card--christmas .events-ladder .events-section__title::before {
+  content: "";
+  flex: none;
+  width: 22px;
+  height: 22px;
+  background: url("/events/christmas-2026-present.png") center / contain no-repeat;
+}
+
+/* Christmas: days 7 and 14 hold the winter decorations; a red ribbon along their top marks them. */
+.events-card--christmas .events-day[data-day="7"],
+.events-card--christmas .events-day[data-day="14"] {
+  background-image: linear-gradient(180deg, #b3262e 0 4px, transparent 4px);
+}
+
 .events-card__banner-image {
   display: block;
   width: 100%;
@@ -246,6 +276,7 @@
   flex: none;
   width: 25px;
   height: 22px;
+  object-fit: contain;
 }
 
 /* ── The login calendar ───────────────────────────────────────────────── */

@@ -2,10 +2,10 @@ import { afterEach, beforeEach, describe, expect, setSystemTime, test } from "bu
 import type { EntityManager } from "@mikro-orm/core";
 
 import type { User } from "../../database/models/user.model.js";
-import { HALLOWEEN_2026_LADDER, THANKSGIVING_2026_LADDER } from "../../game-data/events/events.js";
+import { CHRISTMAS_2026_LADDER, CHRISTMAS_DECOR, HALLOWEEN_2026_LADDER, THANKSGIVING_2026_LADDER } from "../../game-data/events/events.js";
 import { memoryProgressStore } from "../../services/events/progressStore.js";
 import { memoryCoinStore, useCoinStore, type EventCoinStore } from "../../services/events/eventCoins.js";
-import { PUMPKIN_HUNT_EVENT, TURKEY_HUNT_EVENT } from "../../services/yard/season.js";
+import { PRESENT_HUNT_EVENT, PUMPKIN_HUNT_EVENT, TURKEY_HUNT_EVENT } from "../../services/yard/season.js";
 import { eventsActions } from "./eventsActions.js";
 import { mushroomPickAction } from "./mushrooms.js";
 import { runYardAction, type YardAnswer } from "./yardAction.js";
@@ -145,5 +145,53 @@ describe("Thanksgiving turkey hunt ladder", () => {
     // 0.05: golden (a turkey is golden one in ten, so below 0.1); then the variant roll 0.05 gives the small 3 Shiny.
     const picked = await run(mushroomPickAction(() => 0.05, store), { id: 0 });
     expect(picked.body).toMatchObject({ report: { golden: true, shiny: 3, turkeys: 1 } });
+  });
+});
+
+describe("Christmas present hunt ladder", () => {
+  /** 2026-12-20T12:00:00Z, inside Christmas 2026. */
+  const CHRISTMAS = new Date(Date.UTC(2026, 11, 20, 12));
+
+  test("the proposed tiers: 25, 75, 150 and 250 presents", () => {
+    expect(CHRISTMAS_2026_LADDER.map((tier) => tier.need)).toEqual([25, 75, 150, 250]);
+  });
+
+  test("during Christmas a present counts, and the 25th unlocks the first tier: 10 Shiny and 20 Glimmers", async () => {
+    setSystemTime(CHRISTMAS);
+    const store = memoryProgressStore();
+    const claims = eventsActions(store);
+    await store.addToCounter(em as unknown as EntityManager, 2, PRESENT_HUNT_EVENT, 24);
+
+    const early = await run(claims.ladderClaim, { event: PRESENT_HUNT_EVENT, tier: 0 });
+    expect(early.body).toMatchObject({ reason: "tierLocked", have: 24, need: 25 });
+
+    const picked = await run(mushroomPickAction(() => 0.9, store), { id: 0 });
+    expect(picked.body).toMatchObject({ report: { golden: false, presents: 25 } });
+    expect(picked.body).not.toHaveProperty("report.turkeys");
+
+    const claimed = await run(claims.ladderClaim, { event: PRESENT_HUNT_EVENT, tier: 0 });
+    expect(claimed.status).toBe(200);
+    expect(claimed.body).toMatchObject({ credits: 110, report: { tier: 0 }, eventcoins: 20 });
+  });
+
+  test("the top tier puts the top winter decoration in storage", async () => {
+    setSystemTime(CHRISTMAS);
+    const store = memoryProgressStore();
+    const claims = eventsActions(store);
+    await store.addToCounter(em as unknown as EntityManager, 2, PRESENT_HUNT_EVENT, 250);
+    const claimed = await run(claims.ladderClaim, { event: PRESENT_HUNT_EVENT, tier: 3 });
+    expect(claimed.status).toBe(200);
+    expect(claimed.body).toMatchObject({ credits: 130, eventcoins: 80 });
+    expect((db.row!.researchdata as Row)[`b${CHRISTMAS_DECOR.top}`]).toBe(1);
+  });
+
+  test("a present is golden one time in ten, as a turkey: 0.05 is golden, 0.2 is not", async () => {
+    setSystemTime(CHRISTMAS);
+    const store = memoryProgressStore();
+    const golden = await run(mushroomPickAction(() => 0.05, store), { id: 0 });
+    expect(golden.body).toMatchObject({ report: { golden: true, shiny: 3, presents: 1 } });
+    db.row = rowOf();
+    const plain = await run(mushroomPickAction(() => 0.2, store), { id: 0 });
+    expect(plain.body).toMatchObject({ report: { golden: false, shiny: 0, presents: 2 } });
   });
 });

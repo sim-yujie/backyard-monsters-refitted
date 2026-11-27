@@ -327,6 +327,108 @@ export const THANKSGIVING_2026_COINS: EventCoins = {
 
 /**
  * ═══════════════════════════════════════════════════════════════════════
+ * CHRISTMAS 2026: dates, login calendar and present hunt ladder.
+ * A PROPOSAL (beta 10, 27 Nov 2026): the owner has not set the prizes yet.
+ * Change the numbers here; `events.test.ts` checks every reward can be paid.
+ *
+ * Christmas runs on its calendar dates like Halloween and Thanksgiving (no
+ * dashboard switch): {@link CHRISTMAS_2026_STARTS} to {@link CHRISTMAS_2026_ENDS},
+ * four weeks from after Thanksgiving's end (3 Dec) over Christmas and New
+ * Year. The calendar has 14 days, so a player can miss up to 14 days of the
+ * 28 and still claim them all (one claim per UTC day, in order). Locally,
+ * `EVENTS_FORCE_ON=christmas-2026` starts it today.
+ *
+ * During the event the yard's mushrooms grow as presents, about one an hour,
+ * at most 10 waiting (`services/yard/season.ts`), and every present picked
+ * counts toward "Presents found". One in ten is a golden present worth 3 or 8
+ * Shiny, as the golden turkey (`goldenOdds`, owner 19 Nov 2026 for turkeys).
+ *
+ * The winter decorations are not picked yet (option sheet on the owner's
+ * desk), so the prizes name stand-ins: {@link CHRISTMAS_DECOR}. Once the
+ * owner picks, give the new decorations their types in `revampDecorations.ts`
+ * and point these constants at them; nothing else changes.
+ * ═══════════════════════════════════════════════════════════════════════
+ */
+export const CHRISTMAS_2026_STARTS = "2026-12-07T00:00:00Z";
+export const CHRISTMAS_2026_ENDS = "2027-01-04T00:00:00Z";
+
+/**
+ * The winter decoration prizes, by slot. STAND-INS until the owner picks the
+ * winter decorations: existing decorations of about the right size.
+ * `small` 66 Pine Cone (for the Snowman), `mid` 87 Bonsai Tree (for the
+ * Present Pile), `big` 62 Green Gnome (for the Lamp Post with Lights),
+ * `top` 206 Autumn Maple Tree (for the Decorated Christmas Tree).
+ */
+export const CHRISTMAS_DECOR = {
+  small: 66,
+  mid: 87,
+  big: 62,
+  top: 206,
+} as const;
+
+/**
+ * The 14 daily rewards, day 1 first: paced like Halloween's and
+ * Thanksgiving's (the same resources, Shiny and speed-ups on the same days),
+ * with winter decorations on days 7 and 14 and, on day 12, a Production
+ * Overdrive (harvesters at double rate for 12 hours) as Thanksgiving's.
+ * Plus 15 Glimmers a day (`coins`): 14 x 15 + 190 over the ladder = 400,
+ * the owner's big-event target.
+ */
+export const CHRISTMAS_2026_CALENDAR: readonly CalendarDay[] = [
+  /* Day 1  */ { rewards: [{ kind: "resources", amounts: { r1: 10_000, r2: 10_000 } }] },
+  /* Day 2  */ { rewards: [{ kind: "shiny", amount: 10 }] },
+  /* Day 3  */ { rewards: [{ kind: "speedup", item: "SP2", count: 1 }] },
+  /* Day 4  */ { rewards: [{ kind: "resources", amounts: { r3: 15_000, r4: 15_000 } }] },
+  /* Day 5  */ { rewards: [{ kind: "resources", amounts: { r1: 20_000, r2: 20_000, r3: 20_000, r4: 20_000 } }] },
+  /* Day 6  */ { rewards: [{ kind: "speedup", item: "SP2", count: 2 }] },
+  /* Day 7  */ { rewards: [{ kind: "decoration", type: CHRISTMAS_DECOR.small, count: 1 }] },
+  /* Day 8  */ { rewards: [{ kind: "resources", amounts: { r1: 30_000, r2: 30_000 } }] },
+  /* Day 9  */ { rewards: [{ kind: "shiny", amount: 20 }] },
+  /* Day 10 */ { rewards: [{ kind: "speedup", item: "SP3", count: 1 }] },
+  /* Day 11 */ { rewards: [{ kind: "resources", amounts: { r3: 30_000, r4: 30_000 } }] },
+  /* Day 12 */ { rewards: [{ kind: "shopItem", item: "POD" }] },
+  /* Day 13 */ { rewards: [{ kind: "speedup", item: "SP3", count: 2 }] },
+  /* Day 14 */ {
+    rewards: [
+      { kind: "decoration", type: CHRISTMAS_DECOR.mid, count: 1 },
+      { kind: "shiny", amount: 25 },
+    ],
+  },
+];
+
+/**
+ * The present hunt ladder: `need` is the present count. At most one present
+ * an hour grows (24 a day for a player who looks in at least every 10 hours),
+ * so the top tier, 250, takes about 11 full days of the 28. Plus Glimmers
+ * at each tier (`coins`: 20, 35, 55, 80).
+ */
+export const CHRISTMAS_2026_LADDER: readonly LadderTier[] = [
+  /* 25 presents  */ { need: 25, rewards: [{ kind: "shiny", amount: 10 }] },
+  /* 75 presents  */ {
+    need: 75,
+    rewards: [
+      { kind: "speedup", item: "SP3", count: 2 },
+      { kind: "resources", amounts: { r1: 50_000, r2: 50_000, r3: 50_000, r4: 50_000 } },
+    ],
+  },
+  /* 150 presents */ {
+    need: 150,
+    rewards: [
+      { kind: "decoration", type: CHRISTMAS_DECOR.big, count: 1 },
+      { kind: "shiny", amount: 20 },
+    ],
+  },
+  /* 250 presents */ {
+    need: 250,
+    rewards: [
+      { kind: "decoration", type: CHRISTMAS_DECOR.top, count: 1 },
+      { kind: "shiny", amount: 30 },
+    ],
+  },
+];
+
+/**
+ * ═══════════════════════════════════════════════════════════════════════
  * THE MONTHLY KRALLEN HUNT: set by the owner (2026-10-20).
  * Every month from the 15th 00:00 UTC to the end of the month, the first
  * 15-30 November 2026 (never during Halloween). For Town Hall 6 and up,
@@ -483,6 +585,19 @@ export const EVENTS: readonly EventDefinition[] = [
     calendar: THANKSGIVING_2026_CALENDAR,
     ladder: { label: "Turkeys caught", tiers: THANKSGIVING_2026_LADDER },
     coins: THANKSGIVING_2026_COINS,
+  },
+  {
+    id: "christmas-2026",
+    title: "Christmas",
+    text: "Open a gift each day, and pick the presents in your yard for prizes.",
+    upcomingText: "Christmas is coming! Open a gift each day, and pick the presents in your yard for prizes.",
+    kind: "christmas",
+    banner: "/events/christmas-2026-banner.png",
+    startsAt: CHRISTMAS_2026_STARTS,
+    endsAt: CHRISTMAS_2026_ENDS,
+    calendar: CHRISTMAS_2026_CALENDAR,
+    ladder: { label: "Presents found", tiers: CHRISTMAS_2026_LADDER },
+    coins: BIG_EVENT_COINS,
   },
 ].map(withEventCoins);
 

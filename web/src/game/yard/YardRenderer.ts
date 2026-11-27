@@ -58,6 +58,7 @@ import {
   rangeHoverFrame,
 } from "./towerRangeHover";
 import { artUrl } from "../../artUrl";
+import { presentArtUrl, presentPicture } from "./presentArt";
 
 /**
  * The yard's scene graph: ground, mushrooms, buildings and the selection
@@ -215,6 +216,10 @@ export class YardRenderer {
   private pumpkin: Texture | null = null;
   /** Whether the pumpkin is being asked for, so a second Halloween does not ask twice. */
   private pumpkinLoading = false;
+  /** The Christmas present that stands in for a mushroom (`presentArt.ts`), once it has loaded. */
+  private present: Texture | null = null;
+  /** Whether the present is being asked for. */
+  private presentLoading = false;
   /**
    * The painted mushrooms of this page's look, one per art variant
    * (`mushroomArt.ts`), once they have loaded; a missing one is null and its
@@ -329,6 +334,22 @@ export class YardRenderer {
           this.pumpkinLoading = false;
         });
     }
+    if (season === "christmas" && !this.present && !this.presentLoading) {
+      this.presentLoading = true;
+      void loadWithRetries(presentArtUrl(), () => this.destroyed)
+        .then(
+          (texture) => {
+            if (this.destroyed) return;
+            this.present = texture;
+            this.redrawMushrooms();
+          },
+          (caught: unknown) =>
+            console.warn(`The Christmas present did not load in ${LOAD_TRIES} tries; mushrooms stay.`, caught),
+        )
+        .finally(() => {
+          this.presentLoading = false;
+        });
+    }
     if (season === "thanksgiving") {
       // The mushrooms stay until the turkeys arrive, and for good if they never do.
       // Behind the buildings' pictures, like the monsters (beta 9).
@@ -437,7 +458,8 @@ export class YardRenderer {
 
   /**
    * Stands the yard's finds: a turkey per mushroom at Thanksgiving (once the
-   * turkeys are in), else a sprite per mushroom (a pumpkin at Halloween).
+   * turkeys are in), else a sprite per mushroom (a pumpkin at Halloween, a
+   * present at Christmas).
    * `fresh` keys pop up out of the ground (#263).
    */
   private placeFinds(yard: Yard, fresh: readonly string[]): void {
@@ -1521,15 +1543,19 @@ export class YardRenderer {
 
   /**
    * Gives a mushroom's sprite its picture, standing on its spot: the Halloween
-   * pumpkin in season, else its painted mushroom (`mushroomArt.ts`), else,
+   * pumpkin or the Christmas present in season, else its painted mushroom (`mushroomArt.ts`), else,
    * until that arrives or if it never does, the drawn glyph.
    */
   private dressMushroom(sprite: Sprite, variant: number, atlas: YardArtAtlas): void {
     const pumpkin = this.season === "halloween" ? this.pumpkin : null;
+    const present = this.season === "christmas" ? this.present : null;
     const painted = this.mushroomArt?.[mushroomArtIndex(variant)] ?? null;
     if (pumpkin) {
       sprite.texture = pumpkin;
       sprite.anchor.set(0.5, PUMPKIN_BASE);
+    } else if (present) {
+      sprite.texture = present;
+      sprite.anchor.set(0.5, presentPicture().base);
     } else if (painted) {
       sprite.texture = painted;
       const anchor = mushroomAnchor(mushroomPictureFor(variant), painted.width, painted.height);
