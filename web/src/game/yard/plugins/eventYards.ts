@@ -9,7 +9,7 @@ import {
 } from "@/game/eventYards/eventYardAttack";
 import { EVENT_EXTRAS } from "@/ui/events/EventsPanel";
 import { el } from "@/ui/dom";
-import { openYardPrizePopup, yardCardBody } from "@/ui/eventYards/yardEventUi";
+import { openYardPrizePopup, wantsPrizePopup, yardCardBody } from "@/ui/eventYards/yardEventUi";
 import { YARD_PLUGINS, type YardPlugin } from "../yardPlugins";
 
 /**
@@ -19,7 +19,8 @@ import { YARD_PLUGINS, type YardPlugin } from "../yardPlugins";
  * - The Events card's part (kind `yards`): the yard track, the next yard,
  *   its prize and Attack, filled from `GET /bm/events/yards` once drawn.
  * - Attack opens the attack scene on the yard, from the main yard's housing.
- * - Back home after an attack that won prizes, the prize pop-up.
+ * - Back home after an attack that won a building or the trophy, the prize
+ *   pop-up with Build now (Glimmers show on the end panel alone).
  *
  * Main yard only, as the Events page.
  *
@@ -65,7 +66,9 @@ export const eventYardsPlugin: YardPlugin = (mounts) => {
 
   const landed = takeEventYardLanded();
   let popup: { close(): void } | null = null;
-  if (landed && landed.prizes.length > 0) popup = openYardPrizePopup(mounts.overlay.modal, landed);
+  if (landed && wantsPrizePopup(landed)) {
+    popup = openYardPrizePopup(mounts.overlay.modal, landed, { onBuild: (type) => mounts.scene.openBuildMenu(type) });
+  }
 
   return () => {
     popup?.close();

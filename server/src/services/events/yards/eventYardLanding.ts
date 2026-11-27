@@ -8,7 +8,7 @@ import type { User } from "../../../database/models/user.model.js";
 import { attackNotBoundErr, baseGoneErr } from "../../../errors/errors.js";
 import { yardEventByKey, type YardEventDefinition } from "../../../game-data/events/yardEvents.js";
 import { EVENT_OF_YARD } from "../../../game-data/tribes/events/index.js";
-import { RESOURCE_KEYS, type FlingLog, type ResourceAmounts } from "../../../game-rules/combat/index.js";
+import { RESOURCE_KEYS, derivedDestroyed, type FlingLog, type ResourceAmounts } from "../../../game-rules/combat/index.js";
 import { BaseSaveSchema } from "../../../schemas/BaseSaveSchema.js";
 import { postgres } from "../../../server.js";
 import type { JsonObject } from "../../../types/JsonObject.js";
@@ -65,7 +65,9 @@ type BaseSaveData = TypeOf<typeof BaseSaveSchema>;
  * them the best farm in the game.
  *
  * The yard is beaten when its Town Hall falls (Flash, upstream
- * `getBaseDestroyed`): then it stays wrecked for the run, the next yard opens
+ * `getBaseDestroyed`), or when the attack wrecks it as the end panel counts
+ * a camp defeated (`derivedDestroyed`, 90%): so the panel's "Victory!" always
+ * means the yard is beaten. Then it stays wrecked for the run, the next yard opens
  * and the prizes for that many yards are paid in the same landing
  * (`yardPrizes.ts`). Otherwise it keeps its damage until 24 hours after its
  * first hit.
@@ -177,7 +179,12 @@ const saveYardAttack = async (ctx: Context, user: User, saveData: BaseSaveData, 
   );
 };
 
-type YardBattle = AbandonedOutcome & { won: boolean; log: FlingLog };
+/**
+ * The server's battle for an event yard attack: `destroyed` is the client's
+ * own figure for a wild yard (`derivedDestroyed`, the camp threshold), which
+ * the save is checked against; `won` is the event's rule, the Town Hall down.
+ */
+type YardBattle = AbandonedOutcome & { destroyed: number; won: boolean; log: FlingLog };
 
 interface YardAttackerSide {
   readonly entries: readonly unknown[];
@@ -308,11 +315,15 @@ const yardReplayInput = async (
     left,
   });
 
-const yardBattleOf = (fought: AbandonedOutcome, log: FlingLog, served: ServedYard): YardBattle => ({
-  ...fought,
-  won: townHallDown(served.template.buildingdata, fought.buildinghealthdata as JsonObject),
-  log,
-});
+const yardBattleOf = (fought: AbandonedOutcome, log: FlingLog, served: ServedYard): YardBattle => {
+  const destroyed = derivedDestroyed(fought.damage, "wild") ?? 0;
+  return {
+    ...fought,
+    destroyed,
+    won: destroyed === 1 || townHallDown(served.template.buildingdata, fought.buildinghealthdata as JsonObject),
+    log,
+  };
+};
 
 const yardBattle = async (
   ctx: Context,

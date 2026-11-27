@@ -13,9 +13,10 @@
   gap: var(--space-2);
 }
 
+/* Five to a row: Brukkarg War's five in one, Creature Carnage's ten in two. */
 .yard-track {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(32px, 1fr));
+  grid-template-columns: repeat(5, minmax(0, 1fr));
   gap: var(--space-1);
   margin: 0;
   padding: 0;
@@ -24,9 +25,11 @@
 
 .yard-track__yard {
   position: relative;
-  display: grid;
-  place-items: center;
-  min-height: 36px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  min-height: 34px;
   border-radius: var(--radius-md);
   border: 1px solid var(--colour-border-subtle);
   background: var(--colour-surface-sunken);
@@ -37,37 +40,41 @@
 
 .yard-track__yard--won {
   border-color: var(--colour-success);
+  background: color-mix(in srgb, var(--colour-success) 16%, var(--colour-surface-sunken));
   color: var(--colour-success);
 }
 
-.yard-track__yard--won .yard-track__number {
-  position: absolute;
-  right: 2px;
-  bottom: 0;
-  font-size: var(--text-xs);
+.yard-track__check {
+  font-weight: 900;
+  color: var(--colour-success);
 }
 
+/* The next yard: a tinted fill and a bar on top, not a button border (neon r1). */
 .yard-track__yard--next {
-  border: 2px solid var(--colour-accent);
+  background: color-mix(in srgb, var(--colour-accent) 22%, var(--colour-surface-sunken));
   color: var(--colour-text-strong);
-  box-shadow: 0 0 0 2px var(--colour-change-halo);
+  box-shadow: inset 0 3px 0 var(--colour-accent);
 }
 
 .yard-track__gift {
   position: absolute;
-  top: -6px;
-  right: -4px;
+  top: 2px;
+  right: 2px;
 }
 
-/* ── The next yard and Attack ───────────────────────────────────────────── */
+/* ── The next yard: one inset box like the Krallen Hunt's tiers ─────────── */
 
-.yard-card__next {
+.yard-next {
   display: flex;
   align-items: center;
   gap: var(--space-3);
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--colour-border-subtle);
+  border-radius: var(--radius-md);
+  background: var(--colour-surface-sunken);
 }
 
-.yard-card__info {
+.yard-next__info {
   flex: 1 1 auto;
   min-width: 0;
   display: flex;
@@ -75,26 +82,70 @@
   gap: var(--space-1);
 }
 
-.yard-card__title {
+.yard-next p {
   margin: 0;
-  font-weight: 800;
-  color: var(--colour-text-strong);
 }
 
-.yard-card__damage,
-.yard-card__locked,
-.yard-card__refusal,
-.yard-card__done {
-  margin: 0;
+.yard-next__kicker {
+  font-weight: 800;
+  font-size: var(--text-sm);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--colour-text-secondary);
+}
+
+.yard-next__damage {
+  display: flex;
+  flex-wrap: wrap;
+  column-gap: var(--space-3);
+  row-gap: 2px;
   font-size: var(--text-sm);
   color: var(--colour-text-secondary);
 }
 
-.yard-card__damage {
+/* An icon stays with its words when the line wraps (neon r1). */
+.yard-next__part {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  white-space: nowrap;
+}
+
+.yard-next__prize,
+.yard-result__prize {
   display: flex;
   align-items: center;
-  gap: 2px;
+  gap: var(--space-2);
   flex-wrap: wrap;
+}
+
+.yard-next__label {
+  font-size: var(--text-sm);
+  color: var(--colour-text-muted);
+}
+
+.yard-next__locked {
+  flex: 0 1 40%;
+  font-size: var(--text-sm);
+  color: var(--colour-text-secondary);
+  text-align: right;
+}
+
+.yard-next__attack {
+  flex: 0 0 auto;
+  height: auto;
+  min-height: 44px;
+  min-width: 120px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-1);
+}
+
+.yard-card__refusal,
+.yard-card__done {
+  margin: 0;
+  font-size: var(--text-sm);
 }
 
 .yard-card__refusal {
@@ -104,28 +155,6 @@
 .yard-card__done {
   font-weight: 800;
   color: var(--colour-success);
-}
-
-.yard-card__prize {
-  display: flex;
-  align-items: center;
-  gap: var(--space-2);
-  flex-wrap: wrap;
-}
-
-.yard-card__at {
-  font-size: var(--text-xs);
-  color: var(--colour-text-muted);
-}
-
-.yard-card__attack {
-  flex: 0 0 auto;
-  min-height: 44px;
-  min-width: 112px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: var(--space-1);
 }
 
 /* ── A prize: Glimmers, a Spurtz Cannon, the trophy ─────────────────────── */
@@ -141,10 +170,15 @@
   width: 40px;
   height: 40px;
   object-fit: contain;
-  border-radius: var(--radius-md);
 }
 
-.yard-prize__count {
+/* Flash's buttons are on white: on the Classic cream panel, white drops away. */
+:root[data-skin="flash"] .yard-prize__building,
+:root[data-skin="flash"] .yard-prize-popup__art {
+  mix-blend-mode: multiply;
+}
+
+.yard-prize__name {
   font-size: var(--text-sm);
 }
 
@@ -155,7 +189,15 @@
   flex-direction: column;
   align-items: center;
   gap: var(--space-1);
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--colour-border-subtle);
+  border-radius: var(--radius-md);
+  background: var(--colour-surface-sunken);
   text-align: center;
+}
+
+.yard-result--won {
+  border-color: var(--colour-success);
 }
 
 .yard-result p {
@@ -174,7 +216,6 @@
   color: var(--colour-success);
 }
 
-.yard-result__count,
 .yard-result__hint {
   font-size: var(--text-sm);
   color: var(--colour-text-secondary);
@@ -190,22 +231,8 @@
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: var(--space-3);
-  text-align: center;
-}
-
-.yard-prize-popup__count {
-  margin: 0;
-  font-weight: 800;
-}
-
-.yard-prize-popup__list {
-  display: flex;
-  flex-direction: column;
   gap: var(--space-2);
-  margin: 0;
-  padding: 0;
-  list-style: none;
+  text-align: center;
 }
 
 .yard-prize-popup__item {
@@ -215,9 +242,15 @@
   gap: var(--space-1);
 }
 
-.yard-prize-popup__item .yard-prize__building {
-  width: 72px;
-  height: 72px;
+.yard-prize-popup__art {
+  width: 96px;
+  height: 96px;
+  object-fit: contain;
+}
+
+.yard-prize-popup__headline {
+  margin: 0;
+  font-size: var(--text-lg);
 }
 
 .yard-prize-popup__words {
@@ -225,7 +258,20 @@
   font-size: var(--text-sm);
 }
 
-.yard-prize-popup__ok {
-  min-width: 120px;
+.yard-prize-popup__count {
+  margin: 0;
+  font-size: var(--text-sm);
+  color: var(--colour-text-muted);
+}
+
+.yard-prize-popup__buttons {
+  display: flex;
+  gap: var(--space-2);
+  justify-content: center;
+}
+
+.yard-prize-popup__button {
+  height: auto;
+  min-width: 110px;
   min-height: 44px;
 }
