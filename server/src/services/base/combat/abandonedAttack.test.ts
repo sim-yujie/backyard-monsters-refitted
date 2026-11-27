@@ -89,7 +89,9 @@ describe("replayAbandonedAttack on an outpost (issue #179)", () => {
       log: one.log,
       levels: one.levels,
       playerLevel: one.playerLevel,
-      tailTicks: 8000 - one.log.events[0].t,
+      // To the same tick the server's replay stops at: after the last fling,
+      // as the battle still runs there since beta 10's sturdier Fangs.
+      tailTicks: 8000 - one.log.events[one.log.events.length - 1].t,
     });
     const left = outpost(one.height);
     expect(left.buildinghealthdata).toEqual({ ...replayed.health });

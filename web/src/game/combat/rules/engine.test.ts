@@ -39,6 +39,8 @@ import {
   towerHealthScale,
   turnSpurtzBarrel,
   TARGET_GROUP,
+  FLASH_SPURTZ_HATCH,
+  MAIN_YARD_SPURTZ_HATCH,
 } from "./stats.js";
 import {
   buildEngineYard,
@@ -47,7 +49,7 @@ import {
   screenDistanceSquared,
   screenPointOf,
 } from "./yard.js";
-import type { CombatBuildingData, CombatBuildingDataMap, Roster } from "./types.js";
+import type { CombatBuildingData, CombatBuildingDataMap, CombatTargetKind, Roster } from "./types.js";
 
 /**
  * The engine, one rule at a time.
@@ -843,6 +845,54 @@ describe("the Spurtz Cannon's burst and its Spurtz (issue #313)", () => {
       (event) => event.kind === "death" && event.friendly && event.monsterId === "IC1",
     );
     expect(culled.length).toBeGreaterThan(0);
+  });
+
+  /** The most hatched Spurtz on the field at once over `ticks`, on a yard of `kind`. */
+  const mostAtOnce = (kind: CombatTargetKind, options: Partial<BattleOptions> = {}, ticks = 1200): number => {
+    const yard = buildEngineYard({
+      buildingdata: { "1": { id: 1, t: 137, l: 1, X: 0, Y: 0 }, "2": { id: 2, t: 1, l: 1, X: 900, Y: 900 } },
+      buildinghealthdata: {},
+      resources: { r1: 100000, r2: 0, r3: 0, r4: 0 },
+      kind,
+    });
+    const battle = createBattle(yard, { seed: 7, ...options });
+    battle.apply({ kind: "fling", t: 0, x: 150, y: 150, r: 20, monsters: { C10: 4 } });
+    let most = 0;
+    for (let step = 0; step < ticks && !battle.over(); step += 1) {
+      battle.step();
+      const alive = battle.creeps().filter((creep) => creep.friendly && creep.monsterId === "IC1" && creep.hp > 0);
+      most = Math.max(most, alive.length);
+    }
+    return most;
+  };
+
+  it("keeps at most 2 hatched Spurtz a cannon on a player's main yard, Flash's brood elsewhere (beta 10)", () => {
+    expect(MAIN_YARD_SPURTZ_HATCH).toEqual({ chance: 0.5, most: 2, strength: 1 });
+    const main = mostAtOnce("main");
+    expect(main).toBeGreaterThan(0);
+    expect(main).toBeLessThanOrEqual(MAIN_YARD_SPURTZ_HATCH.most);
+    // A tribe yard (Brukkarg War's event yards fight as one) hatches as Flash's did.
+    expect(mostAtOnce("tribe")).toBeGreaterThan(MAIN_YARD_SPURTZ_HATCH.most);
+    // The per-battle override reaches the main yard only.
+    expect(mostAtOnce("main", { spurtzHatch: FLASH_SPURTZ_HATCH })).toBe(mostAtOnce("tribe"));
+    expect(mostAtOnce("main", { spurtzHatch: { ...FLASH_SPURTZ_HATCH, chance: 0 } })).toBe(0);
+  });
+
+  it("hatches weaker Spurtz when the rule's strength is below 1", () => {
+    const yard = buildEngineYard({
+      buildingdata: { "1": { id: 1, t: 137, l: 1, X: 0, Y: 0 }, "2": { id: 2, t: 1, l: 1, X: 900, Y: 900 } },
+      buildinghealthdata: {},
+      resources: { r1: 100000, r2: 0, r3: 0, r4: 0 },
+    });
+    const battle = createBattle(yard, { seed: 7, spurtzHatch: { ...FLASH_SPURTZ_HATCH, strength: 0.5 } });
+    battle.apply({ kind: "fling", t: 0, x: 150, y: 150, r: 20, monsters: { C10: 4 } });
+    let seen: number | null = null;
+    for (let step = 0; step < 900 && seen === null && !battle.over(); step += 1) {
+      battle.step();
+      const spurtz = battle.creeps().find((creep) => creep.friendly && creep.monsterId === "IC1");
+      if (spurtz) seen = spurtz.maxHp;
+    }
+    expect(seen).toBe(Math.trunc(monsterStat("IC1", "health", 1) * 0.5));
   });
 
   it("credits its Spurtz's damage and kills to its own report row", () => {

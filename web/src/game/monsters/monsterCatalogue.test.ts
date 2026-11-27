@@ -175,9 +175,9 @@ describe("the monster catalogue", () => {
     }
   });
 
-  it("folds Rezghul's written-out goo cost", () => {
-    // `"cResource": [3000000 / 3]`, `CREATURELOCKER.as:589`.
-    expect(monsterEntry("C19")?.cResource).toEqual([1000000]);
+  it("takes Rezghul's goo cost from beta 10's rebalance, not the source's written-out one", () => {
+    // `"cResource": [3000000 / 3]`, `CREATURELOCKER.as:589`; beta 10 sets 600,000.
+    expect(monsterEntry("C19")?.cResource).toEqual([600000]);
   });
 });
 
@@ -234,7 +234,8 @@ describe("the lab table", () => {
         [750000, 108000],
         [1125000, 108000],
       ],
-      effect: [0.1, 0.15, 0.2],
+      // Beta 10 (owner, desk b10-numbers, 27 Nov 2026): Thorns 10/15/20% -> 7/10/13%.
+      effect: [0.07, 0.1, 0.13],
     });
     expect(labAbility("C10")).toMatchObject({
       costs: [

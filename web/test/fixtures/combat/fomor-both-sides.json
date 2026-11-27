@@ -64,7 +64,7 @@
   },
   "expected": {
     "ticks": 12200,
-    "damage": 3.426220083118423,
+    "damage": 3.378090247548343,
     "destroyed": null,
     "attackloot": {
       "r1": 0,
@@ -84,70 +84,70 @@
     "creepsKilled": 91,
     "championHp": 0,
     "damagedBuildings": 16,
-    "rngDraws": 6980,
+    "rngDraws": 7092,
     "checkpoints": [
       {
         "tick": 800,
-        "digest": "2325513c05ed2fe6"
+        "digest": "770d81ecc039f432"
       },
       {
         "tick": 1600,
-        "digest": "1f81cd92d29760a8"
+        "digest": "30555499bbf7186f"
       },
       {
         "tick": 2400,
-        "digest": "bd9c3b1bce3236a9"
+        "digest": "c90ce55552dce5ff"
       },
       {
         "tick": 3200,
-        "digest": "0b177a8f30f04731"
+        "digest": "8bb9ca7b06096069"
       },
       {
         "tick": 4000,
-        "digest": "515fb83afc73026c"
+        "digest": "2f6456628c742128"
       },
       {
         "tick": 4800,
-        "digest": "20c2ccd7896e0361"
+        "digest": "7dd914cf4b7dc51d"
       },
       {
         "tick": 5600,
-        "digest": "ccba1f90cc2bdb7a"
+        "digest": "595d7aa4b7357ec2"
       },
       {
         "tick": 6400,
-        "digest": "cb31b364aeaac7a6"
+        "digest": "b8a4e5a83afdc81e"
       },
       {
         "tick": 7200,
-        "digest": "126af3b9fad41093"
+        "digest": "ed5541f570f7c0c3"
       },
       {
         "tick": 8000,
-        "digest": "1edafb0a03edf7bc"
+        "digest": "c7c37c92815c9898"
       },
       {
         "tick": 8800,
-        "digest": "4651764c07c948ce"
+        "digest": "89919000ae322296"
       },
       {
         "tick": 9600,
-        "digest": "502aafa752f6d2b1"
+        "digest": "11a821ff0c5ac1cd"
       },
       {
         "tick": 10400,
-        "digest": "360e9fe1e699fbfb"
+        "digest": "018e5f6d647d209b"
       },
       {
         "tick": 11200,
-        "digest": "7cbf85e02192d98a"
+        "digest": "c9a9f6541c193e32"
       },
       {
         "tick": 12000,
-        "digest": "1615ff32a081dc84"
+        "digest": "65a7502a0eb71ed0"
       }
     ],
-    "digest": "c21ddf26eb3b6e30",
+    "digest": "199c597ec34337fc",
     "bunkerLosses": {
       "83": {
         "C1": 8

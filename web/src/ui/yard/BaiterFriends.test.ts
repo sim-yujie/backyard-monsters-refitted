@@ -173,7 +173,7 @@ describe("the Baiter window's friend tabs (beta 9 #4, design A)", () => {
     expect(texts(view, ".baiter-friends__damage")).toEqual(["41%", "42%", "43%"]);
     const watches = [...view.querySelectorAll<HTMLButtonElement>(".baiter-friends__watch")];
     expect(watches.map((one) => one.disabled)).toEqual([false, true, false]);
-    expect(watches[1]!.title).toBe("Replay not available after a game update");
+    expect(watches[1]!.title).toBe("Recorded before beta 10");
     expect(view.querySelectorAll(".baiter-friends__row--new")).toHaveLength(3);
     expect(texts(view, ".baiter-friends__new")).toEqual(["New", "New", "New"]);
     expect(view.textContent).toContain("Kept 7 days. Real attacks stay in Defences.");

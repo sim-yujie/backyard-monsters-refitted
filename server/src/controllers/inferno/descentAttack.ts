@@ -8,7 +8,7 @@ import { infernoAttackRefusedErr } from "../../errors/errors.js";
 import { academyRanks, type DefenderForces } from "../../game-rules/combat/index.js";
 import { postgres } from "../../server.js";
 import { brainsOf, healthOf, newAttackSession } from "../../services/base/attackSession.js";
-import { academyLevels } from "../../services/base/combat/abandonedAttack.js";
+import { surfaceArmyLevels } from "../../services/inferno/surfaceLevels.js";
 import { poolAmounts } from "../../services/base/combat/attackLoot.js";
 import { servedDefenderForces } from "../../services/base/combat/defenderForces.js";
 import { mapSaveData } from "../../services/base/mapSaveData.js";
@@ -129,7 +129,8 @@ export const startDescentAttack = async (
   const defenderForces = await servedDefenderForces(yard, userSave, now);
   const championBrains = brainsOf(userSave.champion);
   const championHealth = healthOf(userSave.champion);
-  const attackerAcademy = academyLevels(userSave.academy);
+  // An Inferno monster in the main yard's Housing fights at its Inferno level (beta 10).
+  const attackerAcademy = await surfaceArmyLevels(userSave, armies.entryHoused);
   const attackerRanks = academyRanks(userSave.academy);
   const flingerCapacity = descentFlingerCapacity(flingerLevelOf(userSave.buildingdata));
 
