@@ -744,3 +744,18 @@
     margin-top: var(--space-1);
   }
 }
+
+/* A phone on its side (390 px tall): a few px more for the list. */
+@media (max-height: 420px) {
+  .champion-tab__views {
+    padding: 2px;
+  }
+
+  .champion-tab__view {
+    min-height: 28px;
+  }
+
+  .crystal-abilities__inspector {
+    min-height: 22px;
+  }
+}
