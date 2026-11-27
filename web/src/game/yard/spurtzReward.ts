@@ -8,10 +8,10 @@
 export const SPURTZ_TYPE = 136;
 export const BLACK_SPURTZ_TYPE = 137;
 
-/** Reward ids in the save's `rewards` (`server/src/enums/Rewards.ts`). */
-export const SPURTZ_REWARD_1 = "spurtzCannonReward";
-export const SPURTZ_REWARD_2 = "spurtzCannonReward2";
-export const DIAMOND_SPURTZ_REWARD = "spurtzCannonReward3";
+/** Reward ids in the save's `rewards` (`server/src/enums/Rewards.ts`): this project's, not Flash's `spurtzCannonReward*`. */
+export const SPURTZ_REWARD_1 = "brukwarSpurtz1";
+export const SPURTZ_REWARD_2 = "brukwarSpurtz2";
+export const DIAMOND_SPURTZ_REWARD = "brukwarSpurtz3";
 
 const LIMITS: Readonly<Record<string, number>> = { [SPURTZ_REWARD_1]: 1, [SPURTZ_REWARD_2]: 2 };
 export const BLACK_SPURTZ_LIMIT = 2;

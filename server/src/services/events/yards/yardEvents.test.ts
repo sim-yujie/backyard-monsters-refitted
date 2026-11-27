@@ -9,6 +9,7 @@ import { liveYardEventRun, readYardRuns, startYardRun, stopYardRun, yardEventRun
 import { applySpurtzReward, prizesDue } from "./yardPrizes.js";
 import { landedState, repairsAt, standingHealth, YARD_REPAIR_SECONDS, type YardState } from "./yardStore.js";
 import { EVENT_COPY_YARDS } from "../../../game-data/tribes/events/index.js";
+import type { EventPlayerSave } from "../eventPlayer.js";
 
 const DAY = 24 * 60 * 60;
 const carnage = yardEventByKey("carnage")!;
@@ -67,7 +68,8 @@ describe("yard event runs", () => {
 
 describe("who attacks which yard", () => {
   test("Creature Carnage is for Town Hall 2 to 4 who finished the guided start", () => {
-    const save = (hall: number, tutorialstage = 205) => ({ buildingdata: { 0: { t: 14, l: hall, X: 0, Y: 0, id: 0 } }, tutorialstage });
+    const save = (hall: number, tutorialstage = 205) =>
+      ({ buildingdata: { 0: { t: 14, l: hall, X: 0, Y: 0, id: 0 } }, tutorialstage }) as unknown as EventPlayerSave;
     expect(playerLockOf(carnage, save(1))).toBe("townHall");
     expect(playerLockOf(carnage, save(2))).toBeNull();
     expect(playerLockOf(carnage, save(4))).toBeNull();
@@ -160,16 +162,22 @@ describe("prizes", () => {
     expect(spurtzAllowed(SPURTZ_TYPE, save.rewards)).toBe(2);
     expect(spurtzAllowed(BLACK_SPURTZ_TYPE, save.rewards)).toBe(0);
     applySpurtzReward(save, 3);
-    expect(save.rewards[Reward.DIAMOND_SPURTZ]).toEqual({ id: Reward.DIAMOND_SPURTZ });
+    expect(save.rewards[Reward.BRUKWAR_DIAMOND_SPURTZ]).toEqual({ id: Reward.BRUKWAR_DIAMOND_SPURTZ });
     expect(spurtzAllowed(SPURTZ_TYPE, save.rewards)).toBe(0);
     expect(spurtzAllowed(BLACK_SPURTZ_TYPE, save.rewards)).toBe(2);
     expect(save.buildingdata["4"]).toEqual({ t: BLACK_SPURTZ_TYPE, l: 3, id: 4 });
     expect(save.buildingdata["5"]!.t).toBe(21);
   });
 
+  test("Flash's old Spurtz reward ids (Town Hall 9 unlock, sandbox yards) open nothing", () => {
+    const old = { [Reward.SPURTZ1]: { id: Reward.SPURTZ1 }, [Reward.SPURTZ2]: { id: Reward.SPURTZ2 }, [Reward.DIAMOND_SPURTZ]: { id: Reward.DIAMOND_SPURTZ } };
+    expect(spurtzAllowed(SPURTZ_TYPE, old)).toBe(0);
+    expect(spurtzAllowed(BLACK_SPURTZ_TYPE, old)).toBe(0);
+  });
+
   test("no reward, no Spurtz", () => {
     expect(spurtzAllowed(SPURTZ_TYPE, {})).toBe(0);
     expect(spurtzAllowed(SPURTZ_TYPE, null)).toBe(0);
-    expect(spurtzAllowed(21, { [Reward.SPURTZ2]: { id: Reward.SPURTZ2 } })).toBe(0);
+    expect(spurtzAllowed(21, { [Reward.BRUKWAR_SPURTZ2]: { id: Reward.BRUKWAR_SPURTZ2 } })).toBe(0);
   });
 });
