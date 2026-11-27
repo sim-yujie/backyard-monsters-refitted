@@ -243,6 +243,10 @@ const WINDOW_CLASSES = [
  * Shows a wave event's arrival pop-up again (beta 10): forgets that this
  * device saw it and reloads; it opens on its own while a wave event is on.
  * False when no wave event is on (the sandbox yard outside one).
+ *
+ * Not `waitForYard`: its quiet-start check presses Escape on any pop-up at
+ * boot, which closed this one and marked it seen, so the case was always
+ * skipped, even with a wave event on (wmi-events, 27 Nov 2026).
  */
 export const openWaveIntro = async (page: Page): Promise<boolean> => {
   await page.evaluate(() => {
@@ -253,7 +257,10 @@ export const openWaveIntro = async (page: Page): Promise<boolean> => {
     }
   });
   await page.reload();
-  await waitForYard(page);
+  await page
+    .locator('.yard-dock__button[data-dock="build"]:not([disabled])')
+    .first()
+    .waitFor({ state: "visible", timeout: settings.bootTimeout });
   return page
     .locator(".overlay__layer .wave-intro")
     .first()
