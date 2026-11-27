@@ -145,3 +145,14 @@ export const requirePageStats = (
   });
   throw newVersionErr();
 };
+
+/**
+ * Whether an attack was started under another attack-stat table than this
+ * server's: its session records another version, or none (minted by a server
+ * from before beta 10). Only a page left open across a release saves such an
+ * attack, one that was in flight while the server restarted.
+ *
+ * @param sessionStats - The `stats` of the attack's session.
+ */
+export const startedOnOtherStats = (sessionStats: string | undefined, ours: string = ATTACK_STATS_VERSION): boolean =>
+  sessionStats !== ours;
