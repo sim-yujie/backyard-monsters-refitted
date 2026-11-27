@@ -592,3 +592,11 @@
     gap: var(--space-1);
   }
 }
+
+/* A phone on its side has room for the list only: the description follows it, not pinned. */
+@media (max-height: 500px) {
+  .crystal-abilities__inspector {
+    position: static;
+    box-shadow: none;
+  }
+}
