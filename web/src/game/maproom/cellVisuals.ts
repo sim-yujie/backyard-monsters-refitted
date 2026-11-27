@@ -350,6 +350,8 @@ export const TRIBE_COLOURS: Record<string, number> = {
   Kozu: 0x8f5fb8,
   Abunakki: 0xc9a227,
   Dreadnaut: 0x4a8fa8,
+  // Beta 10's Christmas frost tribe: its camps' ice blue (only while the event runs).
+  Frost: 0x8fd8f5,
 };
 const TRIBE_FALLBACK = 0x9aa3b8;
 

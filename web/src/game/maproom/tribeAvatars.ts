@@ -33,6 +33,8 @@ const AVATAR_FILES: Record<string, string> = {
   Kozu: "kozu-256.png",
   Abunakki: "abunakki-256.png",
   Dreadnaut: "dreadnaut-256.png",
+  // Beta 10's Christmas frost tribe, led by Krampus (Codex, art-samples/frost-tribe/av1).
+  Frost: "frost-256.png",
 };
 
 /**
