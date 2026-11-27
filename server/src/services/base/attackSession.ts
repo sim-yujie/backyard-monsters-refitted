@@ -1,5 +1,6 @@
 import { getCurrentDateTime } from "../../utils/getCurrentDateTime.js";
 import { RULES_VERSION } from "../defences/rulesVersion.js";
+import { ATTACK_STATS_VERSION } from "../../game-data/stats/attackStatsVersion.js";
 import {
   MAX_RANK,
   championByType,
@@ -165,6 +166,15 @@ export interface AttackSession {
    * minted before it existed) or no longer plays.
    */
   rules?: string;
+  /**
+   * The attack-stat table the server held when the attack started (its
+   * version, `game-data/stats/attackStatsVersion.ts`; beta 10). An attack
+   * start refuses a page holding another table, so it is the page's too.
+   * Absent on a session minted by a server from before beta 10. A save of an
+   * attack started under another table comes from a page left open across a
+   * release, and skips the private anticheat (`baseSave.ts`).
+   */
+  stats?: string;
 }
 
 /** Monster id → academy level, as {@link AttackSession.attackerAcademy} keeps it. */
@@ -317,7 +327,8 @@ export const serialiseAttackSession = (session: AttackSession): string =>
   session.attackerRanks ||
   session.declareWar !== undefined ||
   session.attackerlevel !== undefined ||
-  session.rules !== undefined
+  session.rules !== undefined ||
+  session.stats !== undefined
     ? JSON.stringify(session)
     : `${session.attackerid}:${session.attackid}:${session.startedat}`;
 
@@ -376,6 +387,7 @@ export type AttackSessionFacts = Pick<
   | "attackerRanks"
   | "declareWar"
   | "rules"
+  | "stats"
 >;
 
 /**
@@ -396,7 +408,7 @@ export const sessionFactsOf = (parsed: Record<string, unknown>): AttackSessionFa
     : undefined;
   const attackerAcademy = academyLevelsOf(parsed.attackerAcademy);
   const attackerRanks = academyRanksOf(parsed.attackerRanks);
-  const { attackerlevel, declareWar, rules } = parsed;
+  const { attackerlevel, declareWar, rules, stats } = parsed;
   return {
     ...(entryHoused && { entryHoused }),
     ...(defenderForces && { defenderForces }),
@@ -410,6 +422,7 @@ export const sessionFactsOf = (parsed: Record<string, unknown>): AttackSessionFa
     ...(attackerRanks && { attackerRanks }),
     ...(typeof declareWar === "boolean" && { declareWar }),
     ...(typeof rules === "string" && /^[0-9a-f]{16}$/.test(rules) && { rules }),
+    ...(typeof stats === "string" && /^[0-9a-f]{16}$/.test(stats) && { stats }),
   };
 };
 
@@ -548,6 +561,7 @@ export const newAttackSession = (
   attackid,
   startedat: getCurrentDateTime(),
   rules: RULES_VERSION,
+  stats: ATTACK_STATS_VERSION,
   ...(entryHoused && { entryHoused }),
   ...(defenderForces && { defenderForces }),
   ...(defenderResources && { defenderResources }),
