@@ -494,6 +494,11 @@
   background: linear-gradient(90deg, #f0a13a, #ffd34d);
 }
 
+/* One wave won shows a round cap, not a sliver (neon r3). */
+.wave-track__fill:not([style*="width: 0%"]) {
+  min-width: 12px;
+}
+
 .wave-track__mark {
   position: absolute;
   bottom: 2px;
