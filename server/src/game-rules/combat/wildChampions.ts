@@ -54,10 +54,13 @@ export const WILD_CHAMPION_PROPS: Readonly<Record<string, WildChampionStat>> = {
     t: 6,
     name: "Krampus",
     props: {
-      speed: [2, 2.2, 2.4, 2.6, 2.8, 3],
-      health: [20000, 36000, 52000, 70000, 90000, 110000],
-      damage: [1200, 1600, 2000, 2600, 3200, 4000],
-      range: [35, 45, 55, 60, 65, 70],
+      // Between Fomor and Korath (owner, 27 Nov 2026: "closer to Fomor and
+      // Korath, more hybrid-ish"): health and speed their midpoint, damage
+      // about 55% of Korath's (his frost does the rest), Korath's melee reach.
+      speed: [1.3, 1.5, 1.9, 2, 2.2, 2.4],
+      health: [21500, 40000, 58000, 71000, 84500, 107500],
+      damage: [1100, 1300, 1650, 2100, 2750, 3600],
+      range: [35, 45, 55, 60, 65, 65],
       // The frost aura's slow, as a share (0.15 = 15% slower), and its radius in the
       // engine's range space (Fomor's enrage reaches 250 in it), per level.
       buffs: [0.15, 0.2, 0.25, 0.3, 0.35, 0.4],

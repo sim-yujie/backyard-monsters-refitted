@@ -1,6 +1,6 @@
 {
   "name": "frost-raid",
-  "description": "A frost raid on a small walled yard (beta 10, frost.ts): frost Eye-ras with Pokeys at the north-west walls, frost Teratorns and frost Fangs from the other sides, every wave marked frost, a bunker of Pokeys and a Zafreeti defending. Pins the frost area, the frostballs and frostbite.",
+  "description": "A frost raid on a small walled yard (beta 10, frost.ts): frost Eye-ras with Pokeys at the north-west walls, frost Teratorns and frost Fangs from the other sides, every wave marked frost, a bunker of Pokeys and a Zafreeti defending. Krampus (level 6) lands with the Teratorns' side five seconds in. Pins the frost area, the frostballs, frostbite and Krampus's aura, Frostbite, Ice Shards and Blizzard Stomp.",
   "yard": {
     "1": {
       "id": 1,
@@ -256,11 +256,24 @@
           "C8": 10
         },
         "frost": true
+      },
+      {
+        "kind": "raid",
+        "t": 400,
+        "x": 700,
+        "y": -300,
+        "r": 40,
+        "monsters": {},
+        "frost": true,
+        "champion": {
+          "t": 6,
+          "l": 6
+        }
       }
     ]
   },
   "expected": {
-    "ticks": 4067,
+    "ticks": 3386,
     "damage": 100,
     "destroyed": null,
     "attackloot": {
@@ -277,34 +290,30 @@
     },
     "firedTraps": 0,
     "destroyedBuildings": 17,
-    "creepsFlung": 52,
-    "creepsKilled": 30,
-    "championHp": null,
+    "creepsFlung": 53,
+    "creepsKilled": 7,
+    "championHp": 107464,
     "damagedBuildings": 17,
-    "rngDraws": 33326,
+    "rngDraws": 37755,
     "checkpoints": [
       {
         "tick": 800,
-        "digest": "851eaee9ce15406f"
+        "digest": "0f5e17509cec97ae"
       },
       {
         "tick": 1600,
-        "digest": "5b5c42516f8e1747"
+        "digest": "bfa3e2b6f2489f78"
       },
       {
         "tick": 2400,
-        "digest": "63b90626f1c963b4"
+        "digest": "c256579ac9aceaf4"
       },
       {
         "tick": 3200,
-        "digest": "c9bfb4f5d15fc6cb"
-      },
-      {
-        "tick": 4000,
-        "digest": "b442f36f0472575d"
+        "digest": "f57f26233b22dad9"
       }
     ],
-    "digest": "3c7b7100017604a6",
+    "digest": "fd81cb8fbd1d1a1d",
     "bunkerLosses": {
       "10": {
         "C1": 6,

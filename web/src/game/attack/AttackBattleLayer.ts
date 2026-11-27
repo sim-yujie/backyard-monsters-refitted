@@ -2667,7 +2667,12 @@ export class AttackBattleLayer {
       return;
     }
     if (event.kind === "quake") {
-      this.spawnQuake(event.tick, groundWorld(event.ix, event.iy, this.origin), event.radius);
+      const at = groundWorld(event.ix, event.iy, this.origin);
+      this.spawnQuake(event.tick, at, event.radius);
+      // Krampus's Blizzard Stomp (beta 10): an icy ring over the quake.
+      if (this.views.get(event.creepId)?.monsterId === "G6") {
+        this.spawnRing(event.tick, at, event.radius, 0x9fe4ff);
+      }
       return;
     }
     if (event.kind === "charge") {

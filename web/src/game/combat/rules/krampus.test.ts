@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  hasFireball,
+  hasQuake,
   KRAMPUS_AURA_INTERVAL,
   KRAMPUS_ID,
   krampusAuraRadius,
@@ -86,13 +88,13 @@ describe("Krampus's numbers (proposed, wildChampions.ts)", () => {
   it("grows from level 1 to 6", () => {
     expect(
       [1, 6].map((level) => championStat(KRAMPUS_ID, "health", level)),
-    ).toEqual([20_000, 110_000]);
+    ).toEqual([21_500, 107_500]);
     expect(
       [1, 6].map((level) => championStat(KRAMPUS_ID, "damage", level)),
-    ).toEqual([1_200, 4_000]);
+    ).toEqual([1_100, 3_600]);
     expect(
       [1, 6].map((level) => championStat(KRAMPUS_ID, "speed", level)),
-    ).toEqual([2, 3]);
+    ).toEqual([1.3, 2.4]);
     expect([1, 6].map(krampusAuraSlow)).toEqual([0.15, 0.4]);
     expect([1, 6].map(krampusAuraRadius)).toEqual([200, 300]);
     expect([1, 3, 6].map(krampusSlowPercent)).toEqual([15, 25, 40]);
@@ -159,10 +161,11 @@ describe("Krampus in a fight", () => {
       return ((ticks.at(-1) ?? 0) - (ticks[0] ?? 0)) / (ticks.length - 1);
     };
     const plain = meanGap(null);
-    const chilled = meanGap(6);
-    // 40% of its ticks lost: each gap about 1 / 0.6 of the plain one.
-    expect(chilled / plain).toBeGreaterThan(1.5);
-    expect(chilled / plain).toBeLessThan(1.85);
+    // Level 4: the aura alone (his Blizzard Stomp, from level 5, freezes harder).
+    const chilled = meanGap(4);
+    // 30% of its ticks lost: each gap about 1 / 0.7 of the plain one.
+    expect(chilled / plain).toBeGreaterThan(1.3);
+    expect(chilled / plain).toBeLessThan(1.6);
   });
 
   it("slows a chilled defender's walk to its level's share", () => {
@@ -206,7 +209,8 @@ describe("Krampus in a fight", () => {
     const ratio =
       meanStep({ t: 6, l: 6 }, true) / meanStep({ t: 1, l: 6 }, false);
     expect(ratio).toBeGreaterThan(0.5);
-    expect(ratio).toBeLessThan(0.7);
+    // About 0.6; his own blows (Korath's, beta 10's abilities) move the Pokeys' paths a little.
+    expect(ratio).toBeLessThan(0.75);
   });
 
   it("thaws everything when it falls", () => {
@@ -273,5 +277,45 @@ describe("Krampus in a fight", () => {
       );
     };
     expect(play()).toBe(play());
+  });
+});
+
+describe("Krampus's three abilities (beta 10, level-gated, champions.ts)", () => {
+  it("throws ice shards at flyers from level 4 and stomps from level 5, whatever his power", () => {
+    expect([3, 4, 6].map((level) => hasFireball(KRAMPUS_ID, level, 0))).toEqual([false, true, true]);
+    expect([4, 5, 6].map((level) => hasQuake(KRAMPUS_ID, level, 0))).toEqual([false, true, true]);
+    // Korath's own gates are untouched.
+    expect(hasFireball("G4", 6, 0)).toBe(false);
+    expect(hasQuake("G4", 6, 2)).toBe(false);
+  });
+
+  const lone = () => yardOf({ "1": { id: 1, t: 1, l: 10, X: 0, Y: 0, st: 1_000_000 } });
+
+  it("frostbites what he hits (Frostbite, every level): a building loses more than his blows", () => {
+    const battle = createBattle(lone(), { seed: 3, wildChampions: true });
+    fling(battle, -60, {}, { t: 6, l: 1 });
+    let blows = 0;
+    watch(battle, 20 * 80, (event) => {
+      if (event.kind === "hit" && event.buildingId === 1) blows += event.amount;
+    });
+    const full = lone().buildings.find((building) => building.id === 1)?.hp;
+    const left = battle.state().health["1"] ?? 0;
+    expect(blows).toBeGreaterThan(0);
+    expect((full ?? 0) - left).toBeGreaterThan(blows);
+  });
+
+  const stomps = (level: number): number => {
+    const battle = createBattle(frostYard(), { seed: 3, wildChampions: true });
+    fling(battle, -60, {}, { t: 6, l: level });
+    let quakes = 0;
+    watch(battle, 40 * 80, (event) => {
+      if (event.kind === "quake") quakes += 1;
+    });
+    return quakes;
+  };
+
+  it("stomps (Blizzard Stomp) only from level 5", () => {
+    expect(stomps(4)).toBe(0);
+    expect(stomps(5)).toBeGreaterThan(0);
   });
 });

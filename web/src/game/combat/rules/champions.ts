@@ -115,11 +115,13 @@ export const hasFlame = (id: string, power: number): boolean =>
  * (`Korath.as:72`, `:99`, `:118`, `:131`); without it he cannot hit one.
  */
 export const hasFireball = (id: string, level: number, power: number): boolean =>
-  id === KORATH_ID && power >= KORATH_POWER_FIREBALL && level > 3;
+  (id === KORATH_ID && power >= KORATH_POWER_FIREBALL && level > 3) ||
+  (id === KRAMPUS_ID && level >= KRAMPUS_ICE_SHARDS_LEVEL);
 
 /** The quake, from power level 3 at level 5 and up (`Korath.as:184`). */
 export const hasQuake = (id: string, level: number, power: number): boolean =>
-  id === KORATH_ID && power >= KORATH_POWER_STOMP && level > 4;
+  (id === KORATH_ID && power >= KORATH_POWER_STOMP && level > 4) ||
+  (id === KRAMPUS_ID && level >= KRAMPUS_BLIZZARD_LEVEL);
 
 /** The fireball deals a quarter of his damage, as an `int` (`Korath.as:114`). */
 export const KORATH_FIREBALL_DIVISOR = 4;
@@ -317,6 +319,34 @@ export const krampusAuraSlow = (level: number): number => championStat(KRAMPUS_I
 /** The aura's radius, in the engine's range space (`buffRadius`): PROPOSED 200 to 300. */
 export const krampusAuraRadius = (level: number): number =>
   championStat(KRAMPUS_ID, "buffRadius", level);
+
+/*
+ * Krampus's three active abilities (owner, 27 Nov 2026: "3 'active' abilities
+ * similar to Korath"), beside his frost aura. He is the frost tribe's and
+ * never a player's, so no power level unlocks them (the raids bring him at
+ * power 0): his level does, as Korath's level gates his fireball and quake.
+ * PROPOSED for the owner's desk.
+ *
+ * 1. Frostbite (every level): each blow and ice shard leaves
+ *    frostbite on the monster or building it hit (`frost.ts`, the frost
+ *    Fang's): {@link KRAMPUS_FROSTBITE_SHARE} of his damage a second for
+ *    `FROSTBITE_SECONDS`, refreshed, never stacked. Korath's Burn.
+ * 2. Ice Shards (level {@link KRAMPUS_ICE_SHARDS_LEVEL} and up): he hits
+ *    flyers, a shard of a quarter of his damage, as Korath's fireball, that
+ *    chills the flyer {@link KRAMPUS_SHARD_SLOW}% for
+ *    {@link KRAMPUS_SHARD_SECONDS} s. Korath's Breath of Fire.
+ * 3. Blizzard Stomp (level {@link KRAMPUS_BLIZZARD_LEVEL} and up): after
+ *    three blows, Korath's quake (same reach and fall-off), and every tower
+ *    whose middle is inside it acts {@link KRAMPUS_BLIZZARD_SLOW}% slower for
+ *    {@link KRAMPUS_BLIZZARD_SECONDS} s. Korath's Fists of Doom.
+ */
+export const KRAMPUS_FROSTBITE_SHARE = 0.15;
+export const KRAMPUS_ICE_SHARDS_LEVEL = 4;
+export const KRAMPUS_SHARD_SLOW = 30;
+export const KRAMPUS_SHARD_SECONDS = 2;
+export const KRAMPUS_BLIZZARD_LEVEL = 5;
+export const KRAMPUS_BLIZZARD_SLOW = 60;
+export const KRAMPUS_BLIZZARD_SECONDS = 3;
 
 /** The slow in whole percent, 0-90, for the towers' tick count (integers: same everywhere). */
 export const krampusSlowPercent = (level: number): number =>

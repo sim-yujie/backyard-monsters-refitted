@@ -16,6 +16,11 @@ import {
   KORATH_ID,
   KRALLEN_ID,
   KRAMPUS_AURA_INTERVAL,
+  KRAMPUS_BLIZZARD_SECONDS,
+  KRAMPUS_BLIZZARD_SLOW,
+  KRAMPUS_FROSTBITE_SHARE,
+  KRAMPUS_SHARD_SECONDS,
+  KRAMPUS_SHARD_SLOW,
   KRAMPUS_ID,
   krampusAuraRadius,
   krampusSlowPercent,
@@ -5112,7 +5117,9 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
     }
     if (!target || target.hp <= 0) return;
     // Korath counts every swing towards his quake (`Korath.as:78`).
-    if (creep.monsterId === KORATH_ID && creep.champion) creep.hits += 1;
+    if (creep.champion && (creep.monsterId === KORATH_ID || creep.monsterId === KRAMPUS_ID)) {
+      creep.hits += 1;
+    }
     // A monster's shot is `rangedAttack`'s plain `damage`, outside the specialist
     // multipliers (`CreepBase.as:886-894`, `:919-920`); Sabnox doubles its own at
     // a tower (`Sabnox.as:12-17`).
@@ -5140,6 +5147,10 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
     recordHit(creep, aim.x, aim.y, dealt, lastBlowMods);
     if (creep.rank > 0) onAttack(creep, creep.damage * multiplier, null, target);
     if (creep.frost) frostHit(creep, creep.damage * multiplier, null, target);
+    // Krampus's Frostbite (beta 10, `champions.ts`).
+    if (creep.champion && creep.monsterId === KRAMPUS_ID) {
+      frostbite(creep, creep.damage * KRAMPUS_FROSTBITE_SHARE, null, target);
+    }
     if (creep.monsterId === KING_WORMZER_ID) {
       kingWormzerSplash(creep, creep.damage * multiplier, null, target);
     }
@@ -5248,20 +5259,27 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
    * is who the blow turns, for issue #195.
    */
   const strikeCreep = (creep: Creep, foe: Creep, by: Creep | null): number => {
-    if (!(creep.champion && creep.monsterId === KORATH_ID)) {
+    const krampus = creep.champion && creep.monsterId === KRAMPUS_ID;
+    if (!(creep.champion && creep.monsterId === KORATH_ID) && !krampus) {
       // A ranked Crabatron's critical hit doubles the blow (Lab "Critical Hits").
       const crit = critRoll(creep);
       const blow = crit ? huntBlow(creep) * CRIT_MULTIPLIER : huntBlow(creep);
       return damageCreep(foe, blow, by, creep, crit ? "crit" : "hit");
     }
-    if (foe.flying && hasFireball(KORATH_ID, creep.level, creep.power)) {
+    if (foe.flying && hasFireball(creep.monsterId, creep.level, creep.power)) {
       // The flame catches as the fireball lands, before its damage (`FIREBALL.as:138-149`).
       burn(foe, creep);
+      if (krampus) {
+        // Krampus's Ice Shards (beta 10): the shard chills the flyer and leaves frostbite.
+        chillCreep(foe, KRAMPUS_SHARD_SLOW, KRAMPUS_SHARD_SECONDS * TICKS_PER_SECOND);
+        frostbite(creep, creep.damage * KRAMPUS_FROSTBITE_SHARE, foe, null);
+      }
       return damageCreep(foe, Math.trunc(creep.damage / KORATH_FIREBALL_DIVISOR), by, creep);
     }
     creep.hits += 1;
     const dealt = damageCreep(foe, creep.damage, by, creep);
     burn(foe, creep);
+    if (krampus) frostbite(creep, creep.damage * KRAMPUS_FROSTBITE_SHARE, foe, null);
     return dealt;
   };
 
@@ -5414,7 +5432,9 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
     foe: Creep | null,
     building: EngineBuilding | null,
   ): void => {
-    if (creep.monsterId === FANG_ID) frostbite(creep, damage, foe, building);
+    if (creep.monsterId === FANG_ID) {
+      frostbite(creep, damage * frostbiteShare(creep.level), foe, building);
+    }
     else if (creep.monsterId === TERATORN_ID) frostball(creep, foe, building);
   };
 
@@ -5427,11 +5447,10 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
    */
   const frostbite = (
     fang: Creep,
-    damage: number,
+    dps: number,
     foe: Creep | null,
     building: EngineBuilding | null,
   ): void => {
-    const dps = damage * frostbiteShare(fang.level);
     if (dps <= 0) return;
     if (foe) {
       if (foe.hp <= 0 || foe.gone) return;
@@ -6849,6 +6868,11 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
         if (dealt !== undefined) damageBuilding(building, dealt, creep, 1);
       }
     }
+    // Krampus's Blizzard Stomp (beta 10): the towers inside it freeze up.
+    if (creep.monsterId === KRAMPUS_ID && !creep.friendly) {
+      const ticksLong = KRAMPUS_BLIZZARD_SECONDS * TICKS_PER_SECOND;
+      chillTowersNear(creep.x, creep.y, radius, KRAMPUS_BLIZZARD_SLOW, ticksLong);
+    }
     visual.push({ kind: "quake", tick, creepId: creep.id, ix: creep.ix, iy: creep.iy, radius });
   };
 
@@ -7370,7 +7394,7 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
     if (creep.champion) {
       tickAura(creep);
       creep.frame += 1;
-      if (creep.monsterId === KORATH_ID && quakeCheck(creep)) {
+      if ((creep.monsterId === KORATH_ID || creep.monsterId === KRAMPUS_ID) && quakeCheck(creep)) {
         moveCreep(creep);
         return;
       }
