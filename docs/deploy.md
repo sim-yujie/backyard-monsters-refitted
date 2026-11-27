@@ -282,8 +282,21 @@ deploy/prod.sh up -d --build
 ```
 
 The first takes a fresh backup, just in case. The last rebuilds the game
-server and brings the database up to date by itself. Players are cut off for
-about half a minute while it restarts.
+server and brings the database up to date by itself.
+
+What players see during the restart (beta 10): the old server stops taking
+connections and finishes the requests it has (up to 10 s, `stop_grace_period`
+20 s), then the new one starts. Meanwhile Caddy holds each new request and
+tries again every 250 ms for up to 45 s (`lb_try_duration` in
+`deploy/Caddyfile`), so players see a short pause, not an error; chat and the
+live map reconnect. `deploy/prod.sh ps` shows `web` as `healthy` once the API
+answers `/connection` again.
+
+**Caddy reads its Caddyfile only when it starts.** `up -d --build` does not
+restart Caddy, and copying new code replaces the file under the running
+container, which keeps the old one. After a release that changes
+`deploy/Caddyfile`, run once: `deploy/prod.sh up -d --force-recreate caddy`
+(a second or two without HTTPS).
 
 ### Updating without GitHub (how bymrevamped.com is run now)
 
