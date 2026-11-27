@@ -2,6 +2,7 @@ import { existsSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { setClassicLook } from "./classicLook";
+import { FROST_MONSTERS } from "./attack/monsterSkins";
 import { CHAMPION_CATALOGUE } from "./yard/championCatalogue";
 import {
   PAINTED_CHAMPION_LEVELS,
@@ -13,6 +14,7 @@ import {
 } from "./portraits";
 
 const publicFile = (src: string): string => fileURLToPath(new URL(`../../public${src}`, import.meta.url));
+const serverFile = (src: string): string => fileURLToPath(new URL(`../../../server/public${src}`, import.meta.url));
 
 describe("monsterPortrait", () => {
   it("shows the painting, with the server's original behind it", () => {
@@ -96,7 +98,6 @@ describe("with the Classic look on", () => {
 
 describe("the original champion files", () => {
   it("are all on the game server, card and icon, at every level", () => {
-    const serverFile = (src: string): string => fileURLToPath(new URL(`../../../server/public${src}`, import.meta.url));
     setClassicLook(true);
     const sources = CHAMPION_CATALOGUE.flatMap((entry) =>
       Array.from({ length: entry.levels }, (_, i) =>
@@ -116,9 +117,25 @@ describe("the painted files", () => {
       const names = levels === "all" ? [id] : levels.map((level) => `${id}-L${level}`);
       for (const name of names) files.push(name, `${name}-icon`);
     }
-    expect(files).toHaveLength(102);
+    // 102, plus Krampus (G6, beta 10's frost champion): 6 levels, card and icon.
+    expect(files).toHaveLength(114);
     const missing = files.filter((name) => !existsSync(publicFile(`/portraits/${name}.webp`)));
     expect(missing).toEqual([]);
+  });
+
+  it("have a frost copy for every frost tribe monster, in both looks (beta 10)", () => {
+    const sources: string[] = [];
+    for (const id of FROST_MONSTERS) {
+      for (const size of ["card", "icon"] as const) {
+        const painted = monsterPortrait(id, size, "frost");
+        expect(painted.src).toContain("/portraits/frost/");
+        expect(painted.fallback).toContain("/assets/monsters/frost/");
+        sources.push(painted.src, painted.fallback ?? "");
+      }
+    }
+    expect(sources.filter((src) => !existsSync(src.includes("/portraits/") ? publicFile(src) : serverFile(src)))).toEqual([]);
+    // A monster with no frost look keeps its own.
+    expect(monsterPortrait("C2", "card", "frost")).toEqual(monsterPortrait("C2", "card"));
   });
 });
 

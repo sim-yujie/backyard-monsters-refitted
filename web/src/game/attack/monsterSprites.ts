@@ -4,6 +4,7 @@ import { windUpFrame } from "./juice";
 import { SHEET_VERSIONS } from "./sheetVersions";
 import { monsterSheetLevel, sheetAtQuality, sheetCopies, sheetForDevice } from "@/game/quality";
 import { artUrl } from "../../artUrl";
+import { hasSkin, sheetSkin, skinFile, skinnedSheet, type MonsterSkin } from "./monsterSkins";
 
 /**
  * Picking a cell out of a monster sprite sheet.
@@ -712,9 +713,10 @@ export const krallenLook = (level: number): number => (level >= 5 ? 3 : level >=
  * and in battle alike (Flash used her power level, `Krallen.as:48`). A level
  * below 1 uses the first sheet. Undefined for an id the table does not know.
  */
-export function spriteFor(creatureId: string, level = 1): AnimatedSheet | undefined {
+export function spriteFor(creatureId: string, level = 1, skin?: MonsterSkin): AnimatedSheet | undefined {
   const direct = MONSTER_SPRITES[creatureId];
-  if (direct) return withLayout(direct);
+  // A skin (`monsterSkins.ts`) draws the same sheet from its own copy of the file.
+  if (direct) return withLayout(skin && hasSkin(creatureId, skin) ? skinnedSheet(direct, skin) : direct);
   const sheets = championSheets(creatureId);
   if (sheets.length === 0) return undefined;
   const look = creatureId === KRALLEN_SHEET_FAMILY ? krallenLook(level) : level;
@@ -1019,18 +1021,21 @@ export const isHighResolutionSheet = (url: string): boolean => /@\d+(\.\d+)?x\.\
  */
 export function sheetUrl(sheet: MonsterSheet | string): string {
   const file = typeof sheet === "string" ? sheet : sheet.file;
+  const skin = typeof sheet === "string" ? undefined : sheetSkin(sheet);
   const repaint = classicLook() ? undefined : REPAINTED_SHEETS[file];
-  if (!repaint) return `${ASSET_ROOT}${file}`;
+  if (!repaint) return `${ASSET_ROOT}${skin ? skinFile(file, skin) : file}`;
   // Never above Medium on a phone or tablet, by either way of asking.
   const level = monsterSheetLevel();
   const copy =
     typeof sheet === "string"
       ? sheetAtQuality(repaint, level)
       : sheetForDevice(repaint, applyLayout(sheet), undefined, level);
-  return versionedUrl(copy);
+  return versionedUrl(copy, skin);
 }
 
-const versionedUrl = (copy: string): string => {
+/** A copy's URL with its version; a skin's copy (`monsters/frost/...`) is its own file, unversioned until it changes. */
+const versionedUrl = (copy: string, skin?: MonsterSkin): string => {
+  if (skin) return `${ASSET_ROOT}${skinFile(copy, skin)}`;
   const version = SHEET_VERSIONS[copy];
   return `${ASSET_ROOT}${copy}${version ? `?v=${version}` : ""}`;
 };
@@ -1048,6 +1053,6 @@ export function sheetStandInUrl(sheet: MonsterSheet): string | null {
   if (!repaint) return null;
   const copies = sheetCopies(repaint);
   if (!copies) return null;
-  const standIn = versionedUrl(copies.low);
+  const standIn = versionedUrl(copies.low, sheetSkin(sheet));
   return standIn === sheetUrl(sheet) ? null : standIn;
 }

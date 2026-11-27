@@ -1,0 +1,22 @@
+Generate an image using your image generation tool (one image only, do not make variations or extra files).
+
+Attached:
+- champions.png: the REAL champion portraits of our game Backyard Monsters Revamped (Gorgo the blue ape, Drull the two-headed dragon, Fomor, Korath the lava beast, Krallen), each at level 1, 3 and 6. This is the STYLE and WEIGHT to match: bold, chunky, saturated painted 3D-looking creatures with strong dark shadow sides, deep rich colour, thick heavy shapes, glossy highlights from a key light at the upper left, a strong silhouette that reads at small size.
+- champ-krampus.png: the APPROVED DESIGN of our new champion "Krampus" (level 1 kid, level 3 beast, level 6 armoured, and its frost power). Keep this exact design (goat-like four-legged horned beast, shaggy grey-white frosted fur, dark charcoal-blue face and legs, long goat face with a fanged grin and a long dark tongue, two big curling horns of translucent ice-blue crystal, glowing icy-cyan eyes, a thin tufted tail; level 6 wears dark iron shoulder plates, a riveted iron muzzle plate, rusted chains wrapped round its body and heavy iron bells). But the concept is too pale, too fine and too thin next to the real champions.
+
+Job: the PRODUCTION portraits of Krampus at all SIX levels, painted BOLDER to sit beside Gorgo, Drull and Korath at the same visual weight:
+- thicker, heavier body and legs, bigger head, chunkier horns (still clear ice crystal), a shaggier, denser coat;
+- much stronger contrast: dark blue-grey shadows in the fur, deep charcoal-navy skin, near-black in the deepest shadows like the real champions; fur is cool grey-white with blue shading, NOT flat white;
+- saturated glowing icy-cyan eyes, a dark red-purple tongue, ivory fangs; frost and snow crust on the back, icicles hanging from the fur;
+- the same painting quality, polish, lighting and camera as the real champions: front-left view about 30 degrees above, facing toward the lower left.
+
+Growth, ONE creature that grows (like Gorgo's level 1-6), all six drawn at ONE scale so it visibly grows:
+- Level 1: a small fluffy kid, big head, big icy eyes, tiny crystal horn buds. About 35% of the cell height.
+- Level 2: a young goat-beast, longer legs, short crystal horns starting to curl. About 48%.
+- Level 3: the full beast, long legs, big curling crystal horns, the shaggy frosted coat. About 62%.
+- Level 4: bigger and heavier, horns with a full curl, a first armour piece: one dark iron shoulder plate and a leather strap, iron cuffs above the hooves. About 72%.
+- Level 5: bigger, horns larger with more curl, both iron shoulder plates, a rusted chain round its chest with one iron bell. About 82%.
+- Level 6: the biggest and oldest, huge horns with several curls, full armour: iron shoulder plates, riveted iron muzzle plate, rusted chains wrapped round the body with several heavy iron bells, spiked iron cuffs. About 92%.
+
+Canvas 1536x1024 split into 3 columns x 2 rows of equal square cells (512x512): row 1 = levels 1, 2, 3 left to right; row 2 = levels 4, 5, 6. Each creature stands centred in its cell, feet near the bottom of the cell, on a FLAT pure magenta #FF00FF background (no ground, no shadow, no gradient, no texture: pure flat #FF00FF everywhere that is not the creature). Nothing of the creature may touch a cell edge or cross into another cell. No grid lines, no numbers, no text, no labels, no frame, no Santa hats or costume items.
+Save the final PNG as krampus-levels.png in the current working directory.

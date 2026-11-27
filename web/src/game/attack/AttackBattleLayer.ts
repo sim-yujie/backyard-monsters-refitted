@@ -1,3 +1,4 @@
+import { creepSkin } from "./monsterSkins";
 import {
   ColorMatrixFilter,
   Container,
@@ -1536,7 +1537,8 @@ export class AttackBattleLayer {
     if (stamp === this.scriptSeen) return;
     this.scriptSeen = stamp;
     for (const id of this.session.scriptedMonsters()) {
-      const sheet = spriteFor(id, this.session.levels[id] ?? 1);
+      // A script brings on the attacking side (a raid's waves, a replay's flings).
+      const sheet = spriteFor(id, this.session.levels[id] ?? 1, creepSkin(this.session.skins, id, false));
       if (sheet) this.textures.preload(sheet, true);
       if (id === DAVE_ID) this.textures.preload(ROCKET_SHEET);
     }
@@ -1567,7 +1569,7 @@ export class AttackBattleLayer {
     if (!defence) return;
     for (const garrison of Object.values(defence.bunkers)) {
       for (const id of Object.keys(garrison)) {
-        const sheet = spriteFor(id, defence.defenderLevels[id] ?? 1);
+        const sheet = spriteFor(id, defence.defenderLevels[id] ?? 1, creepSkin(this.session.skins, id, true));
         if (sheet) this.textures.preload(sheet);
         if (id === DAVE_ID) this.textures.preload(ROCKET_SHEET);
       }
@@ -1791,7 +1793,7 @@ export class AttackBattleLayer {
     const view = this.pool.pop() ?? this.makeView();
     view.id = creep.id;
     view.monsterId = creep.monsterId;
-    view.sheet = spriteFor(creep.monsterId, creep.level) ?? null;
+    view.sheet = spriteFor(creep.monsterId, creep.level, creepSkin(this.session.skins, creep.monsterId, creep.friendly)) ?? null;
     view.lastX = ground.x;
     view.lastY = ground.y;
     view.lastTick = tick;
