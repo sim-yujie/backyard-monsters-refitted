@@ -103,23 +103,29 @@
  * but beta 9's other changes move its battles, so 8.7's 92ea2dbbfe06531c is
  * not listed.
  *
+ * Beta 10's monster rebalance keeps it empty (owner, desk b10-numbers,
+ * 27 Nov 2026): Crabatron, Wormzer, Project X and Fang health, Wormzer's
+ * housing, Zafreeti's speed, Ichi's Thorns (7/10/13%) and the main yard's
+ * Spurtz brood (at most 2 a cannon) move battles, so no replay stamped with
+ * beta 9's 15bf255b01aafabc plays the same any more; the Defences list says
+ * "Recorded before beta 10" instead (`defenceWatch.ts`).
+ *
  * Add the version a change replaces only when that change moves no battle.
  * A change that moves any battle result must empty this list.
  *
  * Beta 10's frost tribe (Krampus, a wild champion, and its frost aura,
  * `wildChampions.ts`) changes no battle without Krampus in it: a chill of 1
  * and an unchilled tower leave every number as it was, and no log could
- * bring a Krampus on before. So beta 9's 15bf255b01aafabc still plays the
- * same.
+ * bring a Krampus on before.
  *
  * Beta 10's frost monsters (`frost.ts`: the frost Eye-ra's area, the frost
  * Teratorn's frostballs, the frost Fang's frostbite) fight only when a fight
  * says its side is frost (`BattleOptions.frostAttackers`/`frostDefenders`, a
  * raid wave's `frost`), which no log or attack before could; every other
- * monster fights as before (the golden replays are unchanged). So beta 9's
- * 15bf255b01aafabc still plays the same.
+ * monster fights as before (the golden replays are unchanged). Neither
+ * adds a version here: the rebalance above already empties the list.
  */
-export const COMPATIBLE_RULES_VERSIONS: readonly string[] = ["15bf255b01aafabc"];
+export const COMPATIBLE_RULES_VERSIONS: readonly string[] = [];
 
 /**
  * Whether a battle stamped with the rules version `stamp` plays to its stored

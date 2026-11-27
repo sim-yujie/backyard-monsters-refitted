@@ -59,7 +59,7 @@ describe("the version check", () => {
   });
 
   it("says why in the owner's words", () => {
-    expect(DEFENCE_REFUSAL_TEXT.update).toBe("Replay not available after a game update");
+    expect(DEFENCE_REFUSAL_TEXT.update).toBe("Recorded before beta 10");
     expect(DEFENCE_REFUSAL_TEXT.missing).toBe("Replay not available");
   });
 

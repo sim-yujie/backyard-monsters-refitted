@@ -202,14 +202,14 @@ describe("the mailbox screen", () => {
     });
 
     it("says why in Watch's place when the replay cannot be played", async () => {
-      const onWatchDefence = vi.fn(async () => "Replay not available after a game update");
+      const onWatchDefence = vi.fn(async () => "Recorded before beta 10");
       const { host } = await openNotice({ onWatchDefence, onOpenDefences: vi.fn() });
 
       click(host.querySelector(".mail-message__watch"));
       await settle();
       expect(host.querySelector(".mail-message__watch")).toBeNull();
       expect(host.querySelector(".mail-message__defence-note")?.textContent).toBe(
-        "Replay not available after a game update",
+        "Recorded before beta 10",
       );
       expect(host.querySelector(".mail-message__defences")).not.toBeNull();
     });

@@ -62,7 +62,7 @@ const portrait = (paintedFile: string | null, original: string): Portrait =>
 /** A monster's portrait; the originals are `-portrait.jpg` (180x120) and `-small.png` (45x40). */
 export const monsterPortrait = (id: string, size: PortraitSize, skin?: MonsterSkin): Portrait =>
   skin && hasSkin(id, skin)
-    ? // A skin's portraits (`monsterSkins.ts`): `portraits/frost/C1.webp`, `/assets/monsters/frost/C1-portrait.jpg`.
+    ? // A skin's portraits (`monsterSkins.ts`): the painted frost card, then the frost Flash portrait.
       portrait(
         `${skin}/${size === "card" ? id : `${id}-icon`}`,
         artUrl(`/assets/monsters/${skin}/${id}-${size === "card" ? "portrait.jpg" : "small.png"}`),

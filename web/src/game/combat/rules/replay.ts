@@ -1,7 +1,7 @@
 import { damagePercent, derivedDestroyed } from "./damagePercent.js";
 import { createDigest } from "./digest.js";
 import { createBattle } from "./engine.js";
-import { ATTACK_MAX_SECONDS, RAID_MAX_SECONDS, ticks } from "./stats.js";
+import { ATTACK_MAX_SECONDS, RAID_MAX_SECONDS, ticks, type SpurtzHatchRule } from "./stats.js";
 import { toCombatYard } from "./types.js";
 import { buildEngineYard } from "./yard.js";
 import type {
@@ -118,6 +118,8 @@ export interface ReplayInput {
   readonly frostDefenders?: boolean;
   /** False keeps the fractions of health the rules before kept (`BattleOptions.wholeHealth`). */
   readonly wholeHealth?: boolean;
+  /** Another main-yard Spurtz rule (`BattleOptions.spurtzHatch`), for tests and balance runs. */
+  readonly spurtzHatch?: SpurtzHatchRule;
 }
 
 /**
@@ -269,6 +271,7 @@ export const replayAttack = (input: ReplayInput): ReplayOutcome => {
     ...(input.flashKrallen === false ? { flashKrallen: false } : {}),
     ...(input.frostDefenders === true ? { frostDefenders: true } : {}),
     ...(input.wholeHealth === false ? { wholeHealth: false } : {}),
+    ...(input.spurtzHatch ? { spurtzHatch: input.spurtzHatch } : {}),
   };
 
   const battle = createBattle(yard, options);
