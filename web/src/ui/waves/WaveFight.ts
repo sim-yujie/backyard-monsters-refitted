@@ -1,7 +1,6 @@
 import type { WaveStatus } from "@/api/waves";
 import { el } from "@/ui/dom";
 import { gameIcon } from "@/ui/gameIcon";
-import { isPhoneLayout } from "@/ui/phoneLayout";
 import "@/ui/styles/waves.css";
 import { waveMonsterImage, waveMonsterName } from "./waveArt";
 
@@ -90,8 +89,9 @@ export class WaveFightHud {
     status.append(plaque, healthGroup, leftGroup);
     status.classList.add("wave-status--waiting");
     this.element = status;
-    // A phone's strip has room in its middle (its title is hidden there): the pill rides in it.
-    const slot = isPhoneLayout() ? options.strip?.querySelector<HTMLElement>(".attack-strip__slot") : null;
+    // The strip is all but empty in a wave's fight: the pill rides in its middle
+    // (on a phone, where the strip's title is hidden, at its left).
+    const slot = options.strip?.querySelector<HTMLElement>(".attack-strip__slot");
     if (slot) {
       status.classList.add("wave-status--in-strip");
       slot.prepend(status);
@@ -105,6 +105,8 @@ export class WaveFightHud {
   /** Keeps a piece of the fight (Surrender) under the strip with the pill. */
   adopt(piece: HTMLElement): void {
     piece.classList.add("wave-fight-piece");
+    // Out of the slam's way until it has folded.
+    if (this.slamPlate) piece.classList.add("wave-fight-piece--waiting");
     this.extras.push(piece);
     this.options.layer.append(piece);
     this.place();
@@ -125,6 +127,7 @@ export class WaveFightHud {
     plate.setAttribute("aria-hidden", "true");
     plate.append(el("span", "wave-slam__words", this.options.slam));
     this.slamPlate = plate;
+    for (const piece of this.extras) piece.classList.add("wave-fight-piece--waiting");
     this.options.layer.append(plate);
     this.place();
     this.timers.push(
@@ -133,6 +136,7 @@ export class WaveFightHud {
         plate.remove();
         if (this.slamPlate === plate) this.slamPlate = null;
         this.element.classList.remove("wave-status--waiting");
+        for (const piece of this.extras) piece.classList.remove("wave-fight-piece--waiting");
       }, WAVE_SLAM_MS + WAVE_SLAM_FOLD_MS),
     );
   }

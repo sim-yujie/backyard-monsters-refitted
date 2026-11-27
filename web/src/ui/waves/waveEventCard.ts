@@ -41,7 +41,6 @@ export const waveCardBody = (status: WaveStatus, onStart: () => void): HTMLEleme
   }
   const prize = el("div", "wave-hud__prize");
   prize.title = "Prize for beating it";
-  prize.append(gameIcon("gift", { size: 24, decorative: true, className: "wave-hud__prize-icon" }));
   if (status.prize && status.prize.glimmers > 0) {
     const coins = coinAmount(`+${status.prize.glimmers}`, { size: 24 });
     coins.setAttribute("aria-label", coinWords(status.prize.glimmers));

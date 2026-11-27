@@ -196,7 +196,13 @@ export class WaveHud {
     const tag = el("div", "wave-hud__tag");
     const plaque = el("span", "wave-hud__plaque");
     if (done) plaque.textContent = "All beaten";
-    else plaque.append(el("span", "wave-hud__label-long", tagWords(status, status.next!)), el("span", "wave-hud__label-short", shortWords));
+    else {
+      plaque.append(
+        el("span", "wave-hud__label-long", tagWords(status, status.next!)),
+        el("span", "wave-hud__label-mid", tagWords(status, status.next!).replace(/^Wave /, "W")),
+        el("span", "wave-hud__label-short", shortWords),
+      );
+    }
     tag.append(totem(), plaque);
 
     // The fold, at the end of the open bar (A) or the drawer (B on a phone).
@@ -231,7 +237,6 @@ export class WaveHud {
     // The prize on its own dark inset, after a divider, so it never reads as a price.
     const prize = el("div", "wave-hud__prize");
     prize.title = "Prize for beating it";
-    prize.append(gameIcon("gift", { size: 24, decorative: true, className: "wave-hud__prize-icon" }));
     const coins = prizeCoins(24);
     if (coins) prize.append(coins);
     if (status.prize?.totemLevel && status.totemType) {

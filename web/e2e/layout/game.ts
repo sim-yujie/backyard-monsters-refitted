@@ -234,7 +234,33 @@ const WINDOW_CLASSES = [
   ".auto-attack--result",
   ".xfer-tray",
   ".attack-window",
+  // A wave event's arrival pop-up (beta 10): it opens by itself on a yard
+  // while a wave event is on, so it is closed with the rest.
+  ".wave-intro",
 ];
+
+/**
+ * Shows a wave event's arrival pop-up again (beta 10): forgets that this
+ * device saw it and reloads; it opens on its own while a wave event is on.
+ * False when no wave event is on (the sandbox yard outside one).
+ */
+export const openWaveIntro = async (page: Page): Promise<boolean> => {
+  await page.evaluate(() => {
+    try {
+      window.localStorage.removeItem("bymr.waveIntroSeen");
+    } catch {
+      /* no storage: no pop-up either */
+    }
+  });
+  await page.reload();
+  await waitForYard(page);
+  return page
+    .locator(".overlay__layer .wave-intro")
+    .first()
+    .waitFor({ state: "visible", timeout: 10_000 })
+    .then(() => true)
+    .catch(() => false);
+};
 
 const openWindows = (page: Page) =>
   page.locator(`.overlay__layer :is(${WINDOW_CLASSES.join(", ")})`);
