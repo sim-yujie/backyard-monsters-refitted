@@ -253,6 +253,28 @@ describe("a wave's landing", () => {
     expect(schedule.fight).toBeUndefined();
   });
 
+  test("costs only repairs: fired traps stay armed, bunkers keep defenders, the champion its health, no housed loss", () => {
+    const save = yard();
+    (save.buildingdata as Record<string, unknown>)["7"] = { id: 7, t: 24, X: 200, Y: 0, l: 1 };
+    save.champion = [{ t: 1, l: 3, hp: 5000 }] as never;
+    const result = landRaid(
+      save,
+      {
+        id: "r_w",
+        tribe: WAVE_TRIBE,
+        startedAt: NOW - 100,
+        outcome: { ...outcome(0.6), firedTraps: [7], health: { "2": 10, "7": 0 }, defenderChampions: [{ t: 1, hp: 1 }] },
+      },
+      NOW
+    );
+    expect(save.buildingdata!["7"]).toBeDefined();
+    expect((save.buildinghealthdata as Record<string, unknown>)["7"]).toBeUndefined();
+    expect(save.firedtraps ?? []).not.toContain(7);
+    expect(save.champion).toEqual([{ t: 1, l: 3, hp: 5000 }]);
+    expect(result.housedLost).toBe(0);
+    expect(save.buildingdata!["2"]!.rE).toBe(1);
+  });
+
   test("wave 1 beaten: counted, Glimmers paid once, the totem into storage", async () => {
     const save = yard();
     const plan = { army: { C2: 5 }, wave: { event: "wmi1", run: RUN, wave: 1 } };

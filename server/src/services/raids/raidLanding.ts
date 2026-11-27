@@ -176,16 +176,23 @@ export const landRaid = (save: RaidLandingSave, raid: RaidLandingInput, now: num
   const isWave = isWaveTribe(raid.tribe);
   const healthBefore = save.buildinghealthdata;
 
-  buildingDataHandler(buildingDataWithout(save.buildingdata as JsonObject, outcome.firedTraps), save as Save);
+  // A wave costs only repairs (owner, 27 Nov 2026): its fired traps stay armed, its
+  // bunkers keep their defenders, the caged champion its health, and no housed
+  // monster is lost with a fallen Housing.
+  const firedTraps = isWave ? [] : outcome.firedTraps;
+  buildingDataHandler(buildingDataWithout(save.buildingdata as JsonObject, firedTraps), save as Save);
   const health: BuildingHealthData = { ...outcome.health };
+  if (isWave) for (const id of outcome.firedTraps) delete health[String(id)];
   save.buildingdata = withHealth(
-    garrisonsAfterBattle(save.buildingdata, { buildinghealthdata: health, bunkerGarrisons: outcome.bunkerGarrisons }),
+    isWave
+      ? ((save.buildingdata ?? {}) as BuildingDataMap)
+      : garrisonsAfterBattle(save.buildingdata, { buildinghealthdata: health, bunkerGarrisons: outcome.bunkerGarrisons }),
     health
   );
   save.buildinghealthdata = health;
-  save.champion = championsAfterDefence(save.champion, outcome.defenderChampions) ?? save.champion;
+  if (!isWave) save.champion = championsAfterDefence(save.champion, outcome.defenderChampions) ?? save.champion;
   save.damage = storedDamage(outcome.damage) ?? save.damage;
-  const housing = landHousingLoss(save, { before: healthBefore, after: health }, save, now);
+  const housing = isWave ? null : landHousingLoss(save, { before: healthBefore, after: health }, save, now);
 
   const buildingdata: BuildingDataMap = { ...save.buildingdata };
   const damaged: number[] = [];
