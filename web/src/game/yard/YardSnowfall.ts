@@ -116,7 +116,7 @@ export class YardSnowfall {
       const depth = this.random();
       const sprite = new Sprite(this.texture);
       sprite.anchor.set(0.5);
-      sprite.alpha = 0.55 + depth * 0.4;
+      sprite.alpha = 0.7 + depth * 0.3;
       this.root.addChild(sprite);
       this.flakes.push({
         sprite,
@@ -124,7 +124,7 @@ export class YardSnowfall {
         v: this.random(),
         fall: 22 + depth * 46,
         // Most flakes small; the nearest few big enough to read over bright snow (neon, 27 Nov 2026).
-        size: 3 + depth * depth * 7,
+        size: 4 + depth * depth * 7,
         swayBy: 6 + this.random() * 14,
         swayRate: 0.6 + this.random() * 1.1,
         phase: this.random() * Math.PI * 2,
