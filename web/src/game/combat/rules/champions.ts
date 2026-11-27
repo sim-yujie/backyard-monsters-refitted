@@ -345,7 +345,7 @@ export const KRAMPUS_ICE_SHARDS_LEVEL = 4;
 export const KRAMPUS_SHARD_SLOW = 30;
 export const KRAMPUS_SHARD_SECONDS = 2;
 export const KRAMPUS_BLIZZARD_LEVEL = 5;
-export const KRAMPUS_BLIZZARD_SLOW = 60;
+export const KRAMPUS_BLIZZARD_SLOW = 45;
 export const KRAMPUS_BLIZZARD_SECONDS = 3;
 
 /** The slow in whole percent, 0-90, for the towers' tick count (integers: same everywhere). */
