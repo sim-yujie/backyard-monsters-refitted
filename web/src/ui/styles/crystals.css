@@ -600,3 +600,84 @@
     box-shadow: none;
   }
 }
+
+/* ── neon round 2 (27 Nov 2026) ── */
+
+/* Only the list scrolls; the head and the description stay put round it. */
+.champion-tab__scroll.champion-tab__abilities {
+  overflow: hidden;
+}
+
+.crystal-abilities {
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+.crystal-abilities__rows {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  padding: var(--space-2) 2px;
+}
+
+.crystal-abilities__inspector {
+  position: static;
+  flex: none;
+  box-shadow: none;
+  border-top: 1px solid var(--colour-border);
+}
+
+.crystal-slot__next {
+  left: auto;
+  right: 6px;
+  transform: none;
+}
+
+/* Cancel and Later: a quiet framed button, never the colour of a go. */
+.crystal-dialog__cancel {
+  min-height: 44px;
+  border: 1px solid var(--colour-border-strong);
+  background: #4a5868;
+  color: #fff;
+}
+
+:root[data-skin="flash"] .crystal-dialog__cancel {
+  background: #c8b99b;
+  color: #3a2400;
+}
+
+@media (max-width: 620px) {
+  .crystal-abilities__how {
+    display: block;
+    font-size: var(--text-xs);
+  }
+}
+
+@media (max-height: 500px) {
+  .crystal-abilities__inspector {
+    min-height: 32px;
+    padding: 2px var(--space-2);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    flex-wrap: nowrap;
+  }
+}
+
+/* A phone on its side: the confirm scrolls inside rather than losing its buttons. */
+@media (max-height: 450px) {
+  .crystal-dialog .panel__body {
+    max-height: calc(100vh - 110px);
+    max-height: calc(100dvh - 110px);
+    overflow-y: auto;
+  }
+
+  .crystal-dialog__sub:not(.crystal-dialog__balance) {
+    display: none;
+  }
+
+  .crystal-dialog__name {
+    margin: 0;
+    font-size: var(--text-lg);
+  }
+}
