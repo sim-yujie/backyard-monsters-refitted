@@ -1040,10 +1040,31 @@
 }
 
 @media (max-width: 620px), (max-height: 500px) {
+  /* One row: the pill gives way before the speed buttons wrap. */
+  .attack-strip--wave {
+    flex-wrap: nowrap;
+  }
+
   .wave-status--in-strip {
     order: -1;
     position: static;
+    flex: 0 1 auto;
+    min-width: 0;
+    gap: 5px;
     transform: none;
+  }
+
+  .wave-status--in-strip .wave-status__bar {
+    width: 44px;
+  }
+
+  .wave-status--in-strip .wave-status__percent {
+    min-width: 2.6em;
+  }
+
+  .wave-status--in-strip .wave-status__face {
+    width: 24px;
+    height: 24px;
   }
 }
 
