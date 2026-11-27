@@ -109,6 +109,17 @@ services:
       resources:
         limits:
           memory: 2G
+    # A restart lets open requests finish (beta 10, src/utils/gracefulShutdown.ts):
+    # on SIGTERM the server stops taking connections and gives open requests
+    # 10 s; Docker kills it only after this.
+    stop_grace_period: 20s
+    # Healthy once the API answers. Bun is in the image; curl is not.
+    healthcheck:
+      test: ["CMD", "bun", "-e", "fetch('http://localhost:3001/connection').then((r) => process.exit(r.ok ? 0 : 1), () => process.exit(1))"]
+      start_period: 60s
+      interval: 15s
+      timeout: 5s
+      retries: 3
     depends_on:
       redis:
         condition: service_healthy

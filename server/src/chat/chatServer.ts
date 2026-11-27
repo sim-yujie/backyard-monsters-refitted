@@ -88,7 +88,8 @@ export const startChatServer = () => {
     },
   };
 
-  Bun.serve<SocketData>(options);
+  const server = Bun.serve<SocketData>(options);
 
   logger.info(`Chat WebSocket server listening on port ${PORT}`);
+  return server;
 };
