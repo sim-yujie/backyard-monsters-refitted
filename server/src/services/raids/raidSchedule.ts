@@ -11,6 +11,7 @@ import { ATTACK_ONLINE_SECONDS, isOnline, readPresenceMarks, type PresenceMarks 
 import { damagedBuildings } from "../yard/repair.js";
 import { readFightLock, type RaidFightLock } from "./raidLock.js";
 import { RAID_PREFERENCES, type RaidPreference } from "./raidPreferences.js";
+import { clampThreat, startThreat, threatAfter } from "./raidThreat.js";
 import { readOpenRaid, readRaidScreen, type RaidScreen } from "./raidStore.js";
 
 /**
@@ -80,6 +81,8 @@ export interface RaidRecord {
    * (`landedResult`).
    */
   readonly defended?: boolean;
+  /** The threat it was planned at (beta 10, `raidThreat.ts`); absent before. */
+  readonly threat?: number;
 }
 
 /** `aiattacks` as the server keeps it (design §8.1). */
@@ -115,6 +118,12 @@ export interface RaidSchedule {
    * landed (WP3).
    */
   readonly trojan?: TrojanFlag;
+  /**
+   * The next wild raid's threat (beta 10, `raidThreat.ts`): one up for each
+   * 90%+ defence, one down for each loss. Always set once read: a schedule
+   * from before beta 10 starts at its 90%+ wild defences in `recent`.
+   */
+  readonly threat: number;
 }
 
 /** The Trojan Horse's once-per-account flag, as `aiattacks.trojan` stores it. */
@@ -150,6 +159,7 @@ const readRecord = (value: unknown): RaidRecord | null => {
     stolen,
     shiny: whole(value.shiny) ?? 0,
     ...(typeof value.defended === "boolean" ? { defended: value.defended } : {}),
+    ...(whole(value.threat) !== undefined ? { threat: clampThreat(whole(value.threat) as number) } : {}),
   };
 };
 
@@ -178,6 +188,7 @@ export const readSchedule = (raw: unknown): RaidSchedule => {
     : [];
   const trojan = readTrojan(stored.trojan);
   const lastOpenedAt = whole(stored.lastOpenedAt);
+  const threat = whole(stored.threat);
   return {
     v: 2,
     lastattack: Math.max(0, whole(stored.lastattack) ?? 0),
@@ -191,6 +202,8 @@ export const readSchedule = (raw: unknown): RaidSchedule => {
     ...(fight ? { fight } : {}),
     ...("s1" in stored ? { s1: stored.s1 } : {}),
     ...(trojan ? { trojan } : {}),
+    // Beta 10's launch: a schedule with no threat starts at its good defences.
+    threat: threat !== undefined ? clampThreat(threat) : startThreat(recent),
   };
 };
 
@@ -255,6 +268,7 @@ export const raidAlreadyApplied = (schedule: RaidSchedule, raidId: string): bool
  * the raid kept in `recent`. A cancelled raid never comes here, so it stays
  * due and comes back on the player's next yard visit (owner, Q1), but not
  * before {@link RAID_MIN_GAP_SECONDS} after it opened ({@link withRaidOpened}).
+ * The threat (beta 10) moves one step by the defence; a cancel leaves it.
  */
 export const recordRaidFinished = (schedule: RaidSchedule, record: RaidRecord): RaidSchedule => ({
   ...withoutFightLock(schedule),
@@ -263,6 +277,8 @@ export const recordRaidFinished = (schedule: RaidSchedule, record: RaidRecord): 
   sessionsSinceLastAttack: 0,
   lastRaidId: record.id,
   recent: [record, ...schedule.recent].slice(0, RECENT_RAIDS_KEPT),
+  // Beta 10: a good defence raises the next raid's threat, a poor one lowers it.
+  threat: threatAfter(schedule.threat, record.defended ?? record.shiny > 0),
 });
 
 /** `aiattacks.recent`'s tribe for a landed Trojan Horse fight (`docs/design/trojan-horse.md` §6, §7). */

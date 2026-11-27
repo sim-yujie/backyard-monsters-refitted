@@ -141,6 +141,13 @@ if (import.meta.env.DEV || import.meta.env.VITE_LAYOUT_CHECK === "1") {
       return layer ? previewTransferMode(layer, state) : null;
     };
   });
+  // The wild monster alert at its busiest (beta 10): Threat 14, 4 sides, a champion.
+  void import("@/ui/raid/raidAlertPreview").then(({ previewRaidAlert }) => {
+    (globalThis as Record<string, unknown>)["__raidAlert"] = (champion?: number, level?: number) => {
+      const modal = document.querySelector<HTMLElement>(".overlay__layer--modal");
+      return modal ? previewRaidAlert(modal, champion, level) : null;
+    };
+  });
   // The attack screen's dock (owner, 18 Nov 2026): the real attack scene on the own yard.
   void import("@/game/attack/attackDockPreview").then(({ previewAttackDock }) => {
     (globalThis as Record<string, unknown>)["__attackDock"] = (kind?: "attack" | "baiter") =>

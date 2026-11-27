@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, mock, setSystemTime, test } from "bun:test";
 import type { Context } from "koa";
 import { RULES_VERSION } from "../../../services/defences/rulesVersion.js";
+import { ATTACK_STATS_VERSION } from "../../../game-data/stats/attackStatsVersion.js";
 import { gzipSync } from "node:zlib";
 import type { BrainWeights, FrozenHabits } from "../../../game-rules/combat/index.js";
 
@@ -133,15 +134,19 @@ mock.module("../../../services/base/reportManager.js", () => ({
   logBanReport: async () => {},
 }));
 
+/** The private anticheat's save check, counted (beta 10: an old page's attack save skips it). */
+const anticheatChecked = mock(async () => {});
 mock.module("../../../scripts/anticheat/anticheat.js", () => ({
   initAnticheat: async () => {},
-  validateSave: async () => {},
+  validateSave: anticheatChecked,
 }));
 
 /** The defence the attack load served, when a test gives the session one (issue #195). */
 let sessionForces: unknown;
 /** The session's rules when a test changes them; null for a session minted before it had any. */
 let sessionRules: string | null | undefined;
+/** The session's attack-stats version when a test changes it; null for a session minted before beta 10. */
+let sessionStats: string | null | undefined;
 /** The champions' brains the attack froze at launch, when a test gives the session some (issue #219). */
 let sessionBrains: Record<string, BrainWeights | FrozenHabits> | undefined;
 /** The champions' health the attack froze at launch, when a test gives the session some. */
@@ -158,6 +163,7 @@ mock.module("../../../services/base/attackSessionStore.js", () => ({
     // Started on a page with this server's battle rules (`rulesStamp.ts`),
     // unless a test plays an attack started before sessions carried them.
     ...(sessionRules !== null && { rules: sessionRules ?? RULES_VERSION }),
+    ...(sessionStats !== null && { stats: sessionStats ?? ATTACK_STATS_VERSION }),
     ...(sessionEntry !== null && { entryHoused: sessionEntry ?? ENTRY }),
     defenderResources: { r1: 5000, r2: 0, r3: 0, r4: 0 },
     ...(sessionForces ? { defenderForces: sessionForces } : {}),
@@ -255,6 +261,8 @@ beforeEach(() => {
   sessionHealth = undefined;
   sessionEntry = undefined;
   sessionRules = undefined;
+  sessionStats = undefined;
+  anticheatChecked.mockClear();
   loggedInfo.mockClear();
   setMode("log");
   reports.length = 0;
@@ -287,6 +295,31 @@ beforeEach(() => {
     buildingdata: {},
     resources: { r1: 100, r2: 100, r3: 100, r4: 100 },
   };
+});
+
+describe("the private anticheat and an old page's attack (beta 10)", () => {
+  test("checks the save of an attack started under this server's rules and stats", async () => {
+    await baseSave(ctxFor({ over: "1", tick: "3200", flinglog: JSON.stringify(LOG) }), async () => {});
+    expect(anticheatChecked).toHaveBeenCalledTimes(1);
+  });
+
+  for (const [when, stats] of [
+    ["under other monster numbers", "6164e7d8578cac11"],
+    ["before sessions carried them (a server from before beta 10)", null],
+  ] as const) {
+    test(`skips the save of an attack started ${when}`, async () => {
+      sessionStats = stats;
+      await baseSave(ctxFor({ over: "1", tick: "3200", flinglog: JSON.stringify(LOG) }), async () => {});
+      expect(anticheatChecked).not.toHaveBeenCalled();
+      expect(loggedInfo.mock.calls.some((call) => (call[1] as { event?: string })?.event === "save-old-page")).toBe(true);
+    });
+  }
+
+  test("skips the save of an attack started under other battle rules", async () => {
+    sessionRules = "0ba3fde8701104af";
+    await baseSave(ctxFor({ over: "1", tick: "3200", flinglog: JSON.stringify(LOG) }), async () => {});
+    expect(anticheatChecked).not.toHaveBeenCalled();
+  });
 });
 
 describe("the plan a hand-played camp attack leaves (issue #221)", () => {

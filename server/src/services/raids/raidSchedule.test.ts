@@ -87,6 +87,7 @@ describe("reading aiattacks", () => {
         sessionsSinceLastAttack: 0,
         attackPreference: 0,
         recent: [],
+        threat: 0,
       });
     }
   });
@@ -109,6 +110,7 @@ describe("reading aiattacks", () => {
       attackPreference: 0,
       recent: [],
       s1: [1, 1284676962, 1],
+      threat: 0,
     });
   });
 
@@ -348,6 +350,8 @@ describe("the session count on a yard load", () => {
       sessionsSinceLastAttack: 3,
       attackPreference: 1,
       recent: [],
+      // Beta 10's launch threat is written back with it.
+      threat: 0,
     });
   });
 
