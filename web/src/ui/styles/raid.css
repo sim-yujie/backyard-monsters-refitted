@@ -69,9 +69,11 @@
 
 /* Beta 10: threat, sides and the countdown as one row of pills (neon's direction 1). */
 .raid-alert__stats {
+  position: relative;
   display: flex;
   flex-wrap: wrap;
   align-items: center;
+  justify-content: center;
   gap: var(--space-1) var(--space-2);
 }
 
@@ -127,10 +129,60 @@ button.raid-alert__threat {
   }
 }
 
+.raid-alert__info {
+  display: inline-grid;
+  place-items: center;
+  width: 1.25rem;
+  height: 1.25rem;
+  margin-inline-start: var(--space-1);
+  border: 1px solid currentcolor;
+  border-radius: 50%;
+  font-size: var(--text-xs);
+}
+
+/* The threat's hint floats under the row, so opening it never moves the window. */
 .raid-alert__hint {
+  position: absolute;
+  top: calc(100% + var(--space-1));
+  left: 50%;
+  z-index: 1;
+  width: max-content;
+  max-width: 100%;
+  margin: 0;
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--colour-border);
+  border-radius: var(--radius-md);
+  background: var(--colour-surface-raised);
+  box-shadow: var(--shadow-float);
+  color: var(--colour-text);
+  font-size: var(--text-sm);
+  font-weight: 700;
+  line-height: var(--leading-normal);
+  text-align: center;
+  transform: translateX(-50%);
+}
+
+.raid-alert__more {
+  margin: 0;
   color: var(--colour-text-secondary);
   font-size: var(--text-sm);
-  line-height: var(--leading-normal);
+  font-weight: 700;
+  text-align: end;
+}
+
+/* "Prepare defences" reads as a button at every size (neon r1). */
+.raid-alert .raid-alert__prepare {
+  min-height: 2.75rem;
+  border: 1px solid var(--colour-border);
+  background: var(--colour-surface-sunken);
+}
+
+.raid-alert .raid-alert__engage {
+  min-height: 2.75rem;
+}
+
+.raid-alert__monsters--champion {
+  padding-top: var(--space-2);
 }
 
 .raid-alert__hint[hidden] {
@@ -167,13 +219,39 @@ button.raid-alert__threat {
   box-shadow: inset 0 0 0.5rem var(--colour-medal-gold);
 }
 
-.raid-alert__champion .raid-alert__count {
-  color: var(--colour-medal-gold);
+.raid-alert__champion {
+  position: relative;
+}
+
+/* "CHAMPION" on its top edge, so the gold frame is not read as a selection. */
+.raid-alert__tag {
+  position: absolute;
+  top: 0;
+  left: 50%;
+  padding: 0 var(--space-2);
+  border-radius: var(--radius-pill);
+  background: var(--colour-medal-gold);
+  color: #2a1a00;
+  font-size: var(--text-xs);
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  line-height: 1.4;
+  text-transform: uppercase;
+  white-space: nowrap;
+  transform: translate(-50%, -50%);
+}
+
+/* The level as a dark chip with gold text: readable on steel and on cream. */
+.raid-alert__level {
+  padding: 0 var(--space-2);
+  border-radius: var(--radius-pill);
+  background: #3a2a10;
+  color: #ffd76a;
   font-weight: 800;
 }
 
-.raid-alert__name {
-  overflow-wrap: anywhere;
+.raid-alert--champion {
+  width: min(92vw, 34rem);
 }
 
 .raid-alert__portrait {
@@ -373,6 +451,38 @@ button.raid-alert__threat {
   }
 }
 
+/* A phone held upright: four cards would break the names, so the champion
+   becomes a banner across the top of the three monster cards (neon). */
+@media (max-width: 620px) and (min-height: 500.02px) {
+  .raid-alert__monsters--champion {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .raid-alert__champion {
+    grid-column: 1 / -1;
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    align-items: center;
+    justify-items: start;
+    column-gap: var(--space-3);
+    text-align: start;
+  }
+
+  .raid-alert__champion .raid-alert__portrait {
+    width: 3rem;
+    height: 3rem;
+  }
+
+  .raid-alert__champion .raid-alert__name {
+    font-size: var(--text-md);
+  }
+
+  /* Both answers side by side, full width (neon r1). */
+  .raid-alert__actions {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
 /* A phone on its side: the alert keeps its tribe line in view instead of
    opening scrolled down to its buttons. */
 @media (min-width: 620.02px) and (max-height: 500px) {
@@ -399,7 +509,4 @@ button.raid-alert__threat {
     height: 2.5rem;
   }
 
-  .raid-alert__pill {
-    min-height: 2.25rem;
-  }
 }

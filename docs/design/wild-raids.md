@@ -1,6 +1,7 @@
 # Wild Monster Raids on Player Yards — Design (issue #226)
 
-Status: planning, 2026-10-05. Owner decisions of 2026-10-05 are final (§1). The §10 questions were
+Status: planning, 2026-10-05. Owner decisions of 2026-10-05 are final (§1), except where §11
+(beta 10's threat, owner 2026-11-27) replaces them. The §10 questions were
 answered by the owner on 2026-10-05; the answers are in §10 and the sections below follow them.
 
 ## Contents
@@ -15,6 +16,7 @@ answered by the owner on 2026-10-05; the answers are in §10 and the sections be
 8. [Where state lives](#8-where-state-lives)
 9. [Work packages](#9-work-packages)
 10. [Owner questions (answered)](#10-owner-questions-answered-2026-10-05)
+11. [Beta 10 threat](#11-beta-10-threat-owner-2026-11-27)
 
 ---
 
@@ -745,3 +747,98 @@ Two further notes from the owner's review:
 - A raid must count as an attack on a **normal yard**, not a wild-camp attack (§6.2 item 5).
 - Harvester theft (writing the drained unbanked amount back) needs new code. That is WP3's, not
   WP0's (§6.3).
+
+---
+
+## 11. Beta 10 threat (owner, 2026-11-27)
+
+The owner: the raids that come every 2-4 days must grow stronger over time ("scale up the number
+of monsters, directions, drop sequence, throw some vorgs and zafreetis and maybe even champions").
+
+### 11.1 Decisions
+
+| # | Decision |
+|---|---|
+| T1 | **A threat level per player.** A wild raid defended at 90%+ raises the next raid's threat by one; a lost raid steps it back one; a cancelled raid (quit = cancel, D5) leaves it. The Trojan Horse and Moloch's raids never move it. |
+| T2 | **Higher threat, bigger raid:** more monsters, more sides (1 to 4 entry directions), groups that land over time, Vorgs and Zafreetis mixed in, and from a high step ONE random champion (Gorgo, Drull, Fomor or Korath) at a level matched to the threat. |
+| T3 | **Reward stays flat:** 10 Shiny for a 90%+ defence (D4). Theft stays Flash's (D3). The more / same / less choice stays (frequency and x1.3 / x1 / x0.5 size, D2). |
+| T4 | **Launch:** a player's threat starts at the number of 90%+ defences among their kept raids (`recent`, the newest 10; `defended`, or for an older record `shiny > 0`; Trojan and Moloch records not counted). |
+| T5 | **The alert shows the threat** ("Threat 7"), short, icons over words. |
+| T6 | **The numbers are not final.** One table, `server/src/config/RaidThreatConfig.ts`, holds every step; a numbers helper proposes it and the owner approves it on the Review Desk. |
+
+**Replaced October decisions:** "plain monster stats, no strength scaling" (Q8, §5.4) is now
+threat scaling (bigger armies; the table has a `strength` column, 1 at every step, so the
+monsters still fight at plain stats unless the owner asks); "the least-defended side" (Q4, §5.2)
+holds for the first side only, extra sides come by threat; the tribe make-ups (§5.3) are kept and
+Vorgs, Zafreetis and a champion are added on top. **Still standing:** D9 (raiders at the
+defender's own Academy levels) and D10 (no hit limit; see 11.4 for the time limit, which is a
+different rule and the owner's to confirm).
+
+### 11.2 Where it lives
+
+- **State:** `aiattacks.threat` (`raidSchedule.ts`), always set once read: a schedule from before
+  beta 10 has none and starts at T4's count (`raidThreat.ts`, `startThreat`), written back with the
+  schedule's next write (the next own-yard load counts a session). No schema migration (§8.1).
+  `recordRaidFinished` moves it (`threatAfter`, held to 0..cap); `recordTrojanFinished` and
+  `recordEmergenceFinished` leave it. Each kept record notes the `threat` it came at.
+- **Plan:** `planRaid({ ..., threat })` (`raidPlan.ts`). The step's `size` multiplies the
+  more / same / less amplifier, so N (§5.3) grows and the tribe's own make-up is kept. Vorgs (C16)
+  and Zafreetis (C15) are added as a share of the tribe's army (at least one each when the share is
+  above 0) and start behind it. The whole army is held to `RAID_MAX_RAIDERS` (in proportion). Sides:
+  the 16 ways in are ranked as Flash ranked them (`rankRaidSolutions`); the first is the old pick,
+  the others the next least-defended at least 90 degrees from those taken (`pickSideBearings`,
+  falling back to 45, then any). Each type is split near-evenly over the sides, then each side's
+  share over the step's `drops`; group `d` on side `s` of `S` lands at `d x gap + s x gap / S`
+  (`stagedRaidEvents`, `raidDrops.ts`). The champion (`championRaider`, one draw after every
+  older draw) lands alone with the last group on the first side. **Threat 0 is exactly the raid
+  before beta 10:** the same draws, one side, one group at tick 0, no extras (a test holds it).
+- **Engine:** `RaidEvent.champion` (`{ t, l, pl?, fb?, hp?, leave? }`) spawns a wild champion
+  after the wave's monsters (Hybrid, no brain), counted as flung; `leave` sends it home that many
+  ticks after it lands. `RaidEvent.retreat` sends every raider home (11.4). The fight, its replay
+  and the client's playback all read `raidSpawnsUntil` from the log (`raidSpawnsUntilOf`: the
+  last wave that lands something), so a raid with later groups is not over while one is to come.
+- **Wire:** `RaidView` gains `threat`, `sides` and `champion`; the result gains `threat` and
+  `nextThreat` (`docs/server-api.md`).
+
+### 11.3 The alert (neon's direction 1)
+
+The ETA line became a row of pills: "[fist] Threat 12" (amber up to 7, red from 8, pulsing red
+from 15; tapping it opens one line: "+1 Threat after a 90%+ defence, −1 after a loss."),
+"[swords] 4 sides" (only for 2+), "[time] 4:25". Threat 0 shows neither extra pill, so the first
+raids look as before. A champion leads the card row in a gold-framed card ("Korath", "Lv 3"); on an
+upright phone it becomes a banner over the three monster cards.
+
+### 11.4 Two rules found while measuring (owner to confirm)
+
+- **Retreat timer.** Vorgs and Zafreetis can heal a raider fighting a bunker defender or the caged
+  champion for good, so a threat 5+ raid on yardtester's yard often ran to the 10-minute cap that
+  the player must watch. Each step 1+ now ends with a retreat wave `retreatSeconds` (placeholder
+  180) after the last group lands; threat 0 has none (D10 is unchanged there).
+- **Champion leave.** A lone champion the towers cannot reach (a Fomor sniping from out of range)
+  also kept raids to the cap; a wild champion leaves `RAID_CHAMPION_LEAVE_SECONDS` (placeholder
+  120) after it lands.
+
+### 11.5 Server cost (measured 27 Nov 2026)
+
+One fight per raid, run once at `/raid/start` in the replay worker (`fightRaid`), on yardtester's
+real yard (98 buildings, its own bunkers, Academy and caged champion) with the placeholder table,
+8 seeds each, Bun on the development PC (a VPS core may be about 2x slower):
+
+| Threat | Raiders | Fight (mean / max s, 1x) | CPU per fight (mean / max) | Worker heap | Plan in Redis | `/raid/start` body |
+|---|---|---|---|---|---|---|
+| 0 | 140-183 | 29 / 42 | 0.16-0.19 s / 0.29 s | ~10 MB | ~1 KB | ~28 KB |
+| 10 | 300-330 | 210-232 / 236 | 0.5-0.7 s / 0.9 s | ~12-14 MB | ~6 KB | ~32 KB |
+| 20 (cap) | 363-400 | 242-251 / 251 | 0.55-0.9 s / 1.3 s | ~13 MB | ~7 KB | ~33 KB |
+
+Projected at one raid per player every two days at most (the "more" choice; 0.5 raids per daily
+player per day), every raid at that threat:
+
+| Daily players | Raids a day | CPU a day at threat 0 / 10 / 20 | Busiest hour (10% of a day) at threat 20 |
+|---|---|---|---|
+| 400 | 200 | 0.6 / 2 / 3 min | 20 raids, 18 s CPU |
+| 4,000 | 2,000 | 6 / 20 / 30 min | 200 raids, 3 min CPU (5% of a core) |
+| 40,000 | 20,000 | 1 / 3.3 / 5 h (0.2 core all day) | 2,000 raids, 30 min CPU (half a core; 0.56 starts a second, a quarter of the two-worker pool) |
+
+Every fight is far inside the 20 s replay deadline. Open raids in Redis stay small (at 40,000 daily
+players about 330 open at the busiest moment, ~2.5 MB). Not measured: the cost on the player's own
+device of drawing 400 raiders and healers (the client plays the same fight).

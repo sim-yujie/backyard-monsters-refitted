@@ -85,7 +85,7 @@ describe("RaidYardUi", () => {
     );
     const alert = t.modal.querySelector(".raid-alert")!;
     const threat = alert.querySelector<HTMLButtonElement>(".raid-alert__threat")!;
-    expect(threat.textContent).toBe("Threat 12");
+    expect(threat.textContent).toBe("Threat 12?");
     expect(threat.classList.contains("raid-alert__threat--danger")).toBe(true);
     expect(alert.querySelector(".raid-alert__sides")!.textContent).toBe("4 sides");
     const hint = alert.querySelector<HTMLElement>(".raid-alert__hint")!;
@@ -96,9 +96,10 @@ describe("RaidYardUi", () => {
     const cards = alert.querySelectorAll(".raid-alert__monster");
     expect(cards).toHaveLength(4);
     expect(cards[0]!.classList.contains("raid-alert__champion")).toBe(true);
-    expect(cards[0]!.textContent).toBe("KorathLv 3");
-    // The champion is one more raider.
+    expect(cards[0]!.textContent).toBe("ChampionKorathLv 3");
+    // The champion is one more raider; the cards leave out C1, said under them.
     expect(alert.textContent).toContain("19 wild monsters");
+    expect(alert.querySelector(".raid-alert__more")!.textContent).toBe("+1 more");
     t.view.destroy();
   });
 

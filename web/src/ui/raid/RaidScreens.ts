@@ -146,35 +146,47 @@ export class RaidAlert {
 
   constructor(raid: RaidAlertRaid, actions: RaidAlertActions) {
     this.raidId = raid.id;
-    this.popup = new Popup({ title: ALERT_TITLE, className: "raid-alert", dismissable: false });
+    this.popup = new Popup({
+      title: ALERT_TITLE,
+      className: raid.champion ? "raid-alert raid-alert--champion" : "raid-alert",
+      dismissable: false,
+    });
     alarmPulse(this.popup);
 
     const head = element("div", "raid-alert__head");
     const words = element("div", "raid-alert__words");
+    const coming = raiderCount(raid.monsters) + (raid.champion ? 1 : 0);
     words.append(
       element("p", "raid-alert__tribe", tribeTitle(raid.tribe)),
-      element("p", "raid-alert__lead", `${raiderCount(raid.monsters) + (raid.champion ? 1 : 0)} wild monsters are coming for your yard!`),
+      element("p", "raid-alert__lead", `${coming} wild monsters are coming for your yard!`),
     );
 
+    head.append(splash(raid.tribe, "raid-alert__splash"), words);
+
+    // Beta 10: threat, sides and the time left in one full-width row (neon r1).
     const stats = element("div", "raid-alert__stats");
     const threat = raid.threat ?? 0;
-    let hint: HTMLElement | null = null;
     if (threat > 0) {
       const pill = element("button", `raid-alert__pill raid-alert__threat raid-alert__threat--${threatTier(threat)}`);
       pill.type = "button";
-      pill.append(gameIcon("fist", { size: 24, decorative: true }), element("span", "", `Threat ${threat}`));
+      pill.append(
+        gameIcon("damage", { size: 24, decorative: true }),
+        element("span", "", `Threat ${threat}`),
+        element("span", "raid-alert__info", "?"),
+      );
       pill.title = THREAT_HINT;
-      hint = element("p", "raid-alert__hint", THREAT_HINT);
+      pill.setAttribute("aria-label", `Threat ${threat}: what is this?`);
+      const hint = element("p", "raid-alert__hint", THREAT_HINT);
       hint.hidden = true;
       hint.id = `raid-threat-hint-${raid.id}`;
+      hint.setAttribute("role", "note");
       pill.setAttribute("aria-expanded", "false");
       pill.setAttribute("aria-controls", hint.id);
-      const shown = hint;
       pill.addEventListener("click", () => {
-        shown.hidden = !shown.hidden;
-        pill.setAttribute("aria-expanded", String(!shown.hidden));
+        hint.hidden = !hint.hidden;
+        pill.setAttribute("aria-expanded", String(!hint.hidden));
       });
-      stats.append(pill);
+      stats.append(pill, hint);
     }
     if ((raid.sides ?? 1) > 1) {
       const sides = element("span", "raid-alert__pill raid-alert__sides");
@@ -183,14 +195,12 @@ export class RaidAlert {
       stats.append(sides);
     }
     const eta = element("span", "raid-alert__pill raid-alert__eta");
-    eta.append(gameIcon("time", { size: 24, label: "Time left" }));
+    eta.title = "They arrive when this runs out.";
+    eta.append(gameIcon("time", { size: 24, label: "Arrives in" }));
     this.eta = element("span", "raid-alert__eta-time");
     this.eta.setAttribute("role", "timer");
     eta.append(this.eta);
     stats.append(eta);
-    words.append(stats);
-    if (hint) words.append(hint);
-    head.append(splash(raid.tribe, "raid-alert__splash"), words);
 
     const list = element("ul", "raid-alert__monsters");
     list.setAttribute("aria-label", "Monsters in the attack");
@@ -201,11 +211,17 @@ export class RaidAlert {
       const picture = element("img", "raid-alert__portrait");
       picture.alt = "";
       showPortrait(picture, championPortrait(`G${t}`, l, "card"));
-      item.append(picture, element("span", "raid-alert__name", championName(t)), element("span", "raid-alert__count", `Lv ${l}`));
-      item.title = `Champion ${championName(t)}, level ${l}, leads the raid.`;
+      item.append(
+        element("span", "raid-alert__tag", "Champion"),
+        picture,
+        element("span", "raid-alert__name", championName(t)),
+        element("span", "raid-alert__count raid-alert__level", `Lv ${l}`),
+      );
+      item.title = `The tribe's champion ${championName(t)}, level ${l}, leads the raid.`;
       list.append(item);
     }
-    for (const monster of alertMonsters(raid.monsters)) {
+    const shown = alertMonsters(raid.monsters);
+    for (const monster of shown) {
       const item = element("li", "raid-alert__monster");
       const picture = element("img", "raid-alert__portrait");
       picture.alt = "";
@@ -214,6 +230,9 @@ export class RaidAlert {
       item.append(picture, element("span", "raid-alert__name", monster.name), element("span", "raid-alert__count", `×${monster.count}`));
       list.append(item);
     }
+    // The types the cards leave out, so the cards add up to the headline (neon r1).
+    const more = raiderCount(raid.monsters) - shown.reduce((sum, monster) => sum + monster.count, 0);
+    const moreLine = more > 0 ? element("p", "raid-alert__more", `+${more} more`) : null;
 
     const buttons = element("div", "raid-alert__actions");
     this.prepare = button("Prepare defences", "btn btn--ghost raid-alert__prepare", actions.onPrepare);
@@ -222,7 +241,7 @@ export class RaidAlert {
     this.engage.title = "Bring the attack on now.";
     buttons.append(this.prepare, this.engage);
 
-    this.popup.setContent(head, list, buttons);
+    this.popup.setContent(head, stats, list, ...(moreLine ? [moreLine] : []), buttons);
   }
 
   mount(host: HTMLElement): this {
