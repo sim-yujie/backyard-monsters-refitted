@@ -119,6 +119,8 @@ export class EventsDoor {
   private whatsNewChecked = false;
   /** The page was just opened: scroll it to the first Claim once the list shows. */
   private scrollToClaim = false;
+  /** The page was opened for a wave (the swords mark): scroll it to the invasion's card once the list shows. */
+  private scrollToWave = false;
   /** Stops following the pumpkin hunt's count (`game/events/pumpkinHunt.ts`). */
   private readonly unwatchPumpkins: () => void;
   /** Stops following the weekend event. */
@@ -244,15 +246,18 @@ export class EventsDoor {
         this.panel = null;
         this.refusal = null;
         this.scrollToClaim = false;
+        this.scrollToWave = false;
         this.button.setAttribute("aria-expanded", "false");
       },
     }).mount(this.mounts.overlay.content);
     this.button.setAttribute("aria-expanded", "true");
-    // A wave to start: the page starts at the top, on the invasion's card.
-    const forWave = waveMarkDue(this.now);
+    // Opened for a wave (the swords mark): the page opens on the invasion's card.
+    const forWave = !atClaim && waveMarkDue(this.now);
     if (forWave) snoozeWaveMark(this.now);
+    this.scrollToWave = forWave;
     this.scrollToClaim = atClaim || (!forWave && window.matchMedia?.(COMPUTER_QUERY).matches !== true);
-    this.render();
+    // refresh, not only render: the swords mark goes once the page is open.
+    this.refresh();
     void this.load();
   }
 
@@ -361,6 +366,10 @@ export class EventsDoor {
     this.weekendDrawn = this.weekendKey(this.now);
     const view = this.view();
     this.panel?.render(view);
+    if (this.scrollToWave && view.kind === "list") {
+      this.scrollToWave = false;
+      this.panel?.showCard("wave");
+    }
     if (this.scrollToClaim && view.kind === "list") {
       this.scrollToClaim = false;
       this.panel?.showFirstClaim();
@@ -376,7 +385,7 @@ export class EventsDoor {
     const count = claimableCount(events) + (checkinWaiting(now) ? 1 : 0);
     this.badge.hidden = count === 0;
     this.badge.textContent = count > 99 ? "99+" : String(count);
-    const wave = waveMarkDue(now) && !this.panel;
+    const wave = waveMarkDue(now);
     this.waveMark.hidden = !wave;
     const parts = [
       ...(count > 0 ? [count === 1 ? "1 reward to claim" : `${count} rewards to claim`] : []),

@@ -519,6 +519,14 @@ export class EventsPanel {
     return true;
   }
 
+  /** Scrolls the page so the first card of kind `kind` starts at the top (the wave event's, opened for a wave). */
+  showCard(kind: string): boolean {
+    const card = this.element.querySelector<HTMLElement>(`.events-card--${kind}`);
+    if (!card) return false;
+    card.scrollIntoView?.({ block: "start" });
+    return true;
+  }
+
   render(view: EventsPanelView): void {
     if (view.kind === "loading") {
       this.panel.setContent(el("p", "events-status", "Loading events…"));
