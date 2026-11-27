@@ -3,7 +3,7 @@ import { waveName, type WaveResult, type WaveStatus } from "@/api/waves";
 import { classicLook } from "@/game/classicLook";
 import { monsterMovement } from "@/game/combat/rules";
 import { isFlyingMovement } from "@/game/combat/rules/targeting";
-import { totemName, WAVE_LOST_CHIP, WAVE_LOST_LINE, WAVE_SURRENDERED_LINE, waveArmy, waveTip } from "@/game/waves/waveText";
+import { startWaveWords, totemName, WAVE_LOST_CHIP, WAVE_LOST_LINE, WAVE_SURRENDERED_LINE, waveArmy, waveTip } from "@/game/waves/waveText";
 import { coinAmount, coinWords } from "@/ui/events/coinUi";
 import { el } from "@/ui/dom";
 import { gameIcon } from "@/ui/gameIcon";
@@ -46,7 +46,7 @@ export const waveTrack = (beaten: number, waves: number, totemType: number | nul
     mark.append(el("span", "wave-track__wave", wave > main ? `B${wave - main}` : String(wave)));
     bar.append(mark);
   }
-  // The same count as the yard's bar: "7/30", then "Bonus 1/2".
+  // "7/30 won", then "Bonus 1/2".
   const count = beaten <= main ? `${beaten}/${main} won` : `Bonus ${beaten - main}/${waves - main}`;
   track.append(bar, el("span", "wave-track__count", count));
   return track;
@@ -125,7 +125,7 @@ export const waveResultPopup = (result: RaidResult, actions: WaveResultActions, 
     const next = el("button", "btn btn--primary wave-result__next");
     next.type = "button";
     const target = won ? wave.next! : wave.wave;
-    next.append(gameIcon("swords", { size: 24, decorative: true, className: "wave-hud__start-icon" }), ` ${won ? `Start ${waveName(target, wave.firstBonusWave).toLowerCase()}` : "Retry"}`);
+    next.append(gameIcon("swords", { size: 24, decorative: true, className: "wave-start-icon" }), ` ${won ? startWaveWords(target, wave.firstBonusWave) : "Retry"}`);
     next.addEventListener("click", () => {
       popup.close();
       actions.onNext?.();
@@ -197,7 +197,7 @@ export const confirmSurrender = (host: HTMLElement, wave: string): Promise<boole
     keep.addEventListener("click", () => popup.close());
     const give = el("button", "btn btn--danger wave-surrender__give");
     give.type = "button";
-    give.append(gameIcon("retreat", { size: 24, decorative: true, className: "wave-hud__start-icon" }), " Surrender");
+    give.append(gameIcon("retreat", { size: 24, decorative: true, className: "wave-start-icon" }), " Surrender");
     give.addEventListener("click", () => {
       answered = true;
       resolve(true);
@@ -267,7 +267,7 @@ export const waveIntroPopup = (status: WaveStatus, onStart: () => void, onClose:
   if (status.next !== null) {
     const start = el("button", "btn btn--primary wave-result__next");
     start.type = "button";
-    start.append(gameIcon("swords", { size: 24, decorative: true, className: "wave-hud__start-icon" }), ` Start ${waveName(status.next, status.firstBonusWave).toLowerCase()}`);
+    start.append(gameIcon("swords", { size: 24, decorative: true, className: "wave-start-icon" }), ` ${startWaveWords(status.next, status.firstBonusWave)}`);
     start.addEventListener("click", () => {
       popup.close();
       onStart();

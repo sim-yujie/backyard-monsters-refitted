@@ -5,7 +5,7 @@ import type { WaveStatus } from "@/api/waves";
 import { rememberWaveArmy, waveCounter, waveStripLine, waveTip } from "@/game/waves/waveText";
 import { startWave } from "@/game/yard/plugins/waves";
 import { ApiError } from "@/api/http";
-import { WaveHud, waveBarDirection } from "./WaveHud";
+import { onWaveFeed, resetWaveFeed, setWaveFeed, snoozeWaveMark, waveMarkDue, waveReady } from "@/game/waves/waveFeed";
 import { scriptMonsters, yardHealth } from "./WaveFight";
 import { waveResultPopup, waveTrack } from "./WaveScreens";
 import { waveCardBody } from "./waveEventCard";
@@ -62,74 +62,6 @@ describe("the words", () => {
     expect(waveStripLine(31, 31)).toBe("Bonus wave 1");
     expect(waveCounter(7, 31)).toBe("7/30");
     expect(waveCounter(32, 31)).toBe("Bonus 2");
-  });
-});
-
-describe("WaveHud", () => {
-  it("is hidden with no event on, and names the next wave with its monsters, prize and start", () => {
-    const onStart = vi.fn();
-    const hud = new WaveHud({ onStart }).mount(document.body);
-    hud.update(null);
-    expect(hud.element.hidden).toBe(true);
-    hud.update(status());
-    expect(hud.element.hidden).toBe(false);
-    expect(hud.element.querySelector(".wave-hud__label-long")?.textContent).toBe("Wave 7/30");
-    expect(hud.element.querySelector(".wave-hud__label-short")?.textContent).toBe("W7");
-    // jsdom is wide: a computer's bar starts open.
-    expect(hud.element.querySelectorAll(".wave-hud__monster")).toHaveLength(2);
-    const start = hud.element.querySelector<HTMLButtonElement>(".wave-hud__start")!;
-    expect(start.textContent).toContain("Start wave 7");
-    start.click();
-    expect(onStart).toHaveBeenCalledTimes(1);
-  });
-
-  it("the pill only opens and closes the tray; it never starts a wave", () => {
-    const onStart = vi.fn();
-    const hud = new WaveHud({ onStart }).mount(document.body);
-    hud.update(status());
-    const pill = hud.element.querySelector<HTMLButtonElement>(".wave-hud__pill")!;
-    pill.click();
-    expect(hud.element.querySelector<HTMLElement>(".wave-hud__tray")!.hidden).toBe(true);
-    expect(pill.getAttribute("aria-expanded")).toBe("false");
-    pill.click();
-    expect(hud.element.querySelector<HTMLElement>(".wave-hud__tray")!.hidden).toBe(false);
-    expect(onStart).not.toHaveBeenCalled();
-  });
-
-  it("keeps a bonus wave's army secret, shows the totem prize, and has no start once every wave is beaten", () => {
-    const hud = new WaveHud({ onStart: vi.fn() }).mount(document.body);
-    hud.update(status({ beaten: 30, next: 31, preview: [], prize: { glimmers: 40, totemLevel: 5 }, totemLevel: 4 }));
-    expect(hud.element.querySelector(".wave-hud__secret")).not.toBeNull();
-    expect(hud.element.querySelector(".wave-hud__prize-totem")).not.toBeNull();
-    expect(hud.element.querySelector(".wave-hud__label-long")?.textContent).toBe("Bonus 1/2");
-    hud.update(status({ beaten: 32, next: null, preview: [], prize: null, totemLevel: 6 }));
-    expect(hud.element.querySelector(".wave-hud__start")).toBeNull();
-    expect(hud.element.querySelector(".wave-hud__label")?.textContent).toBe("All waves beaten");
-  });
-
-  it("folds from the bar's own chevron, and B on a computer never folds", () => {
-    const hud = new WaveHud({ onStart: vi.fn(), direction: "a" }).mount(document.body);
-    hud.update(status());
-    hud.element.querySelector<HTMLButtonElement>(".wave-hud__fold")!.click();
-    expect(hud.element.querySelector<HTMLElement>(".wave-hud__tray")!.hidden).toBe(true);
-    const pinned = new WaveHud({ onStart: vi.fn(), direction: "b" }).mount(document.body);
-    pinned.update(status());
-    expect(pinned.element.classList.contains("wave-hud--b")).toBe(true);
-    expect(pinned.element.querySelector(".wave-hud__fold")).toBeNull();
-    expect(pinned.element.querySelector<HTMLElement>(".wave-hud__tray")!.hidden).toBe(false);
-  });
-
-  it("reads the direction from the page's query", () => {
-    expect(waveBarDirection("?wavebar=b")).toBe("b");
-    expect(waveBarDirection("?wavebar=B&x=1")).toBe("b");
-    expect(waveBarDirection("")).toBe("a");
-    expect(waveBarDirection("?wavebar=c")).toBe("a");
-  });
-
-  it("disables the start while a wave is being called", () => {
-    const hud = new WaveHud({ onStart: vi.fn() }).mount(document.body);
-    hud.update(status(), true);
-    expect(hud.element.querySelector<HTMLButtonElement>(".wave-hud__start")!.disabled).toBe(true);
   });
 });
 
@@ -193,13 +125,77 @@ describe("the result pop-up", () => {
 });
 
 describe("the Events card", () => {
-  it("shows the track, the next wave and its start", () => {
+  const feed = (extra: Partial<WaveStatus> = {}, busy = false, blocked = false) => ({ status: status(extra), busy, blocked });
+
+  it("shows the track, the prize and the start, with no monsters", () => {
     const onStart = vi.fn();
-    const body = waveCardBody(status(), onStart);
+    const body = waveCardBody(feed(), onStart);
     expect(body.querySelector(".wave-track")).not.toBeNull();
-    expect(body.textContent).toContain("Next: Wave 7");
-    body.querySelector<HTMLButtonElement>(".wave-card__start")!.click();
+    expect(body.querySelector(".wave-card__prize")?.textContent).toContain("+5");
+    // No monster portraits or counts (owner, 27 Nov 2026: clutter).
+    expect(body.querySelector("img[class*=portrait]")).toBeNull();
+    expect(body.textContent).not.toContain("×");
+    const start = body.querySelector<HTMLButtonElement>(".wave-card__start")!;
+    expect(start.textContent).toContain("Start wave 7");
+    start.click();
+    start.click();
     expect(onStart).toHaveBeenCalledTimes(1);
+  });
+
+  it("shows the totem's next level on a totem wave, and names a bonus wave as the pop-ups do", () => {
+    const body = waveCardBody(feed({ beaten: 30, next: 31, prize: { glimmers: 40, totemLevel: 5 } }), vi.fn());
+    expect(body.querySelector(".wave-card__chip--totem")?.textContent).toContain("Lv 5");
+    expect(body.querySelector(".wave-card__start")?.textContent).toContain("Start bonus wave 1");
+  });
+
+  it("is busy while the wave is called, and waits while a wild raid is on", () => {
+    const busy = waveCardBody(feed({}, true), vi.fn()).querySelector<HTMLButtonElement>(".wave-card__start")!;
+    expect(busy.disabled).toBe(true);
+    expect(busy.textContent).toContain("Starting");
+    const blocked = waveCardBody(feed({}, false, true), vi.fn()).querySelector<HTMLButtonElement>(".wave-card__start")!;
+    expect(blocked.disabled).toBe(true);
+    expect(blocked.textContent).toContain("Start wave 7");
+  });
+
+  it("has no start once every wave is won", () => {
+    const body = waveCardBody(feed({ beaten: 32, next: null, prize: null, totemLevel: 6 }), vi.fn());
+    expect(body.querySelector(".wave-card__start")).toBeNull();
+    expect(body.textContent).toContain("All 32 waves won");
+  });
+});
+
+describe("the wave feed and the Events button's mark", () => {
+  afterEach(() => resetWaveFeed());
+  const DAY = 86_400;
+
+  it("tells its listeners only when something changed", () => {
+    const listener = vi.fn();
+    onWaveFeed(listener);
+    setWaveFeed(status());
+    setWaveFeed(status());
+    expect(listener).toHaveBeenCalledTimes(1);
+    setWaveFeed(status(), true);
+    expect(listener).toHaveBeenCalledTimes(2);
+  });
+
+  it("is due while a wave can be started, rests for the day once Events opens, and comes back the next day", () => {
+    const now = 1_000 * DAY + 100;
+    expect(waveMarkDue(now)).toBe(false);
+    setWaveFeed(status());
+    expect(waveReady()).toBe(true);
+    expect(waveMarkDue(now)).toBe(true);
+    snoozeWaveMark(now);
+    expect(waveMarkDue(now + 3_600)).toBe(false);
+    expect(waveMarkDue(now + DAY)).toBe(true);
+  });
+
+  it("is not due while busy, during a wild raid, or with every wave won", () => {
+    setWaveFeed(status(), true);
+    expect(waveMarkDue(0)).toBe(false);
+    setWaveFeed(status(), false, true);
+    expect(waveMarkDue(0)).toBe(false);
+    setWaveFeed(status({ next: null }));
+    expect(waveMarkDue(0)).toBe(false);
   });
 });
 

@@ -9,6 +9,9 @@ import { waveName } from "@/api/waves";
 export const waveStripLine = (wave: number, firstBonusWave: number): string =>
   wave >= firstBonusWave ? waveName(wave, firstBonusWave) : `Wave ${wave}/${firstBonusWave - 1}`;
 
+/** The words on every wave's Start, in the Events card and the pop-ups alike: "Start wave 7", "Start bonus wave 1". */
+export const startWaveWords = (wave: number, firstBonusWave: number): string => `Start ${waveName(wave, firstBonusWave).toLowerCase()}`;
+
 /** The HUD's counter: "7/30", or "Bonus 1" on the bonus waves. */
 export const waveCounter = (wave: number, firstBonusWave: number): string =>
   wave >= firstBonusWave ? `Bonus ${wave - firstBonusWave + 1}` : `${wave}/${firstBonusWave - 1}`;

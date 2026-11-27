@@ -40,6 +40,36 @@
   color: #1d1003;
 }
 
+/* A wave of the wave event can be started (owner, 27 Nov 2026: no bar on
+   the yard; neon's direction A): crossed swords on the corner across from
+   the reward count, so the two never read as one number. */
+.events-door__wave {
+  position: absolute;
+  top: -4px;
+  left: -4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  box-sizing: border-box;
+  border: 2px solid var(--colour-dome-bottom);
+  border-radius: 50%;
+  background: #2a2117;
+  box-shadow: 0 1px 3px rgb(0 0 0 / 45%);
+  pointer-events: none;
+}
+
+.events-door__wave[hidden] {
+  display: none;
+}
+
+.events-door__wave > .game-icon {
+  display: block;
+  width: 16px;
+  height: 16px;
+}
+
 @media (max-width: 620px) {
   .yard-dock > .events-door {
     top: calc(var(--hud-height) + var(--space-2));

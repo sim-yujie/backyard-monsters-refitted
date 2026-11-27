@@ -94,7 +94,7 @@ export interface WaveEventDefinition {
   /**
    * The waves; empty for an event that only borrows the event control and
    * its progress row (Creature Carnage's attack yards, `bruk-port`): such an
-   * event has no wave bar, and "Next wave" refuses it (`noEvent`).
+   * event has no wave card in Events, and "Next wave" refuses it (`noEvent`).
    */
   readonly waves: WaveTable;
   /** One prize per wave, the same length as {@link waves}. */

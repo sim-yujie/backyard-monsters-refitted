@@ -1,81 +1,81 @@
-import { waveApi, waveName, type WaveApi, type WaveStatus } from "@/api/waves";
+import type { WaveStatus } from "@/api/waves";
+import { waveFeed, type WaveFeedState } from "@/game/waves/waveFeed";
+import { startWaveWords } from "@/game/waves/waveText";
 import { callNextWave } from "@/game/yard/plugins/waves";
 import { coinAmount, coinWords } from "@/ui/events/coinUi";
 import { EVENT_EXTRAS } from "@/ui/events/EventsPanel";
 import { el } from "@/ui/dom";
 import { gameIcon } from "@/ui/gameIcon";
 import "@/ui/styles/waves.css";
-import { totemImage, waveMonsterImage, waveMonsterName } from "./waveArt";
+import { totemImage } from "./waveArt";
 import { waveTrack } from "./WaveScreens";
 
 /**
- * The wave event's part of its Events card (kind `wave`, beta 10): the
- * waves beaten on the totem track, the next wave's monsters and prize, and
- * "Start wave N", the same as the yard's wave bar. Filled from
- * `GET /bm/events/wave` once the card is drawn.
+ * The wave event's part of its Events card (kind `wave`, beta 10). There is
+ * no wave bar on the yard (owner, 27 Nov 2026: "just have it under the
+ * events tab and have them manually start each wave"), so this is where
+ * every wave starts. neon's direction A (wave-shots/ux3/neon-design.md):
+ * the totem track, then one row with the prize (Glimmers, and the totem's
+ * next level on a totem wave) and "Start wave N"; no monster portraits or
+ * counts. Drawn from the yard's wave feed (`game/waves/waveFeed.ts`); the
+ * Events button redraws the page when the feed changes.
  */
 
-/** The card's body for a status; `onStart` calls the wave. */
-export const waveCardBody = (status: WaveStatus, onStart: () => void): HTMLElement => {
+/** The card's body for the feed's state; `onStart` calls the wave. */
+export const waveCardBody = (feed: WaveFeedState & { status: WaveStatus }, onStart: () => void): HTMLElement => {
+  const { status, busy, blocked } = feed;
   const body = el("div", "wave-card");
   body.append(waveTrack(status.beaten, status.waves, status.totemType, status.firstBonusWave));
   if (status.next === null) {
-    body.append(el("p", "wave-card__next-title", `All ${status.waves} waves beaten!`));
+    const done = el("p", "wave-card__done");
+    if (status.totemType !== null) done.append(totemImage(status.totemType, status.totemLevel, "wave-card__done-totem"));
+    done.append(el("span", "", `All ${status.waves} waves won`));
+    body.append(done);
     return body;
   }
-  const next = el("div", "wave-card__next");
-  const bonus = status.next >= status.firstBonusWave;
-  next.append(el("p", "wave-card__next-title", `Next: ${waveName(status.next, status.firstBonusWave)}`));
-  const monsters = el("ul", "wave-hud__monsters");
-  if (bonus) {
-    const secret = el("li", "wave-hud__monster");
-    secret.append(el("span", "wave-hud__secret", "?"), el("span", "wave-hud__count", "Secret"));
-    monsters.append(secret);
-  } else {
-    for (const group of status.preview.slice(0, 6)) {
-      const item = el("li", "wave-hud__monster");
-      item.title = `${group.count} ${waveMonsterName(group.monster)}`;
-      item.append(waveMonsterImage(group.monster, "wave-hud__portrait"), el("span", "wave-hud__count", `×${group.count}`));
-      monsters.append(item);
-    }
-  }
-  const prize = el("div", "wave-hud__prize");
-  prize.title = "Prize for beating it";
+  const row = el("div", "wave-card__go");
+  const prize = el("div", "wave-card__prize");
+  prize.title = "Prize for winning it";
   if (status.prize && status.prize.glimmers > 0) {
     const coins = coinAmount(`+${status.prize.glimmers}`, { size: 24 });
+    coins.classList.add("wave-card__chip");
     coins.setAttribute("aria-label", coinWords(status.prize.glimmers));
     prize.append(coins);
   }
-  if (status.prize?.totemLevel && status.totemType) {
-    prize.append(totemImage(status.totemType, status.prize.totemLevel, "wave-hud__prize-totem-art"));
+  if (status.prize?.totemLevel && status.totemType !== null) {
+    const totem = el("span", "wave-card__chip wave-card__chip--totem");
+    totem.setAttribute("aria-label", `Victory Totem level ${status.prize.totemLevel}`);
+    totem.append(totemImage(status.totemType, status.prize.totemLevel, "wave-card__chip-totem"), el("span", "", `Lv ${status.prize.totemLevel}`));
+    prize.append(totem);
   }
+  const words = startWaveWords(status.next, status.firstBonusWave);
   const start = el("button", "btn btn--primary wave-card__start");
   start.type = "button";
-  start.append(
-    gameIcon("swords", { size: 24, decorative: true, className: "wave-hud__start-icon" }),
-    el("span", "wave-hud__start-long", ` ${bonus ? "Start bonus" : `Start wave ${status.next}`}`),
-    el("span", "wave-hud__start-short", " Start"),
-  );
-  start.setAttribute("aria-label", bonus ? "Start the bonus wave" : `Start wave ${status.next}`);
+  start.disabled = busy || blocked;
+  if (busy) {
+    start.classList.add("wave-card__start--busy");
+    start.append(el("span", "wave-card__spinner"), " Starting…");
+  } else {
+    start.append(gameIcon("swords", { size: 24, decorative: true, className: "wave-start-icon" }), ` ${words}`);
+  }
+  start.setAttribute("aria-label", busy ? `${words}: starting` : words);
+  if (blocked) start.title = "Finish the wild raid on your yard first";
   start.addEventListener("click", () => {
+    if (start.disabled) return;
     start.disabled = true;
     onStart();
   });
-  next.append(monsters, prize, start);
-  body.append(next);
+  row.append(prize, start);
+  body.append(row);
   return body;
 };
 
-/** Registers the card's part: drawn empty, filled when the status comes. */
-export const registerWaveCard = (api: Pick<WaveApi, "status"> = waveApi, start: () => void = callNextWave): void => {
+/** Registers the card's part, drawn from the feed (empty until the yard has read the event). */
+export const registerWaveCard = (feed: () => WaveFeedState = waveFeed, start: () => void = callNextWave): void => {
   EVENT_EXTRAS.set("wave", (event) => {
     const slot = el("div", "wave-card-slot");
-    void api
-      .status()
-      .then((answer) => {
-        if (answer.wave && answer.wave.run === event.id) slot.replaceChildren(waveCardBody(answer.wave, start));
-      })
-      .catch(() => undefined);
+    const now = feed();
+    if (now.status && now.status.run === event.id) slot.append(waveCardBody({ ...now, status: now.status }, start));
     return slot;
   });
 };

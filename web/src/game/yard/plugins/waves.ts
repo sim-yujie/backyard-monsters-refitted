@@ -3,14 +3,15 @@ import { waveApi, type WaveApi, type WaveStatus } from "@/api/waves";
 import { setRaidRun } from "@/game/raid/raidSession";
 import { rememberWaveArmy } from "@/game/waves/waveText";
 import { raidWatch } from "@/game/raid/raidWatch";
-import { WaveHud } from "@/ui/waves/WaveHud";
+import { setWaveFeed } from "@/game/waves/waveFeed";
 import { waveIntroPopup } from "@/ui/waves/WaveScreens";
 import { YARD_PLUGINS, type YardMounts, type YardPlugin } from "../yardPlugins";
 
 /**
  * Own-yard plugin for the wave events (beta 10, Wild Monster Invasion), on
- * the main yard only: while a wave event is on, the wave bar (`WaveHud`)
- * names the next wave and "Start wave N" calls it (`POST
+ * the main yard only: while a wave event is on, its status goes to the wave
+ * feed (`game/waves/waveFeed.ts`) for the Events card and button (no bar on
+ * the yard, owner 27 Nov 2026), and "Start wave N" calls it (`POST
  * /bm/events/wave/next`); the server answers with the wave already fought,
  * and the raid scene plays it as a raid (`RaidRun.wave`). Its result shows
  * when the yard opens again (`plugins/raid.ts`, `showWaveResult`), whose
@@ -80,15 +81,16 @@ export const wavesYardPlugin: YardPlugin = (mounts) => {
   const go = (): void => {
     if (busy || !status || status.next === null) return;
     busy = true;
-    hud.update(status, true);
+    publish();
     void startWave(mounts).then((started) => {
       if (started || gone) return;
       busy = false;
-      hud.update(status, false);
+      publish();
     });
   };
-  const hud = new WaveHud({ onStart: go }).mount(overlay.content);
-  hud.update(null);
+  // The Events card and button read this (no bar on the yard, owner 27 Nov 2026).
+  const publish = (): void => setWaveFeed(status, busy, raidWatch.current !== null);
+  setWaveFeed(null);
   caller = go;
 
   const refresh = async (): Promise<void> => {
@@ -101,29 +103,22 @@ export const wavesYardPlugin: YardPlugin = (mounts) => {
         const run = status.run;
         intro = waveIntroPopup(status, go, () => markIntroSeen(run)).mount(overlay.modal);
       }
-      // Hidden while a wild raid is open or fighting: the server would refuse the wave anyway.
-      hud.update(raidWatch.current ? null : status, busy);
+      publish();
     } catch {
-      /* the bar stays as it was; the next refresh tries again */
+      /* the card keeps what it had; the next refresh tries again */
     }
   };
   void refresh();
   const timer = setInterval(() => void refresh(), WAVE_STATUS_REFRESH_MS);
-  const stopWatch = raidWatch.subscribe(() => hud.update(raidWatch.current ? null : status, busy));
-  // Out of the way while a window (Events, Build, ...) or a pop-up is open.
-  const covered = (): boolean => overlay.modal.childElementCount > 0 || overlay.content.querySelector(":scope > .panel") !== null;
-  const observer = typeof MutationObserver === "function" ? new MutationObserver(() => hud.setCovered(covered())) : null;
-  observer?.observe(overlay.modal, { childList: true });
-  observer?.observe(overlay.content, { childList: true });
-  hud.setCovered(covered());
+  // A wild raid open or fighting: the card's Start waits (the server would refuse the wave).
+  const stopWatch = raidWatch.subscribe(publish);
 
   return () => {
     gone = true;
     if (caller === go) caller = null;
     clearInterval(timer);
     stopWatch();
-    observer?.disconnect();
-    hud.remove();
+    setWaveFeed(null);
   };
 };
 

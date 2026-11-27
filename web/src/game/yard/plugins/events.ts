@@ -18,6 +18,7 @@ import {
   type ServerClock,
 } from "@/game/events/eventsModel";
 import { setEventsFeed } from "@/game/events/eventsFeed";
+import { onWaveFeed, snoozeWaveMark, waveMarkDue } from "@/game/waves/waveFeed";
 import { onPumpkins, PUMPKIN_HUNT_KIND, withPumpkinCount } from "@/game/events/pumpkinHunt";
 import { currentSeason, seasonFor, setSeason } from "@/game/season";
 import {
@@ -54,7 +55,11 @@ import { YARD_PLUGINS, type YardMounts, type YardPlugin } from "../yardPlugins";
  * page, and the "What's new" cards' one pop-up after an update.
  *
  * - **Button.** Shown only while an event is on or coming up. The badge
- *   counts today's calendar treat and any ladder tier reached.
+ *   counts today's calendar treat and any ladder tier reached. A wave event
+ *   adds a crossed-swords mark on the other corner while a wave can be
+ *   started (`game/waves/waveFeed.ts`); opening the page rests it until the
+ *   next day, and a page opened for a wave starts at the top, where the
+ *   invasion's card is (neon, 27 Nov 2026).
  * - **Clock.** Countdowns run on the server's clock (`serverClock`); the list
  *   is read again when an event starts or ends, or the next day's treat
  *   opens, and whenever the page opens.
@@ -118,6 +123,10 @@ export class EventsDoor {
   private readonly unwatchPumpkins: () => void;
   /** Stops following the weekend event. */
   private readonly unwatchWeekend: () => void;
+  /** Stops following the wave event (its card and the swords mark). */
+  private readonly unwatchWaves: () => void;
+  /** The swords mark: a wave can be started. */
+  private readonly waveMark: HTMLElement;
   /** The weekend runs the page last drew, so a start or end at midnight redraws it. */
   private weekendDrawn = "";
   /** The weekend pop-up opened from its card, one at a time. */
@@ -156,7 +165,12 @@ export class EventsDoor {
     this.badge = document.createElement("span");
     this.badge.className = "yard-dock__badge events-badge";
     this.badge.hidden = true;
-    disc.append(this.badge);
+    this.waveMark = document.createElement("span");
+    this.waveMark.className = "events-door__wave";
+    this.waveMark.hidden = true;
+    this.waveMark.append(gameIcon("swords", { size: 16, decorative: true }));
+    disc.append(this.badge, this.waveMark);
+    this.unwatchWaves = onWaveFeed(() => this.refresh());
     mounts.dock.element.append(element);
     this.timer = window.setInterval(() => this.tick(), TICK_MS);
   }
@@ -234,7 +248,10 @@ export class EventsDoor {
       },
     }).mount(this.mounts.overlay.content);
     this.button.setAttribute("aria-expanded", "true");
-    this.scrollToClaim = atClaim || window.matchMedia?.(COMPUTER_QUERY).matches !== true;
+    // A wave to start: the page starts at the top, on the invasion's card.
+    const forWave = waveMarkDue(this.now);
+    if (forWave) snoozeWaveMark(this.now);
+    this.scrollToClaim = atClaim || (!forWave && window.matchMedia?.(COMPUTER_QUERY).matches !== true);
     this.render();
     void this.load();
   }
@@ -359,9 +376,15 @@ export class EventsDoor {
     const count = claimableCount(events) + (checkinWaiting(now) ? 1 : 0);
     this.badge.hidden = count === 0;
     this.badge.textContent = count > 99 ? "99+" : String(count);
-    const words = count === 1 ? "1 reward to claim" : `${count} rewards to claim`;
-    this.button.setAttribute("aria-label", count > 0 ? `Events. ${words}` : "Events");
-    this.button.title = count > 0 ? `Events: ${words}` : "Events: what is on and coming up";
+    const wave = waveMarkDue(now) && !this.panel;
+    this.waveMark.hidden = !wave;
+    const parts = [
+      ...(count > 0 ? [count === 1 ? "1 reward to claim" : `${count} rewards to claim`] : []),
+      ...(wave ? ["a wave is ready"] : []),
+    ];
+    const words = parts.join(", ");
+    this.button.setAttribute("aria-label", words ? `Events. ${words}` : "Events");
+    this.button.title = words ? `Events: ${words}` : "Events: what is on and coming up";
     this.render();
   }
 
@@ -447,6 +470,7 @@ export class EventsDoor {
     this.destroyed = true;
     this.unwatchPumpkins();
     this.unwatchWeekend();
+    this.unwatchWaves();
     if (this.timer !== null) window.clearInterval(this.timer);
     this.panel?.close();
     this.button.remove();
