@@ -260,6 +260,37 @@ export interface SendOptions extends RequestOptions {
 const FORM_CONTENT_TYPE = "application/x-www-form-urlencoded;charset=UTF-8";
 const JSON_CONTENT_TYPE = "application/json";
 
+/** The query parameter a request names this page's build in (`server/src/middleware/pageBuild.ts`). */
+export const PAGE_BUILD_PARAM = "pb";
+
+let pageBuild: string | null = null;
+
+/**
+ * This page's build: the hash in the name of the entry script it runs
+ * (`/static/index-<hash>.js`, as `app/updateCheck.ts` reads it), or null in
+ * a development build or a test, which have none. Sent with every request so
+ * the server's request log can count tabs still on an old page after a
+ * release (beta 10, owner's pick B+).
+ */
+export const pageBuildId = (doc: Document | undefined = globalThis.document): string | null => {
+  if (pageBuild !== null) return pageBuild;
+  try {
+    for (const script of doc?.querySelectorAll<HTMLScriptElement>("script[type=module][src]") ?? []) {
+      const hash = (script.getAttribute("src") ?? "").match(/\/static\/index-([\w-]{1,40})\.js/)?.[1];
+      if (hash) return (pageBuild = hash);
+    }
+  } catch {
+    // No document to read (a worker): no build to name.
+  }
+  return null;
+};
+
+/** `pb=<build>` for the query string, or "" when the page has no build id. */
+const pageBuildParam = (): string => {
+  const build = pageBuildId();
+  return build ? `${PAGE_BUILD_PARAM}=${encodeURIComponent(build)}` : "";
+};
+
 /**
  * One request, one envelope.
  *
@@ -279,7 +310,7 @@ export const send = async <T extends ApiEnvelope>(
   const answered = localRoute?.(method, path, options.form ?? options.json ?? options.query ?? {});
   if (answered) return (await answered) as T;
 
-  const search = options.query ? encodeForm(options.query) : "";
+  const search = [options.query ? encodeForm(options.query) : "", pageBuildParam()].filter(Boolean).join("&");
   const url = `${apiUrl(path)}${search ? `?${search}` : ""}`;
 
   // `form` wins if a caller somehow passes both, so the encoding a call site

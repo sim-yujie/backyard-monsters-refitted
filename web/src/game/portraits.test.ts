@@ -5,8 +5,10 @@ import { setClassicLook } from "./classicLook";
 import { FROST_MONSTERS } from "./attack/monsterSkins";
 import { CHAMPION_CATALOGUE } from "./yard/championCatalogue";
 import {
+  CHAMPION_CREATURE_BOX,
   PAINTED_CHAMPION_LEVELS,
   PAINTED_MONSTERS,
+  championCrop,
   championPortrait,
   monsterPortrait,
   paintedChampionFile,
@@ -136,6 +138,34 @@ describe("the painted files", () => {
     expect(sources.filter((src) => !existsSync(src.includes("/portraits/") ? publicFile(src) : serverFile(src)))).toEqual([]);
     // A monster with no frost look keeps its own.
     expect(monsterPortrait("C2", "card", "frost")).toEqual(monsterPortrait("C2", "card"));
+  });
+});
+
+describe("championCrop", () => {
+  it("has a creature box for every level of the four wild champions, none for Krallen", () => {
+    for (const id of ["G1", "G2", "G3", "G4"]) {
+      expect(CHAMPION_CREATURE_BOX[id]).toHaveLength(6);
+      for (const [left, top, right, bottom] of CHAMPION_CREATURE_BOX[id]!) {
+        expect(0 <= left && left < right && right <= 1).toBe(true);
+        expect(0 <= top && top < bottom && bottom <= 1).toBe(true);
+      }
+    }
+    expect(championCrop("G5", 3)).toBeNull();
+  });
+
+  it("blows a small creature up to fill the box, a big one barely", () => {
+    // Fomor at level 1 sits in about a third of the frame.
+    const small = championCrop("G3", 1)!;
+    expect(small.size).toBeGreaterThan(250);
+    expect(small.x).toBeLessThan(0);
+    expect(small.y).toBeLessThan(0);
+    // Gorgo at level 6 fills the frame: no blow-up past it.
+    expect(championCrop("G1", 6)!.size).toBe(100);
+  });
+
+  it("clamps the level to 1..6", () => {
+    expect(championCrop("G2", 0)).toEqual(championCrop("G2", 1));
+    expect(championCrop("G2", 9)).toEqual(championCrop("G2", 6));
   });
 });
 

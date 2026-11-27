@@ -105,6 +105,47 @@ export const championPortrait = (id: string, level: number, size: PortraitSize):
   );
 };
 
+type CreatureBox = readonly [left: number, top: number, right: number, bottom: number];
+
+/**
+ * Where the creature sits in a champion's whole-frame portrait at levels 1
+ * to 6, as fractions of the frame (alpha bounds of `G<n>-L<l>.webp`). The
+ * originals (`G<n>_L<l>-150.png`) share the layout, so one table serves
+ * both looks. The Cage keeps the whole frame, so a champion grows with its
+ * level; a small card that must show the creature at any level crops to
+ * this instead ({@link championCrop}). Krallen (G5) is never cropped.
+ */
+export const CHAMPION_CREATURE_BOX: Readonly<Record<string, readonly CreatureBox[]>> = {
+  G1: [[0.176, 0.278, 0.778, 0.761], [0.119, 0.188, 0.869, 0.818], [0.068, 0.114, 0.949, 0.858], [0.074, 0.068, 0.938, 0.955], [0.057, 0.017, 0.96, 0.966], [0.028, 0.017, 0.994, 1]],
+  G2: [[0.165, 0.398, 0.801, 0.75], [0.085, 0.324, 0.949, 0.773], [0.062, 0.188, 1, 0.932], [0.006, 0.085, 0.943, 0.943], [0.045, 0.051, 1, 0.966], [0.006, 0.023, 1, 0.972]],
+  G3: [[0.324, 0.409, 0.653, 0.648], [0.261, 0.358, 0.699, 0.693], [0.188, 0.278, 0.795, 0.75], [0.17, 0.159, 0.926, 0.812], [0.131, 0.165, 0.966, 0.949], [0.062, 0.023, 0.989, 0.932]],
+  G4: [[0.165, 0.415, 0.705, 0.722], [0.08, 0.33, 0.852, 0.818], [0.057, 0.216, 0.835, 0.886], [0.034, 0.188, 0.807, 0.898], [0.011, 0.119, 0.858, 0.92], [0.011, 0.102, 0.875, 0.938]],
+};
+
+/** A square crop of a whole-frame portrait: the image's width and offsets in % of the square box. */
+export interface PortraitCrop {
+  readonly size: number;
+  readonly x: number;
+  readonly y: number;
+}
+
+/**
+ * The square round a champion's creature at a level (clamped to 1..6), with
+ * a little room, as the image's width and offsets in % of a square box; null
+ * when the champion has no table (Krallen).
+ */
+export const championCrop = (id: string, level: number): PortraitCrop | null => {
+  const boxes = CHAMPION_CREATURE_BOX[id];
+  if (boxes === undefined || boxes.length === 0) return null;
+  const at = Math.min(Math.max(Math.trunc(level) || 1, 1), boxes.length);
+  const [left, top, right, bottom] = boxes[at - 1]!;
+  const side = Math.min(1, Math.max(right - left, bottom - top) * 1.08);
+  const startX = (left + right) / 2 - side / 2;
+  const startY = (top + bottom) / 2 - side / 2;
+  const round = (value: number): number => Math.round(value * 10) / 10;
+  return { size: round(100 / side), x: round((-startX / side) * 100), y: round((-startY / side) * 100) };
+};
+
 /**
  * Points an image at a portrait. If the painted file fails, the image tries
  * the original once, and that error is kept from the image's other `error`

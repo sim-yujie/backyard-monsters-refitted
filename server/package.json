@@ -24,6 +24,7 @@
     "consumer:revoke": "bun src/scripts/api-consumers.ts revoke",
     "account:delete": "bun src/scripts/delete-account.ts",
     "inferno:seed": "bun src/scripts/inferno-seed.ts",
+    "stats:snapshot": "bun src/scripts/snapshot-attack-stats.ts",
     "alerts:chat-id": "bun src/scripts/alerts.ts chat-id",
     "alerts:test": "bun src/scripts/alerts.ts test",
     "alerts:check": "bun src/scripts/alerts.ts check",

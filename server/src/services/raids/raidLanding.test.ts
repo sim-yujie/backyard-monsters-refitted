@@ -310,3 +310,32 @@ describe("goal D1, First Blood: a real raid with a raider killed (Flash's kills:
     }
   });
 });
+
+/** Beta 10: the threat moves with a wild raid's landing, and only a wild raid's. */
+describe("landRaid: the threat", () => {
+  const at = (threat: number) => saveOf({ aiattacks: { ...(saveOf().aiattacks as object), threat } as never });
+
+  test("a good defence raises the next threat, a poor one lowers it; the result says both", () => {
+    const good = at(5);
+    const won = landRaid(good, { id: "r_one", tribe: "Kozu", startedAt: STARTED, outcome: outcomeOf({ healthShare: 0.95 }), threat: 5 }, NOW);
+    expect(won.threat).toBe(5);
+    expect(won.nextThreat).toBe(6);
+    expect(readSchedule(good.aiattacks).threat).toBe(6);
+    expect(readSchedule(good.aiattacks).recent[0]!.threat).toBe(5);
+
+    const poor = at(5);
+    const lost = landRaid(poor, { id: "r_one", tribe: "Kozu", startedAt: STARTED, outcome: outcomeOf({ healthShare: 0.5 }), threat: 5 }, NOW);
+    expect(lost.nextThreat).toBe(4);
+    expect(readSchedule(poor.aiattacks).threat).toBe(4);
+  });
+
+  test("the Trojan Horse and Moloch leave it, and say nothing of it", () => {
+    for (const tribe of [TROJAN_TRIBE, "moloch"]) {
+      const save = at(5);
+      const result = landRaid(save, { id: "r_one", tribe, startedAt: STARTED, outcome: outcomeOf({ healthShare: 1 }) }, NOW);
+      expect(readSchedule(save.aiattacks).threat).toBe(5);
+      expect(result.threat).toBeUndefined();
+      expect(result.nextThreat).toBeUndefined();
+    }
+  });
+});
