@@ -41,7 +41,7 @@ describe("the Events card's yard block", () => {
     expect(body.querySelectorAll(".yard-track__yard")[4]!.textContent).toContain("Copy");
     expect(body.querySelector(".yard-next__kicker")!.textContent).toBe("Next · Yard 4 of 5");
     expect(body.querySelector(".yard-next__damage")!.textContent).toContain("35% damaged");
-    expect(body.querySelector(".yard-next__prize")!.textContent).toContain("2× Spurtz Cannon");
+    expect(body.querySelector(".yard-next__prize")!.textContent).toContain("2nd Spurtz Cannon");
     (body.querySelector(".yard-next__attack") as HTMLButtonElement).click();
     expect(onAttack).toHaveBeenCalledWith(expect.objectContaining({ baseid: "904" }));
   });
@@ -76,7 +76,7 @@ describe("after the attack", () => {
   it("the end panel's box says the yard is wrecked and what it paid", () => {
     const box = eventYardResult(landed);
     expect(box.textContent).toContain("3 of 5 yards wrecked!");
-    expect(box.textContent).toContain("1× Spurtz Cannon");
+    expect(box.textContent).toContain("Spurtz Cannon");
     expect(eventYardResult({ ...landed, won: false, prizes: [] }).textContent).toContain("Town Hall still standing.");
   });
 

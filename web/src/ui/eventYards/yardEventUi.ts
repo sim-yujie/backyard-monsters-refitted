@@ -21,9 +21,9 @@ import "@/ui/styles/eventYards.css";
 
 const TOTAL_YARDS = { carnage: 10, brukwar: 5 } as const;
 
-/** "Yard 3 of 10", or "Copy of your yard" for Brukkarg War's last. */
+/** "Yard 3 of 10"; Brukkarg War's last says it is the copy of your yard. */
 export const yardName = (yard: Pick<EventYardView, "index" | "copy">, total: number): string =>
-  yard.copy ? "Copy of your yard" : `Yard ${yard.index} of ${total}`;
+  yard.copy ? `Yard ${yard.index} of ${total}: copy of your yard` : `Yard ${yard.index} of ${total}`;
 
 /** A Spurtz Cannon's picture: Flash's button in the Classic look, the Modern tower otherwise. */
 const spurtzPicture = (black: boolean): string =>
@@ -31,10 +31,10 @@ const spurtzPicture = (black: boolean): string =>
     ? buttonUrl(black ? BLACK_SPURTZ_TYPE : SPURTZ_TYPE)
     : artUrl(`/assets/buildings/${black ? "blackspurtztower" : "spurtztower"}/top.t1@2x.webp`);
 
-/** A prize's name in words: "2× Spurtz Cannon", "Black Diamond Spurtz", "Carnage trophy". */
+/** A prize's name in words: "Spurtz Cannon", "2nd Spurtz Cannon", "Black Diamond Spurtz", "Carnage trophy". */
 export const prizeName = (prize: YardPrizeView): string | null => {
   if (prize.spurtz === 3) return "Black Diamond Spurtz";
-  if (prize.spurtz) return `${prize.spurtz}× Spurtz Cannon`;
+  if (prize.spurtz) return prize.spurtz > 1 ? `${prize.spurtz}nd Spurtz Cannon` : "Spurtz Cannon";
   if (prize.decoration) return "Carnage trophy";
   return null;
 };
@@ -161,7 +161,7 @@ export const eventYardResult = (landed: EventYardLanded): HTMLElement => {
 
 /** The pop-up's headline for a prize, or null for one that needs none (Glimmers alone). */
 export const prizeHeadline = (prize: YardPrizeView): string | null => {
-  if (prize.spurtz === 3) return "Black Diamond Spurtz Cannons!";
+  if (prize.spurtz === 3) return "Black Diamond Spurtz!";
   if (prize.spurtz) return prize.spurtz > 1 ? "A second Spurtz Cannon!" : "Spurtz Cannon unlocked!";
   if (prize.decoration) return "Creature Carnage trophy!";
   return null;
@@ -169,8 +169,8 @@ export const prizeHeadline = (prize: YardPrizeView): string | null => {
 
 /** The words under a prize's headline. */
 export const prizeWords = (prize: YardPrizeView): string => {
-  if (prize.spurtz === 3) return "Your Spurtz Cannons are now Black Diamond. Build up to 2: Build → Defensive.";
-  if (prize.spurtz) return `Build up to ${prize.spurtz}: Build → Defensive.`;
+  if (prize.spurtz === 3) return "Your Spurtz Cannons are now Black Diamond. Place up to 2 from Build → Defensive.";
+  if (prize.spurtz) return `Place up to ${prize.spurtz} from Build → Defensive.`;
   if (prize.decoration) return "It is in your Decorations: Build → Decorations.";
   return "";
 };
@@ -199,7 +199,12 @@ export const openYardPrizePopup = (container: HTMLElement, landed: EventYardLand
     const img = el("img", "yard-prize-popup__art");
     img.src = prize.spurtz ? spurtzPicture(prize.spurtz === 3) : buildPictureUrl(prize.decoration!);
     img.alt = "";
-    item.append(img, el("h3", "yard-prize-popup__headline", prizeHeadline(prize)!), el("p", "yard-prize-popup__words", prizeWords(prize)));
+    const words = el("p", "yard-prize-popup__words");
+    // "Build → Defensive." stays on one line (neon r3).
+    const [before, path] = prizeWords(prize).split(/(?=Build →)/);
+    words.append(before ?? "");
+    if (path) words.append(el("span", "yard-prize-popup__path", path));
+    item.append(img, el("h3", "yard-prize-popup__headline", prizeHeadline(prize)!), words);
     body.append(item);
     if (prize.spurtz) build = prize.spurtz === 3 ? BLACK_SPURTZ_TYPE : SPURTZ_TYPE;
   }

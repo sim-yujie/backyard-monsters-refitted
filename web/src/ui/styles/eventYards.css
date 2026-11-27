@@ -19,7 +19,7 @@
   grid-template-columns: repeat(5, minmax(0, 1fr));
   gap: var(--space-1);
   margin: 0;
-  padding: 0;
+  padding: 6px 0 0;
   list-style: none;
 }
 
@@ -56,10 +56,12 @@
   box-shadow: inset 0 3px 0 var(--colour-accent);
 }
 
+/* Outside the tile's corner, like the HUD's badges, clear of its words and bar (neon r2). */
 .yard-track__gift {
   position: absolute;
-  top: 2px;
-  right: 2px;
+  top: -8px;
+  right: -6px;
+  z-index: 1;
 }
 
 /* ── The next yard: one inset box like the Krallen Hunt's tiers ─────────── */
@@ -116,10 +118,10 @@
   display: flex;
   align-items: center;
   gap: var(--space-2);
-  flex-wrap: wrap;
 }
 
 .yard-next__label {
+  flex: 0 0 auto;
   font-size: var(--text-sm);
   color: var(--colour-text-muted);
 }
@@ -196,8 +198,9 @@
   text-align: center;
 }
 
+/* Gold, not the green of "Result saved." above it (neon r2). */
 .yard-result--won {
-  border-color: var(--colour-success);
+  border-color: var(--colour-warning);
 }
 
 .yard-result p {
@@ -258,9 +261,13 @@
   font-size: var(--text-sm);
 }
 
+.yard-prize-popup__path {
+  white-space: nowrap;
+}
+
 .yard-prize-popup__count {
-  margin: 0;
-  font-size: var(--text-sm);
+  margin: var(--space-1) 0 0;
+  font-size: var(--text-xs);
   color: var(--colour-text-muted);
 }
 
@@ -271,7 +278,22 @@
 }
 
 .yard-prize-popup__button {
-  height: auto;
+  height: 44px;
   min-width: 110px;
-  min-height: 44px;
+}
+
+/* Phones: Attack under the box's words, the full width (neon r2). */
+@media (max-width: 620px) {
+  .yard-next {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .yard-next__attack {
+    width: 100%;
+  }
+
+  .yard-next__locked {
+    text-align: left;
+  }
 }

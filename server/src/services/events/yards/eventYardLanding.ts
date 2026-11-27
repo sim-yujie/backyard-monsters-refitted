@@ -354,6 +354,9 @@ const yardBattle = async (
       attackloot: saveData.attackloot,
       attackerchampion: saveData.attackerchampion,
       attackersiege: saveData.attackersiege,
+      // The copy of the player's yard may cage their champion, who defends:
+      // its health is checked as a player yard's is (a Brukkarg yard has none).
+      champion: saveData.champion,
     },
     battle,
     served.template.buildingdata as JsonObject | undefined,
