@@ -38,14 +38,14 @@ export type MR3MonsterStatsMap = Record<string, { props: MonsterProps }>;
 
 /**
  * Crabatron's hatch seconds (beta 10 rebalance, owner, desk b10-numbers,
- * 27 Nov 2026: 750 -> 450). One value on purpose: the owner may still pick
- * 300. `hTime` follows at 30%, as every monster's does. Change it here, then
+ * 27 Nov 2026: 750 -> 300, 5 minutes at every level; the report's plan was
+ * 450). One value on purpose, so a later step is one edit. `hTime` follows at 30%, as every monster's does. Change it here, then
  * in `web/` run `npm run gen:monster-catalogue` and `npm run gen:attack-stats`
  * (the catalogue and `attackStats.ts` copies must match), and in `server/`
  * `bun run stats:snapshot`. It is economy only: the battle rules version
  * (MANIFEST) does not move.
  */
-export const CRABATRON_HATCH_SECONDS = 450;
+export const CRABATRON_HATCH_SECONDS = 300;
 
 export const monsterStats: MonsterStatsMap = {
   // Pokey

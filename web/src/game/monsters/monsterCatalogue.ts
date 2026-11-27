@@ -267,7 +267,7 @@ export const MONSTER_CATALOGUE: readonly MonsterEntry[] = [
     spawnedBy: null,
     trainingCosts: [[2048000, 43200], [3000000, 64800], [4400000, 86400], [6000000, 172800], [7500000, 259200]],
     cResource: [22500, 33750, 50625, 56250, 67500, 90000],
-    cTime: [450],
+    cTime: [300],
     cStorage: [40],
   },
   // C11 Project X — CREATURELOCKER.as:349; beta 10 sets cTime
