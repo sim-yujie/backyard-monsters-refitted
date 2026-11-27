@@ -461,6 +461,7 @@
    without scrolling on short screens; gone on a phone on its side. */
 .events-card--wave .events-card__banner {
   max-height: clamp(64px, 14vh, 110px);
+  max-height: clamp(64px, 14dvh, 110px);
 }
 
 @media (max-height: 450px) {
