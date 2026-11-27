@@ -681,3 +681,48 @@
     font-size: var(--text-lg);
   }
 }
+
+/* ── neon round 3 (27 Nov 2026) ── */
+
+.crystal-row {
+  grid-template-columns: 156px 1fr auto;
+}
+
+/* The description reads as one line of text, its name inline. */
+.crystal-abilities__inspector {
+  display: block;
+  line-height: 1.4;
+}
+
+.crystal-abilities__inspector-icon {
+  vertical-align: middle;
+  margin-right: var(--space-1);
+}
+
+.events-crystals__count {
+  color: var(--colour-text-strong);
+  font-family: var(--font-display);
+}
+
+:root[data-skin="flash"] .crystal-slot[aria-pressed="true"] {
+  outline-color: #5c3317;
+}
+
+/* A phone on its side: the count of unlocked abilities beside the switch's row. */
+@media (max-height: 500px) {
+  .crystal-abilities__head {
+    display: flex;
+    justify-content: flex-end;
+  }
+
+  .crystal-abilities__held,
+  .crystal-abilities__how {
+    display: none;
+  }
+
+  .crystal-abilities__inspector {
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+}

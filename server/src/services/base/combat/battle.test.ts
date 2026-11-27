@@ -100,7 +100,7 @@ const attackerOf = (one: Fixture) => ({
   champion: [
     { t: 5, l: 5, hp: 62000, pl: 2, la: 1_800_000_000 },
     { t: 1, l: 6, hp: 190000, pl: 4, fb: 3 },
-    { t: 2, l: 6, hp: 40000, pl: 4 },
+    { t: 2, l: 6, hp: 40000, pl: 4, fb: 0 },
     { t: 4, l: 6, hp: 179000, pl: 3, fb: 3 },
     { t: 3, l: 6, hp: 42200, pl: 4, fb: 2 },
   ],

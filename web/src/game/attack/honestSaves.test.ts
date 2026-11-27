@@ -125,7 +125,7 @@ const fixtures = new Map<string, Fixture>(
 const CHAMPIONS: readonly ChampionSaveEntry[] = [
   { t: 5, l: 5, hp: 62_000, pl: 2, fb: 0, la: 1_800_000_000 },
   { t: 1, l: 6, hp: 190_000, pl: 4, fb: 3 },
-  { t: 2, l: 6, hp: 40_000, pl: 4 },
+  { t: 2, l: 6, hp: 40_000, pl: 4, fb: 0 },
   { t: 4, l: 6, hp: 179_000, pl: 3, fb: 3 },
   { t: 3, l: 6, hp: 42_200, pl: 4, fb: 2 },
 ].map((champion) => ({ ...champion, ft: 0, fd: 0, status: 0 }));
