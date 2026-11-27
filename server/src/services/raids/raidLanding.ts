@@ -119,6 +119,9 @@ export interface RaidResult {
   readonly housedLost: number;
   /** A wave event's wave: its own result (`events/waves/waveLanding.ts`). */
   readonly wave?: WaveResult;
+  /** The threat this raid came at, and the next raid's (beta 10); wild raids only. */
+  readonly threat?: number;
+  readonly nextThreat?: number;
 }
 
 /** The raid being landed. */
@@ -128,6 +131,8 @@ export interface RaidLandingInput {
   /** Unix seconds the fight started. */
   readonly startedAt: number;
   readonly outcome: RaidFightOutcome;
+  /** The threat it was planned at (beta 10); absent for a raid planned before, or not a wild one. */
+  readonly threat?: number;
 }
 
 const RESOURCES = ["r1", "r2", "r3", "r4"] as const;
@@ -249,15 +254,17 @@ export const landRaid = (save: RaidLandingSave, raid: RaidLandingInput, now: num
     stolen: { ...stolen },
     shiny,
     defended,
+    ...(raid.threat !== undefined ? { threat: raid.threat } : {}),
   };
   const schedule = readSchedule(save.aiattacks);
-  save.aiattacks = scheduleColumn(
-    isTrojan
-      ? recordTrojanFinished(schedule, record, now)
-      : isMoloch || isWave
-        ? recordEmergenceFinished(schedule, record)
-        : recordRaidFinished(schedule, record)
-  );
+  const next = isTrojan
+    ? recordTrojanFinished(schedule, record, now)
+    : isMoloch || isWave
+      ? recordEmergenceFinished(schedule, record)
+      : recordRaidFinished(schedule, record);
+  save.aiattacks = scheduleColumn(next);
+  // A wave event's wave is no wild raid: no threat on it.
+  const wild = !isTrojan && !isMoloch && !isWave;
 
   return {
     id: raid.id,
@@ -269,6 +276,7 @@ export const landRaid = (save: RaidLandingSave, raid: RaidLandingInput, now: num
     shiny,
     damaged,
     housedLost: housing ? lostCount(housing) : 0,
+    ...(wild ? { threat: raid.threat ?? schedule.threat, nextThreat: next.threat } : {}),
   };
 };
 

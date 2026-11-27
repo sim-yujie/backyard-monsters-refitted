@@ -23,9 +23,14 @@ export const WAVE_WIN_HEALTH_PERCENT = 10;
 /** The yard's health from the strip's damage, 0-100, the same rounding as the strip. */
 export const yardHealth = (damageShown: number): number => Math.max(0, Math.min(100, 100 - Math.floor(damageShown)));
 
-/** The monsters the fight's script brings in all. */
-export const scriptMonsters = (events: readonly { readonly monsters: Readonly<Record<string, number>> }[]): number =>
-  events.reduce((sum, event) => sum + Object.values(event.monsters).reduce((one, count) => one + (Number(count) || 0), 0), 0);
+/** The monsters the fight's script brings in all, a wild champion counting one. */
+export const scriptMonsters = (
+  events: readonly { readonly monsters: Readonly<Record<string, number>>; readonly champion?: unknown }[],
+): number =>
+  events.reduce(
+    (sum, event) => sum + Object.values(event.monsters).reduce((one, count) => one + (Number(count) || 0), 0) + (event.champion ? 1 : 0),
+    0,
+  );
 
 export interface WaveFightHudOptions {
   /** The layer over the scene the pieces float in. */

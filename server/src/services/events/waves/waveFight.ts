@@ -202,7 +202,7 @@ const freezeWave = async (
       const plan = planWave({ event: live.event, wave, quarter: randomInt(0, 4) });
       if (!plan) throw waveRefusedErr("allBeaten");
       if (plan.championsSkipped > 0) {
-        logger.info(`Wave ${wave} of ${live.event.key}: ${plan.championsSkipped} champion group(s) skipped, champion raiders not wired yet`);
+        logger.info(`Wave ${wave} of ${live.event.key}: ${plan.championsSkipped} champion group(s) skipped`);
       }
       const raidId = newRaidId();
       const schedule = readSchedule(locked.aiattacks);

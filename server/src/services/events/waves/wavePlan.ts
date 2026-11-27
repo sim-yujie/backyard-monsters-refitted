@@ -24,19 +24,25 @@ import type { WaveChampionGroup, WaveEventDefinition } from "./waveTypes.js";
 export const WAVE_SPREAD = RAID_MAP_WIDTH * 0.25;
 
 /**
- * Turns a champion group into a spawn event, or null when champions cannot
- * spawn yet. THE CHAMPION SEAM: raid-core's champion raiders
- * (`RaidEvent.champion = { t, l, pl?, fb?, hp? }`, branch feat/raid-core).
- * Until that lands the default spawns none and the wave runs without them;
- * once it is merged, {@link championRaidEvent} is the whole change:
- *
- *   ({ kind: "raid", t, x, y, r, monsters: {},
- *      champion: { t: group.guardian, l: group.level, fb: group.foodbonus, hp: group.health } })
+ * Turns a champion group into a spawn event: raid-core's champion raider
+ * (`RaidEvent.champion`, merged into revamp 27 Nov 2026), landing in the
+ * group's disc at its time, at the table's level, food bonus and health
+ * (Flash's `{ guardian, level, foodbonus, health }`). A spawner may still
+ * answer null (tests, or a champion the rules cannot draw) and the wave runs
+ * without it.
  */
 export type ChampionSpawner = (group: WaveChampionGroup, at: { t: number; x: number; y: number; r: number }) => RaidEvent | null;
 
-/** The champion seam's current answer: none yet (see {@link ChampionSpawner}). */
-export const championRaidEvent: ChampionSpawner = () => null;
+/** The champion seam: the group as a champion raider. */
+export const championRaidEvent: ChampionSpawner = (group, at) => ({
+  kind: "raid",
+  t: at.t,
+  x: at.x,
+  y: at.y,
+  r: at.r,
+  monsters: {},
+  champion: { t: group.guardian, l: group.level, fb: group.foodbonus, hp: group.health },
+});
 
 export interface WavePlanInput {
   readonly event: WaveEventDefinition;

@@ -95,17 +95,24 @@ describe("planWave", () => {
     expect(event.rage).toBeUndefined();
   });
 
-  test("the champion seam: skipped and counted until champion raiders are wired; a spawner adds them", () => {
-    const skipped = planWave({ event: WMI1, wave: 22, quarter: 0 })!;
+  test("the champion seam: wave 22's champion lands as a champion raider at the table's level, food bonus and health", () => {
+    const plan = planWave({ event: WMI1, wave: 22, quarter: 0 })!;
+    expect(plan.championsSkipped).toBe(0);
+    const champion = plan.events.find((event) => event.champion);
+    expect(champion?.monsters).toEqual({});
+    expect(champion?.champion?.hp).toBe(120000);
+    expect(champion?.champion?.t).toBeGreaterThanOrEqual(1);
+    // A spawner that answers null still skips and counts it.
+    const skipped = planWave({ event: WMI1, wave: 22, quarter: 0, champions: () => null })!;
     expect(skipped.championsSkipped).toBe(1);
-    const wired = planWave({
-      event: WMI1,
-      wave: 22,
-      quarter: 0,
-      champions: (group, at) => ({ kind: "raid", t: at.t, x: at.x, y: at.y, r: at.r, monsters: {} , strength: group.health }),
-    })!;
-    expect(wired.championsSkipped).toBe(0);
-    expect(wired.events.some((event) => event.strength === 120000)).toBe(true);
+  });
+
+  test("every WMI1 champion wave (20, 22, 26, 30, 31) brings its champion", () => {
+    for (const wave of [20, 22, 26, 30, 31]) {
+      const plan = planWave({ event: WMI1, wave, quarter: 0 })!;
+      expect(plan.events.some((event) => event.champion)).toBe(true);
+      expect(plan.championsSkipped).toBe(0);
+    }
   });
 
   test("a wave past the table is null; waveSize counts monsters and champions", () => {

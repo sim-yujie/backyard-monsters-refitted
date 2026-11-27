@@ -139,6 +139,7 @@ describe("the fight's pill", () => {
     expect(yardHealth(23.7)).toBe(77);
     expect(yardHealth(120)).toBe(0);
     expect(scriptMonsters([{ monsters: { C1: 5, C2: 3 } }, { monsters: { G1: 1 } }])).toBe(9);
+    expect(scriptMonsters([{ monsters: { C1: 5 } }, { monsters: {}, champion: { t: 1, l: 4 } }])).toBe(6);
   });
 
   it("tips flyers first, then a champion, then a swarm", () => {

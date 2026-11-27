@@ -1,7 +1,7 @@
 import type { BaseLoadResponse } from "@/api/types";
 import type { RaidFight, RaidResult, RaidView } from "@/api/raid";
 import type { AttackTarget } from "@/game/attack/attackTarget";
-import type { RaidEvent } from "@/game/combat/rules";
+import { raidSpawnsUntilOf, type RaidEvent } from "@/game/combat/rules";
 import type { WaveStatus } from "@/api/waves";
 
 /**
@@ -183,10 +183,11 @@ export const raidEvents = (run: RaidRun): RaidEvent[] =>
  * Horse's army with its last spawn's tick (`trojanFight.ts`,
  * `TROJAN_LAST_SPAWN_TICK`), which is its last event's own tick, so the fight
  * stays open through the gaps between spawns. A wild or Moloch raid's waves
- * all land at 0, which the server leaves at its default, 0, too.
+ * all land at 0, which the server leaves at its default, 0, too. Beta 10's
+ * timed groups and retreat wave are read by the same shared rule the server
+ * uses (`raidSpawnsUntilOf`), so both end on one tick.
  */
-export const raidSpawnsUntil = (run: RaidRun): number =>
-  raidEvents(run).reduce((last, event) => Math.max(last, Math.floor(event.t)), 0);
+export const raidSpawnsUntil = (run: RaidRun): number => raidSpawnsUntilOf(raidEvents(run));
 
 /**
  * The attack scene's target for a raid: the player's own main yard, as the
