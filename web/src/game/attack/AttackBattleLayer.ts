@@ -922,6 +922,8 @@ export class AttackBattleLayer {
   private readonly trailFx = new TrailFx();
   /** Gorgo's Stone Skin greys his body: a colour-matrix filter per creep, while it lasts. */
   private readonly stoneFilters = new Map<number, ColorMatrixFilter>();
+  /** The tick of each champion's last ability word and how many went off on it. */
+  private readonly abilityWords = new Map<number, { tick: number; count: number }>();
   /** A tower's top middle in world px, for a Chest Pound's line; null for one not drawn. */
   private readonly towerTop: (id: number) => Point | null;
   private readonly traps = new TrapReveal();
@@ -2941,8 +2943,12 @@ export class AttackBattleLayer {
     if (look.punchy) this.punchy(event.tick, ground, Math.max(40, event.radius * 0.6), look.punchy);
     // A Pounce shows its word as he takes off, not again as he lands.
     if (!look.word || (event.ability === "pounce" && !to)) return;
-    const at = { x: ground.x, y: (view?.top ?? ground.y - BODY_HEIGHT) - 14 };
-    this.fx.word(event.tick, `ability:${event.creepId}`, event.creepId, look.word, at);
+    // Two going off on one tick (Fomor's mist and spit) stack, not overlap.
+    const last = this.abilityWords.get(event.creepId);
+    const stacked = last && last.tick === event.tick ? last.count : 0;
+    this.abilityWords.set(event.creepId, { tick: event.tick, count: stacked + 1 });
+    const at = { x: ground.x, y: (view?.top ?? ground.y - BODY_HEIGHT) - 14 - stacked * 16 };
+    this.fx.word(event.tick, `ability:${event.creepId}:${stacked}`, event.creepId, look.word, at);
   }
 
   /**
