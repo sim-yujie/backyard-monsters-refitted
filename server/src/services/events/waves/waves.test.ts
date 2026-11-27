@@ -166,7 +166,7 @@ describe("the status the HUD reads", () => {
 describe("giveTotem (Flash's BTOTEM.TotemReward / UpgradeTotem)", () => {
   test("none yet: one into storage at the level", () => {
     const save = { buildingdata: {}, researchdata: {} };
-    expect(giveTotem(save, 121, 1)).toEqual({ level: 1, placed: false });
+    expect(giveTotem(save, 121, 1)).toEqual({ level: 1, placed: false, raised: true });
     expect(save.researchdata).toEqual({ b121: 1, bl121: 1 });
   });
   test("placed: raised where it stands, never lowered", () => {
@@ -174,14 +174,14 @@ describe("giveTotem (Flash's BTOTEM.TotemReward / UpgradeTotem)", () => {
       buildingdata: Record<string, { l?: number }>;
       researchdata: Record<string, unknown>;
     };
-    expect(giveTotem(save as never, 121, 4)).toEqual({ level: 4, placed: true });
+    expect(giveTotem(save as never, 121, 4)).toEqual({ level: 4, placed: true, raised: true });
     expect(save.buildingdata["9"]!.l).toBe(4);
-    expect(giveTotem(save as never, 121, 2)).toEqual({ level: 4, placed: true });
+    expect(giveTotem(save as never, 121, 2)).toEqual({ level: 4, placed: true, raised: false });
     expect(save.researchdata).toEqual({});
   });
   test("stored: its stored level raised, the count kept", () => {
     const save = { buildingdata: {}, researchdata: { b131: 1, bl131: 2 } };
-    expect(giveTotem(save, 131, 3)).toEqual({ level: 3, placed: false });
+    expect(giveTotem(save, 131, 3)).toEqual({ level: 3, placed: false, raised: true });
     expect(save.researchdata).toEqual({ b131: 1, bl131: 3 });
   });
 });

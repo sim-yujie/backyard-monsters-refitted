@@ -49,20 +49,22 @@ export const giveTotem = (
   save: Pick<Save, "buildingdata" | "researchdata">,
   type: number,
   level: number
-): { level: number; placed: boolean } => {
+): { level: number; placed: boolean; raised: boolean } => {
   const buildingdata: BuildingDataMap = { ...(save.buildingdata ?? {}) };
   let placed = false;
   let top = level;
+  let before = 0;
   for (const [key, building] of Object.entries(buildingdata)) {
     if (Number(building?.t) !== type) continue;
     placed = true;
+    before = Math.max(before, levelOf(building));
     const next = Math.max(levelOf(building), level);
     top = Math.max(top, next);
     if (next !== levelOf(building)) buildingdata[key] = { ...building!, l: next };
   }
   if (placed) {
     save.buildingdata = buildingdata;
-    return { level: top, placed };
+    return { level: top, placed, raised: top > before };
   }
   const researchdata: JsonObject = { ...(save.researchdata ?? {}) };
   const stored = storedCount(researchdata, type);
@@ -71,7 +73,7 @@ export const giveTotem = (
   top = Math.max(level, storedLevel);
   researchdata[`bl${type}`] = top;
   save.researchdata = researchdata;
-  return { level: top, placed: false };
+  return { level: top, placed: false, raised: stored <= 0 || top > storedLevel };
 };
 
 export const landWave = async (
@@ -100,7 +102,11 @@ export const landWave = async (
         const paid = await coinStore().grant(tx, userid, prize.glimmers, "wave", `wave:${record.run}:${record.wave}`);
         if (paid !== null) glimmers = prize.glimmers;
       }
-      if (prize.totemLevel && event.totemType) totem = { type: event.totemType, ...giveTotem(save, event.totemType, prize.totemLevel) };
+      // Told only when it changed: a totem from an earlier run may already stand higher.
+      if (prize.totemLevel && event.totemType) {
+        const given = giveTotem(save, event.totemType, prize.totemLevel);
+        if (given.raised) totem = { type: event.totemType, level: given.level, placed: given.placed };
+      }
     }
   } else {
     await store.lose(tx, userid, record.run);

@@ -460,8 +460,8 @@
 /* The wave card's banner kept low, so the next wave and its Start show
    without scrolling on short screens; gone on a phone on its side. */
 .events-card--wave .events-card__banner {
-  max-height: clamp(64px, 14vh, 110px);
-  max-height: clamp(64px, 14dvh, 110px);
+  max-height: clamp(56px, 10vh, 96px);
+  max-height: clamp(56px, 10dvh, 96px);
 }
 
 @media (max-height: 450px) {
@@ -507,9 +507,14 @@
 }
 
 .wave-track__wave {
-  top: 22px;
+  top: auto;
+  bottom: -20px;
   color: var(--colour-text);
   text-shadow: none;
+}
+
+.wave-track__count {
+  margin-left: 6px;
 }
 
 .wave-hud__prize {
@@ -556,5 +561,12 @@
 
   .wave-result__actions {
     margin-top: 8px;
+  }
+}
+
+/* A phone on its side has the width for the one-row tray. */
+@media (max-height: 500px) and (min-width: 621px) {
+  .wave-hud {
+    width: min(600px, calc(100vw - 300px));
   }
 }
