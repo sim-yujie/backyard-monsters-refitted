@@ -81,6 +81,8 @@ export interface WavePreviewGroup {
 export interface WaveStatus {
   readonly event: string;
   readonly title: string;
+  /** The event's sentence for the Events page and its first-day pop-up. */
+  readonly text: string;
   readonly run: string;
   readonly endsAt: number;
   readonly waves: number;
@@ -116,6 +118,7 @@ export const waveStatusOf = (event: WaveEventDefinition, run: WaveRun, beaten: n
   return {
     event: event.key,
     title: event.title,
+    text: event.text,
     run: runId(run),
     endsAt: run.endsAt,
     waves: event.waves.length,

@@ -1,5 +1,6 @@
 import type { RaidResult } from "@/api/raid";
-import { waveName, type WaveResult } from "@/api/waves";
+import { waveName, type WaveResult, type WaveStatus } from "@/api/waves";
+import { classicLook } from "@/game/classicLook";
 import { totemName, WAVE_LOST_LINE, WAVE_SURRENDERED_LINE } from "@/game/waves/waveText";
 import { coinAmount, coinWords } from "@/ui/events/coinUi";
 import { el } from "@/ui/dom";
@@ -73,10 +74,10 @@ export const waveResultPopup = (result: RaidResult, actions: WaveResultActions, 
     parts.push(waveTrack(wave.next === null ? wave.waves : wave.next - 1, wave.waves, wave.totemType ?? wave.totem?.type ?? null, wave.firstBonusWave));
     if (result.damaged.length > 0) parts.push(el("p", "wave-result__note", "Damaged buildings are repairing."));
   } else {
-    parts.push(
-      el("p", "wave-result__lead", wave.surrendered ? WAVE_SURRENDERED_LINE : WAVE_LOST_LINE),
-      el("p", "wave-result__note", `Yard left: ${Math.round(result.health * 100)}%. Keep more than 10% and beat every monster to win.`),
-    );
+    parts.push(el("p", "wave-result__lead", wave.surrendered ? WAVE_SURRENDERED_LINE : WAVE_LOST_LINE));
+    if (!wave.surrendered) {
+      parts.push(el("p", "wave-result__note", `Yard left: ${Math.round(result.health * 100)}%. Keep more than 10% and beat every monster to win.`));
+    }
   }
   const actionsRow = el("div", "wave-result__actions");
   const later = el("button", "btn wave-result__later", "Later");
@@ -154,4 +155,41 @@ export const showWaveResult = async (host: HTMLElement, result: RaidResult, acti
     await new Promise<void>((resolve) => totemPopup(totem, resolve).mount(host));
   }
   if (next) actions.onNext?.();
+};
+
+/**
+ * The event's arrival on the yard, once per run on this device (the in-game
+ * announcement hook): its banner in the player's look, its sentence, the
+ * first prize, and "Start wave 1" or "Later".
+ */
+export const waveIntroPopup = (status: WaveStatus, onStart: () => void, onClose: () => void): Popup => {
+  const popup = new Popup({ title: status.title, className: "wave-intro", onClose });
+  const band = el("div", "wave-intro__banner");
+  const picture = el("img", "wave-intro__banner-image");
+  picture.alt = "";
+  picture.src = classicLook() ? status.banner.classic : status.banner.modern;
+  picture.addEventListener("error", () => band.remove(), { once: true });
+  band.append(picture);
+  const parts: HTMLElement[] = [band];
+  if (status.text) parts.push(el("p", "wave-intro__text", status.text));
+  parts.push(el("p", "wave-result__note", "No loot lost · Auto-repairs · Glimmers every wave"));
+  if (status.totemType !== null) parts.push(waveTrack(status.beaten, status.waves, status.totemType, status.firstBonusWave));
+  const row = el("div", "wave-result__actions");
+  const later = el("button", "btn wave-result__later", "Later");
+  later.type = "button";
+  later.addEventListener("click", () => popup.close());
+  row.append(later);
+  if (status.next !== null) {
+    const start = el("button", "btn btn--primary wave-result__next");
+    start.type = "button";
+    start.append(el("span", "wave-hud__start-icon", "▶"), ` Start ${waveName(status.next, status.firstBonusWave).toLowerCase()}`);
+    start.addEventListener("click", () => {
+      popup.close();
+      onStart();
+    });
+    row.append(start);
+  }
+  parts.push(row);
+  popup.setContent(...parts);
+  return popup;
 };

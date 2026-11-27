@@ -3,6 +3,7 @@ import { waveApi, type WaveApi, type WaveStatus } from "@/api/waves";
 import { setRaidRun } from "@/game/raid/raidSession";
 import { raidWatch } from "@/game/raid/raidWatch";
 import { WaveHud } from "@/ui/waves/WaveHud";
+import { waveIntroPopup } from "@/ui/waves/WaveScreens";
 import { YARD_PLUGINS, type YardMounts, type YardPlugin } from "../yardPlugins";
 
 /**
@@ -19,6 +20,19 @@ import { YARD_PLUGINS, type YardMounts, type YardPlugin } from "../yardPlugins";
 export const WAVE_STATUS_REFRESH_MS = 120_000;
 
 export const WAVE_START_FAILED = "Could not start the wave. Try again.";
+
+const SEEN_KEY = "bymr.waveIntroSeen";
+
+/** Whether this device has shown run `run`'s arrival pop-up; marks it shown. */
+export const firstSightOf = (run: string): boolean => {
+  try {
+    if (window.localStorage.getItem(SEEN_KEY) === run) return false;
+    window.localStorage.setItem(SEEN_KEY, run);
+    return true;
+  } catch {
+    return false;
+  }
+};
 
 /** The open yard's caller, for the result pop-up's "Next wave". */
 let caller: (() => void) | null = null;
@@ -72,6 +86,10 @@ export const wavesYardPlugin: YardPlugin = (mounts) => {
       const answer = await waveApi.status();
       if (gone) return;
       status = answer.wave;
+      // The event's arrival, once per run on this device, before its first wave.
+      if (status && status.beaten === 0 && status.lost === 0 && !raidWatch.current && firstSightOf(status.run)) {
+        waveIntroPopup(status, go, () => undefined).mount(overlay.modal);
+      }
       // Hidden while a wild raid is open or fighting: the server would refuse the wave anyway.
       hud.update(raidWatch.current ? null : status, busy);
     } catch {

@@ -40,7 +40,7 @@ export const waveCardBody = (status: WaveStatus, onStart: () => void): HTMLEleme
   }
   const prize = el("div", "wave-hud__prize");
   if (status.prize && status.prize.glimmers > 0) {
-    const coins = coinAmount(`+${status.prize.glimmers}`);
+    const coins = coinAmount(`+${status.prize.glimmers}`, { size: 24 });
     coins.setAttribute("aria-label", coinWords(status.prize.glimmers));
     prize.append(coins);
   }

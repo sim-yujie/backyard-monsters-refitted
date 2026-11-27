@@ -1,4 +1,4 @@
-import type { WaveStatus } from "@/api/waves";
+import { waveName, type WaveStatus } from "@/api/waves";
 import { waveCounter } from "@/game/waves/waveText";
 import { coinAmount, coinWords } from "@/ui/events/coinUi";
 import { el } from "@/ui/dom";
@@ -43,6 +43,10 @@ export interface WaveHudOptions {
   /** "Start wave N". */
   readonly onStart: () => void;
 }
+
+/** Whether the bar sits at the top and its tray opens downwards (`waves.css`). */
+const opensDown = (): boolean =>
+  isPhoneLayout() || (typeof window.matchMedia === "function" && window.matchMedia("(max-width: 1100px)").matches);
 
 export class WaveHud {
   readonly element: HTMLElement;
@@ -100,9 +104,9 @@ export class WaveHud {
     // The pill: the totem as it stands, the wave counter, the chevron.
     this.pill.replaceChildren(
       totemImage(status.totemType ?? 121, Math.max(1, status.totemLevel), `wave-hud__totem${status.totemLevel === 0 ? " wave-hud__totem--none" : ""}`),
-      el("span", "wave-hud__label", done ? "All waves beaten" : `Wave ${waveCounter(status.next!, status.firstBonusWave)}`),
-      // The tray opens downwards on a phone, upwards elsewhere.
-      el("span", "wave-hud__chevron", this.open === isPhoneLayout() ? "▴" : "▾"),
+      el("span", "wave-hud__label", done ? "All waves beaten" : bonus ? waveName(status.next!, status.firstBonusWave) : `Wave ${waveCounter(status.next!, status.firstBonusWave)}`),
+      // The tray opens downwards on a phone or iPad, upwards on a computer.
+      el("span", "wave-hud__chevron", this.open === opensDown() ? "▴" : "▾"),
     );
     this.pill.setAttribute("aria-expanded", String(this.open));
     this.pill.setAttribute(

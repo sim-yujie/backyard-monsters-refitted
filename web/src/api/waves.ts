@@ -23,6 +23,8 @@ export interface WaveStatus {
   /** The event's key (`wmi1`, `wmi2`). */
   readonly event: string;
   readonly title: string;
+  /** The event's sentence (absent from an older server). */
+  readonly text?: string;
   readonly run: string;
   /** Unix seconds the run ends. */
   readonly endsAt: number;
