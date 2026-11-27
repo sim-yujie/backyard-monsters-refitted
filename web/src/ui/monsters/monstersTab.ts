@@ -68,6 +68,8 @@ export interface MonstersFocus {
   readonly buildingId?: number;
   /** A monster to select, by roster id. */
   readonly monster?: string;
+  /** The Champion tab's view: the cage, or the Monster Madness abilities (crystals). */
+  readonly view?: "cage" | "abilities";
 }
 
 /** What the screen hands a tab when it creates it. */

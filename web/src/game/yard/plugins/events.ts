@@ -1,3 +1,5 @@
+import { crystalsHeld } from "@/game/events/crystals";
+import { showCrystalEarned } from "@/ui/monsters/CrystalAbilities";
 import { quietLogin } from "@/game/quietLogin";
 import {
   eventsActions,
@@ -224,6 +226,8 @@ export class EventsDoor {
         this.mounts.scene.openMap();
       },
       onOpenWeekend: (run) => this.openWeekend(run),
+      crystals: () => crystalsHeld(this.mounts.store.save.rewards),
+      onSpendCrystals: () => this.openAbilities(),
       onCheckInWeekend: () => void this.checkInWeekend(),
       onClose: () => {
         this.panel = null;
@@ -412,6 +416,12 @@ export class EventsDoor {
     await this.load();
   }
 
+  /** The Champion tab's Abilities view, where crystals are spent. */
+  private openAbilities(): void {
+    this.panel?.close();
+    this.mounts.scene.openMonsters("champion", { view: "abilities" });
+  }
+
   private async claimTier(event: EventView, tier: number): Promise<void> {
     if (this.claiming !== null) return;
     const key = tierKey(event.id, tier);
@@ -422,6 +432,17 @@ export class EventsDoor {
     if (this.destroyed) return;
     this.claiming = null;
     if (result.ok) {
+      // A crystal or a Korath power lands in the yard's prizes, which the
+      // page keeps itself (no yard answer carries them).
+      if (result.report.rewards) this.mounts.store.mergeWrite({ rewards: result.report.rewards });
+      // A clear's crystal: the proper pop-up, with Spend now (owner, 27 Nov 2026).
+      const crystal = result.report.granted.find((one) => one.kind === "crystal");
+      if (crystal && crystal.kind === "crystal") {
+        showCrystalEarned(this.mounts.overlay.content, crystal.held, () => this.openAbilities());
+        this.render();
+        await this.load();
+        return;
+      }
       // Champions' news stays; resources and Glimmers float on the bar, and
       // the tier flips to claimed (owner, 13 Nov 2026).
       const rewards = offBarRewards(event.ladder?.tiers[tier]?.rewards ?? []);

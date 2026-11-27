@@ -32,7 +32,9 @@ export type EventReward =
   /** Krallen's loot aura until `until` (unix s): the Krallen Hunt's 3x mark; she fights with it at any level. */
   | { readonly kind: "krallenAura"; readonly until: number }
   /** One of Korath's powers (Monster Madness): 1 Burn, 2 Breath of Fire, 3 Fists of Doom. */
-  | { readonly kind: "korath"; readonly power: number };
+  | { readonly kind: "korath"; readonly power: number }
+  /** Monster Madness crystals: each unlocks a champion's next ability (`game/events/crystals.ts`). */
+  | { readonly kind: "crystal"; readonly count: number };
 
 /** One reward as a claim paid it (server `services/events/grant.ts`). */
 export type GrantedReward =
@@ -47,7 +49,9 @@ export type GrantedReward =
   /** Her aura's end (unix s, 0 without a Krallen), her level when paid, and whether she had a Krallen. */
   | { kind: "krallenAura"; until: number; level: number; hasKrallen: boolean }
   /** Korath's power now; `raised` false when it was that high already; `hasKorath` false when it waits for him. */
-  | { kind: "korath"; power: number; raised: boolean; hasKorath: boolean };
+  | { kind: "korath"; power: number; raised: boolean; hasKorath: boolean }
+  /** Crystals paid, and how many the player holds now. */
+  | { kind: "crystal"; count: number; held: number };
 
 export interface CalendarView {
   /** Each day's rewards, day 1 first. */
@@ -166,6 +170,8 @@ export interface LadderClaimReport {
   event: string;
   tier: number;
   granted: GrantedReward[];
+  /** The yard's `rewards` after the claim, when it paid into them (a crystal, a Korath power). */
+  rewards?: Record<string, unknown>;
 }
 
 export const getEvents = (): Promise<EventsBody> => get<EventsBody>("/api/:apiVersion/bm/events");

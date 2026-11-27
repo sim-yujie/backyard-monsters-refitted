@@ -1220,7 +1220,8 @@ export class AttackBattleLayer {
     this.siegeFx.update(siege, shown);
     this.lootFx.update(shown);
     this.showBombNumbers(shown);
-    this.towerStatus.sync(battle.weakenedTowers(), battle.abilityMarks?.().stunned ?? []);
+    const marks = battle.abilityMarks?.();
+    this.towerStatus.sync(battle.weakenedTowers(), marks?.stunned ?? [], marks?.marked ?? []);
 
     if (this.damageDirty) {
       this.damageDirty = false;

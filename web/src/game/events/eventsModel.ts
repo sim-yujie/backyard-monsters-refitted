@@ -173,6 +173,8 @@ export const rewardText = (reward: EventReward, decorationName: (type: number) =
       return "Krallen's loot aura";
     case "korath":
       return `Korath's ${korathPowerName(reward.power)}`;
+    case "crystal":
+      return reward.count === 1 ? "A crystal" : `${reward.count} crystals`;
     case "eventCoins":
       return `${formatAmount(reward.amount)} ${reward.amount === 1 ? "Glimmer" : "Glimmers"}`;
   }

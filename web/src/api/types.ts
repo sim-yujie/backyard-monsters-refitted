@@ -791,6 +791,13 @@ export interface BaseLoadResponse extends ApiEnvelope {
   monsters?: MonstersSave | null;
   /** The base's champions. On the own-yard load, the attacker's own. */
   champion?: ChampionSaveEntry[] | null;
+  /**
+   * The yard's event prizes (`rewards`): Korath's power, Monster Madness
+   * crystals and Gorgo's, Drull's and Fomor's unlocked abilities
+   * (`game/events/crystals.ts`). Not a yard-answer slice: the crystal and
+   * ladder routes hand it back in their reports and the page merges it.
+   */
+  rewards?: Record<string, unknown> | null;
   /** Academy levels by roster id, `{ C1: { level: 6 } }`; absent means level 1. */
   academy?: AcademyData | null;
   /** Monster unlocks. Carried by `/base/load` and by every yard action. */

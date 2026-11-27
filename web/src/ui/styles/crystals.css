@@ -1,0 +1,478 @@
+/* ── Monster Madness crystals (`ui/monsters/CrystalAbilities.ts`, 27 Nov 2026) ──
+ * The Champion tab's Cage | Abilities switch, the Abilities view (a row per
+ * champion: portrait, three ability slots, Unlock) and the crystal pop-ups.
+ * Tokens only, so both looks (`skin.css`) colour it. */
+
+/* Cage | Abilities: a segmented switch, the chosen side lit, as the attack speed's. */
+.champion-tab__views {
+  display: inline-flex;
+  align-self: flex-start;
+  gap: 2px;
+  margin: var(--space-3) var(--space-4) 0;
+  padding: 3px;
+  border: 1px solid var(--colour-border-subtle);
+  border-radius: var(--radius-md);
+  background: var(--colour-surface-sunken);
+}
+
+.champion-tab__view {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  min-height: 36px;
+  border: 0;
+  border-radius: calc(var(--radius-md) - 3px);
+  padding: var(--space-1) var(--space-4);
+  background: transparent;
+  color: var(--colour-text-secondary);
+  font-family: var(--font-display);
+  font-size: var(--text-sm);
+  cursor: pointer;
+}
+
+.champion-tab__view[aria-pressed="true"] {
+  background: var(--colour-surface-selected);
+  color: var(--colour-text-strong);
+}
+
+.champion-tab__view-crystal {
+  width: 22px;
+  height: 22px;
+  margin-left: var(--space-1);
+}
+
+.champion-tab__view-count {
+  font-variant-numeric: tabular-nums;
+}
+
+.champion-tab__scroll[hidden] {
+  display: none;
+}
+
+/* ── The Abilities view ── */
+
+.crystal-abilities {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.crystal-abilities__head {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.crystal-abilities__held {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  font-family: var(--font-display);
+  font-size: var(--text-lg);
+  color: var(--colour-text-strong);
+}
+
+.crystal-abilities__crystal {
+  width: 36px;
+  height: 36px;
+}
+
+.crystal-abilities__how {
+  flex: 1;
+  margin: 0;
+  color: var(--colour-text-muted);
+  font-size: var(--text-sm);
+}
+
+.crystal-abilities__total {
+  color: var(--colour-text-secondary);
+  font-family: var(--font-display);
+  font-variant-numeric: tabular-nums;
+}
+
+.crystal-abilities__rows {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.crystal-row {
+  display: grid;
+  grid-template-columns: 140px 1fr auto;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--colour-border-subtle);
+  border-radius: var(--radius-md);
+  background: var(--colour-surface-sunken);
+}
+
+.crystal-row__who {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+.crystal-row__portrait {
+  width: 52px;
+  height: 52px;
+  flex: none;
+  border-radius: var(--radius-sm);
+  object-fit: cover;
+  background: var(--colour-surface-overlay);
+}
+
+.crystal-row--unowned .crystal-row__portrait {
+  opacity: 0.6;
+  filter: grayscale(0.5);
+}
+
+.crystal-row__name {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+  font-family: var(--font-display);
+  color: var(--colour-text-strong);
+}
+
+.crystal-pill {
+  align-self: flex-start;
+  padding: 0 var(--space-2);
+  border-radius: var(--radius-pill);
+  background: var(--colour-surface-overlay);
+  color: var(--colour-text-secondary);
+  font-family: var(--font-body, inherit);
+  font-size: var(--text-xs);
+  white-space: nowrap;
+}
+
+.crystal-pill--muted {
+  color: var(--colour-text-muted);
+}
+
+.crystal-row__slots {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--space-2);
+}
+
+.crystal-slot {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-height: 52px;
+  padding: var(--space-1) var(--space-2);
+  border: 2px solid var(--colour-border);
+  border-radius: var(--radius-sm);
+  background: var(--colour-surface-control);
+  color: var(--colour-text);
+  font-family: var(--font-display);
+  font-size: var(--text-xs);
+  text-align: left;
+  cursor: pointer;
+}
+
+.crystal-slot__icon {
+  width: 36px;
+  height: 36px;
+  flex: none;
+}
+
+.crystal-slot__name {
+  min-width: 0;
+  font-size: 11px;
+  line-height: 1.15;
+  overflow-wrap: anywhere;
+}
+
+.crystal-slot--unlocked {
+  border-color: var(--colour-warning);
+  background: var(--colour-warning-soft);
+  color: var(--colour-text-strong);
+}
+
+.crystal-slot--next {
+  border-style: dashed;
+  border-color: var(--colour-border-strong);
+}
+
+.crystal-slot--ready {
+  border-style: solid;
+  border-color: #e05ad8;
+  box-shadow: 0 0 10px rgb(224 90 216 / 45%);
+}
+
+.crystal-slot--locked {
+  color: var(--colour-text-muted);
+}
+
+.crystal-slot--locked .crystal-slot__icon {
+  opacity: 0.35;
+  filter: grayscale(0.8);
+}
+
+.crystal-slot[aria-pressed="true"] {
+  outline: 2px solid var(--colour-accent);
+  outline-offset: 1px;
+}
+
+.crystal-slot__tick {
+  position: absolute;
+  top: -7px;
+  right: -7px;
+  display: grid;
+  place-items: center;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: var(--colour-success);
+  color: var(--colour-text-inverse);
+  font-size: 11px;
+}
+
+.crystal-slot__gate {
+  position: absolute;
+  bottom: -7px;
+  right: 4px;
+  padding: 0 5px;
+  border-radius: var(--radius-pill);
+  background: var(--colour-warning);
+  color: var(--colour-warning-text);
+  font-size: 10px;
+}
+
+.crystal-slot__gate--met {
+  background: var(--colour-success);
+  color: var(--colour-text-inverse);
+}
+
+.crystal-row__act {
+  display: flex;
+  justify-content: flex-end;
+  min-width: 104px;
+}
+
+.crystal-row__unlock {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  white-space: nowrap;
+}
+
+.crystal-row__unlock-icon,
+.crystal-dialog__button-icon {
+  width: 22px;
+  height: 22px;
+}
+
+.crystal-row__done {
+  color: var(--colour-success);
+  font-family: var(--font-display);
+}
+
+.crystal-abilities__inspector {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--space-1);
+  min-height: 40px;
+  margin: 0;
+  padding: var(--space-1) var(--space-3);
+  border-radius: var(--radius-sm);
+  background: var(--colour-surface-overlay);
+  color: var(--colour-text);
+  font-size: var(--text-sm);
+}
+
+.crystal-abilities__inspector-icon {
+  width: 28px;
+  height: 28px;
+}
+
+.crystal-abilities__note,
+.crystal-dialog__note {
+  color: var(--colour-warning-bright);
+}
+
+.crystal-abilities__status {
+  margin: 0;
+  color: var(--colour-danger);
+  font-size: var(--text-sm);
+}
+
+.crystal-abilities__status:empty {
+  display: none;
+}
+
+/* ── Phone: the slots go under the champion, Unlock beside his name ── */
+@media (max-width: 620px), (max-height: 500px) {
+  .crystal-abilities__how {
+    display: none;
+  }
+
+  .crystal-row {
+    grid-template-columns: 1fr auto;
+    grid-template-areas:
+      "who act"
+      "slots slots";
+    gap: var(--space-2);
+  }
+
+  .crystal-row__who {
+    grid-area: who;
+  }
+
+  .crystal-row__act {
+    grid-area: act;
+    min-width: 0;
+  }
+
+  .crystal-row__slots {
+    grid-area: slots;
+  }
+
+  .crystal-row__portrait {
+    width: 40px;
+    height: 40px;
+  }
+
+  .crystal-slot {
+    flex-direction: column;
+    justify-content: center;
+    gap: 2px;
+    text-align: center;
+    min-height: 64px;
+  }
+
+  .crystal-slot__icon {
+    width: 32px;
+    height: 32px;
+  }
+}
+
+/* ── Pop-ups: Unlock?, Ability unlocked, Crystal earned ── */
+
+.crystal-dialog {
+  width: min(420px, calc(100vw - 32px));
+}
+
+.crystal-dialog .panel__body {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-2);
+  text-align: center;
+}
+
+.crystal-hero {
+  position: relative;
+  width: 132px;
+  height: 132px;
+  margin: var(--space-2) auto 0;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgb(255 210 120 / 45%), transparent 70%);
+}
+
+.crystal-hero__portrait {
+  width: 132px;
+  height: 132px;
+  object-fit: contain;
+}
+
+.crystal-hero__icon {
+  position: absolute;
+  right: -10px;
+  bottom: -6px;
+  width: 52px;
+  height: 52px;
+}
+
+.crystal-dialog__name {
+  margin: var(--space-2) 0 0;
+  color: var(--colour-text-strong);
+  font-family: var(--font-display);
+  font-size: var(--text-xl);
+}
+
+.crystal-dialog__sub {
+  margin: 0;
+  color: var(--colour-text-muted);
+  font-size: var(--text-sm);
+}
+
+.crystal-dialog__line {
+  margin: 0;
+  max-width: 34ch;
+  color: var(--colour-text);
+}
+
+.crystal-dialog__note {
+  margin: 0;
+  font-size: var(--text-sm);
+}
+
+.crystal-dialog__actions {
+  display: flex;
+  justify-content: center;
+  gap: var(--space-3);
+  margin-top: var(--space-2);
+}
+
+.crystal-dialog__actions .btn {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  min-width: 120px;
+  justify-content: center;
+}
+
+.crystal-dialog__earned {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-1);
+  font-family: var(--font-display);
+  font-size: var(--text-lg);
+  color: var(--colour-text-strong);
+}
+
+.crystal-dialog__earned-icon {
+  width: 72px;
+  height: 72px;
+  filter: drop-shadow(0 0 12px rgb(224 90 216 / 60%));
+}
+
+/* The Events card's Monster Madness line: crystals held and Spend. */
+.events-crystals {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin-top: var(--space-2);
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-md);
+  background: var(--colour-surface-sunken);
+  font-family: var(--font-display);
+  color: var(--colour-text-strong);
+}
+
+.events-crystals__icon {
+  width: 28px;
+  height: 28px;
+}
+
+.events-crystals__words {
+  flex: 1;
+  color: var(--colour-text-secondary);
+  font-family: var(--font-body, inherit);
+  font-size: var(--text-sm);
+}
+
+.events-reward__image--crystal {
+  object-fit: contain;
+}
