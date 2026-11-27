@@ -1,0 +1,13 @@
+Generate an image using your image generation tool (one image only, do not make variations or extra files).
+
+This is a game sprite sheet for our champion "Krampus" in Backyard Monsters Revamped.
+
+Attached:
+- krampus-levels.png: the APPROVED Krampus design at levels 1-6 (row 1: levels 1, 2, 3; row 2: levels 4, 5, 6). Paint the LEVEL 1 creature (row 1, column 1): the small fluffy Krampus kid: big head, big glowing icy-cyan eyes, tiny crystal horn buds, short shaggy cool grey-white frosted fur shaded blue, dark charcoal-navy face and short legs, little cloven hooves, a small fanged grin with the tip of a dark red tongue, a short tufted tail. NO armour. Same colours, same proportions, same painting quality and bold weight as that portrait.
+
+- krallen-attack-poses.png: our game's existing four-legged champion Krallen in its attack: 5 columns = 5 headings (column 1 facing the viewer, column 2 facing down-left, column 3 side view facing left, column 4 facing up-left away from the viewer, column 5 facing straight away from the viewer), 4 rows = 4 frames of its attack. Use it ONLY for the camera angle (the game's camera, about 35 degrees above), the 5 headings and the timing of the attack. Do not copy Krallen's body, colours or spots.
+
+Job: Krampus's ATTACK sheet: the same grid as krallen-attack-poses.png, 5 columns x 4 rows, each cell Krampus at that heading in that frame of its attack: frame 1 rears back with its head lowered and horns aimed forward (wind-up), frame 2 lunges forward horns-first, frame 3 the impact: head down and thrust fully forward, mouth open in a snarl, frame 4 pulls back to stand. The SAME creature, the SAME size and the SAME scale in all 20 cells (it must not grow or shrink between cells), hooves on the same ground line in every cell of a row, the creature centred in its cell and filling about 60% of the cell height. Horns, tail, fur and colours identical in every cell; only the heading and the pose change.
+
+Canvas 1536x1024 split into 5 columns x 4 rows of equal cells. A FLAT pure magenta #FF00FF background everywhere (no ground, no shadow, no gradient, no texture). Nothing may touch a cell edge or cross into another cell. No grid lines, numbers, text, labels or frame.
+Save the final PNG as sheet.png in the current working directory.

@@ -5,6 +5,7 @@ import { SHEET_VERSIONS } from "./sheetVersions";
 import { monsterSheetLevel, sheetAtQuality, sheetCopies, sheetForDevice } from "@/game/quality";
 import { artUrl } from "../../artUrl";
 import { hasSkin, sheetSkin, skinFile, skinnedSheet, type MonsterSkin } from "./monsterSkins";
+import { KRAMPUS_SPRITES } from "./krampusSprites";
 
 /**
  * Picking a cell out of a monster sprite sheet.
@@ -681,7 +682,8 @@ let familyIndex: ReadonlyMap<string, readonly MonsterSheet[]> | null = null;
 const championSheets = (family: string): readonly MonsterSheet[] => {
   if (familyIndex === null) {
     const index = new Map<string, MonsterSheet[]>();
-    for (const sheet of Object.values(MONSTER_SPRITES)) {
+    // Krampus (G6) has no Flash sheet: its rows live in `krampusSprites.ts`.
+    for (const sheet of [...Object.values(MONSTER_SPRITES), ...Object.values(KRAMPUS_SPRITES)]) {
       if (sheet.family === sheet.key) continue;
       const list = index.get(sheet.family) ?? [];
       list.push(sheet);
@@ -1006,6 +1008,12 @@ export const REPAINTED_SHEETS: Readonly<Record<string, string>> = {
   "monsters/korath_4.png": "monsters/korath_4-repaint@3x.png", // Korath level 4 repaint at 3x (at 4x it was 9840 px tall), walk + attack, ground shadow
   "monsters/korath_5.png": "monsters/korath_5-repaint@2x.png", // Korath level 5 repaint at 2x, packed (REPAINT_LAYOUTS), walk + attack + stomp
   "monsters/korath_6.png": "monsters/korath_6-repaint@2x.png", // Korath level 6 repaint at 2x, packed (REPAINT_LAYOUTS), walk + attack + stomp
+  "monsters/krampus_1.png": "monsters/krampus_1-anim@2x.png", // Krampus (G6, frost tribe) level 1 at 2x (krampusSprites.ts), 8 headings, walk + attack, ground shadow
+  "monsters/krampus_2.png": "monsters/krampus_2-anim@2x.png", // Krampus (G6, frost tribe) level 2 at 2x (krampusSprites.ts), 8 headings, walk + attack, ground shadow
+  "monsters/krampus_3.png": "monsters/krampus_3-anim@2x.png", // Krampus (G6, frost tribe) level 3 at 2x (krampusSprites.ts), 8 headings, walk + attack, ground shadow
+  "monsters/krampus_4.png": "monsters/krampus_4-anim@2x.png", // Krampus (G6, frost tribe) level 4 at 2x (krampusSprites.ts), 8 headings, walk + attack, ground shadow
+  "monsters/krampus_5.png": "monsters/krampus_5-anim@2x.png", // Krampus (G6, frost tribe) level 5 at 2x (krampusSprites.ts), 8 headings, walk + attack, ground shadow
+  "monsters/krampus_6.png": "monsters/krampus_6-anim@2x.png", // Krampus (G6, frost tribe) level 6 at 2x (krampusSprites.ts), 8 headings, walk + attack, ground shadow
 };
 
 /** Whether a sheet URL names a high-resolution sheet (`name@4x.png`, `name@3x.png`, `name@1.5x.png?v=…`). */

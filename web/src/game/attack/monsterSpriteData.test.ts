@@ -1,3 +1,4 @@
+import { KRAMPUS_SPRITES } from "./krampusSprites";
 import { describe, expect, it } from "vitest";
 import { closeSync, existsSync, openSync, readSync, statSync } from "node:fs";
 import { fileURLToPath } from "node:url";
@@ -235,7 +236,8 @@ describe("MONSTER_SPRITES", () => {
 
   it("has every repaint on disk at its scale times the original's size", () => {
     for (const [original, repaint] of Object.entries(REPAINTED_SHEETS)) {
-      const sheet = sheets.find((one) => one.file === original);
+      // Krampus (G6) has no Flash row: its sheets are in `krampusSprites.ts`.
+      const sheet = [...sheets, ...Object.values(KRAMPUS_SPRITES)].find((one) => one.file === original);
       expect(sheet, original).toBeDefined();
       if (!sheet) continue;
       const scale = Number(/@(\d+)x\./.exec(repaint)?.[1] ?? 1);

@@ -1,4 +1,5 @@
 import { creepSkin } from "./monsterSkins";
+import { FrostAuraFx } from "./frostAuraFx";
 import {
   ColorMatrixFilter,
   Container,
@@ -313,6 +314,8 @@ export const abilityTint = (creep: CreepSnapshot | null): number => {
   if (creep.burning) return 0xffb070;
   if (creep.enraged || creep.puttied) return 0xff9cff;
   if (creep.lootBoosted) return 0xa8ff80;
+  // Krampus's frost aura (beta 10): an icy blue.
+  if (creep.chilled) return 0x9fd8ff;
   return 0xffffff;
 };
 
@@ -855,6 +858,8 @@ export class AttackBattleLayer {
   private readonly shadows: Container;
   /** In the overlay, in this order. */
   private readonly effects = new Container();
+  /** Krampus's frost aura rings on the ground (beta 10). */
+  private frostAura: FrostAuraFx | null = null;
   /** Drawn explosions, Eye-ra's fiery one (feat/eyera-explosion); inside `effects`. */
   private readonly blastAir = new Container();
   private readonly blastFx: BlastFx;
@@ -1181,6 +1186,7 @@ export class AttackBattleLayer {
       // its view when its death is read, to stay on screen until the bullet lands.
       const live = battle.creeps();
       const seen = this.syncCreeps(live, tick);
+      this.syncFrostAura(live, tick);
       for (const event of battle.recentEvents(this.lastEventTick)) {
         this.sounds.onEvent(event);
         this.lootFx.onEvent(event);
@@ -1472,6 +1478,8 @@ export class AttackBattleLayer {
     }
     this.splats.length = 0;
     this.ringFx.destroy();
+    this.frostAura?.destroy();
+    this.frostAura = null;
     for (const sprite of this.gibPool) sprite.destroy();
     this.gibPool.length = 0;
 
@@ -1581,6 +1589,17 @@ export class AttackBattleLayer {
   }
 
   /* ── Creeps ─────────────────────────────────────────────────────────── */
+
+  /** Krampus's frost aura on the ground, made the first time a Krampus is on the field. */
+  private syncFrostAura(creeps: readonly CreepSnapshot[], tick: number): void {
+    if (!this.frostAura) {
+      if (!creeps.some((creep) => creep.monsterId === "G6")) return;
+      this.frostAura = new FrostAuraFx((ix, iy) => groundWorld(ix, iy, this.origin));
+      // On the ground, under the bodies, where the flyers' shadows go.
+      (this.host.groundShadowLayer?.() ?? this.effects).addChild(this.frostAura.root);
+    }
+    this.frostAura.update(creeps, tick);
+  }
 
   /** Places every creep the engine has; returns their ids. */
   private syncCreeps(creeps: readonly CreepSnapshot[], tick: number): Set<number> {
