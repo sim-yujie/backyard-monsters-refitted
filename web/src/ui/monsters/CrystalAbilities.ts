@@ -12,6 +12,7 @@ import {
   type AbilityInfo,
 } from "@/game/events/crystals";
 import { championPortrait, showPortrait } from "@/game/portraits";
+import { eventsArt } from "@/ui/events/eventsArt";
 import { Popup } from "@/ui/Popup";
 import "@/ui/styles/crystals.css";
 
@@ -134,7 +135,7 @@ export class CrystalAbilities {
     this.count.textContent = String(crystals);
     this.count.setAttribute("aria-label", `${crystals} ${crystals === 1 ? "crystal" : "crystals"}`);
     const unlocked = CRYSTAL_CHAMPION_TYPES.reduce((sum, t) => sum + abilitiesUnlocked(save.rewards, t), 0);
-    this.total.textContent = `${unlocked} / ${CRYSTAL_CHAMPION_TYPES.length * ABILITIES_PER_CHAMPION}`;
+    this.total.textContent = `${unlocked} / ${CRYSTAL_CHAMPION_TYPES.length * ABILITIES_PER_CHAMPION} unlocked`;
     this.total.title = "Abilities unlocked";
     this.rows.replaceChildren(...CRYSTAL_CHAMPION_TYPES.map((t) => this.row(t, save, crystals)));
     this.showPicked(save);
@@ -172,6 +173,8 @@ export class CrystalAbilities {
         slot.append(gate);
       }
       if (state === "unlocked") slot.append(el("span", "crystal-slot__tick", "✓"));
+      if (state === "locked") slot.append(eventsArt("lock", 12, "crystal-slot__lock"));
+      if (state === "next") slot.append(el("span", "crystal-slot__next", "Next"));
       const words = { unlocked: "unlocked", next: "next to unlock", locked: "locked" }[state];
       slot.setAttribute("aria-label", `${ability.name}, ${words}. ${ability.line}`);
       slot.setAttribute("aria-pressed", String(this.picked?.t === t && this.picked.index === index));
@@ -188,7 +191,7 @@ export class CrystalAbilities {
     } else {
       const unlock = el("button", "btn btn--primary crystal-row__unlock");
       unlock.type = "button";
-      unlock.append(crystalIcon("crystal-row__unlock-icon"), el("span", "", "Unlock"));
+      unlock.append(crystalIcon("crystal-row__unlock-icon"), el("span", "crystal-row__cost", "1"), el("span", "", "Unlock"));
       unlock.disabled = crystals < 1 || this.busy || !this.options.actions;
       unlock.title = crystals < 1 ? "No crystal yet" : `Unlock ${abilities[count]?.name ?? ""}`;
       unlock.setAttribute("aria-label", `Unlock ${abilities[count]?.name ?? ""} for ${CRYSTAL_CHAMPION_NAMES[t]}, 1 crystal`);
@@ -228,7 +231,8 @@ export class CrystalAbilities {
     const ability = CHAMPION_ABILITIES[t]?.[index];
     if (!actions || !ability || this.busy) return;
     const container = this.options.popups?.() ?? document.body;
-    if (!(await confirmUnlock(container, t, ability, owned))) return;
+    const held = crystalsHeld(this.options.read().rewards);
+    if (!(await confirmUnlock(container, t, ability, owned, held))) return;
     this.busy = true;
     this.status.textContent = "";
     this.render();
@@ -275,6 +279,7 @@ export const confirmUnlock = (
   t: number,
   ability: AbilityInfo,
   owned: { level: number } | null,
+  held?: number,
 ): Promise<boolean> =>
   new Promise((resolve) => {
     let answered = false;
@@ -283,15 +288,19 @@ export const confirmUnlock = (
       answered = true;
       resolve(value);
     };
-    const popup = new Popup({ title: `Unlock ${ability.name}?`, className: "crystal-dialog", onClose: () => answer(false) });
+    const popup = new Popup({ title: "Unlock ability?", className: "crystal-dialog", onClose: () => answer(false) });
     const note = unlockNote(t, ability, owned);
+    const index = (CHAMPION_ABILITIES[t] ?? []).indexOf(ability);
     popup.setContent(
       hero(t, ability, owned?.level ?? 1),
+      el("h3", "crystal-dialog__name", `${CRYSTAL_CHAMPION_NAMES[t]} · ${ability.name}`),
+      el("p", "crystal-dialog__sub", `Ability ${index + 1}`),
       el("p", "crystal-dialog__line", ability.line),
       ...(note ? [el("p", "crystal-dialog__note", note)] : []),
+      ...(held !== undefined ? [el("p", "crystal-dialog__sub crystal-dialog__balance", `Crystals: ${held} → ${held - 1}`)] : []),
       actionsRow(
-        button("Cancel", "btn--ghost", () => popup.close()),
-        button("Unlock · 1", "btn--primary crystal-dialog__go", () => {
+        button("Cancel", "btn--outline", () => popup.close()),
+        button("1  Unlock", "btn--primary crystal-dialog__go", () => {
           answer(true);
           popup.close();
         }),
@@ -333,7 +342,7 @@ export const showCrystalEarned = (container: HTMLElement, held: number, onSpend:
     el("p", "crystal-dialog__line", "Unlock any champion ability."),
     el("p", "crystal-dialog__sub", `You hold ${held}.`),
     actionsRow(
-      button("Later", "btn--ghost", () => popup.close()),
+      button("Later", "btn--outline", () => popup.close()),
       button("Spend now", "btn--primary", () => {
         popup.close();
         onSpend();

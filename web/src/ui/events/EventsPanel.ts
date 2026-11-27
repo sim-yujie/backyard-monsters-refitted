@@ -757,8 +757,12 @@ export class EventsPanel {
     icon.alt = "";
     const count = el("strong", "events-crystals__count", String(held));
     count.setAttribute("aria-label", `${held} ${held === 1 ? "crystal" : "crystals"}`);
-    const words = el("span", "events-crystals__words", "Each crystal unlocks a champion ability.");
-    const spend = el("button", `btn ${held > 0 ? "btn--primary" : "btn--outline"} events-crystals__spend`, held > 0 ? "Spend" : "Abilities");
+    const words = el(
+      "span",
+      "events-crystals__words",
+      held > 0 ? `${held === 1 ? "crystal" : "crystals"} ready to spend` : "crystals: clear the goal for one",
+    );
+    const spend = el("button", `btn ${held > 0 ? "btn--primary" : "btn--outline"} events-crystals__spend`, held > 0 ? "Spend ›" : "Abilities ›");
     spend.type = "button";
     spend.addEventListener("click", () => this.options.onSpendCrystals?.());
     line.append(icon, count, words, spend);

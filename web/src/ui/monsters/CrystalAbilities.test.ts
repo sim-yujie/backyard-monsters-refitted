@@ -54,7 +54,7 @@ describe("the Abilities view", () => {
   it("shows the crystals, four champions and their slots' states", () => {
     view(2);
     expect(document.querySelector(".crystal-abilities__count")?.textContent).toBe("2");
-    expect(document.querySelector(".crystal-abilities__total")?.textContent).toBe("3 / 12");
+    expect(document.querySelector(".crystal-abilities__total")?.textContent).toBe("3 / 12 unlocked");
     const rows = [...document.querySelectorAll(".crystal-row")];
     expect(rows.map((row) => (row as HTMLElement).dataset.type)).toEqual(["1", "2", "3", "4"]);
     const states = (row: Element) =>
@@ -81,7 +81,7 @@ describe("the Abilities view", () => {
     view(1, crystal);
     document.querySelectorAll<HTMLButtonElement>(".crystal-row__unlock")[1]!.click();
     await Promise.resolve();
-    expect(document.querySelector(".crystal-dialog")?.textContent).toContain("Unlock Bloodthirst?");
+    expect(document.querySelector(".crystal-dialog")?.textContent).toContain("Drull · Bloodthirst");
     document.querySelector<HTMLButtonElement>(".crystal-dialog__go")!.click();
     await vi.waitFor(() => expect(crystal).toHaveBeenCalledWith(2));
     await vi.waitFor(() => expect(document.querySelector(".crystal-dialog--unlocked")).not.toBeNull());

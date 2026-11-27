@@ -345,12 +345,16 @@
   }
 }
 
-/* ── Phone upright: the slots go under the champion, Unlock beside his name ── */
+/* ── Phone upright: no room for the how-to line ── */
 @media (max-width: 620px) {
   .crystal-abilities__how {
     display: none;
   }
+}
 
+/* ── A narrow window (phone upright, iPad upright): the slots go under the
+ * champion, Unlock beside his name ── */
+@media (max-width: 900px) and (min-height: 501px) {
   .crystal-row {
     grid-template-columns: 1fr auto;
     grid-template-areas:
@@ -501,4 +505,90 @@
 
 .events-reward__image--crystal {
   object-fit: contain;
+}
+
+/* ── neon round 1 (27 Nov 2026) ── */
+
+/* The Housing bar says nothing about abilities: hide it in that view. */
+.monsters-screen:has(.champion-tab__abilities:not([hidden])) .monsters-header__housing {
+  display: none;
+}
+
+.crystal-abilities__head {
+  justify-content: space-between;
+}
+
+/* The description of the slot last touched stays in sight under the list. */
+.crystal-abilities__inspector {
+  position: sticky;
+  bottom: 0;
+  z-index: 1;
+  background: var(--colour-surface-base);
+  box-shadow: 0 -6px 10px rgb(0 0 0 / 25%);
+}
+
+.crystal-slot--locked {
+  color: var(--colour-text-secondary);
+}
+
+.crystal-slot__lock {
+  position: absolute;
+  top: 2px;
+  right: 4px;
+  font-size: 11px;
+  opacity: 0.8;
+}
+
+.crystal-slot__next {
+  position: absolute;
+  top: -8px;
+  left: 50%;
+  transform: translateX(-50%);
+  padding: 0 6px;
+  border-radius: var(--radius-pill);
+  background: #e05ad8;
+  color: #fff;
+  font-size: 10px;
+  line-height: 15px;
+}
+
+/* Korath's level gates sit in the top-left corner, clear of the name and the tick. */
+.crystal-slot__gate {
+  top: 2px;
+  bottom: auto;
+  left: 4px;
+  right: auto;
+}
+
+.crystal-row__cost {
+  font-variant-numeric: tabular-nums;
+}
+
+:root[data-skin="flash"] .crystal-slot--unlocked {
+  border-color: #c88a14;
+  background: #fff2c2;
+  color: #3a2400;
+}
+
+@media (max-width: 620px) {
+  .crystal-abilities__held {
+    display: none;
+  }
+}
+
+@media (max-height: 450px) {
+  .crystal-hero,
+  .crystal-hero__portrait {
+    width: 72px;
+    height: 72px;
+  }
+
+  .crystal-hero__icon {
+    width: 36px;
+    height: 36px;
+  }
+
+  .crystal-dialog .panel__body {
+    gap: var(--space-1);
+  }
 }
