@@ -224,6 +224,7 @@
 .events-card--christmas .events-tier .events-reward--decoration .events-reward__figure {
   /* Between words, or with a hyphen inside a long one ("Pine-cone"), never cut off (neon, round 3). */
   white-space: normal;
+  -webkit-hyphens: auto;
   hyphens: auto;
   text-align: center;
   line-height: 1.1;
@@ -248,7 +249,11 @@
   order: 2;
 }
 
-/* Christmas: days 7 and 14 hold the winter decorations; a gold band along their top marks them. */
+/*
+ * Christmas: days 7 and 14 hold the winter decorations; a gold band along their top marks them.
+ * Tied to the day numbers: move these if the calendar's decoration days move
+ * (server `game-data/events/events.ts`, CHRISTMAS_2026_CALENDAR).
+ */
 .events-card--christmas .events-day[data-day="7"],
 .events-card--christmas .events-day[data-day="14"] {
   background-image: linear-gradient(180deg, #f2c14e 0 4px, #a8741a 4px 5px, transparent 5px);

@@ -371,6 +371,8 @@ export const CHRISTMAS_DECOR = {
  * Thanksgiving's (the same resources, Shiny and speed-ups on the same days),
  * with winter decorations on days 7 and 14 and, on day 12, a Production
  * Overdrive (harvesters at double rate for 12 hours) as Thanksgiving's.
+ * The Events card marks days 7 and 14 with a gold band (web
+ * `ui/events/events.css`): move it too if the decoration days move.
  * Plus 15 Glimmers a day (`coins`): 14 x 15 + 190 over the ladder = 400,
  * the owner's big-event target.
  */
