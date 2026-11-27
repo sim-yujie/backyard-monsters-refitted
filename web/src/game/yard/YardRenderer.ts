@@ -58,7 +58,7 @@ import {
   rangeHoverFrame,
 } from "./towerRangeHover";
 import { artUrl } from "../../artUrl";
-import { presentArtUrl, presentPicture } from "./presentArt";
+import { PRESENT_SCALE, presentArtUrl, presentPicture } from "./presentArt";
 
 /**
  * The yard's scene graph: ground, mushrooms, buildings and the selection
@@ -1570,6 +1570,7 @@ export class YardRenderer {
 
   /** How big a mushroom sprite stands at rest: the Halloween pumpkin a bit bigger. */
   private mushroomSize(): number {
+    if (this.season === "christmas" && this.present) return PRESENT_SCALE;
     return this.season === "halloween" && this.pumpkin ? PUMPKIN_SCALE : 1;
   }
 

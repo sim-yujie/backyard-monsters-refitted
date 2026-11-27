@@ -181,13 +181,18 @@
     linear-gradient(135deg, #3b1f4f, #160d1f);
 }
 
-/* Christmas: a snowy night behind the painted props; keep the snow line in a short band. */
+/*
+ * Christmas: a snowy night behind the painted props, in a shorter band than the
+ * other banners (6:1, the picture's own shape) so the calendar stays above the
+ * fold (neon, round 1). On a phone on its side the band crops to the snow line.
+ */
 .events-card__banner--christmas {
+  aspect-ratio: 6 / 1;
   background: linear-gradient(180deg, #101c3a, #344e78);
 }
 
 .events-card__banner--christmas .events-card__banner-image {
-  object-position: center 80%;
+  object-position: center bottom;
 }
 
 /* Christmas: the present beside "Presents found", so the count reads as presents. */
@@ -203,12 +208,43 @@
   width: 22px;
   height: 22px;
   background: url("/events/christmas-2026-present.png") center / contain no-repeat;
+  filter: drop-shadow(0 0 1px rgb(255 255 255 / 55%));
 }
 
-/* Christmas: days 7 and 14 hold the winter decorations; a red ribbon along their top marks them. */
+/*
+ * Christmas: a decoration's name ("Christmas Tree") may take two lines inside
+ * its day tile rather than run past the tile's edges on a narrow grid (neon,
+ * round 2: iPad upright).
+ */
+.events-card--christmas .events-day .events-reward--decoration {
+  max-width: 100%;
+}
+
+.events-card--christmas .events-day .events-reward--decoration .events-reward__figure {
+  white-space: normal;
+  overflow-wrap: anywhere;
+  text-align: center;
+  line-height: 1.1;
+}
+
+:root[data-skin="flash"] .events-card--christmas .events-day[data-day="7"],
+:root[data-skin="flash"] .events-card--christmas .events-day[data-day="14"] {
+  background-image: linear-gradient(180deg, #d99a1e 0 5px, #8a5a10 5px 6px, transparent 6px);
+}
+
+/* Christmas: the hint (where presents come from) just above the ladder it fills, not under it (neon, round 1). */
+.events-card--christmas > .events-card__extra {
+  order: 1;
+}
+
+.events-card--christmas > .events-ladder {
+  order: 2;
+}
+
+/* Christmas: days 7 and 14 hold the winter decorations; a gold band along their top marks them. */
 .events-card--christmas .events-day[data-day="7"],
 .events-card--christmas .events-day[data-day="14"] {
-  background-image: linear-gradient(180deg, #b3262e 0 4px, transparent 4px);
+  background-image: linear-gradient(180deg, #f2c14e 0 4px, #a8741a 4px 5px, transparent 5px);
 }
 
 .events-card__banner-image {
@@ -1100,6 +1136,11 @@
 
   .events-card__banner {
     aspect-ratio: 7 / 1;
+  }
+
+  /* On a phone on its side the calendar needs the height more than the picture (neon, round 2). */
+  .events-card__banner--christmas {
+    display: none;
   }
 }
 

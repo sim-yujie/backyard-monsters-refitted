@@ -23,7 +23,15 @@ export interface PresentPicture {
   readonly base: number;
 }
 
-export const PRESENT_ART_ROOT = "/assets/specialevent/christmas/";
+/** Where the pictures are served from (through `artUrl`, as the mushrooms' root). */
+export const PRESENT_ART_ROOT = artUrl("/assets/specialevent/christmas/");
+
+/**
+ * How big a present stands, as the pumpkin's 1.3 (owner, 20 Oct 2026): a
+ * little bigger than a mushroom, so it reads on a busy yard (neon, round 1).
+ * The tap box (`mushroomPick.ts` `MUSHROOM_HIT`, 52 x 52) still covers it.
+ */
+export const PRESENT_SCALE = 1.3;
 
 export const CLASSIC_PRESENT: PresentPicture = { file: "present@2x.png", base: 0.725 };
 export const MODERN_PRESENT: PresentPicture = { file: "present.modern@2x.webp", base: 0.744 };
@@ -34,14 +42,10 @@ export const presentPicture = (classic: boolean = classicLook()): PresentPicture
 
 /** Where to ask for the present of this page's look. */
 export const presentArtUrl = (classic: boolean = classicLook()): string =>
-  artUrl(PRESENT_ART_ROOT + presentPicture(classic).file);
+  PRESENT_ART_ROOT + presentPicture(classic).file;
 
 /** The golden present for the golden find's popup (`ui/yard/MushroomReward.ts`), one for both looks. */
-export const GOLDEN_PRESENT_ART = artUrl(`${PRESENT_ART_ROOT}golden-present.png`);
+export const GOLDEN_PRESENT_ART = `${PRESENT_ART_ROOT}golden-present.png`;
 
-/**
- * The small present on the Events card (hint line, ladder title): the
- * Classic present, `@2x` for a 25 x 22 slot. A page file (`web/public`), as
- * the event banners, so the card's CSS can use it too.
- */
-export const PRESENT_ICON = "/events/christmas-2026-present.png";
+// The small present by the Events card's "Presents found" is a page file,
+// `web/public/events/christmas-2026-present.png`, set in `ui/events/events.css`.
