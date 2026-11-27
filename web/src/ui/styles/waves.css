@@ -936,8 +936,10 @@
   position: relative;
 }
 
-.events-card--wave .events-card__banner {
-  max-height: 76px;
+/* The Modern band shown wider than 4:1 (its title stays whole down to 7:1,
+   so a wide one-column window no longer cuts the words' tops, neon r2). */
+.events-card--wave .events-card__banner:not(.events-card__banner--classic) {
+  aspect-ratio: 7 / 1;
 }
 
 .events-card--wave .events-card__banner-image {
@@ -1021,22 +1023,47 @@
   }
 }
 
+@media (max-width: 620px) {
+  .events-card--wave .events-card__banner:not(.events-card__banner--classic) {
+    aspect-ratio: 5 / 1;
+  }
+}
+
+/* A narrow phone: the row gives Start room, its words centred clear of the caps. */
 @media (max-width: 420px) {
   .wave-card__go {
     gap: 6px;
   }
 
   .wave-card__prize {
-    gap: 4px;
+    gap: 3px;
   }
 
   .wave-card__chip {
-    padding: 0 8px 0 4px;
+    gap: 2px;
+    padding: 0 6px 0 3px;
   }
 
   .wave-card__start {
-    padding-inline: 8px;
+    justify-content: center;
+    gap: 2px;
+    padding-inline: 4px;
     font-size: 14px;
+  }
+
+  .wave-card__start .wave-start-icon {
+    width: 18px;
+    height: 18px;
+  }
+
+  /* Slimmer painted caps, as on the chat's and yard card's small plates. */
+  .wave-card__start {
+    --skin-button-cap: 14px;
+  }
+
+  .events-card--wave:has(.events-card__banner-image) .events-card__countdown {
+    padding: 1px 5px;
+    font-size: 10px;
   }
 }
 
