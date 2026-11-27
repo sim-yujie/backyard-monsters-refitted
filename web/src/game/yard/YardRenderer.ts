@@ -32,7 +32,7 @@ import { YardTurkeys } from "./YardTurkeys";
 import { thanksgivingDressUp, YardDressUp } from "./YardDressUp";
 import { winterDressUp } from "./winterSkin";
 import { flakeCount, YardSnowfall } from "./YardSnowfall";
-import { quality } from "@/game/quality";
+import { onQualityChange, quality } from "@/game/quality";
 import { UpgradePreview } from "./UpgradePreview";
 import { upgradeLook } from "./upgradeLook";
 import { BlueprintLayer } from "./planner/BlueprintLayer";
@@ -113,6 +113,10 @@ export class YardRenderer {
   private readonly snowfall = new YardSnowfall();
   /** The screen size the snow was counted for. */
   private snowScreen = "";
+  /** A new Quality pick counts the snow again (Low stops it, Medium halves it) without waiting for a resize. */
+  private readonly unwatchSnowQuality = onQualityChange(() => {
+    this.snowScreen = "";
+  });
   /** The ghost of a building's next look while its window offers the upgrade (beta 8); see `setUpgradePreview`. */
   private readonly upgradePreview = new UpgradePreview();
   /** Holds the ghost, so the blueprint view can hide it while the ghost keeps its own visibility. */
@@ -1490,6 +1494,7 @@ export class YardRenderer {
     this.popping.clear();
     this.turkeys.destroy();
     this.dressUp.destroy();
+    this.unwatchSnowQuality();
     this.snowfall.destroy();
     this.planner.destroy();
     this.jobBars.destroy();
