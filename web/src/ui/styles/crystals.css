@@ -164,31 +164,32 @@
 .crystal-slot {
   position: relative;
   display: flex;
+  flex-direction: column;
   align-items: center;
-  gap: var(--space-2);
-  min-height: 52px;
-  padding: var(--space-1) var(--space-2);
+  justify-content: center;
+  gap: 2px;
+  min-height: 60px;
+  padding: var(--space-1);
   border: 2px solid var(--colour-border);
   border-radius: var(--radius-sm);
   background: var(--colour-surface-control);
   color: var(--colour-text);
   font-family: var(--font-display);
   font-size: var(--text-xs);
-  text-align: left;
+  text-align: center;
   cursor: pointer;
 }
 
 .crystal-slot__icon {
-  width: 36px;
-  height: 36px;
+  width: 30px;
+  height: 30px;
   flex: none;
 }
 
 .crystal-slot__name {
   min-width: 0;
   font-size: 11px;
-  line-height: 1.15;
-  overflow-wrap: anywhere;
+  line-height: 1.1;
 }
 
 .crystal-slot--unlocked {
@@ -310,8 +311,42 @@
   display: none;
 }
 
-/* ── Phone: the slots go under the champion, Unlock beside his name ── */
-@media (max-width: 620px), (max-height: 500px) {
+/* ── A short screen (a phone on its side): the switch already says the
+ * crystals held, so the head goes, and the rows stay one line each. ── */
+@media (max-height: 500px) {
+  .crystal-abilities__head {
+    display: none;
+  }
+
+  .champion-tab__views {
+    margin-top: var(--space-2);
+  }
+
+  .champion-tab__view {
+    min-height: 32px;
+  }
+
+  .crystal-row {
+    padding: var(--space-1) var(--space-2);
+  }
+
+  .crystal-row__portrait {
+    width: 40px;
+    height: 40px;
+  }
+
+  .crystal-slot {
+    min-height: 50px;
+  }
+
+  .crystal-slot__icon {
+    width: 26px;
+    height: 26px;
+  }
+}
+
+/* ── Phone upright: the slots go under the champion, Unlock beside his name ── */
+@media (max-width: 620px) {
   .crystal-abilities__how {
     display: none;
   }
@@ -343,16 +378,7 @@
   }
 
   .crystal-slot {
-    flex-direction: column;
-    justify-content: center;
-    gap: 2px;
-    text-align: center;
     min-height: 64px;
-  }
-
-  .crystal-slot__icon {
-    width: 32px;
-    height: 32px;
   }
 }
 
