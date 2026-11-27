@@ -90,7 +90,7 @@ import { yardRoute } from "./controllers/yard/yardRoute.js";
 import { getNeighbours } from "./controllers/maproom/getNeighbours.js";
 import { getMapRoom1 } from "./controllers/maproom/getMapRoom1.js";
 import { presence, stayProtected } from "./controllers/maproom/presence.js";
-import { waveNextController, waveStatusController } from "./controllers/events/waveEvents.js";
+import { waveNextController, waveStatusController, waveSurrenderController } from "./controllers/events/waveEvents.js";
 import { raidDevDue, raidDevTrojan, raidEngage, raidFinish, raidFrequency, raidPrepare, raidStart, raidTrojan } from "./controllers/raid/raid.js";
 import { botCheck, botCheckAnswer, botCheckForce, devCheckEnabled } from "./controllers/maproom/botCheck.js";
 
@@ -277,6 +277,7 @@ router.post("/api/:apiVersion/bm/raid/finish", apiVersion, verifyUserAuth, logRe
 // Wave events (beta 10, Wild Monster Invasion): the event on now, and "Next wave"; a wave lands through `finish` above.
 router.get("/api/:apiVersion/bm/events/wave", apiVersion, verifyUserAuth, logRequest, waveStatusController);
 router.post("/api/:apiVersion/bm/events/wave/next", apiVersion, verifyUserAuth, logRequest, waveNextController);
+router.post("/api/:apiVersion/bm/events/wave/surrender", apiVersion, verifyUserAuth, logRequest, waveSurrenderController);
 router.post("/api/:apiVersion/bm/raid/frequency", apiVersion, verifyUserAuth, logRequest, raidFrequency);
 // DEV only, never mounted in production: the next raid is due now.
 if (devCheckEnabled()) {

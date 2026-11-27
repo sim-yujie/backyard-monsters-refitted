@@ -1,7 +1,7 @@
 import type { User } from "../../database/models/user.model.js";
 import { Status } from "../../enums/StatusCodes.js";
 import { postgres } from "../../server.js";
-import { readWaveStatus, startNextWave } from "../../services/events/waves/waveFight.js";
+import { readWaveStatus, startNextWave, surrenderWave } from "../../services/events/waves/waveFight.js";
 import type { KoaController } from "../../utils/KoaController.js";
 import { getCurrentDateTime } from "../../utils/getCurrentDateTime.js";
 
@@ -14,6 +14,9 @@ import { getCurrentDateTime } from "../../utils/getCurrentDateTime.js";
  *   server and answered as `/raid/start` is (`{ raid, fight }`) plus `wave`,
  *   the status it was called from. It lands through `/raid/finish` like any
  *   raid; the result carries `wave` (`WaveResult`).
+ * - `POST /api/:apiVersion/bm/events/wave/surrender { id, tick }`: the wave
+ *   lost, landing only the damage done up to `tick`; answers `{ result }` as
+ *   `/raid/finish` does.
  */
 export const waveStatusController: KoaController = async (ctx) => {
   const user: User = ctx.authUser;
@@ -27,4 +30,12 @@ export const waveNextController: KoaController = async (ctx) => {
   const start = await startNextWave(postgres.em, user, getCurrentDateTime());
   ctx.status = Status.OK;
   ctx.body = { error: 0, ...start };
+};
+
+export const waveSurrenderController: KoaController = async (ctx) => {
+  const user: User = ctx.authUser;
+  const body = (ctx.request.body ?? {}) as { id?: unknown; tick?: unknown };
+  const result = await surrenderWave(postgres.em, user, body.id, body.tick, getCurrentDateTime());
+  ctx.status = Status.OK;
+  ctx.body = { error: 0, result };
 };

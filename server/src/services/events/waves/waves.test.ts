@@ -1,6 +1,9 @@
 import { afterEach, beforeEach, describe, expect, mock, test } from "bun:test";
 import type { EntityManager } from "@mikro-orm/core";
 
+import { readFileSync } from "node:fs";
+import { fileURLToPath } from "node:url";
+
 import { memoryRedis } from "../../../testing/memoryRedis.js";
 
 /**
@@ -25,6 +28,7 @@ const { waveRunEvents } = await import("./waveRunEvents.js");
 const { WAVE_TRIBE } = await import("./waveTribe.js");
 const { memoryCoinStore, useCoinStore } = await import("../eventCoins.js");
 const { landRaid } = await import("../../raids/raidLanding.js");
+const { fightRaid } = await import("../../raids/raidFight.js");
 const { readSchedule } = await import("../../raids/raidSchedule.js");
 const { RAID_MAX_SECONDS, ticks } = await import("../../../game-rules/combat/index.js");
 
@@ -131,7 +135,7 @@ describe("the dashboard's runs", () => {
     expect(stopped[0]!.endsAt).toBe(NOW + 100);
     expect(runningWaveRun(NOW + 100, stopped)).toBeNull();
     expect(stopWaveRun(stopped, NOW + 200)).toBeNull();
-    const two = startWaveRun(stopped, "wmi2", NOW + 200, 3) as { event: string; endsAt: number }[];
+    const two = startWaveRun(stopped, "wmi2", NOW + 200, 3) as { event: string; startsAt: number; endsAt: number }[];
     expect(two.at(-1)).toEqual({ event: "wmi2", startsAt: NOW + 200, endsAt: NOW + 200 + 3 * DAY });
   });
 
@@ -281,5 +285,24 @@ describe("a wave's landing", () => {
     (save.buildingdata as Record<string, unknown>)["8"] = { id: 8, t: 121, X: 50, Y: 50, l: 5 };
     const result = await landWave(em, save as never, 7, { wave: { event: "wmi1", run: RUN, wave: 32 } }, outcome(0.6));
     expect(result).toMatchObject({ beaten: true, next: null, glimmers: WAVE_GLIMMERS.bonus2, totem: { level: 6, placed: true } });
+  });
+});
+
+describe("surrender's cut-off fight (RaidFightInput.stopAt)", () => {
+  const SANDBOX = JSON.parse(
+    readFileSync(fileURLToPath(new URL("../../../../../web/test/fixtures/baseload-sandbox-yard.json", import.meta.url)), "utf8"),
+  ) as { buildingdata: Parameters<typeof fightRaid>[0]["buildingdata"]; resources: Record<string, number> };
+
+  test("the yard as it stood at the cut, later waves never landing; a cut past the end is the whole fight", () => {
+    const plan = planWave({ event: WMI2, wave: 9, quarter: 1 })!;
+    const input = { buildingdata: SANDBOX.buildingdata, resources: SANDBOX.resources, log: { v: 1 as const, seed: 9, events: plan.events }, raidSpawnsUntil: plan.lastSpawnTick };
+    const whole = fightRaid(input);
+    const early = fightRaid({ ...input, stopAt: ticks(3) });
+    expect(early.ticks).toBe(ticks(3));
+    expect(early.damage).toBeLessThanOrEqual(whole.damage);
+    // Groups due at 16 s never spawned by 3 s.
+    expect(early.creepsFlung).toBeLessThan(whole.creepsFlung);
+    const past = fightRaid({ ...input, stopAt: whole.ticks + 1000 });
+    expect(past.digest).toBe(whole.digest);
   });
 });

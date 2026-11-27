@@ -5,7 +5,7 @@ import type { User } from "../../../database/models/user.model.js";
 import { raidRefusedErr } from "../../../errors/errors.js";
 import { ClientSafeError } from "../../../middleware/clientSafeError.js";
 import { Status } from "../../../enums/StatusCodes.js";
-import { defenderForcesOf, type RaidEvent } from "../../../game-rules/combat/index.js";
+import { TICKS_PER_SECOND, defenderForcesOf, type RaidEvent } from "../../../game-rules/combat/index.js";
 import { logger } from "../../../utils/logger.js";
 import { catchUpLockedRow } from "../../../controllers/yard/yardAction.js";
 import { countAfterCommit } from "../../alliance/allianceProgress.js";
@@ -20,6 +20,7 @@ import { ATTACK_ONLINE_SECONDS, isPresent, readPresenceMarks } from "../../user/
 import { fightSecondsOf, type RaidFightInput, type RaidFightOutcome } from "../../raids/raidFight.js";
 import {
   START_LOCK_SECONDS,
+  finishRaid,
   lockForFight,
   lockMain,
   newSeed,
@@ -30,14 +31,15 @@ import {
 } from "../../raids/raidFlow.js";
 import { raidFighting } from "../../raids/raidLock.js";
 import { readSchedule, scheduleColumn, withFightLock } from "../../raids/raidSchedule.js";
-import { newRaidId, openFightingRaid, readOpenRaid, type OpenRaid } from "../../raids/raidStore.js";
+import { newRaidId, openFightingRaid, readOpenRaid, updateOpenRaid, type OpenRaid } from "../../raids/raidStore.js";
+import type { RaidResult } from "../../raids/raidLanding.js";
 import { eventPlayerOf } from "../eventPlayer.js";
 import type { WavePlanRecord } from "./waveLanding.js";
 import { planWave, waveSize } from "./wavePlan.js";
 import { waveProgressStore } from "./waveProgress.js";
 import { liveWaveEvent, runId, type WaveRun } from "./waveRuns.js";
 import { totemLevelFor } from "./waveRewards.js";
-import { WAVE_TRIBE } from "./waveTribe.js";
+import { WAVE_TRIBE, isWaveTribe } from "./waveTribe.js";
 import type { WaveEventDefinition } from "./waveTypes.js";
 
 /**
@@ -139,6 +141,19 @@ export const readWaveStatus = async (em: EntityManager, userid: number, now: num
 };
 
 type FrozenYard = RaidStart["fight"]["yard"];
+
+/** A wave's open raid's plan: what `raidFlow.ts` reads, the wave, and what a surrender fights again. */
+export interface WaveOpenPlan {
+  readonly army: Record<string, number>;
+  readonly bearing: number;
+  readonly wave: WavePlanRecord;
+  readonly replay: {
+    readonly yard: FrozenYard;
+    readonly defence: RaidStart["fight"]["defence"];
+    readonly events: readonly RaidEvent[];
+    readonly lastSpawnTick: number;
+  };
+}
 
 interface WaveFrozen {
   readonly raidId: string;
@@ -252,7 +267,13 @@ export const startNextWave = async (em: EntityManager, user: User, now: number):
       id: frozen.raidId,
       phase: "fighting",
       tribe: WAVE_TRIBE,
-      plan: { army: frozen.army, bearing: frozen.turn, wave: frozen.record },
+      plan: {
+        army: frozen.army,
+        bearing: frozen.turn,
+        wave: frozen.record,
+        // What a surrender fights again up to its tick (`surrenderWave`).
+        replay: { yard: frozen.yard, defence: frozen.defence, events: frozen.events, lastSpawnTick: frozen.lastSpawnTick },
+      } satisfies WaveOpenPlan,
       seed: frozen.seed,
       attackAt: now,
       warned: 0,
@@ -290,4 +311,62 @@ export const startNextWave = async (em: EntityManager, user: User, now: number):
     tick: start.fight.tick,
   });
   return { ...start, wave: status };
+};
+
+/**
+ * Surrender (owner's pick A, 27 Nov 2026; Flash's `SPECIALEVENT.Surrender`):
+ * the wave is lost, and only the damage done up to the moment of surrender
+ * lands; the monsters still standing go home. The server fights the wave
+ * again from its frozen yard up to `tick` (`RaidFightInput.stopAt`), puts
+ * that outcome on the open raid, marked surrendered, and lands it through
+ * `/raid/finish`'s own path (`finishRaid`), so a finish racing it lands one
+ * or the other, once.
+ *
+ * `tick` is where the player's screen was; it is held to what could have
+ * been watched by now at 2x, and to the fight's own end.
+ */
+export const surrenderWave = async (em: EntityManager, user: User, raidId: unknown, tick: unknown, now: number): Promise<RaidResult> => {
+  if (typeof raidId !== "string") throw raidRefusedErr("badRequest");
+  const raid = await readOpenRaid(user.userid);
+  if (!raid || raid.id !== raidId) {
+    // Landed already (a finish got there first): answer what it landed.
+    return finishRaid(em, user, raidId, now);
+  }
+  if (!isWaveTribe(raid.tribe)) throw waveRefusedErr("notWave");
+  if (raid.phase !== "fighting" || raid.startedAt === undefined) throw raidRefusedErr("notFighting");
+  const plan = raid.plan as WaveOpenPlan;
+  const outcome = raid.outcome as RaidFightOutcome;
+  const watched = Math.max(0, (now - raid.startedAt) * 2 * TICKS_PER_SECOND);
+  const asked = Number.isFinite(Number(tick)) ? Math.max(0, Math.floor(Number(tick))) : outcome.ticks;
+  const stopAt = Math.min(asked, watched, outcome.ticks);
+
+  const release = await reserveReplaySlot(AUTO_ATTACK_SLOT_WAIT_MS, { kind: "wave" });
+  if (!release) throw raidRefusedErr("busy");
+  let cut: RaidFightOutcome;
+  try {
+    cut = await fightRaidInWorker({
+      buildingdata: plan.replay.yard.buildingdata,
+      buildinghealthdata: plan.replay.yard.buildinghealthdata,
+      resources: plan.replay.yard.resources as RaidFightInput["resources"],
+      log: { v: 1, seed: raid.seed, events: plan.replay.events },
+      defence: plan.replay.defence,
+      raidSpawnsUntil: plan.replay.lastSpawnTick,
+      stopAt,
+    });
+  } catch (err) {
+    if (err instanceof ReplayTimeoutError) throw raidRefusedErr("busy");
+    throw err;
+  } finally {
+    release();
+  }
+  const surrendered: OpenRaid = {
+    ...raid,
+    plan: { ...plan, wave: { ...plan.wave, surrendered: true } },
+    fightSeconds: stopAt / TICKS_PER_SECOND,
+    outcome: cut,
+  };
+  // Only while it is still this fight; otherwise a finish or load landed it meanwhile.
+  await updateOpenRaid(user.userid, surrendered, now, "fighting");
+  logger.info(`Wave ${plan.wave.wave} of ${plan.wave.event} surrendered by userid ${user.userid} at tick ${stopAt}`);
+  return finishRaid(em, user, raidId, now);
 };

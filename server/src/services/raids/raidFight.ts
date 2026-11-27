@@ -58,6 +58,13 @@ export interface RaidFightInput {
    * `trojanArmy.ts`).
    */
   readonly raidSpawnsUntil?: number;
+  /**
+   * The tick the fight is cut off at, for a wave event's surrender (beta 10,
+   * owner's pick A, 27 Nov 2026): waves due after it never land, and the
+   * outcome is the yard as it stood then; the raiders left go home. Absent,
+   * the fight runs to its end.
+   */
+  readonly stopAt?: number;
 }
 
 /** What the landing needs of the fight, kept with the open raid until finish. */
@@ -112,14 +119,16 @@ export const fightRaid = (input: RaidFightInput): RaidFightOutcome => {
     .map((event, at) => ({ event, at }))
     .sort((one, other) => (one.event.t === other.event.t ? one.at - other.at : one.event.t - other.event.t))
     .map(({ event }) => event);
+  const stopAt = input.stopAt === undefined ? null : Math.max(0, Math.floor(input.stopAt));
   let last = 0;
   for (const event of events) {
     const at = Math.max(0, Math.floor(event.t));
+    if (stopAt !== null && at > stopAt) break;
     battle.runTo(at);
     battle.apply(event);
     last = Math.max(last, at);
   }
-  battle.runTo(last + ticks(RAID_MAX_SECONDS));
+  battle.runTo(stopAt ?? last + ticks(RAID_MAX_SECONDS));
 
   const state = battle.state();
   const fired = new Set(state.firedTraps);
