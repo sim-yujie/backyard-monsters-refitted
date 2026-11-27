@@ -1,6 +1,6 @@
 {
   "name": "abilities-gorgo-vs-fomor",
-  "description": "A level 6 Gorgo with all three abilities, half hurt, and sixty Pokeys, against a caged level 6 Fomor with all three of his (Healing Mist, Bubble, Acid Spit) and the bunkers' garrisons.",
+  "description": "A level 6 Gorgo with all three abilities and sixty Pokeys, against a caged level 6 Fomor with all three of his (Healing Mist, Bubble, Acid Spit) and the bunkers' garrisons.",
   "yard": "sandbox",
   "without": [
     52,
@@ -59,86 +59,85 @@
         "champion": {
           "t": 1,
           "l": 6,
-          "pl": 4,
-          "hp": 101000
+          "pl": 4
         }
       }
     ]
   },
   "expected": {
     "ticks": 9800,
-    "damage": 4.20014281681253,
+    "damage": 10.039689788597912,
     "destroyed": null,
     "attackloot": {
-      "r1": 0,
-      "r2": 0,
-      "r3": 0,
-      "r4": 0
+      "r1": 54000,
+      "r2": 37800,
+      "r3": 43200,
+      "r4": 32400
     },
     "defenderLoss": {
-      "r1": 0,
-      "r2": 0,
-      "r3": 0,
-      "r4": 0
+      "r1": 60000,
+      "r2": 42000,
+      "r3": 48000,
+      "r4": 36000
     },
     "firedTraps": 0,
-    "destroyedBuildings": 16,
+    "destroyedBuildings": 22,
     "creepsFlung": 60,
     "creepsKilled": 61,
     "championHp": 0,
-    "damagedBuildings": 17,
-    "rngDraws": 820,
+    "damagedBuildings": 23,
+    "rngDraws": 1232,
     "checkpoints": [
       {
         "tick": 800,
-        "digest": "65e4dc1cac502a7a"
+        "digest": "b502704c890e23ea"
       },
       {
         "tick": 1600,
-        "digest": "47f54ee3ef165475"
+        "digest": "818464c0075e3dfa"
       },
       {
         "tick": 2400,
-        "digest": "683a05c1c4a716cb"
+        "digest": "f5ea0e227d9ac904"
       },
       {
         "tick": 3200,
-        "digest": "89229e33a2f41bc5"
+        "digest": "bc5d75d4851360fe"
       },
       {
         "tick": 4000,
-        "digest": "7bb7ea6778e3108d"
+        "digest": "b3bf9e69fa12b287"
       },
       {
         "tick": 4800,
-        "digest": "063d1d9890e0dda2"
+        "digest": "860425da5d3adadc"
       },
       {
         "tick": 5600,
-        "digest": "ae41581412a78cb2"
+        "digest": "5a995974d2aad322"
       },
       {
         "tick": 6400,
-        "digest": "33cef6e05aa6fa26"
+        "digest": "9ad3f9ddf9f55cc3"
       },
       {
         "tick": 7200,
-        "digest": "7fe852b5be4ed52b"
+        "digest": "f5c1cca3ab6ee5f9"
       },
       {
         "tick": 8000,
-        "digest": "80e9b85ac8a398d0"
+        "digest": "82ca1c3f3264d445"
       },
       {
         "tick": 8800,
-        "digest": "7bbe09c89900f6ee"
+        "digest": "a74bfe63970ad715"
       },
       {
         "tick": 9600,
-        "digest": "f5f3ad6f5d852a45"
+        "digest": "344f5b18845181fa"
       }
     ],
-    "digest": "450d718a52db4ab0",
+    "digest": "4653116ebf7160a4",
     "bunkerLosses": {
       "83": {
         "C1": 8

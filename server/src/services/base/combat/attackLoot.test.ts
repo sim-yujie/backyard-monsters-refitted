@@ -104,9 +104,12 @@ const attackerOf = (one: Fixture): LootAttacker => ({
   // Krallen holds a loot aura (`la`) that outlasts the session: the mixed-waves log flings her with it.
   champion: [
     { t: 5, l: 5, pl: 2, la: 1_800_000_000 },
-    { t: 1, l: 4, pl: 3, fb: 3 },
+    // Gorgo, Drull and Fomor with all three Monster Madness abilities (power
+    // level 4): the abilities fixtures fling them so, the rest at 1.
+    { t: 1, l: 6, pl: 4, fb: 3 },
+    { t: 2, l: 6, pl: 4 },
     { t: 4, l: 6, pl: 3, fb: 3 },
-    { t: 3, l: 6, pl: 3, fb: 2 },
+    { t: 3, l: 6, pl: 4, fb: 2 },
   ],
   catapult: 5,
   buildingdata: {},

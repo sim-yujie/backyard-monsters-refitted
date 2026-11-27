@@ -59,8 +59,7 @@
         "champion": {
           "t": 2,
           "l": 6,
-          "pl": 4,
-          "hp": 40000
+          "pl": 4
         }
       }
     ]
@@ -91,11 +90,11 @@
     "checkpoints": [
       {
         "tick": 800,
-        "digest": "2b350d0b37340911"
+        "digest": "a4232f40d608f99e"
       },
       {
         "tick": 1600,
-        "digest": "e739a5cfd6eb006d"
+        "digest": "87b79b8b30209ab5"
       },
       {
         "tick": 2400,

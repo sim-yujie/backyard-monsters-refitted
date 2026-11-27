@@ -591,7 +591,7 @@ export const SCENARIOS = [
           y: -480,
           r: 300,
           monsters: { C1: 40 },
-          champion: { t: 2, l: 6, pl: 4, hp: 40000 },
+          champion: { t: 2, l: 6, pl: 4 },
         },
       ],
     },
@@ -599,7 +599,7 @@ export const SCENARIOS = [
   {
     name: "abilities-gorgo-vs-fomor",
     description:
-      "A level 6 Gorgo with all three abilities, half hurt, and sixty Pokeys, against a caged " +
+      "A level 6 Gorgo with all three abilities and sixty Pokeys, against a caged " +
       "level 6 Fomor with all three of his (Healing Mist, Bubble, Acid Spit) and the " +
       "bunkers' garrisons.",
     yard: "sandbox",
@@ -624,7 +624,7 @@ export const SCENARIOS = [
           y: -300,
           r: 300,
           monsters: { C1: 60 },
-          champion: { t: 1, l: 6, pl: 4, hp: 101000 },
+          champion: { t: 1, l: 6, pl: 4 },
         },
       ],
     },
